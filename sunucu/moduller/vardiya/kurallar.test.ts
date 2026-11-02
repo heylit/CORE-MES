@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  aralik, araliklardanCikar, atamaPayi, ayrildiMi, durusAraliklari, fazlaMesaiKisiHatasi, sonCalismaGunu, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, takvimGunleriniBirlestir,
+  aralik, araliklardanCikar, atamaPayi, ayrildiMi, durusAraliklari, fazlaMesaiKisiHatasi, sonCalismaGunu, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, netSureHatasi, takvimGunleriniBirlestir,
   kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari, araliklarCakisir, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi,
 } from './kurallar.ts';
 
@@ -22,6 +22,9 @@ describe('vardiya kuralları', () => {
     assert.match(molaDenetle('08:00', '16:00', [{ baslangic: '15:45', bitis: '16:15' }]) ?? '', /içinde/);
     assert.match(molaDenetle('08:00', '16:00', [{ baslangic: '12:00', bitis: '12:30' }, { baslangic: '12:15', bitis: '12:45' }]) ?? '', /çakış/);
     assert.equal(molaDenetle('22:00', '06:00', [{ baslangic: '02:00', bitis: '02:30' }]), null);
+    assert.match(molaDenetle('08:00', '16:00', [{ baslangic: '10:00', bitis: '10:00' }]) ?? '', /başlangıç ve bitişi aynı/);
+    assert.equal(netSureHatasi('08:00', '16:00', [{ baslangic: '12:00', bitis: '12:30' }]), null);
+    assert.match(netSureHatasi('08:00', '16:00', [{ baslangic: '08:00', bitis: '16:00' }]) ?? '', /net süre/);
   });
 
   test('VR-01, VR-02: günlük süre o günün açık ve aktif vardiyalarının toplamıdır; tatil ve kapalı günde sıfırdır', () => {

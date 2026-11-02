@@ -22,6 +22,8 @@ yalnız kurulum bilgisi durur. Kurallar `CLAUDE.md`, mimari kararlar `belgeler/a
   geçiş `araclar/vt/tasima.sql`, geri dönüş `araclar/vt/geri-al.sql`; adımlar betik başlıklarında.
 - Sunucu `npm run sunucu` (ya da `gelistir:sunucu`) ile başlatılır. Göç değişkenleri sürecin ortamında
   tanımlıysa sunucu açılmaz; servis kurulurken bu iki değişken servis ortamına konmaz.
+  Canlıda sunucu `TMIV2_PG_USER` olarak hiçbir zaman `tmiv2_goc` ile bağlanmaz: tablo sahibi stok bakiye-defter tetiğinden
+  muaftır (1692 b) ve ara toplam tablosunu görür; sahiple çalışan sunucuda o koruma kalmaz.
 - Betikler herkese açık bağlanma hakkını yalnız bağlı veritabanında alır. Aynı kümede başka
   veritabanı varsa rollerin oraya bağlanamadığı ayrıca doğrulanır (`has_database_privilege`).
 - Göçler elle uygulanır: `npm run goc`. Bekleyen göç varken sunucu açılmaz.

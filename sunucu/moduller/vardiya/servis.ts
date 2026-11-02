@@ -24,7 +24,7 @@ import {
 } from '../istasyonlar/disari.ts';
 import {
   aralik, araliklardanCikar, araliklarCakisir, atamaPayi, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
-  kisininIstasyonu, molaDenetle, netDakika, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
+  kisininIstasyonu, molaDenetle, netDakika, netSureHatasi, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
 import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
@@ -34,6 +34,7 @@ const GECMIS = 'vardiya.gecmis-yaz';
 const VARDIYA_YOK = 'Vardiya bulunamadı.';
 const VARDIYA_KISITLARI = {
   vardiya_ad_tekil: { ileti: 'Bu adda bir vardiya var.', alan: 'ad' },
+  vardiya_ad_tekil_harfsiz: { ileti: 'Bu adda bir vardiya var (büyük/küçük harf ve boşluk farkı ayrı ad sayılmaz).', alan: 'ad' },
 } as const;
 const MATRIS_KISITLARI = {
   vardiya_matrisi_is_merkezi_fk: { ileti: 'İş merkezi bulunamadı.', alan: 'isMerkeziId' },
@@ -153,7 +154,7 @@ async function gecmisDenetle(db: Db, kullanici: Kullanici, tarih: string): Promi
 
 function vardiyaDenetle(v: { baslangic: string; bitis: string; molalar: readonly { baslangic: string; bitis: string }[] }): void {
   if (v.baslangic === v.bitis) throw dogrulama('Başlangıç ve bitiş aynı olamaz.', 'bitis');
-  const hata = molaDenetle(v.baslangic, v.bitis, v.molalar);
+  const hata = molaDenetle(v.baslangic, v.bitis, v.molalar) ?? netSureHatasi(v.baslangic, v.bitis, v.molalar);
   if (hata) throw dogrulama(hata, 'molalar');
 }
 
@@ -620,9 +621,21 @@ async function durusNedeniDenetle(db: Db, nedenId: number | null, onceki: number
   if (!neden.aktif && nedenId !== onceki) throw dogrulama('Pasif duruş nedeni seçilemez.', 'durusNedeniId');
 }
 
+// VR-31 (VRD-7): bugünden önce başlayan planlı duruş geçmiş kapasiteyi (OEE, emek verimi) değiştirir; takvim günü ve fazla mesai gibi
+// `vardiya.gecmis-yaz` ister. Yeni kayıt ve başlangıcı bugünden önceye alınan kayıt denetlenir; var olan kayıtta tek seferlik geçmiş duruş
+// değişmez ve silinmez, geçmişte başlamış tekrarlı duruş silinmez (tekrar bitişiyle sonlandırılır). Arkon'dan yazım da buradan geçer.
+async function durusGecmisDenetle(db: Db, kullanici: Kullanici, yeni: { baslangic: string } | null, onceki: s.PlanliDurusSatiri | null): Promise<void> {
+  if (kullanici.islemler.includes(GECMIS)) return;
+  const gecmis = (an: string) => s.bugundenOnceMi(db, an);
+  const yeniGecmis = yeni !== null && (onceki === null || Date.parse(yeni.baslangic) !== Date.parse(onceki.baslangic)) && await gecmis(yeni.baslangic);
+  const oncekiKilitli = onceki !== null && (onceki.tekrar === 'yok' || yeni === null) && await gecmis(onceki.baslangic);
+  if (yeniGecmis || oncekiKilitli) throw yetkiYok('Geçmiş tarihli planlı duruş için yetkin yok.');
+}
+
 async function durusEkle(db: Db, kullanici: Kullanici, g: PlanliDurusGirdisi, kaynakKimligi: string | null): Promise<number> {
   const d = durusGirdisi(g);
   await durusKapsamiDenetle(db, kullanici, d);
+  await durusGecmisDenetle(db, kullanici, d, null);
   await durusNedeniDenetle(db, d.durusNedeniId, null);
   return kisitKorumali(DURUS_KISITLARI, () => s.planliDurusEkle(db, d, kullanici.id, kaynakKimligi));
 }
@@ -632,6 +645,7 @@ async function durusGuncelle(db: Db, kullanici: Kullanici, onceki: s.PlanliDurus
   await durusKapsamiDenetle(db, kullanici, onceki);
   const d = durusGirdisi(g);
   await durusKapsamiDenetle(db, kullanici, d);
+  await durusGecmisDenetle(db, kullanici, d, onceki);
   await durusNedeniDenetle(db, d.durusNedeniId, onceki.durusNedeniId);
   await kisitKorumali(DURUS_KISITLARI, () => surumluGuncelle({
     guncelle: () => s.planliDurusGuncelle(db, onceki.id, d, surum, kullanici.id),
@@ -642,6 +656,7 @@ async function durusGuncelle(db: Db, kullanici: Kullanici, onceki: s.PlanliDurus
 
 async function durusSil(db: Db, kullanici: Kullanici, onceki: s.PlanliDurusSatiri, surum: number): Promise<void> {
   await durusKapsamiDenetle(db, kullanici, onceki);
+  await durusGecmisDenetle(db, kullanici, null, onceki);
   await surumluGuncelle({
     guncelle: async () => ((await s.planliDurusSil(db, onceki.id, surum)) ? { id: onceki.id } : null),
     varMi: () => s.planliDurusVarMi(db, onceki.id),

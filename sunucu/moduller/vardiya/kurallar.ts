@@ -31,6 +31,7 @@ function molaParcalari(bas: string, molalar: readonly Mola[]): DakikaAraligi[] {
 
 // VR-05: mola vardiyanın içinde olmalı ve molalar birbiriyle çakışmamalı; hata iletisi ya da null.
 export function molaDenetle(bas: string, bit: string, molalar: readonly Mola[]): string | null {
+  if (molalar.some((m) => m.baslangic === m.bitis)) return 'Molanın başlangıç ve bitişi aynı olamaz.';
   const uzunluk = aralik(bas, bit);
   const parcalar = molaParcalari(bas, molalar);
   for (const [i, p] of parcalar.entries()) {
@@ -40,6 +41,10 @@ export function molaDenetle(bas: string, bit: string, molalar: readonly Mola[]):
   }
   return null;
 }
+
+// VR-05: molalar vardiyanın tamamını kaplayamaz; net süresi sıfır olan vardiya kapasite vermez, matriste yanlış görünür.
+export const netSureHatasi = (bas: string, bit: string, molalar: readonly Mola[]): string | null =>
+  netDakika(bas, bit, molalar) > 0 ? null : 'Molalar vardiyanın tamamını kaplıyor; net süre sıfırdan büyük olmalı.';
 
 // VR-01: net süre = vardiya süresi - molalar.
 export function netDakika(bas: string, bit: string, molalar: readonly Mola[]): number {

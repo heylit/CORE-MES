@@ -44,12 +44,16 @@ test.describe('3B sahne', () => {
   test('kartlı akışta tuval yok, kart resimleri 3B çizilir', async ({ page, ac, ag }) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+    // İlk kart resmi sayfanın tek iş parçacığında, tek görevde çizilir: yazılım çizicisinde gölgelendirici derlemesi ve piksel okuması
+    // saniyeler sürer (yerelde 2,5-6 sn, yüklü CI'da 12 sn ölçüldü) ve o sürede sayfa testin sorgularına yanıt vermez. Bu yüzden önce
+    // resim beklenir; resim gelince sayfa boştadır ve sonraki denetimler kendi süresiyle koşar.
     await ac('/cnc-kurulum/yeni/kurulum');
-    await expect(page.getByRole('button', { name: 'Kartlar' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-resim img').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Kartlar' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.tc-cy-sahne-tuval')).toHaveCount(0);
     await ac('/cnc-kurulum/yeni/takim-omru');
-    await expect(page.locator('.tc-cy-ka-satir[data-aktif]')).toBeVisible();
+    // Sayfa yeniden yüklenir; çizici ve ilk resmin bedeli yeniden ödenir.
+    await expect(page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-resim img').first()).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('.tc-cy-sahne-tuval')).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });

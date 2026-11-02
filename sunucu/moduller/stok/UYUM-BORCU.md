@@ -85,3 +85,7 @@ Oturtmada eklendi. Biçim aynı: kural / sapma / nerede / nasıl kapanır. Sın�
 56. SONRA: Reçete ve Rota Stok sekmesindeki sayım hâlâ beklenen miktarla gider (BASKA-MODUL-ISTEKLERI "recete-rota: kör sayım"); eşik iki yolda da uygulanır.
 ## Bakiye-defter tetiği (1692 b) - bilgi
 57. BİLGİ: tetik yalnız yeni yazımı denetler (işlem içi fark); geçmişte bakiye ile defter arasında oluşmuş fark kalır ve 1692 a'nın gece karşılaştırmasıyla görünür. Tablo sahibi (göç kullanıcısı) muaftır; düzeltme göçü ve test fikstürü sahiple yazar.
+
+## Gece defter karşılaştırması (1692 a) - bağlamada kapanacak
+58. VARSAYIM: farkları görme ve sayaç yeni işlem açılmadan `stok.eksi-onayla` (yalnız müdür) ile verildi; tutarlılık işi eksi bakiye onayıyla aynı kişide. Ayrı işlem istenirse paylaşılan işlem listesi ve yetki matrisi değişir.
+59. SONRA: farkın kaydı ve düzeltmesi yok; düzeltme sayım ya da geri almayla, hareketle yapılır. Farkın kimin hangi işlemiyle oluştuğu (sahiple yapılan düzeltme mi, 1692 b öncesi kayıt mı) ayrıca izlenmez.

@@ -8,4 +8,3 @@
 5. Tedarikçi adı ve firma karnesi bağlantısı: açık sipariş okuması tedarikçiyi taşımıyor. İstek: madde 4.
 6. Stok değeri (1291 a: lotun sipariş fiyatı) ve seçilebilir fiyat görünümü (1290 a): stok Dal B'de resmi değer tanımı girince Para bölümüne eklenecek.
 7. Malzeme kartından ve stok ayrıntısından 360'a bağlantı; kartın kendi ekranına derin bağlantı (bugün `/malzemeler` açılıyor).
-8. `degerGrubuToplamlari` bütün malzemeleri döndürüyor, 360 kendi kartını süzüyor; malzeme süzgeçli okuma madde 1 ile gelince kalkar.

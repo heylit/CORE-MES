@@ -60,6 +60,7 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 | `POST /stok/sayim` | `stok.sayim` | beklenen değiştiyse 409 (DEP-16) | DEP-16 | DEP-16 (409) |
 | `POST /stok/sayim` kör sayım (1279 a, 1691 teyit) | `stok.sayim` | beklenen verilmezse sistem kilit altında okunur; deponun eşiğini aşan fark stoğa yazılmaz, `stok_sayim_farki`'na bekler; aynı gözde bekleyen varken 409; hizmet kartı fark beklemeye de giremez (KD-013) | 1279 a | "1279 a kör sayım" 200, `kurallar.test.ts` "1279 a sayım farkı eşiği"; ikinci sayım 409 |
 | `GET /stok/sayim-farklari` | `stok.sayim-onayla` ya da `stok.sayim` | bekleyenler, son 50 karar ve depo eşikleri | 1279 a | 200; işlemsiz rol 403 |
+| `GET /stok/defter-farklari` | `stok.eksi-onayla` (müdür) | son gece karşılaştırmasının bakiye ve defter farkları; yazma yok | 1692 a | `defter-karsilastirma.test.ts` müdür 200, depo 403 |
 | `POST /stok/sayim-farklari/:id/onayla` | `stok.sayim-onayla` (müdür) | sürüm; sayandan başka kişi; yalnız bekleyen; onayda sayımdaki fark hareketle yazılır, hareketin kişisi onaylayan; tekrar korumalı | 1279 a | "1279 a kör sayım" 200 ve DEP-11; depo 403, sayan 403, karara bağlanmış 409 |
 | `POST /stok/sayim-farklari/:id/reddet` | `stok.sayim-onayla` (müdür) | sürüm, neden zorunlu, sayandan başka kişi; stok değişmez | 1279 a | "1279 a ikinci yetkili" 200; sayan 403, nedensiz 400, eski sürüm 409 |
 | `POST /stok/depolar/:id/sayim-esigi` | `stok.sayim-onayla` (müdür) | sürüm; 0-100 yüzde, iki ondalık; tekrar korumalı | 1279 a | "1279 a eşik" 200; depo 403, 101 400, eski sürüm 409 |

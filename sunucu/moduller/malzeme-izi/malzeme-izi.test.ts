@@ -9,6 +9,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { degerGrubuToplamlari } from '../stok/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -88,5 +89,23 @@ describe('malzeme-izi uçları (gerçek PostgreSQL)', () => {
     const v = malzeme360Cevabi.parse(c.govde);
     assert.equal(v.paraGorunur, false);
     assert.equal(v.para, null);
+  });
+
+  test('MIZ-U4 stok grupları yalnız istenen kartın bakiyesinden; başka kartın bakiyesi okunmaz ve karışmaz', async () => {
+    const a = (await kart('miz-dnm-3', 'hammadde', 3, 'Deneme sac'))!.no;
+    const b = (await kart('miz-dnm-4', 'hammadde', 4, 'Deneme boru'))!.no;
+    const hurda = await o().sahip.tek<{ id: number }>(
+      "INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'MIZ-HURDA', 'hurda' FROM stok_depo WHERE kod = 'ANA' RETURNING id");
+    const bakiye = (m: number, konum: string, miktar: string) => o().sahip.sorgu(
+      'INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, $3, now())', [m, konum, miktar]);
+    const kabul = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    await bakiye(a, String(kabul), '5');
+    await bakiye(a, String(hurda!.id), '2');
+    await bakiye(b, String(kabul), '7');
+    assert.deepEqual((await degerGrubuToplamlari(o().vt, [a])).map((g) => [g.malzemeId, g.grup, Number(g.toplam)]), [[a, 'hurda', 2], [a, 'kullanilabilir', 5]]);
+    assert.ok((await degerGrubuToplamlari(o().vt)).some((g) => g.malzemeId === b));
+    const v = malzeme360Cevabi.parse((await oku('yonetici', `/malzeme-izi/malzemeler/${String(a)}`)).govde);
+    assert.deepEqual(v.stok?.gruplar, [{ grup: 'kullanilabilir', miktar: '5' }, { grup: 'hurda', miktar: '2' }]);
+    assert.equal(v.stok?.toplam, '7.000');
   });
 });

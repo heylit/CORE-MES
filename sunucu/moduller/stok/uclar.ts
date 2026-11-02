@@ -21,7 +21,7 @@ import { depoCikisCevabi, depoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
-import { malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
+import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 
@@ -116,6 +116,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/sayim-farklari', yetki: { biri: ['stok.sayim-onayla', 'stok.sayim'] }, cevap: sayimFarklariCevabi, isle: ({ db }) => s.sayimFarklari(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim-farklari/:id/onayla', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimFarkiOnayGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sayimFarkiOnayla(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/sayim-farklari/:id/reddet', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimFarkiRedGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sayimFarkiReddet(db, kullanici.id, parametre.id, govde) }),
+  // Gece defter karşılaştırması (1692 a): son turun farkları; eksi bakiye onayı gibi müdürün tutarlılık işidir.
+  uc({ yontem: 'GET', yol: '/stok/defter-farklari', yetki: 'stok.eksi-onayla', cevap: defterFarklariCevabi, isle: ({ db }) => s.defterFarklari(db) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/depolar/:id/sayim-esigi', yetki: 'stok.sayim-onayla', parametre: kimlikParametresi, govde: sayimEsigiGovdesi, cevap: sayimFarklariCevabi, isle: ({ db, parametre, govde }) => s.sayimEsigiDegistir(db, parametre.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/hareketler/geri-al', yetki: 'stok.geri-al', govde: topluGeriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.topluGeriAl(db, kullanici.id, govde); } }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/hareketler/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: geriAlGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, parametre, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.geriAl(db, kullanici.id, parametre.id, govde); } }),

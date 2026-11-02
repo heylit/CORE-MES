@@ -20,7 +20,7 @@ import type {
   AcikSiparisSatirlariCevabi, BakiyeSatiri, KaliteDurumu, CikisKomutu, CikisOnerisiCevabi, DepolarCevabi, Hareket, HareketCevabi, HareketlerListesi, IsKutusuCevabi, Konum, KonumAyrintiCevabi,
   KonumlarListesi, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltKomutu, MalKabulKomutu, MalKabullerListesi, MalKabulOzeti, MalzemeAyarKomutu,
   FasonIsleriCevabi, MalzemeAyrintiCevabi, RezervelerCevabi, RezerveEtKomutu, RezerveKaldirKomutu, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi, PartilerListesi, Raf,
-  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimFarklariCevabi, SayimKomutu, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi, StokDegeriCevabi, DegerlemeYontemi,
+  RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, SayimCevabi, SayimFarklariCevabi, SayimKomutu, DefterFarklariCevabi, TasimaKomutu, UretimGirisiKomutu, GozOnerisiCevabi, PanelCevabi, StatuDegistirKomutu, AylikStokDegeriCevabi, StokDegeriCevabi, DegerlemeYontemi,
   FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu, StoktanDusKomutu, TeslimKomutu,
   ToplamaAcKomutu, ToplamaAyrintiCevabi, ToplamalarListesi, ToplamaOzeti, YerlesimCevabi, YerlesimKaydetKomutu, AraCevabi, TopluGeriAlKomutu,
   EmirTamamlamaCevabi, EmirTamamlaKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, StokOzetiCevabi, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi,
@@ -248,6 +248,7 @@ export async function isKutusu(db: Db, islemler: readonly string[], kisiId: numb
     teslimBekleyenIstek: islemler.includes('stok.transfer')
       ? await sorgular.teslimBekleyenIstekSayisi(db, await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId))) : null,
     depoyaGelenTeslim: islemler.includes('stok.transfer') ? await sorgular.depoyaGelenTeslimSayisi(db) : null,
+    defterFarki: islemler.includes('stok.eksi-onayla') ? (await sorgular.sonDefterKarsilastirmasi(db))?.farkSayisi ?? null : null,
   };
 }
 // Fason firmasında parçası kalan emirlerden kapanmış olanlar; açık emrin parçası firmada beklenen yerdedir.
@@ -332,7 +333,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
   // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran tanım yetkilisine eşlenmemiş
   // harita yerini de iş olarak gösterir; sayaç da sayar.
   const eslenmemis = islemler.includes('stok.tanim') ? (await haritaOzeti(db)).eslenmemis : 0;
-  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0, eslenmemis].filter((n) => n > 0).length;
+  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0, eslenmemis, k.defterFarki ?? 0].filter((n) => n > 0).length;
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,
     'mal-kabul': islemler.includes('stok.giris') ? k.logoFarki : null,
@@ -345,6 +346,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
     malzemeler: null, hareketler: null, 'refakat-kartlari': null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
     'sayim-onaylari': islemler.includes('stok.sayim-onayla') ? await sorgular.bekleyenSayimFarkiSayisi(db) : null,
+    'defter-farklari': k.defterFarki ?? null,
   };
 }
 
@@ -5474,4 +5476,16 @@ export async function refakatLotaBagla(db: Db, kisiId: number, id: number, g: { 
 export async function refakatPartisiKarti(db: Db, id: number): Promise<RefakatPartisiKartiCevabi> {
   const { refakat } = await refakatPartisiOku(db, id);
   return { refakat, kart: { ...(await refakatKarti(db, refakat.uretimEmriId)), qr: refakat.qr } };
+}
+
+// Gece defter karşılaştırması (1692 a). İş saatte bir koşar; İstanbul saatiyle eşikten sonra günde bir kez karşılaştırır. Fark
+// düzeltilmez, gösterilir: düzeltme sayım ya da geri almayla, hareketle yapılır (1692 b tetiği hareketsiz düzeltmeyi zaten reddeder).
+export const DEFTER_KARSILASTIRMA_SAATI = 2;
+export async function geceDefterKarsilastirmasi(db: Db, saat = DEFTER_KARSILASTIRMA_SAATI): Promise<{ id: number; farkSayisi: number } | null> {
+  if (!(await sorgular.defterKarsilastirmaZamaniMi(db, saat))) return null;
+  return sorgular.defterKarsilastir(db);
+}
+export async function defterFarklari(db: Db): Promise<DefterFarklariCevabi> {
+  const k = await sorgular.sonDefterKarsilastirmasi(db);
+  return { karsilastirma: k, farklar: k === null ? [] : await sorgular.defterFarklari(db, k.id) };
 }

@@ -188,6 +188,9 @@ export const isKutusuCevabi = z.object({
   teslimBekleyenIstek: z.number().int().nullable().optional(),
   // Depoya gelen, onay bekleyen teslim (iade dahil, 753 b); depo işlemi olmayana null.
   depoyaGelenTeslim: z.number().int().nullable().optional(),
+  // Son gece karşılaştırmasında bakiyesi hareket defteriyle tutmayan eksen sayısı (1692 a); stok.eksi-onayla olmayana ya da hiç
+  // karşılaştırma yoksa null.
+  defterFarki: z.number().int().nullable().optional(),
 });
 export type IsKutusuCevabi = z.output<typeof isKutusuCevabi>;
 // Rol panosu kartları: her sayı kendi işlemiyle görünür; yetkisi olmayana null (kart çizilmez).
@@ -1590,3 +1593,16 @@ export type MalzemeFisiAyrintiCevabi = z.output<typeof malzemeFisiAyrintiCevabi>
 // Gönder ve Yeniden gönder aynı komuttur; sunucu fişin türüne ve Logo durumuna göre izin verir.
 export const malzemeFisiGonderGovdesi = z.object({ ...beklenenSurum });
 export type MalzemeFisiGonderGovdesi = z.input<typeof malzemeFisiGonderGovdesi>;
+
+// Gece defter karşılaştırması (1692 a): son turun bakiye ile hareket defteri farkları. Tur yoksa karsilastirma null.
+export const defterFarki = z.object({
+  malzemeId: z.number().int(), malzemeAd: z.string().nullable(), konumId: z.number().int(), konumKod: z.string().nullable(),
+  partiId: z.number().int().nullable(), lotNo: z.string().nullable(), statuId: z.number().int().nullable(), kaliteDurumu: z.string(),
+  bakiye: z.string(), defter: z.string(),
+});
+export type DefterFarki = z.output<typeof defterFarki>;
+export const defterFarklariCevabi = z.object({
+  karsilastirma: z.object({ id: z.number().int(), zaman: z.string(), farkSayisi: z.number().int() }).nullable(),
+  farklar: z.array(defterFarki),
+});
+export type DefterFarklariCevabi = z.output<typeof defterFarklariCevabi>;
