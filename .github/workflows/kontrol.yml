@@ -109,11 +109,23 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       - run: npm run tip
 
   denetim:
@@ -124,11 +136,23 @@ jobs:
         with:
           # Göç damgası denetimi birleştirme commit'inin ilk ebeveynine bakar.
           fetch-depth: 2
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       # Sürüm notundaki satır karta başlıktaki parantezle bağlanır (1565 b; kural araclar/paket.ts kartNoVarMi). Başlık olay
       # yükünden değil API'den okunur: başlık düzeltilince işi yeniden koşturmak yeter, yeni gönderim gerekmez.
       - name: Çekme isteği başlığında kart numarası
@@ -180,11 +204,23 @@ jobs:
         parca: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       - run: node --max-old-space-size=4096 araclar/lint-parcala.ts --parca ${{ matrix.parca }}/4
 
   istemci-test:
@@ -198,11 +234,23 @@ jobs:
         parca: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       - run: npm run test:istemci -- --shard=${{ matrix.parca }}/3
 
   sunucu-test:
@@ -233,11 +281,23 @@ jobs:
       TMIV2_TEST_PARCA: ${{ matrix.parca }}/6
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       # Atılacak test sunucusu: diske yazma beklenmez. Tek işte koşu süresinin önemli kısmı art arda gelen WAL denetim
       # noktalarında geçiyordu. Ayarlar yeniden yüklemeyle geçerli olur; testlerin gördüğü davranış değişmez.
       - name: Test sunucusunu diske yazmayı beklemeyecek biçimde ayarla
@@ -267,8 +327,9 @@ jobs:
   # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
   # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
   # Parçalara bölünür ki ekran işi CI süresini belirleyen iş olmasın; her parça kendi veritabanında koşar, oturum kurulumu her
-  # parçada yeniden koşar. Playwright testleri süreye göre değil, sırayla ve sayıya göre böler; sıra g360, g768, g1280 olduğundan
-  # üç parçada her parça kabaca bir genişliğe düşer ve en uzunu 1280'dir. Parça sayısı değişirse süreler yeniden ölçülür.
+  # parçada yeniden koşar. Playwright testleri süreye göre değil, sırayla ve sayıya göre böler; sıra g360, g768, g1280'dir.
+  # Üç parçada en uzunu tek başına 1280 idi (5:47-8:13, öteki parçalar ~4 dk; 1864); dört parçada 1280 ikiye bölünür.
+  # Parça sayısı değişirse süreler yeniden ölçülür.
   ekran:
     needs: kapsam
     if: needs.kapsam.outputs.ekran == 'true'
@@ -277,7 +338,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3]
+        parca: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:18
@@ -297,11 +358,23 @@ jobs:
       TMIV2_EKRAN_TARAYICI: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       - name: Kurulu tarayıcı
         run: '"$TMIV2_EKRAN_TARAYICI" --version'
       - name: Veritabanı kullanıcılarını aç
@@ -313,7 +386,7 @@ jobs:
       - run: npm run goc
       - run: npm run ekran:hazirla
       - run: npm run derle:istemci
-      - run: npm run ekran -- --shard=${{ matrix.parca }}/3
+      - run: npm run ekran -- --shard=${{ matrix.parca }}/4
       - name: Düşen testlerin görüntü ve izleri
         if: failure()
         uses: actions/upload-artifact@v4
@@ -340,11 +413,23 @@ jobs:
       - name: Logo yardımcısını derle ve testlerini koş
         shell: cmd
         run: call araclar\logo-yardimcisi\derle.cmd test
-      - uses: actions/setup-node@v4
+      - id: node
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Paketler package-lock ve Node sürümüyle anahtarlı önbellekten gelir; anahtar tutmazsa npm ci koşar. Araçların kendi
+      # önbelleği (tip denetiminin artımlı dosyaları, vite) alınmaz: her koşu onları kendisi üretir.
+      - id: paketler
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            !node_modules/.cache
+            !node_modules/.vite
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - if: steps.paketler.outputs.cache-hit != 'true'
+        run: npm ci
       - name: PostgreSQL hizmetini aç
         shell: pwsh
         run: |

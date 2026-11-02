@@ -16,7 +16,6 @@ import {
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
-import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
   AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
@@ -260,12 +259,10 @@ export async function cikisYap(db: Db, anahtar: string | null): Promise<void> {
   if (anahtar) await oturumKapat(db, anahtarOzeti(anahtar));
 }
 
-// Oturumun kişisi: yetkisi kişilerden, dış izleyici işareti (1224 a) portalın firma atamasından her istekte okunur; işaret
-// kopyalanmadığı için atama değişince bir sonraki istekte geçerlidir. Yalnız işaretli kişide alan vardır.
+// Oturumun kişisi: yetkisi kişilerden. Dış izleyici işareti (1224 a) portal kapalıyken okunmaz: portal kullanılmadığı
+// için her istekte portal tablosunu okumak gereksizdir; portal açılırsa işaret yeniden bağlanır.
 async function kimlikYukle(db: Db, kisiId: number, oturumAcildi: string | null = null): Promise<Kullanici | null> {
-  const kullanici = await kullaniciYukle(db, kisiId, oturumAcildi);
-  if (kullanici === null || !(await disIzleyiciKisiMi(db, kullanici.id))) return kullanici;
-  return { ...kullanici, disIzleyici: true };
+  return kullaniciYukle(db, kisiId, oturumAcildi);
 }
 
 // Cihazın profili oturumdan değil her istekte cihaz çerezinden okunur (kart #1358): cihazın profili değişince ya da kişi aynı oturum

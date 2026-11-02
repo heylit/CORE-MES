@@ -13,9 +13,9 @@ import { oturumUclari } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
-// 1224 a: işaret portalın firma atamasından (1021 b) her istekte okunur. Atama burada doğrudan portal deposuna yazılır;
-// atama ucunun kendisi portal testlerindedir (BD-18) ve portal uygulamada kapalıdır (1067).
-describe('dış izleyici: firma kişisi yalnız portal ve oturum uçlarına girer (gerçek PostgreSQL)', () => {
+// Portal kapalıyken oturum dış izleyici işaretini (1224 a) portalın firma atamasından okumaz. Atama burada doğrudan portal
+// deposuna yazılır; atama ucunun kendisi portal testlerindedir (BD-18) ve portal uygulamada kapalıdır (1067).
+describe('dış izleyici: portal kapalıyken firma ataması oturumu etkilemez (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
 
@@ -58,36 +58,21 @@ describe('dış izleyici: firma kişisi yalnız portal ve oturum uçlarına gire
     await ortam?.kaldir();
   });
 
-  test('firmaya atanmış kişi girişte işaretli gelir; iç uç 403, portal ve oturum ucu 200', async () => {
+  test('portaldaki firma ataması oturumu etkilemez: kişi işaretsiz gelir, iç uca girer', async () => {
     const kisi = await kisiEkle('dis.atanmis');
     await firmaAta(kisi, 'p1');
     const { cerez, kullanici } = await girisYap('dis.atanmis');
-    assert.equal(kullanici['disIzleyici'], true);
-    assert.equal((await iste('/ic/okuma', cerez)).statusCode, 403);
-    assert.equal((await iste('/portal/deneme', cerez)).statusCode, 200);
-    const ben = await iste('/oturum', cerez);
-    assert.equal(ben.statusCode, 200);
-    assert.equal(ben.json().kullanici.disIzleyici, true);
-  });
-
-  test('açık oturumda atama yapılınca bir sonraki istek kapanır; atama firm yapılınca yeniden açılır', async () => {
-    const kisi = await kisiEkle('dis.sonradan');
-    const { cerez, kullanici } = await girisYap('dis.sonradan');
     assert.equal(kullanici['disIzleyici'], undefined);
     assert.equal((await iste('/ic/okuma', cerez)).statusCode, 200);
-    await firmaAta(kisi, 'p1');
-    assert.equal((await iste('/ic/okuma', cerez)).statusCode, 403);
-    await firmaAta(kisi, 'firm');
-    assert.equal((await iste('/ic/okuma', cerez)).statusCode, 200);
+    const ben = await iste('/oturum', cerez);
+    assert.equal(ben.statusCode, 200);
+    assert.equal(ben.json().kullanici.disIzleyici, undefined);
   });
 
-  test('portal kullanıcısı olmayan ya da firma içi kişi iç kişidir; bozuk firma alanı dış sayılır', async () => {
-    await kisiEkle('ic.kisi');
-    const ic = await girisYap('ic.kisi');
-    assert.equal((await iste('/ic/okuma', ic.cerez)).statusCode, 200);
-    const bozuk = await kisiEkle('dis.bozuk');
-    await firmaAta(bozuk, 7);
-    const dis = await girisYap('dis.bozuk');
-    assert.equal((await iste('/ic/okuma', dis.cerez)).statusCode, 403);
+  test('açık oturumda sonradan yapılan atama da bir sonraki isteği değiştirmez', async () => {
+    const kisi = await kisiEkle('dis.sonradan');
+    const { cerez } = await girisYap('dis.sonradan');
+    await firmaAta(kisi, 'p1');
+    assert.equal((await iste('/ic/okuma', cerez)).statusCode, 200);
   });
 });

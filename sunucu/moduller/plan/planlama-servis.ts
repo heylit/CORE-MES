@@ -9,7 +9,7 @@ import { KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
 import type { KayitlarCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { isMerkezleri, istasyonlar, makineDurumlari } from '../istasyonlar/disari.ts';
-import { kisiGorevi } from '../kisiler/disari.ts';
+import { kisiGorevleri } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   aktifMalzemeListesi, DURUM_ANAHTARI, degerBicimeUyarMi, degerCokBuyukMu, durumVeEmirler, KAYNAK_OKUMA, nulKarakteriVarMi, receteRotaDurumu, surumUyarMi,
@@ -174,8 +174,8 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     ? Object.fromEntries((await makineDurumlari(db)).map((x) => [String(x.makineId), x.aciklama ?? null])) : null;
   let gorev: Record<string, string | null> | null = null;
   if (yetkiliMi(kullanici, KISI_OKUMA) && d.people !== null) {
-    gorev = {};
-    for (const k of d.people) gorev[k.id] = await kisiGorevi(db, Number(k.id));
+    const gorevler = await kisiGorevleri(db, d.people.map((k) => Number(k.id)));
+    gorev = Object.fromEntries(d.people.map((k) => [k.id, gorevler.get(Number(k.id)) ?? null]));
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const sa = await satinAlmaEkiKur(db, kullanici, d.items);

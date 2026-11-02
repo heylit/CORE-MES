@@ -1557,8 +1557,11 @@ export interface DurumRotaRevizyonu {
 // malzemeId verilince yalnız o ürünün revizyonları (sayımda tek rotanın statüsü çözülür).
 export async function durumRevizyonlari(db: Db, malzemeId: number | null = null): Promise<DurumRotaRevizyonu[]> {
   const sonuc: DurumRotaRevizyonu[] = [];
-  for (const r of await s.iptalsizRevizyonlar(db, malzemeId)) {
-    const icerik = await s.icerikOku(db, r.id);
+  const revizyonlar = await s.iptalsizRevizyonlar(db, malzemeId);
+  // Planlama çalışması her açılışta bütün revizyonları okur: içerik revizyon başına değil, toplu okunur.
+  const icerikler = revizyonlar.length === 0 ? new Map<number, Icerik>() : await s.iceriklerOku(db, revizyonlar.map((r) => r.id));
+  for (const r of revizyonlar) {
+    const icerik = icerikler.get(r.id) ?? { adimlar: [], adaylar: [], bilesenler: [], yanUrunler: [] };
     const onculler = oncullerCikar(icerik.adimlar);
     sonuc.push({
       id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
