@@ -211,6 +211,13 @@ describe('cnc-kurulum kayıt deposu (gerçek PostgreSQL)', () => {
       id: op10, uretimEmriId: acik, emirNo: `UE-${String(acik).padStart(6, '0')}`, opNo: 10, ad: 'OP10', parcaNo: 'P-CNC', parcaAd: 'Deneme mil', adet: 12, istasyon: 'Deneme torna',
     });
     assert.equal(emirler.some((e) => e.id === op20 || e.id === kapaliOp), false);
+    // Talaşlı olmayan (kalite) istasyondaki operasyon listede yoktur ve seçilemez.
+    const kaliteIst = await ortam!.sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif, tip) VALUES ('TEIKAL', 'Deneme kontrol', $1, true, 'kalite') RETURNING id", [im!.id]);
+    const kaliteOp = await isEmriEkle(acik, 30, kaliteIst!.id);
+    const ikinciListe = (await istek(planlayan, 'GET', '/cnc-kurulum/emirler')).json() as { emirler: { id: number }[] };
+    assert.deepEqual([ikinciListe.emirler.some((e) => e.id === op10), ikinciListe.emirler.some((e) => e.id === kaliteOp)], [true, false]);
+    const kaliteSec = await istek(yazar, 'POST', '/cnc-kurulum/emir-sec', { isEmriId: kaliteOp, beklenenSurum: (await kayit(okur, DURUM_ANAHTARI))?.surum ?? null });
+    assert.deepEqual([kaliteSec.statusCode, (kaliteSec.json() as { alan?: string }).alan], [400, 'isEmriId']);
     assert.equal((await istek(okur, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
     assert.equal((await istek(yetkisiz, 'GET', '/cnc-kurulum/emirler')).statusCode, 403);
   });

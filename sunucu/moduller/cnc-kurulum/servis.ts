@@ -114,9 +114,12 @@ const secenek = (i: AcikIsEmri, istasyon: string): EmirSecenegi => ({
   id: i.id, uretimEmriId: i.uretimEmriId, emirNo: i.emirNo, opNo: i.opNo, ad: i.ad, parcaNo: i.parcaNo, parcaAd: i.parcaAd, adet: i.adet, istasyon,
 });
 
+// CNC kurulumu yalnız talaşlı istasyondaki iş emrine açılır (tezgâh listesiyle aynı süzgeç): kalite ya da montaj istasyonundaki
+// operasyon kurulumda seçilmez.
 export async function emirler(db: Db, kullanici: Kullanici): Promise<EmirlerCevabi> {
   if (!emirGorebilirMi(kullanici)) throw yetkiYok();
-  const liste = (await acikIsEmirleri(db)).filter((i) => i.istasyonId !== null);
+  const talasli = await talasliIstasyonlar(db);
+  const liste = (await acikIsEmirleri(db)).filter((i) => i.istasyonId !== null && talasli.has(i.istasyonId));
   const adlar = await istasyonAdlari(db, [...new Set(liste.map((i) => i.istasyonId ?? 0))]);
   return { emirler: liste.map((i) => secenek(i, adlar.get(i.istasyonId ?? 0) ?? '')) };
 }
@@ -214,6 +217,7 @@ async function sunucuYazar(db: Db, anahtar: string, deger: unknown, kisiId: numb
 export async function emirSec(db: Db, kullanici: Kullanici, g: EmirSecGovdesi): Promise<EmirSecCevabi> {
   const e = await acikIsEmri(db, g.isEmriId);
   if (e === null || e.istasyonId === null) throw dogrulama('İş emri açık değil ya da istasyonu yok.', 'isEmriId');
+  if (!(await talasliIstasyonlar(db)).has(e.istasyonId)) throw dogrulama('İş emrinin istasyonu talaşlı değil; CNC kurulumu açılmaz.', 'isEmriId');
   const emir = secenek(e, (await istasyonAdlari(db, [e.istasyonId])).get(e.istasyonId) ?? '');
   const mevcut = await sorgular.surumKilitle(db, DURUM_ANAHTARI);
   if (!surumUyarMi(mevcut, g.beklenenSurum)) throw cakisma(CAKISMA_ILETISI);
