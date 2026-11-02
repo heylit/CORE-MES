@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
-  arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
+  arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, hurdaNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
   girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   planYokDamgala, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
@@ -1158,4 +1158,13 @@ test('karar 732 a: dosyasız taslak malzemenin yayında, Arkon\'un açtığı be
   assert.deepEqual(malzemeCizimleri(undefined, belgeler).length, 3, 'dosya alanı olmayan taslak da öneri alır');
   assert.deepEqual(malzemeCizimleri([{ kind: 'pdf', name: 'x.pdf' }], belgeler), [], 'dosyası olan taslak öneri almaz');
   assert.deepEqual(malzemeCizimleri([], []), []);
+});
+
+test('hurda nedenleri: fason dönüşünün sabit kodları işaretlenir, ötekiler olduğu gibi', () => {
+  const neden = (kod: string, ad: string) => ({ id: 1, kod, ad, aktif: true, sira: 1, surum: 1 });
+  assert.deepEqual(hurdaNedenleriniCevir([neden('FSN-HURDA', 'Firmada hurda'), neden('FSN-GELMEDI', 'Firmadan gelmedi'), neden('H-01', 'Ölçü dışı')]), [
+    { code: 'FSN-HURDA', l: 'Firmada hurda', active: true, fason: true },
+    { code: 'FSN-GELMEDI', l: 'Firmadan gelmedi', active: true, fason: true },
+    { code: 'H-01', l: 'Ölçü dışı', active: true },
+  ]);
 });

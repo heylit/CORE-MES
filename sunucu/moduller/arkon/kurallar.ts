@@ -11,6 +11,7 @@ import type { PlanliDurusGirdisi, PlanliDurusKapsami, PlanliDurusTekrari } from 
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import { svgHatasi } from './svg.ts';
 import type { MuayenePlani } from '../kalite-merkezi/disari.ts';
+import { SABIT_HURDA_KODLARI } from '../durus-nedenleri/disari.ts';
 
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
@@ -227,8 +228,9 @@ export const durusNedenleriniCevir = (nedenler: readonly DurusNedeni[]) => neden
   active: n.aktif,
 }));
 
+// Fason nedenleri (firmada hurda, firmadan gelmedi) yalnız fason dönüşündeki GKK adımında geçer: terminal talaşlı işte göstermesin diye işaretlenir.
 export const hurdaNedenleriniCevir = (nedenler: readonly HurdaNedeni[]) =>
-  nedenler.map((n) => ({ code: n.kod, l: n.ad, active: n.aktif }));
+  nedenler.map((n) => ({ code: n.kod, l: n.ad, active: n.aktif, ...(SABIT_HURDA_KODLARI.includes(n.kod) ? { fason: true } : {}) }));
 
 // TMI'de açılmış ama Arkon'da paketi hazırlanmamış emir, Hazırlık'ta taslak paket olarak görünür.
 // Hazırlık paketi kaydedince Arkon belgesi olur ve bundan sonra o belge geçerlidir. Revizyon Arkon'un yeni paket
