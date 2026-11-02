@@ -61,6 +61,15 @@ const KAPALI = "e.durum IN ('bitti', 'iptal')";
 // Arama metni LIKE kalıbı olarak değil düz metin olarak aranır (% ve _ joker sayılmaz).
 const ARAMA = (p: string) => `($${p}::text IS NULL OR strpos(lower(e.emir_no || ' ' || e.parca_no || ' ' || e.parca_ad), lower($${p}::text)) > 0)`;
 
+// Birleşmiş partilerin hedef emri (kart #262); birleşmemiş emir listede yoktur.
+export function birlesmeHedefleri(db: Db, emirIdleri: readonly number[]): Promise<{ id: number; hedefId: number; hedefNo: string }[]> {
+  return db.sorgu(
+    `SELECT e.id, h.id AS "hedefId", h.emir_no AS "hedefNo"
+       FROM uretim_emri e JOIN uretim_emri h ON h.id = e.birlestigi_emir_id WHERE e.id = ANY($1::int[])`,
+    [[...emirIdleri]],
+  );
+}
+
 // Durum verilirse yalnız o durum; verilmezse `hepsi` değilse yalnız açık emirler.
 export function emirleriGetir(db: Db, durum: EmirDurumu | null, yalnizIstasyonlu: boolean, hepsi = false): Promise<EmirSatiri[]> {
   return db.sorgu<EmirSatiri>(

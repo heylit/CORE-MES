@@ -183,12 +183,14 @@ async function izlemeyeCevir(db: Db, satirlar: readonly EmirSatiri[]): Promise<I
   const adimlar = new Map<number, sorgular.IsEmriSatiri[]>();
   for (const i of await sorgular.isEmirleriGetir(db, satirlar.map((s) => s.id))) adimlar.set(i.uretimEmriId, [...(adimlar.get(i.uretimEmriId) ?? []), i]);
   const kapanislar = new Map((await sorgular.kapanisDurumlari(db, satirlar.map((s) => s.id))).map((k) => [k.uretimEmriId, kapanisSonucu(k.durum, k.saglamAdet)]));
+  const birlesmeler = new Map((await sorgular.birlesmeHedefleri(db, satirlar.map((s) => s.id))).map((b) => [b.id, { id: b.hedefId, emirNo: b.hedefNo }]));
   return satirlar.map((s) => {
     const { istasyonId, acanId, ...kalan } = s;
     return {
       ...kalan,
       ...adimlardanGorunum(s, adimlar.get(s.id) ?? []),
       kapanisSonucu: kapanislar.get(s.id) ?? null,
+      birlestigiEmir: birlesmeler.get(s.id) ?? null,
       istasyon: istasyonId === null ? null : adli(adlar.istasyon, istasyonId, 'İstasyon'),
       acan: adli(adlar.kisi, acanId, 'Kişi'),
       canli: canli.get(s.id) ?? null,

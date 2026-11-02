@@ -220,7 +220,12 @@ export const kayitSemasi = z.object({
 });
 
 // Salt okunur izleme (kart #1191): adımları henüz bir istasyona düşmemiş ya da bitmiş emir de görünür; istasyon yoksa null (uydurulmaz).
-export const izlemeEmirSemasi = emirSemasi.extend({ istasyon: adliKayit.nullable() });
+// Birleşen parti (kart #262): kapanışı "iptal" olarak yazılır ama iptal değildir; adedi birleştiği emre geçmiştir. Ekran onu "Birleşti" gösterir.
+// İsteğe bağlı: sunucu her zaman yazar; birleşmemiş emirde null.
+export const izlemeEmirSemasi = emirSemasi.extend({
+  istasyon: adliKayit.nullable(),
+  birlestigiEmir: z.object({ id: KIMLIK, emirNo: z.string() }).nullable().optional(),
+});
 export const emirlerCevabi = z.object({ emirler: z.array(emirSemasi) });
 export const izlemeListeCevabi = z.object({ emirler: z.array(izlemeEmirSemasi) });
 export const bitenEmirlerCevabi = listeCevapSemasi(izlemeEmirSemasi);
@@ -361,7 +366,8 @@ export const adimliIptalGovdesi = z.object({ surum: surumSemasi }).strict();
 export const oncelikGovdesi = z.object({ oncelik: z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.'), surum: surumSemasi }).strict();
 // Bekleyen iş emrine kaynak atanır ya da kaldırılır (null: atanmamış, ilk sistemdeki "Tezgahsız").
 export const adimKaynagiGovdesi = z.object({ opNo: KIMLIK, kaynak: atanabilirKaynak.nullable(), surum: surumSemasi }).strict();
-// Açılmış emirde başlamamış adım içeriye ya da fasona alınır; rota değişmez. Fasonda firma ve termin günü zorunlu, içeride verilmez.
+// Açılmış emirde başlamamış adım içeriye ya da fasona alınır; rota değişmez. Fasonda firma zorunlu; termin günü isteğe bağlıdır (boşsa plan
+// geçmiş teslimattan ya da varsayılan günden alır). İçeride ikisi de verilmez.
 export const URETIM_YERLERI = ['ic', 'fason'] as const;
 export const uretimYeriGovdesi = z.object({
   opNo: KIMLIK, yer: z.enum(URETIM_YERLERI), firmaId: KIMLIK.nullable(), terminGun: z.number().int().min(1).max(365).nullable(), surum: surumSemasi,
@@ -397,7 +403,9 @@ export const ekAdimGovdesi = ekAdimSemasi.extend({ surum: surumSemasi }).strict(
 
 // Rotasız emir (B13, kullanıcı kararı 14.10.2026): malzemeli emir rota seçmeden açılır, adımları sonradan Reçete ve Rota'da eklenir.
 // Açılış "Rotasız üretim emri" ayarına bağlıdır.
-const gunMetni = (ad: string) => z.string().regex(/^\d{4}-\d{2}-\d{2}$/, `${ad} YYYY-AA-GG olmalı.`);
+// Takvimde olmayan gün (ör. 2026-13-45) alan adıyla 400 döner; veritabanının genel tarih hatasına düşmez.
+const gunMetni = (ad: string) => z.string().regex(/^\d{4}-\d{2}-\d{2}$/, `${ad} YYYY-AA-GG olmalı.`)
+  .refine((d) => tarihSemasi.safeParse(d).success, `${ad} takvimde olmayan bir gün.`);
 export const rotasizEmirGovdesi = z.object({
   malzemeNo: KIMLIK,
   adet: z.number().int('Adet tam sayı olmalı.').positive('Adet sıfırdan büyük olmalı.').max(TAM_SAYI_UST),

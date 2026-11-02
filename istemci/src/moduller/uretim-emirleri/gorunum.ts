@@ -29,8 +29,12 @@ export function farkMetni(adet: number, saglamAdet: number | null): string | nul
 export type KapanisSonucuAlani = { kapanisSonucu?: KapanisSonucu | null };
 
 // Başlamış emirde canlı çalışma durumu adın ikinci parçasıdır ("Başladı · Duraklı"); canlı bilgi yoksa yalnız "Başladı".
-export const durumGosterimi = (emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonucuAlani): DurumGosterimi =>
-  emirDurumuGosterimi({ durum: emir.durum, kapanisSonucu: emir.kapanisSonucu ?? null, calisma: emir.canli?.calisma ?? null });
+// Birleşen parti iptal değildir: adedi birleştiği emre geçmiştir (sunucu onu iptal kapanışıyla yazar).
+export type BirlesmeAlani = { birlestigiEmir?: { id: number; emirNo: string } | null };
+export const durumGosterimi = (emir: Pick<Emir, 'durum' | 'canli'> & KapanisSonucuAlani & BirlesmeAlani): DurumGosterimi =>
+  (emir.birlestigiEmir
+    ? { etiket: `Birleşti: ${emir.birlestigiEmir.emirNo}`, ton: 'pasif' }
+    : emirDurumuGosterimi({ durum: emir.durum, kapanisSonucu: emir.kapanisSonucu ?? null, calisma: emir.canli?.calisma ?? null }));
 
 // Başlamışta canlı sayaç, bitmişte kapanış adedi; öbürlerinde yok (sıfır uydurulmaz).
 export function saglamSayisi(emir: Pick<Emir, 'durum' | 'canli' | 'saglamAdet'>): number | null {

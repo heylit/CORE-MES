@@ -1101,6 +1101,10 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await ayrinti(b2.govde.altEmirId)).emirNo, `${ustNo}/2`, 'katılan kolun numarası yeniden verilmez');
     const geri = await yaz(`${id}/birlestir`, { kaynakEmirId: b2.govde.altEmirId, surum: (await ayrinti(id)).surum, kaynakSurum: (await ayrinti(b2.govde.altEmirId)).surum });
     assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
+    const biten = await istek<{ satirlar: { id: number; durum: string; birlestigiEmir?: { id: number; emirNo: string } | null }[] }>(
+      'planlama_proje', 'GET', `/uretim-emirleri/bitenler?ara=${encodeURIComponent(ustNo)}&istasyonsuz=1`);
+    const satir = (eid: number) => biten.govde.satirlar.find((s) => s.id === eid);
+    assert.deepEqual([satir(b2.govde.altEmirId)?.durum, satir(b2.govde.altEmirId)?.birlestigiEmir], ['iptal', { id, emirNo: ustNo }], 'birleşen parti hedefini taşır');
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200, 'kol katılınca birleşme adımı başlar');
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlesme_op_no = 30 WHERE id = $1', [id]), /uretim_emri_birlesme_kolda/);
     await assert.rejects(o().sahip.sorgu('UPDATE uretim_emri SET birlesme_op_no = 0 WHERE id = $1', [kol]), /uretim_emri_birlesme_op_pozitif/);
@@ -1237,6 +1241,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null }, 'operator')).durum, 403);
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null }, 'planlama_proje', null)).durum, 400, 'istek kimliği zorunlu');
     assert.equal((await ac2({ projeId: denemeProjeId, malzemeNo: hammaddeNo, adet: 3, teslim: null })).durum, 400, 'yalnız mamul ya da yarı mamul');
+    const takvimDisi = await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: '2026-13-45' });
+    assert.deepEqual([takvimDisi.durum, takvimDisi.govde.mesaj], [400, 'Teslim takvimde olmayan bir gün.'], 'genel tarih hatasına düşmez');
     const acilan = await ac2({ projeId: denemeProjeId, malzemeNo: urunNo, adet: 3, teslim: null, aciklama: 'Rotasız deneme' });
     assert.equal(acilan.durum, 200, JSON.stringify(acilan.govde));
     const id = acilan.govde.uretimEmriId;
