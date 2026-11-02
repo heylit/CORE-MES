@@ -97,10 +97,15 @@ describe('guvenlik: reddedilen istekler, yeni sinyaller ve kritik alarm duyurusu
     const ozet = satirlar.map((r) => [r.neden, r.kisiAdi, r.yontem, r.yol, r.ip]);
     assert.deepEqual(ozet.find((r) => r[0] === 'yetki'), ['yetki', 'Deneme Müdür', 'GET', '/guvenlik/ozet', '10.0.0.20']);
     assert.deepEqual(ozet.find((r) => r[0] === 'oturum-yok'), ['oturum-yok', null, 'GET', '/guvenlik/ozet', '10.0.0.30']);
-    assert.deepEqual(ozet.find((r) => r[0] === 'adres-yok'), ['adres-yok', null, 'GET', '/api/yok-boyle-bir-adres', '10.0.0.31']);
+    assert.deepEqual(ozet.find((r) => r[0] === 'adres-yok'), ['adres-yok', null, 'GET', '/yok-boyle-bir-adres', '10.0.0.31']);
 
     const suzulmus = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?neden=adres-yok')).govde);
     assert.equal(suzulmus.satirlar.every((r) => r.neden === 'adres-yok'), true);
+    // Yetki reddi ve var olmayan adres aynı biçimde (/api öneksiz) yazılır; aynı arama ikisini de bulur.
+    const yolAramasi = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?ara=/guvenlik/ozet')).govde);
+    assert.equal(yolAramasi.satirlar.some((r) => r.neden === 'yetki'), true);
+    const adresAramasi = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?ara=/yok-boyle')).govde);
+    assert.deepEqual(adresAramasi.satirlar.map((r) => r.yol), ['/yok-boyle-bir-adres']);
     const aranan = retListeCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?ara=10.0.0.30')).govde);
     assert.deepEqual(aranan.satirlar.map((r) => r.ip), ['10.0.0.30']);
     assert.equal((await istek('yonetici', 'GET', '/guvenlik/reddedilen-istekler?neden=uydurma')).durum, 400);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RetTamponu, YOL_EN_COK, yoluTemizle } from './red-kaydi.ts';
+import { RetTamponu, YOL_EN_COK, apiOnekiniAt, yoluTemizle } from './red-kaydi.ts';
 import type { RetOlayi } from './red-kaydi.ts';
 
 const olay = (yol: string): RetOlayi => ({ zaman: new Date(0), neden: 'yetki', kisiId: 1, yontem: 'GET', yol, ip: '10.0.0.1' });
@@ -20,4 +20,12 @@ test('istenen yol sorgu dizgesinden ve denetim karakterlerinden arınır, uzunlu
   assert.equal(yoluTemizle('/api/yok?parola=gizli'), '/api/yok');
   assert.equal(yoluTemizle('/api/a\r\nb\u0000'), '/api/ab');
   assert.equal(yoluTemizle(`/${'x'.repeat(500)}`).length, YOL_EN_COK);
+});
+
+test('var olmayan adres uç kalıpları gibi /api öneksiz yazılır; yalnız baştaki tam /api parçası atılır', () => {
+  assert.equal(apiOnekiniAt('/api/.env'), '/.env');
+  assert.equal(apiOnekiniAt('/api/guvenlik/ozet'), '/guvenlik/ozet');
+  assert.equal(apiOnekiniAt('/apix/yok'), '/apix/yok');
+  assert.equal(apiOnekiniAt('/api'), '/api');
+  assert.equal(apiOnekiniAt('/yok/api/x'), '/yok/api/x');
 });
