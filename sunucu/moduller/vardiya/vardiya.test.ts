@@ -132,6 +132,24 @@ describe('vardiya (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.planlama, 'POST', `/vardiyalar/${OLMAYAN_ID}/guncelle`, { ...govde, surum: 1 })).durum, 404);
   });
 
+  test('VRD-7: vardiya adı büyük/küçük harf ve boşluk farkıyla da tekildir; net süresi sıfır olan vardiya ve aynı saatli mola reddedilir', async () => {
+    const v = await vardiyaAc();
+    const ayni = await istek<{ alan?: string }>(c.planlama, 'POST', '/vardiyalar', { ad: ` ${v.ad.toLowerCase()}  `, baslangic: '08:00', bitis: '16:00', molalar: [] }, kimlikli());
+    assert.equal(ayni.durum, 409);
+    assert.equal(ayni.govde.alan, 'ad');
+    const bosluk = await istek(c.planlama, 'POST', '/vardiyalar', { ad: `Ç ${v.ad}`, baslangic: '08:00', bitis: '16:00', molalar: [] }, kimlikli());
+    assert.equal(bosluk.durum, 200);
+    assert.equal((await istek(c.planlama, 'POST', '/vardiyalar', { ad: `ç  ${v.ad}`, baslangic: '08:00', bitis: '16:00', molalar: [] }, kimlikli())).durum, 409);
+    const sifir = await istek<{ mesaj?: string; alan?: string }>(c.planlama, 'POST', '/vardiyalar',
+      { ad: `${v.ad}-sifir`, baslangic: '06:00', bitis: '14:00', molalar: [{ baslangic: '06:00', bitis: '14:00' }] }, kimlikli());
+    assert.deepEqual([sifir.durum, sifir.govde.alan], [400, 'molalar']);
+    assert.match(sifir.govde.mesaj ?? '', /net süre/);
+    const molaAyni = await istek<{ mesaj?: string }>(c.planlama, 'POST', '/vardiyalar',
+      { ad: `${v.ad}-mola`, baslangic: '06:00', bitis: '14:00', molalar: [{ baslangic: '10:00', bitis: '10:00' }] }, kimlikli());
+    assert.equal(molaAyni.durum, 400);
+    assert.match(molaAyni.govde.mesaj ?? '', /başlangıç ve bitişi aynı/);
+  });
+
   test('VR-01, VR-04, VR-09: matris hücresi açılır ve kapanır; haftalık ve günlük süre net dakikadır; kapsam dışı iş merkezi ve tesis geneli yazma kısıtlıya kapalı', async () => {
     const v = await vardiyaAc({ molalar: [{ baslangic: '12:00', bitis: '12:30' }] });
     assert.equal((await istek(c.operator, 'POST', '/vardiya-matrisi/degistir', { isMerkeziId: merkezA, gun: 1, vardiyaId: v.id, acik: true })).durum, 403);

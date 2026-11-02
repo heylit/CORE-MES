@@ -24,7 +24,7 @@ import {
 } from '../istasyonlar/disari.ts';
 import {
   aralik, araliklardanCikar, araliklarCakisir, atamaPayi, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
-  kisininIstasyonu, molaDenetle, netDakika, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
+  kisininIstasyonu, molaDenetle, netDakika, netSureHatasi, sonCalismaGunu, takvimAraliklari, takvimGunleriniBirlestir, tarihEkle, vardiyaKadrosu as kadroHesapla,
 } from './kurallar.ts';
 import type { KadroAtamasi, KadroSatiri, MatrisSatiri, TakvimGunu } from './kurallar.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
@@ -34,6 +34,7 @@ const GECMIS = 'vardiya.gecmis-yaz';
 const VARDIYA_YOK = 'Vardiya bulunamadı.';
 const VARDIYA_KISITLARI = {
   vardiya_ad_tekil: { ileti: 'Bu adda bir vardiya var.', alan: 'ad' },
+  vardiya_ad_tekil_harfsiz: { ileti: 'Bu adda bir vardiya var (büyük/küçük harf ve boşluk farkı ayrı ad sayılmaz).', alan: 'ad' },
 } as const;
 const MATRIS_KISITLARI = {
   vardiya_matrisi_is_merkezi_fk: { ileti: 'İş merkezi bulunamadı.', alan: 'isMerkeziId' },
@@ -153,7 +154,7 @@ async function gecmisDenetle(db: Db, kullanici: Kullanici, tarih: string): Promi
 
 function vardiyaDenetle(v: { baslangic: string; bitis: string; molalar: readonly { baslangic: string; bitis: string }[] }): void {
   if (v.baslangic === v.bitis) throw dogrulama('Başlangıç ve bitiş aynı olamaz.', 'bitis');
-  const hata = molaDenetle(v.baslangic, v.bitis, v.molalar);
+  const hata = molaDenetle(v.baslangic, v.bitis, v.molalar) ?? netSureHatasi(v.baslangic, v.bitis, v.molalar);
   if (hata) throw dogrulama(hata, 'molalar');
 }
 
