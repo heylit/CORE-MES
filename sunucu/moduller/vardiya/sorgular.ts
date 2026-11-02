@@ -116,6 +116,11 @@ export async function bugun(db: Db): Promise<string> {
   return (await db.tek<{ g: string }>("SELECT to_char(current_date, 'YYYY-MM-DD') AS g"))!.g;
 }
 
+// An tesis saatiyle bugünün başından önce mi (oturumun saat dilimi tesisinkidir, `bugun` gibi).
+export async function bugundenOnceMi(db: Db, an: string): Promise<boolean> {
+  return (await db.tek<{ once: boolean }>('SELECT $1::timestamptz < current_date::timestamptz AS once', [an]))!.once;
+}
+
 // Dakika ekseni (tarihin 00:00'ından) veritabanı oturumunun saat diliminde ana çevrilir; yaz ve kış saati geçişi dahil.
 export async function anlaraCevir(db: Db, tarih: string, dakikalar: readonly number[]): Promise<string[]> {
   if (dakikalar.length === 0) return [];

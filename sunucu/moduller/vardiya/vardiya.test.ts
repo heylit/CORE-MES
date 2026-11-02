@@ -545,6 +545,31 @@ describe('vardiya (gerçek PostgreSQL)', () => {
       await kaldir(d.id);
     });
 
+    test('VR-31 (VRD-7): geçmiş tarihli planlı duruş geçmiş yazma işlemi ister; tekrarlı geçmiş duruş değişir ama silinmez', async () => {
+      const GECMIS_GUN = '2000-01-05';
+      const gecmisGovde = { baslangic: zaman(GECMIS_GUN, '10:00'), bitis: zaman(GECMIS_GUN, '11:00') };
+      const red = await ac(c.planlama, gecmisGovde);
+      assert.equal(red.durum, 403);
+      const tek = await ac(c.yonetici, gecmisGovde);
+      assert.equal(tek.durum, 200, JSON.stringify(tek.govde));
+      const t = tek.govde.durus;
+      // Tek seferlik geçmiş duruş geçmiş yazma işlemi olmadan değişmez ve silinmez; ileri tarihe taşımak da onu değiştirmektir.
+      assert.equal((await istek(c.planlama, 'POST', `/planli-duruslar/${t.id}/guncelle`, { ...govde(gecmisGovde), baslik: 'Değişti', surum: t.surum })).durum, 403);
+      assert.equal((await istek(c.planlama, 'POST', `/planli-duruslar/${t.id}/guncelle`, { ...govde(), surum: t.surum })).durum, 403);
+      assert.equal((await istek(c.planlama, 'POST', `/planli-duruslar/${t.id}/kaldir`, { surum: t.surum })).durum, 403);
+      // Geleceğe ait duruş geçmişe alınamaz.
+      const ileri = (await ac(c.planlama)).govde.durus;
+      assert.equal((await istek(c.planlama, 'POST', `/planli-duruslar/${ileri.id}/guncelle`, { ...govde(gecmisGovde), surum: ileri.surum })).durum, 403);
+      // Geçmişte başlamış tekrarlı duruş: başlangıcı aynı kalırsa değişir (tekrar bitişi verilir), silinmez.
+      const tekrarli = (await ac(c.yonetici, { ...gecmisGovde, tekrar: 'gunluk' })).govde.durus;
+      const bitir = await istek<PlanliDurusCevabi>(c.planlama, 'POST', `/planli-duruslar/${tekrarli.id}/guncelle`,
+        { ...govde({ ...gecmisGovde, tekrar: 'gunluk', tekrarBitis: zaman('2000-02-01', '00:00') }), surum: tekrarli.surum });
+      assert.equal(bitir.durum, 200, JSON.stringify(bitir.govde));
+      assert.equal((await istek(c.planlama, 'POST', `/planli-duruslar/${tekrarli.id}/kaldir`, { surum: bitir.govde.durus.surum })).durum, 403);
+      for (const d of [t, bitir.govde.durus]) await tamam(c.yonetici, 'POST', `/planli-duruslar/${d.id}/kaldir`, { surum: d.surum });
+      await kaldir(ileri.id);
+    });
+
     test('VR-13: kısıtlı kişi kendi iş merkezinde yazar; başka merkez ve tesis geneli reddedilir; sürüm ve kaldırma', async () => {
       assert.equal((await ac(c.kisitli, { istasyonId: istasyonB })).durum, 403);
       assert.equal((await ac(c.kisitli, { kapsam: 'is-merkezi', istasyonId: null, isMerkeziId: merkezB })).durum, 403);

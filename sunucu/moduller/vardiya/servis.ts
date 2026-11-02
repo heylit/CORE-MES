@@ -621,9 +621,21 @@ async function durusNedeniDenetle(db: Db, nedenId: number | null, onceki: number
   if (!neden.aktif && nedenId !== onceki) throw dogrulama('Pasif duruş nedeni seçilemez.', 'durusNedeniId');
 }
 
+// VR-31 (VRD-7): bugünden önce başlayan planlı duruş geçmiş kapasiteyi (OEE, emek verimi) değiştirir; takvim günü ve fazla mesai gibi
+// `vardiya.gecmis-yaz` ister. Yeni kayıt ve başlangıcı bugünden önceye alınan kayıt denetlenir; var olan kayıtta tek seferlik geçmiş duruş
+// değişmez ve silinmez, geçmişte başlamış tekrarlı duruş silinmez (tekrar bitişiyle sonlandırılır). Arkon'dan yazım da buradan geçer.
+async function durusGecmisDenetle(db: Db, kullanici: Kullanici, yeni: { baslangic: string } | null, onceki: s.PlanliDurusSatiri | null): Promise<void> {
+  if (kullanici.islemler.includes(GECMIS)) return;
+  const gecmis = (an: string) => s.bugundenOnceMi(db, an);
+  const yeniGecmis = yeni !== null && (onceki === null || Date.parse(yeni.baslangic) !== Date.parse(onceki.baslangic)) && await gecmis(yeni.baslangic);
+  const oncekiKilitli = onceki !== null && (onceki.tekrar === 'yok' || yeni === null) && await gecmis(onceki.baslangic);
+  if (yeniGecmis || oncekiKilitli) throw yetkiYok('Geçmiş tarihli planlı duruş için yetkin yok.');
+}
+
 async function durusEkle(db: Db, kullanici: Kullanici, g: PlanliDurusGirdisi, kaynakKimligi: string | null): Promise<number> {
   const d = durusGirdisi(g);
   await durusKapsamiDenetle(db, kullanici, d);
+  await durusGecmisDenetle(db, kullanici, d, null);
   await durusNedeniDenetle(db, d.durusNedeniId, null);
   return kisitKorumali(DURUS_KISITLARI, () => s.planliDurusEkle(db, d, kullanici.id, kaynakKimligi));
 }
@@ -633,6 +645,7 @@ async function durusGuncelle(db: Db, kullanici: Kullanici, onceki: s.PlanliDurus
   await durusKapsamiDenetle(db, kullanici, onceki);
   const d = durusGirdisi(g);
   await durusKapsamiDenetle(db, kullanici, d);
+  await durusGecmisDenetle(db, kullanici, d, onceki);
   await durusNedeniDenetle(db, d.durusNedeniId, onceki.durusNedeniId);
   await kisitKorumali(DURUS_KISITLARI, () => surumluGuncelle({
     guncelle: () => s.planliDurusGuncelle(db, onceki.id, d, surum, kullanici.id),
@@ -643,6 +656,7 @@ async function durusGuncelle(db: Db, kullanici: Kullanici, onceki: s.PlanliDurus
 
 async function durusSil(db: Db, kullanici: Kullanici, onceki: s.PlanliDurusSatiri, surum: number): Promise<void> {
   await durusKapsamiDenetle(db, kullanici, onceki);
+  await durusGecmisDenetle(db, kullanici, null, onceki);
   await surumluGuncelle({
     guncelle: async () => ((await s.planliDurusSil(db, onceki.id, surum)) ? { id: onceki.id } : null),
     varMi: () => s.planliDurusVarMi(db, onceki.id),
