@@ -10,7 +10,7 @@ import type { KartKaydi, Kisi, OnayBilgisi } from '../tipler.ts';
 import { kimlikOf } from './liste.ts';
 import { farkAlanAdi, farkDegeri } from './talep-fark.ts';
 
-export type OnayIslemi = 'onayla' | 'reddet' | 'gonder' | 'pasif' | 'aktif';
+export type OnayIslemi = 'onayla' | 'reddet' | 'gonder' | 'pasif' | 'aktif' | 'geri';
 export type TalepIslemi = 'onayla' | 'reddet' | 'geri';
 
 const DURUM_TONU: Record<string, RozetTonu> = { taslak: 'pasif', onayda: 'uyari', aktif: 'tamam', pasif: 'pasif' };
@@ -29,6 +29,7 @@ export function onayBilgisi(x: KartKaydi, b: KuralBaglami): string {
   const pasif = o['pasif'] as (Kisi & { neden?: string }) | undefined;
   if (k === 'onayda') return `${o.degisiklik ? 'Değişiklik onayı bekliyor' : 'Onay bekliyor'}${o.talep ? ` (gönderen: ${kimMetni(o.talep)})` : ''}`;
   if (k === 'aktif' && o.onay) return `Onaylayan: ${kimMetni(o.onay)}`;
+  if (k === 'taslak' && o.red?.geri) return `Onaydan geri çekildi (${kimMetni(o.red)})`;
   if (k === 'taslak' && o.red) return `Reddedildi (${kimMetni(o.red)})${o.red.neden ? `: ${o.red.neden}` : ''}`;
   if (k === 'pasif' && pasif) return `Pasife alındı (${kimMetni(pasif)})${pasif.neden ? `: ${pasif.neden}` : ''}`;
   return '';
@@ -75,6 +76,7 @@ export function OnayPaneli({ x, yetki, b, mesgul, islem }: {
                 <Dugme onClick={() => nedenYaz('reddet')}>Reddet</Dugme>
               </>
             )}
+            {K.geriCekebilir(x, b) && <Dugme yukleniyor={mesgul} onClick={() => islem('geri')}>Onaydan geri çek</Dugme>}
             {k === 'onayda' && !yetkili && (
               <span className="tc-mk-ipucu">
                 {!yetki.onayla ? 'Onay ana veri sorumlusu ya da yöneticidedir.' : b.genel.dortGoz ? 'Kendi gönderdiğin kartı onaylayamazsın.' : 'Onay yetkin yok.'}

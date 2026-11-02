@@ -22,7 +22,7 @@ import type { z } from 'zod';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
-  katalogIptalYetkiliMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
+  katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
@@ -503,6 +503,7 @@ export async function katalogKartiKaydet(
     acanKisiId: kayitli?.acanKisiId ?? null, gonderenKisiId: kayitli?.gonderenKisiId ?? null, dortGozAcik,
     onayAkisiAcik: katalogOnayAkisiAcikMi(await katalogGenelAyari(db)),
     icerikDegisti: kayitli ? katalogIcerigiDegistiMi(kayitli, { ...gelen, kayit }, true) : false, onaysizIcerikDegisti,
+    hicOnaylanmadi: kayitli ? katalogHicOnaylanmadiMi(kayitli.kayit) : true,
   });
   if (hata) throw hata.kod === 'YETKI_YOK' ? yetkiYok(hata.mesaj) : gecersiz(hata.mesaj);
   if (gonderildi || (yeniDurum === 'aktif' && onceki !== 'aktif')) {

@@ -213,12 +213,13 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
 
   /* ---------------- 1. aktif ya da onaydaki kart taslağa çekilemez ---------------- */
 
-  test('1: yazma yetkilisi aktif kartı da onaydaki kartı da taslağa çekemez; onaycı çekebilir', async () => {
+  // MLZ-5 a: kartı açan ya da gönderen, hiç onaylanmamış kartı onaydan geri çekebilir; başka yazar çekemez.
+  test('1: yazma yetkilisi aktif kartı ve başkasının onaydaki kartını taslağa çekemez; onaycı çekebilir', async () => {
     const aktif = await aktifKart();
     await reddedilir(403, 'YETKI_YOK', yazar, aktif, 'taslak');
     const bekleyen = yeni();
     await kaydet(yazar, bekleyen, 'onayda');
-    await reddedilir(403, 'YETKI_YOK', yazar, bekleyen, 'taslak');
+    await reddedilir(403, 'YETKI_YOK', yazar2, bekleyen, 'taslak');
     assert.equal((await satir(bekleyen))?.onay_durumu, 'onayda');
     await kaydet(onayci, bekleyen, 'taslak');
     assert.equal((await satir(bekleyen))?.onay_durumu, 'taslak');

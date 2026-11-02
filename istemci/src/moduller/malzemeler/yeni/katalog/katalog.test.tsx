@@ -181,6 +181,28 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     expect(p.queryByRole('button', { name: 'Sil' })).toBeNull();
   });
 
+  test('MLZ-5 a: onaya gönderen yazan kartı onaydan geri çeker; başkasının kartında ve onaylanmış kartta düğme yok', async () => {
+    const onaylanmis = { ...onayda('m3', 'HM-C', YAZAN.id), onay: { durum: 'onayda', talep: { by: YAZAN.id, byAd: 'Ben', t: 1 }, onay: { by: 3, byAd: 'Biri', t: 1 } } };
+    for (const [kimlik, kayit] of [['m2', onayda('m2', 'HM-B', 3)], ['m3', onaylanmis]] as const) {
+      cleanup();
+      kur(YAZAN, kartlar(satir(kimlik, 1, kayit)));
+      yeniEkranAc(`${KOK}?kart=${kimlik}`);
+      expect(within(await screen.findByRole('dialog')).queryByRole('button', { name: 'Onaydan geri çek' }), kimlik).toBeNull();
+    }
+    cleanup();
+    const istekler = kur(YAZAN, {
+      ...kartlar(satir('m1', 1, onayda('m1', 'HM-A', YAZAN.id))),
+      'POST /malzeme-katalogu-kartlari/m1/kaydet': () => json(200, { id: 'm1', stok_kodu: 'HM-A', surum: 2 }),
+    });
+    yeniEkranAc(`${KOK}?kart=m1`);
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Onaydan geri çek' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    const govde = istekler.find((i) => i.yontem === 'POST')!.govde as { kayit: { onay: { durum: string; red: { geri?: boolean } } }; ozet: { onay_durumu: string } };
+    expect(govde.kayit.onay.durum).toBe('taslak');
+    expect(govde.kayit.onay.red.geri).toBe(true);
+    expect(govde.ozet.onay_durumu).toBe('taslak');
+  });
+
   test('sorumlu onaylar: kart aktif durumla ve özetle kaydet ucuna gider', async () => {
     const istekler = kur(SORUMLU, {
       ...kartlar(satir('m1', 1, onayda('m1', 'HM-A', 3))),

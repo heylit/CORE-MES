@@ -70,6 +70,8 @@ export interface KatalogGecisi {
   icerikDegisti: boolean;
   // Aynısı, `onay` alt nesnesi sayılmadan: onay adımı yalnız onayı değiştirir.
   onaysizIcerikDegisti: boolean;
+  // Kayıtlı kart hiç onaylanmadı mı (`katalogHicOnaylanmadiMi`); yeni kartta true.
+  hicOnaylanmadi: boolean;
 }
 
 // MKK-3..MKK-5, MKK-12..MKK-14: kartın onay durumunun değişmesi. Uç yazma yetkisiyle açılır; onay gerektiren geçişi burası ayırır.
@@ -80,6 +82,12 @@ export function katalogGecisiDenetle(g: KatalogGecisi): { kod: 'YETKI_YOK' | 'GE
   if (g.onceki === null && g.yeni === 'pasif') return { kod: 'GECERSIZ', mesaj: 'Yeni kart pasif olarak açılamaz.' };
   // MKK-12: aktif ya da onaydaki kartı taslağa çekmek (reddetmek, geri çekmek) ve aktif kartı onaya düşürmek onay yetkilisinin işidir;
   // yoksa kullanımdaki kart düşürülüp iptal edilebilir. Ekran aktif kartı kendi başına onaya düşürmez (değişiklik talebi yazar).
+  // MLZ-5 a: hiç onaylanmamış kartı açan ya da onaya gönderen, kartı içeriğine dokunmadan onaydan taslağa geri çeker.
+  // Kullanılmış kartın onaydan düşürülmesi onay yetkilisinde kalır.
+  const sahip = g.kisiId === g.acanKisiId || g.kisiId === g.gonderenKisiId;
+  if (g.onceki === 'onayda' && g.yeni === 'taslak' && !onaylar && sahip && g.hicOnaylanmadi) {
+    return g.onaysizIcerikDegisti ? { kod: 'GECERSIZ', mesaj: 'Onaydan geri çekerken kartın içeriği değiştirilemez; önce geri çek, sonra düzenle.' } : null;
+  }
   if (g.yeni === 'taslak' && (g.onceki === 'aktif' || g.onceki === 'onayda') && !onaylar) {
     return { kod: 'YETKI_YOK', mesaj: 'Aktif ya da onaydaki kartı taslağa çekmek için onay yetkisi gerekir.' };
   }
@@ -772,8 +780,13 @@ export function katalogGecmisiniBas(kayitli: Nesne | null, kayit: Nesne, kim: Ka
 // Prototipte "Sil" yalnız onay yetkisi olan rollere görünür; yetkisi olmayan yalnız kendi açtığı ve hiç onaylanmamış taslağı iptal eder.
 export function katalogIptalYetkiliMi(g: { islemler: readonly string[]; kisiId: number; acanKisiId: number; kayit: Nesne }): boolean {
   if (g.islemler.includes('malzemeler.onayla')) return true;
-  const onay = nesneMi(g.kayit['onay']) ? g.kayit['onay'] : {};
-  return g.acanKisiId === g.kisiId && !nesneMi(onay['onay']);
+  return g.acanKisiId === g.kisiId && katalogHicOnaylanmadiMi(g.kayit);
+}
+
+// Kartın onay damgası (`onay.onay`) hiç basılmadıysa kart hiç aktif olmamıştır.
+export function katalogHicOnaylanmadiMi(kayit: Nesne): boolean {
+  const onay = nesneMi(kayit['onay']) ? kayit['onay'] : {};
+  return !nesneMi(onay['onay']);
 }
 
 // MKK-6: yalnız taslak iptal edilir (prototipte "sil"); kart hiç silinmez.
