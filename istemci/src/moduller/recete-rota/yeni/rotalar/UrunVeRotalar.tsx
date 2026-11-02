@@ -194,7 +194,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
               </span>
             )}
             {uyarilar.length > 0 && <span className="tc-rr1-uyari" title={uyarilar.join('\n')}>{uyarilar.length} uyarı</span>}
-            {o.yetki.emirYaz && <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', kokId); }}>Üretim emri oluştur</Dugme>}
+            {o.yetki.emirYaz && <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { if (kokId) o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>}
           </span>
         )}
       </div>

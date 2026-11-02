@@ -17,17 +17,21 @@ import {
 
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
+const URUN_ONEKI = 'urun:';
+
 export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   const d = veri.durum;
   const [durumSuzgeci, setDurumSuzgeci] = useState<DurumSuzgeci>('aktif');
   const [turSuzgeci, setTurSuzgeci] = useState('tum');
   const [arama, setArama] = useState('');
-  const [acik, setAcik] = useState<string | null>(kimlik);
+  // Ürün ve rotalar'dan gelen "urun:<id>" yeni emir formunu o ürünle açar; ürün ve emir kimlikleri ayrı sayaçtır, çıplak kimlik emirdir.
+  const yeniUrun = kimlik?.startsWith(URUN_ONEKI) ? kimlik.slice(URUN_ONEKI.length) : null;
+  const [acik, setAcik] = useState<string | null>(yeniUrun === null ? kimlik : null);
   const komut = useEmirKomutu();
   const emirler = useMemo(() => d.emirler?.orders ?? [], [d.emirler]);
   const acabilir = yetki.emirYaz || yetki.rotaEmreKopyala;
   const [sorgu] = useSearchParams();
-  const [yeniAcik, setYeniAcik] = useState((emirler.length === 0 || sorgu.get('yeni') === '1') && acabilir);
+  const [yeniAcik, setYeniAcik] = useState((emirler.length === 0 || sorgu.get('yeni') === '1' || yeniUrun !== null) && acabilir);
 
   if (!d.emirler) {
     return (
@@ -82,7 +86,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
       </div>
       {acabilir && yeniAcik && (
         <YeniEmirFormu
-          durum={d} yetki={yetki} komut={komut} git={git}
+          durum={d} yetki={yetki} komut={komut} git={git} ilkUrun={yeniUrun}
           acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setArama(''); setAcik(id); }}
         />
       )}
@@ -163,8 +167,9 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean }
 
-function YeniEmirFormu({ durum: d, yetki, komut, acildi, git }: {
+function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
+  ilkUrun: string | null;
 }) {
   // Emir yalnız mamul ya da yarı mamule açılır; rotası olan emre kopyalanır (rota.emre-kopyala), rotası olmayan rotasız açılır
   // (uretim-emirleri.yaz). İşlemi olmayan yolun ürünü listede yoktur.
@@ -174,7 +179,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git }: {
   const tatiller = d.cal.holidays;
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
-    urun: urunler[0]?.id ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true,
+    urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true,
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);

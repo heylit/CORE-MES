@@ -249,6 +249,39 @@ describe('R3 Üretim emirleri: komutlar', () => {
     expect(istekler.find((i) => i.yol === '/adimli-emirler/rotasiz')?.govde).toMatchObject({ malzemeNo: 11, adet: 25, emirTuru: 'seri' });
   });
 
+  it('çift tıklama tek emir açar: ikinci tık komut sürerken düşer (RR-2)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: {
+        'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }),
+        'POST /adimli-emirler/rotasiz': () => json(200, { uretimEmriId: 62 }),
+      },
+    });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    const dugme = within(form).getByRole('button', { name: 'Emri oluştur' });
+    fireEvent.click(dugme);
+    fireEvent.click(dugme);
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/adimli-emirler/rotasiz')).toBe(true));
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yol === '/adimli-emirler/rotasiz')).toHaveLength(1);
+  });
+
+  it('Ürün ve rotalar\'daki "Üretim emri oluştur" yeni formu o ürünle açar; aynı numaralı emri açmaz (RR-1)', async () => {
+    const d = ornekDurum();
+    // Ürün kimliği ile emir kimliği çakışsın: eski hata ürün 11 için emir 11'i açıyordu.
+    d.emirler!.orders[0]!.id = '11';
+    sunucuKur(YONETICI, { durum: d });
+    rrAc('/recete-rota/schema');
+    fireEvent.click(await screen.findByRole('button', { name: 'Üretim emri oluştur' }));
+    const b = await bolum('Üretim emirleri');
+    const form = await within(b).findByRole('region', { name: 'Yeni üretim emri' });
+    expect((within(form).getByRole('combobox', { name: 'Ürün' }) as HTMLSelectElement).value).toBe('11');
+    expect(within(b).queryByRole('button', { name: /Ayrıntıyı kapat|Kapat/ })).toBeNull();
+    expect(within(b).getByText('Ayrıntı için listeden bir emir seçin.')).toBeTruthy();
+  });
+
   it('rota.emre-kopyala olmayan rotalı ürüne emir açamaz (reddedilen)', async () => {
     const d = ornekDurum();
     d.routes = { 11: { base: null, steps: [] } };
