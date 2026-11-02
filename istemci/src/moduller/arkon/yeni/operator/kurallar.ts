@@ -403,6 +403,16 @@ export const sonucBelgesi = (x: Is): Result & { kart: number | null } => ({
 // Toplu ve tek sayımda dokunulmayan iyi parça oranı (DoneOv).
 export const kaliteYuzdesi = (o: Pick<Is, 'good' | 'scrap'>): string => (100 * o.good / (o.good + o.scrap || 1)).toFixed(1);
 
+// Bitiş özetinin sayıları. TMI işinde operatör hurda yazmaz, hatalıyı kaliteye ayırır (1034): satır "Hatalı" olur, sayısı sunucunun
+// adım toplamıdır ve kalite oranına girer. Toplam bilinmiyorsa (null) sayı da oran da "—" kalır; sıfır uydurulmaz.
+export interface OzetSatiri { etiket: string; deger: string; ton?: 'durdu' }
+export function bitisOzeti(o: Pick<Is, 'good' | 'scrap'>, hatali: number | null | undefined, sayi: (n: number) => string): OzetSatiri[] {
+  const iyi = { etiket: 'İyi parça', deger: sayi(o.good) };
+  if (hatali === undefined) return [iyi, { etiket: 'Hurda', deger: String(o.scrap), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi(o)}` }];
+  if (hatali === null) return [iyi, { etiket: 'Hatalı', deger: '—', ton: 'durdu' }, { etiket: 'Kalite', deger: '—' }];
+  return [iyi, { etiket: 'Hatalı', deger: String(hatali), ton: 'durdu' }, { etiket: 'Kalite', deger: `%${kaliteYuzdesi({ good: o.good, scrap: hatali })}` }];
+}
+
 
 // Ton adı -> ortak arayüzün durum adı (renk data-durum ile seçilir).
 const TON_DURUMU: Readonly<Record<Ton, MakineDurumu>> = { run: 'calisiyor', hold: 'durakli', stop: 'durdu', done: 'bitti', hazard: 'ayar', idle: 'sirada' };

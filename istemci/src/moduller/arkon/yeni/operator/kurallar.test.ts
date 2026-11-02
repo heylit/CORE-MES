@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
+  bitisOzeti,
   cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
@@ -143,5 +144,20 @@ describe('numune çizgisi aralığı (664)', () => {
     expect(numuneAraligi(kural({ when: 'time', n: 60 }), { good: 0, baseGood: 0, startedAt: 1000 }, 1000 + 75 * 60000)).toEqual({ n: 60, birim: 'dk', gecen: 15, hedef: null });
     expect(numuneAraligi(kural({ when: 'time', n: 60 }), { good: 0, baseGood: 0, startedAt: 0 }, 5000)).toBeNull();
     for (const when of ['first', 'last', 'shift']) expect(numuneAraligi(kural({ when }), { good: 10, baseGood: 0, startedAt: 1 }, 2)).toBeNull();
+  });
+});
+
+describe('bitiş özeti', () => {
+  const sayi = (n: number) => String(n);
+  it('TMI işinde hatalı satırı sunucunun toplamını gösterir ve kalite oranına girer', () => {
+    expect(bitisOzeti({ good: 3, scrap: 0 }, 1, sayi)).toEqual([
+      { etiket: 'İyi parça', deger: '3' }, { etiket: 'Hatalı', deger: '1', ton: 'durdu' }, { etiket: 'Kalite', deger: '%75.0' },
+    ]);
+  });
+  it('hatalı toplamı bilinmiyorsa sayı ve oran boştur', () => {
+    expect(bitisOzeti({ good: 3, scrap: 0 }, null, sayi).slice(1)).toEqual([{ etiket: 'Hatalı', deger: '—', ton: 'durdu' }, { etiket: 'Kalite', deger: '—' }]);
+  });
+  it('TMI dışı işte hurda satırı kalır', () => {
+    expect(bitisOzeti({ good: 9, scrap: 1 }, undefined, sayi).slice(1)).toEqual([{ etiket: 'Hurda', deger: '1', ton: 'durdu' }, { etiket: 'Kalite', deger: '%90.0' }]);
   });
 });
