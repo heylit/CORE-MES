@@ -17,7 +17,10 @@ const DURUS: DurusNedeni[] = [
   { id: 1, kod: 'D-01', ad: 'Deneme arıza', simge: null, kategori: 'plansiz', cagriEkibi: 'bakim', cagriGecikmeDk: 0, aktif: true, sira: 1, surum: 3 },
   { id: 2, kod: 'D-02', ad: 'Deneme mola', simge: null, kategori: 'planli', cagriEkibi: null, cagriGecikmeDk: null, aktif: false, sira: 2, surum: 1 },
 ];
-const HURDA: HurdaNedeni[] = [{ id: 1, kod: 'H-01', ad: 'Deneme hurda', aktif: true, sira: 1, surum: 1 }];
+const HURDA: HurdaNedeni[] = [
+  { id: 1, kod: 'H-01', ad: 'Deneme hurda', aktif: true, sira: 1, surum: 1 },
+  { id: 2, kod: 'FSN-HURDA', ad: 'Deneme firmada hurda', aktif: true, sira: 2, surum: 4 },
+];
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -196,5 +199,34 @@ describe('DurusNedenleri', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));
     expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).toEqual({ kod: 'H-02', ad: 'Yeni hurda' });
+  });
+
+  it('fason hatalı türünde kod kilitlidir; pasife alınırken GKK uyarısı çıkar, ad ve aktiflik yine gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac('hurda');
+    fireEvent.click(await screen.findByText('Deneme firmada hurda'));
+    const pencere = await screen.findByRole('dialog');
+    const kod = within(pencere).getByLabelText(/Kod/) as HTMLInputElement;
+    expect(kod.readOnly).toBe(true);
+    expect(within(pencere).getByText(/kodu değişmez/)).toBeTruthy();
+    expect(within(pencere).queryByRole('note')).toBeNull();
+    fireEvent.click(within(pencere).getByRole('checkbox'));
+    expect(within(pencere).getByRole('note').textContent).toMatch(/GKK/);
+    fireEvent.change(within(pencere).getByLabelText(/Ad/), { target: { value: 'Firmada hurda yeni' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true));
+    const yazma = cagrilar.find((c) => c.yontem === 'POST');
+    expect(yazma?.yol).toBe('/hurda-nedenleri/2/guncelle');
+    expect(yazma?.govde).toEqual({ kod: 'FSN-HURDA', ad: 'Firmada hurda yeni', aktif: false, surum: 4 });
+  });
+
+  it('sıradan hurda nedeninin kodu düzenlenebilir ve pasife alınınca uyarı çıkmaz', async () => {
+    sunucuKur(YONETICI);
+    ac('hurda');
+    fireEvent.click(await screen.findByText('Deneme hurda'));
+    const pencere = await screen.findByRole('dialog');
+    expect((within(pencere).getByLabelText(/Kod/) as HTMLInputElement).readOnly).toBe(false);
+    fireEvent.click(within(pencere).getByRole('checkbox'));
+    expect(within(pencere).queryByRole('note')).toBeNull();
   });
 });
