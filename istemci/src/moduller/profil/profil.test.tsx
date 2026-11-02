@@ -108,7 +108,8 @@ describe('Profil sayfası', () => {
     ac('/profil');
     fireEvent.click(await screen.findByRole('button', { name: "PIN'imi değiştir" }));
     fireEvent.change(screen.getByLabelText(/Eski PIN ya da parola/), { target: { value: '730514' } });
-    fireEvent.change(screen.getByLabelText(/Yeni PIN/), { target: { value: '615203' } });
+    fireEvent.change(screen.getByLabelText(/^Yeni PIN \(6 rakam\)/), { target: { value: '615203' } });
+    fireEvent.change(screen.getByLabelText(/^Yeni PIN \(tekrar\)/), { target: { value: '615203' } });
     fireEvent.click(screen.getByRole('button', { name: "PIN'i değiştir" }));
     expect(await screen.findByText(/PIN değiştirildi/)).toBeTruthy();
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ eski: '730514', yeniPin: '615203' });

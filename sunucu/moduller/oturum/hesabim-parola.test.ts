@@ -101,6 +101,19 @@ describe('kendi parolasını değiştirme (gerçek PostgreSQL, gerçek giriş, s
     await oturumAc(ad, PAROLA);
   });
 
+  test('yeni parola eskisiyle aynı olamaz: 400 alan yeniParola, parola ve oturumlar değişmez, deneme sayılmaz', async () => {
+    const ad = await kisi();
+    const cerez = await oturumAc(ad);
+    const oteki = await oturumAc(ad);
+    const ayni = await degistir(cerez, PAROLA, PAROLA);
+    assert.equal(ayni.statusCode, 400);
+    assert.equal(ayni.json().alan, 'yeniParola');
+    assert.equal(ayni.json().mesaj, 'Yeni parola eskisiyle aynı olamaz.');
+    assert.equal(await acikMi(oteki), true);
+    // Deneme sayılmadı: hemen ardından doğru değişim beklemeye takılmaz.
+    assert.equal((await degistir(cerez, PAROLA, YENI)).statusCode, 200);
+  });
+
   test('yanlış eski parola girişteki beklemeyi başlatır: bekleme dolmadan doğru parola da reddedilir, dolunca kabul edilir', async () => {
     const ad = await kisi();
     const cerez = await oturumAc(ad);

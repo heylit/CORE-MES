@@ -38,6 +38,11 @@ export function beklemeIletisi(kalanSn: number): string {
   return `Çok sık deneme: hatalı denemeden sonra kısa bekleme kilidi var. ${kalanSn} sn sonra yeniden deneyin; bu sürede doğru PIN ya da parola da kabul edilmez.`;
 }
 
+// Yeni parola eskisiyle aynıysa değişim bir şey değiştirmez ama öbür oturumları kapatır ve "değişti" sanılır. İki değer de
+// istekte gelir: karşılaştırma sırra bakmaz, deneme sayılmaz.
+export const AYNI_PAROLA = 'Yeni parola eskisiyle aynı olamaz.';
+export const ayniParolaMi = (eski: string, yeni: string): boolean => eski !== '' && eski === yeni;
+
 // Ada bütün cihazlardan, son başarılı denemeden ve son kilidin başından beri gelen hatalı deneme sayısı eşiğe varınca
 // ad kilitlenir (kullanıcı kararı, 14.10.2026). Cihaz başına bekleme dağıtık denemeyi yavaşlatmaz; kilit durdurur.
 export const HESAP_KILIDI_ESIGI = 10;

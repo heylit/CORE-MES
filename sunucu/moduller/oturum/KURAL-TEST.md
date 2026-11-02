@@ -38,3 +38,4 @@ Test adları dosyalardan okundu; uç başına ayrıntı `GUVENLIK-DENETIMI.md`.
 | Göç dolu ortak cihaz tablosuna yazmaz; açık cihazlar istasyon olur | goc.test.ts "açık cihaz istasyon olur, ..." | aynı test: kapanmış cihaza atama yok, satırlar değişmez |
 | İlk PIN belirleme (oturumsuz uç) değişiklik defterine kişinin kendisiyle yazılır (ALT-4) | hesabim-pin.test.ts "ilk PIN belirleme değişiklik defterine kişinin kendisiyle yazılır, ..." | aynı test: kişi boş ("Sistem") olmaz |
 | ALT-6 Bekleme iletisi bekleme kilidini ve doğru sırrın da reddedildiğini söyler | kurallar.ts `beklemeIletisi`; oturum.test.ts `beklet` kullanan testler | oturum.test.ts "... bekleme dolmadan doğru parola da reddedilir ..." (aynı ileti) |
+| ALT-5 Yeni parola eskisiyle aynı olamaz; karşılaştırma sırra bakmaz, deneme sayılmaz | hesabim-parola.test.ts "oturum ister; doğru eski parolayla değişir, ..." | hesabim-parola.test.ts "yeni parola eskisiyle aynı olamaz: ..." |

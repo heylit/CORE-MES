@@ -18,7 +18,7 @@ import type { GirisSirri } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
 import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
-  AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
+  AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   beklemeIletisi, kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
@@ -186,6 +186,7 @@ export async function kendiParolasiniDegistir(
   const kullaniciAdi = await kisiKullaniciAdi(db, kisiId);
   if (kullaniciAdi === null) throw gecersiz('Kişinin giriş hesabı yok.');
   const ad = kullaniciAdiniDuzelt(kullaniciAdi);
+  if (ayniParolaMi(girdi.eskiParola, girdi.yeniParola)) throw dogrulama(AYNI_PAROLA, 'yeniParola');
   await girisDenemesiniDenetle(db, ad, girdi.ip, simdi);
   if ((await parolayiDegistir(db, kisiId, girdi.eskiParola, girdi.yeniParola)) === 'eski-yanlis') {
     await basarisizDenemeKaydet(db, ad, girdi.ip, simdi, girdi.gunluk);
