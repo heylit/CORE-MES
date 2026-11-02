@@ -818,6 +818,30 @@ describe('makineler bölümü (#1109, IS25)', () => {
     await waitFor(() => { expect(screen.getAllByText('Alınamadı')).toHaveLength(2); });
   });
 
+  it('IST-2: pasif iş merkezinde ya da pasif istasyonda kalmış aktif makine ağaçta soluk dalına düşer; "Tümü" listedeki sayıdır', async () => {
+    const eskiIstasyon = { ...ISTASYONLAR.istasyonlar[0], id: 12, kod: 'E-01', ad: 'Eski Tezgah Yeri', isMerkeziId: 2 };
+    const makine = (id: number, kod: string, istasyonId: number) => ({ ...MAKINELER.makineler[0], id, kod, ad: `Deneme ${kod}`, istasyonId });
+    sunucuKur(OKUYUCU, {
+      '/istasyonlar?pasifler=true': { istasyonlar: [...ISTASYONLAR.istasyonlar, eskiIstasyon] },
+      '/makineler?pasifler=true': { makineler: [...MAKINELER.makineler, makine(22, 'M-03', 12), makine(23, 'M-04', 11)] },
+    });
+    goster(<Istasyonlar />, '/istasyonlar/makineler');
+    const tablo = await screen.findByRole('table', { name: 'Makineler' });
+    await waitFor(() => { expect(within(tablo).getByRole('row', { name: 'M-03' })).toBeTruthy(); });
+    const agac = screen.getByRole('navigation', { name: 'İş merkezleri ve istasyonlar' });
+    const sayi = (etiket: string) => within(agac).getByRole('button', { name: etiket }).querySelector('.tc-ist-calc')?.textContent;
+    expect(sayi('Tümü')).toBe('4');
+    expect(sayi('ESKI Eski Hat')).toBe('1');
+    expect(sayi('TORNA Torna Hattı')).toBe('2');
+    expect(within(agac).getByRole('button', { name: 'ESKI Eski Hat' }).className).toContain('tc-ist-soluk');
+    fireEvent.click(within(agac).getByRole('button', { name: 'ESKI Eski Hat' }));
+    expect(screen.getByRole('row', { name: 'M-03' })).toBeTruthy();
+    expect(screen.queryByRole('row', { name: 'M-04' })).toBeNull();
+    fireEvent.click(within(agac).getByRole('button', { name: 'TORNA istasyonlarını göster' }));
+    fireEvent.click(within(agac).getByRole('button', { name: 'K-01 Kalite Masası' }));
+    expect(screen.getByRole('row', { name: 'M-04' })).toBeTruthy();
+  });
+
   it('süzgeç durumları ayırır, ağaçta arızalı sayısı görünür; okuma kipindeki satır "Düzenle" ile açılır', async () => {
     sunucuKur(YONETICI);
     goster(<Istasyonlar />, '/istasyonlar/makineler');
