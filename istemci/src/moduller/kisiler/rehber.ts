@@ -8,7 +8,7 @@ export const rehber: readonly SayfaRehberi[] = [
       '"Kişi ekle" ile ad, sicil no ve görevi girin.',
       'Satırdaki simgelerle düzenleyin, pasife alın, hesap açın, parola değiştirin ya da PIN verin.',
       '"Roller" penceresinde rol atayın ya da kaldırın.',
-      'Yetkiliyseniz "Yetki matrisi" sekmesinde rol ve işlem eşleşmelerini görürsünüz.',
+      'Yetkiliyseniz "Yetkiler" düğmesi rol ve işlem eşleşmelerinin tutulduğu Ayarlar > Yetkiler sayfasını açar.',
     ],
     sinirlar: [
       'Kayıt, rol ve başkasının parolası ayrı yetkiler ister; herkes kendi parolasını değiştirebilir.',

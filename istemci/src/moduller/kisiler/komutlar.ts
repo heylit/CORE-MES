@@ -16,10 +16,10 @@ export const komutlar: Komut[] = [
     anahtar: 'yetki-matrisi',
     sira: 20,
     baslik: 'Yetki matrisini aç',
-    aciklama: 'Rollerin işlemlerini tek tabloda gör ve düzenle',
+    aciklama: 'Ayarlar > Yetkiler: rollerin işlemlerini tek tabloda gör ve düzenle',
     sozcukler: ['rol', 'yetki', 'işlem'],
     simge: 'lock',
-    yol: '/personel?gorunum=matris',
+    yol: '/ayarlar/yetkiler',
     islem: 'kisiler.rol-yonet',
   },
 ];

@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   KisiOzeti, PersonelCevabi, RolGovdesi, RolOzeti, RollerCevabi, SurumGovdesi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  Dugme, DurumKutusu, Kart, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim,
-  type Sekme, type Sutun,
+  Dugme, DurumKutusu, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim,
+  type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { YetkiMatrisi } from './YetkiMatrisi.tsx';
 import { HesapPenceresi, KisiFormu, ParolaPenceresi, PinPenceresi, eskiyseYenile, listeyeYaz } from './KisiPencereleri.tsx';
 import { kisileriSuz, type DurumSuzgeci } from './suzme.ts';
 import './personel.css';
@@ -118,16 +117,13 @@ function RolPenceresi({ kisiId, kapat }: { kisiId: number; kapat: () => void }) 
   );
 }
 
-type Gorunum = 'kisiler' | 'matris';
-const GORUNUMLER: readonly Sekme<Gorunum>[] = [
-  { anahtar: 'kisiler', baslik: 'Kişiler', simge: 'user' },
-  { anahtar: 'matris', baslik: 'Yetki matrisi', simge: 'lock' },
-];
+// Rol x işlem tek yerde, Ayarlar > Yetkiler'de görülür ve değiştirilir (KIS-8 a); Personel oraya bağlantı verir.
+const YETKILER_YOLU = '/ayarlar/yetkiler';
 
 type Pencere = { tur: 'form' | 'hesap' | 'parola' | 'pin' | 'rol'; kisiId: number | null };
 
-// Ctrl K'den gelen istek (kart #1236): `?yeni=1` boş formu, `?kisi=<id>` o kişinin düzenleme formunu dolu açar, `?gorunum=matris`
-// yetki matrisine geçer. Yazma yine formun kendi ucundadır; yetkisi olmayana pencere açılmaz.
+// Ctrl K'den gelen istek (kart #1236): `?yeni=1` boş formu, `?kisi=<id>` o kişinin düzenleme formunu dolu açar; eski
+// `?gorunum=matris` bağlantısı rol yöneteni Ayarlar > Yetkiler'e götürür. Yazma yine formun kendi ucundadır; yetkisi olmayana pencere açılmaz.
 const ISTEK_ANAHTARLARI = ['yeni', 'kisi', 'gorunum'] as const;
 
 // Bayrak yalnız kisiler.rol-yonet sahibine görünür; bilinmiyorsa düğme kalır, sunucu reddeder. Bayraklı kişinin kaydını
@@ -150,7 +146,6 @@ export function Personel() {
   const parolaDegistirebilir = islemler.includes('kisiler.parola-degistir');
   const kisiler = useQuery({ queryKey: anahtarlar.kisiler, queryFn: () => api.get<PersonelCevabi>('/kisiler') });
   const [acik, acikYaz] = useState<Pencere | null>(null);
-  const [gorunum, gorunumYaz] = useState<Gorunum>('kisiler');
   const [pasifeAlinacak, pasifeAlinacakYaz] = useState<KisiOzeti | null>(null);
   const [ara, araYaz] = useState('');
   const [durum, durumYaz] = useState<DurumSuzgeci>('tumu');
@@ -159,16 +154,17 @@ export function Personel() {
   const kapat = () => acikYaz(null);
 
   const [istek, istekYaz] = useSearchParams();
+  const git = useNavigate();
   useEffect(() => {
     if (!ISTEK_ANAHTARLARI.some((a) => istek.has(a)) || !oturum.data || !kisiler.data) return;
     const kisiId = Number(istek.get('kisi'));
     const hedef = Number.isInteger(kisiId) && kisiId > 0 ? kisiler.data.kisiler.find((k) => k.id === kisiId) : undefined;
-    if (istek.get('gorunum') === 'matris' && yonetebilir) gorunumYaz('matris');
-    else if (istek.get('yeni') === '1' && yazabilir) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: null }); }
-    else if (hedef !== undefined && yazabilir && !hedef.korumali) { gorunumYaz('kisiler'); acikYaz({ tur: 'form', kisiId: hedef.id }); }
+    if (istek.get('gorunum') === 'matris' && yonetebilir) { void git(YETKILER_YOLU, { replace: true }); return; }
+    if (istek.get('yeni') === '1' && yazabilir) acikYaz({ tur: 'form', kisiId: null });
+    else if (hedef !== undefined && yazabilir && !hedef.korumali) acikYaz({ tur: 'form', kisiId: hedef.id });
     // İstek bir kez uygulanır; geri tuşu ya da yenileme pencereyi yeniden açmaz.
     istekYaz((o) => { const y = new URLSearchParams(o); for (const a of ISTEK_ANAHTARLARI) y.delete(a); return y; }, { replace: true });
-  }, [istek, istekYaz, oturum.data, kisiler.data, yazabilir, yonetebilir]);
+  }, [istek, istekYaz, git, oturum.data, kisiler.data, yazabilir, yonetebilir]);
 
   const durumDegistir = useMutation({
     mutationFn: ({ kisi, islem }: { kisi: KisiOzeti; islem: 'pasife-al' | 'aktif-yap' }) =>
@@ -287,21 +283,19 @@ export function Personel() {
   return (
     <Kart
       baslik="Personel"
-      sag={gorunum === 'kisiler' && (
+      sag={(
         <span className="tc-personel-islemler">
           {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => acikYaz({ tur: 'form', kisiId: null })}>Kişi ekle</Dugme>}
+          {yonetebilir && <Dugme simge="lock" onClick={() => { void git(YETKILER_YOLU); }}>Yetkiler</Dugme>}
           <Dugme simge="rotate" aria-label="Yenile" onClick={() => { void kisiler.refetch(); }} yukleniyor={kisiler.isFetching} />
         </span>
       )}
     >
-      {/* Matris bütün yetkili rolü ele verir; sekme yalnız rol yönetene görünür (kart #586). */}
-      {yonetebilir && <Sekmeler etiket="Personel görünümü" sekmeler={GORUNUMLER} secili={gorunum} sec={gorunumYaz} />}
-      {yonetebilir && gorunum === 'matris' && <YetkiMatrisi />}
-      {gorunum === 'kisiler' && kisiler.isPending && <DurumKutusu durum="yukleniyor" />}
-      {gorunum === 'kisiler' && kisiler.isError && (
+      {kisiler.isPending && <DurumKutusu durum="yukleniyor" />}
+      {kisiler.isError && (
         <DurumKutusu durum="hata" mesaj={hataIletisi(kisiler.error, 'Kişiler alınamadı')} yenile={() => { void kisiler.refetch(); }} />
       )}
-      {gorunum === 'kisiler' && kisiler.data && (
+      {kisiler.data && (
         <Tablo
           etiket="Kişiler"
           sutunlar={sutunlar}
