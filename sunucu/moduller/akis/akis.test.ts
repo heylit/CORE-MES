@@ -283,6 +283,12 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     const oz = kartOzetleriCevabi.parse(ozet.govde);
     assert.deepEqual(oz.kartlar.map((x) => [x.id, x.konum.durum, x.rota.length, x.sonAn?.tur]), [[kart.id, 'uretimde', 1, k.anlar.at(-1)?.tur]], 'olmayan kart listede yok');
     assert.equal((await istek('operator', 'GET', `/akis/refakat-kartlari?idler=${String(kart.id)}`)).durum, 403);
+    // AKS-5 a (1870): depo akis.kart-oku ile kartın akışını ve özetini görür; emir yolculuğunu görmez.
+    assert.equal((await istek('depo', 'GET', `/akis/refakat-kartlari?idler=${String(kart.id)}`)).durum, 200);
+    assert.equal((await istek('depo', 'GET', `/akis/refakat-kartlari/${kart.id}`)).durum, 200);
+    assert.equal((await istek('depo', 'GET', '/akis/emirler')).durum, 403);
+    assert.equal((await istek('depo', 'GET', `/akis/emirler/${String(k.emir.id)}`)).durum, 403);
+    assert.equal((await istek('operator', 'GET', `/akis/refakat-kartlari/${kart.id}`)).durum, 403);
     assert.equal((await istek('yonetici', 'GET', '/akis/refakat-kartlari?idler=1,x')).durum, 400);
     assert.equal((await istek('yonetici', 'GET', `/akis/refakat-kartlari?idler=${Array.from({ length: 51 }, (_, i) => i + 1).join(',')}`)).durum, 400, 'en çok 50 kart');
   });

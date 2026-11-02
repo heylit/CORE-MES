@@ -55,6 +55,17 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     expect(screen.getByText('Kart yok.')).toBeTruthy();
   });
 
+  it('yalnız kartın akışını gören (akis.kart-oku, 1870): listede kartın akışı da okunur', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'akis.kart-oku'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: [satir(KART, { kod: 'P-1', ad: 'Mil 40 (örnek)' })], sinirda: false }),
+      'GET /akis/refakat-kartlari': () => json(200, { kartlar: [ORNEK_OZET] }),
+    });
+    ac('/stok/refakat-kartlari');
+    const liste = await screen.findByRole('region', { name: 'Kartlar' });
+    expect(await within(liste).findByText('Stokta · yolda')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/akis/refakat-kartlari?idler=12')).toBe(true);
+  });
+
   it('Akış Süresi okuyan: listede küçük rota, son an ve lead; ayrıntıda özet, lead dağılımı, cycle, süre özeti, rota aşamaları ve iki tablo', async () => {
     const istekler = sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {
       'GET /stok/refakat-kartlari': () => json(200, { kartlar: [satir(KART, { kod: 'P-1', ad: 'Mil 40 (örnek)' })], sinirda: false }),

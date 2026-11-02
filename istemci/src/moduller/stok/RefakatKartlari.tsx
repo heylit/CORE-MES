@@ -357,7 +357,10 @@ export function RefakatKartlari() {
   const [arama, setArama] = useState('');
   const [secili, setSecili] = useState<number | null>(null);
   const [pencere, setPencere] = useState<number | null>(null);
-  const akisOkur = useIslem('sayfa.akis');
+  // Kartın akışını Akış Süresi sayfası ya da yalnız kartı gören dar işlem açar (AKS-5 a, 1870).
+  const sayfaOkur = useIslem('sayfa.akis');
+  const kartOkur = useIslem('akis.kart-oku');
+  const akisOkur = sayfaOkur || kartOkur;
   const sec = (id: number) => { if (akisOkur) setSecili(id); else setPencere(id); };
   const l = useQuery({
     queryKey: anahtarlar.liste('refakat-kartlari', { durum }),
