@@ -152,7 +152,7 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const komutlar: [string, Islem][] = [
       ['/talepler/ac', 'degisiklik-yonetimi.talep-ac'], ['/talepler/999999/siniflandir', 'degisiklik-yonetimi.siniflandir'],
       ['/talepler/999999/etki-analizi', 'degisiklik-yonetimi.siniflandir'], ['/talepler/999999/ccb', 'degisiklik-yonetimi.ccb-karar'],
-      ['/talepler/999999/musteri-onayi', 'degisiklik-yonetimi.musteri-onayi'], ['/talepler/999999/emir-ac', 'degisiklik-yonetimi.emir-ac'],
+      ['/talepler/999999/geri-cek', 'degisiklik-yonetimi.talep-ac'], ['/talepler/999999/musteri-onayi', 'degisiklik-yonetimi.musteri-onayi'], ['/talepler/999999/emir-ac', 'degisiklik-yonetimi.emir-ac'],
       ['/emirler/999999/taslak-ac', 'degisiklik-yonetimi.revizyon-hazirla'], ['/emirler/999999/kalem-kaydet', 'degisiklik-yonetimi.revizyon-hazirla'],
       ['/emirler/999999/yayina-gonder', 'degisiklik-yonetimi.revizyon-hazirla'], ['/emirler/999999/geri-gonder', 'degisiklik-yonetimi.yayinla'],
       ['/emirler/999999/yayinla', 'degisiklik-yonetimi.yayinla'], ['/emirler/999999/karar', 'degisiklik-yonetimi.karar-ver'],
@@ -249,6 +249,22 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     const retOlayi = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?tur=talep_reddedildi&ara=${ret.no}`);
     assert.deepEqual(retOlayi.satirlar.map((o) => [o.kayitNo, o.alanlar.gerekce]), [[ret.no, 'Gerek yok']]);
     await kod(acan, `${K}/talepler/${p.id}/emir-ac`, { surum: ret.surum }, 409);
+    // DY-26: yalnız açan, CCB kararından önce ve gerekçeyle geri çeker; geri çekilen talep kapanır, olay günlüğüne düşer.
+    await kod(acan, `${K}/talepler/${p.id}/geri-cek`, { aciklama: 'Vazgeçildi', surum: ret.surum }, 409, /geri çekilemez/);
+    let g = await talepAc();
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { surum: g.surum }, 400);
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: '  ', surum: g.surum }, 400, /gerekçesini/);
+    await kod(onaylayan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Başkası', surum: g.surum }, 403, /yalnız açan/);
+    await kod(acan, `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Eski sürüm', surum: g.surum + 1 }, 409);
+    g = await tamam(acan, 'POST', `${K}/talepler/${g.id}/siniflandir`, { sinif: 'D1', aciliyet: 'normal', cevaplar, surum: g.surum });
+    const geri = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${g.id}/geri-cek`, { aciklama: 'Yanlış parça seçildi', surum: g.surum });
+    assert.equal(geri.durum, 'geri_cekildi');
+    assert.deepEqual([geri.gecmis.at(-1)?.olay, geri.gecmis.at(-1)?.aciklama, geri.gecmis.at(-1)?.imzaAnlami], ['geri_cekildi', 'Yanlış parça seçildi', null]);
+    const geriOlayi = await tamam<OlayListeCevabi>(acan, 'GET', `${K}/olaylar?tur=talep_geri_cekildi&ara=${geri.no}`);
+    assert.deepEqual(geriOlayi.satirlar.map((o) => [o.kayitNo, o.alanlar.gerekce]), [[geri.no, 'Yanlış parça seçildi']]);
+    await kod(acan, `${K}/talepler/${g.id}/etki-analizi`, { surum: geri.surum }, 409);
+    assert.ok(!(await tamam<TalepListeCevabi>(acan, 'GET', `${K}/talepler`)).satirlar.some((s) => s.id === g.id));
+    assert.ok((await tamam<TalepListeCevabi>(acan, 'GET', `${K}/talepler?kapsam=kapali`)).satirlar.some((s) => s.id === g.id));
     // D2 onayı doğrudan onaylanır.
     let d2 = await talepAc();
     d2 = await tamam(acan, 'POST', `${K}/talepler/${d2.id}/siniflandir`, { sinif: 'D2', aciliyet: 'normal', cevaplar: { ...cevaplar, fff: 'hayir' }, surum: d2.surum });

@@ -20,10 +20,14 @@ export const SINIFLANDIRMA_SORU_METINLERI: Readonly<Record<(typeof SINIFLANDIRMA
 };
 export const CEVAPLAR = ['evet', 'hayir'] as const;
 
-export const TALEP_DURUMLARI = ['gonderildi', 'analizde', 'ccb_bekliyor', 'musteri_onayi_bekliyor', 'onaylandi', 'emir_acildi', 'reddedildi'] as const;
+export const TALEP_DURUMLARI = ['gonderildi', 'analizde', 'ccb_bekliyor', 'musteri_onayi_bekliyor', 'onaylandi', 'emir_acildi', 'reddedildi', 'geri_cekildi'] as const;
+// DY-26: talebi yalnız açan, CCB kararından önce geri çeker; kararlı talep (onay, ret, ECO) geri çekilmez, iz bozulmasın.
+// İstemci düğmesi ve sunucu aynı listeyi kullanır.
+export const GERI_CEKILEBILIR_DURUMLAR = ['gonderildi', 'analizde', 'ccb_bekliyor'] as const satisfies readonly (typeof TALEP_DURUMLARI)[number][];
+export const geriCekilebilirMi = (durum: (typeof TALEP_DURUMLARI)[number]): boolean => (GERI_CEKILEBILIR_DURUMLAR as readonly string[]).includes(durum);
 export const TALEP_DURUM_ADLARI: Readonly<Record<(typeof TALEP_DURUMLARI)[number], string>> = {
   gonderildi: 'Gönderildi', analizde: 'Etki analizi', ccb_bekliyor: 'CCB kararı', musteri_onayi_bekliyor: 'Müşteri onayı',
-  onaylandi: 'Onaylandı', emir_acildi: 'ECO açıldı', reddedildi: 'Reddedildi',
+  onaylandi: 'Onaylandı', emir_acildi: 'ECO açıldı', reddedildi: 'Reddedildi', geri_cekildi: 'Geri çekildi',
 };
 export const EMIR_DURUMLARI = ['acik', 'revizyon_hazirlaniyor', 'yayina_hazir', 'karar', 'uygulamada', 'dogrulama', 'kapandi'] as const;
 export const EMIR_DURUM_ADLARI: Readonly<Record<(typeof EMIR_DURUMLARI)[number], string>> = {
@@ -95,7 +99,7 @@ export const KOSUL_HALLERI = ['tamam', 'eksik', 'bilinmiyor'] as const;
 export const GECMIS_OLAYLARI = [
   'talep_gonderildi', 'siniflandirildi', 'etki_analizi', 'ccb_onay', 'ccb_ret', 'musteri_onayi', 'emir_acildi', 'taslak_acildi',
   'kalem_kaydedildi', 'yayina_gonderildi', 'geri_gonderildi', 'yayinlandi', 'karar', 'mrb_karar', 'toplu_karar', 'karar_ertelendi',
-  'kararlar_tamam', 'fai_onaylandi', 'fai_tamam', 'kapandi',
+  'kararlar_tamam', 'fai_onaylandi', 'fai_tamam', 'kapandi', 'geri_cekildi',
 ] as const;
 export const IMZA_ANLAMLARI = {
   ccb_onay: 'Değişikliği onaylıyorum',
@@ -119,7 +123,7 @@ export const KAPANIS_ENGELI = 'Kapanış koşullarının hepsi tamam olmadan ECO
 export const OLAY_TURLERI = [
   'talep_gonderildi', 'etki_analizi', 'musteri_onayi_istendi', 'emir_acildi', 'revizyon_yayinlandi', 'gecerlilik', 'karar_onerildi',
   'emir_karari', 'stok_karari', 'emir_karantinada', 'rework_istendi', 'sapma_acildi', 'fai_onaylandi', 'emir_kapandi',
-  'talep_reddedildi',
+  'talep_reddedildi', 'talep_geri_cekildi',
 ] as const;
 export const OLAY_ILGILILERI = ['uretim-emirleri', 'rota', 'belge-merkezi', 'malzemeler', 'stok', 'plan', 'kalite-merkezi', 'sevkiyat'] as const;
 
@@ -132,7 +136,7 @@ export const TASARIM_OTORITELERI = ['musteri', 'ic'] as const;
 export const PARCA_HALLERI = ['aktif', 'yalniz_yedek'] as const;
 export const STOK_HALLERI = ['serbest', 'eski_yedek', 'hurda', 'rework'] as const;
 
-// Açık: talepte emir_acildi ve reddedildi dışı, emirde kapandi dışı.
+// Açık: talepte emir_acildi, reddedildi ve geri_cekildi dışı, emirde kapandi dışı.
 export const LISTE_KAPSAMLARI = ['acik', 'kapali', 'tumu'] as const;
 // Görevlerim'deki değişiklik hattı aşamaları.
 export const HAT_ASAMALARI = ['talep', 'revizyon', 'yayin', 'karar', 'fai', 'kapanis'] as const;

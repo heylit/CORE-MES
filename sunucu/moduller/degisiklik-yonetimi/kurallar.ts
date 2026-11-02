@@ -272,7 +272,7 @@ export function talepGorevi(durum: TalepDurumu): GorevAdimi | null {
     case 'ccb_bekliyor': return { adim: 'CCB kararı ver', islem: 'degisiklik-yonetimi.ccb-karar' };
     case 'musteri_onayi_bekliyor': return { adim: 'Müşteri onayını kaydet', islem: 'degisiklik-yonetimi.musteri-onayi' };
     case 'onaylandi': return { adim: 'ECO aç', islem: 'degisiklik-yonetimi.emir-ac' };
-    case 'emir_acildi': case 'reddedildi':
+    case 'emir_acildi': case 'reddedildi': case 'geri_cekildi':
     default: return null;
   }
 }
@@ -302,7 +302,7 @@ export function benimGorevimMi(g: GorevAdimi, islemler: readonly string[], kendi
 
 // Değişiklik hattının aşaması: açık talep, revizyon, yayın, karar, ilk parça, kapanış. Kapanmış emir ve kapanmış talep hatta yoktur.
 export function talepHatti(durum: TalepDurumu): HatAsamasi | null {
-  return durum === 'emir_acildi' || durum === 'reddedildi' ? null : 'talep';
+  return durum === 'emir_acildi' || durum === 'reddedildi' || durum === 'geri_cekildi' ? null : 'talep';
 }
 export function emirHatti(durum: EmirDurumu): HatAsamasi | null {
   const esleme: Record<EmirDurumu, HatAsamasi | null> = {

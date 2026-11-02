@@ -1,13 +1,13 @@
 import { uc } from '#cekirdek/uc.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from '#paylasilan/islemler/degisiklik-yonetimi.ts';
 import {
-  ccbGovdesi, emirCevabi, emirListeCevabi, emirlerSorgusu, faiOnayGovdesi, geriGonderGovdesi, gorevlerimCevabi, gorevlerimSorgusu, idParametresi,
+  ccbGovdesi, emirCevabi, geriCekGovdesi, emirListeCevabi, emirlerSorgusu, faiOnayGovdesi, geriGonderGovdesi, gorevlerimCevabi, gorevlerimSorgusu, idParametresi,
   izlenebilirlikCevabi, izlenebilirlikSorgusu, kalemKaydetGovdesi, kapatGovdesi, kararGovdesi, konfigurasyonCevabi, malzemeParametresi,
   musteriOnayiGovdesi, olayListeCevabi, olaylarSorgusu, parcaAdaylariCevabi, parcaAdaylariSorgusu, raporCevabi, raporSorgusu, seriListeCevabi, serilerSorgusu, siniflandirGovdesi,
   sonUrunlerCevabi, surumGovdesi, talepAcGovdesi, talepCevabi, talepListeCevabi, taleplerSorgusu, yayinlaGovdesi,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import {
-  ccbKarari, emirAc, emirCevabi as emirOku, emirleriListele, etkiAnalizi, faiOnayla, geriGonder, gorevlerim, izlenebilirlik, kalemKaydet, kapat,
+  ccbKarari, emirAc, emirCevabi as emirOku, emirleriListele, etkiAnalizi, faiOnayla, geriCek, geriGonder, gorevlerim, izlenebilirlik, kalemKaydet, kapat,
   kararVer, konfigurasyon, musteriOnayi, olaylar, parcaAdaylari, raporlar, seriler, siniflandir, sonUrunler, talepAc, talepCevabi as talepOku,
   talepleriListele, taslakAc, topluKarar, yayinaGonder, yayinla,
 } from './servis.ts';
@@ -51,6 +51,11 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: `${KOK}/talepler/:id/ccb`, yetki: 'degisiklik-yonetimi.ccb-karar', parametre: idParametresi, govde: ccbGovdesi,
     cevap: talepCevabi, isle: ({ db, kullanici, parametre, govde }) => ccbKarari(db, kullanici, parametre.id, govde),
+  }),
+  // DY-26: yeni işlem yok; talep açma işlemi ve servis "yalnız açan" kuralı.
+  uc({
+    yontem: 'POST', yol: `${KOK}/talepler/:id/geri-cek`, yetki: 'degisiklik-yonetimi.talep-ac', parametre: idParametresi, govde: geriCekGovdesi,
+    cevap: talepCevabi, isle: ({ db, kullanici, parametre, govde }) => geriCek(db, kullanici, parametre.id, govde),
   }),
   uc({
     yontem: 'POST', yol: `${KOK}/talepler/:id/musteri-onayi`, yetki: 'degisiklik-yonetimi.musteri-onayi', parametre: idParametresi,

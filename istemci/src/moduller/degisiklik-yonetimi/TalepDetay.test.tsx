@@ -107,6 +107,39 @@ describe('Talep detayı: CCB ve müşteri onayı', () => {
     expect(musteri?.textContent).toContain('Yapılmadı');
   });
 
+  it('açan kişi kararsız talebi gerekçeyle geri çeker; başkası düğmeyi görmez', async () => {
+    const acanin = talep({ durum: 'ccb_bekliyor', sinif: 'P1', acan: { kisiId: YONETICI.id, kisiAdi: YONETICI.ad, zaman: '2026-10-20T07:30:00Z' } });
+    const cagrilar = kur(acanin);
+    ac('/degisiklik-yonetimi/talepler/7');
+    fireEvent.click(await screen.findByRole('button', { name: 'Talebi geri çek' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Geri çek: ECR-0007' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Talebi geri çek' }));
+    expect(within(pencere).getByText('Geri çekme gerekçesini yazın.')).toBeTruthy();
+    expect(postlar(cagrilar)).toHaveLength(0);
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Yanlış parça' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Talebi geri çek' }));
+    await waitFor(() => { expect(postlar(cagrilar)).toHaveLength(1); });
+    expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/degisiklik-yonetimi/talepler/7/geri-cek', govde: { aciklama: 'Yanlış parça', surum: 4 } });
+    cleanup();
+
+    kur(talep({ durum: 'ccb_bekliyor', sinif: 'P1' }));
+    ac('/degisiklik-yonetimi/talepler/7');
+    await screen.findByText('Sıradaki adım: CCB kararı');
+    expect(screen.queryByRole('button', { name: 'Talebi geri çek' })).toBeNull();
+  });
+
+  it('geri çekilen talep durdu olarak görünür, kimin ve neden çektiği yazar', async () => {
+    kur(talep({
+      durum: 'geri_cekildi',
+      gecmis: [{ olay: 'geri_cekildi', kisiId: 3, kisiAdi: 'Deneme Açan', zaman: '2026-10-21T08:00:00Z', imzaAnlami: null, aciklama: 'Yanlış parça', ozet: 'Talep geri çekildi' }],
+    }));
+    ac('/degisiklik-yonetimi/talepler/7');
+    const adim = await screen.findByRole('region', { name: 'Sıradaki adım' });
+    expect(within(adim).getByText('Talep geri çekildi')).toBeTruthy();
+    expect(within(adim).getByText('Deneme Açan: Yanlış parça')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Talebi geri çek' })).toBeNull();
+  });
+
   it('müşteri onayı numarasız açılmaz; numarayla imzalanıp kaydedilir', async () => {
     const cagrilar = kur(talep({ durum: 'musteri_onayi_bekliyor', sinif: 'D1' }));
     ac('/degisiklik-yonetimi/degisiklikler/talepler/7');
