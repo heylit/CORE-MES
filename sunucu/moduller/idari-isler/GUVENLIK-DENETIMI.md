@@ -22,6 +22,7 @@ Periyodik kontroller (2. parça):
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
 | `GET /idari-isler/kontroller`, `/:id/kayitlar` | `idari-isler.oku` | etkin kalemler en çok 500; kayıt en çok 100; olmayan kalem 404 | `IDR-12`, `IDR-13 yapıldı` | `ekleme reddi` (personel 403) |
+| `GET /idari-isler/kontroller/bitenler` | `idari-isler.oku` | yalnız bitirilen kalemler, en yeni biten önce, en çok 200 | `IDR-15 bitir` | - |
 | `GET /idari-isler/firma-secenekleri` | `idari-isler.kontrol-yaz` | yalnız etkin tedarikçi, en çok 30 | `firma seçenekleri` | `ekleme reddi` (okuyan 403) |
 | `POST /idari-isler/kontroller/ekle` | `idari-isler.kontrol-yaz` | tekrar korumalı; firma etkin; sıklık bütün; açan sunucudan | `IDR-12` | `ekleme reddi` (400, 403, kayıt sayısı değişmez) |
 | `POST .../:id/guncelle` | `idari-isler.kontrol-yaz` | kilit, etkin kalem, sürüm | `güncelleme` | `güncelleme` (409, 404) |

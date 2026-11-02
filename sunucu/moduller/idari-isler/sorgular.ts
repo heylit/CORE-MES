@@ -262,6 +262,10 @@ export function etkinKontroller(db: Db, sinir: number): Promise<KontrolSatiri[]>
   return db.sorgu<KontrolSatiri>(`${KONTROL_SECIMI} WHERE k.aktif ORDER BY k.sonraki_tarih, k.id LIMIT $1`, [sinir]);
 }
 
+export function bitenKontroller(db: Db, sinir: number): Promise<KontrolSatiri[]> {
+  return db.sorgu<KontrolSatiri>(`${KONTROL_SECIMI} WHERE NOT k.aktif ORDER BY k.bitis DESC, k.id DESC LIMIT $1`, [sinir]);
+}
+
 // IDR-14: Bugün'e düşen kalemler (süresi geçen ve gün sınırı içindekiler).
 export function yaklasanKontroller(db: Db, gun: number, sinir: number): Promise<KontrolSatiri[]> {
   return db.sorgu<KontrolSatiri>(

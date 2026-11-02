@@ -75,6 +75,10 @@ export const uclar = [
     isle: async ({ db }) => ({ kontroller: await servis.kontroller(db) }),
   }),
   uc({
+    yontem: 'GET', yol: '/idari-isler/kontroller/bitenler', yetki: 'idari-isler.oku', cevap: kontrollerCevabi,
+    isle: async ({ db }) => ({ kontroller: await servis.bitenKontroller(db) }),
+  }),
+  uc({
     yontem: 'GET', yol: '/idari-isler/kontroller/:id/kayitlar', yetki: 'idari-isler.oku', parametre: idParametresi, cevap: kontrolKayitlariCevabi,
     isle: async ({ db, parametre }) => ({ kayitlar: await servis.kontrolKayitlari(db, parametre.id) }),
   }),

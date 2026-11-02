@@ -258,6 +258,12 @@ export async function kontroller(db: Db): Promise<Kontrol[]> {
   return kontrolCevir(db, await sorgular.etkinKontroller(db, KONTROL_EN_COK));
 }
 
+// Bitirilen kalem listeden düşer; geçmişine bu listeden ulaşılır (en yeni biten önce).
+const BITEN_EN_COK = 200;
+export async function bitenKontroller(db: Db): Promise<Kontrol[]> {
+  return kontrolCevir(db, await sorgular.bitenKontroller(db, BITEN_EN_COK));
+}
+
 const KAYIT_EN_COK = 100;
 export async function kontrolKayitlari(db: Db, id: number): Promise<KontrolKaydi[]> {
   if (!(await sorgular.kontrolVarMi(db, id))) throw bulunamadi(KONTROL_YOK);

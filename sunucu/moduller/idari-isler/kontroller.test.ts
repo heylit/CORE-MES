@@ -149,7 +149,7 @@ describe('idari-isler periyodik kontroller (gerçek PostgreSQL, gerçek giriş)'
     assert.equal(kayit?.birim, 'kg');
   });
 
-  test('IDR-15 bitir: biten kalem listeden çıkar, değiştirilemez ve yeniden bitirilemez (422)', async () => {
+  test('IDR-15 bitir: biten kalem listeden çıkar, bitenlerde görünür, değiştirilemez ve yeniden bitirilemez (422)', async () => {
     const k = await ekle({ ad: 'Bina sigortası', tur: 'sozlesme', siklikDeger: 1, siklikBirim: 'yil' });
     const b = await komut(k, 'bitir', { neden: 'Firma değişti' });
     assert.equal(b.statusCode, 200, b.body);
@@ -159,6 +159,10 @@ describe('idari-isler periyodik kontroller (gerçek PostgreSQL, gerçek giriş)'
     assert.equal((await komut(bitmis, 'bitir')).statusCode, 422);
     const liste = (await oku(okuyan.cerez, '/idari-isler/kontroller')).json<KontrollerCevabi>().kontroller;
     assert.ok(!liste.some((x) => x.id === k.id));
+    const bitenler = (await oku(okuyan.cerez, '/idari-isler/kontroller/bitenler')).json<KontrollerCevabi>().kontroller;
+    assert.equal(bitenler.find((x) => x.id === k.id)?.aktif, false);
+    assert.ok(bitenler.every((x) => !x.aktif));
+    assert.equal((await oku(okuyan.cerez, `/idari-isler/kontroller/${k.id}/kayitlar`)).statusCode, 200);
   });
 
   test('güncelleme: ad, sıklık ve tarih değişir; eski sürüm 409; olmayan kalem 404', async () => {

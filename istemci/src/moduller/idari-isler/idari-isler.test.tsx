@@ -91,6 +91,7 @@ function sunucuKur(kullanici: Kullanici, ozel: (yontem: string, yol: string, gov
       if (yol === '/idari-isler/kisi-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/talep-atanabilir') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/kontroller') return json(200, KONTROLLER);
+      if (yol === '/idari-isler/kontroller/bitenler') return json(200, { kontroller: [{ ...SIGORTA, id: 99, ad: 'Eski temizlik sözleşmesi', aktif: false }] });
       if (/^\/idari-isler\/kontroller\/\d+\/kayitlar$/.test(yol)) return json(200, { kayitlar: [] });
       if (yol.startsWith('/idari-isler/yemek?')) return json(200, YEMEK);
       if (yol === '/idari-isler/demirbaslar') return json(200, { demirbaslar: [LAPTOP, ANAHTAR, MONITOR] } satisfies DemirbaslarCevabi);
@@ -255,6 +256,19 @@ describe('Periyodik kontroller', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Atık/ }));
     expect(screen.queryByText('Bina sigortası')).toBeNull();
     expect(screen.getByText('Talaş ve kesme yağı teslimi')).toBeTruthy();
+  });
+
+  it('biten kalemler istenince listelenir; ayrıntısı geçmişle açılır, işlem düğmesi yoktur', async () => {
+    sunucuKur(IDARI);
+    ac('/idari-isler/periyodik');
+    await screen.findByRole('region', { name: 'Süresi geçti' });
+    expect(screen.queryByText('Eski temizlik sözleşmesi')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Biten kalemler' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eski temizlik sözleşmesi' }));
+    const pencere = within(await screen.findByRole('dialog', { name: 'Eski temizlik sözleşmesi' }));
+    expect(pencere.getByText('Bitti')).toBeTruthy();
+    expect(await pencere.findByText('Henüz kayıt yok.')).toBeTruthy();
+    expect(pencere.queryByRole('button', { name: 'Bitir' })).toBeNull();
   });
 
   it('atık teslimi miktar ve birim ister; sürümle gider', async () => {
