@@ -159,7 +159,7 @@ const parca = (p: string): string => encodeURIComponent(p);
 export interface KaydetSecenegi {
   karantinaHedefKonumId?: number;
   serbestMiktarlar?: KmOnaylaGovdesi['serbestMiktarlar'];
-  // İz işlemi verilmezse oluşturma ya da değişiklik; kilit açmada gerekçe ize yazılır.
+  // İz işlemi verilmezse oluşturma ya da değişiklik; verilen gerekçe ize yazılır.
   izIslemi?: string;
   gerekce?: string;
 }

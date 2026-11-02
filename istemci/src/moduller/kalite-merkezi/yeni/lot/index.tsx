@@ -12,7 +12,7 @@ import type { Lot } from '../tipler.ts';
 import { useKmKomutu } from '../veri.ts';
 import { CubukGrafigi } from '../spc/Grafik.tsx';
 import { kayitCsvIndir, type CsvSutunlari } from '../muayene/csv.ts';
-import { KILIT_YASAK, KilitPenceresi, kilitKarari } from '../muayene/Kilit.tsx';
+import { KILIT_YASAK, kilitKarari } from '../muayene/Kilit.tsx';
 import {
   aqlMetni, lotRetNcrOnDegeri, lotSayaci, lotSuz, retAciklamasi, sikilikTonu, tedarikciAdi, tedarikciBazinda, varsayilanAql, type LotDegeri,
 } from './hesap.ts';
@@ -41,15 +41,12 @@ export function LotKabul({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
   const [f, fYaz] = useState<SihirbazDurumu>({ step: 0, N: '', lvl: v.seviye, sev: 'Normal', kr: v.kr, mj: v.mj, mn: v.mn, cls: 'Majör', key: '' });
   const [c0, c0Yaz] = useState({ N: '1500', L: '1', C: '95' });
   const [form, formYaz] = useState<Form>(null);
-  const [kilit, kilitYaz] = useState<Lot | null>(null);
   const [ret, retYaz] = useState<LotDegeri | null>(null);
   const [silinecek, silinecekYaz] = useState<Lot | null>(null);
   const [yenidenBaslat, yenidenBaslatYaz] = useState<string | null>(null);
 
   const ac = (l: Lot) => {
-    const k = kilitKarari('lot', l, yetki);
-    if (k === 'yasak') { bildir('hata', KILIT_YASAK); return; }
-    if (k === 'sor') { kilitYaz(l); return; }
+    if (kilitKarari('lot', l) === 'yasak') { bildir('hata', KILIT_YASAK); return; }
     formYaz({ kayit: l });
   };
 
@@ -187,12 +184,6 @@ export function LotKabul({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
         </section>
       )}
       {form && <LotFormu veri={veri} yetki={yetki} kayit={form.kayit} on={form.on} kapat={() => { formYaz(null); }} retOldu={retYaz} />}
-      {kilit && (
-        <KilitPenceresi
-          yetki={yetki} kol="lot" kimlik={kilit._id} no={kilit.no ?? ''}
-          devam={() => { const k = kilit; kilitYaz(null); formYaz({ kayit: k }); }} vazgec={() => { kilitYaz(null); }}
-        />
-      )}
       <OnayPenceresi
         acik={ret !== null} baslik="Lot reddedildi" onayMetni="NCR aç"
         onayla={() => { const d = ret; retYaz(null); if (d) git('uygunsuzluklar', { ac: 'yeni', on: lotRetNcrOnDegeri(d) }); }}

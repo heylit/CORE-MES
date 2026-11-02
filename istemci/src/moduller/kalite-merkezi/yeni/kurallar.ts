@@ -117,7 +117,7 @@ export function karakteristikSonucu(c: Karakteristik): 'OK' | 'NOK' | '' {
   return m >= n - alt - 1e-9 && m <= n + ust + 1e-9 ? 'OK' : 'NOK';
 }
 
-// Tamamlanmış kayıt kilitlidir: değiştirmek kilit açma (gerekçe, onay işlemi) ister; sunucu da ayrıca reddeder.
+// Tamamlanmış kayıt kilitlidir: sunucu kimse için değiştirmez (KM-K89); düzeltme yeni kayıtla yapılır.
 export function kilitliMi(kol: KmKoleksiyonu, r: KmKayit | null | undefined): boolean {
   if (!r) return false;
   if (kol === 'insp') return ['Kabul', 'Ret'].includes(String(r.sonuc ?? ''));
