@@ -30,7 +30,7 @@ import {
   yetkiReddiBulgulari, type Bulgu,
   DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
-  alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
+  COK_OTURUM, alarmGuncellemesi, cokOturumBulgulari, cokOturumKosulu, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
   onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari, yeniOlayliBulgular,
 } from './kurallar.ts';
 import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
@@ -52,6 +52,11 @@ async function vpnAraliklari(db: Db): Promise<{ metin: string[]; araliklar: AgAr
   return { metin: deger.split(/[\s,]+/).filter((o) => o !== ''), araliklar: agAraliklariniCoz(deger).araliklar };
 }
 
+// Ayar boş ya da okunamaz değilse ayardaki eşik; tanım varsayılanı 4'tür (GUV-6 a).
+async function cokOturumEsigi(db: Db): Promise<number> {
+  return (await sistemAyariOku(db, 'guvenlik.cok-oturum-esigi')) ?? COK_OTURUM.esik;
+}
+
 // Tek tarama turu (zamanlayıcı her dakika çağırır). Kilit alınamazsa hiçbir şey yazmadan null döner (G-15).
 export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
   if (!(await s.taramaKilidiAl(db))) return null;
@@ -65,7 +70,7 @@ export async function taramaYap(db: Db): Promise<TaramaSonucu | null> {
     ...hataliSeriBulgulari(kisa),
     ...yayilanDenemeBulgulari(uzun),
     ...hedefliHesapBulgulari(uzun),
-    ...cokOturumBulgulari(await acikOturumlariSay(db), simdi),
+    ...cokOturumBulgulari(await acikOturumlariSay(db), simdi, await cokOturumEsigi(db)),
     ...hesapKilidiBulgulari(
       await sonHesapKilitleri(db, { sonSn: HESAP_KILIDI.pencereSn }),
       await s.kapanmisKilitAlarmlari(db, HESAP_KILIDI.pencereSn),
@@ -373,8 +378,11 @@ export async function sunucuDurumu(db: Db, kaynak: SunucuDurumuKaynagi = SUREC_S
 
 export async function kurallar(db: Db): Promise<KurallarCevabi> {
   const vpn = await vpnAraliklari(db);
+  const esik = await cokOturumEsigi(db);
   return {
-    kurallar: SINYALLER.map((sinyal) => ({ sinyal, ...SINYAL_TANIMLARI[sinyal] })),
+    kurallar: SINYALLER.map((sinyal) => ({
+      sinyal, ...SINYAL_TANIMLARI[sinyal], ...(sinyal === 'cok-oturum' ? { kosul: cokOturumKosulu(esik) } : {}),
+    })),
     saklamaGun: SAKLAMA_GUN,
     redSaklamaGun: RED_SAKLAMA_GUN,
     vpnAraliklari: vpn.metin,

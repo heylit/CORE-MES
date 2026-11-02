@@ -171,6 +171,27 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     assert.deepEqual([alarm?.onem, alarm?.gozlenenSayi, alarm?.kisiAdi], ['orta', 4, 'Deneme cok-oturum']);
   });
 
+  test('GUV-6 a: çok oturum eşiği Sistem Ayarları\'ndan değişir; kural metni eşiği gösterir; aralık dışı değer reddedilir', async () => {
+    const yaz = (deger: number) => istek('yonetici', 'POST', '/ayarlar/guvenlik.cok-oturum-esigi/degistir', { deger });
+    assert.equal((await yaz(1)).durum, 400);
+    assert.equal((await yaz(51)).durum, 400);
+    assert.equal((await istek('mudur', 'POST', '/ayarlar/guvenlik.cok-oturum-esigi/degistir', { deger: 6 })).durum, 403);
+    assert.equal((await yaz(6)).durum, 200);
+    try {
+      const kisiId = await kisiEkle('esik-oturum', 'operator');
+      for (let i = 0; i < 5; i += 1) await giris('esik-oturum', `esik-${i}`);
+      await tara();
+      assert.deepEqual(await alarmBul({ sinyal: 'cok-oturum', kisiId }), []);
+      await giris('esik-oturum', 'esik-5');
+      await tara();
+      assert.equal((await alarmBul({ sinyal: 'cok-oturum', kisiId })).length, 1);
+      const kurallar = kurallarCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/kurallar')).govde);
+      assert.match(kurallar.kurallar.find((k) => k.sinyal === 'cok-oturum')?.kosul ?? '', /aynı anda 6 ya da daha çok/);
+    } finally {
+      assert.equal((await yaz(4)).durum, 200);
+    }
+  });
+
   test('G-08, G-09: koşulu biten alarm kendiliğinden kapanmaz; kapanan alarm yeni olay yoksa yeniden açılmaz, yeni olayla açılır (K27 a)', async () => {
     await o().vt.sorgu("INSERT INTO guvenlik_alarmi (sinyal, onem, kullanici_adi, gozlenen_sayi) VALUES ('hatali-giris-serisi', 'orta', 'g09-sessiz', 10)");
     await tara();

@@ -4,11 +4,13 @@ import type { GuncellemeKanali, YedekDurumu } from '#paylasilan/sozlesme/ayarlar
 import type { AlarmDurumu, KorumaDurumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
 import type { DiskDurumu } from '#paylasilan/sozlesme/saglik.ts';
 
-// Eşikler ekrandan değişmez: kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
+// Eşikler ekrandan değişmez (çok oturum eşiği hariç, GUV-6 a): kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
 export const HATALI_SERI = { pencereSn: 15 * 60, esik: 10 } as const;
 export const YAYILAN_DENEME = { pencereSn: 60 * 60, esik: 3 } as const;
 export const HEDEFLI_HESAP = { pencereSn: 60 * 60, esik: 3 } as const;
+// Çok oturum eşiği Sistem Ayarları'ndan değişir (GUV-6 a, 'guvenlik.cok-oturum-esigi'); buradaki değer ayarın varsayılanıdır.
 export const COK_OTURUM = { esik: 4 } as const;
+export const cokOturumKosulu = (esik: number): string => `Bir kişinin aynı anda ${String(esik)} ya da daha çok geçerli oturumu.`;
 // Kilit bir olaydır: son bir günde kurulan kilitlere bakılır; tarama durup yeniden başlasa da kaçmaz.
 export const HESAP_KILIDI = { pencereSn: 24 * 60 * 60 } as const;
 // Reddedilen istek serileri (1369). Yalnız rol, kapsam ve dış izleyici reddi sayılır: cihaz profili ve dosya türü reddi telefonun
@@ -47,7 +49,7 @@ export const SINYAL_TANIMLARI: Readonly<Record<Sinyal, { onem: Onem; baslik: str
   'cok-oturum': {
     onem: 'orta',
     baslik: 'Çok oturum',
-    kosul: `Bir kişinin aynı anda ${COK_OTURUM.esik} ya da daha çok geçerli oturumu.`,
+    kosul: cokOturumKosulu(COK_OTURUM.esik),
   },
   'hesap-kilidi': {
     onem: 'orta',
@@ -130,9 +132,9 @@ export function hedefliHesapBulgulari(uzun: readonly DenemeOzeti[]): Bulgu[] {
 }
 
 // G-05: simdi taramanın anıdır (oturum sayısının bir olay zamanı yoktur).
-export function cokOturumBulgulari(sayilar: readonly { kisiId: number; acikOturum: number }[], simdi: string): Bulgu[] {
+export function cokOturumBulgulari(sayilar: readonly { kisiId: number; acikOturum: number }[], simdi: string, esik: number = COK_OTURUM.esik): Bulgu[] {
   return sayilar
-    .filter((s) => s.acikOturum >= COK_OTURUM.esik)
+    .filter((s) => s.acikOturum >= esik)
     .map((s) => bulgu('cok-oturum', { kullaniciAdi: null, ip: null, kisiId: s.kisiId }, s.acikOturum, simdi));
 }
 
