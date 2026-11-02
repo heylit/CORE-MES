@@ -520,7 +520,8 @@ export const emreKopyalaGovdesi = z.object({
   aciklama: z.string().trim().max(300, 'Açıklama en çok 300 karakter.').nullish(),
   // Taslak emir plana alınana dek terminale düşmez (prototip: taslak -> Plana al -> serbest).
   taslak: z.boolean().optional(),
-  // Boş bırakılırsa emir projesiz açılır; projenin geçerliliğini uretim-emirleri denetler.
+  // Projesiz emir yalnız stok, rework ve bakım-deneme türünde açılır (224); öteki türde boş proje 400 döner. Projenin geçerliliğini ve
+  // türe göre zorunluluğunu uretim-emirleri denetler.
   projeId: KIMLIK.nullish(),
   // 176 a: emir bu sipariş satırını üretir; satırın projenin siparişinde olduğunu uretim-emirleri denetler (değilse 409).
   siparisSatiriId: KIMLIK.nullish(),
