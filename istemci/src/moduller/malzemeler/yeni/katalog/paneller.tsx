@@ -8,6 +8,7 @@ import type { KuralBaglami } from '../kurallar/index.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
 import type { KartKaydi, Kisi, OnayBilgisi } from '../tipler.ts';
 import { kimlikOf } from './liste.ts';
+import { farkAlanAdi, farkDegeri } from './talep-fark.ts';
 
 export type OnayIslemi = 'onayla' | 'reddet' | 'gonder' | 'pasif' | 'aktif';
 export type TalepIslemi = 'onayla' | 'reddet' | 'geri';
@@ -81,7 +82,8 @@ export function OnayPaneli({ x, yetki, b, mesgul, islem }: {
             )}
             {k === 'taslak' && <Dugme tur="birincil" yukleniyor={mesgul} onClick={() => islem('gonder')}>{b.genel.onayAkisi ? 'Onaya gönder' : 'Aktifleştir'}</Dugme>}
             {k === 'aktif' && yetki.onayla && <Dugme onClick={() => nedenYaz('pasif')}>Pasife al</Dugme>}
-            {k === 'pasif' && yetki.onayla && <Dugme yukleniyor={mesgul} onClick={() => islem('aktif')}>Yeniden aktifleştir</Dugme>}
+            {/* Onay akışı açıkken pasiften dönen kart onaydan geçer (MKK-4); düğme sonucu söyler. */}
+            {k === 'pasif' && yetki.onayla && <Dugme yukleniyor={mesgul} onClick={() => islem('aktif')}>{b.genel.onayAkisi ? 'Yeniden onaya gönder' : 'Yeniden aktifleştir'}</Dugme>}
           </span>
         )}
       </div>
@@ -108,7 +110,13 @@ export function TalepPaneli({ x, yetki, b, mesgul, islem }: {
       <div className="tc-mk-tablo-kap">
         <table className="tc-mk-tablo">
           <thead><tr><th scope="col">Alan</th><th scope="col">Mevcut</th><th scope="col">Önerilen</th></tr></thead>
-          <tbody>{farklar.map((f, i) => <tr key={i}><td>{f.f}</td><td className="tc-mk-soluk">{f.a}</td><td><b>{f.b}</b></td></tr>)}</tbody>
+          <tbody>
+            {farklar.map((f, i) => (
+              <tr key={i}>
+                <td title={f.f}>{farkAlanAdi(f.f, x, b)}</td><td className="tc-mk-soluk">{farkDegeri(f.f, f.a)}</td><td><b>{farkDegeri(f.f, f.b)}</b></td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
       {yetki.yaz && (
