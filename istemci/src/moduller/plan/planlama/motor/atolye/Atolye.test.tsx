@@ -153,7 +153,8 @@ describe('PlanlamaAtolyesi', () => {
     await waitFor(() => expect(screen.getByText('1 tezgâh, 0 saat, 0 yeni')).toBeTruthy());
     expect(get).toHaveBeenCalledWith('/plan?taslak=1');
     expect(screen.getByText('Başlamış işler yerinde')).toBeTruthy();
-    expect(screen.getByText('Ağırlıklı gecikme')).toBeTruthy();
+    // 1786b: canlı kutusundaki gecikme de ağırlıklıdır ve adıyla yazılır.
+    expect(screen.getAllByText('Ağırlıklı gecikme').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('4,0 → 6,0 sa')).toBeTruthy();
     expect(screen.getByText('3,5 sa')).toBeTruthy();
     expect(document.querySelectorAll('.tc-pym-pa-aday')).toHaveLength(3);

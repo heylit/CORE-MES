@@ -170,7 +170,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       )}
       <div className="tc-pym-tp-olc">
         <span title="Geciken sipariş"><b data-ton={ozet.late ? 'kotu' : 'iyi'}>{ozet.late}</b> <span data-ad="">geciken</span></span>
-        <span><b>{sure(ozet.wT)}</b> <span data-ad="">gecikme</span></span>
+        <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır."><b>{sure(ozet.wT)}</b> <span data-ad="">ağırlıklı gecikme</span></span>
         {yetki.maliyetOku && <span data-kar="" title="Kâr kayıtlı planda yok"><b>—</b> <span data-ad="">kâr</span></span>}
       </div>
       <span className="tc-pym-tp-bosluk" />

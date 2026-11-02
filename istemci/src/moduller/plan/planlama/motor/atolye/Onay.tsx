@@ -48,13 +48,15 @@ function Fark({ a, b, k = 1, kucukIyi = true }: { a: number | null | undefined; 
   const f = farkKur(a, b, k, kucukIyi);
   return f ? <span className={f.iyi ? 'tc-pym-pa-iyi' : 'tc-pym-pa-kotu'}>{f.metin}</span> : null;
 }
-function Sayilar({ g, gecikme, kiyas: r }: { g: Gostergeler | null; gecikme: number | null; kiyas?: Gostergeler | null }) {
+const AGIRLIKLI_IPUCU = 'Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.';
+// Sunucu öncelik ağırlıklı gecikmeyi verir (öncelik 1 dört kat sayılır); Özet'teki toplam gecikmeyle karışmasın diye adı ayrı yazılır.
+function Sayilar({ g, gecikme, kiyas: r }: { g: Gostergeler | null; gecikme: { saat: number; agirlikli: boolean } | null; kiyas?: Gostergeler | null }) {
   const s = (ad: string, v: string, f?: ReactNode) => <div><dt>{ad}</dt><dd className="mono">{v}{f && <> {f}</>}</dd></div>;
   if (!g) return null;
   return (
     <dl className="tc-pym-pa-sayilar">
       {s('Geciken · tüm plan', `${g.geciken}/${g.emirSayisi}`, r && <Fark a={g.geciken} b={r.geciken} k={0} />)}
-      {s('Gecikme', gecikme == null ? '—' : `${sayi(gecikme, 1)} sa`)}
+      {s(gecikme?.agirlikli ? 'Ağırlıklı gecikme' : 'Gecikme', gecikme == null ? '—' : `${sayi(gecikme.saat, 1)} sa`)}
       {s('Plan TL', tl(g.maliyetTl), r && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl / 1000} b={r.maliyetTl / 1000} k={0} />)}
     </dl>
   );
@@ -235,7 +237,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
             <header><span><Simge ad="play" boyut="k" /> Canlı plan</span><Rozet ton="tamam">{`Sürüm ${canliSurum}`}</Rozet></header>
             <b className="tc-pym-pa-ad">{paGecmisler(l)[0]?.ad ?? `Sürüm ${canliSurum}`}</b>
             {o.depo.planSurumu?.sonCanliyaAlma && <span className="tc-pym-pa-kucuk">{`${o.depo.planSurumu.sonCanliyaAlma.kisi ?? ''} onayladı · ${zamanYaz(o.depo.planSurumu.sonCanliyaAlma.zaman)}`}</span>}
-            <Sayilar g={canli} gecikme={pc ? agirlikliGecikme(pc).saat : null} />
+            <Sayilar g={canli} gecikme={pc ? agirlikliGecikme(pc) : null} />
           </section>
         ) : (
           <section className="tc-pym-pa-kutu" data-ton="bos">
@@ -260,7 +262,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
             <span className="tc-pym-pa-kucuk">{planImzasi(c)}</span>
             <dl className="tc-pym-pa-sayilar">
               <div><dt>Geciken · tüm plan</dt><dd className="mono">{`${p.ozet.late}/${p.ozet.n}`}</dd></div>
-              <div><dt>Gecikme</dt><dd className="mono">{`${sayi(p.ozet.wT, 1)} sa`}</dd></div>
+              <div><dt>Ağırlıklı gecikme</dt><dd className="mono">{`${sayi(p.ozet.wT, 1)} sa`}</dd></div>
               <div><dt>Plan TL</dt><dd className="mono">{tl(o.yetki.maliyetOku ? planTl(c) : null)}</dd></div>
             </dl>
           </section>
@@ -358,12 +360,12 @@ function Adaylar({ l, c, p, cf, canli, sec, secSec, kars, karsYaz }: {
     <>
       <ul className="tc-pym-pa-adaylar">
         {c && p && satir('calisma', 'Çalışma planı', !cf ? 'Canlıyla fark okunuyor' : cf.farkli ? 'Canlıya alınmamış değişiklik var' : 'Canlı plan ve çalışma aynı', 'calisma',
-          <span className="mono">{`${p.ozet.late} geç · ${sayi(p.ozet.wT, 1)} sa`}</span>, <span className="tc-pym-pa-kars" />)}
+          <span className="mono" title={AGIRLIKLI_IPUCU}>{`${p.ozet.late} geç · ${sayi(p.ozet.wT, 1)} sa ağırlıklı`}</span>, <span className="tc-pym-pa-kars" />)}
         {a.map((s) => {
           const g = s.gostergeler;
           const isaretli = kars.includes(s.id);
           return satir(s.id, s.ad, `${s.acan ?? ''} · ${zamanYaz(s.acilma)}${s.canliDegisti ? ' · canlı değişti' : ''}`, s.durum,
-            <><span className="mono">{g ? `${g.geciken} geç · ${g.agirlikliGecikmeSaat != null ? `${sayi(g.agirlikliGecikmeSaat, 1)} sa` : yuzde(g.zamanindaYuzde)}` : '—'}</span>
+            <><span className="mono" title={g?.agirlikliGecikmeSaat != null ? AGIRLIKLI_IPUCU : undefined}>{g ? `${g.geciken} geç · ${g.agirlikliGecikmeSaat != null ? `${sayi(g.agirlikliGecikmeSaat, 1)} sa ağırlıklı` : yuzde(g.zamanindaYuzde)}` : '—'}</span>
               {g && canli && (g.agirlikliGecikmeSaat != null && canli.agirlikliGecikmeSaat != null
                 ? <Fark a={g.agirlikliGecikmeSaat} b={canli.agirlikliGecikmeSaat} /> : <Fark a={g.geciken} b={canli.geciken} k={0} />)}</>,
             <label className="tc-pym-pa-kars" title="Karşılaştırmaya ekle">
