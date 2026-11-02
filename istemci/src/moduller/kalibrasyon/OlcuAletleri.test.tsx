@@ -138,7 +138,20 @@ describe('Ölçü aletleri listesi', () => {
     const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
     expect(hucre('Vade')).toBe('20.10.2026');
     expect(hucre('Durum')).toBe('Vadesi yaklaşıyor');
-    expect(satir.textContent).not.toMatch(/\d+ gün/);
+    expect(hucre('Durum')).not.toMatch(/\d+ gün/);
+  });
+
+  it('KAL-2: alet no bölünmez; tür ile periyot, ad ile yer aynı sütunda iki satırdır', async () => {
+    sunucuKur(OKUR);
+    ac();
+    await listeBekle();
+    const basliklar = within(screen.getByRole('table', { name: 'Ölçü aletleri' })).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(basliklar).toEqual(['Alet no', 'Tür / periyot', 'Ad / yer', 'Son kalibrasyon', 'Vade', 'Durum']);
+    const [satir] = satirlar() as [HTMLElement];
+    const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik);
+    expect(hucre('Alet no')?.classList.contains('tc-tablo-kirilmaz')).toBe(true);
+    expect(hucre('Tür / periyot')?.textContent).toBe('Kumpas365 gün');
+    expect(hucre('Ad / yer')?.textContent).toBe('Dış çap · 0-25Dolap A');
   });
 
   it('arama sunucuya gider ve listeyi daraltır', async () => {

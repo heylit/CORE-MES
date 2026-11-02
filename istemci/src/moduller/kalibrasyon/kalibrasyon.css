@@ -22,3 +22,5 @@
 .tc-kal-kayit-ek { flex-basis: 100%; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 /* `anywhere` en dar genişliği tek harfe indirir ve tablo tür adını harf harf böler; `break-word` yalnız sığmayan tek sözcüğü böler. */
 .tc-kal-tur { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: break-word; }
+.tc-kal-ad-yer { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-kal-yer { color: var(--muted); font-size: var(--yazi-s); }
