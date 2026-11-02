@@ -5,7 +5,7 @@ import {
   faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
-import { butceTl, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
+import { butceTl, iscilikPlaniEksik, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 
@@ -361,4 +361,11 @@ test('PM-47: planı olmayan kayıt varsa finansman planı eksik bildirilir', () 
   assert.equal(planTarihiEksik([]), false);
   assert.equal(planTarihiEksik([kayit({ planTarihi: '2026-11-05' })]), false);
   assert.equal(planTarihiEksik([kayit({ planTarihi: '2026-11-05' }), kayit({ planTarihi: null })]), true);
+});
+
+test('PM-48 (PM-1 a): işçiliğin planı yoksa bildirilir; işçilik kalemi olmayan (fason) kayıt bildirmez', () => {
+  assert.equal(iscilikPlaniEksik([]), false);
+  assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } })]), false);
+  assert.equal(iscilikPlaniEksik([kayit({ plan: { isleme: 100, iscilik: 50 } })]), false);
+  assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } }), kayit({ plan: { isleme: 100, iscilik: null } })]), true);
 });

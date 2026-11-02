@@ -48,4 +48,5 @@
 | PM-43 | Bütçe (198 a) hedeftir: TRY olduğu gibi, döviz bugünün kuruyla; kuru yoksa bütçe bilinmez, `butce_kuru_yok`, hedef plan | kurallar.test.ts "PM-43"; taban-masraf.test.ts "PM-43" |
 | PM-44 | İş emri olmayan projede `is_emri_yok` bildirilir; vade uyarısı yalnız hesaplanan iş varken çıkar | proje-maliyet.test.ts "PM-15"; ProjeMaliyeti.test.tsx |
 | PM-47 | Canlı planda olmayan kayıt varsa `plan_tarihi_yok` bildirilir; defter işi yalnız defterde olmayan biten iş emri olan projeleri hesaplar | kurallar.test.ts "PM-47"; proje-maliyet.test.ts "PM-30", "PM-35" |
+| PM-48 | İşçiliğin planı yoksa `iscilik_plani_yok` bildirilir; katkı payı ve kâr riski sayı uydurmaz, ekran "İşçilik planı yok" yazar (PM-1 a) | kurallar.test.ts "PM-48"; proje-maliyet.test.ts "PM-20"; ProjeMaliyeti.test.tsx "PM-1 a" |
 | 940 c yetki | Taban, masraf bağı ve seçici `projeler.yaz`; seçicide tutar yalnız `finans.maliyet-oku` olana; maliyet okuması `finans.maliyet-oku` | taban-masraf.test.ts "940 c yetki" |

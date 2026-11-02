@@ -25,3 +25,4 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - Bütçe (PM-B4 kapandı, 1818): proje bütçesi `projeGetir`'den okunur, hedef odur; döviz bütçe bugünün kuruyla TRY, kuru yoksa eksik `butce_kuru_yok`. Kural PM-43.
 - Ekran uyarıları (1818): emirsiz projede yeni eksik `is_emri_yok`, vade uyarısı yalnız iş varken (PM-44); gelir kartının başlığı "Proje geliri" (değer siparişin tamamı değil, projenin emir payıdır, PM-36); üretim gerçekleşeni bilinmezken masraf "dahil" yazılmaz.
 - PM-7 (D5 a, 1818): plan tarihi olmayan kayıtta yeni eksik `plan_tarihi_yok`; defter işi bütün projeleri dolaşmak yerine uretim-emirleri `bitenIsEmirleri` ile defterde olmayan biten iş emirlerini bulur, `emirlerinProjeleri` ile yalnız o projeleri hesaplar (PM-47).
+- PM-1 (PM-1 a, 1818): işçilik planı yokken yeni eksik `iscilik_plani_yok`; katkı payı kartı ve kâr riski boş tutar yerine "İşçilik planı yok" yazar, sayı uydurulmaz; plan girilince hesaplanır (PM-48).

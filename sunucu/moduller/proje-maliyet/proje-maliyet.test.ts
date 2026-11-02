@@ -189,9 +189,13 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
   test('PM-20 bağlama (PM-B1): projenin iş emri istasyon saat maliyetiyle planlanır; başlamamış işin gerçeği sıfır; işçilik planı yok, toplama girmez', async () => {
     const proje = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparissiz.id, SIMDI));
     assert.deepEqual(proje.plan, null);
+    assert.ok(!proje.eksikler.includes('iscilik_plani_yok'));
     const { istasyonId } = await isEmriAc(siparissiz.id);
     let c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparissiz.id, SIMDI));
     assert.ok(c.eksikler.includes('birim_maliyet_eksik'));
+    // PM-48 (PM-1 a): rotada kişi süresi yok; katkı uydurulmaz, nedeni bildirilir.
+    assert.ok(c.eksikler.includes('iscilik_plani_yok'));
+    assert.equal(c.katkiPayi, null);
     await ortam!.sahip.sorgu('INSERT INTO finans_istasyon_maliyet (istasyon_id, saat_maliyeti, guncelleyen_id) VALUES ($1, 600, $2)', [istasyonId, yoneticiId]);
     c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparissiz.id, SIMDI));
     assert.ok(!c.eksikler.includes('birim_maliyet_eksik'));

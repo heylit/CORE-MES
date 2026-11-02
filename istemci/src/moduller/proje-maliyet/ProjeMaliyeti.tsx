@@ -28,7 +28,11 @@ const EKSIK_METNI: Record<EksikVeri, string> = {
   butce_kuru_yok: 'Proje bütçesinin para birimi için kur girilmemiş; hedef plan maliyetidir.',
   is_emri_yok: 'Projenin üretim emri yok; maliyet ve gelir emir açılınca hesaplanır.',
   plan_tarihi_yok: 'Bazı iş emirleri canlı planda değil; bu işlerin bekleme finansmanı planı hesaplanmadı.',
+  iscilik_plani_yok: 'Rotada işçilik (kişi) süresi planlanmamış; katkı payı ve kâr riski plan girilince hesaplanır.',
 };
+
+// PM-1 a: işçilik planı yokken katkı ve kâr riski yerine neden yazılır; sayı uydurulmaz.
+const ISCILIK_PLANI_YOK = 'İşçilik planı yok';
 
 const yuzde = (x: number | null): string => (x === null ? '—' : `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
 const isaretliYuzde = (x: number | null): string => (x === null ? '—' : `${x > 0 ? '+' : ''}${yuzde(x)}`);
@@ -59,6 +63,7 @@ const PLAN_SAYFASI = 'sayfa.plan';
 
 function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
   const { gecikmeGunu, gunlukOran, tutar, ceza } = m.karRiski;
+  const iscilikYok = m.eksikler.includes('iscilik_plani_yok');
   const planGorur = useOturum().data?.islemler.includes(PLAN_SAYFASI) === true;
   const oranMetni = `%${gunlukOran.toLocaleString('tr-TR')}/gün`;
   return (
@@ -72,7 +77,7 @@ function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
           <>
             <span className="tc-pm-risk-deger">
               <span className="tc-pm-risk-etiket">Kâr riski (katkı × {oranMetni} × gün)</span>
-              <span className="mono">{tutar !== null && tutar > 0 ? <Rozet ton="hata">{tl(tutar)}</Rozet> : tl(tutar)}</span>
+              <span className="mono">{tutar !== null && tutar > 0 ? <Rozet ton="hata">{tl(tutar)}</Rozet> : tutar === null && iscilikYok ? ISCILIK_PLANI_YOK : tl(tutar)}</span>
             </span>
             {ceza !== null && (
               <span className="tc-pm-risk-deger">
@@ -129,7 +134,8 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
         <SayiKarti baslik="Gerçekleşen maliyet" simge="chart" metin={tl(m.gerceklesen)}
           altMetin={planaOran === null ? `Hedef ${tl(m.hedef)}` : `Hedefin ${yuzde(planaOran)}'i · ${m.butce === null ? 'plan' : 'bütçe'} ${tl(m.hedef)}`} />
         {m.fiyatGorunur && (
-          <SayiKarti baslik="Tahmini katkı payı" simge="target" metin={tl(m.katkiPayi)}
+          <SayiKarti baslik="Tahmini katkı payı" simge="target"
+            metin={m.katkiPayi === null && m.eksikler.includes('iscilik_plani_yok') ? ISCILIK_PLANI_YOK : tl(m.katkiPayi)}
             altMetin={`${yuzde(m.katkiOrani)} · planlanan ${yuzde(m.planlananKatkiOrani)}`}
             ton={m.katkiPayi !== null && m.katkiPayi < 0 ? 'hata' : 'bilgi'} />
         )}
