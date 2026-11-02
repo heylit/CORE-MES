@@ -81,12 +81,17 @@ export const kayitEkleGovdesi = z.object({ satirlar: z.array(kayitSatiri).min(1)
 // "<kişi> <iş> başlattı, önce durdurulmalı" diye sorar; onay `makineDevralGovdesi` ile gelir. Aynı işin kendi makinesinde başlaması devralınamaz,
 // bu alan o ret için dolmaz.
 export const makineDoluRedAyrintisi = z.object({ devralEmirId: z.number().int().positive(), doluOlan: makineDoluAyrintisi });
+// ARK-5 b: makineli istasyonda aynı iş başkasının açık çalışmasıyla sürerken reddedilen başlatma. Ekran "<adlar> çalışıyor, devralınsın mı?"
+// diye sorar; onay `calismaDevralGovdesi` ile gelir. İş durmaz; ötekilerin çalışması duraklatılmış olarak kapanır.
+export const calismaDevralRedAyrintisi = z.object({
+  emirId: z.number().int().positive(), isEmriId: z.number().int().positive().nullable(), adlar: z.array(z.string()).min(1),
+});
 export const kayitEkleCevabi = z.object({
   eklenen: z.number().int(),
   // TMI'nin bu istekte reddettiği kayıtlar (ileti TMI kuralının metni).
   // tmiDurum: reddedilen durum kaydında işin TMI'deki hâli (Arkon durumu); ekran kendi gösterdiğini buna eşitler.
   reddedilen: z.array(z.object({
-    cid: z.string(), ileti: z.string(), makineDolu: makineDoluRedAyrintisi.optional(),
+    cid: z.string(), ileti: z.string(), makineDolu: makineDoluRedAyrintisi.optional(), calismaDevral: calismaDevralRedAyrintisi.optional(),
     tmiDurum: z.enum(['running', 'paused', 'stopped', 'queued', 'done']).optional(),
   })),
   // TMI'nin yazdığı ama kullanıcıya söylenmesi gereken kayıtlar (insanlı istasyonda başkası da çalışıyor).
@@ -97,6 +102,10 @@ export const kayitEkleCevabi = z.object({
 export const makineDevralGovdesi = z.object({
   emirId: z.number().int().positive(), kullanimId: z.number().int().positive(), cid: z.string().min(1).max(200).optional(),
   durdurulanEmirId: z.number().int().positive().optional(),
+}).strict();
+// cid: devralmayı doğuran reddedilmiş başlatma kaydı; devralma yazılınca o yansıma satırı çözülmüş sayılır.
+export const calismaDevralGovdesi = z.object({
+  emirId: z.number().int().positive(), isEmriId: z.number().int().positive().optional(), cid: z.string().min(1).max(200).optional(),
 }).strict();
 export const kayitSorgusu = z.object({
   makine: z.string().max(60).optional(),
@@ -207,6 +216,8 @@ export type YansimalarCevabi = z.output<typeof yansimalarCevabi>;
 export type MakineDoluRedAyrintisi = z.output<typeof makineDoluRedAyrintisi>;
 export type KayitEkleCevabi = z.output<typeof kayitEkleCevabi>;
 export type MakineDevralGovdesi = z.input<typeof makineDevralGovdesi>;
+export type CalismaDevralRedAyrintisi = z.output<typeof calismaDevralRedAyrintisi>;
+export type CalismaDevralGovdesi = z.input<typeof calismaDevralGovdesi>;
 export type YansimaYenidenCevabi = z.output<typeof yansimaYenidenCevabi>;
 
 // Arkon Planlama'dan TMI işinin sırası (A4): ekranın gördüğü canlı sıra ve yeni sıra; sonuç plan taslağıdır.

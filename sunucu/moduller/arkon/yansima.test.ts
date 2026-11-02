@@ -2726,7 +2726,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
 
   // ---------------- terminal: makine seçimi, makine devralma ve aynı işe katılım (kart #1148) ----------------
 
-  type KayitCevabi = { eklenen: number; reddedilen: { cid: string; ileti: string; makineDolu?: { devralEmirId: number; doluOlan: { kullanimId: number; makine: { id: number; ad: string } | null; emir: { id: number; emirNo: string }; kisi: { id: number; ad: string } } }; tmiDurum?: string }[]; uyarilar: { cid: string; ileti: string }[] };
+  type KayitCevabi = { eklenen: number; reddedilen: { cid: string; ileti: string; makineDolu?: { devralEmirId: number; doluOlan: { kullanimId: number; makine: { id: number; ad: string } | null; emir: { id: number; emirNo: string }; kisi: { id: number; ad: string } } }; calismaDevral?: { emirId: number; isEmriId: number | null; adlar: string[] }; tmiDurum?: string }[]; uyarilar: { cid: string; ileti: string }[] };
   const olayEkle = (cerez: string, satir: Record<string, unknown>) => istek<KayitCevabi>(cerez, 'POST', `/arkon/kayitlar/events/ekle`, { satirlar: [satir], kaynak: 'y1' });
   const kisiKimligi = async (kullaniciAdi: string): Promise<number> => (await vt().tek<{ id: number }>('SELECT id FROM kisi WHERE kullanici_adi = $1', [kullaniciAdi]))!.id;
   const operatorKur = async (ad: string): Promise<string> => {
@@ -2834,6 +2834,35 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.deepEqual(await acikKullanimlar(ilk), []);
     // Aynı kullanım ikinci kez devralınamaz (artık kapalı).
     assert.equal((await devral(op2, { emirId: ikinci, kullanimId })).durum, 409);
+  });
+
+  test('çalışma devralma (ARK-5 b): aynı işte başkası çalışırken başlatma reddi devralmayı önerir; onaylanınca iş durmadan çalışma devralana geçer', async () => {
+    await yeniIstasyon();
+    const m = await makineEkle('Freze 6');
+    const op2 = await operatorKur('mk6');
+    const emir = await emirAc();
+    await olayEkle(operator, olay(emir, 'running', { mcs: [m.kod] }));
+    const basla = olay(emir, 'running', { mcs: [m.kod] });
+    const red = (await olayEkle(op2, basla)).govde.reddedilen.find((r) => r.cid === basla['cid'])!;
+    assert.equal(red.makineDolu, undefined, 'aynı iş makine devralması değildir');
+    assert.equal(red.calismaDevral?.emirId, emir);
+    assert.equal(red.calismaDevral?.adlar.length, 1);
+    const devral = (cerez: string, govde: unknown) => istek<{ tamam?: true }>(cerez, 'POST', '/arkon/calisma-devral', govde);
+    assert.equal((await devral(yetkisiz, { emirId: emir })).durum, 403);
+    assert.equal((await devral('', { emirId: emir })).durum, 401);
+    // Devralma katılım gibi istasyon ekibini ister: ekip dışındaki operatör reddedilir ve iş ona geçmez.
+    const ekipDisi = await devral(op2, { emirId: emir, ...(red.calismaDevral?.isEmriId == null ? {} : { isEmriId: red.calismaDevral.isEmriId }) });
+    assert.equal(ekipDisi.durum, 403, JSON.stringify(ekipDisi.govde));
+    assert.notDeepEqual((await acikKullanimlar(emir)).map((k) => k.kisi_id), [await kisiKimligi('mk6')]);
+    const ekip = (await vt().tek<{ id: number }>("INSERT INTO ekip (kod, ad, istasyon_id) VALUES ('YNS-EKIP-6', 'Deneme ekibi', $1) RETURNING id", [istasyonId]))!.id;
+    await vt().sorgu('INSERT INTO ekip_uye (ekip_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, current_date, 10)', [ekip, await kisiKimligi('mk6')]);
+    const ok = await devral(op2, { emirId: emir, ...(red.calismaDevral?.isEmriId == null ? {} : { isEmriId: red.calismaDevral.isEmriId }), cid: basla['cid'] });
+    assert.equal(ok.durum, 200, JSON.stringify(ok.govde));
+    assert.deepEqual([(await emirOku(emir)).durum, (await emirOku(emir)).canli?.calisma], ['basladi', 'calisiyor'], 'iş durmaz');
+    assert.deepEqual((await acikKullanimlar(emir)).map((k) => [k.makine_id, k.kisi_id]), [[m.id, await kisiKimligi('mk6')]]);
+    assert.equal((await yansima(String(basla['cid'])))?.sonuc, 'yazildi', 'reddedilen başlatma çözülmüş sayılır');
+    // Devralan artık işte çalışıyor: ikinci devralma çakışmadır.
+    assert.equal((await devral(op2, { emirId: emir })).durum, 409);
   });
 
   test('devralma iki işin TMI hâlini istasyona ileti olarak yayar; başka istasyondaki emrin hâli yayılmaz', async () => {
