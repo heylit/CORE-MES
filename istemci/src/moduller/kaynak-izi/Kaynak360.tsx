@@ -21,7 +21,8 @@ const paraMetni = (m: { saatMaliyeti: string; paraBirimi: string } | null) => (m
 const ARAMA_SUTUNLARI: readonly Sutun<AramaSatiri>[] = [
   { anahtar: 'tur', baslik: 'Tür', kirilmaz: true, hucre: (s) => TUR_ADI[s.tur] },
   { anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true, hucre: (s) => s.kod ?? '—' },
-  { anahtar: 'ad', baslik: 'Ad', hucre: (s) => <><Link to={adres(s.tur, s.id)}>{s.ad}</Link>{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
+  // Satır da aynı adresi açar; bağlantı tıklaması satıra geçerse geçmişe iki kayıt düşer ve ilk "Geri" aynı sayfada kalır.
+  { anahtar: 'ad', baslik: 'Ad', hucre: (s) => <><Link to={adres(s.tur, s.id)} onClick={(o) => { o.stopPropagation(); }}>{s.ad}</Link>{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
   { anahtar: 'ust', baslik: 'Bağlı olduğu', mono: true, hucre: (s) => s.ust ?? '—' },
 ];
 
