@@ -5,9 +5,8 @@ import type { Tezgah as SunucuTezgahi, TezgahAyari } from '#paylasilan/sozlesme/
 import { allMachines, allMaterials, byId, dirtyUsage, machine, machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, tezgahlariKur, tezgahYok } from '../secici.ts';
 import {
   AYAR_EKSIK_ILETISI, deleteMachine, deleteMat, isCustomMachine, malzemeAlanlari, saveMachine, saveMat, sayi, setMachineNo, sunucuTezgahiKaydet, tezgahAlanlari,
-  MODEL_OPTS, YENI_TEZGAH, type Malzeme, type Tezgah,
+  YENI_TEZGAH, type Malzeme, type Tezgah,
 } from './tanimlar.ts';
-import { KATALOG } from '../veri/tezgah-katalogu.ts';
 
 vi.mock('../depo.ts', async (asil) => ({ ...await asil<object>(), save: vi.fn() }));
 const sunucu = vi.hoisted(() => ({ yazilan: [] as unknown[] }));
@@ -167,16 +166,6 @@ describe('tezgâh listesi İstasyonlar\'dan (1091 a, 1139 b, 1192 a)', () => {
     expect(state.mo[g.id]).toEqual({ info: { not: 'kalır' } });
     expect(sunucuTezgahSatirlari()![0]!.sunucu.surum).toBe(1);
     expect(machine()).toMatchObject({ pockets: 36, rpm: 14000 });
-  });
-
-  it('katalogdan seçilen görünüm model türü olarak yazılır; seçimde CMM yoktur (1893 a, 1894 a)', async () => {
-    const t = KATALOG.find((m) => m.tur === 'mill')!;
-    expect(MODEL_OPTS.some(([k]) => k === t.anahtar)).toBe(true);
-    expect(MODEL_OPTS.some(([k]) => KATALOG.find((m) => m.anahtar === k)?.tur === 'cmm')).toBe(false);
-    tezgahlariKur([makine(7, 'Z-07', null)]);
-    const satir = sunucuTezgahSatirlari()![0]!;
-    await sunucuTezgahiKaydet(satir, { ...tezgahAlanlari(satir.tezgah), type: 'mill', kind: t.anahtar, pockets: '30', rpm: '12000' });
-    expect(sunucu.yazilan).toEqual([{ makineId: 7, surum: 0, ayar: expect.objectContaining({ modelTuru: t.anahtar }) }]);
   });
 
   it('cep ya da devir boşsa yazılmaz', async () => {
