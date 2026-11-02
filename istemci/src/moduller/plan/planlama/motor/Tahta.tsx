@@ -15,7 +15,7 @@ import type { HaritaKomutu } from './harita/Harita.tsx';
 import { KilavuzKarti } from './harita/Kilavuz.tsx';
 import { aralik, durusOku, haritaGruplari, ornekTezgah, pencereSonu, sahneKur, yerlesim, zamanSinirla } from './harita/kurallar.ts';
 import { BosCalisma, BosPlan } from './BosPlan.tsx';
-import { usePlanKur } from './coz.ts';
+import { useBekleyenUygula, usePlanKur } from './coz.ts';
 import { canliPlani, useCanliPlan } from './fark.ts';
 import { FarkSeridi } from './ust/FarkSeridi.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
@@ -177,6 +177,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const { bildir } = useBildirim();
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
+  const bekleyenUygula = useBekleyenUygula(o, uyar);
   const sonKart = gorunum === 'atolye' && !odak ? kartlar[kartlar.length - 1]?.tur ?? null : null;
   const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p });
   tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p };
@@ -242,7 +243,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   return (
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
       <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} gecmis={gecmisAc && (() => gecmisAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
-        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} />
+        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
           {fark && !odak && <FarkSeridi d={canliD} p={p} kapat={() => setFark(false)} />}

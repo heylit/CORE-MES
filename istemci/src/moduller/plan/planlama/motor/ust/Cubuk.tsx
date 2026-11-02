@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
-import { KURULUYOR, type PlanKurucu } from '../coz.ts';
+import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
 import { MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 
@@ -17,12 +17,14 @@ interface Ozellikler {
   refSec: ((v: 'onceki' | 'sabit') => void) | null; sabitle: (() => void) | null; sabitAd: string | null;
   // Planı kur sunucudaki motorla (576); verilmezse ya da plan varken (iyileştirme, 579 b) düğme pasif.
   planKur?: PlanKurucu | null;
+  // Plan veriden eskiyse bekleyen değişiklikleri uygular (1786 PLN-2); verilmezse düğme eskisi gibi pasif.
+  bekleyenUygula?: BekleyenUygulayici | null;
 }
 
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'gecikme', true], ['dar', 'darboğaz', true]];
 
 export function Cubuk(o: Ozellikler) {
-  const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null;
+  const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
   return (
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
@@ -61,8 +63,14 @@ export function Cubuk(o: Ozellikler) {
             </button>
           )}
           {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. Planı kur sunucudaki motorla açıktır (576). */}
-          {o.planYaz && !kur && <small className="tc-pym-sb-not">Motor kapalı</small>}
-          {o.planYaz && (kur ? (
+          {o.planYaz && !kur && !uyg && <small className="tc-pym-sb-not">Motor kapalı</small>}
+          {o.planYaz && uyg ? (
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
+              title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
+              aria-label="Değişiklikleri uygula" onClick={uyg.uygula}>
+              <Simge ad="play" boyut="k" /><span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>
+            </button>
+          ) : o.planYaz && (kur ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={kur.suruyor} aria-busy={kur.suruyor || undefined}
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
               <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
