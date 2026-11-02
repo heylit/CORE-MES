@@ -579,6 +579,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       await vt().sorgu('SELECT kod, acilis_sayfasi FROM rol WHERE acilis_sayfasi IS NOT NULL ORDER BY kod'),
       [
         { kod: 'depo', acilis_sayfasi: '/stok' },
+        { kod: 'guvenlik_gorevlisi', acilis_sayfasi: '/nizamiye' },
         { kod: 'muhasebe_finans', acilis_sayfasi: '/finans' },
         { kod: 'satin_alma', acilis_sayfasi: '/satin-alma' },
         { kod: 'satis', acilis_sayfasi: '/siparisler' },
