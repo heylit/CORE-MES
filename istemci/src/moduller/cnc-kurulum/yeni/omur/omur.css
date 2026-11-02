@@ -8,6 +8,12 @@
 .tc-co-adim-adi { font-size: var(--yazi-xs); letter-spacing: var(--harf-aralik-14); color: var(--muted); font-weight: 700; }
 .tc-co-baslik { font-size: var(--yazi-l); font-weight: 800; color: var(--ink); }
 .tc-co-alt { font-size: var(--yazi-xs); color: var(--muted); display: flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
+.tc-co-mod { position: absolute; right: var(--b-3); top: var(--b-3); z-index: 1; }
+.tc-co-onizleme-kapali { display: flex; align-items: center; justify-content: center; }
+.tc-co-model-kapat {
+  position: absolute; right: var(--b-2); bottom: var(--b-2); z-index: 1; display: grid; place-items: center; width: var(--b-5); height: var(--b-5);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); cursor: pointer;
+}
 .tc-co-gorunus { position: absolute; right: var(--b-3); top: var(--b-3); display: flex; gap: var(--b-1); flex-wrap: wrap; justify-content: flex-end; }
 .tc-co-grafikler {
   position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--orb-3) * 2.1); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -370,6 +370,14 @@
 .tc-ck-hs-nc { font-family: var(--font-mono); font-weight: 800; fill: var(--hold); }
 .tc-ck-hs-satir { fill: var(--muted); }
 
+/* ----- kartlı akış (1843): akışın kendisi ../kart-akisi.css'te ----- */
+.tc-ck-sahne-kart { cursor: default; touch-action: auto; }
+.tc-ck-onizleme-kapali { display: flex; align-items: center; justify-content: center; cursor: default; touch-action: auto; }
+.tc-ck-model-kapat {
+  position: absolute; right: var(--b-3); bottom: var(--b-2); z-index: 1; display: grid; place-items: center; width: var(--b-5); height: var(--b-5);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); cursor: pointer;
+}
+
 /* ----- 860 ve altı: panel alttan çekmece (prototip); 768 penceresinde sahneye yalnız menü dışı alan kalır ----- */
 @media (max-width: 860px) {
   .tc-ck-hz, .tc-ck-govde { grid-template-columns: minmax(0, 1fr); }

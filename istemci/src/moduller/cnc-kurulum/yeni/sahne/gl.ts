@@ -124,6 +124,13 @@ export function thumb(opt: Kalem): HTMLCanvasElement | null {
 
 // Küçük resim bir kez PNG adresine çevrilir (liste görünümleri <img> ile gösterir; prototipin thumbURL'i).
 const thumbURL: Record<string, string> = {};
+// Çizmeden bakar: hazırsa adres, resmi olmayan kalemde null, henüz çizilmediyse undefined (kartlı akış sırayla çizdirir).
+export function thumbUrlHazir(opt: Kalem): string | null | undefined {
+  if (opt.kind === 'empty' || baglam === null) return null;
+  const v = thumbURL[opt.id];
+  if (v !== undefined) return v;
+  return thumbCache[opt.id] === null ? null : undefined;
+}
 export function thumbUrl(opt: Kalem): string | null {
   const v = thumbURL[opt.id];
   if (v !== undefined) return v;

@@ -76,13 +76,16 @@ test.describe('iskelet', () => {
 test.describe('P1 Kurulum ve Hazırlık', () => {
   // Bugünkü akış (prototip 17512-17882, 20916-21793): çark adım adım iner, Hazırlık seçili kurulumun adımlarını sırayla açar.
   // Bakmak ve gezinmek sunucuya yazmaz (kayıt ilk kullanıcı eyleminden sonra ve yalnız değişince yazılır).
-  test('Kurulum: çark ok tuşlarıyla adım değiştirir, kurulum kartı ve önizleme açıktır', async ({ page, ac, ag }) => {
+  // Varsayılan gezinme kartlı akıştır (1843); 3D çark 3b dosyasında sınanır.
+  test('Kurulum: kartlı akış ok tuşlarıyla adım değiştirir, kurulum kartı ve önizleme açıktır', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/kurulum');
-    await expect(page.getByText(/^ADIM 1 \//)).toBeVisible();
+    const aktifNo = page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-no');
+    await expect(aktifNo).toHaveText('01');
     await page.keyboard.press('ArrowDown');
-    await expect(page.getByText(/^ADIM 2 \//)).toBeVisible();
+    await expect(aktifNo).toHaveText('02');
     await page.keyboard.press('ArrowUp');
-    await expect(page.getByText(/^ADIM 1 \//)).toBeVisible();
+    await expect(aktifNo).toHaveText('01');
+    await page.getByRole('button', { name: 'Modeli göster' }).click();
     await expect(page.getByRole('tab', { name: 'Magazin' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: /Üretim emri/ })).toBeVisible();
     expect(ag.hatalar).toEqual([]);
@@ -287,7 +290,9 @@ test.describe('3B sahne', () => {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
       // 2B modda Kütüphane sahne kullanmaz: cepler ve takım çizimi düz öğedir.
-      if (yol !== 'kutuphane') await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
+      // Kurulum ve Takım Ömrü kartlı akışla açılır, sürekli sahne yoktur (1843).
+      if (yol === 'kurulum' || yol === 'takim-omru') await expect(page.locator('.tc-cy-ka'), yol).toBeVisible();
+      else if (yol !== 'kutuphane') await expect(page.locator('.tc-cy-sahne').first(), yol).toBeAttached();
       expect(await page.locator('.tc-cy-sahne-tuval:visible').count(), yol).toBe(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), yol).toBeLessThanOrEqual(0);
     }

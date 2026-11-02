@@ -11,6 +11,8 @@ import { byId, holderIdFor, invKey, machine, material, stockOf, toolById, tools 
 import { coolHint, cutData, holderOf } from '../hesap/kesme.ts';
 import { openDefs, useGorunum, useTuslar } from '../gorunum.ts';
 import { Sahne } from '../sahne/Sahne.tsx';
+import { AkisModuSecici, akisModu, useAkisModu } from '../akis-modu.tsx';
+import { KartAkisi } from './KartAkisi.tsx';
 import type { Kalem } from '../veri/tipler.ts';
 import { emirSec, emirler, hazirlikKaydi, kurulumTamam, seciliEmir, useCncYetkisi } from '../veri.ts';
 import { carkBasildi, carkBirak, carkBirakildi, carkCikti, carkCiz, carkKaydi, sonKartaIn } from './cark.ts';
@@ -280,7 +282,8 @@ export function Kurulum() {
   useKurulumSurum();
   const yetki = useCncYetkisi();
   const [sifirla, sifirlaYaz] = useState(false), [tur, turYaz] = useState(false), [sonda, sondaYaz] = useState(false);
-  const [cekmece, cekmeceYaz] = useState(false);
+  const [cekmece, cekmeceYaz] = useState(false), [model, modelYaz] = useState(false);
+  const mod = useAkisModu(), cark = mod === 'cark';
   const sahne = useRef<HTMLDivElement | null>(null), onizleme = useRef<HTMLDivElement | null>(null);
   const turRef = useRef(false), sondaRef = useRef(false);
   turRef.current = tur; sondaRef.current = sonda;
@@ -298,6 +301,8 @@ export function Kurulum() {
     if (turRef.current || sondaRef.current || seciliEmir() === null) return;
     const d = K.defs[K.active]; if (d) isaretle(d.key);
     if (!tamamDurumu().hazir && S.kurulum?.gecerli !== true) return;
+    // Kartlı akışta tur yok: adımlar zaten ekranda alt alta durur, onay doğrudan açılır.
+    if (akisModu() === 'kart') { sondaYaz(true); return; }
     turYaz(true);
     const toplam = K.defs.length, aralik = Math.max(90, Math.min(240, 4200 / toplam));
     K.active = 0; kurulumYenile();
@@ -347,7 +352,7 @@ export function Kurulum() {
     };
     el.addEventListener('wheel', tekerlek, { passive: false });
     return () => { el.removeEventListener('wheel', tekerlek); };
-  }, [sondanCik]);
+  }, [sondanCik, mod]);
 
   const def = K.defs[K.active], k = focusIdx(K.active), opt = def?.options[k], m = machine();
   const ilerleme = useOran<HTMLSpanElement>(K.defs.length ? (K.active + 1) / K.defs.length : 0);
@@ -365,12 +370,18 @@ export function Kurulum() {
           <Dugme simge="printer" onClick={printSheet}>Yazdır</Dugme>
           <Dugme simge="download" onClick={exportCSV}>CSV</Dugme>
           <Dugme simge="download" className="tc-ck-dar-gizle" onClick={exportJSON}>JSON</Dugme>
+          <AkisModuSecici />
           {yetki.yazabilir && <Dugme simge="rotate" title="Kurulumu varsayılana dön" onClick={() => { sifirlaYaz(true); }}>Sıfırla</Dugme>}
         </div>
       </div>
       <EmirCubugu tamamla={sonaGit} tur={tur} />
       <div className="tc-ck-govde">
-        <div
+        {!cark ? (
+          <div ref={sahne} className="tc-ck-sahne tc-ck-sahne-kart">
+            <KartAkisi sonraki={asagi} />
+            {sonda && <SonOnay kapat={sondanCik} />}
+          </div>
+        ) : <div
           ref={sahne} className={`tc-ck-sahne${tur ? ' tc-ck-turda' : ''}`}
           onPointerDown={(e) => { if (turRef.current || (e.target as HTMLElement).closest('button')) return; if (sondaRef.current && !(e.target as HTMLElement).closest('.tc-ck-sononay')) sondanCik(); carkBasildi(e.clientX, e.clientY); e.currentTarget.setPointerCapture?.(e.pointerId); }}
           onPointerMove={(e) => { carkKaydi(e.clientX, e.clientY); }}
@@ -400,14 +411,19 @@ export function Kurulum() {
             Sürükle: çarkı çevir · Karta tıkla: seç
           </div>
           {sonda && <SonOnay kapat={sondanCik} />}
-        </div>
+        </div>}
         <aside className={`tc-ck-yan${cekmece ? ' tc-ck-acik' : ''}`}>
           <button type="button" className="tc-ck-cekmece" onClick={() => { cekmeceYaz(!cekmece); }}><Simge ad={cekmece ? 'down' : 'up'} boyut="k" /> Kurulum Kartı</button>
           <div className="tc-ck-yan-kaydir">
             <KurulumKarti meta />
           </div>
           <Ayrinti def={def} opt={opt} />
-          <div
+          {!cark && !model ? (
+            <div className="tc-ck-onizleme tc-ck-onizleme-kapali">
+              <Dugme simge="cube" onClick={() => { modelYaz(true); }}>Modeli göster</Dugme>
+              <div className="tc-ck-onizleme-adi">{onizlemeEtiketi}</div>
+            </div>
+          ) : <div
             ref={onizleme} className="tc-ck-onizleme"
             onPointerDown={(e) => { onizlemeSurukle(e.clientX); e.currentTarget.setPointerCapture?.(e.pointerId); }}
             onPointerMove={(e) => { if (e.buttons) onizlemeSurukle(e.clientX); }}
@@ -420,7 +436,8 @@ export function Kurulum() {
             </div>
             <div className="tc-ck-dondur">sürükle: döndür</div>
             <div className="tc-ck-onizleme-adi">{onizlemeEtiketi}</div>
-          </div>
+            {!cark && <button type="button" className="tc-ck-model-kapat" title="Modeli kapat" aria-label="Modeli kapat" onClick={() => { modelYaz(false); }}><Simge ad="x" boyut="k" /></button>}
+          </div>}
         </aside>
       </div>
       <OnayPenceresi

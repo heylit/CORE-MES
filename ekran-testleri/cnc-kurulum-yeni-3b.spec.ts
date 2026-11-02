@@ -13,7 +13,11 @@ test.describe('3B sahne', () => {
   test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer.
     test.setTimeout(180_000);
-    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+    // Kurulum ve Takım Ömrü'nde sahne 3D çark seçilince çizilir; varsayılan kartlı akışta sürekli sahne yoktur (1843).
+    await page.addInitScript(() => {
+      (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla';
+      localStorage.setItem('tmiv2.cnc-kurulum.akis-modu', 'cark');
+    });
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       // Kütüphane tezgâh cepleriyle açılır (1276 a); raf sahnesi Elimizdekiler'dedir.
@@ -33,6 +37,20 @@ test.describe('3B sahne', () => {
         return dolu;
       }), { message: yol, timeout: 30_000 }).toBeGreaterThan(0);
     }
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  // Kartlı akış (1843): Kurulum ve Takım Ömrü'nde sürekli çizilen tuval yoktur; kart resimleri 3B çizilip bir kez saklanır.
+  test('kartlı akışta tuval yok, kart resimleri 3B çizilir', async ({ page, ac, ag }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+    await ac('/cnc-kurulum/yeni/kurulum');
+    await expect(page.getByRole('button', { name: 'Kartlar' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-resim img').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.tc-cy-sahne-tuval')).toHaveCount(0);
+    await ac('/cnc-kurulum/yeni/takim-omru');
+    await expect(page.locator('.tc-cy-ka-satir[data-aktif]')).toBeVisible();
+    await expect(page.locator('.tc-cy-sahne-tuval')).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });
 
