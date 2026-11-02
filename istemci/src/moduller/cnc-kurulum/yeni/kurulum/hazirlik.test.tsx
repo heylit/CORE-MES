@@ -62,7 +62,7 @@ vi.mock('./deneme.ts', () => ({
 }));
 
 const { izinli, kilitli, yazamaz, prMachMain, prCurStep, prEnter } = await import('./hazirlik-eylem.ts');
-const { HazirlikPaneli, gecerliOnaylar, kurulumMetni, adimAdi } = await import('./HazirlikPaneli.tsx');
+const { EmirKarti, HazirlikPaneli, gecerliOnaylar, kurulumMetni, adimAdi } = await import('./HazirlikPaneli.tsx');
 
 const yetki = (y: Partial<CncYetkisi>): CncYetkisi => ({
   kisi: { id: 1, ad: 'Deneme Kisi' }, yazabilir: false, hazirlikOnaylayabilir: false, takimDegistirebilir: false, stokDusebilir: false,
@@ -122,6 +122,16 @@ describe('saf yardımcılar', () => {
     expect(kurulumMetni(null, null)).toBe('');
     expect(kurulumMetni(e, null)).toBe('Kurulum henüz tamamlanmadı');
     expect(kurulumMetni(e, { kisi, zaman: 'x', gecerli: false })).toBe('Kurulum tamamlandıktan sonra seçimler değişti');
+  });
+});
+
+describe('emir kartı', () => {
+  it('emri seçemeyen kişiye seçimi kimin yaptığı söylenir', () => {
+    render(<EmirKarti emir={null} acik kurulum={null} secebilir={false} />);
+    expect(screen.getByText(/kurulumu yapan kişi Kurulum ekranında seçer/)).toBeTruthy();
+    cleanup();
+    render(<EmirKarti emir={null} acik kurulum={null} />);
+    expect(screen.getByText(/Emri Kurulum ekranında seçin/)).toBeTruthy();
   });
 });
 
