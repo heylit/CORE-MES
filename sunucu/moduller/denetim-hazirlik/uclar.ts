@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   belgeCevabi, belgeParametresi, benCevabi, damgaCevabi, ekCevabi, ekIcerikCevabi, ekParametresi, ekYukleGovdesi, kilitCevabi, kilitGovdesi,
-  kisilerCevabi, kurulumCevabi, odaCevabi, odaParametresi, olcuAletleriCevabi, silCevabi, silGovdesi, sorguCevabi, sorguParametresi, yazGovdesi,
+  kisilerCevabi, kurulumCevabi, olcuAletleriCevabi, silCevabi, silGovdesi, sorguCevabi, sorguParametresi, yazGovdesi,
 } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
-import { belgeOku, belgeSil, belgeYaz, ben, damga, ekOku, ekYukle, kilitle, kisiler, kurulum, odaGuncelle, olcuAletleri, sorgu } from './servis.ts';
+import { belgeOku, belgeSil, belgeYaz, ben, damga, ekOku, ekYukle, kilitle, kisiler, kurulum, olcuAletleri, sorgu } from './servis.ts';
 
 // Çerçevedeki prototipin depo çağrıları bu uçlara gelir (istemci/src/moduller/denetim-hazirlik/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -85,14 +85,6 @@ export const uclar = [
     yetki: 'denetim-hazirlik.yonet',
     cevap: kurulumCevabi,
     isle: ({ db, kullanici }) => kurulum(db, kullanici),
-  }),
-  uc({
-    yontem: 'GET',
-    yol: '/denetim-hazirlik/oda',
-    yetki: OKUMA,
-    sorgu: odaParametresi,
-    cevap: odaCevabi,
-    isle: ({ kullanici, sorgu: s }) => odaGuncelle(kullanici, s.durum),
   }),
   uc({
     yontem: 'POST',

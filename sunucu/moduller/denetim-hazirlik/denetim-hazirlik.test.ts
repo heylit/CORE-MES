@@ -302,13 +302,6 @@ describe('denetim-hazirlik belge deposu (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('BD-12: oda o an açık olanları durumlarıyla döner', async () => {
-    const durum = encodeURIComponent(JSON.stringify({ yaziyor: 'genel' }));
-    await istek(yazar, 'GET', `/denetim-hazirlik/oda?durum=${durum}`);
-    const esler = ((await istek(okur, 'GET', '/denetim-hazirlik/oda')).json() as { esler: { kisiId: number; durum: Record<string, unknown> }[] }).esler;
-    assert.deepEqual(esler.find((e) => e.kisiId === yazarId)?.durum, { yaziyor: 'genel' });
-  });
-
   test('BD-13: ortak kayıt (yerel) bütün yazarlara açık', async () => {
     const ortak = yeniBelge();
     assert.equal((await yaz(yazar, { yol: ortak, kip: 'tam', veri: { deger: '1' } })).statusCode, 200);

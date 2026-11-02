@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  BELGE_SINIRI, EK_SINIRI, KURULUM_ISARETI, belgeKotaReddi, kilitSahibi, yeniAnmalar, ODA_SURESI_MS, baslangicBelgeleri, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
+  BELGE_SINIRI, EK_SINIRI, KURULUM_ISARETI, belgeKotaReddi, kilitSahibi, yeniAnmalar, baslangicBelgeleri, ekKotaReddi, ekOkunurMu, degistirebilirMi, derinBirlestir, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kayitOzeti, kilitAlinirMi, olcuAletleriKaydi, sorgula, sonParca, takvimDenetimleri, ustYolu, yonetimGerekirMi,
 } from './kurallar.ts';
 import type { DepoBelgesi } from './kurallar.ts';
 
@@ -54,12 +54,6 @@ describe('denetim-hazirlik belge deposu kuralları', () => {
     assert.equal(kilitAlinirMi({ sahip: 's2', bitis: 100 }, 's1', 100), true);
     assert.equal(kilitAlinirMi({ sahip: 's1', bitis: 500 }, 's1', 100), true);
     assert.equal(kilitAlinirMi({ sahip: 's2', bitis: 500 }, 's1', 100), false);
-  });
-
-  test('BD-K7: oda durumu yamayla birleşir, null alanı siler; süresi geçen eş düşer', () => {
-    assert.deepEqual(durumYamala({ a: 1, b: 2 }, { b: null, c: 3 }), { a: 1, c: 3 });
-    const oda = new Map([[1, { durum: {}, guncellendi: 1000 }], [2, { durum: { yaziyor: 'genel' }, guncellendi: 1000 + ODA_SURESI_MS }]]);
-    assert.deepEqual(canliEsler(oda, 1000 + ODA_SURESI_MS).map((e) => e.kisiId), [2]);
   });
 
   test('BD-K8: başlangıç belgeleri belge yoludur ve kurulum işareti varsa aralarındadır', () => {

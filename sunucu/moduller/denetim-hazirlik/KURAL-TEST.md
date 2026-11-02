@@ -23,7 +23,7 @@ istemci: `istemci/src/moduller/denetim-hazirlik/yeni/**/*.test.ts(x)`. Eski çer
 | BD-21 (1809, DH-3) Yazma (ve kilit gövdesi) belgeye yalnız kişinin okuyabildiği eki yeni anma olarak sokabilir; okunamayan ya da olmayan ek 404; belgede zaten olan anma denetlenmez; bir yazmada en çok 50 yeni anma | servis (`yeniAnmalar`, `ekOkunurMu`) | `BD-K14`, `BD-10f` |
 | BD-22 (1809, DH-3) Kilit sahibi kişi kimliğiyle saklanır; başka kişi aynı sahip adını vererek geçerli kilidi alamaz | servis (`kilitSahibi`) | `BD-K16`, `BD-08b` |
 | BD-10 Başlangıç belgeleri yalnız işaret belgesi yokken bir kez | servis | `BD-K8`, `BD-11` |
-| BD-11 Oda yalnız son 45 sn içinde görülenleri döner | servis (`canliEsler`) | `BD-K7`, `BD-12` |
+| KAPANDI (1809, DH-6) BD-11 Oda ucu kaldırıldı: TS ekranı kullanmıyordu ve okuma ucunda süreç belleğine yazıyordu | - | - |
 | KAPANDI (1418) BD-12 Çerçeve dışarıya istek atamaz, yazı tipi gömülüdür | çerçeve kalktı; TS ekranı yalnız modülün uçlarına gider | - |
 | BD-13 Kayıt sürüm denetimiyle yazılır; çatışmada yazma durur ve kişiye söylenir | `yeni/veri.ts` | `başkası yazdıysa yazma durur ve kişiye söylenir` |
 | BD-14 Yetkisiz kişi uçlara gitmez | ekran + uç | `okuma yetkisi olan kişide de açılır; giriş işlemi olmayana yetki iletisi, uca istek gitmez` |

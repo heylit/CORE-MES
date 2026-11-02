@@ -4,16 +4,16 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { AZAMI_EK_BAYT } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OdaCevabi, OlcuAletleriCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
+import type { BelgeCevabi, BenCevabi, EkCevabi, EkIcerikCevabi, Filtre, KilitCevabi, OlcuAletleriCevabi, Sira, SorguCevabi, YazGovdesi } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import { ekMime } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisileriListele } from '../kisiler/disari.ts';
 import {
   OLCU_ALETI_KAYIT_ADEDI, olcuAletleriKaydi, AZAMI_YENI_ANMA, belgeKotaReddi, kilitSahibi, yeniAnmalar,
-  KURULUM_ISARETI, baslangicBelgeleri, ekAnmasi, ekKotaReddi, ekOkunurMu, canliEsler, degistirebilirMi, derinBirlestir, durumYamala, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
+  KURULUM_ISARETI, baslangicBelgeleri, ekAnmasi, ekKotaReddi, ekOkunurMu, degistirebilirMi, derinBirlestir, erisebilirMi, izinliBelgeMi, izinliKoleksiyonMu, kilitAlinirMi, sonParca, sorgula, ustYolu,
   yonetimGerekirMi, ORTAK_KAYIT_YOLU, takvimDenetimleri,
 } from './kurallar.ts';
-import type { OdaKaydi, Veri } from './kurallar.ts';
+import type { Veri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { KilitliBelge } from './sorgular.ts';
 
@@ -171,16 +171,6 @@ export async function kurulum(db: Db, kullanici: Kullanici): Promise<{ kurulan: 
     kurulan += 1;
   }
   return { kurulan };
-}
-
-// Oda kalıcı değildir: süreç belleğinde durur (TMI tek sunucudur). Okuma ucunda yazılır; veritabanına dokunmaz.
-const oda = new Map<number, OdaKaydi>();
-
-export function odaGuncelle(kullanici: Kullanici, yama: Veri | undefined, simdi = Date.now()): OdaCevabi {
-  const eski = oda.get(kullanici.id);
-  oda.set(kullanici.id, { durum: durumYamala(eski?.durum ?? {}, yama ?? {}), guncellendi: simdi });
-  for (const [kisiId, k] of oda) if (simdi - k.guncellendi > 10 * 60_000) oda.delete(kisiId);
-  return { esler: canliEsler(oda, simdi) };
 }
 
 // Tür yükleyenin bildirdiğinden değil içerikten bulunur (GG-1): HTML ya da SVG Blob olarak açılınca betik çalıştırırdı.

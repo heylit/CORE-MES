@@ -89,11 +89,6 @@ export const benCevabi = z.object({
 export const kisilerCevabi = z.object({ kisiler: z.array(kisiSemasi) });
 export const kurulumCevabi = z.object({ kurulan: z.number().int() });
 
-// Oda: o an sayfası açık olanlar (kalıcı değildir). Durum küçük düz nesnedir.
-export const odaParametresi = z.object({ durum: jsonMetni(z.record(z.unknown())).optional() });
-export const esSemasi = z.object({ kisiId: z.number().int(), durum: z.record(z.unknown()), guncellendi: z.number().int() });
-export const odaCevabi = z.object({ esler: z.array(esSemasi) });
-
 export const ekKimligi = z.string().regex(/^[0-9a-f]{32}$/, 'Geçersiz ek kimliği.');
 export const ekParametresi = z.object({ id: ekKimligi });
 export const ekYukleGovdesi = z.object({
@@ -112,7 +107,6 @@ export type BelgeCevabi = z.output<typeof belgeCevabi>;
 export type BenCevabi = z.output<typeof benCevabi>;
 export type KisilerCevabi = z.output<typeof kisilerCevabi>;
 export type KilitCevabi = z.output<typeof kilitCevabi>;
-export type OdaCevabi = z.output<typeof odaCevabi>;
 export type EkCevabi = z.output<typeof ekCevabi>;
 export type EkIcerikCevabi = z.output<typeof ekIcerikCevabi>;
 export type YazGovdesi = z.output<typeof yazGovdesi>;

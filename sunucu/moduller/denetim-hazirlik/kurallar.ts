@@ -1,7 +1,7 @@
 import { AZAMI_SINIR } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 import type { Filtre, OlcuAletleriCevabi, Sira } from '#paylasilan/sozlesme/denetim-hazirlik.ts';
 
-// Belge deposunun kuralları: yol, kişiye özel alan, birleştirme, sorgu, kilit, oda. Saf; veritabanı ve saat yok.
+// Belge deposunun kuralları: yol, kişiye özel alan, birleştirme, sorgu, kilit. Saf; veritabanı ve saat yok.
 
 export type Veri = Record<string, unknown>;
 export interface DepoBelgesi { yol: string; kimlik: string; veri: Veri; surum: number }
@@ -206,26 +206,6 @@ export function sorgula<T extends DepoBelgesi>(belgeler: readonly T[], kosul: So
 // Kilit kısa süreli ve işbirliğine dayalıdır: süresi geçmiş ya da aynı sahibin kilidi yeniden alınır.
 export function kilitAlinirMi(mevcut: { sahip: string | null; bitis: number | null }, sahip: string, simdi: number): boolean {
   return mevcut.sahip === null || mevcut.bitis === null || mevcut.bitis <= simdi || mevcut.sahip === sahip;
-}
-
-// Oda: sayfası o an açık olanlar. Durum yaması birleşir; null değer alanı siler. Son görülmeden bu yana süre geçen düşer.
-export const ODA_SURESI_MS = 45_000;
-export interface OdaKaydi { durum: Veri; guncellendi: number }
-
-export function durumYamala(eski: Veri, yama: Veri): Veri {
-  const yeni: Veri = { ...eski };
-  for (const [anahtar, deger] of Object.entries(yama)) {
-    if (deger === null) delete yeni[anahtar];
-    else yeni[anahtar] = deger;
-  }
-  return yeni;
-}
-
-export function canliEsler(oda: ReadonlyMap<number, OdaKaydi>, simdi: number): { kisiId: number; durum: Veri; guncellendi: number }[] {
-  return [...oda.entries()]
-    .filter(([, k]) => simdi - k.guncellendi < ODA_SURESI_MS)
-    .map(([kisiId, k]) => ({ kisiId, durum: k.durum, guncellendi: k.guncellendi }))
-    .sort((a, b) => a.kisiId - b.kisiId);
 }
 
 // Boş depoda prototipin açılabilmesi için gereken yapısal belgeler (gerçek veri değil, prototipin varsayılanları).
