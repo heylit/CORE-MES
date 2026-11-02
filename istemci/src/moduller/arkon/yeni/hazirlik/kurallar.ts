@@ -1,5 +1,5 @@
 import { muayeneNumunePlani, type MuayenePlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
-import { ISTASYONSUZ_GONDERIM, istasyonsuzMu, rotaEksigi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
+import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type PlanliPaket } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { Plant, Policy } from '../cekirdek/tipler.ts';
 import { istasyonBul } from '../cekirdek/tesis.ts';
@@ -321,3 +321,11 @@ export function yapistirilanKalemler(metin: string, kimlik: () => string = yeniK
 }
 // Ölçüm yöntemi (teknik-resim.ts methOf): satırda yazılı değilse aleti CMM olan ölçü CMM'dir.
 export const olcumYontemi = (b: Pick<PlanItem, 'm' | 'tool'>): 'cmm' | 'man' => b.m || (b.tool === 'CMM' ? 'cmm' : 'man');
+
+// Gönderim kartının plan dışı eki, "Operatöre gönder" penceresiyle aynı kuraldan: "yalnız canlı plandaki iş düşer" ayarı kapalıysa
+// plan dışı iş de operatöre düşer.
+export function planDisiEki(p: PlanliPaket | null | undefined): string {
+  const uyari = gonderimUyarisi(p);
+  if (uyari === null) return '';
+  return uyari.gorunmez ? ' · operatöre plan canlıya alınınca düşer' : ' · plan dışı: operatöre düşer, plansız başlatılabilir';
+}
