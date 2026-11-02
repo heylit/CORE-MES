@@ -41,6 +41,8 @@ export function KartPenceresi({
   const ayni = yerine ? [] : K.benzerKartlar(x, kayitlar, b).filter((r) => r.seviye === 'ayni');
   const hizmet = x.tur === 'hizmet';
   const kilitli = K.pasifKilitli(x, b);
+  // Sunucu yalnız taslağı iptal eder (MKK-6); kullanılan kart pasife alınır.
+  const silinir = K.onayDurum(x, b) === 'taslak';
   const baslik = `${x.com.kod} ${x.com.ad}`.trim();
   return (
     <Pencere
@@ -58,7 +60,7 @@ export function KartPenceresi({
             </>
           )}
           {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => { git.etiketMerkezi([kart.no]); }}>Etiket Merkezi'nde bas</Dugme>}
-          {yetki.yaz && yetki.onayla && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
+          {yetki.yaz && yetki.onayla && silinir && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
           <Dugme simge="scan" onClick={() => saha(kart.kimlik)}>Saha görünümü</Dugme>
           <GecmisDugmesi kayitlar={[{ tablo: 'malzeme_katalog_karti', anahtar: { kimlik: kart.kimlik } }]} />
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
