@@ -195,7 +195,7 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await istasyonlu(makine!.istasyonId)).durum, 400, 'pasif istasyon');
     // Bağı sonradan kalkan modelli tanımın başka alanı kaydedilebilir.
     const belge = await malzemeBelgesi(m);
-    const modelli = tanimSemasi.parse((await ekle({ opNo: 41, model: { belgeId: belge, revizyon: 'A' } })).govde);
+    const modelli = tanimSemasi.parse((await ekle({ opNo: 41, seriSablonu: 'M{PARCA}-{SEQ}', model: { belgeId: belge, revizyon: 'A' } })).govde);
     await o().sahip.sorgu("DELETE FROM belge_merkezi_bag WHERE belge_id = $1", [belge]);
     const k = await istek('yonetici', 'POST', `/markalama/tanimlar/${modelli.id}/kaydet`, {
       seriSablonu: '{PARCA}-{SEQ:6}', alanlar: [seriAlani], model: modelli.model, surum: modelli.surum,
@@ -334,6 +334,33 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.match(tam[0]?.aciklama ?? '', /Sağlam/);
     assert.ok((await ara(a.seriNo.slice(0, -2))).length >= 2, 'parça');
     assert.equal((await ara('%%')).length, 0, 'joker karakter kaçırılır');
+  });
+
+  test('MRK-U15: aynı malzemede aynı şablonlu ikinci tanım eklenemez ve kayıtta o şablona çevrilemez; pasif tanım da sayılır', async () => {
+    const m = await malzemeAc();
+    const ilk = await tanimAc(m);
+    const ekle = (govde: Record<string, unknown>) => istek<{ alan?: string; mesaj?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: m, opNo: 70, seriSablonu: '{PARCA}-{SEQ:5}', sayacKapsami: 'malzeme', alanlar: [seriAlani], ...govde,
+    });
+    const ayni = await ekle({});
+    assert.equal(ayni.durum, 400, JSON.stringify(ayni.govde));
+    assert.equal(ayni.govde.alan, 'seriSablonu');
+    assert.match(ayni.govde.mesaj ?? JSON.stringify(ayni.govde), /op 40.*düzenleyin/);
+    const ikinci = tanimSemasi.parse((await ekle({ seriSablonu: 'B{PARCA}-{SEQ:5}' })).govde);
+    const kaydet = (seriSablonu: string, surum: number) => istek<{ alan?: string }>('yonetici', 'POST', `/markalama/tanimlar/${ikinci.id}/kaydet`, {
+      seriSablonu, sayacKapsami: 'malzeme', alanlar: [seriAlani], surum,
+    });
+    const cevir = await kaydet('{PARCA}-{SEQ:5}', ikinci.surum);
+    assert.equal(cevir.durum, 400);
+    assert.equal(cevir.govde.alan, 'seriSablonu');
+    const kendi = await kaydet('B{PARCA}-{SEQ:5}', ikinci.surum);
+    assert.equal(kendi.durum, 200, 'kendi şablonunu yeniden kaydetmek engellenmez');
+    const pasif = await istek('yonetici', 'POST', `/markalama/tanimlar/${ilk.id}/aktiflik`, { aktif: false, surum: ilk.surum });
+    assert.equal(pasif.durum, 200);
+    assert.equal((await ekle({ opNo: 71 })).durum, 400, 'pasif tanımın şablonu da dolu');
+    assert.equal((await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: await malzemeAc(), opNo: 70, seriSablonu: '{PARCA}-{SEQ:5}', alanlar: [seriAlani],
+    })).durum, 200, 'başka malzemede aynı şablon serbest');
   });
 
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {

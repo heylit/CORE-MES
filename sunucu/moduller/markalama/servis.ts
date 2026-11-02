@@ -85,10 +85,18 @@ async function seriUzunluguDenetle(db: Db, malzemeId: number, g: TanimKaydetGovd
   if (hata !== null) throw dogrulama(hata, 'seriSablonu');
 }
 
+// MRK-2 (karar a): aynı malzemede aynı şablonlu iki tanım farklı sayaçla aynı numarayı üretir ve markalama 409'da takılır;
+// ikinci tanım kayıtta reddedilir, kullanıcı var olanı düzenler. Pasif tanım da sayılır: verdiği numaralar duruyor.
+async function ayniSablonDenetle(db: Db, malzemeId: number, seriSablonu: string, haricId: number | null): Promise<void> {
+  const onceki = (await s.tanimlariOku(db, malzemeId)).find((t) => t.id !== haricId && t.seriSablonu === seriSablonu);
+  if (onceki !== undefined) throw dogrulama(`Bu malzemede bu seri şablonuyla tanım var (op ${onceki.opNo}); onu düzenleyin.`, 'seriSablonu');
+}
+
 export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdesi): Promise<MarkalamaTanimi> {
   const yazim = tanimYazimi(g);
   // MRK-08: tanım var olan malzemeye açılır (rota adımı bağı Aşama 2'de yabancı anahtarla gelir).
   if ((await malzemeOzeti(db, g.malzemeId)) === null) throw dogrulama('Malzeme bulunamadı.', 'malzemeId');
+  await ayniSablonDenetle(db, g.malzemeId, g.seriSablonu, null);
   await modelDenetle(db, g.malzemeId, g.model);
   await seriUzunluguDenetle(db, g.malzemeId, g);
   const id = await kisitKorumali(
@@ -118,6 +126,7 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
   if (g.model !== null && (g.model.belgeId !== eski.modelBelgeId || g.model.revizyon !== eski.modelRevizyon)) {
     await modelDenetle(db, eski.malzemeId, g.model);
   }
+  if (g.seriSablonu !== eski.seriSablonu) await ayniSablonDenetle(db, eski.malzemeId, g.seriSablonu, id);
   await seriUzunluguDenetle(db, eski.malzemeId, g);
   if (g.baslangicSirasi !== eski.baslangicSirasi) await baslangiciUygula(db, eski.malzemeId, g);
   await surumluGuncelle({

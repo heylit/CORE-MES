@@ -20,6 +20,7 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | Pasif tanım seri vermez, listede kalır, geri etkinleşir | `MRK-U12` |
 | İzleme: seri parçası (harften bağımsız, tam eşleşme önde), tanım süzgeci, olayda kişi adı ve hurda nedeni; olmayan emrin özeti 404 | `MRK-U13` |
 | Genel arama (Ctrl K) `seri` türü: parçayla, harften bağımsız, tam eşleşme önde; yol Seri izleme | `MRK-U14` |
+| Aynı malzemede aynı seri şablonlu ikinci tanım (pasif dahil) eklenemez ve kayıtta o şablona çevrilemez (MRK-2, karar a) | `MRK-U15` |
 | Seri tekil, sayaç tekrar korumalı | `MRK-U3`; kısıt `markalama_birimi_seri_tekil` |
 | Olay defteri yalnız eklenir | `MRK-U6` (UPDATE, DELETE, TRUNCATE reddedilir) |
 | 3B yer: nokta ve normal yere, düzlem normale döner, açı normal çevresinde | `sahne.test.ts` |
