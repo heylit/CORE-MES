@@ -185,4 +185,20 @@ describe('Giris', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
     expect(screen.getByLabelText(/Kullanıcı adı/)).toBeTruthy();
   });
+
+  it('kartla giris: okuyucunun ikinci Enter i eksik PIN le gondermez, kart silinmez', async () => {
+    const cagrilar = sunucuKur();
+    window.localStorage.setItem('tmi.giris.yontem', 'kart');
+    kur();
+    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
+    const form = kart.closest('form')!;
+    fireEvent.change(kart, { target: { value: '0004123456' } });
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    tuslaraBas('7305');
+    fireEvent.submit(form);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(cagrilar).toHaveLength(0);
+    expect(screen.getByText('Kart okundu')).toBeTruthy();
+  });
 });

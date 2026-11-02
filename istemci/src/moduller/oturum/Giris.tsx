@@ -175,6 +175,8 @@ export function Giris() {
     if (kip === 'pin') { giris.mutate({ kullaniciAdi, pin: pinler.pin }); return; }
     if (kip === 'kart') {
       if (!kartOkundu) { if (kart.trim() !== '') { kartOkunduYaz(true); kartla.reset(); } return; }
+      // Okuyucu CR+LF gönderirse kartın ardından ikinci bir Enter gelir; eksik PIN'le gönderim kartı silip sırayı başa alırdı.
+      if (pinler.pin.length !== PIN_HANE) return;
       kartla.mutate({ kart, pin: pinler.pin });
       return;
     }
