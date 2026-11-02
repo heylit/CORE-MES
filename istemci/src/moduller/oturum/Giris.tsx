@@ -7,6 +7,7 @@ import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
+import { girisiYenidenDene } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
 import './giris.css';
 
@@ -97,7 +98,7 @@ export function Giris() {
   };
 
   const giris = useMutation({
-    mutationFn: (govde: GirisGovdesi) => api.post<GirisCevabi>('/oturum/giris', govde, { oturumBitirmez: true }),
+    mutationFn: (govde: GirisGovdesi) => girisiYenidenDene(() => api.post<GirisCevabi>('/oturum/giris', govde, { oturumBitirmez: true })),
     onSuccess: (cevap, govde) => {
       if (cevap.pinBelirlenecek) {
         geciciPinYaz(govde.pin ?? '');
@@ -116,14 +117,15 @@ export function Giris() {
 
   // Hatada kart da silinir: istasyonda sıradaki kişi kendi kartını okutur.
   const kartla = useMutation({
-    mutationFn: (govde: KartGirisGovdesi) => api.post<OturumCevabi>('/oturum/kart-giris', govde, { oturumBitirmez: true }),
+    mutationFn: (govde: KartGirisGovdesi) =>
+      girisiYenidenDene(() => api.post<OturumCevabi>('/oturum/kart-giris', govde, { oturumBitirmez: true })),
     onSuccess: (cevap) => { oturumuYaz(cevap.kullanici); },
     onError: () => { kartYaz(''); kartOkunduYaz(false); pinlerYaz((p) => ({ ...p, pin: '' })); },
   });
 
   const belirle = useMutation({
     mutationFn: (govde: PinBelirleGovdesi) =>
-      api.post<OturumCevabi>('/oturum/pin-belirle', govde, { oturumBitirmez: true }),
+      girisiYenidenDene(() => api.post<OturumCevabi>('/oturum/pin-belirle', govde, { oturumBitirmez: true })),
     onSuccess: (cevap) => { oturumuYaz(cevap.kullanici); },
     onError: () => { pinlerYaz((p) => ({ ...p, yeni: '', tekrar: '' })); etkinYaz('yeni'); },
   });
