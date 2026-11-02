@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { OkutarakAlCevabi, OkutarakAlGovdesi, TeslimCevabi, TeslimKutusuCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, KodOkuyucu, Pencere, Secim } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, KodOkuyucu, Pencere, Secim, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { miktarGirdisi, miktarMetni } from './gorunum.ts';
@@ -32,7 +32,11 @@ export function OkutarakAl({ kutu, baslangic }: { kutu: TeslimKutusuCevabi; basl
   const secili = o?.satirlar[Number(satir)];
   const hedefler = kutu.istasyonlar.filter((i) => i.id !== o?.yer.istasyonId);
   const hedef = hedefler.some((i) => String(i.id) === istasyon) ? istasyon : '';
-  const okut = (k: Okutulan, deger: string) => { setKodlar((x) => ({ ...x, [k]: deger.trim() })); setOkutulan(null); setSatir('0'); };
+  // 1906: okutma pencere kapanınca biter; ses okunduğunu, önizleme hatası yanlış okutmayı söyler.
+  const { bildir } = useOkutmaGecmisi();
+  const okut = (k: Okutulan, deger: string) => { bildir(deger, 'tamam', k === 'kod' ? 'Malzeme ya da lot' : 'Aldığın yer'); setKodlar((x) => ({ ...x, [k]: deger.trim() })); setOkutulan(null); setSatir('0'); };
+  const onizlemeHatasi = onizleme.isError ? hataMetni(onizleme.error) : null;
+  useEffect(() => { if (onizlemeHatasi) bildir(`${kodlar.kod} · ${kodlar.yerKodu}`, 'hata', onizlemeHatasi); }, [onizlemeHatasi, bildir, kodlar.kod, kodlar.yerKodu]);
   return (
     <>
       <h3 className="tc-stok-teslim-baslik">Okutarak al</h3>
