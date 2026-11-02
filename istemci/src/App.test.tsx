@@ -14,6 +14,7 @@ import { anaSayfaKaynaklari, anaSayfaKartlari } from './ortak/rota/ana-sayfa.ts'
 import { modulRotalari, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { OTURUM_BITTI, ULASILAMADI_ILETISI, api } from './ortak/veri/api.ts';
 import { baglantiSifirla } from './ortak/veri/baglanti.ts';
+import { GIRIS_BEKLEME_MS, GIRIS_YENIDEN_DENEME } from './ortak/veri/oturum.ts';
 
 const OPERATOR: Kullanici = { id: 7, ad: 'Deneme Operatör', islemler: ['sayfa.kuyruk'] };
 
@@ -91,15 +92,22 @@ describe('App oturum akisi', () => {
     expect(cagrilar.filter((c) => c.yol === '/oturum' && c.yontem === 'GET')).toHaveLength(1);
   });
 
-  it('ayni anda suren giris denemesi yuzunden reddedilen giris (429) sunucunun iletisini gosterir; oturum bitmis sayilmaz', async () => {
-    sunucuKur(null);
+  it('ayni anda suren giris denemesi (429) kendiliginden yeniden denenir; sinir dolunca sunucunun iletisini gosterir, oturum bitmis sayilmaz', async () => {
+    const cagrilar = sunucuKur(null);
     const oturumBitti = vi.fn();
     window.addEventListener(OTURUM_BITTI, oturumBitti);
     render(<App />);
     await screen.findByRole('button', { name: 'Giriş yap' });
 
-    girisYap('ayni-anda');
-    expect((await screen.findByRole('alert')).textContent).toBe(SURUYOR.mesaj);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      girisYap('ayni-anda');
+      for (let i = 0; i < GIRIS_YENIDEN_DENEME; i += 1) await act(() => vi.advanceTimersByTimeAsync(GIRIS_BEKLEME_MS.enCok));
+      expect((await screen.findByRole('alert')).textContent).toBe(SURUYOR.mesaj);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(cagrilar.filter((c) => c.yol === '/oturum/giris')).toHaveLength(GIRIS_YENIDEN_DENEME + 1);
     window.removeEventListener(OTURUM_BITTI, oturumBitti);
     expect(oturumBitti).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Giriş yap' })).toBeTruthy();

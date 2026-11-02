@@ -23,7 +23,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
@@ -385,6 +385,7 @@ export async function isEmirleriniYenile(
   for (const i of bekleyenGkk) await bekleyeniSil(db, i.id);
   const rotada = new Map(g.isEmirleri.map((i) => [i.opNo, i]));
   const kimlik = new Map(mevcut.map((i) => [i.opNo, i.id]));
+  const eskiHali = new Map(mevcut.map((i) => [i.opNo, i]));
   const degisenler: string[] = [];
   for (const op of plan.sil) {
     const id = kimlik.get(op);
@@ -397,8 +398,12 @@ export async function isEmirleriniYenile(
     if (plan.koru.includes(op)) {
       if (id !== undefined) await s.isEmriSirasiYaz(db, id, i + 1);
     } else if (plan.guncelle.includes(op) && ie !== undefined && id !== undefined) {
-      await bekleyeniGuncelle(db, id, await yaziyaCevir(db, ie, i + 1, tipler));
+      const yazi = await yaziyaCevir(db, ie, i + 1, tipler);
+      await bekleyeniGuncelle(db, id, yazi);
       await eklerYaz(db, uretimEmriId, id, ie);
+      const eski = eskiHali.get(op);
+      const fark = eski === undefined ? null : isEmriFarki(eski, yazi);
+      if (fark !== null) degisenler.push(fark);
     } else if (plan.ekle.includes(op) && ie !== undefined) {
       const yeni = await s.isEmriEkle(db, uretimEmriId, await yaziyaCevir(db, ie, i + 1, tipler));
       await eklerYaz(db, uretimEmriId, yeni, ie);

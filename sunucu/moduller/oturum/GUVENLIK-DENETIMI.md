@@ -4,6 +4,7 @@ Zaman veritabanı saatinden (testte uç fabrikasına verilen saat). Kişi çerez
 Çerez HttpOnly. Giriş komutu denetim kaydına parolasız düşer. Veri kapsamı, sürüm ve istek kimliği bu modülde uygulanmaz
 (oturum açma her seferinde yeni kayıttır; tekrar zararsızdır).
 Dış izleyici (1224 a): portalda firmaya atanmış kişinin kimliği her istekte işaretlenir (portal/disari.ts, işaret kopyalanmaz); çekirdek ona portal ve oturum dışındaki bütün uçları 403 ile kapatır. Atama açık oturumda da bir sonraki istekte geçerlidir (`dis-izleyici.test.ts`).
+İstemci (1877 a): giriş, kart girişi ve PIN belirleme yalnız eşzamanlı deneme cevabını (429 `COK_ISTEK`) 1-2 sn rastgele bekleyip en çok 3 kez yeniden dener (`istemci/src/ortak/veri/oturum.ts`); sunucu kuralı ve sayaçlar değişmez.
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|

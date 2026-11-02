@@ -497,6 +497,37 @@ export function oneDusenYeniAdimlar(plan: IsEmriPlani, rota: readonly { opNo: nu
   return plan.ekle.filter((op) => (yer.get(op) ?? -1) < sonKorunan);
 }
 
+export type IsEmriAlanlari = {
+  opNo: number; operasyonTipiId: number; ad: string; makineId: number | null; kisiId: number | null; fasonFirmaId: number | null;
+  istasyonId: number | null; ayarSuresiDk: string | null; birimSureDk: string | null; terminGun: number | null;
+  bagimlilik: string; devirAdedi: number | null; firePayiYuzde: string; makineKullanimi: string; enKucukParca: number | null;
+  yenidenAyar: boolean; talimatSurumu: number | null;
+};
+
+// Ondalık sütun metin gelir ("30.00" ile "30" aynıdır); karşılaştırma sayıyla, gösterim kullanıcının yazdığı biçime yakın yapılır.
+const sayiAyni = (a: string | null, b: string | null) => (a === null || b === null ? a === b : Number(a) === Number(b));
+const sureMetni = (x: string | null) => (x === null ? 'boş' : `${String(Number(x)).replace('.', ',')} dk`);
+
+// ROT-2: güvenli kipte güncellenen bekleyen iş emrinin neyinin değiştiği "değişenler" listesine yazılır; yalnız ekleme ve çıkarma
+// yazıldığında süre ya da kaynak değişikliği kullanıcıya görünmüyordu. Süreler eski ve yeni değeriyle, ötekiler adıyla verilir.
+export function isEmriFarki(eski: IsEmriAlanlari, yeni: IsEmriAlanlari): string | null {
+  const fark: string[] = [];
+  const sure = (ad: string, a: string | null, b: string | null) => { if (!sayiAyni(a, b)) fark.push(`${ad} ${sureMetni(a)} → ${sureMetni(b)}`); };
+  const alan = (ad: string, degisti: boolean) => { if (degisti) fark.push(ad); };
+  alan('ad', eski.ad !== yeni.ad);
+  alan('operasyon tipi', eski.operasyonTipiId !== yeni.operasyonTipiId);
+  alan('kaynak', eski.makineId !== yeni.makineId || eski.kisiId !== yeni.kisiId || eski.fasonFirmaId !== yeni.fasonFirmaId);
+  alan('istasyon', eski.istasyonId !== yeni.istasyonId);
+  sure('hazırlık', eski.ayarSuresiDk, yeni.ayarSuresiDk);
+  sure('birim süre', eski.birimSureDk, yeni.birimSureDk);
+  alan('termin günü', eski.terminGun !== yeni.terminGun);
+  alan('bağımlılık', eski.bagimlilik !== yeni.bagimlilik || eski.devirAdedi !== yeni.devirAdedi);
+  alan('fire payı', !sayiAyni(eski.firePayiYuzde, yeni.firePayiYuzde));
+  alan('makine kullanımı', eski.makineKullanimi !== yeni.makineKullanimi || eski.enKucukParca !== yeni.enKucukParca || eski.yenidenAyar !== yeni.yenidenAyar);
+  alan('talimat', eski.talimatSurumu !== yeni.talimatSurumu);
+  return fark.length === 0 ? null : `OP ${yeni.opNo} güncellendi (${fark.join('; ')})`;
+}
+
 export const yeniAdimOndeIletisi = (oplar: readonly number[]): string =>
   `${oplar.map((o) => `OP ${String(o)}`).join(', ')} başlamış ya da bitmiş adımların önüne düşüyor; emre eklenmedi. Bu emirde adım ancak başlamamış adımların arasına ya da sona eklenebilir.`;
 

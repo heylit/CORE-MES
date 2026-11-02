@@ -4,7 +4,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { SAYFALAR, type Sayfa } from '#paylasilan/sayfalar.ts';
 import type { GorunumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { CikisCevabi, GirisGovdesi, OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import { OTURUM_BITTI, api } from './api.ts';
+import { ApiHatasi, OTURUM_BITTI, api } from './api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { gosteriBitir, gosteriKur } from './gorunum.ts';
 import { GIRIS_LOGOSU_ADRESI } from './kurum-logosu.ts';
@@ -46,10 +46,36 @@ export function useOturum() {
   });
 }
 
+// Sunucu aynı cihaz adresinden aynı anda tek giriş denemesini işler; ötekine parolaya bakmadan ve kayıt yazmadan 429 döner.
+// Vardiya başında aynı adresi paylaşan cihazlar (ortak ağ, vekil) birbirine çarpınca kullanıcı hata görmesin diye yalnız bu
+// cevap kısa, rastgele beklemeyle yeniden denenir: yeniden deneme sayaçlara dokunmaz, hatalı deneme ve bekleme olduğu gibi döner.
+export const GIRIS_YENIDEN_DENEME = 3;
+export const GIRIS_BEKLEME_MS = { enAz: 1000, enCok: 2000 } as const;
+
+export function girisCakismasiMi(hata: unknown): boolean {
+  return hata instanceof ApiHatasi && hata.durum === 429 && hata.govde.kod === 'COK_ISTEK';
+}
+
+function rastgeleBekle(): Promise<void> {
+  const ms = GIRIS_BEKLEME_MS.enAz + Math.random() * (GIRIS_BEKLEME_MS.enCok - GIRIS_BEKLEME_MS.enAz);
+  return new Promise((coz) => { setTimeout(coz, ms); });
+}
+
+export async function girisiYenidenDene<T>(istek: () => Promise<T>, bekle: () => Promise<void> = rastgeleBekle): Promise<T> {
+  for (let deneme = 0; ; deneme += 1) {
+    try {
+      return await istek();
+    } catch (hata) {
+      if (deneme >= GIRIS_YENIDEN_DENEME || !girisCakismasiMi(hata)) throw hata;
+      await bekle();
+    }
+  }
+}
+
 export function useGiris() {
   const istemci = useQueryClient();
   return useMutation({
-    mutationFn: (govde: GirisGovdesi) => api.post<OturumCevabi>('/oturum/giris', govde, { oturumBitirmez: true }),
+    mutationFn: (govde: GirisGovdesi) => girisiYenidenDene(() => api.post<OturumCevabi>('/oturum/giris', govde, { oturumBitirmez: true })),
     onSuccess: (cevap) => { istemci.setQueryData(anahtarlar.oturum, cevap.kullanici); },
   });
 }
