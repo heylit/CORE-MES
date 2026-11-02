@@ -1,12 +1,27 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { ISKONTO_ONAY_ESIGI } from '#paylasilan/sozlesme/siparisler.ts';
+import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, type TerminAraligi } from '#paylasilan/sozlesme/siparisler.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
   TerminDenemesiKalemi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 
 export const SIPARIS_YOK = 'Sipariş bulunamadı.';
+
+// Termine kalan gün (termin - bugün): eksi gecikmiştir; 0 bugün teslim edilecek olandır.
+export function terminAraligi(kalanGun: number): TerminAraligi {
+  if (kalanGun < 0) return 'gecikmis';
+  if (kalanGun <= 3) return '0-3';
+  if (kalanGun <= 7) return '4-7';
+  if (kalanGun <= 14) return '8-14';
+  return '15+';
+}
+
+export function terminDagilimi(kalanlar: readonly { kalan: number; sayi: number }[]): { aralik: TerminAraligi; sayi: number }[] {
+  const toplam = new Map<TerminAraligi, number>(TERMIN_ARALIKLARI.map((a) => [a, 0]));
+  for (const k of kalanlar) { const a = terminAraligi(k.kalan); toplam.set(a, (toplam.get(a) ?? 0) + k.sayi); }
+  return TERMIN_ARALIKLARI.map((aralik) => ({ aralik, sayi: toplam.get(aralik) ?? 0 }));
+}
 export const FIRMA_YOK = 'Firma bulunamadı.';
 export const FIRMA_PASIF = 'Pasif firmaya sipariş açılamaz.';
 export const FIRMA_MUSTERI_DEGIL = 'Firma müşteri değil; satış siparişi yalnız müşteri firmaya açılır.';

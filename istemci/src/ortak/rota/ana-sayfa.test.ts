@@ -108,10 +108,19 @@ describe('kaynaklariTopla', () => {
       .toEqual(['a-is', 'b-olcu']);
   });
 
+  it('grafik kaynağı bölümüyle toplanır; toplayıcı modül klasörünü yazar (kart 1773)', () => {
+    const [g] = kaynaklariTopla(kaynakDosyasi('a', kaynak('a-grafik', { tur: 'grafik', bolum: 'uretim', anaSayfada: true })));
+    expect(g).toMatchObject({ anahtar: 'a-grafik', bolum: 'uretim', anaSayfada: true, modul: 'a' });
+    expect(kartlariTopla(dosya(kart('a-kart')))[0]?.modul).toBe('a');
+  });
+
   it('reddedilen: kartla ya da başka kaynakla aynı anahtar, tanımsız tür, kayıtsız işlem, dizi olmayan liste', () => {
     expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('ortak')), [kart('ortak')])).toThrow(/ortak \(kart, .*moduller\/a/);
     expect(() => kaynaklariTopla({ ...kaynakDosyasi('a', kaynak('x')), ...kaynakDosyasi('b', kaynak('x')) })).toThrow(/x .*moduller\/a.*moduller\/b/);
-    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { tur: 'grafik' as 'is' })))).toThrow(/türü tanımsız: grafik/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { tur: 'tablo' as 'is' })))).toThrow(/türü tanımsız: tablo/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { tur: 'grafik' })))).toThrow(/Bölüm yalnız grafik/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { bolum: 'uretim' })))).toThrow(/Bölüm yalnız grafik/);
+    expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { tur: 'grafik', bolum: 'stok' as 'uretim' })))).toThrow(/bölümü tanımsız: stok/);
     expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('x', { islem: 'boyle.islem-yok' as never })))).toThrow(/kayıtlı değil/);
     expect(() => kaynaklariTopla(kaynakDosyasi('a', kaynak('X')))).toThrow(/biçime uymuyor/);
     expect(() => kaynaklariTopla({ '../../moduller/a/ana-sayfa.tsx': { anaSayfaKaynaklari: {} } })).toThrow(/dizi değil/);

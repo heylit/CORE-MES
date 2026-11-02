@@ -628,6 +628,17 @@ export async function siparisOzetiSay(db: Db, yaklasanGun: number, ay: number): 
   return { ...sayilar!, aylik };
 }
 
+// Yönetim panosu (kart 1773): onaylı siparişler termine kalan güne göre; aralığa bölmek kuraldadır.
+export async function terminKalanlari(db: Db): Promise<{ kalan: number; sayi: number }[]> {
+  return db.sorgu<{ kalan: number; sayi: number }>(
+    `WITH bugun AS (SELECT (now() AT TIME ZONE 'Europe/Istanbul')::date AS gun)
+     SELECT (s.termin - bugun.gun)::int AS kalan, count(*)::int AS sayi
+       FROM siparisler_siparis s, bugun
+      WHERE s.durum = 'onayli'
+      GROUP BY 1`,
+  );
+}
+
 // ---- Logo gönderim sırası (H10, soru 238). Aynı iş ikinci kez eklenmez.
 
 export async function logoTeklifSirasinaEkle(db: Db, teklifId: number, surumNo: number | null): Promise<void> {

@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { PanoOzetiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { MakineDurumlariCevabi, MakinelerCevabi, PanoOzetiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { GidisatOlcusu, IsKalemi } from '#paylasilan/sozlesme/pano.ts';
+import { MakineDurumuKarti, type MakineKutusu } from '../../ortak/arayuz/grafik/grafikler.tsx';
 import { useKaynakBildir } from '../../ortak/arayuz/pano-baglami.ts';
 import type { AnaSayfaKaynagi } from '../../ortak/rota/ana-sayfa.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -40,7 +41,31 @@ function Calisan() {
   return null;
 }
 
+// Makineler, şu an (kart 1773): aktif makine başına bir kutu. Durumu yazılmamış makine "durum yok"tur, çalışıyor sayılmaz.
+const TON: Readonly<Record<MakineDurumlariCevabi['durumlar'][number]['durum'], MakineKutusu['ton']>> = { calisir: 'calisiyor', ariza: 'ariza', bakim: 'bakim' };
+const TON_SIRASI: Readonly<Record<MakineKutusu['ton'], number>> = { ariza: 0, bakim: 1, bilinmiyor: 2, calisiyor: 3 };
+
+export function makineKutulari(makineler: MakinelerCevabi['makineler'], durumlar: MakineDurumlariCevabi['durumlar']): MakineKutusu[] {
+  const durum = new Map(durumlar.map((d) => [d.makineId, d]));
+  return makineler.filter((m) => m.aktif).map((m): MakineKutusu => {
+    const d = durum.get(m.id);
+    return { anahtar: String(m.id), kod: m.kod, ad: m.ad, ton: d === undefined ? 'bilinmiyor' : TON[d.durum], aciklama: d?.aciklama ?? null, yol: '/istasyonlar/makineler' };
+  }).sort((a, b) => TON_SIRASI[a.ton] - TON_SIRASI[b.ton] || a.kod.localeCompare(b.kod, 'tr'));
+}
+
+function MakineGrafigi() {
+  const m = useQuery({ queryKey: [...anahtarlar.makineler, 'pano'], queryFn: () => api.get<MakinelerCevabi>('/makineler') });
+  const d = useQuery({ queryKey: anahtarlar.makineDurumlari, queryFn: () => api.get<MakineDurumlariCevabi>('/makine-durumlari') });
+  const yuklendi = m.data !== undefined && d.data !== undefined;
+  return (
+    <MakineDurumuKarti baslik="Makineler, şu an" alt="Önce arızalı ve bakımdakiler; durum simge ve yazıyla" simge="cpu" yol="/istasyonlar/makineler"
+      hata={m.isError || d.isError} yuklendi={yuklendi} makineler={yuklendi ? makineKutulari(m.data.makineler, d.data.durumlar) : []} />
+  );
+}
+
 export const anaSayfaKaynaklari: AnaSayfaKaynagi[] = [
   { anahtar: 'istasyonlar-duran-is', tur: 'is', baslik: 'Makine', simge: 'stop', sira: 50, islem: 'sayfa.istasyonlar', veya: ['sayfa.terminal', 'arkon.bakim'], yolunda: 'Duran makine yok', kaynak: Duran },
   { anahtar: 'istasyonlar-makine-olcu', tur: 'gidisat', baslik: 'Makine', simge: 'cpu', sira: 300, islem: 'sayfa.istasyonlar', kaynak: Calisan },
+  // Liste ve durum uçlarının ikisini de geçen işlemler (LISTE_OKUMA ve DURUM_OKUMA kesişimi).
+  { anahtar: 'istasyonlar-makine-grafik', tur: 'grafik', baslik: 'Makineler', simge: 'cpu', sira: 100, bolum: 'makine', anaSayfada: true, islem: 'sayfa.istasyonlar', veya: ['istasyonlar.yaz'], kaynak: MakineGrafigi },
 ];

@@ -31,8 +31,13 @@ export interface AnaSayfaKarti {
   genis?: boolean;
   // Verilmezse kart bölümlerin altında, başlıksız durur (talep formu, sistem durumu gibi).
   bolum?: AnaSayfaBolumu;
+  // Toplayıcı doldurur (modül klasörü); modül yazmaz.
+  modul?: string;
   ekran: ComponentType;
 }
+
+// Glob yolundan modül klasörü: ../../moduller/<ad>/ana-sayfa.tsx.
+const modulAdi = (dosya: string): string => /moduller\/([^/]+)\//.exec(dosya)?.[1] ?? dosya;
 
 const ANAHTAR_BICIMI = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -53,7 +58,7 @@ export function kartlariTopla(dosyalar: Record<string, unknown>): AnaSayfaKarti[
       const onceki = sahip.get(kart.anahtar);
       if (onceki !== undefined) throw new Error(`Aynı anahtarla iki kart verildi: ${kart.anahtar} (${onceki}, ${dosya})`);
       sahip.set(kart.anahtar, dosya);
-      toplam.push(kart);
+      toplam.push({ ...kart, modul: modulAdi(dosya) });
     }
   }
   return toplam;
@@ -76,12 +81,25 @@ export function rolKartlari<T extends { anahtar: string }>(kartlar: readonly T[]
   return izinli === null ? kartlar : kartlar.filter((k) => izinli.has(k.anahtar));
 }
 
+// Yönetim panosunun bölümleri (kart 1773); /pano bu sırayla dizer, grafiği olmayan bölüm çizilmez.
+export const PANO_BOLUMLERI = [
+  { anahtar: 'uretim', baslik: 'Üretim', simge: 'chart' },
+  { anahtar: 'teslim', baslik: 'Teslim', simge: 'truck' },
+  { anahtar: 'kalite', baslik: 'Kalite', simge: 'target' },
+  { anahtar: 'makine', baslik: 'Makine', simge: 'wrench' },
+] as const satisfies readonly { anahtar: string; baslik: string; simge: SimgeAdi }[];
+export type PanoBolumu = (typeof PANO_BOLUMLERI)[number]['anahtar'];
+
+// Grafik kaynağına kabuğun verdiği dönem; verilmezse grafik kendi varsayılanıyla (ana sayfa) çizer.
+export interface GrafikOzellikleri { gun?: number }
+
 // Rol panosunun kaynağı (kart 1585): modül kart çizmez, iş kalemi ya da gidişat ölçüsü bildirir; kabuk birleştirir.
-// Kaynak ekranı görünmez çizilir ve verisini pano-baglami.ts'teki kancayla bildirir.
+// Kaynak ekranı görünmez çizilir ve verisini pano-baglami.ts'teki kancayla bildirir. Grafik kaynağı (kart 1773) ise
+// kendi kartını görünür çizer: ana sayfanın grafik bölgesinde (anaSayfada) ve Yönetim panosunda bölümüyle.
 export interface AnaSayfaKaynagi {
   // Kartlarla ortak ad alanı; küçük harf, rakam, tire.
   anahtar: string;
-  tur: 'is' | 'gidisat';
+  tur: 'is' | 'gidisat' | 'grafik';
   // İş listesinde süzgeç ve satır etiketi (Plan, Malzeme); gidişatta kullanılmaz.
   baslik: string;
   simge: SimgeAdi;
@@ -93,7 +111,12 @@ export interface AnaSayfaKaynagi {
   yolunda?: string;
   // Kişinin kendi işi (operatörün günü, kuyruğu): yalnız rol listesinde adıyla anılınca görünür; tam görünümde (yönetici) çizilmez.
   kisisel?: true;
-  kaynak: ComponentType;
+  // Yalnız grafik: Yönetim panosundaki bölümü ve ana sayfadaki özet grafik bölgesinde görünüp görünmediği.
+  bolum?: PanoBolumu;
+  anaSayfada?: true;
+  // Toplayıcı doldurur (modül klasörü); modül yazmaz.
+  modul?: string;
+  kaynak: ComponentType<GrafikOzellikleri>;
 }
 
 function islemDenetle(islem: Islem | undefined, veya: readonly Islem[] | undefined, anahtar: string, dosya: string): void {
@@ -115,12 +138,14 @@ export function kaynaklariTopla(dosyalar: Record<string, unknown>, kartlar: read
     for (const k of anaSayfaKaynaklari as AnaSayfaKaynagi[]) {
       if (!ANAHTAR_BICIMI.test(k.anahtar)) throw new Error(`Kaynak anahtarı biçime uymuyor: "${k.anahtar}" (${dosya})`);
       if (!Number.isFinite(k.sira)) throw new Error(`Kaynak sırası sayı değil: ${k.anahtar} (${dosya})`);
-      if (k.tur !== 'is' && k.tur !== 'gidisat') throw new Error(`Kaynağın türü tanımsız: ${String(k.tur)} (${k.anahtar}, ${dosya})`);
+      if (k.tur !== 'is' && k.tur !== 'gidisat' && k.tur !== 'grafik') throw new Error(`Kaynağın türü tanımsız: ${String(k.tur)} (${k.anahtar}, ${dosya})`);
+      if ((k.tur === 'grafik') !== (k.bolum !== undefined)) throw new Error(`Bölüm yalnız grafik kaynağında ve onda zorunludur: ${k.anahtar} (${dosya})`);
+      if (k.bolum !== undefined && !PANO_BOLUMLERI.some((b) => b.anahtar === k.bolum)) throw new Error(`Kaynağın bölümü tanımsız: ${String(k.bolum)} (${k.anahtar}, ${dosya})`);
       islemDenetle(k.islem, k.veya, k.anahtar, dosya);
       const onceki = sahip.get(k.anahtar);
       if (onceki !== undefined) throw new Error(`Aynı anahtarla iki kaynak ya da kart verildi: ${k.anahtar} (${onceki}, ${dosya})`);
       sahip.set(k.anahtar, dosya);
-      toplam.push(k);
+      toplam.push({ ...k, modul: modulAdi(dosya) });
     }
   }
   return toplam;

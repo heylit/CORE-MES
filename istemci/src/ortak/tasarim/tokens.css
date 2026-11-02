@@ -16,6 +16,8 @@
   --grafik: #4a90dc;
   /* İkinci seri (iki serili çubuk): birinciyle renk körlüğü denetiminden geçer, durum renklerinden ayrıdır. */
   --grafik-2: #d55181;
+  /* Üçüncü seri (kart 1773): ilk ikisiyle her çift renk körlüğü denetiminden geçer (koyu yüzeyde). */
+  --grafik-3: #c98500;
   --on-sig: #05080a;
   --bp: #cfe3ff; --bp-dim: rgba(207,227,255,.38); --bp-dim2: rgba(207,227,255,.14); --bp-bg: #070c14;
   --shadow: 0 30px 60px -30px rgba(0,0,0,.8);
@@ -33,6 +35,8 @@
   --cmm: #8a2bd6;
   --grafik: #2a6fb8;
   --grafik-2: #c4407a;
+  /* Açık yüzeyde 3:1'in az altında: grafiklerde doğrudan etiket ve tablo görünümü bu yüzden vardır. */
+  --grafik-3: #c98500;
   --on-sig: #ffffff;
   --bp: #12305e; --bp-dim: rgba(18,48,94,.42); --bp-dim2: rgba(18,48,94,.12); --bp-bg: #f4f1ea;
   --shadow: 0 30px 60px -34px rgba(40,30,10,.35);

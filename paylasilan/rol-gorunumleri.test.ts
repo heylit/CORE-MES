@@ -35,11 +35,12 @@ describe('rol görünümleri (1390 a)', () => {
     assert.equal(mudur.kartlar, null);
   });
 
-  test('rol panosu kaynakları (kart 1585): rol yalnız kendi listesiyle yeni düzene geçer; listesiz rol ve müdür boş küme, yönetici tam', () => {
+  test('rol panosu kaynakları (kart 1585, 1773): rol yalnız kendi listesiyle yeni düzene geçer; listesiz rol boş küme, yönetici tam', () => {
     const operator = etkinGorunum(['operator']);
     assert.ok(operator.kaynaklar?.has('uretim-emirleri-kuyrugum-is'));
     assert.equal(etkinGorunum(['depo']).kaynaklar?.size, 0);
-    assert.equal(etkinGorunum(['mudur']).kaynaklar?.size, 0);
+    assert.ok(etkinGorunum(['mudur']).kaynaklar?.has('uretim-emirleri-uretim-grafik'));
+    assert.equal(etkinGorunum(['mudur']).kaynaklar?.has('arkon-gunum-olcu'), false);
     assert.ok(etkinGorunum(['operator', 'depo']).kaynaklar?.has('istasyonlar-duran-is'));
     assert.equal(etkinGorunum(['yonetici']).kaynaklar, null);
     for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {

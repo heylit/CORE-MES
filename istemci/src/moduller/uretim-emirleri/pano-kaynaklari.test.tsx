@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OzetCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { durusOlcusu, kuyrukKalemi, planlanacakKalemi, uretimOlculeri } from './pano-kaynaklari.tsx';
+import { durusOlcusu, gunListesi, kuyrukKalemi, planlanacakKalemi, uretimOlculeri, uretimSerileri } from './pano-kaynaklari.tsx';
 
 const ozet = (ek: Partial<OzetCevabi>): OzetCevabi => ({ planlanacak: 0, acik: 0, kuyrugum: 0, bugunSaglam: 0, ...ek });
 
@@ -26,5 +26,15 @@ describe('uretim emirleri pano kaynaklari (kart 1585)', () => {
     const c = { nedenler: [{ neden: { id: 1, ad: 'Ayar' }, adet: 2, dakika: 30.4 }, { neden: { id: 2, ad: 'Arıza' }, adet: 1, dakika: 90 }] };
     expect(durusOlcusu(c)[0]?.dagilim).toEqual([{ etiket: 'Arıza', deger: 90 }, { etiket: 'Ayar', deger: 30 }]);
     expect(durusOlcusu({ nedenler: [] })).toEqual([]);
+  });
+});
+
+describe('uretim grafikleri (kart 1773)', () => {
+  it('pencere gunleri sirali; kaydi olmayan gun null, oran yalniz uretimi olan gunde', () => {
+    expect(gunListesi('2026-11-01', 3)).toEqual(['2026-10-30', '2026-10-31', '2026-11-01']);
+    const v = uretimSerileri({ gunler: [{ gun: '2026-10-30', saglam: 90, hurda: 10 }, { gun: '2026-11-01', saglam: 0, hurda: 0 }] }, '2026-11-01', 3);
+    expect(v.etiketler).toEqual(['30.10', '31.10', '01.11']);
+    expect(v.saglam).toEqual([90, null, 0]);
+    expect(v.hurdaOrani).toEqual([10, null, null]);
   });
 });

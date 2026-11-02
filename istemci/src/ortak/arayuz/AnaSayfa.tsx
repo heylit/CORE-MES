@@ -1,4 +1,5 @@
 import { useCallback, useId, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { GidisatOlcusu, IsKalemi } from '#paylasilan/sozlesme/pano.ts';
 import {
   bolumlereAyir, gorunenKaynaklar, gorunenKartlar, islerSirala,
@@ -7,6 +8,7 @@ import {
 import { Dugme } from './Dugme.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
 import { GidisatKarti } from './GidisatKarti.tsx';
+import { GostergeSeridi } from './grafik/GostergeSeridi.tsx';
 import { IsListesi } from './IsListesi.tsx';
 import { Kart } from './Kart.tsx';
 import { Simge } from './Simge.tsx';
@@ -14,6 +16,7 @@ import { YonlendirmeSeridi } from './YonlendirmeSeridi.tsx';
 import { PanoKaynakBaglami, PanoKartiBaglami, type KaynakVerisi } from './pano-baglami.ts';
 import './ana-sayfa.css';
 import './rol-panosu.css';
+import './grafik/grafik.css';
 
 // Pano görev odaklıdır (kullanıcı kararı): işler ve uyarılar yalnız yapılacak olanı gösterir, özet kısa başlar.
 const SIFIRI_GIZLENEN: ReadonlySet<string> = new Set(['is', 'uyari']);
@@ -51,8 +54,8 @@ export function AnaSayfa({ kartlar, kaynaklar = [], islemler, ad }: {
   return <KartPanosu kartlar={kartlar} islemler={islemler} ad={ad} />;
 }
 
-function KartPanosu({ kartlar, islemler, ad }: { kartlar: readonly AnaSayfaKarti[]; islemler: readonly string[]; ad?: string }) {
-  const gorunen = gorunenKartlar(kartlar, islemler);
+// Sıfır bildiren kartlar: "Bana düşen işler" ve "Uyarılar" yalnız yapılacak olanı gösterir.
+function useSifirlar(): [ReadonlySet<string>, (anahtar: string, sifir: boolean) => void] {
   const [sifirlar, sifirlarYaz] = useState<ReadonlySet<string>>(() => new Set());
   const bildir = useCallback((anahtar: string, sifir: boolean) => {
     sifirlarYaz((onceki) => {
@@ -62,6 +65,12 @@ function KartPanosu({ kartlar, islemler, ad }: { kartlar: readonly AnaSayfaKarti
       return yeni;
     });
   }, []);
+  return [sifirlar, bildir];
+}
+
+function KartPanosu({ kartlar, islemler, ad }: { kartlar: readonly AnaSayfaKarti[]; islemler: readonly string[]; ad?: string }) {
+  const gorunen = gorunenKartlar(kartlar, islemler);
+  const [sifirlar, bildir] = useSifirlar();
   if (gorunen.length === 0) {
     return (
       <Kart baslik="Ana sayfa">
@@ -135,6 +144,8 @@ function KaynakYeri({ kaynak, bildir }: { kaynak: AnaSayfaKaynagi; bildir: (anah
 
 // Rol panosu (kart 1585): yönlendirme, İşlerim, Gidişat. Eski iş, uyarı, özet ve eğilim bölümleri çizilmez (1594 a);
 // şirket özeti altta kapalı kalır (1593 c), bölümsüz kartlar (talep formu, sistem durumu) en altta yerinde durur.
+// Kademeli geçiş: kaynağı henüz olmayan modülün iş ve uyarı kartları eski bölümleriyle kalır; yerini alan kaynak gelince düşer.
+// Grafik kaynağı görünen kişide (kart 1773, 1772) gidişat "Bir bakışta" kutularına döner, altta açık grafik bölgesi çizilir.
 function RolPanosu({ kaynaklar, kartlar, ad }: { kaynaklar: readonly AnaSayfaKaynagi[]; kartlar: readonly AnaSayfaKarti[]; ad?: string }) {
   const [veriler, verilerYaz] = useState<ReadonlyMap<string, KaynakVerisi>>(() => new Map());
   // Kaynak her çizimde yeni dizi verebilir: içerik aynıysa durum değişmez, döngü kurulmaz.
@@ -144,6 +155,9 @@ function RolPanosu({ kaynaklar, kartlar, ad }: { kaynaklar: readonly AnaSayfaKay
       return new Map(onceki).set(anahtar, veri);
     });
   }, []);
+  const [sifirlar, sifirBildir] = useSifirlar();
+  const veriKaynaklari = kaynaklar.filter((k) => k.tur !== 'grafik');
+  const grafikler = kaynaklar.filter((k) => k.tur === 'grafik');
   const ozet = useMemo(() => {
     const isler: IsSatiri[] = [];
     const olcular: GidisatOlcusu[] = [];
@@ -152,6 +166,7 @@ function RolPanosu({ kaynaklar, kartlar, ad }: { kaynaklar: readonly AnaSayfaKay
     const alinamayanOlcu: string[] = [];
     let yukleniyor = false;
     for (const kaynak of kaynaklar) {
+      if (kaynak.tur === 'grafik') continue;
       const veri = veriler.get(kaynak.anahtar);
       if (kaynak.tur === 'is') {
         if (veri === undefined) { yukleniyor = true; continue; }
@@ -168,19 +183,36 @@ function RolPanosu({ kaynaklar, kartlar, ad }: { kaynaklar: readonly AnaSayfaKay
     return { isler: islerSirala(isler), olcular, yolunda, alinamayanIs, alinamayanOlcu, yukleniyor };
   }, [kaynaklar, veriler]);
   const [ilk, ...kalan] = ozet.isler;
-  const gidisatVar = kaynaklar.some((k) => k.tur === 'gidisat');
+  const grafikVar = grafikler.length > 0;
+  const gidisatVar = !grafikVar && kaynaklar.some((k) => k.tur === 'gidisat');
+  const kaynakliModuller = new Set(kaynaklar.map((k) => k.modul));
+  const eskiIsler = kartlar.filter((k) => (k.bolum === 'is' || k.bolum === 'uyari') && !kaynakliModuller.has(k.modul));
   const sirketOzeti = kartlar.filter((k) => k.bolum === 'yonetim');
   const bolumsuz = kartlar.filter((k) => k.bolum === undefined);
+  const ozetGrafikler = grafikler.filter((k) => k.anaSayfada === true);
   const sifirYok = useCallback(() => {}, []);
   return (
     <div className="tc-pano tc-rol-panosu">
-      {ad !== undefined && <Karsilama ad={ad} />}
-      <div hidden>{kaynaklar.map((k) => <KaynakYeri key={k.anahtar} kaynak={k} bildir={bildir} />)}</div>
+      {(ad !== undefined || grafikVar) && (
+        <div className="tc-pano-ust">
+          {ad !== undefined && <Karsilama ad={ad} />}
+          {grafikVar && <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to="/pano"><Simge ad="chart" boyut="k" />Yönetim panosu</Link>}
+        </div>
+      )}
+      <div hidden>{veriKaynaklari.map((k) => <KaynakYeri key={k.anahtar} kaynak={k} bildir={bildir} />)}</div>
       {ilk !== undefined && <YonlendirmeSeridi satir={ilk} />}
+      {grafikVar && <GostergeSeridi olcular={ozet.olcular} />}
       <div className={gidisatVar ? 'tc-rol-panosu-izgara' : undefined}>
         <IsListesi satirlar={kalan} yolunda={ozet.yolunda} alinamayan={ozet.alinamayanIs} yukleniyor={ozet.yukleniyor && ilk === undefined} />
         {gidisatVar && <GidisatKarti olcular={ozet.olcular} alinamayan={ozet.alinamayanOlcu} />}
       </div>
+      {bolumlereAyir(eskiIsler).map((g) => <Bolum key={g.bolum?.anahtar ?? 'genel'} grup={g} sifirlar={sifirlar} bildir={sifirBildir} />)}
+      {ozetGrafikler.length > 0 && (
+        <section className="tc-pano-bolum" aria-label="Gidişat grafikleri">
+          <h2 className="tc-pano-baslik tc-gp-bolge-baslik"><Simge ad="chart" boyut="k" />Gidişat</h2>
+          <div className="tc-gp-izgarasi">{ozetGrafikler.map((g) => <g.kaynak key={g.anahtar} />)}</div>
+        </section>
+      )}
       {sirketOzeti.length > 0 && (
         <details className="tc-pano-katlanir">
           <summary className="tc-pano-baslik">Şirket özeti</summary>

@@ -5,6 +5,7 @@ import { etkinGorunum } from '#paylasilan/rol-gorunumleri.ts';
 import { SAYFALAR, yolKapaliMi } from '#paylasilan/sayfalar.ts';
 import { AcilisGosterisi, AnaSayfa, BildirimSaglayici, BildirimSayfaIzleyici, DurumKutusu, HataSiniri, Kabuk, Karsilama, Kart, useBildirim } from './ortak/arayuz/index.ts';
 import { anaSayfaKaynaklari, anaSayfaKartlari, rolKaynaklari, rolKartlari, type AnaSayfaKarti } from './ortak/rota/ana-sayfa.ts';
+import { YonetimPanosu } from './ortak/arayuz/YonetimPanosu.tsx';
 import { modulRotalari, rotaPlani, type ModulRotasi } from './ortak/rota/kesif.ts';
 import { hizliIsler } from './ortak/rota/hizli-isler.ts';
 import { IKINCI_MENU_TANIMLARI, adresMaddesiKapaliMi } from './ortak/rota/ikinci-menu.ts';
@@ -125,6 +126,7 @@ function Icerik({ rotalar, kartlar }: { rotalar: readonly ModulRotasi[]; kartlar
           <AdresKorumasi islemler={kullanici.islemler}>
           <Routes>
             <Route path="/" element={<AnaSayfa kartlar={rolKartlari(kartlar, rolGorunumu.kartlar)} kaynaklar={rolKaynaklari(anaSayfaKaynaklari, rolGorunumu.kaynaklar)} islemler={panoIslemleri} ad={kullanici.ad} />} />
+            <Route path="/pano" element={<YonetimPanosu kaynaklar={rolKaynaklari(anaSayfaKaynaklari, rolGorunumu.kaynaklar)} islemler={panoIslemleri} />} />
             {plan.ekranlar.map((r) => (
               <Route key={r.yol} path={r.yol} element={r.kalici === true ? null : <r.ekran />} />
             ))}
