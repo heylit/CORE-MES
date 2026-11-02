@@ -30,3 +30,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 12. SONRA (kart #688). PDF ve foto karesi tarayıcıda üretilir; sunucu içeriğin belgeye benzediğini denetleyemez (CZ-15 ile aynı). Kare üretmeyen eski tarayıcıda belge resimsiz kalır, "Resim üret" ile yeniden denenir.
 13. KAPANDI (kart 1240). Genel arama Türkçe harfi dil ayarına bırakmaz: sütun ve sorgu `public.arama_sade` ile sadeleşir (1233 sözleşmesi);
     İ/I, ı/i ve Ş/ş eşlemesi `arama.test.ts`'te sınanır.
+14. TUTAN (K17 a, Aşama 2). Yayında dört göz yok: hem `belge-merkezi.yaz` hem `belge-merkezi.yayinla` taşıyan rol (bugün Planlama)
+    kendi yüklediği revizyonu yayınlayabilir. DOĞRULANDI: modül testi 2026-11-01, `servis.ts` `revizyonYayinla` yükleyeni denetlemez.
+    Taslak revizyonu okuma yetkisi olan her rol indirebilir. Uyum: Aşama 2'de yetki matrisiyle birlikte (yükleyen yayınlamasın, taslak
+    indirme yalnız yazana); karar ve göç o turda.
