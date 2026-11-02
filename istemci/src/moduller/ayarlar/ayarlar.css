@@ -56,6 +56,8 @@
 .tc-hazirlik-adim > .tc-ayar-aciklama { grid-column: 2; overflow-wrap: anywhere; }
 .tc-hazirlik-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-cagri-ekibi { align-items: flex-start; }
+/* Ekip adı rol kutularına sıkışıp harf harf kırılmasın: ad sütunu en uzun kelimesinden dar olmaz, kutular satıra sarar. */
+.tc-cagri-ekibi > .tc-ayar-metin { min-width: min-content; overflow-wrap: normal; }
 .tc-cagri-rolleri { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); justify-content: flex-end; min-width: 0; }
 .tc-alici-secimi { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
 .tc-alici-kisiler { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; margin: 0; padding: 0; list-style: none; }
