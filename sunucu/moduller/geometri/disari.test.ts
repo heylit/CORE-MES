@@ -95,5 +95,20 @@ describe('geometri dışa açık okuma: malzemenin 3B analizi ve ham önerisi (1
     assert.ok(b);
     assert.ok(b.analiz.revizyonId > ilkRevizyon, 'yeni yayındaki model');
     assert.equal(b.belgeAdi, 'Model buyuk.step');
+    assert.equal(b.kapak, false);
+    assert.equal(b.modelSayisi, 2);
+  });
+
+  test('GEO-2 a: kartta kapak seçilen model en son yayınlanandan önce gelir; model sayısı döner', async () => {
+    const c = tamam(await app.inject({ method: 'GET', url: `/api/cizimler/malzemeler/${String(mil)}/belgeler`, headers: { cookie: cerez } })) as { belgeler: { id: number; ad: string; surum: number }[] };
+    const kup = c.belgeler.find((x) => x.ad === 'Model kup.step');
+    assert.ok(kup);
+    tamam(await istek(`/cizimler/malzemeler/${String(mil)}/belgeler/${String(kup.id)}/kapak`, { surum: kup.surum }));
+    const g = await o().vt.tx((db) => malzemeGeometrisi(db, mil));
+    assert.ok(g);
+    assert.equal(g.belgeAdi, 'Model kup.step');
+    assert.equal(g.kapak, true);
+    assert.equal(g.modelSayisi, 2);
+    assert.deepEqual(g.analiz.analiz?.kutu, { x: 40, y: 20, z: 10 });
   });
 });

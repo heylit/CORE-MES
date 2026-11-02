@@ -291,9 +291,9 @@ export function yayindakiBelgeler(db: Db, s: { tur: BelgeTuru | null; ara: strin
 // belge gelmez. Kayıt kimliği bilinmeden çağrılır: listeyi bağı olan kayıtlar oluşturur.
 export function bagliYayindakiBelgeler(
   db: Db, hedefModul: BagModulu, dosyaTurleri: readonly DosyaTuru[],
-): Promise<(YayindakiBelgeSatiri & { hedefId: number })[]> {
-  return db.sorgu<YayindakiBelgeSatiri & { hedefId: number }>(
-    `SELECT g.hedef_id AS "hedefId", b.id, b.ad, b.tur, y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
+): Promise<(YayindakiBelgeSatiri & { hedefId: number; kapak: boolean })[]> {
+  return db.sorgu<YayindakiBelgeSatiri & { hedefId: number; kapak: boolean }>(
+    `SELECT g.hedef_id AS "hedefId", g.kapak, b.id, b.ad, b.tur, y.id AS "yayindakiRevizyonId", y.sira AS "yayindakiSira", y.dosya_turu AS "dosyaTuru", y.ozet
        FROM belge_merkezi_bag g
        JOIN belge_merkezi_belge b ON b.id = g.belge_id AND b.aktif
        JOIN belge_merkezi_revizyon y ON y.belge_id = b.id AND y.durum = 'yayinda'

@@ -32,8 +32,13 @@ export function AnalizAgirligi() {
   const yogunluk = yazilan ?? onDeger;
   const kg = v.hacimMm3 === null || yogunluk === null ? null : yuvarla((v.hacimMm3 * yogunluk) / 1e6);
   const kaynak = `${v.model.belgeAdi} (${v.model.harf})`;
+  // GEO-2 a: karta birden çok 3B model bağlıysa hangisinin alındığı söylenir; kapak seçilmemişse en son yayınlanan alınmıştır.
+  const uyari = v.modelSayisi < 2 ? null : v.model.kapak
+    ? `Karta bağlı ${String(v.modelSayisi)} 3B model var; ağırlık kapak modelinden alındı: ${kaynak}.`
+    : `Karta bağlı ${String(v.modelSayisi)} 3B model var ve kapak seçilmemiş; ağırlık en son yayınlanan modelden alındı: ${kaynak}. Doğru modeli Belgeler'de kapak seçin.`;
   return (
     <div className="tc-my-canli" role="group" aria-label="3B analizden net ağırlık">
+      {uyari !== null && <div className="tc-my-canli-not" role="status">{uyari}</div>}
       {v.neden !== null && v.neden !== 'model-yok' ? <div className="tc-my-canli-not">{NEDEN[v.neden]} Model: {kaynak}</div> : (
         <>
           <div><small>3B analiz hacmi</small><b>{fmt((v.hacimMm3 ?? 0) / 1000)} cm³</b><small>{kaynak}</small></div>

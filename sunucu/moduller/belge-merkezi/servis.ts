@@ -500,13 +500,16 @@ export interface YayindakiBelge {
 
 // Kayıt başına bağlı ve yayında olan belgeler (ör. Kalite Merkezi resim listesi: malzeme kartına bağlı PDF ve 3B modeller, 1306).
 // Bağı olmayan kayıt haritada yoktur. Okuma yetkisi ve kapsam çağıran modülün ucundadır.
+// Kapak bağın özelliğidir (kayıt başına seçilmiş belge); okuyan modül birden çok belge arasından seçerken kullanır.
+export interface BagliYayindakiBelge extends YayindakiBelge { kapak: boolean }
+
 export async function kayitlaraBagliYayindakiBelgeler(
   db: Db, hedefModul: BagModulu, dosyaTurleri: readonly BagliDosya['tur'][],
-): Promise<Map<number, YayindakiBelge[]>> {
-  const sonuc = new Map<number, YayindakiBelge[]>();
+): Promise<Map<number, BagliYayindakiBelge[]>> {
+  const sonuc = new Map<number, BagliYayindakiBelge[]>();
   for (const b of await sorgular.bagliYayindakiBelgeler(db, hedefModul, dosyaTurleri)) {
     const liste = sonuc.get(b.hedefId) ?? [];
-    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet });
+    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet, kapak: b.kapak });
     sonuc.set(b.hedefId, liste);
   }
   return sonuc;
