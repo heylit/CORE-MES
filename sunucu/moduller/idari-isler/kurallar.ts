@@ -217,6 +217,11 @@ export const ARAC_VERILEMEZ = 'Pasif ya da serviste olan araç göreve verilmez.
 export const ARAC_DOLU = 'Araç bu tarihlerde başka bir görevde.';
 export const CIKIS_KM_GERI = 'Çıkış km\'si aracın kayıtlı km\'sinden küçük olamaz.';
 export const DONUS_KM_GERI = 'Dönüş km\'si çıkış km\'sinden küçük olamaz.';
+// Km geriye yazılmadığı için yanlış yazılan büyük değer düzeltilemez; tek adımda en çok bu kadar ilerlenir. Daha uzun yol önce Filo'da
+// aracın km'si güncellenerek yazılır.
+export const YOL_KM_EN_COK = 10_000;
+export const CIKIS_KM_ASIRI = `Çıkış km'si aracın kayıtlı km'sinden en çok ${YOL_KM_EN_COK.toLocaleString('tr-TR')} fazla olabilir; araç km'si farklıysa önce Filo'da güncelleyin.`;
+export const DONUS_KM_ASIRI = `Dönüş km'si çıkış km'sinden en çok ${YOL_KM_EN_COK.toLocaleString('tr-TR')} fazla olabilir.`;
 
 // IDR-23: görev durum geçişleri. Onaylı görev de reddedilebilir ve geri çekilebilir (araç çıkmadan); yoldaki görev yalnız dönüşle kapanır.
 export type GorevKomutu = 'onayla' | 'reddet' | 'geri-cek' | 'cikis' | 'donus';
@@ -257,12 +262,13 @@ export function aracVerilemezMi(durum: AracDurumu): boolean {
   return durum === 'pasif' || durum === 'serviste';
 }
 
-// IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz.
+// IDR-26: çıkış km'si aracın kayıtlı km'sinden, dönüş km'si çıkıştan küçük olmaz; ikisi de bir öncekinden en çok YOL_KM_EN_COK ilerler.
 export function cikisKmReddi(aracKm: number | null, km: number): string | null {
-  return aracKm !== null && km < aracKm ? CIKIS_KM_GERI : null;
+  if (aracKm === null) return null;
+  return km < aracKm ? CIKIS_KM_GERI : km - aracKm > YOL_KM_EN_COK ? CIKIS_KM_ASIRI : null;
 }
 export function donusKmReddi(cikisKm: number, km: number): string | null {
-  return km < cikisKm ? DONUS_KM_GERI : null;
+  return km < cikisKm ? DONUS_KM_GERI : km - cikisKm > YOL_KM_EN_COK ? DONUS_KM_ASIRI : null;
 }
 
 export const MASRAF_YOK = 'Masraf kaydı bulunamadı.';

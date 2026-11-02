@@ -9,7 +9,7 @@ import {
   geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, tarihEkle, yapildiSonucu,
 } from './kurallar.ts';
 import {
-  CIKIS_KM_GERI, DONUS_KM_GERI, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN, aracVerilemezMi, cikisKmReddi, donusKmReddi,
+  CIKIS_KM_ASIRI, CIKIS_KM_GERI, DONUS_KM_ASIRI, DONUS_KM_GERI, YOL_KM_EN_COK, DONUS_ONCE, GOREV_TARIH_GECMIS, GOREV_TARIH_ILERI, GOREV_UZUN, aracVerilemezMi, cikisKmReddi, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
 import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
@@ -223,12 +223,16 @@ describe('idari-isler kuralları', () => {
     assert.equal(aracVerilemezMi('gorevde'), false);
   });
 
-  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz', () => {
+  test('IDR-26: çıkış km aracın km\'sinden, dönüş km çıkıştan küçük olmaz; tek adımda en çok 10.000 km', () => {
     assert.equal(cikisKmReddi(1000, 999), CIKIS_KM_GERI);
     assert.equal(cikisKmReddi(1000, 1000), null);
     assert.equal(cikisKmReddi(null, 0), null);
     assert.equal(donusKmReddi(1000, 999), DONUS_KM_GERI);
     assert.equal(donusKmReddi(1000, 1000), null);
+    assert.equal(cikisKmReddi(1000, 1000 + YOL_KM_EN_COK), null);
+    assert.equal(cikisKmReddi(1000, 1001 + YOL_KM_EN_COK), CIKIS_KM_ASIRI);
+    assert.equal(donusKmReddi(1000, 1000 + YOL_KM_EN_COK), null);
+    assert.equal(donusKmReddi(1000, 1001 + YOL_KM_EN_COK), DONUS_KM_ASIRI);
   });
 
   test('IDR-27: tutar sıfırdan büyük, en çok iki kuruş basamaklı ve sınır içinde; tarih bugünden ileri değil', () => {

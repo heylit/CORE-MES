@@ -107,12 +107,14 @@ describe('idari-isler araç görevi (gerçek PostgreSQL, gerçek giriş)', () =>
     const onayli = onay.json<AracGoreviCevabi>().gorev;
     assert.equal(onayli.plaka, arac.plaka);
     assert.equal((await komut(idari.cerez, onayli, 'cikis', { km: 4999 })).statusCode, 400);
+    assert.equal((await komut(idari.cerez, onayli, 'cikis', { km: 15_001 })).statusCode, 400);
     const cikis = await komut(idari.cerez, onayli, 'cikis', { km: 5010 });
     assert.equal(cikis.statusCode, 200, cikis.body);
     const yolda = cikis.json<AracGoreviCevabi>().gorev;
     assert.equal((await aracOku(arac.id))?.durum, 'gorevde');
     assert.equal((await aracOku(arac.id))?.km, 5010);
     assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 5000 })).statusCode, 400);
+    assert.equal((await komut(idari.cerez, yolda, 'donus', { km: 9_999_999 })).statusCode, 400);
     const donus = await komut(idari.cerez, yolda, 'donus', { km: 5130 });
     assert.equal(donus.statusCode, 200, donus.body);
     assert.equal(donus.json<AracGoreviCevabi>().gorev.durum, 'tamamlandi');
