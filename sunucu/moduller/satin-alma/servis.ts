@@ -856,6 +856,8 @@ export async function talepSil(db: Db, k: Kullanici, id: string, surum: number):
   if (eski === null) throw bulunamadi(ILETILER.talepYok);
   const kendi = eski.acanKisiId === k.id || eski.talepEdenKisiId === k.id;
   if (!k.islemler.includes(ISLEM.yaz) && !(kendi && k.islemler.includes(ISLEM.talepAc))) throw yetkiYok();
+  // Tetikleyici yine son sözdür; burada açık ileti verilir, tetikleyicinin genel 422 iletisi kullanıcıya yol göstermez.
+  if (eski.durum !== 'taslak') throw gecersiz(ILETILER.yalnizTaslakSilinir);
   await surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
   return { tamam: true };
 }

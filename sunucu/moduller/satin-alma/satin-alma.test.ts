@@ -1442,7 +1442,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: t.surum }));
     assert.equal((await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: 1 })).statusCode, 404);
     const k = await kararli();
-    assert.equal((await istek(c.sa, 'POST', `/satin-alma-talepleri/${k.id}/sil`, { surum: k.surum })).statusCode, 422);
+    const silRed = await istek(c.sa, 'POST', `/satin-alma-talepleri/${k.id}/sil`, { surum: k.surum });
+    assert.deepEqual([silRed.statusCode, (silRed.json() as { mesaj?: string }).mesaj], [422, ILETILER.yalnizTaslakSilinir]);
     const red = await kaydet(c.sa, { ...govde(k), teklifler: k.teklifler.filter((q) => q.id === k.karar!.teklifId) });
     assert.equal(red.statusCode, 422);
   });

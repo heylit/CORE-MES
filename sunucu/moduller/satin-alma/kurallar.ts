@@ -25,6 +25,7 @@ export const sirketAdiGorunumu = (sirket: string): string | null => (sirket.trim
 
 export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
+  yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
   tedarikciYok: 'Tedarikçi bulunamadı.',
   terminMalzemesiYok: 'Malzeme kartı bulunamadı.',

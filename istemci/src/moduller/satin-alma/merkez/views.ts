@@ -752,7 +752,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const p2 = `${panel(2, "Onay", approved ? '<span class="flag good">onaylandı</span>' : aps.state === "rejected" ? '<span class="flag bad">reddedildi</span>' : aps.resubmitted ? '<span class="flag warn">yeniden onay bekliyor</span>' : decided ? '<span class="flag warn">onay bekliyor</span>' : '<span class="flag mute">karardan sonra</span>', `
     <div class="kv">
       <div><div class="k">Tutar</div><div class="v">${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</div><div class="d">KDV hariç${isSplit ? ", nakliye dahil" : ""}</div></div>
-      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "–"}</div><div class="d">Ayarlar'daki limitlere göre</div></div>
+      <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "Limit tanımlı değil"}</div><div class="d">${ap ? "Ayarlar'daki limitlere göre" : "Ayarlar'da onay limiti girilince yazılır"}</div></div>
       ${bu && tt ? `<div><div class="k">${esc(r.department)} bütçesi</div><div class="v">${bu.budget ? pct((bu.used + (ordered ? 0 : tt!.totalTRY)) / bu.budget * 100) : "–"}</div><div class="d">${bu.budget ? `bu alımla ${short(bu.used + (ordered ? 0 : tt!.totalTRY))} / ${short(bu.budget)}` : "bütçe tanımlı değil"}</div></div>` : ""}
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
@@ -861,7 +861,7 @@ export function summaryText(r: PurchaseRequest): string {
   const L: string[] = [];
   L.push(`Satın alma karar özeti`);
   L.push(`${r.no}: ${r.title}`);
-  if (r.department || r.requester) L.push(`Birim: ${r.department || "-"}   Talep eden: ${r.requester || "-"}   Öncelik: ${PRIO[r.priority || "normal"]}`);
+  if (r.department || r.requester) L.push([r.department ? `Birim: ${r.department}` : "", r.requester ? `Talep eden: ${r.requester}` : "", `Öncelik: ${PRIO[r.priority || "normal"]}`].filter(Boolean).join("   "));
   if (r.needDate) L.push(`İhtiyaç tarihi: ${fmtDate(r.needDate)}`);
   L.push("");
   L.push("Kalemler:");

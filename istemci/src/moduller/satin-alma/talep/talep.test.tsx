@@ -192,7 +192,7 @@ describe('Ana sayfadan talep (#375)', () => {
     await screen.findByRole('button', { name: 'Adıyla yazın' });
     const once = cagrilar.length;
     serbestKalem('1.250');
-    for (const [yanlis, ileti] of [['1.250', BELIRSIZ_MIKTAR], ['iki', 'Miktarı sayı olarak yazın']] as const) {
+    for (const [yanlis, ileti] of [['1.250', BELIRSIZ_MIKTAR], ['iki', 'Miktarı sayı olarak yazın'], ['-3', 'Miktar sıfırdan büyük olmalı.']] as const) {
       fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: yanlis } });
       fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
       await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(ileti));

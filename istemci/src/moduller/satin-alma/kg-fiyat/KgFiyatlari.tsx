@@ -235,7 +235,7 @@ export function KgFiyatlari() {
   const fiyatsizlar = (l.data?.fiyatsizKaliteler ?? []).filter((x) => aranan === '' || `${x.kaliteKodu} ${x.form ?? ''} ${formAdi(x.form)}`.toLocaleUpperCase('tr-TR').includes(aranan));
   const fiyatsizSutunlari: Sutun<FiyatsizKalite>[] = [
     { anahtar: 'kalite', baslik: 'Kalite', mono: true, kirilmaz: true, hucre: (x) => x.kaliteKodu },
-    { anahtar: 'form', baslik: 'Form', hucre: (x) => x.form ?? '—' },
+    { anahtar: 'form', baslik: 'Form', hucre: (x) => (x.form === null ? '—' : formAdi(x.form)) },
     { anahtar: 'kart', baslik: 'Malzeme kartı', hizala: 'sag', hucre: (x) => x.kartSayisi },
     ...(yazar ? [{
       anahtar: 'islem', baslik: 'İşlem', kirilmaz: true,
