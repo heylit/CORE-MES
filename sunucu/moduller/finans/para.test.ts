@@ -121,7 +121,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
 
   test('FNS-2, FNS-11: faturalı belgede firma zorunlu; faturasız yalnız izinli kategoride, firmasız ve elle', async () => {
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(null))).durum, 422);
-    const h = await hesap('kasa');
+    const h = await hesap('kasa', 'TRY', 1000);
     const maas = await belge(null, { yon: 'gider', tur: 'faturasiz', kategori: 'personel', kdvOrani: 0, pesin: { yontem: 'nakit', hesapId: h, tarih: TARIH } });
     assert.equal(maas.durum, 'kapandi');
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(null, { yon: 'gider', tur: 'faturasiz', kategori: 'kira', kdvOrani: 0 }))).durum, 400);

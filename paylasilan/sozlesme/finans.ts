@@ -349,7 +349,9 @@ export const oneriDurumuGovdesi = z.object({
   erteleBitis: tarihSemasi.nullish().transform((v) => v ?? null),
 });
 export const oneriDurumuSatiri = z.object({ bulguKimligi: z.string(), durum: z.enum(['uygulaniyor', 'ertelendi', 'kapatildi']), erteleBitis: tarihSemasi.nullable() });
-export const kapanisGovdesi = z.object({ donem: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/), madde: z.string().regex(/^[a-z_]{1,30}$/), isaretli: z.boolean() });
+// K11 a: ay sonu maddeleri sabit listedir (ekranın on maddesi); listede olmayan madde yazılmaz.
+export const KAPANIS_MADDELERI = ['banka', 'kasa', 'cari', 'fatura', 'cek', 'stok', 'bordro', 'kdv', 'butce', 'danisman'] as const;
+export const kapanisGovdesi = z.object({ donem: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/), madde: z.enum(KAPANIS_MADDELERI), isaretli: z.boolean() });
 export const kapanisSatiri = z.object({ donem: z.string(), madde: z.string(), isaretli: z.boolean() });
 export const skorSatiri = z.object({ gun: tarihSemasi, skor: z.number().int(), nakit: numerik.nullable() });
 

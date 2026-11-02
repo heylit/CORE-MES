@@ -27,6 +27,14 @@ export function pasifeAlmaEngeli(o: AcikKayitOzeti, rakamGoster: boolean): strin
 // =====================================================================
 export type Yon = 'gelir' | 'gider';
 const kurus = (tutar: string | number): number => Math.round(Number(tutar) * 100);
+
+// K12 a: kasa eksiye düşmez (fiziki nakit eksi olamaz); banka ve kredi kartı hesabı eksi olabilir.
+export function kasaBakiyesiHatasi(tur: string, bakiye: string): string | null {
+  return tur === 'kasa' && kurus(bakiye) < 0 ? `Kasa eksiye düşemez (işlemden sonra bakiye ${bakiye}). Önce kasaya para girin ya da ödemeyi bankadan yapın.` : null;
+}
+// Çekin vadesi düzenleme tarihinden önce olamaz (belgedeki vade kuralının karşılığı).
+export const cekVadeHatasi = (duzenlemeTarihi: string, vade: string): string | null =>
+  vade < duzenlemeTarihi ? 'Çekin vadesi düzenleme tarihinden önce olamaz.' : null;
 const tl = (k: number): string => (k / 100).toFixed(2);
 
 // FNS-1: KDV oranı belge tarihinde geçerli oranlardan biridir.
