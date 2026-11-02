@@ -72,6 +72,11 @@ export function aramaSiniri(istenen: number): number {
   return Math.max(1, Math.min(FIRMA_ARAMA_SINIRI, Math.trunc(istenen)));
 }
 
+// MT-22 (kart 1812): fason seçicisi (rota, reçete-rota, üretim emirleri) bütün aktif fason firmaları listeler; MT-3'ün 50 sınırı
+// yazılarak yapılan aramaya aittir, seçiciye uygulanınca 50'den sonraki fason firma seçilemiyordu. Bu üst sınır yalnız güvenlik
+// payıdır: bir atölyenin fason firma sayısı bunun çok altındadır.
+export const FASON_SECIM_SINIRI = 1000;
+
 // MT-10: bir firmanın en çok 50 adresi olur (kartın merkez adresi sayılmaz).
 export function adresSiniriHatasi(mevcut: number): string | null {
   return mevcut >= ADRES_SINIRI ? `Bir firmaya en çok ${ADRES_SINIRI} adres eklenir.` : null;

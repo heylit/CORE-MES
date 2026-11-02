@@ -12,7 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kurGetir, kurlar } from '../finans/disari.ts';
-import { firmaAdlari, firmaAra, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari } from './disari.ts';
+import { fasonFirmalari, firmaAdlari, firmaAra, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari } from './disari.ts';
 
 // Örnek firmalar uydurmadır; gerçek ad, vergi numarası ya da adres yoktur.
 const PAROLA = 'dogru-parola-1';
@@ -296,6 +296,29 @@ describe('müşteri ve tedarikçi firma kartı (gerçek PostgreSQL)', () => {
     const sayanDb = { sorgu: async () => { sorgu += 1; return []; }, tek: async () => { sorgu += 1; return null; } };
     assert.equal((await firmaOzetleri(sayanDb, [])).size, 0);
     assert.equal(sorgu, 0);
+  });
+
+  test('MT-22 (kart 1812): fasonFirmalari 50 sınırına takılmaz; yalnız aktif, fason işaretli tedarikçi ve ikisi türünü ad sırasıyla verir', async () => {
+    const kurulan: number[] = [];
+    for (let i = 0; i < 55; i += 1) kurulan.push((await firmaKur({ ad: `Secici Fason ${String(i).padStart(2, '0')}`, tur: 'tedarikci', fason: true })).id);
+    const ikisi = await firmaKur({ ad: 'Secici Fason Ikisi', tur: 'ikisi', fason: true });
+    const fasonsuz = await firmaKur({ ad: 'Secici Fasonsuz', tur: 'tedarikci' });
+    const pasif = await firmaKur({ ad: 'Secici Fason Pasif', tur: 'tedarikci', fason: true });
+    await istek('yazan', 'POST', `/finans/firmalar/${pasif.id}/pasif`, { surum: pasif.surum });
+    // Eski kayıt: müşteri türünde fason işareti (kural öncesi veri) seçiciye girmez.
+    const musteri = await firmaKur({ ad: 'Secici Fason Musteri', tur: 'musteri' });
+    await vt().sorgu('UPDATE musteri_tedarikci_firma SET fason = true WHERE id = $1', [musteri.id]);
+
+    const liste = await vt().tx((db) => fasonFirmalari(db));
+    const idler = new Set(liste.map((f) => f.id));
+    assert.ok(liste.length > 50);
+    assert.ok([...kurulan, ikisi.id].every((id) => idler.has(id)));
+    assert.ok(![fasonsuz.id, pasif.id, musteri.id].some((id) => idler.has(id)));
+    const adlar = liste.map((f) => f.ad.toLowerCase());
+    assert.deepEqual(adlar, [...adlar].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+    assert.deepEqual(Object.keys(liste[0] ?? {}).sort(), ['ad', 'id', 'kod']);
+    // Yazılarak yapılan arama sınırı (MT-3) değişmez.
+    assert.equal((await vt().tx((db) => firmaAra(db, { metin: 'Secici Fason', sinir: 500, fason: true }))).length, 50);
   });
 
   test('disari.ts: firmaAra fason süzgeci yalnız fason işaretlileri, varsayılan olarak yalnız aktifleri döndürür; süzgeçsiz arama değişmez', async () => {

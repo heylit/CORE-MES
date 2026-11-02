@@ -19,7 +19,7 @@ import type {
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { z } from 'zod';
 import {
-  LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
+  FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -209,6 +209,12 @@ export async function firmaAra(
     metin: metin === '' ? null : metin, turler: turKapsami(secenek.tur), yalnizAktif: secenek.yalnizAktif ?? true, sinir: aramaSiniri(secenek.sinir),
     fason: secenek.fason ?? null,
   });
+  return satirlar.map(({ id, ad, kod }) => ({ id, ad, kod }));
+}
+
+// MT-22: fason seçicisinin listesi. Yalnız aktif, fason işaretli ve tedarikçi ya da ikisi türündeki firmalar; ad sırasıyla.
+export async function fasonFirmalari(db: Db): Promise<{ id: number; ad: string; kod: string | null }[]> {
+  const satirlar = await sorgular.firmaAra(db, { metin: null, turler: turKapsami('tedarikci'), yalnizAktif: true, sinir: FASON_SECIM_SINIRI, fason: true });
   return satirlar.map(({ id, ad, kod }) => ({ id, ad, kod }));
 }
 
