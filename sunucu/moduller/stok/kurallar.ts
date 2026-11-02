@@ -80,6 +80,9 @@ export function uretimGirisiKesirEngeli(miktar: string, tamSayili: boolean): str
 }
 // STK-8: üretim çıkışı, hurda, yolda ve sevkiyat konumları kendi akışlarıyla dolar; mal kabul onlara yazılmaz. İstasyona doğrudan kabul
 // (hazırlık) ve fason firmasına doğrudan teslim açık kalır; karantina giriş kontrolünündür.
+// STK-9 a: sayim vadesi stoklu her konumu kapsar (zemin, karantina, kabul...). Fason firmadaki ve yoldaki mal atolyede fiziksel
+// olarak sayilamaz; vadeye girmez.
+export const SAYIM_DISI_KONUMLAR = ['fason', 'yolda'] as const satisfies readonly KonumTuru[];
 export const MAL_KABUL_DISI_KONUMLAR = ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const satisfies readonly KonumTuru[];
 export function malKabulKonumuEngeli(tur: KonumTuru): string | null {
   return (MAL_KABUL_DISI_KONUMLAR as readonly string[]).includes(tur) ? 'Mal kabul bu konuma yazılmaz; üretim çıkışı, hurda, yolda ve sevkiyat konumları kendi akışlarıyla dolar.' : null;

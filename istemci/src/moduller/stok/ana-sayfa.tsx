@@ -23,7 +23,7 @@ function DusukStok() {
 }
 function SayimBekleyen() {
   const o = useOzet();
-  return <SayiKarti baslik="Sayım bekleyen göz" simge="clock" sayi={o.data?.sayimBekleyen} altMetin="Süresi dolmuş ya da hiç sayılmamış" yol="/stok?sayim=1" hata={o.isError} />;
+  return <SayiKarti baslik="Sayım bekleyen konum" simge="clock" sayi={o.data?.sayimBekleyen} altMetin="Süresi dolmuş ya da hiç sayılmamış" yol="/stok?sayim=1" hata={o.isError} />;
 }
 function EksikEmir() {
   const o = useOzet();

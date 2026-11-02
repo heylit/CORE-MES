@@ -24,7 +24,7 @@ export function isler(k: IsKutusuCevabi, eslenmemis = 0): Is[] {
   if (k.eksiBakiye > 0) l.push({ ton: 'hata', baslik: `${k.eksiBakiye} bakiye satırı eksiye düştü`, alt: 'Onaylı eksi çıkışlar; sayım ya da düzeltme bekliyor.', yol: '/stok/malzemeler?durum=eksi', eylem: 'Listele' });
   if (k.kritik > 0) l.push({ ton: 'uyari', baslik: `${k.kritik} malzeme kritik seviyede`, alt: 'Serbest stok tanımlı kritik seviyeye indi.', yol: '/stok/malzemeler?durum=kritik', eylem: 'Listele' });
   if (k.logoFarki > 0) l.push({ ton: 'hata', baslik: `${k.logoFarki} mal kabul satırında Logo irsaliyesiyle fark var`, alt: 'Sayılan miktar irsaliyeden farklı.', yol: '/stok/mal-kabul?logoDurumu=fark_var', eylem: 'Belgeler' });
-  if (k.sayimBekleyen) l.push({ ton: 'uyari', baslik: `${k.sayimBekleyen} dolu göz sayım bekliyor`, alt: 'Son sayımı sayım süresinden eski ya da hiç sayılmamış gözler.', yol: '/stok?sayim=1', eylem: 'Gözler' });
+  if (k.sayimBekleyen) l.push({ ton: 'uyari', baslik: `${k.sayimBekleyen} dolu konum sayım bekliyor`, alt: 'Son sayımı sayım süresinden eski ya da hiç sayılmamış konumlar.', yol: '/stok?sayim=1', eylem: 'Konumlar' });
   if (k.fasondaEksik > 0) l.push({ ton: 'uyari', baslik: `${k.fasondaEksik} emrin parçası fason firmasında kaldı`, alt: 'Emir kapandı; gönderilen, dönen ve hurda tutmuyor. Firmayla eksik kontrol edilmeli.', yol: '/stok/konumlar', eylem: 'Konumlar' });
   if (k.fasonEksikGonderimi > 0) l.push({ ton: 'uyari', baslik: `${k.fasonEksikGonderimi} fason gönderiminde parça eksik gitti`, alt: 'İstasyonda yeterli parça yoktu; olan kadar gönderildi.', yol: '/stok/hareketler', eylem: 'Hareketler' });
   if (k.logoHatasi > 0) l.push({ ton: 'hata', baslik: `${k.logoHatasi} hareket Logo'ya gönderilemedi`, alt: 'Gönderim hata verdi.', yol: '/stok/hareketler', eylem: 'Hareketler' });
@@ -84,7 +84,7 @@ function Gunluk({ gunluk }: { gunluk: PanelCevabi['gunluk'] }) {
   );
 }
 
-// Sayım bekleyen dolu gözler (DEP-15): süre yerleşimdedir (yerleşim düzenleyici, Bina).
+// Sayım bekleyen dolu konumlar (DEP-15, STK-9 a): süre yerleşimdedir (yerleşim düzenleyici, Bina).
 // `?sayim=1` (iş listesindeki "Gözler" ve ana sayfadaki kart) bu bölüme götürür.
 function SayimBekleyenler() {
   const c = useQuery({ queryKey: [...anahtarlar.hepsi, 'sayim-bekleyenler'], queryFn: () => api.get<SayimBekleyenlerCevabi>('/stok/sayim-bekleyenler') });
@@ -95,7 +95,7 @@ function SayimBekleyenler() {
   if (!c.data) return null;
   return (
     <div ref={yer} id="sayim-bekleyenler">
-      <Kart baslik={`Sayım bekleyen gözler (${c.data.gun} gün)`}>
+      <Kart baslik={`Sayım bekleyen konumlar (${c.data.gun} gün)`}>
         <div className="tc-stok-etiketler">
           {c.data.gozler.map((g) => <Link key={g.konumId} to={`/stok/konumlar/${g.konumId}`} className="tc-stok-etiket">{g.kod}{g.sonSayim ? '' : ' · hiç'}</Link>)}
         </div>
@@ -151,7 +151,7 @@ export function IsKutusu() {
           <Link to="/stok/malzemeler?durum=kritik" className={`tc-stok-kpi ${d.kritik + d.eksi ? 'tc-stok-kpi-uyari' : ''}`}><strong>{d.kritik + d.eksi}</strong><span>Kritik ya da eksi</span></Link>
           <Link to="/stok/malzemeler?durum=kabulde" className="tc-stok-kpi"><strong>{d.kabulde}</strong><span>Mal kabul bekleyen</span></Link>
           <Link to="/stok/hazirlik" className="tc-stok-kpi"><strong>{d.toplamaBekleyen}</strong><span>Toplama bekleyen</span></Link>
-          <div className={`tc-stok-kpi ${s.data?.sayimBekleyen ? 'tc-stok-kpi-uyari' : ''}`}><strong>{s.data?.sayimBekleyen ?? '—'}</strong><span>Sayım bekleyen göz</span></div>
+          <div className={`tc-stok-kpi ${s.data?.sayimBekleyen ? 'tc-stok-kpi-uyari' : ''}`}><strong>{s.data?.sayimBekleyen ?? '—'}</strong><span>Sayım bekleyen konum</span></div>
         </div>
       )}
       {s.data && (
@@ -203,7 +203,7 @@ export function IsKutusu() {
           </Kart>
         </div>
       )}
-      {s.data?.sayimBekleyen === null && <p className="tc-stok-not">Sayım süresi tanımlı değil; sayım bekleyen gözler gösterilmiyor.</p>}
+      {s.data?.sayimBekleyen === null && <p className="tc-stok-not">Sayım süresi tanımlı değil; sayım bekleyen konumlar gösterilmiyor.</p>}
       {!!s.data?.sayimBekleyen && <SayimBekleyenler />}
     </section>
   );

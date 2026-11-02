@@ -25,7 +25,7 @@ const sorgu = (i: Istek) => new URLSearchParams(i.yol.split('?')[1] ?? '');
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('İş kutusu', () => {
-  it('eski "elle yapılır" notu yok; ?sayim=1 sayım bekleyen gözleri gösterir ve oraya kaydırır', async () => {
+  it('eski "elle yapılır" notu yok; ?sayim=1 sayım bekleyen konumları gösterir ve oraya kaydırır', async () => {
     const kaydir = vi.fn();
     Element.prototype.scrollIntoView = kaydir;
     sunucuKur(DEPOCU, {
@@ -33,7 +33,7 @@ describe('İş kutusu', () => {
       'GET /stok/sayim-bekleyenler': () => json(200, { gun: 90, gozler: [{ konumId: 3, kod: 'A-03', sonSayim: null }] }),
     });
     ac('/stok?sayim=1');
-    expect(await screen.findByText('Sayım bekleyen gözler (90 gün)')).toBeTruthy();
+    expect(await screen.findByText('Sayım bekleyen konumlar (90 gün)')).toBeTruthy();
     await vi.waitFor(() => expect(kaydir).toHaveBeenCalled());
     expect(screen.queryByText(/şimdilik elle yapılır/)).toBeNull();
   });

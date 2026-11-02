@@ -36,7 +36,7 @@ describe('Rol panosu kartları', () => {
     expect(kart('Düşük stok').textContent).toContain('2');
     expect(kart('Düşük stok').getAttribute('href')).toBe('/stok/malzemeler?durum=kritik');
     expect(kart('Malzemesi eksik emir').textContent).toContain('1');
-    expect(kart('Sayım bekleyen göz').textContent).toContain('0');
+    expect(kart('Sayım bekleyen konum').textContent).toContain('0');
     expect(istekler.filter((i) => i.yol === '/stok/ozet')).toHaveLength(1);
   });
 
