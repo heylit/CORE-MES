@@ -8,7 +8,7 @@ import {
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
-import { girdiEksigi, hazirlikBol, isEmriBagimliligi } from './kurallar.ts';
+import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
@@ -85,6 +85,41 @@ describe('revizyon', () => {
     assert.equal(onayaHazirMi([{ ...tam, ayar: false, ayarDk: null }]), null);
     assert.match(onayaHazirMi([{ ...tam, ayarSuresiDk: null }]) ?? '', /hazırlık süresi/);
     assert.doesNotMatch(onayaHazirMi([{ ...tam, birimSureDk: null }]) ?? '', /ayar/, 'eski "ayar" adı iletide kalmaz');
+  });
+
+  test('ROT-4: onaya hazırlık bütün sorunları sırasıyla toplar; ileti tek sorunda aynı kalır, uzun listede ilk on yazılır', () => {
+    const tam: HazirlikAdimi = {
+      opNo: 10, operasyonTipiAktif: true, kaynakAktif: true, adaylarAktif: [true], fason: false, makineKullanimi: 'tek', ayarSuresiDk: 0, birimSureDk: 2, terminGun: null,
+      bagimlilik: 'bekleyen', girenSayisi: 1,
+    };
+    assert.deepEqual(onayaHazirlikHatalari([tam]), []);
+    assert.deepEqual(onayaHazirlikHatalari([{ ...tam, girenSayisi: 0, birimSureDk: null }, { ...tam, opNo: 20, operasyonTipiAktif: false, ayarSuresiDk: null }]), [
+      'OP 10: giren (hammadde ya da yarı mamul) seçilmeli.', 'OP 10: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.',
+      'OP 20: operasyon tipi kullanıma kapalı.', 'OP 20: hazırlık süresi girilmeli; yoksa 0 yazın.',
+    ]);
+    assert.equal(topluHataIletisi([]), null);
+    assert.equal(topluHataIletisi(['Tek sorun.']), 'Tek sorun.');
+    assert.equal(topluHataIletisi(['A.', 'B.']), 'Onaya gönderilemez, 2 sorun var: A. B.');
+    const on2 = topluHataIletisi(Array.from({ length: 12 }, (_, i) => `S${i}.`)) ?? '';
+    assert.match(on2, /^Onaya gönderilemez, 12 sorun var: S0\. .* S9\. Ve 2 sorun daha\.$/);
+    assert.doesNotMatch(on2, /S10/);
+  });
+
+  test('ROT-4: hazırlık toplamı bölümle çelişirse bildirilir; bölüm gelmezse ya da toplam boşsa ya da kuruş farkıysa çelişki yok', () => {
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: 30, hazirlikDk: 10, ayar: true, ayarDk: 20 }), null);
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: 30.004, hazirlikDk: 10, ayar: true, ayarDk: 20 }), null);
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: 99 }), null, 'bölümü bilmeyen eski görünüm');
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: null, hazirlikDk: 10, ayar: false }), null);
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: 0, hazirlikDk: null, ayar: false, ayarDk: null }), null);
+    assert.equal(hazirlikCeliskisi({ ayarSuresiDk: 40, hazirlikDk: 0, ayar: true, ayarDk: 30 }), 'Hazırlık toplamı (40 dk) hazırlık ve ayar sürelerinin toplamıyla (30 dk) aynı değil.');
+    assert.match(hazirlikCeliskisi({ ayarSuresiDk: 20, hazirlikDk: 15, ayar: false, ayarDk: 40 }) ?? '', /\(15 dk\)/, 'ayar kapalıyken ayar süresi toplama girmez');
+  });
+
+  test('ROT-4: eski tabandan açılan taslağa yazılan ölçümde uyarı; yürürlükteki revizyondan açılanda ya da yürürlük yokken uyarı yok', () => {
+    assert.equal(eskiTabanUyarisi({ harf: 'C', kaynakRevizyonId: 2, kaynakHarf: 'B' }, { id: 2, harf: 'B' }), null);
+    assert.equal(eskiTabanUyarisi({ harf: 'C', kaynakRevizyonId: 1, kaynakHarf: 'A' }, null), null);
+    assert.match(eskiTabanUyarisi({ harf: 'C', kaynakRevizyonId: 1, kaynakHarf: 'A' }, { id: 2, harf: 'B' }) ?? '', /yürürlükteki Rev B yerine Rev A üzerinden açıldı/);
+    assert.match(eskiTabanUyarisi({ harf: 'C', kaynakRevizyonId: null, kaynakHarf: null }, { id: 2, harf: 'B' }) ?? '', /boş ya da başka bir kaynaktan açıldı/);
   });
 
   test('1737 c: aday kaynakta işlem ve hazırlık süresi onayda zorunlu; hazırlık 0 olabilir, adım süresine düşülmez', () => {

@@ -2,7 +2,7 @@ import { kayitNoktasi, kisitIhlali } from '#cekirdek/db.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { OndalikMetin } from '#paylasilan/ondalik.ts';
@@ -31,7 +31,7 @@ import { adimliEmirAyrintisi, isEmirleriniYenile, isEmriSureOzeti, uretimEmriAc,
 import type { EmirBittiOlayi, IsEmriKopyalandiOlayi } from '../uretim-emirleri/disari.ts';
 import {
   YAZ, PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, emreKopyalanabilirMi, fasonTerminToplami, kaynakAnahtari, kontrolListesi, agaciAc, akisiCikar, donguBul, ilkAdimiDuzenle, izinliKomutlar, komutDenetle, ondalikMetin, rotaOzeti,
-  dalDenetle, hazirlikBol, isEmriBagimliligi, girdiEksigi, girdiOlabilirMi, oncullerCikar, onayaHazirMi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
+  dalDenetle, hazirlikBol, isEmriBagimliligi, girdiEksigi, girdiOlabilirMi, oncullerCikar, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, eskiTabanUyarisi, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, teorikSure,
   bekleyenOlcum, degisenTurler, degisimOrani, dortGozEngeli, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, taslakSureleri, teorikAyrim, terminalOlcumleri,
   adimDegerleriDenetle, cozulmusDegerler, ekAdimSartnameIhlali, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi,
   adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, medyaSinirHatasi, medyaTuru, talimatAdimiHatasi, urunMedyaToplami,
@@ -683,7 +683,7 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
       adaySureleri: adaylar.map((x) => ({ ayarSuresiDk: sayiyaCevir(x.ayarSuresiDk), birimSureDk: sayiyaCevir(x.birimSureDk) })),
     });
   }
-  const hata = onayaHazirMi(hazirlik.map(({ a, kaynakAktif, adaylarAktif, adaySureleri }) => ({
+  const hatalar = onayaHazirlikHatalari(hazirlik.map(({ a, kaynakAktif, adaylarAktif, adaySureleri }) => ({
     opNo: a.opNo,
     operasyonTipiAktif: tipler.get(a.operasyonTipiId)?.aktif === true,
     kaynakAktif,
@@ -701,24 +701,32 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
     ayar: a.ayar,
     ayarDk: sayiyaCevir(a.ayarDk),
   })));
-  if (hata) throw gecersiz(hata);
-  await sartnameOnayDenetimi(db, r.id, icerik);
+  // Şartname ve döngü denetimi kendi iletisiyle durur; onların sorunu da öteki sorunlarla birlikte bildirilir (ROT-4).
+  const topla = async (denetim: () => Promise<void>) => {
+    try { await denetim(); } catch (e) {
+      if (e instanceof UygulamaHatasi && e.kod === 'GECERSIZ') hatalar.push(e.message);
+      else throw e;
+    }
+  };
+  await topla(() => sartnameOnayDenetimi(db, r.id, icerik));
   const kartlar = await urunOzetleri(db, [...icerik.bilesenler.map((b) => b.malzemeId), ...icerik.yanUrunler.map((y) => y.malzemeId)]);
   for (const [, k] of kartlar) {
-    if (k.onayDurumu !== 'aktif') throw gecersiz(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`);
+    if (k.onayDurumu !== 'aktif') hatalar.push(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`);
   }
-  for (const b of icerik.bilesenler) {
-    const k = kartlar.get(b.malzemeId);
-    if (k && !girdiOlabilirMi(k.tur)) throw gecersiz(`${k.stokKodu ?? k.ad}: ticari mal ve hizmet reçetede girdi olmaz.`);
+  for (const b of new Set(icerik.bilesenler.map((x) => x.malzemeId))) {
+    const k = kartlar.get(b);
+    if (k && !girdiOlabilirMi(k.tur)) hatalar.push(`${k.stokKodu ?? k.ad}: ticari mal ve hizmet reçetede girdi olmaz.`);
   }
   const bilesenler = [...new Set(icerik.bilesenler.map((b) => b.malzemeId))];
   const mamuller = bilesenler.filter((b) => rotaliTurMu(kartlar.get(b)?.tur ?? ''));
   const rotali = new Set((await s.yururluktekiBilesenler(db, mamuller)).map((x) => x.urunId));
   const eksik = rotasizMamuller(mamuller, rotali);
   if (eksik.length > 0) {
-    throw gecersiz(`Bileşen mamul ya da yarımamulün yürürlükte rotası yok: ${eksik.map((e) => kartlar.get(e)?.stokKodu ?? kartlar.get(e)?.ad ?? String(e)).join(', ')}`);
+    hatalar.push(`Bileşen mamul ya da yarımamulün yürürlükte rotası yok: ${eksik.map((e) => kartlar.get(e)?.stokKodu ?? kartlar.get(e)?.ad ?? String(e)).join(', ')}`);
   }
-  await donguDenetle(db, r.malzemeId, bilesenler);
+  await topla(() => donguDenetle(db, r.malzemeId, bilesenler));
+  const ileti = topluHataIletisi(hatalar);
+  if (ileti !== null) throw gecersiz(ileti);
 }
 
 /* ---------------- komutlar ---------------- */
@@ -864,6 +872,10 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   const eskiBolum = new Map(mevcut.adimlar.map((m) => [m.opNo, {
     hazirlikDk: sayiyaCevir(m.hazirlikDk), ayar: m.ayar, ayarDk: sayiyaCevir(m.ayarDk), toplam: sayiyaCevir(m.ayarSuresiDk),
   }]));
+  for (const [i, a] of govde.adimlar.entries()) {
+    const celiski = hazirlikCeliskisi(a);
+    if (celiski) throw dogrulama(`${a.opNo === null ? 'Yeni adım' : `OP ${a.opNo}`}: ${celiski}`, `adimlar.${i}.ayarSuresiDk`);
+  }
   const bolumlu = govde.adimlar.map((a) => {
     const { toplam, ...bolum } = hazirlikBol(a, (a.opNo === null ? undefined : eskiBolum.get(a.opNo)) ?? null);
     return { ...a, ...bolum, ayarSuresiDk: toplam };
@@ -1330,7 +1342,11 @@ export async function gerceklesenKabulEt(
       malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId, sureDk: satir.sureDk, kisiId: kullanici.id, kaynak: 'kabul', isEmriId: satir.isEmriId,
     });
   }
-  return { taslak: cevap(taslakId, 'taslak', surum), sureler: await sureler(db, taslakId, g.makineId) };
+  const taslak = await s.revizyonOku(db, taslakId);
+  const yid = await s.yururluktekiRevizyonId(db, adim.malzemeId);
+  const yururlukte = yid === null ? null : await s.revizyonOku(db, yid);
+  const uyari = taslak === null ? null : eskiTabanUyarisi(taslak, yururlukte === null ? null : { id: yururlukte.id, harf: yururlukte.harf });
+  return { taslak: cevap(taslakId, 'taslak', surum), sureler: await sureler(db, taslakId, g.makineId), uyari };
 }
 
 // RT-79 (171 a): yürürlüğe giren revizyonda teorik süresi öncekinden farklı türlerin bekleyen ölçümü boş elle satırıyla boşaltılır. Adımın

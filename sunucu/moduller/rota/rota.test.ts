@@ -279,9 +279,14 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const { id } = (await taslakAc(await mamulAc())).json<KomutCevabi>();
     const k = await kaydet(id, 1, [
       yeniAdim({ ayarSuresiDk: null, hazirlikDk: 10, ayar: true, ayarDk: 20 }),
-      yeniAdim({ ayarSuresiDk: 99, hazirlikDk: 15, ayar: false, ayarDk: 40, bilesenler: [] }),
+      yeniAdim({ ayarSuresiDk: 15, hazirlikDk: 15, ayar: false, ayarDk: 40, bilesenler: [] }),
     ]);
     assert.equal(k.statusCode, 200, k.body);
+    // ROT-4: bölümle çelişen toplam sessizce yok sayılmaz; kuruş farkı çelişki değildir.
+    const celiski = await kaydet(id, k.json<KomutCevabi>().surum, [yeniAdim({ ayarSuresiDk: 99, hazirlikDk: 15, ayar: false, ayarDk: null })]);
+    assert.equal(celiski.statusCode, 400);
+    assert.match(celiski.json<{ mesaj: string }>().mesaj, /Hazırlık toplamı \(99 dk\) hazırlık ve ayar sürelerinin toplamıyla \(15 dk\) aynı değil/);
+    assert.equal(celiski.json<{ alan: string }>().alan, 'adimlar.0.ayarSuresiDk');
     const bolum = async () => (await ayrinti(id)).adimlar.map((x) => [x.ayarSuresiDk, x.hazirlikDk, x.ayar, x.ayarDk]);
     assert.deepEqual(await bolum(), [['30.00', '10.00', true, '20.00'], ['15.00', '15.00', false, null]]);
     // Alanı bilmeyen eski görünüm yalnız toplamı yollar: toplam aynıysa bölüm kalır, değiştiyse fark ayara gider.
@@ -293,7 +298,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(k3.statusCode, 200, k3.body);
     assert.deepEqual((await bolum())[0], ['45.00', '10.00', true, '35.00']);
     // Ayar işaretli ama süresi boş: taslakta kalır, onaya gitmez.
-    const k4 = await kaydet(id, k3.json<KomutCevabi>().surum, [yeniAdim({ hazirlikDk: 10, ayar: true, ayarDk: null }), yeniAdim({ hazirlikDk: 0, ayar: false, bilesenler: [] })]);
+    const k4 = await kaydet(id, k3.json<KomutCevabi>().surum, [yeniAdim({ ayarSuresiDk: 10, hazirlikDk: 10, ayar: true, ayarDk: null }), yeniAdim({ ayarSuresiDk: 0, hazirlikDk: 0, ayar: false, bilesenler: [] })]);
     assert.equal(k4.statusCode, 200, k4.body);
     const red = await komut(id, 'onaya-gonder', { surum: k4.json<KomutCevabi>().surum }, c.planlama);
     assert.equal(red.statusCode, 422);
@@ -342,17 +347,22 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const standart = ilk.find((x) => x.varsayilan);
     assert.equal(standart?.ad, 'Standart rota');
     assert.equal(standart?.adimlar.length, 11);
-    assert.equal((await istek(c.kalite, 'POST', '/rota/sablonlar/ekle', { ad: 'Yetkisiz', adimlar: [] })).statusCode, 403);
+    assert.equal((await istek(c.kalite, 'POST', '/rota/sablonlar/ekle', { ad: 'Yetkisiz', adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }] })).statusCode, 403);
+    // ROT-4: adımsız şablon kaydedilmez (ondan açılan taslak onaya gidemezdi).
+    const bos = await istek(c.planlama, 'POST', '/rota/sablonlar/ekle', { ad: 'Boş şablon', adimlar: [] });
+    assert.equal(bos.statusCode, 400);
+    assert.match(bos.body, /en az bir adım/);
 
     const yeni = (await tamam<SablonCevabi>(c.planlama, 'POST', '/rota/sablonlar/ekle', { ad: 'Kısa rota', adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }] })).sablon;
     assert.deepEqual([yeni.varsayilan, yeni.adimlar.map((a) => [a.sira, a.operasyonTipi.id, a.ad])], [false, [[1, tip('TRN'), 'Torna']]]);
-    assert.equal((await istek(c.planlama, 'POST', '/rota/sablonlar/ekle', { ad: 'Kısa rota', adimlar: [] })).statusCode, 409);
+    assert.equal((await istek(c.planlama, 'POST', '/rota/sablonlar/ekle', { ad: 'Kısa rota', adimlar: [{ operasyonTipiId: tip('BM'), ad: 'Muayene' }] })).statusCode, 409);
 
     const kayit = await tamam<SablonCevabi>(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/kaydet`, {
       ad: 'Kısa rota', surum: yeni.surum, adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }, { operasyonTipiId: tip('BM'), ad: 'Muayene' }],
     });
     assert.equal(kayit.sablon.adimlar.length, 2);
-    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/kaydet`, { ad: 'Kısa rota', surum: yeni.surum, adimlar: [] })).statusCode, 409);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/kaydet`, { ad: 'Kısa rota', surum: yeni.surum, adimlar: [{ operasyonTipiId: tip('TRN'), ad: 'Torna' }] })).statusCode, 409);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/sablonlar/${yeni.id}/kaydet`, { ad: 'Kısa rota', surum: kayit.sablon.surum, adimlar: [] })).statusCode, 400);
 
     const urun = await mamulAc();
     const ac = await taslakAc(urun, { tur: 'sablon', sablonId: yeni.id });
@@ -511,6 +521,22 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(k3.statusCode, 200, k3.body);
     const g3 = await komut(id, 'onaya-gonder', { surum: k3.json<KomutCevabi>().surum }, c.planlama);
     assert.equal(g3.statusCode, 200, g3.body);
+  });
+
+  test('ROT-4: onaya göndermede bütün sorunlar tek iletide gelir; tek sorun eski iletisiyle kalır', async () => {
+    const { id } = (await taslakAc(await mamulAc())).json<KomutCevabi>();
+    const k = await kaydet(id, 1, [
+      yeniAdim({ birimSureDk: null, ayarSuresiDk: null, hazirlikDk: null, ayar: false, ayarDk: null }),
+      yeniAdim({ bagimlilik: 'bagimsiz', bilesenler: [], birimSureDk: null }),
+    ]);
+    assert.equal(k.statusCode, 200, k.body);
+    const red = await komut(id, 'onaya-gonder', { surum: k.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(red.statusCode, 422);
+    const ileti = red.json<{ mesaj: string }>().mesaj;
+    assert.match(ileti, /^Onaya gönderilemez, 4 sorun var: /);
+    for (const parca of [/OP 10: işlem süresi girilmeli/, /OP 10: hazırlık süresi girilmeli/, /OP 20: önceki adımı beklemediği için giren seçilmeli/, /OP 20: işlem süresi girilmeli/]) {
+      assert.match(ileti, parca);
+    }
   });
 
   test('RT-08, RT-09, RT-38: adımsız ve süresiz revizyon onaya gitmez; pasif makine kaydedilmez, sonradan pasifleşen makineyle onaya gitmez; kaynağı atanmamış adımla gider', async () => {
@@ -982,6 +1008,12 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const k = await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 5, teslim: '2026-10-30' });
     assert.equal(k.statusCode, 200, k.body);
     assert.equal(k.json<{ isEmriIdleri: number[] }>().isEmriIdleri.length, 2);
+    // Takvimde olmayan gün genel tarih hatasına düşmez, alanıyla reddedilir.
+    for (const [alan, deger] of [['teslim', '2026-13-45'], ['teslim', '2026-02-30'], ['baslangic', '2026-04-31']] as const) {
+      const red = await istek(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 5, teslim: '2026-10-30', [alan]: deger });
+      assert.equal(red.statusCode, 400, `${alan} ${deger}: ${red.body}`);
+      assert.equal(red.json<{ alan: string }>().alan, alan);
+    }
     const { id: taslak } = (await taslakAc(urun)).json<KomutCevabi>();
     assert.equal((await istek(c.planlama, 'POST', `/rota/revizyonlar/${taslak}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: null })).statusCode, 422);
   });
@@ -1395,7 +1427,8 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         const once = (await sureler(rev)).adimlar[0]!;
         const k = await kabulEt(adim.adimId, { tur: 'islem', olcumId: once.olcum.islem!.id, okunanId: once.sonKayit.islem });
         assert.equal(k.statusCode, 200, k.body);
-        const { taslak, sureler: ts } = k.json<GerceklesenKabulCevabi>();
+        const { taslak, sureler: ts, uyari } = k.json<GerceklesenKabulCevabi>();
+        assert.equal(uyari, null, 'yürürlükteki revizyondan açılan taslakta uyarı yok');
         assert.notEqual(taslak.id, rev);
         assert.equal(taslak.durum, 'taslak');
         const t0 = ts.adimlar[0]!;
@@ -1425,6 +1458,29 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         }
         // Eski teorik eski revizyonda kalır.
         assert.equal((await sureler(rev)).adimlar[0]?.teorik.islemDk, '2.0000');
+      });
+
+      test('ROT-4: ölçüm yürürlükteki yerine eski revizyondan açılmış taslağa yazılınca kabul yapılır ve uyarı döner', async () => {
+        const urun = await mamulAc();
+        const eski = await yururlugeAlinmisRota(urun, [ayrikAdim()]);
+        const ac = await taslakAc(urun, { tur: 'revizyon', revizyonId: eski });
+        const yeni = ac.json<KomutCevabi>().id;
+        const govde = (await ayrinti(yeni)).adimlar.map(govdeye);
+        const k = await kaydet(yeni, 1, govde.map((x) => ({ ...x, ad: 'Yeni ad' })));
+        const g = await komut(yeni, 'onaya-gonder', { surum: k.json<KomutCevabi>().surum }, c.planlama);
+        assert.equal((await komut(yeni, 'onayla', { surum: g.json<KomutCevabi>().surum, yururlugeAl: true }, c.mudur)).statusCode, 200);
+        const kopya = await istek(c.planlama, 'POST', `/rota/revizyonlar/${eski}/kopyala`, { hedefUrunId: urun });
+        assert.equal(kopya.statusCode, 200, kopya.body);
+        const adim = (await sureler(yeni)).adimlar[0]!;
+        await olculmusEmir(urun, yeni, adim.opNo, makineA);
+        const once = (await sureler(yeni)).adimlar[0]!;
+        const kabul = await kabulEt(adim.adimId, { tur: 'islem', olcumId: once.olcum.islem!.id, okunanId: once.sonKayit.islem });
+        assert.equal(kabul.statusCode, 200, kabul.body);
+        const cevap = kabul.json<GerceklesenKabulCevabi>();
+        assert.equal(cevap.taslak.id, kopya.json<KomutCevabi>().id);
+        const [harfEski, harfYeni, harfTaslak] = await Promise.all([eski, yeni, cevap.taslak.id].map(async (id) => (await ayrinti(id)).revizyon.harf));
+        assert.equal(cevap.uyari, `Ölçüm Rev ${harfTaslak} taslağına yazıldı; bu taslak yürürlükteki Rev ${harfYeni} yerine Rev ${harfEski} üzerinden açıldı. `
+          + `Onaylanırsa Rev ${harfYeni}'deki öteki değişiklikler geri alınabilir; farkı onaydan önce kontrol edin.`);
       });
 
       test('RT-78: makineye özgü kabul adayın süresine yazar; yürürlükte yalnız o makinenin ölçümü boşalır, değişmeyen tür kalır', async () => {
