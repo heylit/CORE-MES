@@ -33,7 +33,7 @@ const ROLLER = Object.keys(ROL_ISLEMI) as ArkonRolu[];
 // (yönetici bütün işlemleri, amir müdürde, planlama planlama_proje'de).
 const DURUS_YAZAN_ROLLER: readonly ArkonRolu[] = ['admin', 'plan', 'lead'];
 // Arkon formunun en küçük geçerli planlı duruş gövdesi (tesiste 08:00-09:00).
-const DURUS = { title: 'Deneme duruş', scope: 'all', target: '', from: Date.UTC(2026, 9, 7, 5, 0), to: Date.UTC(2026, 9, 7, 6, 0), rep: 'none' };
+const DURUS = { title: 'Deneme duruş', scope: 'all', target: '', from: Date.UTC(2099, 9, 7, 5, 0), to: Date.UTC(2099, 9, 7, 6, 0), rep: 'none' };
 
 describe('arkon güvenlik (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -1556,11 +1556,11 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
 
     test('planlı duruş, bakım ve ayar belgeleri ekranın günlük satırlarını üretir (pano-planlama.ts:288,291; bakim-raporlar.ts:30,65-67,78,241; giris-ayarlar-spc.ts:290; ayarlar-uretim.ts:51)', async () => {
       // Tesiste 08:00-10:30 (Europe/Istanbul, UTC+3): günlük duvar saatini yazar.
-      const d = { title: 'Bahar bakımı', scope: 'all', from: Date.UTC(2026, 9, 7, 5, 0), to: Date.UTC(2026, 9, 7, 7, 30) };
-      assert.deepEqual((await yeniSatirlar(() => belgeYaz('admin', 'downs', 'gd1', d))).map(satir), [['planlı duruş', 'eklendi', 'Bahar bakımı', '2026-10-07 08:00–10:30']]);
-      assert.deepEqual((await yeniSatirlar(() => belgeYaz('admin', 'downs', 'gd1', { ...d, note: 'x' }))).map(satir), [['planlı duruş', 'değiştirildi', 'Bahar bakımı', '2026-10-07 08:00–10:30']]);
+      const d = { title: 'Bahar bakımı', scope: 'all', from: Date.UTC(2099, 9, 7, 5, 0), to: Date.UTC(2099, 9, 7, 7, 30) };
+      assert.deepEqual((await yeniSatirlar(() => belgeYaz('admin', 'downs', 'gd1', d))).map(satir), [['planlı duruş', 'eklendi', 'Bahar bakımı', '2099-10-07 08:00–10:30']]);
+      assert.deepEqual((await yeniSatirlar(() => belgeYaz('admin', 'downs', 'gd1', { ...d, note: 'x' }))).map(satir), [['planlı duruş', 'değiştirildi', 'Bahar bakımı', '2099-10-07 08:00–10:30']]);
       assert.deepEqual((await yeniSatirlar(() => belgeYaz('maint', 'downs', 'gd2', { ...d, title: 'Bakım · Yağlama' }).catch(() => undefined))).map(satir), []);
-      assert.deepEqual((await yeniSatirlar(() => belgeYaz('lead', 'downs', 'gd2', { ...d, title: 'Bakım · Yağlama' }))).map(satir), [['planlı duruş', 'bakım için eklendi', 'Bakım · Yağlama', '2026-10-07 08:00–10:30']]);
+      assert.deepEqual((await yeniSatirlar(() => belgeYaz('lead', 'downs', 'gd2', { ...d, title: 'Bakım · Yağlama' }))).map(satir), [['planlı duruş', 'bakım için eklendi', 'Bakım · Yağlama', '2099-10-07 08:00–10:30']]);
       assert.deepEqual((await yeniSatirlar(() => sil('admin', 'downs', 'gd1'))).map(satir), [['planlı duruş', 'silindi', 'Bahar bakımı', null]]);
 
       const plan = { type: 'plan', mc: 'M1', title: 'Yağ değişimi', everyDays: 30 };
@@ -2148,7 +2148,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       interface Durus { id: number; surum: number; baslik: string; kapsam: string; isMerkeziId: number | null; gunler: number[] }
       const vardiyaKayitlari = async () => (await istek<{ satirlar: Durus[] }>(yonetici, 'GET', '/planli-duruslar?sayfaBoyu=200')).govde.satirlar;
       const vg = {
-        baslik: 'Vardiyadan', kapsam: 'istasyon', istasyonId: A.istasyonId, baslangic: '2026-10-08T08:00:00+03:00', bitis: '2026-10-08T09:00:00+03:00',
+        baslik: 'Vardiyadan', kapsam: 'istasyon', istasyonId: A.istasyonId, baslangic: '2099-10-08T08:00:00+03:00', bitis: '2099-10-08T09:00:00+03:00',
         tekrar: 'haftalik', gunler: [4, 7],
       };
       const v = await istek<{ durus: Durus }>(yonetici, 'POST', '/planli-duruslar', vg);
@@ -2159,7 +2159,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       const bg = belge.govde as Record<string, unknown>;
       const { by: _by, at: _at, ...govde } = bg;
       assert.deepEqual(govde, {
-        id: kimlik, title: 'Vardiyadan', scope: 'st', target: A.istasyon, from: Date.UTC(2026, 9, 8, 5, 0), to: Date.UTC(2026, 9, 8, 6, 0),
+        id: kimlik, title: 'Vardiyadan', scope: 'st', target: A.istasyon, from: Date.UTC(2099, 9, 8, 5, 0), to: Date.UTC(2099, 9, 8, 6, 0),
         rep: 'weekly', days: [4, 0], until: null, note: '', active: true,
       });
       // Arkon formu düzenler: Vardiya kaydı değişir, ISO günlerine çevrilir.
