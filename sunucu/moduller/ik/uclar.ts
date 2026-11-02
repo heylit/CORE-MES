@@ -5,6 +5,7 @@ import {
   IK_ALAN_ADLARI, ikAyarCevabi, ikAyarKaydetGovdesi, ikBenCevabi, ikBordroGordumGovdesi, ikDevamOnayGovdesi, ikDonemParametresi, ikIletisimGovdesi, ikIptalGovdesi, ikKararGovdesi,
   ikKaydetGovdesi, ikIzinGunuCevabi, ikKisiVardiyasiCevabi, ikKisiVardiyasiSorgusu, ikIzinGunuSorgusu, ikKesinlestirGovdesi, ikKimlikParametresi, ikOnayGovdesi, ikOzetiCevabi, ikPuantajCevabi, ikPuantajSorgusu, ikPuantajYazCevabi, ikPuantajYazGovdesi,
   ikTopluCevabi, ikTopluGovde, ikVeriCevabi, ikYazCevabi,
+  girisKartiCevabi, girisKartiKaldirGovdesi, girisKartiParametresi, girisKartiVerGovdesi,
 } from '#paylasilan/sozlesme/ik.ts';
 import { IK_ALANLARI } from './kurallar.ts';
 import * as servis from './servis.ts';
@@ -90,5 +91,18 @@ export const uclar: Uc[] = [
   uc({
     yontem: 'POST', yol: '/ik/ayarlar/kaydet', yetki: 'ik.ayar-yaz', govde: ikAyarKaydetGovdesi, cevap: ikAyarCevabi,
     isle: ({ db, kullanici, govde }) => servis.ayarKaydet(db, kullanici, govde.govde, govde.surum),
+  }),
+  // Personel giriş kartı (1902 b, 1903 b): yalnız İK personel yazan eşleştirir, verir ve kaldırır; Nizamiye'de bu yol yoktur.
+  uc({
+    yontem: 'GET', yol: '/ik/giris-karti/:kisiId', yetki: 'ik.personel-yaz', parametre: girisKartiParametresi, cevap: girisKartiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.girisKarti(db, kullanici, parametre.kisiId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ik/giris-karti/:kisiId', yetki: 'ik.personel-yaz', parametre: girisKartiParametresi, govde: girisKartiVerGovdesi,
+    cevap: girisKartiCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.girisKartiVer(db, kullanici, parametre.kisiId, govde.kartNo),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ik/giris-karti/:kisiId/kaldir', yetki: 'ik.personel-yaz', parametre: girisKartiParametresi, govde: girisKartiKaldirGovdesi,
+    cevap: girisKartiCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.girisKartiKaldir(db, kullanici, parametre.kisiId, govde.surum),
   }),
 ];

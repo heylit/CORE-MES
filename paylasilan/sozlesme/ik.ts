@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { surumSemasi } from '../surum.ts';
+import { gizli } from '../gizli.ts';
+import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 /* İnsan Kaynakları: ekran çerçevedeki uygulamadır (istemci/src/moduller/ik); kayıtlarını bütün olarak saklar, sunucu
@@ -199,3 +200,14 @@ export type IkPuantajKaydi = IkPuantajCevabi['kisiler'][number]['kayitlar'][numb
 export type IkPuantajPlanGunu = z.output<typeof puantajPlanGunu>;
 export type IkPuantajGunuGirdisi = z.output<typeof ikPuantajGunuGirdisi>;
 export type IkPuantajYazCevabi = z.output<typeof ikPuantajYazCevabi>;
+
+// Personel giriş kartı (1902 b, 1903 b): kartı yalnız İK verir ve kaldırır (ik.personel-yaz); kayıt Nizamiye'de durur. Kart istasyonda
+// PIN'siz giriş açar (1897 b): numara düz dönmez, yalnız son dört hanesi.
+export const girisKartiParametresi = z.object({ kisiId: z.coerce.number().int().positive().max(2147483647) });
+export const girisKartiSemasi = z.object({ kartSon4: z.string(), kaydedildi: zamanSemasi, surum: surumSemasi });
+export const girisKartiCevabi = z.object({ kart: girisKartiSemasi.nullable() });
+export const girisKartiVerGovdesi = z.object({ kartNo: gizli(z.string().trim().min(1, 'Kartı okutun.').max(64, 'Kart numarası çok uzun.')) }).strict();
+export const girisKartiKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+export type GirisKarti = z.output<typeof girisKartiSemasi>;
+export type GirisKartiCevabi = z.output<typeof girisKartiCevabi>;
+export type GirisKartiVerGovdesi = z.input<typeof girisKartiVerGovdesi>;

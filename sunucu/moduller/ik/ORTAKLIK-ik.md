@@ -23,3 +23,5 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar; Aşama 2 tablosun
 | Firma (şirket adı) | bordro başlığındaki şirket adı | `ik_genel_ayar.sirket` | finans (`finans_firma`), ayarlar (sistem adı) | serbest metin |
 | Durum listeleri | izin türü, devam türü, sözleşme türü, cinsiyet, eğitim | CHECK kısıtları | yok | modül içi |
 | Rol ve işlem | `ik.*` işlemleri, `sayfa.ik`, `sayfa.ik-islemlerim` | `paylasilan/islemler/ik.ts` | kisiler (`rol_islemi`) | rol dağılımı çekirdek isteği (CEKIRDEK-ISTEKLERI madde 3) |
+
+Giriş kartı (1902 b): İK kart tutmaz; kartı `nizamiye/disari.ts` ile Nizamiye'nin `nizamiye_personel_kart` tablosuna yazar ve oradan okur. Kişi bağı `ik_personel.kisi_id`, kapsam `ik_personel.is_merkezi_id`.

@@ -8,5 +8,4 @@ export const anahtarlar = {
   oneriler: (ara: string) => ['nizamiye', 'oneriler', ara] as const,
   ziyaretcilerim: ['nizamiye', 'ziyaretcilerim'] as const,
   pdksCihazlar: ['nizamiye', 'pdks-cihazlar'] as const,
-  personelKartlari: ['nizamiye', 'personel-kartlari'] as const,
 };

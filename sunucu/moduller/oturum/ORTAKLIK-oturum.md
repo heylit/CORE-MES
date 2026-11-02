@@ -35,4 +35,4 @@ Yok.
 
 ## Okunan başka modül
 
-- Personel kartı (1326, 1327 a): sahibi nizamiye (`nizamiye_personel_kart`); oturum yalnız `personelKartSahibi` (`nizamiye/disari.ts`) ile kart sahibini okur, kart tutmaz.
+- Personel kartı (1326, 1902 b): kayıt nizamiye'de (`nizamiye_personel_kart`), kartı İK verir; oturum yalnız `personelKartSahibi` (`nizamiye/disari.ts`) ile kart sahibini okur, kart tutmaz.

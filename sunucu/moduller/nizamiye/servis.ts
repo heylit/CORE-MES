@@ -5,13 +5,13 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import type {
   AcilDurumCevabi, BenimZiyaretcim, EvSahipleriCevabi, GecmisCevabi, KapiCevabi, Kart, KartlarCevabi, OnerilerCevabi, PdksAktarCevabi, PdksCihaz, PdksCihazAnahtarCevabi,
-  PdksCihazHareketiCevabi, PdksCihazlarCevabi, PdksPersonel, PersonelKart, PersonelKartlariCevabi,
+  PdksCihazHareketiCevabi, PdksCihazlarCevabi, PdksPersonel,
   Ziyaret, ZiyaretcilerimCevabi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
 import type { z } from 'zod';
 import type {
   cikisGovdesi, girisGovdesi, habersizGovdesi, kartBildirGovdesi, kartEkleGovdesi, onKayitGovdesi, pdksAktarGovdesi, pdksCihazDurumGovdesi,
-  pdksCihazEkleGovdesi, pdksCihazHareketiGovdesi, personelKartEkleGovdesi,
+  pdksCihazEkleGovdesi, pdksCihazHareketiGovdesi,
 } from '#paylasilan/sozlesme/nizamiye.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
@@ -381,37 +381,27 @@ const PERSONEL_KART_KISITLARI = {
   nizamiye_personel_kart_kisi: { ileti: 'Kişi bulunamadı.', alan: 'kisiId' },
 } as const;
 
-export async function personelKartlari(db: Db): Promise<PersonelKartlariCevabi> {
-  const satirlar = await sorgu.personelKartlari(db);
-  const etkin = await kisiSecenekleri(db);
-  const bilinen = new Map(etkin.map((k) => [k.id, k]));
-  // Pasife alınmış kişinin kartı da listede kalır ki kaldırılabilsin; adı ayrıca okunur.
-  const adlar = await kisiAdlari(db, satirlar.filter((s) => !bilinen.has(s.kisiId)).map((s) => s.kisiId));
-  const kartlar: PersonelKart[] = satirlar.map((s) => ({
-    ...s, kisiAd: bilinen.get(s.kisiId)?.ad ?? adlar.get(s.kisiId) ?? null, sicilNo: bilinen.get(s.kisiId)?.sicilNo ?? null,
-  }));
-  const kartli = new Set(satirlar.map((s) => s.kisiId));
-  return { kartlar, kisiler: etkin.filter((k) => !kartli.has(k.id)) };
+// Personel giriş kartı (1902 b, 1903 b): kartı yalnız İK verir ve kaldırır, kayıt burada durur; İK uçları bu üçünü `disari.ts` ile
+// çağırır, yetkiyi İK ucu denetler. Kişi başına tek etkin kart, kart başına tek kişi (kısıtlar).
+export async function kisininPersonelKarti(db: Db, kisiId: number): Promise<sorgu.PersonelKartSatiri | null> {
+  return (await sorgu.personelKartlari(db)).find((k) => k.kisiId === kisiId) ?? null;
 }
 
-export async function personelKartEkle(db: Db, kullanici: Kullanici, g: Govde<typeof personelKartEkleGovdesi>): Promise<PersonelKart> {
-  const no = personelKartNoDuzelt(g.kartNo);
+export async function personelKartiVer(db: Db, kaydeden: number, kisiId: number, kartNo: string): Promise<sorgu.PersonelKartSatiri> {
+  const no = personelKartNoDuzelt(kartNo);
   if (no === null) throw new UygulamaHatasi('DOGRULAMA', 'Kart numarası okunamadı; kartı yeniden okutun.', { alan: 'kartNo' });
-  if (!(await kisiSecenekleri(db)).some((k) => k.id === g.kisiId)) throw new UygulamaHatasi('DOGRULAMA', 'Kişi bulunamadı ya da etkin değil.', { alan: 'kisiId' });
+  if (!(await kisiSecenekleri(db)).some((k) => k.id === kisiId)) throw new UygulamaHatasi('DOGRULAMA', 'Kişi bulunamadı ya da etkin değil.', { alan: 'kisiId' });
   const id = await kisitKorumali(PERSONEL_KART_KISITLARI, () =>
-    sorgu.personelKartEkle(db, { kisiId: g.kisiId, ozet: personelKartOzeti(no), son4: no.slice(-4), kaydeden: kullanici.id }));
-  return personelKartCevabi(db, id);
-}
-
-async function personelKartCevabi(db: Db, id: number): Promise<PersonelKart> {
-  const kart = (await personelKartlari(db)).kartlar.find((k) => k.id === id);
-  if (kart === undefined) throw bulunamadi(PERSONEL_KART_YOK);
+    sorgu.personelKartEkle(db, { kisiId, ozet: personelKartOzeti(no), son4: no.slice(-4), kaydeden }));
+  const kart = await sorgu.personelKarti(db, id);
+  if (kart === null) throw bulunamadi(PERSONEL_KART_YOK);
   return kart;
 }
 
-export async function personelKartKaldir(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<{ tamam: true }> {
-  if ((await sorgu.personelKarti(db, id)) === null) throw bulunamadi(PERSONEL_KART_YOK);
-  if (!(await sorgu.personelKartKapat(db, id, surum, kullanici.id))) throw eskiSurum();
+export async function personelKartiniKaldir(db: Db, kapatan: number, kisiId: number, surum: number): Promise<{ tamam: true }> {
+  const kart = await kisininPersonelKarti(db, kisiId);
+  if (kart === null) throw bulunamadi(PERSONEL_KART_YOK);
+  if (!(await sorgu.personelKartKapat(db, kart.id, surum, kapatan))) throw eskiSurum();
   return { tamam: true };
 }
 
