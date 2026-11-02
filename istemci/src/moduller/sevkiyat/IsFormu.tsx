@@ -48,6 +48,15 @@ const noktaSecenekleri = (noktalar: readonly Nokta[]) =>
   NOKTA_TURLERI.filter((t) => t !== 'fabrika').flatMap((tur) => noktalar.filter((n) => n.tur === tur).map((n) => ({ deger: String(n.id), baslik: `${n.ad} · ${NOKTA_TURU_ADI[tur]}` })));
 const TUR_SECENEKLERI = IS_TURLERI.map((t) => ({ deger: t, baslik: IS_TURU_ADI[t] }));
 
+// Sabit aracın kapasitesini aşan iş kaydedilir ama dağıtımda havuzda kalır; kullanıcı bunu kaydetmeden görsün.
+export function sabitAracUyarisi(t: Pick<Taslak, 'sabitAracId' | 'agirlikKilogram' | 'paletSayisi'>, araclar: readonly Arac[]): string | undefined {
+  const arac = araclar.find((a) => String(a.id) === t.sabitAracId);
+  if (!arac) return undefined;
+  const kg = Number(t.agirlikKilogram || 0), palet = Number(t.paletSayisi || 0), kapasiteKg = Number(arac.kapasiteKilogram);
+  const asan = [kg > kapasiteKg ? `${kapasiteKg.toLocaleString('tr-TR')} kg` : null, palet > arac.kapasitePalet ? `${arac.kapasitePalet} palet` : null].filter(Boolean);
+  return asan.length ? `${arac.ad} kapasitesini aşıyor (${asan.join(', ')}); bu araçla dağıtılamaz, iş havuzda kalır.` : undefined;
+}
+
 export function IsFormu({ is, bekleyen = null, tarih, noktalar, araclar, kapat }: {
   is: Is | null; bekleyen?: Bekleyen | null; tarih: string; noktalar: readonly Nokta[]; araclar: readonly Arac[]; kapat: () => void;
 }) {
@@ -91,7 +100,7 @@ export function IsFormu({ is, bekleyen = null, tarih, noktalar, araclar, kapat }
         {t.tur !== 'alim' && pencere('birakis', 'Bırakış zaman aralığı')}
         <div className="tc-sevkiyat-alanlar">
           <Girdi etiket="Belge no" value={t.belgeNo} maxLength={60} onChange={(e) => alan('belgeNo')(e.target.value)} />
-          <Secim etiket="Sabit araç" bosSecenek="Yok (dağıtım seçer)" secenekler={araclar.map((a) => ({ deger: String(a.id), baslik: a.ad }))} value={t.sabitAracId} onChange={(e) => alan('sabitAracId')(e.target.value)} />
+          <Secim etiket="Sabit araç" hata={sabitAracUyarisi(t, araclar)} bosSecenek="Yok (dağıtım seçer)" secenekler={araclar.map((a) => ({ deger: String(a.id), baslik: a.ad }))} value={t.sabitAracId} onChange={(e) => alan('sabitAracId')(e.target.value)} />
         </div>
         <Girdi etiket="Açıklama" value={t.aciklama} maxLength={400} onChange={(e) => alan('aciklama')(e.target.value)} />
         {komut.isError && <p role="alert" className="tc-sevkiyat-hata">{hataIletisi(komut.error, 'İş kaydedilemedi')}</p>}

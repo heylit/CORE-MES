@@ -79,7 +79,8 @@ function matrisSakla(paket: HaritaPaketi, gun: string, m: Matris) {
 
 // ---------- dönüşümler ----------
 
-const ihlalHatasi = (ihlal: KuralIhlali[]) => dogrulama(ihlal[0]!.ileti, ihlal[0]!.alan, ihlal);
+// Ayrıntı, şema doğrulamasıyla aynı biçimde ({ alan, mesaj }) döner.
+const ihlalHatasi = (ihlal: KuralIhlali[]) => dogrulama(ihlal[0]!.ileti, ihlal[0]!.alan, ihlal.map((x) => ({ alan: x.alan, mesaj: x.ileti })));
 
 type KonumluNokta = NoktaSatiri & { konumlar?: FirmaKonumu[] };
 function noktaCevabi(n: KonumluNokta): Nokta {
@@ -251,8 +252,15 @@ export const ORNEK_MALIYETLER = VARSAYILAN_MALIYET;
 export async function araclariListele(db: Db): Promise<Arac[]> {
   return (await sorgu.araclariGetir(db)).map(aracCevabi);
 }
+// Benzersiz dizin yalnız genel "aynı bilgiler" iletisini verir; kullanıcı hangi alanı değiştireceğini bilsin.
+async function aracCakismasiDenetle(db: Db, govde: { ad: string; plaka: string | null }, kendiId: number | null): Promise<void> {
+  const c = await sorgu.aracCakismasi(db, govde.ad, govde.plaka, kendiId);
+  if (c.plaka) throw cakisma(`${govde.plaka} plakası başka bir aktif araçta kayıtlı.`);
+  if (c.ad) throw cakisma(`“${govde.ad}” adında aktif bir araç zaten var.`);
+}
 export async function aracEkle(db: Db, govde: AracGovdesi & { plaka: string | null }): Promise<Arac> {
   const ihlal = aracIhlalleri(govde); if (ihlal.length) throw ihlalHatasi(ihlal);
+  await aracCakismasiDenetle(db, govde, null);
   return aracCevabi(await sorgu.aracEkle(db, govde));
 }
 export async function aracGuncelle(db: Db, id: number, gelen: AracGovdesi & { plaka: string | null; surum: number }, oranlariKoru = false): Promise<Arac> {
@@ -262,6 +270,7 @@ export async function aracGuncelle(db: Db, id: number, gelen: AracGovdesi & { pl
   const ihlal = aracIhlalleri(govde); if (ihlal.length) throw ihlalHatasi(ihlal);
   surumDenetle(onceki.surum, govde.surum);
   await onayliPlanDenetle(db, { aracId: id });
+  await aracCakismasiDenetle(db, govde, id);
   return aracCevabi(surumluYazildi(await sorgu.aracGuncelle(db, id, govde.surum, govde)));
 }
 export async function aracPasiflestir(db: Db, id: number): Promise<Arac> {
