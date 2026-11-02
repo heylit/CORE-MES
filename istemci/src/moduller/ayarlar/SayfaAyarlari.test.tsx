@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { KapaliSayfalarCevabi, KapaliSayfalarGovdesi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { SAYFA_SATIRLARI, SayfaAyarlari } from './SayfaAyarlari.tsx';
+import { SAYFA_SATIRLARI, SayfaAyarlari, sayfaSatirlariniSuz } from './SayfaAyarlari.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -55,6 +55,7 @@ describe('sayfa ayarları', () => {
     await screen.findByText('Sayfa kapatıldı.');
     expect(yazilanlar).toEqual([{ yol: altli.yol, kapali: true }]);
     expect(istemci.getQueryData<KapaliSayfalarCevabi>(ortakAnahtarlar.kapaliSayfalar)).toEqual({ kapali: [altli.yol] });
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${altli.baslik}`) }));
     const alt = screen.getByRole('switch', { name: `${altli.baslik}: ${altli.altlar[0]?.baslik}` });
     expect(alt.getAttribute('aria-checked')).toBe('false');
     expect((alt as HTMLButtonElement).disabled).toBe(true);
@@ -80,6 +81,41 @@ describe('sayfa ayarları', () => {
     expect((anahtar as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(anahtar);
     expect(yazilanlar).toEqual([]);
+  });
+
+  it('alt sayfalar kapalı gelir, sayfanın düğmesiyle açılır ve kapanır', async () => {
+    if (!altli) throw new Error('alt sayfası olan sayfa yok');
+    const ilkAlt = `${altli.baslik}: ${altli.altlar[0]?.baslik}`;
+    sunucuKur([]);
+    ac();
+    await screen.findByRole('switch', { name: altli.baslik });
+    expect(screen.queryByRole('switch', { name: ilkAlt })).toBeNull();
+    const dugme = screen.getByRole('button', { name: new RegExp(`^${altli.baslik}`) });
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    expect(dugme.textContent).toContain(`${altli.altlar.length} alt sayfa`);
+    fireEvent.click(dugme);
+    expect(dugme.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('switch', { name: ilkAlt })).toBeTruthy();
+    fireEvent.click(dugme);
+    expect(screen.queryByRole('switch', { name: ilkAlt })).toBeNull();
+  });
+
+  it('arama sayfa ve alt sayfa adında Türkçe harfe duyarlı geçer; eşleşen alt sayfa açık gelir, eşleşme yoksa söylenir', async () => {
+    if (!altli) throw new Error('alt sayfası olan sayfa yok');
+    const alt = altli.altlar[0];
+    if (!alt) throw new Error('alt sayfa yok');
+    expect(sayfaSatirlariniSuz(SAYFA_SATIRLARI, '')).toHaveLength(SAYFA_SATIRLARI.length);
+    expect(sayfaSatirlariniSuz(SAYFA_SATIRLARI, altli.baslik.toLocaleUpperCase('tr'))).toContainEqual(altli);
+    const altSonuc = sayfaSatirlariniSuz(SAYFA_SATIRLARI, alt.baslik);
+    expect(altSonuc.find((s) => s.yol === altli.yol)?.altlar).toContainEqual(alt);
+    sunucuKur([]);
+    ac();
+    await screen.findByRole('switch', { name: altli.baslik });
+    fireEvent.change(screen.getByLabelText('Sayfa ara'), { target: { value: alt.baslik } });
+    expect(screen.getByRole('switch', { name: `${altli.baslik}: ${alt.baslik}` })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Sayfa ara'), { target: { value: 'zzzz-olmayan' } });
+    expect(screen.getByText('Eşleşen sayfa yok.')).toBeTruthy();
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
   });
 
   it('önbellekteki eski liste gösterilse de liste tazelenene kadar anahtarlar kilitlidir', async () => {

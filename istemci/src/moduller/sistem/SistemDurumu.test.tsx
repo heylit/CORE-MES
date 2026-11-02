@@ -135,7 +135,7 @@ describe('SistemDurumu ayrinti', () => {
     expect(screen.getByText(/12 ms/)).toBeTruthy();
     expect(screen.getByText('20260101000000_ornek')).toBeTruthy();
     expect(screen.getByText('2 sa 5 dk')).toBeTruthy();
-    expect(screen.getByText('test')).toBeTruthy();
+    expect(screen.getByText('Test')).toBeTruthy();
     expect(yollar).toContain('/saglik/ayrinti');
     cleanup();
 
@@ -230,7 +230,7 @@ describe('SistemDurumu ayrinti', () => {
     expect(screen.queryByText('Veritabanı')).toBeNull();
     expect(screen.queryByText('abcdef1')).toBeNull();
     expect(screen.queryByText('20260101000000_ornek')).toBeNull();
-    expect(screen.queryByText('test')).toBeNull();
+    expect(screen.queryByText('Test')).toBeNull();
   });
 
   it('yenile dugmesi operatorde ayrintiyi cagirmaz, yoneticide yeniden cagirir', async () => {
@@ -298,10 +298,12 @@ describe('SistemDurumu zamanlanmis isler', () => {
     const tablo = await screen.findByRole('table', { name: 'Zamanlanmış işler' });
     const satirlar = within(tablo).getAllByRole('row').slice(1).map((r) => [...r.querySelectorAll('td')].map((h) => h.textContent));
     expect(satirlar).toEqual([
-      ['arkon-yansima-yineleyici', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Hata', 'Veritabanı hatası 23514'],
+      ['Arkon: TMI yansımalarını yeniden deneme', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Hata', 'Veritabanı hatası 23514'],
       ['logo-gonderim', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Bekliyor', 'Logo bağlantısı kapalı'],
       ['yeni-is', 'yok', 'yok', 'yok'],
     ]);
+    // Okunur ad kod adını ipucunda taşır; bilinmeyen iş kod adıyla kalır (ad uydurulmaz).
+    expect(within(tablo).getByText('Arkon: TMI yansımalarını yeniden deneme').getAttribute('title')).toBe('arkon-yansima-yineleyici');
   });
 
   it('is listesi bossa "Is yok" yazar; yonetici olmayan is bolumunu gormez', async () => {
