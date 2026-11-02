@@ -367,6 +367,19 @@ const csvYakala = () => {
 };
 
 describe('istasyonlar ekranı (#1109, IS25)', () => {
+  it('EM-6 (kart 1842): Etiket Merkezi\'ni gören kullanımdaki istasyonların etiketini oradan açar; görmeyen bağlantıyı görmez', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.etiket-merkezi'] });
+    goster(<Istasyonlar />);
+    const baglanti = await screen.findByRole('link', { name: 'İstasyon etiketleri (1)' });
+    // Pasif istasyon (11) gitmez; konumu olmayan istasyonu Etiket Merkezi "bulunamadı" sayar.
+    expect(baglanti.getAttribute('href')).toBe('/etiket-merkezi?tur=istasyon&id=10');
+    cleanup();
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />);
+    await screen.findAllByText('Torna Bir');
+    expect(screen.queryByRole('link', { name: /İstasyon etiketleri/ })).toBeNull();
+  });
+
   it('kök adres genel bakıştır: iş merkezi kartında istasyon, makine, kişi ve ekip; bağsızlar ayrı; pasifler istenince; sekme yok', async () => {
     sunucuKur(OKUYUCU);
     goster(<Istasyonlar />, '/istasyonlar');

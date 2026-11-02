@@ -1,5 +1,5 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { DurumKutusu, Kart, Rozet } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Rozet } from '../../ortak/arayuz/index.ts';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { IKINCI_MENU_TANIMLARI, menuMaddeleri, type MenuMaddesi } from '../../ortak/rota/ikinci-menu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -60,6 +60,21 @@ function VardiyaBolumu({ v, sayfaVar }: { v: TesisVerisi; sayfaVar: boolean }) {
   );
 }
 
+// EM-6 (kart 1842): istasyon etiketi Etiket Merkezi'nden basılır; kullanımdaki istasyonlar adresle gider. Stok konumu açılmamış
+// istasyon orada "bulunamadı" sayılır ve basılmaz. Etiket Merkezi'ni açamayan kullanıcı bağlantıyı görmez.
+const ETIKET_SINIRI = 200;
+function IstasyonEtiketleri({ v }: { v: TesisVerisi }) {
+  const idler = v.istasyonlar.filter((i) => i.aktif).map((i) => i.id).slice(0, ETIKET_SINIRI);
+  if (idler.length === 0) return null;
+  return (
+    <div className="tc-ist-arac">
+      <div className="tc-ist-arac-sag">
+        <Link to={`/etiket-merkezi?tur=istasyon&id=${idler.join(',')}`}><Dugme simge="printer">İstasyon etiketleri ({idler.length})</Dugme></Link>
+      </div>
+    </div>
+  );
+}
+
 export function Istasyonlar() {
   const oturum = useOturum();
   const { bolum: adresteki } = useParams();
@@ -82,6 +97,7 @@ export function Istasyonlar() {
     <Kart>
       <div className="tc-ist-sayfa" role="region" aria-label={tanim.baslik}>
         {bolum === 'genel' && <GenelBakis v={v} />}
+        {bolum === 'is-merkezleri' && islemler.includes('sayfa.etiket-merkezi') && <IstasyonEtiketleri v={v} />}
         {bolum === 'is-merkezleri' && <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} />}
         {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yazabilir} durumYazabilir={yazabilir || islemler.includes('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
         {bolum === 'personel' && (
