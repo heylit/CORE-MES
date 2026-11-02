@@ -206,16 +206,17 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
     await expect(page.getByRole('searchbox', { name: 'Kütüphanede ara' })).toBeVisible();
   });
 
-  // 1091 a, 1137 a: tezgâhlar İstasyonlar'ın makineleridir, ekleme yoktur. Örnek makinelerin ayarı yoktur: ekran gömülü listeyle
-  // sürer. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
+  // 1091 a, 1137 a, CNC-6: tezgâhlar İstasyonlar'ın makineleridir, ekleme yoktur; gömülü liste yoktur. Örnek veride bir makinenin
+  // ayarı bilerek eksiktir. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
   test('Tanımlar: makineler İstasyonlar\'dan gelir, ayarı eksik olan işaretlenir, yeni tezgâh eklenmez', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/kutuphane');
     await page.getByRole('button', { name: 'Tanımlar' }).click();
     const pencere = page.getByRole('dialog', { name: 'Tanımlar' });
     await expect(pencere.getByRole('button', { name: 'Yeni tezgâh' })).toHaveCount(0);
-    const satir = pencere.locator('tr').filter({ hasText: 'ORN-CNC-T1' });
+    await expect(pencere.locator('tr').filter({ hasText: 'ORN-CNC-T1' }).getByText('ayarı eksik')).toHaveCount(0);
+    const satir = pencere.locator('tr').filter({ hasText: 'ORN-CNC-T2' });
     await expect(satir.getByText('ayarı eksik')).toBeVisible();
-    await expect(pencere.getByRole('status')).toContainText('gömülü tezgâh listesini kullanıyor');
+    await expect(pencere.getByText(/gömülü tezgâh listesi/)).toHaveCount(0);
     await satir.getByRole('button', { name: 'Düzenle' }).click();
     await expect(pencere.getByLabel('Ad', { exact: true })).toHaveCount(0);
     await expect(pencere.getByLabel('Magazin cep sayısı')).toBeVisible();
