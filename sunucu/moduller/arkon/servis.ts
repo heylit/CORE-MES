@@ -44,7 +44,7 @@ import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
-  makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
+  hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
 } from '../uretim-emirleri/disari.ts';
@@ -323,6 +323,8 @@ async function isEmriTaslaklari(
     const anahtar = `${g.emir.parcaNo}\n${String(N)}`;
     if (!aqlPlanlari.has(anahtar)) aqlPlanlari.set(anahtar, tmiAqlPlani(await muayenePlaniOner(db, { parcaNo: g.emir.parcaNo, N, ayar: null })));
   }
+  const acikAdimi = (ie: { id: number; uretimEmriId: number }) => emirler.get(ie.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === ie.id);
+  const hatali = await hataliToplamlari(db, girdiler.flatMap((g) => (acikAdimi(g.isEmri)?.hataliAdet === undefined ? [g.isEmri.uretimEmriId] : [])));
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = g.istasyon?.tip === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
@@ -338,8 +340,9 @@ async function isEmriTaslaklari(
     // Hazırlık sırası işin bugünkü istasyonundaysa geçerlidir: plan işi başka istasyona aldıysa iş orada sırasız (plan sırasıyla) durur.
     const sira = kuyruk.get(kimlik);
     const kuyrukSirasi = sira !== undefined && g.istasyon?.id === sira.istasyonId ? { sira: sira.sira, kisi: sira.kisi, zaman: sira.zaman } : null;
-    const adim = emirler.get(g.isEmri.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === g.isEmri.id);
-    sonuc.set(kimlik, hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik), adim?.hataliAdet));
+    const adim = acikAdimi(g.isEmri);
+    sonuc.set(kimlik, hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik),
+      adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)));
   }
   return sonuc;
 }
@@ -374,12 +377,55 @@ async function paketEmriBitti(db: Db, paketId: string): Promise<boolean> {
   return emirId !== null && (await emirDurumlari(db, [emirId])).get(emirId) === 'bitti';
 }
 
+// 1853: adımın hatalı toplamı (1188) çalışan adımda acikAdimlar'dan gelir; bekleyen ve bitmiş adımda Arkon onu uretim-emirleri'nin hatalı
+// kayıt listesinden toplar (emir başına tek okuma). Liste sınırına dayanan emirde toplam eksik olabilir: bilinmez sayılır, alan yazılmaz.
+// Sınır uretim-emirleri'nin HATALI_LISTE_SINIRI'dır; disari.ts vermediği için aynı sayı burada tutulur.
+const HATALI_LISTE_SINIRI = 500;
+type HataliToplami = (emirId: number | null, isEmriId: number) => number | undefined;
+async function hataliToplamlari(db: Db, emirIdleri: Iterable<number | null>): Promise<HataliToplami> {
+  const okunan = new Set<number>();
+  const toplam = new Map<number, number>();
+  for (const emirId of new Set(emirIdleri)) {
+    if (emirId === null) continue;
+    const kayitlar = await hataliKayitlari(db, { acik: false, emirId });
+    if (kayitlar.length >= HATALI_LISTE_SINIRI) continue;
+    okunan.add(emirId);
+    // Liste hedef emri bu olan (kola ayrılmış) başka emrin kayıtlarını da verir; adım kendi emrinin kaydıyla sayılır.
+    for (const k of kayitlar) if (k.uretimEmri.id === emirId) toplam.set(k.isEmri.id, (toplam.get(k.isEmri.id) ?? 0) + k.adet);
+  }
+  return (emirId, isEmriId) => (emirId !== null && okunan.has(emirId) ? (toplam.get(isEmriId) ?? 0) : undefined);
+}
+
+// Taslağı olmayan (bitmiş adımın) kayıtlı iş emri paketlerinin hatalı toplamı; yalnız açık (planlı ya da başlamış) emirde okunur, kapanmış
+// emrin paketi kayıtlı hâliyle kalır.
+async function bitmisAdimHatalilari(
+  db: Db, paketler: readonly KayitliPaket[], isEmri: ReadonlyMap<string, unknown>, acikEmirIdleri?: ReadonlySet<number>,
+): Promise<HataliToplami> {
+  const adaylar = paketler.flatMap((b) => {
+    const emirId = paketIsEmri(b.kimlik) === null || isEmri.has(b.kimlik) ? null : paketinEmri(b.kimlik, b.govde);
+    return emirId === null ? [] : [emirId];
+  });
+  const acik = acikEmirIdleri ?? new Set([...(await emirDurumlari(db, adaylar))].flatMap(([id, d]) => (d === 'planli' || d === 'basladi' ? [id] : [])));
+  return hataliToplamlari(db, adaylar.filter((id) => acik.has(id)));
+}
+
+const nesneMi = (d: unknown): d is Record<string, unknown> => d !== null && typeof d === 'object' && !Array.isArray(d);
+
 // Kayıtlı iş emri paketine TMI alanları yazılır; değiştiyse sürüm de değişir (kurallar.ts `tmiBirlesikSurum`).
-function tmiIleBirlestir<T extends KayitliPaket>(b: T, isEmri: ReadonlyMap<string, Record<string, unknown>>): T {
-  if (paketIsEmri(b.kimlik) === null) return b;
-  const taslak = isEmri.get(b.kimlik) ?? plansizKaynak(b.govde);
+function tmiIleBirlestir<T extends KayitliPaket>(b: T, isEmri: ReadonlyMap<string, Record<string, unknown>>, hatali?: HataliToplami): T {
+  const isEmriId = paketIsEmri(b.kimlik);
+  if (isEmriId === null) return b;
+  const kayitli = plansizKaynak(b.govde);
+  const taslak = isEmri.get(b.kimlik)
+    ?? (nesneMi(kayitli) ? hataliAlaniniEkle(kayitli, hatali?.(paketinEmri(b.kimlik, b.govde), isEmriId)) : kayitli);
   const govde = tmiAlanlariniYaz(b.govde, taslak);
   return govde === b.govde ? b : { ...b, govde, surum: tmiBirlesikSurum(b.surum, b.govde, govde) };
+}
+
+// Tek paketin okuması: liste okumasıyla aynı TMI alanları ve sürüm (yazım ve silme tabanı buna göre denetlenir).
+async function tmiyleOku<T extends KayitliPaket>(db: Db, b: T, taslak: Record<string, unknown> | null): Promise<T> {
+  const kaynak = new Map(taslak === null ? [] : [[b.kimlik, taslak]]);
+  return tmiIleBirlestir(b, kaynak, await bitmisAdimHatalilari(db, [b], kaynak));
 }
 
 // Açık iş emri paketinin yeri (taslaktaki gibi: makine kaynağında makinenin istasyonu, kişi kaynağında iş emrininki). Kayıt ve ileti kapsamı
@@ -560,7 +606,8 @@ async function belgelerHam(db: Db, depo: ArkonDeposu) {
       return emirId === null || durumlar.get(emirId) !== 'iptal';
     });
     const { yeni, isEmri } = await tmiTaslaklari(db, kayitli, acik);
-    return [...gorunen.map((b) => bitenIsaretle(b, tmiIleBirlestir(b, isEmri), durumlar.get(paketinEmri(b.kimlik, b.govde) ?? -1) === 'bitti')), ...yeni];
+    const hatali = await bitmisAdimHatalilari(db, gorunen, isEmri, acikKimlikler);
+    return [...gorunen.map((b) => bitenIsaretle(b, tmiIleBirlestir(b, isEmri, hatali), durumlar.get(paketinEmri(b.kimlik, b.govde) ?? -1) === 'bitti')), ...yeni];
   }
   if (depo === 'logi') return stokDurumlariyla(db, kayitli);
   if (depo === 'downs') return durusBelgeleri(db);
@@ -642,7 +689,7 @@ export async function belge(db: Db, kullanici: Kullanici, depo: ArkonDeposu, kim
   const isEmriId = depo === 'pkgs' ? paketIsEmri(kimlik) : null;
   const taslak = isEmriId === null ? null : await isEmriTaslagi(db, kimlik);
   if (isEmriId !== null) {
-    const { surum, govde } = tmiIleBirlestir({ kimlik, surum: bulunan.surum, govde: bulunan.govde }, new Map(taslak === null ? [] : [[kimlik, taslak]]));
+    const { surum, govde } = await tmiyleOku(db, { kimlik, surum: bulunan.surum, govde: bulunan.govde }, taslak);
     bulunan = { surum, govde };
   }
   if (depo === 'pkgs' && (await paketEmriBitti(db, kimlik))) {
@@ -708,8 +755,7 @@ export async function belgeYaz(
   await kapsaminda(db, kullanici, depo, kimlik, g.govde);
   if (belgeRoluReddi(depo, g.govde, guncel?.govde, rol)) throw yetkiYok(ILETILER.kaliteKarari);
   if (bitmisIsReddi(depo, g.govde, guncel?.govde)) throw yetkiYok(ILETILER.bitmisIs);
-  const birlesik = guncel === null || isEmriId === null ? guncel
-    : tmiIleBirlestir({ kimlik, surum: guncel.surum, govde: guncel.govde }, new Map(tmiKaynagi === null ? [] : [[kimlik, tmiKaynagi]]));
+  const birlesik = guncel === null || isEmriId === null ? guncel : await tmiyleOku(db, { kimlik, surum: guncel.surum, govde: guncel.govde }, tmiKaynagi);
   const okunan = guncel === null || birlesik === null || depo !== 'pkgs' ? birlesik
     : bitenIsaretle({ kimlik, surum: guncel.surum, govde: guncel.govde }, { kimlik, surum: birlesik.surum, govde: birlesik.govde }, await paketEmriBitti(db, kimlik));
   if (yazimCakisiyorMu(mevcut, tabanCoz(g.taban, guncel, okunan?.govde)) && okunan !== null) {
@@ -913,8 +959,7 @@ export async function belgeSil(
   const onceki = mevcut === null ? null : await sorgular.belge(db, depo, kimlik);
   const isEmriId = depo === 'pkgs' ? paketIsEmri(kimlik) : null;
   const tmiKaynagi = isEmriId === null || onceki === null ? null : await isEmriTaslagi(db, kimlik);
-  const okunan = onceki === null || isEmriId === null ? onceki
-    : tmiIleBirlestir({ kimlik, surum: onceki.surum, govde: onceki.govde }, new Map(tmiKaynagi === null ? [] : [[kimlik, tmiKaynagi]]));
+  const okunan = onceki === null || isEmriId === null ? onceki : await tmiyleOku(db, { kimlik, surum: onceki.surum, govde: onceki.govde }, tmiKaynagi);
   if (silmeCakisiyorMu(mevcut, tabanCoz(g.taban, onceki, okunan?.govde) ?? g.taban)) throw eskiSurum();
   if (depo === 'logi' && stokaBagliMi(onceki?.govde)) throw yetkiYok(ILETILER.stokIstegi);
   await sorgular.belgeSil(db, depo, kimlik);
