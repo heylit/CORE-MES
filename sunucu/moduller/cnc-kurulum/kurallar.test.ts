@@ -5,7 +5,7 @@ import {
   asinmaBindir,
   elleUretimKaydiVarMi,
   degerBicimeUyarMi, emirAnligi, emirDurumu, hazirlikAyniMi, kurulumIzi, hazirlikOlaylari, hazirlikOnaylariDegistiMi, hazirlikOnaylariniBindir, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sonOnayAdimlariTamamMi, sonOnaySiraDisiMi, stokBindir, surumUyarMi,
-  kurulumYukleri, sayimKullanimi, takimDurumu, takimOlayiSatirlari,
+  kurulumEksikAdimlari, kurulumYukleri, sayimKullanimi, takimDurumu, takimOlayiSatirlari,
 } from './kurallar.ts';
 
 describe('cnc-kurulum kuralları (saf)', () => {
@@ -196,6 +196,19 @@ describe('cnc-kurulum kuralları (saf)', () => {
     // Takım imzaları ortak önek taşısa da arama sınırda kalır, yanlış dizilişi reddeder.
     const cok = Object.fromEntries(Array.from({ length: 120 }, (_, i) => [`T${String(i + 1)}`, 'a']));
     assert.equal(sonOnayAdimlariTamamMi(durum({ ...done, ...cok }, imza(`${Array(120).fill('a').join('#')}#b`))), false);
+  });
+
+  test('CK-K26 (K13 a): "kurulum tamam" eksik adımları: genel adımlar, seçili tezgâhın dolu cepleri, ölçüm ve sarf', () => {
+    const genel = ['machine', 'material', 'fixture', 'jaw', 'zero', 'wcs', 'coolant'];
+    const isaret = (a: readonly string[]) => ({ adimlar: Object.fromEntries(a.map((x) => [x, true])) });
+    const durum = { machine: 'm1', tools: { m1: ['a', 'empty', 'probe', ''], m2: ['x'] } };
+    assert.deepEqual(kurulumEksikAdimlari(durum, null), [...genel, 'T1', 'T3', 'gauges', 'cons']);
+    assert.deepEqual(kurulumEksikAdimlari(durum, isaret([...genel, 'T1', 'T3', 'gauges', 'cons'])), []);
+    assert.deepEqual(kurulumEksikAdimlari(durum, isaret([...genel, 'T1', 'gauges', 'cons'])), ['T3']);
+    assert.deepEqual(kurulumEksikAdimlari(durum, { adimlar: { ...isaret([...genel, 'T1', 'T3', 'gauges']).adimlar, cons: 'evet' } }), ['cons']);
+    // Magazini kayıtta olmayan tezgâhta cep aranmaz; bozuk durum ve işaret eksik sayılır.
+    assert.deepEqual(kurulumEksikAdimlari({ machine: 'm3', tools: durum.tools }, isaret([...genel, 'gauges', 'cons'])), []);
+    assert.deepEqual(kurulumEksikAdimlari('x', 'y'), [...genel, 'gauges', 'cons']);
   });
 
   test('CK-K25 (153 a): bağlı kalemin adedi stoktan, kritik seviye ve yer prototipten; stoksuz kart null; bağsız kalem ve durum dışı değer aynen', () => {

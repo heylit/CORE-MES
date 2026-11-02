@@ -19,7 +19,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import {
   AZAMI_OLAY, KURULUM_ADIMI, asinmaBindir, degerBicimeUyarMi, elleUretimKaydiVarMi, emirAnligi, emirDurumu, hazirlikAyniMi, hazirlikOlaylari, hazirlikOnaylariDegistiMi,
-  hazirlikOnaylariniBindir, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
+  hazirlikOnaylariniBindir, kurulumEksikAdimlari, kurulumIzi, kurulumYukleri, degerCokBuyukMu, nulKarakteriVarMi, onayVarMi, sayimKullanimi, sonOnaySiraDisiMi, stokBindir, surumUyarMi, takimDurumu, takimOlayiSatirlari,
   hedefSutunu, modelBelgesiSec, modelDosyasiMi, modelKaydi, tezgahKaydi, tezgahListesi, tezgahOlabilirMi,
 } from './kurallar.ts';
 import type { StokKalemi, TakimDurumu } from './kurallar.ts';
@@ -41,6 +41,7 @@ const BUYUK_ILETISI = 'Kurulum kaydı 1 MB sınırını aşıyor ve kaydedilmedi
 const ONAY_UCU_ILETISI = 'Hazırlık onayları yalnız hazırlık onayıyla değiştirilir.';
 const URETIM_ADEDI_ILETISI = 'Üretim adedi yalnız Üretim Terminali\'nden girilir.';
 const SIRA_ILETISI = 'Son onay için hazırlığın bütün adımları onaylanmış olmalıdır.';
+const KURULUM_EKSIK_ILETISI = 'Kurulum tamam için kurulum kartındaki bütün adımlar seçilmiş olmalıdır.';
 const EMIR_ILETISI = 'Üretim emri ve emirlerin kurulumları yalnız emir seçimiyle değişir.';
 // Emir ve emirlerin saklanan kurulumları genel uçtan yazılmaz, silinmez: emir değişince kurulum emre saklanmadan değişirdi.
 const emirKaydiMi = (anahtar: string): boolean => anahtar === EMIR_ANAHTARI || anahtar.startsWith(EMIR_ANLIK_ONEKI);
@@ -245,7 +246,15 @@ export async function kurulumTamam(db: Db, kullanici: Kullanici, g: KurulumTamam
   const secili = await seciliIsEmri(db);
   if (secili === null) throw dogrulama('Önce iş emrini seçin.', 'emir');
   const durum = (await sorgular.kayitGetir(db, DURUM_ANAHTARI))?.deger ?? null;
-  await sorgular.hazirlikOlaylariEkle(db, [{ adim: KURULUM_ADIMI, olay: 'tamam', imza: kurulumImzasi(durum) }], secili, kullanici.id);
+  const eksik = kurulumEksikAdimlari(durum, (await sorgular.kayitGetir(db, SECIM_ANAHTARI))?.deger ?? null);
+  if (eksik.length > 0) throw gecersiz(`${KURULUM_EKSIK_ILETISI} Eksik: ${eksik.slice(0, 5).join(', ')}${eksik.length > 5 ? ` ve ${String(eksik.length - 5)} adım daha` : ''}.`);
+  const imza = kurulumImzasi(durum);
+  // Aynı seçimlerle ikinci "kurulum tamam" (çift tıklama, yinelenen istek) deftere ikinci satır yazmaz: kayıt zaten geçerlidir.
+  if ((await sorgular.kurulumSonu(db, secili.isEmriId))?.imza === imza) {
+    const mevcut = await kurulumDurumu(db, secili.isEmriId, durum);
+    if (mevcut !== null) return { kurulum: mevcut };
+  }
+  await sorgular.hazirlikOlaylariEkle(db, [{ adim: KURULUM_ADIMI, olay: 'tamam', imza }], secili, kullanici.id);
   // Takım ömrü (295 a): kurulan magazin iş emrinin istasyonuna yük olarak yazılır; istasyonsuz iş emrinde yük yoktur.
   const istasyonId = (await acikIsEmri(db, secili.isEmriId))?.istasyonId ?? null;
   if (istasyonId !== null) await sorgular.takimYukleriniYaz(db, istasyonId, kurulumYukleri(durum), kullanici.id);
