@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { RrHatasi, useRrKomutu, type KomutGovdesi, type RrDurumu } from '../veri.ts';
 
@@ -11,7 +11,12 @@ export function useEmirKomutu() {
   const komut = useRrKomutu();
   const { bildir } = useBildirim();
   const [uyari, setUyari] = useState<EmirUyarisi | null>(null);
+  // Düğmenin meşgul hâli ancak yeniden çizimde gelir; çift tıkın ikinci tıkı ondan önce düşer ve ikinci emri açardı. Komut sürerken
+  // gelen ikinci komut sessizce düşer (sıralı komutlar, ör. açılıştan sonra bölme, öncekinin bitmesini bekler).
+  const suruyor = useRef(false);
   const calistir = async (ad: string, govde: KomutGovdesi, basari?: string): Promise<KomutCevabi> => {
+    if (suruyor.current) return { tamam: false, sonuc: null, durum: null };
+    suruyor.current = true;
     try {
       const c = await komut.mutateAsync({ ad, govde });
       setUyari(null);
@@ -22,6 +27,8 @@ export function useEmirKomutu() {
       setUyari({ metin: r.message, eskiSurum: r.eskiSurum });
       bildir('hata', r.message);
       return { tamam: false, sonuc: null, durum: null };
+    } finally {
+      suruyor.current = false;
     }
   };
   return { calistir, bildir, mesgul: komut.isPending, uyari, uyariKapat: () => { setUyari(null); } };

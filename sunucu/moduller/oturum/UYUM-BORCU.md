@@ -24,7 +24,7 @@ Yok.
 5. Hesap kilidi (14.10.2026), bağlamada kapanacak:
    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kilit Güvenlik Merkezi alarmı açar (`guvenlik/kurallar.ts` "Hesap kilitlendi"; test `guvenlik.test.ts` "hesap kilidi: her yeni kilit orta önemli alarm açar"). Yöneticiye bildirim yok. Kodda yöneticiye bir şey ulaştıran var olan yol bulunamadı: "Ne oldu?" paneli yalnız gezinmedir,
      `mesaj` kendi deposunu tutar ve dışarı yazma açmaz, denetim kaydı yalnız başarılı komutu yazar. Kilit bugün tabloda
-     (`oturum_hesap_kilidi`) ve sunucu günlüğünde (uyarı satırı) görünür, `GET /oturum/kilitler` ile okunur.
+     (`oturum_hesap_kilidi`) ve sunucu günlüğünde (uyarı satırı) görünür, Güvenlik Merkezi `GET /guvenlik/kilitler` ile okunur (oturum kapısı 1778'de kalktı).
      Nasıl: ortak bildirim yolu gelince kilitlenme olayı ona bağlanır.
    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kilit listesi ve açma Güvenlik Merkezi ekranında (`istemci/src/moduller/guvenlik/Takip.tsx` `/guvenlik/kilitler`, `.../ac`). Ekran yok: kilit listesi ve açma yalnız uçta. Nasıl: ayrı güvenlik sayfası (tasarımda) bu iki ucu kullanır;
      ara çözüm olarak kişiler ekranına "kilidi aç" eylemi eklenmedi.

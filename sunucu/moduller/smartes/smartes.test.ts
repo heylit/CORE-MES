@@ -313,6 +313,28 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal((await istek('POST', '/smartes/eslemeler/kaldir', { tur: 'istasyon', tmiId: b, surum: 1 }, okuyucu)).statusCode, 403);
   });
 
+  test('SMS-2: pasife alınan makinenin eşlemesi listede kalır, değiştirilir ve kaldırılır; serbest kalan kod başka makineye verilir', async () => {
+    const sahip = ortam!.sahip;
+    const ist = await istasyonAc();
+    const makine = async () => (await sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id',
+      [`SMP${(sayac += 1)}`, 'Tezgah', ist]))!.id;
+    const [eski, yeni] = [await makine(), await makine()];
+    const ata = (g: object, c = yonetici) => istek('POST', '/smartes/eslemeler/ata', g, c);
+    assert.equal((await ata({ tur: 'makine', tmiId: eski, smartesKod: 'PM1', surum: null })).statusCode, 200);
+    await sahip.sorgu('UPDATE makine SET aktif = false WHERE id = $1', [eski]);
+    const liste = await istek('GET', '/smartes/eslemeler?tur=makine', undefined, okuyucu);
+    assert.equal(liste.statusCode, 200, liste.body);
+    const satir = (liste.json() as { satirlar: { tmiId: number; aktif: boolean; smartesKod: string | null }[] }).satirlar.find((s) => s.tmiId === eski);
+    assert.deepEqual(satir && { a: satir.aktif, k: satir.smartesKod }, { a: false, k: 'PM1' });
+    // Kod pasif makinede durdukça başkasına verilmez; pasif makinenin eşlemesi değiştirilir ve kaldırılır.
+    assert.equal((await ata({ tur: 'makine', tmiId: yeni, smartesKod: 'PM1', surum: null })).statusCode, 409);
+    const r = await ata({ tur: 'makine', tmiId: eski, smartesKod: 'PM2', surum: 1 });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.equal((await istek('POST', '/smartes/eslemeler/kaldir', { tur: 'makine', tmiId: eski, surum: 2 }, okuyucu)).statusCode, 403);
+    assert.equal((await istek('POST', '/smartes/eslemeler/kaldir', { tur: 'makine', tmiId: eski, surum: 2 })).statusCode, 200);
+    assert.equal((await ata({ tur: 'makine', tmiId: yeni, smartesKod: 'PM2', surum: null })).statusCode, 200);
+  });
+
   // Rotalı emir: iki adım; ilk adımın istasyonu SmartES eşlemeli, ikincininki `ikinciEslemeli` değilse eşlemesiz.
   async function emirKur(ikinciEslemeli = false): Promise<{ uretimEmriId: number; ilk: number; ikinci: number }> {
     const sahip = ortam!.sahip;

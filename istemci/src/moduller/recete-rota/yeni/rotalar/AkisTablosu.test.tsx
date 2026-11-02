@@ -47,6 +47,21 @@ describe('R1 akış tablosu: izinli', () => {
 });
 
 describe('R1 akış tablosu: reddedilen', () => {
+  it('eksi, sayı olmayan ve 99.999 dk üstü süre yazılmaz: girdi alanda kalır, altında nedeni görünür (RR-3)', async () => {
+    const istekler = sunucuKur(YONETICI, { durum: rotaDurumu() });
+    rrAc('/recete-rota/schema');
+    const tablo = await tabloAc();
+    const islem = within(tablo).getByLabelText('İşlem dk') as HTMLInputElement;
+    for (const [girdi, ileti] of [['-3', 'Eksi olamaz.'], ['abc', 'Sayı girin.'], ['99999999', 'En çok 99.999 olabilir.']] as const) {
+      fireEvent.change(islem, { target: { value: girdi } });
+      fireEvent.blur(islem);
+      expect(islem.value).toBe(girdi);
+      expect(await within(tablo).findByRole('alert')).toHaveProperty('textContent', ileti);
+    }
+    await new Promise((r) => { setTimeout(r, 1500); });
+    expect(rotaYazmalari(istekler)).toEqual([]);
+  });
+
   it('yalnız okuyan kişide alanlar kapalıdır, ekleme ve silme düğmesi yoktur, yazma gitmez', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');

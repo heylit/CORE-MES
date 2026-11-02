@@ -178,6 +178,18 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(mudur, `/siparisler/${s.id}/onayla`, { surum: s.surum })).statusCode, 200);
   });
 
+  test('SIP-11: planlama üstteki satırı silince alttaki satırın fiyatı korunur', async () => {
+    const planlama = (await girisYap('planlama_proje')).cerez;
+    const satir = (miktar: string, birimFiyat: string | null) => ({ malzemeNo: mamulNo, miktar, birimFiyat, termin: null, aciklama: null });
+    const c = await gonder(yonetici, '/siparisler/ekle', govde({ satirlar: [satir('10', '250'), satir('4', '75')] }));
+    assert.equal(c.statusCode, 200, c.body);
+    const s = c.json<SiparisAyrintisi>();
+    const p = await gonder(planlama, `/siparisler/${s.id}/guncelle`, { ...govde({ satirlar: [satir('4.000', null)] }), surum: s.surum });
+    assert.equal(p.statusCode, 200, p.body);
+    const sonra = (await oku(yonetici, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+    assert.deepEqual(sonra.satirlar.map((x) => [x.miktar, x.birimFiyat]), [['4.000', '75.0000']]);
+  });
+
   test('SIP-01 tedarikçi firmaya ve olmayan firmaya sipariş açılmaz; müşteriye açılır', async () => {
     const t = await gonder(yonetici, '/siparisler/ekle', govde({ firmaId: tedarikciId }));
     assert.equal(t.statusCode, 400, t.body);

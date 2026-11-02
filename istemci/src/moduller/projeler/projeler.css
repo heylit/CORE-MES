@@ -14,11 +14,13 @@
 /* Statü çipi: rengi tondan gelir; elle yazılmış statü gri ve kesik çerçevelidir (listede değildir). */
 .tc-prj-statu {
   --c: var(--idle);
-  display: inline-flex; align-items: center; gap: var(--b-2); max-width: 100%;
+  display: inline-block; max-width: min(100%, 16rem);
   padding: var(--b-1) var(--b-3); border: 1px solid var(--c); border-radius: var(--yari-tam);
   font-size: var(--yazi-s); font-weight: 700; color: var(--c);
   background: color-mix(in srgb, var(--c) 12%, transparent);
-  overflow-wrap: anywhere;
+  /* "anywhere" tablo sütununun en dar genişliğini harfe indirir, kısa ad heceden bölünür. break-word yalnız tavanı aşan uzun adı böler;
+     tavan, boşluksuz uzun adın sütunu sınırsız genişletmesini önler. */
+  overflow-wrap: break-word;
 }
 .tc-prj-statu[data-ton="tamam"] { --c: var(--run); }
 .tc-prj-statu[data-ton="uyari"] { --c: var(--hold); }

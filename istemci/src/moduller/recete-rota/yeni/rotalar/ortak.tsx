@@ -46,29 +46,43 @@ export function fasonAdi(firmalar: readonly { id: string; code: string | null; n
 }
 
 // Sayı alanı: yazarken yerel kalır, alandan çıkınca ya da Enter ile işlenir (her tuşta taslak yazılmaz). Boş metin null'dır.
-export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu }: {
-  etiket: string; deger: number | null; yaz: (v: number | null) => void; kapali?: boolean; yerTutucu?: string; birim?: string; ipucu?: string;
+// Bu alanların hepsi süre, miktar ya da yüzdedir: eksi kabul edilmez. Geçersiz girdi silinmez ve yazılmaz; altında nedeni görünür.
+export const SURE_EN_COK = 99_999;
+
+export function sayiAlaniHatasi(metin: string, enCok?: number): string | null {
+  if (metin.trim() === '') return null;
+  const v = sayiGirisi(metin);
+  if (v === null) return 'Sayı girin.';
+  if (v < 0) return 'Eksi olamaz.';
+  if (enCok !== undefined && v > enCok) return `En çok ${sayi(enCok)} olabilir.`;
+  return null;
+}
+
+export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu, enCok }: {
+  etiket: string; deger: number | null; yaz: (v: number | null) => void; kapali?: boolean; yerTutucu?: string; birim?: string; ipucu?: string; enCok?: number;
 }) {
   const metin = deger === null ? '' : String(deger).replace('.', ',');
   const [yerel, setYerel] = useState(metin);
-  useEffect(() => { setYerel(metin); }, [metin]);
+  const [hata, setHata] = useState<string | null>(null);
+  useEffect(() => { setYerel(metin); setHata(null); }, [metin]);
   const isle = () => {
-    if (yerel === metin) return;
-    const v = sayiGirisi(yerel);
-    if (yerel.trim() !== '' && v === null) { setYerel(metin); return; }
-    yaz(v);
+    if (yerel === metin) { setHata(null); return; }
+    const h = sayiAlaniHatasi(yerel, enCok);
+    setHata(h);
+    if (h === null) yaz(sayiGirisi(yerel));
   };
   return (
     <label className="tc-rr1-alan">
       <span>{etiket}</span>
       <span className="tc-rr1-alan-ic">
         <input
-          className="tc-rr1-sayi" inputMode="decimal" value={yerel} disabled={kapali} placeholder={yerTutucu} aria-label={etiket}
+          className="tc-rr1-sayi" inputMode="decimal" value={yerel} disabled={kapali} placeholder={yerTutucu} aria-label={etiket} aria-invalid={hata !== null || undefined}
           onChange={(e) => { setYerel(e.target.value); }} onBlur={isle}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); isle(); } }}
         />
         {birim && <small>{birim}</small>}
       </span>
+      {hata && <small className="tc-rr1-hata" role="alert">{hata}</small>}
       {ipucu && <small className="tc-rr1-ipucu">{ipucu}</small>}
     </label>
   );

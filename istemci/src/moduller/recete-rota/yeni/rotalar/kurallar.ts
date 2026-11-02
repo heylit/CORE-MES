@@ -32,7 +32,10 @@ export const OP_GRUPLARI: readonly (readonly [string, string])[] = [
   ['KAP', 'Kaplama'], ['BOY', 'Boya'], ['MRK', 'Markalama'], ['MON', 'Montaj'], ['KAL', 'Kalite kontrol'], ['PAK', 'Paketleme ve sevk'], ['FAS', 'Fason'],
 ];
 
-export const turKisa = (tur: string): string => TUR_KISA[tur] ?? tur;
+// Rota modülünün önizlemesi malzeme türünü katalog adıyla verir (hammadde, yarimamul); ekran kısa adı ve rengi yerel türden alır.
+const SUNUCU_TURU: Readonly<Record<string, string>> = { hammadde: 'ham', yarimamul: 'yari' };
+export const yerelTur = (tur: string): string => SUNUCU_TURU[tur] ?? tur;
+export const turKisa = (tur: string): string => TUR_KISA[yerelTur(tur)] ?? tur;
 export const kucuk = (m: string): string => m.toLocaleLowerCase('tr-TR');
 
 /* ---------------- süreler ---------------- */
@@ -187,7 +190,7 @@ export function rotaEksikleri(adimlar: readonly Adim[], malzemeVar: (id: string)
     if (!fasonMu(s) && s.ayarli === true && s.ayarDk == null) m.push('ayar işaretli; ayar süresi girilmeli');
     if (m.length) {
       const ad = opAdi(s.opId);
-      l.push({ adimId: s.id, metin: `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}: ${m.join(', ')}` });
+      l.push({ adimId: s.id, metin: `OP ${String(statuNo(s))}${ad ? ` ${ad}` : ''}: ${m.join(', ')}` });
     }
   });
   return l;
@@ -201,7 +204,7 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
     const sonraki = ss[i + 1];
     if (!fasonMu(s) || (sonraki && opKodu(sonraki.opId) === GKK_KODU)) return [];
     const ad = opAdi(s.opId);
-    return [{ adimId: s.id, metin: `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}` }];
+    return [{ adimId: s.id, metin: `OP ${String(statuNo(s))}${ad ? ` ${ad}` : ''}` }];
   });
 }
 
@@ -429,7 +432,7 @@ const J = (v: unknown): string => JSON.stringify(v);
 const sayiBicim = (v: number, n: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: n });
 export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari): string[] {
   const out: string[] = [];
-  const nm = (s: Adim) => `OP ${String(s.seq)} ${ad.op(s.opId)}`;
+  const nm = (s: Adim) => `OP ${String(statuNo(s))} ${ad.op(s.opId)}`;
   const am = new Map(A.map((s) => [s.id, s])); const bm = new Map(B.map((s) => [s.id, s]));
   for (const s of B) if (!am.has(s.id)) out.push(`Yeni adım: ${nm(s)}`);
   for (const s of A) if (!bm.has(s.id)) out.push(`Silinen adım: ${nm(s)}`);
@@ -472,7 +475,7 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
 /* ---------------- kaydet gövdesi ---------------- */
 
 const kimlik = (v: string, s: Adim, ne: string): number => {
-  if (!/^\d+$/.test(v)) throw new Error(`OP ${String(s.seq)}: ${ne} sunucudaki kayıtla eşleşmiyor (eski kayıt); rota rota modülüne kaydedilmedi.`);
+  if (!/^\d+$/.test(v)) throw new Error(`OP ${String(statuNo(s))}: ${ne} sunucudaki kayıtla eşleşmiyor (eski kayıt); rota rota modülüne kaydedilmedi.`);
   return Number(v);
 };
 const BAGIMLILIK_SUNUCU: Readonly<Record<Bagimlilik, string>> = { bagimli: 'bekleyen', ortulu: 'akisli', bagimsiz: 'bagimsiz' };
@@ -483,7 +486,7 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
   const izinli = new Set(izinliOpNolar);
   return sirali(adimlar).map((s) => {
     const op = operasyon(s.opId);
-    if (!op) throw new Error(`OP ${String(s.seq)}: operasyon tanımı Operasyonlar bölümündeki karta bağlı değil; rota rota modülüne kaydedilmedi.`);
+    if (!op) throw new Error(`OP ${String(statuNo(s))}: operasyon tanımı Operasyonlar bölümündeki karta bağlı değil; rota rota modülüne kaydedilmedi.`);
     const mk = s.machineId ? kimlik(s.machineId, s, 'Makine') : null;
     const ist = s.stationId ? kimlik(s.stationId, s, 'İstasyon') : null;
     const kaynak = mk ? { tur: 'makine', id: mk } : ist ? { tur: 'istasyon', id: ist } : s.fasonId ? { tur: 'fason', id: Number(s.fasonId) }
@@ -543,7 +546,7 @@ export function rotaHataMetni(ileti: string, alan: string | null, adimlar: reado
   const s = n ? sirali(adimlar)[Number(n[1])] : undefined;
   if (!s) return ileti;
   const ad = opAdi(s.opId);
-  return `OP ${String(s.seq)}${ad ? ` ${ad}` : ''}: ${ileti.replace(/^OP \d+: /, '')}`;
+  return `OP ${String(statuNo(s))}${ad ? ` ${ad}` : ''}: ${ileti.replace(/^OP \d+: /, '')}`;
 }
 
 // Malzeme seçici (Girenler, Yan ürünler): koda ve ada göre süzer, türe göre süzgeç; kodu yazılanla başlayan önce gelir.

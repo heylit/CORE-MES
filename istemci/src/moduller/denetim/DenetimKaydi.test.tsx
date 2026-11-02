@@ -16,6 +16,7 @@ const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.d
 const SATIRLAR: KayitSatiri[] = [
   { id: 12, zaman: '2026-10-07T10:00:00.000+03:00', kisiId: 2, kisiAd: 'Deneme Müdür', yontem: 'POST', yol: '/uretim-emirleri/:id/baslat', modul: 'uretim-emirleri', yetki: 'uretim-emirleri.yaz', kimlikler: { id: 41 } },
   { id: 11, zaman: '2026-10-07T09:00:00.000+03:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/oturum/giris', modul: null, yetki: null, kimlikler: {} },
+  { id: 10, zaman: '2026-10-07T08:30:00.000+03:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/oturum/giris', modul: 'oturum', yetki: 'acik', kimlikler: {} },
 ];
 const SECENEKLER = {
   kisiler: [{ id: 2, ad: 'Deneme Müdür' }],
@@ -81,14 +82,31 @@ describe('DenetimKaydi', () => {
     expect(screen.getByRole('cell', { name: 'Üretim emri 41' })).toBeTruthy();
     expect(screen.queryByRole('cell', { name: 'POST /uretim-emirleri/:id/baslat' })).toBeNull();
     expect(screen.getByRole('cell', { name: 'POST /oturum/giris' })).toBeTruthy();
-    expect(screen.getByText('Oturumsuz')).toBeTruthy();
+    expect(screen.getAllByText('Oturumsuz').length).toBe(2);
+    expect(screen.getByRole('cell', { name: 'Oturumsuz işlem' })).toBeTruthy();
+    expect(screen.queryByRole('cell', { name: 'acik' })).toBeNull();
     expect(screen.queryByRole('button', { name: /sil|kaydet|düzenle/i })).toBeNull();
+  });
+
+  it('ters tarih aralığı: istek gitmez, Bitiş alanı nedenini söyler, genel hata çıkmaz; düzeltince liste gelir', async () => {
+    const yollar = sunucuKur(MUDUR);
+    ac();
+    await screen.findByRole('cell', { name: 'Oturumsuz işlem' });
+    fireEvent.change(screen.getByLabelText('Başlangıç'), { target: { value: '2026-11-05' } });
+    fireEvent.change(screen.getByLabelText('Bitiş'), { target: { value: '2026-11-01' } });
+    expect(await screen.findByText('Bitiş tarihi başlangıçtan önce olamaz.')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.queryByText(/Veri alınamadı/)).toBeNull();
+    expect(yollar.some((y) => y.includes('bitis=2026-11-01'))).toBe(false);
+    fireEvent.change(screen.getByLabelText('Bitiş'), { target: { value: '2026-11-06' } });
+    await waitFor(() => expect(yollar.some((y) => y.includes('baslangic=2026-11-05') && y.includes('bitis=2026-11-06'))).toBe(true));
+    expect(screen.queryByText('Bitiş tarihi başlangıçtan önce olamaz.')).toBeNull();
   });
 
   it('kişi süzgeci sunucuya kisi olarak gider ve listeyi daraltır', async () => {
     const yollar = sunucuKur(MUDUR);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Deneme Müdür' })).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Kişi'), { target: { value: '2' } });
     await waitFor(() => expect(screen.queryByText('Oturumsuz')).toBeNull());
@@ -100,7 +118,7 @@ describe('DenetimKaydi', () => {
   it('modül süzgeci sunucuya modul olarak gider; ayrıntıda teknik komut da görünür', async () => {
     const yollar = sunucuKur(MUDUR);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     await waitFor(() => expect(screen.getByRole('option', { name: 'Üretim emirleri' })).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Modül'), { target: { value: 'uretim-emirleri' } });
     await waitFor(() => expect(yollar.some((y) => y.includes('modul=uretim-emirleri'))).toBe(true));
@@ -119,7 +137,7 @@ describe('DenetimKaydi', () => {
   it('içerik yetkisi olan gövdeyi maskeli ve düz metin olarak görür', async () => {
     const yollar = sunucuKur(YONETICI);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     await waitFor(() => expect(yollar).toContain('/oturum'));
     fireEvent.click(screen.getByRole('cell', { name: 'Üretim emri açma ve düzenleme' }));
     const govde = await screen.findByText(/kalın değil/);
@@ -131,7 +149,7 @@ describe('DenetimKaydi', () => {
   it('Değişiklikler görünümü: kayıt türü, işlem ve alan adları listelenir; göçle yapılan değişim "Sistem" yazılır; tablo süzgeci gider', async () => {
     const yollar = sunucuKur(MUDUR);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     fireEvent.change(screen.getByLabelText('Görünüm'), { target: { value: 'degisiklikler' } });
     expect(await screen.findByRole('cell', { name: 'Üretim emri' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'adet, termin' })).toBeTruthy();
@@ -147,7 +165,7 @@ describe('DenetimKaydi', () => {
   it('değer yetkisi olmayan değişikliği açınca uyarı görür, içerik ucu çağrılmaz; yetkili eski ve yeni değeri maskeli görür', async () => {
     const yollar = sunucuKur(MUDUR);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     fireEvent.change(screen.getByLabelText('Görünüm'), { target: { value: 'degisiklikler' } });
     fireEvent.click(await screen.findByRole('cell', { name: 'Üretim emri' }));
     expect(await screen.findByText('Eski ve yeni değeri görme yetkiniz yok.')).toBeTruthy();
@@ -156,7 +174,7 @@ describe('DenetimKaydi', () => {
     vi.unstubAllGlobals();
     const yYollar = sunucuKur(YONETICI);
     ac();
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     await waitFor(() => expect(yYollar).toContain('/oturum'));
     fireEvent.change(screen.getByLabelText('Görünüm'), { target: { value: 'degisiklikler' } });
     fireEvent.click(await screen.findByRole('cell', { name: 'Üretim emri' }));
@@ -180,7 +198,7 @@ describe('DenetimKaydi', () => {
   it('okunamayan kayıt adresi süzgeçsiz Komutlar görünümüyle açılır', async () => {
     const yollar = sunucuKur(MUDUR);
     ac('/denetim?kayitlar=%7B');
-    await screen.findByText('Oturumsuz');
+    await screen.findAllByText('Oturumsuz');
     expect(screen.queryByText(/Bu kayıt:/)).toBeNull();
     expect(yollar.some((y) => y.includes('kayitlar='))).toBe(false);
   });

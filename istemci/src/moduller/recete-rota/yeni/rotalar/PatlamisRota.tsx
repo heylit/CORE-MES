@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { DurumKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
 import { usePatlatmaOnizlemesi } from '../veri.ts';
-import { agacSirasi, dugumAdedi, onizlemeOzeti, turKisa, type OnizlemeDugumu } from './kurallar.ts';
+import { agacSirasi, dugumAdedi, onizlemeOzeti, turKisa, yerelTur, type OnizlemeDugumu } from './kurallar.ts';
 import { tercihOku, tercihYaz } from './ortak.tsx';
 
 // Patlamış rota (1476-F, prototip onayı 1521 A): ürünün çok katmanlı emirde nasıl açılacağı. Salt okunur; numara, dal ve kök başına adet
@@ -67,7 +67,7 @@ export function PatlamisRota({ revizyonId, miktar, baz }: { revizyonId: number |
                         <td colSpan={6}>
                           <div className="tc-rr1-pr-gb" data-katman={sira === 'agac' ? d.katman : 0}>
                             <span className="tc-rr1-pr-ad">
-                              <span className={`tc-rr1-slot tc-rr1-slot-${d.malzeme.tur}`}>{turKisa(d.malzeme.tur)}</span>
+                              <span className={`tc-rr1-slot tc-rr1-slot-${yerelTur(d.malzeme.tur)}`}>{turKisa(d.malzeme.tur)}</span>
                               <span><b>{d.malzeme.stokKodu ?? ''} {d.malzeme.ad}</b><small>Rev {d.revizyon.harf} · katman {d.katman}</small></span>
                             </span>
                             <DalRozeti dal={d.dal} />

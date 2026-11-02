@@ -13,7 +13,7 @@ import {
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
-import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim } from './ortak.tsx';
+import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -309,20 +309,20 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                 const h = hazirlikBolumu(a);
                 return (
                   <>
-                    <SayiAlani etiket="Hazırlık (dk / parti)" deger={h.hazirlik} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { hazirlik: v }), 'Hazırlık süresi değişti'); }} />
+                    <SayiAlani etiket="Hazırlık (dk / parti)" enCok={SURE_EN_COK} deger={h.hazirlik} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { hazirlik: v }), 'Hazırlık süresi değişti'); }} />
                     <span className="tc-rr1-alan tc-rr1-ayarbox">
                       <IsaretKutusu etiket="Ayar" checked={h.ayarli} disabled={!duzen}
                         onChange={(e) => { const v = e.target.checked; yaz((x) => hazirlikYaz(x, { ayarli: v }), v ? 'Ayar eklendi' : 'Ayar kaldırıldı'); }} />
                     </span>
                     {h.ayarli && (
-                      <SayiAlani etiket="Ayar (dk / parti)" deger={h.ayarDk} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { ayarDk: v }), 'Ayar süresi değişti'); }} />
+                      <SayiAlani etiket="Ayar (dk / parti)" enCok={SURE_EN_COK} deger={h.ayarDk} kapali={!duzen} yaz={(v) => { yaz((x) => hazirlikYaz(x, { ayarDk: v }), 'Ayar süresi değişti'); }} />
                     )}
                     <div className="tc-rr1-alan"><span>Toplam hazırlık</span><b>{a.setup === null ? YOK : `${sayi(a.setup)} dk`}</b></div>
                   </>
                 );
               })()}
-              <SayiAlani etiket={`İşlem (dk / 1 ${birim})`} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
-              <SayiAlani etiket={`Değişim (dk / 1 ${birim})`} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
+              <SayiAlani etiket={`İşlem (dk / 1 ${birim})`} enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz((x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
+              <SayiAlani etiket={`Değişim (dk / 1 ${birim})`} enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yerTutucu="boş" yaz={(v) => { yaz((x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
               <div className="tc-rr1-alan"><span>Değişim %</span><b>{(() => { const o = degisimOrani(a.proc, a.chg); return o === null ? YOK : `%${sayi(Math.round(o * 10) / 10)}`; })()}</b></div>
               <p className="tc-rr1-ipucu tc-rr1-genis">
                 Çevrim = işlem + değişim ({sayi(cevrimToplami(a.proc, a.chg))} dk).{' '}
@@ -366,9 +366,9 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                   return (
                     <div key={id} className="tc-rr1-altrow">
                       <span className="tc-rr1-chip">{x ? `${x.code} ${x.name}` : `İstasyon #${id}`}</span>
-                      <SayiAlani etiket={`${x?.name ?? id} çevrim toplamı (dk)`} deger={t && (t.cycle ?? 0) > 0 ? t.cycle : null} yerTutucu={sayi(a.cycle)} kapali={!duzen}
+                      <SayiAlani etiket={`${x?.name ?? id} çevrim toplamı (dk)`} enCok={SURE_EN_COK} deger={t && (t.cycle ?? 0) > 0 ? t.cycle : null} yerTutucu={sayi(a.cycle)} kapali={!duzen}
                         yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { setup: y.altTimes[id]?.setup ?? null, cycle: v } } }), 'Alternatif süresi değişti'); }} />
-                      <SayiAlani etiket={`${x?.name ?? id} hazırlık (dk)`} deger={t?.setup ?? null} yerTutucu={sayi(a.setup)} kapali={!duzen}
+                      <SayiAlani etiket={`${x?.name ?? id} hazırlık (dk)`} enCok={SURE_EN_COK} deger={t?.setup ?? null} yerTutucu={sayi(a.setup)} kapali={!duzen}
                         yaz={(v) => { yaz((y) => ({ ...y, altTimes: { ...y.altTimes, [id]: { cycle: y.altTimes[id]?.cycle ?? null, setup: v } } }), 'Alternatif süresi değişti'); }} />
                       {duzen && (
                         <button type="button" className="tc-rr1-ib" aria-label={`${x?.name ?? id} alternatifini kaldır`}

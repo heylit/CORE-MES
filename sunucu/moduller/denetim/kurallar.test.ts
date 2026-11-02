@@ -88,3 +88,14 @@ test('değişiklik alanları ada göre sıralanır; gizli adlı sütun ya da jso
   ]);
   assert.deepEqual(degisiklikAlanlari({ adet: {} }), [{ alan: 'adet', eski: null, yeni: null }]);
 });
+
+test('sır özeti sütunu (pin_ozeti, kart_ozeti) değişiklik defterinde maskelenir; özet sözcüğünü taşıyan öbür adlar açık kalır', () => {
+  const gizli = ['pin_ozeti', 'kart_ozeti', 'belirtec_ozeti', 'anahtar_ozeti', 'kod_ozeti', 'PIN_OZETI'];
+  const acik = ['ozet', 'ozeti', 'ozetler', 'ozet_tarihi', 'govdeOzeti'];
+  assert.deepEqual(gizli.filter((ad) => !gizliAnahtarMi(ad)), []);
+  assert.deepEqual(acik.filter(gizliAnahtarMi), []);
+  assert.deepEqual(
+    degisiklikAlanlari({ pin_belirlenecek: { eski: false, yeni: true }, pin_ozeti: { eski: 'scrypt$1', yeni: 'scrypt$2' } }),
+    [{ alan: 'pin_belirlenecek', eski: false, yeni: true }, { alan: 'pin_ozeti', eski: '[gizli]', yeni: '[gizli]' }],
+  );
+});

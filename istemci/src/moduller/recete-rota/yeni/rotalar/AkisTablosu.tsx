@@ -5,7 +5,7 @@ import {
   adimCarpani, adimEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
-import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani } from './ortak.tsx';
+import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
 import { SURUKLE_TURU, surukleAdim, surukleCoz, yereBirak } from './AkisSemasi.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -201,9 +201,9 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                   secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
                   yaz={(v) => { yaz(a, (x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
                 <div className="tc-rr1-fsnums">
-                  <SayiAlani etiket="Hazırlık dk" deger={a.setup} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'setup', v), 'Hazırlık süresi değişti'); }} />
-                  <SayiAlani etiket="İşlem dk" deger={a.proc} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
-                  <SayiAlani etiket="Değişim dk" deger={a.chg} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
+                  <SayiAlani etiket="Hazırlık dk" enCok={SURE_EN_COK} deger={a.setup} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'setup', v), 'Hazırlık süresi değişti'); }} />
+                  <SayiAlani etiket="İşlem dk" enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
+                  <SayiAlani etiket="Değişim dk" enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
                 </div>
                 <small className="tc-rr1-fsoran">Değişim {oran === null ? '—' : `%${sayi(Math.round(oran * 10) / 10)}`}</small>
               </>
