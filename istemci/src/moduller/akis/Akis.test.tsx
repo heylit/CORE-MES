@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EmirAkisiCevabi, EmirListesiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import { AkisEmirleri, EmirYolculugu } from './Akis.tsx';
-import { sureMetni } from './gorunum.ts';
+import { aramaMetni, sureMetni } from './gorunum.ts';
 
 const LISTE: EmirListesiCevabi = {
   emirler: [
@@ -80,6 +80,17 @@ describe('Akış Süresi', () => {
     expect(screen.getByText('UE-000006')).toBeTruthy();
   });
 
+  it('arama Türkçe harfi düz harfle eşler: "FLANS" ve "flans" "flanş"ı bulur', async () => {
+    sunucuKur();
+    ac('/akis');
+    expect(await screen.findByText('UE-000005')).toBeTruthy();
+    for (const aranan of ['FLANS', 'flans', 'FLANŞ']) {
+      fireEvent.change(screen.getByLabelText('Emir ya da ürün ara'), { target: { value: aranan } });
+      expect(screen.queryByText('UE-000005')).toBeNull();
+      expect(screen.getByText('UE-000006')).toBeTruthy();
+    }
+  });
+
   it('emir yolculuğu: ölçüler, şerit, adım ve statü tabloları; ölçülemeyen değer "Veri yok" kalır', async () => {
     sunucuKur();
     ac('/akis/5');
@@ -117,6 +128,13 @@ describe('Akış Süresi', () => {
     ac('/akis/abc');
     expect(await screen.findByText('Üretim emri bulunamadı.')).toBeTruthy();
     expect(istekler.some((y) => y.startsWith('/akis/emirler/'))).toBe(false);
+  });
+});
+
+describe('aramaMetni', () => {
+  it('Türkçe küçük harfe çevirir, ç ğ ı ö ş ü düz harfe iner', () => {
+    expect(aramaMetni('Burç IŞIK İğne Ölçü')).toBe('burc isik igne olcu');
+    expect(aramaMetni('burc')).toBe('burc');
   });
 });
 

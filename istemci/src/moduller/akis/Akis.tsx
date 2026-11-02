@@ -7,7 +7,7 @@ import type {
 import { DurumKutusu, Girdi, Kart, Rozet, SayiKarti, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { BOLUM_ADLARI, BOLUM_SIRASI, eksen, sureMetni, zamanMetni } from './gorunum.ts';
+import { aramaMetni, BOLUM_ADLARI, BOLUM_SIRASI, eksen, sureMetni, zamanMetni } from './gorunum.ts';
 import './akis.css';
 
 type EmirSatiri = EmirListesiCevabi['emirler'][number];
@@ -26,9 +26,9 @@ export function AkisEmirleri() {
   const liste = useQuery({ queryKey: anahtarlar.emirler, queryFn: () => api.get<EmirListesiCevabi>('/akis/emirler') });
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <Hata hata={liste.error} ekranIletisi="Emir listesi alınamadı." yenile={() => { void liste.refetch(); }} />;
-  const aranan = ara.trim().toLocaleLowerCase('tr-TR');
+  const aranan = aramaMetni(ara.trim());
   const satirlar = aranan === '' ? liste.data.emirler
-    : liste.data.emirler.filter((e) => `${e.emirNo} ${e.urun}`.toLocaleLowerCase('tr-TR').includes(aranan));
+    : liste.data.emirler.filter((e) => aramaMetni(`${e.emirNo} ${e.urun}`).includes(aranan));
   return (
     <div className="tc-akis-sayfa">
       <p className="tc-akis-aciklama">Bir emri seçin: hammaddenin gelişinden sevke kadar her adımın bekleme, hazırlık, işleme ve duruş süreleri.</p>
