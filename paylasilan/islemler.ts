@@ -1,3 +1,4 @@
+import { AKIS_ISLEMLERI } from './islemler/akis.ts';
 import { ARKON_ISLEMLERI } from './islemler/arkon.ts';
 import { ATOLYE_ISLEMLERI } from './islemler/atolye.ts';
 import { AYARLAR_ISLEMLERI } from './islemler/ayarlar.ts';
@@ -77,6 +78,7 @@ export const VERI_ISLEMLERI = [
   ...MUSTERI_TEDARIKCI_ISLEMLERI,
   ...NIZAMIYE_ISLEMLERI,
   ...OEE_ISLEMLERI,
+  ...AKIS_ISLEMLERI,
   ...OTURUM_ISLEMLERI,
   ...PANO_ISLEMLERI,
   ...PLAN_ISLEMLERI,

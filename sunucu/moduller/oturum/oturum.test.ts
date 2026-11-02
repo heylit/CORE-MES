@@ -357,7 +357,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'plan.oku',
       // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
       'cnc-kurulum.takim-degistir'],
-    depo: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA_OKU, ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SAYFA('stok', 'malzemeler', 'atolye'), ...SEVKIYAT_TAM, ...ETIKET_BASAN, ...SIPARIS_OKU],
+    depo: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA_OKU, ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SAYFA('stok', 'malzemeler', 'atolye'), ...SEVKIYAT_TAM, ...ETIKET_BASAN, ...SIPARIS_OKU],
     bakim: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...ARKON('bakim'), TALEP, TALEP_SAYFASI, ...SAYFA('stok'), ...CNC_OKU,
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
       'plan.oku',
@@ -543,20 +543,20 @@ describe('oturum (gerçek PostgreSQL)', () => {
 
   test('depo rolü stok, malzeme ve sevkiyat sayfalarını açar, malzeme kartı yazar; ek rol olarak alan kişi rollerinin birleşimini alır', async () => {
     await kisiEkle('depocu', 'depo');
-    assert.deepEqual(await girisIslemleri('depocu'), [...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.malzemeler', 'sayfa.stok', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort());
+    assert.deepEqual(await girisIslemleri('depocu'), [...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.malzemeler', 'sayfa.stok', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort());
 
     const operator = await kisiEkle('operator-depocu', 'operator');
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2)', [operator, await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('operator-depocu'),
-      ['arkon.operator', ...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort(),
+      ['arkon.operator', ...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort(),
     );
 
     const cam = await kisiEkle('cam-satinalmaci', 'cam');
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2), ($1, $3)', [cam, await rolId('satin_alma'), await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
-      ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
+      ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
         'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', ...TESIS_TALEBI].sort(),
     );
   });

@@ -50,7 +50,8 @@ import { depoBekleyenleri, depoCikisiniGeriAl, depoCikisiYaz, depoKabuluYaz, dep
 import type { DepoKalemi, FasonSevkiOlayi, UrunSevkiOlayi, UrunSevkSatiri } from '../sevkiyat/disari.ts';
 import {
   KOMUT_ISLEMI as URETIM_ISLEMI, acikEmirler, acikIstasyon, adimUretimBilgisi, adimliEmirAyrintisi, baslatmaDenetle, emirDilimi, emirDurumlari, emirMalzemeIhtiyaci, emirlerinMalzemeIhtiyaci, emirOzeti, fasonDonusuKaydet, fasonHareketiOzeti, fasonIsEmirleri, isEmriOzeti,
-  uretimEmriOzeti, emirDugumleri, emirNolari, refakatKarti, kapanisSonuclari, aralikAdetleri, adimKararSayaclari,
+  uretimEmriOzeti, emirDugumleri, emirNolari, refakatKarti, kapanisSonuclari, aralikAdetleri, adimKararSayaclari, adimUretimBilgileri, emirlerinDugumleri,
+  emirlerinAdimIstasyonlari, emirlerinIsEmriIdleri,
 } from '../uretim-emirleri/disari.ts';
 import type { FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import {
@@ -2770,10 +2771,20 @@ export async function istasyonSepeti(db: Db, k: Kullanici, istasyonId: number): 
   kapsamDisiysaReddet(await kapsamOku(db, k.id), ist.isMerkeziId);
   return sepetiOku(db, ist);
 }
-async function sepetiOku(db: Db, ist: { id: number; kod: string; ad: string }): Promise<IstasyonSepetiCevabi> {
+// 1868: bir okumada birden çok sepet (iki sepet, gelecek sepet) aynı emir dilimini ve emir adımlarını paylaşır; emir başına ayrıntı
+// okunmaz. Yalnız tek okumanın içinde yaşar (yazımdan sonra yeniden kurulur).
+interface SepetBellegi { dilim: Promise<Awaited<ReturnType<typeof emirDilimi>>> | null; adimlar: Map<number, Awaited<ReturnType<typeof emirlerinAdimIstasyonlari>> extends Map<number, infer A> ? A | null : never> }
+const sepetBellegi = (): SepetBellegi => ({ dilim: null, adimlar: new Map() });
+async function bellektenEmirAdimlari(db: Db, idler: readonly number[], b: SepetBellegi): Promise<void> {
+  const eksik = [...new Set(idler)].filter((id) => !b.adimlar.has(id));
+  if (eksik.length === 0) return;
+  const okunan = await emirlerinAdimIstasyonlari(db, eksik);
+  for (const id of eksik) b.adimlar.set(id, okunan.get(id) ?? null);
+}
+async function sepetiOku(db: Db, ist: { id: number; kod: string; ad: string }, bellek: SepetBellegi = sepetBellegi()): Promise<IstasyonSepetiCevabi> {
   const konumId = await sorgular.istasyonKonumu(db, ist.id);
   const istasyon = { id: ist.id, kod: ist.kod, ad: ist.ad };
-  const emirler = await istasyonEmirleri(db, ist.id);
+  const emirler = await istasyonEmirleri(db, ist.id, bellek);
   if (konumId === null) return { istasyon, emirler, satirlar: [] };
   const b = await konumdakiSerbest(db, konumId);
   const kartlar = await malzemeOzetleri(db, [...new Set(b.map((x) => x.malzemeId))]);
@@ -2783,13 +2794,15 @@ async function sepetiOku(db: Db, ist: { id: number; kod: string; ad: string }): 
   const adimlar = new Map<number, SepetAdimi[]>();
   const adlar = new Map<number, { kod: string | null; ad: string }>();
   const nolar = await emirNoHaritasi(db, b.map((x) => x.uretimEmriId));
-  for (const emirId of new Set(b.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])))) {
-    const e = await adimliEmirAyrintisi(db, emirId).catch((h: unknown) => { if (h instanceof UygulamaHatasi) return null; throw h; });
-    if (!e || e.urun.id === null) continue;
-    const malzemeNo = e.urun.id;
-    for (const i of e.isEmirleri) if (i.istasyon) adlar.set(i.istasyon.id, i.istasyon);
+  const sepettekiEmirler = [...new Set(b.flatMap((x) => (x.uretimEmriId === null ? [] : [x.uretimEmriId])))];
+  await bellektenEmirAdimlari(db, sepettekiEmirler, bellek);
+  for (const emirId of sepettekiEmirler) {
+    const e = bellek.adimlar.get(emirId) ?? null;
+    if (e === null) continue;
+    const malzemeNo = e.urunId;
+    for (const i of e.adimlar) if (i.istasyon) adlar.set(i.istasyon.id, i.istasyon);
     const rota: SepetAdimi[] = [];
-    for (const i of e.isEmirleri) {
+    for (const i of e.adimlar) {
       rota.push({ sira: i.sira, opNo: i.opNo, istasyonId: i.istasyon?.id ?? null, statuId: adimStatusu === null ? null : await adimStatusu(db, { malzemeNo, opNo: i.opNo, uretimEmriId: emirId }) });
     }
     adimlar.set(emirId, rota);
@@ -2811,27 +2824,30 @@ async function sepetiOku(db: Db, ist: { id: number; kod: string; ad: string }): 
     }),
   };
 }
-async function istasyonEmirleri(db: Db, istasyonId: number): Promise<{ id: number; emirNo: string }[]> {
-  return (await emirDilimi(db))
+async function istasyonEmirleri(db: Db, istasyonId: number, bellek?: SepetBellegi): Promise<{ id: number; emirNo: string }[]> {
+  if (bellek && bellek.dilim === null) bellek.dilim = emirDilimi(db);
+  return (await (bellek?.dilim ?? emirDilimi(db)))
     .filter((e) => e.durum !== 'bitti' && e.durum !== 'iptal' && e.durum !== 'taslak' && e.isEmirleri.some((i) => i.istasyonId === istasyonId && i.durum !== 'tamam'))
     .map((e) => ({ id: e.id, emirNo: e.emirNo }));
 }
 // Teslim edilmeyen parça (kart #1289): kullanacak istasyon, emirlerinin rotasındaki öteki istasyonların sepetinde sonraki adımı
 // kendisi olan satırları görür. Kaynak istasyon çekenin kapsamında olmak zorunda değildir; parça zaten ona gidecektir.
-export async function gelecekSepet(db: Db, k: Kullanici, istasyonId: number): Promise<GelecekSepetCevabi> {
+export async function gelecekSepet(db: Db, k: Kullanici, istasyonId: number, bellek: SepetBellegi = sepetBellegi()): Promise<GelecekSepetCevabi> {
   const ist = await istasyonGetir(db, istasyonId);
   if (!ist) throw bulunamadi('İstasyon bulunamadı.');
   kapsamDisiysaReddet(await kapsamOku(db, k.id), ist.isMerkeziId);
   const kaynaklar = new Set<number>();
-  for (const e of await istasyonEmirleri(db, ist.id)) {
-    const a = await adimliEmirAyrintisi(db, e.id).catch((h: unknown) => { if (h instanceof UygulamaHatasi) return null; throw h; });
-    for (const i of a?.isEmirleri ?? []) if (i.istasyon && i.istasyon.id !== ist.id) kaynaklar.add(i.istasyon.id);
+  const emirler = await istasyonEmirleri(db, ist.id, bellek);
+  await bellektenEmirAdimlari(db, emirler.map((e) => e.id), bellek);
+  for (const e of emirler) {
+    for (const i of bellek.adimlar.get(e.id)?.adimlar ?? []) if (i.istasyon && i.istasyon.id !== ist.id) kaynaklar.add(i.istasyon.id);
   }
   const satirlar: GelecekSepetCevabi['satirlar'] = [];
+  const istasyonlar = kaynaklar.size === 0 ? new Map<number, { id: number; kod: string; ad: string }>() : new Map((await tumIstasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
   for (const kaynakId of kaynaklar) {
-    const kaynak = await istasyonGetir(db, kaynakId);
+    const kaynak = istasyonlar.get(kaynakId);
     if (!kaynak) continue;
-    const sepet = await sepetiOku(db, kaynak);
+    const sepet = await sepetiOku(db, kaynak, bellek);
     for (const x of sepet.satirlar) if (x.sonraki?.istasyonId === ist.id && binde(x.miktar) > 0n) satirlar.push({ ...x, kaynak: sepet.istasyon });
   }
   return { satirlar };
@@ -2842,9 +2858,10 @@ export async function istasyonSepetleri(db: Db, k: Kullanici, istasyonId: number
   const ist = await istasyonGetir(db, istasyonId);
   if (!ist) throw bulunamadi('İstasyon bulunamadı.');
   kapsamDisiysaReddet(await kapsamOku(db, k.id), ist.isMerkeziId);
-  const bekleyen = (await gelecekSepet(db, k, istasyonId)).satirlar.filter((x) => x.uretimEmriId === uretimEmriId);
+  const bellek = sepetBellegi();
+  const bekleyen = (await gelecekSepet(db, k, istasyonId, bellek)).satirlar.filter((x) => x.uretimEmriId === uretimEmriId);
   const yolda = (await sorgular.yoldakiGelenler(db, [istasyonId], false)).filter((t) => t.uretimEmriId === uretimEmriId);
-  const sepet = await sepetiOku(db, ist);
+  const sepet = await sepetiOku(db, ist, bellek);
   return { istasyon: sepet.istasyon, gelen: { bekleyen, yolda: await teslimleriAdlandir(db, yolda) }, cikan: sepet.satirlar.filter((x) => x.uretimEmriId === uretimEmriId) };
 }
 // Teslim al ile çekme: çeken hem gönderen hem alan olur; teslim açılır ve aynı anda kapanır (kayıt ve hareket teslim etle aynıdır).
@@ -3009,17 +3026,26 @@ const uretimIstekKoku = (emirId: number, opNo: number, malzemeId: number): strin
 async function girdiYerleri(
   db: Db, malzemeId: number, istasyonKonumu: number | null, uretimEmriId: number, statuId: number | null = null,
 ): Promise<IsMalzemeleriCevabi['isler'][number]['malzemeler'][number]['yerler']> {
+  const toplam = yerToplamlari(await sorgular.uretimGirdiKaynaklari(db, malzemeId, statuId, istasyonKonumu ?? 0, uretimEmriId, true), istasyonKonumu, uretimEmriId);
+  return (await yerleriAdlandir(db, [toplam]))[0]!;
+}
+type YerToplami = { konumId: number; buEmrin: boolean; m: bigint }[];
+function yerToplamlari(kaynaklar: readonly { konumId: number; partiEmriId: number | null; serbest: string }[], istasyonKonumu: number | null, uretimEmriId: number): YerToplami {
   const toplam = new Map<string, { konumId: number; buEmrin: boolean; m: bigint }>();
-  for (const x of await sorgular.uretimGirdiKaynaklari(db, malzemeId, statuId, istasyonKonumu ?? 0, uretimEmriId, true)) {
+  for (const x of kaynaklar) {
     if (x.konumId === istasyonKonumu || binde(x.serbest) <= 0n) continue;
     const buEmrin = x.partiEmriId === uretimEmriId;
     const a = `${x.konumId}:${buEmrin}`;
     toplam.set(a, { konumId: x.konumId, buEmrin, m: (toplam.get(a)?.m ?? 0n) + binde(x.serbest) });
   }
-  const uclar = new Map((await sorgular.teslimUclari(db, [...new Set([...toplam.values()].map((x) => x.konumId))])).map((u) => [u.konumId, u]));
+  return [...toplam.values()];
+}
+// Bütün yer listeleri tek konum ve istasyon okumasıyla adlandırılır (1868).
+async function yerleriAdlandir(db: Db, listeler: readonly YerToplami[]): Promise<IsMalzemeleriCevabi['isler'][number]['malzemeler'][number]['yerler'][]> {
+  const uclar = new Map((await sorgular.teslimUclari(db, [...new Set(listeler.flatMap((l) => l.map((x) => x.konumId)))])).map((u) => [u.konumId, u]));
   const istKodlari = await istasyonKodlari(db, [...uclar.values()].map((u) => u.istasyonId));
   const yerKodu = (konumId: number): string => { const u = uclar.get(konumId); return (u?.istasyonId == null ? undefined : istKodlari.get(u.istasyonId)) ?? u?.kod ?? `#${konumId}`; };
-  return [...toplam.values()].map(({ konumId, buEmrin, m }) => ({ konum: yerKodu(konumId), miktar: bindenMetin(m), konumId, istasyonId: uclar.get(konumId)?.istasyonId ?? null, buEmrin }));
+  return listeler.map((l) => l.map(({ konumId, buEmrin, m }) => ({ konum: yerKodu(konumId), miktar: bindenMetin(m), konumId, istasyonId: uclar.get(konumId)?.istasyonId ?? null, buEmrin })));
 }
 // Teslim al'daki iş malzemeleri (kart #1289): istasyonda bitmemiş her adımın stoklanan girdileri, adım bitene kadar; bulunduğu yer ve
 // açık istekle. Kalan adet, çalışan adımda sayılan sağlam düşülerek hesaplanır; çok katmanlı emrin alt düğümünde gereken kök başına adetle
@@ -3032,23 +3058,42 @@ export async function isMalzemeleri(db: Db, k: Kullanici, istasyonId: number): P
   const adimlar = emirler.flatMap((e) => e.isEmirleri.filter((i) => i.istasyonId === ist.id && i.durum !== 'tamam').map((i) => ({ e, i })));
   const kartlar = await malzemeOzetleri(db, [...new Set(adimlar.flatMap(({ i }) => i.bilesenler.map((b) => b.malzemeId)))]);
   const konumId = await sorgular.istasyonKonumu(db, ist.id);
-  const istasyonda = new Map<string, bigint>();
-  const yerler = new Map<string, IsMalzemeleriCevabi['isler'][number]['malzemeler'][number]['yerler']>();
-  const isler: IsMalzemeleriCevabi['isler'] = [];
+  // 1868: her adımın girdileri, taşınanı, bulunduğu yerler ve istekleri toplu okunur; adım ve girdi başına sorgu yoktur. Taşınanın statüsü ve
+  // çıktısı Reçete ve Rota'nın çözücüsündendir (emir başına; yalnız önceki adımı olan adımda).
+  const isEmriIdleri = await emirlerinIsEmriIdleri(db, [...new Set(adimlar.map(({ e }) => e.id))]);
+  const bilgiler = await adimBilgileri(db, [...isEmriIdleri.values()].flat());
+  const bilgiOf = (emirId: number, opNo: number): AdimBilgisi | null => {
+    const id = (isEmriIdleri.get(emirId) ?? []).find((x) => bilgiler.get(x)?.opNo === opNo);
+    return id === undefined ? null : bilgiler.get(id) ?? null;
+  };
+  const satirlar: { e: (typeof adimlar)[number]['e']; i: (typeof adimlar)[number]['i']; kalan: bigint; birim: Map<number, bigint>; tasinanlar: TasinanGirdi[] }[] = [];
   for (const { e, i } of adimlar) {
     const kalan = kalanAdimAdedi(e.adet, i.dugum?.birimCarpani ?? null, i.canliAdet ?? 0);
     const birim = new Map<number, bigint>();
     for (const b of i.bilesenler) if (stoklanirMi(kartlar.get(b.malzemeId)?.tur ?? '')) birim.set(b.malzemeId, (birim.get(b.malzemeId) ?? 0n) + adetMiktari(1000n, b.miktar));
+    const bilgi = bilgiOf(e.id, i.opNo);
+    const tasinanlar = (bilgi === null ? [] : await tasinanGirdileri(db, e.malzemeNo, bilgi, e.id)).filter((t) => !birim.has(t.malzemeId));
+    satirlar.push({ e, i, kalan, birim, tasinanlar });
+  }
+  // Başka emrin partisi bu iş için kullanılamaz (K2): istasyondaki ve yerler emir başına hesaplanır. Aynı anahtar bir kez okunur.
+  const anahtarlar = new Map<string, sorgular.GirdiKaynagiAnahtari>();
+  for (const { e, birim, tasinanlar } of satirlar) {
+    for (const malzemeId of birim.keys()) anahtarlar.set(`${e.id}:${malzemeId}:`, { malzemeId, statuId: null, uretimEmriId: e.id });
+    for (const t of tasinanlar) anahtarlar.set(`${e.id}:${t.malzemeId}:${t.statuId ?? ''}`, { malzemeId: t.malzemeId, statuId: t.statuId, uretimEmriId: e.id });
+  }
+  const kaynaklar = await sorgular.uretimGirdiKaynaklariToplu(db, [...anahtarlar.values()], konumId ?? 0, true);
+  const sira = [...anahtarlar.keys()];
+  const yerListeleri = await yerleriAdlandir(db, sira.map((a, n) => yerToplamlari(kaynaklar[n]!, konumId, anahtarlar.get(a)!.uretimEmriId!)));
+  const istasyonda = new Map(sira.map((a, n) => [a, konumId === null ? 0n : kaynaklar[n]!.filter((x) => x.konumId === konumId).reduce((t, x) => t + binde(x.serbest), 0n)]));
+  const yerler = new Map(sira.map((a, n) => [a, yerListeleri[n]!]));
+  const istekler = await sorgular.istekleriKoklerden(db, satirlar.flatMap(({ e, i, birim }) => [...birim.keys()].map((m) => uretimIstekKoku(e.id, i.opNo, m))));
+  const tasinanKartlar = await malzemeOzetleri(db, satirlar.flatMap((x) => x.tasinanlar.map((t) => t.malzemeId)));
+  const isler: IsMalzemeleriCevabi['isler'] = [];
+  for (const { e, i, kalan, birim, tasinanlar } of satirlar) {
     const malzemeler: IsMalzemeleriCevabi['isler'][number]['malzemeler'] = [];
     for (const [malzemeId, birAdet] of birim) {
-      // Başka emrin partisi bu iş için kullanılamaz (K2): istasyondaki ve yerler emir başına hesaplanır.
-      const anahtar = `${e.id}:${malzemeId}`;
-      if (!istasyonda.has(anahtar)) {
-        const satirlar = konumId === null ? [] : (await sorgular.uretimGirdiKaynaklari(db, malzemeId, null, konumId, e.id)).filter((x) => x.konumId === konumId);
-        istasyonda.set(anahtar, satirlar.reduce((t, x) => t + binde(x.serbest), 0n));
-        yerler.set(anahtar, await girdiYerleri(db, malzemeId, konumId, e.id));
-      }
-      const istek = (await sorgular.istekleriKoktan(db, uretimIstekKoku(e.id, i.opNo, malzemeId)))[0] ?? null;
+      const anahtar = `${e.id}:${malzemeId}:`;
+      const istek = istekler.get(uretimIstekKoku(e.id, i.opNo, malzemeId))?.[0] ?? null;
       const kart = kartlar.get(malzemeId);
       const mevcut = istasyonda.get(anahtar)!;
       malzemeler.push({
@@ -3056,21 +3101,21 @@ export async function isMalzemeleri(db: Db, k: Kullanici, istasyonId: number): P
         eksik: mevcut < birAdet, yerler: yerler.get(anahtar)!, istek: istek === null ? null : { id: istek.id, no: istek.no, durum: istek.durum },
       });
     }
-    for (const t of await adimTasinanGirdileri(db, e.id, e.malzemeNo, i.opNo)) {
-      if (birim.has(t.malzemeId)) continue;
-      const kart = await malzemeOzeti(db, t.malzemeId);
-      const mevcut = await istasyondakiSerbest(db, t.malzemeId, t.statuId, konumId, e.id);
+    for (const t of tasinanlar) {
+      const anahtar = `${e.id}:${t.malzemeId}:${t.statuId ?? ''}`;
+      const kart = tasinanKartlar.get(t.malzemeId);
+      const mevcut = istasyonda.get(anahtar)!;
       malzemeler.push({
         malzemeId: t.malzemeId, kod: kart?.kod ?? null, ad: kart?.ad ?? null, birim: kart?.birim ?? null, birAdet: bindenMetin(t.birAdet), gereken: bindenMetin(t.birAdet * kalan),
-        istasyonda: bindenMetin(mevcut), eksik: mevcut < t.birAdet, yerler: await girdiYerleri(db, t.malzemeId, konumId, e.id, t.statuId), istek: null,
+        istasyonda: bindenMetin(mevcut), eksik: mevcut < t.birAdet, yerler: yerler.get(anahtar)!, istek: null,
       });
     }
     if (malzemeler.length > 0) isler.push({ uretimEmriId: e.id, emirNo: e.emirNo, opNo: i.opNo, adimAd: i.ad, calisiyor: i.durum === 'calisiyor', kalanAdet: Number(kalan), malzemeler });
   }
   // Depo isteği "Yolda" gösterirken operatör de aynı isteği yolda görür (Akış A provası 2. tur Y2).
-  const istekler = isler.flatMap((x) => x.malzemeler.flatMap((m) => (m.istek === null ? [] : [m.istek])));
-  const yolda = new Map((await sorgular.yoldaTeslimleri(db, istekler.map((x) => x.id))).map((t) => [t.istekId, { id: t.id, no: t.no }]));
-  for (const x of istekler) x.yoldaTeslim = yolda.get(x.id) ?? null;
+  const acikIstekler = isler.flatMap((x) => x.malzemeler.flatMap((m) => (m.istek === null ? [] : [m.istek])));
+  const yolda = new Map((await sorgular.yoldaTeslimleri(db, acikIstekler.map((x) => x.id))).map((t) => [t.istekId, { id: t.id, no: t.no }]));
+  for (const x of acikIstekler) x.yoldaTeslim = yolda.get(x.id) ?? null;
   return { isler };
 }
 // İşin malzemesini iste (kart #1418): depodan eksik miktarla istek; emrin rotasındaki başka istasyondan teslim kaydıyla alma.
@@ -3879,7 +3924,15 @@ type AdimBilgisi = Omit<NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>
 async function adimBilgisi(db: Db, isEmriId: number): Promise<AdimBilgisi | null> {
   const b = await adimUretimBilgisi(db, isEmriId);
   if (b === null) return null;
-  const dugumler = await emirDugumleri(db, b.uretimEmriId);
+  return bolenliBilgi(b, await emirDugumleri(db, b.uretimEmriId));
+}
+// adimBilgisi'nin toplu biçimi (1868): iş emri sayısından bağımsız dört okuma.
+async function adimBilgileri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, AdimBilgisi>> {
+  const ham = await adimUretimBilgileri(db, isEmriIdleri);
+  const dugumler = await emirlerinDugumleri(db, [...new Set([...ham.values()].map((b) => b.uretimEmriId))]);
+  return new Map([...ham].map(([id, b]) => [id, bolenliBilgi(b, dugumler.get(b.uretimEmriId) ?? new Map())]));
+}
+function bolenliBilgi(b: NonNullable<Awaited<ReturnType<typeof adimUretimBilgisi>>>, dugumler: Awaited<ReturnType<typeof emirDugumleri>>): AdimBilgisi {
   const bolenli = (opNo: number, carpan: number | null, girdiler: readonly { malzemeNo: number; miktar: string }[]): ReceteGirdisi[] => {
     const bolen = Math.round((carpan ?? 1) / Number(dugumler.get(opNo)?.birimCarpani ?? 1));
     return girdiler.map((g) => (bolen > 1 ? { ...g, bolen } : { ...g }));
