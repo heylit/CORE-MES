@@ -107,7 +107,7 @@ export function Firmalar() {
           <Girdi
             etiket="Ara"
             type="search"
-            placeholder="Kod, ad, vergi no ya da il"
+            placeholder="Kod, ad ya da vergi no"
             value={arama}
             onChange={(o) => aramaYaz(o.target.value)}
             autoComplete="off"

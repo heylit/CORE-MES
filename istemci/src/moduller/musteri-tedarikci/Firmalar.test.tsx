@@ -133,6 +133,13 @@ describe('Firma listesi', () => {
     await waitFor(() => expect(listeIstekleri(istekler).some((i) => i.yol.includes('ara=ornek'))).toBe(true));
   });
 
+  it('arama kutusu yalnız sunucunun aradığı alanları söyler (kod, ad, vergi no)', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(screen.getByLabelText('Ara').getAttribute('placeholder')).toBe('Kod, ad ya da vergi no');
+  });
+
   it('Durum süzgeci Tümü seçilince aktif parametresi gitmez', async () => {
     const istekler = sunucuKur(OKUYUCU);
     ac('/musteri-tedarikci');
