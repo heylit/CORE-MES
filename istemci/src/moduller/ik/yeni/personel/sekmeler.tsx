@@ -18,6 +18,7 @@ import {
 } from './baska-parcalar.tsx';
 import { alanEtiketi, PERSONEL_ALANLARI, type FormAlani, type PersonelBolumu } from './alanlar.ts';
 import { CalismaBelgesi } from './CalismaBelgesi.tsx';
+import { GirisKarti, GirisKartiYok } from './GirisKarti.tsx';
 import type { CalisanSekmesi } from './Calisan.tsx';
 import {
   adSoyadMetni, aktifMi, belgeIsaretle, belgeListesi, bugun, CIKIS_ADIMLARI, cikisAdimi, cikisIlerlemesi, ibanBicimi, kidemMetni, notEkle,
@@ -115,6 +116,7 @@ export function OzetSekmesi(s: SekmeOzellikleri) {
         ]}
         />
       </Bolum>
+      {s.yetki.personelYaz && (p.kisiId ? <GirisKarti key={p.kisiId} kisiId={p.kisiId} /> : <GirisKartiYok />)}
       {ekip.length > 0 && (
         <Bolum baslik={`Ekibi (${ekip.length})`}>
           <ul className="tc-ikp-liste">

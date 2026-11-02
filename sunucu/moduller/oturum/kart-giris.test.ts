@@ -11,6 +11,7 @@ import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kisininPersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
 import { kimlikCozucu } from './disari.ts';
 import { CIHAZ_CEREZI, HESAP_KILIDI_ESIGI } from './kurallar.ts';
 import { oturumUclari } from './uclar.ts';
@@ -57,8 +58,7 @@ describe('istasyonda PIN\'siz kart girişi (gerçek PostgreSQL, saat elde)', () 
       const c = await app.inject({ method: 'POST', url: '/api/oturum/pin-belirle', payload: { kullaniciAdi: ad, geciciPin: GECICI, yeniPin: PIN } });
       assert.equal(c.statusCode, 200, c.body);
     }
-    const k = await yonetici('/nizamiye/personel-kartlari', { kisiId: id, kartNo: kart });
-    assert.equal(k.statusCode, 200, k.body);
+    await vt().tx((db) => personelKartiVer(db, yoneticiId, id, kart));
     return { id, ad, kart };
   }
   const kartGiris = (kart: string, cihaz: string | null = istasyon, ip = '10.8.0.1', oturum = '') =>
@@ -136,15 +136,13 @@ describe('istasyonda PIN\'siz kart girişi (gerçek PostgreSQL, saat elde)', () 
     assert.match(c.json().mesaj, /İlk PIN/);
 
     ilerle(120);
-    assert.equal((await yonetici('/nizamiye/personel-kartlari', { kisiId: yoneticiId, kartNo: 'ABCDEF01' })).statusCode, 200);
+    await vt().tx((db) => personelKartiVer(db, yoneticiId, yoneticiId, 'ABCDEF01'));
     const yoneticiKarti = await kartGiris('ABCDEF01', istasyon, '10.8.3.1');
     assert.equal(yoneticiKarti.statusCode, 401);
     assert.match(yoneticiKarti.json().mesaj, /Kart tanınmadı/);
 
     const kisi = await kartliOperator();
-    const kart = (await app.inject({ method: 'GET', url: '/api/nizamiye/personel-kartlari', headers: { cookie: yoneticiCerezi } }))
-      .json().kartlar.find((k: { kisiId: number }) => k.kisiId === kisi.id) as { id: number; surum: number };
-    assert.equal((await yonetici(`/nizamiye/personel-kartlari/${kart.id}/kaldir`, { surum: kart.surum })).statusCode, 200);
+    await vt().tx(async (db) => { await personelKartiniKaldir(db, yoneticiId, kisi.id, (await kisininPersonelKarti(db, kisi.id))!.surum); });
     assert.equal((await kartGiris(kisi.kart, istasyon, '10.8.3.2')).statusCode, 401);
   });
 

@@ -606,3 +606,8 @@ export function takvimIzinSatirlari(db: Db, baslangic: string, bitis: string, ki
     [baslangic, bitis, kisiId],
   );
 }
+
+// Giriş kartı (1902 b): kart yalnız İK'da personel kaydı olan kişiye verilir; kaydın iş merkezi kapsam denetimi içindir.
+export function girisKartiPersoneli(db: Db, kisiId: number): Promise<{ is_merkezi_id: number | null } | null> {
+  return db.tek<{ is_merkezi_id: number | null }>('SELECT is_merkezi_id FROM ik_personel WHERE kisi_id = $1 AND NOT iptal', [kisiId]);
+}

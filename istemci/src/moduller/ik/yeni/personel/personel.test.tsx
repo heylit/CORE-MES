@@ -205,3 +205,46 @@ describe('P1 içe aktarma', () => {
     if (menu) { fireEvent.click(menu); expect(screen.queryByRole('menuitem', { name: 'Excel’den aktar' })).toBeNull(); }
   });
 });
+
+// 1902 b, 1903 b: giriş kartını İK personel yazan verir; numara geri gösterilmez, kaldırma önce sorar.
+describe('P1 giriş kartı', () => {
+  const KART = { kartSon4: '3456', kaydedildi: '2026-10-30T09:00:00.000Z', surum: 1 };
+  const kartliAc = (kullanici = IK_YONETICI) => {
+    const r = ikAc('/ik/calisan/emp_a', { kullanici, okumalar: { '/ik/giris-karti/1': () => ({ kart: null }) } });
+    const onceki = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      if (istek?.method !== 'POST' || !adres.includes('/ik/giris-karti/')) return onceki(adres, istek);
+      r.yazmalar.push({ yol: new URL(adres, 'http://yerel').pathname.replace(/^\/api/, ''), govde: JSON.parse(String(istek.body)) as unknown });
+      return new Response(JSON.stringify({ kart: adres.endsWith('/kaldir') ? null : KART }), { status: 200 });
+    }));
+    return r;
+  };
+
+  it('izinli: kart okutulunca verilir, yalnız son dört hane görünür; kaldırma önce sorar', async () => {
+    const { yazmalar } = kartliAc();
+    const alan = await screen.findByLabelText(/^Kart/, { selector: 'input' });
+    fireEvent.change(alan, { target: { value: '0004123456' } });
+    fireEvent.submit(alan.closest('form')!);
+    await waitFor(() => { expect(yazmalar).toContainEqual({ yol: '/ik/giris-karti/1', govde: { kartNo: '0004123456' } }); });
+    expect(await screen.findByText('••••3456')).toBeTruthy();
+    expect(screen.queryByText(/0004123456/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartı kaldır' }));
+    expect(yazmalar).toHaveLength(1);
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
+    await waitFor(() => { expect(yazmalar[1]).toEqual({ yol: '/ik/giris-karti/1/kaldir', govde: { surum: 1 } }); });
+    expect(await screen.findByLabelText(/^Kart/, { selector: 'input' })).toBeTruthy();
+  });
+
+  it('TMI kullanıcısı bağlı olmayan personelde kart verilmez, nasıl bağlanacağı yazar', async () => {
+    ikAc('/ik/calisan/emp_b');
+    expect(await screen.findByText(/Önce İş bölümünde TMI kullanıcısını bağlayın/)).toBeTruthy();
+    expect(screen.queryByLabelText(/^Kart/, { selector: 'input' })).toBeNull();
+  });
+
+  it('reddedilen: salt okuyan giriş kartı bölümünü görmez', async () => {
+    ikAc('/ik/calisan/emp_a', { kullanici: IK_OKUYAN });
+    expect(await screen.findByRole('tablist', { name: 'Özlük dosyası bölümleri' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Giriş kartı' })).toBeNull();
+  });
+});

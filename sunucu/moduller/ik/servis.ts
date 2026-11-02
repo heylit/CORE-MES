@@ -9,11 +9,13 @@ import type {
   IkAlani, IkAyarCevabi, IkBen, IkBordroGirdisi, IkGecmis, IkIzinGunuCevabi, IkKayit, IkKisiVardiyasiCevabi, IkOzetiCevabi, IkPuantajCevabi, IkPuantajGunuGirdisi, IkPuantajKaydi,
   IkPuantajPlanGunu, IkPuantajYazCevabi, IkTopluCevabi, IkTuru, IkVeriCevabi, IkYazCevabi, PuantajDurumu,
 } from '#paylasilan/sozlesme/ik.ts';
+import type { GirisKartiCevabi } from '#paylasilan/sozlesme/ik.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { isMerkezleri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
+import { kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
 import { ikKisisiAc, kisiAdlari, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
 import { ayarKur, ayarParcala } from './ayar-eslesme.ts';
 import { EslesmeHatasi, kur, parcala } from './eslesme.ts';
@@ -941,4 +943,31 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, 
       ...(r.bitis > r.baslangic ? { bitis: r.bitis } : {}),
     };
   });
+}
+
+// Personel giriş kartı (1902 b, 1903 b): kartı yalnız İK eşleştirir ve verir (ik.personel-yaz, uçta); kayıt Nizamiye'dedir. Kart yalnız İK
+// personel kaydına bağlı kişiye ve yazanın iş merkezi kapsamındaysa verilir. Kart istasyonda PIN'siz giriş açar (1897 b).
+const GIRIS_KARTI_PERSONELSIZ = 'Bu kişinin İK personel kaydı yok; kart personel kartındaki TMI kullanıcısına verilir.';
+async function girisKartiKapsami(db: Db, kullanici: Kullanici, kisiId: number): Promise<void> {
+  const personel = await s.girisKartiPersoneli(db, kisiId);
+  if (personel === null) throw bulunamadi(GIRIS_KARTI_PERSONELSIZ);
+  kapsamDisiysaReddet(await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri), personel.is_merkezi_id);
+}
+const girisKartiOzeti = (k: { kartSon4: string; kaydedildi: string; surum: number } | null): GirisKartiCevabi =>
+  ({ kart: k === null ? null : { kartSon4: k.kartSon4, kaydedildi: k.kaydedildi, surum: k.surum } });
+
+export async function girisKarti(db: Db, kullanici: Kullanici, kisiId: number): Promise<GirisKartiCevabi> {
+  await girisKartiKapsami(db, kullanici, kisiId);
+  return girisKartiOzeti(await nizamiyePersonelKarti(db, kisiId));
+}
+
+export async function girisKartiVer(db: Db, kullanici: Kullanici, kisiId: number, kartNo: string): Promise<GirisKartiCevabi> {
+  await girisKartiKapsami(db, kullanici, kisiId);
+  return girisKartiOzeti(await personelKartiVer(db, kullanici.id, kisiId, kartNo));
+}
+
+export async function girisKartiKaldir(db: Db, kullanici: Kullanici, kisiId: number, surum: number): Promise<GirisKartiCevabi> {
+  await girisKartiKapsami(db, kullanici, kisiId);
+  await personelKartiniKaldir(db, kullanici.id, kisiId, surum);
+  return { kart: null };
 }
