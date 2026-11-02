@@ -30,6 +30,9 @@ const MESAI: GunlukMesaiCevabi = {
     { kisiId: 8, ad: 'Deneme Gececi', isMerkeziId: 10, vardiyaId: 2,
       plan: { dakika: 480, kapali: null, araliklar: [{ baslangic: an(10, 22), bitis: an(11, 6) }] } },
     { kisiId: 9, ad: 'Deneme Seçmeyen', isMerkeziId: 10, vardiyaId: null, plan: { dakika: 0, kapali: null, araliklar: [] } },
+    // Vardiyası seçilmemiş kişinin planı iş merkezinin bütün açık vardiyalarıdır (930 dakika); kişi görünümünde sayılmaz (K23 a).
+    { kisiId: 12, ad: 'Deneme Hepsi', isMerkeziId: 10, vardiyaId: null,
+      plan: { dakika: 930, kapali: null, araliklar: [{ baslangic: an(10, 8), bitis: an(10, 12) }, { baslangic: an(10, 22), bitis: an(11, 6) }] } },
     { kisiId: 11, ad: 'Deneme Bağsız', isMerkeziId: null, vardiyaId: null, plan: null },
   ],
 };
@@ -70,7 +73,11 @@ describe('Günlük mesai', () => {
     const gece = within(satir('Deneme Gececi'));
     for (const metin of ['22:00', '11.10 06:00', '8 sa']) expect(gece.getByText(metin)).toBeTruthy();
     expect(within(satir('Deneme Seçmeyen')).getByText('Seçilmedi')).toBeTruthy();
-    expect(within(satir('Deneme Seçmeyen')).getByText('Vardiya yok')).toBeTruthy();
+    expect(within(satir('Deneme Seçmeyen')).getByText('Vardiya seçin')).toBeTruthy();
+    const hepsi = within(satir('Deneme Hepsi'));
+    expect(hepsi.getByText('Vardiya seçin')).toBeTruthy();
+    expect(hepsi.getAllByText('–')).toHaveLength(3);
+    expect(hepsi.queryByText('15,5 sa')).toBeNull();
     expect(within(satir('Deneme Bağsız')).getByText('İş merkezi yok')).toBeTruthy();
   });
 
@@ -82,7 +89,7 @@ describe('Günlük mesai', () => {
     const deger = (baslik: string) => kart(baslik).querySelector('.tc-sayi-deger')!.textContent;
     expect(deger('Mesaide')).toBe('2');
     expect(deger('Planlı mesai')).toBe('15,5');
-    expect(deger('Vardiyası seçilmemiş')).toBe('2');
+    expect(deger('Vardiyası seçilmemiş')).toBe('3');
     expect(deger('İş merkezi yok')).toBe('1');
     expect(kart('Vardiyası seçilmemiş').getAttribute('href')).toBe('/vardiya/personel');
     expect(screen.getByText(/Gerçek giriş-çıkış kaydı henüz tutulmuyor/)).toBeTruthy();

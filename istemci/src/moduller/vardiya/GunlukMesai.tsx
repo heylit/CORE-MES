@@ -15,9 +15,15 @@ import './vardiya.css';
 // saatler plandır ve ekran bunu açıkça söyler; uydurulmuş "geldi/gelmedi" gösterilmez.
 type Satir = GunlukMesaiCevabi['satirlar'][number];
 
+// K23 a: vardiyası seçilmemiş kişi kapasitede iş merkezinin bütün açık vardiyalarında sayılır (sunucu aynı kalır); kişinin mesaisi o
+// vardiyaların toplamı değildir, satır plan yerine "Vardiya seçin" der ve özetin mesai sayılarına girmez.
+const vardiyaBekler = (s: Satir): boolean => s.vardiyaId === null && s.plan !== null && s.plan.kapali === null;
+const planli = (s: Satir) => (vardiyaBekler(s) ? null : s.plan);
+
 function durum(s: Satir): { ton: RozetTonu; metin: string } {
   if (s.plan === null) return { ton: 'pasif', metin: 'İş merkezi yok' };
   if (s.plan.kapali) return { ton: 'uyari', metin: s.plan.kapali.ad ?? (s.plan.kapali.tur === 'tatil' ? 'Tatil' : 'Kapalı') };
+  if (vardiyaBekler(s)) return { ton: 'uyari', metin: 'Vardiya seçin' };
   if (s.plan.dakika > 0) return { ton: 'tamam', metin: 'Mesaide' };
   return { ton: 'pasif', metin: 'Vardiya yok' };
 }
@@ -56,8 +62,8 @@ export function GunlukMesaiEkrani() {
   const merkezAdi = (id: number | null) => { const m = t.isMerkezleri.find((x) => x.id === id); return m ? `${m.kod} ${m.ad}` : '–'; };
   const vardiyaAdi = (id: number | null) => (id === null ? 'Seçilmedi' : t.vardiyalar.find((v) => v.id === id)?.ad ?? '–');
   const satirlar = mesai.data?.satirlar ?? [];
-  const calisan = satirlar.filter((s) => (s.plan?.dakika ?? 0) > 0);
-  const toplamDakika = calisan.reduce((n, s) => n + (s.plan?.dakika ?? 0), 0);
+  const calisan = satirlar.filter((s) => (planli(s)?.dakika ?? 0) > 0);
+  const toplamDakika = calisan.reduce((n, s) => n + (planli(s)?.dakika ?? 0), 0);
   // Okuma gelmeden undefined (yükleniyor), personel yokken null (veri yok); sıfır yalnız gerçek sayımdır.
   const yok = mesai.data !== undefined && satirlar.length === 0;
   const sayi = (n: number) => (mesai.data === undefined ? undefined : yok ? null : n);
@@ -65,9 +71,9 @@ export function GunlukMesaiEkrani() {
     { anahtar: 'ad', baslik: 'Personel', hucre: (s) => s.ad },
     { anahtar: 'merkez', baslik: 'İş merkezi', hucre: (s) => merkezAdi(s.isMerkeziId) },
     { anahtar: 'vardiya', baslik: 'Vardiya', hucre: (s) => vardiyaAdi(s.vardiyaId) },
-    { anahtar: 'giris', baslik: 'Plan giriş', mono: true, kirilmaz: true, hucre: (s) => { const a = s.plan?.araliklar[0]; return a ? anMetni(a.baslangic, tarih) : '–'; } },
-    { anahtar: 'cikis', baslik: 'Plan çıkış', mono: true, kirilmaz: true, hucre: (s) => { const a = s.plan?.araliklar.at(-1); return a ? anMetni(a.bitis, tarih) : '–'; } },
-    { anahtar: 'net', baslik: 'Net mesai', hizala: 'sag', mono: true, hucre: (s) => (s.plan && s.plan.dakika > 0 ? `${saat(s.plan.dakika)} sa` : '–') },
+    { anahtar: 'giris', baslik: 'Plan giriş', mono: true, kirilmaz: true, hucre: (s) => { const a = planli(s)?.araliklar[0]; return a ? anMetni(a.baslangic, tarih) : '–'; } },
+    { anahtar: 'cikis', baslik: 'Plan çıkış', mono: true, kirilmaz: true, hucre: (s) => { const a = planli(s)?.araliklar.at(-1); return a ? anMetni(a.bitis, tarih) : '–'; } },
+    { anahtar: 'net', baslik: 'Net mesai', hizala: 'sag', mono: true, hucre: (s) => { const p = planli(s); return p && p.dakika > 0 ? `${saat(p.dakika)} sa` : '–'; } },
     { anahtar: 'durum', baslik: 'Durum', hucre: (s) => { const d = durum(s); return <Rozet ton={d.ton}>{d.metin}</Rozet>; } },
   ];
   const kapali = t.gunler.find((g) => g.tarih === tarih);
@@ -99,7 +105,7 @@ export function GunlukMesaiEkrani() {
             )}
           </>
         )}
-        <p className="tc-vr-ipucu">Saatler plandır: kişinin vardiyası, vardiyası seçilmemişse iş merkezinin o gün açık vardiyaları; molalar ve planlı duruşlar düşülür. Gerçek giriş-çıkış kaydı henüz tutulmuyor.</p>
+        <p className="tc-vr-ipucu">Saatler plandır: kişinin vardiyası; molalar ve planlı duruşlar düşülür. Vardiyası seçilmemiş kişinin planı vardiya seçilince görünür. Gerçek giriş-çıkış kaydı henüz tutulmuyor.</p>
       </section>
     </div>
   );
