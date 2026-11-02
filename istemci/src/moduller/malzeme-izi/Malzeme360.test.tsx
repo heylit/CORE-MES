@@ -62,6 +62,13 @@ describe('Malzeme 360 (kart 1296)', () => {
     await vi.waitFor(() => expect(istekler.some((y) => y.includes('metin=%C3%A7ubuk'))).toBe(true));
   });
 
+  it('arama adreste durur: adresle açılınca kutu ve istek aynı aramayla gelir', async () => {
+    const istekler = sunucuKur();
+    ac('/malzeme-izi?ara=%C3%A7ubuk&sayfa=2');
+    await vi.waitFor(() => expect(istekler.some((y) => y.includes('metin=%C3%A7ubuk') && y.includes('sayfa=2'))).toBe(true));
+    expect((screen.getByLabelText('Kod ya da ad ara') as HTMLInputElement).value).toBe('çubuk');
+  });
+
   it('şerit stok grupları ve siparişte gelen toplamı; tarihsiz sipariş "Tarihsiz"; açık NCR partisi işaretli', async () => {
     sunucuKur();
     ac('/malzeme-izi/9');
@@ -73,6 +80,40 @@ describe('Malzeme 360 (kart 1296)', () => {
     expect(screen.getByText('Tarihsiz')).toBeTruthy();
     expect(within(screen.getByText('LT-000001').closest('tr')!).getByText('Açık NCR')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Stok/ }).getAttribute('href')).toBe('/stok/malzemeler/9');
+  });
+
+  it('farklı birimdeki sipariş satırları toplanmaz: her birim ayrı kutu, kartın birimi önce', async () => {
+    sunucuKur({ ...V360, gelecek: [
+      { siparisNo: 'SA-000501', tarih: '2026-11-04', miktar: '3', birim: 'boy' },
+      { siparisNo: 'SA-000502', tarih: null, miktar: '0.1', birim: 'kg' },
+      { siparisNo: 'SA-000503', tarih: null, miktar: '0.2', birim: 'kg' },
+      { siparisNo: 'SA-000504', tarih: null, miktar: '2', birim: 'boy' },
+    ] });
+    ac('/malzeme-izi/9');
+    const serit = await screen.findByRole('list', { name: 'Malzemenin hâli' });
+    const kutular = within(serit).getAllByText('Siparişte (gelecek)').map((r) => r.closest('li')?.querySelector('strong')?.textContent);
+    expect(kutular).toEqual(['0,3 kg', '5 boy']);
+  });
+
+  it('teslim yoksa "0 teslimden" yazılmaz; hurda varsa toplam "(hurda dahil)" der; aynı satırlı siparişler ayrı satır', async () => {
+    const satir = { siparisNo: 'SA-000600', tarih: null, miktar: '5', birim: 'kg' };
+    sunucuKur({
+      ...V360,
+      stok: { toplam: '900', kullanilabilir: '820', gruplar: [{ grup: 'kullanilabilir', miktar: '820' }, { grup: 'hurda', miktar: '80' }] },
+      gelecek: [satir, satir],
+      para: { ortalamaAlis: { tryBirimFiyat: null, teslimSayisi: 0 }, sonAlis: null, kg: null },
+    });
+    ac('/malzeme-izi/9');
+    expect(await screen.findByText(/Toplam 900 kg \(hurda dahil\)/)).toBeTruthy();
+    expect(screen.queryByText(/teslimden/)).toBeNull();
+    expect(screen.getAllByText('SA-000600')).toHaveLength(2);
+  });
+
+  it('hurda yoksa toplamda "(hurda dahil)" yazılmaz', async () => {
+    sunucuKur();
+    ac('/malzeme-izi/9');
+    expect(await screen.findByText(/Toplam 880 kg ·/)).toBeTruthy();
+    expect(screen.queryByText(/hurda dahil/)).toBeNull();
   });
 
   it('fiyat yoksa "—", sıfır yazılmaz; finans yetkisi yoksa fiyat bölümü yerine not', async () => {
@@ -89,9 +130,24 @@ describe('Malzeme 360 (kart 1296)', () => {
     expect(screen.getByText('Bu kartın stok bakiyesi yok.')).toBeTruthy();
   });
 
-  it('olmayan kart hata kutusu gösterir', async () => {
+  it('olmayan ya da hizmet kartı (404) "bulunamadı" der, yeniden dene sunmaz', async () => {
     sunucuKur();
     ac('/malzeme-izi/77');
-    expect(await screen.findByRole('button', { name: /Yeniden|Yenile/ })).toBeTruthy();
+    expect(await screen.findByText('Malzeme bulunamadı.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeniden/ })).toBeNull();
+  });
+
+  it('sunucu hatası (5xx) genel kutu ve yeniden dene gösterir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(500, { kod: 'SUNUCU', mesaj: 'Beklenmeyen hata' })));
+    ac('/malzeme-izi/9');
+    expect(await screen.findByRole('button', { name: /Yeniden/ })).toBeTruthy();
+  });
+
+  it('arama kutusu sözleşmedeki 60 sınırını taşır; 400 iletisi gösterilir, yeniden dene yok', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(400, { kod: 'DOGRULAMA', mesaj: 'En çok 60 karakter olabilir.', alan: 'metin' })));
+    ac('/malzeme-izi');
+    expect(screen.getByLabelText('Kod ya da ad ara').getAttribute('maxlength')).toBe('60');
+    expect(await screen.findByText('En çok 60 karakter olabilir.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeniden/ })).toBeNull();
   });
 });

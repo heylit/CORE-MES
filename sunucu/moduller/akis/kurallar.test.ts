@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  adimAraliklari, emirAkisi, fasonAraligi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi,
+  adimAraliklari, aralikBirlesimi, aramaMetni, calisilanSure, emirAkisi, fasonAraligi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, statuKalislari, type AkisAdimi, type AkisGirdisi, type AkisHareketi,
 } from './kurallar.ts';
 
 // Saat 08:00'den dakika sayar; okunaklı örnek için.
@@ -21,7 +21,7 @@ const STATULER = new Map([[11, { ad: 'HM', tur: 'HM' as const }], [12, { ad: 'YM
 const girdi = (g: Partial<AkisGirdisi>): AkisGirdisi => ({
   simdi: z(SIMDI),
   emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'basladi', baslama: null, teslim: null },
-  adimlar: [], birimSureler: new Map(), olaylar: [], sayimlar: [], fason: [], hareketler: [], statuler: STATULER, partiGirisleri: new Map(), sevk: null,
+  adimlar: [], birimSureler: new Map(), olaylar: [], sayimlar: [], fason: [], hareketler: [], statuler: STATULER, partiGirisleri: new Map(), sevk: null, calisma: null,
   ...g,
 });
 
@@ -128,6 +128,27 @@ describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
     assert.deepEqual(s.olculer.sevkBekleme, { dk: 300, acik: false });
     assert.equal(s.olculer.islemeToplamDk, 270 + 100);
     assert.equal(s.olculer.akisVerimi, 0.188);
+    assert.equal(s.olculer.vardiyaSaatiyle, false, 'takvim yoksa takvim saati');
+  });
+
+  // AKS-13 (1852 a): tesis 1. gün 0-480, 2. gün 1440-1920. dakikada çalışır; OP30'un istasyonu yalnız 1700-1800 arası.
+  test('AKS-13: bekleme ve akış ölçüleri vardiya saatiyle; işleme, çevrim ve uçtan uca takvim saatiyle; adımın kendi takvimi önce', () => {
+    const ms = (dakika: number): number => Date.parse(z(dakika));
+    const tesis = [{ bas: ms(0), bit: ms(480) }, { bas: ms(1440), bit: ms(1920) }];
+    const s = emirAkisi({ ...temel, calisma: { adimlar: new Map([[3, [{ bas: ms(1700), bit: ms(1800) }]]]), tesis } });
+    assert.equal(s.olculer.vardiyaSaatiyle, true);
+    assert.deepEqual(s.olculer.uretimAkis, { dk: 450 + 480, acik: false }, '30-480 ve 1440-1920');
+    assert.deepEqual(s.olculer.hammaddeBekleme, { dk: 30, acik: false }, 'mal kabul gece; çalışma 0. dakikada başlar');
+    assert.deepEqual(s.olculer.sevkBekleme, { dk: 0, acik: false }, 'sevk bekleme mesai dışında');
+    assert.deepEqual(s.olculer.uctanUca, { dk: 3400, acik: false });
+    assert.equal(s.olculer.islemeToplamDk, 370);
+    assert.equal(s.olculer.islemeVardiyaDk, 290);
+    assert.equal(s.olculer.akisVerimi, Math.round((270 + 20) / 930 * 1000) / 1000, 'pay işlemenin çalışma saatine düşen kısmı');
+    const [, op20, op30] = s.adimlar;
+    assert.equal(op20?.beklemeDk, 100, 'istasyonsuz (fason) adım tesis takvimiyle');
+    assert.equal(op30?.beklemeDk, 100, 'adımın istasyonu 1700-1800');
+    assert.equal(op30?.cevrimBirimDk, 10);
+    assert.equal(s.hammadde[0]?.beklemeDk, 10, 'parti kullanımı 10. dakikada');
   });
 
   test('adım ölçüleri: bekleyen adımın beklemesi önceki adımın bitişinden (fasonda bütün dönüşten) başlar; çevrim Üretim Emirleri birim süresidir', () => {
@@ -335,5 +356,49 @@ describe('kartın lotundan sarf', () => {
     assert.equal(kartSarfi(h, 1), '2.750');
     assert.equal(kartSarfi(h, 3), null);
     assert.equal(kartSarfi(h, null), null);
+  });
+});
+
+describe('akış verimi ekrandaki sürelerden (AKS-5 a)', () => {
+  const sn = (saniye: number): string => new Date(Date.UTC(2026, 0, 5, 8, 0) + saniye * 1000).toISOString();
+  test('saniyelik kayıtta işleme ve akış "0 dk" iken verim yok; ölçülebilir sürede oran yuvarlanmış dakikalardan', () => {
+    const kisa = girdi({
+      emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'bitti', baslama: sn(0), teslim: null },
+      adimlar: [adim({ id: 1, opNo: 10, baslama: sn(0), bitis: sn(2) })],
+    });
+    const k = emirAkisi(kisa).olculer;
+    assert.equal(k.uretimAkis.dk, 0);
+    assert.equal(k.islemeToplamDk, 0);
+    assert.equal(k.akisVerimi, null);
+    const uzun = girdi({
+      emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'bitti', baslama: z(0), teslim: null },
+      adimlar: [adim({ id: 1, opNo: 10, baslama: z(0), bitis: z(30) }), adim({ id: 2, opNo: 20, baslama: z(60), bitis: z(100) })],
+    });
+    const u = emirAkisi(uzun).olculer;
+    assert.equal(u.uretimAkis.dk, 100);
+    assert.equal(u.islemeToplamDk, 70);
+    assert.equal(u.akisVerimi, 0.7);
+  });
+});
+
+describe('AKS-13 çalışma saati', () => {
+  test('aralığın takvime düşen kısmı; takvim yoksa bütün aralık; ters aralık 0', () => {
+    const t = [{ bas: 10, bit: 20 }, { bas: 30, bit: 40 }];
+    assert.equal(calisilanSure(t, 15, 35), 10);
+    assert.equal(calisilanSure(t, 0, 100), 20);
+    assert.equal(calisilanSure(null, 15, 35), 20);
+    assert.equal(calisilanSure(t, 35, 15), 0);
+    assert.equal(calisilanSure([], 0, 100), 0);
+  });
+  test('istasyon takvimlerinin birleşimi sıralı ve örtüşmez', () => {
+    assert.deepEqual(aralikBirlesimi([[{ bas: 30, bit: 40 }, { bas: 0, bit: 10 }], [{ bas: 5, bit: 15 }, { bas: 40, bit: 50 }]]),
+      [{ bas: 0, bit: 15 }, { bas: 30, bit: 50 }]);
+  });
+});
+
+describe('aramaMetni (AKS-3, AKS-5 a)', () => {
+  test('Türkçe küçük harfe çevirir, ç ğ ı ö ş ü düz harfe iner', () => {
+    assert.equal(aramaMetni(' Burç IŞIK İğne Ölçü '), 'burc isik igne olcu');
+    assert.equal(aramaMetni('burc'), 'burc');
   });
 });

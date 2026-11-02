@@ -51,6 +51,30 @@ export interface AkisGirdisi {
   statuler: ReadonlyMap<number, { ad: string; tur: 'HM' | 'YM' | 'MM' | null }>;
   partiGirisleri: ReadonlyMap<number, { lotNo: string | null; malKabul: string | null }>;
   sevk: { hazir: string | null; sevk: string | null } | null;
+  // 1852 a: bekleme ve akış ölçüleri vardiya saatiyle. Adımın istasyonunun çalışma aralıkları (yoksa tesisinki) ve tesisin aralıkları
+  // (adımların istasyonlarının birleşimi). null: takvim yok, ölçü takvim saatiyle kalır.
+  calisma: { adimlar: ReadonlyMap<number, readonly CalismaAraligi[]>; tesis: readonly CalismaAraligi[] } | null;
+}
+
+export interface CalismaAraligi { bas: number; bit: number }
+
+// AKS-13 (1852 a): [bas, bit] aralığının çalışma saatine düşen kısmı (ms); takvim yoksa bütün aralık (takvim saati).
+export function calisilanSure(takvim: readonly CalismaAraligi[] | null | undefined, bas: number, bit: number): number {
+  if (bit <= bas) return 0;
+  if (takvim == null) return bit - bas;
+  return takvim.reduce((t, a) => t + Math.max(0, Math.min(bit, a.bit) - Math.max(bas, a.bas)), 0);
+}
+
+// Tesisin çalışma aralıkları: istasyonlardan biri çalışırken tesis çalışıyor sayılır (sıralı, örtüşmez).
+export function aralikBirlesimi(listeler: readonly (readonly CalismaAraligi[])[]): CalismaAraligi[] {
+  const sirali = listeler.flat().filter((a) => a.bit > a.bas).sort((x, y) => x.bas - y.bas);
+  const sonuc: CalismaAraligi[] = [];
+  for (const a of sirali) {
+    const son = sonuc.at(-1);
+    if (son !== undefined && a.bas <= son.bit) son.bit = Math.max(son.bit, a.bit);
+    else sonuc.push({ bas: a.bas, bit: a.bit });
+  }
+  return sonuc;
 }
 
 const an = (z: string): number => Date.parse(z);
@@ -201,6 +225,7 @@ export function statuKalislari(
 // HM türündeki statüden çevrilmesi ya da (ikisi de yoksa) ilk adımın başlaması; hangisi önceyse. Emrin kendi ürün partisi
 // hammadde değildir. Mal kabulü olmayan partinin giriş zamanı bilinmez (null), uydurulmaz.
 export function hammaddePartileri(g: AkisGirdisi, uretimBasladi: number | null): HammaddePartisi[] {
+  const tesis = g.calisma?.tesis;
   const kimlikler = new Set<number>();
   for (const h of g.hareketler) {
     if (h.partiId === null || h.malzemeId === g.emir.malzemeNo) continue;
@@ -219,15 +244,15 @@ export function hammaddePartileri(g: AkisGirdisi, uretimBasladi: number | null):
       lotNo: giris?.lotNo ?? null,
       malKabul,
       kullanim: kullanim === null ? null : metin(kullanim),
-      beklemeDk: malKabul === null || kullanim === null ? null : dk(Math.max(0, kullanim - an(malKabul))),
+      beklemeDk: malKabul === null || kullanim === null ? null : dk(calisilanSure(tesis, an(malKabul), kullanim)),
     };
   });
 }
 
-const olcu = (bas: number | null, bit: number | null, simdi: number, surer: boolean): Olcu => {
+const olcu = (bas: number | null, bit: number | null, simdi: number, surer: boolean, takvim?: readonly CalismaAraligi[] | null): Olcu => {
   if (bas === null) return { dk: null, acik: false };
-  if (bit !== null) return { dk: dk(Math.max(0, bit - bas)), acik: false };
-  return surer ? { dk: dk(Math.max(0, simdi - bas)), acik: true } : { dk: null, acik: false };
+  if (bit !== null) return { dk: dk(calisilanSure(takvim, bas, bit)), acik: false };
+  return surer ? { dk: dk(calisilanSure(takvim, bas, simdi)), acik: true } : { dk: null, acik: false };
 };
 const toplam = (a: readonly Aralik[], tur: BolumTuru): number => a.filter((x) => x.tur === tur).reduce((t, x) => t + (x.bit - x.bas), 0);
 const bolum = (a: Aralik): Bolum => ({ tur: a.tur, baslangic: metin(a.bas), bitis: metin(a.bit), acik: a.acik });
@@ -235,9 +260,13 @@ const bolum = (a: Aralik): Bolum => ({ tur: a.tur, baslangic: metin(a.bas), biti
 // AKS-6: damgalar ve ölçüler. Uçtan uca: en eski hammadde mal kabulünden sevke. Hammadde bekleme: mal kabulden üretimin
 // başlamasına. Üretim akış: ilk adımın ilk olayından son adımın bitişine. Sevk bekleme: sevke hazırdan sevke. Bitmemiş ölçü
 // emir sürüyorsa "şimdi"ye kadar açık gösterilir; iptal emirde açık ölçü yoktur. Akış verimi: işleme toplamı ÷ üretim akış süresi.
+// AKS-13 (1852 a): adım beklemesi, hammadde ve sevk beklemesi, üretim akışı ve verim vardiya saatiyle; işleme, çevrim ve uçtan uca
+// takvim saatiyle (Üretim Emirleri ile aynı tanım, AKS-4 a). Verimin payı işlemenin çalışma saatine düşen kısmıdır: iki süre aynı saatle.
 export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
   const simdi = an(g.simdi);
   const surer = g.emir.durum !== 'iptal';
+  const tesis = g.calisma?.tesis ?? null;
+  const adimTakvimi = (id: number) => g.calisma?.adimlar.get(id) ?? tesis;
   const adimlar = [...g.adimlar].sort((a, b) => a.sira - b.sira || a.opNo - b.opNo);
   const araliklar = new Map<number, Aralik[]>();
   for (const a of adimlar) {
@@ -337,7 +366,9 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
       opNo: a.opNo,
       istasyon: a.istasyon,
       fason: a.fason,
-      beklemeDk: b || yenidenAcilma > 0 ? dk((b ? b.bit - b.bas : 0) + yenidenAcilma) : null,
+      beklemeDk: b || yenidenAcilma > 0
+        ? dk([...(b ? [b] : []), ...ar.filter((x) => x.tur === 'bekleme')].reduce((t, x) => t + calisilanSure(adimTakvimi(a.id), x.bas, x.bit), 0))
+        : null,
       hazirlikDk: basladi && !a.fason ? dk(toplam(ar, 'hazirlik')) : null,
       islemeDk: basladi && !a.fason ? dk(isleme) : null,
       duraklamaDk: basladi && !a.fason ? dk(toplam(ar, 'duraklama')) : null,
@@ -352,8 +383,13 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
   });
   const islemeToplam = adimOlculeri.some((a) => a.islemeDk !== null)
     ? adimlar.reduce((t, a) => t + (a.fason ? 0 : toplam(araliklar.get(a.id) ?? [], 'isleme')), 0) : null;
-  const uretimAkis = olcu(uretimBasladi, uretimBitti, simdi, surer);
-  const akisMs = uretimBasladi === null ? null : (uretimBitti ?? simdi) - uretimBasladi;
+  const uretimAkis = olcu(uretimBasladi, uretimBitti, simdi, surer, tesis);
+  const islemeToplamDk = islemeToplam === null ? null : dk(islemeToplam);
+  const islemeCalisilanDk = islemeToplam === null ? null : dk(adimlar.reduce((t, a) => t + (a.fason ? 0
+    : (araliklar.get(a.id) ?? []).filter((x) => x.tur === 'isleme').reduce((u, x) => u + calisilanSure(tesis, x.bas, x.bit), 0)), 0));
+  // Verim ekrandaki (0,1 dk'ya yuvarlanmış) iki süreden: "0 dk" işleme ile "0 dk" akış yanında yüzde görünmez.
+  const akisVerimi = islemeCalisilanDk === null || uretimAkis.dk === null || uretimAkis.dk <= 0
+    ? null : Math.min(1, Math.round(islemeCalisilanDk / uretimAkis.dk * 1000) / 1000);
 
   return {
     simdi: metin(simdi),
@@ -366,11 +402,13 @@ export function emirAkisi(g: AkisGirdisi): Omit<EmirAkisiCevabi, 'emir'> {
     },
     olculer: {
       uctanUca: olcu(malKabul, sevk, simdi, surer),
-      hammaddeBekleme: olcu(malKabul, uretimBasladi, simdi, surer),
+      hammaddeBekleme: olcu(malKabul, uretimBasladi, simdi, surer, tesis),
       uretimAkis,
-      sevkBekleme: olcu(sevkeHazir, sevk, simdi, surer),
-      islemeToplamDk: islemeToplam === null ? null : dk(islemeToplam),
-      akisVerimi: islemeToplam === null || akisMs === null || akisMs <= 0 ? null : Math.min(1, Math.round(islemeToplam / akisMs * 1000) / 1000),
+      sevkBekleme: olcu(sevkeHazir, sevk, simdi, surer, tesis),
+      islemeToplamDk,
+      akisVerimi,
+      vardiyaSaatiyle: tesis !== null,
+      islemeVardiyaDk: islemeCalisilanDk,
     },
     seritler,
     adimlar: adimOlculeri,
@@ -520,3 +558,7 @@ export function kartSarfi(hareketler: readonly AkisHareketi[], partiId: number |
   if (sarflar.length === 0) return null;
   return (sarflar.reduce((t, h) => t + binde(h.miktar), 0) / 1000).toFixed(3);
 }
+
+// Arama Türkçe harfi düz harfle eşler ("burc" "Burç"u bulur); büyük-küçük harf Türkçe kuralıyla (I -> ı, İ -> i).
+const DUZ_HARF: Readonly<Record<string, string>> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+export const aramaMetni = (s: string): string => s.trim().toLocaleLowerCase('tr-TR').replace(/[çğıöşü]/g, (h) => DUZ_HARF[h] ?? h);

@@ -1,5 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
+import { AZAMI_TAKVIM_GUNU } from '#paylasilan/sozlesme/vardiya.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
+import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, SureOzeti } from '#paylasilan/sozlesme/akis.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
@@ -9,17 +12,46 @@ import { receteRotaStatuleri } from '../recete-rota/disari.ts';
 import { emirlerinSevkDurumu } from '../sevkiyat/disari.ts';
 import { emrinAkisHareketleri, partiGirisZamanlari, refakatKartiKapsami } from '../stok/disari.ts';
 import { adimliEmirListesi, emirAkisKaydi, sureOzetiHesapla } from '../uretim-emirleri/disari.ts';
-import { emirAkisi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, type AkisGirdisi } from './kurallar.ts';
+import { calismaTakvimleri } from '../vardiya/disari.ts';
+import { aralikBirlesimi, aramaMetni, emirAkisi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, type AkisGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Standart süreler numeric metin gelir; ekranda dakika sayısıdır.
 const sayi = (m: string | null): number | null => (m === null ? null : Number(m));
 const tekil = (d: readonly (number | null)[]): number[] => [...new Set(d.filter((x): x is number => x !== null))];
 
-export async function emirListesi(db: Db): Promise<EmirListesiCevabi> {
+// Liste Üretim Emirleri'nin arşiv dışı emir listesidir (en yeni önce); arama ve sayfa burada uygulanır. Kaynak sayfalı okuma
+// vermediği için satırlar bir kez okunup dilimlenir (3000 emirde ölçüm: uç 0,05-0,12 sn).
+export async function emirListesi(db: Db, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; ara?: string | undefined }): Promise<EmirListesiCevabi> {
   const { emirler } = await adimliEmirListesi(db, false);
+  const satirlar = emirler.map((e) => ({ id: e.id, emirNo: e.emirNo, urun: `${e.urun.kod} ${e.urun.ad}`.trim(), adet: e.adet, durum: e.durum, teslim: e.teslim }));
+  const aranan = aramaMetni(sorgu.ara ?? '');
+  const uyan = aranan === '' ? satirlar : satirlar.filter((e) => aramaMetni(`${e.emirNo} ${e.urun}`).includes(aranan));
+  return sayfaliListe(sorgu, { say: () => Promise.resolve(uyan.length), satirlar: (d) => Promise.resolve(uyan.slice(d.atla, d.atla + d.sinir)) });
+}
+
+const GUN = 86_400_000;
+
+// 1852 a: adımların istasyonlarının çalışma aralıkları, ölçülen en eski andan bugüne tek okumada. Takvimi olmayan (iş merkezine
+// bağlanamayan ya da hiç çalışma günü tanımlanmamış) istasyon haritada yoktur; hiçbiri yoksa ya da pencere takvim sınırını aşarsa null:
+// ölçüler takvim saatiyle kalır, çalışma saati uydurulmaz.
+async function calismaAraliklari(
+  db: Db, adimlar: readonly { id: number; istasyonId: number | null }[], enErken: number | null, simdi: number,
+): Promise<AkisGirdisi['calisma']> {
+  const istasyonlar = tekil(adimlar.map((a) => a.istasyonId));
+  if (istasyonlar.length === 0 || enErken === null || enErken > simdi) return null;
+  const aralik = { baslangic: tesisGunu(enErken), bitis: tesisGunu(simdi + GUN) };
+  if ((Date.parse(aralik.bitis) - Date.parse(aralik.baslangic)) / GUN > AZAMI_TAKVIM_GUNU) return null;
+  const takvimler = await calismaTakvimleri(db, istasyonlar.map((id) => ({ tur: 'istasyon' as const, id })), aralik);
+  const istasyonAraliklari = new Map(istasyonlar.flatMap((id) => {
+    const t = takvimler.get(`istasyon:${String(id)}`) ?? null;
+    if (t === null || t.gunler.every((x) => x.dakika === 0)) return [];
+    return [[id, t.araliklar.map((a) => ({ bas: Date.parse(a.baslangic), bit: Date.parse(a.bitis) }))] as const];
+  }));
+  if (istasyonAraliklari.size === 0) return null;
   return {
-    emirler: emirler.map((e) => ({ id: e.id, emirNo: e.emirNo, urun: `${e.urun.kod} ${e.urun.ad}`.trim(), adet: e.adet, durum: e.durum, teslim: e.teslim })),
+    adimlar: new Map(adimlar.flatMap((a) => { const t = a.istasyonId === null ? undefined : istasyonAraliklari.get(a.istasyonId); return t === undefined ? [] : [[a.id, t] as const]; })),
+    tesis: aralikBirlesimi([...istasyonAraliklari.values()]),
   };
 }
 
@@ -54,7 +86,12 @@ async function akisGirdisi(db: Db, id: number, kart: { id: number; partiIdler: r
     statuler: new Map(statuler.map((s) => [s.id, { ad: s.ad, tur: s.tur }])),
     partiGirisleri: new Map([...partiler].map(([k, p]) => [k, { lotNo: p.lotNo, malKabul: p.malKabulZamani }])),
     sevk: sevkAni(sevkler.get(id) ?? null),
+    calisma: null,
   };
+  const anlar = [
+    ...[...partiler.values()].map((p) => p.malKabulZamani), emir.baslama, ...kayit.olaylar.map((o) => o.zaman), girdi.sevk?.hazir ?? null,
+  ].flatMap((z) => (z === null ? [] : [Date.parse(z)]));
+  girdi.calisma = await calismaAraliklari(db, kayit.isEmirleri, anlar.length === 0 ? null : Math.min(...anlar), Date.parse(simdi));
   return { girdi, kayit, emir: { id: emir.id, emirNo: emir.emirNo, adet: emir.adet, durum: emir.durum, teslim: emir.teslim } };
 }
 

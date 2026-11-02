@@ -1,6 +1,6 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  emirAkisiCevabi, emirListesiCevabi, emirParametresi, kartAkisiCevabi, kartOzetleriCevabi, kartOzetleriSorgusu, kartParametresi,
+  emirAkisiCevabi, emirListesiCevabi, emirListesiSorgusu, emirParametresi, kartAkisiCevabi, kartOzetleriCevabi, kartOzetleriSorgusu, kartParametresi,
 } from '#paylasilan/sozlesme/akis.ts';
 import { emirAkisiOku, emirListesi, kartAkisiOku, kartOzetleri } from './servis.ts';
 
@@ -12,8 +12,9 @@ export const uclar = [
     yontem: 'GET',
     yol: '/akis/emirler',
     yetki: OKUMA,
+    sorgu: emirListesiSorgusu,
     cevap: emirListesiCevabi,
-    isle: ({ db }) => emirListesi(db),
+    isle: ({ db, sorgu }) => emirListesi(db, sorgu),
   }),
   uc({
     yontem: 'GET',
