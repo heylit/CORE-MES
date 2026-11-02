@@ -30,6 +30,15 @@ test('hiçbir aracın kapasitesine sığmayan iş atanamaz, nedeni yazılır', (
   assert.deepEqual(islerOf(p, 'K1'), ['hafif']);
 });
 
+test('süre sınırı dolunca arama durur, eldeki geçerli çözüm döner; sınır yoksa yineleme bütçesi kullanılır', () => {
+  const isler = [is('t1'), is('t2', { birakisNoktasi: 'B' }), is('t3', { birakisNoktasi: 'C' }), is('t4', { birakisNoktasi: 'D' })];
+  const sinirli = coz(isler, [arac('K1'), arac('K2')], { sureSiniriMs: 0 });
+  assert.equal(sinirli.yineleme, 0);
+  assert.deepEqual(sinirli.atanamayan, []);
+  assert.equal(sinirli.rotalar.flatMap((r) => r.duraklar.filter((d) => d.is !== null)).length, 4);
+  assert.equal(coz(isler, [arac('K1'), arac('K2')]).yineleme, SECENEK.yinelemeSiniri);
+});
+
 test('palet kapasitesi de sınırdır: sefer yükü kapasiteyi aşmaz, gerekirse ara dönüşle ikinci sefer açılır', () => {
   const p = coz([is('t1', { palet: 3, birakisNoktasi: 'A' }), is('t2', { palet: 3, birakisNoktasi: 'C' })], [arac('K1')]);
   const r = rotasi(p, 'K1')!;

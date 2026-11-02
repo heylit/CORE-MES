@@ -24,7 +24,7 @@ import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloR
 import {
   AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
   ADRES_FIRMADA_YOK, ADRES_FIRMASIZ, NOKTA_FIRMASI_GEREKIR, isNoktasiIhlali, noktaFirmasizMi, noktaKonumuSec, onayEngelleri, plandanCikarilmali, surumGuncel,
-  planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar,
+  planDegistirilebilir, planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi, korunanOranlar, COZUCU_SURE_SINIRI_MS,
 } from './kurallar.ts';
 import type { Amac, AracTuru, IsDurumu, IsTuru, KuralIhlali, PlanRotasiGirdisi } from './kurallar.ts';
 import { fasonSevkiBildir, urunSevkiBildir } from './sevk-olaylari.ts';
@@ -576,7 +576,7 @@ function cozucuGirdisi(v: GunVerisi) {
 function coz(paket: HaritaPaketi, v: GunVerisi, amac: Amac, kip: CozumKipi, kilitli: readonly number[]): FiloPlani {
   const girdi = cozucuGirdisi(v), gun = gunTipi(v.tarih);
   const sonuc = filoPlani(paket.ag, girdi.fabrika, girdi.noktalar, girdi.isler, girdi.araclar, {
-    gun, amac, kip, baslangic: girdi.baslangic, kilitliAraclar: kilitli.map(String), yinelemeSiniri: yinelemeButcesi(v.isler.length),
+    gun, amac, kip, baslangic: girdi.baslangic, kilitliAraclar: kilitli.map(String), yinelemeSiniri: yinelemeButcesi(v.isler.length), sureSiniriMs: COZUCU_SURE_SINIRI_MS,
   }, matrisAl(paket, gun));
   matrisSakla(paket, gun, sonuc.matris);
   return sonuc;

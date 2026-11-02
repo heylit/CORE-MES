@@ -1,7 +1,7 @@
 // Filo planı: teslimat, alım ve al-bırak işlerini araçlara paylaştırır ve sıralar. Kapasite (kg, palet), zaman
 // penceresi, araç müsaitlik aralığı, sefer sınırı ve "aynı seferde önce al, sonra bırak" sağlanır.
 // Yöntem: zamana bağlı süre matrisi, pişmanlık (regret-2) ekleme, büyük komşuluk araması (LNS) ve sefer başına kesin sıra.
-// Saf ve belirlenimci: süre yerine yineleme sınırı, rastgelelik tohumlu.
+// Saf; yineleme sınırı ve tohumla belirlenimci. Süre sınırı verilirse arama o süre dolunca en iyi çözümle durur.
 import {
   ARAC_BEDELI_DAKIKA, ARAC_BEDELI_KILOMETRE, ARAC_HIZ_KATSAYISI, BEKLEME_AGIRLIGI, BOSALTMA_DAKIKA, EN_COK_SEFER, RAMPA_HIZI, SEFER_BEDELI_DAKIKA,
   SEFER_BEDELI_KILOMETRE, SERBEST_HIZ, VARSAYILAN_MALIYET, YUKLEME_DAKIKA,
@@ -43,6 +43,8 @@ export interface FiloSecenegi {
   baslangic?: readonly AracRotasi[];
   kilitliAraclar?: readonly string[];
   yinelemeSiniri?: number; tohum?: number;
+  // Arama için duvar saati sınırı (ms): hesap Node'un tek iş parçacığında koşar, uzarsa bütün sunucu bekler.
+  sureSiniriMs?: number;
 }
 
 export const VARSAYILAN_YINELEME = 3000;
@@ -223,6 +225,7 @@ const cozumKopyasi = (s: Cozum): Cozum => ({ ...s, rotalar: s.rotalar.map((r) =>
 export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly CozucuNoktasi[], isler: readonly CozucuIsi[], araclar: readonly CozucuAraci[], secenek: FiloSecenegi, oncekiMatris?: Matris): FiloPlani & { matris: Matris } {
   const amac = secenek.amac, kisa = amac === 'mesafe', ucuz = amac === 'maliyet';
   const yinelemeSiniri = secenek.yinelemeSiniri ?? VARSAYILAN_YINELEME;
+  const bitisAni = secenek.sureSiniriMs === undefined ? Infinity : performance.now() + secenek.sureSiniriMs;
   const oranBellegi = new Map<CozucuAraci, MaliyetOranlari>();
   const oranOf = (a: CozucuAraci) => { let o = oranBellegi.get(a); if (!o) { o = aracOranlari(a); oranBellegi.set(a, o); } return o; };
 
@@ -437,6 +440,7 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   const ilkSicaklik = ucuz ? 40 : 8; let sicaklik = ilkSicaklik, durgun = 0, yenidenBaslama = 0;
   const tasinabilirVar = isListesi.some((_, j) => tasinabilir(j));
   while (kip !== 'degerlendir' && tasinabilirVar && isListesi.length > 1 && aracListesi.length && yineleme < yinelemeSiniri) {
+    if (yineleme % 16 === 0 && performance.now() >= bitisAni) break;
     yineleme++;
     const aday = cozumKopyasi(mevcutCozum);
     const atanan = isListesi.map((_, j) => j).filter((j) => !aday.atanamayan.includes(j) && tasinabilir(j));
