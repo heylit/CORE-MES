@@ -125,22 +125,33 @@ describe('Giris', () => {
     });
   });
 
-  it('parola yolu secilir ve hatirlanir; PIN yoluna donulebilir', async () => {
+  it('parola yolu herkese secilebilir ama hatirlanmaz (1832): sonraki acilis yine PIN ile karsilar; PIN yoluna donulebilir', async () => {
     const cagrilar = sunucuKur();
     kur();
     fireEvent.click(screen.getByRole('button', { name: 'Parola ile gir' }));
+    expect(screen.getByText(/Parola yöneticiler ve henüz PIN'i olmayanlar içindir; PIN'i olan PIN ile girer\./)).toBeTruthy();
     kullaniciAdiYaz();
     fireEvent.change(screen.getByLabelText(/Parola/), { target: { value: 'dogru' } });
     fireEvent.click(girisDugmesi());
     await waitFor(() => expect(cagrilar).toHaveLength(1));
     expect(cagrilar[0]?.govde).toEqual({ kullaniciAdi: 'operator1', parola: 'dogru' });
 
-    cleanup();
-    kur();
-    expect(screen.getByLabelText(/Parola/)).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Rakam tuşları' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'PIN ile gir' }));
     expect(screen.getByRole('group', { name: 'Rakam tuşları' })).toBeTruthy();
+
+    cleanup();
+    kur();
+    expect(screen.getByRole('group', { name: 'Rakam tuşları' })).toBeTruthy();
+    expect(screen.queryByLabelText(/^Parola/)).toBeNull();
+    expect(window.localStorage.getItem('tmi.giris.yontem')).not.toBe('parola');
+  });
+
+  it('eski tarayicida saklanmis parola secimi yok sayilir: ekran PIN ile acilir, Parola ile gir baglantisi gorunur', () => {
+    sunucuKur();
+    window.localStorage.setItem('tmi.giris.yontem', 'parola');
+    kur();
+    expect(screen.getByRole('group', { name: 'Rakam tuşları' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Parola ile gir' })).toBeTruthy();
   });
 
   it('kartla giris (1326): okuyucu karti yazip Enter basinca PIN adimi gelir; kart ve PIN birlikte gider, secim hatirlanir', async () => {

@@ -33,6 +33,11 @@ export function kalanBeklemeSn(ardArdaHatali: number, sonHatalidanBeriSn: number
   return Math.max(0, beklemeSn(ardArdaHatali) - Math.max(0, sonHatalidanBeriSn));
 }
 
+// Bekleme sırasında doğru sır da reddedilir; ileti bunu söyler, yoksa kişi doğru parolasının yanlış sayıldığını sanır.
+export function beklemeIletisi(kalanSn: number): string {
+  return `Çok sık deneme: hatalı denemeden sonra kısa bekleme kilidi var. ${kalanSn} sn sonra yeniden deneyin; bu sürede doğru PIN ya da parola da kabul edilmez.`;
+}
+
 // Ada bütün cihazlardan, son başarılı denemeden ve son kilidin başından beri gelen hatalı deneme sayısı eşiğe varınca
 // ad kilitlenir (kullanıcı kararı, 14.10.2026). Cihaz başına bekleme dağıtık denemeyi yavaşlatmaz; kilit durdurur.
 export const HESAP_KILIDI_ESIGI = 10;

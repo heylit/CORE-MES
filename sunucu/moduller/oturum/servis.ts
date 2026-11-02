@@ -20,7 +20,7 @@ import { disIzleyiciKisiMi } from '../portal/disari.ts';
 import {
   AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
-  kilitKalanDk,
+  beklemeIletisi, kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
 } from './kurallar.ts';
 import {
@@ -143,7 +143,7 @@ export async function girisDenemesiniDenetle(db: Db, ad: string, ip: string, sim
   // kullanıcı kendi beklemesini uzatmaz.
   const seri = await hataliSeriBul(db, ad, ip, simdi);
   const kalanSn = kalanBeklemeSn(seri.sayi, seri.gecen_sn);
-  if (kalanSn > 0) throw oturumYok(`Çok sık deneme. ${kalanSn} sn sonra yeniden deneyin.`);
+  if (kalanSn > 0) throw oturumYok(beklemeIletisi(kalanSn));
 
   // Deneme temizliği zamanlanmış iş değildir; parolaya bakılan her denemede koşar.
   await eskiDenemeleriSil(db, DENEME_SAKLAMA_GUN, simdi);

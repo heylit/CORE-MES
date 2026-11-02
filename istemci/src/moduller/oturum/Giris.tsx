@@ -56,11 +56,11 @@ function TakimYolu() {
   );
 }
 
-// Yönetici kendi bilgisayarında parolayla, istasyon kartla girer (kart #1326); seçim tarayıcıda kalır ki her açılışta yeniden seçilmesin.
+// Asıl giriş PIN'dir (1832): ekran her açılışta PIN ile karşılar, parola o açılış için seçilir ve saklanmaz. İstasyon kartla
+// girer (kart #1326); kart seçimi tarayıcıda kalır ki istasyonda her açılışta yeniden seçilmesin.
 function kayitliKip(): Kip {
   try {
-    const kayitli = window.localStorage.getItem(YONTEM_ANAHTARI);
-    return kayitli === 'parola' || kayitli === 'kart' ? kayitli : 'pin';
+    return window.localStorage.getItem(YONTEM_ANAHTARI) === 'kart' ? 'kart' : 'pin';
   } catch {
     return 'pin';
   }
@@ -141,7 +141,7 @@ export function Giris() {
   };
 
   const yontemDegistir = (yeni: SakliKip) => {
-    kipiSakla(yeni);
+    if (yeni !== 'parola') kipiSakla(yeni);
     kipYaz(yeni);
     etkinYaz('pin');
     kartYaz('');
@@ -248,7 +248,7 @@ export function Giris() {
           </h1>
           <p className="tc-giris-aciklama">
             {kip === 'pin' && `Kullanıcı adınız ve ${PIN_HANE} haneli PIN'inizle girin.`}
-            {kip === 'parola' && 'Kullanıcı adınız ve parolanızla girin.'}
+            {kip === 'parola' && 'Kullanıcı adınız ve parolanızla girin. Parola yöneticiler ve henüz PIN\'i olmayanlar içindir; PIN\'i olan PIN ile girer.'}
             {kip === 'kart' && (kartOkundu ? `Kart okundu. ${PIN_HANE} haneli PIN'inizi girin.` : 'Kişi kartınızı okuyucuya okutun.')}
             {kip === 'belirle' && `Size verilen geçici PIN doğru. Yalnız sizin bileceğiniz ${PIN_HANE} haneli bir PIN seçin.`}
           </p>

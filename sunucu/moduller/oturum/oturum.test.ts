@@ -14,7 +14,7 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from './disari.ts';
-import { CEREZ_ADI } from './kurallar.ts';
+import { CEREZ_ADI, beklemeIletisi } from './kurallar.ts';
 import { denemeKilidiAl } from './sorgular.ts';
 import { oturumUclari } from './uclar.ts';
 
@@ -54,7 +54,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const saatliGiris = (kullaniciAdi: string, parola: string, ip = cihazIp) =>
     saatliApp.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola }, remoteAddress: ip });
 
-  const beklet = (sn: number): string => `Çok sık deneme. ${sn} sn sonra yeniden deneyin.`;
+  const beklet = (sn: number): string => beklemeIletisi(sn);
 
   const cerez = (cevap: { headers: Record<string, unknown> }): string => {
     const baslik = String(cevap.headers['set-cookie'] ?? '');
@@ -634,7 +634,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await vt().sorgu("INSERT INTO giris_denemesi (kullanici_adi, sonuc, ip) SELECT 'gercek-saat', 'hatali', $1 FROM generate_series(1, 5)", [cihazIp]);
     const erken = await giris('gercek-saat', PAROLA);
     assert.equal(erken.statusCode, 401);
-    assert.match(erken.json().mesaj, /^Çok sık deneme\. \d+ sn sonra yeniden deneyin\.$/);
+    assert.match(erken.json().mesaj, /^Çok sık deneme: hatalı denemeden sonra kısa bekleme kilidi var\. \d+ sn sonra yeniden deneyin; bu sürede doğru PIN ya da parola da kabul edilmez\.$/);
   });
 
   test('hatalı denemeden sonra bekleme dolmadan doğru parola da reddedilir ve kalan süreyi söyler; eşiğin altında hesap kilitlenmez, süre dolunca girer', async () => {
