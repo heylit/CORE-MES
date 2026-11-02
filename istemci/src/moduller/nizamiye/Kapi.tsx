@@ -8,7 +8,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { useKomut } from './komut.ts';
-import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir, saat, sureMetni, uyari } from './gorunum.ts';
+import { KIMLIK_TURLERI, KIMLIK_TURU_ADLARI, NEDEN_ADLARI, NEDEN_SIMGELERI, adi, atolyeZorunlu as atolyeGerekir, kapiZamani, sureMetni, uyari } from './gorunum.ts';
 import { EvetHayir } from './EvetHayir.tsx';
 import './nizamiye.css';
 
@@ -213,7 +213,7 @@ export function Kapi() {
                   {u && <span className="tc-nz-uyari"><Simge ad="alert" boyut="k" />{u}</span>}
                 </div>
                 <div className="tc-nz-satir-zaman">
-                  <span className="tc-nz-kartno">{ic ? z.kartNo : saat(z.beklenenZaman)}</span>
+                  <span className="tc-nz-kartno">{ic ? z.kartNo : kapiZamani(z.beklenenZaman, simdi)}</span>
                   <span className="tc-nz-soluk">{ic && z.giris ? sureMetni(z.giris, simdi) : 'bekleniyor'}</span>
                 </div>
                 {yazabilir && (

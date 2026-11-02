@@ -16,7 +16,7 @@ import type {
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
 import {
-  cikisHatasi, geriAlma, girisHatasi, iptalHatasi, kartBildirHatasi, kartVerilemezse, kapidanGec, kimlikDogru, kimlikHatasi, onKayitZamaniHatasi, pdksCihazGovdesiniCoz,
+  KAPIDA_GECIKEN_EN_COK_SAAT, cikisHatasi, geriAlma, girisHatasi, iptalHatasi, kartBildirHatasi, kartVerilemezse, kapidanGec, kimlikDogru, kimlikHatasi, onKayitZamaniHatasi, pdksCihazGovdesiniCoz,
   pdksDosyasiniCoz, pdksIcerideMi, personelKartNoDuzelt, personelKartOzeti, rafaAlmaHatasi, type KapiDurumu, type PdksSatiri,
 } from './kurallar.ts';
 import { anahtarDogruMu, anahtarOzeti, anahtarUret } from './anahtar.ts';
@@ -84,7 +84,7 @@ async function ziyaretNoAl(db: Db): Promise<string> {
 export async function kapi(db: Db): Promise<KapiCevabi> {
   return {
     simdi: await sorgu.simdi(db),
-    beklenen: await adlarlaDoldur(db, await sorgu.beklenenleriOku(db)),
+    beklenen: await adlarlaDoldur(db, await sorgu.beklenenleriOku(db, KAPIDA_GECIKEN_EN_COK_SAAT)),
     iceride: await adlarlaDoldur(db, await sorgu.icerdekileriOku(db)),
     bosKartlar: await sorgu.bosKartlariOku(db),
   };

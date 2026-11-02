@@ -8,6 +8,9 @@ export const GERI_ALMA_SURESI_DK = 10;
 // Ön kayıt bu kadar geçmişe ya da ileriye açılamaz (NZ-09).
 export const ON_KAYIT_GECMIS_DK = 60;
 export const ON_KAYIT_ILERI_GUN = 90;
+// Gelmeyen ön kayıt kapı listesinde bu kadar kalır: liste ve "dikkat" sayacı günlerce birikmesin. Kayıt silinmez; günün geçmişinde
+// ve ev sahibinin listesinde "beklenen" olarak kalır, geç gelen ziyaretçi habersiz girişle alınır.
+export const KAPIDA_GECIKEN_EN_COK_SAAT = 24;
 
 interface GirisDurumu {
   durum: ZiyaretDurumu;

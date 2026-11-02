@@ -10,6 +10,8 @@
 | NZ-07 son giriş ya da çıkış 10 dakika içinde geri alınır; habersiz girişin geri alınması iptal; kart rafa ya da ziyaretçiye döner | `NZ-07` (dört test) |
 | NZ-08 ön kaydı her çalışan kendi adına açar; ev sahibi oturumdan; yalnız kendininkini görür ve gelmeden iptal eder; başkasınınki 404 | `NZ-08` (iki test, nizamiye.test.ts) |
 | NZ-09 ön kayıt bir saatten eski ya da 90 günden ileri açılmaz | `NZ-09` (kurallar.test.ts ve nizamiye.test.ts) |
+| Gelmeyen ön kayıt kapıda en çok 24 saat kalır; kayıt silinmez, geçmişte beklenen | `gelmeyen ön kayıt kapıda` (nizamiye.test.ts) |
+| Ekran: gecikme ve süre gün aşınca günle; beklenen saat bugünün değilse günüyle | `gorunum.test.ts` (3 test) |
 | NZ-10 yalnız boş kart kayıp/hasarlı bildirilir; rafa yalnız kart yöneticisi alır | `NZ-10` (iki test) |
 | NZ-K1 kartı yalnız kart yöneticisi ekler; numara tekil | `NZ-K1` |
 | Görevli, numara ve zaman sunucudan; gövdedeki kişi alanı yok sayılır | `görevli kimliği sunucudan` |

@@ -62,11 +62,13 @@ export async function ziyaretNoVarMi(db: Db, no: string): Promise<boolean> {
 }
 
 // Beklenenler: bugüne ya da önceki günlere düşen (geciken) ön kayıtlar; yarın ve sonrası kapı listesine girmez.
-export function beklenenleriOku(db: Db): Promise<ZiyaretSatiri[]> {
+export function beklenenleriOku(db: Db, gecikenEnCokSaat: number): Promise<ZiyaretSatiri[]> {
   return db.sorgu<ZiyaretSatiri>(
     `SELECT ${ZIYARET_SUTUNLARI} FROM ${ZIYARET_KAYNAGI}
       WHERE z.durum = 'beklenen' AND z.beklenen_zaman < (now()::date + 1)::timestamptz
+        AND z.beklenen_zaman >= now() - make_interval(hours => $1)
       ORDER BY z.beklenen_zaman, z.id`,
+    [gecikenEnCokSaat],
   );
 }
 

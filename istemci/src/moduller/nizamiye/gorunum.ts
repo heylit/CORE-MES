@@ -29,8 +29,22 @@ export const saat = (zaman: string | null): string => (zaman === null ? '—' : 
 export const tarihSaat = (zaman: string | null): string => (zaman === null ? '—' : tesisSaati(Date.parse(zaman)));
 
 export function sureMetni(zaman: string, simdi: number): string {
-  const dk = Math.max(0, Math.round((simdi - Date.parse(zaman)) / 60_000));
-  return dk < 60 ? `${dk} dk` : `${Math.floor(dk / 60)} sa ${dk % 60} dk`;
+  return sureYazisi(Math.max(0, Math.round((simdi - Date.parse(zaman)) / 60_000)));
+}
+
+// Gün aşan süre günle yazılır: "1 gün 3 sa", dakika okunmaz olurdu.
+function sureYazisi(dk: number): string {
+  if (dk < 60) return `${dk} dk`;
+  if (dk < 1440) return `${Math.floor(dk / 60)} sa ${dk % 60} dk`;
+  return `${Math.floor(dk / 1440)} gün ${Math.floor((dk % 1440) / 60)} sa`;
+}
+
+// Kapıda beklenen saat: bugünün değilse günüyle yazılır, geciken kayıt bugünkü gibi görünmesin.
+export function kapiZamani(zaman: string | null, simdi: number): string {
+  if (zaman === null) return '—';
+  const z = tesisSaati(Date.parse(zaman));
+  if (z.slice(0, 10) === tesisSaati(simdi).slice(0, 10)) return z.slice(11);
+  return `${z.slice(8, 10)}.${z.slice(5, 7)} ${z.slice(11)}`;
 }
 
 export const adi = (z: Pick<Ziyaret, 'ad'>): string => z.ad ?? 'Anonim kayıt';
@@ -39,7 +53,7 @@ export const adi = (z: Pick<Ziyaret, 'ad'>): string => z.ad ?? 'Anonim kayıt';
 export function uyari(z: Ziyaret, simdi: number): string | null {
   if (z.durum === 'beklenen' && z.beklenenZaman !== null) {
     const gec = Math.round((simdi - Date.parse(z.beklenenZaman)) / 60_000);
-    if (gec >= GECIKME_DK) return `${gec} dk gecikti`;
+    if (gec >= GECIKME_DK) return `${sureYazisi(gec)} gecikti`;
   }
   if (z.durum === 'iceride' && z.dizustu) return 'Dizüstü / kamera ile girdi';
   return null;
