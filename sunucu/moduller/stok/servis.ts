@@ -1464,6 +1464,8 @@ export async function kaliteDegistir(db: Db, kisiId: number, d: KaliteDegisimi):
 export async function partiKaliteDurumuYap(db: Db, kisiId: number, g: {
   partiId: number; hedef: KaliteDurumu; aciklama: string; uretimEmriId?: number | null;
   satirlar?: { konumId: number; statuId: number | null; kaliteDurumu: KaliteDurumu; miktar: string }[];
+  // KM-11 a (kart 1848): satır verilmezse bakiyeler sırayla en çok bu toplama kadar değişir; yoksa bütün bakiye.
+  enCok?: string;
 }): Promise<{ konumId: number; statuId: number | null; kaynak: KaliteDurumu; miktar: string; hareketId: number }[]> {
   const sonuc: { konumId: number; statuId: number | null; kaynak: KaliteDurumu; miktar: string; hareketId: number }[] = [];
   const bakiyeler = await sorgular.partininBakiyeleri(db, g.partiId, g.hedef);
@@ -1480,11 +1482,15 @@ export async function partiKaliteDurumuYap(db: Db, kisiId: number, g: {
   const satirlar = istenen?.map((x) => x.s) ?? bakiyeler;
   await siraliKilitle(db, ...satirlar.flatMap((s) => [s, { ...s, kaliteDurumu: g.hedef }].map((x) => ({ ...x, partiId: g.partiId }))));
   const plan: { s: (typeof bakiyeler)[number]; miktar: bigint }[] = [];
+  if (g.enCok !== undefined && istenen) throw gecersiz('Satır ve en çok miktar birlikte verilmez.');
+  let kalan = g.enCok === undefined ? null : binde(g.enCok);
+  if (kalan !== null && kalan <= 0n) throw gecersiz('Kalitesi değişecek miktar sıfırdan büyük olmalı.');
   for (const [i, s] of satirlar.entries()) {
     const b = await sorgular.bakiyeKilitle(db, s.malzemeId, s.konumId, g.partiId, s.statuId, s.kaliteDurumu);
     const eldeki = binde(b?.miktar ?? '0') - binde(await sorgular.yoldaAyrilan(db, s.malzemeId, s.konumId, g.partiId, s.statuId, s.kaliteDurumu));
-    const miktar = istenen ? istenen[i]!.miktar : eldeki;
+    let miktar = istenen ? istenen[i]!.miktar : eldeki;
     if (istenen && miktar > eldeki) throw gecersiz('Kalitesi değişecek miktar bakiyenin kullanılabilir miktarını aşıyor.');
+    if (kalan !== null) { if (miktar > kalan) miktar = kalan; kalan -= miktar; }
     if (miktar > 0n) plan.push({ s, miktar });
   }
   for (const { s, miktar } of plan) {
@@ -1493,6 +1499,16 @@ export async function partiKaliteDurumuYap(db: Db, kisiId: number, g: {
       uretimEmriId: g.uretimEmriId ?? null, aciklama: g.aciklama,
     });
     sonuc.push({ konumId: s.konumId, statuId: s.statuId, kaynak: s.kaliteDurumu, miktar: bindenMetin(miktar), hareketId });
+  }
+  return sonuc;
+}
+
+// KM-11 a (kart 1848): partilerin malzeme kartı numarası; olmayan parti haritada yok.
+export async function partilerinMalzemeleri(db: Db, partiIdler: readonly number[]): Promise<Map<number, number>> {
+  const sonuc = new Map<number, number>();
+  for (const id of new Set(partiIdler)) {
+    const p = await sorgular.partiKaynagi(db, id);
+    if (p !== null) sonuc.set(id, p.malzemeId);
   }
   return sonuc;
 }

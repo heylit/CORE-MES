@@ -36,12 +36,14 @@ export const degerGrubuToplamlari = (db: Db) => sorgular.degerGrubuMalzemeToplam
 // Kalite Merkezi (229 a): lot numarası ya da üretim emriyle parti kimlikleri; ve partinin bütün bakiyesini hedef kaliteye geçiren karar
 // (yoldaki teslime ayrılan miktar hariç; değişen satırlar döner). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);
-// Satır verilirse (320 a) yalnız o bakiyeler çevrilir; `karantinadanBirak` sonucunun `hedefKonumId`, `statuId`, `kaliteDurumu`, `miktar` alanları verilir.
+// Satır verilirse (320 a) yalnız o bakiyeler çevrilir; `enCok` verilirse (KM-11 a) bakiyeler sırayla o toplama kadar; `karantinadanBirak` sonucunun `hedefKonumId`, `statuId`, `kaliteDurumu`, `miktar` alanları verilir.
 export const partiKaliteDurumuYap = (db: Db, kisiId: number, g: Parameters<typeof servis.partiKaliteDurumuYap>[2]) =>
   akistan(db, 'kalite', () => servis.partiKaliteDurumuYap(db, kisiId, g));
 // Denetim #15: karantinadaki partiyi serbest bırakma yalnız Kalite Merkezi'nin kararıyla; yetkiyi çağıran korur.
 // 320 a: partilerin red bakiyeleri (karantinada ve yerinde), yoldaki ayrılan düşülmüş; önce karantina konumları. Salt okur.
 export const partilerinRedBakiyeleri = (db: Db, partiIdler: readonly number[]) => servis.partilerinRedBakiyeleri(db, partiIdler);
+// KM-11 a (kart 1848): NCR'nin parça nosu partinin malzemesiyle eşlenir; yetki denetlemez.
+export const partilerinMalzemeleri = (db: Db, partiIdler: readonly number[]): Promise<Map<number, number>> => servis.partilerinMalzemeleri(db, partiIdler);
 export const karantinadanBirak = (db: Db, kisiId: number, g: Parameters<typeof servis.karantinadanBirak>[2]) => akistan(db, 'kalite', () => servis.karantinadanBirak(db, kisiId, g));
 // 1246 giriş kontrolü: karantinada karar bekleyen satın alma lotları (kimlik verilirse o satırlar) ve kararın stok yansıması (kabul ve
 // şartlı kabul mal kabul alanına, hatalı karantinada red, kalitenin reddi tedarikçiye iade; 1252, 1253 a). Çağıranın transaction'ında

@@ -459,6 +459,16 @@ export function karantinaIstegi(
   return yeni;
 }
 
+// KM-11 a (kart 1848): NCR'nin etkilenen miktarı karantinanın üst sınırıdır (stok miktarı biçimi, binde tam sayı). Boş, sıfır ya da
+// geçersizse null: bütün parti alınır.
+export function ncrKarantinaMiktari(v: unknown): bigint | null {
+  const m = /^(\d+)(?:\.(\d{1,3}))?$/.exec(String(v ?? '').trim().replace(',', '.'));
+  if (!m) return null;
+  const b = BigInt(m[1]!) * 1000n + BigInt((m[2] ?? '').padEnd(3, '0'));
+  return b > 0n ? b : null;
+}
+export const bindeMetni = (b: bigint): string => `${b / 1000n}${b % 1000n === 0n ? '' : `.${(b % 1000n).toString().padStart(3, '0').replace(/0+$/, '')}`}`;
+
 export interface BekleyenEmir { id: number; emirNo: string; parcaNo: string; parcaAd: string; adet: number }
 
 export interface BekleyenAdim { isEmriId: number | null; opNo: number | null; kararBekliyor: number }

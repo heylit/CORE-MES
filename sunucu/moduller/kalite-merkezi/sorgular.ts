@@ -218,9 +218,10 @@ export async function karantinaDefteri(db: Db): Promise<{ hareketId: number; ncr
 }
 
 // Verilen NCR dışındaki açık (silinmemiş, kapanmamış) NCR'lerin lot ve emir anahtarları; ikisi de boş olan alınmaz.
-export function acikNcrAnahtarlari(db: Db, haricNcr: string, kapali: string): Promise<{ lotNo: string | null; emirNo: string | null }[]> {
+export function acikNcrAnahtarlari(db: Db, haricNcr: string, kapali: string): Promise<{ lotNo: string | null; emirNo: string | null; parcaNo: string | null }[]> {
   return db.sorgu(
-    `SELECT nullif(btrim(govde->>'lot'), '') AS "lotNo", nullif(btrim(govde->>'emir'), '') AS "emirNo" FROM kalite_merkezi_belge
+    `SELECT nullif(btrim(govde->>'lot'), '') AS "lotNo", nullif(btrim(govde->>'emir'), '') AS "emirNo",
+            nullif(btrim(govde->>'parcaNo'), '') AS "parcaNo" FROM kalite_merkezi_belge
       WHERE koleksiyon = 'ncr' AND kimlik <> $1 AND govde IS NOT NULL AND btrim(coalesce(govde->>'durum', '')) <> $2
         AND (nullif(btrim(govde->>'lot'), '') IS NOT NULL OR nullif(btrim(govde->>'emir'), '') IS NOT NULL)`,
     [haricNcr, kapali],
