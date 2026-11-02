@@ -319,4 +319,49 @@ describe('vardiya kuralları', () => {
     assert.equal(araliklarCakisir({ bas: 960, bit: 1080 }, vardiyaDakikaAraligi(GUNDUZ, 0)), false);
     assert.equal(araliklarCakisir({ bas: 900, bit: 1080 }, vardiyaDakikaAraligi(GUNDUZ, 0)), true);
   });
+
+  // 1872: çıkarma sıralı taramayla, gün dakikası duruşları önce düşerek hesaplanır. Sonuç, her kesiği her parçaya tek tek uygulayan
+  // tanımla aynı kalmalı (sıfır uzunluklu, ters, bitişik ve örtüşen parçalar dahil). Rastgele ama tohumlu girdi.
+  test('VR-07, VR-24 (1872): aralık çıkarma ve günün ek dakikası tanımdaki tek tek çıkarmayla aynıdır', () => {
+    type A = { bas: number; bit: number };
+    const birlesik = (l: readonly A[]): A[] => {
+      const y: A[] = [];
+      for (const a of [...l].sort((x, z) => x.bas - z.bas)) {
+        const son = y[y.length - 1];
+        if (son && a.bas <= son.bit) son.bit = Math.max(son.bit, a.bit);
+        else y.push({ ...a });
+      }
+      return y;
+    };
+    const tanim = (araliklar: readonly A[], cikarilacak: readonly A[]): A[] => araliklar.flatMap((a) => birlesik(cikarilacak).reduce<A[]>((parcalar, k) =>
+      parcalar.flatMap((p) => (k.bit <= p.bas || k.bas >= p.bit ? [p]
+        : [...(k.bas > p.bas ? [{ bas: p.bas, bit: k.bas }] : []), ...(k.bit < p.bit ? [{ bas: k.bit, bit: p.bit }] : [])])), [{ ...a }]));
+    let tohum = 1872;
+    const rastgele = (n: number) => { tohum = (tohum * 1103515245 + 12345) % 2147483648; return tohum % n; };
+    const liste = (n: number, ters: boolean): A[] => Array.from({ length: rastgele(n) }, () => {
+      const bas = rastgele(3000) - 200;
+      const bit = ters && rastgele(10) === 0 ? bas - rastgele(30) : bas + rastgele(rastgele(4) === 0 ? 1 : 400);
+      return { bas, bit };
+    });
+    for (let i = 0; i < 3000; i += 1) {
+      const ters = i % 3 === 0;
+      const a = liste(8, ters);
+      const k = liste(12, ters);
+      assert.deepEqual(araliklardanCikar(a, k), tanim(a, k));
+      const sirali = birlesik(k.filter((x) => x.bit >= x.bas));
+      assert.deepEqual(araliklardanCikar(a, sirali), tanim(a, sirali));
+    }
+    const saat = (dk: number) => `${String(Math.floor(dk / 60) % 24).padStart(2, '0')}:${String(dk % 60).padStart(2, '0')}`;
+    const vardiya = () => { const b = rastgele(96) * 15; return { baslangic: saat(b), bitis: saat(b + 60 + rastgele(40) * 15), molalar: [] }; };
+    const toplam = (l: readonly A[]) => l.reduce((t, p) => t + p.bit - p.bas, 0);
+    for (let i = 0; i < 1000; i += 1) {
+      const gun = rastgele(3);
+      const v = Array.from({ length: rastgele(3) }, vardiya);
+      const e = Array.from({ length: rastgele(3) }, vardiya);
+      const d = liste(6, false);
+      const kaydir = (x: typeof v[number]) => vardiyaParcalari(x).map((p) => ({ bas: p.bas + gun * 1440, bit: p.bit + gun * 1440 }));
+      const beklenen = gunNetDakikasi(gun, v, d) + toplam(tanim(birlesik(e.flatMap(kaydir)), [...v.flatMap(kaydir), ...d]));
+      assert.equal(gunNetDakikasiEk(gun, v, e, d), beklenen);
+    }
+  });
 });
