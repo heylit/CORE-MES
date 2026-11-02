@@ -59,7 +59,7 @@ export const ornekVeri = ornekVeriTanimi({
     const goz = (await servis.rafMatrisi(db, raf.id)).gozler[0];
     if (!goz) throw new Error('Stok örnek rafı göz üretmedi.');
 
-    // Çubuk ve levha lotludur (parti zorunlu); yağ sarftır, partisiz girer. Mil ve flansın stoğu yoktur. Örnekte sipariş yok: "diğer" girişi (soru 104 a).
+    // Her geliş ayrı lot açar; çubukta döküm no da girilir. Mil ve flansın stoğu yoktur. Örnekte sipariş yok: "diğer" girişi (soru 104 a).
     await servis.malKabulYap(db, depocu, {
       tur: 'diger', irsaliyeNo: 'ORN-IRS-1',
       satirlar: [

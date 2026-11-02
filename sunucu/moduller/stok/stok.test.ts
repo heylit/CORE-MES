@@ -841,7 +841,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(giris.emirNo, emirNo);
     assert.equal(giris.partiEtiketi?.includes(`Emir ${emirNo}`), true, giris.partiEtiketi ?? '');
     assert.equal(giris.partiEtiketi?.includes('#'), false);
-    assert.equal((await depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: 999999, malzemeId: m, miktar: '1' })).durum, 409);
+    assert.equal((await depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: 999999, malzemeId: m, miktar: '1' })).durum, 404, 'olmayan emir bulunamadı (STK-8)');
     const h = await kart('hammadde');
     await malKabul(h, '20', { parti: { dokumNo: 'DK-5' } });
     const kabul = await konumId('KABUL');
@@ -855,6 +855,24 @@ describe('stok (gerçek PostgreSQL)', () => {
     partiIziCevabi.parse(iz.govde);
     assert.deepEqual(iz.govde.emirler, [e]);
     assert.deepEqual(iz.govde.sevkler, [], 'emri sevk edilmemiş partinin izinde sevk uydurulmaz');
+  });
+
+  test('STK-8: mal kabul üretim çıkışı ve hurda konumuna yazılmaz, hareket yazılmaz; depo zemini ve KABUL izinli', async () => {
+    const k = await kart('sarf');
+    for (const kod of ['URETIM']) {
+      const r = await depo<Hata>('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: await konumId(kod) }] });
+      assert.deepEqual([r.durum, r.govde.alan], [400, 'satirlar.0.konumId'], JSON.stringify(r.govde));
+    }
+    for (const tur of ['hurda']) {
+      const c = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur, kod: `STK8-${tur.toUpperCase()}-${kartSira}`, ad: null });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      const r = await depo<Hata>('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: c.govde.konum.id }] });
+      assert.deepEqual([r.durum, r.govde.alan], [400, 'satirlar.0.konumId'], `${tur}: ${JSON.stringify(r.govde)}`);
+    }
+    assert.equal((await o().vt.sorgu('SELECT 1 FROM stok_hareketi WHERE malzeme_id = $1', [k])).length, 0, 'reddedilen kabul hareket yazmaz');
+    const zemin = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur: 'depo_zemini', kod: `STK8-Z-${kartSira}`, ad: null });
+    assert.equal((await depo('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: zemin.govde.konum.id }] })).durum, 200, 'depo zemini izinli');
+    assert.equal((await malKabul(k, '1')).durum, 200, 'konumsuz satır KABUL alanına');
   });
 
   test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan yarı mamul sınırsız', async () => {

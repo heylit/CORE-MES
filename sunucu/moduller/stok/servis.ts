@@ -59,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar, kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -894,7 +894,7 @@ async function malKabulSatirlariniYaz(
     const konumId = s.konumId !== undefined ? Number(s.konumId) : gkk ? await sorgular.ilkKarantinaKonumu(db) : kabul;
     if (konumId === null) throw dogrulama(GKK_KARANTINA_KONUMU_YOK, `${alan}.konumId`);
     const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
-    const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : null;
+    const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : malKabulKonumuEngeli(konum.tur);
     if (gkkEngeli) throw dogrulama(gkkEngeli, `${alan}.konumId`);
     const kalite: KaliteDurumu = gkk ? 'karar_bekliyor' : 'serbest';
     let parti: number | null = partiId ?? null;
@@ -1307,7 +1307,7 @@ export async function emirTamamla(db: Db, k: Kullanici, emirId: number, g: EmirT
 
 // Emre yabancı anahtar Aşama 2'de gelir (STK6 b: emir modeli değişiyor); o zamana kadar emrin varlığını sahibi söyler.
 async function emirVarDenetle(db: Db, id: number | null): Promise<void> {
-  if (id !== null && (await emirOzeti(db, id)) === null) throw bagimliKayit('Üretim emri bulunamadı.');
+  if (id !== null && (await emirOzeti(db, id)) === null) throw bulunamadi('Üretim emri bulunamadı.');
 }
 // DEP-36: üretime sarfı yalnız emrin iş merkezi kişinin kapsamındaysa yazar.
 async function sarfEmriDenetle(db: Db, kisiId: number, id: number | null): Promise<void> {

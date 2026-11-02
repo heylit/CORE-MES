@@ -78,6 +78,12 @@ export function uretimGirisiKesirEngeli(miktar: string, tamSayili: boolean): str
   if (!tamSayili || binde(miktar) % 1000n === 0n) return null;
   return 'Bu kart adetle sayılır; miktar tam sayı olmalı.';
 }
+// STK-8: üretim çıkışı, hurda, yolda ve sevkiyat konumları kendi akışlarıyla dolar; mal kabul onlara yazılmaz. İstasyona doğrudan kabul
+// (hazırlık) ve fason firmasına doğrudan teslim açık kalır; karantina giriş kontrolünündür.
+export const MAL_KABUL_DISI_KONUMLAR = ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const satisfies readonly KonumTuru[];
+export function malKabulKonumuEngeli(tur: KonumTuru): string | null {
+  return (MAL_KABUL_DISI_KONUMLAR as readonly string[]).includes(tur) ? 'Mal kabul bu konuma yazılmaz; üretim çıkışı, hurda, yolda ve sevkiyat konumları kendi akışlarıyla dolar.' : null;
+}
 
 // Elle üretim girişi yalnız açık ya da üretimi bitmiş emre yazılır: iptal, taslak ve onaylı kapanışı tamamlanmış emrin (1080 a:
 // kayıtları değişmez) stoğu üretimden gelmez. Bitmiş emir tamamlama ve kapanış öncesi düzeltme için açık kalır.

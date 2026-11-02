@@ -11,7 +11,7 @@ import {
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
-  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -925,5 +925,12 @@ describe('1784: üretim girişi ve statü kartı', () => {
     assert.equal(statuKartEngeli(undefined, 'HM-1'), null);
     assert.ok(statuKartEngeli('HM-2', 'HM-1'));
     assert.ok(statuKartEngeli('HM-2', null));
+  });
+});
+
+describe('STK-8: mal kabul konum türü', () => {
+  test('depo, istasyon, fason ve karantina izinli; üretim çıkışı, hurda, yolda, sevkiyat reddedilir', () => {
+    for (const t of ['kabul', 'raf_gozu', 'depo_zemini', 'ara_alan', 'karantina', 'palet', 'istasyon', 'fason'] as const) assert.equal(malKabulKonumuEngeli(t), null, t);
+    for (const t of ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const) assert.ok(malKabulKonumuEngeli(t), t);
   });
 });
