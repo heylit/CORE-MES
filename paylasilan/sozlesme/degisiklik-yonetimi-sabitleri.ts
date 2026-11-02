@@ -74,6 +74,13 @@ export function onerilenSinif(c: Readonly<Record<(typeof SINIFLANDIRMA_SORULARI)
   return c.sure === 'evet' ? 'planlama' : c.sure === 'hayir' ? 'P2' : null;
 }
 
+// Cevaplardan çıkan önerinin dışında sınıf seçilirse gerekçe zorunludur; seçim izlenebilir kalsın. Eksik cevapta öneri yoktur, gerekçe istenmez.
+export function sinifGerekcesiGerekir(c: Readonly<Record<(typeof SINIFLANDIRMA_SORULARI)[number], SoruCevabi>>, sinif: (typeof SINIFLAR)[number]): boolean {
+  const oneri = onerilenSinif(c);
+  return oneri !== null && oneri !== 'planlama' && oneri !== sinif;
+}
+export const SINIF_GEREKCESI_ILETISI = 'Önerilen sınıftan farklı sınıf seçildi; gerekçeyi Not alanına yazın.';
+
 export const FAI_TURLERI = ['tam', 'kismi'] as const;
 export const FAI_DURUMLARI = ['bekliyor', 'onaylandi'] as const;
 // Kapanış koşulu sahibi modül bağlı değilse 'bilinmiyor' döner (Aşama 1).

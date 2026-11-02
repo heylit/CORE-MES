@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { kapatilabilirMi } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import { kapatilabilirMi, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import {
   benimGorevimMi, cevrimIsGunu, emirAdimiUygunMu, emirGorevleri, emirHatti, emirIlerler, emirKarariOner, etkiAnaliziKur, faiGereksinimi, gorevSuresi, ilkParcaTuru, isGunuFarki,
   izinliKodlar, kapanisKosullari, kararIslemi, kendiTalebiMi, musteriOnayiIstenirMi, seriUyumu, stokKarariOner, talepAdimiUygunMu,
@@ -18,6 +18,14 @@ describe('degisiklik-yonetimi kuralları', () => {
     assert.equal(talepGerekmezMi({ cizim: 'hayir', fff: null, proses: 'hayir', sure: 'hayir' }), false);
     assert.equal(talepGerekmezMi({ cizim: 'evet', fff: 'evet', proses: null, sure: 'evet' }), false);
     assert.equal(talepGerekmezMi({ cizim: null, fff: null, proses: null, sure: null }), false);
+  });
+
+  test('DY-1: önerilen sınıftan farklı seçim gerekçe ister; eksik cevapta ve planlamada istemez', () => {
+    const d1 = { cizim: 'evet', fff: 'evet', proses: null, sure: null } as const;
+    assert.equal(sinifGerekcesiGerekir(d1, 'D1'), false);
+    assert.equal(sinifGerekcesiGerekir(d1, 'P2'), true);
+    assert.equal(sinifGerekcesiGerekir({ cizim: 'evet', fff: null, proses: null, sure: null }, 'P2'), false);
+    assert.equal(sinifGerekcesiGerekir({ cizim: 'hayir', fff: null, proses: 'hayir', sure: 'evet' }, 'P2'), false);
   });
 
   test('DY-2: adım yalnız sıradaki durumda; ilk parça kararla birlikte ya da uygulamada onaylanır', () => {

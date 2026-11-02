@@ -206,9 +206,17 @@ describe('degisiklik-yonetimi (gerçek PostgreSQL)', () => {
     await kod(acan, `${K}/talepler/${t.id}/siniflandir`, {
       sinif: 'P2', aciliyet: 'normal', cevaplar: { cizim: 'hayir', fff: null, proses: 'hayir', sure: 'evet' }, surum: t.surum,
     }, 400, /planlama parametresi/);
+    // Cevaplar D1 önerirken başka sınıf gerekçesiz seçilemez; gerekçeyle seçilir ve geçmişe öneriyle yazılır.
+    await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'P1', aciliyet: 'acil', cevaplar, surum: t.surum }, 400, /farklı sınıf/);
+    await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'P1', aciliyet: 'acil', cevaplar, not: '  ', surum: t.surum }, 400, /farklı sınıf/);
     const s = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${t.id}/siniflandir`, { sinif: 'D1', aciliyet: 'acil', cevaplar, not: 'Müşteri isteği', surum: t.surum });
     assert.deepEqual([s.durum, s.sinif, s.aciliyet, s.surum], ['analizde', 'D1', 'acil', t.surum + 1]);
     assert.equal(s.gecmis.at(-1)?.aciklama, 'Müşteri isteği');
+    assert.doesNotMatch(s.gecmis.at(-1)?.ozet ?? '', /yerine/);
+    const f = await talepAc();
+    const fs = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${f.id}/siniflandir`, { sinif: 'D2', aciliyet: 'normal', cevaplar, not: 'Uyum bozulmuyor', surum: f.surum });
+    assert.equal(fs.sinif, 'D2');
+    assert.match(fs.gecmis.at(-1)?.ozet ?? '', /önerilen D1 Tasarım, Class I yerine/);
     await kod(acan, `${K}/talepler/${t.id}/siniflandir`, { sinif: 'D1', aciliyet: 'acil', cevaplar, surum: t.surum }, 409);
     const e = await tamam<TalepCevabi>(acan, 'POST', `${K}/talepler/${t.id}/etki-analizi`, { surum: s.surum });
     assert.equal(e.durum, 'ccb_bekliyor');

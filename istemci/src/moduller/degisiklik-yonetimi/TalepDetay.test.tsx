@@ -43,6 +43,21 @@ describe('Talep detayı: sınıflandırma', () => {
     expect((screen.getByLabelText('Sınıf') as HTMLSelectElement).value).toBe('P1');
   });
 
+  it('önerilenden farklı sınıf gerekçesiz gönderilmez; gerekçeyle gider', async () => {
+    const cagrilar = kur(talep());
+    ac('/degisiklik-yonetimi/talepler/7');
+    fireEvent.click(within(await screen.findByRole('radiogroup', { name: /Çizim, model/ })).getByLabelText('Evet'));
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: /Form, uyum/ })).getByLabelText('Evet'));
+    fireEvent.change(screen.getByLabelText('Sınıf'), { target: { value: 'D2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sınıflandır' }));
+    expect(await screen.findByText(/Önerilen sınıftan farklı sınıf seçildi/)).toBeTruthy();
+    expect(postlar(cagrilar)).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/Gerekçe/), { target: { value: 'Uyum bozulmuyor' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sınıflandır' }));
+    await waitFor(() => { expect(postlar(cagrilar)).toHaveLength(1); });
+    expect(postlar(cagrilar)[0]).toMatchObject({ govde: { sinif: 'D2', not: 'Uyum bozulmuyor' } });
+  });
+
   it('işlemi olmayan kişi sınıflandırma formunu görmez', async () => {
     kur(talep(), OKUR);
     ac('/degisiklik-yonetimi/talepler/7');

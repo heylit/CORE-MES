@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ACILIYETLER, ACILIYET_ADLARI, SINIFLANDIRMA_SORU_METINLERI, SINIFLAR, SINIF_ADLARI, onerilenSinif, type Aciliyet, type Cevap, type SiniflandirmaSorusu, type Sinif } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import { ACILIYETLER, ACILIYET_ADLARI, SINIFLANDIRMA_SORU_METINLERI, SINIFLAR, SINIF_ADLARI, SINIF_GEREKCESI_ILETISI, onerilenSinif, sinifGerekcesiGerekir, type Aciliyet, type Cevap, type SiniflandirmaSorusu, type Sinif } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import type { SiniflandirGovdesi, TalepCevabi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { Dugme, Girdi, Kart, Secim } from '../../../ortak/arayuz/index.ts';
 import { useKomut } from '../komut.ts';
@@ -33,6 +33,7 @@ export function Siniflandirma({ talep }: { talep: TalepCevabi }) {
   const [secilenSinif, secilenSinifYaz] = useState<Sinif | null>(null);
   const [aciliyet, aciliyetYaz] = useState<Aciliyet>(talep.aciliyet);
   const [not, notYaz] = useState('');
+  const [notHatasi, notHatasiYaz] = useState<string | undefined>(undefined);
   const komut = useKomut(`${KOK}/talepler/${talep.id}/siniflandir`, () => {}, 'Talep sınıflandırılamadı');
   const sorular = gorunenSorular(cevaplar);
   const oneri = onerilenSinif(cevaplar);
@@ -47,7 +48,10 @@ export function Siniflandirma({ talep }: { talep: TalepCevabi }) {
     });
     secilenSinifYaz(null);
   };
+  const gerekceGerekir = sinifGerekcesiGerekir(cevaplar, sinif);
   const gonder = () => {
+    if (gerekceGerekir && not.trim() === '') { notHatasiYaz(SINIF_GEREKCESI_ILETISI); return; }
+    notHatasiYaz(undefined);
     const govde: SiniflandirGovdesi = { sinif, aciliyet, cevaplar, not, surum: talep.surum };
     komut.gonder(govde);
   };
@@ -76,7 +80,8 @@ export function Siniflandirma({ talep }: { talep: TalepCevabi }) {
         <div className="tc-dy-satir tc-dy-satir-alt">
           <Secim etiket="Sınıf" value={sinif} onChange={(e) => { secilenSinifYaz(e.target.value as Sinif); }} secenekler={SINIFLAR.map((s) => ({ deger: s, baslik: SINIF_ADLARI[s] }))} />
           <Secim etiket="Aciliyet" value={aciliyet} onChange={(e) => { aciliyetYaz(e.target.value as Aciliyet); }} secenekler={ACILIYETLER.map((a) => ({ deger: a, baslik: ACILIYET_ADLARI[a] }))} />
-          <Girdi etiket="Not" value={not} onChange={(e) => { notYaz(e.target.value); }} placeholder="İsteğe bağlı" maxLength={1000} />
+          <Girdi etiket={gerekceGerekir ? 'Gerekçe' : 'Not'} value={not} onChange={(e) => { notYaz(e.target.value); }}
+            placeholder={gerekceGerekir ? 'Önerilenden farklı sınıfın nedeni' : 'İsteğe bağlı'} maxLength={1000} required={gerekceGerekir} hata={notHatasi} />
           <Dugme tur="birincil" simge="check" yukleniyor={komut.yukleniyor} disabled={oneri === 'planlama'} onClick={gonder}>Sınıflandır</Dugme>
         </div>
         {komut.hata && <p className="tc-dy-hata" role="alert">{komut.hata}</p>}

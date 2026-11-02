@@ -4,7 +4,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI, KAPANIS_ENGELI, kapatilabilirMi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
+import { ACILIYET_ADLARI, IMZA_ANLAMLARI, KARAR_KODU_ADLARI, OGE_TURLERI, SINIF_ADLARI, TALEP_DURUM_ADLARI, KAPANIS_ENGELI, kapatilabilirMi, SINIF_GEREKCESI_ILETISI, onerilenSinif, sinifGerekcesiGerekir } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type {
   AcikDegisiklik, CcbGovdesi, EmirCevabi, EmirListeCevabi, EmirlerSorgusu, FaiOnayGovdesi, Gecerlilik, GecmisOlayi, GecmisSatiri,
   GeriGonderGovdesi, GorevKapsami, GorevSatiri, GorevlerimCevabi, HatAsamasi, IzlenebilirlikCevabi, IzlenebilirlikSorgusu, KalemKaydetGovdesi, KapatGovdesi,
@@ -134,10 +134,14 @@ async function talepYaz(db: Db, t: TalepSatiri, surum: number, y: s.TalepYazimi)
 export async function siniflandir(db: Db, kullanici: Kullanici, id: number, g: SiniflandirGovdesi): Promise<TalepCevabi> {
   const t = await talepAdimi(db, id, g.surum, 'siniflandir');
   if (talepGerekmezMi(g.cevaplar)) throw dogrulama(PARAMETRE_ILETISI, 'cevaplar');
+  const farkli = sinifGerekcesiGerekir(g.cevaplar, g.sinif);
+  if (farkli && (g.not ?? null) === null) throw dogrulama(SINIF_GEREKCESI_ILETISI, 'not');
+  const oneri = onerilenSinif(g.cevaplar);
   await talepYaz(db, t, g.surum, { durum: 'analizde', sinif: g.sinif, aciliyet: g.aciliyet, cevaplar: g.cevaplar });
   await s.gecmisEkle(db, {
     talepId: id, olay: 'siniflandirildi', kisiId: kullanici.id, imzaAnlami: null, aciklama: g.not ?? null,
-    ozet: `Sınıflandırıldı: ${SINIF_ADLARI[g.sinif]}, aciliyet ${ACILIYET_ADLARI[g.aciliyet]}`,
+    ozet: `Sınıflandırıldı: ${SINIF_ADLARI[g.sinif]}, aciliyet ${ACILIYET_ADLARI[g.aciliyet]}`
+      + (farkli && oneri !== null && oneri !== 'planlama' ? ` (önerilen ${SINIF_ADLARI[oneri]} yerine)` : ''),
   });
   return talepCevabi(db, id);
 }
