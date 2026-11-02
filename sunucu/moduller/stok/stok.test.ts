@@ -841,7 +841,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(giris.emirNo, emirNo);
     assert.equal(giris.partiEtiketi?.includes(`Emir ${emirNo}`), true, giris.partiEtiketi ?? '');
     assert.equal(giris.partiEtiketi?.includes('#'), false);
-    assert.equal((await depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: 999999, malzemeId: m, miktar: '1' })).durum, 409);
+    assert.equal((await depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: 999999, malzemeId: m, miktar: '1' })).durum, 404, 'olmayan emir bulunamadı (STK-8)');
     const h = await kart('hammadde');
     await malKabul(h, '20', { parti: { dokumNo: 'DK-5' } });
     const kabul = await konumId('KABUL');
@@ -857,11 +857,33 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(iz.govde.sevkler, [], 'emri sevk edilmemiş partinin izinde sevk uydurulmaz');
   });
 
-  test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan kart sınırsız', async () => {
+  test('STK-8: mal kabul üretim çıkışı ve hurda konumuna yazılmaz, hareket yazılmaz; depo zemini ve KABUL izinli', async () => {
+    const k = await kart('sarf');
+    for (const kod of ['URETIM']) {
+      const r = await depo<Hata>('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: await konumId(kod) }] });
+      assert.deepEqual([r.durum, r.govde.alan], [400, 'satirlar.0.konumId'], JSON.stringify(r.govde));
+    }
+    for (const tur of ['hurda']) {
+      const c = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur, kod: `STK8-${tur.toUpperCase()}-${kartSira}`, ad: null });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      const r = await depo<Hata>('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: c.govde.konum.id }] });
+      assert.deepEqual([r.durum, r.govde.alan], [400, 'satirlar.0.konumId'], `${tur}: ${JSON.stringify(r.govde)}`);
+    }
+    assert.equal((await o().vt.sorgu('SELECT 1 FROM stok_hareketi WHERE malzeme_id = $1', [k])).length, 0, 'reddedilen kabul hareket yazmaz');
+    const zemin = await mudur<{ konum: { id: number } }>('POST', '/stok/konumlar', { tur: 'depo_zemini', kod: `STK8-Z-${kartSira}`, ad: null });
+    assert.equal((await depo('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1', konumId: zemin.govde.konum.id }] })).durum, 200, 'depo zemini izinli');
+    assert.equal((await malKabul(k, '1')).durum, 200, 'konumsuz satır KABUL alanına');
+  });
+
+  test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan yarı mamul sınırsız', async () => {
     const e = await emir();
     const m = await kart('mamul');
     await o().sahip.sorgu('UPDATE uretim_emri SET malzeme_no = $2 WHERE id = $1', [e, m]);
     const gir = (malzemeId: number, miktar: string) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: e, malzemeId, miktar });
+    // K14 a: başlamamış emirde sınır kayıtlı sağlam adettir; üretim yokken giriş yazılmaz.
+    const baslamamis = await gir(m, '1');
+    assert.deepEqual([baslamamis.durum, baslamamis.govde.mesaj], [400, 'Üretim girişi emrin girilmemiş adedini (0) aşamaz.'], JSON.stringify(baslamamis.govde));
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'basladi', baslama = now() WHERE id = $1", [e]);
     assert.equal((await gir(m, '6')).durum, 200);
     const asan = await gir(m, '6');
     assert.deepEqual([asan.durum, asan.govde.mesaj], [400, 'Üretim girişi emrin girilmemiş adedini (4) aşamaz.'], JSON.stringify(asan.govde));
@@ -874,6 +896,24 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await gir(m, '4')).durum, 200);
     const baska = await kart('yarimamul');
     assert.equal((await gir(baska, '11')).durum, 200, 'emrin ürünü olmayan yarı mamul sınırsız');
+  });
+
+  test('1784: ürünlü emre başka mamul girmez; emrin ürünü kesirli girmez; başlamamış emre giriş yazılmaz (K14 a)', async () => {
+    const e = await emir();
+    const m = await kart('mamul');
+    await o().sahip.sorgu("UPDATE uretim_emri SET malzeme_no = $2, durum = 'basladi', baslama = now() WHERE id = $1", [e, m]);
+    const gir = (malzemeId: number, miktar: string, emirId = e) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: emirId, malzemeId, miktar });
+    const yabanci = await gir(await kart('mamul'), '1');
+    assert.deepEqual([yabanci.durum, yabanci.govde.alan], [400, 'malzemeId'], JSON.stringify(yabanci.govde));
+    const kesir = await gir(m, '0.5');
+    assert.deepEqual([kesir.durum, kesir.govde.alan], [400, 'miktar'], JSON.stringify(kesir.govde));
+    assert.equal((await gir(m, '2')).durum, 200, 'emrin ürünü tam sayıyla girer');
+    // Planlı emirde sağlam adet yazılamaz (durum kısıtı); kayıtlı sağlam 0 sayılır, giriş yazılmaz.
+    const planli = await emir();
+    await o().sahip.sorgu('UPDATE uretim_emri SET malzeme_no = $2 WHERE id = $1', [planli, m]);
+    assert.equal((await gir(m, '1', planli)).durum, 400, 'başlamamış emre üretim girişi yok');
+    const hareket = await o().vt.sorgu('SELECT 1 FROM stok_hareketi WHERE malzeme_id = $1 AND uretim_emri_id = ANY($2::int[])', [m, [e, planli]]);
+    assert.equal(hareket.length, 1, 'reddedilen girişler hareket yazmaz');
   });
 
   test('B-7: elle üretim girişi iptal, taslak ve kapanışı onaylanmış emre yazılmaz; bitmiş ve kapanışı açık emre yazılır', async () => {
@@ -1999,6 +2039,7 @@ describe('stok (gerçek PostgreSQL)', () => {
 
     // Üretim girişi: emrin çıktısından bir kısmı girer.
     const e2 = await rotaliEmir(urun, 5, [[1, h, '1']]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'basladi', baslama = now() WHERE id = $1", [e2]);
     assert.equal((await komut('stok-uretim-girisi', { uretimEmriId: e2, malzemeId: urun, miktar: '2' })).durum, 200);
     assert.equal((await hareketler(urun)).at(-1)?.[0], 2);
 
@@ -2277,6 +2318,14 @@ describe('stok (gerçek PostgreSQL)', () => {
       { kod: 'H1-02-1-1', tur: 'raf_gozu', aktif: true, depoKod: 'HB1', alanId: null },
     ]);
     assert.deepEqual((await mudur('POST', '/stok/konumlar/haritadan-esle')).govde, { eklenen: 0, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] });
+    // 1784c: eşlenmemiş harita yeri ekranda iş satırıdır; tanım yetkilisinin menü sayacı da onu sayar, tanımsız kişininki saymaz.
+    const sayac = async (kim: string) => (await istek<Record<string, number | null>>(kim, 'GET', '/stok/menu-sayaclari')).govde['is-kutusu'];
+    const onceDepo = await sayac('depo'), onceSatin = await sayac('satin_alma');
+    const yeniAlan = (await alan('kabul', 'Eşlenmemiş kabul'))!.id;
+    assert.equal((await mudur<HaritaOzetiCevabi>('GET', '/stok/harita-ozeti')).govde.eslenmemis, 1);
+    assert.equal(await sayac('depo'), onceDepo! + 1, 'tanım yetkilisi eşlenmemiş yeri iş sayar');
+    assert.equal(await sayac('satin_alma'), onceSatin, 'tanım yetkisi olmayanın ekranında bu iş yok');
+    await vt.sorgu('DELETE FROM atolye_alan WHERE id = $1', [yeniAlan]);
 
     // Stoklu göz haritada silinebilir (kullanıcı kararı 12.10, #711): konum bağsız kalır, eşleme kapatmaz, özette listelenir.
     const gozIdleri = (await vt.sorgu<{ id: number }>('SELECT id FROM atolye_goz WHERE raf_id = $1 ORDER BY bolme', [raf!.id])).map((g) => g.id);

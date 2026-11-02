@@ -80,7 +80,7 @@ export function KurFaizSeridi() {
           })}
           {yazabilir && bugunEksik && <span className="tc-kfs-uyari"><span className="tc-kfs-isaret" aria-hidden="true" />Bugün girilmedi</span>}
           <span className="tc-kfs-son">
-            {o.sonGiris ? `Son giriş: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}` : 'Henüz kur ya da faiz girilmedi'}
+            {o.sonGiris ? `Son ${o.sonGiris.tur === 'kur' ? 'kur' : 'faiz'} girişi: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}` : 'Henüz kur ya da faiz girilmedi'}
           </span>
         </button>
         {yazabilir && (

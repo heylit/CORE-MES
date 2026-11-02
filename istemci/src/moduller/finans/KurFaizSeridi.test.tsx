@@ -55,7 +55,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
   it('1089 a: panelde herkes kur grafiğini görür, son 90 gün okunur; toplu yükleme yalnız finans.kur-yaz olana', async () => {
     const istekler = sunucuKur(['musteri-tedarikci.oku']);
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: /Son giriş/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Son (kur|faiz) girişi/ }));
     expect(screen.getByText('Kur ve faiz grafiği')).toBeTruthy();
     await waitFor(() => expect(document.querySelector('.tc-kfg-ozet')?.textContent).toBe('41,5 13.10.2026en düşük 41,2 · en yüksek 41,5'));
     expect(istekler.some((i) => i.yol === '/finans/kur-faiz-araligi?baslangic=2026-07-15&bitis=2026-10-13')).toBe(true);
@@ -71,14 +71,14 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
   it('finans işlemi olmayan kişi değerleri, eski kurun gününü ve son girişleri görür; güncelleme düğmesi ve formu yok', async () => {
     const istekler = sunucuKur(['musteri-tedarikci.oku']);
     ac();
-    expect((await screen.findByText(/Son giriş:/)).textContent).toBe('Son giriş: bugün 09:44, Deneme Satinalma');
+    expect((await screen.findByText(/Son kur girişi:/)).textContent).toBe('Son kur girişi: bugün 09:44, Deneme Satinalma');
     expect(document.querySelector('[data-kfs="kur-USD"]')?.textContent).toBe('USD41,5');
     expect(document.querySelector('[data-kfs="kur-EUR"]')?.textContent).toBe('EUR45,110.10');
     expect(document.querySelector('[data-kfs="kur-GBP"]')?.textContent).toBe('GBPyok');
     expect(document.querySelector('[data-kfs="faiz-TRY"]')?.textContent).toBe('TRY faiz%3,5/ay');
     expect(screen.queryByText('Bugün girilmedi')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Kur ve faizi güncelle' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Son giriş/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Son (kur|faiz) girişi/ }));
     expect(screen.getByText('Kur ve faiz girişi finans ve satın almadadır.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Kurları kaydet' })).toBeNull();
     expect(screen.getByText('düzeltme')).toBeTruthy();

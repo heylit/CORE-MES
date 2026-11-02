@@ -16,6 +16,7 @@ export const KAPI = 'kisiler.rol-yonet';
 export const YONETICI = kisi(1, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'rota.yaz', 'rota.onayla', 'uretim-emirleri.yaz',
   'stok.statu-degistir', 'stok.sayim', 'istasyonlar.yaz', 'kisiler.yaz', 'finans.maliyet-oku']);
 export const OKUYAN = kisi(2, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku']);
+export const PLANCI = kisi(4, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'plan.yaz']);
 export const SAYFASIZ = kisi(3, [KAPI]);
 export const KAPISIZ = kisi(4, ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz']);
 

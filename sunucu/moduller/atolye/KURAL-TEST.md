@@ -47,3 +47,5 @@ Saf: `sunucu/moduller/atolye/kurallar.test.ts`. Akış ve uç (gerçek PostgreSQ
 | ATL-39 | istemci: `makine-durumu.test.ts` "makinesi haritadaysa makine, değilse istasyonun nesnesi", `AtolyeHaritasi.test.tsx` "son hareketler: … (K3)" (izin: liste ve seçim; ret: 403'te yetki iletisi) | — (yalnız gösterim) |
 | ATL-40 | istemci: `makine-durumu.test.ts` "izin: ölçüm, çağrı ve emirsiz terminal olayı Arkon'dan gelir; …", "ret: Arkon sayımı ve emre bağlı durum olayı alınmaz …", `AtolyeHaritasi.test.tsx` "son hareketler Arkon olaylarını da gösterir: … (ATL-40)" | — (yalnız gösterim; kapsam Arkon ucunda) |
 | ATL-41 | `kurallar.test.ts` "ATL-41 hücre adı kareye çözülür; …"; `atolye.test.ts` "ATL-41 kareye atama (#1304): …" (alan aç, türünü değiştir, istasyon yerleştir ve taşı, başka bölümdeki 422, eski sürüm 409, atolye.yaz 403); stok istemcisi "Zemin ızgarası (#1304)" | ATL-16 sürüm, ATL-04 istasyonun tek yeri, ATL-07 çakışma |
+| ATL-42 | saf: "ATL-42 karantina alanı yürüyüş yoluna binerse uyarı; …" | yok (uyarı) |
+| ATL-43 | saf: "ATL-43 aynı adlı iki alan … uyarıdır, kaydı engellemez" | yok (uyarı) |

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import type { FisCevabi, FislerCevabi, MalzemeAyrintiCevabi, SepetCevabi, SepetSatiri, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, StoktanDusGovdesi, TeslimGovdesi } from '#paylasilan/sozlesme/stok.ts';
+import type { FisCevabi, FislerCevabi, Hareket, HareketlerCevabi, MalzemeAyrintiCevabi, SepetCevabi, SepetSatiri, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, StoktanDusGovdesi, TeslimGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -126,6 +126,12 @@ export function DepoSepeti() {
 
 // Taşı: malzemeyi okut ya da ara, her satıra nereye gideceğini seç (ya da hepsine tek yer), tek dokunuşla taşı.
 // Satır hedefi sunucuya teslimde gider; her hedef için ayrı fiş yazılır.
+// Sepet dışından tek tek yapılan taşımalar (Malzemeler, Okut) stok fişi değil hareket fişi yazar; Son fişler onları da gösterir.
+// Akışın otomatik taşıması ve yerinde statü değişimi gösterilmez.
+export function tekilTasimalar(l: readonly Hareket[], sinir = 8): Hareket[] {
+  return l.filter((x) => x.fisId === null && !x.otomatik && x.hareketFisiNo != null && x.kaynakKonumKod !== x.hedefKonumKod).slice(0, sinir);
+}
+
 export function Sepet() {
   const yonlendir = useNavigate();
   const cikabilir = useIslem('stok.cikis');
@@ -135,6 +141,8 @@ export function Sepet() {
   const [aciklama, setAciklama] = useState('');
   const s = useQuery({ queryKey: [...anahtarlar.hepsi, 'sepet'], queryFn: () => api.get<SepetCevabi>('/stok/sepet') });
   const f = useQuery({ queryKey: anahtarlar.liste('fisler', {}), queryFn: () => api.get<FislerCevabi>('/stok/fisler?sayfaBoyu=8') });
+  const t = useQuery({ queryKey: anahtarlar.liste('tekil-tasimalar', {}), queryFn: () => api.get<HareketlerCevabi>('/stok/hareketler?tur=transfer&sayfaBoyu=30') });
+  const tekiller = tekilTasimalar(t.data?.satirlar ?? []);
   const sil = useStokKomutu((g: { id: number }) => api.post<SepetCevabi>(`/stok/sepet/satirlar/${g.id}/sil`, {}), 'Satır kaldırıldı.');
   const tasi = useStokKomutu((g: TeslimGovdesi) => korumaliPost<SepetTeslimCevabi>('/stok/sepet/teslim-et', g).then((c) => {
     setHedefler({}); setAciklama('');
@@ -192,11 +200,15 @@ export function Sepet() {
         </Kart>
       )}
       <Kart baslik="Son fişler">
-        {f.data && f.data.satirlar.length === 0 && <p className="tc-stok-not">Henüz fiş yok.</p>}
+        {f.data && f.data.satirlar.length === 0 && tekiller.length === 0 && <p className="tc-stok-not">Henüz fiş yok.</p>}
         <ul className="tc-stok-satirlar">
           {f.data?.satirlar.map((x) => (
             <li key={x.id}><Link to={`/stok/fisler/${x.id}`}><strong className="tc-stok-mono">{x.no}</strong></Link>
               <span className="tc-stok-not">{zamanMetni(x.zaman)} · {x.satirSayisi} hareket · {x.hedefKonumKod ?? (x.cikisNedeni ? CIKIS_NEDENI[x.cikisNedeni] : '')}</span></li>
+          ))}
+          {tekiller.map((x) => (
+            <li key={`h${x.id}`}><Link to={`/stok/hareketler?metin=${encodeURIComponent(x.hareketFisiNo!)}`}><strong className="tc-stok-mono">{x.hareketFisiNo}</strong></Link>
+              <span className="tc-stok-not">{zamanMetni(x.zaman)} · {x.malzemeAd ?? `Kart ${x.malzemeId}`} · {miktarMetni(x.miktar)} · {x.kaynakKonumKod ?? '—'} → {x.hedefKonumKod ?? '—'}</span></li>
           ))}
         </ul>
       </Kart>

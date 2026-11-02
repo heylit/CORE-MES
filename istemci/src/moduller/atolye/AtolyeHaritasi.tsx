@@ -1,8 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { AramaSonucu, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  Dugme, DurumKutusu, Girdi, Kart, KuyrukKarti, KuyrukListesi, Rozet, Secim, Sekmeler, Simge, useBildirim,
+  Dugme, DurumKutusu, Girdi, Kart, KuyrukKarti, KuyrukListesi, Rozet, Secim, Simge, useBildirim,
 } from '../../ortak/arayuz/index.ts';
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
@@ -32,12 +32,10 @@ const Sahne3B = lazy(() => import('./Sahne3B.tsx').then((m) => ({ default: m.Sah
 type Gorunum = 'genel' | 'kus';
 type SayfaSekmesi = 'harita' | 'ikiz' | 'depo' | 'parcalar';
 
-const SEKMELER = [
-  { anahtar: 'harita' as const, baslik: 'Harita', simge: 'cube' as const },
-  { anahtar: 'ikiz' as const, baslik: 'Dijital ikiz', simge: 'cpu' as const },
-  { anahtar: 'depo' as const, baslik: 'Depo', simge: 'box' as const },
-  { anahtar: 'parcalar' as const, baslik: 'Parçalar', simge: 'layers' as const },
-];
+// Bölümler ikinci menüdedir (paylasilan/sayfalar/atolye.ts); sekme adresten okunur.
+const SEKME_YOLLARI: Record<SayfaSekmesi, string> = { harita: '/atolye', ikiz: '/atolye/ikiz', depo: '/atolye/depo', parcalar: '/atolye/parcalar' };
+const sekmeOku = (yol: string): SayfaSekmesi =>
+  (Object.entries(SEKME_YOLLARI) as [SayfaSekmesi, string][]).find(([a, y]) => a !== 'harita' && (yol === y || yol.startsWith(`${y}/`)))?.[0] ?? 'harita';
 
 function Saat() {
   const [simdi, simdiYaz] = useState(() => new Date());
@@ -158,10 +156,15 @@ export function AtolyeHaritasi() {
   const [turDurdu, turDurduYaz] = useState(false);
   // Tam ekranda istasyon listesi çekmecedir; geniş ekranda açık başlar.
   const [listeAcik, listeAcikYaz] = useState(() => typeof matchMedia === 'function' && matchMedia('(min-width: 1280px)').matches);
-  const [sekme, sekmeYaz] = useState<SayfaSekmesi>('harita');
+  const konum = useLocation();
+  const git = useNavigate();
+  const sekme = sekmeOku(konum.pathname);
+  const sekmeYaz = (s: SayfaSekmesi) => { if (s !== sekme) void git({ pathname: SEKME_YOLLARI[s], search: konum.search }); };
   const [depoSecimi, depoSecimiYaz] = useState<DepoSecimi | null>(null);
   // Bölmeye karşıdan bakış: sahne yalnız o raf bölmesini gösterir (öbür her şey gizlenir).
   const [rafOdak, rafOdakYaz] = useState<RafOdakSecimi | null>(null);
+  // Bölmeye karşıdan bakış yalnız haritada; başka bölüme geçince kapanır.
+  useEffect(() => { if (sekme !== 'harita') rafOdakYaz(null); }, [sekme]);
   const gozKalemleri = useGozKalemleri(salonId);
   const gozKalemListesi = gozKalemleri.data?.kalemler;
   const tumEmirler = useTumEmirler();
@@ -580,7 +583,6 @@ export function AtolyeHaritasi() {
 
   return (
     <Kart baslik={`Fabrika Haritası · ${baslik}`} sag={ustSag}>
-      {!tamEkran.acik && <div className="tc-atolye-sekmeler"><Sekmeler etiket="Atölye bölümleri" sekmeler={SEKMELER} secili={sekme} sec={(a) => { sekmeYaz(a); if (a !== 'harita') rafOdakYaz(null); }} /></div>}
       {harita}
       {!tamEkran.acik && sekme === 'ikiz' && (
         <DijitalIkiz bolumler={gorunen} fabrika={fabrikaGorunumu} baslik={baslik} canli={canliHaritasi} tumEmirler={tumEmirler.data?.emirler ?? null} />

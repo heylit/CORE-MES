@@ -4,7 +4,7 @@ import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { BOLUM_ACIKLAMALARI, menuSayaclari, MOTOR_OKUNAMADI } from './ReceteRotaYeni.tsx';
 import { EKRANLAR, SEKMELER, sekmeBul } from './sekmeler.ts';
-import { json, KAPISIZ, OKUYAN, ornekDurum, rrAc, SAYFASIZ, sunucuKur, YONETICI, type Istek } from './test-ortak.tsx';
+import { json, KAPISIZ, OKUYAN, ornekDurum, PLANCI, rrAc, SAYFASIZ, sunucuKur, YONETICI, type Istek } from './test-ortak.tsx';
 
 // Kabuk testte yoktur: ekranın kabuğa yazdığı sekme sayıları burada yakalanır.
 const sayacYazici = vi.hoisted(() => ({ yaz: vi.fn() }));
@@ -27,6 +27,22 @@ const durumOkundu = (istekler: readonly Istek[]) => waitFor(() => expect(istekle
 const parcaCizildi = async (bolge: HTMLElement, parca: string) => {
   await waitFor(() => expect(bolge.querySelector(`[data-parca="${parca}"]`)).not.toBeNull());
 };
+
+describe('plan şeridi yalnız planı yazana (RR-9)', () => {
+  it('plan.yaz olmayan rol şeridi ve pasif "Onaya gönder"i görmez; plan.yaz olan görür', async () => {
+    const durum = { ...ornekDurum(), planCanli: { planSurumu: 3, sonCanliyaAlma: null, planlanacak: [], kuyruklar: [] } };
+    const istekler = sunucuKur(OKUYAN, { durum });
+    rrAc();
+    await durumOkundu(istekler);
+    await acikBolum('Üretim emirleri');
+    expect(screen.queryByRole('status', { name: 'Plan durumu' })).toBeNull();
+    cleanup();
+    const ikinci = sunucuKur(PLANCI, { durum });
+    rrAc();
+    await durumOkundu(ikinci);
+    expect(await screen.findByRole('status', { name: 'Plan durumu' })).toBeTruthy();
+  });
+});
 
 describe('sekme tablosu', () => {
   it('sekmeler ikinci menünün Reçete ve Rota grubudur, aynı sıra ve adla; her sekmenin ekranı ve parçası var', () => {

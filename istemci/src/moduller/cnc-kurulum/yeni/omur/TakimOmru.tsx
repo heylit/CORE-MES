@@ -5,9 +5,11 @@ import {
   type Cizim, type OmurGecisi,
 } from './cekirdek.ts';
 import { lifeCompute, openAnalysis, type AnalizSonucu, type HesapliSonuc } from './analiz.ts';
+import { AkisModuSecici, useAkisModu } from '../akis-modu.tsx';
 import { AnalizPaneli } from './AnalizPaneli.tsx';
 import { OmurCarki } from './cark-sahnesi.ts';
 import { asinmaGrafigi, dagilimGrafigi, hizGrafigi } from './grafikler.ts';
+import { OmurKartAkisi } from './OmurKartAkisi.tsx';
 import { OmurOnizlemesi, type OnizlemeSekmesi } from './onizleme-sahnesi.ts';
 import { paletOku } from './renk.ts';
 import { tezgahtakiKart } from './takip.ts';
@@ -48,7 +50,9 @@ export function TakimOmru() {
   const koken = useRef<Koken | null>(null);
   const grafik = [useRef<HTMLCanvasElement>(null), useRef<HTMLCanvasElement>(null), useRef<HTMLCanvasElement>(null)] as const;
   const kip = kipOku();
-  const [cekmece, cekmeceYaz] = useState(false);
+  const [cekmece, cekmeceYaz] = useState(false), [model, modelYaz] = useState(false);
+  // Kartlı akışta çark çizilmez; sahne yalnız analizin ömür yüzeyi için kurulur (1843).
+  const carkta = useAkisModu() === 'cark', kartli = !carkta && kip !== 'anal';
   const pv: OnizlemeSekmesi = state.life.pv === 'mag' ? 'mag' : 'model';
 
   const kayit = useCallback(() => { save(); }, []);
@@ -156,10 +160,10 @@ export function TakimOmru() {
   useEffect(() => {
     const el = sahneKutusu.current;
     if (!el) return undefined;
-    const h = (e: WheelEvent): void => { if (kipOku() !== 'anal') cark.teker(e); };
+    const h = (e: WheelEvent): void => { if (kipOku() !== 'anal' && carkta) cark.teker(e); };
     el.addEventListener('wheel', h, { passive: false });
     return () => el.removeEventListener('wheel', h);
-  }, [cark]);
+  }, [cark, carkta]);
 
   const sahneCiz = useCallback((c: Cizim) => {
     const [kk, k2] = yumusat(c.dt);
@@ -175,9 +179,9 @@ export function TakimOmru() {
   }, [cark, onizleme]);
 
   const d = cark.defs[cark.active], secili = cark.selCard();
-  const baslik = kip === 'anal' ? 'Takım ömrü analizi' : kip === 'renew' ? 'Takım ömrü yenileme' : 'Takım ömrü çarkı';
+  const baslik = kip === 'anal' ? 'Takım ömrü analizi' : kip === 'renew' ? 'Takım ömrü yenileme' : carkta ? 'Takım ömrü çarkı' : 'Takım ömrü';
   const alt = kip === 'anal' ? <>Ömür yüzeyi: Vc ve ilerlemeye göre · yeşil uzun, kırmızı kısa</>
-    : kip === 'renew' ? <>Uç çevirme · bileme · kenar düzeltme · çarktan takım seçin</>
+    : kip === 'renew' ? <>Uç çevirme · bileme · kenar düzeltme · {carkta ? 'çarktan' : 'kartlardan'} takım seçin</>
     : <>Tekerlek: tezgâh / depo grubu değiştir · <Simge ad="chev-left" boyut="k" /><Simge ad="chev-right" boyut="k" /> takım seç</>;
 
   return (
@@ -185,13 +189,15 @@ export function TakimOmru() {
       <div className="tc-co-sahne">
         <div
           ref={sahneKutusu} className="tc-co-sahne-alan"
-          onPointerDown={(e) => { if (kip !== 'anal') cark.basla(e.nativeEvent, e.currentTarget); }}
-          onPointerMove={(e) => { if (kip !== 'anal') cark.tasi(e.nativeEvent); }}
-          onPointerUp={(e) => { if (kip !== 'anal') cark.bitir(e.nativeEvent); }}
-          onPointerCancel={(e) => { if (kip !== 'anal') cark.bitir(e.nativeEvent); }}
+          onPointerDown={(e) => { if (kip !== 'anal' && carkta) cark.basla(e.nativeEvent, e.currentTarget); }}
+          onPointerMove={(e) => { if (kip !== 'anal' && carkta) cark.tasi(e.nativeEvent); }}
+          onPointerUp={(e) => { if (kip !== 'anal' && carkta) cark.bitir(e.nativeEvent); }}
+          onPointerCancel={(e) => { if (kip !== 'anal' && carkta) cark.bitir(e.nativeEvent); }}
         >
-          <Sahne ciz={sahneCiz} sinif="tc-co-tuval" />
+          {!kartli && <Sahne ciz={sahneCiz} sinif="tc-co-tuval" />}
         </div>
+        {kartli && <OmurKartAkisi cark={cark} />}
+        {kip !== 'anal' && <div className="tc-co-mod"><AkisModuSecici /></div>}
         <div className="tc-co-bilgi">
           <div className="tc-co-adim-adi">TAKIM ÖMRÜ</div>
           <div className="tc-co-baslik">{baslik}</div>
@@ -213,7 +219,12 @@ export function TakimOmru() {
         <div className="tc-co-yan-kaydir">
           <Sekmeler etiket="Takım ömrü" sekmeler={SEKMELER} secili={kip} sec={kipSec} />
           {kip !== 'anal' && (
-            <div className="tc-co-onizleme">
+            kartli && !model ? (
+              <div className="tc-co-onizleme tc-co-onizleme-kapali">
+                <Dugme simge="cube" onClick={() => { modelYaz(true); }}>Modeli göster</Dugme>
+                {d && <div className="tc-co-onizleme-etiket">{OmurOnizlemesi.etiket(d, secili, pv)}</div>}
+              </div>
+            ) : <div className="tc-co-onizleme">
               <div
                 className="tc-co-onizleme-alan"
                 onPointerDown={(e) => { onizleme.drag = e.clientX; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* yakalama yoksa da döner */ } }}
@@ -232,6 +243,7 @@ export function TakimOmru() {
               )}
               <div className="tc-co-onizleme-ipucu">sürükle: döndür</div>
               {d && <div className="tc-co-onizleme-etiket">{OmurOnizlemesi.etiket(d, secili, pv)}</div>}
+              {kartli && <button type="button" className="tc-co-model-kapat" title="Modeli kapat" aria-label="Modeli kapat" onClick={() => { modelYaz(false); }}><Simge ad="x" boyut="k" /></button>}
             </div>
           )}
           {kip === 'track' && (

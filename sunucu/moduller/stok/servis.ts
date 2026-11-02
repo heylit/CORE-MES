@@ -59,7 +59,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar, kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -321,8 +321,10 @@ async function eksikEmirSayisi(db: Db): Promise<number> {
 export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId: number): Promise<IkinciMenuSayaclari> {
   const k = await isKutusu(db, islemler, kisiId);
   const kapsamliIstasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
-  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı).
-  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0].filter((n) => n > 0).length;
+  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran tanım yetkilisine eşlenmemiş
+  // harita yerini de iş olarak gösterir; sayaç da sayar.
+  const eslenmemis = islemler.includes('stok.tanim') ? (await haritaOzeti(db)).eslenmemis : 0;
+  const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0, eslenmemis].filter((n) => n > 0).length;
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,
     'mal-kabul': islemler.includes('stok.giris') ? k.logoFarki : null,
@@ -892,7 +894,7 @@ async function malKabulSatirlariniYaz(
     const konumId = s.konumId !== undefined ? Number(s.konumId) : gkk ? await sorgular.ilkKarantinaKonumu(db) : kabul;
     if (konumId === null) throw dogrulama(GKK_KARANTINA_KONUMU_YOK, `${alan}.konumId`);
     const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
-    const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : null;
+    const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : malKabulKonumuEngeli(konum.tur);
     if (gkkEngeli) throw dogrulama(gkkEngeli, `${alan}.konumId`);
     const kalite: KaliteDurumu = gkk ? 'karar_bekliyor' : 'serbest';
     let parti: number | null = partiId ?? null;
@@ -1159,13 +1161,21 @@ export async function uretimGirisi(db: Db, kisiId: number, g: UretimGirisiKomutu
   await emirVarDenetle(db, emir);
   const miktar = bindenMetin(binde(g.miktar));
   // 21.4: emrin kendi ürünü sayım ve tamamlamayla da girer; elle giriş adedi aşmaz. Tamamlamayla aynı kilit: eşzamanlı iki giriş
-  // sınırı birlikte aşamaz. Emrin ürünü olmayan yarı mamulün emirdeki miktarı adetten çıkmaz, sınırsız kalır.
+  // sınırı birlikte aşamaz.
   const e = await uretimEmriOzeti(db, emir);
   if (e !== null && e.malzemeNo === malzemeId) await sorgular.emirTamamlamaKilidi(db, emir);
   const durumEngeli = e === null ? null : uretimGirisiDurumEngeli(e.durum, (await kapanisSonuclari(db, [emir])).get(emir) != null);
   if (durumEngeli) throw cakisma(durumEngeli);
+  // Ürünü tanımlı olmayan emirde ağaç bilinmez; kart denetimi ürünlü emirde yapılır.
+  if (e !== null && e.malzemeNo !== null) {
+    const kartlar = new Set([e.malzemeNo, ...[...(await emirDugumleri(db, emir)).values()].flatMap((d) => (d.malzemeNo === null ? [] : [d.malzemeNo]))]);
+    const kartEngeli = uretimGirisiKartEngeli(o.tur, malzemeId, kartlar);
+    if (kartEngeli) throw dogrulama(kartEngeli, 'malzemeId');
+  }
+  const kesir = uretimGirisiKesirEngeli(miktar, o.birim?.toLocaleLowerCase('tr') === 'adet' || e?.malzemeNo === malzemeId);
+  if (kesir) throw dogrulama(kesir, 'miktar');
   if (e !== null && e.malzemeNo === malzemeId) {
-    const asim = uretimGirisiEngeli(e.saglamAdet ?? e.adet, await sorgular.emirUretimGirisi(db, emir, malzemeId), miktar);
+    const asim = uretimGirisiEngeli(uretimGirisiHedefi(e.durum, e.saglamAdet, e.adet), await sorgular.emirUretimGirisi(db, emir, malzemeId), miktar);
     if (asim) throw dogrulama(asim, 'miktar');
   }
   return korumali(async () => {
@@ -1297,7 +1307,7 @@ export async function emirTamamla(db: Db, k: Kullanici, emirId: number, g: EmirT
 
 // Emre yabancı anahtar Aşama 2'de gelir (STK6 b: emir modeli değişiyor); o zamana kadar emrin varlığını sahibi söyler.
 async function emirVarDenetle(db: Db, id: number | null): Promise<void> {
-  if (id !== null && (await emirOzeti(db, id)) === null) throw bagimliKayit('Üretim emri bulunamadı.');
+  if (id !== null && (await emirOzeti(db, id)) === null) throw bulunamadi('Üretim emri bulunamadı.');
 }
 // DEP-36: üretime sarfı yalnız emrin iş merkezi kişinin kapsamındaysa yazar.
 async function sarfEmriDenetle(db: Db, kisiId: number, id: number | null): Promise<void> {
@@ -1417,6 +1427,11 @@ export async function statuDegistir(db: Db, kisiId: number, g: StatuDegistirKomu
   const malzemeId = Number(g.malzemeId), konumId = Number(g.konumId), partiId = g.partiId === null ? null : Number(g.partiId);
   const kaynakStatuId = g.kaynakStatuId === null ? null : Number(g.kaynakStatuId), hedefStatuId = g.hedefStatuId === null ? null : Number(g.hedefStatuId);
   await aktifKonum(db, konumId, 'konumId');
+  if (hedefStatuId !== null) {
+    const statuKarti = (await statuler(db)).statuler.find((x) => x.id === hedefStatuId)?.malzemeNo;
+    const kartEngeli = statuKartEngeli(statuKarti, (await malzemeOzeti(db, malzemeId))?.kod ?? null);
+    if (kartEngeli) throw dogrulama(kartEngeli, 'hedefStatuId');
+  }
   const miktar = bindenMetin(binde(g.miktar));
   return korumali(async () => {
     await siraliKilitle(db, { malzemeId, konumId, partiId, statuId: kaynakStatuId }, { malzemeId, konumId, partiId, statuId: hedefStatuId });

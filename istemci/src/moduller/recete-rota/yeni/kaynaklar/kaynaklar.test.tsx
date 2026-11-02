@@ -55,7 +55,7 @@ describe('R2 Süreler', () => {
     const istekler = sureSunucusu(YONETICI);
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
-    const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık dakika, MM-0001 OP 10' });
+    const hazirlik = await within(bolge).findByRole('textbox', { name: 'Gerçekleşen hazırlık + ayar dakika, MM-0001 OP 10' });
     // Eski düzen: tek tablo, grup başlıkları; kaynak istasyon koduyla, altında istasyon adı ve makine kodu; operasyon yalnız adıyla.
     const tablo = within(bolge).getByRole('table', { name: 'Süreler' });
     expect(within(tablo).getByRole('columnheader', { name: 'Teorik (dk)' })).toBeTruthy();

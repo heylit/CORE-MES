@@ -121,7 +121,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
 
   test('FNS-2, FNS-11: faturalı belgede firma zorunlu; faturasız yalnız izinli kategoride, firmasız ve elle', async () => {
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(null))).durum, 422);
-    const h = await hesap('kasa');
+    const h = await hesap('kasa', 'TRY', 1000);
     const maas = await belge(null, { yon: 'gider', tur: 'faturasiz', kategori: 'personel', kdvOrani: 0, pesin: { yontem: 'nakit', hesapId: h, tarih: TARIH } });
     assert.equal(maas.durum, 'kapandi');
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(null, { yon: 'gider', tur: 'faturasiz', kategori: 'kira', kdvOrani: 0 }))).durum, 400);
@@ -333,8 +333,8 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(`/finans/cekler/${c.id}/odendi`, { surum: c.surum, hesapId: banka, tarih: TARIH })).durum, 422);
     c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/tahsile-ver`, { surum: c.surum }, 'yazan')).cek;
     assert.equal((await yaz(`/finans/cekler/${c.id}/tahsile-ver`, { surum: c.surum })).durum, 422);
-    assert.equal((await yaz(`/finans/cekler/${c.id}/tahsil`, { surum: c.surum, hesapId: kasa, tarih: '2026-11-15' })).durum, 422);
-    c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/tahsil`, { surum: c.surum, hesapId: banka, tarih: '2026-11-15' }, 'yazan')).cek;
+    assert.equal((await yaz(`/finans/cekler/${c.id}/tahsil`, { surum: c.surum, hesapId: kasa, tarih: '2026-10-15' })).durum, 422);
+    c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/tahsil`, { surum: c.surum, hesapId: banka, tarih: '2026-10-15' }, 'yazan')).cek;
     assert.equal(c.durum, 'tahsil');
     assert.equal(await hesapBakiyesi(banka), '1200.00');
     assert.equal((await yaz(`/finans/cekler/${c.id}/duzelt`, { surum: c.surum, vade: '2026-12-01' })).durum, 422);
@@ -345,11 +345,11 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const f = await firma();
     const b = await belge(f);
     const c = tamam(await yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'senet', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-11-15', tutar: 1200, dagitimlar: [{ belgeId: b.id, belgeTutari: 1200 }] })).cek;
-    assert.equal((await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-11-16' }, 'yazan')).durum, 403);
-    const k = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-11-16' })).cek;
+    assert.equal((await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-10-16' }, 'yazan')).durum, 403);
+    const k = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-10-16' })).cek;
     assert.deepEqual([k.durum, k.odemeId], ['karsiliksiz', null]);
     assert.equal((await belgeOku(b.id)).durum, 'acik');
-    assert.equal((await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: k.surum, tarih: '2026-11-16' })).durum, 422);
+    assert.equal((await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: k.surum, tarih: '2026-10-16' })).durum, 422);
   });
 
   test('FNS-26, FNS-54, FNS-27 (D-4, D-8): ciro ödeme doğurur ve tedarikçi faturasını kapatır; ikinci ciro ve müşteriye ciro reddedilir; geri alma ve karşılıksız ödemeleri iptal eder', async () => {
@@ -370,7 +370,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.deepEqual([c.durum, c.ciroOdemeId], ['portfoy', null]);
     assert.equal((await belgeOku(alis.id)).durum, 'acik');
     c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/ciro`, { surum: c.surum, firmaId: t, tarih: TARIH, dagitimlar: [{ belgeId: alis.id, belgeTutari: 1200 }] })).cek;
-    tamam(await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-11-16' }));
+    tamam(await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-10-16' }));
     assert.equal((await belgeOku(alis.id)).durum, 'acik');
     assert.equal((await belgeOku(satis.id)).durum, 'acik');
     assert.equal(await ciroOdemeSayisi(), 0);
@@ -738,7 +738,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.deepEqual(await satir(o.id), { aciklama: 'Havale açıklaması', iptal_nedeni: 'Yanlış hesaba girildi' });
     const b2 = await belge(f);
     const c = tamam(await yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'cek', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-11-15', tutar: 1200, dagitimlar: [{ belgeId: b2.id, belgeTutari: 1200 }] })).cek;
-    tamam(await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-11-16' }));
+    tamam(await yaz(`/finans/cekler/${c.id}/karsiliksiz`, { surum: c.surum, tarih: '2026-10-16' }));
     assert.deepEqual(await satir(await cekOdemesi(c.id)), { aciklama: null, iptal_nedeni: 'Karşılıksız çek' });
     const b3 = await belge(f);
     const c3 = tamam(await yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'senet', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-11-15', tutar: 1200, dagitimlar: [{ belgeId: b3.id, belgeTutari: 1200 }] })).cek;
@@ -818,7 +818,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(c.durum, 'bekliyor');
     assert.equal((await belgeOku(b.id)).durum, 'kapandi');
     assert.equal(await hesapBakiyesi(h), '5000.00');
-    c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/odendi`, { surum: c.surum, hesapId: h, tarih: '2026-11-15' }, 'yazan')).cek;
+    c = tamam(await yaz<{ cek: Cek }>(`/finans/cekler/${c.id}/odendi`, { surum: c.surum, hesapId: h, tarih: '2026-10-15' }, 'yazan')).cek;
     assert.deepEqual([c.durum, c.sonucHesapId], ['odendi', h]);
     assert.equal(await hesapBakiyesi(h), '3800.00');
     assert.equal((await yaz(`/finans/cekler/${c.id}/geri-al`, { surum: c.surum }, 'yazan')).durum, 403);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { EmirSecenegi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
@@ -28,6 +28,7 @@ vi.mock('../veri.ts', () => ({
 const { Kurulum } = await import('./Kurulum.tsx');
 const { emirAdaylari, etiket, operasyon, saat } = await import('./secim.ts');
 const { esc } = await import('./disa-aktarim.ts');
+const { K } = await import('./satirlar.ts');
 
 const EMIR: EmirSecenegi = { id: 7, uretimEmriId: 3, emirNo: 'UE-0001', opNo: 10, ad: 'Frezeleme', parcaNo: 'P-1', parcaAd: 'Ornek parca', adet: 5, istasyon: 'CNC-1' } as EmirSecenegi;
 const yetki = (y: Partial<CncYetkisi>): CncYetkisi => ({
@@ -59,6 +60,32 @@ describe('Kurulum düğmeleri (izinli ve reddedilen)', () => {
     ac();
     expect(await screen.findByRole('button', { name: /Sıfırla/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Önce üretim emrini seçin/ })).toBeNull();
+  });
+});
+
+describe('kartlı akış (1843)', () => {
+  it('3D açılamayan bilgisayarda kartlı akış gelir, çark seçilemez; karta tıklamak seçer ve sonraki adıma geçer', async () => {
+    v.yetki = yetki({ yazabilir: true });
+    ac();
+    const akis = await screen.findByLabelText('Kurulum adımları');
+    expect((screen.getByRole('button', { name: /3D çark/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: /Kartlar/ }).getAttribute('aria-pressed')).toBe('true');
+    const ilk = K.defs[0]!;
+    if (ilk.type !== 'single') throw new Error('ilk adım tek seçimli olmalı');
+    const kartlar = within(within(akis).getByRole('group', { name: `${ilk.title} seçenekleri` })).getAllByRole('button');
+    expect(kartlar).toHaveLength(ilk.options.length);
+    const hedef = ilk.options.length > 1 ? 1 : 0;
+    fireEvent.click(kartlar[hedef]!);
+    expect(ilk.get()).toBe(ilk.options[hedef]!.id);
+    expect(K.active).toBe(1);
+    expect(within(akis).getByRole('group', { name: `${K.defs[1]!.title} seçenekleri` })).toBeTruthy();
+  });
+  it('kartlı akışta 3B önizleme istenince açılır', async () => {
+    v.yetki = yetki({});
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /Modeli göster/ }));
+    expect(screen.getByRole('button', { name: 'Modeli kapat' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Modeli göster/ })).toBeNull();
   });
 });
 

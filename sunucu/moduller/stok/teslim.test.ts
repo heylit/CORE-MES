@@ -273,7 +273,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const a = await istasyon();
     const b = await istasyon();
     const st = (await o().sahip.tek<{ id: number }>(
-      `INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('M-1', 'OP 10 Torna', $1, '#2F6FDE', 'YM') RETURNING id`, [`adim-${randomBytes(4).toString('hex')}`]))!.id;
+      `INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur)
+       SELECT stok_kodu, 'OP 10 Torna', $1, '#2F6FDE', 'YM' FROM malzeme_katalog_karti WHERE no = $2 RETURNING id`, [`adim-${randomBytes(4).toString('hex')}`, ym]))!.id;
     await malKabul(ym, '5');
     const kabul = await kabulKonumu();
     const ilk = await gonder('depo', { malzemeId: ym, miktar: '5', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } });
@@ -283,6 +284,13 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const yariParti = (await o().vt.tek<{ p: number }>('SELECT parti_id AS p FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [ym, aKonum]))!.p;
     // Hareket fişi işlemin sonunda denetlenir (1385 a): komut uçtaki gibi tek işlemde yazılır.
     await o().vt.tx((db) => statuDegistir(db, kisiler.get('yonetici')!, { malzemeId: ym, konumId: aKonum, partiId: yariParti, kaynakStatuId: null, hedefStatuId: st, miktar: '5' }));
+    // 1784: statü kendi kartınındır; başka kart aynı statüye geçemez.
+    const baska = await kart('yarimamul');
+    await malKabul(baska, '2');
+    if (!kisiler.has('mudur')) await kisiEkle('mudur', 'mudur');
+    const baskaParti = (await o().vt.tek<{ p: number | null }>('SELECT parti_id AS p FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [baska, kabul]))!.p;
+    const red = await istek<Hata>('mudur', 'POST', '/stok/statu-degistir', { malzemeId: baska, konumId: kabul, partiId: baskaParti, kaynakStatuId: null, hedefStatuId: st, miktar: '1' });
+    assert.deepEqual([red.durum, red.govde.alan], [400, 'hedefStatuId'], JSON.stringify(red.govde));
     const g = await gonder('operator', { malzemeId: ym, miktar: '5', statuId: st, kaynak: { istasyonId: a.id }, hedef: { istasyonId: b.id } });
     assert.equal(g.durum, 200, JSON.stringify(g.govde));
     assert.equal(g.govde.teslim.statuId, st);

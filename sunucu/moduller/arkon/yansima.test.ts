@@ -1941,7 +1941,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     // İstasyon talaşlı ve emrin CNC kurulumunda onayı yok: hazırlık uyarısı (kilit değil). Adımın ilk parça seçimi varsayılan (her kurulumda): TMI ilk parça kapısı var.
     const planSaati = (p1['tmi'] as { planSaati?: unknown }).planSaati;
     assert.ok(planSaati, 'canlı plandaki işin plan saati');
-    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok', ilkParcaGerekli: true, planSaati });
+    assert.deepEqual(p1['tmi'], { emirId: r.emirId, isEmriId: ie1, opNo: 10, plan: { canli: true, sira: 1, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, hazirlik: 'yok', ilkParcaGerekli: true, planSaati, hatali: 0 });
     assert.deepEqual(tmiPlani(p3), { canli: true, sira: 2, eslesiyor: true, kaynak: await makinesi(ie1!), zorunlu: false }, 'aynı makinede ikinci iş');
     const tek = await paketOku(ieKimligi(ie2!));
     assert.deepEqual(tek?.govde, p2);
@@ -2456,6 +2456,36 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const yok = ieOlay(999_999_999, 'running');
     assert.equal((await ekle(operator, 'events', yok)).durum, 200);
     assert.equal((await yansima(yok.cid))?.neden, 'TMI iş emri bulunamadı: 999999999.');
+  });
+
+  test('1853: tmi.hatali her iş emri paketinde adımın hatalı toplamıdır: bekleyen adımda, çalışan adımda ve bitmiş adımın kayıtlı paketinde; okunan sürümle yazım çakışmaz', async () => {
+    const r = await rotaliEmirKur({ ucuncuIlkte: true });
+    const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
+    const k1 = ieKimligi(ie1!);
+    assert.equal((await paketYaz(k1, null, (await paketOku(k1))!.govde)).durum, 200);
+    // Sentetik kayıt: kalite adımı bağı için emrin üçüncü adımı kullanılır; toplama yalnız adet ve adım girer.
+    await ortam!.sahip.sorgu(
+      `INSERT INTO uretim_emirleri_hatali_kaydi (uretim_emri_id, is_emri_id, hedef_emir_id, kalite_is_emri_id, hurda_nedeni_id, adet, kisi_id)
+       SELECT $1, $2, $1, $3, id, 2, $4 FROM hurda_nedeni WHERE kod = $5`, [r.emirId, ie1, ie3, operatorId, hurdaKodu]);
+    const hatali = (p: { govde: Paket } | null | undefined) => (p?.govde['tmi'] as { hatali?: number } | undefined)?.hatali;
+    let liste = await paketler();
+    assert.deepEqual([hatali(liste.get(k1)), hatali(liste.get(ieKimligi(ie2!)))], [2, 0], 'bekleyen adım: toplam ve gerçek sıfır');
+    for (const [tur, satir] of [['events', ieOlay(ie1!, 'running', { machine: r.ilk })], ['counts', ieSayim(ie1!, 'good', 3, { machine: r.ilk })]] as const) {
+      assert.equal((await ekle(operator, tur, satir)).durum, 200);
+      assert.equal((await yansima(satir.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(satir.cid)));
+    }
+    assert.equal(hatali((await paketler()).get(k1)), 2, 'çalışan adım');
+    await ilkParcaOnay(r.emirId);
+    const bitir = ieOlay(ie1!, 'done', { machine: r.ilk });
+    assert.equal((await ekle(operator, 'events', bitir)).durum, 200);
+    assert.equal((await yansima(bitir.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(bitir.cid)));
+    liste = await paketler();
+    const tek = await paketOku(k1);
+    assert.deepEqual([hatali(liste.get(k1)), hatali(tek)], [2, 2], 'bitmiş adımın paketi listede ve tek okumada');
+    assert.equal(tek?.surum, liste.get(k1)?.surum);
+    const yaz = await paketYaz(k1, tek!.surum, { ...tek!.govde, note: 'not' });
+    assert.equal(yaz.govde.sonuc, 'yazildi', JSON.stringify(yaz.govde));
+    assert.equal(hatali(await paketOku(k1)), 2);
   });
 
   test('iş emri paketi kaydedilince Hazırlık ekleri kalır, TMI alanları istemciden alınmaz; iş emri değişince TMI alanları ve sürüm yenilenir, yeni sürümle yazım çakışmaz', async () => {

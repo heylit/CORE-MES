@@ -293,7 +293,9 @@ describe('finans ekranı: kurulum uyarısı', () => {
     const istekler = sunucuKur(YONETEN, {}, kurulmamis());
     finansAc('/finans/butce');
     await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
-    const uyari = await screen.findByText(/Finans ilk kurulumu yapılmadı/);
+    const uyari = await screen.findByText(/Finans ilk kurulumu (yapılmadı|tamamlanmadı)/);
+    // Örnek veride hesaplar açık: uyarı bakiyeyi eksik saymaz (veri tamlığı listesiyle çelişmez).
+    expect(uyari.textContent).toMatch(/Kasa ve banka bakiyesi girilmiş/);
     fireEvent.click(within(uyari.parentElement!).getByRole('button', { name: "Ayarlar'da tamamla" }));
     await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/finans/ayarlar?sekme=kurulum'));
   });
@@ -307,13 +309,13 @@ describe('finans ekranı: kurulum uyarısı', () => {
     sunucuKur(OKUYAN, {}, kurulmamis());
     finansAc('/finans/kayitlar');
     await screen.findByRole('button', { name: "Excel'e aktar" });
-    expect(screen.queryByText(/Finans ilk kurulumu yapılmadı/)).toBeNull();
+    expect(screen.queryByText(/Finans ilk kurulumu (yapılmadı|tamamlanmadı)/)).toBeNull();
     cleanup();
     const i2 = sunucuKur(OKUYAN);
     finansAc('/finans/nakit');
     await waitFor(() => expect(i2.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
     await acikBolum('Nakit planı');
-    expect(screen.queryByText(/Finans ilk kurulumu yapılmadı/)).toBeNull();
+    expect(screen.queryByText(/Finans ilk kurulumu (yapılmadı|tamamlanmadı)/)).toBeNull();
   });
 });
 

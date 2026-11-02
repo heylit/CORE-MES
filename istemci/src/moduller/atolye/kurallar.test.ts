@@ -8,7 +8,7 @@ import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
   depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, gozKalemiYukleri, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
-  istasyonunParcalari, ozetle, parcaListesi, turSirasi,
+  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi,
 } from './kurallar.ts';
 
 const emir = (istasyonId: number, calisma: 'calisiyor' | 'durakli' | 'durdu' | null, saglam = 0): Emir => ({
@@ -322,5 +322,11 @@ describe('haritaya eklenebilen makineler', () => {
     expect(sonuc.eslesmemis).toBe(2);
     expect(ornekIstasyonMu('ORN-KONTROL')).toBe(true);
     expect(ornekIstasyonMu('orn-1')).toBe(false);
+  });
+
+  it('ATL-5 harita kaydından sonra stok eşleme iletisi yalnız iş varsa çıkar', () => {
+    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 0 })).toBeNull();
+    expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 })).toBe('Stok: 2 göz ya da alanın stok konumu yok. Stok Merkezi > Konumlar\'da "Haritadan eşle" ile güncelleyin.');
+    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 1 })).toContain('1 stoklu konumun haritada yeri kalmadı');
   });
 });

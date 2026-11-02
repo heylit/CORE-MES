@@ -11,7 +11,7 @@ import {
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
-  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -896,5 +896,41 @@ describe('1555 a: iş malzemeleri kalan adedi', () => {
     assert.equal(kalanAdimAdedi(10, '2.0000', 3), 17n);
     assert.equal(kalanAdimAdedi(3, '0.5000', 0), 2n, 'kesirli çarpan tam parçaya yukarı');
     assert.equal(kalanAdimAdedi(10, '2', 25), 0n);
+  });
+});
+
+describe('1784: üretim girişi ve statü kartı', () => {
+  test('K14 a: başlamamış emirde sınır kayıtlı sağlam adet (yoksa 0); başlamışta sağlam yoksa emir adedi', () => {
+    assert.equal(uretimGirisiHedefi('planli', null, 10), 0);
+    assert.equal(uretimGirisiHedefi('planli', 4, 10), 4);
+    assert.equal(uretimGirisiHedefi('basladi', null, 10), 10);
+    assert.equal(uretimGirisiHedefi('bitti', 7, 10), 7);
+  });
+  test('emrin ağacında olmayan mamul reddedilir; emrin ürünü, düğüm kartı ve yarı mamul geçer', () => {
+    const agac = new Set([5, 9]);
+    assert.equal(uretimGirisiKartEngeli('mamul', 5, agac), null);
+    assert.equal(uretimGirisiKartEngeli('mamul', 9, agac), null);
+    assert.equal(uretimGirisiKartEngeli('yarimamul', 3, agac), null);
+    assert.ok(uretimGirisiKartEngeli('mamul', 3, agac));
+  });
+  test('adetle sayılan kart tam sayı ister; başkası ondalık alır', () => {
+    assert.equal(uretimGirisiKesirEngeli('2', true), null);
+    assert.equal(uretimGirisiKesirEngeli('2.000', true), null);
+    assert.ok(uretimGirisiKesirEngeli('0.5', true));
+    assert.equal(uretimGirisiKesirEngeli('0.5', false), null);
+  });
+  test('statü yalnız kendi kartına verilir (büyük-küçük harf ve boşluk farkı sayılmaz); listede olmayan statüye karışılmaz', () => {
+    assert.equal(statuKartEngeli('HM-1', 'HM-1'), null);
+    assert.equal(statuKartEngeli(' hm-1', 'HM-1'), null);
+    assert.equal(statuKartEngeli(undefined, 'HM-1'), null);
+    assert.ok(statuKartEngeli('HM-2', 'HM-1'));
+    assert.ok(statuKartEngeli('HM-2', null));
+  });
+});
+
+describe('STK-8: mal kabul konum türü', () => {
+  test('depo, istasyon, fason ve karantina izinli; üretim çıkışı, hurda, yolda, sevkiyat reddedilir', () => {
+    for (const t of ['kabul', 'raf_gozu', 'depo_zemini', 'ara_alan', 'karantina', 'palet', 'istasyon', 'fason'] as const) assert.equal(malKabulKonumuEngeli(t), null, t);
+    for (const t of ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const) assert.ok(malKabulKonumuEngeli(t), t);
   });
 });

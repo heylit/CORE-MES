@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
@@ -267,13 +267,38 @@ function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
   };
 }
 
-export function useKonumSecenekleri() {
+export function useKonumSecenekleri(disarida: readonly string[] = []) {
   const k = useQuery({ queryKey: anahtarlar.liste('konum-secimi', {}), queryFn: () => api.get<KonumlarCevabi>('/stok/konumlar?sayfaBoyu=200') });
-  return (k.data?.satirlar ?? []).filter((x) => x.kod !== 'KABUL').map((x) => ({ deger: String(x.id), baslik: `${x.kod}${x.ad ? ` · ${x.ad}` : ''}` }));
+  return (k.data?.satirlar ?? []).filter((x) => x.kod !== 'KABUL' && !disarida.includes(x.tur)).map((x) => ({ deger: String(x.id), baslik: `${x.kod}${x.ad ? ` · ${x.ad}` : ''}` }));
+}
+// Sunucunun mal kabulde reddettiği konum türleri (stok kurallar.ts MAL_KABUL_DISI_KONUMLAR): bu yerler kendi akışlarıyla dolar.
+export const MAL_KABUL_DISI_KONUMLAR = ['uretim_cikisi', 'hurda', 'yolda', 'sevkiyat'] as const;
+
+// Aynı irsaliye ikinci kez alınıyor olabilir: düzeltilmemiş belgelerden irsaliye no'su aynı olanlar (boşluk ve harf farkı sayılmaz).
+export function ayniIrsaliyeliBelgeler(belgeler: readonly MalKabulOzeti[], irsaliye: string): MalKabulOzeti[] {
+  const n = (x: string) => x.trim().toUpperCase();
+  const aranan = n(irsaliye);
+  if (aranan === '') return [];
+  return belgeler.filter((b) => b.duzeltenId === null && b.irsaliyeNo !== null && n(b.irsaliyeNo) === aranan);
+}
+function AyniIrsaliye({ irsaliye }: { irsaliye: string }) {
+  const q = useQuery({
+    queryKey: anahtarlar.liste('ayni-irsaliye', { irsaliye }), enabled: irsaliye.trim() !== '',
+    queryFn: () => api.get<MalKabullerCevabi>(`/stok/mal-kabuller?metin=${encodeURIComponent(irsaliye.trim())}&sayfaBoyu=20`),
+  });
+  const l = ayniIrsaliyeliBelgeler(q.data?.satirlar ?? [], irsaliye);
+  if (l.length === 0) return null;
+  return (
+    <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
+      <span>Bu irsaliye no ile kabul var:</span>
+      {l.map((b) => <Link key={b.id} to={`/stok/mal-kabul/${b.id}`} className="tc-stok-mono">{b.no}</Link>)}
+      <span>Aynı irsaliye ikinci kez alınıyor olabilir; belgeyi açıp kontrol edin.</span>
+    </p>
+  );
 }
 
 export function SatirListesi({ satirlar, setSatirlar }: { satirlar: Satir[]; setSatirlar: (f: (s: Satir[]) => Satir[]) => void }) {
-  const konumlar = useKonumSecenekleri();
+  const konumlar = useKonumSecenekleri(MAL_KABUL_DISI_KONUMLAR);
   return (
     <>
       {satirlar.map((s) => (
@@ -375,6 +400,8 @@ export function MalKabul() {
   const yonlendir = useNavigate();
   const [tur, setTur] = useState<(typeof MAL_KABUL_TURLERI)[number]>('satin_alma');
   const [irsaliye, setIrsaliye] = useState('');
+  // Uyarı yazarken değil, alandan çıkınca aranır.
+  const [arananIrsaliye, setArananIrsaliye] = useState('');
   const [satirlar, setSatirlar] = useState<Satir[]>(() => [bosSatir()]);
   const [adres] = useSearchParams();
   const emirId = Number(adres.get('emir'));
@@ -384,7 +411,7 @@ export function MalKabul() {
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => {
     setEtiket({ id: c.belge.id, no: c.belge.no });
     return c;
-  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); });
+  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
   const liste = useListeDurumu({ suzgecler: { logoDurumu: '' as '' | (typeof LOGO_ESLESME_DURUMLARI)[number] }, suzgecDegerleri: { logoDurumu: LOGO_ESLESME_DURUMLARI }, siralamaAlanlari: ['zaman'], adres: true });
@@ -398,8 +425,9 @@ export function MalKabul() {
           <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
-              <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} />
+              <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
             </div>
+            <AyniIrsaliye irsaliye={arananIrsaliye} />
             {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
             {Number.isInteger(emirId) && emirId > 0 && <EmirEksikleri emirId={emirId} doldur={(l) => setSatirlar((m) => [...m.filter((x) => !bosMu(x)), ...l])} />}
             {tur === 'satin_alma' && <AcikSiparisler sec={(x) => setSatirlar((l) => {

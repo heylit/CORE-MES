@@ -6,7 +6,7 @@ import { tl, YOK } from '../bicim.ts';
 import type { Belge, Odeme } from '../donustur.ts';
 import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
 import {
-  belgeIptalKomutu, cariIpucu, cariOnerileri, duzeltIlkDegerleri, duzeltKomutu, kategoriSecenekleri, kdvKilitli, kdvSecenekleri, odemeIptalKomutu,
+  belgeIptalKomutu, iptalUyarisi, cariIpucu, cariOnerileri, duzeltIlkDegerleri, duzeltKomutu, kategoriSecenekleri, kdvKilitli, kdvSecenekleri, odemeIptalKomutu,
   tutarKilitli, type DuzeltDegerleri,
 } from './kurallar-duzelt.ts';
 
@@ -26,7 +26,7 @@ export function KayitPenceresi({ txId, finans, yetki, kapat }: { txId: string; f
 }
 
 // Prototipteki satır içi iki adımlı iptal: "İptal et" düğmesi "İptali onayla"ya döner.
-function IptalDugmesi({ komutKur, kapat }: { komutKur: () => ReturnType<typeof belgeIptalKomutu>; kapat: () => void }) {
+function IptalDugmesi({ komutKur, kapat, uyari = null }: { komutKur: () => ReturnType<typeof belgeIptalKomutu>; kapat: () => void; uyari?: string | null }) {
   const [soruyor, soruyorYaz] = useState(false);
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();
@@ -38,7 +38,7 @@ function IptalDugmesi({ komutKur, kapat }: { komutKur: () => ReturnType<typeof b
     });
   };
   return soruyor
-    ? <Dugme tur="tehlike" yukleniyor={komut.isPending} onClick={iptalEt}>İptali onayla</Dugme>
+    ? <>{uyari && <p className="tc-fk-not" data-ton="uyari">{uyari}</p>}<Dugme tur="tehlike" yukleniyor={komut.isPending} onClick={iptalEt}>İptali onayla</Dugme></>
     : <Dugme simge="x" onClick={() => soruyorYaz(true)}>İptal et</Dugme>;
 }
 
@@ -94,7 +94,7 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
         <Girdi etiket="Vade tarihi" type="date" {...form.alan('due')} />
         {yetki.yonet && (
           <div className="tc-fk-dugmeler">
-            <IptalDugmesi komutKur={() => belgeIptalKomutu(b)} kapat={kapat} />
+            <IptalDugmesi komutKur={() => belgeIptalKomutu(b)} kapat={kapat} uyari={iptalUyarisi(b)} />
           </div>
         )}
       </div>
@@ -119,7 +119,7 @@ function KayitAyrintisi({ belge, odeme, yetki, kapat }: { belge: Belge | undefin
         {belge && !yetki.yaz && <p className="tc-fk-not">Düzeltme yetkiniz yok. Belge no: {belge.belgeNo ?? YOK}</p>}
         {iptal && (
           <div className="tc-fk-dugmeler">
-            <IptalDugmesi komutKur={() => (belge ? belgeIptalKomutu(belge) : odemeIptalKomutu(odeme!))} kapat={kapat} />
+            <IptalDugmesi komutKur={() => (belge ? belgeIptalKomutu(belge) : odemeIptalKomutu(odeme!))} kapat={kapat} uyari={belge ? iptalUyarisi(belge) : null} />
           </div>
         )}
       </div>

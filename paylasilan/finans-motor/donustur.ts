@@ -131,7 +131,7 @@ export function belgeAciklamasi(V: HazirVeri<FirmaCekirdegi>, b: Belge): string 
     const asil = b.iadeBelgeId === null ? undefined : V.belgeById.get(b.iadeBelgeId);
     return `İade: ${asil ? asil.belgeNo || asil.aciklama || '#' + asil.id : '#' + String(b.iadeBelgeId)}${b.aciklama ? ' · ' + b.aciklama : ''}${bagli}`;
   }
-  return (b.aciklama || b.belgeNo || (b.yon === 'gelir' ? 'Satış faturası' : 'Alış faturası')) + bagli;
+  return (b.aciklama || b.belgeNo || (b.tur === 'faturasiz' ? 'Faturasız gider' : b.yon === 'gelir' ? 'Satış faturası' : 'Alış faturası')) + bagli;
 }
 export const firmaEtiketi = (V: HazirVeri<FirmaCekirdegi>, id: number | null | undefined): string | null =>
   (id === null || id === undefined ? null : V.etiket.get(id) || `#${id}`);

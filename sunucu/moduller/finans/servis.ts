@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { KisitEslemesi } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { faizSec, gunlukSkorHesapla, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
@@ -69,6 +69,15 @@ export async function kurlar(db: Db, tarih: string): Promise<Map<string, Gecerli
 }
 
 // 1700 b, 1725 a: başka modüllere giden faiz ayardaki birimdendir (faizSec); aylık ve günlük karşılığı birlikte verilir.
+// Kur boşsa kayıt gününe kadar girilmiş son kur alınır; TRY'de kur 1'dir; dövizde kur yoksa reddedilir (1 sayılmaz).
+async function kayitKuru(db: Db, paraBirimi: string, kur: string | null, tarih: string): Promise<string> {
+  if (kur !== null) return kur;
+  if (paraBirimi === 'TRY') return '1.000000';
+  const gecerli = await kurGetir(db, paraBirimi, tarih);
+  if (!gecerli) throw dogrulama(`${paraBirimi} için ${tarih} gününe kadar girilmiş kur yok; kuru elle girin ya da önce kuru kaydedin.`, 'kur');
+  return gecerli.kur;
+}
+
 export interface GecerliFaiz { aylikYuzde: string; gecerlilikBaslangic: string }
 export interface GecerliGunlukFaiz extends GecerliFaiz { gunlukYuzde: number }
 async function secilenFaizler(db: Db, paraBirimi: string | null, tarih: string): Promise<Map<string, GecerliGunlukFaiz>> {
@@ -180,6 +189,29 @@ async function kilitli<T extends { surum: number }>(getir: () => Promise<T | nul
   if (surum !== null && k.surum !== surum) throw eskiSurum();
   return k;
 }
+// Yalnız bakiyeyi azaltan yazmadan sonra çağrılır (eski eksi kasaya giriş engellenmesin). Hesap satırı kilitlenir, bakiye kilitten
+// sonra okunur: iki eşzamanlı kasa çıkışı ayrı ayrı denetlenir.
+async function kasaEksiyeDusmez(db: Db, hesapId: number | null): Promise<void> {
+  if (hesapId === null) return;
+  await sorgular.hesapGetir(db, hesapId, true);
+  const h = await sorgular.hesapGetir<Hesap>(db, hesapId);
+  const hata = h ? kasaBakiyesiHatasi(h.tur, h.bakiye) : null;
+  if (hata) throw gecersiz(hata);
+}
+function ileriTarihDenetle(tarih: string, tur: 'hareket' | 'belge', alan: string): void {
+  const bugun = tesisGunu(new Date());
+  const hata = ileriTarihHatasi(tarih, bugun, gunEkle(bugun, ILERI_BELGE_GUNU), tur);
+  if (hata) throw dogrulama(hata, alan);
+}
+// Harf farkı aynı belge no sayılır (FIN-9 a); dizin büyük/küçük harfi ayırır, bu denetim ayırmaz. Firmasız belgede no tekil değildir.
+async function belgeNoDenetle(db: Db, firmaId: number | null, yon: string, belgeNo: string | null, haricId: number | null): Promise<void> {
+  if (firmaId === null || belgeNo === null) return;
+  if (await sorgular.belgeNoVarMi(db, firmaId, yon, belgeNo, haricId)) throw new UygulamaHatasi('CAKISMA', 'Bu belge no bu firmada zaten var.', { alan: 'belgeNo' });
+}
+const cekVadeDenetle = (duzenlemeTarihi: string, vade: string): void => {
+  const hata = cekVadeHatasi(duzenlemeTarihi, vade);
+  if (hata) throw dogrulama(hata, 'vade');
+};
 const kosulluYaz = async <T>(yaz: () => Promise<T | null>): Promise<T> => {
   const s = await yaz();
   if (s === null) throw eskiSurum();
@@ -302,13 +334,17 @@ async function dagit(db: Db, odemeId: number, odemePb: string, satirlar: readonl
 export function belgeEkle(db: Db, k: Kullanici, g: G<typeof belgeEkleGovdesi>): Promise<Belge> {
   return korumali(async () => {
     kategoriDenetle(g.yon, g.tur, g.kategori);
+    ileriTarihDenetle(g.belgeTarihi, 'belge', 'belgeTarihi');
+    if (g.pesin) ileriTarihDenetle(g.pesin.tarih, 'hareket', 'pesin');
+    await belgeNoDenetle(db, g.firmaId, g.yon, g.belgeNo, null);
     if (g.pesin && g.cek) throw dogrulama('Belge ya peşin ödenir ya çekle kapanır; ikisi birden olmaz.', 'pesin');
     const asil = g.tur === 'iade' ? await iadeDenetle(db, g) : null;
     if (asil === null) await firmaDenetle(db, g.firmaId, g.yon);
     await kdvDenetle(db, g.kdvOrani, g.belgeTarihi);
     const bag = asil === null ? { siparisId: g.siparisId, sevkiyatIsiId: g.sevkiyatIsiId } : { siparisId: asil.siparisId, sevkiyatIsiId: asil.sevkiyatIsiId };
     if (asil === null) await satisBagiDenetle(db, g);
-    const id = await sorgular.belgeEkle(db, { ...g, ...bag }, k.id);
+    const kur = g.kur ?? (asil !== null ? asil.kur : await kayitKuru(db, g.paraBirimi, null, g.belgeTarihi));
+    const id = await sorgular.belgeEkle(db, { ...g, kur, ...bag }, k.id);
     const b = await belgeOku(db, id);
     if (asil !== null && iadeAsimi(asil.toplam, await sorgular.iadeToplami(db, asil.id, id), b.toplam)) {
       throw dogrulama('İadelerin toplamı asıl faturanın toplamını geçemez.', 'tutar');
@@ -317,8 +353,10 @@ export function belgeEkle(db: Db, k: Kullanici, g: G<typeof belgeEkleGovdesi>): 
       const oid = await sorgular.odemeEkle(db, { yon: g.yon, firmaId: g.firmaId, tarih: g.pesin.tarih, yontem: g.pesin.yontem, hesapId: g.pesin.hesapId, cekId: null,
         paraBirimi: b.paraBirimi, kur: b.kur, tutar: b.toplam, aciklama: null }, k.id);
       await dagit(db, oid, b.paraBirimi, [{ belgeId: id, belgeTutari: b.toplam, caprazKur: null }], g.pesin.tarih, k.id);
+      if (g.yon === 'gider') await kasaEksiyeDusmez(db, g.pesin.hesapId);
     } else if (g.cek) {
       if (g.firmaId === null) throw dogrulama('Çekli belgede firma zorunludur.', 'firmaId');
+      cekVadeDenetle(g.belgeTarihi, g.cek.vade);
       const cid = await sorgular.cekEkle(db, { yon: g.yon === 'gelir' ? 'alinan' : 'verilen', tur: g.cek.tur, firmaId: g.firmaId, banka: g.cek.banka, seriNo: g.cek.seriNo,
         duzenlemeTarihi: g.belgeTarihi, vade: g.cek.vade, paraBirimi: b.paraBirimi, kur: b.kur, tutar: b.toplam }, k.id);
       const oid = await sorgular.odemeEkle(db, { yon: g.yon, firmaId: g.firmaId, tarih: g.belgeTarihi, yontem: g.cek.tur, hesapId: null, cekId: cid,
@@ -332,11 +370,14 @@ export function belgeEkle(db: Db, k: Kullanici, g: G<typeof belgeEkleGovdesi>): 
 export function belgeDuzelt(db: Db, k: Kullanici, id: number, g: G<typeof belgeDuzeltGovdesi>, ek: DefterEki): Promise<Belge> {
   return korumali(async () => {
     const eski = await kilitli(() => sorgular.belgeGetir<Belge>(db, id, true), g.surum, 'Belge bulunamadı.');
+    const kur = g.kur ?? (g.paraBirimi === eski.paraBirimi ? eski.kur : await kayitKuru(db, g.paraBirimi, null, g.belgeTarihi));
     const paraDegisti = eski.tutar !== g.tutar || Number(eski.kdvOrani) !== Number(g.kdvOrani) || eski.tevkifatPay !== g.tevkifatPay
-      || eski.tevkifatPayda !== g.tevkifatPayda || eski.paraBirimi !== g.paraBirimi || Number(eski.kur) !== Number(g.kur)
+      || eski.tevkifatPayda !== g.tevkifatPayda || eski.paraBirimi !== g.paraBirimi || Number(eski.kur) !== Number(kur)
       || eski.belgeTarihi !== g.belgeTarihi || eski.firmaId !== g.firmaId;
     const hata = belgeDuzeltmeHatasi(eski, paraDegisti);
     if (hata) throw gecersiz(hata);
+    if (eski.belgeTarihi !== g.belgeTarihi) ileriTarihDenetle(g.belgeTarihi, 'belge', 'belgeTarihi');
+    await belgeNoDenetle(db, g.firmaId, eski.yon, g.belgeNo, id);
     kategoriDenetle(eski.yon, eski.tur, g.kategori);
     if (eski.satinAlmaSiparisi && eski.firmaId !== g.firmaId) throw gecersiz('Siparişe bağlı faturanın firması değişmez; önce bağı satın almadan kaldırın.');
     if ((eski.siparisId !== null || eski.tur === 'iade') && eski.firmaId !== g.firmaId) throw gecersiz('Siparişe bağlı faturanın ve iade faturasının firması değişmez.');
@@ -344,7 +385,7 @@ export function belgeDuzelt(db: Db, k: Kullanici, id: number, g: G<typeof belgeD
     if (eski.firmaId !== g.firmaId) await firmaDenetle(db, g.firmaId, eski.yon);
     if (paraDegisti) await kdvDenetle(db, g.kdvOrani, g.belgeTarihi);
     const asil = eski.iadeBelgeId === null ? null : await sorgular.belgeGetir<Belge>(db, eski.iadeBelgeId, true);
-    await kosulluYaz(() => sorgular.belgeGuncelle(db, id, g.surum, g, k.id));
+    await kosulluYaz(() => sorgular.belgeGuncelle(db, id, g.surum, { ...g, kur }, k.id));
     const yeni = await belgeOku(db, id);
     // FNS-67: düzeltmeden sonra da iadeler asıl faturayı geçmez (iade büyütülürken de asıl küçültülürken de).
     const asim = asil
@@ -375,9 +416,12 @@ export function belgeIptal(db: Db, k: Kullanici, id: number, surum: number, nede
 // ---- Ödeme ----
 export function odemeEkle(db: Db, k: Kullanici, g: G<typeof odemeEkleGovdesi>): Promise<Odeme> {
   return korumali(async () => {
+    ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
     await firmaDenetle(db, g.firmaId, g.yon);
-    const id = await sorgular.odemeEkle(db, { ...g, cekId: null }, k.id);
+    const kur = await kayitKuru(db, g.paraBirimi, g.kur, g.tarih);
+    const id = await sorgular.odemeEkle(db, { ...g, kur, cekId: null }, k.id);
     await dagit(db, id, g.paraBirimi, g.dagitimlar, g.tarih, k.id);
+    if (g.yon === 'gider') await kasaEksiyeDusmez(db, g.hesapId);
     return odemeOku(db, id);
   });
 }
@@ -385,6 +429,7 @@ export function odemeDagit(db: Db, k: Kullanici, id: number, g: G<typeof dagitGo
   return korumali(async () => {
     const o = await kilitli(() => sorgular.odemeGetir<Odeme>(db, id, true), null, 'Ödeme bulunamadı.');
     if (o.iptal) throw gecersiz('İptal edilmiş ödeme dağıtılamaz.');
+    ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
     await dagit(db, id, o.paraBirimi, g.dagitimlar, g.tarih, k.id);
     return odemeOku(db, id);
   });
@@ -410,6 +455,7 @@ export function odemeIptal(db: Db, k: Kullanici, id: number, surum: number, nede
       ciftler.push([`cek:${c.id}`, c, await cekOku(db, c.id)]);
     }
     await odemeyiIptalEt(db, k.id, id, neden, surum);
+    if (o.yon === 'gelir') await kasaEksiyeDusmez(db, o.hesapId);
     const yeni = await odemeOku(db, id);
     farkYaz(ek, [`odeme:${id}`, o, yeni], ...ciftler);
     return yeni;
@@ -459,10 +505,13 @@ export function mahsupIptalEt(db: Db, k: Kullanici, id: number, surum: number, e
 export function cekEkle(db: Db, k: Kullanici, g: G<typeof cekEkleGovdesi>): Promise<Cek> {
   return korumali(async () => {
     const yon = g.yon === 'alinan' ? 'gelir' : 'gider';
+    cekVadeDenetle(g.duzenlemeTarihi, g.vade);
+    ileriTarihDenetle(g.duzenlemeTarihi, 'belge', 'duzenlemeTarihi');
     await firmaDenetle(db, g.firmaId, yon);
-    const cid = await sorgular.cekEkle(db, g, k.id);
+    const kur = await kayitKuru(db, g.paraBirimi, g.kur, g.duzenlemeTarihi);
+    const cid = await sorgular.cekEkle(db, { ...g, kur }, k.id);
     const oid = await sorgular.odemeEkle(db, { yon, firmaId: g.firmaId, tarih: g.duzenlemeTarihi, yontem: g.tur, hesapId: null, cekId: cid,
-      paraBirimi: g.paraBirimi, kur: g.kur, tutar: g.tutar, aciklama: null }, k.id);
+      paraBirimi: g.paraBirimi, kur, tutar: g.tutar, aciklama: null }, k.id);
     await dagit(db, oid, g.paraBirimi, g.dagitimlar, g.duzenlemeTarihi, k.id);
     return cekOku(db, cid);
   });
@@ -471,6 +520,7 @@ export function cekDuzelt(db: Db, k: Kullanici, id: number, g: G<typeof cekDuzel
   return korumali(async () => {
     const c = await kilitli(() => sorgular.cekGetir<Cek>(db, id, true), g.surum, 'Çek bulunamadı.');
     if (c.durum !== 'portfoy' && c.durum !== 'bekliyor') throw gecersiz('Yalnız portföydeki ya da ödenecek çek düzeltilir.');
+    cekVadeDenetle(c.duzenlemeTarihi, g.vade);
     await kosulluYaz(() => sorgular.cekDuzelt(db, id, g.surum, g, k.id));
     const yeni = await cekOku(db, id);
     farkYaz(ek, [`cek:${id}`, c, yeni]);
@@ -484,6 +534,7 @@ export function cekKomutu(db: Db, k: Kullanici, id: number, komut: CekKomutu, g:
     const c = await kilitli(() => sorgular.cekGetir<Cek>(db, id, true), g.surum, 'Çek bulunamadı.');
     const hata = cekGecisiHatasi(c.yon, c.durum, komut);
     if (hata) throw gecersiz(hata);
+    if (g.tarih !== undefined) ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
     const yaz = (durum: string, tarih: string | null, hesap: number | null) => kosulluYaz(() => sorgular.cekDurumYaz(db, id, g.surum, durum, tarih, hesap, k.id));
     const odemeler = await sorgular.cekOdemeleri(db, id);
     switch (komut) {
@@ -521,7 +572,11 @@ export function cekKomutu(db: Db, k: Kullanici, id: number, komut: CekKomutu, g:
 
 // ---- Hesap, virman, eşitleme ----
 export function hesapEkle(db: Db, k: Kullanici, g: G<typeof hesapEkleGovdesi>) {
-  return korumali(async () => sorgular.hesapGetir(db, await sorgular.hesapEkle(db, g, k.id)));
+  return korumali(async () => {
+    const id = await sorgular.hesapEkle(db, g, k.id);
+    await kasaEksiyeDusmez(db, id);
+    return sorgular.hesapGetir(db, id);
+  });
 }
 export function hesapGuncelle(db: Db, _k: Kullanici, id: number, g: G<typeof hesapEkleGovdesi> & { surum: number }, ek: DefterEki) {
   return korumali(async () => {
@@ -530,6 +585,7 @@ export function hesapGuncelle(db: Db, _k: Kullanici, id: number, g: G<typeof hes
     const hata = hesapAcilisHatasi(await sorgular.hesapHareketiVarMi(db, id), acilisDegisti);
     if (hata) throw gecersiz(hata);
     await kosulluYaz(() => sorgular.hesapGuncelle(db, id, g.surum, g));
+    if (acilisDegisti) await kasaEksiyeDusmez(db, id);
     const yeni = await sorgular.hesapGetir<Hesap>(db, id);
     farkYaz(ek, [`hesap:${id}`, h, yeni ?? {}]);
     return yeni;
@@ -548,21 +604,29 @@ export function hesapEsitle(db: Db, k: Kullanici, id: number, g: G<typeof esitle
   return korumali(async () => {
     const kilitliHesap = await kilitli(() => sorgular.hesapGetir<Hesap>(db, id, true), null, 'Hesap bulunamadı.');
     if (!kilitliHesap.aktif) throw gecersiz('Pasif hesaba hareket yazılamaz.');
+    ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
     // Kilitli SELECT'in bakiyesi kilit beklenmeden önceki görüntüdendir; fark kilitten sonra yeniden okunan bakiyeyle yazılır (S-01).
     const h = await sorgular.hesapGetir<Hesap>(db, id);
     if (!h) throw bulunamadi('Hesap bulunamadı.');
     await sorgular.esitlemeEkle(db, id, g.tarih, g.gercekBakiye, farkTutar(g.gercekBakiye, h.bakiye), k.id);
+    await kasaEksiyeDusmez(db, id);
     return sorgular.hesapGetir(db, id);
   });
 }
 export function virmanEkle(db: Db, k: Kullanici, g: G<typeof virmanEkleGovdesi>) {
-  return korumali(async () => sorgular.virmanGetir(db, await sorgular.virmanEkle(db, g, k.id)));
+  return korumali(async () => {
+    ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
+    const id = await sorgular.virmanEkle(db, g, k.id);
+    await kasaEksiyeDusmez(db, g.kaynakHesapId);
+    return sorgular.virmanGetir(db, id);
+  });
 }
 export function virmanIptal(db: Db, k: Kullanici, id: number, surum: number, ek: DefterEki) {
   return korumali(async () => {
-    const v = await kilitli(() => sorgular.virmanGetir<{ surum: number; iptal: boolean }>(db, id, true), surum, 'Virman bulunamadı.');
+    const v = await kilitli(() => sorgular.virmanGetir<{ surum: number; iptal: boolean; hedefHesapId: number }>(db, id, true), surum, 'Virman bulunamadı.');
     if (v.iptal) throw gecersiz('Virman zaten iptal.');
     await kosulluYaz(() => sorgular.virmanIptal(db, id, surum, k.id));
+    await kasaEksiyeDusmez(db, v.hedefHesapId);
     const yeni = await sorgular.virmanGetir<object>(db, id);
     farkYaz(ek, [`virman:${id}`, v, yeni ?? {}]);
     return yeni;
@@ -773,11 +837,35 @@ export function topluAktar(db: Db, k: Kullanici, g: G<typeof topluAktarGovdesi>)
       if (s.vade < s.belgeTarihi) hatalar.push({ satir: i + 1, ileti: 'Vade belge tarihinden önce.' });
       return { ...s, firmaId: f.id };
     });
-    if (hatalar.length > 0) throw dogrulama(`${hatalar.length} satırda hata var; hiçbir satır aktarılmadı. İlk hata: satır ${hatalar[0]?.satir}: ${hatalar[0]?.ileti}`, 'satirlar', hatalar.slice(0, 50));
-    for (const s of hazir) {
+    const kurlar: (string | null)[] = [];
+    for (const [i, s] of g.satirlar.entries()) {
+      const kur = s.kur ?? (s.paraBirimi === 'TRY' ? '1.000000' : (await kurGetir(db, s.paraBirimi, s.belgeTarihi))?.kur ?? null);
+      if (kur === null) hatalar.push({ satir: i + 1, ileti: `${s.paraBirimi} için belge tarihine kadar girilmiş kur yok.` });
+      kurlar.push(kur);
+    }
+    const bugun = tesisGunu(new Date()), sinir = gunEkle(bugun, ILERI_BELGE_GUNU);
+    for (const [i, s] of hazir.entries()) {
       if (!s) continue;
+      const ileri = ileriTarihHatasi(s.belgeTarihi, bugun, sinir, 'belge');
+      if (ileri) hatalar.push({ satir: i + 1, ileti: ileri });
+    }
+    hatalar.sort((a, b) => a.satir - b.satir);
+    if (hatalar.length > 0) throw dogrulama(`${hatalar.length} satırda hata var; hiçbir satır aktarılmadı. İlk hata: satır ${hatalar[0]?.satir}: ${hatalar[0]?.ileti}`, 'satirlar', hatalar.slice(0, 50));
+    // Var olan numara aktarımı 409 ile durdurur (243 a); harf farkı ve aktarım içindeki tekrar da aynı numaradır.
+    const gorulen = new Set<string>();
+    for (const [i, s] of hazir.entries()) {
+      if (!s || s.belgeNo === null) continue;
+      const anahtar = `${s.firmaId}|${s.yon}|${s.belgeNo.toLocaleLowerCase('tr')}`;
+      if (gorulen.has(anahtar) || await sorgular.belgeNoVarMi(db, s.firmaId, s.yon, s.belgeNo, null)) {
+        throw new UygulamaHatasi('CAKISMA', 'Bu belge no bu firmada zaten var.', { alan: 'belgeNo', ayrinti: [{ satir: i + 1 }] });
+      }
+      gorulen.add(anahtar);
+    }
+    for (const [i, s] of hazir.entries()) {
+      if (!s) continue;
+      const kur = kurlar[i] ?? s.kur ?? '1.000000';
       await sorgular.belgeEkle(db, { yon: s.yon, tur: 'fatura', kategori: s.kategori, firmaId: s.firmaId, belgeNo: s.belgeNo, aciklama: s.aciklama, belgeTarihi: s.belgeTarihi,
-        vade: s.vade, paraBirimi: s.paraBirimi, kur: s.kur, tutar: s.tutar, kdvOrani: s.kdvOrani, tevkifatPay: null, tevkifatPayda: null }, k.id);
+        vade: s.vade, paraBirimi: s.paraBirimi, kur, tutar: s.tutar, kdvOrani: s.kdvOrani, tevkifatPay: null, tevkifatPayda: null }, k.id);
     }
     return { eklenen: hazir.length };
   });

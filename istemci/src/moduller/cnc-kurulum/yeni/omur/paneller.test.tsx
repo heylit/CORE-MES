@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { lifeCompute } from './analiz.ts';
 import { AnalizPaneli } from './AnalizPaneli.tsx';
+import { OmurKartAkisi, type AkisCarki } from './OmurKartAkisi.tsx';
 import { TakipPaneli, type PanelYetkisi } from './TakipPaneli.tsx';
 import { depotKartlari, durumKur, lwDefs, state, TAKIMLAR } from './test-verisi.ts';
 import type { CarkKarti, DepoKarti } from './tipler.ts';
@@ -112,5 +113,33 @@ describe('Analiz paneli yetkisi', () => {
     ciz(false);
     expect(dugme('Kaydet')).toBeNull();
     expect(dugme('Sıfırla')).toBeNull();
+  });
+});
+
+describe('Takım ömrü kartlı akışı (1843)', () => {
+  function akis(active = 0) {
+    const defs = lwDefs();
+    const cark: AkisCarki = {
+      defs, active, anim: Object.fromEntries(defs.map((d) => [d.key, { sel: 0, cur: 0 }])),
+      goRow: vi.fn(), setSel: vi.fn(), teker: vi.fn(),
+    };
+    render(<OmurKartAkisi cark={cark} />);
+    return cark;
+  }
+  it('odaktaki tezgâhın takımları kart olarak görünür; ömür, durum ve yedek yazılır', () => {
+    const cark = akis();
+    const grup = screen.getByRole('group', { name: `${cark.defs[0]!.title} takımları` });
+    const kart = grup.querySelector('button')!;
+    expect(kart.getAttribute('aria-pressed')).toBe('true');
+    expect(kart.textContent).toContain('T01');
+    expect(kart.textContent).toMatch(/İyi|Yarılandı|Yakında değiştir|Ömrü doldu|Takip yok/);
+    expect(kart.textContent).toMatch(/Yedek|Stok girilmedi/);
+  });
+  it('karta tıklamak kartı, başka satıra tıklamak satırı seçer', () => {
+    const cark = akis();
+    fireEvent.click(screen.getByRole('group', { name: `${cark.defs[0]!.title} takımları` }).querySelector('button')!);
+    expect(cark.setSel).toHaveBeenCalledWith(0);
+    fireEvent.click(screen.getByText(cark.defs[1]!.title));
+    expect(cark.goRow).toHaveBeenCalledWith(1);
   });
 });

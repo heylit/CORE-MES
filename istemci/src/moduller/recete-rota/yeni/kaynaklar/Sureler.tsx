@@ -22,7 +22,9 @@ function kaynakMetni(k: SureAdimi['kaynak']): React.ReactNode {
   const alt = k.tur === 'makine' && k.kod !== null ? `${ist.ad} · ${k.kod}` : `${ist.ad} · ${k.ad}`;
   return <><b>{ist.kod}</b><small>{alt}</small></>;
 }
-const TURLER = [['hazirlik', 'Hazırlık'], ['islem', 'İşlem'], ['degisim', 'Değişim']] as const;
+// Hazırlık süresi rotadaki hazırlık ile ayarın toplamıdır (ayarSuresiDk, 1310 a); başlık bunu söyler (RR-9), adım panelindeki tek başına
+// "Hazırlık" alanıyla karışmasın.
+const TURLER = [['hazirlik', 'Hazırlık + ayar'], ['islem', 'İşlem'], ['degisim', 'Değişim']] as const;
 type Tur = (typeof TURLER)[number][0];
 const KAYNAK_ADI = { elle: 'Elle', terminal: 'Terminal' } as const;
 const URUN_SAYFASI = 10;
@@ -163,7 +165,7 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
           <td>
             <span className="tc-rr2-iki">
               <b>Teorik</b>
-              <small>Planda: hazırlık {sayi(ondalik(a.etkin.hazirlikDk))}, işlem {sayi(ondalik(a.etkin.islemDk))}, değişim {sayi(ondalik(a.etkin.degisimDk))} dk</small>
+              <small>Planda: hazırlık + ayar {sayi(ondalik(a.etkin.hazirlikDk))}, işlem {sayi(ondalik(a.etkin.islemDk))}, değişim {sayi(ondalik(a.etkin.degisimDk))} dk</small>
             </span>
           </td>
         </tr>

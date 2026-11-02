@@ -112,11 +112,18 @@ describe('Kapanış onayları', () => {
     ac(ev, '/recete-rota/kapanis?emir=1');
     expect(await screen.findByText(/1 madde eksik: kapanış onaya açılmaz/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Müdür olarak onayla' })).toBeNull();
+    const muaf = screen.getByRole('button', { name: 'Eksik maddeyi gerekçeyle muaf tut' }) as HTMLButtonElement;
+    expect(muaf.disabled, 'gerekçe boşken düğme kapalı (RR-9)').toBe(true);
     fireEvent.change(screen.getByLabelText('Muafiyet gerekçesi'), { target: { value: 'Müşteri teslim aldı' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Eksik maddeyi gerekçeyle muaf tut' }));
+    expect(muaf.disabled).toBe(false);
+    // Çift tık tek istek gönderir (RR-4): ikinci tık ilk istek sürerken düşer.
+    fireEvent.click(muaf);
+    fireEvent.click(muaf);
     await waitFor(() => {
       expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ gerekce: 'Müşteri teslim aldı', madde: 'sevkiyat', surum: 3 });
     });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1);
     cleanup();
     sunucuKur(kullanici('uretim-emirleri.kapanis-kalite'), {
       'GET /kapanislar': () => json(200, liste([])), 'GET /adimli-emirler/1/kapanis': () => json(200, belge),

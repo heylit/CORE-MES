@@ -146,3 +146,17 @@ describe('1257 a: dal çarpanı', () => {
     assert.equal(siraDisiBaslatmaUyarisi(x, x[1]!, 10), null);
   });
 });
+
+describe('ilk parça kararı bekleyen adet ve sonraki adımın adedi', () => {
+  test('ilk parça kararı bekleyen adet kayıp değildir: sonraki adım onu da işler; karar bekleyen olmadan eski kural', () => {
+    const sirali = (birinci: { saglamAdet: number; kararBekleyen?: number }) => [
+      { sira: 1, durum: 'tamam', ...birinci }, { sira: 2, durum: 'bekliyor', saglamAdet: null },
+    ];
+    // OP10 30 adetten 0 sağlam ve 3 karar bekleyen (27 kayıp): OP20 3 işler, 0 değil.
+    assert.deepEqual([...adimAdetleri(sirali({ saglamAdet: 0, kararBekleyen: 3 }), () => 30)], [[1, 30], [2, 3]]);
+    assert.deepEqual([...adimAdetleri(sirali({ saglamAdet: 25, kararBekleyen: 5 }), () => 30)], [[1, 30], [2, 30]]);
+    assert.deepEqual([...adimAdetleri(sirali({ saglamAdet: 25 }), () => 30)], [[1, 30], [2, 25]]);
+    // Taban aşılmaz.
+    assert.deepEqual([...adimAdetleri(sirali({ saglamAdet: 28, kararBekleyen: 5 }), () => 30)], [[1, 30], [2, 30]]);
+  });
+});
