@@ -200,6 +200,15 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.queryByText(/masraf dahil/)).toBeNull();
   });
 
+  it('PM-1 a: işçilik planı yokken katkı payı ve kâr riski sayı yerine "İşçilik planı yok" yazar', async () => {
+    sunucuKur(() => json(200, cevap(true, {
+      katkiPayi: null, katkiOrani: null, karRiski: { gecikmeGunu: 5, gunlukOran: 0.3, tutar: null, ceza: null }, eksikler: ['iscilik_plani_yok'],
+    })));
+    cizdir();
+    expect(await screen.findByText(/Rotada işçilik \(kişi\) süresi planlanmamış/)).toBeTruthy();
+    expect(screen.getAllByText('İşçilik planı yok')).toHaveLength(2);
+  });
+
   it('sunucu hatasında iletiyi gösterir', async () => {
     sunucuKur(() => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' } satisfies HataGovdesi));
     cizdir();

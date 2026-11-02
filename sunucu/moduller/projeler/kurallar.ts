@@ -70,6 +70,16 @@ export function statuReddi(
   return serbestIzin ? null : { ileti: SERBEST_STATU_KAPALI, alan: 'metin' };
 }
 
+// PRJ-17: kapanmış (tamamlandı ya da iptal) proje gerekçesiz yeniden aktife alınmaz; açılış statü geçmişine bu adla yazılır.
+export const YENIDEN_ACILDI = 'Yeniden açıldı';
+export const YENIDEN_ACMA_GEREKCESI = 'Kapanmış projeyi yeniden açmak için gerekçe yazın.';
+export function yenidenAcmaMi(eski: string, yeni: string): boolean {
+  return eski !== 'aktif' && yeni === 'aktif';
+}
+export function yenidenAcmaReddi(eski: string, yeni: string, gerekce: string | null): string | null {
+  return yenidenAcmaMi(eski, yeni) && gerekce === null ? YENIDEN_ACMA_GEREKCESI : null;
+}
+
 // PRJ-15: görev ve kilometre taşı yalnız aktif projede yazılır; statü her durumda yazılır (kapanış notu için).
 export function projeAcikReddi(durum: string): string | null {
   return durum === 'aktif' ? null : PROJE_KAPALI;

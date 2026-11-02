@@ -58,4 +58,24 @@ describe('teklif tablosu eksi değer (TMI A5)', () => {
     expect([ayni.value, ayni.getAttribute('aria-invalid'), kok.querySelector<HTMLSelectElement>('select[data-bf="supplierId"][data-col="0"]')!.value]).toEqual(['-5', 'true', '41']);
     kapat();
   });
+  it('100\'ü aşan iskonto sunucuya gitmez; girilenler durur, ileti çıkar', async () => {
+    const { kok, kapat } = await ac('degerlendirme');
+    await vi.waitFor(() => expect(kok.querySelector('select[data-bf="supplierId"]')).not.toBeNull());
+    const sec = kok.querySelector<HTMLSelectElement>('#bulk select[data-bf="supplierId"][data-col="0"]')!;
+    sec.value = '41';
+    sec.dispatchEvent(new Event('input', { bubbles: true }));
+    const fiyat = kok.querySelector<HTMLInputElement>('#bulk [data-bi][data-col="0"]')!;
+    fiyat.value = '12';
+    fiyat.dispatchEvent(new Event('input', { bubbles: true }));
+    const iskonto = kok.querySelector<HTMLInputElement>('#bulk [data-bf="discountPct"][data-col="0"]')!;
+    iskonto.value = '150';
+    iskonto.dispatchEvent(new Event('input', { bubbles: true }));
+    kok.querySelector<HTMLElement>('[data-act="bulk-save"]')!.click();
+    await new Promise((bitti) => { setTimeout(bitti, 0); });
+    expect(istekler.filter((y) => y !== 'GET')).toEqual([]);
+    // İkinci bağlamada açılış yenilemesi tabloyu durumundan yeniden çizebilir; değerler durumda kalır, ileti görünür.
+    expect(kok.querySelector('#toast')?.textContent).toBe('Yüzde 0 ile 100 arasında olur.');
+    expect([kok.querySelector<HTMLInputElement>('#bulk [data-bf="discountPct"][data-col="0"]')!.value, kok.querySelector<HTMLInputElement>('#bulk [data-bi][data-col="0"]')!.value]).toEqual(['150', '12']);
+    kapat();
+  });
 });

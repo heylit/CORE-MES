@@ -51,7 +51,8 @@ export function approvalFormHTML(r: PurchaseRequest): string {
 export function poText(r: PurchaseRequest, o: OrderInfo): string {
   const set = settings(), s = S.suppliers[o.supplierId];
   const L: string[] = [];
-  L.push(`Konu: Sipariş ${siparisEtiketi(o) || r.no}, ${r.title}`);
+  // Sipariş numarası sipariş verilince oluşur; öncesinde talep numarası sipariş numarası sanılmasın diye ayrı yazılır.
+  L.push(`Konu: ${siparisEtiketi(o) ? `Sipariş ${siparisEtiketi(o)}` : `Sipariş (talep ${r.no})`}, ${r.title}`);
   L.push("");
   L.push(s?.contact ? `Sayın ${s.contact},` : `${supName(o.q)} yetkilisine,`);
   L.push("");

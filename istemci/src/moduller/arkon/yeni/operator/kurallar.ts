@@ -14,6 +14,7 @@ import type { IstasyonSatiri } from '../cekirdek/tesis.ts';
 import { araNumuneSikligi, isKurallari, istasyonAyari, isTuru, numuneEtiketi, numuneOlculeri, numunePlani, siradakiOlcen } from '../hazirlik/index.tsx';
 import type { SeritAraligi } from '../../../../../../arkon/web/src/data/numune-seridi.ts';
 import type { Uyari } from '../hazirlik/tipler.ts';
+import type { ScrapReason } from '../cekirdek/tipler.ts';
 import type {
   Gorev, GorevEylemi, IlkParcaDurumu, Is, KaliteNumunesi, KontrolTakvimi, LotKarari, LotSinifi, Meas, Olcen, Pkg, PlanItem, Result, SiradakiKontrol, Ton,
 } from './tipler.ts';
@@ -396,6 +397,16 @@ export function hurdaUyarisi(o: Pick<Is, 'good' | 'scrap'>, kurallar: { scrapPct
   if (kurallar.scrapPct > 0 && toplam >= kurallar.scrapMin && oran >= kurallar.scrapPct) return { tur: 'oran', oran };
   const yakin = sonHurdalar.filter((c) => o.good - c <= 20);
   return yakin.length >= 3 ? { tur: 'artis', adet: yakin.length } : null;
+}
+
+// Fason nedenleri yalnız fason dönüşündeki GKK adımında geçer; talaşlı işte seçilirse TMI reddeder.
+export const hataliNedenleri = (nedenler: readonly ScrapReason[], pkg: Pick<Pkg, 'opType'> | null | undefined): readonly ScrapReason[] =>
+  (isTuru(pkg) === 'cnc' ? nedenler.filter((r) => !r.fason) : nedenler);
+
+// Hatalı adet adımda henüz sayılmamış adedi aşamaz (TMI kuralı). Hatalı toplamı bilinmiyorsa sınır da bilinmez.
+export function hataliUstSiniri(o: Pick<Is, 'target' | 'good'>, hatali: number | null | undefined): number | null {
+  if (hatali === null || hatali === undefined) return null;
+  return Math.max(0, o.target - o.good - hatali);
 }
 
 // Sonuç belgesi (saveResult): işin tabletteki son durumu paket başına yazılır.

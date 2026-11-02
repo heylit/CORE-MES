@@ -83,7 +83,7 @@ describe('Dosya ekleme yolu (Terminal kural 2/5)', () => {
   });
 });
 
-// 19.1: yeni revizyon yayındayken terminal eski çizimi "KALİTE ONAYLI" göstermez; başlatma görevi uyarıya döner.
+// 19.1: yeni revizyon yayındayken terminal eski çizimde "ESKİ REVİZYON" gösterir; başlatma görevi uyarıya döner.
 describe('Terminalde eski çizim', () => {
   const oz = (c: string) => c.repeat(64);
   const files = [{ kind: 'pdf', name: 'a.pdf', merkez: 3, merkezOzet: oz('a') }, { kind: 'step', name: 'b.step', merkez: 4, merkezOzet: oz('b') }, { kind: 'pdf', name: 'yerel.pdf' }];

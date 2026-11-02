@@ -462,8 +462,12 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await ekle(operator, 'events', olay(emir, 'running'));
     // başkasının başlattığı emri tekrar başlatmak: ret (duruma göre devam denenir ve çalışıyorken reddedilir)
     const yine = olay(emir, 'running');
-    assert.equal((await ekle(digerOperator, 'events', yine)).durum, 200);
+    const cevap = await ekle(digerOperator, 'events', yine);
+    assert.equal(cevap.durum, 200);
     assert.equal((await yansima(String(yine['cid'])))?.sonuc, 'reddedildi');
+    // Ret, kimin çalıştığını söyler ve tabletin cevabına döner.
+    const ret = (cevap.govde as { reddedilen?: { cid: string; ileti: string }[] }).reddedilen?.find((r) => r.cid === yine['cid']);
+    assert.match(ret?.ileti ?? '', /adına çalışıyor; sizin bu işte çalışmanız yok/);
     assert.equal((await emirOku(emir)).durum, 'basladi');
     // bitmiş emre sayım: durum kuralı reddeder
     await ekle(operator, 'events', olay(emir, 'done'));

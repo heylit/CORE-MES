@@ -78,9 +78,13 @@ export function siparisProjeleri(db: Db, siparisId: number): Promise<ProjeSatiri
   return db.sorgu<ProjeSatiri>(`${SECIM} WHERE p.siparis_id = $1 ORDER BY p.id`, [siparisId]);
 }
 
-export interface KilitliProje { firma_id: number | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null }
+export interface KilitliProje {
+  firma_id: number | null; siparis_id: number | null; butce_tutari: string | null; butce_para_birimi: string | null; durum: string;
+}
 export async function projeFirmasi(db: Db, id: number): Promise<KilitliProje | null> {
-  return db.tek<KilitliProje>('SELECT firma_id, siparis_id, butce_tutari, butce_para_birimi FROM projeler_proje WHERE id = $1 FOR UPDATE', [id]);
+  return db.tek<KilitliProje>(
+    'SELECT firma_id, siparis_id, butce_tutari, butce_para_birimi, durum FROM projeler_proje WHERE id = $1 FOR UPDATE', [id],
+  );
 }
 
 export interface ProjeAlanlari {

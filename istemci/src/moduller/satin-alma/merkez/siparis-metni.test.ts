@@ -26,6 +26,7 @@ describe('Sipariş metni', () => {
   it('TMI A11: konu talep numarasını değil sipariş numarasını yazar; Logo numarası varsa yanında', () => {
     expect(poText(r, o).split('\n')[0]).toBe('Konu: Sipariş SA-1, Deneme talep');
     expect(poText(r, { ...o, poNo: 'LG-9' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş SA-1 / LG-9, Deneme talep');
-    expect(poText(r, { ...o, orderNo: '' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş ST-1, Deneme talep');
+    // Numara oluşmadan talep numarası sipariş numarası gibi yazılmaz (SA-9).
+    expect(poText(r, { ...o, orderNo: '' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş (talep ST-1), Deneme talep');
   });
 });

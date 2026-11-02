@@ -15,7 +15,8 @@ type AkisGorunumu = BaglantiAkisDurumu | 'baglanti-yok';
 const AKIS: Record<AkisGorunumu, { metin: string; ton: RozetTonu }> = {
   hazir: { metin: 'Hazır', ton: 'tamam' },
   kapali: { metin: 'Kapalı', ton: 'pasif' },
-  'ayar-eksik': { metin: 'Ayar eksik', ton: 'uyari' },
+  // Bu durum ortam değişkeni yokken gelir; ayar anahtarları açık olsa da akış bu yüzden çalışmaz, eksik olan ayar değil değişkendir.
+  'ayar-eksik': { metin: 'Ortam değişkeni eksik', ton: 'uyari' },
   baglanmadi: { metin: 'Modül bağlanmadı', ton: 'bilgi' },
   'kodda-yok': { metin: 'Kodda yok', ton: 'pasif' },
   'baglanti-yok': { metin: 'Bağlantı yok', ton: 'hata' },

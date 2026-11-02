@@ -10,7 +10,9 @@ function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: str
   const kok = useRef<HTMLDivElement>(null);
   const git = useNavigate();
   const [adres, adresYaz] = useSearchParams();
-  useEffect(() => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, git: (y) => { void git(y); } }) : undefined), [rol, sayfa, yol, git]);
+  const { data: kullanici } = useOturum();
+  const onaylayabilir = kullanici?.islemler.includes('satin-alma.onayla') ?? false;
+  useEffect(() => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, onaylayabilir, git: (y) => { void git(y); } }) : undefined), [rol, sayfa, yol, onaylayabilir, git]);
   // Ctrl K'nın açtığı talep ya da pencere (1237); adres temizlenir ki geri gelince pencere yeniden açılmasın.
   useEffect(() => {
     const acilis = acilisOku(adres);

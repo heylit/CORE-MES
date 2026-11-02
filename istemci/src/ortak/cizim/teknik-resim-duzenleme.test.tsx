@@ -177,3 +177,17 @@ describe('düzenleme ekranı', () => {
     expect(son.bal.map((b) => b.nom)).toEqual(['Ø21', 'Ø22', 'Ø23']);
   });
 });
+
+describe('salt okunur resim başlığı', () => {
+  it('onay rozeti göstermez: resmi kalite onaylamaz; eskimiş çizim rozeti kalır', () => {
+    const k = (eskiCizim?: 'yeni-revizyon'): TeknikResimKontrolu => ({
+      anahtar: 'd', dosyalar: [], anaResim: undefined as unknown as null, balonlar: [], balonlarYaz: () => {}, olcumler: {}, olcumlerYaz: () => {}, saltOkunur: true,
+      ...(eskiCizim ? { eskiCizim } : {}),
+    });
+    const { unmount } = render(<BildirimSaglayici><TeknikResim kontrol={k()} /></BildirimSaglayici>);
+    expect(screen.queryByText(/KALİTE ONAYLI/)).toBeNull();
+    unmount();
+    render(<BildirimSaglayici><TeknikResim kontrol={k('yeni-revizyon')} /></BildirimSaglayici>);
+    expect(screen.getByText(/ESKİ REVİZYON/)).toBeTruthy();
+  });
+});

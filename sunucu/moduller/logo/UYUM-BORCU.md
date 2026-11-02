@@ -58,8 +58,9 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 22. Cari ve ambar yalnız önbellek / `logo_cari`, `logo_ambar` (kod, ad, son okuma); firma kartı, `logoCariKodu` ve depo seçimi bunlardan beslenmez / bağlamada
    musteri-tedarikci cari kodunu, stok ambar seçimini bu önbellekten doğrular (ORTAKLIK-logo.md).
 23. Fatura okuması siparişi numarasıyla arar, numara `logo_siparis_no` tablosundadır / `logo_giden` yalnız sipariş kimliğini ve Logo kaydını tutar, numarayı değil;
-   numara siparişin Logo'da açıldığı turda yazılır, bu değişiklikten önce açılmış sipariş okunmaz (satın alma işi zaten bağlı değil) / satın alma bağlanınca
-   gerekirse eski siparişler için numara bir kez doldurulur. `fatura` akışı bu yüzden `baglanmadi`. Fatura yalnız saklanır; Logo'ya fatura ya da irsaliye yazılmaz.
+   numara siparişin Logo'da açıldığı turda yazılır, bu değişiklikten önce açılmış sipariş okunmaz / satın alma işi bağlıdır (madde 12); eski siparişler için numara
+   gerekirse bir kez doldurulur. `fatura` akışı kodda bağlıdır (`kurallar.ts` `LOGO_AKISLARI`, `kaynak: 'bagli'`), `logo.fatura-okumasi` anahtarıyla kapalı gelir.
+   Fatura yalnız saklanır; Logo'ya fatura ya da irsaliye yazılmaz.
 24. KAPANDI (335, 20.10.2026): kaynak bağlandı. Biten emir `emirBittiYansit` (bağ `sunucu/kablolama.ts`; 233'ten beri fiş hazırlıkta açılır, 27) ile iki fişi (`sarf-fisi`, `uretim-girisi`, belge no
    emir kimliği) `logo_malzeme_fisi_giden`'e bir kez yazar; satırlar gönderimde stoğun `emirMalzemeFisleri` ve üretim emirlerinin `emirHurdalari`
    işlevlerinden okunur (`servis.ts` `emirMalzemeFisiKaynagi`, `kurallar.ts` `emirMalzemeFisi`). Açık kalan VARSAYIM'lar 27'de.
@@ -98,5 +99,6 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    "gönderilmez" görünür ve gitmez. DOĞRULANMADI: fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51 tür kodları ve ambar alanları (SOURCE_WH, DEST_WH; başlıkta
    tek depo çifti, birden çok çift reddedilir); yardımcının uçları kart #494. Geri alma: göç sütun ve tablo ekler; numara çevirme geri alınırsa emir kimliğine döner.
 
-## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
-- Uçlar kalır, bağlamada ekrana bağlanır. Hiçbir ekran çağırmıyor (DOĞRULANDI, `degerlendirme/sistem-uyum/rapor.md` bulgu 8): `GET /logo/birim-setleri`, `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a); bu uçlar malzemelerin Logo ekranına bağlanacak.
+## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026)
+- KAPANDI: üç uç da malzemelerin Logo gönderimi ekranından çağrılıyor (`istemci/src/moduller/malzemeler/LogoGonderimi.tsx`, "Logo birim setleri" kartı):
+  `GET /logo/birim-setleri` (liste ve bağlantı notu), `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a).

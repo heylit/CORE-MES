@@ -17,10 +17,10 @@ const IST: Istasyon360Cevabi = {
   isMerkezi: { id: 1, kod: 'IM-1', ad: 'Deneme Merkezi', aktif: true },
   tesis: {
     makineler: [{ tur: 'makine', id: 5, kod: 'MK-1', ad: 'Deneme Tezgah', aktif: true, durum: { durum: 'ariza', aciklama: 'Mil', degisme: '2026-10-30T08:00:00Z' } }],
-    atananlar: [{ kisiId: 7, ad: 'Deneme Usta', yuzde: '60.00' }],
+    atananlar: [{ kisiId: 7, ad: 'Deneme Usta', aktif: true, yuzde: '60.00' }],
     yetkinler: [],
   },
-  oee: { baslangic: '2026-10-24', bitis: '2026-10-30', oee: 0.625, kullanilabilirlik: null, performans: null, kalite: null },
+  oee: { baslangic: '2026-10-24', bitis: '2026-10-30', oee: 0.625, kullanilabilirlik: null, performans: null, kalite: null, veriEksik: false, vardiyaDisi: null },
   maliyet: null,
   gorunurBolumler: ['tesis', 'oee', 'maliyet'],
 };
@@ -36,7 +36,7 @@ const KIS: Kisi360Cevabi = {
   tesis: { atamalar: [{ tur: 'istasyon', id: 3, kod: 'IS-1', ad: 'Deneme Torna', yuzde: '60.00' }], istasyonYetkinlikleri: [], makineYetkinlikleri: [] },
   vardiya: null,
   izin: { bugunIzinli: true },
-  isler: [{ isEmriId: 1, emirNo: 'UE-000001', parca: 'P-1 Deneme parça', saglam: 12, hurda: null }],
+  isler: [{ isEmriId: 1, emirNo: 'UE-000001', adim: '20 Tornalama', parca: 'P-1 Deneme parça', saglam: 12, hurda: null }],
   maliyet: null,
   gorunurBolumler: ['tesis', 'izin', 'isler'],
 };
@@ -88,7 +88,7 @@ describe('Kaynak 360 (kart 1325)', () => {
     ac('/kaynak-izi/istasyon/3');
     expect(await screen.findByText('Arızalı')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Deneme Usta' }).getAttribute('href')).toBe('/kaynak-izi/kisi/7');
-    expect(screen.getByText('%62.5')).toBeTruthy();
+    expect(screen.getByText('%62,5')).toBeTruthy();
     expect(screen.getAllByText('—').length).toBe(3);
     expect(screen.getByText('Yetkinliği girilmiş kişi yok.')).toBeTruthy();
     expect(screen.getByText('Girilmemiş')).toBeTruthy();

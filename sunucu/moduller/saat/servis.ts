@@ -128,16 +128,20 @@ export async function emir(db: Db, kullanici: Kullanici, id: number): Promise<Sa
   const kapsam = await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri);
   kapsamDisiysaReddet(kapsam, (await istasyonGetir(db, e.istasyon.id))?.isMerkeziId ?? null);
   const isEmriId = e.canli?.isEmri?.id ?? null;
-  const plan = isEmriId === null ? null : (await isEmriPlanBilgileri(db, [isEmriId])).get(isEmriId) ?? null;
-  const birim = birimSaniye(plan?.birimSureDk ?? null);
+  // Ürün kartı olmayan eski (iş emirsiz) emrin adımı yoktur; ayrıntı okuması yalnız iş emirli emirde yapılır.
+  const siradaki = e.malzemeNo == null ? null : (await adimliEmirAyrintisi(db, id)).siradaki;
+  // Başlamamış emirde çalışan iş emri yoktur; kalan süre sıradaki (ilk) iş emrinin birim süresiyle bütün adet için hesaplanır.
+  // birimSaniye sözleşmede çalışan iş emrinindir ve öyle kalır.
+  const kalanIsEmriId = isEmriId ?? (e.baslama === null ? siradaki?.id ?? null : null);
+  const plan = kalanIsEmriId === null ? null : (await isEmriPlanBilgileri(db, [kalanIsEmriId])).get(kalanIsEmriId) ?? null;
+  const kalanBirim = birimSaniye(plan?.birimSureDk ?? null);
+  const birim = isEmriId === null ? null : kalanBirim;
   const saglam = e.canli?.saglam ?? null;
   const makineler = await makineKaynaklari(db);
   const istasyonMakineleri = makineler.durumlar.filter((m) => m.istasyonId === e.istasyon.id);
   const calismaBaslangic = e.canli?.calisma === 'calisiyor' ? (await calismayaGecisAnlari(db, [e.id])).get(e.id) ?? null : null;
   const kaynak = kaynakEmir(e, calismaBaslangic);
   const durum = istasyonDurumu(kaynak, istasyonMakineleri.map((m) => m.durum));
-  // Ürün kartı olmayan eski (iş emirsiz) emrin adımı yoktur; ayrıntı okuması yalnız iş emirli emirde yapılır.
-  const siradaki = e.malzemeNo == null ? null : (await adimliEmirAyrintisi(db, id)).siradaki;
   const malzemeHazir = (await malzemeDurumlari(db, [id])).get(id) ?? null;
   return {
     zaman: await sorgular.simdi(db),
@@ -150,7 +154,7 @@ export async function emir(db: Db, kullanici: Kullanici, id: number): Promise<Sa
     hurda: e.canli?.hurda ?? null,
     hedef: e.adet,
     birimSaniye: birim,
-    kalanSaniye: kalanSaniye(e.adet, saglam, birim),
+    kalanSaniye: kalanSaniye(e.adet, saglam, kalanBirim),
     durusNedeni: e.canli?.durusNedeni?.ad ?? null,
     durusBaslangic: e.canli?.durusBaslangic ?? null,
     op: e.canli?.isEmri == null ? null : { opNo: e.canli.isEmri.opNo, ad: e.canli.isEmri.ad },

@@ -1,36 +1,51 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { Istasyon360Cevabi, KaynakAramaCevabi, KaynakTuru, Kisi360Cevabi, Makine360Cevabi } from '#paylasilan/sozlesme/kaynak-izi.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import './kaynak-izi.css';
 
 type AramaSatiri = KaynakAramaCevabi['satirlar'][number];
+const KAYNAK_YOK = 'Kaynak bulunamadı.';
+const VERI_YOK = 'Veri alınamadı';
+// Sözleşmedeki kaynakAramaSorgusu sınırı; istemci paylasilan'dan değer ithal etmez (zod). Aşan metin sunucuda 400 olur.
+const ARAMA_METNI_EN_COK = 60;
 const TUR_ADI: Record<KaynakTuru, string> = { istasyon: 'İstasyon', makine: 'Makine', kisi: 'Kişi' };
 const UC: Record<KaynakTuru, string> = { istasyon: 'istasyonlar', makine: 'makineler', kisi: 'kisiler' };
 const DURUM: Record<string, { ad: string; ton: RozetTonu }> = {
   calisir: { ad: 'Çalışır', ton: 'tamam' }, ariza: { ad: 'Arızalı', ton: 'hata' }, bakim: { ad: 'Bakımda', ton: 'uyari' },
 };
 const adres = (tur: KaynakTuru, id: number) => `/kaynak-izi/${tur}/${String(id)}`;
-const yuzdeMetni = (y: string) => `%${String(Number(y))}`;
-const oranMetni = (o: number | null) => (o === null ? '—' : `%${(o * 100).toFixed(1)}`);
-const paraMetni = (m: { saatMaliyeti: string; paraBirimi: string } | null) => (m === null ? 'Girilmemiş' : `${m.saatMaliyeti} ${m.paraBirimi}/saat`);
+const yuzdeMetni = (y: string) => `%${Number(y).toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`;
+const oranMetni = (o: number | null) => (o === null ? '—' : `%${(o * 100).toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`);
+const paraMetni = (m: { saatMaliyeti: string; paraBirimi: string } | null) =>
+  (m === null ? 'Girilmemiş' : `${Number(m.saatMaliyeti).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${m.paraBirimi}/saat`);
 
 const ARAMA_SUTUNLARI: readonly Sutun<AramaSatiri>[] = [
   { anahtar: 'tur', baslik: 'Tür', kirilmaz: true, hucre: (s) => TUR_ADI[s.tur] },
   { anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true, hucre: (s) => s.kod ?? '—' },
-  { anahtar: 'ad', baslik: 'Ad', hucre: (s) => <><Link to={adres(s.tur, s.id)}>{s.ad}</Link>{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
+  // Satır da aynı adresi açar; bağlantı tıklaması satıra geçerse geçmişe iki kayıt düşer ve ilk "Geri" aynı sayfada kalır.
+  { anahtar: 'ad', baslik: 'Ad', hucre: (s) => <><Link to={adres(s.tur, s.id)} onClick={(o) => { o.stopPropagation(); }}>{s.ad}</Link>{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
   { anahtar: 'ust', baslik: 'Bağlı olduğu', mono: true, hucre: (s) => s.ust ?? '—' },
 ];
 
 // Giriş: istasyon, makine ya da kişiyi kod ya da adla bulup 360'ını açmak.
 export function KaynakSec() {
   const git = useNavigate();
-  const [ara, araYaz] = useState('');
-  const [metin, metinYaz] = useState('');
-  useEffect(() => { const t = setTimeout(() => { metinYaz(ara.trim()); }, 300); return () => clearTimeout(t); }, [ara]);
+  // Arama metni adreste durur: 360'tan "Geri" dönen kullanıcı aynı listeyi bulur. Yazarken geçmiş kaydı eklenmez (replace).
+  const [adresSorgusu, adresSorgusuYaz] = useSearchParams();
+  const [ara, araYaz] = useState(() => adresSorgusu.get('metin') ?? '');
+  const [metin, metinYaz] = useState(() => (adresSorgusu.get('metin') ?? '').trim());
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const m = ara.trim();
+      metinYaz(m);
+      if ((adresSorgusu.get('metin') ?? '') !== m) adresSorgusuYaz(m ? { metin: m } : {}, { replace: true });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [ara, adresSorgusu, adresSorgusuYaz]);
   const l = useQuery({
     queryKey: anahtarlar.arama(metin),
     queryFn: () => api.get<KaynakAramaCevabi>(`/kaynak-izi/kaynaklar?${new URLSearchParams(metin ? { metin } : {}).toString()}`),
@@ -38,8 +53,8 @@ export function KaynakSec() {
   return (
     <section className="tc-kiz">
       <p className="tc-kiz-alt">Bir istasyon, makine ya da kişi seçin: atama, yetkinlik, durum ve üretim tek ekranda. Bu sayfa yalnız okur.</p>
-      <div className="tc-kiz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} onChange={(e) => araYaz(e.target.value)} /></div>
-      {l.isError ? <DurumKutusu durum="hata" yenile={() => { void l.refetch(); }} /> : (
+      <div className="tc-kiz-arac"><Girdi etiket="Kod ya da ad ara" value={ara} maxLength={ARAMA_METNI_EN_COK} onChange={(e) => araYaz(e.target.value)} /></div>
+      {l.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, VERI_YOK)} yenile={() => { void l.refetch(); }} /> : (
         <Kart>
           <Tablo etiket="Kaynaklar" sutunlar={ARAMA_SUTUNLARI} satirlar={l.data?.satirlar ?? []} satirAnahtari={(s) => `${s.tur}-${String(s.id)}`} mesgul={l.isPending}
             satirSec={(s) => { void git(adres(s.tur, s.id)); }} bosMesaj="Bu aramaya uyan kaynak yok." />
@@ -59,9 +74,11 @@ function useKaynak<T>(tur: KaynakTuru) {
 }
 
 function Durum<T>({ q, gecerli, cocuk }: { q: ReturnType<typeof useKaynak<T>>['v']; gecerli: boolean; cocuk: (d: T) => ReactNode }) {
-  if (!gecerli) return <DurumKutusu durum="bos" mesaj="Kaynak bulunamadı." />;
+  if (!gecerli) return <DurumKutusu durum="bos" mesaj={KAYNAK_YOK} />;
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (q.isError) return <DurumKutusu durum="hata" yenile={() => { void q.refetch(); }} />;
+  // Olmayan kaynak yükleme hatası değildir: yeniden denemek aynı cevabı verir.
+  if (q.isError && q.error instanceof ApiHatasi && q.error.durum === 404) return <DurumKutusu durum="bos" mesaj={q.error.sunucuIletisi ?? KAYNAK_YOK} />;
+  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, VERI_YOK)} yenile={() => { void q.refetch(); }} />;
   return <>{cocuk(q.data)}</>;
 }
 
@@ -80,12 +97,12 @@ function Bas({ baslik, alt, aktif, eylemler }: { baslik: string; alt: ReactNode;
   );
 }
 
-function KisiCipleri({ kisiler, etiket, bos }: { kisiler: readonly { kisiId: number; ad: string; yuzde?: string }[]; etiket: string; bos: string }) {
+function KisiCipleri({ kisiler, etiket, bos }: { kisiler: readonly { kisiId: number; ad: string; aktif: boolean; yuzde?: string }[]; etiket: string; bos: string }) {
   if (kisiler.length === 0) return <p className="tc-kiz-not">{bos}</p>;
   return (
     <ul className="tc-kiz-cipler" aria-label={etiket}>
       {kisiler.map((k) => (
-        <li key={k.kisiId} className="tc-kiz-cip"><Link to={adres('kisi', k.kisiId)}>{k.ad}</Link>{k.yuzde !== undefined && <span className="tc-kiz-mono">{yuzdeMetni(k.yuzde)}</span>}</li>
+        <li key={k.kisiId} className="tc-kiz-cip"><Link to={adres('kisi', k.kisiId)}>{k.ad}</Link>{k.yuzde !== undefined && <span className="tc-kiz-mono">{yuzdeMetni(k.yuzde)}</span>}{!k.aktif && <Rozet ton="pasif">Pasif</Rozet>}</li>
       ))}
     </ul>
   );
@@ -109,6 +126,10 @@ const durumRozeti = (d: { durum: string; aciklama: string | null } | null) => {
 };
 
 const GIZLI = 'Bu bölüm yetkinizle görünmüyor.';
+
+const saatMetni = (dk: number) => `${(dk / 60).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sa`;
+// oee ekranındaki rozetle aynı anlam: sayım çalışma kaydıyla açıklanamıyor, oran hesaplanmaz.
+const veriEksikRozeti = <span title="Sayım çalışma kaydıyla açıklanamıyor ya da çalışma planlı süreden uzun"><Rozet ton="uyari">Veri eksik</Rozet></span>;
 
 export function Istasyon360() {
   const { gecerli, v } = useKaynak<Istasyon360Cevabi>('istasyon');
@@ -138,12 +159,19 @@ export function Istasyon360() {
         </Kart>
         <Kart baslik="OEE (son 7 gün)" simge="gauge">
           {d.oee === null ? <p className="tc-kiz-not">{GIZLI}</p> : (
-            <dl className="tc-kiz-olcu">
-              <div><dt>OEE</dt><dd>{oranMetni(d.oee.oee)}</dd></div>
-              <div><dt>Kullanılabilirlik</dt><dd>{oranMetni(d.oee.kullanilabilirlik)}</dd></div>
-              <div><dt>Performans</dt><dd>{oranMetni(d.oee.performans)}</dd></div>
-              <div><dt>Kalite</dt><dd>{oranMetni(d.oee.kalite)}</dd></div>
-            </dl>
+            <>
+              <dl className="tc-kiz-olcu">
+                <div><dt>OEE</dt><dd>{d.oee.veriEksik ? veriEksikRozeti : oranMetni(d.oee.oee)}</dd></div>
+                <div><dt>Kullanılabilirlik</dt><dd>{oranMetni(d.oee.kullanilabilirlik)}</dd></div>
+                <div><dt>Performans</dt><dd>{d.oee.veriEksik ? veriEksikRozeti : oranMetni(d.oee.performans)}</dd></div>
+                <div><dt>Kalite</dt><dd>{oranMetni(d.oee.kalite)}</dd></div>
+              </dl>
+              {d.oee.vardiyaDisi !== null && (d.oee.vardiyaDisi.calismaDk > 0 || d.oee.vardiyaDisi.saglam > 0) && (
+                <p className="tc-kiz-not">
+                  Vardiya dışı: {d.oee.vardiyaDisi.saglam.toLocaleString('tr-TR')} sağlam, {saatMetni(d.oee.vardiyaDisi.calismaDk)} çalışma; OEE'ye girmez.
+                </p>
+              )}
+            </>
           )}
         </Kart>
         <Kart baslik="Saat maliyeti" simge="lira">
@@ -166,7 +194,6 @@ export function Makine360() {
           {d.tesis === null ? <p className="tc-kiz-not">{GIZLI}</p> : (
             <p className="tc-kiz-not">{durumRozeti(d.tesis.durum)} {d.tesis.durum?.aciklama}</p>
           )}
-          <p className="tc-kiz-not">Bakım ve arıza geçmişi Arkon'dan gelecek.</p>
         </Kart>
         <Kart baslik="Personel" simge="users">
           {d.tesis === null ? <p className="tc-kiz-not">{GIZLI}</p> : (
@@ -185,6 +212,7 @@ export function Makine360() {
 type KisiIsi = NonNullable<Kisi360Cevabi['isler']>[number];
 const IS_SUTUNLARI: readonly Sutun<KisiIsi>[] = [
   { anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, hucre: (i) => i.emirNo },
+  { anahtar: 'adim', baslik: 'Adım', hucre: (i) => i.adim ?? '—' },
   { anahtar: 'parca', baslik: 'Parça', hucre: (i) => i.parca || '—' },
   { anahtar: 'saglam', baslik: 'Sağlam', hizala: 'sag', hucre: (i) => (i.saglam === null ? '—' : String(i.saglam)) },
   { anahtar: 'hurda', baslik: 'Hurda', hizala: 'sag', hucre: (i) => (i.hurda === null ? '—' : String(i.hurda)) },
@@ -194,7 +222,7 @@ export function Kisi360() {
   const { gecerli, v } = useKaynak<Kisi360Cevabi>('kisi');
   return <Durum q={v} gecerli={gecerli} cocuk={(d) => (
     <section className="tc-kiz">
-      <Bas baslik={d.kaynak.ad} aktif={d.kaynak.aktif} alt={<>Kişi{d.gorev && <> · {d.gorev}</>}</>}
+      <Bas baslik={d.kaynak.ad} aktif={d.kaynak.aktif} alt={<>{d.kaynak.kod && <><span className="tc-kiz-mono">{d.kaynak.kod}</span> · </>}Kişi{d.gorev && <> · {d.gorev}</>}</>}
         eylemler={<Link to="/istasyonlar/personel"><Dugme simge="users">Personel</Dugme></Link>} />
       <div className="tc-kiz-izgara">
         <Kart baslik="Atama ve yetkinlik" simge="layers">

@@ -254,6 +254,8 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     let emir = await emirNoAl(e1);
     assert.deepEqual([emir.op, emir.tezgah, emir.siradaki, emir.malzemeHazir, emir.durumBaslangic],
       [null, { ad: 'Tezgah SAI3', tur: 'CNC' }, { opNo: 10, ad: 'Adım 1', adet: 4 }, null, null]);
+    // Başlamamış emirde kalan süre sıradaki iş emrinin birim süresiyle bütün adettir (4 x 90 sn); birim süre çalışan iş emrinindir.
+    assert.deepEqual([emir.birimSaniye, emir.kalanSaniye], [null, 360]);
     assert.equal((await uretim('operator', e1, 'baslat')).durum, 200);
     emir = await emirNoAl(e1);
     assert.deepEqual([emir.op, emir.siradaki, emir.birimSaniye], [{ opNo: 10, ad: 'Adım 1' }, { opNo: 10, ad: 'Adım 1', adet: 4 }, 90]);

@@ -5,7 +5,7 @@
  */
 import "./styles.css";
 import "./yerlesim.css";
-import { setRole, type Role } from "./roles.ts";
+import { setOnaylayabilir, setRole, type Role } from "./roles.ts";
 import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, UNDO_MS, type Page } from "./store.ts";
 import { go, registerUIHooks, requestModal, toast } from "./ui.ts";
 import { esc } from "./util.ts";
@@ -33,7 +33,7 @@ const ISKELET = `<div class="app">
 <div class="undo" id="undo" role="status" aria-live="polite" hidden></div>`;
 
 export type MerkezSayfasi = Page;
-export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string) => void }
+export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string) => void; onaylayabilir?: boolean }
 
 // Prototip sayfası → ikinci menü yolu. Ayrıntı sayfası ait olduğu listenin yolundadır; talep ayrıntısı geldiği yolda kalır.
 const YOLLAR: Partial<Record<Page, string>> = {
@@ -91,6 +91,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   // İçeriden gelinen ayrıntı sayfası (aynı madde yolunda) korunur; değilse maddenin ekranı açılır.
   if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
   setRole(secenek.rol);
+  setOnaylayabilir(secenek.onaylayabilir ?? false);
   etkin = secenek;
   kancalariKur();
   if (!ilkYukleme) ilkYukleme = init(); else { render(); void yenile(); }

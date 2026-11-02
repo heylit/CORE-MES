@@ -25,6 +25,7 @@ export const sirketAdiGorunumu = (sirket: string): string | null => (sirket.trim
 
 export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
+  yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
   tedarikciYok: 'Tedarikçi bulunamadı.',
   terminMalzemesiYok: 'Malzeme kartı bulunamadı.',
@@ -67,6 +68,11 @@ export const ILETILER = {
   faturaSiparisYok: 'Sipariş bulunamadı.',
   faturaKayitsizTedarikci: 'Kayıtlı olmayan tedarikçinin siparişine fatura bağlanmaz; tedarikçiyi finansta kaydedip teklife seçin.',
   faturaBaskaSipariste: 'Fatura başka bir siparişe bağlı; önce oradan kaldırın.',
+  eslesmeFazlaTeslim: 'Teslim alınan miktar sipariş miktarını aşıyor.',
+  eslesmeEksikTeslim: 'Siparişin tamamı henüz teslim alınmadı.',
+  eslesmeParaBirimi: 'Faturanın para birimi siparişinkinden farklı.',
+  eslesmeTutarFazla: 'Fatura tutarı (KDV hariç) sipariş toplamından fazla.',
+  eslesmeTutarEksik: 'Fatura tutarı (KDV hariç) sipariş toplamından az.',
   faturaBagliDegil: 'Fatura bu siparişe bağlı değil.',
   siparisDegisikligiDurumu: 'Kalem değişikliği yalnız siparişi verilmiş talepte yapılır.',
   siparisteKalemYok: 'Kalem siparişte yok.',
@@ -564,6 +570,27 @@ export function siparisFaturaFirmasi(t: Pick<Talep, 'durum' | 'teklifler' | 'kar
   if (!(t.karar?.siparisler ?? []).some((x) => x.teklifId === teklifId)) return { red: ILETILER.faturaSiparisYok };
   const firmaId = t.teklifler.find((x) => x.id === teklifId)?.firmaId ?? null;
   return firmaId === null ? { red: ILETILER.faturaKayitsizTedarikci } : { firmaId };
+}
+// 1839 (karar 1839 a): üç yollu eşleşme; fatura bağlanırken sipariş, teslim ve fatura karşılaştırılır. Bağ reddedilmez, uyarı
+// döner: fatura kısmi teslimde ya da toplu faturada da bağlanabilir. Uyarı rakam taşımaz; fatura tutarı finans rakamıdır (FNS-48).
+// Fatura tutarı okunamazsa (null) tutar karşılaştırılmaz.
+export function faturaEslesmeUyarilari(
+  siparis: { toplam: string | null; paraBirimi: string; satirlar: readonly { miktar: string; teslimAlinan: string | null }[] },
+  fatura: { tutar: string; paraBirimi: string } | null,
+): string[] {
+  const uyarilar: string[] = [];
+  const s = siparis.satirlar;
+  if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) > 0)) uyarilar.push(ILETILER.eslesmeFazlaTeslim);
+  else if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) < 0)) uyarilar.push(ILETILER.eslesmeEksikTeslim);
+  if (fatura !== null && siparis.toplam !== null) {
+    if (fatura.paraBirimi.trim() !== siparis.paraBirimi.trim()) uyarilar.push(ILETILER.eslesmeParaBirimi);
+    else {
+      const k = ondalikKiyas(fatura.tutar, siparis.toplam);
+      if (k > 0) uyarilar.push(ILETILER.eslesmeTutarFazla);
+      else if (k < 0) uyarilar.push(ILETILER.eslesmeTutarEksik);
+    }
+  }
+  return uyarilar;
 }
 // SAT-73 (kart #1124): ödeme planı siparişi verilmiş talebin, finansta kayıtlı tedarikçili siparişine yazılır; firma ve para birimi
 // siparişin teklifinden gelir, gövdede gelmez.

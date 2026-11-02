@@ -21,3 +21,13 @@ export type { MaliyetTuru } from './kurallar.ts';
 export { tedarikciOlabilirMi } from './kurallar.ts';
 // Takvim (891): aralıktaki vergi beyan ve ödeme son günleri (genel kural, tutarsız). Yetki denetlemez; çağıran finans.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
+// 1840 (karar 1839 a): satın almanın üç yollu eşleşme uyarısı için alış faturasının KDV hariç tutarı ve para birimi. Yalnız bu
+// tutar çıkar; KDV, toplam, kalan ve öteki finans rakamları çıkmaz (FNS-48). Firmanın olmayan, gider olmayan ya da iptal
+// edilmiş belgede null döner.
+import type { Db } from '#cekirdek/db.ts';
+import { belgeGetir } from './sorgular.ts';
+export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId: number): Promise<{ tutar: string; paraBirimi: string } | null> {
+  const b = await belgeGetir<{ yon: string; firmaId: number | null; durum: string; tutar: string; paraBirimi: string }>(db, belgeId);
+  if (b === null || b.yon !== 'gider' || b.durum === 'iptal' || b.firmaId !== firmaId) return null;
+  return { tutar: b.tutar, paraBirimi: b.paraBirimi };
+}

@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
@@ -485,4 +485,19 @@ test('898 a Dal 2: plan ön talebi eksikten aynı birimdeki açık sipariş ve t
     [1, 2.75, 6.75, { eksik: 10, siparis: 2.25, talep: 1, yoksayilan: 4 }],
     [3, 5.5, 5.5, { eksik: 5.5, siparis: 0, talep: 0, yoksayilan: 0 }],
   ]);
+});
+
+test('1839: üç yollu eşleşme; teslim ve tutar farkı uyarıdır, rakam taşımaz; okunamayan fatura tutarı karşılaştırılmaz', () => {
+  const sip = (teslim: (string | null)[], toplam: string | null = '100.00') =>
+    ({ toplam, paraBirimi: 'TRY', satirlar: teslim.map((t) => ({ miktar: '5', teslimAlinan: t })) });
+  const f = (tutar: string, paraBirimi = 'TRY') => ({ tutar, paraBirimi });
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5', '5.000']), f('100')), []);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5', null]), f('100')), [ILETILER.eslesmeEksikTeslim]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['6', '2']), f('100')), [ILETILER.eslesmeFazlaTeslim]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5']), f('100.01')), [ILETILER.eslesmeTutarFazla]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5']), f('99.99')), [ILETILER.eslesmeTutarEksik]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5']), f('100', 'USD')), [ILETILER.eslesmeParaBirimi]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5']), null), []);
+  assert.deepEqual(faturaEslesmeUyarilari(sip(['5'], null), f('1')), []);
+  for (const u of [ILETILER.eslesmeTutarFazla, ILETILER.eslesmeTutarEksik, ILETILER.eslesmeParaBirimi]) assert.doesNotMatch(u, /\d/);
 });

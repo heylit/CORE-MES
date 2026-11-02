@@ -686,6 +686,11 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.equal((await istek('POST', '/logo/birim-setleri/ekle', { kod: 'OP1', ad: null }, operatorCerezi)).statusCode, 403);
     assert.equal((await istek('POST', '/logo/birim-setleri/ekle', { kod: 'iki kelime', ad: null })).statusCode, 400);
     assert.deepEqual(await tamam('/logo/birim-setleri/ekle', { kod: 'EL2', ad: null }), { kod: 'EL2' });
+    // LOG-4: yalnız harfi farklı ikinci kod reddedilir, aynı kod yeniden eklenebilir (adı güncellenir).
+    const harf = await istek('POST', '/logo/birim-setleri/ekle', { kod: 'el2', ad: null });
+    assert.equal(harf.statusCode, 422, harf.body);
+    assert.match(harf.body, /EL2 zaten var/);
+    assert.deepEqual(await tamam('/logo/birim-setleri/ekle', { kod: 'EL2', ad: 'Yeni ad' }), { kod: 'EL2' });
     assert.equal((await istek('POST', '/logo/birim-setleri/EL2/kaldir', {}, operatorCerezi)).statusCode, 403);
     // '06' kuyruktaki kartın birim karşılığı: elle işaretlense de kaldırılamaz.
     await aktifKart();

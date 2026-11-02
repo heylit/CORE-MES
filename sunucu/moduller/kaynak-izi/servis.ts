@@ -10,24 +10,32 @@ import {
   isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, istasyonlar, makineDurumlari, makineGetir, makineKisiAtamalari,
   makineYetkinlikleri, makineler,
 } from '../istasyonlar/disari.ts';
-import { kisiAdlari, kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiGorevi, kisileriListele, kisiSecenekleri } from '../kisiler/disari.ts';
 import { istasyonOeeleri } from '../oee/disari.ts';
 import { kisininIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { kisiVardiyalari, vardiyaTanimlari } from '../vardiya/disari.ts';
-import { bolumGorunur, gorunurBolumler, kaynakSuz, sonYediGun, type AramaAdayi } from './kurallar.ts';
+import { adimMetni, bolumGorunur, gorunurBolumler, kaynakSuz, sonYediGun, type AramaAdayi } from './kurallar.ts';
 
 const IS_SINIRI = 20;
 const YEDI_GUN_MS = 7 * 24 * 3600 * 1000;
 const KAYNAK_YOK = 'Kaynak bulunamadı.';
 
 const ozet = (tur: 'istasyon' | 'makine', k: { id: number; kod: string; ad: string; aktif: boolean }) => ({ tur, id: k.id, kod: k.kod, ad: k.ad, aktif: k.aktif });
-const kisiOzeti = (id: number, ad: string, aktif: boolean) => ({ tur: 'kisi' as const, id, kod: null, ad, aktif });
+const kisiOzeti = (id: number, kod: string | null, ad: string, aktif: boolean) => ({ tur: 'kisi' as const, id, kod, ad, aktif });
 
 // Kişi adları pasif kişide de bulunur; aktiflik etkin kişi listesinden okunur.
-async function kisiBilgileri(db: Db, idler: number[]): Promise<{ ad: (id: number) => string; aktif: (id: number) => boolean }> {
+// Sicil no yalnız etkin kişi listesinde var; pasif kişinin sicili null döner.
+async function kisiBilgileri(db: Db, idler: number[]): Promise<{ ad: (id: number) => string; aktif: (id: number) => boolean; sicil: (id: number) => string | null }> {
   const adlar = await kisiAdlari(db, idler);
-  const etkin = new Set((await kisiSecenekleri(db)).map((k) => k.id));
-  return { ad: (id) => adlar.get(id) ?? '', aktif: (id) => etkin.has(id) };
+  const etkin = new Map((await kisiSecenekleri(db)).map((k) => [k.id, k.sicilNo]));
+  return { ad: (id) => adlar.get(id) ?? '', aktif: (id) => etkin.has(id), sicil: (id) => etkin.get(id) ?? null };
+}
+
+// KIZ-3 a: pasif kişi de bulunur, "Pasif" işaretiyle (eski kayıtlardaki kişiye ulaşmak için). Sicil yalnız etkin kişi
+// listesinde var; pasif kişi adıyla bulunur, kodu null.
+async function kisiAramaAdaylari(db: Db): Promise<AramaAdayi[]> {
+  const sicil = new Map((await kisiSecenekleri(db)).map((k) => [k.id, k.sicilNo]));
+  return (await kisileriListele(db)).map((k) => ({ tur: 'kisi' as const, id: k.id, kod: sicil.get(k.id) ?? null, ad: k.ad, aktif: k.aktif, ust: null }));
 }
 
 export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevabi> {
@@ -39,7 +47,7 @@ export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevab
     ...(await makineler(db, { pasiflerDahil: true })).map((m) => ({
       tur: 'makine' as const, id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, ust: m.istasyonId === null ? null : istKod.get(m.istasyonId) ?? null,
     })),
-    ...(await kisiSecenekleri(db)).map((k) => ({ tur: 'kisi' as const, id: k.id, kod: k.sicilNo, ad: k.ad, aktif: true, ust: null })),
+    ...(await kisiAramaAdaylari(db)),
   ];
   const uyan = kaynakSuz(adaylar, metin);
   return { satirlar: uyan.slice(0, KAYNAK_ARAMA_EN_COK), dahaVar: uyan.length > KAYNAK_ARAMA_EN_COK };
@@ -48,7 +56,11 @@ export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevab
 async function oeeOzeti(db: Db, k: Kullanici, istasyonId: number) {
   const pencere = sonYediGun(tesisGunu(new Date()));
   const s = (await istasyonOeeleri(db, k, pencere)).find((x) => x.id === istasyonId);
-  return { ...pencere, oee: s?.oee ?? null, kullanilabilirlik: s?.kullanilabilirlik ?? null, performans: s?.performans ?? null, kalite: s?.kalite ?? null };
+  return {
+    ...pencere, oee: s?.oee ?? null, kullanilabilirlik: s?.kullanilabilirlik ?? null, performans: s?.performans ?? null, kalite: s?.kalite ?? null,
+    veriEksik: s?.veriEksik ?? false,
+    vardiyaDisi: s ? { calismaDk: s.vardiyaDisi.calismaDk, saglam: s.vardiyaDisi.saglam } : null,
+  };
 }
 
 async function maliyet(db: Db, tur: 'istasyon' | 'kisi', id: number) {
@@ -71,8 +83,8 @@ export async function istasyon360(db: Db, k: Kullanici, id: number): Promise<Ist
         const d = durumlar.get(m.id);
         return { ...ozet('makine', m), durum: d ? { durum: d.durum, aciklama: d.aciklama, degisme: d.degisme } : null };
       }),
-      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), yuzde: a.yuzde })),
-      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId) })),
+      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), aktif: kisi.aktif(a.kisiId), yuzde: a.yuzde })),
+      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId), aktif: kisi.aktif(kisiId) })),
     };
   }
   return {
@@ -81,7 +93,7 @@ export async function istasyon360(db: Db, k: Kullanici, id: number): Promise<Ist
     tesis,
     oee: bolumGorunur(k.islemler, 'oee') ? await oeeOzeti(db, k, id) : null,
     maliyet: bolumGorunur(k.islemler, 'maliyet') ? await maliyet(db, 'istasyon', id) : null,
-    gorunurBolumler: gorunurBolumler(k.islemler),
+    gorunurBolumler: gorunurBolumler(k.islemler, 'istasyon'),
   };
 }
 
@@ -97,11 +109,11 @@ export async function makine360(db: Db, k: Kullanici, id: number): Promise<Makin
     const kisi = await kisiBilgileri(db, [...atamalar.map((a) => a.kisiId), ...yetkin]);
     tesis = {
       durum: d ? { durum: d.durum, aciklama: d.aciklama, degisme: d.degisme } : null,
-      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), yuzde: a.yuzde })),
-      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId) })),
+      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), aktif: kisi.aktif(a.kisiId), yuzde: a.yuzde })),
+      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId), aktif: kisi.aktif(kisiId) })),
     };
   }
-  return { kaynak: ozet('makine', m), istasyon: ist ? ozet('istasyon', ist) : null, tesis, gorunurBolumler: gorunurBolumler(k.islemler) };
+  return { kaynak: ozet('makine', m), istasyon: ist ? ozet('istasyon', ist) : null, tesis, gorunurBolumler: gorunurBolumler(k.islemler, 'makine') };
 }
 
 export async function kisi360(db: Db, k: Kullanici, id: number): Promise<Kisi360Cevabi> {
@@ -142,16 +154,18 @@ export async function kisi360(db: Db, k: Kullanici, id: number): Promise<Kisi360
   const simdi = Date.now();
   const isler = bolumGorunur(k.islemler, 'isler')
     ? (await kisininIsEmirleri(db, id, new Date(simdi - YEDI_GUN_MS).toISOString(), new Date(simdi).toISOString())).slice(0, IS_SINIRI)
-      .map((i) => ({ isEmriId: i.isEmriId, emirNo: i.emirNo, parca: `${i.urun.parcaNo} ${i.urun.parcaAd}`.trim(), saglam: i.saglam, hurda: i.hurda }))
+      .map((i) => ({
+        isEmriId: i.isEmriId, emirNo: i.emirNo, adim: adimMetni(i.opNo, i.adimAdi), parca: `${i.urun.parcaNo} ${i.urun.parcaAd}`.trim(), saglam: i.saglam, hurda: i.hurda,
+      }))
     : null;
   return {
-    kaynak: kisiOzeti(id, kisi.ad(id), kisi.aktif(id)),
+    kaynak: kisiOzeti(id, kisi.sicil(id), kisi.ad(id), kisi.aktif(id)),
     gorev: await kisiGorevi(db, id),
     tesis,
     vardiya,
     izin: bolumGorunur(k.islemler, 'izin') ? { bugunIzinli: (await izinliKisiler(db, tesisGunu(new Date()))).includes(id) } : null,
     isler,
     maliyet: bolumGorunur(k.islemler, 'maliyet') ? await maliyet(db, 'kisi', id) : null,
-    gorunurBolumler: gorunurBolumler(k.islemler),
+    gorunurBolumler: gorunurBolumler(k.islemler, 'kisi'),
   };
 }

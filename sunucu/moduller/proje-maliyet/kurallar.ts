@@ -552,6 +552,11 @@ export function planTarihiEksik(kayitlar: readonly MaliyetKaydi[]): boolean {
   return kayitlar.some((k) => k.planTarihi === null);
 }
 
+// PM-48 (PM-1 a): işçiliğin planı yoksa (rotada kişi süresi yok, PM-B10) maliyet tam değildir; katkı ve kâr riski uydurulmaz, nedeni bildirilir.
+export function iscilikPlaniEksik(kayitlar: readonly MaliyetKaydi[]): boolean {
+  return kayitlar.some((k) => 'iscilik' in k.plan && k.plan.iscilik === null);
+}
+
 // Seçici araması: joker karakterler kaçırılır; boş arama süzmez.
 export function aramaKalibi(ara: string): string | null {
   const m = ara.trim();

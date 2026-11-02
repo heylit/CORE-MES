@@ -22,7 +22,7 @@ import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
 import { defterdekiIsEmirleri, defterOku, defterYaz } from './sorgular.ts';
 import * as sorgular from './sorgular.ts';
 import {
-  beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
+  beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, iscilikPlaniEksik, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
 import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
 import { faturaDurumu } from './kurallar.ts';
@@ -271,6 +271,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
   if (isKayitlari.length > 0 && siparis !== null && siparis.odemeVadesiGun === null) eksikler.push('vade_yok');
   // PM-47: planı bilinmeyen kayıt bekleme finansmanının planında sayılmaz (PM-29); kullanıcı bunu görmeli.
   if (planTarihiEksik(isKayitlari)) eksikler.push('plan_tarihi_yok');
+  if (iscilikPlaniEksik(isKayitlari)) eksikler.push('iscilik_plani_yok');
   const tabanEksik = eksikKalemler(isKayitlari);
   const finansman = beklemeFinansmani(
     isKayitlari, MALIYET_KALEMLERI.filter((k) => !tabanEksik.includes(k)), gunlukFaizOrani(faiz === null ? null : Number(faiz.aylikYuzde)),

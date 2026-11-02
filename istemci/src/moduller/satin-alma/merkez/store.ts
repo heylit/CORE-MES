@@ -187,8 +187,8 @@ export interface Backend {
   teslimYontemi(talepId: string, teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null): Promise<boolean>;
   /** D6 b: siparişin tedarikçisinin alış faturaları (fatura finansta girilir). Başarısızsa ileti gösterilir, null döner. */
   siparisFaturalari(talepId: string, teklifId: string): Promise<SiparisFaturasi[] | null>;
-  /** D6 b: alış faturası siparişe bağlanır ya da bağı kaldırılır; sunucu geçmişe yazar. Güncel listeyi ya da null döner. */
-  siparisFaturasiBagla(talepId: string, teklifId: string, belgeId: number, bagla: boolean): Promise<SiparisFaturasi[] | null>;
+  /** D6 b: alış faturası siparişe bağlanır ya da bağı kaldırılır; sunucu geçmişe yazar. Güncel listeyi ve üç yollu eşleşme uyarılarını (1839) ya da null döner. */
+  siparisFaturasiBagla(talepId: string, teklifId: string, belgeId: number, bagla: boolean): Promise<{ liste: SiparisFaturasi[]; uyarilar: string[] } | null>;
   /** Sipariş satırının sertifika ve raporları (belge Çizimler'de). Başarısızsa ileti gösterilir, null döner. */
   siparisBelgeleri(satirId: number): Promise<SiparisBelgesi[] | null>;
   /** Yüklenmiş dosya (özet) satıra sertifika ya da rapor olarak bağlanır; aynı kimlikle yinelenen yükleme ikinci belge açmaz. */

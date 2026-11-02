@@ -11,6 +11,7 @@ import type { PlanliDurusGirdisi, PlanliDurusKapsami, PlanliDurusTekrari } from 
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import { svgHatasi } from './svg.ts';
 import type { MuayenePlani } from '../kalite-merkezi/disari.ts';
+import { SABIT_HURDA_KODLARI } from '../durus-nedenleri/disari.ts';
 
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
@@ -227,8 +228,9 @@ export const durusNedenleriniCevir = (nedenler: readonly DurusNedeni[]) => neden
   active: n.aktif,
 }));
 
+// Fason nedenleri (firmada hurda, firmadan gelmedi) yalnız fason dönüşündeki GKK adımında geçer: terminal talaşlı işte göstermesin diye işaretlenir.
 export const hurdaNedenleriniCevir = (nedenler: readonly HurdaNedeni[]) =>
-  nedenler.map((n) => ({ code: n.kod, l: n.ad, active: n.aktif }));
+  nedenler.map((n) => ({ code: n.kod, l: n.ad, active: n.aktif, ...(SABIT_HURDA_KODLARI.includes(n.kod) ? { fason: true } : {}) }));
 
 // TMI'de açılmış ama Arkon'da paketi hazırlanmamış emir, Hazırlık'ta taslak paket olarak görünür.
 // Hazırlık paketi kaydedince Arkon belgesi olur ve bundan sonra o belge geçerlidir. Revizyon Arkon'un yeni paket
@@ -1778,6 +1780,10 @@ export const ZATEN_CALISIYOR = 'İş zaten çalışıyor; sizin çalışmanız a
 
 export const KENDI_CALISMANIZ_YOK = (adlar: readonly string[]): string =>
   `Bu işte siz çalışmıyorsunuz; ${adlar.join(', ')} çalışıyor. Yalnız kendi çalışmanız duraklatılır ya da bitirilir.`;
+// Makineli istasyonda iş başkasının açık çalışmasıyla sürerken katılımı olmayan kişinin başlatması: TMI'nin genel "iş zaten çalışıyor" reddi
+// kimin çalıştığını söylemez; operatör işi kendisinin sanır.
+export const BASKASI_CALISIYOR_BASLATMA = (adlar: readonly string[]): string =>
+  `Bu iş makinede ${adlar.join(', ')} adına çalışıyor; sizin bu işte çalışmanız yok. Önce ${adlar.length > 1 ? 'onlar kendi çalışmalarını' : 'o kendi çalışmasını'} duraklatmalı ya da bitirmeli.`;
 export const BASKASI_CALISIYOR_DURDURMA = (adlar: readonly string[]): string =>
   `Bu işte ${adlar.join(', ')} de çalışıyor; işi durdurmak başkasının çalışmasını keserdi. Kendi çalışmanızı duraklatın.`;
 
@@ -1790,6 +1796,9 @@ export function katilimYolu(
     // TMI "iş zaten çalışıyor" diye reddederdi; ekran duraklamış, TMI çalışıyor kalırdı.
     if (emirDurumu === 'basladi' && k.emirCalisiyor === true && k.benim === 'duraklamis') return { yol: 'katil' };
     if (emirDurumu === 'basladi' && k.emirCalisiyor === true && k.benim === 'acik') return { yol: 'degisiklik-yok' };
+    if (emirDurumu === 'basladi' && k.emirCalisiyor === true && kaynak === 'makine' && k.benim === 'yok' && k.digerleriAcik.length > 0) {
+      return { yol: 'ret', neden: BASKASI_CALISIYOR_BASLATMA(k.digerleriAcik) };
+    }
     return emirDurumu === 'basladi' && kaynak === 'insan' && (k.digerleriAcik.length > 0 || k.benim === 'acik') ? { yol: 'katil' } : { yol: 'emir' };
   }
   if (k.digerleriAcik.length === 0) return { yol: 'emir' };

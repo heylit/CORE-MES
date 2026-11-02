@@ -195,11 +195,12 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
   const eksik = kalemler.some((k) => k.kart === null && (!k.serbest || k.ad.trim() === '' || k.birim.trim() === ''));
   const miktarsiz = kalemler.some((k) => miktarOku(k.miktar) === null);
   const belirsiz = kalemler.some((k) => belirsizMiktarVar(miktarGirdisi(k.miktar)));
+  const eksiMiktar = kalemler.some((k) => /^-\s*\d/.test(miktarGirdisi(k.miktar)));
 
   const gonderTikla = () => {
     if (eksik || miktarsiz) {
       hataYaz(eksik ? `Her kalem için ${tur === 'hizmet' ? 'hizmeti' : 'malzemeyi'} seçin (ya da adını ve birimini yazın) ve miktarı girin.`
-        : belirsiz ? BELIRSIZ_MIKTAR : 'Miktarı sayı olarak yazın; ondalık için virgül, binlik için nokta (1.250,5).');
+        : belirsiz ? BELIRSIZ_MIKTAR : eksiMiktar ? 'Miktar sıfırdan büyük olmalı.' : 'Miktarı sayı olarak yazın; ondalık için virgül, binlik için nokta (1.250,5).');
       return;
     }
     gonder.mutate({

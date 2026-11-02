@@ -76,6 +76,24 @@ describe('Hatalı parça (1034)', () => {
     expect(giden).toEqual([{ kod: 'TK', adet: 3, aciklama: 'uç kırıldı' }]);
   });
 
+  it('adet adımda sayılmamış adedi aşamaz: sınırın üstü gönderilmez ve söylenir; sınır bilinmiyorsa konmaz', () => {
+    const giden: HataliGirdisi[] = [];
+    const { unmount } = render(<HataliPenceresi nedenler={nedenler} enCok={4} yukleniyor={false} kapat={() => {}} kaydet={(g) => giden.push(g)} />);
+    fireEvent.click(screen.getByRole('radio', { name: /Takım kırılması/ }));
+    fireEvent.change(screen.getByLabelText('Hatalı adet'), { target: { value: '500' } });
+    const ayir = screen.getByRole('button', { name: /Kaliteye ayır/ }) as HTMLButtonElement;
+    expect(ayir.disabled).toBe(true);
+    expect(screen.getByText(/sayılmamış 4 adet var/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Hatalı adet'), { target: { value: '4' } });
+    fireEvent.click(ayir);
+    expect(giden).toEqual([{ kod: 'TK', adet: 4, aciklama: null }]);
+    unmount();
+    render(<HataliPenceresi nedenler={nedenler} yukleniyor={false} kapat={() => {}} kaydet={() => {}} />);
+    fireEvent.click(screen.getByRole('radio', { name: /Takım kırılması/ }));
+    fireEvent.change(screen.getByLabelText('Hatalı adet'), { target: { value: '500' } });
+    expect((screen.getByRole('button', { name: /Kaliteye ayır/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('istek: iş emri paketinde adım paketten, emir paketinde TMI seçer; TMI dışı iş ve geçersiz adet isteksiz', () => {
     const g = { kod: 'TK', adet: 2, aciklama: null };
     expect(hataliIstegi({ id: 'tmi-ie-70', tmi: { emirId: 7 } }, g)).toEqual({ emirId: 7, govde: { isEmriId: 70, hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });

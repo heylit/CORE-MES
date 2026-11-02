@@ -10,10 +10,10 @@ const ISO = PROGRAMLAR.iso9001;
 describe('puanHesapla', () => {
   const qs = [soru('a', '4', 3), soru('b', '4', 1), soru('c', '5', 2), soru('d', '5', 3), soru('s', 'S', 3)];
 
-  it('ağırlıklı yüzde; N/A ve cevapsız dışarıda; savunma eki ayrı yüzde', () => {
+  it('ağırlıklı yüzde bütün sorulara bölünür: cevapsız 0 sayılır, N/A dışarıda; savunma eki ayrı yüzde (DH-4 a)', () => {
     const r = puanHesapla(qs, { a: '3', b: '0', c: 'na', s: '0' }, ISO);
-    // a: 9/9, b: 0/3 -> 9/12 = %75; S: 0/9
-    expect(r.pct).toBe(75);
+    // a: 9/9, b: 0/3, c: N/A, d cevapsız: 0/9 -> 9/21 = %43; grup 5 yalnız N/A ve cevapsız: yüzde yok; S: 0/9
+    expect(r.pct).toBe(43);
     expect(r.defPct).toBe(0);
     expect(r.answered).toBe(4);
     expect(r.na).toBe(1);
@@ -35,6 +35,20 @@ describe('puanHesapla', () => {
     const r = puanHesapla(qs, {}, ISO);
     expect(r.pct).toBeNull();
     expect(r.verdict).toBeNull();
+  });
+
+  it('tek soru tam puanla cevaplanınca hazır denmez (DH-4 a: 1/40 ile %100 çıkıyordu)', () => {
+    const r = puanHesapla(qs, { a: '3' }, ISO);
+    // 9 / (9 + 3 + 6 + 9) = 9/27 -> %33
+    expect(r.pct).toBe(33);
+    expect(r.verdict?.k).not.toBe('ok');
+    expect(r.defPct).toBeNull();
+    expect(grupYuzdesi(r.groups['4'])).toBe(75);
+    expect(grupYuzdesi(r.groups['5'])).toBeNull();
+  });
+
+  it('bütün sorular N/A ise yüzde yok', () => {
+    expect(puanHesapla([soru('a', '4', 3)], { a: 'na' }, ISO).pct).toBeNull();
   });
 
   it('85 ve üstü, en çok 2 minör: hazır', () => {

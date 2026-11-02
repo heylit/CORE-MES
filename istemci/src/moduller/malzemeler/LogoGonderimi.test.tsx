@@ -48,12 +48,12 @@ const BIRIM_SETLERI: BirimSetleriCevabi = {
 
 const json = (kod: number, govde: unknown) => new Response(JSON.stringify(govde), { status: kod });
 
-function sunucuKur(kullanici: Kullanici, setler: BirimSetleriCevabi = BIRIM_SETLERI) {
+function sunucuKur(kullanici: Kullanici, setler: BirimSetleriCevabi = BIRIM_SETLERI, logoDurumu?: LogoDurumuCevabi) {
   const yazilanlar: unknown[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
-    if (yol === '/malzeme-logo-durumu') return json(200, durum(kullanici.islemler.includes('malzemeler.tanim-yaz')));
+    if (yol === '/malzeme-logo-durumu') return json(200, logoDurumu ?? durum(kullanici.islemler.includes('malzemeler.tanim-yaz')));
     if (yol === '/malzeme-logo-karsiliklari/kaydet' && secenek?.method === 'POST') {
       yazilanlar.push(JSON.parse(String(secenek.body)));
       return json(200, { id: 'x' });
@@ -93,6 +93,18 @@ describe('LogoGonderimi (kart #232)', () => {
     expect(within(satirlar[4]!).getByText('Hata')).toBeTruthy();
     expect(within(tablo).queryByRole('button')).toBeNull();
     for (const s of satirlar) expect(s.getAttribute('tabindex')).toBeNull();
+  });
+
+  it('bekleyen demirbaş "Logo\'ya gitmez" der; "Bekliyor" ve tür karşılığı eksiği görünmez (LOG-4)', async () => {
+    const d = durum(false);
+    d.kartlar = [{ id: 12, kod: 'DB-DNM-00001', ad: 'Deneme demirbaş', tur: 'demirbas', birim: 'adet', durum: 'bekliyor', eksikler: ['tur_karsiligi', 'birim_karsiligi'], hata: null, zaman: null, kayitNo: null, guncelleme: null }];
+    sunucuKur(OKUYUCU, BIRIM_SETLERI, d);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Logo gönderim durumu' });
+    const satir = within(tablo).getAllByRole('row')[1]!;
+    expect(within(satir).getByText("Logo'ya gitmez")).toBeTruthy();
+    expect(within(satir).queryByText('Bekliyor')).toBeNull();
+    expect(within(satir).queryByText(/tür karşılığı/)).toBeNull();
   });
 
   it('Logo kartının ad güncellemesi gönderim durumunun yanında görünür; güncelleme hatası "Son hata"da yazılır (kart #783)', async () => {
@@ -204,12 +216,19 @@ describe('LogoGonderimi (kart #232)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Birim seti ekle' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.change(within(pencere).getByRole('textbox', { name: /Kod/ }), { target: { value: ' EL2 ' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
-    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }]));
+    // Çift tık tek istek (LOG-4): ikinci tık yeniden çizimden önce gelir.
+    const ekleDugmesi = within(pencere).getByRole('button', { name: 'Ekle' });
+    fireEvent.click(ekleDugmesi);
+    fireEvent.click(ekleDugmesi);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }]);
+    expect(screen.getAllByText('Birim seti eklendi')).toHaveLength(1);
     fireEvent.click(within(satirlar[1]!).getByRole('button', { name: 'EL1 kaldır' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
-    await waitFor(() => expect(yazilanlar[1]).toEqual({ yol: '/logo/birim-setleri/EL1/kaldir', govde: {} }));
+    const kaldirDugmesi = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' });
+    fireEvent.click(kaldirDugmesi);
+    fireEvent.click(kaldirDugmesi);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }, { yol: '/logo/birim-setleri/EL1/kaldir', govde: {} }]);
     fireEvent.click(within(satirlar[2]!).getByRole('button', { name: 'KG kaldır' }));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
     expect(await screen.findByText('Birim seti KG bir birim karşılığında kullanılıyor; önce karşılığı değiştirin.')).toBeTruthy();

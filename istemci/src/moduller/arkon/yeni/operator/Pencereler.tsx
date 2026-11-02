@@ -58,8 +58,9 @@ export function hataliIstegi(pkg: TmiPaketi | null | undefined, g: HataliGirdisi
 }
 
 /* ── hatalı parça (1034): operatör yalnız nedeni ve adedi seçer; rework, hurda ya da red kararını kalite verir ── */
-export function HataliPenceresi({ nedenler, yukleniyor, kapat, kaydet }: {
-  nedenler: readonly ScrapReason[]; yukleniyor: boolean; kapat: () => void; kaydet: (g: HataliGirdisi) => void;
+// enCok: adımda henüz sayılmamış adet (TMI üst sınırı); bilinmiyorsa null, ekran sınır koymaz, sunucu denetler.
+export function HataliPenceresi({ nedenler, yukleniyor, kapat, kaydet, enCok = null }: {
+  nedenler: readonly ScrapReason[]; yukleniyor: boolean; kapat: () => void; kaydet: (g: HataliGirdisi) => void; enCok?: number | null;
 }) {
   const son = yerel.oku<string>('lastScrap');
   const L = nedenler.filter((r) => r.active !== false);
@@ -68,7 +69,9 @@ export function HataliPenceresi({ nedenler, yukleniyor, kapat, kaydet }: {
   const [adetMetni, adetYaz] = useState('1');
   const [not, notYaz] = useState('');
   const adet = /^\s*\d+\s*$/.test(adetMetni) ? Number(adetMetni) : Number.NaN;
-  const adetGecersiz = !Number.isSafeInteger(adet) || adet < 1;
+  const adetBicimsiz = !Number.isSafeInteger(adet) || adet < 1;
+  const adetFazla = !adetBicimsiz && enCok !== null && adet > enCok;
+  const adetGecersiz = adetBicimsiz || adetFazla;
   const gonder = () => {
     if (kod === null || adetGecersiz || yukleniyor) return;
     yerel.yaz('lastScrap', kod);
@@ -96,10 +99,12 @@ export function HataliPenceresi({ nedenler, yukleniyor, kapat, kaydet }: {
         <label className="tc-ay1-toplu-alan" data-tur="hurda">
           <span className="tc-ay1-ust-yazi">Adet</span>
           <input className="tc-ay1-mono" inputMode="numeric" pattern="[0-9]*" value={adetMetni} aria-label="Hatalı adet"
+            {...(enCok === null ? {} : { max: enCok })}
             onChange={(e) => adetYaz(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') gonder(); }} />
         </label>
       </div>
-      {adetGecersiz ? <small className="tc-ay1-hata">Adet tam sayı ve en az 1 olmalı.</small> : null}
+      {adetBicimsiz ? <small className="tc-ay1-hata">Adet tam sayı ve en az 1 olmalı.</small> : null}
+      {adetFazla ? <small className="tc-ay1-hata">Bu adımda sayılmamış {enCok} adet var; hatalı adet bunu aşamaz.</small> : null}
       <CokSatir etiket="Not" value={not} maxLength={300} onChange={(e) => notYaz(e.target.value)} />
     </Pencere>
   );

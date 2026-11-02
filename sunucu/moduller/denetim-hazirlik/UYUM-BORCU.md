@@ -4,7 +4,7 @@
 | Kural / konu | İstisna | Nasıl uyumlanır |
 |---|---|---|
 | Veri tek jsonb belgede | Prototipin bütün durumu `yerel/kalite-denetim-v4` belgesinde metin olarak durur; sunucu içeriği yorumlamaz. | Aşama 2: denetim, bulgu, DÖF tabloları ve uçları; prototip katmanı uçlara bağlanır. |
-| Eşzamanlı düzenleme | İki kişi aynı anda düzenlerse ikinci yazan uyarı alır, değişikliği kaydedilmez. | Aşama 2: kayıt başına tablo ve sürüm. |
+| Eşzamanlı düzenleme (karar DH-1 a, 02.11.2026: sürüm denetimi kalır) | İki kişi aynı anda düzenlerse ikinci yazan "Başka biri değiştirdi" bandını ve bildirimini alır, değişikliği kaydedilmez; "Son hâli oku" ekrandaki kaydedilmemiş değişikliği bırakır ve bunu bantta söyler. Değişiklik sessizce kaybolmaz (`yeni/veri.ts`, test "başkası yazdıysa yazma durur ve kişiye söylenir"). | Aşama 2: kayıt başına tablo ve sürüm. |
 | KAPANDI (1418, 1392 a): Kendi stili, rengi ve bileşenleri | Eski çerçeve kalktı; ekran TS ekranıdır (`istemci/src/moduller/denetim-hazirlik/yeni/`), tasarım değişkenleri ve ortak bileşenlerle çizilir. | Gerekmez. |
 | KAPANDI (borç turu 19.10.2026): önek listesi gözden geçirildi, `kalite-denetim-v4` kalıcı; eski sürüm anahtarları (`iso9001-denetim-v1..v3`) yalnız taşıma için okunur, bellekte kalır; değişiklik gerekmedi (prototipteki `localStorage` çağrıları tarandı). Tarayıcıda tutulan veri | Prototipin `localStorage` kullanımı köprüyle sunucuya taşınır; önek dışındaki anahtarlar yalnız o sekmede kalır. | Bağlamada önek listesi gözden geçirilir. |
 | Ek boyutu | Ek en çok 700 KB (JSON gövde sınırı); ekler modülün kendi tablosunda. Tür içerikten, kota ve belgeye bağ var (GG-1, BD-17..19); yetim ek temizliği yok (soru 1270). | Aşama 2: `dosya` modülüne bağlanır (ikili cevap, sahipsiz dosya temizliği). |

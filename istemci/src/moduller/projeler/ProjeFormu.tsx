@@ -69,6 +69,10 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const [bitis, bitisYaz] = useState(proje?.bitis ?? '');
   const [aciklama, aciklamaYaz] = useState(proje?.aciklama ?? '');
   const [durum, durumYaz] = useState<ProjeDurumu>(proje?.durum ?? 'aktif');
+  const [gerekce, gerekceYaz] = useState('');
+  const [gerekceHatasi, gerekceHatasiYaz] = useState<string | undefined>(undefined);
+  // PRJ-17: kapanmış proje gerekçeyle yeniden açılır; gerekçe statü geçmişine düşer.
+  const yenidenAcma = proje !== null && proje.durum !== 'aktif' && durum === 'aktif';
   const maliyetGorur = useOturum().data?.islemler.includes(MALIYET_ISLEMI) === true;
   const [butceTutari, butceYaz] = useState(proje?.butceTutari ?? '');
   const [butceParaBirimi, paraBirimiYaz] = useState(proje?.butceParaBirimi ?? 'TRY');
@@ -83,6 +87,7 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
       ? api.post<Proje>('/projeler', { kod, ...ortak, siparisId: Number(siparisId) } satisfies ProjeOlusturGovdesi)
       : api.post<Proje>(`/projeler/${proje.id}/guncelle`, {
         ...ortak, firmaId: firmaId === '' ? null : Number(firmaId), durum, surum: proje.surum,
+        ...(yenidenAcma ? { yenidenAcmaGerekcesi: gerekce } : {}),
       } satisfies ProjeGuncelleGovdesi)),
     onSuccess: async (kayit) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
@@ -94,6 +99,7 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const ilet = (o: FormEvent) => {
     o.preventDefault();
     if (proje === null && siparisId === '') { siparisHatasiYaz('Sipariş seçimi zorunlu.'); return; }
+    if (yenidenAcma && gerekce.trim() === '') { gerekceHatasiYaz('Kapanmış projeyi yeniden açmak için gerekçe yazın.'); return; }
     komut.mutate();
   };
 
@@ -134,6 +140,14 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
         )}
         {proje !== null && (
           <Secim etiket="Durum" required value={durum} secenekler={DURUM_SECENEKLERI} onChange={(e) => { durumYaz(e.target.value as ProjeDurumu); }} />
+        )}
+        {yenidenAcma && (
+          <div className="tc-form-tam">
+            <CokSatir
+              etiket="Yeniden açma gerekçesi" required value={gerekce} maxLength={500} hata={gerekceHatasi}
+              ipucu="Statü geçmişine yazılır." onChange={(e) => { gerekceYaz(e.target.value); gerekceHatasiYaz(undefined); }}
+            />
+          </div>
         )}
         <div className="tc-form-tam">
           <CokSatir etiket="Açıklama" value={aciklama} maxLength={1000} onChange={(e) => { aciklamaYaz(e.target.value); }} />

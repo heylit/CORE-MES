@@ -50,7 +50,7 @@ export function merkezDosyasiniKoy<T extends MerkezDosyasi>(
 // Pakete ve stüdyoya dosya yalnız belge merkezinden eklenir; yerel yükleme ve örnek dosya yoktur.
 export const MERKEZDEN_EKLENIR = 'Dosyalar TMI belge merkezinden eklenir';
 
-// 19.1: paketin merkez çizimi eskiyse terminal "KALİTE ONAYLI" yerine bunu gösterir ve başlatma yerine uyarı verir. Başlatmayı sunucu zaten
+// 19.1: paketin merkez çizimi eskiyse terminal resmin başlığında bunu gösterir ve başlatma yerine uyarı verir. Başlatmayı sunucu zaten
 // reddeder (denetim #34); ekran yalnız önceden söyler. Birden çok dosyada yeni revizyon yayından kalkmaya üstündür.
 export type EskiCizim = 'yeni-revizyon' | 'yayindan-kalkti';
 export const ESKI_CIZIM: Record<EskiCizim, { rozet: string; baslik: string }> = {

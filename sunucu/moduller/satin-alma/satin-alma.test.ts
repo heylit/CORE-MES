@@ -26,6 +26,7 @@ import { ILETILER, karneTeslimOlayi } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
 import { takvimKayitlari } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
+import { siparisOdemeKosullari } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -1079,6 +1080,26 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.match(dis.body, /yalnız siparişi verilmiş/);
   });
 
+  test('1839: fatura bağlanırken üç yollu eşleşme uyarısı döner ve geçmişe yazılır; rakam taşımaz; bağ reddedilmez; liste okumasında uyarı yok', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const toplam = (await vt().tx((db) => siparisOdemeKosullari(db, s.id))).find((x) => x.teklifId === a)!.toplam;
+    const fatura = async (tutar: number) => tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+      yon: 'gider', kategori: 'mal_alimi', firmaId: firmaA, belgeNo: null, belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar, kdvOrani: 20,
+    })).belge.id;
+    const yaz = async (belgeId: number, bagla: boolean) => tamam<SiparisFaturalariCevabi>(
+      await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId, bagla }));
+    const esit = await fatura(Number(toplam));
+    const fazla = await fatura(Number(toplam) + 1);
+    // Teslim yok: tutar tutsa da eksik teslim uyarısı; KDV dahil toplam (tutar x 1,2) karşılaştırılmaz.
+    assert.deepEqual((await yaz(esit, true)).uyarilar, [ILETILER.eslesmeEksikTeslim]);
+    assert.deepEqual((await yaz(esit, false)).uyarilar, []);
+    assert.deepEqual((await yaz(fazla, true)).uyarilar, [ILETILER.eslesmeEksikTeslim, ILETILER.eslesmeTutarFazla]);
+    const gecmis = (await acilistaki(s.id)).hareketler.map((h) => h.metin).filter((m) => m.startsWith('Fatura bağlandı'));
+    assert.ok(gecmis.some((m) => m.includes(ILETILER.eslesmeTutarFazla)), gecmis.join(' | '));
+    assert.ok(gecmis.every((m) => !m.includes(toplam)), 'uyarı rakam taşımaz');
+    assert.deepEqual(tamam<SiparisFaturalariCevabi>(await istek(c.sa, 'GET', `/satin-alma-siparis-faturalari?talepId=${s.id}&teklifId=${a}`)).uyarilar, []);
+  });
+
   test('D6 b: siparişe tedarikçinin alış faturası bağlanır ve kaldırılır; başka siparişteki fatura üstüne bağlanmaz; eşzamanlı iki bağdan biri geçer; geçmişe yazılır', async () => {
     const { s, a, b } = await bolunmusSiparis();
     const { s: s2, a: a2 } = await bolunmusSiparis();
@@ -1139,7 +1160,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(durumlar(await kaldir()), [[f1, false, false], [f2, false, false]].sort());
     tamam(await yaz(s2.id, a2, f1, true));
     const metinler = (await acilistaki(s.id)).hareketler.map((h) => h.metin).filter((m) => m.startsWith('Fatura'));
-    assert.deepEqual(metinler.filter((m) => m.includes('DN-F1')), ['Fatura bağlandı: DN-F1 (Deneme Tedarik A)', 'Fatura bağı kaldırıldı: DN-F1 (Deneme Tedarik A)']);
+    // 1839: tutar 100 TL, sipariş toplamı daha az ve teslim yok; uyarı geçmişe de yazılır.
+    assert.deepEqual(metinler.filter((m) => m.includes('DN-F1')), [`Fatura bağlandı: DN-F1 (Deneme Tedarik A). ${ILETILER.eslesmeEksikTeslim} ${ILETILER.eslesmeTutarFazla}`, 'Fatura bağı kaldırıldı: DN-F1 (Deneme Tedarik A)']);
 
     // Yalnız satın almayı yazan işlem; talep eden 403.
     assert.equal((await liste(s.id, a, c.talep)).statusCode, 403);
@@ -1420,7 +1442,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await istek(c.talep, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: t.surum }));
     assert.equal((await istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: 1 })).statusCode, 404);
     const k = await kararli();
-    assert.equal((await istek(c.sa, 'POST', `/satin-alma-talepleri/${k.id}/sil`, { surum: k.surum })).statusCode, 422);
+    const silRed = await istek(c.sa, 'POST', `/satin-alma-talepleri/${k.id}/sil`, { surum: k.surum });
+    assert.deepEqual([silRed.statusCode, (silRed.json() as { mesaj?: string }).mesaj], [422, ILETILER.yalnizTaslakSilinir]);
     const red = await kaydet(c.sa, { ...govde(k), teklifler: k.teklifler.filter((q) => q.id === k.karar!.teklifId) });
     assert.equal(red.statusCode, 422);
   });

@@ -21,7 +21,7 @@ import { reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
-import { setRole, type Role } from "./roles.ts";
+import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
@@ -175,10 +175,14 @@ function eksiAlanVar(alanlar: readonly (HTMLInputElement | null | undefined)[]):
   const sayilar = alanlar.filter((i): i is HTMLInputElement => !!i && i.type !== "checkbox" && i.tagName === "INPUT");
   sayilar.forEach(i => i.removeAttribute("aria-invalid"));
   const eksi = sayilar.find(i => !i.disabled && (parseNum(i.value) ?? 0) < 0);
-  if (!eksi) return false;
-  eksi.setAttribute("aria-invalid", "true"); toast("Değer eksi olamaz."); eksi.focus();
+  // Yüzde alanı sunucuda 0-100 ile denetlenir; aşan değer de kaydetmeden önce yakalanır.
+  const yuzdeAsan = eksi ? undefined : sayilar.find(i => !i.disabled && yuzdeAlaniMi(i) && (parseNum(i.value) ?? 0) > 100);
+  const hatali = eksi ?? yuzdeAsan;
+  if (!hatali) return false;
+  hatali.setAttribute("aria-invalid", "true"); toast(eksi ? "Değer eksi olamaz." : "Yüzde 0 ile 100 arasında olur."); hatali.focus();
   return true;
 }
+const yuzdeAlaniMi = (i: HTMLInputElement): boolean => i.id === "q-disc" || i.id === "q-adv" || i.dataset.bf === "discountPct" || i.dataset.bf === "advancePct";
 function readQuoteForm(): void {
   const g = (id: string) => $("#" + id); if (!g("q-sup")) return;
   const prevCur = draftQ.currency, prevDate = draftQ.date, set = settings();
@@ -953,13 +957,13 @@ const ACTIONS: Record<string, Action> = {
   },
   "clear-decision": (el, r) => { if (!canWrite() || !r) return; const n = clone(r); delete n.award; if (["approval", "ordered", "received"].includes(n.status)) n.status = "eval"; saveRequestUndoable(n, "Karar kaldırıldı", "Karar ve onaylar kaldırıldı"); },
   "approve": (el, r) => {
-    if (!canWrite() || !r || !r.award) return;
+    if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
     const n = clone(r); const note = $("#ap-note").value.trim();
     const aw = n.award!; aw.approvals = aw.approvals || []; aw.approvals.push({ id: uid(), at: Date.now(), by: S.me?.id ?? "", name: S.me?.name ?? "", decision: "approved", note });
     saveRequest(n, `Onaylandı${note ? ": " + note : ""}`); toast("Onaylandı");
   },
   "reject": (el, r) => {
-    if (!canWrite() || !r || !r.award) return;
+    if (!canWrite() || !onaylayabilir() || !r || !r.award) return;
     const note = $("#ap-note").value.trim(); if (!note) { toast("Ret gerekçesini not alanına yazın."); $("#ap-note").focus(); return; }
     const n = clone(r);
     const aw = n.award!; aw.approvals = aw.approvals || []; aw.approvals.push({ id: uid(), at: Date.now(), by: S.me?.id ?? "", name: S.me?.name ?? "", decision: "rejected", note });
@@ -1426,11 +1430,12 @@ ACTIONS["invoice-link"] = (el) => {
   const fs = faturaSiparisi; if (!fs || !canWrite()) return;
   const bagla = el.dataset.bagla === "1";
   $$("#fi-list button").forEach(b => { b.disabled = true; });
-  void backend.siparisFaturasiBagla(fs.talepId, fs.teklifId, Number(el.dataset.id), bagla).then(liste => {
+  void backend.siparisFaturasiBagla(fs.talepId, fs.teklifId, Number(el.dataset.id), bagla).then(c => {
     if (faturaSiparisi !== fs || !$("#fi-list")) return;
-    if (liste === null) { void faturalariYukle(); return; }
-    $("#fi-list").innerHTML = faturaListesiHTML(liste);
-    toast(bagla ? "Fatura siparişe bağlandı, geçmişe yazıldı" : "Fatura bağı kaldırıldı, geçmişe yazıldı");
+    if (c === null) { void faturalariYukle(); return; }
+    $("#fi-list").innerHTML = faturaListesiHTML(c.liste);
+    toast(!bagla ? "Fatura bağı kaldırıldı, geçmişe yazıldı"
+      : c.uyarilar.length > 0 ? `Fatura bağlandı; eşleşme farkı: ${c.uyarilar.join(" ")}` : "Fatura siparişe bağlandı, geçmişe yazıldı");
   });
 };
 document.addEventListener("change", (e) => {

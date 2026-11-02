@@ -67,6 +67,7 @@ import {
   ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
+  hataliNedenleri, hataliUstSiniri,
 } from './kurallar.ts';
 import {
   CagriCipi, DurumDugmeleri, EtkinKart, GorevKarti, IsAlanlari, IsEtiketleri, IsOzeti, IsKuyrugu, Konfeti, NumuneSeridi, PlanBandi, SayacKadrani, SayimTuslari,
@@ -1191,7 +1192,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </div>
   );
   const toplu = uretir ? (
-    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={ayarlar.hurdaNedenleri} hurdaEtiketi={hataliTmi ? 'Hatalı' : 'Hurda'}
+    <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={hataliTmi ? hataliNedenleri(ayarlar.hurdaNedenleri, o.pkg) : ayarlar.hurdaNedenleri} hurdaEtiketi={hataliTmi ? 'Hatalı' : 'Hurda'}
       kaydet={(g) => { const tamam = topluKaydet(g); if (tamam) ovYaz(null); return tamam; }} />
   ) : null;
   const kaliteGorunumu = kaliteIstasyonu && !pv ? (
@@ -1284,7 +1285,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       {ov === 'station' ? <IstasyonSecici simdiki={MACHINE} kapat={() => ovYaz(null)} sec={(id) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); }} /> : null}
       {warnShow ? <UyariPenceresi liste={warnShow.list} {...(warnShow.title ? { baslik: warnShow.title } : {})} okudum={() => { const w = warnShow; ackWarns(w.list); warnShowYaz(null); bip('ok'); if (w.then) setTimeout(w.then, 50); }} /> : null}
       {ov === 'numune' ? <NumunePenceresi istasyon={MACHINE} numune={{ hazir: !!o.pkg, bekliyor: !!o.pendingReq, gonder: () => { void sendSample(); } }} kapat={() => ovYaz(null)} /> : null}
-      {ov === 'scrap' && hataliTmi ? <HataliPenceresi nedenler={ayarlar.hurdaNedenleri} yukleniyor={hataliGidiyor} kapat={() => ovYaz(null)} kaydet={hataliGonder} /> : null}
+      {ov === 'scrap' && hataliTmi ? <HataliPenceresi nedenler={hataliNedenleri(ayarlar.hurdaNedenleri, o.pkg)} enCok={hataliUstSiniri(o, hataliSayisi)} yukleniyor={hataliGidiyor} kapat={() => ovYaz(null)} kaydet={hataliGonder} /> : null}
       {ov === 'scrap' && !hataliTmi ? <HurdaPenceresi nedenler={ayarlar.hurdaNedenleri} kapat={() => ovYaz(null)} sec={(code) => { ovYaz(null); doScrap(code); }} /> : null}
       {ov === 'reason' ? (
         <DurusPenceresi istasyon={MACHINE} nedenler={ayarlar.durusNedenleri} oneriler={reasonSuggest()} otomatikCagri={POLICY.autoCall} kapat={() => ovYaz(null)}

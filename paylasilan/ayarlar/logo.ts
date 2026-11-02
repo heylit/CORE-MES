@@ -50,7 +50,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: satış gönderimi',
-    aciklama: 'Açıkken portaldaki satış teklifleri Logo\'ya satış teklifi, kabul edilen siparişler tekliften satış siparişi olarak gider. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
+    aciklama: 'Açıkken Siparişler\'de müşteriye verilen teklif sürümleri Logo\'ya satış teklifi, onaylanan siparişler kabul edilen sürümün teklifinden satış siparişi olarak gider. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
   // Kullanıcı kararı 12.10.2026 (#777): hizmet kartı hazır dursun, gerçek köprüyle denenince açılır.
   'logo.hizmet-alinan-gonderimi': {

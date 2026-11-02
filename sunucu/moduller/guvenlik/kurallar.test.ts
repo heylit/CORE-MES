@@ -67,6 +67,9 @@ describe('guvenlik kuralları (saf)', () => {
     assert.deepEqual(cokOturumBulgulari([{ kisiId: 7, acikOturum: 4 }], T1), [
       { sinyal: 'cok-oturum', onem: 'orta', kullaniciAdi: null, ip: null, kisiId: 7, sayi: 4, sonOlay: T1 },
     ]);
+    // GUV-6 a: ayardan gelen eşik uygulanır.
+    assert.deepEqual(cokOturumBulgulari([{ kisiId: 7, acikOturum: 5 }], T1, 6), []);
+    assert.equal(cokOturumBulgulari([{ kisiId: 7, acikOturum: 6 }], T1, 6).length, 1);
   });
 
   test('G-07: yeni hatalı deneme ya da büyüyen sayı sayaçları günceller; aynı veri dokunmaz; oturumda yalnız büyüyen sayı', () => {

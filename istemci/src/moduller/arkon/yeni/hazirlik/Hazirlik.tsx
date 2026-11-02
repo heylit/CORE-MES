@@ -8,7 +8,7 @@ import { PAKET_GRUPLARI, paketGrubuOku, paketleriGrupla, type GrupAdi, type Pake
 import {
   SUZGEC_ALANLARI, paketleriSuz, suzgecOku, suzgecSayisi, suzgecSecenekleri, type PaketSuzgeci, type SuzgecAlani,
 } from '../../../../../../arkon/web/src/data/paket-suzgec.ts';
-import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, planEtiketi, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
+import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { sablonUygula, tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
@@ -31,6 +31,7 @@ import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
+  planDisiEki,
 } from './kurallar.ts';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
@@ -809,7 +810,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                         <b title={p.machine}>{(istasyon && istasyon.name) || p.machine}</b>
                         <small>
                           {p.status === 'draft' ? 'İlk yayın' : 'Güncelleme · v' + ((p.version || 0) + 1)}
-                          {['planlanmadi', 'kaynak-farkli'].includes(planEtiketi(p) || '') ? ' · operatöre plan canlıya alınınca düşer' : ''}
+                          {planDisiEki(p)}
                         </small>
                       </div>
                       <Dugme boyut="ana" tur="ikincil" simge="eye" onClick={() => { void onizle(); }}>Önizle</Dugme>

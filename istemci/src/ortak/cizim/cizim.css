@@ -105,7 +105,6 @@
   display: inline-flex; align-items: center; gap: var(--b-1); padding: 0 var(--b-2); border-radius: var(--yari-tam);
   border: var(--cizgi-ince) solid var(--edge2); font-size: var(--yazi-xs); font-family: var(--font-mono); color: var(--muted);
 }
-.tc-ay5-kilitli { color: var(--run); border-color: var(--run); }
 .tc-ay5-eski { color: var(--hazard-ink); border-color: var(--hazard); }
 .tc-ay5-araclar {
   display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-1); max-block-size: calc(100% - var(--b-4)); overflow-y: auto; scrollbar-width: none;

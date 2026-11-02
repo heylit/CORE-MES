@@ -36,7 +36,8 @@ export interface Policy { shiftLogout: boolean; idleLock: number; callEsc: numbe
 export type CallTeam = 'bakim' | 'kalite' | 'malzeme' | 'amir' | 'ayarci';
 /** duruş nedeni · cat: 'u' plansız (OEE kaybı) · 'p' planlı (planlı süreden düşülür) */
 export interface Reason { code: string; l: string; i?: string; cat: 'u' | 'p'; team?: CallTeam; after?: number; active?: boolean; c?: string }
-export interface ScrapReason { code: string; l: string; active?: boolean }
+/** fason: yalnız fason dönüşündeki GKK adımında geçen neden (TMI sabit kodu) */
+export interface ScrapReason { code: string; l: string; active?: boolean; fason?: boolean }
 export interface AppMode { demo: boolean }
 
 /* ── iş paketi (iş emri + proses paketi) ── */

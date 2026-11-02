@@ -8,6 +8,7 @@ import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Secenek, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import './malzemeler.css';
 
@@ -44,6 +45,9 @@ const turunSecenekleri = (tmiDegeri: string, hepsi: readonly Secenek[]): readonl
 const zamanMetni = (z: string | null): string | null =>
   z === null ? null : new Date(z).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 
+// Demirbaşa tür karşılığı verilemez (sunucu reddeder), bu yüzden bekleyen demirbaş hiç gitmez: "Bekliyor" ve eksik yerine bunu söyler.
+const demirbasGitmez = (k: DurumKarti): boolean => k.tur === 'demirbas' && k.durum === 'bekliyor';
+
 const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, kirilmaz: true, hucre: (k) => k.kod },
   { anahtar: 'ad', baslik: 'Ad', hucre: (k) => k.ad },
@@ -54,6 +58,7 @@ const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
       <span className="tc-logo-durum">
         {k.tur === 'hizmet' && k.durum === 'bekliyor'
           ? <Rozet ton="bilgi"><Simge ad="clock" boyut="k" />Hizmet kartı bağlantısı bekliyor</Rozet>
+          : demirbasGitmez(k) ? <Rozet ton="pasif"><Simge ad="minus" boyut="k" />Logo'ya gitmez</Rozet>
           : <Rozet ton={DURUM[k.durum].ton}><Simge ad={DURUM[k.durum].simge} boyut="k" />{DURUM[k.durum].ad}</Rozet>}
         {/* Logo'daki kartın adı değişince yeni ad bağlantıyla gider; gidene kadar burada görünür (kart #783). */}
         {k.guncelleme?.durum === 'bekliyor' && <Rozet ton="uyari"><Simge ad="clock" boyut="k" />Ad güncellemesi bekliyor</Rozet>}
@@ -63,7 +68,7 @@ const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
   },
   {
     anahtar: 'eksikler', baslik: 'Eksikler',
-    hucre: (k) => (k.eksikler.length === 0 ? null : <span className="tc-logo-eksik">{k.eksikler.map((e) => EKSIK_ADLARI[e]).join(', ')}</span>),
+    hucre: (k) => (k.eksikler.length === 0 || demirbasGitmez(k) ? null : <span className="tc-logo-eksik">{k.eksikler.map((e) => EKSIK_ADLARI[e]).join(', ')}</span>),
   },
   { anahtar: 'hata', baslik: 'Son hata', hucre: (k) => (k.guncelleme?.durum === 'hata' ? k.guncelleme.hata : k.hata) },
   { anahtar: 'kayitNo', baslik: 'Logo kayıt no', mono: true, hucre: (k) => k.kayitNo },
@@ -181,7 +186,8 @@ function BirimSetiPenceresi({ kapat }: { kapat: () => void }) {
   const [ad, adYaz] = useState('');
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const ekle = useMutation({
+  // Çift tık tek istek: düğmenin yükleniyor hali ancak yeniden çizimde gelir (LOG-4).
+  const ekle = useTekGonderim({
     mutationFn: () => api.post('/logo/birim-setleri/ekle', { kod: kod.trim(), ad: ad.trim() === '' ? null : ad.trim() }),
     onSuccess: async () => {
       await istemci.invalidateQueries({ queryKey: BIRIM_SETI_ANAHTARI });
@@ -229,7 +235,7 @@ function BirimSetleri() {
   const [kaldirilacak, kaldirilacakYaz] = useState<BirimSeti | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const kaldir = useMutation({
+  const kaldir = useTekGonderim({
     mutationFn: (b: BirimSeti) => api.post(`/logo/birim-setleri/${encodeURIComponent(b.kod)}/kaldir`, {}),
     onSuccess: async () => {
       kaldirilacakYaz(null);

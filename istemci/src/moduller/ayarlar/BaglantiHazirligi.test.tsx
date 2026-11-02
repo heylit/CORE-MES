@@ -81,7 +81,9 @@ describe('Bağlantı hazırlığı', () => {
     expect(within(screen.getByRole('region', { name: 'Logo → TMI' })).getByText('Kodda yok')).toBeTruthy();
     expect(screen.getByText('Son okuma: SmartES süresinde cevap vermedi.')).toBeTruthy();
     expect(screen.getByText('Açık, denenmedi')).toBeTruthy();
-    expect(screen.getByText('Ortam değişkeni eksik')).toBeTruthy();
+    // Genel rozet ve ortam değişkeni yokken gelen iki SmartES akışı aynı adı taşır; "Ayar eksik" görünmez.
+    expect(screen.getAllByText('Ortam değişkeni eksik')).toHaveLength(3);
+    expect(screen.queryByText('Ayar eksik')).toBeNull();
     expect(istekler.filter((y) => y.endsWith('/kontrol'))).toEqual([]);
   });
 
