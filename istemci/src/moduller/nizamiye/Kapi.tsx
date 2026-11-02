@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { BosKart, CikisGovdesi, GirisGovdesi, KapiCevabi, KimlikTuru, Ziyaret } from '#paylasilan/sozlesme/nizamiye.ts';
@@ -136,6 +136,13 @@ export function Kapi() {
   const [panel, panelYaz] = useState<Panel>(null);
   const [son, sonYaz] = useState<SonIslem | null>(null);
   const geriAl = useKomut<{ surum: number }, Ziyaret>('Geri alınamadı.');
+  const panelYeri = useRef<HTMLElement>(null);
+  // Dar ekranda panel listenin altındadır: Giriş/Çıkış'a basınca görünür alana gelir, yoksa dokunuş boşa gitmiş gibi görünür.
+  // Geniş ekranda panel zaten görünürdür; 'nearest' o zaman kaydırmaz.
+  const panelAnahtari = panel === null ? null : `${panel.tur}-${String(panel.ziyaret.id)}`;
+  useEffect(() => {
+    if (panelAnahtari !== null) panelYeri.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [panelAnahtari]);
 
   const simdi = veri.data ? Date.parse(veri.data.simdi) : 0;
   const q = ara.trim().toLocaleLowerCase('tr');
@@ -223,7 +230,7 @@ export function Kapi() {
             );
           })}
         </main>
-        <aside className="tc-nz-panel" aria-label="İşlem paneli">
+        <aside ref={panelYeri} className="tc-nz-panel" aria-label="İşlem paneli">
           {panel?.tur === 'giris' && <GirisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} bosKartlar={bosKartlar.filter((k) => k.tur === 'ziyaretci')} kapat={() => panelYaz(null)} bitti={bitti} />}
           {panel?.tur === 'cikis' && <CikisPaneli key={panel.ziyaret.id} ziyaret={panel.ziyaret} kapat={() => panelYaz(null)} bitti={bitti} />}
           {panel === null && (

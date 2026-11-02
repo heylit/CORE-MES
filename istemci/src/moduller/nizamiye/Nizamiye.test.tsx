@@ -138,6 +138,23 @@ describe('Kapı konsolu', () => {
     expect((screen.getByRole('button', { name: /İçeri al/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('Giriş ve Çıkış işlem panelini görünür alana getirir (dar ekranda panel listenin altındadır)', async () => {
+    sunucuKur(GOREVLI);
+    const kaydir = vi.fn();
+    Element.prototype.scrollIntoView = kaydir;
+    ac(<Kapi />);
+    await screen.findByText('Servis Teknisyeni');
+    expect(kaydir).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Giriş' })[0]!);
+    await waitFor(() => expect(kaydir).toHaveBeenCalledTimes(1));
+    expect(kaydir.mock.contexts[0]).toBe(screen.getByRole('complementary', { name: 'İşlem paneli' }));
+    expect(kaydir).toHaveBeenCalledWith({ block: 'nearest' });
+    fireEvent.click(screen.getByRole('button', { name: 'Çıkış' }));
+    await waitFor(() => expect(kaydir).toHaveBeenCalledTimes(2));
+    // jsdom'da yöntem yoktur: öteki testler eski haliyle koşsun.
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
   it('kart okutulunca çıkış paneli açılır; dizüstüyle girende eşya kontrolü olmadan çıkarılmaz', async () => {
     const gonderilen = sunucuKur(GOREVLI);
     ac(<Kapi />);

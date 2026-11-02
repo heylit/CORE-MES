@@ -31,3 +31,4 @@
 | Cihaz ağı yalnız kurum içi, döngü adresi yok; saklama süresi 30-3650 | `ag.test.ts` |
 | Personel kartı (1326): yalnız PDKS aktaran kaydeder; kişi başına bir etkin kart, kart bir kişide; numara düz saklanmaz; kaldırılan kart kimseyi bulmaz | `personel-kart.test.ts` (3 test) |
 | Ekran: personel kartı kart okuyucu ekranında; kişi seçilmeden kart alanı kapalı; kaldırma önce sorar | `Nizamiye.test.tsx` `personel kartı` |
+| Ekran: Giriş/Çıkış işlem paneli açılınca görünür alana gelir (dar ekranda liste altında) | `Nizamiye.test.tsx` `Giriş ve Çıkış işlem panelini` |
