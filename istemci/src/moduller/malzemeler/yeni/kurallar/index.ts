@@ -52,7 +52,12 @@ export function tablolariKopyala(girdi: BaslatGirdisi): Cekirdek {
 let cephe: Motor | null = null;
 function motorKur(anahtar: object, girdi: BaslatGirdisi): Motor {
   const c = cekirdekSec(anahtar, girdi);
-  cephe ??= Object.assign(Object.create(c) as Cekirdek, { __taslak: { yaz: (d: KartKaydi) => { c.ayarla_D(d); }, oku: (): KartKaydi => c.D } });
+  // Çekirdek modülün ad alanıdır: tarayıcının gerçek ad alanı nesnesinden türeyen nesneye özellik yazılamaz (Vite geliştirme kipi),
+  // bu yüzden cephe vekildir; okumalar ad alanına gider ve canlı bağlar (D, tablolar) güncel kalır.
+  if (!cephe) {
+    const taslak: Motor['__taslak'] = { yaz: (d: KartKaydi) => { c.ayarla_D(d); }, oku: (): KartKaydi => c.D };
+    cephe = new Proxy(c, { get: (hedef, ad) => (ad === '__taslak' ? taslak : Reflect.get(hedef, ad)) }) as Motor;
+  }
   return cephe;
 }
 
