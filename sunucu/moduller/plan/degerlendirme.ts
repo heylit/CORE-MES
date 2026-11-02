@@ -14,6 +14,7 @@ import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
 import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { planlamaGirdisi } from './planlama-servis.ts';
+import { izlemeIletisi } from './isci-iletisi.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
 // (motor/kancalar.betik) ve kart hesaplarıyla (motor/degerlendir.betik) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
@@ -86,7 +87,7 @@ function calistir(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: number): P
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
     const sayac = setTimeout(() => sonlan(() => reddet(mesgul(`Planlama değerlendirmesi ${String(sureMs)} ms içinde bitmedi; daha az seçenekle ya da biraz sonra yeniden deneyin.`))), sureMs);
-    isci.once('message', (s: DegerlendirmeDonusu) => sonlan(() => coz(s)));
+    isci.on('message', (s: DegerlendirmeDonusu) => { if (!izlemeIletisi(s)) sonlan(() => coz(s)); });
     // 1720: tipli dilimle iş parçacığı hata verirse aynı girdi eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
     isci.once('error', (e) => sonlan(() => {
       if (girdi.kaynakDilimi) calistir({ ...girdi, kaynakDilimi: null }, simdi, Math.max(1, son - Date.now())).then(coz, reddet);

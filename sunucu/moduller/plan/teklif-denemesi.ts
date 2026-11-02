@@ -7,6 +7,7 @@ import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
 import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { COZUM_SURESI_MS } from './plan-motoru.ts';
+import { izlemeIletisi } from './isci-iletisi.ts';
 
 // Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.betik), kalemler motorun acil sipariş olayıyla eklenir
 // (motor/teklif.betik). Sayfanın motor kancaları (motor/kancalar.betik) yüklenir (458 a). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
@@ -103,7 +104,7 @@ function calistir(istek: DenemeIstegi, sureMs: number): Promise<DenemeSonucu | n
     let bitti = false;
     const sonlan = (f: () => void): void => { if (bitti) return; bitti = true; clearTimeout(sayac); f(); void isci.terminate(); };
     const sayac = setTimeout(() => sonlan(() => reddet(new Error(`Teklif denemesi ${String(sureMs)} ms içinde bitmedi.`))), sureMs);
-    isci.once('message', (s: DenemeSonucu | null) => sonlan(() => coz(s)));
+    isci.on('message', (s: DenemeSonucu | null) => { if (!izlemeIletisi(s)) sonlan(() => coz(s)); });
     // 1720: tipli dilimle iş parçacığı hata verirse aynı istek eski yolla, kalan sürede yeniden koşar (bayrak kapalıymış gibi).
     isci.once('error', (e) => sonlan(() => {
       if (istek.kaynakDilimi) calistir({ ...istek, kaynakDilimi: null }, Math.max(1, son - Date.now())).then(coz, reddet);
