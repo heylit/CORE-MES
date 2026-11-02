@@ -218,13 +218,23 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await tercihler('yonetici')).satirlar.find((s) => s.tur === 'istasyonlar.makine-durdu')?.varsayilan, true);
   });
 
-  test('operatör e-posta seçemez: alan null, gönderilen değer kapalı saklanır', async () => {
+  test('operatör e-posta seçemez ve tercih listesi boştur: alan null; listede olmayan türe tercih 400, satır açılmaz', async () => {
     const t = await tercihler('operator');
     assert.equal(t.epostaSecilebilir, false);
-    const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta: true });
-    assert.equal(d.durum, 200);
-    const satir = await o().vt.tek<{ eposta: boolean }>('SELECT eposta FROM bildirim_tercihi WHERE kisi_id = $1', [kim('operator')]);
-    assert.equal(satir?.eposta, false);
+    assert.deepEqual(t.satirlar, []);
+    for (const eposta of [true, false]) {
+      const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta });
+      assert.equal(d.durum, 400);
+    }
+    assert.equal(await o().vt.tek('SELECT 1 FROM bildirim_tercihi WHERE kisi_id = $1', [kim('operator')]), null);
+  });
+
+  test('alamadığı türe tercih yazılamaz: 400, satır açılmaz', async () => {
+    assert.equal((await tercihler('cam')).satirlar.some((s) => s.tur === 'istasyonlar.makine-durdu'), false);
+    const d = await istek<{ alan?: string }>('cam', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: false });
+    assert.equal(d.durum, 400);
+    assert.equal(d.govde.alan, 'tur');
+    assert.equal(await o().vt.tek('SELECT 1 FROM bildirim_tercihi WHERE kisi_id = $1 AND tur = $2', [kim('cam'), 'istasyonlar.makine-durdu']), null);
   });
 
   test('bilinmeyen olay türü ve fazla alan reddedilir', async () => {

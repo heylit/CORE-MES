@@ -65,3 +65,17 @@ export const olmayanKimlikler = (secilen: readonly number[], varOlan: readonly n
   const kume = new Set(varOlan);
   return secilen.filter((r) => !kume.has(r));
 };
+
+export const TERCIH_ILETILERI = {
+  turYok: 'Bu bildirim size gelmiyor; tercihi kaydedilemez.',
+  epostaYok: 'E-posta bildirimi sizin için seçilemez.',
+} as const;
+
+// alinabilen: kişinin tercih listesindeki türler (tercihler okumasıyla aynı kaynak).
+export function tercihHatasi(
+  alinabilen: readonly string[], epostaVar: boolean, govde: { tur: string; eposta: boolean },
+): { mesaj: string; alan: 'tur' | 'eposta' } | null {
+  if (!alinabilen.includes(govde.tur)) return { mesaj: TERCIH_ILETILERI.turYok, alan: 'tur' };
+  if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
+  return null;
+}

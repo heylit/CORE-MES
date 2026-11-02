@@ -3,6 +3,7 @@
 | Kural | Nerede | Test |
 |---|---|---|
 | BIL-1 Mesaj ve e-posta kanalları bu aşamada kapalı; seçim saklanır | `kurallar.ts` `ACIK_KANALLAR` | `tercihler: yalnız alabileceği olaylar ...` (`kanallar` iki kanal da false) |
+| ALT-8 Tercih yalnız kişinin tercih listesindeki türe yazılır; e-posta seçemeyenin e-posta isteği 400 (sessizce kapatılmaz) | `kurallar.test.ts` `tercih kuralı: ...` (izinli istek geçer); `bildirim.test.ts` `tercihler: yalnız alabileceği olaylar ...` | `bildirim.test.ts` `alamadığı türe tercih yazılamaz: 400, satır açılmaz`, `operatör e-posta seçemez ve tercih listesi boştur: ...` |
 | BIL-2 Operatörde e-posta seçeneği çıkmaz | `kurallar.ts` `epostaSecilebilir` | `BIL-2: ...` (saf); `operatör e-posta seçemez ...` (akış) |
 | BIL-3 Alıcı: olay türünün işlem sahibi ya da adıyla verilen etkin kişi; tetikleyen almaz | `kurallar.ts` `alicilariSec` | `BIL-3` üç saf test; `olay işlem sahiplerine gider ...`, `adıyla verilen kişi de alır ...` |
 | BIL-4 Okunmamış aynı kaynak yeni satır açmaz, sayaç artar | `kurallar.ts` `tekilAnahtar`; dizin `bildirim_kaydi_tekil_okunmamis` | `BIL-4` (saf); `aynı kaynak okunmamışken ...` |
