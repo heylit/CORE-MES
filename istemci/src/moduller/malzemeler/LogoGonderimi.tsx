@@ -17,6 +17,9 @@ import './malzemeler.css';
 export const LOGO_ANAHTARI = ['malzemeler', 'logo-durumu'] as const;
 // Birim kavramının sahibi malzemelerdir (soru 144 a); Logo birim seti listesi Logo modülünün tablosundadır, bu sayfadan yönetilir.
 export const BIRIM_SETI_ANAHTARI = ['malzemeler', 'logo-birim-setleri'] as const;
+// Karşılık formu uzun kart listesinin altındadır; gönderim kartındaki kısa yol buraya kaydırır (MLZ-7, G10).
+const KARSILIK_CAPASI = 'logo-karsiliklari';
+const KARSILIK_EKSIKLERI: readonly LogoEksik[] = ['tur_karsiligi', 'birim_karsiligi'];
 
 type BirimSeti = BirimSetleriCevabi['setler'][number];
 
@@ -333,7 +336,7 @@ export function LogoKarsiliklari() {
   return (
     <>
       <Kart baslik="Logo karşılıkları">
-        <p className="tc-logo-not">
+        <p className="tc-logo-not" id={KARSILIK_CAPASI} tabIndex={-1}>
           {yazabilir ? 'Değiştirmek için satıra dokunun. ' : ''}Karşılığı boş olan tür ya da birimdeki kartlar gönderilmez.
         </p>
         <div className="tc-logo-karsiliklar">{tablo('tur')}{tablo('birim')}</div>
@@ -356,10 +359,24 @@ export function LogoGonderimi() {
   const icerik = (() => {
     if (durum.isPending) return <DurumKutusu durum="yukleniyor" />;
     if (durum.isError) return <DurumKutusu durum="hata" yenile={() => { void durum.refetch(); }} />;
+    // Demirbaşa tür karşılığı verilemez: sayılsa kısa yol düzeltilemeyecek eksiğe götürürdü.
+    const karsilikEksik = durum.data.kartlar.filter((k) => k.tur !== 'demirbas' && k.eksikler.some((e) => KARSILIK_EKSIKLERI.includes(e))).length;
+    // Kartın başlığıyla birlikte kaydırılır; odak paragrafa geçer: klavyeyle gelen kullanıcı da formun başında kalır.
+    const karsiligaGit = () => {
+      const capa = document.getElementById(KARSILIK_CAPASI);
+      (capa?.closest('section') ?? capa)?.scrollIntoView({ block: 'start' });
+      capa?.focus({ preventScroll: true });
+    };
     return (
       <>
-        <Kart baslik="Logo gönderimi">
+        <Kart
+          baslik="Logo gönderimi"
+          sag={karsilikEksik > 0
+            ? <Dugme simge="edit" onClick={karsiligaGit}>{durum.data.karsilikYazabilir ? 'Karşılıkları düzenle' : 'Karşılıkları gör'}</Dugme>
+            : undefined}
+        >
           <p className="tc-logo-not">Gönderimi Logo bağlantısı yapar; burada yalnız durum görünür. Eksiği olan kart gönderilmez.</p>
+          {karsilikEksik > 0 && <p className="tc-logo-not tc-logo-eksik" role="status">{karsilikEksik.toLocaleString('tr-TR')} kartta tür ya da birim karşılığı eksik.</p>}
           <Tablo etiket="Logo gönderim durumu" sutunlar={KART_SUTUNLARI} satirlar={durum.data.kartlar} satirAnahtari={(k) => k.id} bosMesaj="Logo'ya gidecek kart yok" />
         </Kart>
         <LogoKarsiliklari />

@@ -246,4 +246,28 @@ describe('LogoGonderimi (kart #232)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilanlar).toEqual([{ cesit: 'tur', tmiDegeri: 'ticari_mal', logoDegeri: '1' }]));
   });
+
+  it('karşılığı eksik kart varsa gönderim kartı sayıyı söyler ve karşılık formuna kaydırır (MLZ-7, G10)', async () => {
+    sunucuKur(TANIMCI);
+    ac();
+    await screen.findByRole('table', { name: 'Logo gönderim durumu' });
+    await screen.findByRole('table', { name: 'Tür karşılıkları' });
+    expect(screen.getByText('1 kartta tür ya da birim karşılığı eksik.')).toBeTruthy();
+    const kaydir = vi.fn();
+    const onceki = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = kaydir;
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Karşılıkları düzenle' }));
+      expect(kaydir).toHaveBeenCalledTimes(1);
+      expect(document.activeElement?.id).toBe('logo-karsiliklari');
+    } finally {
+      Element.prototype.scrollIntoView = onceki;
+    }
+  });
+
+  it('salt okuyan aynı kısa yolu "Karşılıkları gör" diye görür', async () => {
+    sunucuKur(OKUYUCU);
+    ac();
+    expect(await screen.findByRole('button', { name: 'Karşılıkları gör' })).toBeTruthy();
+  });
 });
