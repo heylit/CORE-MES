@@ -1,0 +1,61 @@
+{
+  "istasyonlar": "kesfet",
+  "profiller": [
+    {
+      "ad": "terminal", "ornekHesap": "ornek.operator1", "pay": 60, "dusunmeSn": 600,
+      "yoklamalar": [
+        { "yol": "/arkon/iletiler?kaynak={kaynak}&son=0", "aralikSn": 2 },
+        { "yol": "/arkon/belgeler/requests", "aralikSn": 20 },
+        { "yol": "/arkon/kayitlar/events?makine={istasyon.kod}&baslangic={simdi-604800}&bitis={simdi}", "aralikSn": 30 },
+        { "yol": "/arkon/kayitlar/counts?makine={istasyon.kod}&baslangic={simdi-28800}&bitis={simdi}", "aralikSn": 30 },
+        { "yol": "/bildirimler/sayac", "aralikSn": 30 },
+        { "yol": "/stok/teslim-kutusu/sayac", "aralikSn": 60 },
+        { "yol": "/stok/teslim-kutusu", "aralikSn": 60 },
+        { "yol": "/stok/teslim-kutusu/is-malzemeleri?istasyonId={istasyon.id}", "aralikSn": 60 },
+        { "yol": "/stok/teslim-kutusu/istasyon-sepetleri?istasyonId={istasyon.id}&uretimEmriId={istasyon.emirId}", "aralikSn": 60 },
+        { "yol": "/arkon/refakat-kartlari?istasyon={istasyon.kod}&emirler={istasyon.emirId}", "aralikSn": 60 },
+        { "yol": "/arkon/makine-ayrimlari?emirId={istasyon.emirId}", "aralikSn": 60 }
+      ],
+      "sayfalar": [{ "yol": "/oturum", "agirlik": 1 }],
+      "yazma": {
+        "ortalamaSn": 90,
+        "secenekler": [
+          {
+            "yol": "/arkon/kayitlar/counts/ekle", "agirlik": 7,
+            "govde": { "kaynak": "{kaynak}", "satirlar": [{ "cid": "{uuid}", "at": "{simdi}", "machine": "{istasyon.kod}", "wc": "YUK", "orderNo": "{istasyon.emirNo}", "kind": "good", "delta": 1 }] }
+          },
+          {
+            "yol": "/arkon/kayitlar/events/ekle", "agirlik": 3,
+            "govde": { "kaynak": "{kaynak}", "satirlar": [{ "cid": "{uuid}", "at": "{simdi}", "machine": "{istasyon.kod}", "wc": "YUK", "state": "idle", "reason": "yuk" }] }
+          }
+        ]
+      }
+    },
+    {
+      "ad": "ofis", "ornekHesap": "ornek.planlama", "pay": 30, "dusunmeSn": 15,
+      "yoklamalar": [{ "yol": "/bildirimler/sayac", "aralikSn": 30 }],
+      "sayfalar": [
+        { "yol": "/uretim-emirleri?kapsam=hepsi", "agirlik": 3 },
+        { "yol": "/uretim-emirleri/{istasyon.emirId}", "agirlik": 1 },
+        { "yol": "/adimli-emirler/{istasyon.emirId}", "agirlik": 1 },
+        { "yol": "/plan/planlama-calismasi", "agirlik": 1 },
+        { "yol": "/plan/senaryolar", "agirlik": 1 },
+        { "yol": "/plan/motor-uyarilari", "agirlik": 1 },
+        { "yol": "/plan", "agirlik": 1 },
+        { "yol": "/kisiler", "agirlik": 1 },
+        { "yol": "/stok/teslim-kutusu", "agirlik": 1 }
+      ]
+    },
+    {
+      "ad": "pano", "ornekHesap": "ornek.mudur", "pay": 10, "dusunmeSn": 600,
+      "yoklamalar": [
+        { "yol": "/uretim-emirleri?durum=basladi", "aralikSn": 15 },
+        { "yol": "/bildirimler/sayac", "aralikSn": 30 },
+        { "yol": "/atolye/fabrika", "aralikSn": 60 },
+        { "yol": "/arkon/ozet", "aralikSn": 90 },
+        { "yol": "/arkon/operator-ozeti?donem=gun", "aralikSn": 90 }
+      ],
+      "sayfalar": [{ "yol": "/oturum", "agirlik": 1 }]
+    }
+  ]
+}

@@ -1,24 +1,78 @@
 import { z } from 'zod';
+import { yerTutucuGecerliMi, yerTutuculari } from './sablon.ts';
+import type { Istasyon } from './sablon.ts';
 
 // Yük senaryosu: sanal kişi bir profil alır; profil ekranların kendiliğinden yokladığı uçları (aralıkla) ve kişinin açtığı
 // sayfaları (ağırlıkla, düşünme süresiyle) taşır. Varsayılan karışım bir varsayımdır; gerçek dağılım bilinince
 // TMIV2_YUK_SENARYO dosyasıyla değiştirilir.
 
-const YOL = z.string().regex(/^\/[A-Za-z0-9/_?=&.%-]*$/, 'Yol / ile başlar, yalnız adres karakterleri içerir.');
+// Yol yer tutucu taşıyabilir ({istasyon.id} gibi, sablon.ts); dolduktan sonra da yalnız adres karakterleridir.
+const YOL = z.string().regex(/^\/[A-Za-z0-9/_?=&.%{}-]*$/, 'Yol / ile başlar, yalnız adres karakterleri içerir.');
+
+const metinleri = (x: unknown): string[] => {
+  if (typeof x === 'string') return [x];
+  if (Array.isArray(x)) return x.flatMap(metinleri);
+  if (x !== null && typeof x === 'object') return Object.values(x).flatMap(metinleri);
+  return [];
+};
+
+const yazmaSemasi = z.object({
+  // Yazmalar arası ortalama süre; üstel dağılır (dusunmeSuresiMs).
+  ortalamaSn: z.number().positive(),
+  secenekler: z.array(z.object({ yol: YOL, govde: z.unknown(), agirlik: z.number().positive() })).min(1),
+});
 
 export const profilSemasi = z.object({
-  ad: z.string().min(1),
-  // Rolü bu örnek hesabın rolünden alınır (örnek veri, sunucu/moduller/kisiler/ornek-veri.ts).
-  ornekHesap: z.string().min(1),
+  // Hesap adına girer (yuk.<ad>.0001): küçük harf, rakam, tire.
+  ad: z.string().regex(/^[a-z0-9-]{1,30}$/, 'Profil adı küçük harf, rakam ve tireden oluşur (en çok 30).'),
+  // Rol iki yoldan biriyle verilir: örnek hesabın rolü (örnek veri, sunucu/moduller/kisiler/ornek-veri.ts) ya da rol adı.
+  ornekHesap: z.string().min(1).optional(),
+  rol: z.string().min(1).optional(),
   pay: z.number().positive(),
   yoklamalar: z.array(z.object({ yol: YOL, aralikSn: z.number().positive() })),
   sayfalar: z.array(z.object({ yol: YOL, agirlik: z.number().positive() })),
   dusunmeSn: z.number().positive(),
+  // Yalnız --yazma ile koşar; verilmezse profil yalnız okur.
+  yazma: yazmaSemasi.optional(),
+}).superRefine((p, ctx) => {
+  if ((p.ornekHesap === undefined) === (p.rol === undefined)) {
+    ctx.addIssue({ code: 'custom', message: `${p.ad}: ornekHesap ya da rol, ikisinden yalnız biri verilir.` });
+  }
+  for (const m of metinleri([p.yoklamalar, p.sayfalar, p.yazma])) {
+    for (const ad of yerTutuculari(m)) {
+      if (!yerTutucuGecerliMi(ad)) ctx.addIssue({ code: 'custom', message: `${p.ad}: bilinmeyen yer tutucu {${ad}}` });
+    }
+  }
 });
 
 export const senaryoSemasi = z.array(profilSemasi).min(1);
 
+const istasyonSemasi = z.record(z.string(), z.union([z.string(), z.number()]));
+
+// Senaryo dosyası ya düz profil listesidir ya da istasyon listesiyle birlikte gelir. "kesfet": istasyonlar hedef sunucudan,
+// başlamış emri olan istasyonlardan okunur (hazirla.ts istasyonlariKesfet).
+export const senaryoDosyasiSemasi = z.union([
+  senaryoSemasi,
+  z.object({ istasyonlar: z.union([z.literal('kesfet'), z.array(istasyonSemasi)]).optional(), profiller: senaryoSemasi }),
+]);
+
 export type Profil = z.output<typeof profilSemasi>;
+
+export interface Senaryo { profiller: readonly Profil[]; istasyonlar: 'kesfet' | readonly Istasyon[] }
+
+export function senaryoCoz(veri: unknown): Senaryo {
+  const s = senaryoDosyasiSemasi.parse(veri);
+  return Array.isArray(s) ? { profiller: s, istasyonlar: [] } : { profiller: s.profiller, istasyonlar: s.istasyonlar ?? [] };
+}
+
+// Karma senaryonun paylarını ezer; adı geçmeyen profil koşuya girmez, senaryoda olmayan ad koşuyu durdurur.
+export function karmaUygula(profiller: readonly Profil[], karma: ReadonlyMap<string, number> | null): Profil[] {
+  if (karma === null) return [...profiller];
+  const adlar = new Set(profiller.map((p) => p.ad));
+  const yok = [...karma.keys()].filter((ad) => !adlar.has(ad));
+  if (yok.length > 0) throw new Error(`Karmadaki profil senaryoda yok: ${yok.join(', ')} (senaryoda: ${[...adlar].join(', ')}).`);
+  return profiller.filter((p) => karma.has(p.ad)).map((p) => ({ ...p, pay: karma.get(p.ad) ?? p.pay }));
+}
 
 // Aralıklar ekranlardaki yoklama süreleridir: bildirim sayacı 30 sn (bildirim/gorunum.ts), atölye ve kalite 15 sn.
 const BILDIRIM = { yol: '/bildirimler/sayac', aralikSn: 30 };

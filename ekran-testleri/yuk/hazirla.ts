@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { HESAP_DOSYASI } from '../yollar.ts';
-import { VARSAYILAN_SENARYO, adresDenetle, ortamDenetle, profilDagit, senaryoSemasi } from './senaryo.ts';
-import type { Profil } from './senaryo.ts';
+import { ornekYoneticiMi } from './ayar.ts';
+import type { YukAyari } from './ayar.ts';
+import type { Istasyon } from './sablon.ts';
+import { VARSAYILAN_SENARYO, adresDenetle, karmaUygula, ortamDenetle, profilDagit, senaryoCoz } from './senaryo.ts';
+import type { Profil, Senaryo } from './senaryo.ts';
 
 // Parola ve oturumlar depo dışında, koşuya özel geçici klasörde durur.
 export const YUK_KLASORU = join(tmpdir(), 'tmiv2-yuk');
@@ -71,22 +74,36 @@ function yaz(ileti: string): void {
   process.stdout.write(`${ileti}\n`);
 }
 
-export function senaryoOku(): readonly Profil[] {
-  const dosya = process.env.TMIV2_YUK_SENARYO;
-  if (dosya === undefined || dosya.trim() === '') return VARSAYILAN_SENARYO;
-  return senaryoSemasi.parse(JSON.parse(readFileSync(dosya, 'utf8')));
+export function senaryoOku(ayar: Pick<YukAyari, 'senaryo' | 'karma'>): Senaryo {
+  const s = ayar.senaryo === null
+    ? { profiller: VARSAYILAN_SENARYO, istasyonlar: [] }
+    : senaryoCoz(JSON.parse(readFileSync(ayar.senaryo, 'utf8')));
+  const profiller = karmaUygula(s.profiller, ayar.karma);
+  if (profiller.length === 0) throw new Error('Senaryoda koşacak profil kalmadı.');
+  return { profiller, istasyonlar: s.istasyonlar };
+}
+
+// Örnek yöneticinin parolası ekran hazırlığından gelir; başka yöneticininki yalnız `.env`'deki TMIV2_YUK_YONETICI_PAROLA'dan.
+function yoneticiParolasi(ayar: Pick<YukAyari, 'yonetici'>): string {
+  if (!ornekYoneticiMi(ayar)) {
+    const parola = process.env.TMIV2_YUK_YONETICI_PAROLA;
+    if (parola === undefined || parola === '') throw new Error(`${ayar.yonetici} için parola yok: .env'e TMIV2_YUK_YONETICI_PAROLA yazın.`);
+    return parola;
+  }
+  if (!existsSync(HESAP_DOSYASI)) {
+    throw new Error('Örnek hesapların parolası yok: boş test veritabanında `npm run ekran:hazirla` ya da --yonetici <ad> ile TMIV2_YUK_YONETICI_PAROLA.');
+  }
+  return (JSON.parse(readFileSync(HESAP_DOSYASI, 'utf8')) as { parola: string }).parola;
 }
 
 // Yönetici oturumuyla döner. Ortam iki yerden denetlenir: bu sürecin ortam değişkeni ve hedef sunucunun kendi bildirdiği ortam.
-export async function hedefiDenetle(): Promise<{ kok: string; yonetici: Istemci }> {
+export async function hedefiDenetle(ayar: Pick<YukAyari, 'yonetici'>): Promise<{ kok: string; yonetici: Istemci }> {
   if (process.env.TMIV2_ORTAM === 'canli') throw new Error('TMIV2_ORTAM=canli: yük koşusu canlı ortamda açılmaz.');
   const adres = adresDenetle(process.env.TMIV2_YUK_ADRESI);
   if (!adres.tamam) throw new Error(adres.neden);
-  if (!existsSync(HESAP_DOSYASI)) throw new Error('Örnek hesapların parolası yok: önce boş test veritabanında `npm run ekran:hazirla`.');
-  const { parola } = JSON.parse(readFileSync(HESAP_DOSYASI, 'utf8')) as { parola: string };
   const yonetici = new Istemci(adres.kok);
-  const giris = await yonetici.gir('ornek.yonetici', parola);
-  if (giris.durum !== 200) throw new Error(`ornek.yonetici girişi başarısız (${neden(giris)}).`);
+  const giris = await yonetici.gir(ayar.yonetici, yoneticiParolasi(ayar));
+  if (giris.durum !== 200) throw new Error(`${ayar.yonetici} girişi başarısız (${neden(giris)}).`);
   const ayrinti = await yonetici.istek('GET', '/saglik/ayrinti');
   const ortam = ayrinti.durum === 200 ? (ayrinti.govde as { ortam?: unknown } | null)?.ortam : null;
   const red = ortamDenetle(process.env.TMIV2_ORTAM, typeof ortam === 'string' ? ortam : null);
@@ -106,6 +123,24 @@ const neden = (c: Cevap): string => {
 
 const sirali = (i: number): string => String(i).padStart(4, '0');
 
+// Hesap adı profile bağlıdır: karma değişince önceki hesaplar başka rolle kullanılmaz, eksik olan profil için açılır.
+export const yukHesabi = (profil: string, no: number): string => `yuk.${profil}.${sirali(no)}`;
+
+// Koşunun istediği karma, hazır hesaplardan profil sırasıyla seçilir; eksik varsa ne kadar eksik olduğu söylenir.
+export function hesaplariSec(hesaplar: YukHesaplari, dagilim: readonly string[]): Array<{ kullaniciAdi: string; profil: string }> {
+  const gereken = new Map<string, number>();
+  for (const p of dagilim) gereken.set(p, (gereken.get(p) ?? 0) + 1);
+  const secilen: Array<{ kullaniciAdi: string; profil: string }> = [];
+  const eksik: string[] = [];
+  for (const [profil, sayi] of gereken) {
+    const hazir = hesaplar.kisiler.filter((k) => k.profil === profil).slice(0, sayi);
+    if (hazir.length < sayi) eksik.push(`${profil} ${String(hazir.length)}/${String(sayi)}`);
+    secilen.push(...hazir);
+  }
+  if (eksik.length > 0) throw new Error(`Hazır yük kişisi eksik (${eksik.join(', ')}): aynı ayarla \`npm run yuk -- hazirla\`.`);
+  return secilen;
+}
+
 async function paralel<T>(isler: readonly T[], esZamanli: number, yap: (is: T) => Promise<void>): Promise<void> {
   let sira = 0;
   const isci = async (): Promise<void> => {
@@ -118,38 +153,77 @@ async function paralel<T>(isler: readonly T[], esZamanli: number, yap: (is: T) =
   await Promise.all(Array.from({ length: esZamanli }, isci));
 }
 
-// Sentetik kişiler kişi modülünün kendi uçlarıyla açılır (tabloya doğrudan yazılmaz); ad ve sicil yalnız "Yuk Kisi 0001" biçimindedir.
-export async function hazirla(kisiSayisi: number): Promise<void> {
-  const { yonetici } = await hedefiDenetle();
-  const profiller = senaryoOku();
+// Başlamış emri olan her istasyon bir kez: terminal yükü gerçek istasyon ve emirle koşsun. Veri hedef sunucunun kendisinden okunur.
+export async function istasyonlariKesfet(yonetici: Istemci): Promise<Istasyon[]> {
+  const [emirler, istasyonlar] = await Promise.all([yonetici.istek('GET', '/uretim-emirleri?durum=basladi'), yonetici.istek('GET', '/istasyonlar')]);
+  if (emirler.durum !== 200) throw new Error(`Başlamış emirler okunamadı (${neden(emirler)}).`);
+  if (istasyonlar.durum !== 200) throw new Error(`İstasyonlar okunamadı (${neden(istasyonlar)}).`);
+  const kodu = new Map((istasyonlar.govde as { istasyonlar: Array<{ id: number; kod: string }> }).istasyonlar.map((i) => [i.id, i.kod]));
+  const bulunan = new Map<number, Istasyon>();
+  for (const e of (emirler.govde as { emirler: Array<{ id: number; emirNo: string; istasyon: { id: number } }> }).emirler) {
+    const kod = kodu.get(e.istasyon.id);
+    if (kod !== undefined && !bulunan.has(e.istasyon.id)) bulunan.set(e.istasyon.id, { id: e.istasyon.id, kod, emirId: e.id, emirNo: e.emirNo });
+  }
+  if (bulunan.size === 0) throw new Error('Başlamış emri olan istasyon yok: senaryo istasyon istiyor.');
+  return [...bulunan.values()];
+}
+
+// Rol adı /roller'dan, örnek hesabın rolü /kisiler'den çözülür.
+async function rolleriCoz(yonetici: Istemci, profiller: readonly Profil[], kisiler: readonly KisiSatiri[]): Promise<Map<string, number>> {
+  const adla = new Map(kisiler.filter((k) => k.kullaniciAdi !== null).map((k) => [k.kullaniciAdi as string, k]));
+  let roller: Array<{ id: number; ad: string }> | null = null;
+  const rolNo = new Map<string, number>();
+  for (const p of profiller) {
+    if (p.rol !== undefined) {
+      if (roller === null) {
+        const c = await yonetici.istek('GET', '/roller');
+        if (c.durum !== 200) throw new Error(`Rol listesi okunamadı (${neden(c)}).`);
+        roller = (c.govde as { roller: Array<{ id: number; ad: string }> }).roller;
+      }
+      const rol = roller.find((r) => r.ad === p.rol)?.id;
+      if (rol === undefined) throw new Error(`${p.ad} profilinin rolü (${p.rol}) yok.`);
+      rolNo.set(p.ad, rol);
+      continue;
+    }
+    const rol = adla.get(p.ornekHesap ?? '')?.roller[0]?.id;
+    if (rol === undefined) throw new Error(`${p.ad} profilinin örnek hesabı (${String(p.ornekHesap)}) ya da rolü yok.`);
+    rolNo.set(p.ad, rol);
+  }
+  return rolNo;
+}
+
+// Sentetik kişiler kişi modülünün kendi uçlarıyla açılır (tabloya doğrudan yazılmaz); ad ve sicil yalnız "Yuk Kisi terminal 0001" biçimindedir.
+export async function hazirla(ayar: YukAyari): Promise<void> {
+  const { yonetici } = await hedefiDenetle(ayar);
+  const { profiller } = senaryoOku(ayar);
   const liste = await yonetici.istek('GET', '/kisiler');
   if (liste.durum !== 200) throw new Error(`Kişi listesi okunamadı (${neden(liste)}).`);
   const kisiler = (liste.govde as { kisiler: KisiSatiri[] }).kisiler;
   const adla = new Map(kisiler.filter((k) => k.kullaniciAdi !== null).map((k) => [k.kullaniciAdi as string, k]));
-  const rolNo = new Map<string, number>();
-  for (const p of profiller) {
-    const rol = adla.get(p.ornekHesap)?.roller[0]?.id;
-    if (rol === undefined) throw new Error(`${p.ad} profilinin örnek hesabı (${p.ornekHesap}) ya da rolü yok.`);
-    rolNo.set(p.ad, rol);
-  }
+  const rolNo = await rolleriCoz(yonetici, profiller, kisiler);
 
   const onceki = existsSync(YUK_HESAP_DOSYASI) ? (JSON.parse(readFileSync(YUK_HESAP_DOSYASI, 'utf8')) as YukHesaplari) : null;
   const parola = onceki?.parola ?? randomBytes(18).toString('base64url');
-  const dagilim = profilDagit(kisiSayisi, profiller);
-  const hedef = dagilim.map((profil, i) => ({ kullaniciAdi: `yuk.${sirali(i + 1)}`, profil, no: i + 1 }));
+  const bilinen = new Set(onceki?.kisiler.map((k) => k.kullaniciAdi) ?? []);
+  const sayac = new Map<string, number>();
+  const hedef = profilDagit(ayar.kisi, profiller).map((profil) => {
+    const no = (sayac.get(profil) ?? 0) + 1;
+    sayac.set(profil, no);
+    return { kullaniciAdi: yukHesabi(profil, no), profil, no };
+  });
   let acilan = 0;
   let parolasiYenilenen = 0;
   await paralel(hedef, 8, async (h) => {
     const mevcut = adla.get(h.kullaniciAdi);
     if (mevcut !== undefined) {
-      if (onceki !== null) return;
+      if (bilinen.has(h.kullaniciAdi)) return;
       // Parolası bilinmeyen önceki koşunun hesabı: yeni parola verilir.
       const c = await yonetici.istek('POST', `/kisiler/${String(mevcut.id)}/parola-degistir`, { surum: mevcut.surum, yeniParola: parola });
       if (c.durum !== 200) throw new Error(`${h.kullaniciAdi} parolası verilemedi (${neden(c)}).`);
       parolasiYenilenen += 1;
       return;
     }
-    const kisi = await yonetici.istek('POST', '/kisiler', { ad: `Yuk Kisi ${sirali(h.no)}`, sicilNo: `YUK-${sirali(h.no)}` });
+    const kisi = await yonetici.istek('POST', '/kisiler', { ad: `Yuk Kisi ${h.profil} ${sirali(h.no)}`, sicilNo: `YUK-${h.profil.toUpperCase()}-${sirali(h.no)}` });
     if (kisi.durum !== 200) throw new Error(`${h.kullaniciAdi} açılamadı (${neden(kisi)}).`);
     const k = kisi.govde as KisiSatiri;
     const hesap = await yonetici.istek('POST', `/kisiler/${String(k.id)}/hesap-ac`, {
@@ -159,7 +233,9 @@ export async function hazirla(kisiSayisi: number): Promise<void> {
     acilan += 1;
   });
   mkdirSync(YUK_KLASORU, { recursive: true, mode: 0o700 });
-  const kayit: YukHesaplari = { parola, kisiler: hedef.map(({ kullaniciAdi, profil }) => ({ kullaniciAdi, profil })) };
+  const hepsi = new Map((onceki?.kisiler ?? []).map((k) => [k.kullaniciAdi, k]));
+  for (const { kullaniciAdi, profil } of hedef) hepsi.set(kullaniciAdi, { kullaniciAdi, profil });
+  const kayit: YukHesaplari = { parola, kisiler: [...hepsi.values()].sort((x, y) => x.kullaniciAdi.localeCompare(y.kullaniciAdi)) };
   writeFileSync(YUK_HESAP_DOSYASI, JSON.stringify(kayit), { mode: 0o600 });
-  yaz(`Yük kişileri hazır: ${String(kisiSayisi)} (yeni ${String(acilan)}, parolası yenilenen ${String(parolasiYenilenen)}).`);
+  yaz(`Yük kişileri hazır: ${String(ayar.kisi)} (yeni ${String(acilan)}, parolası yenilenen ${String(parolasiYenilenen)}).`);
 }
