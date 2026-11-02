@@ -60,7 +60,7 @@ import {
   ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli,
   buradakiIstasyon, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani, istekliTeslimEngeli, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari, teslimAlimMiktariEngeli, serbestMiktarEngeli, istekKalani, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu,
   sonrakiIstasyon, type SepetAdimi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar, kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi, rezerveSiniri, fasonGonderimiEksikMi, koduDegisenler, cikisKaliteKarari, kaliteDegisimiEngeli, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, fasonDonusKonumuEngeli, KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, gozTamSayildiMi, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
   kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   AYRILMIS_KONUM_TURLERI,
@@ -1656,7 +1656,8 @@ export async function sayimYap(db: Db, kisiId: number, g: SayimKomutu): Promise<
       hareketIdler.push(await sorgular.hareketYaz(db, hareket({ tur: f.tur, malzemeId, miktar: f.miktar, kisiId, partiId, partiSecimi: partiId === null ? null : 'kisi', ...yon })));
       await bakiyeDegistir(db, { malzemeId, konumId, partiId, fark: f.tur === 'sayim_fazla' ? binde(f.miktar) : -binde(f.miktar) });
     }
-    await sorgular.konumSayildi(db, konumId);
+    const sayilanlar = g.satirlar.map((s) => ({ malzemeId: Number(s.malzemeId), partiId: s.partiId === null ? null : Number(s.partiId) }));
+    if (gozTamSayildiMi(await sorgular.konumBakiyeleri(db, konumId), sayilanlar)) await sorgular.konumSayildi(db, konumId);
   });
   return { hareketIdler, farkSayisi: hareketIdler.length, onayaGiden };
 }

@@ -219,6 +219,15 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect((await cevapla(tam, istek('GET', '/log/events'))).uyari).toBeUndefined();
   });
 
+  it('kayıt: imleçli okuma varış süzgecini geçirir, satırları okuma anı ve kesilmeyle döndürür (1871)', async () => {
+    const { istemci, cagrilar } = istemciKur({ 'GET /arkon/kayitlar/counts': { satirlar: [{ cid: 'a' }], okumaAni: 500, kesildi: true } });
+    const okunan = await cevapla(istemci, istek('GET', '/log/counts', 'machine=T-01&from=10&since=400&cursor=1'));
+    expect(cagrilar[0]?.yol).toBe('/arkon/kayitlar/counts?makine=T-01&baslangic=10&varisSonra=400');
+    expect(okunan.govde).toEqual({ rows: [{ cid: 'a' }], at: 500, cut: true });
+    const { istemci: eski } = istemciKur({ 'GET /arkon/kayitlar/counts': { satirlar: [] } });
+    expect((await cevapla(eski, istek('GET', '/log/counts', 'cursor=1'))).govde).toEqual({ rows: [], at: null, cut: false });
+  });
+
   it('TMI hatası Arkon hata biçimine çevrilir; sunucuya ulaşılamazsa hata geçer (Arkon kuyruğa alır)', async () => {
     const { istemci } = istemciKur({
       'GET /arkon/belgeler/kv': new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Arkon MES için rolünüz yok.' }),

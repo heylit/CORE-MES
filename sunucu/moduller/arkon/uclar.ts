@@ -154,8 +154,10 @@ export const uclar = [
     sorgu: kayitSorgusu,
     cevap: kayitlarCevabi,
     isle: async ({ db, kullanici, parametre, sorgu }) => {
+      // Okuma anı sorgudan önce alınır: sorgu sürerken varan kayıt bir sonraki artımlı okumada da gelir (ekran cid ile tekler).
+      const okumaAni = Date.now();
       const satirlar = await servis.kayitlar(db, kullanici, parametre.tur, sorgu);
-      return { satirlar, ...(satirlar.length >= (sorgu.sinir ?? servis.VARSAYILAN_KAYIT_SINIRI) ? { kesildi: true } : {}) };
+      return { satirlar, okumaAni, ...(satirlar.length >= (sorgu.sinir ?? servis.VARSAYILAN_KAYIT_SINIRI) ? { kesildi: true } : {}) };
     },
   }),
   uc({

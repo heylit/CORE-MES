@@ -11,7 +11,7 @@ import {
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
-  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, SAYIM_DISI_KONUMLAR, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, gozTamSayildiMi, SAYIM_DISI_KONUMLAR, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -939,5 +939,16 @@ describe('STK-9 a: sayım vadesi konumları', () => {
   test('yalnız fason ve yolda vadeye girmez; zemin, karantina, kabul ve raf gözü girer', () => {
     assert.deepEqual([...SAYIM_DISI_KONUMLAR].sort(), ['fason', 'yolda']);
     for (const t of ['raf_gozu', 'depo_zemini', 'karantina', 'kabul'] as const) assert.equal((SAYIM_DISI_KONUMLAR as readonly string[]).includes(t), false, t);
+  });
+});
+
+describe('STK-3 a: göz tamamı sayılınca sayıldı', () => {
+  test('boş ve kısmi sayım gözü kapatmaz; her dolu satır sayılınca kapatır; sıfır satır sayılmak zorunda değil', () => {
+    const b = [{ malzemeId: 1, partiId: 7, miktar: '5' }, { malzemeId: 2, partiId: null, miktar: '1.500' }, { malzemeId: 3, partiId: null, miktar: '0' }];
+    assert.equal(gozTamSayildiMi(b, []), false);
+    assert.equal(gozTamSayildiMi(b, [{ malzemeId: 1, partiId: 7 }]), false);
+    assert.equal(gozTamSayildiMi(b, [{ malzemeId: 1, partiId: null }, { malzemeId: 2, partiId: null }]), false, 'parti farklı satır sayılmış sayılmaz');
+    assert.equal(gozTamSayildiMi(b, [{ malzemeId: 1, partiId: 7 }, { malzemeId: 2, partiId: null }]), true);
+    assert.equal(gozTamSayildiMi([], []), true, 'boş göz');
   });
 });

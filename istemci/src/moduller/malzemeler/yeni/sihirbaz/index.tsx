@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { DurumKutusu, Dugme, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import * as K from '../kurallar/index.ts';
 import * as S from '../sabitler/index.ts';
@@ -64,14 +64,22 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   }, (t, adim) => { yarimYaz({ d: t, adim }); });
   const { taslak: d, adim, degistir, yenisiniKur, adimaGec } = durum;
 
+  // Sorgusuz adres yeni karttır: menüden ya da katalogdan "Yeni kart" yeniden istenince (adres aynı kalsa da) taslak
+  // kayıtlı bir kartın kimliğini taşıyorsa bırakılır; yoksa yeni malzeme o karta değişiklik talebi olarak gider.
+  const konum = useLocation().key;
+  const kimlik = useRef(d.id);
+  kimlik.current = d.id;
   const oncekiKart = useRef<string | null | undefined>(undefined);
+  const oncekiKonum = useRef(konum);
   useEffect(() => {
     const kart = arama.get('kart');
     const uygulanan = ACILIS_SORGUSU.filter((k) => arama.has(k));
+    const yeniIstek = konum !== oncekiKonum.current && kart === null && uygulanan.length === 0 && !!kimlik.current;
+    oncekiKonum.current = konum;
     if (oncekiKart.current === undefined) {
       if (acilisIletisi.current) bildir(acilisIletisi.current);
       acilisIletisi.current = null;
-    } else if (uygulanan.length > 0 || (kart !== null && kart !== oncekiKart.current)) {
+    } else if (uygulanan.length > 0 || (kart !== null && kart !== oncekiKart.current) || yeniIstek) {
       const a = acilisTaslagi(arama, kartlar, sablonlar, b, null);
       yenisiniKur(a.taslak, a.adim);
       secimYazHam({ ...SECIM_BOS, sablonAcik: arama.has('sablonYap') });
@@ -83,7 +91,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
       uygulanan.forEach((k) => { yeni.delete(k); });
       aramaYaz(yeni, { replace: true });
     }
-  }, [arama, aramaYaz, bildir, kartlar, sablonlar, b, yenisiniKur]);
+  }, [arama, konum, aramaYaz, bildir, kartlar, sablonlar, b, yenisiniKur]);
 
   const sayi = useMemo(() => adimlariKur(d, b).length, [d, b]);
   const etkinAdim = Math.min(adim, sayi - 1);
@@ -223,6 +231,7 @@ function acilisTaslagi(
   if (tur !== null) return baslangicTaslagi(b, tur);
   // Düzenlenecek kart listede yoksa (iptal edildi ya da kimlik yanlış) yarım taslak kullanılmaz; boş kart açılır.
   if (arama.get('kart') !== null) return { ...baslangicTaslagi(b, null), ileti: 'Kart katalogda bulunamadı; yeni kart açıldı.' };
-  if (yarim) return { taslak: kopyala(yarim.taslak), adim: yarim.adim, ileti: null };
+  // Kayıtlı kartın yarım düzenlemesi yalnız kendi adresinde (`kart`) sürer; sorgusuz adreste yalnız yeni kartın taslağı sürer.
+  if (yarim && !yarim.taslak.id) return { taslak: kopyala(yarim.taslak), adim: yarim.adim, ileti: null };
   return baslangicTaslagi(b, null);
 }

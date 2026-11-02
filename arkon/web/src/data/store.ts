@@ -9,6 +9,7 @@ import type { CagriEkiplerim } from './cagri-ekiplerim';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI, merge3 } from './cakisma';
 import { BLOB_BELLEK_SINIRI, blobBellegi } from './blob-bellek';
 import { logIletisiniDagit } from './log-tepki';
+import type { ImlecliOkuma } from './artimli-kayit';
 import { depoOkunur } from './depo-okuma';
 import { BUDANAN_DEPOLAR, budanacakAnahtarlar, yerelKayitBudanir } from './kayit-budama';
 import { sunucuyaGonderilir } from './kayit-gonderimi';
@@ -388,6 +389,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   };
 
   /* ── üretim kayıtları: durum değişimi, sayım, ölçüm (OEE, SPC, rapor) ── */
+  const logSorgusu = (f: LogQuery & { since?: number | null; cursor?: number }): string => Object.entries({ machine: f.machine, wc: f.wc, from: f.from, to: f.to, order: f.order, pkg: f.pkg, item: f.item, limit: f.limit, since: f.since, cursor: f.cursor }).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => k + '=' + encodeURIComponent(String(v))).join('&');
   const logSubs = new Set<(kind: string, row: any) => void>();
   const Log = {
     async add(kind: string, row: Record<string, unknown>): Promise<Record<string, any>> {
@@ -402,10 +404,19 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     },
     async query(kind: string, f: LogQuery = {}): Promise<any[]> {
       if (SRV.on && session) {
-        try { const qs = Object.entries({ machine: f.machine, wc: f.wc, from: f.from, to: f.to, order: f.order, pkg: f.pkg, item: f.item, limit: f.limit }).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => k + '=' + encodeURIComponent(String(v))).join('&'); return await api('GET', '/log/' + kind + (qs ? '?' + qs : '')); }
+        try { const qs = logSorgusu(f); return await api('GET', '/log/' + kind + (qs ? '?' + qs : '')); }
         catch (e: any) { if (!e.offline) throw e; }
       }
       return (await L.all('log_' + kind)).filter((r: Record<string, any>) => (!f.machine || r.machine === f.machine) && (!f.wc || r.wc === f.wc) && (!f.from || r.at >= f.from) && (!f.to || r.at < f.to) && (!f.order || r.orderNo === f.order) && (!f.pkg || r.pkgId === f.pkg) && (f.item == null || f.item === '' || r.itemId === +f.item)).sort((a: { at: number }, b: { at: number }) => a.at - b.at).slice(-(f.limit || 5000));
+    },
+    // Sunucunun okuma anıyla okur; `since` verilirse yalnız o andan sonra varan kayıtlar gelir (artimli-kayit.ts). Sunucu yoksa ya da
+    // ulaşılamıyorsa null: çağıran düz okumaya (yerel kayıtlar dahil) düşer.
+    async imlecli(kind: string, f: LogQuery, since: number | null): Promise<ImlecliOkuma | null> {
+      if (!(SRV.on && session)) return null;
+      try {
+        const r = await api('GET', '/log/' + kind + '?' + logSorgusu({ ...f, since, cursor: 1 }));
+        return r && Array.isArray(r.rows) && typeof r.at === 'number' ? { rows: r.rows, at: r.at, cut: r.cut === true } : null;
+      } catch (e: any) { if (!e.offline) throw e; return null; }
     },
     on(fn: (kind: string, row: any) => void) { logSubs.add(fn); return () => { logSubs.delete(fn); }; }
   };

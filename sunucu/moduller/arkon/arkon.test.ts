@@ -572,6 +572,20 @@ describe('arkon (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu("UPDATE arkon_kayit SET emir_no = 'X'"));
   });
 
+  test('artımlı okuma: cevap okuma anını taşır, varisSonra yalnız o andan sonra varan kaydı döndürür (1871)', async () => {
+    const satir = { cid: 'art1', at: Date.parse('2001-10-07T08:00:00Z'), machine: 'TZG-04', wc: 'TAL', orderNo: 'UE-1', kind: 'good', delta: 1 };
+    await istek(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar: [satir], kaynak: 'a1' });
+    const once = Date.now();
+    const ilk = (await istek<KayitlarCevabi>(operator, 'GET', '/arkon/kayitlar/counts?makine=TZG-04')).govde;
+    assert.ok(Number(ilk.okumaAni) >= once && Number(ilk.okumaAni) <= Date.now());
+    assert.ok(ilk.satirlar.some((s) => s['cid'] === 'art1'));
+    // Geç gelen kayıt (tabletin eski zamanıyla) da varışıyla bulunur.
+    await istek(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar: [{ ...satir, cid: 'art2', at: Date.now() - 3 * 3600e3 }], kaynak: 'a1' });
+    const artimli = (await istek<KayitlarCevabi>(operator, 'GET', `/arkon/kayitlar/counts?makine=TZG-04&varisSonra=${ilk.okumaAni}`)).govde;
+    assert.deepEqual(artimli.satirlar.map((s) => s['cid']), ['art2']);
+    assert.equal((await istek(operator, 'GET', '/arkon/kayitlar/counts?varisSonra=-1')).durum, 400);
+  });
+
   test('kayıt iletisi ($log) yazılan kayıtların istasyonlarını taşır; istasyonsuz kayıt varsa liste gönderilmez (1747)', async () => {
     const { son } = (await istek<IletilerCevabi>(yonetici, 'GET', '/arkon/iletiler?kaynak=log-izle')).govde;
     const satir = { at: Date.now(), wc: 'TAL', orderNo: 'UE-1', kind: 'good', delta: 1 };

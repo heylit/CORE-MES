@@ -84,7 +84,7 @@ function govdeyiOku(govde: unknown): unknown {
 }
 
 const KAYIT_SORGUSU: Record<string, string> = {
-  machine: 'makine', wc: 'isMerkezi', from: 'baslangic', to: 'bitis', order: 'emirNo', pkg: 'paketId', item: 'madde', limit: 'sinir',
+  machine: 'makine', wc: 'isMerkezi', from: 'baslangic', to: 'bitis', order: 'emirNo', pkg: 'paketId', item: 'madde', limit: 'sinir', since: 'varisSonra',
 };
 
 function kayitSorgusu(sorgu: URLSearchParams): string {
@@ -223,6 +223,8 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   }
   if (ilk === 'log' && ikinci !== undefined) {
     const liste = await istemci.get<KayitlarCevabi>(`/arkon/kayitlar/${yolParcasi(ikinci)}${kayitSorgusu(g.sorgu)}`);
+    // İmleçli okuma (artımlı kayıt okuması) satırlarla birlikte sunucunun okuma anını ve kesilmeyi ister; düz okuma dizi alır.
+    if (g.sorgu.get('cursor') === '1') return tamam({ rows: liste.satirlar, at: liste.okumaAni ?? null, cut: liste.kesildi === true });
     return liste.kesildi === true ? { ...tamam(liste.satirlar), uyari: listeKesildi(liste.satirlar.length) } : tamam(liste.satirlar);
   }
 

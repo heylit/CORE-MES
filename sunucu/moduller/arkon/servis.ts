@@ -2022,6 +2022,7 @@ export interface KayitIstegi {
   paketId?: string | undefined;
   madde?: number | undefined;
   sinir?: number | undefined;
+  varisSonra?: number | undefined;
 }
 
 export const VARSAYILAN_KAYIT_SINIRI = 5000;
@@ -2040,6 +2041,7 @@ export async function kayitlar(db: Db, kullanici: Kullanici, tur: ArkonKayitTuru
     paketId: paket ? f.paketId ?? null : null,
     madde: paket ? f.madde ?? null : null,
     sinir: f.sinir ?? VARSAYILAN_KAYIT_SINIRI,
+    varisSonra: f.varisSonra === undefined ? null : new Date(f.varisSonra),
     yasak: sinir?.yasak ?? KONUMSUZ,
     izinli: sinir?.izinli ?? null,
   });

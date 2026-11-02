@@ -176,14 +176,15 @@ export interface KayitSuzgeci {
   paketId: string | null;
   madde: number | null;
   sinir: number;
+  varisSonra: Date | null;
   // Kapsam dışı iş merkezlerinin kodları (boş: süzgeç yok). Satırın iş merkezi, istasyon (makine sütunu) ya da makine (mc) kodu burada ise satır dönmez.
   yasak: { merkez: readonly string[]; istasyon: readonly string[]; makine: readonly string[] };
   // Kısıtlı kişide: satır bu kodlardan en az birini taşımalı (null: kısıt yok).
   izinli: { merkez: readonly string[]; istasyon: readonly string[]; makine: readonly string[] } | null;
 }
 
-// Süzgeç verilmeyen alan koşul koymaz. Sıra eskiden yeniye; sınır en yenileri bırakır.
-export const KAYITLAR_SQL = `SELECT govde, zaman FROM (
+// Süzgeç verilmeyen alan koşul koymaz. Sıra eskiden yeniye; sınır en yenileri bırakır. Artımlı okuma ayrı metindir (varış süzgeci $17).
+const kayitlarSql = (artimli: boolean): string => `SELECT govde, zaman FROM (
        SELECT id, govde, zaman FROM arkon_kayit
         WHERE tur = $1
           AND ($2::text IS NULL OR makine = $2) AND ($3::text IS NULL OR is_merkezi = $3)
@@ -194,15 +195,16 @@ export const KAYITLAR_SQL = `SELECT govde, zaman FROM (
           AND NOT coalesce(govde->>'mc' = ANY($12::text[]), false)
           AND ($13::boolean IS NOT TRUE OR coalesce(is_merkezi = ANY($14::text[]), false) OR coalesce(makine = ANY($15::text[]), false)
                OR coalesce(govde->>'mc' = ANY($16::text[]), false))
+          ${artimli ? 'AND varis >= $17' : ''}
         ORDER BY zaman DESC, id DESC LIMIT $9
      ) son ORDER BY zaman, id`;
+export const KAYITLAR_SQL = kayitlarSql(false);
+export const KAYITLAR_ARTIMLI_SQL = kayitlarSql(true);
 
 export function kayitlar(db: Db, tur: ArkonKayitTuru, f: KayitSuzgeci): Promise<{ govde: Record<string, unknown>; zaman: Date }[]> {
-  return db.sorgu(
-    KAYITLAR_SQL,
-    [tur, f.makine, f.isMerkezi, f.baslangic, f.bitis, f.emirNo, f.paketId, f.madde, f.sinir, f.yasak.merkez, f.yasak.istasyon, f.yasak.makine,
-      f.izinli !== null, f.izinli?.merkez ?? [], f.izinli?.istasyon ?? [], f.izinli?.makine ?? []],
-  );
+  const parametreler = [tur, f.makine, f.isMerkezi, f.baslangic, f.bitis, f.emirNo, f.paketId, f.madde, f.sinir, f.yasak.merkez, f.yasak.istasyon,
+    f.yasak.makine, f.izinli !== null, f.izinli?.merkez ?? [], f.izinli?.istasyon ?? [], f.izinli?.makine ?? []];
+  return f.varisSonra === null ? db.sorgu(KAYITLAR_SQL, parametreler) : db.sorgu(KAYITLAR_ARTIMLI_SQL, [...parametreler, f.varisSonra]);
 }
 
 // Tek paketin konum alanları (gövdenin tamamı okunmaz): sonuç, numune ve malzeme kayıtlarının kapsamı bundan çözülür.
