@@ -555,6 +555,11 @@ export const isEmriSemasi = z.object({
   eksik: z.number().int().nullable().optional(),
   // Emirde üretim yerinin son değişimi (kim, ne zaman, hangi yere); hiç değişmediyse null. İsteğe bağlı: sunucu her zaman yazar.
   uretimYeriDegisimi: z.object({ yer: z.enum(URETIM_YERLERI), kisi: adliKayit, zaman: zamanSemasi }).nullable().optional(),
+  // İlk parça kararı beklenen sağlam sayım (327 a, 744 a); sağlama girmez, ayrı gösterilir. İsteğe bağlı: sunucu her zaman yazar.
+  kararBekliyor: z.number().int().nonnegative().optional(),
+  // Çok katmanlı emirde alt parçanın adımı (1476): dal adı ("K1"), alt parça ve kendi rotasındaki op no; kök adımında ya da tek
+  // katmanlı emirde null. İsteğe bağlı: sunucu her zaman yazar.
+  dal: z.object({ ad: z.string(), malzeme: kodluKayit, kaynakOpNo: z.number().int() }).nullable().optional(),
 });
 
 export const adimliEmirAyrintisi = adimliEmirOzeti.extend({

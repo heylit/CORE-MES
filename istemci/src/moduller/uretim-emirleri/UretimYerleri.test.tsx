@@ -111,3 +111,33 @@ describe('Emirde iç ve dış üretim', () => {
     expect(degisimEngeli({ ...FASONDA, fason: { gonderilen: 3, donenSaglam: 0, donenHurda: 0, hareketler: [] } })).toBe('Fasona gönderildi; değişmez.');
   });
 });
+
+describe('İzleme ayrıntısında adım durumu (1787c)', () => {
+  it('izlemede her adımın durumu, sağlamı ve karar bekleyeni görünür; alt parça adımı dal etiketi taşır', async () => {
+    sunucuKur(OKUYUCU, yollar([
+      adim(1010, { durum: 'tamam', saglamAdet: 8, dal: { ad: 'K1', malzeme: { id: 77, kod: 'DNM-ALT', ad: 'Deneme burç' }, kaynakOpNo: 10 } }),
+      adim(30, { durum: 'calisiyor', saglamAdet: null, kararBekliyor: 3, dal: null }),
+      adim(40, { kararBekliyor: 0, dal: null }),
+    ]));
+    ac(ekran, '/uretim-emirleri/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    expect(within(satirlar[0]!).getByText('K1')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('DNM-ALT · rotada OP 10')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('Bitti')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('8')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('Çalışıyor')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('yok · karar bekleyen 3')).toBeTruthy();
+    expect(within(satirlar[2]!).getByText('Bekliyor')).toBeTruthy();
+    expect(within(satirlar[2]!).queryByText(/karar bekleyen/)).toBeNull();
+  });
+
+  it('emrin evinde (Reçete ve Rota) tablo değişmez: durum ve sağlam sütunu, dal etiketi yok', async () => {
+    sunucuKur(YAZAR, yollar([adim(1010, { dal: { ad: 'K1', malzeme: { id: 77, kod: 'DNM-ALT', ad: 'Deneme burç' }, kaynakOpNo: 10 }, kararBekliyor: 2 })]));
+    ac(ev, '/ev/3');
+    const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+    expect(within(tablo).queryByText('Durum')).toBeNull();
+    expect(within(tablo).queryByText('Sağlam')).toBeNull();
+    expect(within(tablo).queryByText('K1')).toBeNull();
+  });
+});

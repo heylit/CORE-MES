@@ -445,6 +445,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     await say(3, 'gerekli');
     assert.deepEqual(await bekleyen(), [[ie1, 10, 3]], 'Op10 ilk parçası kararı bekler');
+    // 1787c: emir ayrıntısı adımın karar bekleyenini ayrı verir; sağlama katmaz.
+    const ayr = (await istek<{ emir: AdimliEmirAyrintisi }>('planlama_proje', 'GET', `/adimli-emirler/${id}`)).govde.emir.isEmirleri;
+    assert.deepEqual(ayr.map((i) => [i.opNo, i.kararBekliyor, i.dal]), [[10, 3, null], [20, 0, null]]);
     assert.equal((await karar(ie1)).adet, 3);
     await say(1, 'gerekli');
     assert.deepEqual(await bekleyen(), [[ie1, 10, 0]], 'onaylı adımda sayım sağlamdır');
