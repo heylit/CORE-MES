@@ -308,7 +308,7 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               {v.merkezler.filter((m) => m.aktif || kisitli.includes(m.id)).map((m) => (
                 <button key={m.id} type="button" className="tc-ist-secmeli" aria-pressed={kisitli.includes(m.id)} disabled={kendisi || y.mesgul || !kisit.isSuccess}
                   onClick={() => y.gonder({ yol: `/kisi-is-merkezleri/${k.id}/belirle`, govde: { isMerkeziIdleri: kisitli.includes(m.id) ? kisitli.filter((x) => x !== m.id) : [...kisitli, m.id] }, satir })}>
-                  <span className="tc-ist-mono">{m.kod}</span> {m.ad}
+                  {m.kod}
                 </button>
               ))}
               {kisit.isSuccess && kisitli.length === 0 && <small className="tc-ist-ipucu">Hiçbiri seçili değil: her iş merkezinde çalışır</small>}

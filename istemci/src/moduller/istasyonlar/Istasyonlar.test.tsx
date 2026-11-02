@@ -1093,12 +1093,12 @@ describe('personel bölümü (#1109, IS25)', () => {
     goster(<Istasyonlar />, '/istasyonlar/personel');
     const usta = await kart('Deneme Usta');
     const baskasi = within(usta).getByRole('group', { name: 'Deneme Usta iş merkezi kısıtı' });
-    await waitFor(() => { expect((within(baskasi).getByRole('button', { name: 'TORNA Torna Hattı' }) as HTMLButtonElement).disabled).toBe(false); });
-    fireEvent.click(within(baskasi).getByRole('button', { name: 'TORNA Torna Hattı' }));
+    await waitFor(() => { expect((within(baskasi).getByRole('button', { name: 'TORNA' }) as HTMLButtonElement).disabled).toBe(false); });
+    fireEvent.click(within(baskasi).getByRole('button', { name: 'TORNA' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toEqual([{ yontem: 'POST', yol: '/kisi-is-merkezleri/5/belirle', govde: { isMerkeziIdleri: [1] } }]); });
     const kendi = within(await kart('Deneme Yeni')).getByRole('group', { name: 'Deneme Yeni iş merkezi kısıtı' });
-    await waitFor(() => { expect(within(kendi).getByRole('button', { name: 'TORNA Torna Hattı' }).getAttribute('aria-pressed')).toBe('true'); });
-    expect((within(kendi).getByRole('button', { name: 'TORNA Torna Hattı' }) as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => { expect(within(kendi).getByRole('button', { name: 'TORNA' }).getAttribute('aria-pressed')).toBe('true'); });
+    expect((within(kendi).getByRole('button', { name: 'TORNA' }) as HTMLButtonElement).disabled).toBe(true);
     // Amir atama ve yetkinlik yazamaz: yalnız kısıt açılır.
     expect(within(usta).queryByRole('button', { name: 'Ata' })).toBeNull();
   });
@@ -1111,7 +1111,7 @@ describe('personel bölümü (#1109, IS25)', () => {
     await bos();
     // Pasif iş merkezi kısıt seçeneği olarak sunulmaz.
     const kisit = within(usta).getByRole('group', { name: 'Deneme Usta iş merkezi kısıtı' });
-    expect(within(kisit).queryByRole('button', { name: 'ESKI Eski Hat' })).toBeNull();
+    expect(within(kisit).queryByRole('button', { name: 'ESKI' })).toBeNull();
     await seciciSec('Deneme Usta için atanacak yer', /Makine M-02/, usta);
     fireEvent.change(within(usta).getByLabelText('Deneme Usta atama yüzdesi'), { target: { value: '30' } });
     fireEvent.click(within(usta).getByRole('button', { name: 'Ata' }));
@@ -1122,7 +1122,7 @@ describe('personel bölümü (#1109, IS25)', () => {
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
     expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/5/belirle', govde: { istasyonIdleri: [] } });
     await bos();
-    fireEvent.click(within(kisit).getByRole('button', { name: 'TORNA Torna Hattı' }));
+    fireEvent.click(within(kisit).getByRole('button', { name: 'TORNA' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(3); });
     expect(POSTLAR(cagrilar)[2]).toEqual({ yontem: 'POST', yol: '/kisi-is-merkezleri/5/belirle', govde: { isMerkeziIdleri: [1] } });
     await bos();
