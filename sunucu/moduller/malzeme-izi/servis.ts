@@ -33,7 +33,7 @@ export async function malzeme360(db: Db, id: number, islemler: readonly string[]
   if (kart === null || kart.tur === 'hizmet') throw bulunamadi('Malzeme kartı bulunamadı.');
   const paraGorunur = islemler.includes('finans.oku');
   const miktarlar = await stokMiktarlari(db, [id]);
-  const gruplar = await degerGrubuToplamlari(db);
+  const gruplar = await degerGrubuToplamlari(db, [id]);
   const gelisler = await malzemeGelisTarihleri(db, [id]);
   const partiler = await sonPartiler(db, id, PARTI_SINIRI);
   const para = paraGorunur ? await fiyatlar(db, id) : null;
@@ -41,7 +41,7 @@ export async function malzeme360(db: Db, id: number, islemler: readonly string[]
   const m = miktarlar.get(id);
   return {
     kart: { id: kart.id, kod: kart.kod, ad: kart.ad, tur: kart.tur, birim: kart.birim, onayDurumu: kart.onayDurumu },
-    stok: m === undefined ? null : { toplam: m.toplam, kullanilabilir: m.kullanilabilir, gruplar: grupDagilimi(gruplar.filter((g) => g.malzemeId === id)) },
+    stok: m === undefined ? null : { toplam: m.toplam, kullanilabilir: m.kullanilabilir, gruplar: grupDagilimi(gruplar) },
     gelecek: (gelisler.get(id) ?? []).map((x) => ({ siparisNo: x.siparisNo, tarih: x.tarih, miktar: x.miktar, birim: x.birim })),
     partiler: partiler.map((p) => ({ partiId: p.partiId, lotNo: p.lotNo, tedarikciPartiNo: p.tedarikciPartiNo, kayitZamani: p.kayitZamani, acikNcr: ncr.has(p.partiId) })),
     paraGorunur,

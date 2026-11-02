@@ -657,13 +657,15 @@ export const stokluMalzemeToplamlari = (db: Db): Promise<{ malzemeId: number; to
   db.sorgu('SELECT malzeme_id AS "malzemeId", sum(miktar)::text AS toplam FROM stok_bakiye GROUP BY malzeme_id ORDER BY malzeme_id');
 // Değer grubu (228 a), sırayla: hurda ve fason konumu; yolda ya da sevkiyat konumu; karantina konumu ya da kalitesi kullanılamaz;
 // raf, kabul, zemindeki statüsüz bakiye kullanılabilir; geri kalanı (istasyon, üretim çıkışı, ara alan, statülü yarı ürün) diğer.
-export const degerGrubuMalzemeToplamlari = (db: Db): Promise<{ malzemeId: number; grup: DegerGrubu; toplam: string }[]> =>
+// malzemeIdler verilirse yalnız o kartlar okunur (Malzeme 360 tek kart ister); verilmezse bütün kartlar.
+export const degerGrubuMalzemeToplamlari = (db: Db, malzemeIdler: readonly number[] | null = null): Promise<{ malzemeId: number; grup: DegerGrubu; toplam: string }[]> =>
   db.sorgu(`SELECT b.malzeme_id AS "malzemeId",
               CASE WHEN k.tur IN ('hurda', 'fason') THEN k.tur WHEN k.tur IN ('yolda', 'sevkiyat') THEN 'yolda'
                    WHEN k.tur = 'karantina' OR NOT b.${KULLANILABILIR_SQL} THEN 'kalite'
                    WHEN k.tur = ANY($1::text[]) AND b.statu_id IS NULL THEN 'kullanilabilir' ELSE 'diger' END AS grup,
               sum(b.miktar)::text AS toplam
-              FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id GROUP BY 1, 2 ORDER BY 1, 2`, [KULLANILABILIR_KONUM_TURLERI]);
+              FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE ($2::int[] IS NULL OR b.malzeme_id = ANY($2::int[]))
+              GROUP BY 1, 2 ORDER BY 1, 2`, [KULLANILABILIR_KONUM_TURLERI, malzemeIdler === null ? null : [...malzemeIdler]]);
 // Ay sonu (içinde bulunulan ay için bugün) malzeme toplamları, hurda konumu ayrı (1382 d: hurda talaş fiyatıyla): bugünkü bakiyeden
 // ay sonundan sonraki hareketlerin net etkisi düşülür. Hareket hedef konumuna ekler, kaynak konumundan düşer; hurdaya ya da hurdadan
 // taşıma iki ayrı satırı değiştirir. `son` ayın bittiği an (içinde bulunulan ayda null), `gun` ayın son günü (içinde bulunulan ayda

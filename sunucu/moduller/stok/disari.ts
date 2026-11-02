@@ -32,7 +32,8 @@ export async function stokMiktarlari(db: Db, malzemeIdler: number[]): Promise<Ma
 // zemin; statüsüz; serbest ya da şartlı, stokMiktarlari.kullanilabilir ile aynı), kalite (karantina, red, karar bekliyor), hurda, fason,
 // yolda (sevkiyat dahil) ve diger (üretimde, ara alan, statülü yarı ürün). Fiyatı çağıran uygular; yetki denetlemez.
 export type { DegerGrubu } from './kurallar.ts';
-export const degerGrubuToplamlari = (db: Db) => sorgular.degerGrubuMalzemeToplamlari(db);
+// malzemeIdler verilirse yalnız o kartların satırları döner (tek kartı soran ekran bütün stoğu okumasın).
+export const degerGrubuToplamlari = (db: Db, malzemeIdler: readonly number[] | null = null) => sorgular.degerGrubuMalzemeToplamlari(db, malzemeIdler);
 // Kalite Merkezi (229 a): lot numarası ya da üretim emriyle parti kimlikleri; ve partinin bütün bakiyesini hedef kaliteye geçiren karar
 // (yoldaki teslime ayrılan miktar hariç; değişen satırlar döner). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);

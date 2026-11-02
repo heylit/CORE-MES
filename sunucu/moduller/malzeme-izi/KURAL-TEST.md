@@ -9,3 +9,4 @@ Testler: `kurallar.test.ts` (saf), `malzeme-izi.test.ts` (gerçek PostgreSQL), `
 | MIZ-U1 Uç sayfa işlemiyle açılır; bakiyesiz kartta stok null, sıfır uydurulmaz | `MIZ-U1 ...` |
 | MIZ-U2 Olmayan ve hizmet kartı 404; arama hizmet listelemez | `MIZ-U2 ...` |
 | MIZ-U3 Fiyat yalnız finans.oku ile | `MIZ-U3 ...`; ekranda `fiyat yoksa "—", sıfır yazılmaz; finans yetkisi yoksa fiyat bölümü yerine not` |
+| MIZ-U4 Stok grupları yalnız istenen kartın bakiyesinden okunur (stok `degerGrubuToplamlari` malzeme süzgeci) | `MIZ-U4 ...` |
