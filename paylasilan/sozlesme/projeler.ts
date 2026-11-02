@@ -80,6 +80,8 @@ export const projeGuncelleGovdesi = z
     butceTutari: butceTutariSemasi.nullable().optional(),
     butceParaBirimi: paraBirimiSemasi.nullable().optional(),
     durum: projeDurumuSemasi,
+    // PRJ-17: tamamlanmış ya da iptal projeyi yeniden aktife alırken zorunlu; sunucu denetler ve statü geçmişine yazar.
+    yenidenAcmaGerekcesi: istege(500),
     ...beklenenSurum,
   })
   .refine(tarihSirasi, TARIH_SIRASI);

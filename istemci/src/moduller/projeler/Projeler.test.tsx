@@ -130,6 +130,35 @@ describe('Projeler', () => {
     expect(yazma?.govde).toMatchObject({ durum: 'tamamlandi', surum: 3, firmaId: 7, baslangic: '2026-10-01' });
   });
 
+  it('kapanmış proje gerekçe yazılmadan yeniden açılmaz; gerekçe gövdeyle gider', async () => {
+    const cagrilar = sunucuKur(YAZAR);
+    const kapali = { ...P1, durum: 'tamamlandi' as const };
+    vi.mocked(fetch).mockImplementation(async (adres, ayar) => {
+      const yol = String(adres).replace('/api', '');
+      const yontem = ayar?.method ?? 'GET';
+      cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
+      if (yol === '/oturum') return json(200, { kullanici: YAZAR } satisfies OturumCevabi);
+      if (yontem === 'GET' && yol === '/projeler/1') return json(200, kapali);
+      if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
+      if (yontem === 'GET' && yol.startsWith('/projeler/firma-secenekleri')) return json(200, FIRMALAR);
+      if (yontem === 'GET' && yol.startsWith('/adimli-emirler')) return json(200, EMIRLER);
+      if (yontem === 'POST') return json(200, P1);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    });
+    ac('/projeler/1');
+    fireEvent.click(await screen.findByRole('button', { name: /Düzenle/ }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).queryByLabelText(/Yeniden açma gerekçesi/)).toBeNull();
+    fireEvent.change(within(pencere).getByLabelText(/^Durum/), { target: { value: 'aktif' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect(await within(pencere).findByText('Kapanmış projeyi yeniden açmak için gerekçe yazın.')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+    fireEvent.change(within(pencere).getByLabelText(/Yeniden açma gerekçesi/), { target: { value: 'Müşteri ek parti istedi' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(true); });
+    expect(cagrilar.find((c) => c.yontem === 'POST')?.govde).toMatchObject({ durum: 'aktif', yenidenAcmaGerekcesi: 'Müşteri ek parti istedi' });
+  });
+
   it('proje ayrıntısında yalnız o projenin üretim emirleri listelenir; emir yetkisi olmayana bölüm yok', async () => {
     const cagrilar = sunucuKur(PLANLAMA);
     ac('/projeler/1');

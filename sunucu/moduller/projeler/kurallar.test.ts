@@ -4,7 +4,7 @@ import { projeKoduSemasi, statuYazGovdesi } from '#paylasilan/sozlesme/projeler.
 import {
   BITTI_GERCEK_BITIS, FIRMA_PASIF, FIRMA_SIPARISTEN, FIRMA_YOK, GERCEK_BASLANGIC_GEREKLI, GERCEK_SIRASI, PROJE_KAPALI, SERBEST_STATU_KAPALI,
   SIPARIS_ONAYSIZ, STATU_ETKIN_DEGIL, STATU_YOK, TABAN_AYNI, aramaKalibi, butce, firmaReddi, gorevDurumuDuzelt, oncekiDonguVarMi,
-  projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi,
+  projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi, YENIDEN_ACMA_GEREKCESI, yenidenAcmaMi, yenidenAcmaReddi,
 } from './kurallar.ts';
 
 describe('projeler kuralları (saf)', () => {
@@ -94,4 +94,15 @@ describe('projeler kuralları (saf)', () => {
     assert.equal(projeAcikReddi('tamamlandi'), PROJE_KAPALI);
     assert.equal(projeAcikReddi('iptal'), PROJE_KAPALI);
   });
+});
+
+test('PRJ-17 yeniden açma: yalnız kapanmıştan aktife geçişte gerekçe ister', () => {
+  assert.equal(yenidenAcmaReddi('iptal', 'aktif', null), YENIDEN_ACMA_GEREKCESI);
+  assert.equal(yenidenAcmaReddi('tamamlandi', 'aktif', null), YENIDEN_ACMA_GEREKCESI);
+  assert.equal(yenidenAcmaReddi('tamamlandi', 'aktif', 'Ek parti'), null);
+  assert.equal(yenidenAcmaReddi('aktif', 'aktif', null), null);
+  assert.equal(yenidenAcmaReddi('aktif', 'iptal', null), null);
+  assert.equal(yenidenAcmaReddi('iptal', 'tamamlandi', null), null);
+  assert.equal(yenidenAcmaMi('iptal', 'aktif'), true);
+  assert.equal(yenidenAcmaMi('aktif', 'aktif'), false);
 });

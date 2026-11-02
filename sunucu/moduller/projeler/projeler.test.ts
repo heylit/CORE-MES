@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { Proje, ProjeListesiCevabi, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type { Proje, ProjeListesiCevabi, ProjeYonetimiCevabi, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
 import type { SiparisAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -199,6 +199,26 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(eski.statusCode, 409, eski.body);
     assert.equal((await oku(yonetici, `/projeler/${p.id}`)).json<Proje>().ad, 'Birinci');
     assert.equal((await guncelle({ ...p, id: 999999, surum: 1 }, { ad: 'X' })).statusCode, 404);
+  });
+
+  test('PRJ-17 yeniden açma: kapanmış proje gerekçesiz aktife alınmaz; gerekçeli açılış statü geçmişine kişi ve notla yazılır', async () => {
+    const p = await projeAc({ kod: 'YAC.1', ad: 'Yeniden açılacak' });
+    const kapali = await guncelle(p, { durum: 'iptal' });
+    assert.equal(kapali.statusCode, 200, kapali.body);
+    for (const yenidenAcmaGerekcesi of [undefined, '   ']) {
+      const ret = await guncelle(kapali.json<Proje>(), { durum: 'aktif', yenidenAcmaGerekcesi });
+      assert.equal(ret.statusCode, 400, ret.body);
+      assert.equal(ret.json<{ alan: string }>().alan, 'yenidenAcmaGerekcesi');
+    }
+    assert.equal((await oku(yonetici, `/projeler/${p.id}`)).json<Proje>().durum, 'iptal', 'reddedilen açılış kaydı değiştirmez');
+    const acik = await guncelle(kapali.json<Proje>(), { durum: 'aktif', yenidenAcmaGerekcesi: 'Ek parti geldi' });
+    assert.equal(acik.statusCode, 200, acik.body);
+    const y = (await oku(yonetici, `/projeler/${p.id}/yonetim`)).json<ProjeYonetimiCevabi>();
+    assert.deepEqual([y.statu?.ad, y.statu?.serbest, y.statuGecmisi[0]?.not], ['Yeniden açıldı', true, 'Ek parti geldi']);
+    assert.ok(y.statuGecmisi[0]?.kisiAd, 'kişi sunucudan');
+    const sade = await guncelle(acik.json<Proje>(), { ad: 'Açık kalır', yenidenAcmaGerekcesi: 'yok sayılır' });
+    assert.equal(sade.statusCode, 200, sade.body);
+    assert.equal((await oku(yonetici, `/projeler/${p.id}/yonetim`)).json<ProjeYonetimiCevabi>().statuGecmisi.length, 1, 'açık projede satır düşmez');
   });
 
   test('PRJ-16 kısmi gövde: gönderilmeyen alan silinmez, istek reddedilir; null açıkça siler; bütçe gönderilmezse kalır', async () => {

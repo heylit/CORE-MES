@@ -18,7 +18,8 @@ import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.t
 import { siparisKilitliAyrinti, siparisListesi } from '../siparisler/disari.ts';
 import {
   FIRMA_YOK, GOREV_YOK, KILOMETRE_TASI_YOK, KOD_KULLANILIYOR, ONCEKI_DONGU, PROJE_YOK, STATU_YOK, aramaKalibi, butce, firmaReddi,
-  gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi,
+  YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
+  tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GorevSatiri, ProjeSatiri, StatuKaydiSatiri, StatuSatiri } from './sorgular.ts';
@@ -84,6 +85,8 @@ export async function projeDuzenle(db: Db, kisiId: number, id: number, g: ProjeG
   if (mevcut === null) throw bulunamadi(PROJE_YOK);
   const sabit = siparisFirmasiReddi(mevcut.siparis_id, mevcut.firma_id, g.firmaId);
   if (sabit !== null) throw dogrulama(sabit, 'firmaId');
+  const acma = yenidenAcmaReddi(mevcut.durum, g.durum, g.yenidenAcmaGerekcesi);
+  if (acma !== null) throw dogrulama(acma, 'yenidenAcmaGerekcesi');
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
   const alan = {
     ad: g.ad, firmaId: g.firmaId, baslangic: g.baslangic, bitis: g.bitis, aciklama: g.aciklama, durum: g.durum,
@@ -94,6 +97,10 @@ export async function projeDuzenle(db: Db, kisiId: number, id: number, g: ProjeG
     varMi: () => sorgular.projeVarMi(db, id),
     bulunamadiIletisi: PROJE_YOK,
   }));
+  // Serbest statü ayarından bağımsızdır: kayıt sistemin yazdığı izdir, kişi ve zaman sunucudan.
+  if (yenidenAcmaMi(mevcut.durum, g.durum)) {
+    await sorgular.statuKaydiEkle(db, id, { statuId: null, metin: YENIDEN_ACILDI, not: g.yenidenAcmaGerekcesi }, kisiId);
+  }
   return projeAyrintisi(db, id, maliyetGorur);
 }
 
