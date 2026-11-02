@@ -61,9 +61,10 @@ describe('istasyonda PIN\'siz kart girişi (gerçek PostgreSQL, saat elde)', () 
     assert.equal(k.statusCode, 200, k.body);
     return { id, ad, kart };
   }
-  const kartGiris = (kart: string, cihaz: string | null = istasyon, ip = '10.8.0.1') =>
+  const kartGiris = (kart: string, cihaz: string | null = istasyon, ip = '10.8.0.1', oturum = '') =>
     saatli.inject({
-      method: 'POST', url: YOL, payload: { kart }, remoteAddress: ip, ...(cihaz === null ? {} : { headers: { cookie: `${CIHAZ_CEREZI}=${cihaz}` } }),
+      method: 'POST', url: YOL, payload: { kart }, remoteAddress: ip,
+      ...(cihaz === null ? {} : { headers: { cookie: [`${CIHAZ_CEREZI}=${cihaz}`, oturum].filter(Boolean).join('; ') } }),
     });
 
   before(async () => {
@@ -145,5 +146,24 @@ describe('istasyonda PIN\'siz kart girişi (gerçek PostgreSQL, saat elde)', () 
       .json().kartlar.find((k: { kisiId: number }) => k.kisiId === kisi.id) as { id: number; surum: number };
     assert.equal((await yonetici(`/nizamiye/personel-kartlari/${kart.id}/kaldir`, { surum: kart.surum })).statusCode, 200);
     assert.equal((await kartGiris(kisi.kart, istasyon, '10.8.3.2')).statusCode, 401);
+  });
+
+  test('oturum açıkken başka kart kişiyi değiştirir: öncekinin oturumu kapanır (1898 a); tanınmayan kart açık oturumu kapatmaz', async () => {
+    const a = await kartliOperator();
+    const b = await kartliOperator();
+    const ilk = await kartGiris(a.kart, istasyon, '10.8.4.1');
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    const aCerezi = cerezAl(ilk);
+    const oturumu = async (cerez: string) =>
+      (await saatli.inject({ method: 'GET', url: '/api/oturum', headers: { cookie: `${CIHAZ_CEREZI}=${istasyon}; ${cerez}` } })).json().kullanici?.id ?? null;
+
+    assert.equal((await kartGiris('99999999', istasyon, '10.8.4.2', aCerezi)).statusCode, 401);
+    assert.equal(await oturumu(aCerezi), a.id);
+
+    const ikinci = await kartGiris(b.kart, istasyon, '10.8.4.3', aCerezi);
+    assert.equal(ikinci.statusCode, 200, ikinci.body);
+    assert.equal(ikinci.json().kullanici.id, b.id);
+    assert.equal(await oturumu(aCerezi), null);
+    assert.equal(await oturumu(cerezAl(ikinci)), b.id);
   });
 });
