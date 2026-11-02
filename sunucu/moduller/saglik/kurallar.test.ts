@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import { commitSec, diskDurumu, uyarilar } from './kurallar.ts';
+import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
+import {
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, metrikDakikasi, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, vtOzeti,
+} from './kurallar.ts';
+import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
 
 const GIT = 'a'.repeat(40);
@@ -77,4 +81,80 @@ test('uyarı (disk): yedek ya da veritabanı diski az; bilinmeyen disk uyarmaz',
     [{ tur: 'disk', ileti: 'Yedek diskinde 2,5 GB boş yer kaldı.' }]);
   assert.deepEqual(uyarilar({ ...temiz, veritabaniDiski: diskDurumu(1 * GB, 100 * GB) }),
     [{ tur: 'disk', ileti: 'Veritabanı diskinde 1,0 GB boş yer kaldı.' }]);
+});
+
+const sayac = (yol: string | null, sinif: UcSayaci['sinif'], sayi: number, kovalar: number[], mesgul = 0): UcSayaci => ({
+  yontem: 'GET', yol, sinif, sayi, toplamMs: sayi * 10, kovalar: [...kovalar, ...Array.from({ length: 12 - kovalar.length }, () => 0)], mesgul,
+});
+
+test('sayaç farkı: iki okuma arasını verir, değişmeyen ve yeni olmayan satırı atar, yeni uç baştan sayılır', () => {
+  const onceki = [sayac('/a', '2xx', 10, [10]), sayac('/b', '2xx', 5, [5])];
+  const simdiki = [sayac('/a', '2xx', 13, [12, 1]), sayac('/b', '2xx', 5, [5]), sayac('/c', '5xx', 2, [0, 0, 0, 2], 2)];
+  const fark = sayacFarki(onceki, simdiki);
+  assert.deepEqual(fark.map((f) => [f.yol, f.sinif, f.sayi, f.kovalar.slice(0, 4), f.mesgul]), [['/a', '2xx', 3, [2, 1, 0, 0], 0], ['/c', '5xx', 2, [0, 0, 0, 2], 2]]);
+});
+
+test('kova yüzdeliği: kovanın üst sınırı; örnek yoksa ve en üst kovadaysa null', () => {
+  assert.equal(kovaYuzdeligi([0, 0, 0], 95), null);
+  const kovalar = [90, 5, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+  assert.equal(kovaYuzdeligi(kovalar, 50), 25);
+  assert.equal(kovaYuzdeligi(kovalar, 95), 50);
+  assert.equal(kovaYuzdeligi(kovalar, 99), 100);
+  assert.equal(kovaYuzdeligi(kovalar, 100), 250);
+  assert.equal(kovaYuzdeligi([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 50), null);
+});
+
+test('uç özetleri: durum sınıfları uç başına birleşir, en çok istek alan önce, liste kısaltılır', () => {
+  const fark = [sayac('/a', '2xx', 3, [3]), sayac('/a', '4xx', 1, [1]), sayac('/b', '2xx', 9, [9]), sayac(null, '4xx', 2, [2])];
+  const o = ucOzetleri(fark, 60, 2);
+  assert.deepEqual(o.map((u) => [u.yol, u.sayi, u.istemciHatasi]), [['/b', 9, 0], ['/a', 4, 1]]);
+});
+
+test('işlemci yüzdeleri: fark yoksa ya da taban yoksa null; süreç yüzdesi çekirdek sayısına bölünür ve 100\'de kesilir', () => {
+  assert.equal(makineIslemciYuzdesi(null, { bosta: 1, toplam: 2 }), null);
+  assert.equal(makineIslemciYuzdesi({ bosta: 5, toplam: 10 }, { bosta: 5, toplam: 10 }), null);
+  assert.equal(makineIslemciYuzdesi({ bosta: 0, toplam: 0 }, { bosta: 600, toplam: 1000 }), 40);
+  assert.equal(surecIslemciYuzdesi(null, 60_000, 4), null);
+  assert.equal(surecIslemciYuzdesi(60_000_000, 60_000, 4), 25);
+  assert.equal(surecIslemciYuzdesi(10_000_000_000, 60_000, 4), 100);
+  assert.equal(surecIslemciYuzdesi(1, 0, 4), null);
+});
+
+test('metrik dakikası: havuz reddi tabana göre fark, havuz yoksa null; istek yoksa yüzdelikler null', () => {
+  const temel = {
+    an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
+    bellek: { rss: 1, heapUsed: 1 }, makineBos: 1, makineToplam: 2, olayDongusuP99Ms: null,
+  };
+  const d = metrikDakikasi({ ...temel, havuz: { boyut: 30, kullanimda: 1, bekleyen: 0, mesgulToplam: 7 }, oncekiMesgulToplam: 4 });
+  assert.deepEqual(d.havuz, { boyut: 30, kullanimda: 1, bekleyen: 0, mesgul: 3 });
+  assert.deepEqual(d.istek, { sayi: 0, saniyede: 0, p50Ms: null, p95Ms: null, p99Ms: null, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 });
+  assert.equal(metrikDakikasi({ ...temel, havuz: null, oncekiMesgulToplam: null }).havuz, null);
+});
+
+const vtOlcusu = (y: Partial<VtIstatistigi> = {}): VtIstatistigi => ({
+  boyutBayt: 1000, xidYasi: 50, islem: 100, geriAlma: 2, deadlock: 0, blokIsabet: 900, blokOkuma: 100, geciciBayt: 0,
+  baglanti: { toplam: 5, aktif: 1, bosta: 3, bosTx: 1, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: 1.234, ...y,
+});
+
+test('veritabanı özeti: sayaçlar farkla, anlık değerler son ölçüden; taban yoksa null', () => {
+  assert.equal(vtOzeti(null, vtOlcusu(), 60), null);
+  assert.equal(vtOzeti(vtOlcusu(), null, 60), null);
+  const o = vtOzeti(vtOlcusu(), vtOlcusu({ islem: 154, geriAlma: 8, deadlock: 1, blokIsabet: 1890, blokOkuma: 110, geciciBayt: 4096, boyutBayt: 2000 }), 60);
+  assert.deepEqual(o, {
+    boyutBayt: 2000, xidYasi: 50, saniyedeIslem: 1, geriAlma: 6, deadlock: 1, onbellekIsabetiYuzde: 99, geciciBayt: 4096,
+    baglanti: { toplam: 5, aktif: 1, bosta: 3, bosTx: 1, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: 1.2,
+  });
+});
+
+test('veritabanı özeti: istatistik sıfırlanırsa aralık sıfırdan sayılır; blok okunmadıysa isabet yüzdesi null, uydurulmaz', () => {
+  const o = vtOzeti(vtOlcusu({ islem: 5000, deadlock: 3 }), vtOlcusu({ islem: 30, geriAlma: 0, deadlock: 0, enUzunTxSn: null }), 60);
+  assert.equal(o?.saniyedeIslem, 0.5);
+  assert.equal(o?.deadlock, 0);
+  assert.equal(o?.geriAlma, 0);
+  assert.equal(o?.enUzunTxSn, null);
+  assert.equal(vtOzeti(vtOlcusu(), vtOlcusu(), 60)?.onbellekIsabetiYuzde, null);
+  assert.equal(metrikDakikasi({
+    an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
+    bellek: { rss: 1, heapUsed: 1 }, makineBos: 1, makineToplam: 2, olayDongusuP99Ms: null, havuz: null, oncekiMesgulToplam: null,
+  }).veritabani, null);
 });

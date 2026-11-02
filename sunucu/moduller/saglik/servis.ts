@@ -1,14 +1,22 @@
 import { execFile } from 'node:child_process';
 import { statfs } from 'node:fs/promises';
+import { cpus, freemem, totalmem } from 'node:os';
 import path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { promisify } from 'node:util';
-import type { Db } from '#cekirdek/db.ts';
+import { surecHavuzDurumu } from '#cekirdek/db.ts';
+import type { Db, HavuzDurumu } from '#cekirdek/db.ts';
+import { istekSayaclari } from '#cekirdek/istek-olcumu.ts';
+import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
-import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, otomatikAcilisCoz, uyarilar } from './kurallar.ts';
-import type { GorevSorgusu, YedekBilgisi } from './kurallar.ts';
+import type { Ayrinti, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
+import {
+  BEKCI_GOREV_ADI, METRIK_PENCERESI, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
+  otomatikAcilisCoz, sayacFarki, surecIslemciYuzdesi, uyarilar,
+} from './kurallar.ts';
+import type { GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import { sonGocAdi, veritabaniYokla, vtBaglantiSay } from './sorgular.ts';
+import type { VtIstatistigi } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 
 const calistir = promisify(execFile);
@@ -218,3 +226,91 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     }),
   };
 }
+
+export interface MetrikKaynagi {
+  simdi: () => number;
+  istekSayaclari: () => UcSayaci[];
+  havuz: () => HavuzDurumu | null;
+  surecIslemci: () => NodeJS.CpuUsage;
+  makineIslemci: () => IslemciZamani;
+  cekirdekSayisi: () => number;
+  bellek: () => { rss: number; heapUsed: number };
+  makineBellek: () => { bos: number; toplam: number };
+  olayDongusu: OlayDongusuOlcer;
+}
+
+function makineIslemciZamani(): IslemciZamani {
+  let bosta = 0;
+  let toplam = 0;
+  for (const c of cpus()) {
+    bosta += c.times.idle;
+    toplam += c.times.idle + c.times.user + c.times.nice + c.times.sys + c.times.irq;
+  }
+  return { bosta, toplam };
+}
+
+export const SUREC_METRIK_KAYNAGI: MetrikKaynagi = {
+  simdi: () => Date.now(),
+  istekSayaclari,
+  havuz: surecHavuzDurumu,
+  surecIslemci: () => process.cpuUsage(),
+  makineIslemci: makineIslemciZamani,
+  cekirdekSayisi: () => cpus().length,
+  bellek: () => process.memoryUsage(),
+  makineBellek: () => ({ bos: freemem(), toplam: totalmem() }),
+  olayDongusu: olayDongusuOlceri(),
+};
+
+interface Taban {
+  an: number; istek: UcSayaci[]; mesgulToplam: number | null; surecCpu: NodeJS.CpuUsage; makineCpu: IslemciZamani; vt: VtIstatistigi | null;
+}
+
+// Dakikalık tur: ilk tur yalnız taban alır, sonraki her tur bir önceki turdan bu yana olanı yazar. Son METRIK_PENCERESI dakika bellekte.
+export class MetrikToplayici {
+  private taban: Taban | null = null;
+  private readonly pencere: MetrikDakikasi[] = [];
+  private readonly k: MetrikKaynagi;
+
+  constructor(kaynak: MetrikKaynagi) {
+    this.k = kaynak;
+  }
+
+  // Veritabanı ölçüsünü iş okur (transaction içinde); okunamadıysa null ve o dakikanın veritabanı alanı boş kalır.
+  tur(vt: VtIstatistigi | null = null): MetrikDakikasi | null {
+    const an = this.k.simdi();
+    const istek = this.k.istekSayaclari();
+    const havuz = this.k.havuz();
+    const surecCpu = this.k.surecIslemci();
+    const makineCpu = this.k.makineIslemci();
+    const olayDongusuP99Ms = this.k.olayDongusu();
+    const onceki = this.taban;
+    this.taban = { an, istek, mesgulToplam: havuz?.mesgulToplam ?? null, surecCpu, makineCpu, vt };
+    if (onceki === null || an <= onceki.an) return null;
+    const gecenMs = an - onceki.an;
+    const cpuFarki = surecCpu.user + surecCpu.system - (onceki.surecCpu.user + onceki.surecCpu.system);
+    const makine = this.k.makineBellek();
+    const dakika = metrikDakikasi({
+      an: new Date(an),
+      aralikMs: gecenMs,
+      istekFarki: sayacFarki(onceki.istek, istek),
+      havuz,
+      oncekiMesgulToplam: onceki.mesgulToplam,
+      surecIslemciYuzde: surecIslemciYuzdesi(cpuFarki, gecenMs, this.k.cekirdekSayisi()),
+      makineIslemciYuzde: makineIslemciYuzdesi(onceki.makineCpu, makineCpu),
+      bellek: this.k.bellek(),
+      makineBos: makine.bos,
+      makineToplam: makine.toplam,
+      olayDongusuP99Ms,
+      vt: { onceki: onceki.vt, simdiki: vt },
+    });
+    this.pencere.push(dakika);
+    if (this.pencere.length > METRIK_PENCERESI) this.pencere.splice(0, this.pencere.length - METRIK_PENCERESI);
+    return dakika;
+  }
+
+  dakikalar(): MetrikDakikasi[] {
+    return [...this.pencere];
+  }
+}
+
+export const surecMetrikleri = new MetrikToplayici(SUREC_METRIK_KAYNAGI);

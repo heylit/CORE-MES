@@ -316,6 +316,15 @@ interface Sira {
   al(): Promise<void>;
   birak(): void;
   cevapGeldi(): void;
+  durum(): HavuzDurumu;
+}
+
+// Havuzun o anki doluluğu ve açılıştan beri doluluk yüzünden reddedilen istek sayısı (artan sayaç; fark ölçen çağıranın işi).
+export interface HavuzDurumu {
+  boyut: number;
+  kullanimda: number;
+  bekleyen: number;
+  mesgulToplam: number;
 }
 
 // Bağlantı sırası sürücüde değil burada tutulur: "sıra beklerken süre doldu" ile "sunucuya bağlanılamadı"
@@ -323,6 +332,7 @@ interface Sira {
 function siraKur(boyut: number, sureMs: number, mesgulBildir: (bekleyen: number) => void): Sira {
   let bos = boyut;
   let sonCevap = Number.NEGATIVE_INFINITY;
+  let mesgulToplam = 0;
   const bekleyenler: Array<() => void> = [];
   return {
     al(): Promise<void> {
@@ -340,6 +350,7 @@ function siraKur(boyut: number, sureMs: number, mesgulBildir: (bekleyen: number)
           // Yerler cevap vermeyen sunucuya takılı denemelerle de dolar; o doluluk değil, ulaşılamamadır.
           // Bekleme boyunca sunucu hiç konuşmadıysa hangisi olduğu bilinemez: beklenmeyen hata sayılır.
           if (sonCevap > baslangic) {
+            mesgulToplam += 1;
             mesgulBildir(bekleyen);
             reddet(mesgul());
           } else {
@@ -357,7 +368,23 @@ function siraKur(boyut: number, sureMs: number, mesgulBildir: (bekleyen: number)
     cevapGeldi(): void {
       sonCevap = performance.now();
     },
+    durum(): HavuzDurumu {
+      return { boyut, kullanimda: boyut - bos, bekleyen: bekleyenler.length, mesgulToplam };
+    },
   };
+}
+
+const havuzDurumlari = new WeakMap<object, () => HavuzDurumu>();
+let surecHavuzu: Veritabani | null = null;
+
+// Elle kurulmuş (test) veritabanında null: doluluk bilinmiyor.
+export function havuzDurumu(vt: object): HavuzDurumu | null {
+  return havuzDurumlari.get(vt)?.() ?? null;
+}
+
+// Sunucunun uygulama havuzu; sağlık ölçümü isteğin transaction'ından değil buradan okur. Süreçte açılmadıysa null.
+export function surecHavuzDurumu(): HavuzDurumu | null {
+  return surecHavuzu === null ? null : havuzDurumu(surecHavuzu);
 }
 
 export function veritabaniAc(ayar: { pg: PgAyari }, secenek: VeritabaniSecenegi = {}): Veritabani {
@@ -401,6 +428,7 @@ export async function uygulamaHavuzuAc(
     await vt.kapat();
     throw hata;
   }
+  surecHavuzu = vt;
   return vt;
 }
 
@@ -592,13 +620,16 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
     });
   }
 
-  return {
+  const vt: Veritabani = {
     ...dbKur((sql, parametreler) => baglantida((calistir) => calistir(sql, parametreler))),
     tx: (is) => txKos(false, is),
     okumaTx: (is) => txKos(true, is),
     oturumda: oturumKos,
     async kapat(): Promise<void> {
+      if (surecHavuzu === vt) surecHavuzu = null;
       await havuz.end();
     },
   };
+  havuzDurumlari.set(vt, () => sira.durum());
+  return vt;
 }

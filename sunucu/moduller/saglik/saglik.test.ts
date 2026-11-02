@@ -20,9 +20,10 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { BEKCI_GOREV_ADI, YOKLAMA_SURE_SINIRI_MS, otomatikAcilisCoz } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
-import type { AyrintiGirdisi } from './servis.ts';
+import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
+import { vtIstatistigiOku } from './sorgular.ts';
 import { saglikUclari } from './uclar.ts';
 import type { SaglikKaynagi } from './uclar.ts';
 
@@ -225,6 +226,64 @@ test('otomatik açılış: sonuç süre boyunca saklanır, süre dolunca ve hata
   assert.equal(sorulan.length, 2);
 });
 
+test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz reddi, işlemci ve belleği yazar; pencere sınırlıdır', () => {
+  let an = 1_000_000;
+  let istekler: ReturnType<MetrikKaynagi['istekSayaclari']> = [];
+  let mesgulToplam = 4;
+  let cpuUs = 0;
+  let makine = { bosta: 0, toplam: 0 };
+  const kaynak: MetrikKaynagi = {
+    simdi: () => an,
+    istekSayaclari: () => istekler,
+    havuz: () => ({ boyut: 30, kullanimda: 3, bekleyen: 1, mesgulToplam }),
+    surecIslemci: () => ({ user: cpuUs, system: 0 }),
+    makineIslemci: () => makine,
+    cekirdekSayisi: () => 4,
+    bellek: () => ({ rss: 100, heapUsed: 50 }),
+    makineBellek: () => ({ bos: 10, toplam: 20 }),
+    olayDongusu: () => 12.5,
+  };
+  const t = new MetrikToplayici(kaynak);
+  assert.equal(t.tur(), null);
+  assert.deepEqual(t.dakikalar(), []);
+  an += 60_000;
+  istekler = [{ yontem: 'GET', yol: '/a', sinif: '2xx', sayi: 120, toplamMs: 1200, kovalar: [120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], mesgul: 0 }];
+  mesgulToplam = 6;
+  cpuUs = 24_000_000;
+  makine = { bosta: 750, toplam: 1000 };
+  const d = t.tur();
+  assert.ok(d !== null);
+  assert.equal(d.aralikSn, 60);
+  assert.equal(d.istek.sayi, 120);
+  assert.equal(d.istek.saniyede, 2);
+  assert.equal(d.istek.p95Ms, 25);
+  assert.deepEqual(d.havuz, { boyut: 30, kullanimda: 3, bekleyen: 1, mesgul: 2 });
+  assert.equal(d.surecIslemciYuzde, 10);
+  assert.equal(d.makineIslemciYuzde, 25);
+  assert.equal(d.olayDongusuP99Ms, 12.5);
+  assert.equal(d.veritabani, null);
+  // Veritabanı ölçüsü iki turda da okunursa fark yazılır; bir tur okunamazsa o ve sonraki dakika boş kalır.
+  const vt = (islem: number) => ({
+    boyutBayt: 1, xidYasi: 1, islem, geriAlma: 0, deadlock: 0, blokIsabet: 0, blokOkuma: 0, geciciBayt: 0,
+    baglanti: { toplam: 1, aktif: 1, bosta: 0, bosTx: 0, kilitBekleyen: 0, gorunmeyen: 0 }, enUzunTxSn: null,
+  });
+  an += 60_000;
+  assert.equal(t.tur(vt(100))?.veritabani, null);
+  an += 60_000;
+  assert.equal(t.tur(vt(160))?.veritabani?.saniyedeIslem, 1);
+  an += 60_000;
+  assert.equal(t.tur(null)?.veritabani, null);
+  an += 60_000;
+  assert.equal(t.tur(vt(200))?.veritabani, null);
+  for (let i = 0; i < 70; i += 1) {
+    an += 60_000;
+    t.tur();
+  }
+  assert.equal(t.dakikalar().length, 60);
+  assert.equal(t.dakikalar().at(-1)?.istek.sayi, 0);
+  assert.equal(t.dakikalar().at(-1)?.istek.p95Ms, null);
+});
+
 describe('sağlık (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -324,6 +383,44 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     await new Promise((coz) => setTimeout(coz, 120));
     const ikinci = (await ayrintiIste(app, yoneticiCerezi)).json();
     assert.equal(typeof ikinci.olayDongusuGecikmeMs === 'number' && ikinci.olayDongusuGecikmeMs >= 0, true);
+  });
+
+  test('/saglik/metrikler: kimliksiz 401, işlemi olmayan 403, işlemi olan toplayıcının dakikalarını görür', async () => {
+    const dakika = {
+      an: '2026-11-01T10:00:00.000Z', aralikSn: 60,
+      istek: { sayi: 6, saniyede: 0.1, p50Ms: 25, p95Ms: 100, p99Ms: 100, istemciHatasi: 1, sunucuHatasi: 0, mesgul: 0 },
+      uclar: [], havuz: { boyut: 30, kullanimda: 2, bekleyen: 0, mesgul: 0 },
+      surecIslemciYuzde: 3.5, makineIslemciYuzde: null,
+      bellek: { rssBayt: 1, yiginBayt: 1, makineBosBayt: 1, makineToplamBayt: 2 }, olayDongusuP99Ms: null, veritabani: null,
+    };
+    const hedef = kaynakliUygulama({ ayarOku, gitOku: () => Promise.resolve(null), metrikler: { dakikalar: () => [dakika] } });
+    const iste = (cerez?: string) => hedef.inject({ method: 'GET', url: '/api/saglik/metrikler', ...(cerez === undefined ? {} : { headers: { cookie: cerez } }) });
+    assert.equal((await iste()).statusCode, 401);
+    assert.equal((await iste(operatorCerezi)).statusCode, 403);
+    const kabul = await iste(izleyenCerezi);
+    assert.equal(kabul.statusCode, 200);
+    assert.deepEqual(kabul.json(), { dakikalar: [dakika] });
+    sizdirmaYok(kabul.body);
+    // Süreç toplayıcısı: ilk turdan önce boş liste, uydurulmuş dakika yok.
+    const surec = await app.inject({ method: 'GET', url: '/api/saglik/metrikler', headers: { cookie: yoneticiCerezi } });
+    assert.equal(surec.statusCode, 200);
+    assert.ok(Array.isArray(surec.json().dakikalar));
+  });
+
+  test('veritabanı ölçüsü: uygulama kullanıcısı ek yetki olmadan okur; sayaçlar azalmaz, kendi bağlantısı en uzun işlem sayılmaz', async () => {
+    const ilk = await acik().vt.tx((db) => vtIstatistigiOku(db));
+    assert.ok(ilk !== null);
+    assert.equal(ilk.boyutBayt > 0, true);
+    assert.equal(Number.isInteger(ilk.xidYasi) && (ilk.xidYasi ?? -1) >= 0, true);
+    assert.equal(ilk.baglanti.toplam >= 1 && ilk.baglanti.aktif >= 1, true);
+    // Aynı rolün bağlantıları görünür; görünmeyen yalnız başka rolün oturumudur.
+    assert.equal(ilk.baglanti.gorunmeyen, 0);
+    for (let i = 0; i < 3; i += 1) await acik().vt.tx((db) => db.sorgu('SELECT 1'));
+    const ikinci = await acik().vt.tx((db) => vtIstatistigiOku(db));
+    assert.ok(ikinci !== null);
+    // Diğer bağlantıların sayacı PostgreSQL'e gecikmeli yazılır (en çok ~1 sn); kesin artış beklenmez, azalma da olmaz.
+    assert.equal(ikinci.islem >= ilk.islem, true);
+    assert.equal(ikinci.enUzunTxSn === null || ikinci.enUzunTxSn < 60, true);
   });
 
   test('son göç: göç klasöründeki son dosyanın adıyla eşleşir', async () => {
