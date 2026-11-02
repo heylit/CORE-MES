@@ -23,11 +23,11 @@ import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import {
-  FASON_VARSAYILAN_GUN, adimOnculleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri, rotadanAdimAdetleri,
+  FASON_VARSAYILAN_GUN, adimOnculleri, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri, rotadanAdimAdetleri,
 } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
-import type { PlanIsEmri } from '../uretim-emirleri/disari.ts';
+import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
@@ -243,12 +243,26 @@ async function planKaynaklari(db: Db, kaynaklar: readonly RotaKaynagi[], istasyo
   return sonuc;
 }
 const isEmriKaynagi = (k: RotaKaynagi | null): PlanIsEmri['kaynak'] => (k === null || k.tur === 'istasyon' ? null : { tur: k.tur, id: k.id });
+type DugumOnbellek = Map<number, Map<number, AdimDugumu>>;
+// Çok katmanlı emrin alt düğüm adımı (RR-7) kök rotada yoktur (emirde 1010, rotada 10): adımı, düğüm ürününün yürürlükteki rotasında
+// kaynak op numarasıyla bulunur. Bulunmazsa rota adımı yok sayılır (kaynaksız kalır).
+async function dugumAdimi(db: Db, i: PlanIsEmri, rotalar: RotaOnbellek, dugumler: DugumOnbellek) {
+  if (i.uretimEmriId <= 0) return undefined;
+  if (!dugumler.has(i.uretimEmriId)) dugumler.set(i.uretimEmriId, await emirDugumleri(db, i.uretimEmriId));
+  const d = dugumler.get(i.uretimEmriId)!.get(i.opNo);
+  if (d === undefined || d.malzemeNo === i.malzemeNo) return undefined;
+  const r = (await yururluktekiRevizyonIdleri(db, [d.malzemeNo])).get(d.malzemeNo);
+  if (r === undefined) return undefined;
+  if (!rotalar.has(r)) rotalar.set(r, await revizyonGetir(db, r));
+  return rotalar.get(r)?.adimlar.find((a) => a.opNo === d.kaynakOpNo);
+}
 async function isKur(
   db: Db, i: PlanIsEmri, rotalar: RotaOnbellek, urunler: Map<number, { kod: string; ad: string }>, istasyonMakineleri: IstasyonMakineleri,
+  dugumler: DugumOnbellek = new Map(),
 ): Promise<Is> {
   if (!rotalar.has(i.kaynakRotaRevizyonId)) rotalar.set(i.kaynakRotaRevizyonId, await revizyonGetir(db, i.kaynakRotaRevizyonId));
   if (!urunler.has(i.malzemeNo)) { const o = await malzemeOzeti(db, i.malzemeNo); urunler.set(i.malzemeNo, { kod: o?.kod ?? '?', ad: o?.ad ?? o?.kod ?? '?' }); }
-  const adim = rotalar.get(i.kaynakRotaRevizyonId)?.adimlar.find((a) => a.opNo === i.opNo);
+  const adim = rotalar.get(i.kaynakRotaRevizyonId)?.adimlar.find((a) => a.opNo === i.opNo) ?? await dugumAdimi(db, i, rotalar, dugumler);
   const ayar = i.ayarSuresiDk === null ? null : Number(i.ayarSuresiDk);
   const birim = i.birimSureDk === null ? null : Number(i.birimSureDk);
   // 1567 a: rotada fason olup emirde içeri alınan adım (fason iş emri plana gelmez) emrin istasyonunda yapılır; istasyonu yoksa kaynaksız kalır.
@@ -414,10 +428,11 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef): Pro
   const ozetler = await malzemeOzetleri(db, acik.map((i) => i.malzemeNo));
   for (const no of new Set(acik.map((i) => i.malzemeNo))) { const o = ozetler.get(no); urunler.set(no, { kod: o?.kod ?? '?', ad: o?.ad ?? o?.kod ?? '?' }); }
   const rotaEksik = new Map<string, string>();
+  const dugumler: DugumOnbellek = new Map();
   for (const i of acik) {
     const neden = eksikRevizyon.get(i.kaynakRotaRevizyonId);
     if (neden) rotaEksik.set(i.emirNo, neden);
-    else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri));
+    else isler.set(i.id, await isKur(db, adimDurumuyla(i), rotalar, urunler, istasyonMakineleri, dugumler));
   }
   const b: Baglam = {
     simdi, gun0, hedef, ayar, isler, rotaEksik, eskiRota: new Map(), kaynaklar, defter, kapaliGunler: [], siparisSatirlari, bedelAyari: await s.bedelAyariOku(db, hedef), finansmanOraniGun: await planFinansmanOrani(db, tesisGunu(simdi)), kurlar: await planKurlari(db, tesisGunu(simdi)), yetkinlik: await yetkinlikOku(db), yersiz: await s.yersizBolmeler(db, hedef), istasyonMakineleri,

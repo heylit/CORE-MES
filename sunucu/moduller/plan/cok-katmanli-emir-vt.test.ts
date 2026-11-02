@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { KuyrukYazCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { KuyrukYazCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 1476-D: çok katmanlı emrin alt düğümü plana kendi ürününün rotasıyla girer; tüketen kök adım alt düğümün son adımı bitmeden başlamaz.
@@ -62,5 +62,20 @@ describe('plan (gerçek PostgreSQL): çok katmanlı emir montaj bağıyla (1476-
     assert.ok(y1 && y3, JSON.stringify(p.yerlesmemis));
     const gun = (Date.parse(y3.baslangic) - Date.parse(y1.bitis)) / 86_400_000;
     assert.ok(gun >= 5 - 1e-6 && gun < 6, `düğümün üçüncü adımı ilkin bitişinden ${String(gun)} gün sonra`);
+  });
+  test('RR-7: istasyonlu alt düğüm adımı motor yerleşiminde istasyonun makinesini alır (kök rotada olmayan op numarası)', async () => {
+    const { istasyonA, makineA, denemeProjeId } = durum();
+    const a = (ek = {}) => o.yeniAdim({ kaynak: { tur: 'istasyon', id: istasyonA }, ayarSuresiDk: 10, birimSureDk: 1, ...ek });
+    const alt = await o.kartAc('yarimamul');
+    await o.yururlugeAlinmisRota(alt, [a(), a({ bilesenler: [] })]);
+    const urun = await o.mamulAc();
+    const rev = await o.yururlugeAlinmisRota(urun, [a({ bilesenler: [{ malzemeId: alt, miktar: 1, fireYuzde: 0 }] }), a({ bilesenler: [] })]);
+    const k = await tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rev}/emre-kopyala`, { projeId: denemeProjeId, adet: 3, teslim: null, cokKatmanli: true });
+    assert.equal(k.isEmriIdleri.length, 4);
+    const m = await tamam<MotorYerlesimiCevabi>(c.planlama, 'GET', '/plan/motor-yerlesimi');
+    for (const id of k.isEmriIdleri) {
+      assert.equal(m.yerlesmeyen.find((x) => x.isEmriId === id), undefined, `iş ${String(id)} yerleşmeli: ${JSON.stringify(m.yerlesmeyen)}`);
+      assert.deepEqual(m.yerlesimler.find((y) => y.isEmriId === id)?.kaynak, { tur: 'makine', id: makineA });
+    }
   });
 });
