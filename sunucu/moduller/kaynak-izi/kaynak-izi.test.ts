@@ -125,6 +125,7 @@ describe('kaynak-izi uçları (gerçek PostgreSQL)', () => {
     assert.deepEqual(i.gorunurBolumler, ['tesis', 'vardiya', 'izin', 'isler', 'oee', 'maliyet']);
     assert.ok(i.oee !== null);
     assert.deepEqual([i.oee.oee, i.maliyet], [null, null]);
+    assert.deepEqual([i.oee.veriEksik, i.oee.vardiyaDisi?.saglam ?? 0], [false, 0], 'KIZ-4: oee modülünün veri eksik ve vardiya dışı alanları taşınır');
     const k = kisi360Cevabi.parse((await oku('yonetici', `/kaynak-izi/kisiler/${String(kisiId)}`)).govde);
     assert.deepEqual([k.vardiya, k.izin, k.isler, k.maliyet], [null, { bugunIzinli: false }, [], null]);
   });

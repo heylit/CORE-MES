@@ -20,7 +20,7 @@ const IST: Istasyon360Cevabi = {
     atananlar: [{ kisiId: 7, ad: 'Deneme Usta', yuzde: '60.00' }],
     yetkinler: [],
   },
-  oee: { baslangic: '2026-10-24', bitis: '2026-10-30', oee: 0.625, kullanilabilirlik: null, performans: null, kalite: null },
+  oee: { baslangic: '2026-10-24', bitis: '2026-10-30', oee: 0.625, kullanilabilirlik: null, performans: null, kalite: null, veriEksik: false, vardiyaDisi: null },
   maliyet: null,
   gorunurBolumler: ['tesis', 'oee', 'maliyet'],
 };

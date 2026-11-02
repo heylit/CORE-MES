@@ -117,6 +117,10 @@ const durumRozeti = (d: { durum: string; aciklama: string | null } | null) => {
 
 const GIZLI = 'Bu bölüm yetkinizle görünmüyor.';
 
+const saatMetni = (dk: number) => `${(dk / 60).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sa`;
+// oee ekranındaki rozetle aynı anlam: sayım çalışma kaydıyla açıklanamıyor, oran hesaplanmaz.
+const veriEksikRozeti = <span title="Sayım çalışma kaydıyla açıklanamıyor ya da çalışma planlı süreden uzun"><Rozet ton="uyari">Veri eksik</Rozet></span>;
+
 export function Istasyon360() {
   const { gecerli, v } = useKaynak<Istasyon360Cevabi>('istasyon');
   return <Durum q={v} gecerli={gecerli} cocuk={(d) => (
@@ -145,12 +149,19 @@ export function Istasyon360() {
         </Kart>
         <Kart baslik="OEE (son 7 gün)" simge="gauge">
           {d.oee === null ? <p className="tc-kiz-not">{GIZLI}</p> : (
-            <dl className="tc-kiz-olcu">
-              <div><dt>OEE</dt><dd>{oranMetni(d.oee.oee)}</dd></div>
-              <div><dt>Kullanılabilirlik</dt><dd>{oranMetni(d.oee.kullanilabilirlik)}</dd></div>
-              <div><dt>Performans</dt><dd>{oranMetni(d.oee.performans)}</dd></div>
-              <div><dt>Kalite</dt><dd>{oranMetni(d.oee.kalite)}</dd></div>
-            </dl>
+            <>
+              <dl className="tc-kiz-olcu">
+                <div><dt>OEE</dt><dd>{d.oee.veriEksik ? veriEksikRozeti : oranMetni(d.oee.oee)}</dd></div>
+                <div><dt>Kullanılabilirlik</dt><dd>{oranMetni(d.oee.kullanilabilirlik)}</dd></div>
+                <div><dt>Performans</dt><dd>{d.oee.veriEksik ? veriEksikRozeti : oranMetni(d.oee.performans)}</dd></div>
+                <div><dt>Kalite</dt><dd>{oranMetni(d.oee.kalite)}</dd></div>
+              </dl>
+              {d.oee.vardiyaDisi !== null && (d.oee.vardiyaDisi.calismaDk > 0 || d.oee.vardiyaDisi.saglam > 0) && (
+                <p className="tc-kiz-not">
+                  Vardiya dışı: {d.oee.vardiyaDisi.saglam.toLocaleString('tr-TR')} sağlam, {saatMetni(d.oee.vardiyaDisi.calismaDk)} çalışma; OEE'ye girmez.
+                </p>
+              )}
+            </>
           )}
         </Kart>
         <Kart baslik="Saat maliyeti" simge="lira">

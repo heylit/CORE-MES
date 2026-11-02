@@ -34,8 +34,13 @@ export type Bolum = keyof typeof BOLUM_ISLEMLERI;
 const kaynakOzeti = z.object({ tur: z.enum(KAYNAK_TURLERI), id: KIMLIK, kod: z.string().nullable(), ad: z.string(), aktif: z.boolean() });
 const kisiPayi = z.object({ kisiId: KIMLIK, ad: z.string(), yuzde: z.string() });
 const makineDurumu = z.object({ durum: z.enum(MAKINE_DURUMLARI), aciklama: z.string().nullable(), degisme: zamanSemasi });
-// Son yedi günün OEE'si (oran 0-1); veri yoksa alanlar null.
-const oeeOzeti = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi, oee: z.number().nullable(), kullanilabilirlik: z.number().nullable(), performans: z.number().nullable(), kalite: z.number().nullable() });
+// Son yedi günün OEE'si (oran 0-1); veri yoksa alanlar null. veriEksik ve vardiya dışı üretim oee modülünün kuralıdır (OE-10, OE-16):
+// vardiya dışında yapılan iş OEE'ye girmez; gösterilmezse üretim varken %0 "hiç üretim yok" gibi okunur.
+const oeeOzeti = z.object({
+  baslangic: tarihSemasi, bitis: tarihSemasi, oee: z.number().nullable(), kullanilabilirlik: z.number().nullable(), performans: z.number().nullable(), kalite: z.number().nullable(),
+  veriEksik: z.boolean(),
+  vardiyaDisi: z.object({ calismaDk: z.number(), saglam: z.number().int() }).nullable(),
+});
 const saatMaliyeti = z.object({ saatMaliyeti: z.string(), paraBirimi: z.string() });
 
 export const istasyon360Cevabi = z.object({

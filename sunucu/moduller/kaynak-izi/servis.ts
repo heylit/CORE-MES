@@ -48,7 +48,11 @@ export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevab
 async function oeeOzeti(db: Db, k: Kullanici, istasyonId: number) {
   const pencere = sonYediGun(tesisGunu(new Date()));
   const s = (await istasyonOeeleri(db, k, pencere)).find((x) => x.id === istasyonId);
-  return { ...pencere, oee: s?.oee ?? null, kullanilabilirlik: s?.kullanilabilirlik ?? null, performans: s?.performans ?? null, kalite: s?.kalite ?? null };
+  return {
+    ...pencere, oee: s?.oee ?? null, kullanilabilirlik: s?.kullanilabilirlik ?? null, performans: s?.performans ?? null, kalite: s?.kalite ?? null,
+    veriEksik: s?.veriEksik ?? false,
+    vardiyaDisi: s ? { calismaDk: s.vardiyaDisi.calismaDk, saglam: s.vardiyaDisi.saglam } : null,
+  };
 }
 
 async function maliyet(db: Db, tur: 'istasyon' | 'kisi', id: number) {
