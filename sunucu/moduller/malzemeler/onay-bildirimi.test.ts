@@ -104,4 +104,22 @@ describe('Malzeme kartı onay bildirimleri (gerçek PostgreSQL, gerçek giriş)'
     await kaydet(kalite, k, 'aktif');
     assert.deepEqual(await bildirimler(depo.id, 'malzemeler.kart-reddedildi', k), []);
   });
+
+  test('karar verilince "onay bekliyor" bütün onaycılarda okundu olur; yeniden gönderilen kart yeni bildirim açar', async () => {
+    const depo = await girisYap('b-depo-4', 'depo');
+    const kalite = await girisYap('b-kalite-4', 'kalite');
+    const mudur = await girisYap('b-mudur-4', 'mudur');
+    const k: Kart = { kimlik: `bil${++sayac}`, surum: null, stokKodu: null };
+    const acik = (kisiId: number) => vt().sorgu<{ id: number }>(
+      "SELECT id FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = 'malzemeler.kart-onay-bekliyor' AND tekil_anahtar LIKE '%' || $2 AND okundu IS NULL", [kisiId, k.kimlik]);
+    await kaydet(depo, k, 'onayda');
+    assert.equal((await acik(kalite.id)).length, 1);
+    assert.equal((await acik(mudur.id)).length, 1);
+    await kaydet(kalite, k, 'taslak');
+    assert.deepEqual([(await acik(kalite.id)).length, (await acik(mudur.id)).length], [0, 0]);
+    await kaydet(depo, k, 'onayda');
+    assert.equal((await acik(mudur.id)).length, 1);
+    await kaydet(mudur, k, 'aktif');
+    assert.deepEqual([(await acik(kalite.id)).length, (await acik(mudur.id)).length], [0, 0]);
+  });
 });

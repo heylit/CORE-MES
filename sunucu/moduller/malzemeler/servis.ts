@@ -19,7 +19,7 @@ import type {
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { z } from 'zod';
-import { bildirimGonder } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
@@ -560,13 +560,15 @@ export async function katalogKartiKaydet(
   return { id: kimlik, stok_kodu: r.stokKodu, surum: r.surum };
 }
 
-// MLZ-5 a: onaya gönderilen kart onaycılara, reddedilen kart gönderene bildirilir; yazımla aynı transaction'da (ADR 0006).
+// MLZ-5 a: onaya gönderilen kart onaycılara, reddedilen kart gönderene bildirilir; onaydan çıkan kartın bekleyen bildirimi kapanır; yazımla aynı transaction'da (ADR 0006).
 // Yol türün yolunda kalır: kartın derin bağı (`?kart=`) tür yolu denetimine uymaz. Kaynak kimlik kartın kimliğidir; okunmamış bildirim yinelenmez.
 async function kartOnayiBildir(db: Db, g: {
   kimlik: string; stokKodu: string; ad: string | null; gonderildi: boolean; onceki: string | null; yeni: string;
   geriCekildi: boolean; gonderenKisiId: number | null; kisiId: number;
 }): Promise<void> {
   const metin = g.ad ? `${g.stokKodu} · ${g.ad}` : g.stokKodu;
+  // Onaydan çıkan kart (onay, ret, geri çekme) artık onay beklemez: açık bildirimi bütün onaycılarda kapanır.
+  if (g.onceki === 'onayda' && g.yeni !== 'onayda') await bildirimKapat(db, { tur: 'malzemeler.kart-onay-bekliyor', kaynakKimlik: g.kimlik });
   if (g.gonderildi) {
     await bildirimGonder(db, {
       tur: 'malzemeler.kart-onay-bekliyor', baslik: `Onay bekleyen malzeme kartı: ${g.stokKodu}`, metin, yol: '/malzemeler', kaynakKimlik: g.kimlik, haric: g.kisiId,
