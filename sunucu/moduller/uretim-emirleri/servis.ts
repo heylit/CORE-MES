@@ -10,7 +10,7 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
-  aktifIstasyonlar, calisirMakineler, ekipler, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
+  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
@@ -510,14 +510,19 @@ export async function makineAyrimlari(db: Db, emirId: number, makineIdleri: read
 }
 
 // Kilidin yeri: seçilen ya da atanmış makineler; makinesiz işte istasyonun makinesiz yeri (eski istasyon kilidi). Aynı işe
-// birden çok kişinin girmesi kilit değil katılımdır.
+// birden çok kişinin girmesi kilit değil katılımdır. 1891: kapasite kaynağı insan olan istasyon yetkin kişilerin havuzudur; orada makinesiz
+// iş yer tutmaz, aynı anda birden çok el işi açık olabilir (1891 A b, teyit-2 a). Kişiye sınır yoktur.
 interface Yer {
   istasyonId: number;
   makineler: readonly number[];
 }
 
+const havuzYeriMi = async (db: Db, yer: Yer): Promise<boolean> =>
+  yer.makineler.length === 0 && (await kapasiteKaynaklari(db, [yer.istasyonId])).get(yer.istasyonId) === 'insan';
+
 // Yer doluysa 409; ayrıntı kimin hangi işi başlattığını ve devralmanın kapatacağı kullanımı söyler. Aynı emrin öteki adımı da yeri doldurur.
 async function yeriDenetle(db: Db, emirId: number, yer: Yer, isEmriId: number | null = null): Promise<void> {
+  if (await havuzYeriMi(db, yer)) return;
   const [acik] = await sorgular.acikKullanimlar(db, yer.istasyonId, yer.makineler);
   const ihlal = makineDoluIhlali(acik?.emirId ?? null, emirId, yer.makineler.length > 0, acik?.isEmriId ?? null, isEmriId);
   if (ihlal === null || acik === undefined) return;
@@ -535,7 +540,7 @@ async function yeriDenetle(db: Db, emirId: number, yer: Yer, isEmriId: number | 
 async function yeriTut(db: Db, emirId: number, isEmriId: number | null, yer: Yer, kisiId: number, an: string): Promise<void> {
   try {
     for (const m of yer.makineler) await sorgular.kullanimAc(db, emirId, isEmriId, yer.istasyonId, m, kisiId, an);
-    if (yer.makineler.length === 0) await sorgular.kullanimAc(db, emirId, isEmriId, yer.istasyonId, null, kisiId, an);
+    if (yer.makineler.length === 0) await sorgular.kullanimAc(db, emirId, isEmriId, yer.istasyonId, null, kisiId, an, await havuzYeriMi(db, yer));
   } catch (hata) {
     // Yarışı kaybeden: öteki iş denetimden sonra, ama bizden önce yere yazıldı.
     const kisit = kisitIhlali(hata)?.iz.kisit;

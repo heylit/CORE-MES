@@ -503,6 +503,43 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     assert.equal((await komut(ilk.id, 'devam')).govde.mesaj, ISTASYON_DOLU);
   });
 
+  // 1891 (A b, teyit-2 a): kapasite kaynağı insan olan istasyon yetkin kişilerin havuzudur; el işi yer tutmaz, kişiye sınır yoktur.
+  test('insanlı istasyonda aynı anda birden çok el işi açılır; makinesiz ama insanlı olmayan istasyon kilitli kalır', async () => {
+    const istasyonId = await istasyonKur();
+    await sahip().sorgu("UPDATE istasyon SET kapasite_kaynagi = 'insan' WHERE id = $1", [istasyonId]);
+    const [ilk, ikinci, ucuncu] = [await emirAc(istasyonId), await emirAc(istasyonId), await emirAc(istasyonId)];
+    assert.equal((await baslat(ilk.id)).durum, 200);
+    assert.equal((await baslat(ikinci.id, 'operator2')).durum, 200, 'ikinci kişi aynı istasyonda ikinci işi açar');
+    assert.equal((await baslat(ucuncu.id)).durum, 200, 'kişiye sınır yok: aynı kişi ikinci el işini açar');
+    assert.deepEqual(
+      await Promise.all([ilk, ikinci, ucuncu].map(async (e) => (await canliAl(e.id))?.calisma)),
+      ['calisiyor', 'calisiyor', 'calisiyor'],
+    );
+    assert.equal((await komut(ilk.id, 'duraklat')).durum, 200);
+    assert.equal((await komut(ilk.id, 'devam', 'mudur')).durum, 200, 'duraklamış el işine istasyonda iş varken de devam edilir');
+    const havuz = await sahip().sorgu<{ havuz: boolean }>('SELECT havuz FROM uretim_emirleri_makine_kullanimi WHERE istasyon_id = $1 AND bitis IS NULL', [istasyonId]);
+    assert.deepEqual(havuz.map((h) => h.havuz), [true, true, true]);
+
+    const kilitli = await istasyonKur();
+    const a = await emirAc(kilitli);
+    const b = await emirAc(kilitli);
+    assert.equal((await baslat(a.id)).durum, 200);
+    assert.equal((await baslat(b.id, 'operator2')).govde.mesaj, ISTASYON_DOLU, 'kaynağı girilmemiş istasyon makine sayılır, kilit sürer');
+  });
+
+  test('veritabanı kısıtı: havuz kullanımı makineli olamaz; insanlı olmayan istasyonda ikinci makinesiz kullanım doğrudan yazılsa da reddedilir', async () => {
+    const { emir, istasyonId } = await baslatilmis();
+    const kisi = await kisiId('operator2');
+    const makineId = await makineKur(istasyonId);
+    const yaz = (makine: number | null, havuz: boolean) => sahip().sorgu(
+      'INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, istasyon_id, makine_id, kisi_id, baslama, havuz) VALUES ($1, $2, $3, $4, now(), $5)',
+      [emir.id, istasyonId, makine, kisi, havuz],
+    );
+    await assert.rejects(yaz(makineId, true), /uretim_emirleri_makine_kullanimi_havuz_makinesiz/);
+    await assert.rejects(yaz(null, false), /uretim_emirleri_makine_kullanimi_istasyonda_tek/);
+    await yaz(null, true);
+  });
+
   test('duraklatma ve durdurma makineyi bırakır; devam son makinesine döner, makine doluysa reddedilir', async () => {
     await nedenleriKur();
     const { makineId, duraklamis, calisan } = await ikiliKur();
