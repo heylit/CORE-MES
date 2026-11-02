@@ -11,7 +11,7 @@ import { AletTuru } from './alet-simgeleri.tsx';
 import { Turler } from './Turler.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { AletFormu } from './formlar.tsx';
-import { DURUM_TONU, aletlerCsv, durumMetni, tarihMetni } from './gosterim.ts';
+import { DURUM_TONU, aletlerCsv, durumMetni, tarihMetni, vadeMetni } from './gosterim.ts';
 import './kalibrasyon.css';
 
 // Bölümü kabuğun ikinci menüsü seçer (paylasilan/sayfalar/kalibrasyon.ts); her bölüm kendi adresindedir.
@@ -30,7 +30,7 @@ const SUTUNLAR: Sutun<Alet>[] = [
   { anahtar: 'yer', baslik: 'Yer', hucre: (a) => a.yer },
   { anahtar: 'periyot', baslik: 'Periyot (gün)', hucre: (a) => a.periyotGun, hizala: 'sag', mono: true },
   { anahtar: 'son', baslik: 'Son kalibrasyon', hucre: (a) => tarihMetni(a.sonKalibrasyon), mono: true },
-  { anahtar: 'vade', baslik: 'Vade', hucre: (a) => tarihMetni(a.vade), mono: true },
+  { anahtar: 'vade', baslik: 'Vade', hucre: (a) => vadeMetni(a), mono: true },
   { anahtar: 'durum', baslik: 'Durum', hucre: (a) => <Rozet ton={DURUM_TONU[a.durum]}>{durumMetni(a)}</Rozet> },
 ];
 

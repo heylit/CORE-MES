@@ -69,7 +69,7 @@ export function AletAyrinti({ id, yazabilir, turler, kapat, form = null, formKap
               <dt>Yer / zimmet</dt><dd>{alet.yer ?? YOK}</dd>
               <dt>Periyot</dt><dd>{alet.periyotGun} gün</dd>
               <dt>Son kalibrasyon</dt><dd>{tarihMetni(alet.sonKalibrasyon) ?? YOK}</dd>
-              <dt>Sonraki vade</dt><dd>{tarihMetni(alet.vade) ?? YOK}</dd>
+              <dt>Sonraki vade</dt><dd>{alet.kullanimDisi ? 'Kullanım dışında vade sayılmaz' : tarihMetni(alet.vade) ?? YOK}</dd>
             </dl>
             <h3 className="tc-kal-alt-baslik">Son kalibrasyon kayıtları</h3>
             {alet.sonKayitlar.length === 0

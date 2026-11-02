@@ -113,6 +113,20 @@ describe('Ölçü aletleri listesi', () => {
     expect(screen.getByText('30 gün içinde: 1')).toBeTruthy();
   });
 
+  it('kullanım dışı alette listede vade yazılmaz', async () => {
+    const disi = alet({
+      id: 1, no: 'DNM-1', sonKalibrasyon: '2026-11-02', vade: '2027-05-01', kalanGun: 180, durum: 'kullanim-disi', kullanimDisi: true,
+      kullanimDisiNedeni: 'Kalibrasyon sonucu uygunsuz.',
+    });
+    sunucuKur(OKUR, { aletler: [disi], ozet: { vadesiGecen: 0, yaklasan: 0 } });
+    ac();
+    await listeBekle();
+    const [satir] = satirlar() as [HTMLElement];
+    const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
+    expect(hucre('Vade')).toBe('yok');
+    expect(hucre('Son kalibrasyon')).toBe('02.11.2026');
+  });
+
   it('kalan günü bilinmeyen yaklaşan alette gün sayısı uydurulmaz', async () => {
     const sayisiz = alet({ id: 4, no: 'DNM-4', sonKalibrasyon: '2025-10-20', vade: '2026-10-20', kalanGun: null, durum: 'yaklasan' });
     sunucuKur(OKUR, { aletler: [sayisiz], ozet: { vadesiGecen: 0, yaklasan: 1 } });

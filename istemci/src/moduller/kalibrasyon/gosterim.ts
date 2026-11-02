@@ -9,6 +9,11 @@ export function tarihMetni(tarih: string | null): string | null {
   return `${g}.${a}.${y}`;
 }
 
+// Kullanım dışı alet ölçümde kullanılmaz; gelecekteki vadesi "geçerli" diye okunmasın diye gösterilmez.
+export function vadeMetni(alet: Pick<Alet, 'durum' | 'vade'>): string | null {
+  return alet.durum === 'kullanim-disi' ? null : tarihMetni(alet.vade);
+}
+
 export function durumMetni(alet: Pick<Alet, 'durum' | 'kalanGun'>): string {
   switch (alet.durum) {
     case 'kullanim-disi': return 'Kullanım dışı';
@@ -35,6 +40,6 @@ export function aletlerCsv(aletler: readonly Alet[]): string {
   // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın).
   const alan = (v: string | number | null) => `"${(typeof v === 'string' ? formulKoru(v, { sayiSerbest: true }) : String(v ?? '')).replace(/"/g, '""')}"`;
   const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum'];
-  const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), tarihMetni(a.vade), durumMetni(a)]);
+  const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), vadeMetni(a), durumMetni(a)]);
   return '﻿' + [baslik, ...satirlar].map((s) => s.map(alan).join(';')).join('\r\n');
 }

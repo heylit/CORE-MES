@@ -19,7 +19,8 @@ export interface KalibrasyonDurumu {
 }
 
 // Kalibrasyon vadesi ve durumunun tek kuralı: Ölçü aletleri, Kalite Merkezi ve Denetim Hazırlığı bunu kullanır.
-// Vadesine 30 gün ya da daha az kalan (vadesi bugün olan dahil) yaklaşandır. Çerçevelere metni gömüldüğü için
+// Vadesine 30 gün ya da daha az kalan (vadesi bugün olan dahil) yaklaşandır. Periyodu 60 günden kısa olanda eşik periyodun
+// yarısıdır: yoksa 30 günlük periyotlu alet kalibre edildiği gün de "yaklaşan" sayılırdı. Çerçevelere metni gömüldüğü için
 // işlev kendi içinde kapalıdır: dışarıdan ad kullanmaz.
 // Sıra anlamlıdır: kullanım dışı her şeyi bastırır; kaydı olmayanın vadesi bilinmez, sıfır uydurulmaz.
 export function kalibrasyonDurumu(g: KalibrasyonDurumGirdisi): KalibrasyonDurumu {
@@ -28,6 +29,8 @@ export function kalibrasyonDurumu(g: KalibrasyonDurumGirdisi): KalibrasyonDurumu
   const gun = (t: string): number => Date.parse(`${t}T00:00:00Z`) / GUN_MS;
   const tarih = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
   let vade: string | null = g.vade ? g.vade : null;
+  // Elle girilen vadede periyot bilinmez; eşik tam kalır.
+  let periyotGunu: number | null = null;
   if (vade === null && g.sonTarih) {
     if (g.periyotAy !== undefined) {
       // Ay sonu kısalır: 31 Ağustos + 1 ay = 30 Eylül.
@@ -38,11 +41,13 @@ export function kalibrasyonDurumu(g: KalibrasyonDurumGirdisi): KalibrasyonDurumu
     } else {
       vade = tarih((gun(g.sonTarih) + Number(g.periyotGun ?? 0)) * GUN_MS);
     }
+    periyotGunu = Math.round(gun(vade) - gun(g.sonTarih));
   }
+  const esik = periyotGunu === null ? YAKLASAN_ESIK_GUN : Math.min(YAKLASAN_ESIK_GUN, Math.floor(periyotGunu / 2));
   const kalanGun = vade === null ? null : Math.round(gun(vade) - gun(g.bugun));
   if (g.kullanimDisi) return { vade, kalanGun, durum: 'kullanim-disi' };
   if (vade === null || kalanGun === null) return { vade, kalanGun, durum: 'kayit-yok' };
   if (kalanGun < 0) return { vade, kalanGun, durum: 'gecmis' };
-  if (kalanGun <= YAKLASAN_ESIK_GUN) return { vade, kalanGun, durum: 'yaklasan' };
+  if (kalanGun <= esik) return { vade, kalanGun, durum: 'yaklasan' };
   return { vade, kalanGun, durum: 'gecerli' };
 }
