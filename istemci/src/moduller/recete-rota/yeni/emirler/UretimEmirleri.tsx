@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
-import { sayi } from '../bicim.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
+import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
@@ -165,6 +165,9 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
   );
 }
 
+// K19 a: bugünden önceki teslim uyarı ve onayla açılır, engellenmez. İki değer de ISO gün ("2026-11-02"); boş ya da bozuk teslim geçmiş sayılmaz.
+export const gecmisTeslimMi = (teslim: string, bugunGun: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(teslim) && teslim < bugunGun;
+
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean }
 
 function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
@@ -184,6 +187,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
   const [hata, setHata] = useState<string | null>(null);
+  const [gecmisSorusu, setGecmisSorusu] = useState(false);
   // 1476-F: çok katmanlı seçim yalnız emri rotadan açabilene ve rotalı alt parçası olan ürüne görünür (önizleme sunucudan).
   const kokRevizyon = yururlukteRevizyonId(d, f.urun);
   const onizleme = usePatlatmaOnizlemesi(kokRevizyon, yetki.rotaEmreKopyala && uretilirMi(d, f.urun)).data;
@@ -204,9 +208,12 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const adimlar = emirAdimlari(d, sanal);
   const girdi = { anaAd: 'Ana emir', miktar: sanal.qty, adimSayisi: adimlar.length, aralik: { ilk: 1, son: adimlar.length }, mevcutKollar: [], bitti: () => false };
 
-  const olustur = async () => {
+  const gecmis = gecmisTeslimMi(f.teslim, bugun());
+  const olustur = async (gecmisOnayli = false) => {
     if (!adet.tamam || adet.deger === null || !(adet.deger > 0)) { setHata('Miktar sıfırdan büyük olmalı.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(f.teslim)) { setHata('Başlangıç ve teslim tarihini girin.'); return; }
+    // K19 a: geçmiş teslim engel değildir; emir kullanıcı onaylayınca açılır.
+    if (gecmis && !gecmisOnayli) { setGecmisSorusu(true); return; }
     // Çok katmanlı emir açılırken bölünmez (sunucu bölmeyi reddeder); taslak koşulu 1476-C ile kalktı.
     const bolunur = !cokAcik && (bolme.tur === 'parti' || bolme.tur === 'kol');
     if (!rotali && bolunur) { setHata('Rotasız emir açılırken bölünmez; adımları ekledikten sonra bölün.'); return; }
@@ -248,7 +255,8 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
         />
         <Girdi etiket="Miktar" inputMode="decimal" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
         <Girdi etiket="Başlangıç" type="date" value={f.baslangic} onChange={(o) => { yaz({ baslangic: o.target.value }); }} />
-        <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { yaz({ teslim: o.target.value }); }} />
+        <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { yaz({ teslim: o.target.value }); }}
+          ipucu={gecmis ? 'Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.' : undefined} />
         <Secim
           etiket="Öncelik" value={f.oncelik} onChange={(o) => { yaz({ oncelik: o.target.value }); }}
           secenekler={[1, 2, 3, 4].map((n) => ({ deger: String(n), baslik: ONCELIK_ADI[n] ?? '' }))}
@@ -279,6 +287,16 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
       <div className="tc-rr3-arac">
         <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
       </div>
+      {gecmisSorusu && (
+        <Pencere acik kapat={() => { setGecmisSorusu(false); }} baslik="Teslim tarihi geçmişte" alt={(
+          <>
+            <Dugme onClick={() => { setGecmisSorusu(false); }}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="check" onClick={() => { setGecmisSorusu(false); void olustur(true); }}>Yine de aç</Dugme>
+          </>
+        )}>
+          <p>{`Teslim ${tarih(f.teslim)}, bugünden önce. Emir açılınca plan onu gecikmiş gösterir. Yine de açılsın mı?`}</p>
+        </Pencere>
+      )}
     </section>
   );
 }
