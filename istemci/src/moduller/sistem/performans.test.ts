@@ -25,9 +25,21 @@ describe('performans', () => {
     ]);
     expect(o).toEqual({
       saniyede: 1, saniyedeEnCok: 3, p95Ms: 50, p95MsEnCok: 500, sunucuHatasi: 2, havuzKullanimda: 2, havuzBoyut: 30, havuzBekleyen: 1, havuzReddi: 2,
+      olayDongusuP99Ms: null, olayDongusuP99MsEnCok: null, anaIsYuzde: null, anaIsYuzdeEnCok: null,
     });
     expect(dakikaOzeti([]).p95Ms).toBeNull();
     expect(dakikaOzeti([]).sunucuHatasi).toBeNull();
+  });
+
+  it('olay döngüsü ve ana iş parçacığı: son değer ve en kötüsü; alan eklenmeden önceki dakika ölçüsüz kalır', () => {
+    const d = [
+      dakika('2026-11-01T10:00:00Z', { olayDongusuP99Ms: 680, anaIsParcacigiYuzde: 93 }),
+      dakika('2026-11-01T10:01:00Z', { olayDongusuP99Ms: 120 }),
+    ];
+    expect(dakikaOzeti(d)).toMatchObject({ olayDongusuP99Ms: 120, olayDongusuP99MsEnCok: 680, anaIsYuzde: null, anaIsYuzdeEnCok: 93 });
+    const s = dakikaSerileri(d);
+    expect(s.dongu.map((n) => n.deger)).toEqual([680, 120]);
+    expect(s.anaIs.map((n) => n.deger)).toEqual([93, null]);
   });
 
   it('saat serileri ve kutuları: p95 saatin en kötüsü, işlemci ortalaması, havuz boyutu bilinmez', () => {
@@ -39,7 +51,11 @@ describe('performans', () => {
     };
     const s = saatSerileri([saat]);
     expect([s.p95[0]?.deger, s.surec[0]?.deger, s.makine[0]?.deger, s.havuz[0]?.deger]).toEqual([250, 4, null, 7]);
-    expect(saatOzetiKutulari([saat])).toMatchObject({ p95Ms: 250, havuzKullanimda: 7, havuzBoyut: null, sunucuHatasi: 1 });
+    expect(saatOzetiKutulari([saat])).toMatchObject({ p95Ms: 250, havuzKullanimda: 7, havuzBoyut: null, sunucuHatasi: 1, anaIsYuzde: null });
+    const dolu = saatSerileri([{ ...saat, olayDongusuP99MsEnCok: 640, anaIsParcacigiYuzde: { ort: 70, enCok: 95 } }]);
+    expect([dolu.dongu[0]?.deger, dolu.anaIs[0]?.deger]).toEqual([640, 70]);
+    expect(saatOzetiKutulari([{ ...saat, olayDongusuP99MsEnCok: 640, anaIsParcacigiYuzde: { ort: 70, enCok: 95 } }]))
+      .toMatchObject({ olayDongusuP99Ms: 640, anaIsYuzde: 70, anaIsYuzdeEnCok: 95 });
   });
 
   it('en yavaş uçlar: istek toplanır, p95 dakikaların en kötüsü; kalıpsız istek girmez; yavaştan hızlıya', () => {

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, oluOraniYuzde, veritabaniBuyumesi, vtOzeti,
+  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, anaIsParcacigiYuzdesi, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, oluOraniYuzde, veritabaniBuyumesi, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
@@ -121,6 +121,15 @@ test('işlemci yüzdeleri: fark yoksa ya da taban yoksa null; süreç yüzdesi �
   assert.equal(surecIslemciYuzdesi(1, 0, 4), null);
 });
 
+test('ana iş parçacığı yüzdesi: olay döngüsü kullanımı tek çekirdeğe göre; ölçü yoksa ya da bozuksa null', () => {
+  assert.equal(anaIsParcacigiYuzdesi(0.9), 90);
+  assert.equal(anaIsParcacigiYuzdesi(0.12345), 12.3);
+  assert.equal(anaIsParcacigiYuzdesi(1.2), 100);
+  assert.equal(anaIsParcacigiYuzdesi(null), null);
+  assert.equal(anaIsParcacigiYuzdesi(Number.NaN), null);
+  assert.equal(anaIsParcacigiYuzdesi(-0.1), null);
+});
+
 test('metrik dakikası: havuz reddi tabana göre fark, havuz yoksa null; istek yoksa yüzdelikler null', () => {
   const temel = {
     an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
@@ -208,6 +217,18 @@ test('saat özeti: toplamlar toplanır, uçlar en kötüsüyle, ortalamalar yaln
   assert.equal(o.veritabani?.deadlock, 1);
   assert.equal(o.veritabani?.onbellekIsabetiYuzdeEnAz, 99);
   assert.equal(saatOzeti(saat, [dakikaOrnegi({ veritabani: null })])?.veritabani, null);
+});
+
+test('saat özeti: ana iş parçacığı payı ortalama ve en çok; alan eklenmeden önce yazılmış dakikalar ölçüsüz sayılır', () => {
+  const saat = new Date('2026-11-01T10:00:00Z');
+  assert.equal(saatOzeti(saat, [dakikaOrnegi(), dakikaOrnegi()])?.anaIsParcacigiYuzde, null);
+  assert.deepEqual(saatOzeti(saat, [dakikaOrnegi(), dakikaOrnegi({ anaIsParcacigiYuzde: 40 }), dakikaOrnegi({ anaIsParcacigiYuzde: 80 })])?.anaIsParcacigiYuzde,
+    { ort: 60, enCok: 80 });
+  assert.equal(metrikDakikasi({
+    an: new Date('2026-11-01T10:00:00Z'), aralikMs: 60_000, istekFarki: [], surecIslemciYuzde: null, makineIslemciYuzde: null,
+    bellek: { rss: 1, heapUsed: 1 }, makineBos: 1, makineToplam: 2, olayDongusuP99Ms: null, havuz: null, oncekiMesgulToplam: null,
+    anaIsParcacigiYuzde: 75,
+  }).anaIsParcacigiYuzde, 75);
 });
 
 test('eşik: son süre boyunca her dakika aşılınca açılır; ölçülemeyen ya da az istekli dakika açmaz; kapanış süre kadar, en az 3 temiz dakika ister', () => {

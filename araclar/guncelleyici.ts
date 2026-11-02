@@ -12,7 +12,7 @@ import {
 } from '../sunucu/moduller/ayarlar/disari.ts';
 import { GOC_KIMLIGI, anaAgacKoku, envYolu, ortamiYukle } from './ortam.ts';
 import { binYolu, npmCliBul } from './paket-bin.ts';
-import { NPM_ONBELLEGI } from './paket.ts';
+import { NPM_ONBELLEGI, SURUM_DOSYASI } from './paket.ts';
 import { tarAc } from './tar-oku.ts';
 
 // Güncelleyici (kart #1210): sunucuyu açar, Sistem Ayarları'ndan istenen paketi uygular. Sunucu kendini değiştiremez; istek
@@ -307,6 +307,21 @@ function calistir(komut: string, argumanlar: readonly string[], secenek: { cwd: 
 }
 
 // Ekrandaki sürüm adı derlemeye buradan girer (istemci/vite.config.ts); adsız sürümde package.json sürümü kalır.
+export function kokSurumDosyasi(kok: string): CalisanSurum | null {
+  let metin: string;
+  try {
+    metin = readFileSync(join(kok, SURUM_DOSYASI), 'utf8');
+  } catch {
+    return null;
+  }
+  try {
+    const kayit = calisanSurumSemasi.safeParse(JSON.parse(metin));
+    return kayit.success ? kayit.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export function derlemeOrtami(surum: CalisanSurum): Record<string, string> {
   return {
     ...(surum.commit === null ? {} : { TMIV2_COMMIT: surum.commit }),
@@ -360,8 +375,11 @@ export class Guncelleyici {
   private yol(ad: string): string { return join(this.s.dizin, ad); }
   surumKlasoru(commit: string): string { return join(this.s.dizin, SURUMLER_KLASORU, commit); }
 
-  // İlk kurulum git ağacıysa sürümü git'ten okunur; değilse bilinmez.
+  // Paketten açılan ilk kurulum git ağacı değildir; sürümü paketin yazdığı dosyadadır. Dosya yoksa git'ten, o da yoksa bilinmez.
+  // Dosya önce okunur: paket klasörü başka bir git ağacının içine konmuşsa git yanlış commit verir.
   private kokSurumu(): CalisanSurum {
+    const dosya = kokSurumDosyasi(this.s.kok);
+    if (dosya !== null) return dosya;
     try {
       const git = (a: string[]) => execFileSync('git', a, { cwd: this.s.kok, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
       return { commit: git(['rev-parse', 'HEAD']), surum: null, tarih: new Date(git(['show', '-s', '--format=%cI', 'HEAD'])).toISOString() };

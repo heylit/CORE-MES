@@ -11,6 +11,8 @@ export const ARALIKLAR: readonly { anahtar: Aralik; baslik: string }[] = [
 
 // Yanıt süresi eşiği sunucudaki eşik kuralıyla aynıdır (saglik kurallar.ts, yanit-suresi); çizgi yalnız gösterir.
 export const YANIT_ESIGI_MS = 1000;
+// Olay döngüsü eşiği sunucudaki "Sunucu tıkanıyor" kuralıyla aynıdır (saglik kurallar.ts, olay-dongusu).
+export const OLAY_DONGUSU_ESIGI_MS = 500;
 
 export interface Nokta { an: Date; deger: number | null }
 export interface Seriler {
@@ -19,6 +21,8 @@ export interface Seriler {
   surec: Nokta[];
   makine: Nokta[];
   havuz: Nokta[];
+  anaIs: Nokta[];
+  dongu: Nokta[];
 }
 
 export function dakikaSerileri(d: readonly MetrikDakikasi[]): Seriler {
@@ -29,6 +33,8 @@ export function dakikaSerileri(d: readonly MetrikDakikasi[]): Seriler {
     surec: seri((m) => m.surecIslemciYuzde),
     makine: seri((m) => m.makineIslemciYuzde),
     havuz: seri((m) => m.havuz?.kullanimda ?? null),
+    anaIs: seri((m) => m.anaIsParcacigiYuzde ?? null),
+    dongu: seri((m) => m.olayDongusuP99Ms),
   };
 }
 
@@ -41,6 +47,8 @@ export function saatSerileri(s: readonly SaatOzeti[]): Seriler {
     surec: seri((o) => o.surecIslemciYuzde?.ort ?? null),
     makine: seri((o) => o.makineIslemciYuzde?.ort ?? null),
     havuz: seri((o) => o.havuz?.kullanimdaEnCok ?? null),
+    anaIs: seri((o) => o.anaIsParcacigiYuzde?.ort ?? null),
+    dongu: seri((o) => o.olayDongusuP99MsEnCok),
   };
 }
 
@@ -59,11 +67,16 @@ export interface Ozet {
   havuzBoyut: number | null;
   havuzBekleyen: number | null;
   havuzReddi: number | null;
+  olayDongusuP99Ms: number | null;
+  olayDongusuP99MsEnCok: number | null;
+  anaIsYuzde: number | null;
+  anaIsYuzdeEnCok: number | null;
 }
 
 const BOS_OZET: Ozet = {
   saniyede: null, saniyedeEnCok: null, p95Ms: null, p95MsEnCok: null, sunucuHatasi: null,
   havuzKullanimda: null, havuzBoyut: null, havuzBekleyen: null, havuzReddi: null,
+  olayDongusuP99Ms: null, olayDongusuP99MsEnCok: null, anaIsYuzde: null, anaIsYuzdeEnCok: null,
 };
 
 const topla = (n: readonly number[]): number => n.reduce((a, b) => a + b, 0);
@@ -83,6 +96,10 @@ export function dakikaOzeti(d: readonly MetrikDakikasi[]): Ozet {
     havuzBoyut: son.havuz?.boyut ?? null,
     havuzBekleyen: havuzlu.length === 0 ? null : Math.max(...havuzlu.map((h) => h.bekleyen)),
     havuzReddi: havuzlu.length === 0 ? null : topla(havuzlu.map((h) => h.mesgul)),
+    olayDongusuP99Ms: son.olayDongusuP99Ms,
+    olayDongusuP99MsEnCok: enCok(d.map((m) => m.olayDongusuP99Ms)),
+    anaIsYuzde: son.anaIsParcacigiYuzde ?? null,
+    anaIsYuzdeEnCok: enCok(d.map((m) => m.anaIsParcacigiYuzde ?? null)),
   };
 }
 
@@ -100,6 +117,10 @@ export function saatOzetiKutulari(s: readonly SaatOzeti[]): Ozet {
     havuzBoyut: null,
     havuzBekleyen: havuzlu.length === 0 ? null : Math.max(...havuzlu.map((h) => h.bekleyenEnCok)),
     havuzReddi: havuzlu.length === 0 ? null : topla(havuzlu.map((h) => h.mesgul)),
+    olayDongusuP99Ms: son.olayDongusuP99MsEnCok,
+    olayDongusuP99MsEnCok: enCok(s.map((o) => o.olayDongusuP99MsEnCok)),
+    anaIsYuzde: son.anaIsParcacigiYuzde?.ort ?? null,
+    anaIsYuzdeEnCok: enCok(s.map((o) => o.anaIsParcacigiYuzde?.enCok ?? null)),
   };
 }
 

@@ -256,47 +256,70 @@ export interface HazirlikAdimi {
 // Terminal adımda ne tüketeceğini girenden okur (#1372): ilk adım ve önceki adımı beklemeyen adım girensiz olmaz; bekleyen ya da akışlı ara adım
 // önceki adımın çıktısını tüketir. Adımlar sıra düzenindedir.
 // Dallı rotada (1248 a) öncülü olmayan adım (dalın ilk adımı) girensiz olmaz.
+export function girdiEksikleri(
+  adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; girenSayisi: number; dal?: string | null; birlesen?: readonly string[] }[],
+): string[] {
+  const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik, devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
+  const eksikler: string[] = [];
+  for (const [i, a] of adimlar.entries()) {
+    if (a.girenSayisi > 0) continue;
+    if (i === 0) { eksikler.push(`OP ${a.opNo}: giren (hammadde ya da yarı mamul) seçilmeli.`); continue; }
+    const o = onculler[i];
+    if (o === null || o === undefined) {
+      if (a.bagimlilik === 'bagimsiz') eksikler.push(`OP ${a.opNo}: önceki adımı beklemediği için giren seçilmeli.`);
+    } else if (o.length === 0) {
+      eksikler.push(`OP ${a.opNo}: hiçbir adımı beklemediği için giren seçilmeli.`);
+    }
+  }
+  return eksikler;
+}
+
 export function girdiEksigi(
   adimlar: readonly { opNo: number; bagimlilik: Bagimlilik; girenSayisi: number; dal?: string | null; birlesen?: readonly string[] }[],
 ): string | null {
-  const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik, devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
-  for (const [i, a] of adimlar.entries()) {
-    if (a.girenSayisi > 0) continue;
-    if (i === 0) return `OP ${a.opNo}: giren (hammadde ya da yarı mamul) seçilmeli.`;
-    const o = onculler[i];
-    if (o === null || o === undefined) {
-      if (a.bagimlilik === 'bagimsiz') return `OP ${a.opNo}: önceki adımı beklemediği için giren seçilmeli.`;
-    } else if (o.length === 0) {
-      return `OP ${a.opNo}: hiçbir adımı beklemediği için giren seçilmeli.`;
-    }
+  return girdiEksikleri(adimlar)[0] ?? null;
+}
+
+function adimHatalari(a: HazirlikAdimi): string[] {
+  const h: string[] = [];
+  if (!a.operasyonTipiAktif) h.push(`OP ${a.opNo}: operasyon tipi kullanıma kapalı.`);
+  if (a.kaynakAktif === false) {
+    h.push(a.fason ? `OP ${a.opNo}: fason firma kullanımda değil ya da fason işaretli değil.` : `OP ${a.opNo}: makine ya da kişi kullanımda değil.`);
   }
-  return null;
+  // RT-69 onayda yeniden: kural gelmeden kaydedilmiş taslak da onaya gidemez.
+  if (a.fason && (a.adaylarAktif.length > 0 || a.makineKullanimi !== 'tek')) h.push(`OP ${a.opNo}: fason adımda aday kaynak ve paralel bölme olmaz.`);
+  if (a.adaylarAktif.includes(false)) h.push(`OP ${a.opNo}: aday kaynaklardan biri kullanımda değil.`);
+  // Fason adımın termini isteğe bağlıdır: boşsa plan süreyi satın almadaki geçmiş teslimattan ya da varsayılandan alır.
+  if (a.fason) return h;
+  if (a.birimSureDk === null) h.push(`OP ${a.opNo}: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.`);
+  if (a.ayarSuresiDk === null) h.push(`OP ${a.opNo}: hazırlık süresi girilmeli; yoksa 0 yazın.`);
+  if (a.ayar === true && (a.ayarDk ?? null) === null) h.push(`OP ${a.opNo}: ayar işaretli; ayar süresi girilmeli.`);
+  // 1737 c: aday kaynakta süre boşsa plan adımın süresini kullanıyordu (kaynaktakiSure); onayda adayın kendi süresi zorunludur.
+  for (const x of a.adaySureleri ?? []) {
+    if (x.birimSureDk === null) h.push(`OP ${a.opNo}: aday kaynağın işlem süresi girilmeli.`);
+    if (x.ayarSuresiDk === null) h.push(`OP ${a.opNo}: aday kaynağın hazırlık süresi girilmeli; yoksa 0 yazın.`);
+  }
+  return [...new Set(h)];
+}
+
+// Onaya gönderen bütün eksikleri bir kerede görür (ROT-4); tek tek düzeltip yeniden göndermesi gerekmez.
+export function onayaHazirlikHatalari(adimlar: readonly HazirlikAdimi[]): string[] {
+  if (adimlar.length === 0) return ['Adımı olmayan revizyon onaya gönderilemez.'];
+  return [...girdiEksikleri(adimlar), ...adimlar.flatMap(adimHatalari)];
 }
 
 export function onayaHazirMi(adimlar: readonly HazirlikAdimi[]): string | null {
-  if (adimlar.length === 0) return 'Adımı olmayan revizyon onaya gönderilemez.';
-  const girdi = girdiEksigi(adimlar);
-  if (girdi) return girdi;
-  for (const a of adimlar) {
-    if (!a.operasyonTipiAktif) return `OP ${a.opNo}: operasyon tipi kullanıma kapalı.`;
-    if (a.kaynakAktif === false) {
-      return a.fason ? `OP ${a.opNo}: fason firma kullanımda değil ya da fason işaretli değil.` : `OP ${a.opNo}: makine ya da kişi kullanımda değil.`;
-    }
-    // RT-69 onayda yeniden: kural gelmeden kaydedilmiş taslak da onaya gidemez.
-    if (a.fason && (a.adaylarAktif.length > 0 || a.makineKullanimi !== 'tek')) return `OP ${a.opNo}: fason adımda aday kaynak ve paralel bölme olmaz.`;
-    if (a.adaylarAktif.includes(false)) return `OP ${a.opNo}: aday kaynaklardan biri kullanımda değil.`;
-    // Fason adımın termini isteğe bağlıdır: boşsa plan süreyi satın almadaki geçmiş teslimattan ya da varsayılandan alır.
-    if (a.fason) continue;
-    if (a.birimSureDk === null) return `OP ${a.opNo}: işlem süresi girilmeli; hazırlık ve değişim 0 olabilir.`;
-    if (a.ayarSuresiDk === null) return `OP ${a.opNo}: hazırlık süresi girilmeli; yoksa 0 yazın.`;
-    if (a.ayar === true && (a.ayarDk ?? null) === null) return `OP ${a.opNo}: ayar işaretli; ayar süresi girilmeli.`;
-    // 1737 c: aday kaynakta süre boşsa plan adımın süresini kullanıyordu (kaynaktakiSure); onayda adayın kendi süresi zorunludur.
-    for (const x of a.adaySureleri ?? []) {
-      if (x.birimSureDk === null) return `OP ${a.opNo}: aday kaynağın işlem süresi girilmeli.`;
-      if (x.ayarSuresiDk === null) return `OP ${a.opNo}: aday kaynağın hazırlık süresi girilmeli; yoksa 0 yazın.`;
-    }
-  }
-  return null;
+  return onayaHazirlikHatalari(adimlar)[0] ?? null;
+}
+
+// Uzun liste iletiyi okunmaz yapar: ilk sorunlar yazılır, kalanın sayısı söylenir.
+export const AZAMI_LISTELENEN_SORUN = 10;
+export function topluHataIletisi(hatalar: readonly string[]): string | null {
+  if (hatalar.length === 0) return null;
+  if (hatalar.length === 1) return hatalar[0]!;
+  const gorunen = hatalar.slice(0, AZAMI_LISTELENEN_SORUN);
+  const kalan = hatalar.length - gorunen.length;
+  return `Onaya gönderilemez, ${hatalar.length} sorun var: ${gorunen.join(' ')}${kalan > 0 ? ` Ve ${kalan} sorun daha.` : ''}`;
 }
 
 export interface HazirlikBolumu { hazirlikDk: number | null; ayar: boolean; ayarDk: number | null }
@@ -304,6 +327,27 @@ export interface HazirlikBolumu { hazirlikDk: number | null; ayar: boolean; ayar
 // Hazırlık süresi (1310 a): toplam = hazırlık + (ayar işaretliyse) ayar. Plan ve iş emri toplamı okur; ayar işareti planın ayarcı arayıp
 // aramayacağını söyler. Bölümü göndermeyen eski istemci yalnız toplamı yollar: toplam aynıysa kayıtlı bölüm kalır, değiştiyse
 // kayıtlı işaret korunur ve fark ayara (işaret kapalıysa hazırlığa) yazılır; kayıt yoksa göç kuralı: süre varsa ayardır.
+// Bölüm gelince toplam sunucuda yeniden hesaplanır; gönderilen toplam bölümle çelişiyorsa sessizce yok sayılmaz (ROT-4).
+// Kuruş farkı (ondalık toplama) çelişki sayılmaz.
+export function hazirlikCeliskisi(g: { ayarSuresiDk: number | null; hazirlikDk?: number | null; ayar?: boolean; ayarDk?: number | null }): string | null {
+  if (g.ayar === undefined || g.ayarSuresiDk === null) return null;
+  const { toplam } = hazirlikBol(g, null);
+  if (Math.abs((toplam ?? 0) - g.ayarSuresiDk) < 0.01) return null;
+  return `Hazırlık toplamı (${g.ayarSuresiDk} dk) hazırlık ve ayar sürelerinin toplamıyla (${toplam ?? 0} dk) aynı değil.`;
+}
+
+// Ölçüm kabulü açık taslağa yazılır. Taslak yürürlükteki revizyondan açılmadıysa onaylandığında yürürlükteki değişiklikler geri gidebilir;
+// kabul durmaz, kullanıcı uyarılır (ROT-4).
+export function eskiTabanUyarisi(
+  taslak: { harf: string; kaynakRevizyonId: number | null; kaynakHarf: string | null },
+  yururlukte: { id: number; harf: string } | null,
+): string | null {
+  if (yururlukte === null || taslak.kaynakRevizyonId === yururlukte.id) return null;
+  const taban = taslak.kaynakHarf === null ? 'boş ya da başka bir kaynaktan' : `Rev ${taslak.kaynakHarf} üzerinden`;
+  return `Ölçüm Rev ${taslak.harf} taslağına yazıldı; bu taslak yürürlükteki Rev ${yururlukte.harf} yerine ${taban} açıldı. `
+    + `Onaylanırsa Rev ${yururlukte.harf}'deki öteki değişiklikler geri alınabilir; farkı onaydan önce kontrol edin.`;
+}
+
 export function hazirlikBol(
   g: { ayarSuresiDk: number | null; hazirlikDk?: number | null; ayar?: boolean; ayarDk?: number | null },
   eski: (HazirlikBolumu & { toplam: number | null }) | null,

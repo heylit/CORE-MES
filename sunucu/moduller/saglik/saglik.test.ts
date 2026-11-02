@@ -233,6 +233,7 @@ test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz 
   let mesgulToplam = 4;
   let cpuUs = 0;
   let makine = { bosta: 0, toplam: 0 };
+  let elu = { active: 0, idle: 0, utilization: 0 };
   const kaynak: MetrikKaynagi = {
     simdi: () => an,
     istekSayaclari: () => istekler,
@@ -243,6 +244,7 @@ test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz 
     bellek: () => ({ rss: 100, heapUsed: 50 }),
     makineBellek: () => ({ bos: 10, toplam: 20 }),
     olayDongusu: () => 12.5,
+    olayDongusuKullanimi: () => elu,
   };
   const t = new MetrikToplayici(kaynak);
   assert.equal(t.tur(), null);
@@ -252,6 +254,8 @@ test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz 
   mesgulToplam = 6;
   cpuUs = 24_000_000;
   makine = { bosta: 750, toplam: 1000 };
+  // Süreç işlemcisi 4 çekirdeğe bölünür (%10); ana iş parçacığı dakikanın 54 saniyesini dolu geçirdi (%90).
+  elu = { active: 54_000, idle: 6_000, utilization: 0.9 };
   const d = t.tur();
   assert.ok(d !== null);
   assert.equal(d.aralikSn, 60);
@@ -262,6 +266,7 @@ test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz 
   assert.equal(d.surecIslemciYuzde, 10);
   assert.equal(d.makineIslemciYuzde, 25);
   assert.equal(d.olayDongusuP99Ms, 12.5);
+  assert.equal(d.anaIsParcacigiYuzde, 90);
   assert.equal(d.veritabani, null);
   // Veritabanı ölçüsü iki turda da okunursa fark yazılır; bir tur okunamazsa o ve sonraki dakika boş kalır.
   const vt = (islem: number) => ({
@@ -276,6 +281,9 @@ test('metrik toplayıcı: ilk tur taban alır; sonraki tur aradaki istek, havuz 
   assert.equal(t.tur(null)?.veritabani, null);
   an += 60_000;
   assert.equal(t.tur(vt(200))?.veritabani, null);
+  // Bir turdan ötekine döngü hiç ilerlemediyse (süre farkı yok) pay uydurulmaz.
+  an += 60_000;
+  assert.equal(t.tur()?.anaIsParcacigiYuzde, null);
   for (let i = 0; i < 70; i += 1) {
     an += 60_000;
     t.tur();

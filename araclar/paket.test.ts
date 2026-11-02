@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
-import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
+import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumNotu,
+  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu,
 } from './paket.ts';
 
 const kayit = (konu: string, govde: string): string => `${konu}\x1f${govde}\n\x1e\n`;
@@ -163,4 +163,9 @@ test('kayıt adresi dışından gelen ya da bütünlüğü olmayan paket reddedi
 test('platform adı biçimi denetlenir', () => {
   assert.deepEqual(platformlariOku('win32-x64'), [{ os: 'win32', cpu: 'x64' }]);
   assert.throws(() => platformlariOku('windows'), /Platform/);
+});
+
+test('sürüm dosyası güncelleyicinin çalışan sürüm biçimindedir (1876)', () => {
+  const kimlik = { commit: 'c'.repeat(40), surum: '2026.11.02-1', tarih: '2026-11-02T08:00:00.000Z' };
+  assert.deepEqual(calisanSurumSemasi.parse(JSON.parse(surumDosyasi(kimlik).toString('utf8'))), kimlik);
 });

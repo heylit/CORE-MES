@@ -123,6 +123,13 @@ export const NPM_ONBELLEGI = '.npm-onbellek';
 export const SUNUCUDA_KURULMAYAN: readonly string[] = ['@playwright/test'];
 export const NPM_KAYIT_ADRESI = 'https://registry.npmjs.org/';
 
+// Yük git ağacı değildir: paketten açılan ilk kurulumda güncelleyici sürümü git'ten okuyamaz, bu dosyadan okur.
+export const SURUM_DOSYASI = 'surum.json';
+
+export function surumDosyasi(g: { commit: string; surum: string; tarih: string }): Buffer {
+  return Buffer.from(`${JSON.stringify({ commit: g.commit, surum: g.surum, tarih: g.tarih }, null, 2)}\n`, 'utf8');
+}
+
 interface KilitGirdisi {
   resolved?: string;
   integrity?: string;

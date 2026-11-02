@@ -233,7 +233,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
 
   test('1310 a: adımın hazırlığı, ayar işareti ve ayar süresi gelir; setup toplamdır', async () => {
     const k = await taslakKur(await kart('mamul', 'RRR mamul ayar'), [
-      adim({ hazirlikDk: 5, ayar: true, ayarDk: 25 }), adim({ hazirlikDk: 8, ayar: false, bilesenler: [] }),
+      adim({ ayarSuresiDk: 30, hazirlikDk: 5, ayar: true, ayarDk: 25 }), adim({ ayarSuresiDk: 8, hazirlikDk: 8, ayar: false, bilesenler: [] }),
     ]);
     const steps = (await durumOku()).routeRevs?.find((r) => r.id === String(k.id))?.data.steps ?? [];
     assert.deepEqual(steps.map((s) => [s.setup, s.hazirlik, s.ayarli, s.ayarDk]), [[30, 5, true, 25], [8, 8, false, null]]);

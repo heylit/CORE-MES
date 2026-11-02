@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
+import { tarihSemasi } from '../zaman.ts';
 import { OPERASYON_GRUP_KODLARI } from './istasyonlar.ts';
 import { EMIR_TURLERI } from './uretim-emirleri.ts';
 import { HAM_STOK_NEDENLERI, hamStokOnerisi } from './geometri.ts';
@@ -148,7 +149,8 @@ export const AZAMI_SABLON_ADI = 120;
 export const sablonParametresi = z.object({ id: yolKimligi });
 export const sablonYazGovdesi = z.object({
   ad: metin(AZAMI_SABLON_ADI, 'Şablon adı zorunlu.'),
-  adimlar: z.array(z.object({ operasyonTipiId: KIMLIK, ad: metin(200, 'Adım adı zorunlu.') })).max(AZAMI_ADIM),
+  // Adımsız şablondan açılan taslak onaya gidemez (ROT-4): şablon en az bir adım taşır.
+  adimlar: z.array(z.object({ operasyonTipiId: KIMLIK, ad: metin(200, 'Adım adı zorunlu.') })).min(1, 'Şablonda en az bir adım olmalı.').max(AZAMI_ADIM),
 });
 export const sablonKaydetGovdesi = sablonYazGovdesi.extend({ surum: KIMLIK });
 
@@ -455,7 +457,8 @@ export const surelerCevabi = z.object({
 });
 
 // Kabulün yazdığı taslak ve onun süreleri; plan yeni süreyi taslak yürürlüğe girince kullanır.
-export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi });
+// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa dolu (ROT-4); kabul yine yapılmıştır.
+export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi, uyari: z.string().nullable() });
 
 export type RevizyonDurumu = z.output<typeof revizyonDurumu>;
 export type Bagimlilik = z.output<typeof bagimlilik>;
@@ -513,10 +516,11 @@ export type AdimKaynakGirdisi = z.input<typeof adimKaynakGirdisi>;
 // Rotanın emre kopyalanması (karar K1): yürürlükteki revizyondan üretim emri açılır; her adım bir iş emri olur.
 export const emreKopyalaGovdesi = z.object({
   adet: z.number().int().positive('Adet sıfırdan büyük olmalı.').max(TAM_SAYI_UST),
-  teslim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Teslim YYYY-AA-GG olmalı.').nullable(),
+  // Biçim ve takvim ayrı denetlenir: 2026-13-45 genel tarih hatasına düşmeden alanıyla reddedilir.
+  teslim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Teslim YYYY-AA-GG olmalı.').pipe(tarihSemasi).nullable(),
   // İlk sistemin emir formu: öncelik (1 acil - 4 düşük), başlangıç ve açıklama; verilmezse uretim-emirleri varsayılanı.
   oncelik: z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.').optional(),
-  baslangic: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Başlangıç YYYY-AA-GG olmalı.').nullish(),
+  baslangic: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Başlangıç YYYY-AA-GG olmalı.').pipe(tarihSemasi).nullish(),
   aciklama: z.string().trim().max(300, 'Açıklama en çok 300 karakter.').nullish(),
   // Taslak emir plana alınana dek terminale düşmez (prototip: taslak -> Plana al -> serbest).
   taslak: z.boolean().optional(),

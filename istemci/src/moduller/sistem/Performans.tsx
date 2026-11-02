@@ -7,7 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CizgiGrafik } from './CizgiGrafik.tsx';
 import {
-  ARALIKLAR, YANIT_ESIGI_MS, dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, sayiMetni, zamanEtiketi,
+  ARALIKLAR, OLAY_DONGUSU_ESIGI_MS, YANIT_ESIGI_MS, dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, sayiMetni, zamanEtiketi,
   type Aralik, type Ozet, type YavasUc,
 } from './performans.ts';
 
@@ -27,6 +27,8 @@ function Kutular({ ozet }: { ozet: Ozet }) {
       deger: ozet.havuzKullanimda === null ? YOK : ozet.havuzBoyut === null ? sayiMetni(ozet.havuzKullanimda) : `${ozet.havuzKullanimda} / ${ozet.havuzBoyut}`,
       alt: `bekleyen ${deger(ozet.havuzBekleyen)} · reddedilen ${deger(ozet.havuzReddi)}`,
     },
+    { ad: 'Olay döngüsü p99', deger: deger(ozet.olayDongusuP99Ms, ' ms'), alt: `en kötü ${deger(ozet.olayDongusuP99MsEnCok, ' ms')}` },
+    { ad: 'Ana iş parçacığı', deger: deger(ozet.anaIsYuzde, '%'), alt: `en çok ${deger(ozet.anaIsYuzdeEnCok, '%')}` },
   ];
   return (
     <dl className="tc-sistem-kutular">
@@ -91,13 +93,24 @@ export function Performans() {
             seriler={[{ ad: 'Uygulama', ton: 'birinci', noktalar: veri.seriler.surec }, { ad: 'Makine', ton: 'ikinci', noktalar: veri.seriler.makine }]}
           />
           <CizgiGrafik
+            baslik="Ana iş parçacığı (%)" birim="%" etiket={etiket} tavan={100}
+            seriler={[{ ad: 'Dolu', ton: 'birinci', noktalar: veri.seriler.anaIs }]}
+          />
+          <CizgiGrafik
+            baslik="Olay döngüsü p99 (ms)" birim=" ms" etiket={etiket} esik={OLAY_DONGUSU_ESIGI_MS}
+            seriler={[{ ad: 'p99', ton: 'birinci', noktalar: veri.seriler.dongu }]}
+          />
+          <CizgiGrafik
             baslik="Veritabanı bağlantısı (kullanımda)" birim="" etiket={etiket}
             seriler={[{ ad: 'Kullanımda', ton: 'birinci', noktalar: veri.seriler.havuz }]}
           />
           <p className="tc-sistem-soluk">
             {aralik === 'saat'
               ? 'Her nokta bir dakika; son 60 dakika sunucu belleğinden gelir.'
-              : 'Her nokta bir saat; p95 o saatin en kötü dakikası, işlemci saatin ortalamasıdır.'}
+              : 'Her nokta bir saat; p95 ve olay döngüsü o saatin en kötü dakikası, işlemci saatin ortalamasıdır.'}
+          </p>
+          <p className="tc-sistem-soluk">
+            Uygulama işlemcisi bütün çekirdeklere bölünür; istekler tek iş parçacığında işlendiği için tıkanmayı ana iş parçacığı ve olay döngüsü gösterir.
           </p>
         </>
       )}
