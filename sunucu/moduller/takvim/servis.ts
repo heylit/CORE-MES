@@ -55,5 +55,5 @@ export async function takvim(db: Db, kullanici: Kullanici, sorgu: TakvimSorgusu)
 export async function gecikenler(db: Db, kullanici: Kullanici, bugun: string): Promise<TakvimGecikenCevabi> {
   const { baslangic, bitis } = gecikenAraligi(bugun, GECIKEN_GERI_GUN);
   const kayitlar = await oku(db, kullanici, gorulenKaynaklar(kullanici.islemler).okunan, baslangic, bitis);
-  return { kayitlar: kayitlariSirala(kayitlar.filter((k) => !k.bitti && k.tarih < bugun)) };
+  return { kayitlar: kayitlariSirala(kayitlar.filter((k) => !k.bitti && (k.bitis ?? k.tarih) < bugun)) };
 }

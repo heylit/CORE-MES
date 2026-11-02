@@ -7,7 +7,7 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Sekmeler
 import { api } from '../../ortak/veri/api.ts';
 import type { Siralama } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KAYNAK_BILGISI, aramayaUyar, gecikti, kalanMetni, ozeteUyar, type OzetSuzgeci } from './kaynaklar.ts';
+import { KAYNAK_BILGISI, aramayaUyar, gecikti, gorunenGun, kalanMetni, ozeteUyar, type OzetSuzgeci } from './kaynaklar.ts';
 import {
   GUN_ADLARI, ayBasi, ayBasligi, ayEkle, ayIzgarasi, gunEkle, gunler, gunNo, haftaBasi, haftaBasligi, haftaGunu, tarihMetni,
 } from './tarih.ts';
@@ -37,6 +37,7 @@ function gecikenleriEkle(pencere: readonly TakvimKaydi[], gecikenler: readonly T
 
 const siraliTarih = (a: TakvimKaydi, b: TakvimKaydi): number => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0);
 const kayitAnahtari = (k: TakvimKaydi): string => `${k.kaynak}:${k.kimlik}:${k.tarih}`;
+const tarihAraligi = (k: TakvimKaydi): string => (k.bitis ? `${tarihMetni(k.tarih)} – ${tarihMetni(k.bitis)}` : tarihMetni(k.tarih));
 
 function KalanRozeti({ kayit, bugun }: { kayit: TakvimKaydi; bugun: string }) {
   const k = kalanMetni(kayit, bugun);
@@ -107,8 +108,11 @@ interface IzgaraOzellikleri {
 }
 
 function Izgara({ gunListesi, ay, kayitlar, tatiller, bugun, ac, haftayaGec }: IzgaraOzellikleri) {
+  // Çok günlük kayıt (izin) ızgarada her gününde görünür.
   const gunun = new Map<string, TakvimKaydi[]>();
-  for (const k of kayitlar) gunun.set(k.tarih, [...(gunun.get(k.tarih) ?? []), k]);
+  for (const k of kayitlar) {
+    for (const g of k.bitis ? gunler(k.tarih, k.bitis) : [k.tarih]) gunun.set(g, [...(gunun.get(g) ?? []), k]);
+  }
   return (
     <div className="tc-takvim-izgara" data-kip={ay ? 'ay' : 'hafta'}>
       {ay && GUN_ADLARI.map((g) => <div key={g} className="tc-takvim-gb" aria-hidden="true">{g}</div>)}
@@ -155,7 +159,7 @@ function Gundem({ kayitlar, bugun, ac }: { kayitlar: TakvimKaydi[]; bugun: strin
   if (acik.length === 0) return <BosDurum />;
   const gruplar = new Map<string, TakvimKaydi[]>();
   for (const k of acik) {
-    const g = gecikti(k, bugun) ? 'gec' : k.tarih;
+    const g = gecikti(k, bugun) ? 'gec' : gorunenGun(k, bugun);
     gruplar.set(g, [...(gruplar.get(g) ?? []), k]);
   }
   const sira = [...gruplar.keys()].sort((a, b) => (a === 'gec' ? -1 : b === 'gec' ? 1 : a < b ? -1 : 1));
@@ -199,7 +203,7 @@ function TabloGorunumu({ kayitlar, bugun, ac, ara, araYaz }: { kayitlar: TakvimK
     });
   }, [kayitlar, bitenler, siralama]);
   const sutunlar: Sutun<TakvimKaydi>[] = [
-    { anahtar: 'tarih', baslik: 'Tarih', mono: true, kirilmaz: true, sirala: true, hucre: (k) => tarihMetni(k.tarih), csv: (k) => k.tarih },
+    { anahtar: 'tarih', baslik: 'Tarih', mono: true, kirilmaz: true, sirala: true, hucre: (k) => tarihAraligi(k), csv: (k) => k.tarih },
     {
       anahtar: 'kaynak', baslik: 'Kaynak', sirala: true, csv: (k) => KAYNAK_BILGISI[k.kaynak].ad,
       hucre: (k) => <span className="tc-takvim-kaynak" data-kaynak={k.kaynak}><span className="tc-takvim-nokta" aria-hidden="true" />{KAYNAK_BILGISI[k.kaynak].ad}</span>,
@@ -229,7 +233,7 @@ function Kanban({ kayitlar, kaynaklar, bugun, ac }: { kayitlar: TakvimKaydi[]; k
   const sutunlar: { anahtar: string; ad: string; kaynak?: TakvimKaynagi; gec?: boolean; uyar: (k: TakvimKaydi) => boolean }[] = grup === 'zaman'
     ? [
       { anahtar: 'gec', ad: 'Geciken', gec: true, uyar: (k) => gecikti(k, bugun) },
-      { anahtar: 'bugun', ad: 'Bugün', uyar: (k) => k.tarih === bugun },
+      { anahtar: 'bugun', ad: 'Bugün', uyar: (k) => !gecikti(k, bugun) && gorunenGun(k, bugun) === bugun },
       { anahtar: 'hafta', ad: 'Bu hafta', uyar: (k) => k.tarih > bugun && k.tarih < gunEkle(pzt, 7) },
       { anahtar: 'gelecek', ad: 'Gelecek hafta', uyar: (k) => k.tarih > bugun && k.tarih >= gunEkle(pzt, 7) && k.tarih < gunEkle(pzt, 14) },
       { anahtar: 'sonra', ad: 'Sonra', uyar: (k) => k.tarih > bugun && k.tarih >= gunEkle(pzt, 14) },
@@ -271,7 +275,7 @@ function Ayrinti({ kayit, bugun, kapat }: { kayit: TakvimKaydi | null; bugun: st
   const gezin = useNavigate();
   if (!kayit) return null;
   const b = KAYNAK_BILGISI[kayit.kaynak];
-  const satirlar: [string, string][] = [['Kaynak', b.ad], ['Tarih', tarihMetni(kayit.tarih)], ['Durum', kayit.durum]];
+  const satirlar: [string, string][] = [['Kaynak', b.ad], ['Tarih', tarihAraligi(kayit)], ['Durum', kayit.durum]];
   if (kayit.no) satirlar.push(['No', kayit.no]);
   if (kayit.ilgili) satirlar.push(['İlgili', kayit.ilgili]);
   return (

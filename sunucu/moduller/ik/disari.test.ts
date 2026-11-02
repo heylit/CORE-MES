@@ -64,18 +64,20 @@ describe('İK disari: izinli kişiler (gerçek PostgreSQL)', () => {
     assert.deepEqual(await vt.tx((db) => gununFazlaMesaisi(db, '2026-11-09')), []);
   });
 
-  test('takvim (891): aralıkta başlayan izin başlangıç gününde personel adıyla gelir; iptal gelmez, bekleyen de gelir, bağsız personel de gelir', async () => {
+  test('takvim (891, 1816): aralıkla kesişen izin ilk ve son günüyle, personel adıyla gelir; iptal gelmez, bekleyen de gelir, bağsız personel de gelir', async () => {
     const vt = ortam!.vt;
-    const kayit = (kimlik: string, ad: string, tarih: string, baslik: string, durum: string) =>
-      ({ kaynak: 'izin', kimlik, tarih, no: null, baslik, ilgili: `${ad} Deneme`, durum, bitti: false });
-    assert.deepEqual(await vt.tx((db) => takvimKayitlari(db, '2026-11-01', '2026-11-30')), [
-      kayit('leave_a', 'emp_a', '2026-11-02', 'Yıllık izin (3 gün)', 'Onaylandı'),
-      kayit('leave_b', 'emp_b', '2026-11-02', 'Hastalık / rapor (3 gün)', 'Onaylandı'),
-      kayit('leave_c', 'emp_c', '2026-11-02', 'Yıllık izin (3 gün)', 'Beklemede'),
-      kayit('leave_bagsiz', 'emp_bagsiz', '2026-11-02', 'Yıllık izin (3 gün)', 'Onaylandı'),
-      kayit('leave_d', 'emp_d', '2026-11-05', 'Yıllık izin (2 gün)', 'Onaylandı'),
-    ]);
-    assert.deepEqual(await vt.tx((db) => takvimKayitlari(db, '2026-11-03', '2026-11-04')), [], 'başlangıcı aralık dışında olan izin gelmez');
+    const kayit = (kimlik: string, ad: string, tarih: string, bitis: string, baslik: string, durum: string) =>
+      ({ kaynak: 'izin', kimlik, tarih, no: null, baslik, ilgili: `${ad} Deneme`, durum, bitti: false, bitis });
+    const kasim = [
+      kayit('leave_a', 'emp_a', '2026-11-02', '2026-11-04', 'Yıllık izin (3 gün)', 'Onaylandı'),
+      kayit('leave_b', 'emp_b', '2026-11-02', '2026-11-04', 'Hastalık / rapor (3 gün)', 'Onaylandı'),
+      kayit('leave_c', 'emp_c', '2026-11-02', '2026-11-04', 'Yıllık izin (3 gün)', 'Beklemede'),
+      kayit('leave_bagsiz', 'emp_bagsiz', '2026-11-02', '2026-11-04', 'Yıllık izin (3 gün)', 'Onaylandı'),
+      kayit('leave_d', 'emp_d', '2026-11-05', '2026-11-06', 'Yıllık izin (2 gün)', 'Onaylandı'),
+    ];
+    assert.deepEqual(await vt.tx((db) => takvimKayitlari(db, '2026-11-01', '2026-11-30')), kasim);
+    assert.deepEqual(await vt.tx((db) => takvimKayitlari(db, '2026-11-04', '2026-11-04')), kasim.slice(0, 4), 'TKV-3: aralıktan önce başlayıp süren izin gelir');
+    assert.deepEqual(await vt.tx((db) => takvimKayitlari(db, '2026-11-06', '2026-11-30')), kasim.slice(4), 'son günü aralıktan önce biten izin gelmez');
     assert.deepEqual((await vt.tx((db) => takvimKayitlari(db, '2026-11-01', '2026-11-30', kisi.a))).map((k) => k.kimlik), ['leave_a'], '1191 a: kişi yalnız kendi iznini görür');
   });
 });

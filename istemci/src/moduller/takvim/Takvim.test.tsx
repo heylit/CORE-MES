@@ -119,4 +119,27 @@ describe('Takvim ekranı', () => {
     const gec = await screen.findByRole('region', { name: 'Geciken' });
     expect(within(gec).getByText('Sipariş S-90')).toBeTruthy();
   });
+
+  it('çok günlük izin (1816) ızgarada her gününde görünür; süren izin gecikmiş değil, bugündedir', async () => {
+    const izin = (o: Partial<TakvimKaydi>) => kayit({ kaynak: 'izin', no: null, ilgili: 'Deneme Kişi', durum: 'Onaylandı', ...o });
+    sunucuKur(() => json(200, {
+      ...CEVAP, kaynaklar: ['izin'], bekleyenler: [],
+      kayitlar: [
+        izin({ kimlik: 'leave_uc', tarih: '2031-03-17', bitis: '2031-03-19', baslik: 'Yıllık izin (3 gün)' }),
+        izin({ kimlik: 'leave_suren', tarih: '2031-03-10', bitis: '2031-03-13', baslik: 'Mazeret izni (4 gün)' }),
+      ],
+    }));
+    cizdir(<Takvim />);
+    expect(await screen.findByText('Mart 2031')).toBeTruthy();
+    for (const g of ['17 Mar Pzt', '18 Mar Sal', '19 Mar Çar']) {
+      expect(within(screen.getByLabelText(g)).getByText(/Deneme Kişi/)).toBeTruthy();
+    }
+    expect(within(screen.getByLabelText('20 Mar Per')).queryByText(/Deneme Kişi/)).toBeNull();
+    const ozet = screen.getByRole('group', { name: 'Özet' });
+    expect(within(within(ozet).getByText('Geciken').closest('button')!).getByText('0')).toBeTruthy();
+    expect(within(within(ozet).getByText('Bugün').closest('button')!).getByText('1')).toBeTruthy();
+    fireEvent.click(screen.getAllByText(/Mazeret izni|Deneme Kişi/)[0]!);
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText('Sürüyor')).toBeTruthy();
+  });
 });

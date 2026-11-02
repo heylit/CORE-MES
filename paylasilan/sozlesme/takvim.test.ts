@@ -20,3 +20,11 @@ test('kayıt bilinmeyen kaynağı ve boş başlığı kabul etmez; no ve ilgili 
   assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, baslik: '' }).success, false);
   assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, kimlik: '' }).success, false);
 });
+
+test('çok günlük kayıt (1816): son gün ilk günden sonra olur; tek günlük kayıtta son gün yoktur', () => {
+  const kayit = { kaynak: 'izin', kimlik: 'leave_1', tarih: '2026-11-09', no: null, baslik: 'Yıllık izin (3 gün)', ilgili: null, durum: 'Onaylandı', bitti: false };
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-11' }).success, true);
+  assert.equal(takvimKaydiSemasi.safeParse(kayit).success, true);
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-09' }).success, false);
+  assert.equal(takvimKaydiSemasi.safeParse({ ...kayit, bitis: '2026-11-08' }).success, false);
+});

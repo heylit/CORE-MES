@@ -891,7 +891,7 @@ export async function puantajYaz(db: Db, kullanici: Kullanici, gunler: readonly 
 }
 
 
-// Takvim (891): aralıkta başlayan izinler başlangıç gününde, personelin adıyla. Yetki denetlemez; çağıran seçer (1191 a): ik.oku ya da
+// Takvim (891): aralıkla kesişen izinler (1816, TKV-3: önce başlayan da gelir), ilk ve son günüyle, personelin adıyla. Yetki denetlemez; çağıran seçer (1191 a): ik.oku ya da
 // ik.izin-oku olana bütün personel (kisiId null), öteki kişiye yalnız kendi personel kaydının izinleri.
 export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, kisiId: number | null = null): Promise<TakvimKaydi[]> {
   return (await s.takvimIzinSatirlari(db, baslangic, bitis, kisiId)).map((r): TakvimKaydi => {
@@ -900,6 +900,7 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, 
       kaynak: 'izin', kimlik: r.kimlik, tarih: r.baslangic, no: null,
       baslik: gun === null ? r.tur : `${r.tur} (${String(gun)} gün)`, ilgili: `${r.ad} ${r.soyad}`.trim(),
       durum: r.durum, bitti: r.durum === 'Onaylandı' && r.gecti,
+      ...(r.bitis > r.baslangic ? { bitis: r.bitis } : {}),
     };
   });
 }

@@ -22,6 +22,8 @@ export type TakvimSorgusu = z.output<typeof takvimSorgusu>;
 
 // kimlik kaynağın içinde tekildir ve kaynağın kendi ekranını açar (sipariş id'si, alet no ...). no ekranda gösterilen belge numarasıdır.
 // bitti: kayıt kapanmıştır (sevk edildi, ödendi ...); geçmiş tarihli açık kayıt gecikmiş sayılır. Bilinmeyen alan null.
+// bitis: birden çok gün süren kaydın son günü (izin; 1816, TKV-3). Tek günlük kayıtta yoktur; kaynakların çoğu tek günlüktür.
+// Süren kayıt aralıkla kesişiyorsa gelir; tarih (ilk gün) aralığın başından önce olabilir.
 export const takvimKaydiSemasi = z.object({
   kaynak: takvimKaynagiSemasi,
   kimlik: z.string().min(1),
@@ -31,7 +33,8 @@ export const takvimKaydiSemasi = z.object({
   ilgili: z.string().nullable(),
   durum: z.string().min(1),
   bitti: z.boolean(),
-});
+  bitis: tarihSemasi.optional(),
+}).refine((k) => k.bitis === undefined || k.bitis > k.tarih, { message: 'Son gün ilk günden sonra olmalı.', path: ['bitis'] });
 export type TakvimKaydi = z.output<typeof takvimKaydiSemasi>;
 
 export const takvimTatiliSemasi = z.object({ tarih: tarihSemasi, ad: z.string().nullable() });
@@ -47,7 +50,7 @@ export const takvimCevabi = z.object({
 export type TakvimCevabi = z.output<typeof takvimCevabi>;
 
 // Geciken kayıtlar (1816, TKV-1): ekranın okuma penceresi (93 gün) eski gecikmeleri dışarıda bırakır; bu okuma bugünden
-// önceki GECIKEN_GERI_GUN günü tarar ve yalnız kapanmamış kayıtları verir. Sınır, her kaynağın bütün geçmişini okumamak içindir.
+// önceki GECIKEN_GERI_GUN günü tarar ve yalnız kapanmamış, son günü bugünden önce olan kayıtları verir. Sınır, her kaynağın bütün geçmişini okumamak içindir.
 export const GECIKEN_GERI_GUN = 730;
 export const takvimGecikenCevabi = z.object({ kayitlar: z.array(takvimKaydiSemasi) });
 export type TakvimGecikenCevabi = z.output<typeof takvimGecikenCevabi>;
