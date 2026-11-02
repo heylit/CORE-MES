@@ -74,6 +74,21 @@ describe('R2 Süreler', () => {
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/rota/revizyonlar/7/sureler').length).toBeGreaterThanOrEqual(3));
   });
 
+  it('ROT-4: kabul eski tabandan açılmış taslağa yazıldıysa sahibinin uyarısı kullanıcıya gösterilir', async () => {
+    const uyari = 'Ölçüm Rev C taslağına yazıldı; bu taslak yürürlükteki Rev B yerine Rev A üzerinden açıldı.';
+    sunucuKur(YONETICI, {
+      durum: rotaliDurum(),
+      yazmalar: {
+        'GET /rota/revizyonlar/7/sureler': () => json(200, SURELER),
+        'POST /rota/adimlar/41/gerceklesen-sure/kabul': () => json(200, { taslak: { id: 8, harf: 'C' }, sureler: null, uyari }),
+      },
+    });
+    rrAc('/recete-rota/sureler');
+    const bolge = await bolumAc('Süreler');
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'İşlem ölçümünü kabul et, MM-0001 OP 10' }));
+    expect(await screen.findByText(uyari)).toBeTruthy();
+  });
+
   it('reddedilen: geçersiz sayı istek atmaz; rota.yaz olmayan girdi ve kabul düğmesi görmez, ölçüm metin olarak görünür', async () => {
     const istekler = sureSunucusu(YONETICI);
     rrAc('/recete-rota/sureler');

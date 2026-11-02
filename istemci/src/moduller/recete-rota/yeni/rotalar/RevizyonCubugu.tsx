@@ -8,6 +8,9 @@ import {
 import type { RotaEkrani } from './ortak.tsx';
 import type { RevEylemi } from './useRotaDuzeni.ts';
 
+// Sahibinin sınırı (sozlesme/rota.ts AZAMI_GERI_GONDERME_NEDENI); istemci sözleşmeyi değer olarak ithal edemez, aşan metni sahibi 400 ile reddeder.
+const AZAMI_GERI_GONDERME_NEDENI = 500;
+
 type Panel = 'gonder' | 'onay' | 'fark' | 'daha' | 'gecmis' | 'kopya' | null;
 interface Onay { baslik: string; metin: string; onayMetni: string; tehlikeli?: boolean; yap: () => Promise<unknown> }
 
@@ -25,6 +28,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [not, setNot] = useState('');
+  const [neden, setNeden] = useState('');
   const [hedef, setHedef] = useState('');
   const [onay, setOnay] = useState<Onay | null>(null);
   const { duzen, yetki } = r;
@@ -47,7 +51,11 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
   const taslaklar = agac.filter((x) => acikRevizyon(duzen.revler(x)) !== null || duzen.taslakVar(x));
   const eksikler = rotaEksikleri(adimlar, duzen.malzemeVar, duzen.opAdi);
   const gkksizler = gkkUyarilari(adimlar, (id) => h.op.get(id)?.code ?? null, duzen.opAdi);
-  const ac = (p: Panel) => { setPanel(panel === p ? null : p); if (p === 'gonder') setNot(duzen.taslakNotu(urunId) ?? V?.note ?? ''); };
+  const ac = (p: Panel) => {
+    setPanel(panel === p ? null : p);
+    if (p === 'gonder') setNot(duzen.taslakNotu(urunId) ?? V?.note ?? '');
+    if (p === 'onay') setNeden('');
+  };
   const eylem = async (e: RevEylemi, rev: Revizyon | null, n?: string) => {
     if (await duzen.revEylemi(e, urunId, rev?.id ?? null, n)) setPanel(null);
   };
@@ -138,6 +146,9 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
           </span>
         </div>
       )}
+      {V?.status === 'taslak' && V.geriGondermeNedeni && (
+        <div className="tc-rr1-warnbox" role="status">Rev {V.no} onaydan düzeltmeye geri gönderildi: {V.geriGondermeNedeni}</div>
+      )}
       {V?.status === 'yururlukte' && (O || taslak) && (
         <div className="tc-rr1-rv-row tc-rr1-rv-note"><span className="tc-rr1-ipucu">Yürürlükteki Rev {V.no} gösteriliyor; açık taslağı düzenlemek için onu seç.</span></div>
       )}
@@ -155,7 +166,14 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
               onayMetni: 'Onayla ve yürürlüğe al', yap: () => eylem('onayla', V) });
           }}>Onayla ve yürürlüğe al</Dugme>
           <Dugme tur="ikincil" disabled={duzen.mesgul} onClick={() => { void eylem('yalnizOnayla', V); }}>Yalnızca onayla</Dugme>
-          <Dugme tur="ikincil" disabled={duzen.mesgul} onClick={() => { void eylem('geriGonder', V); }}>Düzeltmeye geri gönder</Dugme>
+        </div>
+      )}
+      {panel === 'onay' && V?.status === 'onay' && onaylayabilir && (
+        <div className="tc-rr1-rv-panel tc-rr1-rv-row">
+          <input className="tc-rr1-metin tc-rr1-grow" value={neden} placeholder="Planlama neyi düzeltmeli?" aria-label="Geri gönderme nedeni"
+            maxLength={AZAMI_GERI_GONDERME_NEDENI} onChange={(e) => { setNeden(e.target.value); }} />
+          <Dugme tur="ikincil" simge="back" disabled={duzen.mesgul || neden.trim() === ''} title={neden.trim() === '' ? 'Önce nedeni yaz.' : undefined}
+            onClick={() => { void eylem('geriGonder', V, neden.trim()); }}>Düzeltmeye geri gönder</Dugme>
         </div>
       )}
       {panel === 'fark' && (

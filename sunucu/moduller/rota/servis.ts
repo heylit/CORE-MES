@@ -323,7 +323,7 @@ export async function revizyonAyrintisi(db: Db, kullanici: Kullanici, id: number
       kaynak: r.kaynakRevizyonId === null || r.kaynakHarf === null ? null : { id: r.kaynakRevizyonId, harf: r.kaynakHarf },
       acan: kisi(r.acanKisiId), gonderen: varsa(r.gonderenKisiId), gonderme: r.gonderme, onaylayan: varsa(r.onaylayanKisiId),
       dortGozsuzOnay: r.dortGozsuzOnay, yururlugeAlan: varsa(r.yururlugeAlanKisiId), iptalEden: varsa(r.iptalEdenKisiId),
-      iptalEtme: r.iptalEtme, duzenleyenler: r.duzenleyenKisiIdleri.map(kisi),
+      iptalEtme: r.iptalEtme, duzenleyenler: r.duzenleyenKisiIdleri.map(kisi), geriGondermeNedeni: r.geriGondermeNedeni,
     },
     adimlar,
     miktar: ondalikMetin(miktar),
@@ -956,9 +956,9 @@ export async function onayaGonder(db: Db, kullanici: Kullanici, id: number, suru
   return cevap(id, 'onay_bekliyor', await s.gonderYaz(db, id, kullanici.id));
 }
 
-export async function geriGonder(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<KomutCevabi> {
+export async function geriGonder(db: Db, kullanici: Kullanici, id: number, surum: number, neden: string): Promise<KomutCevabi> {
   await komutIcinAl(db, kullanici, id, 'geri-gonder', surum);
-  return cevap(id, 'taslak', await s.geriGonderYaz(db, id));
+  return cevap(id, 'taslak', await s.geriGonderYaz(db, id, neden));
 }
 
 export async function onayla(db: Db, kullanici: Kullanici, id: number, surum: number, yururlugeAl: boolean): Promise<KomutCevabi> {
@@ -1567,6 +1567,7 @@ export interface DurumRotaRevizyonu {
   acilma: string;
   onaylama: string | null;
   yururlugeAlma: string | null;
+  geriGondermeNedeni: string | null;
   adimlar: DurumRotaAdimi[];
 }
 
@@ -1581,7 +1582,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
     const onculler = oncullerCikar(icerik.adimlar);
     sonuc.push({
       id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
-      yururlugeAlma: r.yururlugeAlma,
+      yururlugeAlma: r.yururlugeAlma, geriGondermeNedeni: r.geriGondermeNedeni,
       adimlar: icerik.adimlar.map((a, i) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,

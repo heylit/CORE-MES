@@ -76,6 +76,8 @@
 .tc-rr1-rv-yururlukte { border-color: var(--run); background: var(--run); color: var(--on-sig); }
 .tc-rr1-rv-taslak { border-color: var(--hold); color: var(--hold); background: color-mix(in srgb, var(--hold) 18%, var(--panel-solid)); }
 .tc-rr1-rv-onay { border-color: var(--hold); background: var(--hold); color: var(--on-sig); }
+/* Dolgulu zeminde alt satır sönük renk almaz: koyu yeşil üstünde koyu metin okunmuyordu (ROT-4). */
+.tc-rr1-rvtab.tc-rr1-rv-yururlukte small, .tc-rr1-rvtab.tc-rr1-rv-onay small { color: inherit; font-weight: 600; }
 .tc-rr1-rv-onayli { border-color: var(--run); color: var(--run); background: color-mix(in srgb, var(--run) 14%, var(--panel-solid)); }
 .tc-rr1-rv-panel { border-top: 1px solid var(--edge); padding-top: var(--b-2); }
 .tc-rr1-son { font-size: var(--yazi-s); color: var(--muted); }

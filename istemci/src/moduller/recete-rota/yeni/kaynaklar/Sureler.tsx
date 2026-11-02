@@ -124,7 +124,11 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
     if (!olcum) return;
     void calistir('rota-olcum-kabul', {
       adimId: a.adimId, tur, olcumId: olcum.id, makineId: sureler.data?.makineId ?? null, okunanId: a.sonKayit[tur],
-    }, { sureler: true, basari: 'Ölçüm kabul edildi; ürünün rota taslağına teorik süre olarak yazıldı. Taslak yürürlüğe girince plan bunu kullanır.' });
+    }, {
+      sureler: true, basari: 'Ölçüm kabul edildi; ürünün rota taslağına teorik süre olarak yazıldı. Taslak yürürlüğe girince plan bunu kullanır.',
+      // ROT-4: taslak yürürlükteki revizyondan açılmadıysa sahibi uyarı döner; onaylanırsa yürürlükteki değişiklikler geri alınabilir.
+      sonuc: (v) => { const u = (v as { uyari?: unknown } | null)?.uyari; if (typeof u === 'string' && u !== '') bildir('bilgi', u); },
+    });
   };
 
   const gerceklesen = (a: SureAdimi, tur: Tur, etiket: string) => {

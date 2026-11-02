@@ -565,11 +565,34 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const g = await komut(id, 'onaya-gonder', { surum: 2 }, c.planlama);
     assert.equal((await kaydet(id, 3, [yeniAdim()])).statusCode, 409);
     await assert.rejects(vt().sorgu('DELETE FROM rota_adimi WHERE revizyon_id = $1', [id]), /rota_icerik_kilitli|yalnız taslakta/);
-    assert.equal((await komut(id, 'geri-gonder', { surum: g.json<KomutCevabi>().surum }, c.planlama)).statusCode, 403);
-    const geri = await komut(id, 'geri-gonder', { surum: g.json<KomutCevabi>().surum }, c.mudur);
+    const neden = 'Kaba tornada birim süre eksik.';
+    assert.equal((await komut(id, 'geri-gonder', { surum: g.json<KomutCevabi>().surum, neden }, c.planlama)).statusCode, 403);
+    const geri = await komut(id, 'geri-gonder', { surum: g.json<KomutCevabi>().surum, neden }, c.mudur);
     assert.equal(geri.statusCode, 200, geri.body);
     assert.equal(geri.json<KomutCevabi>().durum, 'taslak');
     assert.equal((await kaydet(id, geri.json<KomutCevabi>().surum, [yeniAdim()])).statusCode, 200);
+  });
+
+  test('ROT-3: geri gönderme nedensiz yapılamaz; neden revizyonda görünür ve yeniden onaya gönderilince boşalır', async () => {
+    const { id } = (await taslakAc(await mamulAc())).json<KomutCevabi>();
+    await kaydet(id, 1, [yeniAdim()]);
+    const g = (await komut(id, 'onaya-gonder', { surum: 2 }, c.planlama)).json<KomutCevabi>();
+    assert.equal((await ayrinti(id)).revizyon.geriGondermeNedeni, null);
+    for (const govde of [{ surum: g.surum }, { surum: g.surum, neden: '   ' }, { surum: g.surum, neden: 'x'.repeat(501) }]) {
+      assert.equal((await komut(id, 'geri-gonder', govde, c.mudur)).statusCode, 400);
+    }
+    assert.equal((await ayrinti(id)).revizyon.durum, 'onay_bekliyor');
+    const geri = await komut(id, 'geri-gonder', { surum: g.surum, neden: '  Ayar süresini kontrol et.  ' }, c.mudur);
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.equal((await ayrinti(id)).revizyon.geriGondermeNedeni, 'Ayar süresini kontrol et.');
+    const yeniden = await komut(id, 'onaya-gonder', { surum: geri.json<KomutCevabi>().surum }, c.planlama);
+    assert.equal(yeniden.statusCode, 200, yeniden.body);
+    assert.equal((await ayrinti(id)).revizyon.geriGondermeNedeni, null);
+    const defter = await vt().sorgu<{ yeni: string | null }>(
+      "SELECT alanlar->'geri_gonderme_nedeni'->>'yeni' AS yeni FROM denetim_degisiklik WHERE tablo = 'rota_revizyonu' AND anahtar = $1::jsonb AND alanlar ? 'geri_gonderme_nedeni' ORDER BY id",
+      [JSON.stringify({ id })],
+    );
+    assert.deepEqual(defter.map((d) => d.yeni), ['Ayar süresini kontrol et.', null]);
   });
 
   test('ana sayfa revizyon özeti ürün listesinden sayılanla aynıdır; okuma oturumla açılır', async () => {

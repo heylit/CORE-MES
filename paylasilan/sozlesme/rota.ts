@@ -138,6 +138,9 @@ export const kaydetGovdesi = z.object({
 
 export const surumGovdesi = z.object({ surum: KIMLIK });
 export const onaylaGovdesi = z.object({ surum: KIMLIK, yururlugeAl: z.boolean() });
+// ROT-3 a: geri gönderen neyin düzeltileceğini yazar; nedensiz geri gönderme yoktur (plan senaryosunun geri göndermesiyle aynı alan).
+export const AZAMI_GERI_GONDERME_NEDENI = 500;
+export const geriGonderGovdesi = z.object({ surum: KIMLIK, neden: metin(AZAMI_GERI_GONDERME_NEDENI, 'Geri gönderme nedenini yaz.') });
 export const kopyalaGovdesi = z.object({ hedefUrunId: MALZEME_KIMLIGI });
 // Yeni kartta seçilen ürünün yürürlükteki rotası (#500): kart kullanımdaysa hemen, değilse kart onaylanınca taslak olarak açılır.
 export const kopyaIsteGovdesi = z.object({ kaynakUrunId: MALZEME_KIMLIGI });
@@ -254,6 +257,8 @@ export const revizyonAyrintisi = z.object({
     iptalEden: adliKayit.nullable(),
     iptalEtme: zaman.nullable(),
     duzenleyenler: z.array(adliKayit),
+    // Son geri göndermenin nedeni; yeniden onaya gönderilince boşalır.
+    geriGondermeNedeni: z.string().nullable(),
   }),
   adimlar: z.array(adimSemasi),
   miktar: ondalikMetinSemasi,

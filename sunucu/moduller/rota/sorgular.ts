@@ -23,12 +23,14 @@ export interface RevizyonSatiri extends RevizyonOzeti {
   iptalEdenKisiId: number | null;
   iptalEtme: string | null;
   duzenleyenKisiIdleri: number[];
+  geriGondermeNedeni: string | null;
 }
 
 const SATIR = `${OZET}, r.malzeme_id AS "malzemeId", r.kaynak_revizyon_id AS "kaynakRevizyonId", k.harf AS "kaynakHarf",
   r.acan_kisi_id AS "acanKisiId", r.gonderen_kisi_id AS "gonderenKisiId", ${ISO('r.gonderme')} AS gonderme,
   r.onaylayan_kisi_id AS "onaylayanKisiId", r.dort_gozsuz_onay AS "dortGozsuzOnay",
   r.yururluge_alan_kisi_id AS "yururlugeAlanKisiId", r.iptal_eden_kisi_id AS "iptalEdenKisiId", ${ISO('r.iptal_etme')} AS "iptalEtme",
+  r.geri_gonderme_nedeni AS "geriGondermeNedeni",
   COALESCE((SELECT array_agg(d.kisi_id ORDER BY d.kisi_id) FROM rota_revizyonu_duzenleyen d WHERE d.revizyon_id = r.id), '{}')
     AS "duzenleyenKisiIdleri"`;
 
@@ -53,10 +55,10 @@ export function urunRevizyonlari(db: Db, malzemeId: number): Promise<RevizyonOze
 }
 
 // Reçete ve Rota'nın bağlı durumu (kart #1184): iptal edilmeyen bütün revizyonlar; içerik ayrıca okunur.
-export interface DurumRevizyonSatiri extends RevizyonOzeti { malzemeId: number }
+export interface DurumRevizyonSatiri extends RevizyonOzeti { malzemeId: number; geriGondermeNedeni: string | null }
 export function iptalsizRevizyonlar(db: Db, malzemeId: number | null = null): Promise<DurumRevizyonSatiri[]> {
   return db.sorgu<DurumRevizyonSatiri>(
-    `SELECT ${OZET}, r.malzeme_id AS "malzemeId" FROM rota_revizyonu r WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) ORDER BY r.malzeme_id, r.id`,
+    `SELECT ${OZET}, r.malzeme_id AS "malzemeId", r.geri_gonderme_nedeni AS "geriGondermeNedeni" FROM rota_revizyonu r WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) ORDER BY r.malzeme_id, r.id`,
     [malzemeId],
   );
 }
@@ -483,9 +485,10 @@ async function surumArtir(db: Db, id: number, ek: string, degerler: readonly unk
 }
 
 export const gonderYaz = (db: Db, id: number, kisiId: number): Promise<number> =>
-  surumArtir(db, id, "durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now()", [kisiId]);
+  surumArtir(db, id, "durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now(), geri_gonderme_nedeni = NULL", [kisiId]);
 
-export const geriGonderYaz = (db: Db, id: number): Promise<number> => surumArtir(db, id, "durum = 'taslak'", []);
+export const geriGonderYaz = (db: Db, id: number, neden: string): Promise<number> =>
+  surumArtir(db, id, "durum = 'taslak', geri_gonderme_nedeni = $2", [neden]);
 
 export const iptalYaz = (db: Db, id: number, kisiId: number): Promise<number> =>
   surumArtir(db, id, "durum = 'iptal', iptal_eden_kisi_id = $2, iptal_etme = now()", [kisiId]);

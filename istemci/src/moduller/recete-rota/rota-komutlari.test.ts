@@ -113,16 +113,16 @@ describe('rota köprü komutları', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('ROK-4: onay akışı komutları revizyonun ucuna yalnız sürümle (onayla yürürlük bayrağıyla) gider', async () => {
+  it('ROK-4: onay akışı komutları revizyonun ucuna yalnız sürümle (onayla yürürlük bayrağıyla, geri gönderme nedeniyle) gider', async () => {
     const istekler = sunucuKur(tamam);
     const isle = kopruKur();
-    for (const ad of ['rota-onaya-gonder', 'rota-geri-gonder', 'rota-yururluge-al', 'rota-iptal']) await isle('komut', { ad, govde: { revizyonId: 101, surum: 3, sinsi: 1 } });
+    for (const ad of ['rota-onaya-gonder', 'rota-geri-gonder', 'rota-yururluge-al', 'rota-iptal']) await isle('komut', { ad, govde: { revizyonId: 101, surum: 3, sinsi: 1, neden: '  Süreyi düzelt. ' } });
     await isle('komut', { ad: 'rota-onayla', govde: { revizyonId: 101, surum: 3, yururlugeAl: true } });
     await isle('komut', { ad: 'rota-onayla', govde: { revizyonId: 101, surum: 3 } });
     const yazmalar = istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde]);
     expect(yazmalar).toEqual([
       ['/rota/revizyonlar/101/onaya-gonder', { surum: 3 }],
-      ['/rota/revizyonlar/101/geri-gonder', { surum: 3 }],
+      ['/rota/revizyonlar/101/geri-gonder', { surum: 3, neden: 'Süreyi düzelt.' }],
       ['/rota/revizyonlar/101/yururluge-al', { surum: 3 }],
       ['/rota/revizyonlar/101/iptal', { surum: 3 }],
       ['/rota/revizyonlar/101/onayla', { surum: 3, yururlugeAl: true }],
