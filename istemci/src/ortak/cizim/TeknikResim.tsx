@@ -816,8 +816,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
           <b>
             {doc.name}{doc.rev && <span className="tc-ay5-rev">REV {doc.rev}</span>}
             {(doc.mk || doc.kind !== 'bos') && <span className="tc-ay5-kaynak">{doc.mk || (doc.kind === 'pdf' ? 'PDF' : 'STEP')}</span>}
-            {RO && ctl.eskiCizim ? <span className="tc-ay5-kaynak tc-ay5-eski"><Simge ad="alert" boyut="k" /> {ESKI_CIZIM[ctl.eskiCizim].rozet}</span>
-              : RO ? <span className="tc-ay5-kaynak tc-ay5-kilitli"><Simge ad="check" boyut="k" /> KALİTE ONAYLI</span> : null}
+            {/* Salt okunur resimde onay rozeti yok: resmi kalite onaylamaz, planlama yayınlar; yalnız eskimiş çizim söylenir. */}
+            {RO && ctl.eskiCizim ? <span className="tc-ay5-kaynak tc-ay5-eski"><Simge ad="alert" boyut="k" /> {ESKI_CIZIM[ctl.eskiCizim].rozet}</span> : null}
           </b>
           <span className="tc-ay5-alt">{doc.sub}</span>
           {(doc.kind === 'step' || pkgModel) && (
