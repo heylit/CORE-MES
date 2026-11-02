@@ -328,7 +328,8 @@ jobs:
   # Tarayıcı ağdan indirilmez: çalıştırıcı imajında kurulu Google Chrome kullanılır.
   # Parçalara bölünür ki ekran işi CI süresini belirleyen iş olmasın; her parça kendi veritabanında koşar, oturum kurulumu her
   # parçada yeniden koşar. Playwright testleri süreye göre değil, sırayla ve sayıya göre böler; sıra g360, g768, g1280'dir.
-  # Üç parçada en uzunu tek başına 1280 idi (5:47-8:13, öteki parçalar ~4 dk; 1864); dört parçada 1280 ikiye bölünür.
+  # 1280 testleri öteki iki genişliğin toplamı kadar sürer ve 360'ta atlanan testler de sayıya girer; dört parçada son
+  # iki parça ilk ikinin bir buçuk katıydı. Altı parçada en uzun parçanın test süresi ~5:25'ten ~4:00'e iner (1911 ölçümü).
   # Parça sayısı değişirse süreler yeniden ölçülür.
   ekran:
     needs: kapsam
@@ -338,7 +339,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4]
+        parca: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:18
@@ -386,7 +387,7 @@ jobs:
       - run: npm run goc
       - run: npm run ekran:hazirla
       - run: npm run derle:istemci
-      - run: npm run ekran -- --shard=${{ matrix.parca }}/4
+      - run: npm run ekran -- --shard=${{ matrix.parca }}/6
       - name: Düşen testlerin görüntü ve izleri
         if: failure()
         uses: actions/upload-artifact@v4
