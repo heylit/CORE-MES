@@ -151,6 +151,27 @@ describe('Markalama istasyonu', () => {
   });
 });
 
+describe('Çift dokunuş', () => {
+  it('MRK-1: Markalandı çift dokunuşta tek istek, tek seri; sonraki parça yeni kimlikle', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    ac(<Istasyon />);
+    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
+    const emir = await screen.findByLabelText('Üretim emri');
+    await screen.findByRole('option', { name: /UE-DNM-1/ });
+    fireEvent.change(emir, { target: { value: '5' } });
+    await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
+    const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
+    const dugme = screen.getByRole('button', { name: /Markalandı/ });
+    fireEvent.click(dugme);
+    fireEvent.click(dugme);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Markalandı/ }).hasAttribute('disabled')).toBe(false));
+    expect(markalar()).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /Markalandı/ }));
+    await waitFor(() => expect(markalar()).toHaveLength(2));
+    expect(markalar()[1]!.kimlik).not.toBe(markalar()[0]!.kimlik);
+  });
+});
+
 describe('Hatalı markalama', () => {
   it('onay sormadan numara yakmaz; Vazgeç istek göndermez, onayla hatalı sonuçla gider', async () => {
     const cagrilar = sunucuKur(YONETICI);

@@ -398,6 +398,36 @@ describe('Mal kabul', () => {
     const g = istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: { malzemeId: number; miktar: string; parti: { dokumNo: string } | null }[] };
     expect(g.satirlar[0]).toMatchObject({ malzemeId: 901, miktar: '12.5', konumId: 3, parti: { dokumNo: 'D-7' }, ambalaj: { tur: 'kasa', olcu: 'hop', adet: 5 } });
   });
+
+  it('STK-7: Teslim al çift tıklamada tek istek ve tek bildirim', async () => {
+    const ozet = { ozet: { id: 901, tur: 'hammadde', kod: 'HM-001', ad: 'Deneme sac', onayDurumu: 'aktif', kullanilabilir: true, birim: 'kg' } } satisfies MalzemeOzetiCevabi;
+    const ayrinti = { ...AYRINTI, ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null } };
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/konumlar': () => json(200, bosListe satisfies KonumlarCevabi),
+      'GET /stok/mal-kabuller': () => json(200, bosListe satisfies MalKabullerCevabi),
+      'GET /stok/malzemeler/901/ozet': () => json(200, ozet),
+      'GET /stok/malzemeler/901': () => json(200, ayrinti),
+      'GET /stok/malzemeler/901/goz-onerisi': () => json(200, { oneri: { konumId: 3, kod: 'A-02-01' } }),
+      'POST /stok/mal-kabul': () => json(200, { belge: { id: 1, no: 'MK-000001', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-07T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [1] }),
+    });
+    ac('/stok/mal-kabul');
+    fireEvent.change(await screen.findByLabelText('Malzeme'), { target: { value: '901' } });
+    expect(await screen.findByText(/Deneme sac · Hammadde · HM-001 · kg/)).toBeTruthy();
+    expect(await screen.findByLabelText(/Sayılan miktar \(toplam, kg\)/)).toBeTruthy();
+    expect(await screen.findByText('A-02-01')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Plastik kasa/ }));
+    fireEvent.change(screen.getByLabelText('Ambalaj sayısı'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Ambalaj başına miktar'), { target: { value: '2,5' } });
+    expect((screen.getByLabelText(/Sayılan miktar/) as HTMLInputElement).value).toBe('12,5');
+    fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
+    fireEvent.change(screen.getByLabelText('Döküm no'), { target: { value: 'D-7' } });
+    const teslim = screen.getByRole('button', { name: 'Teslim al' });
+    fireEvent.click(teslim);
+    fireEvent.click(teslim);
+    expect(await screen.findByText('Mal kabul kaydedildi.')).toBeTruthy();
+    expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1);
+    expect(screen.getAllByText('Mal kabul kaydedildi.')).toHaveLength(1);
+  });
   it('soru 104 a: siparişsiz satın alma satırında uyarı çıkar; Diğer türünde çıkmaz', async () => {
     sunucuKur(DEPOCU, {
       'GET /stok/konumlar': () => json(200, bosListe satisfies KonumlarCevabi),

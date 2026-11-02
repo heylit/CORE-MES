@@ -6,6 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { TalepCevabi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { ISTEK_KIMLIGI_BASLIGI } from '../../ortak/veri/api.ts';
 import { rotalar } from './rotalar.tsx';
 
 export const YONETICI: Kullanici = {
@@ -15,7 +16,7 @@ export const YONETICI: Kullanici = {
 };
 export const OKUR: Kullanici = { id: 2, ad: 'Deneme Okur', islemler: [] };
 
-export interface Cagri { yontem: string; yol: string; govde: unknown }
+export interface Cagri { yontem: string; yol: string; govde: unknown; istekKimligi?: string }
 type Yanit = (yol: string, yontem: string, govde: unknown) => Response | undefined;
 
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -27,7 +28,8 @@ export function sunucuKur(kullanici: Kullanici, yanit: Yanit): Cagri[] {
     const yol = adres.replace('/api', '');
     const yontem = ayar?.method ?? 'GET';
     const govde: unknown = typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined;
-    cagrilar.push({ yontem, yol, govde });
+    const istekKimligi = (ayar?.headers as Record<string, string> | undefined)?.[ISTEK_KIMLIGI_BASLIGI];
+    cagrilar.push({ yontem, yol, govde, ...(istekKimligi === undefined ? {} : { istekKimligi }) });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     return yanit(yol, yontem, govde) ?? json(404, { kod: 'BULUNAMADI', mesaj: yol });
   }));
