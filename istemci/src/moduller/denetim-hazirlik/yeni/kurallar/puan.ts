@@ -14,7 +14,8 @@ export const kuralBaglami = (profil: Profil, program: ProgramKodu): KuralBaglami
 });
 
 export interface Risk { q: Soru; v: number; lvl: Seviye }
-export interface GrupPuani { num: number; den: number; n: number; a: number }
+// p: puanlanan (cevaplı, N/A değil) soru; yüzde ancak en az bir puanlanan soru varken gösterilir.
+export interface GrupPuani { num: number; den: number; n: number; a: number; p: number }
 export interface PuanSonucu {
   pct: number | null;
   defPct: number | null;
@@ -35,25 +36,28 @@ export interface PuanSonucu {
 // Tanımlı (savunma) şartlar yalnız açıkça seçilince sayılır.
 export const aktifSorular = (pg: ProgramTanimi, def: boolean): Soru[] => pg.Q.filter((x) => def || !x.d);
 
-// Hazırlık puanı: soru ağırlığı (1-3) x puan; N/A dışarıda. Kritik soruda 0 majör, 1 ve altı minör, 2 gözlem.
+// Hazırlık puanı (DH-4 a): soru ağırlığı (1-3) x puan, bütün sorulara bölünür; cevapsız soru 0 puan sayılır, N/A dışarıdadır.
+// Hiç puanlanan soru yoksa yüzde yoktur (sıfır uydurulmaz). Kritik soruda 0 majör, 1 ve altı minör, 2 gözlem.
 // Savunma ekleri (S) ayrı yüzdedir ve karara girmez.
 export function puanHesapla(qs: readonly Soru[], ans: Readonly<Record<string, Cevap>>, pg: ProgramTanimi): PuanSonucu {
-  let num = 0, den = 0, dnum = 0, dden = 0, answered = 0, na = 0, good = 0;
+  let num = 0, den = 0, dnum = 0, dden = 0, answered = 0, na = 0, good = 0, puanlanan = 0, dpuanlanan = 0;
   const groups: Record<string, GrupPuani> = {};
   const risks: Risk[] = [];
   const ci = { major: 0, minor: 0 };
   for (const x of qs) {
-    const g = groups[x.g] ?? (groups[x.g] = { num: 0, den: 0, n: 0, a: 0 });
+    const g = groups[x.g] ?? (groups[x.g] = { num: 0, den: 0, n: 0, a: 0, p: 0 });
     g.n++;
     const a = ans[x.id];
+    if (a === 'na') { answered++; g.a++; na++; continue; }
+    if (x.g === 'S') dden += 3 * x.w; else den += 3 * x.w;
+    g.den += 3 * x.w;
     if (a === undefined) continue;
     answered++;
     g.a++;
-    if (a === 'na') { na++; continue; }
+    g.p++;
     const v = Number(a);
-    if (x.g === 'S') { dnum += v * x.w; dden += 3 * x.w; } else { num += v * x.w; den += 3 * x.w; }
+    if (x.g === 'S') { dnum += v * x.w; dpuanlanan++; } else { num += v * x.w; puanlanan++; }
     g.num += v * x.w;
-    g.den += 3 * x.w;
     let lvl: Seviye | null = null;
     if (v === 0 && x.w === 3) lvl = 'major';
     else if (v <= 1) lvl = 'minor';
@@ -66,16 +70,16 @@ export function puanHesapla(qs: readonly Soru[], ans: Readonly<Record<string, Ce
   }
   const sira: Record<Seviye, number> = { major: 0, minor: 1, obs: 2 };
   risks.sort((a, b) => sira[a.lvl] - sira[b.lvl] || b.q.w - a.q.w || a.v - b.v);
-  const pct = den ? Math.round((num / den) * 100) : null;
+  const pct = puanlanan > 0 && den ? Math.round((num / den) * 100) : null;
   const c = { major: 0, minor: 0, obs: 0 };
   for (const r of risks) c[r.lvl]++;
   return {
-    pct, defPct: dden ? Math.round((dnum / dden) * 100) : null, isoMajor: ci.major, isoMinor: ci.minor, answered, na, total: qs.length, groups, risks,
+    pct, defPct: dpuanlanan > 0 && dden ? Math.round((dnum / dden) * 100) : null, isoMajor: ci.major, isoMinor: ci.minor, answered, na, total: qs.length, groups, risks,
     major: c.major, minor: c.minor, obs: c.obs, good, verdict: pct === null ? null : pg.verdict(pct, ci),
   };
 }
 
-export const grupYuzdesi = (g: GrupPuani | undefined): number | null => (g && g.den ? Math.round((g.num / g.den) * 100) : null);
+export const grupYuzdesi = (g: GrupPuani | undefined): number | null => (g && g.p > 0 && g.den ? Math.round((g.num / g.den) * 100) : null);
 
 // Kanıt işaretlerinden puan önerisi: hiçbiri 0, hepsi 3, yarıdan az 1, yarı ve üstü 2.
 export function puanOner(isaretler: readonly boolean[] | undefined): Cevap | null {
