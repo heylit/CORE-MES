@@ -5,7 +5,7 @@ import type {
   AdimOlcusu, EmirAkisiCevabi, EmirListesiCevabi, HammaddePartisi, Olcu, Serit, StatuKalisi,
 } from '#paylasilan/sozlesme/akis.ts';
 import { DurumKutusu, Girdi, Kart, Rozet, SayiKarti, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BOLUM_ADLARI, BOLUM_SIRASI, eksen, sureMetni, zamanMetni } from './gorunum.ts';
 import './akis.css';
@@ -25,7 +25,7 @@ export function AkisEmirleri() {
   const git = useNavigate();
   const liste = useQuery({ queryKey: anahtarlar.emirler, queryFn: () => api.get<EmirListesiCevabi>('/akis/emirler') });
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
+  if (liste.isError) return <Hata hata={liste.error} ekranIletisi="Emir listesi alınamadı." yenile={() => { void liste.refetch(); }} />;
   const aranan = ara.trim().toLocaleLowerCase('tr-TR');
   const satirlar = aranan === '' ? liste.data.emirler
     : liste.data.emirler.filter((e) => `${e.emirNo} ${e.urun}`.toLocaleLowerCase('tr-TR').includes(aranan));
@@ -151,10 +151,24 @@ function Yolculuk({ a }: { a: EmirAkisiCevabi }) {
   );
 }
 
+// Sunucunun iletisi gösterilir; istek hatası (4xx) yeniden denemekle düzelmez, düğme yalnız ağ ve sunucu hatasında çıkar.
+function Hata({ hata, ekranIletisi, yenile, listeye = false }: { hata: unknown; ekranIletisi: string; yenile: () => void; listeye?: boolean }) {
+  const kalici = hata instanceof ApiHatasi && hata.durum >= 400 && hata.durum < 500;
+  return (
+    <DurumKutusu durum="hata" mesaj={hataIletisi(hata, ekranIletisi)} {...(kalici ? {} : { yenile })}>
+      {kalici && listeye && <Link to="/akis">Emir listesi</Link>}
+    </DurumKutusu>
+  );
+}
+
+const EMIR_YOK = 'Üretim emri bulunamadı.';
+
 export function EmirYolculugu() {
   const id = Number(useParams().id);
-  const akis = useQuery({ queryKey: anahtarlar.emir(id), queryFn: () => api.get<EmirAkisiCevabi>(`/akis/emirler/${String(id)}`) });
+  const gecerli = Number.isSafeInteger(id) && id > 0;
+  const akis = useQuery({ queryKey: anahtarlar.emir(id), queryFn: () => api.get<EmirAkisiCevabi>(`/akis/emirler/${String(id)}`), enabled: gecerli });
+  if (!gecerli) return <DurumKutusu durum="hata" mesaj={EMIR_YOK}><Link to="/akis">Emir listesi</Link></DurumKutusu>;
   if (akis.isPending) return <DurumKutusu durum="yukleniyor" />;
-  if (akis.isError) return <DurumKutusu durum="hata" yenile={() => { void akis.refetch(); }} />;
+  if (akis.isError) return <Hata hata={akis.error} ekranIletisi="Emirin akışı alınamadı." listeye yenile={() => { void akis.refetch(); }} />;
   return <Yolculuk a={akis.data} />;
 }
