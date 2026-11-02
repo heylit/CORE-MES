@@ -29,8 +29,9 @@ test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görün
   await expect(page.locator('.tc-ikinci')).toHaveCount(1);
 });
 
+// /ik yeni ekrandır (1614); İK'nın eski sayfası PDKS aktarma kabuk şeridiyle açılır.
 test('eski ekranda kabuğun ikinci menü şeridi durur', async ({ page, ac }) => {
-  await ac('/ik');
+  await ac('/ik/pdks');
   await expect(page.getByRole('navigation', { name: 'İnsan Kaynakları menüsü' })).toBeVisible();
 });
 

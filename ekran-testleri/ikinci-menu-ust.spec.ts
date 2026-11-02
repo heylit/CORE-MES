@@ -4,7 +4,8 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 // menüyü üstte açar, ana menünün yanında ikinci bir sütun açılmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
-const SAYFALAR = ['/stok', '/vardiya', '/siparisler', '/ayarlar', '/ik'];
+// /ik yeni ekrandır, ikinci menüyü kendi sekmesi olarak çizer (1614); İK'da kabuk şeridi PDKS aktarma sayfasında kalır.
+const SAYFALAR = ['/stok', '/vardiya', '/siparisler', '/ayarlar', '/ik/pdks'];
 
 test('ikinci menü içeriğin üstünde, içerik genişliğinde şerittir', async ({ page, ag, ac }) => {
   for (const yol of SAYFALAR) {
