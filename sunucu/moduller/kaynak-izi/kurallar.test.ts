@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bolumGorunur, gorunurBolumler, kaynakSuz, sonYediGun, type AramaAdayi } from './kurallar.ts';
+import { adimMetni, bolumGorunur, gorunurBolumler, kaynakSuz, sonYediGun, type AramaAdayi } from './kurallar.ts';
 
 test('KI-1 bölüm sahibinin okuma işlemlerinden biriyle görünür; işlemsiz kişide hiçbiri', () => {
   assert.equal(bolumGorunur(['sayfa.istasyonlar'], 'tesis'), true);
@@ -9,6 +9,17 @@ test('KI-1 bölüm sahibinin okuma işlemlerinden biriyle görünür; işlemsiz 
   assert.equal(bolumGorunur(['sayfa.kaynak-izi'], 'maliyet'), false);
   assert.deepEqual(gorunurBolumler(['sayfa.kaynak-izi']), []);
   assert.deepEqual(gorunurBolumler(['oee.oku', 'finans.maliyet-oku', 'sayfa.vardiya']), ['vardiya', 'oee', 'maliyet']);
+  const hepsi = ['sayfa.istasyonlar', 'sayfa.vardiya', 'ik.oku', 'sayfa.uretim-emirleri', 'oee.oku', 'finans.maliyet-oku'];
+  assert.deepEqual(gorunurBolumler(hepsi, 'makine'), ['tesis'], 'KIZ-5: makinede yalnız tesis bölümü var');
+  assert.deepEqual(gorunurBolumler(hepsi, 'istasyon'), ['tesis', 'oee', 'maliyet']);
+  assert.deepEqual(gorunurBolumler(hepsi, 'kisi'), ['tesis', 'vardiya', 'izin', 'isler', 'maliyet']);
+});
+
+test('KIZ-5 iş adımı op no ve addan; ikisi de yoksa null', () => {
+  assert.equal(adimMetni(20, 'Tornalama'), '20 Tornalama');
+  assert.equal(adimMetni(null, 'Tornalama'), 'Tornalama');
+  assert.equal(adimMetni(30, '  '), '30');
+  assert.equal(adimMetni(null, null), null);
 });
 
 test('KI-2 kodda ya da adda arar, Türkçe harf duyarsız; kodu tam tutan önce, sonra aktif, tür ve ad', () => {

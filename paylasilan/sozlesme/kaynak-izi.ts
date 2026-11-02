@@ -80,7 +80,7 @@ export const kisi360Cevabi = z.object({
   // Bugün onaylı izinde mi (yalnız evet/hayır; izin türü ve gerekçesi İK'da kalır).
   izin: z.object({ bugunIzinli: z.boolean() }).nullable(),
   // Son yedi günde sayımı ya da katılımı olan iş emirleri, en yeni önce (en çok 20).
-  isler: z.array(z.object({ isEmriId: z.number().int().nullable(), emirNo: z.string(), parca: z.string(), saglam: z.number().nullable(), hurda: z.number().nullable() })).nullable(),
+  isler: z.array(z.object({ isEmriId: z.number().int().nullable(), emirNo: z.string(), adim: z.string().nullable(), parca: z.string(), saglam: z.number().nullable(), hurda: z.number().nullable() })).nullable(),
   maliyet: saatMaliyeti.nullable(),
   gorunurBolumler: z.array(z.string()),
 });

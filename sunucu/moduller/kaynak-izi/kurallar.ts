@@ -5,8 +5,17 @@ import { BOLUM_ISLEMLERI, type Bolum, type KaynakTuru } from '#paylasilan/sozles
 export const bolumGorunur = (islemler: readonly string[], bolum: Bolum): boolean =>
   (BOLUM_ISLEMLERI[bolum] as readonly string[]).some((i) => islemler.includes(i));
 
-export const gorunurBolumler = (islemler: readonly string[]): Bolum[] =>
-  (Object.keys(BOLUM_ISLEMLERI) as Bolum[]).filter((b) => bolumGorunur(islemler, b));
+// Kaynak türünün taşıdığı bölümler: listede olmayan bölüm o türde yoktur, görünür sayılmaz (makinede vardiya, OEE, maliyet yok).
+export const TUR_BOLUMLERI = {
+  istasyon: ['tesis', 'oee', 'maliyet'],
+  makine: ['tesis'],
+  kisi: ['tesis', 'vardiya', 'izin', 'isler', 'maliyet'],
+} as const satisfies Record<KaynakTuru, readonly Bolum[]>;
+
+export const gorunurBolumler = (islemler: readonly string[], tur?: KaynakTuru): Bolum[] =>
+  (Object.keys(BOLUM_ISLEMLERI) as Bolum[])
+    .filter((b) => tur === undefined || (TUR_BOLUMLERI[tur] as readonly Bolum[]).includes(b))
+    .filter((b) => bolumGorunur(islemler, b));
 
 export interface AramaAdayi { tur: KaynakTuru; id: number; kod: string | null; ad: string; aktif: boolean; ust: string | null }
 
@@ -19,6 +28,12 @@ export function kaynakSuz(adaylar: readonly AramaAdayi[], metin: string): AramaA
   return adaylar
     .filter((a) => m === '' || aramaSade(a.ad).includes(m) || (a.kod !== null && aramaSade(a.kod).includes(m)))
     .sort((a, b) => tam(a) - tam(b) || Number(b.aktif) - Number(a.aktif) || sira[a.tur] - sira[b.tur] || a.ad.localeCompare(b.ad, 'tr'));
+}
+
+// Aynı emrin iki iş emri ayrı satırdır; adım (op no ve ad) onları ayırır. İkisi de yoksa null (emir düzeyinde kayıt).
+export function adimMetni(opNo: number | null, adimAdi: string | null): string | null {
+  const m = [opNo === null ? null : String(opNo), adimAdi?.trim() || null].filter((x) => x !== null).join(' ');
+  return m === '' ? null : m;
 }
 
 // KI-3: OEE penceresi son yedi gündür (bugün dahil).
