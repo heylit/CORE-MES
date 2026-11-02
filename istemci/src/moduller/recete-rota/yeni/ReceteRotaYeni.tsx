@@ -129,7 +129,8 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
     <>
       {/* Bölümler kabuğun ikinci menü şeridindedir (553 1 a); eski ekranın sırası (497/1 a): şeridin altında kenardan kenara plan şeridi,
           sonra bölüm başı. */}
-      {veri.data && !PLANSIZ.has(sekme.anahtar) && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
+      {/* Plan şeridi planı yazanındır (RR-9): plan yazmayan rol (kalite, CAM) onu ve pasif "Onaya gönder"i görmez. */}
+      {veri.data && yetki.planYaz && !PLANSIZ.has(sekme.anahtar) && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <div className="tc-rry-govde">
         <BolumBasi key={sekme.anahtar} baslik={BASLIKSIZ.has(sekme.anahtar) ? null : sekme.baslik} aciklama={BOLUM_ACIKLAMALARI[sekme.anahtar]} />
         {motorOkunamadi && !PLANSIZ.has(sekme.anahtar) && <p className="tc-rry-not" role="status">{MOTOR_OKUNAMADI}</p>}

@@ -80,7 +80,9 @@
 .tc-rr3-emir > .tc-rr3-no > .tc-rr3-ilerleme { display: flex; flex-direction: row; align-items: center; align-self: stretch; gap: var(--b-2); }
 .tc-rr3-emir > .tc-rr3-no > .tc-rr3-ilerleme progress { flex: 1; }
 /* Emir no kırılmaz (eski ekranda tek satır); sütun en az onun genişliğindedir. Eski ekran gibi kalın, düz yazı. */
-.tc-rr3-emirno { font-size: var(--yazi-m); font-weight: 700; letter-spacing: var(--harf-aralik-02); white-space: nowrap; overflow-wrap: normal; }
+/* Uzun emir no sütununu taşırmaz (RR-9: taşan satır sağdaki tampon rozetinin altına giriyordu); tamamı title'da ve ayrıntıdadır. */
+.tc-rr3-emirno { font-size: var(--yazi-m); font-weight: 700; letter-spacing: var(--harf-aralik-02); white-space: nowrap; overflow-wrap: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tc-rr3-emir > .tc-rr3-no > * { max-width: 100%; }
 /* Eski ekranın küçük etiketleri (805 R2): öncelik hap, tür ve durum kutu, revizyon hap; metin her zaman yazılır. */
 .tc-rr3-oncelik, .tc-rr3-rev, .tc-rr3-tampon, .tc-rr3-durum, .tc-rr3-etiket {
   display: inline-block; padding: var(--cizgi-ince) var(--b-2); border: var(--cizgi-ince) solid var(--edge);

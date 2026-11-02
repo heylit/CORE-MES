@@ -142,7 +142,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
         <span className="tc-rr3-no">
           <span className="tc-rr3-etiketler">
             {derinlik > 0 && <Simge ad={o.kol ? 'route' : 'layers'} boyut="k" />}
-            <b className="tc-rr3-emirno">{o.no}</b>
+            <b className="tc-rr3-emirno" title={o.no}>{o.no}</b>
             {o.priority <= 2 && <span className="tc-rr3-oncelik" data-oncelik={String(o.priority)}>{ONCELIK_ADI[o.priority] ?? ''}</span>}
           </span>
           <span className="tc-rr3-urun-ad">
