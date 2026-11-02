@@ -402,6 +402,13 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
     expect(istekler.some((i) => i.startsWith('/stok/'))).toBe(false);
     cleanup();
+    // EM-1: stok.istek (malzeme isteme) stok okuması açmaz; vardiya sorumlusu hata kutusu değil açıklamayı görür.
+    const istekci = sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.istek'] });
+    ac(<HazirSablonlar />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
+    expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
+    expect(istekci.some((i) => i.startsWith('/stok/'))).toBe(false);
+    cleanup();
     sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.giris'] });
     ac(<HazirSablonlar />);
     fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
