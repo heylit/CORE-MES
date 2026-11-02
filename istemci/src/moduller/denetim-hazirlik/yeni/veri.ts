@@ -21,9 +21,18 @@ const EN_UZUN_BEKLEME_MS = 60_000;
 export const CATISMA_ILETISI = 'Bu kayıt başka bir kişi tarafından değiştirildi; sayfayı yenileyin.';
 export const YETKI_ILETISI = 'Bu değişikliği kaydetme yetkiniz yok; değişiklik kaydedilmedi.';
 export const BAGLANTI_ILETISI = 'Değişiklik sunucuya kaydedilemedi; bağlantı dönünce kendiliğinden yeniden denenir. Sayfayı kapatmayın.';
+export const BUYUK_ILETISI = 'Kayıt sunucunun kabul ettiği boyutu aştı; son değişiklik kaydedilmedi ve ekran son kaydedilen hâle döndü. Yöneticiye haber verin.';
+export const REDDEDILDI_ILETISI = 'Sunucu bu değişikliği kabul etmedi; ekran son kaydedilen hâle döndü.';
+
+// Yeniden denemekle geçmeyen redler (yetki, doğrulama, boyut): değişiklik bırakılır. 401 oturum dönünce geçer, 409 çakışmadır;
+// ikisi burada değildir.
+const KALICI_RET = new Set([400, 403, 404, 413, 422]);
+const retIletisi = (e: ApiHatasi): string =>
+  e.durum === 413 ? BUYUK_ILETISI : e.durum === 403 ? (e.sunucuIletisi ?? YETKI_ILETISI) : (e.sunucuIletisi ?? REDDEDILDI_ILETISI);
 
 // kayitli: sunucudakiyle aynı; bekliyor: yazılacak değişiklik var; hata: bağlantı sorunu, yeniden denenir;
-// catisma: başkası yazdı, yazma durdu (yenile); yetkisiz: son değişiklik reddedildi, sonrakiler denenir.
+// catisma: başkası yazdı, yazma durdu (yenile); yetkisiz: son değişiklik reddedildi (yetki, doğrulama ya da boyut), ekran son kaydedilen
+// hâle döndü, sonrakiler denenir.
 export type KayitDurumu = 'kayitli' | 'bekliyor' | 'hata' | 'catisma' | 'yetkisiz';
 
 export interface Yukleme {
@@ -74,19 +83,22 @@ export function useDepoYazici({ ilk, uyar }: Secenek): DepoYazici {
   const [depo, depoYazDurum] = useState<Depo | null>(ilk?.depo ?? null);
   const [kayit, kayitYaz] = useState<KayitDurumu>('kayitli');
   const son = useRef<Depo | null>(ilk?.depo ?? null);
+  // Sunucudaki son hâl: reddedilen değişiklik ekranda kalmasın diye buna dönülür.
+  const kaydedilen = useRef<Depo | null>(ilk?.depo ?? null);
   const surum = useRef<number | null>(ilk?.surum ?? null);
   const yazilan = useRef<string | null>(ilk ? depoMetni(ilk.depo) : null);
   const zamanlayici = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bekleme = useRef(2500);
   const durdu = useRef(false);
   const yaziyor = useRef(false);
-  const uyarildi = useRef({ yetki: false, baglanti: false });
+  const uyarildi = useRef({ baglanti: false });
   const uyarRef = useRef(uyar);
   uyarRef.current = uyar;
 
   useEffect(() => {
     if (!ilk) return;
     son.current = ilk.depo;
+    kaydedilen.current = ilk.depo;
     surum.current = ilk.surum;
     yazilan.current = depoMetni(ilk.depo);
     durdu.current = false;
@@ -97,23 +109,28 @@ export function useDepoYazici({ ilk, uyar }: Secenek): DepoYazici {
   const gonder = useCallback(async (): Promise<void> => {
     zamanlayici.current = null;
     if (durdu.current || !son.current || yaziyor.current) return;
-    const metin = depoMetni(son.current);
+    const gonderilen = son.current;
+    const metin = depoMetni(gonderilen);
     if (metin === yazilan.current) { kayitYaz('kayitli'); return; }
     yaziyor.current = true;
     try {
       const c = await api.post<BelgeCevabi>('/denetim-hazirlik/belge/yaz', { yol: BELGE_YOLU, kip: 'tam', veri: { deger: metin }, beklenenSurum: surum.current });
       surum.current = c.belge?.surum ?? surum.current;
       yazilan.current = metin;
+      kaydedilen.current = gonderilen;
       bekleme.current = 2500;
       uyarildi.current.baglanti = false;
       kayitYaz(depoMetni(son.current) === metin ? 'kayitli' : 'bekliyor');
     } catch (e) {
-      if (e instanceof ApiHatasi && e.durum === 403) {
-        // Yetki reddi çakışma değildir: yazma durmaz, yalnız bu değişiklik kaydedilmez. Reddedilen hâl yazılmış sayılır ki aynı
-        // istek döngüye girmesin; sonraki değişiklik yeniden denenir.
-        yazilan.current = metin;
+      if (e instanceof ApiHatasi && KALICI_RET.has(e.durum)) {
+        // Kalıcı ret çakışma değildir: yazma durmaz, yalnız bu değişiklik bırakılır. Ekran son kaydedilen hâle döner; reddedilen hâl
+        // ekranda kalsaydı sonraki her tam yazma onu da taşır ve yine reddedilirdi. Her ret söylenir: her biri kaybolan bir değişikliktir.
+        const geri = kaydedilen.current ?? gonderilen;
+        son.current = geri;
+        yazilan.current = depoMetni(geri);
+        depoYazDurum(geri);
         kayitYaz('yetkisiz');
-        if (!uyarildi.current.yetki) { uyarildi.current.yetki = true; uyarRef.current(e.sunucuIletisi ?? YETKI_ILETISI); }
+        uyarRef.current(retIletisi(e));
       } else if (e instanceof ApiHatasi && e.durum === 409) {
         durdu.current = true;
         kayitYaz('catisma');
@@ -147,6 +164,7 @@ export function useDepoYazici({ ilk, uyar }: Secenek): DepoYazici {
     const d = depoOku(belgeMetni(c));
     if (zamanlayici.current) { clearTimeout(zamanlayici.current); zamanlayici.current = null; }
     son.current = d;
+    kaydedilen.current = d;
     surum.current = c.belge?.surum ?? null;
     yazilan.current = depoMetni(d);
     durdu.current = false;
@@ -164,6 +182,7 @@ export function useDepoYazici({ ilk, uyar }: Secenek): DepoYazici {
         if (yeniSurum === surum.current || zamanlayici.current !== null || yaziyor.current) return;
         const d = depoOku(belgeMetni(c));
         son.current = d;
+        kaydedilen.current = d;
         surum.current = yeniSurum;
         yazilan.current = depoMetni(d);
         depoYazDurum(d);

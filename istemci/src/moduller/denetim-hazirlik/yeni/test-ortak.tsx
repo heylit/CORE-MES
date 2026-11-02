@@ -58,7 +58,10 @@ export function sahteSunucu(s: SahteSunucuSecenegi = {}): SahteSunucu {
     if (yontem === 'POST' && yol === '/denetim-hazirlik/belge/yaz') {
       const g = JSON.parse(String(secenek?.body)) as { veri: { deger: string }; beklenenSurum: number | null };
       sonuc.yazilanlar.push({ deger: g.veri.deger, beklenenSurum: g.beklenenSurum });
-      if (s.yazmaDurumu) return json(s.yazmaDurumu, { kod: s.yazmaDurumu === 409 ? 'CAKISMA' : 'YETKISIZ', mesaj: s.yazmaDurumu === 409 ? 'Çakışma.' : 'Yetkiniz yok.' });
+      if (s.yazmaDurumu) {
+        const [kod, mesaj] = s.yazmaDurumu === 409 ? ['CAKISMA', 'Çakışma.'] : s.yazmaDurumu === 413 ? ['COK_BUYUK', 'Gönderilen veri büyük.'] : ['YETKISIZ', 'Yetkiniz yok.'];
+        return json(s.yazmaDurumu, { kod, mesaj });
+      }
       if (g.beklenenSurum !== (deger === null ? null : surum)) return json(409, { kod: 'CAKISMA', mesaj: 'Çakışma.' });
       deger = g.veri.deger;
       surum++;
