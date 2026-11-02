@@ -195,6 +195,8 @@ export function Personel() {
     {
       anahtar: 'giris',
       baslik: 'Giriş',
+      // Kullanıcı adı en çok 40 karakterdir ve bölünürse okunmaz; ad sütunundaki bölünme kuralı buraya uygulanmaz.
+      kirilmaz: true,
       // Kullanıcı adı yalnız rol yönetene gelir; ötekine giriş türü tek başına kalır.
       hucre: (k) => {
         const tur = !k.girisVar ? 'Yok' : k.pinVar ? 'PIN' : 'Parola';
