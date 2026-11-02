@@ -426,3 +426,73 @@ describe('R3 Stok', () => {
     }));
   });
 });
+
+describe('R3 kolun devamı: ana kola katılır ya da ayrı ilerler (1827; 1825 a+b)', () => {
+  const adim = (seq: number) => ({
+    id: `s${String(seq)}`, seq, opNo: seq * 10, opId: '21', name: `Adım ${String(seq)}`, stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null,
+    setup: 10, proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+    digerAdaylar: [], ins: [], outs: [],
+  });
+  // Ana emir 61 üç adımlı rotada; kol 62 birinci adımdan sonra ayrılır. m = 4 (rota uzunluğu + 1) sunucuda "ayrı ilerler"dir.
+  const kollu = (m: number) => {
+    const d = ornekDurum();
+    d.routes = { '11': { base: null, steps: [adim(1), adim(2), adim(3)] } } as unknown as typeof d.routes;
+    const ana = { ...d.emirler!.orders[0]!, status: 'serbest' as const };
+    d.emirler = { ...d.emirler!, orders: [ana, { ...ana, id: '62', kayitNo: 62, no: 'UE-0002', qty: 2, parentId: '61', kol: { n: 1, m }, surum: 4 }] };
+    return d;
+  };
+  const okuma = (id: number, ust: number | null) => () => json(200, { emir: {
+    id, parti: { ustEmirId: ust, bolunmeSira: ust === null ? null : 2, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null },
+    isEmirleri: [1, 2, 3].map((s) => ({
+      id: 700 + s, sira: s, opNo: s * 10, durum: 'bekliyor', ad: `Adım ${String(s)}`, tip: { id: 21, ad: 'Tornalama', kod: 'TOR' }, kaynak: null, istasyon: null,
+      ayarSuresiDk: '10', birimSureDk: '2', terminGun: null, bilesenler: [], adaylar: [], fason: null, saglamAdet: null, baslama: null, bitis: null,
+    })),
+  } });
+  const kolAc = async () => {
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: /UE-0002/ }));
+    const ayrinti = within(b).getByLabelText('UE-0002 ayrıntısı');
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0002 için diğer işlemler' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Katılma ya da ayrı ilerleme' }));
+    return within(ayrinti).getByRole('group', { name: 'Kolun devamı' });
+  };
+  const yazmalar = {
+    'GET /adimli-emirler/62': okuma(62, 61),
+    'GET /adimli-emirler/61': okuma(61, null),
+    'PUT /adimli-emirler/62/birlesme-plani': () => json(200, { id: 62, surum: 5 }),
+    'POST /adimli-emirler/62/birlesme-plani': () => json(200, { id: 62, surum: 5 }),
+  };
+  const plan = (istekler: readonly Istek[]) => istekler.filter((i) => i.yol === '/adimli-emirler/62/birlesme-plani');
+
+  it('katılan kolda "Ayrı ilerler" boş katılma adımıyla sahibine gider (izinli)', async () => {
+    const istekler = sunucuKur(YONETICI, { durum: kollu(3), yazmalar });
+    rrAc();
+    const grup = await kolAc();
+    expect(within(grup).getByRole('button', { name: 'Ana kola katılır' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(grup).getByRole('button', { name: 'Ayrı ilerler' }));
+    await waitFor(() => expect(plan(istekler)).toHaveLength(1));
+    expect(plan(istekler)[0]?.govde).toEqual({ birlesmeOpNo: null, surum: 4 });
+  });
+
+  it('ayrı ilerleyen kol "Ana kola katılır" ile ayrıldığı adımın ardılında katılır (izinli)', async () => {
+    const istekler = sunucuKur(YONETICI, { durum: kollu(4), yazmalar });
+    rrAc();
+    const grup = await kolAc();
+    expect(screen.getAllByText(/ana emre katılmaz/).length).toBeGreaterThan(0);
+    expect(within(grup).getByRole('button', { name: 'Ayrı ilerler' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(grup).getByRole('button', { name: 'Ana kola katılır' }));
+    await waitFor(() => expect(plan(istekler)).toHaveLength(1));
+    expect(plan(istekler)[0]?.govde).toEqual({ birlesmeOpNo: 20, surum: 4 });
+  });
+
+  it('emir yazma yetkisi olmayan kişi seçimi görmez (reddedilen)', async () => {
+    const istekler = sunucuKur(kisi(['rota.emre-kopyala']), { durum: kollu(3), yazmalar });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: /UE-0002/ }));
+    const ayrinti = within(b).getByLabelText('UE-0002 ayrıntısı');
+    expect(within(ayrinti).queryByRole('button', { name: 'UE-0002 için diğer işlemler' })).toBeNull();
+    expect(within(ayrinti).queryByRole('group', { name: 'Kolun devamı' })).toBeNull();
+    expect(plan(istekler)).toEqual([]);
+  });
+});

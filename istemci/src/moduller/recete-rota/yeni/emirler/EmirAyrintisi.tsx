@@ -65,7 +65,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
     : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
   const diger: MenuOgesi[] = [
     ...(acik && yetki.emirYaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
-    ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma adımını değiştir', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
+    ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
     ...(ana && acik && yetki.emirYaz ? [{
       anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
       sec: () => {
@@ -182,6 +182,8 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
   const toplam = partiler.reduce((a, x) => a + x.qty, o.qty);
   const acik = acikMi(o);
   const kisa = (j: number) => { const a = adimlar[j - 1]; return a ? d.opdefs?.find((x) => x.id === a.opId)?.abbr ?? a.ad : String(j); };
+  // Ayrı ilerleyen kolun katılma yeri rotanın sonrasıdır (sunucu: birlesmeOpNo boş).
+  const kolAyri = o.kol !== null && o.kol.m > adimlar.length;
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
   const baslamis = adimlar.filter((a) => {
@@ -223,17 +225,42 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
     <div className="tc-rr3-yapi">
       {o.parentId !== null && (
         <p className="tc-rr3-ipucu">
-          {o.kol
-            ? `Kol emri: ana emrin ${String(o.kol.n)}. adımından sonra ${sayi(o.qty)} adetle ayrılır, ${String(o.kol.m)}. adımında ana emre yeniden bağlanır; ara adımları bu emir, ana emir de kalan miktarla yapar.`
-            : 'Alt emir: ana emre bağlı parti.'}
+          {o.kol && kolAyri
+            ? `Kol emri: ana emrin ${String(o.kol.n)}. adımından sonra ${sayi(o.qty)} adetle ayrılır ve ana emre katılmaz; ana rotanın kalan adımlarını bu emir kendisi yapar.`
+            : o.kol
+              ? `Kol emri: ana emrin ${String(o.kol.n)}. adımından sonra ${sayi(o.qty)} adetle ayrılır, ${String(o.kol.m)}. adımında ana emre yeniden bağlanır; ara adımları bu emir, ana emir de kalan miktarla yapar.`
+              : 'Alt emir: ana emre bağlı parti.'}
           {ana ? '' : ' Ana emri listede yok.'}
         </p>
       )}
       {acik && yetki.emirYaz && <ReworkSatirlari durum={d} emir={o} komut={komut} />}
       {o.kol && acik && islem === 'katil' && yetki.emirYaz && (
         <div className="tc-rr3-katil">
-          <h4>Katılma adımı</h4>
-          <p className="tc-rr3-ipucu">Bu kol ana emre {o.kol.m} {kisa(o.kol.m)} adımında katılır. Yeni adımı seçin; seçim hemen uygulanır.</p>
+          <h4>Kolun devamı</h4>
+          {/* 1825 a+b: kol ya ana kola yeniden katılır (varsayılan) ya da ana rotanın kalan adımlarını kopyalayıp ayrı ilerler; emir sayısı değişmez. */}
+          <div className="tc-rr3-arac" role="group" aria-label="Kolun devamı">
+            <Dugme tur={kolAyri ? 'ikincil' : 'birincil'} simge="route" aria-pressed={!kolAyri} disabled={!kolAyri || komut.mesgul || o.kol.n + 1 > adimlar.length}
+              onClick={() => {
+                // Hatalı parça kolunun varsayılanı gibi ayrıldığı adımın ardılında katılır; başka adım aşağıdaki şeritten seçilir.
+                const m = o.kol!.n + 1;
+                islemKapat();
+                void komut.calistir('emir-katilma', { id: o.id, m, surum: o.surum }, `${o.no} ${String(m)}. adımda ${ana?.no ?? 'ana emre'} bağlanır.`);
+              }}>
+              Ana kola katılır
+            </Dugme>
+            <Dugme tur={kolAyri ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={kolAyri} disabled={kolAyri || komut.mesgul}
+              onClick={() => {
+                islemKapat();
+                void komut.calistir('emir-katilma', { id: o.id, m: null, surum: o.surum }, `${o.no} ayrı ilerler: ana rotanın kalan adımları bu emre kopyalandı.`);
+              }}>
+              Ayrı ilerler
+            </Dugme>
+          </div>
+          <p className="tc-rr3-ipucu">
+            {kolAyri
+              ? 'Bu kol ana emre katılmaz; ana rotanın kalan adımları bu emirdedir. "Ana kola katılır" ya da aşağıdan bir adım seçilirse kopyalanan bekleyen adımlar silinir ve kol o adımda katılır.'
+              : `Bu kol ana emre ${String(o.kol.m)} ${kisa(o.kol.m)} adımında katılır. Başka adım seçin ya da "Ayrı ilerler"i seçin; seçim hemen uygulanır.`}
+          </p>
           <AdimSeridi
             etiket="Katılma adımı" adimlar={adimlar} opdefs={d.opdefs} istasyonlar={d.stations}
             durum={(j) => (j === o.kol!.n ? ['ayril', 'Kol bu adımdan sonra ayrılır'] : j === o.kol!.m ? ['birles', 'Şu an burada katılır']
