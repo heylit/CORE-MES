@@ -45,3 +45,9 @@ export const takvimCevabi = z.object({
   tatiller: z.array(takvimTatiliSemasi),
 });
 export type TakvimCevabi = z.output<typeof takvimCevabi>;
+
+// Geciken kayıtlar (1816, TKV-1): ekranın okuma penceresi (93 gün) eski gecikmeleri dışarıda bırakır; bu okuma bugünden
+// önceki GECIKEN_GERI_GUN günü tarar ve yalnız kapanmamış kayıtları verir. Sınır, her kaynağın bütün geçmişini okumamak içindir.
+export const GECIKEN_GERI_GUN = 730;
+export const takvimGecikenCevabi = z.object({ kayitlar: z.array(takvimKaydiSemasi) });
+export type TakvimGecikenCevabi = z.output<typeof takvimGecikenCevabi>;

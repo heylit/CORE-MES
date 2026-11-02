@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { TakvimCevabi, TakvimKaydi, TakvimKaynagi } from '#paylasilan/sozlesme/takvim.ts';
+import type { TakvimCevabi, TakvimGecikenCevabi, TakvimKaydi, TakvimKaynagi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Sekmeler, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -17,7 +17,8 @@ import './takvim.css';
 type Gorunum = 'takvim' | 'tablo' | 'kanban';
 type Kip = 'ay' | 'hafta' | 'gundem';
 
-// Özet, gündem, tablo ve kanban tek okumadır: son 61 gün ve gelecek 31 gün (sunucu sınırı 93 gün). Daha eskisi ay görünümünde gezilerek görülür.
+// Özet, gündem, tablo ve kanban tek okumadır: son 61 gün ve gelecek 31 gün (sunucu sınırı 93 gün). Daha eskisi ay görünümünde gezilerek görülür;
+// yalnız pencereden eski kapanmamış kayıtlar ayrı okumayla (/takvim/gecikenler) eklenir, "Geciken" onları da sayar (1816).
 const GERI_GUN = 61;
 const ILERI_GUN = 31;
 const AY_GUNDE_GOSTERILEN = 3;
@@ -27,6 +28,11 @@ function useTakvim(baslangic: string, bitis: string) {
     queryKey: anahtarlar.takvim(baslangic, bitis),
     queryFn: () => api.get<TakvimCevabi>(`/takvim?baslangic=${baslangic}&bitis=${bitis}`),
   });
+}
+
+// Pencereden eski gecikmeler pencere kayıtlarına eklenir; pencerede olan kayıt ikinci kez gelmez.
+function gecikenleriEkle(pencere: readonly TakvimKaydi[], gecikenler: readonly TakvimKaydi[], pencereBasi: string): TakvimKaydi[] {
+  return [...gecikenler.filter((k) => k.tarih < pencereBasi), ...pencere];
 }
 
 const siraliTarih = (a: TakvimKaydi, b: TakvimKaydi): number => (a.tarih < b.tarih ? -1 : a.tarih > b.tarih ? 1 : 0);
@@ -298,7 +304,12 @@ export function Takvim({ gorunum = 'takvim' }: { gorunum?: Gorunum }) {
   const [ozet, ozetYaz] = useState<OzetSuzgeci | null>(null);
   const [secili, seciliYaz] = useState<TakvimKaydi | null>(null);
 
-  const pencere = useTakvim(gunEkle(bugun, -GERI_GUN), gunEkle(bugun, ILERI_GUN));
+  const pencereBasi = gunEkle(bugun, -GERI_GUN);
+  const pencere = useTakvim(pencereBasi, gunEkle(bugun, ILERI_GUN));
+  const eskiGecikenler = useQuery({
+    queryKey: anahtarlar.gecikenler(bugun),
+    queryFn: () => api.get<TakvimGecikenCevabi>('/takvim/gecikenler'),
+  });
   const izgaraAraligi = kip === 'hafta' ? { baslangic: hafta, bitis: gunEkle(hafta, 6) } : ayIzgarasi(ay);
   const izgaraAcik = gorunum === 'takvim' && kip !== 'gundem';
   const izgara = useQuery({
@@ -324,9 +335,11 @@ export function Takvim({ gorunum = 'takvim' }: { gorunum?: Gorunum }) {
   };
   const haftayaGec = (g: string) => { haftaYaz(haftaBasi(g)); kipYaz('hafta'); };
 
-  if (pencere.isPending) return <Kart baslik="Takvim"><DurumKutusu durum="yukleniyor" /></Kart>;
-  if (pencere.isError) return <Kart baslik="Takvim"><DurumKutusu durum="hata" yenile={() => { void pencere.refetch(); }} /></Kart>;
-  const veri = pencere.data;
+  if (pencere.isPending || eskiGecikenler.isPending) return <Kart baslik="Takvim"><DurumKutusu durum="yukleniyor" /></Kart>;
+  if (pencere.isError || eskiGecikenler.isError) {
+    return <Kart baslik="Takvim"><DurumKutusu durum="hata" yenile={() => { void pencere.refetch(); void eskiGecikenler.refetch(); }} /></Kart>;
+  }
+  const veri: TakvimCevabi = { ...pencere.data, kayitlar: gecikenleriEkle(pencere.data.kayitlar, eskiGecikenler.data.kayitlar, pencereBasi) };
   const tumu = suz(veri.kayitlar, false);
   const gosterilen = suz(veri.kayitlar, true).sort(siraliTarih);
 

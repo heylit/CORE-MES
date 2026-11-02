@@ -22,14 +22,18 @@ const CEVAP: TakvimCevabi = {
   tatiller: [{ tarih: '2031-03-20', ad: 'Deneme tatili' }],
 };
 
+// Pencere 2031-01-10'da başlar: S-1 pencerede de olduğu için ikinci kez sayılmamalı, S-90 yalnız bu okumadan gelir.
+const ESKI_GECIKENLER = { kayitlar: [kayit({ kimlik: '90', tarih: '2030-11-20', no: 'S-90', baslik: 'Sipariş S-90' }), kayit({ kimlik: '7', tarih: '2031-03-05', no: 'S-7', baslik: 'Sipariş S-7' })] };
+
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function sunucuKur(yanit: () => Response = () => json(200, CEVAP)) {
+function sunucuKur(yanit: () => Response = () => json(200, CEVAP), gecikenler: unknown = { kayitlar: [] }) {
   const yollar: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
     const yol = adres.replace('/api', '');
     yollar.push(yol);
     if (yol.startsWith('/takvim?')) return yanit();
+    if (yol === '/takvim/gecikenler') return json(200, gecikenler);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
   return yollar;
@@ -98,5 +102,21 @@ describe('Takvim ekranı', () => {
     sunucuKur(() => json(500, { kod: 'SUNUCU', mesaj: 'Hata.' }));
     cizdir(<Takvim />);
     expect(await screen.findByRole('button', { name: /yeniden|Tekrar/i })).toBeTruthy();
+  });
+
+  it('pencereden eski geciken kayıt (1816) özette, gündemde ve kanbanda sayılır; pencerede olan iki kez sayılmaz', async () => {
+    const yollar = sunucuKur(undefined, ESKI_GECIKENLER);
+    cizdir(<Takvim />);
+    const ozet = await screen.findByRole('group', { name: 'Özet' });
+    expect(within(within(ozet).getByText('Geciken').closest('button')!).getByText('2')).toBeTruthy();
+    expect(yollar).toContain('/takvim/gecikenler');
+    fireEvent.click(within(ozet).getByText('Geciken'));
+    expect(screen.getByText('Sipariş S-90')).toBeTruthy();
+    expect(screen.getAllByText('Sipariş S-7')).toHaveLength(1);
+    cleanup();
+    sunucuKur(undefined, ESKI_GECIKENLER);
+    cizdir(<TakvimKanban />);
+    const gec = await screen.findByRole('region', { name: 'Geciken' });
+    expect(within(gec).getByText('Sipariş S-90')).toBeTruthy();
   });
 });

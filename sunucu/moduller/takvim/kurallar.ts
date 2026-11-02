@@ -37,3 +37,10 @@ export function kayitlariSirala(kayitlar: readonly TakvimKaydi[]): TakvimKaydi[]
   return [...kayitlar].sort((a, b) => (a.tarih !== b.tarih ? (a.tarih < b.tarih ? -1 : 1)
     : a.kaynak !== b.kaynak ? sira(a.kaynak) - sira(b.kaynak) : a.kimlik < b.kimlik ? -1 : a.kimlik > b.kimlik ? 1 : 0));
 }
+
+const GUN_MS = 86_400_000;
+const gunEkle = (t: string, gun: number): string => new Date(Date.parse(`${t}T00:00:00Z`) + gun * GUN_MS).toISOString().slice(0, 10);
+
+// Geciken taraması bugünden önceki `geriGun` gündür; bugün dahil değildir (bugünkü kayıt gecikmiş sayılmaz).
+export const gecikenAraligi = (bugun: string, geriGun: number): { baslangic: string; bitis: string } =>
+  ({ baslangic: gunEkle(bugun, -geriGun), bitis: gunEkle(bugun, -1) });
