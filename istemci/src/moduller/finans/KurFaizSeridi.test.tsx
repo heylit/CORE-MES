@@ -16,6 +16,7 @@ const OZET: KurFaizOzeti = {
     { paraBirimi: 'EUR', tarih: '2026-10-10', kur: '45.100000', girenAd: 'Deneme Muhasebe', giris: '2026-10-10T06:00:00.000Z', surum: 1 },
   ],
   faizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', aylikYuzde: '3.5000', girenAd: 'Deneme Muhasebe', giris: '2026-10-01T07:00:00.000Z' }],
+  gunlukFaizler: [], faizBirimi: 'aylik',
   sonGiris: { tur: 'kur', giris: '2026-10-13T06:44:00.000Z', girenAd: 'Deneme Satinalma' },
   gecmis: [
     { tur: 'kur', paraBirimi: 'USD', deger: '41.500000', tarih: '2026-10-13', duzeltme: true, girenAd: 'Deneme Satinalma', giris: '2026-10-13T06:44:00.000Z' },

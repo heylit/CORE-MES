@@ -14,7 +14,7 @@ function sunucuKur(yukleme: () => Response = () => json(200, { eklenen: 1, ayni:
     const yol = adres.replace('/api', '');
     istekler.push({ yontem: secenek?.method ?? 'GET', yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) : undefined, kimlik: new Headers(secenek?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol.startsWith('/finans/kur-faiz-araligi')) {
-      return json(200, { kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-27', kur: '41.850000' }, { paraBirimi: 'EUR', tarih: '2026-10-27', kur: '48.600000' }], faizler: [] });
+      return json(200, { kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-27', kur: '41.850000' }, { paraBirimi: 'EUR', tarih: '2026-10-27', kur: '48.600000' }], faizler: [], gunlukFaizler: [] });
     }
     if (yol === '/finans/kur-faiz/toplu-yukle') return yukleme();
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });

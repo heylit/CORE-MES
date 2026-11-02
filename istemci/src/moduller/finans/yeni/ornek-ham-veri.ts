@@ -90,10 +90,10 @@ export function ornekHamVeri(): FinansHamVerisi {
       sirketAdi: 'Deneme AS', sektor: 'uretim', nakitEsigi: '20000', beklenenAylikSatis: null, beklenenTahsilGunu: null, riskToleransi: 5, simulasyonSayisi: 400,
       cekKarsiliksizOlasiligi: '3', batikGunu: 180, anomaliEsigi: '3.5', agirlikLikidite: 20, agirlikNakit: 25, agirlikKarlilik: 20, agirlikVerimlilik: 15,
       agirlikBorcluluk: 20, bilancoDonen: null, bilancoStok: '1000', bilancoKvb: null, bilancoToplamBorc: null, bilancoOzkaynak: null, bilancoBirikmisKar: null,
-      kurulumTamam: true, caprazKurPayi: '2', surum: 3,
+      kurulumTamam: true, caprazKurPayi: '2', faizBirimi: 'aylik', surum: 3,
     },
     amortisman: [{ ay: '2026-09', tutarTl: '1500.00' }],
-    kurOzeti: { bugun: '2026-10-15', kurlar: [], faizler: [], sonGiris: null, gecmis: [] },
+    kurOzeti: { bugun: '2026-10-15', kurlar: [], faizler: [], gunlukFaizler: [], faizBirimi: 'aylik', sonGiris: null, gecmis: [] },
     beklenenOdemeler: [],
     sirketAdi: 'Deneme Sirketi',
   };

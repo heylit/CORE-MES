@@ -17,6 +17,12 @@ const FAIZ_BIRIMLERI = ['TRY', 'USD', 'EUR'] as const;
 const OZET_ANAHTARI = ['finans', 'kur-ozeti'] as const;
 
 const sayi = (deger: string, basamak: number): string => Number(deger).toLocaleString('tr-TR', { maximumFractionDigits: basamak });
+// 1700 b, 1725 a: günlük faiz ayrı tutulur; hesapların kullandığı birim finans ayarındadır.
+const TUR_ADI = { kur: 'kur', faiz: 'faiz', gunluk_faiz: 'günlük faiz' } as const;
+const gecmisDegeri = (tur: keyof typeof TUR_ADI, deger: string): string => (tur === 'kur' ? sayi(deger, 4) : tur === 'faiz' ? `aylık %${sayi(deger, 2)}` : `günlük %${sayi(deger, 4)}`);
+const gunlukNotu = (o: KurFaizOzeti): string | null => (o.gunlukFaizler.length === 0 ? null
+  : `Günlük: ${o.gunlukFaizler.map((f) => `${f.paraBirimi} %${sayi(f.gunlukYuzde, 4)}`).join(' · ')}`);
+const birimNotu = (o: KurFaizOzeti): string => `Hesaplarda ${o.faizBirimi === 'gunluk' ? 'günlük' : 'aylık'} faiz kullanılır (finans ayarı).`;
 const girdiSayisi = (metin: string): number | null => {
   const t = metin.trim().replace(/\s/g, '').replace(',', '.');
   if (t === '') return null;
@@ -102,6 +108,8 @@ function Panel({ o, yazabilir, kapat }: { o: KurFaizOzeti; yazabilir: boolean; k
         <div className="tc-kfs-blok">
           <h2 className="tc-kfs-baslik"><Simge ad="chart" boyut="k" />Aylık faiz</h2>
           <p className="tc-kfs-not">{FAIZ_BIRIMLERI.map((p) => { const f = o.faizler.find((x) => x.paraBirimi === p); return `${p} ${f ? `%${sayi(f.aylikYuzde, 2)}` : 'yok'}`; }).join(' · ')}</p>
+          {gunlukNotu(o) && <p className="tc-kfs-not">{gunlukNotu(o)}</p>}
+          <p className="tc-kfs-not">{birimNotu(o)}</p>
         </div>
       )}
       <div className="tc-kfs-blok tc-kfs-gecmis-blok">
@@ -110,9 +118,9 @@ function Panel({ o, yazabilir, kapat }: { o: KurFaizOzeti; yazabilir: boolean; k
           <ul className="tc-kfs-gecmis">
             {o.gecmis.map((g) => (
               <li key={`${g.tur}-${g.paraBirimi}-${g.tarih}-${g.giris}`}>
-                <span className="tc-kfs-tur" data-tur={g.tur}>{g.tur}</span>
+                <span className="tc-kfs-tur" data-tur={g.tur}>{TUR_ADI[g.tur]}</span>
                 <span className="tc-kfs-ne">
-                  <span className="mono">{g.paraBirimi} {g.tur === 'kur' ? sayi(g.deger, 4) : `aylık %${sayi(g.deger, 2)}`}</span>
+                  <span className="mono">{g.paraBirimi} {gecmisDegeri(g.tur, g.deger)}</span>
                   {g.duzeltme && <span className="tc-kfs-not"> düzeltme</span>}
                   <br /><span className="tc-kfs-not">{g.girenAd ?? 'bilinmiyor'}</span>
                 </span>
@@ -252,6 +260,8 @@ function FaizFormu({ o, kapat }: { o: KurFaizOzeti; kapat: () => void }) {
       {hata && <p className="tc-kfs-hata" role="alert">{hata}</p>}
       <div className="tc-kfs-eylem"><Dugme type="submit" tur="birincil" simge="check" yukleniyor={yaz.isPending}>Faizi kaydet</Dugme></div>
       <p className="tc-kfs-not">Yalnız değişen para birimi yazılır. Eski oranlar silinmez; teklif karşılaştırmaları yeni oranla hesaplanır.</p>
+      {gunlukNotu(o) && <p className="tc-kfs-not">{gunlukNotu(o)}</p>}
+      <p className="tc-kfs-not">{birimNotu(o)}</p>
     </form>
   );
 }

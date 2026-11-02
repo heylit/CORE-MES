@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Db } from '#cekirdek/db.ts';
 import { takvimKayitlari } from './disari.ts';
-import { pasifeAlmaEngeli, vergiSonGunu, vergiTakvimi } from './kurallar.ts';
+import { faizSec, pasifeAlmaEngeli, vergiSonGunu, vergiTakvimi } from './kurallar.ts';
 import {
   asiyorMu, belgeDuzeltmeHatasi, cekGecisiHatasi, dagitimHesapla, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
   hesapPasifHatasi, kdvOraniGecerliMi, mahsupTutarlari,
@@ -331,4 +331,15 @@ test('takvim (891): vergi son günü kayıt olarak gelir; bugünden önceki son 
     { kaynak: 'vergi', kimlik: '2026-11-26-muhtasar', tarih: '2026-11-26', no: null, baslik: 'Muhtasar ve prim hizmet beyannamesi', ilgili: 'Dönem: Ekim 2026', durum: 'Son gün', bitti: false },
     { kaynak: 'vergi', kimlik: '2026-11-30-kdv', tarih: '2026-11-30', no: null, baslik: 'KDV beyannamesi ve ödemesi', ilgili: 'Dönem: Ekim 2026', durum: 'Son gün', bitti: false },
   ]);
+});
+
+test('1700 b, 1725 a: faizSec ayardaki birimi alır, o birimde oran yoksa öbürünü çevirir; ikisi de yoksa null', () => {
+  const aylik = { yuzde: '3.0000', gecerlilikBaslangic: '2026-07-01' };
+  const gunluk = { yuzde: '0.120000', gecerlilikBaslangic: '2026-07-10' };
+  assert.deepEqual(faizSec('aylik', aylik, gunluk), { aylikYuzde: '3.0000', gunlukYuzde: (3 * 12) / 365, gecerlilikBaslangic: '2026-07-01', birim: 'aylik' });
+  assert.deepEqual(faizSec('gunluk', aylik, gunluk), { aylikYuzde: '3.6500', gunlukYuzde: 0.12, gecerlilikBaslangic: '2026-07-10', birim: 'gunluk' });
+  assert.equal(faizSec('aylik', undefined, gunluk)?.birim, 'gunluk');
+  assert.equal(faizSec('gunluk', aylik, undefined)?.birim, 'aylik');
+  assert.equal(faizSec('aylik', undefined, undefined), null);
+  assert.equal(faizSec('gunluk', undefined, undefined), null);
 });

@@ -1,6 +1,7 @@
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { durumKur, verileriHazirla, yuvarla, type FinansHamVerisi, type FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import { finansMotoru } from '#paylasilan/finans-motor/motor.ts';
+import { aylikFaizdenGunluk, gunlukFaizdenAylik } from '#paylasilan/sozlesme/finansman.ts';
 
 // Finans iş kuralları (saf). Numara (FNS-n) ON-PAKET-finans ve KURAL-TEST.md ile aynıdır.
 
@@ -406,7 +407,7 @@ export function topluKurFaizKarari(deger: string, kayitli: string | undefined): 
   return Number(kayitli) === Number(deger) ? 'ayni' : 'farkli';
 }
 // 1086 a: kur bugün ya da geçmiş günündür, faiz ileri tarihten başlayabilir. İlk ileri tarihli kur satırının sırası (0'dan), yoksa null.
-export function ileriTarihliKurSirasi(satirlar: readonly { tur: 'kur' | 'faiz'; tarih: string }[], bugun: string): number | null {
+export function ileriTarihliKurSirasi(satirlar: readonly { tur: 'kur' | 'faiz' | 'gunluk_faiz'; tarih: string }[], bugun: string): number | null {
   const i = satirlar.findIndex((s) => s.tur === 'kur' && s.tarih > bugun);
   return i < 0 ? null : i;
 }
@@ -462,4 +463,17 @@ export function gunlukSkorHesapla<F extends FirmaCekirdegi>(ham: FinansHamVerisi
   const skor = motor.runAnalysis().score;
   if (skor === null) return null;
   return { skor, nakit: yuvarla(motor.cashToday()).toFixed(2) };
+}
+
+// 1700 b, 1725 a: hesabın faizi ayardaki birimden gelir; o birimde o güne kadar başlamış oran yoksa öbür birimin oranı çevrilir.
+// Aylıktan çevrilen günlük yuvarlanmaz (planın bugünkü hesabı böyledir); günlükten çevrilen aylık, aylığın saklandığı dört ondalıkladır.
+// İkisi de yoksa null (oran bilinmiyor, sıfır değil).
+export type FaizBirimi = 'aylik' | 'gunluk';
+export interface FaizAdayi { yuzde: string; gecerlilikBaslangic: string }
+export interface SecilenFaiz { aylikYuzde: string; gunlukYuzde: number; gecerlilikBaslangic: string; birim: FaizBirimi }
+export function faizSec(tercih: FaizBirimi, aylik: FaizAdayi | undefined, gunluk: FaizAdayi | undefined): SecilenFaiz | null {
+  const aylikla = (a: FaizAdayi): SecilenFaiz => ({ aylikYuzde: a.yuzde, gunlukYuzde: aylikFaizdenGunluk(Number(a.yuzde)), gecerlilikBaslangic: a.gecerlilikBaslangic, birim: 'aylik' });
+  const gunlukle = (g: FaizAdayi): SecilenFaiz => ({ aylikYuzde: gunlukFaizdenAylik(Number(g.yuzde)).toFixed(4), gunlukYuzde: Number(g.yuzde), gecerlilikBaslangic: g.gecerlilikBaslangic, birim: 'gunluk' });
+  if (tercih === 'gunluk') return gunluk ? gunlukle(gunluk) : aylik ? aylikla(aylik) : null;
+  return aylik ? aylikla(aylik) : gunluk ? gunlukle(gunluk) : null;
 }
