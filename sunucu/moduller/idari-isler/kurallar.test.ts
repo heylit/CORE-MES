@@ -5,7 +5,7 @@ import type { YemekBildirVerisi } from '#paylasilan/sozlesme/idari-isler.ts';
 import {
   KM_GERI, aracBugundeMi, aracUyarilari, kmReddi, plakaBicimle,
   HESAP_DEGISTI, NEDEN_GEREK, SAYI_EKSI, YEMEK_GECMIS, YEMEK_ILERI, yemekBildirimReddi, yemekKadrosu, yemekSayisi,
-  ATIK_MIKTARI, MIKTAR_ARTI, SONRAKI_GEREK, SONRAKI_ONCE, YALNIZ_ATIK_MIKTARI, YAPILMA_GELECEK, bugundeMi, bugunSirasi, gecisHedefi, gecisReddi,
+  ATIK_MIKTARI, MIKTAR_ARTI, SONRAKI_GEREK, SONRAKI_ONCE, YALNIZ_ATIK_MIKTARI, YAPILMA_GELECEK, TARIH_ESKI, bugundeMi, bugunSirasi, gecisHedefi, gecisReddi,
   geriCekmeReddi, kontrolGrubu, senden, sonDurumMu, tarihEkle, yapildiSonucu,
 } from './kurallar.ts';
 import {
@@ -109,6 +109,8 @@ describe('idari-isler kuralları', () => {
     assert.deepEqual(yapildiSonucu(yasal, g, bugun), { sonraki: '2027-04-19' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, sonrakiTarih: '2027-01-01' }, bugun), { sonraki: '2027-01-01' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '2026-10-20' }, bugun), { ileti: YAPILMA_GELECEK, alan: 'yapilma' });
+    assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '1990-01-01' }, bugun), { ileti: TARIH_ESKI, alan: 'yapilma' });
+    assert.deepEqual(yapildiSonucu(yasal, { ...g, yapilma: '2000-01-01', sonrakiTarih: '2001-01-01' }, bugun), { sonraki: '2001-01-01' });
     assert.deepEqual(yapildiSonucu(yasal, { ...g, miktar: '5', birim: 'kg' }, bugun), { ileti: YALNIZ_ATIK_MIKTARI, alan: 'miktar' });
     assert.deepEqual(yapildiSonucu(atik, g, bugun), { ileti: ATIK_MIKTARI, alan: 'miktar' });
     assert.deepEqual(yapildiSonucu(atik, { ...g, miktar: '5' }, bugun), { ileti: ATIK_MIKTARI, alan: 'birim' });
@@ -260,6 +262,7 @@ describe('idari-isler kuralları', () => {
     assert.equal(masrafReddi({ tutar: '0.01', tarih: '2025-01-01' }, b), null);
     assert.equal(masrafReddi({ tutar: '9999999999.99', tarih: b }, b), null);
     assert.deepEqual(masrafReddi({ tutar: '10', tarih: '2026-10-20' }, b), { ileti: MASRAF_GELECEK, alan: 'tarih' });
+    assert.deepEqual(masrafReddi({ tutar: '10', tarih: '1900-01-01' }, b), { ileti: TARIH_ESKI, alan: 'tarih' });
     for (const tutar of ['0', '0.00', '-5', '1.234', '10000000000']) {
       assert.deepEqual(masrafReddi({ tutar, tarih: b }, b), { ileti: TUTAR_GECERSIZ, alan: 'tutar' }, tutar);
     }
@@ -284,6 +287,7 @@ describe('idari-isler kuralları', () => {
     assert.equal(zimmetlemeReddi('bakimda', b, b)?.ileti, ZIMMETLENEMEZ);
     assert.equal(zimmetlemeReddi('zimmetli', b, b)?.ileti, ZIMMETLENEMEZ);
     assert.deepEqual(zimmetlemeReddi('bosta', '2026-10-20', b), { ileti: VERILIS_GELECEK, alan: 'verilis' });
+    assert.deepEqual(zimmetlemeReddi('bosta', '1900-01-01', b), { ileti: TARIH_ESKI, alan: 'verilis' });
   });
 
   test('IDR-31: iade ileri ve verilişten önce olmaz; sağlam boşa, hasarlı bakıma, kayıp kayba', () => {

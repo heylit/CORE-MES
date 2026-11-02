@@ -68,6 +68,9 @@ export const KONTROL_YOK = 'Kontrol kalemi bulunamadı.';
 export const KONTROL_BITTI = 'Biten kalem değiştirilemez.';
 export const FIRMA_YOK = 'Firma bulunamadı ya da pasif.';
 export const YAPILMA_GELECEK = 'Yapılma tarihi bugünden sonra olamaz.';
+// Yanlış yazılan yıl (1900, 1990) kalemi "13.000 gün geçti" gösterir; bu tarihten önceki kayıt elle girilmez.
+export const TARIH_EN_ERKEN = '2000-01-01';
+export const TARIH_ESKI = 'Tarih 01.01.2000\'den önce olamaz; yılı kontrol edin.';
 export const ATIK_MIKTARI = 'Atık tesliminde miktar ve birim zorunlu.';
 export const YALNIZ_ATIK_MIKTARI = 'Miktar yalnız atık tesliminde yazılır.';
 export const MIKTAR_ARTI = 'Miktar sıfırdan büyük olmalı.';
@@ -113,6 +116,7 @@ export function yapildiSonucu(
   k: KontrolOzu, g: Pick<YapildiVerisi, 'yapilma' | 'sonrakiTarih' | 'miktar' | 'birim'>, bugun: string,
 ): { sonraki: string } | { ileti: string; alan: string } {
   if (g.yapilma > bugun) return { ileti: YAPILMA_GELECEK, alan: 'yapilma' };
+  if (g.yapilma < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'yapilma' };
   if (k.tur === 'atik' && (g.miktar === null || g.birim === null)) return { ileti: ATIK_MIKTARI, alan: g.miktar === null ? 'miktar' : 'birim' };
   if (k.tur !== 'atik' && (g.miktar !== null || g.birim !== null)) return { ileti: YALNIZ_ATIK_MIKTARI, alan: 'miktar' };
   if (g.miktar !== null && !(Number(g.miktar) > 0)) return { ileti: MIKTAR_ARTI, alan: 'miktar' };
@@ -296,6 +300,7 @@ export const TUTAR_GECERSIZ = 'Tutar sıfırdan büyük, en çok iki kuruş basa
 // IDR-27: tutar sıfırdan büyük, en çok iki kuruş basamaklı ve sınır içinde; masraf tarihi bugünden ileri değil.
 export function masrafReddi(g: { tutar: string; tarih: string }, bugun: string): { ileti: string; alan: string } | null {
   if (g.tarih > bugun) return { ileti: MASRAF_GELECEK, alan: 'tarih' };
+  if (g.tarih < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'tarih' };
   return tutarGecerliMi(g.tutar, TUTAR_EN_COK) ? null : { ileti: TUTAR_GECERSIZ, alan: 'tutar' };
 }
 
@@ -335,6 +340,7 @@ export function elleDurumReddi(mevcut: DemirbasDurumu, yeni: ElleDurum): string 
 export function zimmetlemeReddi(durum: DemirbasDurumu, verilis: string, bugun: string): { ileti: string; alan: string } | null {
   if (durum !== 'bosta') return { ileti: ZIMMETLENEMEZ, alan: 'kisiId' };
   if (verilis > bugun) return { ileti: VERILIS_GELECEK, alan: 'verilis' };
+  if (verilis < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'verilis' };
   return null;
 }
 
