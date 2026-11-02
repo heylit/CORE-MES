@@ -267,6 +267,13 @@ describe('parça listesi ve makineler', () => {
     expect(l.map((p) => [p.kod, p.malzeme?.no ?? null])).toEqual([['KP-1', 7], ['SC-9', null]]);
   });
 
+  it('ATL-4 kodu stok koduyla eşleşmeyen parçada emrin kartı satıra geçer; kartsız emirde null', () => {
+    const kartli = { ...emir(5, null), parcaNo: 'MM-1', malzemeNo: 12 };
+    const kartsiz = { ...emir(6, null), id: 61, parcaNo: 'IS-2', malzemeNo: null };
+    const l = parcaListesi([], [], [kartli, kartsiz]);
+    expect(l.map((p) => [p.kod, p.malzeme, p.emirKartiNo])).toEqual([['IS-2', null, null], ['MM-1', null, 12]]);
+  });
+
   it('göz, görünüm ve emir birleşir; ad önce gözden; makine süren önce, sonra en yeni; iptal sayılmaz', () => {
     const l = parcaListesi(
       [gozKalemi(1, 1, 1, 1, 1, 'KP-1', 40)],
