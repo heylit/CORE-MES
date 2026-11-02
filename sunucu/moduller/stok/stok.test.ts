@@ -2610,7 +2610,7 @@ describe('stok (gerçek PostgreSQL)', () => {
       parcaRevizyonuCozucusu(async () => new Map());
     }
     const konum = (await o().vt.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
-    await o().vt.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, '4', now())", [m, konum]);
+    await o().sahip.sorgu("INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, '4', now())", [m, konum]);
     const satirlar = await o().vt.tx((db) => malzemePartiBakiyeleri(db, [m, m]));
     assert.deepEqual(satirlar.map((x) => [x.partiId === null, x.parcaRevizyonu, Number(x.miktar)]), [[true, null, 4], [false, null, 2], [false, 'B', 3]]);
     assert.deepEqual(await o().vt.tx((db) => malzemePartiBakiyeleri(db, [])), []);
