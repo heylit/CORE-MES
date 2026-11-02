@@ -130,7 +130,8 @@ export function bordroGirdisi(r: Kayit): { brut: number; gun?: number; ek: numbe
 /* ---------------- komutlar ---------------- */
 
 export interface IkKomutlari {
-  kaydet: (kayit: Kayit) => Promise<void>;
+  // Sunucunun yazdığı kayıt döner (yeni personelin kendiliğinden açılan kişisi govde.kisiId'dedir, 1878 a); bordroda null.
+  kaydet: (kayit: Kayit) => Promise<IkKayit | null>;
   topluKaydet: (kayitlar: readonly Kayit[]) => Promise<void>;
   iptal: (id: string) => Promise<void>;
   ayarKaydet: (ayarlar: IkAyarlar) => Promise<void>;
@@ -162,10 +163,15 @@ export function komutlariKur(istemci: Istemci, depo: () => IkDeposu | undefined,
     }
   }
 
-  async function kaydet(kayit: Kayit): Promise<void> {
-    if (kayit.kind === 'pay') return bordroKesinlestir([kayit]);
+  async function kaydet(kayit: Kayit): Promise<IkKayit | null> {
+    if (kayit.kind === 'pay') {
+      await bordroKesinlestir([kayit]);
+      return null;
+    }
     const h = yazmaHedefi(kayit, depo()?.al(kayit.id) ?? null, surumu(kayit.id), yetki);
-    cevap(await istemci.post<IkYazCevabi>(h.yol, h.govde));
+    const c = await istemci.post<IkYazCevabi>(h.yol, h.govde);
+    cevap(c);
+    return c.kayit;
   }
 
   async function topluKaydet(rs: readonly Kayit[]): Promise<void> {

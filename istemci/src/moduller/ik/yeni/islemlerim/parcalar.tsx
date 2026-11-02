@@ -58,7 +58,7 @@ export function BagliDegil({ baslik, simge }: { baslik: string; simge: SimgeAdi 
     <>
       <SayfaBasligi baslik={baslik} simge={simge} />
       <DurumKutusu durum="bos" mesaj="Hesabınız bir personel kaydıyla eşleşmedi">
-        <p>İnsan kaynakları biriminden kullanıcı hesabınızın personel kaydınıza bağlanmasını isteyin.</p>
+        <p>Bağı İnsan kaynakları kurar: personel kartınızın İş bölümündeki “TMI kullanıcısı” alanında hesabınızı seçer. Bunu İK biriminden isteyin.</p>
       </DurumKutusu>
     </>
   );

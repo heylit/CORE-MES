@@ -25,7 +25,9 @@ describe('İK disari: izinli kişiler (gerçek PostgreSQL)', () => {
       const yon = (await kullaniciYukle(db, yonId)) as Kullanici;
       const personel = (id: string, ek: Govde): Govde => ({ id, kind: 'emp', ad: id, soyad: 'Deneme', isMerkeziId: im!.id, ...ek });
       for (const k of Object.keys(kisi) as (keyof typeof kisi)[]) await kaydet(db, yon, 'personel', `emp_${k}`, personel(`emp_${k}`, { kisiId: kisi[k] }), null);
-      await kaydet(db, yon, 'personel', 'emp_bagsiz', personel('emp_bagsiz', {}), null);
+      // Yeni kart kişisini kendisi açar (1878 a); bağsız kart, bağı sonradan kaldırılmış eski karttır.
+      const bagsiz = await kaydet(db, yon, 'personel', 'emp_bagsiz', personel('emp_bagsiz', {}), null);
+      await kaydet(db, yon, 'personel', 'emp_bagsiz', personel('emp_bagsiz', {}), bagsiz.kayit.surum);
       const izin = (id: string, emp: string, ek: Govde = {}): Govde =>
         ({ id, kind: 'leave', empId: emp, tur: 'Yıllık izin', baslangic: '2026-11-02', bitis: '2026-11-04', gun: 3, durum: 'Onaylandı', ...ek });
       await kaydet(db, yon, 'izinler', 'leave_a', izin('leave_a', 'emp_a'), null);

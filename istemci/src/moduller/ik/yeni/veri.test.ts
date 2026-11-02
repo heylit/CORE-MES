@@ -85,9 +85,11 @@ describe('İK yeni ekran: yazma ucu yetkiye göre (bugünkü köprü kuralları)
 describe('İK yeni ekran: komutlar', () => {
   it('kaydet cevabı depoya yazar', async () => {
     const { k, istekler, depo } = kur(TAM);
-    await k.kaydet({ ...(depo().al('emp_b') as Kayit), ad: 'Değişti' });
+    const yazilan = await k.kaydet({ ...(depo().al('emp_b') as Kayit), ad: 'Değişti' });
     expect(istekler[0]?.yol).toBe('/ik/personel/emp_b/kaydet');
     expect(depo().surumler.get('emp_b')).toBe(2);
+    // Sunucunun yazdığı kayıt çağırana döner (yeni personelin kişisi, 1878 a).
+    expect(yazilan?.kimlik).toBe('emp_b');
   });
 
   it('iptal kaydı depodan çıkarır, sürümünü saklar', async () => {

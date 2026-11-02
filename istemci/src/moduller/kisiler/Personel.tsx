@@ -123,8 +123,9 @@ const YETKILER_YOLU = '/ayarlar/yetkiler';
 type Pencere = { tur: 'form' | 'hesap' | 'parola' | 'pin' | 'rol'; kisiId: number | null };
 
 // Ctrl K'den gelen istek (kart #1236): `?yeni=1` boş formu, `?kisi=<id>` o kişinin düzenleme formunu dolu açar; eski
-// `?gorunum=matris` bağlantısı rol yöneteni Ayarlar > Yetkiler'e götürür. Yazma yine formun kendi ucundadır; yetkisi olmayana pencere açılmaz.
-const ISTEK_ANAHTARLARI = ['yeni', 'kisi', 'gorunum'] as const;
+// `?gorunum=matris` bağlantısı rol yöneteni Ayarlar > Yetkiler'e götürür. `?kisi=<id>&hesap=1` (İK'da açılan kişi, 1878 a)
+// girişsiz kişinin hesap penceresini açar. Yazma yine formun kendi ucundadır; yetkisi olmayana pencere açılmaz.
+const ISTEK_ANAHTARLARI = ['yeni', 'kisi', 'gorunum', 'hesap'] as const;
 
 // Bayrak yalnız kisiler.rol-yonet sahibine görünür; bilinmiyorsa düğme kalır, sunucu reddeder. Bayraklı kişinin kaydını
 // yalnız bayraklı kullanıcı düzenler.
@@ -161,6 +162,7 @@ export function Personel() {
     const hedef = Number.isInteger(kisiId) && kisiId > 0 ? kisiler.data.kisiler.find((k) => k.id === kisiId) : undefined;
     if (istek.get('gorunum') === 'matris' && yonetebilir) { void git(YETKILER_YOLU, { replace: true }); return; }
     if (istek.get('yeni') === '1' && yazabilir) acikYaz({ tur: 'form', kisiId: null });
+    else if (istek.get('hesap') === '1' && hedef !== undefined && yonetebilir && !hedef.girisVar) acikYaz({ tur: 'hesap', kisiId: hedef.id });
     else if (hedef !== undefined && yazabilir && !hedef.korumali) acikYaz({ tur: 'form', kisiId: hedef.id });
     // İstek bir kez uygulanır; geri tuşu ya da yenileme pencereyi yeniden açmaz.
     istekYaz((o) => { const y = new URLSearchParams(o); for (const a of ISTEK_ANAHTARLARI) y.delete(a); return y; }, { replace: true });
@@ -196,7 +198,17 @@ export function Personel() {
         </span>
       ),
     },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (k) => <Rozet ton={k.aktif ? 'tamam' : 'pasif'}>{k.aktif ? 'Aktif' : 'Pasif'}</Rozet> },
+    {
+      anahtar: 'durum',
+      baslik: 'Durum',
+      // Hesabı olup İK personel kartına bağlı olmayan kişi işaretlenir (1878 a); bağı İK kartındaki "TMI kullanıcısı" kurar.
+      hucre: (k) => (
+        <span className="tc-personel-roller">
+          <Rozet ton={k.aktif ? 'tamam' : 'pasif'}>{k.aktif ? 'Aktif' : 'Pasif'}</Rozet>
+          {k.aktif && k.girisVar && !k.ozlukIk && <span title="Bağı İK personel kartındaki TMI kullanıcısı alanı kurar."><Rozet ton="uyari">İK kartı yok</Rozet></span>}
+        </span>
+      ),
+    },
     {
       anahtar: 'giris',
       baslik: 'Giriş',

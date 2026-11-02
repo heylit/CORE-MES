@@ -783,4 +783,17 @@ export function ozlukItmesi(onceki: Govde | null, yeni: Govde | null): OzlukItme
   return { birak, it: ayni ? null : { kisiId: y.kisiId, ad: y.ad, sicilNo: y.sicilNo, gorev: y.gorev, cikisTarihi: y.cikisTarihi } };
 }
 
+// 1878 a: yeni personel kartı TMI kullanıcısı seçilmeden kaydedilirse kişisi Kişiler'de kendiliğinden açılır; açılacak kişinin
+// adı döner. Var olan kart (eski bağsız kart elle bağlanır), seçili kişi ve çıkışı bugün ya da önce olan kart kişi açmaz.
+export function yeniPersonelKisiAdi(kayitliVar: boolean, yeni: Govde, gun: string): string | null {
+  if (kayitliVar) return null;
+  const o = ozluk(yeni);
+  if (o.kisiId !== null || o.ad === '') return null;
+  if (o.cikisTarihi !== null && o.cikisTarihi <= gun) return null;
+  return o.ad;
+}
+
+// Kendiliğinden açılan kişinin sicil no'su başka kişide: kullanıcı yeni kişi yerine var olanı seçmeli.
+export const YENI_KISI_SICIL_CAKISMASI = 'Bu sicil no Personel\'de başka bir kişide kayıtlı. Yeni kişi açmak yerine "TMI kullanıcısı" alanından o kişiyi seçin.';
+
 export const OZLUK_SON_YONETICI_UYARISI = 'Çıkış tarihi geçti ama kişi son yönetici olduğu için Kişiler\'de pasife alınmadı.';
