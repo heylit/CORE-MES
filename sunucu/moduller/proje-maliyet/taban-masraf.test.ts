@@ -210,6 +210,49 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     assert.equal((await app.inject({ method: 'POST', url: `/api/proje-maliyet/${p.id}/taban`, payload: {} })).statusCode, 401);
   });
 
+  test('PM-45 (K18 a): tamamlanmış ya da iptal edilmiş projeye masraf bağlanamaz; var olan bağ kalır', async () => {
+    const p = await projeAc('PMT.9');
+    const once = await giderAc('personel', 40);
+    await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: once }));
+    const kapat = async (durum: 'tamamlandi' | 'iptal', proje: Proje) => tamam<Proje>(gonder(yonetici, `/projeler/${proje.id}/guncelle`, {
+      ad: proje.ad, firmaId: proje.firmaId, baslangic: proje.baslangic, bitis: proje.bitis, aciklama: proje.aciklama, durum, surum: proje.surum,
+    }));
+    await kapat('iptal', p);
+    const red = await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc('personel', 10) });
+    assert.equal(red.statusCode, 409);
+    assert.match(red.body, /iptal edilmiş projeye masraf bağlanamaz/);
+    assert.equal((await maliyet(p.id)).ozet.masraflar.length, 1);
+
+    const tamamlanan = await kapat('tamamlandi', await projeAc('PMT.10'));
+    assert.equal((await gonder(yonetici, `/proje-maliyet/${tamamlanan.id}/masraflar`, { belgeId: await giderAc('personel', 10) })).statusCode, 409);
+  });
+
+  test('PM-46 (K18 a): masraf bağını yalnız maliyeti gören kaldırır; kaldırma iz bırakır, iz değiştirilemez', async () => {
+    const p = await projeAc('PMT.11');
+    const belge = await giderAc('personel', 60);
+    await tamam(gonder(planlama, `/proje-maliyet/${p.id}/masraflar`, { belgeId: belge }));
+    const bag = (await maliyet(p.id)).ozet.masraflar[0]!;
+    const red = await gonder(planlama, `/proje-maliyet/masraflar/${bag.id}/kaldir`);
+    assert.equal(red.statusCode, 403);
+    assert.match(red.body, /maliyetini gören kaldırabilir/);
+    assert.equal((await maliyet(p.id)).ozet.masraflar.length, 1);
+
+    await tamam(gonder(yonetici, `/proje-maliyet/masraflar/${bag.id}/kaldir`));
+    assert.equal((await maliyet(p.id)).ozet.masraflar.length, 0);
+    const iz = await sahip().tek<{ projeId: number; belgeId: number; baglayan: number; kaldiran: number }>(
+      `SELECT proje_id AS "projeId", finans_belge_id AS "belgeId", baglayan_id AS baglayan, kaldiran_id AS kaldiran
+         FROM proje_maliyet_masraf_kaldirma WHERE bag_id = $1`, [bag.id]);
+    assert.equal(iz?.projeId, p.id);
+    assert.equal(iz?.belgeId, belge);
+    assert.equal(iz?.kaldiran, yoneticiId);
+    assert.notEqual(iz?.baglayan, yoneticiId);
+    assert.equal((await gonder(yonetici, `/proje-maliyet/masraflar/${bag.id}/kaldir`)).statusCode, 404);
+    await assert.rejects(sahip().sorgu('UPDATE proje_maliyet_masraf_kaldirma SET kaldiran_id = $2 WHERE bag_id = $1', [bag.id, yoneticiId]), /yalnız ekleme/);
+    await assert.rejects(sahip().sorgu('DELETE FROM proje_maliyet_masraf_kaldirma WHERE bag_id = $1', [bag.id]), /yalnız ekleme/);
+    // Kaldırılan belge yeniden bağlanabilir.
+    await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: belge }));
+  });
+
   test('tekrar koruması: aynı istek kimliğiyle ikinci taban yeni satır açmaz', async () => {
     const p = await projeAc('PMT.5');
     await isEmriAc(p.id);

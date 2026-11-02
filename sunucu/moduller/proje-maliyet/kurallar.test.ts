@@ -8,6 +8,7 @@ import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kur
 import { butceTl, iscilikPlaniEksik, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
+import { MASRAF_KAPALI_PROJE, projeMasrafReddi } from './kurallar.ts';
 
 const isEmri = (id: number, bitisZamani: string | null = null) => ({ isEmriId: id, emirNo: `UE-${id}`, opNo: 10, istasyonAd: null, bitisZamani });
 const kayit = (k: Partial<MaliyetKaydi>): MaliyetKaydi => ({
@@ -342,6 +343,12 @@ test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son 
   assert.deepEqual(maliyetFarki(null, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: null });
   assert.deepEqual(maliyetFarki(1000, null, 700, m), { masrafToplami: 100, sonGerceklesen: null, tahminiSon: null, fark: null });
   assert.deepEqual(maliyetFarki(1000, 400, null, []), { masrafToplami: 0, sonGerceklesen: 400, tahminiSon: null, fark: null });
+});
+
+test('PM-45 (K18 a): masraf yalnız aktif projeye bağlanır', () => {
+  assert.equal(projeMasrafReddi('aktif'), null);
+  assert.equal(projeMasrafReddi('tamamlandi'), MASRAF_KAPALI_PROJE);
+  assert.equal(projeMasrafReddi('iptal'), MASRAF_KAPALI_PROJE);
 });
 
 test('seçici araması: joker kaçırılır, boş arama süzmez', () => {

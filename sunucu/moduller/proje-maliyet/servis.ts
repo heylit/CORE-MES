@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
@@ -26,6 +26,7 @@ import {
 } from './kurallar.ts';
 import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
 import { faturaDurumu } from './kurallar.ts';
+import { MASRAF_KALDIRMA_YETKISI, projeMasrafReddi } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
 
 // Sipariş tutarı ve kâr için ayrıca bu işlem gerekir (180 cevabı: yalnız yönetici ve müdür). İşlem Çekirdek'in göçüyle gelir;
@@ -434,7 +435,10 @@ export async function tabanAl(db: Db, kullanici: Kullanici, projeId: number, ger
 
 // PM-41: bağ kişiyle ve zamanla yazılır; bir belge tek projeye bağlanır, görev aynı projeden olmalıdır.
 export async function masrafBagla(db: Db, kullanici: Kullanici, projeId: number, g: { belgeId: number; gorevId: number | null }): Promise<{ tamam: true }> {
-  if ((await projeGetir(db, projeId)) === null) throw bulunamadi('Proje bulunamadı.');
+  const proje = await projeGetir(db, projeId);
+  if (proje === null) throw bulunamadi('Proje bulunamadı.');
+  const kapali = projeMasrafReddi(proje.durum);
+  if (kapali !== null) throw cakisma(kapali);
   const belge = (await giderBelgeleri(db, [g.belgeId])).get(g.belgeId);
   const ret = masrafReddi(belge, PROJE_MASRAF_KATEGORILERI);
   if (ret === MASRAF_YOK) throw bulunamadi(ret);
@@ -443,8 +447,10 @@ export async function masrafBagla(db: Db, kullanici: Kullanici, projeId: number,
   return { tamam: true };
 }
 
-export async function masrafBagiKaldir(db: Db, bagId: number): Promise<{ tamam: true }> {
-  if (!(await sorgular.masrafBagiKaldir(db, bagId))) throw bulunamadi('Masraf bağı bulunamadı.');
+// PM-46 (K18 a): kaldırma proje yazmanın yanında maliyet okumayı da ister; her kaldırma iz bırakır.
+export async function masrafBagiKaldir(db: Db, kullanici: Kullanici, bagId: number): Promise<{ tamam: true }> {
+  if (!islemVarMi(kullanici, 'finans.maliyet-oku')) throw yetkiYok(MASRAF_KALDIRMA_YETKISI);
+  if (!(await sorgular.masrafBagiKaldir(db, bagId, kullanici.id))) throw bulunamadi('Masraf bağı bulunamadı.');
   return { tamam: true };
 }
 

@@ -1,6 +1,6 @@
 # Ortaklık (proje-maliyet)
 
-Tabloları `proje_maliyet_defteri` (199 a; proje_id, is_emri_id, plan, gercek, ucretler, adet, saglam, bitis, dondurma, donduran_id), `proje_maliyet_taban` (936 a; proje_id, sira, plan, kalemler, eksik_kalemler, is_emri_sayisi, gerekce, kisi_id, an) ve `proje_maliyet_masraf` (940 c; proje_id, finans_belge_id, gorev_id, kisi_id, an); yabancı anahtarla projeler_proje, projeler_gorev (gorev_id, proje_id), uretim_emirleri_is_emri, finans_belge ve kisi'ye bağlıdır. Öbür kavramlar başka modülün `disari.ts` okumasıdır.
+Tabloları `proje_maliyet_defteri` (199 a; proje_id, is_emri_id, plan, gercek, ucretler, adet, saglam, bitis, dondurma, donduran_id), `proje_maliyet_taban` (936 a; proje_id, sira, plan, kalemler, eksik_kalemler, is_emri_sayisi, gerekce, kisi_id, an) `proje_maliyet_masraf` (940 c; proje_id, finans_belge_id, gorev_id, kisi_id, an) ve `proje_maliyet_masraf_kaldirma` (K18 a; bag_id, proje_id, finans_belge_id, gorev_id, baglayan_id, baglama_an, kaldiran_id, an); yabancı anahtarla projeler_proje, projeler_gorev (gorev_id, proje_id), uretim_emirleri_is_emri, finans_belge ve kisi'ye bağlıdır. Öbür kavramlar başka modülün `disari.ts` okumasıdır.
 
 | Kavram | Sahibi | Okunan | Durum |
 |---|---|---|---|

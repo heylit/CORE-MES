@@ -50,6 +50,7 @@ export const uclar = [
     yetki: 'projeler.yaz',
     parametre: masrafParametresi,
     cevap: yazmaCevabi,
-    isle: ({ db, parametre }) => masrafBagiKaldir(db, parametre.bagId),
+    // K18 a: servis ayrıca finans.maliyet-oku ister (maliyeti gören kaldırır).
+    isle: ({ db, kullanici, parametre }) => masrafBagiKaldir(db, kullanici, parametre.bagId),
   }),
 ];
