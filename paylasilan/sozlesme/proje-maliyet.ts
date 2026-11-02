@@ -40,7 +40,7 @@ export const sapanIsEmriSemasi = z.object({
 
 // Ekranda uyarı satırı olarak çıkan eksik veri: bağlanmamış kaynak ya da girilmemiş fiyat.
 export const EKSIK_VERILER = [
-  'siparis_yok', 'kur_yok', 'is_emirleri_bagli_degil', 'fason_bagli_degil', 'birim_maliyet_eksik', 'genel_gider_orani_yok', 'talas_dusulmedi', 'faiz_yok', 'vade_yok', 'amortisman_dahil_degil', 'satirsiz_emir',
+  'siparis_yok', 'kur_yok', 'is_emirleri_bagli_degil', 'fason_bagli_degil', 'birim_maliyet_eksik', 'genel_gider_orani_yok', 'talas_dusulmedi', 'faiz_yok', 'vade_yok', 'amortisman_dahil_degil', 'satirsiz_emir', 'butce_kuru_yok',
 ] as const;
 export type EksikVeri = (typeof EKSIK_VERILER)[number];
 
@@ -62,7 +62,7 @@ export const projeMaliyetCevabi = z.object({
   gelir: tutar,
   // Faturalanan kısmın bugünün kuruyla değeri eksi fatura kuruyla değeri; gelire eklenmez, ayrı satırdır (1398 a). Fiyat yetkisi yoksa null.
   kurFarki: tutar,
-  // Proje bütçesi (198 a); girilmemişse hedef plan maliyetidir.
+  // Proje bütçesi TRY (198 a; döviz bütçe bugünün kuruyla); girilmemişse hedef plan maliyetidir.
   butce: tutar,
   hedef: tutar,
   plan: tutar,

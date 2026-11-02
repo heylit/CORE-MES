@@ -24,7 +24,7 @@ import * as sorgular from './sorgular.ts';
 import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
-import { MASRAF_YOK, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
+import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
 import { faturaDurumu } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
 
@@ -248,8 +248,11 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
 
   const siparis = proje.siparisId === null ? null : await siparisAyrintisi(db, proje.siparisId);
   if (siparis === null) eksikler.push('siparis_yok');
-  // 198 a: bütçe alanı projeler'e eklenince projeGetir'den okunur (UYUM-BORCU PM-B4).
-  const butce: number | null = null;
+  // PM-43 (198 a): bütçe döviz girildiyse bugünün kuruyla TRY'ye çevrilir.
+  const butceKuru = proje.butceTutari === null || proje.butceParaBirimi === null || proje.butceParaBirimi === 'TRY'
+    ? null : await kurGetir(db, proje.butceParaBirimi, bugun).then((k) => (k === null ? null : Number(k.kur)));
+  const { butce, kurYok: butceKuruYok } = butceTl(proje.butceTutari, proje.butceParaBirimi, butceKuru);
+  if (butceKuruYok) eksikler.push('butce_kuru_yok');
 
   const { kayitlar: guncel, eksikler: kayitEksikleri, isler } = await maliyetKayitlari(db, projeId, bugun);
   const { gelir, kurFarki } = await gelirHesapla(db, isler, bugun, eksikler);

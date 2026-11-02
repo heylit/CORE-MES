@@ -25,6 +25,7 @@ const EKSIK_METNI: Record<EksikVeri, string> = {
   vade_yok: 'Siparişte ödeme vadesi girilmemiş; bekleme finansmanı üretim bitişine kadar hesaplandı.',
   amortisman_dahil_degil: 'Finanstaki genel gider oranı amortismanı içermiyor; makine amortismanı henüz hesaba girmez.',
   satirsiz_emir: 'Bazı üretim emirleri sipariş satırına bağlı değil; bu emirlerin geliri hesaba girmez.',
+  butce_kuru_yok: 'Proje bütçesinin para birimi için kur girilmemiş; hedef plan maliyetidir.',
 };
 
 const yuzde = (x: number | null): string => (x === null ? '—' : `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);

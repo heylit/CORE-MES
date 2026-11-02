@@ -22,3 +22,4 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - Plan motoru için (227 a): `disari.ts` `uretimEmriMalzemeMaliyetleri(db, emirIdleri)` → `Map<emir id, TL | null>`, planlanan malzeme (PM-25, talaş düşülmüş). Malzeme okuması proje kaydıyla ortak yardımcıda.
 - Kâr riski oranı (PM-B6 kapandı, 227 a): plan `karRiskiOraniGun` (müdürün bedel ayarı); `VARSAYILAN_KAR_RISKI_ORANI` kaldırıldı.
 - Gelir (226 a, denetim #9, #10, #38): gelir sipariş ara toplamı değil, projenin emirlerinin bağlı sipariş satırlarından (emir adedi x birim fiyat x kur); iptal siparişin satırı sayılmaz; satırsız emir için yeni eksik `satirsiz_emir`. Maliyet tam değilse (bir kalem bilinmiyor ya da finansman hesaplanamıyor) katkı payı, katkı oranı ve kâr riski null. Kural PM-36, PM-37.
+- Bütçe (PM-B4 kapandı, 1818): proje bütçesi `projeGetir`'den okunur, hedef odur; döviz bütçe bugünün kuruyla TRY, kuru yoksa eksik `butce_kuru_yok`. Kural PM-43.

@@ -5,7 +5,7 @@ import {
   faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
-import { beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
+import { butceTl, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 
@@ -347,4 +347,12 @@ test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son 
 test('seçici araması: joker kaçırılır, boş arama süzmez', () => {
   assert.equal(aramaKalibi('  '), null);
   assert.equal(aramaKalibi('%5_a'), '%\\%5\\_a%');
+});
+
+test('PM-43 bütçe TRY: TRY ya da para birimsiz bütçe olduğu gibi; döviz kurla; kuru yoksa bilinmez; bütçe yoksa null', () => {
+  assert.deepEqual(butceTl('2500.00', 'TRY', null), { butce: 2500, kurYok: false });
+  assert.deepEqual(butceTl('2500.00', null, null), { butce: 2500, kurYok: false });
+  assert.deepEqual(butceTl('100.00', 'EUR', 35), { butce: 3500, kurYok: false });
+  assert.deepEqual(butceTl('100.00', 'EUR', null), { butce: null, kurYok: true });
+  assert.deepEqual(butceTl(null, 'EUR', null), { butce: null, kurYok: false });
 });
