@@ -9,11 +9,16 @@ export function tarihMetni(tarih: string | null): string | null {
   return `${g}.${a}.${y}`;
 }
 
+// Kullanım dışı alet ölçümde kullanılmaz; gelecekteki vadesi "geçerli" diye okunmasın diye gösterilmez.
+export function vadeMetni(alet: Pick<Alet, 'durum' | 'vade'>): string | null {
+  return alet.durum === 'kullanim-disi' ? null : tarihMetni(alet.vade);
+}
+
 export function durumMetni(alet: Pick<Alet, 'durum' | 'kalanGun'>): string {
   switch (alet.durum) {
     case 'kullanim-disi': return 'Kullanım dışı';
     case 'kayit-yok': return 'Kalibrasyon kaydı yok';
-    case 'gecmis': return 'Kalibrasyonu geçmiş';
+    case 'gecmis': return alet.kalanGun === null ? 'Kalibrasyonu geçmiş' : `${-alet.kalanGun} gün geçti`;
     // Kalan gün bilinmiyorsa sayı yazılmaz; durumun kendisi yine gösterilir.
     case 'yaklasan': return alet.kalanGun === null ? 'Vadesi yaklaşıyor' : `${alet.kalanGun} gün kaldı`;
     case 'gecerli': return 'Geçerli';
@@ -34,7 +39,14 @@ export const SONUC_METNI: Record<Sonuc, string> = { uygun: 'Uygun', uygunsuz: 'U
 export function aletlerCsv(aletler: readonly Alet[]): string {
   // Formül gibi başlayan metin ' ile başlar (Excel onu komut olarak çalıştırmasın).
   const alan = (v: string | number | null) => `"${(typeof v === 'string' ? formulKoru(v, { sayiSerbest: true }) : String(v ?? '')).replace(/"/g, '""')}"`;
-  const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum'];
-  const satirlar = aletler.map((a) => [a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), tarihMetni(a.vade), durumMetni(a)]);
+  const baslik = ['Alet no', 'Tür', 'Ad', 'Ölçme aralığı', 'Yer', 'Periyot (gün)', 'Son kalibrasyon', 'Vade', 'Durum', 'Kullanım dışı nedeni'];
+  const satirlar = aletler.map((a) => [
+    a.no, a.tur, a.ad, a.olcmeAraligi, a.yer, a.periyotGun, tarihMetni(a.sonKalibrasyon), vadeMetni(a), durumMetni(a), a.kullanimDisiNedeni,
+  ]);
   return '﻿' + [baslik, ...satirlar].map((s) => s.map(alan).join(';')).join('\r\n');
+}
+
+// GGGG-AA-GG tarihinden `gun` gün öncesi.
+export function gunOncesi(tarih: string, gun: number): string {
+  return new Date(Date.parse(`${tarih}T00:00:00Z`) - gun * 86_400_000).toISOString().slice(0, 10);
 }

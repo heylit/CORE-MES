@@ -11,7 +11,7 @@ import { AletTuru } from './alet-simgeleri.tsx';
 import { Turler } from './Turler.tsx';
 import { anahtarlar } from './anahtarlar.ts';
 import { AletFormu } from './formlar.tsx';
-import { DURUM_TONU, aletlerCsv, durumMetni, tarihMetni } from './gosterim.ts';
+import { DURUM_TONU, aletlerCsv, durumMetni, tarihMetni, vadeMetni } from './gosterim.ts';
 import './kalibrasyon.css';
 
 // Bölümü kabuğun ikinci menüsü seçer (paylasilan/sayfalar/kalibrasyon.ts); her bölüm kendi adresindedir.
@@ -23,14 +23,31 @@ const ADRES_FORMLARI: readonly AdresFormu[] = ['kalibrasyon', 'duzenle'];
 const aletKimligi = (deger: string | null): number | null => (deger !== null && /^[1-9]\d{0,9}$/.test(deger) ? Number(deger) : null);
 const adresFormu = (deger: string | null): AdresFormu | null => ADRES_FORMLARI.find((f) => f === deger) ?? null;
 
+// Alet no kod gibi okunur, bölünmez; tablo 1280'de sığsın diye tür ile periyot, ad ile yer tek sütunda iki satırdır (KAL-2).
+const adVeYer = (a: Alet) => {
+  const ad = [a.ad, a.olcmeAraligi].filter((m) => m !== null).join(' · ');
+  if (ad === '' && a.yer === null) return null;
+  return (
+    <span className="tc-kal-ad-yer">
+      {ad !== '' && <span>{ad}</span>}
+      {a.yer !== null && <span className="tc-kal-yer">{a.yer}</span>}
+    </span>
+  );
+};
+
+const turVePeriyot = (a: Alet) => (
+  <span className="tc-kal-ad-yer">
+    <AletTuru tur={a.tur} />
+    <span className="tc-kal-yer">{a.periyotGun} gün</span>
+  </span>
+);
+
 const SUTUNLAR: Sutun<Alet>[] = [
-  { anahtar: 'no', baslik: 'Alet no', hucre: (a) => a.no, mono: true },
-  { anahtar: 'tur', baslik: 'Tür', hucre: (a) => <AletTuru tur={a.tur} /> },
-  { anahtar: 'ad', baslik: 'Ad / aralık', hucre: (a) => [a.ad, a.olcmeAraligi].filter((m) => m !== null).join(' · ') },
-  { anahtar: 'yer', baslik: 'Yer', hucre: (a) => a.yer },
-  { anahtar: 'periyot', baslik: 'Periyot (gün)', hucre: (a) => a.periyotGun, hizala: 'sag', mono: true },
+  { anahtar: 'no', baslik: 'Alet no', hucre: (a) => a.no, mono: true, kirilmaz: true },
+  { anahtar: 'tur', baslik: 'Tür / periyot', hucre: turVePeriyot },
+  { anahtar: 'ad', baslik: 'Ad / yer', hucre: adVeYer },
   { anahtar: 'son', baslik: 'Son kalibrasyon', hucre: (a) => tarihMetni(a.sonKalibrasyon), mono: true },
-  { anahtar: 'vade', baslik: 'Vade', hucre: (a) => tarihMetni(a.vade), mono: true },
+  { anahtar: 'vade', baslik: 'Vade', hucre: (a) => vadeMetni(a), mono: true },
   { anahtar: 'durum', baslik: 'Durum', hucre: (a) => <Rozet ton={DURUM_TONU[a.durum]}>{durumMetni(a)}</Rozet> },
 ];
 
@@ -77,7 +94,7 @@ export function OlcuAletleri({ sekme = 'aletler' }: { sekme?: SekmeAnahtari }) {
 
   return (
     <Kart
-      baslik="Ölçü aletleri"
+      baslik={sekme === 'turler' ? 'Alet türleri' : 'Ölçü aletleri'}
       sag={sekme === 'aletler' && (
         <>
           <Dugme simge="download" disabled={!liste.data?.aletler.length} onClick={() => { if (liste.data) csvIndir(liste.data.aletler); }}>CSV</Dugme>

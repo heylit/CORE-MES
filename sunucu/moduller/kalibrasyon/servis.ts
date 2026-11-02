@@ -8,17 +8,18 @@ import type {
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import {
-  SON_KAYIT_SAYISI, TAKVIM_ALET_DURUMU, VARSAYILAN_PERIYOT_GUN, aramayaUyar, belirleyenKayit, gelecekTarihMi, kalibrasyonEtkisi, ozetSay,
+  SON_KAYIT_SAYISI, TAKVIM_ALET_DURUMU, VARSAYILAN_PERIYOT_GUN, aramayaUyar, belirleyenKayit, cokEskiTarihMi, gelecekTarihMi, kalibrasyonEtkisi, ozetSay,
   olcumdeKullanilabilirMi, takvimdeMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
 } from './kurallar.ts';
 import {
-  aktifTurleriGetir, aletEkle, aletGuncelle, aletSil, aletVarMi, aletiKilitle, aletinTuru, aletleriGetir, bugunuGetir, kayitEkle,
-  kayitSayisi, kayitSiralari, kullanimDisiMi, kullanimDurumuYaz, sonKayitlarHepsi, sonKayitlariGetir, turBul, turEkle, turGuncelle, turleriGetir,
+  aktifTurleriGetir, aletEkle, aletGuncelle, aletSil, aletSurumunuArtir, aletVarMi, aletiKilitle, aletinTuru, aletleriGetir, bugunuGetir,
+  iptalEkle, kayitBul, kayitEkle, kayitSayisi, kayitSiralari, kullanimDisiMi, kullanimDurumuYaz, sonKayitlarHepsi, sonKayitlariGetir, turBul, turEkle, turGuncelle, turleriGetir,
 } from './sorgular.ts';
 import type { AletAlanlari, AletSatiri } from './sorgular.ts';
 
 const ALET_YOK = 'Ölçü aleti bulunamadı.';
 const GELECEK_TARIH = 'Kalibrasyon tarihi bugünden sonra olamaz.';
+const ESKI_TARIH = 'Kalibrasyon tarihi 10 yıldan eski olamaz.';
 const NO_KULLANILIYOR = 'Bu alet numarası kullanılıyor.';
 const TUR_ADI_KULLANILIYOR = 'Bu tür adı kullanılıyor.';
 
@@ -59,14 +60,18 @@ export async function aletAyrintisi(db: Db, id: number): Promise<AletAyrintiCeva
   if (satir === undefined) throw bulunamadi(ALET_YOK);
   const kayitlar = await sonKayitlariGetir(db, id, SON_KAYIT_SAYISI);
   const adlar = kayitlar.length === 0 ? new Map<number, string>() : new Map((await kisileriListele(db)).map((k) => [k.id, k.ad]));
+  // Yabancı anahtar kişiyi tutar; ad bulunamıyorsa uydurulmaz.
+  const ad = (kisiId: number, kayitId: number): string => {
+    const bulunan = adlar.get(kisiId);
+    if (bulunan === undefined) throw new Error(`Kalibrasyon kaydının kişisi bulunamadı: ${kayitId}`);
+    return bulunan;
+  };
   return {
     ...aleteCevir(satir),
-    sonKayitlar: kayitlar.map((k) => {
-      const kisiAd = adlar.get(k.kisi_id);
-      // Yabancı anahtar kişiyi tutar; ad bulunamıyorsa uydurulmaz.
-      if (kisiAd === undefined) throw new Error(`Kalibrasyon kaydının kişisi bulunamadı: ${k.id}`);
-      return { id: k.id, tarih: k.tarih, sonuc: k.sonuc, sertifikaNo: k.sertifika_no, aciklama: k.aciklama, kisiAd };
-    }),
+    sonKayitlar: kayitlar.map((k) => ({
+      id: k.id, tarih: k.tarih, sonuc: k.sonuc, sertifikaNo: k.sertifika_no, aciklama: k.aciklama, kisiAd: ad(k.kisi_id, k.id),
+      iptal: k.iptal_nedeni === null || k.iptal_kisi_id === null ? null : { neden: k.iptal_nedeni, kisiAd: ad(k.iptal_kisi_id, k.id) },
+    })),
     kayitSayisi: await kayitSayisi(db, id),
   };
 }
@@ -96,8 +101,10 @@ function alanlar(g: Omit<AletGuncelleGovdesi, 'surum'>): AletAlanlari {
 
 // `bugun` verilmezse veritabanının bugünüdür; testler saati buradan verir.
 async function kayitYaz(db: Db, kisiId: number, aletId: number, govde: KalibrasyonGovdesi, bugun?: string): Promise<void> {
-  if (govde.tarih !== undefined && gelecekTarihMi(govde.tarih, bugun ?? await bugunuGetir(db))) {
-    throw dogrulama(GELECEK_TARIH, 'tarih');
+  if (govde.tarih !== undefined) {
+    const gun = bugun ?? await bugunuGetir(db);
+    if (gelecekTarihMi(govde.tarih, gun)) throw dogrulama(GELECEK_TARIH, 'tarih');
+    if (cokEskiTarihMi(govde.tarih, gun)) throw dogrulama(ESKI_TARIH, 'tarih');
   }
   const id = await kayitEkle(db, {
     aletId, tarih: govde.tarih ?? null, kisiId, sonuc: govde.sonuc, sertifikaNo: govde.sertifikaNo ?? null, aciklama: govde.aciklama ?? null,
@@ -135,6 +142,18 @@ export async function kalibrasyonKaydet(
   // Eşzamanlı iki kayıt sırayla işlenir: ikincisi birincinin kaydını görerek belirleyen kaydı seçer.
   if (!(await aletiKilitle(db, aletId))) throw bulunamadi(ALET_YOK);
   await kayitYaz(db, kisiId, aletId, govde, bugun);
+  return aletAyrintisi(db, aletId);
+}
+
+// Yanlış kayıt silinmez, iptal kaydıyla geçersiz sayılır (KAL-1). İptal kullanım durumunu değiştirmez: uygunsuz kaydın
+// iptali aleti kendiliğinden kullanıma döndürmez, doğru kayıt ayrıca girilir. Vade ve durum iptal edilmemiş kayıtlardan türer.
+export async function kayitIptalEt(db: Db, kisiId: number, aletId: number, kayitId: number, neden: string): Promise<AletAyrintiCevabi> {
+  if (!(await aletiKilitle(db, aletId))) throw bulunamadi(ALET_YOK);
+  const kayit = await kayitBul(db, aletId, kayitId);
+  if (kayit === null) throw bulunamadi('Kalibrasyon kaydı bulunamadı.');
+  if (kayit.iptal) throw cakisma('Bu kayıt zaten iptal edilmiş.');
+  await iptalEkle(db, kayitId, kisiId, neden);
+  await aletSurumunuArtir(db, aletId);
   return aletAyrintisi(db, aletId);
 }
 

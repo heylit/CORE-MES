@@ -61,8 +61,15 @@ export const masrafBaglari = (db: Db, projeId: number) => db.sorgu<MasrafBagi>(
 export const masrafBagiGetir = (db: Db, id: number) => db.tek<MasrafBagi>(`SELECT ${MASRAF} FROM proje_maliyet_masraf WHERE id = $1`, [id]);
 export const masrafBagla = (db: Db, projeId: number, belgeId: number, gorevId: number | null, kisiId: number) => db.sorgu(
   'INSERT INTO proje_maliyet_masraf (proje_id, finans_belge_id, gorev_id, kisi_id) VALUES ($1, $2, $3, $4)', [projeId, belgeId, gorevId, kisiId]);
-export async function masrafBagiKaldir(db: Db, id: number): Promise<boolean> {
-  return (await db.tek<{ id: number }>('DELETE FROM proje_maliyet_masraf WHERE id = $1 RETURNING id', [id])) !== null;
+// K18 a: bağ silinir, içeriği kaldıran ve zamanla iz tablosuna aynı cümlede yazılır.
+export async function masrafBagiKaldir(db: Db, id: number, kaldiranId: number): Promise<boolean> {
+  return (await db.tek<{ id: number }>(
+    `WITH silinen AS (DELETE FROM proje_maliyet_masraf WHERE id = $1 RETURNING id, proje_id, finans_belge_id, gorev_id, kisi_id, an)
+     INSERT INTO proje_maliyet_masraf_kaldirma (bag_id, proje_id, finans_belge_id, gorev_id, baglayan_id, baglama_an, kaldiran_id)
+     SELECT id, proje_id, finans_belge_id, gorev_id, kisi_id, an, $2 FROM silinen
+     RETURNING bag_id AS id`,
+    [id, kaldiranId],
+  )) !== null;
 }
 export async function bagliBelgeler(db: Db, belgeIdler: readonly number[]): Promise<Set<number>> {
   if (belgeIdler.length === 0) return new Set();

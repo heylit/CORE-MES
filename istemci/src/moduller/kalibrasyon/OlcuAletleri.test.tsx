@@ -8,7 +8,8 @@ import type { Alet, AletAyrintiCevabi, ListeCevabi, Tur, TurListesiCevabi } from
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { AletTurleri, OlcuAletleri } from './OlcuAletleri.tsx';
-import { aletlerCsv } from './gosterim.ts';
+import { aletlerCsv, gunOncesi } from './gosterim.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 
 const YAZAR: Kullanici = { id: 1, ad: 'Deneme Kalite', islemler: ['kalibrasyon.oku', 'kalibrasyon.yaz'] };
 const OKUR: Kullanici = { id: 2, ad: 'Deneme Müdür', islemler: ['kalibrasyon.oku'] };
@@ -37,7 +38,7 @@ const TURLER: Tur[] = [
 
 const AYRINTI_KAYITLI = {
   ...GECMIS,
-  sonKayitlar: [{ id: 9, tarih: '2025-01-10', sonuc: 'uygun', sertifikaNo: 'C-1', aciklama: null, kisiAd: 'Deneme Kalite' }],
+  sonKayitlar: [{ id: 9, tarih: '2025-01-10', sonuc: 'uygun', sertifikaNo: 'C-1', aciklama: null, kisiAd: 'Deneme Kalite', iptal: null }],
   kayitSayisi: 1,
 } satisfies AletAyrintiCevabi;
 const AYRINTI_BOS = { ...KAYITSIZ, sonKayitlar: [], kayitSayisi: 0 } satisfies AletAyrintiCevabi;
@@ -65,6 +66,7 @@ function sunucuKur(kullanici: Kullanici, liste: ListeCevabi = LISTE, kayitCevabi
     if (yol === '/olcu-aleti-turleri' && yontem === 'GET') return json(200, { turler: TURLER } satisfies TurListesiCevabi);
     if (yontem === 'POST' && yol === '/olcu-aletleri') return json(200, AYRINTI_BOS);
     if (yontem === 'POST' && yol === '/olcu-aletleri/1/kalibrasyon-kaydet') return kayitCevabi();
+    if (yontem === 'POST' && yol === '/olcu-aletleri/1/kayitlar/9/iptal') return json(200, AYRINTI_KAYITLI);
     if (yontem === 'POST' && yol === '/olcu-aleti-turleri/2/guncelle') return json(200, { turler: TURLER } satisfies TurListesiCevabi);
     if (yontem === 'POST' && yol === '/olcu-aleti-turleri') {
       return json(409, { kod: 'CAKISMA', mesaj: 'Bu tür adı kullanılıyor.' });
@@ -104,13 +106,27 @@ describe('Ölçü aletleri listesi', () => {
     await listeBekle();
     const hucre = (satir: HTMLElement, baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
     const [gecmis, yaklasan, kayitsiz] = satirlar() as [HTMLElement, HTMLElement, HTMLElement];
-    expect(hucre(gecmis, 'Durum')).toBe('Kalibrasyonu geçmiş');
+    expect(hucre(gecmis, 'Durum')).toBe('270 gün geçti');
     expect(hucre(gecmis, 'Vade')).toBe('10.01.2026');
     expect(hucre(yaklasan, 'Durum')).toBe('14 gün kaldı');
     expect(hucre(kayitsiz, 'Durum')).toBe('Kalibrasyon kaydı yok');
     expect(hucre(kayitsiz, 'Vade')).toBe('yok');
     expect(screen.getByText('Kalibrasyonu geçmiş: 1')).toBeTruthy();
     expect(screen.getByText('30 gün içinde: 1')).toBeTruthy();
+  });
+
+  it('kullanım dışı alette listede vade yazılmaz', async () => {
+    const disi = alet({
+      id: 1, no: 'DNM-1', sonKalibrasyon: '2026-11-02', vade: '2027-05-01', kalanGun: 180, durum: 'kullanim-disi', kullanimDisi: true,
+      kullanimDisiNedeni: 'Kalibrasyon sonucu uygunsuz.',
+    });
+    sunucuKur(OKUR, { aletler: [disi], ozet: { vadesiGecen: 0, yaklasan: 0 } });
+    ac();
+    await listeBekle();
+    const [satir] = satirlar() as [HTMLElement];
+    const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
+    expect(hucre('Vade')).toBe('yok');
+    expect(hucre('Son kalibrasyon')).toBe('02.11.2026');
   });
 
   it('kalan günü bilinmeyen yaklaşan alette gün sayısı uydurulmaz', async () => {
@@ -122,7 +138,20 @@ describe('Ölçü aletleri listesi', () => {
     const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
     expect(hucre('Vade')).toBe('20.10.2026');
     expect(hucre('Durum')).toBe('Vadesi yaklaşıyor');
-    expect(satir.textContent).not.toMatch(/\d+ gün/);
+    expect(hucre('Durum')).not.toMatch(/\d+ gün/);
+  });
+
+  it('KAL-2: alet no bölünmez; tür ile periyot, ad ile yer aynı sütunda iki satırdır', async () => {
+    sunucuKur(OKUR);
+    ac();
+    await listeBekle();
+    const basliklar = within(screen.getByRole('table', { name: 'Ölçü aletleri' })).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(basliklar).toEqual(['Alet no', 'Tür / periyot', 'Ad / yer', 'Son kalibrasyon', 'Vade', 'Durum']);
+    const [satir] = satirlar() as [HTMLElement];
+    const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik);
+    expect(hucre('Alet no')?.classList.contains('tc-tablo-kirilmaz')).toBe(true);
+    expect(hucre('Tür / periyot')?.textContent).toBe('Kumpas365 gün');
+    expect(hucre('Ad / yer')?.textContent).toBe('Dış çap · 0-25Dolap A');
   });
 
   it('arama sunucuya gider ve listeyi daraltır', async () => {
@@ -138,14 +167,16 @@ describe('Ölçü aletleri listesi', () => {
 });
 
 describe('CSV dışa aktarma', () => {
-  it('sütunlar Arkon karşılığıyla aynı; tarih ve durum ekrandaki gibi, boş alan boş kalır, tırnak kaçar', () => {
+  it('sütunlar Arkon karşılığıyla aynı, sonda kullanım dışı nedeni; tarih ve durum ekrandaki gibi, boş alan boş kalır, tırnak kaçar', () => {
     const tirnakli = alet({ id: 5, no: 'DNM-5', ad: 'İç "çap"' });
-    const csv = aletlerCsv([GECMIS, tirnakli]);
+    const disi = alet({ id: 6, no: 'DNM-6', durum: 'kullanim-disi', kullanimDisi: true, kullanimDisiNedeni: 'Düşürüldü' });
+    const csv = aletlerCsv([GECMIS, tirnakli, disi]);
     expect(csv.startsWith('﻿')).toBe(true);
-    const [baslik, gecmis, ikinci] = csv.slice(1).split('\r\n');
-    expect(baslik).toBe('"Alet no";"Tür";"Ad";"Ölçme aralığı";"Yer";"Periyot (gün)";"Son kalibrasyon";"Vade";"Durum"');
-    expect(gecmis).toBe('"DNM-1";"Kumpas";"Dış çap";"0-25";"Dolap A";"365";"10.01.2025";"10.01.2026";"Kalibrasyonu geçmiş"');
-    expect(ikinci).toBe('"DNM-5";"Kumpas";"İç ""çap""";"";"";"365";"";"";"Kalibrasyon kaydı yok"');
+    const [baslik, gecmis, ikinci, ucuncu] = csv.slice(1).split('\r\n');
+    expect(baslik).toBe('"Alet no";"Tür";"Ad";"Ölçme aralığı";"Yer";"Periyot (gün)";"Son kalibrasyon";"Vade";"Durum";"Kullanım dışı nedeni"');
+    expect(gecmis).toBe('"DNM-1";"Kumpas";"Dış çap";"0-25";"Dolap A";"365";"10.01.2025";"10.01.2026";"270 gün geçti";""');
+    expect(ikinci).toBe('"DNM-5";"Kumpas";"İç ""çap""";"";"";"365";"";"";"Kalibrasyon kaydı yok";""');
+    expect(ucuncu).toBe('"DNM-6";"Kumpas";"";"";"";"365";"";"";"Kullanım dışı";"Düşürüldü"');
   });
 
   it('okuma yetkisi olan ekrandaki satırları indirir; liste boşken düğme kapalı', async () => {
@@ -178,6 +209,7 @@ describe('yetki', () => {
     await screen.findByText('Son kalibrasyon kayıtları');
     expect(screen.queryByRole('button', { name: 'Kalibrasyon kaydet' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
 
   it('yazma yetkisi olan alet ekleyebilir; tür listesinde pasif tür seçilemez', async () => {
@@ -199,6 +231,36 @@ describe('yetki', () => {
   });
 });
 
+describe('KAL-4 ekran iletileri', () => {
+  it('boş periyotla kayıt gönderilmez, "zorunlu" iletisi çıkar', async () => {
+    const cagrilar = sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(screen.getByRole('button', { name: 'Alet ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Alet ekle' });
+    fireEvent.change(within(pencere).getByLabelText(/Alet no/), { target: { value: 'yeni-2' } });
+    fireEvent.change(within(pencere).getByLabelText(/Kalibrasyon periyodu/), { target: { value: '' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect((await within(pencere).findByRole('alert')).textContent).toBe('Kalibrasyon periyodu zorunlu.');
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+  });
+
+  it('Türler bölümünün başlığı "Alet türleri"dir', async () => {
+    sunucuKur(OKUR);
+    ac('turler');
+    expect(await screen.findByText('Alet türleri')).toBeTruthy();
+    expect(screen.queryByText('Ölçü aletleri')).toBeNull();
+  });
+
+  it('kalan günü bilinmeyen geçmiş alette gün sayısı uydurulmaz', async () => {
+    const sayisiz = alet({ id: 7, no: 'DNM-7', sonKalibrasyon: '2025-01-10', vade: '2026-01-10', kalanGun: null, durum: 'gecmis' });
+    sunucuKur(OKUR, { aletler: [sayisiz], ozet: { vadesiGecen: 1, yaklasan: 0 } });
+    ac();
+    await listeBekle();
+    expect(within(satirlar()[0] as HTMLElement).getByText('Kalibrasyonu geçmiş')).toBeTruthy();
+  });
+});
+
 describe('alet ayrıntısı', () => {
   it('kaydı olan aletin son kayıtlarını gösterir ve silme düğmesi vermez; kalibrasyon kaydı gönderir', async () => {
     const cagrilar = sunucuKur(YAZAR);
@@ -216,6 +278,40 @@ describe('alet ayrıntısı', () => {
     await waitFor(() => expect(cagrilar.find((c) => c.yol === '/olcu-aletleri/1/kalibrasyon-kaydet')?.govde).toEqual({
       sonuc: 'uygun', sertifikaNo: 'C-2', aciklama: '',
     }));
+  });
+
+  it('kalibrasyon tarihi seçicisi bugünden ileri ve 10 yıldan eskiye gitmez', async () => {
+    sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(satirlar()[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kalibrasyon kaydet' }));
+    const tarih = within(await screen.findByRole('dialog', { name: 'Kalibrasyon kaydet: DNM-1' })).getByLabelText(/Tarih/);
+    const bugun = tesisGunu(Date.now());
+    expect(tarih.getAttribute('max')).toBe(bugun);
+    expect(tarih.getAttribute('min')).toBe(gunOncesi(bugun, 3650));
+  });
+
+  it('yanlış kayıt nedeniyle iptal edilir; iptal edilen kayıt işaretli ve nedeniyle görünür, düğmesi kalkar', async () => {
+    const cagrilar = sunucuKur(YAZAR);
+    ac();
+    await listeBekle();
+    fireEvent.click(satirlar()[0] as HTMLElement);
+    await screen.findByText('Son kalibrasyon kayıtları');
+    fireEvent.click(screen.getByRole('button', { name: 'İptal et' }));
+    const form = await screen.findByRole('dialog', { name: 'Kaydı iptal et: DNM-1 · 10.01.2025' });
+    fireEvent.change(within(form).getByLabelText(/İptal nedeni/), { target: { value: 'Tarih yanlış' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'İptal et' }));
+    await waitFor(() => expect(cagrilar.find((c) => c.yol === '/olcu-aletleri/1/kayitlar/9/iptal')?.govde).toEqual({ neden: 'Tarih yanlış' }));
+    cleanup();
+
+    const iptalli = { ...AYRINTI_KAYITLI, sonKayitlar: [{ ...AYRINTI_KAYITLI.sonKayitlar[0], iptal: { neden: 'Tarih yanlış', kisiAd: 'Deneme Kalite' } }] };
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => json(200,
+      adres.endsWith('/oturum') ? { kullanici: YAZAR } : adres.endsWith('/olcu-aletleri/1') ? iptalli : adres.endsWith('/olcu-aleti-turleri') ? { turler: TURLER } : LISTE)));
+    ac('aletler', '?alet=1');
+    expect(await screen.findByText('İptal edildi')).toBeTruthy();
+    expect(screen.getByText('İptal nedeni: Tarih yanlış · Deneme Kalite')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
 
   it('kalibrasyon kaydı istek kimliğiyle gider; hatadan sonra yeniden kaydetme aynı kimliği kullanır', async () => {

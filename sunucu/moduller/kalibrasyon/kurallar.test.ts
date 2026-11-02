@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { kalibrasyonDurumu } from '#paylasilan/sozlesme/kalibrasyon-kurali.ts';
 import {
-  UYGUNSUZ_NEDENI, aramayaUyar, belirleyenKayit, gelecekTarihMi, gunEkle, gunFarki, kalibrasyonEtkisi, ozetSay,
+  UYGUNSUZ_NEDENI, aramayaUyar, belirleyenKayit, cokEskiTarihMi, gelecekTarihMi, gunEkle, gunFarki, kalibrasyonEtkisi, ozetSay,
   olcumdeKullanilabilirMi, takvimdeMi, turdeGecerliAletVarMi, turet, vadeyeGoreSirala,
 } from './kurallar.ts';
 import type { Alet } from '#paylasilan/sozlesme/kalibrasyon.ts';
@@ -40,6 +40,24 @@ describe('vade ve durum', () => {
     assert.equal(durum(gunEkle(BUGUN, 30 - 100)).durum, 'yaklasan');
     assert.deepEqual(durum(gunEkle(BUGUN, -100)), { vade: BUGUN, kalanGun: 0, durum: 'yaklasan' });
     assert.deepEqual(durum(gunEkle(BUGUN, -101)), { vade: '2026-02-28', kalanGun: -1, durum: 'gecmis' });
+  });
+
+  test('KAL-3: periyodu 60 günden kısa alette yaklaşan eşiği periyodun yarısıdır; 60 gün ve üstünde 30 gün kalır', () => {
+    const g = { kullanimDisi: false, bugun: BUGUN };
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: BUGUN, periyotGun: 30 }).durum, 'gecerli');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -15), periyotGun: 30 }).durum, 'yaklasan');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -14), periyotGun: 30 }).durum, 'gecerli');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -5), periyotGun: 10 }).durum, 'yaklasan');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -4), periyotGun: 10 }).durum, 'gecerli');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: BUGUN, periyotGun: 1 }).durum, 'gecerli');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -1), periyotGun: 1 }).durum, 'yaklasan');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -30), periyotGun: 60 }).durum, 'yaklasan');
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -29), periyotGun: 59 }).durum, 'gecerli');
+    // Bir aylık periyot ayın uzunluğuna göre 28-31 gündür; Eylül'de 30 gün, eşik 15 gün.
+    assert.equal(kalibrasyonDurumu({ ...g, bugun: '2026-09-16', sonTarih: '2026-09-01', periyotAy: 1 }).durum, 'yaklasan');
+    assert.equal(kalibrasyonDurumu({ ...g, bugun: '2026-09-15', sonTarih: '2026-09-01', periyotAy: 1 }).durum, 'gecerli');
+    // Elle girilen vadede periyot bilinmez: eşik 30 gün.
+    assert.equal(kalibrasyonDurumu({ ...g, sonTarih: gunEkle(BUGUN, -5), periyotGun: 10, vade: gunEkle(BUGUN, 25) }).durum, 'yaklasan');
   });
 
   test('KLB-06: kullanım dışı her şeyi bastırır; kaydı olmayan aletin vadesi null, durumu "kayıt yok" (KLB-S5)', () => {
@@ -132,4 +150,13 @@ test('takvim (891): yalnız vadesi bilinen ve kullanımdaki alet, aralığın ik
   assert.equal(takvimdeMi(a('yaklasan', '2026-04-01'), '2026-03-01', '2026-03-31'), false);
   assert.equal(takvimdeMi(a('kullanim-disi', '2026-03-10'), '2026-03-01', '2026-03-31'), false);
   assert.equal(takvimdeMi(a('kayit-yok', null), '2026-03-01', '2026-03-31'), false);
+});
+
+describe('KAL-1: eski tarih sınırı', () => {
+  test('bugünden 3650 gün öncesi kabul, bir gün daha eskisi ret', () => {
+    assert.equal(cokEskiTarihMi(gunEkle(BUGUN, -3650), BUGUN), false);
+    assert.equal(cokEskiTarihMi(gunEkle(BUGUN, -3651), BUGUN), true);
+    assert.equal(cokEskiTarihMi('0001-01-01', BUGUN), true);
+    assert.equal(cokEskiTarihMi(BUGUN, BUGUN), false);
+  });
 });

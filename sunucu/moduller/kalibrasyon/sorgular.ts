@@ -17,6 +17,9 @@ export interface AletSatiri {
   surum: number;
 }
 
+// İptal edilen kayıt defterde kalır ama vadeyi, durumu ve belirleyen kaydı etkilemez (KAL-1).
+export const IPTAL_EDILMEMIS = 'NOT EXISTS (SELECT 1 FROM kalibrasyon_kaydi_iptal i WHERE i.kayit_id = k.id)';
+
 export interface AletSuzgeci {
   id?: number;
   turId?: number;
@@ -27,7 +30,8 @@ export function aletleriGetir(db: Db, suzgec: AletSuzgeci = {}): Promise<AletSat
   return db.sorgu<AletSatiri>(
     `SELECT a.id, a.no, a.tur_id, t.ad AS tur, a.ad, a.olcme_araligi, a.yer, a.periyot_gun,
             a.kullanim_disi, a.kullanim_disi_nedeni, a.surum,
-            (SELECT max(k.tarih) FROM kalibrasyon_kaydi k WHERE k.alet_id = a.id AND k.sonuc = 'uygun')::text AS son_uygun,
+            (SELECT max(k.tarih) FROM kalibrasyon_kaydi k
+              WHERE k.alet_id = a.id AND k.sonuc = 'uygun' AND ${IPTAL_EDILMEMIS})::text AS son_uygun,
             current_date::text AS bugun
        FROM olcu_aleti a JOIN olcu_aleti_turu t ON t.id = a.tur_id
       WHERE ($1::int IS NULL OR a.id = $1) AND ($2::int IS NULL OR a.tur_id = $2)
@@ -107,22 +111,28 @@ export interface KayitSatiri {
   kisi_id: number;
 }
 
-export function sonKayitlariGetir(db: Db, aletId: number, adet: number): Promise<KayitSatiri[]> {
-  return db.sorgu<KayitSatiri>(
-    `SELECT k.id, k.tarih::text AS tarih, k.sonuc, k.sertifika_no, k.aciklama, k.kisi_id
-       FROM kalibrasyon_kaydi k
+export interface DefterSatiri extends KayitSatiri {
+  iptal_nedeni: string | null;
+  iptal_kisi_id: number | null;
+}
+
+export function sonKayitlariGetir(db: Db, aletId: number, adet: number): Promise<DefterSatiri[]> {
+  return db.sorgu<DefterSatiri>(
+    `SELECT k.id, k.tarih::text AS tarih, k.sonuc, k.sertifika_no, k.aciklama, k.kisi_id,
+            i.neden AS iptal_nedeni, i.kisi_id AS iptal_kisi_id
+       FROM kalibrasyon_kaydi k LEFT JOIN kalibrasyon_kaydi_iptal i ON i.kayit_id = k.id
       WHERE k.alet_id = $1 ORDER BY k.tarih DESC, k.id DESC LIMIT $2`,
     [aletId, adet],
   );
 }
 
-// Arkon'un alet listesi için: alet başına en yeni `adet` kayıt, tek sorguda.
+// Arkon'un alet listesi için: alet başına iptal edilmemiş en yeni `adet` kayıt, tek sorguda.
 export function sonKayitlarHepsi(db: Db, adet: number): Promise<(KayitSatiri & { alet_id: number })[]> {
   return db.sorgu<KayitSatiri & { alet_id: number }>(
     `SELECT id, alet_id, tarih, sonuc, sertifika_no, aciklama, kisi_id
        FROM (SELECT k.id, k.alet_id, k.tarih::text AS tarih, k.sonuc, k.sertifika_no, k.aciklama, k.kisi_id,
                     row_number() OVER (PARTITION BY k.alet_id ORDER BY k.tarih DESC, k.id DESC) AS sira
-               FROM kalibrasyon_kaydi k) s
+               FROM kalibrasyon_kaydi k WHERE ${IPTAL_EDILMEMIS}) s
       WHERE sira <= $1 ORDER BY alet_id, tarih, id`,
     [adet],
   );
@@ -149,7 +159,26 @@ export async function kayitEkle(db: Db, k: KayitGirdisi): Promise<number> {
 }
 
 export function kayitSiralari(db: Db, aletId: number): Promise<{ id: number; tarih: string }[]> {
-  return db.sorgu<{ id: number; tarih: string }>('SELECT id, tarih::text AS tarih FROM kalibrasyon_kaydi WHERE alet_id = $1', [aletId]);
+  return db.sorgu<{ id: number; tarih: string }>(
+    `SELECT k.id, k.tarih::text AS tarih FROM kalibrasyon_kaydi k WHERE k.alet_id = $1 AND ${IPTAL_EDILMEMIS}`, [aletId],
+  );
+}
+
+// Kayıt yalnız kendi aletinin altında bulunur; başka aletin kaydı "yok" sayılır.
+export function kayitBul(db: Db, aletId: number, kayitId: number): Promise<{ iptal: boolean } | null> {
+  return db.tek<{ iptal: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM kalibrasyon_kaydi_iptal i WHERE i.kayit_id = k.id) AS iptal
+       FROM kalibrasyon_kaydi k WHERE k.id = $1 AND k.alet_id = $2`,
+    [kayitId, aletId],
+  );
+}
+
+export async function aletSurumunuArtir(db: Db, id: number): Promise<void> {
+  await db.sorgu('UPDATE olcu_aleti SET surum = surum + 1 WHERE id = $1', [id]);
+}
+
+export async function iptalEkle(db: Db, kayitId: number, kisiId: number, neden: string): Promise<void> {
+  await db.sorgu('INSERT INTO kalibrasyon_kaydi_iptal (kayit_id, kisi_id, neden) VALUES ($1, $2, $3)', [kayitId, kisiId, neden]);
 }
 
 export async function bugunuGetir(db: Db): Promise<string> {

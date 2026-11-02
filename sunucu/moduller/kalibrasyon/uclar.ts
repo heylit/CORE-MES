@@ -1,10 +1,10 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  aletAyrintiCevabi, aletGuncelleGovdesi, aletOlusturGovdesi, idParametresi, kalibrasyonGovdesi, kullanimDisiGovdesi,
+  aletAyrintiCevabi, aletGuncelleGovdesi, aletOlusturGovdesi, idParametresi, kalibrasyonGovdesi, kayitIptalGovdesi, kayitParametresi, kullanimDisiGovdesi,
   listeCevabi, listeSorgusu, ozetCevabi, silmeCevabi, turGuncelleGovdesi, turListesiCevabi, turOlusturGovdesi,
 } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import {
-  aletAyrintisi, aletDuzenle, aletOlustur, aletOzeti, aletiSil, aletleriListele, kalibrasyonKaydet, kullanimDisiBirak, turDuzenle,
+  aletAyrintisi, aletDuzenle, aletOlustur, aletOzeti, aletiSil, aletleriListele, kalibrasyonKaydet, kayitIptalEt, kullanimDisiBirak, turDuzenle,
   turOlustur, turleriListele,
 } from './servis.ts';
 
@@ -73,6 +73,15 @@ export const uclar = [
     govde: kalibrasyonGovdesi,
     cevap: aletAyrintiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => kalibrasyonKaydet(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/olcu-aletleri/:id/kayitlar/:kayitId/iptal',
+    yetki: 'kalibrasyon.yaz',
+    parametre: kayitParametresi,
+    govde: kayitIptalGovdesi,
+    cevap: aletAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kayitIptalEt(db, kullanici.id, parametre.id, parametre.kayitId, govde.neden),
   }),
   uc({
     yontem: 'POST',

@@ -1,11 +1,13 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import type {
-  AletAyrintiCevabi, AletGuncelleGovdesi, AletOlusturGovdesi, KalibrasyonGovdesi, KullanimDisiGovdesi, Sonuc, Tur, TurGuncelleGovdesi, TurListesiCevabi,
+  AletAyrintiCevabi, AletGuncelleGovdesi, AletOlusturGovdesi, KalibrasyonGovdesi, KayitIptalGovdesi, KullanimDisiGovdesi, Sonuc, Tur, TurGuncelleGovdesi,
+  TurListesiCevabi,
 } from '#paylasilan/sozlesme/kalibrasyon.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { CokSatir, Dugme, Girdi, IsaretKutusu, Pencere, Secim } from '../../ortak/arayuz/index.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useKomut } from './komut.ts';
-import { SONUC_METNI } from './gosterim.ts';
+import { SONUC_METNI, gunOncesi } from './gosterim.ts';
 
 const SONUC_SECENEKLERI = (['uygun', 'uygunsuz'] as const).map((s) => ({ deger: s, baslik: SONUC_METNI[s] }));
 
@@ -26,7 +28,11 @@ const kalibrasyonGovdesi = (d: KalibrasyonDegeri): KalibrasyonGovdesi => ({
   aciklama: d.aciklama,
 });
 
+// Sunucunun sınırıyla aynı (sunucu/moduller/kalibrasyon/kurallar.ts); asıl denetim sunucudadır, bu yalnız tarih seçiciyi daraltır.
+const ESKI_TARIH_SINIRI_GUN = 3650;
+
 function KalibrasyonAlanlari({ deger, degistir }: { deger: KalibrasyonDegeri; degistir: (d: KalibrasyonDegeri) => void }) {
+  const bugun = tesisGunu(Date.now());
   return (
     <>
       <Secim
@@ -34,7 +40,11 @@ function KalibrasyonAlanlari({ deger, degistir }: { deger: KalibrasyonDegeri; de
         onChange={(e) => degistir({ ...deger, sonuc: e.target.value as Sonuc })}
         ipucu={deger.sonuc === 'uygunsuz' ? 'Uygunsuz sonuç aleti kullanım dışı bırakır.' : undefined}
       />
-      <Girdi etiket="Tarih" type="date" value={deger.tarih} ipucu="Boşsa bugün yazılır; ileri tarih girilmez." onChange={(e) => degistir({ ...deger, tarih: e.target.value })} />
+      <Girdi
+        etiket="Tarih" type="date" value={deger.tarih} min={gunOncesi(bugun, ESKI_TARIH_SINIRI_GUN)} max={bugun}
+        ipucu="Boşsa bugün yazılır; ileri tarih ve 10 yıldan eski tarih girilmez."
+        onChange={(e) => degistir({ ...deger, tarih: e.target.value })}
+      />
       <Girdi etiket="Sertifika no" value={deger.sertifikaNo} maxLength={80} onChange={(e) => degistir({ ...deger, sertifikaNo: e.target.value })} />
       <div className="tc-form-tam">
         <CokSatir etiket="Açıklama" value={deger.aciklama} maxLength={500} onChange={(e) => degistir({ ...deger, aciklama: e.target.value })} />
@@ -104,6 +114,22 @@ export function KullanimDisiFormu({ aletId, aletNo, kapat }: { aletId: number; a
   );
 }
 
+export function KayitIptalFormu({ aletId, kayitId, baslik, kapat }: { aletId: number; kayitId: number; baslik: string; kapat: () => void }) {
+  const [neden, nedenYaz] = useState('');
+  const komut = useKomut<AletAyrintiCevabi>(`/olcu-aletleri/${aletId}/kayitlar/${kayitId}/iptal`, kapat, 'Kayıt iptal edilemedi');
+  return (
+    <FormKabugu baslik={`Kaydı iptal et: ${baslik}`} kapat={kapat} gonder={() => { komut.gonder({ neden } satisfies KayitIptalGovdesi); }} yukleniyor={komut.yukleniyor} hata={komut.hata} onayMetni="İptal et">
+      <div className="tc-form-tam">
+        <CokSatir
+          etiket="İptal nedeni" required value={neden} maxLength={300}
+          ipucu="Kayıt silinmez, iptal edildi diye işaretlenir ve vade hesabından çıkar. Aletin kullanım durumu değişmez; doğru kaydı ayrıca girin."
+          onChange={(e) => nedenYaz(e.target.value)}
+        />
+      </div>
+    </FormKabugu>
+  );
+}
+
 export interface AletDuzenlemesi {
   id: number;
   no: string;
@@ -131,7 +157,15 @@ export function AletFormu({ alet, turler, kapat }: { alet: AletDuzenlemesi | nul
   // Pasif tür yalnız aletin kendi türüyse listede kalır: yeni seçim yapılamaz, mevcut atama bozulmaz.
   const secenekler = turler.filter((t) => t.aktif || t.id === alet?.turId).map((t) => ({ deger: String(t.id), baslik: t.ad }));
 
+  // Boş alan sayıya çevrilince 0 olur; kullanıcı "en az 1 gün" değil "zorunlu" iletisini görsün.
+  const [periyotHatasi, periyotHatasiYaz] = useState<string | null>(null);
+
   const gonder = () => {
+    if (periyot.trim() === '') {
+      periyotHatasiYaz('Kalibrasyon periyodu zorunlu.');
+      return;
+    }
+    periyotHatasiYaz(null);
     const alanlar = { no, turId: Number(turId), ad, olcmeAraligi: aralik, yer, periyotGun: Number(periyot) };
     if (alet !== null) {
       komut.gonder({ ...alanlar, surum: alet.surum } satisfies AletGuncelleGovdesi);
@@ -141,7 +175,7 @@ export function AletFormu({ alet, turler, kapat }: { alet: AletDuzenlemesi | nul
   };
 
   return (
-    <FormKabugu baslik={alet === null ? 'Alet ekle' : `Aleti düzenle: ${alet.no}`} kapat={kapat} gonder={gonder} yukleniyor={komut.yukleniyor} hata={komut.hata} onayMetni="Kaydet">
+    <FormKabugu baslik={alet === null ? 'Alet ekle' : `Aleti düzenle: ${alet.no}`} kapat={kapat} gonder={gonder} yukleniyor={komut.yukleniyor} hata={periyotHatasi ?? komut.hata} onayMetni="Kaydet">
       <Girdi etiket="Alet no" required value={no} maxLength={60} onChange={(e) => noYaz(e.target.value)} />
       <Secim etiket="Tür" required bosSecenek="Seçiniz" value={turId} secenekler={secenekler} onChange={(e) => turYaz(e.target.value)} />
       <Girdi etiket="Ad" value={ad} maxLength={120} onChange={(e) => adYaz(e.target.value)} />

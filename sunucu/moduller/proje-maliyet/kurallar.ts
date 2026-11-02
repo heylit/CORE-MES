@@ -507,6 +507,13 @@ export const MASRAF_YOK = 'Gider belgesi bulunamadı.';
 export const MASRAF_IPTAL = 'İptal edilmiş belge projeye bağlanamaz.';
 export const MASRAF_SATIN_ALMA = 'Satın alma siparişine bağlı belge üretim maliyetine satın almadan girer; projeye ayrıca bağlanamaz.';
 export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz (faiz, vergi, kredi, kur farkı).';
+export const MASRAF_KAPALI_PROJE = 'Tamamlanmış ya da iptal edilmiş projeye masraf bağlanamaz.';
+export const MASRAF_KALDIRMA_YETKISI = 'Masraf bağını yalnız proje maliyetini gören kaldırabilir.';
+
+// PM-45 (K18 a): masraf yalnız aktif projeye bağlanır.
+export function projeMasrafReddi(durum: string): string | null {
+  return durum === 'aktif' ? null : MASRAF_KAPALI_PROJE;
+}
 
 // PM-40: taban yalnız iş emri olan projede alınır; ilk taban gerekçesiz, yenileme gerekçeli. İlk tabanda verilen gerekçe yazılmaz
 // (veritabanı da ilk satırı gerekçesiz ister).

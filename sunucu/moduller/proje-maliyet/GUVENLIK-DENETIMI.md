@@ -6,8 +6,8 @@ Defteri sunucu işi yazar (236 a), yalnız ekleme; zaman sunucudan, donduran bo�
 |---|---|---|---|---|
 | GET /proje-maliyet/masraf-secenekleri | projeler.yaz | iptal dışı, satın almaya bağlı olmayan, proje masrafı türündeki ve bağlanmamış gider belgeleri, en çok 20; tutar yalnız `finans.maliyet-oku` olana (FNS-48, 260 a kalıbı) | 940 c yetki | kalite 403 |
 | POST /proje-maliyet/:projeId/taban | projeler.yaz | PM-40; tekrar korumalı; cevap tutar taşımaz | PM-40, tekrar koruması | emirsiz 422, gerekçesiz yenileme 422, kalite 403, girişsiz 401 |
-| POST /proje-maliyet/:projeId/masraflar | projeler.yaz | PM-41; tekrar korumalı; kişi ve zaman sunucudan | PM-41 | iptal ve faiz 422, başka projede 409, başka projenin görevi 409, olmayan belge ve proje 404, kalite 403 |
-| POST /proje-maliyet/masraflar/:bagId/kaldir | projeler.yaz | bağ silinir (belge finansta kalır); olmayan 404; denetim kaydı uçtan | PM-41 | olmayan 404 |
+| POST /proje-maliyet/:projeId/masraflar | projeler.yaz | PM-41, PM-45; tekrar korumalı; kişi ve zaman sunucudan; tamamlanmış ya da iptal proje 409 (K18 a) | PM-41 | iptal ve faiz 422, başka projede 409, başka projenin görevi 409, kapalı ve iptal proje 409, olmayan belge ve proje 404, kalite 403 |
+| POST /proje-maliyet/masraflar/:bagId/kaldir | projeler.yaz + servis `finans.maliyet-oku` (K18 a) | bağ silinir (belge finansta kalır), silinen bağ kaldıran ve zamanla `proje_maliyet_masraf_kaldirma`'ya yazılır (yalnız ekleme); olmayan 404 | PM-41, PM-46 | maliyet okumayan (planlama) 403, olmayan 404 |
 | GET /proje-maliyet/:projeId | finans.maliyet-oku | tutar, gelir, katkı, sapma, kâr riski, ceza ve sapan iş emirleri yalnız `siparisler.fiyat-oku` ile | yönetici okur (PM-13); fiyat yetkilisi tutarı görür (PM-14) | operatör 403, girişsiz 401, olmayan proje 404, sayı olmayan kimlik 400; fiyat yetkisi olmayana tutarlar null (PM-14) |
 
 Okuma ucunun gövdesi yok. Taban ve masraf bağlama istek kimliği ister; bağ kaldırma tekrarında ikincisi 404 alır, ikinci kez silmez.
