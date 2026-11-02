@@ -16,7 +16,7 @@
 | Geçmiş araması düz metin (LIKE işaretleri kaçırılır) | `geçmiş günün kayıtlarını verir` |
 | Acil durum listesi içeridekiler ve yazdıran | `acil durum listesi` |
 | Menü sayacı okumayana boş | `menü sayacı` |
-| Ekran: kimlik EVET denmeden giriş kapalı, seçili kart gider, geri al; atölye kask; kart okutunca çıkış, eşya kontrolü; yetkiye göre düğmeler; kart rafı; acil durum yazdır | `Nizamiye.test.tsx` (7 test) |
+| Ekran: kimlik EVET denmeden giriş kapalı, seçili kart gider, geri al; son dört hane yazılınca tür zorunlu (K24 a); atölye kask; kart okutunca çıkış, eşya kontrolü; yetkiye göre düğmeler; kart rafı; acil durum yazdır | `Nizamiye.test.tsx` (8 test) |
 | Ekran: Ziyaretçilerim üst çubukta oturuma açık; yalnız beklenen iptal; ön kayıt tesis saatiyle, ev sahibi alanı olmadan, istek kimliğiyle | `Ziyaretcilerim.test.tsx` (3 test) |
 | PDKS dosyası: başlık, boş satır, tesis saati; bozuk ve ileri zamanlı satır hatada | `kurallar.test.ts` `PDKS dosyası` |
 | PDKS: son hareketi giriş olan içeride, 24 saatten eski giriş sayılmaz | `kurallar.test.ts` `PDKS: son hareketi` |
