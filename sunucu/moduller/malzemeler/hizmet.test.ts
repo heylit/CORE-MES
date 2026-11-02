@@ -66,6 +66,8 @@ describe('Hizmet kartı (kart #163, MH1-MH5, gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('malzemehizmet');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
     kisiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme hizmet', kullaniciAdi: 'hz-yonetici', parola: PAROLA }));
+    // LOG-1 a: birim karşılığı yalnız geçerli Logo birim setinden yazılır; testin kodları liste okunmamışken elle eklenmiş sayılır.
+    await vt().sorgu("INSERT INTO logo_birim_seti (kod, elle, ekleyen_kisi_id) SELECT k, true, (SELECT min(id) FROM kisi) FROM unnest($1::text[]) AS k ON CONFLICT (kod) DO NOTHING", [['SAAT']]);
     const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'hz-yonetici', parola: PAROLA } });
     yonetici = String(c.headers['set-cookie']).split(';')[0] ?? '';
     await tamam('POST', '/malzeme-katalogu-ayarlari/genel/kaydet', { deger: { onayAkisi: false } });

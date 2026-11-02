@@ -122,6 +122,8 @@ describe('Logo\'ya gönderime hazırlık (kart #232, gerçek PostgreSQL)', () =>
     kisiId = ilk.id;
     onayci = ilk.cerez;
     onayci2 = (await girisYap('lg-onayci-iki', 'yonetici')).cerez;
+    // LOG-1 a: birim karşılığı yalnız geçerli Logo birim setinden yazılır; testin kodları liste okunmamışken elle eklenmiş sayılır.
+    await vt().sorgu("INSERT INTO logo_birim_seti (kod, elle, ekleyen_kisi_id) SELECT k, true, (SELECT min(id) FROM kisi) FROM unnest($1::text[]) AS k ON CONFLICT (kod) DO NOTHING", [['LOGO-M', 'LOGO-AD', 'LOGO-YENI', 'LOGO-LV', 'KG', '06', 'TRB-1']]);
     yazar = (await girisYap('lg-yazar', 'satin_alma', ilk.id)).cerez;
     // Yerleşik rollerin hiçbiri malzemeyi yalnız okumaz: okuyucu rolü testte açılır.
     await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('okuyucu', 'Okuyucu')");
@@ -309,6 +311,24 @@ describe('Logo\'ya gönderime hazırlık (kart #232, gerçek PostgreSQL)', () =>
     await assert.rejects(vt().sorgu(`UPDATE malzeme_logo_karsiligi SET logo_degeri = '06 KG' WHERE cesit = 'birim' AND tmi_degeri = 'kg'`), kisit);
     const cevap = await tamam<LogoDurumuCevabi>(okuyucu, 'GET', '/malzeme-logo-durumu');
     assert.deepEqual(cevap.kartTuruSecenekleri.map((t) => t.kod), ['10', '11', '12', '13', '1']);
+  });
+
+  test('LOG-1 a: listede olmayan birim karşılığı 422 ile reddedilir; liste sonradan değişip geçersiz kalan karşılıklı kart "hazır" görünmez', async () => {
+    const m = await istek(onayci, 'POST', '/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: 'YOKKOD' });
+    assert.equal(m.statusCode, 422, m.body);
+    assert.match(m.body, /Birim seti YOKKOD Logo birim seti listesinde yok/);
+    await karsilik('tur', 'hammadde', '10');
+    await karsilik('birim', 'kg', 'KG');
+    const { no } = await aktifKart({ kod: 'HM-LGO-00901' });
+    const eksik = async () => (await tamam<LogoDurumuCevabi>(okuyucu, 'GET', '/malzeme-logo-durumu')).kartlar.find((x) => x.id === no)?.eksikler;
+    assert.deepEqual(await eksik(), []);
+    // Liste köprüden okununca elle eklenen KG geçersiz kalır (listede yok): kart birim karşılığı eksik görünür.
+    await vt().sorgu('INSERT INTO logo_birim_seti_okuma (son_okuma, sayi) VALUES (now(), 0)');
+    try {
+      assert.deepEqual(await eksik(), ['birim_karsiligi']);
+    } finally {
+      await vt().sorgu('DELETE FROM logo_birim_seti_okuma');
+    }
   });
 
   test('logoBirimSetiKullaniliyorMu (kart #207 isteği): bütün birim karşılıklarına bakar; kuyrukta kart olmasa da kullanılan set doğru, kullanılmayan yanlış', async () => {

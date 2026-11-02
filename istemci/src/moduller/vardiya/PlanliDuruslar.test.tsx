@@ -121,6 +121,7 @@ describe('Planlı duruşlar', () => {
     fireEvent.change(bas, { target: { value: '31.02.2026 08:00' } });
     fireEvent.blur(bas);
     expect(bas.value).toBe(eski);
+    bas.focus();
     fireEvent.change(bas, { target: { value: '29.10.2026 0:00' } });
     fireEvent.keyDown(bas, { key: 'Enter' });
     expect(bas.value).toBe('29.10.2026 00:00');

@@ -1,4 +1,4 @@
-import { useEffect, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from 'react';
 import { Girdi } from '../../ortak/arayuz/index.ts';
 import { saatOku, tarihMetni, tarihOku, zamanMetni, zamanOku } from './gosterim.ts';
 
@@ -18,7 +18,9 @@ interface Cekirdek {
 function useTaslak({ deger, bicimle, oku, degistir, bosOlabilir }: Cekirdek) {
   const [metin, metinYaz] = useState(bicimle(deger));
   const [gecersiz, gecersizYaz] = useState(false);
-  useEffect(() => { metinYaz(bicimle(deger)); }, [deger, bicimle]);
+  // Kayıtlı değer değişmeden aynı değer ikinci kez verilmez: reddedilen değer odak her çıktığında yeniden gitmesin.
+  const verilen = useRef<string | null>(null);
+  useEffect(() => { metinYaz(bicimle(deger)); verilen.current = null; }, [deger, bicimle]);
   const bitir = () => {
     if (metin.trim() === '') {
       if (bosOlabilir) { if (deger !== '') degistir(''); metinYaz(''); } else metinYaz(bicimle(deger));
@@ -26,7 +28,7 @@ function useTaslak({ deger, bicimle, oku, degistir, bosOlabilir }: Cekirdek) {
     }
     const v = oku(metin);
     if (v === null) { gecersizYaz(true); metinYaz(bicimle(deger)); return; }
-    if (v !== deger) degistir(v);
+    if (v !== deger && v !== verilen.current) { verilen.current = v; degistir(v); }
     metinYaz(bicimle(v));
   };
   return {
@@ -34,7 +36,8 @@ function useTaslak({ deger, bicimle, oku, degistir, bosOlabilir }: Cekirdek) {
     gecersiz,
     degisti: (m: string) => { metinYaz(m); gecersizYaz(false); },
     bitti: bitir,
-    tus: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') bitir(); },
+    // Enter odağı bırakır, uygulamayı odak çıkışı yapar: Enter'da ayrıca uygulamak, hata bildirimi odağı alınca ikinci istek doğuruyordu.
+    tus: (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') e.currentTarget.blur(); },
   };
 }
 

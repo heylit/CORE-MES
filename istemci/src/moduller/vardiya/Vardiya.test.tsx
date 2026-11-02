@@ -417,6 +417,7 @@ describe('Vardiya', () => {
     const okunan = () => cagrilar.filter((c) => c.yol.startsWith('/calisma-takvimi')).length;
     await waitFor(() => expect(okunan()).toBeGreaterThan(0));
     const once = okunan();
+    alan.focus();
     fireEvent.change(alan, { target: { value: '2.1.2026' } });
     expect(okunan()).toBe(once);
     fireEvent.keyDown(alan, { key: 'Enter' });
@@ -425,6 +426,50 @@ describe('Vardiya', () => {
     fireEvent.change(alan, { target: { value: '' } });
     fireEvent.blur(alan);
     expect(alan.value).toBe('02.01.2026');
+  });
+
+  it('VRD-7: reddedilen saat Enter ve sonraki odak çıkışlarında tek istek gönderir', async () => {
+    const cagrilar = sunucuKur(PLANLAMA, {
+      'POST /vardiyalar/1/guncelle': () => json(400, { kod: 'GECERSIZ', mesaj: 'Başlangıç ve bitiş aynı olamaz.' } satisfies HataGovdesi),
+    });
+    ac();
+    const alan = await screen.findByLabelText('Gündüz bitiş') as HTMLInputElement;
+    alan.focus();
+    fireEvent.change(alan, { target: { value: '08:00' } });
+    fireEvent.keyDown(alan, { key: 'Enter' });
+    expect(document.activeElement).not.toBe(alan);
+    fireEvent.blur(alan);
+    alan.focus();
+    alan.blur();
+    expect(await screen.findAllByText('Başlangıç ve bitiş aynı olamaz.')).toHaveLength(1);
+    expect(postlar(cagrilar)).toHaveLength(1);
+  });
+
+  it('VRD-7: boş mola ve boş kapalı gün tarihi alan iletisi verir, istek gitmez', async () => {
+    const cagrilar = sunucuKur(PLANLAMA);
+    ac();
+    const kart = await screen.findByLabelText('Akşam vardiyası');
+    fireEvent.click(within(kart).getByRole('button', { name: 'Mola ekle' }));
+    fireEvent.click(within(kart).getByRole('button', { name: 'Ekle' }));
+    expect(within(kart).getByRole('alert').textContent).toContain('başlangıç ve bitiş saatini');
+    fireEvent.change(within(kart).getByLabelText('Mola başlangıç'), { target: { value: '20:00' } });
+    fireEvent.blur(within(kart).getByLabelText('Mola başlangıç'));
+    expect(within(kart).queryByRole('alert')).toBeNull();
+    const tatil = screen.getByLabelText('Tatiller ve kapalı günler');
+    fireEvent.click(within(tatil).getByRole('button', { name: 'Tarih ekle' }));
+    expect(within(tatil).getByRole('alert').textContent).toContain('GG.AA.YYYY');
+    expect(postlar(cagrilar)).toHaveLength(0);
+  });
+
+  it('VRD-7: vardiya kartları başlangıç saatine göre sıralanır', async () => {
+    sunucuKur(PLANLAMA, {
+      'GET /vardiya-takvimi': () => json(200, { ...TAKVIM, vardiyalar: [
+        { ...TAKVIM.vardiyalar[1]!, id: 3, ad: 'Gece', baslangic: '00:00', bitis: '08:00' }, ...TAKVIM.vardiyalar].reverse() } satisfies TakvimCevabi),
+    });
+    ac();
+    await screen.findByLabelText('Gece vardiyası');
+    const kartlar = screen.getByLabelText('Vardiya saatleri ve molalar').querySelectorAll('.tc-vr-kart');
+    expect([...kartlar].map((k) => k.getAttribute('aria-label'))).toEqual(['Gece vardiyası', 'Gündüz vardiyası', 'Akşam vardiyası']);
   });
 
   it('vardiya saatinde bir hane silip düzeltmek değeri kaydırmaz; boşaltılan saat eski değere döner', async () => {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -139,6 +139,24 @@ describe('Tüm işler', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Sevkiyattaki/ }));
     const okunan = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
     expect(within(okunan).queryAllByRole('button', { name: /Sevk et|^Al$|Çıkışı yap|Kabul et/ })).toHaveLength(0);
+  });
+
+  it('EM-6 (kart 1842): Etiket Merkezi\'ni gören giden ürün kaleminin koli etiketini oradan açar; fason ve görmeyen düğme görmez', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.etiket-merkezi'] });
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const Adres = () => <output data-testid="adres">{useLocation().pathname + useLocation().search}</output>;
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/sevkiyat/tum-isler']}><TumIsler /><Adres /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('tab', { name: /Sevkiyattaki/ }));
+    const tablo = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
+    expect(within(satirOf(tablo, 'DENEME-UE-15')).queryByRole('button', { name: 'Koli etiketi' })).toBeNull();
+    fireEvent.click(within(satirOf(tablo, 'DENEME-UE-13')).getByRole('button', { name: 'Koli etiketi' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/etiket-merkezi?tur=sevk-koli&id=41'));
+    cleanup();
+    sunucuKur(OKUYUCU);
+    ac();
+    fireEvent.click(await screen.findByRole('tab', { name: /Sevkiyattaki/ }));
+    const okunan = await screen.findByRole('table', { name: 'Sevkiyattaki işler' });
+    expect(within(okunan).queryAllByRole('button', { name: 'Koli etiketi' })).toHaveLength(0);
   });
 
   it('sevkiyat elle işi başlıktan açar; dönüşlü gidiş dönüş gününü taşır; okuyucu düğmeyi görmez', async () => {

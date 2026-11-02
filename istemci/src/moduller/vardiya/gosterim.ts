@@ -76,8 +76,15 @@ export const zamanMetni = (yerel: string): string => (yerel === '' ? '' : `${tar
 // Yeni vardiyanın önerilen adı: "Vardiya N"in ilk boştaki numarası. Vardiya silinmediği için sayı + 1 bir kez alınmışsa
 // hep alınmış kalır. Sunucunun ad tekilliği gibi tam eşleşmedir.
 export function yeniVardiyaAdi(adlar: readonly string[]): string {
-  const alinmis = new Set(adlar.map((a) => a.trim()));
+  // Sunucudaki tekillik gibi büyük/küçük harf ve boşluk farkı ayrı ad sayılmaz.
+  const sade = (a: string) => a.trim().replace(/\s+/g, ' ').toLowerCase();
+  const alinmis = new Set(adlar.map(sade));
   let n = adlar.length + 1;
-  while (alinmis.has(`Vardiya ${String(n)}`)) n += 1;
+  while (alinmis.has(`vardiya ${String(n)}`)) n += 1;
   return `Vardiya ${String(n)}`;
+}
+
+// Kartlar başlangıç saatine göre okunur; aynı saatte ada göre.
+export function baslangicSirali<T extends { baslangic: string; ad: string }>(vardiyalar: readonly T[]): T[] {
+  return [...vardiyalar].sort((a, b) => a.baslangic.localeCompare(b.baslangic) || a.ad.localeCompare(b.ad, 'tr'));
 }

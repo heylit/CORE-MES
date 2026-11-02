@@ -67,6 +67,7 @@
 /* Günlük mesai */
 .tc-vr-ozet { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); }
 .tc-vr-ozet > * { min-width: 0; }
+.tc-vr-alan-hata { display: flex; flex: 1 1 100%; align-items: center; gap: var(--b-1); margin: 0; color: var(--stop); font-size: var(--yazi-s); }
 .tc-vr-uyari { margin: 0; padding: var(--b-2) var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-1); color: var(--ink); font-size: var(--yazi-s); }
 
 /* Boş durum kartı */

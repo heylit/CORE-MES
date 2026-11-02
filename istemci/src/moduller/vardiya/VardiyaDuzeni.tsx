@@ -5,7 +5,7 @@ import { AcKapa, Dugme, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BosVardiya } from './BosVardiya.tsx';
 import { SaatGirdisi, TarihGirdisi } from './ZamanAlani.tsx';
-import { GUNLER, kisaAdlar, saat, tarihMetni, yeniVardiyaAdi } from './gosterim.ts';
+import { GUNLER, baslangicSirali, kisaAdlar, saat, tarihMetni, yeniVardiyaAdi } from './gosterim.ts';
 import { IkiAdimli } from './IkiAdimli.tsx';
 import type { useVardiyaYaz } from './komut.ts';
 import { aramaUyar, degistir, hepsiniDegistir } from './secim.ts';
@@ -126,14 +126,19 @@ function MolaEkle({ ekle }: { ekle: (m: Mola) => void }) {
   const [acik, acikYaz] = useState(false);
   const [b, bYaz] = useState('');
   const [s, sYaz] = useState('');
-  const kapat = () => { acikYaz(false); bYaz(''); sYaz(''); };
+  const [hata, hataYaz] = useState<string | null>(null);
+  const kapat = () => { acikYaz(false); bYaz(''); sYaz(''); hataYaz(null); };
   if (!acik) return <div className="tc-vr-satir"><Dugme simge="plus" onClick={() => acikYaz(true)}>Mola ekle</Dugme></div>;
   return (
     <div className="tc-vr-satir">
-      <SaatGirdisi aria-label="Mola başlangıç" deger={b} degistir={bYaz} bosOlabilir />
-      <SaatGirdisi aria-label="Mola bitiş" deger={s} degistir={sYaz} bosOlabilir />
-      <Dugme tur="birincil" simge="plus" onClick={() => { if (!b || !s) return; ekle({ baslangic: b, bitis: s }); kapat(); }}>Ekle</Dugme>
+      <SaatGirdisi aria-label="Mola başlangıç" deger={b} degistir={(d) => { bYaz(d); hataYaz(null); }} bosOlabilir />
+      <SaatGirdisi aria-label="Mola bitiş" deger={s} degistir={(d) => { sYaz(d); hataYaz(null); }} bosOlabilir />
+      <Dugme tur="birincil" simge="plus" onClick={() => {
+        if (!b || !s) { hataYaz('Molanın başlangıç ve bitiş saatini SS:DD biçiminde yaz.'); return; }
+        ekle({ baslangic: b, bitis: s }); kapat();
+      }}>Ekle</Dugme>
       <Dugme onClick={kapat}>Vazgeç</Dugme>
+      {hata && <p className="tc-vr-alan-hata" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
     </div>
   );
 }
@@ -156,7 +161,7 @@ function Saatler({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
       <p className="tc-vr-ipucu">Başlangıç ve bitiş saatini değiştir, molaları ekle. Kapasite molalar düşülmüş net süreyle hesaplanır. Bitiş başlangıçtan önceyse vardiya gece yarısını geçer ve başladığı güne sayılır.</p>
       {t.vardiyalar.length === 0 && <p className="tc-vr-ipucu">Vardiya tanımlanmadı.</p>}
       <div className="tc-vr-kartlar">
-        {t.vardiyalar.map((v) => (
+        {baslangicSirali(t.vardiyalar).map((v) => (
           <div key={v.id} className="tc-vr-kart" aria-label={`${v.ad} vardiyası`}>
             <AdAlani v={v} disabled={!yaz} kaydet={(ad) => guncelle(v, { ad })} />
             <div className="tc-vr-satir">
@@ -197,6 +202,7 @@ function Saatler({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
 function Tatiller({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
   const [tarih, tarihYaz] = useState('');
   const [ad, adYaz] = useState('');
+  const [hata, hataYaz] = useState<string | null>(null);
   const ikMi = (g: TakvimCevabi['gunler'][number]): boolean => g.kaynak === 'ik';
   const kendiVar = t.gunler.some((g) => !ikMi(g));
   return (
@@ -204,9 +210,13 @@ function Tatiller({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
       <h3>Tatiller ve kapalı günler ({t.gunler.length})</h3>
       {yaz && (
         <div className="tc-vr-satir">
-          <TarihGirdisi aria-label="Kapalı gün tarihi" deger={tarih} degistir={tarihYaz} bosOlabilir />
+          <TarihGirdisi aria-label="Kapalı gün tarihi" deger={tarih} degistir={(d) => { tarihYaz(d); hataYaz(null); }} bosOlabilir />
           <input className="tc-alan-kutu" aria-label="Kapalı gün adı" placeholder="Ad (isteğe bağlı)" maxLength={80} value={ad} onChange={(e) => adYaz(e.target.value)} />
-          <Dugme simge="plus" onClick={() => { if (!tarih) return; y.mutate({ yol: '/takvim-gunleri', govde: { tarih, tur: 'kapali', ad: ad.trim() || null } }); tarihYaz(''); adYaz(''); }}>Tarih ekle</Dugme>
+          <Dugme simge="plus" onClick={() => {
+            if (!tarih) { hataYaz('Kapalı gün tarihini GG.AA.YYYY biçiminde yaz.'); return; }
+            y.mutate({ yol: '/takvim-gunleri', govde: { tarih, tur: 'kapali', ad: ad.trim() || null } }); tarihYaz(''); adYaz('');
+          }}>Tarih ekle</Dugme>
+          {hata && <p className="tc-vr-alan-hata" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
         </div>
       )}
       {t.gunler.length === 0 ? <p className="tc-vr-ipucu">Tatil ya da kapalı gün yok.</p> : (

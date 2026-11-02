@@ -1092,6 +1092,11 @@ export function baglantiDurumu(acik: boolean, kopru: KopruIstemcisi | null): Log
   return kopru === null ? 'ortam-degiskeni-yok' : 'acik';
 }
 
+// Malzemelerin karşılık yazımı ve gönderim listesi bunu kablolamayla okur (LOG-1 a): liste okunduysa yalnız listedekiler, okunmadıysa elle eklenenler.
+export async function gecerliBirimSetiKodlari(db: Db): Promise<ReadonlySet<string>> {
+  return gecerliBirimSetleri(await s.birimSetleri(db), (await s.birimSetiOkumasi(db)) !== null);
+}
+
 export async function birimSetleriniGetir(db: Db, kopru: KopruIstemcisi | null): Promise<BirimSetleriCevabi> {
   const okuma = await s.birimSetiOkumasi(db);
   const setler = await s.birimSetleri(db);

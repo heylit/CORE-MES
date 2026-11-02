@@ -25,7 +25,7 @@ import {
   katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
   katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
-  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
+  katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
 import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
@@ -275,11 +275,18 @@ export async function malzemeLogoGuncellemeSonucu(db: Db, no: number, sonuc: Log
 
 /* ---------------- Logo durumu ekranı ve karşılık tablosu ---------------- */
 
+// LOG-1 a: geçerli Logo birim seti kodlarının listesi Logo modülündedir; Logo bu modülü ithal ettiği için tersini sunucu/kablolama.ts
+// kaydeder. Kayıt yokken (yalnız birim testleri; kablolama eksik bağda süreci açmaz) birim karşılığı denetlenmez.
+export type LogoBirimSetiCozucusu = (db: Db) => Promise<ReadonlySet<string>>;
+let logoBirimSetleri: LogoBirimSetiCozucusu | null = null;
+export function logoBirimSetiCozucusuKaydet(cozucu: LogoBirimSetiCozucusu): void { logoBirimSetleri = cozucu; }
+
 export async function logoDurumunuGetir(db: Db, kullanici: Kullanici): Promise<LogoDurumuCevabi> {
+  const gecerli = logoBirimSetleri === null ? null : await logoBirimSetleri(db);
   const kartlar = (await s.logoDurumluKartlar(db)).map((k) => ({
     id: k.id, kod: k.kod, ad: k.ad, tur: k.tur, birim: k.birim, durum: k.durum, hata: k.hata, zaman: k.zaman, kayitNo: k.kayitNo,
     guncelleme: k.guncellemeDurumu === null || k.guncellemeZamani === null ? null : { durum: k.guncellemeDurumu, hata: k.guncellemeHata, zaman: k.guncellemeZamani },
-    eksikler: k.durum === 'gonderildi' ? [] : logoEksikleri({ tur: k.tur, stokKodu: k.kod, ad: k.ad, birim: k.birim, logoKartTuru: k.logoKartTuru, logoBirimSeti: k.logoBirimSeti }),
+    eksikler: k.durum === 'gonderildi' ? [] : logoEksikleri({ tur: k.tur, stokKodu: k.kod, ad: k.ad, birim: k.birim, logoKartTuru: k.logoKartTuru, logoBirimSeti: k.logoBirimSeti }, gecerli),
   }));
   return {
     kartlar: kartlar.sort(logoDurumSirasi),
@@ -290,7 +297,9 @@ export async function logoDurumunuGetir(db: Db, kullanici: Kullanici): Promise<L
 }
 
 export async function logoKarsiligiKaydet(db: Db, kullanici: Kullanici, k: LogoKarsiligi): Promise<{ id: string }> {
-  const izinsiz = logoKarsiligiHatasi(k);
+  const izinsiz = logoKarsiligiHatasi(k) ?? (k.cesit === 'birim' && k.logoDegeri !== null && logoBirimSetleri !== null
+    ? logoBirimSetiGecersizHatasi(k.logoDegeri, await logoBirimSetleri(db))
+    : null);
   if (izinsiz) throw gecersiz(izinsiz);
   await kisitKorumali(
     {

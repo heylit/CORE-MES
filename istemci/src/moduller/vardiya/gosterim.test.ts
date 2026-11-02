@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kisaAdlar, saatOku, tarihOku, yeniVardiyaAdi, zamanMetni, zamanOku } from './gosterim.ts';
+import { baslangicSirali, kisaAdlar, saatOku, tarihOku, yeniVardiyaAdi, zamanMetni, zamanOku } from './gosterim.ts';
 
 describe('kisaAdlar', () => {
   it('baş harfi aynı vardiyalar ayrışana kadar harf ekler; tek olan tek harf kalır', () => {
@@ -46,5 +46,18 @@ describe('yeniVardiyaAdi', () => {
     expect(yeniVardiyaAdi(['Gündüz', 'Akşam'])).toBe('Vardiya 3');
     expect(yeniVardiyaAdi(['Gündüz', 'Vardiya 3'])).toBe('Vardiya 4');
     expect(yeniVardiyaAdi(['Vardiya 4 ', 'Vardiya 5', 'Gece'])).toBe('Vardiya 6');
+  });
+
+  it('VRD-7: büyük/küçük harf ve boşluk farkı alınmış sayılır', () => {
+    expect(yeniVardiyaAdi(['Gündüz', 'vardiya  3'])).toBe('Vardiya 4');
+    expect(yeniVardiyaAdi(['Gündüz', 'VARDIYA 3'])).toBe('Vardiya 4');
+  });
+});
+
+describe('baslangicSirali', () => {
+  it('başlangıç saatine, eşitte ada göre sıralar; girdiyi değiştirmez', () => {
+    const v = [{ ad: 'Akşam', baslangic: '16:00' }, { ad: 'B', baslangic: '08:00' }, { ad: 'A', baslangic: '08:00' }];
+    expect(baslangicSirali(v).map((x) => x.ad)).toEqual(['A', 'B', 'Akşam']);
+    expect(v[0]!.ad).toBe('Akşam');
   });
 });

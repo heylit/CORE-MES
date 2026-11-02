@@ -6,6 +6,7 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
+import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
   BirimAyrintisi, BirimlerCevabi, EmirOzetiCevabi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
@@ -39,7 +40,17 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 
 interface Cagri { yol: string; yontem: string; govde: unknown; kimlik: string | null }
 
-function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] = 'saglam') {
+const ISTASYONLAR: IstasyonSecimiCevabi = {
+  gruplar: [{
+    isMerkeziId: 1, isMerkeziKod: 'DNM', isMerkeziAd: 'Deneme Merkezi',
+    istasyonlar: [
+      { id: 21, kod: 'DNM-1', ad: 'Lazer 1', isMerkeziId: 1, tip: 'markalama', aktif: true },
+      { id: 22, kod: 'DNM-2', ad: 'Eski Lazer', isMerkeziId: 1, tip: 'markalama', aktif: false },
+    ],
+  }],
+};
+
+function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] = 'saglam', istasyonlar: IstasyonSecimiCevabi = ISTASYONLAR) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -47,6 +58,7 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
     const basliklar = new Headers(secenek?.headers);
     cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, kimlik: basliklar.get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
+    if (yol === '/istasyonlar/secim') return json(200, istasyonlar);
     if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM] } satisfies TanimlarCevabi);
     if (yol.startsWith('/markalama/tanimlar/7/onizleme')) return json(200, { numaralar: ['ORN-A-00005', 'ORN-A-00006'] } satisfies OnizlemeCevabi);
     if (yol === '/markalama/tanimlar/7/emirler') return json(200, { emirler: [{ id: 5, emirNo: 'UE-DNM-1', adet: 10, durum: 'acik' }] } satisfies TanimEmirleriCevabi);
@@ -142,10 +154,15 @@ describe('Markalama istasyonu', () => {
     await screen.findByRole('option', { name: /UE-DNM-1/ });
     fireEvent.change(emir, { target: { value: '5' } });
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' })).toBeTruthy();
+    const istasyon = screen.getByLabelText('İstasyon');
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    expect(screen.queryByRole('option', { name: /Eski Lazer/ })).toBeNull();
+    expect((screen.getByRole('button', { name: /Markalandı/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(istasyon, { target: { value: '21' } });
     fireEvent.click(screen.getByRole('button', { name: /Markalandı/ }));
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/birimler/markala')).toBe(true));
     const c = cagrilar.find((x) => x.yol === '/markalama/birimler/markala')!;
-    expect(c.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: null, sonuc: 'iyi' });
+    expect(c.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: 21, sonuc: 'iyi' });
     expect(c.kimlik).toMatch(/^[0-9a-f-]{36}$/);
     expect(await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-bolum .mono' })).toBeTruthy();
   });
@@ -160,6 +177,8 @@ describe('Çift dokunuş', () => {
     await screen.findByRole('option', { name: /UE-DNM-1/ });
     fireEvent.change(emir, { target: { value: '5' } });
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    fireEvent.change(screen.getByLabelText('İstasyon'), { target: { value: '21' } });
     const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
     const dugme = screen.getByRole('button', { name: /Markalandı/ });
     fireEvent.click(dugme);
@@ -172,9 +191,25 @@ describe('Çift dokunuş', () => {
   });
 });
 
+describe('Markalama istasyonu, istasyon listesi boş', () => {
+  it('seçilecek istasyon yoksa seri istasyonsuz verilir', async () => {
+    const cagrilar = sunucuKur(YONETICI, 'saglam', { gruplar: [] });
+    ac(<Istasyon />);
+    fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
+    const emir = await screen.findByLabelText('Üretim emri');
+    await screen.findByRole('option', { name: /UE-DNM-1/ });
+    fireEvent.change(emir, { target: { value: '5' } });
+    await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
+    await screen.findByRole('option', { name: 'İstasyon yok' });
+    fireEvent.click(screen.getByRole('button', { name: /Markalandı/ }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/birimler/markala')).toBe(true));
+    expect(cagrilar.find((x) => x.yol === '/markalama/birimler/markala')!.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: null, sonuc: 'iyi' });
+  });
+});
+
 describe('Hatalı markalama', () => {
   it('onay sormadan numara yakmaz; Vazgeç istek göndermez, onayla hatalı sonuçla gider', async () => {
-    const cagrilar = sunucuKur(YONETICI);
+    const cagrilar = sunucuKur(YONETICI, 'saglam', { gruplar: [] });
     ac(<Istasyon />);
     fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
     const emir = await screen.findByLabelText('Üretim emri');

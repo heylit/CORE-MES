@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
   BirimlerCevabi, EmirOzetiCevabi, MarkalaGovdesi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
 } from '#paylasilan/sozlesme/markalama.ts';
@@ -25,7 +26,10 @@ const SUTUNLAR: readonly Sutun<MarkalamaBirimi>[] = [
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (b) => zamanMetni(b.zaman) },
 ];
 
-function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId: number; yazabilir: boolean }) {
+// Seçilen istasyon birimin kaydına girer (hangi tezgâhta markalandı). Liste okunamıyor ya da boşsa seçim istenmez: markalama durmasın.
+function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
+  tanim: MarkalamaTanimi; emirId: number; istasyonId: number | null; istasyonGerekli: boolean; yazabilir: boolean;
+}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [son, sonYaz] = useState<MarkalamaBirimi | null>(null);
@@ -46,7 +50,7 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
   // ikinci numara yanmaz.
   const markala = useKorumaliKomut<MarkalaGovdesi['sonuc'], MarkalamaBirimi>({
     gonder: (sonuc, deneme) => {
-      const govde: MarkalaGovdesi = { tanimId: tanim.id, uretimEmriId: emirId, istasyonId: null, sonuc };
+      const govde: MarkalaGovdesi = { tanimId: tanim.id, uretimEmriId: emirId, istasyonId, sonuc };
       return api.post<MarkalamaBirimi>('/markalama/birimler/markala', govde, deneme);
     },
     onSettled: () => hataliOnayiYaz(false),
@@ -66,6 +70,7 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
   });
 
   const siradaki = onizleme.data?.numaralar[0] ?? null;
+  const istasyonBekliyor = istasyonGerekli && istasyonId === null;
   const kodVar = tanim.alanlar.some((a) => a.kodTuru !== 'yok');
   const beklenen = tanim.dogrulama && son !== null && son.durum !== 'hurda' && son.dogrulamaZamani === null ? son : null;
   const sahneMarkalari = tanim.alanlar.flatMap((a, i) => (a.yer === null ? [] : [{
@@ -93,14 +98,15 @@ function Calisma({ tanim, emirId, yazabilir }: { tanim: MarkalamaTanimi; emirId:
         </ol>
         {yazabilir ? (
           <div className="tc-mrk-eylemler">
-            <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={markala.isPending && markala.variables === 'iyi'} disabled={markala.isPending} onClick={() => markala.mutate('iyi')}>
+            <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={markala.isPending && markala.variables === 'iyi'} disabled={markala.isPending || istasyonBekliyor} onClick={() => markala.mutate('iyi')}>
               Markalandı
             </Dugme>
-            <Dugme tur="tehlike" boyut="ana" simge="alert" yukleniyor={markala.isPending && markala.variables === 'hatali'} disabled={markala.isPending} onClick={() => hataliOnayiYaz(true)}>
+            <Dugme tur="tehlike" boyut="ana" simge="alert" yukleniyor={markala.isPending && markala.variables === 'hatali'} disabled={markala.isPending || istasyonBekliyor} onClick={() => hataliOnayiYaz(true)}>
               Hatalı markalama
             </Dugme>
           </div>
         ) : <p className="tc-mrk-ipucu">Seri vermek için markalama yetkisi gerekir.</p>}
+        {yazabilir && istasyonBekliyor && <p className="tc-mrk-ipucu">Seri vermek için istasyonu seçin.</p>}
         <OnayPenceresi
           acik={hataliOnayi} baslik="Hatalı markalama" onayMetni="Numarayı yak" tehlikeli
           yukleniyor={markala.isPending && markala.variables === 'hatali'}
@@ -164,7 +170,12 @@ export function Istasyon() {
   const oturum = useOturum();
   const yazabilir = oturum.data?.islemler.includes('markalama.seri-ver') === true;
   const [secim, secimYaz] = useState<{ tanimId: number | null; emirId: number | null }>({ tanimId: null, emirId: null });
+  const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.tanimlar, queryFn: () => api.get<TanimlarCevabi>('/markalama/tanimlar') });
+  const istasyonlar = useQuery({ queryKey: [...anahtarlar.kok, 'istasyonlar'], queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim') });
+  const istasyonSecenekleri = (istasyonlar.data?.gruplar ?? []).flatMap((g) => g.istasyonlar.filter((i) => i.aktif).map((i) => ({
+    deger: String(i.id), baslik: `${g.isMerkeziAd} · ${i.ad}`,
+  })));
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   const tanim = liste.data.tanimlar.find((t) => t.id === secim.tanimId);
@@ -180,9 +191,22 @@ export function Istasyon() {
             onChange={(o) => secimYaz({ tanimId: o.target.value === '' ? null : Number(o.target.value), emirId: null })}
           />
           {tanim && <EmirSecimi key={tanim.id} tanim={tanim} emirId={secim.emirId} sec={(emirId) => secimYaz((o) => ({ ...o, emirId }))} />}
+          <Secim
+            etiket="İstasyon"
+            secenekler={istasyonSecenekleri}
+            bosSecenek={istasyonlar.isPending ? 'İstasyonlar okunuyor' : istasyonSecenekleri.length === 0 ? 'İstasyon yok' : 'Seçin'}
+            value={istasyonId === null ? '' : String(istasyonId)}
+            onChange={(o) => istasyonIdYaz(o.target.value === '' ? null : Number(o.target.value))}
+          />
         </div>
+        {istasyonlar.isError && <p className="tc-mrk-hata" role="alert">{hataIletisi(istasyonlar.error, 'İstasyonlar okunamadı')}</p>}
       </Kart>
-      {tanim && secim.emirId !== null && <Calisma key={`${tanim.id}:${secim.emirId}`} tanim={tanim} emirId={secim.emirId} yazabilir={yazabilir} />}
+      {tanim && secim.emirId !== null && (
+        <Calisma
+          key={`${tanim.id}:${secim.emirId}`} tanim={tanim} emirId={secim.emirId} istasyonId={istasyonId}
+          istasyonGerekli={istasyonSecenekleri.length > 0} yazabilir={yazabilir}
+        />
+      )}
     </div>
   );
 }
