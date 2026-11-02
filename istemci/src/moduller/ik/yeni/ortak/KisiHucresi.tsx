@@ -7,7 +7,7 @@ export function KisiHucresi({ personel, alt }: { personel: Pick<Personel, 'ad' |
     <span className="tc-ik-kisi">
       <span className="tc-ik-kisi-bas" aria-hidden="true">{basHarfler(personel)}</span>
       <span className="tc-ik-kisi-ad">
-        <b>{adSoyad(personel)}</b>
+        <b title={adSoyad(personel)}>{adSoyad(personel)}</b>
         {alt && <small>{alt}</small>}
       </span>
     </span>

@@ -12,6 +12,10 @@
 .tc-ik-kisi-ad { display: grid; min-width: 0; }
 .tc-ik-kisi-ad b, .tc-ik-kisi-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ik-kisi-ad small { color: var(--muted); }
+/* Ad kesilirse aynı soyadlı ya da aynı ön adlı iki kişi ayırt edilemez: ad kırılır, alt satır (pozisyon) kısalabilir. */
+.tc-ik-kisi-ad b { white-space: normal; overflow-wrap: anywhere; }
+/* Kullanıcı metni (açıklama, not) boşluksuz uzun da olsa kartı ve tabloyu taşırmaz. */
+.tc-ik-uzun-metin { overflow-wrap: anywhere; }
 .tc-ik-ay { display: inline-flex; align-items: center; gap: var(--b-2); }
 .tc-ik-belge-arac { display: flex; justify-content: flex-end; padding-bottom: var(--b-3); }
 .tc-ik-belge { max-width: 800px; margin: 0 auto; padding: var(--b-5); background: var(--panel); color: var(--ink); }

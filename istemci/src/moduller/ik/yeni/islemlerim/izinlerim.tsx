@@ -33,7 +33,7 @@ export function Izinlerim(o: IkEkranOzellikleri) {
     { anahtar: 'tarih', baslik: 'Tarihler', hucre: (l) => `${tarih(l.baslangic)} – ${tarih(l.bitis)}`, kirilmaz: true },
     { anahtar: 'gun', baslik: 'Gün', hucre: (l) => (l.gun == null ? null : sayiMetni(sayi(l.gun))), hizala: 'sag', mono: true },
     { anahtar: 'durum', baslik: 'Durum', hucre: (l) => <IzinCipi durum={l.durum} />, csv: (l) => l.durum ?? '' },
-    { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (l) => l.aciklama ?? '' },
+    { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (l) => <span className="tc-ik-uzun-metin">{l.aciklama ?? ''}</span> },
     {
       anahtar: 'islem', baslik: '', csv: false,
       hucre: (l) => (o.yetki.izinTalep && l.durum === IZIN_BEKLIYOR
