@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { GelecekSatiri, Malzeme360Cevabi, MalzemeAramaCevabi, MalzemeAramaSatiri, PartiSatiri } from '#paylasilan/sozlesme/malzeme-izi.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sayfalama, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -25,13 +25,21 @@ const ARAMA_SUTUNLARI: readonly Sutun<MalzemeAramaSatiri>[] = [
   { anahtar: 'birim', baslik: 'Birim', hucre: (m) => m.birim ?? '—' },
 ];
 
-// Giriş: malzemeyi kod ya da adla bulup 360'ını açmak.
+// Giriş: malzemeyi kod ya da adla bulup 360'ını açmak. Arama ve sayfa adreste durur: 360'tan geri dönünce liste aynı yerde açılır.
 export function MalzemeSec() {
   const git = useNavigate();
-  const [ara, araYaz] = useState('');
-  const [metin, metinYaz] = useState('');
-  const [sayfa, sayfaYaz] = useState(1);
-  useEffect(() => { const t = setTimeout(() => { metinYaz(ara.trim()); sayfaYaz(1); }, 300); return () => clearTimeout(t); }, [ara]);
+  const [adres, adresYaz] = useSearchParams();
+  const metin = adres.get('ara') ?? '';
+  const sayfa = Math.max(1, Math.trunc(Number(adres.get('sayfa'))) || 1);
+  const [ara, araYaz] = useState(metin);
+  const aramaYaz = (m: string, s: number) => {
+    adresYaz(new URLSearchParams({ ...(m ? { ara: m } : {}), ...(s > 1 ? { sayfa: String(s) } : {}) }), { replace: true });
+  };
+  const sayfaYaz = (s: number) => { aramaYaz(metin, s); };
+  useEffect(() => {
+    const t = setTimeout(() => { if (ara.trim() !== metin) aramaYaz(ara.trim(), 1); }, 300);
+    return () => clearTimeout(t);
+  }, [ara]);
   const l = useQuery({
     queryKey: anahtarlar.arama(metin, sayfa),
     queryFn: () => api.get<MalzemeAramaCevabi>(`/malzeme-izi/malzemeler?${new URLSearchParams({ ...(metin ? { metin } : {}), sayfa: String(sayfa) }).toString()}`),
@@ -67,7 +75,9 @@ function Serit({ v }: { v: Malzeme360Cevabi }) {
   );
 }
 
-const gelecekSutunlari = (birim: string | null): readonly Sutun<GelecekSatiri>[] => [
+// Aynı siparişte aynı tarih ve miktarlı iki satır olabilir; satırın kimliği sözleşmede yok, anahtar sıradır (liste salt okunur).
+type SiraliGelecek = GelecekSatiri & { sira: number };
+const gelecekSutunlari = (birim: string | null): readonly Sutun<SiraliGelecek>[] => [
   { anahtar: 'no', baslik: 'Sipariş', mono: true, kirilmaz: true, hucre: (g) => g.siparisNo },
   { anahtar: 'miktar', baslik: 'Kalan', hizala: 'sag', hucre: (g) => miktarMetni(g.miktar, g.birim || birim) },
   { anahtar: 'tarih', baslik: 'Beklenen', kirilmaz: true, hucre: (g) => tarihMetni(g.tarih) },
@@ -85,7 +95,7 @@ function Para({ v }: { v: Malzeme360Cevabi }) {
   const birim = v.kart.birim ? `TL/${v.kart.birim}` : 'TL';
   return (
     <dl className="tc-miz-para">
-      <div><dt>Ortalama alış</dt><dd>{paraMetni(o?.tryBirimFiyat ?? null, birim)}</dd>{o && <small>{o.teslimSayisi} teslimden</small>}</div>
+      <div><dt>Ortalama alış</dt><dd>{paraMetni(o?.tryBirimFiyat ?? null, birim)}</dd>{o && o.teslimSayisi > 0 && <small>{o.teslimSayisi} teslimden</small>}</div>
       <div><dt>Son alış</dt><dd>{s ? paraMetni(s.birimFiyat, s.paraBirimi) : '—'}</dd>{s && <small>{zamanMetni(s.zaman)}{s.paraBirimi !== 'TRY' ? ` · ${paraMetni(s.tryBirimFiyat, birim)}` : ''}</small>}</div>
       <div><dt>kg fiyatı (referans)</dt><dd>{kg ? paraMetni(kg.kgFiyati, `${kg.paraBirimi}/kg`) : '—'}</dd>{kg && <small>{tarihMetni(kg.gecerlilik.slice(0, 10))} · birim başına {paraMetni(kg.tryBirimFiyati, birim)}</small>}</div>
     </dl>
@@ -118,11 +128,11 @@ export function Malzeme360() {
       <div className="tc-miz-izgara">
         <Kart baslik="Elde" simge="box">
           {d.stok === null ? <p className="tc-miz-not">Bu kartın stok bakiyesi yok.</p> : (
-            <p className="tc-miz-not">Toplam {miktarMetni(d.stok.toplam, k.birim)} · kullanılabilir {miktarMetni(d.stok.kullanilabilir, k.birim)}. Konum ve lot kırılımı Stok ekranında.</p>
+            <p className="tc-miz-not">Toplam {miktarMetni(d.stok.toplam, k.birim)}{d.stok.gruplar.some((g) => g.grup === 'hurda') ? ' (hurda dahil)' : ''} · kullanılabilir {miktarMetni(d.stok.kullanilabilir, k.birim)}. Konum ve lot kırılımı Stok ekranında.</p>
           )}
         </Kart>
         <Kart baslik="Gelecek" simge="truck">
-          <Tablo etiket="Açık sipariş satırları" sutunlar={gelecekSutunlari(k.birim)} satirlar={d.gelecek} satirAnahtari={(g) => `${g.siparisNo}-${g.tarih ?? ''}-${g.miktar}`} bosMesaj="Açık satın alma siparişi yok." />
+          <Tablo etiket="Açık sipariş satırları" sutunlar={gelecekSutunlari(k.birim)} satirlar={d.gelecek.map((g, sira) => ({ ...g, sira }))} satirAnahtari={(g) => g.sira} bosMesaj="Açık satın alma siparişi yok." />
         </Kart>
         <Kart baslik="Para" simge="lira"><Para v={d} /></Kart>
         <Kart baslik="Kalite ve son partiler" simge="lab">
