@@ -558,6 +558,8 @@ export interface AdimDugumu { dugum: string; malzemeNo: number; kaynakOpNo: numb
 export async function emirDugumleri(db: Db, uretimEmriId: number): Promise<Map<number, AdimDugumu>> {
   return new Map((await dugumleriGetir(db, [uretimEmriId])).map((d) => [d.opNo, { dugum: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani, dugumSonu: d.dugumSonu }]));
 }
+// 1868: adimUretimBilgisi ve emirDugumleri'nin toplu biçimi (stok Teslim al, istasyondaki her adım için tek okuma).
+export const { adimUretimBilgileri, emirlerinDugumleri, emirlerinAdimIstasyonlari } = isEmri;
 
 // Plan, rotadan önizlediği emirde de aynı fason varsayılanını kullanır.
 export { FASON_VARSAYILAN_GUN } from './kurallar.ts';

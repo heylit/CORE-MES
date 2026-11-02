@@ -2599,3 +2599,46 @@ export async function isEmriDugumleri(db: Db, isEmriIdleri: readonly number[]): 
   );
   return new Map(satirlar.map((s) => [s.isEmriId, s]));
 }
+
+// 1868: stok Teslim al'da istasyondaki her adımın üretim bilgisini okur; aşağıdakiler adimUretimSatiriGetir, adimGirdileriGetir,
+// tasinanGirdiGetir ve emirAdimZinciriGetir'in toplu biçimidir (aynı kural ve sıra, tek sorgu).
+export function adimUretimSatirlariGetir(db: Db, isEmriIdleri: readonly number[]): Promise<(AdimUretimSatiri & { isEmriId: number })[]> {
+  return db.sorgu(
+    `SELECT i.id AS "isEmriId", i.uretim_emri_id AS "uretimEmriId", i.op_no AS "opNo",
+            ARRAY(SELECT o.op_no FROM uretim_emirleri_is_emri o WHERE o.uretim_emri_id = i.uretim_emri_id AND o.sira < i.sira ORDER BY o.sira) AS "oncekiOpNolari",
+            ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
+            NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri s WHERE s.uretim_emri_id = i.uretim_emri_id AND s.sira > i.sira) AS "sonAdim"
+       FROM uretim_emirleri_is_emri i WHERE i.id = ANY($1::int[]) ORDER BY i.id`,
+    [[...new Set(isEmriIdleri)]],
+  );
+}
+export function emirAdimZincirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<(EmirAdimZinciriSatiri & { uretimEmriId: number })[]> {
+  return db.sorgu(
+    `SELECT i.uretim_emri_id AS "uretimEmriId", i.op_no AS "opNo", (SELECT d.dal FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS dal,
+            (SELECT d.adet_carpani FROM uretim_emirleri_is_emri_dali d WHERE d.is_emri_id = i.id) AS "adetCarpani", ${ONCUL_OP_NOLARI('i')} AS "onculOpNolari",
+            COALESCE((SELECT json_agg(json_build_object('malzemeNo', b.malzeme_no, 'miktar', b.miktar::text) ORDER BY b.id)
+                        FROM uretim_emirleri_is_emri_bileseni b WHERE b.is_emri_id = i.id), '[]'::json) AS girdiler
+       FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = ANY($1::int[]) ORDER BY i.uretim_emri_id, i.sira`,
+    [[...new Set(emirIdleri)]],
+  );
+}
+export function adimGirdileriTopluGetir(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; malzemeNo: number; miktar: string }[]> {
+  return db.sorgu(
+    'SELECT is_emri_id AS "isEmriId", malzeme_no AS "malzemeNo", miktar::text AS miktar FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, id',
+    [[...new Set(isEmriIdleri)]],
+  );
+}
+export function tasinanGirdileriGetir(db: Db, emirIdleri: readonly number[]): Promise<{ uretimEmriId: number; malzemeNo: number; miktar: string }[]> {
+  return db.sorgu(
+    `SELECT e.id AS "uretimEmriId", t.* FROM unnest($1::int[]) AS e(id) CROSS JOIN LATERAL (
+       WITH RECURSIVE kok AS (
+         SELECT u.id, u.ust_emir_id FROM uretim_emri u WHERE u.id = e.id
+         UNION ALL SELECT u.id, u.ust_emir_id FROM uretim_emri u JOIN kok ON u.id = kok.ust_emir_id
+       )
+       SELECT b.malzeme_no AS "malzemeNo", b.miktar::text AS miktar
+         FROM kok JOIN uretim_emirleri_is_emri i ON i.uretim_emri_id = kok.id JOIN uretim_emirleri_is_emri_bileseni b ON b.is_emri_id = i.id
+        WHERE kok.ust_emir_id IS NULL
+        ORDER BY i.sira, b.id LIMIT 1) t`,
+    [[...new Set(emirIdleri)]],
+  );
+}

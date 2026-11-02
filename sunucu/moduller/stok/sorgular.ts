@@ -1945,3 +1945,39 @@ export const defterFarklari = (db: Db, karsilastirmaId: number): Promise<DefterF
    FROM stok_defter_farki f LEFT JOIN malzeme_katalog_karti m ON m.no = f.malzeme_id LEFT JOIN stok_konum k ON k.id = f.konum_id
      LEFT JOIN stok_parti p ON p.id = f.parti_id
    WHERE f.karsilastirma_id = $1 ORDER BY k.kod NULLS LAST, f.malzeme_id, f.parti_id NULLS FIRST`, [karsilastirmaId]);
+// 1868: Teslim al'daki iş malzemeleri istasyondaki her adım ve girdi için ayrı okuyordu (terminal dakikada bir çağırır). Aşağıdaki iki
+// okuma uretimGirdiKaynaklari ve istekleriKoktan'ın toplu biçimidir: kural ve sıra aynıdır, istek tek sorgudur.
+export interface GirdiKaynagiAnahtari { malzemeId: number; statuId: number | null; uretimEmriId: number | null }
+export const uretimGirdiKaynaklariToplu = async (
+  db: Db, anahtarlar: readonly GirdiKaynagiAnahtari[], istasyonKonumId: number, digerIstasyonlar = false,
+): Promise<{ konumId: number; partiId: number | null; partiEmriId: number | null; kaliteDurumu: KaliteDurumu; serbest: string }[][]> => {
+  if (anahtarlar.length === 0) return [];
+  const satirlar = await db.sorgu<{ sira: number; konumId: number; partiId: number | null; partiEmriId: number | null; kaliteDurumu: KaliteDurumu; serbest: string }>(
+    `SELECT c.sira::int AS sira, x.* FROM unnest($1::int[], $2::int[], $3::int[]) WITH ORDINALITY AS c(malzeme_id, statu_id, emir_id, sira)
+       CROSS JOIN LATERAL (
+         SELECT b.konum_id AS "konumId", b.parti_id AS "partiId", p.uretim_emri_id AS "partiEmriId", b.kalite_durumu AS "kaliteDurumu",
+                (b.miktar - COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id AND t.malzeme_id = b.malzeme_id
+                                      AND t.parti_id IS NOT DISTINCT FROM b.parti_id AND t.statu_id IS NOT DISTINCT FROM b.statu_id AND t.kalite_durumu = b.kalite_durumu), 0))::text AS serbest
+           FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id LEFT JOIN stok_parti p ON p.id = b.parti_id
+          WHERE b.malzeme_id = c.malzeme_id AND b.statu_id IS NOT DISTINCT FROM c.statu_id AND b.kalite_durumu = 'serbest' AND b.miktar > 0
+            AND (c.emir_id IS NULL OR p.uretim_emri_id IS NULL OR p.uretim_emri_id = c.emir_id)
+            AND (b.konum_id = $4 OR (c.statu_id IS NULL AND k.tur NOT IN ('istasyon', 'uretim_cikisi', 'fason', 'yolda', ${AYRILMIS_SQL}))
+                 OR (c.statu_id IS NOT NULL AND k.tur = 'kabul') OR ($5 AND k.tur IN ('istasyon', 'uretim_cikisi')))
+          ORDER BY (b.konum_id = $4) DESC, (p.uretim_emri_id IS NOT NULL AND p.uretim_emri_id = c.emir_id) DESC, b.ilk_giris, b.id) x
+      ORDER BY c.sira`,
+    [anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.statuId), anahtarlar.map((a) => a.uretimEmriId), istasyonKonumId, digerIstasyonlar]);
+  const l = anahtarlar.map((): { konumId: number; partiId: number | null; partiEmriId: number | null; kaliteDurumu: KaliteDurumu; serbest: string }[] => []);
+  for (const { sira, ...x } of satirlar) l[sira - 1]!.push(x);
+  return l;
+};
+// Kök başına aynı kökten açılmış istekler, en yenisi önce (istekleriKoktan ile aynı).
+export const istekleriKoklerden = async (db: Db, kokler: readonly string[]): Promise<Map<string, IstekHam[]>> => {
+  const tekil = [...new Set(kokler)];
+  const sonuc = new Map<string, IstekHam[]>(tekil.map((k) => [k, []]));
+  if (tekil.length === 0) return sonuc;
+  const satirlar = await db.sorgu<IstekHam & { kok: string }>(
+    `SELECT x.*, k.kok FROM unnest($1::text[]) AS k(kok) CROSS JOIN LATERAL (${ISTEK_SECIMI} WHERE i.kaynak_kimligi LIKE k.kok || '%' ORDER BY i.id DESC) x
+      ORDER BY k.kok, x.id DESC`, [tekil]);
+  for (const { kok, ...x } of satirlar) sonuc.get(kok)!.push(x);
+  return sonuc;
+};

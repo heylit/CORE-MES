@@ -33,6 +33,7 @@ import {
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
+import type { AdimDugumu, AdimUretimBilgisi } from './disari.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
 const URUN_DEGIL = 'Üretim emri yalnız kullanımdaki mamul ya da yarı mamul kartına açılır.';
@@ -1170,6 +1171,63 @@ export async function otomatikGkkKoy(db: Db, kisiId: number, emirId: number): Pr
 export async function gkkFasonuBul(db: Db, hepsi: readonly IsEmriSatiri[], adim: IsEmriSatiri): Promise<IsEmriSatiri | null> {
   if (oncekiAdim(hepsi, adim)?.fasonFirmaId == null) return null;
   return gkkFasonu(hepsi, adim, await gkkTipiId(db));
+}
+
+// 1868: adimUretimBilgisi'nin toplu biçimi (stok Teslim al istasyondaki her adımı okur): aynı alanlar, iş emri sayısından bağımsız
+// sorgu sayısı. GKK tipi yalnız önceki adımı fason olan adım varsa bir kez okunur. Olmayan iş emri haritada yoktur.
+export async function adimUretimBilgileri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, AdimUretimBilgisi>> {
+  if (isEmriIdleri.length === 0) return new Map();
+  const satirlar = await s.adimUretimSatirlariGetir(db, isEmriIdleri);
+  if (satirlar.length === 0) return new Map();
+  const emirIdleri = [...new Set(satirlar.map((a) => a.uretimEmriId))];
+  const hepsi = await s.isEmirleriGetir(db, emirIdleri);
+  const girdiler = await s.adimGirdileriTopluGetir(db, satirlar.map((a) => a.isEmriId));
+  const tasinanlar = new Map((await s.tasinanGirdileriGetir(db, emirIdleri)).map((t) => [t.uretimEmriId, { malzemeNo: t.malzemeNo, miktar: t.miktar }]));
+  const zincirler = await s.emirAdimZincirleriGetir(db, emirIdleri);
+  let gkkTipi: number | null | undefined;
+  const sonuc = new Map<number, AdimUretimBilgisi>();
+  for (const { isEmriId, ...a } of satirlar) {
+    const emrin = hepsi.filter((i) => i.uretimEmriId === a.uretimEmriId);
+    const adim = emrin.find((i) => i.id === isEmriId);
+    let fason: IsEmriSatiri | null = null;
+    if (adim !== undefined && oncekiAdim(emrin, adim)?.fasonFirmaId != null) {
+      if (gkkTipi === undefined) gkkTipi = await gkkTipiId(db);
+      fason = gkkFasonu(emrin, adim, gkkTipi);
+    }
+    sonuc.set(isEmriId, {
+      ...a, girdiler: girdiler.filter((g) => g.isEmriId === isEmriId).map((g) => ({ malzemeNo: g.malzemeNo, miktar: g.miktar })),
+      tasinan: tasinanlar.get(a.uretimEmriId) ?? null, gkkFasonIsEmriId: fason?.id ?? null,
+      emirAdimlari: zincirler.filter((z) => z.uretimEmriId === a.uretimEmriId).map(({ uretimEmriId: _e, ...z }) => z),
+    });
+  }
+  return sonuc;
+}
+// emirDugumleri'nin toplu biçimi: emir başına op numarasıyla düğüm haritası; düğümsüz emirde harita boştur.
+export async function emirlerinDugumleri(db: Db, emirIdleri: readonly number[]): Promise<Map<number, Map<number, AdimDugumu>>> {
+  const sonuc = new Map<number, Map<number, AdimDugumu>>(emirIdleri.map((id) => [id, new Map()]));
+  if (emirIdleri.length === 0) return sonuc;
+  for (const d of await s.dugumleriGetir(db, [...new Set(emirIdleri)])) {
+    sonuc.get(d.uretimEmriId)?.set(d.opNo, { dugum: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani, dugumSonu: d.dugumSonu });
+  }
+  return sonuc;
+}
+
+// 1868: stok sepeti emrin ürününü ve adımlarının sırasını, op numarasını ve istasyonunu okur (adimliAyrinti ile aynı alanlar, aynı
+// istasyon adı kuralı); emir başına ayrıntı yerine tek okuma. Olmayan ya da ürünü olmayan emir haritada yoktur.
+export interface EmirAdimIstasyonlari { urunId: number; adimlar: { sira: number; opNo: number; istasyon: { id: number; kod: string | null; ad: string } | null }[] }
+export async function emirlerinAdimIstasyonlari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, EmirAdimIstasyonlari>> {
+  const tekil = [...new Set(emirIdleri)];
+  if (tekil.length === 0) return new Map();
+  const emirler = (await s.ustEmirlerBul(db, tekil)).filter((e) => e.malzemeNo !== null);
+  if (emirler.length === 0) return new Map();
+  const adimlar = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
+  const istasyon = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, { id: i.id, kod: i.kod, ad: i.ad }]));
+  return new Map(emirler.map((e) => [e.id, {
+    urunId: e.malzemeNo!,
+    adimlar: adimlar.filter((i) => i.uretimEmriId === e.id).map((i) => ({
+      sira: i.sira, opNo: i.opNo, istasyon: i.istasyonId === null ? null : istasyon.get(i.istasyonId) ?? { id: i.istasyonId, kod: null, ad: `#${i.istasyonId}` },
+    })),
+  }]));
 }
 
 export interface GkkHesabi { fasonIsEmriId: number; gonderilen: number; donen: number; firmadaHatali: number }
