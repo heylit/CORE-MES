@@ -16851,16 +16851,10 @@ var CNCDATA = (function () {
   function fmtD(x) { return String(x).replace('.', ','); }
 
   var MACHINES = [
-    { id: 'f5a', no: 'F-01', name: '5 Eksen Freze A', code: '5 eksen · döner-devrilir tabla · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5ax' },
-    { id: 'f5b', no: 'F-02', name: '5 Eksen Freze B', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-    { id: 'f5c', no: 'F-03', name: '5 Eksen Freze C', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-    { id: 'f5d', no: 'F-04', name: '5 Eksen Freze D', code: '5 eksen · döner kafa · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5axh' },
-    { id: 'fgk', no: 'F-05', name: 'Gezer Kolon Freze', code: 'Gezer kolon · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_gk' },
-    { id: 'yim', no: 'F-06', name: 'Yatay İşleme Merkezi', code: 'Yatay işleme merkezi · B döner tabla · palet değiştirici', type: 'mill', ctrl: 'iso', taper: 'BT40', pockets: 60, rpm: 14000, kind: 'm_hmc' },
-    { id: 'tfm', no: 'T-01', name: 'Torna-Freze Merkezi', code: 'Torna-freze · B ekseni · karşı iş mili · Capto C6', type: 'millturn', ctrl: 'iso', taper: 'Capto C6', pockets: 38, rpm: 12000, spindle: 3000, kind: 'm_tf' },
-    { id: 'tcy', no: 'T-02', name: 'CNC Torna Y', code: 'CNC torna · Y ekseni · canlı takımlı taret', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 4000, live: true, liveRpm: 6000, kind: 'm_lathe' },
-    { id: 'tby', no: 'T-03', name: 'Büyük CNC Torna', code: 'Büyük torna · Y ekseni + canlı takım · punta', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 1500, spindle: 1500, live: true, liveRpm: 2500, kind: 'm_lathe' },
-    { id: 'ulathe', no: 'T-04', name: 'Üniversal Torna', code: 'Konvansiyonel · elle kumanda · 4\'lü kalemlik', type: 'lathe', ctrl: 'iso', manual: true, taper: 'Taret', pockets: 4, rpm: 2000, spindle: 2000, kind: 'm_ulathe' }
+    { id: 'f5a', no: 'OR-F1', name: 'Örnek 5 Eksen Freze', code: '5 eksen · döner-devrilir tabla · konuşmalı kontrol', type: 'mill', ctrl: 'heid', taper: 'HSK-A63', pockets: 30, rpm: 15000, kind: 'm_5ax' },
+    { id: 'tfm', no: 'OR-TF1', name: 'Örnek Torna-Freze', code: 'Torna-freze · B ekseni · karşı iş mili · Capto C6', type: 'millturn', ctrl: 'iso', taper: 'Capto C6', pockets: 40, rpm: 12000, spindle: 4000, kind: 'm_tf' },
+    { id: 'tcy', no: 'OR-T1', name: 'Örnek CNC Torna', code: 'CNC torna · Y ekseni · canlı takımlı taret', type: 'lathe', ctrl: 'iso', taper: 'Taret', pockets: 12, rpm: 4000, live: true, liveRpm: 6000, kind: 'm_lathe' },
+    { id: 'ulathe', no: 'OR-T2', name: 'Örnek Üniversal Torna', code: 'Konvansiyonel · elle kumanda · 4\'lü kalemlik', type: 'lathe', ctrl: 'iso', manual: true, taper: 'Taret', pockets: 4, rpm: 2000, spindle: 2000, kind: 'm_ulathe' }
   ];
 
   function mat(id, name, iso, vcK, vcH, fk, color, desc, extra) { return Object.assign({ id: id, name: name, code: 'ISO ' + iso, iso: iso, vcK: vcK, vcH: vcH, fk: fk, color: color, isoCol: ISO[iso], col: ISO[iso], kind: 'mat', desc: desc, tags: 'Vc karbür ≈ ' + vcK + ' m/dk' }, extra || {}); }
@@ -24086,18 +24080,12 @@ var CNCDATA = (function () {
     if (/_qa$/.test(k)) return 'wait'; if (/fai/.test(k)) return 'insp'; if (/prove|_mat$|first/.test(k)) return 'prove'; if (/find/.test(k)) return 'srch'; if (/prog/.test(k)) return 'fix';
     if (/meas|zero|true|gauge|dry|cutl|subz|idx|cax|tail|steady|tset/.test(k)) return 'meas'; return 'mech';
   }
-  /* tezgâh profilleri (TMI parkı) — m: dk · kg: tipik parça · ld: tipik boy / çap */
+  /* örnek tezgâh profilleri — m: dk · kg: tipik parça · ld: tipik boy / çap */
   var SU_PDEF = {
-    tfm: { cls: 'mt', hold: 'Capto C6 · 38 cep magazin', swap: 1.2, meas: 'probe', jaw: 20, jawQ: 2, sub: 1, prove: 1.5, kg: 8, ld: 3, why: 'B ekseni + karşı iş mili: program denemesi uzun, ama tek bağlamada biter' },
+    tfm: { cls: 'mt', hold: 'Capto C6 · 40 cep magazin', swap: 1.2, meas: 'probe', jaw: 20, jawQ: 2, sub: 1, prove: 1.5, kg: 8, ld: 3, why: 'B ekseni + karşı iş mili: program denemesi uzun, ama tek bağlamada biter' },
     tcy: { cls: 'lathe', hold: 'BMT taret · 12 istasyon', swap: 2.5, meas: 'probe', jaw: 20, jawQ: 2, tail: 1, prove: 1.0, kg: 6, ld: 3, why: '12 istasyonlu taret: her iş için takım söküp takmak gerekir' },
-    tby: { cls: 'lathe', hold: 'Ağır taret · 12 istasyon', swap: 3.5, meas: 'probe', jaw: 35, jawQ: 5, tail: 1, steady: 1, prove: 1.2, kg: 60, ld: 10, why: 'Büyük ayna, punta, yatak ve vinç: en uzun torna hazırlığı' },
     ulathe: { cls: 'manual', hold: '4\'lü kalemlik', swap: 3, meas: 'manual', jaw: 15, jawQ: 15, tail: 1, prove: 0, kg: 5, ld: 3, why: 'Program yok; her ölçü deneme talaşıyla tutturulur' },
     f5a: { cls: 'mill5', hold: 'HSK-A63 · 30 cep', swap: 1.2, meas: 'probe', fix: 8, fixQ: 0.8, prove: 1.3, kg: 5, why: '5 eksen: çarpışma kontrolü için deneme yavaş' },
-    f5b: { cls: 'mill5', hold: 'HSK-A63 · 30 cep', swap: 1.2, meas: 'probe', fix: 8, fixQ: 0.8, prove: 1.3, kg: 10, why: '5 eksen döner kafa' },
-    f5c: { cls: 'mill5', hold: 'HSK-A63 · 30 cep', swap: 1.2, meas: 'probe', fix: 10, fixQ: 0.8, prove: 1.3, kg: 18, why: '5 eksen döner kafa, büyük tabla' },
-    f5d: { cls: 'mill5', hold: 'HSK-A63 · 30 cep', swap: 1.2, meas: 'probe', fix: 12, fixQ: 1, prove: 1.3, kg: 35, why: 'Büyük parça: vinçle bağlama' },
-    fgk: { cls: 'mill5', hold: 'HSK-A63 · 30 cep', swap: 1.2, meas: 'probe', fix: 15, fixQ: 2, nfix: 2, prove: 1.3, kg: 60, why: 'Uzun tabla: birden çok aparatı aynı eksene hizalamak' },
-    yim: { cls: 'hmc', hold: 'BT40 · 60 cep', swap: 1.2, meas: 'probe', fix: 8, fixQ: 0.8, apc: 1, prove: 1.1, kg: 15, why: 'Palet değiştirici: aparat diğer palet işlerken dışarıda hazırlanır' }
   };
   var SU_PF = [['swap', 'Takım bağlama', 'dk / takım'], ['hold2', 'Ayna / aparat', 'dk'], ['meas', 'Takım ölçme', ''], ['prove', 'Deneme ×', ''], ['kg', 'Tipik parça', 'kg']];
   function suProfBase(m) {
@@ -24232,16 +24220,10 @@ var CNCDATA = (function () {
      Kaynak: tipik katalog değerleri (varsayım)
      ========================================================= */
   var CAP_DEF = {
-    tfm: { maxD: 668, maxL: 1549, bar: 101, subBar: 78, chuck: 12, xT: 673, yT: 300, zT: 1524 },
-    tcy: { maxD: 366, maxL: 705, bar: 80, chuck: 10, yT: 100 },
-    f5a: { xT: 650, yT: 520, zT: 475, zDay: 625, tbl: 'Ø630', load: 300, viseW: 160 },
-    f5b: { xT: 630, yT: 560, zT: 560, zDay: 710, tbl: '840×600', load: 500, viseW: 160 },
-    f5c: { xT: 750, yT: 650, zT: 560, zDay: 710, tbl: '840×650', load: 600, viseW: 200 },
-    f5d: { xT: 950, yT: 850, zT: 650, zDay: 800, tbl: '1250×850', load: 1000, viseW: 200 },
-    fgk: { xT: 3600, yT: 700, zT: 750, zDay: 900, tbl: '4000×750', load: 4000, viseW: 200 },
-    yim: { xT: 730, yT: 730, zT: 880, zDay: 1000, tbl: '500×500', load: 500, viseW: 200 },
-    tby: { maxD: 920, maxL: 5100, bar: 164, chuck: 16, xT: 485, yT: 220 },
-    ulathe: { maxD: 460, maxL: 1500, bar: 52, chuck: 8 }
+    tfm: { maxD: 600, maxL: 1500, bar: 100, subBar: 80, chuck: 12, xT: 650, yT: 300, zT: 1500 },
+    tcy: { maxD: 350, maxL: 700, bar: 80, chuck: 10, yT: 100 },
+    f5a: { xT: 600, yT: 500, zT: 450, zDay: 600, tbl: 'Ø600', load: 300, viseW: 160 },
+    ulathe: { maxD: 450, maxL: 1500, bar: 50, chuck: 8 }
   };
   function capDefOf(m) { return CAP_DEF[m.id] || CAP_DEF[String(m.id).replace(/_\d+$/, '')] || {}; }
   function camCaps(m) {

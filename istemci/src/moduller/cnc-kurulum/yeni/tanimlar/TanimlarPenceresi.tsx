@@ -11,7 +11,7 @@ import { ModellerSekmesi } from './ModellerSekmesi.tsx';
 import type { TanimSekmesi } from '../gorunum.ts';
 import { useCncYetkisi } from '../veri.ts';
 import {
-  BEH_ANAHTARLARI, deleteMat, isCustomMachine, isCustomMat, ISO_OPTS, KONTROL_OPTS, malzemeAlanlari, malzemeler, MODEL_OPTS, saveMachine,
+  BEH_ANAHTARLARI, deleteMat, isCustomMachine, isCustomMat, ISO_OPTS, katalogaGore, KONTROL_OPTS, malzemeAlanlari, malzemeler, MODEL_OPTS, saveMachine,
   saveMat, setMachineNo, sunucuTezgahiKaydet, TAPER_OPTS, tezgahAlanlari, tezgahlar, TIP_ADI, TIP_OPTS, yeniMalzemeTaslagi,
   type Malzeme, type MalzemeAlanlari, type Tezgah, type TezgahAlanlari,
 } from './tanimlar.ts';
@@ -51,7 +51,7 @@ function TezgahFormu({ mode, m, sunucu = false, kaydet, vazgec }: {
         {!sunucu && <Girdi etiket="Tezgâh no" placeholder="ör. T-09" {...d('no')} />}
         {!sunucu && <Girdi etiket="Ad" autoFocus {...d('name')} />}
         {custom && <Secim etiket="Tip" secenekler={secenek(TIP_OPTS)} {...d('type')} />}
-        {custom && <Secim etiket="3D görünüm" secenekler={secenek(MODEL_OPTS)} {...d('kind')} />}
+        {custom && <Secim etiket="3D görünüm" secenekler={secenek(MODEL_OPTS)} value={f.kind} onChange={(o) => { fYaz(katalogaGore(f, o.target.value)); }} />}
         {custom && <Secim etiket="Kontrol" secenekler={secenek(KONTROL_OPTS)} {...d('ctrl')} />}
         {custom && <Secim etiket="Takım bağlantısı" secenekler={TAPER_OPTS.map((t) => ({ deger: t, baslik: t }))} {...d('taper')} />}
         <Girdi etiket={m.type === 'lathe' ? 'Taret istasyonu' : 'Magazin cep sayısı'} type="number" min="1" max="120" {...d('pockets')} />

@@ -7,7 +7,7 @@ import { D, defaults } from '../durum.ts';
 import { clamp } from '../bicim.ts';
 import { allMachines, allMaterials, byId, dirtyUsage, material, MOTOR_ALANLARI, sunucuTezgahiGuncelle, type TezgahSatiri } from '../secici.ts';
 import { tezgahAyarYaz } from '../veri.ts';
-import { KATALOG, katalogEtiketi } from '../veri/tezgah-katalogu.ts';
+import { GOVDE_TURU, KATALOG, katalogAyrintisi, katalogBilgisi, katalogEtiketi, katalogModeli } from '../veri/tezgah-katalogu.ts';
 import type { IsMalzemesi, IsoGrubu, Kontrol, Tezgah, TezgahTuru } from '../veri/tipler.ts';
 
 // Önce genel gövdeler (prototipin sırası), sonra genel katalog (1893 a). CMM modelleri tezgâh seçiminde yoktur (1894 a): CMM
@@ -18,7 +18,7 @@ export const MODEL_OPTS: readonly [string, string][] = [
   ['m_ulathe', 'Üniversal (konvansiyonel) torna'], ['m_swiss', 'Kayar otomat'],
   ...KATALOG.filter((m) => m.tur !== 'cmm').map((m): [string, string] => [m.anahtar, katalogEtiketi(m)]),
 ];
-export const TAPER_OPTS: readonly string[] = ['HSK-A63', 'HSK-A100', 'BT40', 'SK40', 'BT50', 'Capto C6', 'Taret'];
+export const TAPER_OPTS: readonly string[] = ['HSK-A63', 'HSK-A100', 'BT30', 'BT40', 'SK40', 'BT50', 'Capto C6', 'Taret'];
 export const TIP_OPTS: readonly [string, string][] = [['mill', 'Freze / işleme merkezi'], ['lathe', 'CNC torna'], ['millturn', 'Torna-freze']];
 export const KONTROL_OPTS: readonly [string, string][] = [['heid', 'Heidenhain TNC (Preset)'], ['iso', 'ISO / Fanuc / Siemens (G54)']];
 export const ISO_OPTS: readonly [string, string][] = [
@@ -51,6 +51,33 @@ export function tezgahAlanlari(m: Partial<Tezgah>): TezgahAlanlari {
   };
 }
 
+// Formda katalog modeli seçilince (1900) tip, bağlantı, cep, devir ve canlı takım katalogdan gelir; katalogda boş olan
+// alan formdaki değeriyle kalır. Gövde tipi ya da bilinmeyen anahtar yalnız görünümü değiştirir. Değerler kaydetmeden düzeltilir.
+export function katalogaGore(f: TezgahAlanlari, kind: string): TezgahAlanlari {
+  const k = katalogModeli(kind);
+  if (!k || k.tur === 'cmm') return { ...f, kind };
+  const a = katalogAyrintisi(kind), type = GOVDE_TURU[k.govde] as TezgahTuru;
+  const yaz = (v: number | null, eski: string): string => (v === null ? eski : String(v));
+  return {
+    ...f, kind, type,
+    taper: k.konik ?? (type === 'lathe' ? 'Taret' : f.taper),
+    pockets: yaz(a.cep, f.pockets),
+    rpm: type === 'millturn' ? yaz(a.frezeDevri, f.rpm) : yaz(k.devir, f.rpm),
+    spindle: type === 'millturn' ? yaz(k.devir, f.spindle) : f.spindle,
+    live: a.canli ?? f.live,
+  };
+}
+
+// Katalog modeline yeni geçen tezgâhın Tezgâh bilgileri (marka, model, kurslar) katalogdan yazılır; öteki bilgiler kalır.
+// Aynı model yeniden kaydedilirse kullanıcının düzelttiği bilgiye dokunulmaz.
+function katalogBilgisiniYaz(id: string, eskiKind: string | undefined, kind: string): boolean {
+  const k = katalogModeli(kind);
+  if (!k || k.tur === 'cmm' || kind === eskiKind) return false;
+  const mo = state.mo[id] ?? (state.mo[id] = {});
+  mo.info = { ...(mo.info ?? {}), ...katalogBilgisi(k) };
+  return true;
+}
+
 // Kaydedilen tezgâhın kimliği döner (önbellek bırakılsın diye). Özel tezgâhın her alanı, katalog tezgâhının yalnız no, ad,
 // cep, devir ve ana iş mili devri değişir (prototipteki gibi `mo` üzerine yazılır).
 export function saveMachine(mode: 'new' | 'edit', m: Partial<Tezgah>, f: TezgahAlanlari, simdi: number = Date.now()): string {
@@ -81,6 +108,7 @@ export function saveMachine(mode: 'new' | 'edit', m: Partial<Tezgah>, f: TezgahA
     dirtyUsage(); save();
     return o.id;
   }
+  katalogBilgisiniYaz(m.id!, m.kind, f.kind);
   const mo = state.mo[m.id!] ?? (state.mo[m.id!] = {});
   mo.name = name; mo.no = no; mo.pockets = pockets; mo.rpm = rpm;
   if (spindle) mo.spindle = spindle;
@@ -109,11 +137,11 @@ export function tezgahAyari(m: Partial<Tezgah>, f: TezgahAlanlari): TezgahAyari 
 export async function sunucuTezgahiKaydet(satir: TezgahSatiri, f: TezgahAlanlari): Promise<string> {
   const t: SunucuTezgahi = await tezgahAyarYaz(satir.sunucu, tezgahAyari(satir.tezgah, f));
   sunucuTezgahiGuncelle(t);
-  const id = satir.tezgah.id, mo = state.mo[id];
-  if (mo && MOTOR_ALANLARI.some((k) => k in mo)) {
-    for (const k of MOTOR_ALANLARI) delete mo[k];
-    save();
-  } else yenile();
+  const id = satir.tezgah.id, bilgiYazildi = katalogBilgisiniYaz(id, satir.tezgah.kind, f.kind), mo = state.mo[id];
+  const duzeltmeVar = !!mo && MOTOR_ALANLARI.some((k) => k in mo);
+  if (mo && duzeltmeVar) for (const k of MOTOR_ALANLARI) delete mo[k];
+  if (bilgiYazildi || duzeltmeVar) save();
+  else yenile();
   return id;
 }
 

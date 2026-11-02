@@ -50,20 +50,20 @@ type Satir = [anahtar: string, marka: string, model: string, govde: GovdeTipi, x
 const SATIRLAR: readonly Satir[] = [
   ['m_brs700x2', 'Brother', 'SPEEDIO S700X2', 'm_vmc', 700, 400, 300, 16000, 'BT30'],
   ['m_brs500x2', 'Brother', 'SPEEDIO S500X2', 'm_vmc', 500, 400, 300, 16000, 'BT30'],
-  ['m_dmgdmu50', 'DMG MORI', 'DMU 50', 'm_5ax', 500, 450, 400, 14000, 'SK40'],
+  ['m_dmgdmu50', 'DMG MORI', 'DMU 50', 'm_5ax', 650, 520, 475, 15000, 'SK40'],
   ['m_dmgdmu60', 'DMG MORI', 'DMU 60 eVo', 'm_5ax', 600, 500, 500, 18000, 'HSK-A63'],
   ['m_dmgdmu65', 'DMG MORI', 'DMU 65 monoBLOCK', 'm_5axh', 735, 650, 560, 14000, 'SK40'],
   ['m_dmgdmu75', 'DMG MORI', 'DMU 75 monoBLOCK', 'm_5axh', 750, 650, 560, 14000, 'SK40'],
   ['m_dmgdmu95', 'DMG MORI', 'DMU 95 monoBLOCK', 'm_5axh', 950, 850, 650, 14000, 'SK40'],
   ['m_dmgdmf360', 'DMG MORI', 'DMF 360', 'm_gk', 3600, 1100, 900, 18000, 'HSK-A63'],
   ['m_dmgcmx1100', 'DMG MORI', 'CMX 1100 V', 'm_vmc', 1100, 560, 510, 12000, 'SK40'],
-  ['m_dmgnhc5000', 'DMG MORI', 'NHC 5000', 'm_hmc', 730, 730, 880, 14000, 'BT40'],
+  ['m_dmgnhc5000', 'DMG MORI', 'NHC 5000', 'm_hmc', 730, 730, 880, 15000, 'BT40'],
   ['m_dmgnhx4000', 'DMG MORI', 'NHX 4000', 'm_hmc', 560, 560, 660, 15000, 'BT40'],
-  ['m_dmgnlx2500', 'DMG MORI', 'NLX 2500/700', 'm_lathe', 460, 0, 705, 4000, null],
+  ['m_dmgnlx2500', 'DMG MORI', 'NLX 2500/700', 'm_lathe', 366, 0, 705, 4000, null],
   ['m_dmgnlx2500sy', 'DMG MORI', 'NLX 2500SY/700', 'm_lathe', 366, 100, 705, 4000, null],
   ['m_dmgclx450', 'DMG MORI', 'CLX 450', 'm_lathe', 400, 0, 600, 4000, null],
   ['m_dmgntx2000', 'DMG MORI', 'NTX 2000', 'm_tf', 500, 200, 1500, 5000, 'Capto C6'],
-  ['m_dmgntx3000', 'DMG MORI', 'NTX 3000', 'm_tf', 670, 260, 1520, 4000, 'Capto C6'],
+  ['m_dmgntx3000', 'DMG MORI', 'NTX 3000', 'm_tf', 668, 300, 1549, 3000, 'Capto C6'],
   ['m_dnsdnm5700', 'DN Solutions', 'DNM 5700', 'm_vmc', 1050, 570, 510, 12000, 'BT40'],
   ['m_dnsdvf5000', 'DN Solutions', 'DVF 5000', 'm_5ax', 625, 450, 400, 12000, 'BT40'],
   ['m_dnslynx2100', 'DN Solutions', 'Lynx 2100', 'm_lathe', 300, 0, 410, 6000, null],
@@ -73,9 +73,9 @@ const SATIRLAR: readonly Satir[] = [
   ['m_haasvf2', 'Haas', 'VF-2', 'm_vmc', 762, 406, 508, 8100, 'BT40'],
   ['m_haasvf4', 'Haas', 'VF-4', 'm_vmc', 1270, 508, 635, 8100, 'BT40'],
   ['m_haasumc750', 'Haas', 'UMC-750', 'm_5ax', 762, 508, 508, 8100, 'BT40'],
-  ['m_haasec400', 'Haas', 'EC-400', 'm_hmc', 508, 508, 508, 8100, 'BT40'],
-  ['m_haasst20y', 'Haas', 'ST-20Y', 'm_lathe', 254, 102, 533, 4000, null],
-  ['m_haasst30', 'Haas', 'ST-30', 'm_lathe', 406, 0, 584, 3400, null],
+  ['m_haasec400', 'Haas', 'EC-400', 'm_hmc', 559, 635, 559, 8100, 'BT40'],
+  ['m_haasst20y', 'Haas', 'ST-20Y', 'm_lathe', 298, 102, 533, 4000, null],
+  ['m_haasst30', 'Haas', 'ST-30', 'm_lathe', 533, 0, 826, 3400, null],
   ['m_hermlec22', 'Hermle', 'C 22', 'm_5ax', 450, 600, 330, 18000, 'HSK-A63'],
   ['m_hermlec32', 'Hermle', 'C 32', 'm_5ax', 650, 650, 500, 18000, 'HSK-A63'],
   ['m_hermlec42', 'Hermle', 'C 42', 'm_5ax', 800, 800, 550, 18000, 'HSK-A63'],
@@ -94,7 +94,7 @@ const SATIRLAR: readonly Satir[] = [
   ['m_mazaki200', 'Mazak', 'INTEGREX i-200', 'm_tf', 658, 250, 1011, 5000, 'Capto C6'],
   ['m_okumam560v', 'Okuma', 'GENOS M560-V', 'm_vmc', 1050, 560, 460, 15000, 'BT40'],
   ['m_okumamu5000v', 'Okuma', 'MU-5000V', 'm_5ax', 800, 1050, 600, 15000, 'BT40'],
-  ['m_okumamb5000h', 'Okuma', 'MB-5000H', 'm_hmc', 730, 730, 730, 15000, 'BT40'],
+  ['m_okumamb5000h', 'Okuma', 'MB-5000H', 'm_hmc', 760, 760, 760, 15000, 'BT40'],
   ['m_okumal250', 'Okuma', 'GENOS L250', 'm_lathe', 340, 0, 500, 5000, null],
   ['m_okumau3000', 'Okuma', 'MULTUS U3000', 'm_tf', 650, 200, 1500, 5000, 'Capto C6'],
   ['m_citizenl20', 'Citizen', 'Cincom L20', 'm_swiss', 20, 0, 200, 10000, null],
@@ -129,3 +129,42 @@ export function govdesi(kind: string): GovdeTipi | null {
 }
 
 export const katalogEtiketi = (m: KatalogModeli): string => `${m.marka} ${m.model} · ${GOVDE_ADI[m.govde]}`;
+
+// Katalog ayrıntısı (1900): standart donanımın yaklaşık değerleri, kamuya açık broşürlerden. Seçenekle değişen ya da
+// bilinmeyen değer yazılmaz (null), uydurulmaz; kullanıcı her değeri düzeltir. frezeDevri torna-frezede takım milinin
+// devridir (katalog `devir`i ana iş milidir). Kayar otomatın cep sayısı magazin değildir, boştur. Bir kısmı satıcı ilanlarındaki
+// teknik verilerle karşılaştırıldı (1900); seçenek donanımı (büyük magazin, yüksek devirli mil) yazılmaz.
+export interface KatalogAyrintisi { cep: number | null; frezeDevri: number | null; canli: boolean | null; canliDevir: number | null }
+
+type Ayrinti = [cep: number | null, frezeDevri?: number | null, canli?: boolean | null, canliDevir?: number | null];
+const AYRINTI: Readonly<Record<string, Ayrinti>> = {
+  m_brs700x2: [21], m_brs500x2: [21],
+  m_dmgdmu50: [30], m_dmgdmu60: [30], m_dmgdmu65: [30], m_dmgdmu75: [30], m_dmgdmu95: [30], m_dmgdmf360: [60], m_dmgcmx1100: [30],
+  m_dmgnhc5000: [40], m_dmgnhx4000: [40],
+  m_dmgnlx2500: [12], m_dmgnlx2500sy: [12, null, true, 10000], m_dmgclx450: [12],
+  m_dmgntx2000: [38, 12000], m_dmgntx3000: [38, 12000],
+  m_dnsdnm5700: [30], m_dnsdvf5000: [30], m_dnslynx2100: [12], m_dnspuma2600sy: [12, null, true, 6000], m_dnsnhp5000: [40],
+  m_fanucd21mib5: [21],
+  m_haasvf2: [20], m_haasvf4: [20], m_haasumc750: [40], m_haasec400: [30], m_haasst20y: [12, null, true, 6000], m_haasst30: [12],
+  m_hwhitech200: [12], m_hwhitech700: [12], m_hwhitech850xl: [12, null, true, null],
+  m_mazakvcn530c: [30], m_mazakvari600: [30], m_mazakhcn5000: [43], m_mazakqt250my: [12, null, true, 6000], m_mazaki200: [36, 12000],
+  m_okumam560v: [32], m_okumal250: [12],
+};
+
+export function katalogAyrintisi(anahtar: string): KatalogAyrintisi {
+  const [cep = null, frezeDevri = null, canli = null, canliDevir = null] = AYRINTI[anahtar] ?? [];
+  return { cep, frezeDevri, canli, canliDevir };
+}
+
+// Hazırlık → Tezgâh bilgileri alanları (MF anahtarları): marka, model ve çalışma alanından türeyen kurslar. Frezede X, Y, Z
+// kursu; tornada en büyük tornalama çapı ve boyu, Y kursu varsa; kayar otomatta çubuk kapasitesi.
+export function katalogBilgisi(m: KatalogModeli): Record<string, string | number> {
+  const b: Record<string, string | number> = { marka: m.marka, model: m.model };
+  if (m.govde === 'm_swiss') b['bar'] = m.alan.x;
+  else if (m.tur === 'mill') Object.assign(b, { xT: m.alan.x, yT: m.alan.y, zT: m.alan.z });
+  else if (m.tur === 'lathe' || m.tur === 'millturn') {
+    Object.assign(b, { maxD: m.alan.x, maxL: m.alan.z });
+    if (m.alan.y > 0) b['yT'] = m.alan.y;
+  }
+  return b;
+}

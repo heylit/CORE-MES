@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 
 // 1337 a: el okuyucu klavye gibi yazar ve Enter ile bitirir. Terminal kod alanı odakta olmasa da onu dinler; dokunmatik ekranda
 // odaksız kalan alana yazılan okutma kaybolmasın. Okuyucuyu insan yazısından ayıran hızdır: tuşlar arası kısa, kod en az üç karakter.
@@ -7,17 +8,20 @@ export const EN_KISA_KOD = 3;
 
 export interface OkuyucuDurumu { metin: string; son: number }
 export const OKUYUCU_BASI: OkuyucuDurumu = { metin: '', son: 0 };
+const DEGISTIRICI = new Set(['Shift', 'CapsLock', 'AltGraph']);
 
 // Saf: bir tuşu ekler. Enter geldiğinde biriken hızlı yazı kod olarak döner; yavaş yazı ve kısa metin yok sayılır.
 export function tusEkle(d: OkuyucuDurumu, tus: string, zaman: number): { durum: OkuyucuDurumu; kod: string | null } {
   const hizli = d.metin !== '' && zaman - d.son <= TUS_ARALIGI_MS;
   if (tus === 'Enter') return { durum: OKUYUCU_BASI, kod: hizli && d.metin.length >= EN_KISA_KOD ? d.metin : null };
+  // Okuyucu büyük harf ve ":" için Shift'e basar; değiştirici tuş okutmayı bölmez.
+  if (DEGISTIRICI.has(tus)) return { durum: d, kod: null };
   if (tus.length !== 1) return { durum: OKUYUCU_BASI, kod: null };
   return { durum: { metin: hizli ? d.metin + tus : tus, son: zaman }, kod: null };
 }
 
 // Terminalin anladığı tek okutma refakat kartıdır (RP:<kimlik>); malzeme ve lot üst çubuktaki Malzeme · Teslim panelinde okutulur.
-// Önek ve biçim paylasilan/kod-sozlugu.ts ile aynıdır (test eşliği sabitler); sözlük istemciye değer olarak ithal edilmez.
+// Önek ve biçim paylasilan/kod-sozlugu.ts ile aynıdır (test eşliği sabitler); okutma buraya `okutmaDuzelt`ten geçmiş gelir.
 export type TerminalOkutmasi = { tur: 'kart'; kartId: number } | { tur: 'baska'; kod: string };
 export function terminalOkutmasi(ham: string): TerminalOkutmasi {
   const k = /^RP:(\d{1,9})$/.exec(ham.replace(/\s+/g, '').toUpperCase());
@@ -42,7 +46,7 @@ export function useElOkuyucu(etkin: boolean, okundu: (kod: string) => boolean | 
       const r = tusEkle(durum.current, o.key, o.timeStamp);
       durum.current = r.durum;
       if (r.kod === null) return;
-      if (okunduRef.current(r.kod) === false) return;
+      if (okunduRef.current(okutmaDuzelt(r.kod)) === false) return;
       o.preventDefault();
       o.stopPropagation();
     };

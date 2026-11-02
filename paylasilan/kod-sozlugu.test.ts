@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { kodTuru } from './kod-sozlugu.ts';
+import { kodTuru, okutmaDuzelt } from './kod-sozlugu.ts';
 
 test('kod sözlüğü: her önek kendi türüne yönlendirir', () => {
   assert.deepEqual(kodTuru('LOC:A-01-01'), { tur: 'konum', deger: 'A-01-01' });
@@ -38,4 +38,21 @@ test('kod sözlüğü: tanınmayan, boş ya da biçimi tutmayan kod "bilinmiyor"
 test('kod sözlüğü: refakat partisi kartı gelmeden basılan refakat kartı (UE:<emir>) emir olarak okunmaya devam eder', () => {
   assert.deepEqual(kodTuru('UE:4512'), { tur: 'uretim-emri', deger: '4512', bicim: 'kimlik' });
   assert.notEqual(kodTuru('RP:4512').tur, 'uretim-emri');
+});
+
+test('kod sözlüğü: fabrika ayarındaki okuyucunun Türkçe Q klavyede yazdığı kod çözülür', () => {
+  assert.deepEqual(kodTuru('LOTŞLT*000123'), { tur: 'lot', deger: 'LT-000123' });
+  assert.deepEqual(kodTuru('UEŞ4512'), { tur: 'uretim-emri', deger: '4512', bicim: 'kimlik' });
+  assert.deepEqual(kodTuru('UE*004512'), { tur: 'uretim-emri', deger: 'UE-004512', bicim: 'no' });
+  assert.deepEqual(kodTuru('LOCŞA*01*01'), { tur: 'konum', deger: 'A-01-01' });
+  assert.deepEqual(kodTuru('rpş37'), { tur: 'refakat-partisi', deger: '37' });
+  assert.equal(okutmaDuzelt('MLZŞ901'), 'MLZ:901');
+  assert.equal(okutmaDuzelt('LT*000123'), 'LT-000123');
+});
+
+test('kod sözlüğü: düzeltme yalnız bilinen koda dönüşen okutmaya uygulanır (reddedilen)', () => {
+  for (const ham of ['ŞAFT 20', 'Ş*', 'XYZŞ12', '2*3', 'A1B2C3D4', '04A1B2C3', 'LOC:A*01', 'MLZŞabc', 'RPŞ*3']) {
+    assert.equal(okutmaDuzelt(ham), ham, ham);
+  }
+  assert.deepEqual(kodTuru('XYZŞ12'), { tur: 'bilinmiyor', deger: 'XYZŞ12' });
 });

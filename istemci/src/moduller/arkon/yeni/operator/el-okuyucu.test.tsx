@@ -29,8 +29,14 @@ describe('1337 a el okuyucu', () => {
     let d = tusEkle(OKUYUCU_BASI, 'x', 0).durum;
     for (const [i, c] of [...'RP:5'].entries()) d = tusEkle(d, c, 500 + i * 5).durum;
     expect(tusEkle(d, 'Enter', 520).kod).toBe('RP:5');
-    const s = tusEkle(tusEkle(tusEkle(OKUYUCU_BASI, 'R', 0).durum, 'P', 5).durum, 'Shift', 8).durum;
+    const s = tusEkle(tusEkle(tusEkle(OKUYUCU_BASI, 'R', 0).durum, 'P', 5).durum, 'Tab', 8).durum;
     expect(s).toEqual(OKUYUCU_BASI);
+  });
+  it('okuyucunun her büyük harf ve ":" için bastığı Shift okutmayı bölmez', () => {
+    let d = OKUYUCU_BASI;
+    let t = 0;
+    for (const c of ['Shift', 'R', 'Shift', 'P', 'Shift', ':', '3', '7']) { d = tusEkle(d, c, t).durum; t += 4; }
+    expect(tusEkle(d, 'Enter', t).kod).toBe('RP:37');
   });
   it('terminal yalnız refakat kartını tanır', () => {
     expect(terminalOkutmasi('rp:42')).toEqual({ tur: 'kart', kartId: 42 });
@@ -48,6 +54,13 @@ function Deneme({ etkin, okundu }: { etkin: boolean; okundu: (k: string) => bool
 const okut = (hedef: Element, metin: string) => { for (const c of [...metin, 'Enter']) fireEvent.keyDown(hedef, { key: c }); };
 
 describe('useElOkuyucu', () => {
+  it('fabrika ayarındaki okuyucunun Türkçe Q klavyede yazdığı "RPŞ37" terminale "RP:37" olarak gelir', () => {
+    const okundu = vi.fn();
+    render(<Deneme etkin okundu={okundu} />);
+    okut(document.body, 'RPŞ37');
+    expect(okundu).toHaveBeenCalledWith('RP:37');
+    expect(terminalOkutmasi('RP:37')).toEqual({ tur: 'kart', kartId: 37 });
+  });
   it('odak düğmedeyken okutmayı alır; Enter düğmeyi tıklamaz', () => {
     const okundu = vi.fn();
     const tikla = vi.fn();

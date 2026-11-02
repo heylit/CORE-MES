@@ -4,10 +4,10 @@ import { D, defaults } from '../durum.ts';
 import type { Tezgah as SunucuTezgahi, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { allMachines, allMaterials, byId, dirtyUsage, machine, machNoDup, sunucuTezgahSatirlari, tezgahKaynagi, tezgahlariKur, tezgahYok } from '../secici.ts';
 import {
-  AYAR_EKSIK_ILETISI, deleteMachine, deleteMat, isCustomMachine, malzemeAlanlari, saveMachine, saveMat, sayi, setMachineNo, sunucuTezgahiKaydet, tezgahAlanlari,
+  AYAR_EKSIK_ILETISI, deleteMachine, katalogaGore, deleteMat, isCustomMachine, malzemeAlanlari, saveMachine, saveMat, sayi, setMachineNo, sunucuTezgahiKaydet, tezgahAlanlari,
   MODEL_OPTS, YENI_TEZGAH, type Malzeme, type Tezgah,
 } from './tanimlar.ts';
-import { KATALOG } from '../veri/tezgah-katalogu.ts';
+import { KATALOG, katalogModeli } from '../veri/tezgah-katalogu.ts';
 
 vi.mock('../depo.ts', async (asil) => ({ ...await asil<object>(), save: vi.fn() }));
 const sunucu = vi.hoisted(() => ({ yazilan: [] as unknown[] }));
@@ -167,6 +167,31 @@ describe('tezgâh listesi İstasyonlar\'dan (1091 a, 1139 b, 1192 a)', () => {
     expect(state.mo[g.id]).toEqual({ info: { not: 'kalır' } });
     expect(sunucuTezgahSatirlari()![0]!.sunucu.surum).toBe(1);
     expect(machine()).toMatchObject({ pockets: 36, rpm: 14000 });
+  });
+
+  it('1900: katalog modeli seçilince tip, bağlantı, cep, devir ve canlı takım dolar; katalogda boş alan formda kalır', () => {
+    const bos = { no: '', name: 'X', type: 'mill', kind: 'm_vmc', ctrl: 'heid', taper: 'HSK-A63', pockets: '7', rpm: '999', spindle: '', live: false };
+    expect(katalogaGore(bos, 'm_haasvf2')).toEqual({ ...bos, kind: 'm_haasvf2', type: 'mill', taper: 'BT40', pockets: '20', rpm: '8100' });
+    expect(katalogaGore(bos, 'm_dmgntx3000')).toMatchObject({ type: 'millturn', taper: 'Capto C6', pockets: '38', rpm: '12000', spindle: '3000' });
+    expect(katalogaGore(bos, 'm_mazakqt250my')).toMatchObject({ type: 'lathe', taper: 'Taret', pockets: '12', rpm: '4000', live: true });
+    // Ayrıntısı bilinmeyen model: cep formdaki değerle kalır, uydurulmaz.
+    expect(katalogaGore(bos, 'm_hermlec32')).toMatchObject({ pockets: '7', rpm: '18000', taper: 'HSK-A63' });
+    // Gövde tipi ve CMM yalnız görünümü değiştirir.
+    expect(katalogaGore(bos, 'm_5ax')).toEqual({ ...bos, kind: 'm_5ax' });
+    expect(katalogaGore(bos, 'm_zeissprismo')).toEqual({ ...bos, kind: 'm_zeissprismo' });
+  });
+
+  it('1900: yeni katalog modeline geçen makinenin Tezgâh bilgileri katalogdan yazılır, öteki bilgiler kalır; aynı model yeniden kaydedilince dokunulmaz', async () => {
+    tezgahlariKur([makine(7, 'Z-07', AYAR)]);
+    const satir = sunucuTezgahSatirlari()![0]!, id = satir.tezgah.id;
+    state.mo[id] = { info: { seri: 'S-1', xT: 1 } };
+    const f = katalogaGore(tezgahAlanlari(satir.tezgah), 'm_haasvf2');
+    await sunucuTezgahiKaydet(satir, f);
+    const k = katalogModeli('m_haasvf2')!;
+    expect(state.mo[id]?.info).toEqual({ seri: 'S-1', marka: k.marka, model: k.model, xT: k.alan.x, yT: k.alan.y, zT: k.alan.z });
+    state.mo[id]!.info = { ...state.mo[id]!.info, xT: 700 };
+    await sunucuTezgahiKaydet(sunucuTezgahSatirlari()![0]!, f);
+    expect(state.mo[id]?.info?.['xT']).toBe(700);
   });
 
   it('katalogdan seçilen görünüm model türü olarak yazılır; seçimde CMM yoktur (1893 a, 1894 a)', async () => {

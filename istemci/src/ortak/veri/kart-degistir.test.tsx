@@ -35,6 +35,19 @@ describe('1898 a kart biçimi', () => {
     expect(yaz('0004123456', 200)).toBeNull();
     expect(yaz('RP:12', 10)).toBeNull();
   });
+  it('okuyucunun büyük harf için bastığı Shift, CapsLock ve AltGraph onaltılık kartı bölmez', () => {
+    let d: OkuyucuDurumu = OKUYUCU_BASI;
+    let t = 1000;
+    let kart: string | null = null;
+    for (const c of ['4', 'Shift', 'F', '2', 'Shift', 'A', 'CapsLock', '9', 'AltGraph', 'C', '1', 'D', 'Enter']) {
+      const r = kartTusu(d, c, t);
+      d = r.durum;
+      t += 10;
+      kart = r.kart ?? kart;
+    }
+    expect(kart).toBe('4F2A9C1D');
+    expect(kartTusu({ metin: '4F2', son: 1000 }, 'Tab', 1010).durum).toEqual(OKUYUCU_BASI);
+  });
 });
 
 function Deneme({ etkin }: { etkin: boolean }) {

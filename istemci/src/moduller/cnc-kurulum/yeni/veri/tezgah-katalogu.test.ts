@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MACHINES } from './cncdata.ts';
-import { GOVDE_ADI, GOVDE_ALANI, govdesi, KATALOG, katalogEtiketi, katalogModeli } from './tezgah-katalogu.ts';
+import { GOVDE_ADI, GOVDE_ALANI, govdesi, KATALOG, katalogAyrintisi, katalogBilgisi, katalogEtiketi, katalogModeli } from './tezgah-katalogu.ts';
 
 // Sözleşmedeki model türü kalıbı (paylasilan/sozlesme/cnc-kurulum.ts MODEL_TURU); istemci paylasilan'dan değer ithal etmez.
 const MODEL_TURU = /^m_[a-z0-9]{1,20}$/;
@@ -47,5 +47,28 @@ describe('tezgâh kataloğu (1893 a)', () => {
   it('etiket marka, model ve gövde adını taşır', () => {
     const m = KATALOG[0]!;
     expect(katalogEtiketi(m)).toBe(`${m.marka} ${m.model} · ${GOVDE_ADI[m.govde]}`);
+  });
+
+  it('1900: ayrıntı yalnız katalogdaki CNC modellerinde; cep 1-120, canlı takım devri yalnız canlı takımlıda; bilinmeyen boş', () => {
+    const anahtarlar = new Set(KATALOG.filter((m) => m.tur !== 'cmm').map((m) => m.anahtar));
+    for (const m of KATALOG) {
+      const a = katalogAyrintisi(m.anahtar);
+      if (m.tur === 'cmm' || m.govde === 'm_swiss') expect(a.cep, m.anahtar).toBeNull();
+      if (a.cep !== null) expect(a.cep >= 1 && a.cep <= 120, m.anahtar).toBe(true);
+      if (a.canliDevir !== null) expect(a.canli, m.anahtar).toBe(true);
+      if (a.frezeDevri !== null) expect(m.tur, m.anahtar).toBe('millturn');
+      expect(anahtarlar.has(m.anahtar) || a.cep === null, m.anahtar).toBe(true);
+    }
+    expect(katalogAyrintisi('m_yok')).toEqual({ cep: null, frezeDevri: null, canli: null, canliDevir: null });
+  });
+
+  it('1900: Tezgâh bilgisi türe göre: freze kurs, torna çap ve boy (Y varsa), kayar otomat çubuk', () => {
+    const bul = (f: (m: (typeof KATALOG)[number]) => boolean) => KATALOG.find(f)!;
+    const fr = bul((m) => m.tur === 'mill'), to = bul((m) => m.tur === 'lathe' && m.govde === 'm_lathe' && m.alan.y === 0);
+    const ty = bul((m) => m.govde === 'm_lathe' && m.alan.y > 0), sw = bul((m) => m.govde === 'm_swiss');
+    expect(katalogBilgisi(fr)).toEqual({ marka: fr.marka, model: fr.model, xT: fr.alan.x, yT: fr.alan.y, zT: fr.alan.z });
+    expect(katalogBilgisi(to)).toEqual({ marka: to.marka, model: to.model, maxD: to.alan.x, maxL: to.alan.z });
+    expect(katalogBilgisi(ty)).toMatchObject({ yT: ty.alan.y });
+    expect(katalogBilgisi(sw)).toEqual({ marka: sw.marka, model: sw.model, bar: sw.alan.x });
   });
 });
