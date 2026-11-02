@@ -21,7 +21,7 @@ const STATULER = new Map([[11, { ad: 'HM', tur: 'HM' as const }], [12, { ad: 'YM
 const girdi = (g: Partial<AkisGirdisi>): AkisGirdisi => ({
   simdi: z(SIMDI),
   emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'basladi', baslama: null, teslim: null },
-  adimlar: [], olaylar: [], sayimlar: [], fason: [], hareketler: [], statuler: STATULER, partiGirisleri: new Map(), sevk: null,
+  adimlar: [], birimSureler: new Map(), olaylar: [], sayimlar: [], fason: [], hareketler: [], statuler: STATULER, partiGirisleri: new Map(), sevk: null,
   ...g,
 });
 
@@ -100,9 +100,11 @@ describe('AKS-4 statüde kalış (ilk giren ilk çıkar)', () => {
 
 describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
   const adimlar = [adim({ id: 1, opNo: 10, bitis: z(300), birimSureDk: 5 }), adim({ id: 2, opNo: 20, fason: true, istasyon: null }), adim({ id: 3, opNo: 30, bitis: z(2000) })];
+  // Emir başlaması Üretim Emirleri'nden gelir: ilk başlatma (30. dakika), hazırlık (0. dakika) değil (AKS-4 a).
   const temel = girdi({
-    emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'bitti', baslama: null, teslim: null },
+    emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'bitti', baslama: z(30), teslim: null },
     adimlar,
+    birimSureler: new Map([[1, 26.4], [3, 10]]),
     olaylar: [
       { isEmriId: 1, zaman: z(0), olay: 'ayar' }, { isEmriId: 1, zaman: z(30), olay: 'baslat' }, { isEmriId: 1, zaman: z(300), olay: 'bitir' },
       { isEmriId: 3, zaman: z(1900), olay: 'baslat' }, { isEmriId: 3, zaman: z(2000), olay: 'bitir' },
@@ -118,21 +120,23 @@ describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
   test('damgalar ve uçtan uca ölçüler: mal kabulden sevke', () => {
     const s = emirAkisi(temel);
     assert.equal(s.damgalar.malKabul, z(-1000));
-    assert.equal(s.damgalar.uretimBasladi, z(0));
+    assert.equal(s.damgalar.uretimBasladi, z(30), 'Üretim başladı emrin başlamasıdır; hazırlık (0. dakika) değil');
     assert.equal(s.damgalar.uretimBitti, z(2000));
     assert.deepEqual(s.olculer.uctanUca, { dk: 3400, acik: false });
-    assert.deepEqual(s.olculer.hammaddeBekleme, { dk: 1000, acik: false });
-    assert.deepEqual(s.olculer.uretimAkis, { dk: 2000, acik: false });
+    assert.deepEqual(s.olculer.hammaddeBekleme, { dk: 1030, acik: false });
+    assert.deepEqual(s.olculer.uretimAkis, { dk: 1970, acik: false });
     assert.deepEqual(s.olculer.sevkBekleme, { dk: 300, acik: false });
     assert.equal(s.olculer.islemeToplamDk, 270 + 100);
-    assert.equal(s.olculer.akisVerimi, 0.185);
+    assert.equal(s.olculer.akisVerimi, 0.188);
   });
 
-  test('adım ölçüleri: bekleyen adımın beklemesi önceki adımın bitişinden (fasonda bütün dönüşten) başlar; çevrim işleme ÷ sağlam', () => {
+  test('adım ölçüleri: bekleyen adımın beklemesi önceki adımın bitişinden (fasonda bütün dönüşten) başlar; çevrim Üretim Emirleri birim süresidir', () => {
     const [op10, op20, op30] = emirAkisi(temel).adimlar;
     assert.equal(op10?.hazirlikDk, 30);
     assert.equal(op10?.islemeDk, 270);
-    assert.equal(op10?.cevrimBirimDk, 27);
+    assert.equal(op10?.cevrimBirimDk, 26.4, 'işleme ÷ sağlam (27) değil, verilen birim süre');
+    assert.equal(op20?.cevrimBirimDk, null, 'fasonda çevrim yok');
+    assert.equal(op30?.cevrimBirimDk, 10);
     assert.equal(op10?.beklemeDk, null);
     assert.equal(op20?.beklemeDk, 100, 'OP10 300. dakikada biter, fason 400. dakikada gider; ilk sayım (100) sayılmaz');
     assert.equal(op20?.fasonDk, 1200);
@@ -192,6 +196,7 @@ describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
 
   test('hammadde: sarf yoksa HM statüsünden çevirme kullanım sayılır; mal kabulü bilinmeyen partide bekleme uydurulmaz', () => {
     const g = girdi({
+      emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'basladi', baslama: z(500), teslim: null },
       adimlar: [adim({ id: 1, opNo: 10 })],
       olaylar: [{ isEmriId: 1, zaman: z(500), olay: 'baslat' }],
       hareketler: [
@@ -206,6 +211,7 @@ describe('AKS-3 / AKS-5 / AKS-6 emir akışı', () => {
 
   test('sürmekte olan emirde ölçüler şimdiye kadar açık; iptal emirde açık ölçü yok', () => {
     const acik = girdi({
+      emir: { id: 1, emirNo: 'UE-1', malzemeNo: 100, adet: 10, durum: 'basladi', baslama: z(0), teslim: null },
       adimlar: [adim({ id: 1, opNo: 10 })],
       olaylar: [{ isEmriId: 1, zaman: z(0), olay: 'baslat' }],
     });

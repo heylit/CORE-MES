@@ -179,6 +179,15 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     assert.notEqual(op20?.fasonDk, null, 'fason gidiş-dönüş süresi ölçülür');
     assert.equal(op30?.islemeDk, null, 'başlamamış adımın işlemesi yok');
     assert.equal(a.olculer.uretimAkis.acik, true, 'son adım bitmedi, akış sürüyor');
+
+    // AKS-4 a: çevrim ve "Üretim başladı" Üretim Emirleri'nin kendi ekranındaki değerle aynıdır.
+    const ozet = await istek<{ netBirimDk: number | null }>('yonetici', 'GET', `/adimli-emirler/${id}/is-emirleri/${isEmriIdleri[0]!}/sure-ozeti`);
+    assert.equal(ozet.durum, 200, JSON.stringify(ozet.govde));
+    assert.equal(op10?.cevrimBirimDk, ozet.govde.netBirimDk);
+    const emir = await istek<{ emir: { baslama: string | null } }>('yonetici', 'GET', `/uretim-emirleri/${id}`);
+    assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
+    assert.ok(emir.govde.emir.baslama && a.damgalar.uretimBasladi);
+    assert.equal(Date.parse(a.damgalar.uretimBasladi), Date.parse(emir.govde.emir.baslama));
   });
 
   test('AKS-U3 (kart #708): kartın akışı kartın lotu ve kartla sayılanla ölçülür; anlar kabulden sayıma sırayla; yetki ve 404', async () => {

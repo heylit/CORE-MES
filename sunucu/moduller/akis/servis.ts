@@ -46,6 +46,7 @@ async function akisGirdisi(db: Db, id: number, kart: { id: number; partiIdler: r
     simdi,
     emir: { id: emir.id, emirNo: emir.emirNo, malzemeNo: emir.malzemeNo, adet: emir.adet, durum: emir.durum, baslama: emir.baslama, teslim: emir.teslim },
     adimlar,
+    birimSureler: new Map(adimlar.filter((a) => !a.fason).map((a) => [a.id, adimSureOzeti(kayit, a, simdi).netBirimDk])),
     olaylar: kayit.olaylar,
     sayimlar,
     fason: kayit.fason,
@@ -55,6 +56,21 @@ async function akisGirdisi(db: Db, id: number, kart: { id: number; partiIdler: r
     sevk: sevkAni(sevkler.get(id) ?? null),
   };
   return { girdi, kayit, emir: { id: emir.id, emirNo: emir.emirNo, adet: emir.adet, durum: emir.durum, teslim: emir.teslim } };
+}
+
+type Kayit = NonNullable<Awaited<ReturnType<typeof emirAkisKaydi>>>;
+
+// Adımın Üretim Emirleri süre özeti: emir yolculuğu ve kartın emir sütunu aynı tanımı okur (AKS-4 a). Pencere verilirse
+// (kartın adımdaki penceresi) yalnız o aralık ve verilen sayımlar ölçülür.
+function adimSureOzeti(
+  kayit: Kayit, a: { id: number; baslama: string | null; bitis: string | null }, simdi: string,
+  pencere?: { baslama: string | null; bitis: string | null; ayarlar: boolean; sayimlar: Kayit['sayimlar'] },
+): SureOzeti {
+  const olaylar = kayit.olaylar.filter((o) => o.isEmriId === a.id);
+  const ayarlar = olaylar.filter((o) => o.olay === 'ayar').map((o) => o.zaman);
+  const duruslar = olaylar.flatMap((o) => (o.olay === 'duraklat' || o.olay === 'durdur' || o.olay === 'devam' ? [{ olay: o.olay, zaman: o.zaman }] : []));
+  const p = pencere ?? { baslama: a.baslama, bitis: a.bitis, ayarlar: true, sayimlar: kayit.sayimlar.filter((s) => s.isEmriId === a.id) };
+  return sureOzetiHesapla({ baslama: p.baslama, bitis: p.bitis, simdi, ayarlar: p.ayarlar ? ayarlar : [], olaylar: duruslar, sayimlar: p.sayimlar });
 }
 
 export async function emirAkisiOku(db: Db, id: number): Promise<EmirAkisiCevabi> {
@@ -95,17 +111,12 @@ async function kartAkisi(db: Db, id: number): Promise<KartAkisiCevabi | null> {
   const r = k.refakat;
   // Süre özeti iş emrinin kuralıyla: emir sütunu adımın bütün sayımları, kart sütunu kartın penceresi ve sayımlarıyla (AKS-9).
   const sureOzetleri = girdi.adimlar.filter((a) => !a.fason).map((a) => {
-    const olaylar = kayit.olaylar.filter((o) => o.isEmriId === a.id);
-    const ayarlar = olaylar.filter((o) => o.olay === 'ayar').map((o) => o.zaman);
-    const duruslar = olaylar.flatMap((o) => (o.olay === 'duraklat' || o.olay === 'durdur' || o.olay === 'devam' ? [{ olay: o.olay, zaman: o.zaman }] : []));
     const sayimlar = kayit.sayimlar.filter((s) => s.isEmriId === a.id);
-    const ozet = (p: { baslama: string | null; bitis: string | null }, ayar: readonly string[], say: typeof sayimlar): SureOzeti =>
-      sureOzetiHesapla({ baslama: p.baslama, bitis: p.bitis, simdi: girdi.simdi, ayarlar: ayar, olaylar: duruslar, sayimlar: say });
     const pencere = kartPenceresi(a, sayimlar.map((s) => ({ zaman: s.zaman, kartin: s.refakatPartisiId === id })));
     return {
       isEmriId: a.id,
-      kart: ozet(pencere, pencere.hazirlikKartin ? ayarlar : [], sayimlar.filter((s) => s.refakatPartisiId === id)),
-      emir: ozet(a, ayarlar, sayimlar),
+      kart: adimSureOzeti(kayit, a, girdi.simdi, { ...pencere, ayarlar: pencere.hazirlikKartin, sayimlar: sayimlar.filter((s) => s.refakatPartisiId === id) }),
+      emir: adimSureOzeti(kayit, a, girdi.simdi),
     };
   });
   // 750 a: plan saatleri adımın güncel canlı yeri; taban (ilk canlıya alınan yer) ikinci satırdır.

@@ -48,7 +48,7 @@ export const adimOlcusuSemasi = z.object({
   durusDk: dakika.nullable(),
   fasonDk: dakika.nullable(),
   saglamAdet: z.number().int().nonnegative(),
-  // İşleme süresi ÷ sağlam adet; sayım yoksa null.
+  // Üretim Emirleri süre özetinin net birim süresi: başlatmadan bitişe (sürüyorsa şimdiye) duraklama ve duruş düşülmüş süre ÷ (sağlam + hurda); sayım yoksa null.
   cevrimBirimDk: dakika.nullable(),
   standartBirimDk: dakika.nullable(),
   standartHazirlikDk: dakika.nullable(),
