@@ -40,6 +40,9 @@ describe('stok örnek verisi (gerçek PostgreSQL)', { timeout: 120_000 }, () => 
     assert.equal(toplamlar.get('ORNEK Kesme yağı'), '120');
     const cubuk = stok.satirlar.find((s) => s.ad === 'ORNEK Yuvarlak çubuk Ø50');
     assert.equal(cubuk?.konumSayisi, 2);
+    // İki partili konum tek etiket olur, miktarı toplamdır (1784b).
+    const levha = stok.satirlar.find((s) => s.ad === 'ORNEK Sac levha 10 mm');
+    assert.deepEqual(levha?.konumlar.map((k) => [k.kod, Number(k.miktar)]), [['ORN-ZEMIN-2', 280]]);
 
     const konumlar = await vt().tx((db) => servis.konumListesi(db, { sayfa: 1, sayfaBoyu: 200, yon: 'artan' as const }));
     assert.ok(['ORN-ZEMIN-1', 'ORN-ZEMIN-2', 'ORN-ARA'].every((kod) => konumlar.satirlar.some((k) => k.kod === kod)));

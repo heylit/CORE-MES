@@ -486,8 +486,10 @@ export interface MalzemeSuzgeci {
   durum?: 'kritik' | 'eksi' | 'kabulde' | 'statulu' | undefined; metin?: string | undefined; adlaBulunan?: number[] | undefined;
   statuIdleri?: number[] | undefined; statuluKartlar?: number[] | undefined;
 }
-const KONUM_ETIKETLERI = (malzeme: string): string => `COALESCE((SELECT json_agg(json_build_object('kod', x.kod, 'katNo', x.kat_no, 'miktar', x.miktar::text) ORDER BY x.miktar DESC)
-  FROM (SELECT k.kod, k.kat_no, b.miktar FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = ${malzeme} ORDER BY b.miktar DESC, k.kod LIMIT 3) x), '[]'::json)`;
+// Konum başına tek etiket: aynı konumdaki parti, statü ve kalite satırları toplanır (konum sayısıyla aynı kırılım).
+const KONUM_ETIKETLERI = (malzeme: string): string => `COALESCE((SELECT json_agg(json_build_object('kod', x.kod, 'katNo', x.kat_no, 'miktar', x.miktar::text) ORDER BY x.miktar DESC, x.kod)
+  FROM (SELECT k.kod, k.kat_no, sum(b.miktar) AS miktar FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = ${malzeme}
+        GROUP BY k.id, k.kod, k.kat_no ORDER BY sum(b.miktar) DESC, k.kod LIMIT 3) x), '[]'::json)`;
 const malzemeKaynagi = (ekKartlar = '') => `FROM (SELECT malzeme_id FROM stok_bakiye UNION SELECT malzeme_id FROM stok_malzeme_ayari${ekKartlar}) m
   LEFT JOIN stok_malzeme_ayari a ON a.malzeme_id = m.malzeme_id
   LEFT JOIN LATERAL (SELECT COALESCE(sum(b.miktar), 0) AS toplam, COALESCE(sum(b.miktar) FILTER (WHERE b.statu_id IS NULL AND b.${KULLANILABILIR_SQL}), 0) AS serbest,
