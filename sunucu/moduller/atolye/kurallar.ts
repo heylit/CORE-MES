@@ -480,6 +480,26 @@ export function yerlesimiDenetle(k: YerlesimKaydi, b: DenetimBaglami): DenetimSo
     }
   }
 
+  // ATL-42: karantina alanı yürüyüş yoluna binerse uyarı: ayrılan parça yolda durmasın. Kaydı engellemez.
+  k.alanlar.forEach((q, qi) => {
+    if (q.tur !== 'karantina') return;
+    for (const { a, i } of yollar) {
+      if (cakisirMi(q, a, 0.1)) uyarilar.push({ kural: 'ATL-42', mesaj: `Karantina alanı "${q.ad}", ${a.ad} yürüyüş yoluna biniyor.`, ogeler: [`alan:${qi}`, `alan:${i}`] });
+    }
+  });
+
+  // ATL-43: aynı bölümde aynı adlı iki alan uyarıdır (stok konumu adı alan adıdır; depocu ikisini ayıramaz). Kaydı engellemez.
+  const adlar = new Map<string, number[]>();
+  k.alanlar.forEach((q, qi) => {
+    const anahtar = q.ad.trim().toLocaleLowerCase('tr');
+    adlar.set(anahtar, [...(adlar.get(anahtar) ?? []), qi]);
+  });
+  for (const idler of adlar.values()) {
+    const ilk = idler[0];
+    if (idler.length < 2 || ilk === undefined) continue;
+    uyarilar.push({ kural: 'ATL-43', mesaj: `Bu bölümde ${idler.length} alan aynı adı taşıyor: ${k.alanlar[ilk]?.ad ?? ''}.`, ogeler: idler.map((qi) => `alan:${qi}`) });
+  }
+
   return { ihlaller, uyarilar };
 }
 

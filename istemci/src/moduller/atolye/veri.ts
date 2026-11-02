@@ -4,7 +4,7 @@ import type {
   AramaCevabi, FabrikaCevabi, FabrikaKayitCevabi, FabrikaKayitGovdesi, Kroki, KrokiCevabi, KrokiHizalaGovdesi, GozKalemi, GozKalemiGovdesi, GozKalemleriCevabi, GozlerCevabi, Model, ModelGovdesi, ModelParcaCevabi, ModelParcaYazCevabi, KalemGorunumleriCevabi, KalemGorunumuGovdesi, MerkezKrokileriCevabi, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaGovdesi, MerkezModelleriCevabi, MalzemeModelleriCevabi, ModellerCevabi, YerlesmemisIstasyonlarCevabi, RotaCevabi,
   SalonlarCevabi, YerlesimCevabi,
 } from '#paylasilan/sozlesme/atolye.ts';
-import type { GozStoklariCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GozStoklariCevabi, HaritaOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Emir, EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -151,6 +151,17 @@ export function useBolmeStoklari(rafId: number | null, bolme: number | null): Re
     const stoklu = new Set((stok.data ?? []).filter((g) => g.kalemSayisi > 0).map((g) => g.gozId));
     return new Set((gozler.data?.satirlar ?? []).filter((s) => stoklu.has(s.id)).map((s) => hucreAnahtari(s.bolme, s.kat, s.goz)));
   }, [stok.data, gozler.data]);
+}
+
+// ATL-5: harita kaydından sonra stok tarafında bekleyen iş. Eşleme Stok Merkezi'ndedir (stok.tanim); harita yalnız haber verir.
+// eslenmemis: stok konumu olmayan göz ya da alan; yetimStoklu: haritada yeri kalmamış, içinde stok olan konum. Okunamazsa null.
+export async function stokEslemeDurumu(): Promise<{ eslenmemis: number; yetimStoklu: number } | null> {
+  try {
+    const o = await api.get<HaritaOzetiCevabi>('/stok/harita-ozeti');
+    return { eslenmemis: o.eslenmemis, yetimStoklu: o.bagsizKonumlar.filter((k) => k.satirSayisi > 0).length };
+  } catch {
+    return null;
+  }
 }
 
 export function useGozStogu(gozId: number | null, acik: boolean) {

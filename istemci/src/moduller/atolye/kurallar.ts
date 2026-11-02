@@ -575,3 +575,12 @@ export function saatMetni(zaman: string | null): string | null {
   const t = new Date(zaman);
   return Number.isNaN(t.getTime()) ? null : t.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
+
+// ATL-5: harita kaydından sonra stok eşlemesi gerekiyorsa tek ileti; gerekmiyorsa null.
+export function stokEslemeIletisi(d: { eslenmemis: number; yetimStoklu: number }): string | null {
+  const parcalar: string[] = [];
+  if (d.eslenmemis > 0) parcalar.push(`${d.eslenmemis} göz ya da alanın stok konumu yok`);
+  if (d.yetimStoklu > 0) parcalar.push(`${d.yetimStoklu} stoklu konumun haritada yeri kalmadı`);
+  if (parcalar.length === 0) return null;
+  return `Stok: ${parcalar.join('; ')}. Stok Merkezi > Konumlar'da "Haritadan eşle" ile güncelleyin.`;
+}

@@ -5,6 +5,7 @@ import type { FabrikaKayitCevabi, IhlalAyrintisi, KayitCevabi, MerkezModeli, Sur
 import type { Istasyon, IstasyonTipi, IstasyonlarCevabi, Makine, MakinelerCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, gecmisiDegistir, geriAl,
@@ -12,12 +13,12 @@ import {
 } from './duzenleyici-durumu.ts';
 import { bolumeCevir, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { EklenecekTur, Gecmis, Taslak } from './duzenleyici-durumu.ts';
-import { ISTASYON_TIPI_ADI, MAKINE_CINSI_ADI, eklenebilirIstasyonlar, makineCinsi, ornekIstasyonMu, saatMetni } from './kurallar.ts';
+import { ISTASYON_TIPI_ADI, MAKINE_CINSI_ADI, eklenebilirIstasyonlar, makineCinsi, ornekIstasyonMu, saatMetni, stokEslemeIletisi } from './kurallar.ts';
 import { useDepoYazimi } from './depo-yazimi.ts';
 import { OgeSimgesi } from './plan-simgeleri.tsx';
 import { OzellikPaneli } from './OzellikPaneli.tsx';
 import { PlanCizimi } from './PlanCizimi.tsx';
-import { fabrikaKaydet, krokiHizala, useKroki, useMerkezModelleri, useModeller } from './veri.ts';
+import { fabrikaKaydet, krokiHizala, stokEslemeDurumu, stokOkurMu, useKroki, useMerkezModelleri, useModeller } from './veri.ts';
 import {
   dondur as krokiDondur, eksenOturt, hizalamaYuvarla, ilkHizalama, kutuyaYapis, metreMetni, noktayaTasi, noktayaYapis, olcekAyarla,
   tasi as krokiTasi, uzaklik, yapismaVerisiKur, yerelle, yerlestir,
@@ -84,6 +85,8 @@ const donusAl = (t: Taslak, anahtar: string): number =>
 
 export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Ozellikler) {
   const { bildir } = useBildirim();
+  const oturum = useOturum();
+  const stokOkur = oturum.data?.islemler.some(stokOkurMu) === true;
   const istemci = useQueryClient();
   const fabrikaMi = salonId === null;
   // Depo kipi (Stok Merkezi'nden, harita yetkisi olmadan): yalnız raflar eklenir, taşınır ve düzenlenir; kayıt yalnız rafları
@@ -323,6 +326,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       bildir('tamam', fabrikaMi ? 'Fabrika planı kaydedildi.' : 'Yerleşim kaydedildi.');
       // Uyarı kaydı engellemez (giriş noktası, yürüyüş yolu); kullanıcı hangi öğe olduğunu görür.
       for (const u of uyarilar) bildir('bilgi', `${u.kural}: ${u.mesaj}`);
+      if (stokOkur) void stokEslemeDurumu().then((d) => { const m = d && stokEslemeIletisi(d); if (m) bildir('bilgi', m); });
       kaydedildi();
     },
     onError: (hata) => {

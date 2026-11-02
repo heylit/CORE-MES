@@ -182,6 +182,28 @@ describe('atolye kuralları (saf)', () => {
     assert.deepEqual(sonuc.uyarilar.map((u) => u.kural), ['ATL-19']);
   });
 
+  test('ATL-42 karantina alanı yürüyüş yoluna binerse uyarı; yoldan ayrı karantina uyarı vermez', () => {
+    const yol = alan({ tur: 'yuruyus_yolu', ad: 'Ana yol', x: 20, z: 12, genislik: 38, derinlik: 3 });
+    const ustte = yerlesimiDenetle(kayit({ alanlar: [yol, alan({ tur: 'karantina', ad: 'Karantina', x: 20, z: 12, genislik: 4, derinlik: 3 })] }), baglam());
+    assert.deepEqual(ustte.ihlaller, []);
+    assert.deepEqual(ustte.uyarilar.map((u) => [u.kural, u.ogeler]), [['ATL-42', ['alan:1', 'alan:0']]]);
+    const ayri = yerlesimiDenetle(kayit({ alanlar: [yol, alan({ tur: 'karantina', ad: 'Karantina', x: 6, z: 20, genislik: 4, derinlik: 3 })] }), baglam());
+    assert.deepEqual(ayri.uyarilar, []);
+    const bolge = yerlesimiDenetle(kayit({ alanlar: [yol, alan({ tur: 'bolge', ad: 'Bölge', x: 20, z: 12, genislik: 4, derinlik: 3 })] }), baglam());
+    assert.deepEqual(bolge.uyarilar, []);
+  });
+
+  test('ATL-43 aynı adlı iki alan (büyük-küçük harf ve boşluk farkı sayılmaz) uyarıdır, kaydı engellemez', () => {
+    const k = kayit({ alanlar: [
+      alan({ tur: 'karantina', ad: 'Karantina', x: 6, z: 20, genislik: 4, derinlik: 3 }),
+      alan({ tur: 'karantina', ad: ' KARANTİNA ', x: 16, z: 20, genislik: 4, derinlik: 3 }),
+      alan({ tur: 'bolge', ad: 'Bölge', x: 26, z: 20, genislik: 4, derinlik: 3 }),
+    ] });
+    const sonuc = yerlesimiDenetle(k, baglam());
+    assert.deepEqual(sonuc.ihlaller, []);
+    assert.deepEqual(sonuc.uyarilar.map((u) => [u.kural, u.ogeler]), [['ATL-43', ['alan:0', 'alan:1']]]);
+  });
+
   test('ATL-20 rota katı öğeden geçmez, yolu yeğler; ulaşılamayan hedefte en yakın ulaşılan noktada biter', () => {
     const duvar = { x: 10, z: 6, donus: 0, genislik: 0.2, derinlik: 10 };
     const r = rotaBul({ salon: { genislik: 20, derinlik: 12 }, engeller: [duvar], yollar: [], bas: { x: 2, z: 2 }, hedef: { x: 18, z: 2 } });

@@ -259,6 +259,8 @@
 
 /* Tablet ve telefon */
 @media (max-width: 1279px) {
+  /* ATL-5: dar sahnede bölüm etiketi yalnız kodu taşır; ad sahne kenarından ve arama kutusunun altından taşmasın. */
+  .tc-atolye-etiket-bolum span { display: none; }
   .tc-atolye-ana { grid-template-columns: minmax(0, 1fr); }
   .tc-atolye-ana > .tc-kuyruk { max-height: none; }
   .tc-atolye-gostergeler { grid-template-columns: repeat(3, minmax(0, 1fr)); }
