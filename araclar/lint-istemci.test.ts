@@ -1,63 +1,8 @@
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
-import { basename, join, relative } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
-import { ESLint } from 'eslint';
-import stylelint from 'stylelint';
+import { EKRAN, EKRAN_TESTI, ITHAL, SOZDIZIMI, cssKurallari, deger, ihlaller, kurallar } from './lint-ortak.ts';
 
-const KOK = fileURLToPath(new URL('../', import.meta.url));
-// CI=true iken ayrıştırıcı tek koşu kipine geçer ve sanal kod yerine diskteki dosyayı tip denetler.
-process.env.TSESTREE_SINGLE_RUN = 'false';
-const eslint = new ESLint({ cwd: KOK });
-
-// Tip bilgili kurallar dosyanın tsconfig kapsamında olmasını ister: kod sanaldır, yol var olan bir dosyanındır.
-const SUNUCU = 'sunucu/ana.ts';
-const EKRAN = 'istemci/src/App.tsx';
-const EKRAN_TESTI = 'istemci/src/App.test.tsx';
-
-const SOZ = '@typescript-eslint/no-floating-promises';
-const YANLIS_SOZ = '@typescript-eslint/no-misused-promises';
-const TIP_ITHALI = '@typescript-eslint/consistent-type-imports';
-const ITHAL = '@typescript-eslint/no-restricted-imports';
-const SOZDIZIMI = 'no-restricted-syntax';
-
-async function ihlaller(dosya: string, kod: string): Promise<Array<{ kural: string; mesaj: string }>> {
-  const [sonuc] = await eslint.lintText(kod, { filePath: join(KOK, dosya) });
-  assert.ok(sonuc, `${dosya} lint kapsamında değil`);
-  // Kuralsız ileti ayrıştırma hatası ya da yapılandırma uyarısıdır; metniyle görünür ki sessizce yeşil kalmasın.
-  return sonuc.messages.map((m) => ({ kural: m.ruleId ?? m.message, mesaj: m.message }));
-}
-
-const kurallar = async (dosya: string, kod: string): Promise<string[]> => (await ihlaller(dosya, kod)).map((i) => i.kural);
-
-async function cssKurallari(dosya: string, kod: string): Promise<string[]> {
-  const { results } = await stylelint.lint({ code: kod, codeFilename: join(KOK, dosya), cwd: KOK });
-  return results.flatMap((r) => r.warnings.map((u) => u.rule));
-}
-
-const BEKLE = 'const bekle = async (): Promise<number> => 1;\n';
-
-test('lint: beklenmeyen söz kırmızı; await, void ve node:test çağrısı yeşil', async () => {
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}bekle();`), [SOZ]);
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}await bekle();\nvoid bekle();`), []);
-  assert.deepEqual(await kurallar(SUNUCU, "import { test } from 'node:test';\ntest('a', async () => {});"), []);
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}const test = bekle;\ntest();`), [SOZ]);
-});
-
-test('lint: söz, değer beklenen yere verilirse kırmızı', async () => {
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}[1].forEach(async () => {\n  await bekle();\n});`), [YANLIS_SOZ]);
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}if (bekle()) console.log(1);`), [YANLIS_SOZ]);
-  assert.deepEqual(await kurallar(SUNUCU, `${BEKLE}if (await bekle()) console.log(1);`), []);
-});
-
-test('lint: yalnız tip olarak kullanılan ithal import type ister', async () => {
-  assert.deepEqual(await kurallar(SUNUCU, "import { Db } from './cekirdek/db.ts';\nexport type A = Db;"), [TIP_ITHALI]);
-  assert.deepEqual(await kurallar(SUNUCU, "import type { Db } from './cekirdek/db.ts';\nexport type A = Db;"), []);
-  assert.deepEqual(await kurallar(SUNUCU, "import { type Db } from './cekirdek/db.ts';\nexport type A = Db;"), []);
-});
-
-const deger = (yol: string): string => `import { x } from '${yol}';\nexport const y = x;`;
+// Yalnız istemci programları kurulur; sunucu kuralları lint-sunucu.test.ts'tedir (ayrı süreç, 1863).
 
 test('lint: istemci paylasilan dan değer ithal edemez (sözleşme, listede olmayan dosya, takma ad, göreli ve düzgünleştirilmemiş yol)', async () => {
   const yollar = [
@@ -115,8 +60,6 @@ test('lint: paylasilan tip ithali, zod taşımadığı bilinen dosyalar ve istem
     deger('./sozlesme/saglik.ts'),
   ];
   for (const kod of yesil) assert.deepEqual(await kurallar(EKRAN, kod), [], kod);
-  assert.deepEqual(await kurallar(SUNUCU, deger(S)), []);
-  assert.deepEqual(await kurallar(SUNUCU, `export const m = await import('${S}');`), []);
 });
 
 test('lint: tsx içinde style özniteliği ve renk özniteliğinde hex kırmızı; test dosyası muaf', async () => {
@@ -165,7 +108,6 @@ test('lint: istemcide crypto.randomUUID kırmızı; ortak kimlik üreticisi, tes
   const cagri = 'export const k = crypto.randomUUID();';
   assert.deepEqual(await kurallar('istemci/src/ortak/veri/istek-kimligi.ts', cagri), []);
   assert.deepEqual(await kurallar(EKRAN_TESTI, cagri), []);
-  assert.deepEqual(await kurallar(SUNUCU, "import { randomUUID } from 'node:crypto';\nexport const k = randomUUID();"), []);
   assert.deepEqual(await kurallar(ISTEMCI_TS, 'export const k = crypto.getRandomValues(new Uint8Array(16));'), []);
 });
 
@@ -175,30 +117,11 @@ test('lint: dosya içi kapatma yorumu ihlali gizlemez', async () => {
     const sonuc = await kurallar(EKRAN, `${yorum}\n${stil}`);
     assert.ok(sonuc.includes(SOZDIZIMI), yorum);
   }
-  assert.ok((await kurallar(SUNUCU, `${BEKLE}bekle(); // eslint-disable-line`)).includes(SOZ));
 
   const CSS = 'istemci/src/moduller/stok/liste.css';
   assert.deepEqual(await cssKurallari(CSS, '.a { color: #fff; /* stylelint-disable-line */ }'), ['color-no-hex']);
   assert.deepEqual(await cssKurallari(CSS, '/* stylelint-disable */\n.a { color: #fff; }'), ['color-no-hex']);
   assert.deepEqual(await cssKurallari(CSS, '/* stylelint-disable-next-line color-no-hex */\n.a { color: #fff; }'), ['color-no-hex']);
-});
-
-test('lint: ajan çalışma ağacındaki dosya taranmaz; aynı ihlal depoda kırmızı', async () => {
-  const ihlal = `${BEKLE}bekle();`;
-  assert.deepEqual(await kurallar(SUNUCU, ihlal), [SOZ]);
-
-  // Gerçek ağaç gibi kendi yapılandırmasını taşır: en yakın yapılandırma seçilse de kök taramaz.
-  const agac = join(KOK, '.claude/worktrees', `lint-testi-${process.pid}`);
-  await mkdir(join(agac, 'sunucu'), { recursive: true });
-  try {
-    await copyFile(join(KOK, 'eslint.config.js'), join(agac, 'eslint.config.js'));
-    await writeFile(join(agac, 'sunucu/ana.ts'), ihlal);
-    // Sabit önekli yol aramayı o klasörden başlatır ve kök yapılandırmayı atlar; `**` ile başlayan desen `eslint .` gibi kökten yürür.
-    const taranan = await new ESLint({ cwd: KOK, errorOnUnmatchedPattern: false }).lintFiles([`**/${basename(agac)}/**`]);
-    assert.deepEqual(taranan.map((s) => relative(KOK, s.filePath)), []);
-  } finally {
-    await rm(agac, { recursive: true, force: true });
-  }
 });
 
 test('lint: css içinde hex istemcinin her yerinde kırmızı; yalnız tasarım değişkenleri dosyası ve dist dışarıda', async () => {
@@ -213,20 +136,4 @@ test('lint: css içinde hex istemcinin her yerinde kırmızı; yalnız tasarım 
   assert.deepEqual(await cssKurallari('istemci/src/dist/a.css', hex), ['color-no-hex']);
   const yesil = ['.a { color: var(--ink); }', '#abc { display: grid; }', ".a { background: url(simge.svg#abc); content: '#abc'; }", '/* #fff */'];
   for (const kod of yesil) assert.deepEqual(await cssKurallari('istemci/src/moduller/stok/liste.css', kod), [], kod);
-});
-
-test('lint: sunucuda aynı db istemcisine Promise.all ile eşzamanlı sorgu uyarılır; sıralı bekleme ve db siz Promise.all yeşil', async () => {
-  const DB = "import type { Db } from './cekirdek/db.ts';\ndeclare const db: Db;\ndeclare function oku(d: Db, n: number): Promise<number>;\n";
-  const uyari = async (kod: string): Promise<Array<{ kural: string; agirlik: number }>> => {
-    const [sonuc] = await eslint.lintText(`${DB}${kod}`, { filePath: join(KOK, SUNUCU) });
-    assert.ok(sonuc);
-    return sonuc.messages.map((m) => ({ kural: m.ruleId ?? m.message, agirlik: m.severity }));
-  };
-  for (const kod of [
-    'export const a = await Promise.all([oku(db, 1), oku(db, 2)]);',
-    'export const a = await Promise.all([1, 2].map((n) => oku(db, n)));',
-    'export const a = await Promise.allSettled([oku(db, 1)]);',
-  ]) assert.deepEqual(await uyari(kod), [{ kural: SOZDIZIMI, agirlik: 1 }], kod);
-  assert.deepEqual(await uyari('export const a = await oku(db, 1);\nexport const b = await oku(db, 2);'), []);
-  assert.deepEqual(await uyari('export const a = await Promise.all([Promise.resolve(1), Promise.resolve(2)]);'), []);
 });
