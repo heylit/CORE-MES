@@ -17,7 +17,8 @@ yalnız kurulum bilgisi durur. Kurallar `CLAUDE.md`, mimari kararlar `belgeler/a
 - İki veritabanı kullanıcısı (ADR 0005): `tmiv2_uygulama` sunucu içindir, yalnız okur ve yazar;
   `tmiv2_goc` tabloların sahibidir, yalnız `npm run goc` ve testler kullanır. `.env`'de süper kullanıcı
   parolası durmaz. Yeni veritabanı: `psql -1 -U postgres -d <veritabanı> -f araclar/vt/kurulum.sql`
-  (her veritabanı için bir kez), sonra iki rol için `\password`. Tek kullanıcılı eski kurulumdan
+  (her veritabanı için bir kez), sonra iki rol için `\password`. Betik `max_locks_per_transaction` 512'den küçükse uyarır;
+  asıl veritabanında değer `kurulum/yedek.md` Kurulum 5'e göre 512 yapılır, yoksa geri yükleme çalışmaz. Tek kullanıcılı eski kurulumdan
   geçiş `araclar/vt/tasima.sql`, geri dönüş `araclar/vt/geri-al.sql`; adımlar betik başlıklarında.
 - Sunucu `npm run sunucu` (ya da `gelistir:sunucu`) ile başlatılır. Göç değişkenleri sürecin ortamında
   tanımlıysa sunucu açılmaz; servis kurulurken bu iki değişken servis ortamına konmaz.
