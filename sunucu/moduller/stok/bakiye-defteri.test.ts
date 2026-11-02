@@ -4,6 +4,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
+import * as sorgular from './sorgular.ts';
 
 interface Defter {
   islem: string;
@@ -33,6 +34,12 @@ describe('stok bakiyesi değişiklik defteri (göç 20261101200500) (gerçek Pos
       "SELECT islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'stok_bakiye' AND anahtar = $1::jsonb ORDER BY id",
       [JSON.stringify(anahtar)],
     );
+  // Uygulama kullanıcısı bakiyeyi yalnız aynı işlemdeki eşdeğer hareketle değiştirebilir (1692 b tetiği): değişiklik bir çıkışla üretilir.
+  const cikis = (db: Db, konumId: number, miktar: string): Promise<number> => sorgular.hareketYaz(db, {
+    tur: 'cikis', malzemeId: kart, partiId: null, partiSecimi: null, kaynakKonumId: konumId, hedefKonumId: null, miktar, onayliEksi: false,
+    girisKaynagi: null, cikisNedeni: 'diger', uretimEmriId: null, geriAlinanId: null, kisiId: yonetici, aciklama: null,
+    kaynakStatuId: null, hedefStatuId: null, kaynakKaliteDurumu: 'serbest', hedefKaliteDurumu: null, isEmriId: null,
+  });
   const bakiyeAc = async (konumId: number, miktar: string): Promise<number> => (await o().sahip.tek<{ id: number }>(
     'INSERT INTO stok_bakiye (malzeme_id, konum_id, miktar, ilk_giris) VALUES ($1, $2, $3, now()) RETURNING id', [kart, konumId, miktar]))!.id;
 
@@ -55,7 +62,10 @@ describe('stok bakiyesi değişiklik defteri (göç 20261101200500) (gerçek Pos
   test('miktar değişimi eski, yeni değer ve yazan kişiyle düşer; aynı değerle güncelleme satır yazmaz; ekleme yazılmaz', async () => {
     const id = await bakiyeAc(konum, '10.000');
     assert.deepEqual(await defter({ id }), []);
-    await kisiyle((db) => db.sorgu('UPDATE stok_bakiye SET miktar = 7.5 WHERE id = $1', [id]));
+    await kisiyle(async (db) => {
+      await cikis(db, konum, '2.5');
+      await db.sorgu('UPDATE stok_bakiye SET miktar = 7.5 WHERE id = $1', [id]);
+    });
     await kisiyle((db) => db.sorgu('UPDATE stok_bakiye SET miktar = miktar WHERE id = $1', [id]));
     const satirlar = await defter({ id });
     assert.deepEqual(satirlar.map((s) => [s.islem, s.kisi_id, Object.keys(s.alanlar)]), [['guncelle', yonetici, ['miktar']]]);
@@ -64,7 +74,10 @@ describe('stok bakiyesi değişiklik defteri (göç 20261101200500) (gerçek Pos
 
   test('silinen bakiye satırı eski değerleriyle düşer', async () => {
     const id = await bakiyeAc(ikinciKonum, '3.000');
-    await kisiyle((db) => db.sorgu('DELETE FROM stok_bakiye WHERE id = $1', [id]));
+    await kisiyle(async (db) => {
+      await cikis(db, ikinciKonum, '3');
+      await db.sorgu('DELETE FROM stok_bakiye WHERE id = $1', [id]);
+    });
     const satirlar = await defter({ id });
     assert.deepEqual(satirlar.map((s) => [s.islem, s.kisi_id]), [['sil', yonetici]]);
     assert.deepEqual(satirlar[0]?.alanlar.miktar, { eski: 3, yeni: null });
