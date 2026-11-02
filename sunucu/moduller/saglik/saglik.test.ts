@@ -310,10 +310,10 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     hedef.inject({ method: 'GET', url: '/api/saglik/ayrinti', ...(cerez === undefined ? {} : { headers: { cookie: cerez } }) });
 
   // Kendi kaynağıyla kurulan sağlık uçları; kimlik aynı veritabanındaki gerçek oturumdan çözülür.
-  const kaynakliUygulama = (kaynak: SaglikKaynagi): FastifyInstance => {
+  const kaynakliUygulama = (kaynak: SaglikKaynagi, sureSiniriMs: number = YOKLAMA_SURE_SINIRI_MS): FastifyInstance => {
     const hedef = Fastify();
     hataYonetiminiKur(hedef);
-    uclariKaydet(hedef, saglikUclari(YOKLAMA_SURE_SINIRI_MS, kaynak), { vt: acik().vt, kimlik: kimlikCozucu(acik().vt) });
+    uclariKaydet(hedef, saglikUclari(sureSiniriMs, kaynak), { vt: acik().vt, kimlik: kimlikCozucu(acik().vt) });
     return hedef;
   };
 
@@ -393,8 +393,11 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     await asil.sorgu("INSERT INTO vt_buyume_deneme SELECT g, repeat('x', 200) FROM generate_series(1, 20000) g");
     await asil.sorgu('DELETE FROM vt_buyume_deneme WHERE id <= 5000');
     await asil.sorgu('ANALYZE vt_buyume_deneme');
+    // Canlıdaki 2 sn sınırı burada ölçülmez (sınır aşımı ayrı testte): CI'da eşzamanlı göç kuran dosyalar boyut sorgusunu
+    // yavaşlatır ve ölçü null düşerdi. Gerçek istatistiğin doğruluğuna bakılır.
+    const hedef = kaynakliUygulama({ ayarOku, gitOku: () => Promise.resolve(null) }, 15_000);
     try {
-      const cevap = await ayrintiIste(app, izleyenCerezi);
+      const cevap = await ayrintiIste(hedef, izleyenCerezi);
       assert.equal(cevap.statusCode, 200);
       const b = cevap.json().veritabaniBuyumesi;
       assert.equal(Number.isInteger(b.boyutBayt) && b.boyutBayt > 0, true);
