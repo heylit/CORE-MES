@@ -1,10 +1,10 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  geometriAnalizCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, revizyonParametresi,
+  geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, yenidenHesapla } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, yenidenHesapla } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -30,6 +30,11 @@ export const uclar = [
     yontem: 'GET', yol: '/geometri/modeller/:revizyonId/dosya', yetki: 'geometri.oku',
     parametre: revizyonParametresi, cevap: ikiliCevap,
     isle: ({ db, parametre }) => modelDosyasi(db, parametre.revizyonId),
+  }),
+  uc({
+    yontem: 'GET', yol: '/geometri/modeller/:revizyonId/guncel', yetki: 'geometri.oku',
+    parametre: revizyonParametresi, cevap: geometriGuncelRevizyonCevabi,
+    isle: ({ db, parametre }) => guncelRevizyon(db, parametre.revizyonId),
   }),
   uc({
     yontem: 'GET', yol: '/geometri/analizler/:revizyonId', yetki: 'geometri.oku',

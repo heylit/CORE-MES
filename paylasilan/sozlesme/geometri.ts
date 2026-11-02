@@ -68,6 +68,10 @@ export type GeometriModelSatiri = z.output<typeof geometriModelSatiri>;
 export const geometriModelListeCevabi = listeCevapSemasi(geometriModelSatiri);
 export type GeometriModelListeCevabi = z.output<typeof geometriModelListeCevabi>;
 
+// Eski bağlantı: revizyon yayından düştüyse aynı belgenin bugün listede olan revizyonu; yoksa null.
+export const geometriGuncelRevizyonCevabi = z.object({ revizyonId: z.number().int().nullable() });
+export type GeometriGuncelRevizyonCevabi = z.output<typeof geometriGuncelRevizyonCevabi>;
+
 export const geometriAnalizCevabi = z.object({
   revizyonId: z.number().int(),
   belgeId: z.number().int(),
