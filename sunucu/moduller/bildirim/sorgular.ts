@@ -69,6 +69,16 @@ export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<Bild
   );
 }
 
+// Kaynak kaydın kararı verilince o kayda bağlı açık bildirim bütün alıcılarda okunur; okunmuş ve arşivdeki satıra dokunulmaz.
+export async function kaynaktanOkunduIsaretle(db: Db, tekilAnahtar: string): Promise<number> {
+  const r = await db.sorgu<{ id: number }>(
+    `UPDATE bildirim_kaydi SET okundu = now()
+     WHERE tekil_anahtar = $1 AND okundu IS NULL AND arsivlendi IS NULL RETURNING id`,
+    [tekilAnahtar],
+  );
+  return r.length;
+}
+
 export async function tumunuOkunduIsaretle(db: Db, kisiId: number): Promise<number> {
   const r = await db.sorgu<{ id: number }>(
     'UPDATE bildirim_kaydi SET okundu = now() WHERE kisi_id = $1 AND okundu IS NULL AND arsivlendi IS NULL RETURNING id',

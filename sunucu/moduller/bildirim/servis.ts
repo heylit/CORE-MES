@@ -56,6 +56,20 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   return alicilar.length;
 }
 
+export interface BildirimKapanisi {
+  tur: BildirimTuru;
+  // `bildirimGonder`'e verilen kaynak kimliğinin aynısı; kimliksiz açılan bildirim kaynağa bağlanamaz, kapatılamaz.
+  kaynakKimlik: string;
+}
+
+// "Onay bekliyor" türü bildirim, karar verilince (onay, ret, iptal) kendiliğinden kapanır: kararı yazan modül kendi
+// transaction'ında çağırır, karar geri alınırsa kapanış da kalmaz. Kapatılan satır sayısını döner.
+export async function bildirimKapat(db: Db, k: BildirimKapanisi): Promise<number> {
+  const anahtar = tekilAnahtar(k.tur, k.kaynakKimlik);
+  if (anahtar === null) throw new Error(`Bildirim kapatmak için kaynak kimliği gerekir: ${k.tur}`);
+  return s.kaynaktanOkunduIsaretle(db, anahtar);
+}
+
 export function bildirimListesi(
   db: Db, kullanici: Kullanici, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; durum: BildirimListeDurumu },
 ): Promise<SayfaliListe<Bildirim>> {

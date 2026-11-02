@@ -10,7 +10,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { bildirimGonder, type BildirimOlayi } from './disari.ts';
+import { bildirimGonder, bildirimKapat, type BildirimOlayi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -176,6 +176,22 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Üçüncü', kaynakKimlik: '4' });
     assert.equal((await liste('bakim')).satirlar.length, 2);
     assert.equal((await sayac('bakim')).okunmamis, 1);
+  });
+
+  test('kaynağa bağlı açık bildirim kapatılınca okunur; başka kaynak ve kimliksiz kapanış etkilenmez', async () => {
+    await bosalt();
+    await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu 9', kaynakKimlik: '9' });
+    await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu 10', kaynakKimlik: '10' });
+    assert.equal((await sayac('bakim')).okunmamis, 2);
+    const kapanan = await o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '9' }));
+    assert.ok(kapanan >= 1);
+    assert.equal((await sayac('bakim')).okunmamis, 1);
+    const satirlar = (await liste('bakim')).satirlar;
+    assert.equal(satirlar.find((b) => b.baslik === 'Durdu 9')?.okundu !== null, true);
+    assert.equal(satirlar.find((b) => b.baslik === 'Durdu 10')?.okundu, null);
+    // İkinci kapanış okunmuş satıra dokunmaz.
+    assert.equal(await o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '9' })), 0);
+    await assert.rejects(o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '' })));
   });
 
   test('geçersiz yol ve boş başlık olayı yazmaz', async () => {
