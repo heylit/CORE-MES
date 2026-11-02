@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { degisiklikAlanlari, gizle, gizliAnahtarMi, kimlikParametreleri } from './kurallar.ts';
+import { degisiklikAlanlari, gizle, gizliAnahtarMi, icerenKalibi, kimlikParametreleri } from './kurallar.ts';
 
 test('parola alanları iç içe yapıda da gizlenir; diğer alanlar aynen kalır', () => {
   const girdi = { kullaniciAdi: 'ali', parola: 'gizli1', kisiler: [{ ad: 'A', yeniParola: 'gizli2', adet: 0 }], not: null };
@@ -98,4 +98,9 @@ test('sır özeti sütunu (pin_ozeti, kart_ozeti) değişiklik defterinde maskel
     degisiklikAlanlari({ pin_belirlenecek: { eski: false, yeni: true }, pin_ozeti: { eski: 'scrypt$1', yeni: 'scrypt$2' } }),
     [{ alan: 'pin_belirlenecek', eski: false, yeni: true }, { alan: 'pin_ozeti', eski: '[gizli]', yeni: '[gizli]' }],
   );
+});
+
+test('yol arama kalıbı: parçayı % ile sarar; %, _ ve \\ harf olarak kaçışlanır', () => {
+  assert.equal(icerenKalibi('/kisiler'), '%/kisiler%');
+  assert.equal(icerenKalibi('a%b_c\\d'), '%a\\%b\\_c\\\\d%');
 });

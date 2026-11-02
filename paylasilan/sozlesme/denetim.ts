@@ -4,7 +4,8 @@ import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 export const DENETIM_YONTEMLERI = ['POST', 'PUT', 'DELETE', 'GET'] as const;
 
-// Tarih aralığı iki ucu dahil gündür. Komut yöntem ve yol kalıbıyla birlikte seçilir (ör. POST /kisiler/:id/duzenle).
+// Tarih aralığı iki ucu dahil gündür. `yol` yolun içinde geçen parçayla arar; seçim kutusundaki komut yöntem ve tam yol
+// kalıbıyla (`yolTam=true`) gelir (ör. POST /kisiler/:id/duzenle). Tanınmayan parametre 400 olur, sessizce atılmaz.
 export const kayitListesiSorgusu = z.object({
   ...sayfaSorguAlanlari,
   kisi: z.coerce.number().int().positive().max(2147483647).optional(),
@@ -12,8 +13,9 @@ export const kayitListesiSorgusu = z.object({
   bitis: tarihSemasi.optional(),
   yontem: z.enum(DENETIM_YONTEMLERI).optional(),
   yol: z.string().trim().min(1).max(300).optional(),
+  yolTam: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
   modul: z.string().trim().regex(/^[a-z][a-z0-9-]{0,62}$/).optional(),
-}).superRefine((s, ctx) => {
+}).strict().superRefine((s, ctx) => {
   if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
   }
@@ -78,7 +80,7 @@ export const degisiklikListesiSorgusu = z.object({
       return z.NEVER;
     }
   }).pipe(z.array(kayitSecimi).min(1).max(50)).optional(),
-}).superRefine((s, ctx) => {
+}).strict().superRefine((s, ctx) => {
   if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
   }

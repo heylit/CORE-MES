@@ -112,7 +112,7 @@ describe('DenetimKaydi', () => {
     await waitFor(() => expect(screen.queryByText('Oturumsuz')).toBeNull());
     expect(yollar.some((y) => y.includes('kisi=2'))).toBe(true);
     fireEvent.change(screen.getByLabelText('Komut'), { target: { value: 'POST /oturum/giris' } });
-    await waitFor(() => expect(yollar.some((y) => y.includes('yontem=POST') && y.includes(`yol=${encodeURIComponent('/oturum/giris')}`))).toBe(true));
+    await waitFor(() => expect(yollar.some((y) => y.includes('yontem=POST') && y.includes(`yol=${encodeURIComponent('/oturum/giris')}`) && y.includes('yolTam=true'))).toBe(true));
   });
 
   it('modül süzgeci sunucuya modul olarak gider; ayrıntıda teknik komut da görünür', async () => {
