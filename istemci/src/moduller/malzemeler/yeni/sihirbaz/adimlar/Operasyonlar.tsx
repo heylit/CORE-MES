@@ -173,7 +173,7 @@ function RotaDuzenleyici() {
               </div>
             </>
           ) : (
-            <div className="tc-my-ops-bos"><b>Rota boş</b><span>Soldaki listeden operasyonları sırasıyla seç. Numaralar 10, 20, 30 diye verilir.</span></div>
+            <div className="tc-my-ops-bos"><b>Rota boş</b><span>Operasyon listesinden sırasıyla seç ya da şablondan doldur. Numaralar 10, 20, 30 diye verilir.</span></div>
           )}
         </section>
       </div>

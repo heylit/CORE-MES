@@ -228,23 +228,38 @@
 .tc-my-dar { max-inline-size: 20rem; }
 .tc-my-mtip { display: inline-flex; gap: var(--b-1); align-items: center; font-size: var(--yazi-xs); }
 
-/* Operasyonlar. */
-.tc-my-ops { display: grid; gap: var(--b-4); }
-.tc-my-ops-ust { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: end; justify-content: space-between; }
-.tc-my-ops-govde { display: grid; gap: var(--b-4); grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); align-items: start; }
-.tc-my-ops-turler { display: grid; gap: var(--b-3); max-block-size: var(--ekran-boy-60); overflow: auto; }
-.tc-my-ops-tur { display: grid; gap: var(--b-1); }
-.tc-my-ops-tur h5 { display: flex; gap: var(--b-2); align-items: center; margin: 0; font-size: var(--yazi-s); }
-.tc-my-ops-liste { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
-.tc-my-ops-oge { display: flex; gap: var(--b-2); align-items: center; justify-content: space-between; }
-.tc-my-ops-sec, .tc-my-ops-sablon, .tc-my-ops-rota { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
-.tc-my-ops-bos { color: var(--muted); }
-.tc-my-ops-numara, .tc-my-opno { font-family: var(--font-mono); white-space: nowrap; }
+/* Operasyonlar: solda seçim (tip ve operasyon listesi), sağda rota; dar alanda seçim üstte, rota altta. Her bölüm dikey akar. */
+.tc-my-ops { display: grid; gap: var(--b-6); grid-template-columns: minmax(0, 30rem) minmax(0, 1fr); align-items: start; }
+.tc-my-ops-sec, .tc-my-ops-rota { display: grid; gap: var(--b-3); align-content: start; min-width: 0; }
+.tc-my-ops-ust { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: baseline; }
+.tc-my-ops-ust small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-my-ops-govde { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); align-items: start; }
+.tc-my-ops-turler, .tc-my-ops-liste { display: grid; gap: var(--b-1); max-block-size: var(--ekran-boy-60); overflow: auto; }
+.tc-my-ops-tur, .tc-my-ops-oge {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-2); align-items: center; inline-size: 100%; min-block-size: var(--dokunma);
+  padding: var(--b-1) var(--b-2); font: inherit; font-size: var(--yazi-s); color: var(--ink); text-align: left;
+  background: var(--panel-solid); border: thin solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
+}
+.tc-my-ops-tur:hover, .tc-my-ops-oge:hover { border-color: var(--ink); }
+.tc-my-ops-tur[aria-pressed='true'] { border-color: var(--ink); background: var(--panel2); font-weight: 600; }
+.tc-my-ops-tur span, .tc-my-ops-oge span { min-width: 0; overflow-wrap: anywhere; }
+.tc-my-ops-tur small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-my-ops-oge b { font-family: var(--font-mono); }
+.tc-my-ops-oge em { font-style: normal; color: var(--run); font-variant-numeric: tabular-nums; }
+.tc-my-ops-sablon { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+.tc-my-ops-bos { display: grid; gap: var(--b-1); padding: var(--b-4); color: var(--muted); border: thin dashed var(--edge); border-radius: var(--yari-2); }
+.tc-my-ops-bos b { color: var(--ink); }
+.tc-my-ops-numara { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; justify-content: space-between; }
+.tc-my-opno { font-family: var(--font-mono); white-space: nowrap; }
 .tc-my-opad { min-width: 0; overflow-wrap: anywhere; }
 .tc-my-sira { display: flex; gap: var(--b-1); }
-@media (width < 1100px) {
+@container (width < 900px) {
+  .tc-my-ops { grid-template-columns: minmax(0, 1fr); }
+}
+@container (width < 520px) {
   .tc-my-ops-govde { grid-template-columns: minmax(0, 1fr); }
-  .tc-my-ops-turler { max-block-size: none; }
+  .tc-my-ops-turler { display: flex; flex-wrap: wrap; max-block-size: none; }
+  .tc-my-ops-turler .tc-my-ops-tur { inline-size: auto; }
 }
 
 /* Sağdaki föy önizlemesi ve son adımdaki tam föy, ortak Föy bileşeninin kabı. */
