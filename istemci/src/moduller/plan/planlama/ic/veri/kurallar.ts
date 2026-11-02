@@ -89,13 +89,16 @@ export type PlanJ = Record<string, { C: number | null; T: number | null }>;
 export function siparisSuz(l: readonly Siparis[], J: PlanJ, f: SiparisSuzgeci, ara: string, urunAd: (id: string) => string = (id) => id): Siparis[] {
   const q = ara.trim().toLocaleLowerCase('tr-TR');
   return l.filter((s) => {
+    if (f !== 'hepsi' && s.iptal === true) return false;
     if (f === 'gec') { const j = J[s.id]; if (!j || !(j.T == null || j.T > 0.01)) return false; }
     if (f === 'yuksek' && s.oncelik !== 1) return false;
     return !q || `${s.id} ${s.urun} ${urunAd(s.urun)}`.toLocaleLowerCase('tr-TR').includes(q);
   });
 }
 export type SiparisDurumu = { ad: string; ton: 'pasif' | 'hata' | 'tamam' } | null;
-export function siparisDurumu(J: PlanJ | null, id: string): SiparisDurumu {
+// 1892 b: iptal edilen emir listede "İptal" durumuyla kalır; planın (eskimiş olsa da) sonucu ona yazılmaz.
+export function siparisDurumu(J: PlanJ | null, id: string, iptal = false): SiparisDurumu {
+  if (iptal) return { ad: 'İptal', ton: 'pasif' };
   if (!J) return null;
   const j = J[id];
   if (!j) return { ad: 'Planda yok', ton: 'pasif' };

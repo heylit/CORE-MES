@@ -195,6 +195,8 @@ function rrCevir(st) {
     else if (o.serbestSaat && a.serbest && rrSaat(a.serbest) !== o.serbestSaat) y.serbest = o.start !== bas ? o.start + ' ' + o.serbestSaat : null;
     if (!a || a.oncelik !== oncSinifi(o.priority)) y.oncelik = oncSinifi(o.priority);
     if (!a || !!a.havuz !== (o.status === 'taslak')) { if (o.status === 'taslak') y.havuz = true; else if (a && 'havuz' in a) y.havuz = false; }
+    /* 1892 b: iptal edilen emir çalışmada "iptal" işaretiyle kalır (sayfa gösterir, hesaba katmaz); işaret değişince plan eskir */
+    if (!a || !!a.iptal !== (o.status === 'iptal')) { if (o.status === 'iptal') y.iptal = true; else if (a && 'iptal' in a) y.iptal = false; }
     if (!a || (a.ad || '') !== (o.note || '')) y.ad = o.note || o.no || o.id;
     if (!a) Object.assign(y, { gelir: null, cezaGun: null });
     /* 1473 a: siparişin malzemesi rotanın bütün adımlarının hammaddesidir (yalnız ilk adımınki değil); her satır tükettiği adımın anahtarını
@@ -223,7 +225,7 @@ function rrCevir(st) {
     /* sayfanın eklediği alanlar (ağırlık, elle öncelik) önceki kopyada (d.plan) kalır; sunucunun alanları her okumada yeniden yazılır */
     dugumSiparisleri.push(rrKur(d.plan || null, {
       id: dugumSipId(o, d.dugum), urun: d.itemId, adet: +o.qty * +d.carpan, termin: bagli ? null : ana.termin ?? null, serbest: ana.serbest ?? null,
-      oncelik: ana.oncelik ?? oncSinifi(o.priority), havuz: ana.havuz ? true : undefined, ad: (ana.ad || o.no || o.id) + ' ' + d.dugum,
+      oncelik: ana.oncelik ?? oncSinifi(o.priority), havuz: ana.havuz ? true : undefined, iptal: ana.iptal ? true : undefined, ad: (ana.ad || o.no || o.id) + ' ' + d.dugum,
       gelir: null, cezaGun: null, malzeme: mal, dugum: d.dugum,
       ust: bagli ? (d.ust === '0' ? String(o.id) : dugumSipId(o, d.ust)) : undefined, ustAdim: bagli ? String(ustAdim) : undefined, birim: bagli ? +d.birim : undefined,
       dugumBiten: biten.length ? biten : undefined,
@@ -423,7 +425,7 @@ function tmiCalisanlar(durum, st, D, now) {
 /* Ürün, malzeme, rota ve emrin sahibi Malzemeler, Rota ve Üretim Emirleri'dir. Reçete ve Rota çerçevesi bunları kayda yazmaz (kayıtta
    bağlanmadan önceki yerel emirler kalır, kart #1185); planlama sayfası da sunucu çözücüsü de kaynak okumasındaki güncel dilimleri kaydın
    üstüne koyar (13.1: sonradan açılan emir plana girer). Okunamayan dilim (yetki yok) kayıttaki gibi kalır. Biten ve iptal edilen emir
-   çalışmada kalır, motorun girdisinden düşer (tmiBitenler). Tezgâh, ürün ve emrin motor ayarları (plan alt nesnesi) önce açık çalışmadan (planlama sayfasının düzenlediği), yoksa
+   (iptal işaretiyle, 1892 b) çalışmada kalır, motorun girdisinden düşer (tmiBitenler). Tezgâh, ürün ve emrin motor ayarları (plan alt nesnesi) önce açık çalışmadan (planlama sayfasının düzenlediği), yoksa
    kayıttan alınır. */
 function sunucuKaydi(kayit, durum, D0, bugun) {
   const k = rrKopya(kayit && kayit.items ? kayit : TMI_BOS_KAYIT);
@@ -641,8 +643,8 @@ const MOTOR_KURALI = new Set(['atcs', 'oncelik', 'edd', 'cr', 'spt', 'fifo']);
 function stKur(S, ek = [], gevset = true) {
   const D = clone(S.D);
   D.ayarlar = D.ayarlar || {};
-  /* havuzdaki sipariş plana henüz alınmamıştır; motor onu görmez */
-  D.siparisler = D.siparisler.filter(s => !s.havuz);
+  /* havuzdaki sipariş plana henüz alınmamıştır, iptal edilen emir plana girmez (1892 b); motor ikisini de görmez */
+  D.siparisler = D.siparisler.filter(s => !s.havuz && !s.iptal);
   const st = {
     D, now: 7, down: S.down.map((d, i) => ({ ...d, id: 'd' + i })), ekMesai: clone(S.ekMesai), eksik: [],
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: clone(S.ogren || {}),

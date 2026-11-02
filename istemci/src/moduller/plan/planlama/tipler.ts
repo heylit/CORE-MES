@@ -39,10 +39,15 @@ export interface Siparis extends ExtraAlanlar {
   serbest?: string | null;
   oncelik?: number;
   havuz?: boolean;
+  // 1892 b: Üretim Emirleri'nde iptal edilen emir çalışmada bu işaretle kalır (girdi.betik rrCevir); plana ve hesaplara girmez.
+  iptal?: boolean;
   gelir?: number | null;
   cezaGun?: number | null;
   malzeme?: { kod: string; miktar: number }[];
 }
+
+// Planın dışındaki sipariş: havuzdaki (taslak, teklif) ya da iptal edilen. Plan, maliyet, malzeme ve gecikme hesapları bunları saymaz.
+export const planDisi = (s: Pick<Siparis, 'havuz' | 'iptal'>): boolean => s.havuz === true || s.iptal === true;
 
 // Tezgâh (makine). `grup` istasyondur; ücret okunamazsa null (69 a: sıfır uydurulmaz). Kimlik veritabanı anahtarıdır: ekran tezgâhı
 // `kod`, grubu `grupKod` ve `grupAd` ile yazar (1786 PLN-7); eski kayıtta yoksa kimlik yazılır.

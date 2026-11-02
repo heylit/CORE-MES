@@ -786,7 +786,7 @@ export function ufukVerisi(c: PlanlamaCalismasi, z: Zaman, ongoruGoster: boolean
   const urunOf = Object.fromEntries(D.urunler.map((u) => [u.id, u]));
   const kaba: UfukKabasi[] = [];
   for (const s of D.siparisler) {
-    if (planli.has(s.id)) continue;
+    if (planli.has(s.id) || s.iptal === true) continue;
     const u = urunOf[s.urun]; const due = saatOku(z, s.termin);
     if (!u || due === null) continue;
     let r = geriZamanla(cal, u, n(s.adet), due, A.kuyruk, tezOf, fsOf, gunH); let gec = 0;

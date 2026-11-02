@@ -4,6 +4,7 @@ import type { PgAdim } from '../../motor/atolye/kurallar.ts';
 import type { Bolge, Kamera } from '../../motor/harita/kurallar.ts';
 import { ayristir, isAgirligi, type Derleme, type OkunanPlan, type PlanIslemi, type SureKategorisi } from '../../motor/kurallar.ts';
 import type { RotaAdimi, Urun } from '../../tipler.ts';
+import { planDisi } from '../../tipler.ts';
 
 // Tahta kartları (zc-tahta TK_TUR, ze-rota): Başka menüsünün okumaları haritanın üstüne bırakılan kartlardır; dünya koordinatında durur,
 // haritayla kayar, tutulup taşınır, küçültülür, kapatılır. Kartın tahtadaki boyu sabit bir yakınlığa göredir (KREF): her kartın belli bir yeri olur.
@@ -139,7 +140,7 @@ export interface PlanKarti { late: number; n: number; wT: number; en: { m: strin
 export function planKarti(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): PlanKarti {
   const m: Record<string, { v: number; j: Set<string> }> = {};
   for (const s of c.D.siparisler) {
-    const J = p.J[s.id]; if (s.havuz || !J || !((J.T ?? 0) > 0.05)) continue; const a = ayristir(p, cx, s.id); if (!a || a === 'eksik') continue;
+    const J = p.J[s.id]; if (planDisi(s) || !J || !((J.T ?? 0) > 0.05)) continue; const a = ayristir(p, cx, s.id); if (!a || a === 'eksik') continue;
     for (const [k, ad, v] of a.kaynak) if (k === 'tezgah') { const e = (m[ad] ??= { v: 0, j: new Set() }); e.v += v; e.j.add(s.id); }
   }
   const en = Object.entries(m).sort((a, b) => b[1].v - a[1].v)[0];
@@ -162,7 +163,7 @@ export function bitisFarki(p: OkunanPlan, canli: Record<string, PgAdim> | null):
   return out;
 }
 export function siparisSatirlari(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, suz: SiparisSuzgeci, sira: SiparisSirasi, fark: Record<string, number>): SiparisSatiri[] {
-  let l = c.D.siparisler.filter((x) => !x.havuz && p.J[x.id]);
+  let l = c.D.siparisler.filter((x) => !planDisi(x) && p.J[x.id]);
   if (suz === 'gec') l = l.filter((x) => (p.J[x.id]?.T ?? 0) > 0.05); else if (suz === 'degisen') l = l.filter((x) => fark[x.id] != null);
   const satir = l.map((x): SiparisSatiri => {
     const J = p.J[x.id]; const a = ayristir(p, cx, x.id); let belirleyen: SiparisSatiri['belirleyen'] = null;
@@ -206,7 +207,7 @@ export interface AgBagi { a: string; b: string; k: SureKategorisi; v: number; d:
 export interface EtkiAgi { W: number; H: number; x: [number, number, number]; tur: AgDugumu[]; kaynak: AgDugumu[]; is: AgDugumu[]; bag: AgBagi[] }
 export function etkiAgi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): EtkiAgi | null {
   const A: Record<string, [SureKategorisi, string, number][]> = {};
-  const gec = c.D.siparisler.filter((x) => !x.havuz && (p.J[x.id]?.T ?? 0) > 0.05)
+  const gec = c.D.siparisler.filter((x) => !planDisi(x) && (p.J[x.id]?.T ?? 0) > 0.05)
     .map((x) => { const a = ayristir(p, cx, x.id); if (a && a !== 'eksik') A[x.id] = a.kaynak; return x.id; })
     .filter((j) => A[j]).sort((a, b) => (p.J[b]?.T ?? 0) - (p.J[a]?.T ?? 0)).slice(0, 10);
   if (!gec.length) return null;
@@ -242,7 +243,7 @@ export interface PlanOlcusu { wT: number | null; late: number | null; Cmax: numb
 function gecikmeOlcusu(c: PlanlamaCalismasi, cx: Derleme, C: Record<string, number>): { wT: number; late: number } {
   let wT = 0, late = 0;
   for (const s of c.D.siparisler) {
-    const b = C[s.id]; const due = cx.jobs[s.id]?.due; if (s.havuz || b == null || due == null) continue;
+    const b = C[s.id]; const due = cx.jobs[s.id]?.due; if (planDisi(s) || b == null || due == null) continue;
     const T = b - due; if (T > 0.05) { late++; wT += T * isAgirligi(s); }
   }
   return { wT, late };

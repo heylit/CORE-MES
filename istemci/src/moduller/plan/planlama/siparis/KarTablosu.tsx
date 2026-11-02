@@ -7,6 +7,7 @@ import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, YOK, type SiparisMali
 import { MotorNotu } from './IsiHaritasi.tsx';
 import { KAR_ORANLARI, hedefKarOrani, onerilenFiyat, saat, sayi, tl, urunAdi, type KayitliPlan } from './kurallar.ts';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
+import { planDisi } from '../tipler.ts';
 
 // "Siparişler: maliyet ve kâr" (zu-yan-sayfalar sSiparisKar): gösterge satırı, toplu fiyat, sipariş tablosu, alt not. Tutar, vade ve hedef kâr
 // oranı çalışmanın kendi alanlarıdır, burada yazılır (karar 180). Maliyet, bekleme ve gecikme bedeli Maliyetler (P3) hesabıyla plandan çıkar
@@ -37,7 +38,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
   if (!c || !p) return <Kart baslik={BASLIK} simge="list"><p className="tc-pys-kucuk">Maliyet plandan çıkar (tezgâh, ayar, fason). Önce plan kurulmalı.</p></Kart>;
   const D = c.D;
   const b = maliyetBaglami(c, emirler);
-  const satirlar: Satir[] = D.siparisler.filter((s) => !s.havuz).map((s) => ({ s, x: b ? siparisMaliyeti(b, s) : null }));
+  const satirlar: Satir[] = D.siparisler.filter((s) => !planDisi(s)).map((s) => ({ s, x: b ? siparisMaliyeti(b, s) : null }));
   const top = (f: (x: SiparisMaliyeti) => number | null): number => satirlar.reduce((a, r) => a + (r.x ? f(r.x) ?? 0 : 0), 0);
   const tutar = top((x) => x.tutar); const maliyet = top((x) => x.top); const gec = top((x) => x.gec); const net = top((x) => x.net);
   const W = b?.W ?? null; const wa = wipAyar(D);

@@ -20,6 +20,7 @@ import {
   agYakinlari, bitisFarki, canliOlcu, etkiAgi, GECIS_AD, gecisTuru, KUYRUK_GOSTERIM, kuyrukGrubu, kuyrukGruplari, kuyrukListesi, OLCU_SIRASI, planKarti,
   rotaRecetesi, rotaUrunu, siparisSatirlari, simdikiOlcu, TUR_AD, type KartTuru, type OlcuAnahtari, type PlanOlcusu, type SiparisSirasi, type SiparisSuzgeci,
 } from './kurallar.ts';
+import { planDisi } from '../../tipler.ts';
 
 // Kartların gövdeleri (z-komuta kmPlan; za-merkez mzSiparis, mzKuyruk, mzAg). Okurlar; çalışmaya yazan tek yol kararların eylemidir (eylem.ts).
 // Motor isteyen hamleler (öne al, öncelik, sürükleyip sıralama, planı toparla) görünür ve pasiftir (357 b).
@@ -445,7 +446,7 @@ function RotaGovdesi({ b }: { b: KartBaglami }) {
   const sj = b.secim.adim ? p.ops[b.secim.adim]?.job ?? null : b.secim.siparis;
   const u = rotaUrunu(c, sj, b.rotaUrun);
   if (!u) return <p className="tc-pym-kucuk-yazi">Ürün yok.</p>;
-  const kul = D.siparisler.filter((x) => x.urun === u.id && !x.havuz).length; const rec = rotaRecetesi(c, u); const rota = u.rota ?? [];
+  const kul = D.siparisler.filter((x) => x.urun === u.id && !planDisi(x)).length; const rec = rotaRecetesi(c, u); const rota = u.rota ?? [];
   const malz = (kod: string) => (D.malzemeler ?? []).find((x) => x.kod === kod);
   const fason = (id: string) => (D.fasoncular ?? []).find((f) => f.id === id)?.ad ?? id;
   const ust = (k: string | null, m: string | null) => () => b.rotaUst({ k, m });

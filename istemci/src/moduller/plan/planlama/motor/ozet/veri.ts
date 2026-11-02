@@ -2,6 +2,7 @@ import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import {
   ayristir, donemAraligi, KATEGORI_AD, nabizOlc, saatYaz, saKisa, sayiEki, type Derleme, type Donem, type OkunanPlan, type PlanIslemi, type SureKategorisi,
 } from '../kurallar.ts';
+import { planDisi } from '../../tipler.ts';
 
 // Özet'in hesabı (zf-resim.betik brVeri ve bölgeleri, zs-olcek-ortak dönem): bütün hesap tek yerde, seçili dönemle. Metin parçası
 // düz yazı ya da kalın (`{ b }`); eski sayfanın <b> vurgusu.
@@ -43,7 +44,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
   const tezGrup = new Map(D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger']));
   const grup = (m: string) => (m.startsWith('@') ? 'fason' : tezGrup.get(m) ?? 'diger');
   const urunAd = new Map(D.urunler.map((u) => [u.id, u.ad ?? u.id]));
-  const isler0 = D.siparisler.filter((s) => !s.havuz && p.J[s.id] && cx.jobs[s.id]);
+  const isler0 = D.siparisler.filter((s) => !planDisi(s) && p.J[s.id] && cx.jobs[s.id]);
   const eksik = (id: string) => (cx.jobs[id]?.ops ?? []).filter((o) => { const r = p.ops[o.id]; return !r || !Number.isFinite(r.S) || !Number.isFinite(r.C); }).length;
   const yok = isler0.map((s) => ({ id: s.id, adim: eksik(s.id) })).filter((x) => { const C = p.J[x.id]?.C; return x.adim > 0 || C == null || !Number.isFinite(C); });
   const isler = isler0.filter((s) => !yok.some((x) => x.id === s.id));

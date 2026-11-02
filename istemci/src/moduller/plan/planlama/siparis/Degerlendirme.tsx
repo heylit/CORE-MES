@@ -189,7 +189,9 @@ export function TerminSecenekleri({ cevap }: { cevap: DegerlendirmeCevabi<'termi
   );
 }
 
-export function TeklifKarti({ siparisler, degerlendir, yenile }: { siparisler: PlanVerisi['siparisler']; degerlendir: Degerlendirici | null; yenile: () => void }) {
+export function TeklifKarti({ siparisler: hepsi, degerlendir, yenile }: { siparisler: PlanVerisi['siparisler']; degerlendir: Degerlendirici | null; yenile: () => void }) {
+  // 1892 b: iptal edilen emre söz tarihi denenmez
+  const siparisler = hepsi.filter((s) => s.iptal !== true);
   const ilk = (siparisler.find((s) => s.havuz) ?? siparisler[0])?.id ?? '';
   const [id, idYaz] = useState(ilk);
   const tid = siparisler.some((s) => s.id === id) ? id : ilk;

@@ -13,6 +13,7 @@ import { degisken, HAZIRLANIYOR, MetinYaz, MOTOR_NOTU, YOK_NOTU } from '../ortak
 import { IsDenetci, OpDenetci, TezgahDenetci } from './Denetci.tsx';
 import { Dg } from './Dugme.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
+import { planDisi } from '../../tipler.ts';
 
 // Çizelgenin yan panelleri (t-tekyer.betik solPanel ve sagPanel): solda sepet ve havuz, sağda yardımcı (zz24-sade sdYardimci, altında
 // teknik ayrıntı) ve ayrıntı (n-karar.betik kararPaneli). Motor isteyen düğme görünür ve pasiftir (357 b), nedeni ipucunda.
@@ -64,8 +65,8 @@ function Sepet({ p, planYaz }: SolOzellikleri) {
 // Havuz (t-tekyer.betik havuzGovde): sürükleme kapalı (459/4 a); havuzdan plana almak ve havuza atmak motorla yeniden kurulur.
 function Havuz({ c, planYaz, secJob }: SolOzellikleri) {
   const [sec, setSec] = useState<string | null>(null);
-  const l = c.D.siparisler.filter((s) => s.havuz);
-  const secJ = secJob ? c.D.siparisler.find((s) => s.id === secJob && !s.havuz) : undefined;
+  const l = c.D.siparisler.filter((s) => s.havuz && !s.iptal);
+  const secJ = secJob ? c.D.siparisler.find((s) => s.id === secJob && !planDisi(s)) : undefined;
   const urunAd = (u: string) => c.D.urunler.find((x) => x.id === u)?.ad ?? u;
   return (
     <>
@@ -122,7 +123,7 @@ export function SagPanel(o: SagOzellikleri) {
 // olduğundan "Son yaptıklarınız" çıkmaz.
 type Gorev = [SimgeAdi, string, string, (() => void) | null, string];
 function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }: SagOzellikleri) {
-  const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !s.havuz && s.termin != null).length; const g = gec[0];
+  const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !planDisi(s) && s.termin != null).length; const g = gec[0];
   const durum: [SimgeAdi, string, string, string][] = [];
   if (!guncel) durum.push(['rotate', 'uyari', 'Veri plandan sonra değişti.', 'Gösterilen saatler eski. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.']);
   if (!g) durum.push(top ? ['check', 'tamam', `Termini olan ${top} siparişin hepsi zamanında bitiyor.`, ''] : ['flag', 'bilgi', 'Termini olan sipariş yok.', '']);
@@ -163,7 +164,7 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }
 function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec, veriAc, hesapAc }: SagOzellikleri) {
   const { bildir } = useBildirim();
   const [sabitOnay, setSabitOnay] = useState(false);
-  const dg = dengeAl(c); const el = elleSayilari(c); const kap = c.kapali.length; const nHav = c.D.siparisler.filter((s) => s.havuz).length;
+  const dg = dengeAl(c); const el = elleSayilari(c); const kap = c.kapali.length; const nHav = c.D.siparisler.filter((s) => s.havuz && !s.iptal).length;
   const bul = useMemo(() => veriDenetimi(c, cx), [c, cx]); const ciddi = bul.filter((b) => ['personel', 'tezgah', 'hata'].includes(b.k)).length;
   const es = c.ekipSon && typeof c.ekipSon === 'object' ? (c.ekipSon as { wT?: unknown }) : null; const esT = typeof es?.wT === 'number' ? es.wT : null;
   const dengeSec = (v: Denge) => {

@@ -1,6 +1,7 @@
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, AY_AD, ayristir, saatYaz, sayiYaz, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { planDisi } from '../../tipler.ts';
 
 // Tezgâh haritası (y-atolye.betik, o-tahta tbYerlesim, x-resim rsDoluluk, zs-olcek-ortak, zm-ozet, zo-kontrol, z-komuta): saf hesaplar.
 // Dünya ölçüleri eski sayfanınkidir; çizim Harita.tsx'te.
@@ -234,7 +235,7 @@ export const gecMetin = (h: number | null): string => (h == null || !Number.isFi
 export interface BitisIzi { id: string; x: number; ln: number; gec: boolean; C: number; T: number | null; due: number | null }
 export function bitisIzleri(D: PlanVerisi, s: Sahne, cx: Derleme): { ic: BitisIzi[]; ote: string[] } {
   const now = s.now; const W = s.son - now;
-  const l = D.siparisler.filter((x) => !x.havuz && s.J[x.id] && Number.isFinite(s.J[x.id]?.C ?? Number.NaN))
+  const l = D.siparisler.filter((x) => !planDisi(x) && s.J[x.id] && Number.isFinite(s.J[x.id]?.C ?? Number.NaN))
     .map((x) => ({ id: x.id, C: s.J[x.id]?.C ?? 0, T: s.J[x.id]?.T ?? null, due: cx.jobs[x.id]?.due ?? null })).sort((a, b) => a.C - b.C);
   const sira = [-1e9, -1e9, -1e9]; const ic: BitisIzi[] = [];
   for (const o of l.filter((z) => z.C <= now + W)) {
@@ -254,7 +255,7 @@ export interface GecikmeEtkisi { m: Record<string, { v: number; j: Set<string> }
 export function gecikmeEtkisi(D: PlanVerisi, p: OkunanPlan, cx: Derleme): GecikmeEtkisi {
   const m: GecikmeEtkisi['m'] = {};
   for (const x of D.siparisler) {
-    const J = p.J[x.id]; if (x.havuz || !J || !((J.T ?? 0) > 0.05)) continue; const a = ayristir(p, cx, x.id); if (!a || a === 'eksik') continue;
+    const J = p.J[x.id]; if (planDisi(x) || !J || !((J.T ?? 0) > 0.05)) continue; const a = ayristir(p, cx, x.id); if (!a || a === 'eksik') continue;
     for (const [k, ad, v] of a.kaynak) if (k === 'tezgah') { const e = (m[ad] ??= { v: 0, j: new Set() }); e.v += v; e.j.add(x.id); }
   }
   return { m, en: Math.max(0, ...Object.values(m).map((e) => e.v)) };

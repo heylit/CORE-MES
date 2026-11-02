@@ -1,6 +1,7 @@
 import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../tipler.ts';
 import type { Metin } from './ozet/veri.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
+import { planDisi } from '../tipler.ts';
 
 // P1'in saf hesapları. Plan saat eksenlidir: 0, D.meta.baslangic günü 00:00 duvar saatidir (engine.betik baseMs, parseT, fmtDT).
 // Motor burada koşmaz (357 b); kayıttaki çözülmüş plan okunur. Eski sayfanın tarayıcıda motorun derlemesinden (compile) aldığı takvim,
@@ -223,7 +224,7 @@ export function plandanBitenler(c: PlanlamaCalismasi, p: OkunanPlan | null): Bit
 // 1786 (PLN-3): planda yeri olmayan açık siparişler (plan kurulduktan sonra gelen ya da motorun yerleştiremediği); havuzdaki ve biten düşer.
 // Atölye listesi bunları "geç" satırı gösterir; sayılar (çubuk, kontrol, onaya gönder) aynı tanımla sayar.
 export function yerlesmeyenSiparisler(c: PlanlamaCalismasi, p: OkunanPlan, bit: Bitenler): string[] {
-  return c.D.siparisler.filter((s) => !s.havuz && !bit.siparis.has(s.id) && p.J[s.id]?.C == null).map((s) => s.id);
+  return c.D.siparisler.filter((s) => !planDisi(s) && !bit.siparis.has(s.id) && p.J[s.id]?.C == null).map((s) => s.id);
 }
 
 // Planın girdisi (girdi.betik stKur, simdiUygula): verinin kopyası; havuzdaki ve biten sipariş düşer, kapalı kısıtın gevşetmesi ve olaylar
@@ -253,7 +254,7 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
 export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new Set(), adim: new Set() }): Girdi {
   const D = structuredClone(c.D) as Girdi['D'];
   D.ayarlar = nesne(D.ayarlar) ? D.ayarlar : {};
-  D.siparisler = D.siparisler.filter((s) => !s.havuz && !biten.siparis.has(s.id));
+  D.siparisler = D.siparisler.filter((s) => !planDisi(s) && !biten.siparis.has(s.id));
   const g: Girdi = { D, now: simdiSaati(c), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
   for (const d of c.down) { const m = metin(d.m), a = sayi(d.from), b = sayi(d.to); if (m !== null && a !== null && b !== null) g.down.push({ m, from: a, to: b }); }
   for (const e of c.ekMesai) { const m = metin(e.m), gun = sayi(e.gun), v = metin(e.vardiya); if (m !== null && gun !== null && v !== null) g.ekMesai.push({ m, gun, vardiya: v }); }
@@ -436,7 +437,7 @@ export function donemKumesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, r:
   const k = new Set<string>();
   for (const s of c.D.siparisler) {
     const J = p.J[s.id], j = cx.jobs[s.id];
-    if (s.havuz || !J || !j) continue;
+    if (planDisi(s) || !J || !j) continue;
     const C = J.C ?? Number.NaN; const bas = ilk[s.id] ?? (Number.isFinite(C) ? C : null);
     const son = Math.max(Number.isFinite(C) ? C : bas ?? 0, j.due ?? -Infinity);
     if ((bas == null || bas < r.b) && son > r.a) k.add(s.id);
@@ -642,7 +643,7 @@ export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
   if (ev.tip === 'fason') return `${String(ev.f)} teslim süresi +${String(ev.gun)} gün`;
   // Süre sapması açıkça yazılır (Soru 494 b): ürün ve adım ya da tek adım, çarpan, etkilenen sipariş sayısı.
   if (ev.tip === 'sure') {
-    const u = D.urunler.find((x) => x.id === ev.urun); const n = D.siparisler.filter((j) => !j.havuz && j.urun === ev.urun).length;
+    const u = D.urunler.find((x) => x.id === ev.urun); const n = D.siparisler.filter((j) => !planDisi(j) && j.urun === ev.urun).length;
     return `${u?.ad ?? String(ev.urun)}, adım ${String(ev.k)}: süre ×${sayiYaz(Number(ev.oran), 2)} (${String(n)} sipariş)`;
   }
   if (ev.tip === 'sureOp') return `${String(ev.id)}: süre ×${sayiYaz(Number(ev.oran), 2)}`;
@@ -696,7 +697,7 @@ export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, gunce
 export interface Geciken { s: Siparis; T: number | null; C: number | null }
 export function gecikenler(c: PlanlamaCalismasi, p: OkunanPlan): Geciken[] {
   const l: Geciken[] = [];
-  for (const s of c.D.siparisler) { const j = p.J[s.id]; if (!s.havuz && j && (j.T == null || j.T > 0.01)) l.push({ s, T: j.T, C: j.C }); }
+  for (const s of c.D.siparisler) { const j = p.J[s.id]; if (!planDisi(s) && j && (j.T == null || j.T > 0.01)) l.push({ s, T: j.T, C: j.C }); }
   return l.sort((a, b) => (b.T ?? 1e9) - (a.T ?? 1e9));
 }
 export const DENGE = {

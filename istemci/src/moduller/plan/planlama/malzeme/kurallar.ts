@@ -1,5 +1,6 @@
 import type { Malzeme, PlanlamaCalismasi, PlanVerisi, Siparis, Urun } from '../tipler.ts';
 import { hucreKoy, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiUstDurumu } from '../ortak/isi/index.ts';
+import { planDisi } from '../tipler.ts';
 
 // Malzeme satın alma planının hesabı (224 a: MRP Planlama'nındır; 205 a: saf işlev). Eski ekranın zt-malzeme-plan.betik'i ve motorun
 // matAlloc ile satinalmaListe'si (sunucu/moduller/plan/motor/engine.betik), satın alma planı zv-termin.betik'i aynı kuralla
@@ -266,7 +267,7 @@ export function malzemePlani(g: MrpGirdisi, taban: number, tahsis: Tahsis = tahs
     const fiyat = typeof bf === 'number' && Number.isFinite(bf) ? bf : null;
     return { ...s, fiyat, tutar: fiyat === null ? null : fiyat * s.q, gecikti: s.tur === 'yeni' && s.alim < g.simdi };
   });
-  const plansiz = g.siparisler.filter((s) => s.havuz === true || !planda.has(s.id)).length;
+  const plansiz = g.siparisler.filter((s) => s.iptal !== true && (s.havuz === true || !planda.has(s.id))).length;
   return { satirlar, plansiz, fiyatsiz: [...new Set(satirlar.filter((s) => s.fiyat === null).map((s) => s.kod))] };
 }
 
@@ -629,7 +630,7 @@ export interface MotorGirdisiKaynagi {
 export function motorGirdisi(k: MotorGirdisiKaynagi): MrpGirdisi {
   const mats = new Map(k.malzemeler.map((m) => [m.kod, m]));
   const ted = tedarikciGecikmeleri(k.D);
-  const siparisler = k.D.siparisler.filter((s) => s.havuz !== true && !k.biten.siparis.has(s.id)).map((s): Siparis => {
+  const siparisler = k.D.siparisler.filter((s) => !planDisi(s) && !k.biten.siparis.has(s.id)).map((s): Siparis => {
     if (!s.malzeme) return s;
     return { ...s, malzeme: s.malzeme.map((r) => { const f = sayiOku(mats.get(r.kod)?.fire); return f > 0 ? { ...r, miktar: sayiOku(r.miktar) * (1 + f / 100) } : r; }) };
   });

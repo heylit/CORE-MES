@@ -6,6 +6,7 @@ import {
 import type { Metin } from '../../motor/ozet/veri.ts';
 import type { PlanlamaCalismasi, Siparis } from '../../tipler.ts';
 import { alanYaz } from '../hesap/kurallar.ts';
+import { planDisi } from '../../tipler.ts';
 
 // Bugünün kararları (u-bugun.betik): planlamacının günlük akışı. Hesap motorun kayıttaki planından; ekran yalnız sırayı ve dili değiştirir:
 // önce gelenler, sonra karar bekleyenler, sonra bu oturumda yapılanların dökümü, en son yayın.
@@ -50,7 +51,7 @@ export function gelenler(c: PlanlamaCalismasi, cx: Derleme, guncel: boolean, now
   if (!guncel) {
     ekle({ id: 'eski', ton: 'uyari', simge: 'alert', baslik: 'Veri değişti, plan eski', metin: ['Plan kurulduktan sonra veri ya da olay değişti. Saatler gerçeği yansıtmayabilir.'], eylemler: [eylem('Planı güncelle', 'ekip', '', true)] });
   }
-  for (const s of D.siparisler.filter((x) => x.havuz)) {
+  for (const s of D.siparisler.filter((x) => x.havuz && !x.iptal)) {
     ekle({
       id: `h${s.id}`, job: s.id, ton: 'bilgi', simge: 'box', baslik: `${s.id} plana alınmadı`,
       metin: [`${urunAd(c, s)}, ${sayiYaz(Number(s.adet) || 0)} adet, termin ${terminKisa(s)}. Plana almadan önce söz tarihine bakabilirsiniz.`],
@@ -79,7 +80,7 @@ export function gelenler(c: PlanlamaCalismasi, cx: Derleme, guncel: boolean, now
 // Termine yetişmeyen siparişler, gecikme × öncelik ağırlığıyla en ağırdan; planlanamayan en ağır sayılır.
 export function kararlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): BugunKarti[] {
   const D = c.D; const kay = gecikmeKaynaklari(c, p, cx); const km = kabulEdilenler(c); const out: BugunKarti[] = [];
-  const gec = D.siparisler.filter((s) => !s.havuz).map((s) => ({ s, j: p.J[s.id] }))
+  const gec = D.siparisler.filter((s) => !planDisi(s)).map((s) => ({ s, j: p.J[s.id] }))
     .filter((x): x is { s: Siparis; j: NonNullable<typeof x.j> } => !!x.j && (x.j.T == null || x.j.T > 0.05))
     .sort((a, b) => (b.j.T ?? 1e4) * isAgirligi(b.s) - (a.j.T ?? 1e4) * isAgirligi(a.s));
   for (const { s, j } of gec) {
@@ -105,7 +106,7 @@ export function kararlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): Bugu
 
 export function durumCumlesi(c: PlanlamaCalismasi, p: OkunanPlan, bekleyen: number): string {
   const o = p.ozet;
-  const ilk = c.D.siparisler.filter((s) => !s.havuz).map((s) => ({ s, T: p.J[s.id]?.T ?? null })).filter((x): x is { s: Siparis; T: number } => x.T != null && x.T > 0.05).sort((a, b) => b.T - a.T)[0];
+  const ilk = c.D.siparisler.filter((s) => !planDisi(s)).map((s) => ({ s, T: p.J[s.id]?.T ?? null })).filter((x): x is { s: Siparis; T: number } => x.T != null && x.T > 0.05).sort((a, b) => b.T - a.T)[0];
   const plan = o.late ? `Plan ${o.n} siparişin ${o.late} tanesinde terminin gerisinde${ilk ? `; en çok ${ilk.s.id}, ${gecMetin(ilk.T)}` : ''}.` : 'Bütün siparişler termine yetişiyor.';
   return `${plan} ${bekleyen ? `${bekleyen} karar bekliyor.` : 'Bekleyen karar yok.'}`;
 }

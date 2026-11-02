@@ -13,6 +13,7 @@ import {
   tezUcretYaz, ucretYaz, vadeBasYaz, type Yaz,
 } from '../yazmalar.ts';
 import { Alan, AltNot, AsilKart, Kilit, Not, SayiGir, Segment } from './girdi.tsx';
+import { planDisi } from '../../tipler.ts';
 
 // Maliyetler sayfasının "Tüm satırlar"ı: bugünkü sayfanın kartları (zu-yan-sayfalar sMaliyetler, ymBeklemeKart; zv-termin "Bu planın bütün
 // maliyeti"; zz6 genel gider ve mesai bedeli satırları). Girdiler satır içidir; her biri tek değişiklik yazar.
@@ -328,7 +329,7 @@ function BeklemeKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean;
 
 function ErkenSevkKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
   const D = c.D;
-  const l = D.siparisler.filter((s) => !s.havuz);
+  const l = D.siparisler.filter((s) => !planDisi(s));
   return (
     <AsilKart simge="truck" baslik="Erken sevk kabul eden siparişler">
       <Not>İşaretli siparişte müşteri malı termin öncesi alır ve fatura teslimde başlar: erken biten işin ödemesi erken gelir. İşaretsizde vade terminde başlar. Varsayılan işaretsiz.</Not>

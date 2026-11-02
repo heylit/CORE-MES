@@ -1,6 +1,7 @@
 import { bitenler, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi, PlanVerisi, Siparis, Tezgah } from '../tipler.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
+import { planDisi } from '../tipler.ts';
 
 // P3'ün saf hesapları (205 a): maliyet, genel gider, ek mesai ve fason. Bugünkü sayfanın hesaplarının aynısıdır (cerceve/planlama/parca
 // zu-yan-sayfalar, zz6-maliyet-mesai, zv-termin; motor/durum.betik ymAyar, wipAyar, agBedel; motor/engine.betik compile ve matAlloc'un
@@ -217,7 +218,7 @@ export function planSonucu(c: PlanlamaCalismasi, job: string): { C: number | nul
   return nesneMi(j) ? { C: sayiOku(j.C), T: sayiOku(j.T) } : null;
 }
 export const urunAdi = (D: PlanVerisi, id: string): string => D.urunler.find((u) => u.id === id)?.ad ?? (id || YOK);
-export const aktifSiparisler = (D: PlanVerisi): Siparis[] => D.siparisler.filter((s) => !s.havuz);
+export const aktifSiparisler = (D: PlanVerisi): Siparis[] => D.siparisler.filter((s) => !planDisi(s));
 
 // ---------- takvim: tezgâhın çalışabilir pencereleri (engine.betik compile) ----------
 export type Aralik = [number, number];
