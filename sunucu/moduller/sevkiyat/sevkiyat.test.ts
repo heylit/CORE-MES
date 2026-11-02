@@ -596,8 +596,11 @@ test('SVK-40: gece yarısını aşan elle rota uyarıyla döner; cevap sözleşm
   const T = '2026-10-21';
   const uzun = await nokta('Uzun Duraklı Müşteri', 8, 8);
   await tx(async (db) => servis.noktaGuncelle(db, uzun.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun.id), ad: 'Uzun Duraklı Müşteri', tur: 'musteri', ...konum(8, 8), adres: null, durakSuresiDakika: 240, firmaId: uzun.firmaId }));
+  const uzun2 = await nokta('Uzun Duraklı Müşteri 2', 7, 7);
+  await tx(async (db) => servis.noktaGuncelle(db, uzun2.id, { surum: await surumu(db, 'sevkiyat_noktasi', uzun2.id), ad: 'Uzun Duraklı Müşteri 2', tur: 'musteri', ...konum(7, 7), adres: null, durakSuresiDakika: 240, firmaId: uzun2.firmaId }));
+  // Aynı noktada art arda duraklar tek yanaşma sayılır; süre birikmesi için iki nokta sırayla gezilir.
   const isler: { id: number }[] = [];
-  for (let i = 0; i < 12; i++) isler.push(await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: uzun.id })));
+  for (let i = 0; i < 12; i++) isler.push(await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: i % 2 ? uzun2.id : uzun.id })));
   const p = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: null, rotalar: [{ aracId: k2, kilitli: false, ogeler: isler.map((i) => ({ isId: i.id, alis: false })) }] }, kaynak));
   const r = p.rotalar.find((x) => x.aracId === k2)!;
   assert.ok(r.hesap!.donus > 2880);

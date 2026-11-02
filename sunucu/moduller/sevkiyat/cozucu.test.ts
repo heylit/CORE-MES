@@ -39,6 +39,14 @@ test('süre sınırı dolunca arama durur, eldeki geçerli çözüm döner; sın
   assert.equal(coz(isler, [arac('K1'), arac('K2')]).yineleme, SECENEK.yinelemeSiniri);
 });
 
+test('aynı noktada art arda iki iş tek yanaşmadır: durak en uzun işin süresi kadar sürer', () => {
+  const p = coz([is('t1', { birakisNoktasi: 'C' }), is('t2', { birakisNoktasi: 'C', durakSuresiDakika: 25 })], [arac('K1')]);
+  const r = rotasi(p, 'K1')!, [ilk, ikinci] = r.duraklar.filter((d) => d.is !== null);
+  assert.equal(ilk!.nokta, ikinci!.nokta);
+  assert.equal(ikinci!.ayrilis - ilk!.baslama, 25, 'toplam 10 + 25 değil, en uzunu 25');
+  assert.deepEqual(r.seferler[0]!.durakSureleri, [25]);
+});
+
 test('palet kapasitesi de sınırdır: sefer yükü kapasiteyi aşmaz, gerekirse ara dönüşle ikinci sefer açılır', () => {
   const p = coz([is('t1', { palet: 3, birakisNoktasi: 'A' }), is('t2', { palet: 3, birakisNoktasi: 'C' })], [arac('K1')]);
   const r = rotasi(p, 'K1')!;

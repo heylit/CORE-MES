@@ -82,15 +82,17 @@ export const gidisCiktiMi = (r: TumIsSatiri): boolean => r.ilerleme !== GIDIS_CI
 export const tetiklenebilir = (r: TumIsSatiri): boolean =>
   r.tasima === 'biz' && r.is !== null && r.is.tetiklendi === null && (r.asama === 'havuzda' || r.asama === 'planlandi' || r.asama === 'yolda');
 
+// Sayaçlar bu sayfanın kalemlerini sayar; Günlük sevkiyatta "Yeni iş" ile açılan iş kalem değildir. Kullanıcı iki ekranın sayısını karşılaştırırken bunu görsün.
+export const KAPSAM = 'Günlük sevkiyatta "Yeni iş" ile açılan işler burada sayılmaz.';
 export const OZETLER = [
-  { kod: 'hazir', gorunum: 'karar', ad: 'Hazır, bırakılmadı', ton: 'uyari', suz: (r: TumIsSatiri) => r.asama === 'hazir' },
-  { kod: 'gelecek', gorunum: 'karar', ad: '14 günde hazır', ton: null,
+  { kod: 'hazir', gorunum: 'karar', ad: 'Hazır, bırakılmadı', ton: 'uyari', baslik: 'Bitmiş, sevkiyata henüz serbest bırakılmamış kalemler', suz: (r: TumIsSatiri) => r.asama === 'hazir' },
+  { kod: 'gelecek', gorunum: 'karar', ad: '14 günde hazır', ton: null, baslik: 'Tahmini hazır günü 14 gün içinde olan kalemler',
     suz: (r: TumIsSatiri, b: string) => r.asama === 'hazir-degil' && gunu(r) !== null && fark(gunu(r)!, b) <= 14 },
-  { kod: 'gecikmis', gorunum: 'sevkiyat', ad: 'Geciken iş', ton: 'hata', suz: (r: TumIsSatiri, b: string) => !adayMi(r) && geciktiMi(r, b) },
-  { kod: 'havuz', gorunum: 'sevkiyat', ad: 'Havuzda', ton: null, suz: (r: TumIsSatiri) => r.asama === 'havuzda' },
-  { kod: 'yolda', gorunum: 'sevkiyat', ad: 'Yolda', ton: null, suz: (r: TumIsSatiri) => r.asama === 'yolda' },
-  { kod: 'kabul', gorunum: 'sevkiyat', ad: 'Depoda bekleyen', ton: 'uyari', suz: (r: TumIsSatiri) => r.asama === 'depoda' },
-] as const satisfies readonly { kod: string; gorunum: Gorunum; ad: string; ton: 'uyari' | 'hata' | null; suz: (r: TumIsSatiri, bugun: string) => boolean }[];
+  { kod: 'gecikmis', gorunum: 'sevkiyat', ad: 'Geciken iş', ton: 'hata', baslik: `İstenen günü geçmiş kalemler. ${KAPSAM}`, suz: (r: TumIsSatiri, b: string) => !adayMi(r) && geciktiMi(r, b) },
+  { kod: 'havuz', gorunum: 'sevkiyat', ad: 'Havuzda', ton: null, baslik: `Serbest bırakılıp araca verilmemiş kalemler. ${KAPSAM}`, suz: (r: TumIsSatiri) => r.asama === 'havuzda' },
+  { kod: 'yolda', gorunum: 'sevkiyat', ad: 'Yolda', ton: null, baslik: `Onaylı planda yola çıkmış kalemler. ${KAPSAM}`, suz: (r: TumIsSatiri) => r.asama === 'yolda' },
+  { kod: 'kabul', gorunum: 'sevkiyat', ad: 'Depoda bekleyen', ton: 'uyari', baslik: 'Sevkiyatı bitmiş, depoda son çıkışı ya da kabulü bekleyen kalemler', suz: (r: TumIsSatiri) => r.asama === 'depoda' },
+] as const satisfies readonly { kod: string; gorunum: Gorunum; ad: string; ton: 'uyari' | 'hata' | null; baslik: string; suz: (r: TumIsSatiri, bugun: string) => boolean }[];
 export type Ozet = (typeof OZETLER)[number]['kod'];
 
 export interface Suzgec {

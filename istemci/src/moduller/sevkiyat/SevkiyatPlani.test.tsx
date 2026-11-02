@@ -249,7 +249,7 @@ describe('SevkiyatPlani onaylı plan', () => {
     fireEvent.click(within(alimSatiri).getByRole('button', { name: 'Yapılamadı' }));
     const pencere = screen.getByRole('dialog', { name: 'Yapılamadı' });
     fireEvent.change(within(pencere).getByRole('textbox'), { target: { value: 'Yük hazır değil' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Havuza geri al' }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yapılamadı olarak işaretle' }));
     await waitFor(() => expect(yazmalar(istekler)[1]).toEqual({ yontem: 'POST', yol: `/sevkiyat/isler/${alim.id}/durum`, govde: { durum: 'yapilamadi', tarih: TARIH, not: 'Yük hazır değil' } }));
   });
 

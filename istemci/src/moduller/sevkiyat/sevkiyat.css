@@ -192,7 +192,9 @@
 .tc-sevkiyat-fabrika-satiri { display: flex; gap: var(--b-2); padding: var(--b-1) var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-sevkiyat-fabrika-satiri time { font-family: var(--font-mono); color: var(--ink); }
 .tc-sevkiyat-bos { padding: var(--b-3); color: var(--muted); font-size: var(--yazi-s); border: thin dashed var(--edge2); border-radius: var(--yari-1); }
-.tc-sevkiyat-rozetler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-sevkiyat-rozetler { display: flex; flex-wrap: wrap; gap: var(--b-1); min-width: 0; }
+/* Dar ekranda uzun rozet kart kenarından taşmasın: satıra sığmayan metin alta iner. */
+.tc-sevkiyat-rozetler .tc-rozet { white-space: normal; text-align: left; }
 .tc-sevkiyat-sonuc-dugmeleri { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1); flex: 0 1 auto; margin-left: auto; }
 .tc-sevkiyat-kapali > summary { display: flex; align-items: center; min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-s); cursor: pointer; }
 .tc-sevkiyat-bekleyen-grubu ul { display: grid; gap: var(--b-1); }
