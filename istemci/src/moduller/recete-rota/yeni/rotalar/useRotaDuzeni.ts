@@ -25,6 +25,8 @@ const EYLEMLER: Readonly<Record<RevEylemi, { ad: string; ek?: KomutGovdesi; basl
   yururlugeAl: { ad: 'rota-yururluge-al', baslik: 'Yürürlüğe alınamadı' },
   sil: { ad: 'rota-iptal', baslik: 'Taslak silinemedi' },
 };
+// Onay bekleyen revizyonu onaylama yetkisi olan kişi düzenlerse revizyon önce taslağa döner; sunucu nedeni zorunlu tutar (ROT-3).
+const ONAYDA_DUZENLEME = 'Onay beklerken düzenlemek için taslağa alındı.';
 const EKSIK_ILETISI: Partial<Record<RevEylemi, string>> = {
   gonder: 'onaya gönderilmedi', onayla: 'onaylanmadı', yalnizOnayla: 'onaylanmadı', yururlugeAl: 'yürürlüğe alınmadı',
 };
@@ -151,7 +153,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
         revId = s.id; surum = s.surum; opNolar = kaynak ? kaynak.data.steps.map((x) => x.opNo) : [];
       } else {
         revId = acik.id; surum = acik.surum; opNolar = acik.data.steps.map((x) => x.opNo);
-        if (acik.status === 'onay') surum = revSonucu((await gonder('rota-geri-gonder', { revizyonId: Number(revId), surum })).sonuc).surum;
+        if (acik.status === 'onay') surum = revSonucu((await gonder('rota-geri-gonder', { revizyonId: Number(revId), surum, neden: ONAYDA_DUZENLEME })).sonuc).surum;
       }
       await gonder('rota-kaydet', { revizyonId: Number(revId), surum, aciklama: t.not.trim() || null, adimlar: kaydetGovdesi(t.adimlar, opNolar, opBul) });
       // Kayıt sürerken yeni değişiklik geldiyse taslak kalır; sıradaki kayıt onu yazar.
@@ -232,8 +234,14 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     ciz();
   };
 
-  async function revEylemi(e: RevEylemi, urunId: string, revId: string | null, not?: string): Promise<boolean> {
+  // `metin` onaya gönderirken revizyon notu, geri gönderirken onaylayanın nedenidir (ROT-3); neden revizyon notunun yerine yazılmaz.
+  async function revEylemi(e: RevEylemi, urunId: string, revId: string | null, metin?: string): Promise<boolean> {
     const kod = h.malzeme.get(urunId)?.code ?? '';
+    const not = e === 'geriGonder' ? undefined : metin;
+    if (e === 'geriGonder' && (metin === undefined || metin.trim() === '')) {
+      bildir('hata', 'Taslağa döndürülemedi: geri gönderme nedenini yaz.');
+      return false;
+    }
     if (not !== undefined) {
       const t = taslaklar.current.get(urunId);
       const V = gorulen(urunId);
@@ -284,7 +292,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     const tanim = EYLEMLER[e];
     setMesgul(true);
     try {
-      await gonder(tanim.ad, { revizyonId: Number(g.id), surum: g.surum, ...tanim.ek });
+      await gonder(tanim.ad, { revizyonId: Number(g.id), surum: g.surum, ...tanim.ek, ...(e === 'geriGonder' ? { neden: metin } : {}) });
     } catch (x) {
       const k = x instanceof RrHatasi ? x : null;
       const metin = `${tanim.baslik}: ${rotaHataMetni(k?.message ?? (x as Error).message, k?.alan ?? null, g.data.steps, opAdi)}`;

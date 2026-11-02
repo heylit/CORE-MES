@@ -16,12 +16,13 @@ export function useR2Komutu() {
   const { bildir } = useBildirim();
   const istemci = useQueryClient();
   const calistir = async (
-    ad: KomutAdi, govde: KomutGovdesi, s: { basari?: string; sureler?: boolean; sessiz?: boolean } = {},
+    ad: KomutAdi, govde: KomutGovdesi, s: { basari?: string; sureler?: boolean; sessiz?: boolean; sonuc?: (v: unknown) => void } = {},
   ): Promise<KomutHatasi | null> => {
     try {
-      await komut.mutateAsync({ ad, govde });
+      const c = await komut.mutateAsync({ ad, govde });
       if (s.sureler) await istemci.invalidateQueries({ queryKey: [...RR_ANAHTARI, 'sureler'] });
       if (s.basari) bildir('tamam', s.basari);
+      s.sonuc?.(c.sonuc);
       return null;
     } catch (h) {
       const r = h instanceof RrHatasi ? h : new RrHatasi(h);

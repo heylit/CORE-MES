@@ -138,6 +138,32 @@ describe('R1 Ürün ve rotalar: izinli', () => {
   });
 });
 
+describe('R1 Ürün ve rotalar: geri gönderme nedeni (ROT-3)', () => {
+  it('onaylayan nedeni yazmadan geri gönderemez; neden sahibine gider ve taslakta görünür', async () => {
+    let durum = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'onay', 2)]);
+    const istekler = sunucuKur(YONETICI, {
+      durum: () => json(200, durum),
+      yazmalar: {
+        'POST /rota/revizyonlar/72/geri-gonder': () => {
+          durum = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), { ...revizyonOrnegi('72', 'B', 'taslak', 3), geriGondermeNedeni: 'Ayar süresini kontrol et.' }]);
+          return json(200, { id: 72, durum: 'taslak', surum: 3 });
+        },
+      },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Onayla…' }));
+    const geri = within(bolge).getByRole('button', { name: 'Düzeltmeye geri gönder' }) as HTMLButtonElement;
+    expect(geri.disabled).toBe(true);
+    fireEvent.change(within(bolge).getByLabelText('Geri gönderme nedeni'), { target: { value: '  Ayar süresini kontrol et. ' } });
+    expect(geri.disabled).toBe(false);
+    fireEvent.click(geri);
+    await waitFor(() => { expect(rotaYazmalari(istekler)).toHaveLength(1); });
+    expect(rotaYazmalari(istekler)[0]).toMatchObject({ yol: '/rota/revizyonlar/72/geri-gonder', govde: { surum: 2, neden: 'Ayar süresini kontrol et.' } });
+    expect(await within(bolge).findByText('Rev B onaydan düzeltmeye geri gönderildi: Ayar süresini kontrol et.')).toBeTruthy();
+  });
+});
+
 describe('R1 Ürün ve rotalar: reddedilen', () => {
   it('rota yazma işlemi olmayan düzenleme düğmelerini görmez, alanlar kapalı, istek gitmez', async () => {
     const istekler = sunucuKur(OKUYAN, { durum: rotaDurumu() });

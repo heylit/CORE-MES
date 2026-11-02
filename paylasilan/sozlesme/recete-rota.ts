@@ -213,6 +213,8 @@ export const durumRotaRevizyonSemasi = z.object({
   note: z.string(),
   created: z.number(),
   approvedAt: z.number().nullable(),
+  // ROT-3: onaylayanın geri gönderme nedeni; revizyon yeniden onaya gidince boşalır. Önizleme ve örnek veride alan yoktur; yokluğu boşla aynıdır.
+  geriGondermeNedeni: z.string().nullable().optional(),
   data: durumRotaSemasi,
 });
 

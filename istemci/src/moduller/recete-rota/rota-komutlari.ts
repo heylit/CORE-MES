@@ -130,7 +130,11 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
     },
   },
   'rota-onaya-gonder': basit('onaya-gonder'),
-  'rota-geri-gonder': basit('geri-gonder'),
+  // ROT-3: onaylayan geri gönderirken neden yazar; boş neden sahibinde 400 döner.
+  'rota-geri-gonder': {
+    hafif: true,
+    hazirla: (g) => ({ yol: revizyonYolu(g, 'geri-gonder'), govde: { ...surumGovdesi(g), neden: typeof g['neden'] === 'string' ? g['neden'].trim() : '' } }),
+  },
   'rota-yururluge-al': basit('yururluge-al'),
   'rota-iptal': basit('iptal'),
   // Süreler (169 c, 171 a): elle girilen değer ölçümdür, boş değer bekleyen ölçümü boşaltır; kabul ölçümü ürünün taslağına teorik süre

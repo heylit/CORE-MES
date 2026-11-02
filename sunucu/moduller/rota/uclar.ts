@@ -1,6 +1,6 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
+  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
   talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
@@ -338,9 +338,9 @@ export const uclar = [
     yol: '/rota/revizyonlar/:id/geri-gonder',
     yetki: 'rota.onayla',
     parametre: revizyonParametresi,
-    govde: surumGovdesi,
+    govde: geriGonderGovdesi,
     cevap: komutCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => geriGonder(db, kullanici, parametre.id, govde.surum),
+    isle: ({ db, kullanici, parametre, govde }) => geriGonder(db, kullanici, parametre.id, govde.surum, govde.neden),
   }),
   uc({
     yontem: 'POST',
