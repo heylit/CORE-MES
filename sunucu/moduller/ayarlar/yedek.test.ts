@@ -530,6 +530,16 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     assert.equal((await yedekleriListele(yedekOrtami())).suruyor, null);
   });
 
+  test('yedek sürerken elle yedek komutu 409 döner; başladı demez', async () => {
+    process.env['YEDEK_SAHTE_BEKLE_MS'] = '500';
+    const ilk = yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'));
+    const ikinci = await istek(yonetici, 'POST', '/yedekler/al');
+    assert.equal(ikinci.statusCode, 409, ikinci.body);
+    assert.match(ikinci.body, /zaten alınıyor/);
+    await ilk;
+    assert.deepEqual(await yedekDosyalari(), [yedekAdi(VT, 'elle', new Date('2026-10-14T06:00:00Z'))]);
+  });
+
   test('gece işi günün yedeğini bir kez alır, sonra eskileri ve bir günden eski yarım dosyaları siler; başka dosyaya dokunmaz', async () => {
     const simdi = new Date('2026-10-30T00:00:00Z');
     const eskiler = [40, 41, 42, 43].map((g) => dosya('gece', new Date(simdi.getTime() - g * GUN).toISOString()));
