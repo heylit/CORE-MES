@@ -327,6 +327,21 @@ export function fazlaMesaiHatasi(g: Omit<FazlaMesaiTanimi, 'tarih' | 'kisiIdleri
   return null;
 }
 
+// VR-30: fazla mesainin kendi gününün 00:00'ından dakika aralığı; gece yarısını geçen kayıt ertesi güne uzanır. Gün farkı (öbür kaydın günü
+// eksi bu günü) verilirse aynı eksene kaydırılır.
+export function fazlaMesaiDakikaAraligi(f: { baslangic: string; bitis: string }, gunFarkiDk = 0): DakikaAraligi {
+  const bas = dakika(f.baslangic) + gunFarkiDk * GUN_DK;
+  return { bas, bit: bas + aralik(f.baslangic, f.bitis) };
+}
+
+// VR-30: vardiyanın (molalar dahil) başladığı günün 00:00'ından dakika aralığı, gün sırasıyla kaydırılmış.
+export function vardiyaDakikaAraligi(v: Pick<VardiyaTanimi, 'baslangic' | 'bitis'>, gunSirasi: number): DakikaAraligi {
+  const bas = dakika(v.baslangic) + gunSirasi * GUN_DK;
+  return { bas, bit: bas + aralik(v.baslangic, v.bitis) };
+}
+
+export const araliklarCakisir = (a: DakikaAraligi, b: DakikaAraligi): boolean => a.bas < b.bit && b.bas < a.bit;
+
 // VR-29 (W8, 18.1): kişinin son çalışma günü. İK çıkış günü çalışma günüdür (puantaj da yalnız sonrasını reddeder). Pasif kişi bugünden
 // itibaren çalışmaz; geçmiş günleri değişmez, çünkü Arkon emek verimi ve OEE geçmiş ayları da takvimden okur. Sınır yoksa null.
 export function sonCalismaGunu(k: { aktif: boolean; cikisTarihi: string | null; bugun: string }): string | null {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   aralik, araliklardanCikar, atamaPayi, ayrildiMi, durusAraliklari, fazlaMesaiKisiHatasi, sonCalismaGunu, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, takvimGunleriniBirlestir,
-  kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari,
+  kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari, araliklarCakisir, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi,
 } from './kurallar.ts';
 
 const GUNDUZ = { id: 1, baslangic: '08:00', bitis: '16:00', aktif: true, molalar: [{ baslangic: '12:00', bitis: '12:30' }], netDakika: 450 };
@@ -307,5 +307,13 @@ describe('vardiya kuralları', () => {
     assert.equal(fazlaMesaiKisiHatasi('2026-11-10', kisiler), null);
     assert.deepEqual(fazlaMesaiKisiHatasi('2026-11-11', kisiler), { ileti: 'İşten ayrılmış ya da pasif kişiye fazla mesai yazılamaz.', alan: 'kisiIdleri' });
     assert.equal(fazlaMesaiKisiHatasi('2026-11-11', []), null);
+  });
+  test('VR-30: fazla mesai ve vardiya aynı dakika ekseninde karşılaştırılır; gece yarısını geçen kayıt ertesi güne uzanır, bitişik aralık çakışmaz', () => {
+    assert.deepEqual(fazlaMesaiDakikaAraligi({ baslangic: '22:00', bitis: '02:00' }), { bas: 1320, bit: 1560 });
+    assert.deepEqual(fazlaMesaiDakikaAraligi({ baslangic: '22:00', bitis: '02:00' }, -1), { bas: -120, bit: 120 });
+    assert.deepEqual(vardiyaDakikaAraligi(GUNDUZ, 1), { bas: 1920, bit: 2400 });
+    assert.equal(araliklarCakisir(fazlaMesaiDakikaAraligi({ baslangic: '22:00', bitis: '09:00' }), vardiyaDakikaAraligi(GUNDUZ, 1)), true);
+    assert.equal(araliklarCakisir({ bas: 960, bit: 1080 }, vardiyaDakikaAraligi(GUNDUZ, 0)), false);
+    assert.equal(araliklarCakisir({ bas: 900, bit: 1080 }, vardiyaDakikaAraligi(GUNDUZ, 0)), true);
   });
 });
