@@ -90,6 +90,8 @@ describe('Akış Süresi', () => {
     expect(within(adimlar).getByText('50 dk')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Statüde kalış' })).getByText('1 sa 30 dk')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Hammadde partileri' })).getByText('LT-000007')).toBeTruthy();
+    // Ortak pano grafiğinin .tc-akis / .tc-akis-alt kuralları (flex-wrap) sayfayı dar ekranda yana taşırıyordu.
+    expect(document.querySelector('.tc-akis, .tc-akis-alt')).toBeNull();
   });
 
   it('olmayan emirde hata kutusu gösterilir', async () => {

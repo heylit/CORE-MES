@@ -1,7 +1,8 @@
-.tc-akis { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+/* Ortak pano grafiği .tc-akis ve .tc-akis-alt adlarını kullanır (flex-wrap, overflow-wrap); sayfa kendi adlarıyla çakışmaz. */
+.tc-akis-sayfa { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-akis-bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-2) var(--b-4); }
 .tc-akis-baslik { margin: 0; font-size: var(--yazi-xl); }
-.tc-akis-alt { color: var(--muted); font-size: var(--yazi-s); }
+.tc-akis-aciklama { color: var(--muted); font-size: var(--yazi-s); }
 .tc-akis-olculer { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 5), 1fr)); gap: var(--b-3); }
 .tc-akis-damgalar { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-5); margin: 0; font-size: var(--yazi-s); }
 .tc-akis-damgalar div { display: flex; flex-direction: column; }

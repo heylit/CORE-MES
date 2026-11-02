@@ -30,8 +30,8 @@ export function AkisEmirleri() {
   const satirlar = aranan === '' ? liste.data.emirler
     : liste.data.emirler.filter((e) => `${e.emirNo} ${e.urun}`.toLocaleLowerCase('tr-TR').includes(aranan));
   return (
-    <div className="tc-akis">
-      <p className="tc-akis-alt">Bir emri seçin: hammaddenin gelişinden sevke kadar her adımın bekleme, hazırlık, işleme ve duruş süreleri.</p>
+    <div className="tc-akis-sayfa">
+      <p className="tc-akis-aciklama">Bir emri seçin: hammaddenin gelişinden sevke kadar her adımın bekleme, hazırlık, işleme ve duruş süreleri.</p>
       <Girdi etiket="Emir ya da ürün ara" value={ara} onChange={(e) => araYaz(e.target.value)} />
       <Tablo etiket="Üretim emirleri" sutunlar={EMIR_SUTUNLARI} satirlar={satirlar} satirAnahtari={(e) => e.id}
         satirSec={(e) => { void git(`/akis/${String(e.id)}`); }} bosMesaj="Emir yok" />
@@ -110,10 +110,10 @@ const HAMMADDE_SUTUNLARI: readonly Sutun<HammaddePartisi>[] = [
 function Yolculuk({ a }: { a: EmirAkisiCevabi }) {
   const { damgalar: d, olculer: o } = a;
   return (
-    <div className="tc-akis">
+    <div className="tc-akis-sayfa">
       <div className="tc-akis-bas">
         <h2 className="tc-akis-baslik">{a.emir.emirNo}</h2>
-        <span className="tc-akis-alt">{a.emir.adet} adet · {a.emir.durum}{a.emir.teslim !== null ? ` · teslim ${a.emir.teslim}` : ''}</span>
+        <span className="tc-akis-aciklama">{a.emir.adet} adet · {a.emir.durum}{a.emir.teslim !== null ? ` · teslim ${a.emir.teslim}` : ''}</span>
         <Link to="/akis">Emir listesi</Link>
       </div>
       <div className="tc-akis-olculer">
