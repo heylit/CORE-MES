@@ -21,6 +21,8 @@ export interface OzetSiparisi {
 export interface OzetVerisi {
   now: number; T0: number; H1: number; gun: number; kova: number; gunAd: string[]; gruplar: string[];
   sip: OzetSiparisi[]; yok: { id: string; adim: number }[]; yokAdim: number;
+  // Dönemdeki siparişlerden termini olmayanlar: zamanında da geç de sayılmaz (veri yoksa uydurulmaz).
+  terminsiz: number;
   yuk: { m: string; grup: string; g: (number | null)[] }[];
   u: [string, number][];
   ops: { m: string; job: string; S: number; C: number; su: number }[];
@@ -53,7 +55,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
     const adim = l.map((r, i) => ({ j: s.id, m: r.m, g: grup(r.m), S: r.S, C: r.C, su: r.su, run: r.run, bek: Math.max(0, r.S - (i ? l[i - 1]?.C ?? 0 : Math.max(now, Math.min(r.S, now)))) }));
     const T = J?.T ?? 0;
     return {
-      id: s.id, urun: urunAd.get(s.urun) ?? s.urun ?? '—', adim, S: l[0]?.S ?? now, C: J?.C ?? Number.NaN, due: j?.due ?? null, T, gec: T > 0.05, yol,
+      id: s.id, urun: urunAd.get(s.urun) ?? s.urun ?? '—', adim, S: l[0]?.S ?? now, C: J?.C ?? Number.NaN, due: j?.due ?? null, T, gec: j?.due != null && T > 0.05, yol,
       seg: a && a !== 'eksik' ? a.seg : null, kaynak: a && a !== 'eksik' ? a.kaynak : [],
     };
   });
@@ -77,7 +79,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
   const sip = sip0.filter((s) => s.S < r.b && Math.max(Number.isFinite(s.C) ? s.C : s.S, s.due ?? 0) > r.a);
   const w = nabizOlc({ J: p.J, ops: p.ops }, new Set(sip.map((s) => s.id)), cx, r);
   return {
-    now, T0: r.a, H1: r.b, gun, kova, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((t, x) => t + x.adim, 0), yuk,
+    now, T0: r.a, H1: r.b, gun, kova, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((t, x) => t + x.adim, 0), terminsiz: sip.filter((s) => s.due == null).length, yuk,
     u: Object.entries(w.util),
     ops: ops.map((o) => ({ m: o.m, job: o.job, S: o.S, C: o.C, su: o.su })),
     oz: { suH: w.suH, suN: ops.filter((o) => o.su > 0 && o.S >= r.a && o.S < r.b).length, famN: null, Cmax: p.ozet.Cmax },
@@ -99,12 +101,14 @@ export const sutunAni = (v: OzetVerisi, d: number): number => v.T0 + d * v.kova 
 // --- göstergeler (brKpi) ---
 export interface Gosterge { simge: 'list' | 'alert' | 'check' | 'gauge' | 'cpu' | 'wrench' | 'flag'; ad: string; deger: string | number | null; ek: string; alt: string; ton: '' | 'hata' | 'tamam' | 'uyari' }
 export function gostergeler(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: string) => string): Gosterge[] {
-  const n = v.sip.length, gec = v.sip.filter((s) => s.gec), zam = n - gec.length; const top = gec.reduce((a, s) => a + s.T, 0);
+  const n = v.sip.length, gec = v.sip.filter((s) => s.gec), olculen = n - v.terminsiz, zam = olculen - gec.length; const top = gec.reduce((a, s) => a + s.T, 0);
   const ort = v.u.length ? v.u.reduce((a, [, x]) => a + x, 0) / v.u.length : null; const dar = [...v.u].sort((a, b) => b[1] - a[1])[0];
   return [
     { simge: 'list', ad: 'Sipariş', deger: n + v.yok.length, ek: '', alt: v.yok.length ? `${n} tanesi tam yerleşti` : 'planda', ton: '' },
     ...(v.yok.length ? [{ simge: 'alert', ad: 'Yerleşmedi', deger: v.yok.length, ek: `${v.yokAdim} adım`, alt: 'kaynak ya da ufuk yetmedi', ton: 'hata' } as const] : []),
-    { simge: 'check', ad: 'Zamanında', deger: zam, ek: `%${Math.round(zam / Math.max(1, n + v.yok.length) * 100)}`, alt: 'termininden önce biter', ton: 'tamam' },
+    olculen
+      ? { simge: 'check', ad: 'Zamanında', deger: zam, ek: `%${Math.round(zam / Math.max(1, olculen + v.yok.length) * 100)}`, alt: v.terminsiz ? `termininden önce biter; ${v.terminsiz} terminsiz` : 'termininden önce biter', ton: 'tamam' }
+      : { simge: 'check', ad: 'Zamanında', deger: null, ek: '', alt: 'termini olan sipariş yok', ton: '' },
     { simge: 'alert', ad: 'Geç', deger: gec.length, ek: saKisa(top), alt: 'toplam gecikme', ton: gec.length ? 'hata' : 'tamam' },
     { simge: 'gauge', ad: 'Ortalama doluluk', deger: ort == null ? null : Math.round(ort * 100), ek: '%', alt: 'çalışan tezgâhlarda', ton: '' },
     { simge: 'cpu', ad: 'En yoğun tezgâh', deger: dar ? dar[0] : '—', ek: dar ? `%${Math.round(dar[1] * 100)}` : '', alt: dar ? GRUP_AD[tezGrup(dar[0])] ?? '' : '', ton: 'uyari' },
@@ -168,14 +172,16 @@ export function yokMetni(v: OzetVerisi): Metin {
 }
 export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: string) => string): Yorum[] {
   const D = c.D; const l: Yorum[] = []; const n = v.sip.length; const gec = v.sip.filter((s) => s.gec).sort((a, b) => b.T - a.T);
+  const olculen = n - v.terminsiz;
   if (v.yok.length) l.push({ simge: 'alert', ton: 'hata', m: yokMetni(v) });
   const g0 = gec[0];
   if (n) {
     l.push(g0 ? {
       simge: 'alert', ton: 'hata',
-      m: [`${n} siparişin `, { b: String(n - gec.length) }, `${sayiEki(n - gec.length, 'i')} zamanında, `, { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç. En çok geciken `, { b: g0.id }, ` (${g0.urun}), termininden `, { b: saKisa(g0.T) }, ' sonra bitiyor.'],
+      m: [`${olculen} siparişin `, { b: String(olculen - gec.length) }, `${sayiEki(olculen - gec.length, 'i')} zamanında, `, { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç. En çok geciken `, { b: g0.id }, ` (${g0.urun}), termininden `, { b: saKisa(g0.T) }, ' sonra bitiyor.', ...terminsizMetni(v)],
       eylem: { tur: 'br-git-sip', v: g0.id, ad: 'Tahtada göster' },
-    } : { simge: 'check', ton: 'tamam', m: [`${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin hepsi termininden önce bitiyor.`] });
+    } : olculen ? { simge: 'check', ton: 'tamam', m: [`${v.yok.length ? 'Yerleşen ' : ''}${olculen} siparişin hepsi termininden önce bitiyor.`, ...terminsizMetni(v)] }
+      : { simge: 'flag', ton: 'bilgi', m: [`${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin termini yok; zamanında olup olmadığı ölçülmez.`] });
   }
   const bek: Record<string, number> = {};
   for (const s of gec) for (const [k, ad, x] of s.kaynak) if (k !== 'isleme') bek[ad] = (bek[ad] ?? 0) + x;
@@ -216,6 +222,8 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
   return l;
 }
 const saatYaziKisa = (h: number | null) => saKisa(h ?? 0);
+// Termini olmayan sipariş zamanında sayılmaz; sayısı ayrıca söylenir.
+function terminsizMetni(v: OzetVerisi): Metin { return v.terminsiz ? [' Termini olmayan ', { b: String(v.terminsiz) }, ' sipariş sayılmadı.'] : []; }
 
 // --- bölgenin cevabı (brCevap) ---
 export type BolgeKimligi = 'ozet' | 'bekle' | 'yuk' | 'sure' | 'yaris' | 'yorum';
@@ -224,8 +232,9 @@ export function cevap(c: PlanlamaCalismasi, v: OzetVerisi, id: BolgeKimligi, yor
   switch (id) {
     case 'ozet':
       if (!n) return [...yokMetni(v), ' Son işin bitişi: ', { b: saatYaz(D, v.oz.Cmax) }, '.'];
-      return [...(v.yok.length ? [...yokMetni(v), ' Yerleşen '] : []), `${n} siparişin `, { b: String(n - gec.length) }, `${sayiEki(n - gec.length, 'i')} zamanında`,
-        ...(gec.length ? [', ', { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç (toplam ${saKisa(top)})`] : []), '. Son işin bitişi: ', { b: saatYaz(D, v.oz.Cmax) }, '.'];
+      if (n === v.terminsiz) return [...(v.yok.length ? [...yokMetni(v), ' Yerleşen '] : []), `${n} siparişin termini yok; zamanında olup olmadığı ölçülmez. Son işin bitişi: `, { b: saatYaz(D, v.oz.Cmax) }, '.'];
+      return [...(v.yok.length ? [...yokMetni(v), ' Yerleşen '] : []), `${n - v.terminsiz} siparişin `, { b: String(n - v.terminsiz - gec.length) }, `${sayiEki(n - v.terminsiz - gec.length, 'i')} zamanında`,
+        ...(gec.length ? [', ', { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç (toplam ${saKisa(top)})`] : []), '.', ...terminsizMetni(v), ' Son işin bitişi: ', { b: saatYaz(D, v.oz.Cmax) }, '.'];
     case 'bekle': {
       const x = [...beklemeler(v)].sort((a, b) => b.bek - a.bek)[0];
       return x && x.bek > 0.5 ? ['En çok bekleme ', { b: grupAdi(x.id) }, ` grubunda: ${saKisa(x.bek)}`, ...(x.bekG > 0.5 ? [', bunun ', { b: saKisa(x.bekG) }, "'i geç siparişlerin"] : []), '.'] : ['Belirgin bir bekleme yok.'];
@@ -238,7 +247,7 @@ export function cevap(c: PlanlamaCalismasi, v: OzetVerisi, id: BolgeKimligi, yor
     case 'sure': return yor.find((x) => x.simge === 'clock')?.m ?? [];
     case 'yaris': {
       const g0 = gec[0];
-      return g0 ? [{ b: String(gec.length) }, ' sipariş geç; en çok geciken ', { b: g0.id }, `, termininden ${saKisa(g0.T)} sonra biter.`] : ['Bütün siparişler termininden önce biter.'];
+      return g0 ? [{ b: String(gec.length) }, ' sipariş geç; en çok geciken ', { b: g0.id }, `, termininden ${saKisa(g0.T)} sonra biter.`] : n === v.terminsiz ? ['Termini olan sipariş yok.'] : ['Termini olan bütün siparişler termininden önce biter.'];
     }
     case 'yorum': return ['Veriden çıkan ', { b: String(yor.length) }, ' gözlem; önce sorunlar.'];
   }

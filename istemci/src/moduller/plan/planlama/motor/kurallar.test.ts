@@ -72,6 +72,24 @@ describe('planlama motoru hesapları', () => {
     ]);
   });
 
+  it('termini olmayan sipariş zamanında sayılmaz; hiç termin yoksa Zamanında boştur (1786 PLN-4)', () => {
+    const { c, p, cx, tg } = kur();
+    const biri = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((s) => (s.id === '3' ? { ...s, termin: null } : s)) } };
+    const cx1 = derle(girdiKur(biri, plandanBitenler(biri, p)));
+    const v1 = ozetVerisi(biri, p, cx1, 'hafta', 0);
+    expect(v1.terminsiz).toBe(1);
+    expect(gostergeler(biri, v1, tg).find((g) => g.ad === 'Zamanında')).toMatchObject({ deger: 0, alt: 'termininden önce biter; 1 terminsiz' });
+    expect(html(cevap(biri, v1, 'ozet', yorumlar(biri, v1, tg)))).toMatch(/^1 siparişin <b>0<\/b>'ı zamanında, <b>1<\/b>'i geç \(toplam 73 sa\)\. Termini olmayan <b>1<\/b> sipariş sayılmadı\./);
+    const hic = { ...c, D: { ...c.D, siparisler: c.D.siparisler.map((s) => ({ ...s, termin: null })) } };
+    const cx2 = derle(girdiKur(hic, plandanBitenler(hic, p)));
+    const v2 = ozetVerisi(hic, p, cx2, 'hafta', 0);
+    expect(v2.sip.some((s) => s.gec)).toBe(false);
+    expect(gostergeler(hic, v2, tg).find((g) => g.ad === 'Zamanında')).toMatchObject({ deger: null, alt: 'termini olan sipariş yok' });
+    expect(html(cevap(hic, v2, 'ozet', yorumlar(hic, v2, tg)))).toMatch(/^2 siparişin termini yok; zamanında olup olmadığı ölçülmez\./);
+    expect(html(cevap(hic, v2, 'yaris', []))).toBe('Termini olan sipariş yok.');
+    void cx;
+  });
+
   it('dönem değişince Özet o dönemi gösterir; günde üçer saatlik sekiz sütun, yılda sütun haftadır', () => {
     const { c, p, cx } = kur();
     const gun = ozetVerisi(c, p, cx, 'gun', 0);

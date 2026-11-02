@@ -122,10 +122,10 @@ export function SagPanel(o: SagOzellikleri) {
 // olduğundan "Son yaptıklarınız" çıkmaz.
 type Gorev = [SimgeAdi, string, string, (() => void) | null, string];
 function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }: SagOzellikleri) {
-  const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !s.havuz).length; const g = gec[0];
+  const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !s.havuz && s.termin != null).length; const g = gec[0];
   const durum: [SimgeAdi, string, string, string][] = [];
   if (!guncel) durum.push(['rotate', 'uyari', 'Veri plandan sonra değişti.', 'Gösterilen saatler eski. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.']);
-  if (!g) durum.push(['check', 'tamam', `${top} siparişin hepsi zamanında bitiyor.`, '']);
+  if (!g) durum.push(top ? ['check', 'tamam', `Termini olan ${top} siparişin hepsi zamanında bitiyor.`, ''] : ['flag', 'bilgi', 'Termini olan sipariş yok.', '']);
   else durum.push(['clock', 'hata', `${top} siparişten ${gec.length} tanesi geç bitiyor.`, `En çok geciken ${g.s.id}: ${g.T == null ? 'planlanamadı' : `${saatYazi(g.T)} geç`} (termin ${terminYaz(c, g.s.termin)}).`]);
   const gorevler: Gorev[] = [];
   if (yaz) gorevler.push(['play', 'Plan iyileştirme ara', 'Motor gecikmeyi azaltmaya çalışır; sonucu görüp siz kabul edersiniz.', null, MOTOR_NOTU]);
