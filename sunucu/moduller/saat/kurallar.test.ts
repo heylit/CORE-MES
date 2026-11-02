@@ -67,16 +67,16 @@ describe('saat kuralları', () => {
     ]);
   });
   const tezgahlar: KaynakMakine[] = [
-    { id: 10, istasyonId: 1, ad: 'Mazak', tur: 'CNC' },
-    { id: 11, istasyonId: 1, ad: 'Haas', tur: null },
+    { id: 10, istasyonId: 1, ad: 'Ornek CNC', tur: 'CNC' },
+    { id: 11, istasyonId: 1, ad: 'Ornek Torna', tur: null },
     { id: 12, istasyonId: null, ad: 'Boşta', tur: null },
   ];
 
   test('tezgah: istasyonun ilk makinesi; çalışan iş emrinin makinesi biliniyorsa o; makine yoksa null', () => {
-    assert.deepEqual(istasyonlariKur(istasyonlar, [], [], tezgahlar).map((i) => i.tezgah), [{ ad: 'Mazak', tur: 'CNC' }, null]);
-    assert.deepEqual(emirTezgahi(11, 1, tezgahlar), { ad: 'Haas', tur: null });
-    assert.deepEqual(emirTezgahi(null, 1, tezgahlar), { ad: 'Mazak', tur: 'CNC' });
-    assert.deepEqual(emirTezgahi(99, 1, tezgahlar), { ad: 'Mazak', tur: 'CNC' });
+    assert.deepEqual(istasyonlariKur(istasyonlar, [], [], tezgahlar).map((i) => i.tezgah), [{ ad: 'Ornek CNC', tur: 'CNC' }, null]);
+    assert.deepEqual(emirTezgahi(11, 1, tezgahlar), { ad: 'Ornek Torna', tur: null });
+    assert.deepEqual(emirTezgahi(null, 1, tezgahlar), { ad: 'Ornek CNC', tur: 'CNC' });
+    assert.deepEqual(emirTezgahi(99, 1, tezgahlar), { ad: 'Ornek CNC', tur: 'CNC' });
     assert.equal(emirTezgahi(null, 2, tezgahlar), null);
   });
 
