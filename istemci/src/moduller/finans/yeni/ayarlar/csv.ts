@@ -61,6 +61,7 @@ export function csvdenBelgeler(metin: string, kategori: (yon: Yon, etiket: strin
   const ci = {
     date: sutun('tarih', 'belgetarihi'), type: sutun('tür', 'tur', 'tip'), cat: sutun('kategori'), party: sutun('cari', 'müşteri', 'tedarikçi'),
     desc: sutun('açıklama', 'aciklama'), amt: sutun('kdvhariç', 'kdvharic', 'tutar', 'matrah'), kdv: sutun('kdv%', 'kdvoranı', 'kdv'), due: sutun('vade'),
+    pb: sutun('parabirimi', 'döviz', 'doviz'), kur: sutun('kur'),
   };
   if (ci.date < 0 || ci.amt < 0 || ci.party < 0) return { ok: [], bad: ['Başlıkta Tarih, Cari ve KDV hariç (veya Tutar) sütunları bulunamadı'] };
   const ok: TopluSatir[] = [], bad: string[] = [];
@@ -73,17 +74,25 @@ export function csvdenBelgeler(metin: string, kategori: (yon: Yon, etiket: strin
     if (!g('party')) { bad.push(`satır ${ln}: cari boş`); return; }
     const yon: Yon = /gider|alış|alis|ödeme|odeme|masraf/.test(g('type').toLocaleLowerCase('tr')) ? 'gider' : 'gelir';
     const kdvHam = csvSayisi(g('kdv'));
+    // FIN-11 a: para birimi sütunu okunur (boşsa TRY). Kur boşsa sunucu belge gününe kadar girilmiş son kuru alır, yoksa satırı reddeder.
+    const pbHam = g('pb').toLocaleUpperCase('tr').replace(/\s/g, '');
+    const paraBirimi = pbHam === '' || pbHam === 'TL' || pbHam === '₺' ? 'TRY' : pbHam;
+    if (!/^[A-Z]{3}$/.test(paraBirimi)) { bad.push(`satır ${ln}: para birimi okunamadı (TRY, USD, EUR gibi üç harf)`); return; }
+    const kur = csvSayisi(g('kur'));
+    if (g('kur') && !(kur > 0)) { bad.push(`satır ${ln}: kur okunamadı`); return; }
     ok.push({
       belgeTarihi: tarih, yon, kategori: kategori(yon, g('cat')), firma: g('party'), aciklama: g('desc') || (yon === 'gelir' ? 'Satış' : 'Gider'),
       tutar: yuvarla(tutar), kdvOrani: [0, 1, 10, 20].includes(kdvHam) ? kdvHam : 20, vade: csvTarihi(g('due')) ?? tarih,
+      ...(paraBirimi === 'TRY' ? {} : { paraBirimi, ...(kur > 0 ? { kur } : {}) }),
     });
   });
   return { ok, bad };
 }
 
 // İndirilen şablon (prototipteki örnek iki satır); firma adları uydurmadır.
-export const SABLON_BASLIKLARI = ['Tarih', 'Tür', 'Kategori', 'Cari', 'Açıklama', 'KDV hariç', 'KDV %', 'Vade', 'Durum', 'Ödeme tarihi'] as const;
+// Para birimi ve kur sütunları isteğe bağlıdır (FIN-11 a); boş para birimi TRY, boş kur o günün kuru demektir.
+export const SABLON_BASLIKLARI = ['Tarih', 'Tür', 'Kategori', 'Cari', 'Açıklama', 'KDV hariç', 'KDV %', 'Vade', 'Durum', 'Ödeme tarihi', 'Para birimi', 'Kur'] as const;
 export const SABLON_SATIRLARI: readonly (readonly CsvDegeri[])[] = [
-  ['01.10.2026', 'gelir', 'Ürün satışı', 'Örnek Müşteri A.Ş.', 'Fatura 2026-001', 100000, 20, '31.10.2026', 'açık', ''],
-  ['02.10.2026', 'gider', 'Mal / hammadde alımı', 'Örnek Tedarikçi', 'Alış faturası', 40000, 20, '02.10.2026', 'ödendi', '02.10.2026'],
+  ['01.10.2026', 'gelir', 'Ürün satışı', 'Örnek Müşteri A.Ş.', 'Fatura 2026-001', 100000, 20, '31.10.2026', 'açık', '', 'TRY', ''],
+  ['02.10.2026', 'gider', 'Mal / hammadde alımı', 'Örnek Tedarikçi', 'Alış faturası', 40000, 20, '02.10.2026', 'ödendi', '02.10.2026', 'TRY', ''],
 ];

@@ -34,4 +34,9 @@ describe('F4 CSV ice aktarma', () => {
     expect(csvdenBelgeler('Ad;Soyad\n1;2', kategori).bad[0]).toMatch(/Başlıkta/);
     expect(csvdenBelgeler('Tarih', kategori).bad).toEqual(['Dosyada veri satırı yok']);
   });
+  it('para birimi ve kur sutunlarini okur; bos ya da TL TRY, bos kur gonderilmez (sunucu gunun kurunu alir)', () => {
+    const s = csvdenBelgeler('Tarih;Cari;Tutar;KDV;Para birimi;Kur\n01.10.2026;A;10;20;USD;34,25\n01.10.2026;A;10;20;eur;\n01.10.2026;A;10;20;TL;\n01.10.2026;A;10;20;;\n01.10.2026;A;10;20;DOLAR;\n01.10.2026;A;10;20;USD;abc', kategori);
+    expect(s.ok.map((x) => [x.paraBirimi, x.kur])).toEqual([['USD', 34.25], ['EUR', undefined], [undefined, undefined], [undefined, undefined]]);
+    expect(s.bad).toEqual(['satır 6: para birimi okunamadı (TRY, USD, EUR gibi üç harf)', 'satır 7: kur okunamadı']);
+  });
 });
