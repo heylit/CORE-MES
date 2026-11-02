@@ -45,6 +45,7 @@ export async function vtIstatistigiOku(db: Db): Promise<VtIstatistigi | null> {
        FROM pg_stat_database WHERE datname = current_database()`,
   );
   if (d === null) return null;
+  // now() okuyan transaction'ın başlangıcıdır; ondan sonra başlayan işlem eksi süre verirdi. Duvar saati her açık işlemden sonradır.
   const a = await db.tek<{
     toplam: number; aktif: number; bosta: number; bos_tx: number; kilit: number; gorunmeyen: number; en_uzun_tx_sn: number | null;
   }>(
@@ -54,7 +55,7 @@ export async function vtIstatistigiOku(db: Db): Promise<VtIstatistigi | null> {
             count(*) FILTER (WHERE state LIKE 'idle in transaction%')::int AS bos_tx,
             count(*) FILTER (WHERE wait_event_type = 'Lock')::int AS kilit,
             count(*) FILTER (WHERE state IS NULL)::int AS gorunmeyen,
-            extract(epoch FROM max(now() - xact_start) FILTER (WHERE pid <> pg_backend_pid()))::float8 AS en_uzun_tx_sn
+            extract(epoch FROM max(clock_timestamp() - xact_start) FILTER (WHERE pid <> pg_backend_pid()))::float8 AS en_uzun_tx_sn
        FROM pg_stat_activity
       WHERE datname = current_database() AND backend_type = 'client backend'`,
   );
