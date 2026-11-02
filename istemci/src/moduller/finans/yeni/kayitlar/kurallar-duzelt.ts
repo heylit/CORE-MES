@@ -54,8 +54,15 @@ export function duzeltKomutu(V: HazirVeri, b: Belge, d: DuzeltDegerleri): { komu
   return { komut: { uc: 'POST /finans/belgeler/:id/duzelt', parametre: { id: b.id }, govde, tekrar: false, basari: 'Belge düzeltildi.' } };
 }
 
+// İptal yalnız belgenin dağıtımlarını kaldırır (FNS-13): ödenmiş kısım firmanın avansında kalır, ödeme ayrı satırdır ve ayrıca iptal edilir.
+export function iptalUyarisi(b: Belge): string | null {
+  if (Number(b.kapanan) <= 0) return null;
+  const tutar = b.paraBirimi === 'TRY' ? fmt(Number(b.kapanan)) : `${nf(Number(b.kapanan))} ${b.paraBirimi}`;
+  return `Bu belgenin ${tutar} tutarındaki ödemesi iptal edilmez; firmanın avansı olarak kalır. Parayı da geri almak için Kayıtlar'da ödeme satırını ayrıca iptal edin.`;
+}
 export const belgeIptalKomutu = (b: Belge): Komut =>
-  ({ uc: 'POST /finans/belgeler/:id/iptal', parametre: { id: b.id }, govde: { surum: b.surum }, tekrar: false, basari: 'Belge iptal edildi; ödemesi varsa avansa döndü.' });
+  ({ uc: 'POST /finans/belgeler/:id/iptal', parametre: { id: b.id }, govde: { surum: b.surum }, tekrar: false,
+    basari: iptalUyarisi(b) ? 'Belge iptal edildi; ödemesi firmanın avansı olarak kaldı.' : 'Belge iptal edildi.' });
 export const odemeIptalKomutu = (o: Odeme): Komut =>
   ({ uc: 'POST /finans/odemeler/:id/iptal', parametre: { id: o.id }, govde: { surum: o.surum }, tekrar: false, basari: 'Ödeme iptal edildi.' });
 

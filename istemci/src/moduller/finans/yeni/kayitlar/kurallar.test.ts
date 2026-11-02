@@ -4,7 +4,7 @@ import { finansiKur } from '../veri.ts';
 import {
   aylaraBol, kayitCsvSatirlari, kayitDurumu, kayitlariSuz, kategoriEtiketi, suzgecSayilari,
 } from './kurallar.ts';
-import { belgeIptalKomutu, cariIpucu, duzeltIlkDegerleri, duzeltKomutu, odemeIptalKomutu } from './kurallar-duzelt.ts';
+import { belgeIptalKomutu, cariIpucu, iptalUyarisi, duzeltIlkDegerleri, duzeltKomutu, odemeIptalKomutu } from './kurallar-duzelt.ts';
 
 const BUGUN = '2026-10-15';
 const kur = () => finansiKur(ornekHamVeri(), BUGUN);
@@ -99,6 +99,16 @@ describe('Kayıtlar: düzeltme ve iptal komutu', () => {
     const { V } = kur();
     expect(belgeIptalKomutu(V.belgeById.get(1)!)).toMatchObject({ uc: 'POST /finans/belgeler/:id/iptal', parametre: { id: 1 }, govde: { surum: 1 } });
     expect(odemeIptalKomutu(V.odemeById.get(4)!)).toMatchObject({ uc: 'POST /finans/odemeler/:id/iptal', parametre: { id: 4 }, govde: { surum: 1 } });
+  });
+
+  it('ödenmiş belgenin iptali ödemenin avansta kalacağını önceden ve sonra söyler; ödenmemişte uyarı yok', () => {
+    const { V } = kur();
+    const odenmis = V.belgeById.get(1)!;
+    expect(iptalUyarisi(odenmis)).toMatch(/ödemesi iptal edilmez; firmanın avansı olarak kalır/);
+    expect(belgeIptalKomutu(odenmis).basari).toMatch(/avansı olarak kaldı/);
+    const acik = { ...odenmis, kapanan: '0.00' };
+    expect(iptalUyarisi(acik)).toBeNull();
+    expect(belgeIptalKomutu(acik).basari).toBe('Belge iptal edildi.');
   });
 
   it('cari ipucu: müşteride risk notu, tedarikçide son 12 ay, boşta yok', () => {
