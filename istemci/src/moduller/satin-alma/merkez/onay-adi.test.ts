@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { S, V } from './store.ts';
 import { transport } from './tasiyici.ts';
 import './ui.ts';
+import { setOnaylayabilir } from './roles.ts';
 import type { PurchaseRequest } from './tipler.ts';
 
-afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; S.me = null; });
+afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; S.me = null; setOnaylayabilir(false); });
 
-const kur = (alanDegeri: string, not: string) => {
+const kur = (alanDegeri: string, not: string, onayIslemi = true) => {
+  setOnaylayabilir(onayIslemi);
   const r = { id: 't1', no: 'ST-2026-001', title: 'Deneme', status: 'approval', items: [], quotes: [], rfqs: [], log: [], award: { mode: 'single', quoteId: 'q1', approvals: [] } } as unknown as PurchaseRequest;
   S.requests[r.id] = r; S.ready = true; S.me = { id: 'u7', email: 'm@x', name: 'Oturum Kişisi' };
   V.page = 'request'; V.id = r.id;
@@ -35,5 +37,14 @@ describe('SA onaylayan adı: oturumdan gelir, alandaki metin yok sayılır', () 
     expect(yazilan.award!.approvals![0]!.name).toBe('Oturum Kişisi');
     expect(yazilan.log.at(-1)!.t).toBe('Reddedildi: vade kısa');
     expect(JSON.stringify(yazilan)).not.toContain('Uydurma Kisi');
+  });
+});
+
+describe('TMI Ç5: onay işlemi olmayan kişi onaylayamaz', () => {
+  it('onay işlemi yoksa Onayla ve Reddet kayıt yazmaz', () => {
+    const { yaz } = kur('', 'tamam', false);
+    document.querySelector<HTMLButtonElement>('[data-act="approve"]')!.click();
+    document.querySelector<HTMLButtonElement>('[data-act="reject"]')!.click();
+    expect(yaz).not.toHaveBeenCalled();
   });
 });

@@ -16,7 +16,7 @@ import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, v
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
-import { getRole, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
+import { getRole, onaylayabilir, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 export function render(): void {
   renderNav();
@@ -238,7 +238,9 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
 }
 function filteredRequests(): PurchaseRequest[] {
   let list = Object.values(S.requests);
-  if (V.status === "open") list = list.filter(r => OPEN.includes(r.status));
+  // Liste ve süzgeç sayısı aynı tanımı kullanır.
+  const durumSuzgeci = STATUS_FILTERS.find(([k]) => k === V.status)?.[2];
+  if (durumSuzgeci) list = list.filter(durumSuzgeci);
   else if (V.status !== "all") list = list.filter(r => r.status === V.status);
   if (V.prio) list = list.filter(r => (r.priority || "normal") === V.prio);
   if (V.dept) list = list.filter(r => norm(r.department) === norm(V.dept));
@@ -249,8 +251,9 @@ function filteredRequests(): PurchaseRequest[] {
   if (key) return list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * V.dir; });
   return list.sort((a, b) => (po[a.priority || "normal"] - po[b.priority || "normal"]) || ((b.createdAt || 0) - (a.createdAt || 0)));
 }
+// "Onayda" onay bekleyendir; onaylanıp siparişi beklenen talep Açık'ta kalır, Onayda sayılmaz (TMI Ç3, menü sayacıyla aynı tanım).
 const STATUS_FILTERS: [string, string, (r: PurchaseRequest) => boolean][] = [
-  ["open", "Açık", r => OPEN.includes(r.status)], ["approval", "Onayda", r => r.status === "approval"],
+  ["open", "Açık", r => OPEN.includes(r.status)], ["approval", "Onayda", r => r.status === "approval" && approvalState(r).state !== "approved"],
   ["ordered", "Siparişte", r => r.status === "ordered"], ["received", "Tamamlanan", r => r.status === "received"],
   ["cancelled", "İptal", r => r.status === "cancelled"], ["all", "Tümü", () => true],
 ];
@@ -693,7 +696,8 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   const aps = approvalState(r);
   const approved = aps.state === "approved";
   // Sunucu durum dışı onay ve siparişi zaten reddeder; düğme yalnız işlem geçerliyken görünür (SA4).
-  const canApprove = aps.state === "pending" && r.status === "approval";
+  const canApprove = aps.state === "pending" && r.status === "approval" && onaylayabilir();
+  const baskasiOnaylar = aps.state === "pending" && r.status === "approval" && !onaylayabilir();
   const bu = r.department && tt ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
   const decided = !!r.award;
   const ordered = COMMITTED.includes(r.status);
@@ -753,7 +757,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
     ${canApprove ? `<div class="grid g2"><label class="f"><span>Onaylayan</span><input type="text" id="ap-name" value="${esc(S.me?.name ?? "")}" readonly></label><label class="f"><span>Not</span><input type="text" id="ap-note" placeholder="İsteğe bağlı"></label></div>
-    <div class="row"><button class="btn good" data-act="approve">Onayla</button><button class="btn" data-act="approval-form">Onay formu</button><button class="btn bad" data-act="reject">Reddet ve değerlendirmeye geri gönder</button><span class="small muted">Onay özetini e-postayla göndermek için aşağıdaki karar özetini kopyalayın.</span></div>` : ordered ? "" : `<div class="row"><button class="btn" data-act="approval-form">Onay formu</button><span class="small muted">${aps.state === "rejected" ? "Karar reddedildi. Seçimi güncelleyip yeniden onaya gönderin." : approved ? "Karar onaylandı; sipariş verilebilir." : "Onay, karar onaya gönderildiğinde açılır."}</span></div>`}`, decided)}`;
+    <div class="row"><button class="btn good" data-act="approve">Onayla</button><button class="btn" data-act="approval-form">Onay formu</button><button class="btn bad" data-act="reject">Reddet ve değerlendirmeye geri gönder</button><span class="small muted">Onay özetini e-postayla göndermek için aşağıdaki karar özetini kopyalayın.</span></div>` : ordered ? "" : `<div class="row"><button class="btn" data-act="approval-form">Onay formu</button><span class="small muted">${aps.state === "rejected" ? "Karar reddedildi. Seçimi güncelleyip yeniden onaya gönderin." : approved ? "Karar onaylandı; sipariş verilebilir." : baskasiOnaylar ? "Onay, onay yetkisi olan kişide; Onaylar sayfasından verilir." : "Onay, karar onaya gönderildiğinde açılır."}</span></div>`}`, decided)}`;
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
     ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
     <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button><button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>

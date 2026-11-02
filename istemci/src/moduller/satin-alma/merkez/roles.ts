@@ -19,6 +19,10 @@ export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "T
 let gecerliRol: Role = "buyer";
 export function getRole(): Role { return gecerliRol; }
 export function setRole(r: Role): void { gecerliRol = r; }
+// Onayla/Reddet yalnız onay işlemi olan kişiye çizilir: sunucu işlemsiz onayı 403 ile reddeder (TMI Ç5).
+let onayIslemi = false;
+export function onaylayabilir(): boolean { return onayIslemi; }
+export function setOnaylayabilir(v: boolean): void { onayIslemi = v; }
 
 /* ================= satın alma: iş kutusu ================= */
 interface Job { r: PurchaseRequest; info: string; flag?: string; act: string; tab: string }

@@ -565,7 +565,8 @@ export function savingsOf(r: PurchaseRequest): { avg: number; neg: number } {
   const t = awardTotals(r);
   if (!t) return { avg: 0, neg: 0 };
   const full = t.ev.elig.filter((x) => x.c.covered === (r.items ?? []).length).map((x) => x.c.pvTRY);
-  const avg = full.length > 1 ? Math.max(0, sum(full) / full.length - t.pvTRY) : 0;
+  // Ortalamadan pahalı seçim eksi tasarruftur; kırpılırsa raporda pahalı seçim görünmez (TMI G8).
+  const avg = full.length > 1 ? sum(full) / full.length - t.pvTRY : 0;
   const neg = t.x && isNum(t.x.q.firstTotal) ? Math.max(0, (t.x.q.firstTotal - t.x.c.total) * t.x.c.rate) : 0;
   return { avg, neg };
 }
