@@ -23,6 +23,8 @@ const komutlar = (s: KomutSonucu): Komut[] => {
 // Tekrar korumalı uçlar sunucudaki `tekrarKorumali` işaretiyle aynıdır. İstemci sözleşme şemasını değer olarak ithal edemez (zod).
 const DURUMLAR: readonly [string, OlayTuru, Partial<AkisDegerleri>, string, Record<string, unknown>, boolean][] = [
   ['satış faturası', 'satis', { party: musteri, amount: '1000' }, 'POST /finans/belgeler/ekle', { yon: 'gelir', tur: 'fatura', firmaId: 1, tutar: 1000, kdvOrani: 20, paraBirimi: 'TRY', kur: 1 }, true],
+  ['fatura no ve not ayrı alan (1824 a)', 'satis', { party: musteri, amount: '1000', fno: ' SF-001 ', desc: 'Ekim teslimi' }, 'POST /finans/belgeler/ekle', { belgeNo: 'SF-001', aciklama: 'Ekim teslimi' }, true],
+  ['fatura no boşsa belge no yok', 'alis', { party: tedarikci, amount: '500', desc: 'Kira notu' }, 'POST /finans/belgeler/ekle', { belgeNo: null, aciklama: 'Kira notu' }, true],
   ['peşin satış', 'satis', { party: musteri, amount: '1000', method: 'pesin', hesap: '1' }, 'POST /finans/belgeler/ekle', { yon: 'gelir', pesin: { yontem: 'banka', hesapId: 1, tarih: BUGUN } }, true],
   ['alış faturası', 'alis', { party: tedarikci, amount: '500', cat: 'Kira' }, 'POST /finans/belgeler/ekle', { yon: 'gider', tur: 'fatura', kategori: 'kira', firmaId: 2, tutar: 500 }, true],
   ['banka tahsilatı', 'tahsilat', { party: musteri, amount: '100', hesap: '1' }, 'POST /finans/odemeler/ekle', { yon: 'gelir', firmaId: 1, yontem: 'banka', hesapId: 1, tutar: 100 }, true],
@@ -35,6 +37,7 @@ const DURUMLAR: readonly [string, OlayTuru, Partial<AkisDegerleri>, string, Reco
   ['mahsup', 'mahsup', { satis: '3', alis: '2', satisTutari: '10' }, 'POST /finans/mahsuplar/ekle', { firmaId: 3, satisBelgeId: 3, alisBelgeId: 2, satisTutari: 10 }, true],
   ['avans düşme', 'avans', { odeme: '4', belge: '2', amount: '100' }, 'POST /finans/odemeler/:id/dagit', { dagitimlar: [{ belgeId: 2, belgeTutari: 100 }] }, true],
   ['satış iadesi', 'iadesat', { asil: '1', amount: '100' }, 'POST /finans/belgeler/ekle', { yon: 'gider', tur: 'iade', kategori: 'satis_iadesi', iadeBelgeId: 1, tutar: 100 }, true],
+  ['iade fatura no', 'iadesat', { asil: '1', amount: '100', fno: 'IF-7' }, 'POST /finans/belgeler/ekle', { belgeNo: 'IF-7', aciklama: null }, true],
   ['alış iadesi', 'iadealis', { asil: '2', amount: '100' }, 'POST /finans/belgeler/ekle', { yon: 'gelir', tur: 'iade', kategori: 'alis_iadesi', iadeBelgeId: 2, tutar: 100 }, true],
 ];
 
