@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { OeeCevabi, OeeOlcusu } from '#paylasilan/sozlesme/oee.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { DurumKutusu, Girdi, Kart, Rozet, SayiKarti, Sekmeler, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import './oee.css';
 
@@ -112,14 +112,23 @@ const ARALIKLAR = [
   { anahtar: 'dun', baslik: 'Dün' }, { anahtar: 'hafta', baslik: 'Son 7 gün' }, { anahtar: 'ay', baslik: 'Bu ay' }, { anahtar: 'ozel', baslik: 'Tarih seç' },
 ] as const;
 
+// İki bölüm ayrı rotadır, bölüm değişince ekran yeniden kurulur: seçilen dönem bölümler arasında burada korunur (sayfa yenilenene dek).
+let sonDonem: { aralik: Aralik; ozel: { bas: string; bit: string } } | null = null;
+export const donemiUnut = (): void => { sonDonem = null; };
+
 export function Oee({ bolum = 'ozet' }: { bolum?: Bolum }) {
-  const [aralik, aralikYaz] = useState<Aralik>('hafta');
-  const [ozel, ozelYaz] = useState(() => ({ bas: gunOnce(6), bit: gunOnce(0) }));
+  const [aralik, aralikSakla] = useState<Aralik>(() => sonDonem?.aralik ?? 'hafta');
+  const [ozel, ozelSakla] = useState(() => sonDonem?.ozel ?? { bas: gunOnce(6), bit: gunOnce(0) });
+  const aralikYaz = (a: Aralik) => { aralikSakla(a); sonDonem = { aralik: a, ozel }; };
+  const ozelYaz = (o: { bas: string; bit: string }) => { ozelSakla(o); sonDonem = { aralik, ozel: o }; };
   const { bas, bit } = aralikTarihleri(aralik, ozel);
   const sorgu = useQuery({
     queryKey: anahtarlar.oee(bas, bit),
     queryFn: () => api.get<OeeCevabi>(`/oee?baslangic=${bas}&bitis=${bit}`),
   });
+  // 4xx'te (ters aralık, 92 günü aşan, boş tarih) sunucunun iletisi yazılır, yeniden deneme sunulmaz: aynı istek aynı cevabı alır.
+  // Ağ ve 5xx'te ortak kutu.
+  const istemciHatasi = sorgu.error instanceof ApiHatasi && sorgu.error.durum >= 400 && sorgu.error.durum < 500 ? sorgu.error.sunucuIletisi : null;
   return (
     <Kart baslik="OEE">
       <div className="tc-oee">
@@ -138,6 +147,7 @@ export function Oee({ bolum = 'ozet' }: { bolum?: Bolum }) {
           makineye bakıyorsa "Kişi / makine" sütununda payı görünür; birim maliyet makine ve işçilik saatini birlikte sayar.
         </p>
         {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+          : istemciHatasi !== null ? <DurumKutusu durum="hata" mesaj={istemciHatasi} />
           : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
             : (
               <>

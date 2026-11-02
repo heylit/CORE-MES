@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { OeeCevabi, OeeOlcusu } from '#paylasilan/sozlesme/oee.ts';
-import { Oee, OeeMakineler } from './Oee.tsx';
+import { Oee, OeeMakineler, donemiUnut } from './Oee.tsx';
 
 // Biçim sunucunun cevabından (oee.test.ts, 1 kişi 3 makine): üretimsiz planlı makine ve maliyet yetkilisi.
 const olcu = (o: Partial<OeeOlcusu> = {}): OeeOlcusu => ({
@@ -42,7 +42,7 @@ function cizdir(ekran: React.ReactNode) {
   return render(<QueryClientProvider client={istemci}>{ekran}</QueryClientProvider>);
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); donemiUnut(); });
 
 describe('OEE ekranı', () => {
   it('son 7 günü okur; tesis özetini ve iş merkezi tablosunu gösterir', async () => {
@@ -109,5 +109,41 @@ describe('OEE ekranı', () => {
     sunucuKur(() => json(500, { kod: 'IC_HATA', mesaj: 'Deneme hata' }));
     cizdir(<Oee />);
     expect(await screen.findByRole('button', { name: 'Yeniden dene' })).toBeTruthy();
+  });
+
+  it('seçilen dönem bölüm değişince korunur', async () => {
+    const yollar = sunucuKur(() => json(200, cevap(true)));
+    cizdir(<Oee />);
+    await screen.findByText('OEE (vardiyaya göre)');
+    fireEvent.click(screen.getByText('Tarih seç'));
+    fireEvent.change(screen.getByLabelText('Başlangıç'), { target: { value: '2099-10-05' } });
+    fireEvent.change(screen.getByLabelText('Bitiş'), { target: { value: '2099-10-06' } });
+    expect(await screen.findByText('OEE (vardiyaya göre)')).toBeTruthy();
+    cleanup();
+    yollar.length = 0;
+    cizdir(<OeeMakineler />);
+    await screen.findByRole('table', { name: 'Makineler' });
+    expect((screen.getByLabelText('Başlangıç') as HTMLInputElement).value).toBe('2099-10-05');
+    expect(yollar).toContain('/oee?baslangic=2099-10-05&bitis=2099-10-06');
+  });
+
+  it('ters ya da 92 günü aşan aralıkta sunucunun nedeni yazılır, yeniden dene sunulmaz', async () => {
+    const hata = (mesaj: string) => json(400, { kod: 'DOGRULAMA', mesaj, alan: 'bitis' } satisfies HataGovdesi);
+    sunucuKur(() => json(200, cevap(true)));
+    cizdir(<Oee />);
+    await screen.findByText('OEE (vardiyaya göre)');
+    sunucuKur(() => hata('Bitiş başlangıçtan önce olamaz.'));
+    fireEvent.click(screen.getByText('Tarih seç'));
+    fireEvent.change(screen.getByLabelText('Başlangıç'), { target: { value: '2099-10-06' } });
+    fireEvent.change(screen.getByLabelText('Bitiş'), { target: { value: '2099-10-05' } });
+    expect(await screen.findByText('Bitiş başlangıçtan önce olamaz.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+  });
+
+  it('sunucu 400 dönerse iletisini yazar, yeniden dene sunmaz', async () => {
+    sunucuKur(() => json(400, { kod: 'DOGRULAMA', mesaj: 'En çok 92 gün okunur.', alan: 'bitis' } satisfies HataGovdesi));
+    cizdir(<Oee />);
+    expect(await screen.findByText('En çok 92 gün okunur.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
   });
 });
