@@ -37,6 +37,11 @@ export function listeDegeri<A extends AyarAnahtari>(
   return 'hata' in sonuc ? { deger: null, gecersiz: true } : { deger: sonuc.deger, gecersiz: false };
 }
 
+// Beklenen değer verilmediyse denetlenmez; verildiyse ekranın gördüğü değerle birebir aynı olmalı (değerler ilkel: boolean, sayı, metin, null).
+export function beklenenTutarMi(gorulen: unknown, beklenen: unknown): boolean {
+  return beklenen === undefined || gorulen === beklenen;
+}
+
 // Değiştirme komutu türe uymayan saklanan değeri de görür: başka modülün okuması onu reddeder, onarmanın yolu üstüne yazmaktır.
 export function oncekiDeger(anahtar: AyarAnahtari, saklanan: { deger: unknown } | null): unknown {
   if (saklanan === null) return AYAR_TANIMLARI[anahtar].varsayilan;

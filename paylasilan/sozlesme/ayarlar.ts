@@ -60,7 +60,9 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
 export const ayarParametresi = z.object({ anahtar: z.string().max(80) });
 
 // Değerin türü anahtara bağlıdır; gövde şeması onu bilemez, tanıma göre serviste doğrulanır.
-export const ayarDegistirGovdesi = z.object({ deger: z.unknown() });
+// `beklenen`: ekranın gördüğü değer (ayarın sürümü yerine). Saklanan değer ondan farklıysa komut 409 alır; iki yönetici
+// birbirinin değişikliğini habersiz ezmez. Verilmezse denetlenmez (betik ve başka modülün testi gibi değeri bilmeyen çağıran).
+export const ayarDegistirGovdesi = z.object({ deger: z.unknown(), beklenen: z.unknown().optional() });
 
 // Saklanan değer tanımın türüne uymuyorsa `gecersiz` gelir ve değer null'dur; üstüne yazmak onarır.
 const ayarOrtak = { anahtar: z.string(), baslik: z.string(), aciklama: z.string(), gecersiz: z.literal(true).optional() };

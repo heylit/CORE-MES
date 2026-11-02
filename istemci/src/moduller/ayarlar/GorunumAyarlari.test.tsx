@@ -54,12 +54,12 @@ describe('görünüm ve hareket', () => {
     const hareket = within(screen.getByRole('radiogroup', { name: 'Hareket dili' }));
     expect(hareket.getByRole('radio', { name: /^Kapalı/ }).getAttribute('aria-checked')).toBe('false');
     fireEvent.click(screen.getByRole('radio', { name: /^Ultra/ }));
-    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/ayarlar/kabuk.hareket/degistir', govde: { deger: 'ultra' } }]));
+    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/ayarlar/kabuk.hareket/degistir', govde: { deger: 'ultra', beklenen: 'orta' } }]));
     await waitFor(() => expect(screen.getByRole('radio', { name: /^Ultra/ }).getAttribute('aria-checked')).toBe('true'));
     fireEvent.click(screen.getByRole('radio', { name: /^Rastgele/ }));
-    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.acilis/degistir', govde: { deger: 'rastgele' } }));
+    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.acilis/degistir', govde: { deger: 'rastgele', beklenen: 'yok' } }));
     fireEvent.click(hareket.getByRole('radio', { name: /^Kapalı/ }));
-    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.hareket/degistir', govde: { deger: 'kapali' } }));
+    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.hareket/degistir', govde: { deger: 'kapali', beklenen: 'ultra' } }));
   });
 
   it('seçili karta yeniden dokunmak kaydetmez; her seçeneğin önizleme taslağı kendi seviyesini taşır', async () => {
@@ -75,14 +75,14 @@ describe('görünüm ve hareket', () => {
   it('geçiş hızı kartla, açılış süresi kaydırıcı bırakılınca bir kez kaydedilir', async () => {
     const yazilanlar = kur();
     fireEvent.click(await screen.findByRole('radio', { name: /^Yavaş/ }));
-    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/ayarlar/kabuk.gecis-hizi/degistir', govde: { deger: 'yavas' } }]));
+    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/ayarlar/kabuk.gecis-hizi/degistir', govde: { deger: 'yavas', beklenen: 'normal' } }]));
     const kaydirici = screen.getByRole('slider');
     expect(kaydirici.getAttribute('aria-valuetext')).toBe('2,0 sn');
     fireEvent.change(kaydirici, { target: { value: '3.5' } });
     fireEvent.change(kaydirici, { target: { value: '4' } });
     expect(yazilanlar).toHaveLength(1);
     fireEvent.pointerUp(kaydirici);
-    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.acilis-suresi/degistir', govde: { deger: 4 } }));
+    await waitFor(() => expect(yazilanlar.at(-1)).toEqual({ yol: '/ayarlar/kabuk.acilis-suresi/degistir', govde: { deger: 4, beklenen: 2 } }));
     expect(yazilanlar).toHaveLength(2);
   });
 

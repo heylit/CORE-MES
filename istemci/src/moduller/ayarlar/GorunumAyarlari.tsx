@@ -4,11 +4,12 @@ import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozle
 import type { AcilisTuru, GecisHizi, HareketSeviyesi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { AcilisOnizleme, Dugme, DurumKutusu, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { usePerformans } from '../../ortak/veri/gorunum.ts';
 import { useKurumLogosu } from '../../ortak/veri/kurum-logosu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { gorulenDeger } from './gorulen.ts';
 import './gorunum.css';
 
 export const GORUNUM_ANAHTARLARI = ['kabuk.hareket', 'kabuk.gecis-hizi', 'kabuk.acilis', 'kabuk.acilis-suresi'] as const;
@@ -68,14 +69,17 @@ export function GorunumAyarlari() {
 
   const degistir = useMutation({
     mutationFn: ({ anahtar, deger }: { anahtar: string; deger: string | number }) =>
-      api.post<Ayar>(`/ayarlar/${encodeURIComponent(anahtar)}/degistir`, { deger } satisfies AyarDegistirGovdesi),
+      api.post<Ayar>(`/ayarlar/${encodeURIComponent(anahtar)}/degistir`, { deger, beklenen: gorulenDeger(istemci, anahtar) } satisfies AyarDegistirGovdesi),
     onSuccess: (guncel) => {
       istemci.setQueryData<AyarlarCevabi>(anahtarlar.liste, (onceki) =>
         onceki && { ayarlar: onceki.ayarlar.map((a) => (a.anahtar === guncel.anahtar ? guncel : a)) });
       void istemci.invalidateQueries({ queryKey: ortakAnahtarlar.gorunum });
       bildir('tamam', 'Görünüm kaydedildi.');
     },
-    onError: (hata) => { bildir('hata', hataIletisi(hata, 'Görünüm kaydedilemedi.')); },
+    onError: (hata) => {
+      bildir('hata', hataIletisi(hata, 'Görünüm kaydedilemedi.'));
+      if (hata instanceof ApiHatasi && hata.durum === 409) void istemci.invalidateQueries({ queryKey: anahtarlar.liste });
+    },
   });
 
   const deger = (anahtar: string): string | null => {
