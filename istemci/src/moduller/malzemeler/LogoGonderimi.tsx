@@ -8,6 +8,7 @@ import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Secenek, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import './malzemeler.css';
 
@@ -185,7 +186,8 @@ function BirimSetiPenceresi({ kapat }: { kapat: () => void }) {
   const [ad, adYaz] = useState('');
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const ekle = useMutation({
+  // Çift tık tek istek: düğmenin yükleniyor hali ancak yeniden çizimde gelir (LOG-4).
+  const ekle = useTekGonderim({
     mutationFn: () => api.post('/logo/birim-setleri/ekle', { kod: kod.trim(), ad: ad.trim() === '' ? null : ad.trim() }),
     onSuccess: async () => {
       await istemci.invalidateQueries({ queryKey: BIRIM_SETI_ANAHTARI });
@@ -233,7 +235,7 @@ function BirimSetleri() {
   const [kaldirilacak, kaldirilacakYaz] = useState<BirimSeti | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const kaldir = useMutation({
+  const kaldir = useTekGonderim({
     mutationFn: (b: BirimSeti) => api.post(`/logo/birim-setleri/${encodeURIComponent(b.kod)}/kaldir`, {}),
     onSuccess: async () => {
       kaldirilacakYaz(null);

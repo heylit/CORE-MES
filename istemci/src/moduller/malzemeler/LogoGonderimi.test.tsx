@@ -216,12 +216,19 @@ describe('LogoGonderimi (kart #232)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Birim seti ekle' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.change(within(pencere).getByRole('textbox', { name: /Kod/ }), { target: { value: ' EL2 ' } });
-    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
-    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }]));
+    // Çift tık tek istek (LOG-4): ikinci tık yeniden çizimden önce gelir.
+    const ekleDugmesi = within(pencere).getByRole('button', { name: 'Ekle' });
+    fireEvent.click(ekleDugmesi);
+    fireEvent.click(ekleDugmesi);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }]);
+    expect(screen.getAllByText('Birim seti eklendi')).toHaveLength(1);
     fireEvent.click(within(satirlar[1]!).getByRole('button', { name: 'EL1 kaldır' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
-    await waitFor(() => expect(yazilanlar[1]).toEqual({ yol: '/logo/birim-setleri/EL1/kaldir', govde: {} }));
+    const kaldirDugmesi = within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' });
+    fireEvent.click(kaldirDugmesi);
+    fireEvent.click(kaldirDugmesi);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(yazilanlar).toEqual([{ yol: '/logo/birim-setleri/ekle', govde: { kod: 'EL2', ad: null } }, { yol: '/logo/birim-setleri/EL1/kaldir', govde: {} }]);
     fireEvent.click(within(satirlar[2]!).getByRole('button', { name: 'KG kaldır' }));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Kaldır' }));
     expect(await screen.findByText('Birim seti KG bir birim karşılığında kullanılıyor; önce karşılığı değiştirin.')).toBeTruthy();
