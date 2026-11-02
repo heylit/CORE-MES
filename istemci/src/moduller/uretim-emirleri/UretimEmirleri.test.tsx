@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { useLocation } from 'react-router-dom';
 import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
@@ -152,6 +153,13 @@ describe('EmirAyrintisi', () => {
     expect(await screen.findByText('EM-1')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
     expect(screen.getByRole('button', { name: "Reçete ve Rota'da aç" })).toBeTruthy();
+    cleanup();
+    // 1787a: düğme emri Reçete ve Rota'da seçili açar (genel aramanın `?kayit=` adresi).
+    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.recete-rota'] }, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
+    const Ev = () => <p>Ev: {useLocation().search}</p>;
+    ac([...ekran, { yol: '/recete-rota', ekran: Ev }], '/uretim-emirleri/1');
+    fireEvent.click(await screen.findByRole('button', { name: "Reçete ve Rota'da aç" }));
+    expect(await screen.findByText(`Ev: ?kayit=${String(PLANLI.id)}`)).toBeTruthy();
     cleanup();
     sunucuKur(YAZAR, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
     ac(ekran, '/uretim-emirleri/1');

@@ -76,7 +76,8 @@ export function EmirAyrintisi() {
           {emir && <Dugme simge="scan" aria-pressed={iplikAcik} onClick={izle}>Parçayı izle</Dugme>}
           {emir && <GecmisDugmesi kayitlar={[{ tablo: 'uretim_emri', anahtar: { id: emir.id } }]} />}
           {receteRotaGorur && (
-            <Dugme simge="tool" onClick={() => { void yonlendir('/recete-rota'); }}>Reçete ve Rota'da aç</Dugme>
+            // Emrin evi seçili kaydı `?kayit=` ile açar; emir no okunamadıysa liste açılır.
+            <Dugme simge="tool" onClick={() => { void yonlendir(emir ? `/recete-rota?kayit=${String(emir.id)}` : '/recete-rota'); }}>Reçete ve Rota'da aç</Dugme>
           )}
           {emir && akisGorur && (
             <Dugme simge="gantt" onClick={() => { void yonlendir(`/akis/${String(emirId)}`); }}>Akış Süresi'nde aç</Dugme>
