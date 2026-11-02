@@ -62,5 +62,5 @@ export function gorunenAyarEkranlari(ekranlar: readonly AyarEkrani[], islemler: 
 }
 
 export const ayarEkranlari: readonly AyarEkrani[] = ayarEkranlariniTopla(
-  acikModulDosyalari(import.meta.glob('../../moduller/*/ayar-ekranlari.tsx', { eager: true })),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/ayar-ekranlari.tsx', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

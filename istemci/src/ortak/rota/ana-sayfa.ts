@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
-import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import type { Aciliyet, IsKalemi } from '#paylasilan/sozlesme/pano.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 
@@ -175,7 +175,9 @@ export function islerSirala(satirlar: readonly IsSatiri[]): IsSatiri[] {
     || a.kaynak.anahtar.localeCompare(b.kaynak.anahtar) || a.kalem.anahtar.localeCompare(b.kalem.anahtar));
 }
 
-const MODUL_DOSYALARI = import.meta.glob('../../moduller/*/ana-sayfa.tsx', { eager: true });
+const MODUL_DOSYALARI = acikModulDosyalari(
+  import.meta.glob(['../../moduller/*/ana-sayfa.tsx', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true }),
+);
 
 export const anaSayfaKartlari: readonly AnaSayfaKarti[] = kartlariTopla(MODUL_DOSYALARI);
 export const anaSayfaKaynaklari: readonly AnaSayfaKaynagi[] = kaynaklariTopla(MODUL_DOSYALARI, anaSayfaKartlari);

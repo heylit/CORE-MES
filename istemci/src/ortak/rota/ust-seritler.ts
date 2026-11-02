@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
 import { seritRolGorunurMu } from '#paylasilan/rol-gorunumleri.ts';
-import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
+import { acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 
 // Bütün sayfaların en üstünde, kabuğun tam genişliğinde duran modül şeridi (istemci/src/moduller/<ad>/ust-serit.tsx; 939).
 // Kabuk yalnız yeri, sırayı ve görünürlüğü verir; içerik ve yazma yetkisi modülündür.
@@ -50,5 +50,5 @@ export function rolSeritleri(seritler: readonly UstSerit[], roller: readonly str
 }
 
 export const ustSeritler: readonly UstSerit[] = ustSeritleriTopla(
-  import.meta.glob('../../moduller/*/ust-serit.tsx', { eager: true }),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/ust-serit.tsx', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

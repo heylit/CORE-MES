@@ -102,5 +102,5 @@ export function gorunenHizliIsler(isler: readonly HizliIs[], { sayfalar, menuler
 }
 
 export const hizliIsler: readonly HizliIs[] = hizliIsleriTopla(
-  acikModulDosyalari(import.meta.glob('../../moduller/*/hizli-isler.ts', { eager: true })),
+  acikModulDosyalari(import.meta.glob(['../../moduller/*/hizli-isler.ts', '!../../moduller/portal/**', '!../../moduller/mesaj/**'], { eager: true })),
 );

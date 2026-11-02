@@ -1,7 +1,9 @@
 // Kapalı modül (1067 teyit, 1071 a): kodu, tabloları ve yetki satırları durur; uygulama onu yüklemez. Sunucu uçlarını
 // kaydetmez, istemci sayfasını, menüsünü, rehberini, hızlı işini ve ayar ekranını almaz, ekran testleri koşmaz.
-// Modülün kendi birim testleri koşmaya devam eder: kod main'le birlikte güncel kalır. Açmak listeden satırı silmektir;
-// açmadan önce modülün UYUM-BORCU.md dosyasındaki "kapalı modül" maddeleri kapanır.
+// Modülün kendi birim testleri koşmaya devam eder: kod main'le birlikte güncel kalır. Açmak listeden satırı ve istemci
+// toplayıcılarının (`istemci/src/ortak/rota/`) `import.meta.glob` dışlama desenini silmektir: Vite deseni derlemede
+// sabit ister, bu listeden okuyamaz; dışlanmayan modülün kodu pakete girer (yine de `acikModulDosyalari` süzer).
+// Açmadan önce modülün UYUM-BORCU.md dosyasındaki "kapalı modül" maddeleri kapanır.
 export const KAPALI_MODULLER: readonly string[] = ['portal', 'mesaj'];
 
 export const modulKapaliMi = (ad: string): boolean => KAPALI_MODULLER.includes(ad);
