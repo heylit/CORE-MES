@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
@@ -194,9 +194,16 @@ function OnayKutusu({ k, tur, yetkili }: { k: KapanisCevabi; tur: KapanisOnayi; 
     // Sürüm çakışmasında güncel kayıt yeniden okunur: başkası araya girdiyse kişi yeni hali görür.
     onError: async (x) => { bildir('hata', hataIletisi(x, 'Komut işlenemedi.')); await istemci.invalidateQueries({ queryKey: anahtarlar.kapanis(k.uretimEmriId) }); },
   });
+  // isPending ilk tıklamadan sonraki çizimde gelir; aynı karede ikinci tık ikinci istek gönderip eski sürümle 409 alıyordu (RR-4).
+  const suruyor = useRef(false);
+  const gonder = (v: { ad: Komut; govde: Record<string, unknown> }) => {
+    if (suruyor.current) return;
+    suruyor.current = true;
+    komut.mutate(v, { onSettled: () => { suruyor.current = false; } });
+  };
   const gerekceyle = (ad: Komut, ek: Record<string, unknown> = {}) => {
     if (not.trim() === '') { hataYaz('Gerekçe yaz.'); return; }
-    komut.mutate({ ad, govde: { gerekce: not.trim(), ...ek } });
+    gonder({ ad, govde: { gerekce: not.trim(), ...ek } });
   };
   const o = k.onaylar[tur];
   const baslik = tur === 'kalite' ? 'Kalite onayı' : 'Müdür onayı';
@@ -213,7 +220,7 @@ function OnayKutusu({ k, tur, yetkili }: { k: KapanisCevabi; tur: KapanisOnayi; 
         {notAlani(`${baslik} notu`, 'Not (ret için zorunlu)')}
         <div className="tc-emir-ust">
           <Dugme tur="birincil" simge="check" yukleniyor={komut.isPending && komut.variables?.ad === 'onay'} disabled={komut.isPending}
-            onClick={() => komut.mutate({ ad: 'onay', govde: { not: not.trim() === '' ? null : not.trim() } })}>
+            onClick={() => gonder({ ad: 'onay', govde: { not: not.trim() === '' ? null : not.trim() } })}>
             {tur === 'kalite' ? 'Kaliteyi onayla' : 'Müdür olarak onayla'}
           </Dugme>
           <Dugme tur="tehlike" simge="x" disabled={komut.isPending} onClick={() => gerekceyle('ret')}>Geri gönder</Dugme>
@@ -240,7 +247,7 @@ function OnayKutusu({ k, tur, yetkili }: { k: KapanisCevabi; tur: KapanisOnayi; 
           )}
           {notAlani('Muafiyet gerekçesi', 'Muafiyet gerekçesi (zorunlu)')}
           <div className="tc-emir-ust">
-            <Dugme simge="lock" disabled={komut.isPending || muafMaddesi === '' || muafMaddesi === undefined}
+            <Dugme simge="lock" disabled={komut.isPending || muafMaddesi === '' || muafMaddesi === undefined || not.trim() === ''}
               onClick={() => { if (muafMaddesi) gerekceyle('muaf', { madde: muafMaddesi }); }}>Eksik maddeyi gerekçeyle muaf tut</Dugme>
           </div>
         </>
