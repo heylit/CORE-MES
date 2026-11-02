@@ -857,11 +857,15 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(iz.govde.sevkler, [], 'emri sevk edilmemiş partinin izinde sevk uydurulmaz');
   });
 
-  test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan kart sınırsız', async () => {
+  test('21.4: emrin ürününün elle üretim girişi emrin adedini aşmaz (önceki girişlerle birlikte); emrin ürünü olmayan yarı mamul sınırsız', async () => {
     const e = await emir();
     const m = await kart('mamul');
     await o().sahip.sorgu('UPDATE uretim_emri SET malzeme_no = $2 WHERE id = $1', [e, m]);
     const gir = (malzemeId: number, miktar: string) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: e, malzemeId, miktar });
+    // K14 a: başlamamış emirde sınır kayıtlı sağlam adettir; üretim yokken giriş yazılmaz.
+    const baslamamis = await gir(m, '1');
+    assert.deepEqual([baslamamis.durum, baslamamis.govde.mesaj], [400, 'Üretim girişi emrin girilmemiş adedini (0) aşamaz.'], JSON.stringify(baslamamis.govde));
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'basladi', baslama = now() WHERE id = $1", [e]);
     assert.equal((await gir(m, '6')).durum, 200);
     const asan = await gir(m, '6');
     assert.deepEqual([asan.durum, asan.govde.mesaj], [400, 'Üretim girişi emrin girilmemiş adedini (4) aşamaz.'], JSON.stringify(asan.govde));
@@ -874,6 +878,24 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await gir(m, '4')).durum, 200);
     const baska = await kart('yarimamul');
     assert.equal((await gir(baska, '11')).durum, 200, 'emrin ürünü olmayan yarı mamul sınırsız');
+  });
+
+  test('1784: ürünlü emre başka mamul girmez; emrin ürünü kesirli girmez; başlamamış emre giriş yazılmaz (K14 a)', async () => {
+    const e = await emir();
+    const m = await kart('mamul');
+    await o().sahip.sorgu("UPDATE uretim_emri SET malzeme_no = $2, durum = 'basladi', baslama = now() WHERE id = $1", [e, m]);
+    const gir = (malzemeId: number, miktar: string, emirId = e) => depo<Hata>('POST', '/stok/uretim-girisi', { uretimEmriId: emirId, malzemeId, miktar });
+    const yabanci = await gir(await kart('mamul'), '1');
+    assert.deepEqual([yabanci.durum, yabanci.govde.alan], [400, 'malzemeId'], JSON.stringify(yabanci.govde));
+    const kesir = await gir(m, '0.5');
+    assert.deepEqual([kesir.durum, kesir.govde.alan], [400, 'miktar'], JSON.stringify(kesir.govde));
+    assert.equal((await gir(m, '2')).durum, 200, 'emrin ürünü tam sayıyla girer');
+    // Planlı emirde sağlam adet yazılamaz (durum kısıtı); kayıtlı sağlam 0 sayılır, giriş yazılmaz.
+    const planli = await emir();
+    await o().sahip.sorgu('UPDATE uretim_emri SET malzeme_no = $2 WHERE id = $1', [planli, m]);
+    assert.equal((await gir(m, '1', planli)).durum, 400, 'başlamamış emre üretim girişi yok');
+    const hareket = await o().vt.sorgu('SELECT 1 FROM stok_hareketi WHERE malzeme_id = $1 AND uretim_emri_id = ANY($2::int[])', [m, [e, planli]]);
+    assert.equal(hareket.length, 1, 'reddedilen girişler hareket yazmaz');
   });
 
   test('B-7: elle üretim girişi iptal, taslak ve kapanışı onaylanmış emre yazılmaz; bitmiş ve kapanışı açık emre yazılır', async () => {
@@ -1999,6 +2021,7 @@ describe('stok (gerçek PostgreSQL)', () => {
 
     // Üretim girişi: emrin çıktısından bir kısmı girer.
     const e2 = await rotaliEmir(urun, 5, [[1, h, '1']]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'basladi', baslama = now() WHERE id = $1", [e2]);
     assert.equal((await komut('stok-uretim-girisi', { uretimEmriId: e2, malzemeId: urun, miktar: '2' })).durum, 200);
     assert.equal((await hareketler(urun)).at(-1)?.[0], 2);
 

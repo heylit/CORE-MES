@@ -62,6 +62,23 @@ export function uretimGirisiEngeli(hedefAdet: number, girilen: string, miktar: s
   return `Üretim girişi emrin girilmemiş adedini (${bindenMetin(kalan > 0n ? kalan : 0n)}) aşamaz.`;
 }
 
+// K14 a: başlamamış emirde üretim yoktur; giriş yalnız kayıtlı sağlam adet kadar olur. Başlamış emirde sağlam adet yazılana kadar
+// sınır emrin adedidir (21.4).
+export function uretimGirisiHedefi(durum: string, saglamAdet: number | null, adet: number): number {
+  return durum === 'planli' ? saglamAdet ?? 0 : saglamAdet ?? adet;
+}
+// Emre yalnız onun ürünü ya da çok katmanlı emrin düğüm kartları girer; emrin ağacında olmayan mamul başka emrin işidir. Yarı mamulün
+// emirdeki miktarı adetten çıkmaz, sınırsız kalır (21.4).
+export function uretimGirisiKartEngeli(tur: string, malzemeId: number, emrinKartlari: ReadonlySet<number>): string | null {
+  if (tur !== 'mamul' || emrinKartlari.has(malzemeId)) return null;
+  return 'Bu mamul bu emrin ürünü değil; üretim girişi kendi emrine yazılır.';
+}
+// Adetle sayılan parça bölünmez: adet birimli kart ya da emrin kendi ürünü (emir adedi tam sayıdır) tam sayıyla girer.
+export function uretimGirisiKesirEngeli(miktar: string, tamSayili: boolean): string | null {
+  if (!tamSayili || binde(miktar) % 1000n === 0n) return null;
+  return 'Bu kart adetle sayılır; miktar tam sayı olmalı.';
+}
+
 // Elle üretim girişi yalnız açık ya da üretimi bitmiş emre yazılır: iptal, taslak ve onaylı kapanışı tamamlanmış emrin (1080 a:
 // kayıtları değişmez) stoğu üretimden gelmez. Bitmiş emir tamamlama ve kapanış öncesi düzeltme için açık kalır.
 export const URETIM_GIRISI_EMIR_DURUMLARI = ['planli', 'basladi', 'bitti'] as const;
@@ -408,6 +425,11 @@ export function statuKirilimi(b: readonly { statuId: number | null; miktar: stri
 // metniyle bağlıdır (yabancı anahtar yok): kart kodu büyük harfe çevrilip karşılaştırılır, malzemeler de kodu böyle arar.
 export interface StatuOzeti { id: number; malzemeNo: string; ad: string; urunKodu: string | null }
 const statuKodu = (kod: string): string => kod.trim().toLocaleUpperCase('tr-TR');
+// Statü tek bir kartın OP durumudur; başka kartın statüsüne geçilmez (statuKodu kuralıyla). Listede olmayan statüyü yabancı anahtar reddeder.
+export function statuKartEngeli(statuKarti: string | undefined, kartKodu: string | null): string | null {
+  if (statuKarti === undefined || (kartKodu !== null && statuKodu(statuKarti) === statuKodu(kartKodu))) return null;
+  return `Bu statü ${statuKarti} kartına ait; bu karta verilemez.`;
+}
 // Metnin statü adında, statünün malzeme kodunda ya da mamül kodunda geçtiği statüler ("OP 10" gibi).
 export function statuAramasi(statuler: readonly StatuOzeti[], metin: string): number[] {
   const m = metin.trim().toLocaleLowerCase('tr-TR');
