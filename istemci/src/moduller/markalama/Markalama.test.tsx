@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { HurdaNedenleriCevabi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import type {
   BirimAyrintisi, BirimlerCevabi, EmirOzetiCevabi, MarkalamaBirimi, MarkalamaTanimi, OnizlemeCevabi, TanimEmirleriCevabi, TanimlarCevabi,
@@ -17,7 +17,7 @@ import { Izleme } from './Izleme.tsx';
 import { Tanimlar } from './Tanimlar.tsx';
 
 // Model okuyucu Web Worker ve WASM ister; ekran testinde sahne kurulmaz.
-vi.mock('../cizimler/disari.ts', () => ({ modelOku: vi.fn(() => new Promise(() => {})), birak: vi.fn() }));
+vi.mock('../belge-merkezi/disari.ts', () => ({ modelOku: vi.fn(() => new Promise(() => {})), birak: vi.fn() }));
 
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.markalama', 'markalama.tanim-yaz', 'markalama.seri-ver', 'markalama.durum-yaz'] };
 const IZLEYICI: Kullanici = { id: 2, ad: 'Deneme İzleyici', islemler: ['sayfa.markalama'] };

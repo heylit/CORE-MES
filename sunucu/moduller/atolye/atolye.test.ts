@@ -12,7 +12,7 @@ import type {
 } from '#paylasilan/sozlesme/atolye.ts';
 import { MODEL_PARCA_BAYT } from '#paylasilan/sozlesme/atolye.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { kaydaBagla, kaydaBagliBelgeler } from '../cizimler/disari.ts';
+import { kaydaBagla, kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';

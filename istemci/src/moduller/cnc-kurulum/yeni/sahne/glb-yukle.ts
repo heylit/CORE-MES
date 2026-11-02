@@ -53,7 +53,7 @@ async function dosyaAc(m: CncModel): Promise<Object3D | null> {
       throw new ApiHatasi(cevap.status, null);
     }
     const veri = new Uint8Array(await cevap.arrayBuffer());
-    const { modelOku } = await import('../../../cizimler/disari.ts');
+    const { modelOku } = await import('../../../belge-merkezi/disari.ts');
     return modelOku(veri, belge.dosyaTuru, sahneRengi3('m-alu'));
   })();
   dosyalar.set(anahtar, ac);

@@ -4,7 +4,7 @@ import { kopruKur } from './kopru.ts';
 import { belgeAdi, modeliCizimlereAktar, yayinlaVeEslestir } from './model-aktarimi.ts';
 
 const yuklenen: Uint8Array[] = [];
-vi.mock('../cizimler/disari.ts', () => ({
+vi.mock('../belge-merkezi/disari.ts', () => ({
   dosyaYukle: vi.fn(async (veri: Uint8Array) => { yuklenen.push(veri); return 'a'.repeat(64); }),
 }));
 

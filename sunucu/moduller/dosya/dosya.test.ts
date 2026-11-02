@@ -289,7 +289,7 @@ describe('dosya saklama (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.notEqual(await vt().tx((db) => dosyalar.dosyaAkisi(db, 'k-tut', ozet)), null);
     assert.deepEqual((await vt().tx((db) => dosyalar.bagKaldir(db, 'k-tut', null))).map((d) => d.ozet), [ozet]);
     assert.deepEqual(await vt().tx((db) => dosyalar.bagliDosyalar(db, 'k-tut')), []);
-    assert.equal(dosyaTutamagi('cizimler').modul, 'cizimler');
+    assert.equal(dosyaTutamagi('belge-merkezi').modul, 'belge-merkezi');
     for (const ad of ['olmayan-modul', '', '../dosya', 'dosya/', 'Kisiler', 'kisiler ', '.']) {
       assert.throws(() => dosyaTutamagi(ad), /modül klasörü yok/, ad);
     }
@@ -318,7 +318,7 @@ describe('dosya saklama (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('kaynaktan bağlama (karar 732 a): başka modülde bağlı dosyayı sunucu kişisiz bağlar; bağsız ya da yalnız kendi modülünde bağlı dosyada ret', async () => {
     const arkon = modulDeposuTutamagi('arkon');
-    const cizimler = dosyaTutamagi('cizimler');
+    const cizimler = dosyaTutamagi('belge-merkezi');
     const sinir = { turler: ['pdf'] as const, azamiBayt: 1e9 };
     const icerik = pdf(2200);
     const ozet = ozetOf(icerik);

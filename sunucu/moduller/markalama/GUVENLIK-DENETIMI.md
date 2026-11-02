@@ -17,7 +17,7 @@ Okuma: `{ biri: ['sayfa.markalama'] }`. Test rolleri: operatör (sayfa + seri-ve
 
 ## Yalnız ekranda kalan
 - Düğmelerin görünmesi işleme bağlıdır; durum düğmeleri MRK-04'ü yansıtır, karar sunucudadır.
-- 3B model Çizim Merkezi uçlarından okunur; o uçların yetkisi (`sayfa.cizimler`, `cizimler.oku`, `malzemeler.yaz`) geçerlidir, ekran 403'te yazıyla uyarır.
+- 3B model Çizim Merkezi uçlarından okunur; o uçların yetkisi (`sayfa.cizimler`, `belge-merkezi.oku`, `malzemeler.yaz`) geçerlidir, ekran 403'te yazıyla uyarır.
 
 ## Açık konular
 Rol satırı yok (UYUM-BORCU 1). Kişi kimliği tabloda, ad yok; olayın kişisi denetim kaydı ve `kisi_id` ile.

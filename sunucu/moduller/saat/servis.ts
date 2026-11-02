@@ -7,7 +7,7 @@ import type {
   SaatDurusNedenleriCevabi, SaatEmriCevabi, SaatIstasyonlariCevabi, SaatOnizlemesiCevabi, SaatSiradakiCevabi, SaatUyarilariCevabi, SaatVardiyaCevabi,
 } from '#paylasilan/sozlesme/saat.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { yayindakiOnizleme, yayindakiOnizlemeKaresi } from '../cizimler/disari.ts';
+import { yayindakiOnizleme, yayindakiOnizlemeKaresi } from '../belge-merkezi/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { aktifIstasyonlar, aktifMakineler, istasyonGetir, kisininIzinliIsMerkezleri, makineDurumlari } from '../istasyonlar/disari.ts';
 import { stokMiktarlari, emirlerinNetSarfi } from '../stok/disari.ts';

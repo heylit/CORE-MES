@@ -6,7 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
-import { DosyaHatasi, dosyaYukle } from '../cizimler/disari.ts';
+import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';

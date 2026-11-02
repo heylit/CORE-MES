@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { KucukResim } from '#paylasilan/sozlesme/cizimler.ts';
+import type { KucukResim } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, EmirDurumu, IzlemeEmri, IzlemeListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { KucukResimKutusu, useKucukResimler } from '../cizimler/disari.ts';
+import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI, durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';

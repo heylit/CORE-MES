@@ -1,7 +1,7 @@
-import type { BagGovdesi, BelgeAyrintisi, BelgeListesiCevabi, BelgeOlusturGovdesi, RevizyonEkleGovdesi, SurumGovdesi } from '#paylasilan/sozlesme/cizimler.ts';
+import type { BagGovdesi, BelgeAyrintisi, BelgeListesiCevabi, BelgeOlusturGovdesi, RevizyonEkleGovdesi, SurumGovdesi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
-import { dosyaYukle, onizlemeGonder } from '../cizimler/disari.ts';
+import { dosyaYukle, onizlemeGonder } from '../belge-merkezi/disari.ts';
 
 // Seçili makinenin modeli Çizimler'e 3B model belgesi olarak gider (taslak; yayın Çizimler ekranından). Aynı makine ikinci kez
 // aktarılınca yeni belge açılmaz: adıyla bulunan belgeye revizyon eklenir, dosya aynıysa hiçbir şey yazılmaz. İstasyona bağ

@@ -47,7 +47,7 @@ const TABLO_ADLARI: Readonly<Record<string, string>> = {
 // Yol parametresinden önceki kesimin ekrandaki karşılığı (`/uretim-emirleri/:id` -> "Üretim emri 13"); listede olmayan "Kayıt" olur.
 const KESIM_ADLARI: Readonly<Record<string, string>> = {
   'adimli-emirler': 'Emir', 'uretim-emirleri': 'Üretim emri', emirler: 'Emir', 'is-emirleri': 'İş emri', adimlar: 'Adım',
-  isler: 'İş', teklifler: 'Teklif', revizyonlar: 'Revizyon', salonlar: 'Salon', cizimler: 'Çizim', istasyonlar: 'İstasyon',
+  isler: 'İş', teklifler: 'Teklif', revizyonlar: 'Revizyon', salonlar: 'Salon', cizimler: 'Çizim', 'belge-merkezi': 'Belge', istasyonlar: 'İstasyon',
   senaryolar: 'Senaryo', 'satin-alma-talepleri': 'Satın alma talebi', 'satin-alma-siparis-satirlari': 'Sipariş satırı',
   kisiler: 'Kişi', 'kisi-yetkinlikleri': 'Kişi', firmalar: 'Firma', urunler: 'Ürün', sartnameler: 'Şartname',
   'refakat-partileri': 'Refakat partisi', partiler: 'Parti', cekler: 'Çek', malzemeler: 'Malzeme', siparisler: 'Sipariş',

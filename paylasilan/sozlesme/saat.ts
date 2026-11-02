@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { durdurGovdesi } from './uretim-emirleri.ts';
 import { KATEGORILER } from './durus-nedenleri.ts';
-import { ONIZLEME_SINIRLARI } from './cizimler.ts';
+import { ONIZLEME_SINIRLARI } from './belge-merkezi.ts';
 
 // Akıllı saat (kart #1631): saat yalnız okur. Cevaplar küçük tutulur; saatin pili her sorguda ağdan geçen bayta bağlıdır.
 // Süreler saniyedir; ölçülemeyen değer null döner (sıfır uydurulmaz).

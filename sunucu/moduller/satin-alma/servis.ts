@@ -19,7 +19,7 @@ import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
 import { alisBelgeleri, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
-import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../cizimler/disari.ts';
+import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';

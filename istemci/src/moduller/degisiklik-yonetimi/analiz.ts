@@ -214,7 +214,7 @@ export const OLAY_TURU_ADLARI: Readonly<Record<OlayTuru, string>> = {
   sapma_acildi: 'Sapma açıldı', fai_onaylandi: 'FAI onaylandı', emir_kapandi: 'ECO kapandı',
 };
 export const OLAY_ILGILI_ADLARI: Readonly<Record<OlayIlgilisi, string>> = {
-  'uretim-emirleri': 'Üretim emirleri', rota: 'Rota', cizimler: 'Çizimler', malzemeler: 'Malzemeler', stok: 'Stok',
+  'uretim-emirleri': 'Üretim emirleri', rota: 'Rota', 'belge-merkezi': 'Belge Merkezi', malzemeler: 'Malzemeler', stok: 'Stok',
   plan: 'Plan', 'kalite-merkezi': 'Kalite Merkezi', sevkiyat: 'Sevkiyat',
 };
 

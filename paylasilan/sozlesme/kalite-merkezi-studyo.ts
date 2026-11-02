@@ -95,7 +95,7 @@ export const kmResimEkleGovdesi = z.object({
   revizyon: z.string().trim().min(1).max(20).nullish(),
 });
 export const kmResimCevabi = z.object({ resim: kmResim });
-// Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (cizimler/disari.ts yayindakiBelgeler); arama belge adında.
+// Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (belge-merkezi/disari.ts yayindakiBelgeler); arama belge adında.
 export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
 // Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
 export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzemeNo: z.coerce.number().int().positive().max(2147483647).optional() });

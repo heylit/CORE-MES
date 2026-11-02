@@ -21,7 +21,7 @@ import { PLAN_STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/p
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { Statu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import { kayitlaraBagliBelgeler } from '../cizimler/disari.ts';
+import { kayitlaraBagliBelgeler } from '../belge-merkezi/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';

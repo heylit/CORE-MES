@@ -3,7 +3,7 @@ import { Box3, Color, DirectionalLight, HemisphereLight, LinearSRGBColorSpace, P
 import type { Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DurumKutusu } from '../../ortak/arayuz/index.ts';
-import { birak, modelOku, type ModelBicimi } from '../cizimler/disari.ts';
+import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
 
 // Sahne renkleri tasarım değişkenlerinden okunur; değişken yoksa (test ortamı) nötr gri.
 function renk(ad: string): Color {

@@ -6,7 +6,7 @@ import type { EmirAyrintiCevabi, UretimKaydi } from '#paylasilan/sozlesme/uretim
 import { AdimListesi, Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { KucukResimKutusu, useKucukResimler } from '../cizimler/disari.ts';
+import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';

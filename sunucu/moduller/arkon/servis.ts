@@ -38,7 +38,7 @@ import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTak
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { ekipCagrisiBildir } from '../bildirim/disari.ts';
-import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../cizimler/disari.ts';
+import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { depoDolulugu, eksikDosyalar as kisininEksikDosyalari, modulDeposuTutamagi } from '../dosya/disari.ts';
 import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';

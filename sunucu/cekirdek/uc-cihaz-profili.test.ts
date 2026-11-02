@@ -41,7 +41,7 @@ function uygulama(denetle?: Denetle): FastifyInstance {
     dosyaUcu('/arkon/dxf', 'image/vnd.dxf'), dosyaUcu('/arkon/ag', 'application/octet-stream'),
     dosyaUcu('/arkon/foto', 'image/jpeg'), dosyaUcu('/arkon/video', 'video/mp4')], 'arkon');
   kur([ucKur('/finans/oku'), ucKur('/finans/yaz', 'POST')], 'finans');
-  kur([ucKur('/cizimler/onizleme')], 'cizimler');
+  kur([ucKur('/cizimler/onizleme')], 'belge-merkezi');
   kur([ucKur('/modulsuz')]);
   return app;
 }
@@ -77,7 +77,7 @@ test('telefona PDF, 3B, DXF ve imzasız ağ dizisi verilmez, içerik akmaz ve de
 
 test('kapı listeleri: telefon modülleri sabit; yasak türler kayıtlı çizim ve 3B türlerini kapsar', () => {
   assert.ok(TELEFON_MODULLERI.includes('oturum'), 'telefonda giriş ve çıkış açık kalmalı');
-  for (const yasak of ['cizimler', 'dosya', 'cnc-kurulum']) assert.equal(TELEFON_MODULLERI.includes(yasak), false, `telefona açılmamalı: ${yasak}`);
+  for (const yasak of ['belge-merkezi', 'dosya', 'cnc-kurulum']) assert.equal(TELEFON_MODULLERI.includes(yasak), false, `telefona açılmamalı: ${yasak}`);
   // Yanlış yazılmış ad telefona hiçbir şey açmaz ve terminali sessizce kırar: her ad uçlu bir modül klasörüdür.
   for (const modul of TELEFON_MODULLERI) assert.ok(existsSync(new URL(`../moduller/${modul}/uclar.ts`, import.meta.url)), modul);
   for (const tur of ['application/pdf', 'model/step', 'model/stl', 'model/iges', 'model/gltf-binary', 'model/gltf+json', 'image/vnd.dxf', 'application/octet-stream']) {

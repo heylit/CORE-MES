@@ -501,7 +501,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
       return { belge: b.id, rev };
     };
     const bagla = (belge: number, modul: string, id: number) => o().sahip.sorgu(
-      'INSERT INTO cizimler_bag (belge_id, hedef_modul, hedef_id, ekleyen_id) VALUES ($1, $2, $3, $4)', [belge, modul, id, yoneticiId]);
+      'INSERT INTO belge_merkezi_bag (belge_id, hedef_modul, hedef_id, ekleyen_id) VALUES ($1, $2, $3, $4)', [belge, modul, id, yoneticiId]);
     const onizleme = async (ad: string, id: number) =>
       saatOnizlemesiCevabi.parse((await istek(ad, 'GET', `/saat/emirler/${id}/onizleme`)).govde).onizleme;
     const kare = (ad: string, id: number, k: number) =>

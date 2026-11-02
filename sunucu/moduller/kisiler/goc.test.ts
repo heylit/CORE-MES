@@ -124,7 +124,7 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     // Rota yazma ve canlıya alma göçü (kullanıcı kararı, 15.10.2026).
     'rota.yaz', 'plan.canliya-al',
     // Çizim Merkezi göçü (kullanıcı kararı, 18.10.2026).
-    'cizimler.oku', 'cizimler.yaz', 'cizimler.yayinla', 'sayfa.cizimler',
+    'belge-merkezi.oku', 'belge-merkezi.yaz', 'belge-merkezi.yayinla', 'sayfa.cizimler',
     // Etiket Merkezi göçü (kullanıcı kararı 99, 18.10.2026).
     'etiket-merkezi.oku', 'etiket-merkezi.bas', 'sayfa.etiket-merkezi',
     // Rol x işlem tablosu göçü (kullanıcı kararları 139 a ve 160 a, 19.10.2026).

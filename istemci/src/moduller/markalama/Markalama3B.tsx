@@ -6,7 +6,7 @@ import {
 import type { Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Dugme, DurumKutusu } from '../../ortak/arayuz/index.ts';
-import { birak, modelOku, type ModelBicimi } from '../cizimler/disari.ts';
+import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
 import { yonelim, type Yer } from './sahne.ts';
 
 export interface SahneMarkasi {

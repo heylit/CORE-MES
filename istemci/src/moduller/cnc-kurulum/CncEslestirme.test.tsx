@@ -26,10 +26,10 @@ vi.mock('./yeni/sahne/model-uret.ts', () => ({
   },
 }));
 const cizimler = vi.hoisted(() => ({ onizlemeGonder: vi.fn(async (_r: unknown, _g: unknown) => {}) }));
-vi.mock('../cizimler/disari.ts', () => ({ dosyaYukle: vi.fn(async () => 'a'.repeat(64)), onizlemeGonder: cizimler.onizlemeGonder }));
+vi.mock('../belge-merkezi/disari.ts', () => ({ dosyaYukle: vi.fn(async () => 'a'.repeat(64)), onizlemeGonder: cizimler.onizlemeGonder }));
 
 // Kişi ve makine adları uydurmadır.
-const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.cnc-kurulum', 'cizimler.yaz', 'cizimler.yayinla'] };
+const YAZAR: Kullanici = { id: 5, ad: 'Deneme Yazar', islemler: ['sayfa.cnc-kurulum', 'belge-merkezi.yaz', 'belge-merkezi.yayinla'] };
 const OZET = 'a'.repeat(64);
 const GRUPLAR: IstasyonSecimiCevabi['gruplar'] = [
   { isMerkeziId: 1, isMerkeziKod: 'IM1', isMerkeziAd: 'Talaşlı', istasyonlar: [
@@ -220,7 +220,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
   });
 
   it('TA-10: yayınlama yetkisi yoksa revizyon taslak kalır ve küçük resim üretilmez (reddedilen)', async () => {
-    sunucuKur({ ...YAZAR, islemler: ['sayfa.cnc-kurulum', 'cizimler.yaz'] });
+    sunucuKur({ ...YAZAR, islemler: ['sayfa.cnc-kurulum', 'belge-merkezi.yaz'] });
     makineler(F01);
     ac();
     const satir = await eslestir();

@@ -282,7 +282,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Etiket Merkezi'nde basar, şablon ve yazıcı düzenler (kullanıcı kararı 99, 18.10.2026).
       'etiket-merkezi.oku', 'etiket-merkezi.bas', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz',
       // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
-      'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'durus-nedenleri.yaz', 'cizimler.oku', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al',
+      'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'durus-nedenleri.yaz', 'belge-merkezi.oku', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al',
       'siparisler.oku', 'siparisler.yaz', 'siparisler.onayla',
       // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
       'cnc-kurulum.takim-degistir',
@@ -293,7 +293,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Kalite Merkezi'ni görür, yazmaz (kullanıcı kararı 15.10.2026).
       'sayfa.kalite-merkezi', 'kalite-merkezi.oku', ...ETIKET_BASAN,
       // Kalite Merkezi'nde yazar ve onaylar, çizimi yayınlar (kullanıcı kararları 139 a ve 160 a).
-      'kalite-merkezi.yaz', 'kalite-merkezi.onayla', 'sayfa.cizimler', 'cizimler.oku', 'cizimler.yayinla', ...SIPARIS_OKU,
+      'kalite-merkezi.yaz', 'kalite-merkezi.onayla', 'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yayinla', ...SIPARIS_OKU,
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
       'plan.oku'],
     planlama_proje: [
@@ -336,7 +336,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Rotayı kurar ve planı canlıya alır (kullanıcı kararı 15.10.2026); rota onayı değişmez.
       'rota.yaz', 'plan.canliya-al',
       // Çizim Merkezi'nde belge okur, yazar ve yayınlar (kullanıcı kararı 18.10.2026, 109 a).
-      'cizimler.oku', 'cizimler.yaz', 'cizimler.yayinla', 'sayfa.cizimler',
+      'belge-merkezi.oku', 'belge-merkezi.yaz', 'belge-merkezi.yayinla', 'sayfa.cizimler',
       ...ETIKET_BASAN,
       // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
       'sayfa.durus-nedenleri', 'durus-nedenleri.yaz', 'sayfa.smartes', 'plan.kilitle', 'plan.studyo', 'rota.talimat-yaz', ...SIPARIS_YAZ,
@@ -352,7 +352,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Kapı kaydını yazar, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).
       'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz', 'nizamiye.kart-yonet'],
     cam: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', TALEP, TALEP_SAYFASI, ...ARKON('hazirlik'), 'arkon.kuyruk-sirala', ...SAYFA('uretim-emirleri', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'atolye'), ...SEVKIYAT_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU,
-      'sayfa.cizimler', 'cizimler.oku', 'cizimler.yaz', 'rota.talimat-yaz',
+      'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz',
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
       'plan.oku',
       // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
@@ -557,7 +557,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
       ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
-        'sayfa.cizimler', 'cizimler.oku', 'cizimler.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', ...TESIS_TALEBI].sort(),
+        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', ...TESIS_TALEBI].sort(),
     );
   });
 

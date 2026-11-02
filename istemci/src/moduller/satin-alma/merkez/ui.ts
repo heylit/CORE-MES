@@ -23,7 +23,7 @@ import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.t
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
 import { setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
-import { DosyaHatasi, dosyaYukle } from "../../cizimler/disari.ts";
+import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 /* ================= modal altyapısı ================= */
 export function openModal(html: string, narrow: boolean | "wide" = false, sticky = false): void {
