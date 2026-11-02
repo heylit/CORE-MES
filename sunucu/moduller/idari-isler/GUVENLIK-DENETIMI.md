@@ -6,7 +6,8 @@
 | `GET /idari-isler/bugun` | `idari-isler.oku` | IDR-10 | `IDR-10 Bugün` | `IDR-05 pano ve Bugün` (403) |
 | `GET /idari-isler/talepler/pano` | `idari-isler.oku` | sütun başına en çok 200 | `IDR-05 pano ve Bugün` | `IDR-05 pano ve Bugün` (403) |
 | `GET /idari-isler/taleplerim`, `/son-yerler` | `idari-isler.talep-ac` | yalnız açanın kayıtları (sorguda `acan_kisi_id`) | `IDR-05` | `IDR-05` (başkasının talebi listede yok) |
-| `GET /idari-isler/kisi-secenekleri` | `idari-isler.talep-yonet` | yalnız etkin kişiler, ad ve id | `IDR-07` | `IDR-02 red` |
+| `GET /idari-isler/kisi-secenekleri` | `idari-isler.talep-yonet` ya da `idari-isler.zimmet-yaz` | yalnız etkin kişiler, ad ve id (zimmet seçimi) | `IDR-07` | `IDR-07` (okuyan 403) |
+| `GET /idari-isler/talep-atanabilir` | `idari-isler.talep-yonet` | yalnız `talep-yonet` işlemi olan etkin kişiler, ad ve id (IDR-07) | `IDR-07` | `IDR-07` (okuyan 403) |
 | `POST /idari-isler/talepler/ac` | `idari-isler.talep-ac` | tekrar korumalı; açan ve zaman sunucudan; şema sınırları | `IDR-01` | `IDR-01 red` (401, 403, 400) |
 | `POST .../:id/geri-cek` | `idari-isler.talep-ac` | satır kilidi; başkasının talebi 404 (varlığı sızmaz); IDR-02; sürüm | `IDR-03` | `IDR-03` (404, 422) |
 | `POST .../:id/ustlen` | `idari-isler.talep-yonet` | kilit, IDR-02, IDR-07, sürüm | `IDR-02 akış`, `IDR-07` | `IDR-02 red` (403), `IDR-07` (400), `IDR-02 akış` (409) |

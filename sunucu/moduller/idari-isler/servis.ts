@@ -14,13 +14,13 @@ import {
 } from '#paylasilan/sozlesme/idari-isler.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { gununFazlaMesaisi, izinliKisiler } from '../ik/disari.ts';
-import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
 import { basladigiGunTakvimleri, vardiyaKadrosu } from '../vardiya/disari.ts';
 import {
   DEGER_GECERSIZ, DEMIRBAS_YOK, ZIMMET_BAGLI, ZIMMET_IADE_EDILMIS, ZIMMET_YOK, degerReddi, demirbasNo, elleDurumReddi, iadeReddi, iadeSonrasiDurum,
   zimmetlemeReddi,
-  ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
+  ARAC_DOLU, ARAC_VERILEMEZ, ARAC_YOK, ATANAMAZ, BUGUN_GUN, FIRMA_YOK, GOREV_YOK, KISI_YOK, KONTROL_BITTI, KONTROL_YOK, MASRAF_IPTALLI, MASRAF_YOK,
   PLAKA_GECERSIZ, PLAKA_VAR,
   TALEP_YOK, YAKIN_GUN, aracBelgeReddi, aracBugundeMi, aracUyarilari, aracVerilemezMi, bugunSirasi, cikisKmReddi, donusKmReddi, elleAracDurumReddi,
   gecisHedefi, gecisReddi,
@@ -69,15 +69,21 @@ async function kilitle(db: Db, id: number, komut: TalepKomutu): Promise<{ acan_k
 const surumlu = (db: Db, id: number, guncelle: () => Promise<{ id: number } | null>) =>
   surumluGuncelle({ guncelle, varMi: () => sorgular.talepVarMi(db, id), bulunamadiIletisi: TALEP_YOK });
 
-// IDR-07: başkasına atanan kişi etkin olmalı.
+// IDR-30: zimmet etkin kişiye verilir.
 async function atanabilirMi(db: Db, kisiId: number): Promise<boolean> {
   return (await kisiSecenekleri(db)).some((k) => k.id === kisiId);
+}
+
+// IDR-07: talep yalnız talebi yönetebilen etkin kişiye atanır; başkası pano ve Bugün'ü görmediği için atanan talebi bulamazdı.
+async function talepAtanabilirler(db: Db): Promise<{ id: number; ad: string }[]> {
+  const islemler = await kisilerinIslemleri(db);
+  return (await kisiSecenekleri(db)).filter((k) => islemler.get(k.id)?.includes('idari-isler.talep-yonet') ?? false);
 }
 
 export async function ustlen(db: Db, kullanici: Kullanici, id: number, surum: number, kisiId: number | null): Promise<Talep> {
   await kilitle(db, id, 'ustlen');
   const ustlenen = kisiId ?? kullanici.id;
-  if (ustlenen !== kullanici.id && !(await atanabilirMi(db, ustlenen))) throw dogrulama(KISI_YOK, 'kisiId');
+  if (ustlenen !== kullanici.id && !(await talepAtanabilirler(db)).some((k) => k.id === ustlenen)) throw dogrulama(ATANAMAZ, 'kisiId');
   await surumlu(db, id, () => sorgular.ustlenmeYaz(db, id, surum, ustlenen));
   return talep(db, id);
 }
@@ -132,6 +138,10 @@ export async function sonYerler(db: Db, kullanici: Kullanici): Promise<string[]>
 
 export async function atanabilirKisiler(db: Db): Promise<KisiSecenekleriCevabi> {
   return { kisiler: (await kisiSecenekleri(db)).map((k) => ({ id: k.id, ad: k.ad })) };
+}
+
+export async function talepAtanabilirKisiler(db: Db): Promise<KisiSecenekleriCevabi> {
+  return { kisiler: (await talepAtanabilirler(db)).map((k) => ({ id: k.id, ad: k.ad })) };
 }
 
 export async function bugun(db: Db, kullanici: Kullanici): Promise<BugunCevabi> {

@@ -6,6 +6,7 @@ import {
 
 export const TALEP_YOK = 'Talep bulunamadı.';
 export const KISI_YOK = 'Kişi bulunamadı ya da pasif.';
+export const ATANAMAZ = 'Talep yalnız tesis taleplerini yönetebilen etkin kişiye atanır.';
 export const YALNIZ_ACAN = 'Talebi yalnız açan kişi geri çekebilir.';
 
 // IDR-02: durum geçişleri. Kapanan, reddedilen ve geri çekilen talep son durumdadır.

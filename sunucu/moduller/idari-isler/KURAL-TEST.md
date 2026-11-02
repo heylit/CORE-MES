@@ -7,7 +7,7 @@
 | IDR-03 yalnız açan, yalnız yeni talebi geri çeker | `kurallar.test.ts` `IDR-03 ...`, `idari-isler.test.ts` `IDR-03 ...`; istemci `yeni talep geri çekilir` |
 | IDR-04 red nedeni zorunlu (`idari_isler_talep_red_nedeni`) | `IDR-04 ...`, `kısıtlar ...`; istemci `reddetmek neden ister ...` |
 | IDR-05 personel yalnız kendi taleplerini görür; pano ve Bugün yalnız `oku` | `IDR-05 ...`, `IDR-05 pano ve Bugün ...`; istemci `... kökte kendi taleplerini görür` |
-| IDR-07 başkasına atama yalnız etkin kişiye | `IDR-07 ...` |
+| IDR-07 başkasına atama yalnız talebi yönetebilen (`idari-isler.talep-yonet`) etkin kişiye; seçenekler `talep-atanabilir` ucundan | `IDR-07 ...` |
 | IDR-08 numara Sistem Ayarları kalıbından (varsayılan TT-yıl-sıra), ortak sayaç, dolu numara atlanır, tekil | `idari-isler.test.ts` `IDR-08 ...` |
 | IDR-09 Bugün sırası: acil, yeni, yapılan; grupta eski önce | `kurallar.test.ts` `IDR-09 ...` |
 | IDR-10 Bugün: yeni talepler ve kişinin üstlendikleri | `kurallar.test.ts` `IDR-10 ...`, `idari-isler.test.ts` `IDR-10 Bugün ...` |

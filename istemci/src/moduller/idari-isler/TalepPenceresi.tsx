@@ -20,8 +20,8 @@ export function TalepPenceresi({ talep, kapat }: { talep: Talep | null; kapat: (
   const [hata, hataYaz] = useState<string | null>(null);
   const [bekliyor, bekliyorYaz] = useState(false);
   const kisiler = useQuery({
-    queryKey: anahtarlar.kisiler,
-    queryFn: () => api.get<KisiSecenekleriCevabi>('/idari-isler/kisi-secenekleri'),
+    queryKey: anahtarlar.talepAtanabilir,
+    queryFn: () => api.get<KisiSecenekleriCevabi>('/idari-isler/talep-atanabilir'),
     enabled: talep !== null && yonetir && kip === 'ata',
   });
 

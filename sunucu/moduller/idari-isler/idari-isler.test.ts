@@ -23,6 +23,7 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
   let personel = { cerez: '', id: 0 };
   let personel2 = { cerez: '', id: 0 };
   let idari = { cerez: '', id: 0 };
+  let idari2 = { cerez: '', id: 0 };
   let okuyan = { cerez: '', id: 0 };
   let yetkisiz = { cerez: '', id: 0 };
   let yonetici = { cerez: '', id: 0 };
@@ -76,6 +77,7 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
     personel = await girisYap(['idari-isler.talep-ac']);
     personel2 = await girisYap(['idari-isler.talep-ac']);
     idari = await girisYap(['idari-isler.oku', 'idari-isler.talep-ac', 'idari-isler.talep-yonet']);
+    idari2 = await girisYap(['idari-isler.oku', 'idari-isler.talep-yonet']);
     okuyan = await girisYap(['idari-isler.oku']);
     yetkisiz = await girisYap([]);
   });
@@ -197,19 +199,28 @@ describe('idari-isler tesis talepleri (gerçek PostgreSQL, gerçek giriş)', () 
     assert.equal((await komut(personel, ustlenilen, 'geri-cek')).statusCode, 422);
   });
 
-  test('IDR-07: başkasına atama etkin kişiye olur; olmayan kişiye 400', async () => {
+  test('IDR-07: başkasına atama yalnız talebi yönetebilen etkin kişiye olur; olmayan ya da yönetemeyen kişiye 400', async () => {
     const t = await talepAc();
     assert.equal((await komut(idari, t, 'ustlen', { kisiId: 999999 })).statusCode, 400);
-    const a = await komut(idari, t, 'ustlen', { kisiId: personel2.id });
+    const yonetemez = await komut(idari, t, 'ustlen', { kisiId: personel2.id });
+    assert.equal(yonetemez.statusCode, 400);
+    assert.match(yonetemez.body, /yönetebilen/);
+    const a = await komut(idari, t, 'ustlen', { kisiId: idari2.id });
     assert.equal(a.statusCode, 200, a.body);
-    assert.equal(a.json<TalepCevabi>().talep.ustlenenKisiId, personel2.id);
+    assert.equal(a.json<TalepCevabi>().talep.ustlenenKisiId, idari2.id);
+    const secenek = await oku(idari.cerez, '/idari-isler/talep-atanabilir');
+    assert.equal(secenek.statusCode, 200);
+    const idler = secenek.json<{ kisiler: { id: number }[] }>().kisiler.map((k) => k.id);
+    assert.ok(idler.includes(idari2.id));
+    assert.ok(!idler.includes(personel2.id));
+    assert.equal((await oku(okuyan.cerez, '/idari-isler/talep-atanabilir')).statusCode, 403);
     assert.equal((await oku(idari.cerez, '/idari-isler/kisi-secenekleri')).statusCode, 200);
     assert.equal((await oku(okuyan.cerez, '/idari-isler/kisi-secenekleri')).statusCode, 403);
   });
 
   test('IDR-10 Bugün: yeni talepler ve kişinin üstlendikleri; başkasının üstlendiği görünmez', async () => {
     const benim = (await komut(idari, await talepAc(), 'ustlen')).json<TalepCevabi>().talep;
-    const baskasinin = (await komut(idari, await talepAc(), 'ustlen', { kisiId: personel2.id })).json<TalepCevabi>().talep;
+    const baskasinin = (await komut(idari, await talepAc(), 'ustlen', { kisiId: idari2.id })).json<TalepCevabi>().talep;
     const isler = talepIdleri((await oku(idari.cerez, '/idari-isler/bugun')).json<BugunCevabi>());
     assert.ok(isler.includes(benim.id));
     assert.ok(!isler.includes(baskasinin.id));

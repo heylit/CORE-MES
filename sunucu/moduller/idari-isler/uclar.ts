@@ -11,8 +11,8 @@ import {
 import * as servis from './servis.ts';
 
 // Talebi her personel kendi adına açar ve yalnız kendi taleplerini görür (talep-ac); bütün talepleri idari işler ve müdür okur (oku);
-// üstlenme, bırakma, kapatma ve red idari işlerindir (talep-yonet). Periyodik kontrolleri oku okur, kontrol-yaz yazar; yemek sayısını
-// oku okur, yemek-yaz bildirir; araç kartını oku okur, filo-yaz yazar. Araç görev talebini her çalışan kendi adına açar, görür ve geri
+// üstlenme, bırakma, kapatma ve red idari işlerindir (talep-yonet); talep yalnız talep-yonet işlemi olan kişiye atanır.
+// Periyodik kontrolleri oku okur, kontrol-yaz yazar; yemek sayısını oku okur, yemek-yaz bildirir; araç kartını oku okur, filo-yaz yazar. Araç görev talebini her çalışan kendi adına açar, görür ve geri
 // çeker (arac-talebi-ac); bütün görevleri oku okur; onay, red, çıkış ve dönüş km'si filo-yaz'dır. Araç masrafını ve tutarını oku okur,
 // filo-yaz yazar ve iptal eder. Demirbaşı ve zimmet geçmişini oku okur; demirbaş kaydı, zimmetleme, iade ve kişiye bağlama zimmet-yaz'dır.
 export const uclar = [
@@ -39,6 +39,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/idari-isler/kisi-secenekleri', yetki: { biri: ['idari-isler.talep-yonet', 'idari-isler.zimmet-yaz'] }, cevap: kisiSecenekleriCevabi,
     isle: ({ db }) => servis.atanabilirKisiler(db),
+  }),
+  uc({
+    yontem: 'GET', yol: '/idari-isler/talep-atanabilir', yetki: 'idari-isler.talep-yonet', cevap: kisiSecenekleriCevabi,
+    isle: ({ db }) => servis.talepAtanabilirKisiler(db),
   }),
   uc({
     yontem: 'POST', yol: '/idari-isler/talepler/ac', yetki: 'idari-isler.talep-ac', tekrarKorumali: true, govde: talepAcGovdesi, cevap: talepCevabi,

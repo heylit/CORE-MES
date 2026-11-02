@@ -89,6 +89,7 @@ function sunucuKur(kullanici: Kullanici, ozel: (yontem: string, yol: string, gov
       if (yol.startsWith('/idari-isler/taleplerim/son-yerler')) return json(200, { yerler: ['Salon 1', 'Kompresör odası'] });
       if (yol.startsWith('/idari-isler/taleplerim')) return json(200, TALEPLERIM);
       if (yol === '/idari-isler/kisi-secenekleri') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
+      if (yol === '/idari-isler/talep-atanabilir') return json(200, { kisiler: [{ id: 9, ad: 'Deneme Teknisyen' }] });
       if (yol === '/idari-isler/kontroller') return json(200, KONTROLLER);
       if (/^\/idari-isler\/kontroller\/\d+\/kayitlar$/.test(yol)) return json(200, { kayitlar: [] });
       if (yol.startsWith('/idari-isler/yemek?')) return json(200, YEMEK);

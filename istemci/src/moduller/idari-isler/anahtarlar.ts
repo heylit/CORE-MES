@@ -6,6 +6,7 @@ export const anahtarlar = {
   taleplerim: (sorgu: object) => ['idari-isler', 'taleplerim', sorgu] as const,
   sonYerler: ['idari-isler', 'son-yerler'] as const,
   kisiler: ['idari-isler', 'kisi-secenekleri'] as const,
+  talepAtanabilir: ['idari-isler', 'talep-atanabilir'] as const,
   kontroller: ['idari-isler', 'kontroller'] as const,
   kayitlar: (id: number) => ['idari-isler', 'kontroller', id, 'kayitlar'] as const,
   firmalar: (ara: string) => ['idari-isler', 'firma-secenekleri', ara] as const,
