@@ -5,7 +5,7 @@ import {
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
   enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinGecisiDenetle, izinOnayBildirimi,
-  ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
+  GUNLUK_AZAMI_SAAT, ibanGecerliMi, kayitIsMerkezi, katilimciIsMerkezleri, kesinlestirmeDenetle, kimlikIbanDenetle, personelBul, pozisyonGecisiDenetle, resmiTatilTarihleri, tcknGecerliMi, turDenetle,
   ucretDenetle, yillikMesaiSiniri,
 } from './kurallar.ts';
 import type { Govde, IzinGecisi } from './kurallar.ts';
@@ -371,5 +371,18 @@ describe('IK-82: T.C. kimlik ve IBAN biçimi', () => {
     assert.equal(kimlikIbanDenetle(null, p({ tckn: 10000000146 }))?.alan, 'govde.tckn', 'sayı olarak gelen değer metin değildir');
     assert.equal(kimlikIbanDenetle(p({ tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01' }), p({ tckn: '10000000147', iban: 'TR00 0000 0000 0000 0000 0000 01', telefon: '0500' })), null, 'kayıtlı eski değer kilitlenmez');
     assert.equal(kimlikIbanDenetle(p({ tckn: '10000000147' }), p({ tckn: '10000000136' }))?.alan, 'govde.tckn', 'değişen değer denetlenir');
+  });
+});
+
+describe('1806 IK-3: devam kaydı bir günden uzun olamaz', () => {
+  const devam = (saat: unknown): Govde => ({ id: 'att_1', kind: 'att', empId: 'emp_1', tarih: '2026-11-03', tur: 'Fazla mesai', saat });
+  test(`${GUNLUK_AZAMI_SAAT} saate kadar geçer, üstü reddedilir`, () => {
+    assert.equal(turDenetle('att', devam(GUNLUK_AZAMI_SAAT)), null);
+    assert.equal(turDenetle('att', devam(7.5)), null);
+    assert.equal(turDenetle('att', devam(undefined)), null, 'süresiz kayıt (devamsızlık günü) geçer');
+    const h = turDenetle('att', devam(30));
+    assert.equal(kod(h), 'DOGRULAMA');
+    assert.equal(h?.alan, 'govde.saat');
+    assert.equal(kod(turDenetle('att', devam(24.5))), 'DOGRULAMA');
   });
 });

@@ -58,6 +58,7 @@ export function istemciAlanlariniAyikla(tur: IkTuru, govde: Govde): Govde {
 }
 
 // IK-4: türün zorunlu alanları; kalan alanları ekran belirler.
+export const GUNLUK_AZAMI_SAAT = 24;
 const eksiMi = (v: unknown): boolean => v !== null && v !== undefined && v !== '' && Number(v) < 0;
 
 export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
@@ -90,6 +91,8 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
       if (!dolu(g['empId'])) return dogrulama('Kayıt bir personele bağlı olmalı.', 'govde.empId');
       // IK-79: eksi süre fazla mesaiyi düşürür ve bordroya öyle geçer (Soru 112 b; veritabanında da kısıt).
       if (tur === 'att' && eksiMi(g['saat'])) return dogrulama('Süre eksi olamaz.', 'govde.saat');
+      // Bir devam kaydı tek günündür; günden uzun süre bordroya fazla mesai diye geçerdi.
+      if (tur === 'att' && Number(g['saat']) > GUNLUK_AZAMI_SAAT) return dogrulama(`Süre bir günde en çok ${GUNLUK_AZAMI_SAAT} saat olabilir.`, 'govde.saat');
       break;
     case 'job':
       if (!dolu(g['baslik'])) return dogrulama('Pozisyon adı boş olamaz.', 'govde.baslik');
