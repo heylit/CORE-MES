@@ -16,8 +16,23 @@ const KIMLIK = /^\d{1,9}$/;
 const EMIR_NO = /^UE-\d+$/;
 const LOT_NO = /^LT-\d+$/;
 
-// Okuyucu ve elle giriş boşluk ve küçük harf katabilir; kodların hiçbiri boşluk taşımaz, harfleri büyüktür.
+// Fabrika ayarındaki el okuyucu ABD klavyesinin tuşlarına basar; Türkçe Q düzenli bilgisayarda ":" tuşu "Ş", "-" tuşu "*" yazar.
+// Okuyucu cihaz cihaz ayarlanmadan çalışsın diye geri çevrilir. Yalnız ham metin tanınmıyor ve çevrilen metin bilinen bir kod oluyorsa:
+// elle yazılan metin ve kart numaraları (rakam ve A-F) olduğu gibi kalır.
+const ABD_TUSU: Readonly<Record<string, string>> = { 'Ş': ':', 'ş': ':', '*': '-' };
+const ABD_TUSU_DESENI = /[Şş*]/g;
+export function okutmaDuzelt(ham: string): string {
+  if (!/[Şş*]/.test(ham) || cozumle(ham).tur !== 'bilinmiyor') return ham;
+  const duz = ham.replace(ABD_TUSU_DESENI, (c) => ABD_TUSU[c] ?? c);
+  return cozumle(duz).tur === 'bilinmiyor' ? ham : duz;
+}
+
 export function kodTuru(ham: string): KodTuru {
+  return cozumle(okutmaDuzelt(ham));
+}
+
+// Okuyucu ve elle giriş boşluk ve küçük harf katabilir; kodların hiçbiri boşluk taşımaz, harfleri büyüktür.
+function cozumle(ham: string): KodTuru {
   const kod = ham.replace(/\s+/g, '').toUpperCase();
   const ayrac = kod.indexOf(':');
   const onek = ayrac < 0 ? null : kod.slice(0, ayrac);

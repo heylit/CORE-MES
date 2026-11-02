@@ -17,6 +17,18 @@ describe('KodOkuyucu', () => {
     expect((alan as HTMLInputElement).value).toBe('');
   });
 
+  it('fabrika ayarindaki okuyucunun Turkce Q klavyede bozdugu ayraclar duzelir, baska metin degismez', () => {
+    const okundu = vi.fn();
+    render(<KodOkuyucu okundu={okundu} />);
+    const alan = screen.getByLabelText('Kod');
+    fireEvent.change(alan, { target: { value: 'LOTŞLT*000123' } });
+    fireEvent.submit(alan.closest('form')!);
+    expect(okundu).toHaveBeenLastCalledWith('LOT:LT-000123');
+    fireEvent.change(alan, { target: { value: 'ŞAFT 2*3' } });
+    fireEvent.submit(alan.closest('form')!);
+    expect(okundu).toHaveBeenLastCalledWith('ŞAFT 2*3');
+  });
+
   it('kamerasi olmayan tarayicida kamera acilinca elle girisi gosteren uyari cikar', async () => {
     render(<KodOkuyucu okundu={() => undefined} />);
     fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));

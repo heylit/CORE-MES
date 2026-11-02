@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { useKamera } from '../veri/kamera.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
 import './kod-okuyucu.css';
 
-// Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin olduğu gibi `okundu`ya gider, ne olduğuna çağıran karar verir.
+// Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin `okundu`ya gider, ne olduğuna çağıran karar verir. Klavyeden gelen metin
+// `okutmaDuzelt`ten geçer: fabrika ayarındaki okuyucunun Türkçe klavyede bozduğu ayraçlar düzelir, başka metin değişmez.
 // El okuyucu klavye gibi yazar ve Enter gönderir; kamerasız bilgisayarda da yalnız bu alan yeter.
 // `kendiliginden` kamerayı açılışta başlatır (okutmak için açılan ekranlar); varsayılan dokunmayla açılıştır.
 // `sik` okuyucuyu tek satıra indirir (kamera, kod, bul, fotoğraf); kamera görüntüsü yalnız açıkken yer kaplar, ipucu alanın açıklaması olur.
@@ -43,7 +45,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
         o.stopPropagation();
         elleSon.current = '';
         setElleDurumu('');
-        sonOkundu.current(kod);
+        sonOkundu.current(okutmaDuzelt(kod));
         return;
       }
       if (o.key.length !== 1) return;
@@ -55,7 +57,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
     return () => window.removeEventListener('keydown', tus, true);
   }, [acilistaOdak]);
   const dosya = useRef<HTMLInputElement | null>(null);
-  const gonder = (o: FormEvent) => { o.preventDefault(); if (elle.trim() !== '') { okundu(elle.trim()); setElle(''); } };
+  const gonder = (o: FormEvent) => { o.preventDefault(); if (elle.trim() !== '') { okundu(okutmaDuzelt(elle.trim())); setElle(''); } };
   const kodAlani = (
     <Girdi etiket="Kod" placeholder={sik ? 'Kodu yaz ya da okut' : 'Kodu yaz ya da el okuyucuyla okut'} value={elle} onChange={(o) => setElle(o.target.value)} autoFocus={acilistaOdak}
       {...(acilistaOdak ? { 'data-ilk-odak': '' } : {})} {...(ipucu ? { ipucu } : {})} />
