@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { BagModulu, BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 
@@ -197,11 +198,12 @@ export interface BelgeSuzgeci {
   makine: boolean | null;
 }
 
-// Arama adda (büyük-küçük harf duyarsız) geçer; joker karakterler düz metin sayılır.
+// Arama adda ya da resim numarasında geçer; genel aramayla aynı Türkçe sadeleştirmeden geçer ("flans" "Flanş"ı bulur) ve
+// aynı trigram ifade indeksine düşer (göç 20261029132000). Joker karakterler düz metin sayılır.
 const KOSUL = `WHERE b.aktif = $1 AND ($2::text IS NULL OR b.tur = $2)
-    AND ($3::text IS NULL OR b.ad ILIKE '%' || $3 || '%' ESCAPE '\\')
+    AND ($3::text IS NULL OR public.arama_sade(b.ad) LIKE $3 OR public.arama_sade(b.resim_no) LIKE $3)
     AND ($4::boolean IS NULL OR $4 = EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id AND g.hedef_modul = 'istasyonlar'))`;
-const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : s.ara.replace(/[\\%_]/g, (c) => `\\${c}`), s.makine];
+const kosulParametreleri = (s: BelgeSuzgeci): unknown[] => [s.aktif, s.tur, s.ara === null ? null : icindeDeseni(s.ara), s.makine];
 
 export async function belgeSay(db: Db, s: BelgeSuzgeci): Promise<number> {
   const satir = await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM belge_merkezi_belge b ${KOSUL}`, kosulParametreleri(s));

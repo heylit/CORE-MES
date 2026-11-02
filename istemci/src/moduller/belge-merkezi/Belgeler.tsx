@@ -76,7 +76,7 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
     >
       <div className="tc-cz-icerik">
         {ucBGorunumu && <Sekmeler etiket="3B modeller" sekmeler={UC_B_SEKMELERI} secili={ucB} sec={(s) => { ucBYaz(s); liste.sayfaDegistir(1); }} />}
-        <Girdi etiket="Ara" type="search" placeholder="Belge adı" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
+        <Girdi etiket="Ara" type="search" placeholder="Belge adı ya da resim no" value={liste.suzgecler.ara} onChange={(e) => { liste.suzgecDegistir({ ara: e.target.value }); }} />
         {l.isError
           ? <DurumKutusu durum="hata" mesaj={hataIletisi(l.error, 'Belgeler alınamadı')} yenile={() => { void l.refetch(); }} />
           : (

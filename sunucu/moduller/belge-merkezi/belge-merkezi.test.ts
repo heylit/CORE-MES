@@ -416,6 +416,21 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(c.json().mesaj, 'Bağlanacak kayıt bulunamadı.');
   });
 
+  test('liste araması Türkçe harften bağımsızdır ve resim numarasında da arar; joker karakter düz metindir', async () => {
+    let b = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Listeara Flanş Resmi');
+    const c = await gonder(yonetici, `/cizimler/${b.id}/guncelle`, { ad: b.ad, aciklama: null, resimNo: 'LSTARA-77', surum: b.surum });
+    assert.equal(c.statusCode, 200, c.body);
+    b = c.json<BelgeAyrintisi>();
+    const bulunan = async (ara: string): Promise<number[]> => {
+      const r = await oku(yonetici, `/cizimler?ara=${encodeURIComponent(ara)}`);
+      assert.equal(r.statusCode, 200, r.body);
+      return (r.json() as { satirlar: { id: number }[] }).satirlar.map((x) => x.id);
+    };
+    for (const ara of ['listeara flans', 'LİSTEARA FLANŞ', 'lstara-77', 'LSTARA']) assert.deepEqual(await bulunan(ara), [b.id], ara);
+    assert.deepEqual(await bulunan('Listeara%Resmi'), []);
+    assert.deepEqual(await bulunan('Listeara_Flan'), []);
+  });
+
   test('CZ-16 3B listesi makineye göre süzülür: istasyona bağlı model makine, bağsız ya da yalnız malzemeye bağlı model malzeme; süzgeçsiz liste değişmez', async () => {
     const im = await vt().tek<{ id: number }>('INSERT INTO is_merkezi (kod, ad) VALUES ($1, $2) RETURNING id', [`CZIM${(sayac += 1)}`, 'Deneme Merkezi']);
     const ist = await vt().tek<{ id: number }>(
