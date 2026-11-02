@@ -46,7 +46,7 @@ function MiktarPenceresi({ partiler, bitir }: { partiler: KarantinaPartisi[]; bi
   };
   return (
     <Pencere acik baslik="Serbest bırakılan adet" kapat={() => bitir(null)}
-      alt={<><Dugme onClick={() => bitir(null)}>Vazgeç</Dugme><Dugme tur="birincil" onClick={tamam}>Kapat</Dugme></>}>
+      alt={<><Dugme onClick={() => bitir(null)}>Vazgeç</Dugme><Dugme tur="birincil" onClick={tamam}>NCR'yi kapat</Dugme></>}>
       <p>Kalan miktar karantinada kalır.</p>
       {partiler.map((p, i) => (
         <Girdi key={p.partiId} etiket={`Lot ${p.lotNo ?? p.partiId} (red: ${p.redMiktar})`} inputMode="decimal" value={degerler[i] ?? ''}
