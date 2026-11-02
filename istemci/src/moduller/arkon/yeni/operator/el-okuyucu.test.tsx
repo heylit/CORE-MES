@@ -40,7 +40,11 @@ describe('1337 a el okuyucu', () => {
   });
   it('terminal yalnız refakat kartını tanır', () => {
     expect(terminalOkutmasi('rp:42')).toEqual({ tur: 'kart', kartId: 42 });
-    expect(terminalOkutmasi('LOT:LT-9')).toEqual({ tur: 'baska', kod: 'LOT:LT-9' });
+    // 1908 a: lot ve malzeme etiketi işin girdisiyle karşılaştırılır; başka kod terminalin değildir.
+    expect(terminalOkutmasi('LOT:LT-9')).toEqual({ tur: 'etiket', kod: 'LOT:LT-9' });
+    expect(terminalOkutmasi('LT-000123')).toEqual({ tur: 'etiket', kod: 'LT-000123' });
+    expect(terminalOkutmasi('MLZ:901')).toEqual({ tur: 'etiket', kod: 'MLZ:901' });
+    expect(terminalOkutmasi('LOC:A-01')).toEqual({ tur: 'baska', kod: 'LOC:A-01' });
     // paylasilan/kod-sozlugu.test.ts ile aynı girdiler: boşluk ve küçük harf kart sayılır, bozuk gövde sayılmaz.
     expect(terminalOkutmasi(' rp : 7 ')).toEqual({ tur: 'kart', kartId: 7 });
     for (const ham of ['RP:abc', 'RP:', 'RP-12', 'RP:-3', 'RP:12a', 'UE:4', 'RP:1234567890']) expect(terminalOkutmasi(ham).tur).toBe('baska');
