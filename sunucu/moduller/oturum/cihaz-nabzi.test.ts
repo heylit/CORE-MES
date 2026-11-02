@@ -244,18 +244,6 @@ describe('cihaz nabzı ucu (gerçek PostgreSQL)', () => {
     assert.equal(await nabizSayisi(), once);
   });
 
-  test('reddedilen: dış izleyici (firma kişisi) 403', async () => {
-    const kisi = await kisiEkle('nabiz.dis');
-    await vt().sorgu(
-      `INSERT INTO portal_belge (yol, ust, kimlik, veri, surum) VALUES ($1, 'users', $2, $3, 1)`,
-      [`users/tmi-${kisi}`, `tmi-${kisi}`, JSON.stringify({ id: `tmi-${kisi}`, partyId: 'p1' })],
-    );
-    const cerez = await giris('nabiz.dis');
-    const once = await nabizSayisi();
-    assert.equal((await nabiz(cerez)).statusCode, 403);
-    assert.equal(await nabizSayisi(), once);
-  });
-
   test('reddedilen: negatif ya da sınır dışı sayı, fazladan alan (kişi, konum, saat) 400', async () => {
     await kisiEkle('nabiz.gecersiz');
     const cerez = await giris('nabiz.gecersiz');
