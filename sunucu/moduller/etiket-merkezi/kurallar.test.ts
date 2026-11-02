@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, yerlesim } from './kurallar.ts';
+import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 
@@ -82,6 +82,23 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(satirlaraBol(`10 Torna${SATIR_BASI}20 Freze`, 18, 10, 3), ['10 Torna', '20 Freze']);
     assert.deepEqual(satirlaraBol(['a', 'b', 'c', 'd'].join(SATIR_BASI), 18, 7.2, 3), ['a', 'b...']);
     assert.deepEqual(satirlaraBol('10 Torna\n20 Freze', 36, 10, 3), ['10 Torna 20 Freze'], 'satır sonu satır başı değildir');
+  });
+
+  test('kod satıra sığmazsa ortadan bölünmez: yazı küçülür, o da yetmezse ayıraçtan bölünür', () => {
+    // Konum 50x25'te kod 24 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
+    const konum = HAZIR_SABLONLAR.find((s) => s.anahtar === 'konum-50x25');
+    assert.ok(konum);
+    const kod = yerlesim(konum, { qr: 'LOC:ORN-ZEMIN-1', kod: 'ORN-ZEMIN-1' }, false).find((o) => o.tur === 'metin');
+    assert.equal(kod?.tur === 'metin' && kod.satirlar.join('|'), 'ORN-ZEMIN-1');
+    assert.equal(kod?.tur === 'metin' && kod.yaziMm < 4 && kod.yaziMm >= 4 * 0.6, true);
+    assert.match(zpl({ genislik: 50, yukseklik: 25, dpi: 203, adet: 1, ogeler: konum ? yerlesim(konum, { kod: 'ORN-ZEMIN-1' }, false) : [] }), /\^FDORN-ZEMIN-1\^FS/);
+    // Sığan kodun ve boşluklu metnin boyu değişmez.
+    assert.equal(sigdirilmisYazi('OA-01-01', 24, 4), 4);
+    assert.equal(sigdirilmisYazi('Örnek uzun malzeme adı', 24, 4), 4);
+    // Okunurluk sınırının altına inilmez: tasarım boyunda kalır ve son sığan ayıraçtan bölünür.
+    assert.equal(sigdirilmisYazi('ORN-DEPO-ZEMIN-0001', 24, 4), 4);
+    assert.deepEqual(satirlaraBol('ORN-DEPO-ZEMIN-0001', 24, 10, 4), ['ORN-DEPO-', 'ZEMIN-0001']);
+    assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCDE', 'FGHIJ'], 'ayıraç yoksa satır sonundan');
   });
 
   test('PPLB yazı tipi istenen yüksekliği aşmaz', () => {

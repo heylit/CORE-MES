@@ -41,6 +41,12 @@ export const tekSatir = (metin: string): string => metin.replace(/[\u0000-\u001f
 // atmaz, gelen veride satır sonu eskisi gibi boşluk olur.
 export const HARF_ORANI = 0.6;
 export const SATIR_BASI = '\u2028';
+// Satıra sığmayan sözcük, satıra sığan son ayıraçtan (- / . _) sonra bölünür; ayıraç yoksa satır sonundan.
+const AYIRACLAR = new Set(['-', '/', '.', '_']);
+function kesimYeri(sozcuk: string, enCokHarf: number): number {
+  for (let i = Math.min(enCokHarf, sozcuk.length) - 1; i > 0; i--) if (AYIRACLAR.has(sozcuk[i] ?? '')) return i + 1;
+  return enCokHarf;
+}
 function paragrafiBol(paragraf: string, enCokHarf: number): string[] {
   const satirlar: string[] = [];
   let satir = '';
@@ -50,12 +56,22 @@ function paragrafiBol(paragraf: string, enCokHarf: number): string[] {
       const aday = satir === '' ? kalan : `${satir} ${kalan}`;
       if (aday.length <= enCokHarf) { satir = aday; kalan = ''; continue; }
       if (satir !== '') { satirlar.push(satir); satir = ''; continue; }
-      satirlar.push(kalan.slice(0, enCokHarf));
-      kalan = kalan.slice(enCokHarf);
+      const kesim = kesimYeri(kalan, enCokHarf);
+      satirlar.push(kalan.slice(0, kesim));
+      kalan = kalan.slice(kesim);
     }
   }
   if (satir !== '') satirlar.push(satir);
   return satirlar;
+}
+// EM-3: kod gibi boşluksuz tek sözcük satıra sığmıyorsa ortadan bölünmesin diye yazı küçülür; en çok tasarım boyunun
+// EN_KUCUK_YAZI_ORANI'na kadar (okunurluk). O da yetmezse tasarım boyunda kalır ve ayıraçtan bölünür.
+export const EN_KUCUK_YAZI_ORANI = 0.6;
+export function sigdirilmisYazi(metin: string, genislikMm: number, yaziMm: number): number {
+  if (metin === '' || /\s/.test(metin)) return yaziMm;
+  if (Math.floor(genislikMm / (yaziMm * HARF_ORANI)) >= metin.length) return yaziMm;
+  const kucuk = Math.floor((genislikMm / (metin.length * HARF_ORANI)) * 10) / 10;
+  return kucuk >= yaziMm * EN_KUCUK_YAZI_ORANI && Math.floor(genislikMm / (kucuk * HARF_ORANI)) >= metin.length ? kucuk : yaziMm;
 }
 export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number): string[] {
   const enCokHarf = Math.max(1, Math.floor(genislikMm / (yaziMm * HARF_ORANI)));
@@ -99,7 +115,8 @@ function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): Onizl
   // QR içeriği kimliktir ve ASCII'dir; sadeleştirme yalnız okunan yazıya uygulanır.
   if (o.tur === 'qr') { const v = tekSatir(ham); return { tur: 'qr', x: o.x, y: o.y, boyut: o.boyut, veri: v, kareler: qrMatrisi(v) }; }
   const metin = tekSatir(sade ? sadelestir(ham) : ham);
-  return { tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm: o.yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, o.yaziMm) };
+  const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yaziMm);
+  return { tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm) };
 }
 
 // Koyu modüller satır satır birleşik dikdörtgenlere çevrilir; iki dil de QR'ı yazıcının QR komutuyla değil, kutu komutuyla basar.
