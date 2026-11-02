@@ -500,6 +500,13 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(kisitlar, [{ conname: 'ik_departman_butce_eksi_degil', convalidated: true }, { conname: 'ik_devam_saat_eksi_degil', convalidated: true }]);
   });
 
+  test('1806 IK-3, IK-4: günden uzun devam kaydı ve sınırı aşan metin sunucuda reddedilir', async () => {
+    const devam = (id: string, saat: number, aciklama?: string) => ({ id, kind: 'att', empId: 'emp_a', tarih: '2026-10-07', tur: 'Fazla mesai', saat, ...(aciklama === undefined ? {} : { aciklama }) });
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_g1/kaydet', { govde: devam('att_g1', 30), surum: null });
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_g2/kaydet', { govde: devam('att_g2', 2, 'x'.repeat(20_000)), surum: null });
+    await kaydet(c.uzm, 'devam', devam('att_g3', 24, 'x'.repeat(1000)));
+  });
+
   test('IK-82: T.C. kimlik ve IBAN biçimi sunucuda denetlenir; tek kayıt ve toplu aktarım aynı kurala girer, kayıtlı eski değer kilitlenmez', async () => {
     // Uydurma, algoritmadan geçen değerler; gerçek kişi ya da hesap değildir.
     await kaydet(c.uzm, 'personel', personel('emp_k1', { tckn: '10000003048', iban: 'TR200000000000000000000001' }));

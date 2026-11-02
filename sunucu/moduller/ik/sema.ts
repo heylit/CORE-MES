@@ -26,7 +26,13 @@ export interface Alan {
   // TMI tablolarına bağ (sayı kimliği; uygulamada da sayı).
   dis?: 'kisi' | 'is_merkezi';
   tekil?: boolean;
+  // Uzun metin (ilan, değerlendirme, not): METIN_AZAMI yerine UZUN_METIN_AZAMI.
+  uzun?: boolean;
 }
+
+// Metin alanının en çok karakteri. Kayıt sınırı (64 KB) tek alanın ekranları bozacak kadar uzamasını engellemez.
+export const METIN_AZAMI = 1000;
+export const UZUN_METIN_AZAMI = 10_000;
 
 // Alt liste: dizi (sıralı nesneler), harita (anahtar -> nesne), deger (anahtar -> tek değer), kimlik (bağlı kayıt kimlikleri).
 export interface Liste {
@@ -93,8 +99,8 @@ const PERSONEL: TurTanimi = {
     sec('yemekYontem', 'yemek_yontem', ['Genel ayar', ...YEMEK_YONTEM]), sec('yemekHesap', 'yemek_hesap', HESAP_OPTS), sayi('yemekDeger', 'yemek_deger'),
     sec('yolYontem', 'yol_yontem', ['Genel ayar', ...YOL_YONTEM]), sec('yolHesap', 'yol_hesap', HESAP_OPTS), sayi('yolDeger', 'yol_deger'),
     m('tesvikId', 'tesvik_kodu'), mantik('besKatilim', 'bes_katilim'), m('banka', 'banka'), m('iban', 'iban'),
-    sayi('oncekiKullanim', 'onceki_kullanilan_izin'), m('yanHaklar', 'yan_haklar'),
-    tarih('cikisTarihi', 'cikis_tarihi'), sec('cikisKodu', 'cikis_kodu', EXIT_CODES), m('cikisNotu', 'cikis_notu'),
+    sayi('oncekiKullanim', 'onceki_kullanilan_izin'), m('yanHaklar', 'yan_haklar', { uzun: true }),
+    tarih('cikisTarihi', 'cikis_tarihi'), sec('cikisKodu', 'cikis_kodu', EXIT_CODES), m('cikisNotu', 'cikis_notu', { uzun: true }),
     // Kullanıcı kararları 2 ve 6 (08.10.2026): TMI kullanıcısı (bir kişi en çok bir personel) ve zorunlu iş merkezi.
     { a: 'kisiId', s: 'kisi_id', t: 'tamsayi', dis: 'kisi', tekil: true },
     { a: 'isMerkeziId', s: 'is_merkezi_id', t: 'tamsayi', dis: 'is_merkezi', zorunlu: true },
@@ -103,7 +109,7 @@ const PERSONEL: TurTanimi = {
     { a: 'ucretGecmisi', tablo: 'ik_personel_ucret', bicim: 'dizi', alanlar: [tarih('tarih', 'yururluk', { zorunlu: true }), tutar('brut', 'brut', { zorunlu: true }), m('neden', 'neden'), m('not', 'notu')] },
     { a: 'hareketler', tablo: 'ik_personel_hareket', bicim: 'dizi', alanlar: [{ a: 't', s: 'zaman', t: 'zaman' }, tarih('tarih', 'tarih'), m('alan', 'alan'), m('eski', 'eski'), m('yeni', 'yeni')] },
     { a: 'belgeler', tablo: 'ik_personel_belge', bicim: 'harita', anahtar: 'belge_adi', alanlar: [mantik('ok', 'tamam'), tarih('tarih', 'tarih')] },
-    { a: 'notlar', tablo: 'ik_personel_notu', bicim: 'dizi', alanlar: [{ a: 't', s: 'zaman', t: 'zaman' }, m('m', 'metin', { zorunlu: true })] },
+    { a: 'notlar', tablo: 'ik_personel_notu', bicim: 'dizi', alanlar: [{ a: 't', s: 'zaman', t: 'zaman' }, m('m', 'metin', { zorunlu: true, uzun: true })] },
     { a: 'cikisListesi', tablo: 'ik_personel_cikis_adimi', bicim: 'deger', anahtar: 'adim', alanlar: [tarih('', 'tarih')] },
     { a: 'primler', tablo: 'ik_personel_primi', bicim: 'harita', anahtar: 'prim_kodu', alanlar: [mantik('aktif', 'aktif'), sayi('deger', 'deger')] },
   ],
@@ -140,7 +146,7 @@ const PERFORMANS: TurTanimi = {
   tur: 'perf', tablo: 'ik_performans', bagSutunu: 'performans_no',
   alanlar: [
     bag('empId', 'personel_no', 'emp', { zorunlu: true }), m('donem', 'donem'), bag('degerlendirenId', 'degerlendiren_no', 'emp'), tarih('tarih', 'tarih'),
-    m('hedefler', 'hedefler'), m('guclu', 'guclu'), m('gelisim', 'gelisim'), m('aksiyon', 'aksiyon'),
+    m('hedefler', 'hedefler', { uzun: true }), m('guclu', 'guclu', { uzun: true }), m('gelisim', 'gelisim', { uzun: true }), m('aksiyon', 'aksiyon', { uzun: true }),
   ],
   listeler: [{ a: 'skorlar', tablo: 'ik_performans_puani', bicim: 'deger', anahtar: 'kriter', alanlar: [tam('', 'puan')] }],
 };
@@ -165,10 +171,10 @@ const POZISYON: TurTanimi = {
     sec('calismaSekli', 'calisma_sekli', CALISMA_SEKLI), sec('calismaTuru', 'calisma_turu', ['Tam zamanlı', 'Yarı zamanlı', 'Dönemsel / proje', 'Stajyer', 'Serbest']),
     sec('deneyim', 'deneyim', ['Deneyimsiz', '1 yıl ve üzeri', '2–5 yıl', '5–10 yıl', '10 yıl ve üzeri', 'Belirtilmemiş']),
     sec('egitimSeviye', 'egitim_seviye', ['İlköğretim', 'Lise', 'Ön lisans', 'Lisans', 'Yüksek lisans', 'Belirtilmemiş']),
-    m('ozet', 'ozet'), m('sorumluluklar', 'sorumluluklar'), m('nitelikler', 'nitelikler'), m('tercih', 'tercih'), m('yanHaklar', 'yan_haklar'),
+    m('ozet', 'ozet', { uzun: true }), m('sorumluluklar', 'sorumluluklar', { uzun: true }), m('nitelikler', 'nitelikler', { uzun: true }), m('tercih', 'tercih', { uzun: true }), m('yanHaklar', 'yan_haklar', { uzun: true }),
     mantik('ucretGoster', 'ucret_goster'), tarih('sonBasvuru', 'son_basvuru'), m('ilanKodu', 'ilan_kodu', { tekil: true }),
-    m('basvuruEposta', 'basvuru_eposta'), m('basvuruLink', 'basvuru_baglanti'), m('mulakatSorulari', 'mulakat_sorulari'), m('aciklama', 'aciklama'),
-    m('ozelMetin', 'ozel_metin'),
+    m('basvuruEposta', 'basvuru_eposta'), m('basvuruLink', 'basvuru_baglanti'), m('mulakatSorulari', 'mulakat_sorulari', { uzun: true }), m('aciklama', 'aciklama', { uzun: true }),
+    m('ozelMetin', 'ozel_metin', { uzun: true }),
     // Kullanıcı kararı A (08.10.2026): pozisyonun iş merkezi; aday ve görüşme kapsamı buradan.
     { a: 'isMerkeziId', s: 'is_merkezi_id', t: 'tamsayi', dis: 'is_merkezi', zorunlu: true },
   ],
@@ -185,9 +191,9 @@ const ADAY: TurTanimi = {
     m('il', 'il'), m('kaynak', 'kaynak'), bag('refEmpId', 'referans_no', 'emp'), tarih('basvuruTarihi', 'basvuru_tarihi'),
     sec('asama', 'asama', STAGES), mantik('kvkk', 'kvkk_onayi'), m('mevcutSirket', 'mevcut_sirket'), m('mevcutPozisyon', 'mevcut_pozisyon'),
     sayi('tecrubeYil', 'tecrube_yil'), sec('egitim', 'egitim', EGITIM), m('okul', 'okul'), m('yabanciDil', 'yabanci_dil'), m('cvLink', 'cv_baglanti'),
-    m('ozet', 'ozet'), tutar('maasBeklentisi', 'maas_beklentisi'), tarih('baslayabilir', 'baslayabilir'), tutar('teklifUcret', 'teklif_ucret'),
+    m('ozet', 'ozet', { uzun: true }), tutar('maasBeklentisi', 'maas_beklentisi'), tarih('baslayabilir', 'baslayabilir'), tutar('teklifUcret', 'teklif_ucret'),
     tarih('teklifTarihi', 'teklif_tarihi'), sec('teklifYanit', 'teklif_yanit', ['Bekleniyor', 'Kabul etti', 'Reddetti', 'Pazarlık sürüyor']),
-    m('teklifNot', 'teklif_notu'), sec('redNedeni', 'red_nedeni', REJECT_REASONS), m('notlar', 'notlar'), bag('empId', 'personel_no', 'emp'),
+    m('teklifNot', 'teklif_notu', { uzun: true }), sec('redNedeni', 'red_nedeni', REJECT_REASONS), m('notlar', 'notlar', { uzun: true }), bag('empId', 'personel_no', 'emp'),
     tarih('iseAlimTarihi', 'ise_alim_tarihi'), tarih('redTarihi', 'red_tarihi'),
   ],
   listeler: [],
@@ -198,7 +204,7 @@ const GORUSME: TurTanimi = {
   alanlar: [
     bag('candId', 'aday_no', 'cand', { zorunlu: true }), sec('tur', 'tur', INTV_TYPES), tarih('tarih', 'tarih'), { a: 'saat', s: 'saat', t: 'saat' },
     tam('sure', 'sure'), sec('sekil', 'sekil', ['Yüz yüze', 'Video görüşme', 'Telefon']), m('yer', 'yer'), sec('durum', 'durum', INTV_STATES),
-    sec('oneri', 'oneri', RECS), m('guclu', 'guclu'), m('zayif', 'zayif'), m('notlar', 'notlar'), tarih('degerlendirmeTarihi', 'degerlendirme_tarihi'),
+    sec('oneri', 'oneri', RECS), m('guclu', 'guclu', { uzun: true }), m('zayif', 'zayif', { uzun: true }), m('notlar', 'notlar', { uzun: true }), tarih('degerlendirmeTarihi', 'degerlendirme_tarihi'),
   ],
   listeler: [
     { a: 'gorusmeciler', tablo: 'ik_gorusmeci', bicim: 'kimlik', alanlar: [bag('', 'personel_no', 'emp')] },
@@ -257,8 +263,8 @@ export const ORTAK_SUTUNLAR = ['no', 'kimlik', 'surum', 'iptal', 'olusturan_kisi
 // Şirket geneli ayarlar (tek satır).
 export const GENEL_AYAR_ALANLARI: readonly Alan[] = [
   m('sirket', 'sirket'), mantik('cumartesiIsGunu', 'cumartesi_is_gunu'), tam('denemeAy', 'deneme_suresi_ay'), tam('engelliEsik', 'engelli_esik'),
-  sayi('engelliOran', 'engelli_oran'), sayi('sgkTesvikPuan', 'sgk_tesvik_puan'), m('sirketTanitim', 'sirket_tanitim'), m('kariyerEposta', 'kariyer_eposta'),
-  m('kariyerSayfasi', 'kariyer_sayfasi'), m('ilanLokasyon', 'ilan_lokasyon'), m('kvkkLink', 'kvkk_baglanti'), m('ilanYanHaklar', 'ilan_yan_haklari'),
+  sayi('engelliOran', 'engelli_oran'), sayi('sgkTesvikPuan', 'sgk_tesvik_puan'), m('sirketTanitim', 'sirket_tanitim', { uzun: true }), m('kariyerEposta', 'kariyer_eposta'),
+  m('kariyerSayfasi', 'kariyer_sayfasi'), m('ilanLokasyon', 'ilan_lokasyon'), m('kvkkLink', 'kvkk_baglanti'), m('ilanYanHaklar', 'ilan_yan_haklari', { uzun: true }),
   m('hesapPersonel', 'hesap_personel'), m('hesapSgk', 'hesap_sgk'), m('hesapVergi', 'hesap_vergi'), m('hesapGider', 'hesap_gider'), m('hesapDiger', 'hesap_diger'),
 ];
 
