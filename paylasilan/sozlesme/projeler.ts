@@ -28,11 +28,11 @@ const istege = (azami: number) =>
 
 // PRJ-09: bütçeyi yalnız `finans.maliyet-oku` olan görür ve yazar; işlemi olmayanın gövdesindeki bütçe yok sayılır. Bütçe en çok iki ondalıklı, eksi olmayan tutardır; para birimi verilmezse TRY.
 export const BUTCE_BICIMI = /^\d{1,16}(\.\d{1,2})?$/;
+const butceTutariSemasi = z.string().trim().regex(BUTCE_BICIMI, 'Bütçe en çok iki ondalıklı bir tutar olmalı (örnek: 250000.00).');
+const paraBirimiSemasi = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Para birimi üç harfli koddur (TRY gibi).');
 const butceAlanlari = {
-  butceTutari: z.string().trim().regex(BUTCE_BICIMI, 'Bütçe en çok iki ondalıklı bir tutar olmalı (örnek: 250000.00).')
-    .nullish().transform((t) => t ?? null),
-  butceParaBirimi: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Para birimi üç harfli koddur (TRY gibi).')
-    .nullish().transform((p) => p ?? null),
+  butceTutari: butceTutariSemasi.nullish().transform((t) => t ?? null),
+  butceParaBirimi: paraBirimiSemasi.nullish().transform((p) => p ?? null),
 };
 
 const projeAlanlari = {
@@ -65,9 +65,23 @@ export const projeOlusturGovdesi = z
   .refine(tarihSirasi, TARIH_SIRASI);
 export const siparisParametresi = z.object({ siparisId: z.coerce.number().int().positive().max(2147483647) });
 
-// Güncelleme tam kayıttır; kod yoktur (PRJ-03: açıldıktan sonra değişmez).
+// Güncelleme tam kayıttır; kod yoktur (PRJ-03: açıldıktan sonra değişmez). PRJ-16: gönderilmeyen alan sessizce silinmez, gövde reddedilir;
+// silmek için alan `null` gönderilir. Bütçe istisnadır: maliyet görmeyen onu hiç göndermez; yoksa var olan kalır, `null` siler.
 export const projeGuncelleGovdesi = z
-  .object({ ...projeAlanlari, durum: projeDurumuSemasi, ...beklenenSurum })
+  .object({
+    ad: projeAlanlari.ad,
+    firmaId: z.number().int().positive().nullable(),
+    baslangic: tarihSemasi.nullable(),
+    bitis: tarihSemasi.nullable(),
+    aciklama: z.string().max(1000).nullable().transform((m) => {
+      const kirpik = m?.trim();
+      return kirpik ? kirpik : null;
+    }),
+    butceTutari: butceTutariSemasi.nullable().optional(),
+    butceParaBirimi: paraBirimiSemasi.nullable().optional(),
+    durum: projeDurumuSemasi,
+    ...beklenenSurum,
+  })
   .refine(tarihSirasi, TARIH_SIRASI);
 
 export const projeListesiSorgusu = z.object({

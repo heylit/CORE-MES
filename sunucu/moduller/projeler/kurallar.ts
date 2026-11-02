@@ -37,8 +37,9 @@ export function siparisFirmasiReddi(siparisId: number | null, mevcutFirmaId: num
 // PRJ-09: bütçeyi yalnız maliyet gören yazar; görmeyenin gövdesindeki bütçe yok sayılır ve var olan değer kalır. Tutar varsa
 // para birimi verilmediğinde TRY'dir, tutar yoksa para birimi de yoktur.
 export interface Butce { butceTutari: string | null; butceParaBirimi: string | null }
-export function butce(gorur: boolean, tutar: string | null, paraBirimi: string | null, mevcut: Butce | null): Butce {
-  if (!gorur) return mevcut ?? { butceTutari: null, butceParaBirimi: null };
+// PRJ-16: düzenlemede gönderilmeyen tutar (`undefined`) var olanı korur; `null` siler.
+export function butce(gorur: boolean, tutar: string | null | undefined, paraBirimi: string | null | undefined, mevcut: Butce | null): Butce {
+  if (!gorur || tutar === undefined) return mevcut ?? { butceTutari: null, butceParaBirimi: null };
   if (tutar === null) return { butceTutari: null, butceParaBirimi: null };
   return { butceTutari: tutar, butceParaBirimi: paraBirimi ?? 'TRY' };
 }

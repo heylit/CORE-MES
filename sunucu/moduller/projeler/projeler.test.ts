@@ -198,7 +198,28 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
     const eski = await guncelle(p, { ad: 'İkinci' });
     assert.equal(eski.statusCode, 409, eski.body);
     assert.equal((await oku(yonetici, `/projeler/${p.id}`)).json<Proje>().ad, 'Birinci');
-    assert.equal((await gonder(yonetici, '/projeler/999999/guncelle', { ad: 'X', durum: 'aktif', surum: 1 })).statusCode, 404);
+    assert.equal((await guncelle({ ...p, id: 999999, surum: 1 }, { ad: 'X' })).statusCode, 404);
+  });
+
+  test('PRJ-16 kısmi gövde: gönderilmeyen alan silinmez, istek reddedilir; null açıkça siler; bütçe gönderilmezse kalır', async () => {
+    const p = await projeAc({ kod: 'KSM.1', ad: 'Kısmi', baslangic: '2026-11-02', bitis: '2026-12-31', aciklama: 'Not', butceTutari: '700' });
+    for (const eksik of ['firmaId', 'baslangic', 'bitis', 'aciklama']) {
+      const govde: Record<string, unknown> = {
+        ad: p.ad, firmaId: p.firmaId, baslangic: p.baslangic, bitis: p.bitis, aciklama: p.aciklama, durum: p.durum, surum: p.surum,
+      };
+      delete govde[eksik];
+      const c = await gonder(yonetici, `/projeler/${p.id}/guncelle`, govde);
+      assert.equal(c.statusCode, 400, `${eksik}: ${c.body}`);
+      assert.equal(c.json<{ alan: string }>().alan, eksik);
+    }
+    const kayit = (await oku(yonetici, `/projeler/${p.id}`)).json<Proje>();
+    assert.deepEqual([kayit.baslangic, kayit.bitis, kayit.aciklama, kayit.surum], ['2026-11-02', '2026-12-31', 'Not', p.surum], 'reddedilen istek kaydı değiştirmez');
+    const butcesiz = await guncelle(p, { ad: 'Kısmi 2' });
+    assert.equal(butcesiz.statusCode, 200, butcesiz.body);
+    assert.deepEqual([butcesiz.json<Proje>().butceTutari, butcesiz.json<Proje>().butceParaBirimi], ['700.00', 'TRY'], 'gönderilmeyen bütçe kalır');
+    const bosalt = await guncelle(butcesiz.json<Proje>(), { baslangic: null, bitis: null, aciklama: null });
+    assert.equal(bosalt.statusCode, 200, bosalt.body);
+    assert.deepEqual([bosalt.json<Proje>().baslangic, bosalt.json<Proje>().bitis, bosalt.json<Proje>().aciklama], [null, null, null], 'null açıkça siler');
   });
 
   test('liste: arama kod ve adda, durum süzgeci, sayfalı cevap; açan ve zaman sunucudan', async () => {

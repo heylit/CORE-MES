@@ -17,6 +17,7 @@
 | PRJ-13 kilometre taşı taban tarihi yalnız gerekçeyle yenilenir, eski değer geçmişte kalır; doğrudan değişiklik veritabanında reddedilir (`projeler_kilometre_tasi_taban_donuk`) | `kurallar.test.ts` `PRJ-13 ...`, `proje-yonetimi.test.ts` `PRJ-13 ...`, `ProjeYonetimi.test.tsx` `taban tarih gerekçe ve sürümle yenilenir ...` |
 | PRJ-14 proje ilerlemesi: iptal dışındaki görevlerin plan günüyle ağırlıklı ortalaması; görev yoksa null | `kurallar.test.ts` `PRJ-14 ...`, `proje-yonetimi.test.ts` `PRJ-14 ...` |
 | PRJ-15 aktif olmayan projeye görev ve kilometre taşı yazılmaz; statü yazılır | `kurallar.test.ts` `PRJ-15 ...`, `proje-yonetimi.test.ts` `PRJ-15 ...`, `ProjeYonetimi.test.tsx` `okuyan statü ve görev yazamaz ...` |
+| PRJ-16 düzenleme gövdesi tam kayıttır: `firmaId`, `baslangic`, `bitis`, `aciklama` gönderilmezse 400 (kayıt değişmez), silmek için `null` gönderilir; bütçe gönderilmezse var olan kalır, `null` siler (karar PRJ-2 a) | `kurallar.test.ts` `PRJ-09 ...`, `projeler.test.ts` `PRJ-16 kısmi gövde: ...` |
 | Yetki: okuma `sayfa.projeler` ya da `projeler.oku`; yazma, firma ve sipariş seçici `projeler.yaz`; görev ve kilometre taşı `projeler.gorev-yaz`, statü `projeler.statu-yaz`, statü listesi ve serbest yazı izni `projeler.statu-ayar` (910 a) | `yetki: yönetici açar ve listeler; ...` |
 | Liste süzgeci ve arama (joker kaçırılır) | `liste: arama kod ve adda, ...`, `arama kalıbı: ...` |
 | disari.ts sözleşmesi | `disari.ts: kod, özet, seçenekler ...` |
