@@ -9,6 +9,7 @@ import type { HaritaKaynagi } from './servis.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
 import { izgaraKaynagi } from './test-agi.ts';
+import { NOKTA_YOLA_BAGLANMIYOR } from './cozucu.ts';
 import { gunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 
 let ortam: TestVeritabani;
@@ -456,6 +457,24 @@ test('yerleşemeyen iş nedeniyle döner, bekleyende kalır; okuma cevabında bu
   assert.deepEqual(p.bekleyen, [agir.id]);
   assert.deepEqual(p.yerlesemeyen, [{ isId: agir.id, neden: 'Hiçbir aracın kapasitesi yetmiyor' }]);
   assert.deepEqual((await tx((db) => servis.gunPlani(db, T, kaynak))).yerlesemeyen, []);
+});
+
+test('SEV-1 (1780a): yol ağına bağlanamayan noktanın işi günü düşürmez; dağıtımda nedeniyle kalır, araca konmuşsa onayı engeller', async () => {
+  const T = '2026-10-23';
+  await havuzuBosalt();
+  const uzak = await tx((db) => servis.noktaEkle(db, { ad: 'Ağ Dışı Nokta', tur: 'diger', enlem: 41.0, boylam: 29.0, adres: null, durakSuresiDakika: 10, firmaId: null }));
+  const disari = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: uzak.id }));
+  const icerde = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: T, tur: 'teslimat', birakisNoktasiId: a }));
+  const okuma = await tx((db) => servis.gunPlani(db, T, kaynak));
+  assert.deepEqual(okuma.bekleyen.sort(), [disari.id, icerde.id].sort());
+  const p = await tx((db) => servis.dagit(db, T, { amac: 'sure', kilitliAraclar: [], surum: null }, 'dagit', kaynak));
+  assert.deepEqual(p.yerlesemeyen, [{ isId: disari.id, neden: NOKTA_YOLA_BAGLANMIYOR }]);
+  assert.deepEqual(p.bekleyen, [disari.id]);
+  const q = await tx((db) => servis.kaydet(db, T, { amac: 'sure', surum: p.surum, rotalar: [{ aracId: k1, kilitli: false, ogeler: [{ isId: disari.id, alis: false }, { isId: icerde.id, alis: false }] }] }, kaynak));
+  assert.deepEqual(q.atanamayan.map((x) => x.isId), [disari.id]);
+  assert.ok(q.onayEngelleri.length > 0);
+  await assert.rejects(tx((db) => servis.onayla(db, T, q.surum!, kaynak)), hata('GECERSIZ'));
+  await tx((db) => servis.noktaPasiflestir(db, uzak.id));
 });
 
 test('yol ağı yoksa plan kaydedilir ama saat hesaplanmaz, dağıtma ve onay yapılamaz', async () => {

@@ -46,6 +46,9 @@ export interface FiloSecenegi {
 }
 
 export const VARSAYILAN_YINELEME = 3000;
+export const NOKTA_YOLA_BAGLANMIYOR = 'Nokta yol ağına bağlanamıyor (harita alanının dışında); konumunu düzeltin';
+export const FABRIKA_YOLA_BAGLANMIYOR = 'Fabrika konumu yol ağına bağlanamıyor; Sistem Ayarları\'ndaki firma konumunu düzeltin';
+export const YOL_BAGLANTISI_NEDENLERI: ReadonlySet<string> = new Set([NOKTA_YOLA_BAGLANMIYOR, FABRIKA_YOLA_BAGLANMIYOR]);
 
 export interface FiloDuragi {
   // null: fabrikaya ara dönüş (boşaltma ve yeniden yükleme)
@@ -138,7 +141,7 @@ export function matrisKur(ag: YolAgi, noktalar: CozucuNoktasi[], gun: GunTipi): 
   const enHizli = new Float32Array(n * n * ornekSayisi), enKisaSure = new Float32Array(n * n * ornekSayisi), enUcuzSure = new Float32Array(n * n * ornekSayisi), secilen = new Uint8Array(n * n * ornekSayisi);
   const yollar: (Int32Array | null)[] = new Array(n * n * yolSecenegiSayisi).fill(null), metre = new Float32Array(n * n * yolSecenegiSayisi);
   for (let i = 0; i < n; i++) {
-    const agaclar = [...KAYNAK_SAATLER.map((d) => agac(ag, dugum[i]!, kenarSuresi, d)), agac(ag, dugum[i]!, kenarMesafesi, 0), agac(ag, dugum[i]!, kenarTlBedeli, 0)];
+    const agaclar = dugum[i]! < 0 ? [] : [...KAYNAK_SAATLER.map((d) => agac(ag, dugum[i]!, kenarSuresi, d)), agac(ag, dugum[i]!, kenarMesafesi, 0), agac(ag, dugum[i]!, kenarTlBedeli, 0)];
     for (let j = 0; j < n; j++) {
       const matrisBasi = (i * n + j) * ornekSayisi;
       if (i === j || dugum[i] === dugum[j]) { // aynı düğüm: yalnız sokak bağlantısı
@@ -147,6 +150,7 @@ export function matrisKur(ag: YolAgi, noktalar: CozucuNoktasi[], gun: GunTipi): 
       }
       const gorulen: string[] = [];
       for (let v = 0; v < yolSecenegiSayisi; v++) {
+        if (dugum[i]! < 0 || dugum[j]! < 0) break; // ağa bağlanmayan nokta: yol yok, süre sonsuz kalır
         const { onceki, onceYon } = agaclar[v]!; if (onceki[dugum[j]!]! < 0) continue;
         const liste: number[] = []; let x = dugum[j]!, yolMetresi = 0;
         while (x !== dugum[i]) { const e = onceki[x]!, y = onceYon[x]!; liste.push(e * 2 + (y === 1 ? 0 : 1)); yolMetresi += ag.kenarMetre[e]!; x = y === 1 ? ag.kenarA[e]! : ag.kenarB[e]!; }
@@ -226,9 +230,19 @@ export function filoPlani(ag: YolAgi, fabrika: CozucuNoktasi, noktalar: readonly
   const kullanilan = new Set<string>([fabrika.anahtar]);
   const noktasiz: { is: string; neden: string }[] = [];
   const gecerli: CozucuIsi[] = [];
+  // Yol ağına bağlanamayan nokta (harita alanının dışı) süre matrisine girmez; işi atanamayan olur, bütün gün düşmez.
+  const baglanti = new Map<string, boolean>();
+  const yolaBaglanir = (p: CozucuNoktasi) => {
+    let bagli = baglanti.get(p.anahtar);
+    if (bagli === undefined) { bagli = enYakinDugum(ag, [p.boylam, p.enlem]).dugum >= 0; baglanti.set(p.anahtar, bagli); }
+    return bagli;
+  };
+  const fabrikaBaglanir = yolaBaglanir(fabrika);
   for (const is of isler) {
     const gereken = is.tur === 'teslimat' ? [is.birakisNoktasi] : is.tur === 'alim' ? [is.alisNoktasi] : [is.alisNoktasi, is.birakisNoktasi];
     if (gereken.some((x) => !x || !noktaBul.has(x))) { noktasiz.push({ is: is.anahtar, neden: 'Nokta seçilmemiş ya da pasif' }); continue; }
+    if (!fabrikaBaglanir) { noktasiz.push({ is: is.anahtar, neden: FABRIKA_YOLA_BAGLANMIYOR }); continue; }
+    if (gereken.some((x) => !yolaBaglanir(noktaBul.get(x!)!))) { noktasiz.push({ is: is.anahtar, neden: NOKTA_YOLA_BAGLANMIYOR }); continue; }
     gereken.forEach((x) => kullanilan.add(x!)); gecerli.push(is);
   }
   const siteler = [...kullanilan].map((a) => noktaBul.get(a)!);

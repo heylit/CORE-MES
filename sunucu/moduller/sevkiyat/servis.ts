@@ -19,7 +19,7 @@ import { talepNolari } from '../satin-alma/disari.ts';
 import type { AlimOlayi } from '../satin-alma/disari.ts';
 import { ara, aramaDiziniKur, konumCoz } from './arama.ts';
 import type { AramaDizini, AramaVerisi } from './arama.ts';
-import { filoPlani } from './cozucu.ts';
+import { filoPlani, YOL_BAGLANTISI_NEDENLERI } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
   AKTIF_FABRIKA_KALDIRILAMAZ, FABRIKA_KONUMU_AYARDA, AMACLAR, bolmeIhlali, kapanisSevki, DUZENLENEMEZ_IS, durumGecisiIhlali, firmaBaglanabilir, ileriSonucIhlali, isDuzenlenebilir, yeniIsDurumu, VARSAYILAN_MALIYET, fabrikaKaldirilir, onayliPlanIletisi, aracIhlalleri, araDonusleriTemizle, cozucuOgeleri, fabrikayaCevrilemez, gunTipi, ikinciFabrikaMi, isDegistirilebilir, isIhlalleri,
@@ -624,9 +624,12 @@ async function gunPlaniCevabi(v: GunVerisi, kaynak: HaritaKaynagi): Promise<GunP
     return { aracId: a.id, kilitli: kilitli.get(a.id) ?? false, ogeler: ogeler.get(a.id) ?? [], hesap: h && paket ? rotaHesabi(paket, v, h) : null, onaySaatleri: v.onaySaatleri.get(a.id) ?? null };
   });
   const isNoktalari = new Map(v.noktalar.map((n) => [n.id, n]));
+  const pasifNoktali = (i: IsSatiri) => [i.alisNoktasiId, i.birakisNoktasiId].some((n) => n !== null && !isNoktalari.get(n)?.aktif);
+  // Araca konmuş ama noktası yol ağına bağlanmayan iş rotada hesaplanmaz; onayı engellesin diye burada da sayılır.
+  const yolsuz = new Map((hesap?.atanamayan ?? []).filter((a) => YOL_BAGLANTISI_NEDENLERI.has(a.neden)).map((a) => [Number(a.is), a.neden]));
   const atanamayan = v.isler
-    .filter((i) => yerdekiler.has(i.id) && [i.alisNoktasiId, i.birakisNoktasiId].some((n) => n !== null && !isNoktalari.get(n)?.aktif))
-    .map((i) => ({ isId: i.id, neden: 'Noktası pasifleştirilmiş; işi güncelleyin ya da iptal edin.' }));
+    .filter((i) => yerdekiler.has(i.id) && (pasifNoktali(i) || yolsuz.has(i.id)))
+    .map((i) => ({ isId: i.id, neden: pasifNoktali(i) ? 'Noktası pasifleştirilmiş; işi güncelleyin ya da iptal edin.' : `${yolsuz.get(i.id)!}.` }));
   return {
     tarih: v.tarih, gunTipi: gunTipi(v.tarih), amac, surum: v.plan?.surum ?? null, onaylandi: v.plan?.onaylandi ?? null,
     fabrika: v.fabrika ? noktaCevabi(v.fabrika) : null, haritaVar: paket !== null,
