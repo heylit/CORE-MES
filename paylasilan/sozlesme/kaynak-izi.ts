@@ -32,7 +32,9 @@ export const BOLUM_ISLEMLERI = {
 export type Bolum = keyof typeof BOLUM_ISLEMLERI;
 
 const kaynakOzeti = z.object({ tur: z.enum(KAYNAK_TURLERI), id: KIMLIK, kod: z.string().nullable(), ad: z.string(), aktif: z.boolean() });
-const kisiPayi = z.object({ kisiId: KIMLIK, ad: z.string(), yuzde: z.string() });
+// aktif: pasif kişi atamada ya da yetkinlikte kalabilir; ekran onu işaretler (KIZ-3 a).
+const kisiPayi = z.object({ kisiId: KIMLIK, ad: z.string(), aktif: z.boolean(), yuzde: z.string() });
+const yetkinKisi = z.object({ kisiId: KIMLIK, ad: z.string(), aktif: z.boolean() });
 const makineDurumu = z.object({ durum: z.enum(MAKINE_DURUMLARI), aciklama: z.string().nullable(), degisme: zamanSemasi });
 // Son yedi günün OEE'si (oran 0-1); veri yoksa alanlar null. veriEksik ve vardiya dışı üretim oee modülünün kuralıdır (OE-10, OE-16):
 // vardiya dışında yapılan iş OEE'ye girmez; gösterilmezse üretim varken %0 "hiç üretim yok" gibi okunur.
@@ -49,7 +51,7 @@ export const istasyon360Cevabi = z.object({
   tesis: z.object({
     makineler: z.array(kaynakOzeti.extend({ durum: makineDurumu.nullable() })),
     atananlar: z.array(kisiPayi),
-    yetkinler: z.array(z.object({ kisiId: KIMLIK, ad: z.string() })),
+    yetkinler: z.array(yetkinKisi),
   }).nullable(),
   oee: oeeOzeti.nullable(),
   maliyet: saatMaliyeti.nullable(),
@@ -62,7 +64,7 @@ export const makine360Cevabi = z.object({
   tesis: z.object({
     durum: makineDurumu.nullable(),
     atananlar: z.array(kisiPayi),
-    yetkinler: z.array(z.object({ kisiId: KIMLIK, ad: z.string() })),
+    yetkinler: z.array(yetkinKisi),
   }).nullable(),
   // Bakım ve arıza geçmişi Arkon'dan okunacak (1323 a); Arkon'un makineye göre okuması gelene kadar boş (BASKA-MODUL-ISTEKLERI).
   gorunurBolumler: z.array(z.string()),

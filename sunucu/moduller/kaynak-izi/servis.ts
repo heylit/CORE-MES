@@ -10,7 +10,7 @@ import {
   isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, istasyonlar, makineDurumlari, makineGetir, makineKisiAtamalari,
   makineYetkinlikleri, makineler,
 } from '../istasyonlar/disari.ts';
-import { kisiAdlari, kisiGorevi, kisiSecenekleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiGorevi, kisileriListele, kisiSecenekleri } from '../kisiler/disari.ts';
 import { istasyonOeeleri } from '../oee/disari.ts';
 import { kisininIsEmirleri } from '../uretim-emirleri/disari.ts';
 import { kisiVardiyalari, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -31,6 +31,13 @@ async function kisiBilgileri(db: Db, idler: number[]): Promise<{ ad: (id: number
   return { ad: (id) => adlar.get(id) ?? '', aktif: (id) => etkin.has(id), sicil: (id) => etkin.get(id) ?? null };
 }
 
+// KIZ-3 a: pasif kişi de bulunur, "Pasif" işaretiyle (eski kayıtlardaki kişiye ulaşmak için). Sicil yalnız etkin kişi
+// listesinde var; pasif kişi adıyla bulunur, kodu null.
+async function kisiAramaAdaylari(db: Db): Promise<AramaAdayi[]> {
+  const sicil = new Map((await kisiSecenekleri(db)).map((k) => [k.id, k.sicilNo]));
+  return (await kisileriListele(db)).map((k) => ({ tur: 'kisi' as const, id: k.id, kod: sicil.get(k.id) ?? null, ad: k.ad, aktif: k.aktif, ust: null }));
+}
+
 export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevabi> {
   const merkezler = new Map((await isMerkezleri(db, { pasiflerDahil: true })).map((m) => [m.id, m.kod]));
   const ist = await istasyonlar(db, { pasiflerDahil: true });
@@ -40,7 +47,7 @@ export async function kaynakAra(db: Db, metin: string): Promise<KaynakAramaCevab
     ...(await makineler(db, { pasiflerDahil: true })).map((m) => ({
       tur: 'makine' as const, id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, ust: m.istasyonId === null ? null : istKod.get(m.istasyonId) ?? null,
     })),
-    ...(await kisiSecenekleri(db)).map((k) => ({ tur: 'kisi' as const, id: k.id, kod: k.sicilNo, ad: k.ad, aktif: true, ust: null })),
+    ...(await kisiAramaAdaylari(db)),
   ];
   const uyan = kaynakSuz(adaylar, metin);
   return { satirlar: uyan.slice(0, KAYNAK_ARAMA_EN_COK), dahaVar: uyan.length > KAYNAK_ARAMA_EN_COK };
@@ -76,8 +83,8 @@ export async function istasyon360(db: Db, k: Kullanici, id: number): Promise<Ist
         const d = durumlar.get(m.id);
         return { ...ozet('makine', m), durum: d ? { durum: d.durum, aciklama: d.aciklama, degisme: d.degisme } : null };
       }),
-      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), yuzde: a.yuzde })),
-      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId) })),
+      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), aktif: kisi.aktif(a.kisiId), yuzde: a.yuzde })),
+      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId), aktif: kisi.aktif(kisiId) })),
     };
   }
   return {
@@ -102,8 +109,8 @@ export async function makine360(db: Db, k: Kullanici, id: number): Promise<Makin
     const kisi = await kisiBilgileri(db, [...atamalar.map((a) => a.kisiId), ...yetkin]);
     tesis = {
       durum: d ? { durum: d.durum, aciklama: d.aciklama, degisme: d.degisme } : null,
-      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), yuzde: a.yuzde })),
-      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId) })),
+      atananlar: atamalar.map((a) => ({ kisiId: a.kisiId, ad: kisi.ad(a.kisiId), aktif: kisi.aktif(a.kisiId), yuzde: a.yuzde })),
+      yetkinler: yetkin.map((kisiId) => ({ kisiId, ad: kisi.ad(kisiId), aktif: kisi.aktif(kisiId) })),
     };
   }
   return { kaynak: ozet('makine', m), istasyon: ist ? ozet('istasyon', ist) : null, tesis, gorunurBolumler: gorunurBolumler(k.islemler, 'makine') };

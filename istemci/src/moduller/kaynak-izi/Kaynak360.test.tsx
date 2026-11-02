@@ -17,7 +17,7 @@ const IST: Istasyon360Cevabi = {
   isMerkezi: { id: 1, kod: 'IM-1', ad: 'Deneme Merkezi', aktif: true },
   tesis: {
     makineler: [{ tur: 'makine', id: 5, kod: 'MK-1', ad: 'Deneme Tezgah', aktif: true, durum: { durum: 'ariza', aciklama: 'Mil', degisme: '2026-10-30T08:00:00Z' } }],
-    atananlar: [{ kisiId: 7, ad: 'Deneme Usta', yuzde: '60.00' }],
+    atananlar: [{ kisiId: 7, ad: 'Deneme Usta', aktif: true, yuzde: '60.00' }],
     yetkinler: [],
   },
   oee: { baslangic: '2026-10-24', bitis: '2026-10-30', oee: 0.625, kullanilabilirlik: null, performans: null, kalite: null, veriEksik: false, vardiyaDisi: null },

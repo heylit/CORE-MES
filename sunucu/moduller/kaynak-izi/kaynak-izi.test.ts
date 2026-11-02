@@ -109,8 +109,8 @@ describe('kaynak-izi uçları (gerçek PostgreSQL)', () => {
     const i = istasyon360Cevabi.parse((await oku('tesisci', `/kaynak-izi/istasyonlar/${String(istasyonId)}`)).govde);
     assert.deepEqual(i.gorunurBolumler, ['tesis']);
     assert.deepEqual(i.tesis?.makineler.map((x) => [x.kod, x.durum?.durum, x.durum?.aciklama]), [['KIZ-MK', 'ariza', 'Deneme arıza']]);
-    assert.deepEqual(i.tesis?.atananlar, [{ kisiId, ad: 'Deneme Işıl Usta', yuzde: '60.00' }]);
-    assert.deepEqual(i.tesis?.yetkinler, [{ kisiId, ad: 'Deneme Işıl Usta' }]);
+    assert.deepEqual(i.tesis?.atananlar, [{ kisiId, ad: 'Deneme Işıl Usta', aktif: true, yuzde: '60.00' }]);
+    assert.deepEqual(i.tesis?.yetkinler, [{ kisiId, ad: 'Deneme Işıl Usta', aktif: true }]);
     assert.equal(i.oee, null);
     const m = makine360Cevabi.parse((await oku('tesisci', `/kaynak-izi/makineler/${String(makineId)}`)).govde);
     assert.deepEqual([m.tesis?.durum?.durum, m.tesis?.atananlar, m.tesis?.yetkinler.map((y) => y.kisiId)], ['ariza', [], [kisiId]]);
@@ -132,5 +132,16 @@ describe('kaynak-izi uçları (gerçek PostgreSQL)', () => {
     assert.deepEqual(k.gorunurBolumler, ['tesis', 'vardiya', 'izin', 'isler', 'maliyet']);
     const m = makine360Cevabi.parse((await oku('yonetici', `/kaynak-izi/makineler/${String(makineId)}`)).govde);
     assert.deepEqual(m.gorunurBolumler, ['tesis']);
+  });
+  test('KIZ-3 a: pasif kişi aramada "pasif" olarak bulunur; atama ve yetkinlik çipinde pasif işaretlenir', async () => {
+    const liste = (await oku('yonetici', '/kisiler')).govde as { kisiler: { id: number; surum: number }[] };
+    const surum = liste.kisiler.find((k) => k.id === kisiId)?.surum;
+    await yaz(`/kisiler/${String(kisiId)}/pasife-al`, { surum });
+    const l = kaynakAramaCevabi.parse((await oku('yalin', '/kaynak-izi/kaynaklar?metin=isil usta')).govde);
+    assert.deepEqual(l.satirlar.map((s) => [s.tur, s.id, s.aktif, s.kod]), [['kisi', kisiId, false, null]], 'pasif kişinin sicili etkin listede yok');
+    const i = istasyon360Cevabi.parse((await oku('yonetici', `/kaynak-izi/istasyonlar/${String(istasyonId)}`)).govde);
+    assert.deepEqual([i.tesis?.atananlar.map((a) => a.aktif), i.tesis?.yetkinler.map((y) => y.aktif)], [[false], [false]]);
+    const m = makine360Cevabi.parse((await oku('yonetici', `/kaynak-izi/makineler/${String(makineId)}`)).govde);
+    assert.deepEqual(m.tesis?.yetkinler.map((y) => [y.kisiId, y.aktif]), [[kisiId, false]]);
   });
 });

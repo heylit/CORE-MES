@@ -97,12 +97,12 @@ function Bas({ baslik, alt, aktif, eylemler }: { baslik: string; alt: ReactNode;
   );
 }
 
-function KisiCipleri({ kisiler, etiket, bos }: { kisiler: readonly { kisiId: number; ad: string; yuzde?: string }[]; etiket: string; bos: string }) {
+function KisiCipleri({ kisiler, etiket, bos }: { kisiler: readonly { kisiId: number; ad: string; aktif: boolean; yuzde?: string }[]; etiket: string; bos: string }) {
   if (kisiler.length === 0) return <p className="tc-kiz-not">{bos}</p>;
   return (
     <ul className="tc-kiz-cipler" aria-label={etiket}>
       {kisiler.map((k) => (
-        <li key={k.kisiId} className="tc-kiz-cip"><Link to={adres('kisi', k.kisiId)}>{k.ad}</Link>{k.yuzde !== undefined && <span className="tc-kiz-mono">{yuzdeMetni(k.yuzde)}</span>}</li>
+        <li key={k.kisiId} className="tc-kiz-cip"><Link to={adres('kisi', k.kisiId)}>{k.ad}</Link>{k.yuzde !== undefined && <span className="tc-kiz-mono">{yuzdeMetni(k.yuzde)}</span>}{!k.aktif && <Rozet ton="pasif">Pasif</Rozet>}</li>
       ))}
     </ul>
   );
