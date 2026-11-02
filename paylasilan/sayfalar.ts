@@ -5,7 +5,7 @@ import { AKIS_IKINCI_MENU, AKIS_SAYFALARI } from './sayfalar/akis.ts';
 import { MALZEME_IZI_IKINCI_MENU, MALZEME_IZI_SAYFALARI } from './sayfalar/malzeme-izi.ts';
 import { KAYNAK_IZI_IKINCI_MENU, KAYNAK_IZI_SAYFALARI } from './sayfalar/kaynak-izi.ts';
 import { ARKON_IKINCI_MENU, ARKON_SAYFALARI, KUYRUK_IKINCI_MENU, URETIM_TERMINALI_IKINCI_MENU } from './sayfalar/arkon.ts';
-import { ATOLYE_SAYFALARI } from './sayfalar/atolye.ts';
+import { ATOLYE_IKINCI_MENU, ATOLYE_SAYFALARI } from './sayfalar/atolye.ts';
 import { AYARLAR_IKINCI_MENU, AYARLAR_SAYFALARI } from './sayfalar/ayarlar.ts';
 import { CIZELGE_SAYFALARI } from './sayfalar/cizelge.ts';
 import { BELGE_MERKEZI_IKINCI_MENU, BELGE_MERKEZI_SAYFALARI } from './sayfalar/belge-merkezi.ts';
@@ -151,6 +151,7 @@ export const TUM_IKINCI_MENULER = [
   TAKVIM_IKINCI_MENU,
   DEGISIKLIK_YONETIMI_IKINCI_MENU,
   URETIM_EMIRLERI_IKINCI_MENU,
+  ATOLYE_IKINCI_MENU,
 ] as const satisfies readonly IkinciMenuTanimi[];
 
 export const IKINCI_MENULER = TUM_IKINCI_MENULER.filter((m) => !kapaliModulYoluMu(m.kok));

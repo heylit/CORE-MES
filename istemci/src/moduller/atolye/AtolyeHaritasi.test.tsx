@@ -326,9 +326,7 @@ describe('fabrika haritası', () => {
 
   it('depo: raf cephesinde göze basınca panel açılır; yazan kalem koyar (boş yer kadar)', async () => {
     const cagrilar = sunucuKur(YAZAN);
-    goster(<AtolyeHaritasi />);
-    await screen.findByRole('img', { name: 'Atölye planı' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Depo' }));
+    goster(<AtolyeHaritasi />, '/atolye/depo');
     const cephe = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
     fireEvent.click(within(cephe).getByRole('button', { name: /Kat 1 göz 1: DENEME-1 %40, DENEME-2 %30/ }));
     const panel = await screen.findByRole('region', { name: 'Göz R1-01-1-1' });
@@ -345,9 +343,7 @@ describe('fabrika haritası', () => {
 
   it('parçalar: kod başına satır, nerede durduğu ve hangi makinede üretildiği; "Rafta göster" depoya götürür', async () => {
     sunucuKur(OKUYAN);
-    goster(<AtolyeHaritasi />);
-    await screen.findByRole('img', { name: 'Atölye planı' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Parçalar' }));
+    goster(<AtolyeHaritasi />, '/atolye/parcalar');
     const tablo = await screen.findByRole('table', { name: 'Parçalar ve malzemeler' });
     const satir = within(tablo).getByText('DENEME-1').closest('tr') as HTMLElement;
     expect(within(satir).getByText('R1-01-1-1 %40')).toBeTruthy();
@@ -357,14 +353,11 @@ describe('fabrika haritası', () => {
     expect(within(ayrinti).getByText('Üretiliyor')).toBeTruthy();
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'Rafta göster' }));
     expect(await screen.findByRole('region', { name: 'Göz R1-01-1-1' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Depo' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('bölmeye karşıdan bakış: yalnız bölme çizilir, oklar bölme değiştirir, göz seçilir, Escape çıkar', async () => {
     sunucuKur(OKUYAN);
-    goster(<AtolyeHaritasi />);
-    await screen.findByRole('img', { name: 'Atölye planı' });
-    fireEvent.click(screen.getByRole('tab', { name: 'Depo' }));
+    goster(<AtolyeHaritasi />, '/atolye/depo');
     fireEvent.click(await screen.findByRole('button', { name: '3B karşıdan bak' }));
     const cubuk = await screen.findByRole('toolbar', { name: 'Bölme görünümü' });
     expect(screen.queryByRole('img', { name: 'Atölye planı' })).toBeNull();

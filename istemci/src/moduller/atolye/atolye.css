@@ -549,10 +549,6 @@
 .tc-atolye-net[open] > summary { margin-bottom: var(--b-2); }
 .tc-atolye-net-eksik { color: var(--stop); font-size: var(--yazi-s); }
 
-/* Dar ekranda üç bölüm sekmesi kaymadan sığar: sekmeler genişliği paylaşır, iç boşluk daralır. */
-@media (max-width: 767px) {
-  .tc-atolye-sekmeler .tc-sekme { flex: 1 1 0; justify-content: center; padding: 0 var(--b-2); }
-}
 .tc-atolye-yan-secim { display: flex; gap: var(--b-1); margin-inline-start: auto; }
 .tc-atolye-palet-model { display: inline-flex; margin-inline-start: auto; color: var(--run); }
 .tc-atolye-palet-not { margin-inline-start: auto; color: var(--muted); font-size: var(--yazi-xs); }

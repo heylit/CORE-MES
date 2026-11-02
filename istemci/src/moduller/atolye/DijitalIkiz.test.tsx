@@ -99,14 +99,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function goster() {
+function goster(adres = '/atolye/ikiz') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<MemoryRouter initialEntries={['/atolye']}><QueryClientProvider client={istemci}><BildirimSaglayici><AtolyeHaritasi /></BildirimSaglayici></QueryClientProvider></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={[adres]}><QueryClientProvider client={istemci}><BildirimSaglayici><AtolyeHaritasi /></BildirimSaglayici></QueryClientProvider></MemoryRouter>);
 }
 
 async function ikizeGec() {
   goster();
-  fireEvent.click(await screen.findByRole('tab', { name: /Dijital ikiz/ }));
   return screen.findByRole('img', { name: /Dijital ikiz · Deneme salonu/ });
 }
 
@@ -170,8 +169,7 @@ describe('dijital ikiz görünümü', () => {
   it('veri yokken boş durum gösterilir, tuval çizilmez', async () => {
     sunucuKur([{ ...YERLESIM, istasyonYerleri: [] }]);
     goster();
-    fireEvent.click(await screen.findByRole('tab', { name: /Dijital ikiz/ }));
-    expect(await screen.findByText(/dijital ikiz çizilecek nesne bulamadı/)).toBeTruthy();
+      expect(await screen.findByText(/dijital ikiz çizilecek nesne bulamadı/)).toBeTruthy();
     expect(screen.queryByRole('img', { name: /Dijital ikiz/ })).toBeNull();
   });
 });
