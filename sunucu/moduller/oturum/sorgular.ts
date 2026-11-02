@@ -613,3 +613,9 @@ export async function profilAtamasiYaz(db: Db, cihazId: number, profil: CihazPro
     );
   return satir !== null;
 }
+
+// Oturumsuz uçta yazan kişiyi değişiklik defterine bildirir (uç katmanı yalnız oturumlu yazmada verir). Yerel ayar transaction
+// bitince düşer.
+export async function defterKisisiniYaz(db: Db, kisiId: number): Promise<void> {
+  await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(kisiId)]);
+}
