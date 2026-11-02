@@ -1,6 +1,7 @@
 import { kisaTl, maliyetBaglami, siparisMaliyeti, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import { DURUM_ADI, DURUM_TONU, tedarikciAdi, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
+import { planDisi } from '../tipler.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
 // Kaynak bugünkü çerçevedir: zv-termin, zw-denge, zz25-sade-takvim, zz29-gorsel, zz30-isi, zr-agirlik ve motor/durum.betik, engine.betik
@@ -131,7 +132,7 @@ export function haftaSutunlari(D: PlanVerisi, now: number, n: number) {
 }
 
 // ---- siparişler ----
-export const plandaki = (D: PlanVerisi): Siparis[] => D.siparisler.filter((s) => !s.havuz);
+export const plandaki = (D: PlanVerisi): Siparis[] => D.siparisler.filter((s) => !planDisi(s));
 export const urunAdi = (D: PlanVerisi, id: string): string => D.urunler.find((u) => u.id === id)?.ad ?? (id || '—');
 
 // Planın geç bitirdiği siparişler, en çok geciken başta (zz24-sade sdGecikenler).
@@ -432,7 +433,7 @@ export function dengeAcilimi(r: DengeSatiri, ck: string, sutunAd: string) {
 export function partiAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
   const isler = Object.values(p.ops);
   const basladi = (j: string) => isler.some((r) => r.job === j && (Boolean(r.done) || Boolean((r as unknown as Record<string, unknown>).act)));
-  return D.siparisler.filter((s) => !s.havuz && s.adet >= 2 && isler.some((r) => r.job === s.id) && !basladi(s.id))
+  return D.siparisler.filter((s) => !planDisi(s) && s.adet >= 2 && isler.some((r) => r.job === s.id) && !basladi(s.id))
     .sort((a, b) => (p.J[b.id]?.T ?? 0) - (p.J[a.id]?.T ?? 0) || a.id.localeCompare(b.id, 'tr'));
 }
 export const PARTI_EN_COK = 20;
@@ -454,7 +455,7 @@ export function ortusmeAdaylari(D: PlanVerisi, p: KayitliPlan): Siparis[] {
   const A = nesne(D.ortusAcik) ? D.ortusAcik : {};
   const isler = Object.values(p.ops);
   const basladi = (j: string) => isler.some((r) => r.job === j && (Boolean(r.done) || Boolean((r as unknown as Record<string, unknown>).act)));
-  return D.siparisler.filter((s) => !s.havuz && s.ortus !== true && !A[s.id] && !A[s.id.split('/')[0] ?? ''] && !basladi(s.id) && (p.J[s.id]?.T ?? 0) > 0.05)
+  return D.siparisler.filter((s) => !planDisi(s) && s.ortus !== true && !A[s.id] && !A[s.id.split('/')[0] ?? ''] && !basladi(s.id) && (p.J[s.id]?.T ?? 0) > 0.05)
     .filter((s) => { const r = D.urunler.find((u) => u.id === s.urun)?.rota ?? []; return r.some((o, i) => i > 0 && o.ortusebilir === true && bagTuru(r, i) === 'b'); })
     .map((s) => ({ s, w: (p.J[s.id]?.T ?? 0) * isAgirligi(s) })).sort((a, b) => b.w - a.w).slice(0, 6).map((x) => x.s);
 }

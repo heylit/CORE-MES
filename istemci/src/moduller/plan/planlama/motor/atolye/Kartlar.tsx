@@ -124,7 +124,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             <label htmlFor="tc-pym-tp-suz-j">Üretim emri</label>
             <select id="tc-pym-tp-suz-j" value={f?.j ?? ''} onChange={(e) => ort.suzSec(suzKoy(D, f ? { ...f, j: null } : null, 'j', e.target.value || null))}>
               <option value="">Hepsi</option>
-              {D.siparisler.map((x) => x.id).sort().map((j) => <option key={j} value={j}>{j}</option>)}
+              {D.siparisler.filter((x) => x.iptal !== true).map((x) => x.id).sort().map((j) => <option key={j} value={j}>{j}</option>)}
             </select>
             <div className="tc-pym-tp-eylem">
               <button type="button" className="tc-dugme" aria-disabled={!f} onClick={() => { if (f) ort.suzSec(null); }}><Simge ad="x" boyut="k" />Temizle</button>

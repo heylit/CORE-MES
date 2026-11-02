@@ -900,10 +900,11 @@ export function isEmriBul(db: Db, id: number, kilit = false): Promise<IsEmriSati
 }
 
 // Makine ayrımı denetimi için (393 d): iş emirlerinin emri, emir no'su, op no'su ve durumu.
+// 1892 b: iptal edilen emrin iş emirleri 'bekliyor' kalır, canlı plandaki yeri plan yeniden kurulana dek durur; o yer makineyi ayırmaz.
 export function isEmriAyrimBilgileri(db: Db, idler: readonly number[]): Promise<{ id: number; uretimEmriId: number; emirNo: string; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam' }[]> {
   return db.sorgu(
     `SELECT i.id, i.uretim_emri_id AS "uretimEmriId", e.emir_no AS "emirNo", i.op_no AS "opNo", i.durum
-       FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = ANY($1::int[])`,
+       FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = ANY($1::int[]) AND e.durum <> 'iptal'`,
     [[...idler]],
   );
 }

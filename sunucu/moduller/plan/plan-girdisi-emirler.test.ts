@@ -34,7 +34,7 @@ const durum = (emirler: unknown) => ({
   routeRevs: [{ id: '1', itemId: '50', status: 'yururlukte' }],
   emirler,
 });
-type Siparis = { id: string; urun: string; gelir?: number; havuz?: boolean };
+type Siparis = { id: string; urun: string; gelir?: number; havuz?: boolean; iptal?: boolean };
 type Sonuc = { S: { D: { siparisler: Siparis[]; urunler: Array<{ id: string }> } }; st: { D: { siparisler: Siparis[] } } };
 const kur = (D: Record<string, unknown>, emirler: unknown): Sonuc =>
   planGirdisi({ calisma: calisma(D), kayit: KAYIT, kaynak: { durum: durum(emirler), ek: null }, bugun: '2026-10-19' }) as unknown as Sonuc;
@@ -43,10 +43,26 @@ describe('plan girdisi: sunucunun emirleri (13.1)', () => {
   test('sonradan açılan emir plana girer; yerel emir girmez; biten ve iptal emir çalışmada kalır, motora girmez; sayfadaki emir ayarı korunur', () => {
     const r = kur(D0, { orders: [emir('7', 'UE-7', 'serbest'), emir('8', 'UE-8', 'serbest'), emir('9', 'UE-9', 'tamam'), emir('10', 'UE-10', 'iptal')] });
     assert.deepEqual(r.S.D.siparisler.map((s) => s.id), ['7', '8', '9', '10']);
+    assert.deepEqual(r.S.D.siparisler.map((s) => !!s.iptal), [false, false, false, true]);
     assert.deepEqual(r.S.D.urunler.map((u) => u.id), ['50']);
     assert.equal(r.S.D.siparisler[0]?.gelir, 500);
     assert.deepEqual(r.st.D.siparisler.map((s) => s.id), ['7', '8']);
     assert.ok((motorYukle().compile(r.st as never) as { ops: Array<{ id: string }> }).ops.some((o) => o.id === '8.10'));
+  });
+
+  // 1892 b: planlanmış emir sonradan iptal edilince çalışmada iptal işaretiyle kalır; veri sürümü artar, kayıtlı plan eskir; motor görmez.
+  test('iptal edilen emir işaretlenir, planı eskitir ve motora girmez', () => {
+    type Surumlu = Sonuc & { S: { dataVer: number } };
+    const ac = (D: Record<string, unknown>, dataVer: number, emirler: unknown): Surumlu => planGirdisi({
+      calisma: { ...calisma(D), dataVer }, kayit: KAYIT, kaynak: { durum: durum(emirler), ek: null }, bugun: '2026-10-19',
+    }) as unknown as Surumlu;
+    const ilk = ac(D0, 1, { orders: [emir('7', 'UE-7', 'serbest'), emir('8', 'UE-8', 'serbest')] });
+    const sonra = ac(ilk.S.D as unknown as Record<string, unknown>, ilk.S.dataVer, { orders: [emir('7', 'UE-7', 'serbest'), emir('8', 'UE-8', 'iptal')] });
+    assert.deepEqual(sonra.S.D.siparisler.map((s) => [s.id, !!s.iptal]), [['7', false], ['8', true]]);
+    assert.deepEqual(sonra.st.D.siparisler.map((s) => s.id), ['7']);
+    assert.ok(sonra.S.dataVer > ilk.S.dataVer);
+    const ayni = ac(sonra.S.D as unknown as Record<string, unknown>, sonra.S.dataVer, { orders: [emir('7', 'UE-7', 'serbest'), emir('8', 'UE-8', 'iptal')] });
+    assert.equal(ayni.S.dataVer, sonra.S.dataVer);
   });
 
   test('taslak emir havuzdadır: çalışmada durur, motor görmez', () => {

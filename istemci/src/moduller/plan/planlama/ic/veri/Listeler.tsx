@@ -43,11 +43,11 @@ export function SiparisListesi({ c, p, cizelgede }: ListeOzellikleri) {
     { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (s) => s.termin ?? '—' },
     { anahtar: 'oncelik', baslik: 'Öncelik', hucre: (s) => { const o = ONCELIK[Number(s.oncelik)]; return o ? <Rozet ton={o[1]}>{o[0]}</Rozet> : '—'; } },
     { anahtar: 'serbest', baslik: 'Serbest', kirilmaz: true, hucre: (s) => s.serbest ?? 'hemen' },
-    { anahtar: 'bitis', baslik: 'Planlanan bitiş', kirilmaz: true, hucre: (s) => (J?.[s.id]?.C != null ? saatYaz(D, J[s.id]?.C) : '—') },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => { const d = siparisDurumu(J, s.id); return d ? <Rozet ton={d.ton}>{d.ad}</Rozet> : '—'; } },
+    { anahtar: 'bitis', baslik: 'Planlanan bitiş', kirilmaz: true, hucre: (s) => (s.iptal !== true && J?.[s.id]?.C != null ? saatYaz(D, J[s.id]?.C) : '—') },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (s) => { const d = siparisDurumu(J, s.id, s.iptal === true); return d ? <Rozet ton={d.ton}>{d.ad}</Rozet> : '—'; } },
     islem((s) => (
       <>
-        {p && <KucukDugme ad="Çizelgede göster" simge="gantt" yap={() => { cizelgede(s.id); }} />}
+        {p && s.iptal !== true && <KucukDugme ad="Çizelgede göster" simge="gantt" yap={() => { cizelgede(s.id); }} />}
         <SahipDugmesi ad="Sil" simge="trash" />
       </>
     )),

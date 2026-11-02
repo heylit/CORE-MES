@@ -1,5 +1,6 @@
 import { hucreKoy, kisaSure, saatKademesi, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiUstDurumu } from '../ortak/isi/index.ts';
 import type { ExtraAlanlar, PlanlamaCalismasi } from '../tipler.ts';
+import { planDisi } from '../tipler.ts';
 
 // Sevkiyat hesapları (saf, 205 a): plana göre bitmesi gereken işler, dönem özeti ve bitiş tarihi akışı. Ölçüt bugünkü sayfadır
 // (cerceve/planlama/parca/zx-sevkiyat.betik). Sipariş, son adımının planlanan bitişine göre döneme düşer ve terminiyle karşılaştırılır;
@@ -129,7 +130,7 @@ export function sevkListesi(c: PlanlamaCalismasi): SevkListesi | null {
   const gercek = nesneMi(c.gercek) ? c.gercek : {};
   const satirlar: SevkSatiri[] = [];
   for (const s of c.D.siparisler) {
-    if (s.havuz) continue;
+    if (planDisi(s)) continue;
     const j = J[s.id];
     if (!nesneMi(j)) continue;
     const o = son[s.id];

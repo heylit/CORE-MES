@@ -89,7 +89,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
     window.addEventListener('keydown', tus); return () => window.removeEventListener('keydown', tus);
   }, [tam]);
 
-  const nHav = c.D.siparisler.filter((s) => s.havuz).length;
+  const nHav = c.D.siparisler.filter((s) => s.havuz && !s.iptal).length;
   const pd = (panel: Panel, simge: SimgeAdi, basili: boolean, ac: () => void, n = 0) => (
     <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-tb-pd" aria-pressed={basili} title={PANEL_AD[panel]} onClick={ac}>
       <Simge ad={simge} boyut="k" /><span>{PANEL_AD[panel]}</span>{n > 0 && <b className="tc-pym-mono tc-pym-tb-say">{n}</b>}
@@ -138,7 +138,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
             onChange={(e) => { const x = e.target.value; setAra(x); if (!(e.nativeEvent instanceof InputEvent) || e.nativeEvent.inputType === 'insertReplacementText') bul(x); }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); bul(ara); } }} />
           <datalist id="tc-pym-tb-sip">
-            {c.D.siparisler.map((s) => <option key={`s${s.id}`} value={s.id}>{c.D.urunler.find((u) => u.id === s.urun)?.ad ?? s.urun}</option>)}
+            {c.D.siparisler.filter((s) => s.iptal !== true).map((s) => <option key={`s${s.id}`} value={s.id}>{c.D.urunler.find((u) => u.id === s.urun)?.ad ?? s.urun}</option>)}
             {c.D.tezgahlar.map((t) => <option key={`t${t.id}`} value={t.id}>{t.ad}</option>)}
           </datalist>
         </label>
