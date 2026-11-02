@@ -129,10 +129,13 @@ export async function tanimKaydet(db: Db, kullanici: Kullanici, id: number, g: T
 
 interface SeriKaynagi { parca: string; emirNo: string }
 
+// Emirsiz önizlemede emir no bilinmez; boş bırakılırsa numara gerçeğe benzer ama yanlış görünür, yer tutucu yazılır.
+const EMIR_YER_TUTUCUSU = '{EMIR}';
+
 async function seriKaynagi(db: Db, t: s.TanimSatiri, emirId: number | null): Promise<SeriKaynagi> {
   const malzeme = await malzemeOzeti(db, t.malzemeId);
   if (malzeme === null) throw gecersiz('Tanımın malzemesi bulunamadı.');
-  if (emirId === null) return { parca: malzeme.kod, emirNo: '' };
+  if (emirId === null) return { parca: malzeme.kod, emirNo: EMIR_YER_TUTUCUSU };
   const emir = await uretimEmriOzeti(db, emirId);
   if (emir === null) throw bulunamadi('Üretim emri bulunamadı.');
   // MRK-07: seri yalnız açık emirde ve tanımın malzemesinin emrinde verilir.
@@ -152,8 +155,9 @@ export async function onizleme(db: Db, tanimId: number, emirId: number | null): 
   const t = await varOlanTanim(db, tanimId);
   const k = await seriKaynagi(db, t, emirId);
   const gun = tesisGunu(Date.now());
-  const anahtar = kapsamAnahtari(t.sayacKapsami, emirId ?? 0, gun);
-  const son = await s.sonSira(db, t.malzemeId, anahtar);
+  // Emir kapsamında emirsiz önizleme, yeni açılacak bir emrin ilk numaralarıdır.
+  const yeniEmir = emirId === null && t.sayacKapsami === 'emir';
+  const son = yeniEmir ? null : await s.sonSira(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, emirId ?? 0, gun));
   const ilk = son === null ? t.baslangicSirasi : son + 1;
   return { numaralar: [0, 1, 2].map((i) => seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, ilk + i)) };
 }

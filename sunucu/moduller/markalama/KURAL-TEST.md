@@ -10,6 +10,7 @@ Testler: `kurallar.test.ts` (saf), `markalama.test.ts` (gerçek PostgreSQL), `is
 | MRK-04 Durum geçişi: sağlam -> red, hurda; red -> rework, kabul, hurda; rework -> red, kabul, hurda; hurda son | `MRK-04`; `MRK-U5` (409) |
 | MRK-05 Hurda nedeni yalnız hurdada ve orada zorunlu | `MRK-05`; `MRK-U5` |
 | MRK-06 Doğrulama yalnız bu tanımın birimi; hurda doğrulanmaz; yinelenen okutma olay yazmaz | `MRK-U4` |
+| Önizleme: emirsiz istekte {EMIR} yer tutucusu, emir kapsamında yeni emrin ilk numaraları | `MRK-U11` |
 | MRK-07 Seri yalnız açık emirde, tanımın malzemesinin emrinde | `MRK-U3` (422) |
 | MRK-08 Tanım var olan malzemeye açılır; (malzeme, op) tekil; sürüm denetimi | `MRK-U2` |
 | MRK-09 Başlangıç sırası değişince: malzeme ve yıl kapsamında başlamış sayaç ileri alınır, geri alma reddedilir; emir kapsamında yeni emirde geçer | `MRK-09`; `MRK-U10` |

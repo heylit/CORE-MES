@@ -249,6 +249,21 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal(emirli.durum, 200, JSON.stringify(emirli.govde));
   });
 
+  test('MRK-U11: emirsiz önizlemede emir no yer tutucusuyla gösterilir, emirli önizleme emrin numarasını taşır', async () => {
+    const m = await malzemeAc();
+    const t = await tanimAc(m, {}, { seriSablonu: '{PARCA}-{EMIR}-{SEQ:3}', sayacKapsami: 'emir' });
+    const kod = t.malzemeKodu ?? '';
+    const emirsiz = await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme`);
+    assert.equal(emirsiz.durum, 200, JSON.stringify(emirsiz.govde));
+    assert.deepEqual(emirsiz.govde.numaralar, [`${kod}-{EMIR}-001`, `${kod}-{EMIR}-002`, `${kod}-{EMIR}-003`]);
+    const emir = await emirAc(m);
+    const ilk = (await markala('operator', t.id, emir)).govde;
+    const emirNo = birimAyrintisiCevabi.parse((await istek('yonetici', 'GET', `/markalama/birimler/${ilk.id}`)).govde).emirNo;
+    const emirli = await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme?emirId=${emir}`);
+    assert.equal(emirli.govde.numaralar[0], `${kod}-${emirNo}-002`);
+    assert.equal((await istek<{ numaralar: string[] }>('yonetici', 'GET', `/markalama/tanimlar/${t.id}/onizleme`)).govde.numaralar[0], `${kod}-{EMIR}-001`, 'yeni emir baştan başlar');
+  });
+
   test('MRK-U7: yazı yüksekliği, derinliği ve tipi ayrı saklanır; ikisi de boş olabilir; 0 ve boş op no alan adıyla reddedilir', async () => {
     const m = await malzemeAc();
     const t = await tanimAc(m, { yaziYuksekligiMm: 0.5, yaziDerinligiMm: 0.05, yaziTipi: 'gotik' });
