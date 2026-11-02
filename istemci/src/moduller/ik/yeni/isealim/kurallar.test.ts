@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Aday, Egitim, Gorusme, Performans, Personel, Pozisyon } from '../tipler.ts';
 import {
   adayPuani, asamaKaydir, degerlendirmeBekleyenler, durumDegistir, egitimOzeti, gorusmeSonrasiAsama, gunEkle, gunFarki, iseAlimOzeti, iseGirisTaslagi,
-  isgEksikleri, kanalMetni, kriterOrtalamasi, oneriSayilari, performansOzeti, performansSonucu, performanslariSuz, pozisyonKopyasi, puanOrtalamasi,
+  isgEksikleri, kanalMetni, kriterOrtalamasi, kvkkEngeli, oneriSayilari, performansOzeti, performansSonucu, performanslariSuz, pozisyonKopyasi, puanOrtalamasi,
   sertifikaDurumu, sonrakiGorusme, sorulariEkle, soruSetleri, yayindaIsaretle, yayindanKaldir,
 } from './kurallar.ts';
 
@@ -131,5 +131,14 @@ describe('soru bankası', () => {
     expect(soruSetleri({}, [{ id: 'q1', ad: 'Genel', sorular: 'A' }]).map((s) => s.id)).toEqual(['q1']);
     expect(soruSetleri({ soruSetleri: [] }, [{ id: 'q1', ad: 'Genel', sorular: 'A' }])).toEqual([]);
     expect(sorulariEkle('A\nB', { id: 'q', ad: 'x', sorular: 'B\nC' })).toBe('A\nB\nC');
+  });
+});
+
+describe('1844 IK-9: KVKK onayı', () => {
+  it('onaysız aday ön görüşme ve sonrasına alınmaz; başvuru ve ret serbest', () => {
+    for (const h of ['Ön görüşme', 'Mülakat', 'Teklif', 'İşe alındı']) expect(kvkkEngeli({}, h)).toMatch(/KVKK/);
+    expect(kvkkEngeli({ kvkk: false }, 'Reddedildi')).toBeNull();
+    expect(kvkkEngeli({ kvkk: false }, 'Başvuru')).toBeNull();
+    expect(kvkkEngeli({ kvkk: true }, 'Mülakat')).toBeNull();
   });
 });

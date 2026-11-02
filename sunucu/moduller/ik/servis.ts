@@ -22,7 +22,7 @@ import type { Govde, IzinUcu, KuralHatasi } from './kurallar.ts';
 import {
   EKIP_ALANLARI, FAZLA_MESAI_TURLERI, IS_GUNU_IZIN_TURLERI, GIZLI_AYARLAR, IK_ALANLARI, IK_YAZMA_ISLEMLERI, ILETISIM_ALANLARI, YONETICI_ALANLARI, alanlariSec, ayarDegisikligiDenetle,
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
-  iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinCakismasiDenetle, izinGecisiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
+  adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
   OZLUK_SON_YONETICI_UYARISI, ozlukItmesi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
@@ -180,6 +180,10 @@ export async function veriGetir(db: Db, kullanici: Kullanici): Promise<IkVeriCev
   }
   const benim = ben.personelKimlik;
   const yoneticim = benim === null ? null : (d.harita.get(benim)?.govde['yoneticiId'] ?? null);
+  // IK-9 (karar a): görüşmeci, görüşmesinin adayını ve pozisyon adını görür (KVKK görünürlüğü daraltılmış alanlarla).
+  const gorusmelerim = etkin.filter((k) => k.tur === 'intv' && gorusmeciMi(k.govde, benim));
+  const adaylarim = new Set(gorusmelerim.map((k) => String(k.govde['candId'])).filter((a) => d.harita.get(a)?.govde['kvkk'] === true));
+  const pozisyonlarim = new Set([...adaylarim].map((a) => d.harita.get(a)?.govde['jobId']).filter((p): p is string => typeof p === 'string'));
   const gorunur = (k: Kayit): IkKayit | null => {
     const c = kayitCevabi(k, d);
     const p = typeof k.govde['empId'] === 'string' ? k.govde['empId'] : null;
@@ -197,7 +201,9 @@ export async function veriGetir(db: Db, kullanici: Kullanici): Promise<IkVeriCev
         const katilan = Array.isArray(c.govde['katilimcilar']) ? (c.govde['katilimcilar'] as unknown[]).filter((x) => x === benim || d.ekip.has(String(x))) : [];
         return katilan.length ? { ...c, govde: { ...c.govde, katilimcilar: katilan } } : null;
       }
-      case 'cand': case 'intv': case 'job':
+      case 'intv': return adaylarim.has(String(k.govde['candId'])) && gorusmeciMi(k.govde, benim) ? c : null;
+      case 'cand': return adaylarim.has(k.kimlik) ? { ...c, govde: alanlariSec(c.govde, GORUSMECI_ADAY_ALANLARI) } : null;
+      case 'job': return pozisyonlarim.has(k.kimlik) ? { ...c, govde: alanlariSec(c.govde, GORUSMECI_POZISYON_ALANLARI) } : null;
       default: return null;
     }
   };
@@ -269,6 +275,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   if (onceki) kapsamDenetle(g.tur, onceki, d);
   const ek: Record<string, Deger> = {};
   let devamUyarisi: string | null = null;
+  let izinUyarisi: string | null = null;
   if (g.tur === 'att') {
     const o = devamOnayiKur({ onceki, yeni, islemler, benimPersonel: d.ben.personelKimlik });
     yeni['onay'] = o.onay;
@@ -284,6 +291,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     firlat(izinGecisiDenetle({
       onceki, yeni, islemler, benimPersonel: d.ben.personelKimlik, uc: g.uc === 'iletisim' ? 'kaydet' : g.uc, ekipte: d.ekip.has(String(yeni['empId'])),
     }));
+    firlat(izinTarihiDenetle(onceki, yeni, g.uc === 'iletisim' ? 'kaydet' : g.uc, gun));
     if (IS_GUNU_IZIN_TURLERI.includes(String(yeni['tur'])) && yeni['durum'] !== 'İptal' && (onceki === null || izinIcerigiDegistiMi(onceki, yeni))) {
       await izinIsGunuDenetle(db, d, yeni);
     }
@@ -291,6 +299,7 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     await s.anahtarKilitle(db, `ik-izin-${String(yeni['empId'])}`);
     const izinler = (await s.kayitlar(db, ['leave'])).map(kayitKur).filter((k) => !k.iptal).map((k) => k.govde);
     firlat(izinCakismasiDenetle(onceki, yeni, izinler));
+    izinUyarisi = await izinBakiyeUyarisiOku(db, d, onceki, yeni);
     yeni['talepTarihi'] = onceki?.['talepTarihi'] ?? gun;
     const once = onceki ? String(onceki['durum']) : null;
     if (yeni['durum'] !== once && yeni['durum'] !== 'Beklemede') {
@@ -322,6 +331,11 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   await baglariDenetle(db, g.tur, satirlar);
   // Yeni halin iş merkezi bağlı kayıtlardan çözülür (personel değiştiyse yeni personelin).
   kapsamDenetle(g.tur, yeni, d);
+  if (g.tur === 'cand') firlat(adayGecisiDenetle(onceki, yeni));
+  if (g.tur === 'intv') {
+    const aday = d.harita.get(String(yeni['candId']));
+    firlat(gorusmeAdayiDenetle(onceki, yeni, aday && !aday.iptal && aday.tur === 'cand' ? aday.govde : null));
+  }
   const satir = kayitli
     ? await kisitKorumali(KISITLAR, () => surumluGuncelle({
       guncelle: () => s.kayitGuncelle(db, g.tur, g.kimlik, kayitli.surum, satirlar, kullanici.id, ek), varMi: () => s.varMi(db, g.tur, g.kimlik),
@@ -341,8 +355,19 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
   const ozlukUyarisi = g.tur === 'emp' ? await ozluguKisiyeIt(db, kullanici, onceki, kayit.govde) : null;
   const uyari = g.tur === 'emp'
     ? [cikisZimmetUyarisi(kayit.govde, await acikZimmetler(db, kayit.govde)), ozlukUyarisi].filter((u) => u !== null).join(' ') || null
-    : devamUyarisi;
+    : devamUyarisi ?? izinUyarisi;
   return { kayit, gecmis, uyari };
+}
+
+// IK-7 (karar b): kalan, yazımdan önceki kayıtlarla motorun bugünkü yıllık izin bakiyesidir (ekrandaki "Kalan yıllık izin" ile aynı hesap).
+async function izinBakiyeUyarisiOku(db: Db, d: Durum, onceki: Govde | null, yeni: Govde): Promise<string | null> {
+  const personel = d.harita.get(String(yeni['empId']));
+  // Kural bu izne hiç uygulanmıyorsa (yıllık değil, etkin değil) motor kurulmaz: sınırsız eksi kalanla bile uyarı çıkmaz.
+  if (!personel || personel.iptal || izinBakiyeUyarisi(onceki, yeni, -Infinity, '') === null) return null;
+  const ayar = await ayarGovdesi(db);
+  const motor = motorKur(d.kayitlar.filter((k) => !k.iptal).map((k) => k.govde), ayar.govde);
+  const kalan = motor.leaveBalance(personel.govde, new Date()).kalan;
+  return izinBakiyeUyarisi(onceki, yeni, kalan, adHaritasi(d).get(personel.kimlik) ?? '');
 }
 
 // IK-84: bağlı kişinin özlük alanları Kişiler'e itilir; bağı kalkan kişi serbest kalır. Aynı transaction'da: itme reddedilirse

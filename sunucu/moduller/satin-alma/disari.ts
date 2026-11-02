@@ -81,6 +81,9 @@ export { fasonSuresiTahminleri } from './servis.ts';
 
 // Kart #435: stok yok istekleri satın alma iş kutusunda görünür; kaynak stoktan gelir (stok satın almayı ithal eder, bu yüzden ters yön
 // ADR 0006 gibi kablolamada kurulur: sunucu/kablolama.ts).
+// 1647: değişiklik yönetimi sipariş satırının parça revizyonunu verir; bağı kablolama.ts kurar.
+export type { ParcaRevizyonuCozucusu } from './servis.ts';
+export const parcaRevizyonuCozucusu = (cozucu: servis.ParcaRevizyonuCozucusu): void => servis.parcaRevizyonuCozucusuKaydet(cozucu);
 export const stokYokCozucusu = (cozucu: servis.StokYokCozucusu): void => servis.stokYokCozucusuKaydet(cozucu);
 // SAT-77: kg fiyatları sayfasındaki hammadde stok değeri için stok miktarı (kablolama stok/disari stokMiktarlari ile bağlar).
 export const stokMiktariCozucusu = (cozucu: servis.StokMiktariCozucusu): void => servis.stokMiktariCozucusuKaydet(cozucu);

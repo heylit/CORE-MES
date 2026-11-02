@@ -1,6 +1,6 @@
 import type { EmirCevabi, FaiSarti, KararSatiri, TalepCevabi } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import {
-  IMZA_ANLAMLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, type GecerlilikTuru, type KararKodu,
+  IMZA_ANLAMLARI, KARAR_HEDEFI_ADLARI, KARAR_KODU_ADLARI, KARAR_MODU_ADLARI, type GecerlilikTuru, type KararKodu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import { FormPenceresi, Girdi, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useForm } from '../../../ortak/veri/form.ts';
@@ -13,7 +13,7 @@ import { useEmirKomutu, useTalep } from './emir-veri.ts';
 interface Ortak { emir: EmirCevabi; kapat: () => void }
 
 export const hedefMetni = (k: Pick<KararSatiri, 'hedef' | 'hedefId' | 'hedefEtiketi'>) =>
-  `${k.hedef === 'stok' ? 'Stok' : 'Emir'} ${k.hedefEtiketi ?? `#${k.hedefId}`}`;
+  `${KARAR_HEDEFI_ADLARI[k.hedef]} ${k.hedefEtiketi ?? `#${k.hedefId}`}`;
 
 const GECERLILIK_SECENEKLERI: readonly { deger: GecerlilikTuru; baslik: string }[] = [
   { deger: 'seri', baslik: 'Seri numarasından itibaren' },

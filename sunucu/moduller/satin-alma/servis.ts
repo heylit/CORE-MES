@@ -343,6 +343,7 @@ export async function talepAc(db: Db, k: Kullanici, gelen: TalepYazimi, izYaz: F
   const no = await belgeNo(db, 'satin-alma.talep-no', (x) => s.talepNoVarMi(db, x));
   await kisitKorumali({}, () => s.talepEkle(db, t, no, talepEden, k.id), { CAKISMA: ILETILER.talepVar });
   await s.altKayitlariYaz(db, t, siparisNoVerici(db));
+  await siparisRevizyonlariniYaz(db, t.id);
   for (const h of t.hareketler) await s.hareketEkle(db, t.id, h.id, h.metin, k.id);
   return gorunen(k, fiyatIziniYaz(izYaz, null, (await talepOku(db, t.id))!));
 }
@@ -602,6 +603,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   }
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);
   await s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db));
+  await siparisRevizyonlariniYaz(db, id);
   await s.siparisGuncellemesiniIsaretle(db, id, guncellenecek);
   const siparisteMi = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
   if (siparisteMi(yazilacak.durum) && !siparisteMi(eski.durum)) {
@@ -1239,6 +1241,21 @@ const STOK_YOK_SINIRI = 100;
 export interface StokYokKaynagi {
   id: number; no: string; malzemeId: number; miktar: string; birim: string | null; uretimEmriId: number | null; acilma: string;
 }
+// 1647: sipariş satırı ilk yazıldığında kalemin malzemesinin yürürlükteki parça revizyonunu taşır. Revizyonun sahibi değişiklik
+// yönetimidir ve bu modülü okur; bağı kablolama.ts kurar. Bağ yoksa ya da parçanın revizyonu yoksa boş kalır; sonra yazılmaz.
+export type ParcaRevizyonuCozucusu = (db: Db, malzemeNolari: readonly number[]) => Promise<Map<number, string>>;
+let parcaRevizyonuCozucu: ParcaRevizyonuCozucusu = async () => new Map();
+export function parcaRevizyonuCozucusuKaydet(cozucu: ParcaRevizyonuCozucusu): void { parcaRevizyonuCozucu = cozucu; }
+async function siparisRevizyonlariniYaz(db: Db, talepId: string): Promise<void> {
+  const satirlar = await s.revizyonsuzSiparisSatirlari(db, talepId);
+  if (satirlar.length === 0) return;
+  const revizyonlar = await parcaRevizyonuCozucu(db, satirlar.map((x) => x.malzemeNo));
+  await s.siparisSatiriRevizyonlariYaz(db, satirlar.flatMap((x) => {
+    const r = revizyonlar.get(x.malzemeNo);
+    return r === undefined ? [] : [{ id: x.id, parcaRevizyonu: r }];
+  }));
+}
+
 export type StokYokCozucusu = (db: Db, sinir: number) => Promise<StokYokKaynagi[]>;
 let stokYokCozucu: StokYokCozucusu | null = null;
 export function stokYokCozucusuKaydet(cozucu: StokYokCozucusu): void { stokYokCozucu = cozucu; }

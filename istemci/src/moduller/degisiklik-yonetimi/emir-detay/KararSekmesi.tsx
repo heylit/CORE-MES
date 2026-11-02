@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { EmirCevabi, KararSatiri } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
-import { KARAR_KODU_ADLARI, type KararKodu } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
+import { KARAR_HEDEFI_ADLARI, KARAR_KODU_ADLARI, type KararKodu } from '#paylasilan/sozlesme/degisiklik-yonetimi-sabitleri.ts';
 import { Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { useYetki } from '../../../ortak/veri/yetki.ts';
@@ -45,7 +45,7 @@ export function KararSekmesi({ emir }: { emir: EmirCevabi }) {
               {emir.kararlar.length === 0 && <tr><td colSpan={5} className="tc-tablo-yok">{kaynakYok ? 'Emir ve stok kaynağı bağlı değil; etkilenen hedef bilinmiyor.' : 'Etkilenen emir veya stok yok.'}</td></tr>}
               {emir.kararlar.map((k) => (
                 <tr key={k.id}>
-                  <td><b>{k.hedef === 'stok' ? 'Stok' : 'Emir'}</b><div className="dy-kod">{k.hedefEtiketi ?? `#${k.hedefId}`}</div></td>
+                  <td><b>{KARAR_HEDEFI_ADLARI[k.hedef]}</b><div className="dy-kod">{k.hedefEtiketi ?? `#${k.hedefId}`}</div></td>
                   <td><span className="dy-silik" title="Sahibi modül bağlanınca">—</span></td>
                   <td><b>{KARAR_KODU_ADLARI[k.onerilenKod]}</b><div className="dy-silik">{k.gerekce}</div></td>
                   <td><ModRozeti mod={k.mod} /></td>

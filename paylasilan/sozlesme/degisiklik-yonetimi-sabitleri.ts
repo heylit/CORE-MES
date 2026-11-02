@@ -56,7 +56,11 @@ export const KARAR_MODLARI = ['otomatik', 'onayli', 'mrb'] as const;
 export const KARAR_MODU_ADLARI: Readonly<Record<(typeof KARAR_MODLARI)[number], string>> = { otomatik: 'Otomatik', onayli: 'Onaylı', mrb: 'MRB' };
 // Hurda, rework, sapma ve yedek her zaman MRB kararıdır (1122 düzeltmesi: ayrı işlem).
 export const MRB_KODLARI = ['eskiyle_tamamla_sapma', 'rework', 'hurda', 'eski_yedek'] as const satisfies readonly (typeof KARAR_KODLARI)[number][];
-export const KARAR_HEDEFLERI = ['emir', 'stok'] as const;
+// Stok hedefi partidir; partisiz bakiye malzeme başına ayrı hedeftir; sipariş satırı yoldaki malzemedir (1647).
+export const KARAR_HEDEFLERI = ['emir', 'stok', 'partisiz_stok', 'siparis_satiri'] as const;
+export const KARAR_HEDEFI_ADLARI: Readonly<Record<(typeof KARAR_HEDEFLERI)[number], string>> = {
+  emir: 'Emir', stok: 'Parti', partisiz_stok: 'Stok', siparis_satiri: 'Sipariş satırı',
+};
 
 // Hangi işlemin (karar-ver ya da mrb-karar) kararı verdiğini istemci ve sunucu aynı yerden okur.
 export function mrbKarariMi(mod: (typeof KARAR_MODLARI)[number], kod: (typeof KARAR_KODLARI)[number]): boolean {

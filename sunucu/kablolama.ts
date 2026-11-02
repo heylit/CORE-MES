@@ -3,13 +3,14 @@ import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
+import { yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import { acilSiparisOnaylandi, canliMakineAyrimlari, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteDurumuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, kaliteDurumuCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import { logoBirimSetiCozucusu, rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit } from './moduller/rota/disari.ts';
@@ -58,6 +59,8 @@ export function sunucununBaglari(): Bag[] {
     bag('adım statüsü çözücüsü -> stok', stok.adimStatusuCozucusu, receteRota.adimStatusu),
     bag('adım çıktısı çözücüsü -> stok', stok.adimCiktisiCozucusu, receteRota.adimCiktisi),
     bag('statü listesi -> stok', stok.statuListesiCozucusu, receteRota.receteRotaStatuleri),
+    bag('parça revizyonu -> stok partisi', stok.parcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
+    bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
     bag('emir bitti -> sevkiyat', uretimEmirleri.emirBittiDinle, sevkiyat.emirBittiYansit),
     bag('logo durumu -> stok malzeme fişi', stok.malzemeFisiLogoCozucusu, logo.malzemeFisiLogoDurumlari),

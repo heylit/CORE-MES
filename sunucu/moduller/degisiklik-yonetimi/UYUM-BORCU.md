@@ -4,7 +4,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 
 ## Bağlamada kapanacak
 1. Rol x işlem: on bir işlem yalnız yöneticide (1122 a). Roller ortak yetki matrisinden verilir.
-2. Etkilenen emir ve stok kaynağı: `servis.ts` `EtkiCozucusu` uretim-emirleri ve stok `disari.ts` ile bağlanır; o zamana kadar karar satırı yok, kapanış koşulu 'bilinmiyor'.
+2. ~~Etkilenen emir ve stok kaynağı: `servis.ts` `EtkiCozucusu` uretim-emirleri ve stok `disari.ts` ile bağlanır; o zamana kadar karar satırı yok, kapanış koşulu 'bilinmiyor'.~~ Kapandı (1644): `KAYNAKLARDAN_ETKI` yayında malzemenin taslak, planlı ve başlamış emirlerini ve stoğunu okur; açık karar kapanışı durdurur. Kalanı 25-28.
 3. Kararın sahada uygulanması (karantina, emir yenileme, hurda, rework, NCR) sahibi modülün ucuyla (1123 a); bugün yalnız iç olay günlüğüne yazılır.
 4. İlk parça kanıtı (ölçüm, rapor) denetlenmez; kalite-merkezi bağlanınca.
 5. Seri, markalama ve uyum: `konfigurasyon.seriler`, `seriler` ucu, `izlenebilirlik.iplik`, `modSeviyesi`, `emirRevizyonu`, `soyAgaci` null ya da boş; uyum 'bilinmiyor'.
@@ -28,3 +28,9 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 23. Kalemin eski dört revizyon sütunu (`eski_/yeni_cizim_revizyonu_id`, `eski_/yeni_rota_revizyonu_id`) 1642 göçüyle öğe tablosuna kopyalandı ve okunmuyor; silinmesi dolu tabloyu değiştiren göçtür, kullanıcı onayıyla ayrı kart.
 24. Öğe revizyon kimlikleri sahibi modülde var mı ve kalemin parçasına mı ait, denetlenmez (14 ile aynı); sahibi modüllerin `disari.ts` okumasıyla kapanır.
 19. Kapanış (K16 a, kart 1819): bilinmeyen koşul varken ECO kapanmaz (`kapatilabilirMi`, sunucu ve düğme aynı kural). Seri ve yeni revizyonla üretim koşulları bugün hep bilinmiyor olduğundan hiçbir ECO kapanamaz; etki çözücü, seri ve rota-üretim kaynakları bağlanınca kapanış açılır.
+25. Etkilenen emir alanları (1644): donmuş bölge, seri aralığı ve yeni rotayla termin kayması emirde tutulmuyor; `donmus` false, `seriAraligi` null, `terminKayar` null verilir. Termin null olduğundan emir kararı otomatik uygulanmaz (onaylı ya da MRB). Plan ve seri kaydı bağlanınca dolar.
+26. ~~Stok hedefi (1644, VARSAYIM): malzeme başına tek karar satırı.~~ 1647 ile değişti: stok hedefi parti başına (`stok`, `hedefId` = parti id), partisiz bakiye malzeme başına (`partisiz_stok`, `hedefId` = malzeme no). Parti kimliği bigint, hedef kimliği int: 2^31'i aşan parti kimliği bu tabloya yazılamaz (bugün uzak, VARSAYIM). Revizyonu boş eski partiler de hedeftir (revizyonu bilinmiyor).
+27. Kaynak kapsamı (1644, 1647): açık satın alma sipariş satırı 1647 ile okunur (`siparis_satiri`); fason hizmet satırı emir hedefinin içindedir, ayrı hedef olmaz. Sevk edilmiş ürün ve üst montaj (where-used) okunmuyor; ayrı kartlarla.
+28. Etki analizi adımı (talep aşaması) kaynak okumaz; etkilenenler yalnız yayında hesaplanır. Talep ekranında etkilenen sayısı göstermek ayrı iş.
+29. Revizyonun dolması (1647): parti ve sipariş satırı açılışta yürürlükteki parça revizyonunu `disari.ts yururluktekiParcaRevizyonlari` ile alır (kablolama); siparişli mal kabulde parti sipariş satırının revizyonunu alır. Üretim partisinin revizyonu emrin sabit revizyonundan gelmeli; emre sabitleme (1645) gelene kadar açılış anındaki yürürlükteki revizyondur.
+30. Sipariş satırı kararı (1647): olay ilgili listesinde satın alma yok; `stok_karari` olayı ilgilisiz ve `hedef` alanıyla yazılır. "Tedarikçiye iade" ve "stok bitince kullan" kodu yok (1606 raporu); bugün D1'de öneri "Karantinada beklet" (MRB) adıyla görünür. İkisi ayrı kart (sabit listesi ve göç).

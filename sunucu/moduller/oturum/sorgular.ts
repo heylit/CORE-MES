@@ -619,3 +619,86 @@ export async function profilAtamasiYaz(db: Db, cihazId: number, profil: CihazPro
 export async function defterKisisiniYaz(db: Db, kisiId: number): Promise<void> {
   await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(kisiId)]);
 }
+
+export interface NabizGirdisi {
+  surum: string | null;
+  kuyruk: number | null;
+  sonEsitlemeSn: number | null;
+  jsHata: number;
+}
+
+// Nabız açık oturuma yazılır; cihaz oturum anahtarından, kayıtlıysa ortak cihaz belirtecinden bulunur. Son nabızdan beri
+// en az `enSikSn` geçmemişse hiçbir şey yazılmaz. Günlük özet aynı ifadede güncellenir: ikisi ayrışmaz.
+export async function nabizYaz(
+  db: Db, anahtarOzeti: string, cihazOzeti: string | null, girdi: NabizGirdisi, enSikSn: number,
+): Promise<boolean> {
+  const satir = await db.tek<{ yazildi: number }>(
+    `WITH o AS (
+       SELECT o.id, (SELECT oc.id FROM oturum_ortak_cihaz oc WHERE oc.belirtec_ozeti = $2 AND oc.kapandi IS NULL) AS ortak_cihaz_id
+         FROM oturum o WHERE o.anahtar_ozeti = $1 AND o.kapandi IS NULL
+     ), s AS (
+       INSERT INTO oturum_cihaz_nabzi AS n (oturum_id, ortak_cihaz_id, ilk, son, istemci_surumu, kuyruk, son_esitleme, js_hata)
+       SELECT o.id, o.ortak_cihaz_id, now(), now(), $3, $4, now() - make_interval(secs => $5::int), $6 FROM o
+       ON CONFLICT (oturum_id) DO UPDATE SET
+         ortak_cihaz_id = EXCLUDED.ortak_cihaz_id, son = EXCLUDED.son, istemci_surumu = EXCLUDED.istemci_surumu,
+         kuyruk = EXCLUDED.kuyruk, son_esitleme = EXCLUDED.son_esitleme, js_hata = EXCLUDED.js_hata
+         WHERE n.son <= now() - make_interval(secs => $7::int)
+       RETURNING oturum_id, ortak_cihaz_id
+     ), g AS (
+       INSERT INTO oturum_cihaz_nabzi_gunluk AS g (gun, oturum_id, ortak_cihaz_id, nabiz, azami_kuyruk, js_hata, istemci_surumu)
+       SELECT current_date, s.oturum_id, s.ortak_cihaz_id, 1, $4, $6, $3 FROM s
+       ON CONFLICT (gun, oturum_id) DO UPDATE SET
+         ortak_cihaz_id = EXCLUDED.ortak_cihaz_id, nabiz = g.nabiz + 1,
+         azami_kuyruk = GREATEST(g.azami_kuyruk, EXCLUDED.azami_kuyruk), js_hata = g.js_hata + EXCLUDED.js_hata,
+         istemci_surumu = EXCLUDED.istemci_surumu
+       RETURNING 1
+     )
+     SELECT count(*)::int AS yazildi FROM g`,
+    [anahtarOzeti, cihazOzeti, girdi.surum, girdi.kuyruk, girdi.sonEsitlemeSn, girdi.jsHata, enSikSn],
+  );
+  return (satir?.yazildi ?? 0) > 0;
+}
+
+export interface CihazNabziSatiri {
+  oturumId: number;
+  ortakCihazId: number | null;
+  ortakCihazAd: string | null;
+  cihazProfili: CihazProfili | null;
+  son: string;
+  sonNabizdanBeriSn: number;
+  istemciSurumu: string | null;
+  kuyruk: number | null;
+  sonEsitleme: string | null;
+  jsHata: number;
+  bugunJsHata: number;
+}
+
+// Açık oturumların son nabzı. Kişi, adres ve tarayıcı okunmaz (1616 bölüm 7): cihaz ortak cihaz adıyla ya da oturum numarasıyla tanınır.
+export function cihazNabizlari(db: Db, sure: OturumSuresi): Promise<CihazNabziSatiri[]> {
+  return db.sorgu<CihazNabziSatiri>(
+    `SELECT n.oturum_id::int AS "oturumId", n.ortak_cihaz_id::int AS "ortakCihazId", oc.ad AS "ortakCihazAd",
+            a.profil AS "cihazProfili",
+            ${zamanMetni('n.son')} AS son, floor(extract(epoch FROM now() - n.son))::int AS "sonNabizdanBeriSn",
+            n.istemci_surumu AS "istemciSurumu", n.kuyruk, ${zamanMetni('n.son_esitleme')} AS "sonEsitleme", n.js_hata AS "jsHata",
+            COALESCE(g.js_hata, 0) AS "bugunJsHata"
+       FROM oturum_cihaz_nabzi n
+       JOIN oturum o ON o.id = n.oturum_id
+       LEFT JOIN oturum_ortak_cihaz oc ON oc.id = n.ortak_cihaz_id
+       LEFT JOIN oturum_cihaz_profil_atamasi a ON a.cihaz_id = n.ortak_cihaz_id
+       LEFT JOIN oturum_cihaz_nabzi_gunluk g ON g.gun = current_date AND g.oturum_id = n.oturum_id
+      WHERE o.kapandi IS NULL AND o.son_gorulme > now() - make_interval(secs => $1) AND o.acildi > now() - make_interval(secs => $2)
+      ORDER BY n.son, n.oturum_id`,
+    [sure.bostaSn, sure.azamiSn],
+  );
+}
+
+export async function eskiNabizlariSil(db: Db, gun: number, simdi: Simdi): Promise<void> {
+  await db.sorgu(
+    'DELETE FROM oturum_cihaz_nabzi_gunluk WHERE gun < COALESCE($2::timestamptz, now())::date - $1::int',
+    [gun, simdi],
+  );
+  await db.sorgu(
+    'DELETE FROM oturum_cihaz_nabzi WHERE son < COALESCE($2::timestamptz, now()) - make_interval(days => $1)',
+    [gun, simdi],
+  );
+}

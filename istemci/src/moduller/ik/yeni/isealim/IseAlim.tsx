@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DurumKutusu, Dugme, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Rozet, SayiKarti, Secim, Sekmeler, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
 import { adSoyad, paraKisa, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
@@ -9,7 +9,7 @@ import { useIkKomutu } from '../veri.ts';
 import { AdayFormu, GorusmeFormu, PozisyonDuzenle, useIseAlim } from './formlar.tsx';
 import {
   adayAdi, adayGorusmeleri, adayPuani, asamaKaydir, asamasi, degerlendirilebilir, degerlendirmeBekleyenler, gunEkle, gunFarki, iseAlimOzeti,
-  kisaGorusmeZamani, kriterOrtalamasi, oneriSayilari, pozisyonDurumRozeti, puanMetni, REDDEDILDI, satirlar, siraliPozisyonlar, sonrakiGorusme,
+  kisaGorusmeZamani, kriterOrtalamasi, kvkkEngeli, oneriSayilari, pozisyonDurumRozeti, puanMetni, REDDEDILDI, satirlar, siraliPozisyonlar, sonrakiGorusme,
   surecteMi, tamamlandiMi, puanOrtalamasi, yayindakiKanalSayisi,
 } from './kurallar.ts';
 import { adayBul, AsamaRozeti, Baslik, Bolum, bugun, Not, OneriRozeti, Puan, pozisyonBul } from './parcalar.tsx';
@@ -63,6 +63,13 @@ export function IseAlimSayfasi(o: IkEkranOzellikleri) {
   const komut = useIkKomutu();
   const iseAl = useIseAlim(o);
   const asamalar = ikSabitleri()?.STAGES ?? [];
+  const { bildir } = useBildirim();
+  const ileri = (a: AdayKaydi) => {
+    const hedef = asamaKaydir(asamalar, a, 1);
+    const engel = kvkkEngeli(a, hedef);
+    if (engel) { bildir('hata', engel); return; }
+    void komut.kaydet({ ...a, asama: hedef });
+  };
   const [sekme, sekmeYaz] = useState<IseAlimSekmesi>(sonSekme);
   const [pozisyonSuz, pozisyonSuzYaz] = useState('');
   const [kars, karsYaz] = useState({ pozisyon: '', reddedilen: false });
@@ -131,7 +138,7 @@ export function IseAlimSayfasi(o: IkEkranOzellikleri) {
                         {puan ? <Puan deger={puan} /> : <span className="tc-ika-soluk">Puan yok</span>}
                         <span className="tc-ika-bosluk" />
                         {yaz && i > 0 && i < 5 && <Dugme simge="chev-left" aria-label="Önceki aşamaya taşı" onClick={() => { void komut.kaydet({ ...a, asama: asamaKaydir(asamalar, a, -1) }); }} />}
-                        {yaz && i < 3 && <Dugme simge="chev-right" aria-label="Sonraki aşamaya taşı" onClick={() => { void komut.kaydet({ ...a, asama: asamaKaydir(asamalar, a, 1) }); }} />}
+                        {yaz && i < 3 && <Dugme simge="chev-right" aria-label="Sonraki aşamaya taşı" onClick={() => { ileri(a); }} />}
                         {yaz && i === 3 && <Dugme tur="birincil" onClick={() => { iseAl.baslat(a); }}>İşe al</Dugme>}
                       </div>
                     </div>

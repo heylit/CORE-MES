@@ -177,3 +177,29 @@ export function profilSayfalariHatasi(sayfalar: readonly string[]): string | nul
   }
   return new Set(sayfalar).size === sayfalar.length ? null : 'Aynı sayfa iki kez seçilmiş.';
 }
+
+// Cihaz nabzı (kart 1666, 1621 a): oturumlu istemci beş dakikada bir bildirir. Üç nabız kaçıran cihaz sessizdir.
+export const NABIZ_ARALIGI_SN = 5 * 60;
+// Bundan sık gelen nabız yazılmaz: sekme çoğalsa ya da istemci bozulsa da satır ve sayaç şişmez.
+export const NABIZ_EN_SIK_SN = 60;
+export const SESSIZ_ESIK_SN = 3 * NABIZ_ARALIGI_SN;
+// Bu kadar kayıt gönderilmeden bekleyen cihaz "kuyruğu biriken" sayılır (VARSAYIM; kullanımda ayarlanır).
+export const KUYRUK_BIRIKME_ESIGI = 20;
+// 1619 a: cihaz nabzı 30 gün saklanır.
+export const NABIZ_SAKLAMA_GUN = 30;
+// Son eşitleme istemci saatiyle değil, "kaç saniye önce" diye gelir; zaman sunucuda hesaplanır. Saklama süresinden eskisi bilinmez sayılır.
+export const NABIZ_ESITLEME_AZAMI_SN = NABIZ_SAKLAMA_GUN * 24 * 60 * 60;
+
+export type NabizDurumu = 'sessiz' | 'kuyruk' | 'iyi';
+
+// Sessizlik kuyruktan önce gelir: sessiz cihazın son bildirdiği kuyruk bayattır.
+export function nabizDurumu(sonNabizdanBeriSn: number, kuyruk: number | null): NabizDurumu {
+  if (sonNabizdanBeriSn >= SESSIZ_ESIK_SN) return 'sessiz';
+  if (kuyruk !== null && kuyruk >= KUYRUK_BIRIKME_ESIGI) return 'kuyruk';
+  return 'iyi';
+}
+
+// Saklama süresinden eski eşitleme bilinmez sayılır; negatif değer şemada reddedilir.
+export function esitlemeSuresi(sn: number | null): number | null {
+  return sn === null || sn > NABIZ_ESITLEME_AZAMI_SN ? null : sn;
+}

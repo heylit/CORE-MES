@@ -156,6 +156,7 @@ const TAM_DENETLENMEYEN_UCLAR = [
   // CMM sonuç dosyası (1450 a): dosya metni deftere girmez; emir, resim ve (yazmada) resim sürümü ile onaylanan satır sayısı girer.
   'POST /kalite-merkezi/studyo/olcumler/cmm-onizle govdesiz+secim',
   'POST /kalite-merkezi/studyo/olcumler/cmm-yaz govdesiz+secim',
+  'POST /oturum/nabiz yok', // 1755 a: cihaz nabzı 5 dakikada bir gelir, izini kendi tablosunda bırakır (kart 1666).
 ];
 
 // 385 a: dosya veren okuma ucu dosyayı verirken denetime yazılır. Yalnız ekranın kendiliğinden yüklediği, kişinin dosya olarak

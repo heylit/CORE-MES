@@ -37,6 +37,22 @@ export const parolaCevabi = z.object({ tamam: z.literal(true) });
 // Kişinin kendi PIN'i: eski olarak geçerli PIN ya da parola; girişle aynı bekleme kuralına tabidir.
 export const kendiPinGovdesi = z.object({ eski: gizli(z.string().max(200)), yeniPin: gizli(z.string().max(20)) });
 
+// Cihaz nabzı (kart 1666, 1621 a, 1745 a): kişi, konum ve istemci saati yok. Son eşitleme "kaç saniye önce" diye gelir, zamanı sunucu
+// hesaplar. Kuyruğu ya da eşitlemesi olmayan istemci (Arkon dışı) null gönderir; sıfır uydurulmaz. Sınırlar bozuk istemcinin sayaçları
+// taşıramayacağı kadar dardır.
+export const NABIZ_KUYRUK_AZAMI = 100_000;
+export const NABIZ_JS_HATA_AZAMI = 10_000;
+export const NABIZ_SURUM_AZAMI = 64;
+export const NABIZ_ESITLEME_SN_AZAMI = 10 * 365 * 24 * 60 * 60;
+export const nabizGovdesi = z.object({
+  surum: z.string().trim().min(1).max(NABIZ_SURUM_AZAMI).nullable(),
+  kuyruk: z.number().int().min(0).max(NABIZ_KUYRUK_AZAMI).nullable(),
+  sonEsitlemeSn: z.number().int().min(0).max(NABIZ_ESITLEME_SN_AZAMI).nullable(),
+  jsHata: z.number().int().min(0).max(NABIZ_JS_HATA_AZAMI),
+}).strict();
+// yazildi false: nabız bir dakikadan sık geldi ve yazılmadı.
+export const nabizCevabi = z.object({ yazildi: z.boolean() });
+
 // Oturum yoksa kullanici null döner; açılış sorgusu 401 üretmez.
 export const oturumCevabi = z.object({ kullanici: kullaniciSemasi.nullable() });
 export const girisCevabi = oturumCevabi.extend({ pinBelirlenecek: z.literal(true).optional() });
@@ -136,6 +152,8 @@ export type PinBelirleGovdesi = z.input<typeof pinBelirleGovdesi>;
 export type GirisCevabi = z.output<typeof girisCevabi>;
 export type KendiParolaGovdesi = z.input<typeof kendiParolaGovdesi>;
 export type KendiPinGovdesi = z.input<typeof kendiPinGovdesi>;
+export type NabizGovdesi = z.input<typeof nabizGovdesi>;
+export type NabizCevabi = z.output<typeof nabizCevabi>;
 export type OturumCevabi = z.output<typeof oturumCevabi>;
 export type CikisCevabi = z.output<typeof cikisCevabi>;
 export type HesapKilidi = z.output<typeof hesapKilidiSemasi>;

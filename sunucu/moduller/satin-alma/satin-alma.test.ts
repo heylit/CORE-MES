@@ -520,6 +520,34 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s.durum, 'siparis_verildi');
   });
 
+  test('1647: sipariş satırı ilk yazıldığında yürürlükteki parça revizyonunu alır; sonraki kayıt değiştirmez; satır okuması taşır', async () => {
+    let revizyon = 'B';
+    servis.parcaRevizyonuCozucusuKaydet(async (_db, nolar) => new Map(nolar.map((n) => [n, revizyon])));
+    try {
+      const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ kalemler: [kalem('Deneme revizyonlu')] })));
+      const [k1] = t.kalemler.map((k) => k.id) as [string];
+      const a = teklif(firmaA, [[k1, '10']]);
+      const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+      const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(deg), durum: 'onayda', teklifler: [a],
+        karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+      const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
+      const siparis = { teklifId: a.id, siparisNo: 'SA-REV', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+      const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
+      const satir = async () => (await vt().tek<{ id: number; rev: string | null }>(
+        'SELECT id, parca_revizyonu AS rev FROM satin_alma_siparis_satiri WHERE talep_id = $1', [t.id]))!;
+      assert.equal((await satir()).rev, 'B');
+      revizyon = 'C';
+      tamam<Talep>(await kaydet(c.sa, { ...govde(s), notlar: 'Deneme yeniden kayıt' }));
+      const { id } = await satir();
+      assert.equal((await satir()).rev, 'B');
+      const [okunan] = await vt().tx((db) => servis.siparisSatirlari(db, [id]));
+      assert.deepEqual([okunan?.parcaRevizyonu, okunan?.isEmriId], ['B', null]);
+    } finally {
+      // Bu testin kataloğundaki kartın konfigürasyonu yok: gerçek bağ da boş döner.
+      servis.parcaRevizyonuCozucusuKaydet(async () => new Map());
+    }
+  });
+
   type DenetimSatiri = { yol: string; govde: Record<string, unknown> & { _ek?: Record<string, unknown>[] } };
   const denetimler = (talepId: string) => vt().sorgu<DenetimSatiri>(
     `SELECT yol, govde FROM denetim_kaydi WHERE yol = '/satin-alma-talepleri/:id/kaydet' AND parametre->>'id' = $1 ORDER BY id`, [talepId]);

@@ -6,14 +6,14 @@ import {
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
   cihazProfiliParametresi, cihazProfilleriCevabi, kayitsizProfilCevabi, kayitsizProfilGovdesi, profilAtaCevabi, profilAtaGovdesi,
-  profilSayfalariCevabi, profilSayfalariGovdesi,
+  profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi,
 } from '#paylasilan/sozlesme/oturum.ts';
 import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
 import {
   cikisYap, girisYap, kartlaGirisYap, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
-  cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz,
+  cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz, nabizKaydet,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
 
@@ -84,6 +84,23 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
           simdi(),
         );
         return { tamam: true as const };
+      },
+    }),
+    // Cihaz nabzı (1745 a): girişli her cihaz, ayrı işlem olmadan; telefon da gönderir (oturum telefon listesindedir). Dış izleyicinin
+    // cihazı kurumun değildir, saatin tarayıcı oturumu yoktur: ikisi de reddedilir. Nabız kendi tablosunda iz bırakır; her beş
+    // dakikada bir denetim satırı defteri şişirirdi (karar: denetimsiz).
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/nabiz',
+      yetki: 'oturum',
+      denetim: 'yok',
+      govde: nabizGovdesi,
+      cevap: nabizCevabi,
+      isle: async ({ db, kullanici, govde, istek }) => {
+        if (kullanici.disIzleyici === true) throw yetkiYok('Dış izleyici cihazı nabız göndermez.');
+        const anahtar = istek.cerez(CEREZ_ADI);
+        if (anahtar === null) throw yetkiYok('Nabız yalnız tarayıcı oturumundan gelir.');
+        return { yazildi: await nabizKaydet(db, anahtar, istek.cerez(CIHAZ_CEREZI), govde) };
       },
     }),
     uc({

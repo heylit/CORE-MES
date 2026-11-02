@@ -136,7 +136,7 @@ describe('ECO detay', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.click(within(mrb!).getByRole('button', { name: 'Karar ver' }));
-    pencere = await screen.findByRole('dialog', { name: 'MRB kararı: Stok #77' });
+    pencere = await screen.findByRole('dialog', { name: 'MRB kararı: Parti #77' });
     expect(within(pencere).getByText('MRB kararını onaylıyorum')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'İmzala ve uygula' }));
     await waitFor(() => expect(komutlar(istekler)).toHaveLength(2));
@@ -166,7 +166,7 @@ describe('ECO detay', () => {
     const [, onayli, mrb] = within(tablo).getAllByRole('row');
     await within(onayli!).findByRole('button', { name: 'Karar ver' });
     expect(within(mrb!).queryByRole('button', { name: 'Karar ver' })).toBeNull();
-    expect((within(mrb!).getByLabelText('Stok #77 kararı') as HTMLSelectElement).disabled).toBe(true);
+    expect((within(mrb!).getByLabelText('Parti #77 kararı') as HTMLSelectElement).disabled).toBe(true);
     cleanup();
 
     const istekler = sunucuKur({ ...EMIR, durum: 'karar', kararlar: [KARAR_ONAYLI] }, OKUYUCU);

@@ -351,24 +351,24 @@ export interface PartiAnahtari { malzemeId: number; tedarikciPartiNo: string | n
 export const emirPartisiBul = async (db: Db, malzemeId: number, uretimEmriId: number): Promise<number | null> =>
   (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND uretim_emri_id = $2 AND refakat_partisi_id IS NULL', [malzemeId, uretimEmriId]))?.id ?? null;
 // Eşzamanlı açışta ikincisi çakışmayı yakalar (null) ve var olanı okur.
-export const partiAc = async (db: Db, p: PartiAnahtari & { lotNo: string }): Promise<number | null> =>
+export const partiAc = async (db: Db, p: PartiAnahtari & { lotNo: string; parcaRevizyonu: string | null }): Promise<number | null> =>
   (await db.tek<{ id: number }>(
-    `INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, dokum_no, sertifika_no, uretim_emri_id, acan_kisi_id, lot_no)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, dokum_no, sertifika_no, uretim_emri_id, acan_kisi_id, lot_no, parca_revizyonu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (malzeme_id, uretim_emri_id) WHERE uretim_emri_id IS NOT NULL AND refakat_partisi_id IS NULL
      DO NOTHING RETURNING id`,
-    [p.malzemeId, p.tedarikciPartiNo, p.dokumNo, p.sertifikaNo, p.uretimEmriId, p.kisiId, p.lotNo],
+    [p.malzemeId, p.tedarikciPartiNo, p.dokumNo, p.sertifikaNo, p.uretimEmriId, p.kisiId, p.lotNo, p.parcaRevizyonu],
   ))?.id ?? null;
 // Refakat kartıyla sayılan parçanın partisi (malzeme, kart başına bir; #126).
 export const refakatCiktiPartisiBul = async (db: Db, malzemeId: number, refakatPartisiId: number): Promise<number | null> =>
   (await db.tek<{ id: number }>('SELECT id FROM stok_parti WHERE malzeme_id = $1 AND refakat_partisi_id = $2', [malzemeId, refakatPartisiId]))?.id ?? null;
 export const refakatCiktiPartisiAc = async (
-  db: Db, p: { malzemeId: number; uretimEmriId: number; refakatPartisiId: number; kisiId: number; lotNo: string },
+  db: Db, p: { malzemeId: number; uretimEmriId: number; refakatPartisiId: number; kisiId: number; lotNo: string; parcaRevizyonu: string | null },
 ): Promise<number | null> =>
   (await db.tek<{ id: number }>(
-    `INSERT INTO stok_parti (malzeme_id, uretim_emri_id, refakat_partisi_id, acan_kisi_id, lot_no) VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO stok_parti (malzeme_id, uretim_emri_id, refakat_partisi_id, acan_kisi_id, lot_no, parca_revizyonu) VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (malzeme_id, refakat_partisi_id) WHERE refakat_partisi_id IS NOT NULL DO NOTHING RETURNING id`,
-    [p.malzemeId, p.uretimEmriId, p.refakatPartisiId, p.kisiId, p.lotNo],
+    [p.malzemeId, p.uretimEmriId, p.refakatPartisiId, p.kisiId, p.lotNo, p.parcaRevizyonu],
   ))?.id ?? null;
 // Kartın lotu ve kartla sayılan parçaların partileri: sayım bunları önce kullanır.
 export const refakatStokPartileri = async (db: Db, kartlar: readonly number[]): Promise<number[]> =>
@@ -1904,3 +1904,13 @@ export const sayimEsikleri = (db: Db): Promise<{ depoId: number; depoKod: string
   db.sorgu('SELECT id AS "depoId", kod AS "depoKod", ad AS "depoAd", sayim_esik_yuzde::text AS "esikYuzde", surum FROM stok_depo WHERE aktif ORDER BY kod, id');
 export const sayimEsigiYaz = (db: Db, depoId: number, surum: number, esikYuzde: string): Promise<{ id: number } | null> =>
   db.tek('UPDATE stok_depo SET sayim_esik_yuzde = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 AND aktif RETURNING id', [depoId, surum, esikYuzde]);
+
+// Değişiklik etkisi (1647): malzemenin pozitif bakiyesi parti başına (partisiz bakiye parti kimliği boş tek satır), partinin revizyonuyla.
+export interface PartiBakiyesi { malzemeId: number; partiId: number | null; lotNo: string | null; parcaRevizyonu: string | null; miktar: string }
+export const malzemePartiBakiyeleri = (db: Db, malzemeIdler: readonly number[]): Promise<PartiBakiyesi[]> => db.sorgu(
+  `SELECT b.malzeme_id AS "malzemeId", b.parti_id AS "partiId", p.lot_no AS "lotNo", p.parca_revizyonu AS "parcaRevizyonu", sum(b.miktar)::text AS miktar
+     FROM stok_bakiye b LEFT JOIN stok_parti p ON p.id = b.parti_id
+    WHERE b.malzeme_id = ANY($1::int[])
+    GROUP BY b.malzeme_id, b.parti_id, p.lot_no, p.parca_revizyonu
+   HAVING sum(b.miktar) > 0
+    ORDER BY b.malzeme_id, b.parti_id NULLS FIRST`, [[...malzemeIdler]]);

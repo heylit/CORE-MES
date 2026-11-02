@@ -132,6 +132,10 @@ export function sertifikaDurumu(gecerlilik: string | undefined, bugun: string): 
 export const ISE_ALINDI = 'İşe alındı';
 export const REDDEDILDI = 'Reddedildi';
 export const TEKLIF = 'Teklif';
+// IK-9 (karar a, sunucuyla aynı): KVKK aydınlatma onayı alınmamış aday ön görüşme ve sonrasına alınmaz.
+export const KVKK_GEREKEN_ASAMALAR: readonly string[] = ['Ön görüşme', 'Mülakat', TEKLIF, ISE_ALINDI];
+export const kvkkEngeli = (a: Pick<Aday, 'kvkk'>, hedef: string): string | null =>
+  (KVKK_GEREKEN_ASAMALAR.includes(hedef) && a.kvkk !== true ? `KVKK aydınlatma onayı alınmamış aday "${hedef}" aşamasına alınamaz.` : null);
 export const asamasi = (a: Pick<Aday, 'asama'>): string => a.asama || 'Başvuru';
 export const surecteMi = (a: Pick<Aday, 'asama'>): boolean => ![ISE_ALINDI, REDDEDILDI].includes(asamasi(a));
 export const adayAdi = (a: Pick<Aday, 'ad' | 'soyad'> | null | undefined): string => (a ? `${a.ad ?? ''} ${a.soyad ?? ''}`.trim() || 'İsimsiz aday' : '—');

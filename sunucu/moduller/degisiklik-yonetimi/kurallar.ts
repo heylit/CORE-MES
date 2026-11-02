@@ -96,7 +96,8 @@ export interface EtkilenenEmir {
   seriAraligi: readonly [number, number] | null;
   // Emrin ürünü (ya da hizmet ettiği seri ürün) geçerliliğin son ürünü mü.
   sonUrunu: boolean;
-  baslangic: string;
+  // Planlanan başlangıç; emirde yoksa null (uydurulmaz).
+  baslangic: string | null;
   // Yeni rotayla termin kayıyor mu; hesaplanamıyorsa null.
   terminKayar: boolean | null;
 }
@@ -116,8 +117,10 @@ export function emirKarariOner(sinif: Sinif, gecerlilik: Gecerlilik | null, e: E
     }
     if (ilk < gecerlilik.ilkSeri) return { kod: 'beklet', mod: 'mrb', gerekce: 'Seri aralığı geçerlilik sınırını kesiyor; emir bölünmeli.' };
   }
-  if (gecerlilik?.tur === 'tarih' && e.baslangic < gecerlilik.tarih && !e.basladi && e.durum !== 'tamamlandi') {
-    return { kod: 'eskiyle_tamamla', mod: 'onayli', gerekce: 'Planlanan başlangıç geçerlilik tarihinden önce.' };
+  if (gecerlilik?.tur === 'tarih' && !e.basladi && e.durum !== 'tamamlandi') {
+    // Başlangıç yoksa emrin geçerlilikten önce mi sonra mı başlayacağı bilinmez: karar kişiye bırakılır.
+    if (e.baslangic === null) return { kod: 'yeniden_olustur', mod: 'onayli', gerekce: 'Planlanan başlangıç yok; geçerlilik tarihine göre yeri bilinmiyor.' };
+    if (e.baslangic < gecerlilik.tarih) return { kod: 'eskiyle_tamamla', mod: 'onayli', gerekce: 'Planlanan başlangıç geçerlilik tarihinden önce.' };
   }
   if (e.durum === 'tamamlandi') {
     return d1
@@ -154,10 +157,20 @@ export function stokKarariOner(sinif: Sinif): KararOnerisi {
     : { kod: 'islem_yok', mod: 'otomatik', gerekce: 'Değiştirilebilir; stok kullanılabilir.' };
 }
 
+// DY-25: açık satın alma sipariş satırı (yoldaki malzeme) için öneri (1647). Değiştirilemez değişiklikte yoldaki eski revizyon yeni
+// konfigürasyona hizmet etmez: tedarikçiyle revizyon değişikliği ya da iptal MRB'de kararlaştırılır. Öteki sınıflarda olduğu gibi kullanılır.
+export function siparisKarariOner(sinif: Sinif): KararOnerisi {
+  return sinif === 'D1'
+    ? { kod: 'beklet', mod: 'mrb', gerekce: 'Yoldaki malzeme eski revizyonda. Tedarikçiyle revizyon değişikliği ya da iptal MRB’de kararlaştırılmalı.' }
+    : { kod: 'islem_yok', mod: 'otomatik', gerekce: 'Değiştirilebilir; yoldaki malzeme kullanılabilir.' };
+}
+
 // DY-11: hedefe uygulanabilecek kodlar. Bitmiş emirde yeniden oluşturma ve geçirme yok; başlamış emir yeniden oluşturulmaz; yeni parça numarası
-// alan kalemde kalanlar yeni revizyona geçirilemez. Stokta yalnız yedek, işlem yok, hurda ve rework.
+// alan kalemde kalanlar yeni revizyona geçirilemez. Stokta (parti ya da partisiz) yalnız yedek, işlem yok, hurda ve rework; sipariş
+// satırında yalnız bekletme, işlem yok ve yedek (1647).
 export function izinliKodlar(hedef: KararHedefi, emir: EtkilenenEmir | null, yeniParcaNoVar: boolean): KararKodu[] {
-  if (hedef === 'stok' || emir === null) return ['eski_yedek', 'islem_yok', 'hurda', 'rework'];
+  if (hedef === 'siparis_satiri') return ['beklet', 'islem_yok', 'eski_yedek'];
+  if (hedef !== 'emir' || emir === null) return ['eski_yedek', 'islem_yok', 'hurda', 'rework'];
   if (emir.durum === 'tamamlandi') return ['islem_yok', 'rework', 'eski_yedek', 'hurda', 'eskiyle_tamamla_sapma'];
   const kodlar: KararKodu[] = [];
   if (!emir.basladi) kodlar.push('yeniden_olustur');

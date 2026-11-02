@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   haftalikVardiyaPlani, izinGunuDenetle, izinIsGunu,
+  adayGecisiDenetle, gorusmeAdayiDenetle, gorusmeciMi, izinBakiyeUyarisi, izinTarihiDenetle,
   AZAMI_KAYIT_BAYT, EKIP_ALANLARI, IK_ALANLARI, IK_YAZMA_ISLEMLERI, alanlariSec, ayarDegisikligiDenetle, bordroKaydi, bordroOnayDenetle, boyutDenetle,
   bugunIzindekiler, cikisZimmetUyarisi, degisiklikler, devamGorunurMu, ekipKimlikleri,
   enErkenDonemBaslangici, esitMi, etiket, govdeKimligiDenetle, ikRolu, iletisimDenetle, istemciAlanlariniAyikla, izinCakismasiDenetle, izinGecisiDenetle, izinOnayBildirimi,
@@ -416,5 +417,64 @@ describe('1806 IK-2: gelecek ayın bordrosu kesinleşmez', () => {
     assert.equal(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2025-12', '2026-11-02'), null);
     assert.equal(kod(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir'], '2026-12', '2026-11-30')), 'GECERSIZ');
     assert.equal(kod(kesinlestirmeDenetle(false, ['ik.bordro-kesinlestir', 'ik.bordro-kilit-ac'], '2030-01', '2026-11-02')), 'GECERSIZ');
+  });
+});
+
+describe('1844 IK-7 b: yıllık izin bakiyesi aşılırsa uyarı, kayıt sürer', () => {
+  const l = (gun: number, durum = 'Beklemede', tur = 'Yıllık izin'): Govde => ({ tur, gun, durum });
+  test('kalanı aşan etkin yıllık izin uyarır; kalan içinde, başka tür ya da sonuçlanmış izin uyarmaz', () => {
+    assert.equal(izinBakiyeUyarisi(null, l(30), 28, 'Ad Soyad'), 'Uyarı: Ad Soyad için kalan yıllık izin 28 gün; bu izin 30 gün.');
+    assert.equal(izinBakiyeUyarisi(null, l(28), 28, 'A'), null);
+    assert.equal(izinBakiyeUyarisi(null, l(30, 'Onaylandı'), 28, 'A') !== null, true);
+    assert.equal(izinBakiyeUyarisi(null, l(30, 'Reddedildi'), 28, 'A'), null);
+    assert.equal(izinBakiyeUyarisi(null, l(30, 'Beklemede', 'Ücretsiz izin'), 28, 'A'), null);
+    assert.equal(izinBakiyeUyarisi(null, l(2.5), 1.5, 'A'), 'Uyarı: A için kalan yıllık izin 1,5 gün; bu izin 2,5 gün.');
+  });
+  test('önceden onaylı aynı iznin günü kalana geri eklenir', () => {
+    assert.equal(izinBakiyeUyarisi(l(5, 'Onaylandı'), l(6, 'Onaylandı'), 2, 'A'), null);
+    assert.equal(izinBakiyeUyarisi(l(5, 'Beklemede'), l(6, 'Onaylandı'), 2, 'A') !== null, true);
+  });
+});
+
+describe('1844 IK-9 a: aday, görüşme ve izin sınırları', () => {
+  test('KVKK onaysız aday ön görüşme ve sonrasına alınmaz; başvuru ve ret serbest', () => {
+    for (const asama of ['Ön görüşme', 'Mülakat', 'Teklif']) assert.equal(kod(adayGecisiDenetle({ asama: 'Başvuru' }, { asama, kvkk: false })), 'GECERSIZ', asama);
+    assert.equal(kod(adayGecisiDenetle(null, { asama: 'Mülakat' })), 'GECERSIZ');
+    assert.equal(adayGecisiDenetle(null, { asama: 'Başvuru', kvkk: false }), null);
+    assert.equal(adayGecisiDenetle({ asama: 'Başvuru' }, { asama: 'Reddedildi', kvkk: false }), null);
+    assert.equal(adayGecisiDenetle({ asama: 'Başvuru' }, { asama: 'Mülakat', kvkk: true }), null);
+    // Aşama değişmiyorsa (onay sonradan geri çekildi) kayıt düzenlenebilir.
+    assert.equal(adayGecisiDenetle({ asama: 'Mülakat', kvkk: true }, { asama: 'Mülakat', kvkk: false }), null);
+  });
+  test('"İşe alındı" personel kaydına bağlanmadan olmaz', () => {
+    assert.equal(kod(adayGecisiDenetle({ asama: 'Teklif' }, { asama: 'İşe alındı', kvkk: true })), 'GECERSIZ');
+    assert.equal(adayGecisiDenetle({ asama: 'Teklif' }, { asama: 'İşe alındı', kvkk: true, empId: 'emp_1' }), null);
+    assert.equal(kod(adayGecisiDenetle({ asama: 'Teklif' }, { asama: 'İşe alındı', kvkk: false, empId: 'emp_1' })), 'GECERSIZ');
+  });
+  test('KVKK onaysız adayla görüşme planlanmaz; var olan görüşme adayı değişmedikçe denetlenmez', () => {
+    assert.equal(kod(gorusmeAdayiDenetle(null, { candId: 'c1' }, { kvkk: false })), 'GECERSIZ');
+    assert.equal(gorusmeAdayiDenetle(null, { candId: 'c1' }, { kvkk: true }), null);
+    assert.equal(gorusmeAdayiDenetle({ candId: 'c1' }, { candId: 'c1', notlar: 'x' }, { kvkk: false }), null);
+    assert.equal(kod(gorusmeAdayiDenetle({ candId: 'c1' }, { candId: 'c2' }, {})), 'GECERSIZ');
+  });
+  test('görüşmeci yalnız kendi, iptal edilmemiş görüşmesinde', () => {
+    assert.equal(gorusmeciMi({ gorusmeciler: ['e1', 'e2'], durum: 'Planlandı' }, 'e2'), true);
+    assert.equal(gorusmeciMi({ gorusmeciler: ['e1'], durum: 'Planlandı' }, 'e2'), false);
+    assert.equal(gorusmeciMi({ gorusmeciler: ['e2'], durum: 'İptal' }, 'e2'), false);
+    assert.equal(gorusmeciMi({ gorusmeciler: ['e2'] }, null), false);
+  });
+  test('çalışan geçmiş tarihli izin talep edemez; İK girer; değişmeyen eski talep kilitlenmez', () => {
+    const l = (baslangic: string, ek: Govde = {}): Govde => ({ tur: 'Yıllık izin', baslangic, bitis: baslangic, gun: 1, durum: 'Beklemede', ...ek });
+    assert.equal(kod(izinTarihiDenetle(null, l('2026-11-01'), 'talep', '2026-11-02')), 'GECERSIZ');
+    assert.equal(izinTarihiDenetle(null, l('2026-11-02'), 'talep', '2026-11-02'), null);
+    assert.equal(izinTarihiDenetle(null, l('2026-11-01'), 'kaydet', '2026-11-02'), null);
+    assert.equal(izinTarihiDenetle(l('2026-11-01'), l('2026-11-01', { durum: 'İptal' }), 'talep', '2026-11-02'), null);
+    assert.equal(izinTarihiDenetle(l('2026-11-01'), l('2026-11-01', { aciklama: 'x' }), 'talep', '2026-11-02'), null);
+    assert.equal(kod(izinTarihiDenetle(l('2026-11-05'), l('2026-10-30'), 'talep', '2026-11-02')), 'GECERSIZ');
+  });
+  test('iş günlü izinde gün, iş gününün yarısından az olamaz', () => {
+    assert.equal(kod(izinGunuDenetle(2, 5)), 'DOGRULAMA');
+    assert.equal(izinGunuDenetle(2.5, 5), null);
+    assert.equal(izinGunuDenetle(0.5, 1), null);
   });
 });

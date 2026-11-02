@@ -18,7 +18,7 @@ function veri(): IkVeriCevabi {
     kayitlar: [
       ...v.kayitlar,
       kayit('job', 'job_2', { baslik: 'Kalite teknisyeni', durum: 'Açık', ilanKodu: 'IK-2026-002', acilis: '2026-10-01', isMerkeziId: 1 }),
-      kayit('cand', 'cand_a', { ad: 'Deniz', soyad: 'Aday', jobId: 'job_2', asama: 'Mülakat', basvuruTarihi: '2026-10-10', kaynak: 'İç ilan' }),
+      kayit('cand', 'cand_a', { ad: 'Deniz', soyad: 'Aday', jobId: 'job_2', asama: 'Mülakat', basvuruTarihi: '2026-10-10', kaynak: 'İç ilan', kvkk: true }),
       kayit('intv', 'intv_1', { candId: 'cand_a', tur: 'İK mülakatı', tarih: '2099-01-10', saat: '10:00', durum: 'Planlandı' }),
       kayit('perf', 'perf_1', { empId: 'emp_b', donem: '2025 Yıllık', tarih: '2025-12-20', skorlar: { 'İş bilgisi': 4 } }),
       kayit('train', 'train_1', { ad: 'Tezgah güvenliği', tur: 'İSG (zorunlu)', durum: 'Tamamlandı', tarih: '2026-02-01', katilimcilar: ['emp_a'], gecerlilik: '2099-01-01' }),
@@ -55,6 +55,16 @@ describe('P4 işe alım', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki aşamaya taşı' }));
     await waitFor(() => { expect(yazmalar.map((y) => y.yol)).toEqual(['/ik/adaylar/cand_a/kaydet']); });
     expect((yazmalar[0]?.govde as { govde: { asama: string } }).govde.asama).toBe('Teklif');
+  });
+
+  it('1844 IK-9: KVKK onayı olmayan aday sonraki aşamaya taşınmaz; uyarı görünür, yazma gitmez', async () => {
+    const v = veri();
+    const { yazmalar } = ikAc('/ik/ise-alim', { veri: { ...v, kayitlar: v.kayitlar.map((k) => (k.kimlik === 'cand_a' ? { ...k, govde: { ...k.govde, kvkk: false } } : k)) } });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Aday süreci' }));
+    await screen.findByText('Deniz Aday');
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki aşamaya taşı' }));
+    expect(await screen.findByText(/KVKK aydınlatma onayı alınmamış aday "Teklif" aşamasına alınamaz/)).toBeTruthy();
+    expect(yazmalar).toEqual([]);
   });
 });
 
