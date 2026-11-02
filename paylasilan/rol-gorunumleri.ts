@@ -3,6 +3,10 @@
 // yine görünmez (süzgeç işlem süzgecinden sonra uygulanır).
 // Listesi olmayan rol (yönetici, sonradan açılan özel rol) bugünkü tam görünümde kalır: yeni modül önce yöneticide görünür.
 
+// Menü en çok 8 sayfadır; Akış Süresi için müdür ve planlamada 9 (1851 a). Telefon alt çubuğu ilk dört maddeyi aldığı için değişmez.
+export const MENU_SINIRI = 8;
+export const GENIS_MENU: Readonly<Record<string, number>> = { mudur: 9, planlama_proje: 9 };
+
 export interface RolGorunumu {
   // Ana menüdeki sırayla; telefondaki alt çubuk ilk maddeleri alır.
   sayfalar: readonly `/${string}`[];
@@ -30,7 +34,7 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
     kaynaklar: ['uretim-emirleri-kuyrugum-is', 'istasyonlar-duran-is', 'vardiya-vardiyasiz-is', 'istasyonlar-makine-olcu', 'arkon-gunum-olcu'],
   },
   planlama_proje: {
-    sayfalar: ['/plan', '/recete-rota', '/uretim-emirleri', '/kuyruk', '/arkon', '/siparisler', '/malzemeler', KISISEL],
+    sayfalar: ['/plan', '/recete-rota', '/uretim-emirleri', '/kuyruk', '/arkon', '/siparisler', '/malzemeler', '/akis', KISISEL],
     kartlar: [
       'uretim-emirleri-planlanacak', 'uretim-emirleri-acik', 'plan-geciken-emir', 'plan-girmeyen-emir', 'plan-istasyon-dolulugu',
       'rota-acik-revizyon', 'rota-onay-bekleyen', 'siparisler-geciken', 'siparisler-yaklasan-termin', 'stok-eksik-emir',
@@ -102,7 +106,7 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
   // Müdür (kart 1773, 1772 ikisi birden): yönlendirme, bir bakışta, işler ve açık grafik bölgesi; ayrıntı Yönetim panosunda.
   // Kart süzgeci yok: kaynağı henüz olmayan modülün iş ve uyarı kartları eski bölümleriyle kalır, şirket özeti altta kapalı (1593 c).
   mudur: {
-    sayfalar: ['/uretim-emirleri', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans'],
+    sayfalar: ['/uretim-emirleri', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans', '/akis'],
     kartlar: [],
     kaynaklar: [
       'istasyonlar-duran-is', 'siparisler-termin-is', 'uretim-emirleri-planlanacak-is', 'sevkiyat-is', 'malzemeler-onay-is', 'kalibrasyon-is',

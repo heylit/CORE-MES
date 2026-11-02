@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ROL_GORUNUMLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
+import { GENIS_MENU, MENU_SINIRI, ROL_GORUNUMLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
 import { SAYFALAR, menudeGorunur } from './sayfalar.ts';
 
 describe('rol görünümleri (1390 a)', () => {
-  test('her rolün menüsü en çok 8 sayfadır, tekrarsızdır ve yalnız menüde görünen kayıtlı sayfaları içerir', () => {
+  test('her rolün menüsü en çok 8 sayfadır (müdür ve planlamada 9, 1851 a), tekrarsızdır ve yalnız menüde görünen kayıtlı sayfaları içerir', () => {
     const menudekiler = new Set(SAYFALAR.filter(menudeGorunur).map((s) => s.yol as string));
     for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {
-      assert.ok(g.sayfalar.length > 0 && g.sayfalar.length <= 8, `${rol}: ${String(g.sayfalar.length)} sayfa`);
+      assert.ok(g.sayfalar.length > 0 && g.sayfalar.length <= (GENIS_MENU[rol] ?? MENU_SINIRI), `${rol}: ${String(g.sayfalar.length)} sayfa`);
       assert.equal(new Set(g.sayfalar).size, g.sayfalar.length, `${rol}: tekrar eden sayfa`);
       for (const yol of g.sayfalar) assert.ok(menudekiler.has(yol), `${rol}: menüde olmayan sayfa ${yol}`);
       assert.equal(new Set(g.kartlar).size, g.kartlar.length, `${rol}: tekrar eden kart`);
     }
+  });
+
+  test('1851 a: Akış Süresi müdür ve planlama menüsünde, telefon alt çubuğunun (ilk dört) dışında', () => {
+    for (const rol of ['mudur', 'planlama_proje']) assert.ok((ROL_GORUNUMLERI[rol]?.sayfalar.indexOf('/akis') ?? -1) >= 4, rol);
   });
 
   test('operatör CNC Kurulum görmez (1393 c+); yönetici rol listesinde yoktur, tam görünümdedir', () => {
