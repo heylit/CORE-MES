@@ -6,6 +6,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BelgeAyrintisi, BelgeListesiCevabi, BelgeSatiri } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { CerceveSayacBaglami } from '../../ortak/rota/cerceve-sayaclari.ts';
 import { gorunenKomutlar } from '../../ortak/rota/komutlar.ts';
 import { IKINCI_MENULER, SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Belgeler } from './Belgeler.tsx';
@@ -308,6 +309,36 @@ describe('cizimler ekranları', () => {
     await waitFor(() => { expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1); });
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
     expect(cagrilar.filter((c) => c.yontem === 'POST')).toHaveLength(1);
+  });
+
+  it('modül testi C3: yazma komutundan sonra ikinci menü sayıları hemen yeniden okunur ve kabuğa verilir; ekran kalkınca silinir', async () => {
+    sunucuKur(YAYINCI);
+    const sunucu = globalThis.fetch as (adres: string, ayar?: RequestInit) => Promise<Response>;
+    let okuma = 0;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      if (adres === '/api/cizimler/menu-sayaclari') { okuma += 1; return json(200, { tumu: okuma }); }
+      return sunucu(adres, ayar);
+    }));
+    const yazilan: [string, unknown][] = [];
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { unmount } = render(
+      <QueryClientProvider client={istemci}>
+        <CerceveSayacBaglami.Provider value={(kok, sayaclar) => { yazilan.push([kok, sayaclar]); }}>
+          <BildirimSaglayici>
+            <MemoryRouter initialEntries={['/cizimler/belge/7']}>
+              <Routes><Route path="/cizimler/belge/:id" element={<BelgeSayfasi />} /></Routes>
+            </MemoryRouter>
+          </BildirimSaglayici>
+        </CerceveSayacBaglami.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => { expect(yazilan.at(-1)).toEqual(['/cizimler', { tumu: 1 }]); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Yayınla' }));
+    const pencere = await screen.findByRole('dialog');
+    fireEvent.click(Array.from(pencere.querySelectorAll('button')).find((b) => b.textContent === 'Yayınla')!);
+    await waitFor(() => { expect(yazilan.at(-1)).toEqual(['/cizimler', { tumu: 2 }]); });
+    unmount();
+    expect(yazilan.at(-1)).toEqual(['/cizimler', null]);
   });
 
   it('CZ-14: 3B model sistemdeki istasyonla eşleştirilir; teknik resimde eşleştirme düğmesi yok', async () => {
