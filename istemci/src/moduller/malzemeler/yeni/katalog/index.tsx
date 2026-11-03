@@ -90,22 +90,22 @@ function sutunlar(
       anahtar: 'agirlik', baslik: 'Birim ağırlık', hizala: 'sag',
       hucre: (k) => {
         const w = K.weight(k.kayit, b);
-        return <>{w ? kgFmt(w.kg, b.birim) : YOK}<small className="tc-mk-alt">{agirlikAlti(k.kayit, b)}</small></>;
+        return <span className="tc-mk-deger">{w ? kgFmt(w.kg, b.birim) : YOK}<small className="tc-mk-alt">{agirlikAlti(k.kayit, b)}</small></span>;
       },
     },
     {
       anahtar: 'birim', baslik: 'Stok birimi',
-      hucre: (k) => <>{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt">{k.kayit.com.ted ?? ''}</small></>,
+      hucre: (k) => <span className="tc-mk-deger">{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt">{k.kayit.com.ted ?? ''}</small></span>,
     },
     {
       anahtar: 'guncelleme', baslik: 'Güncelleme', hizala: 'sag', kirilmaz: true,
       hucre: (k) => {
         const x = k.kayit;
         return (
-          <>
+          <span className="tc-mk-deger">
             {x.updatedAt ? new Date(x.updatedAt).toLocaleDateString('tr-TR') : YOK}
             <small className="tc-mk-alt">{x.rev?.length ? `${x.rev.length} revizyon` : ''}</small>
-          </>
+          </span>
         );
       },
     },
@@ -253,9 +253,11 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
           placeholder="Kod, ad, ERP kodu, açıklama veya tedarikçi ara" aria-label="Katalogda ara"
         />
         <span className="tc-mk-ara-bosluk" />
-        <Dugme tur="birincil" onClick={() => pencereYaz({ tur: 'excel' })}>Excel: şablon, dışa ve içe aktar</Dugme>
-        <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.csv', katalogCsvMetni(gorunenKayitlar, b))}>CSV dışa aktar</Dugme>
-        <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.json', katalogJsonMetni(gorunenKayitlar, b))}>JSON dışa aktar</Dugme>
+        <div className="tc-mk-aktarma">
+          <Dugme tur="birincil" onClick={() => pencereYaz({ tur: 'excel' })}>Excel: şablon, dışa ve içe aktar</Dugme>
+          <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.csv', katalogCsvMetni(gorunenKayitlar, b))}>CSV dışa aktar</Dugme>
+          <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.json', katalogJsonMetni(gorunenKayitlar, b))}>JSON dışa aktar</Dugme>
+        </div>
       </div>
       {bosKatalog ? (
         <DurumKutusu durum="bos" mesaj="Katalog boş.">

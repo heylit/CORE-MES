@@ -297,3 +297,56 @@ for (const hesap of HESAPLAR) {
     });
   });
 }
+
+// Hiza (1937): düzen ve akış değişmez; yalnız kayan, oynayan ve dağılan parçalar sınanır.
+test.describe('1937 hiza', () => {
+  test('katalog: aktarma düğmeleri birlikte sarar; kart görünümünde değer ve alt yazı başlığın karşısında tek parça', async ({ page, ac }) => {
+    await ac('/malzemeler');
+    const ust = async (ad: string) => (await page.getByRole('button', { name: ad }).boundingBox())?.y ?? -1;
+    await expect(page.getByRole('button', { name: 'JSON dışa aktar' })).toBeVisible();
+    expect(await ust('JSON dışa aktar'), 'CSV ve JSON aynı satırda').toBe(await ust('CSV dışa aktar'));
+    if ((page.viewportSize()?.width ?? 0) >= 720) expect(await ust('JSON dışa aktar'), 'üç düğme aynı satırda').toBe(await ust('Excel: şablon, dışa ve içe aktar'));
+    await expect(page.locator('.tc-mk-ana tbody tr').first()).toBeVisible();
+    const olcu = await page.locator('.tc-mk-ana tbody tr').first().evaluate((tr) => [...tr.querySelectorAll('td')].filter((td) => td.querySelector('.tc-mk-deger'))
+      .map((td) => {
+        const d = td.querySelector('.tc-mk-deger')!.getBoundingClientRect();
+        const t = td.getBoundingClientRect();
+        const s = getComputedStyle(td);
+        return { cocuk: td.children.length, sagBosluk: t.right - parseFloat(s.paddingRight) - d.right, kart: td.closest('[data-kip="kart"]') !== null };
+      }));
+    expect(olcu.length, 'ağırlık, birim, güncelleme').toBe(3);
+    for (const h of olcu) {
+      expect(h.cocuk, 'hücrede tek parça').toBe(1);
+      if (h.kart) expect(Math.abs(h.sagBosluk), 'kart görünümünde değer sağa yaslı').toBeLessThanOrEqual(1);
+    }
+  });
+
+  test('sihirbaz: tür kartlarının adı aynı satırda aynı yükseklikte; özette açıklama kutuları ve föy değerleri hizalı', async ({ page, ag, ac }) => {
+    await ac('/malzemeler/yeni?tur=hizmet');
+    await expect(page.getByRole('heading', { name: 'Malzeme türü' })).toBeVisible();
+    const adlar = await page.locator('.tc-my-turler .tc-my-kart').evaluateAll((l) => l.map((k) => ({
+      kart: Math.round(k.getBoundingClientRect().top), ad: Math.round(k.querySelector('.tc-my-kart-ad')!.getBoundingClientRect().top - k.getBoundingClientRect().top),
+    })));
+    const satirlar = new Map<number, Set<number>>();
+    for (const a of adlar) satirlar.set(a.kart, (satirlar.get(a.kart) ?? new Set()).add(a.ad));
+    for (const [, farklar] of satirlar) expect(farklar.size, 'aynı satırdaki kartlarda ad aynı yükseklikte').toBe(1);
+
+    const sihirbaz = page.getByRole('navigation', { name: 'Sihirbaz' });
+    await page.getByRole('button', { name: /Yüzey işlem ve kaplama/ }).click();
+    await sihirbaz.getByRole('button', { name: 'İleri' }).click();
+    await page.getByText('Alınan', { exact: true }).first().click();
+    await page.getByText('Eloksal', { exact: true }).first().click();
+    await sihirbaz.getByRole('button', { name: 'İleri' }).click();
+    await expect(page.getByRole('heading', { name: 'Ticari bilgiler' })).toBeVisible();
+    await sihirbaz.getByRole('button', { name: 'İleri' }).click();
+    await expect(page.getByRole('heading', { name: 'Özet ve kayıt' })).toBeVisible();
+    const kutular = await page.getByRole('textbox', { name: /^Açıklama [123]$/ }).evaluateAll((l) => l.map((g) => Math.round(g.getBoundingClientRect().right)));
+    expect(kutular.length).toBe(3);
+    expect(new Set(kutular).size, 'açıklama kutularının sağ kenarı aynı').toBe(1);
+    const degerler = await page.locator('.tc-my-govde .tc-foy:not(.tc-foy-kisa) dd').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().left)));
+    expect(degerler.length).toBeGreaterThan(3);
+    // 480 altında etiket ve değer alt alta; değerler yine aynı soldan başlar.
+    expect(new Set(degerler).size, 'föy değerleri bölümden bölüme aynı soldan başlar').toBe(1);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});

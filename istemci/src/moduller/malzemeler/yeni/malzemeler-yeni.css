@@ -15,6 +15,8 @@
 /* Üst baş (prototipte `header.top`): solda büyük başlık ve açıklama, sağda araç düğmeleri; dar ekranda araçlar alta, sola yaslı. */
 .tc-myeni-ust { display: flex; flex-wrap: wrap; gap: var(--b-3) var(--b-6); align-items: flex-end; justify-content: space-between; min-width: 0; }
 .tc-myeni-ust > div { min-width: 0; max-width: 100%; }
+/* Araçlar başlığın altına sarınca da sağda kalır (geniş ekrandaki yeri); 720 altında tam genişlik ve sola yaslıdır. */
+.tc-myeni-ust-sag { margin-inline-start: auto; }
 /* Eski büyük dar başlık: ortak Archivo'nun dar kesimi (yerel dosya genişlik eksenini taşır), yeni yazı tipi yok. */
 .tc-myeni-ust h1 { margin: 0; font-size: var(--yazi-3xl); line-height: 1; font-weight: 800; font-stretch: 75%; overflow-wrap: anywhere; }
 .tc-myeni-ust-aciklama { margin: var(--b-2) 0 0; color: var(--muted); max-width: 52ch; }

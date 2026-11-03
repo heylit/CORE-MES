@@ -98,7 +98,7 @@ function AciklamaKutusu() {
             }}
             sonEk={(
               <>
-                <span className="tc-my-birim">{v.length}/{L}</span>
+                <span className="tc-my-birim tc-my-sayac">{v.length}/{L}</span>
                 <Dugme
                   className="tc-my-otomatik"
                   onClick={() => { degistir((t) => { const m = [...(t.acManual ?? [false, false, false])]; m[i] = false; t.acManual = m; }); }}
