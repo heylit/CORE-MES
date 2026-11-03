@@ -758,7 +758,11 @@ export function lotIstegiReddi(i: LotKarariIstegi): 'lotKaynagi' | 'lotParcasi' 
 
 /* ---------------- Stüdyo: teknik resim, balon, numune, ölçüm (595 1 b, 597 a, 600 a) ---------------- */
 
+// 2037 (1080 a): onaylı kapanışı tamamlanmış emre ölçüm, numune isteği ve numune kararı yazılmaz; kapanış geri açılınca yazılır.
+export const kapanmisEmirReddi = (kapanisTamam: boolean): StudyoIletisi | null => (kapanisTamam ? 'emirKapandi' : null);
+
 export const STUDYO_ILETILER = {
+  emirKapandi: 'Emrin kapanışı onaylanmış; ölçüm ve numune yazılmaz. Müdür kapanışı geri açınca yazılır.',
   parcaYok: 'Parça kartı bulunamadı.',
   belgeYok: 'Belge merkezinde yayında revizyonu olan belge bulunamadı.',
   belgeTuru: 'Stüdyo yalnız PDF resim ile STEP, STL ve IGES model açar.',
