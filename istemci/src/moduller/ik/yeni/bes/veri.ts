@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../../ortak/veri/api.ts';
-import type { BesHareketi, BesTuru } from './kurallar.ts';
+import type { IkBesCevabi, IkBesHareketGirdisi, IkBesYazCevabi } from '#paylasilan/sozlesme/ik-bes.ts';
+import type { BesHareketi } from './kurallar.ts';
 
 // BES uçları (kart 1939): okuma `GET /ik/bes` (`ik.oku`, kişinin İK kapsamına göre süzülür), yazma ayrı komutlar (`ik.ucret-yaz`).
 // Zaman ve yazan sunucudan gelir; ekran yazmaz.
-export interface BesCevabi { hareketler: BesHareketi[] }
-export interface BesHareketGirdisi { personel: string; tur: BesTuru; tarih: string; oran: number | null; sirket: string | null; aciklama: string | null }
-export interface BesYazCevabi { hareket: BesHareketi }
+export type BesCevabi = IkBesCevabi;
+export type BesHareketGirdisi = IkBesHareketGirdisi;
+export type BesYazCevabi = IkBesYazCevabi;
 
 export const BES_ANAHTARI = ['ik', 'yeni', 'bes'] as const;
 export type BesIstemcisi = Pick<typeof api, 'get' | 'post'>;

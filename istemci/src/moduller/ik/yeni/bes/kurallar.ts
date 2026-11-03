@@ -1,9 +1,14 @@
+import type { BesTuru, IkBesHareketi } from '#paylasilan/sozlesme/ik-bes.ts';
 import type { Personel } from '../tipler.ts';
 
 // BES hareketi (kart 1939). Sunucu `GET /ik/bes` ile kişiye göre süzülmüş hareketleri verir; durum burada, son geçerli hareketten çıkar.
-export const BES_GIRIS_TURLERI = ['otomatik_katilim', 'gonullu_katilim'] as const;
-export const BES_CIKIS_TURLERI = ['cayma', 'ayrilma', 'isten_cikis'] as const;
-export type BesTuru = (typeof BES_GIRIS_TURLERI)[number] | (typeof BES_CIKIS_TURLERI)[number];
+export type { BesTuru };
+// İstemci zod'lu sözleşmeyi değer olarak almaz; listeler burada, tip sözleşmeyle aynı kalmaya zorlanır.
+export const BES_GIRIS_TURLERI = ['otomatik_katilim', 'gonullu_katilim'] as const satisfies readonly BesTuru[];
+export const BES_CIKIS_TURLERI = ['cayma', 'ayrilma', 'isten_cikis'] as const satisfies readonly BesTuru[];
+type Eksik = Exclude<BesTuru, (typeof BES_GIRIS_TURLERI)[number] | (typeof BES_CIKIS_TURLERI)[number]>;
+const eksikYok: [Eksik] extends [never] ? true : never = true;
+void eksikYok;
 
 export const BES_TUR_ADI: Readonly<Record<BesTuru, string>> = {
   otomatik_katilim: 'Otomatik katılım',
@@ -13,18 +18,7 @@ export const BES_TUR_ADI: Readonly<Record<BesTuru, string>> = {
   isten_cikis: 'İşten çıkışla sona erme',
 };
 
-export interface BesHareketi {
-  id: number;
-  personel: string;
-  tur: BesTuru;
-  tarih: string;
-  oran: number | null;
-  sirket: string | null;
-  aciklama: string | null;
-  iptal: boolean;
-  surum: number;
-  yazan: string | null;
-}
+export type BesHareketi = IkBesHareketi;
 
 export type BesDurumu = 'bes' | 'cikti' | 'hic';
 export interface BesSatiri {
