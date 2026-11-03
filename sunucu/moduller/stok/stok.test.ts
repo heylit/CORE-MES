@@ -14,7 +14,7 @@ import {
   araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, LotEtiketleriCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/plan-stok-komutlari.ts';
@@ -1172,27 +1172,23 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await depo<{ tur: string }>('GET', '/stok/kod-coz?kod=MK:YOK-00000')).govde.tur, 'bilinmiyor');
   });
 
-  test('#1060 lot etiketi ve LOT okutma: etiket verisi okuma yetkisiyle gelir; LOT: kodu o lotu çözer, düşüm o lottan olur; bilinmeyen lot tanınmaz', async () => {
+  test('#1060 lot etiketi ve LOT okutma: Etiket Merkezi etiket verisini disari ile alır; LOT: kodu o lotu çözer, düşüm o lottan olur; bilinmeyen lot tanınmaz', async () => {
     const h = await kart('hammadde');
     const ilk = await malKabul(h, '4', { parti: { dokumNo: 'D-ETK', sertifikaNo: 'S-ETK' } });
     const ikinci = await malKabul(h, '6');
     assert.equal(ikinci.durum, 200, JSON.stringify(ikinci.govde));
-    const e = await depo<LotEtiketleriCevabi>('GET', `/stok/mal-kabuller/${ilk.govde.belge.id}/lot-etiketleri`);
-    assert.equal(e.durum, 200, JSON.stringify(e.govde));
-    lotEtiketleriCevabi.parse(e.govde);
-    const [et] = e.govde.etiketler;
-    assert.deepEqual([e.govde.etiketler.length, et?.malzemeId, et?.dokumNo, et?.sertifikaNo, et?.tedarikciPartiNo, et?.miktar, et?.belgeNo, et?.malzemeTuru],
+    const etiketler = await o().vt.tx((db) => lotEtiketleri(db, { malKabulId: ilk.govde.belge.id }));
+    lotEtiketleriCevabi.parse({ etiketler });
+    const [et] = etiketler;
+    assert.deepEqual([etiketler.length, et?.malzemeId, et?.dokumNo, et?.sertifikaNo, et?.tedarikciPartiNo, et?.miktar, et?.belgeNo, et?.malzemeTuru],
       [1, h, 'D-ETK', 'S-ETK', null, '4.000', ilk.govde.belge.no, 'hammadde']);
     assert.match(et!.lotNo, /^LT-\d{6}$/);
-    const yeniden = await depo<LotEtiketleriCevabi>('GET', `/stok/partiler/${et!.partiId}/etiket`);
-    assert.deepEqual(yeniden.govde.etiketler.map((x) => [x.lotNo, x.belgeNo, x.miktar]), [[et!.lotNo, ilk.govde.belge.no, '4.000']]);
-    assert.equal((await depo('GET', '/stok/partiler/999999999/etiket')).durum, 404);
-    // Etiket Merkezi aynı etiketleri disari'dan alır; olmayan kayıt boş dizi.
-    assert.deepEqual(await o().vt.tx((db) => lotEtiketleri(db, { malKabulId: ilk.govde.belge.id })), e.govde.etiketler);
-    assert.deepEqual(await o().vt.tx((db) => lotEtiketleri(db, { partiId: et!.partiId })), yeniden.govde.etiketler);
+    const yeniden = await o().vt.tx((db) => lotEtiketleri(db, { partiId: et!.partiId }));
+    assert.deepEqual(yeniden.map((x) => [x.lotNo, x.belgeNo, x.miktar]), [[et!.lotNo, ilk.govde.belge.no, '4.000']]);
+    // Olmayan kayıt boş dizi; eski 404 veren uçlar kaldırıldı.
     assert.deepEqual([await o().vt.tx((db) => lotEtiketleri(db, { partiId: 999999999 })), await o().vt.tx((db) => lotEtiketleri(db, { malKabulId: 999999999 }))], [[], []]);
-    assert.equal((await istek('operator', 'GET', `/stok/mal-kabuller/${ilk.govde.belge.id}/lot-etiketleri`)).durum, 403);
-    assert.equal((await istek('operator', 'GET', `/stok/partiler/${et!.partiId}/etiket`)).durum, 403);
+    assert.equal((await depo('GET', `/stok/mal-kabuller/${ilk.govde.belge.id}/lot-etiketleri`)).durum, 404);
+    assert.equal((await depo('GET', `/stok/partiler/${et!.partiId}/etiket`)).durum, 404);
 
     const oku = async (kod: string) => {
       const c = await depo<KodCozCevabi>('GET', `/stok/kod-coz?kod=${encodeURIComponent(kod)}`);

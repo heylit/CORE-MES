@@ -205,20 +205,11 @@ export async function olcumAletiGecerliMi(db: Db, id: number): Promise<boolean> 
   return satir !== undefined && olcumdeKullanilabilirMi(aleteCevir(satir).durum);
 }
 
-export async function vadesiGecenAletSayisi(db: Db): Promise<number> {
-  return (await aletOzeti(db)).vadesiGecen;
-}
-
 export interface AletKimligi { id: number; no: string; turId: number; tur: string; vade: string | null; durum: Alet['durum'] }
 
 function kimlik(s: AletSatiri): AletKimligi {
   const a = aleteCevir(s);
   return { id: a.id, no: a.no, turId: a.turId, tur: a.tur, vade: a.vade, durum: a.durum };
-}
-
-export async function aletGetir(db: Db, id: number): Promise<AletKimligi | null> {
-  const [satir] = await aletleriGetir(db, { id });
-  return satir === undefined ? null : kimlik(satir);
 }
 
 // Malzeme kartı aleti numarasıyla anar (885 a); numara tabloda büyük harf ve kırpılmış tutulur.

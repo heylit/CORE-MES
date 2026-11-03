@@ -13,8 +13,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  aletGetir, aletKimlikleri, aletNoIleGetir, aletTurleri, aletlerVeKayitlari, gecerliAletVarMi, olcumAletiGecerliMi, takvimKayitlari,
-  vadesiGecenAletSayisi,
+  aletKimlikleri, aletNoIleGetir, aletTurleri, aletlerVeKayitlari, gecerliAletVarMi, olcumAletiGecerliMi, takvimKayitlari,
 } from './disari.ts';
 import { gunEkle } from './kurallar.ts';
 import { aletOlustur, kalibrasyonKaydet } from './servis.ts';
@@ -94,6 +93,7 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     return ortam.sahip;
   };
   const gun = (n: number): string => gunEkle(bugun, n);
+  const kimlikBul = async (id: number) => (await aletKimlikleri(vt())).find((a) => a.id === id);
   const gunuOku = async (): Promise<string> => (await vt().tek<{ d: string }>('SELECT current_date::text AS d'))?.d ?? '';
   const test = (ad: string, govde: () => Promise<void>): void => {
     dugumTesti(ad, () => tekGunde(gunuOku, async (g) => {
@@ -535,11 +535,11 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     const alet = await aletAc({ turId: tur, periyotGun: 100 });
     assert.equal(alet.kayitSayisi, 0);
     assert.equal(await gecerliAletVarMi(vt(), tur), false);
-    assert.equal((await aletGetir(vt(), alet.id))?.durum, 'kayit-yok');
+    assert.equal((await kimlikBul(alet.id))?.durum, 'kayit-yok');
 
     await kayitAt(alet.id, { sonuc: 'uygun' });
     assert.equal(await gecerliAletVarMi(vt(), tur), true);
-    assert.equal((await aletGetir(vt(), alet.id))?.durum, 'gecerli');
+    assert.equal((await kimlikBul(alet.id))?.durum, 'gecerli');
   });
 
   test('KLB-S7: alet nedenle elle kullanım dışı bırakılır; neden zorunlu; yalnız yeni uygun kayıt döndürür; uygunsuz kayıt elle yazılan nedeni ezmez', async () => {
@@ -700,7 +700,7 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     assert.equal((await cagir(okur, 'GET', '/olcu-aletleri?ara=yokyokyok')).json<ListeCevabi>().aletler.length, 0);
   });
 
-  test('disari: gecerliAletVarMi (KLB-15, KLB-16), aletGetir, aletNoIleGetir, aletKimlikleri, vadesiGecenAletSayisi', async () => {
+  test('disari: gecerliAletVarMi (KLB-15, KLB-16), aletNoIleGetir, aletKimlikleri', async () => {
     const yeniTur = async (ad: string): Promise<number> => (await vt().tek<{ id: number }>('INSERT INTO olcu_aleti_turu (ad) VALUES ($1) RETURNING id', [ad]))?.id ?? 0;
     const bos = await yeniTur('Boş tür');
     const karisik = await yeniTur('Karışık tür');
@@ -721,29 +721,24 @@ describe('kalibrasyon (gerçek PostgreSQL)', () => {
     await kayitAt(disi.id, { sonuc: 'uygunsuz' });
     assert.equal(await gecerliAletVarMi(vt(), disiTur), null);
 
-    assert.deepEqual(await aletGetir(vt(), gecerli.id), {
+    assert.deepEqual(await kimlikBul(gecerli.id), {
       id: gecerli.id, no: gecerli.no, turId: karisik, tur: 'Karışık tür', vade: gun(90), durum: 'gecerli',
     });
-    assert.equal((await aletGetir(vt(), disi.id))?.durum, 'kullanim-disi');
-    assert.equal(await aletGetir(vt(), 99999), null);
+    assert.equal((await kimlikBul(disi.id))?.durum, 'kullanim-disi');
+    assert.equal(await kimlikBul(99999), undefined);
     // 885 a: malzeme kartı aleti numarasıyla anar; numara küçük harf ve boşlukla da bulunur.
-    assert.deepEqual(await aletNoIleGetir(vt(), ` ${gecerli.no.toLowerCase()} `), await aletGetir(vt(), gecerli.id));
+    assert.deepEqual(await aletNoIleGetir(vt(), ` ${gecerli.no.toLowerCase()} `), await kimlikBul(gecerli.id));
     assert.equal(await aletNoIleGetir(vt(), 'YOK-NO-1'), null);
     assert.equal(await aletNoIleGetir(vt(), '  '), null);
     const hepsi = await aletKimlikleri(vt());
     assert.deepEqual(hepsi.map((a) => a.no), [...hepsi.map((a) => a.no)].sort((a, b) => a.localeCompare(b)));
     assert.equal(hepsi.find((a) => a.id === disi.id)?.durum, 'kullanim-disi');
-    assert.deepEqual(hepsi.find((a) => a.id === gecerli.id), await aletGetir(vt(), gecerli.id));
     // KLB-17: tek alet; geçerli kullanılır, vadesi geçmiş, kullanım dışı ve olmayan kullanılmaz.
     assert.equal(await olcumAletiGecerliMi(vt(), gecerli.id), true);
     const gecmis = await aletAc({ turId: karisik, periyotGun: 100, ilkKalibrasyon: { tarih: gun(-300), sonuc: 'uygun' } });
     assert.equal(await olcumAletiGecerliMi(vt(), gecmis.id), false);
     assert.equal(await olcumAletiGecerliMi(vt(), disi.id), false);
     assert.equal(await olcumAletiGecerliMi(vt(), 99999), false);
-
-    const beklenen = (await cagir(yonetici, 'GET', '/olcu-aletleri')).json<ListeCevabi>().ozet.vadesiGecen;
-    assert.equal(await vadesiGecenAletSayisi(vt()), beklenen);
-    assert.equal(beklenen > 0, true);
   });
 
   test('ana sayfa özeti liste ucunun özetiyle aynıdır, aletleri taşımaz', async () => {
