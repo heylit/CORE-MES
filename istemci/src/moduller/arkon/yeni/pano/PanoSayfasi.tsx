@@ -98,7 +98,7 @@ export function PanoSayfasi() {
             alt={o?.yukseltilen ? `${o.yukseltilen} yükseltildi` : 'yükseltilen yok'} />
         </div>
         {!o ? <DurumKutusu durum="yukleniyor" />
-          : !o.karolar.length ? <DurumKutusu durum="bos" mesaj={depo.status().mode === 'server' ? 'İstasyon yok. İstasyonlar TMI\'de İstasyonlar sayfasından eklenir.' : 'İstasyon yok. Ayarlar › Tesis yapısı\'ndan istasyon ekleyin.'} />
+          : !o.karolar.length ? <DurumKutusu durum="bos" mesaj={depo.status().mode === 'server' ? 'İstasyon yok. İstasyonlar CORE\'da İstasyonlar sayfasından eklenir.' : 'İstasyon yok. Ayarlar › Tesis yapısı\'ndan istasyon ekleyin.'} />
           : o.gruplar.map((g) => (
             <section key={g.wc} className="tc-ay3-grup" aria-label={g.ad}>
               <div className="tc-ay3-gkart-bas"><h3>İstasyonlar · {g.ad}</h3><span>{g.karolar.length} istasyon</span></div>

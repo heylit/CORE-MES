@@ -93,7 +93,7 @@ export function OlcuAletleri({ soyle }: { soyle: Soyle }) {
         <Dugme simge="download" onClick={csv}>CSV</Dugme>
         {duzenle && <Dugme tur="birincil" simge="plus" onClick={() => edYaz({ id: `g-${yeniKimlik()}`, isNew: true, no: '', type: '', name: '', range: '', loc: '', interval: 365, last: Date.now(), status: 'ok' })}>Alet ekle</Dugme>}
       </div>
-      {tmide && <small className="tc-ay3-not"><Simge ad="lock" boyut="k" /> Ölçü aletleri ve kalibrasyon kayıtları TMI&apos;de Kalibrasyon sayfasından girilir.</small>}
+      {tmide && <small className="tc-ay3-not"><Simge ad="lock" boyut="k" /> Ölçü aletleri ve kalibrasyon kayıtları CORE&apos;da Kalibrasyon sayfasından girilir.</small>}
       {ed && (
         <form className="tc-ay3-kutu tc-ay3-form" aria-label="Ölçü aleti" onSubmit={(o) => { o.preventDefault(); void kaydet(); }}>
           <div className="tc-ay3-alanlar">

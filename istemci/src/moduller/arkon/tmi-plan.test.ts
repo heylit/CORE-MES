@@ -52,7 +52,7 @@ describe('Arkon rotalı işin plan durumu', () => {
       expect(istasyonPlanOzeti([{ machine: 'AI1', ...ie('published', plan) }], 'AI1')).toBe(null);
     }
   });
-  it('rotasız TMI emri ve Arkon paketi bugünkü gibi: yayınlanınca düşer, etiket yok', () => {
+  it('rotasız CORE emri ve Arkon paketi bugünkü gibi: yayınlanınca düşer, etiket yok', () => {
     for (const p of [{ status: 'published' }, { status: 'published', tmi: null }]) {
       expect(operatoreAcik(p)).toBe(true);
       expect(tmiPlani(p)).toBe(null);
@@ -72,7 +72,7 @@ describe('Arkon rotalı işin plan durumu', () => {
     expect(istasyonPlanOzeti(pk, 'AI2')).toBe(null);
   });
   // A4: canlı planda yerleşmiş TMI işi plan sırasıyla önce; Planlama'daki taşıma yalnız aynı kaynağın kuyruğunu plana gönderir.
-  it('sıra: plandaki TMI işi önce, plan sırasıyla; öteki paketler ardından', () => {
+  it('sıra: plandaki CORE işi önce, plan sırasıyla; öteki paketler ardından', () => {
     const tp = (id: number, sira: number | null, kaynakId = 5) => ({ id: `tmi-ie-${id}`, status: 'published', machine: 'AI1',
       tmi: { isEmriId: id, plan: { canli: sira !== null, sira, eslesiyor: true, kaynak: sira === null ? null : { tur: 'makine' as const, id: kaynakId } } } });
     const arkon = { id: 'x', status: 'published', machine: 'AI1' };
@@ -153,7 +153,7 @@ describe('Arkon Hazırlık kuyruk sırası ve plan referansı', () => {
     expect(planFarkOzeti(planReferanslari([{ id: 'x', status: 'published' }]).values())).toBe(null);
   });
 
-  it('kuyruk isteği yalnız açık TMI iş emri paketleriyle gider; bölünmüş bütün, biten iş ve Arkon paketi girmez; sıra değişmediyse null', () => {
+  it('kuyruk isteği yalnız açık CORE iş emri paketleriyle gider; bölünmüş bütün, biten iş ve Arkon paketi girmez; sıra değişmediyse null', () => {
     const arkon = { id: 'x', status: 'published', machine: 'AI1' };
     const [a, b] = [tp(1, 1), tp(2, 2)];
     const bolunmus = tp(3, 3, null, { bolunmus: true });

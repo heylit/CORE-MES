@@ -1,5 +1,5 @@
 /* Arkon operatör ekranının TMI emrine bağlanan işleri (Üretim Terminali ile aynı davranış): talimat adımı TMI'ye yazılır, başlatmadan
-   önce girdi istasyonda mı sorulur. Paket TMI'den gelmiyorsa (yerel paket) ikisi de yerelde kalır. */
+   önce girdi istasyonda mı sorulur. Paket CORE'dan gelmiyorsa (yerel paket) ikisi de yerelde kalır. */
 export interface TmiPaketi { id?: unknown; tmi?: { emirId?: unknown } | null }
 
 // tmi-ue-<emir> doğrudan emirdir; tmi-ie-<iş emri> paketinde emir `tmi.emirId`'dedir. Emir bilinmiyorsa null.

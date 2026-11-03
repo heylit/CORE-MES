@@ -111,7 +111,7 @@ describe('A2 Hazırlık ekranı', () => {
     expect(yazim(istekler).find((p) => p.status === 'published')?.history?.at(-1)).not.toHaveProperty('planYok');
   }, 40000);
 
-  it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma TMI\'ye gitmez', async () => {
+  it('"Operatör gözüyle" sayfanın üstünde pencerede açılır, adres değişmez; pencere açıkken yazma CORE\'a gitmez', async () => {
     const istekler = sunucuKur(YONETICI, sunucu());
     arkonAc('/arkon/hazirlik');
     const d = await ekran();
@@ -217,7 +217,7 @@ describe('A2 Hazırlık ekranı', () => {
   const tmiSunucusu = (ek: { kimlik: string; surum: number; govde: unknown }[] = []) => ({
     belgeler: { pkgs: [{ kimlik: TMI_TASLAGI.id, surum: 1, govde: TMI_TASLAGI }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }, ...ek] },
   });
-  it('dosyasız TMI taslağı açılınca malzemenin Çizim Merkezi belgesi bir kez pakete gelir; öneri pakete yazılmaz', async () => {
+  it('dosyasız CORE taslağı açılınca malzemenin Çizim Merkezi belgesi bir kez pakete gelir; öneri pakete yazılmaz', async () => {
     const istekler = sunucuKur(YONETICI, tmiSunucusu());
     merkezKur(istekler);
     arkonAc('/arkon/hazirlik');
@@ -253,7 +253,7 @@ describe('A2 Hazırlık ekranı', () => {
   const kmOkur = (d: Deneme): Deneme => ({ ...d, kullanici: { ...d.kullanici, islemler: [...d.kullanici.islemler, 'kalite-merkezi.oku'] } });
   const kmPaketYazimi = (l: Istek[]) => l.filter((i) => i.yol === `/arkon/belgeler/pkgs/${KM_PAKETI.id}/yaz`).map((i) => (i.govde as { govde: Pkg }).govde);
 
-  it('TMI paketinde Dokümanlar parçanın Kalite Merkezi resmini listeler; Pakete al dosyayı ve balonları kimlikleriyle getirir, plan salt okunur', async () => {
+  it('CORE paketinde Dokümanlar parçanın Kalite Merkezi resmini listeler; Pakete al dosyayı ve balonları kimlikleriyle getirir, plan salt okunur', async () => {
     const istekler = sunucuKur(kmOkur(YONETICI), kmSunucusu());
     merkezKur(istekler);
     kmKur([KM_RESMI, { ...KM_RESMI, id: 13, ad: 'Kaldırılmış resim', aktif: false }]);

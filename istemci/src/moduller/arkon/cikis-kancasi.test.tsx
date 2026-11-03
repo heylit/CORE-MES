@@ -9,7 +9,7 @@ import './rotalar.tsx';
 afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
 describe('Arkon çıkış temizliği', () => {
-  it('Arkon sayfası hiç açılmadan TMI çıkışı kişi verisini siler, istasyon seçimi kalır', async () => {
+  it('Arkon sayfası hiç açılmadan CORE çıkışı kişi verisini siler, istasyon seçimi kalır', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
     localStorage.setItem('arkon:opName', JSON.stringify('Deneme Kisi'));
     localStorage.setItem('arkon:station', JSON.stringify('CNC-1'));

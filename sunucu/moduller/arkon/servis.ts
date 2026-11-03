@@ -1135,7 +1135,7 @@ async function makineKodlariniCoz(db: Db, kodlar: readonly string[], onbellek: O
   const idler: number[] = [];
   for (const kod of kodlar) {
     const id = harita.get(kod);
-    if (id === undefined) return { neden: `Makine TMI'de yok ya da pasif: ${kod}.` };
+    if (id === undefined) return { neden: `Makine CORE'da yok ya da pasif: ${kod}.` };
     idler.push(id);
   }
   return { idler };
@@ -1179,7 +1179,7 @@ async function kayitAniyla<T>(db: Db, an: string, is: (an: string | undefined) =
 async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari, emirId: number, kayitAni: string, onbellek: OkumaOnbellegi): Promise<NonNullable<YansimaSonucu>> {
   if (karar.komut === null) return { sonuc: 'eslenemedi', neden: karar.neden ?? 'Karşılığı yok.' };
   const emirSatiri = await emirOzetiOku(db, onbellek, emirId);
-  if (emirSatiri === null) return { sonuc: 'eslenemedi', neden: `TMI üretim emri bulunamadı: ${emirId}.` };
+  if (emirSatiri === null) return { sonuc: 'eslenemedi', neden: `CORE üretim emri bulunamadı: ${emirId}.` };
   // Paralel adım (639): iş emri paketinin komutu kendi adımına gider; kurallar emrin değil adımın durumuyla okunur.
   const adimKimligi = karar.isEmriId;
   const adim = adimKimligi === null ? null : await isEmriOzetiOku(db, onbellek, adimKimligi);
@@ -1254,13 +1254,13 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
     }
     case 'durdur': {
       const neden = (await onbellek.oku('durusNedenleri', () => durusNedenleriniListele(db, { yalnizAktif: false }))).find((n) => n.kod === komut.nedenKodu);
-      if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Duruş nedeni TMI'de yok: ${komut.nedenKodu}.` };
+      if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Duruş nedeni CORE'da yok: ${komut.nedenKodu}.` };
       is = () => kayitAniyla(db, kayitAni, (an) => emirDurdur(db, kullanici, emir.id, neden.id, an, adimli));
       break;
     }
     case 'hurda': {
       const neden = komut.nedenKodu === null ? null : (await onbellek.oku('hurdaNedenleri', () => hurdaNedenleriniListele(db, { yalnizAktif: false }))).find((n) => n.kod === komut.nedenKodu);
-      if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Hurda nedeni TMI'de yok: ${komut.nedenKodu}.` };
+      if (neden === undefined) return { sonuc: 'eslenemedi', neden: `Hurda nedeni CORE'da yok: ${komut.nedenKodu}.` };
       const govde = sayimGovdesi.safeParse({
         tur: 'hurda', adet: komut.adet, ...(neden === null ? {} : { hurdaNedeniId: neden.id }), ...(komut.refakatPartisiId === null ? {} : { refakatPartisiId: komut.refakatPartisiId }),
       });
@@ -1284,15 +1284,15 @@ async function tmiKomutuYurut(db: Db, kullanici: Kullanici, karar: YansimaKarari
   }
   // Kuyruğa alınan emir zaten duraklamış, durmuş ya da başlamamışsa TMI durum kuralı (çakışma) reddeder: yapılacak değişiklik yoktur, ret değildir.
   if (komut.komut === 'ayar' && sonuc.hata instanceof UygulamaHatasi && sonuc.hata.kod === 'CAKISMA') {
-    return { sonuc: 'eslenemedi', neden: `${HAZIRLIK_DEGISIKLIK_YOK} TMI: ${sonuc.hata.mesaj}` };
+    return { sonuc: 'eslenemedi', neden: `${HAZIRLIK_DEGISIKLIK_YOK} CORE: ${sonuc.hata.mesaj}` };
   }
   if (komut.komut === 'kuyruga-al' && sonuc.hata instanceof UygulamaHatasi && sonuc.hata.kod === 'CAKISMA') {
-    return { sonuc: 'eslenemedi', neden: `${KUYRUK_DEGISIKLIK_YOK} TMI: ${sonuc.hata.mesaj}` };
+    return { sonuc: 'eslenemedi', neden: `${KUYRUK_DEGISIKLIK_YOK} CORE: ${sonuc.hata.mesaj}` };
   }
   // Makine başka işte doluysa kullanıcı o işi durdurup kendi işini başlatabilir; aynı işin aynı makinede yeniden başlatılması devralınamaz.
   const dolu = komut.komut === 'basla-ya-da-devam' && sonuc.hata instanceof UygulamaHatasi && sonuc.hata.kod === 'CAKISMA' ? makineDoluAyrintisi.safeParse(sonuc.hata.ayrinti) : null;
   const makineDolu = dolu?.success && dolu.data.emir.id !== emir.id ? { devralEmirId: emir.id, doluOlan: dolu.data } : undefined;
-  return { sonuc: 'reddedildi', neden: sonuc.hata instanceof UygulamaHatasi ? sonuc.hata.mesaj : 'TMI kuralı reddetti.', ...(makineDolu === undefined ? {} : { makineDolu }) };
+  return { sonuc: 'reddedildi', neden: sonuc.hata instanceof UygulamaHatasi ? sonuc.hata.mesaj : 'CORE kuralı reddetti.', ...(makineDolu === undefined ? {} : { makineDolu }) };
 }
 
 // `tmi-ue` paketi: kayıtlıysa makinesi emrin şimdiki istasyonu olmalı (#501); kayıtsızsa emir rotasız olmalı (rotalı emrin taslağı iş emri başınadır).
@@ -1321,9 +1321,9 @@ async function isEmirlerininEmirleri(db: Db, satirlar: readonly Readonly<Record<
       const okuma = await kayitNoktasi(db, () => isEmriOzeti(db, id));
       const d = okuma.tamam ? okuma.deger : null;
       if (okuma.tamam) sonuc.set(id, d === null ? null : { emirId: d.uretimEmriId, emirNo: d.emirNo, durum: d.durum, kaynak: d.kaynak });
-      else gunluk.hata(`Arkon: TMI iş emri okunamadı (iş emri ${id}); kayıt eşlenmeden yazılır`, okuma.hata);
+      else gunluk.hata(`Arkon: CORE iş emri okunamadı (iş emri ${id}); kayıt eşlenmeden yazılır`, okuma.hata);
     } catch (hata) {
-      gunluk.hata(`Arkon: TMI iş emri okunamadı (iş emri ${id}); kayıt eşlenmeden yazılır`, hata);
+      gunluk.hata(`Arkon: CORE iş emri okunamadı (iş emri ${id}); kayıt eşlenmeden yazılır`, hata);
     }
   }
   return sonuc;
@@ -1465,7 +1465,7 @@ async function tmiyeKuyrugaAl(
 ): Promise<void> {
   const eslenemedi = (neden: string) => sorgular.yansimaYaz(db, kayitId, null, kullanici.id, 'eslenemedi', neden.slice(0, NEDEN_SINIRI));
   if (karar.komut !== null && isEmriOkunamadi) {
-    await eslenemedi(`TMI iş emri okunamadı: ${karar.isEmriId}; kayıt TMI'ye işlenmedi.`);
+    await eslenemedi(`CORE iş emri okunamadı: ${karar.isEmriId}; kayıt CORE'a işlenmedi.`);
     return;
   }
   // Emrin okuması noktanın içindedir: TMI tablosu okunamazsa (süre aşımı) Arkon kaydı düşmez, satır karar.emirId ile bekliyor yazılır;
@@ -1482,13 +1482,13 @@ async function tmiyeKuyrugaAl(
       emirYok = okuma.tamam && okuma.deger === null;
       iptalEdildi = okuma.tamam && okuma.deger?.durum === 'iptal';
     } catch (hata) {
-      gunluk.hata(`Arkon: TMI emri okunamadı (emir ${emirNo}); kayıt bekliyor yazıldı`, hata);
+      gunluk.hata(`Arkon: CORE emri okunamadı (emir ${emirNo}); kayıt bekliyor yazıldı`, hata);
       emirYok = false;
     }
   }
   if (iptalEdildi) throw yetkiYok(ILETILER.emirIptal);
   if (karar.komut !== null && emirNo === null && karar.isEmriId !== null) {
-    await eslenemedi(`TMI iş emri bulunamadı: ${karar.isEmriId}.`);
+    await eslenemedi(`CORE iş emri bulunamadı: ${karar.isEmriId}.`);
     return;
   }
   if (karar.komut === null || emirNo === null) {
@@ -1496,7 +1496,7 @@ async function tmiyeKuyrugaAl(
     return;
   }
   if (emirYok) {
-    await eslenemedi(`TMI üretim emri bulunamadı: ${emirNo}.`);
+    await eslenemedi(`CORE üretim emri bulunamadı: ${emirNo}.`);
     return;
   }
   await sorgular.yansimaYaz(db, kayitId, emirNo, kullanici.id, 'bekliyor', null);
@@ -1608,7 +1608,7 @@ async function bekleyeniDene(
       if (kisi === null) return { sonuc: 'reddedildi', neden: 'Yetki yok: kişi pasif ya da kullanıcı değil.' };
       return tmiKomutuYurut(db, kisi, karar, emirId, y.zaman, onbellek);
     });
-    sonuc = s.tamam ? s.deger : { sonuc: 'reddedildi', neden: s.hata instanceof UygulamaHatasi ? s.hata.mesaj : 'TMI kuralı reddetti.' };
+    sonuc = s.tamam ? s.deger : { sonuc: 'reddedildi', neden: s.hata instanceof UygulamaHatasi ? s.hata.mesaj : 'CORE kuralı reddetti.' };
   } catch (hata) {
     if (geciciHataMi(hata)) {
       await sorgular.yansimaGecici(db, y.id, hataOzeti(hata));

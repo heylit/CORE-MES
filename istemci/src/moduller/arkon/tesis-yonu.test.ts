@@ -18,7 +18,7 @@ describe('Arkon tesis yönü', () => {
     expect(tesisListesi(false, true, true)).toBe(false);
   });
 
-  it('istasyonlar hedefi köprüyle TMI İstasyonlar sayfasını açar; köprü yoksa false', () => {
+  it('istasyonlar hedefi köprüyle CORE İstasyonlar sayfasını açar; köprü yoksa false', () => {
     const git = vi.fn();
     const pencere = {
       document: window.document, localStorage: window.localStorage, fetch: vi.fn(), EventSource: class {},

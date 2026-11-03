@@ -1,6 +1,6 @@
 import { tmiPaketiMi } from './yeni-paket';
 /* Muayene (kalite) paketinin numune planı: TMI emrinden gelen pakette lot büyüklüğü emir adedidir.
-   564 2 a: kalite istasyonunun TMI paketinde numune sayısı ve kabul sayısı (Ac) Kalite Merkezi'nin AQL planıdır (`tmi.aql`, sunucu damgalar);
+   564 2 a: kalite istasyonunun CORE paketinde numune sayısı ve kabul sayısı (Ac) Kalite Merkezi'nin AQL planıdır (`tmi.aql`, sunucu damgalar);
    plan yoksa planlamacının girdiği değer kalır. */
 export interface MuayenePlani { lot: number; n: number; ac: number; [alan: string]: unknown }
 export interface MuayenePaketi { id?: unknown; target?: unknown; tmi?: unknown }

@@ -30,7 +30,7 @@ const EKSIK: UretimHazirligiCevabi = {
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-describe('talimat adımı TMI\'ye yazılır', () => {
+describe('talimat adımı CORE\'a yazılır', () => {
   it('adımlar emrin ayrıntısından okunur, işaret Üretim Terminali\'nin tamamla ucuna gider', async () => {
     const { istemci, cagrilar } = istemciKur({
       'GET /uretim-emirleri/12': { emir: {}, kayitlar: [], adimlar: [ADIM(1, false), ADIM(2, true)] },
@@ -42,7 +42,7 @@ describe('talimat adımı TMI\'ye yazılır', () => {
     expect(cagrilar[1]).toEqual({ yontem: 'POST', yol: '/uretim-emirleri/12/adimlar/1/tamamla', govde: { tamam: true } });
   });
 
-  it('işaretsiz ya da geçersiz emirli istek TMI\'ye gitmez', async () => {
+  it('işaretsiz ya da geçersiz emirli istek CORE\'a gitmez', async () => {
     const { istemci, cagrilar } = istemciKur({});
     expect((await cevapla(istemci, istek('POST', '/tmi-adimlar/12/1', JSON.stringify({})))).durum).toBe(400);
     expect((await cevapla(istemci, istek('GET', '/tmi-adimlar/abc'))).durum).toBe(400);

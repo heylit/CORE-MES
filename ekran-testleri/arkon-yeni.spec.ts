@@ -382,7 +382,7 @@ test.describe('A6 Ayarlar ve çağrı bandı', () => {
     }
     for (const [sekme, metin] of [
       ['Tesis', /İstasyonlar sayfasından değiştirilir/], ['Kişiler ve yetkiler', /Roller sayfasından değiştirilir/],
-      ['Üretim', /Vardiya sayfasından değiştirilir/], ['Sistem', /Yedekleme TMI sunucusunda yapılır/],
+      ['Üretim', /Vardiya sayfasından değiştirilir/], ['Sistem', /Yedekleme CORE sunucusunda yapılır/],
     ] as const) {
       await sekmeler.getByRole('tab', { name: sekme }).click();
       await expect(bolum.getByText(metin)).toBeVisible();

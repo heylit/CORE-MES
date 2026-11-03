@@ -8,7 +8,7 @@ describe('CNC hazırlık uyarısı', () => {
     for (const h of ['yok', 'suruyor', 'tamam']) expect(hazirlikUyarisi({ tmi: { hazirlik: h } })).toBeNull();
   });
 
-  it('bağ açıkken sunucunun yazdığı hazırlık eksiğine göre metin; eksik yoksa ya da paket TMI dışıysa uyarı yok', () => {
+  it('bağ açıkken sunucunun yazdığı hazırlık eksiğine göre metin; eksik yoksa ya da paket CORE dışıysa uyarı yok', () => {
     expect(hazirlikUyarisi({ tmi: { hazirlik: 'yok' } }, true)).toBe('CNC hazırlığı tamamlanmadı · kurulumda onay yok');
     expect(hazirlikUyarisi({ tmi: { hazirlik: 'suruyor' } }, true)).toBe('CNC hazırlığı tamamlanmadı · kurulum sürüyor');
     for (const p of [{ tmi: {} }, { tmi: { hazirlik: 'tamam' } }, { tmi: null }, {}, null, undefined]) expect(hazirlikUyarisi(p, true)).toBeNull();

@@ -34,7 +34,7 @@ describe('çağrı bandı alıcısı', () => {
 });
 
 describe('köprü: çağrı ekiplerim (298)', () => {
-  it("Arkon /cagri-ekiplerim isteği TMI /bildirimler/cagri-yonlendirme/benim ucuna gider; cevap olduğu gibi döner ve bant onu okur", async () => {
+  it("Arkon /cagri-ekiplerim isteği CORE /bildirimler/cagri-yonlendirme/benim ucuna gider; cevap olduğu gibi döner ve bant onu okur", async () => {
     const cevap = { ekipler: ['kalite'] } satisfies CagriEkiplerimCevabi;
     const yollar: string[] = [];
     const istemci = { get: async <T,>(yol: string) => { yollar.push(yol); return cevap as T; }, post: async () => { throw new Error('yazma yok'); } } as unknown as Istemci;

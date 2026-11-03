@@ -165,7 +165,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
   };
   // TMI'den gelen işin istasyonu TMI planından değişir; aynı şeritte sıra değiştirme serbesttir.
   const tasi = async (p: Pkg, st: string, onceki?: string | null) => {
-    if (tmiIsi(p) && p.machine !== st) { soyle('İstasyon TMI planından değişir', 'hata'); return; }
+    if (tmiIsi(p) && p.machine !== st) { soyle('İstasyon CORE planından değişir', 'hata'); return; }
     if (kuyrukIsiMi(p)) { await kuyrukTasi(p, st, onceki); return; }
     if (!izinli('plan.edit')) return;
     if (tmiPlani(p)) { await planaSirala(p, st, onceki); return; }
@@ -245,7 +245,7 @@ function IsEmirleri({ salt }: { salt: boolean }) {
             <button type="button" className="tc-ay3-secim" onClick={() => adim(p, st, 1)} aria-label="Aşağı"><Simge ad="down" boyut="k" /></button>
             {planDuzenle && (
               <select className="tc-ay3-secim" aria-label="İstasyona taşı" value={bilinen.has(st) ? st : ''} disabled={tmiIsi(p)}
-                title={tmiIsi(p) ? 'İstasyon TMI planından değişir' : undefined}
+                title={tmiIsi(p) ? 'İstasyon CORE planından değişir' : undefined}
                 onChange={(o) => { if (o.target.value) void tasi(p, o.target.value); }}>
                 <option value="">Taşı…</option>
                 {istasyonListesi(ayarlar.tesis).map((s) => <option key={s.id} value={s.id}>{s.id}</option>)}

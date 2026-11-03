@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import type { BenCevabi, KayitlarCevabi, Tezgah, TezgahlarCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import type { Secenek } from '../../ortak/arayuz/index.ts';
@@ -14,8 +14,9 @@ import type { AktarilacakModel, MevcutEslesme } from './model-aktarimi.ts';
 import './cnc-kurulum.css';
 
 // Çizim Merkezi'nin CNC makineleri sayfası (kart #1196, #1238): CNC Kurulum'un makineleri Çizim Merkezi'nde listelenir, her biri sistemdeki
-// istasyonla eşleştirilir. Eşleştirmede model 3B model belgesi olarak yazılır, yayına alınır ve istasyona bağlanır; fabrika haritasına
-// yalnız eşleşen makine eklenebilir. Satır makinenin Çizim Merkezi'ndeki son durumunu gösterir.
+// istasyonla eşleştirilir. Makineler İstasyonlar'ın aktif CNC makine kayıtlarıdır (1986, 1988 b), kurulumdaki ayar ve katalog modeliyle;
+// gömülü liste kullanılmaz. Ayarı eksik makine listede görünür, işaretlenemez. Eşleştirmede model 3B model belgesi olarak yazılır, yayına alınır ve istasyona bağlanır;
+// fabrika haritasına yalnız eşleşen makine eklenebilir. Satır makinenin Çizim Merkezi'ndeki son durumunu gösterir.
 // Modeli CNC Kurulum ekranının sahnesi üretir (1135 a); sayfa kayıtları yalnız okur. Sahne kodu üç boyut kütüphanesini taşıdığı
 // için sayfa açılınca ayrıca yüklenir.
 const DURUM_ANAHTARI = `${ONEK}v1`;
@@ -49,6 +50,12 @@ export function onerilenIstasyon(no: string | null, gruplar: IstasyonSecimiCevab
   return null;
 }
 
+// Makinenin İstasyonlar'daki istasyonu seçilebilir listedeyse o önerilir (1989 a), yoksa aynı kodlu istasyon.
+export function varsayilanIstasyon(m: MakineOzeti, gruplar: IstasyonSecimiCevabi['gruplar']): number | null {
+  if (m.istasyonId !== null && gruplar.some((g) => g.istasyonlar.some((i) => i.id === m.istasyonId))) return m.istasyonId;
+  return onerilenIstasyon(m.no, gruplar);
+}
+
 export function CncEslestirme() {
   const oturum = useOturum();
   const kullanici = oturum.data;
@@ -60,6 +67,7 @@ export function CncEslestirme() {
   const [arama] = useSearchParams();
   const gelenMakine = arama.get('makine');
   const [degerler, setDegerler] = useState<ReturnType<typeof yerelDegerler> | null>(null);
+  const [tezgahlar, setTezgahlar] = useState<readonly Tezgah[] | null>(null);
   const [uretici, setUretici] = useState<Uretici | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [makineler, setMakineler] = useState<MakineOzeti[] | null>(null);
@@ -91,15 +99,18 @@ export function CncEslestirme() {
     return () => { bitti = true; };
   }, [aktarabilir]);
 
-  // Elle eklenen makineler ve düzeltmeler kayıtlardadır; liste onlarla kurulur.
+  // Makineler sunucudan, düzeltmeler (`mo`) kayıtlardan gelir; liste ikisiyle kurulur.
   useEffect(() => {
     if (!girebilir || !aktarabilir) return;
     let bitti = false;
     void (async () => {
       try {
         await api.get<BenCevabi>('/cnc-kurulum/ben');
-        const kayitlar = await api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar');
-        if (!bitti) setDegerler(yerelDegerler(kayitlar));
+        const [kayitlar, t] = await Promise.all([
+          api.get<KayitlarCevabi>('/cnc-kurulum/kayitlar'),
+          api.get<TezgahlarCevabi>('/cnc-kurulum/tezgahlar'),
+        ]);
+        if (!bitti) { setDegerler(yerelDegerler(kayitlar)); setTezgahlar(t.tezgahlar); }
       } catch (e) {
         if (!bitti) setHata(hataIletisi(e, 'CNC Kurulum kayıtları okunamadı.'));
       }
@@ -109,9 +120,9 @@ export function CncEslestirme() {
 
   const kayitMetni = degerler?.[DURUM_ANAHTARI]?.deger;
   useEffect(() => {
-    if (uretici === null || degerler === null) return;
-    setMakineler(uretici.makineListesi(kayitMetni));
-  }, [uretici, degerler, kayitMetni]);
+    if (uretici === null || degerler === null || tezgahlar === null) return;
+    setMakineler(uretici.makineListesi(tezgahlar, kayitMetni));
+  }, [uretici, degerler, tezgahlar, kayitMetni]);
 
   // Çizim Merkezi'ndeki durum makine listesi gelince bir kez okunur; okunamazsa satırlar durumsuz kalır, eşleştirme yine yapılır.
   useEffect(() => {
@@ -124,20 +135,21 @@ export function CncEslestirme() {
     return () => { bitti = true; };
   }, [makineler]);
 
-  // Seçim yalnız henüz yazılmamış satıra konur: önce var olan eşleşme, yoksa aynı kodlu istasyon. Kullanıcının seçimi korunur.
+  // Seçim yalnız henüz yazılmamış satıra konur: önce var olan eşleşme, yoksa makinenin istasyonu, yoksa aynı kodlu istasyon. Kullanıcının
+  // seçimi korunur.
   useEffect(() => {
     if (makineler === null || mevcut === null) return;
     const gruplar = istasyonlar.data?.gruplar ?? [];
     setSatirlar((once) => Object.fromEntries(makineler.map((m) => {
       const s = once[m.makineId];
-      const istasyonId = mevcut.get(belgeAdi(m))?.istasyonId ?? onerilenIstasyon(m.no, gruplar);
-      return [m.makineId, s ?? { secili: m.makineId === gelenMakine, istasyonId, sonuc: null }];
+      const istasyonId = mevcut.get(belgeAdi(m))?.istasyonId ?? varsayilanIstasyon(m, gruplar);
+      return [m.makineId, s ?? { secili: !m.eksik && m.makineId === gelenMakine, istasyonId, sonuc: null }];
     })));
   }, [makineler, mevcut, istasyonlar.data, gelenMakine]);
 
   const modelIste = async (makineId: string): Promise<AktarilacakModel> => {
-    if (uretici === null) throw new ModelHatasi('CNC Kurulum Motoru henüz hazır değil.');
-    try { return uretici.modelUret(makineId, kayitMetni); } catch (e) {
+    if (uretici === null || tezgahlar === null) throw new ModelHatasi('CNC Kurulum Motoru henüz hazır değil.');
+    try { return uretici.modelUret(makineId, tezgahlar, kayitMetni); } catch (e) {
       throw new ModelHatasi(e instanceof Error ? e.message : 'Model üretilemedi.');
     }
   };
@@ -184,15 +196,16 @@ export function CncEslestirme() {
   if (hata !== null) return <div className="tc-cnc-kurulum-durum"><DurumKutusu durum="hata" mesaj={hata} /></div>;
 
   const seciliSayisi = Object.values(satirlar).filter((s) => s.secili).length;
-  const hepsi = makineler !== null && makineler.length > 0 && seciliSayisi === makineler.length;
+  const secilebilir = new Set((makineler ?? []).filter((m) => !m.eksik).map((m) => m.makineId));
+  const hepsi = secilebilir.size > 0 && seciliSayisi === secilebilir.size;
   return (
     <section className="tc-cnc-aktarim" aria-label="CNC makineleri">
       <header className="tc-cnc-aktarim-ust">
         <div>
           <h1><Simge ad="rotate" /> CNC makineleri</h1>
           <p className="tc-cnc-aktarim-ipucu">
-            CNC Kurulum Motoru'ndaki makineler. Makineyi işaretleyip sistemdeki makineyle eşleştirin; eşleşen modelin çizimi yayına alınır. Fabrika Haritası'na yalnız eşleşen makine eklenebilir.
-            {' "Sistemdeki makine" listesi İstasyonlar\'daki kayıtlardır; aynı kodlu istasyon kendiliğinden seçilir.'}
+            İstasyonlar'daki CNC makineleri; ayarı eksik olan CNC Kurulum &gt; Tanımlar'da tamamlanınca işaretlenebilir. Makineyi işaretleyip sistemdeki makineyle eşleştirin; eşleşen modelin çizimi yayına alınır. Fabrika Haritası'na yalnız eşleşen makine eklenebilir.
+            {' "Sistemdeki makine" listesi İstasyonlar\'daki kayıtlardır; makinenin istasyonu kendiliğinden seçilir.'}
             {istasyonAcabilir && <> <Link to={ISTASYON_SAYFASI.yol}>İstasyonları aç</Link></>}
             {!yayinlayabilir && ' Yayınlama yetkiniz olmadığı için modeller taslak kalır.'}
           </p>
@@ -204,15 +217,15 @@ export function CncEslestirme() {
       {makineler === null
         ? <DurumKutusu durum="yukleniyor" mesaj="CNC makineleri okunuyor" />
         : makineler.length === 0
-          ? <DurumKutusu durum="bos" mesaj="CNC Kurulum Motoru'nda makine yok" />
+          ? <DurumKutusu durum="bos" mesaj="İstasyonlar'da aktif CNC makinesi yok." />
           : (
             <ul className="tc-cnc-aktarim-liste">
               <li className="tc-cnc-aktarim-hepsi">
                 <IsaretKutusu
                   etiket="Tümünü seç"
                   checked={hepsi}
-                  disabled={calisiyor}
-                  onChange={(e) => { const v = e.target.checked; setSatirlar((once) => Object.fromEntries(Object.entries(once).map(([k, s]) => [k, { ...s, secili: v }]))); }}
+                  disabled={calisiyor || secilebilir.size === 0}
+                  onChange={(e) => { const v = e.target.checked; setSatirlar((once) => Object.fromEntries(Object.entries(once).map(([k, s]) => [k, { ...s, secili: v && secilebilir.has(k) }]))); }}
                 />
               </li>
               {makineler.map((m) => {
@@ -220,7 +233,7 @@ export function CncEslestirme() {
                 const durum = mevcut?.get(belgeAdi(m));
                 return (
                   <li key={m.makineId} className="tc-cnc-aktarim-satir">
-                    <IsaretKutusu etiket={belgeAdi(m)} checked={s?.secili ?? false} disabled={calisiyor} onChange={(e) => { satirYaz(m.makineId, { secili: e.target.checked }); }} />
+                    <IsaretKutusu etiket={belgeAdi(m)} checked={s?.secili ?? false} disabled={calisiyor || m.eksik} onChange={(e) => { satirYaz(m.makineId, { secili: e.target.checked }); }} />
                     <Secim
                       etiket="Sistemdeki makine"
                       bosSecenek="Eşleştirme yok"
@@ -229,6 +242,11 @@ export function CncEslestirme() {
                       disabled={calisiyor || istasyonlar.isPending}
                       onChange={(e) => { satirYaz(m.makineId, { istasyonId: e.target.value === '' ? null : Number(e.target.value) }); }}
                     />
+                    {m.eksik && (
+                      <p className="tc-cnc-aktarim-sonuc" role="note">
+                        <Simge ad="alert" boyut="k" />{'Ayarı eksik; modeli üretilemez. CNC Kurulum > Tanımlar\'da tamamlayın.'}
+                      </p>
+                    )}
                     {s?.secili && s.istasyonId === null && istasyonlar.isSuccess && (
                       <p className="tc-cnc-aktarim-sonuc" role="note">
                         <Simge ad="cpu" boyut="k" />

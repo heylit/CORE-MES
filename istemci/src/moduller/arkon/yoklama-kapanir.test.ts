@@ -17,7 +17,7 @@ const akisAc = (pencere: Window & typeof globalThis): EventSource => new pencere
 afterEach(() => { vi.useRealTimers(); });
 
 describe('Arkon olay akışı çerçeveyle kapanır', () => {
-  it('bagla\'nın döndürdüğü işlev açık akışların hepsini kapatır; sonra TMI\'ye okuma gitmez', async () => {
+  it('bagla\'nın döndürdüğü işlev açık akışların hepsini kapatır; sonra CORE\'a okuma gitmez', async () => {
     vi.useFakeTimers();
     const yollar: string[] = [];
     const istemci = { get: async (yol: string) => { yollar.push(yol); return { son: 1, iletiler: [] }; }, post: async () => undefined } as unknown as Istemci;

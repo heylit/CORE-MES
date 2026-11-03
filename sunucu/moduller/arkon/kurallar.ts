@@ -19,9 +19,9 @@ export const ILETILER = {
   ozetRolYok: 'Özetim yalnız Arkon operatörü ve amiri içindir.',
   ozetKapsamDisi: 'Bu kişinin özetini göremezsiniz: yalnız kendi özetiniz ya da amiri olduğunuz iş merkezindeki kişiler açılır.',
   silmeSurumu: 'Silmede belgenin sürümü gönderilmeli.',
-  tmiYonetir: 'Bu ayar TMI\'de yönetilir (İstasyonlar, Duruş ve Hurda Nedenleri).',
-  aletTmide: 'Ölçü aletleri ve kalibrasyon TMI\'de Kalibrasyon sayfasında yönetilir.',
-  yetkiTmide: 'Yetkiler TMI\'de yönetilir (Roller).',
+  tmiYonetir: 'Bu ayar CORE\'da yönetilir (İstasyonlar, Duruş ve Hurda Nedenleri).',
+  aletTmide: 'Ölçü aletleri ve kalibrasyon CORE\'da Kalibrasyon sayfasında yönetilir.',
+  yetkiTmide: 'Yetkiler CORE\'da yönetilir (Roller).',
   gunlukOkuma: 'Değişiklik günlüğünü yalnız Üretim Hazırlık yöneticisi okur.',
   yalnizYonetici: 'Bu ayarı yalnız Üretim Hazırlık yöneticisi değiştirir.',
   rolYetmez: 'Rolünüz bu belgeyi yazamaz ya da silemez.',
@@ -31,7 +31,7 @@ export const ILETILER = {
   aletGecersiz: 'Seçilen ölçü aletinin kalibrasyonu geçerli değil ya da alet kullanım dışı: bu aletle ölçüm kaydedilmez.',
   ilkParcaYeniden: 'Hazırlık yeniden ilk parça onayı istedi: kalite kararına kadar ikinci sağlam parça sayılmaz.',
   ikinciKontrol: 'Kritik ölçüler ikinci kez kontrol edildi işaretlenmeden onay verilemez.',
-  kisiTmide: 'Kişiler TMI\'de yönetilir (Personel).',
+  kisiTmide: 'Kişiler CORE\'da yönetilir (Personel).',
   ozetTutmuyor: 'Dosya içeriği özetiyle tutmuyor.',
   parcaUyusmuyor: 'Parça sayısı önceki parçalarla uyuşmuyor.',
   sunucuIletisi: 'Bu ileti türünü yalnız sunucu üretir.',
@@ -42,15 +42,15 @@ export const ILETILER = {
   lotKarariGecersiz: 'Lot kararı eksik: Kabul için bulunan kusurlu sayıları, Red için en az bir kusurlu sayısı ve gerekçe gerekir.',
   lotKarariVar: 'Bu lotun kararı verildi; değiştirmek Kalite Merkezi\'ndedir.',
   lotKarariTutmadi: 'Bulunan kusurlu sayıları AQL planına göre başka karar veriyor; sayıları ya da kararı düzeltin.',
-  lotPaketi: 'Lot kararı yalnız kalite istasyonundaki TMI iş emri paketinde verilir.',
+  lotPaketi: 'Lot kararı yalnız kalite istasyonundaki CORE iş emri paketinde verilir.',
   kaliteKarari: 'Bu kayıt karara bağlanmış ya da kapanmış: değiştirmek yalnız kararı veren ya da kapatan role ve yöneticiye açıktır.',
   ilkParcaKmde: 'İlk parça kararı Kalite Merkezi\'nde verilir.',
   kmNumuneYok: 'Bu numune Kalite Merkezi\'ne bağlı değil: ölçüm buradan girilmez.',
   numuneYok: 'Numune isteği bulunamadı.',
   kayitRolYetmez: 'Rolünüz bu kayıt türünü ya da kaynağı yazamaz.',
   olcumKaynagi: 'Ölçüm kaynağı tanınmıyor.',
-  isEmriYok: 'Bu paketin TMI iş emri açık değil.',
-  yerelPaket: 'Yeni paket TMI\'de emir açılınca oluşur (Rota > Üretim emirleri); emir dışı paket açılmaz.',
+  isEmriYok: 'Bu paketin CORE iş emri açık değil.',
+  yerelPaket: 'Yeni paket CORE\'da emir açılınca oluşur (Rota > Üretim emirleri); emir dışı paket açılmaz.',
   isEmriNo: 'Kaydın emir numarası paketin iş emrininki değil.',
   planCanliDegil: 'Plan canlıya alınmadı: bu iş canlı planda bu istasyona yerleşmeden başlatılamaz.',
   planSiraYetki: 'İş sırasını değiştirme yetkiniz yok.',
@@ -64,16 +64,16 @@ export const ILETILER = {
   dosyaYok: 'Dosya yok.',
   merkezRolu: 'Çizim Merkezi\'nden dosya almak için paket düzenleme yetkisi gerekir.',
   merkezYok: 'Çizim Merkezi\'nde bu belgenin yayında revizyonu yok.',
-  merkezTur: 'Bu dosya türünü TMI CORE okumaz (PDF, STEP, IGES ya da STL olmalı).',
-  merkezBuyuk: 'Dosya, TMI CORE\'un dosya sınırından büyük.',
+  merkezTur: 'Bu dosya türünü CORE okumaz (PDF, STEP, IGES ya da STL olmalı).',
+  merkezBuyuk: 'Dosya, CORE\'un dosya sınırından büyük.',
   merkezOzet: 'Merkezdeki dosyanın içeriği özetiyle tutmuyor.',
   gunlukSunucu: 'Değişiklik günlüğünü yalnız sunucu yazar.',
   hazirliktaSayim: 'Hazırlıkta sayım yapılmaz · önce ilk parça onayı',
   makineKaynagi: 'Makine kaynaklı (src: auto) kaydı yalnız makine bağlantısı yazar.',
   alanYetkisi: 'Rolünüz bu belgedeki bu değişikliği yapamaz.',
-  emirIptal: 'Bu iş emri TMI\'de iptal edildi; iş için kayıt yazılmaz.',
+  emirIptal: 'Bu iş emri CORE\'da iptal edildi; iş için kayıt yazılmaz.',
   bitmisIs: 'Bu iş bitti: sayı ve durum değişmez.',
-  tmiIstasyonu: 'Bu paketin istasyonu TMI planından değişir.',
+  tmiIstasyonu: 'Bu paketin istasyonu CORE planından değişir.',
   onaysizYayin: 'Paket kalite onayı olmadan yayınlanamaz.',
   onayEskidi: 'Onaydan sonra paketin içeriği değişti: yeniden kaliteye onaya gönderin.',
   stokIstegi: 'Bu malzeme isteği stokta açıldı; durumu Stok Merkezi\'nden değişir.',
@@ -1636,9 +1636,9 @@ function olayKomutu(satir: Readonly<Record<string, unknown>>): { komut: YansimaK
     case 'done': return { komut: { komut: 'bitir' } };
     case 'stopped': {
       const kod = kodMetni(satir['reason']);
-      return kod === null ? { neden: 'Duruş nedeni yok: TMI nedensiz duruş kabul etmez.' } : { komut: { komut: 'durdur', nedenKodu: kod } };
+      return kod === null ? { neden: 'Duruş nedeni yok: CORE nedensiz duruş kabul etmez.' } : { komut: { komut: 'durdur', nedenKodu: kod } };
     }
-    default: return { neden: `Durum "${typeof durum === 'string' ? durum : '?'}" için TMI karşılığı yok.` };
+    default: return { neden: `Durum "${typeof durum === 'string' ? durum : '?'}" için CORE karşılığı yok.` };
   }
 }
 
@@ -1668,7 +1668,7 @@ function sayimKomutu(satir: Readonly<Record<string, unknown>>): { komut: Yansima
   if (satir['kind'] !== 'scrap') return { neden: 'Sayım türü tanınmıyor.' };
   const kod = kodMetni(satir['reason']);
   if (delta < 0) return { komut: { komut: 'hurda', adet: delta, nedenKodu: kod, refakatPartisiId } };
-  return kod === null ? { neden: 'Hurda nedeni yok: TMI nedensiz hurda kabul etmez.' } : { komut: { komut: 'hurda', adet: delta, nedenKodu: kod, refakatPartisiId } };
+  return kod === null ? { neden: 'Hurda nedeni yok: CORE nedensiz hurda kabul etmez.' } : { komut: { komut: 'hurda', adet: delta, nedenKodu: kod, refakatPartisiId } };
 }
 
 // Elle bölünmüş iş (kart #1572): parça kendi adedinden fazla sağlam sayamaz (düzeltme ve hurda serbest). Parça plandan kalktıysa sayım alınmaz.
@@ -1685,7 +1685,7 @@ export function parcaSayimReddi(satir: Readonly<Record<string, unknown>>, parca:
 // Parçalar aynı iş emrinin parçalarıdır ve TMI'de iş emrinin tek durumu vardır: parça olayı öteki parçaları bozmasın. Öteki parça çalışırken
 // başlatma TMI'yi değiştirmez (iş zaten çalışıyor), duraklatma ve duruş iş emrini durdurmaz. Biten parça, öteki parçalar bitmeden iş emrini
 // bitirmez: çalışan parça yoksa iş emri duraklar, varsa değişmez. Bütün parçalar bitince son parçanın bitişi iş emrini bitirir.
-export const PARCA_OTEKI_CALISIYOR = 'Bölünmüş işin öteki parçası çalışıyor: iş emrinin TMI durumu değişmez.';
+export const PARCA_OTEKI_CALISIYOR = 'Bölünmüş işin öteki parçası çalışıyor: iş emrinin CORE durumu değişmez.';
 export const PARCA_OTEKILER_BITMEDI = 'Bölünmüş işin öteki parçaları bitmedi: iş emri hepsi bitince biter.';
 export function parcaOlayKarari(karar: YansimaKarari, toplamParca: number, kardesler: readonly (string | null)[]): YansimaKarari {
   if (karar.komut === null || karar.komut.komut === 'saglam' || karar.komut.komut === 'hurda') return karar;
@@ -1731,7 +1731,7 @@ export function paketinEmri(kimlik: string, govde: unknown): number | null {
 
 // TMI komutu emrin sıradaki iş emrine işler: başka adımın paketinden gelen kayıt (önceden hazırlanmış sonraki adım ya da bitmiş adım) eşlenmez.
 // Baş kısmı istemcinin eşleştirdiği metindir (TmiYansimalari.tsx); paralel adımla (639) yalnız bitmiş adımın kaydı eşlenmez.
-export const PAKET_ADIM_SIRASI = 'Paket başka adımın: bu adım bittikten sonra kaydı TMI\'ye işlenmez.';
+export const PAKET_ADIM_SIRASI = 'Paket başka adımın: bu adım bittikten sonra kaydı CORE\'a işlenmez.';
 // Paralel adım (639): iş emri paketinin komut kuralları adımın durumuyla okunur. Adım bekliyorsa iş planlı, çalışıyorsa başlamış, bittiyse
 // bitmiştir; açık olmayan emir (bitmiş, iptal) kendi durumunu taşır. Sıra dışı başlatma reddedilmez, TMI uyarı döner (626 a).
 export function adimEmirDurumu(emirDurumu: string, adimDurumu: string | null): string {
@@ -1776,7 +1776,7 @@ export type KatilimYolu =
   | { yol: 'ret'; neden: string; devralinabilir?: readonly string[] };
 
 // Kişinin kendi çalışması TMI'de zaten açıkken gelen başlatma (iş başka ekrandan, ör. Fabrika Haritası'ndan başlatılmış): yapılacak değişiklik yoktur, ret değildir.
-export const ZATEN_CALISIYOR = 'İş zaten çalışıyor; sizin çalışmanız açık, başlatma TMI\'de değişiklik yapmadı.';
+export const ZATEN_CALISIYOR = 'İş zaten çalışıyor; sizin çalışmanız açık, başlatma CORE\'da değişiklik yapmadı.';
 
 export const KENDI_CALISMANIZ_YOK = (adlar: readonly string[]): string =>
   `Bu işte siz çalışmıyorsunuz; ${adlar.join(', ')} çalışıyor. Yalnız kendi çalışmanız duraklatılır ya da bitirilir.`;
@@ -1823,23 +1823,26 @@ export function tmidekiDurum(emirDurumu: string, calisma: string | null, benim: 
 // bekletilir (yanlış sayı olmasın diye); emrin başlama kaydı geldiğinde öne alınır, sayım ardından yazılır.
 export const SAYIM_ERTELEME = 'Emir başlamadı: başlama kaydı bekleniyor.';
 export const GECICI_BEKLEME = 'Geçici hata; yeniden denenecek.';
-export const KUYRUK_DEGISIKLIK_YOK = 'Emir çalışmıyordu; kuyruğa alma TMI\'de değişiklik yapmadı.';
-export const BITMIS_BITIR = 'Emir zaten bitmiş; bitirme TMI\'de değişiklik yapmadı.';
-export const HAZIRLIK_DEGISIKLIK_YOK = 'Emir başlamış ya da hazırlığı yazılmış; hazırlık TMI\'de değişiklik yapmadı.';
+export const KUYRUK_DEGISIKLIK_YOK = 'Emir çalışmıyordu; kuyruğa alma CORE\'da değişiklik yapmadı.';
+export const BITMIS_BITIR = 'Emir zaten bitmiş; bitirme CORE\'da değişiklik yapmadı.';
+export const HAZIRLIK_DEGISIKLIK_YOK = 'Emir başlamış ya da hazırlığı yazılmış; hazırlık CORE\'da değişiklik yapmadı.';
 export const SIFIR_SAYIM = 'Sayım farkı sıfır.';
 
 // "TMI'ye yazılamayanlar" listesinde varsayılan olarak gizlenen satır türleri (#199 3. tur, TA2): beklenen ya da kendiliğinden çözülecek durumlar.
 // Satır silinmez; tür başına sayılır ve istenince gösterilir. Tür, sonuç ve kayıtlı nedenin başından çıkarılır (şema yok): "iş zaten çalışıyor"
 // TMI'nin metnidir; TMI metni değişirse satır görünür olur, yani hata görünür tarafa düşer. Önek null ise o sonuçtaki her satır o türdendir.
 export interface GizliYansimaTuru { kod: string; ad: string; kurallar: readonly { sonuc: string; onek: string | null }[] }
+// 1941'den önce yazılan satırların nedeni uygulamanın eski adını ("TMI") taşır; o satırlar da aynı türde sayılır.
+const ikiAdla = (sonuc: string, onek: string): { sonuc: string; onek: string }[] =>
+  [{ sonuc, onek }, { sonuc, onek: onek.replace("CORE'da", "TMI'de").replace('CORE ', 'TMI ') }];
 export const GIZLI_YANSIMA_TURLERI: readonly GizliYansimaTuru[] = [
   { kod: 'kurulum-bosta', ad: 'Kurulum ve boşta durumu', kurallar: [
-    { sonuc: 'eslenemedi', onek: 'Durum "setup" için TMI karşılığı yok' }, { sonuc: 'eslenemedi', onek: 'Durum "none" için TMI karşılığı yok' },
-    { sonuc: 'eslenemedi', onek: HAZIRLIK_DEGISIKLIK_YOK },
+    ...ikiAdla('eslenemedi', 'Durum "setup" için CORE karşılığı yok'), ...ikiAdla('eslenemedi', 'Durum "none" için CORE karşılığı yok'),
+    ...ikiAdla('eslenemedi', HAZIRLIK_DEGISIKLIK_YOK),
   ] },
   { kod: 'zaten-calisiyor', ad: 'İş zaten çalışıyor', kurallar: [{ sonuc: 'reddedildi', onek: 'İş zaten çalışıyor' }, { sonuc: 'eslenemedi', onek: 'İş zaten çalışıyor' }] },
-  { kod: 'kuyruk-degisiklik-yok', ad: 'Kuyruğa alma değişiklik yapmadı', kurallar: [{ sonuc: 'eslenemedi', onek: KUYRUK_DEGISIKLIK_YOK }] },
-  { kod: 'zaten-bitmis', ad: 'Emir zaten bitmiş', kurallar: [{ sonuc: 'eslenemedi', onek: BITMIS_BITIR }] },
+  { kod: 'kuyruk-degisiklik-yok', ad: 'Kuyruğa alma değişiklik yapmadı', kurallar: ikiAdla('eslenemedi', KUYRUK_DEGISIKLIK_YOK) },
+  { kod: 'zaten-bitmis', ad: 'Emir zaten bitmiş', kurallar: ikiAdla('eslenemedi', BITMIS_BITIR) },
   { kod: 'sifir-sayim', ad: 'Sıfır sayım', kurallar: [{ sonuc: 'eslenemedi', onek: SIFIR_SAYIM }] },
   { kod: 'bekliyor', ad: 'Kendiliğinden çözülecek (bekliyor)', kurallar: [{ sonuc: 'bekliyor', onek: null }] },
 ];
@@ -1851,7 +1854,7 @@ export function gizliYansimaTuru(sonuc: string, neden: string | null): string | 
 
 // Denetim #24: kayıt isteğinin cevabı yalnız o istekte sonuçlanan kayıtları taşır. Bekleyip sonra (başka istekte ya da arka planda) TMI'ye
 // yazılamayan sayım tablet akışına ret iletisiyle döner; ekran cevaptaki retle aynı yoldan adedi geri çevirir. "hatali" cevapta hiç dönmez.
-export const SAYIM_YAZILAMADI = 'TMI\'ye yazılırken hata oluştu; yönetici "TMI\'ye yazılamayanlar" ekranından yeniden deneyebilir.';
+export const SAYIM_YAZILAMADI = 'CORE\'a yazılırken hata oluştu; yönetici "CORE\'a yazılamayanlar" ekranından yeniden deneyebilir.';
 export function gecikmeliSayimReddi(tur: string, sonuc: string, neden: string | null, buIstekte: boolean): string | null {
   if (tur !== 'counts') return null;
   if (sonuc === 'hatali') return SAYIM_YAZILAMADI;
@@ -1875,7 +1878,7 @@ export function yansimaNedeni(sonuc: string, neden: string | null, sonHata: stri
 
 // Yeniden kuyruğa alma (#243): yalnız "hatali" satır alınır. Durum kaydı (events) aynı emrin kendinden sonraki bir durum kaydı TMI'ye yazılmışsa alınmaz:
 // eski "duraklat" sonradan yazılan "başlat"ın üstüne yazılıp emri yanlış duruma sokardı. Sayım toplamaya eklenir, sıra koruması gerekmez.
-export const YENIDEN_YALNIZ_HATALI = 'Yalnız TMI\'ye yazılırken hata veren kayıt yeniden denenir.';
+export const YENIDEN_YALNIZ_HATALI = 'Yalnız CORE\'a yazılırken hata veren kayıt yeniden denenir.';
 export const YENIDEN_SONRAKI_YAZILDI = 'Bu emirde sonraki durum kayıtları yazıldı; eski durum kaydı yeniden denenmez.';
 
 export function yenidenDenemeReddi(sonuc: string, tur: string, sonrakiDurumYazildi: boolean): string | null {
@@ -2974,7 +2977,7 @@ export function emekVerimi(standartSn: number | null, mesaiSn: number | null): n
 export const KUYRUK_ILETILERI = {
   gecersiz: 'Yeni sıra, ekrandaki işlerin dizilişi olmalı.',
   eski: 'Kuyruk değişti: ekranı yenileyip yeniden sıralayın.',
-  pakete: 'Yalnız TMI iş emri işleri sıralanır.',
+  pakete: 'Yalnız CORE iş emri işleri sıralanır.',
   sabit: 'Kilitli ya da dondurulmuş iş yerinden oynatılamaz.',
   degismedi: 'Sıra değişmedi.',
   bos: 'Bu kuyrukta Hazırlık sırası yok.',

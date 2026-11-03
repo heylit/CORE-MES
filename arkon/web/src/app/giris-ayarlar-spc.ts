@@ -307,7 +307,7 @@ function ShiftList() {
   return html`<div className="shl">
     ${SHIFTS.map((x, i) => html`<div key=${i} className="shr"><b className="shn">${x.name}</b><span className="mono">${x.start} – ${x.end}</span>
       <div className="shb">${(x.breaks || []).map((b, k) => html`<span key=${k} className="shbr mono">${b.at} · ${b.min} dk</span>`)}</div></div>`)}
-    <small className="muted"><${I} n="lock" s=${14} /> Vardiyalar ve molalar TMI'de Vardiya sayfasından değiştirilir.</small>
+    <small className="muted"><${I} n="lock" s=${14} /> Vardiyalar ve molalar CORE'da Vardiya sayfasından değiştirilir.</small>
   </div>`;
 }
 const KILIT = (metin: string) => html`<small className="muted"><${I} n="lock" s=${14} /> ${metin}</small>`;
@@ -320,20 +320,20 @@ function PlantList() {
         ${makineler.map(m => html`<div key=${m.id} className=${'pmc ' + (act_(m) ? '' : 'off')}><${I} n="cpu" s=${16} /><b className="mono">${m.id}</b><span>${m.name}${m.kind ? ' · ' + m.kind : ''}</span></div>`)}
       </div>`)}${!g.istasyonlar.length ? html`<small className="muted">İstasyon yok.</small>` : null}</div>
     </div>`)}
-    ${KILIT('Tesis TMI\'de İstasyonlar sayfasından değiştirilir.')}
+    ${KILIT('Tesis CORE\'da İstasyonlar sayfasından değiştirilir.')}
     ${gomuluMu() ? html`<button className="btn" onClick=${() => tmiyeGit('istasyonlar')}><${I} n="layers" s=${18} />İstasyonlar sayfasını aç</button>` : null}
   </div>`;
 }
 function ReasonList() {
   return html`<div className="shl">
     ${REASONS.map(r => html`<div key=${r.code} className="shr"><b className="shn mono">${r.code}</b><span>${r.l}</span><span className="tag">${r.cat === 'p' ? 'Planlı' : 'Plansız'}</span></div>`)}
-    ${KILIT('Duruş nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')}
+    ${KILIT('Duruş nedenleri CORE\'da Duruş ve Hurda Nedenleri sayfasından değiştirilir.')}
   </div>`;
 }
 function ScrapList() {
   return html`<div className="shl">
     ${SCRAPS.map(r => html`<div key=${r.code} className="shr"><b className="shn mono">${r.code}</b><span>${r.l}</span></div>`)}
-    ${KILIT('Hurda nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')}
+    ${KILIT('Hurda nedenleri CORE\'da Duruş ve Hurda Nedenleri sayfasından değiştirilir.')}
   </div>`;
 }
 export function ShiftEditor({ say }) {

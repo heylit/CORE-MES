@@ -45,7 +45,7 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(durum.closest('.tc-ay-bant')).not.toBeNull();
   }, 20000);
 
-  it('adres değişince sayfa değişir; TMI ekranı olan madde kendi adresine gider', async () => {
+  it('adres değişince sayfa değişir; CORE ekranı olan madde kendi adresine gider', async () => {
     sunucuKur(YONETICI);
     arkonAc('/arkon/pano');
     await bolum('Pano');
@@ -102,7 +102,7 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     expect(adres()).toBe('/kuyruk');
   }, 20000);
 
-  it('Kuyruk, Plan Kuyruğu yetkisi olmayan operatöre de açılır (eskisi gibi yalnız TMI işlemiyle)', async () => {
+  it('Kuyruk, Plan Kuyruğu yetkisi olmayan operatöre de açılır (eskisi gibi yalnız CORE işlemiyle)', async () => {
     sunucuKur({ ...OPERATOR, kullanici: { ...OPERATOR.kullanici, islemler: [...OPERATOR.kullanici.islemler, 'sayfa.kuyruk'] } });
     arkonAc('/kuyruk');
     expect((await bolum('Kuyruk')).getAttribute('data-sayfa')).toBe('kuyruk');

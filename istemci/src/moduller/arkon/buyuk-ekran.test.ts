@@ -25,7 +25,7 @@ describe('Arkon terminal büyük ekranı', () => {
     expect(malzemeSatiri(null, 'Flanş')).toBeNull();
   });
 
-  it('malzeme satırı TMI paketinde: malzemeNo sayı kimliktir, yazılmaz ve ekranı düşürmez; metin olmayan alan boş sayılır', () => {
+  it('malzeme satırı CORE paketinde: malzemeNo sayı kimliktir, yazılmaz ve ekranı düşürmez; metin olmayan alan boş sayılır', () => {
     expect(malzemeSatiri({ malzemeNo: 1, partNo: 'MM-ADM-00001', rev: 'A' } as { partNo: unknown; rev: unknown }, 'Flanş')).toBe('MM-ADM-00001 · Rev A');
     expect(malzemeSatiri({ partNo: 42, rev: 3 }, 'Flanş')).toBeNull();
     expect(isSatiri(7, 'Op 10')).toBe('Op 10');

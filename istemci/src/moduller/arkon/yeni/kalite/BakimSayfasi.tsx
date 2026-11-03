@@ -215,7 +215,7 @@ function PeriyodikBakim({ liste, yenile, soyle }: { liste: Maint[]; yenile: () =
         )}
       </div>
       {!makineler.length && (
-        <small className="tc-ay3-not">{depo.status().mode === 'server' ? "Önce TMI'de İstasyonlar sayfasında makine tanımla." : "Önce Ayarlar › Tesis yapısı'nda makine tanımla."}</small>
+        <small className="tc-ay3-not">{depo.status().mode === 'server' ? "Önce CORE'da İstasyonlar sayfasında makine tanımla." : "Önce Ayarlar › Tesis yapısı'nda makine tanımla."}</small>
       )}
       {ed && (
         <form className="tc-ay3-kutu tc-ay3-form" aria-label="Bakım planı" onSubmit={(o) => { o.preventDefault(); void planKaydet(); }}>

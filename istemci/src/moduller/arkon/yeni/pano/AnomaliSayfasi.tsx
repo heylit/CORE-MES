@@ -139,7 +139,7 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
         <Dugme simge="layers" onClick={() => git('hazirlik')}>Üretim Terminali Hazırlık</Dugme>
         {bagli && !yasak && <Dugme simge="rotate" onClick={() => { void sor(); }} disabled={mesgul}>Yenile</Dugme>}
       </div>
-      {!bagli ? <p className="tc-ay3-not">Üretim anomalisi yalnız TMI&apos;ye bağlıyken hesaplanır.</p>
+      {!bagli ? <p className="tc-ay3-not">Üretim anomalisi yalnız CORE&apos;a bağlıyken hesaplanır.</p>
         : yasak ? <p className="tc-ay3-not">Üretim anomalisini görme yetkiniz yok.</p>
         : !a ? <p className="tc-ay3-not">{hata ? 'Anomali verisi şu an alınamadı' : 'Hesaplanıyor…'}</p>
         : (

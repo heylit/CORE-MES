@@ -58,7 +58,7 @@ export function IstasyonSecici({ simdiki, sec, kapat }: { simdiki: string; sec: 
             <Simge ad="layers" boyut="b" /><b>Tanımlı istasyon yok</b>
             {durum.mode === 'server' ? (
               <>
-                <small className="tc-ay2-soluk">İş merkezi, istasyon ve makine TMI'de İstasyonlar sayfasından tanımlanır.</small>
+                <small className="tc-ay2-soluk">İş merkezi, istasyon ve makine CORE'da İstasyonlar sayfasından tanımlanır.</small>
                 {yetkiVar('adm.plant') ? <Dugme tur="ikincil" simge="layers" onClick={() => { tmiyeGit('istasyonlar'); kapat(); }}>İstasyonlar sayfasını aç</Dugme> : null}
               </>
             ) : (

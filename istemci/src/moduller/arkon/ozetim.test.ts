@@ -27,7 +27,7 @@ describe('Operatör Özetim (kart #1295)', () => {
     expect(ornekOzet('hafta', '2026-10-14').ekipOrtalamasi).toBeNull();
   });
 
-  it('köprü: Arkon /operator-ozeti isteği dönem ve kişiyle TMI ucuna gider; başka sorgu taşınmaz, yazma eşlenmez', async () => {
+  it('köprü: Arkon /operator-ozeti isteği dönem ve kişiyle CORE ucuna gider; başka sorgu taşınmaz, yazma eşlenmez', async () => {
     const cevap = {
       kisi: { id: 3, ad: 'Deneme Kişi' }, donem: 'hafta', baslangic: '2026-10-12', bitis: '2026-10-14', hesaplama: '2026-10-14T07:00:00.000Z',
       saglam: 120, hurda: null, kalite: 1, calismaSn: 7200, saatlikSaglam: 60, basari: null, ekipOrtalamasi: null, verim: null, isler: [], hurdaNedenleri: [], yetkiler: { istasyonlar: [], makineler: [] }, mesailer: null, fazlaMesai: null, izinler: null, emekVerimi: { oran: null, standartSn: 0, mesaiSn: null },

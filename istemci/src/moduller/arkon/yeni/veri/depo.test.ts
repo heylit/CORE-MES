@@ -53,7 +53,7 @@ describe('Yeni ekranın veri katmanı', () => {
     ] as const) expect(typeof d.Server[ad]).toBe('function');
   });
 
-  it('TMI\'ye bağlanır; belge yazması köprü üzerinden TMI ucuna gider', async () => {
+  it('CORE\'a bağlanır; belge yazması köprü üzerinden CORE ucuna gider', async () => {
     const { istemci, yazmalar } = istemciKur(() => kisi('k1'));
     const d = await baslat(kisi('k1'), istemci);
     expect(d.status()).toMatchObject({ mode: 'server', online: true });
@@ -63,7 +63,7 @@ describe('Yeni ekranın veri katmanı', () => {
     expect(d.status().pending).toBe(0);
   });
 
-  it('TMI\'de başka kişiyle girilince veri katmanı yeni kişiyle çalışır (sayfa yenilenmeden)', async () => {
+  it('CORE\'da başka kişiyle girilince veri katmanı yeni kişiyle çalışır (sayfa yenilenmeden)', async () => {
     let simdiki = kisi('k1');
     const { istemci } = istemciKur(() => simdiki);
     const once = await baslat(simdiki, istemci);

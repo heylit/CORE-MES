@@ -3,7 +3,7 @@ import { bolunmusMu } from './parca';
 /* Rotalı TMI işinin plan durumu (kart #199, A4). Sunucu iş emri paketine `tmi.plan` yazar: canlı planda yerleşim var mı, yerleştiği kaynaktaki
    sırası ve kaynak iş emrininkiyle eşleşiyor mu; `zorunlu` "Operatöre yalnız canlı plandaki iş düşer" ayarıdır (kart #1257, varsayılan kapalı).
    Ayar açıkken operatör yalnız yayındaki ve canlı planda eşleşen işi görür (sunucu başlatmayı da yalnız onda kabul eder); kapalıyken plan durumu
-   yalnız bilgidir. Rotasız TMI emri ve Arkon'un kendi paketi bugünkü gibidir: yayınlanınca düşer. */
+   yalnız bilgidir. Rotasız CORE emri ve Arkon'un kendi paketi bugünkü gibidir: yayınlanınca düşer. */
 export interface PlanKaynagi { tur: 'makine' | 'kisi'; id: number }
 // `zorunlu` yazılmamış (eski) plan durumu A4 kuralıyla okunur.
 // taslakta: canlıda yok, açık bir plan taslağında yerleşmiş; taslak canlıya alınınca iş canlıya geçer.
