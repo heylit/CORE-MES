@@ -391,7 +391,7 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Teslim alınan' }));
     expect(within(within(panel).getByRole('list', { name: 'Freze 2 sepeti' })).getAllByRole('listitem').map((l) => l.textContent)).toEqual([expect.stringMatching(/Deneme cubuk/)]);
     // Herkese sepet (Soru 133): operatör de kendi sepetini görür; taşıma sepeti şeridi (1338 a) her ekranda olduğu için panel açılınca okunur.
-    expect(within(panel).getByRole('button', { name: 'Sepetim' })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Depo sepetim' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/stok/sepet')).toBe(true);
   });
 
@@ -405,7 +405,7 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
     expect(await screen.findByText('Sayfa')).toBeTruthy();
     // Depo sepeti isteği kamerayla açılır; Elimdekiler depo sepetiyle açılır. Kutucuk "Sayfa" yazısından sonra yüklenebilir; düğme beklenir.
     fireEvent.click(await within(panel).findByRole('button', { name: /^Elimdekiler/ }));
-    expect((await within(panel).findByRole('button', { name: 'Sepetim' })).getAttribute('aria-pressed')).toBe('true');
+    expect((await within(panel).findByRole('button', { name: 'Depo sepetim' })).getAttribute('aria-pressed')).toBe('true');
     const satir = within(await within(panel).findByRole('list', { name: 'Sepetim' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/A-01-02 · TP-1/)).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Hepsini taşı' })).toHaveProperty('disabled', true);

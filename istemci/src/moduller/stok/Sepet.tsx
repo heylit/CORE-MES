@@ -84,7 +84,7 @@ export function DepoSepeti() {
       {sonuc && sonuc.kalanlar.length > 0 && (
         <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{sonuc.kalanlar.length} satır gönderilemedi: {sonuc.kalanlar.map((k) => k.neden).join(' · ')}</p>
       )}
-      {satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Sepet boş. Okutulan kartın satırını ya da malzemeyi sonuçtan sepete ekleyin." /> : (
+      {satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Depo sepeti boş. Okutulan kartın satırını ya da malzemeyi sonuçtan sepete ekleyin." /> : (
         <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Sepetim">
           {satirlar.map((x) => (
             <li key={x.id} className="tc-stok-is tc-stok-teslim-satir">
