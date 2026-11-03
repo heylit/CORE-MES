@@ -1080,7 +1080,7 @@ describe('makineler bölümü (#1109, IS25)', () => {
 });
 
 describe('personel bölümü (#1109, IS25)', () => {
-  const KISI_YAZAN: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'kisiler.yaz'] };
+  const KISI_YAZAN: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'ik.personel-yaz'] };
   const kisitlar = {
     '/kisi-is-merkezleri/5': { isMerkeziIdleri: [] } satisfies KisiIsMerkezleriCevabi,
     '/kisi-is-merkezleri/7': { isMerkeziIdleri: [1] } satisfies KisiIsMerkezleriCevabi,
@@ -1103,7 +1103,7 @@ describe('personel bölümü (#1109, IS25)', () => {
     expect(within(usta).queryByLabelText('Deneme Usta için atanacak yer')).toBeNull();
     expect(within(usta).queryByRole('group', { name: 'Deneme Usta iş merkezi kısıtı' })).toBeNull();
     expect(screen.queryByRole('article', { name: 'Deneme Ayrılan' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Kişi' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Kişi' })).toBeNull();
     expect(cagrilar.map((c) => c.yol)).not.toContain('/kisi-secenekleri');
     expect(cagrilar.some((c) => c.yol.startsWith('/kisi-is-merkezleri'))).toBe(false);
     fireEvent.change(screen.getByLabelText('Kişi ara'), { target: { value: 'yeni' } });
@@ -1271,22 +1271,18 @@ describe('personel bölümü (#1109, IS25)', () => {
     expect((await within(usta).findByRole('alert')).textContent).toBe(asim);
   });
 
-  it('"Kişi" düğmesi yalnız kisiler.yaz ile görünür; yeni kişi kisiler ucuna gider', async () => {
-    sunucuKur(YONETICI, kisitlar);
+  it('"Kişi" bağlantısı yalnız ik.personel-yaz ile görünür ve İK\'da yeni kişi formunu açar; burada kişi açılmaz', async () => {
+    sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'kisiler.yaz'] }, kisitlar);
     goster(<Istasyonlar />, '/istasyonlar/personel');
     await kart('Deneme Usta');
-    expect(screen.queryByRole('button', { name: 'Kişi' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Kişi' })).toBeNull();
     cleanup();
     const cagrilar = sunucuKur(KISI_YAZAN, kisitlar);
     goster(<Istasyonlar />, '/istasyonlar/personel');
-    fireEvent.click(await screen.findByRole('button', { name: 'Kişi' }));
-    const pencere = await screen.findByRole('dialog', { name: 'Kişi ekle' });
-    const kaydet = within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
-    expect(kaydet.disabled).toBe(true);
-    fireEvent.change(within(pencere).getByLabelText(/Ad soyad/), { target: { value: ' Deneme Kişi ' } });
-    fireEvent.click(kaydet);
-    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
-    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisiler', govde: { ad: 'Deneme Kişi', sicilNo: null, gorev: null } });
+    const baglanti = await screen.findByRole('link', { name: 'Kişi' });
+    expect(baglanti.getAttribute('href')).toBe('/ik/personel?yeni=1');
+    expect(screen.queryByRole('dialog', { name: 'Kişi ekle' })).toBeNull();
+    expect(POSTLAR(cagrilar)).toHaveLength(0);
   });
 
   it('ekipler Personel içinde: istasyon, üye sayısı ve durumla listelenir, arar; yeni ekip istasyonsuz gidebilir', async () => {

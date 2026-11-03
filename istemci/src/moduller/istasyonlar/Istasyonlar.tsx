@@ -33,7 +33,7 @@ function VardiyaBolumu({ v, sayfaVar }: { v: TesisVerisi; sayfaVar: boolean }) {
   return (
     <div className="tc-ist-bolum">
       <div className="tc-ist-arac">
-        <p className="tc-ist-ipucu">Vardiyalar, haftalık düzen, tatil günleri ve kişinin vardiyası Vardiya sayfasında yazılır; kişinin vardiyası Personel bölümünde de seçilir.</p>
+        <p className="tc-ist-ipucu">Vardiyalar, haftalık düzen ve tatil günleri İnsan Kaynakları menüsünde yazılır; kişinin vardiyası Personel bölümünde seçilir.</p>
         {sayfaVar && <div className="tc-ist-arac-sag"><Link to="/vardiya">Vardiya düzenini aç</Link></div>}
       </div>
       <section className="tc-ist-panel" aria-label="Vardiya tanımları">
@@ -101,7 +101,7 @@ export function Istasyonlar() {
         {bolum === 'is-merkezleri' && <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} />}
         {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yazabilir} durumYazabilir={yazabilir || islemler.includes('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
         {bolum === 'personel' && (
-          <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('kisiler.yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
+          <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('ik.personel-yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
         )}
         {bolum === 'yetkinlik' && <YetkinlikMatrisi v={v} yazabilir={yazabilir} />}
         {bolum === 'vardiyalar' && <VardiyaBolumu v={v} sayfaVar={islemler.includes('sayfa.vardiya')} />}
