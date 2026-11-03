@@ -228,6 +228,48 @@ describe('Okut paneli Yerlestir ve Al modlari (1916)', () => {
   });
 });
 
+describe('Okutarak birakma (1919 a)', () => {
+  it('hedef okutulunca bırakma acilir; okutulan lot yalniz o kalemi secer, Kaydet komutu birakir', async () => {
+    const sepetSatiri = (id: number, partiId: number) => ({
+      id, malzemeId: 1, malzemeAd: 'Deneme 1', malzemeKod: 'HM-1', kaynakKonumId: 5, kaynakKonumKod: 'KABUL', partiId, partiEtiketi: `LT-${partiId}`,
+      miktar: '2.000', mevcut: '2.000', eklenme: '2026-11-03T08:00:00+03:00', refakat: null,
+    });
+    const istekler = panel(DEPO, {
+      'GET /stok/sepet': () => json(200, { satirlar: [sepetSatiri(1, 7), sepetSatiri(2, 8)] }),
+      'POST /stok/tasima': () => json(200, { hareketIdler: [3] }),
+      'POST /stok/sepet/satirlar/2/sil': () => json(200, { satirlar: [] }),
+    });
+    const COZ: Record<string, unknown> = {
+      'LOC:A-01-1': { tur: 'yer', yer: { konumId: 41, kod: 'A-01-1', ad: null, tur: 'raf_gozu', istasyonId: null }, satirlar: null, baskaSepetler: [] },
+      'LOT:LT-8': { tur: 'malzeme', malzeme: { id: 1, kod: 'HM-1', ad: 'Deneme 1', birim: 'adet' }, parti: { id: 8, etiket: 'LT-8' }, yerler: [], baskaSepetler: [] },
+      'LOT:LT-9': { tur: 'malzeme', malzeme: { id: 2, kod: 'HM-2', ad: 'Deneme 2', birim: 'adet' }, parti: { id: 9, etiket: 'LT-9' }, yerler: [], baskaSepetler: [] },
+    };
+    const asil = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (adres, secenek) => {
+      const yol = String(adres).replace('/api', '');
+      if (yol.startsWith('/stok/teslim-kutusu/kod-coz')) {
+        const c = COZ[decodeURIComponent(yol.split('kod=')[1] ?? '')];
+        return c ? json(200, c) : json(404, { kod: 'BULUNAMADI', mesaj: 'Kod bulunamadı.' });
+      }
+      return asil(adres, secenek);
+    });
+    const p = await panelAc();
+    fireEvent.click(await within(p).findByRole('radio', { name: 'Taşı' }));
+    await within(p).findByRole('region', { name: 'Taşıma sepetim' });
+    okut(p, 'LOC:A-01-1');
+    const form = await within(p).findByRole('list', { name: 'Bırakılacaklar' });
+    await waitFor(() => expect(within(form).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([true, true]));
+    okut(p, 'LOT:LT-9');
+    expect(await within(p).findByText(/sepette yok/)).toBeTruthy();
+    okut(p, 'LOT:LT-8');
+    await waitFor(() => expect(within(form).getAllByRole('checkbox').map((c) => (c as HTMLInputElement).checked)).toEqual([false, true]));
+    okut(p, 'CMD:KAYDET');
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/stok/tasima').map((i) => i.govde)).toEqual([
+      expect.objectContaining({ malzemeId: 1, kaynakKonumId: 5, partiId: 8, hedefKonumId: 41, miktar: '2' }),
+    ]));
+  });
+});
+
 describe('Komut karti (1909)', () => {
   it('is, miktar ve mod komutlarini QR olarak basar; kartta yalniz komut var', async () => {
     sunucuKur(DEPOCU, {});

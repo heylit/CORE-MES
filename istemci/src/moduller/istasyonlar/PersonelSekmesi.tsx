@@ -4,15 +4,16 @@ import { Link } from 'react-router-dom';
 import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { Ekipler } from './Ekipler.tsx';
 import { SatirHatasi } from './Hucreler.tsx';
 import { CikarOnayi } from './KisiPaneli.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
+import { SecimKutusu, TopluCubuk } from './TopluCubuk.tsx';
 import { istasyonSecenekleri, kisileriBirlestir, kisininMerkezi, merkezRengi, yuzdeMetni, type KisiAtamasi, type KisiOzeti } from './tesis.ts';
 import { TAKVIM_ANAHTARI, type TesisVerisi, type TesisYaz } from './tesisVerisi.ts';
 
@@ -27,10 +28,20 @@ const TEZGAH_SINIRI_EN_COK = 20;
 
 const IK_YENI_KISI = '/ik/personel?yeni=1';
 
+// Toplu komutun reddi kapsam dışı kişileri ayrıntıda taşır; komut hepsini ya da hiçbirini yazar.
+function reddedilenKisiler(hata: unknown): number[] {
+  if (!(hata instanceof ApiHatasi)) return [];
+  const ayrinti = hata.govde.ayrinti as Record<string, unknown> | null | undefined;
+  const liste = typeof ayrinti === 'object' && ayrinti !== null ? ayrinti['kisiIdleri'] : undefined;
+  return Array.isArray(liste) ? liste.filter((x): x is number => typeof x === 'number') : [];
+}
+const YOK = 'yok';
+
 const basHarfler = (ad: string) => ad.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toLocaleUpperCase('tr-TR')).join('');
 
-function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk }: {
+function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk, cokVardiyali, secim, reddedildi }: {
   k: KisiOzeti; v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; kendisi: boolean; vardiyaYazabilir: boolean; renk: string;
+  cokVardiyali: boolean; secim: { secili: boolean; degistir: (secili: boolean) => void } | null; reddedildi: boolean;
 }) {
   const istemci = useQueryClient();
   // Kişinin vardiyası vardiya modülünün ucudur; cevap takvimin tamamıdır ve iki ekranın ortak anahtarına yazılır.
@@ -111,6 +122,7 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
       <span className={`tc-ist-avatar ${renk}`} aria-hidden="true">{basHarfler(k.ad)}</span>
       <div className="tc-ist-kisi-govde">
         <div className="tc-ist-kisi-bas">
+          {secim && <SecimKutusu etiket={`${k.ad} seç`} secili={secim.secili} degistir={secim.degistir} />}
           <b>{k.ad}</b>
           {!k.aktif && <small className="tc-ist-ipucu">pasif</small>}
           <GecmisDugmesi kayitlar={[
@@ -127,6 +139,9 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               </select>
             </label>
           )}
+          {/* 1950: vardiyası seçilmeyen kişi iş merkezinin her açık vardiyasında sayılır; birden çok vardiyada bu çoğu zaman bir eksikliktir. */}
+          {v.takvim && vardiya === null && cokVardiyali && <Rozet ton="uyari">Her vardiyada sayılıyor, vardiya seçin</Rozet>}
+          {reddedildi && <Rozet ton="hata">Yetkin yok, vardiyası değişmedi</Rozet>}
         </div>
         <div className="tc-ist-kisi-satir">
           <span className="tc-ist-kisi-etiket">Atama</span>
@@ -297,6 +312,23 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
   v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; benId: number; kisiAcabilir: boolean; vardiyaYazabilir: boolean;
 }) {
   const [ara, araYaz] = useState('');
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  // 1951: seçilen kişilere tek komutla vardiya (vardiya modülünün toplu ucu); cevap takvimin tamamıdır.
+  const [secili, seciliYaz] = useState<ReadonlySet<number>>(new Set());
+  const [topluVardiya, topluVardiyaYaz] = useState('');
+  const [reddedilen, reddedilenYaz] = useState<ReadonlySet<number>>(new Set());
+  const toplu = useMutation({
+    mutationFn: (g: { kisiIdleri: number[]; vardiyaId: number | null }) => api.post<TakvimCevabi>('/kisi-vardiyalari/toplu-belirle', g),
+    onMutate: () => reddedilenYaz(new Set()),
+    onSuccess: (t, g) => {
+      istemci.setQueryData(TAKVIM_ANAHTARI, t);
+      seciliYaz(new Set());
+      topluVardiyaYaz('');
+      bildir('tamam', `${g.kisiIdleri.length.toLocaleString('tr-TR')} kişinin vardiyası kaydedildi.`);
+    },
+    onError: (h) => reddedilenYaz(new Set(reddedilenKisiler(h))),
+  });
   if (v.yukleniyor) return <DurumKutusu durum="yukleniyor" />;
   if (v.hata) return <DurumKutusu durum="hata" yenile={v.yenile} />;
   if (v.istasyonKisileri === null || v.makineKisileri === null || v.ekipUyeleri === null) {
@@ -323,18 +355,52 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
   const kadroSayisi = (m: number, vardiyaId: number) => kadro.find((k) => k.isMerkeziId === m && k.vardiyaId === vardiyaId)?.kisiIdleri.length ?? 0;
   const kadroToplami = (m: number) => new Set(kadro.filter((k) => k.isMerkeziId === m).flatMap((k) => k.kisiIdleri)).size;
   const kadroMerkezleri = v.merkezler.filter((m) => kadroToplami(m.id) > 0);
+  // Açık vardiya: iş merkezinin haftalık düzeninde en az bir günü olan aktif vardiya (vardiya modülünün kadro tanımıyla aynı).
+  const topluAcik = vardiyaYazabilir && Boolean(v.takvim);
+  // Seçim listede kalan kişilerle sınırlıdır; arama yalnız görünenleri değiştirir, seçili kalanlar komuta gider.
+  const tumKisiler = kisileriBirlestir(v.kisiler, atamalar);
+  const seciliIdler = tumKisiler.filter((k) => secili.has(k.id)).map((k) => k.id);
+  const hepsiSecili = kisiler.length > 0 && kisiler.every((k) => secili.has(k.id));
+  const seciminiDegistir = (idler: number[], sec: boolean) => seciliYaz((o) => {
+    const yeni = new Set(o);
+    for (const id of idler) { if (sec) yeni.add(id); else yeni.delete(id); }
+    return yeni;
+  });
+  const topluUygula = () => toplu.mutate({ kisiIdleri: seciliIdler, vardiyaId: topluVardiya === YOK ? null : Number(topluVardiya) });
+  const aktifVardiyaIdleri = new Set(aktifVardiyalar.map((x) => x.id));
+  const acikVardiyaSayisi = (m: number | null) => (m === null ? 0
+    : new Set((v.takvim?.matris ?? []).filter((x) => x.isMerkeziId === m && aktifVardiyaIdleri.has(x.vardiyaId)).map((x) => x.vardiyaId)).size);
 
   return (
     <div className="tc-ist-bolum">
       <div className="tc-ist-arac">
         <Girdi etiket="Kişi ara" type="search" placeholder="Kişi adı" value={ara} onChange={(o) => araYaz(o.target.value)} />
         {/* Kişi İK'da açılır (1927 a, 1928 a: kayıt ve işe alış İK'nındır); burada yalnız atanır. */}
+        {topluAcik && kisiler.length > 0 && (
+          <label className="tc-isaret">
+            <SecimKutusu etiket="Görünen kişilerin hepsini seç" secili={hepsiSecili} kismen={!hepsiSecili && kisiler.some((k) => secili.has(k.id))}
+              degistir={(s) => seciminiDegistir(kisiler.map((k) => k.id), s)} />
+            <span>Görünenlerin hepsini seç ({kisiler.length.toLocaleString('tr-TR')})</span>
+          </label>
+        )}
         {kisiAcabilir && <div className="tc-ist-arac-sag"><Link className="tc-dugme tc-dugme-birincil tc-dugme-normal" to={IK_YENI_KISI}><Simge ad="plus" />Kişi</Link></div>}
       </div>
       <p className="tc-ist-ipucu">
         Kişinin atamalarının toplamı 100'ü geçemez. Yetkinlik kişinin çalışabildiği istasyonlardır; plan yetkin olmadığı istasyondaki işi uyarır.
         Vardiyası seçilmeyen kişi iş merkezinin bütün açık vardiyalarında sayılır.
       </p>
+      {topluAcik && (
+        <TopluCubuk sayi={seciliIdler.length} temizle={() => { seciliYaz(new Set()); reddedilenYaz(new Set()); toplu.reset(); }}
+          ret={toplu.isError ? hataIletisi(toplu.error, 'Vardiya kaydedilemedi.') : null}>
+          <select className="tc-alan-kutu tc-ist-hucre" aria-label="Seçilenlerin vardiyası" value={topluVardiya} disabled={toplu.isPending}
+            onChange={(o) => topluVardiyaYaz(o.target.value)}>
+            <option value="">Vardiya seç…</option>
+            {aktifVardiyalar.map((x) => <option key={x.id} value={x.id}>{x.ad} {x.baslangic}-{x.bitis}</option>)}
+            <option value={YOK}>Bütün vardiyalar (seçimi kaldır)</option>
+          </select>
+          <Dugme simge="check" disabled={topluVardiya === '' || toplu.isPending} onClick={topluUygula}>Vardiyayı uygula</Dugme>
+        </TopluCubuk>
+      )}
       {v.takvim && aktifVardiyalar.length > 0 && kadroMerkezleri.length > 0 && (
         <section className="tc-ist-panel" aria-label="Vardiya başına personel">
           <h3 className="tc-ist-alt-baslik">Vardiya başına personel</h3>
@@ -359,7 +425,9 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
         <section key={g.id ?? 'yok'} className={`tc-ist-panel ${merkezRengi(g.id)}`} aria-label={g.baslik}>
           <div className="tc-ist-grup-bas"><h3 className="tc-ist-alt-baslik">{g.baslik}</h3><small className="tc-ist-ipucu">{g.kisiler.length} kişi</small></div>
           {g.kisiler.map((k) => (
-            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)} />
+            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)}
+              cokVardiyali={acikVardiyaSayisi(g.id) > 1} reddedildi={reddedilen.has(k.id)}
+              secim={topluAcik ? { secili: secili.has(k.id), degistir: (s) => seciminiDegistir([k.id], s) } : null} />
           ))}
         </section>
       ))}
