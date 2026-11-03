@@ -13,7 +13,7 @@ export function MakineEtiketi({ makine, durum }: { makine: SurumluMakine; durum:
   const ad = durum ? MAKINE_DURUM_ADLARI[durum.durum] : 'Durum girilmemiş';
   return (
     <span className="tc-ist-cip" data-durum={kod} title={`${makine.ad}: ${ad}${durum?.aciklama ? `, ${durum.aciklama}` : ''}`}>
-      <span className="tc-ist-led" aria-hidden="true" />
+      <span className="tc-ist-led" data-durum={kod} aria-hidden="true" />
       <span className="tc-ist-mono">{makine.kod}</span>
       <span className="tc-ist-gizli">{ad}</span>
     </span>

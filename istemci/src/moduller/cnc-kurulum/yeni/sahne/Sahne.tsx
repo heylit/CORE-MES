@@ -142,13 +142,14 @@ export function useCizimModu(): CizimModu {
   return useSyncExternalStore((d) => { modDinleyicileri.add(d); return () => { modDinleyicileri.delete(d); }; }, cizimModu, cizimModu);
 }
 
+// Seçim modülün bütün görünümlerine uygulanır; düğme yalnız üst şeritte (CncYeni.tsx) durur, sayfalarda yoktur.
 export function CizimModuSecici() {
   const m = useCizimModu(), uc = glAl() !== null;
   return (
     <span className="tc-cy-mod" role="group" aria-label="Çizim modu">
-      <Dugme tur={m === '3d' ? 'birincil' : 'ikincil'} aria-pressed={m === '3d'} disabled={!uc}
+      <Dugme tur={m === '3d' ? 'birincil' : 'ikincil'} simge="cube" aria-pressed={m === '3d'} disabled={!uc}
         title={uc ? '3D çizim' : 'Bu bilgisayarda 3D çizim kapalı (ekran kartı yok)'} onClick={() => { cizimModunuSec('3d'); }}>3D</Dugme>
-      <Dugme tur={m === '2b' ? 'birincil' : 'ikincil'} aria-pressed={m === '2b'} title="Hafif 2B çizim" onClick={() => { cizimModunuSec('2b'); }}>2B</Dugme>
+      <Dugme tur={m === '2b' ? 'birincil' : 'ikincil'} simge="grid" aria-pressed={m === '2b'} title="Hafif 2B çizim" onClick={() => { cizimModunuSec('2b'); }}>2B</Dugme>
     </span>
   );
 }

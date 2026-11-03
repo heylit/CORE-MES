@@ -8,10 +8,11 @@ import { csvIndir } from './csv.ts';
 import { MAKINE_DURUM_ADLARI, MAKINE_DURUM_SECENEKLERI } from './etiketler.ts';
 import { Hucre, MetinHucresi, SatirHatasi, SecimHucresi } from './Hucreler.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
+import { MakineEklePenceresi } from './MakineEklePenceresi.tsx';
 import { MakineFormu } from './MakineFormu.tsx';
 import { AktifDugmesi, DuzenleDugmesi } from './MerkezIstasyonlari.tsx';
 import { TesisAgaci, TUMU, type AgacSecimi } from './TesisAgaci.tsx';
-import { istasyonSecenekleri, makineGovdesi, yeniKod } from './tesis.ts';
+import { istasyonSecenekleri, makineGovdesi } from './tesis.ts';
 import { useTopluYaz, type TesisVerisi, type TesisYaz } from './tesisVerisi.ts';
 import { SecimKutusu, TopluCubuk } from './TopluCubuk.tsx';
 
@@ -40,6 +41,7 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
   const [secili, seciliYaz] = useState<ReadonlySet<number>>(new Set());
   const [duzenlenen, duzenlenenYaz] = useState<ReadonlySet<number>>(new Set());
   const [coklu, cokluYaz] = useState(false);
+  const [ekle, ekleYaz] = useState(false);
   const [topluDurum, topluDurumYaz] = useState<DurumKodu | ''>('');
   const t = useTopluYaz();
   if (v.yukleniyor) return <DurumKutusu durum="yukleniyor" />;
@@ -72,11 +74,6 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
     y.gonder({ yol: `/makineler/${x.id}/guncelle`, govde: makineGovdesi(x, degisen), satir: `mk:${x.id}` });
   const durumYaz = (x: SurumluMakine, yeni: DurumKodu, aciklama: string | null) =>
     y.gonder({ yol: `/makineler/${x.id}/durum`, govde: { durum: yeni, aciklama, surum: durum(x.id)?.surum ?? 0 }, satir: `mk:${x.id}` });
-  const yeni = (i: SurumluIstasyon | undefined) => y.gonder({
-    yol: '/makineler',
-    govde: { kod: yeniKod(i ? `${i.kod}-M` : 'MK', v.makineler.map((x) => x.kod)), ad: 'Yeni makine', istasyonId: i?.id ?? null },
-    satir: `yeni-mk:${i?.id ?? 0}`,
-  });
   const seciminiBosalt = () => { seciliYaz(new Set()); t.temizle(); };
   const toplu = (yol: string, govde: Record<string, unknown>, surum: (x: SurumluMakine) => number = (x) => x.surum) =>
     t.gonder({ yol, govde: { ...govde, kayitlar: seciliKayitlar.map((x) => ({ id: x.id, surum: surum(x) })) }, tamam: () => seciliYaz(new Set()) });
@@ -182,7 +179,7 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
             )}
             {yazabilir && <Dugme simge="layers" disabled={y.mesgul} onClick={() => cokluYaz(true)}>Çoklu ekle</Dugme>}
             {yazabilir && (
-              <Dugme tur="birincil" simge="plus" disabled={y.mesgul || (agacIstasyonu !== undefined && !agacIstasyonu.aktif)} onClick={() => yeni(agacIstasyonu)}
+              <Dugme tur="birincil" simge="plus" disabled={y.mesgul || (agacIstasyonu !== undefined && !agacIstasyonu.aktif)} onClick={() => { t.temizle(); ekleYaz(true); }}
                 aria-label={agacIstasyonu ? `${agacIstasyonu.kod} için yeni makine` : 'Yeni makine'}>
                 Makine
               </Dugme>
@@ -198,7 +195,6 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
             </button>
           ))}
         </div>
-        <SatirHatasi ileti={y.hatalar[`yeni-mk:${agacIstasyonu?.id ?? 0}`]} />
         <TopluCubuk sayi={seciliKayitlar.length} temizle={seciminiBosalt} ret={t.ret?.ileti ?? null}>
           <AranabilirSecim etiket="Seçilenleri istasyona taşı" tur="istasyon" deger="" yerTutucu="İstasyona taşı" bos="İstasyonsuz bırak" secenekler={secenekler}
             disabled={t.mesgul} sec={(s) => toplu('/makineler/toplu-tasi', { istasyonId: s === '' ? null : Number(s) })} />
@@ -238,6 +234,11 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
         </p>
       </div>
       {ayrinti !== null && <MakineFormu key={ayrinti.id} kayit={ayrinti} kapat={() => ayrintiYaz(null)} />}
+      {ekle && (
+        <MakineEklePenceresi v={v} istasyon={agacIstasyonu} mesgul={t.mesgul} ret={t.ret?.ileti ?? null}
+          kaydet={(govde) => t.gonder({ yol: '/makineler', govde, tamam: () => ekleYaz(false) })}
+          kapat={() => { ekleYaz(false); t.temizle(); }} />
+      )}
       {coklu && (
         <MakineCokluEkle v={v} istasyon={agacIstasyonu} mesgul={t.mesgul} ret={t.ret?.ileti ?? null}
           kaydet={(govde) => t.gonder({ yol: '/makineler/coklu-ekle', govde, tamam: () => cokluYaz(false) })}

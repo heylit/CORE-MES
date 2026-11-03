@@ -84,9 +84,10 @@
 .tc-ist-nasil > summary { display: inline-flex; align-items: center; gap: var(--b-1); cursor: pointer; color: var(--muted); font-size: var(--yazi-s); font-weight: 700; }
 .tc-ist-nasil > .tc-ist-ipucu { margin: var(--b-2) 0 0; }
 .tc-ist-bag { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); }
+/* İstasyon sütunu kod ve adı birlikte okutacak genişliktedir; dar sütunda seçili istasyonun adı kesiliyordu. */
 /* Durum seçicisi en uzun seçeneği ("Girilmemiş") kesmeden gösterir (IST-5). */
 .tc-ist-g-mk > .tc-ist-tablo-bas, .tc-ist-g-mk .tc-ist-tablo-satir {
-  grid-template-columns: var(--b-5) var(--b-3) calc(var(--b-6) * 3.2) minmax(calc(var(--b-6) * 3.5), 1.3fr) calc(var(--b-6) * 3) calc(var(--b-6) * 4) calc(var(--b-6) * 4.2) minmax(calc(var(--b-6) * 3), 1fr) calc(var(--b-6) * 5.4);
+  grid-template-columns: var(--b-5) var(--b-3) calc(var(--b-6) * 3.2) minmax(calc(var(--b-6) * 3.5), 1.3fr) calc(var(--b-6) * 3) minmax(calc(var(--b-6) * 6), 1.2fr) calc(var(--b-6) * 4.2) minmax(calc(var(--b-6) * 3), 1fr) calc(var(--b-6) * 5.4);
 }
 .tc-ist-hucre { min-block-size: calc(var(--dokunma) - var(--b-2)); padding: var(--b-1) var(--b-2); inline-size: 100%; min-width: 0; }
 .tc-ist-hucre.tc-ist-mono { font-family: var(--font-mono); }
@@ -121,7 +122,7 @@
   .tc-ist-g-st > .tc-ist-tablo-bas, .tc-ist-g-st > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 29); }
   .tc-ist-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tc-ist-g-st .tc-ist-tablo-satir > .tc-ist-h:nth-child(2) .tc-ist-mono { white-space: nowrap; }
-  .tc-ist-g-mk > .tc-ist-tablo-bas, .tc-ist-g-mk > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 30); }
+  .tc-ist-g-mk > .tc-ist-tablo-bas, .tc-ist-g-mk > .tc-ist-satir-kap { min-inline-size: calc(var(--b-6) * 32); }
 }
 @media (max-width: 767px) {
   .tc-ist-panel { padding: var(--b-3); }

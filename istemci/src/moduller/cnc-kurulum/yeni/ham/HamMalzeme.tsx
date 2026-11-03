@@ -12,7 +12,7 @@ import {
 } from '../parca.ts';
 import { HamSahnesi } from '../sahne/ham-sahnesi.ts';
 import { Ham2b } from '../sahne/ham-2b.ts';
-import { CizimModuSecici, Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
+import { Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
 import { allMaterials } from '../secici.ts';
 import { hamAnalizi, useCncYetkisi } from '../veri.ts';
 import { HamFormu, type HamEylemi } from './HamFormu.tsx';
@@ -124,7 +124,6 @@ export function HamMalzeme() {
           {r && <span>{r.label}</span>}
         </div>
         <div className="tc-ch-gorus">
-          <CizimModuSecici />
             {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { if (mod === '3d') sahne.current?.sigdir(v); else cizici2b.gorus = v; }}>{a}</Dugme>)}
           <Dugme simge="cube" yukleniyor={okunuyor} onClick={() => { void analizdenAl(); }}>Analizden al</Dugme>
           <Dugme tur="birincil" simge="upload" onClick={() => { dosya.current?.click(); }}>Yükle</Dugme>
