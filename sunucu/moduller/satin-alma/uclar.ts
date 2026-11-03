@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
+  acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, sirketAdiCevabi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
@@ -184,6 +184,11 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/satin-alma-katalogu/:id/sil', yetki: 'satin-alma.yaz', parametre: katalogParametresi, govde: katalogSilGovdesi,
     cevap: tamamCevabi, isle: ({ db, parametre, govde }) => servis.katalogSil(db, parametre.id, govde.surum),
+  }),
+  // Şirket adı başka ekranlarda da (Finans) gösterilir: oturum yeter, ayarın geri kalanı gitmez.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-ayarlari/sirket-adi', yetki: 'oturum', cevap: sirketAdiCevabi,
+    isle: async ({ db }) => ({ sirketAdi: await servis.sirketAdi(db) }),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-ayarlari/kaydet', yetki: 'satin-alma.ayar', govde: ayarlarKaydetGovdesi, cevap: ayarlarSemasi,

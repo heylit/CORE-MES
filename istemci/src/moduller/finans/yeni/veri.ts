@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SatisSevkleriCevabi, SatisSiparisleriCevabi } from '#paylasilan/sozlesme/finans.ts';
-import type { KurumCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { SirketAdiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import { yolKur } from '../../../ortak/veri/uc-cagrisi.ts';
@@ -49,8 +49,8 @@ export async function finansVerisiOku(): Promise<FinansHamVerisi> {
   const kurOzeti = await api.get<FinansHamVerisi['kurOzeti']>('/finans/kur-ozeti');
   // Satın almanın siparişte girdiği ödeme planı (#1124); faturası bağlanınca listeden düşer, borç faturadadır.
   const beklenenOdemeler = (await api.get<{ odemeler: FinansHamVerisi['beklenenOdemeler'] }>('/finans/beklenen-odemeler')).odemeler;
-  // Şirket adının esası Sistem Ayarları > Firma adı'dır (1942 a); boşsa null, Finans kendi ayarındaki adı gösterir.
-  const sirketAdi = (await api.get<KurumCevabi>('/kurum')).ad.trim() || null;
+  // Şirket adının esası satın alma ayarıdır (A7, #514).
+  const sirketAdi = (await api.get<SirketAdiCevabi>('/satin-alma-ayarlari/sirket-adi')).sirketAdi;
   return { ...(listeler as unknown as Pick<FinansHamVerisi, ListeAdi>), ayar, amortisman, kurOzeti, beklenenOdemeler, sirketAdi };
 }
 

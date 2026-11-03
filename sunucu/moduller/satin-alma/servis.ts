@@ -25,7 +25,7 @@ import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, sirketAdiGorunumu, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -202,9 +202,7 @@ async function ayarlariKur(db: Db): Promise<Ayarlar> {
   const listeler = [...a.kurlar, ...oneri];
   const satirlar = listeler.map((k) => ({ ...k, aylikFaizYuzdesi: aylikFaiz(finansFaizi.get(k.paraBirimi)?.aylikYuzde), kur: sade(finans.get(k.paraBirimi)?.kur ?? null) }));
   const tarihler = listeler.filter((k) => k.paraBirimi !== 'TRY').flatMap((k) => finans.get(k.paraBirimi)?.tarih ?? []).sort();
-  // Şirket adı satın almanın değildir (1942 a): Sistem Ayarları > Firma adı'ndan okunur, burada değiştirilmez.
-  const sirket = await sistemAyariOku(db, 'kabuk.kurum-adi');
-  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null };
+  return { ...a, kurlar: satirlar, kurTarihi: tarihler[0] ?? null };
 }
 
 // Birim boş olabilir (departmansız talep); doluysa ayarlardaki listede olmalı.
@@ -933,6 +931,10 @@ export async function katalogKaydet(db: Db, k: Kullanici, g: KatalogKaydetYazimi
 export async function katalogSil(db: Db, id: string, surum: number): Promise<{ tamam: true }> {
   await bagliyken(() => surumluGuncelle({ guncelle: () => s.katalogSil(db, id, surum), varMi: () => s.katalogVarMi(db, id), bulunamadiIletisi: ILETILER.katalogYok }));
   return { tamam: true };
+}
+
+export async function sirketAdi(db: Db): Promise<string | null> {
+  return sirketAdiGorunumu(await s.sirketAdiOku(db));
 }
 
 export async function ayarlarKaydet(db: Db, a: AyarlarKaydetYazimi): Promise<Ayarlar> {

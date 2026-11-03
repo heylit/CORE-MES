@@ -51,7 +51,7 @@ export function sunucuKur(kullanici: Kullanici, yazmalar: Record<string, (govde:
       if (yol === '/finans/amortisman') return json(200, { aylar: ham.amortisman });
       if (yol === '/finans/kur-ozeti') return json(200, ham.kurOzeti);
       if (yol === '/finans/beklenen-odemeler') return json(200, { odemeler: ham.beklenenOdemeler });
-      if (yol === '/kurum') return json(200, { ad: ham.sirketAdi ?? '' });
+      if (yol === '/satin-alma-ayarlari/sirket-adi') return json(200, { sirketAdi: ham.sirketAdi });
     }
     const isle = yazmalar[`${yontem} ${yol}`];
     return isle ? isle(govde) : json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });

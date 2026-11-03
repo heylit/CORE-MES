@@ -18,7 +18,7 @@ describe('F4 ayar govdesi', () => {
     expect(g.nakitEsigi).toBe(100000);
     expect(g).not.toHaveProperty('caprazKurPayi');
   });
-  it('Sistem Ayarlari firma adi ve degisiklik ustune yazilir', () => {
+  it('satin almadaki sirket adi ve degisiklik ustune yazilir', () => {
     const g = ayarGovdesi(ayar, 'Satin Alma Adi', { riskToleransi: 10, caprazKurPayi: 1.5 });
     expect(g.sirketAdi).toBe('Satin Alma Adi');
     expect(g.riskToleransi).toBe(10);

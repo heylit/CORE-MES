@@ -1712,9 +1712,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     };
     assert.equal((await istek(c.mudur, 'POST', '/satin-alma-ayarlari/kaydet', g)).statusCode, 403);
     const y = tamam<Ayarlar>(await istek(c.sa, 'POST', '/satin-alma-ayarlari/kaydet', g));
-    // Gövdedeki şirket adı yok sayılır (1942 a): ad Sistem Ayarları > Firma adı'ndandır.
-    const firmaAdi = tamam<{ ad: string }>(await istek(c.sa, 'GET', '/kurum')).ad;
-    assert.deepEqual([y.sirket, y.kurlar.map((k) => k.paraBirimi), y.kategoriler, y.onayLimitleri.length, y.surum], [firmaAdi, ['TRY', 'USD'], ['Bakım', 'Ambalaj'], 2, a.surum + 1]);
+    assert.deepEqual([y.sirket, y.kurlar.map((k) => k.paraBirimi), y.kategoriler, y.onayLimitleri.length, y.surum], ['Deneme A.Ş.', ['TRY', 'USD'], ['Bakım', 'Ambalaj'], 2, a.surum + 1]);
     assert.equal((await istek(c.sa, 'POST', '/satin-alma-ayarlari/kaydet', g)).statusCode, 409);
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("INSERT INTO satin_alma_kur (para_birimi) VALUES ('JPY')")), kisitla('satin_alma_kur_kod'));
   });
@@ -1879,10 +1877,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari/malzemeler?nolar=1,x')).statusCode, 400);
   });
 
-  test('1942 a: şirket adı Sistem Ayarları > Firma adı\'ndan gelir; satın alma ayarı onu değiştirmez, eski şirket adı ucu yoktur', async () => {
-    tamam(await istek(c.yonetici, 'POST', '/ayarlar/kabuk.kurum-adi/degistir', { deger: 'Deneme Atölyesi' }));
-    assert.equal(tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).ayarlar.sirket, 'Deneme Atölyesi');
-    assert.equal((await istek(c.operator, 'GET', '/satin-alma-ayarlari/sirket-adi')).statusCode, 404);
+  test('SAT-72: şirket adı satın alma ayarından okunur; oturumu olan herkes okur, oturumsuz 401', async () => {
+    assert.equal((await istek('', 'GET', '/satin-alma-ayarlari/sirket-adi')).statusCode, 401);
+    assert.deepEqual(tamam(await istek(c.operator, 'GET', '/satin-alma-ayarlari/sirket-adi')), { sirketAdi: 'Deneme A.Ş.' });
   });
 
   test('SA3 a: güncel kur finanstan; döviz teklifi kendi gününün kurunu saklar ve sonradan değişmez; finansta kur yoksa kullanıcıdan istenir, finansa yazılmaz', async () => {

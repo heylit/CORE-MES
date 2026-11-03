@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, sirketAdiGorunumu, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
@@ -15,6 +15,12 @@ const T: TalepYazimi = {
   durum: 'degerlendirme', iptalNedeni: '', agirliklar: null, kalemler: [], teklifIstekleri: [], teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: null,
 };
 const ONAY = { id: '00000000-0000-4000-8000-0000000000aa', zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay' as const, dortGozsuz: false, notlar: '' };
+
+test('SAT-72: boş ya da yalnız boşluk şirket adı yok sayılır (null); dolu ad kırpılır', () => {
+  assert.equal(sirketAdiGorunumu(''), null);
+  assert.equal(sirketAdiGorunumu('   '), null);
+  assert.equal(sirketAdiGorunumu(' Deneme A.Ş. '), 'Deneme A.Ş.');
+});
 
 test('V-33: karşılaştırma alan sırasından bağımsızdır', () => {
   assert.equal(izi({ a: 1, b: { c: 2, d: [3, { e: 4, f: 5 }] } }), izi({ b: { d: [3, { f: 5, e: 4 }], c: 2 }, a: 1 }));

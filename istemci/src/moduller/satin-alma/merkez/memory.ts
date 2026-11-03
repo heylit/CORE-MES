@@ -209,7 +209,7 @@ export function viewSettings(draft?: Settings | null): string {
     <label class="f"><span>Teklif geçerliliği (gün)</span><input type="number" min="1" data-set="validityDays" value="${s.validityDays}"></label>
     <label class="f"><span>Önerilen en az teklif</span><input type="number" min="1" data-set="minQuotes" value="${s.minQuotes}"></label>
     <label class="f"><span>Fiyat artış uyarısı (%)</span><input type="number" min="1" data-set="priceAlertPct" value="${s.priceAlertPct}"></label>
-    <label class="f"><span>Şirket adı <small>— Sistem Ayarları &gt; Firma adı'ndan gelir</small></span><input type="text" readonly value="${esc(s.company)}"></label>
+    <label class="f"><span>Şirket adı <small>— teklif isteğinde, siparişte ve Finans'ta</small></span><input type="text" maxlength="120" data-set="company" value="${esc(s.company)}"></label>
   </div></section>
   <div class="cols">
     <section class="panel"><div class="panel-h"><h2>Onay limitleri</h2><span class="sub">tutar (KDV hariç TL) bu değere kadar</span></div><div class="panel-b">

@@ -20,6 +20,9 @@ export const VARSAYILAN_ONAY_LIMITLERI: readonly { azamiTutar: string | null; se
   { azamiTutar: null, seviye: 'Genel müdür' },
 ];
 
+// SAT-72: şirket adının esası satın alma ayarıdır; boş ad "yok" demektir, boş metin gösterilmez.
+export const sirketAdiGorunumu = (sirket: string): string | null => (sirket.trim() === '' ? null : sirket.trim());
+
 export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
