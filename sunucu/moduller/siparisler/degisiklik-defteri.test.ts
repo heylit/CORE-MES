@@ -31,11 +31,13 @@ describe('sipariş satırı değişiklik defteri (gerçek PostgreSQL)', () => {
       return is(db);
     });
 
-  const defter = (id: number): Promise<Defter[]> =>
+  // Ekleme de deftere düşer (1968 a); kurulumdaki ekleme sahiple ve kişisizdir. Ekleme dışı satırlar ayrıca okunur.
+  const defter = (id: number, eklemeDahil = false): Promise<Defter[]> =>
     o().sahip.sorgu<Defter>(
       `SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik
-        WHERE tablo = 'siparisler_siparis_satiri' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY denetim_degisiklik.id`,
-      [id],
+        WHERE tablo = 'siparisler_siparis_satiri' AND anahtar = jsonb_build_object('id', $1::int) AND ($2 OR islem <> 'ekle')
+        ORDER BY denetim_degisiklik.id`,
+      [id, eklemeDahil],
     );
 
   const satirAc = async (sira: number): Promise<number> =>
@@ -60,9 +62,13 @@ describe('sipariş satırı değişiklik defteri (gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('yeni satır deftere yazılmaz; güncelleme eski, yeni değer ve yazan kişiyle düşer', async () => {
+  test('yeni satır ekle olarak düşer; güncelleme eski, yeni değer ve yazan kişiyle düşer', async () => {
     const satir = await satirAc(1);
-    assert.deepEqual(await defter(satir), []);
+    const [ekle, ...fazla] = await defter(satir, true);
+    assert.deepEqual(fazla, []);
+    assert.equal(ekle?.islem, 'ekle');
+    assert.equal(ekle?.kisi_id, null);
+    assert.deepEqual(ekle?.alanlar.miktar, { eski: null, yeni: 10 });
     await kisiyle((db) => db.sorgu('UPDATE siparisler_siparis_satiri SET miktar = 12 WHERE id = $1', [satir]));
     assert.deepEqual((await defter(satir)).map(({ islem, alanlar, kisi_id }) => ({ islem, alanlar, kisi_id })), [
       { islem: 'guncelle', alanlar: { miktar: { eski: 10, yeni: 12 } }, kisi_id: kisi },
@@ -90,5 +96,48 @@ describe('sipariş satırı değişiklik defteri (gerçek PostgreSQL)', () => {
     await assert.rejects(o().vt.sorgu('UPDATE denetim_degisiklik SET kisi_id = NULL WHERE id = $1', [kayit.id]));
     await assert.rejects(o().vt.sorgu('DELETE FROM denetim_degisiklik WHERE id = $1', [kayit.id]));
     assert.deepEqual(await defter(satir), [kayit]);
+  });
+});
+
+// 1968 a: sipariş başlığı (göç 20261103090800) termin ve durumuyla defterdedir; değişiklik akışı (1962) okur.
+describe('sipariş başlığı değişiklik defteri (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let kisi = 0;
+  let firma = 0;
+
+  const o = (): TestVeritabani => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return ortam;
+  };
+  const kisiyle = <T>(is: (db: Db) => Promise<T>): Promise<T> =>
+    o().vt.tx(async (db) => {
+      await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(kisi)]);
+      return is(db);
+    });
+  const defter = (id: number): Promise<Defter[]> =>
+    o().sahip.sorgu<Defter>(
+      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'siparisler_siparis' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY id",
+      [id],
+    );
+
+  before(async () => {
+    ortam = await testVeritabaniKur('siparisler_baslik_defter');
+    kisi = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Defter Yazan', kullaniciAdi: 'siparis-baslik-defter', parola: 'dogru-parola-1' }));
+    firma = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Firma', 'musteri', $1) RETURNING id", [kisi]))!.id;
+  });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('sipariş açılışı ve termin değişikliği yazan kişiyle düşer; oluşturan, güncelleyen ve sürüm deftere girmez', async () => {
+    const siparis = await kisiyle(async (db) => (await db.tek<{ id: number }>(
+      `INSERT INTO siparisler_siparis (no, firma_id, siparis_tarihi, termin, kdv_orani, olusturan_id)
+       VALUES ('SD-BD-1', $1, '2026-10-23', '2026-11-30', 20, $2) RETURNING id`, [firma, kisi]))!.id);
+    await kisiyle((db) => db.sorgu(
+      "UPDATE siparisler_siparis SET termin = '2026-12-05', guncelleyen_id = $2, guncelleme = now() + interval '1 minute', surum = surum + 1 WHERE id = $1", [siparis, kisi]));
+    await kisiyle((db) => db.sorgu('UPDATE siparisler_siparis SET guncelleyen_id = $2, surum = surum + 1 WHERE id = $1', [siparis, kisi]));
+    const d = await defter(siparis);
+    assert.deepEqual(d.map((x) => [x.islem, x.kisi_id]), [['ekle', kisi], ['guncelle', kisi]]);
+    assert.deepEqual(d[1]?.alanlar, { termin: { eski: '2026-11-30', yeni: '2026-12-05' } });
+    for (const alan of ['olusturan_id', 'olusturma', 'guncelleyen_id', 'guncelleme', 'surum']) assert.ok(!(alan in (d[0]?.alanlar ?? {})), alan);
   });
 });
