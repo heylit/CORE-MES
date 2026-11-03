@@ -118,8 +118,8 @@ describe('PortalCercevesi', () => {
     const prototip = '<html><head></head><body><div class="logo" aria-hidden="true">AM</div><b>Atlas Metal Sanayi</b> <i>Atlas Metal ekibi</i></body></html>';
     const sayfa = sayfaKur(prototip, '', '');
     expect(sayfa).not.toContain('Atlas Metal');
-    expect(sayfa).toContain('<b>TMI</b> <i>TMI ekibi</i>');
-    expect(sayfa).toContain('<div class="logo" aria-hidden="true">TMI</div>');
+    expect(sayfa).toContain('<b>CORE</b> <i>CORE ekibi</i>');
+    expect(sayfa).toContain('<div class="logo" aria-hidden="true">COR</div>');
   });
 
   it('275 a: çerçevede bildirim önizlemesinin WhatsApp bağlantısı yoktur, e-posta bağlantısı kalır', async () => {
@@ -138,8 +138,8 @@ describe('PortalCercevesi', () => {
     expect(sayfa).toContain("var f='Deneme Atölye';");
     expect(kurumKisaltmasi('TMI')).toBe('TMI');
     expect(kurumKisaltmasi('deneme atölye imalat')).toBe('DAİ');
-    expect(guvenliKurumAdi(null)).toBe('TMI');
-    expect(guvenliKurumAdi('  ')).toBe('TMI');
+    expect(guvenliKurumAdi(null)).toBe('CORE');
+    expect(guvenliKurumAdi('  ')).toBe('CORE');
     expect(guvenliKurumAdi(`A'<b>"\\`.concat('${x}`'))).toBe('Ab{x}');
   });
 

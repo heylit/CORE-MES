@@ -3,7 +3,7 @@ import type { Ortam } from '#paylasilan/ortam.ts';
 // Zamanlanmış işin kod adı (sunucudaki iş tanımı) yöneticinin okuyacağı ada çevrilir; kod adı ipucunda kalır (destek için).
 // Listede olmayan yeni iş kod adıyla görünür: ad uydurulmaz.
 const IS_ADLARI: Readonly<Record<string, string>> = {
-  'arkon-yansima-yineleyici': 'Arkon: TMI yansımalarını yeniden deneme',
+  'arkon-yansima-yineleyici': 'Arkon: CORE yansımalarını yeniden deneme',
   'arkon-anomali-gunu': 'Arkon: günlük üretim anomalisi',
   'arkon-anomali-olaylari': 'Arkon: gecikme ve teslim riski olayları',
   'arkon-ileti-budama': 'Arkon: eski cihaz iletilerini silme',

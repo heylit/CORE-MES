@@ -141,7 +141,7 @@ describe('guvenlik: reddedilen istekler, yeni sinyaller ve kritik alarm duyurusu
     const alarm = (await alarmlar()).find((a) => a.sinyal === 'adres-taramasi' && a.ip === '10.0.0.66');
     assert.equal(alarm?.onem, 'kritik');
     assert.equal(alarm?.gozlenenSayi, ADRES_TARAMASI.farkliYol);
-    assert.deepEqual(olaylar.filter((m) => m.includes('10.0.0.66')), [`TMI guvenlik alarmi: Adres taraması: 10.0.0.66 (${String(ADRES_TARAMASI.farkliYol)})`]);
+    assert.deepEqual(olaylar.filter((m) => m.includes('10.0.0.66')), [`CORE guvenlik alarmi: Adres taraması: 10.0.0.66 (${String(ADRES_TARAMASI.farkliYol)})`]);
 
     const bildirimler = await istek<{ satirlar: { tur: string; yol: string | null }[] }>('yonetici', 'GET', '/bildirimler');
     assert.deepEqual(bildirimler.govde.satirlar.filter((b) => b.tur === 'guvenlik.kritik-alarm').map((b) => b.yol), ['/guvenlik/alarmlar']);

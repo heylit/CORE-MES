@@ -135,7 +135,7 @@ export function glbYaz(kok: GlbAgi, ad: string): Uint8Array {
 
   const nodes = meshes.map((_, i) => ({ mesh: i }));
   const gltf = {
-    asset: { version: '2.0', generator: 'TMI CNC Kurulum Motoru' },
+    asset: { version: '2.0', generator: 'CORE CNC Kurulum Motoru' },
     scene: 0,
     scenes: [{ name: ad, nodes: nodes.map((_, i) => i) }],
     nodes,

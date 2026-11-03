@@ -174,7 +174,7 @@ export function Ayarlar() {
       </Kart>
 
       <Kart baslik="Veriler nerede saklanıyor?" simge={ps('shield')}>
-        <p className="tc-dhd-aciklama">Bütün bilgiler TMI sunucusunda, kurum içindeki ortak kayıtta tutulur; internete gönderilmez. Aynı kaydı yetkili herkes görür; başka bir bilgisayardan girildiğinde de kayıtlar oradadır.</p>
+        <p className="tc-dhd-aciklama">Bütün bilgiler CORE sunucusunda, kurum içindeki ortak kayıtta tutulur; internete gönderilmez. Aynı kaydı yetkili herkes görür; başka bir bilgisayardan girildiğinde de kayıtlar oradadır.</p>
         <p className="tc-dhd-aciklama">Yedek dosyası (.json) bu kayıtların taşınabilir kopyasıdır; bir profili başka bir kuruluşa ya da başka bir kurulumda devam etmek için taşır.</p>
         <p className={`tc-dhd-durum ${eski ? 'tc-dhy-ton-uyari' : 'tc-dhy-ton-iyi'}`}>
           <Simge ad={eski ? 'alert' : 'check'} />

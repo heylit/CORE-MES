@@ -128,7 +128,7 @@ async function sonucuBildir(db: Db, no: number, sonuc: MalzemeLogoSonucu): Promi
   // Kartın kuralı reddederse (kart bu arada gönderilmiş, kayıt numarası başka kartta) tur düşmez; neden giden kutusuna yazılır.
   const r = await kayitNoktasi(db, () => malzemeLogoSonucu(db, no, sonuc));
   if (r.tamam) return null;
-  return kirp(`TMI kartına yazılamadı: ${r.hata instanceof UygulamaHatasi ? r.hata.mesaj : 'kural reddetti'}`);
+  return kirp(`CORE kartına yazılamadı: ${r.hata instanceof UygulamaHatasi ? r.hata.mesaj : 'kural reddetti'}`);
 }
 
 // Bir tur: kuyruktan ilk uygun karta tek adım. Adımlar sırayla: (1) niyet yazılır (tur biter, niyet kalıcı olur);
@@ -232,7 +232,7 @@ function tekAdim<T>(
       const zaman = o.saat();
       const bekleme = new Date(zaman.getTime() + geriCekilmeMs((g?.ardisikHata ?? 0) + 1));
       const yazilamadi = (b: Awaited<ReturnType<typeof kayitNoktasi>>): string | null =>
-        b.tamam ? null : kirp(`TMI kaydına yazılamadı: ${b.hata instanceof UygulamaHatasi ? b.hata.mesaj : 'kural reddetti'}`);
+        b.tamam ? null : kirp(`CORE kaydına yazılamadı: ${b.hata instanceof UygulamaHatasi ? b.hata.mesaj : 'kural reddetti'}`);
       if ('tamam' in r) {
         const hata = yazilamadi(await kayitNoktasi(db, () => a.bildir(db, r.deger)));
         await s.denemeYaz(db, a.belge, a.id, hata === null
@@ -381,7 +381,7 @@ export interface SatinAlmaTurOrtami extends TurOrtami {
 }
 
 const yazilamadiMetni = (r: { tamam: boolean; hata?: unknown }): string =>
-  kirp(`TMI kaydına yazılamadı: ${r.hata instanceof UygulamaHatasi ? r.hata.mesaj : 'kural reddetti'}`);
+  kirp(`CORE kaydına yazılamadı: ${r.hata instanceof UygulamaHatasi ? r.hata.mesaj : 'kural reddetti'}`);
 
 // Bir tur, sırayla ilk işi olan adım: talep fişi açma, sipariş açma, düzenleme, kapatma, iptal, karşılama. Turda en çok bir yazma isteği.
 // İstek ancak "Logo bağlantısı" ve "Logo: satın alma gönderimi" açık VE köprü değişkenleri varken çıkar.
@@ -435,7 +435,7 @@ async function acmaSonucuYaz(
   const esleme = refler === null ? null : satirEslemesi(satirlar, refler);
   let yazilamadi: string | null;
   if (esleme === null) {
-    yazilamadi = kirp(`Logo satırları TMI satırlarıyla eşlenemedi (Logo ${refler?.length ?? 0}, TMI ${satirlar.length}).`);
+    yazilamadi = kirp(`Logo satırları CORE satırlarıyla eşlenemedi (Logo ${refler?.length ?? 0}, CORE ${satirlar.length}).`);
     await kayitNoktasi(db, () => bildir(db, { hata: `Logo kaydı ${kayitNo}. ${yazilamadi}` }));
   } else {
     const b = await kayitNoktasi(db, () => bildir(db, { kayitNo, satirlar: esleme }));
@@ -620,7 +620,7 @@ async function siparisGuncellemeTuru(db: Db, o: SatinAlmaTurOrtami, kopru: Kopru
       const sonra = await kopru.siparisSatirlari(sip.no.trim());
       const esleme = sonra.tur === 'basarili' && sonra.satirRefleri !== null
         ? guncellemeEslemesi(satirlar, sonra.satirRefleri, sip.kaldirilanSatirRefleri) : null;
-      if (esleme === null) return { sonuc: 'yazilamadi', hata: 'Düzenleme gitti ama Logo satırları TMI satırlarıyla eşlenemedi.' };
+      if (esleme === null) return { sonuc: 'yazilamadi', hata: 'Düzenleme gitti ama Logo satırları CORE satırlarıyla eşlenemedi.' };
       return { tamam: true, kayitNo: sip.logoKayitNo, deger: { satirlar: esleme } };
     },
     bildir: (yazDb, x) => o.kaynak.guncellemeSonucu(yazDb, sip.id, x),

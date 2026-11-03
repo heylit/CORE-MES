@@ -111,7 +111,7 @@ async function alarmiDuyur(db: Db, id: number, b: Bulgu): Promise<void> {
   const kisiAdi = b.kisiId === null ? null : (await kisiAdlari(db, [b.kisiId])).get(b.kisiId) ?? null;
   const metin = alarmDuyuruMetni(b, kisiAdi);
   await bildirimGonder(db, { tur: 'guvenlik.kritik-alarm', baslik: SINYAL_TANIMLARI[b.sinyal].baslik, metin, yol: '/guvenlik/alarmlar', kaynakKimlik: String(id) });
-  olayaYaz(`TMI guvenlik alarmi: ${metin}`);
+  olayaYaz(`CORE guvenlik alarmi: ${metin}`);
 }
 
 async function adlarlaAlarmlar(db: Db, satirlar: s.AlarmSatiri[]): Promise<Alarm[]> {

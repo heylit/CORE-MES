@@ -6,6 +6,7 @@ import type {
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import { DurumKutusu, Dugme, Kart, Rozet, SayfaBasligi, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useKurumAdi } from '../../ortak/veri/kurum.ts';
 import { analizAnahtarlari } from './analiz-anahtarlari.ts';
 import { malzemeEtiketi, type AileDugumu } from './analiz.ts';
 import { AileIpligiGrafigi } from './DijitalIplik.tsx';
@@ -70,7 +71,8 @@ export function SonUrunDurumu({ sorgu }: { sorgu: ReturnType<typeof useSonUrunle
 
 const tire = (m: string | null): string => m ?? '—';
 
-const BASELINE_SUTUNLARI: readonly Sutun<BaselineSatiri>[] = [
+// Tasarım otoritesi müşteri değilse firmanın kendisidir: adı Sistem Ayarları > Firma adı'ndan (1942 a), girilmemişse "Firma".
+const baselineSutunlari = (firma: string): readonly Sutun<BaselineSatiri>[] => [
   { anahtar: 'oge', baslik: 'Konfigürasyon öğesi', hucre: (b) => malzemeEtiketi(b.malzeme) },
   { anahtar: 'rev', baslik: 'Rev', mono: true, kirilmaz: true, hucre: (b) => tire(b.cizimRevizyonu) },
   { anahtar: 'rota', baslik: 'Rota', mono: true, kirilmaz: true, hucre: (b) => tire(b.rotaRevizyonu) },
@@ -82,8 +84,8 @@ const BASELINE_SUTUNLARI: readonly Sutun<BaselineSatiri>[] = [
   },
   {
     anahtar: 'otorite', baslik: 'Tasarım otoritesi',
-    hucre: (b) => (b.tasarimOtoritesi === null ? '—' : b.tasarimOtoritesi === 'musteri' ? <Rozet>Müşteri</Rozet> : 'TMI'),
-    csv: (b) => (b.tasarimOtoritesi === null ? null : b.tasarimOtoritesi === 'musteri' ? 'Müşteri' : 'TMI'),
+    hucre: (b) => (b.tasarimOtoritesi === null ? '—' : b.tasarimOtoritesi === 'musteri' ? <Rozet>Müşteri</Rozet> : firma),
+    csv: (b) => (b.tasarimOtoritesi === null ? null : b.tasarimOtoritesi === 'musteri' ? 'Müşteri' : firma),
   },
   {
     anahtar: 'durum', baslik: 'Durum',
@@ -126,6 +128,7 @@ function YayinBekleyen({ liste }: { liste: readonly AcikDegisiklik[] }) {
 }
 
 export function Konfigurasyon() {
+  const kurumAdi = useKurumAdi();
   const adresteki = kimlikOku(useParams().malzemeId);
   const git = useNavigate();
   const urunler = useSonUrunler();
@@ -168,7 +171,7 @@ export function Konfigurasyon() {
                       ? <p className="tc-dy-bos">Konfigürasyon öğeleri (revizyon, rota, NC programları) bağlı değil.</p>
                       : (
                         <Tablo
-                          etiket="Yürürlükteki baseline" sutunlar={BASELINE_SUTUNLARI} satirlar={sorgu.data.baseline}
+                          etiket="Yürürlükteki baseline" sutunlar={baselineSutunlari(kurumAdi ?? 'Firma')} satirlar={sorgu.data.baseline}
                           satirAnahtari={(b) => b.malzeme.malzemeId} bosMesaj="Yayımlı konfigürasyon öğesi yok."
                         />
                       )}

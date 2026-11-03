@@ -101,7 +101,7 @@ async function kimlikDenetle(db: Db, kullanici: Kullanici, eski: Veri | null, ye
 }
 
 function rolDenetle(yol: string, eski: Veri | null, yeni: Veri): void {
-  if (rolDegisiyorMu(yol, eski, yeni)) throw yetkiYok('Portal rolü TMI rolünden gelir; burada değiştirilemez.');
+  if (rolDegisiyorMu(yol, eski, yeni)) throw yetkiYok('Portal rolü CORE rolünden gelir; burada değiştirilemez.');
 }
 
 function teslimDenetle(yol: string, eski: Veri | null, yeni: Veri): void {

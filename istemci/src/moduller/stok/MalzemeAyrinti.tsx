@@ -140,7 +140,7 @@ function UretimGirisiFormu({ malzemeId, kapat }: { malzemeId: number; kapat: () 
     <Pencere acik kapat={kapat} baslik="Üretimden giriş" tur="yan"
       alt={<Dugme tur="birincil" yukleniyor={komut.isPending} disabled={emir === ''} onClick={() => komut.mutate({ malzemeId, uretimEmriId: Number(emir), miktar: miktarGirdisi(miktar) })}>Girişi yaz</Dugme>}>
       <div className="tc-stok-form">
-        <p className="tc-stok-not">Biten mamul üretim çıkış alanına (URETIM) girer; partisi üretim emridir. Üretim sayımı TMI'ya yazılana kadar giriş elle yapılır.</p>
+        <p className="tc-stok-not">Biten mamul üretim çıkış alanına (URETIM) girer; partisi üretim emridir. Üretim sayımı CORE'a yazılana kadar giriş elle yapılır.</p>
         <EmirSecici deger={emir} degistir={setEmir} zorunlu />
         <Girdi etiket="Miktar" inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} required />
       </div>

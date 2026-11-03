@@ -221,7 +221,7 @@ export function viewSettings(draft?: Settings | null): string {
   </div>
   <section class="panel"><div class="panel-h"><h2>Malzeme kategorileri</h2><span class="sub">her satıra bir kategori</span></div><div class="panel-b"><textarea id="set-cats" data-sa-y="17">${esc((s.categories || []).join("\n"))}</textarea></div></section>
   <section class="panel"><div class="panel-h"><h2>Veriler</h2></div><div class="panel-b stack" data-sa-y="18">
-    <p class="small muted">Veriler TMI sunucusunda tutulur; yedeği TMI alır. ${Object.keys(S.requests).length} talep, ${Object.keys(S.materials).length} malzeme, ${Object.keys(S.suppliers).length} tedarikçi kayıtlı.</p>
+    <p class="small muted">Veriler CORE sunucusunda tutulur; yedeği CORE alır. ${Object.keys(S.requests).length} talep, ${Object.keys(S.materials).length} malzeme, ${Object.keys(S.suppliers).length} tedarikçi kayıtlı.</p>
   </div></section>
   <div class="row"><button class="btn primary" data-act="save-settings">Ayarları kaydet</button></div>
   </div>`;

@@ -98,7 +98,7 @@ export function Eslemeler() {
   const eslenen = satirlar.filter((s) => s.smartesKod !== null).length;
 
   const sutunlar: Sutun<Satir>[] = [
-    { anahtar: 'tmiKod', baslik: 'TMI kodu', hucre: (s) => s.tmiKod, mono: true },
+    { anahtar: 'tmiKod', baslik: 'CORE kodu', hucre: (s) => s.tmiKod, mono: true },
     { anahtar: 'tmiAd', baslik: 'Ad', hucre: (s) => <>{s.tmiAd}{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</> },
     { anahtar: 'smartesKod', baslik: 'SmartES kodu', hucre: (s) => s.smartesKod ?? YOK, mono: true },
     ...(yazabilir
@@ -110,7 +110,7 @@ export function Eslemeler() {
     <Kart baslik="Kod eşlemeleri">
       <div className="tc-smartes">
         <p className="tc-smartes-aciklama">
-          SmartES’e yalnız eşlenmiş istasyonların iş emri gider; okunan kayıtlar bu kodlarla TMI kayıtlarına bağlanır.
+          SmartES’e yalnız eşlenmiş istasyonların iş emri gider; okunan kayıtlar bu kodlarla CORE kayıtlarına bağlanır.
         </p>
         <Sekmeler etiket="Eşleme türü" sekmeler={SEKMELER} secili={tur} sec={(t) => { turYaz(t); seciliYaz(null); }} />
         {liste.isPending && <DurumKutusu durum="yukleniyor" />}
@@ -118,7 +118,7 @@ export function Eslemeler() {
         {liste.data && (
           <>
             <p className="tc-smartes-ozet"><Rozet ton="bilgi">{`${eslenen} / ${satirlar.length} eşli`}</Rozet></p>
-            <Tablo etiket="Kod eşlemeleri" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => s.tmiId} bosMesaj="Bu türde TMI kaydı yok." />
+            <Tablo etiket="Kod eşlemeleri" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => s.tmiId} bosMesaj="Bu türde CORE kaydı yok." />
           </>
         )}
       </div>

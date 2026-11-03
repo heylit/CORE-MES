@@ -79,7 +79,7 @@ export type PaketBildirimi = z.output<typeof paketBildirimi>;
 export type PaketReddi = 'imlecYok' | 'baslikBozuk' | 'imzaGecersiz' | 'bildirimBozuk' | 'yukUyusmuyor';
 
 export const PAKET_REDDI_ILETISI: Readonly<Record<PaketReddi, string>> = {
-  imlecYok: 'Dosya TMI CORE güncelleme paketi değil.',
+  imlecYok: 'Dosya CORE güncelleme paketi değil.',
   baslikBozuk: 'Paket başlığı okunamıyor.',
   imzaGecersiz: 'Paket imzası doğrulanamadı; paket bu kurum için imzalanmamış ya da değiştirilmiş.',
   bildirimBozuk: 'Paket bildirimi okunamıyor.',

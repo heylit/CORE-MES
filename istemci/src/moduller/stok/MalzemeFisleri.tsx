@@ -64,7 +64,7 @@ export function MalzemeFisleri() {
     { anahtar: 'tur', baslik: 'Tür', hucre: (f) => <FisTuruRozeti tur={f.tur} /> },
     { anahtar: 'kaynak', baslik: 'Kaynak', hucre: kaynakMetni },
     { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (f) => f.satirSayisi },
-    { anahtar: 'tmi', baslik: 'TMI', hucre: (f) => (f.satirSayisi === 0 ? <Rozet ton="pasif">Boş</Rozet> : <Rozet ton="bilgi">Açık</Rozet>) },
+    { anahtar: 'tmi', baslik: 'CORE', hucre: (f) => (f.satirSayisi === 0 ? <Rozet ton="pasif">Boş</Rozet> : <Rozet ton="bilgi">Açık</Rozet>) },
     { anahtar: 'logo', baslik: 'Logo', hucre: (f) => <LogoDurumRozeti logo={f.logo} /> },
     { anahtar: 'deneme', baslik: 'Son deneme', hucre: (f) => zamanMetni(f.logo.sonDeneme) },
   ];

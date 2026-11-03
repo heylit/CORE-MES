@@ -89,7 +89,7 @@ const birimSetiBasligi = (b: BirimSeti): string => (b.ad === null ? b.kod : `${b
 const karsilikSutunlari = (
   cesit: LogoKarsilikCesidi, turAdi: (kod: string) => string, gecerliMi: (kod: string) => boolean,
 ): readonly Sutun<LogoKarsiligi>[] => [
-  { anahtar: 'tmi', baslik: cesit === 'tur' ? 'TMI türü' : 'TMI birimi', hucre: (k) => (cesit === 'tur' ? TUR_ADLARI[k.tmiDegeri] ?? k.tmiDegeri : k.tmiDegeri) },
+  { anahtar: 'tmi', baslik: cesit === 'tur' ? 'CORE türü' : 'CORE birimi', hucre: (k) => (cesit === 'tur' ? TUR_ADLARI[k.tmiDegeri] ?? k.tmiDegeri : k.tmiDegeri) },
   {
     anahtar: 'logo', baslik: cesit === 'tur' ? 'Logo kart türü' : 'Logo birim seti', mono: true,
     hucre: (k) => {

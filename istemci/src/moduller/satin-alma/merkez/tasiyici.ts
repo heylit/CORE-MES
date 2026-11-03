@@ -383,8 +383,8 @@ const backend: Backend = {
   statusHTML: () => '',
   // TCMB'den kur çekme kalkar: TMI'de dış servis çağrısı yok (kırmızı çizgi). Elle kur girişi kalır.
   tcmb: false,
-  exportData: () => Promise.reject(new Error('Yedek TMI tarafından alınır.')),
-  importData: () => Promise.reject(new Error('Yedekten geri yükleme TMI tarafından yapılır.')),
+  exportData: () => Promise.reject(new Error('Yedek CORE tarafından alınır.')),
+  importData: () => Promise.reject(new Error('Yedekten geri yükleme CORE tarafından yapılır.')),
   deleteSamples: () => Promise.reject(new Error('Örnek veri yok.')),
   fetchTcmb: () => Promise.reject(new Error('Dış servis çağrısı yok.')),
   async firmaAra(metin) {

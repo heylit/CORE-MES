@@ -18,9 +18,9 @@ export const ROL_TABLOSU: readonly [string, number][] = [
 export function Kullanicilar({ yetki }: EkranOzellikleri) {
   return (
     <div className="tc-km4">
-      <SayfaBasligi baslik="Kullanıcılar" simge="users" alt="Kim hangi işlemi yapabilir. Giriş TMI oturumuyla yapılır; kayıtlardaki &quot;kim yaptı&quot; bilgisi oturumdaki kişidir." />
+      <SayfaBasligi baslik="Kullanıcılar" simge="users" alt="Kim hangi işlemi yapabilir. Giriş CORE oturumuyla yapılır; kayıtlardaki &quot;kim yaptı&quot; bilgisi oturumdaki kişidir." />
       <div className="tc-km-not">
-        <p><b>Rol TMI yetkisinden gelir.</b> TMI yöneticisi Kalite yöneticisi, kalite onay ve yazma yetkisi olan Kalite mühendisi, yalnız yazma yetkisi olan Muayeneci, yazma yetkisi olmayan İzleyicidir. Yetki Personel sayfasında rolle verilir.</p>
+        <p><b>Rol CORE yetkisinden gelir.</b> CORE yöneticisi Kalite yöneticisi, kalite onay ve yazma yetkisi olan Kalite mühendisi, yalnız yazma yetkisi olan Muayeneci, yazma yetkisi olmayan İzleyicidir. Yetki Personel sayfasında rolle verilir.</p>
         <p className="tc-km-soluk">Sizin rolünüz: <b>{yetki.rol}</b></p>
         {!yetki.yaz && (
           <p className="tc-km-soluk">
@@ -43,7 +43,7 @@ export function Kullanicilar({ yetki }: EkranOzellikleri) {
             </tbody>
           </table>
         </div>
-        <p className="tc-km-soluk">Not: Giriş TMI oturumuyla yapılır; kullanıcı ve ayar kayıtlarını yalnız TMI yöneticisi değiştirir. Değişiklik izi sunucuda silinemez şekilde tutulur.</p>
+        <p className="tc-km-soluk">Not: Giriş CORE oturumuyla yapılır; kullanıcı ve ayar kayıtlarını yalnız CORE yöneticisi değiştirir. Değişiklik izi sunucuda silinemez şekilde tutulur.</p>
       </Panel>
     </div>
   );

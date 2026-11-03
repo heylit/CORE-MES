@@ -79,7 +79,7 @@ describe('Arkon dosyaları Çizim Merkezi\'nden (kart #800)', () => {
 
 describe('Dosya ekleme yolu (Terminal kural 2/5)', () => {
   it('boş dosya alanı dosyanın yalnız belge merkezinden eklendiğini söyler', () => {
-    expect(MERKEZDEN_EKLENIR).toBe('Dosyalar TMI belge merkezinden eklenir');
+    expect(MERKEZDEN_EKLENIR).toBe('Dosyalar CORE belge merkezinden eklenir');
   });
 });
 

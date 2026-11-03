@@ -45,7 +45,7 @@ export function MalzemeFisi() {
         <div className="tc-stok-form">
           <p><strong>Tür:</strong> <FisTuruRozeti tur={x.tur} /></p>
           <p><strong>Kaynak:</strong> {kaynakMetni(x)}</p>
-          <p><strong>TMI:</strong> {x.satirSayisi === 0 ? 'Boş' : `${x.satirSayisi} satır`}</p>
+          <p><strong>CORE:</strong> {x.satirSayisi === 0 ? 'Boş' : `${x.satirSayisi} satır`}</p>
           <p><strong>Logo:</strong> <LogoDurumRozeti logo={x.logo} />{x.logo.gonderimSekli !== null && ` · ${FIS_GONDERIM_ETIKETI[x.logo.gonderimSekli]}`}</p>
           {x.logo.kayitNo !== null && <p><strong>Logo kayıt no:</strong> {x.logo.kayitNo}</p>}
           {x.logo.neden !== null && <p><strong>{hatali ? 'Son hata' : 'Not'}:</strong> {x.logo.neden}</p>}
