@@ -8,7 +8,7 @@ Her madde: kural / nerede / nasıl uyumlanır. İşaretler: DOĞRULANDI, VARSAYI
    (durus-nedenleri), `model_belge_id` (cizimler), (malzeme, op_no) -> rota adımı (rota). Uyum: ayrı göçle. VARSAYIM: op no rota adımının op numarasıdır.
 3. Rota onayı: tanımın rota adımı var mı denetlenmiyor; rota iptal ya da op silinince tanım kalır. Uyum: rota `disari.ts` okuması.
 4. Kapandı (2028): Arkon markalama paneli seriyi istemcide üretmez; `disari.ts`'teki `useTerminalMarkalama` ile `markala` ve `dogrula` uçlarına gider.
-   Açık: operatörün okuma yetkisi (2048); karar gelene kadar terminal okuması `sayfa.markalama` ister.
+   Operatör terminal okumaları için `sayfa.markalama` alır (2048 b + teyit, göç 20261103174800).
 5. Kalite: red ve hurdanın KM NCR kaydına bağlanması (karar 4a). Uyum: kalite modülü `disari.ts` ile, akış akış.
 6. Hurda nedenleri `GET /hurda-nedenleri`'den okunur; o ucun okuma yetkisi `sayfa.markalama`'yı içermez. Yöneticide çalışır; kalite rolünde 403 olur.
    Uyum: durus-nedenleri okuma listesine `sayfa.markalama` (BASKA-MODUL-ISTEKLERI).

@@ -347,8 +347,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // CNC Kurulum'u görmez, okumaz, takım değişimi yazmaz (1393 c+, 1458 a, kart #1454).
       // Ctrl K'de yalnız kendi istasyonunun emirlerini arar (kullanıcı kararı 16.10.2026).
       'uretim-emirleri.ara-istasyon',
-      // Markalama istasyonunda seriyi sunucudan alır ve doğrular; durum ve tanım yazmaz (2030 a + teyit).
-      'markalama.seri-ver'],
+      // Markalama istasyonunda seriyi sunucudan alır ve doğrular; durum ve tanım yazmaz (2030 a + teyit). Terminal panelinin
+      // okumaları için Markalama sayfası (2048 b + teyit).
+      'markalama.seri-ver', ...SAYFA('markalama')],
     insan_kaynaklari: [...MESAJ, ...STOK_ISTEK, ...IK_UZMANI, 'kisiler.oku', 'kisiler.yaz', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU, 'profil.geri-bildirim-oku'],
     satin_alma: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA, 'satin-alma.oku', TALEP, TALEP_SAYFASI, 'satin-alma.yaz', 'satin-alma.ayar', 'finans.kur-yaz', 'uretim-emirleri.fason', ...SAYFA('stok', 'malzemeler', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.satinalma'],
     muhasebe_finans: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'finans.oku', 'finans.maliyet-oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...FIRMA, 'satin-alma.oku', ...SAYFA('uretim-emirleri', 'emirler', 'stok', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.finans', ...SIPARIS_YAZ, 'projeler.oku'],
@@ -553,7 +554,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2)', [operator, await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('operator-depocu'),
-      ['arkon.operator', ...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort(),
+      ['arkon.operator', ...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI].sort(),
     );
 
     const cam = await kisiEkle('cam-satinalmaci', 'cam');
@@ -572,7 +573,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'denetim.oku'), ($1, 'sayfa.terminal'), ($1, 'eski.islem')", [ek]);
     const al = async (): Promise<string[]> => ((await giris('cokrollu', PAROLA)).json().kullanici.islemler as string[]).sort();
 
-    const OPERATOR = [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'uretim-emirleri.ara-istasyon', 'arkon.operator', 'sayfa.kuyruk', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', ...TESIS_TALEBI].sort();
+    const OPERATOR = [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'uretim-emirleri.ara-istasyon', 'arkon.operator', 'sayfa.kuyruk', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama', ...TESIS_TALEBI].sort();
     assert.deepEqual(await al(), OPERATOR);
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2)', [id, ek]);
     assert.deepEqual(await al(), ['denetim.oku', ...OPERATOR].sort());
