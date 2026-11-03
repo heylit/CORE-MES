@@ -5,7 +5,6 @@ Modül `paylasilan/kapali-moduller.ts` listesindedir: uçları kaydedilmez; sayf
 Listeden çıkarmadan (açmadan) önce kapanacak:
 - KD-050 ve KD-060 (`denetim/KOD.md`): belge deposunda sahiplik ve sahte zaman kanıtı.
 - 1057 a K1: ek dosyası içeriğinin tarayıcıda çalışması (XSS).
-- ADR 0021'deki dış erişim işleri bu modül açılmadan başlamaz.
 
 ## Bağlamada kapanacak
 | Kural / konu | İstisna | Nasıl uyumlanır |
@@ -27,3 +26,11 @@ Listeden çıkarmadan (açmadan) önce kapanacak:
 ## Sunucuda zorunlu olup eksik kalan
 Belge deposu kuralları (yol, erişim, sürüm, kilit, ek boyutu, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Kapalı modül (1067 teyit, 28.10.2026)
+
+- ADR 0021'deki dış erişim işleri bu modül açılmadan başlamaz.

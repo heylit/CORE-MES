@@ -30,8 +30,6 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
     ya da bağlamada eşleme türü eklenip sistem yazımı (kullanıcı kararı).
 13. Tanım gönderimi `GEREKLI_METOTLAR` dışındadır / `ISTEGE_BAGLI_METOTLAR` yalnız bildirilir / canlı WSDL doğrulanınca gerekli listeye alınıp alınmayacağı kararlanır.
 14. Stok kaynağı kart türü süzgeci (hammadde, yarı mamul, mamul; yalnız `aktif` kart) VARSAYIM / `tanim-kaynagi.ts` / kullanıcı kararıyla genişletilir.
-15. Tanım gönderiminde niyet bir tur önce yazılır; süreç niyet ile gönderim arasında yeniden başlarsa kayıt `belirsiz` olur (yanlış alarm, çift gönderim değil) /
-    `smartes_tanim_giden` / SmartES'te kontrol edilip elle temizlenir (arayüz yok).
 
 16. Belgede tanımı olmayanlar (VARSAYIM; SmartES firmasına sorulur) / `kurallar.ts` / cevap gelince yalnız ilgili satır değişir:
     a) KAPANDI (kullanıcı 20.10.2026): `IsErpOK` / `IsErpRED` OK ve RED adedinin ERP'ye aktarıldı işaretidir, yalnız ERP tarafı yazar; belgedeki
@@ -47,11 +45,7 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 17. İş emrine bağlı duruş okunmuyor / WSDL'de ayrı metot yok (kullanıcı 20.10.2026), yalnız iş emrisiz duruş okunur / `OKUMA_METOTLARI.durus` /
     dolaylı yollar `ActiveModeList` ile `DownTimeStatusListWithoutWorkOrder` makine ve zaman kesişimi; firmaya soruldu (CustomReport, OEEReport,
     salt okunur SQL). Duruş satırının alan adları (`DOWNTIME_NAME`) WSDL şemasından doğrulanacak.
-18. Alarm satırında kimlik yok: kayıt makine kimliği, alarm tipi, alarm no ve başlangıçtan türetilen kimlikle tekildir (`alarmKimligi`, SHA-256'nın
-    ilk 52 biti); şema değişmedi. Her alarm turunda makine sayısı kadar istek gider; bir makinenin okuması düşerse pencerenin tamamı yeniden okunur.
 
-19. Özet içeriği değişti (`Multipler`, stok açıklaması 150): bağlantı açılınca daha önce gönderilmiş her iş emri bir kez yeniden gider (zararsız
-    güncelleme). Bugün bağlantı hiç açılmadı (VARSAYIM).
 20. KAPANDI (#2141): `kurulum/smartes.md` madde 3 ve 4 belgedeki metot adlarıyla güncellendi.
 
 21. Parametre adlarının harfi / kullanıcının WSDL'inde `WorkOrderStatusID`, `WorkOrderStatusFilter`; kodda `Workorder...` (`kurallar.ts:263`, `:276`).
@@ -62,3 +56,16 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 
 ## Sonra
 9. Okuma penceresi ve aralıklar (5/15 dk, 24 saat üst sınır, 15 dk örtüşme) VARSAYIM; gerçek hacimle ayarlanır.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak
+
+- Tanım gönderiminde niyet bir tur önce yazılır; süreç niyet ile gönderim arasında yeniden başlarsa kayıt `belirsiz` olur (yanlış alarm, çift gönderim değil) /
+    `smartes_tanim_giden` / SmartES'te kontrol edilip elle temizlenir (arayüz yok).
+- Alarm satırında kimlik yok: kayıt makine kimliği, alarm tipi, alarm no ve başlangıçtan türetilen kimlikle tekildir (`alarmKimligi`, SHA-256'nın
+    ilk 52 biti); şema değişmedi. Her alarm turunda makine sayısı kadar istek gider; bir makinenin okuması düşerse pencerenin tamamı yeniden okunur.
+- Özet içeriği değişti (`Multipler`, stok açıklaması 150): bağlantı açılınca daha önce gönderilmiş her iş emri bir kez yeniden gider (zararsız
+    güncelleme). Bugün bağlantı hiç açılmadı (VARSAYIM).

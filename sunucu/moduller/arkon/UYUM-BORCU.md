@@ -10,7 +10,6 @@ Sayım (kullanıcı kararı 104 a, 18.10.2026): modül başına 30 maddelik bor�
 ## Veri
 
 - Belge deposu jsonb: `arkon_belge` (depo + kimlik, `govde jsonb`). Paket, sonuç, numune, çizim, bakım, ölçü aleti ve ayar belgeleri Arkon'un biçimiyle saklanır; sunucu gövdeyi yorumlamaz, sütun ve kısıtla korumaz. Kısmen kapandı: TMI'nin okuduğu sonuç (durum, sayaçlar) ve paket (no, istasyon, sürüm) alanları türüyle denetlenir (`arkonBelgeAlanlari`); öteki alanlar serbest.
-- Dosya deposu ortak `dosya` modülüdür (kart #732); yükleme şeridi `arkon_dosya_parcasi` Arkon'da kalır. Dosya JSON gövdesinde base64 parçalarla taşınır.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): sabit karar "Arkon kaydı operatör günlüğü, asıl üretim kaydı emirde" bugünkü kurguyu onaylar; madde borç değil, kurgu kaydıdır (sabit kimlikler, Arkon bağı iş emrine). Sayım Arkon'un kendi kaydındadır: `arkon_kayit` (`tur = counts`), yalnız eklenir; aynı işlemde TMI üretim emrine yansır (bkz. "TMI üretim emrine yansıma"). TMI terminal sayacı TMI'nin kendi sayacıdır (kart #211).
 - Sürüm, liste ve kısıt çekirdek kalıplarıyla değil: belge sürümü milisaniyedir ve çakışma 200 cevabında `sonuc: 'cakisma'` ile döner (`surumluGuncelle` yok, kart #168); listeler sayfasızdır (`sayfaliListe` yok, kayıt okuması `sinir` ile en çok 20000 satır, kart #90; sınıra ulaşan liste `kesildi` döner ve kabuk kullanıcıya söyler); kısıt ihlali modül iletisine çevrilmez (`kisitKorumali` yok, kart #169).
 - Veri kapsamı (kapandı, kart #215, birinci tur denetiminden sonra sıkılaştırıldı): kişinin iş merkezi kısıtı `#cekirdek/kapsam.ts` ile sunucuda uygulanır. KISITLI kişide kayıt ya da belge `wc`, `machine` (istasyon), `mc` (makine), `pkgId` ve `orderNo` alanlarından EN AZ BİR iş merkezi çözmeli ve çözülenlerin hepsi kapsamda olmalıdır; tanımsız, biçimsiz (dizi, nesne, sayı) ya da TMI kodundan farklı (küçük harf, boşluklu) kod, konumsuz kayıt, olmayan paket, tüm tesis planlı duruşu (`scope: 'all'`) ve geçersiz duruş kapsamı 403. Kodlar TMI'deki kodla tam eşleşir; pasif istasyon ve makine çözüme dahildir. Sonuç belgesi paketin istasyonundan çözülür (paket tek sorguyla okunur; emirden türeyen taslak yalnız `tmi-ue-` kimliğinde aranır). Yazmada var olan belgenin ve yeni gövdenin yeri ayrı ayrı denetlenir (alan silerek konumsuz yapma 403). Listelerde kapsam dışı ve konumsuz satırlar görünmez; tek belge okuması kapsam dışında boş döner. Kısıtsız kişide eski kural kalır: iş merkezi çözülemeyen kayıt geçer. Çizim, ölçü aleti ve ayar belgelerinin iş merkezi yoktur, kapsam uygulanmaz. KURAL (kullanıcı kararı): kalite, bakım ve lojistik rollerine iş merkezi kısıtı VERİLMEZ; bu roller kendi iş merkezleri dışındaki isteği, arızayı ve malzeme talebini göremeyip üstlenemeyeceği için kısıt verilirse ekranda iş akışı bozulur.
@@ -19,13 +18,10 @@ Sayım (kullanıcı kararı 104 a, 18.10.2026): modül başına 30 maddelik bor�
 
 - KAPANDI (17.10.2026, kullanıcının yazılı onayı, ADR 0007 madde 2 değişikliği #1606): okuma uçları (13) ve yazma uçları (9) `yetki: { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }` ister (`uclar.ts` `ARKON_SAYFASI`); Arkon rolü olan her varsayılan rol bu sayfalardan birini görür, kimse yazma kaybetmez (`arkon.test.ts` "varsayılan rollerden"). Önceki kayıt: Okuma uçları (7) `yetki: { biri: ['sayfa.arkon'] }` ister (3. tur N3; Arkon rolü olan her TMI rolünde `sayfa.arkon` var, rol dağılımı testi). Yazma uçları (6) `yetki: 'oturum'` kalır: yazma uçları #223'te (tek yetki matrisi) taşınacak; ara durum bilerek karışık. Her uçta Arkon rolü serviste `rolGerekli` ile denetlenir (rolü olmayan 403) ve "her uç" testi aynen kalır. KALAN: elle kurulmuş, Arkon rol işlemi olup `sayfa.arkon` olmayan rol okuyamaz ama yazabilir.
 - Denetim kaydı: dosya parçası (`/arkon/dosyalar/:ozet/parca`) ve eksik dosya sorgusu (`/arkon/dosyalar/eksikler`) `denetim: 'govdesiz'` ile tanımlıdır: satır yazılır (kişi, yöntem, yol, parametre), gövdenin yerine boyutu ve özeti girer (kart #212). Belge ve kayıt yazımlarının (`/arkon/belgeler/.../yaz`, `/sil`, `/arkon/kayitlar/:tur/ekle`, `/arkon/iletiler`) gövdesi deftere tam girer. KAPANDI (karar: tam kalır, kullanıcı 17.10.2026).
-- Yetkiler tek yerdedir: TMI rol x işlem matrisi ve sunucu tabloları (kullanıcı kararı); Arkon'un Ayarlar > Yetkiler ekranı yetki kaynağı DEĞİLDİR (tam taşıma ayrı kartta). Ara adım (kart #215): `kv/perms` yazımı ve silmesi yönetici dahil herkese 403 ("Yetkiler TMI'de yönetilir"); okuması sunucu tablolarından türetilmiş matristir (`kurallar.ts` `yetkiMatrisi`: Arkon varsayılanı PERMS0 ile sunucu kuralının kesişimi); tabloda önceden yazılmış `kv/perms` değeri yok sayılır. Eşleme (izin anahtarı -> sunucu kuralı): `prod.run` -> kayıt yazarları (events, counts); `prod.ack` -> `call-ack` iletisi + calls yazarları; `logi.req`, `logi.handle` -> logi yazarları; `plan.edit` -> `pkg-order` iletisi + pkgs yazarları; `down.edit` -> downs yazarları; `pkg.edit` -> pkgs yazarları; `pkg.publish` -> `pkg` iletisi + pkgs yazarları; `pkg.del` -> pkgs silicileri; `pkg.approve` -> `pkg-approved` iletisi + pkgs yazarları; `q.meas` -> meas yazarları ve kalite kararı rolleri; `q.decide` -> kalite kararı rolleri + requests yazarları; `gauge.edit` -> gauges yazarları; `maint.work`, `maint.plan` -> maint yazarları; `adm.shifts` -> `kv/shifts` yazarları; `adm.audit` -> yalnız yönetici. EŞLENMEYEN (Arkon varsayılanı aynen): `page.op`, `page.board`, `page.plan`, `page.prep`, `page.quality`, `page.maint`, `page.report`, `page.draw` (yalnız ekran görünürlüğü), `prod.fix`, `prod.station`, `q.report`, `adm.users`, `adm.plant`, `adm.backup`, `adm.demo`, `adm.reasons`. Bugün Arkon varsayılanı ile sunucu kuralı bire bir örtüşür; matris yalnız sunucunun reddedeceği eylemi gizlemek için kesişimdir. Gevşek taraf: sunucunun kabul edip matriste olmayan eylem vardır (örnek: operatör `logi.handle` anahtarı olmadan da `logi` belgesi yazar; sunucu depo tablosu anahtar başına değil depo başınadır). Sunucu tabloları tabandır: kaynak yetki tek yerde olana kadar rol işlemi (`arkon.*`) genişlemez.
 
 ## Yapı
 
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): karar F (teslim olduğu gibi) ve "ekran aynı, veri ve kural taşınır" ilkesi Arkon ekranının TMI tasarımına taşınmasını istemiyor (VARSAYIM: lint muafiyeti de bu karara dahil). Üst düzey `arkon/` klasörü ve ayrı derleme: Arkon kaynağı (`arkon/web`, `arkon/shared`) modül klasörlerinin dışındadır, TMI lint kurallarından muaftır, `npm run derle:arkon` ile ayrı derlenir ve istemcinin `/arkon-mes/` yolundan çerçevede sunulur. Ekran TMI tasarım değişkenlerini ve ortak bileşenleri kullanmaz.
-- Dondurma sonrası (kullanıcı kararı 114, 19.10.2026). Anlık ileti yoklamayla: istemci köprüsü `/arkon/iletiler` ucunu 2 saniyede bir okur (Arkon'un EventSource beklentisi yerine); iletiler `arkon_ileti` tablosunda 15 dakika tutulur.
-- Dondurma sonrası (kullanıcı kararı 114, 19.10.2026). Çerçeve bağlaması standart köprüyle değil: görünüm aktarımı aynı kökenli çerçevenin adres işaretine (`location.hash`) doğrudan yazıp `hashchange` dinleyerek yapılır; `useCerceveGorunumu` ve `cerceve-iletisi.ts` iletileri kullanılmıyor. Veri bağlantısı çerçeve penceresinin `fetch` ve `EventSource` işlevlerini değiştirerek kurulur.
 - TD (3. tur, kullanıcı kararı TDy a; KAPANDI, tarayıcıda görüldü 18.10.2026, başsız Chromium, örnek veri; kalıcı ekran testi `ekran-testleri/arkon.spec.ts` ayrı çekme isteğinde "başka kökene istek göndermez": gömülü çerçevede başka kökene `fetch` 403 alır ve ağa çıkmaz, Ayarlar > Genel'de Bağlantı kartı yöneticiye de görünmez): TMI içinde Arkon'un başka kökene giden her isteği köprüde 403 alır ve gönderilmez (olay akışı da açılmaz); aynı kökenin dosyaları ve sanal adres geçer. `arkon:server` her çerçeve açılışında sanal adrese yeniden yazılır. Gömülüyken Ayarlar > Genel'deki Bağlantı kartı kimseye görünmez; tek başına açılan Arkon'da yalnız yöneticiye görünür (`arkon/web/src/app/gomulu.ts`). Sunucuda reddedilecek uç yoktur: adres yalnız tarayıcıda tutulur. İkinci katman CSP `connect-src 'self'` (zorlayıcı kipe geçince). Kart 1418: çerçeve kalktı; ekran testi yeni Ayarlar'da Bağlantı kartının olmadığını ve dışarı istek gitmediğini sınar, başka kökene istek yeni ekranın taşıyıcısında durur (`yeni/veri/tasiyici.test.ts`).
 - İçerik güvenliği ilkesi (CSP), adım 2 (kullanıcı kararı CSP a, 08.10.2026; KAPANDI, tarayıcıda görüldü 18.10.2026, başsız Chromium, örnek veri; kalıcı ekran testi `ekran-testleri/arkon.spec.ts` ayrı çekme isteğinde "zorlayıcı CSP": sekiz Arkon sayfası zorlayıcı başlıkla açılır, yalnız-rapor başlığı yok, `unsafe-eval` yok, çerçevede ihlal 0; Android ve Safari "Denenemeyenler" maddesinde): Arkon sayfası zorlayıcı `Content-Security-Policy` başlığıyla sunulur (adım 1 yalnız-rapordu; ikinci tarayıcı turunda bütün akışlarda ihlal 0, DOĞRULANDI `ikinci-tur/SONUC.md` bölüm 3). İlke değişmedi; `unsafe-eval` ana sayfaya girmez, yalnız `vendor/occt/step-calisan.js` cevabındadır (`sun.test.ts`). Başlığı yalnız `arkon/sun.ts` ara katmanı ekler. Canlı kurulumda (kart #175) aynı başlık Arkon'u sunan katmana da eklenir; satır içi iki betiğin özeti o katmanda da sunulan `index.html`'den hesaplanır. AÇIK: Android sarmalayıcıda (ArkonAndroid) ve Safari'de denenmedi. Kart 1418: TMI içinde `/arkon-mes/` sayfası artık açılmaz; çerçevedeki CSP ekran testi kalktı, başlık `sun.test.ts`'te sınanır.
 - Dondurma sonrası (kullanıcı kararı 114, 19.10.2026). Mobil düzende küçük dokunma hedefleri (B6, ekran ölçümü 08.10.2026, `/mnt/project-files/tur3-raporlar/ekran-olcumu.md`; kod yok, kullanıcı kararıyla borçta): 360 ve 768 genişlikte raporlardaki "CSV" düğmeleri 36x22 px (5 adet), çizimde "Yeni" 36x22 px, planlamada onay kutusu 19 px; üst etiketler (`span.over`) 10-11 px, raporlarda 47 metin 12 px altında. Arkon'un kendi tasarımıdır; ekrana oturtmada dokunulmaz. 1280'deki küçülme (B1, `useFit` zoom 0.57): KAPANDI (#331, kabuk; kart #172).
@@ -98,13 +94,10 @@ KISMEN KAPANDI (#199 oturtma): TMI köprüsü (`istemci/src/moduller/arkon/bagla
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): tablet `audit`'i yalnız yerelde tutar (`arkon/web/src/data/kayit-gonderimi.ts` `YALNIZ_YEREL ... 'audit'`; Y8). Her rol `audit` türü yazar (ekran her değişiklikte `audit()` çağırır): 400; günlüğü sunucu üretir. Kayıp yoktur ama ekranın kendi satırı yerelde kalır.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kullanıcı kuralı gereği tasarımdır (Veri bölümü KURAL); ret `reddiBildirimi` ile görünür. Kısıtlı (iş merkezi kapsamlı) planlama, amir ve operatör: kapsam dışına paket taşıyamaz, tüm tesis planlı duruşu yazamaz ve silemez, başka iş merkezinin kaydını ve belgesini göremez (403 ya da boş liste); kalite, bakım ve lojistik rollerine kısıt verilmez (kural).
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): aynı kural (kalite, bakım, lojistik rollerine kısıt verilmez); ret bildirilir. Kısıtlı kişi başka iş merkezinin çağrısını üstlenirse bakım/arıza belgesi yazımı 403.
-- Yönetici Arkon matrisini (Ayarlar > Yetkiler) genişletir: ekran düğmeyi gösterir, sunucu reddeder. `kv/perms` yazımı artık hep 403; okunan matris sunucudan türediği için ekran düğmeleri sunucuyla uyumludur (gevşek taraf hariç).
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): Terminal kural 2/5 ile yerel yükleme ekrandan kalktı (`FARK.md` "Yerel dosya yükleme kalktı"). Hazırlıkta dosya yüklemesi: kişi sınırı aşılınca yeni parça 429 ile reddedilir; en eski yükleme atılmaz (Terminal kural 2/5); depo dolunca da 429. Başkasının aynı özetli yüklemesi artık engel olmaz. Arkon dosya yüklemede cevabın `tamam` alanına bakmaz. Terminal kural 2/5: yerel yükleme ekrandan kalktı; uç yalnız iç eşitleme ve .arkon içe aktarma için kalır (kalktı: ekrandaki yükleme).
 - KAPANDI (kalıcı sınır, kullanıcı kararı 114 evet, 19.10.2026): TMI içinde (sunucu kipi) tanıtım verisi tohumlanmaz (`hazirlik.ts` `APPMODE.demo`). Tanıtım kipinde tohumlama (`seedRules`, `seedV11`, örnek paketler): yazma yetkisi olmayan rol Hazırlık ya da İstasyonlar sayfasını açarsa 403.
-- Yönetici `kv/reasons`, `kv/scraps`, `kv/plant` ve `kv/perms` yazar: 403 (TMI'de yönetilir).
 - KAPANDI (kullanıcı kararı 17.10): bekleyen numune isteği yalnız ölçüm yetkisi (`q.meas`) olan kişi seçince `measuring`'e geçer (`data/numune.ts secinceOlcumeAlinir`); amir, planlama ve hazırlık yalnız görür, 403 çıkmaz.
 - KAPANDI (kullanıcı kararı 17.10, ön deneme bulgu 1-2): "Numune zamanı gelince otomatik kaliteye gönder" retten sonraki "Tekrar ölçüm"de çalışmaz (`data/otomatik-numune.ts`). Önceden terminal retten hemen sonra yeni numune açıyor, gerekçeli ret kartı ekrandan siliniyordu; şimdi ret kartı kalır, operatör düzeltip numuneyi kendisi gönderir. Zamanı gelen numune kendiliğinden gitmeye devam eder, reddedilen ölçü ona katılmaz.
-- Operatör numune kararı ya da onay yazar (bekleme dışı durum): 403; operatör ve amir `src: 'quality'` ölçüm yazar: 403.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ileti retleri artık sessiz değil, köprü bildirir (`istemci/src/moduller/arkon/baglanti.ts` `const ret = reddiBildirimi(...)`). İleti hızı sınırı (dakikada 120) ve çok baytlı 8 KiB aşımı: ileti öteki cihaza gitmez.
 - YAZILDI, tarayıcıda görülünce kapanır (19.10.2026, sunucu testiyle sabit: `guvenlik.test.ts` "ileti: Arkon'un gerçek ileti gövdeleri geçer" operatör ve amir `result` iletisi 200). Operatörün `result` iletisi 403 (bulgu 18.10.2026; iş geçişinde tarayıcıda görüldü, başsız Chromium, örnek veri; ölçümde koddan): tablet iş geçişinde eski işin sonucunu ve operatör ölçümünü `result` iletisiyle duyurur (`operator.ts` `isGec`, `setMeas` -> `saveResult(..., 'result')`), sunucu bu türü yalnız yönetici ve kaliteye açar (`kurallar.ts` `ILETI_GONDERENLERI`); operatör her geçişte "İleti öteki cihazlara gitmedi" bildirimi görür, öteki cihazlar (Hazırlık'taki "Operatörden ölçüm geldi") iletiyi almaz. Sonuç belgesi yine yazılır, veri kaybı yok. Kullanıcı kararı 101 a (18.10.2026): ileti operatör ve amire de açılır; YAZILDI ayrı çekme isteğinde (`borc-arkon-sonuc-iletisi`), tarayıcıda görülünce kapanır.
 - KD-001 (KAPANDI, tarayıcıda görüldü 18.10.2026, başsız Chromium, örnek veri: duraklatma olayı 503 alırken gönderim kuyruğuna (`outbox`) girdi, sunucu düzelince kendiliğinden gitti ve TMI emri duraklamış oldu; #383): `Log.add` ve `Docs.put`/`Docs.del` sunucu 5xx, 401 ya da durumsuz hatada kuyruğa alır (`arkon/web/src/data/gonderim-hatasi.ts`); açık ret (öteki 4xx) `Log.add`'de `arkon-rejected` olayı olur, `Docs.put`/`Docs.del`'de çağırana fırlar.
@@ -165,7 +158,6 @@ KISMEN KAPANDI (#199 oturtma): TMI köprüsü (`istemci/src/moduller/arkon/bagla
 ## Zorlayıcı CSP kontrolünün gözlemleri (08.10.2026)
 
 - Operatörde ölçü aleti 403 (KAPANDI, #351): tablet, rolün okuyamadığı depoyu (`gauges`, `maint`, `draws`) istemez (`arkon/web/src/data/depo-okuma.ts`); liste sunucunun `okuyabilirMi` kuralıyla testle eşit (`kurallar.test.ts`).
-- Ayarda basılan İyi ve Hurda (KARAR, kullanıcı kararı AY1 a, 08.10.2026): bugünkü gibi sayılır; başlamamış emre gelen sayım bekler ve üretim başlayınca TMI'ye yazılır (FARK.md, A3 bekletme kuralı). Kod değişmedi. Ayar hurdasını ayrı izlemek istenirse uretim-emirleri'nden yeni alan gerekir; şimdilik istenmedi.
 
 ## Diğer
 
@@ -178,24 +170,13 @@ KISMEN KAPANDI (#199 oturtma): TMI köprüsü (`istemci/src/moduller/arkon/bagla
 - Görünüm (KAPANDI, 17.10.2026, tarayıcıda): Ayarlar > Üretim > Kurallar kartında sayı girişli iki kuralın (dokunulmazsa kilitle, çağrı yükseltme) etiket ve açıklaması üst üste binmiyor. Ekran testi altyapısıyla (Chromium, örnek veri, yönetici) 360, 768 ve 1280 genişlikte kart çekildi; başlık, açıklama ve sayı girişi kutuları ardışık, kesişme yok. 10.10.2026'daki çakışma o tarihten sonraki kabuk ölçekleme düzeltmesiyle (#331) gitmiş olmalı (VARSAYIM).
 - Davranış (KAPANDI, 17.10.2026, koddan): `putDoc` sonrası kendi cihazdaki liste. Sözü edilen malzeme isteği ve teslim paneli kaldırıldı (efaea5ea; malzeme ve teslim Stok'ta). Kalan bütün `putDoc`/`delDoc` çağıranları (bakım, ölçü aleti, planlı duruş) kaydın ardından listeyi kendisi yeniler (`reload()` ya da `setDOWNS`); `Bus.send` gönderene dönmez, gerek de kalmadı.
 
-## Not
-
-- Logo ile ilgisi yok: Arkon tablolarında malzeme, firma, sipariş ya da stok hareketi tablosu ve Logo alanı (kayıt numarası vb.) yoktur. Taslak paketteki `material` alanı boş metindir.
-
 ## İş emri paketi (kart #199 adım 1, bağlamada kapanacak)
 - Paket adımları rotanın geçerli talimatından geliyor; emre kopyalanan kontrol listesi uretim-emirleri `disari`'sinde yok (BASKA-MODUL-ISTEKLERI 11).
 - Makine kaynağının istasyonu makinenin bugünkü istasyonundan; iş emrinin istasyonu toplu okunamıyor (BASKA-MODUL-ISTEKLERI 12).
 - Akışlı adımda devir adedi dolunca sonraki iş emrinin başlaması ve komutların iş emri kimliğiyle çağrılması adım 2'dedir; bugün sıradaki iş emri dışındaki paketin kaydı işlenmez.
 
 ## Planlı duruş Vardiya'da (kapandı, A6, kart #519)
-- `downs` deposu artık Vardiya planlı duruş kayıtlarıdır (`kurallar.ts` `durustenBelgeye`, `belgedenDurusa`; `servis.ts` `durusBelgesiYaz`, `durusBelgesiSil`). Belge kimliği Arkon'dan açılmışta Arkon'un kimliği (kaynak kimliği), Vardiya'dan açılmışta `tmi-pd-<kimlik>`; sürüm içerikten. Arkon tabanı Vardiya kaydı kilitlendikten sonra denetlenir; Vardiya ekranından araya giren yazım Arkon'a çakışma (silmede 409) döner.
-- Yazma Arkon rolü (admin, plan, lead) VE `vardiya.durus-yaz` ister; kapsam hem Arkon kodlarıyla hem Vardiya kuralıyla (VR-13) denetlenir. Tanınmayan neden, iş merkezi ya da istasyon kodu 400.
 - KAPANDI (17.10.2026, kullanıcının yazılı onayı): `arkon_belge` içindeki eski `downs` belgeleri okunmuyordu (kullanıcı kararı 5b: taşınmaz, boş başlar); `20261017075045_arkon_eski_durus_belgeleri.sql` siler, testi `eski-durus-goc.test.ts`. Geri dönüş göç öncesi yedekten.
-
-## Vardiyalar (A7, #517) - bağlamada kapanacak
-
-- Arkon `currentShift`, OEE ve vardiya kilidi yalnız vardiya adı ve saatini kullanır; Vardiya modülünün iş merkezi x gün matrisi Arkon'a gitmez. Tatil ve kapalı günler gider (kv `holidays`, `arkonTatilleri`): o gün başlayan vardiya penceresi yoktur.
-- Aktif vardiya yokken Arkon varsayılan vardiyalarıyla (SHIFTS0) çalışır.
 
 ## Ölçü aletleri (A7, #518) - bağlamada kapanacak
 
@@ -213,7 +194,6 @@ KISMEN KAPANDI (#199 oturtma): TMI köprüsü (`istemci/src/moduller/arkon/bagla
 ## Terminal makine seçimi ve devralma (kart #1148) - bağlamada kapanacak
 - Kural: ekran sunucu kuralını yansıtır, kendi kuralı yoktur. İstisna: makine seçimi ve `kayittakiMakineler` yalnız ekranda (`arkon/web/src/data/makine-secimi.ts`); sunucu kodu çözer ve TMI denetler. Nasıl uyumlanır: Hazırlık/plan makineyi iş emrine yazdığında seçici yalnız atanmışı geçersiz kılma işi görür.
 - Kural: sunucu ret sonrası ekran durumu TMI ile aynı kalmalı. Kapandı: reddedilen başlatmada ekran cevaptaki `tmiDurum`a eşitlenir; devralmada sunucu iki işin TMI hâlini `$durum` iletisiyle istasyona yayar, öteki tablet de eşitlenir (`devralmaHaliniYay`, `durumIletisi`).
-- Kural: ortak sahiplik. İstisna: katılım (`uretim_emirleri_katilim`) ve makine kullanımı uretim-emirleri'ndedir; Arkon yalnız `disari.ts` ile çağırır. Eksik okuma (Dondurma sonrası (kullanıcı kararı 114, 19.10.2026).): istasyon makinelerinin canlı doluluğu ekranda gösterilemiyor (makine seçicide "dolu" işareti yok); `uretim-emirleri/disari.ts` için açık kullanım okuması istenebilir.
 
 ## Üretim anomalisi (kart #1149) - bağlamada kapanacak
 
@@ -223,7 +203,6 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 - **Üretilen = günün net sağlam sayımı (VARSAYIM):** istasyon ve kişi için kaydı olmayan kimlik 0 sayılır (o gün hiç giriş yok; bilinmeyen değil). Sayım satırındaki kişi girişi yapan kişidir, yerleşimin sahibi olmak zorunda değil: kişinin üretileni kendi girdiği sayımdır. İstasyonun üretileni plana girmemiş iş emrinin sayımını da içerir (istasyon bazlı sayım iş emrine bakmaz).
 - **AR-AN-1 (VARSAYIM):** süre, istasyonun son girişinden (yoksa gün başından) şu ana kadar planlı pencerelerin (iş emri yerleşimi x kaynağın net aktif süresi) birleşimidir; kaynaklardan birinin takvimi bilinmiyorsa süre null. İzinli kişinin kaynağı pencereye girmez.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): gün içinde biten iş `bitenIsBeklenen` ile beklenene girer (`arkon/kurallar.ts` `bitenIsBeklenen`, `servis.ts` çağrısı; #1306); kalan kısım aşağıda "Biten iş emri (kapandı, kısmen)" maddesinde açık. Planı olan ama gün içinde BİTMİŞ iş emri canlı plandan ve `planlanacakIsEmirleri`'nden düştüğü için beklenene girmez; üretilen istasyon sayımında kalır (VARSAYIM: plandan düşen iş emri o günkü plana sayılmaz; biten iş fazla üretilen gibi görünebilir).
-- Okuma başına makine satırı için `isEmriSureOzeti` üç sorgu atar (başlamış iş emri sayısı kadar). Toplu okuma uretim-emirleri'nin `disari.ts`'inden istenmeli (Arkon tek başına kapatamaz).
 - **Beklenen adet varsayımları (VARSAYIM):** verim `planAyarlari().verimYuzde` (satırı olmayan istasyon %100); birim süre `adimEtkinSureleri` (makineye özel gerçekleşen varsa o), yoksa iş emrine kopyalanan süre; kaynağın günlük net süresi yalnız o günün vardiyalarındandır (önceki geceden taşan vardiya `calismaTakvimi`'nin verdiği kadar).
 - **İzinli kişi (VARSAYIM):** `ik/disari.ts izinliKisiler(db, tarih)` o gün onaylı izindeki kişileri verir; kişi satırı "izinli", beklenen 0. Makineye atanmış herkes izinliyse makine de beklenene girmez; atamasız makine izne bağlı değildir. Kişi-makine eşlemesi `makineKisiAtamalari` (yüzdeli atama); `ik_personel` ile `kisi` eşlemesi ik modülünde `kisi_id` alanıdır (DOĞRULANDI: `izinliKisiNolari`).
 - KAPANDI (kullanıcı kararı 17.10 "60 dakika ve yüzde 0 olarak kalsın, ayarlara da koy"): eşik varsayılanları giriş yok 60 net aktif dakika, eksik adet toleransı %0. İkisi zaten TMI Ayarlar'dadır (`paylasilan/ayarlar/arkon.ts` `arkon.anomali-giris-yok-dk`, `arkon.anomali-adet-tolerans-yuzde`; `ayarlar.yaz` ile değişir), boş bırakılırsa kural kapanır; yeni kod gerekmedi.
@@ -260,7 +239,6 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `paylasilan/islemler/arkon.ts` `'arkon.anomali-kisi'` tanımlı, `arkon/uclar.ts` istatistik ucunda kullanılıyor. **Kişi kırılımı (karar 2026-10-14, yalnız yönetici):** yeni işlem `arkon.anomali-kisi`; rol satırı eklenmedi (yönetici rolü bütün işlemleri taşır,
   kişiye ek yetki olarak da verilebilir). Bugünkü panoda da hazırlık ve planlama artık kişi satırını görmez.
 - **Plansız duruş:** eksik adedin nedeni olarak gösterilmiyor; duruş kaydının okunacağı yer belli değil (BİLMİYORUM).
-- **Gece vardiyası:** üretilen gün sınırıyla (00:00) kesilir, beklenen o günün vardiya takvimiyle; gece yarısını aşan vardiyada iki gün arasında kayma olabilir.
 - **Yeniden hesapla:** kesin günü yeniden hesaplayan yönetici komutu yok.
 - **Ekran:** KAPANDI (tarayıcıda görüldü 18.10.2026, başsız Chromium, örnek veri; kalıcı ekran testi `ekran-testleri/arkon.spec.ts` ayrı çekme isteğinde "dönem görünümü"): Gün, Hafta ve Ay sekmeleri özet (plan uyumu, kayıtlı gün) ve tarih alanıyla açılır, hata yok. Tarih seçimi tabletin yerel günüdür.
 
@@ -281,7 +259,6 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 - CNC hazırlığı iş emri başına (YAZILDI, tarayıcıda görülünce kapanır; kullanıcı kararı 266 a): talaşlı iş emri paketinin `tmi.hazirlik` uyarısı iş emrinin kendi CNC kurulum onayından okunur (`cnc-kurulum/disari.ts isEmriHazirlikDurumlari`); aynı emrin başka iş emrinin onayı uyarıyı kapatmaz. Uçtan uca test `yansima.test.ts` "266 a". Emir düzeyi okuma (`emirHazirlikDurumlari`) Arkon'da kullanılmıyor; kaldırılması cnc-kurulum sahibinde.
 - Gecikmeli sayım reddi (YAZILDI, tarayıcıda görülünce kapanır; denetim #24 kalanı): kayıt isteğinin cevabı yalnız o istekte sonuçlanan retleri taşır. Bekleyip sonra (başka kayıt isteğinde, arka plan yineleyicisinde ya da yeniden denemede) reddedilen, gizli olmayan nedenle eşlenemeyen ya da "hatali" olan sayım tablet akışına `$tmiRet` iletisiyle yayılır (`servis.ts gecikmeliRetBildir`, `kurallar.ts gecikmeliSayimReddi`); tablet yalnız sayımı yapan kişide cevaptaki retle aynı yoldan adedi geri çevirir ve ret uyarısını gösterir (`arkon/web/src/data/biten-is.ts gecikmeliRet`, `store.ts`). "hatali" o istekte de yalnız iletiyle döner. Testler `yansima.test.ts` "denetim #24 (gecikmeli)", `biten-is.test.ts` "gecikmeli sayım reddi". VARSAYIM (geri alma ucuz): ileti kapsamı kaydın makine, iş merkezi ve emir koduyla süzülür; tablet kapalıyken yayılan ileti 15 dakikalık ileti budamasından sonra kaybolur, o durumda kayıt yalnız "TMI'ye yazılamayanlar" ekranında görünür.
 - Kayıt anı (YAZILDI, tarayıcıda görülünce kapanır; denetim #25): TMI'ye yansıyan komutlar (başlat, devam, ayar, katılım, duraklat, bitir, durdur, sayım) Arkon kaydının zamanıyla (`arkon_kayit.zaman`, tabletin anı; 12 saat geri, 2 dakika ileri sınırlı) yazılır (`servis.ts kayitAniyla`). Uçtan uca test `yansima.test.ts` "denetim #25". VARSAYIM (geri alma ucuz): kayıt emrin son anından eskiyse ya da sunucu saatinden ilerideyse Üretim emirleri reddeder; sayım kaybolmasın diye aynı komut sunucu saatiyle yeniden yazılır (iki yol da testte: "denetim #25" eski kayıt, "denetim #25: ileri" saati ileri tablet). Sunucu saatiyle yazılan satır kayıttan ayırt edilmez (Arkon kaydında tabletin zamanı kalır). Makine devralma (`makineDevralOnayla`) çevrimiçi onaydır, sunucu saatinde kalır.
-- Malzeme · Teslim kutusu (kullanıcı kararı 317 b): operatör ekranında ayrı kutu yoktur; teslim yalnız üst çubuktaki Malzeme · Teslim panelindendir (stok modülü), başlatmada eksik girdi de o paneli açar (`istemci/src/moduller/arkon/baglanti.ts`, kart #1289). AÇIK, ölü artıklar (bilerek bırakıldı, kaldırılması ayrı karar ister): tablet deposunun `logi` eşitlemesi (`arkon/web/src/data/store.ts` KEYPATH, SYNC, yedek), sunucuda `logi` depo kuralı (`kurallar.ts` depo listesi ve istek tamamlama kuralı) ve `logi.req` / `logi.handle` yetki anahtarları (`arkon/web/src/app/ortak-ayarlar.ts`); yetki anahtarı silmek Çekirdek'in rol x işlem alanına dokunur. `logi` kayıtları silinmez.
 - Çağrı bannerı (298, YAZILDI, tarayıcıda görülünce kapanır): banner alıcıyı bildirim modülünün yönlendirmesinden okur (`GET /bildirimler/cagri-yonlendirme/benim`, `arkon/web/src/data/cagri-ekiplerim.ts`); `CALL_ROLES` kopyası kalktı. Yönetici ve vardiya amiri bütün çağrıları görür (Arkon kuralı). VARSAYIM (geri alma ucuz): yönlendirme okunamazsa banner bütün çağrıları gösterir, çağrı kaçmasın diye. Test `cagri-ekiplerim.test.ts`.
 
 ## W7 (23 Ekim test bulguları)
@@ -310,11 +287,6 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
   `stop` kuralını uyarı sayar. KAPANDI (kart 1418, karar 1392 a): eski çerçeve TMI'den kalktı; `/arkon/eski`, `/kuyruk/eski`, `/uretim-terminali/eski` aynı yolun yeni adresine gider. Eski ekran kodu `arkon/web` derlemesinde durur, TMI'den açılmaz.
 
 ## Kalite istasyonu terminali (564 1 b, 6 a, 600 a) - bağlamada kapanacak
-- Lot Kabul'ü kalite adımının sağlam sayısını yazmaz; kalite istasyonundaki parça sayımı sağ sekmedeki kalite panelinden (parça başına) sürer.
-  Lot kararı ile adım sayımının bağı bağlamada kararlaştırılır.
-- Terminal numuneyi `kaliteIstasyonu` ile listeler; stoktaki teslimin "Teslim al" yapılıp yapılmadığı istemcide bilinmez (Arkon istek kaydı
-  stok teslim durumunu taşımaz). Teslim alınmamış numune de listede görünür.
-- Lot büyüklüğü paketin hedefidir (adım adedi); parça bölünmüş pakette parçanın adedidir. Lot kararı Arkon'da düzeltilmez; düzeltme Kalite Merkezi'ndedir.
 - Paralel adım (639e): reddedilen durum kaydından sonra ekrana dönen TMI hâli (`tmidekiHal`) emir düzeyindedir; yansıma satırı iş emrini taşımaz (`sorgular.ts` kilit dışında). İki açık adımda ekran reddedilen adımın hâlini emrin özetinden görür. Ekran işi (aynı emrin iki adımı, uyarı gösterimi) 639f'de.
 
 ## Terminale dosya iletimi (kart #731 A) - bağlamada kapanacak
@@ -323,9 +295,73 @@ Hesap Arkon'dadır (`kurallar.ts` AR-AN-1..4, `servis.ts anomaliler`). İstasyon
 
 ## Cihaz kipi (kart #739 D3) - bağlamada kapanacak
 - Eski çerçeve (`ArkonCercevesi`) kipi sormuyordu. KAPANDI (kart 1418, karar 1392 a): eski çerçeve TMI'den kalktı; `/arkon/eski`, `/kuyruk/eski`, `/uretim-terminali/eski` aynı yolun yeni adresine gider. Çıkıştaki yerel veri temizliği (karar 102 a) `istemci/src/moduller/arkon/cikis-temizligi.ts`'te sürer.
-- Kişisel cihazda sekme kapanırsa ya da sayfa yenilenirse gönderilmemiş kayıt kaybolur (karar 738 a'nın bilinen bedeli; rozet kopukken yazar).
 
 ## Arkon dosyaları ortak depoda (kart #732) - bağlamada kapanacak
 - `dosya_bagi('arkon', 'depo')` hiç kaldırılmaz; Arkon dosyası ortak depoda bağsız kalıp temizlenmez. Arkon kendi dosya temizliğini ortak depoya bağlayınca kapanır.
 - `arkon_dosya` tablosu göçten sonra boş kullanılmaz ama durur; düşürülmesi ayrı göçle, göç canlıda doğrulandıktan sonra.
 - Önerinin kendiliğinden alınması yalnız yeni Hazırlık ekranında; eski çerçeve öneriyi görmüyordu. KAPANDI (kart 1418, karar 1392 a): eski çerçeve TMI'den kalktı; `/arkon/eski`, `/kuyruk/eski`, `/uretim-terminali/eski` aynı yolun yeni adresine gider.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Veri
+
+- Dosya deposu ortak `dosya` modülüdür (kart #732); yükleme şeridi `arkon_dosya_parcasi` Arkon'da kalır. Dosya JSON gövdesinde base64 parçalarla taşınır.
+
+### Yetki
+
+- Yetkiler tek yerdedir: TMI rol x işlem matrisi ve sunucu tabloları (kullanıcı kararı); Arkon'un Ayarlar > Yetkiler ekranı yetki kaynağı DEĞİLDİR (tam taşıma ayrı kartta). Ara adım (kart #215): `kv/perms` yazımı ve silmesi yönetici dahil herkese 403 ("Yetkiler TMI'de yönetilir"); okuması sunucu tablolarından türetilmiş matristir (`kurallar.ts` `yetkiMatrisi`: Arkon varsayılanı PERMS0 ile sunucu kuralının kesişimi); tabloda önceden yazılmış `kv/perms` değeri yok sayılır. Eşleme (izin anahtarı -> sunucu kuralı): `prod.run` -> kayıt yazarları (events, counts); `prod.ack` -> `call-ack` iletisi + calls yazarları; `logi.req`, `logi.handle` -> logi yazarları; `plan.edit` -> `pkg-order` iletisi + pkgs yazarları; `down.edit` -> downs yazarları; `pkg.edit` -> pkgs yazarları; `pkg.publish` -> `pkg` iletisi + pkgs yazarları; `pkg.del` -> pkgs silicileri; `pkg.approve` -> `pkg-approved` iletisi + pkgs yazarları; `q.meas` -> meas yazarları ve kalite kararı rolleri; `q.decide` -> kalite kararı rolleri + requests yazarları; `gauge.edit` -> gauges yazarları; `maint.work`, `maint.plan` -> maint yazarları; `adm.shifts` -> `kv/shifts` yazarları; `adm.audit` -> yalnız yönetici. EŞLENMEYEN (Arkon varsayılanı aynen): `page.op`, `page.board`, `page.plan`, `page.prep`, `page.quality`, `page.maint`, `page.report`, `page.draw` (yalnız ekran görünürlüğü), `prod.fix`, `prod.station`, `q.report`, `adm.users`, `adm.plant`, `adm.backup`, `adm.demo`, `adm.reasons`. Bugün Arkon varsayılanı ile sunucu kuralı bire bir örtüşür; matris yalnız sunucunun reddedeceği eylemi gizlemek için kesişimdir. Gevşek taraf: sunucunun kabul edip matriste olmayan eylem vardır (örnek: operatör `logi.handle` anahtarı olmadan da `logi` belgesi yazar; sunucu depo tablosu anahtar başına değil depo başınadır). Sunucu tabloları tabandır: kaynak yetki tek yerde olana kadar rol işlemi (`arkon.*`) genişlemez.
+
+### Yapı
+
+- Dondurma sonrası (kullanıcı kararı 114, 19.10.2026). Anlık ileti yoklamayla: istemci köprüsü `/arkon/iletiler` ucunu 2 saniyede bir okur (Arkon'un EventSource beklentisi yerine); iletiler `arkon_ileti` tablosunda 15 dakika tutulur.
+- Dondurma sonrası (kullanıcı kararı 114, 19.10.2026). Çerçeve bağlaması standart köprüyle değil: görünüm aktarımı aynı kökenli çerçevenin adres işaretine (`location.hash`) doğrudan yazıp `hashchange` dinleyerek yapılır; `useCerceveGorunumu` ve `cerceve-iletisi.ts` iletileri kullanılmıyor. Veri bağlantısı çerçeve penceresinin `fetch` ve `EventSource` işlevlerini değiştirerek kurulur.
+
+### Sessiz kayıp (kart #215)
+
+- Yönetici Arkon matrisini (Ayarlar > Yetkiler) genişletir: ekran düğmeyi gösterir, sunucu reddeder. `kv/perms` yazımı artık hep 403; okunan matris sunucudan türediği için ekran düğmeleri sunucuyla uyumludur (gevşek taraf hariç).
+- Yönetici `kv/reasons`, `kv/scraps`, `kv/plant` ve `kv/perms` yazar: 403 (TMI'de yönetilir).
+- Operatör numune kararı ya da onay yazar (bekleme dışı durum): 403; operatör ve amir `src: 'quality'` ölçüm yazar: 403.
+
+### Zorlayıcı CSP kontrolünün gözlemleri (08.10.2026)
+
+- Ayarda basılan İyi ve Hurda (KARAR, kullanıcı kararı AY1 a, 08.10.2026): bugünkü gibi sayılır; başlamamış emre gelen sayım bekler ve üretim başlayınca TMI'ye yazılır (FARK.md, A3 bekletme kuralı). Kod değişmedi. Ayar hurdasını ayrı izlemek istenirse uretim-emirleri'nden yeni alan gerekir; şimdilik istenmedi.
+
+### Not
+
+- Logo ile ilgisi yok: Arkon tablolarında malzeme, firma, sipariş ya da stok hareketi tablosu ve Logo alanı (kayıt numarası vb.) yoktur. Taslak paketteki `material` alanı boş metindir.
+
+### Planlı duruş Vardiya'da (kapandı, A6, kart #519)
+
+- `downs` deposu artık Vardiya planlı duruş kayıtlarıdır (`kurallar.ts` `durustenBelgeye`, `belgedenDurusa`; `servis.ts` `durusBelgesiYaz`, `durusBelgesiSil`). Belge kimliği Arkon'dan açılmışta Arkon'un kimliği (kaynak kimliği), Vardiya'dan açılmışta `tmi-pd-<kimlik>`; sürüm içerikten. Arkon tabanı Vardiya kaydı kilitlendikten sonra denetlenir; Vardiya ekranından araya giren yazım Arkon'a çakışma (silmede 409) döner.
+- Yazma Arkon rolü (admin, plan, lead) VE `vardiya.durus-yaz` ister; kapsam hem Arkon kodlarıyla hem Vardiya kuralıyla (VR-13) denetlenir. Tanınmayan neden, iş merkezi ya da istasyon kodu 400.
+
+### Vardiyalar (A7, #517) - bağlamada kapanacak
+
+- Arkon `currentShift`, OEE ve vardiya kilidi yalnız vardiya adı ve saatini kullanır; Vardiya modülünün iş merkezi x gün matrisi Arkon'a gitmez. Tatil ve kapalı günler gider (kv `holidays`, `arkonTatilleri`): o gün başlayan vardiya penceresi yoktur.
+- Aktif vardiya yokken Arkon varsayılan vardiyalarıyla (SHIFTS0) çalışır.
+
+### Terminal makine seçimi ve devralma (kart #1148) - bağlamada kapanacak
+
+- Kural: ortak sahiplik. İstisna: katılım (`uretim_emirleri_katilim`) ve makine kullanımı uretim-emirleri'ndedir; Arkon yalnız `disari.ts` ile çağırır. Eksik okuma (Dondurma sonrası (kullanıcı kararı 114, 19.10.2026).): istasyon makinelerinin canlı doluluğu ekranda gösterilemiyor (makine seçicide "dolu" işareti yok); `uretim-emirleri/disari.ts` için açık kullanım okuması istenebilir.
+
+### Anomali gün kaydı ve dönem istatistiği (kart #1306) - bağlamada kapanacak
+
+- **Gece vardiyası:** üretilen gün sınırıyla (00:00) kesilir, beklenen o günün vardiya takvimiyle; gece yarısını aşan vardiyada iki gün arasında kayma olabilir.
+
+### İlk parça kararı Kalite Merkezi'nde (denetim #12) - bağlamada kapanacak
+
+- Malzeme · Teslim kutusu (kullanıcı kararı 317 b): operatör ekranında ayrı kutu yoktur; teslim yalnız üst çubuktaki Malzeme · Teslim panelindendir (stok modülü), başlatmada eksik girdi de o paneli açar (`istemci/src/moduller/arkon/baglanti.ts`, kart #1289). AÇIK, ölü artıklar (bilerek bırakıldı, kaldırılması ayrı karar ister): tablet deposunun `logi` eşitlemesi (`arkon/web/src/data/store.ts` KEYPATH, SYNC, yedek), sunucuda `logi` depo kuralı (`kurallar.ts` depo listesi ve istek tamamlama kuralı) ve `logi.req` / `logi.handle` yetki anahtarları (`arkon/web/src/app/ortak-ayarlar.ts`); yetki anahtarı silmek Çekirdek'in rol x işlem alanına dokunur. `logi` kayıtları silinmez.
+
+### Kalite istasyonu terminali (564 1 b, 6 a, 600 a) - bağlamada kapanacak
+
+- Lot Kabul'ü kalite adımının sağlam sayısını yazmaz; kalite istasyonundaki parça sayımı sağ sekmedeki kalite panelinden (parça başına) sürer.
+  Lot kararı ile adım sayımının bağı bağlamada kararlaştırılır.
+- Terminal numuneyi `kaliteIstasyonu` ile listeler; stoktaki teslimin "Teslim al" yapılıp yapılmadığı istemcide bilinmez (Arkon istek kaydı
+  stok teslim durumunu taşımaz). Teslim alınmamış numune de listede görünür.
+- Lot büyüklüğü paketin hedefidir (adım adedi); parça bölünmüş pakette parçanın adedidir. Lot kararı Arkon'da düzeltilmez; düzeltme Kalite Merkezi'ndedir.
+
+### Cihaz kipi (kart #739 D3) - bağlamada kapanacak
+
+- Kişisel cihazda sekme kapanırsa ya da sayfa yenilenirse gönderilmemiş kayıt kaybolur (karar 738 a'nın bilinen bedeli; rozet kopukken yazar).

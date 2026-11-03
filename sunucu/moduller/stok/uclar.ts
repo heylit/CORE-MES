@@ -12,7 +12,7 @@ import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import { z } from 'zod';
 import {
   araCevabi, araSorgusu, sayimBekleyenlerCevabi, yerlesimCevabi, yerlesimKaydetGovdesi, adimToplaGovdesi, toplamaAcGovdesi, toplamaAdimParametresi, toplamaAyrintiCevabi, toplamaKapatGovdesi, toplamalarCevabi, toplamalarSorgusu,
-  fisAyrintiCevabi, fisCevabi, fislerCevabi, fislerSorgusu, kodCozCevabi, kodCozSorgusu, okutCozCevabi, kisiKoduCevabi, lotEtiketleriCevabi, sepetCevabi, sepetDegistirGovdesi, sepetEkleGovdesi, sepetTeslimCevabi, stoktanDusGovdesi, teslimGovdesi,
+  fisAyrintiCevabi, fisCevabi, fislerCevabi, fislerSorgusu, kodCozCevabi, kodCozSorgusu, okutCozCevabi, kisiKoduCevabi, sepetCevabi, sepetDegistirGovdesi, sepetEkleGovdesi, sepetTeslimCevabi, stoktanDusGovdesi, teslimGovdesi,
   istekTeslimGovdesi, stokOzetiCevabi, malzemeIstegiCevabi, malzemeIstekleriCevabi, malzemeIstekleriSorgusu,
   istasyonSepetiCevabi, istasyonSepetiSorgusu, istasyonSepetleriCevabi, istasyonSepetleriSorgusu, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
@@ -82,7 +82,6 @@ export const uclar = [
 
   uc({ yontem: 'GET', yol: '/stok/partiler', yetki: OKUMA, sorgu: partilerSorgusu, cevap: partilerCevabi, isle: ({ db, sorgu }) => s.partiListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/belgeler/:belgeId', yetki: OKUMA, parametre: partiBelgeParametresi, cevap: ikiliCevap, isle: ({ db, parametre }) => s.partiBelgeDosyasi(db, parametre.id, parametre.belgeId) }),
-  uc({ yontem: 'GET', yol: '/stok/partiler/:id/etiket', yetki: OKUMA, parametre: kimlikParametresi, cevap: lotEtiketleriCevabi, isle: ({ db, parametre }) => s.partiLotEtiketi(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/iz', yetki: OKUMA, parametre: kimlikParametresi, cevap: partiIziCevabi, isle: ({ db, parametre }) => s.partiIzi(db, parametre.id) }),
 
   uc({ yontem: 'GET', yol: '/stok/fason-isleri', yetki: 'stok.giris', sorgu: fasonIsleriSorgusu, cevap: fasonIsleriCevabi, isle: ({ db, sorgu }) => s.fasonIsleri(db, sorgu.konumId) }),
@@ -92,7 +91,6 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/siparis-irsaliyeleri', yetki: SON_PARTI_OKUMA, sorgu: siparisIrsaliyeleriSorgusu, cevap: siparisIrsaliyeleriCevabi,
     isle: ({ db, sorgu }) => s.siparisIrsaliyeleri(db, sorgu.siparisSatirlari) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller', yetki: OKUMA, sorgu: malKabullerSorgusu, cevap: malKabullerCevabi, isle: ({ db, sorgu }) => s.malKabulListesi(db, sorgu) }),
-  uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id/lot-etiketleri', yetki: OKUMA, parametre: kimlikParametresi, cevap: lotEtiketleriCevabi, isle: ({ db, parametre }) => s.malKabulLotEtiketleri(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malKabulAyrintiCevabi, isle: ({ db, parametre }) => s.malKabulAyrintisi(db, parametre.id) }),
   // Düzeltme hareketleri ters çevirir: geri alma işlemiyle korunur (DEP-53).
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/mal-kabuller/:id/duzelt', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: malKabulDuzeltGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, parametre, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulDuzelt(db, kullanici, parametre.id, govde, denetimEki); } }),

@@ -6,7 +6,6 @@
    `/oturum/kilitler` ve `/oturum/kilitler/:id/ac` uçları kalktı. Karar: kullanıcı, proje sohbeti 17.10.2026 18:53.
 2. Koruma maddeleri "bilinmiyor": yedek, güncelleme imzası, HTTPS, sertifika, denetim kaydı durumu. Okuyacak `disari.ts`
    yok; istekler `CEKIRDEK-ISTEKLERI.md` ve `BASKA-MODUL-ISTEKLERI.md`.
-3. Yönetici işlemleri bölümü yalnız `/denetim` sayfasına bağlantıdır; denetim `disari.ts` okuyucu vermiyor.
 4. VPN ve NAT: muafiyet ayarı geldi, boş başlar. VPN'in adres verme biçimi bilinmiyor (kullanıcı bilgi işleme soracak).
 5. Devredilmezlik kapandı: `guvenlik.oku` ve `guvenlik.yonet` `DEVREDILMEZ_ISLEMLER`'de (kullanıcı kararı "Verilemesin").
 6. KAPANDI (1369, 1365 a): açık alarm sayısı ana menüde de görünür (`anaMenuSayaci: 'alarmlar'`, kabuk).
@@ -14,4 +13,11 @@
    toplayıcıları ve ayar modeli; `kurulum/yetki-matrisi.md`, `araclar/yetki-matrisi.test.ts`; kisiler `kurallar.ts` ve testi;
    Sistem Ayarları metin satırı; `eslint.config.js`). Hepsi ayrı commit'te, görev gereği.
 8. KAPANDI (1778, GUV-4): koruma ve sunucu durumu maddelerinde zaman ekranda okunur biçimde ve yılıyla görünür (`gorunum.ts` `degerMetni`). Eski metin: Koruma maddelerinde zaman değeri ham ISO metniyle görünür (bugünkü "tarama" maddesi gibi); biçim ortak zaman biçimleyiciyle gelir (CEKIRDEK-ISTEKLERI 3).
-9. Sertifika bitişi yalnız arayüz kapısının kendi sertifikasından okunur; ters vekil kurulursa (askıda) madde onun sertifikasını göstermez.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak
+
+- Sertifika bitişi yalnız arayüz kapısının kendi sertifikasından okunur; ters vekil kurulursa (askıda) madde onun sertifikasını göstermez.

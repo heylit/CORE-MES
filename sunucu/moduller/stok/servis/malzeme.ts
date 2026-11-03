@@ -7,7 +7,7 @@ import { KATALOG_TURLERI, type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   KaliteDurumu, CikisOnerisiCevabi, MalzemeAyarKomutu, MalzemeAyrintiCevabi, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi,
-  PartilerListesi, GozOnerisiCevabi, PanelCevabi, LotEtiketi, LotEtiketleriCevabi,
+  PartilerListesi, GozOnerisiCevabi, PanelCevabi, LotEtiketi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import { emirlerinSevkleri } from '../../sevkiyat/disari.ts';
@@ -206,11 +206,7 @@ async function lotEtiketleriCevir(db: Db, h: sorgular.LotEtiketiHam[]): Promise<
     return { ...x, malzemeAd: o?.ad ?? null, malzemeKod: o?.kod ?? null, malzemeTuru: o?.tur ?? null, birim: o?.birim ?? null };
   });
 }
-export async function malKabulLotEtiketleri(db: Db, malKabulId: number): Promise<LotEtiketleriCevabi> {
-  if (!(await sorgular.malKabulBul(db, malKabulId))) throw bulunamadi('Mal kabul belgesi bulunamadı.');
-  return { etiketler: await lotEtiketleriCevir(db, await sorgular.malKabulLotEtiketleri(db, malKabulId)) };
-}
-// Etiket Merkezi için: olmayan parti ya da mal kabul boş liste verir (uçlardaki 404 yerine).
+// Etiket Merkezi için: olmayan parti ya da mal kabul boş liste verir.
 export async function lotEtiketleri(db: Db, a: { partiId: number } | { malKabulId: number }): Promise<LotEtiketi[]> {
   if ('partiId' in a) {
     const h = await sorgular.partiLotEtiketi(db, a.partiId);
@@ -230,9 +226,4 @@ export async function kaliteEtiketleri(db: Db, bakiyeIdler: readonly number[]): 
     const o = ozet.get(h.malzemeId);
     return [{ ...h, malzemeAd: o?.ad ?? null, malzemeKod: o?.kod ?? null, birim: o?.birim ?? null }];
   });
-}
-export async function partiLotEtiketi(db: Db, partiId: number): Promise<LotEtiketleriCevabi> {
-  const h = await sorgular.partiLotEtiketi(db, partiId);
-  if (!h) throw bulunamadi('Parti bulunamadı.');
-  return { etiketler: await lotEtiketleriCevir(db, [h]) };
 }

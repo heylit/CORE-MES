@@ -34,8 +34,8 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
    `oturum.test.ts` ve `kisiler/goc.test.ts` matris beklentileri güncellenir. Denetimde bulunan yetki açıkları kapanmadan role işlem verilmez.
    GÜNCELLENDİ (tur 4): `satin-alma.teslim-al` kalktı (teslim alma stokta). Teslimin yeni matrisi (Ç3: satin_alma, mudur, muhasebe_finans; depoda işlem yok)
    `firmalar.yaz` ve `sayfa.firmalar` içerir; ayrı firmalar modülü yok (sabit kimlik), o satırlar finansa göre yeniden sorulur.
-7. `GET /satin-alma-acilis` `yetki: 'oturum'` (kayıtlı işlem değil); işlemsiz kullanıcıyı servis 403'e çevirir (test SAT-65). Uç yetki katmanında kayıtlı işlem ister kuralının istisnası. Uyum: `satin-alma.oku` ya da yeni işlem; talep eden akışı ayrı uç gerektirir.
-   Aynı şekilde `POST /satin-alma-talepleri/:id/kaydet` en zayıf işlemi (`talep-ac`) ister, gerçek yetkiyi servis `degisiklikTuru` ile seçer (V-33); `/satin-alma-katalogu/kaydet` yazmada `talep-ac` ister, düzenleme yetkisini servis denetler.
+7. Açılış ucu artık kayıtlı işlem listesi ister (`uclar.ts`), o kısım kapandı. Açık kalan:
+   `POST /satin-alma-talepleri/:id/kaydet` en zayıf işlemi (`talep-ac`) ister, gerçek yetkiyi servis `degisiklikTuru` ile seçer (V-33); `/satin-alma-katalogu/kaydet` yazmada `talep-ac` ister, düzenleme yetkisini servis denetler.
 8. Sürüm ve 409: `surumluGuncelle` talep, tedarikçi, katalog, ayar kayıtlarında kullanılır (DOĞRULANDI `servis.ts`). Açık nokta: alt kayıtlar (teklif, onay, hareket, senaryo) kendi sürümünü taşımaz, talebin sürümüyle bütün olarak yazılır; alt kayıt kimlikleri
    istemcide üretilen uuid'dir (V-39, sayı kimlik kalıbından sapma). Uyum: karar bekler.
 9. KAPANDI: `talepleri/ac`, `katalogu/kaydet`, `siparisleri/teslim-al` tekrar korumalı; ekran `tekrarKorumaliGonder` ile gönderir.
@@ -70,9 +70,6 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     Eski metin: KISMEN KAPANDI (borç turu 17.10.2026): ekran çizimi testi `merkez/cizim.test.ts` (her bölüm ve üç rolde ana sayfa uydurma veriyle hatasız, boş ya da "undefined"/"NaN" metinsiz çizilir). Kalan: sayfa testleri (rota, rol seti) bağlamada, rol satırları gelince.
    GÜNCELLENDİ (tur 4): `gorunumler.test.ts` menüyle birlikte kalktı; madde rotaları teste bağlı değil.
 
-20. Ölü akış: `merkez/ui.ts:314-318, 967-984` yedek indirme/geri yükleme (`export-json`, `import-json`, `do-import`), örnek veri silme (`del-samples`) ve TCMB (`mk-tcmb`) işleyicileri kodda duruyor;
-    taşıyıcı (`tasiyici.ts`) bunların hepsini reddediyor (V-30, kırmızı çizgi). DOĞRULANDI (koddan). Uyum: ekran yeniden kurulurken işleyiciler ve modal kodu silinir.
-   KAPANDI (tur 4): kullanıcı işleyicileri kaldırdı (yedek, içe aktarma, örnek veri, TCMB). Boş `mk-tcmb-st` durum alanı da kalktı (borç turu 17.10.2026).
 21. KAPANDI: SAT-42 ayrı testte, atlanmadan koşar.
 22. Okuma kaynakları (2. tur, #162): `GET /satin-alma-acilis` çekirdeğin okuma yetkisini (`{ biri: SATIN_ALMA_ISLEMLERI }`) taşır (KAPANDI). Kalan: açılış
    rol süzmeli tek bütündür; kaynaklara (talepler, talep, tedarikçiler, katalog, ayarlar) ve sayfalı listeye (`#cekirdek/liste.ts`) bölünmedi, `GET /satin-alma-teslimleri`
@@ -128,12 +125,6 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - Fason hizmet siparişi rota adımına bağlı açılış: bu turda yalnız seçenek listesi (BASKA-MODUL-ISTEKLERI.md "Üretim emirleri ve rota"); fason firma ve konumu Aşama 2'nin sonraki turunda.
     - KAPANDI (939 a): `satin_alma_ayar.kur_tarihi` göç `20261027083000_satin_alma_faiz_finanstan.sql` ile düştü (dökümsüz, kullanıcı onayı).
 
-34. Ana sayfadan talep (kart #375) açık kalanlar:
-    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kart ortak glob ile yükleniyor (`istemci/src/ortak/rota/ana-sayfa.ts` "../../moduller/*/ana-sayfa.tsx", `satin-alma/ana-sayfa.tsx` `anaSayfaKartlari`). Eski metin: Ana sayfa kartı `ana-sayfa.tsx` ortak arayüzün kart yapısı (#172) birleşince bağlanır; ekran onayı birleşik önce/sonra görüntüsüyle.
-    - KAPANDI (kart #1192, SAT-75): hizmet talebi yalnız alınan hizmet kartını seçer (sunucuda ret, testli).
-    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): hızlı talep rol satırları göç `20261009065000_kisiler_satin_alma_islemleri.sql`'de (planlama_proje, cam, bakim, kalite, depo `satin-alma.talep-ac`). Eski metin: Rol satırları (planlama_proje, cam, bakim, kalite, depo, mudur, satin_alma; operator yok) bu iş birleştikten sonra çekirdekten girer.
-    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): uygulanmış, `servis.ts` hızlı talep "durum: 'taslak'". Eski metin: VARSAYIM: hızlı talep `taslak` açılır (satın almanın iş kutusunda görünür; talep eden düzeltip silebilir). Geri alma ucuz: tek satır.
-    - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): uygulanmış, `servis.ts` #375 yorumu "kartsız kalem 'kart bekliyor' kalır" (VARSAYIM: yalnız yorum ve akış okundu). Eski metin: VARSAYIM: kart bekleyen kalem satın alma ekranında talep düzenlenip katalogdaki kaleme yazılarak bağlanır; ayrı "karta bağla" düğmesi yok.
 
 35. KAPANDI (kart #162, SA3 a tamamlama): talep açma ve kaydetme, teklifte ve sabit kurda geçen para biriminin `satin_alma_kur` satırını yazmadan önce ekler (`ON CONFLICT DO NOTHING`, faiz tablo varsayılanı, sıra sona; finansın kur tablosuna yazılmaz); ayarlar hiç kaydedilmemiş kurulumda döviz teklifi kaydedilir. Test `satin-alma.test.ts` SA3 a.
     Eski metin: ve teklif (kart #162, SA3 a uygulama eksiği): yeni kurulumda finansta kuru olan para birimi ayarlarda görünür ama `satin_alma_kur` satırı ayarlar kaydedilene kadar yoktur; o para biriminde teklif `satin_alma_teklif` yabancı anahtarına takılır
@@ -150,7 +141,6 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
 
 43. KAPANDI (937 b, 939 a): faiz yalnız finanstan okunur, finansta oran yoksa boş (`aylikFaiz`); ayar kaydı faiz yazmaz, `satin_alma_kur.aylik_faiz_yuzdesi` göç `20261027083000` ile düştü. Önceki durum: (kart #160, finansın "faiz finanstan" isteği): ayarlar cevabındaki güncel aylık faiz (`ayarlariKur`), finansın `faizler(db, bugun)` okumasındaki geçerli orandan gelir; o para birimi için finansta oran yoksa `satin_alma_kur.aylik_faiz_yuzdesi` kalır, başka hiçbir hesap değişmedi (kural `aylikFaiz`, testler `satin-alma.test.ts` Kart 160, `hesap-kayit.test.ts`).
   AÇIK kalan: teklif ve siparişte o gün kullanılan faizin kendi kaydında saklanması (sütun gerekir, göç; çekirdek şeridi) ve ayar ekranındaki faiz alanının yalnız gösterilmesi (ekran işi). Not: ayar formu görünen finans faizini kaydette `satin_alma_kur`a geri yazar; finans oranı sonradan düşse bile satın almanın yedek oranı o değerdir.
-44. [bağlama] Kart #135 (karar 102 a): satın alma Ctrl K'yı almaz, kabuğun ortak paleti açılır; üst çubuktaki "Satın almada ara" kutusu (talep, malzeme, tedarikçi) prototipteki yerinde kalır. Kalan: talep, malzeme ve tedarikçi araması ortak palete kayıt kaynağı olarak (`paylasilan/sayfalar/satin-alma.ts` `aramaUcu`, sunucuda okuma yetkisi, izinli ve reddedilen test); geçince kutunun kalıp kalmayacağı kullanıcıya sorulur (prototip değişikliği).
 
 ## Bağlamada kapanmayacak (bilgi)
 
@@ -185,7 +175,6 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
     - Komutlar boş form açar; değer alan komut ("talep ST-2026-001") 1233 çekirdek ucuyla gelir.
 
 ## Kart 1733 (TMI satın alma bulguları, bağlamada)
-46. [bağlama] TMI A13: fatura bağlama yalnız Sipariş adımındaki düğmede; Finans fatura formunda siparişe bağ yok. Finans ile akış D bağlanırken kapanır.
 47. [bağlama] TMI A14: alım "tamamlandı" görünürken giriş kontrolü (GKK) kararı bekleyen miktar satın almada görünmez; stok `disari.ts` kalite durumu okumasıyla sipariş özetine eklenir.
 48. TMI A10 (yeniden üretilmedi, BİLMİYORUM): ikinci talepte teklif kaydından sonra Karşılaştır adımı açılmadı. VARSAYIM: talep, teklif sayısı ayarlardaki "en az teklif" sayısına ulaşınca değerlendirmeye geçer (`merkez/ui.ts` save-quote); ikinci talepte teklif sayısı altta kalmış olabilir. Yeniden üretilirse ayrı kart.
 49. TMI A11: sipariş PDF'i yok (yalnız e-posta metni); yeni özellik, kullanıcıya sorulur.

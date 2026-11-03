@@ -22,11 +22,18 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    `kurulum/devir.md` değişkeni zaten anlatıyor.
 7. ~~`/sevkiyat/harita` yanıtı yaklaşık 4,5 MB.~~ Kapandı: çekirdek eşiği aşan JSON'u gzip ile gönderir (`sunucu/cekirdek/uc.ts`, `SIKISTIRMA_ESIGI`); uç
    `onbellek: 'etag'` ile döner, değişmeyen harita 304 ve gövdesizdir (#1827, `uclar.test.ts` "borç 7").
-8. Ana menü simgesi `next` (kamyon simgesi satın almada). Uyum: ortak simge setine sevkiyat simgesi istenirse çekirdek işi.
 9. KAPANDI (borç değerlendirmesi 17.10.2026): kurallar `SVK-n` önekli (ON-PAKET, KURAL-TEST), test adları kural numarasını taşır (SVK-21 testi adla eşleşmedi, önek yok). Eski metin: İş kuralları numaralı ama modül önekli değil (ON-PAKET 1-43); test adları kural numarası taşımıyor. Uyum: `SVK-n` öneki.
 10. KAPANDI (kullanıcı kararı 17.10.2026): stoktaki "Sevkiyat" modu, düğmesi ve hazırlık teslim seçeneği "Sevk çıkışı" adını aldı; davranış aynı.
 11. KAPANDI (kart #1310): fason dönüşünde sağlamı yalnız mal kabul stoğa alır; Dış operasyonlardaki dönüş yalnız hurdayı firmadan düşer.
 12. KAPANDI (kart #1310): kapanmış emrin firmada kalan parçası stok iş kutusunda "fason firmasında kaldı" olarak görünür.
-13. İSTİSNA (kullanıcının yazılı onayı 16.10.2026): "Sürücüye gönder" Google Haritalar / Yandex rota bağlantısı üretir (`istemci/src/moduller/sevkiyat/SurucuBaglantisi.tsx`).
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak
+
+- Ana menü simgesi `next` (kamyon simgesi satın almada). Uyum: ortak simge setine sevkiyat simgesi istenirse çekirdek işi.
+- İSTİSNA (kullanıcının yazılı onayı 16.10.2026): "Sürücüye gönder" Google Haritalar / Yandex rota bağlantısı üretir (`istemci/src/moduller/sevkiyat/SurucuBaglantisi.tsx`).
    Ekranda dört öğe kalır (kullanıcı kararı 16.10.2026 "Kalsın"): "Google Haritalar'da aç" ve "Yandex'te aç" bağlantıları ile "Google/Yandex bağlantısını kopyala" düğmeleri.
    Asıl amaç rotayı sürücüye göndermektir; sürücü bağlantıyı kendi telefonunda, kendi internetiyle açar. Sunucu dışarı çağırmaz. "Dış servis çağrısı yok" kuralına yalnız bu bağlantı için istisnadır, borç değildir.

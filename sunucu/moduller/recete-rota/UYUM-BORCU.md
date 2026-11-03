@@ -50,9 +50,6 @@ Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritaban
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
 
 ## Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
-- Çevirici sunucuda (DOĞRULANDI 23.10.2026: `plan-cozucusu.ts` `sunucuPlanCozucusu`, `motor/emirler.betik` `sunucuCozumGirdisi`, `disari.ts`ten verilir). Girdi planlama
-  sayfasının çalışması, kayıt ve kaynak okumasıdır; çalışma kaydı yoksa çözücü 409 verir. Bağ `sunucu/kablolama.ts`'te yok: plan bugünkü `oner` yolundadır.
-  Çalışan adımlar çerçeveye bağlandı (DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
 - Kıyas yapıldı (plan `plan-kiyas.test.ts`, uydurma veri): vardiyalı senaryoda 8 işin 8'i iki motorda aynı (168 b ile motor vardiya molasını düşer). Kalan farklar:
   (1) vardiyası tanımsız tezgâhın işi çözücüde `vardiyasiz` listesinde döner; plan bu alanı okumaz, iş eksik sayılır ve komut 409 olur;
   (2) sunucu iş merkezi haftasını ve kişi vardiyasını okumaz (takvim eki null): çalışma günleri sayfanın tek takviminden; 159 b ile ayarcı sınırı sunucuda uygulanmaz, uyarı plana gelmez.
@@ -91,3 +88,13 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
   Nasıl uyumlanır: ayrı dalda emir verisine durdu alanı eklenir (sahibi `uretim-emirleri`), sonra `DURUM_SUZGECLERI`ne "Durdu" bölümü ve satıra rozet girer.
 - Üretimi bitmiş emrin stoğa işlenip işlenmediği bu sekmede bilinmez: "Üretimi bitti" ve kapanış sonucu yoksa her zaman Üretim Emirleri uyarısı çıkar
   (stoğa işlenmiş ama kapanmamış emirde de). Nasıl uyumlanır: emir verisine stok tamamlama bilgisi gelince uyarı yalnız işlenmemiş emirde çıkar.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
+
+- Çevirici sunucuda (DOĞRULANDI 23.10.2026: `plan-cozucusu.ts` `sunucuPlanCozucusu`, `motor/emirler.betik` `sunucuCozumGirdisi`, `disari.ts`ten verilir). Girdi planlama
+  sayfasının çalışması, kayıt ve kaynak okumasıdır; çalışma kaydı yoksa çözücü 409 verir. Bağ `sunucu/kablolama.ts`'te yok: plan bugünkü `oner` yolundadır.
+  Çalışan adımlar çerçeveye bağlandı (DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
