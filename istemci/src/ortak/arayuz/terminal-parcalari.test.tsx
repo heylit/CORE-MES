@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import {
   AdimListesi, CamYuzey, Dugme, GrupluSecim, Kadran, KadranEtiketi, KuyrukKarti, KuyrukListesi, Orb, OzetKatmani, Pencere,
   SayimDugmeleri, Sekmeler, TerminalYerlesimi, TusTakimi,
@@ -162,6 +162,29 @@ describe('Orb', () => {
     expect(tetikle).toHaveBeenCalledTimes(1);
     rerender(<Orb simge="play" etiket="Başlat" ton="calisiyor" ana disabled tetikle={tetikle} />);
     fireEvent.click(tus('Başlat'));
+    expect(tetikle).toHaveBeenCalledTimes(1);
+  });
+
+  it('sure dolunca destekleyen cihaz kisa titrer; titresimsiz cihazda yine tetikler', () => {
+    sahteZaman();
+    const titret = vi.fn(() => true);
+    Object.defineProperty(navigator, 'vibrate', { value: titret, configurable: true });
+    try {
+      const tetikle = vi.fn();
+      render(<Orb simge="flag" etiket="Bitir" basiliTutMs={SURE} tetikle={tetikle} />);
+      fireEvent.pointerDown(tus('Bitir, basılı tutun'));
+      ilerle(SURE - 200);
+      expect(titret).not.toHaveBeenCalled();
+      ilerle(300);
+      expect([tetikle.mock.calls.length, titret.mock.calls.length]).toEqual([1, 1]);
+    } finally {
+      Reflect.deleteProperty(navigator, 'vibrate');
+    }
+    cleanup();
+    const tetikle = vi.fn();
+    render(<Orb simge="flag" etiket="Bitir" basiliTutMs={SURE} tetikle={tetikle} />);
+    fireEvent.pointerDown(tus('Bitir, basılı tutun'));
+    ilerle(SURE + 100);
     expect(tetikle).toHaveBeenCalledTimes(1);
   });
 
@@ -458,6 +481,16 @@ describe('AdimListesi', () => {
     expect(degistir).not.toHaveBeenCalled();
     rerender(<AdimListesi adimlar={ADIMLAR} />);
     expect(kutu(/Kasaya diz/).getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('sayfa verilince yalniz o sayfa cizilir; numara ve sayac butun listedendir (geriye uyum: sayfasiz cagri degismez)', () => {
+    const degistir = vi.fn();
+    render(<AdimListesi adimlar={ADIMLAR} degistir={degistir} sayfa={{ boyut: 2, no: 1 }} />);
+    const liste = screen.getByRole('group', { name: 'Talimat adımları' });
+    expect(liste.textContent).toContain('1 / 3 tamamlandı');
+    expect(within(liste).getAllByRole('checkbox').map((k) => k.textContent)).toEqual(['3. Kasaya dizKat arasına karton']);
+    fireEvent.click(kutu(/Kasaya diz/));
+    expect(degistir).toHaveBeenLastCalledWith(13, true);
   });
 
   it('adim yoksa sayac ve oran uydurmaz, bos durumu gosterir', () => {

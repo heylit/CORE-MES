@@ -6,7 +6,7 @@ import {
   emirlerSorgusu,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
-  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -16,7 +16,7 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
-  adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar,
+  adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
   izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
@@ -513,6 +513,25 @@ const adimKomutUclari = [
     parametre: isEmriParametresi,
     cevap: katilimCevabi,
     isle: ({ db, kullanici, parametre }) => katilimAyril(db, kullanici.id, parametre.id, parametre.isEmriId),
+  }),
+  // 1979 (2003 c): adımın plandaki payları ve ilerlemesi; katılımı gören okur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/paylar',
+    yetki: KATILIM_OKUMA,
+    parametre: isEmriParametresi,
+    cevap: adimPaylariCevabi,
+    isle: ({ db, parametre }) => adimPaylari(db, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/makine-ekle',
+    yetki: 'terminal.uret',
+    tekrarKorumali: true,
+    parametre: isEmriParametresi,
+    govde: makineEkleGovdesi,
+    cevap: emirCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => makineEkle(db, kullanici.id, parametre.id, parametre.isEmriId, govde.makineId),
   }),
   // 647 a: sayım aşımı izi; katılımı gören okur.
   uc({

@@ -1,4 +1,4 @@
-/* Üretim anomalisi panosu (kart #1149). Hesap TMI sunucusundadır (GET /arkon/anomaliler); ekran yalnız gösterir. Bilinmeyen değer null gelir
+/* Üretim anomalisi panosu (kart #1149). Hesap CORE sunucusundadır (GET /arkon/anomaliler); ekran yalnız gösterir. Bilinmeyen değer null gelir
    ve "–" gösterilir: sıfır uydurulmaz. İşaret alanları true: anomali, false: yok, null: hüküm yok ya da kural kapalı. */
 export type AnomaliDurumu = 'normal' | 'isaret' | 'izinli' | 'bilinmiyor';
 
@@ -58,7 +58,7 @@ export function kapaliKurallar(e: Anomaliler['esikler']): string[] {
   return [e.girisYokDk === null ? 'Giriş yok süresi' : null, e.adetToleransYuzde === null ? 'Eksik adet' : null].filter((x): x is string => x !== null);
 }
 
-/* Gün, hafta, ay istatistiği (kart #1306): TMI'nin kaydettiği günlerden (GET /arkon/anomali-istatistik). Kaydı olmayan gün null alanlıdır. */
+/* Gün, hafta, ay istatistiği (kart #1306): CORE'un kaydettiği günlerden (GET /arkon/anomali-istatistik). Kaydı olmayan gün null alanlıdır. */
 export type AnomaliDonemi = 'gun' | 'hafta' | 'ay';
 interface DonemOlcusu { beklenen: number; uretilen: number; hurda: number; oran: number | null; performans: number | null }
 interface DonemKirilimi extends DonemOlcusu { isaretliGun: number; gun: number }

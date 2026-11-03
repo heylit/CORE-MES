@@ -1,5 +1,5 @@
 // Terminalde toplu giriş (kart #1046): operatör bir seferde N sağlam ve N hurda girer. Kayıt düzeltme değil olağan sayımdır: ekran
-// sayaçları artırır, sayım satırları her zamanki fark (delta) biçimiyle gider. TMI nedensiz hurdayı kabul etmediği için
+// sayaçları artırır, sayım satırları her zamanki fark (delta) biçimiyle gider. CORE nedensiz hurdayı kabul etmediği için
 // (sunucu kurallar.ts sayimKomutu) hurda nedeni burada zorunludur; sağlam, +1 düğmesi gibi hedefi aşamaz.
 export interface TopluGiris { saglam: number; hurda: number; neden: string | null }
 

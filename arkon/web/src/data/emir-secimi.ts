@@ -1,5 +1,5 @@
-// Ctrl K'den Üretim Terminali'ne "emir seç" (kullanıcı kararı 16.10): TMI adresindeki `?emir=<üretim emri id>` çerçeveye
-// `__tmiEmirSec` olarak bırakılır ve bu olayla duyurulur (istemci/src/moduller/arkon/baglanti.ts emirSeciminiGonder). Çerçeve TMI
+// Ctrl K'den Üretim Terminali'ne "emir seç" (kullanıcı kararı 16.10): CORE adresindeki `?emir=<üretim emri id>` çerçeveye
+// `__tmiEmirSec` olarak bırakılır ve bu olayla duyurulur (istemci/src/moduller/arkon/baglanti.ts emirSeciminiGonder). Çerçeve CORE
 // yüklenmeden önce açılabilir: istek pencerede bekler, operatör ekranı kurulunca okunur.
 export const EMIR_SEC_OLAYI = 'tmi-emir-sec';
 

@@ -7,7 +7,7 @@ export const BASLAMAMIS_IS_ILETISI = 'İş başlamadı · önce başlat';
 export const DURUSTA_SAYIM_ILETISI = 'Duruşta sayım yapılmaz · önce devam et';
 export const HAZIRLIKTA_SAYIM_ILETISI = 'Hazırlıkta sayım yapılmaz · önce ilk parça onayı';
 
-// TMI sayımı yalnız başlamış ve durmamış emirde kabul eder (sunucu/moduller/uretim-emirleri/kurallar.ts sayimIhlali): ekran o durumlarda
+// CORE sayımı yalnız başlamış ve durmamış emirde kabul eder (sunucu/moduller/uretim-emirleri/kurallar.ts sayimIhlali): ekran o durumlarda
 // düğmeyi kapatır, sayı önce değişip sonra geri dönmez. Hazırlıkta iyi parça sayılmaz (sunucu da reddeder, arkon/kurallar.ts sayimKomutu):
 // onaysız ilk parçalar işin sonunda iyi parçaya katılıyordu. Hazırlık hurdası sayılır.
 export function sayimKapaliNedeni(is: SayimIsi | null | undefined, tur: 'good' | 'scrap' = 'scrap'): string | null {
@@ -19,7 +19,7 @@ export function sayimKapaliNedeni(is: SayimIsi | null | undefined, tur: 'good' |
 
 export const sayimKapali = (is: SayimIsi | null | undefined, tur: 'good' | 'scrap' = 'scrap'): boolean => sayimKapaliNedeni(is, tur) !== null;
 
-// Sunucu TMI'de biten emrin paketine okumada `tmi.bitti` yazar (sunucu/moduller/arkon/kurallar.ts bitenEmirIsareti).
+// Sunucu CORE'da biten emrin paketine okumada `tmi.bitti` yazar (sunucu/moduller/arkon/kurallar.ts bitenEmirIsareti).
 export const tmiBitti = (paket: { tmi?: { bitti?: unknown } | null } | null | undefined): boolean => paket?.tmi?.bitti === true;
 
 // Kuyruk listesi: açık işler önce, biten işler ayrı başlık altında; sıra numarası listedeki yeridir (seçim onunla yapılır).
@@ -51,15 +51,15 @@ export function sayimGeriUygula<T extends SayacliIs>(isler: readonly T[], g: Say
   return isler.map((is) => (geriAlinacakIs(is, g) ? { ...is, [g.alan]: Math.max(0, is[g.alan] + g.fark) } : is));
 }
 
-// Kayıt isteğinin cevabı: TMI'ye işlenmeyen satırlar `reddedilen` listesinde döner (paylasilan/sozlesme/arkon.ts).
-// `tmiDurum`: reddedilen durum kaydında işin TMI'deki hâli; varsa ekran kendi gösterdiğini buna eşitler.
+// Kayıt isteğinin cevabı: CORE'a işlenmeyen satırlar `reddedilen` listesinde döner (paylasilan/sozlesme/arkon.ts).
+// `tmiDurum`: reddedilen durum kaydında işin CORE'daki hâli; varsa ekran kendi gösterdiğini buna eşitler.
 export function logRetleri(cevap: unknown): { cid: string; ileti: string; tmiDurum?: string }[] {
   const liste = (cevap as { reddedilen?: unknown } | null | undefined)?.reddedilen;
   if (!Array.isArray(liste)) return [];
   return liste.filter((r): r is { cid: string; ileti: string; tmiDurum?: string } => !!r && typeof r.cid === 'string' && typeof r.ileti === 'string');
 }
 
-// Sayım kaydı bekleyip sonradan TMI'ye yazılamadıysa sunucu `$tmiRet` iletisi yayar (cevaptaki ret o istekte sonuçlananları taşır).
+// Sayım kaydı bekleyip sonradan CORE'a yazılamadıysa sunucu `$tmiRet` iletisi yayar (cevaptaki ret o istekte sonuçlananları taşır).
 // Yalnız sayımı yapan kişinin tableti uygular; ayrıntı cevaptaki retle aynıdır, ekran aynı yoldan sayıyı geri çevirir.
 export function gecikmeliRet(m: unknown, kullaniciId: string | undefined): { store: string; kind: string; id: string; cid: string; row: Record<string, unknown>; msg: string } | null {
   const d = m as { type?: unknown; kind?: unknown; cid?: unknown; row?: unknown; ileti?: unknown } | null | undefined;
@@ -69,10 +69,10 @@ export function gecikmeliRet(m: unknown, kullaniciId: string | undefined): { sto
   return { store: 'log_counts', kind: 'counts', id: d.cid, cid: d.cid, row, msg: d.ileti };
 }
 
-// TMI durum kaydını reddetti ve işin TMI'deki hâlini bildirdi: ekran o hâli gösterir (duraklatma yazılmadıysa iş çalışıyor görünür,
-// devam reddedildiyse ama iş TMI'de çalışıyorsa çalışıyor görünür). Eşitleme yeni durum kaydı yazmaz.
+// CORE durum kaydını reddetti ve işin CORE'daki hâlini bildirdi: ekran o hâli gösterir (duraklatma yazılmadıysa iş çalışıyor görünür,
+// devam reddedildiyse ama iş CORE'da çalışıyorsa çalışıyor görünür). Eşitleme yeni durum kaydı yazmaz.
 const ESITLENEN_DURUMLAR = new Set(['running', 'paused', 'stopped', 'queued', 'done']);
-// pkgId undefined: emrin bu istasyondaki bütün işleri (TMI hâli emrin hâlidir).
+// pkgId undefined: emrin bu istasyondaki bütün işleri (CORE hâli emrin hâlidir).
 export interface DurumEsitleme { orderNo: string; pkgId: string | null | undefined; state: string }
 
 export function durumEsitleme(detay: unknown): DurumEsitleme | null {
@@ -91,7 +91,7 @@ export function durumEsitle<T extends DurumluIs>(isler: readonly T[], e: DurumEs
   });
 }
 
-// Makine devralınınca TMI iki işin yeni hâlini `$durum` iletisiyle yayar (sunucu `devralmaHaliniYay`): istasyonun tableti o emri eşitler.
+// Makine devralınınca CORE iki işin yeni hâlini `$durum` iletisiyle yayar (sunucu `devralmaHaliniYay`): istasyonun tableti o emri eşitler.
 export function durumIletisi(m: unknown, istasyon: string): DurumEsitleme | null {
   const d = m as { type?: unknown; machine?: unknown; orderNo?: unknown; state?: unknown } | null | undefined;
   if (d?.type !== '$durum' || d.machine !== istasyon || typeof d.orderNo !== 'string' || d.orderNo === '') return null;
@@ -99,7 +99,7 @@ export function durumIletisi(m: unknown, istasyon: string): DurumEsitleme | null
   return { orderNo: d.orderNo, pkgId: undefined, state: d.state };
 }
 
-// Sunucunun reddettiği başlatma (kayıttan önceki 409 ya da TMI reddi): iş başlamadı, terminal çalışıyor göstermez. Üretimi olmayan iş
+// Sunucunun reddettiği başlatma (kayıttan önceki 409 ya da CORE reddi): iş başlamadı, terminal çalışıyor göstermez. Üretimi olmayan iş
 // kuyruğa, üretimi olan iş duraklamaya döner.
 export interface BaslatmaGeriAlma { orderNo: string; pkgId: string | null }
 

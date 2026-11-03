@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { bosIs } from './kurallar.ts';
 import { DurumDugmeleri, GorevKarti, IsKuyrugu, IsAlanlari, IsOzeti, Konfeti, NumuneSeridi, SayacKadrani, type CevrimOlcer } from './Parcalar.tsx';
+import { YerelAdimlar } from './Adimlar.tsx';
 
 // Eski kadranın dönen çevrim ışığı ve iş bitince konfeti (283.19 geri getirme).
 
@@ -77,6 +78,19 @@ describe('Sayaç kadranı kalan ve boş istasyon', () => {
     expect(b?.disabled).toBe(false);
     fireEvent.click(b!);
     expect(eylemler.length).toBe(1);
+  });
+  it('1999 a: genişte Resim gizlenir; 2000 b: çalışırken Durdur dokunuşla, Duraklat basılı tutularak', () => {
+    const tam = render(<DurumDugmeleri durum="queued" eylem={() => {}} erken={() => {}} />);
+    expect(tam.queryByRole('button', { name: /Resim/ })).toBeTruthy();
+    cleanup();
+    const genis = render(<DurumDugmeleri durum="queued" gizle="drawing" eylem={() => {}} erken={() => {}} />);
+    expect(genis.queryByRole('button', { name: /Resim/ })).toBeNull();
+    cleanup();
+    const eylemler: string[] = [];
+    const calisan = render(<DurumDugmeleri durum="running" eylem={(d) => eylemler.push(d.eylem)} erken={() => {}} />);
+    fireEvent.click(calisan.getByRole('button', { name: /^Durdur/ }), { detail: 1 });
+    expect(eylemler).toEqual(['stop']);
+    expect(calisan.getByRole('button', { name: /Duraklat, basılı tutun/ })).toBeTruthy();
   });
 });
 
@@ -190,5 +204,37 @@ describe('702: Şimdi şeridi', () => {
     const kart = getByRole('status');
     expect(kart.contains(getByRole('list', { name: 'Numune planı' }))).toBe(true);
     expect(kart.contains(getByText('Sıradaki işe hazırlan'))).toBe(true);
+  });
+});
+
+describe('1999 a: adımlar sayfalanır', () => {
+  const adimlar = Array.from({ length: 8 }, (_, i) => ({ id: `a${i}`, t: `Adım ${i + 1}`, on: i < 7 ? 1 : 0 }));
+  const kutular = () => screen.getAllByRole('checkbox').map((k) => k.textContent);
+  it('ilk yapılmamış adımın sayfasıyla açılır; numara ve sayaç bütün listedendir; oklar ve yana kaydırma sayfa çevirir, işaretlemez', () => {
+    render(<YerelAdimlar adimlar={adimlar} />);
+    expect(kutular()).toEqual(['5. Adım 5', '6. Adım 6', '7. Adım 7', '8. Adım 8']);
+    expect(screen.getByText('2 / 2')).toBeTruthy();
+    expect(document.body.textContent).toContain('7 / 8 tamamlandı');
+    fireEvent.click(screen.getByRole('button', { name: 'Önceki adımlar' }));
+    expect(kutular()[0]).toBe('1. Adım 1');
+    // jsdom PointerEvent tanımlamaz; konumlu ve kimlikli olay MouseEvent alt sınıfıyla verilir.
+    class Isaretci extends MouseEvent {
+      readonly pointerId: number;
+      constructor(tur: string, ek: MouseEventInit & { pointerId?: number } = {}) { super(tur, ek); this.pointerId = ek.pointerId ?? 0; }
+    }
+    const eskiOlay = Object.getOwnPropertyDescriptor(window, 'PointerEvent');
+    Object.defineProperty(window, 'PointerEvent', { value: Isaretci, configurable: true });
+    const alan = document.querySelector('.tc-ay1-adimlar')!;
+    const ilk = screen.getAllByRole('checkbox')[0]!;
+    fireEvent.pointerDown(alan, { clientX: 300, clientY: 100, pointerId: 1 });
+    fireEvent.pointerUp(alan, { clientX: 150, clientY: 105, pointerId: 1 });
+    fireEvent.click(ilk);
+    if (eskiOlay) Object.defineProperty(window, 'PointerEvent', eskiOlay); else Reflect.deleteProperty(window, 'PointerEvent');
+    expect(kutular()[0]).toBe('5. Adım 5');
+    expect(document.body.textContent).toContain('7 / 8 tamamlandı');
+  });
+  it('tek sayfalık listede gezgin çizilmez', () => {
+    render(<YerelAdimlar adimlar={adimlar.slice(0, 4)} />);
+    expect(screen.queryByRole('navigation', { name: 'Adım sayfaları' })).toBeNull();
   });
 });

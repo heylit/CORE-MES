@@ -1,10 +1,10 @@
-// Sunucuya bağlı Arkon'da duruş ve hurda nedenleri ile tesis TMI'de düzenlenir; Arkon Ayarlar'da hazırlık (paket hazırlayan) bunları
+// Sunucuya bağlı Arkon'da duruş ve hurda nedenleri ile tesis CORE'da düzenlenir; Arkon Ayarlar'da hazırlık (paket hazırlayan) bunları
 // salt okunur görür (kullanıcı kararı, soru 51/52 b). Düzenleyebilen kendi düzenleyicisini görür; yetki değişmez.
 export const tmiListesiSaltOkunur = (sunucuda: boolean, hazirlikGorur: boolean, duzenleyebilir: boolean): boolean =>
   sunucuda && hazirlikGorur && !duzenleyebilir;
 
-// Tesisin sahibi TMI İstasyonlar'dır: sunucuya bağlıyken sunucu Arkon'un tesis yazımını reddeder. Düzenleyici (ve örnek yapı) yalnız yerel
-// kiptedir; sunucuda yönetici de salt okunur listeyi görür, düzenleme yeri TMI'dir.
+// Tesisin sahibi CORE İstasyonlar'dır: sunucuya bağlıyken sunucu Arkon'un tesis yazımını reddeder. Düzenleyici (ve örnek yapı) yalnız yerel
+// kiptedir; sunucuda yönetici de salt okunur listeyi görür, düzenleme yeri CORE'dur.
 export const tesisDuzenleyicisi = (sunucuda: boolean, duzenleyebilir: boolean): boolean => !sunucuda && duzenleyebilir;
 export const tesisListesi = (sunucuda: boolean, hazirlikGorur: boolean, duzenleyebilir: boolean): boolean =>
   sunucuda && (hazirlikGorur || duzenleyebilir);

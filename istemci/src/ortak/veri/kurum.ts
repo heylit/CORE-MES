@@ -16,3 +16,15 @@ export function useKurumAdi(): string | null {
   const ad = sorgu.data?.ad?.trim() ?? '';
   return ad === '' ? null : ad;
 }
+
+// Giriş ekranı oturumsuz uçtan okur (karar 2002); okunamazsa ya da ad yoksa null ve ekran yalnız CORE yazar.
+export function useGirisKurumAdi(): string | null {
+  const sorgu = useQuery({
+    queryKey: anahtarlar.girisKurumu,
+    queryFn: () => api.get<KurumCevabi>('/giris-kurum-adi'),
+    staleTime: TAZE_SURE,
+    retry: false,
+  });
+  const ad = sorgu.data?.ad?.trim() ?? '';
+  return ad === '' ? null : ad;
+}

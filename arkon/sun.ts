@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
 
-// Derlenmiş Arkon (arkon/dist, `npm run derle:arkon`) TMI istemcisinin /arkon-mes/ yolunda sunulur (/arkon TMI sayfasıdır):
-// geliştirmede ara katman olarak, derlemede istemci çıktısına kopyalanarak. Arkon TMI paketine karışmaz.
+// Derlenmiş Arkon (arkon/dist, `npm run derle:arkon`) CORE istemcisinin /arkon-mes/ yolunda sunulur (/arkon CORE sayfasıdır):
+// geliştirmede ara katman olarak, derlemede istemci çıktısına kopyalanarak. Arkon CORE paketine karışmaz.
 export const ARKON_YOLU = '/arkon-mes/';
 const DIST = fileURLToPath(new URL('./dist/', import.meta.url));
 const ARKON_KOKU = fileURLToPath(new URL('./', import.meta.url));
@@ -30,7 +30,7 @@ export function dosyaYolu(istekYolu: string, kok = DIST): string | null {
 }
 
 // İçerik güvenliği ilkesi (#199, kullanıcı kararı CSP a): zorlayıcı başlık; ikinci tarayıcı turunda yalnız-rapor kipinde ihlal sıfırdı.
-// frame-ancestors <meta> ile verilemez, bu yüzden derlemede değil burada, sayfa cevabının başlığındadır. Satır içi betikler (TMI köprüsü
+// frame-ancestors <meta> ile verilemez, bu yüzden derlemede değil burada, sayfa cevabının başlığındadır. Satır içi betikler (CORE köprüsü
 // çağrısı ve ARKON_FILES) özetle izinlidir; özet sunulan sayfadan hesaplanır, Arkon yeniden derlenince kendiliğinden güncellenir.
 // Tarayıcı özeti, HTML ayrıştırıcının satır sonlarını LF'ye çevirdiği metinden alır; Windows'ta (git autocrlf) sayfa CRLF ile gelir, özet de LF'den hesaplanır.
 // Gerekçeler: wasm-unsafe-eval OCCT ve Tesseract ikilisini bellekten derlemek için; unsafe-inline stil, ekranın ve çizim svg'sinin style

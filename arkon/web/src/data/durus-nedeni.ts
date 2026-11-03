@@ -8,7 +8,7 @@ export interface ParetoSatiri { k: string; l: string; ms: number; n: number; p: 
 export const NEDEN_YOK = '—';
 export const NEDEN_YOK_ETIKETI = 'Nedeni belirsiz';
 
-// İş değiştirirken çalışan eski işin kendiliğinden duraklatılması bu nedeni taşır (TMI neden kodu değildir; TMI'ye duraklatma gider).
+// İş değiştirirken çalışan eski işin kendiliğinden duraklatılması bu nedeni taşır (CORE neden kodu değildir; CORE'a duraklatma gider).
 // Duraklatma emrin durmasıdır, makinenin değil: makinede başka iş çalışırsa o süre çalışmadır; makine boşta kalırsa yeni iş başlayana
 // kadar geçen süre plansız duruştur (kullanıcı kararı, soru 33/50).
 export const IS_DEGISIMI = 'is-degisimi';

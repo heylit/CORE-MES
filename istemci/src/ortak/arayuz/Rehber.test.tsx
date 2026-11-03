@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { tanitimGorulduMu } from '../veri/tanitim.ts';
 import { Kabuk } from './Kabuk.tsx';
+import { Kitapcik } from './Rehber.tsx';
+import { tanitimAdimlari } from './Tanitim.tsx';
 
 const ISLEMLER = ['sayfa.stok', 'sayfa.ik-islemlerim'];
 const sayfalar = SAYFALAR.filter((s) => ISLEMLER.includes(s.islem));
@@ -84,5 +86,15 @@ describe('Yardim ve tanitim', () => {
     const kitap = within(screen.getByRole('dialog', { name: 'Kullanım kitapçığı' }));
     expect(kitap.getByRole('heading', { name: 'Stok Merkezi' })).toBeTruthy();
     expect(kitap.getByRole('button', { name: 'Yazdır / PDF' })).toBeTruthy();
+  });
+
+  it('firma adı girilmişse kitapçık ve tanıtım "<Firma> CORE" der; girilmemişse yalnız CORE', () => {
+    const r = render(<Kitapcik maddeler={[]} konular={[]} kurumAdi="Deneme Atolye" kapat={() => undefined} />);
+    expect(document.querySelector('.tc-kitapcik-ust')?.textContent).toBe('Deneme Atolye CORE');
+    r.unmount();
+    render(<Kitapcik maddeler={[]} konular={[]} kapat={() => undefined} />);
+    expect(document.querySelector('.tc-kitapcik-ust')?.textContent).toBe('CORE');
+    expect(tanitimAdimlari({ maddeler: [], kisayolVar: false, kurumAdi: 'Deneme Atolye' })[0]?.baslik).toBe("Deneme Atolye CORE'a hoş geldiniz");
+    expect(tanitimAdimlari({ maddeler: [], kisayolVar: false })[0]?.baslik).toBe("CORE'a hoş geldiniz");
   });
 });

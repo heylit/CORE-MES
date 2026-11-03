@@ -7,6 +7,8 @@ import type { PlanMotoruIstegi } from './disari.ts';
 import { coz } from './plan-cozucusu.ts';
 import { yerlesimleriSil, yerlesimler, yerlesimYaz, yersizBolmeler } from './sorgular.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
+import { canliPaylar } from './disari.ts';
+import { planTestOrtami } from './plan-ortak.test.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
@@ -203,5 +205,19 @@ describe('plan (gerçek PostgreSQL): motor bölmesi işareti (1985 a)', () => {
     assert.deepEqual([...(await o().vt.tx((db) => yersizBolmeler(db, senaryo))).keys()], [-1002]);
     const kalan = await o().sahip.sorgu<{ id: number }>('SELECT DISTINCT is_emri_id AS id FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1', [senaryo]);
     assert.deepEqual(kalan.map((x) => x.id), [-1002]);
+  });
+});
+
+// 1979 (2003 c): terminal adımın canlı paylarını plandan okur; yalnız yerleşmiş parçalar, kaynak makine ya da kişi.
+describe('plan (gerçek PostgreSQL): adımın canlı payları (1979)', () => {
+  const { isEmirleriAc, yeniAdim, durum, vt } = planTestOrtami();
+  test('yerleşmiş parçalar döner; parçasız adımda liste boş', async () => {
+    const { ortam, operatorId } = durum();
+    const [ie, bos] = await isEmirleriAc([yeniAdim({}), yeniAdim({})]);
+    await ortam!.sahip.sorgu("INSERT INTO plan_yerlesimi (is_emri_id, kisi_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, '2099-10-05 08:00Z', '2099-10-05 10:00Z', $2)", [ie, operatorId]);
+    await ortam!.sahip.sorgu("INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet, kisi_id, baslangic, bitis) VALUES ($1, 1, 3, $2, '2099-10-05 08:00Z', '2099-10-05 09:00Z')", [ie, operatorId]);
+    await ortam!.sahip.sorgu('INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet) VALUES ($1, 2, 2)', [ie]);
+    assert.deepEqual(await vt().tx((db) => canliPaylar(db, ie!)), [{ no: 1, adet: 3, makineId: null, kisiId: operatorId }]);
+    assert.deepEqual(await vt().tx((db) => canliPaylar(db, bos!)), []);
   });
 });

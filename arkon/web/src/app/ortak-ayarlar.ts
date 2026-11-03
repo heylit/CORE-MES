@@ -12,7 +12,7 @@ import { kapaliGun, kapaliGunEtiketi, tatilleriOku, type Tatiller } from '../dat
 /* ── Ortak ayarlar: vardiyalar ve çalışma modu (kv 'shifts', 'mode' · sunucu modunda bütün cihazlarda aynı) ── */
 // Aktif vardiya tanımı yoksa liste boştur: varsayılan vardiya uydurulmaz, OEE ve vardiya süresi hesaplanmaz.
 export let SHIFTS: Shift[] = [], APPMODE: AppMode = { demo: true };
-// TMI tatil ve kapalı günleri (kv 'holidays'): o gün başlayan vardiya penceresi yoktur.
+// CORE tatil ve kapalı günleri (kv 'holidays'): o gün başlayan vardiya penceresi yoktur.
 export let HOLIDAYS: Tatiller = {};
 /* ── Tesis yapısı: İş merkezi › İstasyon › Makine (kv 'plant') ──
    İstasyon: tabletin durduğu iş yeri; iş paketleri istasyona gönderilir (pkg.machine = istasyon kodu, kayıtlarda "machine").
@@ -35,7 +35,7 @@ export const machineOf = id => stationList(true).find(m => m.id === id) || { id,
 export const mcOf = id => PLANT.mcs.find(m => m.id === id) || null;
 /** Bu cihaz bir istasyon tableti mi? (istasyon bu cihazda seçilmiş ve kişi üretim kaydı yapabiliyor) — ofisten operatör ekranına bakan kişiler istasyon kaydını bozmasın */
 export const isStationTablet = () => (!!LS.get('station') || (APPMODE.demo && !MEU())) && can('prod.run');
-/** Bu tabletin istasyonu: kayıtlı istasyon, yoksa kişinin TMI'de atandığı istasyon, o da yoksa ilk istasyon */
+/** Bu tabletin istasyonu: kayıtlı istasyon, yoksa kişinin CORE'da atandığı istasyon, o da yoksa ilk istasyon */
 export const myStation = () => istasyonSec(LS.get('station'), (MEU() || {}).st, stationList().map(x => x.id), (MEU() || {}).sts);
 
 /* ── Roller (sabit) ve işlem yetki matrisi (kv 'perms' · yönetici düzenler) ── */
@@ -141,7 +141,7 @@ export function audit(area, action, target, detail?) { try { AKStore.Log.add('au
 export function allowed(k, say) { if (can(k)) return true; if (Date.now() - denyT > 1500) { denyT = Date.now(); try { beep('nok'); } catch (e) {} say && say('Yetkin yok: ' + (PERM_L[k] || k), 'lock', 'var(--stop)'); } return false; }
 export async function loadCfg() {
   const S = AKStore, st = S.status(), srv = st.mode === 'server';
-  // Okumalar birbirini beklemeden gider: TMI içinde her biri ayrı sunucu isteğidir, sırayla beklemek terminalin açılışını okuma sayısı
+  // Okumalar birbirini beklemeden gider: CORE içinde her biri ayrı sunucu isteğidir, sırayla beklemek terminalin açılışını okuma sayısı
   // kadar gidiş-dönüş uzatıyordu. Sonuçlar eskisi gibi sırayla uygulanır (tesis, kipten sonra).
   const sonuc = (p: Promise<any>) => p.then(v => ({ ok: true, v }), () => ({ ok: false, v: undefined }));
   const [sh, md, pl, pm, po, rs, sc, dw, gg, hd] = await Promise.all([

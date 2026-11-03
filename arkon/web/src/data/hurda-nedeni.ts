@@ -1,4 +1,4 @@
-/* Hurda yalnız nedenle yazılır (kullanıcı kararı 116 a): pencerede nedensiz kayıt yoktur. Neden listesi boşsa (TMI'de hurda nedeni
+/* Hurda yalnız nedenle yazılır (kullanıcı kararı 116 a): pencerede nedensiz kayıt yoktur. Neden listesi boşsa (CORE'da hurda nedeni
    tanımsız) operatöre neden kaydedemediği söylenir; liste dolunca kayıt açılır. */
 export const HURDA_NEDENI_YOK = "Hurda nedeni tanımlı değil; hurda kaydedilemez. CORE'da hurda nedeni tanımlanınca kayıt açılır.";
 

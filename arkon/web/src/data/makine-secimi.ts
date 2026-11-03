@@ -1,4 +1,4 @@
-/* Makine seçimi (kart #1148). Makineli istasyonda TMI kilidi makinededir: işi hangi makinelerde çalıştıracağını operatör seçer, seçmezse işe atanmış
+/* Makine seçimi (kart #1148). Makineli istasyonda CORE kilidi makinededir: işi hangi makinelerde çalıştıracağını operatör seçer, seçmezse işe atanmış
    makine kullanılır (sunucu karar verir; ekran seçilmemişliği `mcs` göndermeyerek söyler). Tek makineli istasyonda seçim yoktur. Seçim yalnız
    çalışmaya geçiş kaydına girer: çalışan işte makine değişmez (başka makineye geçmek önce durdurmak ister). */
 export interface SecilebilirMakine { id: string; name?: string }

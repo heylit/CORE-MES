@@ -22,16 +22,20 @@ interface Ozellikler {
   // İşaretler görünür ama değiştirilemez (ör. yetkisiz kişi, bitmiş emir, süren istek).
   saltOkunur?: boolean;
   bosMesaj?: string;
+  // Uzun listeyi parça parça göstermek için: yalnız bu sayfanın adımları çizilir; numara ve tamamlanma sayacı bütün listedendir.
+  sayfa?: { boyut: number; no: number } | undefined;
 }
 
 export function AdimListesi({
-  baslik = 'Talimat adımları', adimlar, degistir, saltOkunur = false, bosMesaj = 'Bu emirde adım yok',
+  baslik = 'Talimat adımları', adimlar, degistir, saltOkunur = false, bosMesaj = 'Bu emirde adım yok', sayfa,
 }: Ozellikler) {
   const baslikKimlik = useId();
   if (adimlar.length === 0) return <DurumKutusu durum="bos" mesaj={bosMesaj} />;
 
   const kilitli = saltOkunur || degistir === undefined;
   const biten = adimlar.filter((a) => a.tamam).length;
+  const ilk = sayfa ? sayfa.no * sayfa.boyut : 0;
+  const gorunen = sayfa ? adimlar.slice(ilk, ilk + sayfa.boyut) : adimlar;
   return (
     <div className="tc-adimlar" role="group" aria-labelledby={baslikKimlik}>
       <div className="tc-adimlar-ust">
@@ -41,7 +45,7 @@ export function AdimListesi({
           <span className="tc-adimlar-sayac">{biten} / {adimlar.length} tamamlandı</span>
         </div>
       </div>
-      {adimlar.map((a, sira) => (
+      {gorunen.map((a, i) => (
         <button
           key={a.id}
           type="button"
@@ -53,7 +57,7 @@ export function AdimListesi({
         >
           <span className="tc-adim-kutu" aria-hidden="true"><Simge ad="check" /></span>
           <span className="tc-adim-metin">
-            <b>{sira + 1}. {a.ad}</b>
+            <b>{ilk + i + 1}. {a.ad}</b>
             {a.aciklama && <small>{a.aciklama}</small>}
             {a.not && <small className="tc-adim-not">{a.not}</small>}
           </span>

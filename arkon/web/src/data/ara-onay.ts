@@ -28,7 +28,7 @@ function imza(d: unknown): string {
 export const IMZA_ALANLARI = [
   ['plan', 'Kontrol planı'], ['steps', 'Operasyon adımları'], ['files', 'Dokümanlar'], ['warns', 'Uyarılar'], ['samp', 'Numune planı'],
   ['cycle', 'Çevrim süresi'], ['setup', 'Ayar süresi'], ['op', 'Operasyon'],
-  // Plan işi başka istasyona ya da makineye taşıyınca TMI paketi `machine` ve `mc` alanlarını yeniden yazar; rota revizyonu `rev`'dir.
+  // Plan işi başka istasyona ya da makineye taşıyınca CORE paketi `machine` ve `mc` alanlarını yeniden yazar; rota revizyonu `rev`'dir.
   ['machine', 'İstasyon'], ['mc', 'Makine'], ['rev', 'Rota revizyonu'],
 ] as const;
 

@@ -1,4 +1,4 @@
-/* TMI işinde adımda girilen hatalı parça toplamı (1188): sunucu iş emri paketine `tmi.hatali` olarak yazar; sıfır gerçek sıfırdır.
+/* CORE işinde adımda girilen hatalı parça toplamı (1188): sunucu iş emri paketine `tmi.hatali` olarak yazar; sıfır gerçek sıfırdır.
    Alan yoksa ya da geçersizse sayı bilinmiyor (null) döner; ekran uydurmaz, "—" yazar. */
 export interface HataliPaketi { tmi?: object | null }
 

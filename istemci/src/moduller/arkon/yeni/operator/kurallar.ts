@@ -314,12 +314,13 @@ export function durumDugmeleri(durum: string): DurumDugmesi[] {
   ];
   if (durum === 'setup') return [{ key: 's', eylem: 'start', simge: 'play', etiket: 'Üretime Geç', ton: 'run', ana: true }];
   if (durum === 'running') return [
-    { key: 'x', eylem: 'stop', simge: 'stop', etiket: 'Durdur', ton: 'stop', tut: true },
-    { key: 'p', eylem: 'pause', simge: 'pause', etiket: 'Duraklat', ton: 'hold', ana: true },
+    // 2000 b: ana düğme Durdur; dokununca neden penceresi açılır, kayıt bildirimden geri alınır. Nedensiz Duraklat basılı tutulur.
+    { key: 'x', eylem: 'stop', simge: 'stop', etiket: 'Durdur', ton: 'stop', ana: true },
+    { key: 'p', eylem: 'pause', simge: 'pause', etiket: 'Duraklat', ton: 'hold', tut: true },
     { key: 'f', eylem: 'finish', simge: 'flag', etiket: 'Bitir', ton: 'done', tut: true },
   ];
   if (durum === 'paused') return [
-    { key: 'x', eylem: 'stop', simge: 'stop', etiket: 'Durdur', ton: 'stop', tut: true },
+    { key: 'x', eylem: 'stop', simge: 'stop', etiket: 'Durdur', ton: 'stop' },
     { key: 'r', eylem: 'resume', simge: 'play', etiket: 'Devam Et', ton: 'run', ana: true },
     { key: 'f', eylem: 'finish', simge: 'flag', etiket: 'Bitir', ton: 'done', tut: true },
   ];
@@ -329,10 +330,10 @@ export function durumDugmeleri(durum: string): DurumDugmesi[] {
   ];
   return [{ key: 'n', eylem: 'next', simge: 'next', etiket: 'Sıradaki İş', ton: 'hazard', ana: true }];
 }
-// Telefonun alt eylem çubuğu (618, 615-1 b): durumun ana eylemi ve Durdur. Durdur dokunuşla duruş nedeni penceresini açar, orada onaylanır;
+// Telefonun alt eylem çubuğu (618, 615-1 b): durumun ana eylemi, Durdur ve Duraklat. Durdur dokunuşla duruş nedeni penceresini açar, orada onaylanır;
 // basılı tutulan Bitir ve ikincil eylemler (Hazırlık, Resim) aşağıdaki düğme grubunda kalır.
 export function cubukDugmeleri(durum: string): DurumDugmesi[] {
-  return durumDugmeleri(durum).filter((d) => d.ana || d.eylem === 'stop').map(({ tut: _tut, ...d }) => d);
+  return durumDugmeleri(durum).filter((d) => d.ana || d.eylem === 'stop' || d.eylem === 'pause').map(({ tut: _tut, ...d }) => d);
 }
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };

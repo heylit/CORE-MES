@@ -6,7 +6,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
-  AcikAdim, AdimCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
+  AcikAdim, AdimCevabi, AdimPaylariCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
@@ -22,8 +22,9 @@ import {
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
+  MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi,
 } from './kurallar.ts';
-import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
+import type { IstasyonDurumu, MakineAyrimi, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
@@ -486,6 +487,11 @@ async function secimiDenetle(db: Db, istasyonId: number, secilen: readonly numbe
 export type PlanAyrimiCozucusu = (db: Db, makineIdleri: readonly number[], ufukDk: number) => Promise<{ makineId: number; isEmriId: number; baslangic: string }[]>;
 let planAyrimi: PlanAyrimiCozucusu | null = null;
 export function planAyrimiCozucusuKaydet(cozucu: PlanAyrimiCozucusu | null): void { planAyrimi = cozucu; }
+// 1979 (2003 c): adımın canlı plandaki payları (bölünmüş işin parçaları; kaynak makine ya da kişi). Kayıtsızken ya da bölünmemiş adımda boş.
+export type PlanPaylariCozucusu = (db: Db, isEmriId: number) => Promise<PlanPayi[]>;
+let planPaylari: PlanPaylariCozucusu | null = null;
+export function planPaylariCozucusuKaydet(cozucu: PlanPaylariCozucusu | null): void { planPaylari = cozucu; }
+const adiminPaylari = async (db: Db, isEmriId: number | null): Promise<PlanPayi[]> => (planPaylari === null || isEmriId === null ? [] : planPaylari(db, isEmriId));
 
 // 393 d: yalnız seçilen ve iş emrinin makinesi olmayan makineler denetlenir; seçimsiz başlatma planın makinesindedir.
 async function ayrimAdaylari(db: Db, baska: readonly number[]): Promise<MakineAyrimi[]> {
@@ -1023,7 +1029,8 @@ export async function katil(db: Db, kisiId: number, id: number, isEmriId?: numbe
   const son = await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null);
   // Kendi duraklattığı çalışmasına dönen kişi zaten bu işteydi (işi başlatan ekip denetimine girmez): ekip yalnız yeni katılımda aranır.
   const donus = son !== null && son.kapanis === 'duraklat';
-  if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId))) throw yetkiYok(EKIP_DISI);
+  // 1979 (2003 c): planda bu adımda payı olan kişi ekip dışından da katılır.
+  if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId)) && !payiVarMi(await adiminPaylari(db, adim?.id ?? null), { kisiId })) throw yetkiYok(EKIP_DISI);
   const ihlal = katilmaIhlali(emir.durum, calisma, son !== null && son.cikis === null);
   if (ihlal !== null) throw cakisma(ihlal);
   try {
@@ -1097,4 +1104,38 @@ export async function sonOlaylar(db: Db, sonra: string | null, sayi: number): Pr
       zaman: r.zaman,
     })),
   };
+}
+
+/* ---------------- plandaki paylar terminalde (1979, 2003 c) ---------------- */
+
+// Adımın payları ve ilerlemesi: kişi payında kişinin bu adımda saydığı; makine payında null (sayım makine tutmuyor, 2009 b göçüyle
+// gelecek). Bölünmemiş adımda boş.
+export async function adimPaylari(db: Db, emirId: number, isEmriId: number): Promise<AdimPaylariCevabi> {
+  const emir = await sorgular.emirBul(db, emirId);
+  if (emir === null) throw bulunamadi(EMIR_YOK);
+  if (!(await sorgular.isEmirleriGetir(db, [emirId])).some((i) => i.id === isEmriId)) throw bulunamadi(IS_EMRI_YOK);
+  const paylar = await adiminPaylari(db, isEmriId);
+  if (paylar.length === 0) return { paylar: [] };
+  const saglam = new Map((await sorgular.kisiSaglamlariGetir(db, isEmriId)).map((x) => [x.kisiId, x.saglam]));
+  const adlar = await adlariAl(db);
+  const cevap: AdimPaylariCevabi['paylar'] = [];
+  for (const p of payIlerlemesi(paylar, saglam)) {
+    const makine = p.makineId === null ? null : { id: p.makineId, ad: (await makineGetir(db, p.makineId))?.ad ?? `#${String(p.makineId)}` };
+    cevap.push({ no: p.no, adet: p.adet, sayilan: p.sayilan, fazla: p.fazla, makine, kisi: p.kisiId === null ? null : adli(adlar.kisi, p.kisiId, 'Kişi') });
+  }
+  return { paylar: cevap };
+}
+
+// Çalışan adıma planda payı olan makine eklenir: iş durmaz, makinenin kullanımı açılır. Makine doluysa başlatmadaki gibi reddedilir (devral).
+export async function makineEkle(db: Db, kisiId: number, id: number, isEmriId: number, makineId: number): Promise<{ emir: Emir }> {
+  const { emir, adim, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
+  const ihlal = katilmaIhlali(emir.durum, calisma, false);
+  if (ihlal !== null) throw cakisma(ihlal);
+  if (!payiVarMi(await adiminPaylari(db, adim!.id), { makineId })) throw cakisma(PAYI_YOK_MAKINE);
+  if ((await sorgular.acikKullanimlar(db, istasyonId, [makineId])).some((k) => k.emirId === id && k.isEmriId === adim!.id)) throw cakisma(MAKINE_ZATEN_ADIMDA);
+  await secimiDenetle(db, istasyonId, [makineId]);
+  const yer: Yer = { istasyonId, makineler: [makineId] };
+  await yeriDenetle(db, id, yer, adim!.id);
+  await yeriTut(db, id, adim!.id, yer, kisiId, await komutAni(db, id));
+  return emirdenCevap(db, id);
 }

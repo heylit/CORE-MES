@@ -103,9 +103,9 @@ export function App({ preview }) {
       if (i >= 0) { const prev = out[i]; out[i] = Object.assign({}, prev, base, { fresh: preview ? false : prev.pkg ? (prev.pkg.version !== p.version || prev.fresh) : true, baseGood: prev.pkg ? prev.baseGood : prev.good }, r && !prev.pkg ? { state: r.state || prev.state, good: r.good, scrap: r.scrap, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? r.good, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {}, kart: r.kart ?? null } : null, r && prev.pkg ? { pins: r.pins || prev.pins || [] } : null); }
       else out = [Object.assign({ state: 'queued', good: 0, scrap: 0, meas: {}, pins: [], fresh: !r && !preview, baseGood: 0 }, r ? { state: r.state || 'queued', good: r.good || 0, scrap: r.scrap || 0, meas: r.meas || {}, pins: r.pins || [], baseGood: r.baseGood ?? 0, acks: r.acks || {}, toolsAt: r.toolsAt || {}, sr: r.sr || {}, kart: r.kart ?? null } : null, base), ...out];
     }
-    // TMI'de biten emrin işi terminalde de biter (kart #1194): sayaç kapanır, iş biten işlere geçer.
+    // CORE'da biten emrin işi terminalde de biter (kart #1194): sayaç kapanır, iş biten işlere geçer.
     out = out.map(x => tmiBitti(x.pkg) && x.state !== 'done' ? Object.assign({}, x, { state: 'done' }) : x);
-    // Sıra: canlı plandaki TMI işleri plan sırasıyla, öteki işler Planlama'daki sırayla (pkg.seq)
+    // Sıra: canlı plandaki CORE işleri plan sırasıyla, öteki işler Planlama'daki sırayla (pkg.seq)
     return out.map((x, i) => [x, x.pkg && x.pkg.seq != null ? x.pkg.seq : 1e9 + i]).sort((a, b) => planOnce(a[0].pkg, b[0].pkg) || a[1] - b[1]).map(x => x[0]);
   };
   const pkgsRef = useRef<any>({});
@@ -124,7 +124,7 @@ export function App({ preview }) {
     if (msg && msg.type === 'pin-resolved') say('Hazırlık notunu yanıtladı: ' + (msg.reply || 'çözüldü'), 'check', 'var(--run)');
   };
   useEffect(() => { (async () => { await seedIfEmpty(); await loadPkgs(); if (!preview) { const h = await AKStore.DB.get('kv', 'handover'); if (h && Date.now() - h.at < 12 * 3600e3) setHandover(h); } })(); if (preview) return; return AKStore.Bus.on(m => { if (m.type === 'pkg' || m.type === 'pkg-removed' || m.type === 'pin-resolved') loadPkgs(m); if (m.type === 'pkg-order' && m.machine === MACHINE) loadPkgs(); if (m.type === '$merged' && (m.store === 'results' || m.store === 'pkgs')) loadPkgs(); if (m.type === 'mc' && m.st === MACHINE) onMachineData(m); if (m.type === 'call-ack' && m.machine === MACHINE) { beep('call'); setCall(x => x && x.t0 === m.t0 ? Object.assign({}, x, { stage: Math.max(x.stage, 1), who: m.who, times: x.times.concat([Date.now()]), msgs: x.msgs.concat([{ from: 'them', text: m.who + ' çağrıyı aldı · geliyor', at: Date.now() }]) }) : x); } if (m.type === 'sample-result' && m.machine === MACHINE) onSampleResult(m); const ds = durumIletisi(m, MACHINE); if (ds) onTmiDurum(ds); }); }, []);
-  // Makine devralındı: TMI'deki hâl gelir, ekran ona eşitlenir; eşitleme yeni durum kaydı yazmaz.
+  // Makine devralındı: CORE'daki hâl gelir, ekran ona eşitlenir; eşitleme yeni durum kaydı yazmaz.
   const onTmiDurum = ds => {
     const a = live.current.o;
     if (a && a.no === ds.orderNo && a.state !== ds.state) { autoRef.current.state = true; if (a.state === 'running' && ds.state === 'paused') say('Makine başka işe devredildi · iş duraklatıldı', 'alert', 'var(--hazard)'); }
@@ -367,7 +367,7 @@ export function App({ preview }) {
   /* sunucu sayımı ya da başlatmayı reddetti: terminaldeki sayı ya da durum geri döner, ret metni gösterilir; geri alma yeni kayıt yazmaz */
   useEffect(() => {
     const f = e => {
-      // TMI işin hâlini bildirdiyse ekran ona eşitlenir (tek kaynak TMI): duraklatma yazılmadıysa iş çalışıyor, devam reddedildiyse ama iş
+      // CORE işin hâlini bildirdiyse ekran ona eşitlenir (tek kaynak CORE): duraklatma yazılmadıysa iş çalışıyor, devam reddedildiyse ama iş
       // çalışıyorsa çalışıyor görünür. Yoksa başlatma geri alınır.
       const es = durumEsitleme(e.detail);
       if (es) {
@@ -378,7 +378,7 @@ export function App({ preview }) {
       }
       const b = baslatmaGeriAlma(e.detail);
       if (b) {
-        // Başlatma yazılmadı: iş geri döner; geri dönüş yeni durum kaydı yazmaz (TMI'de değişen bir şey yok).
+        // Başlatma yazılmadı: iş geri döner; geri dönüş yeni durum kaydı yazmaz (CORE'da değişen bir şey yok).
         const a = live.current.o; if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
         setOrders(l => baslatmaGeriUygula(l, b));
         beep('nok'); say('İş başlamadı · ' + (e.detail.msg || 'CORE kabul etmedi'), 'alert', 'var(--stop)');
@@ -428,8 +428,8 @@ export function App({ preview }) {
     // Başlat ilk parça onayını beklemez (129, 130 a): ilk parça Başlat'tan sonra üretilip sayılır ve kaliteye gider.
     if ((a === 'start' || a === 'resume' || a === 'restart') && ilk.acik) say('Dikkat: ilk parçayı say ve kaliteye gönder · ' + (ilk.yeniden ? 'karar gelene kadar sonraki sağlam parçalar sayılmaz' : 'Kalite Merkezi kararı gelene kadar sağlam parçalar karar bekler'), 'alert', 'var(--hold)');
     if ((a === 'start' || a === 'setup') && !warned && !preview) { const sw = RL.warns.filter(w => w.t && w.t.trim() && w.when === 'start' && !((o.acks || {})[w.id] && (o.acks || {})[w.id].v === (o.pkg && o.pkg.version))); if (sw.length) { setWarnShow({ list: sw, title: 'Başlamadan önce oku', then: () => act(a, t, true) }); return; } }
-    // Üretim Terminali gibi: TMI emrinde başlatmadan önce girdiler istasyonda mı sorulur; eksikse istek açılır, Malzeme · Teslim paneli açılır
-    // ve iş uyarıyla başlar (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü TMI'nin başlat denetimi söyler.
+    // Üretim Terminali gibi: CORE emrinde başlatmadan önce girdiler istasyonda mı sorulur; eksikse istek açılır, Malzeme · Teslim paneli açılır
+    // ve iş uyarıyla başlar (karar 110 b). Sorulamazsa (ağ yok) başlatma gider, son sözü CORE'un başlat denetimi söyler.
     const tmiEmir = tmiEmirId(o.pkg);
     if (a === 'start' && !hazir && !preview && tmiEmir !== null && AKStore.status().mode === 'server') {
       if (hazirlikta.current) return;

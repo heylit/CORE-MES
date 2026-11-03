@@ -46,7 +46,7 @@ export const STEP_TEMPLATES = {
     { t: 'İlk 3 parçayı gözle ve mastarla kontrol et', d: 'Çapak, ezik, çatlak', r: true }]
 };
 export const uidg = () => Math.random().toString(36).slice(2, 9);
-/* rotalı TMI emrinin iş emri paketi: emir, operasyon, istasyon, adet, süreler, termin ve öncelik TMI planından gelir, burada değişmez */
+/* rotalı CORE emrinin iş emri paketi: emir, operasyon, istasyon, adet, süreler, termin ve öncelik CORE planından gelir, burada değişmez */
 export const tmiIsEmri = p => String((p && p.id) || '').startsWith('tmi-ie-');
 const TMI_KILIT = 'CORE planından gelir';
 // Rotalı işin plan durumu (data/tmi-plan.ts): operatöre yalnız canlı planda eşleşen iş düşer; sıra canlı plandandır.
@@ -186,7 +186,7 @@ export function PrepApp() {
   };
   const patch = (ch) => { if (!allowed('pkg.edit', say)) return; setCur(o => { const n = Object.assign({}, o, ch, { updatedAt: Date.now(), dirty: true }); clearTimeout(saveT.current); saveT.current = setTimeout(() => { saveT.current = 0; DB.put('pkgs', n).then(reload); }, 500); return n; }); };
   const select = async (x) => { if (cur && saveT.current) { clearTimeout(saveT.current); saveT.current = 0; await DB.put('pkgs', cur); } setCur(x); setTab('info'); setPlanSel(null); setMEdit(true); reload(); };
-  // A5 (kart #541): paket TMI'de emir açılınca oluşur; Arkon yerel paket açmaz.
+  // A5 (kart #541): paket CORE'da emir açılınca oluşur; Arkon yerel paket açmaz.
   const create = () => { if (!allowed('pkg.edit', say)) return; if (!tmiyeGit('emir-ac')) say('Yeni paket CORE’da emir açılınca oluşur: Rota > Üretim emirleri’nde emri aç', 'alert', 'var(--hold)'); };
   const remove = async () => { if (!p || !allowed('pkg.del', say)) return; audit('paket', 'silindi', p.no, p.part); await DB.del('pkgs', p.id); Bus.send({ type: 'pkg-removed', id: p.id }); const all = await reload(); setCur(all[0] || null); say('Paket silindi', 'trash', 'var(--stop)'); };
   /** Çizim stüdyosunda kaydedilmiş çizimi pakete al: dosyalar + ana resim + okuma ayarı (+ balonlar varsa kontrol planı) */

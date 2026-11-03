@@ -217,7 +217,7 @@ export function ApprovalView({ pkgs, say }) {
 export let GAUGES: Gauge[] = [];
 export const gaugeDue = g => (g.last || 0) + (g.interval || 365) * 864e5;
 export const gaugeTone = (g, now) => g.status === 'out' ? ['var(--idle)', 'Kullanım dışı'] : gaugeDue(g) < now ? ['var(--stop)', 'Kalibrasyonu geçmiş'] : gaugeDue(g) < now + 30 * 864e5 ? ['var(--hold)', Math.ceil((gaugeDue(g) - now) / 864e5) + ' gün kaldı'] : ['var(--run)', 'Geçerli'];
-// Sunucuya bağlı Arkon'da ölçü aletleri TMI'nin Kalibrasyon sayfasındadır; sunucu gauges yazımını reddeder (A7, #518). Liste salt okunur.
+// Sunucuya bağlı Arkon'da ölçü aletleri CORE'un Kalibrasyon sayfasındadır; sunucu gauges yazımını reddeder (A7, #518). Liste salt okunur.
 const aletlerTmide = () => AKStore.status().mode === 'server';
 export function GaugeView({ say }) {
   const [list, reload] = useDocs('gauges'), [ed, setEd] = useState(null), [cal, setCal] = useState(null), [q, setQ] = useState(''), now = useNow(600000), edit = can('gauge.edit') && !aletlerTmide();

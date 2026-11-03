@@ -79,6 +79,14 @@ export const uclar = [
   }),
   uc({
     yontem: 'GET',
+    yol: '/giris-kurum-adi',
+    // Giriş ekranı oturum açılmadan "<Firma> CORE" yazar (kullanıcı kararı 2002). Yalnız firma adı döner; kimlik istemez (ADR 0003 madde 2).
+    yetki: 'acik',
+    cevap: kurumCevabi,
+    isle: ({ db }) => kurumOku(db),
+  }),
+  uc({
+    yontem: 'GET',
     yol: '/kurum',
     // Modül başlıkları her oturumda yazar; yazma genel değiştirme ucundan, ayar yazan kişiyledir.
     yetki: 'oturum',

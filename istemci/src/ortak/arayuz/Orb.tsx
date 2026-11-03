@@ -24,6 +24,7 @@ const YARICAP = 50;
 const CEVRE = 2 * Math.PI * YARICAP;
 // Basılı tutamayan yardımcı teknoloji için ikinci etkinleştirmenin beklendiği süre.
 export const ORB_ONAY_SURESI_MS = 5000;
+const TITRESIM_MS = 40;
 // Tuş bırakılınca tarayıcının ürettiği tıklama, yardımcı teknoloji tıklaması sayılmasın diye.
 const TUS_SONRASI_MS = 100;
 
@@ -67,6 +68,8 @@ export function Orb({
     if (gecen >= 1) {
       // Başlangıç silinir: bırakma artık "erken" sayılmaz ve aynı basış ikinci kez tetiklemez.
       baslangic.current = null;
+      // Eldivenle halka görülmeyebilir: süre dolunca destekleyen cihaz kısa titrer; desteklemeyende yalnız halka kalır.
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(TITRESIM_MS);
       tetikleRef.current();
       return;
     }

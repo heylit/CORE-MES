@@ -21,7 +21,7 @@ export function isSatiri(parca?: unknown, op?: unknown): string | null {
 }
 
 // Üretilen malzemenin kodu (parça no) ve revizyonu. Kod adla aynıysa tekrar yazılmaz; ikisi de yoksa satır çizilmez.
-// `malzemeNo` TMI'de malzeme kartının sayı kimliğidir, kod değildir: yazılmaz. Metin olmayan alan ekranı düşürmez, boş sayılır.
+// `malzemeNo` CORE'da malzeme kartının sayı kimliğidir, kod değildir: yazılmaz. Metin olmayan alan ekranı düşürmez, boş sayılır.
 export function malzemeSatiri(paket: { partNo?: unknown; rev?: unknown } | null | undefined, ad?: unknown): string | null {
   if (!paket) return null;
   const kod = metin(paket.partNo);

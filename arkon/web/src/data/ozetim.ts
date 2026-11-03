@@ -1,4 +1,4 @@
-/* Operatör Özetim (kart #1295). Hesap TMI sunucusundadır (GET /arkon/operator-ozeti); ekran yalnız gösterir. Veri yoksa alan null gelir ve
+/* Operatör Özetim (kart #1295). Hesap CORE sunucusundadır (GET /arkon/operator-ozeti); ekran yalnız gösterir. Veri yoksa alan null gelir ve
    "–" gösterilir: sıfır uydurulmaz. Ekip ortalaması isimsiz tek sayıdır. */
 export type OzetDonemi = 'gun' | 'hafta' | 'ay';
 export interface OzetGunu { tarih: string; saglam: number | null; hurda: number | null; beklenen: number | null }
@@ -52,7 +52,7 @@ export function ozetTarih(tarih: string): string {
   return `${d.getUTCDate()} ${AY_ADI[d.getUTCMonth()] ?? ''} ${GUN_ADI[d.getUTCDay()] ?? ''}`;
 }
 
-// Mesainin başlangıç ve bitiş saati tesis saat dilimiyle (TMI paylasilan/tesis-zamani.ts ile aynı).
+// Mesainin başlangıç ve bitiş saati tesis saat dilimiyle (CORE paylasilan/tesis-zamani.ts ile aynı).
 const SAAT = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 export const ozetSaat = (zaman: string | null): string => (zaman === null ? '–' : SAAT.format(new Date(zaman)));
 

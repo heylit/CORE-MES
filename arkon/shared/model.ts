@@ -24,7 +24,7 @@ export interface Session { token?: string; user: User; srv?: string }
 export type OpType = 'cnc' | 'kalite' | 'depo' | 'mark' | 'boya' | 'montaj';
 export type MachineConn = '' | 'focas' | 'opcua' | 'mtc' | 'modbus' | 'io';
 export interface WorkCenter { id: Id; name: string; note?: string; active?: boolean }
-/** tmi: TMI'deki sayısal istasyon kimliği (sunucu kipinde; 3B model küçük resmi bununla okunur) */
+/** tmi: CORE'daki sayısal istasyon kimliği (sunucu kipinde; 3B model küçük resmi bununla okunur) */
 export interface Station { id: Id; name: string; wc: Id; t: OpType; active?: boolean; tmi?: number }
 export interface Machine { id: Id; name: string; kind?: string; make?: string; serial?: string; st: Id; conn?: MachineConn; addr?: string; active?: boolean }
 export interface Plant { wcs: WorkCenter[]; sts: Station[]; mcs: Machine[] }
@@ -36,7 +36,7 @@ export interface Policy { shiftLogout: boolean; idleLock: number; callEsc: numbe
 export type CallTeam = 'bakim' | 'kalite' | 'malzeme' | 'amir' | 'ayarci';
 /** duruş nedeni · cat: 'u' plansız (OEE kaybı) · 'p' planlı (planlı süreden düşülür) */
 export interface Reason { code: string; l: string; i?: string; cat: 'u' | 'p'; team?: CallTeam; after?: number; active?: boolean; c?: string }
-/** fason: yalnız fason dönüşündeki GKK adımında geçen neden (TMI sabit kodu) */
+/** fason: yalnız fason dönüşündeki GKK adımında geçen neden (CORE sabit kodu) */
 export interface ScrapReason { code: string; l: string; active?: boolean; fason?: boolean }
 export interface AppMode { demo: boolean }
 
@@ -54,18 +54,18 @@ export interface SampleRule { when: 'first' | 'every' | 'time' | 'shift' | 'last
 export interface Approval { ok: boolean; by: string; at: Ms; note?: string; version?: number }
 export interface PublishHistory { v: number; rev: string; at: Ms; by: string; ap?: string | null; st?: Id }
 export interface Pkg {
-  id: Id; no: string; opType: OpType; st: Record<string, any>; partNo: string; part: string; /** emrin projesinin adı (TMI yazar; projesizde ve Arkon paketinde boş) */ proje?: string; rev: string; op: string;
+  id: Id; no: string; opType: OpType; st: Record<string, any>; partNo: string; part: string; /** emrin projesinin adı (CORE yazar; projesizde ve Arkon paketinde boş) */ proje?: string; rev: string; op: string;
   /** istasyon kodu (eski adıyla "machine") */ machine: Id; /** belirli makine */ mc?: Id;
   target: number; cycle: number; due: string; priority: 'normal' | 'urgent'; material: string; note: string;
   files: PkgFile[]; primary: string | null; plan: PlanItem[]; steps: Step[]; rules?: any; samp?: SampleRule[]; readCfg?: any; derived?: any;
   status: PkgStatus; version: number; dirty: boolean; createdAt: Ms; updatedAt: Ms; publishedAt?: Ms; by: string;
   seq?: number; approval?: Approval | null; apReq?: { at: Ms; by: string; version?: number } | null; history?: PublishHistory[];
-  /** TMI emrinden gelen pakette ürünün malzeme kartı numarası; adımsız eski emirde null */ malzemeNo?: number | null;
-  /** ayar süresi (dk); rotalı TMI emrinin iş emri paketinde rotadan */ setup?: number | null;
-  /** rotalı TMI emrinin iş emri paketinde bağ (sunucu yazar) */ tmi?: { emirId: number; isEmriId: number; opNo: number; /** kol adımı: rework, tamir ya da ek (rota adımında yok) */ tur?: string; ekAciklama?: string; plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: { tur: 'makine' | 'kisi'; id: number } | null } };
+  /** CORE emrinden gelen pakette ürünün malzeme kartı numarası; adımsız eski emirde null */ malzemeNo?: number | null;
+  /** ayar süresi (dk); rotalı CORE emrinin iş emri paketinde rotadan */ setup?: number | null;
+  /** rotalı CORE emrinin iş emri paketinde bağ (sunucu yazar) */ tmi?: { emirId: number; isEmriId: number; opNo: number; /** kol adımı: rework, tamir ya da ek (rota adımında yok) */ tur?: string; ekAciklama?: string; plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: { tur: 'makine' | 'kisi'; id: number } | null } };
   /** ara onay kararı (Terminal kural 1/5); by, at ve once sunucudan */ fpRe?: { on: boolean; key: string; why: 'red' | 'revizyon' | 'degisiklik'; by?: string; at?: Ms; once?: string[] } | null;
   /** son yayındaki içerik imzası (arkon/web/src/data/ara-onay.ts) */ yayinImza?: Record<string, string> | null;
-  /** karar 732 a: kayıtsız TMI taslağına malzemenin Çizimler'deki yayında belgeleri (sunucu önerir, Hazırlık merkezden alır) */
+  /** karar 732 a: kayıtsız CORE taslağına malzemenin Çizimler'deki yayında belgeleri (sunucu önerir, Hazırlık merkezden alır) */
   malzemeCizimleri?: { belgeId: number; ad: string; tip: 'pdf' | 'model' }[];
   imported?: Ms; from?: string; [k: string]: unknown;
 }

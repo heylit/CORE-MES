@@ -1,4 +1,4 @@
-// TMI vardiya takvimindeki tatil ve kapalı günler (kv 'holidays', sunucu `arkonTatilleri`): o gün başlayan vardiya yoktur.
+// CORE vardiya takvimindeki tatil ve kapalı günler (kv 'holidays', sunucu `arkonTatilleri`): o gün başlayan vardiya yoktur.
 export interface TatilGunu { type: 'tatil' | 'kapali'; name: string | null }
 export type Tatiller = Readonly<Record<string, TatilGunu>>;
 

@@ -183,7 +183,7 @@ export function PlanApp() {
     ${toastEl}
   </${PageShell}>`;
 }
-// TMI ana menüsündeki Kuyruk sayfası: planın salt okunur görünümü; sıra ve istasyon yalnız Plan Kuyruğu'nda değişir.
+// CORE ana menüsündeki Kuyruk sayfası: planın salt okunur görünümü; sıra ve istasyon yalnız Plan Kuyruğu'nda değişir.
 export function KuyrukApp() {
   const [say, toastEl] = useToast();
   const [pk, reloadPk] = useDocs('pkgs', ['pkg', 'pkg-removed', 'pkg-approval', 'pkg-approved', 'progress']);
@@ -207,7 +207,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
   const items = pk.filter(p => showDone || !done(p));
   const sortL = L => L.slice().sort((a, b) => planOnce(a, b) || (a.seq ?? 1e9) - (b.seq ?? 1e9) || (parseDue(a.due) || 9e15) - (parseDue(b.due) || 9e15) || (a.createdAt || 0) - (b.createdAt || 0));
   const remainMs = p => { const r = R[p.id], left = kalanAdet(p.target, (r && r.good) || 0, (r && r.scrap) || 0); return left * (p.cycle || 0) * 1000; };
-  // TMI'den gelen işin istasyonu TMI planından değişir: taşınan paketin kaydı TMI'de reddedilir. Aynı şeritte sıra değiştirme serbesttir.
+  // CORE'dan gelen işin istasyonu CORE planından değişir: taşınan paketin kaydı CORE'da reddedilir. Aynı şeritte sıra değiştirme serbesttir.
   const tmiIsi = p => String(p.id).startsWith('tmi-');
   const moveTo = async (p, st, beforeId?) => {
     if (!allowed('plan.edit', say)) return;
@@ -225,7 +225,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
     audit('plan', moved ? 'istasyon değişti' : 'sıra değişti', p.no, moved ? p.machine + ' → ' + st : st + ' · ' + (idx + 1) + '. sıra');
     say(moved ? p.no + ' → ' + st : p.no + ' sırası güncellendi', 'check', 'var(--run)'); reload();
   };
-  // Açık TMI iş emrinin sırası Üretim Hazırlık'ındır (kart 527, 519 1 c, 544 a): kuyruğa yazılır, plan değişmez (plan yalnız yeni ekrandaki
+  // Açık CORE iş emrinin sırası Üretim Hazırlık'ındır (kart 527, 519 1 c, 544 a): kuyruğa yazılır, plan değişmez (plan yalnız yeni ekrandaki
   // "Plana öner" ile). Kuyruk işlemini (`arkon.kuyruk-sirala`) sunucu denetler; istek istasyonun gizli tamamlananları dahil bütün işleriyle gider.
   const kuyrugaSirala = async (p, st, beforeId) => {
     const istek = kuyrukTasimaIstegi(st, sortL(pk.filter(x => x.machine === st)), p, beforeId);
@@ -234,7 +234,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
     catch (e) { say((e && e.message) || 'Kuyruk sırası yazılamadı', 'x', 'var(--stop)'); }
     reload();
   };
-  // Rotalı TMI işinin (kuyruk dışı) sırası planındır (A4, 147 a): plan taslağına yazılır; ekran ve operatör taslak onaylanıp canlıya alınınca değişir,
+  // Rotalı CORE işinin (kuyruk dışı) sırası planındır (A4, 147 a): plan taslağına yazılır; ekran ve operatör taslak onaylanıp canlıya alınınca değişir,
   // o zamana dek kart "Sıra taslakta" ya da "Sıra onay bekliyor" der.
   const planaSirala = async (p, st, beforeId) => {
     if (!tmiPlani(p).canli) { say('Plana yerleşmemiş iş sıralanamaz', 'x', 'var(--stop)'); return; }
