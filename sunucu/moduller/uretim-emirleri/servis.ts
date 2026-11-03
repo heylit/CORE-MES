@@ -10,12 +10,12 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
-  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
+  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
   ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
-  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
+  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
@@ -573,6 +573,15 @@ async function yeriTut(db: Db, emirId: number, isEmriId: number | null, yer: Yer
   }
 }
 
+// UE20 (86 b) ve 2047 a: işe giren her yol (başlat, devam, ayar, katıl, çalışma ve makine devral) istasyonda bugün geçerli yetkinlik ister;
+// yönetici muaftır. Muaflık döner: başlatma makine yetkinliğinde (2046 a) de kullanır.
+async function istasyonYetkinliginiDenetle(db: Db, kisiId: number, istasyonId: number): Promise<boolean> {
+  const muaf = await kisiBayrakliMi(db, kisiId);
+  const ihlal = baslatmaYetkinlikIhlali(muaf || (await yetkinMi(db, kisiId, istasyonId)), muaf);
+  if (ihlal !== null) throw yetkiYok(ihlal);
+  return muaf;
+}
+
 // İş emirli emirde başlatma sıradaki iş emrini başlatır; fason iş emri operatörle başlamaz (UE3).
 // Uyarı (karar 110 b): stok girdi istasyonda yokken başlatmayı durdurmaz, eksiği iz olarak açar ve metnini döner; yoksa null.
 // Paralel adım (639): adım verilirse o adım başlar; emir başlamışken de bekleyen adım başlatılır. Sıra dışı başlatma reddedilmez,
@@ -588,8 +597,7 @@ export async function emirBaslat(
   const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
-  const yetkinlikIhlali = baslatmaYetkinlikIhlali(await yetkinMi(db, kisiId, istasyonId), await kisiBayrakliMi(db, kisiId));
-  if (yetkinlikIhlali !== null) throw yetkiYok(yetkinlikIhlali);
+  const muaf = await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   const paralel = isEmriId !== undefined && emir.durum === 'basladi';
   const durumIhlali = paralel ? null : baslatmaIhlali(emir.durum);
   if (durumIhlali !== null) throw cakisma(durumIhlali);
@@ -607,6 +615,8 @@ export async function emirBaslat(
   await secimiDenetle(db, istasyonId, makineIdleri);
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
+  const makineIhlali = yer.makineler.length === 0 ? null : makineYetkinlikIhlali(kisiId, yer.makineler, await makineYetkinlikleri(db), muaf);
+  if (makineIhlali !== null) throw yetkiYok(makineIhlali);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
   const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, isEmri.onculler === null
     ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri));
@@ -637,6 +647,7 @@ export async function emirAyar(db: Db, kisiId: number, id: number, isEmriId?: nu
   const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
+  await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
   if (isEmri !== null && isEmri.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
   if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
@@ -888,6 +899,8 @@ export async function emirDevam(db: Db, kisiId: number, id: number, makineIdleri
   const { emir, adim: isEmri, istasyonId, calisma } = await komutBaglami(db, kisiId, id, isEmriId);
   const ihlal = devamIhlali(emir.durum, calisma);
   if (ihlal !== null) throw cakisma(ihlal);
+  // Bu adımda daha önce çalışmış kişi kendi işine döner (katılımdaki dönüş gibi); işe ilk kez giren yetkinlik ister.
+  if ((await sorgular.sonKatilim(db, id, kisiId, isEmri?.id ?? null)) === null) await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   await secimiDenetle(db, istasyonId, makineIdleri);
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const son = makineIdleri === undefined ? await sorgular.sonKapananMakineler(db, id, isEmri?.id ?? null) : [];
@@ -923,6 +936,8 @@ export async function makineDevral(db: Db, kisiId: number, id: number, kullanimI
   const { adim } = await komutAdimi(db, emir, isEmriId);
   const istasyonId = komutIstasyonu(emir, adim, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
+  // Yetkinlik öteki işi durdurmadan önce aranır: yetkisiz devralma kimsenin işini kesmesin. Bu adımda çalışmış kişi devamdaki gibi muaftır.
+  if ((await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null)) === null) await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   const baslatilacak = isEmriId === undefined ? emir.durum === 'planli' : adim?.durum === 'bekliyor';
   if (!baslatilacak) {
     const calisan = adim?.durum === 'calisiyor' ? adim : null;
@@ -962,6 +977,7 @@ export async function calismaDevral(db: Db, kisiId: number, id: number, isEmriId
   if (otekiler.length === 0) throw cakisma(DEVRALINACAK_CALISMA_YOK);
   const donus = (await sorgular.sonKatilim(db, id, kisiId, adim?.id ?? null))?.kapanis === 'duraklat';
   if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId))) throw yetkiYok(EKIP_DISI);
+  if (!donus) await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   const an = await komutAni(db, id);
   for (const k of otekiler) await sorgular.katilimKapat(db, k.id, 'duraklat', an);
   const adimId = adim?.id ?? null;
@@ -1042,6 +1058,7 @@ export async function katil(db: Db, kisiId: number, id: number, isEmriId?: numbe
   const donus = son !== null && son.kapanis === 'duraklat';
   // 1979 (2003 c): planda bu adımda payı olan kişi ekip dışından da katılır.
   if (!donus && !(await istasyonEkibinde(db, istasyonId, kisiId)) && !payiVarMi(await adiminPaylari(db, adim?.id ?? null), { kisiId })) throw yetkiYok(EKIP_DISI);
+  if (!donus) await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   const ihlal = katilmaIhlali(emir.durum, calisma, son !== null && son.cikis === null);
   if (ihlal !== null) throw cakisma(ihlal);
   try {

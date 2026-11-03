@@ -19,12 +19,12 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, hurdaSayimDinle, kararliSayimiSonuclandir, saglamSayimDinle,
+  calismaDevral, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, hurdaSayimDinle, kararliSayimiSonuclandir, saglamSayimDinle,
 } from './disari.ts';
 import { emirAc as emirYaz } from './servis.ts';
 import { iptaliYaz } from './sorgular.ts';
 import type { HurdaSayimOlayi, SaglamSayimOlayi } from './disari.ts';
-import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, SAYIM_KATILIMSIZ, YETKINLIK_YOK } from './kurallar.ts';
+import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, SAYIM_KATILIMSIZ, MAKINE_YETKINLIGI_YOK, YETKINLIK_YOK } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 const BASLATANLAR = ['mudur', 'operator'];
@@ -432,6 +432,31 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
   const olaySayisi = async (id: number) =>
     (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_olayi WHERE emir_id = $1', [id]))?.n;
 
+  test('2046 a: kayıtlı makinede geçerli makine yetkinliği olmayan kişi başlatamaz; kayıtsız makine istasyon yetkinliğiyle açık; yönetici muaf', async () => {
+    const istasyonId = await istasyonKur();
+    const kayitli = await makineKur(istasyonId, 'Kayıtlı tezgah');
+    const kayitsiz = await makineKur(istasyonId, 'Kayıtsız tezgah');
+    await sahip().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [await kisiId('operator2'), kayitli, yoneticiId]);
+
+    const emir = await emirAc(istasyonId);
+    const red = await baslat(emir.id, 'operator', makinede(kayitli));
+    assert.deepEqual([red.durum, red.govde.kod, red.govde.mesaj], [403, 'YETKI_YOK', MAKINE_YETKINLIGI_YOK]);
+    assert.equal(await durumOku(emir.id), 'planli');
+    assert.equal(await kayitSayisi(emir.id), 0);
+    assert.deepEqual(await acikKullanim(kayitli), []);
+    assert.equal((await baslat(emir.id, 'operator', { makineIdleri: [kayitsiz, kayitli] })).durum, 403, 'seçimdeki her makine aranır');
+    assert.equal((await baslat(emir.id, 'operator', makinede(kayitsiz))).durum, 200, 'kayıtsız makine');
+
+    const emir2 = await emirAc(istasyonId);
+    assert.equal((await baslat(emir2.id, 'operator2', makinede(kayitli))).durum, 200, 'yetkin kişi');
+
+    const ikinci = await istasyonKur();
+    const m2 = await makineKur(ikinci);
+    await sahip().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [await kisiId('operator2'), m2, yoneticiId]);
+    const emir3 = await emirAc(ikinci);
+    assert.equal((await baslat(emir3.id, 'yonetici', makinede(m2))).durum, 200, 'yönetici muaf');
+  });
+
   // Aynı makinede iki başlamış emir: ilki duraklatılmış (makineyi bırakır), ikincisi çalışıyor.
   async function ikiliKur(): Promise<{ istasyonId: number; makineId: number; duraklamis: Emir; calisan: Emir }> {
     const istasyonId = await istasyonKur();
@@ -582,6 +607,44 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     const planli = await komut(yeni.id, 'makine-devral', 'operator', { kullanimId: ikinciAyrinti.kullanimId });
     assert.equal(planli.govde.emir.durum, 'basladi', 'planlı iş devralınca başlar');
     assert.equal((await komut(yeni.id, 'makine-devral', 'operator', { kullanimId: ikinciAyrinti.kullanimId })).govde.mesaj, DEVRAL_DURUMU);
+  });
+
+  test('2047 a: katıl, çalışma devral, makine devral, devam ve ayar istasyon yetkinliği ister; ekipte olmak yetmez; işe dönen kişi ve yönetici muaf', async () => {
+    const yol = (id: number, y: string, kim: string, govde?: unknown) => istek<Hata>(kisiCerezi(kim), 'POST', `/uretim-emirleri/${id}/${y}`, govde);
+    const { emir, istasyonId } = await baslatilmis();
+    const yetkinsiz = await kisiId('yetkinsiz');
+    sayac += 1;
+    const ekip = (await sahip().tek<{ id: number }>('INSERT INTO ekip (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`UEK${sayac}`, 'Deneme ekibi', istasyonId]))!.id;
+    await sahip().sorgu('INSERT INTO ekip_uye (ekip_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, current_date, 10)', [ekip, yetkinsiz]);
+
+    const katil = await yol(emir.id, 'katil', 'yetkinsiz');
+    assert.deepEqual([katil.durum, katil.govde.mesaj], [403, YETKINLIK_YOK], 'katıl');
+    const devral = await disaridan('yetkinsiz', (db, k) => calismaDevral(db, k, emir.id));
+    assert.deepEqual([devral.durum, devral.govde.mesaj], [403, YETKINLIK_YOK], 'çalışma devral');
+
+    assert.equal((await komut(emir.id, 'duraklat')).durum, 200);
+    const devam = await komut(emir.id, 'devam', 'yetkinsiz');
+    assert.deepEqual([devam.durum, devam.govde.mesaj], [403, YETKINLIK_YOK], 'devam');
+    assert.equal((await komut(emir.id, 'devam', 'operator')).durum, 200, 'işe dönen kişi');
+
+    const planli = await emirAc(istasyonId);
+    const ayar = await komut(planli.id, 'ayar', 'yetkinsiz');
+    assert.deepEqual([ayar.durum, ayar.govde.mesaj], [403, YETKINLIK_YOK], 'ayar');
+    const yoneticiIstasyonu = await istasyonKur();
+    const yonetici = await emirAc(yoneticiIstasyonu);
+    await sahip().sorgu('DELETE FROM istasyonlar_yetkinlik WHERE istasyon_id = $1', [yoneticiIstasyonu]);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM istasyonlar_yetkinlik WHERE istasyon_id = $1', [yoneticiIstasyonu]))?.n, 0);
+    assert.equal((await komut(yonetici.id, 'ayar', 'operator')).durum, 403, 'yetkinliği silinen operatör');
+    assert.equal((await komut(yonetici.id, 'ayar', 'yonetici')).durum, 200, 'yönetici muaf');
+
+    const makineId = await makineKur(istasyonId);
+    const dolu = await emirAc(istasyonId);
+    assert.equal((await baslat(dolu.id, 'operator', makinede(makineId))).durum, 200);
+    const kullanim = (await vt().tek<{ id: number }>('SELECT id FROM uretim_emirleri_makine_kullanimi WHERE makine_id = $1 AND bitis IS NULL', [makineId]))!.id;
+    const md = await komut(planli.id, 'makine-devral', 'yetkinsiz', { kullanimId: kullanim });
+    assert.deepEqual([md.durum, md.govde.mesaj], [403, YETKINLIK_YOK], 'makine devral');
+    assert.deepEqual((await acikKullanim(makineId)).map((k) => k.emirId), [dolu.id], 'reddedilen devralma öteki işi durdurmaz');
+    assert.equal(await durumOku(planli.id), 'planli');
   });
 
   test('katılım: ekipteki ikinci kişi çalışan işe uyarıyla katılır; herkes kendi çalışmasını duraklatır ve bitirir; adet işin toplamına eklenir', async () => {

@@ -17,6 +17,17 @@ export const KAPSAM_DISI = 'Bu istasyonun iş merkezinde çalışma yetkiniz yok
 // UE20 (karar 86 b): istasyonda bugün geçerli yetkinliği olmayan kişi iş başlatamaz; bütün işlemleri taşıyan yönetici rolü muaftır.
 export const YETKINLIK_YOK = 'Bu istasyonda geçerli yetkinlik kaydınız yok; iş başlatılamaz. Yetkinlik İstasyonlar > Personel sekmesinden verilir.';
 export const baslatmaYetkinlikIhlali = (yetkin: boolean, muaf: boolean): string | null => (yetkin || muaf ? null : YETKINLIK_YOK);
+// 2046 a: bugün geçerli makine yetkinliği kaydı olan makine "kayıtlı"dır ve yalnız kaydı olan kişi onda başlatır. Kaydı olmayan makine
+// kayıtsızdır, istasyon yetkinliğiyle açık kalır (563 c). Yönetici muaftır.
+export const MAKINE_YETKINLIGI_YOK = 'Bu makinede geçerli yetkinlik kaydınız yok; iş başlatılamaz. Makine yetkinliği İstasyonlar > Personel sekmesinden verilir.';
+export const makineYetkinlikIhlali = (
+  kisiId: number, makineler: readonly number[], kayitlar: readonly { kisiId: number; makineId: number }[], muaf: boolean,
+): string | null => {
+  if (muaf) return null;
+  const kayitli = new Set(kayitlar.map((k) => k.makineId));
+  const yetkin = new Set(kayitlar.filter((k) => k.kisiId === kisiId).map((k) => k.makineId));
+  return makineler.some((m) => kayitli.has(m) && !yetkin.has(m)) ? MAKINE_YETKINLIGI_YOK : null;
+};
 // Soru 185 a: sayımı yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; düzeltme işlemi olan (yönetici, vardiya sorumlusu) da yazar.
 export const SAYIM_DUZELTME_ISLEMI = 'uretim-emirleri.sayim-duzelt' satisfies Islem;
 export const SAYIM_KATILIMSIZ = 'Bu işe başlamadınız ya da katılmadınız; sayımı işteki kişi, yönetici ya da vardiya sorumlusu girer.';
