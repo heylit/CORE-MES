@@ -22,8 +22,9 @@
   `disari.ts` ile verir (`arkon/servis.ts` katılım yolu). `POST /adimli-emirler/:id/{ek-adim, ek-adim-kaldir}`: ek adım Reçete ve Rota'da bölmeyle girer
   (`emir-bol` `ekAdimlar`). `GET .../is-emirleri/:isEmriId/sure-ozeti`: rota sunucusu `isEmriSureOzeti` ile okur. `POST .../fason-tamamla` aslında
   çağrılıyor (Satın Alma dış operasyonlar, `DisOperasyonlar.tsx`).
-- `POST /adimli-emirler/:id/hazirlik-muafiyeti` ve `GET /adimli-emirler/:id/hazirlik`: ekrana bağlanmaz (882 c: CNC kurulum hazır değil, kural şimdilik
-  eklenmez). Uç ve müdür işlemi sunucuda kalır. Açık: CNC Kurulum'da kaydı açılıp son onaya gelmeyen iş emri başlamaz ve ekrandan muaf tutulamaz (soru 889).
+- KAPANDI (2060 a, 03.11.2026; 882 c'nin yerine geçer): `GET /adimli-emirler/:id/hazirlik` ve `POST /adimli-emirler/:id/hazirlik-muafiyeti` emir
+  ayrıntısındaki hazırlık matrisine bağlandı (`istemci/.../uretim-emirleri/HazirlikListesi.tsx`); muafiyet yalnız `uretim-emirleri.hazirlik-muaf` olana
+  görünür. Üretim Terminali'ndeki gösterim ayrı adımdır (2060 terminal kısmı).
 
 ## Bilgi (borç değil)
 
