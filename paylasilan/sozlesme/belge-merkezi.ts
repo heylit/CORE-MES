@@ -141,8 +141,8 @@ export const malzemeSecimiCevabi = z.object({
 
 /* ---------------- Malzeme kartından yükleme ve küçük resim (kart #688) ---------------- */
 
-// Malzeme kartından açılan belge türleri. Foto doğrudan yayına girer; teknik resim ve 3B model taslak girer, yayını merkez yapar
-// (yayındaki çizim atölyeye gider).
+// Malzeme kartından açılan belge türleri. Foto ve teknik resim doğrudan yayına girer (1991 b); 3B model taslak girer, resmi
+// yüklenince üretilir, yayını merkez yapar (1990 a; yayındaki çizim atölyeye gider).
 export const MALZEME_BELGE_TURLERI = ['fotograf', 'teknik-resim', '3b-model'] as const;
 export type MalzemeBelgeTuru = (typeof MALZEME_BELGE_TURLERI)[number];
 
@@ -163,7 +163,7 @@ export const malzemeRevizyonEkleGovdesi = z.object({ ...dosyaGirdisi, ...beklene
 export const malzemeBelgeSurumGovdesi = z.object({ ...beklenenSurum });
 
 // Listelerin küçük resmi: kayıt başına seçilmiş revizyon ve kare sayısı. revUyumu: true kartın revizyonuna uyuyor, false uymuyor
-// (resim yine gösterilir, uyarıyla), null karşılaştırılacak bilgi yok.
+// (resim yine gösterilir, uyarıyla), null karşılaştırılacak bilgi yok. taslak: true resim yayına girmemiş 3B modelin karesidir (yoksa yayına girmiş).
 export const kucukResim = z.object({
   hedefId: z.number().int(),
   belgeId: z.number().int(),
@@ -171,6 +171,7 @@ export const kucukResim = z.object({
   harf: z.string(),
   kareSayisi: z.number().int().min(1),
   revUyumu: z.boolean().nullable(),
+  taslak: z.boolean().optional(),
 });
 
 export const malzemeBelgesi = z.object({

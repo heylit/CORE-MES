@@ -1962,8 +1962,10 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const icerik = Buffer.from('%PDF-1.4\n% malzeme cizimi 732\n%%EOF\n');
     const ozet = createHash('sha256').update(icerik).digest('hex');
     await korumali(`/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
-    const eklenen = await korumali<{ belgeler: { id: number; ad: string }[] }>(`/cizimler/malzemeler/${r.kart}/belge-ekle`, { ad: 'Deneme 732 resmi', tur: 'teknik-resim', ozet, dosyaAdi: 'deneme-732.pdf' });
-    const belgeId = eklenen.belgeler.find((b) => b.ad === 'Deneme 732 resmi')!.id;
+    // Merkezde açılan teknik resim taslak girer (karttan açılan doğrudan yayındadır, 1991 b); karta merkezden bağlanır.
+    const acilan = await korumali<{ id: number; surum: number }>('/cizimler', { ad: 'Deneme 732 resmi', tur: 'teknik-resim', ozet, dosyaAdi: 'deneme-732.pdf' });
+    const belgeId = acilan.id;
+    await korumali(`/cizimler/${belgeId}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: r.kart, surum: acilan.surum });
     const belge = (await istek<{ surum: number; revizyonlar: { id: number }[] }>(yonetici, 'GET', `/cizimler/${belgeId}`)).govde;
     assert.equal((await paketler()).get(kimlik)?.govde['malzemeCizimleri'], undefined, 'yayında revizyonu olmayan belge önerilmez');
     await korumali(`/cizimler/${belgeId}/revizyonlar/${belge.revizyonlar[0]?.id}/yayinla`, { surum: belge.surum });

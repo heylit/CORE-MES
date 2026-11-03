@@ -142,10 +142,11 @@ export async function revizyonSil(db: Db, id: number, revizyonId: number, surum:
 export async function onizlemeYaz(
   db: Db, kullanici: Kullanici, id: number, revizyonId: number, g: OnizlemeGovdesi, denetimEki: DenetimEki,
 ): Promise<BelgeAyrintisi> {
-  etkinOlmali(await kilitliBelge(db, id));
+  const belge = await kilitliBelge(db, id);
+  etkinOlmali(belge);
   const r = await sorgular.revizyon(db, id, revizyonId);
   if (r === null) throw bulunamadi('Revizyon bulunamadı.');
-  const revizyonRet = onizlemeRevizyonReddi(r);
+  const revizyonRet = onizlemeRevizyonReddi(r, belge.tur);
   if (revizyonRet === 'onizlemeTaslak') throw cakisma(ILETILER.onizlemeTaslak);
   if (revizyonRet !== null) throw dogrulama(ILETILER[revizyonRet], 'revizyonId');
   const kareRet = onizlemeKareReddi(g.kareler);
@@ -361,7 +362,7 @@ export async function malzemeRevizyonEkle(
   etkinOlmali(b);
   await surumuIlerlet(db, id, g.surum);
   const revizyonId = await revizyonYaz(db, kullanici, b, g, denetimEki);
-  if (b.tur === 'fotograf') await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
+  if (malzemedenYayinda(b.tur)) await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
   return malzemeBelgeleri(db, no);
 }
 
@@ -414,7 +415,7 @@ export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, he
   }
   for (const [hedefId, belgeler] of kayitlar) {
     const s = kucukResimSec([...belgeler.values()], kartlar.get(hedefId) ?? null);
-    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), kareSayisi: s.kareSayisi, revUyumu: s.revUyumu });
+    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), kareSayisi: s.kareSayisi, revUyumu: s.revUyumu, taslak: s.taslak });
   }
   return sonuc;
 }

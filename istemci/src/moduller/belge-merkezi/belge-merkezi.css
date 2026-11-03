@@ -73,6 +73,11 @@
   position: absolute; right: 0; bottom: 0; display: inline-flex; padding: calc(var(--b-1) / 2);
   color: var(--hold); background: var(--panel); border-top-left-radius: var(--yari-1);
 }
+/* Yayına girmemiş 3B modelin karesi (1990 a): sol üstte taslak işareti. */
+.tc-cz-kr-taslak {
+  position: absolute; left: 0; top: 0; display: inline-flex; padding: calc(var(--b-1) / 2);
+  color: var(--muted); background: var(--panel); border-bottom-right-radius: var(--yari-1);
+}
 
 /* Malzeme kartındaki resim paneli. */
 .tc-cz-rp { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }

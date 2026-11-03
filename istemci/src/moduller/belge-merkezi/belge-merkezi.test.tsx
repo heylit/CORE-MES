@@ -17,6 +17,8 @@ import { Box3, Color, Vector3 } from 'three';
 import { modelOku } from './goruntu/model.ts';
 import { IZINLI_DOSYA_TURLERI, dosyaTuruBul, gorunumTuru, kabulMetni, modelBicimi } from './gosterim.ts';
 import { COZUNURLUKLER, KARE_BAYT_SINIRI, KARE_SAYISI, OnizlemeAtlandi, kareAcisi, sinirdaKareler } from './onizleme-kurallari.ts';
+import { KucukResimKutusu } from './KucukResim.tsx';
+import { resimUretilir } from './ResimPaneli.tsx';
 
 // Çizim (three, occt) tarayıcı ister; üretimin kendisi taklit edilir, akış gerçektir.
 const { onizlemeKareleri } = vi.hoisted(() => ({ onizlemeKareleri: vi.fn() }));
@@ -593,5 +595,30 @@ describe('cizimler önizleme akışı', () => {
     sunucu(YAYINCI, yayinda(0));
     ac('/cizimler/belge/7');
     expect(await screen.findByRole('button', { name: 'Revizyon B için önizleme üret' })).toBeTruthy();
+  });
+});
+
+describe('cizimler malzeme küçük resmi (1990 a)', () => {
+  afterEach(cleanup);
+  const resim = { hedefId: 1, belgeId: 2, revizyonId: 3, harf: 'A', kareSayisi: 8, revUyumu: null };
+
+  it('yüklemede kare yayındaki revizyona ve taslak 3B modele üretilir; 3B dışı taslağa üretilmez', () => {
+    expect(resimUretilir({ tur: '3b-model' }, { durum: 'taslak' })).toBe(true);
+    expect(resimUretilir({ tur: 'teknik-resim' }, { durum: 'yayinda' })).toBe(true);
+    expect(resimUretilir({ tur: 'fotograf' }, { durum: 'yayinda' })).toBe(true);
+    expect(resimUretilir({ tur: 'teknik-resim' }, { durum: 'taslak' })).toBe(false);
+    expect(resimUretilir({ tur: '3b-model' }, { durum: 'eski' })).toBe(false);
+  });
+
+  it('taslak 3B modelin karesi işaretlenir; yayına girmiş resimde işaret yok', () => {
+    render(<KucukResimKutusu resim={{ ...resim, taslak: true }} ad="Parça" />);
+    expect(screen.getByRole('img', { name: 'Taslak' })).toBeTruthy();
+    expect(screen.getByTitle('Parça: taslak 3B model, yayınlanmadı')).toBeTruthy();
+    cleanup();
+    render(<KucukResimKutusu resim={{ ...resim, taslak: false }} ad="Parça" />);
+    expect(screen.queryByRole('img', { name: 'Taslak' })).toBeNull();
+    cleanup();
+    render(<KucukResimKutusu resim={resim} ad="Parça" />);
+    expect(screen.queryByRole('img', { name: 'Taslak' })).toBeNull();
   });
 });
