@@ -65,6 +65,8 @@
 .tc-my-girdi input[readonly] { background: var(--panel2); color: var(--muted); }
 .tc-my-cok { min-block-size: calc(var(--dokunma) * 2); resize: vertical; }
 .tc-my-birim { flex: none; color: var(--muted); font-size: var(--yazi-s); }
+/* Uzunluk sayacı sabit genişlikte: "7/50" ile "37/50" kutunun sağ kenarını oynatmaz. */
+.tc-my-sayac { min-inline-size: 5ch; text-align: end; font-variant-numeric: tabular-nums; }
 .tc-my-gecersiz, .tc-my-girdi input:invalid { border-color: var(--stop); }
 
 .tc-my-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
@@ -114,7 +116,7 @@
 .tc-my-kartlar, .tc-my-turler { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
 .tc-my-turler { grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); }
 .tc-my-kart {
-  display: grid; gap: var(--b-2); justify-items: start; padding: var(--b-3) var(--b-4); min-block-size: var(--dokunma-ana);
+  display: grid; gap: var(--b-2); justify-items: start; align-content: start; padding: var(--b-3) var(--b-4); min-block-size: var(--dokunma-ana);
   font: inherit; color: var(--ink); text-align: left; background: var(--panel-solid); border: thin solid var(--edge); border-left: var(--b-1) solid var(--my-renk, var(--edge));
   border-radius: var(--yari-2); cursor: pointer;
 }
@@ -218,7 +220,8 @@
 }
 
 /* Ticari ve özet. */
-.tc-my-kod-bilgi { font-size: var(--yazi-xs); color: var(--muted); }
+/* Kod bilgisi alan ızgarasında bir hücredir; kutuların hizasında durur, hücrenin tepesine yapışmaz. */
+.tc-my-kod-bilgi { align-self: center; margin: 0; font-size: var(--yazi-xs); color: var(--muted); }
 .tc-my-oneri { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
 .tc-my-belgeler { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
 .tc-my-belgeler li { display: flex; flex-wrap: wrap; gap: var(--b-3); }

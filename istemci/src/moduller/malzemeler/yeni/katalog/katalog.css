@@ -4,6 +4,8 @@
 .tc-mk-araclar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
 .tc-mk-ara { flex: 0 1 var(--menu-genis); min-width: 0; }
 .tc-mk-ara-bosluk { flex: 1; }
+/* Aktarma düğmeleri birlikte sarar: sığmazsa üçü birden alt satıra, sağa yaslı iner; tek düğme yalnız kalmaz. */
+.tc-mk-aktarma { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); margin-left: auto; min-width: 0; }
 .tc-mk-duzen { display: grid; gap: var(--b-5); min-width: 0; grid-template-columns: minmax(0, var(--menu-genis)) minmax(0, 1fr); align-items: start; }
 .tc-mk-ana { display: grid; gap: var(--b-3); min-width: 0; align-content: start; }
 .tc-mk-yan {
@@ -22,6 +24,7 @@
 @media (max-width: 720px) {
   .tc-mk-ara { flex-basis: 100%; }
   .tc-mk-ara-bosluk { display: none; }
+  .tc-mk-aktarma { margin-left: 0; justify-content: flex-start; }
 }
 
 .tc-mk-fasetler { display: grid; gap: var(--b-3); }
@@ -67,6 +70,8 @@
 .tc-mk-ad { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .tc-mk-malzeme .tc-rozet-cizgi { --c: var(--tur-renk); }
 .tc-mk-alt { display: block; font-size: var(--yazi-xs); color: var(--muted); }
+/* Değer ve alt yazı tek parçadır: kart görünümünde ortak düzen hücrenin çocuklarını iki yana yayar; değer başlığın karşısında, alt yazı altında kalır. */
+.tc-mk-deger { display: block; min-width: 0; }
 
 .tc-mk-bag {
   padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer;
