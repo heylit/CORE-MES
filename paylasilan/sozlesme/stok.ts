@@ -1606,3 +1606,38 @@ export const defterFarklariCevabi = z.object({
   farklar: z.array(defterFarki),
 });
 export type DefterFarklariCevabi = z.output<typeof defterFarklariCevabi>;
+
+// ---- Seri liste (1915, 1914 teyit) ---------------------------------------------------------------------------------
+// Okut panelinin Seri modu ve okuyucu hafızası: okutulan kodlar seçimsiz, kişinin taslak listesine sırayla düşer; stok değişmez.
+// Liste yalnız sahibinindir. Satırlar bilgisayarda düzeltilip bir işe (taşıma, sayım, depo sepeti) verilir; işin kendi ucu ve
+// yetkisi geçerlidir, burada yalnız "işlendi" işaretlenir.
+export const SERI_KAYNAKLARI = ['okutma', 'hafiza'] as const;
+export type SeriKaynagi = (typeof SERI_KAYNAKLARI)[number];
+export const SERI_SATIR_SINIRI = 500;
+export const seriListeOzeti = z.object({
+  id: z.number().int(), kaynak: z.enum(SERI_KAYNAKLARI), acilis: z.string(), degisim: z.string(), kapanis: z.string().nullable(),
+  satirSayisi: z.number().int(), acikSatir: z.number().int(),
+});
+export type SeriListeOzeti = z.output<typeof seriListeOzeti>;
+export const seriListelerCevabi = z.object({ listeler: z.array(seriListeOzeti) });
+export type SeriListelerCevabi = z.output<typeof seriListelerCevabi>;
+// Adet yalnız sayılan etikette (lot, malzeme) dolu; göz, raf, kart ve tanınmayan kodda null.
+export const seriSatiri = z.object({
+  id: z.number().int(), sira: z.number().int(), kod: z.string(), adet: z.string().nullable(), okutma: z.string(), islendi: z.string().nullable(),
+});
+export type SeriSatiri = z.output<typeof seriSatiri>;
+export const seriListeCevabi = z.object({ liste: seriListeOzeti, satirlar: z.array(seriSatiri) });
+export type SeriListeCevabi = z.output<typeof seriListeCevabi>;
+const seriKodu = z.string().trim().min(1).max(200);
+// `listeId` yoksa yeni liste açılır (telefonun ilk okutması, hafıza aktarımı).
+export const seriEkleGovdesi = z.object({
+  listeId: buyukKimlik.optional(), kaynak: z.enum(SERI_KAYNAKLARI).default('okutma'), kodlar: z.array(seriKodu).min(1).max(SERI_SATIR_SINIRI),
+});
+export type SeriEkleGovdesi = z.input<typeof seriEkleGovdesi>;
+export type SeriEkleKomutu = z.output<typeof seriEkleGovdesi>;
+export const seriSatirParametresi = z.object({ id: buyukKimlik, satirId: buyukKimlik });
+export const seriAdetGovdesi = z.object({ adet: sifirOlabilirMiktar });
+export type SeriAdetGovdesi = z.input<typeof seriAdetGovdesi>;
+export const seriIslendiGovdesi = z.object({ satirIdler: z.array(buyukKimlik).min(1).max(SERI_SATIR_SINIRI) });
+export type SeriIslendiGovdesi = z.input<typeof seriIslendiGovdesi>;
+export const seriListeParametresi = z.object({ id: buyukKimlik });

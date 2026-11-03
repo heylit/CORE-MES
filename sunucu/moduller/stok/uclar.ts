@@ -18,6 +18,7 @@ import {
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { depoCikisCevabi, depoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { seriAdetGovdesi, seriEkleGovdesi, seriIslendiGovdesi, seriListeCevabi, seriListelerCevabi, seriListeParametresi, seriSatirParametresi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -129,6 +130,14 @@ export const uclar = [
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/sepet/satir-ekle', yetki: 'stok.istek', govde: sepetEkleGovdesi, cevap: sepetCevabi, isle: ({ db, kullanici, govde }) => s.sepeteEkle(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', yol: '/stok/sepet/satirlar/:id/degistir', yetki: 'stok.istek', parametre: kimlikParametresi, govde: sepetDegistirGovdesi, cevap: sepetCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sepetSatiriDegistir(db, kullanici.id, parametre.id, govde.miktar) }),
   uc({ yontem: 'POST', yol: '/stok/sepet/satirlar/:id/sil', yetki: 'stok.istek', parametre: kimlikParametresi, cevap: sepetCevabi, isle: ({ db, kullanici, parametre }) => s.sepetSatiriSil(db, kullanici.id, parametre.id) }),
+  // Seri liste (1915): kişinin taslağı; Okut panelini açabilen herkes. Okuma da kişiye özeldir.
+  uc({ yontem: 'GET', yol: '/stok/seri-listeler', yetki: 'stok.istek', cevap: seriListelerCevabi, isle: ({ db, kullanici }) => s.seriListeler(db, kullanici.id) }),
+  uc({ yontem: 'GET', yol: '/stok/seri-listeler/:id', yetki: 'stok.istek', parametre: seriListeParametresi, cevap: seriListeCevabi, isle: ({ db, kullanici, parametre }) => s.seriListeAyrinti(db, kullanici.id, parametre.id) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/seri-listeler/okutma-ekle', yetki: 'stok.istek', govde: seriEkleGovdesi, cevap: seriListeCevabi, isle: ({ db, kullanici, govde }) => s.seriEkle(db, kullanici.id, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/seri-listeler/:id/satirlar/:satirId/degistir', yetki: 'stok.istek', parametre: seriSatirParametresi, govde: seriAdetGovdesi, cevap: seriListeCevabi, isle: ({ db, kullanici, parametre, govde }) => s.seriAdetDegistir(db, kullanici.id, parametre.id, parametre.satirId, govde.adet) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/seri-listeler/:id/satirlar/:satirId/sil', yetki: 'stok.istek', parametre: seriSatirParametresi, cevap: seriListeCevabi, isle: ({ db, kullanici, parametre }) => s.seriSatirSil(db, kullanici.id, parametre.id, parametre.satirId) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/seri-listeler/:id/islendi', yetki: 'stok.istek', parametre: seriListeParametresi, govde: seriIslendiGovdesi, cevap: seriListeCevabi, isle: ({ db, kullanici, parametre, govde }) => s.seriIslendi(db, kullanici.id, parametre.id, govde.satirIdler) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/seri-listeler/:id/kapat', yetki: 'stok.istek', parametre: seriListeParametresi, cevap: seriListeCevabi, isle: ({ db, kullanici, parametre }) => s.seriKapat(db, kullanici.id, parametre.id) }),
   // Herkese sepet (Soru 133): sepet kişinindir, her satır kendi hedefine yoldaki teslim olur. Depo taşıması (teslim-et) depo işidir.
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/gonder', yetki: 'stok.istek', govde: sepetTeslimEtGovdesi, cevap: sepetTeslimEtCevabi, isle: ({ db, kullanici, govde }) => s.sepetGonder(db, kullanici, govde) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/teslim-et', yetki: 'stok.transfer', govde: teslimGovdesi, cevap: sepetTeslimCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.teslimEt(db, kullanici.id, govde); } }),

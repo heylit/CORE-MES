@@ -17,6 +17,7 @@ describe('okutma-modlari', () => {
   it('mod yalniz islemi olana; Otomatik ve Bilgi herkesin', () => {
     expect(izinliModlar(() => false).map((m) => m.mod)).toEqual(['otomatik', 'bilgi']);
     expect(izinliModlar((i) => i === 'stok.sayim').map((m) => m.mod)).toEqual(['otomatik', 'bilgi', 'say']);
+    expect(izinliModlar((i) => i === 'stok.istek').map((m) => m.mod)).toEqual(['otomatik', 'bilgi', 'seri']);
     expect(izinliModlar(() => true)).toEqual(OKUT_MODLARI);
   });
   it('komut adi modu bulur; bilinmeyen null', () => {
@@ -68,11 +69,11 @@ const okut = (p: HTMLElement, kod: string) => {
 };
 
 describe('Okut paneli modlari (1912)', () => {
-  it('operator yalniz Otomatik ve Bilgi gorur; Otomatik bugunku kutucuklarla acilir', async () => {
+  it('operator yalniz Otomatik, Bilgi ve Seri gorur; Otomatik bugunku kutucuklarla acilir', async () => {
     panel(OPERATOR);
     const p = await panelAc();
     const modlar = within(p).getByRole('radiogroup', { name: 'Mod' });
-    expect(within(modlar).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Otomatik', 'Bilgi']);
+    await waitFor(() => expect(within(modlar).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Otomatik', 'Bilgi', 'Seri']));
     expect(within(modlar).getByRole('radio', { name: 'Otomatik' }).getAttribute('aria-checked')).toBe('true');
     expect(await within(p).findByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
   });
@@ -136,6 +137,35 @@ describe('Okut paneli modlari (1912)', () => {
     okut(p, 'CMD:GERI-AL');
     okut(p, 'CMD:KAYDET');
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/toplamalar/3/adimlar/11/topla')?.govde).toEqual({ surum: 1, miktar: '1' }));
+  });
+});
+
+describe('Okut paneli Seri modu (1915)', () => {
+  it('okutmalar secim sormadan listeye duser, ikinci okutma ayni listeye gider; Geri al sonuncuyu siler; stok yazilmaz', async () => {
+    const ozet = { id: 3, kaynak: 'okutma', acilis: '2026-11-03T09:00:00+03:00', degisim: '2026-11-03T09:00:00+03:00', kapanis: null, satirSayisi: 0, acikSatir: 0 };
+    const satirlar: { id: number; sira: number; kod: string; adet: string | null; okutma: string; islendi: null }[] = [];
+    const cevap = () => json(200, { liste: { ...ozet, satirSayisi: satirlar.length, acikSatir: satirlar.length }, satirlar: [...satirlar] });
+    const istekler = panel(OPERATOR, {
+      'GET /stok/seri-listeler': () => json(200, { listeler: [] }),
+      'POST /stok/seri-listeler/okutma-ekle': (g) => {
+        for (const kod of (g as { kodlar: string[] }).kodlar) satirlar.push({ id: satirlar.length + 1, sira: satirlar.length + 1, kod, adet: kod.startsWith('LOT:') ? '1' : null, okutma: ozet.acilis, islendi: null });
+        return cevap();
+      },
+      'POST /stok/seri-listeler/3/satirlar/2/sil': () => { satirlar.pop(); return cevap(); },
+    });
+    const p = await panelAc();
+    fireEvent.click(await within(p).findByRole('radio', { name: 'Seri' }));
+    expect(within(p).getByText(/Stok değişmez/)).toBeTruthy();
+    const liste = () => within(p).getByRole('list', { name: 'Seri liste' });
+    okut(p, 'LOC:A-01-1');
+    await waitFor(() => expect(within(liste()).getByText('LOC:A-01-1')).toBeTruthy());
+    okut(p, 'LOT:LT-7');
+    await waitFor(() => expect(within(liste()).getByText('LOT:LT-7')).toBeTruthy());
+    const ekler = istekler.filter((i) => i.yol === '/stok/seri-listeler/okutma-ekle').map((i) => i.govde);
+    expect(ekler).toEqual([{ kodlar: ['LOC:A-01-1'] }, { listeId: 3, kodlar: ['LOT:LT-7'] }]);
+    okut(p, 'CMD:GERI-AL');
+    await waitFor(() => expect(within(liste()).queryByText('LOT:LT-7')).toBeNull());
+    expect(istekler.filter((i) => i.yontem === 'POST').every((i) => i.yol.startsWith('/stok/seri-listeler'))).toBe(true);
   });
 });
 
