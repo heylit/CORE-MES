@@ -2,7 +2,7 @@ import { eskiSurumMu } from '#paylasilan/hata.ts';
 import { ROTA_KOMUTLARI } from './rota-komutlari.ts';
 import type { RotaKomutu } from './rota-komutlari.ts';
 import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
-import { BOS_ANLIK, KAYNAK_KOMUTLARI, KAYNAK_OKUMALARI, koleksiyonKur, komutIstegi, takvimEki } from './kaynak-komutlari.ts';
+import { BOS_ANLIK, KAYNAK_OKUMALARI, koleksiyonKur, komutIstegi, takvimEki } from './kaynak-komutlari.ts';
 import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
 import type { PlanSenaryoKomutu } from './plan-senaryo-komutlari.ts';
 import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
@@ -74,19 +74,14 @@ const surum = (v: unknown): number | null => (typeof v === 'number' && Number.is
 
 // İzinli komutlar (kart #1104, #1106): prototipin eylem adı -> sahibi modülün VAR OLAN ucu. Tabloda olmayan komut çerçeveye hata döner.
 // Gövde yalnız listelenen alanlarla kurulur; kural, yetki ve sürüm denetimi sahibi modüldedir (uç reddederse hata çerçeveye taşınır).
-// Kaynak komutları `kaynak-komutlari.ts` dosyasındadır (KAYNAK_KOMUTLARI): tablo zod taşımaz; `paylasilan` sözleşmesi zod taşıdığı için
-// istemciye değer olarak giremez. Sunucu testi aynı tabloyla sahibin ucunu dener. Sekmeler bağlandıkça komutlar buraya eklenir.
+// Kaynak ve operasyon tipi komutu yoktur (1927 a): iş merkezi, istasyon, makine, kişi, yetkinlik ve operasyon tipi İstasyonlar'da yazılır.
+// Komut tablosu (KomutTanimi) `kaynak-komutlari.ts` dosyasındadır: zod taşımaz; `paylasilan` sözleşmesi zod taşıdığı için istemciye değer
+// olarak giremez. Sekmeler bağlandıkça komutlar buraya eklenir.
 interface HazirKomut { yol: string; govde: Nesne; tekrarKorumali?: boolean }
 // Sahibin kaydını okuyup ya da kartı kuran komutlar (kart #1105): gövdeyi köprü hazırlar. Öteki komutlar KomutTanimi tablosudur.
 // baglam: köprünün son okuduğu durumun maliyet dilimi (sürüm buradan gelir; çerçeveye sürüm sorulmaz). null: dilim okunmadı ya da yetki yok.
 export interface KomutBaglami { maliyet: DurumCevabi['maliyet'] }
 export interface OzelKomut { hazirla: (girdi: Nesne, baglam: KomutBaglami) => HazirKomut | Promise<HazirKomut> }
-const suz = (girdi: Nesne, alanlar: readonly string[]): Nesne => {
-  const govde: Nesne = {};
-  for (const alan of alanlar) if (Object.hasOwn(girdi, alan)) govde[alan] = girdi[alan];
-  return govde;
-};
-const OPERASYON_ALANLARI = ['kod', 'ad', 'grup', 'aktif', 'kisaltma', 'varsayilanAyarDk', 'varsayilanBirimDk', 'varsayilanIstasyonId'] as const;
 const pozitifTamSayi = (v: unknown, alan: string): number => {
   if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) throw new Error(`Geçersiz ${alan}.`);
   return v;
@@ -108,28 +103,7 @@ export function maliyetIstegi(girdi: Nesne, baglam: KomutBaglami): HazirKomut {
   return { yol: `/finans/maliyetler/${tur}/yaz`, govde: { anahtar, birimMaliyet: tutar, paraBirimi: 'TRY', surum: mevcut?.surum ?? null } };
 }
 
-interface OperasyonTipiSatiri {
-  id: number; kod: string; ad: string; grup: string; aktif: boolean; kisaltma: string | null;
-  varsayilanAyarDk: string | null; varsayilanBirimDk: string | null; varsayilanIstasyonId: number | null; surum: number;
-}
-
 export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | RotaKomutu | PlanSenaryoKomutu>> = {
-  // İstasyonlar: operasyon tipi ekleme (POST /operasyon-tipleri).
-  'operasyon-tipi-ekle': { yol: '/operasyon-tipleri', alanlar: OPERASYON_ALANLARI },
-  // İstasyonlar: operasyon tipi düzenleme (POST /operasyon-tipleri/:id/guncelle). Sahibi ad, grup ve aktif alanlarını ister ve gönderilmeyen
-  // aktif alanını "aktif" sayar; durum cevabı bunları ve sürümü taşımadığı için kayıt yazmadan hemen önce sahibinin listesinden okunur,
-  // çerçevenin değiştirdiği alanlar üstüne konur (pasif tip yeniden etkinleşmez). Listede olmayan tip 404 gibi reddedilir.
-  'operasyon-tipi-duzenle': {
-    hazirla: async (girdi: Nesne) => {
-      const id = pozitifTamSayi(girdi['id'], 'operasyon tipi');
-      const liste = await api.get<{ operasyonTipleri: OperasyonTipiSatiri[] }>('/operasyon-tipleri?pasifler=true');
-      const kayit = liste.operasyonTipleri.find((t) => t.id === id);
-      if (kayit === undefined) throw new ApiHatasi(404, { kod: 'BULUNAMADI', mesaj: 'Operasyon tipi bulunamadı.' });
-      const mevcut = { ad: kayit.ad, grup: kayit.grup, aktif: kayit.aktif, kisaltma: kayit.kisaltma, varsayilanAyarDk: kayit.varsayilanAyarDk,
-        varsayilanBirimDk: kayit.varsayilanBirimDk, varsayilanIstasyonId: kayit.varsayilanIstasyonId };
-      return { yol: `/operasyon-tipleri/${String(id)}/guncelle`, govde: { ...mevcut, ...suz(girdi, OPERASYON_ALANLARI), surum: kayit.surum } };
-    },
-  },
   // Stok: statü atlatma (kart #1169, POST /stok/statu-degistir, `stok.statu-degistir`). Statü kimlikleri `recete_rota_statu.id`, null serbest
   // stoktur; konum ve parti çerçevenin seçtiği bakiye satırından gelir. Kural (yeterli bakiye, statü malzemenin mi) stoktadır.
   'statu-degistir': {
@@ -137,7 +111,6 @@ export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | 
   },
   // Finans: birim maliyetler (kart #1187, POST /finans/maliyetler/:tur/yaz, `finans.yonet`).
   'maliyet-yaz': { hazirla: (girdi: Nesne, baglam: KomutBaglami) => maliyetIstegi(girdi, baglam) },
-  ...KAYNAK_KOMUTLARI,
   ...PLAN_STOK_KOMUTLARI,
   // 533 a: malzemenin tedarik termini Satın Alma'nın ucuna yazılır (yetki satin-alma.yaz ya da plan.yaz; sürüm tutmazsa 409).
   'tedarik-termini-kaydet': { yol: '/satin-alma-tedarik-terminleri/kaydet', alanlar: ['malzemeNo', 'termin', 'aciklama', 'surum'], tekrarKorumali: true },
@@ -344,10 +317,7 @@ export function kopruKur(
     islemler?: readonly string[];
   } = {},
 ): KopruIsleyici {
-  // Çerçeve kayıtları okuduğu andaki sürümler: güncelleme bu sürümle gider, başkası arada yazdıysa sahibi 409 döner. Her başarılı
-  // komuttan ve her okumadan sonra yenilenir. Kaynak komutları ve okumaları sırayla koşar (iki hızlı değişiklik birbirinin sürümünü
-  // eskitmesin).
-  let anlik: KaynakAnlik = BOS_ANLIK;
+  // Komutlar ve okumalar sırayla koşar (iki hızlı değişiklik birbirinin sürümünü eskitmesin).
   let sira: Promise<void> = Promise.resolve();
   const sirala = <T,>(is: () => Promise<T>): Promise<T> => {
     const sonuc = sira.then(is);
@@ -455,8 +425,7 @@ export function kopruKur(
       case 'kaynak-oku':
         return sirala(async () => {
           const [okunan, kapasite, sa] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku(), satinAlmaEkiOku()]);
-          anlik = okunan.anlik;
-          return { durum: await durumOku(), ek: ekOzeti(anlik, okunan.takvim, kapasite, sa) };
+          return { durum: await durumOku(), ek: ekOzeti(okunan.anlik, okunan.takvim, kapasite, sa) };
         });
       case 'komut': {
         const ad = metin(v['ad'], 'komut adı');
@@ -465,7 +434,7 @@ export function kopruKur(
         const girdi = ad === 'emir-ac' ? await emirAcilisi(nesne(v['govde']), secenek.emirSecimi) : nesne(v['govde']);
         const musteriler = CANLIYA_ALMA_KOMUTLARI.has(ad) ? await acilMusteriler(girdi, secenek.acilMusteriSecimi) : [];
         return sirala(async () => {
-          const hazir = 'hazirla' in tanim ? { tekrarKorumali: false, ...(await tanim.hazirla(girdi, { maliyet: maliyetAnlik })) } : komutIstegi(tanim, girdi, anlik);
+          const hazir = 'hazirla' in tanim ? { tekrarKorumali: false, ...(await tanim.hazirla(girdi, { maliyet: maliyetAnlik })) } : komutIstegi(tanim, girdi);
           const istek = musteriler.length === 0 ? hazir : { ...hazir, govde: { ...hazir.govde, acilMusteriler: musteriler } };
           const sonuc = istek.tekrarKorumali
             ? await tekrarKorumaliGonder((d) => api.post<unknown>(istek.yol, istek.govde, d))
@@ -474,9 +443,8 @@ export function kopruKur(
           if ('hafif' in tanim) return { sonuc, durum: await durumOku().catch(() => null), ek: null };
           // Komut uygulandı; durum okunamazsa komut başarısız sayılmaz (çerçeve `kaynakOku()` ile yeniden ister). Sürümler önce okunur.
           const [okunan, kapasite, sa] = await Promise.all([anlikOku(secenek.islemler), kapasiteOku(), satinAlmaEkiOku()]);
-          anlik = okunan.anlik;
           const durum = await durumOku().catch(() => null);
-          return { sonuc, durum, ek: ekOzeti(anlik, okunan.takvim, kapasite, sa) };
+          return { sonuc, durum, ek: ekOzeti(okunan.anlik, okunan.takvim, kapasite, sa) };
         });
       }
       default:

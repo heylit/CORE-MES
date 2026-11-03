@@ -1,30 +1,12 @@
 import { useState } from 'react';
-import { DurumKutusu, Dugme, Tablo, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Tablo } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih, YOK } from '../bicim.ts';
+import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { useRrKomutu } from '../veri.ts';
 import {
-  acikRevizyon, cevrimToplami, degisimOrani, kucuk, OP_GRUPLARI, REV_DURUMU, revizyonlari, sureGirisi, sureMetni, yururlukteki,
-  type Malzeme, type Operasyon, type SureAlani,
+  acikRevizyon, kucuk, OP_GRUPLARI, REV_DURUMU, revizyonlari, yururlukteki, type Malzeme, type Operasyon,
 } from './kurallar.ts';
-import { MetinAlani, renkSinifi, SecimAlani } from './ortak.tsx';
-
-type Sure = { proc: number | null; chg: number | null };
-const SURE_ALANI: Readonly<Record<'setup' | 'proc' | 'chg', SureAlani>> = { setup: 'hazirlik', proc: 'islem', chg: 'degisim' };
-
-function SureGirdisi({ etiket, deger, kapali, yaz }: { etiket: string; deger: number | null; kapali: boolean; yaz: (ham: string) => void }) {
-  const metin = deger === null ? '' : String(deger).replace('.', ',');
-  const [yerel, setYerel] = useState<string | null>(null);
-  return (
-    <label className="tc-rr1-alan">
-      <span>{etiket}</span>
-      <input className="tc-rr1-sayi" inputMode="decimal" value={yerel ?? metin} disabled={kapali} placeholder="boş" aria-label={etiket}
-        onChange={(e) => { setYerel(e.target.value); }}
-        onBlur={() => { if (yerel !== null && yerel !== metin) yaz(yerel); setYerel(null); }}
-        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
-    </label>
-  );
-}
+import { renkSinifi } from './ortak.tsx';
 
 // Eski sayfanın sık tablosu: başlık satırı geniş ekranda görünür; dar ekranda satır alanları kendi etiketini gösterir.
 const ODBASLIK = (
@@ -35,19 +17,12 @@ const ODBASLIK = (
   </div>
 );
 
-// Operasyonlar: İstasyonlar'ın operasyon tipi kataloğu 13 grupla; ekle ve değiştir İstasyonlar kaydına yazılır (istasyonlar.yaz). Altında
+// Operasyonlar: İstasyonlar'ın operasyon tipi kataloğu 13 grupla, yalnız okunur; ekleme ve düzenleme İstasyonlar'dadır (1927 a). Altında
 // ürünlerin rota revizyonları.
 export function Operasyonlar(o: EkranOzellikleri) {
   const d = o.veri.durum;
-  const komut = useRrKomutu();
-  const { bildir } = useBildirim();
   const [q, setQ] = useState('');
   const [kapali, setKapali] = useState<Record<string, boolean>>({});
-  const [yeni, setYeni] = useState<{ grup: string; kod: string; kisa: string; ad: string; ist: string; setup: string; proc: string; chg: string } | null>(null);
-  const [hata, setHata] = useState('');
-  // Durum yalnız toplam birim süreyi (çevrim) taşır; işlem ve değişim ayrı girilince ekranda ayrı tutulur.
-  const [sureler, setSureler] = useState<Record<string, Sure>>({});
-  const yaz = o.yetki.istasyonYaz;
 
   if (d.opdefs === null) {
     return (
@@ -58,81 +33,31 @@ export function Operasyonlar(o: EkranOzellikleri) {
   }
   const istasyonlar = d.stations ?? [];
   const kullanim = (id: string) => Object.values(d.routes ?? {}).reduce((t, r) => t + r.steps.filter((s) => s.opId === id).length, 0);
-  const sureOf = (x: Operasyon): Sure => sureler[x.id] ?? { proc: x.cycle, chg: null };
-  const gonder = async (govde: Record<string, unknown>, basari?: string): Promise<boolean> => {
-    try {
-      await komut.mutateAsync({ ad: 'operasyon-tipi-duzenle', govde });
-      if (basari) bildir('tamam', basari);
-      return true;
-    } catch (e) {
-      bildir('hata', (e as Error).message);
-      return false;
-    }
-  };
-  const sureDegisti = (x: Operasyon, f: 'setup' | 'proc' | 'chg', ham: string) => {
-    const g = sureGirisi(ham, SURE_ALANI[f]);
-    if (!g.ok) { bildir('hata', g.ileti); return; }
-    if (f === 'setup') { void gonder({ id: Number(x.id), varsayilanAyarDk: sureMetni(g.deger, 2) }); return; }
-    const eski = sureOf(x);
-    const s = { ...eski, [f]: g.deger };
-    setSureler({ ...sureler, [x.id]: s });
-    void gonder({ id: Number(x.id), varsayilanBirimDk: s.proc === null && s.chg === null ? null : sureMetni(cevrimToplami(s.proc, s.chg), 4) })
-      .then((ok) => { if (!ok) setSureler((m) => ({ ...m, [x.id]: eski })); });
-  };
 
   const s = kucuk(q.trim());
   const gruplar = [...OP_GRUPLARI, ...[...new Set(d.opdefs.map((x) => x.group))].filter((g) => !OP_GRUPLARI.some(([k]) => k === g)).map((g) => [g, g] as const)];
-  const satir = (x: Operasyon) => {
-    const sure = sureOf(x);
-    const oran = degisimOrani(sure.proc, sure.chg);
-    const n = kullanim(x.id);
-    return (
-      <div key={x.id} className="tc-rr1-od">
-        <span className={`tc-rr1-od-kisa ${renkSinifi(x.stationId)}`}>
-          <MetinAlani etiket="Kısaltma" deger={x.abbr ?? ''} enCok={6} kapali={!yaz}
-            yaz={(v) => { void gonder({ id: Number(x.id), kisaltma: v.toLocaleUpperCase('tr-TR').trim().slice(0, 6) || null }); }} />
-        </span>
-        <MetinAlani etiket="Kod" deger={x.code} kapali={!yaz} yaz={(v) => { if (v.trim()) void gonder({ id: Number(x.id), kod: v.trim() }); }} />
-        <span className="tc-rr1-od-genis">
-          <MetinAlani etiket="Operasyon adı" deger={x.name} kapali={!yaz} yaz={(v) => { if (v.trim()) void gonder({ id: Number(x.id), ad: v.trim() }); }} />
-        </span>
-        <span className="tc-rr1-od-genis">
-          <SecimAlani etiket="Varsayılan istasyon" deger={x.stationId ?? ''} kapali={!yaz} bos="Seç…"
-            secenekler={istasyonlar.map((i) => ({ deger: i.id, baslik: `${i.code} ${i.name}` }))}
-            yaz={(v) => { void gonder({ id: Number(x.id), varsayilanIstasyonId: v === '' ? null : Number(v) }); }} />
-        </span>
-        <SureGirdisi etiket="Hazırlık dk" deger={x.setup} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'setup', v); }} />
-        <SureGirdisi etiket="İşlem dk / birim" deger={sure.proc} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'proc', v); }} />
-        <SureGirdisi etiket="Değişim dk / birim" deger={sure.chg} kapali={!yaz} yaz={(v) => { sureDegisti(x, 'chg', v); }} />
-        <div className="tc-rr1-alan tc-rr1-od-sag"><span>Değişim %</span><b>{oran === null ? YOK : `%${sayi(Math.round(oran * 10) / 10)}`}</b></div>
-        <div className="tc-rr1-alan"><span>Kullanım</span><span className="tc-rr1-ipucu">{n} adım{!x.aktif && <span className="tc-rr1-tag">pasif</span>}</span></div>
-      </div>
-    );
+  const istasyonAdi = (id: string | null) => {
+    const i = id === null ? undefined : istasyonlar.find((x) => x.id === id);
+    return i ? `${i.code} ${i.name}` : YOK;
   };
-
-  const ekle = async () => {
-    if (!yeni) return;
-    if (!yeni.kod.trim()) { setHata('Operasyonun kodunu yaz.'); return; }
-    const s1 = sureGirisi(yeni.setup, 'hazirlik'); const s2 = sureGirisi(yeni.proc, 'islem'); const s3 = sureGirisi(yeni.chg, 'degisim');
-    const kotu = [s1, s2, s3].find((x) => !x.ok);
-    if (kotu && !kotu.ok) { setHata(kotu.ileti); return; }
-    setHata('');
-    try {
-      await komut.mutateAsync({
-        ad: 'operasyon-tipi-ekle',
-        govde: {
-          kod: yeni.kod.trim(), ad: yeni.ad.trim(), grup: yeni.grup, kisaltma: yeni.kisa.trim() || null, varsayilanAyarDk: sureMetni(s1.deger, 2),
-          varsayilanBirimDk: s2.deger === null && s3.deger === null ? null : sureMetni(cevrimToplami(s2.deger, s3.deger), 4),
-          varsayilanIstasyonId: yeni.ist === '' ? null : Number(yeni.ist),
-        },
-      });
-      bildir('tamam', `${yeni.kod.trim()} operasyon kataloğuna eklendi.`);
-      setYeni(null);
-    } catch (e) {
-      setHata((e as Error).message);
-    }
-  };
-  const alan = (k: keyof NonNullable<typeof yeni>, v: string) => { if (yeni) setYeni({ ...yeni, [k]: v }); };
+  const alan = (etiket: string, deger: string, sag = false) => (
+    <div className={`tc-rr1-alan${sag ? ' tc-rr1-od-sag' : ''}`}><span>{etiket}</span><b>{deger}</b></div>
+  );
+  const sure = (dk: number | null) => (dk === null ? YOK : sayi(dk));
+  const satir = (x: Operasyon) => (
+    <div key={x.id} className="tc-rr1-od">
+      <span className={`tc-rr1-od-kisa ${renkSinifi(x.stationId)}`}>{alan('Kısaltma', x.abbr ?? YOK)}</span>
+      {alan('Kod', x.code)}
+      <span className="tc-rr1-od-genis">{alan('Operasyon adı', x.name)}</span>
+      <span className="tc-rr1-od-genis">{alan('Varsayılan istasyon', istasyonAdi(x.stationId))}</span>
+      {alan('Hazırlık dk', sure(x.setup), true)}
+      {/* Durum yalnız toplam birim süreyi (çevrim) taşır; işlem ve değişim ayrımı katalogda tutulmaz. */}
+      {alan('İşlem dk / birim', sure(x.cycle), true)}
+      {alan('Değişim dk / birim', YOK, true)}
+      {alan('Değişim %', YOK, true)}
+      <div className="tc-rr1-alan"><span>Kullanım</span><span className="tc-rr1-ipucu">{kullanim(x.id)} adım{!x.aktif && <span className="tc-rr1-tag">pasif</span>}</span></div>
+    </div>
+  );
 
   const urunler = (d.items ?? []).filter((m) => m.type !== 'ham' && revizyonlari(d.routeRevs, m.id).length > 0);
   return (
@@ -141,38 +66,10 @@ export function Operasyonlar(o: EkranOzellikleri) {
         <input className="tc-rr1-metin" type="search" value={q} placeholder="Kod, kısaltma ya da ad ara…" aria-label="Operasyon ara" autoComplete="off"
           onChange={(e) => { setQ(e.target.value); }} />
         <span className="tc-rr1-grow" />
-        {yaz && (
-          <Dugme tur="birincil" simge="plus" onClick={() => {
-            setHata('');
-            setYeni(yeni ? null : { grup: OP_GRUPLARI[0]?.[0] ?? '', kod: '', kisa: '', ad: '', ist: '', setup: '', proc: '', chg: '' });
-          }}>Operasyon</Dugme>
-        )}
+        <SahibindeDuzenle sahip="operasyon" />
         <Dugme tur="ikincil" simge="clock" onClick={() => { o.git('sureler'); }}>Süreler</Dugme>
       </div>
-      {yeni && (
-        <section className="tc-rr1-panel" aria-label="Yeni operasyon">
-          <h3>Yeni operasyon</h3>
-          <p className="tc-rr1-ipucu">Operasyon İstasyonlar&apos;ın operasyon tipi kataloğuna yazılır; Malzemeler ve Hizmetler de aynı listeyi okur. Kod senin verdiğin koddur ve rotada ya da iş emrinde kullanılınca değişmez.</p>
-          <div className="tc-rr1-ig">
-            <SecimAlani etiket="Grup" deger={yeni.grup} secenekler={OP_GRUPLARI.map(([k, ad]) => ({ deger: k, baslik: ad }))} yaz={(v) => { alan('grup', v); }} />
-            <label className="tc-rr1-alan"><span>Kod</span><input className="tc-rr1-metin" value={yeni.kod} placeholder="Örneğin KES-LZR" aria-label="Operasyon kodu" onChange={(e) => { alan('kod', e.target.value); }} /></label>
-            <label className="tc-rr1-alan"><span>Kısaltma</span><input className="tc-rr1-metin" value={yeni.kisa} maxLength={6} placeholder="LZR" aria-label="Kısaltma" onChange={(e) => { alan('kisa', e.target.value); }} /></label>
-            <label className="tc-rr1-alan tc-rr1-genis"><span>Ad</span><input className="tc-rr1-metin" value={yeni.ad} placeholder="Lazer kesim" aria-label="Operasyon adı" onChange={(e) => { alan('ad', e.target.value); }} /></label>
-            <span className="tc-rr1-genis">
-              <SecimAlani etiket="Varsayılan istasyon" deger={yeni.ist} bos="Seç…" secenekler={istasyonlar.map((i) => ({ deger: i.id, baslik: `${i.code} ${i.name}` }))} yaz={(v) => { alan('ist', v); }} />
-            </span>
-            <label className="tc-rr1-alan"><span>Hazırlık (dk)</span><input className="tc-rr1-sayi" inputMode="decimal" value={yeni.setup} placeholder="boş" aria-label="Hazırlık" onChange={(e) => { alan('setup', e.target.value); }} /></label>
-            <label className="tc-rr1-alan"><span>İşlem (dk / birim)</span><input className="tc-rr1-sayi" inputMode="decimal" value={yeni.proc} placeholder="boş" aria-label="İşlem" onChange={(e) => { alan('proc', e.target.value); }} /></label>
-            <label className="tc-rr1-alan"><span>Değişim (dk / birim)</span><input className="tc-rr1-sayi" inputMode="decimal" value={yeni.chg} placeholder="boş" aria-label="Değişim" onChange={(e) => { alan('chg', e.target.value); }} /></label>
-          </div>
-          {hata && <p className="tc-rr1-hata" role="alert">{hata}</p>}
-          <div className="tc-rr1-btnrow">
-            <Dugme tur="birincil" yukleniyor={komut.isPending} onClick={() => { void ekle(); }}>Operasyonu ekle</Dugme>
-            <Dugme tur="ikincil" onClick={() => { setYeni(null); }}>Vazgeç</Dugme>
-          </div>
-        </section>
-      )}
-      {d.opdefs.length === 0 && !q && <DurumKutusu durum="bos" mesaj="Katalog boş. Kesim, büküm, kaynak, montaj gibi operasyonlarını ekle." />}
+      {d.opdefs.length === 0 && !q && <DurumKutusu durum="bos" mesaj="Katalog boş. Kesim, büküm, kaynak, montaj gibi operasyonları İstasyonlar sayfasında ekle." />}
       {gruplar.map(([k, ad]) => {
         const tum = d.opdefs?.filter((x) => x.group === k) ?? [];
         if (tum.length === 0 && !OP_GRUPLARI.some(([g]) => g === k)) return null;
