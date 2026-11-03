@@ -129,6 +129,9 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     expect(kutu.checked).toBe(false);
     expect(within(eksik).getByRole('note').textContent).toContain('Ayarı eksik');
     await within(eksik).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
+    // Satır seçimleri durum metninden sonraki etkide kurulur; kurulmadan basılan Tümünü seç boşa gider.
+    const f01 = screen.getByText('F-01 · Beş eksen').closest('li') as HTMLElement;
+    await waitFor(() => { expect((within(f01).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('5'); });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Tümünü seç' }));
     expect(screen.getByRole('button', { name: '1 makineyi eşleştir' })).toBeTruthy();
     expect(kutu.checked).toBe(false);
@@ -223,7 +226,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     const dmu = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
     expect(await within(dmu).findByText('Eşleşti: T-01 - Deneme torna. Haritaya eklenebilir.')).toBeTruthy();
     // Kod F-01 istasyonunu önerirdi; Çizim Merkezi'ndeki bağ (T-01) önce gelir.
-    expect((within(dmu).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('6');
+    await waitFor(() => { expect((within(dmu).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('6'); });
     const t9 = screen.getByText('T-09 · Taslak torna').closest('li') as HTMLElement;
     expect(within(t9).getByText('Çizim Merkezi\'nde modeli var, eşleşmedi; haritaya eklenemez.')).toBeTruthy();
     const yeni = screen.getByText('Yeni').closest('li') as HTMLElement;

@@ -78,8 +78,16 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
   }
   const kaydetGovdesi = (govde: Govde) => ({ govde, surum: surumler.get(String(govde['id'])) ?? null });
   const personel = (id: string, ek: Govde = {}): Govde => ({ id, kind: 'emp', ad: `Ad ${id}`, soyad: 'Deneme', iseGiris: '2024-01-01', isMerkeziId: im1, ...ek });
+  // Çalışan geçmiş tarihli izin talep edemez (IK-9): örnek izin bugünden en az 30 gün sonraki pazartesi başlar, çarşambaya kadar
+  // üç iş günüdür. Sabit tarih o gün geçince talebi 422'ye düşürürdü.
+  const gunSonra = (tarih: string, gun: number): string => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * 86_400_000).toISOString().slice(0, 10);
+  const izinBasi = ((): string => {
+    const t = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    return gunSonra(t, (8 - new Date(`${t}T00:00:00Z`).getUTCDay()) % 7);
+  })();
+  const izinSonu = gunSonra(izinBasi, 2);
   const izin = (id: string, empId: string, durum: string, ek: Govde = {}): Govde =>
-    ({ id, kind: 'leave', empId, tur: 'Yıllık izin', baslangic: '2026-12-07', bitis: '2026-12-09', gun: 3, durum, ...ek });
+    ({ id, kind: 'leave', empId, tur: 'Yıllık izin', baslangic: izinBasi, bitis: izinSonu, gun: 3, durum, ...ek });
   const buAy = (): string => new Date().toISOString().slice(0, 7);
   const sonrakiAyBasi = (): string => { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 1)).toISOString().slice(0, 10); };
 
@@ -190,7 +198,7 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('IK-5, IK-6: onaylı izin onaysız değişmez; sonuçlanmış izin değişmez', async () => {
     const v = (await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri')).kayitlar.find((x) => x.kimlik === 'leave_o1')!;
-    await ret(403, 'YETKI_YOK', c.uzm, 'POST', '/ik/izinler/leave_o1/kaydet', { govde: { ...v.govde, bitis: '2026-12-11' }, surum: v.surum });
+    await ret(403, 'YETKI_YOK', c.uzm, 'POST', '/ik/izinler/leave_o1/kaydet', { govde: { ...v.govde, bitis: gunSonra(izinBasi, 4) }, surum: v.surum });
     await ret(403, 'YETKI_YOK', c.uzm, 'POST', '/ik/izinler/leave_o1/kaydet', { govde: { ...v.govde, durum: 'İptal' }, surum: v.surum });
     await ret(403, 'YETKI_YOK', c.uzm, 'POST', '/ik/izinler/leave_o1/iptal', { surum: v.surum });
     await ret(422, 'GECERSIZ', c.opr, 'POST', '/ik/izinler/leave_o1/talep', { govde: { ...v.govde, durum: 'İptal' }, surum: v.surum });
@@ -441,14 +449,14 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!ilk.some((b) => b.kisi_id === kim.uzm), 'talebi giren almaz');
     assert.ok(!ilk.some((b) => b.kisi_id === kim.opr), 'izin onayı olmayan almaz');
     assert.deepEqual({ ...ilk.find((b) => b.kisi_id === kim.mud) }, {
-      kisi_id: kim.mud, baslik: 'İzin talebi onay bekliyor', metin: 'Ad emp_bl Deneme · Yıllık izin · 2026-12-07 - 2026-12-09', yol: '/ik-islemlerim/onaylar',
+      kisi_id: kim.mud, baslik: 'İzin talebi onay bekliyor', metin: `Ad emp_bl Deneme · Yıllık izin · ${izinBasi} - ${izinSonu}`, yol: '/ik-islemlerim/onaylar',
     });
     // Bağlantı alıcının açabildiği sayfaya gider: müdürde sayfa.ik yok; Onaylar maddesi izin onayı yetkisiyle görünür.
     const madde = IK_ISLEMLERIM_IKINCI_MENU.gruplar.flatMap((g): readonly { yol: string; islem: string }[] => g.maddeler).find((m) => m.yol === ilk[0]!.yol);
     assert.equal(madde?.islem, 'ik.izin-onay');
     await kaydet(c.uzm, 'izinler', { ...izin('leave_bl1', 'emp_bl', 'Beklemede'), aciklama: 'not' });
     assert.equal((await bildirimler('leave_bl1')).length, ilk.length, 'bekleyen talebin düzeltilmesi yeni bildirim açmaz');
-    await kaydet(c.yon, 'izinler', izin('leave_bl2', 'emp_bl', 'Onaylandı', { baslangic: '2027-01-04', bitis: '2027-01-04', gun: 1 }));
+    await kaydet(c.yon, 'izinler', izin('leave_bl2', 'emp_bl', 'Onaylandı', { baslangic: gunSonra(izinBasi, 7), bitis: gunSonra(izinBasi, 7), gun: 1 }));
     assert.deepEqual(await bildirimler('leave_bl2'), [], 'onay beklemeyen izin bildirim açmaz');
   });
 
@@ -520,7 +528,8 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('1844 IK-7 b, IK-9 a: bakiye aşımı uyarır; KVKK onaysız aday sürece girmez; işe alım personel kartıyla; görüşmeci adayı görür; geçmiş talep ve eksik gün reddedilir', async () => {
     // IK-7 b: yıllık izin kalanı aşarsa kayıt sürer, cevap uyarı taşır; kalan içindeki talep uyarısızdır.
-    await kaydet(c.yon, 'personel', personel('emp_bk1'));
+    // İşe giriş bugünden 400 gün önce: hak hep tek yıllık kıdemdir. Sabit tarihte her yıldönümü hakkı büyütür, 30 günlük izin kalanı aşmaz olurdu.
+    await kaydet(c.yon, 'personel', personel('emp_bk1', { iseGiris: gunSonra(tesisGunu(new Date()), -400) }));
     const yillik = (id: string, baslangic: string, bitis: string, gun: number, durum = 'Beklemede') => ({ id, kind: 'leave', empId: 'emp_bk1', tur: 'Yıllık izin', baslangic, bitis, gun, durum });
     assert.equal((await kaydet(c.uzm, 'izinler', yillik('leave_bk1', '2027-01-11', '2027-01-13', 3))).uyari, undefined);
     const asim = await kaydet(c.uzm, 'izinler', yillik('leave_bk2', '2027-02-01', '2027-03-12', 30));
