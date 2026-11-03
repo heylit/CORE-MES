@@ -4,6 +4,7 @@ import {
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { useTema } from '../../../../ortak/veri/tema.ts';
+import { KabukUstYuvasi } from '../../../../ortak/arayuz/Kabuk.tsx';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
@@ -1418,10 +1419,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }
 
   const gecerliSekme = sekmeler.some((s) => s.id === tab) ? tab : sekmeler[0]!.id;
+  // 2052-1 a: terminal şeridi kabuğun üst çubuğundadır (prototip v5); önizlemede cihaz çerçevesinin içinde kalır.
+  const ustSerit = (serit: ReactNode) => (pv ? serit : (
+    <KabukUstYuvasi><div className="tc-ay1 tc-ay1-kabukta" data-durum={IS_DURUM_RENGI(o.state)}>{serit}</div></KabukUstYuvasi>
+  ));
   const saat = new Date(simdi);
   const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   return (
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
+      {ustSerit(
       <header className="tc-ay1-ust">
         <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
           {MACHINE ? <><b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small></> : <b>İstasyon seçilmedi</b>}
@@ -1435,8 +1441,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         {/* 1999 a: çark görünürken iş listesi çarkın İşler şerididir; düğme tekrar olur. */}
         {carkVar ? null : <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>}
         {!pv ? <Dugme tur="ikincil" simge="bell" onClick={() => ovYaz('call')}>Çağrı</Dugme> : null}
-        <BaglantiDurumu />
-        <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
+        {/* 2052-1 a (prototip v5): bağlantı durumu saatin altında; vardiya satırı yer varsa yanında. */}
+        <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><span className="tc-ay1-saat-alt"><BaglantiDurumu /><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span></span>
         <button type="button" className="tc-ay1-simge-dugme" onClick={temaDegistir} title="Tema değiştir" aria-label="Tema değiştir"><Simge ad={tema === 'dark' ? 'sun' : 'moon'} /></button>
         {/* 848 a: genişte Menü yalnız geçiş varsa; öteki satırlar (vardiya özeti, uzak mod, resim) başlıkta zaten var. */}
         {gecisSatirlari.length > 0 ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} title="Menü" aria-label="Menü"><Simge ad="list" /></button> : null}
@@ -1444,7 +1450,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
           <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
         </button>
-      </header>
+      </header>,
+      )}
       {/* 791 b: iki sütun (üretim, ayrıntı); iş listesi "İşler" düğmesinden açılır. Sütunlar ekran yüksekliğine sığar, taşan sütun kendi içinde kayar. */}
       <div className="tc-ay1-izgara">
         <div className="tc-ay1-orta tc-ay1-sutun">

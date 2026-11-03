@@ -7,7 +7,7 @@ import './cark.css';
 
 /* 790: iş ve makine çarkı (CNC Kurulum'un kart dizisi gibi). Tek çark, şerit başına bir liste. Çevirmek yalnız bakar: düğme, yana
    kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandaki işi değiştirmez; geçiş ve seçim şeridin kendi eylemidir. Ekrandaki öğe
-   de kısa kartla çizilir; yalnız bakılan kart çizilir (1999 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir.
+   de kısa kartla çizilir; komşular arkada üst üste görünür (prototip, 828 a; 2052-2 a ile geri geldi). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir.
    Tek öğeli şeritte çevirecek bir şey yoktur: ok, sıra ve ipucu çizilmez, kart tek başına durur (888 a). */
 
 export interface CarkSeridi {
@@ -24,8 +24,8 @@ export interface CarkSeridi {
   eylem: (i: number) => ReactNode;
 }
 
-// 1999 a: yalnız bakılan kart çizilir; komşu kartlar üst şeridi kalabalıklaştırıyordu, gezinme ok, kaydırma ve sayaçla kalır.
-const KOMSU = 0;
+// Çizilen komşu sayısı: ötesi görünmez, DOM'a da girmez. Komşular bakılan kartın arkasında üst üste durur, yükseklik eklemez.
+const KOMSU = 2;
 // Sürükleme bu kadar yürüyünce işaretçi sahneye bağlanır: dışarıda bırakılan sürükleme de sayılır (888 c), ama yerinde dokunuş
 // komşu kartın tıklaması olarak kalır (yakalanan işaretçinin tıklaması sahneye gider).
 const YAKALA = 8;

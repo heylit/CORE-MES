@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientContext } from '@tanstack/react-query';
 import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sayfalar.ts';
@@ -131,6 +132,26 @@ const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim
 // listesi aynı sayıyı gösterir.
 const AnaMenuSayacBaglami = createContext<ReadonlyMap<string, number>>(new Map());
 
+/* Üst çubuk yuvası (2052-1 a): sayfa kendi şeridini kabuğun üst çubuğuna koyar, üç şerit (başlık, tek maddelik ikinci menü, sayfa
+   şeridi) tek satıra iner. Yuva doluyken arama, iş paneli ve üst eylemler gizlenir ama bağlı kalır (Ctrl+K, bildirim sayımı sürer);
+   geri/ileri, başlık ve hesap menüsü (çıkış) kalır. Kabuk dışında (test, önizleme) içerik yerinde çizilir. */
+interface UstYuva { yer: HTMLElement | null; doldur: (dolu: boolean) => void }
+const UstYuvaBaglami = createContext<UstYuva | null>(null);
+
+export function KabukUstYuvasi({ children }: { children: ReactNode }) {
+  const yuva = useContext(UstYuvaBaglami);
+  const doldur = yuva?.doldur;
+  const yer = yuva?.yer ?? null;
+  useEffect(() => {
+    if (!doldur || yer === null) return undefined;
+    doldur(true);
+    return () => { doldur(false); };
+  }, [doldur, yer]);
+  if (yer === null) return <>{children}</>;
+  return createPortal(children, yer);
+}
+
+
 // Menünün sayaç ucunu okuyup tek maddenin sayısını yazar; görünmez. Kişinin okuma yetkisi yoksa uç sayı vermez.
 function AnaMenuSayacOkuyucu({ kok, uc, anahtar, yaz }: { kok: string; uc: string; anahtar: string; yaz: (kok: string, sayi: number | null) => void }) {
   const sayaclar = useIkinciMenuSayaclari(uc);
@@ -189,6 +210,10 @@ export function Kabuk({
   // Kabuk sorgu sağlayıcısı olmadan da çizilir (bileşen testleri); o zaman firma adı sorulmaz.
   const sorguVar = useContext(QueryClientContext) !== undefined;
   const [kurumAdi, kurumAdiYaz] = useState<string | null>(null);
+  const [ustYuvaYeri, ustYuvaYeriYaz] = useState<HTMLDivElement | null>(null);
+  const [ustYuvaSayisi, ustYuvaSayisiYaz] = useState(0);
+  const ustYuvaDoldur = useCallback((dolu: boolean) => { ustYuvaSayisiYaz((n) => Math.max(0, n + (dolu ? 1 : -1))); }, []);
+  const ustYuva = useMemo<UstYuva>(() => ({ yer: ustYuvaYeri, doldur: ustYuvaDoldur }), [ustYuvaYeri, ustYuvaDoldur]);
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
   const ikinciMenuler = useMemo(() => kapaliMaddeleriSuz(tumMenuler, kapali), [tumMenuler, kapali]);
@@ -372,6 +397,7 @@ export function Kabuk({
         className="tc-kabuk"
         data-ikinci={ikinci ? '' : undefined}
         data-ikinci-tek={ikinci && TELEFONDA_SERITSIZ.has(ikinci.kok) && menuMaddeleri(ikinci).length === 1 ? '' : undefined}
+        data-ust-yuva={ustYuvaSayisi > 0 ? '' : undefined}
         data-cerceveli={cerceveli ? '' : undefined}
         data-tam-ekran={tamEkranAcik ? '' : undefined}
         data-menu-dar={menuDar ? '' : undefined}
@@ -435,6 +461,7 @@ export function Kabuk({
           {gorunenler.filter((e) => e.yer === 'sol').map((e) => <e.dugme key={e.anahtar} />)}
           <GeziDugmeleri menuler={ikinciMenuler} gecmis={gecmis} />
           <h1 className="tc-kabuk-baslik">{baslik}</h1>
+          <div ref={ustYuvaYeriYaz} className="tc-kabuk-yuva" />
           <GenelArama
             sayfalar={sayfalar}
             menuler={ikinciMenuler}
@@ -512,7 +539,9 @@ export function Kabuk({
             : (
               <CerceveSayacBaglami.Provider value={cerceveSayacYaz}>
                 <SayfaKomutBaglami.Provider value={sayfaKomutYaz}>
-                  <PaletSorgusuBaglami.Provider value={paletSorgusu}>{children}</PaletSorgusuBaglami.Provider>
+                  <PaletSorgusuBaglami.Provider value={paletSorgusu}>
+                    <UstYuvaBaglami.Provider value={ustYuva}>{children}</UstYuvaBaglami.Provider>
+                  </PaletSorgusuBaglami.Provider>
                 </SayfaKomutBaglami.Provider>
               </CerceveSayacBaglami.Provider>
             )}
