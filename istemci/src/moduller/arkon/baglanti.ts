@@ -63,7 +63,7 @@ const ret = (durum: number, mesaj: string): Cevap => ({ durum, govde: { error: m
 const yolParcasi = (p: string): string => encodeURIComponent(p);
 export const listeKesildi = (n: number): string => `Liste en yeni ${n} kayıtla sınırlandı; daha eskisi için tarih aralığını daraltın.`;
 
-export const arkonKisisi = (k: ArkonKisi) => ({ id: k.kimlik, name: k.ad, role: k.rol, wcs: k.isMerkezleri, st: k.istasyon, sts: k.istasyonlar ?? [], active: k.aktif });
+export const arkonKisisi = (k: ArkonKisi) => ({ id: k.kimlik, name: k.ad, role: k.rol, wcs: k.isMerkezleri, st: k.istasyon, sts: k.istasyonlar ?? [], ...(k.makineler === undefined ? {} : { mks: k.makineler }), active: k.aktif });
 
 export function base64Yaz(veri: Uint8Array): string {
   let ikili = '';

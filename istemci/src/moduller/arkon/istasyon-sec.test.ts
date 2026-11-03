@@ -22,8 +22,9 @@ describe('operatör ekranının istasyonu', () => {
   });
   it('açılışta oturum kişisi tazelenirken yetkili istasyonlar korunur', () => {
     const me = { id: '7', name: 'A', role: 'operator' as const, wcs: ['M1'], st: null, sts: ['DF1'], active: true };
-    expect(oturumKisisi(me)).toEqual({ id: '7', name: 'A', role: 'operator', wcs: ['M1'], st: null, sts: ['DF1'] });
-    expect(oturumKisisi({ id: '7', name: 'A', role: 'operator' })).toEqual({ id: '7', name: 'A', role: 'operator', wcs: [], st: null, sts: [] });
+    expect(oturumKisisi(me)).toEqual({ id: '7', name: 'A', role: 'operator', wcs: ['M1'], st: null, sts: ['DF1'], mks: null });
+    expect(oturumKisisi({ id: '7', name: 'A', role: 'operator' })).toEqual({ id: '7', name: 'A', role: 'operator', wcs: [], st: null, sts: [], mks: null });
+    expect(oturumKisisi({ id: '7', name: 'A', role: 'operator', mks: ['TZG-04'] }).mks).toEqual(['TZG-04']);
   });
   it('köprü kişinin istasyonunu Arkon kullanıcısına taşır', () => {
     expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: 'DF1', aktif: true }).st).toBe('DF1');
@@ -31,6 +32,11 @@ describe('operatör ekranının istasyonu', () => {
   it('köprü kişinin yetkili istasyonlarını taşır; alan yoksa boş liste', () => {
     expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: 'DF1', istasyonlar: ['DF1', 'DT1'], aktif: true }).sts).toEqual(['DF1', 'DT1']);
     expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: null, aktif: true }).sts).toEqual([]);
+  });
+  it('2046 a: köprü çalışabildiği makineleri taşır; alan yoksa taşınmaz (süzgeç yok), boş liste hiç makine demektir', () => {
+    expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: null, makineler: ['TZG-04'], aktif: true }).mks).toEqual(['TZG-04']);
+    expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: null, makineler: [], aktif: true }).mks).toEqual([]);
+    expect(arkonKisisi({ kimlik: '7', ad: 'A', rol: 'operator', isMerkezleri: [], istasyon: null, aktif: true }).mks).toBeUndefined();
   });
 });
 

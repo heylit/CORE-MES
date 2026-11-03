@@ -125,7 +125,27 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.equal((await istek(rolsuz, 'GET', '/arkon/belgeler/pkgs')).durum, 403);
     assert.equal((await istek<ArkonBenCevabi>(yonetici, 'GET', '/arkon/ben')).govde.kisi.rol, 'admin');
     const op = await istek<ArkonBenCevabi>(operator, 'GET', '/arkon/ben');
-    assert.deepEqual(op.govde.kisi, { kimlik: String(operatorId), ad: 'Deneme operator1', rol: 'operator', isMerkezleri: [], istasyon: null, istasyonlar: [], aktif: true });
+    const { makineler, ...kisi } = op.govde.kisi;
+    assert.deepEqual(kisi, { kimlik: String(operatorId), ad: 'Deneme operator1', rol: 'operator', isMerkezleri: [], istasyon: null, istasyonlar: [], aktif: true });
+    assert.ok(Array.isArray(makineler));
+  });
+
+  test('2046 a: ben kişinin çalışabildiği makineleri verir; kayıtlı makine yalnız yetkinliği olana açık, kayıtsız makine herkese; yönetici süzülmez', async () => {
+    const { istasyonId, makine: kayitsiz } = await istasyonKur();
+    const kayitli = await istek<{ id: number; kod: string }>(yonetici, 'POST', '/makineler', { kod: kod('AK'), ad: 'Kayıtlı makine', istasyonId, baglantiTuru: 'mtconnect' });
+    assert.equal(kayitli.durum, 200, JSON.stringify(kayitli.govde));
+    // Kaydı tutan öteki kişi girişsizdir: Arkon kişi listesine girmez.
+    const baska = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme yetkin') RETURNING id"))!.id;
+    await ortam!.sahip.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $3), ($2, $3)', [baska, operatorId, istasyonId]);
+    await ortam!.sahip.sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [baska, kayitli.govde.id, yoneticiId]);
+    const makineleri = async (c: typeof operator) => (await istek<ArkonBenCevabi>(c, 'GET', '/arkon/ben')).govde.kisi.makineler;
+
+    const reddedilen = await makineleri(operator);
+    assert.ok(reddedilen?.includes(kayitsiz), 'kayıtsız makine açık');
+    assert.ok(!reddedilen?.includes(kayitli.govde.kod), 'yetkinliği olmayana kayıtlı makine kapalı');
+    await ortam!.sahip.sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [operatorId, kayitli.govde.id, yoneticiId]);
+    assert.ok((await makineleri(operator))?.includes(kayitli.govde.kod), 'yetkinlik verilince açılır');
+    assert.equal(await makineleri(yonetici), undefined, 'yönetici süzülmez');
   });
 
   // Kullanıcı kararı (soru 38/49 A): Arkon rolü kişinin rolünden gelir; ek Arkon işlemi rolü değiştirmez, rolünde Arkon işlemi
@@ -209,7 +229,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.deepEqual(tam.map((k) => k.rol).sort(), ['admin', 'operator']);
     const dar = await istek<ArkonKisilerCevabi>(operator, 'GET', '/arkon/kisiler');
     assert.equal(dar.durum, 200);
-    assert.deepEqual(dar.govde.kisiler, [{ kimlik: String(operatorId), ad: 'Deneme operator1', rol: 'operator', isMerkezleri: [], istasyon: null, istasyonlar: [], aktif: true }]);
+    assert.deepEqual(dar.govde.kisiler.map(({ makineler: _m, ...k }) => k), [{ kimlik: String(operatorId), ad: 'Deneme operator1', rol: 'operator', isMerkezleri: [], istasyon: null, istasyonlar: [], aktif: true }]);
     assert.equal((await istek(rolsuz, 'GET', '/arkon/kisiler')).durum, 403);
     // Kabul: aynı operatör rolüne kisiler.oku eklenince bütün listeyi alır.
     const rol = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'gecici_arkon'");
