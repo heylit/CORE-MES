@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ComponentType, type FormEvent } from 'react';
 import { Dugme, Qr, Simge } from '../../../../ortak/arayuz/index.ts';
+import { hataIletisi } from '../../../../ortak/veri/api.ts';
+import { useTerminalMarkalama, type TerminalMarkalamaIsi } from '../../../markalama/disari.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { bip } from '../cekirdek/ses.ts';
@@ -158,62 +160,84 @@ export function DepoPaneli({ api }: PanelOzellikleri) {
 }
 
 const YONTEMLER: Readonly<Record<string, string>> = { lazer: 'Lazer', damga: 'Damga / nokta vuruş', etiket: 'Etiket' };
+// 2028: seri, sayaç ve doğrulama Markalama modülünün sunucusundadır; panel yalnız görünümü çizer. Arkon iş kaydına (sr) seri
+// yazılmaz; yalnız işin iyi ve hurda sayısı sessizce artar (seri geri alınamaz, sayım da geri alınabilir kayıt olmaz).
+function markalamaIsi(paket: Pkg): TerminalMarkalamaIsi | null {
+  const bag = paket.tmi;
+  if (!bag || paket.malzemeNo == null || !paket.machine) return null;
+  return { uretimEmriId: bag.emirId, opNo: bag.opNo, malzemeId: paket.malzemeNo, istasyonKodu: String(paket.machine) };
+}
+const saatMetni = (zaman: string) => new Date(zaman).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
 export function MarkaPaneli({ api }: PanelOzellikleri) {
-  const { ayar, kayit, paket } = api;
-  const sira = kayit.seq != null ? kayit.seq : (+ayar.start || 1);
-  const sn = seriNo(ayar.fmt, sira, paket);
-  const gunluk = kayit.log || [];
-  const sonIyi = gunluk.find((l) => l.ok);
-  const markala = (ok: boolean) => api.yap((ok ? 'Markalandı · ' : 'Hatalı markalama · hurda · ') + sn, ok ? 'tag' : 'trash', ok ? 'run' : 'stop', (x) => {
-    const s = kayitOf(x); const q = s.seq != null ? s.seq : (+ayar.start || 1);
-    return { ...srYaz(x, { seq: q + 1, log: [{ sn: seriNo(ayar.fmt, q, paket), ok, at: Date.now() }, ...(s.log || [])].slice(0, 2000) }), ...(ok ? { good: x.good + 1 } : { scrap: x.scrap + 1 }) };
-  });
+  const { ayar, paket } = api;
+  const is = markalamaIsi(paket);
+  const m = useTerminalMarkalama(is);
+  if (is === null) return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk">Bu iş CORE emrine bağlı değil; seri verilmez.</p></div>;
+  if (m.okunuyor) return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk">Markalama bilgisi okunuyor…</p></div>;
+  if (m.okumaHatasi != null || m.veri === undefined) {
+    return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk" role="alert">{hataIletisi(m.okumaHatasi, 'Markalama bilgisi okunamadı.')}</p></div>;
+  }
+  const v = m.veri;
+  if (v.tanim === null) return <div className="tc-ay2-panel tc-ay2-marka"><p className="tc-ay2-soluk">Bu parça ve operasyon için markalama tanımı yok; seri verilmez.</p></div>;
+  const tanim = v.tanim;
+  const sn = v.siradakiler[0] ?? null;
+  const sonIyi = v.sonSeriler.find((b) => b.durum !== 'hurda') ?? null;
+  const markala = (ok: boolean) => {
+    m.markala(ok ? 'iyi' : 'hatali').then((b) => {
+      if (b === null) return;
+      bip(ok ? 'ok' : 'nok');
+      api.soyle((ok ? 'Markalandı · ' : 'Hatalı markalama · hurda · ') + b.seriNo, ok ? 'run' : 'stop');
+      api.sessiz((x) => (ok ? { good: x.good + 1 } : { scrap: x.scrap + 1 }));
+    }, (h: unknown) => { bip('nok'); api.soyle(hataIletisi(h, 'Seri verilemedi.'), 'stop'); });
+  };
   const dogrula = () => api.okut({
-    baslik: 'Markayı doğrula', ipucu: 'Parçadaki QR kodu okut ya da seri numarasını yaz · son markalanan: ' + (sonIyi ? sonIyi.sn : YOK),
+    baslik: 'Markayı doğrula', ipucu: 'Parçadaki QR kodu okut ya da seri numarasını yaz · son markalanan: ' + (sonIyi ? sonIyi.seriNo : YOK),
     okundu: (kod) => {
-      const k = kod.trim(); const bulunan = gunluk.find((l) => l.sn === k);
-      if (bulunan && bulunan.ok) {
-        bip('ok'); api.soyle('Doğrulandı · ' + kod + (bulunan === sonIyi ? ' (son parça)' : ''), 'run');
-        api.sessiz((x) => srYaz(x, { verified: { ...kayitOf(x).verified, [kod]: Date.now() } }));
-      } else { bip('nok'); api.soyle('Eşleşmedi: ' + kod + ' · bu işte markalanmamış', 'stop'); }
+      m.dogrula(kod.trim()).then(
+        (b) => { bip('ok'); api.soyle('Doğrulandı · ' + b.seriNo + (b.seriNo === sonIyi?.seriNo ? ' (son parça)' : ''), 'run'); },
+        (h: unknown) => { bip('nok'); api.soyle(hataIletisi(h, 'Eşleşmedi: ' + kod), 'stop'); },
+      );
     },
   });
-  const nDogru = Object.keys(kayit.verified || {}).length;
+  const kapali = !m.yazabilir || m.markalaniyor !== null || sn === null;
   return (
     <div className="tc-ay2-panel tc-ay2-marka">
       <div className="tc-ay2-marka-ana">
         <div className="tc-ay2-marka-seri">
-          <span className="tc-ay2-ust-yazi">Şimdi markalanacak</span><b className="tc-ay2-mono">{sn}</b>
-          <small>Sonraki: <span className="tc-ay2-mono">{seriNo(ayar.fmt, sira + 1, paket)}</span></small>
+          <span className="tc-ay2-ust-yazi">Şimdi markalanacak</span><b className="tc-ay2-mono">{sn ?? YOK}</b>
+          <small>Sonraki: <span className="tc-ay2-mono">{v.siradakiler[1] ?? YOK}</span></small>
           <div className="tc-ay2-marka-meta">
             <Cip ton="done">{YONTEMLER[ayar.method] || ayar.method}</Cip>
             {ayar.pos ? <span className="tc-ay2-marka-yer"><Simge ad="target" boyut="k" />{ayar.pos}</span> : null}
           </div>
         </div>
-        <Qr metin={sn} boyut={150} />
+        {sn !== null ? <Qr metin={sn} boyut={150} /> : null}
       </div>
       <div className="tc-ay2-marka-eylem">
-        <Dugme boyut="ana" simge="check" onClick={() => markala(true)}>Markalandı</Dugme>
-        <Dugme boyut="ana" tur="tehlike" simge="trash" onClick={() => markala(false)}>Hatalı · hurda</Dugme>
-        {ayar.verify ? <Dugme boyut="ana" tur="ikincil" simge="scan" onClick={dogrula}>Doğrula</Dugme> : null}
-        <Dugme boyut="ana" tur="ikincil" simge="download" onClick={() => etiketYazdir([etiketSvg(sn, paket, ayar.pos)])}>Etiket</Dugme>
+        <Dugme boyut="ana" simge="check" disabled={kapali} yukleniyor={m.markalaniyor === 'iyi'} onClick={() => markala(true)}>Markalandı</Dugme>
+        <Dugme boyut="ana" tur="tehlike" simge="trash" disabled={kapali} yukleniyor={m.markalaniyor === 'hatali'} onClick={() => markala(false)}>Hatalı · hurda</Dugme>
+        {tanim.dogrulama ? <Dugme boyut="ana" tur="ikincil" simge="scan" disabled={!m.yazabilir || m.dogrulaniyor} onClick={dogrula}>Doğrula</Dugme> : null}
+        <Dugme boyut="ana" tur="ikincil" simge="download" disabled={sonIyi === null} onClick={() => { if (sonIyi) etiketYazdir([etiketSvg(sonIyi.seriNo, paket, ayar.pos)]); }}>Etiket</Dugme>
       </div>
+      {!m.yazabilir ? <p className="tc-ay2-soluk">Seri vermek için markalama yetkisi gerekir.</p> : null}
+      {m.yazabilir && v.istasyonId === null ? <p className="tc-ay2-soluk">Bu terminalin istasyonu bulunamadı; seri yalnız markalama istasyonunda verilir.</p> : null}
       <div className="tc-ay2-marka-kayit">
         <div className="tc-ay2-kb">
           <b>Seri kaydı</b>
           <span className="tc-ay2-ust-yazi tc-ay2-sag">
-            {gunluk.filter((l) => l.ok).length} iyi · {gunluk.filter((l) => !l.ok).length} hatalı{ayar.verify ? ' · ' + nDogru + ' doğrulandı' : ''}
+            {v.sayilar === null ? YOK : v.sayilar.saglam + ' iyi · ' + v.sayilar.hurda + ' hatalı' + (tanim.dogrulama ? ' · ' + v.sayilar.dogrulanan + ' doğrulandı' : '')}
           </span>
         </div>
-        {gunluk.slice(0, 12).map((l, i) => (
-          <div key={i} className="tc-ay2-marka-satir" data-ton={l.ok ? undefined : 'stop'}>
-            <span className="tc-ay2-mono">{l.sn}</span>
-            {(kayit.verified || {})[l.sn] ? <Cip ton="run">Doğrulandı</Cip> : null}
-            {!l.ok ? <Cip ton="stop">Hurda</Cip> : null}
-            <small>{new Date(l.at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</small>
+        {v.sonSeriler.map((b) => (
+          <div key={b.id} className="tc-ay2-marka-satir" data-ton={b.durum === 'hurda' ? 'stop' : undefined}>
+            <span className="tc-ay2-mono">{b.seriNo}</span>
+            {b.dogrulamaZamani !== null ? <Cip ton="run">Doğrulandı</Cip> : null}
+            {b.durum === 'hurda' ? <Cip ton="stop">Hurda</Cip> : null}
+            <small>{saatMetni(b.zaman)}</small>
           </div>
         ))}
-        {!gunluk.length ? <p className="tc-ay2-soluk">Henüz markalama yok. İlk seri: <b className="tc-ay2-mono">{sn}</b></p> : null}
+        {!v.sonSeriler.length ? <p className="tc-ay2-soluk">Henüz markalama yok. İlk seri: <b className="tc-ay2-mono">{sn ?? YOK}</b></p> : null}
       </div>
     </div>
   );
