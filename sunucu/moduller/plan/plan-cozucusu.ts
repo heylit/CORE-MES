@@ -27,8 +27,11 @@ export async function coz(
   kaynak: { calisma: unknown; kayit: unknown; kaynak: Parameters<typeof cozumGirdisi>[0]['kaynak'] },
   istek: PlanMotoruIstegi & { ekAdimlar?: readonly EkAdim[] } & PlanBenzetimi,
 ): Promise<Awaited<ReturnType<PlanMotoruCozucusu>> & { vardiyasiz: string[]; malzemeBekleyen: string[]; nedenler: Record<string, string> }> {
+  // 1952 iş 2b: paralel bölme yalnız motor önerisindedir ('yeni'); sabit kip kuyruğun tezgâh sırasını korur, pay oraya sığmaz.
+  const calisma = istek.kip === 'yeni' ? kaynak.calisma : bolmesiz(kaynak.calisma);
   const g = cozumGirdisi({
     ...kaynak,
+    calisma,
     kaynak: sanalAdimAdetleriyle(kaynak.kaynak, istek.sanalEmirler),
     istek: {
       simdi: istek.simdi.toISOString(), kuyruklar: istek.kuyruklar, sabitler: istek.sabitler,
@@ -57,9 +60,28 @@ export async function coz(
   const basarisiz = new Set((plan.fail ?? []).map(String));
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
+  const parcaliYerlesimler: ParcaliYerlesim[] = [];
   for (const id of g.sira) {
     const r = plan.ops[id];
     const anahtar = g.kimlik[id]!;
+    const paylar = payKimlikleri(plan.ops, id);
+    if (paylar.length > 1) {
+      if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
+      const adetler = payAdetleri(g.st, id, paylar.length);
+      const parcalar = paylar.map((p, n) => ({ p, n, r: plan.ops[p] })).flatMap(({ p, n, r: x }) => {
+        if (x === undefined || basarisiz.has(p) || !Number.isFinite(x.S) || !Number.isFinite(x.C) || adetler === null) return [];
+        const m = String(x.m), kisiId = m.startsWith(KISI_TEZGAHI) ? Number(m.slice(KISI_TEZGAHI.length)) : null, makineId = kisiId === null ? Number(m) : null;
+        if (!Number.isInteger(kisiId ?? makineId)) return [];
+        return [{ no: n + 1, adet: adetler[n]!, makineId, kisiId, baslangic: planAni(g.baslangic, x.S), bitis: planAni(g.baslangic, x.C) }];
+      });
+      if (parcalar.length !== paylar.length) {
+        yerlesmeyen.push(anahtar);
+        nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p));
+        continue;
+      }
+      parcaliYerlesimler.push({ anahtar, parcalar });
+      continue;
+    }
     const kisiId = r !== undefined && String(r.m).startsWith(KISI_TEZGAHI) ? Number(String(r.m).slice(KISI_TEZGAHI.length)) : null;
     const makineId = r === undefined || kisiId !== null ? NaN : Number(r.m);
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
@@ -73,7 +95,33 @@ export async function coz(
     else yerlesimler.push({ ...yer, makineId });
   }
   // Kişi yeri yalnız varsa döner: kişi kuyruğu olmayan istek ve sonuç eskisi gibidir.
-  return { yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler, ...(kisiYerlesimleri.length > 0 ? { kisiYerlesimleri } : {}) };
+  return {
+    yerlesimler, yerlesmeyen, vardiyasiz, malzemeBekleyen, nedenler, ...(kisiYerlesimleri.length > 0 ? { kisiYerlesimleri } : {}),
+    ...(parcaliYerlesimler.length > 0 ? { parcaliYerlesimler } : {}),
+  };
+}
+
+type ParcaliYerlesim = NonNullable<Awaited<ReturnType<PlanMotoruCozucusu>>['parcaliYerlesimler']>[number];
+// Motorun paylarının kimliği: ilk pay adımın kimliği, ötekiler "~2", "~3" ekiyle (engine.betik compile). Tek kimlik bölünmemiş adımdır.
+function payKimlikleri(ops: Record<string, unknown>, id: string): string[] {
+  const l = [id];
+  while (ops[`${id}~${String(l.length + 1)}`] !== undefined) l.push(`${id}~${String(l.length + 1)}`);
+  return l;
+}
+// Payın adedi motorun bölmesindeki gibidir: adımın adedi (opAdet, yoksa siparişin adedi) eşit bölünür, kalan ilk paylara. Adet okunamazsa null.
+function payAdetleri(st: MotorDurumu, id: string, n: number): number[] | null {
+  const D = st['D'] as { opAdet?: Record<string, unknown>; siparisler?: { id: unknown; adet: unknown }[] } | undefined;
+  const sip = String(id.slice(0, id.lastIndexOf('.')));
+  const ham = D?.opAdet?.[id] ?? D?.siparisler?.find((x) => String(x.id) === sip)?.adet;
+  const adet = Number(ham);
+  if (ham == null || !Number.isInteger(adet) || adet < n) return null;
+  return Array.from({ length: n }, (_, p) => Math.floor(adet / n) + (p < adet % n ? 1 : 0));
+}
+// Çalışmanın bölme ayarı kapatılır; çağıranın nesnesi değişmez.
+function bolmesiz(calisma: unknown): unknown {
+  if (typeof calisma !== 'object' || calisma === null) return calisma;
+  const c = calisma as { param?: Record<string, unknown> };
+  return { ...c, param: { ...(c.param ?? {}), bolmeKip: 'kapali' } };
 }
 
 // 1527: sanal emrin (deneme emri) adım adetleri kaynak okumasının adimAdetleri'ne gerçek emirdeki anahtarla ("emir no|OP no") eklenir;

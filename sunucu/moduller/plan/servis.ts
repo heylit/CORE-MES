@@ -405,7 +405,9 @@ export interface PlanMotoruIstegi extends PlanBenzetimi {
 // göre nedenidir (örnek: öncülü yerleşmedi).
 export type PlanMotoruCozucusu = (db: Db, istek: PlanMotoruIstegi) =>
   Promise<{ yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[]; yerlesmeyen: string[]; vardiyasiz?: string[]; malzemeBekleyen?: string[]; nedenler?: Record<string, string>;
-    kisiYerlesimleri?: { anahtar: string; kisiId: number; baslangic: string; bitis: string }[] }>;
+    kisiYerlesimleri?: { anahtar: string; kisiId: number; baslangic: string; bitis: string }[];
+    // 1952 iş 2b: motorun paralel böldüğü adım (yalnız 'yeni' kip); her payın kaynağı (makine ya da kişi), adedi ve yeri.
+    parcaliYerlesimler?: { anahtar: string; parcalar: { no: number; adet: number; makineId: number | null; kisiId: number | null; baslangic: string; bitis: string }[] }[] }>;
 let planMotoru: PlanMotoruCozucusu | null = null;
 export function planMotoruCozucusuKaydet(cozucu: PlanMotoruCozucusu | null): void { planMotoru = cozucu; }
 // 227 a: üretim emrinin plan malzeme maliyeti (Proje maliyet) katkıdan düşülür; kayıtsızken katkı payı bilinmez.
@@ -625,19 +627,21 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
   kip?: 'sabit' | 'yeni'; benzetim?: PlanBenzetimi; ekSabitler?: PlanMotoruIstegi['sabitler']; kisiKuyruklari?: readonly KisiKuyrugu[]; kisiAdaylari?: ReadonlyMap<number, readonly number[]>;
 } = {}): Promise<{
   yer: Map<number, { baslangic: Date; bitis: Date }>; makine: Map<number, number>; kisi: Map<number, number>; fark: MotorFarki; yerlesmez: Set<number>; malzemeBekleyen: number; yerlesmeyen: { isId: number; neden: string }[];
+  parca: Map<number, MotorParcasi[]>;
 }> {
   const kip = secenek.kip ?? 'sabit';
   const kisiKuyruklari = kip === 'yeni' ? secenek.kisiKuyruklari ?? [] : [];
   const yer = new Map<number, { baslangic: Date; bitis: Date }>();
   const makine = new Map<number, number>();
   const kisi = new Map<number, number>();
+  const parca = new Map<number, MotorParcasi[]>();
   const yerlesmez = new Set<number>();
   const yerlesmeyen: { isId: number; neden: string }[] = [];
   const yeniden = new Map(kuyruklar.flatMap((q) => q.isler.map((i) => [i.isId, q.makineId] as const)));
   const kisiye = new Map(kisiKuyruklari.flatMap((q) => q.isler.map((i) => [i.isId, q.kisiId] as const)));
   for (const id of kisiye.keys()) if (yeniden.has(id)) throw cakisma('Aynı iş hem makine hem kişi kuyruğunda; sunucu motoru dizemez.');
   const hepsi = [...yeniden.keys(), ...kisiye.keys()];
-  if (planMotoru === null || hepsi.length === 0) return { yer, makine, kisi, fark: [], yerlesmez, malzemeBekleyen: 0, yerlesmeyen };
+  if (planMotoru === null || hepsi.length === 0) return { yer, makine, kisi, fark: [], yerlesmez, malzemeBekleyen: 0, yerlesmeyen, parca };
   const anahtarOf = (id: number) => { const is = b.isler.get(id); return is ? `${is.emirNo}|${is.opNo}` : null; };
   const idOf = new Map<string, number>();
   for (const id of hepsi) {
@@ -676,7 +680,7 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
   const sabitAnahtar = new Set([...sabitParcalar.map((x) => x.anahtar), ...calisan]);
   const bekleyen = new Map<number, string>();
   for (let tur = 0; ; tur += 1) {
-    yer.clear(); makine.clear(); kisi.clear(); yerlesmez.clear(); yerlesmeyen.length = 0;
+    yer.clear(); makine.clear(); kisi.clear(); parca.clear(); yerlesmez.clear(); yerlesmeyen.length = 0;
     const kisiKuyrugu = kisiKuyruklari.map((q) => ({ kisiId: q.kisiId, anahtarlar: q.isler.filter((i) => !bekleyen.has(i.isId)).map((i) => anahtarOf(i.isId)!) })).filter((q) => q.anahtarlar.length > 0);
     const kisiAdaylari = kisiKuyrugu.flatMap((q) => q.anahtarlar.flatMap((a) => {
       const l = secenek.kisiAdaylari?.get(idOf.get(a)!);
@@ -721,6 +725,24 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
       yer.set(id, { baslangic, bitis });
       kisi.set(id, r.kisiId);
     }
+    // 1952 iş 2b: paylı adımın yeri zarftır (ilk payın kaynağı, ilk başlangıç, son bitiş); paylar 1..n, adetleri toplamı adımın adedi.
+    for (const r of sonuc.parcaliYerlesimler ?? []) {
+      const id = idOf.get(r.anahtar);
+      const is = id === undefined ? undefined : b.isler.get(id);
+      const l = [...r.parcalar].sort((p, q) => p.no - q.no).map((p) => ({
+        no: p.no, adet: p.adet, kaynak: p.kisiId !== null ? { tur: 'kisi' as const, id: p.kisiId } : { tur: 'makine' as const, id: p.makineId! },
+        baslangic: new Date(p.baslangic), bitis: new Date(p.bitis),
+      }));
+      const gecerli = l.length >= 2 && l.every((p, n) => p.no === n + 1 && Number.isInteger(p.kaynak.id) && p.adet > 0 && p.bitis.getTime() >= p.baslangic.getTime())
+        && l.reduce((t, p) => t + p.adet, 0) === (is?.adimAdedi ?? is?.adet);
+      if (id === undefined || kip !== 'yeni' || yer.has(id) || yerlesmez.has(id) || !gecerli) {
+        throw cakisma(`Sunucu motoru ${anahtarMetni(r.anahtar)} için istenmeyen yer verdi. Plan yazılmadı.`);
+      }
+      yer.set(id, { baslangic: new Date(Math.min(...l.map((p) => p.baslangic.getTime()))), bitis: new Date(Math.max(...l.map((p) => p.bitis.getTime()))) });
+      const ilk = l[0]!.kaynak;
+      if (ilk.tur === 'kisi') kisi.set(id, ilk.id); else makine.set(id, ilk.id);
+      parca.set(id, l);
+    }
     const eksik = hepsi.filter((id) => !yer.has(id) && !yerlesmez.has(id));
     if (eksik.length > 0) throw cakisma(`Sunucu motoru şu işleri yerleştirmedi: ${eksik.map((id) => anahtarMetni(anahtarOf(id)!)).join(', ')}. Plan yazılmadı.`);
     const yeni = bekleyenAdimlar(b, yer, sabitAnahtar, anahtarOf, bekleyen);
@@ -734,8 +756,9 @@ async function sunucuMotoru(db: Db, b: Baglam, taslakId: number | null, kuyrukla
     if (y === undefined || o === null || (Math.abs(Date.parse(o.baslangic) - y.baslangic.getTime()) <= FARK_MS && Math.abs(Date.parse(o.bitis) - y.bitis.getTime()) <= FARK_MS)) return [];
     return [{ anahtar: anahtarOf(i.isId)!, onizleme: { baslangic: iso(o.baslangic), bitis: iso(o.bitis) }, sunucu: { baslangic: iso(y.baslangic), bitis: iso(y.bitis) } }];
   }));
-  return { yer, makine, kisi, fark, yerlesmez, malzemeBekleyen, yerlesmeyen };
+  return { yer, makine, kisi, fark, yerlesmez, malzemeBekleyen, yerlesmeyen, parca };
 }
+type MotorParcasi = { no: number; adet: number; kaynak: Kaynak; baslangic: Date; bitis: Date };
 
 // 168 b: sunucu motoru kayıtlıyken vardiyası tanımsız tezgâhın işi yerleşmez (motor sürekli çalışma varsaymaz).
 const VARDIYASIZ = 'Tezgâhın vardiyası tanımsız.';
@@ -1858,7 +1881,8 @@ function motorGirdisi(b: Baglam, satirListesi: readonly YerlesimSatiri[], koruna
       for (const x of isgal([y])) sabitler.push({ ...x, uretimEmriId: is.uretimEmriId, sira: is.sira });
     } else {
       serbest.add(y.isEmriId);
-      const sp = satirlar.get(y.isEmriId)?.parcalar ?? [];
+      // 1985 a: motorun kendi bölmesi motora bölünmemiş iş olarak gider; motor onu yeniden böler ya da bütün dizer.
+      const sp = (satirlar.get(y.isEmriId)?.parcalar ?? []).filter((p) => !p.motorBolmesi);
       if (sp.length) parcalar.set(y.isEmriId, uzlasikParcalar(is, sp).map((p) => ({ no: p.no, sureDk: parcaSuresi(is, p.adet), kaynak: p.elleKaynak && tutulur(p.kaynak) ? p.kaynak : null })));
     }
   }
@@ -1950,7 +1974,10 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
   const nedeni = new Map(m.yerlesmeyen.map((x) => [x.isId, x.neden]));
   const yerlesimler: Yerlesim[] = [...m.yer].map(([id, y]) => ({
     isEmriId: id, kaynak: m.kisi.has(id) ? { tur: 'kisi', id: m.kisi.get(id)! } : { tur: 'makine', id: m.makine.get(id)! }, baslangic: dk(b, y.baslangic), bitis: dk(b, y.bitis),
+    ...(m.parca.has(id) ? { parcalar: m.parca.get(id)!.map((p) => ({ no: p.no, kaynak: p.kaynak, baslangic: dk(b, p.baslangic), bitis: dk(b, p.bitis) })) } : {}),
   }));
+  // 1952 iş 2b: motorun böldüğü adımın pay adetleri (iş -> pay no -> adet).
+  const motorParcaAdetleri = new Map([...m.parca].map(([id, l]) => [id, new Map(l.map((p) => [p.no, p.adet]))]));
   const kuyrukKisisi = new Map([...kisiKuyrugu].flatMap(([kisiId, l]) => l.map((x) => [x.isId, kisiId] as const)));
   for (const id of m.yerlesmez) {
     const kisiId = kuyrukKisisi.get(id);
@@ -1959,7 +1986,7 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
     yerlesmeyen.push({ isEmriId: id, neden: nedeni.get(id) ?? (takvimsiz ? (k.tur === 'kisi' ? KISI_VARDIYASIZ : VARDIYASIZ) : MALZEME_BEKLER) });
   }
   const yeniden = [...kuyrukKisisi.keys(), ...[...kuyruk.values()].flatMap((l) => l.map((x) => x.isId))];
-  return { sabitler, yerinde, yerlesimler, yerlesmeyen, yeniden };
+  return { sabitler, yerinde, yerlesimler, yerlesmeyen, yeniden, motorParcaAdetleri };
 }
 
 // 248 a: korunan işin önüne iş konmaz. Motor sabit işin önündeki boşluğu doldurduğu için makine şimdiden korunan işlerin başına dek
@@ -2018,9 +2045,16 @@ async function onerUygula(db: Db, b: Baglam, id: number): Promise<number[]> {
   await s.yerlesimleriSil(db, id, sonuc.yeniden);
   for (const y of sonuc.yerlesimler) {
     const e = eski.get(y.isEmriId);
+    const adet = sonuc.motorParcaAdetleri.get(y.isEmriId);
     await s.yerlesimYaz(db, id, {
       isEmriId: y.isEmriId, kaynak: y.kaynak, baslangic: tarih(b, y.baslangic), bitis: tarih(b, y.bitis), kilitli: false, dondurulmus: false,
       elleSira: e?.elleSira ?? null, elleIstasyonId: e?.elleIstasyonId ?? null, elleKaynak: e?.elleKaynak ?? false,
+      ...(y.parcalar?.length && adet ? {
+        parcalar: y.parcalar.map((p) => ({
+          no: p.no, adet: adet.get(p.no)!, kaynak: p.kaynak, baslangic: tarih(b, p.baslangic), bitis: tarih(b, p.bitis), elleSira: null, elleIstasyonId: null, elleKaynak: false,
+          motorBolmesi: true,
+        })),
+      } : {}),
     });
   }
   return [...new Set([...sonuc.yeniden, ...sonuc.yerlesimler.map((y) => y.isEmriId)])];
@@ -2098,6 +2132,8 @@ export async function motorYerlesimi(db: Db, k: Kullanici, taslak?: number): Pro
   for (const y of sonuc.yerlesimler) {
     const i = b.isler.get(y.isEmriId);
     const kayit = [...(kayitliBolme.get(y.isEmriId) ?? [])].sort((p, q) => p.no - q.no);
+    const motorun = oneri.motorParcaAdetleri.get(y.isEmriId);
+    if (motorun) { parcaAdetleri.set(y.isEmriId, motorun); continue; }
     if (!i || !y.parcalar?.length || kayit.length !== y.parcalar.length) continue;
     const adet = bolmeAdetleri(kayit.map((p) => p.adet), i.adimAdedi ?? i.adet);
     parcaAdetleri.set(y.isEmriId, adet === null ? null : new Map(kayit.map((p, n) => [p.no, adet[n]!])));
