@@ -31,6 +31,14 @@ function ciz(kullanici: Kullanici, hedef: OkutHedefi, satirlar: SepetSatiri[], y
 const satiri = (ad: string) => screen.getByText(ad).closest('li')!;
 
 describe('Taşıma sepeti bırakma (1338 a)', () => {
+  it('hedef okutulunca bırakma formu görünür alana kayar (telefonda okuyucunun altında kalıyordu)', () => {
+    const kaydir = vi.fn();
+    Element.prototype.scrollIntoView = kaydir;
+    ciz(OPERATOR, GOZ, [satir(1, '4.000')], {});
+    expect(kaydir).toHaveBeenCalledTimes(1);
+    expect(kaydir.mock.contexts[0]).toBe(screen.getByRole('button', { name: '1 kalemi bırak' }).closest('form'));
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+  });
   it('istasyona parçalı bırakma: azaltılan satır miktarla gider, işareti kaldırılan gitmez', async () => {
     const { istekler, bitti } = ciz(OPERATOR, ISTASYON, [satir(1, '4.000'), satir(2, '1.000')], {
       'POST /stok/sepet/gonder': () => json(200, { teslimler: [{ satirId: 1, teslimNo: 'TS-000009' }], kalanlar: [] }),
