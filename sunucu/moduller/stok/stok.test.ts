@@ -1433,7 +1433,9 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(onceKg.length, 6);
     const kalite = `STK-AY-${kartSira}`;
     const k = await kart('hammadde', 'aktif', 'kg');
-    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET kayit = kayit || jsonb_build_object('grade', $2::text, 'form', 'cubuk', 'fam', 'metal') WHERE no = $1", [k, kalite]);
+    // Hammadde kartı varsayılanda GKK ister ve satın alma lotu karantinaya girer; karantina konumu ise başka testin yan ürünüdür.
+    // Bu test GKK'yı sınamaz: kart GKK'sız açılır ki tek başına ya da başka sırada koşunca da lot kabul alanına girsin.
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET gkk_gerekli = false, kayit = kayit || jsonb_build_object('grade', $2::text, 'form', 'cubuk', 'fam', 'metal') WHERE no = $1", [k, kalite]);
     await o().sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ($1, NULL, 100, 'TRY', current_date - 400, $2)",
       [kalite, kisiler.get('yonetici')]);
     assert.equal((await malKabul(k, '5', { siparisSatirId: await fiyatliSiparis(k, 100) })).durum, 200);
