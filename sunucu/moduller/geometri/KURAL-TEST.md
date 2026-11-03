@@ -20,3 +20,9 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Yeni yayın en geç bir turda kuyruğa girer; bitmiş iş yeniden hesaplanmaz | `G-A1` |
 | Yeniden hesaplatma sürümlü; iş yokken açılır | `G-A3`, `G-A4` |
 | Yetki: okuma ve hesaplatma ayrı işlem | `G-A3` |
+| Özellik tanıma (2044, 1923 b): tam tur iç silindir ve koni aynı eksende delik zinciri; içbükey dik düzlem düz dip, dışa daralan uç koni matkap ucu (derinliğe girmez), dipsiz delik geçiş | `GEO-OZ1`, `GEO-OZ2`, `GEO-OZ7`, `G-A9` |
+| Delikte büyük çaplı silindir kademe, koni havşa; giriş kör delikte dibin karşısı, geçişte geniş uç; çapraz delikle kesilen aynı çaplı delik tek delik | `GEO-OZ7`, `G-A9` |
+| Yarım tur iç silindir delik değildir; dış silindir (mil) delik değildir; eğik eksenli delik de deliktir | `GEO-OZ3`, `GEO-OZ8`, `GEO-OZ9` |
+| Radyüs: iki komşusuna teğet silindir, torus ya da küre; iç ya da dış | `GEO-OZ4`, `G-A9` |
+| Pah: iki düzlem komşu arasındaki açıyı bölen, dışbükey kenarlı dar düzlem; mil ucunda aynı eksenli dış silindire bağlı dış koni | `GEO-OZ5`, `GEO-OZ6`, `G-A9` |
+| Özellikler yalnız öneridir; analizle aynı işlemde yenilenir, yinelenmez | `G-A9` |

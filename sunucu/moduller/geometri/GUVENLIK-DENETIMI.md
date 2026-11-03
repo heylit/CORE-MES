@@ -7,6 +7,7 @@
 | `GET /geometri/modeller/:revizyonId/guncel` | `geometri.oku` | yalnız belge kimliği kuyruk kaydından; dönen revizyon listedeki (yayında, karta bağlı) modeldir, yoksa null | `G-A7` | `G-A7`: işlemsiz 403, oturumsuz 401 |
 | `GET /geometri/analizler/:revizyonId` | `geometri.oku` | listede olmayan revizyon 404; analiz yalnız aynı özetteki içeriğe aitse döner | `G-A1`, `G-A3` | `G-A3` 403; `G-A4` 404 |
 | `GET /geometri/ham-onerisi/:revizyonId` | `geometri.oku` | pay 0-100 mm (yoksa ayar), kalite en çok 100 karakter; analiz yoksa enAz null; hammadde kartlarından yalnız kod, ad, kalite, form, ölçü döner | `G-A1` | `G-A4`: eksi pay 400 |
+| `GET /geometri/ozellikler/:revizyonId` | `geometri.oku` | listede olmayan revizyon 404; analiz başka içeriğe aitse ya da yüzler okunamadıysa null; yalnız tanınan özellik ölçüleri döner (dosya içeriği dönmez); yazma yok | `G-A9` (okur 200) | `G-A9`: işlemsiz 403, oturumsuz 401, bağsız revizyon 404 |
 | `POST /geometri/analizler/:revizyonId/yeniden-hesapla` | `geometri.hesapla`, tekrar korumalı | sürüm koşullu (iş yokken null); gövde katı; yalnız kuyruğa yazar | `G-A3`, `G-A4` | `G-A3`: okur 403, oturumsuz 401; `G-A4`: eski sürüm 409, bağsız revizyon 404 |
 
 Rol x işlem (1445 a): Aşama 1'de yalnız yönetici; roller 1390 rol menüsüyle verilir, göç yok.

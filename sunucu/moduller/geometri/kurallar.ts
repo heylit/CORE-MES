@@ -1,6 +1,7 @@
 // Geometri kuralları: saf hesap, veritabanı ve saat yok. Ölçüler mm.
 
 import { GEOMETRI_YUZ_TURLERI, HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriDelikDibi, GeometriOzellikTuru } from '#paylasilan/sozlesme/geometri.ts';
 
 // Güvenilmeyen girdi sınırları (VARSAYIM, kart 1441; geri alma ucuz).
 export const DOSYA_EN_BUYUK_BAYT = 200 * 1024 * 1024;
@@ -393,4 +394,257 @@ export function stokEslestir(
     });
   }
   return [...enIyi.values()].sort((x, y) => x.hamHacimMm3 - y.hamHacimMm3);
+}
+
+// ---- Özellik tanıma (kart 2044; 1923 b) ----
+// Girdi kesin B-rep yüzleri ve yüz komşuluğudur (hesap süreci libcascade ile çıkarır); kural saf hesaptır. Sonuç yalnız öneridir
+// (1704 a ilkesi): rotaya, karta ya da Kalite Merkezi'ne kendiliğinden yazılmaz.
+
+// yan: yüzün dış normali (malzemeden dışarı) eğrilik merkezine mi bakıyor ('ic': delik, iç köşe radyüsü) yoksa ondan uzağa mı ('dis':
+// mil, dış kenar radyüsü). Düzlemde null. normal yalnız düzlemde (dış normal). u ve v yüzün parametre aralığıdır: silindirde u açı
+// (radyan), v eksen boyunca mm; konide u açı, v doğru boyunca mm.
+export interface TanimaYuzu {
+  yuz: Yuz;
+  yan: 'ic' | 'dis' | null;
+  normal: [number, number, number] | null;
+  u: [number, number] | null;
+  v: [number, number] | null;
+}
+export type KenarTuru = 'icbukey' | 'disbukey' | 'teget' | 'diger';
+// a ve b yüzlerin dizideki yeri (0'dan). Aynı yüzün dikiş kenarı ve ikiden çok yüzlü kenar girdiye alınmaz.
+export interface YuzKenari { a: number; b: number; tur: KenarTuru; uzunlukMm: number }
+
+export interface Ozellik {
+  tur: GeometriOzellikTuru;
+  // Bağlı olduğu deliğin sonuç dizisindeki yeri (0'dan); kademe ve havşada dolu.
+  ust: number | null;
+  capMm: number | null;
+  yaricapMm: number | null;
+  derinlikMm: number | null;
+  aciDerece: number | null;
+  genislikMm: number | null;
+  boyMm: number | null;
+  gecis: boolean | null;
+  dip: GeometriDelikDibi | null;
+  ic: boolean | null;
+  eksen: [number, number, number] | null;
+  konum: [number, number, number] | null;
+  // Yüzlerin analizdeki sıra numaraları (1'den).
+  yuzler: number[];
+}
+
+// Tolerans (VARSAYIM, kart 2044; geri alma ucuz): uzunluk 0,01 mm, eksen yönü 1e-6, tam tur %99.
+const UZ_TOL = 0.01;
+const YON_TOL = 1e-6;
+const TAM_TUR = 2 * Math.PI * 0.99;
+// Pah: yüz iki komşusuna 10-80 derece eğik ve iki komşunun arasındaki açıyı böler (2 derece).
+const PAH_EN_AZ = 10, PAH_EN_COK = 80, PAH_ACI_TOL = 2;
+
+const derece = (r: number): number => (r * 180) / Math.PI;
+const aciArasi = (a: V3, b: V3): number => derece(Math.acos(Math.max(-1, Math.min(1, ic(birim(a), birim(b))))));
+
+// Eksen doğrusu: yön işaretten bağımsız (ilk sıfır olmayan bileşen artı), konum doğrunun orijine en yakın noktası.
+interface Dogru { yon: V3; nokta: V3 }
+function dogru(eksen: V3, konum: V3): Dogru {
+  let y = birim(eksen);
+  const ilk = Math.abs(y[0]) > YON_TOL ? y[0] : Math.abs(y[1]) > YON_TOL ? y[1] : y[2];
+  if (ilk < 0) y = [-y[0], -y[1], -y[2]];
+  const t = ic(konum, y);
+  return { yon: y, nokta: [konum[0] - t * y[0], konum[1] - t * y[1], konum[2] - t * y[2]] };
+}
+const ayniDogru = (a: Dogru, b: Dogru): boolean =>
+  Math.abs(ic(a.yon, b.yon)) > 1 - YON_TOL && Math.hypot(...cikar(a.nokta, b.nokta)) < UZ_TOL;
+const eksenNoktasi = (d: Dogru, t: number): V3 => [d.nokta[0] + t * d.yon[0], d.nokta[1] + t * d.yon[1], d.nokta[2] + t * d.yon[2]];
+
+// Silindir ya da koninin eksen doğrusu üzerindeki aralığı: t0 < t1, r0 ve r1 o uçlardaki yarıçap.
+interface Parca { dogru: Dogru; tur: 'silindir' | 'koni'; t0: number; t1: number; r0: number; r1: number; yariAci: number | null; yuzler: number[]; kapsam: number }
+
+function parca(y: TanimaYuzu, i: number): Parca | null {
+  const z = y.yuz;
+  if ((z.tur !== 'silindir' && z.tur !== 'koni') || z.eksen === null || z.konum === null || z.yaricapMm === null || y.u === null || y.v === null) return null;
+  const d = dogru(z.eksen, z.konum);
+  const isaret = ic(birim(z.eksen), d.yon) < 0 ? -1 : 1;
+  const taban = ic(z.konum, d.yon);
+  const kapsam = Math.min(2 * Math.PI, y.u[1] - y.u[0]);
+  let uclar: [number, number][];
+  if (z.tur === 'silindir') {
+    uclar = y.v.map((v) => [taban + isaret * v, z.yaricapMm!] as [number, number]);
+  } else {
+    const a = ((z.yariAciDerece ?? 0) * Math.PI) / 180;
+    uclar = y.v.map((v) => [taban + isaret * v * Math.cos(a), Math.max(0, z.yaricapMm! + v * Math.sin(a))] as [number, number]);
+  }
+  uclar.sort((p, q) => p[0] - q[0]);
+  const [u0, u1] = uclar as [[number, number], [number, number]];
+  return { dogru: d, tur: z.tur, t0: u0[0], t1: u1[0], r0: u0[1], r1: u1[1], yariAci: z.tur === 'koni' ? Math.abs(z.yariAciDerece ?? 0) : null, yuzler: [i], kapsam };
+}
+
+// Aynı yüzeyin parçaları (dikişle ikiye bölünmüş silindir, iki yarım koni) tek parça olur; kapsam toplanır.
+function parcalariBirlestir(liste: readonly Parca[]): Parca[] {
+  const sonuc: Parca[] = [];
+  const ayni = (a: number, b: number): boolean => Math.abs(a - b) < UZ_TOL;
+  for (const p of liste) {
+    const es = sonuc.find((q) => q.tur === p.tur && ayniDogru(q.dogru, p.dogru) && ayni(q.t0, p.t0) && ayni(q.t1, p.t1) && ayni(q.r0, p.r0) && ayni(q.r1, p.r1));
+    if (es === undefined) sonuc.push({ ...p, yuzler: [...p.yuzler] });
+    else { es.yuzler.push(...p.yuzler); es.kapsam = Math.min(2 * Math.PI, es.kapsam + p.kapsam); }
+  }
+  return sonuc;
+}
+
+const r4 = (x: number): number => yuvarla(x, 4) + 0;
+const v4 = (v: V3): [number, number, number] => [r4(v[0]), r4(v[1]), r4(v[2])];
+const v8 = (v: V3): [number, number, number] => [yuvarla(v[0], 8) + 0, yuvarla(v[1], 8) + 0, yuvarla(v[2], 8) + 0];
+const bos = (tur: GeometriOzellikTuru, yuzler: number[]): Ozellik => ({
+  tur, ust: null, capMm: null, yaricapMm: null, derinlikMm: null, aciDerece: null, genislikMm: null, boyMm: null,
+  gecis: null, dip: null, ic: null, eksen: null, konum: null, yuzler,
+});
+
+export function ozellikleriTani(yuzler: readonly TanimaYuzu[], kenarlar: readonly YuzKenari[]): Ozellik[] {
+  const komsu: { diger: number; tur: KenarTuru; uzunlukMm: number }[][] = yuzler.map(() => []);
+  for (const k of kenarlar) {
+    if (k.a === k.b || komsu[k.a] === undefined || komsu[k.b] === undefined) continue;
+    komsu[k.a]!.push({ diger: k.b, tur: k.tur, uzunlukMm: k.uzunlukMm });
+    komsu[k.b]!.push({ diger: k.a, tur: k.tur, uzunlukMm: k.uzunlukMm });
+  }
+  const sonuc: Ozellik[] = [];
+  const kullanilan = new Set<number>();
+
+  // Delik: içe bakan, tam tur silindir ve koni parçaları aynı eksen doğrusunda sıralanır. Değen parçalar (kademe ve havşa basamağı
+  // eksen boyunca sıfır kalınlıktadır) ve aynı yarıçaplı iki silindir arasındaki boşluk (çapraz delikle kesilen delik) tek deliktir.
+  const icParcalar = parcalariBirlestir(yuzler.flatMap((y, i) => (y.yan === 'ic' ? [parca(y, i)].filter((p): p is Parca => p !== null) : [])))
+    .filter((p) => p.kapsam >= TAM_TUR);
+  const dogrular: Parca[][] = [];
+  for (const p of icParcalar) {
+    const g = dogrular.find((x) => ayniDogru(x[0]!.dogru, p.dogru));
+    if (g === undefined) dogrular.push([p]); else g.push(p);
+  }
+  for (const grup of dogrular) {
+    grup.sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1);
+    const zincirler: Parca[][] = [];
+    for (const p of grup) {
+      const z = zincirler[zincirler.length - 1];
+      const son = z?.[z.length - 1];
+      const deger = son !== undefined && p.t0 <= Math.max(...z!.map((x) => x.t1)) + UZ_TOL;
+      const kopru = son !== undefined && son.tur === 'silindir' && p.tur === 'silindir' && Math.abs(son.r0 - p.r0) < UZ_TOL;
+      if (z !== undefined && (deger || kopru)) z.push(p); else zincirler.push([p]);
+    }
+    for (const z of zincirler) deligiYaz(z);
+  }
+
+  function dipBul(z: Parca[], alt: boolean): { dip: GeometriDelikDibi; yuz: number | null; aci: number | null; t: number } | null {
+    const uc = alt ? z[0]! : z[z.length - 1]!;
+    const t = alt ? Math.min(...z.map((p) => p.t0)) : Math.max(...z.map((p) => p.t1));
+    // Matkap ucu: uçtaki koni dışa doğru daralır ve zincir dışında komşusu yoktur (tepe noktası yüz sınırı değildir).
+    const daralir = alt ? uc.r0 < uc.r1 - UZ_TOL : uc.r1 < uc.r0 - UZ_TOL;
+    const zincirde = new Set(z.flatMap((p) => p.yuzler));
+    if (uc.tur === 'koni' && daralir && uc.yuzler.every((i) => komsu[i]!.every((k) => zincirde.has(k.diger)))) {
+      return { dip: 'matkap', yuz: null, aci: r4(2 * (uc.yariAci ?? 0)), t: alt ? uc.t1 : uc.t0 };
+    }
+    for (const i of uc.yuzler) for (const k of komsu[i]!) {
+      const d = yuzler[k.diger]!;
+      if (k.tur !== 'icbukey' || d.yuz.tur !== 'duzlem' || d.normal === null || d.yuz.konum === null) continue;
+      if (Math.abs(ic(birim(d.normal), uc.dogru.yon)) < 1 - YON_TOL) continue;
+      if (Math.abs(ic(d.yuz.konum, uc.dogru.yon) - t) < UZ_TOL) return { dip: 'duz', yuz: k.diger, aci: null, t };
+    }
+    return null;
+  }
+
+  function deligiYaz(z: Parca[]): void {
+    const silindirler = z.filter((p) => p.tur === 'silindir');
+    if (silindirler.length === 0) return;
+    const altDip = dipBul(z, true), ustDip = dipBul(z, false);
+    const d = z[0]!.dogru;
+    const tAlt = Math.min(...z.map((p) => p.t0)), tUst = Math.max(...z.map((p) => p.t1));
+    const rEn = Math.min(...silindirler.map((p) => p.r0));
+    // Giriş: kör delikte dibin karşı ucu; geçişte geniş (kademe ya da havşa) ucu, yoksa eksenin alt ucu.
+    let girisAlt: boolean;
+    if (altDip !== null && ustDip === null) girisAlt = false;
+    else if (ustDip !== null && altDip === null) girisAlt = true;
+    else girisAlt = !((z[z.length - 1]!.r1) > (z[0]!.r0) + UZ_TOL);
+    const tGiris = girisAlt ? tAlt : tUst;
+    const dip = girisAlt ? ustDip : altDip;
+    const tSon = dip?.t ?? (girisAlt ? tUst : tAlt);
+    const yon: V3 = girisAlt ? d.yon : [-d.yon[0], -d.yon[1], -d.yon[2]];
+    const tum = z.flatMap((p) => p.yuzler);
+    if (dip !== null && dip.yuz !== null) tum.push(dip.yuz);
+    for (const i of tum) kullanilan.add(i);
+    const delikYeri = sonuc.length;
+    sonuc.push({
+      ...bos('delik', [...new Set(tum)].sort((a, b) => a - b).map((i) => i + 1)),
+      capMm: r4(2 * rEn), derinlikMm: r4(Math.abs(tSon - tGiris)), gecis: altDip === null && ustDip === null,
+      dip: dip?.dip ?? null, aciDerece: dip?.aci ?? null, eksen: v8(yon), konum: v4(eksenNoktasi(d, tGiris)),
+    });
+    const ucIc = dip?.dip === 'matkap' ? (girisAlt ? z[z.length - 1] : z[0]) : undefined;
+    for (const p of z) {
+      if (p.tur === 'silindir' && p.r0 > rEn + UZ_TOL) {
+        sonuc.push({ ...bos('kademe', p.yuzler.map((i) => i + 1)), ust: delikYeri, capMm: r4(2 * p.r0), derinlikMm: r4(p.t1 - p.t0) });
+      } else if (p.tur === 'koni' && p !== ucIc) {
+        sonuc.push({
+          ...bos('havsa', p.yuzler.map((i) => i + 1)), ust: delikYeri, capMm: r4(2 * Math.max(p.r0, p.r1)),
+          aciDerece: r4(2 * (p.yariAci ?? 0)), derinlikMm: r4(p.t1 - p.t0),
+        });
+      }
+    }
+  }
+
+  // Radyüs: deliğe girmemiş silindir, torus ya da küre yüzü, iki ayrı komşusuna teğet geçiyor. Torusta yarıçap küçük yarıçaptır.
+  yuzler.forEach((y, i) => {
+    if (kullanilan.has(i)) return;
+    const z = y.yuz;
+    if (z.tur !== 'silindir' && z.tur !== 'torus' && z.tur !== 'kure') return;
+    const tegetler = new Set(komsu[i]!.filter((k) => k.tur === 'teget').map((k) => k.diger));
+    if (tegetler.size < 2) return;
+    const yaricap = z.tur === 'torus' ? z.ikinciYaricapMm : z.yaricapMm;
+    if (yaricap === null) return;
+    const p = z.tur === 'silindir' ? parca(y, i) : null;
+    kullanilan.add(i);
+    sonuc.push({
+      ...bos('radyus', [i + 1]), yaricapMm: r4(yaricap), ic: y.yan === null ? null : y.yan === 'ic',
+      boyMm: p === null ? null : r4(p.t1 - p.t0), eksen: z.eksen === null ? null : v8(birim(z.eksen)), konum: z.konum === null ? null : v4(z.konum),
+    });
+  });
+
+  // Pah: (1) düzlem yüz, en uzun iki kenarı dışbükey ve iki ayrı düzlem komşuya; yüz ikisine de 10-80 derece eğik ve aradaki açıyı
+  // böler. Genişlik alan / en uzun kenar (dikdörtgen pah yüzünde kesin). Açı büyük komşuya göredir.
+  // (2) Dışa bakan tam tur koni, dışbükey kenarla aynı eksenli dışa bakan silindire bağlı (mil ucu pahı). Açı koninin yarı açısıdır.
+  yuzler.forEach((y, i) => {
+    if (kullanilan.has(i)) return;
+    const z = y.yuz;
+    if (z.tur === 'duzlem' && y.normal !== null) {
+      const kenar = [...komsu[i]!].sort((a, b) => b.uzunlukMm - a.uzunlukMm);
+      const [e1, e2] = kenar;
+      if (e1 === undefined || e2 === undefined || e1.diger === e2.diger || e1.tur !== 'disbukey' || e2.tur !== 'disbukey') return;
+      const A = yuzler[e1.diger]!, B = yuzler[e2.diger]!;
+      if (A.yuz.tur !== 'duzlem' || B.yuz.tur !== 'duzlem' || A.normal === null || B.normal === null) return;
+      const ta = aciArasi(y.normal, A.normal), tb = aciArasi(y.normal, B.normal), tab = aciArasi(A.normal, B.normal);
+      if (ta < PAH_EN_AZ || ta > PAH_EN_COK || tb < PAH_EN_AZ || tb > PAH_EN_COK || Math.abs(ta + tb - tab) > PAH_ACI_TOL) return;
+      const boy = Math.max(e1.uzunlukMm, e2.uzunlukMm);
+      if (boy <= 0) return;
+      const genislik = z.alanMm2 / boy;
+      if (genislik >= boy) return;
+      kullanilan.add(i);
+      sonuc.push({ ...bos('pah', [i + 1]), genislikMm: r4(genislik), boyMm: r4(boy), aciDerece: r4(A.yuz.alanMm2 >= B.yuz.alanMm2 ? ta : tb) });
+      return;
+    }
+    if (z.tur === 'koni' && y.yan === 'dis') {
+      const p = parca(y, i);
+      if (p === null) return;
+      const birlesik = parcalariBirlestir(yuzler.flatMap((x, j) => (x.yan === 'dis' && x.yuz.tur === 'koni' ? [parca(x, j)].filter((q): q is Parca => q !== null) : [])))
+        .find((q) => q.yuzler.includes(i));
+      if (birlesik === undefined || birlesik.kapsam < TAM_TUR) return;
+      const milde = birlesik.yuzler.some((j) => komsu[j]!.some((k) => {
+        if (k.tur !== 'disbukey') return false;
+        const q = parca(yuzler[k.diger]!, k.diger);
+        return q !== null && q.tur === 'silindir' && yuzler[k.diger]!.yan === 'dis' && ayniDogru(q.dogru, p.dogru);
+      }));
+      if (!milde) return;
+      for (const j of birlesik.yuzler) kullanilan.add(j);
+      const a = ((p.yariAci ?? 0) * Math.PI) / 180;
+      sonuc.push({
+        ...bos('pah', birlesik.yuzler.map((j) => j + 1).sort((x, w) => x - w)), capMm: r4(2 * Math.max(p.r0, p.r1)),
+        genislikMm: r4((p.t1 - p.t0) / Math.cos(a)), aciDerece: r4(p.yariAci ?? 0), eksen: v8(p.dogru.yon),
+        konum: v4(eksenNoktasi(p.dogru, p.t0)),
+      });
+    }
+  });
+  return sonuc;
 }

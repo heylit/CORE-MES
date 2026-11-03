@@ -86,3 +86,63 @@ export async function delikliKutuStep(): Promise<string> {
   oc.FS.unlink('/delikli.stp');
   return metin;
 }
+
+// Yalnız testler için (kart 2044): ölçüsü bilinen özellikli sentetik parça, libcascade ile üretilir. 60x30x20 blok; üst yüz z=20.
+// - A (15,15): Ø10 geçiş deliği, üstte 90 derece havşa (Ø16'ya).
+// - B (40,24): Ø6 kör delik, 8 mm silindir ve 118 derece matkap ucu.
+// - C (52,8): Ø6 geçiş deliği, üstte Ø11 x 4 kademe.
+// - D: z=8, y=15'te x boyunca Ø8 geçiş deliği; A'yı keser.
+// - x=0, y=0 dikey dış kenarında R2 radyüs; x=60, y=30 dikey dış kenarında 1,5 mm pah.
+// - E (25,24): Ø5 x 6 düz dipli kör delik.
+interface UreticiOzellik extends Uretici {
+  BRepPrimAPI_MakeCone: new (eksen: unknown, r1: number, r2: number, h: number) => { Shape(): unknown };
+  BRepAlgoAPI_Fuse: new (a: unknown, b: unknown, ilerleme: unknown) => { Shape(): unknown };
+  BRepFilletAPI_MakeFillet: new (s: unknown) => { Add(r: number, e: unknown): void; Shape(): unknown };
+  BRepFilletAPI_MakeChamfer: new (s: unknown) => { Add(d: number, e: unknown): void; Shape(): unknown };
+  TopExp_Explorer: new (s: unknown, bul: string, kacin: string) => { More(): boolean; Next(): void; Current(): unknown };
+  TopAbs_ShapeEnum: { TopAbs_EDGE: string; TopAbs_SHAPE: string };
+  TopoDS: { Edge(s: unknown): unknown };
+  Bnd_Box: new () => { GetXMin(): number; GetXMax(): number; GetYMin(): number; GetYMax(): number; GetZMin(): number; GetZMax(): number };
+  BRepBndLib: { Add(s: unknown, k: unknown, ucgen: boolean): void };
+}
+export async function ozellikliParcaStep(): Promise<string> {
+  const { createInstance } = (await import(LIBCASCADE)) as { createInstance: () => Promise<unknown> };
+  const oc = (await createInstance()) as UreticiOzellik;
+  const ilerleme = (): unknown => new oc.Message_ProgressRange();
+  const eksen = (x: number, y: number, z: number, d: [number, number, number]): unknown => new oc.gp_Ax2(new oc.gp_Pnt(x, y, z), new oc.gp_Dir(...d));
+  const kes = (a: unknown, b: unknown): unknown => new oc.BRepAlgoAPI_Cut(a, b, ilerleme()).Shape();
+  const birles = (a: unknown, b: unknown): unknown => new oc.BRepAlgoAPI_Fuse(a, b, ilerleme()).Shape();
+  const silindir = (x: number, y: number, z: number, r: number, h: number, d: [number, number, number] = [0, 0, 1]): unknown =>
+    new oc.BRepPrimAPI_MakeCylinder(eksen(x, y, z, d), r, h).Shape();
+  const koni = (x: number, y: number, z: number, r1: number, r2: number, h: number): unknown => new oc.BRepPrimAPI_MakeCone(eksen(x, y, z, [0, 0, 1]), r1, r2, h).Shape();
+  // Dikey kenar (x, y) noktasında: kutusu o noktada ince olan kenar.
+  const dikeyKenar = (s: unknown, x: number, y: number): unknown => {
+    for (const k = new oc.TopExp_Explorer(s, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE); k.More(); k.Next()) {
+      const b = new oc.Bnd_Box();
+      oc.BRepBndLib.Add(k.Current(), b, false);
+      if (Math.abs(b.GetXMin() - x) < 1e-3 && Math.abs(b.GetXMax() - x) < 1e-3 && Math.abs(b.GetYMin() - y) < 1e-3 && Math.abs(b.GetYMax() - y) < 1e-3) return oc.TopoDS.Edge(k.Current());
+    }
+    throw new Error('kenar yok');
+  };
+  let s: unknown = new oc.BRepPrimAPI_MakeBox(60, 30, 20).Shape();
+  const radyus = new oc.BRepFilletAPI_MakeFillet(s);
+  radyus.Add(2, dikeyKenar(s, 0, 0));
+  s = radyus.Shape();
+  const pah = new oc.BRepFilletAPI_MakeChamfer(s);
+  pah.Add(1.5, dikeyKenar(s, 60, 30));
+  s = pah.Shape();
+  s = kes(s, silindir(15, 15, -1, 5, 22));
+  s = kes(s, koni(15, 15, 17, 5, 8, 3));
+  const r = 3, h = r / Math.tan((59 * Math.PI) / 180);
+  s = kes(s, birles(silindir(40, 24, 12, r, 9), koni(40, 24, 12 - h, 0, r, h)));
+  s = kes(s, silindir(52, 8, -1, 3, 22));
+  s = kes(s, silindir(52, 8, 16, 5.5, 5));
+  s = kes(s, silindir(-1, 15, 8, 4, 62, [1, 0, 0]));
+  s = kes(s, silindir(25, 24, 14, 2.5, 7));
+  const yazici = new oc.STEPControl_Writer();
+  yazici.Transfer(s, oc.STEPControl_StepModelType.STEPControl_AsIs, true, ilerleme());
+  yazici.Write('/ozellikli.stp');
+  const metin = oc.FS.readFile('/ozellikli.stp', { encoding: 'utf8' });
+  oc.FS.unlink('/ozellikli.stp');
+  return metin;
+}

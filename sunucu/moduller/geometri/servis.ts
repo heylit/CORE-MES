@@ -5,7 +5,7 @@ import { bulunamadi, eskiSurum } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri,
+  GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriOzellikCevabi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
@@ -110,6 +110,16 @@ export async function guncelRevizyon(db: Db, revizyonId: number): Promise<{ revi
 
 export async function analizOku(db: Db, revizyonId: number): Promise<GeometriAnalizCevabi> {
   return analizCevabi(db, await model(db, revizyonId));
+}
+
+// Tanınan özellikler (kart 2044). Analiz yoksa ya da başka içeriğe aitse, ya da yüzler okunamadıysa ozellikler null; yüzler var ama
+// özellik yoksa boş liste. Yalnız öneridir.
+export async function ozellikOku(db: Db, revizyonId: number): Promise<GeometriOzellikCevabi> {
+  const m = await model(db, revizyonId);
+  const a = await sorgular.analiz(db, revizyonId);
+  if (a === null || a.ozet !== m.ozet || (await sorgular.yuzOzeti(db, revizyonId)).length === 0) return { revizyonId, motor: null, ozellikler: null };
+  const satirlar = await sorgular.ozellikler(db, revizyonId);
+  return { revizyonId, motor: YUZ_MOTORU, ozellikler: satirlar.map(({ motor: _m, ...o }) => o) };
 }
 
 // Pay sorgudan, yoksa sistem ayarından; ikisi de yoksa 0 ve kaynak 'yok' (ekran söyler). Stok listesi aktif hammadde kartları (1469 a).
@@ -228,6 +238,7 @@ export async function geometriTuru(vt: Veritabani, surec: GeometriSureci, gunluk
       if (yanit.tamam) {
         await sorgular.analizYaz(db, { revizyonId: is.revizyonId, belgeId: is.belgeId, ozet: is.ozet, motor: MOTOR, olcum: yanit.olcum, sureMs: yanit.sureMs });
         await sorgular.yuzlerYaz(db, is.revizyonId, YUZ_MOTORU, yanit.yuzler);
+        await sorgular.ozelliklerYaz(db, is.revizyonId, YUZ_MOTORU, yanit.yuzler === null ? null : yanit.ozellikler);
         await sorgular.isBitir(db, is.id, 'bitti', null);
       } else {
         if (!yanit.kalici) gunluk.uyar(`Geometri hesabı yarıda kaldı (revizyon ${String(is.revizyonId)}): ${yanit.hata}`);

@@ -6,6 +6,7 @@
 | Dosya türü | `geometri_is.dosya_turu` (step, iges) | cizimler | Çizim Merkezi'nin dosya türünün alt kümesi |
 | Malzeme | (tablo yok) | malzemeler | belge bağı Çizim Merkezi'ndedir; kod ve ad `malzemeler/disari.ts` `malzemeOzetleri` |
 | Geometri analizi | `geometri_analiz` (kutu, döndürülmüş kutu, hacim, alan, gövde, kapalılık) | geometri | yalnız bu modülde |
+| Tanınan özellik (delik, kademe, havşa, pah, radyüs) | `geometri_ozellik` (tur, cap_mm, derinlik_mm, gecis, dip, aci_derece, yaricap_mm) | geometri | yalnız öneri (2044); Arkon teknik resminin kendi delik tanıması (`stepdraw.ts` `findCylinders`) ayrıdır, bu tabloyu okuması ayrı karttır |
 | Analiz kuyruğu ve durum listesi | `geometri_is.durum` (bekliyor, calisiyor, bitti, hata) | geometri | `paylasilan/sozlesme/geometri.ts` |
 | Stok ölçüsü (hammadde formu ve ölçüleri) | `malzeme_katalog_karti.kayit` (form, dims) | malzemeler | `hammaddeStokOlculeri` ile okunur (1469 a) |
 | İşleme payı | sistem ayarı `geometri.ham-payi-mm` | geometri | ayar tablosu |
