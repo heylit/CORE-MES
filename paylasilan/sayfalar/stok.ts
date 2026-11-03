@@ -32,8 +32,6 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Malzeme fişleri', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
         // Göz ve etiket okutarak kör sayım; okuyucunun hafızasından aktarım da buradan (1905).
-        // Okut panelinin Seri modunda toplanan listeler; düzeltilip bir işe verilir (1915).
-        { anahtar: 'seri-listeler', baslik: 'Seri listeler', yol: '/stok/seri-listeler', simge: 'list', islem: 'stok.istek' },
         { anahtar: 'okutarak-sayim', baslik: 'Okutarak say', yol: '/stok/okutarak-sayim', simge: 'scan', islem: 'stok.sayim' },
         // Basılı komut barkodları (1909): okuyucuyla ekrandaki düğmeye basılır.
         { anahtar: 'komut-karti', baslik: 'Komut kartı', yol: '/stok/komut-karti', simge: 'printer', islem: 'sayfa.stok' },

@@ -67,8 +67,6 @@ import {
 } from './kurallar.ts';
 import type { IstekGecisi, MalzemeTuru, SevkBakiyesi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
-import { seriEklemeleri } from './kurallar.ts';
-import { SERI_SATIR_SINIRI, type SeriEkleKomutu, type SeriListeCevabi, type SeriListelerCevabi } from '#paylasilan/sozlesme/stok.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
 import type { BakiyeHam, BelgeTablosu, HareketHam, HareketYeni, IstekHam, RefakatPartisiHam, TeslimHam } from './sorgular.ts';
 
@@ -343,7 +341,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     // Hazırlık: bekleyen istekler ve açık listeler birlikte.
     hazirlik: islemler.includes('stok.transfer') || islemler.includes('stok.toplama')
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
-    okut: null, depo: null, 'okutarak-sayim': null, 'komut-karti': null, 'seri-listeler': null,
+    okut: null, depo: null, 'okutarak-sayim': null, 'komut-karti': null,
     // Depo sevk (960): sayaç yok; liste sevkiyatın tetiklediği kalemlerdir, kabuk rozet göstermez.
     'depo-sevk': null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
@@ -5546,57 +5544,4 @@ export async function geceDefterKarsilastirmasi(db: Db, saat = DEFTER_KARSILASTI
 export async function defterFarklari(db: Db): Promise<DefterFarklariCevabi> {
   const k = await sorgular.sonDefterKarsilastirmasi(db);
   return { karsilastirma: k, farklar: k === null ? [] : await sorgular.defterFarklari(db, k.id) };
-}
-
-// ---- Seri liste (1915, 1914 teyit): kişinin taslağı; stok yazılmaz. Başkasının listesi yokmuş gibi davranır. -----------------
-export async function seriListeler(db: Db, kisiId: number): Promise<SeriListelerCevabi> {
-  return { listeler: await sorgular.seriAcikListeler(db, kisiId) };
-}
-export async function seriListeAyrinti(db: Db, kisiId: number, id: number): Promise<SeriListeCevabi> {
-  const liste = await sorgular.seriListe(db, id, kisiId);
-  if (!liste) throw bulunamadi('Seri liste bulunamadı.');
-  return { liste, satirlar: (await sorgular.seriSatirlari(db, id)).map((x) => ({ ...x, adet: x.adet === null ? null : bindenMetin(binde(x.adet)) })) };
-}
-async function acikSeriListe(db: Db, kisiId: number, id: number): Promise<void> {
-  const l = await sorgular.seriListeKilitle(db, id, kisiId);
-  if (!l) throw bulunamadi('Seri liste bulunamadı.');
-  if (l.kapanis !== null) throw gecersiz('Seri liste kapandı; yeni okutma yeni listeye düşer.');
-}
-export async function seriEkle(db: Db, kisiId: number, g: SeriEkleKomutu): Promise<SeriListeCevabi> {
-  let id = g.listeId;
-  if (id === undefined) id = await sorgular.seriListeAc(db, kisiId, g.kaynak);
-  else await acikSeriListe(db, kisiId, id);
-  const satirlar = await sorgular.seriSatirlari(db, id);
-  const son = satirlar.at(-1) ?? null;
-  const e = seriEklemeleri(son && son.islendi === null ? son : null, g.kodlar);
-  if (satirlar.length + e.yeni.length > SERI_SATIR_SINIRI) throw dogrulama(`Bir listede en çok ${SERI_SATIR_SINIRI} satır olur; listeyi bitirip yenisini aç.`, 'kodlar');
-  if (e.sonAdet !== null && son) await sorgular.seriAdetYaz(db, id, son.id, e.sonAdet);
-  let sira = son?.sira ?? 0;
-  for (const y of e.yeni) await sorgular.seriSatirEkle(db, id, ++sira, y.kod, y.adet);
-  await sorgular.seriDegisti(db, id);
-  return seriListeAyrinti(db, kisiId, id);
-}
-export async function seriAdetDegistir(db: Db, kisiId: number, id: number, satirId: number, adet: string): Promise<SeriListeCevabi> {
-  await acikSeriListe(db, kisiId, id);
-  if (!(await sorgular.seriAdetYaz(db, id, satirId, bindenMetin(binde(adet))))) throw bulunamadi('Satır bulunamadı ya da işlendi.');
-  await sorgular.seriDegisti(db, id);
-  return seriListeAyrinti(db, kisiId, id);
-}
-export async function seriSatirSil(db: Db, kisiId: number, id: number, satirId: number): Promise<SeriListeCevabi> {
-  await acikSeriListe(db, kisiId, id);
-  if (!(await sorgular.seriSatirSil(db, id, satirId))) throw bulunamadi('Satır bulunamadı ya da işlendi.');
-  await sorgular.seriDegisti(db, id);
-  return seriListeAyrinti(db, kisiId, id);
-}
-// İşin kendi ucu yazdıktan sonra çağrılır; işlenen satır değişmez, silinmez.
-export async function seriIslendi(db: Db, kisiId: number, id: number, satirIdler: number[]): Promise<SeriListeCevabi> {
-  await acikSeriListe(db, kisiId, id);
-  await sorgular.seriIslendi(db, id, satirIdler);
-  await sorgular.seriDegisti(db, id);
-  return seriListeAyrinti(db, kisiId, id);
-}
-export async function seriKapat(db: Db, kisiId: number, id: number): Promise<SeriListeCevabi> {
-  await acikSeriListe(db, kisiId, id);
-  await sorgular.seriListeKapat(db, id);
-  return seriListeAyrinti(db, kisiId, id);
 }
