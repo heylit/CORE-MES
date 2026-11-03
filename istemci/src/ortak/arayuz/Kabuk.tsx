@@ -208,6 +208,14 @@ export function Kabuk({
     () => (menuSirasi === undefined ? null : menuSirasi.flatMap((yol) => menudekiler.filter((s) => s.yol === yol))),
     [menuSirasi, menudekiler],
   );
+  // Açılan liste rol menüsündekileri yinelemez; geriye sayfa kalmayan rolde "Tüm sayfalar" çizilmez.
+  const kalanGruplar = useMemo(() => {
+    if (rolMenusu === null) return gruplar;
+    const menude = new Set(rolMenusu.map((s) => s.yol));
+    return gruplar
+      .map((g) => ({ ...g, sayfalar: g.sayfalar.filter((s) => !menude.has(s.yol)) }))
+      .filter((g) => g.sayfalar.length > 0);
+  }, [gruplar, rolMenusu]);
   const [tumMenuAcik, tumMenuYaz] = useState(false);
   // Geçici (308 d): yeni ekran satırları yalnız yöneticide, ayrı grupta; bağlamada kalkar.
   const yeniEkranlar = useMemo(() => yeniEkranBaglantilari(menudekiler, islemler), [menudekiler, islemler]);
@@ -378,19 +386,21 @@ export function Kabuk({
           {rolMenusu !== null && (
             <div className="tc-kabuk-grup">
               {rolMenusu.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
-              <button
-                type="button"
-                className="tc-kabuk-bag"
-                onClick={() => tumMenuYaz((a) => !a)}
-                aria-expanded={tumMenuAcik}
-                title="Tüm sayfalar"
-              >
-                <Simge ad="dash" />
-                <span className="tc-kabuk-bag-metin">Tüm sayfalar</span>
-              </button>
+              {kalanGruplar.length > 0 && (
+                <button
+                  type="button"
+                  className="tc-kabuk-bag"
+                  onClick={() => tumMenuYaz((a) => !a)}
+                  aria-expanded={tumMenuAcik}
+                  title="Tüm sayfalar"
+                >
+                  <Simge ad="dash" />
+                  <span className="tc-kabuk-bag-metin">Tüm sayfalar</span>
+                </button>
+              )}
             </div>
           )}
-          {(rolMenusu === null || tumMenuAcik) && gruplar.map((g) => (
+          {(rolMenusu === null || tumMenuAcik) && kalanGruplar.map((g) => (
             <div className="tc-kabuk-grup" key={g.grup}>
               <p className="tc-kabuk-grup-ad">{g.grup}</p>
               {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
