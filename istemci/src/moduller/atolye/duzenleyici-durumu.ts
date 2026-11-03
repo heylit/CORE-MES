@@ -265,7 +265,7 @@ const ALAN_VARSAYILAN: Record<Exclude<AlanTuru, never>, { ad: string; genislik: 
 
 // İstasyon tipine göre önerilen ayak izi (metre); düzenleyicide değiştirilebilir.
 export const AYAK_IZI: Record<IstasyonTipi, [number, number]> = {
-  talasli: [3.5, 2.6], kalite: [3, 2.4], montaj: [2.4, 1.2], boya: [3, 3], markalama: [2, 1.4], depo: [3, 2],
+  talasli: [3.5, 2.6], kalite: [3, 2.4], montaj: [2.4, 1.2], tesviye: [2.4, 1.2], boya: [3, 3], markalama: [2, 1.4], depo: [3, 2],
 };
 
 export function sonrakiRafKodu(onek: string, kodlar: readonly string[]): string {

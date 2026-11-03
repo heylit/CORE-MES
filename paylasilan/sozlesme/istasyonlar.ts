@@ -3,7 +3,7 @@ import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
-export const ISTASYON_TIPLERI = ['talasli', 'kalite', 'depo', 'markalama', 'boya', 'montaj'] as const;
+export const ISTASYON_TIPLERI = ['talasli', 'kalite', 'depo', 'markalama', 'boya', 'montaj', 'tesviye'] as const;
 export const BAGLANTI_TURLERI = ['focas', 'opcua', 'mtconnect', 'modbus', 'dijital_giris'] as const;
 // Kapasiteyi neyin belirlediği: makinenin çalışma saati ya da istasyondaki kişilerin saat toplamı (IK4).
 export const KAPASITE_KAYNAKLARI = ['makine', 'insan'] as const;

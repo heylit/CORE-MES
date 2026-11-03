@@ -190,7 +190,7 @@ export const ALAN_TURU_ADI: Record<AlanTuru, string> = {
 
 // İstasyonlar modülünün ekran etiketleri (etiketler.ts) dışa açık değil; açılınca oradan alınır (BASKA-MODUL-ISTEKLERI).
 export const ISTASYON_TIPI_ADI: Record<IstasyonTipi, string> = {
-  talasli: 'Talaşlı imalat', kalite: 'Kalite', depo: 'Depo', markalama: 'Markalama', boya: 'Boya', montaj: 'Montaj',
+  talasli: 'Talaşlı imalat', kalite: 'Kalite', depo: 'Depo', markalama: 'Markalama', boya: 'Boya', montaj: 'Montaj', tesviye: 'Tesviye',
 };
 
 // Makine cinsi: 3B gövde ve 2B plan simgesi aynı karardan çizilir. Talaşlıda tip yetmez; tornayı ve 5 ekseni ad ayırır.
@@ -198,7 +198,7 @@ export type MakineCinsi = 'dik_isleme' | 'bes_eksen' | 'torna' | 'lazer' | 'cmm'
 
 export function makineCinsi(tip: IstasyonTipi | string, ad: string): MakineCinsi {
   if (tip === 'kalite') return 'cmm';
-  if (tip === 'montaj') return 'montaj';
+  if (tip === 'montaj' || tip === 'tesviye') return 'montaj';
   if (tip === 'boya') return 'boya';
   if (tip === 'markalama') return 'lazer';
   if (tip === 'depo') return 'depo';
