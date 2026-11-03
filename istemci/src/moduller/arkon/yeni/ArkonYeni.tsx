@@ -13,6 +13,7 @@ import { anahtarlar } from '../anahtarlar.ts';
 import { EMIR_PARAMETRESI, KART_PARAMETRESI, TMI_HEDEFLERI, emirParametresiOku, emirSeciminiGonder, tmiRetMetni, type MakineDoluRedi } from '../baglanti.ts';
 import { MakineDevralPenceresi, devralMetni } from '../MakineDevralPenceresi.tsx';
 import { CagriBandi } from './ayarlar/index.tsx';
+import { MalKabulPaneli } from './hazirlik/MalKabulPaneli.tsx';
 import { ArkonCizimOrtami } from './cizim/ortam.tsx';
 import { ayarlariOku, ILK_AYARLAR, type ArkonAyarlari } from './cekirdek/ayarlar.ts';
 import { olcekHesapla, TASARIM_GENISLIGI, TASARIM_YUKSEKLIGI } from './cekirdek/olcek.ts';
@@ -34,8 +35,19 @@ export function ArkonYeni() {
 // Ayrı sayfa (Üretim Terminali, Kuyruk): eski sayfa gibi TMI sayfa işlemi ve Arkon sayfa yetkisiyle açılır.
 export type TasinanSayfa = 'kuyruk' | 'operator';
 export function ArkonAyriSayfa({ sayfa }: { sayfa: TasinanSayfa }) {
+  const islemler = useOturum().data?.islemler;
+  if (sayfa === 'operator' && islemler === undefined) return <DurumKutusu durum="yukleniyor" />;
+  if (sayfa === 'operator' && islemler !== undefined && yalnizMalKabul(islemler)) {
+    return <section className="tc-ay-icerik" aria-label="Mal kabul" data-sayfa="mal-kabul"><MalKabulPaneli /></section>;
+  }
   return <ArkonYeniEkrani sabitSayfa={sayfa} />;
 }
+
+// 2039 a: Arkon rolü olmayan depo kullanıcısı terminalde yalnız mal kabulü görür; Arkon'un kişi kaydı (/arkon/ben) istenmez, çünkü
+// Arkon rolü yoktur ve sunucu reddeder. Liste sunucunun rol sırasıdır (sunucu/moduller/arkon/kurallar.ts ROL_SIRASI).
+const ARKON_ROL_ISLEMLERI: readonly string[] = ['arkon.yonetici', 'arkon.planlama', 'arkon.hazirlik', 'arkon.kalite', 'arkon.bakim', 'arkon.amir', 'arkon.operator'];
+export const yalnizMalKabul = (islemler: readonly string[]): boolean =>
+  islemler.includes('stok.giris') && !islemler.some((i) => ARKON_ROL_ISLEMLERI.includes(i));
 
 // Sistem Ayarları'ndaki Arkon bölümü: Üretim Hazırlık > Ayarlar'ın kendisi, aynı görünürlük ve aynı kayıt. Adres Sistem Ayarları'nındır;
 // sayfa açık değilse giriş sayfasına götürülmez, yerinde "açık değil" yazar.

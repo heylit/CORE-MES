@@ -4,6 +4,7 @@ import { rotalariTopla } from '../../../ortak/rota/kesif.ts';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { eskiAdresinYenisi, rotalar } from '../rotalar.tsx';
 import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
+import { yalnizMalKabul } from './ArkonYeni.tsx';
 import { SAYFALAR, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 
@@ -140,6 +141,22 @@ describe('Arkon giriş sayfası', () => {
     expect(arkonGirisSayfasi('operator', ['sayfa.arkon', 'arkon.operator', 'arkon.planlama'])).toBe('operator');
     expect(arkonGirisSayfasi('admin', ['sayfa.arkon'])).toBe('operator');
   });
+});
+
+// 2039 a, 2026: Arkon rolü olmayan depo kullanıcısı terminalde yalnız mal kabulü görür; Arkon kişi kaydı istenmez.
+describe('Arkon rolü olmayan depo kullanıcısı', () => {
+  const DEPO = { rol: 'operator', kullanici: { id: 9, ad: 'Deneme Depocu', islemler: ['sayfa.uretim-terminali', 'stok.giris'] } } as Parameters<typeof sunucuKur>[0];
+  it('yalnız mal kabul kuralı: stok girişi var, Arkon rol işlemi yok', () => {
+    expect(yalnizMalKabul(['sayfa.uretim-terminali', 'stok.giris'])).toBe(true);
+    expect(yalnizMalKabul(['sayfa.uretim-terminali', 'stok.giris', 'arkon.operator'])).toBe(false);
+    expect(yalnizMalKabul(['sayfa.uretim-terminali'])).toBe(false);
+  });
+  it('/uretim-terminali mal kabul bölümünü açar; /arkon/ben istenmez', async () => {
+    const istekler = sunucuKur(DEPO);
+    arkonAc('/uretim-terminali');
+    expect((await bolum('Mal kabul')).getAttribute('data-sayfa')).toBe('mal-kabul');
+    expect(istekler.some((i) => i.yol === '/arkon/ben')).toBe(false);
+  }, 20000);
 });
 
 // Eski çerçeve kalktı (1418, karar 1392 a): `/eski` adresleri yer imi için aynı yolun yeni adresine gider.
