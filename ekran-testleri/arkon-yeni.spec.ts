@@ -6,10 +6,15 @@ import { ADRES, expect, test } from './ortak.ts';
 // çalışan davranışı yeni yolda sınar. İskelet yalnız kabuğu sınar; bölümlerin içine bakmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
-// Tek maddelik şerit genişte durur; telefonda çizilmez, sayfa kendi başlığını taşır (618c).
-async function tekSerit(page: Page, ad: string): Promise<void> {
+// Tek maddelik şerit genişte durur; telefonda çizilmez, sayfa kendi başlığını taşır (618c). Kendi şeridini kabuğun üst çubuğuna
+// koyan sayfada (2052-1 a; terminal 900 px ve üstünde geniş düzendedir) şerit çizilmez, sayfanın şeridi üst çubuktadır.
+async function tekSerit(page: Page, ad: string, ustCubukta: { genislik: number; serit: string } | null = null): Promise<void> {
   const menu = page.locator(`nav[aria-label="${ad} menüsü"]`);
-  if ((page.viewportSize()?.width ?? 0) < 768) await expect(menu).toBeHidden();
+  const en = page.viewportSize()?.width ?? 0;
+  if (ustCubukta !== null && en >= ustCubukta.genislik) {
+    await expect(page.locator(`.tc-kabuk-ust ${ustCubukta.serit}`)).toBeVisible();
+    await expect(menu).toBeHidden();
+  } else if (en < 768) await expect(menu).toBeHidden();
   else await expect(menu).toBeVisible();
 }
 
@@ -408,11 +413,11 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
 
   test.describe('operatör', () => {
     test.use({ hesap: 'ornek.operator1' });
-    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur; görünüm geçişi yoktur', async ({ page, ag, ac }) => {
+    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur (genişte terminal şeridi üst çubukta, 2052-1 a); görünüm geçişi yoktur', async ({ page, ag, ac }) => {
       await ac('/uretim-terminali');
       await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
       await expect(page.locator('iframe')).toHaveCount(0);
-      await tekSerit(page, 'Üretim Terminali');
+      await tekSerit(page, 'Üretim Terminali', { genislik: 900, serit: '.tc-ay1-ust' });
       await page.getByRole('button', { name: 'Hesap' }).click();
       await expect(page.getByRole('menuitem').first()).toBeVisible();
       await expect(page.getByRole('menuitem', { name: /görünüm$/ })).toHaveCount(0);

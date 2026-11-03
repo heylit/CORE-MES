@@ -10,12 +10,14 @@ test.describe('operatör', () => {
   test('kendi istasyonunda açılır; iş yokken sayaç kapalı; Özetim açılır', async ({ page, ag, ac }, bilgi) => {
     await ac('/uretim-terminali');
     const terminal = page.getByRole('region', { name: 'Üretim Terminali' });
-    // Makine ataması istasyon yetkisi sayılır (#1433): operatör 1 ORN-TORNA-1 ile açılır.
-    await expect(terminal.getByText('ORN-TORNA-1').first()).toBeVisible();
+    // Makine ataması istasyon yetkisi sayılır (#1433): operatör 1 ORN-TORNA-1 ile açılır. Genişte terminal şeridi (istasyon,
+    // Özetim) kabuğun üst çubuğundadır (2052-1 a).
+    const serit = bilgi.project.name === 'g1280' ? page.locator('.tc-kabuk-ust') : terminal;
+    await expect(serit.getByText('ORN-TORNA-1').first()).toBeVisible();
     if (bilgi.project.name === 'g1280') {
       await expect(terminal.getByRole('button', { name: 'İyi +1' })).toBeDisabled();
       await expect(terminal.getByRole('button', { name: 'Hurda +1' })).toBeDisabled();
-      await terminal.getByRole('button', { name: 'Özetim' }).click();
+      await serit.getByRole('button', { name: 'Özetim' }).click();
     } else {
       await terminal.getByRole('navigation', { name: 'Terminal görünümleri' }).getByRole('button', { name: 'Özetim' }).click();
     }
