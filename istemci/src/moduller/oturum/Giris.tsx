@@ -28,6 +28,9 @@ const TANITIM: readonly { simge: ComponentProps<typeof Simge>['ad']; metin: stri
   { simge: 'box', metin: 'Malzeme ve stok hareketi izli' },
 ];
 
+// Firma adı Türkçede eksiz durur ("Çeliği X keser"), bu yüzden hangi ad gelirse gelsin cümle bozulmaz; ad yoksa genel "atölye" kullanılır.
+export const slogan = (kurumAdi: string | null): string => `Çeliği ${kurumAdi ?? 'atölye'} keser, tartışmayı CORE. Sıfır tahmin.`;
+
 const KONTUR = 'M60 60 H300 A40 40 0 0 1 340 100 V220 H100 A40 40 0 0 1 60 180 Z';
 
 // Yerel çizim: takım yolunu çizen freze, parçanın dış konturu ve cebi. Süs çizimidir, ekran okuyucudan gizlidir;
@@ -81,7 +84,8 @@ const rakamlar = (metin: string): string => metin.replace(/\D/g, '').slice(0, PI
 
 export function Giris() {
   const istemci = useQueryClient();
-  const markaAdi = birlesikAd(useGirisKurumAdi());
+  const kurumAdi = useGirisKurumAdi();
+  const markaAdi = birlesikAd(kurumAdi);
   const [kip, kipYaz] = useState<Kip>(kayitliKip);
   const [logoVar, logoVarYaz] = useState(false);
   const [kullaniciAdi, kullaniciAdiYaz] = useState('');
@@ -236,7 +240,7 @@ export function Giris() {
           <div className="tc-giris-marka">
             <span className="tc-giris-ad">{markaAdi}</span>
           </div>
-          <p className="tc-giris-baslik-buyuk">Plandan sevke, her adım kayıt altında.</p>
+          <p className="tc-giris-baslik-buyuk">{slogan(kurumAdi)}</p>
           <p className="tc-giris-slogan">Üretim planlama ve izlenebilirlik</p>
           <ul className="tc-giris-ozellikler">
             {TANITIM.map((o) => (
