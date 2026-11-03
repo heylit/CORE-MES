@@ -26,6 +26,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   tmiTabanKur(S0.D, bugun);
   baslangicTazele(S0, Date.parse(istek.simdi));
   Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
+  /* 1952 iş 2a: paralel bölme yalnız planlama atölyesindedir; canlı planda payların iş emrine geri yazılması 2b'nin işidir */
+  S0.param = Object.assign({}, S0.param, { bolmeKip: 'kapali' });
   const nolar = new Set();
   for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...(istek.kisiKuyruklari || []).flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar),
     ...(istek.kisiSabitleri || []).map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));

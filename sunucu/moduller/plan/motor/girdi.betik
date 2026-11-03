@@ -109,6 +109,14 @@ function rrCevir(st) {
     tezgahlar.push(rrKur(a, y));
   }
   const kisiGrubu = new Map(elKisileri.map(p => [kisiTezgahKimligi(p.id), elGruplari(p)[0]]));
+  /* 1952 (1955 a): paralel bölünen adımda insanlı istasyonun aktif ekibinin en az iki üyesinin tezgâhı varsa adaylar yalnız ekiptir;
+     yoksa istasyonun bütün kişileri. Bölünmeyen adımın adayları değişmez. */
+  const ekip = st.ekipUyeleri || {};
+  const elAdaylari = (g, bol) => {
+    const b = grupMak(g); if (!bol) return b;
+    const e = new Set((ekip[g] || []).map(id => kisiTezgahKimligi(id))), be = b.filter(id => e.has(id));
+    return be.length >= 2 ? be : b;
+  };
   const grupMak = g => insanli.has(g)
     ? elKisileri.filter(p => elGruplari(p).includes(g)).map(p => kisiTezgahKimligi(p.id))
     : tezgahlar.filter(m => m.grup === g && !kisiGrubu.has(m.id)).map(m => m.id);
@@ -150,7 +158,7 @@ function rrCevir(st) {
       /* 1952: insanlı istasyonda adayların kümesi kişilerin yetkinliği ve vardiyasıyla değişir (istasyon insanlıya dönünce makineler düşer);
          küme değişince adım yeniden kurulur, kalan kişinin süresi korunur. */
       const elDegisti = !!o0 && [s.stationId, ...(s.alts || [])].filter(g => insanli.has(g)).some(g => {
-        const b = grupMak(g), v = (o0.tezgahlar || []).map(t => String(t.id)).filter(id => grupOf(id) === g || b.includes(id) || (id.startsWith(KISI_TEZGAH_ONEKI) && !kisiGrubu.has(id)));
+        const b = elAdaylari(g, s.split === 'bol'), v = (o0.tezgahlar || []).map(t => String(t.id)).filter(id => grupOf(id) === g || b.includes(id) || (id.startsWith(KISI_TEZGAH_ONEKI) && !kisiGrubu.has(id)));
         return !rrEsit(b.slice().sort(), v.slice().sort());
       });
       if (!o0 || elDegisti || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
@@ -164,7 +172,7 @@ function rrCevir(st) {
         for (const g of izin) {
           if (insanli.has(g)) {
             const sakla = new Map(eski.map(t => [String(t.id), t]));
-            tz.push(...grupMak(g).map(id => sakla.has(id) ? (degisti(g) ? Object.assign({}, sakla.get(id), sure(g)) : sakla.get(id)) : Object.assign({ id }, sure(g))));
+            tz.push(...elAdaylari(g, s.split === 'bol').map(id => sakla.has(id) ? (degisti(g) ? Object.assign({}, sakla.get(id), sure(g)) : sakla.get(id)) : Object.assign({ id }, sure(g))));
             continue;
           }
           const varolan = eski.filter(t => grupOf(t.id) === g);
@@ -181,6 +189,8 @@ function rrCevir(st) {
       if (!o0 || ref.depQty !== s.depQty || (s.dep === 'ortulu' && !('transfer' in o0))) { if (+s.depQty > 1 || s.dep === 'ortulu' || (o0 && 'transfer' in o0)) z.transfer = Math.max(1, +s.depQty || 1); }
       /* 1310 a: rotada ayarı işaretsiz adımda hazırlık sayılır, ayarcı aranmaz (engine ayarciIster); alanı olmayan eski kayıt ayarlıdır */
       if (s.ayarli === false) { if (!o0 || o0.ayarci !== false) z.ayarci = false; } else if (o0 && 'ayarci' in o0) z.ayarci = undefined;
+      /* 1952: rotadaki "paralel böl" (Reçete ve Rota split 'bol') motorun bölme işaretidir (engine compile) */
+      if (s.split === 'bol') { if (!o0 || !o0.bol) z.bol = true; } else if (o0 && 'bol' in o0) z.bol = undefined;
       if (!o0 || ref.minLot !== s.minLot) { if (+s.minLot > 0 || (o0 && 'minParti' in o0)) z.minParti = +s.minLot; }
       const bag = bagOf(s, i).map(([r, t]) => { const e = ((o0 && o0.bag) || []).find(([q]) => q === r); return e ? [r, t, ...e.slice(2)] : [r, t]; });
       if (!o0 || !rrEsit(o0.bag || [], bag)) z.bag = bag;
@@ -372,6 +382,7 @@ function tmiKaynakIle(st, kaynak, D) {
     });
   }
   if (Array.isArray(ek.insanliIstasyonlar)) o.insanliIstasyonlar = ek.insanliIstasyonlar.map(String);
+  if (ek.ekipUyeleri && typeof ek.ekipUyeleri === 'object') o.ekipUyeleri = ek.ekipUyeleri;
   return o;
 }
 /* Fason firmanın sahibi Müşteri ve Tedarikçi'dir; durum okuması aktif fason firmaları verir (fasonFirms). Motor fason adımı yalnız
@@ -694,7 +705,9 @@ function stKur(S, ek = [], gevset = true) {
     locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: clone(S.ogren || {}),
     w: { ...clone(W0), rule: MOTOR_KURALI.has(S.w.rule) ? S.w.rule : W0.rule, famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta),
       /* 1477 a: motor ölçeği (sistem ayarı); yoksa motor varsayılanı (engine olcekKur) */
-      ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null },
+      ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null,
+      /* 1952 (1958 a): rotada "paralel böl" adımı motor kendisi böler; çalışmanın bölme ayarı "kapali" değilse, en çok bolmeMaks paya */
+      bol: (S.param && S.param.bolmeKip) !== 'kapali', bolMaks: +((S.param && S.param.bolmeMaks) ?? 3) },
   };
   const kapali = new Set([...(gevset ? kapaliKisitlar(S) : []), ...ek]);
   for (const k of kapali) if (GEVSEK[k]) GEVSEK[k](st);
