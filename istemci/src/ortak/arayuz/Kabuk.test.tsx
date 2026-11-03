@@ -302,10 +302,25 @@ describe('Kabuk', () => {
     fireEvent.click(tum);
     expect(tum.getAttribute('aria-expanded')).toBe('true');
     expect(baglantilar()).toEqual(expect.arrayContaining(['/arkon', '/plan']));
+    // Açılan liste rol menüsündekileri yinelemez (1932).
+    expect(baglantilar().filter((y) => y === '/stok' || y === '/kuyruk')).toEqual(['/stok', '/kuyruk']);
     // Telefondaki Tümü listesi her zaman bütün sayfalardır.
     fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
     const liste = within(screen.getByRole('dialog', { name: 'Tüm sayfalar' }));
     for (const s of gorunen) expect(liste.getByRole('link', { name: s.baslik })).toBeTruthy();
+  });
+
+  it('rol menusu kisinin butun sayfalarini kapsiyorsa Tum sayfalar dugmesi cizilmez; telefondaki Tumu kalir (1932)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok'].includes(s.yol));
+    render(
+      <MemoryRouter>
+        <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk']}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+    expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
+    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/profil', '/stok', '/kuyruk']);
+    expect(screen.getByRole('button', { name: 'Tümü' })).toBeTruthy();
   });
 
   it('Tumu listesi Esc ile kapanir ve odagi Tumu dugmesine geri verir', () => {

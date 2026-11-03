@@ -18,6 +18,20 @@ export function gorunurSayfalar(kullanici: Kullanici): readonly Sayfa[] {
   return SAYFALAR.filter((s) => kullanici.islemler.includes(s.islem));
 }
 
+// 1930: giriş ekranı istasyonda kartla açılır. Cihazın istasyon olduğunu sunucu çerezden bilir; oturum yokken istemci bilemez, bu yüzden
+// istasyon profilli oturum açıldığında tarayıcı hatırlar, başka profilde unutur. İşaret yalnız ilk görünümü seçer: yanlış işaret
+// sunucunun reddettiği bir kart denemesinden öte bir şey açmaz.
+export const GIRIS_YONTEMI_ANAHTARI = 'tmi.giris.yontem';
+export function girisYonteminiHatirla(kullanici: Kullanici | null): void {
+  if (kullanici?.cihazProfili === undefined) return;
+  try {
+    if (kullanici.cihazProfili === 'istasyon') window.localStorage.setItem(GIRIS_YONTEMI_ANAHTARI, 'kart');
+    else if (window.localStorage.getItem(GIRIS_YONTEMI_ANAHTARI) === 'kart') window.localStorage.removeItem(GIRIS_YONTEMI_ANAHTARI);
+  } catch {
+    // Saklanamazsa giriş ekranı PIN ile açılır; kart yine arka planda okunur.
+  }
+}
+
 export function useOturum() {
   const istemci = useQueryClient();
   // Herhangi bir istek 401 dönerse oturum sunucuda bitmiştir; giriş ekranına düşmek için yeniden sorulur.
@@ -40,6 +54,7 @@ export function useOturum() {
         istemci.removeQueries({ predicate: (q) => q.queryKey[0] !== anahtarlar.oturum[0] });
         istemci.getMutationCache().clear();
       }
+      girisYonteminiHatirla(kullanici);
       return kullanici;
     },
     staleTime: Infinity,

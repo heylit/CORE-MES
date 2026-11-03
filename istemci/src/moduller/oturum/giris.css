@@ -72,6 +72,15 @@
   border-radius: var(--yari-2); background: var(--panel2); font-weight: 700;
 }
 
+.tc-giris-okut {
+  display: grid; justify-items: center; gap: var(--b-2); padding: var(--b-5) var(--b-3); text-align: center;
+  border: 1px dashed var(--edge); border-radius: var(--yari-2); background: var(--panel2);
+}
+.tc-giris-okut strong { font-size: var(--yazi-l); }
+.tc-giris-okut-simge { color: var(--hazard); }
+.tc-giris-okut-hata { border-color: var(--stop); }
+.tc-giris-okut-hata .tc-giris-okut-simge, .tc-giris-okut-hata span { color: var(--stop); font-weight: 700; }
+
 .tc-giris-pin {
   text-align: center; font-family: var(--font-mono); font-size: var(--yazi-xl); letter-spacing: .5em;
 }

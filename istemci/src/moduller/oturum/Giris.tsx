@@ -8,12 +8,11 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
 import { kartTusu, OKUYUCU_BASI } from '../../ortak/veri/kart-degistir.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
-import { girisiYenidenDene } from '../../ortak/veri/oturum.ts';
+import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
 import './giris.css';
 
 const PIN_HANE = 6;
-const YONTEM_ANAHTARI = 'tmi.giris.yontem';
 const AG_YOK = 'Sunucuya ulaşılamadı';
 
 type Kip = 'pin' | 'parola' | 'kart' | 'belirle';
@@ -59,7 +58,7 @@ function TakimYolu() {
 }
 
 // Asıl giriş PIN'dir (1832): ekran her açılışta PIN ile karşılar, parola o açılış için seçilir ve saklanmaz. İstasyon kartla
-// girer (kart #1326); kart seçimi tarayıcıda kalır ki istasyonda her açılışta yeniden seçilmesin.
+// girer (kart #1326, 1930): istasyon profilli oturum tarayıcıya kartı yazar (ortak/veri/oturum.ts), ekran orada kartla açılır.
 function kayitliKip(): Kip {
   try {
     return window.localStorage.getItem(YONTEM_ANAHTARI) === 'kart' ? 'kart' : 'pin';
@@ -88,12 +87,11 @@ export function Giris() {
   const [etkin, etkinYaz] = useState<PinAlani>('pin');
   const [geciciPin, geciciPinYaz] = useState('');
   const [uyusmazlik, uyusmazlikYaz] = useState(false);
-  // Okuyucu klavye gibi yazıp Enter'a basar: istasyonda kart tek başına girer (1897 b), PIN sorulmaz.
-  const [kart, kartYaz] = useState('');
 
   // Açılış gösterisi oturum yazılmadan hemen önce kurulur: giriş anında oynar, kabuk arkasında hazırlanır.
   const oturumuYaz = (kullanici: Kullanici | null) => {
     if (kullanici !== null) girisGosterisiBaslat(GIRIS_LOGOSU_ADRESI);
+    girisYonteminiHatirla(kullanici);
     istemci.setQueryData(anahtarlar.oturum, kullanici);
   };
 
@@ -115,12 +113,10 @@ export function Giris() {
     },
   });
 
-  // Hatada kart da silinir: istasyonda sıradaki kişi kendi kartını okutur.
   const kartla = useMutation({
     mutationFn: (govde: KartGirisGovdesi) =>
       girisiYenidenDene(() => api.post<OturumCevabi>('/oturum/kart-giris', govde, { oturumBitirmez: true })),
-    onSuccess: (cevap) => { kipiSakla('kart'); oturumuYaz(cevap.kullanici); },
-    onError: () => { kartYaz(''); },
+    onSuccess: (cevap) => { oturumuYaz(cevap.kullanici); },
   });
 
   // 1917: istasyonda kart, yöntem ya da alan seçmeden okutulur. Okuyucunun hızlı yazdığı kart biçimindeki girdi Enter'da yakalanır
@@ -130,7 +126,6 @@ export function Giris() {
   const kartOkut = useRef<(kart: string, ham: string) => void>(() => undefined);
   kartOkut.current = (kartNo, ham) => {
     if (kartla.isPending) return;
-    kartYaz('');
     parolaYaz('');
     pinlerYaz((p) => ({ ...p, pin: '' }));
     kullaniciAdiYaz((a) => (a.endsWith(ham) ? a.slice(0, -ham.length) : a));
@@ -174,10 +169,9 @@ export function Giris() {
   };
 
   const yontemDegistir = (yeni: SakliKip) => {
-    if (yeni !== 'parola') kipiSakla(yeni);
+    if (yeni === 'kart') kipiSakla(yeni);
     kipYaz(yeni);
     etkinYaz('pin');
-    kartYaz('');
     pinlerYaz((p) => ({ ...p, pin: '' }));
     giris.reset();
     kartla.reset();
@@ -196,14 +190,8 @@ export function Giris() {
     olay.preventDefault();
     if (kip === 'parola') { giris.mutate({ kullaniciAdi, parola }); return; }
     if (kip === 'pin') { giris.mutate({ kullaniciAdi, pin: pinler.pin }); return; }
-    if (kip === 'kart') {
-      // Alan gönderimde boşalır: okuyucu CR+LF gönderirse gelen ikinci Enter aynı kartı yeniden göndermez.
-      const okunan = kart.trim();
-      if (okunan === '' || kartla.isPending) return;
-      kartYaz('');
-      kartla.mutate({ kart: okunan });
-      return;
-    }
+    // Kart ekranında gönderilecek alan yok: kartı arka plan dinleyicisi okur.
+    if (kip === 'kart') return;
     if (pinler.yeni !== pinler.tekrar) { uyusmazlikYaz(true); return; }
     belirle.mutate({ kullaniciAdi, geciciPin, yeniPin: pinler.yeni });
   };
@@ -216,7 +204,6 @@ export function Giris() {
   const pinKipi = kip === 'pin' || kip === 'belirle';
   const hazir = kip === 'pin'
     ? pinler.pin.length === PIN_HANE
-    : kip === 'kart' ? kart.trim() !== ''
     : kip === 'belirle' ? pinler.yeni.length === PIN_HANE && pinler.tekrar.length === PIN_HANE : true;
 
   const pinGirdisi = (alan: PinAlani, etiket: string, hata?: string) => (
@@ -277,25 +264,18 @@ export function Giris() {
           <p className="tc-giris-aciklama">
             {kip === 'pin' && `Kullanıcı adınız ve ${PIN_HANE} haneli PIN'inizle girin.`}
             {kip === 'parola' && 'Kullanıcı adınız ve parolanızla girin. Parola yöneticiler ve henüz PIN\'i olmayanlar içindir; PIN\'i olan PIN ile girer.'}
-            {kip === 'kart' && 'Kişi kartınızı okuyucuya okutun.'}
+            {kip === 'kart' && 'Kişi kartınızı okuyucuya yaklaştırın; ekrana dokunmanız gerekmez.'}
             {kip === 'belirle' && `Size verilen geçici PIN doğru. Yalnız sizin bileceğiniz ${PIN_HANE} haneli bir PIN seçin.`}
           </p>
         </header>
 
         {kip === 'belirle' && <p className="tc-giris-kisi"><Simge ad="user" boyut="k" /><span>{kullaniciAdi}</span></p>}
         {kip === 'kart' && (
-          <Girdi
-            etiket="Kart"
-            name="kart"
-            type="password"
-            autoComplete="off"
-            autoFocus
-            maxLength={64}
-            value={kart}
-            onChange={(o) => kartYaz(o.target.value)}
-            hata={kartHatasi}
-            ipucu="Okuyucu kartı yazar ve kendisi geçer."
-          />
+          <div className={`tc-giris-okut${kartHatasi ? ' tc-giris-okut-hata' : ''}`} role="status" aria-live="polite">
+            <span className="tc-giris-okut-simge"><Simge ad={kartHatasi ? 'alert' : 'scan'} boyut="b" /></span>
+            <strong>{kartla.isPending ? 'Kart okunuyor' : 'Kartınızı okutun'}</strong>
+            {kartHatasi && <span>{kartHatasi}</span>}
+          </div>
         )}
         {(kip === 'pin' || kip === 'parola') && (
           <Girdi
@@ -344,16 +324,18 @@ export function Giris() {
           </div>
         )}
 
-        <Dugme
-          type="submit"
-          tur="birincil"
-          boyut="ana"
-          simge={kip === 'belirle' ? 'check' : 'lock'}
-          disabled={!hazir}
-          yukleniyor={giris.isPending || belirle.isPending || kartla.isPending}
-        >
-          {kip === 'belirle' ? 'PIN\'i kaydet ve gir' : 'Giriş yap'}
-        </Dugme>
+        {kip !== 'kart' && (
+          <Dugme
+            type="submit"
+            tur="birincil"
+            boyut="ana"
+            simge={kip === 'belirle' ? 'check' : 'lock'}
+            disabled={!hazir}
+            yukleniyor={giris.isPending || belirle.isPending || kartla.isPending}
+          >
+            {kip === 'belirle' ? 'PIN\'i kaydet ve gir' : 'Giriş yap'}
+          </Dugme>
+        )}
 
         <div className="tc-giris-alt">
           {kip === 'pin' && (
@@ -367,9 +349,14 @@ export function Giris() {
             </button>
           )}
           {kip === 'kart' && (
-            <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('pin')}>
-              <Simge ad="grid" boyut="k" />Kullanıcı adıyla gir
-            </button>
+            <>
+              <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('pin')}>
+                <Simge ad="grid" boyut="k" />Kullanıcı adıyla gir
+              </button>
+              <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('parola')}>
+                <Simge ad="user" boyut="k" />Parola ile gir
+              </button>
+            </>
           )}
           {kip === 'pin' && (
             <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('kart')}>

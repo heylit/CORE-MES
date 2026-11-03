@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiHatasi } from './api.ts';
-import { GIRIS_YENIDEN_DENEME, girisCakismasiMi, girisiYenidenDene } from './oturum.ts';
+import { GIRIS_YENIDEN_DENEME, GIRIS_YONTEMI_ANAHTARI, girisCakismasiMi, girisiYenidenDene, girisYonteminiHatirla, type Kullanici } from './oturum.ts';
 
 const cakisma = () => new ApiHatasi(429, { kod: 'COK_ISTEK', mesaj: 'Aynı anda başka bir giriş denemesi sürüyor. Birazdan yeniden deneyin.' });
 const hatali = () => new ApiHatasi(401, { kod: 'OTURUM_YOK', mesaj: 'Kullanıcı adı ya da parola hatalı.' });
@@ -57,5 +57,19 @@ describe('giris cakismasi yeniden denemesi (1877 a)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('giris yontemini hatirlama (1930)', () => {
+  const kisi = (cihazProfili?: Kullanici['cihazProfili']): Kullanici => ({ id: 1, ad: 'Deneme', islemler: [], ...(cihazProfili ? { cihazProfili } : {}) });
+  it('istasyon profili karti yazar, baska profil kart secimini siler, profilsiz kimlik ve oturumsuzluk dokunmaz', () => {
+    window.localStorage.clear();
+    girisYonteminiHatirla(kisi('istasyon'));
+    expect(window.localStorage.getItem(GIRIS_YONTEMI_ANAHTARI)).toBe('kart');
+    girisYonteminiHatirla(kisi());
+    girisYonteminiHatirla(null);
+    expect(window.localStorage.getItem(GIRIS_YONTEMI_ANAHTARI)).toBe('kart');
+    girisYonteminiHatirla(kisi('telefon'));
+    expect(window.localStorage.getItem(GIRIS_YONTEMI_ANAHTARI)).toBeNull();
   });
 });
