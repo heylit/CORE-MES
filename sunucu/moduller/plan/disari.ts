@@ -14,6 +14,13 @@ import {
 export { calisanAdimlar, canliMakineAyrimlari, canliOzeti, canliSira, kuyruguSirala, taslaktakiler } from './servis.ts';
 export type { CalisanAdim } from './servis.ts';
 
+// 1979 (2003 c): adımın canlı plandaki yerleşmiş payları (bölünmüş işin parçaları); üretim emirleri terminalde payı olana izin verir
+// (kablolama.ts). Bölünmemiş ya da canlıda olmayan adımda boş.
+export async function canliPaylar(db: Db, isEmriId: number): Promise<{ no: number; adet: number; makineId: number | null; kisiId: number | null }[]> {
+  const [y] = await canliYerlesimleri(db, [isEmriId]);
+  return (y?.parcalar ?? []).map((p) => ({ no: p.no, adet: p.adet, makineId: p.kaynak.tur === 'makine' ? p.kaynak.id : null, kisiId: p.kaynak.tur === 'kisi' ? p.kaynak.id : null }));
+}
+
 // ADR 0018: ortak plan motoru (Reçete ve Rota) asıl plana yazan komutlarda saatleri verir; bağı kablolama.ts kurar, kayıtsızken Motor A.
 export const planMotoruCozucusu = (cozucu: PlanMotoruCozucusu | null): void => planMotoruCozucusuKaydet(cozucu);
 export type { PlanMotoruCozucusu, PlanMotoruIstegi };
