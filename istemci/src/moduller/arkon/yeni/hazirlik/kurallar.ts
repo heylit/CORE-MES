@@ -77,6 +77,7 @@ export const IS_TURLERI: Readonly<Record<OpType, IsTuruTanimi>> = {
   mark: { l: 'Markalama', short: 'Markala', simge: 'tag', cnt: 'Markalanan', unit: 'parça', tab: 'Markalama', d: 'Seri no, lazer / damga / etiket, QR doğrulama' },
   boya: { l: 'Boya · kaplama', short: 'Boya', simge: 'drop', cnt: 'Boyanan', unit: 'parça', tab: 'Boya', d: 'Renk, ortam, fırın süresi, kaplama kalınlığı' },
   montaj: { l: 'Montaj', short: 'Montaj', simge: 'box', cnt: 'Monte edilen', unit: 'ünite', tab: 'Montaj', d: 'Kit listesi, parça izlenebilirliği, tork' },
+  tesviye: { l: 'Tesviye', short: 'Tesviye', simge: 'users', cnt: 'İyi parça', unit: 'adet', tab: 'Kontrol listesi', d: 'El işi: çapak, kenar, pah · kontrol listesi, kişi payı' },
 };
 export const isTuru = (p: { opType?: unknown } | null | undefined): OpType =>
   p && typeof p.opType === 'string' && Object.hasOwn(IS_TURLERI, p.opType) ? (p.opType as OpType) : 'cnc';
@@ -99,6 +100,8 @@ export interface IstasyonAyari {
   mode: 'pick' | 'receive'; items: DepoKalemi[];
   // markalama ve montaj
   fmt: string; start: number; method: string; pos: string; verify: boolean; bom: MontajKalemi[]; torque: TorkAdimi[];
+  // tesviye: işin kontrol listesi (2012 a); sayım ve kişi payı terminalin ortak sayacındadır (2003 c).
+  checks: string[];
   // boya
   ral: string; name: string; hex: string; type: string; layers: number; dftMin: number; dftMax: number; cureT: number; cureMin: number;
   envTmin: number; envTmax: number; rhMax: number; rack: number;
@@ -113,6 +116,7 @@ export const VARSAYILAN_AYARLAR: Readonly<Record<OpType, () => Partial<IstasyonA
     rhMax: 70, rack: 20,
   }),
   montaj: () => ({ bom: [], torque: [], fmt: '{PARCA}-{YY}{WW}-{SEQ:4}', start: 1 }),
+  tesviye: () => ({ checks: ['Çapak yok', 'Keskin kenar yok', 'Diş temiz'] }),
 };
 // Operatör, düzenleyici ve doğrulama aynı lotu görsün diye türetme tek yerdedir. Türe ait olmayan alan kayıtta yoksa tanımsızdır.
 export function istasyonAyari(p: Pick<Pkg, 'st' | 'opType' | 'id' | 'target'> | null | undefined): IstasyonAyari {
@@ -269,6 +273,7 @@ export function istasyonDenetimi(p: Pick<Pkg, 'st' | 'opType' | 'id' | 'target' 
   if (t === 'mark') return [{ k: 'st', ok: /\{SEQ(:\d+)?\}/i.test(c.fmt || ''), l: 'Seri numarası şablonu', d: c.fmt ? seriNo(c.fmt, c.start, p) : 'Şablonda {SEQ} olmalı' }];
   if (t === 'boya') return [{ k: 'st', ok: !!c.ral && c.dftMax > c.dftMin && c.cureMin > 0, l: 'Boya parametreleri', d: 'RAL ' + c.ral + ' · ' + c.dftMin + '–' + c.dftMax + ' µm · ' + c.cureT + '°C ' + c.cureMin + ' dk' }];
   if (t === 'montaj') return [{ k: 'st', ok: (c.bom || []).length > 0, l: 'Montaj parça listesi', d: (c.bom || []).length + ' parça · ' + (c.torque || []).length + ' tork' }];
+  if (t === 'tesviye') return [{ k: 'st', ok: (c.checks || []).length > 0, l: 'Kontrol listesi', d: (c.checks || []).length + ' kontrol', soft: true }];
   if (t === 'kalite') return [{ k: 'st', ok: c.n > 0 && c.lot >= c.n, l: 'Numune planı', d: 'Lot ' + c.lot + ' · numune ' + c.n + ' · Ac ' + c.ac }];
   return [];
 }

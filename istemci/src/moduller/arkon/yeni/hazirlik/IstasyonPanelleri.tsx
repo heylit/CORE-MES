@@ -25,6 +25,7 @@ export interface IstasyonKaydi {
   cur?: { comps?: Record<string, string | true | undefined>; tq?: Record<string, number>; vals?: Record<string, number | string>; def?: string[] };
   units?: { sn: string; comps: Record<string, unknown>; tq: Record<string, number>; at: number }[];
   insp?: { i: number; vals: Record<string, number | string>; def: string[]; ok: boolean; at: number }[];
+  tes?: Record<string, number>;
 }
 export type IsDegisikligi = (x: Order) => Partial<Order>;
 export interface PanelArayuzu {
@@ -239,6 +240,37 @@ export function MarkaPaneli({ api }: PanelOzellikleri) {
         ))}
         {!v.sonSeriler.length ? <p className="tc-ay2-soluk">Henüz markalama yok. İlk seri: <b className="tc-ay2-mono">{sn ?? YOK}</b></p> : null}
       </div>
+    </div>
+  );
+}
+
+// 2012 a: tesviye el işidir. Sayaç tek ve terminalin ortak sayacıdır, kişi payı terminalin pay çipindedir (2003 c); panel işin kontrol
+// listesini tutar. İşaret iş kaydındadır (işaret zamanı); geri alınabilir.
+export function TesviyePaneli({ api }: PanelOzellikleri) {
+  const { ayar, kayit, is } = api;
+  const kontroller = ayar.checks || [];
+  const isaretli = kayit.tes || {};
+  const tamam = kontroller.filter((k) => isaretli[k]).length;
+  const degistir = (k: string) => {
+    const acik = !isaretli[k];
+    api.yap((acik ? 'Kontrol tamam · ' : 'Kontrol geri alındı · ') + k, 'check', acik ? 'run' : 'idle', (x) => {
+      const s = { ...(kayitOf(x).tes || {}) };
+      if (acik) s[k] = Date.now(); else delete s[k];
+      return srYaz(x, { tes: s });
+    });
+  };
+  return (
+    <div className="tc-ay2-panel tc-ay2-tesviye">
+      <div className="tc-ay2-kart">
+        <div className="tc-ay2-kb"><b>Kontrol listesi</b><span className="tc-ay2-ust-yazi tc-ay2-sag">{tamam} / {kontroller.length}</span></div>
+        <div className="tc-ay2-hazirlar">
+          {kontroller.map((k) => (
+            <button key={k} type="button" className="tc-ay2-hazir" data-ton="run" aria-pressed={!!isaretli[k]} onClick={() => degistir(k)}><i aria-hidden="true" />{k}</button>
+          ))}
+        </div>
+        {!kontroller.length ? <p className="tc-ay2-soluk">Kontrol listesi boş · hazırlıkta kontrol ekle.</p> : null}
+      </div>
+      <p className="tc-ay2-soluk">İş toplamı {sayi(is.good)} / {sayi(is.target)} · sayaç tek, payın üstteki pay çipinde.</p>
     </div>
   );
 }
@@ -548,5 +580,5 @@ export function KalitePaneli({ api, kurallar }: PanelOzellikleri) {
 }
 
 export const ISTASYON_PANELLERI: Readonly<Partial<Record<OpType, ComponentType<PanelOzellikleri>>>> = {
-  kalite: KalitePaneli, depo: DepoPaneli, mark: MarkaPaneli, boya: BoyaPaneli, montaj: MontajPaneli,
+  kalite: KalitePaneli, depo: DepoPaneli, mark: MarkaPaneli, boya: BoyaPaneli, montaj: MontajPaneli, tesviye: TesviyePaneli,
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PLAN_YOK_UYARISI, araNumuneSikligi, kalemBitti, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
+  IS_TURLERI, PLAN_YOK_UYARISI, araNumuneSikligi, istasyonAyari, istasyonDenetimi, kalemBitti, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
 } from './kurallar.ts';
 import type { NumuneKurali, Pkg } from './tipler.ts';
 import { takimKullanimi } from './TakimKarti.tsx';
@@ -97,5 +97,16 @@ describe('1307 b kontrol planı görevi', () => {
     expect(planYokUyarisiGerekir(paket({ opType: 'kalite' }))).toBe(false);
     expect(plan(paket({ opType: 'boya' }))).toMatchObject({ ok: false, soft: true, d: 'İsteğe bağlı' });
     expect(planYokUyarisiGerekir(paket({ opType: 'boya' }))).toBe(false);
+  });
+});
+
+// 2012 a, 2026: tesviye iş türü; varsayılan kontrol listesi, boş liste yayını durdurmayan eksiktir.
+describe('tesviye iş türü', () => {
+  const paket = (st: Record<string, unknown>) => ({ id: 'p', opType: 'tesviye', st, target: 10, partNo: 'ORN', part: 'Örnek', no: 'UE-1', rev: 'A' }) as unknown as Pkg;
+  it('varsayılan kontrol listesi ve denetim', () => {
+    expect(IS_TURLERI.tesviye.tab).toBe('Kontrol listesi');
+    expect(istasyonAyari(paket({})).checks).toEqual(['Çapak yok', 'Keskin kenar yok', 'Diş temiz']);
+    expect(istasyonDenetimi(paket({}))).toEqual([{ k: 'st', ok: true, l: 'Kontrol listesi', d: '3 kontrol', soft: true }]);
+    expect(istasyonDenetimi(paket({ checks: [] }))[0]!.ok).toBe(false);
   });
 });

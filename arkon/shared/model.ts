@@ -21,7 +21,7 @@ export interface User { id: Id; name: string; role: Role; wcs?: Id[]; st?: Id | 
 export interface Session { token?: string; user: User; srv?: string }
 
 /* ── tesis yapısı: İş merkezi › İstasyon › Makine ── */
-export type OpType = 'cnc' | 'kalite' | 'depo' | 'mark' | 'boya' | 'montaj';
+export type OpType = 'cnc' | 'kalite' | 'depo' | 'mark' | 'boya' | 'montaj' | 'tesviye';
 export type MachineConn = '' | 'focas' | 'opcua' | 'mtc' | 'modbus' | 'io';
 export interface WorkCenter { id: Id; name: string; note?: string; active?: boolean }
 /** tmi: CORE'daki sayısal istasyon kimliği (sunucu kipinde; 3B model küçük resmi bununla okunur) */
