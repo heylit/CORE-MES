@@ -7,6 +7,7 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import { birakmaHedefi, ELDEN_NOTU, kisiHedefiMi, sepetTasinir, type OkutHedefi } from './okut-akisi.ts';
+import { okutarakSec } from './birakma-secimi.ts';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
 
@@ -61,7 +62,11 @@ export function SepetSeridi({ satirlar }: { satirlar: SepetSatiri[] }) {
 // satırın kalanı sepette kalır (parçalı bırakma). Her satır ayrı kayıttır; biri reddedilirse ötekiler yazılmış kalır ve nedeni söylenir.
 interface Secim { secili: boolean; miktar: string }
 const tamMiktar = (s: SepetSatiri): string => miktarMetni(s.miktar).replace(/\./g, '');
-export function Birakma({ hedef, satirlar, bitti, vazgec }: { hedef: OkutHedefi; satirlar: SepetSatiri[]; bitti: (metin: string) => void; vazgec: () => void }) {
+// `okutma` (1919 a): okutulan etiketin eşleştiği satırlar; ilk okutma "hepsi seçili"yi bırakır, sonrakiler ekler.
+// `gonder`: Kaydet komutu sayacı; arttıkça seçilenler bırakılır.
+export function Birakma({ hedef, satirlar, bitti, vazgec, okutma = null, gonder = 0 }: {
+  hedef: OkutHedefi; satirlar: SepetSatiri[]; bitti: (metin: string) => void; vazgec: () => void; okutma?: { ids: number[]; sira: number } | null; gonder?: number;
+}) {
   const depocu = useIslem('stok.transfer');
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -111,12 +116,29 @@ export function Birakma({ hedef, satirlar, bitti, vazgec }: { hedef: OkutHedefi;
   // Hedef okutulunca form okuyucunun altında açılır; telefonda ekranın dışında kalıp "bir şey olmadı" sanılıyordu.
   const kok = useRef<HTMLFormElement>(null);
   useEffect(() => { kok.current?.scrollIntoView?.({ block: 'start' }); }, []);
+  const okutuldu = useRef(false);
+  useEffect(() => {
+    if (!okutma) return;
+    setSecim((x) => {
+      const onceki = new Set(satirlar.filter((s) => x[s.id]?.secili).map((s) => s.id));
+      const yeni = okutarakSec({ secili: onceki, okutuldu: okutuldu.current }, okutma.ids).secili;
+      return Object.fromEntries(satirlar.map((s) => [s.id, { secili: yeni.has(s.id), miktar: x[s.id]?.miktar ?? tamMiktar(s) }]));
+    });
+    okutuldu.current = true;
+  }, [okutma, satirlar]);
+  const gonderilen = useRef(gonder);
+  useEffect(() => {
+    if (gonder === gonderilen.current) return;
+    gonderilen.current = gonder;
+    if (secilen.length > 0 && !birak.isPending) birak.mutate();
+  }, [gonder, secilen.length, birak]);
   return (
     <form ref={kok} className="tc-stok-form tc-stok-birakma" onSubmit={(o) => { o.preventDefault(); if (secilen.length > 0) birak.mutate(); }}>
       <div className="tc-stok-birakma-hedef">
         <Simge ad="pin" />
         <div><strong>Buraya bırak: {hedefMetni(hedef)}</strong>{kisiHedefiMi(hedef) && <span className="tc-stok-not">{ELDEN_NOTU(hedef.alici.ad)}</span>}</div>
       </div>
+      {satirlar.length > 1 && <p className="tc-stok-not">Etiket okutunca yalnız okutulanlar seçili kalır.</p>}
       <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Bırakılacaklar">
         {satirlar.map((s) => {
           const x = secim[s.id] ?? { secili: false, miktar: '' };
