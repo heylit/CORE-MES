@@ -322,5 +322,6 @@ describe('giriş ekranı sloganı (2041)', () => {
     sunucuKur();
     kur();
     expect(await screen.findByText('Çeliği atölye keser, tartışmayı CORE. Sıfır tahmin.')).toBeTruthy();
+    expect(screen.getByText('Atölyenin işletim sistemi')).toBeTruthy();
   });
 });

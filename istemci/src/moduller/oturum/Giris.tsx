@@ -241,7 +241,7 @@ export function Giris() {
             <span className="tc-giris-ad">{markaAdi}</span>
           </div>
           <p className="tc-giris-baslik-buyuk">{slogan(kurumAdi)}</p>
-          <p className="tc-giris-slogan">Üretim planlama ve izlenebilirlik</p>
+          <p className="tc-giris-slogan">Atölyenin işletim sistemi</p>
           <ul className="tc-giris-ozellikler">
             {TANITIM.map((o) => (
               <li key={o.simge}><span className="tc-giris-ozellik-simge"><Simge ad={o.simge} /></span><span>{o.metin}</span></li>
