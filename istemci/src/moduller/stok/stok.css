@@ -494,3 +494,19 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-sayim-son li { border-left: var(--b-1) solid var(--run); padding-left: var(--b-2); overflow-wrap: anywhere; }
 .tc-stok-sayim-son li[data-ton="uyari"] { border-left-color: var(--hold); }
 .tc-stok-sayim-son li[data-ton="hata"] { border-left-color: var(--stop); }
+/* Okut modları (1912): seçili mod büyük durur ki yanlış modda okutulmasın; çipler dar ekranda alt satıra iner. */
+.tc-stok-mod { display: grid; gap: var(--b-2); }
+.tc-stok-mod-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); border-bottom: var(--cizgi) solid var(--edge); }
+.tc-stok-mod-cip { display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma-ana); padding: 0 var(--b-3); border: 0;
+  border-bottom: var(--b-1) solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.tc-stok-mod-cip[aria-checked="true"] { color: var(--ink); border-bottom-color: var(--hazard); }
+.tc-stok-mod-cip:focus-visible { outline: var(--cizgi) solid var(--hazard); outline-offset: calc(var(--b-1) * -1); }
+.tc-stok-mod-bilgi { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-stok-mod-bilgi strong { color: var(--ink); font-size: var(--yazi-l); }
+/* Komut kartı (1909): hücreler basılınca da kesilmez; QR açık zeminde koyu basılır (ortak Qr). */
+.tc-stok-komut-karti { display: grid; gap: var(--b-4); }
+.tc-stok-komutlar { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: var(--b-3); margin: 0; padding: 0; list-style: none; }
+.tc-stok-komutlar-sik { grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); }
+.tc-stok-komut { display: grid; justify-items: center; gap: var(--b-1); padding: var(--b-3); border: var(--cizgi) solid var(--edge); border-radius: var(--yari-2);
+  text-align: center; break-inside: avoid; min-inline-size: 0; }
+.tc-stok-komut-kod { font-size: var(--yazi-xs); color: var(--muted); overflow-wrap: anywhere; }

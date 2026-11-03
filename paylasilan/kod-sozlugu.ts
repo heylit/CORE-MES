@@ -3,14 +3,33 @@
 
 // Raf etiketi rafın kendisini gösterir (#116); stok yeri göz olduğundan raf kodu konum kodu değildir, öneki ayrıdır.
 // Refakat partisi (emir + depodan verilen lot) kendi kartını taşır; kart emri değil partiyi gösterdiği için öneki emirden ayrıdır.
-export const KOD_ONEKI = { konum: 'LOC', malzeme: 'MLZ', lot: 'LOT', 'uretim-emri': 'UE', raf: 'RAF', 'refakat-partisi': 'RP' } as const;
+// Komut (1909, 1912) bir kayıt göstermez: ekrandaki düğmenin barkodudur (komut kartı). Kaydı sahibi modül değil, okutulan ekran yorumlar.
+export const KOD_ONEKI = { konum: 'LOC', malzeme: 'MLZ', lot: 'LOT', 'uretim-emri': 'UE', raf: 'RAF', 'refakat-partisi': 'RP', komut: 'CMD' } as const;
 
 // uretim-emri iki biçimde gelir: refakat kartı QR'ı kimliği (UE:4512), elle yazılan ya da eski etiket emir numarasını (UE-004512) taşır.
 export type KodTuru =
   | { tur: 'konum' | 'malzeme' | 'lot' | 'raf'; deger: string }
   | { tur: 'uretim-emri'; deger: string; bicim: 'kimlik' | 'no' }
   | { tur: 'refakat-partisi'; deger: string }
+  | { tur: 'komut'; komut: Komut }
   | { tur: 'bilinmiyor'; deger: string };
+
+// Komut kartındaki komutlar. Miktar tam sayıdır (karttaki sabit değerler); mod adı ekranın bildiği modlardan biri olmalıdır, burada
+// yalnız biçimi denetlenir.
+export const SABIT_KOMUTLAR = ['KAYDET', 'GERI-AL', 'EVET', 'VAZGEC', 'ARTI', 'EKSI'] as const;
+export type SabitKomut = (typeof SABIT_KOMUTLAR)[number];
+export type Komut = { ad: SabitKomut } | { ad: 'MIKTAR'; miktar: number } | { ad: 'MOD'; mod: string };
+const MIKTAR = /^MIKTAR:(\d{1,6})$/;
+const MOD = /^MOD:([A-Z]{2,20})$/;
+function komutCoz(govde: string): Komut | null {
+  if ((SABIT_KOMUTLAR as readonly string[]).includes(govde)) return { ad: govde as SabitKomut };
+  const m = MIKTAR.exec(govde);
+  if (m) return { ad: 'MIKTAR', miktar: Number(m[1]) };
+  const d = MOD.exec(govde);
+  return d ? { ad: 'MOD', mod: d[1]! } : null;
+}
+export const komutKodu = (k: Komut): string =>
+  `${KOD_ONEKI.komut}:${k.ad === 'MIKTAR' ? `MIKTAR:${k.miktar}` : k.ad === 'MOD' ? `MOD:${k.mod}` : k.ad}`;
 
 const KIMLIK = /^\d{1,9}$/;
 const EMIR_NO = /^UE-\d+$/;
@@ -43,6 +62,7 @@ function cozumle(ham: string): KodTuru {
   if (onek === KOD_ONEKI.lot && govde !== '') return { tur: 'lot', deger: govde };
   if (onek === KOD_ONEKI.raf && govde !== '') return { tur: 'raf', deger: govde };
   if (onek === KOD_ONEKI['refakat-partisi'] && KIMLIK.test(govde)) return { tur: 'refakat-partisi', deger: govde };
+  if (onek === KOD_ONEKI.komut) { const k = komutCoz(govde); if (k) return { tur: 'komut', komut: k }; }
   if (onek === KOD_ONEKI['uretim-emri'] && KIMLIK.test(govde)) return { tur: 'uretim-emri', deger: govde, bicim: 'kimlik' };
   if ((onek === null || onek === KOD_ONEKI['uretim-emri']) && EMIR_NO.test(govde)) return { tur: 'uretim-emri', deger: govde, bicim: 'no' };
   if (onek === null && LOT_NO.test(govde)) return { tur: 'lot', deger: govde };

@@ -18,5 +18,5 @@ export function lotEslesmesi(girdiler: readonly IsGirdisi[], c: OkutCozCevabi, i
   const burada = c.yerler.some((y) => y.istasyonId === istasyonId && y.partiId === c.parti!.id);
   return burada
     ? { ton: 'run', metin: `Doğru malzeme: ${ad} · lot ${c.parti.etiket}`, malzemeId: c.malzeme.id }
-    : { ton: 'hold', metin: `Doğru malzeme: ${ad} · lot ${c.parti.etiket} bu istasyonda görünmüyor; Malzeme · Teslim'den al`, malzemeId: c.malzeme.id };
+    : { ton: 'hold', metin: `Doğru malzeme: ${ad} · lot ${c.parti.etiket} bu istasyonda görünmüyor; Okut panelinden al`, malzemeId: c.malzeme.id };
 }

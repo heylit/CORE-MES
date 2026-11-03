@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { KodOkuyucu } from './KodOkuyucu.tsx';
 import { Pencere } from './Pencere.tsx';
+import { useOkutmaGecmisi } from './okutma-geribildirimi.ts';
+import { useOkuyucuKomutu, type KomutIsleyici } from './okuyucu-komutu.ts';
 
 describe('KodOkuyucu', () => {
   it('el okuyucunun yazdigini Enter ile bosluksuz bildirir, bos girdiyi bildirmez', () => {
@@ -146,6 +148,72 @@ describe('KodOkuyucu', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));
       await screen.findByRole('status');
       expect(document.activeElement).toBe(screen.getByLabelText('Kod'));
+    });
+  });
+
+  describe('komut barkodu (1909)', () => {
+    function Ekran({ okundu, komut }: { okundu: (k: string) => void; komut?: KomutIsleyici }) {
+      const g = useOkutmaGecmisi();
+      return <KodOkuyucu okundu={okundu} geribildirim={g} {...(komut ? { komut } : {})} />;
+    }
+    const okut = (kod: string) => {
+      const alan = screen.getByLabelText('Kod');
+      fireEvent.change(alan, { target: { value: kod } });
+      fireEvent.submit(alan.closest('form')!);
+    };
+
+    it('komut ekranin isleyicisine gider, okunduya gitmez; sonucu seritte gorunur', () => {
+      const okundu = vi.fn();
+      const komut = vi.fn<KomutIsleyici>(() => ({ ton: 'tamam', metin: 'Kaydedildi' }));
+      render(<Ekran okundu={okundu} komut={komut} />);
+      okut('CMDŞKAYDET');
+      expect(komut).toHaveBeenCalledWith({ ad: 'KAYDET' });
+      expect(okundu).not.toHaveBeenCalled();
+      expect(screen.getByText(/Kaydedildi/)).toBeTruthy();
+      okut('LOC:A1');
+      expect(okundu).toHaveBeenCalledWith('LOC:A1');
+    });
+
+    it('ekranda olmayan komut uyari olarak yazilir; isleyici yoksa komut siradan kod gibi gider', () => {
+      const okundu = vi.fn();
+      const { unmount } = render(<Ekran okundu={okundu} komut={() => null} />);
+      okut('CMD:EVET');
+      expect(screen.getByText(/Bu ekranda bu komut yok/)).toBeTruthy();
+      expect(okundu).not.toHaveBeenCalled();
+      unmount();
+      render(<Ekran okundu={okundu} />);
+      okut('CMD:EVET');
+      expect(okundu).toHaveBeenCalledWith('CMD:EVET');
+    });
+
+    it('okuyucunun disinda pencere aciksa alan odaksizken tuslari yakalamaz', () => {
+      vi.stubGlobal('matchMedia', () => ({ matches: false }));
+      const okundu = vi.fn();
+      render(<><KodOkuyucu okundu={okundu} dokunmatikteOdakYok /><Pencere acik kapat={() => undefined} baslik="Onay"><button type="button">Vazgeç</button></Pencere></>);
+      const dugme = screen.getByRole('button', { name: 'Vazgeç' });
+      for (const t of 'LOT:12') fireEvent.keyDown(dugme, { key: t });
+      fireEvent.keyDown(dugme, { key: 'Enter' });
+      expect(okundu).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+  });
+
+  describe('useOkuyucuKomutu', () => {
+    function Onay({ isle }: { isle: (k: unknown) => boolean }) {
+      useOkuyucuKomutu(true, isle);
+      return <button type="button" onClick={() => isle('tik')}>Vazgeç</button>;
+    }
+    it('hizli gelen komut islenir ve Enter odaktaki dugmeye basmaz; elle Enter dugmeye basar', () => {
+      const isle = vi.fn(() => true);
+      render(<Onay isle={isle} />);
+      const dugme = screen.getByRole('button', { name: 'Vazgeç' });
+      dugme.focus();
+      for (const t of 'CMD:EVET') fireEvent.keyDown(dugme, { key: t, timeStamp: 1 });
+      expect(fireEvent.keyDown(dugme, { key: 'Enter' })).toBe(false);
+      expect(isle).toHaveBeenCalledWith({ ad: 'EVET' });
+      vi.spyOn(performance, 'now').mockReturnValue(10_000);
+      expect(fireEvent.keyDown(dugme, { key: 'Enter' })).toBe(true);
+      vi.restoreAllMocks();
     });
   });
 });

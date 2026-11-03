@@ -341,7 +341,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     // Hazırlık: bekleyen istekler ve açık listeler birlikte.
     hazirlik: islemler.includes('stok.transfer') || islemler.includes('stok.toplama')
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
-    okut: null, depo: null, 'okutarak-sayim': null,
+    okut: null, depo: null, 'okutarak-sayim': null, 'komut-karti': null,
     // Depo sevk (960): sayaç yok; liste sevkiyatın tetiklediği kalemlerdir, kabuk rozet göstermez.
     'depo-sevk': null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
@@ -3300,7 +3300,7 @@ export async function teslimGonder(db: Db, k: Kullanici, g: TeslimGonderGovdesi,
     if (hedefIstasyonId !== null) {
       const fiil = alici === null ? 'bırakıldı' : 'elden teslim edildi';
       await bildirimGonder(db, {
-        tur: 'stok.birakildi', baslik: `${t.no}: malzeme ${fiil}`, metin: `${t.miktar} ${fiil} (${t.no}). Yanlışsa vardiya sonuna kadar itiraz edin: Malzeme · Teslim > Teslim et.`,
+        tur: 'stok.birakildi', baslik: `${t.no}: malzeme ${fiil}`, metin: `${t.miktar} ${fiil} (${t.no}). Yanlışsa vardiya sonuna kadar itiraz edin: Okut > Teslim et.`,
         kisiler: (await istasyondakiKisiler(db, hedefIstasyonId)).map((x) => x.kisiId), haric: k.id, kaynakKimlik: t.no,
       });
     }
@@ -3594,7 +3594,7 @@ export async function okutarakAl(db: Db, k: Kullanici, g: OkutarakAlGovdesi): Pr
   const alan = (await kisiAdlari(db, [k.id])).get(k.id) ?? null;
   await bildirimGonder(db, {
     tur: 'stok.okutarak-alindi', baslik: `${yer.ad}: ${o.ad ?? o.kod} okutarak alındı`.slice(0, 200),
-    metin: `${miktar}${o.birim ? ` ${o.birim}` : ''} ${hedefIstasyon.ad} istasyonuna alındı${alan ? ` (${alan})` : ''}, ${t.no}. İtiraz: Malzeme · Teslim > Teslim et.`,
+    metin: `${miktar}${o.birim ? ` ${o.birim}` : ''} ${hedefIstasyon.ad} istasyonuna alındı${alan ? ` (${alan})` : ''}, ${t.no}. İtiraz: Okut > Teslim et.`,
     kisiler: (await istasyondakiKisiler(db, yer.istasyonId)).map((x) => x.kisiId), haric: k.id, kaynakKimlik: t.no,
   });
   return teslimOku(db, id);
@@ -3650,7 +3650,7 @@ export async function kartlaAl(db: Db, k: Kullanici, id: number, g: KartlaAlGovd
     const alan = (await kisiAdlari(db, [k.id])).get(k.id) ?? null;
     await bildirimGonder(db, {
       tur: 'stok.okutarak-alindi', baslik: `${satir.konumAd ?? satir.konumKod}: ${satir.malzemeAd ?? satir.malzemeKod ?? 'malzeme'} kartla alındı`.slice(0, 200),
-      metin: `${miktar}${satir.birim ? ` ${satir.birim}` : ''} ${hedefIstasyon.ad} istasyonuna alındı${alan ? ` (${alan})` : ''}, ${t.no}. İtiraz: Malzeme · Teslim > Teslim et.`,
+      metin: `${miktar}${satir.birim ? ` ${satir.birim}` : ''} ${hedefIstasyon.ad} istasyonuna alındı${alan ? ` (${alan})` : ''}, ${t.no}. İtiraz: Okut > Teslim et.`,
       kisiler: (await istasyondakiKisiler(db, satir.istasyonId)).map((x) => x.kisiId), haric: k.id, kaynakKimlik: t.no,
     });
   }

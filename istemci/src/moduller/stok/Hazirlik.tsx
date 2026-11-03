@@ -5,7 +5,10 @@ import type {
   AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Tablo, useOkutmaGecmisi, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import {
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Tablo, useOkutmaGecmisi,
+  type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
+} from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -318,7 +321,9 @@ function DenetimRozeti({ ad, d }: { ad: string; d: Denetim }) {
 
 // 1907 a: okutma isteğe bağlıdır; okutulan göz ve lot denetlenir, yanlışı Toplandı'yı kapatır. Okuyucu alan seçmeden de okur.
 // Son okutmalar listenin ekranındadır (`gecmis`): adım değişince şerit silinmez.
-function SiradakiAdim({ id, t, gecmis }: { id: number; t: ToplamaAyrintiCevabi; gecmis: OkutmaGecmisi }) {
+// Komut barkodları (1909): Kaydet Toplandı'dır; Miktar, Artı ve Eksi alınan miktarı yazar; Geri al okutma denetimini siler.
+// Bu ekranın bilmediği komut `ustKomut`a gider (Okut panelinin Topla modu, 1912).
+function SiradakiAdim({ id, t, gecmis, ustKomut }: { id: number; t: ToplamaAyrintiCevabi; gecmis: OkutmaGecmisi; ustKomut?: KomutIsleyici }) {
   const sira = t.adimlar.find((a) => !a.toplandi)!;
   const [miktar, setMiktar] = useState(miktarMetni(sira.miktar).replace(/\./g, ''));
   const [denetim, setDenetim] = useState<ToplamaDenetimi>(DENETIM_BASI);
@@ -343,6 +348,26 @@ function SiradakiAdim({ id, t, gecmis }: { id: number; t: ToplamaAyrintiCevabi; 
   }, 'Toplandı.');
   const yanlis = okutmaEngeli(denetim);
   const m = miktarGirdisi(miktar);
+  const miktarGecerli = Number(m) > 0 || belirsizMiktarVar(m);
+  const toplandi = () => topla.komut.mutate({ adimId: sira.id, surum: t.toplama.surum, ...(Number(m) !== Number(sira.miktar) ? { miktar: m } : {}) });
+  const komut: KomutIsleyici = (k) => {
+    switch (k.ad) {
+      case 'KAYDET':
+        if (yanlis) return { ton: 'hata', metin: 'Okunan kod adımla eşleşmiyor; doğrusunu okut' };
+        if (!miktarGecerli) return { ton: 'uyari', metin: 'Alınan miktarı yaz' };
+        if (topla.komut.isPending) return { ton: 'uyari', metin: 'Önceki kayıt sürüyor' };
+        toplandi();
+        return { ton: 'tamam', metin: `Toplandı: ${sira.konumKod}` };
+      case 'MIKTAR': setMiktar(String(k.miktar)); return { ton: 'tamam', metin: `Alınan miktar ${k.miktar}` };
+      case 'ARTI': case 'EKSI': {
+        const yeni = Math.max(0, (Number(m) || 0) + (k.ad === 'ARTI' ? 1 : -1));
+        setMiktar(String(yeni));
+        return { ton: 'tamam', metin: `Alınan miktar ${yeni}` };
+      }
+      case 'GERI-AL': setDenetim(DENETIM_BASI); return { ton: 'tamam', metin: 'Okutma denetimi silindi' };
+      case 'EVET': case 'VAZGEC': case 'MOD': return ustKomut?.(k) ?? null;
+    }
+  };
   return (
     <Kart baslik={`Sıradaki adım ${sira.sira}`}>
       <div className="tc-stok-form">
@@ -353,14 +378,13 @@ function SiradakiAdim({ id, t, gecmis }: { id: number; t: ToplamaAyrintiCevabi; 
         </div>
         <p className="tc-stok-bilgi" role="status" aria-label="Okutma denetimi"><DenetimRozeti ad="Göz" d={denetim.goz} /><DenetimRozeti ad="Lot" d={denetim.lot} /></p>
         <div className="tc-stok-iki">
-          <KodOkuyucu sik dokunmatikteOdakYok okundu={okundu} bekliyor={lotCoz.isPending} geribildirim={gecmis}
+          <KodOkuyucu sik dokunmatikteOdakYok okundu={okundu} bekliyor={lotCoz.isPending} geribildirim={gecmis} komut={komut}
             ipucu="İsteğe bağlı: önce göz, sonra lot ya da malzeme etiketi. Okutulan kod denetlenir." />
           <Girdi etiket="Alınan miktar" inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} ipucu="Azı kısmi toplamadır; eksik listede görünür." />
         </div>
         {yanlis && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Okunan kod bu adımın gözüyle ya da lotuyla eşleşmiyor; doğrusunu okut.</p>}
         <div className="tc-stok-sag">
-          <Dugme tur="birincil" simge="check" disabled={yanlis || !(Number(m) > 0 || belirsizMiktarVar(m))} yukleniyor={topla.komut.isPending}
-            onClick={() => topla.komut.mutate({ adimId: sira.id, surum: t.toplama.surum, ...(Number(m) !== Number(sira.miktar) ? { miktar: m } : {}) })}>Toplandı</Dugme>
+          <Dugme tur="birincil" simge="check" disabled={yanlis || !miktarGecerli} yukleniyor={topla.komut.isPending} onClick={toplandi}>Toplandı</Dugme>
         </div>
       </div>
       {topla.onayPenceresi}
@@ -417,6 +441,58 @@ function ListeAyrintisi({ id }: { id: number }) {
       )}
       {kapat.onayPenceresi}
     </section>
+  );
+}
+
+// Okut panelinin Topla modu (1912): açık listenin sıradaki adımı panelde. Tek açık liste varsa o açılır; liste kapatma ve rota
+// Hazırlık sayfasında kalır.
+export function ToplaModu({ ustKomut }: { ustKomut?: KomutIsleyici }) {
+  const yetkili = useIslem('stok.toplama');
+  const [secili, setSecili] = useState<number | null>(null);
+  const l = useQuery({ queryKey: anahtarlar.liste('toplamalar', {}), queryFn: () => api.get<ToplamalarCevabi>('/stok/toplamalar?sayfaBoyu=20'), enabled: yetkili });
+  if (!yetkili) return <DurumKutusu durum="hata" mesaj="Toplama için stok toplama yetkisi gerekir." />;
+  if (l.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (l.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />;
+  const acik = l.data.satirlar.filter((x) => x.durum === 'topluyor');
+  const id = secili ?? (acik.length === 1 ? acik[0]!.id : null);
+  if (acik.length === 0) return <DurumKutusu durum="bos" mesaj="Açık hazırlık listesi yok. Liste Hazırlık sayfasında açılır." />;
+  if (id === null) {
+    return (
+      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Açık hazırlık listeleri">
+        {acik.map((x) => (
+          <li key={x.id} className="tc-stok-is">
+            <div><strong className="tc-stok-mono">{x.no}</strong><span>{x.ad} · {x.toplanan}/{x.adimSayisi} adım</span></div>
+            <Dugme tur="birincil" simge="truck" onClick={() => setSecili(x.id)}>Topla</Dugme>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <>
+      <div className="tc-stok-eylem">
+        {acik.length > 1 && <Dugme simge="back" onClick={() => setSecili(null)}>Listeler</Dugme>}
+        <Link to={`/stok/hazirlik/${id}`}>Listeyi sayfada aç</Link>
+      </div>
+      <PaneldeListe key={id} id={id} {...(ustKomut ? { ustKomut } : {})} />
+    </>
+  );
+}
+
+function PaneldeListe({ id, ustKomut }: { id: number; ustKomut?: KomutIsleyici }) {
+  const t = useQuery({ queryKey: anahtarlar.ayrinti('toplama', id), queryFn: () => api.get<ToplamaAyrintiCevabi>(`/stok/toplamalar/${id}`) });
+  const gecmis = useOkutmaGecmisi();
+  if (t.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (t.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(t.error)} yenile={() => void t.refetch()} />;
+  const { toplama, adimlar } = t.data;
+  const sira = adimlar.find((a) => !a.toplandi);
+  return (
+    <>
+      <p className="tc-stok-not"><strong className="tc-stok-mono">{toplama.no}</strong> · {toplama.ad} · {toplama.toplanan} / {toplama.adimSayisi} adım</p>
+      {toplama.durum === 'topluyor' && sira
+        ? <SiradakiAdim key={sira.id} id={id} t={t.data} gecmis={gecmis} {...(ustKomut ? { ustKomut } : {})} />
+        : <DurumKutusu durum="bos" mesaj="Bütün adımlar toplandı; listeyi Hazırlık sayfasında bitir." />}
+    </>
   );
 }
 

@@ -77,8 +77,8 @@ function ciz(kullanici: Kullanici, yollar: Record<string, Isleyici>, kutu: Tesli
 }
 
 async function panelAc() {
-  fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-  return screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
+  fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+  return screen.findByRole('dialog', { name: 'Okut' });
 }
 async function okut(kap: HTMLElement, kod: string) {
   fireEvent.change(within(kap).getAllByLabelText(/^Kod/)[0]!, { target: { value: kod } });
@@ -397,7 +397,7 @@ describe('Sepet süzgeçleri (soru 89, 95 a)', () => {
       'GET /stok/sepet': () => json(200, { satirlar: [SATIR] }),
       'POST /stok/sepet/satirlar/5/sil': () => json(200, { satirlar: [] }),
     }, KUTU, '/stok/okut?mod=sepet');
-    const panel = await screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
+    const panel = await screen.findByRole('dialog', { name: 'Okut' });
     expect(await screen.findByText('Sayfa')).toBeTruthy();
     // Depo sepeti isteği kamerayla açılır; Elimdekiler depo sepetiyle açılır. Kutucuk "Sayfa" yazısından sonra yüklenebilir; düğme beklenir.
     fireEvent.click(await within(panel).findByRole('button', { name: /^Elimdekiler/ }));
