@@ -1,3 +1,4 @@
+import { randomBytes, randomInt } from 'node:crypto';
 import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
@@ -10,7 +11,7 @@ import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, KisiSecim
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
-  cikisliAktiflikReddi, cikisPasifiReddi, ozlukDuzenlemeReddi, ozlukItmeReddi,
+  cikisliAktiflikReddi, cikisPasifiReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
 } from './kurallar.ts';
 import type { KisiAlanlari, Ret } from './kurallar.ts';
 import { parolaDogrula, parolaOzetle } from './parola.ts';
@@ -20,7 +21,7 @@ import {
   eksikBilgiSayilari, cikisiGelenKisiler, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
 import type { KisiSatiri, RolSatiri } from './sorgular.ts';
-import { kisiSecimAra as kisiSecimSatirlari } from './sorgular.ts';
+import { ikRolSatirlari, kisiSecimAra as kisiSecimSatirlari, kokluKullaniciAdlari } from './sorgular.ts';
 
 const SON_ROL_KISITI = 'kisi_giris_rol_ister';
 
@@ -428,6 +429,38 @@ export async function hesapAc(
   // Rol, hesapla aynı transaction'da yazılır: rolsüz giriş hesabı kalıcı olamaz (ertelenmiş kısıt commit'te denetler).
   await rolEkle(db, kisiId, girdi.rolId);
   return kisiyiGetir(db, kisiId, bayrakGorur);
+}
+
+// 1925 a: İK'nın yeni personele açtığı hesap. Kullanıcı adı addan kurulur (doluysa sonuna sayı), giriş PIN'ledir: geçici PIN sistemce
+// üretilir ve yalnız bu cevapla bir kez döner; kişi ilk girişte kendi PIN'ini belirler. Parola rastgeledir ve kimseye verilmez (hesap
+// PIN'le girer). Rol, İK'nın verebileceği rollerden olmalıdır. Yetki (ik.hesap-ac) İK ucunda denetlenir.
+export interface IkHesabi { kullaniciAdi: string; pin: string }
+
+export async function ikRolSecenekleri(db: Db): Promise<{ id: number; kod: string; ad: string }[]> {
+  return (await ikRolSatirlari(db)).filter(ikRolVerebilirMi).map((r) => ({ id: r.id, kod: r.kod, ad: r.ad }));
+}
+
+export async function ikHesabiAc(db: Db, kisiId: number, rolId: number): Promise<IkHesabi> {
+  await surumDenetle(db, kisiId, null);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  if (hedef.giris_var) throw cakisma(ILETILER.girisVar);
+  const rol = (await ikRolSatirlari(db)).find((r) => r.id === rolId);
+  if (rol === undefined) throw bulunamadi(ILETILER.rolBulunamadi);
+  if (!ikRolVerebilirMi(rol)) throw yetkiYok(ILETILER.ikRolVeremez);
+  const kok = kullaniciAdiKoku(hedef.ad) || `kisi${kisiId}`;
+  const kullaniciAdi = bosKullaniciAdi(kok, await kokluKullaniciAdlari(db, kok));
+  const pin = rastgelePin(() => randomInt(10));
+  try {
+    if (!(await hesapYaz(db, kisiId, kullaniciAdi, await parolaOzetle(randomBytes(24).toString('base64url'))))) throw cakisma(ILETILER.girisVar);
+  } catch (hata) {
+    if (hata instanceof UygulamaHatasi) throw hata;
+    if (kisitIhlali(hata)?.hata.kod === 'CAKISMA') throw cakisma(ILETILER.kullaniciAdiVar);
+    throw hata;
+  }
+  await rolEkle(db, kisiId, rolId);
+  if (!(await pinYaz(db, kisiId, await parolaOzetle(pin), true))) throw gecersiz(ILETILER.girisYok);
+  return { kullaniciAdi, pin };
 }
 
 function yeniParolaDenetle(yeniParola: string): void {

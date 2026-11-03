@@ -387,6 +387,10 @@ export async function kisininPersonelKarti(db: Db, kisiId: number): Promise<sorg
   return (await sorgu.personelKartlari(db)).find((k) => k.kisiId === kisiId) ?? null;
 }
 
+export function etkinPersonelKartlari(db: Db): Promise<sorgu.PersonelKartSatiri[]> {
+  return sorgu.personelKartlari(db);
+}
+
 export async function personelKartiVer(db: Db, kaydeden: number, kisiId: number, kartNo: string): Promise<sorgu.PersonelKartSatiri> {
   const no = personelKartNoDuzelt(kartNo);
   if (no === null) throw new UygulamaHatasi('DOGRULAMA', 'Kart numarası okunamadı; kartı yeniden okutun.', { alan: 'kartNo' });

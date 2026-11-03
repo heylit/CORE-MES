@@ -47,6 +47,7 @@ export const ILETILER = {
   kullaniciAdiVar: 'Bu kullanıcı adı kullanılıyor.',
   kisiYok: 'Kişi bulunamadı.',
   rolBulunamadi: 'Rol bulunamadı.',
+  ikRolVeremez: 'Bu rol yetki dağıtan işlem taşıdığı için İK tarafından verilemez; rolü Personel\'de rol yöneten verir.',
   rolYonetimiYetkisiz: 'Rol atamak ve almak için rol yönetme yetkisi gerekir.',
   matrisYetkisiz: 'Rol yetkilerini yalnızca tüm yetkileri veren role sahip kişi değiştirebilir.',
   bayrakliMatris: 'Tüm yetkileri veren rol her işleme sahiptir; yetkileri tek tek değiştirilmez.',
@@ -243,4 +244,45 @@ export function ozlukItmeReddi(girdi: { hedefBayrakli: boolean; aktorBayrakli: b
 // Çıkışla pasife almada son bayraklı kullanıcı korunur (pasifeAlmaReddi ile aynı sayım); aktör yoktur, kendi kendine kuralı uygulanmaz.
 export function cikisPasifiReddi(girdi: { hedefSayiliyor: boolean; kalanBayrakli: number }): boolean {
   return girdi.hedefSayiliyor && girdi.kalanBayrakli < 1;
+}
+
+// 1925 a: İK'nın açtığı hesaba verebileceği rol. Tüm yetkileri veren rol ve yetki dağıtan işlem taşıyan rol İK'ya kapalıdır:
+// İK kendine ya da başkasına rol yönetme, parola değiştirme ya da yeni hesap açma yetkisi veremez.
+export const IK_VEREMEZ_ISLEMLER = ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'ik.hesap-ac'] as const satisfies readonly Islem[];
+
+export function ikRolVerebilirMi(rol: { yonetici: boolean; islemler: readonly unknown[] }): boolean {
+  return !rol.yonetici && !IK_VEREMEZ_ISLEMLER.some((islem) => rol.islemler.includes(islem));
+}
+
+const TURKCE: Readonly<Record<string, string>> = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' };
+
+// Addan kullanıcı adı kökü (Personel'in hesap penceresindeki öneriyle aynı kural); 3 karakterden kısaysa boş.
+export function kullaniciAdiKoku(ad: string): string {
+  const kok = ad
+    .toLocaleLowerCase('tr')
+    .replace(/[çğıöşü]/g, (h) => TURKCE[h] ?? h)
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 40)
+    .replace(/\.+$/, '');
+  return kok.length >= 3 ? kok : '';
+}
+
+// Kullanılan adlar arasında ilk boş aday: kök, sonra kök2, kök3... (40 karakteri aşmaz).
+export function bosKullaniciAdi(kok: string, kullanilan: ReadonlySet<string>): string {
+  for (let sira = 1; ; sira += 1) {
+    const ek = sira === 1 ? '' : String(sira);
+    const aday = `${kok.slice(0, 40 - ek.length).replace(/\.+$/, '')}${ek}`;
+    if (!kullanilan.has(aday)) return aday;
+  }
+}
+
+// Sistemin verdiği geçici PIN; PIN kuralını (tekrar, sıra) geçene kadar yeniden çekilir.
+export function rastgelePin(rakam: () => number): string {
+  for (;;) {
+    const pin = Array.from({ length: PIN_UZUNLUK }, () => String(rakam())).join('');
+    if (pinHatasi(pin) === null) return pin;
+  }
 }

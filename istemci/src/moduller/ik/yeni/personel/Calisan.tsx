@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { IkIstasyonUyumsuzluklariCevabi } from '#paylasilan/sozlesme/ik.ts';
 import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
 import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { DurumKutusu } from '../../../../ortak/arayuz/DurumKutusu.tsx';
@@ -8,6 +10,7 @@ import { Rozet } from '../../../../ortak/arayuz/Rozet.tsx';
 import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Sekmeler, type Sekme } from '../../../../ortak/arayuz/Sekmeler.tsx';
 import { useSayfaKomutlari } from '../../../../ortak/rota/sayfa-komutlari.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { DurumCipi } from '../ortak/DurumCipi.tsx';
 import type { Personel } from '../tipler.ts';
@@ -45,6 +48,10 @@ export function Calisan(o: IkEkranOzellikleri) {
   const [belgeAcik, belgeAcikYaz] = useState(false);
   const [siliyor, siliyorYaz] = useState(false);
   const gun = bugun();
+  // 1928 a: asıl istasyonu İK kaydının iş merkezinde değilse kart uyarır; düzeltme İş bölümünde ya da İstasyonlar'dadır.
+  const uyumsuzluk = useQuery({
+    queryKey: ['ik', 'yeni', 'istasyon-uyumsuzluklari'], queryFn: () => api.get<IkIstasyonUyumsuzluklariCevabi>('/ik/istasyon-uyumsuzluklari'),
+  }).data?.uyumsuzluklar.find((u) => u.personel === kimlik);
 
   // Başka kişiye geçilince Özet'ten başlanır (bugünkü davranış).
   if (kimlik !== sonKimlik) { sonKimlikYaz(kimlik); sekmeYaz('ozet'); }
@@ -96,6 +103,11 @@ export function Calisan(o: IkEkranOzellikleri) {
             {departman && <Rozet ton="pasif">{departman}</Rozet>}
             <span className="tc-ikp-sicil">{`Sicil ${p.sicilNo || '—'}`}</span>
             <DurumCipi metin={personelDurumu(p, depo.tur('leave'), gun)} ton={DURUM_TONU[personelDurumu(p, depo.tur('leave'), gun)]} />
+            {uyumsuzluk && (
+              <span title={`Asıl istasyonu ${uyumsuzluk.istasyon}${uyumsuzluk.istasyonIsMerkezi ? `, ${uyumsuzluk.istasyonIsMerkezi} iş merkezinde` : ''}; kartın iş merkezi farklı. İş bölümünden ya da İstasyonlar'dan düzeltin.`}>
+                <Rozet ton="uyari">İstasyon iş merkezi farklı</Rozet>
+              </span>
+            )}
           </span>
         )}
         birincil={yetki.izinYaz || yetki.izinTalep ? { etiket: 'İzin talebi', simge: 'flag', yap: () => { izinAcikYaz(true); } } : undefined}

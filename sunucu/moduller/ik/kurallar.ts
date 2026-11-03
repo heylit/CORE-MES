@@ -797,3 +797,15 @@ export function yeniPersonelKisiAdi(kayitliVar: boolean, yeni: Govde, gun: strin
 export const YENI_KISI_SICIL_CAKISMASI = 'Bu sicil no Personel\'de başka bir kişide kayıtlı. Yeni kişi açmak yerine "TMI kullanıcısı" alanından o kişiyi seçin.';
 
 export const OZLUK_SON_YONETICI_UYARISI = 'Çıkış tarihi geçti ama kişi son yönetici olduğu için Kişiler\'de pasife alınmadı.';
+
+// 1928 a: işe alırken verilen ilk istasyon kaydın iş merkezinde ve aktif olmalı; istasyon listesinde olmayan (pasif) reddedilir.
+export function ilkIstasyonHatasi(istasyon: { isMerkeziId: number } | undefined, isMerkeziId: number | null): string | null {
+  if (istasyon === undefined) return 'İlk istasyon bulunamadı ya da pasif.';
+  if (isMerkeziId === null || istasyon.isMerkeziId !== isMerkeziId) return 'İlk istasyon personelin iş merkezinde olmalı.';
+  return null;
+}
+
+// İlk atama işe giriş gününde başlar; işe giriş geçmişteyse atama bugünden (geçmiş tarihli atama girilmez).
+export function ilkAtamaGunu(iseGiris: unknown, bugun: string): string | undefined {
+  return typeof iseGiris === 'string' && iseGiris > bugun ? iseGiris : undefined;
+}
