@@ -69,7 +69,9 @@ test.describe('3B sahne', () => {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       if (yol === 'hammadde') await page.getByRole('button', { name: 'Örnek parça' }).click();
       const tuval = page.locator('.tc-cy-sahne-2b');
-      await expect(tuval, yol).toBeVisible();
+      // 2B modda da modül açılırken 3B çizici yazılım çizicisinde kurulur (sahne/gl.ts, 3D seçilebilir mi diye); yüklü makinede bu
+      // saniyeler sürer ve görünüm ondan sonra çizilir. Tuvalin gelmesi, ilk sahne testindeki gibi yazılım çizicisinin süresiyle beklenir.
+      await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
       expect(await page.locator('.tc-cy-sahne-tuval').count(), yol).toBe(0);
       // Zemin tek renktir; parça, ham ve yol çizildiyse tuvalde farklı renkler vardır.
       await expect.poll(async () => tuval.evaluate((t: HTMLCanvasElement) => {

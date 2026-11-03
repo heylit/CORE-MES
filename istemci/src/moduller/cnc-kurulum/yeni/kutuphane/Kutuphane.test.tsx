@@ -8,7 +8,7 @@ import { allMachines, dirtyUsage, invKey, toolLib } from '../secici.ts';
 import { allShelves } from './raf.ts';
 
 // WebGL testte yok: sahne ve dokular boş gövdeyle gelir; görünüm testi yalnız düğme ve alanlara bakar.
-vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => <div data-testid="sahne" />, CizimModuSecici: () => null, useCizimModu: () => '3d' }));
+vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => <div data-testid="sahne" />, useCizimModu: () => '3d' }));
 vi.mock('../sahne/gl.ts', () => ({ thumb: () => null, onbellekSil: () => undefined }));
 vi.mock('./raf-sahnesi.ts', () => ({
   LSP: 2.3, LSH: 3.3, renk: () => '',

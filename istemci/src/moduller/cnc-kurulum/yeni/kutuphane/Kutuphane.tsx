@@ -4,7 +4,7 @@ import { useCncSurum } from '../depo.ts';
 import { clamp } from '../bicim.ts';
 import { byId, invKey } from '../secici.ts';
 import { onbellekSil } from '../sahne/gl.ts';
-import { CizimModuSecici, Sahne, useCizimModu, type Cizim, type Dikdortgen } from '../sahne/Sahne.tsx';
+import { Sahne, useCizimModu, type Cizim, type Dikdortgen } from '../sahne/Sahne.tsx';
 import { useTuslar } from '../gorunum.ts';
 import { download } from '../indir.ts';
 import { useCncYetkisi } from '../veri.ts';
@@ -226,7 +226,6 @@ export function Kutuphane() {
           <Dugme simge="gear" tur={bolum === 'tezgah' ? 'birincil' : 'ikincil'} aria-pressed={bolum === 'tezgah'} onClick={() => { bolumYaz('tezgah'); }}>Tezgâhlara göre</Dugme>
           <Dugme simge="cube" tur={bolum === 'stok' ? 'birincil' : 'ikincil'} aria-pressed={bolum === 'stok'} onClick={() => { bolumYaz('stok'); }}>Elimizdekiler</Dugme>
         </div>
-        <CizimModuSecici />
         {bolum === 'tezgah'
           ? <IsaretKutusu etiket="Yalnız stok uyarısı olanlar" checked={yalnizSorunlu} onChange={(o) => { yalnizSorunluYaz(o.target.checked); }} />
           : (

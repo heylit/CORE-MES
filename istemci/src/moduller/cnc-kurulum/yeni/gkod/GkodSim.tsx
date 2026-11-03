@@ -8,7 +8,7 @@ import { ileti } from '../ham/ileti.tsx';
 import { useParca } from '../parca.ts';
 import { GkodSahnesi } from '../sahne/gkod-sahnesi.ts';
 import { Gkod2b } from '../sahne/gkod-2b.ts';
-import { CizimModuSecici, Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
+import { Sahne, useCizimModu, type Cizim } from '../sahne/Sahne.tsx';
 import { machine, toolLib, tools } from '../secici.ts';
 import { useCncYetkisi } from '../veri.ts';
 import type { Aciklama } from './aciklama.ts';
@@ -166,7 +166,6 @@ export function GkodSim() {
             </div>
           )}
           <div className="tc-ch-gorus" role="group" aria-label="Simülasyon görünümü">
-            <CizimModuSecici />
             {GORUNUSLER.map(([v, a]) => <Dugme key={v} onClick={() => { if (mod === '3d') sahne.current?.sigdir(v); else cizici2b.gorus = v; }}>{a}</Dugme>)}
             {ANAHTARLAR.map(({ k, baslik }) => (
               <Dugme key={k} tur={gs[k] ? 'birincil' : 'ikincil'} aria-pressed={!!gs[k]} onClick={yap(() => { anahtar(k); })}>{baslik}</Dugme>

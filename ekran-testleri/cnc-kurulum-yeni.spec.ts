@@ -289,6 +289,9 @@ test.describe('3B sahne', () => {
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
+      // 3D/2B seçimi modülün tek anahtarıdır (1920): üst şeritte bir kez durur, görünümlerin içinde yoktur.
+      await expect(page.locator('.tc-cy-ust').getByRole('group', { name: 'Çizim modu' }), yol).toHaveCount(1);
+      await expect(page.locator('.tc-cy-gorunum').getByRole('group', { name: 'Çizim modu' }), yol).toHaveCount(0);
       // 2B modda Kütüphane sahne kullanmaz: cepler ve takım çizimi düz öğedir.
       // Kurulum ve Takım Ömrü kartlı akışla açılır, sürekli sahne yoktur (1843).
       if (yol === 'kurulum' || yol === 'takim-omru') await expect(page.locator('.tc-cy-ka'), yol).toBeVisible();

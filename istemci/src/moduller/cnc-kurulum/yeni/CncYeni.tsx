@@ -10,7 +10,7 @@ import { durumKur, useCncSurum } from './depo.ts';
 import { DURUM_ANAHTARI } from './durum.ts';
 import { closeDefs, gorunumAdresi, openDefs, useGorunum, useTanimlar, type Gorunum } from './gorunum.ts';
 import { KayitYazici } from './kayit.ts';
-import { sahneAlaniKur } from './sahne/Sahne.tsx';
+import { CizimModuSecici, sahneAlaniKur } from './sahne/Sahne.tsx';
 import { tezgahlariKur, tezgahYok } from './secici.ts';
 import { GORUNUM_KAYITLARI } from './sekmeler.ts';
 import { TanimlarPenceresi } from './tanimlar/index.tsx';
@@ -135,6 +135,7 @@ export function CncYeni() {
           <div className="tc-cy-serit" {...{ [SERIT]: '' }}>
             <Sekmeler etiket="CNC Kurulum görünümleri" sekmeler={kayitlar} secili={gorunum} sec={(g) => { git(g); }} />
           </div>
+          <CizimModuSecici />
           {gecmisGorebilir && (
             <Dugme simge="clock" onClick={() => { gecmisAcikYaz(true); }} title="Kim neyi ne zaman değiştirdi">Geçmiş</Dugme>
           )}
