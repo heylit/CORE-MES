@@ -86,7 +86,7 @@ export function PersonelListesi(o: IkEkranOzellikleri) {
             <DurumCipi metin={personelDurumu(p, izinler, gun)} ton={DURUM_TONU[personelDurumu(p, izinler, gun)]} />
             {md.length > 0 && <span title={md.join(', ')}><Rozet ton="uyari">{`${md.length} eksik belge`}</Rozet></span>}
             {/* 1878 a: TMI kullanıcısına bağlı olmayan çalışan izin ve bordrosunu göremez; bağ kartın İş bölümünden kurulur. */}
-            {aktifMi(p, gun) && !p.kisiId && <span title="TMI kullanıcısı bağlı değil: kart İş bölümünden bağlanır."><Rozet ton="uyari">Kullanıcı bağı yok</Rozet></span>}
+            {aktifMi(p, gun) && !p.kisiId && <span title="CORE kullanıcısı bağlı değil: kart İş bölümünden bağlanır."><Rozet ton="uyari">Kullanıcı bağı yok</Rozet></span>}
           </span>
         );
       },

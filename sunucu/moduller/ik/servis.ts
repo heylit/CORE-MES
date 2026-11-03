@@ -240,8 +240,8 @@ interface YazGirdisi { tur: IkTuru; kimlik: string; govde: Govde; surum: number 
 const KISITLAR = {
   ik_personel_sicil_no_tek: { ileti: 'Bu sicil no başka bir personelde kayıtlı.', alan: 'govde.sicilNo' },
   ik_personel_tckn_tek: { ileti: 'Bu kimlik numarası başka bir personelde kayıtlı.', alan: 'govde.tckn' },
-  ik_personel_kisi_id_tek: { ileti: 'Bu TMI kullanıcısı başka bir personele bağlı.', alan: 'govde.kisiId' },
-  ik_personel_kisi_id_fkey: { ileti: 'TMI kullanıcısı bulunamadı.', alan: 'govde.kisiId' },
+  ik_personel_kisi_id_tek: { ileti: 'Bu CORE kullanıcısı başka bir personele bağlı.', alan: 'govde.kisiId' },
+  ik_personel_kisi_id_fkey: { ileti: 'CORE kullanıcısı bulunamadı.', alan: 'govde.kisiId' },
   ik_personel_is_merkezi_id_fkey: { ileti: 'İş merkezi bulunamadı.', alan: 'govde.isMerkeziId' },
   ik_pozisyon_is_merkezi_id_fkey: { ileti: 'İş merkezi bulunamadı.', alan: 'govde.isMerkeziId' },
   ik_pozisyon_ilan_kodu_tek: { ileti: 'Bu ilan kodu başka bir pozisyonda kayıtlı.', alan: 'govde.ilanKodu' },
@@ -949,7 +949,7 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, 
 
 // Personel giriş kartı (1902 b, 1903 b): kartı yalnız İK eşleştirir ve verir (ik.personel-yaz, uçta); kayıt Nizamiye'dedir. Kart yalnız İK
 // personel kaydına bağlı kişiye ve yazanın iş merkezi kapsamındaysa verilir. Kart istasyonda PIN'siz giriş açar (1897 b).
-const GIRIS_KARTI_PERSONELSIZ = 'Bu kişinin İK personel kaydı yok; kart personel kartındaki TMI kullanıcısına verilir.';
+const GIRIS_KARTI_PERSONELSIZ = 'Bu kişinin İK personel kaydı yok; kart personel kartındaki CORE kullanıcısına verilir.';
 async function girisKartiKapsami(db: Db, kullanici: Kullanici, kisiId: number): Promise<void> {
   const personel = await s.girisKartiPersoneli(db, kisiId);
   if (personel === null) throw bulunamadi(GIRIS_KARTI_PERSONELSIZ);

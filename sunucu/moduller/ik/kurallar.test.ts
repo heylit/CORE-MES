@@ -218,7 +218,7 @@ describe('İK kuralları', () => {
     assert.equal(ekipKimlikleri(personeller, [], null).size, 0);
   });
 
-  test('IK-25: kişi personel kaydıyla TMI kullanıcısı alanından; çift bağda hiçbiri', () => {
+  test('IK-25: kişi personel kaydıyla CORE kullanıcısı alanından; çift bağda hiçbiri', () => {
     const personeller = [{ id: 'e1', kind: 'emp', kisiId: 7 }, { id: 'e2', kind: 'emp', kisiId: 8 }, { id: 'e3', kind: 'emp', kisiId: 8 }, { id: 'e4', kind: 'emp' }];
     assert.equal(personelBul(personeller, 7), 'e1');
     assert.equal(personelBul(personeller, 8), null);

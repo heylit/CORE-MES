@@ -127,7 +127,7 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(opr.kayitlar.find((k) => k.kimlik === 'emp_m')?.govde['brutMaas'], undefined);
     const ben = await tamam<IkBen>(c.yon, 'GET', '/ik/ben');
     assert.deepEqual({ rol: ben.rol, personel: ben.personelKimlik, salt: ben.saltOkunur }, { rol: 'ik', personel: null, salt: false });
-    assert.ok(ben.secenekler.kisiler.some((k) => k.id === kim.opr), 'TMI kullanıcısı seçeneği');
+    assert.ok(ben.secenekler.kisiler.some((k) => k.id === kim.opr), 'CORE kullanıcısı seçeneği');
     assert.deepEqual((await tamam<IkBen>(c.uzm, 'GET', '/ik/ben')).secenekler.isMerkezleri.map((m) => m.id), [im1], 'yalnız kapsamdaki iş merkezi');
     assert.deepEqual((await tamam<IkBen>(c.opr, 'GET', '/ik/ben')).secenekler, { kisiler: [], isMerkezleri: [] });
   });

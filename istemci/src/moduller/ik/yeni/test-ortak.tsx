@@ -59,6 +59,8 @@ const VARSAYILAN_OKUMALAR: Okumalar = {
   '/ik/izin-gunu': () => ({ isGunu: 5 } satisfies IkIzinGunuCevabi),
   '/ik/kisi-vardiyasi': () => ({ vardiya: null } satisfies IkKisiVardiyasiCevabi),
   '/ik/ozet': () => ({ izinli: 1, raporlu: 0 } satisfies IkOzetiCevabi),
+  // Firma adı Sistem Ayarları'ndandır (1942 a); İK ayarındaki eski sirket alanından farklı tutulur ki okunmadığı görünsün.
+  '/kurum': () => ({ ad: 'Deneme Firma' }),
 };
 
 export function sunucuKur(kullanici: Kullanici, veri: IkVeriCevabi = ornekVeri(), okumalar: Okumalar = {}): Yazma[] {

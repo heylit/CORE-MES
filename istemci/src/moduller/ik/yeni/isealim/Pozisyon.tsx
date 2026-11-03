@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   CokSatir, DurumKutusu, Dugme, Girdi, OnayPenceresi, Pencere, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
+import { useKurumAdi } from '../../../../ortak/veri/kurum.ts';
 import { adSoyad, paraKisa, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { ikSabitleri } from '../motor.ts';
@@ -40,6 +41,7 @@ export function PozisyonSayfasi(o: IkEkranOzellikleri) {
   const [bicim, bicimYaz] = useState<Bicim>('metin');
   const [kanalId, kanalIdYaz] = useState('');
   const [taslakMetin, taslakMetinYaz] = useState<string | null>(null);
+  const kurumAdi = useKurumAdi();
   const [pencere, pencereYaz] = useState<
     | { tur: 'duzenle' } | { tur: 'sil' } | { tur: 'aday' } | { tur: 'asistan' } | { tur: 'isaret'; kanal: IlanKanali } | null
   >(null);
@@ -161,7 +163,7 @@ export function PozisyonSayfasi(o: IkEkranOzellikleri) {
             <Dugme tur="birincil" simge="file" onClick={() => { metniKopyala(metin, null); }}>Metni kopyala</Dugme>
             {bicim === 'html' && (
               <Dugme simge="download" onClick={() => {
-                const baslik = `${kacis(p.ilanBaslik || p.baslik || '')} – ${kacis(ayar('sirket'))}`;
+                const baslik = [p.ilanBaslik || p.baslik || '', kurumAdi ?? ''].filter(Boolean).map(kacis).join(' – ');
                 dosyaIndir(`ilan-${(p.ilanKodu || 'pozisyon').toLowerCase()}.html`, `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${baslik}</title></head><body>${sablon(p, k, 'html')}</body></html>`);
               }}
               >Sayfa olarak indir</Dugme>

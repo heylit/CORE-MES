@@ -205,7 +205,7 @@ export function Personel() {
       hucre: (k) => (
         <span className="tc-personel-roller">
           <Rozet ton={k.aktif ? 'tamam' : 'pasif'}>{k.aktif ? 'Aktif' : 'Pasif'}</Rozet>
-          {k.aktif && k.girisVar && !k.ozlukIk && <span title="Bağı İK personel kartındaki TMI kullanıcısı alanı kurar."><Rozet ton="uyari">İK kartı yok</Rozet></span>}
+          {k.aktif && k.girisVar && !k.ozlukIk && <span title="Bağı İK personel kartındaki CORE kullanıcısı alanı kurar."><Rozet ton="uyari">İK kartı yok</Rozet></span>}
         </span>
       ),
     },

@@ -68,17 +68,22 @@ describe('P3 hesaplamalar ve maliyet planı', () => {
 });
 
 describe('P3 ayarlar', () => {
+  it('1942 a: şirket adı alanı yoktur; ad Sistem Ayarları\'ndan gelir, İK ayarındaki eski ad okunmaz', async () => {
+    ikAc('/ik/ayarlar');
+    expect(await screen.findByText("Şirket adı Sistem Ayarları > Firma adı'ndan gelir: Deneme Firma.")).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Şirket adı' })).toBeNull();
+  });
+
   it('izinli: genel ayar kaydı sürümle gider', async () => {
     const { yazmalar } = ikAc('/ik/ayarlar');
-    const alan = await screen.findByRole('textbox', { name: 'Şirket adı' });
-    fireEvent.change(alan, { target: { value: 'Yeni Atölye' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Cumartesi iş günü sayılsın' }));
     expect(screen.getByText('1 kaydedilmemiş değişiklik')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Ayarları kaydet' }));
     await waitFor(() => { expect(yazmalar).toHaveLength(1); });
     expect(yazmalar[0]?.yol).toBe('/ik/ayarlar/kaydet');
     const g = govdesi(yazmalar[0]?.govde);
     expect(g['surum']).toBe(7);
-    expect(govdesi(g['govde'])['sirket']).toBe('Yeni Atölye');
+    expect(govdesi(g['govde'])['cumartesiIsGunu']).toBe(true);
   });
 
   it('izinli: dönemli değer seçili dönemin parametresine yazılır', async () => {
@@ -94,7 +99,7 @@ describe('P3 ayarlar', () => {
 
   it('reddedilen: salt okuyan kaydet ve dönem düğmelerini görmez, alanlar kapalıdır', async () => {
     ikAc('/ik/ayarlar', { kullanici: IK_OKUYAN });
-    expect((await screen.findByRole('textbox', { name: 'Şirket adı' }) as HTMLInputElement).disabled).toBe(true);
+    expect((await screen.findByRole('checkbox', { name: 'Cumartesi iş günü sayılsın' }) as HTMLInputElement).disabled).toBe(true);
     expect(dugme('Ayarları kaydet')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Ücret, vergi ve SGK' }));
     expect(await screen.findByRole('button', { name: 'Bu dönemle hesap dene' })).toBeTruthy();

@@ -794,7 +794,7 @@ export function yeniPersonelKisiAdi(kayitliVar: boolean, yeni: Govde, gun: strin
 }
 
 // Kendiliğinden açılan kişinin sicil no'su başka kişide: kullanıcı yeni kişi yerine var olanı seçmeli.
-export const YENI_KISI_SICIL_CAKISMASI = 'Bu sicil no Personel\'de başka bir kişide kayıtlı. Yeni kişi açmak yerine "TMI kullanıcısı" alanından o kişiyi seçin.';
+export const YENI_KISI_SICIL_CAKISMASI = 'Bu sicil no Personel\'de başka bir kişide kayıtlı. Yeni kişi açmak yerine "CORE kullanıcısı" alanından o kişiyi seçin.';
 
 export const OZLUK_SON_YONETICI_UYARISI = 'Çıkış tarihi geçti ama kişi son yönetici olduğu için Kişiler\'de pasife alınmadı.';
 

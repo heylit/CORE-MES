@@ -268,7 +268,7 @@ describe('İK puantaj (gerçek PostgreSQL, gerçek giriş)', () => {
     } }, 'kapalı vardiya ve başka iş merkezi görünmez; vardiyalar başlangıca göre');
     assert.deepEqual((await vardiyasi(c.opr, 'emp_a')).json(), r.json(), 'çalışan kendi kaydı');
     assert.deepEqual((await vardiyasi(c.uzm, 'emp_b')).json(), { vardiya: null }, 'iş merkezine bağlanamayan kişi');
-    assert.deepEqual((await vardiyasi(c.uzm, 'emp_d')).json(), { vardiya: null }, 'TMI kullanıcısına bağlı olmayan personel');
+    assert.deepEqual((await vardiyasi(c.uzm, 'emp_d')).json(), { vardiya: null }, 'CORE kullanıcısına bağlı olmayan personel');
     await ret(404, 'BULUNAMADI', c.opr, 'GET', '/ik/kisi-vardiyasi?personel=emp_b');
     await ret(404, 'BULUNAMADI', c.uzm, 'GET', '/ik/kisi-vardiyasi?personel=emp_c');
     // Kişiye vardiya seçilmişse yalnız o vardiyanın günleri.

@@ -58,7 +58,7 @@ export const PERSONEL_ALANLARI: readonly FormAlani<keyof Personel & string>[] = 
   { bolum: 'İletişim', k: 'acilYakinlik', l: 'Yakınlık derecesi' },
   { bolum: 'İletişim', k: 'acilTelefon', l: 'Acil durum telefonu', tur: 'tel' },
   { bolum: 'İş', k: 'isMerkeziId', l: 'İş merkezi', tur: 'ismerkezi', zorunlu: true, ipucu: 'Kaydı yalnız bu iş merkezinde yetkili olanlar görür ve değiştirir.' },
-  { bolum: 'İş', k: 'kisiId', l: 'TMI kullanıcısı', tur: 'tmikisi', ipucu: 'Bağlanan kullanıcı kendi izin ve bordrosunu görür; yöneticiyse ekibini. Yeni kartta boş bırakılırsa kişi Personel\'de kendiliğinden açılır.' },
+  { bolum: 'İş', k: 'kisiId', l: 'CORE kullanıcısı', tur: 'tmikisi', ipucu: 'Bağlanan kullanıcı kendi izin ve bordrosunu görür; yöneticiyse ekibini. Yeni kartta boş bırakılırsa kişi Personel\'de kendiliğinden açılır.' },
   { bolum: 'İş', k: 'sicilNo', l: 'Sicil no' },
   { bolum: 'İş', k: 'departmanId', l: 'Departman', tur: 'departman' },
   { bolum: 'İş', k: 'pozisyon', l: 'Pozisyon', zorunlu: true },
