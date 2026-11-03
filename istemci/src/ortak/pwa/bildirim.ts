@@ -24,7 +24,7 @@ export const APPLE_SIMGESI = '/apple-touch-icon.png';
 export const WEB_BILDIRIMI = {
   name: 'CORE',
   short_name: 'CORE',
-  description: 'Üretim planlama ve izlenebilirlik',
+  description: 'Atölyenin işletim sistemi',
   lang: 'tr',
   id: '/',
   start_url: '/',
