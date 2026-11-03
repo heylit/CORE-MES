@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { GirisCevabi, OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { Giris } from './Giris.tsx';
+import { Giris, slogan } from './Giris.tsx';
 
 const OPERATOR: Kullanici = { id: 7, ad: 'Deneme Operatör', islemler: ['sayfa.kuyruk'] };
 
@@ -301,5 +301,27 @@ describe('giriş ekranı marka adı (karar 2002)', () => {
     sunucuKur();
     kur();
     expect(await screen.findByText('CORE')).toBeTruthy();
+  });
+});
+
+describe('giriş ekranı sloganı (2041)', () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('firma adı eksiz girer; ad yoksa "atölye" yazar', () => {
+    expect(slogan('Deneme Atolye')).toBe('Çeliği Deneme Atolye keser, tartışmayı CORE. Sıfır tahmin.');
+    expect(slogan(null)).toBe('Çeliği atölye keser, tartışmayı CORE. Sıfır tahmin.');
+  });
+
+  it('ekranda firma ayarındaki adla, okunamazsa "atölye" ile görünür', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
+      ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
+      : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
+    kur();
+    expect(await screen.findByText('Çeliği Deneme Atolye keser, tartışmayı CORE. Sıfır tahmin.')).toBeTruthy();
+    cleanup();
+    sunucuKur();
+    kur();
+    expect(await screen.findByText('Çeliği atölye keser, tartışmayı CORE. Sıfır tahmin.')).toBeTruthy();
+    expect(screen.getByText('Atölyenin işletim sistemi')).toBeTruthy();
   });
 });

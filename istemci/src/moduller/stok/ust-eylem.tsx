@@ -659,7 +659,7 @@ const sepetAnahtari = (istasyonId: number) => [...KUTU, 'sepet', istasyonId] as 
 // Soru 89 ve 95 a: sepette hepsi görünür; Üretilen ve Teslim alınan süzer (satıra son giren hareket). Sepetim herkesin kendi sepetidir (Soru 133).
 type SepetSuzgeci = 'hepsi' | 'uretim' | 'teslim' | 'depo';
 const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
-  { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Sepetim' },
+  { anahtar: 'hepsi', baslik: 'Hepsi' }, { anahtar: 'uretim', baslik: 'Üretilen' }, { anahtar: 'teslim', baslik: 'Teslim alınan' }, { anahtar: 'depo', baslik: 'Depo sepetim' },
 ];
 function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean; buradaki: number | null }) {
   const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
@@ -677,14 +677,14 @@ function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoS
     </div>
   );
   if (suzgec === 'depo') return <>{suzgecler}<DepoSepeti /></>;
-  if (kutu.istasyonlar.length === 0) return <>{suzgecler}<DurumKutusu durum="bos" mesaj="Kapsamınızda istasyon yok; sepet istasyona bağlıdır." /></>;
+  if (kutu.istasyonlar.length === 0) return <>{suzgecler}<DurumKutusu durum="bos" mesaj="Kapsamınızda istasyon yok; istasyon sepeti istasyona bağlıdır." /></>;
   const satirlar = (sepet.data?.satirlar ?? []).filter((x) => suzgec === 'hepsi' || x.koken === suzgec);
   return (
     <>
       {suzgecler}
       {sepet.isPending ? <DurumKutusu durum="yukleniyor" />
         : sepet.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(sepet.error)} yenile={() => { void sepet.refetch(); }} />
-        : satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj={suzgec === 'hepsi' ? `${sepet.data.istasyon.ad} sepeti boş` : `${sepet.data.istasyon.ad} sepetinde bu süzgece uyan satır yok`} />
+        : satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj={suzgec === 'hepsi' ? `${sepet.data.istasyon.ad} istasyon sepeti boş` : `${sepet.data.istasyon.ad} istasyon sepetinde bu süzgece uyan satır yok`} />
         : (
           <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label={`${sepet.data.istasyon.ad} sepeti`}>
             {satirlar.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={sepet.data.emirler} />)}
