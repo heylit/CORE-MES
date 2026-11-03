@@ -1538,16 +1538,31 @@ export function emirIlerlemesi(adet: number, adimlar: readonly IlerlemeAdimi[], 
   };
 }
 
-// 1979 (2003 c): plandaki pay terminalde izindir; sayaç adımda tektir. Payın ilerlemesi kişinin bu adımda saydığıdır (sağlam ve karar bekleyen); makine payının
-// sayılanı sayım makine tutana dek (2009 b göçü) bilinmez: null. fazla payı aşan adettir, iş engellenmez.
+// 1979 (2003 c): plandaki pay terminalde izindir; sayaç adımda tektir. Payın ilerlemesi payın sahibinin bu adımda saydığıdır (sağlam ve
+// karar bekleyen): kişi payında kişinin, makine payında makinenin (2009 b). fazla payı aşan adettir, iş engellenmez.
 export const PAYI_YOK_MAKINE = 'Bu makinenin bu adımda planda payı yok; çalışan adıma yalnız payı olan makine eklenir.';
 export const MAKINE_ZATEN_ADIMDA = 'Bu makine bu adımda zaten çalışıyor.';
 export interface PlanPayi { no: number; adet: number; makineId: number | null; kisiId: number | null }
 export const payiVarMi = (paylar: readonly PlanPayi[], k: { kisiId?: number; makineId?: number }): boolean =>
   paylar.some((p) => (k.kisiId !== undefined && p.kisiId === k.kisiId) || (k.makineId !== undefined && p.makineId === k.makineId));
-export function payIlerlemesi(paylar: readonly PlanPayi[], kisiSaglami: ReadonlyMap<number, number>) {
+export function payIlerlemesi(paylar: readonly PlanPayi[], kisiSaglami: ReadonlyMap<number, number>, makineSaglami: ReadonlyMap<number, number>) {
   return [...paylar].sort((a, b) => a.no - b.no).map((p) => {
-    const sayilan = p.kisiId === null ? null : (kisiSaglami.get(p.kisiId) ?? 0);
+    const sayilan = p.makineId !== null ? (makineSaglami.get(p.makineId) ?? 0) : p.kisiId !== null ? (kisiSaglami.get(p.kisiId) ?? 0) : null;
     return { ...p, sayilan, fazla: sayilan === null ? null : Math.max(0, sayilan - p.adet) };
   });
+}
+
+// 2009 b: sayımın makinesi. İstenen makine adımda açık olmalıdır. İstenmezse kişinin adımda açtığı tek makine; kişinin açtığı makine
+// yoksa ve planda kişi payı varsa sayım elle yapılan paydır (makinesiz); yoksa adımdaki tek açık makine (ekip makinenin işini sayar).
+// Seçilemezse null: makine uydurulmaz.
+export const MAKINE_ADIMDA_ACIK_DEGIL = 'Bu makine bu adımda çalışmıyor; sayım yalnız adımda açık makineye yazılır.';
+export function sayimMakinesi(
+  acik: readonly { makineId: number; kisiId: number }[], kisiId: number, istenen: number | null, kisiPayli: boolean,
+): { makineId: number | null } | { ihlal: string } {
+  if (istenen !== null) return acik.some((k) => k.makineId === istenen) ? { makineId: istenen } : { ihlal: MAKINE_ADIMDA_ACIK_DEGIL };
+  const kisinin = [...new Set(acik.filter((k) => k.kisiId === kisiId).map((k) => k.makineId))];
+  if (kisinin.length > 0) return { makineId: kisinin.length === 1 ? kisinin[0]! : null };
+  if (kisiPayli) return { makineId: null };
+  const makineler = [...new Set(acik.map((k) => k.makineId))];
+  return { makineId: makineler.length === 1 ? makineler[0]! : null };
 }

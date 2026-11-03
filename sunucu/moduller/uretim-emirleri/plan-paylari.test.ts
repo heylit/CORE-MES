@@ -12,7 +12,7 @@ import type { PlanPayi } from './kurallar.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 
 // 1979 (2003 c): plandaki pay terminalde izindir. Payı olan kişi ekip dışından katılır, payı olan makine çalışan adıma eklenir; pay
-// ilerlemesi kişinin adımdaki sağlamıdır. Plan çözücüsü testte sahtedir. Adlar uydurmadır.
+// ilerlemesi kişinin ya da makinenin adımdaki sağlamıdır (2009 b). Plan çözücüsü testte sahtedir. Adlar uydurmadır.
 describe('uretim-emirleri plan payları terminalde (gerçek PostgreSQL)', () => {
   let paylar: PlanPayi[] = [];
   let ortam: TestVeritabani | undefined;
@@ -133,9 +133,33 @@ describe('uretim-emirleri plan payları terminalde (gerçek PostgreSQL)', () => 
     await tx((db) => servis.katil(db, veli.id, id, ie));
     await tx((db) => servis.emirSayim(db, veli.id, id, { tur: 'saglam', adet: 3 }, { isEmriId: ie }));
     const p = (await tx((db) => servis.adimPaylari(db, id, ie))).paylar;
-    assert.deepEqual(p.map((x) => [x.no, x.adet, x.sayilan, x.fazla]), [[1, 6, null, null], [2, 2, 3, 1]]);
+    // Veli'nin kendi makinesi yok ve kişi payı var: sayım elle yapılan paydır, makine payına yazılmaz (2009 b).
+    assert.deepEqual(p.map((x) => [x.no, x.adet, x.sayilan, x.fazla]), [[1, 6, 0, 0], [2, 2, 3, 1]]);
     assert.equal(p[0]!.makine?.id, makineId);
     paylar = [];
     assert.deepEqual((await tx((db) => servis.adimPaylari(db, id, ie))).paylar, []);
+  });
+
+  test('makine payının ilerlemesi o makinedeki sayımdır; kişi kendi açtığı makineye sayar, açık olmayan makine reddedilir', async () => {
+    const { id, ie, makineId, ikinci, ucuncu } = await calisanIs();
+    paylar = [{ no: 1, adet: 5, makineId, kisiId: null }, { no: 2, adet: 5, makineId: ikinci, kisiId: null }];
+    await tx((db) => servis.makineEkle(db, veli.id, id, ie, ikinci));
+    await tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 3 }, { isEmriId: ie }));
+    await tx((db) => servis.emirSayim(db, veli.id, id, { tur: 'saglam', adet: 4 }, { isEmriId: ie }));
+    await reddeder(tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 1, makineId: ucuncu }, { isEmriId: ie })), /bu adımda çalışmıyor/);
+    await tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 1, makineId: ikinci }, { isEmriId: ie }));
+    const p = (await tx((db) => servis.adimPaylari(db, id, ie))).paylar;
+    assert.deepEqual(p.map((x) => [x.no, x.sayilan, x.fazla]), [[1, 3, 0], [2, 5, 0]]);
+  });
+
+  test('reddedilen parça makine payında sayılmaz; karar satırları sayımın makinesini taşır', async () => {
+    const { id, ie, makineId } = await calisanIs();
+    paylar = [{ no: 1, adet: 5, makineId, kisiId: null }, { no: 2, adet: 5, makineId: null, kisiId: veli.id }];
+    await tx((db) => servis.emirSayim(db, ali.id, id, { tur: 'saglam', adet: 2 }, { isEmriId: ie }));
+    assert.equal((await tx((db) => servis.adimPaylari(db, id, ie))).paylar[0]!.sayilan, 2);
+    await tx((db) => servis.kararliSayimiSonuclandir(db, ali.id, id, 'ret', ie));
+    assert.equal((await tx((db) => servis.adimPaylari(db, id, ie))).paylar[0]!.sayilan, 0);
+    const satirlar = await o().sahip.sorgu<{ makineId: number | null }>('SELECT makine_id AS "makineId" FROM uretim_sayimi WHERE is_emri_id = $1', [ie]);
+    assert.ok(satirlar.length >= 3 && satirlar.every((x) => x.makineId === makineId));
   });
 });
