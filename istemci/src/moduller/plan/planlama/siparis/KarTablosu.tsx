@@ -4,17 +4,16 @@ import { planGuncel } from '../durum.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi, Siparis } from '../tipler.ts';
 import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, YOK, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
-import { MotorNotu } from './IsiHaritasi.tsx';
 import { KAR_ORANLARI, hedefKarOrani, onerilenFiyat, saat, sayi, tl, urunAdi, type KayitliPlan } from './kurallar.ts';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
 import { planDisi } from '../tipler.ts';
 
 // "Siparişler: maliyet ve kâr" (zu-yan-sayfalar sSiparisKar): gösterge satırı, toplu fiyat, sipariş tablosu, alt not. Tutar, vade ve hedef kâr
 // oranı çalışmanın kendi alanlarıdır, burada yazılır (karar 180). Maliyet, bekleme ve gecikme bedeli Maliyetler (P3) hesabıyla plandan çıkar
-// (ymSipMaliyet); önerilen fiyatı tutara yazan düğmeler yerinde pasif (486/1 a).
+// (ymSipMaliyet). Önerilen fiyat Uygula ile tek siparişin, "fiyatsızlara yaz" ile tutarı boş siparişlerin tutarına yazılır (2053-2 a, 486/1 a
+// değişti); yazma çalışmadadır, geri alınabilir, sipariş modülüne gitmez. Fiyat tam liraya yuvarlanır.
 
 const BASLIK = 'Siparişler: maliyet ve kâr';
-const YAZMA_PASIF = 'Önerilen fiyatı tutara yazma (Uygula, fiyatsızlara yaz) yerinde pasif.';
 const yuzde = (x: number | null | undefined): string => (x == null || !Number.isFinite(x) ? '—' : `%${sayi(x * 100, 1)}`);
 const eksiTl = (x: number | null | undefined): string => (x != null && x < 0 ? `−${tl(-x)}` : tl(x));
 
@@ -42,7 +41,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
   const top = (f: (x: SiparisMaliyeti) => number | null): number => satirlar.reduce((a, r) => a + (r.x ? f(r.x) ?? 0 : 0), 0);
   const tutar = top((x) => x.tutar); const maliyet = top((x) => x.top); const gec = top((x) => x.gec); const net = top((x) => x.net);
   const W = b?.W ?? null; const wa = wipAyar(D);
-  const oner = (r: Satir): number | null => (r.x && !r.x.eksik.length ? onerilenFiyat(r.x.top, hedefKarOrani(D, r.s)) : null);
+  const oner = (r: Satir): number | null => { const o = r.x && !r.x.eksik.length ? onerilenFiyat(r.x.top, hedefKarOrani(D, r.s)) : null; const y = o == null ? null : Math.round(o); return y != null && y > 0 ? y : null; };
 
   const yaz = (r: Satir, ne: string, ayrinti: string, fn: (s: Siparis) => void, planKoru = false) => {
     komut?.degistir(ne, (t) => { const s = t.D.siparisler.find((x) => x.id === r.s.id); if (!s) return false; fn(s); return true; }, { ayrinti, planKoru });
@@ -54,6 +53,15 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
     return v;
   };
   const yazilir = Boolean(komut);
+  const uygula = (r: Satir, o: number): void => yaz(r, 'Gecikme bedeli verisi değişti', `${r.s.id} tutar: ${r.s.gelir ?? '—'} → ${String(o)} (önerilen)`, (s) => { Object.assign(s, { gelir: o }); });
+  const fiyatsiz = satirlar.flatMap((r) => { const o = r.s.gelir == null ? oner(r) : null; return o == null ? [] : [{ id: r.s.id, o }]; });
+  const fiyatsizlaraYaz = (): void => {
+    komut?.degistir('Gecikme bedeli verisi değişti', (t) => {
+      let n = 0;
+      for (const f of fiyatsiz) { const s = t.D.siparisler.find((x) => x.id === f.id); if (s && s.gelir == null) { Object.assign(s, { gelir: f.o }); n++; } }
+      return n > 0;
+    }, { ayrinti: `Önerilen fiyat yazıldı: ${fiyatsiz.map((f) => f.id).join(', ')}` });
+  };
 
   const sutunlar: Sutun<Satir>[] = [
     { anahtar: 'siparis', baslik: 'Sipariş', hucre: (r) => <><b className="mono">{r.s.id}</b><small className="tc-pys-not">{urunAdi(D, r.s.urun)} · {sayi(r.s.adet, 0)} adet</small></> },
@@ -101,7 +109,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
               {[...new Set([...KAR_ORANLARI, h])].sort((a, b) => a - b).map((x) => <option key={x} value={String(x)}>%{sayi(x, 1)}</option>)}
             </select>
             <b className="mono">{tl(o)}</b>
-            {o != null && (r.s.gelir == null || Math.abs(r.s.gelir - o) >= 1) && <Dugme simge="check" disabled title={YAZMA_PASIF}>Uygula</Dugme>}
+            {o != null && (r.s.gelir == null || Math.abs(r.s.gelir - o) >= 1) && <Dugme simge="check" disabled={!yazilir} title={yazilir ? `Tutarı ${tl(o)} yap` : 'Tutar yazma yetkiniz yok.'} onClick={() => uygula(r, o)}>Uygula</Dugme>}
           </span>
           {fark != null && Math.abs(fark) >= 1 && <small className="tc-pys-not">{fark > 0 ? `tutar ${tl(fark)} üstünde` : `tutar ${tl(-fark)} altında`}</small>}
         </>
@@ -138,8 +146,8 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
         { simge: 'check', ad: 'Net kâr', deger: tl(net), not: 'gecikme, finansman, bekleme düşülmüş', ton: net < 0 ? 'hata' : undefined },
       ]} />
       <div className="tc-pys-sira">
-        <span className="tc-pys-kucuk tc-pys-sira-ara">Önerilen fiyat = maliyet × (1 + hedef kâr oranı). Uygula siparişin tutarını değiştirir; gecikme bedeli ve öncelik tutardan yeniden hesaplanır.</span>
-        <Dugme simge="lira" disabled title={YAZMA_PASIF}>Fiyatsızlara önerilen fiyatı yaz</Dugme>
+        <span className="tc-pys-kucuk tc-pys-sira-ara">Önerilen fiyat = maliyet × (1 + hedef kâr oranı), tam liraya yuvarlanır. Uygula siparişin tutarını değiştirir; gecikme bedeli ve öncelik tutardan yeniden hesaplanır.</span>
+        <Dugme simge="lira" disabled={!yazilir || fiyatsiz.length === 0} title={!yazilir ? 'Tutar yazma yetkiniz yok.' : fiyatsiz.length ? `${String(fiyatsiz.length)} siparişe yazılır` : 'Önerilen fiyatı olan fiyatsız sipariş yok.'} onClick={fiyatsizlaraYaz}>Fiyatsızlara önerilen fiyatı yaz</Dugme>
       </div>
       <Tablo etiket={BASLIK} sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(r) => r.s.id} bosMesaj="Planda sipariş yok." />
       <p className="tc-pys-kucuk">
@@ -151,7 +159,6 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
         vadeden bağımsız olarak aynı süre kaydırır.
         {!planGuncel(c) && <b> Veri plandan sonra değişti; maliyet yeniden çözülünce güncellenir.</b>}
       </p>
-      <MotorNotu ne={YAZMA_PASIF} />
     </Kart>
   );
 }
