@@ -1211,6 +1211,13 @@ export function katalogEtiketiStokKodu(ham: string): string | null {
   const p = /^\s*MK\s*:\s*(\S+)\s*$/i.exec(ham);
   return p ? p[1]!.toUpperCase() : null;
 }
+// DEP-55: önekin çözemediği kodun geri düşmesi. Konum kodu öneksiz (A-01-01) ya da eski `LOC-` biçimindedir; kart no düz sayıdır,
+// `MLZ-` öneki isteğe bağlı. Kart no değilse null; katalog etiketi ayrıca denenir.
+export function geriDusmeKodlari(ham: string): { konumKodu: string; kartNo: number | null } {
+  const kod = ham.trim().toUpperCase();
+  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1];
+  return { konumKodu: kod.replace(/^LOC[:\s-]*/, ''), kartNo: no === undefined ? null : Number(no) };
+}
 
 // ---- Refakat partisi (kart #123): emir + depodan verilen lot -------------------------------------------------------------
 // Kartın okunur adı emir no ve sıradır (UE-000120-P2); emir no bilinmezse kimlik yazılır, uydurulmaz.
