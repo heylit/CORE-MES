@@ -287,7 +287,9 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const b = await siparisAc();
     const sira = (no: string) => Number(no.split('-')[2]);
     assert.equal(sira(b.no), sira(a.no) + 1);
-    const eski = await siparisAc({ siparisTarihi: '2025-12-30', termin: '2026-01-10' });
+    // Sipariş tarihi geçen yılın son günlerindendir; sabit tarih iki yıllık sınırı aşınca açılamaz olurdu.
+    const buYil = Number(tesisGunu(Date.now()).slice(0, 4));
+    const eski = await siparisAc({ siparisTarihi: `${buYil - 1}-12-30`, termin: `${buYil}-01-10` });
     assert.match(eski.no, new RegExp(`^SS-${tesisGunu(Date.now()).slice(0, 4)}-`));
     // Sayaç baştan başlasa da var olan numara yeniden verilmez (eski sayaçtan gelen numaralar böyle korunur).
     await o().sahip.sorgu("DELETE FROM ayar_numara_sayaci WHERE anahtar = 'siparisler.siparis-no'");
@@ -427,7 +429,8 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const oncekiDagilim = (await oku(yonetici, '/siparisler/termin-dagilimi')).json<TerminDagilimiCevabi>();
     const gun = (fark: number): string => tesisGunu(Date.now() + fark * 86_400_000);
     const onayla = async (fark: number): Promise<number> => {
-      const s = await siparisAc();
+      // Aylık seri son altı ayı sipariş tarihiyle sayar; varsayılan sabit tarih takvim ilerleyince pencereden çıkardı.
+      const s = await siparisAc({ siparisTarihi: gun(-7), termin: gun(7) });
       const c = await gonder(yonetici, `/siparisler/${s.id}/onayla`, { surum: s.surum });
       assert.equal(c.statusCode, 200, c.body);
       // Termin geçmişe ancak doğrudan yazılır (SIP-07: termin sipariş tarihinden önce olamaz); sayım yalnız terminle ilgilidir.

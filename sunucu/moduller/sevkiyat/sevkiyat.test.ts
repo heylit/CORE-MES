@@ -11,6 +11,7 @@ import * as sorgu from './sorgular.ts';
 import { izgaraKaynagi } from './test-agi.ts';
 import { NOKTA_YOLA_BAGLANMIYOR } from './cozucu.ts';
 import { gunPlaniCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 
 let ortam: TestVeritabani;
 let vt: Veritabani;
@@ -554,10 +555,11 @@ test('aynı anda iki ilk kayıt: biri yazılır, öteki çakışma alır', async
 });
 
 test('iki gün aynı anda kaydedilince ortak iş tek taslakta kalır (KD-030)', async () => {
+  // Günler bugünden uzak ileridedir: geçmiş güne düşen sabit tarih bu yarışı denemez olur; +40 günü kullanan testle de çakışmaz.
+  const gun = (n: number) => tesisGunu(Date.now() + (400 + n) * 86_400_000);
   for (let tur = 0; tur < 5; tur++) {
-    const is = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: '2027-03-01', tur: 'teslimat', birakisNoktasiId: a }));
+    const is = await tx((db) => servis.isEkle(db, { ...BOS_IS, tarih: gun(0), tur: 'teslimat', birakisNoktasiId: a }));
     const kayit = (tarih: string, aracId: number) => tx((db) => servis.kaydet(db, tarih, { amac: 'sure', surum: null, rotalar: [{ aracId, kilitli: false, ogeler: [{ isId: is.id, alis: false }] }] }, yok));
-    const gun = (n: number) => `2027-03-${String(n).padStart(2, '0')}`;
     // Sıraya giren ikinci kayıt işi öteki günde planlanmış bulur: ya iş artık bu güne ait değildir ya da sürüm değişmiştir.
     const sonuc = await Promise.allSettled([kayit(gun(2 + tur * 2), k1), kayit(gun(3 + tur * 2), k2)]);
     assert.equal(sonuc.filter((x) => x.status === 'fulfilled').length, 1);
