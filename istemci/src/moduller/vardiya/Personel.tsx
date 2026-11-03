@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { VardiyaPersoneliCevabi } from '#paylasilan/sozlesme/vardiya.ts';
-import { Dugme, DurumKutusu, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
-import { useVardiyaYaz } from './komut.ts';
-import { aramaUyar, degistir, hepsiniDegistir, reddedilenler } from './secim.ts';
-import { usePersonel, useTakvim, useYazabilir } from './veri.ts';
+import { Dugme, DurumKutusu, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
+import { aramaUyar } from './secim.ts';
+import { usePersonel, useTakvim } from './veri.ts';
 import './vardiya.css';
 
 type PersonelSatiri = VardiyaPersoneliCevabi['personel'][number];
@@ -13,18 +14,14 @@ const HEPSI = '';
 const YOK = 'yok';
 const uyar = (suzgec: string, deger: number | null) => suzgec === HEPSI || (suzgec === YOK ? deger === null : deger === Number(suzgec));
 
+// Kişinin vardiyası İstasyonlar > Personel'de yazılır (1927 a: tek giriş yeri); burada yalnız okunur.
 export function PersonelEkrani() {
   const takvim = useTakvim();
   const personel = usePersonel();
-  const yaz = useYazabilir();
-  const y = useVardiyaYaz();
-  const { bildir } = useBildirim();
+  const istasyonlarVar = useOturum().data?.islemler.includes('sayfa.istasyonlar') ?? false;
   const [arama, aramaYaz] = useState('');
   const [merkez, merkezYaz] = useState(HEPSI);
   const [vardiya, vardiyaYaz] = useState(HEPSI);
-  const [secili, seciliYaz] = useState<ReadonlySet<number>>(new Set());
-  const [reddedilen, reddedilenYaz] = useState<ReadonlySet<number>>(new Set());
-  const [hedef, hedefYaz] = useState('');
   // Özetteki sayıya dokununca liste o hücrenin kişilerine süzülür (kişi birden çok iş merkezinde sayılabilir).
   const [kisiSuzgeci, kisiSuzgeciYaz] = useState<{ baslik: string; idler: ReadonlySet<number> } | null>(null);
   if (takvim.isPending || personel.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -33,48 +30,23 @@ export function PersonelEkrani() {
   const liste = personel.data.personel;
   const merkezAdi = (id: number | null) => { const m = t.isMerkezleri.find((x) => x.id === id); return m ? `${m.kod} ${m.ad}` : null; };
   const secenekler = t.vardiyalar.map((v) => ({ deger: String(v.id), baslik: `${v.ad} ${v.baslangic}–${v.bitis}` }));
+  const vardiyaAdi = (id: number | null) => secenekler.find((s) => s.deger === String(id))?.baslik ?? 'Seçilmedi';
   const merkezler = t.isMerkezleri.filter((m) => m.aktif);
   const vardiyalar = t.vardiyalar.filter((v) => v.aktif);
   const gorunen = liste.filter((p) => (kisiSuzgeci === null || kisiSuzgeci.idler.has(p.kisiId))
     && uyar(merkez, p.isMerkeziId) && uyar(vardiya, p.vardiyaId) && aramaUyar(arama, p.ad, merkezAdi(p.isMerkeziId) ?? ''));
-  const gorunenIdler = gorunen.map((p) => p.kisiId);
-  const hepsiSecili = gorunen.length > 0 && gorunen.every((p) => secili.has(p.kisiId));
-  // Seçim listede kalan kişilerle sınırlıdır: bu arada istasyon ataması kalkan kişi komuta gitmez.
-  const seciliIdler = liste.filter((p) => secili.has(p.kisiId)).map((p) => p.kisiId);
   const suzgecVar = kisiSuzgeci !== null || arama !== '' || merkez !== HEPSI || vardiya !== HEPSI;
   // Sayılar vardiya modülünün tek tanımından gelir (İstasyonlar sayfası da aynısını gösterir).
   const kadro = (m: number, v: number | null) => t.kadro.find((k) => k.isMerkeziId === m && k.vardiyaId === v)?.kisiIdleri ?? [];
   const suz = (baslik: string, idler: readonly number[]) => { kisiSuzgeciYaz({ baslik, idler: new Set(idler) }); merkezYaz(HEPSI); vardiyaYaz(HEPSI); aramaYaz(''); };
-  const topluUygula = () => y.mutate(
-    { yol: '/kisi-vardiyalari/toplu-belirle', govde: { kisiIdleri: seciliIdler, vardiyaId: hedef === YOK ? null : Number(hedef) } },
-    {
-      onSuccess: () => { reddedilenYaz(new Set()); seciliYaz(new Set()); bildir('tamam', `${seciliIdler.length.toLocaleString('tr-TR')} kişinin vardiyası kaydedildi.`); },
-      onError: (e) => reddedilenYaz(new Set(reddedilenler(e, 'kisiIdleri'))),
-    },
-  );
-
   const sutunlar: Sutun<PersonelSatiri>[] = [
-    ...(yaz ? [{
-      anahtar: 'sec', baslik: 'Seç', hucre: (p: PersonelSatiri) => (
-        <input type="checkbox" className="tc-vr-kutu" aria-label={`${p.ad} seç`} checked={secili.has(p.kisiId)} onChange={() => seciliYaz(degistir(secili, p.kisiId))} />
-      ),
-    }] : []),
     {
       anahtar: 'ad', baslik: 'Personel', hucre: (p) => (
-        <span className="tc-vr-ad">{p.ad}{reddedilen.has(p.kisiId) && <Rozet ton="hata">Yetkin yok, değişmedi</Rozet>}</span>
+        <span className="tc-vr-ad">{p.ad}</span>
       ),
     },
     { anahtar: 'merkez', baslik: 'İş merkezi', hucre: (p) => merkezAdi(p.isMerkeziId) },
-    {
-      anahtar: 'vardiya', baslik: 'Vardiya', hucre: (p) => (
-        // Sütun başlığı yeter; kişinin adı satırda zaten yazılı, etiketi yalnız ekran okuyucu okur.
-        <select className="tc-alan-kutu" aria-label={`${p.ad} vardiyası`} value={p.vardiyaId === null ? '' : String(p.vardiyaId)} disabled={!yaz}
-          onChange={(e) => y.mutate({ yol: `/kisi-vardiyalari/${String(p.kisiId)}/belirle`, govde: { vardiyaId: e.target.value === '' ? null : Number(e.target.value) } })}>
-          <option value="">Seçilmedi</option>
-          {secenekler.map((s) => <option key={s.deger} value={s.deger}>{s.baslik}</option>)}
-        </select>
-      ),
-    },
+    { anahtar: 'vardiya', baslik: 'Vardiya', hucre: (p) => vardiyaAdi(p.vardiyaId) },
   ];
   return (
     <div className="tc-vr-sayfa">
@@ -122,31 +94,12 @@ export function PersonelEkrani() {
           {kisiSuzgeci && <Rozet>{kisiSuzgeci.baslik}</Rozet>}
           {suzgecVar && <Dugme simge="x" onClick={() => { kisiSuzgeciYaz(null); aramaYaz(''); merkezYaz(HEPSI); vardiyaYaz(HEPSI); }}>Süzgeci temizle</Dugme>}
         </div>
-        {yaz && (
-          <div className="tc-vr-satir">
-            <label className="tc-vr-sec">
-              <input type="checkbox" className="tc-vr-kutu" checked={hepsiSecili} disabled={gorunen.length === 0} onChange={() => seciliYaz(hepsiniDegistir(secili, gorunenIdler))} />
-              Görünenlerin hepsini seç ({gorunen.length.toLocaleString('tr-TR')})
-            </label>
-          </div>
-        )}
-        {yaz && seciliIdler.length > 0 && (
-          <section className="tc-vr-toplu" aria-label="Toplu vardiya atama">
-            <div className="tc-vr-baslik-satiri">
-              <strong>{seciliIdler.length.toLocaleString('tr-TR')} kişi seçili</strong>
-              <Dugme simge="x" onClick={() => { seciliYaz(new Set()); reddedilenYaz(new Set()); }}>Seçimi bırak</Dugme>
-            </div>
-            <div className="tc-vr-satir">
-              <Secim etiket="Seçilenlerin vardiyası" value={hedef} bosSecenek="Vardiya seç" onChange={(e) => hedefYaz(e.target.value)}
-                secenekler={[...vardiyalar.map((v) => ({ deger: String(v.id), baslik: `${v.ad} ${v.baslangic}–${v.bitis}` })), { deger: YOK, baslik: 'Seçilmedi (vardiyayı kaldır)' }]} />
-              <Dugme tur="birincil" simge="check" disabled={hedef === '' || y.isPending} onClick={topluUygula}>Uygula</Dugme>
-            </div>
-            <p className="tc-vr-ipucu">Komut seçilenlerin hepsine birden uygulanır; yetkin olmayan bir kişi varsa hiçbiri değişmez ve satırında yazar.</p>
-          </section>
-        )}
         <Tablo etiket="Personel" sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(p) => p.kisiId}
           bosMesaj={liste.length === 0 ? 'Atanmış personel yok' : 'Süzgece uyan personel yok'} />
-        <p className="tc-vr-ipucu">Kişinin iş merkezi en büyük yüzdeli istasyon atamasından, o yoksa makine ya da ekip atamasından gelir (İstasyonlar sayfası).</p>
+        <p className="tc-vr-ipucu">
+          Kişinin iş merkezi en büyük yüzdeli istasyon atamasından, o yoksa makine ya da ekip atamasından gelir. Kişinin vardiyası ve ataması İstasyonlar
+          sayfasında yazılır{istasyonlarVar ? <>: <Link to="/istasyonlar/personel">İstasyonlar &gt; Personel</Link></> : ''}.
+        </p>
       </section>
     </div>
   );
