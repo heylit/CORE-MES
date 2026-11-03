@@ -149,7 +149,7 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'uretim-emirleri.kapanis-oku',
   ].sort();
   const OPERATOR_SONUNDA = [
-    'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver',
+    'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',
     // CNC Kurulum okuma, hazırlık onayı ve takım değişimi 1393 c+ ve 1458 a ile operatörden kalktı (kart #1454).
     // Ctrl K istasyon araması göçü (kullanıcı kararı, 16.10.2026).
     'uretim-emirleri.ara-istasyon',
