@@ -51,6 +51,7 @@ const ANALIZ: GeometriAnalizCevabi = {
   analiz: {
     motor: 'occt-import-js@0.0.23', kutu: { x: 40, y: 20, z: 10 }, obb: { a: 40, b: 20, c: 10, cap: 22.3607, yon: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] },
     hacimMm3: 8000, alanMm2: 2800, govdeSayisi: 1, kapali: true, ucgenSayisi: 12, hesapSuresiMs: 200, hesapZamani: '2026-10-31T20:00:02+03:00',
+    yuzler: null,
   },
 };
 const HAM: GeometriHamCevabi = {

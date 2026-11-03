@@ -4,11 +4,11 @@ import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ILETILER, IS_SURE_SINIRI_MS, SUREC_BELLEK_ESIGI_BAYT } from './kurallar.ts';
-import type { DosyaTuru, Olcum } from './kurallar.ts';
+import type { DosyaTuru, Olcum, Yuz } from './kurallar.ts';
 
 export interface HesapIstegi { kimlik: number; tur: DosyaTuru; veri: Uint8Array }
 export type HesapYaniti =
-  | { tamam: true; olcum: Olcum; sureMs: number; bellek: number }
+  | { tamam: true; olcum: Olcum; yuzler: Yuz[] | null; sureMs: number; bellek: number }
   | { tamam: false; kalici: boolean; hata: string; bellek?: number };
 
 const GIRIS = fileURLToPath(new URL('./hesap-sureci.ts', import.meta.url));

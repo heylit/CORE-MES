@@ -56,3 +56,33 @@ export function kutuStep(x: number, y: number, z: number): string {
   e(`SHAPE_DEFINITION_REPRESENTATION(#${String(sekil)},#${String(temsil)})`);
   return `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\nFILE_NAME('kutu.step','',(''),(''),'','','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\nENDSEC;\nDATA;\n${s.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`;
 }
+
+// Yalnız testler için: 40x20x10 mm kutunun ortasından Ø10 geçen delikli kutu, libcascade ile üretilir (kart 1984). Üçüncü taraf ya da
+// gerçek parça dosyası depoya girmez; yüzleri bilinir: 6 düzlem, 1 silindir (yarıçap 5, eksen z, yüz ters yönlü).
+interface Uretici {
+  BRepPrimAPI_MakeBox: new (x: number, y: number, z: number) => { Shape(): unknown };
+  BRepPrimAPI_MakeCylinder: new (eksen: unknown, r: number, h: number) => { Shape(): unknown };
+  BRepAlgoAPI_Cut: new (a: unknown, b: unknown, ilerleme: unknown) => { Shape(): unknown };
+  gp_Ax2: new (p: unknown, d: unknown) => unknown;
+  gp_Pnt: new (x: number, y: number, z: number) => unknown;
+  gp_Dir: new (x: number, y: number, z: number) => unknown;
+  Message_ProgressRange: new () => unknown;
+  STEPControl_Writer: new () => { Transfer(s: unknown, tur: unknown, uyum: boolean, ilerleme: unknown): unknown; Write(ad: string): unknown };
+  STEPControl_StepModelType: { STEPControl_AsIs: unknown };
+  FS: { readFile(ad: string, s: { encoding: 'utf8' }): string; unlink(ad: string): void };
+}
+// Modül adı değişkenden: paketin 11 MB tip tanımı çözülmez (hesap-sureci.ts ile aynı neden).
+const LIBCASCADE = 'libcascade/single/init';
+export async function delikliKutuStep(): Promise<string> {
+  const { createInstance } = (await import(LIBCASCADE)) as { createInstance: () => Promise<unknown> };
+  const oc = (await createInstance()) as Uretici;
+  const kutu = new oc.BRepPrimAPI_MakeBox(40, 20, 10).Shape();
+  const sil = new oc.BRepPrimAPI_MakeCylinder(new oc.gp_Ax2(new oc.gp_Pnt(20, 10, -1), new oc.gp_Dir(0, 0, 1)), 5, 12).Shape();
+  const sonuc = new oc.BRepAlgoAPI_Cut(kutu, sil, new oc.Message_ProgressRange()).Shape();
+  const yazici = new oc.STEPControl_Writer();
+  yazici.Transfer(sonuc, oc.STEPControl_StepModelType.STEPControl_AsIs, true, new oc.Message_ProgressRange());
+  yazici.Write('/delikli.stp');
+  const metin = oc.FS.readFile('/delikli.stp', { encoding: 'utf8' });
+  oc.FS.unlink('/delikli.stp');
+  return metin;
+}

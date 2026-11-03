@@ -65,6 +65,7 @@
     "fastify": "^5.2.1",
     "highs": "1.15.3",
     "htm": "3.1.1",
+    "libcascade": "3.1.0",
     "occt-import-js": "0.0.23",
     "pdfjs-dist": "6.4.299",
     "pg": "^8.13.1",

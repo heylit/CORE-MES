@@ -16,10 +16,10 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { isler } from './isler.ts';
-import { EN_COK_DENEME, ILETILER } from './kurallar.ts';
+import { EN_COK_DENEME, ILETILER, YUZ_MOTORU } from './kurallar.ts';
 import { geometriTuru } from './servis.ts';
 import { geometriSureci, geometriSureciKur } from './surec.ts';
-import { kutuStep } from './test-ortak.ts';
+import { delikliKutuStep, kutuStep } from './test-ortak.ts';
 import type { GeometriSureci } from './surec.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -133,6 +133,7 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     assert.ok(Math.abs(a.analiz.obb.cap - 22.3607) < 1e-3, 'uzun eksen çevresinde kesit köşegeni');
     assert.equal(a.analiz.alanMm2, 2800);
     assert.equal(a.analiz.kapali, true);
+    assert.deepEqual(a.analiz.yuzler, { motor: YUZ_MOTORU, toplam: 6, sayilar: { duzlem: 6 } }, 'kesin yüz türü B-rep\'ten (1984)');
     assert.equal(a.is?.denemeSayisi, 1);
     const ham = geometriHamCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ham-onerisi/${String(once.revizyonId)}?payMm=2`)));
     assert.equal(ham.payKaynagi, 'istek');
@@ -271,5 +272,32 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     const son = tamam(await istek('yonetici', 'GET', `/cizimler/${String(eski.belgeId)}`)) as { surum: number };
     tamam(await istek('yonetici', 'POST', `/cizimler/${String(eski.belgeId)}/arsivle`, { surum: son.surum }));
     assert.deepEqual(tamam(await guncel(eski.revizyonId)), { revizyonId: null }, 'belge arşivde');
+  });
+
+  test('G-A8 kesin yüz türü (1984): delikli kutuda 6 düzlem ve 1 silindir; silindir yarıçapı 5, ekseni z, yüz ters; yeniden hesapta satırlar yinelenmez', async () => {
+    const delikli = Buffer.from(await delikliKutuStep());
+    await modelEkle(flans, delikli, 'delikli.step');
+    await tur();
+    const s = (await liste()).find((x) => x.malzemeNo === flans && x.belgeAdi === 'Model delikli.step');
+    assert.ok(s);
+    const a = await analiz(s.revizyonId);
+    assert.equal(a.durum, 'bitti');
+    assert.deepEqual(a.analiz?.yuzler, { motor: YUZ_MOTORU, toplam: 7, sayilar: { duzlem: 6, silindir: 1 } });
+    const satirlar = await o().vt.sorgu<{ tur: string; ters: boolean; yaricap: number | null; eksen: number[] | null; konum: number[] | null; alan: number }>(
+      `SELECT tur, ters, yaricap_mm::float8 AS yaricap, eksen::float8[] AS eksen, konum::float8[] AS konum, alan_mm2::float8 AS alan
+         FROM geometri_yuz WHERE revizyon_id = $1 ORDER BY sira`, [s.revizyonId]);
+    const sil = satirlar.filter((x) => x.tur === 'silindir');
+    assert.equal(sil.length, 1);
+    assert.equal(sil[0]!.yaricap, 5);
+    assert.equal(sil[0]!.ters, true, 'delik: yüz yönü yüzey normalinin tersi');
+    assert.deepEqual(sil[0]!.eksen?.map(Math.abs), [0, 0, 1]);
+    assert.deepEqual(sil[0]!.konum?.slice(0, 2), [20, 10]);
+    assert.ok(Math.abs(sil[0]!.alan - 2 * Math.PI * 5 * 10) < 1e-3, 'delik cidarı alanı');
+    assert.ok(satirlar.filter((x) => x.tur === 'duzlem').every((x) => x.yaricap === null && x.eksen?.length === 3), 'düzlemde yarıçap yok');
+    const yeniden = tamam(await istek('hesaplar', 'POST', `/geometri/analizler/${String(s.revizyonId)}/yeniden-hesapla`, { surum: a.is?.surum ?? null }));
+    assert.ok(yeniden);
+    await tur();
+    const say = await o().vt.sorgu<{ n: number }>('SELECT count(*)::int AS n FROM geometri_yuz WHERE revizyon_id = $1', [s.revizyonId]);
+    assert.equal(say[0]!.n, 7);
   });
 });

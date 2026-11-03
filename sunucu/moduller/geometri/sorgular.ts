@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { GeometriDosyaTuru, GeometriIsDurumu } from '#paylasilan/sozlesme/geometri.ts';
-import type { Olcum } from './kurallar.ts';
+import type { Olcum, Yuz, YuzTuru } from './kurallar.ts';
 
 export interface IsSatiri {
   id: number;
@@ -93,6 +93,31 @@ export async function analizYaz(
        hesap_suresi_ms = EXCLUDED.hesap_suresi_ms, hesap_zamani = now()`,
     [s.revizyonId, s.belgeId, s.ozet, s.motor, o.kutu.x, o.kutu.y, o.kutu.z, o.obb.a, o.obb.b, o.obb.c, o.obb.yon.flat(),
       o.hacimMm3, o.alanMm2, o.govdeSayisi, o.kapali, o.ucgenSayisi, s.sureMs, o.obb.cap],
+  );
+}
+
+// Yüzler analizle aynı işlemde yenilenir: önce revizyonun eski satırları silinir. null (okunamadı ya da sınırı aştı) satırsız bırakır.
+export async function yuzlerYaz(db: Db, revizyonId: number, motor: string, yuzler: readonly Yuz[] | null): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_yuz WHERE revizyon_id = $1', [revizyonId]);
+  if (yuzler === null || yuzler.length === 0) return;
+  const uc = (d: readonly number[] | null): string | null => (d === null ? null : `{${d.join(',')}}`);
+  await db.sorgu(
+    `INSERT INTO geometri_yuz (revizyon_id, sira, tur, ters, alan_mm2, yaricap_mm, ikinci_yaricap_mm, yari_aci_derece, eksen, konum, motor)
+     SELECT $1, u.sira, u.tur, u.ters, u.alan, u.yaricap, u.ikinci, u.aci, u.eksen::numeric[], u.konum::numeric[], $2
+       FROM unnest($3::int[], $4::text[], $5::bool[], $6::numeric[], $7::numeric[], $8::numeric[], $9::numeric[], $10::text[], $11::text[])
+         AS u(sira, tur, ters, alan, yaricap, ikinci, aci, eksen, konum)`,
+    [revizyonId, motor, yuzler.map((_, i) => i + 1), yuzler.map((y) => y.tur), yuzler.map((y) => y.ters), yuzler.map((y) => y.alanMm2),
+      yuzler.map((y) => y.yaricapMm), yuzler.map((y) => y.ikinciYaricapMm), yuzler.map((y) => y.yariAciDerece),
+      yuzler.map((y) => uc(y.eksen)), yuzler.map((y) => uc(y.konum))],
+  );
+}
+
+export interface YuzOzetiSatiri { motor: string; tur: YuzTuru; sayi: number }
+
+export function yuzOzeti(db: Db, revizyonId: number): Promise<YuzOzetiSatiri[]> {
+  return db.sorgu<YuzOzetiSatiri>(
+    'SELECT motor, tur, count(*)::int AS sayi FROM geometri_yuz WHERE revizyon_id = $1 GROUP BY motor, tur ORDER BY tur',
+    [revizyonId],
   );
 }
 

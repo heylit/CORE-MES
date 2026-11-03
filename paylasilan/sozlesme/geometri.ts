@@ -16,6 +16,16 @@ export type GeometriDosyaTuru = (typeof GEOMETRI_DOSYA_TURLERI)[number];
 
 const mm = z.number().nonnegative();
 
+// Kesin yüz türleri (kart 1984): B-rep yüzeyinin türü; dönel, ekstrüzyon ve ofset genel yüzeylerdir.
+export const GEOMETRI_YUZ_TURLERI = ['duzlem', 'silindir', 'koni', 'kure', 'torus', 'bezier', 'bspline', 'donel', 'ekstruzyon', 'ofset', 'diger'] as const;
+export type GeometriYuzTuru = (typeof GEOMETRI_YUZ_TURLERI)[number];
+// Yüz özeti: motor, toplam yüz ve türe göre sayı (olmayan tür yazılmaz). Yüz okunamadıysa ya da sınırı aştıysa analizde null.
+export const geometriYuzOzetiSemasi = z.object({
+  motor: z.string(),
+  toplam: z.number().int().min(0),
+  sayilar: z.record(z.enum(GEOMETRI_YUZ_TURLERI), z.number().int().min(1)),
+});
+
 export const geometriAnaliziSemasi = z.object({
   motor: z.string(),
   // Eksenlere hizalı dış kutu (modelin kendi eksenlerinde).
@@ -31,6 +41,7 @@ export const geometriAnaliziSemasi = z.object({
   ucgenSayisi: z.number().int().min(1),
   hesapSuresiMs: z.number().int().min(0),
   hesapZamani: zamanSemasi,
+  yuzler: geometriYuzOzetiSemasi.nullable(),
 });
 export type GeometriAnalizi = z.output<typeof geometriAnaliziSemasi>;
 
