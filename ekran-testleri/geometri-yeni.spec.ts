@@ -25,6 +25,14 @@ const ANALIZ = {
   },
 };
 const HAM = { revizyonId: 8, payMm: 0, payKaynagi: 'yok', enAz: { a: 45, b: 20, c: 10 }, oneriler: [], kaliteler: [], neden: 'stok-listesi-yok' };
+// Özellikler kartının okuduğu cevap (2044-2): yayındaki rev 8 için gerçek uç 200 döner; sentetik tek geçiş deliği.
+const OZELLIK = {
+  revizyonId: 8, motor: 'ornek-motor',
+  ozellikler: [{
+    sira: 1, tur: 'delik', ust: null, capMm: 6, yaricapMm: null, derinlikMm: 10, aciDerece: null, genislikMm: null, boyMm: null,
+    gecis: true, dip: null, ic: null, eksen: [0, 0, -1], konum: [10, 10, 10], yuzler: [1],
+  }],
+};
 const BULUNAMADI = { kod: 'BULUNAMADI', mesaj: 'Bu revizyon bir malzeme kartına bağlı, yayındaki STEP ya da IGES modeli değil.' };
 
 async function sunucu(page: Page): Promise<void> {
@@ -34,6 +42,7 @@ async function sunucu(page: Page): Promise<void> {
     if (yol === '/geometri/modeller') return json(200, LISTE);
     if (yol === '/geometri/analizler/8') return json(200, ANALIZ);
     if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, HAM);
+    if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
     if (yol === '/geometri/modeller/8/dosya') return r.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.alloc(0) });
     if (yol === '/geometri/modeller/1/guncel') return json(200, { revizyonId: 8 });
     if (yol === '/geometri/modeller/2/guncel') return json(200, { revizyonId: null });

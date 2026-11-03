@@ -2,11 +2,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriOzellik, GeometriOzellikCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { rotalar } from './rotalar.tsx';
 
-vi.mock('./Goruntu3B.tsx', () => ({ default: () => <div>görüntü</div> }));
+vi.mock('./Goruntu3B.tsx', () => ({
+  default: ({ vurgu }: { vurgu?: { capMm: number; konum: readonly number[] } | null }) => (
+    <>
+      <div>görüntü</div>
+      {vurgu ? <div>{`vurgu Ø${String(vurgu.capMm)} @ ${vurgu.konum.join(',')}`}</div> : null}
+    </>
+  ),
+}));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -59,6 +66,22 @@ const HAM: GeometriHamCevabi = {
   oneriler: [{ malzemeNo: 9, kod: 'HM-0009', ad: 'Çubuk Ø25', kalite: 'C45', form: 'cubuk', olcu: { d: 25, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 21598.4 }],
 };
 const HAM_AYAR: GeometriHamCevabi = { ...HAM, payMm: 3, payKaynagi: 'ayar', enAz: { a: 46, b: 26, c: 16 } };
+const oz = (o: Partial<GeometriOzellik> & Pick<GeometriOzellik, 'sira' | 'tur'>): GeometriOzellik => ({
+  ust: null, capMm: null, yaricapMm: null, derinlikMm: null, aciDerece: null, genislikMm: null, boyMm: null, gecis: null, dip: null, ic: null,
+  eksen: null, konum: null, yuzler: [1], ...o,
+});
+const OZELLIK: GeometriOzellikCevabi = {
+  revizyonId: 41, motor: 'libcascade@3.1.0',
+  ozellikler: [
+    oz({ sira: 1, tur: 'delik', capMm: 10, derinlikMm: 20, gecis: true, eksen: [0, 0, -1], konum: [15, 15, 20] }),
+    oz({ sira: 2, tur: 'havsa', ust: 1, capMm: 16, aciDerece: 90, derinlikMm: 3 }),
+    oz({ sira: 3, tur: 'delik', capMm: 6, derinlikMm: 8, gecis: false, dip: 'matkap', aciDerece: 118, eksen: [0, 0, -1], konum: [40, 24, 20] }),
+    oz({ sira: 4, tur: 'delik', capMm: 8, derinlikMm: 60, gecis: true, eksen: [1, 0, 0], konum: [0, 15, 8] }),
+    oz({ sira: 5, tur: 'kademe', ust: 4, capMm: 11, derinlikMm: 4 }),
+    oz({ sira: 6, tur: 'pah', genislikMm: 2.1213, aciDerece: 45, boyMm: 20 }),
+    oz({ sira: 7, tur: 'radyus', yaricapMm: 2, ic: false, boyMm: 20 }),
+  ],
+};
 const DOSYA = () => new Response(new Uint8Array([1, 2, 3]), { status: 200 });
 
 describe('3D Atölyesi', () => {
@@ -185,5 +208,64 @@ describe('3D Atölyesi', () => {
     expect(await screen.findByText('Hesap 120 saniyede bitmedi.')).toBeTruthy();
     expect(screen.getByText('Model kapalı değil, hesaplanamadı')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('button', { name: /Yeniden hesapla/ }).hasAttribute('disabled')).toBe(false));
+  });
+  it('2044-2: özellikler kartı delikleri bağlı havşa ve kademeyle, pah ve radyüsü listeler; delik satırı modelde vurgulanır, ikinci dokunuş kaldırır', async () => {
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, OZELLIK),
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText('Özellikler (öneri)')).toBeTruthy();
+    expect(await screen.findByText('5 özellik')).toBeTruthy();
+    expect(screen.getByText('3 delik')).toBeTruthy();
+    expect(screen.getByText('Ø10 geçiş · 20 mm')).toBeTruthy();
+    expect(screen.getByText('Havşa Ø16 x 90°')).toBeTruthy();
+    expect(screen.getByText('Ø6 kör · 8 mm')).toBeTruthy();
+    expect(screen.getByText('Üst yüz (Z) · matkap ucu 118°')).toBeTruthy();
+    expect(screen.getByText('Yan yüz (X)')).toBeTruthy();
+    expect(screen.getByText('Kademe Ø11 x 4 mm')).toBeTruthy();
+    expect(screen.getByText('Pah 1,5 x 45°')).toBeTruthy();
+    expect(screen.getByText('R2 dış kenar')).toBeTruthy();
+    const satir = screen.getByRole('button', { name: /Ø10 geçiş/ });
+    expect(satir.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(satir);
+    expect(await screen.findByText('vurgu Ø10 @ 15,15,20')).toBeTruthy();
+    expect(satir.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(satir);
+    await waitFor(() => expect(screen.queryByText(/^vurgu/)).toBeNull());
+    // Pah ve radyüsün konumu yok: seçilemez (düğme değildir).
+    expect(screen.queryByRole('button', { name: /Pah/ })).toBeNull();
+  });
+
+  it('2044-2: yüzler okunamadıysa ve özellik yoksa ayrı ileti; hesap sürerken özellik okunmaz', async () => {
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: null, ozellikler: null }),
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText(/yüzleri okunamadı; özellik tanınamadı/)).toBeTruthy();
+    cleanup();
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: 'libcascade@3.1.0', ozellikler: [] }),
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText('Tanınan delik, pah ya da radyüs yok.')).toBeTruthy();
+    cleanup();
+    const ikinci = sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/42': () => json(200, { ...ANALIZ, revizyonId: 42, durum: 'calisiyor' }),
+      'GET /geometri/modeller/42/dosya': DOSYA,
+    });
+    ac('/geometri?rev=42');
+    // Analiz kartı eski analizi gösterir; özellikler kartı hesap bitene kadar bekler.
+    expect(await screen.findByText('Hesap sürüyor; sonuç gelince burada görünür.')).toBeTruthy();
+    expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler'))).toBe(false);
   });
 });
