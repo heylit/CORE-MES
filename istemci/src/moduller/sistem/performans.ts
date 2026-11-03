@@ -13,6 +13,10 @@ export const ARALIKLAR: readonly { anahtar: Aralik; baslik: string }[] = [
 export const YANIT_ESIGI_MS = 1000;
 // Olay döngüsü eşiği sunucudaki "Sunucu tıkanıyor" kuralıyla aynıdır (saglik kurallar.ts, olay-dongusu).
 export const OLAY_DONGUSU_ESIGI_MS = 500;
+// Bellek eşiği sunucudaki "Bellek az" kuralıyla aynıdır (saglik kurallar.ts, bellek): makinenin boş belleği toplamın bu payı.
+export const BELLEK_ESIGI_PAYI = 0.1;
+const MB = 1024 * 1024;
+const mb = (bayt: number): number => Math.round(bayt / MB);
 
 export interface Nokta { an: Date; deger: number | null }
 export interface Seriler {
@@ -23,6 +27,8 @@ export interface Seriler {
   havuz: Nokta[];
   anaIs: Nokta[];
   dongu: Nokta[];
+  uygulamaBellek: Nokta[];
+  makineBosBellek: Nokta[];
 }
 
 export function dakikaSerileri(d: readonly MetrikDakikasi[]): Seriler {
@@ -35,10 +41,13 @@ export function dakikaSerileri(d: readonly MetrikDakikasi[]): Seriler {
     havuz: seri((m) => m.havuz?.kullanimda ?? null),
     anaIs: seri((m) => m.anaIsParcacigiYuzde ?? null),
     dongu: seri((m) => m.olayDongusuP99Ms),
+    uygulamaBellek: seri((m) => mb(m.bellek.rssBayt)),
+    makineBosBellek: seri((m) => (m.bellek.makineToplamBayt <= 0 ? null : mb(m.bellek.makineBosBayt))),
   };
 }
 
-// Saatlik özet: istek saatin toplamı, p95 saatin en kötü dakikası, işlemci ortalama, havuz en çok kullanım.
+// Saatlik özet: istek saatin toplamı, p95 saatin en kötü dakikası, işlemci ortalama, havuz en çok kullanım;
+// bellekte uygulamanın en çoğu ve makinenin en az boşu (uyarıyı tetikleyen uç değerler).
 export function saatSerileri(s: readonly SaatOzeti[]): Seriler {
   const seri = (oku: (o: SaatOzeti) => number | null): Nokta[] => s.map((o) => ({ an: new Date(o.saat), deger: oku(o) }));
   return {
@@ -49,6 +58,8 @@ export function saatSerileri(s: readonly SaatOzeti[]): Seriler {
     havuz: seri((o) => o.havuz?.kullanimdaEnCok ?? null),
     anaIs: seri((o) => o.anaIsParcacigiYuzde?.ort ?? null),
     dongu: seri((o) => o.olayDongusuP99MsEnCok),
+    uygulamaBellek: seri((o) => mb(o.bellek.rssBaytEnCok)),
+    makineBosBellek: seri((o) => mb(o.bellek.makineBosBaytEnAz)),
   };
 }
 
@@ -122,6 +133,12 @@ export function saatOzetiKutulari(s: readonly SaatOzeti[]): Ozet {
     anaIsYuzde: son.anaIsParcacigiYuzde?.ort ?? null,
     anaIsYuzdeEnCok: enCok(s.map((o) => o.anaIsParcacigiYuzde?.enCok ?? null)),
   };
+}
+
+// Eşik çizgisi yalnız toplam bellek bilindiğinde (dakika ölçüsü) çizilir; saatlik özet toplamı taşımaz.
+export function bellekEsigiMb(d: readonly MetrikDakikasi[]): number | null {
+  const toplam = d.at(-1)?.bellek.makineToplamBayt;
+  return toplam === undefined || toplam <= 0 ? null : mb(toplam * BELLEK_ESIGI_PAYI);
 }
 
 export interface YavasUc { yontem: string; yol: string; sayi: number; p95Ms: number | null }

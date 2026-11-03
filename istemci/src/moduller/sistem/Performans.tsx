@@ -7,7 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CizgiGrafik } from './CizgiGrafik.tsx';
 import {
-  ARALIKLAR, OLAY_DONGUSU_ESIGI_MS, YANIT_ESIGI_MS, dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, sayiMetni, zamanEtiketi,
+  ARALIKLAR, OLAY_DONGUSU_ESIGI_MS, YANIT_ESIGI_MS, bellekEsigiMb, dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, sayiMetni, zamanEtiketi,
   type Aralik, type Ozet, type YavasUc,
 } from './performans.ts';
 
@@ -64,8 +64,10 @@ export function Performans() {
   });
   const sorgu = aralik === 'saat' ? dakikalar : saatlik;
   const veri = aralik === 'saat'
-    ? dakikalar.data && { seriler: dakikaSerileri(dakikalar.data.dakikalar), ozet: dakikaOzeti(dakikalar.data.dakikalar) }
-    : saatlik.data && { seriler: saatSerileri(saatlik.data.saatler), ozet: saatOzetiKutulari(saatlik.data.saatler) };
+    ? dakikalar.data && {
+      seriler: dakikaSerileri(dakikalar.data.dakikalar), ozet: dakikaOzeti(dakikalar.data.dakikalar), bellekEsigi: bellekEsigiMb(dakikalar.data.dakikalar),
+    }
+    : saatlik.data && { seriler: saatSerileri(saatlik.data.saatler), ozet: saatOzetiKutulari(saatlik.data.saatler), bellekEsigi: null };
   const etiket = (an: Date) => zamanEtiketi(an, aralik);
   const yavas = dakikalar.data ? enYavasUclar(dakikalar.data.dakikalar) : [];
 
@@ -93,6 +95,10 @@ export function Performans() {
             seriler={[{ ad: 'Uygulama', ton: 'birinci', noktalar: veri.seriler.surec }, { ad: 'Makine', ton: 'ikinci', noktalar: veri.seriler.makine }]}
           />
           <CizgiGrafik
+            baslik="Bellek (MB)" birim=" MB" etiket={etiket} esik={veri.bellekEsigi ?? undefined}
+            seriler={[{ ad: 'Uygulama', ton: 'birinci', noktalar: veri.seriler.uygulamaBellek }, { ad: 'Makinede boş', ton: 'ikinci', noktalar: veri.seriler.makineBosBellek }]}
+          />
+          <CizgiGrafik
             baslik="Ana iş parçacığı (%)" birim="%" etiket={etiket} tavan={100}
             seriler={[{ ad: 'Dolu', ton: 'birinci', noktalar: veri.seriler.anaIs }]}
           />
@@ -107,10 +113,13 @@ export function Performans() {
           <p className="tc-sistem-soluk">
             {aralik === 'saat'
               ? 'Her nokta bir dakika; son 60 dakika sunucu belleğinden gelir.'
-              : 'Her nokta bir saat; p95 ve olay döngüsü o saatin en kötü dakikası, işlemci saatin ortalamasıdır.'}
+              : 'Her nokta bir saat; p95 ve olay döngüsü o saatin en kötü dakikası, işlemci saatin ortalamasıdır; bellekte uygulamanın en çoğu, makinenin en az boşu gösterilir.'}
           </p>
           <p className="tc-sistem-soluk">
             Uygulama işlemcisi bütün çekirdeklere bölünür; istekler tek iş parçacığında işlendiği için tıkanmayı ana iş parçacığı ve olay döngüsü gösterir.
+          </p>
+          <p className="tc-sistem-soluk">
+            Makinede boş bellek eşik çizgisinin altına inerken uygulamanın belleği düz kalıyorsa belleği aynı makinedeki başka bir program kullanıyordur.
           </p>
         </>
       )}

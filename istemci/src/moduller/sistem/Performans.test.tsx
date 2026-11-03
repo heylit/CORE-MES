@@ -59,7 +59,7 @@ describe('Performans', () => {
     await waitFor(() => expect(screen.getByText('Yanıt süresi p95')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: '13 ay' }));
     await waitFor(() => expect(yollar).toContain('/saglik/metrikler/saatlik?aralik=yil'));
-    await waitFor(() => expect(screen.getAllByText('Bu aralıkta ölçü yok.')).toHaveLength(6));
+    await waitFor(() => expect(screen.getAllByText('Bu aralıkta ölçü yok.')).toHaveLength(7));
     expect(screen.getByRole('button', { name: '13 ay' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
