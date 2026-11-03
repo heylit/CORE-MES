@@ -188,12 +188,13 @@ export async function markala(db: Db, kullanici: Kullanici, g: MarkalaGovdesi): 
   const alanlar = (await s.alanlariOku(db, [t.id])).get(t.id) ?? [];
   if (!seriAlaniVarMi(alanlar)) throw gecersiz('Bu tanımda seri no taşıyan marka yok; seri verilmez.');
   const k = await seriKaynagi(db, t, g.uretimEmriId);
-  // MRK-12: istasyon varsa kayıtlı ve aktif olmalı (yabancı anahtar Aşama 2'de).
-  if (g.istasyonId !== null) {
-    const istasyon = await istasyonGetir(db, g.istasyonId);
-    if (istasyon === null) throw dogrulama('İstasyon bulunamadı.', 'istasyonId');
-    if (!istasyon.aktif) throw dogrulama('İstasyon pasif; seri verilmez.', 'istasyonId');
-  }
+  // MRK-12, 2036 a: seri yalnız markalama istasyonunda verilir; istasyon zorunlu, kayıtlı, aktif ve tipi markalama (yabancı anahtar Aşama 2'de).
+  // Seri alma yetkisi rol düzeyindedir (2030); hangi tezgâhta verildiğini bu kural sınırlar.
+  if (g.istasyonId === null) throw dogrulama('Markalama istasyonu seçin; seri yalnız markalama istasyonunda verilir.', 'istasyonId');
+  const istasyon = await istasyonGetir(db, g.istasyonId);
+  if (istasyon === null) throw dogrulama('İstasyon bulunamadı.', 'istasyonId');
+  if (!istasyon.aktif) throw dogrulama('İstasyon pasif; seri verilmez.', 'istasyonId');
+  if (istasyon.tip !== 'markalama') throw dogrulama('Bu istasyon markalama istasyonu değil; seri verilmez.', 'istasyonId');
   const gun = tesisGunu(Date.now());
   const sira = await s.sayaciArtir(db, t.malzemeId, kapsamAnahtari(t.sayacKapsami, g.uretimEmriId, gun), t.baslangicSirasi);
   const seriNo = seriNoUret(t.seriSablonu, { parca: k.parca, emir: k.emirNo, gun }, sira);

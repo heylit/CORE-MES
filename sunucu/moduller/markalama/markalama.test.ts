@@ -73,7 +73,7 @@ describe('markalama (gerçek PostgreSQL)', () => {
   async function makineKur(): Promise<number> {
     sayac += 1;
     const im = await o().sahip.tek<{ id: number }>('INSERT INTO is_merkezi (kod, ad) VALUES ($1, $2) RETURNING id', [`MKM${sayac}`, 'Deneme Merkezi']);
-    const ist = await o().sahip.tek<{ id: number }>('INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ($1, $2, $3) RETURNING id', [`MKI${sayac}`, `Deneme İstasyonu ${sayac}`, im?.id]);
+    const ist = await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, tip) VALUES ($1, $2, $3, 'markalama') RETURNING id", [`MKI${sayac}`, `Deneme İstasyonu ${sayac}`, im?.id]);
     return (await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`MKK${sayac}`, 'Lazer', ist?.id]))!.id;
   }
 
@@ -115,7 +115,9 @@ describe('markalama (gerçek PostgreSQL)', () => {
   }
 
   async function markala(ad: string, tanimId: number, uretimEmriId: number, sonuc = 'iyi', kimlik?: string): Promise<Cevap<MarkalamaBirimi>> {
-    return istek<MarkalamaBirimi>(ad, 'POST', '/markalama/birimler/markala', { tanimId, uretimEmriId, sonuc }, kimlik);
+    // 2036 a: seri yalnız markalama istasyonunda verilir; testler son kurulan markalama istasyonunu kullanır.
+    const ist = await o().sahip.tek<{ id: number }>("SELECT id FROM istasyon WHERE tip = 'markalama' AND aktif ORDER BY id DESC LIMIT 1");
+    return istek<MarkalamaBirimi>(ad, 'POST', '/markalama/birimler/markala', { tanimId, uretimEmriId, istasyonId: ist?.id ?? null, sonuc }, kimlik);
   }
 
   before(async () => {
@@ -171,7 +173,7 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await kaydet(t.surum)).durum, 409, 'eski sürüm');
   });
 
-  test('MRK-U8: model malzemeye bağlı belge, istasyon kayıtlı ve aktif olmalı; yüzey yönü sıfır olamaz', async () => {
+  test('MRK-U8, 2036 a: model malzemeye bağlı belge, istasyon zorunlu, kayıtlı, aktif ve markalama tipinde olmalı; yüzey yönü sıfır olamaz', async () => {
     const m = await malzemeAc();
     const ekle = (govde: Record<string, unknown>) => istek<{ alan?: string }>('yonetici', 'POST', '/markalama/tanimlar/ekle', {
       malzemeId: m, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani], ...govde,
@@ -188,6 +190,12 @@ describe('markalama (gerçek PostgreSQL)', () => {
     const makine = await o().sahip.tek<{ istasyonId: number }>('SELECT istasyon_id AS "istasyonId" FROM makine ORDER BY id DESC LIMIT 1');
     const istasyonlu = (istasyonId: number) => istek<MarkalamaBirimi>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, istasyonId, sonuc: 'iyi' });
     assert.equal((await istasyonlu(2147483647)).durum, 400, 'olmayan istasyon');
+    const istasyonsuz = await istek<{ alan?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, sonuc: 'iyi' });
+    assert.equal(istasyonsuz.durum, 400, '2036 a: istasyonsuz seri verilmez');
+    assert.equal(istasyonsuz.govde.alan, 'istasyonId');
+    const im = await o().sahip.tek<{ id: number }>("SELECT is_merkezi_id AS id FROM istasyon WHERE id = $1", [makine!.istasyonId]);
+    const torna = await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, tip) VALUES ('MKTORNA', 'Deneme torna', $1, 'talasli') RETURNING id", [im!.id]);
+    assert.equal((await istasyonlu(torna!.id)).durum, 400, '2036 a: markalama tipi olmayan istasyon');
     const iyi = await istasyonlu(makine!.istasyonId);
     assert.equal(iyi.durum, 200, JSON.stringify(iyi.govde));
     assert.equal(iyi.govde.istasyonId, makine!.istasyonId);
@@ -225,7 +233,8 @@ describe('markalama (gerçek PostgreSQL)', () => {
     const ilk = await markala('operator', t.id, emir);
     assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
     assert.equal(ilk.govde.seriNo.length, 80);
-    const tasan = await istek<{ mesaj?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, sonuc: 'iyi' });
+    const ist = await o().sahip.tek<{ id: number }>("SELECT id FROM istasyon WHERE tip = 'markalama' AND aktif ORDER BY id DESC LIMIT 1");
+    const tasan = await istek<{ mesaj?: string }>('operator', 'POST', '/markalama/birimler/markala', { tanimId: t.id, uretimEmriId: emir, istasyonId: ist!.id, sonuc: 'iyi' });
     assert.equal(tasan.durum, 422);
     assert.match(tasan.govde.mesaj ?? '', /80 karakteri aşıyor/);
   });
