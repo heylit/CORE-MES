@@ -1,16 +1,9 @@
-import type { ComponentType } from 'react';
+import { createElement, lazy, Suspense, type ComponentType } from 'react';
 import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
+import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import type { AkisDegerleri, OlayTuru } from './akislar.ts';
 import type { FinansVerisi, FinansYetkisi } from './veri.ts';
-import { AnaSayfa } from './ana/index.tsx';
-import { Ayarlar } from './ayarlar/index.tsx';
-import { Cekler } from './cekler/index.tsx';
-import { Firmalar } from './firmalar/index.tsx';
-import { Kayitlar } from './kayitlar/index.tsx';
-import { Butce, NakitPlani, VergiTakvimi } from './plan/index.tsx';
-import { AyKapanisi, DurumVeOneriler, GelirTablosu, KararAraclari, Tahminler } from './raporlar/index.tsx';
-import { GenelGider } from './genel-gider.tsx';
 
 // Ekranın iç gezinmesi: ikinci menünün 14 maddesi aynı sırayla sekme olur (menü verisinden okunur). Her sekme menü maddesinin
 // adresinde açılır (1418, 1392 a): menü, hızlı işler ve başka modüllerin bağları değişmeden ekrana gelir.
@@ -31,6 +24,48 @@ type Madde = (typeof finansMenusu)['gruplar'][number]['maddeler'][number];
 // Kabuk şeridinin madde sayıları (firmalar, çekler) aynı uçtan sekmelere de yazılır: şerit bu ekranda çizilmez.
 export const SAYAC_UCU: string | undefined = finansMenusu.sayacUcu;
 export type SekmeAnahtari = Madde['anahtar'];
+
+// Ekranlar ana pakete girmez: rotalar.tsx bu dosyayı sabit olarak ithal eder, kabuk da rotaları hevesli tarar; doğrudan ithal
+// bütün bölümleri (ve grafik kitaplığını) ilk açılışta indirtiyordu. Bir bölüm ilk açılınca hepsi birlikte indirilir, sekmeler arası geçiş beklemez.
+const yukleyiciler = {
+  ana: () => import('./ana/index.tsx'),
+  ayarlar: () => import('./ayarlar/index.tsx'),
+  cekler: () => import('./cekler/index.tsx'),
+  firmalar: () => import('./firmalar/index.tsx'),
+  kayitlar: () => import('./kayitlar/index.tsx'),
+  plan: () => import('./plan/index.tsx'),
+  raporlar: () => import('./raporlar/index.tsx'),
+  genelGider: () => import('./genel-gider.tsx'),
+};
+let hepsi: Promise<unknown> | null = null;
+// İndirilemeyen bölüm (bağlantı koptu) burada sessiz kalır: açıldığında kendi beklemesi hatayı gösterir, sonraki açılış yeniden dener.
+const hepsiniYukle = (): Promise<unknown> => (hepsi ??= Promise.all(Object.values(yukleyiciler).map((y) => y())).catch(() => { hepsi = null; }));
+
+// Bekleme bölümün içinde çizilir: kabuğun rota beklemesine düşen ekran sekmeleriyle birlikte kaybolurdu. Ötekiler açılan bölüm
+// geldikten sonra istenir: aynı klasörü iki yerden aynı anda istemek test ortamının modül yükleyicisinde yarım modül döndürüyordu.
+function tembel<M>(yukle: () => Promise<M>, sec: (m: M) => ComponentType<EkranOzellikleri>): ComponentType<EkranOzellikleri> {
+  const Ekran = lazy(async () => {
+    const m = await yukle();
+    void hepsiniYukle();
+    return { default: sec(m) };
+  });
+  return (ozellik) => createElement(Suspense, { fallback: createElement(DurumKutusu, { durum: 'yukleniyor' }) }, createElement(Ekran, ozellik));
+}
+
+const AnaSayfa = tembel(yukleyiciler.ana, (m) => m.AnaSayfa);
+const Ayarlar = tembel(yukleyiciler.ayarlar, (m) => m.Ayarlar);
+const Cekler = tembel(yukleyiciler.cekler, (m) => m.Cekler);
+const Firmalar = tembel(yukleyiciler.firmalar, (m) => m.Firmalar);
+const Kayitlar = tembel(yukleyiciler.kayitlar, (m) => m.Kayitlar);
+const NakitPlani = tembel(yukleyiciler.plan, (m) => m.NakitPlani);
+const Butce = tembel(yukleyiciler.plan, (m) => m.Butce);
+const VergiTakvimi = tembel(yukleyiciler.plan, (m) => m.VergiTakvimi);
+const DurumVeOneriler = tembel(yukleyiciler.raporlar, (m) => m.DurumVeOneriler);
+const GelirTablosu = tembel(yukleyiciler.raporlar, (m) => m.GelirTablosu);
+const KararAraclari = tembel(yukleyiciler.raporlar, (m) => m.KararAraclari);
+const AyKapanisi = tembel(yukleyiciler.raporlar, (m) => m.AyKapanisi);
+const Tahminler = tembel(yukleyiciler.raporlar, (m) => m.Tahminler);
+const GenelGider = tembel(yukleyiciler.genelGider, (m) => m.GenelGider);
 
 // Sekme -> ekran ve sahibi parça. Firmalar ve Genel gider rakam yetkisi istemez (kendi işlemiyle açılır).
 export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellikleri>; parca: 'F1' | 'F2' | 'F3' | 'F4' | 'var' }> = {
