@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type {
   KmBalon, KmBalonlarGovdesi, KmBalonYeriGovdesi, KmMerkezBelgeleriCevabi, KmMerkezBelgesi, KmNumunelerCevabi, KmOlcumGovdesi, KmOlcumlerCevabi, KmResim, KmResimEkleGovdesi,
-  KmStudyoParcaCevabi,
+  KmStudyoEsitlemeCevabi, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import type {
   KmCmmOnizlemeCevabi, KmCmmOnizleGovdesi, KmCmmPlaniCevabi, KmCmmYazCevabi, KmCmmYazGovdesi,
@@ -148,6 +148,20 @@ const parcayaKoy = (istemci: ReturnType<typeof useQueryClient>, resim: KmResim) 
     ...o, resimler: o.resimler.some((r) => r.id === resim.id) ? o.resimler.map((r) => (r.id === resim.id ? resim : r)) : [...o.resimler, resim],
   });
 };
+
+// Kartına Çizim Merkezi'nde bağlı yayındaki PDF ve 3B parçaya alınır (1993 a); eklenen varsa parça ve liste yeniden okunur.
+export function useMerkezdenEsitle() {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (malzemeNo: number) => tekrarKorumaliGonder((d) => api.post<KmStudyoEsitlemeCevabi>(
+      `/kalite-merkezi/studyo/parcalar/${String(malzemeNo)}/esitle`, {},
+      { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
+    )),
+    onSuccess: ({ eklenen }, malzemeNo) => {
+      if (eklenen > 0) void istemci.invalidateQueries({ queryKey: studyoAnahtari.parca(malzemeNo) });
+    },
+  });
+}
 
 // Belge merkezindeki yayındaki revizyon parçaya alınır (603 a); revizyon harfi belgenin yayındaki harfidir.
 export function useResimAl() {

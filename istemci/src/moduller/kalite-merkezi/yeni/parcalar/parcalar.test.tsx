@@ -32,6 +32,18 @@ describe('Parçalar listesi', () => {
     expect(screen.getByText('2 parça')).toBeTruthy();
   });
 
+  it('1993 a: Kalite kaydı olmayan aktif mamul ve yarı mamul kartı da satırdır; kaydı olan kart ikinci kez gelmez', async () => {
+    kmAc('parcalar', MUAYENECI, KAYITLAR, { parcalar: [
+      { malzemeNo: 50, kod: 'DNM-01', ad: 'Deneme mili', aktif: true },
+      { malzemeNo: 51, kod: 'DNM-09', ad: 'Deneme gövde', aktif: true },
+    ] });
+    const s = await satir(/DNM-09/);
+    expect(within(s).getByText('Deneme gövde')).toBeTruthy();
+    expect(within(s).getByText('Muayene yok')).toBeTruthy();
+    expect(screen.getAllByRole('row', { name: /DNM-01/ })).toHaveLength(1);
+    expect(screen.getByText('3 parça')).toBeTruthy();
+  });
+
   it('arama parça no ve adda yapılır', async () => {
     ac(MUAYENECI);
     await satir(/DNM-01/);

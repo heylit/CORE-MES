@@ -38,15 +38,42 @@ async function resimlerCevabi(db: Db, satirlar: readonly sorgular.ResimSatiri[])
   return satirlar.map((r) => ({ ...r, balonlar: balonlar.filter((b) => b.resimId === r.id).map(balonCevabi) }));
 }
 
+// Malzeme kartına Çizim Merkezi'nde bağlı, yayındaki revizyonu olan PDF ve 3B modeller (alma süzgeciyle aynı).
+async function kartinYayindakiBelgeleri(db: Db, malzemeNo: number) {
+  return (await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)).flatMap((b) => {
+    const tur = b.dosyaTuru === null ? null : studyoResimTuru(b.dosyaTuru);
+    if (tur === null || b.revizyonId === null || b.harf === null || b.ozet === null) return [];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, tur }];
+  });
+}
+
+const resimAnahtari = (merkezBelgeId: number, ozet: string) => `${String(merkezBelgeId)}:${ozet}`;
+
 export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyoParcaCevabi> {
   const resimler = await resimlerCevabi(db, await sorgular.parcaResimleri(db, malzemeNo));
   // Plan yalnız Kalite Merkezi'nin kuralıyla yazılır; okunamayan plan sessizce boş sayılmaz (hata olarak görünür).
   const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo)).map((p) => ({ opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }));
-  return { resimler, numunePlanlari };
+  const alinan = new Set((await sorgular.parcaResimKaynaklari(db, malzemeNo)).map((r) => resimAnahtari(r.merkezBelgeId, r.ozet)));
+  const alinmamis = (await kartinYayindakiBelgeleri(db, malzemeNo)).filter((b) => !alinan.has(resimAnahtari(b.id, b.ozet))).length;
+  return { resimler, numunePlanlari, alinmamis };
 }
 
-// Çizim Merkezi'nde malzeme kartına PDF ya da 3B model bağlanmış parça, Kalite Merkezi'nde kaydı olmasa da listede yer alır (1306):
-// resim parçaya yine elle alınır, okuma bir şey yazmaz.
+// Kartına bağlı yayındaki PDF ve 3B parçaya kendiliğinden alınır (1993 a; 1306'daki elle almanın yerine). Okuma yazmadığı için alma ayrı
+// komuttur ve alan kişi satıra yazılır. Parçadan elle kaldırılmış revizyon geri getirilmez: kaldırma kalite onayıdır, eşitleme onu bozmaz.
+export async function merkezdenEsitle(db: Db, kisiId: number, malzemeNo: number): Promise<{ eklenen: number }> {
+  if ((await malzemeOzeti(db, malzemeNo)) === null) throw ret('parcaYok', 'malzemeNo');
+  const alinan = new Set((await sorgular.parcaResimKaynaklari(db, malzemeNo)).map((r) => resimAnahtari(r.merkezBelgeId, r.ozet)));
+  let eklenen = 0;
+  for (const b of await kartinYayindakiBelgeleri(db, malzemeNo)) {
+    if (alinan.has(resimAnahtari(b.id, b.ozet))) continue;
+    await sorgular.resimEkle(db, { malzemeNo, tur: b.tur, merkezBelgeId: b.id, ozet: b.ozet, ad: b.ad, revizyon: b.harf, kisiId });
+    eklenen += 1;
+  }
+  return { eklenen };
+}
+
+// Çizim Merkezi'nde malzeme kartına PDF ya da 3B model bağlanmış parça, Kalite Merkezi'nde kaydı olmasa da listede yer alır (1306);
+// okuma bir şey yazmaz.
 export async function studyoOzetleri(db: Db): Promise<KmStudyoOzeti[]> {
   const ozetler = await sorgular.studyoOzetleri(db);
   const merkez = await kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', KM_MERKEZ_BICIMLERI);

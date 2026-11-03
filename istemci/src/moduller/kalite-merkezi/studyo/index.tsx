@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { KmParcaKaynagi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmMerkezBelgesi, KmNumune, KmResim } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
@@ -14,7 +14,7 @@ import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } fr
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
-import { useBalonPlaniYaz, useEmirNumuneleri, useOlcumYaz, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
+import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
 // Resim ve modeller (597 a): Arkon çizim stüdyosunun düzeni; solda parça, resimler ve üretim emri, ortada Arkon'la ortak teknik resim
@@ -101,6 +101,17 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
     });
   };
 
+  // Kartına bağlı yayındaki PDF ve 3B, kalite onayı olan açınca kendiliğinden alınır (1993 a); okuma yazmadığı için ayrı komuttur.
+  // Parça başına bir kez denenir: hata olursa açılış başına tek bildirim.
+  const esitle = useMerkezdenEsitle();
+  const esitlenen = useRef(new Set<number>());
+  const alinmamis = parca.data?.alinmamis ?? 0;
+  useEffect(() => {
+    if (malzemeNo === null || !duzenler || alinmamis === 0 || esitlenen.current.has(malzemeNo)) return;
+    esitlenen.current.add(malzemeNo);
+    esitle.mutate(malzemeNo, { onError: (h) => { bildir('hata', hataIletisi(h, 'Çizim Merkezi’ndeki resimler alınamadı.')); } });
+  }, [malzemeNo, duzenler, alinmamis]);
+
   // Resim alma ve kaldırma kalite onayıdır (603 a).
   const [merkez, merkezYaz] = useState(false);
   const [kaldirilacak, kaldirilacakYaz] = useState<KmResim | null>(null);
@@ -168,6 +179,9 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
                   </li>
                 ))}</ul>
               ) : <span className="km-st-soluk">{parca.isPending ? 'Yükleniyor' : 'Belge merkezinden alınmış resim yok.'}</span>}
+            {!duzenler && alinmamis > 0 ? (
+              <span className="km-st-soluk">Çizim Merkezi’nde bu karta bağlı {String(alinmamis)} yayındaki belge var; kalite onayı olan biri açınca parçaya alınır.</span>
+            ) : null}
             {duzenler && kart ? <Dugme tur="ikincil" simge="plus" onClick={() => { merkezYaz(true); }}>Belge merkezinden al</Dugme> : null}
           </section>
         ) : null}

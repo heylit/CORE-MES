@@ -256,6 +256,46 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(yazar, `/kalite-merkezi/studyo/merkez-belgeleri?malzemeNo=${String(mil)}`)).statusCode, 403);
   });
 
+  test('KM-S27 (1993 a) kartına bağlı yayındaki resim eşitlemeyle parçaya kendiliğinden alınır; kaldırılan geri gelmez; yeni revizyon ayrı satırdır', async () => {
+    const cubuk = (await o().vt.tx((db) => ornekMalzemeNo(db, 'cubuk')))!;
+    const kisi = { id: yonId, ad: 'Deneme Yönetici', islemler: [] };
+    const birinci = await belgeAc('Çubuk resmi', pdf('cubuk'), 'cubuk.pdf');
+    const ikinci = await belgeAc('Çubuk ek resmi', pdf('cubuk-ek'), 'cubuk-ek.pdf');
+    const taslak = await belgeAc('Çubuk taslak', pdf('cubuk-taslak'), 'cubuk-taslak.pdf', false);
+    await o().vt.tx(async (db) => { for (const b of [birinci, ikinci, taslak]) await kaydaBagla(db, kisi, b, 'malzemeler', cubuk); });
+    const parca = async () => (await oku(kalite, `/kalite-merkezi/studyo/parcalar/${cubuk}`)).json() as KmStudyoParcaCevabi;
+    const esitle = (c: string) => yaz(c, `/kalite-merkezi/studyo/parcalar/${cubuk}/esitle`, {});
+
+    assert.deepEqual([(await parca()).resimler.length, (await parca()).alinmamis], [0, 2], 'okuma almaz; taslak sayılmaz');
+    assert.equal((await esitle(yazar)).statusCode, 403);
+    assert.equal((await esitle(operator)).statusCode, 403);
+    assert.equal((await esitle('')).statusCode, 401);
+    assert.equal((await yaz(kalite, '/kalite-merkezi/studyo/parcalar/2147480000/esitle', {})).statusCode, 400);
+    const ilk = await esitle(kalite);
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    assert.deepEqual(ilk.json(), { eklenen: 2 });
+    const sonra = await parca();
+    assert.deepEqual(sonra.resimler.map((r) => [r.merkezBelgeId, r.revizyon]).sort(), [[birinci, 'A'], [ikinci, 'A']].sort());
+    assert.equal(sonra.alinmamis, 0);
+    const satir = await o().sahip.tek<{ ekleyen: number }>('SELECT ekleyen_id AS ekleyen FROM kalite_merkezi_resim WHERE merkez_belge_id = $1', [birinci]);
+    assert.equal(satir?.ekleyen, kaliteId, 'alan kişi eşitleyen');
+    assert.deepEqual((await esitle(kalite)).json(), { eklenen: 0 }, 'ikinci eşitleme yinelenen satır açmaz');
+
+    // Kaldırılan resim eşitlemeyle geri gelmez; elle alma geri getirir (603 a).
+    const kaldirilan = sonra.resimler.find((r) => r.merkezBelgeId === ikinci)!;
+    assert.equal((await yaz(kalite, `/kalite-merkezi/studyo/resimler/${kaldirilan.id}/kaldir`, { surum: kaldirilan.surum })).statusCode, 200);
+    assert.deepEqual((await esitle(kalite)).json(), { eklenen: 0 });
+    assert.deepEqual((await parca()).resimler.map((r) => r.merkezBelgeId), [birinci]);
+
+    // Yeni revizyon yayınlanınca ayrı satır olarak alınır; eskinin balon planına bu iş dokunmaz (1995 ayrı karar).
+    const b = (await oku(yonetici, `/cizimler/${birinci}`)).json() as MerkezBelgesi;
+    const r = await merkez<MerkezBelgesi>(`/cizimler/${birinci}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('cubuk-b')), dosyaAdi: 'cubuk.pdf', surum: b.surum });
+    await merkez(`/cizimler/${birinci}/revizyonlar/${r.revizyonlar.find((x) => x.harf === 'B')?.id}/yayinla`, { surum: r.surum });
+    assert.equal((await parca()).alinmamis, 1);
+    assert.deepEqual((await esitle(kalite)).json(), { eklenen: 1 });
+    assert.deepEqual((await parca()).resimler.map((x) => x.revizyon).sort(), ['A', 'B']);
+  });
+
   test('KM-S11 resim dosyası belge merkezinden akar; belge yeni revizyona geçince alınan revizyon 409 olur; yetkisiz 403', async () => {
     const icerik = pdf('revizyon-a');
     const belge = await belgeAc('Revizyonlu resim', icerik, 'rev.pdf');

@@ -277,6 +277,11 @@ export function parcaResimleri(db: Db, malzemeNo: number): Promise<ResimSatiri[]
   return db.sorgu(`SELECT ${RESIM_SUTUNLARI} FROM kalite_merkezi_resim WHERE malzeme_no = $1 AND aktif ORDER BY id`, [malzemeNo]);
 }
 
+// Parçaya bir kez alınmış her belge revizyonu, kaldırılmışlar dahil: eşitleme kaldırılanı geri getirmez (1993 a).
+export function parcaResimKaynaklari(db: Db, malzemeNo: number): Promise<{ merkezBelgeId: number; ozet: string }[]> {
+  return db.sorgu('SELECT merkez_belge_id AS "merkezBelgeId", ozet FROM kalite_merkezi_resim WHERE malzeme_no = $1', [malzemeNo]);
+}
+
 export function resim(db: Db, id: number): Promise<ResimSatiri | null> {
   return db.tek(`SELECT ${RESIM_SUTUNLARI} FROM kalite_merkezi_resim WHERE id = $1`, [id]);
 }

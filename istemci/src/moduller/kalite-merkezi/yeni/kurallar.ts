@@ -173,8 +173,12 @@ interface DizinGirdisi {
   parca: readonly ParcaKarti[];
 }
 
-// Parça dizini kayıtlardan türetilir (parça kartı olmasa da); en son hareket gören önce.
-export function parcaDizini(v: DizinGirdisi): ParcaOzeti[] {
+// Malzemeler'deki üretilen parça (mamul, yarı mamul) kartı: numara ve ad oradandır (592 B2 a).
+export interface UretilenParca { malzemeNo: number; kod: string; ad: string | null }
+
+// Parça dizini kayıtlardan türetilir (parça kartı olmasa da); en son hareket gören önce. Kalite kaydı olmayan her üretilen parça da bir
+// satırdır (1993 a): kartı kalite parça kartına bağlı olan ya da aynı numaralı kayıt varsa ona katılır, yoksa hareketsiz satır açılır.
+export function parcaDizini(v: DizinGirdisi, uretilenler: readonly UretilenParca[] = []): ParcaOzeti[] {
   const m = new Map<string, ParcaOzeti>();
   const dokun = (pn: unknown, ad: unknown, tarih: unknown): ParcaOzeti | null => {
     if (!pn || !String(pn).trim()) return null;
@@ -204,6 +208,12 @@ export function parcaDizini(v: DizinGirdisi): ParcaOzeti[] {
       if (x.ad) p.ad = x.ad;
     }
   });
+  const bagliKartlar = new Set([...m.values()].flatMap((p) => (p.meta?.malzemeNo === undefined ? [] : [p.meta.malzemeNo])));
+  for (const u of uretilenler) {
+    if (bagliKartlar.has(u.malzemeNo)) continue;
+    const p = dokun(u.kod, u.ad, '');
+    if (p && !p.meta) p.meta = { _id: '', parcaNo: p.no, malzemeNo: u.malzemeNo };
+  }
   for (const p of m.values()) {
     p.acikNcr = p.ncr.filter((n) => n.durum !== KAPALI);
     const hepsi = [...p.insp.map((i) => ({ t: i.tarih, s: i.sonuc, no: i.no })), ...p.lot.map((l) => ({ t: l.tarih, s: l.karar, no: l.no }))]

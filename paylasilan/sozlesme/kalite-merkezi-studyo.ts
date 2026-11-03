@@ -74,7 +74,10 @@ export const kmNumuneKurali = z.object({
 }).refine((k) => (k.ne === 'her' || k.ne === 'sure') === (k.n !== undefined), 'Her n parça ve süre kuralında n verilir, ötekilerde verilmez.');
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
-export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani) });
+// `alinmamis`: malzeme kartına Çizim Merkezi'nde bağlı, yayındaki PDF ve 3B modelden parçaya hiç alınmamışların sayısı (1993 a); kaldırılan sayılmaz.
+export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani), alinmamis: z.number().int().nonnegative() });
+// Kartına bağlı yayındaki belgeler parçaya alınır; parçadan elle kaldırılmış revizyon geri getirilmez (1993 a).
+export const kmStudyoEsitlemeCevabi = z.object({ eklenen: z.number().int().nonnegative() });
 // Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı. `merkezde`:
 // Çizim Merkezi'nde malzeme kartına bağlı, yayındaki PDF ve 3B model sayısı (1306); alınmış olanlar da sayılır.
 export const kmStudyoOzeti = z.object({
@@ -211,6 +214,7 @@ export type KmResim = z.output<typeof kmResim>;
 export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
+export type KmStudyoEsitlemeCevabi = z.output<typeof kmStudyoEsitlemeCevabi>;
 export type KmStudyoOzeti = z.output<typeof kmStudyoOzeti>;
 export type KmStudyoOzetleriCevabi = z.output<typeof kmStudyoOzetleriCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;

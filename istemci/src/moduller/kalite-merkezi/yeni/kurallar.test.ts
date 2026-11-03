@@ -73,6 +73,14 @@ describe('karantina ve parça dizini', () => {
     expect(lottanNcr(lot[0]!).tanim).toContain('3 / 1');
   });
 
+  it('parça dizini üretilen kartlardan da satır açar; kaydına bağlı kart ve aynı numaralı kayıt tek satırdır (1993 a)', () => {
+    const bos = { cizim: [], insp: [], ncr: [], lot: [], spc: [], capa: [] };
+    const d = parcaDizini({ ...bos, parca: [{ _id: 'p', parcaNo: 'ESKI-NO', malzemeNo: 7, ad: 'Bağlı' }], insp: [{ _id: 'i', parcaNo: 'dnm-2', tarih: '2026-10-01' }] }, [
+      { malzemeNo: 7, kod: 'DNM-1', ad: 'Bağlı kart' }, { malzemeNo: 8, kod: 'DNM-2', ad: 'Kayıtlı' }, { malzemeNo: 9, kod: 'DNM-3', ad: null },
+    ]);
+    expect(d.map((p) => [p.no, p.meta?.malzemeNo])).toEqual([['dnm-2', 8], ['DNM-3', 9], ['ESKI-NO', 7]]);
+  });
+
   it('parça dizini kayıtlardan türer, durum en ağırdan', () => {
     const d = parcaDizini({ cizim: [], insp, ncr, lot, spc: [], capa: [{ _id: 'c1', ncrRef: 'n1' }], parca: [{ _id: 'p', parcaNo: 'p1', ad: 'Mil' }] });
     const p1 = d.find((p) => p.k === 'P1')!;

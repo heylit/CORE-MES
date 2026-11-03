@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import type { KmStudyoOzeti, KmStudyoOzetleriCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { api } from '../../../ortak/veri/api.ts';
 
-// Resim ve modeller listesi (799, 801 a, 1306): Parçalar'daki malzeme kartlı her parça, resmi ya da planı olan her parça ve malzeme kartına
-// Çizim Merkezi'nde PDF ya da 3B model bağlanmış her parça bir satırdır.
-// Eksik: resim yok (Çizim Merkezi'nde varsa "alınmadı"), resmi olup balonu yok, numune planı yok. 3B model her parçada gerekmez; sayısı görünür,
+// Resim ve modeller listesi (799, 801 a, 1306, 1993 a): Parçalar'daki malzeme kartlı her parça (her aktif mamul ve yarı mamul dahil), resmi ya da
+// planı olan her parça ve malzeme kartına Çizim Merkezi'nde PDF ya da 3B model bağlanmış her parça bir satırdır.
+// Eksik: resim yok (Çizim Merkezi'nde varsa "alınmadı": stüdyo açılınca kendiliğinden alınır), resmi olup balonu yok, numune planı yok. 3B model her parçada gerekmez; sayısı görünür,
 // eksik sayılmaz.
 export type ResimEksigi = 'resim' | 'alinmadi' | 'balon' | 'numune';
 export interface ResimListeSatiri extends KmStudyoOzeti { eksik: ResimEksigi[] }

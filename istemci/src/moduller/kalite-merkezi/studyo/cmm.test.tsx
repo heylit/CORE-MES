@@ -11,7 +11,7 @@ const RESIM: KmResim = {
   id: 1, malzemeNo: 7, tur: 'resim', merkezBelgeId: 11, ozet: 'a'.repeat(64), ad: 'Deneme resim', revizyon: 'B', aktif: true, surum: 4,
   eklendi: '2026-10-20T08:00:00.000Z', balonlar: [],
 };
-const PARCA: KmStudyoParcaCevabi = { resimler: [RESIM], numunePlanlari: [] };
+const PARCA: KmStudyoParcaCevabi = { resimler: [RESIM], numunePlanlari: [], alinmamis: 0 };
 const SECENEK: SunucuSecenegi = {
   parcalar: [KART],
   emirler: [{ kimlik: 'ue-6', no: 'UE-6', tip: 'İş emri', acik: true, parcaNo: 'DNM-07', parcaAdi: null, miktar: 10, termin: null, firmaId: null, firmaAd: null }],

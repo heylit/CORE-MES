@@ -4,7 +4,7 @@ import { DurumKutusu, Dugme, Rozet, SayfaBasligi, Tablo, type Sutun } from '../.
 import { rozetTonu, trd } from '../bicim.ts';
 import { parcaAnahtari, parcaDizini, parcaDurumu, type ParcaOzeti } from '../kurallar.ts';
 import { STUDYO_YOLU, type EkranOzellikleri, type KmSayaci } from '../sekmeler.ts';
-import { useParcaKaynaklari } from './kaynak.ts';
+import { useParcaKaynaklari, useUretilenParcalar } from './kaynak.ts';
 import { ParcaFormu } from './ParcaFormu.tsx';
 import { ParcaSayfasi } from './ParcaSayfasi.tsx';
 import { parcaAra } from './parca.ts';
@@ -49,7 +49,8 @@ export function Parcalar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
   }, [gecis]);
 
   // 592 B2 a: kartı Malzemeler'e bağlı parçanın adı oradandır; bağsız (eski) parçada kayıtlardaki ad kalır.
-  const ham = parcaDizini(veri);
+  const uretilen = useUretilenParcalar();
+  const ham = parcaDizini(veri, uretilen.data?.parcalar ?? []);
   const kartlar = useParcaKaynaklari(ham.map((p) => p.meta?.malzemeNo));
   const kartOf = (p: ParcaOzeti) => (p.meta?.malzemeNo === undefined ? undefined : kartlar.get(p.meta.malzemeNo));
   const dizin = ham.map((p) => { const k = kartOf(p); return k?.ad ? { ...p, ad: k.ad } : p; });
@@ -88,7 +89,7 @@ export function Parcalar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikle
       {dizin.length === 0
         ? (
           <DurumKutusu durum="bos" mesaj="Henüz parça yok">
-            <p>Parçalar; resim, model, muayene, lot ve NCR kayıtlarındaki parça numaralarından otomatik oluşur.</p>
+            <p>Parçalar; Malzemeler'deki aktif mamul ve yarı mamul kartlarından ve resim, model, muayene, lot ve NCR kayıtlarındaki parça numaralarından otomatik oluşur.</p>
             {/* Resim listesi boşken yükleme düğmesi tek başına boş listeye döndürüyordu (1306): parça buradan da eklenir. */}
             {yetki.yaz && <Dugme tur="ikincil" simge="plus" onClick={() => { formYaz('yeni'); }}>Parça ekle</Dugme>}
             {yetki.yaz && <Dugme tur="birincil" simge="upload" onClick={studyo}>Resim / model yükle</Dugme>}
