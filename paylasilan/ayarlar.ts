@@ -9,6 +9,7 @@ import { IK_AYARLARI } from './ayarlar/ik.ts';
 import { KALITE_MERKEZI_AYARLARI } from './ayarlar/kalite-merkezi.ts';
 import { LOGO_AYARLARI } from './ayarlar/logo.ts';
 import { MALZEMELER_AYARLARI } from './ayarlar/malzemeler.ts';
+import { MUSTERI_TEDARIKCI_AYARLARI } from './ayarlar/musteri-tedarikci.ts';
 import { NIZAMIYE_AYARLARI } from './ayarlar/nizamiye.ts';
 import { PLAN_AYARLARI } from './ayarlar/plan.ts';
 import { ROTA_AYARLARI } from './ayarlar/rota.ts';
@@ -34,6 +35,7 @@ export const AYAR_TANIMLARI = {
   ...KALITE_MERKEZI_AYARLARI,
   ...LOGO_AYARLARI,
   ...MALZEMELER_AYARLARI,
+  ...MUSTERI_TEDARIKCI_AYARLARI,
   ...NIZAMIYE_AYARLARI,
   ...PLAN_AYARLARI,
   ...ROTA_AYARLARI,
