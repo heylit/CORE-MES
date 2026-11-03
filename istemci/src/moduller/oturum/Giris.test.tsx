@@ -43,6 +43,7 @@ const tuslaraBas = (rakamlar: string) => {
   for (const r of rakamlar) fireEvent.click(screen.getByRole('button', { name: r }));
 };
 const kullaniciAdiYaz = () => fireEvent.change(screen.getByLabelText(/Kullanıcı adı/), { target: { value: 'operator1' } });
+const okut = (hedef: Element, metin: string) => { for (const c of [...metin, 'Enter']) fireEvent.keyDown(hedef, { key: c }); };
 const girisDugmesi = () => screen.getByRole('button', { name: 'Giriş yap' }) as HTMLButtonElement;
 
 beforeEach(() => { window.localStorage.clear(); });
@@ -154,49 +155,78 @@ describe('Giris', () => {
     expect(screen.getByRole('button', { name: 'Parola ile gir' })).toBeTruthy();
   });
 
-  it('kartla giris (1897 b): okuyucu karti yazip Enter basinca PIN sorulmadan girer, secim hatirlanir', async () => {
-    const cagrilar = sunucuKur();
-    const istemci = kur();
-    fireEvent.click(screen.getByRole('button', { name: 'Kartla gir' }));
-    expect(screen.queryByLabelText(/Kullanıcı adı/)).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Rakam tuşları' })).toBeNull();
-    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
-    fireEvent.change(kart, { target: { value: ' 0004123456 ' } });
-    fireEvent.submit(kart.closest('form')!);
-    await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
-    expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '0004123456' } }]);
-    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
-  });
-
-  it('kartla giris: okuyucunun ikinci Enter i karti ikinci kez gondermez', async () => {
+  // 1930: istasyonda ilk ekran kartlı giriştir; okutma alanı görünmez, kart arka planda okunur, öteki yollar seçenektir.
+  const okutGorseli = () => screen.getByRole('status');
+  it('1930: istasyon tarayicisinda ekran kartla acilir; kart alani ve giris dugmesi yok, okutulan kart PIN sorulmadan girer', async () => {
     const cagrilar = sunucuKur();
     window.localStorage.setItem('tmi.giris.yontem', 'kart');
     const istemci = kur();
-    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
-    const form = kart.closest('form')!;
-    fireEvent.change(kart, { target: { value: '0004123456' } });
-    fireEvent.submit(form);
-    fireEvent.submit(form);
+    expect(okutGorseli().textContent).toMatch(/Kartınızı okutun/);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByLabelText(/^Kart/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Giriş yap' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Rakam tuşları' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Parola ile gir' })).toBeTruthy();
+    okut(document.body, '0004123456');
+    await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
+    expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '0004123456' } }]);
+  });
+
+  it('1930: okuyucunun ikinci Enter i karti ikinci kez gondermez', async () => {
+    const cagrilar = sunucuKur();
+    window.localStorage.setItem('tmi.giris.yontem', 'kart');
+    const istemci = kur();
+    okut(document.body, '0004123456');
+    fireEvent.keyDown(document.body, { key: 'Enter' });
     await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
     expect(cagrilar).toHaveLength(1);
   });
 
-  it('kartla giris hatasinda ileti gorunur, kart silinir, sira kart okutmaya doner; kullanici adi yoluna donulebilir', async () => {
+  it('1930 reddedilen: taninmayan kartta ileti okutma gorselinde gorunur, sira kart okutmaya doner; kullanici adi yoluna donulebilir', async () => {
     sunucuKur();
     window.localStorage.setItem('tmi.giris.yontem', 'kart');
     kur();
-    const kart = screen.getByLabelText(/^Kart/) as HTMLInputElement;
-    fireEvent.change(kart, { target: { value: '99999999' } });
-    fireEvent.submit(kart.closest('form')!);
+    okut(document.body, '99999999');
     expect(await screen.findByText('Kart tanınmadı ya da bu kartla giriş kapalı.')).toBeTruthy();
-    expect((screen.getByLabelText(/^Kart/) as HTMLInputElement).value).toBe('');
+    expect(okutGorseli().textContent).toMatch(/Kartınızı okutun/);
     fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
     expect(screen.getByLabelText(/Kullanıcı adı/)).toBeTruthy();
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
   });
-  // 1917: istasyonda kart yöntem ya da alan seçmeden okutulur; okuyucu klavye gibi hızlı yazar ve Enter'a basar.
-  const okut = (hedef: Element, metin: string) => { for (const c of [...metin, 'Enter']) fireEvent.keyDown(hedef, { key: c }); };
 
-  it('1917: PIN ekranindayken okutulan kart arka planda yakalanir; PIN formu gonderilmez, alana dusen kart silinir, secim karta doner', async () => {
+  it('1930: istasyon profilli oturum tarayiciyi kartli girise cevirir; baska profilde kart secimi unutulur', async () => {
+    const istasyonda = { ...OPERATOR, cihazProfili: 'istasyon' as const };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kullanici: istasyonda }), { status: 200 })));
+    const istemci = kur();
+    kullaniciAdiYaz();
+    tuslaraBas('730514');
+    fireEvent.click(girisDugmesi());
+    await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(istasyonda));
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
+
+    cleanup();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kullanici: { ...OPERATOR, cihazProfili: 'tam' } }), { status: 200 })));
+    const ikinci = kur();
+    fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
+    kullaniciAdiYaz();
+    tuslaraBas('730514');
+    fireEvent.click(girisDugmesi());
+    await waitFor(() => expect(ikinci.getQueryData(anahtarlar.oturum)).toBeTruthy());
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBeNull();
+  });
+
+  it('PIN ekranindan Kartla gir secilebilir ve hatirlanir', () => {
+    sunucuKur();
+    kur();
+    fireEvent.click(screen.getByRole('button', { name: 'Kartla gir' }));
+    expect(okutGorseli()).toBeTruthy();
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
+  });
+
+  // 1917: istasyonda kart yöntem ya da alan seçmeden okutulur; okuyucu klavye gibi hızlı yazar ve Enter'a basar.
+
+  it('1917: PIN ekranindayken okutulan kart arka planda yakalanir; PIN formu gonderilmez, alana dusen kart silinir', async () => {
     const cagrilar = sunucuKur();
     const istemci = kur();
     const ad = screen.getByLabelText(/Kullanıcı adı/) as HTMLInputElement;
@@ -206,7 +236,6 @@ describe('Giris', () => {
     await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
     expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '0004123456' } }]);
     expect(ad.value).toBe('operator1');
-    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
   });
 
   it('1917: odak hicbir alanda degilken de kart girer; kucuk harfli onaltilik kart buyuk harfle gider', async () => {
