@@ -23,6 +23,9 @@ const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 /* 1476-D: çok katmanlı emrin alt düğümü motorda ayrı siparişdir ve tüketen üst adıma montaj bağıyla bağlanır (durum.betik mtStUygula,
    kancalar.betik montajUygula). Kimlik kök emrin kimliği ve düğüm yoludur ("0.1.2" -> "<emir>-Y1-Y2"; "-Y" sayısı derinliktir). */
 const dugumSipId = (o, yol) => String(o.id) + String(yol).split('.').slice(1).map(n => '-Y' + n).join('');
+/* 1952: kişinin el tezgâhının kimliği; sunucu motoru (emirler.betik kisiTezgahi) ve çözücü (plan-cozucusu.ts) aynı öneki okur */
+const KISI_TEZGAH_ONEKI = 'kisi-';
+const kisiTezgahKimligi = id => KISI_TEZGAH_ONEKI + id;
 const rotaOpNo = a => a.opNo > 0 ? a.opNo : a.seq;
 const rotaAdimlari = (st, id) => ((((st && st.routes) || {})[id] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
 
@@ -56,7 +59,7 @@ function rrCevir(st) {
   const P = rrKopya(st.plan || {});
   const items = st.items || [], item = id => items.find(x => x.id === id);
   const urunMu = it => it && (it.type === 'mamul' || it.type === 'yari');
-  const grupOf = id => { const m = (st.machines || []).find(x => x.id === id); return m ? m.stationId : ''; };
+  const grupOf = id => { const m = (st.machines || []).find(x => x.id === id); return m ? m.stationId : kisiGrubu.get(id) || ''; };
   const opAd = id => { const d = (st.opdefs || []).find(x => x.id === id); return d ? d.name : ''; };
   const ilkVardiya = (st.cal && st.cal.shifts && st.cal.shifts[0] && st.cal.shifts[0].start) || '08:00';
   /* 650 a: tezgâhın haftası istasyonunun iş merkezinden (gün adı -> vardiyalar); merkez haftaları okunmadıysa yok, tezgâh atölyenin takvimiyle */
@@ -82,7 +85,33 @@ function rrCevir(st) {
     if (!rrEsit(a && a.hafta, hafta)) y.hafta = hafta;
     return rrKur(a, y);
   });
-  const grupMak = g => tezgahlar.filter(m => m.grup === g).map(m => m.id);
+  /* 1952 (1953 a, 1954 a, 1957 a, 1959 a): insanlı istasyonun (kapasite kaynağı "insan", 1891 A b) tezgâhları kişilerdir; makineleri adıma
+     aday olmaz (sunucu motorunun kuralı, plan/servis.ts kaynaklariOku). O istasyonda bugün yetkin ve vardiyası olan her aktif kişiye bir el
+     tezgâhı kurulur; kimlik motorun öneki (emirler.betik kisiTezgahi, plan-cozucusu.ts) ile aynıdır. Kişi birden çok insanlı istasyonda
+     yetkinse tek tezgâhı vardır, grubu en küçük kimlikli olanıdır. Tezgâh kişinin vardiyasıyla çalışır (iş merkezinin haftası değil); atama
+     yüzdesi kapasiteyi kesmez. Tezgâhın tek operatörü kişinin kendisidir: personel kısıtı açıkken kişi aynı saatte makinede olamaz. */
+  const insanli = new Set((st.insanliIstasyonlar || []).filter(id => (st.stations || []).some(x => x.id === id)));
+  const elGruplari = p => (p.skills || []).filter(g => insanli.has(g)).sort((x, y) => (+x - +y) || (x < y ? -1 : x > y ? 1 : 0));
+  const elKisileri = (st.people || []).filter(p => p.shiftId && elGruplari(p).length > 0);
+  const elKisisi = new Set(elKisileri.map(p => p.id));
+  for (const p of elKisileri) {
+    const grup = elGruplari(p)[0], ist = (st.stations || []).find(x => x.id === grup) || {};
+    const a = p.tezgahPlan || null; const y = {}, id = kisiTezgahKimligi(p.id);
+    if (!a || a.id !== id) y.id = id;
+    if (!a || a.ad !== p.name) y.ad = p.name;
+    if (!a || a.grup !== grup) y.grup = grup;
+    const grupKod = ist.code || undefined, grupAd = ist.name || undefined;
+    if (!a || a.grupKod !== grupKod) y.grupKod = grupKod;
+    if (!a || a.grupAd !== grupAd) y.grupAd = grupAd;
+    if (!a) Object.assign(y, { ucret: rrSayi(ist.cost), ucretIst: rrSayi(ist.cost), verim: (+ist.eff || 100) / 100, opOran: 1 });
+    if (!a || !rrEsit(a.vardiyalar, [p.shiftId])) y.vardiyalar = [p.shiftId];
+    if (a && a.hafta !== undefined) y.hafta = undefined;
+    tezgahlar.push(rrKur(a, y));
+  }
+  const kisiGrubu = new Map(elKisileri.map(p => [kisiTezgahKimligi(p.id), elGruplari(p)[0]]));
+  const grupMak = g => insanli.has(g)
+    ? elKisileri.filter(p => elGruplari(p).includes(g)).map(p => kisiTezgahKimligi(p.id))
+    : tezgahlar.filter(m => m.grup === g && !kisiGrubu.has(m.id)).map(m => m.id);
   const urunler = [];
   /* 1473 a: ürünün rota adımı sırası (seq) -> motorun adım anahtarı (k); siparişin malzeme satırı tükettiği adımı bu anahtarla taşır */
   const adimAnahtari = {};
@@ -118,7 +147,13 @@ function rrCevir(st) {
       if (!o0 || o0.k !== k) z.k = k;
       const ad = opAd(s.opId) || (o0 && o0.ad) || ('OP ' + s.seq); if (!o0 || o0.ad !== ad) z.ad = ad;
       const ref = o0 ? rrAdimYerli(o0, grupOf, s.opId) : null;
-      if (!o0 || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
+      /* 1952: insanlı istasyonda adayların kümesi kişilerin yetkinliği ve vardiyasıyla değişir (istasyon insanlıya dönünce makineler düşer);
+         küme değişince adım yeniden kurulur, kalan kişinin süresi korunur. */
+      const elDegisti = !!o0 && [s.stationId, ...(s.alts || [])].filter(g => insanli.has(g)).some(g => {
+        const b = grupMak(g), v = (o0.tezgahlar || []).map(t => String(t.id)).filter(id => grupOf(id) === g || b.includes(id) || (id.startsWith(KISI_TEZGAH_ONEKI) && !kisiGrubu.has(id)));
+        return !rrEsit(b.slice().sort(), v.slice().sort());
+      });
+      if (!o0 || elDegisti || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
         /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ayar süresi
            boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
         const izin = [s.stationId, ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
@@ -127,6 +162,11 @@ function rrCevir(st) {
         const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
         const tz = [];
         for (const g of izin) {
+          if (insanli.has(g)) {
+            const sakla = new Map(eski.map(t => [String(t.id), t]));
+            tz.push(...grupMak(g).map(id => sakla.has(id) ? (degisti(g) ? Object.assign({}, sakla.get(id), sure(g)) : sakla.get(id)) : Object.assign({ id }, sure(g))));
+            continue;
+          }
           const varolan = eski.filter(t => grupOf(t.id) === g);
           if (varolan.length && !degisti(g)) tz.push(...varolan);
           else if (varolan.length) tz.push(...varolan.map(t => Object.assign({}, t, sure(g))));
@@ -177,7 +217,8 @@ function rrCevir(st) {
     if (!a || a.vardiya !== p.shiftId) y.vardiya = p.shiftId;
     if (!a || !rrEsit(a.gruplar || [], p.skills || [])) y.gruplar = (p.skills || []).slice();
     /* 563 c, 563 2 a: baktığı makineler ve aynı anda en çok tezgâh istasyonlardan gelir; sayfada değiştirilmez */
-    if (!a || !rrEsit(a.makineler || [], p.machines || [])) y.makineler = (p.machines || []).slice();
+    const makineler = [...(p.machines || []), ...(elKisisi.has(p.id) ? [kisiTezgahKimligi(p.id)] : [])];
+    if (!a || !rrEsit(a.makineler || [], makineler)) y.makineler = makineler;
     if (!a || (a.enCok ?? null) !== (p.maxMachines ?? null)) y.enCok = p.maxMachines ?? null;
     if (!a) y.ayar = p.role === 'Ayarcı';
     return rrKur(a, y);
@@ -326,9 +367,11 @@ function tmiKaynakIle(st, kaynak, D) {
         shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true,
         machines: (k.machines || []).slice(), maxMachines: k.maxMachines ?? null };
       const a = eski('personel', k.id); if (a) y.plan = a;
+      const t = eski('tezgahlar', kisiTezgahKimligi(k.id)); if (t) { y.tezgahPlan = t; ucretIzle(t, maliyet('istasyon', String(t.grup))); }
       return y;
     });
   }
+  if (Array.isArray(ek.insanliIstasyonlar)) o.insanliIstasyonlar = ek.insanliIstasyonlar.map(String);
   return o;
 }
 /* Fason firmanın sahibi Müşteri ve Tedarikçi'dir; durum okuması aktif fason firmaları verir (fasonFirms). Motor fason adımı yalnız
@@ -526,7 +569,8 @@ function tmiSiparisBedelleri(siparisler, l) {
    tezgâh" 1/N yazar). Planlamada girilmez: kaynak okundukça istasyonunkiyle yazılır; istasyonu okunmayan tezgâhta oran 1 sayılır. */
 function tmiOperatorOrani(tezgahlar, istasyonlar) {
   const O = new Map(istasyonlar.map(x => [String(x.id), x.opPer]));
-  for (const m of tezgahlar || []) { const v = O.get(String(m.grup)); m.opOran = v == null || !isFinite(+v) ? 1 : +v; }
+  /* 1952: kişinin el tezgâhının operatörü yalnız kişinin kendisidir; istasyonun operatör oranı ona uygulanmaz */
+  for (const m of tezgahlar || []) { const v = O.get(String(m.grup)); m.opOran = String(m.id).startsWith(KISI_TEZGAH_ONEKI) ? 1 : v == null || !isFinite(+v) ? 1 : +v; }
 }
 /* 533 a: Satın Alma'nın tedarik termini malzemede durur (saTermin 'GGGG-AA-GG' ya da null; saSurum yazma ucunun sürümü). Okunamadıysa
    (null) açık çalışmadaki değer kalır; satırı olmayan malzemede alan yoktur (termin bekleniyor). */

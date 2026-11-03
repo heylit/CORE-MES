@@ -3,7 +3,7 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { birimMaliyetleri } from '../../finans/disari.ts';
 import {
-  aktifMakineler, isMerkezleri, istasyonlar, istasyonYetkinlikleri, kisiTezgahSinirlari, makineYetkinlikleri, planAyarlari,
+  aktifMakineler, isMerkezleri, istasyonlar, istasyonYetkinlikleri, kapasiteKaynaklari, kisiTezgahSinirlari, makineYetkinlikleri, planAyarlari,
 } from '../../istasyonlar/disari.ts';
 import { kisiGorevleri, kisiSecenekleri } from '../../kisiler/disari.ts';
 import { KAYNAK_OKUMA } from '../../recete-rota/disari.ts';
@@ -31,12 +31,17 @@ export async function kaynakDilimiOku(db: Db, kullanici: Kullanici, izinler: Kay
   let istasyon: KaynakDilimiOkumasi['istasyon'] = null;
   if (istasyonOkur) {
     const ayar = new Map((await planAyarlari(db)).map((a) => [a.istasyonId, a]));
+    const aktifIstasyonlar = (await istasyonlar(db, { pasiflerDahil: false })).filter((i) => i.aktif);
+    const kaynak = await kapasiteKaynaklari(db, aktifIstasyonlar.map((i) => i.id));
     istasyon = {
       merkezler: (await isMerkezleri(db, { pasiflerDahil: false })).filter((m) => m.aktif).map((m) => ({ id: m.id })),
       // Plan ayarı satırı olmayan istasyon sahibinin kuralıyla verim %100, operatör 1 (istasyonlar/disari.ts planAyarlari).
-      istasyonlar: (await istasyonlar(db, { pasiflerDahil: false })).filter((i) => i.aktif).map((i) => {
+      istasyonlar: aktifIstasyonlar.map((i) => {
         const a = ayar.get(i.id);
-        return { id: i.id, kod: i.kod, ad: i.ad, merkezId: i.isMerkeziId, verimYuzde: a === undefined ? 100 : sayi(a.verimYuzde), operatorOrani: a === undefined ? 1 : sayi(a.operatorIhtiyaci) };
+        return {
+          id: i.id, kod: i.kod, ad: i.ad, merkezId: i.isMerkeziId, verimYuzde: a === undefined ? 100 : sayi(a.verimYuzde),
+          operatorOrani: a === undefined ? 1 : sayi(a.operatorIhtiyaci), insanli: kaynak.get(i.id) === 'insan',
+        };
       }),
       makineler: (await aktifMakineler(db)).filter((m) => m.aktif).map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, istasyonId: m.istasyonId })),
     };
