@@ -14,8 +14,8 @@ import {
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
-  ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
-  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
+  ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, MAKINE_SECILMELI, TERMINAL_FASON, acmaIstasyonIhlali,
+  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, kendiligindenMakine, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
@@ -573,6 +573,14 @@ async function yeriTut(db: Db, emirId: number, isEmriId: number | null, yer: Yer
   }
 }
 
+// 2055 a: seçimsiz ve atamasız başlatmanın makinesi; boş liste makinesiz (insanlı ya da makinesi çalışmayan istasyon) demektir.
+async function baslatmaMakinesi(db: Db, istasyonId: number): Promise<number[]> {
+  const insanli = (await kapasiteKaynaklari(db, [istasyonId])).get(istasyonId) === 'insan';
+  const sonuc = kendiligindenMakine(insanli, insanli ? [] : await calisirMakineler(db, istasyonId));
+  if (sonuc === 'secilmeli') throw dogrulama(MAKINE_SECILMELI, 'makineIdleri');
+  return sonuc;
+}
+
 // UE20 (86 b) ve 2047 a: işe giren her yol (başlat, devam, ayar, katıl, çalışma ve makine devral) istasyonda bugün geçerli yetkinlik ister;
 // yönetici muaftır. Muaflık döner: başlatma makine yetkinliğinde (2046 a) de kullanır.
 async function istasyonYetkinliginiDenetle(db: Db, kisiId: number, istasyonId: number): Promise<boolean> {
@@ -612,9 +620,10 @@ export async function emirBaslat(
   if (istasyonIhlali !== null) throw cakisma(istasyonIhlali);
   const denetim = isEmri === null ? { engel: null, uyarilar: [] } : await baslatmaDenetimi(db, { uretimEmriId: id, isEmriId: isEmri.id, istasyonId, kisiId });
   if (denetim.engel !== null) throw cakisma(denetim.engel);
-  await secimiDenetle(db, istasyonId, makineIdleri);
-  await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
-  const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
+  const secim = (makineIdleri !== undefined && makineIdleri.length > 0) || isEmri?.makineId != null ? makineIdleri : await baslatmaMakinesi(db, istasyonId);
+  await secimiDenetle(db, istasyonId, secim);
+  await ayrimiDenetle(db, id, secim, isEmri?.makineId ?? null);
+  const yer: Yer = { istasyonId, makineler: calisilacakMakineler(secim, isEmri?.makineId ?? null) };
   const makineIhlali = yer.makineler.length === 0 ? null : makineYetkinlikIhlali(kisiId, yer.makineler, await makineYetkinlikleri(db), muaf);
   if (makineIhlali !== null) throw yetkiYok(makineIhlali);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);

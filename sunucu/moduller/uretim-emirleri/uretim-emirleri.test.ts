@@ -24,7 +24,7 @@ import {
 import { emirAc as emirYaz } from './servis.ts';
 import { iptaliYaz } from './sorgular.ts';
 import type { HurdaSayimOlayi, SaglamSayimOlayi } from './disari.ts';
-import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, SAYIM_KATILIMSIZ, MAKINE_YETKINLIGI_YOK, YETKINLIK_YOK } from './kurallar.ts';
+import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, MAKINE_SECILMELI, SAYIM_KATILIMSIZ, MAKINE_YETKINLIGI_YOK, YETKINLIK_YOK } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 const BASLATANLAR = ['mudur', 'operator'];
@@ -512,6 +512,35 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     await sahip().sorgu("INSERT INTO istasyonlar_makine_durumu (makine_id, durum, degistiren_kisi_id) VALUES ($1, 'ariza', $2)", [arizali, yoneticiId]);
     assert.equal((await baslat(e.id, 'operator', makinede(arizali))).durum, 400, 'arızadaki makine seçilemez');
     assert.equal(await durumOku(e.id), 'planli');
+  });
+
+  test('2055 a: çok makineli istasyonda seçimsiz ve atamasız başlatma reddedilir, yazı olmaz; tek makinede makine kendiliğinden alınır; insanlı istasyon muaf', async () => {
+    const istasyonId = await istasyonKur();
+    const m1 = await makineKur(istasyonId);
+    await makineKur(istasyonId);
+    const emir = await emirAc(istasyonId);
+    const red = await baslat(emir.id, 'operator');
+    assert.deepEqual([red.durum, red.govde.mesaj], [400, MAKINE_SECILMELI]);
+    assert.equal((await baslat(emir.id, 'operator', { makineIdleri: [] })).durum, 400, 'boş seçim seçimsizdir');
+    assert.equal(await durumOku(emir.id), 'planli');
+    assert.equal(await kayitSayisi(emir.id), 0);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_makine_kullanimi WHERE emir_id = $1', [emir.id]))?.n, 0);
+    assert.equal((await baslat(emir.id, 'operator', makinede(m1))).durum, 200, 'seçimle başlar');
+
+    const tekli = await istasyonKur();
+    const tek = await makineKur(tekli);
+    const emir2 = await emirAc(tekli);
+    assert.equal((await baslat(emir2.id, 'operator')).durum, 200);
+    assert.deepEqual((await acikKullanim(tek)).map((k) => k.emirId), [emir2.id], 'tek makine kendiliğinden');
+
+    const insanli = await istasyonKur();
+    await makineKur(insanli);
+    await makineKur(insanli);
+    await sahip().sorgu("UPDATE istasyon SET kapasite_kaynagi = 'insan' WHERE id = $1", [insanli]);
+    assert.equal((await baslat((await emirAc(insanli)).id, 'operator')).durum, 200, 'insanlı istasyon');
+
+    const makinesiz = await baslatilmis();
+    assert.equal(await durumOku(makinesiz.emir.id), 'basladi', 'makinesi olmayan istasyon');
   });
 
   test('makinesiz iş istasyon yerini tutar; dolu cevabı makinesizdir ve devralınabilir', async () => {

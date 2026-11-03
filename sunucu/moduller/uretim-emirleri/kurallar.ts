@@ -41,6 +41,13 @@ export const DURAKLI_DURDUR = 'Duraklamış iş durdurulamaz; önce devam ettiri
 export const MAKINE_DOLU = 'Bu makinede başka biri iş başlatmış; önce onun durdurulması gerek. Onaylarsanız o işi durdurup sizin için başlatabilirsiniz.';
 export const MAKINEDE_AYNI_IS = 'Bu iş bu makinede zaten çalışıyor.';
 export const MAKINE_SECILEMEZ = 'Seçilen makine bu istasyonda değil ya da çalışır durumda değil.';
+// 2055 a: makinesi olan istasyonda iş makinesiz başlamaz. Seçim ve plan ataması yoksa tek çalışır makine kendiliğinden alınır;
+// birden çok çalışır makinede seçim istenir. İnsanlı istasyon (kapasite kaynağı insan) ve çalışır makinesi olmayan istasyon muaftır.
+export const MAKINE_SECILMELI = 'Bu istasyonda iş makinesiz başlatılamaz; çalışacağınız makineyi seçin.';
+export const kendiligindenMakine = (insanli: boolean, calisir: readonly number[]): number[] | 'secilmeli' => {
+  if (insanli || calisir.length === 0) return [];
+  return calisir.length === 1 ? [...calisir] : 'secilmeli';
+};
 export const DEVRAL_DEGISTI = 'Makinedeki iş değişti; ekranı yenileyip yeniden deneyin.';
 export const DEVRAL_DURUMU = 'Makine devralınarak yalnız planlı, duraklamış ya da durmuş iş başlatılır.';
 export const ISTASYON_DOLU = 'Bu istasyonda başka biri iş başlatmış; önce onun durdurulması gerek. Onaylarsanız o işi durdurup sizin için başlatabilirsiniz.';
