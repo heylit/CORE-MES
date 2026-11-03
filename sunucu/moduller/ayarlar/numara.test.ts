@@ -69,12 +69,12 @@ describe('ayarlar: belge numarası (gerçek PostgreSQL)', () => {
 
   test('kayıt geri alınırsa sıra da geri alınır; aynı anda iki işlem aynı numarayı alamaz', async () => {
     await assert.rejects(vt().tx(async (db) => {
-      await numaraAl(db, 'satin-alma.katalog-kodu', { varMi: bosMu });
+      await numaraAl(db, 'musteri-tedarikci.musteri-kodu', { varMi: bosMu });
       throw new Error('kayıt geri alındı');
     }), /kayıt geri alındı/);
-    assert.equal(await vt().tx((db) => numaraAl(db, 'satin-alma.katalog-kodu', { varMi: bosMu })), 'M-0001');
-    const nolar = await Promise.all(Array.from({ length: 6 }, () => vt().tx((db) => numaraAl(db, 'satin-alma.katalog-kodu', { varMi: bosMu }))));
-    assert.deepEqual([...nolar].sort(), ['M-0002', 'M-0003', 'M-0004', 'M-0005', 'M-0006', 'M-0007']);
+    assert.equal(await vt().tx((db) => numaraAl(db, 'musteri-tedarikci.musteri-kodu', { varMi: bosMu })), 'MUS-0001');
+    const nolar = await Promise.all(Array.from({ length: 6 }, () => vt().tx((db) => numaraAl(db, 'musteri-tedarikci.musteri-kodu', { varMi: bosMu }))));
+    assert.deepEqual([...nolar].sort(), ['MUS-0002', 'MUS-0003', 'MUS-0004', 'MUS-0005', 'MUS-0006', 'MUS-0007']);
   });
 
   test('bozuk kalıp kaydedilmez: sayaçsız, bilinmeyen alan, yılsız ay ve küçük harf reddedilir; geçerli kalıp kabul edilir', async () => {
