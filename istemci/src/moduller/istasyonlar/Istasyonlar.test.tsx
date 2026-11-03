@@ -931,8 +931,31 @@ describe('makineler bölümü (#1109, IS25)', () => {
     fireEvent.click(within(agac).getByRole('button', { name: 'T-01 Torna Bir' }));
     await waitFor(() => { expect((screen.getByRole('button', { name: 'T-01 için yeni makine' }) as HTMLButtonElement).disabled).toBe(false); });
     fireEvent.click(screen.getByRole('button', { name: 'T-01 için yeni makine' }));
+    // Düğme doğrudan kayıt açmaz: form ağaçtaki istasyonla dolu gelir.
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni makine' });
+    expect(POSTLAR(cagrilar)).toHaveLength(1);
+    expect((within(pencere).getByRole('button', { name: 'Yeni makinenin istasyonu' })).textContent).toContain('T-01');
+    fireEvent.change(within(pencere).getByLabelText(/Makine adı/), { target: { value: 'Torna Tezgahı' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
-    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/makineler', govde: { kod: 'T-01-M-1', ad: 'Yeni makine', istasyonId: 10 } });
+    expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/makineler', govde: { kod: 'T-01-M-1', ad: 'Torna Tezgahı', tur: null, istasyonId: 10 } });
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Yeni makine' })).toBeNull(); });
+  });
+
+  it('yeni makine formu istasyonsuz kaydetmez; istasyon seçilince tek komut gider', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/makineler');
+    await screen.findByRole('table', { name: 'Makineler' });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni makine' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni makine' });
+    fireEvent.change(within(pencere).getByLabelText(/Makine adı/), { target: { value: 'Freze Tezgahı' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect(await within(pencere).findByText(/İstasyon seçin; istasyonsuz makine plana iş almaz/)).toBeTruthy();
+    expect(POSTLAR(cagrilar)).toHaveLength(0);
+    await seciciSec('Yeni makinenin istasyonu', /T-01/, pencere);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/makineler', govde: { kod: 'MK-1', ad: 'Freze Tezgahı', tur: null, istasyonId: 10 } });
   });
 
   it('toplu taşıma, durum ve pasife alma seçilenleri tek komutla okunan sürümlerle gönderir; durum sürümü durum satırından, girilmemişte 0', async () => {
