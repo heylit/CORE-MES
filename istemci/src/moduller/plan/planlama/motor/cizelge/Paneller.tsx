@@ -14,6 +14,7 @@ import { IsDenetci, OpDenetci, TezgahDenetci } from './Denetci.tsx';
 import { Dg } from './Dugme.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { planDisi } from '../../tipler.ts';
+import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 
 // Çizelgenin yan panelleri (t-tekyer.betik solPanel ve sagPanel): solda sepet ve havuz, sağda yardımcı (zz24-sade sdYardimci, altında
 // teknik ayrıntı) ve ayrıntı (n-karar.betik kararPaneli). Motor isteyen düğme görünür ve pasiftir (357 b), nedeni ipucunda.
@@ -103,6 +104,7 @@ interface SagOzellikleri {
   sipSec: (j: string) => void; isAc: (j: string) => void; solAc: (x: SolPanelAdi) => void; mercekSec: (m: CizelgeMercegi) => void;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
   veriAc: ((bolum: string) => void) | null; hesapAc: (() => void) | null; tezStudyo: ((m: string) => void) | null;
+  tasi?: AtolyeKomutlari['tasi'] | undefined;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;

@@ -9,6 +9,7 @@ import { degisken, MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from '../ortak.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
+import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 
 // Ayrıntı sekmesinin seçim panelleri: iş (c-masa.betik opDenetci), sipariş (isDenetci), tezgâh (o-tahta.betik tbTezPaneli).
 // Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
@@ -17,6 +18,8 @@ export interface DenetciOzellikleri {
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; mercekSec: (m: CizelgeMercegi) => void; kuyrukAc: (m: string) => void;
   // Tezgâh stüdyosu: Planlama atölyesinin panosu tezgâhı süzer ve günlüğünü açar (zz36 istek); verilmezse pasif.
   tezStudyo?: ((m: string) => void) | null;
+  // Başka tezgâha taşı (1982 a): sunucu komutu; verilmezse pasif.
+  tasi?: AtolyeKomutlari['tasi'] | undefined;
 }
 
 const kisaId = (id: string) => id.slice(id.lastIndexOf('.') + 1);
@@ -73,6 +76,7 @@ function Adimlar({ o, jid, secili, kilitGoster }: { o: DenetciOzellikleri; jid: 
 export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
   const { c, p, cx, komut, planYaz: yaz, planKilitle } = o; const D = c.D;
   const r = p.ops[id]; if (!r) return null;
+  const tasiyabilir = !!o.tasi && !r.fas && !r.act;
   const ad = cx.byId[id]; const s = D.siparisler.find((z) => z.id === r.job); const j = p.J[r.job];
   const l = c.locks[id]; const kilit = l && typeof l === 'object' ? (l as Record<string, unknown>) : null;
   const q = tezgahKuyrugu(p, r.m); const i = q.findIndex((x) => x.id === id);
@@ -131,7 +135,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
                   <tr key={x.m} data-secili={r.m === x.m ? '' : undefined}>
                     <td data-baslik="Tezgâh">{tezgahAdi(D, x.m)}</td>
                     <td data-baslik="Süre" className="tc-pym-num">{x.sure == null ? 'fason' : saatYazi(x.sure)}</td>
-                    <td data-baslik="">{r.m === x.m ? <Rozet ton="tamam">Planda</Rozet> : <Dg ad="Taşı" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />}</td>
+                    <td data-baslik="">{r.m === x.m ? <Rozet ton="tamam">Planda</Rozet> : <Dg ad="Taşı" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} yap={tasiyabilir && x.sure != null ? () => o.tasi?.(id, x.m, r.S) : null} />}</td>
                   </tr>
                 ))}
               </tbody>

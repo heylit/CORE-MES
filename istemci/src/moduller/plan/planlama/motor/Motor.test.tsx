@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { api } from '../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
@@ -21,12 +22,13 @@ const DEPO = { durum: null } as unknown as PlanlamaDeposu;
 function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
+  const yenile = vi.fn();
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile: vi.fn(), ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
+    depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
   };
   render(<BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici>);
-  return { git };
+  return { git, yenile };
 }
 // İskeletin ortak ölçek ve seçimi (PlanlamaYeni.tsx'teki gibi).
 function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'>) {
@@ -39,7 +41,7 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 }
 const komutKur = (c: PlanlamaCalismasi) => {
   const yazilan: PlanlamaCalismasi[] = [];
-  const komut: CalismaKomutu = { degistir: vi.fn((_ne, fn) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }) } as unknown as CalismaKomutu;
+  const komut: CalismaKomutu = { degistir: vi.fn((_ne, fn) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAdimlari: () => [], geriDon: vi.fn(), kaydet: vi.fn(async () => 8) } as unknown as CalismaKomutu;
   return { komut, yazilan };
 };
 
@@ -335,6 +337,41 @@ describe('PlanlamaMotoru', () => {
     expect(within(tz).getByRole('button', { name: 'Tezgâhı boşalt' }).getAttribute('title')).toContain(MOTOR_NOTU);
     fireEvent.click(within(tz).getByRole('button', { name: 'Kapat' }));
     expect(screen.getByRole('region', { name: 'Karar paneli' })).toBeTruthy();
+  });
+
+  it('Ayrıntı, uygun tezgâhlar (1982 a): Taşı sunucu komutudur; iş aynı saatte öteki tezgâha gider, cevaptan sonra sayfa yenilenir', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const c = ornekCalisma();
+    // Burcun tornası iki tezgâhta yapılabilsin.
+    const torna = c.D.urunler.find((u) => u.id === '3')?.rota?.[0];
+    if (!torna) throw new Error('örnek veride burcun tornası yok');
+    torna.tezgahlar = [...(torna.tezgahlar ?? []), { id: '2', ayar: 25, cevrim: 3 }];
+    const { komut } = komutKur(c);
+    const { yenile } = ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Ayrıntı' }));
+    const op = screen.getByRole('region', { name: '3 adım 10' });
+    const d = within(op).getAllByRole('button', { name: 'Taşı' }).find((b) => b.getAttribute('aria-disabled') !== 'true');
+    expect(d).toBeTruthy();
+    fireEvent.click(d!);
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/is-tasi', { isId: '3.10', tezgah: '2', baslangic: expect.any(Number) as unknown, calismaSurumu: 8 }, expect.anything()));
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    post.mockRestore();
+  });
+
+  it('Siparişler merceği, Planı geri al (2053): bu oturumdaki son plan çözümüne döner, sonraki değişiklikler birlikte geri alınır', () => {
+    const geriDon = vi.fn(() => true);
+    const komut = { degistir: vi.fn(() => true), geriDon, geriAdimlari: () => [{ ne: 'İş kilitlendi', t: 2 }, { ne: 'Bekleyen değişiklik uygulandı', t: 1 }] } as unknown as CalismaKomutu;
+    ac({ komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    const d = screen.getByRole('button', { name: /Planı geri al/ });
+    expect(d.getAttribute('aria-disabled')).toBe('false');
+    expect(d.getAttribute('title')).toBe('Son plan çözümünü ve ondan sonraki 1 değişikliği geri al');
+    fireEvent.click(d);
+    expect(geriDon).toHaveBeenCalledWith(2);
   });
 
   it('Düzenle: E seçilene göre menüyü açar, sayı komutu çalıştırır, sabitlemek degistir ile; motor komutları pasif; D değişiklikler, Esc kapatır', () => {

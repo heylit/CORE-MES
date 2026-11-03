@@ -12,7 +12,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { IZ_SINIRI, isTasi, olayEkle } from './atolye-komutlari-kurallar.ts';
+import { IZ_SINIRI, ekMesaiEkle, isTasi, olayEkle } from './atolye-komutlari-kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // 1982 a: atölyenin elle düzenleme komutları. Veriler uydurmadır.
@@ -94,6 +94,21 @@ describe('atölye komutlarının kuralı', () => {
       [{ tip: 'eksik', gun: 1, vardiya: 'V9', grup: 'TOR', n: 1 }, 'olay.vardiya'], [{ tip: 'eksik', gun: 1, vardiya: 'V1', grup: 'FRZ', n: 1 }, 'olay.grup'],
       [{ tip: 'fason', f: 'F9', gun: 2 }, 'olay.f'],
     ] as const) assert.deepEqual((hata(olayEkle(planli(), o, KISI)) as { alan: string }).alan, alan);
+  });
+
+  test('ek mesai (2053): satır eklenir, bekleyen yalnız o tezgâhtaki siparişleri işaretler; aynı satır değişiklik değildir; geçmiş gün ve bilinmeyen kayıt reddedilir', () => {
+    const c = planli({ ekMesai: [{ m: 'T2', gun: 1, vardiya: 'V1' }] });
+    const y = deger(ekMesaiEkle(c, { tezgah: 'T1', gun: 2, vardiya: 'V1' }, KISI));
+    assert.deepEqual(y.ekMesai, [{ m: 'T2', gun: 1, vardiya: 'V1' }, { m: 'T1', gun: 2, vardiya: 'V1' }]);
+    assert.deepEqual((y.bekleyen as { isler: unknown; geri: unknown }[])[0]?.isler, ['J1']);
+    assert.deepEqual((y.bekleyen as { geri: unknown }[])[0]?.geri, [{ yol: ['ekMesai'], once: [{ m: 'T2', gun: 1, vardiya: 'V1' }] }]);
+    const ayni = ekMesaiEkle(c, { tezgah: 'T2', gun: 1, vardiya: 'V1' }, KISI);
+    assert.ok('deger' in ayni && !ayni.degisti);
+    // Şimdi 10. saat: 0. gün bugündür, izinlidir; simdi 30 iken 0. gün geçmiştir.
+    assert.ok('deger' in ekMesaiEkle(c, { tezgah: 'T1', gun: 0, vardiya: 'V1' }, KISI));
+    assert.equal((hata(ekMesaiEkle(planli({ simdi: 30 }), { tezgah: 'T1', gun: 0, vardiya: 'V1' }, KISI)) as { alan: string }).alan, 'gun');
+    assert.equal((hata(ekMesaiEkle(c, { tezgah: 'T9', gun: 2, vardiya: 'V1' }, KISI)) as { alan: string }).alan, 'tezgah');
+    assert.equal((hata(ekMesaiEkle(c, { tezgah: 'T1', gun: 2, vardiya: 'V9' }, KISI)) as { alan: string }).alan, 'vardiya');
   });
 
   test('değişiklik izi sınırı korunur', () => {
@@ -201,6 +216,8 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
     for (const [cerez, ad] of [[okuyucu, 'okuyucu'], [receteYazari, 'receteci']] as const) {
       const o = await gonder(cerez, 'olay-ekle', { calismaSurumu: surum, olay: { tip: 'ariza', m: makineId, bas: 100, saat: 4 } }, `ak-02-o-${ad}`);
       assert.equal(o.statusCode, 403, o.body);
+      const m = await gonder(cerez, 'ek-mesai-ekle', { calismaSurumu: surum, tezgah: makineId, gun: 2, vardiya: '1' }, `ak-02-m-${ad}`);
+      assert.equal(m.statusCode, 403, m.body);
       const t = await gonder(cerez, 'is-tasi', { calismaSurumu: surum, isId: 'J1.10', tezgah: 'T1', baslangic: 12 }, `ak-02-t-${ad}`);
       assert.equal(t.statusCode, 403, t.body);
     }
@@ -217,6 +234,8 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
     assert.equal(yok.statusCode, 400, yok.body);
     const bozuk = await gonder(tam, 'olay-ekle', { calismaSurumu: surum, olay: { tip: 'bilinmeyen' } }, 'ak-03-d');
     assert.equal(bozuk.statusCode, 400, bozuk.body);
+    const vardiyasiz = await gonder(tam, 'ek-mesai-ekle', { calismaSurumu: surum, tezgah: makineId, gun: 2, vardiya: 'YOK' }, 'ak-03-f');
+    assert.equal(vardiyasiz.statusCode, 400, vardiyasiz.body);
     const gecmisSaat = await gonder(tam, 'is-tasi', { calismaSurumu: surum, isId: 'J1.10', tezgah: 'T1', baslangic: -1 }, 'ak-03-e');
     assert.equal(gecmisSaat.statusCode, 400, gecmisSaat.body);
     assert.equal((await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)))?.surum, surum);

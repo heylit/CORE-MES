@@ -1,4 +1,4 @@
-import type { AtolyeOlayi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import type { AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 
 // Atölye komutlarının saf kuralı (1982 a): kayıtlı çalışmaya tek bir değişiklik uygulanır. Değişiklik sayfanın kendi yazmasıyla aynı izi
 // bırakır (istemci kayit.ts degistir): veri sürümü artar (plan bayatlar), plan varken bekleyen değişiklik satırı ve geri dönüş farkı yazılır,
@@ -115,4 +115,23 @@ export function olayEkle(deger: unknown, olay: AtolyeOlayi, k: KomutKisisi): Kom
   const yeni = kopya(deger);
   yeni.olaylar = [...olaylar, olay];
   return { deger: isle(deger, yeni, { ne: OLAY_ADI[olay.tip], ayrinti: olay.tip, isler: ['*'], geri: [{ yol: ['olaylar'], once: olaylar }] }, k), degisti: true };
+}
+
+// Ek mesai (2053): tezgâha gün ve vardiya eklenir; motor o vardiyayı tezgâhın açık saatine katar (girdi.betik ekMesai). Geçmiş gün ve aynı
+// satırın ikincisi eklenmez. Bekleyen satırı o tezgâhta planlı işlerin siparişlerini işaretler (istemci etkilenenIsler).
+export function ekMesaiEkle(deger: unknown, g: Omit<EkMesaiEkleGovdesi, 'calismaSurumu'>, k: KomutKisisi): KomutSonucu {
+  if (!nesne(deger)) return cakisma('Çalışma kaydı okunamadı; sayfayı yenileyin.');
+  const D = veriOf(deger);
+  if (!kimligiVar(D.tezgahlar, 'id', g.tezgah)) return dogrulama('Tezgâh çalışmada yok.', 'tezgah');
+  if (!kimligiVar(D.vardiyalar, 'id', g.vardiya)) return dogrulama('Vardiya çalışmada yok.', 'vardiya');
+  if (g.gun < Math.floor(simdiSaati(deger) / 24)) return dogrulama('Geçmiş güne ek mesai eklenemez.', 'gun');
+  const satir = { m: g.tezgah, gun: g.gun, vardiya: g.vardiya };
+  const eski = dizi(deger.ekMesai);
+  if (eski.some((x) => nesne(x) && String(x.m) === g.tezgah && x.gun === g.gun && String(x.vardiya) === g.vardiya)) return { deger, degisti: false };
+  const yeni = kopya(deger);
+  yeni.ekMesai = [...eski, satir];
+  const plan = planOf(deger);
+  const ops = plan !== null && nesne(plan.ops) ? Object.values(plan.ops) : [];
+  const isler = [...new Set(ops.flatMap((r) => (nesne(r) && String(r.m) === g.tezgah && typeof r.job === 'string' ? [r.job] : [])))].sort();
+  return { deger: isle(deger, yeni, { ne: 'Ek mesai eklendi', ayrinti: `${g.tezgah} · ${String(g.gun)}. gün · ${g.vardiya}`, isler, geri: [{ yol: ['ekMesai'], once: eski }] }, k), degisti: true };
 }

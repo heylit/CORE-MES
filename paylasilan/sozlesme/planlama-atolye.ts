@@ -32,9 +32,15 @@ export const atolyeOlayi = z.discriminatedUnion('tip', [
 
 export const olayEkleGovdesi = z.object({ calismaSurumu: z.number().int(), olay: atolyeOlayi });
 
+// Ek mesai (2053): tezgâha verilen gün ve vardiya açılır (motorun ekMesai satırı {m, gun, vardiya}); gün çalışmanın başlangıç gününden sayılır.
+export const ekMesaiEkleGovdesi = z.object({
+  calismaSurumu: z.number().int(), tezgah: kimlik, gun: z.number().int().nonnegative().max(400), vardiya: kimlik,
+});
+
 export const atolyeKomutuCevabi = z.object({ calismaSurumu: z.number().int(), oncekiSurum: z.number().int() });
 
 export type IsTasiGovdesi = z.output<typeof isTasiGovdesi>;
 export type AtolyeOlayi = z.output<typeof atolyeOlayi>;
 export type OlayEkleGovdesi = z.output<typeof olayEkleGovdesi>;
+export type EkMesaiEkleGovdesi = z.output<typeof ekMesaiEkleGovdesi>;
 export type AtolyeKomutuCevabi = z.output<typeof atolyeKomutuCevabi>;

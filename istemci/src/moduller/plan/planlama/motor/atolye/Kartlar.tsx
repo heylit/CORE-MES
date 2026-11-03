@@ -7,6 +7,7 @@ import { bekleyenListesi } from '../../kayit.ts';
 import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
+import { mesaiAdaylari } from '../secim/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
@@ -19,7 +20,7 @@ import { bilgiAl, type Ortam } from './Pano.tsx';
 // yanında açılır, telefonda alttan; dışına dokunmak ve Esc kapatır. Panonun kabı konum kabı olduğundan kart sayfanın gövdesine çizilir.
 export type AcikKart =
   | { tur: 'op'; id: string } | { tur: 'suz' } | { tur: 'geri' } | { tur: 'gonder' } | { tur: 'menu' } | { tur: 'dondurma' } | { tur: 'gun' }
-  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string } | { tur: 'olay' };
+  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string } | { tur: 'olay'; m?: string } | { tur: 'mesai'; m: string };
 export interface Ankraj { x: number; y: number }
 type Bildir = ReturnType<typeof useBildirim>['bildir'];
 
@@ -207,7 +208,8 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         ),
       };
     case 'gun': return gunOzeti(ort);
-    case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} /> } : null;
+    case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} m={kart.m} /> } : null;
+    case 'mesai': return ort.ekMesai ? { ad: `${kart.m} ek mesai`, simge: 'clock', ic: <EkMesai ort={ort} m={kart.m} ekle={ort.ekMesai} /> } : null;
     case 'termin': {
       const s = bilgiAl(ort, kart.j); if (!s) return null; const metin = terminMetni(c, s);
       const kopyala = () => {
@@ -257,8 +259,8 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             <Not>Gerçekleşen atölyeden veri geldikçe dolar.</Not>
             <div className="tc-pym-tp-eylem">
               <button type="button" className="tc-dugme" onClick={() => { ort.suzSec(suzKoy(D, null, 'm', kart.m)); ort.kartKapat(); }}><Simge ad="eye" boyut="k" />Çizelgede süz</button>
-              {yaz && <button type="button" className="tc-dugme" aria-disabled="true" title={`Arıza bildir: ${MOTOR_NOTU}`}><Simge ad="alert" boyut="k" />Arıza bildir</button>}
-              {yaz && <button type="button" className="tc-dugme" aria-disabled="true" title={`Ek mesai: ${MOTOR_NOTU}`}><Simge ad="clock" boyut="k" />Ek mesai</button>}
+              {yaz && <button type="button" className="tc-dugme" aria-disabled={!ort.olayEkle} onClick={() => { if (ort.olayEkle) ort.kartAc({ tur: 'olay', m: kart.m }); }}><Simge ad="alert" boyut="k" />Arıza bildir</button>}
+              {yaz && <button type="button" className="tc-dugme" aria-disabled={!ort.ekMesai} onClick={() => { if (ort.ekMesai) ort.kartAc({ tur: 'mesai', m: kart.m }); }}><Simge ad="clock" boyut="k" />Ek mesai</button>}
             </div>
           </>
         ),
@@ -301,13 +303,31 @@ const gunFarki = (bas: string | undefined, gun: string): number | null => {
   const a = Date.parse(`${(bas ?? '').slice(0, 10)}T00:00:00Z`), b = Date.parse(`${gun}T00:00:00Z`);
   return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86_400_000) : null;
 };
-function OlayFormu({ ort, ekle }: { ort: Ortam; ekle: (o: AtolyeOlayi) => Promise<boolean> }) {
+// Ek mesai (2053): önümüzdeki beş günde tezgâhın çalışmadığı vardiyalar; seçilen sunucuda çalışmaya yazılır, plan kendiliğinden uygulanır.
+// Bütçe onaya gönderirken denetlenir.
+function EkMesai({ ort, m, ekle }: { ort: Ortam; m: string; ekle: (m: string, gun: number, vardiya: string) => void }) {
+  const l = mesaiAdaylari(ort.c, ort.cx, m);
+  const var_ = ort.c.ekMesai.flatMap((e) => (e.m === m && typeof e.gun === 'number' && e.gun >= Math.floor(ort.now / 24) ? [{ gun: e.gun, vardiya: String(e.vardiya) }] : []));
+  return (
+    <>
+      {var_.length > 0 && <Not>{`Eklenmiş: ${var_.map((e) => `${gs(ort.c.D, e.gun * 24)} ${e.vardiya}`).join(', ')}`}</Not>}
+      {l.length === 0 ? <Not>Önümüzdeki beş günde eklenecek vardiya yok.</Not> : (
+        <div className="tc-pym-tp-cipler">
+          {l.map((x) => <button key={`${String(x.gun)}/${x.vardiya}`} type="button" className="tc-pym-tp-cip" onClick={() => { ekle(m, x.gun, x.vardiya); ort.kartKapat(); }}>{x.ad}</button>)}
+        </div>
+      )}
+      <Not>Ek mesai bütçesi onaya gönderirken denetlenir.</Not>
+    </>
+  );
+}
+
+function OlayFormu({ ort, ekle, m }: { ort: Ortam; ekle: (o: AtolyeOlayi) => Promise<boolean>; m?: string | undefined }) {
   const D = ort.c.D;
   const tezgahlar = D.tezgahlar; const urunler = D.urunler; const malzemeler = D.malzemeler ?? []; const fasoncular = D.fasoncular ?? [];
   const vardiyalar = (D.vardiyalar ?? []).flatMap((v) => (typeof v.id === 'string' ? [{ id: v.id, ad: typeof v.ad === 'string' ? v.ad : v.id }] : []));
   const gruplar = [...new Set(tezgahlar.map((t) => (typeof t.grup === 'string' ? t.grup : '')).filter(Boolean))];
   const [tur, setTur] = useState<OlayTuru>('ariza');
-  const [f, setF] = useState<Record<OlayAlani, string>>({ m: tezgahlar[0]?.id ?? '', ofs: '0', saat: '8', urun: urunler[0]?.id ?? '', adet: '1', termin: '',
+  const [f, setF] = useState<Record<OlayAlani, string>>({ m: m ?? tezgahlar[0]?.id ?? '', ofs: '0', saat: '8', urun: urunler[0]?.id ?? '', adet: '1', termin: '',
     kod: malzemeler[0]?.kod ?? '', gun: '1', vardiya: vardiyalar[0]?.id ?? '', grup: gruplar[0] ?? 'ayar', n: '1', f: fasoncular[0]?.id ?? '', tarih: '' });
   const [gidiyor, setGidiyor] = useState(false);
   const al = (k: OlayAlani) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));

@@ -14,8 +14,10 @@ import { PlanlamaAtolyesi } from '../index.tsx';
 import { HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
 import { planOku } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
+import { planKurSifirla } from '../coz.ts';
+import { otomatikUygulaIste, otomatikUygulaSifirla } from './gonder.ts';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); otomatikUygulaSifirla(); });
 // jsdom'da PointerEvent yok: fireEvent onsuz olayı konumsuz yollar. Sürükle testleri için fare olayından türetilir.
 if (typeof window.PointerEvent === 'undefined') {
   class IsaretciOlayi extends MouseEvent {
@@ -44,13 +46,13 @@ const DEPO = {
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
+function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
+    depo: o.depo ?? DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
     yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
@@ -480,6 +482,44 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(kart()).getByText('Neden bu saatte')).toBeTruthy();
     expect(post).toHaveBeenCalledTimes(1);
     post.mockRestore();
+  });
+
+  it('ek mesai (2053): tezgâh günlüğündeki düğme boş vardiyaları gösterir, seçilen sunucuya gider; arıza bildir olay formunu o tezgâhla açar', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const c = ornekCalisma();
+    const m = c.D.tezgahlar[0]!.id;
+    c.D.tezgahlar[0]!.vardiyalar = ['1'];
+    const { yenile } = ac({ c });
+    fireEvent.click(screen.getAllByRole('button', { name: new RegExp(`^${m}\\b`) })[0]!);
+    const gunlukDugmesi = screen.queryByRole('button', { name: 'Ek mesai' });
+    if (gunlukDugmesi === null) { post.mockRestore(); throw new Error('Tezgâh günlüğü açılamadı'); }
+    fireEvent.click(gunlukDugmesi);
+    const k = screen.getByRole('dialog', { name: `${m} ek mesai` });
+    const cip = within(k).getAllByRole('button').find((b) => b.classList.contains('tc-pym-tp-cip'))!;
+    expect(cip.textContent).toContain(' 2 ');
+    fireEvent.click(cip);
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/ek-mesai-ekle', expect.objectContaining({ tezgah: m, vardiya: '2', calismaSurumu: 8 }), expect.anything()));
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getAllByRole('button', { name: new RegExp(`^${m}\\b`) })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Arıza bildir' }));
+    expect((within(screen.getByRole('dialog', { name: 'Olay ekle' })).getByLabelText('Tezgâh') as HTMLSelectElement).value).toBe(m);
+    post.mockRestore();
+  });
+
+  it('2053-1 a: komut çalışmayı değiştirdiyse yenilenen sayfa bekleyen değişiklikleri kendiliğinden uygular; değişmeyen komut uygulatmaz', async () => {
+    const post = vi.spyOn(api, 'post').mockImplementation((() => new Promise(() => undefined)) as never);
+    const c = ornekCalisma();
+    const { komut } = komutKur(c);
+    otomatikUygulaIste({ calismaSurumu: 8, oncekiSurum: 8 });
+    ac({ c, komut, depo: { ...DEPO, calismaSurumu: 8 } as PlanlamaDeposu });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(komut.kaydet).not.toHaveBeenCalled();
+    cleanup();
+    otomatikUygulaIste({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac({ c, komut, depo: { ...DEPO, calismaSurumu: 9 } as PlanlamaDeposu });
+    await waitFor(() => expect(post).toHaveBeenCalledWith(expect.stringContaining('degerlendirme'), { surum: 8, istek: { tur: 'plan-uygula', isler: ['*'] } }, expect.anything()));
+    post.mockRestore();
+    planKurSifirla();
   });
 
   it('olay ekle (1982 a): formdan sunucuya gider, kart kapanır; yazamayan için Olay pasif, taşı düğmesi ve sürükleme yok', async () => {
