@@ -58,7 +58,7 @@ describe('yerAdi', () => {
   });
 
   it('reddedilen: hiçbir sayfaya ait olmayan yol sayfa adı uydurmaz', () => {
-    expect(yerAdi('/olmayan-yer', [MENU])).toBe('TMI CORE');
+    expect(yerAdi('/olmayan-yer', [MENU])).toBe('CORE');
   });
 });
 

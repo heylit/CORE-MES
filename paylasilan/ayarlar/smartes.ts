@@ -8,7 +8,7 @@ export const SMARTES_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'SmartES bağlantısı',
-    aciklama: 'Açıkken makine gerçekleşenleri SmartES\'ten okunur ve SmartES karşılığı olan istasyonların iş emirleri SmartES\'e gönderilir; TMI "ERP\'ye aktarıldı" işaretini koymaz. Servis adresi sunucunun ortam değişkeninde yoksa açık olsa da istek çıkmaz.',
+    aciklama: 'Açıkken makine gerçekleşenleri SmartES\'ten okunur ve SmartES karşılığı olan istasyonların iş emirleri SmartES\'e gönderilir; CORE "ERP\'ye aktarıldı" işaretini koymaz. Servis adresi sunucunun ortam değişkeninde yoksa açık olsa da istek çıkmaz.',
   },
   'smartes.kalite-ambar-okumasi': {
     modul: 'smartes',
