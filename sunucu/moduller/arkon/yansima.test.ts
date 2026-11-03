@@ -26,7 +26,7 @@ const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
 interface Yansima { sonuc: string; neden: string | null; emir_id: number | null }
 
-describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreSQL)', () => {
+describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yoneticiId = 0;
@@ -145,7 +145,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await ortam?.kaldir();
   });
 
-  test('Arkon olay ve sayımı TMI komutuna eşlenir: başlat, sağlam sayım ve düzeltme, hurda, duraklat, devam, durdur (TMI kodlu neden), bitir', async () => {
+  test('Arkon olay ve sayımı CORE komutuna eşlenir: başlat, sağlam sayım ve düzeltme, hurda, duraklat, devam, durdur (CORE kodlu neden), bitir', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const ilkSaglam = sayim(emir, 'good', 5);
@@ -173,7 +173,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // Kart #156: terminalde "Aç" ile seçilen refakat kartı sayımla TMI'ye gider; başka emrin kartı reddedilir (denetim stokta).
-  test('kart #156: sayım satırındaki refakat kartı TMI sayımına yazılır; başka emrin kartıyla sayım reddedilir', async () => {
+  test('kart #156: sayım satırındaki refakat kartı CORE sayımına yazılır; başka emrin kartıyla sayım reddedilir', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const baska = await emirAc();
@@ -200,7 +200,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await yansima(String(yanlis['cid'])))?.sonuc, 'reddedildi');
   });
 
-  test('denetim #25: çevrimdışı kuyruktan gelen kayıt TMI\'ye kendi zamanıyla yazılır; emrin son anından eski kayıt kaybolmaz, sunucu saatiyle yazılır', async () => {
+  test('denetim #25: çevrimdışı kuyruktan gelen kayıt CORE\'a kendi zamanıyla yazılır; emrin son anından eski kayıt kaybolmaz, sunucu saatiyle yazılır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const saat = (dk: number) => Date.now() - dk * 60_000;
@@ -222,7 +222,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.ok(ms((await vt().tek<{ zaman: Date }>("SELECT max(zaman) AS zaman FROM uretim_olayi WHERE emir_id = $1", [emir]))?.zaman)! >= once - 1000, 'eski kayıt sunucu saatiyle');
   });
 
-  test('denetim #25: ileri: saati sunucudan ileri tabletin kaydı (pencere içinde) TMI\'ye sunucu saatiyle yazılır', async () => {
+  test('denetim #25: ileri: saati sunucudan ileri tabletin kaydı (pencere içinde) CORE\'a sunucu saatiyle yazılır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const ileri = Date.now() + 60_000;
@@ -319,7 +319,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await say()).durum, 200, 'kararın ardından gelen Kalite Merkezi onayı kapatır');
   });
 
-  test('Arkon hazırlığı TMI\'de "ayar" olayıdır: planlı emirde bir kez yazılır, emri başlatmaz; yinelenen ve başlamış emirdeki hazırlık değişiklik yapmaz', async () => {
+  test('Arkon hazırlığı CORE\'da "ayar" olayıdır: planlı emirde bir kez yazılır, emri başlatmaz; yinelenen ve başlamış emirdeki hazırlık değişiklik yapmaz', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const ayarlar = async () => (await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM uretim_olayi WHERE emir_id = $1 AND olay = 'ayar'", [emir]))?.n;
@@ -368,7 +368,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await yansima(calls.cid), null);
   });
 
-  test('denetim #24: TMI\'ye yazılmayan sayım operatöre ret olarak döner (ekran adedi geri çevirir); sıfır sayım ve olaylar dönmez', async () => {
+  test('denetim #24: CORE\'a yazılmayan sayım operatöre ret olarak döner (ekran adedi geri çevirir); sıfır sayım ve olaylar dönmez', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     await ekle(operator, 'events', olay(emir, 'running'));
@@ -379,15 +379,15 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     };
     const nedensiz = sayim(emir, 'scrap', 1);
     const r1 = await donen('counts', nedensiz);
-    assert.equal(r1.length, 1, 'nedensiz hurda TMI\'ye yazılmadı: operatör bilmeli');
+    assert.equal(r1.length, 1, 'nedensiz hurda CORE\'a yazılmadı: operatör bilmeli');
     assert.match(r1[0]!.ileti, /Hurda nedeni yok/);
-    assert.equal((await donen('counts', sayim(emir, 'scrap', 1, { reason: 'YOK-KOD' }))).length, 1, 'TMI\'de olmayan neden');
+    assert.equal((await donen('counts', sayim(emir, 'scrap', 1, { reason: 'YOK-KOD' }))).length, 1, 'CORE\'da olmayan neden');
     assert.deepEqual(await donen('counts', sayim(emir, 'good', 0)), [], 'sıfır sayım beklenen eşlenemezdir');
     assert.deepEqual(await donen('events', olay(emir, 'setup')), [], 'eşlenemeyen olay ret değildir');
     assert.equal((await yansima(String(nedensiz['cid'])))?.sonuc, 'eslenemedi', 'yansıma satırı aynı kalır');
   });
 
-  test('denetim #24 (gecikmeli): sonradan TMI\'ye yazılamayan sayım tablet akışına "$tmiRet" iletisiyle döner; o isteğin cevabında yoktur', async () => {
+  test('denetim #24 (gecikmeli): sonradan CORE\'a yazılamayan sayım tablet akışına "$tmiRet" iletisiyle döner; o isteğin cevabında yoktur', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const s = sayim(emir, 'scrap', 1, { reason: 'YOK-KOD' });
@@ -404,10 +404,10 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(iletiler.length, 1, JSON.stringify(iletiler));
     const m = iletiler[0]!;
     assert.deepEqual([m['kind'], m['cid'], (m['row'] as Record<string, unknown>)['delta'], (m['row'] as Record<string, unknown>)['pkgId']], ['counts', s['cid'], 1, pk(emir)]);
-    assert.match(String(m['ileti']), /Hurda nedeni TMI'de yok/);
+    assert.match(String(m['ileti']), /Hurda nedeni CORE'da yok/);
   });
 
-  test('kuyruğa alma (queued) duraklatmadır: çalışan emir duraklar ve istasyon yeni emri başlatır; çalışmayan emirde TMI değişmez, kayıt "eslenemedi" olur', async () => {
+  test('kuyruğa alma (queued) duraklatmadır: çalışan emir duraklar ve istasyon yeni emri başlatır; çalışmayan emirde CORE değişmez, kayıt "eslenemedi" olur', async () => {
     await yeniIstasyon();
     const eski = await emirAc();
     const yeni = await emirAc();
@@ -456,7 +456,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.deepEqual([(await emirOku(eski)).durum, (await emirOku(yeni)).durum], ['basladi', 'basladi']);
   });
 
-  test('TMI reddederse Arkon kaydı yazılı kalır ve yansıma "reddedildi" nedeniyle saklanır', async () => {
+  test('CORE reddederse Arkon kaydı yazılı kalır ve yansıma "reddedildi" nedeniyle saklanır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     await ekle(operator, 'events', olay(emir, 'running'));
@@ -542,7 +542,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await onayliSaglam(emir), 1);
   });
 
-  test('TMI\'ye yazılamayanlar listesi (#243): arkon.yansima-oku ile yazılan dışındaki yansımalar, emir ve neden (kişi yok); süzgeç ve sayfa; işlemsiz kişiye 403', async () => {
+  test('CORE\'a yazılamayanlar listesi (#243): arkon.yansima-oku ile yazılan dışındaki yansımalar, emir ve neden (kişi yok); süzgeç ve sayfa; işlemsiz kişiye 403', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const yazilan = olay(emir, 'running');
@@ -573,7 +573,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await app.inject({ method: 'GET', url: '/api/arkon/tmi-yansimalari' })).statusCode, 401);
   });
 
-  test('TMI\'ye yazılamayanlar listesinde veri kapsamı (#243): kısıtlı kişi yalnız kendi iş merkezinin kayıtlarını görür, sayı da süzülür; bekleyende iç hata yerine kullanıcı nedeni', async () => {
+  test('CORE\'a yazılamayanlar listesinde veri kapsamı (#243): kısıtlı kişi yalnız kendi iş merkezinin kayıtlarını görür, sayı da süzülür; bekleyende iç hata yerine kullanıcı nedeni', async () => {
     await yeniIstasyon();
     const benimMerkez = merkezId;
     const benimKod = istasyonKodu;
@@ -605,7 +605,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     for (const k of [kendi, yabanci, konumsuz]) assert.ok(cidler(genis).includes(String(k['cid'])), String(k['cid']));
   });
 
-  test('TMI\'ye yazılamayanlar ayıklanır (TA2): beklenen türler varsayılan olarak listede yok, tür başına sayılır; gösterilince türüyle gelir, tabloda durur', async () => {
+  test('CORE\'a yazılamayanlar ayıklanır (TA2): beklenen türler varsayılan olarak listede yok, tür başına sayılır; gösterilince türüyle gelir, tabloda durur', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     const planli = await emirAc();
@@ -705,7 +705,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.deepEqual([...new Set(kayitlar.map((x) => x.kisi.ad))], ['Deneme op1']);
   });
 
-  test('yinelenen kayıt TMI\'yi ikinci kez çağırmaz; eşzamanlı aynı kayıt tek yansıma ve tek sayım üretir', async () => {
+  test('yinelenen kayıt CORE\'u ikinci kez çağırmaz; eşzamanlı aynı kayıt tek yansıma ve tek sayım üretir', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     await ekle(operator, 'events', olay(emir, 'running'));
@@ -960,7 +960,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     await assert.rejects(vt().tx((db) => belgeSil(db, planci, 'pkgs', pk(baskaTaslak), { kaynak: 'k3', taban: 0 })), (h: { durum?: number }) => h.durum === 403);
   });
 
-  test('veri kapsamı, TMI katmanı: Arkon paketi kendi istasyonuna kayıtlı ama emir başka iş merkezindeyse Arkon kaydı yazılır, yansıma "reddedildi" olur ve emir değişmez', async () => {
+  test('veri kapsamı, CORE katmanı: Arkon paketi kendi istasyonuna kayıtlı ama emir başka iş merkezindeyse Arkon kaydı yazılır, yansıma "reddedildi" olur ve emir değişmez', async () => {
     const kisitli = await kisiKur('op7', ['arkon.operator', 'sayfa.arkon', 'terminal.uret']);
     const kisi = await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'op7'");
     await yeniIstasyon();
@@ -1026,7 +1026,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     }
   });
 
-  test('tek seferlik sayım sınırı TMI ucundakiyle aynıdır: aşan sayım "reddedildi", sınırdaki yazılır', async () => {
+  test('tek seferlik sayım sınırı CORE ucundakiyle aynıdır: aşan sayım "reddedildi", sınırdaki yazılır', async () => {
     await yeniIstasyon();
     const emir = await emirAc();
     await ekle(operator, 'events', olay(emir, 'running'));
@@ -1062,7 +1062,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     return e;
   };
 
-  test('aynı emre eşzamanlı farklı kayıtlar: hepsi 200 ve kayıtlı, TMI sayacı toplama eşit, bekleyen kalmaz (12 tur x 3)', async () => {
+  test('aynı emre eşzamanlı farklı kayıtlar: hepsi 200 ve kayıtlı, CORE sayacı toplama eşit, bekleyen kalmaz (12 tur x 3)', async () => {
     const emir = await calisanEmir();
     const cidler: string[] = [];
     for (let tur = 0; tur < 12; tur += 1) {
@@ -1110,7 +1110,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // A11: emrin işlemesini saran korumaliIsle doğrudan ölçülür: kayıt noktası dışındaki hata (sonuç yazımı) isteği düşürmez, TMI yazımı geri alınır.
-  test('sonuç yazımı düşerse istek düşmez: Arkon kaydı yazılır, TMI yazımı geri alınır, yansıma bekliyor; hata kalkınca tam bir kez yazılır', async () => {
+  test('sonuç yazımı düşerse istek düşmez: Arkon kaydı yazılır, CORE yazımı geri alınır, yansıma bekliyor; hata kalkınca tam bir kez yazılır', async () => {
     const emir = await calisanEmir();
     const s = sayim(emir, 'good', 7);
     await ortam?.sahip.sorgu(`CREATE OR REPLACE FUNCTION yansima_sonuc_hatasi() RETURNS trigger LANGUAGE plpgsql AS $f$
@@ -1386,7 +1386,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   let yenileyici = '';
   const yenileyiciAl = async (): Promise<string> => (yenileyici ||= await kisiKur('yenileyici1', ['arkon.yansima-yeniden']));
 
-  test('yeniden deneme: aynı satır iki kez denendi, emirde tek sayım var; TMI yazıp hata veren deneme geri alınmıştır', async () => {
+  test('yeniden deneme: aynı satır iki kez denendi, emirde tek sayım var; CORE yazıp hata veren deneme geri alınmıştır', async () => {
     const cerez = await yenileyiciAl();
     const emir = await calisanEmir();
     // Sayım satırı YAZILDIKTAN sonra hata: komut cevap veremez. Kayıt noktası yazımı geri alır, "yazıldı ama cevap alınamadı" kalmaz.
@@ -1397,7 +1397,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     } finally {
       await kaldir();
     }
-    assert.equal((await emirOku(emir)).canli?.saglam, 0, 'hatali olan beş denemenin hiçbiri TMI sayımı bırakmadı');
+    assert.equal((await emirOku(emir)).canli?.saglam, 0, 'hatali olan beş denemenin hiçbiri CORE sayımı bırakmadı');
     const ilk = await yenidenDene(cerez, String(s['cid']));
     assert.deepEqual([ilk.durum, ilk.govde.sonuc], [200, 'yazildi'], JSON.stringify(ilk.govde));
     const ikinci = await yenidenDene(cerez, String(s['cid']));
@@ -1638,7 +1638,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await onayliSaglam(emir), 172);
   });
 
-  test('arka plan işinde iz bırakmayan yazım olmaz: satırın sonucu yazılamazsa TMI komutu da geri alınır; iz yazılınca komut kalır', async () => {
+  test('arka plan işinde iz bırakmayan yazım olmaz: satırın sonucu yazılamazsa CORE komutu da geri alınır; iz yazılınca komut kalır', async () => {
     const { emir, c } = await bekleyenKur(173, 'yineleyici_3');
     await denemeyeHazirla();
     // Kısıt sınıfı hata: kayıt noktası bunu kural reddi sayıp yutabilir; iz yazılmadıysa komut da geri alınmalı.
@@ -1648,7 +1648,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     try {
       assert.equal(await turKos(), 'tamam');
       assert.equal((await yansima(c))?.sonuc, 'bekliyor');
-      assert.equal((await emirOku(emir)).canli?.saglam, 0, 'iz yoksa TMI sayımı da yok');
+      assert.equal((await emirOku(emir)).canli?.saglam, 0, 'iz yoksa CORE sayımı da yok');
     } finally {
       await ortam?.sahip.sorgu('DROP TRIGGER yineleyici_iz ON arkon_tmi_yansima');
     }
@@ -1657,7 +1657,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(await onayliSaglam(emir), 173);
   });
   // AR-BI-2 (kart #1194): TMI'de emir bitince terminal sayımı artırıp azaltabiliyordu; paket biten emri söyler.
-  test('AR-BI-2: TMI\'de biten emrin paketi listede ve tek okumada tmi.bitti taşır, açık emrinki taşımaz; okunan sürümle yazım çakışmasız yazılır', async () => {
+  test('AR-BI-2: CORE\'da biten emrin paketi listede ve tek okumada tmi.bitti taşır, açık emrinki taşımaz; okunan sürümle yazım çakışmasız yazılır', async () => {
     await yeniIstasyon();
     const biten = await emirAc();
     const acik = await emirAc();
@@ -1680,7 +1680,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // AR2 (ikinci tarayıcı turu Y1): TMI'de iptal edilen emrin paketi Arkon'da yaşıyordu; operatör uyarısız ayar, sayım yapıyordu.
-  test('TMI\'de iptal edilen emrin paketi Arkon listesinden ve tek okumadan düşer, yazılamaz; olay ve sayımı 403 alır, kaydı yazılmaz (AR2)', async () => {
+  test('CORE\'da iptal edilen emrin paketi Arkon listesinden ve tek okumadan düşer, yazılamaz; olay ve sayımı 403 alır, kaydı yazılmaz (AR2)', async () => {
     await yeniIstasyon();
     const iptal = await emirAc();
     const acik = await emirAc();
@@ -1856,7 +1856,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     const surum = async (k: string) => (await istek<{ belge: { surum: number } | null }>(yonetici, 'GET', `/arkon/belgeler/pkgs/${k}`)).govde.belge?.surum ?? null;
     const tasi = await istek<{ alan?: string }>(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(r.emirId)}/yaz`, { taban: await surum(pk(r.emirId)), govde: { ...paket, machine: r.ikinci }, kaynak: 'y1' });
     assert.equal(tasi.durum, 400, JSON.stringify(tasi.govde));
-    assert.match(JSON.stringify(tasi.govde), /TMI planından değişir/);
+    assert.match(JSON.stringify(tasi.govde), /CORE planından değişir/);
     const ayni = await istek(yonetici, 'POST', `/arkon/belgeler/pkgs/${pk(r.emirId)}/yaz`, { taban: await surum(pk(r.emirId)), govde: { ...paket, seq: 20 }, kaynak: 'y1' });
     assert.equal(ayni.durum, 200, JSON.stringify(ayni.govde));
     // Eski paketin ilk kaydında da makine emrin şimdiki istasyonu olmalı.
@@ -1917,7 +1917,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((((await paketOku(ieKimligi(ie1!)))?.govde['tmi'] as Record<string, unknown>)['ilkParca'] as { karar?: string }).karar, 'onay', 'kayıtlı pakette de sunucunun yazdığıdır; istemcinin alanı sayılmaz');
   });
 
-  test('iş emri paketi: rotalı emrin her adımı kendi istasyonunda, TMI alanları rotadan ve emirden dolu; emir başına paket yok; aynı makinedeki iki adım ayrı paket', async () => {
+  test('iş emri paketi: rotalı emrin her adımı kendi istasyonunda, CORE alanları rotadan ve emirden dolu; emir başına paket yok; aynı makinedeki iki adım ayrı paket', async () => {
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
     const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
     const liste = await paketler();
@@ -2055,7 +2055,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   };
 
   // Kart #1257: A4 kuralı ayardır, varsayılanı kapalı. Kapalıyken plansız iş başlar; plan durumu pakette bilgi olarak kalır.
-  test('canlı plan ayarı kapalıyken (varsayılan) plana yerleşmemiş iş emri paketi başlatılır ve TMI\'ye yazılır', async () => {
+  test('canlı plan ayarı kapalıyken (varsayılan) plana yerleşmemiş iş emri paketi başlatılır ve CORE\'a yazılır', async () => {
     const r = await rotaliEmirKur({ plansiz: true });
     const [ie1] = await isEmriIdleri(r.emirId);
     assert.deepEqual(tmiPlani((await paketler()).get(ieKimligi(ie1!))?.govde), { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: false });
@@ -2150,7 +2150,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
   });
 
   // A4: Arkon Planlama'daki sıralama plan taslağına gider; canlı ve operatör müdür canlıya alana dek eski sırada kalır.
-  test('Arkon Planlama sırası: TMI işinin sırası plan taslağına yazılır, canlı değişmez; eski ekran, geçersiz sıra ve yetkisiz reddedilir', async () => {
+  test('Arkon Planlama sırası: CORE işinin sırası plan taslağına yazılır, canlı değişmez; eski ekran, geçersiz sıra ve yetkisiz reddedilir', async () => {
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
     const [ie1, , ie3] = await isEmriIdleri(r.emirId);
     const kaynak = await makinesi(ie1!);
@@ -2286,7 +2286,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await sirala(operator, [k1, k3], [k3, k1])).durum, 403, 'Arkon operatörü');
     assert.equal((await sirala(planlamaci, [k1, k3], [k3, k1])).durum, 403, 'kuyruk işlemi olmayan planlamacı');
     assert.equal((await sirala(hazirlikci, [k1, k3], [k3, k3])).durum, 400, 'yinelenen iş');
-    assert.equal((await sirala(hazirlikci, [k1, 'oz-p1'], ['oz-p1', k1])).durum, 400, 'TMI iş emri paketi değil');
+    assert.equal((await sirala(hazirlikci, [k1, 'oz-p1'], ['oz-p1', k1])).durum, 400, 'CORE iş emri paketi değil');
     assert.equal((await sirala(hazirlikci, [k1], [k1])).durum, 409, 'ekran kuyruğun bir kısmını görüyor');
     assert.equal((await sirala(hazirlikci, [k1, k3], [k1, k3])).durum, 400, 'sıra değişmedi');
     assert.equal((await sirala(hazirlikci, [k1, k3], [k3, k1], 'YOK-ISTASYON')).durum, 404);
@@ -2451,11 +2451,15 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await yansima(eski.cid))?.neden, PAKET_ADIM_SIRASI);
     assert.equal((await yansima(eskiBitir.cid))?.neden, BITMIS_BITIR);
     assert.equal(gizliYansimaTuru('eslenemedi', BITMIS_BITIR), 'zaten-bitmis');
+    // 1941 öncesi kayıtlı nedenler eski adı taşır; gizli türleri değişmez.
+    assert.equal(gizliYansimaTuru('eslenemedi', "Emir zaten bitmiş; bitirme TMI'de değişiklik yapmadı."), 'zaten-bitmis');
+    assert.equal(gizliYansimaTuru('eslenemedi', 'Durum "setup" için TMI karşılığı yok (kp-1).'), 'kurulum-bosta');
+    assert.equal(gizliYansimaTuru('eslenemedi', "Emir çalışmıyordu; kuyruğa alma TMI'de değişiklik yapmadı."), 'kuyruk-degisiklik-yok');
     assert.equal((await adimliEmir(r.emirId) as typeof calisan).emir.isEmirleri.find((i) => i.id === ie2)?.durum, 'calisiyor');
     // Bulunamayan iş emri.
     const yok = ieOlay(999_999_999, 'running');
     assert.equal((await ekle(operator, 'events', yok)).durum, 200);
-    assert.equal((await yansima(yok.cid))?.neden, 'TMI iş emri bulunamadı: 999999999.');
+    assert.equal((await yansima(yok.cid))?.neden, 'CORE iş emri bulunamadı: 999999999.');
   });
 
   test('1853: tmi.hatali her iş emri paketinde adımın hatalı toplamıdır: bekleyen adımda, çalışan adımda ve bitmiş adımın kayıtlı paketinde; okunan sürümle yazım çakışmaz', async () => {
@@ -2488,7 +2492,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal(hatali(await paketOku(k1)), 2);
   });
 
-  test('iş emri paketi kaydedilince Hazırlık ekleri kalır, TMI alanları istemciden alınmaz; iş emri değişince TMI alanları ve sürüm yenilenir, yeni sürümle yazım çakışmaz', async () => {
+  test('iş emri paketi kaydedilince Hazırlık ekleri kalır, CORE alanları istemciden alınmaz; iş emri değişince CORE alanları ve sürüm yenilenir, yeni sürümle yazım çakışmaz', async () => {
     const r = await rotaliEmirKur();
     const [ie1] = await isEmriIdleri(r.emirId);
     const k = ieKimligi(ie1!);
@@ -2772,7 +2776,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     // Reddedilenler.
     await olayEkle(operator, olay(emir, 'paused'));
     const yok = await olayEkle(operator, olay(emir, 'running', { mcs: ['YOK-MAKINE'] }));
-    assert.match(yok.govde.reddedilen[0]?.ileti ?? '', /Makine TMI'de yok ya da pasif: YOK-MAKINE/);
+    assert.match(yok.govde.reddedilen[0]?.ileti ?? '', /Makine CORE'da yok ya da pasif: YOK-MAKINE/);
     await yeniIstasyon();
     const baska = await makineEkle('Başka istasyonun makinesi');
     const sonEmir = await emirAc();
@@ -2865,7 +2869,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await devral(op2, { emirId: emir })).durum, 409);
   });
 
-  test('devralma iki işin TMI hâlini istasyona ileti olarak yayar; başka istasyondaki emrin hâli yayılmaz', async () => {
+  test('devralma iki işin CORE hâlini istasyona ileti olarak yayar; başka istasyondaki emrin hâli yayılmaz', async () => {
     await yeniIstasyon();
     const m = await makineEkle('Freze 4');
     const op2 = await operatorKur('mk5');
@@ -2993,7 +2997,7 @@ describe('arkon sayım ve olayları TMI üretim emrine yansır (gerçek PostgreS
     assert.equal((await emirOku(emir)).durum, 'bitti');
   });
 
-  test('terminal TMI ile aynı hâli gösterir: duraklattığı çalışmaya dönüş makineli istasyonda da yazılır, açık çalışmaya başlatma değişiklik yapmaz, ret işin TMI hâlini döner', async () => {
+  test('terminal CORE ile aynı hâli gösterir: duraklattığı çalışmaya dönüş makineli istasyonda da yazılır, açık çalışmaya başlatma değişiklik yapmaz, ret işin CORE hâlini döner', async () => {
     await yeniIstasyon();
     await insanliYap();
     const op2 = await operatorKur('kt6');

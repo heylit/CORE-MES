@@ -467,7 +467,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     },
     async importLocal(bytes: Bytes): Promise<void> {
       let txt: string; try { txt = new TextDecoder().decode(new Uint8Array(await new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer())); } catch (e: any) { txt = new TextDecoder().decode(bytes); }
-      const d = JSON.parse(txt); if (d.format !== 'arkon-yedek-yerel') throw new Error('Bu bir TMI CORE cihaz yedeği değil');
+      const d = JSON.parse(txt); if (d.format !== 'arkon-yedek-yerel') throw new Error('Bu bir CORE cihaz yedeği değil');
       for (const s of ['pkgs', 'results', 'requests', 'draws', 'downs', 'maint', 'gauges', 'logi']) { if (!d.stores[s]) continue; await L.clear(s); for (const v of decTA(d.stores[s] || [])) await L.put(s, v); }
       for (const [k, v] of decTA(d.stores.kv || [])) await L.put('kv', v, k);
       for (const s of ['log_events', 'log_counts', 'log_meas', 'log_calls', 'log_audit']) { if (!d.stores[s]) continue; await L.clear(s); for (const v of d.stores[s] || []) await L.add(s, v); }
@@ -577,7 +577,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   /* ── .arkon paket dosyası ve klasör eşitleme ── */
   const Pkg = {
     toFile(p: any): string { return JSON.stringify(Object.assign({}, p, { format: 'arkon-paket', derived: p.derived ? encTA(p.derived) : undefined, files: (p.files || []).map((f: { name: string; kind: string; bytes: Bytes }) => ({ name: f.name, kind: f.kind, size: f.bytes.length, b64: b64(f.bytes) })) })); },
-    fromFile(text: string): any { const p = JSON.parse(text); if (p.format !== 'arkon-paket') throw new Error('Bu bir TMI CORE iş paketi değil'); p.files = (p.files || []).map((f: { name: string; kind: string; b64: string }) => ({ name: f.name, kind: f.kind, bytes: unb64(f.b64) })); if (p.derived) p.derived = decTA(p.derived); delete p.format; return p; },
+    fromFile(text: string): any { const p = JSON.parse(text); if (p.format !== 'arkon-paket') throw new Error('Bu bir CORE iş paketi değil'); p.files = (p.files || []).map((f: { name: string; kind: string; b64: string }) => ({ name: f.name, kind: f.kind, bytes: unb64(f.b64) })); if (p.derived) p.derived = decTA(p.derived); delete p.format; return p; },
     fileName(p: { no?: string; rev?: string }): string { return (p.no || 'paket').replace(/[^\wİıŞşĞğÜüÖöÇç.-]+/g, '_') + '_rev' + (p.rev || '-') + '.arkon'; }
   };
   const Folder = {

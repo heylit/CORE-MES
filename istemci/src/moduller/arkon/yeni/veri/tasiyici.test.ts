@@ -21,7 +21,7 @@ function istemciKur(cevaplar: Record<string, unknown> = {}) {
 }
 
 describe('Yeni Arkon ekranının istek taşıyıcısı', () => {
-  it('belge okuma ve yazma köprünün çevirisiyle TMI uçlarına gider', async () => {
+  it('belge okuma ve yazma köprünün çevirisiyle CORE uçlarına gider', async () => {
     const { istemci, istekler } = istemciKur({
       '/arkon/belgeler/pkgs': { belgeler: [{ kimlik: 'p1', surum: 3, govde: { id: 'p1' } }] },
       '/arkon/belgeler/pkgs/p1/yaz': { sonuc: 'yazildi', surum: 4 },
@@ -45,7 +45,7 @@ describe('Yeni Arkon ekranının istek taşıyıcısı', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('önizlemede yazma TMI\'ye iletilmez, okuma sürer', async () => {
+  it('önizlemede yazma CORE\'a iletilmez, okuma sürer', async () => {
     const { istemci, istekler } = istemciKur({ '/arkon/belgeler/pkgs': { belgeler: [] }, '/arkon/kayitlar/counts/ekle': { eklenen: 1 } });
     let onizleme = true;
     const t = tasiyiciYap({ koken: KOKEN, istemci, saltOkunur: () => onizleme });
@@ -59,7 +59,7 @@ describe('Yeni Arkon ekranının istek taşıyıcısı', () => {
     expect(istekler.at(-1)?.yontem).toBe('POST');
   });
 
-  it('reddedilen yazma ve TMI kuralı reddi kullanıcıya söylenir, makine dolu ayrıca sorulur', async () => {
+  it('reddedilen yazma ve CORE kuralı reddi kullanıcıya söylenir, makine dolu ayrıca sorulur', async () => {
     const { istemci } = istemciKur({
       '/arkon/belgeler/pkgs/p1/yaz': new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Yetkiniz yok.' }),
       '/arkon/kayitlar/events/ekle': {

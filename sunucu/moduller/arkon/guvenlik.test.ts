@@ -346,7 +346,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     assert.equal((await yaz('admin', 'pkgs', 'b006-emirsiz', 0, { id: 'b006-emirsiz', plan })).durum, 200);
     assert.equal((await say('b006-emirsiz')).govde.eklenen, 1);
     assert.equal((await say('b006-emirsiz')).govde.eklenen, 1);
-    assert.equal(await bekleyen(), 0, 'emri olmayan paketin sayımı TMI\'ye yansımaz, karar beklemez');
+    assert.equal(await bekleyen(), 0, 'emri olmayan paketin sayımı CORE\'a yansımaz, karar beklemez');
     assert.equal((await say('b006-yok')).govde.eklenen, 1, 'paketi olmayan kayıt kapıya takılmaz');
     assert.equal((await say('b006-yok')).govde.eklenen, 1);
   });
@@ -1604,11 +1604,11 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     const matrisOku = async (rol: ArkonRolu): Promise<Record<string, string[]>> =>
       ((await oku(rol, 'kv', 'perms')).govde.belge?.govde as { v: Record<string, string[]> }).v;
 
-    test('kv/perms yazımı ve silmesi yönetici dahil herkese 403 ("TMI\'de yönetilir"); okuma türetilmiş matrisi verir, kayıtlı eski değer yok sayılır', async () => {
+    test('kv/perms yazımı ve silmesi yönetici dahil herkese 403 ("CORE\'da yönetilir"); okuma türetilmiş matrisi verir, kayıtlı eski değer yok sayılır', async () => {
       for (const rol of ROLLER) {
         const y = await istek(cerezler[rol], 'POST', '/arkon/belgeler/kv/perms/yaz', { taban: 0, govde: { v: { operator: ['pkg.del'] } }, kaynak: 'g1' });
         assert.equal(y.durum, 403, rol);
-        assert.match((y.govde as unknown as { mesaj: string }).mesaj, /TMI/);
+        assert.match((y.govde as unknown as { mesaj: string }).mesaj, /CORE/);
         assert.equal((await istek(cerezler[rol], 'POST', '/arkon/belgeler/kv/perms/sil', { kaynak: 'g1' })).durum, 403, rol);
       }
       // Önceden (yerelde) yazılmış değer: tabloda satır olsa bile okuma türetilmiş matristir.
@@ -1932,7 +1932,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       assert.deepEqual([await acik(kapsamliBakim.cerez) - kisitliOnce, await acik(cerezler.maint) - tumOnce], [1, 2]);
     });
 
-    test('TMI\'deki açık emirden türeyen taslak paket yalnız iş merkezi kapsamındaki kişiye görünür; taslağı kapsam dışından ezemez', async () => {
+    test('CORE\'daki açık emirden türeyen taslak paket yalnız iş merkezi kapsamındaki kişiye görünür; taslağı kapsam dışından ezemez', async () => {
       const emir = await emirYaz({ parcaNo: 'KAPSAM-B', parcaAd: 'B parçası', adet: 3, istasyonId: B.istasyonId, projeId });
       assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
       const kimlik = `tmi-ue-${emir.govde.emir.id}`;
@@ -1946,7 +1946,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
     });
 
     // A5 (kart #541): Arkon'dan emir açılmaz; yeni paket yalnız TMI emrinin ya da iş emrinin paketidir.
-    test('A5: yeni yerel paket her yazan rolde 403 ve belge oluşmaz; var olan yerel paket yazılır; TMI taslağının ilk kaydı geçer ve "oluşturuldu" yazar', async () => {
+    test('A5: yeni yerel paket her yazan rolde 403 ve belge oluşmaz; var olan yerel paket yazılır; CORE taslağının ilk kaydı geçer ve "oluşturuldu" yazar', async () => {
       for (const rol of ['admin', 'plan', 'prep', 'quality'] as const) {
         const kimlik = `a5-yerel-${rol}`;
         const red = await istekDogrudan<{ error?: string }>(cerezler[rol], 'POST', `/arkon/belgeler/pkgs/${kimlik}/yaz`, { taban: 0, govde: { id: kimlik, machine: A.istasyon }, kaynak: 'g1' });
@@ -1963,7 +1963,7 @@ describe('arkon güvenlik (gerçek PostgreSQL)', () => {
       assert.equal(emir.durum, 200, JSON.stringify(emir.govde));
       const kimlik = `tmi-ue-${emir.govde.emir.id}`;
       const taslak = (await oku('admin', 'pkgs', kimlik)).govde.belge;
-      assert.ok(taslak, 'TMI emrinin taslağı Hazırlık\'ta görünür');
+      assert.ok(taslak, 'CORE emrinin taslağı Hazırlık\'ta görünür');
       const ilk = await istekDogrudan<BelgeYazCevabi>(yonetici, 'POST', `/arkon/belgeler/pkgs/${kimlik}/yaz`, { taban: taslak.surum, govde: { ...(taslak.govde as object), note: 'A5' }, kaynak: 'g1' });
       assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
       assert.equal(ilk.govde.sonuc, 'yazildi');

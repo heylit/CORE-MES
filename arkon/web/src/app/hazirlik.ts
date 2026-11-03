@@ -48,7 +48,7 @@ export const STEP_TEMPLATES = {
 export const uidg = () => Math.random().toString(36).slice(2, 9);
 /* rotalı TMI emrinin iş emri paketi: emir, operasyon, istasyon, adet, süreler, termin ve öncelik TMI planından gelir, burada değişmez */
 export const tmiIsEmri = p => String((p && p.id) || '').startsWith('tmi-ie-');
-const TMI_KILIT = 'TMI planından gelir';
+const TMI_KILIT = 'CORE planından gelir';
 // Rotalı işin plan durumu (data/tmi-plan.ts): operatöre yalnız canlı planda eşleşen iş düşer; sıra canlı plandandır.
 const PLAN_RENGI = { planlanmadi: 'var(--idle)', 'kaynak-farkli': 'var(--stop)', 'hazirlik-bekliyor': 'var(--hold)' };
 const SIRA_RENGI = { taslakta: 'var(--idle)', onayda: 'var(--hold)' };
@@ -187,7 +187,7 @@ export function PrepApp() {
   const patch = (ch) => { if (!allowed('pkg.edit', say)) return; setCur(o => { const n = Object.assign({}, o, ch, { updatedAt: Date.now(), dirty: true }); clearTimeout(saveT.current); saveT.current = setTimeout(() => { saveT.current = 0; DB.put('pkgs', n).then(reload); }, 500); return n; }); };
   const select = async (x) => { if (cur && saveT.current) { clearTimeout(saveT.current); saveT.current = 0; await DB.put('pkgs', cur); } setCur(x); setTab('info'); setPlanSel(null); setMEdit(true); reload(); };
   // A5 (kart #541): paket TMI'de emir açılınca oluşur; Arkon yerel paket açmaz.
-  const create = () => { if (!allowed('pkg.edit', say)) return; if (!tmiyeGit('emir-ac')) say('Yeni paket TMI’de emir açılınca oluşur: Rota > Üretim emirleri’nde emri aç', 'alert', 'var(--hold)'); };
+  const create = () => { if (!allowed('pkg.edit', say)) return; if (!tmiyeGit('emir-ac')) say('Yeni paket CORE’da emir açılınca oluşur: Rota > Üretim emirleri’nde emri aç', 'alert', 'var(--hold)'); };
   const remove = async () => { if (!p || !allowed('pkg.del', say)) return; audit('paket', 'silindi', p.no, p.part); await DB.del('pkgs', p.id); Bus.send({ type: 'pkg-removed', id: p.id }); const all = await reload(); setCur(all[0] || null); say('Paket silindi', 'trash', 'var(--stop)'); };
   /** Çizim stüdyosunda kaydedilmiş çizimi pakete al: dosyalar + ana resim + okuma ayarı (+ balonlar varsa kontrol planı) */
   const useDraw = d => {
@@ -239,7 +239,7 @@ export function PrepApp() {
   const unpublish = async () => { if (!allowed('pkg.publish', say)) return; const n = Object.assign({}, p, { status: 'draft', dirty: true }); await DB.put('pkgs', n); setCur(n); await reload(); Bus.send({ type: 'pkg-removed', id: n.id }); audit('paket', 'geri çekildi', n.no); say('Operatörden geri çekildi', 'back', 'var(--hold)'); };
   const resolvePin = async (id, reply?) => { const r = await DB.get('results', p.id); if (!r) return; reply = reply || 'Hazırlık: incelendi ve düzeltildi'; r.pins = (r.pins || []).map(x => x.id === id ? Object.assign({}, x, { status: 'done', reply }) : x); await DB.put('results', r); Bus.send({ type: 'pin-resolved', id: p.id, reply }); await reload(); say('Not çözüldü · operatöre bildirildi', 'check', 'var(--run)'); };
   const exportPkg = () => download(Pkg.fileName(p), Pkg.toFile(p), 'application/json');
-  const importPkg = async f => { if (!f || !allowed('pkg.edit', say)) return; if (!tmiPaketiMi(cur)) { say('Önce bir TMI paketi seç: dosya ona şablon olarak uygulanır', 'alert', 'var(--hold)'); return; } try { const n = sablonUygula(cur, Pkg.fromFile(await f.text()), Date.now()); await DB.put('pkgs', n); await reload(); setCur(n); say('Dosya şablon olarak uygulandı: ' + n.no, 'download', 'var(--run)'); } catch (e) { say('İçe aktarılamadı: ' + e.message, 'alert', 'var(--stop)'); } };
+  const importPkg = async f => { if (!f || !allowed('pkg.edit', say)) return; if (!tmiPaketiMi(cur)) { say('Önce bir CORE paketi seç: dosya ona şablon olarak uygulanır', 'alert', 'var(--hold)'); return; } try { const n = sablonUygula(cur, Pkg.fromFile(await f.text()), Date.now()); await DB.put('pkgs', n); await reload(); setCur(n); say('Dosya şablon olarak uygulandı: ' + n.no, 'download', 'var(--run)'); } catch (e) { say('İçe aktarılamadı: ' + e.message, 'alert', 'var(--stop)'); } };
 
   const list = paketleriSuz(pkgs, suz, q);
   const gruplar = paketleriGrupla(list, grup, grupAdi);
@@ -294,7 +294,7 @@ export function PrepApp() {
           <div className="pbody">
           ${tab === 'info' ? html`<div className="glass pform fadein">
             <${Field} l="Operasyon tipi · operatör ekranı buna göre şekillenir" w=${3}><${TypePicker} v=${opOf(p)} onChange=${t => { const keep = tmiIsEmri(p) || machineOf(p.machine).t === t; patch({ opType: t, st: Object.assign(ST_DEFAULT[t](), opOf(p) === t ? p.st : {}), machine: keep ? p.machine : ((stationList().find(m => m.t === t) || {}).id || p.machine), mc: keep ? p.mc : '', op: keep ? p.op : OPTYPES[t].l }); }} /></${Field}>
-            ${tmiIsEmri(p) ? html`<${Field} l="TMI iş emri" w=${3}><span className="muted">İş emri, operasyon, istasyon, adet, süreler, termin ve öncelik TMI planından gelir; burada resim, kontrol planı, adım ve kurallar hazırlanır.</span></${Field}>` : null}
+            ${tmiIsEmri(p) ? html`<${Field} l="CORE iş emri" w=${3}><span className="muted">İş emri, operasyon, istasyon, adet, süreler, termin ve öncelik CORE planından gelir; burada resim, kontrol planı, adım ve kurallar hazırlanır.</span></${Field}>` : null}
             <${Field} l="İş emri no"><input value=${p.no} disabled=${tmiIsEmri(p)} title=${tmiIsEmri(p) ? TMI_KILIT : null} onChange=${e => S('no', e.target.value)} /></${Field}>
             <${Field} l="Parça no"><input value=${p.partNo} disabled=${tmiIsEmri(p)} title=${tmiIsEmri(p) ? TMI_KILIT : null} onChange=${e => S('partNo', e.target.value)} placeholder="FLN-120" /></${Field}>
             <${Field} l="Revizyon"><input value=${p.rev} disabled=${tmiIsEmri(p)} title=${tmiIsEmri(p) ? TMI_KILIT : null} onChange=${e => S('rev', e.target.value.toUpperCase())} style=${{ fontWeight: 800 }} /></${Field}>

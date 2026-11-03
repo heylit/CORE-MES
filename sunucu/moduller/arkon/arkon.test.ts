@@ -118,7 +118,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     await ortam?.kaldir();
   });
 
-  test('rol TMI işleminden gelir: yönetici admin, operatör operator; Arkon rolü olmayan 403, oturumsuz 401', async () => {
+  test('rol CORE işleminden gelir: yönetici admin, operatör operator; Arkon rolü olmayan 403, oturumsuz 401', async () => {
     assert.equal((await istek(null, 'GET', '/arkon/ben')).durum, 401);
     const red = await istek(rolsuz, 'GET', '/arkon/ben');
     assert.equal(red.durum, 403);
@@ -149,7 +149,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
   });
 
   // Demo bulgusu: operatör ekranı kayıtlı istasyon yoksa kişinin TMI istasyonuyla açılır (ortak-ayarlar.ts myStation); kod buradan gelir.
-  test('Arkon kişisi TMI istasyon atamasını taşır: en yüksek yüzdeli istasyonun kodu, ataması kalkınca null', async () => {
+  test('Arkon kişisi CORE istasyon atamasını taşır: en yüksek yüzdeli istasyonun kodu, ataması kalkınca null', async () => {
     const az = await istasyonKur();
     const t = await istasyonKur();
     for (const [ist, yuzde] of [[az, '30'], [t, '70']] as const) {
@@ -281,7 +281,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     for (const r of roller) assert.ok(r.sayfali, r.kod);
   });
 
-  test('79: tatil ve kapalı günler TMI Vardiya takviminden Arkon\'a tarih anahtarıyla gider; Arkon\'dan yazılamaz', async () => {
+  test('79: tatil ve kapalı günler CORE Vardiya takviminden Arkon\'a tarih anahtarıyla gider; Arkon\'dan yazılamaz', async () => {
     const sahip = ortam!.sahip;
     await sahip.sorgu("INSERT INTO vardiya_takvim_gunu (tarih, tur, ad) VALUES ('2031-10-29', 'tatil', 'Deneme bayramı'), ('2031-11-03', 'kapali', NULL)");
     try {
@@ -293,7 +293,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('A7-V1: Arkon vardiyaları TMI Vardiya modülünden okunur; pasif vardiya gelmez, Arkon\'dan yazılamaz', async () => {
+  test('A7-V1: Arkon vardiyaları CORE Vardiya modülünden okunur; pasif vardiya gelmez, Arkon\'dan yazılamaz', async () => {
     const sahip = ortam!.sahip;
     const v = await sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Arkon Deneme Gece', '22:00', '06:00') RETURNING id");
     await sahip.sorgu("INSERT INTO vardiya_molasi (vardiya_id, baslangic, bitis) VALUES ($1, '23:50', '00:20')", [v!.id]);
@@ -309,7 +309,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('A7-K1: Arkon ölçü aletleri TMI Kalibrasyon modülünden okunur; kayıtlı Arkon aleti gelmez; Arkon\'dan yazılamaz ve silinemez', async () => {
+  test('A7-K1: Arkon ölçü aletleri CORE Kalibrasyon modülünden okunur; kayıtlı Arkon aleti gelmez; Arkon\'dan yazılamaz ve silinemez', async () => {
     const sahip = ortam!.sahip;
     const tur = await sahip.tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'");
     const alet = await sahip.tek<{ id: number }>("INSERT INTO olcu_aleti (no, tur_id, yer, periyot_gun) VALUES ('ARK-DNM-K1', $1, 'Dolap', 90) RETURNING id", [tur!.id]);
@@ -330,7 +330,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.equal((await istek(yonetici, 'POST', `/arkon/belgeler/gauges/${kimlik}/sil`, { kaynak: 'c1' })).durum, 403);
   });
 
-  test('tesis, iş merkezi kısıtı TMI\'den okunur; TMI ayarı Arkon\'dan yazılamaz, yönetici ayarını yalnız Arkon yöneticisi yazar', async () => {
+  test('tesis, iş merkezi kısıtı CORE\'dan okunur; CORE ayarı Arkon\'dan yazılamaz, yönetici ayarını yalnız Arkon yöneticisi yazar', async () => {
     const t = await istasyonKur();
     const plant = await istek<BelgeCevabi>(operator, 'GET', '/arkon/belgeler/kv/plant');
     const tesis = (plant.govde.belge?.govde as { v: { wcs: { id: string }[]; sts: unknown[]; mcs: unknown[] } }).v;
@@ -398,7 +398,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.equal((await istek(operator, 'POST', '/arkon/belgeler/results/r2/yaz', { taban: null, kaynak: 'c1' })).durum, 400);
   });
 
-  test('TMI\'deki açık emir Hazırlık\'ta taslak paket görünür; paket kaydedilince kayıtlı belge geçerlidir', async () => {
+  test('CORE\'daki açık emir Hazırlık\'ta taslak paket görünür; paket kaydedilince kayıtlı belge geçerlidir', async () => {
     const t = await istasyonKur();
     const emir = await emirYaz({
       parcaNo: 'DENEME-1', parcaAd: 'Deneme parçası', adet: 25, istasyonId: t.istasyonId, projeId,
@@ -547,7 +547,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.equal(JSON.stringify(okunan).includes('hz1'), false);
   });
 
-  test('kayıtlar yalnız eklenir: aynı cid ikinci kez yazılmaz, kişi TMI oturumundan yazılır, süzgeçler çalışır', async () => {
+  test('kayıtlar yalnız eklenir: aynı cid ikinci kez yazılmaz, kişi CORE oturumundan yazılır, süzgeçler çalışır', async () => {
     const satir = { cid: 'k1', at: Date.parse('2001-10-07T08:00:00Z'), machine: 'TZG-04', wc: 'TAL', orderNo: 'UE-1', kind: 'good', delta: 1, userName: 'sahte' };
     const once = Date.now();
     assert.equal((await istek<{ eklenen: number }>(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar: [satir], kaynak: 'c1' })).govde.eklenen, 1);
@@ -950,7 +950,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('ayar yazımı: TMI ayarlarını kimse yazamaz ve silemez; yönetici ayarlarını operatör rolü yazamaz ve silemez, Arkon yöneticisi yazar', async () => {
+  test('ayar yazımı: CORE ayarlarını kimse yazamaz ve silemez; yönetici ayarlarını operatör rolü yazamaz ve silemez, Arkon yöneticisi yazar', async () => {
     const yaz = (cerez: string, kimlik: string) => istek(cerez, 'POST', `/arkon/belgeler/kv/${kimlik}/yaz`, { taban: null, govde: { v: {} }, kaynak: 'c9' });
     const sil = (cerez: string, kimlik: string) => istek(cerez, 'POST', `/arkon/belgeler/kv/${kimlik}/sil`, { kaynak: 'c9' });
     for (const kimlik of ['plant', 'reasons', 'scraps', 'perms', 'shifts', 'holidays']) {

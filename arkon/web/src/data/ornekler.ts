@@ -7,7 +7,7 @@ export function ornekHazir(kimlikler: readonly string[], veriVar: (id: string) =
   return kimlikler.every(veriVar);
 }
 /* Operatör ekranında iş yokken ya da işin dokümanı yokken yerleşik örnek çizim (FLN-120) çizilmez: TMI'ye bağlı Arkon'da
-   örnek resim gerçek iş sanılır (demo bulgusu). Yalnız TMI'siz tanıtım kipinde iş yokken örnek çizim kalır. */
+   örnek resim gerçek iş sanılır (demo bulgusu). Yalnız CORE'suz tanıtım kipinde iş yokken örnek çizim kalır. */
 export function ornekCizimGorunur(gomulu: boolean, isVar: boolean, bos: boolean): boolean {
   return !bos && !isVar && !gomulu;
 }

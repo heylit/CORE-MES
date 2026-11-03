@@ -4,7 +4,7 @@ import { aqlPlani, muayeneNumunePlani } from '../../../../arkon/web/src/data/mua
 // Muayene paketinin numune planında lot büyüklüğü TMI emrinin adedinden gelir (Akış A provası O4).
 describe('Muayene numune planı lotu', () => {
   const st = { lot: 200, n: 8, ac: 0 };
-  it('TMI iş emri paketinde lot hedef adettir, numune ve Ac planlamacınındır', () => {
+  it('CORE iş emri paketinde lot hedef adettir, numune ve Ac planlamacınındır', () => {
     expect(muayeneNumunePlani({ id: 'tmi-ie-5', target: 19 }, st)).toEqual({ lot: 19, n: 8, ac: 0 });
     expect(muayeneNumunePlani({ id: 'tmi-ue-9', target: 19 }, st)).toEqual({ lot: 19, n: 8, ac: 0 });
   });

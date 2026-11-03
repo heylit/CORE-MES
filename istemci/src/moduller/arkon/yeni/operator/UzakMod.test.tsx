@@ -76,7 +76,7 @@ describe('UzakMod düzeni', () => {
     expect(uyan).toHaveBeenCalledTimes(1);
   });
 
-  it('TMI işinde (1188) hurda yerine sunucunun hatalı toplamı; bilinmiyorsa tire', () => {
+  it('CORE işinde (1188) hurda yerine sunucunun hatalı toplamı; bilinmiyorsa tire', () => {
     ac({}, () => {}, 3);
     expect(screen.queryByText('Hurda')).toBeNull();
     expect(screen.getByText('Hatalı').nextSibling?.textContent).toBe('3');

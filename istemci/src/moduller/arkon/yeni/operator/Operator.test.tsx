@@ -220,7 +220,7 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/kuyruk'); });
   }, 40000);
 
-  it('820 b: operatörde geçiş satırı yok; TMI işlemi olmayan sayfa Arkon yetkisi olsa da gösterilmez (reddedilen)', async () => {
+  it('820 b: operatörde geçiş satırı yok; CORE işlemi olmayan sayfa Arkon yetkisi olsa da gösterilmez (reddedilen)', async () => {
     telefon();
     // Arkon yetkisi Kalite'yi açsa da TMI menü işlemi (arkon.kalite) yok: satır çıkmaz.
     sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op', 'page.quality', 'prod.run'] } } }]));
@@ -309,7 +309,7 @@ describe('807 üst çubuk kısayolları', () => {
 
 // Son blok: işin yerel kopyası (çalışıyor) sonraki testin açılışında sunucuya yazılır, öteki testlerden sonra durur.
 describe('A1 Üretim Terminali hatalı parça (1034)', () => {
-  it('TMI işinde Hurda yerine Hatalı: neden ve adetle kalite kolu açılır, hurda sayımı yazılmaz; kadranda hatalı adedi artar (1188)', async () => {
+  it('CORE işinde Hurda yerine Hatalı: neden ve adetle kalite kolu açılır, hurda sayımı yazılmaz; kadranda hatalı adedi artar (1188)', async () => {
     const tmi = { ...PAKET, id: 'tmi-ie-70', no: 'UE-DENEME-7', tmi: { emirId: 7, hatali: 1 } };
     const istekler = sunucuKur(ISTASYONLU, { belgeler: {
       pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }],
@@ -392,7 +392,7 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   }, 40000);
 });
 
-describe('A1 Üretim Terminali TMI reddi bildirimi', () => {
+describe('A1 Üretim Terminali CORE reddi bildirimi', () => {
   const RET = 'Bu işte Deneme Kişi de çalışıyor.';
   const reddet = (durum: string, tmiDurum?: string) => (tur: string, satirlar: Record<string, unknown>[]) => {
     const red = tur === 'events' ? satirlar.filter((r) => r.state === durum) : [];
@@ -421,7 +421,7 @@ describe('A1 Üretim Terminali TMI reddi bildirimi', () => {
       const neden = pencere.querySelector('.tc-ay1-neden');
       expect(neden).not.toBeNull();
       fireEvent.click(neden!);
-      await waitFor(() => { expect(bildirimler()).toContain(`TMI kabul etmedi · ${RET}`); }, { timeout: 10000 });
+      await waitFor(() => { expect(bildirimler()).toContain(`CORE kabul etmedi · ${RET}`); }, { timeout: 10000 });
       expect(bildirimler().filter((m) => m?.includes(RET))).toHaveLength(1);
       expect(bildirimler().some((m) => m?.startsWith('Duruş kaydedildi'))).toBe(false);
     } finally {

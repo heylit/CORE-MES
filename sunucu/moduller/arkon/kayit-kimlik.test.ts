@@ -166,7 +166,7 @@ describe('arkon kayıt kimlikleri (gerçek PostgreSQL)', () => {
   const sayimZamanla = (cid: string, at: number, machine: string, wc: string) =>
     istek(operator, 'POST', '/arkon/kayitlar/counts/ekle', { satirlar: [{ cid, at, kind: 'good', delta: 1, machine, wc }], kaynak: 'k1' });
 
-  test('istasyon kodu TMI\'de değişince: yeni kod aynı kimliği alır; değişiklikten önceki zamanla gelen eski kodlu kayıt (çevrimdışı kuyruk) eski koddan çözülür; sonraki zamanlı eski kod çözülmez; eski kayıt değişmez', async () => {
+  test('istasyon kodu CORE\'da değişince: yeni kod aynı kimliği alır; değişiklikten önceki zamanla gelen eski kodlu kayıt (çevrimdışı kuyruk) eski koddan çözülür; sonraki zamanlı eski kod çözülmez; eski kayıt değişmez', async () => {
     const t = await tesisKur();
     await sayimYaz('kd1', t.istasyon.kod, t.merkez.kod);
     const once = Date.now() - 60_000;

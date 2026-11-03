@@ -829,7 +829,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const a = live.current.o;
         if (a && a.state !== es.state && geriAlinacakIs(a, { ...es, pkgId: es.pkgId ?? null, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => durumEsitle(l, es));
-        bip('nok'); retSoyleRef.current(`TMI kabul etmedi · ${detay?.msg || ''}`, detay?.msg, true);
+        bip('nok'); retSoyleRef.current(`CORE kabul etmedi · ${detay?.msg || ''}`, detay?.msg, true);
         return;
       }
       const b = baslatmaGeriAlma(detay);
@@ -838,7 +838,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const a = live.current.o;
         if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => baslatmaGeriUygula(l, b));
-        bip('nok'); retSoyleRef.current(`İş başlamadı · ${detay?.msg || 'TMI kabul etmedi'}`, detay?.msg, true);
+        bip('nok'); retSoyleRef.current(`İş başlamadı · ${detay?.msg || 'CORE kabul etmedi'}`, detay?.msg, true);
         return;
       }
       const g = sayimGeriAlma(detay);
@@ -1009,7 +1009,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const yer = c.kolAcildi ? ` · kol ${c.hedefEmir.emirNo}` : ' · adımlar emre eklendi';
         say(`Hatalı · ${sayi(g.adet)} adet kaliteye ayrıldı${yer} · karar kalitede${c.uyari ? ` · ${c.uyari}` : ''}`, 'alert', 'hold',
           { action: { l: 'Kaliteyi çağır', fn: () => startCall(CAGRI_EKIPLERI.find((x) => x.k === 'kalite')!) } });
-      }, (h: unknown) => { bip('nok'); say(`TMI kabul etmedi · ${hataIletisi(h, 'Hatalı kaydedilemedi.')}`, 'alert', 'stop'); })
+      }, (h: unknown) => { bip('nok'); say(`CORE kabul etmedi · ${hataIletisi(h, 'Hatalı kaydedilemedi.')}`, 'alert', 'stop'); })
       .finally(() => { hataliGidiyorYaz(false); });
   };
   const doScrap = (why: string) => {
@@ -1334,7 +1334,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       ) : null}
       {ov === 'ozetim' ? <Pencere acik kapat={() => ovYaz(null)} baslik="Özetim" tur="tam"><Ozetim /></Pencere> : null}
       {ov === 'done' ? <Konfeti /> : null}
-      <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · TMI'ye bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
+      <OzetKatmani acik={ov === 'done'} ustYazi={`${o.no} · CORE'a bildirildi`} baslik="İş emri tamamlandı" kapat={() => ovYaz(null)}
         satirlar={bitisOzeti(o, hataliSayisi, sayi, ilk.kararBekleyen ?? 0)}
         {...(!pv && bitenEmir !== null ? { ek: <BitenSepet istasyon={MACHINE} emirId={bitenEmir} /> } : {})}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />

@@ -95,7 +95,7 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
       ...(benVerisi.cevap === undefined ? {} : { ben: { cevap: benVerisi.cevap, zaman: benVerisi.zaman } }),
       cikis: () => cikisRef.current(),
       reddedildi: (ileti) => {
-        const no = bildirRef.current('hata', `TMI CORE: ${ileti}`);
+        const no = bildirRef.current('hata', `CORE: ${ileti}`);
         const retler = retBildirimleri.current;
         retler.delete(ileti);
         retler.set(ileti, no);
@@ -103,7 +103,7 @@ function ArkonYeniEkrani({ sabitSayfa }: { sabitSayfa?: SabitSayfa }) {
         const eski = retler.keys().next().value;
         if (retler.size > RET_BILDIRIMI_SINIRI && eski !== undefined) retler.delete(eski);
       },
-      uyari: (ileti) => bildirRef.current('bilgi', `TMI CORE: ${ileti}`),
+      uyari: (ileti) => bildirRef.current('bilgi', `CORE: ${ileti}`),
       makineDolu: (red) => devralmalarYaz((l) => [...l, red]),
       saltOkunur: () => saltOkunurRef.current,
     });
@@ -194,7 +194,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
       bildir('tamam', red.tur === 'calisma' ? 'İş devralındı; çalışma sizin adınıza sürüyor.' : `${red.doluOlan.emir.emirNo} durduruldu; işiniz başlatıldı.`);
       siradakiniKapat();
     },
-    onError: (hata) => { bildir('hata', `TMI CORE: ${hataIletisi(hata, 'Devralınamadı.')}`); siradakiniKapat(); },
+    onError: (hata) => { bildir('hata', `CORE: ${hataIletisi(hata, 'Devralınamadı.')}`); siradakiniKapat(); },
   });
   const siradaki = devralmalar[0] ?? null;
 
@@ -290,7 +290,7 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
         yukleniyor={devral.isPending}
         onayla={() => { if (siradaki !== null) devral.mutate(siradaki); }}
         vazgec={() => {
-          if (siradaki !== null) bildir('bilgi', `TMI CORE: ${devralMetni(siradaki)} İşiniz başlatılmadı.`);
+          if (siradaki !== null) bildir('bilgi', `CORE: ${devralMetni(siradaki)} İşiniz başlatılmadı.`);
           siradakiniKapat();
         }}
       />

@@ -14,7 +14,7 @@ describe('Arkon biten iş sayaç kilidi', () => {
   });
 });
 
-describe('Arkon sayım: TMI\'nin kabul etmediği durumda kapalı, ret gelince geri döner', () => {
+describe('Arkon sayım: CORE\'un kabul etmediği durumda kapalı, ret gelince geri döner', () => {
   it('başlamamış (kuyruktaki) ve durmuş işte sayaç kapalı, nedeni söylenir', () => {
     expect(sayimKapaliNedeni({ state: 'queued' })).toBe(BASLAMAMIS_IS_ILETISI);
     expect(sayimKapaliNedeni({ state: 'stopped' })).toBe(DURUSTA_SAYIM_ILETISI);
@@ -62,7 +62,7 @@ describe('Arkon sayım: hazırlıkta iyi parça kapalı', () => {
 });
 
 describe('Arkon biten işler', () => {
-  it('TMI\'de biten emrin paketi tmi.bitti taşır; taşımayan ya da paketsiz iş bitmiş sayılmaz', () => {
+  it('CORE\'da biten emrin paketi tmi.bitti taşır; taşımayan ya da paketsiz iş bitmiş sayılmaz', () => {
     expect(tmiBitti({ tmi: { bitti: true } })).toBe(true);
     expect([tmiBitti({ tmi: {} }), tmiBitti({ tmi: null }), tmiBitti(null), tmiBitti({ tmi: { bitti: 'evet' } })]).toEqual([false, false, false, false]);
   });
@@ -98,7 +98,7 @@ describe('Arkon başlatma reddi: iş durumu geri döner', () => {
   });
 });
 
-describe('Arkon durum eşitleme: ret gelince terminal işin TMI hâlini gösterir', () => {
+describe('Arkon durum eşitleme: ret gelince terminal işin CORE hâlini gösterir', () => {
   const row = { orderNo: 'E-1', pkgId: 'tmi-ue-1', state: 'paused' };
   it('yalnız durum kaydında ve bilinen hâlde eşitler', () => {
     expect(durumEsitleme({ kind: 'events', row, tmiDurum: 'running' })).toEqual({ orderNo: 'E-1', pkgId: 'tmi-ue-1', state: 'running' });
@@ -116,12 +116,12 @@ describe('Arkon durum eşitleme: ret gelince terminal işin TMI hâlini gösteri
     const kuyruk = durumEsitle(isler, { ...es, state: 'queued' })[0]!;
     expect([kuyruk.state, kuyruk.startedAt]).toEqual(['queued', undefined]);
   });
-  it('kayıt cevabındaki TMI hâli korunur', () => {
+  it('kayıt cevabındaki CORE hâli korunur', () => {
     expect(logRetleri({ reddedilen: [{ cid: 'a', ileti: 'x', tmiDurum: 'running' }] })).toEqual([{ cid: 'a', ileti: 'x', tmiDurum: 'running' }]);
   });
 });
 
-describe('durumIletisi: devralma sonrası TMI hâli', () => {
+describe('durumIletisi: devralma sonrası CORE hâli', () => {
   const ileti = { type: '$durum', machine: 'DN-TORNA-1', orderNo: 'UE-1', state: 'paused' };
   it('yalnız bu istasyonun geçerli $durum iletisini alır', () => {
     expect(durumIletisi(ileti, 'DN-TORNA-1')).toEqual({ orderNo: 'UE-1', pkgId: undefined, state: 'paused' });

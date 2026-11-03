@@ -373,7 +373,7 @@ export function App({ preview }) {
       if (es) {
         const a = live.current.o; if (a && a.state !== es.state && geriAlinacakIs(a, { ...es, alan: 'good', fark: 0 })) autoRef.current.state = true;
         setOrders(l => durumEsitle(l, es));
-        beep('nok'); say('TMI kabul etmedi · ' + (e.detail.msg || ''), 'alert', 'var(--stop)');
+        beep('nok'); say('CORE kabul etmedi · ' + (e.detail.msg || ''), 'alert', 'var(--stop)');
         return;
       }
       const b = baslatmaGeriAlma(e.detail);
@@ -381,7 +381,7 @@ export function App({ preview }) {
         // Başlatma yazılmadı: iş geri döner; geri dönüş yeni durum kaydı yazmaz (TMI'de değişen bir şey yok).
         const a = live.current.o; if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
         setOrders(l => baslatmaGeriUygula(l, b));
-        beep('nok'); say('İş başlamadı · ' + (e.detail.msg || 'TMI kabul etmedi'), 'alert', 'var(--stop)');
+        beep('nok'); say('İş başlamadı · ' + (e.detail.msg || 'CORE kabul etmedi'), 'alert', 'var(--stop)');
         return;
       }
       const g = sayimGeriAlma(e.detail); if (!g) return;

@@ -6,7 +6,7 @@ import { PageShell } from './pano-planlama';
 import { I, html, pad, pl, useCallback, useEffect, useState } from './temel';
 
 /* ══════════ Üretim anomalisi sayfası (kart #1149, ayrı sayfa kart #1193) ══════════
-   Hesap TMI sunucusundadır (GET /arkon/anomaliler: arkon.hazirlik, arkon.planlama ya da arkon.yonetici); sayfa yalnız gösterir.
+   Hesap CORE sunucusundadır (GET /arkon/anomaliler: arkon.hazirlik, arkon.planlama ya da arkon.yonetici); sayfa yalnız gösterir.
    Beklenen: plandaki sıraya göre şu ana kadarki net aktif süreye düşen adet; bilinmeyen değer "–" gösterilir. */
 const ANOMALI_YENILEME_MS = 60000;
 
@@ -49,7 +49,7 @@ function Bugun({ sekme }: { sekme: unknown }) {
     <a className="btn" ...${pl('hazirlik')}><${I} n="layers" s=${16} />Üretim Terminali Hazırlık</a>
     ${bagli && !yasak ? html`<button className="btn" onClick=${() => sor()} disabled=${mesgul}><${I} n="rotate" s=${16} />Yenile</button>` : null}
   </div>`;
-  const govde = !bagli ? html`<p className="muted">Üretim anomalisi yalnız TMI'ye bağlıyken hesaplanır.</p>`
+  const govde = !bagli ? html`<p className="muted">Üretim anomalisi yalnız CORE'a bağlıyken hesaplanır.</p>`
     : yasak ? html`<p className="muted">Üretim anomalisini görme yetkiniz yok.</p>`
     : !a ? html`<p className="muted">${hata ? 'Anomali verisi şu an alınamadı' : 'Hesaplanıyor…'}</p>`
     : html`<div className="anomsayfa">

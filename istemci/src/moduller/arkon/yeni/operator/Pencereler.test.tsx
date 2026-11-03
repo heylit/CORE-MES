@@ -31,7 +31,7 @@ describe('Vardiya özeti', () => {
     expect(metin).toContain('2/2');
     expect(metin).toContain('%50');
   });
-  it('TMI işinde hurda yerine hatalı yazar; hatalı kalite oranına girer (1190)', () => {
+  it('CORE işinde hurda yerine hatalı yazar; hatalı kalite oranına girer (1190)', () => {
     const metin = ac(ozet({ good: 9, hatali: 1, goal: 18 })).baseElement.textContent ?? '';
     expect(metin).toContain('1 hatalı');
     expect(metin).not.toContain('hurda');
@@ -94,7 +94,7 @@ describe('Hatalı parça (1034)', () => {
     expect((screen.getByRole('button', { name: /Kaliteye ayır/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('istek: iş emri paketinde adım paketten, emir paketinde TMI seçer; TMI dışı iş ve geçersiz adet isteksiz', () => {
+  it('istek: iş emri paketinde adım paketten, emir paketinde CORE seçer; CORE dışı iş ve geçersiz adet isteksiz', () => {
     const g = { kod: 'TK', adet: 2, aciklama: null };
     expect(hataliIstegi({ id: 'tmi-ie-70', tmi: { emirId: 7 } }, g)).toEqual({ emirId: 7, govde: { isEmriId: 70, hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });
     expect(hataliIstegi({ id: 'tmi-ue-7' }, g)).toEqual({ emirId: 7, govde: { hurdaNedeniKodu: 'TK', adet: 2, aciklama: null } });
@@ -102,7 +102,7 @@ describe('Hatalı parça (1034)', () => {
     expect(hataliIstegi({ id: 'tmi-ue-7' }, { ...g, adet: 0 })).toBeNull();
   });
 
-  it('toplu girişte TMI işinde ikinci alan Hatalı adını taşır (1044 a); öteki işte Hurda kalır', () => {
+  it('toplu girişte CORE işinde ikinci alan Hatalı adını taşır (1044 a); öteki işte Hurda kalır', () => {
     const { unmount } = render(<TopluGiris kalan={10} kapali={false} nedenler={nedenler} hurdaEtiketi="Hatalı" kaydet={() => true} />);
     expect(screen.getByLabelText('Toplu hatalı')).toBeTruthy();
     expect(screen.queryByLabelText('Toplu hurda')).toBeNull();

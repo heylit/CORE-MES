@@ -37,12 +37,12 @@ function TmiSteps({ emirId }: { emirId: number }) {
     setListe(l => l && adimYaz(l, a.id, x => ({ ...x, tamam })));
     AKStore.Server.tmiAdimIsaretle(emirId, a.id, tamam)
       .then(c => setListe(l => l && adimCevabiUygula(l, a.id, c)))
-      .catch(e => { setListe(l => l && adimYaz(l, a.id, x => ({ ...x, tamam: !tamam }))); setHata('Adım kaydedilmedi · ' + ((e && e.message) || 'TMI kabul etmedi')); })
+      .catch(e => { setListe(l => l && adimYaz(l, a.id, x => ({ ...x, tamam: !tamam }))); setHata('Adım kaydedilmedi · ' + ((e && e.message) || 'CORE kabul etmedi')); })
       .finally(() => { suruyor.current.delete(a.id); });
   };
   const L = liste || [], n = L.filter(a => a.tamam).length;
   return html`<div className="glass steps fadein">
-    <div className="steps-h"><${MiniRing} v=${L.length ? n / L.length : 0} c="var(--run)" /><div><h3>Operasyon adımları</h3><span className="over">${liste === null ? 'Yükleniyor…' : L.length ? n + ' / ' + L.length + ' tamamlandı · TMI\'ye yazılır' : 'Bu emrin talimat adımı yok'}</span></div></div>
+    <div className="steps-h"><${MiniRing} v=${L.length ? n / L.length : 0} c="var(--run)" /><div><h3>Operasyon adımları</h3><span className="over">${liste === null ? 'Yükleniyor…' : L.length ? n + ' / ' + L.length + ' tamamlandı · CORE\'a yazılır' : 'Bu emrin talimat adımı yok'}</span></div></div>
     ${hata ? html`<div className="suggest"><${I} n="alert" s=${20} /><div><b>${hata}</b></div></div>` : null}
     ${L.map((a, i) => html`<div key=${a.id} className=${'step ' + (a.tamam ? 'on' : '')} role="checkbox" aria-checked=${a.tamam} tabIndex="0" onClick=${() => isaretle(a)} onKeyDown=${e => (e.key === ' ' || e.key === 'Enter') && (e.preventDefault(), isaretle(a))}>
       <span className="box"><${I} n="check" s=${26} w=${3} /></span><div><b>${i + 1}. ${a.ad}</b>${a.aciklama ? html`<small>${a.aciklama}</small>` : null}</div></div>`)}
@@ -235,7 +235,7 @@ export function DoneOv({ o, onNext, onClose }) {
   return html`<${Fragment}><div className="confetti">${bits.map((b, i) => html`<i key=${i} style=${{ left: b.l + '%', background: b.c, animationDuration: b.t + 's', animationDelay: b.d + 's', transform: 'rotate(' + b.r + 'deg)' }}></i>`)}</div>
     <div className="done-ov" onClick=${e => e.target === e.currentTarget && onClose()}><div className="done-c">
       <div className="stamp"><${I} n="check" s=${110} w=${2.5} /></div>
-      <span className="over" style=${{ color: 'var(--done)' }}>${o.no} · TMI'ye bildirildi</span>
+      <span className="over" style=${{ color: 'var(--done)' }}>${o.no} · CORE'a bildirildi</span>
       <h2>İş emri tamamlandı</h2>
       <div className="sum"><div>İyi parça<b>${fmt(o.good)}</b></div><div>Hurda<b style=${{ color: 'var(--stop)' }}>${o.scrap}</b></div><div>Kalite<b>%${(100 * o.good / (o.good + o.scrap || 1)).toFixed(1)}</b></div></div>
       <div style=${{ display: 'flex', gap: 12, marginTop: 8 }}><button className="btn lg" onClick=${onClose}>Kapat</button><button className="btn lg pri" onClick=${onNext}><${I} n="next" s=${20} />Sıradaki işe geç</button></div>

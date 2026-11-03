@@ -387,7 +387,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const iceAl = async (f: File | undefined) => {
     if (!f) return;
     if (!duzenler) { yetkisiz(); return; }
-    if (!tmiPaketiMi(secili)) { soyle('Önce bir TMI paketi seç: dosya ona şablon olarak uygulanır', 'hold'); return; }
+    if (!tmiPaketiMi(secili)) { soyle('Önce bir CORE paketi seç: dosya ona şablon olarak uygulanır', 'hold'); return; }
     try {
       const n = sablonUygula(secili!, depo.Pkg.fromFile(await f.text()) as Record<string, unknown>, Date.now());
       await depo.DB.put('pkgs', n); await yenile(); seciliYaz(n); soyle('Dosya şablon olarak uygulandı: ' + n.no, 'run');
@@ -590,8 +590,8 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                 <div className="tc-ay2-form">
                   <Alan etiket="Operasyon tipi · operatör ekranı buna göre şekillenir" genis={3}><TurSecici deger={tur} degistir={turDegistir} /></Alan>
                   {tmiKilit ? (
-                    <Alan etiket="TMI iş emri" genis={3}>
-                      <span className="tc-ay2-soluk">İş emri, operasyon, istasyon, adet, süreler, termin ve öncelik TMI planından gelir; burada resim, kontrol planı, adım ve kurallar hazırlanır.</span>
+                    <Alan etiket="CORE iş emri" genis={3}>
+                      <span className="tc-ay2-soluk">İş emri, operasyon, istasyon, adet, süreler, termin ve öncelik CORE planından gelir; burada resim, kontrol planı, adım ve kurallar hazırlanır.</span>
                     </Alan>
                   ) : null}
                   <Alan etiket="İş emri no"><input value={p.no} disabled={tmiKilit} title={kilitIpucu} onChange={(e) => S('no', e.target.value)} /></Alan>

@@ -121,7 +121,7 @@ export function BoardApp() {
       <div className="glass bk"><span className="over">Açık çağrı</span><b style=${{ color: openCalls.length ? 'var(--hazard-ink)' : 'var(--muted)' }}>${openCalls.length}</b><small>${openCalls.filter(c => c.esc).length ? openCalls.filter(c => c.esc).length + ' yükseltildi' : 'yükseltilen yok'}</small></div>
     </div>
     <div className="bwrap">
-      <div className="bgrid">${!d ? html`<p className="muted">Yükleniyor…</p>` : !tiles.length ? html`<div className="glass empty" style=${{ padding: 30 }}><${I} n="layers" s=${36} /><b>İstasyon yok</b><small className="muted">${AKStore.status().mode === 'server' ? 'İstasyonlar TMI\'de İstasyonlar sayfasından eklenir.' : 'Ayarlar › Tesis yapısı\'ndan istasyon ekleyin.'}</small></div>` : groups.map(g => html`<section key=${g.wc} className="bgrp"><span className="over">${g.name}</span><div className="btiles">${g.list.map(t => html`<${BoardTile} key=${t.s.id} t=${t} now=${now} />`)}</div></section>`)}</div>
+      <div className="bgrid">${!d ? html`<p className="muted">Yükleniyor…</p>` : !tiles.length ? html`<div className="glass empty" style=${{ padding: 30 }}><${I} n="layers" s=${36} /><b>İstasyon yok</b><small className="muted">${AKStore.status().mode === 'server' ? 'İstasyonlar CORE\'da İstasyonlar sayfasından eklenir.' : 'Ayarlar › Tesis yapısı\'ndan istasyon ekleyin.'}</small></div>` : groups.map(g => html`<section key=${g.wc} className="bgrp"><span className="over">${g.name}</span><div className="btiles">${g.list.map(t => html`<${BoardTile} key=${t.s.id} t=${t} now=${now} />`)}</div></section>`)}</div>
       <aside className="bside">
         <div className="glass bcalls"><span className="over">Açık çağrılar</span>${openCalls.length ? openCalls.map(c => html`<div key=${c.id} className=${'bcall ' + (c.esc ? 'esc' : c.ack ? 'ack' : '')}><b>${c.machine} · ${(CALLS.find(x => x.k === c.team) || { l: c.team }).l}</b><small>${c.ack ? 'Üstlendi: ' + (c.ackBy || '') + ' · ' : c.esc ? 'YÜKSELTİLDİ · ' : 'Bekliyor · '}${mins(now - c.open)} dk${c.note ? ' · ' + c.note : ''}</small></div>`) : html`<small className="muted">Açık çağrı yok</small>`}</div>
         <div className="glass bcalls"><span className="over">Açık arızalar</span>${d && d.mt.filter(m => m.type === 'ariza' && m.status !== 'done' && (!wc || machineOf(m.st).wc === wc)).length ? d.mt.filter(m => m.type === 'ariza' && m.status !== 'done' && (!wc || machineOf(m.st).wc === wc)).map(m => html`<div key=${m.id} className="bcall"><b>${m.st}${m.mc ? ' · ' + m.mc : ''}</b><small>${m.title} · ${mins(now - m.openedAt)} dk${m.ackBy ? ' · ' + m.ackBy : ''}</small></div>`) : html`<small className="muted">Açık arıza yok</small>`}</div>
@@ -211,7 +211,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
   const tmiIsi = p => String(p.id).startsWith('tmi-');
   const moveTo = async (p, st, beforeId?) => {
     if (!allowed('plan.edit', say)) return;
-    if (tmiIsi(p) && p.machine !== st) { say('İstasyon TMI planından değişir', 'x', 'var(--stop)'); return; }
+    if (tmiIsi(p) && p.machine !== st) { say('İstasyon CORE planından değişir', 'x', 'var(--stop)'); return; }
     if (kuyrukIsiMi(p)) { await kuyrugaSirala(p, st, beforeId); return; }
     if (tmiPlani(p)) { await planaSirala(p, st, beforeId); return; }
     const mt = machineOf(st).t, pt = opOf(p);
@@ -262,7 +262,7 @@ export function OrdersBoard({ pk, rs, say, reload, salt = false }) {
       <div className="pcm"><span>${fmt(good)} / ${fmt(p.target || 0)}</span><span>${minsL(remainMs(p))}</span></div>
       <div className="pcm"><span>${sc && sc.start ? 'Başlar ' + dmyhm(sc.start) : ''}</span><span className=${late ? 'lt' : ''}>${sc && sc.end ? 'Biter ' + dmyhm(sc.end) : sc ? 'Takvime sığmıyor' : ''}</span></div>
       ${p.due ? html`<div className="pcm"><span>Termin ${p.due}</span>${late ? html`<span className="lt">Gecikecek</span>` : null}</div>` : null}
-      ${edit ? html`<div className="pcbtn"><button className="x" onClick=${() => step(p, st, -1)} aria-label="Yukarı"><${I} n="chevu" s=${14} /></button><button className="x" onClick=${() => step(p, st, 1)} aria-label="Aşağı"><${I} n="chevd" s=${14} /></button><select value=${known.has(st) ? st : ''} disabled=${tmiIsi(p)} title=${tmiIsi(p) ? 'İstasyon TMI planından değişir' : null} onChange=${e => e.target.value && moveTo(p, e.target.value)} aria-label="İstasyona taşı"><option value="">Taşı…</option>${stationList().map(s => html`<option key=${s.id} value=${s.id}>${s.id}</option>`)}</select></div>` : null}
+      ${edit ? html`<div className="pcbtn"><button className="x" onClick=${() => step(p, st, -1)} aria-label="Yukarı"><${I} n="chevu" s=${14} /></button><button className="x" onClick=${() => step(p, st, 1)} aria-label="Aşağı"><${I} n="chevd" s=${14} /></button><select value=${known.has(st) ? st : ''} disabled=${tmiIsi(p)} title=${tmiIsi(p) ? 'İstasyon CORE planından değişir' : null} onChange=${e => e.target.value && moveTo(p, e.target.value)} aria-label="İstasyona taşı"><option value="">Taşı…</option>${stationList().map(s => html`<option key=${s.id} value=${s.id}>${s.id}</option>`)}</select></div>` : null}
     </div>`;
   };
   const laneEl = (id, title, sub, L, isSt) => {

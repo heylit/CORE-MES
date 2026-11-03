@@ -19,7 +19,7 @@ const SATIRLAR: YansimaSatiri[] = [
     kayit: { tur: 'counts', cid: 'c1', zaman: '2026-10-07T09:00:00.000+03:00', paketId: 'tmi-ue-8', emirNo: null }, gizliTur: null,
   },
   {
-    id: 5, sonuc: 'eslenemedi', neden: 'Paket başka adımın: bu adımın sırası gelmeden ya da bittikten sonra kaydı TMI\'ye işlenmez.', deneme: 0, zaman: '2026-10-07T13:00:00.000+03:00', sonDeneme: null, emirId: 11,
+    id: 5, sonuc: 'eslenemedi', neden: 'Paket başka adımın: bu adımın sırası gelmeden ya da bittikten sonra kaydı CORE\'a işlenmez.', deneme: 0, zaman: '2026-10-07T13:00:00.000+03:00', sonDeneme: null, emirId: 11,
     kayit: { tur: 'events', cid: 'c5', zaman: '2026-10-07T13:00:00.000+03:00', paketId: 'tmi-ie-40', emirNo: 'UE-0011' }, gizliTur: null,
   },
   {
@@ -30,7 +30,7 @@ const SATIRLAR: YansimaSatiri[] = [
 
 // Sunucu varsayılan olarak gizler; gizlenenler=true ile gizli satır da gelir.
 const GIZLI: YansimaSatiri = {
-  id: 4, sonuc: 'eslenemedi', neden: 'Durum "setup" için TMI karşılığı yok.', deneme: 0, zaman: '2026-10-07T12:00:00.000+03:00', sonDeneme: null, emirId: 7,
+  id: 4, sonuc: 'eslenemedi', neden: 'Durum "setup" için CORE karşılığı yok.', deneme: 0, zaman: '2026-10-07T12:00:00.000+03:00', sonDeneme: null, emirId: 7,
   kayit: { tur: 'events', cid: 'c4', zaman: '2026-10-07T12:00:00.000+03:00', paketId: 'tmi-ue-7', emirNo: 'UE-0007' }, gizliTur: 'Kurulum ve boşta durumu',
 };
 const GIZLENENLER: YansimalarCevabi['gizlenenler'] = [
@@ -88,10 +88,10 @@ describe('TmiYansimalari', () => {
     const tur = screen.getByRole('list', { name: 'Gizlenen türler' });
     expect(tur.textContent).toContain('Kurulum ve boşta durumu: 1');
     expect(tur.textContent).toContain('İş zaten çalışıyor: 0');
-    expect(screen.queryByText('Durum "setup" için TMI karşılığı yok.')).toBeNull();
+    expect(screen.queryByText('Durum "setup" için CORE karşılığı yok.')).toBeNull();
     expect(yollar.some((y) => y.includes('gizlenenler='))).toBe(false);
     fireEvent.click(screen.getByLabelText('Gizlenenleri göster'));
-    expect(await screen.findByText('Durum "setup" için TMI karşılığı yok.')).toBeTruthy();
+    expect(await screen.findByText('Durum "setup" için CORE karşılığı yok.')).toBeTruthy();
     expect(screen.getByText('Gizlenen: Kurulum ve boşta durumu')).toBeTruthy();
     expect(yollar.some((y) => y.includes('gizlenenler=true'))).toBe(true);
   });
@@ -103,7 +103,7 @@ describe('TmiYansimalari', () => {
     const dugmeler = await screen.findAllByRole('button', { name: 'Yeniden dene' });
     expect(dugmeler).toHaveLength(1);
     fireEvent.click(dugmeler[0] as HTMLElement);
-    expect(await screen.findByText('Kayıt TMI\'ye yazıldı.')).toBeTruthy();
+    expect(await screen.findByText('Kayıt CORE\'a yazıldı.')).toBeTruthy();
     expect(yollar).toContain('POST /arkon/tmi-yansimalari/3/yeniden-dene');
   });
 

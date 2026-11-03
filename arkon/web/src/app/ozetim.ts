@@ -6,7 +6,7 @@ import { Fragment, I, html, useEffect, useState } from './temel';
 
 /* ══════════ Operatör Özetim (kart #1295, 2. sürüm #1322) ══════════
    Kişinin kendi sağlamı, hurdası, çalıştığı süre ve işleri. Plana göre başarı, verim, ekip ortalaması ve kalite yüzdesi hesapları sunucuda
-   durur ama gösterilmez (kullanıcı kararı, #1322: hesaplardan henüz emin olunmadı). Sayılar TMI'deki üretim emri sayımındandır; terminaldeki
+   durur ama gösterilmez (kullanıcı kararı, #1322: hesaplardan henüz emin olunmadı). Sayılar CORE'daki üretim emri sayımındandır; terminaldeki
    vardiya özeti makineye göredir, bu sayfa kişiye göredir. Amir kendi iş merkezindeki kişiyi seçip salt okur. */
 const OZET_YENILEME_MS = 120000;
 const DONEMLER: OzetDonemi[] = ['gun', 'hafta', 'ay'];

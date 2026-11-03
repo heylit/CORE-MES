@@ -7,7 +7,7 @@ import { arkonKisisi } from './baglanti.ts';
 describe('operatör ekranının istasyonu', () => {
   const L = ['DT1', 'DF1'];
   it('cihazda seçilmiş istasyon önce gelir', () => expect(istasyonSec('DF1', 'DT1', L)).toBe('DF1'));
-  it('seçim yoksa kişinin TMI istasyonu, ilk istasyon değil', () => expect(istasyonSec(null, 'DF1', L)).toBe('DF1'));
+  it('seçim yoksa kişinin CORE istasyonu, ilk istasyon değil', () => expect(istasyonSec(null, 'DF1', L)).toBe('DF1'));
   it('listede olmayan seçim ve atama atlanır; hiçbiri yoksa ilk istasyon', () => {
     expect(istasyonSec('ESKI', 'DF1', L)).toBe('DF1');
     expect(istasyonSec(null, 'PASIF', L)).toBe('DT1');
@@ -46,7 +46,7 @@ describe('istasyon seçicideki liste', () => {
 
 // Denetim bulgusu: TMI istasyonuyla açılan ekran istasyonu cihaza yazmazsa üretim kaydı (isStationTablet) düşer.
 describe('operatör ekranının ilk açılışı', () => {
-  it('kişinin TMI istasyonuyla açıldıysa istasyon cihaza yazılır, sorulmaz', () => expect(ilkAcilis(null, 'DF1', 'DF1', true)).toBe('kaydet'));
+  it('kişinin CORE istasyonuyla açıldıysa istasyon cihaza yazılır, sorulmaz', () => expect(ilkAcilis(null, 'DF1', 'DF1', true)).toBe('kaydet'));
   it('atama yoksa ya da açılan istasyon atanan değilse sorulur', () => {
     expect(ilkAcilis(null, null, 'DT1', true)).toBe('sor');
     expect(ilkAcilis(null, 'PASIF', 'DT1', true)).toBe('sor');

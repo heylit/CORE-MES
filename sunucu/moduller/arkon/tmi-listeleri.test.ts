@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { tesisGruplari, tmiListesiSaltOkunur } from '../../../arkon/web/src/data/tmi-listeleri.ts';
 
 // Kullanıcı kararı (soru 51/52 b): Arkon Ayarlar'da hazırlık duruş ve hurda nedenleri ile tesisi salt okunur görür; düzenleme TMI'de.
-describe('Arkon Ayarlar: TMI listeleri salt okunur', () => {
+describe('Arkon Ayarlar: CORE listeleri salt okunur', () => {
   it('yalnız sunucuya bağlıyken, hazırlık görebiliyorsa ve düzenleyemiyorsa salt okunur liste açılır', () => {
     assert.equal(tmiListesiSaltOkunur(true, true, false), true);
     assert.equal(tmiListesiSaltOkunur(true, true, true), false);

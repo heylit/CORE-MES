@@ -32,8 +32,8 @@ function istemciKur(cevaplar: Record<string, unknown | ((govde: unknown) => unkn
 const istek = (yontem: string, yol: string, sorgu = '', govde?: unknown): IstekGirdisi =>
   ({ yontem, yol, sorgu: new URLSearchParams(sorgu), govde });
 
-describe('Arkon sözleşmesi -> TMI uçları', () => {
-  it('malzeme seçicisi: aranan metin TMI malzeme aramasına gider, liste olduğu gibi döner', async () => {
+describe('Arkon sözleşmesi -> CORE uçları', () => {
+  it('malzeme seçicisi: aranan metin CORE malzeme aramasına gider, liste olduğu gibi döner', async () => {
     const malzemeler = [{ id: 3, kod: 'SRF-1', ad: 'Deneme sarf', birim: 'lt' }];
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/malzemeler': { malzemeler } });
     expect((await cevapla(istemci, istek('GET', '/materials', 'q=s%C4%B1v%C4%B1 &c=c1'))).govde).toEqual(malzemeler);
@@ -92,21 +92,21 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     }
   });
 
-  it('plan sırası: Arkon Planlama\'nın sıralaması TMI plan sıralama komutuna gider (A4)', async () => {
+  it('plan sırası: Arkon Planlama\'nın sıralaması CORE plan sıralama komutuna gider (A4)', async () => {
     const g = { kaynak: { tur: 'makine', id: 5 }, onceki: [1, 2], yeni: [2, 1], planSurumu: 7 };
     const { istemci, cagrilar } = istemciKur({ 'POST /arkon/plan-sira/sirala': { taslakId: 3, taslakAcildi: true } });
     const c = await cevapla(istemci, istek('POST', '/plan-sira', 'c=c1', JSON.stringify(g)));
     expect(c.govde).toEqual({ taslakId: 3, taslakAcildi: true });
     expect(cagrilar).toEqual([{ yontem: 'POST', yol: '/arkon/plan-sira/sirala', govde: g }]);
   });
-  it('plan sürümü: Planlama yüklenirken canlı plan sürümünü TMI\'den okur (A4)', async () => {
+  it('plan sürümü: Planlama yüklenirken canlı plan sürümünü CORE\'dan okur (A4)', async () => {
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/plan-sira/surum': { planSurumu: 7 } });
     const c = await cevapla(istemci, istek('GET', '/plan-sira', 'c=c1'));
     expect(c.govde).toEqual({ planSurumu: 7 });
     expect(cagrilar).toEqual([{ yontem: 'GET', yol: '/arkon/plan-sira/surum' }]);
   });
 
-  it('kuyruk sırası (kart 527): Hazırlık sıralaması ve plan sırasına dönüş TMI kuyruk uçlarına cihaz kaynağıyla gider; plan ucu çağrılmaz', async () => {
+  it('kuyruk sırası (kart 527): Hazırlık sıralaması ve plan sırasına dönüş CORE kuyruk uçlarına cihaz kaynağıyla gider; plan ucu çağrılmaz', async () => {
     const g = { istasyon: 'AI1', onceki: ['tmi-ie-1', 'tmi-ie-2'], yeni: ['tmi-ie-2', 'tmi-ie-1'] };
     const { istemci, cagrilar } = istemciKur({ 'POST /arkon/kuyruk-sira/sirala': { surum: 9 }, 'POST /arkon/kuyruk-sira/plana-don': { silinen: 2 } });
     expect((await cevapla(istemci, istek('POST', '/kuyruk-sira', 'c=c1', JSON.stringify(g)))).govde).toEqual({ surum: 9 });
@@ -117,7 +117,7 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     ]);
   });
 
-  it('makine ayrımları (393 d): yalnız emir kimliği TMI ucuna geçer, cevap olduğu gibi döner', async () => {
+  it('makine ayrımları (393 d): yalnız emir kimliği CORE ucuna geçer, cevap olduğu gibi döner', async () => {
     const ayrim = { planMakinesi: 'M1', ayrimlar: [{ mc: 'M2', emirNo: 'E-1', opNo: 10, baslangic: '2026-10-21T10:30:00+03:00' }] };
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/makine-ayrimlari?emirId=12': ayrim });
     const c = await cevapla(istemci, istek('GET', '/makine-ayrimlari', 'emirId=12&kisiId=5&c=c1'));
@@ -125,7 +125,7 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect(cagrilar).toEqual([{ yontem: 'GET', yol: '/arkon/makine-ayrimlari?emirId=12' }]);
   });
 
-  it('sağlık ve kişi: Arkon biçimiyle döner, kişi TMI\'den gelir', async () => {
+  it('sağlık ve kişi: Arkon biçimiyle döner, kişi CORE\'dan gelir', async () => {
     const { istemci } = istemciKur({ 'GET /arkon/ben': { kisi: KISI }, 'GET /arkon/kisiler': { kisiler: [KISI] } });
     const saglik = await cevapla(istemci, istek('GET', '/health'));
     expect(saglik.durum).toBe(200);
@@ -228,7 +228,7 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     expect((await cevapla(eski, istek('GET', '/log/counts', 'cursor=1'))).govde).toEqual({ rows: [], at: null, cut: false });
   });
 
-  it('TMI hatası Arkon hata biçimine çevrilir; sunucuya ulaşılamazsa hata geçer (Arkon kuyruğa alır)', async () => {
+  it('CORE hatası Arkon hata biçimine çevrilir; sunucuya ulaşılamazsa hata geçer (Arkon kuyruğa alır)', async () => {
     const { istemci } = istemciKur({
       'GET /arkon/belgeler/kv': new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Arkon MES için rolünüz yok.' }),
       'GET /arkon/belgeler/pkgs': new TypeError('Failed to fetch'),
@@ -237,7 +237,7 @@ describe('Arkon sözleşmesi -> TMI uçları', () => {
     await expect(cevapla(istemci, istek('GET', '/doc/pkgs'))).rejects.toThrow('Failed to fetch');
   });
 
-  it('çıkış TMI oturumunu kapatır; yedekleme TMI\'dedir', async () => {
+  it('çıkış CORE oturumunu kapatır; yedekleme TMI\'dedir', async () => {
     const { istemci } = istemciKur({});
     const cikis = vi.fn();
     expect((await cevapla(istemci, istek('POST', '/logout'), cikis)).govde).toEqual({ ok: true });
@@ -280,7 +280,7 @@ describe('anlık iletim', () => {
   });
 });
 
-it('tohum: Arkon sanal sunucuya, TMI kişisiyle ve TMI temasıyla açılır', () => {
+it('tohum: Arkon sanal sunucuya, CORE kişisiyle ve CORE temasıyla açılır', () => {
   const depo = new Map<string, string>();
   tohumla({ setItem: (k, v) => depo.set(k, v), getItem: (k) => depo.get(k) ?? null }, { kokAdres: 'https://tmi.yerel', kisi: KISI, tema: 'light' });
   expect(JSON.parse(depo.get('arkon:server') ?? '')).toBe('https://tmi.yerel/arkon-tmi');
@@ -298,7 +298,7 @@ it('ikinci menü sayıları: taslak paket ve ölçüm bekleyen numune sayılır'
   )).toEqual({ taslakPaket: 1, bekleyenNumune: 2 });
 });
 
-describe('sessiz kayıp: reddedilen yazma TMI bildirimiyle söylenir', () => {
+describe('sessiz kayıp: reddedilen yazma CORE bildirimiyle söylenir', () => {
   it('reddiBildirimi: yazma reddi neden ve hedefle döner; okuma, çakışma, oturum, yok ve günlük satırı söylenmez', () => {
     const r = (durum: number, error = 'Rolünüz bu belgeyi yazamaz ya da silemez.') => ({ durum, govde: { error } });
     expect(reddiBildirimi('PUT', '/doc/pkgs/p1', r(403))).toBe('Belge kaydedilmedi (pkgs): Rolünüz bu belgeyi yazamaz ya da silemez.');
@@ -340,8 +340,8 @@ describe('sessiz kayıp: reddedilen yazma TMI bildirimiyle söylenir', () => {
 
 });
 
-describe('TMI içinde Arkon yalnız TMI\'ye bağlanır (TD)', () => {
-  it('TMI içinde başka sunucuya istek gitmez: başka kökene fetch 403 ve gönderilmez, olay akışı açılmaz; aynı kökenin dosyası ve sanal adres geçer', async () => {
+describe('CORE içinde Arkon yalnız CORE\'a bağlanır (TD)', () => {
+  it('CORE içinde başka sunucuya istek gitmez: başka kökene fetch 403 ve gönderilmez, olay akışı açılmaz; aynı kökenin dosyası ve sanal adres geçer', async () => {
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/ben': { kisi: KISI } });
     const bildirimler: string[] = [];
     const asilFetch = vi.fn(async () => new window.Response('dosya'));
@@ -368,7 +368,7 @@ describe('TMI içinde Arkon yalnız TMI\'ye bağlanır (TD)', () => {
     expect(cagrilar.map((c) => c.yol)).toEqual(['/arkon/ben']);
   });
 
-  it('adres ayarı her açılışta TMI sanal adresine döner: elle yazılan başka adres kalmaz', () => {
+  it('adres ayarı her açılışta CORE sanal adresine döner: elle yazılan başka adres kalmaz', () => {
     window.localStorage.setItem('arkon:server', JSON.stringify('http://baska-sunucu.test:8080'));
     const pencere = { document: window.document, location: window.location, localStorage: window.localStorage, fetch: vi.fn(), EventSource: class {} } as unknown as Window & typeof globalThis;
     bagla(pencere, { istemci: istemciKur({}).istemci });
@@ -378,7 +378,7 @@ describe('TMI içinde Arkon yalnız TMI\'ye bağlanır (TD)', () => {
 
 // Önizleme ("Operatör gözüyle") köprüyü bulunca gerçek TMI'ye erişir: okuma geçer, hiçbir yazma (paket yayını, sayım, olay, ölçüm, ileti,
 // dosya, plan sırası) TMI'ye gönderilmez. Aynı köprü önizleme dışındaki çerçevede yazmayı iletir.
-describe('önizleme TMI\'yi yalnız okur', () => {
+describe('önizleme CORE\'u yalnız okur', () => {
   const YAZMALAR: [string, string][] = [
     ['PUT', '/doc/pkgs/tmi-ie-1'], ['DELETE', '/doc/pkgs/tmi-ie-1'], ['POST', '/log/counts'], ['POST', '/log/events'], ['POST', '/log/meas'],
     ['POST', '/bus'], ['PUT', '/blob/b1'], ['POST', '/plan-sira'], ['POST', '/kuyruk-sira'], ['POST', '/kuyruk-sira/plana-don'], ['POST', '/login'],
@@ -395,7 +395,7 @@ describe('önizleme TMI\'yi yalnız okur', () => {
   };
   const adres = (yol: string) => `${window.location.origin}${SANAL_SUNUCU}/api${yol}?c=x`;
 
-  it('önizleme çerçevesinde okuma TMI\'ye gider, her yazma 403 ile durur ve TMI\'ye hiç istek gitmez', async () => {
+  it('önizleme çerçevesinde okuma CORE\'a gider, her yazma 403 ile durur ve CORE\'a hiç istek gitmez', async () => {
     const { istemci, cagrilar } = istemciKur({ 'GET /arkon/ben': { kisi: KISI } });
     const { pencere, bildirimler } = pencereKur('#onizle:tmi-ie-1', istemci);
     for (const [yontem, yol] of YAZMALAR) {
@@ -409,14 +409,14 @@ describe('önizleme TMI\'yi yalnız okur', () => {
     expect(cagrilar.map((c) => c.yol)).toEqual(['/arkon/ben']);
   });
 
-  it('önizleme dışındaki çerçevede yazma TMI\'ye iletilir', async () => {
+  it('önizleme dışındaki çerçevede yazma CORE\'a iletilir', async () => {
     const { istemci, cagrilar } = istemciKur({ 'POST /arkon/kayitlar/counts/ekle': { eklenen: 1 } });
     const { pencere } = pencereKur('#hazirlik', istemci);
     await pencere.fetch(adres('/log/counts'), { method: 'POST', body: JSON.stringify([{ cid: 'a' }]) });
     expect(cagrilar.map((c) => `${c.yontem} ${c.yol}`)).toEqual(['POST /arkon/kayitlar/counts/ekle']);
   });
 
-  it('TMI kayıt yansımasını reddettiyse (kol önceki adım bitmedi) ret metni operatöre olduğu gibi bildirilir; ret yoksa bildirim yok', async () => {
+  it('CORE kayıt yansımasını reddettiyse (kol önceki adım bitmedi) ret metni operatöre olduğu gibi bildirilir; ret yoksa bildirim yok', async () => {
     const KOL = 'Kol, üst emirde bölündüğü adımdan önceki adım bitmeden başlamaz.';
     const { istemci } = istemciKur({
       'POST /arkon/kayitlar/events/ekle': (g: unknown) => (JSON.stringify(g).includes('"red"')
@@ -432,7 +432,7 @@ describe('önizleme TMI\'yi yalnız okur', () => {
 });
 
 // A5 (kart #541): Arkon'dan emir açılmaz; "Yeni paket" köprüyle yalnız listedeki TMI sayfasına götürür.
-describe('Arkon TMI\'de yalnız izinli sayfaya götürür', () => {
+describe('Arkon CORE\'da yalnız izinli sayfaya götürür', () => {
   const pencereKur = (git?: (yol: string) => void) => {
     const pencere = {
       document: window.document, localStorage: window.localStorage, fetch: vi.fn(), EventSource: class {},

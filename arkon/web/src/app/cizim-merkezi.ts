@@ -3,7 +3,7 @@ import { merkezBagi, merkezKontrolIstegi, merkezUyarilari, type MerkezDosyasi } 
 import { I, html, useEffect, useState } from './temel';
 
 /* ══════════ Çizim Merkezi'nden dosya alma (kart #800) ══════════
-   Yalnız TMI'ye bağlıyken vardır. Merkezde yayındaki PDF ve 3B modeller seçilir; dosya Arkon'un kendi deposuna kopyalanır. Arkon'da
+   Yalnız CORE'a bağlıyken vardır. Merkezde yayındaki PDF ve 3B modeller seçilir; dosya Arkon'un kendi deposuna kopyalanır. Arkon'da
    yüklenen dosya merkeze gitmez. Kayıtlı dosyanın merkezdeki yayındaki özeti değişirse "Yeni revizyon var" görünür. */
 export const merkezVar = () => AKStore.status().mode === 'server';
 

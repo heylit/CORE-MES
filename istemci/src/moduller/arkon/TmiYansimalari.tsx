@@ -54,7 +54,7 @@ export function emirBaglantisi(y: Pick<YansimaSatiri, 'sonuc' | 'neden' | 'emirI
 
 // Yeniden deneme sonucu: yazılan satır listeden düşer, ötekinde yeni durum ve neden.
 const yenidenSonucu = (c: YansimaYenidenCevabi): string =>
-  c.sonuc === 'yazildi' ? 'Kayıt TMI\'ye yazıldı.' : `Kayıt yeniden denendi: ${SONUC_ADLARI[c.sonuc].ad}${c.neden === null ? '' : ` (${c.neden})`}.`;
+  c.sonuc === 'yazildi' ? 'Kayıt CORE\'a yazıldı.' : `Kayıt yeniden denendi: ${SONUC_ADLARI[c.sonuc].ad}${c.neden === null ? '' : ` (${c.neden})`}.`;
 
 export function TmiYansimalari() {
   const istemci = useQueryClient();
@@ -94,7 +94,7 @@ export function TmiYansimalari() {
     placeholderData: keepPreviousData,
   });
   return (
-    <Kart baslik="TMI'ye yazılamayan terminal kayıtları">
+    <Kart baslik="CORE'a yazılamayan terminal kayıtları">
       <div className="tc-arkon-yansima">
         <Secim
           etiket="Durum"
@@ -115,11 +115,11 @@ export function TmiYansimalari() {
         {liste.isError && <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />}
         {liste.data && (
           <Tablo
-            etiket="TMI'ye yazılamayan kayıtlar"
+            etiket="CORE'a yazılamayan kayıtlar"
             sutunlar={sutunlar}
             satirlar={liste.data.satirlar}
             satirAnahtari={(y) => y.id}
-            bosMesaj="TMI'ye yazılamayan kayıt yok"
+            bosMesaj="CORE'a yazılamayan kayıt yok"
             mesgul={liste.isPlaceholderData}
             sayfalama={{ sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, degistir: sayfaYaz }}
           />

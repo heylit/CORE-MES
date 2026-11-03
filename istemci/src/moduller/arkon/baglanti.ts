@@ -133,8 +133,8 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   if (ilk === 'users' && g.yontem === 'GET') {
     return tamam((await istemci.get<ArkonKisilerCevabi>('/arkon/kisiler')).kisiler.map(arkonKisisi));
   }
-  if (ilk === 'users') return ret(403, 'Kişiler ve roller TMI\'de yönetilir (Personel).');
-  if (ilk === 'login') return ret(403, 'Giriş TMI\'den yapılır.');
+  if (ilk === 'users') return ret(403, 'Kişiler ve roller CORE\'da yönetilir (Personel).');
+  if (ilk === 'login') return ret(403, 'Giriş CORE\'dan yapılır.');
   // Arkon'dan çıkış TMI oturumunu kapatır: Arkon'un ayrı girişi yoktur.
   if (ilk === 'logout') {
     cikis?.();
@@ -305,9 +305,9 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
   if (ilk === 'kuyruk-sira' && g.yontem === 'POST' && ikinci === 'plana-don') {
     return tamam(await istemci.post('/arkon/kuyruk-sira/plana-don', { ...(govdeyiOku(g.govde) as object), kaynak }));
   }
-  if (ilk === 'collector') return tamam({ machines: {}, note: 'Makine verisi TMI\'de toplanır.' });
+  if (ilk === 'collector') return tamam({ machines: {}, note: 'Makine verisi CORE\'da toplanır.' });
   if (ilk === 'backups' && g.yontem === 'GET' && ikinci === undefined) return tamam([]);
-  if (ilk === 'backups' || ilk === 'restore') return ret(403, 'Yedekleme TMI sunucusunda yapılır.');
+  if (ilk === 'backups' || ilk === 'restore') return ret(403, 'Yedekleme CORE sunucusunda yapılır.');
   if (ilk === 'schema') return tamam([]);
   return ret(404, 'Bilinmeyen istek');
 }
@@ -489,11 +489,11 @@ export function emirSeciminiGonder(pencere: Pick<Window, 'dispatchEvent'> & { __
   pencere.dispatchEvent(new Event('tmi-emir-sec'));
 }
 
-export const ONIZLEME_SALT_OKUR = 'Önizlemede kayıt yapılmaz; istek TMI\'ye gönderilmedi.';
+export const ONIZLEME_SALT_OKUR = 'Önizlemede kayıt yapılmaz; istek CORE\'a gönderilmedi.';
 // Arkon'un TMI'de açtırabileceği sayfalar (A5, kart #541): yalnız bu listedeki hedef açılır, çerçeve TMI'de yol seçemez.
 export const TMI_HEDEFLERI: Readonly<Record<string, string>> = { 'emir-ac': '/recete-rota', plan: '/recete-rota/plan', istasyonlar: '/istasyonlar' };
 
-export const BASKA_SUNUCU = "TMI CORE yalnız kendi sunucusuna bağlanır; başka sunucuya istek gönderilmedi.";
+export const BASKA_SUNUCU = "CORE yalnız kendi sunucusuna bağlanır; başka sunucuya istek gönderilmedi.";
 
 // Başka sunucuya açılmak istenen olay akışı: bağlantı kurulmaz, Arkon kopmuş akış gibi görür.
 export function kapaliIletim(): AnlikIletim {

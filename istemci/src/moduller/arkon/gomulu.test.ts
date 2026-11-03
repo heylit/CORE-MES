@@ -8,7 +8,7 @@ const { gomuluMu, pinGirisiVar } = (await import(/* @vite-ignore */ YOL)) as {
 };
 
 describe('Arkon gömülü mü (sunucu adresi kartı)', () => {
-  it('TMI köprüsü olan üst pencerede gömülüdür; üst pencereye erişilemiyorsa da gömülü sayılır', () => {
+  it('CORE köprüsü olan üst pencerede gömülüdür; üst pencereye erişilemiyorsa da gömülü sayılır', () => {
     const ust = { __tmiArkonBagla: () => {} };
     expect(gomuluMu({ parent: ust })).toBe(true);
     expect(gomuluMu({ parent: { parent: ust } }), 'önizleme: Arkon içinde ikinci çerçeve').toBe(true);
@@ -26,7 +26,7 @@ describe('Arkon gömülü mü (sunucu adresi kartı)', () => {
     expect(gomuluMu({ parent: { parent: ust } })).toBe(false);
   });
 
-  it('TMI içinde PIN girişi ve kilidi yoktur (oturum TMI\'nin); tek başına Arkon kişi varsa PIN ister', () => {
+  it('CORE içinde PIN girişi ve kilidi yoktur (oturum CORE\'un); tek başına Arkon kişi varsa PIN ister', () => {
     expect(pinGirisiVar(true, true)).toBe(false);
     expect(pinGirisiVar(true, false)).toBe(true);
     expect(pinGirisiVar(false, false)).toBe(false);

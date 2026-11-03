@@ -32,7 +32,7 @@ function TmiAdimlari({ emirId }: { emirId: number }) {
       .then((c) => listeYaz((l) => l && adimCevabiUygula(l, id, c)))
       .catch((e: unknown) => {
         listeYaz((l) => l && adimYaz(l, id, (x) => ({ ...x, tamam: !tamam })));
-        hataYaz(`Adım kaydedilmedi · ${(e instanceof Error && e.message) || 'TMI kabul etmedi'}`);
+        hataYaz(`Adım kaydedilmedi · ${(e instanceof Error && e.message) || 'CORE kabul etmedi'}`);
       })
       .finally(() => { suruyor.current.delete(id); });
   };
@@ -40,7 +40,7 @@ function TmiAdimlari({ emirId }: { emirId: number }) {
   return (
     <div className="tc-ay1-adimlar">
       {hata ? <p className="tc-ay1-hata" role="alert">{hata}</p> : null}
-      <AdimListesi baslik="Operasyon adımları · TMI'ye yazılır" adimlar={liste} degistir={isaretle} bosMesaj="Bu emrin talimat adımı yok" />
+      <AdimListesi baslik="Operasyon adımları · CORE'a yazılır" adimlar={liste} degistir={isaretle} bosMesaj="Bu emrin talimat adımı yok" />
     </div>
   );
 }

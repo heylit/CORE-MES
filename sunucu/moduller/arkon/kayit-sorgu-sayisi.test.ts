@@ -150,7 +150,7 @@ describe('arkon kayıt ekleme satır başına sorgu sayısı (gerçek PostgreSQL
     assert.deepEqual(
       yirmi.cevap.reddedilen.map((r) => [r.cid, r.ileti, r.tmiDurum, r.makineDolu?.devralEmirId]),
       yirmi.cidler.map((cid) => [cid, dolu, 'queued', bekleyenEmir]),
-      'ret iletisi, TMI hali ve devralma ayrıntısı her satırda aynı ve kayıt sırasındadır',
+      'ret iletisi, CORE hali ve devralma ayrıntısı her satırda aynı ve kayıt sırasındadır',
     );
     assert.deepEqual(yirmi.yansimalar, [{ sonuc: 'reddedildi', neden: dolu, adet: 20 }]);
     assert.ok(satirBasina <= SATIR_BASINA_SINIR, `ek satır başına ${satirBasina} sorgu (1 satır ${bir.sorgu}, 20 satır ${yirmi.sorgu})`);

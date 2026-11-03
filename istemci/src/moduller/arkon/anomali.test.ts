@@ -44,7 +44,7 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     expect(kapaliKurallar({ girisYokDk: null, adetToleransYuzde: null })).toEqual(['Giriş yok süresi', 'Eksik adet']);
   });
 
-  it('köprü: Arkon /anomaliler isteği TMI /arkon/anomaliler ucuna gider ve cevap olduğu gibi döner; sözleşme tipiyle uyumlu', async () => {
+  it('köprü: Arkon /anomaliler isteği CORE /arkon/anomaliler ucuna gider ve cevap olduğu gibi döner; sözleşme tipiyle uyumlu', async () => {
     const cevap = {
       tarih: '2026-10-13', hesaplama: '2026-10-13T07:00:00.000Z', esikler: { girisYokDk: 60, adetToleransYuzde: 0 },
       toplam: { beklenen: 60, uretilen: 45, oran: 0.75, hurda: 2, performans: 0.9, planDisi: 0 }, istasyonlar: [ist('A', { uretilen: 45, oran: 0.75, adetEksik: true })],
@@ -74,7 +74,7 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     expect(kapaliZamanKurallari({ gecGirisDk: null, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null })).toEqual(['Geç giriş', 'Girdi gecikmesi', 'Bitiş kayması', 'Süre aşımı']);
   });
 
-  it('köprü: Arkon /anomali-olaylari isteği TMI /arkon/anomali-olaylari ucuna gider; sözleşme tipiyle uyumlu; yazma eşlenmez', async () => {
+  it('köprü: Arkon /anomali-olaylari isteği CORE /arkon/anomali-olaylari ucuna gider; sözleşme tipiyle uyumlu; yazma eşlenmez', async () => {
     const cevap = {
       hesaplama: '2026-10-27T09:00:00.000Z', esikler: { gecGirisDk: 30, gecTeslimDk: null, bitisKaymaDk: null, sureAsimYuzde: null },
       ozet: { acik: 1, aksatilanIs: 0, toplamEtkiDk: 0, riskliEmir: 0 },

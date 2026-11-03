@@ -149,7 +149,7 @@ describe('numune çizgisi aralığı (664)', () => {
 
 describe('bitiş özeti', () => {
   const sayi = (n: number) => String(n);
-  it('TMI işinde hatalı satırı sunucunun toplamını gösterir ve kalite oranına girer', () => {
+  it('CORE işinde hatalı satırı sunucunun toplamını gösterir ve kalite oranına girer', () => {
     expect(bitisOzeti({ good: 3, scrap: 0 }, 1, sayi)).toEqual([
       { etiket: 'İyi parça', deger: '3' }, { etiket: 'Hatalı', deger: '1', ton: 'durdu' }, { etiket: 'Kalite', deger: '%75.0' },
     ]);
@@ -157,12 +157,12 @@ describe('bitiş özeti', () => {
   it('hatalı toplamı bilinmiyorsa sayı ve oran boştur', () => {
     expect(bitisOzeti({ good: 3, scrap: 0 }, null, sayi).slice(1)).toEqual([{ etiket: 'Hatalı', deger: '—', ton: 'durdu' }, { etiket: 'Kalite', deger: '—' }]);
   });
-  it('TMI dışı işte hurda satırı kalır', () => {
+  it('CORE dışı işte hurda satırı kalır', () => {
     expect(bitisOzeti({ good: 9, scrap: 1 }, undefined, sayi).slice(1)).toEqual([{ etiket: 'Hurda', deger: '1', ton: 'durdu' }, { etiket: 'Kalite', deger: '%90.0' }]);
   });
 });
 
-describe('TMI ilk parça kapısı ve eksik adette bitirme', () => {
+describe('CORE ilk parça kapısı ve eksik adette bitirme', () => {
   const sayi = (n: number) => String(n);
   const cnc = { opType: 'cnc', plan: [], tmi: { ilkParcaGerekli: true } } as unknown as Is['pkg'];
   it('paketin tmi.ilkParcaGerekli alanı okunur; yoksa ya da başka değerse kapı yok', () => {
@@ -171,7 +171,7 @@ describe('TMI ilk parça kapısı ve eksik adette bitirme', () => {
     expect(tmiIlkParcaGerekli({ tmi: null })).toBe(false);
     expect(tmiIlkParcaGerekli(null)).toBe(false);
   });
-  it('kontrol planı boşken TMI kapısında çalışan iş karar bekleyeni söyler', () => {
+  it('kontrol planı boşken CORE kapısında çalışan iş karar bekleyeni söyler', () => {
     const o = is({ pkg: cnc, good: 3 });
     const g = siradakiGorev(o, kontrolTakvimi(o, 0, 0), null, { acik: false, sayilan: 3, kararBekleyen: 3, tmi: true }, 0);
     expect(g).toMatchObject({ tone: 'hazard', key: 'kbt' });

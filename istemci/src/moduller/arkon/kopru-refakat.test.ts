@@ -19,7 +19,7 @@ const istemciKur = () => {
 };
 
 describe('köprü: refakat kartları (kart #156)', () => {
-  it('Arkon /refakat-kartlari isteği istasyon ve emirlerle TMI /arkon/refakat-kartlari ucuna gider; cevap olduğu gibi döner', async () => {
+  it('Arkon /refakat-kartlari isteği istasyon ve emirlerle CORE /arkon/refakat-kartlari ucuna gider; cevap olduğu gibi döner', async () => {
     const { istemci, yollar } = istemciKur();
     const c = await cevapla(istemci, { yontem: 'GET', yol: '/refakat-kartlari', sorgu: new URLSearchParams('istasyon=T 1&emirler=7,9'), govde: undefined });
     expect(c.durum).toBe(200);

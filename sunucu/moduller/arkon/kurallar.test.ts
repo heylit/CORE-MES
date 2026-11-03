@@ -40,7 +40,7 @@ test('Arkon rolü rolden gelen işlemlerdendir; rolde Arkon işlemi yoksa bütü
   assert.equal(arkonRoluSec([], []), null);
 });
 
-test('TMI ayarı kimse tarafından yazılamaz; ortak ayarı yalnız yönetici yazar; vardiya TMI Vardiya modülündedir', () => {
+test('CORE ayarı kimse tarafından yazılamaz; ortak ayarı yalnız yönetici yazar; vardiya CORE Vardiya modülündedir', () => {
   assert.equal(yazmaReddi('kv', 'plant', 'admin', 'yaz'), 'tmiYonetir');
   assert.equal(yazmaReddi('kv', 'reasons', 'admin', 'sil'), 'tmiYonetir');
   assert.equal(yazmaReddi('kv', 'perms', 'lead', 'yaz'), 'tmiYonetir');
@@ -77,7 +77,7 @@ test('sürüm kuralı: var olan belgeye bildiği sürümsüz yazılmaz; olmayan 
   assert.equal(silmeCakisiyorMu(null, 4), false);
 });
 
-test('tesis kodlarla kurulur, istasyon TMI kimliğini taşır; iş merkezi ya da istasyonu bilinmeyen kayıt atlanır', () => {
+test('tesis kodlarla kurulur, istasyon CORE kimliğini taşır; iş merkezi ya da istasyonu bilinmeyen kayıt atlanır', () => {
   const tesis = tesisKur(
     [{ id: 1, kod: 'TAL', ad: 'Talaşlı', aciklama: null, aktif: true }],
     [
@@ -443,7 +443,7 @@ const girdi = (ek: Partial<Parameters<typeof isEmrindenTaslakPaket>[0]> = {}): P
 });
 
 // Kontrol planı boşken terminal TMI'nin ilk parça kapısını paketten okur: alan yalnız kapı varken yazılır.
-test('TMI ilk parça kapısı paketin tmi alanında', () => {
+test('CORE ilk parça kapısı paketin tmi alanında', () => {
   const tmi = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['tmi'] as Record<string, unknown>;
   assert.equal(tmi(girdi({ ilkParcaGerekli: true }))['ilkParcaGerekli'], true);
   assert.equal('ilkParcaGerekli' in tmi(girdi({ ilkParcaGerekli: false })), false);
@@ -452,7 +452,7 @@ test('TMI ilk parça kapısı paketin tmi alanında', () => {
 
 // 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
 // yalnız "her kurulumda" ve talaşlı (ya da istasyonsuz) adımdadır.
-test('744 a: adımın ilk parça seçimi taslak kuralına ve TMI kilidine', () => {
+test('744 a: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () => {
   assert.equal(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'her_kurulum' }))['rules'], undefined);
   assert.equal(isEmrindenTaslakPaket(girdi())['rules'], undefined);
   assert.deepEqual(isEmrindenTaslakPaket(girdi({ ilkParcaSecimi: 'yok' }))['rules'], { q: { firstPiece: false } });
@@ -465,7 +465,7 @@ test('744 a: adımın ilk parça seçimi taslak kuralına ve TMI kilidine', () =
 });
 
 // 664: terminal başlığında Proje; paket emrin proje adını taşır, projesizde boş. TMI alanıdır: kayıtlı pakette de her okumada yazılır.
-test('paket emrin proje adını taşır; projesiz emirde boş metin; proje TMI alanıdır', () => {
+test('paket emrin proje adını taşır; projesiz emirde boş metin; proje CORE alanıdır', () => {
   assert.equal(isEmrindenTaslakPaket(girdi({ proje: 'Deneme proje' }))['proje'], 'Deneme proje');
   assert.equal(isEmrindenTaslakPaket(girdi())['proje'], '');
   assert.ok((TMI_PAKET_ALANLARI as readonly string[]).includes('proje'));
@@ -501,7 +501,7 @@ test('iş emri taslağının hedefi adımın adedi; adım adedi yoksa emir adedi
   assert.equal(isEmrindenTaslakPaket(girdi({ isEmri: { ...girdi().isEmri, adet: 40 } }))['target'], 40);
 });
 
-test('iş emri taslağı: TMI alanları rotadan ve emirden; çevrim saniye, ayar dakika, termin teslim, öncelik 1 acil; adımlar talimattan; süre yoksa null', () => {
+test('iş emri taslağı: CORE alanları rotadan ve emirden; çevrim saniye, ayar dakika, termin teslim, öncelik 1 acil; adımlar talimattan; süre yoksa null', () => {
   const p = isEmrindenTaslakPaket(girdi());
   assert.equal(p['id'], 'tmi-ie-41');
   assert.equal(p['no'], 'UE-7');
@@ -526,7 +526,7 @@ test('iş emri taslağı: TMI alanları rotadan ve emirden; çevrim saniye, ayar
   assert.deepEqual(talimatAdimlari(''), []);
 });
 
-test('şablon: aynı malzeme, revizyon ve operasyonun en son yayınlanmışı; resim, plan, kural, adım kopyalanır, TMI alanları ve durum kopyalanmaz', () => {
+test('şablon: aynı malzeme, revizyon ve operasyonun en son yayınlanmışı; resim, plan, kural, adım kopyalanır, CORE alanları ve durum kopyalanmaz', () => {
   const eski = { malzemeNo: 900, rev: 'C', tmi: { opNo: 20 }, publishedAt: 10, steps: [{ t: 'eski' }] };
   const baskaRev = { malzemeNo: 900, rev: 'B', tmi: { opNo: 20 }, publishedAt: 50, steps: [{ t: 'B' }] };
   const son = { malzemeNo: 900, rev: 'C', tmi: { opNo: 20 }, publishedAt: 20, steps: [{ t: 'son' }], plan: [{ id: 1 }], files: [{ name: 'a.pdf' }], primary: 'a.pdf', rules: { r: 1 },
@@ -550,7 +550,7 @@ test('şablon: aynı malzeme, revizyon ve operasyonun en son yayınlanmışı; r
   assert.deepEqual(isEmrindenTaslakPaket(girdi({ sablon: { ...son, opType: 'kalite' } }))['st'], {});
 });
 
-test('kayıtlı iş emri paketi: TMI alanları yazılır, gerisi kalır; değişen yoksa aynı nesne ve aynı sürüm; okunan sürümle yazım kayıtlı sürüm sayılır', () => {
+test('kayıtlı iş emri paketi: CORE alanları yazılır, gerisi kalır; değişen yoksa aynı nesne ve aynı sürüm; okunan sürümle yazım kayıtlı sürüm sayılır', () => {
   const taslak = isEmrindenTaslakPaket(girdi());
   const kayitli = { ...taslak, cycle: 30, machine: 'ESKI', steps: [{ t: 'Hazırlık' }], plan: [{ id: 1 }] };
   const birlesik = tmiAlanlariniYaz(kayitli, taslak) as Record<string, unknown>;
@@ -613,7 +613,7 @@ test('131 b: kapı açıkken ilk sağlamdan sonrası karar bekler; düzeltme ve 
   assert.equal(KARAR_BEKLIYOR_ALANI in kayitGovdesi({ kind: 'good', delta: 2, [KARAR_BEKLIYOR_ALANI]: 2 }, { id: 1, ad: 'A' }, 1), false, 'istemcinin alanı atılır');
 });
 
-test('toplu giriş (kart #1046) olağan sayımdır: N sağlam ve nedenli N hurda TMI\'ye aynı adetle gider; nedensiz hurda ve 0 adet yansımaz', () => {
+test('toplu giriş (kart #1046) olağan sayımdır: N sağlam ve nedenli N hurda CORE\'a aynı adetle gider; nedensiz hurda ve 0 adet yansımaz', () => {
   const sayim = (ek: Record<string, unknown>) => yansimaKarari('counts', { pkgId: 'tmi-ie-41', ...ek });
   assert.deepEqual(sayim({ kind: 'good', delta: 12, cycleMs: null }).komut, { komut: 'saglam', adet: 12, kararBekliyor: 0, refakatPartisiId: null });
   assert.deepEqual(sayim({ kind: 'scrap', delta: 3, reason: 'H-01', cycleMs: null }).komut, { komut: 'hurda', adet: 3, nedenKodu: 'H-01', refakatPartisiId: null });
@@ -802,9 +802,9 @@ test('Arkon Planlama sırası: yeni sıra aynı işlerden, görülen sıra canl�
   for (const rol of ['prep', 'quality', 'lead', 'maint', 'operator'] as const) assert.equal(planSiralayabilirMi(rol), false, rol);
 });
 
-test('A5 yerel paket: yeni emir dışı paket reddedilir; TMI emri ve iş emri paketi, var olan yerel paket ve başka depo geçer', () => {
+test('A5 yerel paket: yeni emir dışı paket reddedilir; CORE emri ve iş emri paketi, var olan yerel paket ve başka depo geçer', () => {
   assert.equal(yerelPaketReddi('pkgs', 'p-1', null), true);
-  assert.equal(yerelPaketReddi('pkgs', 'tmi-ue-0012', null), true, 'kanonik olmayan TMI kimliği');
+  assert.equal(yerelPaketReddi('pkgs', 'tmi-ue-0012', null), true, 'kanonik olmayan CORE kimliği');
   assert.equal(yerelPaketReddi('pkgs', 'tmi-pd-3', null), true);
   assert.equal(yerelPaketReddi('pkgs', 'tmi-ue-12', null), false);
   assert.equal(yerelPaketReddi('pkgs', 'tmi-ie-7', null), false);
@@ -821,7 +821,7 @@ test('plansızKaynak: bitmiş iş emri paketinden yalnız tmi.plan düşer; plan
   assert.equal(plansizKaynak(null), null);
 });
 
-test('A7-V1: TMI vardiyaları Arkon biçimine çevrilir; pasif atlanır, gece yarısını geçen mola dakikası doğru, aktif yoksa null', () => {
+test('A7-V1: CORE vardiyaları Arkon biçimine çevrilir; pasif atlanır, gece yarısını geçen mola dakikası doğru, aktif yoksa null', () => {
   const sonuc = arkonVardiyalari([
     { ad: 'Gündüz', baslangic: '08:00:00', bitis: '16:00:00', aktif: true, molalar: [{ baslangic: '12:00:00', bitis: '12:30:00' }] },
     { ad: 'Eski', baslangic: '07:00:00', bitis: '15:00:00', aktif: false, molalar: [] },
@@ -835,13 +835,13 @@ test('A7-V1: TMI vardiyaları Arkon biçimine çevrilir; pasif atlanır, gece ya
   assert.equal(arkonVardiyalari([]), null);
 });
 
-test('79: TMI tatil günleri Arkon biçimine tarih anahtarıyla çevrilir; kayıt yoksa ayar yok', () => {
+test('79: CORE tatil günleri Arkon biçimine tarih anahtarıyla çevrilir; kayıt yoksa ayar yok', () => {
   assert.deepEqual(arkonTatilleri([{ tarih: '2026-10-29', tur: 'tatil', ad: 'Bayram' }, { tarih: '2026-11-02', tur: 'kapali', ad: null }]),
     { '2026-10-29': { type: 'tatil', name: 'Bayram' }, '2026-11-02': { type: 'kapali', name: null } });
   assert.equal(arkonTatilleri([]), null);
 });
 
-test('A7-K1: TMI ölçü aleti Arkon alet biçimine çevrilir; boş alan yazılmaz, tarih tesis günü öğlesi, kullanım dışı out', () => {
+test('A7-K1: CORE ölçü aleti Arkon alet biçimine çevrilir; boş alan yazılmaz, tarih tesis günü öğlesi, kullanım dışı out', () => {
   const ogle = Date.UTC(2026, 2, 10, 9, 0, 0);
   assert.deepEqual(arkonAletleri([
     {
@@ -895,7 +895,7 @@ test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdı
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', durum('duraklamis', 'Ali')), 'katil', 'duraklattığı işe döner');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', durum('acik')), 'katil', 'zaten çalışıyor: katılım kuralı reddeder');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', durum('yok')), 'emir', 'kimse çalışmıyor: iş devam eder');
-  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', durum('yok', 'Ali')), 'emir', 'makineli: TMI çalışan işe devamı reddeder');
+  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', durum('yok', 'Ali')), 'emir', 'makineli: CORE çalışan işe devamı reddeder');
   assert.equal(yol('basla-ya-da-devam', 'planli', 'insan', durum('yok')), 'emir');
   // İş TMI'de çalışıyorken: duraklattığı çalışmasına dönüş makineli istasyonda da katılımdır; açık çalışmaya başlatma değişiklik yapmaz.
   const calisan = (benim: KatilimDurumu['benim'], ...digerleri: string[]): KatilimDurumu => ({ benim, digerleriAcik: digerleri, emirCalisiyor: true });
@@ -908,7 +908,7 @@ test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdı
   assert.deepEqual(baskasi.yol === 'ret' ? baskasi.devralinabilir : null, ['Ali'], 'ARK-5 b: devralma önerilir');
   const durdurma = katilimYolu('durdur', 'basladi', 'makine', calisan('acik', 'Ali'));
   assert.equal(durdurma.yol === 'ret' ? durdurma.devralinabilir : null, undefined, 'yalnız başlatma reddi devralma önerir');
-  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('yok')), 'emir', 'katılım satırı olmayan eski iş: TMI kuralı');
+  assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', calisan('yok')), 'emir', 'katılım satırı olmayan eski iş: CORE kuralı');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'insan', calisan('yok', 'Ali')), 'katil', 'insanlı: katılım');
   assert.equal(yol('basla-ya-da-devam', 'basladi', 'makine', { benim: 'duraklamis', digerleriAcik: [], emirCalisiyor: false }), 'emir', 'iş duraklamış: devam emre');
   // Duraklatma ve kuyruğa alma.
@@ -932,7 +932,7 @@ test('katılım yolu: insanlı istasyonda çalışan işe başlatma katılımdı
   assert.ok(ret.yol === 'ret' && ret.neden.includes('Ali, Veli'));
 });
 
-test('TMI hâli Arkon durumuyla: kişi kendi çalışmasını duraklattıysa iş sürse de duraklamış; iptalin karşılığı yok', () => {
+test('CORE hâli Arkon durumuyla: kişi kendi çalışmasını duraklattıysa iş sürse de duraklamış; iptalin karşılığı yok', () => {
   assert.equal(tmidekiDurum('planli', null, 'yok'), 'queued');
   assert.equal(tmidekiDurum('bitti', null, 'yok'), 'done');
   assert.equal(tmidekiDurum('iptal', null, 'yok'), null);
@@ -1017,7 +1017,7 @@ test('biten iş beklenen: bugünkü sağlam kayıttaki beklenenin altında sayı
   assert.equal(bitenIsBeklenen(null, 70), null);
 });
 
-test('belge alanları: TMI\'nin okuduğu sonuç ve paket alanları türüyle denetlenir, Arkon\'un öteki alanları serbesttir', () => {
+test('belge alanları: CORE\'un okuduğu sonuç ve paket alanları türüyle denetlenir, Arkon\'un öteki alanları serbesttir', () => {
   assert.equal(belgeBicimiHatasi('results', { id: 'p1', state: 'setup', good: 3, scrap: 0, baseGood: 0, meas: {}, yeniAlan: 'x' }), null);
   assert.deepEqual(belgeBicimiHatasi('results', { state: 'calisiyor' }), { ileti: 'Belge alanı geçersiz: state.', alan: 'govde.state' });
   assert.deepEqual(belgeBicimiHatasi('results', { good: -1 }), { ileti: 'Belge alanı geçersiz: good.', alan: 'govde.good' });

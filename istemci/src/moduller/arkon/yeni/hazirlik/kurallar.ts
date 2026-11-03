@@ -182,7 +182,7 @@ export const ADIM_SABLONLARI: Readonly<Record<string, readonly { t: string; d: s
 };
 // Rotalı TMI emrinin iş emri paketi: emir, operasyon, istasyon, adet, süreler, termin ve öncelik TMI planından gelir, burada değişmez.
 export const tmiIsEmri = (p: { id?: unknown } | null | undefined): boolean => String((p && p.id) || '').startsWith('tmi-ie-');
-export const TMI_KILIT = 'TMI planından gelir';
+export const TMI_KILIT = 'CORE planından gelir';
 
 /* ── yayın onayı: kural açıksa paket son değişikliğinden sonra kalitece onaylanmadan yayınlanamaz ── */
 type OnayAlanlari = Pick<Pkg, 'approval' | 'apReq' | 'updatedAt'>;

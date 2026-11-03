@@ -91,7 +91,7 @@ export function AyarlarEkrani() {
         {acik === 'sistem' && (
           <>
             {yetkiVar('adm.backup') && (
-              <AyarKarti ust="Güvence" baslik="Yedekleme"><Kilit>Yedekleme TMI sunucusunda yapılır.</Kilit></AyarKarti>
+              <AyarKarti ust="Güvence" baslik="Yedekleme"><Kilit>Yedekleme CORE sunucusunda yapılır.</Kilit></AyarKarti>
             )}
             {yetkiVar('adm.plant') && <AyarKarti ust="Makine verisi" baslik="Otomatik sayım ve durum"><MakineVerisi /></AyarKarti>}
             {yetkiVar('adm.audit') && <AyarKarti ust="İzlenebilirlik" baslik="Değişiklik günlüğü" genis><DegisiklikGunlugu /></AyarKarti>}
@@ -172,7 +172,7 @@ function TesisListesi() {
           {g.istasyonlar.length === 0 && <small className="tc-ay6-soluk">İstasyon yok.</small>}
         </section>
       ))}
-      <Kilit>Tesis TMI&apos;de İstasyonlar sayfasından değiştirilir.</Kilit>
+      <Kilit>Tesis CORE&apos;da İstasyonlar sayfasından değiştirilir.</Kilit>
       <div><Dugme simge="layers" onClick={() => tmiyeGit('istasyonlar')}>İstasyonlar sayfasını aç</Dugme></div>
     </div>
   );
@@ -203,7 +203,7 @@ function KisiListesi() {
         );
       })}
       {kisiler.isSuccess && liste.length === 0 && <p className="tc-ay6-soluk">Kullanıcı yok.</p>}
-      <Kilit>Kişiler ve roller TMI&apos;de Personel sayfasından yönetilir.</Kilit>
+      <Kilit>Kişiler ve roller CORE&apos;da Personel sayfasından yönetilir.</Kilit>
     </div>
   );
 }
@@ -269,7 +269,7 @@ function VardiyaListesi() {
           <div className="tc-ay6-molalar">{(x.breaks ?? []).map((b, k) => <Rozet key={k} ton="pasif">{b.at} · {b.min} dk</Rozet>)}</div>
         </div>
       ))}
-      <Kilit>Vardiyalar ve molalar TMI&apos;de Vardiya sayfasından değiştirilir.</Kilit>
+      <Kilit>Vardiyalar ve molalar CORE&apos;da Vardiya sayfasından değiştirilir.</Kilit>
     </div>
   );
 }
@@ -283,7 +283,7 @@ function DurusNedenleri() {
           <b className="tc-ay6-mono">{r.code}</b><span>{r.l}</span><Rozet ton={r.cat === 'p' ? 'tamam' : 'uyari'}>{r.cat === 'p' ? 'Planlı' : 'Plansız'}</Rozet>
         </div>
       ))}
-      <Kilit>Duruş nedenleri TMI&apos;de Duruş ve Hurda Nedenleri sayfasından değiştirilir.</Kilit>
+      <Kilit>Duruş nedenleri CORE&apos;da Duruş ve Hurda Nedenleri sayfasından değiştirilir.</Kilit>
     </div>
   );
 }
@@ -295,7 +295,7 @@ function HurdaNedenleri() {
       {ayarlar.hurdaNedenleri.map((r) => (
         <div key={r.code} className="tc-ay6-neden"><b className="tc-ay6-mono">{r.code}</b><span>{r.l}</span></div>
       ))}
-      <Kilit>Hurda nedenleri TMI&apos;de Duruş ve Hurda Nedenleri sayfasından değiştirilir.</Kilit>
+      <Kilit>Hurda nedenleri CORE&apos;da Duruş ve Hurda Nedenleri sayfasından değiştirilir.</Kilit>
     </div>
   );
 }
@@ -383,7 +383,7 @@ function MakineVerisi() {
           </div>
         ))
         : <small className="tc-ay6-soluk">Veri bağlantısı tanımlı makine yok.</small>}
-      <small className="tc-ay6-soluk">Makine verisi TMI&apos;de toplanır.</small>
+      <small className="tc-ay6-soluk">Makine verisi CORE&apos;da toplanır.</small>
     </div>
   );
 }

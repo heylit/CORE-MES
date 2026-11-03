@@ -24,10 +24,10 @@ describe('Arkon örnek dosya düğmeleri (TB2)', () => {
 
 // Demo bulgusu: boş istasyonda operatör ekranı prototipteki FLN-120 çizimini gösteriyordu.
 describe('operatör ekranında örnek çizim', () => {
-  it('TMI\'ye bağlı Arkon\'da iş yokken ya da doküman yokken örnek çizilmez', () => {
+  it('CORE\'a bağlı Arkon\'da iş yokken ya da doküman yokken örnek çizilmez', () => {
     expect(ornekCizimGorunur(true, false, false)).toBe(false);
     expect(ornekCizimGorunur(true, true, true)).toBe(false);
     expect(ornekCizimGorunur(false, true, true)).toBe(false);
   });
-  it('yalnız TMI\'siz tanıtım kipinde, iş yokken örnek kalır', () => expect(ornekCizimGorunur(false, false, false)).toBe(true));
+  it('yalnız CORE\'suz tanıtım kipinde, iş yokken örnek kalır', () => expect(ornekCizimGorunur(false, false, false)).toBe(true));
 });

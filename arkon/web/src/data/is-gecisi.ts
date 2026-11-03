@@ -1,5 +1,5 @@
 /* İş değiştirme. TMI bir istasyonda tek başlamış emre izin verir: operatör başka işe geçerken çalışan iş duraklatılır ve olayı
-   gönderilir; Arkon ve TMI aynı durumu gösterir. Etkin olmayan çalışan iş de sayılır: sayfa yenilenince etkin iş listenin ilk
+   gönderilir; Arkon ve CORE aynı durumu gösterir. Etkin olmayan çalışan iş de sayılır: sayfa yenilenince etkin iş listenin ilk
    işidir (AR2). Çalışmayan (kuyrukta, ayarda, duraklamış, durmuş, bitmiş) iş olduğu gibi kalır; hedef iş duraklatılmaz. */
 export interface GecisIsi { state?: string; empty?: boolean }
 

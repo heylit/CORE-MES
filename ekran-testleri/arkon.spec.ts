@@ -53,7 +53,7 @@ test.describe('yönetici', () => {
 test.describe('planlama', () => {
   test.use({ hesap: 'ornek.planlama' });
 
-  test('TMI nedenleri ve tesis Ayarlar\'da salt okunur, yalnız TMI listesinden', async ({ page, ag, ac }) => {
+  test('CORE nedenleri ve tesis Ayarlar\'da salt okunur, yalnız CORE listesinden', async ({ page, ag, ac }) => {
     const tmi = await page.request.get(`${ADRES}/api/durus-nedenleri?yalnizAktif=true`);
     expect(tmi.ok()).toBe(true);
     const govde = await tmi.json() as unknown;
@@ -63,15 +63,15 @@ test.describe('planlama', () => {
     await ac('/arkon/ayarlar');
     const f = page.locator('main .tc-ay6');
     await f.getByRole('tab', { name: 'Üretim', exact: true }).click();
-    await expect(f.getByText('Duruş nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
-    await expect(f.getByText('Hurda nedenleri TMI\'de Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
+    await expect(f.getByText('Duruş nedenleri CORE\'da Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
+    await expect(f.getByText('Hurda nedenleri CORE\'da Duruş ve Hurda Nedenleri sayfasından değiştirilir.')).toBeVisible();
     const satirlar = await f.locator('.tc-ay6-neden').evaluateAll((ss) => ss.map((s) => [s.querySelector('b')?.textContent?.trim(), s.querySelector('span')?.textContent?.trim()]));
     for (const n of liste) expect(satirlar, n.kod).toContainEqual([n.kod, n.ad]);
     await expect(f.getByRole('button', { name: 'Varsayılanlar' })).toHaveCount(0);
     await expect(f.locator('.tc-ay6-neden input')).toHaveCount(0);
 
     await f.getByRole('tab', { name: 'Tesis', exact: true }).click();
-    await expect(f.getByText('Tesis TMI\'de İstasyonlar sayfasından değiştirilir.')).toBeVisible();
+    await expect(f.getByText('Tesis CORE\'da İstasyonlar sayfasından değiştirilir.')).toBeVisible();
     await expect(f.getByText('ORN-TORNA-1').first()).toBeVisible();
     await expect(f.getByRole('button', { name: 'Kaydet' })).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
