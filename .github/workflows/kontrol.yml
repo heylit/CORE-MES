@@ -253,6 +253,8 @@ jobs:
         run: npm ci
       - run: npm run test:istemci -- --shard=${{ matrix.parca }}/3
 
+  # node --test-shard dosyaları sırayla dağıtır, süreye bakmaz; birkaç uzun dosya ilk parçada toplanıyordu (altı parçada en
+  # uzunu ötekilerin ~1,25 katı). Sekiz parçada en uzun parçanın payı ~%30 azalır (1913 ölçümü). Parça sayısı değişirse süreler yeniden ölçülür.
   sunucu-test:
     needs: kapsam
     if: needs.kapsam.outputs.sunucu == 'true'
@@ -261,7 +263,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        parca: [1, 2, 3, 4, 5, 6]
+        parca: [1, 2, 3, 4, 5, 6, 7, 8]
     services:
       postgres:
         image: postgres:18
@@ -278,7 +280,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      TMIV2_TEST_PARCA: ${{ matrix.parca }}/6
+      TMIV2_TEST_PARCA: ${{ matrix.parca }}/8
     steps:
       - uses: actions/checkout@v4
       - id: node
