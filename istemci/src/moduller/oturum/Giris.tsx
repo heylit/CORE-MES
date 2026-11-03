@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { GirisCevabi, GirisGovdesi, KartGirisGovdesi, OturumCevabi, PinBelirleGovdesi } from '#paylasilan/sozlesme/oturum.ts';
@@ -6,6 +6,7 @@ import { Dugme, Girdi, Simge } from '../../ortak/arayuz/index.ts';
 import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
+import { kartTusu, OKUYUCU_BASI } from '../../ortak/veri/kart-degistir.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { girisiYenidenDene } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
@@ -118,9 +119,40 @@ export function Giris() {
   const kartla = useMutation({
     mutationFn: (govde: KartGirisGovdesi) =>
       girisiYenidenDene(() => api.post<OturumCevabi>('/oturum/kart-giris', govde, { oturumBitirmez: true })),
-    onSuccess: (cevap) => { oturumuYaz(cevap.kullanici); },
+    onSuccess: (cevap) => { kipiSakla('kart'); oturumuYaz(cevap.kullanici); },
     onError: () => { kartYaz(''); },
   });
+
+  // 1917: istasyonda kart, yöntem ya da alan seçmeden okutulur. Okuyucunun hızlı yazdığı kart biçimindeki girdi Enter'da yakalanır
+  // (1898 kuralı); Enter durdurulur ki PIN ya da parola formu gönderilmesin, alana düşen karakterler silinir. Kayıtsız cihazda
+  // sunucu reddeder ve denemeyi saymaz. Yakalama aşamasında dinlenir: odaktaki alan Enter'ı görmeden karar verilir.
+  const okuyucu = useRef(OKUYUCU_BASI);
+  const kartOkut = useRef<(kart: string, ham: string) => void>(() => undefined);
+  kartOkut.current = (kartNo, ham) => {
+    if (kartla.isPending) return;
+    kartYaz('');
+    parolaYaz('');
+    pinlerYaz((p) => ({ ...p, pin: '' }));
+    kullaniciAdiYaz((a) => (a.endsWith(ham) ? a.slice(0, -ham.length) : a));
+    giris.reset();
+    kartla.mutate({ kart: kartNo });
+  };
+  const arkaPlanKarti = kip !== 'belirle';
+  useEffect(() => {
+    if (!arkaPlanKarti) return undefined;
+    const dinle = (o: KeyboardEvent) => {
+      if (o.ctrlKey || o.altKey || o.metaKey) { okuyucu.current = OKUYUCU_BASI; return; }
+      const ham = okuyucu.current.metin;
+      const r = kartTusu(okuyucu.current, o.key, o.timeStamp);
+      okuyucu.current = r.durum;
+      if (r.kart === null) return;
+      o.preventDefault();
+      o.stopPropagation();
+      kartOkut.current(r.kart.toUpperCase(), ham);
+    };
+    window.addEventListener('keydown', dinle, true);
+    return () => { window.removeEventListener('keydown', dinle, true); okuyucu.current = OKUYUCU_BASI; };
+  }, [arkaPlanKarti]);
 
   const belirle = useMutation({
     mutationFn: (govde: PinBelirleGovdesi) =>
@@ -288,10 +320,10 @@ export function Giris() {
             required
             value={parola}
             onChange={(o) => parolaYaz(o.target.value)}
-            hata={girisHatasi}
+            hata={girisHatasi ?? kartHatasi}
           />
         )}
-        {kip === 'pin' && pinGirdisi('pin', 'PIN', girisHatasi)}
+        {kip === 'pin' && pinGirdisi('pin', 'PIN', girisHatasi ?? kartHatasi)}
         {kip === 'belirle' && (
           <>
             {pinGirdisi('yeni', 'Yeni PIN')}
