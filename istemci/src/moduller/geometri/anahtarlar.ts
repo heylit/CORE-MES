@@ -5,5 +5,4 @@ export const anahtarlar = {
   ham: (revizyonId: number, payMm: number, kalite: string) => ['geometri', 'ham', revizyonId, payMm, kalite] as const,
   guncel: (revizyonId: number) => ['geometri', 'guncel', revizyonId] as const,
   dosya: (revizyonId: number) => ['geometri', 'dosya', revizyonId] as const,
-  ozellik: (revizyonId: number) => ['geometri', 'ozellik', revizyonId] as const,
 };

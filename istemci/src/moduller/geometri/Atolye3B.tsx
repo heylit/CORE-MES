@@ -2,19 +2,14 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type {
-  GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, GeometriOzellik,
-  GeometriOzellikCevabi, HamStokOnerisi,
+  GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import {
-  agirlikKg, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
-  uzunluk, yogunlukBicimi, yogunlukOku,
-} from './gorunum.ts';
-import type { Vurgu } from './Goruntu3B.tsx';
+import { agirlikKg, agirlikMetni, buyukSayi, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, stokOlcuMetni, suruyorMu, uzunluk, yogunlukBicimi, yogunlukOku } from './gorunum.ts';
 import './geometri.css';
 
 const Goruntu3B = lazy(() => import('./Goruntu3B.tsx'));
@@ -215,89 +210,6 @@ function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; ana
   );
 }
 
-// Özellikler (2044-2 prototipi): tanınan delik, kademe, havşa, pah ve radyüs; yalnız öneri. Delik satırı modelde vurgulanır (girişte halka
-// ve eksen); pah ve radyüsün konumu sunucudan gelmez, yalnız listede durur. Analiz yenilenince (durum değişince) yeniden okunur.
-function OzellikKarti({ revizyonId, durum, secili, sec }: {
-  revizyonId: number; durum: GeometriDurumu; secili: number | null; sec: (o: GeometriOzellik | null) => void;
-}) {
-  const surer = suruyorMu(durum);
-  const sorgu = useQuery({
-    queryKey: [...anahtarlar.ozellik(revizyonId), durum],
-    queryFn: () => api.get<GeometriOzellikCevabi>(`/geometri/ozellikler/${String(revizyonId)}`),
-    enabled: !surer,
-  });
-  const oz = sorgu.data?.ozellikler ?? null;
-  const ustler = oz?.filter((o) => o.ust === null) ?? [];
-  const delikler = ustler.filter((o) => o.tur === 'delik');
-  const pahlar = ustler.filter((o) => o.tur === 'pah');
-  const radyuslar = ustler.filter((o) => o.tur === 'radyus');
-  return (
-    <Kart baslik="Özellikler (öneri)" simge="target" baslikEki={oz !== null && !surer ? <Rozet ton="pasif">{ustler.length} özellik</Rozet> : undefined}>
-      {surer ? <p className="tc-g3b-soluk">Hesap sürüyor; sonuç gelince burada görünür.</p>
-        : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
-          : sorgu.isError ? <DurumKutusu durum="hata" mesaj={yetkiyse(sorgu.error, 'Özellikler okunamadı.')} />
-            : oz === null ? <p className="tc-g3b-soluk">Bu modelin yüzleri okunamadı; özellik tanınamadı. Ölçüler Analiz kartında.</p>
-              : ustler.length === 0 ? <p className="tc-g3b-soluk">Tanınan delik, pah ya da radyüs yok.</p>
-                : (
-                  <>
-                    <div className="tc-g3b-oz-ozet">
-                      <Rozet gorunum="cizgi">{delikler.length} delik</Rozet>
-                      <Rozet gorunum="cizgi">{pahlar.length} pah</Rozet>
-                      <Rozet gorunum="cizgi">{radyuslar.length} radyüs</Rozet>
-                    </div>
-                    {delikler.length > 0 && (
-                      <>
-                        <h3 className="tc-g3b-oz-grup"><Simge ad="target" /> Delikler</h3>
-                        <ul className="tc-g3b-oz-liste">
-                          {delikler.map((d) => {
-                            const m = delikMetni(d);
-                            const bagli = oz.filter((o) => o.ust === d.sira);
-                            return (
-                              <li key={d.sira}>
-                                <button type="button" className="tc-g3b-oz-satir" aria-pressed={secili === d.sira} onClick={() => sec(secili === d.sira ? null : d)}>
-                                  <Simge ad="target" />
-                                  <span className="tc-g3b-oz-metin">
-                                    <strong>{m.ust}</strong>
-                                    {m.alt !== '' && <span className="tc-g3b-soluk">{m.alt}</span>}
-                                    {bagli.length > 0 && (
-                                      <span className="tc-g3b-oz-alt">{bagli.map((b) => <Rozet key={b.sira} gorunum="cizgi">{bagliMetni(b)}</Rozet>)}</span>
-                                    )}
-                                  </span>
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </>
-                    )}
-                    {pahlar.length + radyuslar.length > 0 && (
-                      <>
-                        <h3 className="tc-g3b-oz-grup"><Simge ad="edit" /> Pah ve radyüs</h3>
-                        <ul className="tc-g3b-oz-liste">
-                          {[...pahlar.map((o) => ({ o, m: pahMetni(o), simge: 'edit' as const })), ...radyuslar.map((o) => ({ o, m: radyusMetni(o), simge: 'rotate' as const }))]
-                            .map(({ o, m, simge }) => (
-                              <li key={o.sira} className="tc-g3b-oz-satir tc-g3b-oz-duz">
-                                <Simge ad={simge} />
-                                <span className="tc-g3b-oz-metin">
-                                  <strong>{m.ust}</strong>
-                                  {m.alt !== '' && <span className="tc-g3b-soluk">{m.alt}</span>}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      </>
-                    )}
-                    <p className="tc-g3b-soluk tc-g3b-oz-not">Kesin yüzlerden tanındı; yalnız öneridir, rotaya ve karta yazılmaz. Cep, kanal, diş ve tolerans tanınmaz.</p>
-                  </>
-                )}
-    </Kart>
-  );
-}
-
-const vurgusu = (o: GeometriOzellik | null): Vurgu | null =>
-  o === null || o.konum === null || o.eksen === null || o.capMm === null
-    ? null : { konum: o.konum, eksen: o.eksen, capMm: o.capMm, derinlikMm: o.derinlikMm ?? 0 };
-
 // Bağlantıdaki revizyon yayından düştüyse (yeni revizyon yayınlandı) aynı belgenin yayındaki revizyonuna geçilir.
 function EskiRevizyon({ revizyonId, yonlendir }: { revizyonId: number; yonlendir: (rev: number) => void }) {
   const { bildir } = useBildirim();
@@ -327,7 +239,6 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
     staleTime: Infinity,
     retry: false,
   });
-  const [secili, seciliYaz] = useState<GeometriOzellik | null>(null);
   if (analiz.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Analiz okunuyor" />;
   if (analiz.isError) {
     if (analiz.error instanceof ApiHatasi && analiz.error.durum === 404) return <EskiRevizyon revizyonId={revizyonId} yonlendir={yonlendir} />;
@@ -344,13 +255,12 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
         : dosya.isError ? <div className="tc-g3b-sahne"><DurumKutusu durum="hata" mesaj={yetkiyse(dosya.error, 'Model dosyası alınamadı.')} /></div>
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
-              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} />
+              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} />
             </Suspense>
           )}
       <div className="tc-g3b-kartlar">
         <AnalizKarti revizyonId={revizyonId} cevap={analiz.data} />
         <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
-        <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />
       </div>
     </div>
   );
