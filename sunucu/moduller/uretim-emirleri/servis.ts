@@ -21,7 +21,7 @@ import {
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
-  KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu,
+  KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -443,7 +443,24 @@ export async function emirAyrintisi(db: Db, id: number): Promise<EmirAyrintiCeva
   const kayitlar = await kayitlariCevir(db, await sorgular.kayitlariGetir(db, id));
   const kollar = (await sorgular.altPartilerGetir(db, [id])).map((k) => k.id);
   const kolHurdasi = kollar.length === 0 ? null : (await sorgular.hurdaToplamlariGetir(db, kollar)).reduce((t, x) => t + x.hurda, 0);
-  return { emir, kayitlar, adimlar: await adimlariCevir(db, id), kolHurdasi };
+  return { emir, kayitlar, adimlar: await adimlariCevir(db, id), kolHurdasi, ilerleme: await emrinIlerlemesi(db, satir.id, satir.adet) };
+}
+
+// 1944: rota ve adım yüzdesi. Çalışan adımın sağlamı canlı sayaçtan; çok katmanlı emirde alt düğüm adımı düğümün dal adını ve birim
+// çarpanını taşır (adımın kendi çarpanı yoksa).
+async function emrinIlerlemesi(db: Db, emirId: number, adet: number) {
+  const isEmirleri = await sorgular.isEmirleriGetir(db, [emirId]);
+  if (isEmirleri.length === 0) return null;
+  const sayac = new Map((await sorgular.adimSayaclariGetir(db, isEmirleri.filter((i) => i.durum === 'calisiyor').map((i) => i.id))).map((x) => [x.isEmriId, x.saglam]));
+  const dugum = new Map((await sorgular.dugumleriGetir(db, [emirId])).filter((d) => d.dugum !== '0').map((d) => [d.isEmriId, d]));
+  return emirIlerlemesi(adet, isEmirleri.map((i) => {
+    const d = dugum.get(i.id);
+    return {
+      id: i.id, sira: i.sira, opNo: i.opNo, ad: i.ad, dal: d?.dugum ?? null, durum: i.durum, saglamAdet: i.saglamAdet,
+      canliSaglam: i.durum === 'calisiyor' ? sayac.get(i.id) ?? 0 : null, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
+      onculler: i.onculler, adetCarpani: i.adetCarpani ?? (d ? Number(d.birimCarpani) : null),
+    };
+  }));
 }
 
 // Denetimsiz yazıcı: yalnız test kurulumları çağırır (iş emirsiz emir).

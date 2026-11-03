@@ -1,6 +1,7 @@
 import type {
-  ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, Emir, EmirDurumu, KayitOlayi, UretimKaydi,
+  ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, Emir, EmirDurumu, IlerlemeEsasi, KayitOlayi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { EmirTamamlamaCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi, type KapanisSonucu } from '#paylasilan/sozlesme/emir-durumu.ts';
 
 // Ad ve ton tek sözlükten (1389 a); bu modül ve başka ekranlar aynı adı yazar.
@@ -55,3 +56,25 @@ export const kayitKisisi = (k: Pick<UretimKaydi, 'olay' | 'kisi' | 'kararVeren'>
 
 export const kayitNedeni = (k: Pick<UretimKaydi, 'durusNedeni' | 'hurdaNedeni'>): string | null =>
   k.durusNedeni?.ad ?? k.hurdaNedeni?.ad ?? null;
+
+// 1944: rota yüzdesinin esası ekranda yazılır (1945); hesap sunucudadır.
+export const ILERLEME_ESASI_METNI: Record<IlerlemeEsasi, string> = {
+  sure: 'adımların planlı süresiyle ağırlıklı', adet: 'adım yüzdelerinin ortalaması', adim: 'biten adım oranı',
+};
+
+export interface ReceteIlerlemesi {
+  yuzde: number | null;
+  bilesenler: { malzemeId: number; ad: string; verilen: string; brut: string; yuzde: number }[];
+}
+// Reçete ilerlemesi: bileşen başına emre verilen (net sarf) / brüt ihtiyaç; hizmet ve ihtiyacı sıfır olan bileşen sayılmaz. Birimler
+// (kg, adet, metre) toplanamadığı için emrin yüzdesi bileşen yüzdelerinin ortalamasıdır. Sayılacak bileşen yoksa yüzde yoktur (null).
+export function receteIlerlemesi(c: Pick<EmirTamamlamaCevabi, 'bilesenler'>): ReceteIlerlemesi {
+  const bilesenler = c.bilesenler.flatMap((b) => {
+    const brut = Number(b.brut);
+    if (b.hizmet || !(brut > 0)) return [];
+    const yuzde = Math.min(100, Math.max(0, Math.floor((Number(b.verilen) / brut) * 100 + 1e-9)));
+    return [{ malzemeId: b.malzemeId, ad: b.malzemeAd ?? `#${String(b.malzemeId)}`, verilen: b.verilen, brut: b.brut, yuzde }];
+  });
+  const yuzde = bilesenler.length === 0 ? null : Math.floor(bilesenler.reduce((t, b) => t + b.yuzde, 0) / bilesenler.length);
+  return { yuzde, bilesenler };
+}
