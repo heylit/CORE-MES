@@ -26,7 +26,7 @@ export function seriBloklari(satirlar: readonly SeriSatiri[]): SeriBlogu[] {
 }
 
 type Coz = (kod: string) => KodCozCevabi | undefined;
-type Stoklu = Extract<KodCozCevabi, { tur: 'lot' | 'malzeme' }>;
+export type Stoklu = Extract<KodCozCevabi, { tur: 'lot' | 'malzeme' }>;
 const stoklu = (c: KodCozCevabi | undefined): Stoklu | null => (c && (c.tur === 'lot' || c.tur === 'malzeme') ? c : null);
 
 // Öneri yalnız yol gösterir; iş seçilmeden hiçbir şey yazılmaz.
@@ -44,7 +44,7 @@ export function blokOnerisi(b: SeriBlogu, coz: Coz): string | null {
 export interface Atlanan { satirId: number; neden: string }
 // Taşımanın kaynağı satırın tek yeridir: etiketin hedef dışındaki tek, statüsüz bakiyesi. Birden çok yer varsa hangisinden
 // alındığı bilinmez; satır atlanır ve Otomatik modda tek tek taşınır.
-function tekKaynak(c: Stoklu, hedefKonumId: number): BakiyeSatiri | string {
+export function tekKaynak(c: Stoklu, hedefKonumId: number): BakiyeSatiri | string {
   const yerler = c.bakiyeler.filter((b) => b.konumId !== hedefKonumId && Number(b.miktar) > 0);
   if (yerler.length === 0) return c.bakiyeler.some((b) => b.konumId === hedefKonumId) ? 'Zaten hedef gözde' : 'Stokta yok';
   if (yerler.length > 1) return `${yerler.length} yerde kayıtlı; hangisinden alındığı bilinmez`;

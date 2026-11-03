@@ -14,6 +14,7 @@ import { BilgiOkut, OkutAlani } from './OkutPaneli.tsx';
 import { OkutarakSayim } from './OkutarakSayim.tsx';
 import { ToplaModu } from './Hazirlik.tsx';
 import { SeriOkut } from './SeriOkut.tsx';
+import { YerlestirModu } from './YerlestirModu.tsx';
 import { acilisModu, izinliModlar, kayitliMod, komuttanMod, modTanimi, moduKaydet, type ModTanimi, type OkutModu } from './okutma-modlari.ts';
 import { ELDEN_NOTU, okutulanHedef, type OkutulanHedef } from './okut-akisi.ts';
 import { Qr } from './Qr.tsx';
@@ -171,6 +172,8 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
             <ModSeridi modlar={modlar} mod={mod} sec={modSec} />
             {mod === 'bilgi' ? <BilgiOkut komut={panelKomutu} />
               : mod === 'seri' ? <SeriOkut komut={panelKomutu} />
+              : mod === 'yerlestir' ? <YerlestirModu komut={panelKomutu} />
+              : mod === 'al' ? (kutu.data ? <>{yer}<OkutarakAl gomulu kutu={kutu.data} baslangic={{}} komut={panelKomutu} /></> : <DurumKutusu durum="yukleniyor" />)
               : mod === 'say' ? <OkutarakSayim gomulu ustKomut={panelKomutu} />
               : mod === 'topla' ? <ToplaModu ustKomut={panelKomutu} />
               : (
