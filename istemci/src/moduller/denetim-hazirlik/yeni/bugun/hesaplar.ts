@@ -47,7 +47,7 @@ export function baslarkenAdimlari(kb: KuralBaglami, cihazlar: readonly Cihaz[]):
   const st = kb.profil;
   const w = kb.calisma;
   return [
-    { t: 'Firma adını girin', d: 'Dokümanlara, raporlara ve yedeğe işlenir.', ok: !!st.profile.firma, go: 'profil' },
+    { t: 'Firma adını girin', d: 'Sistem Ayarları > Firma adı\'nda girilir; dokümanlara, raporlara ve yedeğe işlenir.', ok: !!st.profile.firma, go: 'profil' },
     { t: `${kb.pg.s} denetim tarihini ekleyin`, d: 'Hazırlık programı ve geri sayım bu tarihe göre çalışır.', ok: !!siradakiDenetim(st, kb.program), go: 'takvim' },
     { t: 'İlk ölçümü yapın: 10 soruluk hızlı tur', d: 'Yaklaşık 15 dakika. Hazırlık puanınız ilk kez oluşur.', ok: Object.keys(w.ans).length >= 10, go: 'hizli-tur' },
     { t: 'Raporda ilk açığınızı kapatın', d: 'Aksiyon planında bir maddeyi tamamlayıp işaretleyin.', ok: Object.values(w.done).some(Boolean), go: 'rapor' },

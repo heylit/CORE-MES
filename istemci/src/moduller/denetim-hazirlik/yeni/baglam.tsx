@@ -11,6 +11,7 @@ import { PROGRAMLAR, type ProgramTanimi } from './icerik/programlar.ts';
 import { haftalariKur } from './kurallar/hafta.ts';
 import { cihazlar as cihazListesi } from './kurallar/kalibrasyon.ts';
 import { kuralBaglami, type KuralBaglami } from './kurallar/puan.ts';
+import { firmaAdiyla } from './kurallar/profil.ts';
 import { profilNormalize } from './normalize.ts';
 import type { Calisma, Cihaz, Depo, EkranDurumu, GorunumKodu, KysSekmesi, Profil, ProgramKodu } from './tipler.ts';
 import { KOK, useDepoYazici, YETKI_ILETISI, type KayitDurumu, type Yukleme } from './veri.ts';
@@ -85,7 +86,9 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
   const [ekran, ekranYaz] = useState<EkranDurumu>(() => ekranDurumuOku(kisiId, etkinProfil(yukleme.depo)));
   const yetki = useMemo(() => ({ yazabilir: yukleme.ben.yazabilir, yonetici: yukleme.ben.yonetici }), [yukleme.ben]);
 
-  const profil = etkinProfil(depo);
+  // Ekran firma adını Sistem Ayarları'ndan görür (1946 b); yazmalar ham depoya (sonDepo) gider.
+  const gorunen = useMemo(() => firmaAdiyla(depo, kurumAdi), [depo, kurumAdi]);
+  const profil = etkinProfil(gorunen);
   const program = ekran.program;
   const kb = useMemo(() => kuralBaglami(profil, program), [profil, program]);
   const cihazlar = useMemo(() => cihazListesi(yukleme.aletler), [yukleme.aletler]);
@@ -177,7 +180,7 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
 
   const yenidenOku = yazici.yenidenOku;
   const deger = useMemo<DenetimBaglami>(() => ({
-    depo, profil, program, pg: PROGRAMLAR[program], calisma: profil.pw[program], kb, gorunum: kod, ekran, ekranDegistir, degistir, depoDegistir,
+    depo: gorunen, profil, program, pg: PROGRAMLAR[program], calisma: profil.pw[program], kb, gorunum: kod, ekran, ekranDegistir, degistir, depoDegistir,
     programSec, git, geriAl, geriAlinabilir: yiginSurumu >= 0 && yigin.current.var(depo.active), bildir, yetki, kayit: yazici.kayit,
     yenidenOku: () => {
       yigin.current.temizle();
@@ -185,7 +188,7 @@ export function DenetimSaglayici({ yukleme, gorunum: kod, children }: Ozellikler
       yenidenOku().catch((e: unknown) => { uyar(hataIletisi(e, 'Kayıt okunamadı; bağlantıyı denetleyip yeniden deneyin.')); });
     },
     olcuAletleri: yukleme.aletler, cihazlar, kurumAdi, kisiler: yukleme.kisiler,
-  }), [depo, profil, program, kb, kod, ekran, ekranDegistir, degistir, depoDegistir, programSec, git, geriAl, yiginSurumu, bildir, yetki,
+  }), [gorunen, profil, program, kb, kod, ekran, ekranDegistir, degistir, depoDegistir, programSec, git, geriAl, yiginSurumu, bildir, yetki,
     yazici.kayit, yenidenOku, uyar, yukleme.aletler, yukleme.kisiler, cihazlar, kurumAdi]);
 
   return <Baglam.Provider value={deger}>{children}</Baglam.Provider>;

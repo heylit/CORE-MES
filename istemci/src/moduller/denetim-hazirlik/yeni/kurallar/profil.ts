@@ -129,6 +129,14 @@ export function yedekYukle(depo: Depo, profiller: readonly unknown[]): number {
 export const ORNEK_PROFIL_ADI = 'Örnek: Anadolu Hassas İşleme A.Ş. (demo)';
 export const ornekMi = (st: Profil | undefined): boolean => st?.profile.firma === ORNEK_PROFIL_ADI;
 
+// Firma adı profilin değildir (1946 b): ekranda her profil Sistem Ayarları > Firma adı'nı taşır; örnek profil kendi adını korur.
+// Yalnız okunan depo böyle kurulur; kayda ham depo yazılır, profildeki eski ad silinmez.
+export function firmaAdiyla(depo: Depo, kurumAdi: string | null): Depo {
+  const data: Record<string, Profil> = {};
+  for (const [id, p] of Object.entries(depo.data)) data[id] = ornekMi(p) ? p : { ...p, profile: { ...p.profile, firma: kurumAdi ?? '' } };
+  return { ...depo, data };
+}
+
 export function ornekProfil(): Profil {
   const st = bosProfil();
   const t = bugunTarihi();
