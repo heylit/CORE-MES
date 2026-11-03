@@ -17,9 +17,24 @@ export const planlamaSilGovdesi = z.object({ anahtar: planlamaAnahtari, beklenen
 // Planlama sayfasının açılış verisi (288 a): çalışma kaydı (`:planlama`) Reçete ve Rota kaydı ve kaynak okumasıyla sunucuda birleşmiş olarak
 // gelir; sayfa birleştirmez. Çalışma yoksa (hiç kaydedilmemiş ya da kayıt biçimi eski) null. Sürüm çalışma kaydınındır (yazmada beklenen
 // sürüm); kayıt yoksa null.
+// 1962 / 1963 a: birleşme başka sayfadaki değişikliği bulup planı eskittiyse (veri sürümü arttıysa) neyin değiştiği. Alan motor girdisinin
+// üst alanıdır; ariza makine durumundan kurulan arızadır, receteRotaKaydi Reçete ve Rota'nın ana kaydıdır. Farklar en çok 50 (yol, eski, yeni);
+// kesik, sınırda kesildiyse true. Kişi ve zaman yoktur: birleşme yalnız farkı bilir, kimi değişiklik defteri verir (1975).
+export const KAYNAK_DEGISIKLIK_ALANLARI = [
+  'tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet',
+  'devamsizlik', 'satinalma', 'ariza', 'receteRotaKaydi',
+] as const;
+export const KAYNAK_FARKI_EN_COK = 50;
+export const kaynakDegisikligi = z.object({
+  alanlar: z.array(z.enum(KAYNAK_DEGISIKLIK_ALANLARI)),
+  farklar: z.array(z.object({ yol: z.string(), eski: z.unknown(), yeni: z.unknown() })).max(KAYNAK_FARKI_EN_COK),
+  kesik: z.boolean(),
+});
 export const planlamaCalismasiCevabi = z.object({
   calisma: z.record(z.string(), z.unknown()).nullable(),
   surum: z.number().int().nullable(),
+  // Yalnız planlama sayfasının okumasında; değişiklik yoksa null ya da yok.
+  kaynakDegisikligi: kaynakDegisikligi.nullable().optional(),
 });
 
 // 499 a, 506 a: çalışma planı ile canlı plan farkı (atölyenin "canlı planla aynı" rozeti). k: motorun işlem kimliği (sipariş.k), anahtar plan
@@ -310,6 +325,8 @@ export const yillikCozDurumuCevabi = z.discriminatedUnion('durum', [
 export type PlanlamaYazGovdesi = z.output<typeof planlamaYazGovdesi>;
 export type PlanlamaSilGovdesi = z.output<typeof planlamaSilGovdesi>;
 export type PlanlamaCalismasiCevabi = z.output<typeof planlamaCalismasiCevabi>;
+export type KaynakDegisikligi = z.output<typeof kaynakDegisikligi>;
+export type KaynakDegisiklikAlani = (typeof KAYNAK_DEGISIKLIK_ALANLARI)[number];
 export type CanliFarkiCevabi = z.output<typeof canliFarkiCevabi>;
 export type TabanVeCanliCevabi = z.output<typeof tabanVeCanliCevabi>;
 export type CalismaTaslagiGovdesi = z.output<typeof calismaTaslagiGovdesi>;

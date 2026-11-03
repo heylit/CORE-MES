@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MotorUyarilariCevabi, PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { BenCevabi, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import type { DurumCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { DurumCevabi, KaynakDegisikligi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
 import { ufukKur } from './ufuk-olcegi.ts';
@@ -25,6 +25,8 @@ export interface PlanlamaDeposu {
   // okunamıyorsa null.
   calisma: PlanlamaCalismasi | null;
   calismaSurumu: number | null;
+  // 1972: sunucu birleşmesinin bu açılışta bulduğu başka sayfa değişikliği; yoksa null (eski sunucu alanı yazmaz).
+  kaynakDegisikligi: KaynakDegisikligi | null;
   // Reçete ve Rota ana kaydı (anahtar `recete-rota-motoru-v1`): çalışmanın verisi bundan kurulur (sunucuda, girdi.betik). Ekran yalnız okur.
   receteRotaKaydi: unknown;
   durum: DurumCevabi | null;
@@ -60,6 +62,7 @@ export async function acilisOku(o: Okuyucu = api): Promise<PlanlamaDeposu> {
     ben,
     calisma,
     calismaSurumu: calisma === null ? null : calismaCevabi.surum,
+    kaynakDegisikligi: calisma === null ? null : calismaCevabi.kaynakDegisikligi ?? null,
     receteRotaKaydi: kayit(ONEK)?.deger ?? null,
     durum, planSurumu, senaryolar,
     motorUyarilari: uyari?.uyarilar ?? null,

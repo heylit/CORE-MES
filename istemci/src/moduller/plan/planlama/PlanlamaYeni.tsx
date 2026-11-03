@@ -12,6 +12,8 @@ import {
   studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
+import { DegisiklikSeridi } from './ortak/degisiklik-seridi/DegisiklikSeridi.tsx';
+import { kaynakSatiri } from './ortak/degisiklik-seridi/kurallar.ts';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
 import './planlama-yeni.css';
@@ -69,6 +71,14 @@ function PlanlamaEkrani() {
     yazici?.abone ?? bosAbone,
     () => yazici?.calisma ?? (durum.tur === 'hazir' ? durum.depo.calisma : null),
   );
+  // 1972: başka sayfadaki değişiklik bu açılışın birleşmesinden gelir; açılış başına bir satırdır, yazabilen kişide bekleyene yazılır.
+  const disSatir = useMemo(() => {
+    if (durum.tur !== 'hazir' || durum.depo.calisma === null || durum.depo.kaynakDegisikligi === null) return null;
+    return kaynakSatiri(durum.depo.kaynakDegisikligi, Date.now(), durum.depo.calisma.dataVer);
+  }, [durum]);
+  useEffect(() => {
+    if (yazici !== null && disSatir !== null) yazici.kaynakDegisikliginiYaz(disSatir);
+  }, [yazici, disSatir]);
   useEffect(() => {
     if (yazici === null) return undefined;
     const cik = (): void => { void yazici.hepsiniYaz(); };
@@ -98,9 +108,11 @@ function PlanlamaEkrani() {
   const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
 
   const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
+  const serit = calisma !== null && calisma.plan !== null;
 
   return (
-    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined}>
+    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={serit ? '' : undefined}>
+      {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} />}
       {calismaYok && (
         <div className="tc-py-calisma-yok" role="status">
           <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>

@@ -98,7 +98,7 @@ export interface IzSatiri { t: number; kim: string; rol: string; sayfa: string; 
 // Bekleyen değişiklik (755 a): plan varken planın girdisini değiştiren değişiklik atölyede uygulanana ya da reddedilene kadar burada bekler.
 // `isler` etkilediği siparişlerdir ('*': bütün işler); `geri` reddin yol bazlı geri dönüş farkıdır, null ise yalnız uygulanır (787 a).
 export interface GeriYama { yol: string[]; id?: string; once: unknown }
-export interface BekleyenDegisiklik { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null }
+export interface BekleyenDegisiklik { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null; dis?: true }
 
 // ufukGun ve dilimDk sunucunun yazdığı motor ölçeğidir (1477 a, sistem ayarı); sayfa değiştirmez.
 export interface PlanAgirliklari extends ExtraAlanlar { dondurma: number; famK: number; mat: string; sure: number; ufukGun?: number; dilimDk?: number }
