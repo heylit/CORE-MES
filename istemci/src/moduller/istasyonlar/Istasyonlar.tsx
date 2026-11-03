@@ -101,7 +101,7 @@ export function Istasyonlar() {
         {bolum === 'is-merkezleri' && <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} />}
         {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yazabilir} durumYazabilir={yazabilir || islemler.includes('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
         {bolum === 'personel' && (
-          <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('ik.personel-yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
+          <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('kisiler.yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
         )}
         {bolum === 'yetkinlik' && <YetkinlikMatrisi v={v} yazabilir={yazabilir} />}
         {bolum === 'vardiyalar' && <VardiyaBolumu v={v} sayfaVar={islemler.includes('sayfa.vardiya')} />}

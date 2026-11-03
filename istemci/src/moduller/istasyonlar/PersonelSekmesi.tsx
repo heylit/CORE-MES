@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { KisiGovdesi } from '#paylasilan/sozlesme/kisiler.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Pencere, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { Ekipler } from './Ekipler.tsx';
@@ -25,9 +26,44 @@ const ATAMA_YOLU: Record<AtamaTuru, (id: number) => string> = {
 // Sözleşmedeki TEZGAH_SINIRI_EN_COK ile aynı; istemci sözleşmeden değer ithal etmez.
 const TEZGAH_SINIRI_EN_COK = 20;
 
-const IK_YENI_KISI = '/ik/personel?yeni=1';
-
 const basHarfler = (ad: string) => ad.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toLocaleUpperCase('tr-TR')).join('');
+
+// Kişi açma kisiler modülünün ucudur; düğme yalnız bugün kişi açabilene (kisiler.yaz) görünür, rol yetkileri değişmez
+// (kullanıcı kararı, kart #1109).
+function KisiAcPenceresi({ kapat }: { kapat: () => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const [ad, adYaz] = useState('');
+  const [sicilNo, sicilYaz] = useState('');
+  const [gorev, gorevYaz] = useState('');
+  const kaydet = useMutation({
+    // Tekrar korumalı: cevabı yitirilen gönderim aynı kimlikle yinelenir, ikinci kişi açılmaz.
+    mutationFn: (govde: KisiGovdesi) => tekrarKorumaliGonder((deneme) => api.post('/kisiler', govde, deneme)),
+    onSuccess: async () => {
+      await istemci.invalidateQueries({ queryKey: anahtarlar.kisiSecenekleri });
+      bildir('tamam', 'Kişi eklendi; atamasını ve yetkinliğini aşağıdan verin.');
+      kapat();
+    },
+  });
+  return (
+    <Pencere acik baslik="Kişi ekle" kapat={kapat} alt={(
+      <>
+        <Dugme onClick={kapat}>Vazgeç</Dugme>
+        <Dugme tur="birincil" simge="check" yukleniyor={kaydet.isPending} disabled={ad.trim() === ''}
+          onClick={() => kaydet.mutate({ ad: ad.trim(), sicilNo: sicilNo.trim() || null, gorev: gorev.trim() || null })}>
+          Kaydet
+        </Dugme>
+      </>
+    )}>
+      <div className="tc-ist-kutular">
+        <Girdi etiket="Ad soyad" required value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" />
+        <Girdi etiket="Sicil no" value={sicilNo} onChange={(o) => sicilYaz(o.target.value)} autoComplete="off" />
+        <Girdi etiket="Görev" value={gorev} onChange={(o) => gorevYaz(o.target.value)} autoComplete="off" />
+      </div>
+      {kaydet.isError && <p className="tc-ist-hata" role="alert">{hataIletisi(kaydet.error, 'Kişi kaydedilemedi.')}</p>}
+    </Pencere>
+  );
+}
 
 function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk }: {
   k: KisiOzeti; v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; kendisi: boolean; vardiyaYazabilir: boolean; renk: string;
@@ -297,6 +333,7 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
   v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; benId: number; kisiAcabilir: boolean; vardiyaYazabilir: boolean;
 }) {
   const [ara, araYaz] = useState('');
+  const [kisiAc, kisiAcYaz] = useState(false);
   if (v.yukleniyor) return <DurumKutusu durum="yukleniyor" />;
   if (v.hata) return <DurumKutusu durum="hata" yenile={v.yenile} />;
   if (v.istasyonKisileri === null || v.makineKisileri === null || v.ekipUyeleri === null) {
@@ -328,8 +365,7 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
     <div className="tc-ist-bolum">
       <div className="tc-ist-arac">
         <Girdi etiket="Kişi ara" type="search" placeholder="Kişi adı" value={ara} onChange={(o) => araYaz(o.target.value)} />
-        {/* Kişi İK'da açılır (1927 a, 1928 a: kayıt ve işe alış İK'nındır); burada yalnız atanır. */}
-        {kisiAcabilir && <div className="tc-ist-arac-sag"><Link className="tc-dugme tc-dugme-birincil tc-dugme-normal" to={IK_YENI_KISI}><Simge ad="plus" />Kişi</Link></div>}
+        {kisiAcabilir && <div className="tc-ist-arac-sag"><Dugme tur="birincil" simge="plus" onClick={() => kisiAcYaz(true)}>Kişi</Dugme></div>}
       </div>
       <p className="tc-ist-ipucu">
         Kişinin atamalarının toplamı 100'ü geçemez. Yetkinlik kişinin çalışabildiği istasyonlardır; plan yetkin olmadığı istasyondaki işi uyarır.
@@ -367,6 +403,7 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
         <h3 className="tc-ist-alt-baslik">Ekipler</h3>
         <Ekipler yazabilir={yazabilir} />
       </section>
+      {kisiAc && <KisiAcPenceresi kapat={() => kisiAcYaz(false)} />}
     </div>
   );
 }
