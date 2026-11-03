@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MetrikDakikasi, SaatOzeti } from '#paylasilan/sozlesme/saglik.ts';
-import { dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, yuvarlakTavan } from './performans.ts';
+import { bellekEsigiMb, dakikaOzeti, dakikaSerileri, enYavasUclar, saatOzetiKutulari, saatSerileri, yuvarlakTavan } from './performans.ts';
 
 const ISTEK = { sayi: 60, saniyede: 1, p50Ms: 25, p95Ms: 50, p99Ms: 100, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 };
 const dakika = (an: string, y: Partial<MetrikDakikasi> = {}): MetrikDakikasi => ({
@@ -68,5 +68,31 @@ describe('performans', () => {
 
   it('eksen tavanı yuvarlak sayıdır', () => {
     expect([yuvarlakTavan(0), yuvarlakTavan(7), yuvarlakTavan(12), yuvarlakTavan(1300), yuvarlakTavan(24)]).toEqual([1, 10, 20, 2000, 25]);
+  });
+
+  it('bellek serileri: MB olarak; makine toplamı ölçülmediyse boş bellek ve eşik null', () => {
+    const MB = 1024 * 1024;
+    const d = [
+      dakika('2026-11-01T10:00:00Z', { bellek: { rssBayt: 300 * MB, yiginBayt: 1, makineBosBayt: 1500 * MB, makineToplamBayt: 16000 * MB } }),
+      dakika('2026-11-01T10:01:00Z', { bellek: { rssBayt: 310 * MB, yiginBayt: 1, makineBosBayt: 0, makineToplamBayt: 0 } }),
+    ];
+    const s = dakikaSerileri(d);
+    expect(s.uygulamaBellek.map((n) => n.deger)).toEqual([300, 310]);
+    expect(s.makineBosBellek.map((n) => n.deger)).toEqual([1500, null]);
+    expect(bellekEsigiMb(d)).toBeNull();
+    expect(bellekEsigiMb(d.slice(0, 1))).toBe(1600);
+    expect(bellekEsigiMb([])).toBeNull();
+  });
+
+  it('saatlik bellek: uygulamanın en çoğu ve makinenin en az boşu', () => {
+    const MB = 1024 * 1024;
+    const saat = {
+      saat: '2026-11-01T10:00:00.000Z', dakikaSayisi: 60,
+      istek: { sayi: 0, saniyede: 0, p95MsEnCok: null, p99MsEnCok: null, istemciHatasi: 0, sunucuHatasi: 0, mesgul: 0 },
+      havuz: null, surecIslemciYuzde: null, makineIslemciYuzde: null,
+      bellek: { rssBaytEnCok: 420 * MB, makineBosBaytEnAz: 900 * MB }, olayDongusuP99MsEnCok: null, veritabani: null,
+    } satisfies SaatOzeti;
+    const s = saatSerileri([saat]);
+    expect([s.uygulamaBellek[0]?.deger, s.makineBosBellek[0]?.deger]).toEqual([420, 900]);
   });
 });
