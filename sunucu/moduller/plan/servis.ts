@@ -25,7 +25,7 @@ import { dusukStokSayisi } from '../stok/disari.ts';
 import {
   FASON_VARSAYILAN_GUN, adimOnculleri, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri, rotadanAdimAdetleri,
 } from '../uretim-emirleri/disari.ts';
-import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
+import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
@@ -1902,6 +1902,7 @@ function sabitYerleri(sabitler: readonly Sabit[]): Yerlesim[] {
 const BOLUNMUS_IS = 'Bölünmüş iş motorla dizilmez; parçalarını planda elle yerleştirin.';
 const ELLE_SIRALI_IS = 'Elle sıralı iş motorla dizilmez; planda elle yerleştirin.';
 const ADAYSIZ_IS = 'Adımın kullanılabilir makinesi ya da kişisi yok (istasyonda aktif makine yok, insanlı istasyonda yetkin kişi yok ya da yetkiniz dışında).';
+const ISTASYON_VARDIYASIZ = 'İnsanlı istasyonda yetkin kişilerin hiçbirinin vardiyası tanımlı değil.';
 const MALZEME_BEKLER = 'Malzemesi planlama ufkunda karşılanmıyor.';
 async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[], korunanYerler: readonly PlanYeri[] = []) {
   const { sabitler, isler } = motorGirdisi(b, satirlar, new Set(korunanYerler.map((p) => p.isEmriId)));
@@ -1911,6 +1912,9 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
   const kuyruk = new Map<number, MotorKuyrugu['isler']>();
   const kisiKuyrugu = new Map<number, KisiKuyrugu['isler']>();
   const kisiAdaylari = new Map<number, number[]>();
+  // 1959 a (1969): vardiyalı kişi, kişi vardiyası tanımlı olandır (planlama atölyesiyle aynı tanım, girdi.betik). Takvim ölçütü olamaz:
+  // kişinin takvimi ataması yoksa iş merkezine bağlanamaz ve boş döner, yalnız yetkinliği olan kişi (1954 a) hep vardiyasız görünürdü.
+  const vardiyasiOlan = new Set((await kisiVardiyalari(db)).map((k) => k.kisiId));
   for (const i of isler) {
     const y = yerli.get(i.id);
     const makinesi = (k: Kaynak | null | undefined) => (k?.tur === 'makine' && (i.adaylar.length === 0 || i.adaylar.some((a) => ayniKaynak(a, k))) ? k.id : null);
@@ -1920,11 +1924,13 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
     // 1891 B a: insanlı istasyon yetkin ve vardiyası olan kişilerin havuzudur; iş bu kişilerin el tezgâhlarına aday olur, motor birini seçer.
     // Terminal insanlı istasyonda aynı anda birden çok el işi açar (1891 teyit-2 a), paralel dizilen işler başlatılabilir.
     const istasyonIsi = i.kaynak === null || i.kaynak.tur !== 'kisi';
-    const vardiyalilar = adayKisiler.filter((id) => (b.takvimler.get(kaynakAnahtari({ tur: 'kisi', id })) ?? null) !== null);
-    const kisiId = makineId !== null ? null : istasyonIsi ? vardiyalilar[0] ?? adayKisiler[0] ?? null : kisisi(i.kaynak) ?? kisisi(y?.kaynak) ?? adayKisiler[0] ?? null;
+    const vardiyalilar = adayKisiler.filter((id) => vardiyasiOlan.has(id));
+    // 1959 a: insanlı istasyonda vardiyası olmayan kişi aday değildir (yedek aday da değil); hiçbiri vardiyalı değilse iş nedeniyle yerleşmez.
+    const kisiId = makineId !== null ? null : istasyonIsi ? vardiyalilar[0] ?? null : kisisi(i.kaynak) ?? kisisi(y?.kaynak) ?? adayKisiler[0] ?? null;
     if (i.parcalar?.length || i.elleSira != null || (makineId === null && kisiId === null)) {
       if (y) { const { isEmriId, kaynak, baslangic, bitis, parcalar } = yerOf(b, y); yerinde.push({ isEmriId, kaynak, baslangic, bitis, ...(parcalar ? { parcalar } : {}) }); } else {
-        yerlesmeyen.push({ isEmriId: i.id, neden: i.parcalar?.length ? BOLUNMUS_IS : i.elleSira != null ? ELLE_SIRALI_IS : ADAYSIZ_IS });
+        const neden = i.parcalar?.length ? BOLUNMUS_IS : i.elleSira != null ? ELLE_SIRALI_IS : istasyonIsi && adayKisiler.length > 0 ? ISTASYON_VARDIYASIZ : ADAYSIZ_IS;
+        yerlesmeyen.push({ isEmriId: i.id, neden });
       }
       continue;
     }

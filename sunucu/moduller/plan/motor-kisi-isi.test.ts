@@ -109,6 +109,9 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     // Terminal insanlı istasyonda işi istasyonda yetkin kişiye başlatır: aday kişiler yetkinlikten.
     await o.durum().ortam!.sahip.sorgu("UPDATE istasyon SET kapasite_kaynagi = 'insan' WHERE id = $1", [insanli]);
     await o.durum().ortam!.sahip.sorgu("INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, i FROM kisi, unnest($1::int[]) i WHERE ad IN ('Deneme operator', 'Deneme planlama')", [[insanli, bos]]);
+    // 1959 a: insanlı istasyonun adayı yalnız kişi vardiyası olan yetkin kişidir; vardiya yalnız birine verilir (öteki vardiyasız kalır).
+    await o.durum().ortam!.sahip.sorgu(`INSERT INTO vardiya_kisi (kisi_id, vardiya_id) SELECT k.id, (SELECT min(vardiya_id) FROM vardiya_matrisi WHERE is_merkezi_id = $1)
+      FROM kisi k WHERE k.ad = 'Deneme planlama' ON CONFLICT (kisi_id) DO UPDATE SET vardiya_id = EXCLUDED.vardiya_id`, [merkezId]);
     const [kisiIsi, elIsi, adaysiz] = await o.isEmirleriAc([
       o.yeniAdim({ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 10, birimSureDk: 1 }),
       o.yeniAdim({ kaynak: { tur: 'istasyon', id: insanli }, ayarSuresiDk: 0, birimSureDk: 2, bilesenler: [] }),
@@ -118,7 +121,7 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     const m = await o.tamam<MotorYerlesimiCevabi>(o.c.planlama, 'GET', '/plan/motor-yerlesimi');
     const yeri = (id: number) => m.yerlesimler.find((y) => y.isEmriId === id);
     const k = yeri(kisiIsi!), e = yeri(elIsi!);
-    const yetkinler = (await o.vt().tx((db) => db.sorgu<{ id: number }>("SELECT id FROM kisi WHERE ad IN ('Deneme operator', 'Deneme planlama')"))).map((x) => x.id);
+    const yetkinler = (await o.vt().tx((db) => db.sorgu<{ id: number }>("SELECT id FROM kisi WHERE ad = 'Deneme planlama'"))).map((x) => x.id);
     assert.deepEqual(k?.kaynak, { tur: 'kisi', id: operatorId }, JSON.stringify(m.yerlesmeyen));
     assert.ok(e?.kaynak.tur === 'kisi' && yetkinler.includes(e.kaynak.id), `istasyonun işi yetkin kişiye: ${JSON.stringify(e?.kaynak)}`);
     assert.equal((Date.parse(k!.bitis) - Date.parse(k!.baslangic)) / 60_000, 20, 'ayar ve parça başı süre rotadandır');
@@ -130,5 +133,18 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     if (e2!.kaynak.id === e!.kaynak.id) assert.ok(Date.parse(e2!.bitis) <= Date.parse(e!.baslangic), 'aynı kişide üst üste binmez');
     assert.match(m.yerlesmeyen.find((y) => y.isEmriId === adaysiz)?.neden ?? '', /kullanılabilir makinesi ya da kişisi yok/);
     assert.equal(m.yerlesmeyen.some((y) => /dizilmez/.test(y.neden)), false);
+  });
+
+  // 1959 a (1969): yetkin kişilerin hiçbirinin vardiyası yoksa insanlı istasyonun işi vardiyasız kişiye yedek olarak verilmez.
+  test('reddedilen: insanlı istasyonda yetkin kişi vardiyasızsa iş yerleşmez ve nedenini söyler', async () => {
+    const { merkezId } = o.durum();
+    const { id: insanli } = await o.tamam<{ id: number }>(o.c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-VS', ad: 'Deneme RT-VS', isMerkeziId: merkezId });
+    await o.durum().ortam!.sahip.sorgu("UPDATE istasyon SET kapasite_kaynagi = 'insan' WHERE id = $1", [insanli]);
+    await o.durum().ortam!.sahip.sorgu("INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi WHERE ad = 'Deneme operator'", [insanli]);
+    await o.durum().ortam!.sahip.sorgu("DELETE FROM vardiya_kisi WHERE kisi_id IN (SELECT id FROM kisi WHERE ad = 'Deneme operator')");
+    const [elIsi] = await o.isEmirleriAc([o.yeniAdim({ kaynak: { tur: 'istasyon', id: insanli }, ayarSuresiDk: 0, birimSureDk: 2 })]);
+    const m = await o.tamam<MotorYerlesimiCevabi>(o.c.planlama, 'GET', '/plan/motor-yerlesimi');
+    assert.equal(m.yerlesimler.some((y) => y.isEmriId === elIsi), false, JSON.stringify(m.yerlesimler.find((y) => y.isEmriId === elIsi)));
+    assert.match(m.yerlesmeyen.find((y) => y.isEmriId === elIsi)?.neden ?? '', /vardiyası tanımlı değil/);
   });
 });
