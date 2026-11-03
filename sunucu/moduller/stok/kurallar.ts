@@ -1,6 +1,7 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
@@ -1423,4 +1424,29 @@ export function eksidenUyari(g: { ilkAdim: boolean; eksik: bigint; baskaEmreAyri
     return `${ne} bu istasyonda başka emre ayrılı (${bindenMetin(g.baskaEmreAyrili)}); ${bindenMetin(g.eksik)} ${eksiden}. Rezerveyi müdür kaldırır ya da bu emir için ${ne.toLocaleLowerCase('tr')} teslim ettirin.`;
   }
   return `${ne} bu istasyonda yok; ${bindenMetin(g.eksik)} ${eksiden}. ${neyi} bu istasyona teslim ettirin.`;
+}
+
+// ---- Seri liste (1915) ------------------------------------------------------------------------------------------
+// Okutma sırası korunur; aynı sayılan etiket (lot, malzeme) üst üste gelirse yeni satır açılmaz, adet artar. Göz, raf, kart ve
+// tanınmayan kod sayılmaz (adet boş). Komut barkodu listeye girmez: ekrandaki düğmedir.
+export interface SeriEklemesi { sonAdet: string | null; yeni: { kod: string; adet: string | null }[]; atlanan: number }
+const sayilanMi = (kod: string): boolean => { const t = kodTuru(kod).tur; return t === 'lot' || t === 'malzeme'; };
+export function seriEklemeleri(son: { kod: string; adet: string | null } | null, kodlar: readonly string[]): SeriEklemesi {
+  const eski = son ? { ...son } : null;
+  let sonAdet: string | null = null;
+  const yeni: { kod: string; adet: string | null }[] = [];
+  let atlanan = 0;
+  for (const ham of kodlar) {
+    const kod = okutmaDuzelt(ham.trim());
+    if (kod === '' || kodTuru(kod).tur === 'komut') { atlanan += 1; continue; }
+    const onceki = yeni.at(-1) ?? eski;
+    const sayilir = sayilanMi(kod);
+    if (sayilir && onceki && onceki.kod === kod && onceki.adet !== null) {
+      onceki.adet = bindenMetin(binde(onceki.adet) + 1000n);
+      if (onceki === eski) sonAdet = onceki.adet;
+      continue;
+    }
+    yeni.push({ kod, adet: sayilir ? '1' : null });
+  }
+  return { sonAdet, yeni, atlanan };
 }
