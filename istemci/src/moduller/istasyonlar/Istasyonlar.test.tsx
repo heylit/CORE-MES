@@ -1397,6 +1397,46 @@ describe('vardiyalar bölümü (#1109)', () => {
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-vardiyalari/5/belirle', govde: { vardiyaId: null } });
   });
+
+  it('1951: seçilen kişilere toplu vardiya tek komutla gider; yalnız vardiya.yaz ile seçim vardır; kapsam dışı kişi kartında yazar, seçim kalır', async () => {
+    const kisit = { '/kisi-is-merkezleri/5': { isMerkeziIdleri: [] }, '/kisi-is-merkezleri/7': { isMerkeziIdleri: [] }, '/vardiya-takvimi': TAKVIM };
+    sunucuKur(YONETICI, kisit);
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    await screen.findByLabelText('Deneme Usta vardiyası');
+    expect(screen.queryByLabelText('Deneme Usta seç')).toBeNull();
+    expect(screen.queryByLabelText('Görünen kişilerin hepsini seç')).toBeNull();
+    cleanup();
+    const VARDIYACI: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'vardiya.yaz'] };
+    const cagrilar = sunucuKur(VARDIYACI, { ...kisit, '/kisi-vardiyalari/toplu-belirle': TAKVIM });
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    fireEvent.click(await screen.findByLabelText('Görünen kişilerin hepsini seç'));
+    const cubuk = screen.getByRole('region', { name: 'Toplu işlem' });
+    expect(within(cubuk).getByText('2 seçili')).toBeTruthy();
+    const uygula = within(cubuk).getByRole('button', { name: 'Vardiyayı uygula' }) as HTMLButtonElement;
+    expect(uygula.disabled).toBe(true);
+    expect(within(within(cubuk).getByLabelText('Seçilenlerin vardiyası')).queryByRole('option', { name: /Eski Gece/ })).toBeNull();
+    fireEvent.change(within(cubuk).getByLabelText('Seçilenlerin vardiyası'), { target: { value: '1' } });
+    fireEvent.click(uygula);
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-vardiyalari/toplu-belirle', govde: { kisiIdleri: [5, 7], vardiyaId: 1 } });
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Toplu işlem' })).toBeNull(); });
+    cleanup();
+    sunucuKur(VARDIYACI, kisit);
+    const ortak = vi.mocked(fetch).getMockImplementation();
+    const ret = { kod: 'YETKI_YOK', mesaj: 'Bu istasyonun iş merkezinde çalışma yetkiniz yok.', ayrinti: { kisiIdleri: [7] } };
+    vi.mocked(fetch).mockImplementation((adres, secenek) => (String(adres).endsWith('/kisi-vardiyalari/toplu-belirle')
+      ? Promise.resolve(new Response(JSON.stringify(ret), { status: 403 })) : ortak!(adres, secenek)));
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    fireEvent.click(await screen.findByLabelText('Deneme Usta seç'));
+    fireEvent.click(screen.getByLabelText('Deneme Yeni seç'));
+    const cubuk2 = screen.getByRole('region', { name: 'Toplu işlem' });
+    fireEvent.change(within(cubuk2).getByLabelText('Seçilenlerin vardiyası'), { target: { value: 'yok' } });
+    fireEvent.click(within(cubuk2).getByRole('button', { name: 'Vardiyayı uygula' }));
+    expect(await within(screen.getByRole('article', { name: 'Deneme Yeni' })).findByText('Yetkin yok, vardiyası değişmedi')).toBeTruthy();
+    expect(within(screen.getByRole('article', { name: 'Deneme Usta' })).queryByText('Yetkin yok, vardiyası değişmedi')).toBeNull();
+    expect(within(cubuk2).getByText('2 seçili')).toBeTruthy();
+    expect(within(cubuk2).getByRole('alert').textContent).toContain('Hiçbir kayıt değişmedi.');
+  });
 });
 
 // 565 a: yetkinlik matrisi; hücre, satır ve sütun tek toplu uçtan yazılır, okuyan yalnız görür.
