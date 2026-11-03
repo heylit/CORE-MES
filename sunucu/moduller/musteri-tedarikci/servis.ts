@@ -11,6 +11,7 @@ import type {
   HizmetPuaniGovdesi, KarneCevabi, KarneOlayKaynagi, KarneOlayi, KarneOzeti, LotKarari, YillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { numaraAl } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
@@ -88,9 +89,22 @@ function kimligiDenetle(k: FirmaKimligi): void {
 export async function firmaEkle(db: Db, kullanici: Kullanici, govde: FirmaKimligi): Promise<Firma> {
   const k = { ...govde, musteriSinifi: musteriSinifiTuru(govde.tur, govde.musteriSinifi) };
   kimligiDenetle(k);
+  if (k.kod === null || k.kod.trim() === '') k.kod = await firmaKoduVer(db, k.tur);
   const firma = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaEkle(db, k, kullanici.id));
   if (!firma) throw new Error('Firma eklenemedi.');
   return firma;
+}
+
+// Kart 1936: kodu boş gelen yeni firmaya kod ayardaki kalıptan verilir; elle yazılan kod olduğu gibi kalır.
+// Numara bu işlemde alınır: kayıt geri alınırsa sıra da geri alınır. Kalıp kodun sınırını aşarsa kayıt açılmaz.
+const FIRMA_KODU_EN_COK = 40;
+async function firmaKoduVer(db: Db, tur: FirmaTuru): Promise<string> {
+  const anahtar = tur === 'tedarikci' ? 'musteri-tedarikci.tedarikci-kodu' : 'musteri-tedarikci.musteri-kodu';
+  const kod = await numaraAl(db, anahtar, { varMi: (x) => sorgular.firmaKoduVarMi(db, x) });
+  if (kod.length > FIRMA_KODU_EN_COK || kod.trim() !== kod) {
+    throw gecersiz(`Ayarlardaki firma kodu kalıbı ${FIRMA_KODU_EN_COK} karakterden uzun ya da boşlukla başlayıp bitiyor; kodu elle girin ya da kalıbı düzeltin.`);
+  }
+  return kod;
 }
 
 // Sıra: kilit, sürüm, kural. Eski sürümle gelen istek kural iletisi değil 409 alır.

@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { MUAF_TUTULABILEN_MADDELER } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  CalismaDurumu, EmirDurumu, EmirTuru, HazirlikMaddesi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 
@@ -1489,4 +1489,51 @@ export function fasonKarneOlayi(
   const donen = donusler.reduce((t, h) => t + h.adet + (h.hurdaAdet ?? 0), 0);
   const termin = new Date(Date.parse(`${gunu(ilk.zaman)}T00:00:00Z`) + isEmri.terminGun * 86_400_000).toISOString().slice(0, 10);
   return { firmaId: isEmri.fasonFirmaId, termin, zaman: son.zaman, tam: donen >= gonderilen };
+}
+
+// 1944, 1945 b: rota yüzdesi adım yüzdelerinin ortalamasıdır; esas tek yerdedir, karar değişirse yalnız bu satır değişir.
+export const ILERLEME_ESASI: IlerlemeEsasi = 'adet';
+
+export interface IlerlemeAdimi {
+  id: number; sira: number; opNo: number; ad: string; dal: string | null; durum: 'bekliyor' | 'calisiyor' | 'tamam';
+  saglamAdet: number | null; canliSaglam: number | null; ayarSuresiDk: string | null; birimSureDk: string | null;
+  onculler: readonly { id: number }[] | null; adetCarpani: number | null;
+}
+
+// Yüzde aşağı yuvarlanır: 99,6 "100" görünmez, 100 yalnız iş bitince. Biten adım her zaman 100'dür (son parçası hurda olsa da iş bitmiştir).
+const yuzdeOf = (pay: number, payda: number): number => (payda <= 0 ? 0 : Math.min(100, Math.max(0, Math.floor((pay / payda) * 100 + 1e-9))));
+
+// Adım yüzdesi: hedef adımın işleyeceği adettir (adimAdetleri: önceki biten adımın kaybı düşülür, dal adımı çarpanla büyür). Çalışan
+// adımda canlı sağlam sayacı, bekleyende 0. Rota yüzdesi esasa göre: 'sure' adımın planlı süresiyle (ayar + birim x hedef) ağırlıklı,
+// planlı süresi olmayan adım bilinenlerin ortalama ağırlığını alır (hiçbiri yoksa eşit); 'adet' adım yüzdelerinin ortalaması; 'adim'
+// biten adım oranı. Adımsız emirde null.
+export function emirIlerlemesi(adet: number, adimlar: readonly IlerlemeAdimi[], esas: IlerlemeEsasi = ILERLEME_ESASI): EmirIlerlemesi | null {
+  if (adimlar.length === 0) return null;
+  const sirali = [...adimlar].sort((x, y) => x.sira - y.sira);
+  const hedefler = adimAdetleri(sirali, () => adet);
+  const satirlar = sirali.map((a) => {
+    const hedef = hedefler.get(a.sira) ?? adet;
+    const yapilan = a.durum === 'tamam' ? a.saglamAdet ?? 0 : a.durum === 'calisiyor' ? a.canliSaglam ?? 0 : 0;
+    const yuzde = a.durum === 'tamam' ? 100 : yuzdeOf(yapilan, hedef);
+    return { a, hedef, yapilan, yuzde };
+  });
+  const rota = (() => {
+    if (esas === 'adim') return yuzdeOf(satirlar.filter((x) => x.a.durum === 'tamam').length, satirlar.length);
+    const sureler = satirlar.map((x) => {
+      const ayar = x.a.ayarSuresiDk === null ? null : Number(x.a.ayarSuresiDk);
+      const birim = x.a.birimSureDk === null ? null : Number(x.a.birimSureDk);
+      const s = ayar === null && birim === null ? null : (ayar ?? 0) + (birim ?? 0) * x.hedef;
+      return s !== null && Number.isFinite(s) && s > 0 ? s : null;
+    });
+    const bilinen = sureler.filter((s): s is number => s !== null);
+    const ortalama = bilinen.length === 0 ? 1 : bilinen.reduce((t, s) => t + s, 0) / bilinen.length;
+    const agirlik = esas === 'sure' ? sureler.map((s) => s ?? ortalama) : satirlar.map(() => 1);
+    const toplam = agirlik.reduce((t, w) => t + w, 0);
+    const kazanilan = satirlar.reduce((t, x, i) => t + (x.yuzde / 100) * agirlik[i]!, 0);
+    return satirlar.every((x) => x.a.durum === 'tamam') ? 100 : Math.min(99, yuzdeOf(kazanilan, toplam));
+  })();
+  return {
+    esas, rota,
+    adimlar: satirlar.map((x) => ({ opNo: x.a.opNo, ad: x.a.ad, dal: x.a.dal, durum: x.a.durum, hedef: x.hedef, yapilan: x.yapilan, yuzde: x.yuzde })),
+  };
 }

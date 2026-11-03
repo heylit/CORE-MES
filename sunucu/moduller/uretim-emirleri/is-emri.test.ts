@@ -11,7 +11,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirAyrintiCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -259,9 +259,17 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(ayr1.govde.adimlar.map((a) => a.ad), ['Çapak al'], 'kontrol listesi çalışan iş emrinindir');
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 9 })).durum, 200);
     await ilkParcaOnay(id);
+    // 1944: adım yüzdesi canlı sağlamdan; rota yüzdesi adım yüzdelerinin ortalaması (1945 b).
+    const ilerleme = async () => {
+      const c = await istek<EmirAyrintiCevabi>('planlama_proje', 'GET', `/uretim-emirleri/${id}`);
+      const il = emirAyrintiCevabi.parse(c.govde).ilerleme;
+      return il && [il.esas, il.rota, il.adimlar.map((a) => [a.opNo, a.durum, a.hedef, a.yapilan, a.yuzde])];
+    };
+    assert.deepEqual(await ilerleme(), ['adet', 30, [[10, 'calisiyor', 10, 9, 90], [20, 'bekliyor', 10, 0, 0], [30, 'bekliyor', 10, 0, 0]]]);
     const bitir1 = await terminal(`/${id}/bitir`, {});
     assert.equal(bitir1.durum, 200, JSON.stringify(bitir1.govde));
     emirCevabi.parse(bitir1.govde);
+    assert.deepEqual(await ilerleme(), ['adet', 33, [[10, 'tamam', 10, 9, 100], [20, 'bekliyor', 9, 0, 0], [30, 'bekliyor', 9, 0, 0]]], 'biten adımın kaybı sonraki hedefi düşürür');
     assert.equal(bitir1.govde.emir.istasyon.id, ist1, 'cevap bitirildiği istasyondaki hâldir');
     let e = await ayrinti(id);
     assert.equal(e.durum, 'basladi', 'bir iş emri bitti, emir üretimdedir');

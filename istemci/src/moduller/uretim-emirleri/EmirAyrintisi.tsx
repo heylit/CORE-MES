@@ -12,6 +12,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
 import { UretimYerleri } from './UretimYerleri.tsx';
+import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
 import { iplikDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
@@ -109,6 +110,7 @@ export function EmirAyrintisi() {
             <Satir ad="Bitiş" deger={zamanMetni(emir.bitis)} />
             {emir.durum === 'iptal' && <Satir ad="İptal" deger={zamanMetni(emir.iptal)} />}
           </dl>
+          <Ilerleme emir={emir} ilerleme={ayrinti.data.ilerleme ?? null} />
           {iplikAcik && (
             <section className="tc-emir-bolum-iplik" aria-label="İzlenebilirlik ipliği">
               <div className="tc-emir-iplik-bas">

@@ -45,8 +45,9 @@ describe('Stoka tamamla', () => {
       ac(ekran, '/uretim-emirleri/3');
       expect(await screen.findByText('EM-3')).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Stoka tamamla' })).toBeNull();
-      // Refakat kartları bölümü stok okumasıdır (Soru 586); onun okuması dışında stok ucu çağrılmaz.
-      expect(istekler.some((i) => i.yol.startsWith('/stok/') && !(i.yontem === 'GET' && i.yol === '/stok/uretim-emirleri/3/refakat-partileri'))).toBe(false);
+      // Refakat kartları (Soru 586) ve reçete ilerlemesi (1944) stok okumasıdır; bu iki okuma dışında stok ucu çağrılmaz, komut hiç gitmez.
+      const okumalar = ['/stok/uretim-emirleri/3/refakat-partileri', '/stok/uretim-emirleri/3/tamamlama'];
+      expect(istekler.some((i) => i.yol.startsWith('/stok/') && !(i.yontem === 'GET' && okumalar.includes(i.yol)))).toBe(false);
       cleanup();
     }
   });

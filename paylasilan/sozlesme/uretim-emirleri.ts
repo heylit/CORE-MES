@@ -237,7 +237,25 @@ export const emirAyrintiCevabi = z.object({
   // 283 a: emirden ayrılan kolların (torunlar, katılmış kollar dahil) hurda toplamı; emrin kendi hurdasına karışmaz. Kolu yoksa null.
   // İsteğe bağlı: sunucu her zaman yazar, bu alandan önce yazılmış istemci verisi geçerli kalır.
   kolHurdasi: z.number().int().nullable().optional(),
+  // 1944: rota ve adım ilerlemesi (yüzde, tam sayı, aşağı yuvarlanır; 100 yalnız adım bitince). esas rota yüzdesinin hesabıdır (1945):
+  // sure planlı süreyle ağırlıklı, adet adım yüzdelerinin ortalaması, adim biten adım oranı. İş emri olmayan emirde null.
+  // İsteğe bağlı: sunucu her zaman yazar, bu alandan önce yazılmış istemci verisi geçerli kalır.
+  ilerleme: z.lazy(() => emirIlerlemesiSemasi).nullable().optional(),
 });
+export const ILERLEME_ESASLARI = ['sure', 'adet', 'adim'] as const;
+const yuzdeSemasi = z.number().int().min(0).max(100);
+// hedef: adımın işleyeceği adet (önceki biten adımın kaybı düşülmüş); yapilan: biten adımda kapanış sağlamı, çalışanda canlı sağlam sayacı.
+// dal: çok katmanlı emirde alt parçanın dal adı ("K1"); kök adımında null.
+export const emirIlerlemesiSemasi = z.object({
+  esas: z.enum(ILERLEME_ESASLARI),
+  rota: yuzdeSemasi,
+  adimlar: z.array(z.object({
+    opNo: z.number().int(), ad: z.string(), dal: z.string().nullable(), durum: z.lazy(() => isEmriDurumu),
+    hedef: z.number().int().nonnegative(), yapilan: z.number().int().nonnegative(), yuzde: yuzdeSemasi,
+  })),
+});
+export type EmirIlerlemesi = z.output<typeof emirIlerlemesiSemasi>;
+export type IlerlemeEsasi = (typeof ILERLEME_ESASLARI)[number];
 // Emir komutları emrin son halini döner.
 export const emirCevabi = z.object({ emir: emirSemasi });
 export const adimCevabi = z.object({ emir: emirSemasi, adimlar: z.array(adimSemasi) });

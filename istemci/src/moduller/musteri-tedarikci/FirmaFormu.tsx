@@ -144,7 +144,7 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
     <FormPenceresi baslik={firma === null ? 'Yeni firma' : `Düzenle: ${firma.ad}`} kimlik="tc-mt-firma-form" kapat={kapat} form={form}>
       <section className="tc-mt-bolum" aria-label="Firma kartı">
         <div className="tc-mt-ikili">
-          <Girdi etiket="Kod" autoComplete="off" {...form.alan('kod')} />
+          <Girdi etiket="Kod" autoComplete="off" ipucu={firma === null ? 'Boş bırakılırsa kayıtta otomatik verilir.' : undefined} {...form.alan('kod')} />
           <Secim
             etiket="Tür"
             secenekler={TUR_SECENEKLERI}

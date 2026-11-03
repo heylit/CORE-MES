@@ -73,3 +73,16 @@
   .tc-kapanis-serit:last-child { border-bottom: 0; }
   .tc-kapanis-iki { grid-template-columns: minmax(0, 1fr); }
 }
+/* 1944: ilerleme bölümü; çubuk Reçete ve Rota'daki ilerleme çubuğunun görünüşündedir, yüzde yanında yazılır. */
+.tc-emir-bolum-ilerleme { margin: 0 0 var(--b-4); min-width: 0; display: grid; gap: var(--b-2); }
+.tc-emir-bolum-ilerleme .tc-emir-bolum { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-emir-bolum-ilerleme .tc-emir-liste { margin: 0; }
+.tc-emir-ilerleme-cubuk { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-emir-ilerleme-cubuk b { font-family: var(--font-mono); font-size: var(--yazi-s); white-space: nowrap; }
+.tc-emir-ilerleme-cubuk progress {
+  flex: 1; width: 100%; min-width: var(--dokunma); height: calc(var(--b-2) + var(--cizgi)); border: 0; border-radius: var(--yari-tam);
+  background: var(--panel2); overflow: hidden; appearance: none;
+}
+.tc-emir-ilerleme-cubuk progress::-webkit-progress-bar { background: var(--panel2); }
+.tc-emir-ilerleme-cubuk progress::-webkit-progress-value { background: var(--run); }
+.tc-emir-ilerleme-cubuk progress::-moz-progress-bar { background: var(--run); }

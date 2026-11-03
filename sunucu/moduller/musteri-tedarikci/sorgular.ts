@@ -105,6 +105,10 @@ export async function firmaVarMi(db: Db, id: number): Promise<{ aktif: boolean }
 export async function firmaNoKoddan(db: Db, kod: string): Promise<number | null> {
   return (await db.tek<{ id: number }>('SELECT id FROM musteri_tedarikci_firma WHERE kod = $1', [kod]))?.id ?? null;
 }
+// Kod tekilliği büyük/küçük harfe bakmaz (musteri_tedarikci_firma_kod_tekil upper(kod)); sıra atlaması da öyle bakar.
+export async function firmaKoduVarMi(db: Db, kod: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM musteri_tedarikci_firma WHERE upper(kod) = upper($1) LIMIT 1', [kod])) !== null;
+}
 // Örnek veri kodları ORN- ile başlar; elle girilen firma bu öneki kullanırsa örnek veri yüklü sayılır.
 export async function ornekFirmaVarMi(db: Db): Promise<boolean> {
   return (await db.tek("SELECT 1 FROM musteri_tedarikci_firma WHERE kod LIKE 'ORN-%' LIMIT 1")) !== null;
