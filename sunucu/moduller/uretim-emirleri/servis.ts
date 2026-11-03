@@ -22,7 +22,7 @@ import {
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
   emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
-  MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi,
+  MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
 } from './kurallar.ts';
 import type { IstasyonDurumu, MakineAyrimi, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
@@ -703,8 +703,9 @@ export async function emirBitir(
   const kapanis = mevcut + saglamaFark;
   const uyarilar = [await adimGirdisiUyarisi(db, emir, hepsi, calisan, fark), calisan === null ? null : await eksiyleBitisUyarisi(db, hepsi, calisan, kapanis)];
   const an = await komutAni(db, id);
-  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId, adimId);
-  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId, adimId);
+  const makineId = fark === 0 ? null : await sayimMakinesiSec(db, adimId, kisiId, null);
+  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId, adimId, makineId);
+  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId, adimId, makineId);
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an, adimId);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adimId);
   await sorgular.emrinKatilimlariniKapat(db, id, an, adimId);
@@ -739,14 +740,23 @@ export async function emirBitir(
 // Sağlam sayım satırı yazılır, sonra aynı işlemde dinleyicilere bildirilir (kart #1289; stok girişi). Dinleyicilerin uyarısı döner.
 async function saglamYaz(
   db: Db, emir: { id: number }, kisiId: number, istasyonId: number, adet: number, duzeltme: boolean, an: string, kararBekliyor = false,
-  refakatPartisiId: number | null = null, adimId: number | null = null,
+  refakatPartisiId: number | null = null, adimId: number | null = null, makineId: number | null = null,
 ): Promise<string | null> {
   const { isEmriId } = await sorgular.sayimEkle(db, {
-    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId, isEmriId: adimId,
+    emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId, isEmriId: adimId, makineId,
   });
   return saglamSayimiBildir(db, {
     uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest', refakatPartisiId,
   });
+}
+
+// 2009 b: sayımın makinesi adımın açık kullanımlarından seçilir (kurallar.sayimMakinesi); adımsız eski emirde makine istenemez.
+async function sayimMakinesiSec(db: Db, adimId: number | null, kisiId: number, istenen: number | null): Promise<number | null> {
+  const acik = adimId === null ? [] : await sorgular.adiminAcikMakineleri(db, adimId);
+  const kisiPayli = istenen === null && acik.length > 0 && payiVarMi(await adiminPaylari(db, adimId), { kisiId });
+  const secim = sayimMakinesi(acik, kisiId, istenen, kisiPayli);
+  if ('ihlal' in secim) throw cakisma(secim.ihlal);
+  return secim.makineId;
 }
 
 export type IlkParcaGereksinimi = 'gerekli' | 'gerekmez';
@@ -793,13 +803,14 @@ export async function emirSayim(
     if (ihlalEksi !== null) throw cakisma(ihlalEksi);
     asimUyarisi = await adimGirdisiUyarisi(db, emir, hepsi, adim, govde.adet);
   }
+  const makineId = await sayimMakinesiSec(db, adimId, kisiId, govde.makineId ?? null);
   let uyari: string | null = null;
   if (govde.tur === 'saglam') {
-    uyari = await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId, adimId);
+    uyari = await saglamYaz(db, emir, kisiId, istasyonId, govde.adet, govde.adet < 0, await komutAni(db, id), kararBekliyor, refakatPartisiId, adimId, makineId);
   } else {
     if (hurdaNedeniId === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
     const { isEmriId } = await sorgular.sayimEkle(db, {
-      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId, isEmriId: adimId,
+      emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId, isEmriId: adimId, makineId,
     });
     uyari = await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }
@@ -819,7 +830,7 @@ export async function kararliSayimiSonuclandir(
   const an = await sorgular.anAl(db);
   const gruplar = new Map<string, { grup: KararGrubu; satirlar: { zaman: string; adet: number }[] }>();
   for (const { zaman, adet, ...grup } of await sorgular.kararBekleyenSatirlari(db, id, isEmriId)) {
-    const anahtar = `${String(grup.isEmriId)}/${grup.istasyonId}/${grup.kisiId}/${String(grup.refakatPartisiId)}`;
+    const anahtar = `${String(grup.isEmriId)}/${grup.istasyonId}/${grup.kisiId}/${String(grup.refakatPartisiId)}/${String(grup.makineId)}`;
     const g = gruplar.get(anahtar) ?? { grup, satirlar: [] };
     g.satirlar.push({ zaman, adet });
     gruplar.set(anahtar, g);
@@ -1108,8 +1119,8 @@ export async function sonOlaylar(db: Db, sonra: string | null, sayi: number): Pr
 
 /* ---------------- plandaki paylar terminalde (1979, 2003 c) ---------------- */
 
-// Adımın payları ve ilerlemesi: kişi payında kişinin bu adımda saydığı; makine payında null (sayım makine tutmuyor, 2009 b göçüyle
-// gelecek). Bölünmemiş adımda boş.
+// Adımın payları ve ilerlemesi: kişi payında kişinin, makine payında makinenin bu adımda saydığı (2009 b; göç öncesi makinesiz sayım
+// makine payına yazılmaz). Bölünmemiş adımda boş.
 export async function adimPaylari(db: Db, emirId: number, isEmriId: number): Promise<AdimPaylariCevabi> {
   const emir = await sorgular.emirBul(db, emirId);
   if (emir === null) throw bulunamadi(EMIR_YOK);
@@ -1117,9 +1128,10 @@ export async function adimPaylari(db: Db, emirId: number, isEmriId: number): Pro
   const paylar = await adiminPaylari(db, isEmriId);
   if (paylar.length === 0) return { paylar: [] };
   const saglam = new Map((await sorgular.kisiSaglamlariGetir(db, isEmriId)).map((x) => [x.kisiId, x.saglam]));
+  const makineSaglami = new Map((await sorgular.makineSaglamlariGetir(db, isEmriId)).map((x) => [x.makineId, x.saglam]));
   const adlar = await adlariAl(db);
   const cevap: AdimPaylariCevabi['paylar'] = [];
-  for (const p of payIlerlemesi(paylar, saglam)) {
+  for (const p of payIlerlemesi(paylar, saglam, makineSaglami)) {
     const makine = p.makineId === null ? null : { id: p.makineId, ad: (await makineGetir(db, p.makineId))?.ad ?? `#${String(p.makineId)}` };
     cevap.push({ no: p.no, adet: p.adet, sayilan: p.sayilan, fazla: p.fazla, makine, kisi: p.kisiId === null ? null : adli(adlar.kisi, p.kisiId, 'Kişi') });
   }

@@ -83,12 +83,15 @@ export const sayimGovdesi = z.discriminatedUnion('tur', [
     tur: z.literal('saglam'),
     adet: sayimAdedi.refine((a) => a !== 0, 'Adet sıfır olamaz.'),
     refakatPartisiId,
+    // 2009 b: birden çok makinenin açık olduğu adımda sayımın makinesi; verilmezse sunucu seçer.
+    makineId: KIMLIK.optional(),
   }).strict(),
   z.object({
     tur: z.literal('hurda'),
     adet: sayimAdedi.refine((a) => a !== 0, 'Adet sıfır olamaz.'),
     hurdaNedeniId: KIMLIK.optional(),
     refakatPartisiId,
+    makineId: KIMLIK.optional(),
   }).strict(),
 ]).superRefine((g, ctx) => {
   if (g.tur === 'hurda' && g.adet > 0 && g.hurdaNedeniId === undefined) ctx.addIssue({ code: 'custom', path: ['hurdaNedeniId'], message: 'Hurda nedeni seçin.' });

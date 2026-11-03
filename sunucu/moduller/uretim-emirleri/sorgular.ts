@@ -200,14 +200,16 @@ export interface SayimYazisi {
   refakatPartisiId: number | null;
   // Verilmezse terminal iş emri (paralel adımdan önceki çağrılar).
   isEmriId?: number | null;
+  // 2009 b: sayımın makinesi; verilmezse null (makinesiz iş ya da makinesi seçilemeyen sayım).
+  makineId?: number | null;
 }
 
 // Satırın bağlandığı iş emri döner (sağlam sayım stoka bu iş emriyle yansır); iş emirsiz eski emirde null.
 export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: number | null }> {
   const satir = await db.tek<{ isEmriId: number | null }>(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${ADIM_IS_EMRI('$1', '$10')}, $9) RETURNING is_emri_id AS "isEmriId"`,
-    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId, y.isEmriId ?? null],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id, makine_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${ADIM_IS_EMRI('$1', '$10')}, $9, $11) RETURNING is_emri_id AS "isEmriId"`,
+    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId, y.isEmriId ?? null, y.makineId ?? null],
   );
   return { isEmriId: satir?.isEmriId ?? null };
 }
@@ -221,9 +223,9 @@ export async function ilkParcaOnaysiz(db: Db, emirId: number, isEmriId: number |
   return satir?.yok ?? false;
 }
 
-// Karar bekleyen adet iş emri, istasyon ve refakat partisi başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş
-// emrine ve aynı partiye gider.
-export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; refakatPartisiId: number | null }
+// Karar bekleyen adet iş emri, istasyon, refakat partisi ve makine başına: sayım o anki terminal iş emrine yazılmıştır, sonuç satırı da aynı iş
+// emrine, aynı partiye ve aynı makineye gider (2009 b: reddedilen parça makine payında sayılmasın).
+export interface KararGrubu { isEmriId: number | null; istasyonId: number; kisiId: number; refakatPartisiId: number | null; makineId: number | null }
 export interface KararBekleyenSatir extends KararGrubu { zaman: string; adet: number }
 
 // Grubun henüz karara bağlanmamış satırları, yazılış sırasıyla: her karar grubu sıfırlar, bu yüzden bekleyen, grubun kümülatif
@@ -232,16 +234,16 @@ export interface KararBekleyenSatir extends KararGrubu { zaman: string; adet: nu
 export function kararBekleyenSatirlari(db: Db, emirId: number, isEmriId: number | null = null): Promise<KararBekleyenSatir[]> {
   return db.sorgu<KararBekleyenSatir>(
     `WITH s AS (
-       SELECT id, is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, zaman, adet,
-              sum(adet) OVER (PARTITION BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id ORDER BY id) AS kumulatif
+       SELECT id, is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, makine_id, zaman, adet,
+              sum(adet) OVER (PARTITION BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, makine_id ORDER BY id) AS kumulatif
          FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'karar_bekliyor' AND ($2::int IS NULL OR is_emri_id = $2)),
      g AS (
-       SELECT is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, COALESCE(max(id) FILTER (WHERE kumulatif = 0), 0) AS sifir
-         FROM s GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id)
+       SELECT is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, makine_id, COALESCE(max(id) FILTER (WHERE kumulatif = 0), 0) AS sifir
+         FROM s GROUP BY is_emri_id, istasyon_id, kisi_id, refakat_partisi_id, makine_id)
      SELECT s.is_emri_id AS "isEmriId", s.istasyon_id AS "istasyonId", s.kisi_id AS "kisiId", s.refakat_partisi_id AS "refakatPartisiId",
-            ${ISO('s.zaman')} AS zaman, s.adet
+            s.makine_id AS "makineId", ${ISO('s.zaman')} AS zaman, s.adet
        FROM s JOIN g ON g.is_emri_id IS NOT DISTINCT FROM s.is_emri_id AND g.istasyon_id = s.istasyon_id AND g.kisi_id = s.kisi_id
-                    AND g.refakat_partisi_id IS NOT DISTINCT FROM s.refakat_partisi_id
+                    AND g.refakat_partisi_id IS NOT DISTINCT FROM s.refakat_partisi_id AND g.makine_id IS NOT DISTINCT FROM s.makine_id
       WHERE s.id > g.sifir
       ORDER BY s.id`,
     [emirId, isEmriId],
@@ -255,10 +257,10 @@ export function kararSatirlariEkle(
   db: Db, emirId: number, g: KararGrubu, tur: 'saglam' | 'red', uretimAni: string, adet: number, kararAni: string, kararVerenId: number,
 ): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id, karar_veren_kisi_id, karar_zamani)
-     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8, $9, $10::timestamptz),
-            ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8, $9, $10::timestamptz)`,
-    [emirId, g.kisiId, g.istasyonId, g.isEmriId, uretimAni, adet, tur, g.refakatPartisiId, kararVerenId, kararAni],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, duzeltme, zaman, is_emri_id, refakat_partisi_id, karar_veren_kisi_id, karar_zamani, makine_id)
+     VALUES ($1, $2, $3, 'karar_bekliyor', -$6::int, true, $5::timestamptz, $4, $8, $9, $10::timestamptz, $11),
+            ($1, $2, $3, $7, $6, true, $5::timestamptz, $4, $8, $9, $10::timestamptz, $11)`,
+    [emirId, g.kisiId, g.istasyonId, g.isEmriId, uretimAni, adet, tur, g.refakatPartisiId, kararVerenId, kararAni, g.makineId],
   );
 }
 
@@ -2670,5 +2672,21 @@ export function tasinanGirdileriGetir(db: Db, emirIdleri: readonly number[]): Pr
 export const kisiSaglamlariGetir = (db: Db, isEmriId: number): Promise<{ kisiId: number; saglam: number }[]> =>
   db.sorgu(
     `SELECT kisi_id AS "kisiId", sum(adet)::int AS saglam FROM uretim_sayimi WHERE is_emri_id = $1 AND tur IN ('saglam', 'karar_bekliyor') GROUP BY kisi_id ORDER BY kisi_id`,
+    [isEmriId],
+  );
+
+// 2009 b: adımın makine başına net saydığı (sağlam ve karar bekleyen); makine payının ilerlemesi bundan okunur. Makinesiz satır sayılmaz.
+export const makineSaglamlariGetir = (db: Db, isEmriId: number): Promise<{ makineId: number; saglam: number }[]> =>
+  db.sorgu(
+    `SELECT makine_id AS "makineId", sum(adet)::int AS saglam FROM uretim_sayimi
+      WHERE is_emri_id = $1 AND makine_id IS NOT NULL AND tur IN ('saglam', 'karar_bekliyor') GROUP BY makine_id ORDER BY makine_id`,
+    [isEmriId],
+  );
+
+// 2009 b: adımın açık makine kullanımları ve açan kişi, açılış sırasıyla; sayımın makinesi bundan seçilir.
+export const adiminAcikMakineleri = (db: Db, isEmriId: number): Promise<{ makineId: number; kisiId: number }[]> =>
+  db.sorgu(
+    `SELECT makine_id AS "makineId", kisi_id AS "kisiId" FROM uretim_emirleri_makine_kullanimi
+      WHERE is_emri_id = $1 AND makine_id IS NOT NULL AND bitis IS NULL ORDER BY baslama, id`,
     [isEmriId],
   );
