@@ -41,6 +41,9 @@ import './hazirlik.css';
 // Çizim parçası (A5) ağırdır; yalnız Dokümanlar ve Kontrol planı sekmesi açılınca yüklenir.
 const TeknikResim = lazy(async () => ({ default: (await import('../cizim/index.tsx')).TeknikResim }));
 // Baytı gelmemiş dosya kaydı (yalnız ad ve boy) resimde açılamaz; görüntüleyici onu atlar, dosya yoksa "Doküman yok" görünür.
+// Küçük dosya "0 KB" görünmesin: 1 KB altı bayt, 1 MB altı KB, üstü bir ondalıklı MB.
+const boyutMetni = (bayt: number): string =>
+  bayt < 1024 ? `${String(bayt)} B` : bayt < 1024 ** 2 ? `${String(Math.round(bayt / 1024))} KB` : `${(bayt / 1024 ** 2).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} MB`;
 const baytli = (l: readonly PkgFile[]): TeknikResimKontrolu['dosyalar'] => l.filter((f): f is TeknikResimKontrolu['dosyalar'][number] => baytiVar(f.bytes));
 const MerkezSecici = lazy(async () => ({ default: (await import('../cizim/index.tsx')).MerkezSecici }));
 // Dosya satırındaki merkez rozeti: kendi dosyasının merkezdeki durumunu sorar ("Yeni revizyon var" ve Güncelle, eski hazirlik.ts gibi).
@@ -643,7 +646,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                       <div className="tc-ay2-kb"><span className="tc-ay2-dosya-turu" data-tur={k}>{kisa}</span><div><b>{ad}</b><small>{acik}</small></div></div>
                       {f ? (
                         <div className="tc-ay2-dosya">
-                          <Simge ad="check" /><b>{f.name}</b><span>{(dosyaBoyu(f) / 1024).toFixed(0)} KB</span>
+                          <Simge ad="check" /><b>{f.name}</b><span>{boyutMetni(dosyaBoyu(f))}</span>
                           {sunucuda ? <Suspense fallback={null}><MerkezDurumu f={f} mesgul={merkezMesgul} guncelle={(g) => { void merkezdenAl(Number(g.merkez), true); }} /></Suspense> : null}
                           <button type="button" className="tc-ay2-arac" aria-label={ad + ' kaldır'} onClick={() => dosyaKaldir(k)}><Simge ad="trash" /></button>
                         </div>

@@ -183,6 +183,8 @@ html.tc-ay-tv .tc-ay3-pano-ozet .tc-ay3-ozet-kutu b { font-size: var(--yazi-2xl)
 .tc-ay3-kuyruk-arac .tc-ay3-secmeli { gap: var(--b-2); padding: 0; border: 0; background: none; }
 .tc-ay3-kuyruk-arac .tc-ay3-secmeli button { border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel); white-space: nowrap; }
 .tc-ay3-kuyruk-arac .tc-ay3-secmeli button[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); border-color: transparent; box-shadow: none; }
+/* Görünüm kutusu araç çubuğunun kalanını alır; işaret kutuları ve not kendi aralığıyla dizilir, dar genişlikte alt satıra iner. */
+.tc-ay3-kuyruk-gorunum { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: var(--b-3); min-width: 0; }
 
 @media (max-width: 767px) {
   /* Telefonda şeritler yana kaymaz, alt alta durur: işler aranmadan sırayla okunur. */
