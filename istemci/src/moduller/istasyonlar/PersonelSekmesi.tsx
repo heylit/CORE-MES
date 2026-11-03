@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import type { AtamaTuru, KisiIsMerkezleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { TakvimCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -29,8 +29,9 @@ const IK_YENI_KISI = '/ik/personel?yeni=1';
 
 const basHarfler = (ad: string) => ad.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toLocaleUpperCase('tr-TR')).join('');
 
-function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk }: {
+function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk, cokVardiyali }: {
   k: KisiOzeti; v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; kendisi: boolean; vardiyaYazabilir: boolean; renk: string;
+  cokVardiyali: boolean;
 }) {
   const istemci = useQueryClient();
   // Kişinin vardiyası vardiya modülünün ucudur; cevap takvimin tamamıdır ve iki ekranın ortak anahtarına yazılır.
@@ -127,6 +128,8 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               </select>
             </label>
           )}
+          {/* 1950: vardiyası seçilmeyen kişi iş merkezinin her açık vardiyasında sayılır; birden çok vardiyada bu çoğu zaman bir eksikliktir. */}
+          {v.takvim && vardiya === null && cokVardiyali && <Rozet ton="uyari">Her vardiyada sayılıyor, vardiya seçin</Rozet>}
         </div>
         <div className="tc-ist-kisi-satir">
           <span className="tc-ist-kisi-etiket">Atama</span>
@@ -323,6 +326,10 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
   const kadroSayisi = (m: number, vardiyaId: number) => kadro.find((k) => k.isMerkeziId === m && k.vardiyaId === vardiyaId)?.kisiIdleri.length ?? 0;
   const kadroToplami = (m: number) => new Set(kadro.filter((k) => k.isMerkeziId === m).flatMap((k) => k.kisiIdleri)).size;
   const kadroMerkezleri = v.merkezler.filter((m) => kadroToplami(m.id) > 0);
+  // Açık vardiya: iş merkezinin haftalık düzeninde en az bir günü olan aktif vardiya (vardiya modülünün kadro tanımıyla aynı).
+  const aktifVardiyaIdleri = new Set(aktifVardiyalar.map((x) => x.id));
+  const acikVardiyaSayisi = (m: number | null) => (m === null ? 0
+    : new Set((v.takvim?.matris ?? []).filter((x) => x.isMerkeziId === m && aktifVardiyaIdleri.has(x.vardiyaId)).map((x) => x.vardiyaId)).size);
 
   return (
     <div className="tc-ist-bolum">
@@ -359,7 +366,8 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
         <section key={g.id ?? 'yok'} className={`tc-ist-panel ${merkezRengi(g.id)}`} aria-label={g.baslik}>
           <div className="tc-ist-grup-bas"><h3 className="tc-ist-alt-baslik">{g.baslik}</h3><small className="tc-ist-ipucu">{g.kisiler.length} kişi</small></div>
           {g.kisiler.map((k) => (
-            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)} />
+            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)}
+              cokVardiyali={acikVardiyaSayisi(g.id) > 1} />
           ))}
         </section>
       ))}

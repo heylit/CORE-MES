@@ -1359,6 +1359,29 @@ describe('vardiyalar bölümü (#1109)', () => {
     expect(within(satir).getAllByRole('cell').map((h) => h.textContent)).toEqual(['3', '2', '3']);
   });
 
+  it('1950: iş merkezinde birden çok açık vardiya varken vardiyası seçilmeyen kişi uyarılır; tek vardiyada ve seçilmişte uyarı yok', async () => {
+    const ikiVardiya = {
+      ...TAKVIM,
+      vardiyalar: [TAKVIM.vardiyalar[0]!, TAKVIM.vardiyalar[1]!, { id: 3, ad: 'Akşam', baslangic: '16:00', bitis: '00:00', aktif: true, surum: 1, molalar: [], netDakika: 480 }],
+      matris: [{ isMerkeziId: 1, gun: 1, vardiyaId: 1 }, { isMerkeziId: 1, gun: 2, vardiyaId: 3 }],
+    } satisfies TakvimCevabi;
+    const kisiler = {
+      kisiler: [ISTASYON_KISILERI.kisiler[0]!, { istasyonId: 10, kisiId: 8, kisiAd: 'Deneme Bir', yuzde: '100.00', baslangic: '2026-10-01', baslayacak: false }],
+    } satisfies IstasyonKisileriCevabi;
+    const uyari = 'Her vardiyada sayılıyor, vardiya seçin';
+    sunucuKur(OKUYUCU, { '/vardiya-takvimi': ikiVardiya, '/istasyon-kisileri': kisiler });
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    expect(await within(await screen.findByRole('article', { name: 'Deneme Bir' })).findByText(uyari)).toBeTruthy();
+    expect(within(screen.getByRole('article', { name: 'Deneme Usta' })).queryByText(uyari)).toBeNull();
+    cleanup();
+    // Pasif vardiya açık sayılmaz: iş merkezinde tek aktif vardiya kalır.
+    const tekAktif = { ...ikiVardiya, matris: [{ isMerkeziId: 1, gun: 1, vardiyaId: 1 }, { isMerkeziId: 1, gun: 2, vardiyaId: 2 }] } satisfies TakvimCevabi;
+    sunucuKur(OKUYUCU, { '/vardiya-takvimi': tekAktif, '/istasyon-kisileri': kisiler });
+    goster(<Istasyonlar />, '/istasyonlar/personel');
+    await screen.findByRole('article', { name: 'Deneme Bir' });
+    expect(screen.queryByText(uyari)).toBeNull();
+  });
+
   it('kişinin vardiyası kartta yalnız vardiya.yaz ile seçilir ve vardiya ucuna gider', async () => {
     const kisit = { '/kisi-is-merkezleri/5': { isMerkeziIdleri: [] }, '/kisi-is-merkezleri/7': { isMerkeziIdleri: [] }, '/vardiya-takvimi': TAKVIM };
     sunucuKur(YONETICI, kisit);
