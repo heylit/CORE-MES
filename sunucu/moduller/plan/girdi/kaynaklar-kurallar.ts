@@ -18,7 +18,7 @@ export interface KaynakDilimiOkumasi {
   // İstasyon okunamazsa (yetki yok) null.
   istasyon: {
     merkezler: { id: number }[];
-    istasyonlar: { id: number; kod: string; ad: string; merkezId: number | null; verimYuzde: number | null; operatorOrani: number | null }[];
+    istasyonlar: { id: number; kod: string; ad: string; merkezId: number | null; verimYuzde: number | null; operatorOrani: number | null; insanli?: boolean }[];
     makineler: { id: number; kod: string; ad: string; istasyonId: number | null }[];
   } | null;
   // İş merkezi haftası ve kişinin vardiyası; okunmadıysa null (takvim bilinmez).
@@ -77,10 +77,44 @@ function ucretIzle(a: Record<string, unknown>, maliyet: number | null): void {
   if (izler) { a['ucret'] = maliyet; a['ucretIst'] = maliyet; }
 }
 
+// 1952 (1953 a, 1954 a, 1957 a, 1959 a): insanlı istasyonun tezgâhları kişilerdir (girdi.betik rrCevir ile aynı kural). O istasyonda bugün
+// yetkin ve vardiyası olan her aktif kişiye bir el tezgâhı; kimlik motorun önekiyle (emirler.betik kisiTezgahi). Birden çok insanlı
+// istasyonda yetkin kişinin grubu en küçük kimlikli istasyondur. Atama yüzdesi kapasiteyi kesmez.
+export const KISI_TEZGAH_ONEKI = 'kisi-';
+const kisiTezgahKimligi = (id: number): string => `${KISI_TEZGAH_ONEKI}${String(id)}`;
+function elKisileri(o: KaynakDilimiOkumasi): { id: number; ad: string; vardiya: string; grup: number }[] {
+  if (o.istasyon === null || o.kisiler === null) return [];
+  const insanli = new Set(o.istasyon.istasyonlar.filter((i) => i.insanli === true).map((i) => i.id));
+  const vardiya = new Map((o.takvim?.kisiVardiyasi ?? []).map((k) => [k.kisiId, String(k.vardiyaId)]));
+  return o.kisiler.flatMap((k) => {
+    const gruplar = k.yetkinlikler.filter((g) => insanli.has(g)).sort((a, b) => a - b);
+    const v = vardiya.get(k.id);
+    return gruplar.length > 0 && v !== undefined ? [{ id: k.id, ad: k.ad, vardiya: v, grup: gruplar[0]! }] : [];
+  });
+}
+
 function tezgahlar(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: ReadonlyMap<number, number>): MotorTezgahi[] {
   if (o.istasyon === null) return (elle.tezgahlar ?? []).map((t) => kopya(t) as unknown as MotorTezgahi);
   const istasyon = new Map(o.istasyon.istasyonlar.map((i) => [i.id, i]));
-  return o.istasyon.makineler.flatMap((m) => {
+  const kisiTezgahlari = elKisileri(o).map((k) => {
+    const ist = istasyon.get(k.grup)!;
+    const id = kisiTezgahKimligi(k.id);
+    const a = kimlikle(elle.tezgahlar, id);
+    const maliyet = o.istasyonMaliyeti?.get(ist.id) ?? null;
+    if (a !== undefined) ucretIzle(a, maliyet);
+    const ilk = a === undefined ? { ucret: maliyet, ucretIst: maliyet, verim: (ist.verimYuzde || 100) / 100 } : {};
+    return ustuneYaz<MotorTezgahi>(a, {
+      id, ad: k.ad, grup: String(ist.id), grupKod: ist.kod || undefined, grupAd: ist.ad || undefined, ...ilk, vardiyalar: [k.vardiya], hafta: undefined, opOran: 1,
+    });
+  });
+  return [...makineTezgahlari(o.istasyon, o, elle, sira), ...kisiTezgahlari];
+}
+
+function makineTezgahlari(
+  ist0: NonNullable<KaynakDilimiOkumasi['istasyon']>, o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: ReadonlyMap<number, number>,
+): MotorTezgahi[] {
+  const istasyon = new Map(ist0.istasyonlar.map((i) => [i.id, i]));
+  return ist0.makineler.flatMap((m) => {
     const ist = m.istasyonId === null ? undefined : istasyon.get(m.istasyonId);
     if (ist === undefined) return [];
     const id = String(m.id);
@@ -102,11 +136,13 @@ function tezgahlar(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: Readonl
 function personel(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi): MotorKisisi[] {
   if (o.kisiler === null) return (elle.personel ?? []).map((p) => kopya(p) as unknown as MotorKisisi);
   const vardiya = new Map((o.takvim?.kisiVardiyasi ?? []).map((k) => [k.kisiId, String(k.vardiyaId)]));
+  const el = new Set(elKisileri(o).map((k) => k.id));
   return o.kisiler.map((k) => {
     const id = String(k.id);
     const a = kimlikle(elle.personel, id);
+    const makineler = [...k.makineler.map(String), ...(el.has(k.id) ? [kisiTezgahKimligi(k.id)] : [])];
     return ustuneYaz<MotorKisisi>(a, {
-      id, ad: k.ad, vardiya: vardiya.get(k.id) ?? '', gruplar: k.yetkinlikler.map(String), makineler: k.makineler.map(String), enCok: k.enCok,
+      id, ad: k.ad, vardiya: vardiya.get(k.id) ?? '', gruplar: k.yetkinlikler.map(String), makineler, enCok: k.enCok,
       // İlk kurulumda ayarcı görevden; sonra planlamacının elle değeri kalır.
       ...(a === undefined ? { ayar: k.gorev === 'Ayarcı' } : {}),
     });

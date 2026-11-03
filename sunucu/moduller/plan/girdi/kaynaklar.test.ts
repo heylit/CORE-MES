@@ -75,6 +75,7 @@ function eskiKaynak(o: KaynakDilimiOkumasi): { durum: Record<string, unknown>; e
     ek: {
       takvim: o.takvim === null ? null : { hafta, kisiVardiyasi: Object.fromEntries(o.takvim.kisiVardiyasi.map((k) => [String(k.kisiId), String(k.vardiyaId)])) },
       kisiGorevi: o.kisiler === null ? null : Object.fromEntries(o.kisiler.map((k) => [String(k.id), k.gorev])),
+      insanliIstasyonlar: o.istasyon === null ? null : o.istasyon.istasyonlar.filter((i) => i.insanli === true).map((i) => String(i.id)),
       kapasite: { kisiler: o.izinler?.map((p) => ({ id: p.kisiId, izinli: p.gunler, fazlaMesai: [], paylar: [] })) ?? null },
     },
   };
@@ -121,6 +122,32 @@ describe('kaynak dilimi eşdeğerliği (1716, saf)', () => {
     assert.deepEqual(d.devamsizlik, [
       { personel: '8', gun: '2026-10-23' }, { personel: '7', gun: '2026-10-21', sunucu: true }, { personel: '7', gun: '2026-10-22', sunucu: true },
     ]);
+  });
+
+  // 1952: insanlı istasyon (12) kişileri el tezgâhıdır; vardiyası olmayan kişi (8) tezgâh almaz (1959 a), makine tezgâhı kalır.
+  const INSANLI: KaynakDilimiOkumasi = {
+    ...OKUMA,
+    istasyon: { ...OKUMA.istasyon!, istasyonlar: OKUMA.istasyon!.istasyonlar.map((i) => (i.id === 12 ? { ...i, insanli: true } : i)) },
+    kisiler: [
+      { id: 7, ad: 'Ornek Operator', gorev: 'Operatör', yetkinlikler: [12, 10], makineler: [100], enCok: 2 },
+      { id: 8, ad: 'Ornek Ayarci', gorev: 'Ayarcı', yetkinlikler: [10, 11, 12], makineler: [], enCok: null },
+    ],
+  };
+  test('KD-08: insanlı istasyonun kişileri el tezgâhı olur; eski yolla aynı', () => {
+    esdeger(INSANLI, ELLE);
+    esdeger(INSANLI, {});
+    const d = kaynakDilimiKur(INSANLI, {});
+    const t = Object.fromEntries(d.tezgahlar.map((x) => [x.id, x]));
+    assert.deepEqual(Object.keys(t), ['100', '101', '110', '120', 'kisi-7']);
+    assert.deepEqual([t['kisi-7']?.ad, t['kisi-7']?.grup, t['kisi-7']?.vardiyalar, t['kisi-7']?.opOran, t['kisi-7']?.hafta], ['Ornek Operator', '12', ['1'], 1, undefined]);
+    const p = Object.fromEntries(d.personel.map((x) => [x.id, x]));
+    assert.deepEqual([p['7']?.makineler, p['8']?.makineler], [['100', 'kisi-7'], []]);
+  });
+  test('KD-09: elle değiştirilen el tezgâhı ayarı korunur; eski yolla aynı', () => {
+    const elle: KaynakElleVerisi = { ...ELLE, tezgahlar: [...ELLE.tezgahlar!, { id: 'kisi-7', ad: 'Eski', grup: '12', ucret: 400, ucretIst: 300, verim: 0.7, vardiyalar: ['2'], opOran: 1, hafta: { pzt: ['1'] } }] };
+    esdeger(INSANLI, elle);
+    const t = kaynakDilimiKur(INSANLI, elle).tezgahlar.find((x) => x.id === 'kisi-7');
+    assert.deepEqual([t?.ad, t?.ucret, t?.verim, t?.vardiyalar, t?.hafta], ['Ornek Operator', 400, 0.7, ['1'], undefined]);
   });
 
   // Eski yol okunamayan dilimde Reçete ve Rota kaydındaki kopyaya düşer; yeni yol açık çalışmadakini korur; hangisinin geçerli olacağı 1720'de sorulur.

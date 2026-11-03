@@ -8,7 +8,7 @@ import type {
 import { KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
 import type { KayitlarCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { isMerkezleri, istasyonlar, makineDurumlari } from '../istasyonlar/disari.ts';
+import { isMerkezleri, istasyonlar, kapasiteKaynaklari, makineDurumlari } from '../istasyonlar/disari.ts';
 import { kisiGorevleri } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
@@ -177,12 +177,16 @@ export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOku
     const gorevler = await kisiGorevleri(db, d.people.map((k) => Number(k.id)));
     gorev = Object.fromEntries(d.people.map((k) => [k.id, gorevler.get(Number(k.id)) ?? null]));
   }
+  // 1952 (1891 A b): insanlı istasyonun tezgâhları kişilerdir; girdi.betik istasyonun kapasite kaynağını bu listeden bilir.
+  const insanliIstasyonlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && d.stations !== null
+    ? [...await kapasiteKaynaklari(db, d.stations.map((x) => Number(x.id)))].flatMap(([id, k]) => (k === 'insan' ? [String(id)] : []))
+    : null;
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const sa = await satinAlmaEkiKur(db, kullanici, d.items);
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
     durum: d,
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici) },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici) },
   };
 }
 
