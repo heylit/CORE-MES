@@ -527,6 +527,7 @@ const adimKomutUclari = [
     yontem: 'POST',
     yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/makine-ekle',
     yetki: 'terminal.uret',
+    tekrarKorumali: true,
     parametre: isEmriParametresi,
     govde: makineEkleGovdesi,
     cevap: emirCevabi,
