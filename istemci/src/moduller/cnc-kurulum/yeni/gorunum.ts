@@ -64,17 +64,42 @@ export function useTanimlar(): { acik: boolean; sekme: TanimSekmesi } {
 // Alt ya da Cmd'li tuş tarayıcının ve sistemin kısayoludur (Alt+Sol/Sağ geri ve ileri gider); görünümler onu yutmaz.
 export const sistemKisayoluMu = (e: Pick<KeyboardEvent, 'altKey' | 'metaKey'>): boolean => e.altKey || e.metaKey;
 
+// Okları kendisi işleyen gezinme öğeleri: üst şeridin sekmeleri, ikinci menü, açılır menü, seçenek grupları.
+const KENDI_OKU = '[role="tablist"],[role="menu"],[role="menubar"],[role="listbox"],[role="radiogroup"],.tc-ikinci';
+// Odağı son taşıyan giriş. Fareyle tıklanan sekme ya da menü bağı odağı tutar; oklar o öğeye değil görünüme gitmelidir.
+// Tab ile oraya gelen kullanıcı ise o öğede gezinmek ister.
+let sonGiris: 'fare' | 'klavye' = 'fare';
+
 // Klavye yalnız etkin görünümde, yazı alanı odakta değilken ve Tanımlar kapalıyken (prototipin libKey/gKey/prKey/lwKey'i).
 export function useTuslar(etkin: boolean, isleyici: (e: KeyboardEvent) => void): void {
   useEffect(() => {
     if (!etkin) return undefined;
-    const tus = (e: KeyboardEvent): void => {
+    const uygun = (e: KeyboardEvent): boolean => {
       const h = e.target;
-      if (h instanceof HTMLElement && (h.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(h.tagName))) return;
-      if (tanim.acik || sistemKisayoluMu(e)) return;
+      if (h instanceof HTMLElement && (h.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(h.tagName))) return false;
+      return !tanim.acik && !sistemKisayoluMu(e);
+    };
+    const gezinmede = (e: KeyboardEvent): boolean => e.target instanceof Element && e.target.closest(KENDI_OKU) !== null;
+    const tus = (e: KeyboardEvent): void => {
+      if (gezinmede(e) || !uygun(e)) return;
       isleyici(e);
     };
+    // Gezinme öğesi odaktayken tuş, öğenin kendi işleyicisinden önce yakalanır: fareyle gelindiyse görünüm işler ve
+    // işlediği tuş öğeye geçmez (sekme değişmez, şerit kaymaz); klavyeyle gelindiyse öğeye bırakılır.
+    const yakala = (e: KeyboardEvent): void => {
+      if (e.key === 'Tab') { sonGiris = 'klavye'; return; }
+      if (!gezinmede(e) || sonGiris === 'klavye' || !uygun(e)) return;
+      isleyici(e);
+      if (e.defaultPrevented) e.stopPropagation();
+    };
+    const imlec = (): void => { sonGiris = 'fare'; };
+    window.addEventListener('keydown', yakala, true);
+    window.addEventListener('pointerdown', imlec, true);
     window.addEventListener('keydown', tus);
-    return () => { window.removeEventListener('keydown', tus); };
+    return () => {
+      window.removeEventListener('keydown', yakala, true);
+      window.removeEventListener('pointerdown', imlec, true);
+      window.removeEventListener('keydown', tus);
+    };
   }, [etkin, isleyici]);
 }
