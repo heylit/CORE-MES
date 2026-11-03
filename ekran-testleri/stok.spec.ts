@@ -48,10 +48,10 @@ test('Malzemeler: Durum sekmelerinin hepsi görünür', async ({ page, ag, ac })
   expect(ag.hatalar).toEqual([]);
 });
 
-test('Malzeme ve teslim paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', async ({ page, ag, ac }) => {
+test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', async ({ page, ag, ac }) => {
   await ac('/stok');
-  await page.getByRole('button', { name: /^Malzeme ve teslim/ }).filter({ visible: true }).first().click();
-  const panel = page.getByRole('dialog', { name: 'Malzeme · Teslim' });
+  await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
+  const panel = page.getByRole('dialog', { name: 'Okut' });
   await expect(panel).toBeVisible();
   // 372 a, 809: ayrı QR tuşu yok; okuyucu pencerenin üstünde, kutucuklardan önce görünür.
   await expect(page.getByRole('button', { name: 'QR okut', exact: true })).toHaveCount(0);
