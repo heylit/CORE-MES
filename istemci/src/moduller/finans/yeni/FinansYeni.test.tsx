@@ -29,7 +29,7 @@ const kayitYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.
 
 // Finans verisinin son okuması şirket adıdır; okununca bölüm veriyle çizilir.
 const okundu = async (istekler: readonly Istek[]) => {
-  await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+  await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
   await acikBolum('Ana sayfa');
 };
 
@@ -48,7 +48,7 @@ describe('finans ekranı: adresler ve açılış', () => {
   it('her bölüm menü maddesinin adresinde açılır; sekmeye tıklamak o adrese gider', async () => {
     const istekler = sunucuKur(OKUYAN);
     finansAc('/finans/nakit');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     await acikBolum('Nakit planı');
     fireEvent.click(screen.getByRole('tab', { name: /Bütçe/ }));
     await acikBolum('Bütçe');
@@ -169,7 +169,7 @@ describe('finans ekranı: Ctrl K komutları', () => {
     const t = komutToplayici();
     const istekler = sunucuKur(YAZAN);
     finansAc('/finans/durum', t.yaz);
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     await waitFor(() => expect(basliklar(t.liste())).toContain('Kayıt gir: Satış yaptım'));
     const l = basliklar(t.liste());
     expect(l.slice(0, 2)).toEqual(['Kayıt gir: Satış yaptım', 'Kayıt gir: Müşteriden para geldi']);
@@ -202,7 +202,7 @@ describe('finans ekranı: Ctrl K komutları', () => {
     const t = komutToplayici();
     const istekler = sunucuKur(OKUYAN);
     finansAc('/finans/kayitlar', t.yaz);
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     await waitFor(() => expect(basliklar(t.liste())).toContain("Kayıtları Excel'e aktar"));
     const l = basliklar(t.liste());
     expect(l.some((b) => b.startsWith('Kayıt gir'))).toBe(false);
@@ -235,7 +235,7 @@ describe('finans ekranı: N kısayolu', () => {
   it('yazı alanında, Ctrl ile ya da açık pencerede N seçici açmaz', async () => {
     const istekler = sunucuKur(YAZAN);
     finansAc('/finans/kayitlar');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     const arama = await screen.findByLabelText('Kayıtlarda ara');
     n(arama);
     act(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true })); });
@@ -263,7 +263,7 @@ describe('finans ekranı: skor ve kritik öneri rozeti', () => {
   it('başlıkta sağlık skoru notuyla durur ve Durum ve öneriler\'e götürür; kritik öneri sayısı o sekmededir', async () => {
     const istekler = sunucuKur(OKUYAN);
     finansAc('/finans/kayitlar');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     const bag = await screen.findByRole('link', { name: new RegExp(`Sağlık skoru ${A.score}`) });
     expect(bag.textContent).toContain(A.grade);
     expect(kritik).toBeGreaterThan(0);
@@ -292,7 +292,7 @@ describe('finans ekranı: kurulum uyarısı', () => {
   it('kurulum yapılmadıysa Plan bölümlerinde uyarı çıkar; yöneten Ayarlar > İlk kurulum\'a gider', async () => {
     const istekler = sunucuKur(YONETEN, {}, kurulmamis());
     finansAc('/finans/butce');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     const uyari = await screen.findByText(/Finans ilk kurulumu (yapılmadı|tamamlanmadı)/);
     // Örnek veride hesaplar açık: uyarı bakiyeyi eksik saymaz (veri tamlığı listesiyle çelişmez).
     expect(uyari.textContent).toMatch(/Kasa ve banka bakiyesi girilmiş/);
@@ -303,7 +303,7 @@ describe('finans ekranı: kurulum uyarısı', () => {
   it('yönetmeyene kimin tamamlayacağı yazılır; kurulum yapıldıysa ya da Plan dışı bölümde uyarı yoktur', async () => {
     const istekler = sunucuKur(OKUYAN, {}, kurulmamis());
     finansAc('/finans/vergi');
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
     await screen.findByText("Finans yöneticisi Ayarlar'dan tamamlar.");
     cleanup();
     sunucuKur(OKUYAN, {}, kurulmamis());
@@ -313,7 +313,7 @@ describe('finans ekranı: kurulum uyarısı', () => {
     cleanup();
     const i2 = sunucuKur(OKUYAN);
     finansAc('/finans/nakit');
-    await waitFor(() => expect(i2.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+    await waitFor(() => expect(i2.some((i) => i.yol === '/kurum')).toBe(true));
     await acikBolum('Nakit planı');
     expect(screen.queryByText(/Finans ilk kurulumu (yapılmadı|tamamlanmadı)/)).toBeNull();
   });

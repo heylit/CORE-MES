@@ -339,6 +339,7 @@ export const katalogKaydetGovdesi = z.object({
 export const katalogSilGovdesi = z.object(beklenenSurum);
 
 export const ayarlarSemasi = z.object({
+  // Sistem Ayarları > Firma adı (1942 a); salt okunur, kaydet gövdesinde yoktur.
   sirket: z.string(),
   agirliklar: agirliklarSemasi,
   gecerlilikGun: z.number().int(),
@@ -352,10 +353,7 @@ export const ayarlarSemasi = z.object({
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),
   surum: surumSemasi,
 });
-// Şirket adının esası satın alma ayarıdır (A7, #514); boşsa null. Finans ekranı adı buradan gösterir.
-export const sirketAdiCevabi = z.object({ sirketAdi: z.string().nullable() });
 export const ayarlarKaydetGovdesi = z.object({
-  sirket: metin(120),
   agirliklar: agirliklarSemasi,
   gecerlilikGun: z.number().int().min(1).max(365),
   enAzTeklif: z.number().int().min(1).max(20),
@@ -544,7 +542,6 @@ export type KatalogKaydi = z.output<typeof katalogSemasi>;
 export type KatalogKaydetYazimi = z.output<typeof katalogKaydetGovdesi>;
 export type Ayarlar = z.output<typeof ayarlarSemasi>;
 export type AyarlarKaydetYazimi = z.output<typeof ayarlarKaydetGovdesi>;
-export type SirketAdiCevabi = z.output<typeof sirketAdiCevabi>;
 export type AcilisCevabi = z.output<typeof acilisCevabi>;
 export type FirmaSecenekleriCevabi = z.output<typeof firmaSecenekleriCevabi>;
 export type MalzemeSecenekleriCevabi = z.output<typeof malzemeSecenekleriCevabi>;
@@ -588,7 +585,6 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-katalogu/kaydet': { govde: z.input<typeof katalogKaydetGovdesi>; cevap: KatalogKaydi };
   'POST /satin-alma-katalogu/:id/sil': { govde: z.input<typeof katalogSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-ayarlari/kaydet': { govde: z.input<typeof ayarlarKaydetGovdesi>; cevap: Ayarlar };
-  'GET /satin-alma-ayarlari/sirket-adi': { cevap: SirketAdiCevabi };
   'GET /satin-alma-kg-fiyatlari': { cevap: KgFiyatlariCevabi };
   'GET /satin-alma-kg-fiyatlari/gecmis': { sorgu: z.input<typeof kgFiyatiGecmisiSorgusu>; cevap: KgFiyatiGecmisiCevabi };
   'POST /satin-alma-kg-fiyatlari/ekle': { govde: KgFiyatiEkleGovdesi; cevap: KgFiyatlariCevabi };
