@@ -11,7 +11,7 @@ import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS,
+  bicimDenetimi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
@@ -78,6 +78,7 @@ export async function modelListesi(
 async function analizCevabi(db: Db, m: Model): Promise<GeometriAnalizCevabi> {
   const is = await sorgular.is(db, m.revizyonId);
   const a = await sorgular.analiz(db, m.revizyonId);
+  const yuzSatirlari = a === null ? [] : await sorgular.yuzOzeti(db, m.revizyonId);
   return {
     revizyonId: m.revizyonId, belgeId: m.belgeId, dosyaTuru: m.dosyaTuru, durum: durumu(is),
     is: is === null ? null : {
@@ -88,6 +89,11 @@ async function analizCevabi(db: Db, m: Model): Promise<GeometriAnalizCevabi> {
       obb: { a: a.obbA, b: a.obbB, c: a.obbC, cap: a.capMm, yon: [0, 1, 2].map((i) => a.obbYon.slice(i * 3, i * 3 + 3)) },
       hacimMm3: a.hacimMm3, alanMm2: a.alanMm2, govdeSayisi: a.govdeSayisi, kapali: a.kapali, ucgenSayisi: a.ucgenSayisi,
       hesapSuresiMs: a.hesapSuresiMs, hesapZamani: a.hesapZamani,
+      yuzler: yuzSatirlari.length === 0 ? null : {
+        motor: yuzSatirlari[0]!.motor,
+        toplam: yuzSatirlari.reduce((t, y) => t + y.sayi, 0),
+        sayilar: Object.fromEntries(yuzSatirlari.map((y) => [y.tur, y.sayi])),
+      },
     },
   };
 }
@@ -221,6 +227,7 @@ export async function geometriTuru(vt: Veritabani, surec: GeometriSureci, gunluk
     await vt.tx(async (db) => {
       if (yanit.tamam) {
         await sorgular.analizYaz(db, { revizyonId: is.revizyonId, belgeId: is.belgeId, ozet: is.ozet, motor: MOTOR, olcum: yanit.olcum, sureMs: yanit.sureMs });
+        await sorgular.yuzlerYaz(db, is.revizyonId, YUZ_MOTORU, yanit.yuzler);
         await sorgular.isBitir(db, is.id, 'bitti', null);
       } else {
         if (!yanit.kalici) gunluk.uyar(`Geometri hesabı yarıda kaldı (revizyon ${String(is.revizyonId)}): ${yanit.hata}`);

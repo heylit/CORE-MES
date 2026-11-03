@@ -10,3 +10,8 @@
 - Kapalılık, aynı konumdaki köşeler birleştirilerek her kenarın iki üçgende olmasıyla anlaşılır (OCCT yüz başına köşe çoğaltır).
 - Analiz revizyon başınadır ve özeti taşır: özet değişmişse (aynı revizyon kimliği başka içerik) ekran analizi göstermez.
 - Turda geçici hatayla kuyruğa dönen iş aynı turda yeniden alınmaz (`siradakiIsiAl` `haric`).
+- Kesin yüz türü (1984; 1923 b, 1983 a): aynı süreçte libcascade (tek iş parçacıklı derleme) dosyayı ikinci kez okur ve her B-rep yüzünün
+  türünü, alanını, yarıçapını, eksenini `geometri_yuz`'a yazar. Ölçüler (kutu, hacim, alan) hâlâ occt-import-js ağındandır; libcascade
+  okuyamazsa ya da yüz sayısı `YUZ_EN_COK`'u aşarsa analiz yine biter, yüz özeti null kalır. İki wasm aynı süreçte: ilk iş birkaç saniye
+  yükleme alır, bellek NIST AP242 modellerinde 0,6-0,9 GB ölçüldü (eşik 2 GB).
+- Emscripten nesneleri çöp toplayıcıyla serbest kalmaz: yüz döngüsünde oluşturulan her nesne `delete` ile bırakılır.

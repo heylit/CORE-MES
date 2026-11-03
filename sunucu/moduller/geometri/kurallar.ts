@@ -1,6 +1,6 @@
 // Geometri kuralları: saf hesap, veritabanı ve saat yok. Ölçüler mm.
 
-import { HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
+import { GEOMETRI_YUZ_TURLERI, HAM_STOK_FORMLARI } from '#paylasilan/sozlesme/geometri.ts';
 
 // Güvenilmeyen girdi sınırları (VARSAYIM, kart 1441; geri alma ucuz).
 export const DOSYA_EN_BUYUK_BAYT = 200 * 1024 * 1024;
@@ -10,6 +10,10 @@ export const EN_COK_DENEME = 3;
 export const HATA_METNI_EN_UZUN = 500;
 export const TUR_BASINA_EN_COK_IS = 5;
 export const MOTOR = 'occt-import-js@0.0.23';
+// Kesin yüz türü (1923 b, 1983 a): ölçüler üçgen ağından kalır, yüz türü ve parametreleri B-rep'ten okunur.
+export const YUZ_MOTORU = 'libcascade@3.1.0';
+// Bu sayıdan çok yüzlü modelde yüz listesi yazılmaz (VARSAYIM, kart 1984; geri alma ucuz): tablo ve yanıt büyüklüğü sınırlı kalır.
+export const YUZ_EN_COK = 20_000;
 
 export const ILETILER = {
   dosyaYok: 'Model dosyası Çizim Merkezi\'nde bulunamadı (belge arşivde ya da revizyon değişti).',
@@ -23,6 +27,38 @@ export const ILETILER = {
 } as const;
 
 export type DosyaTuru = 'step' | 'iges';
+
+export const YUZ_TURLERI = GEOMETRI_YUZ_TURLERI;
+export type YuzTuru = (typeof YUZ_TURLERI)[number];
+
+const GEOM_ABS: Readonly<Record<string, YuzTuru>> = {
+  GeomAbs_Plane: 'duzlem', GeomAbs_Cylinder: 'silindir', GeomAbs_Cone: 'koni', GeomAbs_Sphere: 'kure', GeomAbs_Torus: 'torus',
+  GeomAbs_BezierSurface: 'bezier', GeomAbs_BSplineSurface: 'bspline', GeomAbs_SurfaceOfRevolution: 'donel',
+  GeomAbs_SurfaceOfExtrusion: 'ekstruzyon', GeomAbs_OffsetSurface: 'ofset',
+};
+export function yuzTuru(geomAbs: string): YuzTuru {
+  return GEOM_ABS[geomAbs] ?? 'diger';
+}
+
+// B-rep yüzü. ters: yüz yönü yüzeyin doğal normalinin tersi (delik ile mil ayrımı bunu ister). yaricap: silindir ve küre yarıçapı, koninin
+// eksen konumundaki yarıçapı, torusun büyük yarıçapı; ikinciYaricap yalnız torusun küçük yarıçapı; yariAci koninin yarı açısı (derece).
+// eksen ve konum silindir, koni ve torusta eksen yönü ve eksen üstündeki nokta, kürede konum merkezdir. Türün taşımadığı alan null'dır.
+export interface Yuz {
+  tur: YuzTuru;
+  ters: boolean;
+  alanMm2: number;
+  yaricapMm: number | null;
+  ikinciYaricapMm: number | null;
+  yariAciDerece: number | null;
+  eksen: [number, number, number] | null;
+  konum: [number, number, number] | null;
+}
+
+export function yuzSayilari(yuzler: readonly Yuz[]): Partial<Record<YuzTuru, number>> {
+  const s: Partial<Record<YuzTuru, number>> = {};
+  for (const y of yuzler) s[y.tur] = (s[y.tur] ?? 0) + 1;
+  return s;
+}
 
 // Dosyanın başı biçimiyle tutmalı: STEP "ISO-10303-21", IGES 80 sütunluk satırın 73. sütununda 'S' (başlangıç bölümü).
 export function bicimDenetimi(tur: DosyaTuru, bas: Uint8Array): string | null {

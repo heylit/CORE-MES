@@ -18,14 +18,16 @@ export interface YerlesimSatiri {
 }
 export interface ParcaSatiri {
   no: number; adet: number; kaynak: Kaynak; baslangic: Date; bitis: Date; elleSira: number | null; elleIstasyonId: number | null; elleKaynak: boolean;
+  // 1985 a: parça motorun paralel bölmesindendir; motor sonraki öneride bölmeyi yeniden kurar. Yoksa ya da false ise elle bölmedir.
+  motorBolmesi?: boolean;
 }
 type Ham = Omit<YerlesimSatiri, 'kaynak' | 'parcalar'> & { makineId: number | null; kisiId: number | null };
 type ParcaHam = Omit<ParcaSatiri, 'kaynak' | 'baslangic' | 'bitis'> & { isEmriId: number; makineId: number | null; kisiId: number | null; baslangic: Date | null; bitis: Date | null };
 const kaynakOf = (makineId: number | null, kisiId: number | null): Kaynak => (makineId !== null ? { tur: 'makine', id: makineId } : { tur: 'kisi', id: kisiId! });
 const coz = ({ makineId, kisiId, ...r }: Ham): YerlesimSatiri => ({ ...r, kaynak: kaynakOf(makineId, kisiId) });
 const PARCA = `is_emri_id AS "isEmriId", parca_no AS no, adet, makine_id AS "makineId", kisi_id AS "kisiId", baslangic, bitis, elle_sira AS "elleSira",
-  elle_istasyon_id AS "elleIstasyonId", elle_kaynak AS "elleKaynak"`;
-const PARCA_SUTUN = 'is_emri_id, parca_no, adet, makine_id, kisi_id, baslangic, bitis, elle_sira, elle_istasyon_id, elle_kaynak';
+  elle_istasyon_id AS "elleIstasyonId", elle_kaynak AS "elleKaynak", motor_bolmesi AS "motorBolmesi"`;
+const PARCA_SUTUN = 'is_emri_id, parca_no, adet, makine_id, kisi_id, baslangic, bitis, elle_sira, elle_istasyon_id, elle_kaynak, motor_bolmesi';
 // Yerleşmiş parçalar yerleşimlere eklenir; bölünmemiş işte alan hiç yoktur (eski okuyucuların karşılaştırması değişmez).
 function parcalariEkle(satirlar: YerlesimSatiri[], parcalar: readonly ParcaHam[]): YerlesimSatiri[] {
   const h = new Map<number, ParcaSatiri[]>();
@@ -93,8 +95,8 @@ export async function makinelerinCanliIsleri(db: Db, makineIdleri: readonly numb
 export interface BolmeParcasi { no: number; adet: number }
 export async function yersizBolmeler(db: Db, hedef: Hedef): Promise<Map<number, BolmeParcasi[]>> {
   const r = hedef === null
-    ? await db.sorgu<BolmeParcasi & { isEmriId: number }>('SELECT is_emri_id AS "isEmriId", parca_no AS no, adet FROM plan_yerlesim_parcasi WHERE baslangic IS NULL ORDER BY is_emri_id, parca_no')
-    : await db.sorgu<BolmeParcasi & { isEmriId: number }>('SELECT is_emri_id AS "isEmriId", parca_no AS no, adet FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1 AND baslangic IS NULL ORDER BY is_emri_id, parca_no', [hedef]);
+    ? await db.sorgu<BolmeParcasi & { isEmriId: number }>('SELECT is_emri_id AS "isEmriId", parca_no AS no, adet FROM plan_yerlesim_parcasi WHERE baslangic IS NULL AND NOT motor_bolmesi ORDER BY is_emri_id, parca_no')
+    : await db.sorgu<BolmeParcasi & { isEmriId: number }>('SELECT is_emri_id AS "isEmriId", parca_no AS no, adet FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1 AND baslangic IS NULL AND NOT motor_bolmesi ORDER BY is_emri_id, parca_no', [hedef]);
   const h = new Map<number, BolmeParcasi[]>();
   for (const { isEmriId, ...p } of r) h.set(isEmriId, [...(h.get(isEmriId) ?? []), p]);
   return h;
@@ -127,14 +129,16 @@ export async function yerlesimYaz(db: Db, senaryoId: number, y: YerlesimSatiri):
   );
   for (const p of y.parcalar ?? []) {
     await db.sorgu(
-      `INSERT INTO plan_senaryo_yerlesim_parcasi (senaryo_id, ${PARCA_SUTUN}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [senaryoId, y.isEmriId, p.no, p.adet, mk(p.kaynak), ks(p.kaynak), p.baslangic, p.bitis, p.elleSira, p.elleSira === null ? null : p.elleIstasyonId, p.elleKaynak],
+      `INSERT INTO plan_senaryo_yerlesim_parcasi (senaryo_id, ${PARCA_SUTUN}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [senaryoId, y.isEmriId, p.no, p.adet, mk(p.kaynak), ks(p.kaynak), p.baslangic, p.bitis, p.elleSira, p.elleSira === null ? null : p.elleIstasyonId, p.elleKaynak, p.motorBolmesi ?? false],
     );
   }
 }
-// Yerleşim kalkar; bölünmüş işin bölmesi yersiz parçalar olarak kalır (bölmeyi yalnız planlamacı kaldırır).
+// Yerleşim kalkar; elle bölünmüş işin bölmesi yersiz parçalar olarak kalır (bölmeyi yalnız planlamacı kaldırır). Motorun bölmesi (1985 a)
+// yerle birlikte kalkar: motor onu bir sonraki öneride yeniden kurar.
 export async function yerlesimleriSil(db: Db, senaryoId: number, isEmriIdleri: readonly number[]): Promise<void> {
   await db.sorgu('DELETE FROM plan_senaryo_yerlesimi WHERE senaryo_id = $1 AND is_emri_id = ANY($2::int[])', [senaryoId, [...isEmriIdleri]]);
+  await db.sorgu('DELETE FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1 AND is_emri_id = ANY($2::int[]) AND motor_bolmesi', [senaryoId, [...isEmriIdleri]]);
   await db.sorgu(
     `UPDATE plan_senaryo_yerlesim_parcasi SET makine_id = NULL, kisi_id = NULL, baslangic = NULL, bitis = NULL, elle_sira = NULL, elle_istasyon_id = NULL
       WHERE senaryo_id = $1 AND is_emri_id = ANY($2::int[])`, [senaryoId, [...isEmriIdleri]]);

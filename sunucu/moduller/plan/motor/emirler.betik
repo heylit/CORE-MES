@@ -26,8 +26,6 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   tmiTabanKur(S0.D, bugun);
   baslangicTazele(S0, Date.parse(istek.simdi));
   Object.assign(S0, { locks: {}, olaylar: [], gercek: {}, rrSavedAt: -1 });
-  /* 1952 iş 2a: paralel bölme yalnız planlama atölyesindedir; canlı planda payların iş emrine geri yazılması 2b'nin işidir */
-  S0.param = Object.assign({}, S0.param, { bolmeKip: 'kapali' });
   const nolar = new Set();
   for (const a of [...istek.kuyruklar.flatMap(q => q.anahtarlar), ...(istek.kisiKuyruklari || []).flatMap(q => q.anahtarlar), ...istek.sabitler.map(x => x.anahtar),
     ...(istek.kisiSabitleri || []).map(x => x.anahtar), ...istek.calisanlar.map(x => x.anahtar)]) nolar.add(a.slice(0, a.lastIndexOf('|')));
@@ -118,7 +116,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür. Fason adım ise (CA-2) öncülünden sonra döner:
      kuyruktaki ardılı onu bekler. */
   for (const o of cx.ops) {
-    if (sira.has(o.id) || st.gercek[o.id] || sabitYer[o.id] || !o.c.length) continue;
+    /* 1952 iş 2b: kuyruktaki adımın motorca açılan payları (engine.betik compile, o.asil) kuyruktadır; bitmiş sayılmaz */
+    if (sira.has(o.id) || (o.asil && sira.has(o.asil)) || st.gercek[o.id] || sabitYer[o.id] || !o.c.length) continue;
     if (o.c.every(x => x.fas) && (cx.FS[o.c[0].m.slice(1)] || {}).hemen) {
       const S = Math.max(frz + 1, ...o.pr.map(([p]) => (ops[p] ? ops[p].S : -Infinity))) + 1e-9;
       ops[o.id] = { id: o.id, job: o.job, m: o.c[0].m, S, C: S + 1e-7, fas: 1 };
@@ -304,7 +303,15 @@ function kisiTezgahlariniEkle(k, D, istek, opOf, emirler) {
     const ayar = sayi(y && y[1].setup) ?? sayi(t.setup) ?? 0, cevrim = sayi(y && y[1].cycle) ?? sayi(t.cycle);
     if (cevrim === null) continue;
     const kimler = (adaylar.get(a) || [q.kisiId]).map(String);
-    u.rota[i] = Object.assign({}, u.rota[i], { tezgahlar: [...new Set([String(q.kisiId), ...kimler])].map(x => ({ id: kisiTezgahi(x), ayar, cevrim })) });
+    let secilen = [...new Set([String(q.kisiId), ...kimler])];
+    /* 1952 (1955 a): paralel bölünen adımın rotadaki kişileri girdi.betik'te ekipten kurulmuştur (ekipte iki kişi yoksa istasyonun bütün
+       kişileri); adaylar onlarla daraltılır, en az iki kişi kalmazsa plan modülünün adayları geçerlidir. */
+    if (u.rota[i].bol) {
+      const rotada = new Set((u.rota[i].tezgahlar || []).map(t => String(t.id)));
+      const e = secilen.filter(x => rotada.has(kisiTezgahi(x)));
+      if (e.length >= 2) secilen = e;
+    }
+    u.rota[i] = Object.assign({}, u.rota[i], { tezgahlar: secilen.map(x => ({ id: kisiTezgahi(x), ayar, cevrim })) });
   }
 }
 function kuyrukMakineleriniEkle(k, D, istek, opOf) {

@@ -113,9 +113,11 @@ function compile(st){olcekKur(st.w);
       const ad0=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
       const adaylar=o.fason?[]:(o.tezgahlar||[]).filter(t=>M[t.id]);
       /* 1952 (1956 a, 1958 a): rotada "paralel böl" adımı adayları arasında N paya bölünür; N = aday sayısı, adet / en küçük parça ve
-         bölme sınırının (st.w.bolMaks) en küçüğü. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
+         bölme sınırının (st.w.bolMaks) en küçüğü. Kilitli, çalışan
+         ve yeri sabit adım bölünmez: yeri tek kaynaktadır. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
          adımın öncüllerini bekler, ardıl hepsini bekler. Adet eşit bölünür, kalan ilk paylara. */
-      const N=st.w.bol&&o.bol&&!o.fason?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      const sabit=(st.locks&&st.locks[id])||(st.gercek&&st.gercek[id])||(st.sabitYer&&st.sabitYer[id]);
+      const N=st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
       if(N>1)bolunen[id]=[];
       for(let p=0;p<N;p++){
       const pid=p===0?id:id+'~'+(p+1),ad=N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
@@ -136,7 +138,7 @@ function compile(st){olcekKur(st.w);
   for(const op of ops)if(op.pr.some(([p])=>bolunen[p]))op.pr=op.pr.flatMap(([p,t])=>bolunen[p]?bolunen[p].map(q=>[q,t]):[[p,t]]);
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
   /* emirler arası öncül (st.ekOncul [işlem, öncül]; sunucu girdisi, 690 b): biten ya da planda olmayan öncül beklenmez */
-  for(const [a,p] of st.ekOncul||[])if(byId[a]&&byId[p]&&!byId[a].pr.some(([q])=>q===p))byId[a].pr.push([p,'b']);
+  for(const [a0,p0] of st.ekOncul||[])for(const a of bolunen[a0]||[a0])for(const p of bolunen[p0]||[p0])if(byId[a]&&byId[p]&&!byId[a].pr.some(([q])=>q===p))byId[a].pr.push([p,'b']);
   for(const jid in jobs){const j=jobs[jid];let v=0;for(const o of j.ops){const m=o.c.filter(c=>!c.fas);if(m.length){const p=Math.min(...m.map(c=>c.run*(1-(c.pay||0))));v+=(o.sig*p)**2;}
       else{const f=FS[(o.c[0]||{m:'@'}).m.slice(1)];if(f&&f.sapmaGun)v+=(f.sapmaGun*24)**2;}}
     j.buf=st.w.tampon?(+st.w.tamponZ||0)*Math.sqrt(v):0;j.dueB=j.due==null?null:j.due-j.buf;}
