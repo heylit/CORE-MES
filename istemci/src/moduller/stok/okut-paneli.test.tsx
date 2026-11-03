@@ -7,7 +7,10 @@ import type { BakiyeSatiri, IstasyonSepetiCevabi, KodCozCevabi, MalzemeIstegi, O
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { DEPOCU, json, type Istek } from './test-ortak.tsx';
 import { OkutYonlendir } from './OkutYonlendir.tsx';
+import { rotalar } from './rotalar.tsx';
 import { ustEylemler } from './ust-eylem.tsx';
+
+const SayimAdresi = rotalar.find((r) => r.yol === '/stok/okutarak-sayim')!.ekran;
 
 // Okut sayfasının paneldeki yeri (kart #95, soru 89, 90 a, 93 a, 95 a, 96, 98 a): okutma sonucu, Mal kabul, Sevk, depo sepeti,
 // istasyondan iste, okutarak al ve itiraz.
@@ -68,6 +71,7 @@ function ciz(kullanici: Kullanici, yollar: Record<string, Isleyici>, kutu: Tesli
         <Dugme />
         <Routes>
           <Route path="/stok/okut" element={<OkutYonlendir />} />
+          <Route path="/stok/okutarak-sayim" element={<SayimAdresi />} />
           <Route path="*" element={<p>Sayfa</p>} />
         </Routes>
       </MemoryRouter>
@@ -430,5 +434,22 @@ describe('Malzeme iste: kaynak (soru 96 a)', () => {
     expect(within(panel).getByText('Teslim yeri: Freze 2')).toBeTruthy();
     fireEvent.click(within(panel).getByRole('button', { name: 'İste' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ malzemeId: 901, miktar: '2', istasyonId: 2, kaynakIstasyonId: 1 }));
+  });
+});
+
+describe('Okutarak say adresi (2022 b)', () => {
+  it('eski adres sayfa açmaz, paneli Say modunda açar ve İş kutusuna döner', async () => {
+    ciz(DEPO, {}, KUTU, '/stok/okutarak-sayim');
+    const p = await screen.findByRole('dialog', { name: 'Okut' });
+    const modlar = within(p).getByRole('radiogroup', { name: 'Mod' });
+    await waitFor(() => expect(within(modlar).getByRole('radio', { name: 'Say' }).getAttribute('aria-checked')).toBe('true'));
+    expect(screen.queryByText('Okutarak sayım')).toBeNull();
+  });
+  it('sayım yetkisi olmayana panel Say modunda açılmaz (reddedilen)', async () => {
+    ciz(OPERATOR, {}, KUTU, '/stok/okutarak-sayim');
+    const p = await screen.findByRole('dialog', { name: 'Okut' });
+    const modlar = within(p).getByRole('radiogroup', { name: 'Mod' });
+    await waitFor(() => expect(within(modlar).getByRole('radio', { name: 'Otomatik' }).getAttribute('aria-checked')).toBe('true'));
+    expect(within(modlar).queryByRole('radio', { name: 'Say' })).toBeNull();
   });
 });

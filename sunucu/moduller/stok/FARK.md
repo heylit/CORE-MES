@@ -548,3 +548,7 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 ## Kalite durum etiketi okuması (kart 1525, 1286 a)
 - `disari.ts kaliteEtiketleri(db, bakiyeIdler)`: kalite durumu bakiye satırındadır; etiket satırın lot no'sunu, malzemesini (ad, kod, birim), konum kodunu, miktarını ve kalite durumunu verir. Lotsuz ve olmayan satır dönmez; istenen sıra korunur. Etiket Merkezi kalite durum etiketini bununla basar.
 - Uç, işlem, tablo ve göç yok; salt okuma. Karar tarihi, karar veren ve GKK/NCR no ilk turda verilmez (hareket geçmişinden okunması ayrı iş).
+
+## Kanal ilkesi (kart 2014, 2022 b)
+
+Okutarak yapılan iş yalnız üst çubuktaki Okut panelinde, masa işi yalnız sayfada. İkinci menüden "Okut" ve "Okutarak say" maddeleri, "Ne oldu?" panelinden ve Ctrl K'dan "Kod okut" kopyaları kalktı. `/stok/okut` ve `/stok/okutarak-sayim` adresleri paneli açar (sayım adresi Say modunda; `PanelIstegi.mod`), sayım yetkisi olmayana panel Otomatik açılır. Uç, kural ve yetki değişmedi; menü sayacından iki anahtar düştü.

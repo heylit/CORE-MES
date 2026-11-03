@@ -15,7 +15,6 @@ export const STOK_IKINCI_MENU = {
     {
       maddeler: [
         { anahtar: 'is-kutusu', baslik: 'İş kutusu', yol: '/stok', simge: 'dash', islem: 'sayfa.stok' },
-        { anahtar: 'okut', baslik: 'Okut', yol: '/stok/okut', simge: 'scan', islem: 'sayfa.stok' },
         { anahtar: 'mal-kabul', baslik: 'Mal kabul', yol: '/stok/mal-kabul', simge: 'truck', islem: 'stok.giris' },
         // Sevkiyatın tetiklediği son çıkış ve kabuller (960); çıkış stok.cikis, kabul stok.giris ister.
         { anahtar: 'depo-sevk', baslik: 'Depo sevk', yol: '/stok/depo-sevk', simge: 'route', islem: 'stok.cikis', veya: ['stok.giris'] },
@@ -34,7 +33,6 @@ export const STOK_IKINCI_MENU = {
         // Göz ve etiket okutarak kör sayım; okuyucunun hafızasından aktarım da buradan (1905).
         // Okut panelinin Seri modunda toplanan listeler; düzeltilip bir işe verilir (1915).
         { anahtar: 'seri-listeler', baslik: 'Seri listeler', yol: '/stok/seri-listeler', simge: 'list', islem: 'stok.istek' },
-        { anahtar: 'okutarak-sayim', baslik: 'Okutarak say', yol: '/stok/okutarak-sayim', simge: 'scan', islem: 'stok.sayim' },
         // Basılı komut barkodları (1909): okuyucuyla ekrandaki düğmeye basılır.
         { anahtar: 'komut-karti', baslik: 'Komut kartı', yol: '/stok/komut-karti', simge: 'printer', islem: 'sayfa.stok' },
         // Eşiği aşan sayım farkı ikinci yetkilinin onayını bekler (1279 a); sayan da listeyi görür.

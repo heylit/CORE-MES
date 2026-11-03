@@ -133,7 +133,7 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
   const islemler: readonly string[] = oturum?.islemler ?? [];
   const modlar = izinliModlar((i) => islemler.includes(i));
   // Terminalden ya da bir bölüm isteğiyle açılış o işin ekranıdır: Otomatik açılır, kayıtlı mod değişmez.
-  const [modSecimi, setModSecimi] = useState<OkutModu>(() => (odak || istek ? 'otomatik' : kayitliMod()));
+  const [modSecimi, setModSecimi] = useState<OkutModu>(() => istek?.mod ?? (odak || istek ? 'otomatik' : kayitliMod()));
   const mod = acilisModu(modSecimi, modlar);
   const [istasyonSecimi, setIstasyonSecimi] = useState<number | null>(null);
   const son = sonSecilen !== null && sonSecilen.kisiId === kisiId ? sonSecilen.istasyonId : null;

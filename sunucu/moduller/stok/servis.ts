@@ -343,7 +343,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     // Hazırlık: bekleyen istekler ve açık listeler birlikte.
     hazirlik: islemler.includes('stok.transfer') || islemler.includes('stok.toplama')
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
-    okut: null, depo: null, 'okutarak-sayim': null, 'komut-karti': null, 'seri-listeler': null,
+    depo: null, 'komut-karti': null, 'seri-listeler': null,
     // Depo sevk (960): sayaç yok; liste sevkiyatın tetiklediği kalemlerdir, kabuk rozet göstermez.
     'depo-sevk': null,
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,

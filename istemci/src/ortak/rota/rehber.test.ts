@@ -37,7 +37,7 @@ describe('rehberMaddeleri', () => {
     expect(madde?.yazili).toBe(false);
     expect(madde?.ozet).toContain('Stok Merkezi');
     // Mal kabul stok giriş yetkisi ister: yetkisizin bölüm listesinde yoktur.
-    expect(madde?.bolumler.map((b) => b.baslik)).toContain('Okut');
+    expect(madde?.bolumler.map((b) => b.baslik)).toContain('Malzemeler');
     expect(madde?.bolumler.map((b) => b.baslik)).not.toContain('Mal kabul');
   });
 });
