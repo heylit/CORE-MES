@@ -1,9 +1,6 @@
-// Kaynaklar komut tablosu ve istek kurucusu: zod taşımaz, bu yüzden istemci modülünde durur; köprü ve sunucu testi aynısını kullanır.
-// ----- Kaynak komutları (kart #1106) -----
-// Kaynaklar sekmesinin yazma eylemleri sahibi modüllerin VAR OLAN uçlarına gider. Tablo hangi uca, hangi gövde alanlarıyla gideceğini
-// söyler; kural ve yetki sahibindedir. Güncelleme uçları tam kayıt ve okunan sürümü ister: ekranın gönderdiği alanlar, sahibinden
-// OKUNMUŞ kaydın üstüne konur (gönderilmeyen alan silinmez) ve sürüm o okunmuş kayıttan gelir. Başkası arada yazdıysa sahibi 409 döner.
-export type KaynakTuru = 'isMerkezi' | 'istasyon' | 'makine' | 'kisi' | 'vardiya' | 'planAyari' | 'makineDurumu';
+// Kaynaklar okuma tablosu ve köprü komutlarının istek kurucusu: zod taşımaz, bu yüzden istemci modülünde durur; köprü ve sunucu testi
+// aynısını kullanır. Kaynaklar sekmesi yazmaz (1927 a): iş merkezi, istasyon, makine, kişi ve yetkinlik İstasyonlar'da, vardiya Vardiya'da
+// yazılır. Komut tablosu (KomutTanimi) plan ve stok komutlarınındır: hangi uca, hangi gövde alanlarıyla gideceğini söyler.
 export type KaynakKaydi = Readonly<Record<string, unknown>> & { readonly surum: number };
 export type KaynakKoleksiyonu = ReadonlyMap<number, KaynakKaydi>;
 // Koleksiyon okunamadıysa (sahibinin okuma yetkisi yok) null'dır.
@@ -31,37 +28,8 @@ export interface KomutTanimi {
   readonly sabit?: Readonly<Record<string, unknown>>;
   // Sahibinin ucu `tekrarKorumali` ise istek kimliğiyle gönderilir.
   readonly tekrarKorumali?: boolean;
-  // Güncelleme: gövdede gelmeyen alanlar ve sürüm bu türün okunmuş kaydından tamamlanır (kimlik `id` parametresidir).
-  readonly tamamla?: KaynakTuru;
 }
 
-const ISTASYON_ALANLARI = ['kod', 'ad', 'isMerkeziId', 'tip', 'sorumluKisiId', 'kapasiteKaynagi', 'uretimAlani', 'aktif'] as const;
-const MAKINE_ALANLARI = ['kod', 'ad', 'tur', 'markaModel', 'seriNo', 'istasyonId', 'baglantiTuru', 'baglantiAdresi', 'aktif'] as const;
-const IS_MERKEZI_ALANLARI = ['kod', 'ad', 'aciklama', 'aktif'] as const;
-
-// Tek düzenleme yeri: istasyonun plan ayarı ve makine durumu İstasyonlar'da, vardiya, hafta düzeni, tatil ve kişi vardiyası Vardiya'da
-// yazılır; köprü bunları yalnız okur (prototip düzenleme isteğini o sayfaya götürür).
-export const KAYNAK_KOMUTLARI: Readonly<Record<string, KomutTanimi>> = {
-  'is-merkezi-ekle': { yol: '/is-merkezleri', alanlar: IS_MERKEZI_ALANLARI },
-  'is-merkezi-guncelle': { yol: '/is-merkezleri/:id/guncelle', parametre: ['id'], alanlar: IS_MERKEZI_ALANLARI, tamamla: 'isMerkezi' },
-  'is-merkezi-sil': { yol: '/is-merkezleri/:id/sil', parametre: ['id'], alanlar: [] },
-  'istasyon-ekle': { yol: '/istasyonlar', alanlar: ISTASYON_ALANLARI },
-  'istasyon-guncelle': { yol: '/istasyonlar/:id/guncelle', parametre: ['id'], alanlar: ISTASYON_ALANLARI, tamamla: 'istasyon' },
-  'istasyon-sil': { yol: '/istasyonlar/:id/sil', parametre: ['id'], alanlar: [] },
-  'makine-ekle': { yol: '/makineler', alanlar: MAKINE_ALANLARI },
-  'makine-guncelle': { yol: '/makineler/:id/guncelle', parametre: ['id'], alanlar: MAKINE_ALANLARI, tamamla: 'makine' },
-  'makine-sil': { yol: '/makineler/:id/sil', parametre: ['id'], alanlar: [] },
-  'kisi-ekle': { yol: '/kisiler', alanlar: ['ad', 'sicilNo', 'gorev'], tekrarKorumali: true },
-  'kisi-duzenle': { yol: '/kisiler/:id/duzenle', parametre: ['id'], alanlar: ['ad', 'sicilNo', 'gorev'], tamamla: 'kisi' },
-  'yetkinlik-belirle': { yol: '/kisi-yetkinlikleri/:kisiId/belirle', parametre: ['kisiId'], alanlar: ['istasyonIdleri'] },
-};
-
-const KOLEKSIYON: Readonly<Record<KaynakTuru, keyof KaynakAnlik>> = {
-  isMerkezi: 'isMerkezleri', istasyon: 'istasyonlar', makine: 'makineler', kisi: 'kisiler', vardiya: 'vardiyalar',
-  planAyari: 'planAyarlari', makineDurumu: 'makineDurumlari',
-};
-// Okunmuş kaydı olmadan güncellenemeyen türler. Plan ayarı ve makine durumunda satır yoksa sürüm 0'dır (sahibinin kuralı).
-const SATIR_ZORUNLU: ReadonlySet<KaynakTuru> = new Set<KaynakTuru>(['isMerkezi', 'istasyon', 'makine', 'kisi', 'vardiya']);
 const TAM_SAYI = /^[1-9]\d{0,9}$/;
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 const AZAMI_KIMLIK = 2_147_483_647;
@@ -107,29 +75,15 @@ export interface KomutIstegi { readonly yol: string; readonly govde: Record<stri
 
 // Tabloda tanımlı komutun isteğini kurar: yol parametreleri doğrulanır, gövde yalnız izinli alanlardan oluşur. Geçersiz girdide
 // "Geçersiz ..." iletili hata fırlar (köprü bunu çerçeveye 400 ile taşır).
-export function komutIstegi(tanim: KomutTanimi, girdi: Readonly<Record<string, unknown>>, anlik: KaynakAnlik = BOS_ANLIK): KomutIstegi {
+export function komutIstegi(tanim: KomutTanimi, girdi: Readonly<Record<string, unknown>>): KomutIstegi {
   let yol = tanim.yol;
   for (const ad of tanim.parametre ?? []) yol = yol.replace(`:${ad}`, yolDegeri(ad, girdi[ad]));
   const govde: Record<string, unknown> = {};
-  let kayit: KaynakKaydi | undefined;
-  let koleksiyonVar = false;
-  if (tanim.tamamla !== undefined) {
-    const koleksiyon = anlik[KOLEKSIYON[tanim.tamamla]];
-    koleksiyonVar = koleksiyon !== null;
-    kayit = koleksiyon?.get(Number(yolDegeri('id', girdi['id'])));
-    if (kayit === undefined && SATIR_ZORUNLU.has(tanim.tamamla)) {
-      throw new Error('Geçersiz kayıt: bu kayıt okunmadı; ekranı yenileyip yeniden deneyin.');
-    }
-  }
   for (const alan of tanim.alanlar) {
-    const deger = Object.hasOwn(girdi, alan) ? girdi[alan] : kayit?.[alan];
+    const deger = Object.hasOwn(girdi, alan) ? girdi[alan] : undefined;
     if (deger !== undefined) govde[alan] = deger;
   }
   Object.assign(govde, tanim.sabit);
-  if (tanim.tamamla !== undefined) {
-    if (kayit !== undefined) govde['surum'] = kayit.surum;
-    else if (koleksiyonVar) govde['surum'] = 0;
-  }
   return { yol, govde, tekrarKorumali: tanim.tekrarKorumali === true };
 }
 

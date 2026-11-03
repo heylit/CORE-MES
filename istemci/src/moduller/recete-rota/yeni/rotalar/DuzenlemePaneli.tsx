@@ -2,20 +2,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
-import { useRrKomutu } from '../veri.ts';
 import {
-  adimBirlesen, adimCarpani, adimDali, adimEkle, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz, carpanYaz,
+  adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz, carpanYaz,
   cevrimToplami, DAL_HARFLERI, dalYaz, degisimOrani, fasonaCevir, fasonMu,
-  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, OP_GRUPLARI, operasyonYaz, rotaEksikleri,
-  sirali, statuNo, sureGirisi, sureMetni, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa, yeniAdim,
-  type Adim, type Malzeme, type Operasyon,
+  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, operasyonYaz, rotaEksikleri,
+  sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
+  type Adim, type Malzeme,
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
 import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
-import { yeniKimlik } from './useRotaDuzeni.ts';
+import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
 
 const BAG_ACIKLAMA = { bagimli: 'Önceki adım tamamen bitince başlar.', ortulu: 'Önceki adımdan belirli adet çıkınca başlar, akarak devam eder.', bagimsiz: 'Önceki adımı beklemez, paralel yapılır.' } as const;
 const MALZEME_GIT_NOT = 'Listede olmayan malzeme Malzemeler ve Hizmetler\'de açılır; kart onaylanınca burada seçilebilir.';
@@ -540,80 +539,18 @@ function SecmeliPanel({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur:
   );
 }
 
-function YeniOperasyon({ r, eklendi }: { r: RotaEkrani; eklendi: (op: Operasyon) => void }) {
-  const komut = useRrKomutu();
-  const { bildir } = useBildirim();
-  const ilkIst = [...r.duzen.h.istasyon.values()].find((x) => x.aktif)?.id ?? '';
-  const [f, setF] = useState({ grup: OP_GRUPLARI[0]?.[0] ?? '', kod: '', kisa: '', ad: '', ist: ilkIst, setup: '15', proc: '2', chg: '' });
-  const [hata, setHata] = useState('');
-  const alan = (k: keyof typeof f, v: string) => { setF({ ...f, [k]: v }); };
-  const kaydet = async () => {
-    if (!f.kod.trim()) { setHata('Operasyonun kodunu yaz.'); return; }
-    if (!f.ad.trim()) { setHata('Operasyonun adını yaz.'); return; }
-    const s1 = sureGirisi(f.setup, 'hazirlik'); const s2 = sureGirisi(f.proc, 'islem'); const s3 = sureGirisi(f.chg, 'degisim');
-    const kotu = [s1, s2, s3].find((x) => !x.ok);
-    if (kotu && !kotu.ok) { setHata(kotu.ileti); return; }
-    setHata('');
-    const cevrim = s2.deger === null && s3.deger === null ? null : cevrimToplami(s2.deger, s3.deger);
-    try {
-      const c = await komut.mutateAsync({
-        ad: 'operasyon-tipi-ekle',
-        govde: {
-          kod: f.kod.trim(), ad: f.ad.trim(), grup: f.grup, kisaltma: f.kisa.trim().toLocaleUpperCase('tr-TR') || null,
-          varsayilanAyarDk: sureMetni(s1.deger, 2), varsayilanBirimDk: sureMetni(cevrim, 4), varsayilanIstasyonId: f.ist === '' ? null : Number(f.ist),
-        },
-      });
-      const id = (c.sonuc as { id?: unknown } | null)?.id;
-      if (typeof id !== 'number' && typeof id !== 'string') throw new Error('Operasyon kataloğunun cevabı okunamadı.');
-      bildir('tamam', `${f.kod.trim()} operasyon kataloğuna eklendi.`);
-      eklendi({
-        id: String(id), code: f.kod.trim(), abbr: f.kisa.trim() || null, name: f.ad.trim(), group: f.grup, groupName: f.grup,
-        stationId: f.ist || null, setup: s1.deger, cycle: cevrim, aktif: true,
-      });
-    } catch (e) {
-      setHata((e as Error).message);
-    }
-  };
-  return (
-    <Bolme baslik="Yeni operasyon tanımla">
-      <p className="tc-rr1-ipucu">Operasyon İstasyonlar&apos;ın operasyon tipi kataloğuna yazılır.</p>
-      <div className="tc-rr1-ig">
-        <SecimAlani etiket="Grup" deger={f.grup} secenekler={OP_GRUPLARI.map(([k, ad]) => ({ deger: k, baslik: ad }))} yaz={(v) => { alan('grup', v); }} />
-        <label className="tc-rr1-alan"><span>Kod</span><input className="tc-rr1-metin" value={f.kod} placeholder="Örneğin KES-LZR" aria-label="Operasyon kodu" onChange={(e) => { alan('kod', e.target.value); }} /></label>
-        <label className="tc-rr1-alan"><span>Kısaltma</span><input className="tc-rr1-metin" value={f.kisa} maxLength={6} placeholder="LZR" aria-label="Kısaltma" onChange={(e) => { alan('kisa', e.target.value); }} /></label>
-        <label className="tc-rr1-alan tc-rr1-genis"><span>Ad</span><input className="tc-rr1-metin" value={f.ad} placeholder="Lazer kesim" aria-label="Operasyon adı" onChange={(e) => { alan('ad', e.target.value); }} /></label>
-        <span className="tc-rr1-genis">
-          <SecimAlani etiket="İstasyon" deger={f.ist} bos="Seç…" secenekler={[...r.duzen.h.istasyon.values()].filter((x) => x.aktif).map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-            yaz={(v) => { alan('ist', v); }} />
-        </span>
-        <label className="tc-rr1-alan"><span>Hazırlık (dk)</span><input className="tc-rr1-sayi" inputMode="decimal" value={f.setup} aria-label="Hazırlık" onChange={(e) => { alan('setup', e.target.value); }} /></label>
-        <label className="tc-rr1-alan"><span>İşlem (dk / birim)</span><input className="tc-rr1-sayi" inputMode="decimal" value={f.proc} aria-label="İşlem" onChange={(e) => { alan('proc', e.target.value); }} /></label>
-        <label className="tc-rr1-alan"><span>Değişim (dk / birim)</span><input className="tc-rr1-sayi" inputMode="decimal" value={f.chg} placeholder="boş" aria-label="Değişim" onChange={(e) => { alan('chg', e.target.value); }} /></label>
-      </div>
-      {hata && <p className="tc-rr1-hata" role="alert">{hata}</p>}
-      <Dugme tur="birincil" yukleniyor={komut.isPending} onClick={() => { void kaydet(); }}>Tanımla ve adıma ekle</Dugme>
-    </Bolme>
-  );
-}
-
 function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: 'adimEkle' }>; kapat: () => void }) {
   const { duzen: dz } = r;
   const sahip = dz.h.malzeme.get(s.urunId);
   if (!sahip) return <BosPanel r={r} />;
   const sonra = s.sonraId ? dz.adimlar(s.urunId).find((x) => x.id === s.sonraId) : undefined;
-  const ekle = (op: Operasyon) => {
-    const yeni = yeniAdim(op, yeniKimlik());
-    const l2 = adimEkle(dz.adimlar(s.urunId), s.sonraId, yeni);
-    if (dz.degistir(s.urunId, () => l2, `${op.abbr ?? op.code} adımı eklendi`)) {
-      r.sec({ tur: 'adim', urunId: s.urunId, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar: 1 });
-    }
-  };
   return (
     <>
       <Baslik baslik="Adım ekle" etiket={sahip.code} kapat={kapat} />
       {/* Operasyon listesi tek yerdedir: soldaki palet (1113 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
       <p className="tc-rr1-ipucu">{sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek.` : 'Rotanın başına eklenecek.'} Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
-      {r.yetki.istasyonYaz && <YeniOperasyon r={r} eklendi={ekle} />}
+      {/* Operasyon tipi kataloğu İstasyonlar'da tanımlanır (1927 a); yeni tip orada açılınca palete gelir. */}
+      <SahibindeDuzenle sahip="operasyon" metin="Yeni operasyonu İstasyonlar'da tanımla" />
     </>
   );
 }

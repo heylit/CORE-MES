@@ -172,17 +172,19 @@ test.describe('R2 kaynaklar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  test('Kaynaklar: ekleme penceresi vazgeçilince istek gitmez; vardiya düzenleme Vardiya sayfasını açar', async ({ page, ag, ac }) => {
+  // 1927 a: kaynaklar burada yalnız okunur; ekleme penceresi yoktur, düzenleme sahibinin sayfasını açar.
+  test('Kaynaklar salt okunur: ekleme düğmesi yok; "İstasyonlar\'da düzenle" İstasyonlar\'ı, vardiya düzenleme Vardiya sayfasını açar', async ({ page, ag, ac }) => {
     await ac('/recete-rota/res');
     const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
     const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
     await alt.getByRole('tab', { name: 'İş merkezleri ve istasyonlar' }).click({ timeout: 15_000 });
-    await kaynaklar.getByRole('button', { name: 'İş merkezi', exact: true }).click();
-    const pencere = page.getByRole('dialog', { name: 'Yeni iş merkezi' });
-    await expect(pencere.getByLabel('Kod')).not.toHaveValue('');
-    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
-    await expect(pencere).toBeHidden();
-    await alt.getByRole('tab', { name: 'Vardiyalar' }).click();
+    await expect(kaynaklar.getByRole('button', { name: "İstasyonlar'da düzenle" }).first()).toBeVisible();
+    await expect(kaynaklar.getByRole('button', { name: 'İş merkezi', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await kaynaklar.getByRole('button', { name: "İstasyonlar'da düzenle" }).first().click();
+    await expect(page).toHaveURL(/\/istasyonlar\/is-merkezleri$/);
+    await ac('/recete-rota/res');
+    await alt.getByRole('tab', { name: 'Vardiyalar' }).click({ timeout: 15_000 });
     await kaynaklar.getByRole('button', { name: 'Bu düzeni diğerlerine kopyala' }).first().click();
     await expect(page).toHaveURL(/\/vardiya$/);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
