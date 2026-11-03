@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link, useLocation } from 'react-router-dom';
 import type { IstasyonSecimiCevabi, MakinelerCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { CalismaTakvimiCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { DurumKutusu, Secim } from '../../ortak/arayuz/index.ts';
@@ -17,13 +18,24 @@ export { PersonelEkrani } from './Personel.tsx';
 
 // Bölümü kabuğun ikinci menüsü seçer (paylasilan/sayfalar/vardiya.ts); her bölüm kendi adresindedir.
 
+// Vardiya tanımı, haftalık düzen ve kapalı günler İK menüsünden yazılır (1934 a); veri bu modülde kalır. Aynı ekran öteki adreslerde
+// (Vardiya, İstasyonlar) yalnız okunur ve yazabilene İK'daki adresi gösterir.
+export const IK_VARDIYA_YOLU = '/ik/vardiya';
 export function VardiyaEkrani() {
   const takvim = useTakvim();
-  const yaz = useYazabilir();
+  const yazabilir = useYazabilir();
+  const ikte = useLocation().pathname === IK_VARDIYA_YOLU;
   const y = useVardiyaYaz();
   if (takvim.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (takvim.isError) return <DurumKutusu durum="hata" yenile={() => { void takvim.refetch(); }} />;
-  return <VardiyaDuzeni t={takvim.data} yaz={yaz} y={y} />;
+  return (
+    <>
+      {yazabilir && !ikte && (
+        <p className="tc-vr-ipucu">Vardiyalar, haftalık düzen ve kapalı günler İnsan Kaynakları menüsünde yazılır: <Link to={IK_VARDIYA_YOLU}>İK'da düzenle</Link></p>
+      )}
+      <VardiyaDuzeni t={takvim.data} yaz={yazabilir && ikte} y={y} />
+    </>
+  );
 }
 
 const GUN_SAYISI = 14;
