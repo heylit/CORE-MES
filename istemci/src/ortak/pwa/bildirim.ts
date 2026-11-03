@@ -12,7 +12,7 @@ export interface BildirimSimgesi {
   purpose: 'any' | 'maskable';
 }
 
-// Simgeler kabuktaki TMI işaretidir (sarı zemin, koyu yazı); maskelenebilir olanlarda yazı güvenli dairenin içinde kalır.
+// Simgeler uygulama adıdır (sarı zemin, koyu yazı); maskelenebilir olanlarda yazı güvenli dairenin içinde kalır.
 export const SIMGELER: readonly BildirimSimgesi[] = [
   { src: '/simgeler/simge-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
   { src: '/simgeler/simge-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -22,8 +22,8 @@ export const SIMGELER: readonly BildirimSimgesi[] = [
 export const APPLE_SIMGESI = '/apple-touch-icon.png';
 
 export const WEB_BILDIRIMI = {
-  name: 'TMI CORE',
-  short_name: 'TMI CORE',
+  name: 'CORE',
+  short_name: 'CORE',
   description: 'Üretim planlama ve izlenebilirlik',
   lang: 'tr',
   id: '/',
