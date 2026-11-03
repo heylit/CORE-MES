@@ -1752,8 +1752,19 @@ export interface CalisanIsEmriSatiri {
 // Emir başına en çok bir iş emri çalışır (tek çalışan kuralı); yine de sıraca ilki alınır.
 export function calisanIsEmirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<CalisanIsEmriSatiri[]> {
   return db.sorgu<CalisanIsEmriSatiri>(
-    `SELECT DISTINCT ON (i.uretim_emri_id) i.uretim_emri_id AS "emirId", i.id, i.op_no AS "opNo", i.ad, i.makine_id AS "makineId"
-       FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = ANY($1::int[]) AND i.durum = 'calisiyor'
+    // Makine işin terminalde başlatıldığı kullanımdandır, planlı makine yalnız yedektir: Fabrika Haritası çalışan işi bu makinede
+    // gösterir ve planlı makine boş ya da farklı olabilir. Açık kullanım önce (planlı makine onlardan biriyse o, yoksa ilk açılan);
+    // duraklatma ve duruş kullanımı kapatır, iş o makinede kalır: açık yoksa son kapanan.
+    `SELECT DISTINCT ON (i.uretim_emri_id) i.uretim_emri_id AS "emirId", i.id, i.op_no AS "opNo", i.ad,
+            COALESCE(k.makine_id, i.makine_id) AS "makineId"
+       FROM uretim_emirleri_is_emri i
+       LEFT JOIN LATERAL (
+         SELECT m.makine_id FROM uretim_emirleri_makine_kullanimi m
+          WHERE m.is_emri_id = i.id AND m.makine_id IS NOT NULL
+          ORDER BY m.bitis IS NULL DESC, (m.bitis IS NULL AND m.makine_id IS NOT DISTINCT FROM i.makine_id) DESC,
+                   CASE WHEN m.bitis IS NULL THEN m.baslama END, m.baslama DESC, m.id DESC LIMIT 1
+       ) k ON true
+      WHERE i.uretim_emri_id = ANY($1::int[]) AND i.durum = 'calisiyor'
       ORDER BY i.uretim_emri_id, i.sira`,
     [[...emirIdleri]],
   );
