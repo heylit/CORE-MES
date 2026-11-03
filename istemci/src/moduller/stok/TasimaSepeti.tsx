@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { OkutCozCevabi, SepetCevabi, SepetEkleGovdesi, SepetSatiri, SepetTeslimEtCevabi, SepetTeslimEtGovdesi, TasimaGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -108,8 +108,11 @@ export function Birakma({ hedef, satirlar, bitti, vazgec }: { hedef: OkutHedefi;
     onError: (h) => bildir('hata', hataMetni(h)),
     onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }),
   });
+  // Hedef okutulunca form okuyucunun altında açılır; telefonda ekranın dışında kalıp "bir şey olmadı" sanılıyordu.
+  const kok = useRef<HTMLFormElement>(null);
+  useEffect(() => { kok.current?.scrollIntoView?.({ block: 'start' }); }, []);
   return (
-    <form className="tc-stok-form tc-stok-birakma" onSubmit={(o) => { o.preventDefault(); if (secilen.length > 0) birak.mutate(); }}>
+    <form ref={kok} className="tc-stok-form tc-stok-birakma" onSubmit={(o) => { o.preventDefault(); if (secilen.length > 0) birak.mutate(); }}>
       <div className="tc-stok-birakma-hedef">
         <Simge ad="pin" />
         <div><strong>Buraya bırak: {hedefMetni(hedef)}</strong>{kisiHedefiMi(hedef) && <span className="tc-stok-not">{ELDEN_NOTU(hedef.alici.ad)}</span>}</div>

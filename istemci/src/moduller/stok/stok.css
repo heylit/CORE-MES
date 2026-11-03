@@ -469,6 +469,8 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-sepet-serit { position: sticky; inset-block-end: 0; z-index: 1; display: grid; gap: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); }
 .tc-stok-sepet-serit-bas { display: flex; align-items: center; gap: var(--b-2); inline-size: 100%; padding: var(--b-2); border: 0; background: none; color: var(--ink); font: inherit; text-align: start; cursor: pointer; }
 .tc-stok-sepet-serit-bas .tc-stok-not { margin-inline-start: auto; }
+/* Bırakma formu açıkken şerit aynı kalemleri tekrarlar ve formun düğmelerini örterdi. */
+.tc-stok-teslim-panel:has(.tc-stok-birakma) .tc-stok-sepet-serit { display: none; }
 .tc-stok-sepet-sayi { min-inline-size: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-2); background: var(--hold); color: var(--ink); font-weight: 700; text-align: center; }
 .tc-stok-birakma-hedef { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
 .tc-stok-birakma-hedef > div { display: grid; gap: var(--b-1); }
