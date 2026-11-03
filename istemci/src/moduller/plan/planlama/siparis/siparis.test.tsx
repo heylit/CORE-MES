@@ -92,14 +92,14 @@ describe('P2 Siparişler', () => {
     expect(within(acilimAl()).queryByRole('form')).toBeNull();
   }, 20000);
 
-  it('motor gereken araçlar yerinde pasif, değerlendirme düğmeyle istenir (açılışta istek gitmez); kâr tablosunda tutar yazılır, Uygula pasif', async () => {
+  it('motor gereken araçlar yerinde pasif, değerlendirme düğmeyle istenir (açılışta istek gitmez); kâr tablosunda tutar yazılır', async () => {
     const govdeler: unknown[] = [];
     const istekler = sunucuKur(YONETICI, KAYIT, { govdeler });
     ac('/plan/ysiparis');
     await parca('ysiparis');
     tumAc();
-    // Parti bölme altındaki not motor notu değildir: bölme Üretim emirlerinde yapılır, etkisi burada ölçülür (1980).
-    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(3);
+    // Parti bölme altındaki not motor notu değildir: bölme Üretim emirlerinde yapılır, etkisi burada ölçülür (1980). Kâr tablosu yazar (2053-2 a).
+    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(2);
     expect(dugme('Örtüşmeyi dene').disabled).toBe(true);
     expect(screen.getByText('Örtüşebilir bağı olan geciken iş emri yok.')).toBeTruthy();
     for (const ad of ['Partiyi böl', 'Parti taraması', 'Örtüşme', 'Siparişler: maliyet ve kâr']) {
@@ -108,8 +108,6 @@ describe('P2 Siparişler', () => {
     // Partiyi böl değerlendirme ucuyla ölçülür (576): düğme açık, basılmadıkça istek gitmez.
     expect(dugme('Böl').disabled).toBe(false);
     expect(dugme('Tara').disabled).toBe(true);
-    expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
-    expect(screen.queryAllByRole('button', { name: 'Uygula' }).every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     const tutar = screen.getByLabelText('S2 tutar');
     fireEvent.change(tutar, { target: { value: '800' } });
     fireEvent.blur(tutar);
@@ -119,11 +117,12 @@ describe('P2 Siparişler', () => {
   }, 20000);
 });
 
-describe('P2 kâr tablosu (486/1 a)', () => {
-  it('maliyet Maliyetler hesabıyla dolu; önerilen fiyatı yazan düğmeler pasif', async () => {
+describe('P2 kâr tablosu (2053-2 a)', () => {
+  it('maliyet Maliyetler hesabıyla dolu; Uygula önerilen fiyatı tutara yazar, fiyatsızlara yaz boş tutarları doldurur', async () => {
     const deger = structuredClone(CALISMA_DEGERI);
-    Object.assign(deger.D.tezgahlar[0]!, { ucret: 10 }); Object.assign(deger.D.fasoncular[0]!, { fiyat: 1 }); deger.plan.ops['S1.a2'].m = '@F1';
-    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }]);
+    Object.assign(deger.D.tezgahlar[0]!, { ucret: 10_000 }); Object.assign(deger.D.fasoncular[0]!, { fiyat: 1 }); deger.plan.ops['S1.a2'].m = '@F1';
+    const govdeler: unknown[] = [];
+    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger }], { govdeler });
     ac('/plan/ysiparis');
     await parca('ysiparis');
     tumAc();
@@ -133,8 +132,28 @@ describe('P2 kâr tablosu (486/1 a)', () => {
     expect(within(tablo).getAllByText('genel gider —').length).toBeGreaterThan(0);
     const uygula = screen.getAllByRole('button', { name: 'Uygula' }) as HTMLButtonElement[];
     expect(uygula.length).toBeGreaterThan(0);
-    expect(uygula.every((b) => b.disabled)).toBe(true);
+    expect(uygula.every((b) => !b.disabled)).toBe(true);
+    type Sip = { id: string; gelir?: number | null };
+    const son = () => (govdeler.at(-1) as { deger: { D: { siparisler: Sip[] } } }).deger.D.siparisler;
+    // S2'nin maliyeti eksik (adımları planda değil): önerisi yok, toplu düğmenin yazacağı sipariş yok.
     expect(dugme('Fiyatsızlara önerilen fiyatı yaz').disabled).toBe(true);
+    // S1'in Uygula'sı önerilen fiyatı (tam lira) tutara yazar.
+    fireEvent.click(within(within(tablo).getByText('S1').closest('tr')!).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
+    const yeni = son()[0]?.gelir;
+    expect(yeni).not.toBe(1000);
+    expect(Number.isInteger(yeni) && (yeni ?? 0) > 0).toBe(true);
+    // Tutarı boş S1: toplu düğme aynı önerilen fiyatı yazar.
+    cleanup();
+    const bos = structuredClone(deger); Object.assign(bos.D.siparisler[0]!, { gelir: null });
+    const g2: unknown[] = [];
+    sunucuKur(YONETICI, [{ ...KAYIT[0]!, deger: bos }], { govdeler: g2 });
+    ac('/plan/ysiparis');
+    await parca('ysiparis');
+    tumAc();
+    fireEvent.click(dugme('Fiyatsızlara önerilen fiyatı yaz'));
+    await waitFor(() => { expect(g2).toHaveLength(1); }, { timeout: 5000 });
+    expect((g2[0] as { deger: { D: { siparisler: Sip[] } } }).deger.D.siparisler[0]?.gelir).toBe(yeni);
   }, 20000);
 });
 
