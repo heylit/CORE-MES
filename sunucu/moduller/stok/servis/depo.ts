@@ -1,0 +1,275 @@
+import { type Db } from '#cekirdek/db.ts';
+import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { sayfaliListe } from '#cekirdek/liste.ts';
+import { surumluGuncelle } from '#cekirdek/surum.ts';
+import type { SayfaliListe } from '#paylasilan/liste.ts';
+import type {
+  DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
+  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi,
+} from '#paylasilan/sozlesme/stok.ts';
+import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
+import { type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import {
+  alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
+  zemin as haritaZemini,
+} from '../../atolye/disari.ts';
+import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import * as sorgular from '../sorgular.ts';
+import { korumali, adlar, emirNoHaritasi, bakiyeSatiri } from './ortak.ts';
+
+// ---- Depo ve konum -----------------------------------------------------------------------------------------------------
+export async function depoListesi(db: Db): Promise<DepolarCevabi> { return { depolar: await sorgular.depolar(db) }; }
+
+export function konumListesi(db: Db, s: KonumlarListesi): Promise<SayfaliListe<Konum>> {
+  const suzgec = { tur: s.tur, rafId: s.rafId, metin: s.metin };
+  return sayfaliListe(s, { say: () => sorgular.konumSay(db, suzgec), satirlar: (d) => sorgular.konumlar(db, suzgec, s, d) });
+}
+// Zemin ızgarası (kart #1304): konumun karesi bağlı olduğu öğenin (gözün rafı, alan, istasyon) karesidir; bölüm kodu ve kare
+// adıyla yazılır ("DEPO1 C4"). Öğesi haritada olmayan konumun karesi yoktur, uydurulmaz.
+export async function zeminDurumu(db: Db) {
+  const z = await haritaZemini(db);
+  const konumlar = await sorgular.zeminKonumlari(db);
+  const gozRafi = new Map((await haritaGozleri(db)).map((g) => [g.id, g.rafId]));
+  const kareler = new Map<string, { salonId: number; bolumKod: string; hucre: string }>();
+  for (const b of z.bolumler) for (const n of b.nesneler) kareler.set(`${n.tur}:${n.id}`, { salonId: b.salonId, bolumKod: b.kod, hucre: n.hucre });
+  const kare = (k: { gozId: number | null; alanId: number | null; istasyonId: number | null }) =>
+    (k.gozId !== null ? kareler.get(`raf:${gozRafi.get(k.gozId)}`) : k.alanId !== null ? kareler.get(`alan:${k.alanId}`)
+      : k.istasyonId !== null ? kareler.get(`istasyon:${k.istasyonId}`) : undefined) ?? null;
+  const konumKaresi = new Map(konumlar.flatMap((k) => { const y = kare(k); return y ? [[k.id, y] as const] : []; }));
+  return { z, konumlar, konumKaresi, zeminMetni: (konumId: number) => { const y = konumKaresi.get(konumId); return y ? `${y.bolumKod} ${y.hucre}` : null; } };
+}
+
+export async function zeminIzgarasi(db: Db): Promise<ZeminCevabi> {
+  const { z, konumlar, konumKaresi } = await zeminDurumu(db);
+  const depo = new Map((await sorgular.haritaDepolari(db)).flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.kod] as const] : [])));
+  return {
+    bolumler: z.bolumler.map((b) => ({
+      ...b, depoKod: depo.get(b.salonId) ?? null,
+      konumlar: konumlar.flatMap((k) => { const y = konumKaresi.get(k.id); return y && y.salonId === b.salonId ? [{ id: k.id, kod: k.kod, tur: k.tur, hucre: y.hucre, satirSayisi: k.satirSayisi }] : []; }),
+    })),
+    istasyonlar: z.istasyonlar,
+  };
+}
+
+export async function konumAyrintisi(db: Db, id: number): Promise<KonumAyrintiCevabi> {
+  const konum = await sorgular.konumBul(db, id);
+  if (!konum) throw bulunamadi('Konum bulunamadı.');
+  const b = await sorgular.konumBakiyeleri(db, id);
+  const ad = await adlar(db, b.map((x) => x.malzemeId));
+  const zemin = (await zeminDurumu(db)).zeminMetni(id);
+  const nolar = await emirNoHaritasi(db, b.map((x) => x.uretimEmriId));
+  return {
+    konum, raf: konum.rafId === null ? null : await sorgular.konumunRafOlcusu(db, id), bakiyeler: b.map((x) => ({ ...bakiyeSatiri(x, ad, nolar), zemin })), zemin,
+    haritaYeri: konum.haritaGozId !== null ? (await haritaGozAdresi(db, konum.haritaGozId))?.adres ?? null
+      : konum.haritaAlanId !== null ? (await haritaAlanlari(db)).find((a) => a.id === konum.haritaAlanId)?.ad ?? null : null,
+  };
+}
+export async function konumAc(db: Db, g: { tur: ElleKonumTuru; kod: string; ad?: string | null | undefined; depoId?: number | undefined }): Promise<{ konum: Konum }> {
+  const depoId = g.depoId ?? (await sorgular.depoKimligi(db, 'ANA'));
+  if (depoId === null || !(await sorgular.depoVarMi(db, depoId))) throw dogrulama('Depo bulunamadı.', 'depoId');
+  const id = await korumali(() => sorgular.konumAc(db, { depoId, kod: g.kod, tur: g.tur, ad: g.ad ?? null }));
+  return { konum: (await sorgular.konumBul(db, id))! };
+}
+export async function konumDuzenle(db: Db, id: number, g: { surum: number; kod: string; ad?: string | null | undefined; tur?: ElleKonumTuru | undefined }): Promise<KonumDuzenleCevabi> {
+  const k = await sorgular.konumBul(db, id);
+  if (k && k.tur === 'raf_gozu' && k.kod !== g.kod) throw dogrulama('Raf gözünün kodu raftan gelir; rafı düzenleyin.', 'kod');
+  if (k && ['KABUL', 'URETIM'].includes(k.kod) && k.kod !== g.kod) throw dogrulama('Sabit konumun kodu değişmez.', 'kod');
+  const turEngeli = k && g.tur !== undefined ? konumTurDegisimEngeli(k, g.tur) : null;
+  if (turEngeli !== null) throw dogrulama(turEngeli, 'tur');
+  await korumali(() => surumluGuncelle({ guncelle: () => sorgular.konumGuncelle(db, id, g.surum, { kod: g.kod, ad: g.ad ?? null, tur: g.tur ?? null }), varMi: () => sorgular.konumVarMi(db, id), bulunamadiIletisi: 'Konum bulunamadı.' }));
+  return { konum: (await sorgular.konumBul(db, id))!, koduDegisenler: koduDegisenler(k ? [k] : [], await sorgular.kodDurumlari(db, { idler: [id] })) };
+}
+export async function konumPasif(db: Db, id: number, surum: number): Promise<{ konum: Konum }> {
+  const k = await sorgular.konumBul(db, id);
+  if (k && ['KABUL', 'URETIM'].includes(k.kod)) throw gecersiz('Sabit konum pasife alınamaz.');
+  if (k && k.tur === 'raf_gozu') throw gecersiz('Raf gözü raftan kapatılır; rafı düzenleyin.');
+  await korumali(() => surumluGuncelle({ guncelle: () => sorgular.konumPasifYap(db, id, surum), varMi: () => sorgular.konumVarMi(db, id), bulunamadiIletisi: 'Konum bulunamadı.' }));
+  return { konum: (await sorgular.konumBul(db, id))! };
+}
+
+// Fabrika Haritası raf, göz ve alanın tek kaynağıdır (#686); eşleme depo seçilmiş bölümün yeni yerini stok konumu yapar (#711).
+async function haritaDurumu(db: Db) {
+  const gozler = await haritaGozleri(db), alanlar = await haritaAlanlari(db), depolar = await sorgular.haritaDepolari(db);
+  const plan = haritaPlani({ gozler, alanlar, depolar, konumlar: await sorgular.haritaKonumlari(db), kodlar: new Set(await sorgular.tumKonumKodlari(db)) });
+  return { gozler, alanlar, depolar, plan };
+}
+export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
+  const { plan } = await haritaDurumu(db);
+  const idler = plan.guncelle.map((k) => k.id);
+  const onceki = idler.length === 0 ? [] : await sorgular.kodDurumlari(db, { idler });
+  for (const k of plan.ekle) await korumali(() => sorgular.haritaKonumuAc(db, k));
+  for (const k of plan.guncelle) await korumali(() => sorgular.haritaKonumuGuncelle(db, k));
+  for (const k of plan.turDegisimi) await sorgular.haritaKonumuTuru(db, k);
+  const kapatilan = plan.kapat.length === 0 ? 0 : (await sorgular.haritaKonumlariniKapat(db, plan.kapat)).length;
+  return {
+    eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length, kapatilan, atlanan: plan.atlanan,
+    koduDegisenler: idler.length === 0 ? [] : koduDegisenler(onceki, await sorgular.kodDurumlari(db, { idler })),
+  };
+}
+
+export async function haritaOzeti(db: Db): Promise<HaritaOzetiCevabi> {
+  const { gozler, alanlar, depolar, plan } = await haritaDurumu(db);
+  const bolumler = new Map<number, { salonId: number; kod: string; gozSayisi: number }>();
+  for (const z of gozler) {
+    const b = bolumler.get(z.salonId) ?? { salonId: z.salonId, kod: z.salonKodu, gozSayisi: 0 };
+    b.gozSayisi += 1;
+    bolumler.set(z.salonId, b);
+  }
+  for (const a of alanlar) if (haritaAlaniMi(a.tur) && !bolumler.has(a.salonId)) bolumler.set(a.salonId, { salonId: a.salonId, kod: `Bölüm ${a.salonId}`, gozSayisi: 0 });
+  const depo = new Map(depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.kod] as const] : [])));
+  return {
+    ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length, bagsizKonumlar: await sorgular.haritasizKonumlar(db),
+    bolumler: [...bolumler.values()].sort((x, y) => x.kod.localeCompare(y.kod, 'tr')).map((b) => ({ ...b, depoKod: depo.get(b.salonId) ?? null })),
+  };
+}
+
+export async function gozStoklari(db: Db, gozIdler: number[]): Promise<GozStoklariCevabi> {
+  const satirlar = await sorgular.gozStoklari(db, gozIdler);
+  const ad = await adlar(db, satirlar.flatMap((s) => (s.ilkMalzemeId === null ? [] : [s.ilkMalzemeId])));
+  return { gozler: satirlar.map(({ ilkMalzemeId, ...s }) => ({ ...s, ilkMalzemeAd: ilkMalzemeId === null ? null : ad.get(ilkMalzemeId) ?? null })) };
+}
+
+// Bölümü stok deposu yapar (varsa pasif depoyu açar, yoksa bölüm kodundan açar) ya da depodan çıkarır. Çıkarmada bölümde stok ya da
+// sabit konum (KABUL, URETIM) varsa reddedilir; boş konumlar kapanır. Ardından eşleme koşar.
+// DEP-61 (kart #1304): Stok Merkezi'nden raf ve göz kalemi yalnız stok deposu yapılmış (etkin) bölümde yazılır; öbür bölümler
+// ve makineler Fabrika Haritası'nın düzenleme yetkisini ister. Raf kaydında bölümün öbür öğeleri kayıtlı haliyle kalır.
+const DEPO_DEGIL = 'Bu bölüm stok deposu değil; rafını Fabrika Haritası yetkisi olan kişi düzenler.';
+async function depoBolumuOlmali(db: Db, salonId: number | null): Promise<void> {
+  if (salonId === null) throw bulunamadi('Göz bulunamadı.');
+  if (!(await sorgular.haritaDepolari(db)).some((d) => d.aktif && d.salonId === salonId)) throw yetkiYok(DEPO_DEGIL);
+}
+export async function depoRaflariKaydet(db: Db, salonId: number, g: { surum: number; raflar: RafKaydi[] }, kisiId: number): Promise<KayitCevabi> {
+  await depoBolumuOlmali(db, salonId);
+  return rafYerlesimiKaydet(db, salonId, g, kisiId);
+}
+export async function depoGozKalemiYaz(db: Db, g: GozKalemiKaydi, kisiId: number): Promise<GozKalemi> {
+  await depoBolumuOlmali(db, (await haritaGozAdresi(db, g.gozId))?.salonId ?? null);
+  return haritaGozKalemiYaz(db, g, kisiId);
+}
+export async function depoGozKalemiSil(db: Db, id: number): Promise<void> {
+  const salonId = await gozKaleminBolumu(db, id);
+  if (salonId === null) throw bulunamadi('Göz kalemi bulunamadı.');
+  await depoBolumuOlmali(db, salonId);
+  await haritaGozKalemiSil(db, id);
+}
+
+export async function bolumDeposu(db: Db, salonId: number, depoOlsun: boolean): Promise<HaritaOzetiCevabi> {
+  const { gozler, alanlar, depolar } = await haritaDurumu(db);
+  const salonKodu = gozler.find((z) => z.salonId === salonId)?.salonKodu ?? (alanlar.some((a) => a.salonId === salonId) ? `BOLUM${salonId}` : null);
+  if (salonKodu === null) throw bulunamadi('Bölüm Fabrika Haritası\'nda bulunamadı ya da rafı yok.');
+  const mevcut = depolar.find((d) => d.salonId === salonId) ?? null;
+  if (depoOlsun) {
+    if (mevcut) await sorgular.depoAktifligi(db, mevcut.id, true);
+    else await korumali(() => sorgular.haritaDeposuAc(db, { salonId, kod: depoKoduOner(salonKodu, new Set(depolar.map((d) => d.kod))), ad: salonKodu }));
+  } else if (mevcut?.aktif) {
+    const dolu = await sorgular.depoDoluMu(db, mevcut.id);
+    if (dolu.sabit > 0) throw gecersiz('Bu bölümde mal kabul ve üretim çıkışı konumları var; ana depo depodan çıkarılamaz.');
+    if (dolu.bakiye > 0) throw cakisma(`Bölümde ${dolu.bakiye} stok satırı var; önce taşıyın.`);
+    await sorgular.depoKonumlariniKapat(db, mevcut.id);
+    await sorgular.depoAktifligi(db, mevcut.id, false);
+  }
+  await haritadanEsle(db);
+  return haritaOzeti(db);
+}
+
+// ---- Raf -------------------------------------------------------------------------------------------------------------------
+export function rafListesi(db: Db, s: RaflarListesi): Promise<SayfaliListe<Raf>> {
+  const suzgec = { tur: s.tur, metin: s.metin };
+  return sayfaliListe(s, { say: () => sorgular.rafSay(db, suzgec), satirlar: (d) => sorgular.raflar(db, suzgec, s, d) });
+}
+export async function rafMatrisi(db: Db, id: number): Promise<RafMatrisiCevabi> {
+  const raf = await sorgular.rafBul(db, id);
+  if (!raf) throw bulunamadi('Raf bulunamadı.');
+  const gozler = await sorgular.rafinGozleri(db, id);
+  const ad = await adlar(db, gozler.flatMap((g) => (g.ilkMalzemeId === null ? [] : [g.ilkMalzemeId])));
+  return { raf, gozler: gozler.map(({ ilkMalzemeId, ...g }) => ({ ...g, ilkMalzemeAd: ilkMalzemeId === null ? null : ad.get(ilkMalzemeId) ?? null })) };
+}
+type RafGirdisi = Omit<RafAcKomutu, 'depoId'>;
+async function gozleriKur(db: Db, rafId: number, depoId: number, r: RafGirdisi): Promise<void> {
+  const gozler = rafGozleri({ kod: r.kod, numaralama: r.numaralama, ilkBolme: r.ilkBolme, bolmeSayisi: r.bolmeSayisi, katSayisi: r.katSayisi });
+  await korumali(async () => {
+    await sorgular.kodDenetiminiErtele(db);
+    await sorgular.gozKodlariniYenile(db, rafId, r.kod);
+    await sorgular.fazlaGozleriKapat(db, rafId, gozler);
+    await sorgular.gozleriYaz(db, rafId, depoId, gozler);
+    await sorgular.kodDenetiminiAc(db);
+  });
+}
+export async function rafAc(db: Db, g: RafAcKomutu): Promise<{ raf: Raf }> {
+  const depoId = g.depoId ?? (await sorgular.depoKimligi(db, 'ANA'));
+  if (depoId === null || !(await sorgular.depoVarMi(db, depoId))) throw dogrulama('Depo bulunamadı.', 'depoId');
+  const id = await korumali(() => sorgular.rafAc(db, { ...g, depoId }));
+  await gozleriKur(db, id, depoId, g);
+  return { raf: (await sorgular.rafBul(db, id))! };
+}
+const bolmeleri = (r: { numaralama: 'sirali' | 'tek' | 'cift'; ilkBolme: number; bolmeSayisi: number }): number[] =>
+  Array.from({ length: r.bolmeSayisi }, (_, k) => bolmeNo(r.numaralama, r.ilkBolme, k));
+export async function rafDuzenle(db: Db, id: number, g: RafDuzenleKomutu): Promise<RafDuzenleCevabi> {
+  const { surum, ...alanlar } = g;
+  const eski = await sorgular.rafBul(db, id, true);
+  const onceki = await sorgular.kodDurumlari(db, { rafId: id });
+  if (eski) await korumali(() => sorgular.gozleriYenidenNumarala(db, id, bolmeleri(eski), bolmeleri(alanlar)));
+  await korumali(() => surumluGuncelle({ guncelle: () => sorgular.rafGuncelle(db, id, surum, alanlar), varMi: () => sorgular.rafVarMi(db, id), bulunamadiIletisi: 'Raf bulunamadı.' }));
+  const raf = (await sorgular.rafBul(db, id))!;
+  await gozleriKur(db, id, raf.depoId, alanlar);
+  return { raf: (await sorgular.rafBul(db, id))!, koduDegisenler: koduDegisenler(onceki, await sorgular.kodDurumlari(db, { rafId: id })) };
+}
+export async function rafPasif(db: Db, id: number, surum: number): Promise<{ raf: Raf }> {
+  await korumali(async () => {
+    await surumluGuncelle({ guncelle: () => sorgular.rafPasifYap(db, id, surum), varMi: () => sorgular.rafVarMi(db, id), bulunamadiIletisi: 'Raf bulunamadı.' });
+    await sorgular.rafGozleriniKapat(db, id);
+  });
+  return { raf: (await sorgular.rafBul(db, id))! };
+}
+
+// ---- Depo yerleşimi (2B düzenleyici) ---------------------------------------------------------------------------------------
+export const say = (m: string): number => Number(m);
+export async function anaDepo(db: Db): Promise<number> {
+  const id = await sorgular.depoKimligi(db, 'ANA');
+  if (id === null) throw new Error('Ana depo yok');
+  return id;
+}
+export async function yerlesimOku(db: Db): Promise<YerlesimCevabi> {
+  const depoId = await anaDepo(db);
+  const y = (await sorgular.yerlesim(db, depoId))!;
+  const raflar = await sorgular.yerlesimRaflari(db, depoId);
+  return {
+    depo: (await sorgular.depoBul(db, depoId))!,
+    yerlesim: {
+      bina: { x0: say(y.bina_x0), x1: say(y.bina_x1), z0: say(y.bina_z0), z1: say(y.bina_z1) },
+      kabul: { x: say(y.kabul_x), z: say(y.kabul_z), genislik: say(y.kabul_genislik), derinlik: say(y.kabul_derinlik) },
+      kareBoyu: say(y.kare_boyu), sayimSuresiGun: y.sayim_suresi_gun, fason: { x: say(y.fason_x), z: say(y.fason_z), aci: y.fason_aci }, surum: y.surum,
+    },
+    raflar: raflar.map((r) => ({ ...r, bolmeGenislikM: say(r.bolmeGenislikM), derinlikM: say(r.derinlikM), katAraligiM: say(r.katAraligiM), xM: say(r.xM), zM: say(r.zM) })),
+  };
+}
+const metin2 = (n: number): string => n.toFixed(2);
+// Tek işlemde kaydeder: önce kaldırılanlar (stoklu göz kaldırılamaz), sonra değişenler (sürümlü), sonra yeniler.
+// Göz adresi tekil kalmalı: iki raf aynı adresi üretirse `stok_konum_kod_tek` 409 döner.
+export async function yerlesimKaydet(db: Db, g: YerlesimKaydetKomutu): Promise<YerlesimCevabi> {
+  const depoId = await anaDepo(db);
+  await korumali(async () => {
+    await surumluGuncelle({ guncelle: () => sorgular.yerlesimGuncelle(db, depoId, g.surum, g), varMi: () => sorgular.yerlesimVarMi(db, depoId), bulunamadiIletisi: 'Yerleşim bulunamadı.' });
+    await sorgular.depoAdiYaz(db, depoId, g.depoAdi);
+    for (const x of g.silinenler) {
+      await surumluGuncelle({ guncelle: () => sorgular.rafPasifYap(db, x.id, x.surum), varMi: () => sorgular.rafVarMi(db, x.id), bulunamadiIletisi: 'Raf bulunamadı.' });
+      await sorgular.rafGozleriniKapat(db, x.id);
+    }
+    for (const r of g.raflar) {
+      const alanlar = { kod: r.kod, tur: r.tur, numaralama: r.numaralama, ilkBolme: r.ilkBolme, bolmeSayisi: r.bolmeSayisi, katSayisi: r.tur === 'zemin' ? 1 : r.katSayisi,
+        bolmeGenislikM: metin2(r.bolmeGenislikM), derinlikM: metin2(r.derinlikM), katAraligiM: metin2(r.katAraligiM) };
+      let id: number;
+      if (r.id !== null) {
+        const eski = await sorgular.rafBul(db, r.id, true);
+        if (!eski) throw bulunamadi(`Raf ${r.kod} bulunamadı.`);
+        await sorgular.gozleriYenidenNumarala(db, r.id, bolmeleri(eski), bolmeleri(alanlar));
+        const rid = r.id, rs = r.surum ?? 0;
+        await surumluGuncelle({ guncelle: () => sorgular.rafGuncelle(db, rid, rs, alanlar), varMi: () => sorgular.rafVarMi(db, rid), bulunamadiIletisi: 'Raf bulunamadı.' });
+        id = r.id;
+      } else id = await sorgular.rafAc(db, { ...alanlar, depoId });
+      await sorgular.rafYeriYaz(db, id, r);
+      await gozleriKur(db, id, depoId, alanlar);
+    }
+  });
+  return yerlesimOku(db);
+}
