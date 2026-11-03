@@ -10,7 +10,7 @@ import {
 import * as servis from './servis.ts';
 import {
   kmBalonlarGovdesi, kmMerkezBelgeleriCevabi, kmMerkezBelgeSorgusu, kmNumuneCevabi, kmNumuneIsteGovdesi, kmNumuneKarariGovdesi, kmNumunePlaniCevabi, kmNumunePlaniGovdesi, kmNumunelerCevabi,
-  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi, kmStudyoEsitlemeCevabi,
+  kmOlcumGovdesi, kmOlcumlerCevabi, kmResimCevabi, kmResimEkleGovdesi, kmStudyoEmirParametresi, kmStudyoNumuneParametresi, kmStudyoOzetleriCevabi, kmStudyoParcaCevabi, kmStudyoEsitlemeCevabi, kmPlanKopyalaGovdesi,
   kmStudyoParcaParametresi, kmStudyoPlanParametresi, kmStudyoResimParametresi, kmSurumGovdesi, kmBalonCevabi, kmBalonYeriGovdesi, kmStudyoBalonParametresi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import * as studyo from './studyo.ts';
@@ -318,6 +318,16 @@ export const uclar: Uc[] = [
     isle: async ({ db, sorgu }) => ({
       belgeler: await studyo.merkezBelgeleri(db, sorgu.ara === undefined || sorgu.ara === '' ? null : sorgu.ara, sorgu.malzemeNo ?? null),
     }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/studyo/resimler/:resimId/plani-kopyala',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kmStudyoResimParametresi,
+    govde: kmPlanKopyalaGovdesi,
+    cevap: kmResimCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ resim: await studyo.planKopyala(db, kullanici.id, parametre.resimId, govde) }),
   }),
   uc({
     yontem: 'POST',

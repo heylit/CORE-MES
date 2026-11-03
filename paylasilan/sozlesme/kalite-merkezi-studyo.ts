@@ -44,6 +44,8 @@ export const kmBalon = z.object({
   // bilmeyen okuyucular içindir.
   yer: z.tuple([z.number(), z.number()]).nullable().optional(),
   yerKipi: z.enum(KM_BALON_YER_KIPLERI).nullable().optional(),
+  // 1995 a: eski revizyondan kopyalanan balonun yeri yeni resimde kontrol bekler. Sunucu hep gönderir (isteğe bağlılık yukarıdaki gibi).
+  yerKontrol: z.boolean().optional(),
   surum: z.number().int().positive(),
 });
 
@@ -58,6 +60,9 @@ export const kmResim = z.object({
   aktif: z.boolean(),
   surum: z.number().int().positive(),
   eklendi: zamanSemasi,
+  // 1995 a: aynı belgenin daha yeni revizyonu parçaya alındıysa bu resim eski revizyondur: görünür, planı değiştirilmez, yeniye kopyalanır.
+  // Sunucu hep gönderir; isteğe bağlılık bu alanı bilmeyen okuyucular içindir.
+  eski: z.boolean().optional(),
   balonlar: z.array(kmBalon),
 });
 
@@ -98,6 +103,8 @@ export const kmResimEkleGovdesi = z.object({
   revizyon: z.string().trim().min(1).max(20).nullish(),
 });
 export const kmResimCevabi = z.object({ resim: kmResim });
+// 1995 a: eski revizyonun planı balonu olmayan yeni revizyona kopyalanır; hedefin sürümüyle.
+export const kmPlanKopyalaGovdesi = z.object({ kaynakResimId: kimlik, surum: z.number().int().positive() });
 // Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (belge-merkezi/disari.ts yayindakiBelgeler); arama belge adında.
 export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
 // Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
@@ -215,6 +222,7 @@ export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
 export type KmStudyoEsitlemeCevabi = z.output<typeof kmStudyoEsitlemeCevabi>;
+export type KmPlanKopyalaGovdesi = z.input<typeof kmPlanKopyalaGovdesi>;
 export type KmStudyoOzeti = z.output<typeof kmStudyoOzeti>;
 export type KmStudyoOzetleriCevabi = z.output<typeof kmStudyoOzetleriCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;

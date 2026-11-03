@@ -14,7 +14,7 @@ import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } fr
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
-import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
+import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, usePlanKopyala, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
 // Resim ve modeller (597 a): Arkon çizim stüdyosunun düzeni; solda parça, resimler ve üretim emri, ortada Arkon'la ortak teknik resim
@@ -43,6 +43,8 @@ function NumuneSatiri({ n }: { n: KmNumune }) {
     </li>
   );
 }
+
+const yerKontrolSayisi = (r: KmResim): number => r.balonlar.filter((b) => b.yerKontrol === true).length;
 
 export const ResimVeModellerSayaci: KmSayaci = null;
 
@@ -76,7 +78,10 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   const kart: KmParcaKaynagi | undefined = useParcaKaynaklari(malzemeNo === null ? [] : [malzemeNo]).get(malzemeNo ?? 0);
   const parca = useStudyoParcasi(malzemeNo);
   const resimler = useMemo(() => (parca.data?.resimler ?? []).filter((r) => r.aktif), [parca.data]);
-  const resim = resimler.find((r) => r.id === resimId) ?? resimler[0] ?? null;
+  // Eski revizyon (1995 a) seçilmedikçe güncel resim açılır.
+  const resim = resimler.find((r) => r.id === resimId) ?? resimler.find((r) => !r.eski) ?? resimler[0] ?? null;
+  const eskiKaynak = resim && !resim.eski && resim.balonlar.length === 0
+    ? resimler.find((r) => r.eski && r.merkezBelgeId === resim.merkezBelgeId && r.balonlar.length > 0) ?? null : null;
 
   // Parçanın iş emirleri: Üretim emirleri'nden gelen satırlar, stok kodu kartınkiyle aynı olanlar (596).
   const emirler = useMemo(
@@ -90,6 +95,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
 
   // Görüntüleyicideki plan değişikliği kaydedilene dek taslaktır; resim ya da sürümü değişince düşer.
   const duzenler = yetki.onayla;
+  const planDuzenler = duzenler && resim?.eski !== true;
   const [taslak, taslakYaz] = useState<Balon[] | null>(null);
   useEffect(() => { taslakYaz(null); }, [resim?.id, resim?.surum]);
   const planYaz = useBalonPlaniYaz(malzemeNo);
@@ -111,6 +117,15 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
     esitlenen.current.add(malzemeNo);
     esitle.mutate(malzemeNo, { onError: (h) => { bildir('hata', hataIletisi(h, 'Çizim Merkezi’ndeki resimler alınamadı.')); } });
   }, [malzemeNo, duzenler, alinmamis]);
+
+  const kopyala = usePlanKopyala();
+  const planiKopyala = () => {
+    if (!resim || !eskiKaynak) return;
+    kopyala.mutate({ hedef: resim, kaynak: eskiKaynak }, {
+      onSuccess: () => { bildir('tamam', 'Eski revizyonun planı kopyalandı; işaretli balonların yerini kontrol edin.'); },
+      onError: (h) => { bildir('hata', hataIletisi(h, 'Plan kopyalanamadı.')); },
+    });
+  };
 
   // Resim alma ve kaldırma kalite onayıdır (603 a).
   const [merkez, merkezYaz] = useState(false);
@@ -171,7 +186,11 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
                   <li key={r.id} className="km-st-belge-satir">
                     <button type="button" className={`km-st-belge${r.id === resim?.id ? ' cur' : ''}`} aria-pressed={r.id === resim?.id} onClick={() => { resimIdYaz(r.id); mobilYaz('resim'); }}>
                       <span className={`km-st-tur km-st-tur-${r.tur}`}><Simge ad={r.tur === 'resim' ? 'file' : 'cube'} boyut="k" /></span>
-                      <span className="km-st-belge-ad"><b>{r.ad}</b><small>{[r.revizyon ? `Rev ${r.revizyon}` : null, `${String(r.balonlar.length)} kontrol noktası`].filter(Boolean).join(' · ')}</small></span>
+                      <span className="km-st-belge-ad"><b>{r.ad}</b><small>{[
+                        r.revizyon ? `Rev ${r.revizyon}` : null, `${String(r.balonlar.length)} kontrol noktası`,
+                        yerKontrolSayisi(r) ? `${String(yerKontrolSayisi(r))} yeri kontrol bekliyor` : null,
+                      ].filter(Boolean).join(' · ')}</small></span>
+                      {r.eski ? <Rozet ton="uyari">Eski revizyon</Rozet> : null}
                     </button>
                     {duzenler ? (
                       <button type="button" className="km-st-kaldir" aria-label={`${r.ad} resmini kaldır`} onClick={() => { kaldirilacakYaz(r); }}><Simge ad="trash" boyut="k" /></button>
@@ -181,6 +200,9 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
               ) : <span className="km-st-soluk">{parca.isPending ? 'Yükleniyor' : 'Belge merkezinden alınmış resim yok.'}</span>}
             {!duzenler && alinmamis > 0 ? (
               <span className="km-st-soluk">Çizim Merkezi’nde bu karta bağlı {String(alinmamis)} yayındaki belge var; kalite onayı olan biri açınca parçaya alınır.</span>
+            ) : null}
+            {duzenler && eskiKaynak ? (
+              <Dugme tur="ikincil" simge="layers" disabled={kopyala.isPending || taslak !== null} onClick={planiKopyala}>Eski revizyondan planı kopyala</Dugme>
             ) : null}
             {duzenler && kart ? <Dugme tur="ikincil" simge="plus" onClick={() => { merkezYaz(true); }}>Belge merkezinden al</Dugme> : null}
           </section>
@@ -217,8 +239,8 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           </div>
         ) : null}
         {resim ? (
-          <Resim resim={resim} yerYaz={duzenler && taslak === null} kontrol={{
-            balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !duzenler,
+          <Resim resim={resim} yerYaz={planDuzenler && taslak === null} kontrol={{
+            balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !planDuzenler,
           }} />
         ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
       </section>

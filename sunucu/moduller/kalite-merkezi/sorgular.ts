@@ -307,11 +307,11 @@ export interface BalonSatiri {
   id: number; resimId: number; malzemeNo: number; no: number; nominal: string; tolerans: string | null; alt: string | null; ust: string | null;
   alet: string | null; siklik: string | null; kritik: boolean; yontem: 'cmm' | 'elle' | null; olcuAletiGerekir: boolean; tur: string | null;
   sayfa: number | null; x: number | null; y: number | null; yaziKutusu: number[] | null; yer: [number, number] | null; yerKipi: 'yakin' | 'serit' | null;
-  surum: number;
+  yerKontrol: boolean; surum: number;
 }
 const BALON_SUTUNLARI = `b.id, b.resim_id AS "resimId", r.malzeme_no AS "malzemeNo", b.no, b.nominal, b.tolerans, b.alt::text AS alt, b.ust::text AS ust,
   b.alet, b.siklik, b.kritik, b.yontem, b.olcu_aleti_gerekir AS "olcuAletiGerekir", b.tur, b.sayfa, b.x, b.y, b.yazi_kutusu AS "yaziKutusu",
-  CASE WHEN b.yer_x IS NULL THEN NULL ELSE ARRAY[b.yer_x, b.yer_y] END AS yer, b.yer_kipi AS "yerKipi", b.surum`;
+  CASE WHEN b.yer_x IS NULL THEN NULL ELSE ARRAY[b.yer_x, b.yer_y] END AS yer, b.yer_kipi AS "yerKipi", b.yer_kontrol AS "yerKontrol", b.surum`;
 
 export function resimBalonlari(db: Db, resimIdler: readonly number[]): Promise<BalonSatiri[]> {
   return db.sorgu(
@@ -490,13 +490,32 @@ export async function balonGuncelle(db: Db, id: number, b: BalonYazimi, kisiId: 
   await db.sorgu(
     `UPDATE kalite_merkezi_balon SET no = $2, nominal = $3, tolerans = $4, alt = $5::numeric, ust = $6::numeric, alet = $7, siklik = $8, kritik = $9,
         yontem = $10, olcu_aleti_gerekir = $11, tur = $12, sayfa = $13, x = $14, y = $15, yazi_kutusu = $16::double precision[],
-        yer_x = $17::double precision, yer_y = $18::double precision, yer_kipi = $19, surum = surum + 1, guncelleyen_id = $20, guncellendi = now()
+        yer_x = $17::double precision, yer_y = $18::double precision, yer_kipi = $19, yer_kontrol = false, surum = surum + 1, guncelleyen_id = $20,
+        guncellendi = now()
       WHERE id = $1 AND aktif AND (no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y, yazi_kutusu,
           yer_x, yer_y, yer_kipi)
         IS DISTINCT FROM ($2, $3, $4, $5::numeric, $6::numeric, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::double precision[],
           $17::double precision, $18::double precision, $19)`,
     [id, ...balonDegerleri(b), kisiId],
   );
+}
+
+// 1995 a: eski revizyonun etkin balonları yeni resme olduğu gibi kopyalanır; yeri olan balon "yer kontrol bekliyor" işaretiyle gelir.
+export async function balonlariKopyala(db: Db, kaynakResimId: number, hedefResimId: number, kisiId: number): Promise<number> {
+  const r = await db.sorgu<{ id: number }>(
+    `INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y,
+        yazi_kutusu, yer_x, yer_y, yer_kipi, yer_kontrol, guncelleyen_id)
+     SELECT $2, no, nominal, tolerans, alt, ust, alet, siklik, kritik, yontem, olcu_aleti_gerekir, tur, sayfa, x, y,
+        yazi_kutusu, yer_x, yer_y, yer_kipi, (x IS NOT NULL OR yer_x IS NOT NULL), $3
+       FROM kalite_merkezi_balon WHERE resim_id = $1 AND aktif ORDER BY no RETURNING id`,
+    [kaynakResimId, hedefResimId, kisiId],
+  );
+  return r.length;
+}
+
+// Plan kaydedilince balonların yeri gözden geçirilmiş sayılır (1995 a).
+export async function yerKontrolunuKaldir(db: Db, resimId: number): Promise<void> {
+  await db.sorgu('UPDATE kalite_merkezi_balon SET yer_kontrol = false WHERE resim_id = $1 AND aktif AND yer_kontrol', [resimId]);
 }
 
 export async function balonEkle(db: Db, resimId: number, b: BalonYazimi, kisiId: number): Promise<void> {
@@ -514,7 +533,7 @@ export async function balonYeriYaz(
   db: Db, id: number, surum: number, yer: readonly [number, number] | null, yerKipi: 'yakin' | 'serit' | null, kisiId: number,
 ): Promise<boolean> {
   const r = await db.sorgu<{ id: number }>(
-    `UPDATE kalite_merkezi_balon SET yer_x = $3::double precision, yer_y = $4::double precision, yer_kipi = $5, surum = surum + 1,
+    `UPDATE kalite_merkezi_balon SET yer_x = $3::double precision, yer_y = $4::double precision, yer_kipi = $5, yer_kontrol = false, surum = surum + 1,
         guncelleyen_id = $6, guncellendi = now()
       WHERE id = $1 AND surum = $2 AND aktif RETURNING id`,
     [id, surum, yer?.[0] ?? null, yer?.[1] ?? null, yerKipi, kisiId],

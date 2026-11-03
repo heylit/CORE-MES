@@ -68,6 +68,36 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     expect(esitleme(o.yazmalar)).toHaveLength(0);
   });
 
+  it('1995 a: eski revizyon rozetle ayrılır, güncel resim açılır; balonsuz yeni revizyona eski plan tek düğmeyle kopyalanır', async () => {
+    const balon = {
+      id: 5, no: 1, nominal: 'Ø5', tolerans: null, alt: '4.9', ust: '5.1', alet: null, siklik: null, kritik: false, yontem: null, olcuAletiGerekir: false,
+      tur: null, sayfa: 1, x: 10, y: 20, yaziKutusu: null, yer: null, yerKipi: null, yerKontrol: false, surum: 1,
+    };
+    const parcasi: KmStudyoParcaCevabi = {
+      resimler: [resim({ id: 20, ad: 'Deneme resim', revizyon: 'A', eski: true, balonlar: [balon] }), resim({ id: 21, ad: 'Deneme resim', revizyon: 'B', surum: 3, eski: false })],
+      numunePlanlari: [], alinmamis: 0,
+    };
+    const s = kmAc('resimler?parca=7', MUHENDIS, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, parcalar: { 7: parcasi } } });
+    const sol = await screen.findByRole('complementary', { name: 'Parça ve resimler' });
+    const eskiDugme = await within(sol).findByRole('button', { name: /Rev A/ });
+    expect(within(eskiDugme).getByText('Eski revizyon')).toBeTruthy();
+    expect(within(sol).getByRole('button', { name: /Rev B/ }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(sol).getByRole('button', { name: 'Eski revizyondan planı kopyala' }));
+    await waitFor(() => {
+      expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/21/plani-kopyala')?.govde).toEqual({ kaynakResimId: 20, surum: 3 });
+    });
+  });
+
+  it('1995 a: onaysız kullanıcı kopyalama düğmesini görmez', async () => {
+    const parcasi: KmStudyoParcaCevabi = {
+      resimler: [resim({ id: 20, revizyon: 'A', eski: true, balonlar: [] }), resim({ id: 21, revizyon: 'B', eski: false })], numunePlanlari: [], alinmamis: 0,
+    };
+    kmAc('resimler?parca=7', MUAYENECI, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, parcalar: { 7: parcasi } } });
+    const sol = await screen.findByRole('complementary', { name: 'Parça ve resimler' });
+    await within(sol).findByRole('button', { name: /Rev B/ });
+    expect(within(sol).queryByRole('button', { name: 'Eski revizyondan planı kopyala' })).toBeNull();
+  });
+
   it('yan paneller kapalı açılır (1738 c); düğme açar, tercih bu tarayıcıda hatırlanır', async () => {
     window.localStorage.removeItem('kalite-merkezi:studyo-yan-panel');
     kmAc('resimler?parca=7', MUAYENECI, {}, SECENEK);

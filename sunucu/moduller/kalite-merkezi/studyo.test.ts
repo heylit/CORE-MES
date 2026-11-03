@@ -22,7 +22,7 @@ import { numuneIste, olcumYaz, studyoParcasi } from './disari.ts';
 import {
   STUDYO_ILETILER, balonPlaniReddi, numuneKarariReddi, numunePlaniReddi, olcumSonucu, ondalikKarsilastir, sonOlcumler, studyoResimTuru,
 } from './kurallar.ts';
-import { resimMerkezdenEkle } from './studyo.ts';
+import { balonYeriYaz, resimMerkezdenEkle } from './studyo.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -294,6 +294,60 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await parca()).alinmamis, 1);
     assert.deepEqual((await esitle(kalite)).json(), { eklenen: 1 });
     assert.deepEqual((await parca()).resimler.map((x) => x.revizyon).sort(), ['A', 'B']);
+  });
+
+  test('KM-S28 (1995 a) yeni revizyon boş başlar; eski revizyon salt okunur görünür; plan tek komutla yeniye kopyalanır, yeri olan balon kontrol bekler', async () => {
+    const levha = (await o().vt.tx((db) => ornekMalzemeNo(db, 'levha')))!;
+    const kisi = { id: yonId, ad: 'Deneme Yönetici', islemler: [] };
+    const icerikA = pdf('levha-a');
+    const belge = await belgeAc('Levha resmi', icerikA, 'levha.pdf');
+    await o().vt.tx((db) => kaydaBagla(db, kisi, belge, 'malzemeler', levha));
+    assert.deepEqual((await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${levha}/esitle`, {})).json(), { eklenen: 1 });
+    const parca = async () => (await oku(kalite, `/kalite-merkezi/studyo/parcalar/${levha}`)).json() as KmStudyoParcaCevabi;
+    const eskiId = (await parca()).resimler[0]!.id;
+    await balonEkle(eskiId, 1, ['4.9', '5.1'], true);
+    await o().sahip.sorgu('UPDATE kalite_merkezi_balon SET x = 10, y = 20 WHERE resim_id = $1', [eskiId]);
+    await balonEkle(eskiId, 2, null);
+
+    const b = (await oku(yonetici, `/cizimler/${belge}`)).json() as MerkezBelgesi;
+    const r = await merkez<MerkezBelgesi>(`/cizimler/${belge}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('levha-b')), dosyaAdi: 'levha.pdf', surum: b.surum });
+    await merkez(`/cizimler/${belge}/revizyonlar/${r.revizyonlar.find((x) => x.harf === 'B')?.id}/yayinla`, { surum: r.surum });
+    assert.deepEqual((await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${levha}/esitle`, {})).json(), { eklenen: 1 });
+    const iki = await parca();
+    const eski = iki.resimler.find((x) => x.id === eskiId)!;
+    const yeni = iki.resimler.find((x) => x.id !== eskiId)!;
+    assert.deepEqual([eski.eski, eski.balonlar.length, yeni.eski, yeni.revizyon, yeni.balonlar.length], [true, 2, false, 'B', 0], 'yeni revizyon boş başlar');
+
+    // Eski resim alınan revizyonun dosyasıyla görünür; planı ve balon yeri değiştirilmez.
+    const dosya = await oku(kalite, `/kalite-merkezi/studyo/resimler/${eskiId}/dosya`);
+    assert.equal(dosya.statusCode, 200, dosya.body);
+    assert.equal(dosya.rawPayload.equals(icerikA), true);
+    const plan = await yaz(kalite, `/kalite-merkezi/studyo/resimler/${eskiId}/balonlar`, { surum: eski.surum, balonlar: [] });
+    assert.deepEqual([plan.statusCode, ileti(plan)], [400, STUDYO_ILETILER.resimEski]);
+    const yer = await o().vt.tx((db) => balonYeriYaz(db, yonId, eski.balonlar[0]!.id, { surum: eski.balonlar[0]!.surum, yer: [1, 2], yerKipi: null }).then(() => null, (h: unknown) => h));
+    assert.equal((yer as UygulamaHatasi | null)?.message, STUDYO_ILETILER.resimEski);
+
+    const kopyala = (c: string, hedef: number, govde: unknown) => yaz(c, `/kalite-merkezi/studyo/resimler/${hedef}/plani-kopyala`, govde);
+    assert.equal((await kopyala(yazar, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum })).statusCode, 403);
+    assert.equal((await kopyala('', yeni.id, { kaynakResimId: eskiId, surum: yeni.surum })).statusCode, 401);
+    const tersine = await kopyala(kalite, eskiId, { kaynakResimId: yeni.id, surum: eski.surum });
+    assert.deepEqual([tersine.statusCode, ileti(tersine)], [400, STUDYO_ILETILER.resimEski]);
+    const baskaKaynak = await kopyala(kalite, yeni.id, { kaynakResimId: resimId, surum: yeni.surum });
+    assert.deepEqual([baskaKaynak.statusCode, ileti(baskaKaynak)], [400, STUDYO_ILETILER.kopyaKaynakUygunsuz]);
+    const k = await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum });
+    assert.equal(k.statusCode, 200, k.body);
+    const kopya = (k.json() as { resim: KmResim }).resim;
+    assert.deepEqual(kopya.balonlar.map((x) => [x.no, x.alt, x.ust, x.kritik, x.x, x.yerKontrol]), [[1, '4.9', '5.1', true, 10, true], [2, null, null, false, null, false]]);
+    assert.equal((await parca()).resimler.find((x) => x.id === eskiId)?.balonlar.length, 2, 'eski plan yerinde kalır');
+    const dolu = await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: kopya.surum });
+    assert.deepEqual([dolu.statusCode, ileti(dolu)], [400, STUDYO_ILETILER.kopyaHedefDolu]);
+    assert.equal((await kopyala(kalite, yeni.id, { kaynakResimId: eskiId, surum: yeni.surum })).statusCode, 409, 'eski sürümle kopya ezmez');
+
+    // Plan kaydedilince yer kontrolü kalkar.
+    const girdi = kopya.balonlar.map((x) => ({ id: x.id, no: x.no, nominal: x.nominal, alt: x.alt, ust: x.ust, kritik: x.kritik, olcuAletiGerekir: x.olcuAletiGerekir, x: x.x, y: x.y }));
+    const kayit = await yaz(kalite, `/kalite-merkezi/studyo/resimler/${yeni.id}/balonlar`, { surum: kopya.surum, balonlar: girdi });
+    assert.equal(kayit.statusCode, 200, kayit.body);
+    assert.deepEqual((kayit.json() as { resim: KmResim }).resim.balonlar.map((x) => x.yerKontrol), [false, false]);
   });
 
   test('KM-S11 resim dosyası belge merkezinden akar; belge yeni revizyona geçince alınan revizyon 409 olur; yetkisiz 403', async () => {
