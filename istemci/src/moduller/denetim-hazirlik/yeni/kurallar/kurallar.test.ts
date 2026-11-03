@@ -10,7 +10,7 @@ import { cihazDurumu } from './kalibrasyon.ts';
 import { kysGecikti } from './kys.ts';
 import { ozNotu, ozSonrakiVade, ozTurBaslat, ozTurBitir } from './oz.ts';
 import { performansMatrisi, performansOlaylari, BOS_SUZGEC } from './performans.ts';
-import { hepsiniSil, profilEkle, profilSil, sifirla, yedektenOku, yedekVerisi, yedekYukle } from './profil.ts';
+import { firmaAdiyla, hepsiniSil, ornekProfil, profilAdi, profilEkle, profilSil, sifirla, yedektenOku, yedekVerisi, yedekYukle } from './profil.ts';
 import { kuralBaglami } from './puan.ts';
 
 beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(2026, 5, 15, 12)); });
@@ -183,5 +183,19 @@ describe('profiller ve yedek', () => {
     expect(hedef.order.map((id) => hedef.data[id]?.profile.firma)).toEqual(['Deneme', 'Deneme (yedekten)']);
     expect(yedektenOku('{bozuk')).toBeNull();
     expect(yedektenOku('{"a":1}')).toBeNull();
+  });
+});
+
+describe('firma adı Sistem Ayarları\'ndan (1946 b)', () => {
+  it('görünen depoda her profil kurum adını taşır, örnek profil kendi adını korur; ham depo değişmez', () => {
+    const p = bosProfil();
+    p.profile.firma = 'Eski Ad';
+    const ornek = ornekProfil();
+    const ham = { active: 'a', order: ['a', 'o'], data: { a: p, o: ornek }, lastBackup: 0 };
+    const gorunen = firmaAdiyla(ham, 'Deneme Atölyesi');
+    expect(gorunen.data['a']?.profile.firma).toBe('Deneme Atölyesi');
+    expect(gorunen.data['o']?.profile.firma).toBe(ornek.profile.firma);
+    expect(p.profile.firma).toBe('Eski Ad');
+    expect(profilAdi(firmaAdiyla(ham, null).data['a'])).toBe('Adsız profil');
   });
 });

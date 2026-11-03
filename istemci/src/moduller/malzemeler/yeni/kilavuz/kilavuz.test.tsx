@@ -43,6 +43,6 @@ describe('M4 Kılavuz', () => {
     yeniEkranAc(ADRES);
     await screen.findByRole('table', { name: 'Roller ve yetkiler' });
     expect(screen.queryByText(/Senin rolün:/)).toBeNull();
-    expect(screen.getByText(/Roller TMI yetkilerinden gelir\./)).toBeTruthy();
+    expect(screen.getByText(/Roller CORE yetkilerinden gelir\./)).toBeTruthy();
   });
 });

@@ -799,7 +799,7 @@ function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
   const selQ = (r.quotes || []).find(q => q.id === a.quoteId);
   const ld = selQ ? parseNum(selQ.leadDays) : null;
   const expDefault = a.expectedDate || (a.orderDate && ld !== null ? addDays(a.orderDate, ld) : "");
-  return `<p class="small muted">Sipariş no: ${a.orderNo ? `<b>${esc(a.orderNo)}</b>` : "sipariş verilince TMI verir (numara kuralı)"}${logoRozeti(a.logo)}</p><div class="grid g3">
+  return `<p class="small muted">Sipariş no: ${a.orderNo ? `<b>${esc(a.orderNo)}</b>` : "sipariş verilince CORE verir (numara kuralı)"}${logoRozeti(a.logo)}</p><div class="grid g3">
       <label class="f"><span>Logo / tedarikçi no</span><input type="text" id="o-po" value="${esc(a.poNo || "")}"></label>
       <label class="f"><span>Sipariş tarihi</span><input type="date" id="o-date" value="${esc(a.orderDate || todayStr())}"></label>
       <label class="f"><span>Beklenen teslim <small>— boşsa termine göre</small></span><input type="date" id="o-exp" value="${esc(expDefault)}"></label>

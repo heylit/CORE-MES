@@ -657,7 +657,7 @@ export const SMARTES_AKISLARI: readonly SmartesAkisTanimi[] = [
     aciklama: 'Ayrı anahtar: "SmartES tanım gönderimi". SmartES\'te kodu olmayan aktif istasyon ve stok kartı tanım olarak gider '
       + '(WorkStationCreateUpdate, StockCreateUpdate); var olan kod gönderilmez, sonucu bilinmeyen gönderim yinelenmez. Kod eşlemesi kendiliğinden yazılmaz; rota tanımı yok.' },
   { anahtar: 'is-emri-durumu', yon: 'smartes-tmi', baslik: 'Üretim sayıları (sağlam, red)', kaynak: 'bagli',
-    aciklama: 'WorkOrdersStatusList beş dakikada bir, tarih aralığıyla okunur. TMI bu işareti koymaz; işareti mevcut program koyar (346 a).' },
+    aciklama: 'WorkOrdersStatusList beş dakikada bir, tarih aralığıyla okunur. CORE bu işareti koymaz; işareti mevcut program koyar (346 a).' },
   { anahtar: 'durus', yon: 'smartes-tmi', baslik: 'Duruşlar', kaynak: 'bagli',
     aciklama: 'İş emrine bağlı olmadan başlatılan duruşlar (DownTimeStatusListWithoutWorkOrder) on beş dakikada bir okunur.' },
   { anahtar: 'alarm', yon: 'smartes-tmi', baslik: 'Alarmlar', kaynak: 'bagli',

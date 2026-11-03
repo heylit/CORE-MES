@@ -152,7 +152,7 @@ export const SAYFA_YARDIMI: Partial<Record<GorunumKodu, SayfaYardimi>> = {
       'Başka bir kurulumda devam etmek için yedeği orada "Yedek yükle" ile açın (yalnız yönetici).',
     ],
     e: 'Danışmansanız her müşteri için ayrı profil açın. Müşteri ziyaretinden önce yedek alın.',
-    m: 'Profil silmeden ya da sıfırlamadan önce yedek almamak. Veriler TMI sunucusunda saklanır; yalnız ekran tercihleri (açık sekme, sade görünüm) bu tarayıcıda kalır.',
+    m: 'Profil silmeden ya da sıfırlamadan önce yedek almamak. Veriler CORE sunucusunda saklanır; yalnız ekran tercihleri (açık sekme, sade görünüm) bu tarayıcıda kalır.',
   },
 };
 

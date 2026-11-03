@@ -11,7 +11,7 @@ const bosIse = (v: unknown) => { const n = Number(v); return v === null || v ===
 
 /**
  * Prototipin ayarGovdesi karsiligi: kayitli ayarin butun alanlari, ustune degisiklik.
- * sirketAdi: satin almadaki ad doluysa o gonderilir (A7); caprazKurPayi yalniz degisiklikte varsa gider.
+ * sirketAdi: Sistem Ayarlari > Firma adi doluysa o gonderilir (1942 a); caprazKurPayi yalniz degisiklikte varsa gider.
  */
 export function ayarGovdesi(a: Ayar, sirketAdi: string | null, ek: AyarDegisikligi = {}): AyarGovdesi {
   return {

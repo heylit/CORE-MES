@@ -208,6 +208,12 @@ export async function kapasiteKaynaklari(db: Db, idler: readonly number[]): Prom
   return new Map((await sorgular.kapasiteKaynaklariniBul(db, tekil)).map((s) => [s.id, kapasiteKaynagiCoz(s.kapasiteKaynagi).kaynak]));
 }
 
+// İK'nın işe alırken verdiği ilk istasyon (1928 a): tam (%100) atama. Kural atamaYap'tadır: geçmiş tarih, pasif kişi ve
+// yüzde tavanı orada reddedilir; iş merkezi uyumunu çağıran denetler.
+export async function istasyonAtamasiAc(db: Db, g: { istasyonId: number; kisiId: number; baslangic?: string | undefined }): Promise<void> {
+  await servis.atamaYap(db, 'istasyon', g.istasyonId, { kisiId: g.kisiId, yuzde: '100', baslangic: g.baslangic });
+}
+
 // Plan personel kısıtı: iş merkezine kısıtla bağlı aktif kişi sayısı.
 export const isMerkeziPersonelSayilari = (db: Db): Promise<{ isMerkeziId: number; sayi: number }[]> => servis.isMerkeziPersonelSayilari(db);
 

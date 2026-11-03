@@ -300,7 +300,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'yazilamadi' });
     const t = kaynak.siparisler.get(s.id)!;
     assert.equal(t.kayitNo, null);
-    assert.match(t.hata ?? '', /satırları TMI satırlarıyla eşlenemedi \(Logo 1, TMI 2\)/);
+    assert.match(t.hata ?? '', /satırları CORE satırlarıyla eşlenemedi \(Logo 1, CORE 2\)/);
     simdi += 3600_000;
     await tur(ortami(bellek));
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'yazilamadi' });
@@ -324,7 +324,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     kaynak.reddet = true;
     await tur(ortami(bellek));
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: r.id, sonuc: 'yazilamadi' });
-    assert.match((await giden('siparis', r.id))?.son_hata ?? '', /TMI kaydına yazılamadı: Sipariş bu arada değişti/);
+    assert.match((await giden('siparis', r.id))?.son_hata ?? '', /CORE kaydına yazılamadı: Sipariş bu arada değişti/);
   });
 
   test('LGS-14 iptal: gönderim kuyruğu boşken Logo\'ya gitmiş siparişin iptali gider; reddedilen iptal "hata" ve bekleme sonrası yinelenir', async () => {

@@ -148,7 +148,7 @@ describe('SmartES kod eşlemeleri', () => {
     ac(<Eslemeler />);
     await screen.findByText('Deneme torna');
     fireEvent.click(screen.getByRole('tab', { name: 'Duruş nedeni' }));
-    expect(await screen.findByText('Bu türde TMI kaydı yok.')).toBeTruthy();
+    expect(await screen.findByText('Bu türde CORE kaydı yok.')).toBeTruthy();
     expect(cagrilar.some((c) => c.yol === '/smartes/eslemeler?tur=durus-nedeni')).toBe(true);
   });
 });

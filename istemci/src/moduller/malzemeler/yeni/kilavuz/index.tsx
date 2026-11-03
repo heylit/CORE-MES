@@ -111,7 +111,7 @@ export function Kilavuz(o: EkranOzellikleri) {
         <Tablo etiket="Roller ve yetkiler" sutunlar={ROL_SUTUNLARI} satirlar={ROL_ISLERI} satirAnahtari={(s) => s} />
         <p className="tc-ml-yardim">
           {benimRolum && <>Senin rolün: <b>{benimRolum.ad}</b>. </>}
-          Roller TMI yetkilerinden gelir.
+          Roller CORE yetkilerinden gelir.
         </p>
       </Bolum>
 

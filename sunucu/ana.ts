@@ -93,7 +93,7 @@ try {
   }
   zamanlayici.baslat();
   const arayuzMetni = arayuzSecenegi === null ? '' : ` | arayüz: ${arayuzSecenegi.https === null ? 'http' : 'https'}://${arayuzSecenegi.host}:${String(arayuzSecenegi.port)}`;
-  console.log(`TMI CORE V2 dinliyor: port ${ayar.port}${arayuzMetni} | veritabanı: ${hedef?.ad ?? '?'} | ortam: ${ayar.ortam}`);
+  console.log(`CORE dinliyor: port ${ayar.port}${arayuzMetni} | veritabanı: ${hedef?.ad ?? '?'} | ortam: ${ayar.ortam}`);
 } catch (hata) {
   console.error(`Sunucu açılamadı: ${hata instanceof Error ? hata.message : String(hata)}`);
   await isVt?.kapat().catch(() => undefined);

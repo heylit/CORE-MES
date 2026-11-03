@@ -5,6 +5,8 @@ export const IK_ISLEMLERI = [
   // Takvimde bütün personelin izinlerini görmek (1191 a); öteki İK kayıtlarını açmaz. Yetkisi olmayan takvimde yalnız kendi iznini görür.
   'ik.izin-oku',
   'ik.personel-yaz',
+  // Yeni personelin giriş hesabını açmak (1925 a): kullanıcı adı ve geçici PIN sistemce kurulur; rol yalnız yetki dağıtmayan rollerden.
+  'ik.hesap-ac',
   'ik.ucret-yaz',
   'ik.izin-yaz',
   'ik.izin-talep',

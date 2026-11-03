@@ -100,7 +100,7 @@ function UstBas({ qrAc, ayarAc }: { qrAc: () => void; ayarAc: () => void }) {
           <button type="button" aria-pressed={birim === 'met'} onClick={() => birimYaz('met')}>mm, kg</button>
           <button type="button" aria-pressed={birim === 'imp'} onClick={() => birimYaz('imp')}>in, lb</button>
         </div>
-        <p className="tc-myeni-not">Kartlar TMI veritabanında</p>
+        <p className="tc-myeni-not">Kartlar CORE veritabanında</p>
       </div>
     </header>
   );

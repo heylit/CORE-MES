@@ -1,3 +1,4 @@
+import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DurumKutusu, HataSiniri, Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
@@ -26,7 +27,7 @@ const OKUMA_ISLEMLERI = ['sayfa.portal', 'portal.oku', 'portal.yaz'];
 const MENU_KOLEKSIYONLARI: readonly KoleksiyonAdi[] = [
   'users', 'parties', 'approvals', 'requests', 'orders', 'rfqs', 'priceReqs', 'contracts', 'docs', 'ncrs', 'payments', 'recons',
 ];
-export const KURUM_ADI = 'TMI';
+export const KURUM_ADI = UYGULAMA_ADI;
 const DAKIKA_MS = 60_000;
 
 export function PortalYeni() {

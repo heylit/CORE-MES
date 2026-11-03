@@ -482,3 +482,28 @@ export function kisiSecimAra(
     [g.icindeDeseni, g.sade, g.pasifler, g.sinir, g.atla],
   );
 }
+
+export interface IkRolSatiri extends RolSatiri {
+  kod: string;
+  islemler: unknown[];
+}
+
+// İK'nın hesap açarken seçebileceği rollerin süzülmesi için bütün roller işlemleriyle (1925 a).
+export function ikRolSatirlari(db: Db): Promise<IkRolSatiri[]> {
+  return db.sorgu<IkRolSatiri>(
+    `SELECT r.id, r.kod, r.ad, r.yonetici,
+            COALESCE(jsonb_agg(ri.islem) FILTER (WHERE ri.islem IS NOT NULL), '[]'::jsonb) AS islemler
+       FROM rol r LEFT JOIN rol_islemi ri ON ri.rol_id = r.id
+      GROUP BY r.id
+      ORDER BY r.ad, r.id`,
+  );
+}
+
+// Kökle başlayan kullanıcı adları (kök ve kök2, kök3...); boş aday bunların dışından seçilir.
+export async function kokluKullaniciAdlari(db: Db, kok: string): Promise<Set<string>> {
+  const satirlar = await db.sorgu<{ kullanici_adi: string }>(
+    "SELECT kullanici_adi FROM kisi WHERE kullanici_adi LIKE $1 || '%' ESCAPE '\\'",
+    [kok.slice(0, 36).replace(/[\\%_]/g, (h) => `\\${h}`)],
+  );
+  return new Set(satirlar.map((s) => s.kullanici_adi));
+}

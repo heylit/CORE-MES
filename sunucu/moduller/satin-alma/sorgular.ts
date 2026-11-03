@@ -587,16 +587,16 @@ export function katalogSil(db: Db, id: string, surum: number): Promise<{ id: str
 
 // ---- Ayarlar
 // Kur bu tabloda değil, finanstadır (SA3 a); servis ekler.
-export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
+export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
 export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string }[]> {
   return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye FROM satin_alma_onay_limiti ORDER BY sira');
 }
 export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
-  const a = (await db.tek<{ sirket: string; m: number; t: number; td: number; g: number; gecerlilikGun: number; enAzTeklif: number; fiyatUyariYuzdesi: string; surum: number }>(
-    `SELECT sirket, agirlik_maliyet AS m, agirlik_termin AS t, agirlik_tedarikci AS td, agirlik_garanti AS g, gecerlilik_gun AS "gecerlilikGun",
+  const a = (await db.tek<{ m: number; t: number; td: number; g: number; gecerlilikGun: number; enAzTeklif: number; fiyatUyariYuzdesi: string; surum: number }>(
+    `SELECT agirlik_maliyet AS m, agirlik_termin AS t, agirlik_tedarikci AS td, agirlik_garanti AS g, gecerlilik_gun AS "gecerlilikGun",
       en_az_teklif AS "enAzTeklif", fiyat_uyari_yuzdesi AS "fiyatUyariYuzdesi", surum FROM satin_alma_ayar`))!;
   return {
-    sirket: a.sirket, agirliklar: { maliyet: a.m, termin: a.t, tedarikci: a.td, garanti: a.g }, gecerlilikGun: a.gecerlilikGun,
+    agirliklar: { maliyet: a.m, termin: a.t, tedarikci: a.td, garanti: a.g }, gecerlilikGun: a.gecerlilikGun,
     enAzTeklif: a.enAzTeklif, fiyatUyariYuzdesi: a.fiyatUyariYuzdesi, surum: a.surum,
     kurlar: await db.sorgu('SELECT para_birimi AS "paraBirimi" FROM satin_alma_kur ORDER BY sira, para_birimi'),
     kategoriler: (await db.sorgu<{ ad: string }>('SELECT ad FROM satin_alma_kategori ORDER BY sira, ad')).map((k) => k.ad),
@@ -616,14 +616,11 @@ export async function paraBirimleriniEkle(db: Db, paraBirimleri: readonly string
     [paraBirimleri],
   );
 }
-export async function sirketAdiOku(db: Db): Promise<string> {
-  return (await db.tek<{ sirket: string }>('SELECT sirket FROM satin_alma_ayar'))!.sirket;
-}
 export function ayarGuncelle(db: Db, a: AyarlarKaydetYazimi): Promise<{ surum: number } | null> {
-  return db.tek(`UPDATE satin_alma_ayar SET sirket = $1, agirlik_maliyet = $2, agirlik_termin = $3, agirlik_tedarikci = $4, agirlik_garanti = $5,
-      gecerlilik_gun = $6, en_az_teklif = $7, fiyat_uyari_yuzdesi = $8, surum = surum + 1, guncelleme = now()
-    WHERE surum = $9 RETURNING surum`,
-  [a.sirket, a.agirliklar.maliyet, a.agirliklar.termin, a.agirliklar.tedarikci, a.agirliklar.garanti, a.gecerlilikGun, a.enAzTeklif,
+  return db.tek(`UPDATE satin_alma_ayar SET agirlik_maliyet = $1, agirlik_termin = $2, agirlik_tedarikci = $3, agirlik_garanti = $4,
+      gecerlilik_gun = $5, en_az_teklif = $6, fiyat_uyari_yuzdesi = $7, surum = surum + 1, guncelleme = now()
+    WHERE surum = $8 RETURNING surum`,
+  [a.agirliklar.maliyet, a.agirliklar.termin, a.agirliklar.tedarikci, a.agirliklar.garanti, a.gecerlilikGun, a.enAzTeklif,
     a.fiyatUyariYuzdesi, a.surum]);
 }
 // Listeler: kurlar eşitlenir (tekliflerin bağlı olduğu para birimi silinemez), diğerleri baştan yazılır.

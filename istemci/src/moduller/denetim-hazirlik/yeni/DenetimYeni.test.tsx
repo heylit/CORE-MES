@@ -105,11 +105,11 @@ function Yazici({ etiket }: { etiket: string | null }) {
   const d = useDenetim();
   return (
     <>
-      <p>{d.profil.profile.firma || 'adsız'}</p>
+      <p>{d.profil.profile.tesis || 'adsız'}</p>
       <p>{d.kayit}</p>
       <p>{d.yetki.yazabilir ? 'yazar' : 'okur'}</p>
       <p>{yikiciIzinli(d.yetki) ? 'yikici' : 'yikici-yok'}</p>
-      <button type="button" onClick={() => { d.degistir(etiket, (t) => { t.profile.firma = 'Yeni Ad'; }); }}>yaz</button>
+      <button type="button" onClick={() => { d.degistir(etiket, (t) => { t.profile.tesis = 'Yeni Ad'; }); }}>yaz</button>
       <button type="button" onClick={d.geriAl}>geri</button>
     </>
   );
@@ -128,7 +128,7 @@ describe('veri katmanı', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS + 10); });
     expect(sunucu.yazilanlar).toHaveLength(1);
     expect(sunucu.yazilanlar[0]?.beklenenSurum).toBe(1);
-    expect(depoOku(sunucu.yazilanlar[0]?.deger ?? null).data[depo.active]?.profile.firma).toBe('Yeni Ad');
+    expect(depoOku(sunucu.yazilanlar[0]?.deger ?? null).data[depo.active]?.profile.tesis).toBe('Yeni Ad');
     expect(screen.getByText('kayitli')).toBeTruthy();
     expect(screen.getByText('Firma adı değişti')).toBeTruthy();
     fireEvent.click(screen.getByText('geri'));
@@ -153,7 +153,7 @@ describe('veri katmanı', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(YAZMA_GECIKMESI_MS + 10); });
     expect(sunucu.yazilanlar).toHaveLength(1);
     const yazilan = depoOku(sunucu.yazilanlar[0]?.deger ?? null).data[depo.active];
-    expect(yazilan?.profile.firma).toBe('Yeni Ad');
+    expect(yazilan?.profile.tesis).toBe('Yeni Ad');
     expect(yazilan?.pw[profil?.prog ?? 'iso9001'].wkAnchor.ad).toBe(tarih);
   });
 
@@ -223,11 +223,11 @@ function Secenekli() {
   const d = useDenetim();
   return (
     <>
-      <p>{d.profil.profile.firma || 'adsız'}</p>
+      <p>{d.profil.profile.tesis || 'adsız'}</p>
       <p>{`dok:${d.ekran.kys.dok ?? ''} yeni:${String(d.ekran.takvim?.yeniDenetim ?? false)} sekme:${d.ekran.kys.tab}`}</p>
       <p>{d.geriAlinabilir ? 'geri-alinabilir' : 'geri-yok'}</p>
-      <button type="button" onClick={() => { d.degistir('Puan', (t) => { t.profile.firma = 'Sessiz'; }, { sessiz: true }); }}>sessiz</button>
-      <button type="button" onClick={() => { d.degistir('Firma', (t) => { t.profile.firma = 'Metinli'; }, { bildirim: 'Firma adı kaydedildi' }); }}>metinli</button>
+      <button type="button" onClick={() => { d.degistir('Puan', (t) => { t.profile.tesis = 'Sessiz'; }, { sessiz: true }); }}>sessiz</button>
+      <button type="button" onClick={() => { d.degistir('Firma', (t) => { t.profile.tesis = 'Metinli'; }, { bildirim: 'Firma adı kaydedildi' }); }}>metinli</button>
       <button type="button" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'd1' }); }}>dokuman</button>
       <button type="button" onClick={() => { d.git('takvim', { yeniDenetim: true }); }}>takvim</button>
     </>

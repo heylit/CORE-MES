@@ -171,8 +171,8 @@ function LogoBolumu() {
       ]}
       ayarlar={d.ayarlar.map((a) => [a.baslik, a.acik] as const)}
       gruplar={[
-        { baslik: 'TMI → Logo', simge: 'upload', akislar: akis('tmi-logo') },
-        { baslik: 'Logo → TMI', simge: 'download', akislar: akis('logo-tmi') },
+        { baslik: 'CORE → Logo', simge: 'upload', akislar: akis('tmi-logo') },
+        { baslik: 'Logo → CORE', simge: 'download', akislar: akis('logo-tmi') },
       ]}
       kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch(); } }}
       not="Deneme yalnız okur: ambar listesi, deneme malzemesinin “var mı” kaydı ve birim seti listesi. Logo’ya yazma isteği gitmez. Firma ve dönem köprünün kendi ayarındadır."
@@ -202,8 +202,8 @@ function SmartesBolumu() {
       ]}
       ayarlar={[['SmartES bağlantısı', d.baglanti !== 'kapali']]}
       gruplar={[
-        { baslik: 'TMI → SmartES', simge: 'upload', akislar: akis('tmi-smartes') },
-        { baslik: 'SmartES → TMI', simge: 'download', akislar: akis('smartes-tmi') },
+        { baslik: 'CORE → SmartES', simge: 'upload', akislar: akis('tmi-smartes') },
+        { baslik: 'SmartES → CORE', simge: 'download', akislar: akis('smartes-tmi') },
       ]}
       kontrol={{ veri: k.data, yukleniyor: k.isFetching, hata: k.isError ? k.error : null, dene: () => { void k.refetch(); } }}
       not="Deneme yalnız okur: servis tanımı (WSDL) ve son bir saatin üretim listesi. Okunan satır kaydedilmez, işaretlenmez; MES verisi değişmez."

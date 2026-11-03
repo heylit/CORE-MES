@@ -9,14 +9,16 @@ import type {
   IkAlani, IkAyarCevabi, IkBen, IkBordroGirdisi, IkGecmis, IkIzinGunuCevabi, IkKayit, IkKisiVardiyasiCevabi, IkOzetiCevabi, IkPuantajCevabi, IkPuantajGunuGirdisi, IkPuantajKaydi,
   IkPuantajPlanGunu, IkPuantajYazCevabi, IkTopluCevabi, IkTuru, IkVeriCevabi, IkYazCevabi, PuantajDurumu,
 } from '#paylasilan/sozlesme/ik.ts';
-import type { GirisKartiCevabi } from '#paylasilan/sozlesme/ik.ts';
+import type {
+  GirisKartiCevabi, IkGirisKartlariCevabi, IkHesapRolleriCevabi, IkIseAlCevabi, IkIstasyonUyumsuzluklariCevabi,
+} from '#paylasilan/sozlesme/ik.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
-import { isMerkezleri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
-import { kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
-import { ikKisisiAc, kisiAdlari, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
+import { aktifIstasyonlar, isMerkezleri, istasyonAtamasiAc, istasyonKisileri, kisininIzinliIsMerkezleri } from '../istasyonlar/disari.ts';
+import { etkinPersonelKartlari, kisininPersonelKarti as nizamiyePersonelKarti, personelKartiniKaldir, personelKartiVer } from '../nizamiye/disari.ts';
+import { ikHesabiAc, ikKisisiAc, ikRolSecenekleri, kisiAdlari, kisiKullaniciAdi, kisiSecenekleri, ozlukBaginiKaldir, ozluguIkdenYaz } from '../kisiler/disari.ts';
 import { ayarKur, ayarParcala } from './ayar-eslesme.ts';
 import { EslesmeHatasi, kur, parcala } from './eslesme.ts';
 import type { Deger, Satirlar } from './eslesme.ts';
@@ -26,7 +28,7 @@ import {
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
   ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
-  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
+  OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
 import { gunMetni, motorGunu, motorKur } from '#paylasilan/ik-motor/arayuz.ts';
@@ -970,4 +972,80 @@ export async function girisKartiKaldir(db: Db, kullanici: Kullanici, kisiId: num
   await girisKartiKapsami(db, kullanici, kisiId);
   await personelKartiniKaldir(db, kullanici.id, kisiId, surum);
   return { kart: null };
+}
+
+// 1925 a: yeni personel tek adımda işe alınır. Kart yazılır (kişisi 1878 a ile açılır), kişiye PIN'li giriş hesabı açılır, kart
+// numarası geldiyse giriş kartı verilir. Hepsi ucun transaction'ında: biri reddedilirse (rol İK'ya kapalı, kart başkasında, sicil
+// başka kişide) hiçbiri yazılmaz. Uç ik.hesap-ac ister; kart yazımı ayrıca personel yazma işlemini ister.
+export const ISE_ALIM_PERSONEL_YETKISIZ = 'Personel eklemek için personel kartı düzenleme yetkisi gerekir.';
+export const ISE_ALIM_KAYIT_VAR = 'Bu personel kaydı zaten var; giriş hesabı Personel\'de açılır.';
+export const ISE_ALIM_KISISIZ = 'Çıkış tarihi geçmiş personele giriş hesabı ve kart açılmadı.';
+export const ISE_ALIM_HESAP_VAR = 'Seçilen kişinin giriş hesabı zaten vardı; yeni hesap açılmadı.';
+
+export async function iseAl(
+  db: Db, kullanici: Kullanici, kimlik: string, govde: Govde, rolId: number, kartNo: string | undefined, istasyonId?: number,
+): Promise<IkIseAlCevabi> {
+  if (!kullanici.islemler.includes('ik.personel-yaz')) throw yetkiYok(ISE_ALIM_PERSONEL_YETKISIZ);
+  if (await s.varMi(db, 'emp', kimlik)) throw cakisma(ISE_ALIM_KAYIT_VAR);
+  if (istasyonId !== undefined) {
+    const hata = ilkIstasyonHatasi((await aktifIstasyonlar(db)).find((i) => i.id === istasyonId), kayitIsMerkezi('emp', govde, () => null));
+    if (hata !== null) throw dogrulama(hata, 'istasyonId');
+  }
+  const d = await durumOku(db, kullanici);
+  const r = await yaz(db, kullanici, { tur: 'emp', kimlik, govde, surum: null, uc: 'kaydet' }, d);
+  const kisiId = typeof r.kayit.govde['kisiId'] === 'number' ? r.kayit.govde['kisiId'] : null;
+  const uyarilar = [r.uyari];
+  let hesap: IkIseAlCevabi['hesap'] = null;
+  let kart: IkIseAlCevabi['kart'] = null;
+  if (kisiId === null) uyarilar.push(ISE_ALIM_KISISIZ);
+  else {
+    if ((await kisiKullaniciAdi(db, kisiId)) === null) hesap = { kisiId, ...(await ikHesabiAc(db, kisiId, rolId)) };
+    else uyarilar.push(ISE_ALIM_HESAP_VAR);
+    const no = kartNo?.trim() ?? '';
+    if (no !== '') kart = (await girisKartiVer(db, kullanici, kisiId, no)).kart;
+    if (istasyonId !== undefined) {
+      await istasyonAtamasiAc(db, { istasyonId, kisiId, baslangic: ilkAtamaGunu(govde['iseGiris'], tesisGunu(new Date())) });
+    }
+  }
+  const uyari = uyarilar.filter((u) => u !== null).join(' ');
+  return {
+    kayit: kayitCevabi(r.kayit, d), gecmis: await gecmisCevaplari(db, [r.gecmis], d), hesap, kart, ...(uyari === '' ? {} : { uyari }),
+  };
+}
+
+export async function hesapRolleri(db: Db): Promise<IkHesapRolleriCevabi> {
+  const istasyonlar = (await aktifIstasyonlar(db)).map((i) => ({ id: i.id, ad: i.ad, isMerkeziId: i.isMerkeziId }));
+  return { roller: await ikRolSecenekleri(db), istasyonlar };
+}
+
+// 1928 a: İK kaydının iş merkezi ile kişinin asıl istasyonunun iş merkezi ayrışırsa kişi kartı uyarır. Atama istasyonlardadır,
+// iş merkezi İK'da (kapsam); ikisi elle düzelir, burada yalnız gösterilir. Ataması olmayan kişi listede yoktur.
+export async function istasyonUyumsuzluklari(db: Db, kullanici: Kullanici): Promise<IkIstasyonUyumsuzluklariCevabi> {
+  const d = await durumOku(db, kullanici);
+  const asil = new Map((await istasyonKisileri(db)).map((a) => [a.kisiId, a.istasyonId]));
+  const istasyon = new Map((await aktifIstasyonlar(db)).map((i) => [i.id, i]));
+  const merkezAdi = new Map((await isMerkezleri(db, { pasiflerDahil: true })).map((m) => [m.id, m.ad]));
+  const uyumsuzluklar = etkinler(d, 'emp').flatMap((k) => {
+    const merkez = kayitIsMerkezi('emp', k.govde, bulucu(d.harita));
+    if (!kapsamdaMi(d.kapsam, merkez) || typeof k.govde['kisiId'] !== 'number') return [];
+    const ist = istasyon.get(asil.get(k.govde['kisiId']) ?? 0);
+    if (ist === undefined || ist.isMerkeziId === merkez) return [];
+    return [{ personel: k.kimlik, istasyon: ist.ad, istasyonIsMerkezi: merkezAdi.get(ist.isMerkeziId) ?? null }];
+  });
+  return { uyumsuzluklar };
+}
+
+// İK sayfasının kart listesi: yazanın iş merkezi kapsamındaki etkin personelin kartı; kişisi personel kartına bağlı olmayan kart
+// (İK dışında verilmiş eski kayıt) listede yoktur.
+export async function girisKartlari(db: Db, kullanici: Kullanici): Promise<IkGirisKartlariCevabi> {
+  const d = await durumOku(db, kullanici);
+  const personel = new Map(etkinler(d, 'emp')
+    .filter((k) => typeof k.govde['kisiId'] === 'number' && kapsamdaMi(d.kapsam, kayitIsMerkezi('emp', k.govde, bulucu(d.harita))))
+    .map((k) => [k.govde['kisiId'] as number, k.kimlik]));
+  return {
+    kartlar: (await etkinPersonelKartlari(db)).flatMap((k) => {
+      const kimlik = personel.get(k.kisiId);
+      return kimlik === undefined ? [] : [{ kisiId: k.kisiId, personel: kimlik, kartSon4: k.kartSon4, kaydedildi: k.kaydedildi }];
+    }),
+  };
 }

@@ -607,7 +607,7 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
   test('rol x işlem göçü: onaylı dağılım; İK sayfası yalnız İK uzmanında, herkes İK İşlemlerim ile izin talep eder ve bordrosunu onaylar; muhasebe İK kayıtlarını okumaz', () => {
     const rolun = (kod: string) => gocDagilimi.filter((d) => d.kod === kod).map((d) => d.islem);
     assert.deepEqual(rolun('insan_kaynaklari'), ['ik.ayar-yaz', 'ik.bordro-gordum', 'ik.bordro-kesinlestir', 'ik.bordro-kilit-ac', 'ik.devam-onay', 'ik.devam-yaz', 'ik.egitim-yaz',
-      'ik.ise-alim-yaz', 'ik.izin-onay', 'ik.izin-talep', 'ik.izin-yaz', 'ik.oku', 'ik.ozel-veri-oku', 'ik.performans-yaz', 'ik.personel-yaz', 'ik.pozisyon-onay',
+      'ik.hesap-ac', 'ik.ise-alim-yaz', 'ik.izin-onay', 'ik.izin-talep', 'ik.izin-yaz', 'ik.oku', 'ik.ozel-veri-oku', 'ik.performans-yaz', 'ik.personel-yaz', 'ik.pozisyon-onay',
       'ik.ucret-yaz', 'sayfa.ik', 'sayfa.ik-islemlerim']);
     assert.deepEqual(rolun('mudur'), ['ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'sayfa.ik-islemlerim']);
     for (const kod of ['planlama_proje', 'operator', 'kalite', 'satin_alma', 'muhasebe_finans', 'idari_isler', 'cam', 'depo', 'bakim', 'sevkiyat']) {

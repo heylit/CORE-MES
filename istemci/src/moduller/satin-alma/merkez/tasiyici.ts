@@ -282,7 +282,7 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
   if (coll === 'settings') {
     const s = d as Settings;
     const a = await uc.post('/satin-alma-ayarlari/kaydet', { govde: {
-      sirket: s.company ?? '', agirliklar: { maliyet: s.weights.cost, termin: s.weights.lead, tedarikci: s.weights.supplier, garanti: s.weights.warranty },
+      agirliklar: { maliyet: s.weights.cost, termin: s.weights.lead, tedarikci: s.weights.supplier, garanti: s.weights.warranty },
       gecerlilikGun: s.validityDays, enAzTeklif: s.minQuotes, fiyatUyariYuzdesi: ond(s.priceAlertPct),
       // Kur ve faiz finansındır (SA3 a, 937 b): yalnız para birimi listesi gider.
       kurlar: (Object.keys(s.currencies) as Currency[]).map((c) => ({ paraBirimi: c })),
@@ -383,8 +383,8 @@ const backend: Backend = {
   statusHTML: () => '',
   // TCMB'den kur çekme kalkar: TMI'de dış servis çağrısı yok (kırmızı çizgi). Elle kur girişi kalır.
   tcmb: false,
-  exportData: () => Promise.reject(new Error('Yedek TMI tarafından alınır.')),
-  importData: () => Promise.reject(new Error('Yedekten geri yükleme TMI tarafından yapılır.')),
+  exportData: () => Promise.reject(new Error('Yedek CORE tarafından alınır.')),
+  importData: () => Promise.reject(new Error('Yedekten geri yükleme CORE tarafından yapılır.')),
   deleteSamples: () => Promise.reject(new Error('Örnek veri yok.')),
   fetchTcmb: () => Promise.reject(new Error('Dış servis çağrısı yok.')),
   async firmaAra(metin) {

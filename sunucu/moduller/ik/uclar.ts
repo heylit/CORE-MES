@@ -5,7 +5,7 @@ import {
   IK_ALAN_ADLARI, ikAyarCevabi, ikAyarKaydetGovdesi, ikBenCevabi, ikBordroGordumGovdesi, ikDevamOnayGovdesi, ikDonemParametresi, ikIletisimGovdesi, ikIptalGovdesi, ikKararGovdesi,
   ikKaydetGovdesi, ikIzinGunuCevabi, ikKisiVardiyasiCevabi, ikKisiVardiyasiSorgusu, ikIzinGunuSorgusu, ikKesinlestirGovdesi, ikKimlikParametresi, ikOnayGovdesi, ikOzetiCevabi, ikPuantajCevabi, ikPuantajSorgusu, ikPuantajYazCevabi, ikPuantajYazGovdesi,
   ikTopluCevabi, ikTopluGovde, ikVeriCevabi, ikYazCevabi,
-  girisKartiCevabi, girisKartiKaldirGovdesi, girisKartiParametresi, girisKartiVerGovdesi,
+  girisKartiCevabi, girisKartiKaldirGovdesi, girisKartiParametresi, girisKartiVerGovdesi, ikGirisKartlariCevabi, ikHesapRolleriCevabi, ikIseAlCevabi, ikIseAlGovdesi, ikIstasyonUyumsuzluklariCevabi,
 } from '#paylasilan/sozlesme/ik.ts';
 import { IK_ALANLARI } from './kurallar.ts';
 import * as servis from './servis.ts';
@@ -91,6 +91,20 @@ export const uclar: Uc[] = [
   uc({
     yontem: 'POST', yol: '/ik/ayarlar/kaydet', yetki: 'ik.ayar-yaz', govde: ikAyarKaydetGovdesi, cevap: ikAyarCevabi,
     isle: ({ db, kullanici, govde }) => servis.ayarKaydet(db, kullanici, govde.govde, govde.surum),
+  }),
+  // 1925 a: yeni personelin tek adımda işe alınması (kart, kişi, PIN'li hesap, giriş kartı). Rol sınırı Kişiler'de, sunucuda.
+  uc({
+    yontem: 'POST', yol: '/ik/personel/:kimlik/ise-al', yetki: 'ik.hesap-ac', parametre: ikKimlikParametresi, govde: ikIseAlGovdesi, cevap: ikIseAlCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.iseAl(db, kullanici, parametre.kimlik, govde.govde, govde.rolId, govde.kartNo, govde.istasyonId),
+  }),
+  uc({ yontem: 'GET', yol: '/ik/hesap-rolleri', yetki: 'ik.hesap-ac', cevap: ikHesapRolleriCevabi, isle: ({ db }) => servis.hesapRolleri(db) }),
+  uc({
+    yontem: 'GET', yol: '/ik/istasyon-uyumsuzluklari', yetki: 'ik.oku', cevap: ikIstasyonUyumsuzluklariCevabi,
+    isle: ({ db, kullanici }) => servis.istasyonUyumsuzluklari(db, kullanici),
+  }),
+  uc({
+    yontem: 'GET', yol: '/ik/giris-kartlari', yetki: 'ik.personel-yaz', cevap: ikGirisKartlariCevabi,
+    isle: ({ db, kullanici }) => servis.girisKartlari(db, kullanici),
   }),
   // Personel giriş kartı (1902 b, 1903 b): yalnız İK personel yazan eşleştirir, verir ve kaldırır; Nizamiye'de bu yol yoktur.
   uc({

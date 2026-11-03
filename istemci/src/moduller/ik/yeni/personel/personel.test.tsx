@@ -65,6 +65,107 @@ describe('P1 personel listesi', () => {
     expect(dugme('Giriş hesabı aç')).toBeNull();
   });
 
+  // 1925 a: hesap açabilen İK yeni personeli tek adımda işe alır; rol listesi ve işe alma cevabı sunucudan gelir.
+  const ROLLER = {
+    roller: [{ id: 5, kod: 'kalite', ad: 'Kalite' }, { id: 7, kod: 'operator', ad: 'Operatör' }],
+    istasyonlar: [{ id: 11, ad: 'Deneme Torna', isMerkeziId: 1 }, { id: 12, ad: 'Uzak Freze', isMerkeziId: 2 }],
+  };
+  const iseAlimFormu = (islemler: typeof IK_YONETICI.islemler) => {
+    const gonderilen: unknown[] = [];
+    ikAc('/ik/personel', {
+      kullanici: { ...IK_YONETICI, islemler },
+      veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }),
+      okumalar: { '/ik/hesap-rolleri': () => ROLLER },
+    });
+    const onceki = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      if (istek?.method !== 'POST' || !/\/ik\/personel\/[^/]+\/ise-al$/.test(adres)) return onceki(adres, istek);
+      const g = JSON.parse(String(istek.body)) as { govde: Record<string, unknown>; kartNo?: string };
+      gonderilen.push(g);
+      const kimlik = String(g.govde['id']);
+      return new Response(JSON.stringify({
+        kayit: { kimlik, tur: 'emp', surum: 1, govde: { ...g.govde, kisiId: 77 } }, gecmis: [],
+        hesap: { kisiId: 77, kullaniciAdi: 'yeni.deneme', pin: '480913' },
+        kart: g.kartNo ? { kisiId: 77, kartSon4: g.kartNo.slice(-4), kaydedildi: '2026-11-03T06:00:00.000Z', kaydeden: null } : null,
+      }), { status: 200 });
+    }));
+    return gonderilen;
+  };
+  const doldur = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni personel' });
+    const yaz = (etiket: RegExp, deger: string) => { fireEvent.change(within(pencere).getByLabelText(etiket), { target: { value: deger } }); };
+    yaz(/^Ad( \*)?$/, 'Yeni'); yaz(/^Soyad/, 'Deneme'); yaz(/^Pozisyon/, 'Ayarcı'); yaz(/^İşe giriş tarihi/, '2026-11-02');
+    return pencere;
+  };
+
+  it('1925 a izinli: hesap ve geçici PIN kayıtla açılır; rol varsayılanı Operatör, kart son dört hanesiyle görünür', async () => {
+    const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    const rol = within(pencere).getByLabelText(/^Rol( \*)?$/) as HTMLSelectElement;
+    await waitFor(() => { expect(rol.value).toBe('7'); });
+    fireEvent.change(within(pencere).getByLabelText(/^Giriş kartı/), { target: { value: '0000123456' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    const sonuc = await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(within(sonuc).getByText('yeni.deneme')).toBeTruthy();
+    expect(within(sonuc).getByText('480913')).toBeTruthy();
+    expect(within(sonuc).getByText('••••3456')).toBeTruthy();
+    expect(gonderilen).toHaveLength(1);
+    expect(gonderilen[0]).toMatchObject({ rolId: 7, kartNo: '0000123456' });
+  });
+
+  it('1925 a: kart boşsa kart gönderilmez; seçilen rol gider', async () => {
+    const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    const rol = within(pencere).getByLabelText(/^Rol( \*)?$/) as HTMLSelectElement;
+    await waitFor(() => { expect(rol.value).toBe('7'); });
+    fireEvent.change(rol, { target: { value: '5' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    const sonuc = await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(within(sonuc).getByText('Verilmedi')).toBeTruthy();
+    expect(gonderilen[0]).toMatchObject({ rolId: 5 });
+    expect(gonderilen[0]).not.toHaveProperty('kartNo');
+  });
+
+  it('1928 a: ilk istasyon yalnız seçilen iş merkezinden; seçilen istasyon işe alma ile gider', async () => {
+    const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    const istasyon = within(pencere).getByLabelText(/^İlk istasyon/) as HTMLSelectElement;
+    await waitFor(() => { expect(within(istasyon).queryByRole('option', { name: 'Deneme Torna' })).toBeTruthy(); });
+    expect(within(istasyon).queryByRole('option', { name: 'Uzak Freze' })).toBeNull();
+    fireEvent.change(istasyon, { target: { value: '11' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await screen.findByRole('dialog', { name: 'Giriş hesabı açıldı' });
+    expect(gonderilen[0]).toMatchObject({ istasyonId: 11 });
+  });
+
+  it('1925 a reddedilen: hesap açamayan İK formda giriş hesabı bölümünü görmez', async () => {
+    iseAlimFormu(IK_YONETICI.islemler);
+    const pencere = await doldur();
+    expect(within(pencere).queryByLabelText(/^Rol( \*)?$/)).toBeNull();
+    expect(within(pencere).queryByLabelText(/^Giriş kartı/)).toBeNull();
+    expect(within(pencere).queryByLabelText(/^İlk istasyon/)).toBeNull();
+  });
+
+  it('1925 a: ?yeni=1 yeni personel formunu açar; salt okuyanda açmaz', async () => {
+    ikAc('/ik/personel?yeni=1');
+    expect(await screen.findByRole('dialog', { name: 'Yeni personel' })).toBeTruthy();
+    cleanup();
+    ikAc('/ik/personel?yeni=1', { kullanici: IK_OKUYAN });
+    expect(await screen.findByText('Mehmet Deneme')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Yeni personel' })).toBeNull();
+  });
+
+  it('1925 a: giriş kartları listesi son dört haneyi gösterir, satır kişi sayfasını açar; salt okuyanda yok', async () => {
+    ikAc('/ik/personel', { okumalar: { '/ik/giris-kartlari': () => ({ kartlar: [{ kisiId: 1, personel: 'emp_a', kartSon4: '4321', kaydedildi: '2026-11-01T08:00:00.000Z' }] }) } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Personel: diğer işlemler' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Giriş kartları' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Giriş kartları' });
+    expect(await within(pencere).findByText('••••4321')).toBeTruthy();
+    fireEvent.click(within(pencere).getByText('Ayşe Örnek'));
+    expect(await screen.findByRole('tab', { name: 'Ücret' })).toBeTruthy();
+  });
+
   it('reddedilen: salt okuyan Personel ekle görmez', async () => {
     ikAc('/ik/personel', { kullanici: IK_OKUYAN });
     expect(await screen.findByText('Mehmet Deneme')).toBeTruthy();
@@ -88,6 +189,16 @@ describe('P1 kişi sayfası', () => {
     expect(screen.getByText('Kalan yıllık izin').nextSibling?.textContent).toMatch(/^-?[\d.,]+ gün$/);
     fireEvent.click(within(sekmeler).getByRole('tab', { name: 'İzinler' }));
     expect(await screen.findByText('Hizmet yılına göre hak ediş', { selector: 'summary' })).toBeTruthy();
+  });
+
+  it('1928 a: asıl istasyonu başka iş merkezinde olan personelin kartı uyarır; uyumlu olanınki uyarmaz', async () => {
+    const uyumsuzluklar = { uyumsuzluklar: [{ personel: 'emp_b', istasyon: 'Uzak Freze', istasyonIsMerkezi: 'Merkez 2' }] };
+    ikAc('/ik/calisan/emp_b', { okumalar: { '/ik/istasyon-uyumsuzluklari': () => uyumsuzluklar } });
+    expect(await screen.findByText('İstasyon iş merkezi farklı')).toBeTruthy();
+    cleanup();
+    ikAc('/ik/calisan/emp_a', { okumalar: { '/ik/istasyon-uyumsuzluklari': () => uyumsuzluklar } });
+    expect(await screen.findByRole('tab', { name: 'Ücret' })).toBeTruthy();
+    expect(screen.queryByText('İstasyon iş merkezi farklı')).toBeNull();
   });
 
   it('bulunmayan kayıt boş durum gösterir', async () => {

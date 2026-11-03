@@ -223,6 +223,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const TESIS_TALEBI = ['sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac'];
   const IK_UZMANI = [...IK_TALEP, 'sayfa.ik', 'ik.oku', 'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-onay', 'ik.devam-yaz', 'ik.devam-onay', 'ik.bordro-kesinlestir',
     'ik.bordro-kilit-ac', 'ik.performans-yaz', 'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.pozisyon-onay', 'ik.ayar-yaz',
+    // Yeni personele giriş hesabı açar; yetki dağıtan rolleri veremez (kullanıcı kararı 1925 a).
+    'ik.hesap-ac',
     // Kan grubu ve engel durumu (KVKK özel nitelikli veri) yalnız İK'da (kullanıcı kararı 88 a).
     'ik.ozel-veri-oku'];
   // Portal (kart #760, kullanıcı kararı 12.10.2026): satış, alış, kalite, sevkiyat ve finans okur ve yazar; planlama yalnız okur.

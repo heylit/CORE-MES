@@ -91,9 +91,10 @@ export function Ayarlar() {
       {d.ekran.ux !== 'uzman' && <p className="tc-dhd-aciklama">Firma bilgileri, her firma veya saha için ayrı profil, yedekleme ve sıfırlama.</p>}
 
       <Kart baslik="Firma ve denetim bilgileri" simge={ps('brief')} baslikEki={yaz ? <span className="tc-dhd-soluk">Yazdıkça kaydedilir</span> : undefined}>
-        {d.kurumAdi && <p className="tc-dhd-not">{`Ekran başlığındaki kurum adı TMI ayarlarından gelir: ${d.kurumAdi}.`}</p>}
+        <p className="tc-dhd-not">{d.kurumAdi
+          ? `Firma adı Sistem Ayarları > Firma adı'ndan gelir: ${d.kurumAdi}.`
+          : 'Firma adı Sistem Ayarları > Firma adı\'ndan gelir; henüz girilmedi.'}</p>
         <div className="tc-dhd-form">
-          <Girdi etiket="Firma adı" placeholder="Örn. firma unvanı" {...alan('firma')} />
           <Girdi etiket="Tesis / saha" placeholder="Örn. 2. fabrika" {...alan('tesis')} />
           <div className="tc-dhd-genis"><CokSatir etiket="KYS kapsamı" rows={2} placeholder="Sertifikadaki kapsam ifadesiyle aynı yazın" {...alan('kapsam')} /></div>
           <Girdi etiket="Belgelendirme kuruluşu (varsayılan)" placeholder="Örn. TSE, TÜV, BV" {...alan('kurulus')} />
@@ -173,7 +174,7 @@ export function Ayarlar() {
       </Kart>
 
       <Kart baslik="Veriler nerede saklanıyor?" simge={ps('shield')}>
-        <p className="tc-dhd-aciklama">Bütün bilgiler TMI sunucusunda, kurum içindeki ortak kayıtta tutulur; internete gönderilmez. Aynı kaydı yetkili herkes görür; başka bir bilgisayardan girildiğinde de kayıtlar oradadır.</p>
+        <p className="tc-dhd-aciklama">Bütün bilgiler CORE sunucusunda, kurum içindeki ortak kayıtta tutulur; internete gönderilmez. Aynı kaydı yetkili herkes görür; başka bir bilgisayardan girildiğinde de kayıtlar oradadır.</p>
         <p className="tc-dhd-aciklama">Yedek dosyası (.json) bu kayıtların taşınabilir kopyasıdır; bir profili başka bir kuruluşa ya da başka bir kurulumda devam etmek için taşır.</p>
         <p className={`tc-dhd-durum ${eski ? 'tc-dhy-ton-uyari' : 'tc-dhy-ton-iyi'}`}>
           <Simge ad={eski ? 'alert' : 'check'} />

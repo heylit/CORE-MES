@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { IkHesapRolleriCevabi, IkIseAlCevabi, IkIseAlGovdesi } from '#paylasilan/sozlesme/ik.ts';
 import { useNavigate } from 'react-router-dom';
 import { FormPenceresi } from '../../../../ortak/arayuz/FormPenceresi.tsx';
 import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
+import { Dugme, Girdi, Pencere, Secim } from '../../../../ortak/arayuz/index.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { ikSabitleri, motorKur, type IkMotoru } from '../motor.ts';
 import type { Personel } from '../tipler.ts';
-import { useIkDeposu, useIkKomutu, yeniKimlik, type IkDeposu } from '../veri.ts';
+import { ikAnahtarlari, useIkDeposu, useIkKomutu, yeniKimlik, type IkDeposu } from '../veri.ts';
 import { bolumAlanlari, YENI_PERSONEL_BOLUMLERI, type PersonelBolumu } from './alanlar.ts';
 import {
   adSoyadMetni, aktifMi, bugun, cikistanSonrakiIzinler, personelDogrula, personelKayitOncesi, sayi, siraliDepartman, siraliPersonel,
 } from './kurallar.ts';
 import { ayar } from './motor-yuzu.ts';
-import { AlanGirdisi, type AlanBaglami } from './parcalar.tsx';
+import { AlanGirdisi, Not, Tanimlar, type AlanBaglami } from './parcalar.tsx';
 
 type Degerler = Record<string, unknown>;
 
@@ -47,6 +51,23 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
   const git = useNavigate();
   // Kartla kendiliğinden açılan kişi (1878 a); elle seçilen kişi buraya girmez.
   const acilanKisi = useRef<number | null>(null);
+  // 1925 a: hesap açma işlemi olan İK kullanıcısı yeni personeli tek adımda işe alır: hesap her zaman açılır, kullanıcı adı ve
+  // geçici PIN sunucudan gelir; rol yalnız sunucunun verdiği (yetki dağıtmayan) rollerden, giriş kartı isteğe bağlı.
+  const sorgu = useQueryClient();
+  const hesapAcar = !kayit && yetki.var('ik.hesap-ac');
+  const roller = useQuery({
+    queryKey: ['ik', 'yeni', 'hesap-rolleri'], queryFn: () => api.get<IkHesapRolleriCevabi>('/ik/hesap-rolleri'), enabled: hesapAcar && acik,
+  });
+  const [rolSecimi, rolSecimiYaz] = useState<number | null>(null);
+  const [kartNo, kartNoYaz] = useState('');
+  const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
+  const iseAlim = useRef<IkIseAlCevabi | null>(null);
+  const [sonuc, sonucYaz] = useState<{ p: Personel; c: IkIseAlCevabi } | null>(null);
+  const varsayilanRol = roller.data?.roller.find((r) => r.kod === 'operator')?.id ?? roller.data?.roller[0]?.id ?? null;
+  const rolId = rolSecimi ?? varsayilanRol;
+  // 1928 a: ilk istasyon yalnız seçilen iş merkezinin aktif istasyonlarından; iş merkezi değişince eski seçim düşer.
+  const merkezIstasyonlari = (merkez: unknown) => (roller.data?.istasyonlar ?? []).filter((i) => i.isMerkeziId === (Number(merkez) || null));
+  const gecerliIstasyon = (merkez: unknown) => (merkezIstasyonlari(merkez).some((i) => i.id === istasyonId) ? istasyonId : null);
   const bolumler = bolum ? [bolum] : YENI_PERSONEL_BOLUMLERI;
   const alanlar = useMemo(() => bolumAlanlari(bolumler), [bolum]);
   const personeller = depo.tur('emp');
@@ -65,6 +86,19 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
         personelAdi: (id) => adSoyadMetni(personeller.find((x) => x.id === id)),
         yakaTahmini: sabitler?.inferCollar, kademeTahmini: sabitler?.inferLevel,
       });
+      iseAlim.current = null;
+      if (hesapAcar) {
+        if (rolId === null) throw new Error('Giriş hesabı için rol seçin.');
+        const ilkIstasyon = gecerliIstasyon(yeni.isMerkeziId);
+        const govde: IkIseAlGovdesi = {
+          govde: yeni, rolId, ...(kartNo.trim() === '' ? {} : { kartNo }), ...(ilkIstasyon === null ? {} : { istasyonId: ilkIstasyon }),
+        };
+        const c = await api.post<IkIseAlCevabi>(`/ik/personel/${encodeURIComponent(yeni.id)}/ise-al`, govde);
+        await sorgu.invalidateQueries({ queryKey: ikAnahtarlari.veri });
+        if (c.uyari !== undefined) bildir('bilgi', c.uyari);
+        iseAlim.current = c;
+        return yeni;
+      }
       // Sunucunun uyarısını (IK-74) komut kendisi gösterir.
       const yazilan = await komut.kaydet(yeni);
       const kisiId = yazilan?.govde['kisiId'];
@@ -73,6 +107,14 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
     },
     basarili: (p) => {
       kapat();
+      const c = iseAlim.current;
+      if (c !== null) {
+        kartNoYaz(''); istasyonIdYaz(null);
+        if (c.hesap !== null) { sonucYaz({ p, c }); return; }
+        bildir('tamam', 'Kaydedildi.');
+        kaydedildi?.(p);
+        return;
+      }
       if (bolum === 'Ayrılış' && kayit && !kayit.cikisTarihi && p.cikisTarihi) {
         const sonra = cikistanSonrakiIzinler(p, izinler);
         bildir(sonra ? 'hata' : 'tamam', `Çıkış kaydedildi. Kontrol listesini tamamlayın${sonra ? `: çıkış tarihinden sonra ${sonra} izin kaydı var.` : '.'}`);
@@ -108,8 +150,12 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
   };
 
   const gruplar = bolumler.map((b) => ({ b, alanlar: alanlar.filter((f) => f.bolum === b) }));
+  const formMerkezi = Number(form.degerler['isMerkeziId']) || null;
+  const istasyonSecenekleri = merkezIstasyonlari(formMerkezi);
+  const secilenIstasyon = gecerliIstasyon(formMerkezi);
   const ad = kayit ? adSoyadMetni(kayit) : '';
   return (
+    <>
     <FormPenceresi
       acik={acik} kapat={kapat} form={form}
       baslik={baslik ?? (kayit ? `${ad}: ${bolum === 'Ayrılış' && !kayit.cikisTarihi ? 'işten çıkış' : bolum ?? 'düzenle'}` : 'Yeni personel')}
@@ -124,7 +170,47 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
           </div>
         </fieldset>
       ))}
+      {hesapAcar && (
+        <fieldset className="tc-ikp-form-bolum">
+          <legend>Giriş hesabı</legend>
+          <div className="tc-ikp-form-alanlar">
+            <Secim
+              etiket="Rol" required value={rolId === null ? '' : String(rolId)} bosSecenek={roller.data ? 'Seçiniz' : 'Yükleniyor'}
+              secenekler={(roller.data?.roller ?? []).map((r) => ({ deger: String(r.id), baslik: r.ad }))}
+              onChange={(o) => { rolSecimiYaz(o.target.value === '' ? null : Number(o.target.value)); }}
+              ipucu="Hesap kayıtla açılır; kullanıcı adı ve geçici PIN sistemce verilir. Yetki dağıtan roller burada yoktur."
+            />
+            <Secim
+              etiket="İlk istasyon" value={secilenIstasyon === null ? '' : String(secilenIstasyon)}
+              bosSecenek={formMerkezi === null ? 'Önce iş merkezi seçin' : 'Atama yok'} disabled={formMerkezi === null}
+              secenekler={istasyonSecenekleri.map((i) => ({ deger: String(i.id), baslik: i.ad }))}
+              onChange={(o) => { istasyonIdYaz(o.target.value === '' ? null : Number(o.target.value)); }}
+              ipucu="İsteğe bağlı: tam (%100) atama işe giriş gününden başlar. Sonraki atamalar İstasyonlar'dadır."
+            />
+            <Girdi
+              etiket="Giriş kartı" maxLength={64} autoComplete="off" value={kartNo} onChange={(o) => { kartNoYaz(o.target.value); }}
+              // Okuyucu klavye gibi yazıp Enter'a basar: Enter formu göndermesin, kart alanda kalsın.
+              onKeyDown={(o) => { if (o.key === 'Enter') o.preventDefault(); }}
+              ipucu="İsteğe bağlı: alana tıklayıp kartı okutun. Kişi istasyonda bu kartla girer."
+            />
+          </div>
+        </fieldset>
+      )}
     </FormPenceresi>
+    {sonuc && (
+      <Pencere
+        acik kapat={() => { const p = sonuc.p; sonucYaz(null); kaydedildi?.(p); }} baslik="Giriş hesabı açıldı"
+        alt={<Dugme tur="birincil" onClick={() => { const p = sonuc.p; sonucYaz(null); kaydedildi?.(p); }}>Tamam</Dugme>}
+      >
+        <Tanimlar satirlar={[
+          { etiket: 'Kullanıcı adı', deger: sonuc.c.hesap?.kullaniciAdi ?? '' },
+          { etiket: 'Geçici PIN', deger: sonuc.c.hesap?.pin ?? '' },
+          { etiket: 'Giriş kartı', deger: sonuc.c.kart ? `••••${sonuc.c.kart.kartSon4}` : 'Verilmedi' },
+        ]} />
+        <Not>PIN yalnız şimdi gösterilir; çalışana iletin. Çalışan ilk girişte kendi PIN'ini belirler.</Not>
+      </Pencere>
+    )}
+    </>
   );
 }
 

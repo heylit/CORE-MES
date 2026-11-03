@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Rozet } from '../../../../ortak/arayuz/Rozet.tsx';
 import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Secim } from '../../../../ortak/arayuz/Alan.tsx';
@@ -19,6 +20,7 @@ import {
   aktifMi, BOS_SUZGEC, DURUM_TONU, bugun, kidemMetni, kucuk, personelDurumu, personelSirala, personelSuz, siraliDepartman, siraliPersonel,
   type DurumSuzgeci, type PersonelSiraAlani, type PersonelSuzgeci,
 } from './kurallar.ts';
+import { GirisKartlari } from './GirisKartlari.tsx';
 import { PersonelFormPenceresi } from './PersonelFormu.tsx';
 import './personel.css';
 
@@ -33,6 +35,16 @@ export function PersonelListesi(o: IkEkranOzellikleri) {
   const [sira, siraYaz] = useState<Siralama<PersonelSiraAlani> | null>({ alan: 'ad', yon: 'artan' });
   const [yeniAcik, yeniAcikYaz] = useState(false);
   const [aktarimAcik, aktarimAcikYaz] = useState(false);
+  const [kartlarAcik, kartlarAcikYaz] = useState(false);
+  const [sorgu, sorguYaz] = useSearchParams();
+  const yeniIstendi = sorgu.get('yeni') === '1';
+
+  // Başka sayfadaki "Kişi ekle" bu adrese gelir; form bir kez açılır, adres temizlenir ki geri dönüşte yeniden açılmasın.
+  useEffect(() => {
+    if (!yeniIstendi) return;
+    if (yetki.personelYaz) yeniAcikYaz(true);
+    sorguYaz((q) => { const y = new URLSearchParams(q); y.delete('yeni'); return y; }, { replace: true });
+  }, [yeniIstendi, yetki.personelYaz, sorguYaz]);
 
   const tumu = depo.tur('emp');
   const izinler = depo.tur('leave');
@@ -103,6 +115,7 @@ export function PersonelListesi(o: IkEkranOzellikleri) {
   const eylemler: MenuOgesi[] = [
     ...(tumu.length ? [{ anahtar: 'indir', baslik: 'Listeyi indir', simge: 'download' as const, sec: listeyiIndir }] : []),
     ...(yetki.personelYaz ? [{ anahtar: 'aktar', baslik: 'Excel’den aktar', simge: 'upload' as const, sec: () => { aktarimAcikYaz(true); } }] : []),
+    ...(yetki.personelYaz ? [{ anahtar: 'kartlar', baslik: 'Giriş kartları', simge: 'id-card' as const, sec: () => { kartlarAcikYaz(true); } }] : []),
   ];
 
   const komutlar: SayfaKomutu[] = [
@@ -148,6 +161,7 @@ export function PersonelListesi(o: IkEkranOzellikleri) {
           kaydedildi={(p) => { git('calisan', p.id); }}
         />
       )}
+      {yetki.personelYaz && <GirisKartlari acik={kartlarAcik} kapat={() => { kartlarAcikYaz(false); }} depo={depo} sec={(id) => { git('calisan', id); }} />}
       {yetki.personelYaz && <IceAktarma acik={aktarimAcik} kapat={() => { aktarimAcikYaz(false); }} depo={depo} />}
     </div>
   );

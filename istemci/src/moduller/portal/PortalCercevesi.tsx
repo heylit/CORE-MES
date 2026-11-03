@@ -1,3 +1,4 @@
+import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { BenCevabi, SorguCevabi } from '#paylasilan/sozlesme/portal.ts';
@@ -44,7 +45,7 @@ export const YEREL: Pick<CerceveAyari['yerel'], 'kapsam' | 'onekler' | 'catismaI
 export const YETENEKLER: readonly string[] = ['db', 'assets', 'downloads'];
 
 // Prototipteki örnek firma adı yerine Ayarlar > Genel'deki firma adı görünür; ad okunamazsa bu ad.
-export const KURUM_ADI = 'TMI';
+export const KURUM_ADI = UYGULAMA_ADI;
 const PROTOTIP_ADI = /Atlas Metal(?: Sanayi)?/g;
 const PROTOTIP_KISA = /(<div class="logo"(?: aria-hidden="true")?>)AM(<\/div>)/g;
 // Kişi hep TMI oturumundaki kişidir: prototipin çıkışı (demo kullanıcı seçimine döner), aynı firmada kullanıcı değiştirme

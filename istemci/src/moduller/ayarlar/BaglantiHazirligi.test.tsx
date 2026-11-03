@@ -74,11 +74,11 @@ describe('Bağlantı hazırlığı', () => {
     expect(await screen.findByText('http://10.0.0.5:5149')).toBeTruthy();
     expect(screen.getByText('Tanımlı')).toBeTruthy();
     expect(screen.getByText('Tanımlı değil (TMIV2_SMARTES_ADRESI)')).toBeTruthy();
-    const tmiLogo = screen.getByRole('region', { name: 'TMI → Logo' });
+    const tmiLogo = screen.getByRole('region', { name: 'CORE → Logo' });
     expect(within(tmiLogo).getByText('Malzeme kartı')).toBeTruthy();
     expect(within(tmiLogo).getByText('12 gönderildi · 1 hatalı')).toBeTruthy();
     expect(within(tmiLogo).getByText('Modül bağlanmadı')).toBeTruthy();
-    expect(within(screen.getByRole('region', { name: 'Logo → TMI' })).getByText('Kodda yok')).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Logo → CORE' })).getByText('Kodda yok')).toBeTruthy();
     expect(screen.getByText('Son okuma: SmartES süresinde cevap vermedi.')).toBeTruthy();
     expect(screen.getByText('Açık, denenmedi')).toBeTruthy();
     // Genel rozet ve ortam değişkeni yokken gelen iki SmartES akışı aynı adı taşır; "Ayar eksik" görünmez.
@@ -95,7 +95,7 @@ describe('Bağlantı hazırlığı', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Bağlantıyı dene' })[0] as HTMLElement);
     expect(await screen.findByText('Köprüye ulaşılamadı (ECONNREFUSED). (12 ms)')).toBeTruthy();
     expect(istekler.filter((y) => y.endsWith('/kontrol'))).toEqual(['/logo/hazirlik/kontrol']);
-    const tmiLogo = screen.getByRole('region', { name: 'TMI → Logo' });
+    const tmiLogo = screen.getByRole('region', { name: 'CORE → Logo' });
     expect(within(tmiLogo).getByText('Bağlantı yok')).toBeTruthy();
     expect(within(tmiLogo).queryByText('Hazır')).toBeNull();
   });

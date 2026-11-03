@@ -583,7 +583,7 @@ const KOD_TEKIL = { smartes_esleme_kod_tekil: { ileti: 'Bu SmartES kodu bu türd
 export async function eslemeAta(
   db: Db, kisiId: number, g: { tur: EslemeTuru; tmiId: number; smartesKod: string; surum: number | null },
 ): Promise<EslemeCevabi> {
-  if (!(await tmiKayitlari(db, g.tur)).some((k) => k.id === g.tmiId)) throw bulunamadi('Eşlenecek TMI kaydı bulunamadı.');
+  if (!(await tmiKayitlari(db, g.tur)).some((k) => k.id === g.tmiId)) throw bulunamadi('Eşlenecek CORE kaydı bulunamadı.');
   const surum = await kisitKorumali(KOD_TEKIL, () => {
     if (g.surum === null) {
       return eslemeEkleVeyaCakis(db, g.tur, g.tmiId, g.smartesKod, kisiId);

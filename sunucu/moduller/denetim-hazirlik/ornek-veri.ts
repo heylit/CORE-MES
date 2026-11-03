@@ -25,7 +25,7 @@ export function ornekDurum(gun: string, anMs: number): Record<string, unknown> {
         view: 'home',
         updated: anMs,
         profile: {
-          firma: 'TMI',
+          firma: 'Örnek Atölye',
           tesis: 'Örnek Tesis',
           kapsam: 'CNC talaşlı imalat ve montaj (örnek kapsam)',
           kurulus: 'Örnek Belgelendirme Kuruluşu',

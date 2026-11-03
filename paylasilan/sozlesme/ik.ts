@@ -208,6 +208,36 @@ export const girisKartiSemasi = z.object({ kartSon4: z.string(), kaydedildi: zam
 export const girisKartiCevabi = z.object({ kart: girisKartiSemasi.nullable() });
 export const girisKartiVerGovdesi = z.object({ kartNo: gizli(z.string().trim().min(1, 'Kartı okutun.').max(64, 'Kart numarası çok uzun.')) }).strict();
 export const girisKartiKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+// 1925 a: İK yeni personeli tek adımda işe alır: personel kaydı, kişisi (1878 a), PIN'li giriş hesabı ve isteğe bağlı giriş kartı
+// aynı transaction'da. Geçici PIN yalnız bu cevapta bir kez döner (kişi ilk girişte kendi PIN'ini belirler); kayıtlarda tutulmaz.
+const IK_KIMLIK = z.number().int().positive().max(2147483647);
+export const ikIseAlGovdesi = z.object({
+  govde: ikGovdesi,
+  rolId: IK_KIMLIK,
+  kartNo: gizli(z.string().trim().max(64, 'Kart numarası çok uzun.')).optional(),
+  // 1928 a: ilk istasyon; kaydın iş merkezindeki aktif istasyonlardan, işe giriş gününden başlayan tam atama.
+  istasyonId: IK_KIMLIK.optional(),
+}).strict();
+export const ikHesabiSemasi = z.object({ kisiId: IK_KIMLIK, kullaniciAdi: z.string(), pin: gizli(z.string()) });
+export const ikIseAlCevabi = ikYazCevabi.extend({ hesap: ikHesabiSemasi.nullable(), kart: girisKartiSemasi.nullable() });
+// İşe alma formunun seçenekleri: verilebilen roller ve ilk istasyon için aktif istasyonlar (iş merkezine göre süzülür).
+export const ikHesapRolleriCevabi = z.object({
+  roller: z.array(z.object({ id: IK_KIMLIK, kod: z.string(), ad: z.string() })),
+  istasyonlar: z.array(z.object({ id: IK_KIMLIK, ad: z.string(), isMerkeziId: IK_KIMLIK })),
+});
+// 1928 a: kişinin asıl istasyonu (en büyük yüzdeli aktif atama) İK kaydının iş merkezinde değilse uyarı satırı.
+export const ikIstasyonUyumsuzluklariCevabi = z.object({
+  uyumsuzluklar: z.array(z.object({ personel: z.string(), istasyon: z.string(), istasyonIsMerkezi: z.string().nullable() })),
+});
+// İK sayfasının kart listesi: kapsamdaki personelin etkin kartı, yalnız son dört hane.
+export const ikGirisKartlariCevabi = z.object({
+  kartlar: z.array(z.object({ kisiId: IK_KIMLIK, personel: z.string(), kartSon4: z.string(), kaydedildi: zamanSemasi })),
+});
+export type IkIseAlGovdesi = z.input<typeof ikIseAlGovdesi>;
+export type IkIseAlCevabi = z.output<typeof ikIseAlCevabi>;
+export type IkHesapRolleriCevabi = z.output<typeof ikHesapRolleriCevabi>;
+export type IkGirisKartlariCevabi = z.output<typeof ikGirisKartlariCevabi>;
+export type IkIstasyonUyumsuzluklariCevabi = z.output<typeof ikIstasyonUyumsuzluklariCevabi>;
 export type GirisKarti = z.output<typeof girisKartiSemasi>;
 export type GirisKartiCevabi = z.output<typeof girisKartiCevabi>;
 export type GirisKartiVerGovdesi = z.input<typeof girisKartiVerGovdesi>;
