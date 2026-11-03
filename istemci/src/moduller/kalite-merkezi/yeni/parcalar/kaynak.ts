@@ -1,4 +1,4 @@
-import { useQueries, type UseQueryResult } from '@tanstack/react-query';
+import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import type { KmParcaKaynagi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 
@@ -21,5 +21,14 @@ export function useParcaKaynaklari(malzemeNolar: readonly (number | undefined)[]
       staleTime: 60_000,
     })),
     combine: birlestir,
+  });
+}
+
+// 1993 a: her aktif mamul ve yarı mamul kartı (Malzemeler); Parçalar ve Resim ve modeller listesi bunlardan da satır açar.
+export function useUretilenParcalar() {
+  return useQuery({
+    queryKey: parcaKaynagiAnahtari('uretilen'),
+    queryFn: () => api.get<KmParcaKaynaklariCevabi>('/kalite-merkezi/parca-kaynaklari?uretilen=1'),
+    staleTime: 60_000,
   });
 }

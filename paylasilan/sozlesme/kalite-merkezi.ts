@@ -144,6 +144,8 @@ export const kmEmirKaynaklariCevabi = z.object({ emirler: z.array(kmEmirKaynagi)
 export const kmParcaKaynaklariSorgusu = z.object({
   ara: z.string().trim().max(80).optional(),
   idler: z.string().regex(/^\d{1,10}(,\d{1,10}){0,199}$/).optional(),
+  // 1993 a: Parçalar ve Resim ve modeller listesi her aktif mamul ve yarı mamulü gösterir; arama ve kimlik verilmezse geçerlidir.
+  uretilen: z.literal('1').optional(),
 });
 export const kmParcaKaynagi = z.object({ malzemeNo: z.number().int().positive(), kod: z.string(), ad: z.string().nullable(), aktif: z.boolean() });
 export const kmParcaKaynaklariCevabi = z.object({ parcalar: z.array(kmParcaKaynagi) });

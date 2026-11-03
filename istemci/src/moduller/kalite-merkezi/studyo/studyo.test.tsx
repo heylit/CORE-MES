@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { KmMerkezBelgesi, KmResim, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { kmAc, MUAYENECI, MUHENDIS, OKUYAN, type SunucuSecenegi } from '../yeni/test-ortak.tsx';
 
@@ -12,6 +12,7 @@ const resim = (o: Partial<KmResim>): KmResim => ({
 const PARCA: KmStudyoParcaCevabi = {
   resimler: [resim({}), resim({ id: 2, tur: 'model', ad: 'Deneme model', revizyon: null }), resim({ id: 3, ad: 'Eski resim', aktif: false })],
   numunePlanlari: [{ opNo: 10, surum: 1, kurallar: [{ kimlik: 'k1', ne: 'ilk', kim: ['kalite'], balonlar: 'hepsi', kapi: true }] }],
+  alinmamis: 0,
 };
 const SECENEK: SunucuSecenegi = {
   parcalar: [KART],
@@ -54,6 +55,47 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     expect(fetch.mock.calls.some(([a]) => a === '/api/kalite-merkezi/studyo/emirler/6/olcumler')).toBe(true);
     fireEvent.change(emir, { target: { value: 'ue-5' } });
     expect(await within(sag).findByText('Bu emirde numune isteği yok.')).toBeTruthy();
+  });
+
+  it('1993 a: kartına bağlı alınmamış yayındaki belge varsa kalite onayı olan açınca bir kez eşitlenir; onaysız eşitlemez, notu görür', async () => {
+    const bekleyen = { ...SECENEK, studyo: { ...SECENEK.studyo, parcalar: { 7: { ...PARCA, alinmamis: 2 } } } };
+    const esitleme = (yazmalar: { yol: string }[]) => yazmalar.filter((y) => y.yol === '/kalite-merkezi/studyo/parcalar/7/esitle');
+    const m = kmAc('resimler?parca=7', MUHENDIS, {}, bekleyen);
+    await waitFor(() => { expect(esitleme(m.yazmalar)).toHaveLength(1); });
+    cleanup();
+    const o = kmAc('resimler?parca=7', MUAYENECI, {}, bekleyen);
+    expect(await screen.findByText(/bu karta bağlı 2 yayındaki belge var/)).toBeTruthy();
+    expect(esitleme(o.yazmalar)).toHaveLength(0);
+  });
+
+  it('1995 a: eski revizyon rozetle ayrılır, güncel resim açılır; balonsuz yeni revizyona eski plan tek düğmeyle kopyalanır', async () => {
+    const balon = {
+      id: 5, no: 1, nominal: 'Ø5', tolerans: null, alt: '4.9', ust: '5.1', alet: null, siklik: null, kritik: false, yontem: null, olcuAletiGerekir: false,
+      tur: null, sayfa: 1, x: 10, y: 20, yaziKutusu: null, yer: null, yerKipi: null, yerKontrol: false, surum: 1,
+    };
+    const parcasi: KmStudyoParcaCevabi = {
+      resimler: [resim({ id: 20, ad: 'Deneme resim', revizyon: 'A', eski: true, balonlar: [balon] }), resim({ id: 21, ad: 'Deneme resim', revizyon: 'B', surum: 3, eski: false })],
+      numunePlanlari: [], alinmamis: 0,
+    };
+    const s = kmAc('resimler?parca=7', MUHENDIS, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, parcalar: { 7: parcasi } } });
+    const sol = await screen.findByRole('complementary', { name: 'Parça ve resimler' });
+    const eskiDugme = await within(sol).findByRole('button', { name: /Rev A/ });
+    expect(within(eskiDugme).getByText('Eski revizyon')).toBeTruthy();
+    expect(within(sol).getByRole('button', { name: /Rev B/ }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(sol).getByRole('button', { name: 'Eski revizyondan planı kopyala' }));
+    await waitFor(() => {
+      expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/21/plani-kopyala')?.govde).toEqual({ kaynakResimId: 20, surum: 3 });
+    });
+  });
+
+  it('1995 a: onaysız kullanıcı kopyalama düğmesini görmez', async () => {
+    const parcasi: KmStudyoParcaCevabi = {
+      resimler: [resim({ id: 20, revizyon: 'A', eski: true, balonlar: [] }), resim({ id: 21, revizyon: 'B', eski: false })], numunePlanlari: [], alinmamis: 0,
+    };
+    kmAc('resimler?parca=7', MUAYENECI, {}, { ...SECENEK, studyo: { ...SECENEK.studyo, parcalar: { 7: parcasi } } });
+    const sol = await screen.findByRole('complementary', { name: 'Parça ve resimler' });
+    await within(sol).findByRole('button', { name: /Rev B/ });
+    expect(within(sol).queryByRole('button', { name: 'Eski revizyondan planı kopyala' })).toBeNull();
   });
 
   it('yan paneller kapalı açılır (1738 c); düğme açar, tercih bu tarayıcıda hatırlanır', async () => {

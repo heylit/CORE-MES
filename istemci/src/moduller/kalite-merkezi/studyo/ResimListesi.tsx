@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { DurumKutusu, Rozet, SayfaBasligi, Tablo, type Sutun, type TabloSuzgeci } from '../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { parcaDizini } from '../yeni/kurallar.ts';
-import { useParcaKaynaklari } from '../yeni/parcalar/kaynak.ts';
+import { useParcaKaynaklari, useUretilenParcalar } from '../yeni/parcalar/kaynak.ts';
 import type { EkranOzellikleri } from '../yeni/sekmeler.ts';
 import { ResimVeModeller } from './index.tsx';
 import { EKSIK_METNI, resimListesi, useStudyoOzetleri, type ResimListeSatiri } from './liste.ts';
@@ -40,7 +40,8 @@ function Liste({ veri }: EkranOzellikleri) {
   const [sorgu, sorguYaz] = useState('');
   const [suzgec, suzgecYaz] = useState('');
   const ozetler = useStudyoOzetleri();
-  const kartNolari = useMemo(() => parcaDizini(veri).map((p) => p.meta?.malzemeNo), [veri]);
+  const uretilen = useUretilenParcalar();
+  const kartNolari = useMemo(() => parcaDizini(veri, uretilen.data?.parcalar ?? []).map((p) => p.meta?.malzemeNo), [veri, uretilen.data]);
   const ham = useMemo(() => resimListesi(kartNolari, ozetler.data?.parcalar ?? []), [kartNolari, ozetler.data]);
   const kartlar = useParcaKaynaklari(ham.map((s) => s.malzemeNo));
   const satirlar: Satir[] = ham.map((s) => { const k = kartlar.get(s.malzemeNo); return { ...s, kod: k?.kod ?? String(s.malzemeNo), ad: k?.ad ?? '' }; });
@@ -62,7 +63,7 @@ function Liste({ veri }: EkranOzellikleri) {
             <Tablo
               etiket="Resim ve modeller" sutunlar={SUTUNLAR} satirlar={gorunen} satirAnahtari={(s) => s.malzemeNo}
               satirSec={(s) => { adresYaz({ parca: String(s.malzemeNo) }); }}
-              bosMesaj={satirlar.length ? 'Aramaya uyan parça yok' : 'Çizim Merkezi’nde malzeme kartına bağlı resim ya da model yok. Kartlara çizimi Çizim Merkezi’nde bağlayın.'}
+              bosMesaj={satirlar.length ? 'Aramaya uyan parça yok' : 'Aktif mamul ya da yarı mamul kartı yok; Çizim Merkezi’nde kartlara bağlı resim ya da model de yok.'}
               arac={{
                 arama: { deger: sorgu, degistir: sorguYaz, etiket: 'Parça ara', yerTutucu: 'Parça no veya adı ara' },
                 suzgec: { etiket: 'Durum', secenekler: SUZGECLER, secili: suzgec, sec: suzgecYaz },

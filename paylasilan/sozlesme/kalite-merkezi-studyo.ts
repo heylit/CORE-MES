@@ -44,6 +44,8 @@ export const kmBalon = z.object({
   // bilmeyen okuyucular içindir.
   yer: z.tuple([z.number(), z.number()]).nullable().optional(),
   yerKipi: z.enum(KM_BALON_YER_KIPLERI).nullable().optional(),
+  // 1995 a: eski revizyondan kopyalanan balonun yeri yeni resimde kontrol bekler. Sunucu hep gönderir (isteğe bağlılık yukarıdaki gibi).
+  yerKontrol: z.boolean().optional(),
   surum: z.number().int().positive(),
 });
 
@@ -58,6 +60,9 @@ export const kmResim = z.object({
   aktif: z.boolean(),
   surum: z.number().int().positive(),
   eklendi: zamanSemasi,
+  // 1995 a: aynı belgenin daha yeni revizyonu parçaya alındıysa bu resim eski revizyondur: görünür, planı değiştirilmez, yeniye kopyalanır.
+  // Sunucu hep gönderir; isteğe bağlılık bu alanı bilmeyen okuyucular içindir.
+  eski: z.boolean().optional(),
   balonlar: z.array(kmBalon),
 });
 
@@ -74,7 +79,10 @@ export const kmNumuneKurali = z.object({
 }).refine((k) => (k.ne === 'her' || k.ne === 'sure') === (k.n !== undefined), 'Her n parça ve süre kuralında n verilir, ötekilerde verilmez.');
 export const kmNumunePlani = z.object({ opNo: z.number().int().positive(), kurallar: z.array(kmNumuneKurali).max(50), surum: z.number().int().positive() });
 
-export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani) });
+// `alinmamis`: malzeme kartına Çizim Merkezi'nde bağlı, yayındaki PDF ve 3B modelden parçaya hiç alınmamışların sayısı (1993 a); kaldırılan sayılmaz.
+export const kmStudyoParcaCevabi = z.object({ resimler: z.array(kmResim), numunePlanlari: z.array(kmNumunePlani), alinmamis: z.number().int().nonnegative() });
+// Kartına bağlı yayındaki belgeler parçaya alınır; parçadan elle kaldırılmış revizyon geri getirilmez (1993 a).
+export const kmStudyoEsitlemeCevabi = z.object({ eklenen: z.number().int().nonnegative() });
 // Resim ve modeller listesi (799): parça başına etkin resim, 3B model ve balon sayısı, kuralı olan numune planı sayısı. `merkezde`:
 // Çizim Merkezi'nde malzeme kartına bağlı, yayındaki PDF ve 3B model sayısı (1306); alınmış olanlar da sayılır.
 export const kmStudyoOzeti = z.object({
@@ -95,6 +103,8 @@ export const kmResimEkleGovdesi = z.object({
   revizyon: z.string().trim().min(1).max(20).nullish(),
 });
 export const kmResimCevabi = z.object({ resim: kmResim });
+// 1995 a: eski revizyonun planı balonu olmayan yeni revizyona kopyalanır; hedefin sürümüyle.
+export const kmPlanKopyalaGovdesi = z.object({ kaynakResimId: kimlik, surum: z.number().int().positive() });
 // Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (belge-merkezi/disari.ts yayindakiBelgeler); arama belge adında.
 export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
 // Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
@@ -211,6 +221,8 @@ export type KmResim = z.output<typeof kmResim>;
 export type KmNumuneKurali = z.output<typeof kmNumuneKurali>;
 export type KmNumunePlani = z.output<typeof kmNumunePlani>;
 export type KmStudyoParcaCevabi = z.output<typeof kmStudyoParcaCevabi>;
+export type KmStudyoEsitlemeCevabi = z.output<typeof kmStudyoEsitlemeCevabi>;
+export type KmPlanKopyalaGovdesi = z.input<typeof kmPlanKopyalaGovdesi>;
 export type KmStudyoOzeti = z.output<typeof kmStudyoOzeti>;
 export type KmStudyoOzetleriCevabi = z.output<typeof kmStudyoOzetleriCevabi>;
 export type KmResimEkleGovdesi = z.input<typeof kmResimEkleGovdesi>;

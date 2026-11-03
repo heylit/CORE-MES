@@ -805,7 +805,21 @@ export async function emirKaynaklari(db: Db): Promise<KmEmirKaynaklariCevabi> {
   return { emirler: emirKaynakSirasi([...liste.values()]) };
 }
 
-export async function parcaKaynaklari(db: Db, g: { ara?: string; idler?: string }): Promise<KmParcaKaynaklariCevabi> {
+// 1993 a: üretilen parça (mamul, yarı mamul) Kalite Merkezi'nde kaydı olmasa da listelenir. Ticari mal üretilmez, buraya girmez.
+const URETILEN_TURLER = ['mamul', 'yarimamul'] as const satisfies readonly (typeof PARCA_TURLERI)[number][];
+const URETILEN_SAYFA = 200;
+const URETILEN_SINIRI = 5000;
+
+export async function parcaKaynaklari(db: Db, g: { ara?: string; idler?: string; uretilen?: '1' }): Promise<KmParcaKaynaklariCevabi> {
+  if (g.uretilen !== undefined && g.idler === undefined && g.ara === undefined) {
+    const parcalar: KmParcaKaynaklariCevabi['parcalar'] = [];
+    for (let sayfa = 1; parcalar.length < URETILEN_SINIRI; sayfa += 1) {
+      const r = await malzemeAra(db, { metin: null, turler: URETILEN_TURLER, yalnizAktif: true, sayfa, sayfaBoyu: URETILEN_SAYFA });
+      parcalar.push(...r.satirlar.map((m) => ({ malzemeNo: m.id, kod: m.kod, ad: m.ad, aktif: m.onayDurumu === 'aktif' })));
+      if (r.satirlar.length < URETILEN_SAYFA || (r.toplam !== null && parcalar.length >= r.toplam)) break;
+    }
+    return { parcalar: parcalar.slice(0, URETILEN_SINIRI) };
+  }
   if (g.idler !== undefined) {
     const ozet = await malzemeOzetleri(db, g.idler.split(',').map(Number));
     return { parcalar: [...ozet.values()].map((m) => ({ malzemeNo: m.id, kod: m.kod, ad: m.ad, aktif: m.onayDurumu === 'aktif' })) };

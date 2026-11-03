@@ -783,6 +783,9 @@ export const STUDYO_ILETILER = {
   sapmaGereksiz: 'Bütün ölçüler uygun; sapma değil onay verilir.',
   surumDegisti: 'Bu kayıt siz açtıktan sonra değişti; yenileyip yeniden deneyin.',
   resimPasif: 'Kaldırılmış resmin planı değiştirilmez.',
+  resimEski: 'Eski revizyonun kontrol planı değiştirilmez; planı yeni revizyona kopyalayın.',
+  kopyaHedefDolu: 'Plan yalnız balonu olmayan resme kopyalanır.',
+  kopyaKaynakUygunsuz: 'Plan yalnız aynı belgenin bu parçadaki eski revizyonundan kopyalanır.',
   balonNoTekrar: 'Aynı balon numarası planda bir kez kullanılır.',
   balonResimDisi: 'Balon bu resmin etkin balonu değil.',
   balonSinirEksik: 'Alt ve üst sınır birlikte verilir ya da ikisi de boş kalır (geçer/geçmez).',
@@ -794,6 +797,16 @@ export const STUDYO_ILETILER = {
   kuralBalonYok: 'Numune kuralındaki balon numarası parçanın etkin resimlerinde yok.',
 } as const;
 export type StudyoIletisi = keyof typeof STUDYO_ILETILER;
+
+// 1995 a: parçada aynı belgenin daha sonra alınmış (kimliği büyük) etkin başka revizyonu varsa resim eski revizyondur.
+export function eskiRevizyonlar(resimler: readonly { id: number; merkezBelgeId: number; ozet: string; aktif: boolean }[]): Set<number> {
+  const enYeni = new Map<number, { id: number; ozet: string }>();
+  for (const r of resimler) {
+    const o = enYeni.get(r.merkezBelgeId);
+    if (r.aktif && (o === undefined || r.id > o.id)) enYeni.set(r.merkezBelgeId, { id: r.id, ozet: r.ozet });
+  }
+  return new Set(resimler.filter((r) => { const y = enYeni.get(r.merkezBelgeId); return y !== undefined && y.id > r.id && y.ozet !== r.ozet; }).map((r) => r.id));
+}
 
 // Stüdyo PDF'i resim, STEP/STL/IGES'i model olarak açar (Arkon'un belge merkezinden aldığı türler); öteki türler stüdyoda açılmaz.
 export function studyoResimTuru(dosyaTuru: string): 'resim' | 'model' | null {
