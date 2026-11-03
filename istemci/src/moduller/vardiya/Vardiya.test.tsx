@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { IstasyonSecimiCevabi, MakinelerCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -66,12 +65,10 @@ function sunucuKur(kullanici: Kullanici, ek: Record<string, () => Response> = {}
   return cagrilar;
 }
 
-// Düzen yalnız İK adresinde yazılır (1934 a); öteki ekranlar kendi adreslerinde açılır.
-function ac(ekran: 'duzen' | 'personel' | 'takvim' = 'duzen', yol?: string) {
+function ac(ekran: 'duzen' | 'personel' | 'takvim' = 'duzen') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const E = ekran === 'duzen' ? VardiyaEkrani : ekran === 'personel' ? PersonelEkrani : TakvimEkrani;
-  const adres = yol ?? (ekran === 'duzen' ? '/ik/vardiya' : ekran === 'personel' ? '/vardiya/personel' : '/vardiya/takvim');
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[adres]}><E /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><E /></BildirimSaglayici></QueryClientProvider>);
 }
 
 const postlar = (c: Cagri[]) => c.filter((x) => x.yontem === 'POST');
@@ -175,8 +172,8 @@ describe('Vardiya', () => {
     expect(screen.queryByRole('button', { name: '2026-11-02 gününü kaldır' })).toBeNull();
   });
 
-  it('vardiya başına personel: çalışan ama kimsesiz vardiya işaretlenir, vardiyası seçilmeyen kişi o vardiyada sayılır; kişinin vardiyası yalnız okunur', async () => {
-    const cagrilar = sunucuKur(ISTASYON_OKUR);
+  it('vardiya başına personel: çalışan ama kimsesiz vardiya işaretlenir, vardiyası seçilmeyen kişi o vardiyada sayılır; vardiya seçimi kişinin vardiyasını yazar', async () => {
+    const cagrilar = sunucuKur(PLANLAMA);
     ac('personel');
     const tablo = (await screen.findByText('Vardiya başına personel')).closest('section')!;
     const satirA = within(tablo).getByText('IM-A').closest('tr')!;
@@ -184,14 +181,13 @@ describe('Vardiya', () => {
     const satirB = within(tablo).getByText('IM-B').closest('tr')!;
     expect(within(satirB).getAllByRole('cell')[1]!.className).toBe('');
     expect(within(satirB).getAllByRole('cell')[2]!.textContent).toBe('1');
-    const liste = screen.getByRole('table', { name: 'Personel' });
-    expect(within(screen.getByText('Deneme Kişi').closest('tr')!).getByText('Gündüz 08:00–16:00')).toBeTruthy();
-    expect(within(screen.getByText('Deneme Öteki').closest('tr')!).getByText('Seçilmedi')).toBeTruthy();
-    expect(within(liste).queryByRole('combobox')).toBeNull();
-    expect(within(liste).queryByRole('checkbox')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Toplu vardiya atama' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'İstasyonlar > Personel' }).getAttribute('href')).toBe('/istasyonlar/personel');
-    expect(postlar(cagrilar)).toHaveLength(0);
+    expect(screen.queryByText('Deneme Öteki vardiyası')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Deneme Öteki vardiyası'), { target: { value: '2' } });
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(1));
+    expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/kisi-vardiyalari/8/belirle', govde: { vardiyaId: 2 } });
+    fireEvent.change(screen.getByLabelText('Deneme Kişi vardiyası'), { target: { value: '' } });
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(2));
+    expect(postlar(cagrilar)[1]!.govde).toEqual({ vardiyaId: null });
   });
 
   // Tek tanım: aynı veride İstasyonlar sayfası (Istasyonlar.test.tsx) da aynı sayıyı gösterir.
@@ -219,10 +215,10 @@ describe('Vardiya', () => {
     expect(within(satir).getAllByRole('cell').map((h) => h.textContent)).toEqual(['3', '2', '2']);
     // Sayıya dokununca liste o hücrenin kişilerine süzülür.
     fireEvent.click(within(satir).getByRole('button', { name: 'IM-A Akşam: 2 kişiyi listele' }));
-    expect(screen.queryByText('Deneme Kişi')).toBeNull();
-    expect(screen.getByText('Deneme Bir')).toBeTruthy();
+    expect(screen.queryByLabelText('Deneme Kişi vardiyası')).toBeNull();
+    expect(screen.getByLabelText('Deneme Bir vardiyası')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
-    expect(screen.getByText('Deneme Kişi')).toBeTruthy();
+    expect(screen.getByLabelText('Deneme Kişi vardiyası')).toBeTruthy();
   });
 
   it('toplu matris: seçilen iş merkezlerine seçilen gün ve vardiya tek komutla eklenir; "yalnız bunlar" ve kopyalama iki adımlıdır', async () => {
@@ -275,48 +271,52 @@ describe('Vardiya', () => {
     cleanup();
     sunucuKur(IZLEYEN);
     ac('personel');
-    await screen.findByText('Deneme Kişi');
-    expect(screen.queryByRole('link', { name: 'İstasyonlar > Personel' })).toBeNull();
+    await screen.findByLabelText('Deneme Kişi vardiyası');
+    expect(screen.queryByLabelText('Deneme Kişi seç')).toBeNull();
+    expect(screen.queryByText(/Görünenlerin hepsini seç/)).toBeNull();
   });
 
-  it('personel: süzgeç ve arama listeyi daraltır; özetteki sayı listeyi süzer', async () => {
-    sunucuKur(PLANLAMA);
+  it('personel: süzgeç ve arama listeyi daraltır; özetteki sayı listeyi süzer; seçilenlere toplu vardiya tek komuttur', async () => {
+    const cagrilar = sunucuKur(PLANLAMA);
     ac('personel');
-    await screen.findByText('Deneme Kişi');
+    await screen.findByLabelText('Deneme Kişi vardiyası');
     fireEvent.change(screen.getByLabelText('Vardiya'), { target: { value: 'yok' } });
-    expect(screen.queryByText('Deneme Kişi')).toBeNull();
-    expect(screen.getByText('Deneme Öteki')).toBeTruthy();
+    expect(screen.queryByLabelText('Deneme Kişi vardiyası')).toBeNull();
+    expect(screen.getByLabelText('Deneme Öteki vardiyası')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
     fireEvent.change(screen.getByLabelText('Personel ara'), { target: { value: 'öteki' } });
-    expect(screen.queryByText('Deneme Kişi')).toBeNull();
+    expect(screen.queryByLabelText('Deneme Kişi vardiyası')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
     fireEvent.click(screen.getByRole('button', { name: 'IM-A Gündüz: 1 kişiyi listele' }));
-    expect(screen.getByText('Deneme Kişi')).toBeTruthy();
-    expect(screen.queryByText('Deneme Öteki')).toBeNull();
+    expect(screen.getByLabelText('Deneme Kişi vardiyası')).toBeTruthy();
+    expect(screen.queryByLabelText('Deneme Öteki vardiyası')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Süzgeci temizle' }));
+
+    fireEvent.click(screen.getByLabelText(/Görünenlerin hepsini seç/));
+    const cubuk = screen.getByRole('region', { name: 'Toplu vardiya atama' });
+    expect(within(cubuk).getByText('2 kişi seçili')).toBeTruthy();
+    fireEvent.change(within(cubuk).getByLabelText('Seçilenlerin vardiyası'), { target: { value: '2' } });
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(1));
+    expect(postlar(cagrilar)[0]).toMatchObject({ yol: '/kisi-vardiyalari/toplu-belirle', govde: { kisiIdleri: [7, 8], vardiyaId: 2 } });
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Toplu vardiya atama' })).toBeNull());
   });
 
-  it('1934 a: düzen yalnız İK adresinde yazılır; Vardiya ve İstasyonlar adresinde yazabilene İK bağlantısı çıkar', async () => {
-    for (const yol of ['/vardiya', '/istasyonlar/vardiyalar']) {
-      const cagrilar = sunucuKur(PLANLAMA);
-      ac('duzen', yol);
-      const hucre = await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' });
-      expect((hucre as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.queryByRole('button', { name: 'Tümünü temizle' })).toBeNull();
-      expect(screen.queryByLabelText('IM-A seç')).toBeNull();
-      expect(screen.getByRole('link', { name: "İK'da düzenle" }).getAttribute('href')).toBe('/ik/vardiya');
-      fireEvent.click(hucre);
-      expect(postlar(cagrilar)).toHaveLength(0);
-      cleanup();
-    }
-    sunucuKur(PLANLAMA);
-    ac('duzen', '/ik/vardiya');
-    expect(((await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' })) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.queryByRole('link', { name: "İK'da düzenle" })).toBeNull();
-    cleanup();
-    sunucuKur(IZLEYEN);
-    ac('duzen', '/vardiya');
-    await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' });
-    expect(screen.queryByRole('link', { name: "İK'da düzenle" })).toBeNull();
+  it('personel: toplu atamada kapsam dışı kişi satırında yazılır, seçim kalır; "Seçilmedi" vardiyayı kaldırır', async () => {
+    const cagrilar = sunucuKur(PLANLAMA, {
+      'POST /kisi-vardiyalari/toplu-belirle': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu istasyonun iş merkezinde çalışma yetkiniz yok.', ayrinti: { kisiIdleri: [8] } } satisfies HataGovdesi),
+    });
+    ac('personel');
+    fireEvent.click(await screen.findByLabelText('Deneme Kişi seç'));
+    fireEvent.click(screen.getByLabelText('Deneme Öteki seç'));
+    const cubuk = screen.getByRole('region', { name: 'Toplu vardiya atama' });
+    fireEvent.change(within(cubuk).getByLabelText('Seçilenlerin vardiyası'), { target: { value: 'yok' } });
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Uygula' }));
+    await waitFor(() => expect(postlar(cagrilar)).toHaveLength(1));
+    expect(postlar(cagrilar)[0]!.govde).toEqual({ kisiIdleri: [7, 8], vardiyaId: null });
+    const rozet = await screen.findByText('Yetkin yok, değişmedi');
+    expect(rozet.closest('.tc-vr-ad')?.textContent).toContain('Deneme Öteki');
+    expect(within(cubuk).getByText('2 kişi seçili')).toBeTruthy();
   });
 
   it('çalışma takvimi seçilen kaynağın günlerini ve aralıklarını gösterir; bağlı olmayan kaynakta takvim yoktur', async () => {

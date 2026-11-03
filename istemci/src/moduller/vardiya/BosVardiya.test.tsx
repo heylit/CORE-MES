@@ -50,7 +50,7 @@ function sunucuKur(kullanici: Kullanici, ilkPost?: () => Response, dusenSira = 1
 function ac(ekran: 'duzen' | 'mesai') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const E = ekran === 'duzen' ? VardiyaEkrani : GunlukMesaiEkrani;
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={[ekran === 'duzen' ? '/ik/vardiya' : '/vardiya/mesai']}><E /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><E /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
 }
 
 const postlar = (c: Cagri[]) => c.filter((x) => x.yontem === 'POST');
