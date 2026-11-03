@@ -100,7 +100,7 @@ function compile(st){olcekKur(st.w);
   const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
   const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));
   // işlemler
-  const ops=[],jobs={};
+  const ops=[],jobs={},bolunen={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
   const bitti=st.bitti||{};
   for(const [sira,j] of D.siparisler.entries()){const u=urun[j.urun];if(!u)continue;
@@ -110,19 +110,30 @@ function compile(st){olcekKur(st.w);
       /* biten adım (st.bitti, sunucunun iş emri durumu) plana girmez; ardılı onu beklemez, malzemesi o adımda alınmıştır */
       if(bitti[id])continue;
       /* adımın işleyeceği adet (24 a): önceki biten adımın hurdası düşülmüş; verilmezse sipariş adedi */
-      const ad=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
+      const ad0=D.opAdet&&D.opAdet[id]!=null&&isFinite(+D.opAdet[id])?+D.opAdet[id]:j.adet;
+      const adaylar=o.fason?[]:(o.tezgahlar||[]).filter(t=>M[t.id]);
+      /* 1952 (1956 a, 1958 a): rotada "paralel böl" adımı adayları arasında N paya bölünür; N = aday sayısı, adet / en küçük parça ve
+         bölme sınırının (st.w.bolMaks) en küçüğü. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
+         adımın öncüllerini bekler, ardıl hepsini bekler. Adet eşit bölünür, kalan ilk paylara. */
+      const N=st.w.bol&&o.bol&&!o.fason?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      if(N>1)bolunen[id]=[];
+      for(let p=0;p<N;p++){
+      const pid=p===0?id:id+'~'+(p+1),ad=N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
-      else for(const t of o.tezgahlar||[]){const mm=M[t.id];if(!mm)continue;const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
+      else for(const t of adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
         c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
-      const op={id,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
-        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false};
-      ops.push(op);jobs[j.id].ops.push(op);}
+      const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
+        program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,...(N>1?{parca:p+1,parcaAdedi:N,asil:id}:{})};
+      if(N>1)bolunen[id].push(pid);
+      ops.push(op);jobs[j.id].ops.push(op);}}
   }
+  /* bölünen adımı bekleyen ardıl bütün payları bekler (aynı bağ türüyle) */
+  for(const op of ops)if(op.pr.some(([p])=>bolunen[p]))op.pr=op.pr.flatMap(([p,t])=>bolunen[p]?bolunen[p].map(q=>[q,t]):[[p,t]]);
   const byId=Object.fromEntries(ops.map(o=>[o.id,o]));
   /* emirler arası öncül (st.ekOncul [işlem, öncül]; sunucu girdisi, 690 b): biten ya da planda olmayan öncül beklenmez */
   for(const [a,p] of st.ekOncul||[])if(byId[a]&&byId[p]&&!byId[a].pr.some(([q])=>q===p))byId[a].pr.push([p,'b']);

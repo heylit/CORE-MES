@@ -19,8 +19,8 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { durusNedeniGetir } from '../durus-nedenleri/disari.ts';
 import { kisilerinCikisTarihleri, kisilerinIzinleri, resmiTatilGunleri } from '../ik/disari.ts';
 import {
-  aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonAdlari, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir,
-  makineKisiAtamalari,
+  aktifMakineler, calisirMakineler, ekipler, ekipUyeleri, isMerkezleri, istasyonAdlari, istasyonGetir, istasyonKisiAtamalari, istasyonlar, istasyonYetkinlikleri,
+  kapasiteKaynaklari, kisininIzinliIsMerkezleri, makineGetir, makineKisiAtamalari,
 } from '../istasyonlar/disari.ts';
 import {
   aralik, araliklardanCikar, araliklarCakisir, atamaPayi, birlestir, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi, ayrildiMi, fazlaMesaiKisiHatasi, onayliIzinGunleri, durusAraliklari, durusHatasi, durusuDuzenle, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gecmisMi, gunFarki, gunNetDakikasi, gunNetDakikasiEk, gununCalismaAraliklari, gununMolaAraliklari, izinliKisim, gununSonDakikasi, gununVardiyalari, haftaKopyasi, kaynagaUyanlar, kisiTakvimiGorunur, topluMatris,
@@ -355,6 +355,22 @@ export async function calismaTakvimleri(db: Db, kaynaklar: readonly TakvimKaynag
   return new Map([...(await takvimleriHesapla(db, kaynaklar, aralik))].map(([k, h]) => [k, h?.takvim ?? null]));
 }
 
+// 1970 a: ataması olmayan kişi, bugün yetkin olduğu istasyonun iş merkezinin takvimini alır (vardiyası varsa yalnız o vardiya). Planlama
+// insanlı istasyonda kişiyi yetkinlikten aday yapar (1954 a); takvimi olmayan kişi plana ve vardiya ekranına çalışmıyor görünürdü. Birden çok
+// yetkin istasyonda önce insanlı istasyon, sonra en küçük kimlik (planlama atölyesinin el tezgâhı grubuyla aynı); pasif istasyon sayılmaz.
+async function yetkinlikIstasyonlari(db: Db, liste: readonly { id: number; aktif: boolean }[]): Promise<Map<number, number>> {
+  const aktif = new Set(liste.filter((i) => i.aktif).map((i) => i.id));
+  const insanli = new Set([...await kapasiteKaynaklari(db, [...aktif])].flatMap(([id, k]) => (k === 'insan' ? [id] : [])));
+  const sonuc = new Map<number, number>();
+  for (const y of await istasyonYetkinlikleri(db)) {
+    if (!aktif.has(y.istasyonId)) continue;
+    const eski = sonuc.get(y.kisiId);
+    const once = (a: number, b: number) => (insanli.has(a) !== insanli.has(b) ? insanli.has(a) : a < b);
+    if (eski === undefined || once(y.istasyonId, eski)) sonuc.set(y.kisiId, y.istasyonId);
+  }
+  return sonuc;
+}
+
 export interface BasladigiGun { araliklar: TakvimAraligi[]; molalar: TakvimAraligi[]; bitis: string | null }
 interface TakvimHesabi { takvim: KaynakTakvimi; basladigiGunler: BasladigiGun[] }
 
@@ -365,8 +381,11 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
   const sonuc = new Map<string, TakvimHesabi | null>();
   if (kaynaklar.length === 0) return sonuc;
   const merkezler = new Set((await isMerkezleri(db, { pasiflerDahil: true })).map((m) => m.id));
-  const istasyonMerkezi = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i.isMerkeziId]));
-  const atamalar = kaynaklar.some((k) => k.tur === 'kisi') ? await kisiAtamalari(db) : { istasyon: [], digerleri: [] };
+  const istasyonListesi = await istasyonlar(db, { pasiflerDahil: true });
+  const istasyonMerkezi = new Map(istasyonListesi.map((i) => [i.id, i.isMerkeziId]));
+  const kisiVar = kaynaklar.some((k) => k.tur === 'kisi');
+  const atamalar = kisiVar ? await kisiAtamalari(db) : { istasyon: [], digerleri: [] };
+  const yetkinIstasyonu = kisiVar ? await yetkinlikIstasyonlari(db, istasyonListesi) : new Map<number, number>();
   const kisiVardiyasi = new Map((await s.kisiVardiyalari(db)).map((k) => [k.kisiId, k.vardiyaId]));
   const vardiyalar = new Map((await vardiyaListesi(db)).map((v) => [v.id, v]));
   const matris = await s.matris(db);
@@ -394,7 +413,7 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
       istasyonId = makineIstasyonu.has(k.id) ? makineIstasyonu.get(k.id)! : (await makineGetir(db, k.id))?.istasyonId ?? null;
       isMerkeziId = istasyonId === null ? null : merkez(istasyonMerkezi.get(istasyonId));
     } else {
-      const kisininIstasyonId = kisininIstasyonu(kisininAtamalari(atamalar, k.id));
+      const kisininIstasyonId = kisininIstasyonu(kisininAtamalari(atamalar, k.id)) ?? yetkinIstasyonu.get(k.id) ?? null;
       isMerkeziId = kisininIstasyonId === null ? null : merkez(istasyonMerkezi.get(kisininIstasyonId));
     }
     if (isMerkeziId === null) return null;
