@@ -163,7 +163,7 @@ export function GorunumAyarlari() {
         </div>
       </Kart>
       <Kart baslik="Açılış gösterisi">
-        <p className="tc-ayar-aciklama">Her girişte ve her çıkışta kurum logosuyla bir kez oynar; girişi ve çıkışı bekletmez, dokununca geçilir. Logo yoksa uygulama adı işlenir.</p>
+        <p className="tc-ayar-aciklama">Her girişte ve her çıkışta kurum logosuyla bir kez oynar; girişi ve çıkışı bekletmez, dokununca geçilir. Logo yoksa TMI yazısı işlenir.</p>
         <label className="tc-gorunum-sure">
           <span className="tc-gorunum-ad">Süre: {saniye(sure)}</span>
           <input

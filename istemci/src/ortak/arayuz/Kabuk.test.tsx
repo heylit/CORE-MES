@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { anahtarlar } from '../veri/anahtarlar.ts';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
@@ -210,7 +208,7 @@ describe('Kabuk', () => {
     expect(ana.getAttribute('aria-current')).toBeNull();
   });
 
-  it('baslik sayfanin kendi yolunda da alt yolunda da sayfanin basligidir; sayfaya ait olmayan yolda uygulama adi', () => {
+  it('baslik sayfanin kendi yolunda da alt yolunda da sayfanin basligidir; sayfaya ait olmayan yolda TMI CORE', () => {
     const baslik = () => screen.getByRole('heading', { level: 1 }).textContent;
     const { unmount: stokKapat } = ciz(SAYFALAR, undefined, '/stok');
     expect(baslik()).toBe('Stok Merkezi');
@@ -220,10 +218,10 @@ describe('Kabuk', () => {
     altKapat();
     // Önek yetmez: '/stoklar' stok sayfasının alt yolu değildir.
     const { unmount: benzerKapat } = ciz(SAYFALAR, undefined, '/stoklar');
-    expect(baslik()).toBe('CORE');
+    expect(baslik()).toBe('TMI CORE');
     benzerKapat();
     ciz(SAYFALAR, undefined, '/bilinmeyen/alt');
-    expect(baslik()).toBe('CORE');
+    expect(baslik()).toBe('TMI CORE');
   });
 
   it('yeni ekranin basligi ve menu secimi bagli oldugu sayfadandir, adres onekinden degil', () => {
@@ -261,7 +259,7 @@ describe('Kabuk', () => {
 
   it('yetkisi olmayan sayfanin adresinde baslik o sayfanin adini vermez', () => {
     ciz(SAYFALAR.filter((s) => s.yol !== '/finans'), undefined, '/finans');
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('CORE');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('TMI CORE');
   });
 
   it('Tumu dugmesi butun sayfalari tam ekran listede acar', () => {
@@ -367,7 +365,7 @@ describe('Kabuk', () => {
     alt.unmount();
   });
 
-  it('sol üstte sürüm ve derleme tarihi yazar; logo verilince firma işaretinin yerinde durur', () => {
+  it('sol üstte sürüm ve derleme tarihi yazar; logo verilince TMI işaretinin yerinde durur', () => {
     const { container, unmount } = ciz();
     // Güncelleyicinin kurduğu derlemede yayın adı (2026.11.01-1), elle kurulumda package.json yer tutucusu yerine "geliştirme".
     expect(container.querySelector('.tc-kabuk-surum')?.textContent).toMatch(/^(geliştirme|\d{4}\.\d{2}\.\d{2}-\d+) · \d{2}\.\d{2}\.\d{4}$/);
@@ -379,26 +377,6 @@ describe('Kabuk', () => {
     );
     expect(ikinci.container.querySelector('.tc-kabuk-marka-logo')?.getAttribute('src')).toBe(logo);
     expect(ikinci.container.querySelector('.tc-kabuk-marka-isaret')).toBeNull();
-  });
-
-  it('logo yokken marka isaretinde firma adi durur; firma adi bossa isaret cizilmez, yalniz CORE kalir', () => {
-    const kur = (ad: string) => {
-      const istemci = new QueryClient();
-      istemci.setQueryData(anahtarlar.kurum, { ad });
-      return render(
-        <QueryClientProvider client={istemci}>
-          <MemoryRouter><Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined}><p>icerik</p></Kabuk></MemoryRouter>
-        </QueryClientProvider>,
-      );
-    };
-    const dolu = kur('Ornek Atolye');
-    expect(dolu.container.querySelector('.tc-kabuk-marka-isaret')?.textContent).toBe('Ornek Atolye');
-    expect(dolu.container.querySelector('.tc-kabuk-marka-metin')?.textContent).toBe('CORE');
-    dolu.unmount();
-    const bos = kur('  ');
-    expect(bos.container.querySelector('.tc-kabuk-marka-isaret')).toBeNull();
-    expect(bos.container.querySelector('.tc-kabuk-marka-metin')?.textContent).toBe('CORE');
-    bos.unmount();
   });
 
   it('Üretim Terminali ve Kuyruk şeridi tek maddeye düşünce kabuk data-ikinci-tek taşır (telefonda şerit çizilmez); başka sayfada ve çok maddede taşımaz', async () => {

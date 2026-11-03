@@ -1,4 +1,3 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -228,11 +227,12 @@ export function Giris() {
 
   return (
     <main className="tc-giris">
-      <section className="tc-giris-tanitim" aria-label={UYGULAMA_ADI} data-theme="dark">
+      <section className="tc-giris-tanitim" aria-label="TMI Core" data-theme="dark">
         <TakimYolu />
         <div className="tc-giris-tanitim-ic">
           <div className="tc-giris-marka">
-            <span className="tc-giris-ad">{UYGULAMA_ADI}</span>
+            <span className="tc-giris-isaret mono">TMI</span>
+            <span className="tc-giris-ad">CORE</span>
           </div>
           <p className="tc-giris-baslik-buyuk">Plandan sevke, her adım kayıt altında.</p>
           <p className="tc-giris-slogan">Üretim planlama ve izlenebilirlik</p>

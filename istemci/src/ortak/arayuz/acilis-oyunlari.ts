@@ -1,7 +1,6 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import type { OynanacakAcilis } from '../veri/gorunum.ts';
 
-// Açılış gösterisinin çizimleri: kurum logosu (yoksa uygulama adı) tuvalde bir imalat işlemiyle ortaya çıkar.
+// Açılış gösterisinin çizimleri: kurum logosu (yoksa TMI yazısı) tuvalde bir imalat işlemiyle ortaya çıkar.
 // Her oyun kare başına çağrılan bir çizicidir; geçen süreyi alır, sürüyorsa true döner. Renkler tasarım değişkenlerindendir.
 
 type Ctx = CanvasRenderingContext2D;
@@ -50,7 +49,7 @@ const tuval = (w: number, h: number): [HTMLCanvasElement, Ctx] => {
 export function tmiResmi(renk: Renkler): string {
   const [c, g] = tuval(640, 220);
   g.fillStyle = renk.hazard; g.font = '900 170px Archivo, Arial Black, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
-  g.fillText(UYGULAMA_ADI, 320, 115);
+  g.fillText('TMI', 320, 115);
   return c.toDataURL();
 }
 
@@ -427,7 +426,7 @@ const OYUNLAR: Readonly<Record<OynanacakAcilis, { kur: (L: Logo, yaz: Yazici) =>
   '3b': { kur: ucBoyut, sure: 1750, oran: 0.55 },
 };
 
-export { UYGULAMA_ADI };
+export const UYGULAMA_ADI = 'CORE';
 
 const sinirla = (t: number): number => Math.min(1, Math.max(0, t));
 

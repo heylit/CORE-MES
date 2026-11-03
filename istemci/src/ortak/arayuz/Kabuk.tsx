@@ -1,8 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { QueryClientContext } from '@tanstack/react-query';
 import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sayfalar.ts';
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import type { CerceveSayaclari } from '../rota/cerceve-iletisi.ts';
 import { CerceveSayacBaglami, type CerceveSayacYazici } from '../rota/cerceve-sayaclari.ts';
@@ -21,7 +19,6 @@ import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
 import { usePerformans } from '../veri/gorunum.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
-import { useKurumAdi } from '../veri/kurum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
 import { useTema } from '../veri/tema.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
@@ -77,7 +74,7 @@ interface Ozellikler {
   ikinciMenuler?: readonly IkinciMenuTanimi[];
   // Sistem Ayarları'ndan kapatılan yollar: menüden ve aramadan kalkar, adresle açılınca içerik yerine "kapalı" yazar.
   kapali?: readonly string[];
-  // Sistem Ayarları'ndan yüklenen kurum logosu (veri adresi); yoksa firma adı, o da yoksa yalnız uygulama adı durur.
+  // Sistem Ayarları'ndan yüklenen kurum logosu (veri adresi); yoksa TMI işareti durur.
   logo?: string | null;
   // Ana sayfa bağlantısının yolu: rolün açılış sayfası varsa o (rolün kendi panosu), yoksa ortak ana sayfa.
   anaSayfa?: string;
@@ -172,17 +169,9 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
 // Telefonda tek maddelik şeridi çizilmeyen sayfalar: başlıkları kendi ekranlarındadır, şerit yalnız işi aşağı iter.
 const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/kuyruk']);
 
-// Firma adı (kabuk.kurum-adi) logo yokken marka işaretinde durur; girilmemişse işaret çizilmez, yalnız uygulama adı kalır.
-function KurumIsareti() {
-  const ad = useKurumAdi();
-  return ad === null ? null : <span className="tc-kabuk-marka-isaret mono">{ad}</span>;
-}
-
 export function Kabuk({
   sayfalar: tumSayfalar, kullaniciAdi, cikis, islemler = ISLEMSIZ, ikinciMenuler: tumMenuler = IKINCI_MENU_TANIMLARI, kapali = KAPALISIZ, logo = null, anaSayfa = '/', ustEylemler = EYLEMSIZ, ustSeritler = SERITSIZ, hizliIsler = OLAYSIZ, komutlar = GENEL_KOMUTSUZ, rehberler = sayfaRehberleri, kisiId, menuSirasi, children,
 }: Ozellikler) {
-  // Kabuk sorgu sağlayıcısı olmadan da çizilir (bileşen testleri); o zaman firma adı sorulmaz.
-  const sorguVar = useContext(QueryClientContext) !== undefined;
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
   const ikinciMenuler = useMemo(() => kapaliMaddeleriSuz(tumMenuler, kapali), [tumMenuler, kapali]);
@@ -307,7 +296,7 @@ export function Kabuk({
   // yazmasın. Kapalı sayfa kişinindir; adı kalır, içerik "kapalı" der.
   const baslik = konum.pathname === '/' ? ANA_SAYFA_BASLIGI
     : konum.pathname === PROFIL_YOLU || konum.pathname.startsWith(`${PROFIL_YOLU}/`) ? 'Profilim'
-      : tumSayfalar.find((s) => s.yol === sayfaYolu)?.baslik ?? UYGULAMA_ADI;
+      : tumSayfalar.find((s) => s.yol === sayfaYolu)?.baslik ?? 'TMI CORE';
 
   // Menü yalnız kullanıcının gördüğü sayfada açılır; hiç maddesi kalmayan menü yoktur. Cihazın sade görünüm tercihi
   // açıksa yetkiyle süzülmüş maddelerden yalnız sade listedekiler kalır.
@@ -373,10 +362,10 @@ export function Kabuk({
         <nav className="tc-kabuk-menu" aria-label="Ana menü">
           {/* Klavye ve ekran okuyucu için ana sayfa bağlantısı aşağıdaki maddedir; logo yalnız fareyle tıklanan kısayoldur. */}
           <NavLink to={anaSayfa} className="tc-kabuk-marka" aria-hidden="true" tabIndex={-1} end>
-            {logo !== null
-              ? <img className="tc-kabuk-marka-logo" src={logo} alt="" />
-              : sorguVar && <KurumIsareti />}
-            <span className="tc-kabuk-marka-metin">{UYGULAMA_ADI}</span>
+            {logo === null
+              ? <span className="tc-kabuk-marka-isaret mono">TMI</span>
+              : <img className="tc-kabuk-marka-logo" src={logo} alt="" />}
+            <span className="tc-kabuk-marka-metin">CORE</span>
           </NavLink>
           <p className="tc-kabuk-surum mono" title={`Sürüm ${DERLEME.surum}, derleme ${derlemeTarihi(DERLEME.tarih, true)}`}>
             {/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}
@@ -499,7 +488,7 @@ export function Kabuk({
         )}
 
         <span className="tc-kabuk-tarama" aria-hidden="true" />
-        {/* Davet köşede sabit durur; içerik altına onun payı kadar boşluk alır ki son düğmeler davetin üstüne kaydırılabilsin (A7). */}
+        {/* Davet köşede sabit durur; içerik altına onun payı kadar boşluk alır ki son düğmeler davetin üstüne kaydırılabilsin (TMI A7). */}
         <main className="tc-kabuk-icerik" data-cerceveli={cerceveli && !kapaliAdres ? '' : undefined} data-davet={davet && !tanitimAcik ? '' : undefined}>
           {kapaliAdres
             ? <DurumKutusu durum="bos" mesaj="Bu sayfa şu an kapalı" />

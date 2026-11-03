@@ -1,4 +1,3 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -170,7 +169,7 @@ export function Kitapcik({ maddeler, konular, kapat }: { maddeler: readonly Rehb
       </div>
       <article className="tc-kitapcik-sayfa">
         <header className="tc-kitapcik-kapak">
-          <p className="tc-kitapcik-ust mono">{UYGULAMA_ADI}</p>
+          <p className="tc-kitapcik-ust mono">TMI CORE</p>
           <h1>Kullanım kitapçığı</h1>
           <p>Bu kitapçık sizin gördüğünüz sayfaları anlatır. {bugun()}</p>
         </header>

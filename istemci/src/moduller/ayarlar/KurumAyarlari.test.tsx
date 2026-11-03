@@ -51,7 +51,7 @@ describe('kurum logosu', () => {
   it('dosya seçilince veri adresi uca gider; kaydedilen logo görünür ve ortak anahtara yazılır', async () => {
     const yazilanlar = sunucuKur(null);
     const istemci = ac(<KurumLogosu ciz={async () => PNG} />);
-    await screen.findByText('Logo yüklenmedi; menüde firma adı görünüyor.');
+    await screen.findByText('Logo yüklenmedi; TMI işareti görünüyor.');
     const dosya = new File([new Uint8Array([137, 80, 78, 71])], 'logo.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText('Logo dosyası'), { target: { files: [dosya] } });
     await waitFor(() => expect(yazilanlar).toHaveLength(1));

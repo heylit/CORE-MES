@@ -1,4 +1,3 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Ayrinti } from '#paylasilan/sozlesme/saglik.ts';
@@ -69,7 +68,7 @@ export function KurumLogosu({ ciz = pngyeCiz }: { ciz?: (d: File) => Promise<str
           <div className="tc-ayar-metin">
             <p className="tc-ayar-aciklama">Sol üstte, menünün başında görünür. PNG, JPEG ya da WebP; en çok 140 KB.</p>
             {logo.data.logo === null
-              ? <p className="tc-ayar-baslik">Logo yüklenmedi; menüde firma adı görünüyor.</p>
+              ? <p className="tc-ayar-baslik">Logo yüklenmedi; TMI işareti görünüyor.</p>
               : <img className="tc-ayar-logo" src={logo.data.logo} alt="Kurum logosu" />}
           </div>
           <div className="tc-ayar-sayi">
@@ -107,7 +106,6 @@ export function SurumBilgisi() {
   return (
     <Kart baslik="Sürüm">
       <div className="tc-ayarlar">
-        <Satir ad="Uygulama adı" deger={UYGULAMA_ADI} />
         <Satir ad="Sürüm" deger={/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} />
         <Satir ad="Derleme tarihi" deger={derlemeTarihi(DERLEME.tarih, true)} />
         <Satir ad="Arayüz commit" deger={kisaCommit(DERLEME.commit) ?? 'Bilinmiyor'} />

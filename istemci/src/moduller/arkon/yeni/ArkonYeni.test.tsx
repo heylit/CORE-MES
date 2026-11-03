@@ -52,7 +52,7 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     seritte(/^Kalite/);
     expect((await bolum('Kalite')).getAttribute('data-sayfa')).toBe('kalite');
     expect(adres()).toBe('/arkon/kalite');
-    seritte(/CORE'a yazılamayanlar/);
+    seritte(/TMI'ye yazılamayanlar/);
     await waitFor(() => { expect(adres()).toBe('/arkon/tmi-yansimalari'); });
   }, 20000);
 
