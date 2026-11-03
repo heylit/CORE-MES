@@ -47,12 +47,13 @@ export const KABUK_AYARLARI = {
     baslik: 'Gece karşılamasının başladığı saat',
     aciklama: 'Bu saatten gündüz başlangıcına kadar açanlar ay ve yıldızlı karşılamayı görür (0-23, tesis saati). Boşsa 18 sayılır.',
   },
-  // Kullanıcı onayı (kart #880): modül başlıkları kurumun adını buradan okur; varsayılan sistemin kendi adıdır.
+  // Kullanıcı onayı (kart #880, karar 1942 a): firma adının tek kaynağı; boş başlar, çünkü uygulama adı (CORE) firma adı değildir.
   'kabuk.kurum-adi': {
     modul: 'kabuk',
     tur: 'metin',
-    varsayilan: 'TMI',
+    varsayilan: '',
     enUzun: 80,
+    bosOlabilir: true,
     baslik: 'Firma adı',
     aciklama: 'Modül başlıklarında ve belgelerde görünen kurum adı.',
   },

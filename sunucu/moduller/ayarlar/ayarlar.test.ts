@@ -601,17 +601,19 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
     const oku = (cerez: string | null = yonetici) => istek(cerez, 'GET', '/kurum');
     const ANAHTAR = 'kabuk.kurum-adi';
 
-    test('her oturum varsayılan adı okur; oturumsuz 401; yalnız ayar yazan değiştirir; boş ve uzun ad reddedilir', async () => {
-      assert.equal(varsayilanDeger(ANAHTAR), 'TMI');
+    test('firma adı boş başlar; her oturum okur; oturumsuz 401; yalnız ayar yazan değiştirir; uzun ad reddedilir, boş ad girilmemiş sayılır', async () => {
+      assert.equal(varsayilanDeger(ANAHTAR), '');
       assert.equal((await oku(null)).statusCode, 401);
       for (const { rol, cerez } of bayraksizlar) {
         const cevap = await oku(cerez);
         assert.equal(cevap.statusCode, 200, `${rol.ad}: ${cevap.body}`);
-        assert.deepEqual(cevap.json(), { ad: 'TMI' }, rol.ad);
+        assert.deepEqual(cevap.json(), { ad: '' }, rol.ad);
         assert.equal((await degistir('Başka', cerez, ANAHTAR)).statusCode, 403, rol.ad);
       }
-      for (const kotu of ['', '  ', 'a'.repeat(81), 5, null]) assert.equal((await degistir(kotu, yonetici, ANAHTAR)).statusCode, 400, String(kotu));
+      for (const kotu of ['a'.repeat(81), 5, null]) assert.equal((await degistir(kotu, yonetici, ANAHTAR)).statusCode, 400, String(kotu));
       assert.deepEqual(await satirlar(), []);
+      assert.equal((await degistir('  ', yonetici, ANAHTAR)).statusCode, 200);
+      assert.deepEqual((await oku()).json(), { ad: '' });
       assert.equal((await degistir(' Deneme Atölyesi ', yonetici, ANAHTAR)).statusCode, 200);
       for (const { rol, cerez } of bayraksizlar) assert.deepEqual((await oku(cerez)).json(), { ad: 'Deneme Atölyesi' }, rol.ad);
     });

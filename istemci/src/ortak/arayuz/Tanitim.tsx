@@ -1,3 +1,4 @@
+import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { RehberMaddesi } from '../rota/rehber.ts';
@@ -22,7 +23,7 @@ export function tanitimAdimlari({ maddeler, kisayolVar }: { maddeler: readonly R
     {
       anahtar: 'hosgeldin',
       simge: 'home',
-      baslik: 'TMI CORE\'a hoş geldiniz',
+      baslik: `${UYGULAMA_ADI}'a hoş geldiniz`,
       icerik: (
         <>
           <p>Atölyenin işi burada tek yerde: emir, malzeme, istasyon, kalite.</p>

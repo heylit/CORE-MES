@@ -46,7 +46,7 @@ describe('Yardim ve tanitim', () => {
 
   it('ilk giriste tanitim onerilir; "Simdi degil" bir daha onermez', () => {
     const ilk = ciz('/stok', 7);
-    // Davet açıkken içerik altına pay alır (TMI A7); kapanınca pay kalkar.
+    // Davet açıkken içerik altına pay alır (A7); kapanınca pay kalkar.
     expect(screen.getByRole('main').hasAttribute('data-davet')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Şimdi değil' }));
     expect(screen.getByRole('main').hasAttribute('data-davet')).toBe(false);

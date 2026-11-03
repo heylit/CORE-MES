@@ -52,7 +52,7 @@ export const ARKON_IKINCI_MENU = {
       { anahtar: 'bakim', baslik: 'Bakım', yol: '/arkon/bakim', simge: 'wrench', islem: 'arkon.bakim', veya: ['arkon.amir', 'arkon.yonetici'] },
       { anahtar: 'raporlar', baslik: 'Raporlar', yol: '/arkon/raporlar', simge: 'chart', islem: 'arkon.planlama', veya: PANO_ROLLERI },
       // TMI ekranıdır, çerçevede açılmaz.
-      { anahtar: 'tmi-yansimalari', baslik: 'TMI\'ye yazılamayanlar', yol: '/arkon/tmi-yansimalari', simge: 'alert', islem: 'arkon.yansima-oku' },
+      { anahtar: 'tmi-yansimalari', baslik: 'CORE\'a yazılamayanlar', yol: '/arkon/tmi-yansimalari', simge: 'alert', islem: 'arkon.yansima-oku' },
     ] },
     { baslik: 'Sistem', maddeler: [
       { anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/arkon/ayarlar', simge: 'gear', islem: 'sayfa.arkon' },

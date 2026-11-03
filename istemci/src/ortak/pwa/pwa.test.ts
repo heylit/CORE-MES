@@ -11,7 +11,7 @@ describe('web uygulaması bildirimi', () => {
   it('kurulum alanları istenen değerlerde ve geçerli JSON', () => {
     const bildirim = JSON.parse(JSON.stringify(WEB_BILDIRIMI)) as Record<string, unknown>;
     expect(bildirim).toMatchObject({
-      name: 'TMI CORE', short_name: 'TMI CORE', start_url: '/', scope: '/', display: 'standalone', orientation: 'any',
+      name: 'CORE', short_name: 'CORE', start_url: '/', scope: '/', display: 'standalone', orientation: 'any',
       theme_color: TEMA_RENGI, background_color: TEMA_RENGI,
     });
   });
@@ -38,7 +38,7 @@ describe('web uygulaması bildirimi', () => {
     expect(ad('theme-color')).toBe(TEMA_RENGI);
     expect(ad('apple-mobile-web-app-capable')).toBe('yes');
     expect(ad('apple-mobile-web-app-status-bar-style')).toBe('default');
-    expect(ad('apple-mobile-web-app-title')).toBe('TMI CORE');
+    expect(ad('apple-mobile-web-app-title')).toBe('CORE');
     expect(JSON.stringify([etiketler, WEB_BILDIRIMI])).not.toMatch(/https?:\/\//);
   });
 });

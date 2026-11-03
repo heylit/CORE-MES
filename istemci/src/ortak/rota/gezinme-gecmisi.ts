@@ -1,3 +1,4 @@
+import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
@@ -39,7 +40,7 @@ export function yerAdi(yol: string, menuler: readonly IkinciMenu[] = IKINCI_MENU
   if (yolAdi === '/') return 'Ana sayfa';
   const sayfaYolu = rotaninSayfasi(yolAdi);
   const sayfa = SAYFALAR.find((s) => s.yol === sayfaYolu);
-  if (sayfa === undefined) return 'TMI CORE';
+  if (sayfa === undefined) return UYGULAMA_ADI;
   const menu = menuler.find((m) => m.kok === sayfaYolu);
   const madde = menu === undefined ? null : etkinMadde(menuMaddeleri(menu), yolAdi);
   return madde === null ? sayfa.baslik : `${sayfa.baslik} › ${madde.baslik}`;
