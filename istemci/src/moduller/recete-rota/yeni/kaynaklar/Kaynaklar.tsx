@@ -1,20 +1,21 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DurumKutusu, Dugme, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun,
+  DurumKutusu, Dugme, Girdi, OnayPenceresi, Pencere, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih, YOK } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { useEskiKayit, type RrDurumu, type RrVerisi } from '../veri.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import {
-  aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi,
-  geceyiGecer, vardiyaHaftaSaati, yetkinler, type Hafta,
+  aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi, sonrakiKod,
+  geceyiGecer, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir, type Hafta,
 } from './kurallar.ts';
 import { SAHIP_SAYFASI, SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 
-// Kaynaklar (envanter 2.7): iş merkezi, istasyon, makine ve personel sahiplerinin kayıtlarıdır (İstasyonlar, Kişiler, Vardiya). Tek giriş
-// yeri İstasyonlar'dır (1927 a): burada yalnız okunur, düğme sahibinin sayfasını açar. Yazılan tek alan birim maliyettir (sahibi Finans).
+// Kaynaklar (envanter 2.7): iş merkezi, istasyon, makine ve personel sahiplerinin kayıtlarıdır (İstasyonlar, Kişiler, Vardiya). Burada
+// yazılanlar sahibin komutlarıdır (kod, ad, kapasite kaynağı, ekleme ve silme, kişi ve yetkinlik, birim maliyet). Vardiya, mola, tatil,
+// iş merkezi haftası, kişi vardiyası, verim, operatör ihtiyacı ve makine durumu yalnız okunur; düğme sahibinin sayfasını açar.
 type IsMerkezi = NonNullable<RrDurumu['wcs']>[number];
 type Istasyon = NonNullable<RrDurumu['stations']>[number];
 type Makine = NonNullable<RrDurumu['machines']>[number];
@@ -34,8 +35,8 @@ const operatorMetni = (oran: number): string => {
   return n >= 2 && n <= 10 && Math.floor(100 / n) / 100 === oran ? `1 operatör ${String(n)} tezgâha bakar` : `${sayi(oran)} operatör/makine`;
 };
 export const ISTASYON_MALIYET_NOTU = 'Doğrudan gider: enerji, bakım, sarf (amortisman ve kira genel giderde)';
-export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine ve personel İstasyonlar sayfasında, vardiya ve tatiller Vardiya sayfasında yazılır; '
-  + 'burada yalnız okunur.';
+export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine, personel, vardiya ve tatiller İstasyonlar, Kişiler ve Vardiya sayfalarıyla ortaktır: '
+  + 'burada yapılan değişiklik orada da görünür.';
 
 // Seçili alt sekme cihaz tercihidir (yalnız bu tarayıcı); depo kapalıysa Genel bakış açılır.
 function altSekmeOku(): AltSekme {
@@ -63,11 +64,18 @@ interface Bag {
   renk: (wcId: string | null) => string | undefined;
   kapasite: (x: Istasyon) => 'makine' | 'insan';
   altSekme: (s: AltSekme) => void;
+  ekle: (e: Ekleme) => void;
+  sil: (s: Silme) => void;
 }
+type Ekleme = { tur: 'wc' } | { tur: 'station'; wcId: string } | { tur: 'machine'; istasyon: Istasyon } | { tur: 'person' };
+interface Silme { tur: 'wc' | 'station' | 'machine'; id: string; ad: string }
 
 export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   const { durum, ek } = veri;
   const [alt, altYaz] = useState<AltSekme>(altSekmeOku);
+  const [ekleme, eklemeYaz] = useState<Ekleme | null>(null);
+  const [silme, silmeYaz] = useState<Silme | null>(null);
+  const { calistir, mesgul } = useR2Komutu();
 
   const sec = (s: AltSekme) => { altYaz(s); altSekmeYaz(s); };
   const istasyonYok = durum.wcs === null || durum.stations === null || durum.machines === null;
@@ -90,7 +98,7 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
       return i < 0 ? undefined : String(i % RENK_SAYISI);
     },
     kapasite: (x) => kapasiteKaynagi(ek.istasyonTipi?.[x.id] ?? null, ek.kapasiteKaynagi?.[x.id] ?? null),
-    altSekme: sec,
+    altSekme: sec, ekle: eklemeYaz, sil: silmeYaz,
   };
 
   const sekmeler: { anahtar: AltSekme; baslik: string }[] = [
@@ -109,11 +117,23 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   else if (alt === 'people') govde = <Personel b={bag} />;
   else govde = <FasonVeAparat />;
 
+  const silmeKomutu = { wc: ['is-merkezi-sil', 'İş merkezi silindi.'], station: ['istasyon-sil', 'İstasyon silindi.'], machine: ['makine-sil', 'Makine silindi.'] } as const;
   return (
     <div className="tc-rr2" data-parca="R2">
       <div className="tc-rr2-bolmeli"><Sekmeler<AltSekme> etiket="Kaynak türü" sekmeler={sekmeler} secili={alt} sec={sec} /></div>
       <p className="tc-rr2-not">{ORTAK_KAYNAK_NOTU}</p>
       <div className="tc-rr2-govde" data-alt={alt}>{govde}</div>
+      {ekleme && <EklemeFormu e={ekleme} b={bag} kapat={() => eklemeYaz(null)} />}
+      <OnayPenceresi
+        acik={silme !== null} baslik="Kayıt silinsin mi?" onayMetni="Sil" tehlikeli yukleniyor={mesgul} vazgec={() => silmeYaz(null)}
+        onayla={() => {
+          const s = silme;
+          silmeYaz(null);
+          if (s) void calistir(silmeKomutu[s.tur][0], { id: s.id }, { basari: silmeKomutu[s.tur][1] });
+        }}
+      >
+        <p>{silme?.ad} silinir. Kayıt sahibinin sayfasında da silinmiş olur.</p>
+      </OnayPenceresi>
     </div>
   );
 }
@@ -352,40 +372,64 @@ function VardiyaCubugu({ v, mola }: { v: Vardiya; mola: number }) {
 
 /* ---------------- İş merkezleri ve istasyonlar ---------------- */
 
+// Kod ve ad boş bırakılamaz (sahibinin kuralı); boş girdi istek atmadan geri alınır.
+function useMetinKaydi() {
+  const { calistir } = useR2Komutu();
+  const { bildir } = useBildirim();
+  return async (komut: string, govde: Record<string, unknown>, alan: string, v: string, etiket: string): Promise<boolean> => {
+    if (!v.trim()) { bildir('hata', `${etiket} boş olamaz.`); return false; }
+    return (await calistir(komut, { ...govde, [alan]: v.trim() })) === null;
+  };
+}
+
 function IsMerkezleri({ b }: { b: Bag }) {
+  const kaydet = useMetinKaydi();
+  const yaz = b.yetki.istasyonYaz;
   return (
     <>
       <p className="tc-rr2-not">
         İş merkezi bir bölüm ya da hattır; vardiya düzeni iş merkezinde tutulur. İstasyon, operasyonun yapıldığı makine grubu ya da tezgâhtır. Operatör
         ihtiyacı, istasyonun bir makinesi çalışırken kaç kişinin başında durması gerektiğidir. İstasyonun ₺ / saat değeri: {ISTASYON_MALIYET_NOTU}.
       </p>
-      <div className="tc-rr2-arac"><SahibindeDuzenle sahip="istasyon" /></div>
-      {b.wcs.length === 0 && <DurumKutusu durum="bos" mesaj="İş merkezi yok. Kesimhane, kaynakhane, montaj gibi bölümleri İstasyonlar sayfasında ekle." />}
+      <div className="tc-rr2-arac"><SahibindeDuzenle sahip="istasyon" metin="Verim ve operatörü İstasyonlar'da düzenle" /></div>
+      {b.wcs.length === 0 && <DurumKutusu durum="bos" mesaj="İş merkezi yok. Kesimhane, kaynakhane, montaj gibi bölümlerini ekle." />}
       {b.wcs.map((w) => (
         <section key={w.id} className="tc-rr2-grup tc-rr2-panel tc-rr2-im" data-renk={b.renk(w.id)} aria-label={`${w.code} ${w.name}`}>
           <div className="tc-rr2-baslik-satiri">
             <span className="tc-rr2-alan"><span>Kod</span>
-              <b>{w.code}</b>
+              {yaz ? <SatirGirdisi deger={w.code} etiket="İş merkezi kodu" kaydet={(v) => kaydet('is-merkezi-guncelle', { id: w.id }, 'kod', v, 'Kod')} /> : <b>{w.code}</b>}
             </span>
             <span className="tc-rr2-alan tc-rr2-genis"><span>İş merkezi adı</span>
-              <b>{w.name}</b>
+              {yaz ? <SatirGirdisi deger={w.name} etiket="İş merkezi adı" kaydet={(v) => kaydet('is-merkezi-guncelle', { id: w.id }, 'ad', v, 'Ad')} /> : <b>{w.name}</b>}
             </span>
             <span className="tc-rr2-alan"><span>Haftalık vardiya saati</span>
               {b.takvimVar ? <b>{sayi(Math.round(haftaSaati(b.hafta(w.id), b.shifts) * 10) / 10)} sa</b> : <Rozet ton="pasif">bağlı değil</Rozet>}
             </span>
+            {yaz && <Dugme simge="trash" aria-label={`${w.code} iş merkezini sil`} onClick={() => b.sil({ tur: 'wc', id: w.id, ad: `${w.code} ${w.name}` })} />}
           </div>
           <div className="tc-rr2-kutu"><IstasyonTablosu b={b} wc={w} /></div>
+          {yaz && <div className="tc-rr2-arac"><Dugme simge="plus" onClick={() => b.ekle({ tur: 'station', wcId: w.id })}>İstasyon</Dugme></div>}
         </section>
       ))}
+      {yaz && <div className="tc-rr2-arac"><Dugme simge="plus" tur="birincil" onClick={() => b.ekle({ tur: 'wc' })}>İş merkezi</Dugme></div>}
     </>
   );
 }
 
 function IstasyonTablosu({ b, wc }: { b: Bag; wc: IsMerkezi }) {
+  const { calistir, mesgul } = useR2Komutu();
+  const kaydet = useMetinKaydi();
   const liste = b.stations.filter((x) => x.wcId === wc.id);
+  const yaz = b.yetki.istasyonYaz;
   const sutunlar: Sutun<Istasyon>[] = [
-    { anahtar: 'kod', baslik: 'İstasyon kodu', kirilmaz: true, hucre: (x) => x.code },
-    { anahtar: 'ad', baslik: 'İstasyon adı', hucre: (x) => x.name },
+    {
+      anahtar: 'kod', baslik: 'İstasyon kodu', kirilmaz: true,
+      hucre: (x) => (yaz ? <SatirGirdisi deger={x.code} etiket={`${x.code} istasyon kodu`} kaydet={(v) => kaydet('istasyon-guncelle', { id: x.id }, 'kod', v, 'Kod')} /> : x.code),
+    },
+    {
+      anahtar: 'ad', baslik: 'İstasyon adı',
+      hucre: (x) => (yaz ? <SatirGirdisi deger={x.name} etiket={`${x.code} istasyon adı`} kaydet={(v) => kaydet('istasyon-guncelle', { id: x.id }, 'ad', v, 'Ad')} /> : x.name),
+    },
     { anahtar: 'maliyet', baslik: '₺ / saat', hizala: 'sag', hucre: (x) => <MaliyetHucresi tur="istasyon" id={x.id} etiket={`${x.code} saatlik maliyet`} b={b} /> },
     { anahtar: 'verim', baslik: 'Verim %', hizala: 'sag', hucre: (x) => sayi(x.eff) },
     {
@@ -407,11 +451,25 @@ function IstasyonTablosu({ b, wc }: { b: Bag; wc: IsMerkezi }) {
         const ad = (v: 'makine' | 'insan') => `${v === 'makine' ? 'Makine saati' : 'Personel saati'}${secili === null && v === k ? ' (türden)' : ''}`;
         return (
           <span className="tc-rr2-satir">
-            {ad(k)}
+            {yaz
+              ? (
+                <select
+                  className="tc-alan-kutu tc-rr2-girdi" value={k} disabled={mesgul} aria-label={`${x.code} kapasite kaynağı`}
+                  onChange={(o) => { void calistir('istasyon-guncelle', { id: x.id, kapasiteKaynagi: o.target.value }); }}
+                >
+                  <option value="makine">{ad('makine')}</option>
+                  <option value="insan">{ad('insan')}</option>
+                </select>
+              )
+              : ad(k)}
             <small className="tc-rr2-soluk">{alt}</small>
           </span>
         );
       },
+    },
+    {
+      anahtar: 'eylem', baslik: 'Eylem', csv: false,
+      hucre: (x) => (yaz ? <Dugme simge="trash" aria-label={`${x.code} istasyonunu sil`} onClick={() => b.sil({ tur: 'station', id: x.id, ad: `${x.code} ${x.name}` })} /> : null),
     },
   ];
   return <Tablo<Istasyon> etiket={`${wc.code} istasyonları`} sutunlar={sutunlar} satirlar={liste} satirAnahtari={(x) => x.id} bosMesaj="Bu iş merkezinde istasyon yok." />;
@@ -438,6 +496,8 @@ function MaliyetHucresi({ tur, id, etiket, b }: { tur: 'istasyon' | 'kisi'; id: 
 /* ---------------- Makineler ---------------- */
 
 function Makineler({ b }: { b: Bag }) {
+  const kaydet = useMetinKaydi();
+  const yaz = b.yetki.istasyonYaz;
   // Makinede şu an çalışan adım sunucunun başlamış adımlarındandır (emir no ve OP no).
   const calisan = (makineId: string) => {
     const a = (b.durum.calisanAdimlar ?? []).find((x) => x.makineId === makineId);
@@ -445,18 +505,28 @@ function Makineler({ b }: { b: Bag }) {
   };
   const sutunlar: Sutun<Makine>[] = [
     { anahtar: 'durum', baslik: 'Durum', hucre: (m) => <Rozet ton={MAKINE_DURUMU[m.status].ton}>{MAKINE_DURUMU[m.status].ad}</Rozet>, csv: (m) => MAKINE_DURUMU[m.status].ad },
-    { anahtar: 'kod', baslik: 'Makine kodu', kirilmaz: true, hucre: (m) => m.code },
-    { anahtar: 'ad', baslik: 'Makine adı', hucre: (m) => m.name },
+    {
+      anahtar: 'kod', baslik: 'Makine kodu', kirilmaz: true,
+      hucre: (m) => (yaz ? <SatirGirdisi deger={m.code} etiket={`${m.code} makine kodu`} kaydet={(v) => kaydet('makine-guncelle', { id: m.id }, 'kod', v, 'Kod')} /> : m.code),
+    },
+    {
+      anahtar: 'ad', baslik: 'Makine adı',
+      hucre: (m) => (yaz ? <SatirGirdisi deger={m.name} etiket={`${m.code} makine adı`} kaydet={(v) => kaydet('makine-guncelle', { id: m.id }, 'ad', v, 'Ad')} /> : m.name),
+    },
     { anahtar: 'not', baslik: 'Not', hucre: (m) => b.ek.makineNotu?.[m.id] ?? YOK },
     { anahtar: 'simdi', baslik: 'Şu an', hucre: (m) => calisan(m.id) },
+    {
+      anahtar: 'eylem', baslik: 'Eylem', csv: false,
+      hucre: (m) => (yaz ? <Dugme simge="trash" aria-label={`${m.code} makinesini sil`} onClick={() => b.sil({ tur: 'machine', id: m.id, ad: `${m.code} ${m.name}` })} /> : null),
+    },
   ];
   return (
     <>
       <p className="tc-rr2-not">
         Makine, istasyondaki tek tek ekipmandır. Bir istasyonda makine tanımlıysa istasyonun paralel kapasitesi aktif makine sayısı kadar olur; bakımdaki ya da
-        arızalı makine kapasiteden düşer ve plan buna göre kayar. Makine, durumu ve notu İstasyonlar sayfasında yazılır.
+        arızalı makine kapasiteden düşer ve plan buna göre kayar. Makine durumu ve notu İstasyonlar sayfasında değişir.
       </p>
-      <div className="tc-rr2-arac"><SahibindeDuzenle sahip="makine" /></div>
+      <div className="tc-rr2-arac"><SahibindeDuzenle sahip="makine" metin="Durum ve notu İstasyonlar'da düzenle" /></div>
       {b.wcs.map((w) => {
         const sts = b.stations.filter((x) => x.wcId === w.id);
         if (sts.length === 0) return null;
@@ -472,6 +542,7 @@ function Makineler({ b }: { b: Bag }) {
                     <small className="tc-rr2-soluk">
                       {ms.length > 0 ? `${String(ms.length)} makine, ${String(etkinMakine(x.id, x.count, b.machines))} aktif` : `Makine yok, paralel adet ${String(x.count)} kullanılıyor`}
                     </small>
+                    {yaz && <Dugme simge="plus" onClick={() => b.ekle({ tur: 'machine', istasyon: x })}>Makine</Dugme>}
                   </h4>
                   {ms.length > 0 && <div className="tc-rr2-kutu"><Tablo<Makine> etiket={`${x.code} makineleri`} sutunlar={sutunlar} satirlar={ms} satirAnahtari={(m) => m.id} /></div>}
                 </div>
@@ -495,7 +566,7 @@ function Personel({ b }: { b: Bag }) {
   return (
     <>
       <p className="tc-rr2-not">
-        Personel bir iş merkezine ve vardiyaya bağlıdır; atama, vardiya ve yetkinlik İstasyonlar sayfasında yazılır. Plan, istasyonların çalıştığı saatleri operatör ihtiyacıyla çarpar ve o gün
+        Personel bir iş merkezine ve vardiyaya bağlıdır; yetkin olduğu istasyonları işaretle. Plan, istasyonların çalıştığı saatleri operatör ihtiyacıyla çarpar ve o gün
         vardiyada olan personelin net saatiyle karşılaştırır. Saatlik ücret girersen işçilik maliyeti emir maliyetine eklenir.
       </p>
       <section className="tc-rr2-grup tc-rr2-panel" aria-label="Vardiya başına personel">
@@ -532,11 +603,12 @@ function Personel({ b }: { b: Bag }) {
           )
           : (
             <p className="tc-rr2-not">
-              Kişilerin vardiyası İstasyonlar sayfasında atanır; atanmamış kişi istasyonunun iş merkezinin vardiyasında çalışır. Kişinin istasyonu İstasyonlar'daki
-              istasyon atamasından, yoksa yetkin olduğu istasyondan gelir.
+              Kişilerin vardiyası Vardiya sayfasında atanır; atanmamış kişi istasyonunun iş merkezinin vardiyasında çalışır. Kişinin istasyonu Vardiya'daki istasyon
+              atamasından, yoksa yetkin olduğu istasyondan gelir.
             </p>
           )}
       </section>
+      {b.yetki.kisiYaz && <div className="tc-rr2-arac"><Dugme simge="user-plus" tur="birincil" onClick={() => b.ekle({ tur: 'person' })}>Personel</Dugme></div>}
       {gruplar.map(({ w, liste }) => (
         <section key={w?.id ?? 'yok'} className="tc-rr2-grup tc-rr2-panel tc-rr2-im" data-renk={b.renk(w?.id ?? null)} aria-label={w ? `${w.code} ${w.name} personeli` : 'İş merkezi atanmamış personel'}>
           <h3 className="tc-rr2-grup-baslik"><span>{w ? `${w.code} ${w.name}` : 'İş merkezi atanmamış'}</span><Rozet ton="pasif">{`${String(liste.length)} kişi`}</Rozet></h3>
@@ -549,24 +621,31 @@ function Personel({ b }: { b: Bag }) {
 }
 
 function KisiKarti({ k, w, b }: { k: Kisi; w: IsMerkezi | null; b: Bag }) {
-  const yetkin = k.skills.map((id) => b.stations.find((x) => x.id === id)).filter((x): x is Istasyon => x !== undefined);
+  const { calistir, mesgul } = useR2Komutu();
+  const kaydet = useMetinKaydi();
+  const yaz = b.yetki.kisiYaz;
+  const yetkinlikYaz = b.yetki.istasyonYaz;
+  const kendi = w ? b.stations.filter((x) => x.wcId === w.id) : [];
+  const disari = k.skills.filter((id) => !kendi.some((x) => x.id === id)).map((id) => b.stations.find((x) => x.id === id)).filter((x): x is Istasyon => x !== undefined);
+  const eklenebilir = b.stations.filter((x) => !kendi.includes(x) && !k.skills.includes(x.id));
   const istasyon = k.stationId ? b.stations.find((x) => x.id === k.stationId) : undefined;
   const vardiyaId = b.ek.takvim?.kisiVardiyasi[k.id] ?? null;
   const vardiya = vardiyaId ? b.shifts.find((v) => v.id === vardiyaId) : undefined;
+  const yetkinlik = (istasyonIdleri: number[]) => { void calistir('yetkinlik-belirle', { kisiId: k.id, istasyonIdleri }); };
   return (
     <article className="tc-rr2-kisi-satir" data-pasif={!k.active || undefined} aria-label={k.name}>
       <div className="tc-rr2-kisi">
         <span className="tc-rr2-avatar" data-renk={b.renk(w?.id ?? null)} aria-hidden="true">{basHarfler(k.name)}</span>
         <div className="tc-rr2-kisi-alanlar">
           <span className="tc-rr2-alan"><span>Sicil</span>
-            <b>{k.code ?? YOK}</b>
+            {yaz ? <SatirGirdisi deger={k.code ?? ''} etiket={`${k.name} sicil`} kaydet={async (v) => (await calistir('kisi-duzenle', { id: k.id, sicilNo: v.trim() || null })) === null} /> : <b>{k.code ?? YOK}</b>}
           </span>
           <span className="tc-rr2-alan tc-rr2-genis"><span>Ad soyad</span>
-            <b>{k.name}</b>
+            {yaz ? <SatirGirdisi deger={k.name} etiket={`${k.name} ad soyad`} kaydet={(v) => kaydet('kisi-duzenle', { id: k.id }, 'ad', v, 'Ad')} /> : <b>{k.name}</b>}
           </span>
           <span className="tc-rr2-alan"><span>Görev</span><b>{b.ek.kisiGorevi?.[k.id] ?? YOK}</b></span>
           <span className="tc-rr2-alan"><span>İstasyon</span>
-            <b title={k.stationAtama ? 'İstasyonlar sayfasındaki istasyon ataması' : 'Atama yok; yetkin olduğu ilk istasyon'}>
+            <b title={k.stationAtama ? 'Vardiya sayfasındaki istasyon ataması' : 'Atama yok; yetkin olduğu ilk istasyon'}>
               {istasyon ? `${istasyon.code} ${istasyon.name}${k.stationAtama ? '' : ' (yetkinlik)'}` : YOK}
             </b>
           </span>
@@ -579,7 +658,21 @@ function KisiKarti({ k, w, b }: { k: Kisi; w: IsMerkezi | null; b: Bag }) {
       </div>
       <div className="tc-rr2-satir" role="group" aria-label={`${k.name} yetkinlikleri`}>
         <span className="tc-rr2-soluk">Yetkinlik</span>
-        {yetkin.length === 0 ? <span>{YOK}</span> : yetkin.map((x) => <Rozet key={x.id} ton="bilgi">{x.code} {x.name}</Rozet>)}
+        {[...kendi, ...disari].map((x) => {
+          const acik = k.skills.includes(x.id);
+          return yetkinlikYaz
+            ? <Dugme key={x.id} aria-pressed={acik} disabled={mesgul} onClick={() => yetkinlik(yetkinlikDegistir(k.skills, x.id))}>{x.code} {x.name}</Dugme>
+            : acik ? <Rozet key={x.id} ton="bilgi">{x.code} {x.name}</Rozet> : null;
+        })}
+        {yetkinlikYaz && eklenebilir.length > 0 && (
+          <select
+            className="tc-alan-kutu tc-rr2-girdi" value="" disabled={mesgul} aria-label={`${k.name} için başka istasyon yetkinliği ekle`}
+            onChange={(o) => { if (o.target.value) yetkinlik([...k.skills, o.target.value].map(Number)); }}
+          >
+            <option value="">+ Başka istasyon</option>
+            {eklenebilir.map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
+          </select>
+        )}
       </div>
     </article>
   );
@@ -620,5 +713,77 @@ function FasonVeAparat() {
         />
       </section>
     </>
+  );
+}
+
+/* ---------------- Ekleme formu ---------------- */
+
+const FORM = {
+  wc: { baslik: 'Yeni iş merkezi', eklendi: 'İş merkezi eklendi.', ad: 'İş merkezi adı' },
+  station: { baslik: 'Yeni istasyon', eklendi: 'İstasyon eklendi.', ad: 'İstasyon adı' },
+  machine: { baslik: 'Yeni makine', eklendi: 'Makine eklendi.', ad: 'Makine adı' },
+  person: { baslik: 'Yeni personel', eklendi: 'Personel eklendi.', ad: 'Ad soyad' },
+} as const;
+
+function EklemeFormu({ e, b, kapat }: { e: Ekleme; b: Bag; kapat: () => void }) {
+  const { calistir, mesgul } = useR2Komutu();
+  const { bildir } = useBildirim();
+  const oneri = e.tur === 'wc' ? sonrakiKod(b.wcs.map((w) => w.code), 'IM')
+    : e.tur === 'station' ? sonrakiKod(b.stations.map((x) => x.code), 'IS', 1)
+    : e.tur === 'machine' ? `${e.istasyon.code}-${String(b.machines.filter((m) => m.stationId === e.istasyon.id).length + 1).padStart(2, '0')}`
+    : '';
+  const [kod, kodYaz] = useState(oneri);
+  const [ad, adYaz] = useState('');
+  const [hata, hataYaz] = useState<string | null>(null);
+  const f = FORM[e.tur];
+
+  const gonder = async (o: FormEvent) => {
+    o.preventDefault();
+    if (mesgul) return;
+    let komut: string;
+    let govde: Record<string, unknown>;
+    if (e.tur === 'person') {
+      if (!ad.trim()) { hataYaz('Ad soyad boş olamaz.'); return; }
+      komut = 'kisi-ekle';
+      govde = { ad: ad.trim(), sicilNo: kod.trim() || null };
+    } else {
+      if (!kod.trim() || !ad.trim()) { hataYaz('Kod ve ad boş olamaz.'); return; }
+      const ortak = { kod: kod.trim(), ad: ad.trim() };
+      if (e.tur === 'wc') { komut = 'is-merkezi-ekle'; govde = ortak; }
+      else if (e.tur === 'station') { komut = 'istasyon-ekle'; govde = { ...ortak, isMerkeziId: Number(e.wcId) }; }
+      else { komut = 'makine-ekle'; govde = { ...ortak, istasyonId: Number(e.istasyon.id) }; }
+    }
+    const h = await calistir(komut, govde, { sessiz: true });
+    if (h === null) { bildir('tamam', f.eklendi); kapat(); }
+    else hataYaz(h.ileti);
+  };
+
+  return (
+    <Pencere
+      acik kapat={kapat} baslik={f.baslik}
+      alt={(
+        <>
+          <Dugme onClick={kapat} disabled={mesgul}>Vazgeç</Dugme>
+          <Dugme tur="birincil" type="submit" form="tc-rr2-ekleme" yukleniyor={mesgul}>Kaydet</Dugme>
+        </>
+      )}
+    >
+      <form id="tc-rr2-ekleme" className="tc-rr2-form" aria-label={f.baslik} noValidate onSubmit={(o) => { void gonder(o); }}>
+        {e.tur === 'person'
+          ? (
+            <>
+              <Girdi etiket="Ad soyad" value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" required />
+              <Girdi etiket="Sicil no (isteğe bağlı)" value={kod} onChange={(o) => kodYaz(o.target.value)} autoComplete="off" />
+            </>
+          )
+          : (
+            <>
+              <Girdi etiket="Kod" value={kod} onChange={(o) => kodYaz(o.target.value)} autoComplete="off" required />
+              <Girdi etiket={f.ad} value={ad} onChange={(o) => adYaz(o.target.value)} autoComplete="off" required />
+            </>
+          )}
+        {hata !== null && <p className="tc-rr2-uyari" role="alert">{hata}</p>}
+      </form>
+    </Pencere>
   );
 }

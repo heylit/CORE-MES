@@ -83,8 +83,7 @@ export const SAHIP_SAYFASI = {
   istasyon: { yol: '/istasyonlar/is-merkezleri', ad: 'İstasyonlar', dugme: "İstasyonlar'da düzenle" },
   makine: { yol: '/istasyonlar/makineler', ad: 'İstasyonlar', dugme: "İstasyonlar'da düzenle" },
   vardiya: { yol: '/vardiya', ad: 'Vardiya', dugme: "Vardiya'da düzenle" },
-  personel: { yol: '/istasyonlar/personel', ad: 'İstasyonlar', dugme: "İstasyonlar'da düzenle" },
-  operasyon: { yol: '/istasyonlar/operasyon-tipleri', ad: 'İstasyonlar', dugme: "İstasyonlar'da düzenle" },
+  personel: { yol: '/vardiya/personel', ad: 'Vardiya', dugme: "Vardiya'da düzenle" },
   malzeme: { yol: '/malzemeler/yeni', ad: 'Malzemeler ve Hizmetler', dugme: "Malzemeler ve Hizmetler'de oluştur" },
 } as const;
 

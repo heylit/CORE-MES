@@ -217,27 +217,39 @@ const SAHIP_OKUMALARI = {
 const altSekme = (bolge: HTMLElement, ad: RegExp) => { fireEvent.click(within(within(bolge).getByRole('tablist', { name: 'Kaynak türü' })).getByRole('tab', { name: ad })); };
 
 describe('R2 Kaynaklar', () => {
-  it('tek giriş yeri İstasyonlar (1927 a): yönetici bile girdi, ekleme ve silme görmez; düğme İstasyonlar sayfasını açar; istek gitmez', async () => {
-    const istekler = sunucuKur(YONETICI, { durum: kaynakDurumu(), yazmalar: SAHIP_OKUMALARI });
+  it('izinli: istasyonlar.yaz istasyon adını okunmuş kaydın sürümüyle yazar, iş merkezi ekler ve onayla siler', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: kaynakDurumu(),
+      yazmalar: {
+        ...SAHIP_OKUMALARI,
+        'POST /istasyonlar/31/guncelle': () => json(200, {}),
+        'POST /is-merkezleri': () => json(200, {}),
+        'POST /is-merkezleri/41/sil': () => json(200, {}),
+      },
+    });
     rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');
     // Genel bakış: plan teorik süreyi kullanır (Soru 490/1 a; eski cümle 468/4 a ile geçersizdi).
     expect(within(bolge).getByText(/kabul edilen ölçüm teorik süreye yazılır, plan teorik süreyi kullanır/)).toBeTruthy();
-    expect(within(bolge).getByText(/burada yalnız okunur/)).toBeTruthy();
     altSekme(bolge, /İş merkezleri/);
-    await within(bolge).findByText('TZ1');
-    expect(within(bolge).queryByRole('textbox', { name: 'TZ1 istasyon adı' })).toBeNull();
-    expect(within(bolge).queryByRole('combobox', { name: 'TZ1 kapasite kaynağı' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: 'İş merkezi' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: /sil$/ })).toBeNull();
-    for (const sekme of [/Makineler/, /Personel/]) {
-      altSekme(bolge, sekme);
-      expect(within(bolge).queryAllByRole('button', { name: /^(Makine|Personel)$/ })).toEqual([]);
-    }
-    expect(within(bolge).queryByRole('combobox', { name: /yetkinliği ekle/ })).toBeNull();
-    fireEvent.click(within(bolge).getAllByRole('button', { name: "İstasyonlar'da düzenle" })[0]!);
-    await screen.findByText('Başka sayfa');
-    expect(yazmalar(istekler)).toEqual([]);
+    yaz(await within(bolge).findByRole('textbox', { name: 'TZ1 istasyon adı' }), 'Torna A');
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/istasyonlar/31/guncelle', govde: { kod: 'TZ1', ad: 'Torna A', isMerkeziId: 41, surum: 4 } });
+    // Verim ve operatör ihtiyacı sahibinde düzenlenir: girdi yoktur.
+    expect(within(bolge).queryByRole('textbox', { name: /verim/i })).toBeNull();
+
+    fireEvent.click(within(bolge).getByRole('button', { name: 'İş merkezi' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni iş merkezi' });
+    fireEvent.change(within(pencere).getByLabelText(/İş merkezi adı/), { target: { value: 'Montaj' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
+    expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/is-merkezleri', govde: { kod: 'IM-10', ad: 'Montaj' } });
+
+    fireEvent.click(within(bolge).getByRole('button', { name: 'IM1 iş merkezini sil' }));
+    expect(yazmalar(istekler)).toHaveLength(2);
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Kayıt silinsin mi?' })).getByRole('button', { name: 'Sil' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(3));
+    expect(yazmalar(istekler)[2]).toMatchObject({ yol: '/is-merkezleri/41/sil', govde: {} });
   });
 
   it('reddedilen: istasyonlar.yaz olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
