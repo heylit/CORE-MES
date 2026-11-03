@@ -4,6 +4,7 @@ import {
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { useTema } from '../../../../ortak/veri/tema.ts';
+import { KabukUstYuvasi } from '../../../../ortak/arayuz/Kabuk.tsx';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
@@ -1418,10 +1419,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }
 
   const gecerliSekme = sekmeler.some((s) => s.id === tab) ? tab : sekmeler[0]!.id;
+  // 2052-1 a: terminal şeridi kabuğun üst çubuğundadır (prototip v5); önizlemede cihaz çerçevesinin içinde kalır.
+  const ustSerit = (serit: ReactNode) => (pv ? serit : (
+    <KabukUstYuvasi><div className="tc-ay1 tc-ay1-kabukta" data-durum={IS_DURUM_RENGI(o.state)}>{serit}</div></KabukUstYuvasi>
+  ));
   const saat = new Date(simdi);
   const AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   return (
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
+      {ustSerit(
       <header className="tc-ay1-ust">
         <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
           {MACHINE ? <><b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small></> : <b>İstasyon seçilmedi</b>}
@@ -1444,7 +1450,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
           <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
         </button>
-      </header>
+      </header>,
+      )}
       {/* 791 b: iki sütun (üretim, ayrıntı); iş listesi "İşler" düğmesinden açılır. Sütunlar ekran yüksekliğine sığar, taşan sütun kendi içinde kayar. */}
       <div className="tc-ay1-izgara">
         <div className="tc-ay1-orta tc-ay1-sutun">

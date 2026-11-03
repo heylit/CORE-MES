@@ -749,3 +749,18 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus[data-duzeltme] { font-size: var(--yazi-xs); font-weight: 600; }
 .tc-ay1-adim-sayfa { display: flex; align-items: center; justify-content: center; gap: var(--b-3); }
 .tc-ay1-adimlar { touch-action: pan-y; }
+/* 2052-1 a: şerit kabuğun üst çubuğundayken çerçevesiz ve tek satırdır; yalnız saat vardiyayla alt alta kalır. Izgara yüksekliğin tamamını alır. */
+.tc-ay1-kabukta { display: flex; flex: 1 1 auto; min-width: 0; gap: 0; }
+.tc-ay1-kabukta > .tc-ay1-ust {
+  flex: 1 1 auto; flex-wrap: nowrap; gap: var(--b-2); padding: 0; border: 0; background: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.tc-ay1-kabukta .tc-ay1-ust :is(.tc-ay1-istasyon small, .tc-ay1-kisi > span:last-child) { display: none; }
+.tc-ay1-kabukta .tc-ay1-durum-adi { white-space: nowrap; }
+/* Şeridin öğeleri kısalmaz; yer daralınca önce kabuğun sayfa başlığı kısalır. */
+.tc-ay1-kabukta .tc-ay1-ust > :not(.tc-ay1-bosluk) { flex: none; }
+.tc-ay1-kabukta .tc-ay1-istasyon b { white-space: nowrap; }
+.tc-ay1-kabukta .tc-ay1-saat small { white-space: nowrap; }
+/* Kabuk menüsü açıkken 1600 px altında vardiya satırı sığmaz; bugünkü dar şerit gibi yalnız saat kalır. */
+@media (max-width: 1599px) { .tc-ay1-kabukta .tc-ay1-saat small { display: none; } }
+.tc-ay1-genis:not(:has(> .tc-ay1-ust)) { grid-template-rows: minmax(0, 1fr); }
