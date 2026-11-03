@@ -32,6 +32,7 @@ import { nabizYazmalari, PlanSeridi } from './ust/PlanSeridi.tsx';
 import type { KbPanel } from './Duzenle.tsx';
 import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
+import { useAtolyeKomutlari, useOtomatikUygula } from './atolye/gonder.ts';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -178,6 +179,9 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
   const bekleyenUygula = useBekleyenUygula(o, uyar);
+  // Taşı ve ek mesai sunucu komutudur (1982 a, 2053); ardından plan kendiliğinden uygulanır (2053-1 a).
+  useOtomatikUygula(o, uyar);
+  const { tasi, ekMesai } = useAtolyeKomutlari(o, c);
   const sonKart = gorunum === 'atolye' && !odak ? kartlar[kartlar.length - 1]?.tur ?? null : null;
   const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p });
   tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p };
@@ -251,7 +255,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <>
               {cubuk}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-                <OdakTahtasi c={c} p={p} cx={cx} v={v} now={now} yer={odak} ac={odakAc} secim={secim} sec={sec} komut={komut} planYaz={yetki.planYaz} />
+                <OdakTahtasi c={c} p={p} cx={cx} v={v} now={now} yer={odak} ac={odakAc} secim={secim} sec={sec} komut={komut} planYaz={yetki.planYaz} ekMesai={ekMesai} />
               </Suspense>
             </>
           ) : gorunum === 'atolye' && p ? (
@@ -279,7 +283,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
                   planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
                   sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} hesapAc={sayfaAc && (() => sayfaAc('hesap'))}
-                  tezStudyo={o.studyoAc ? (m) => o.studyoAc?.({ tur: 'tez', v: m }) : null} />
+                  tezStudyo={o.studyoAc ? (m) => o.studyoAc?.({ tur: 'tez', v: m }) : null} tasi={tasi} />
               ) : gorunum === 'kesif' ? (
                 <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
                   sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />
@@ -291,7 +295,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <SecimPaneli kok={dk} c={c} p={p} cx={cx} s={sahne} r={r} olcek={donem} t={zaman} secim={ps} sek={sek} sekSec={sekSec}
             komut={komut} planYaz={yetki.planYaz} planKilitle={yetki.planYaz} kapat={secimBirak} opSec={opSec} sipSec={(j) => sipSec(j, false)}
             rotaSec={(j) => { sipSec(j, false); setSekD({ k: `siparis:${j}`, x: 'rota' }); }}
-            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} odakla={(m) => odakAc({ g: tezgahGrubu(c.D, m), m })} />
+            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} odakla={(m) => odakAc({ g: tezgahGrubu(c.D, m), m })} tasi={tasi} ekMesai={ekMesai} />
         )}
       </div>
       {p && yetki.planYaz && (

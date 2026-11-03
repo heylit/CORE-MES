@@ -1,8 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { AtolyeKomutuCevabi, IsTasiGovdesi, OlayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
-import { isTasi, olayEkle, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import type { AtolyeKomutuCevabi, EkMesaiEkleGovdesi, IsTasiGovdesi, OlayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import { ekMesaiEkle, isTasi, olayEkle, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -32,4 +32,9 @@ export function isiTasi(db: Db, kullanici: Kullanici, g: IsTasiGovdesi, simdi: n
 
 export function olayiEkle(db: Db, kullanici: Kullanici, g: OlayEkleGovdesi, simdi: number = Date.now()): Promise<AtolyeKomutuCevabi> {
   return uygula(db, kullanici, g.calismaSurumu, (d, k) => olayEkle(d, g.olay, k), simdi);
+}
+
+export function ekMesaiyiEkle(db: Db, kullanici: Kullanici, g: EkMesaiEkleGovdesi, simdi: number = Date.now()): Promise<AtolyeKomutuCevabi> {
+  const { calismaSurumu, ...satir } = g;
+  return uygula(db, kullanici, calismaSurumu, (d, k) => ekMesaiEkle(d, satir, k), simdi);
 }

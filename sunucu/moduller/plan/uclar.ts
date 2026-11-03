@@ -12,9 +12,9 @@ import {
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
-import { atolyeKomutuCevabi, isTasiGovdesi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import { atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import { isiTasi, olayiEkle } from './atolye-komutlari.ts';
+import { ekMesaiyiEkle, isiTasi, olayiEkle } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
@@ -216,6 +216,9 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => isiTasi(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,
     isle: ({ db, kullanici, govde }) => olayiEkle(db, kullanici, govde) }),
+  // 2053: ek mesai de atölyenin ayrı komutudur (1982 a); haftalık bütçe onaya gönderirken denetlenir.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/ek-mesai-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: ekMesaiEkleGovdesi, cevap: atolyeKomutuCevabi,
+    isle: ({ db, kullanici, govde }) => ekMesaiyiEkle(db, kullanici, govde) }),
   // Planlama kartlarının sunucuda hesabı (Soru 357 a, 463 a): başlatma girdiyi okur, kayıt yazmaz; hesap uç transaction'ının dışında koşar,
   // sonuç kimlikle transaction açmadan okunur.
   uc({ yontem: 'POST', yol: '/plan/planlama-degerlendirmesi', yetki: PLANLAMA_OKUR, govde: degerlendirmeGovdesi, cevap: degerlendirmeBaslatCevabi,

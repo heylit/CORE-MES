@@ -10,7 +10,7 @@ import { MOTOR_NOTU } from '../ortak.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
 import { AtolyeEkrani } from './AtolyeEkrani.tsx';
 import { Brif, Bugun } from './Bugun.tsx';
-import { gonderHataIletisi, isiTasi, olayiEkle, tasimaSaati } from './gonder.ts';
+import { useAtolyeKomutlari, useOtomatikUygula } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
@@ -19,7 +19,7 @@ import {
 import { Ray } from './Ray.tsx';
 
 // Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor isteyen her
-// eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı ve olay sunucu komutudur (1982 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
+// eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı, olay ve ek mesai sunucu komutudur (1982 a), ardından plan kendiliğinden uygulanır (2053-1 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
 // `komut.degistir`le yazılır (221 c); seçim iskeletin ortak seçimidir.
 
 export interface Ortam {
@@ -35,6 +35,7 @@ export interface Ortam {
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
   // 1982 a: sunucu komutları; yazamayan için null. `isleniyor` komut sürerken ikinci komutu engeller.
   tasi: ((id: string, m: string, S: number) => void) | null; olayEkle: ((olay: AtolyeOlayi) => Promise<boolean>) | null; isleniyor: boolean;
+  ekMesai: ((m: string, gun: number, vardiya: string) => void) | null;
 }
 
 interface Ozellikler {
@@ -69,17 +70,10 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const pano = useRef<HTMLDivElement | null>(null);
   const yaz = komut !== null && yetki.planYaz;
   const { bildir } = useBildirim();
-  // Taşı ve olay ekle sunucuda yazılır (1982 a); cevaptan sonra sayfa çalışmayı yeniden okur, plan bir sonraki uygulamada değişir.
-  const [isleniyor, setIsleniyor] = useState(false);
-  const yenile = o.yenile;
-  const sunucuKomutu = useCallback(async (is: () => Promise<unknown>, tamam: string): Promise<boolean> => {
-    setIsleniyor(true);
-    try { await is(); bildir('tamam', tamam); yenile(); return true; } catch (h) { bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
-  }, [bildir, yenile]);
-  const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
-    void sunucuKomutu(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdiSaati(c)) }), 'İş taşındı. Plan yeniden çözülünce güncellenir.');
-  } : null), [yaz, komut, sunucuKomutu, c]);
-  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => sunucuKomutu(() => olayiEkle(komut, olay), 'Olay eklendi. Plan yeniden çözülünce güncellenir.') : null), [yaz, komut, sunucuKomutu]);
+  // Taşı, olay ve ek mesai sunucuda yazılır (1982 a); cevaptan sonra sayfa çalışmayı yeniden okur ve plan kendiliğinden uygulanır (2053-1 a).
+  const uyar = useCallback((ileti: string) => { bildir('hata', ileti); }, [bildir]);
+  useOtomatikUygula(o, uyar);
+  const { tasi, olayEkle, ekMesai, isleniyor } = useAtolyeKomutlari(o, c);
 
   // Seçili adımın siparişi seçili sipariş sayılır.
   const secOp = secim.adim && p.ops[secim.adim] ? secim.adim : null;
@@ -163,7 +157,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
     olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
-    tasi: isleniyor ? null : tasi, olayEkle: isleniyor ? null : olayEkle, isleniyor,
+    tasi, olayEkle, isleniyor, ekMesai,
   };
   const ozet = p.ozet;
   const farkli = !fark || fark.farkli || !planGuncel(c);

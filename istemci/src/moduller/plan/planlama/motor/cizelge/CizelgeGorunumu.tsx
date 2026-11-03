@@ -14,6 +14,7 @@ import { OlcekCizelgesi } from './OlcekCizelgesi.tsx';
 import { SagPanel, SolPanel, type SagPanelAdi, type SolPanelAdi } from './Paneller.tsx';
 import { ZamanCizelgesi } from './ZamanCizelgesi.tsx';
 import './cizelge.css';
+import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 
 // Çizelge (t-tekyer tbAracCubugu ve mercekler, zo-kontrol sgHtml "masa"): araç satırında görünüm çubuğu, sepet ve havuz, mercek (Tezgâhlar,
 // Siparişler, Kuyruk, Matris), arama, yardımcı ve ayrıntı, stüdyo ve tam ekran; gövdede seçili mercek. Tezgâhlar dönemin ölçeğini izler:
@@ -29,6 +30,7 @@ interface Ozellikler {
   planYaz: boolean; planKilitle: boolean; planCanliyaAl: boolean; studyo: () => void; ust: ReactNode;
   sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null; veriAc?: ((bolum: string) => void) | null; hesapAc?: (() => void) | null;
   tezStudyo?: ((m: string) => void) | null;
+  tasi?: AtolyeKomutlari['tasi'] | undefined;
 }
 // Eski sayfanın geniş ekran sınırı (t-tekyer sagAcikMi: innerWidth >= 1280); çerçevenin yerine görünümün genişliği.
 const GENIS = 1280;
@@ -115,7 +117,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
   const tezKapat = useCallback(() => { sec({ tezgah: null }); }, [sec]);
 
   let govde: ReactNode;
-  if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} />;
+  if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} komut={o.komut} />;
   else if (mercek === 'kuyruk') govde = <KuyrukCizelgesi c={c} p={p} cx={cx} planYaz={o.planYaz} gun={kGun} gunSec={setKGun} odak={kTez} masadaGor={masadaGor} />;
   else if (mercek === 'matris') govde = <MatrisCizelgesi c={c} p={p} cx={cx} olcek={olcek} gor={mGor} gorSec={setMGor} gun={mGun} gunSec={setMGun} kuyrukAc={kuyrukAc} sipSec={sipSec} />;
   else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
@@ -154,7 +156,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
         {sag && (
           <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null}
             planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={mercekSec}
-            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} veriAc={o.veriAc ?? null} hesapAc={o.hesapAc ?? null} tezStudyo={o.tezStudyo ?? null} />
+            opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} veriAc={o.veriAc ?? null} hesapAc={o.hesapAc ?? null} tezStudyo={o.tezStudyo ?? null} tasi={o.tasi} />
         )}
       </div>
     </section>

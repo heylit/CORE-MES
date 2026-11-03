@@ -17,6 +17,7 @@ import {
   type OdakYeri,
 } from './kurallar.ts';
 import './odak.css';
+import type { AtolyeKomutlari } from '../../motor/atolye/gonder.ts';
 
 // Odak tahtası (zg-odak.betik odHtml): tahtanın içinde bir bölüm ya da tek tezgâh. Konum izi, kardeş seçimi, görünen süre; etki satırı,
 // şeritler ve lejant; yanda seçili iş, bekleyenler ya da kuyruk, ek mesai ve takvim. Sürükleyip taşımak, sıra ve ek mesai denemesi motor
@@ -27,6 +28,8 @@ const YETKISIZ = 'Plan yazma yetkiniz yok.';
 export interface OdakOzellikleri {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; v: OzetVerisi | null; now: number; yer: OdakYeri; ac: (y: OdakYeri | null) => void;
   secim: PlanlamaSecimi; sec: (s: Partial<PlanlamaSecimi>) => void; komut: CalismaKomutu | null; planYaz: boolean;
+  // Ek mesai sunucu komutu (2053); verilmezse pasif.
+  ekMesai?: AtolyeKomutlari['ekMesai'] | undefined;
 }
 
 export function OdakTahtasi(o: OdakOzellikleri) {
@@ -228,8 +231,8 @@ function Mesai({ o, m }: { o: OdakOzellikleri; m: string }) {
   return (
     <section className="tc-pyo-blok">
       <h4><Simge ad="clock" boyut="k" />Ek mesai dene</h4>
-      <p className="tc-pyo-k">Seçtiğiniz vardiya bu tezgâha eklenir, motor işleri yeniden dizer; önce önizleme açılır.</p>
-      <div className="tc-pyo-dugmeler">{l.map((x) => <Dg key={`${x.gun}|${x.vardiya}`} ad={x.ad} not={MOTOR_NOTU} />)}</div>
+      <p className="tc-pyo-k">Seçtiğiniz vardiya bu tezgâha eklenir, motor işleri yeniden dizer. Bütçe onaya gönderirken denetlenir.</p>
+      <div className="tc-pyo-dugmeler">{l.map((x) => { const ek = o.ekMesai; return <Dg key={`${x.gun}|${x.vardiya}`} ad={x.ad} not={MOTOR_NOTU} yap={ek ? () => ek(m, x.gun, x.vardiya) : null} />; })}</div>
     </section>
   );
 }

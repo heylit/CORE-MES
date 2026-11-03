@@ -15,10 +15,11 @@ import { degisken, HAZIRLANIYOR, MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
 import { isoYerel, mesaiAdaylari, tezgahYazi, yolculuk, type PanelSecimi } from './kurallar.ts';
 import { RotaSekmesi, TakvimSekmesi } from './Sekmeler.tsx';
 import './secim.css';
+import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 
 // Yan panel (zl-yan dkHtml) ve seçim kartı (zc-tahta tkSecim, z-komuta kmSiparis, kmTezgah, kmIs): Özet, Harita ve Keşfet'te seçim olunca
-// görünümün sağında açılır, dar ekranda alttan. Motorun hamleleri (öne al, öncelik, hedefe yetiştir, boşalt, sıra, ek mesai, taşı, kaydır)
-// yerinde ve pasiftir (357 b); sabitlemek çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz).
+// görünümün sağında açılır, dar ekranda alttan. Taşı, kaydır ve ek mesai sunucu komutudur (1982 a, 2053); öteki motor hamleleri (öne al,
+// öncelik, hedefe yetiştir, boşalt, sıra) yerinde ve pasiftir (357 b); sabitlemek çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz).
 export type PanelSekmesi = 'yon' | 'rota' | 'takvim';
 export interface Ozellikler {
   kok?: MutableRefObject<HTMLElement | null>;
@@ -31,6 +32,8 @@ export interface Ozellikler {
   gunPlani: (t: number, sec: { adim?: string; tezgah?: string }) => void; hazirlikAc: () => void;
   // Tezgâhın odak tahtasını açar (577a); verilmezse Odakla pasif.
   odakla?: ((m: string) => void) | null;
+  // Sunucu komutları (1982 a, 2053): taşı ve ek mesai; verilmezse pasif.
+  tasi?: AtolyeKomutlari['tasi'] | undefined; ekMesai?: AtolyeKomutlari['ekMesai'] | undefined;
 }
 
 const Bolum = ({ baslik, simge, children }: { baslik: string; simge: SimgeAdi; children: ReactNode }) => (
@@ -169,7 +172,7 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani }: Ozel
     </>
   );
 }
-function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani, odakla }: Ozellikler & { m: string }) {
+function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec, zamanSec, gunPlani, odakla, ekMesai }: Ozellikler & { m: string }) {
   const D = c.D; const st = tezgahDurumu(s, durusOku(c), m, t); const d = s.dol[m] ?? [];
   const e = gecikmeEtkisi(D, p, cx).m[m]; const L = dilimBoyu(r);
   const mesai = yaz && !m.startsWith('@') ? mesaiAdaylari(c, cx, m).slice(0, 4) : [];
@@ -204,7 +207,7 @@ function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec,
         {mesai.length > 0 && (
           <>
             <p className="tc-pym-km-alt"><Simge ad="clock" boyut="k" />Ek mesai ekle, motor yeniden dizsin:</p>
-            <div className="tc-pym-km-hamleler">{mesai.map((x) => <Dg key={`${x.gun}|${x.vardiya}`} ad={x.ad} />)}</div>
+            <div className="tc-pym-km-hamleler">{mesai.map((x) => <Dg key={`${x.gun}|${x.vardiya}`} ad={x.ad} yap={ekMesai ? () => ekMesai(m, x.gun, x.vardiya) : null} />)}</div>
           </>
         )}
       </Bolum>
@@ -223,11 +226,13 @@ function TezgahKarti({ c, p, cx, s, r, olcek, t, m, planYaz: yaz, opSec, sipSec,
   );
 }
 
-function IsKarti({ c, p, cx, id, komut, planYaz: yaz, planKilitle, sipSec }: Ozellikler & { id: string }) {
+function IsKarti({ c, p, cx, s, id, komut, planYaz: yaz, planKilitle, sipSec, tasi: o0 }: Ozellikler & { id: string }) {
   const D = c.D; const r = p.ops[id]; if (!r) return null;
   const o = cx.byId[id]; const kl = !!c.locks[id];
   const al = (o?.c ?? []).filter((m) => m !== r.m);
   const pasif = yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.';
+  // Fason, biten ve başlamış iş taşınmaz (sunucu da reddeder).
+  const tasi = o0 && !r.fas && !r.act && r.C > s.now ? o0 : null;
   const sabit = planKilitle && komut ? () => {
     komut.degistir(kl ? 'Sabitlik kaldırıldı' : 'İş sabitlendi', (x) => { if (kl) delete x.locks[id]; else x.locks[id] = { m: r.m, S: r.S }; }, { ayrinti: id, planKoru: true });
   } : null;
@@ -242,8 +247,8 @@ function IsKarti({ c, p, cx, id, komut, planYaz: yaz, planKilitle, sipSec }: Oze
           <ul className="tc-pym-km-secenek">
             {al.map((m) => (
               <li key={m}>
-                <span><b className="tc-pym-mono">{tezgahYazi(m)}</b><small className="tc-pym-mono">{MOTOR_NOTU}</small></span>
-                <Dg ad="Taşı" not={pasif} />
+                <span><b className="tc-pym-mono">{tezgahYazi(m)}</b><small className="tc-pym-mono">aynı saatte</small></span>
+                <Dg ad="Taşı" not={pasif} yap={tasi ? () => tasi(id, m, r.S) : null} />
               </li>
             ))}
           </ul>
@@ -251,7 +256,9 @@ function IsKarti({ c, p, cx, id, komut, planYaz: yaz, planKilitle, sipSec }: Oze
       </Bolum>
       <Bolum baslik="Zamanı" simge="clock">
         <div className="tc-pym-km-hamleler">
-          {([[-24, '−1 gün'], [-2, '−2 sa'], [2, '+2 sa'], [24, '+1 gün']] as const).map(([v, ad]) => <Dg key={v} ad={ad} not={pasif} />)}
+          {([[-24, '−1 gün'], [-2, '−2 sa'], [2, '+2 sa'], [24, '+1 gün']] as const).map(([v, ad]) => (
+            <Dg key={v} ad={ad} not={r.S + v < s.now ? 'Geçmiş saate taşınamaz.' : pasif} yap={tasi && r.S + v >= s.now ? () => tasi(id, r.m, r.S + v) : null} />
+          ))}
           <Dg ad={kl ? 'Sabitliği kaldır' : 'Burada sabitle'} simge="lock" yap={sabit} not="Sabitleme yetkiniz yok." />
         </div>
         <p className="tc-pym-kucuk-yazi">Sabit iş motorun yeniden dizmesinde yerinden oynamaz.</p>

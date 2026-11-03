@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
+import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
@@ -11,7 +12,15 @@ import { zamanCizelgesi, type ZamanSatiri } from './kurallar.ts';
 // fason ayrı grupta. Konumlar saat cinsindendir; saat başına piksel dönemin ölçeğidir (stilde). İşe basmak onu seçer.
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; olcek: DonemOlcegi; kayma: number; r: Aralik; now: number;
-  secili: string | null; secJob: string | null; planYaz: boolean; opSec: (id: string) => void;
+  secili: string | null; secJob: string | null; planYaz: boolean; opSec: (id: string) => void; komut?: CalismaKomutu | null;
+}
+
+// Planı geri al (2053): bu oturumda planı değiştiren son adıma (planı kur ya da bekleyen değişikliği uygula) döner. Ondan sonra yapılan
+// değişiklikler de birlikte geri alınır; ipucu kaç adım olduğunu söyler. Plan adımı yoksa düğme pasiftir.
+const PLAN_ADIMI = /^Plan çözüldü$|bekleyen değişiklik uygulandı$/iu;
+export function planGeriAdimi(k: CalismaKomutu | null | undefined): number | null {
+  const i = k?.geriAdimlari().findIndex((x) => PLAN_ADIMI.test(x.ne)) ?? -1;
+  return i >= 0 ? i + 1 : null;
 }
 
 export function ZamanCizelgesi(o: Ozellikler) {
@@ -23,6 +32,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
   const a = o.r.a;
   useEffect(() => { const g = kap.current; if (g && kayma) g.scrollLeft = Math.max(0, a * v.px - 40); }, [olcek, kayma, a, v.px]);
   const simdiye = () => kap.current?.scrollTo({ left: Math.max(0, now * v.px - 60), behavior: 'smooth' });
+  const geri = o.planYaz ? planGeriAdimi(o.komut) : null;
   const katla = (g: string) => setKatli((l) => (l.includes(g) ? l.filter((x) => x !== g) : [...l, g]));
 
   const satir = (s: ZamanSatiri) => (
@@ -53,7 +63,11 @@ export function ZamanCizelgesi(o: Ozellikler) {
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Grupları katla ya da aç" aria-label="Grupları katla ya da aç"
           onClick={() => setKatli((l) => (l.length ? [] : v.gruplar.map((g) => g.g)))}><Simge ad="layers" boyut="k" /></button>
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Şimdiye git" aria-label="Şimdiye git" onClick={simdiye}><Simge ad="target" boyut="k" /></button>
-        {o.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" data-pasif="" aria-disabled="true" title={`Planı geri al: ${MOTOR_NOTU}`}><Simge ad="back" boyut="k" />Planı geri al</button>}
+        {o.planYaz && (
+          <button type="button" className="tc-dugme tc-pym-kucuk" data-pasif={geri === null ? '' : undefined} aria-disabled={geri === null}
+            title={geri === null ? 'Bu oturumda geri alınacak plan çözümü yok.' : geri === 1 ? 'Son plan çözümünü geri al' : `Son plan çözümünü ve ondan sonraki ${String(geri - 1)} değişikliği geri al`}
+            onClick={() => { if (geri !== null) o.komut?.geriDon(geri); }}><Simge ad="back" boyut="k" />Planı geri al</button>
+        )}
       </div>
       <div ref={kap} className="tc-pym-gantt" tabIndex={0} role="region" aria-label="Plan çizelgesi" data-olcek={olcek}>
         <div className="tc-pym-g-ic" ref={degisken({ '--w': v.saat })}>
