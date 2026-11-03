@@ -16,7 +16,7 @@ import type {
   OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, SepettenCekGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { malzemeIstegiAcGirdisi, type IstekTeslimGovdesi, type KartlaAlGovdesi, type RefakatKartSatiri } from '#paylasilan/sozlesme/stok.ts';
-import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
+import { kodTuru, type KodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../../ayarlar/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari, istasyonGetir, istasyondakiKisiler, istasyonlar as tumIstasyonlar, kisininIzinliIsMerkezleri } from '../../istasyonlar/disari.ts';
@@ -27,7 +27,7 @@ import { malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, mal
 import { KOMUT_ISLEMI as URETIM_ISLEMI, acikIstasyon, adimliEmirAyrintisi, emirDilimi, uretimEmriOzeti, emirlerinAdimIstasyonlari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, partiEtiketi, stoklanirMi, partiSec, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, buradakiIstasyon, istekAcilisDurumu, istekListeEngeli, serbestMiktarEngeli,
-  istekKalani, istenenFazlaNotu, yoldaSureSonu, sonrakiIstasyon, type SepetAdimi, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu,
+  istekKalani, istenenFazlaNotu, yoldaSureSonu, sonrakiIstasyon, type SepetAdimi, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu, geriDusmeKodlari,
   istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatEtiketi, refakatTeslimEngeli, refakatAnaEylemi, AYRILMIS_KONUM_TURLERI,
 } from '../kurallar.ts';
 import type { IstekGecisi } from '../kurallar.ts';
@@ -291,14 +291,28 @@ async function malzemeCoz(db: Db, no: number): Promise<KodCozCevabi | null> {
 // Üretim emri kodu stokta çözülmez (emre çıkış bağlamada); sözlüğün tanımadığı öneksiz konum kodu (A-01-01, KABUL), eski `LOC-`
 // biçimi ve düz kart no stokun kendi geri düşmesiyle aranır.
 export async function kodCoz(db: Db, ham: string): Promise<KodCozCevabi> {
-  const t = kodTuru(ham);
-  const bulunan = t.tur === 'lot' ? await lotCoz(db, t.deger) : t.tur === 'refakat-partisi' ? await refakatCoz(db, Number(t.deger)) : t.tur === 'konum' ? await konumCoz(db, t.deger) : t.tur === 'malzeme' ? await malzemeCoz(db, Number(t.deger)) : null;
+  const bulunan = await sirayliCoz<KodCozCevabi>(db, ham, {
+    onekli: async (t) => (t.tur === 'lot' ? lotCoz(db, t.deger) : t.tur === 'refakat-partisi' ? refakatCoz(db, Number(t.deger)) : t.tur === 'konum' ? konumCoz(db, t.deger) : t.tur === 'malzeme' ? malzemeCoz(db, Number(t.deger)) : null),
+    konum: (kod) => konumCoz(db, kod),
+    malzeme: (no) => malzemeCoz(db, no),
+  });
+  return bulunan ?? { tur: 'bilinmiyor', kod: ham.trim() };
+}
+// Çözüm sırası iki okuma ucunda (kodCoz, okutCoz) aynıdır ve yalnız burada yazılır: önekli kod kendi yolundan; önek tanınmaz ya da
+// kayıt bulunmazsa öneksiz konum kodu, en son düz kart no ya da katalog etiketi. Cevabı her uç kendi yetkisine göre kurar.
+interface CozumYollari<T> {
+  onekli: (t: KodTuru) => Promise<T | null>;
+  konum: (kod: string) => Promise<T | null>;
+  malzeme: (no: number) => Promise<T | null>;
+}
+async function sirayliCoz<T>(db: Db, ham: string, y: CozumYollari<T>): Promise<T | null> {
+  const bulunan = await y.onekli(kodTuru(ham));
   if (bulunan) return bulunan;
-  const kod = ham.trim().toUpperCase();
-  const konum = await konumCoz(db, kod.replace(/^LOC[:\s-]*/, ''));
+  const g = geriDusmeKodlari(ham);
+  const konum = await y.konum(g.konumKodu);
   if (konum) return konum;
-  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1] ?? await katalogEtiketiKartNo(db, ham);
-  return (no === undefined || no === null ? null : await malzemeCoz(db, Number(no))) ?? { tur: 'bilinmiyor', kod: ham.trim() };
+  const no = g.kartNo ?? await katalogEtiketiKartNo(db, ham);
+  return no === null ? null : y.malzeme(no);
 }
 // DEP-64: katalog etiketi (MK:<stok kodu>); kart no'yu Malzemeler verir, stok onun tablosunu okumaz. Kart yoksa null.
 async function katalogEtiketiKartNo(db: Db, ham: string): Promise<number | null> {
@@ -760,47 +774,48 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
   const digerIstasyonlar = async (malzemeId: number, parti: { id: number } | null) =>
     (await malzemeninIstasyonlari(db, malzemeId, parti?.id)).filter((x) => !istasyonlar.has(x.istasyonId))
       .map(({ istasyonId, kod, ad, miktar }) => ({ istasyonId, kod, ad, miktar }));
-  // Çözüm sırası Okut sayfasındaki kodCoz ile aynıdır: önekli kod, sonra öneksiz konum kodu, en son düz kart no.
-  const t = kodTuru(ham);
-  let bulunan: OkutCozCevabi | null = null;
-  if (t.tur === 'konum') bulunan = await yerCevabi(t.deger);
-  else if (t.tur === 'malzeme') bulunan = await malzemeCevabi(Number(t.deger), null, await sorgular.malzemeBakiyeleri(db, Number(t.deger)));
-  else if (t.tur === 'lot') {
-    const p = await sorgular.lotNoylaParti(db, t.deger);
-    const nolar = p === null ? new Map() : await emirNoHaritasi(db, [p.uretimEmriId]);
-    if (p) await kartaBagliLotuReddet(db, k, p.id);
-    if (p) bulunan = await malzemeCevabi(p.malzemeId, { id: p.id, etiket: partiEtiketi(p, emirNoDe(nolar, p.uretimEmriId)) ?? p.lotNo, uretimEmriId: p.uretimEmriId }, await sorgular.lotBakiyeleri(db, p.id));
-  } else if (t.tur === 'refakat-partisi') {
-    // Refakat kartı (kart #123): veren için lotun alabileceği yerleri, alan için kendisine o kartla yoldaki teslimleri taşır (Soru 118 a).
-    // Lot bekleyen (istisna) kartın lotu yok: okutma ekranı onu Dal 8'de gösterir; burada kod tanınmaz.
-    // Soru 128: kartın satırları her okutana gelir; istisna kartı (lotsuz) da okutulur, alınacak yeri yoktur.
-    const r = await sorgular.etkinRefakatPartisiBul(db, Number(t.deger));
-    const lotId = r?.partiId ?? null;
-    const refakat = r === null ? undefined : (await refakatPartileriCevir(db, [r]))[0];
-    const m = !r || !refakat ? null : lotId === null
-      ? await malzemeCevabi(r.malzemeId, null, [])
-      : await malzemeCevabi(r.malzemeId, { id: lotId, etiket: refakat.etiket, uretimEmriId: null }, await sorgular.lotBakiyeleri(db, lotId));
-    if (r && refakat && m?.tur === 'malzeme') {
-      const gelenler: TeslimHam[] = [];
-      if (lotId !== null) for (const x of await sorgular.refakatYoldakiTeslimleri(db, r.uretimEmriId, lotId)) if (banaGelen(x, k.id) && await teslimAlabilir(db, k, x)) gelenler.push(x);
-      const kartSatirlari = await refakatKartSatirlari(db, r.id);
-      const anaEylem = refakatAnaEylemi({ gelenSayisi: gelenler.length, kartAcik: refakat.durum === 'acik', satirIstasyonlari: kartSatirlari.map((x) => x.istasyonId), kapsamdakiIstasyonlar: istasyonlar });
-      bulunan = { ...m, ...(lotId === null ? { parti: null, digerIstasyonlar: [] } : {}), refakat, gelenler: await teslimleriAdlandir(db, gelenler), kartSatirlari, anaEylem };
-    }
-  } else if (t.tur === 'raf') {
-    const raf = await sorgular.rafKoduyla(db, t.deger);
-    if (raf) {
-      const gozler = await sorgular.rafinGozleri(db, raf.id);
-      const yerler = await yerOku(gozler.map((g) => g.konumId));
-      const icerikli: Extract<OkutCozCevabi, { tur: 'raf' }>['gozler'] = [];
-      for (const y of gozler.flatMap((g) => yerler.get(g.konumId) ?? [])) {
-        icerikli.push({ ...y, satirlar: alinir(y) ? (await yerdekiStok(db, k, { konumId: y.konumId })).satirlar : null });
+  const onekli = async (t: KodTuru): Promise<OkutCozCevabi | null> => {
+    let bulunan: OkutCozCevabi | null = null;
+    if (t.tur === 'konum') bulunan = await yerCevabi(t.deger);
+    else if (t.tur === 'malzeme') bulunan = await malzemeCevabi(Number(t.deger), null, await sorgular.malzemeBakiyeleri(db, Number(t.deger)));
+    else if (t.tur === 'lot') {
+      const p = await sorgular.lotNoylaParti(db, t.deger);
+      const nolar = p === null ? new Map() : await emirNoHaritasi(db, [p.uretimEmriId]);
+      if (p) await kartaBagliLotuReddet(db, k, p.id);
+      if (p) bulunan = await malzemeCevabi(p.malzemeId, { id: p.id, etiket: partiEtiketi(p, emirNoDe(nolar, p.uretimEmriId)) ?? p.lotNo, uretimEmriId: p.uretimEmriId }, await sorgular.lotBakiyeleri(db, p.id));
+    } else if (t.tur === 'refakat-partisi') {
+      // Refakat kartı (kart #123): veren için lotun alabileceği yerleri, alan için kendisine o kartla yoldaki teslimleri taşır (Soru 118 a).
+      // Lot bekleyen (istisna) kartın lotu yok: okutma ekranı onu Dal 8'de gösterir; burada kod tanınmaz.
+      // Soru 128: kartın satırları her okutana gelir; istisna kartı (lotsuz) da okutulur, alınacak yeri yoktur.
+      const r = await sorgular.etkinRefakatPartisiBul(db, Number(t.deger));
+      const lotId = r?.partiId ?? null;
+      const refakat = r === null ? undefined : (await refakatPartileriCevir(db, [r]))[0];
+      const m = !r || !refakat ? null : lotId === null
+        ? await malzemeCevabi(r.malzemeId, null, [])
+        : await malzemeCevabi(r.malzemeId, { id: lotId, etiket: refakat.etiket, uretimEmriId: null }, await sorgular.lotBakiyeleri(db, lotId));
+      if (r && refakat && m?.tur === 'malzeme') {
+        const gelenler: TeslimHam[] = [];
+        if (lotId !== null) for (const x of await sorgular.refakatYoldakiTeslimleri(db, r.uretimEmriId, lotId)) if (banaGelen(x, k.id) && await teslimAlabilir(db, k, x)) gelenler.push(x);
+        const kartSatirlari = await refakatKartSatirlari(db, r.id);
+        const anaEylem = refakatAnaEylemi({ gelenSayisi: gelenler.length, kartAcik: refakat.durum === 'acik', satirIstasyonlari: kartSatirlari.map((x) => x.istasyonId), kapsamdakiIstasyonlar: istasyonlar });
+        bulunan = { ...m, ...(lotId === null ? { parti: null, digerIstasyonlar: [] } : {}), refakat, gelenler: await teslimleriAdlandir(db, gelenler), kartSatirlari, anaEylem };
       }
-      bulunan = { tur: 'raf', raf, gozler: icerikli };
+    } else if (t.tur === 'raf') {
+      const raf = await sorgular.rafKoduyla(db, t.deger);
+      if (raf) {
+        const gozler = await sorgular.rafinGozleri(db, raf.id);
+        const yerler = await yerOku(gozler.map((g) => g.konumId));
+        const icerikli: Extract<OkutCozCevabi, { tur: 'raf' }>['gozler'] = [];
+        for (const y of gozler.flatMap((g) => yerler.get(g.konumId) ?? [])) {
+          icerikli.push({ ...y, satirlar: alinir(y) ? (await yerdekiStok(db, k, { konumId: y.konumId })).satirlar : null });
+        }
+        bulunan = { tur: 'raf', raf, gozler: icerikli };
+      }
+    } else if (t.tur === 'uretim-emri' && t.bicim === 'kimlik') {
+      return { tur: 'eski-kart', kod: ham.trim(), uretimEmriId: Number(t.deger) };
     }
-  } else if (t.tur === 'uretim-emri' && t.bicim === 'kimlik') {
-    return { tur: 'eski-kart', kod: ham.trim(), uretimEmriId: Number(t.deger) };
-  }
+    return bulunan;
+  };
   // 1338 a, 1342 a: okutulan yerde başkasının sepetindeki miktar etiket olarak gelir; stok ayrılmaz.
   const sepetler = async (c: OkutCozCevabi): Promise<OkutCozCevabi> => {
     const konumlar = c.tur === 'yer' ? [c.yer.konumId] : c.tur === 'malzeme' ? c.yerler.map((y) => y.konumId) : c.tur === 'raf' ? c.gozler.map((g) => g.konumId) : [];
@@ -813,13 +828,9 @@ export async function okutCoz(db: Db, k: Kullanici, ham: string): Promise<OkutCo
   };
   const stokluCevap = async (c: OkutCozCevabi): Promise<OkutCozCevabi> =>
     sepetler((c.tur === 'malzeme' || c.tur === 'yer') && stokOkurMu(k) ? { ...c, stok: await kodCoz(db, ham) } : c);
-  if (bulunan) return stokluCevap(bulunan);
-  const kod = ham.trim().toUpperCase();
-  const yer = await yerCevabi(kod.replace(/^LOC[:\s-]*/, ''));
-  if (yer) return stokluCevap(yer);
-  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(kod)?.[1] ?? await katalogEtiketiKartNo(db, ham);
-  const m = no === undefined || no === null ? null : await malzemeCevabi(Number(no), null, await sorgular.malzemeBakiyeleri(db, Number(no)));
-  return m ? stokluCevap(m) : { tur: 'bilinmiyor', kod: ham.trim() };
+  const c = await sirayliCoz(db, ham, { onekli, konum: yerCevabi, malzeme: async (no) => malzemeCevabi(no, null, await sorgular.malzemeBakiyeleri(db, no)) });
+  if (c === null) return { tur: 'bilinmiyor', kod: ham.trim() };
+  return c.tur === 'eski-kart' ? c : stokluCevap(c);
 }
 // Stok okuması (sayfa ya da herhangi bir stok işlemi): okutma cevabına gözler ve toplam eklenir; panel ayrıca istek atmaz.
 const stokOkurMu = (k: Kullanici): boolean => islemVarMi(k, 'sayfa.stok') || STOK_ISLEMLERI.some((i) => islemVarMi(k, i));
@@ -1036,13 +1047,13 @@ async function okutulanMalzeme(db: Db, ham: string): Promise<{ malzemeId: number
   if (t.tur === 'malzeme') return { malzemeId: Number(t.deger), partiId: null };
   if (t.tur === 'refakat-partisi') { const r = await sorgular.etkinRefakatPartisiBul(db, Number(t.deger)); return r ? { malzemeId: r.malzemeId, partiId: r.partiId } : null; }
   if (t.tur === 'konum') return null;
-  const no = /^(?:MLZ[:\s-]*)?(\d{1,9})$/.exec(ham.trim().toUpperCase())?.[1] ?? await katalogEtiketiKartNo(db, ham);
-  return no === undefined || no === null ? null : { malzemeId: Number(no), partiId: null };
+  const no = geriDusmeKodlari(ham).kartNo ?? await katalogEtiketiKartNo(db, ham);
+  return no === null ? null : { malzemeId: no, partiId: null };
 }
 // Okutulan yer etiketi yalnız aktif istasyon konumu olabilir: okutarak alma istasyondan istasyona yapılır.
 async function okutulanIstasyonYeri(db: Db, ham: string): Promise<{ konumId: number; istasyonId: number; kod: string; ad: string } | null> {
   const t = kodTuru(ham);
-  const kod = t.tur === 'konum' ? t.deger : ham.trim().toUpperCase().replace(/^LOC[:\s-]*/, '');
+  const kod = t.tur === 'konum' ? t.deger : geriDusmeKodlari(ham).konumKodu;
   const satir = await sorgular.konumKoduyla(db, kod);
   const u = satir === null ? undefined : (await sorgular.teslimUclari(db, [satir.id]))[0];
   if (!u || !u.aktif || u.tur !== 'istasyon' || u.istasyonId === null) return null;

@@ -26,9 +26,9 @@ const SUTUNLAR: readonly Sutun<MarkalamaBirimi>[] = [
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (b) => zamanMetni(b.zaman) },
 ];
 
-// Seçilen istasyon birimin kaydına girer (hangi tezgâhta markalandı). Liste okunamıyor ya da boşsa seçim istenmez: markalama durmasın.
-function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
-  tanim: MarkalamaTanimi; emirId: number; istasyonId: number | null; istasyonGerekli: boolean; yazabilir: boolean;
+// Seçilen istasyon birimin kaydına girer (hangi tezgâhta markalandı). Seri yalnız markalama istasyonunda verilir (2036): istasyon seçilmeden gönderilmez.
+function Calisma({ tanim, emirId, istasyonId, yazabilir }: {
+  tanim: MarkalamaTanimi; emirId: number; istasyonId: number | null; yazabilir: boolean;
 }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -74,7 +74,7 @@ function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
   });
 
   const siradaki = onizleme.data?.numaralar[0] ?? null;
-  const istasyonBekliyor = istasyonGerekli && istasyonId === null;
+  const istasyonBekliyor = istasyonId === null;
   const kodVar = tanim.alanlar.some((a) => a.kodTuru !== 'yok');
   const beklenen = tanim.dogrulama && son !== null && son.durum !== 'hurda' && son.dogrulamaZamani === null ? son : null;
   const sahneMarkalari = tanim.alanlar.flatMap((a, i) => (a.yer === null ? [] : [{
@@ -110,7 +110,7 @@ function Calisma({ tanim, emirId, istasyonId, istasyonGerekli, yazabilir }: {
             </Dugme>
           </div>
         ) : <p className="tc-mrk-ipucu">Seri vermek için markalama yetkisi gerekir.</p>}
-        {yazabilir && istasyonBekliyor && <p className="tc-mrk-ipucu">Seri vermek için istasyonu seçin.</p>}
+        {yazabilir && istasyonBekliyor && <p className="tc-mrk-ipucu">Seri vermek için markalama istasyonunu seçin.</p>}
         <OnayPenceresi
           acik={hataliOnayi} baslik="Hatalı markalama" onayMetni="Numarayı yak" tehlikeli
           yukleniyor={markala.isPending && markala.variables === 'hatali'}
@@ -177,7 +177,7 @@ export function Istasyon() {
   const [istasyonId, istasyonIdYaz] = useState<number | null>(null);
   const liste = useQuery({ queryKey: anahtarlar.tanimlar, queryFn: () => api.get<TanimlarCevabi>('/markalama/tanimlar') });
   const istasyonlar = useQuery({ queryKey: anahtarlar.istasyonlar, queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim') });
-  const istasyonSecenekleri = (istasyonlar.data?.gruplar ?? []).flatMap((g) => g.istasyonlar.filter((i) => i.aktif).map((i) => ({
+  const istasyonSecenekleri = (istasyonlar.data?.gruplar ?? []).flatMap((g) => g.istasyonlar.filter((i) => i.aktif && i.tip === 'markalama').map((i) => ({
     deger: String(i.id), baslik: `${g.isMerkeziAd} · ${i.ad}`,
   })));
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -199,7 +199,7 @@ export function Istasyon() {
           <Secim
             etiket="İstasyon"
             secenekler={istasyonSecenekleri}
-            bosSecenek={istasyonlar.isPending ? 'İstasyonlar okunuyor' : istasyonSecenekleri.length === 0 ? 'İstasyon yok' : 'Seçin'}
+            bosSecenek={istasyonlar.isPending ? 'İstasyonlar okunuyor' : istasyonSecenekleri.length === 0 ? 'Markalama istasyonu yok' : 'Seçin'}
             value={istasyonId === null ? '' : String(istasyonId)}
             onChange={(o) => istasyonIdYaz(o.target.value === '' ? null : Number(o.target.value))}
           />
@@ -209,7 +209,7 @@ export function Istasyon() {
       {tanim && secim.emirId !== null && (
         <Calisma
           key={`${tanim.id}:${secim.emirId}`} tanim={tanim} emirId={secim.emirId} istasyonId={istasyonId}
-          istasyonGerekli={istasyonSecenekleri.length > 0} yazabilir={yazabilir}
+          yazabilir={yazabilir}
         />
       )}
     </div>

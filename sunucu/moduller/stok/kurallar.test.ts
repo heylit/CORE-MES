@@ -9,7 +9,7 @@ import {
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
-  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, siparisBagiEngeli,
+  sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, geriDusmeKodlari, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, gozTamSayildiMi, SAYIM_DISI_KONUMLAR, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
 } from './kurallar.ts';
@@ -655,6 +655,19 @@ describe('DEP-64 katalog etiketi', () => {
     assert.equal(katalogEtiketiStokKodu('MK:HM-ABC-00001'), 'HM-ABC-00001');
     assert.equal(katalogEtiketiStokKodu(' mk : hm-abc-00001 '), 'HM-ABC-00001');
     for (const ham of ['MK:', 'MK: ', 'MLZ:12', 'HM-ABC-00001', 'MK:A B', 'XMK:HM-1']) assert.equal(katalogEtiketiStokKodu(ham), null, ham);
+  });
+});
+
+describe('DEP-55 geri düşme kodları', () => {
+  test('konum kodu büyük harfe çevrilir, eski LOC öneki atılır; kart no düz sayı ya da MLZ önekli sayıdır', () => {
+    assert.deepEqual(geriDusmeKodlari(' a-01-01 '), { konumKodu: 'A-01-01', kartNo: null });
+    assert.deepEqual(geriDusmeKodlari('loc-kabul'), { konumKodu: 'KABUL', kartNo: null });
+    assert.deepEqual(geriDusmeKodlari('LOC: A-02'), { konumKodu: 'A-02', kartNo: null });
+    assert.deepEqual(geriDusmeKodlari('42'), { konumKodu: '42', kartNo: 42 });
+    assert.deepEqual(geriDusmeKodlari('mlz-000017'), { konumKodu: 'MLZ-000017', kartNo: 17 });
+  });
+  test('on haneli sayı, boşluklu ya da harf karışık kod kart no değildir', () => {
+    for (const ham of ['1234567890', '12 34', 'MLZ-12A', 'MK:HM-1', '']) assert.equal(geriDusmeKodlari(ham).kartNo, null, ham);
   });
   test('soru 98 a: mamul ve yarı mamul elle sevk çıkışıyla düşülmez; emirsiz malzeme ve öteki nedenler değişmez', () => {
     for (const tur of ['mamul', 'yarimamul']) assert.match(sevkCikisEngeli(tur, 'sevk') ?? '', /sevkiyat işini/, tur);

@@ -47,6 +47,7 @@ const ISTASYONLAR: IstasyonSecimiCevabi = {
     istasyonlar: [
       { id: 21, kod: 'DNM-1', ad: 'Lazer 1', isMerkeziId: 1, tip: 'markalama', aktif: true },
       { id: 22, kod: 'DNM-2', ad: 'Eski Lazer', isMerkeziId: 1, tip: 'markalama', aktif: false },
+      { id: 23, kod: 'DNM-3', ad: 'Torna 1', isMerkeziId: 1, tip: 'talasli', aktif: true },
     ],
   }],
 };
@@ -180,6 +181,7 @@ describe('Markalama istasyonu', () => {
     const istasyon = screen.getByLabelText('İstasyon');
     await screen.findByRole('option', { name: /Lazer 1/ });
     expect(screen.queryByRole('option', { name: /Eski Lazer/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: /Torna 1/ })).toBeNull();
     expect((screen.getByRole('button', { name: /Markalandı/ }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(istasyon, { target: { value: '21' } });
     fireEvent.click(screen.getByRole('button', { name: /Markalandı/ }));
@@ -218,7 +220,7 @@ describe('Çift dokunuş', () => {
 });
 
 describe('Markalama istasyonu, istasyon listesi boş', () => {
-  it('seçilecek istasyon yoksa seri istasyonsuz verilir', async () => {
+  it('2036: markalama istasyonu yoksa seri verilmez; düğmeler kapalı kalır', async () => {
     const cagrilar = sunucuKur(YONETICI, 'saglam', { gruplar: [] });
     ac(<Istasyon />);
     fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
@@ -226,22 +228,25 @@ describe('Markalama istasyonu, istasyon listesi boş', () => {
     await screen.findByRole('option', { name: /UE-DNM-1/ });
     fireEvent.change(emir, { target: { value: '5' } });
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
-    await screen.findByRole('option', { name: 'İstasyon yok' });
-    fireEvent.click(screen.getByRole('button', { name: /Markalandı/ }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/birimler/markala')).toBe(true));
-    expect(cagrilar.find((x) => x.yol === '/markalama/birimler/markala')!.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: null, sonuc: 'iyi' });
+    await screen.findByRole('option', { name: 'Markalama istasyonu yok' });
+    expect((screen.getByRole('button', { name: /Markalandı/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Hatalı markalama/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Seri vermek için markalama istasyonunu seçin.')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/markalama/birimler/markala')).toBe(false);
   });
 });
 
 describe('Hatalı markalama', () => {
   it('onay sormadan numara yakmaz; Vazgeç istek göndermez, onayla hatalı sonuçla gider', async () => {
-    const cagrilar = sunucuKur(YONETICI, 'saglam', { gruplar: [] });
+    const cagrilar = sunucuKur(YONETICI);
     ac(<Istasyon />);
     fireEvent.change(await screen.findByLabelText('Parça ve operasyon'), { target: { value: '7' } });
     const emir = await screen.findByLabelText('Üretim emri');
     await screen.findByRole('option', { name: /UE-DNM-1/ });
     fireEvent.change(emir, { target: { value: '5' } });
     await screen.findByText('ORN-A-00005', { selector: '.tc-mrk-buyuk' });
+    await screen.findByRole('option', { name: /Lazer 1/ });
+    fireEvent.change(screen.getByLabelText('İstasyon'), { target: { value: '21' } });
     const markalar = () => cagrilar.filter((c) => c.yol === '/markalama/birimler/markala');
     fireEvent.click(screen.getByRole('button', { name: /Hatalı markalama/ }));
     const pencere = await screen.findByRole('dialog');
@@ -252,7 +257,7 @@ describe('Hatalı markalama', () => {
     fireEvent.click(screen.getByRole('button', { name: /Hatalı markalama/ }));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /Numarayı yak/ }));
     await waitFor(() => expect(markalar()).toHaveLength(1));
-    expect(markalar()[0]!.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: null, sonuc: 'hatali' });
+    expect(markalar()[0]!.govde).toEqual({ tanimId: 7, uretimEmriId: 5, istasyonId: 21, sonuc: 'hatali' });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
