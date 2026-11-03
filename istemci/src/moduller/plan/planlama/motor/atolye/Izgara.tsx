@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
@@ -75,15 +75,17 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   };
 
   const [oklar, setOklar] = useState<{ w: number; h: number; yol: { d: string; kr: boolean }[]; yazi: { x: number; y: number; t: string; kr: boolean }[] } | null>(null);
-  // Okların yeri çubukların çizilmiş yerinden ölçülür (cizOklar).
+  // Okların satırı çubukların çizilmiş yerinden ölçülür (cizOklar); yatay yeri planın saatinden hesaplanır: çubuğun `left` ve `width`
+  // geçişi sürerken ölçülen yer ölçek değişmeden önceki yerdi, ok boşluğa düşüyordu.
   useLayoutEffect(() => {
     const al = alan.current;
     if (!al || !secJob || yil) { setOklar(null); return; }
     const A = akis(p, cx, ort.hazir, secJob); if (!A) { setOklar(null); return; }
     const ar = al.getBoundingClientRect(); const yer = new Map<string, { x0: number; x1: number; y: number }>();
     for (const x of A.L) {
-      const el = al.querySelector(`[data-id="${secKacis(x.id)}"]`); if (!el) continue;
-      const b = el.getBoundingClientRect(); yer.set(x.id, { x0: b.left - ar.left, x1: b.right - ar.left, y: b.top - ar.top + b.height / 2 });
+      const el = al.querySelector(`[data-id="${secKacis(x.id)}"]`); const r = p.ops[x.id]; if (!el || !r) continue;
+      const b = el.getBoundingClientRect(); const x0 = gen.e + r.S * k;
+      yer.set(x.id, { x0, x1: x0 + Math.max(3, (r.C - r.S) * k), y: b.top - ar.top + b.height / 2 });
     }
     const yol: { d: string; kr: boolean }[] = [], yazi: { x: number; y: number; t: string; kr: boolean }[] = [];
     for (const x of A.L) for (const [pid] of cx.byId[x.id]?.pr ?? []) {
@@ -93,7 +95,43 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       if (x.onc === pid && x.bek >= 1 && b.x0 - a.x1 > 40) yazi.push({ x: (a.x1 + b.x0) / 2, y: (a.y + b.y) / 2 - 6, t: sure(x.bek), kr });
     }
     setOklar({ w: al.offsetWidth, h: al.offsetHeight, yol, yazi });
-  }, [secJob, k, H, p, cx, yil, R]);
+  }, [secJob, k, H, p, cx, yil, R, gen.e]);
+  // Sürükle-bırak (1981 b): yatay kayma saati, bırakılan satır tezgâhı verir; iş orada kilitlenir (sunucu komutu). Altı pikselden kısa hareket
+  // dokunmadır, iş kartını açar. Uygun olmayan tezgâha bırakılan iş kendi tezgâhında kalır, yalnız saati değişir.
+  const suruk = useRef<{ id: string; m: string; S: number; x0: number; y0: number; el: HTMLElement; oldu: boolean; hedef: HTMLElement | null } | null>(null);
+  const birakti = useRef(false);
+  const hedefSatir = (x: number, y: number): HTMLElement | null =>
+    (typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : []).map((e) => e.closest<HTMLElement>('.tc-pym-tp-satir[data-m]')).find((e) => e) ?? null;
+  const surukBit = () => {
+    const s = suruk.current; suruk.current = null; if (!s) return;
+    delete s.el.dataset.surukle; s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy');
+    if (s.hedef) delete s.hedef.dataset.hedef;
+  };
+  const surukle = (r: PlanIslemi, acik: boolean) => (acik ? {
+    onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+      if (e.button > 0 || !ort.tasi) return;
+      suruk.current = { id: r.id, m: r.m, S: r.S, x0: e.clientX, y0: e.clientY, el: e.currentTarget, oldu: false, hedef: null };
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
+      const s = suruk.current; if (!s || s.id !== r.id) return;
+      const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
+      if (!s.oldu) { if (Math.hypot(dx, dy) < 6) return; s.oldu = true; s.el.setPointerCapture?.(e.pointerId); s.el.dataset.surukle = ''; }
+      s.el.style.setProperty('--dx', `${dx}px`); s.el.style.setProperty('--dy', `${dy}px`);
+      const h = hedefSatir(e.clientX, e.clientY);
+      if (h !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (h) h.dataset.hedef = ''; s.hedef = h; }
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLElement>) => {
+      const s = suruk.current; if (!s || s.id !== r.id) return;
+      const oldu = s.oldu; const hm = s.hedef?.dataset.m ?? null; const dx = e.clientX - s.x0;
+      surukBit();
+      if (!oldu || !ort.tasi || !Number.isFinite(dx)) return;
+      birakti.current = true;
+      const adaylar = cx.byId[r.id]?.c ?? [];
+      ort.tasi(r.id, hm && adaylar.includes(hm) ? hm : r.m, r.S + dx / k);
+    },
+    onPointerCancel: surukBit,
+  } : {});
+
   const sb = secJob ? ort.bilgi.get(secJob) : null; const A = secJob && !yil ? akis(p, cx, ort.hazir, secJob) : null;
   const ofs = gen.e;
 
@@ -153,7 +191,8 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
         data-fason={r.fas ? '' : undefined} data-soluk={soluk ? '' : undefined} data-vurgu={vur ? '' : undefined} data-parla={pr ? '' : undefined}
         data-grup={tezGrup(D, r.m)} aria-pressed={secOp === r.id}
         title={`${r.job} · ${ad} · ${tz(D, r.S)} → ${tz(D, r.C)}${il != null ? ` · ilerleme %${Math.round(il * 100)}` : ''}`}
-        ref={degisken({ '--x': `${xx}px`, '--w': `${w}px` })} onClick={(e) => x.opSec(r.id, ankraj(e))}>
+        ref={degisken({ '--x': `${xx}px`, '--w': `${w}px` })} {...surukle(r, !sabit && !r.fas && !!x.tasi)}
+        onClick={(e) => { if (birakti.current) { birakti.current = false; return; } x.opSec(r.id, ankraj(e)); }}>
         {il != null && <span className="tc-pym-tp-ilerleme" ref={degisken({ '--o': `${Math.min(100, il * 100)}%` })} />}
         {r.su > 0 && r.Su != null && r.Su > r.S && <span className="tc-pym-tp-ayar" ref={degisken({ '--a': `${Math.min(w, (r.Su - r.S) * kk)}px` })} />}
         {yz && <span className="tc-pym-tp-yazi"><b>{yz.b}</b>{yz.ek}{yz.alt && <small>{yz.alt}</small>}</span>}

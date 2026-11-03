@@ -7,7 +7,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import './belge-merkezi.css';
 
 // Liste ve kartlardaki küçük resim (kart #688). Kare ortak uçtan okunur: oturum açmış herkes, yalnız bağlı ve yayına girmiş
-// revizyonun karesini görür. Resim yoksa ya da okunamazsa yer tutucu ikon çizilir; revizyon karta uymuyorsa uyarı işareti çıkar.
+// revizyonun karesini görür; 3B modelde taslağın karesi de görünür ve işaretlenir (1990 a). Resim yoksa ya da okunamazsa yer tutucu ikon çizilir; revizyon karta uymuyorsa uyarı işareti çıkar.
 
 export type KucukResimBoyu = 'kucuk' | 'orta' | 'buyuk';
 
@@ -32,11 +32,14 @@ export function KucukResimKutusu({ resim, ad, boy = 'kucuk' }: { resim: KucukRes
   const [bozuk, bozukYaz] = useState<number | null>(null);
   const goster = resim != null && bozuk !== resim.revizyonId;
   const uyumsuz = resim?.revUyumu === false;
+  const taslak = goster && resim.taslak === true;
+  const baslik = uyumsuz ? `${ad}: resim revizyonu (${resim.harf}) kartın revizyonuna uymuyor` : taslak ? `${ad}: taslak 3B model, yayınlanmadı` : ad;
   return (
-    <span className={`tc-cz-kr tc-cz-kr-${boy}`} title={uyumsuz ? `${ad}: resim revizyonu (${resim.harf}) kartın revizyonuna uymuyor` : ad}>
+    <span className={`tc-cz-kr tc-cz-kr-${boy}`} title={baslik}>
       {goster
         ? <img src={kucukResimAdresi(resim)} alt={ad} loading="lazy" decoding="async" onError={() => { bozukYaz(resim.revizyonId); }} />
         : <Simge ad="camera" />}
+      {taslak && <span className="tc-cz-kr-taslak" role="img" aria-label="Taslak"><Simge ad="edit" /></span>}
       {uyumsuz && <span className="tc-cz-kr-uyari" role="img" aria-label="Revizyon uyuşmuyor"><Simge ad="alert" /></span>}
     </span>
   );

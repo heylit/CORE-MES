@@ -426,20 +426,21 @@ export function kucukResimAdaylari(db: Db, hedefModul: BagModulu, hedefIdler: re
             (SELECT count(*)::int FROM belge_merkezi_onizleme o WHERE o.revizyon_id = r.id) AS "kareSayisi"
        FROM belge_merkezi_bag g
        JOIN belge_merkezi_belge b ON b.id = g.belge_id AND b.aktif
-       JOIN belge_merkezi_revizyon r ON r.belge_id = b.id AND r.durum <> 'taslak'
+       JOIN belge_merkezi_revizyon r ON r.belge_id = b.id AND (r.durum <> 'taslak' OR b.tur = '3b-model')
       WHERE g.hedef_modul = $1 AND g.hedef_id = ANY($2::int[])
       ORDER BY g.hedef_id, b.id, r.sira`,
     [hedefModul, [...hedefIdler]],
   );
 }
 
-// Küçük resim karesi: revizyon yayına girmiş, belgesi etkin ve bir kayda bağlıysa okunur. Taslağın karesi verilmez.
+// Küçük resim karesi: revizyon yayına girmiş (3B modelde taslak da, 1990 a), belgesi etkin ve bir kayda bağlıysa okunur.
+// Öbür türlerde taslağın karesi verilmez.
 export function kucukResimKaresi(db: Db, revizyonId: number, kare: number): Promise<{ belgeId: number; ozet: string } | null> {
   return db.tek<{ belgeId: number; ozet: string }>(
     `SELECT r.belge_id AS "belgeId", o.ozet
        FROM belge_merkezi_onizleme o
-       JOIN belge_merkezi_revizyon r ON r.id = o.revizyon_id AND r.durum <> 'taslak'
-       JOIN belge_merkezi_belge b ON b.id = r.belge_id AND b.aktif
+       JOIN belge_merkezi_revizyon r ON r.id = o.revizyon_id
+       JOIN belge_merkezi_belge b ON b.id = r.belge_id AND b.aktif AND (r.durum <> 'taslak' OR b.tur = '3b-model')
       WHERE o.revizyon_id = $1 AND o.kare = $2 AND EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id)`,
     [revizyonId, kare],
   );

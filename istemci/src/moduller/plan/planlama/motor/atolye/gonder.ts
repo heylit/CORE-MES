@@ -1,5 +1,6 @@
 import type { DortSaatAyrintisi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, TaslaktanCalismayaCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { AtolyeKomutuCevabi, AtolyeOlayi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
@@ -111,3 +112,23 @@ export async function calismayiGeriAl(calismaSurumu: number): Promise<CalismaGer
 export const acmaOzeti = (r: Pick<TaslaktanCalismayaCevabi, 'yazilan' | 'kilitli' | 'atlanan'>): string =>
   `${r.yazilan} iş çalışmaya yazıldı${r.kilitli ? `, ${r.kilitli} kilit` : ''}`
   + `${r.atlanan.length ? `; ${r.atlanan.length} iş çalışmada karşılığı olmadığı için yazılmadı (${ilkUc(r.atlanan)})` : ''}. Plan yeniden çözülmeli.`;
+
+// Atölyenin elle düzenleme komutları (1982 a): taşı, başka tezgâha, saat kaydır, sürükle-bırak ve olay ekle her biri kendi ucuyla gider.
+// Bekleyen değişiklik önce kaydedilir (sunucu kayıtlı çalışmanın sürümünü ister); cevaptan sonra sayfa çalışmayı yeniden okur. Plan bir
+// sonraki "uygula" ile değişir.
+export async function isiTasi(komut: CalismaKomutu, g: Omit<IsTasiGovdesi, 'calismaSurumu'>): Promise<AtolyeKomutuCevabi> {
+  const calismaSurumu = await komut.kaydet();
+  if (calismaSurumu === null) throw new GonderHatasi('İş taşınamadı: çalışma kaydedilemedi; sayfayı yenileyip yeniden deneyin.');
+  try {
+    return await tekrarKorumaliGonder((d) => api.post<AtolyeKomutuCevabi>('/plan/planlama-calismasi/is-tasi', { ...g, calismaSurumu }, d));
+  } catch (h) { throw new GonderHatasi(`İş taşınamadı: ${sebep(h)}`); }
+}
+export async function olayiEkle(komut: CalismaKomutu, olay: AtolyeOlayi): Promise<AtolyeKomutuCevabi> {
+  const calismaSurumu = await komut.kaydet();
+  if (calismaSurumu === null) throw new GonderHatasi('Olay eklenemedi: çalışma kaydedilemedi; sayfayı yenileyip yeniden deneyin.');
+  try {
+    return await tekrarKorumaliGonder((d) => api.post<AtolyeKomutuCevabi>('/plan/planlama-calismasi/olay-ekle', { calismaSurumu, olay }, d));
+  } catch (h) { throw new GonderHatasi(`Olay eklenemedi: ${sebep(h)}`); }
+}
+// Taşımanın saati çeyrek saate yuvarlanır ve şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).
+export const tasimaSaati = (S: number, now: number): number => Math.max(Math.ceil(now * 4 - 1e-9) / 4, Math.round(S * 4) / 4);

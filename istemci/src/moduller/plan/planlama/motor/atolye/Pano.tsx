@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { planGuncel } from '../../durum.ts';
@@ -9,6 +10,7 @@ import { MOTOR_NOTU } from '../ortak.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
 import { AtolyeEkrani } from './AtolyeEkrani.tsx';
 import { Brif, Bugun } from './Bugun.tsx';
+import { gonderHataIletisi, isiTasi, olayiEkle, tasimaSaati } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
@@ -17,7 +19,7 @@ import {
 import { Ray } from './Ray.tsx';
 
 // Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor isteyen her
-// eylem (dene, olay, iyileştir, taşı, böl, çözüm yolları) görünür ama pasiftir. Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
+// eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı ve olay sunucu komutudur (1982 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
 // `komut.degistir`le yazılır (221 c); seçim iskeletin ortak seçimidir.
 
 export interface Ortam {
@@ -31,6 +33,8 @@ export interface Ortam {
   olcek: AtolyeOlcegi; olcekSec: (z: AtolyeOlcegi) => void; sekSec: (s: AtolyeSekmesi) => void;
   bugunAc: (x: boolean) => void; brifAc: () => void; atolyeAc: () => void;
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
+  // 1982 a: sunucu komutları; yazamayan için null. `isleniyor` komut sürerken ikinci komutu engeller.
+  tasi: ((id: string, m: string, S: number) => void) | null; olayEkle: ((olay: AtolyeOlayi) => Promise<boolean>) | null; isleniyor: boolean;
 }
 
 interface Ozellikler {
@@ -65,6 +69,17 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const pano = useRef<HTMLDivElement | null>(null);
   const yaz = komut !== null && yetki.planYaz;
   const { bildir } = useBildirim();
+  // Taşı ve olay ekle sunucuda yazılır (1982 a); cevaptan sonra sayfa çalışmayı yeniden okur, plan bir sonraki uygulamada değişir.
+  const [isleniyor, setIsleniyor] = useState(false);
+  const yenile = o.yenile;
+  const sunucuKomutu = useCallback(async (is: () => Promise<unknown>, tamam: string): Promise<boolean> => {
+    setIsleniyor(true);
+    try { await is(); bildir('tamam', tamam); yenile(); return true; } catch (h) { bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
+  }, [bildir, yenile]);
+  const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
+    void sunucuKomutu(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdiSaati(c)) }), 'İş taşındı. Plan yeniden çözülünce güncellenir.');
+  } : null), [yaz, komut, sunucuKomutu, c]);
+  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => sunucuKomutu(() => olayiEkle(komut, olay), 'Olay eklendi. Plan yeniden çözülünce güncellenir.') : null), [yaz, komut, sunucuKomutu]);
 
   // Seçili adımın siparişi seçili sipariş sayılır.
   const secOp = secim.adim && p.ops[secim.adim] ? secim.adim : null;
@@ -148,6 +163,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const ort: Ortam = {
     c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
     olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
+    tasi: isleniyor ? null : tasi, olayEkle: isleniyor ? null : olayEkle, isleniyor,
   };
   const ozet = p.ozet;
   const farkli = !fark || fark.farkli || !planGuncel(c);
@@ -188,7 +204,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       <button type="button" className="tc-dugme" aria-disabled="true" aria-label="Şu olursa: denemeler" title={`Çalışma planını bozmadan farklı yollar dene ve karşılaştır. ${MOTOR_NOTU}`}>
         <Simge ad="lab" boyut="k" /><span data-ikincil="" data-metin="">Dene</span>
       </button>
-      <button type="button" className="tc-dugme" aria-disabled="true" aria-label="Olay: arıza, acil sipariş, malzeme, personel ya da fason" title={`Olay: arıza, acil sipariş, malzeme, personel ya da fason. ${MOTOR_NOTU}`}>
+      <button type="button" className="tc-dugme" aria-disabled={!olayEkle} aria-label="Olay: arıza, acil sipariş, malzeme, personel ya da fason"
+        title={olayEkle ? 'Olay: arıza, acil sipariş, malzeme, personel ya da fason' : 'Olay eklemek plan yazma yetkisi ister.'} onClick={(e) => { if (olayEkle) kartAc({ tur: 'olay' }, ankraj(e)); }}>
         <Simge ad="plus" boyut="k" /><span data-ikincil="" data-metin="">Olay</span>
       </button>
       <button type="button" className="tc-dugme" aria-disabled="true" aria-label="İyileştirme ara" title={`Motor daha iyi bir plan arar; bulursa önizlersiniz. ${MOTOR_NOTU}`}>

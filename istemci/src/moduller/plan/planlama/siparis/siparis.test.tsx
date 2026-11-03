@@ -98,7 +98,8 @@ describe('P2 Siparişler', () => {
     ac('/plan/ysiparis');
     await parca('ysiparis');
     tumAc();
-    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(4);
+    // Parti bölme altındaki not motor notu değildir: bölme Üretim emirlerinde yapılır, etkisi burada ölçülür (1980).
+    expect(document.querySelectorAll('[data-kapali="motor"]').length).toBe(3);
     expect(dugme('Örtüşmeyi dene').disabled).toBe(true);
     expect(screen.getByText('Örtüşebilir bağı olan geciken iş emri yok.')).toBeTruthy();
     for (const ad of ['Partiyi böl', 'Parti taraması', 'Örtüşme', 'Siparişler: maliyet ve kâr']) {

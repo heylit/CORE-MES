@@ -342,8 +342,8 @@ export function PartiBolmeKarti({ c, p, degerlendir, yenile }: { c: PlanlamaCali
         <div className="tc-pys-dugmeler">
           <Dugme tur="birincil" type="submit" simge="ruler" disabled={!degerlendir || Boolean(hata) || d.tur === 'bekliyor'}>Böl</Dugme>
         </div>
-        {/* 451/2: bölme Üretim emirlerinde yapılır; burada yalnız etkisi ölçülür (motor bağlanınca). */}
-        <MotorNotu ne="İş emri Üretim emirlerinde bölünür; burada bölmenin gecikmeye etkisi ölçülür." />
+        {/* 451/2: bölme Üretim emirlerinde yapılır; burada yalnız etkisi ölçülür (ölçüm sunucu motorundadır). */}
+        <p className="tc-pys-kucuk">İş emri Reçete ve Rota &gt; Üretim emirlerinde bölünür; burada bölmenin gecikmeye etkisi ölçülür.</p>
         <DurumSatiri d={d} yenile={yenile} />
         {d.tur === 'sonuc' && <PartiBolme cevap={d.cevap} />}
       </form>

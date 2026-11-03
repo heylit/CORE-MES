@@ -8,4 +8,5 @@
 - `yayindakiOnizleme` birden çok bağlı 3B modelden bağın eklenme sırasına göre ilkini seçer (eşitse belge kimliği); istasyonda zaten tek model vardır.
 - Eskiye düşen revizyonun kareleri ve dosya bağları kalır; `disari.ts` yalnız yayındakini verir. Birikim revizyon başına en çok 512 KiB.
 - Malzeme resmi (kart #688): malzeme kartı merkezin yükleme uçlarını kullanır (`/cizimler/malzemeler/:no/...`), çünkü sunucuda bağımlılık yalnız merkez -> malzemeler yönündedir; istemcide malzemeler `cizimler/disari.ts` `ResimPaneli` bileşenini gömer.
+- Malzeme kartından yayın (kart 1987, 1990 a, 1991 b): foto ve teknik resim karttan doğrudan yayına girer; 3B model taslak girer ama küçük resmi yüklemede üretilir ve malzemenin resmi olur (`taslak` işaretli). 3B dışı taslağa önizleme yazılmaz.
 - Küçük resim seçimi saftır (`kurallar.kucukResimSec`, CZ-19, CZ-20); kartın revizyonu antet rev ile, antet rev yoksa revizyon harfiyle karşılaştırılır (büyük harf, tr-TR). Uyan revizyon eskiye düşmüş olsa da gösterilir: kart eski revizyondaysa parça o resimle üretilir.

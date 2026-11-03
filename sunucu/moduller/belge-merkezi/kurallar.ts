@@ -1,6 +1,6 @@
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { ONIZLEME_SINIRLARI } from '#paylasilan/sozlesme/belge-merkezi.ts';
-import type { BelgeTuru, MalzemeBelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import type { BelgeTuru, RevizyonDurumu } from '#paylasilan/sozlesme/belge-merkezi.ts';
 
 export const ILETILER = {
   arsivde: 'Arşivdeki belge değişmez; önce arşivden çıkarın.',
@@ -14,7 +14,7 @@ export const ILETILER = {
   hedefYok: 'Bağlanacak kayıt bulunamadı.',
   malzemeDisi: 'Merkezden yalnız malzeme kartına ve istasyona bağ kurulur; öbür kayıtlar kendi ekranından bağlanır.',
   istasyonaModelDisi: 'İstasyona merkezden yalnız 3B model belgesi bağlanır.',
-  onizlemeTaslak: 'Önizleme yalnız yayındaki revizyon için üretilir.',
+  onizlemeTaslak: 'Önizleme yalnız yayındaki revizyon ve taslak 3B model için üretilir.',
   onizlemeTuru: 'Bu dosya türünden önizleme üretilmez.',
   onizlemeKareSayisi: 'Önizleme 1 ile 16 kare arasında olmalı.',
   onizlemeKareSirasi: 'Önizleme kareleri 0\'dan başlayıp sırayla gelmeli.',
@@ -82,12 +82,13 @@ export function silmeReddi(durum: RevizyonDurumu, revizyonSayisi: number): keyof
   return null;
 }
 
-// CZ-15: önizleme yalnız yayındaki revizyona yazılır (taslağın karesini kimse okumaz). 3B modelden dönen kareler, PDF'in ilk
-// sayfasından ve fotodan tek kare; DXF'ten üretilmez.
+// CZ-15: önizleme yayındaki revizyona yazılır; 3B modelde taslağa da (1990 a): malzemenin resmi yüklenince oluşur, yayın yine
+// merkezindir. 3B modelden dönen kareler, PDF'in ilk sayfasından ve fotodan tek kare; DXF'ten üretilmez.
 export const ONIZLEME_REVIZYON_TURLERI: readonly DosyaTuru[] = ['step', 'iges', 'stl', 'glb', 'gltf', 'pdf', 'png', 'jpeg', 'webp'];
 export const ONIZLEME_KARE_TURLERI: readonly DosyaTuru[] = ['png', 'jpeg', 'webp'];
-export function onizlemeRevizyonReddi(r: { durum: RevizyonDurumu; dosyaTuru: DosyaTuru }): keyof typeof ILETILER | null {
-  if (r.durum !== 'yayinda') return 'onizlemeTaslak';
+export const taslakResimli = (tur: BelgeTuru): boolean => tur === '3b-model';
+export function onizlemeRevizyonReddi(r: { durum: RevizyonDurumu; dosyaTuru: DosyaTuru }, belgeTuru: BelgeTuru): keyof typeof ILETILER | null {
+  if (r.durum === 'eski' || (r.durum === 'taslak' && !taslakResimli(belgeTuru))) return 'onizlemeTaslak';
   if (!ONIZLEME_REVIZYON_TURLERI.includes(r.dosyaTuru)) return 'onizlemeTuru';
   return null;
 }
@@ -106,9 +107,9 @@ export function onizlemeBoyutReddi(dosyalar: readonly { tur: DosyaTuru; boyut: n
   return dosyalar.reduce((t, d) => t + d.boyut, 0) > ONIZLEME_SINIRLARI.toplamBayt ? 'onizlemeToplamBuyuk' : null;
 }
 
-// CZ-18: malzeme kartından açılan belge. Foto doğrudan yayına girer; teknik resim ve 3B model taslak girer, yayını
-// `belge-merkezi.yayinla` sahibi merkezden yapar: yayındaki çizim atölyeye gider, karttan yanlış çizim doğrudan tezgaha ulaşmamalı.
-export const malzemedenYayinda = (tur: MalzemeBelgeTuru): boolean => tur === 'fotograf';
+// CZ-18: malzeme kartından açılan belge. Foto ve teknik resim doğrudan yayına girer (1991 b): kartı yazan kişinin yüklediği PDF
+// atölyede geçerli revizyon olur. 3B model taslak girer, yayını `belge-merkezi.yayinla` sahibi merkezden yapar (1990 a).
+export const malzemedenYayinda = (tur: BelgeTuru): boolean => tur === 'fotograf' || tur === 'teknik-resim';
 
 // CZ-19: kapak seçilmemişse küçük resim bu öncelikle seçilir; eşitse ilk bağlanan, o da eşitse küçük belge kimliği.
 const TUR_ONCELIGI: Readonly<Partial<Record<BelgeTuru, number>>> = { '3b-model': 0, fotograf: 1, 'teknik-resim': 2 };
@@ -146,12 +147,14 @@ export interface KucukResimSecimi {
   sira: number;
   kareSayisi: number;
   revUyumu: boolean | null;
+  taslak: boolean;
 }
 
 // CZ-20: kaydın küçük resmi. Kapak, yoksa CZ-19 sırası; ilk resmi olan belge seçilir. Belgede kartın revizyonuna uyan
 // yayına girmiş (yayında ya da eski) revizyon, yoksa yayındaki revizyon gösterilir; ikincisinde ve resim numarası kartınkiyle
 // çeliştiğinde revUyumu false olur (resim yine gösterilir, ekran uyarır). Kartta revizyon yoksa karşılaştırma yapılmaz (null).
-// Taslak hiçbir zaman seçilmez.
+// Taslak yalnız 3B modelde ve belgenin yayına girmiş resimli revizyonu yokken seçilir (en yeni taslak, 1990 a); taslak=true döner,
+// ekran işaretler. Taslakta revizyon karşılaştırması yapılmaz (null).
 export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari | null): KucukResimSecimi | null {
   const sirali = [...belgeler].sort((a, b) =>
     Number(b.kapak) - Number(a.kapak) || oncelik(a.tur) - oncelik(b.tur) || a.eklendi.localeCompare(b.eklendi) || a.belgeId - b.belgeId);
@@ -171,7 +174,11 @@ export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari
       secilen = uyan ?? yayinda;
       uyum = uyan !== undefined && !resimCeliskili;
     }
-    if (secilen !== undefined) return { belgeId: b.belgeId, revizyonId: secilen.id, sira: secilen.sira, kareSayisi: secilen.kareSayisi, revUyumu: uyum };
+    if (secilen !== undefined) return { belgeId: b.belgeId, revizyonId: secilen.id, sira: secilen.sira, kareSayisi: secilen.kareSayisi, revUyumu: uyum, taslak: false };
+    if (resimli.length === 0 && taslakResimli(b.tur)) {
+      const t = b.revizyonlar.filter((r) => r.durum === 'taslak' && r.kareSayisi > 0).sort((x, y) => y.sira - x.sira)[0];
+      if (t !== undefined) return { belgeId: b.belgeId, revizyonId: t.id, sira: t.sira, kareSayisi: t.kareSayisi, revUyumu: resimCeliskili ? false : null, taslak: true };
+    }
   }
   return null;
 }

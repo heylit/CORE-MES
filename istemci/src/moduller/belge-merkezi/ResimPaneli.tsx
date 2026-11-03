@@ -17,8 +17,8 @@ import { onizlemeGonder } from './onizleme-akisi.ts';
 import './belge-merkezi.css';
 
 // Malzeme kartının resimleri (kart #688): foto, teknik resim ve 3B model çizim merkezinde revizyonlu belge olarak durur; kart
-// kopya tutmaz. Malzeme yazan kişi yalnız bu kartın belgelerine yazar. Foto hemen yayına girer ve küçük resmi bu cihazda
-// üretilir; teknik resim ve 3B model taslak girer, çizim merkezinde yayınlanınca görünür.
+// kopya tutmaz. Malzeme yazan kişi yalnız bu kartın belgelerine yazar. Foto ve teknik resim hemen yayına girer (1991 b); 3B model
+// taslak girer, yayını çizim merkezi yapar. Küçük resim yüklemede bu cihazda üretilir; 3B modelde taslakken de (1990 a).
 
 const MALZEME_TURLERI: readonly MalzemeBelgeTuru[] = ['fotograf', 'teknik-resim', '3b-model'];
 
@@ -61,7 +61,7 @@ export interface MalzemeBelgesiGirdisi {
   not?: string | null;
 }
 
-// Kartın açılışında seçilen dosyalar kart ilk kaydedilince bununla gönderilir: yükler, belgeyi açar, fotoysa küçük resmini üretir.
+// Kartın açılışında seçilen dosyalar kart ilk kaydedilince bununla gönderilir: yükler, belgeyi açar, küçük resmini üretir.
 // Küçük resim üretilemezse belge yine açılmış olur; ileti `kareHatasi`nda döner.
 export async function malzemeBelgesiYukle(
   no: number, dosya: File, g: MalzemeBelgesiGirdisi, ilerleme: (oran: number) => void = () => {},
@@ -77,7 +77,7 @@ export async function malzemeBelgesiYukle(
   let kareHatasi: string | null = null;
   const yeni = cevap.belgeler.find((b) => b.revizyonlar.some((r) => r.ozet === ozet));
   const r = yeni?.revizyonlar.find((x) => x.ozet === ozet);
-  if (yeni && r && r.durum === 'yayinda') {
+  if (yeni && r && resimUretilir(yeni, r)) {
     try {
       await kareUret(no, yeni.id, r, veri);
       cevap = await api.get<MalzemeBelgeleriCevabi>(`${kok(no)}/belgeler`);
@@ -87,6 +87,16 @@ export async function malzemeBelgesiYukle(
   }
   return { cevap, kareHatasi };
 }
+
+// Yayındaki revizyonun ve taslak 3B modelin karesi yüklemede üretilir (1990 a); sunucu da aynı kuralla kabul eder.
+export const resimUretilir = (b: Pick<MalzemeBelgesi, 'tur'>, r: Pick<Revizyon, 'durum'>): boolean =>
+  r.durum === 'yayinda' || (r.durum === 'taslak' && b.tur === '3b-model');
+
+const YUKLEME_ILETISI: Readonly<Record<MalzemeBelgeTuru, string | null>> = {
+  fotograf: null,
+  'teknik-resim': 'Teknik resim yayına alındı; atölyede geçerli revizyon oldu.',
+  '3b-model': '3B model taslak olarak eklendi ve resmi malzemeye işlendi; çizim merkezinde yayınlanınca atölyeye gider.',
+};
 
 function Ilerleme({ oran }: { oran: number | null }) {
   if (oran === null) return null;
@@ -113,8 +123,8 @@ function BelgeEkle({ no, kapat }: { no: number; kapat: () => void }) {
     onMutate: () => { hataYaz(null); ilerlemeYaz(0); },
     onSuccess: async ({ kareHatasi }) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
-      if (kareHatasi !== null) bildir('bilgi', kareHatasi);
-      else if (tur !== 'fotograf') bildir('bilgi', `${TUR_ADI[tur]} taslak olarak eklendi; çizim merkezinde yayınlanınca resmi görünür.`);
+      const ileti = kareHatasi ?? YUKLEME_ILETISI[tur];
+      if (ileti !== null) bildir('bilgi', ileti);
       kapat();
     },
     onError: (e) => { ilerlemeYaz(null); hataYaz(e instanceof DosyaHatasi ? e.message : hataIletisi(e, 'Belge eklenemedi')); },
@@ -162,12 +172,13 @@ function RevizyonYukle({ no, belge, kapat }: { no: number; belge: MalzemeBelgesi
       const govde: MalzemeRevizyonEkleGovdesi = { ozet, dosyaAdi: d.name.slice(0, 120), antetRev, not, surum: belge.surum };
       const cevap = await tekrarKorumaliGonder((deneme) => api.post<MalzemeBelgeleriCevabi>(`${kok(no)}/belgeler/${belge.id}/revizyon-ekle`, govde, deneme), { istekKimligi: kimlik });
       const r = cevap.belgeler.find((b) => b.id === belge.id)?.revizyonlar.find((x) => x.ozet === ozet);
-      if (r?.durum === 'yayinda') await kareUret(no, belge.id, r, veri);
+      if (r && resimUretilir(belge, r)) await kareUret(no, belge.id, r, veri);
     },
     onMutate: () => { hataYaz(null); },
     onSuccess: async () => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
-      if (tur !== 'fotograf') bildir('bilgi', 'Yeni revizyon taslak; çizim merkezinde yayınlanınca geçerli olur.');
+      if (tur === 'teknik-resim') bildir('bilgi', 'Yeni revizyon yayına alındı; önceki revizyon eskidi.');
+      else if (tur === '3b-model') bildir('bilgi', 'Yeni revizyon taslak; çizim merkezinde yayınlanınca geçerli olur.');
       kapat();
     },
     onError: async (e) => {
@@ -235,7 +246,8 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
             <div className="tc-cz-rp-ust">
               <KucukResimKutusu resim={veri.kucukResim} ad="Malzeme resmi" boy="buyuk" />
               {veri.kucukResim?.revUyumu === false && <p className="tc-cz-uyari" role="status">Resmin revizyonu ({veri.kucukResim.harf}) kartın revizyonuna uymuyor.</p>}
-              {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Foto ekleyin ya da çizimin yayınlanmasını bekleyin.</p>}
+              {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model çizim merkezinde yayınlanınca atölyeye gider.</p>}
+              {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Foto, teknik resim ya da 3B model ekleyin.</p>}
             </div>
             {veri.belgeler.length === 0
               ? <DurumKutusu durum="bos" mesaj="Bağlı resim ya da çizim yok" />

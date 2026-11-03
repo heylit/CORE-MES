@@ -648,11 +648,15 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal((await oku(yonetici, `/cizimler/${baska.id}/revizyonlar/${id}/onizleme/0`)).statusCode, 404);
     });
 
-    test('taslak revizyona 409; yayındaki PDF, foto ve STL revizyonuna kare yazılır (kart #688)', async () => {
-      const taslak = await belgeAc(yonetici, '3b-model', step(), 'Taslak model');
-      let c = await onizlemeGonder(yonetici, taslak, [png()]);
+    test('3B dışı taslağa 409; taslak 3B model (1990 a) ile yayındaki PDF, foto ve STL revizyonuna kare yazılır (kart #688)', async () => {
+      const taslakResim = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Taslak resim');
+      let c = await onizlemeGonder(yonetici, taslakResim, [png()]);
       assert.equal(c.statusCode, 409, c.body);
-      assert.equal(c.json().mesaj, 'Önizleme yalnız yayındaki revizyon için üretilir.');
+      assert.equal(c.json().mesaj, 'Önizleme yalnız yayındaki revizyon ve taslak 3B model için üretilir.');
+      const taslak = await belgeAc(yonetici, '3b-model', step(), 'Taslak model');
+      c = await onizlemeGonder(yonetici, taslak, [png()]);
+      assert.equal(c.statusCode, 200, c.body);
+      assert.equal(await kareSayisi(taslak.revizyonlar[0]?.id ?? 0), 1);
 
       let resim = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Resim önizlemeli');
       resim = (await gonder(yonetici, `/cizimler/${resim.id}/revizyonlar/${resim.revizyonlar[0]?.id}/yayinla`, { surum: resim.surum })).json<BelgeAyrintisi>();
@@ -873,7 +877,7 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       return gonder(o, `/cizimler/malzemeler/${no}/belgeler/${belgeId}/revizyonlar/${revizyonId}/onizleme`, { kareler: govde });
     }
 
-    test('malzeme yazan foto açar (yayında) ve teknik resim açar (taslak); malzeme yazmayan 403 alır ve belge açılmaz', async () => {
+    test('malzeme yazan foto ve teknik resim açar (yayında, 1991 b) ve 3B model açar (taslak); malzeme yazmayan 403 alır ve belge açılmaz', async () => {
       const no = await kartAc();
       const once = await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM belge_merkezi_belge');
       const ret = await malzemeBelgesiEkle(operator, no, 'fotograf', png());
@@ -890,7 +894,11 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       c = await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf());
       assert.equal(c.statusCode, 200, c.body);
       cevap = c.json<MalzemeBelgeleriCevabi>();
-      assert.equal(cevap.belgeler.find((b) => b.tur === 'teknik-resim')?.revizyonlar[0]?.durum, 'taslak', 'çizim taslak girer; yayını merkez yapar');
+      assert.equal(cevap.belgeler.find((b) => b.tur === 'teknik-resim')?.revizyonlar[0]?.durum, 'yayinda', 'teknik resim karttan doğrudan yayına girer');
+      c = await malzemeBelgesiEkle(malzemeci, no, '3b-model', step());
+      assert.equal(c.statusCode, 200, c.body);
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.belgeler.find((b) => b.tur === '3b-model')?.revizyonlar[0]?.durum, 'taslak', '3B model taslak girer; yayını merkez yapar');
 
       assert.equal((await malzemeBelgesiEkle(malzemeci, 2_000_000_000, 'fotograf', png())).statusCode, 404, 'olmayan kart');
       assert.equal((await malzemeBelgesiEkle(malzemeci, no, 'sertifika', pdf())).statusCode, 400, 'karttan yalnız foto, teknik resim, 3B model');
@@ -915,7 +923,7 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal((await oku(operator, `/cizimler/malzemeler/${baskaNo}/belgeler`)).statusCode, 403, 'yalnız sayfa.malzemeler okuyamaz');
     });
 
-    test('foto belgesine yeni revizyon yayına girer; teknik resme yeni revizyon taslak kalır; sürüm denetlenir', async () => {
+    test('foto ve teknik resme yeni revizyon yayına girer, önceki eskir; 3B modele yeni revizyon taslak kalır; sürüm denetlenir', async () => {
       const no = await kartAc();
       let foto = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
       assert.ok(foto);
@@ -931,14 +939,20 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${resim?.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, pdf()), dosyaAdi: 'b.pdf', surum: resim?.surum });
       assert.equal(c.statusCode, 200, c.body);
       resim = c.json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id === resim?.id);
-      assert.deepEqual(resim?.revizyonlar.map((r) => r.durum), ['taslak', 'taslak']);
+      assert.deepEqual(resim?.revizyonlar.map((r) => r.durum), ['yayinda', 'eski']);
+
+      let model = (await malzemeBelgesiEkle(malzemeci, no, '3b-model', step())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === '3b-model');
+      c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${model?.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, step()), dosyaAdi: 'b.step', surum: model?.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      model = c.json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id === model?.id);
+      assert.deepEqual(model?.revizyonlar.map((r) => r.durum), ['taslak', 'taslak']);
     });
 
     test('kapak: taslak belge kapak olamaz; kayıt başına tek kapak; kapak küçük resmi belirler', async () => {
       const no = await kartAc();
       const foto = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
       const ikinci = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.id !== foto?.id);
-      const resim = (await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === 'teknik-resim');
+      const resim = (await malzemeBelgesiEkle(malzemeci, no, '3b-model', step())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === '3b-model');
       assert.ok(foto && ikinci && resim);
       for (const b of [foto, ikinci]) assert.equal((await kareYaz(malzemeci, no, b.id, b.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
 
@@ -1008,10 +1022,24 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual(kare.rawPayload, kareler[1]);
       assert.equal((await app.inject({ method: 'GET', url: `/api/cizimler/kucuk-resim/${revB.id}/1` })).statusCode, 401, 'oturumsuz okunmaz');
 
-      const taslak = (await malzemeBelgesiEkle(malzemeci, resimsiz, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      const taslakli = await kartAc();
+      let taslak = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Taslak resim');
+      const bag = await gonder(yonetici, `/cizimler/${taslak.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: taslakli, surum: taslak.surum });
+      assert.equal(bag.statusCode, 200, bag.body);
+      taslak = bag.json<BelgeAyrintisi>();
       await vt().tx((db) => db.sorgu('INSERT INTO belge_merkezi_onizleme (revizyon_id, kare, ozet, kisi_id) VALUES ($1, 0, $2, $3)',
-        [taslak?.revizyonlar[0]?.id, ozetOf(kareler[0] as Buffer), yonetici.id]));
-      assert.equal((await oku(operator, `/cizimler/kucuk-resim/${taslak?.revizyonlar[0]?.id}/0`)).statusCode, 404, 'taslağın karesi verilmez');
+        [taslak.revizyonlar[0]?.id, ozetOf(kareler[0] as Buffer), yonetici.id]));
+      assert.equal((await oku(operator, `/cizimler/kucuk-resim/${taslak.revizyonlar[0]?.id}/0`)).statusCode, 404, '3B dışı taslağın karesi verilmez');
+      assert.equal(resimler.has(taslakli), false);
+
+      // 1990 a: taslak 3B modelin karesi malzemenin resmi olur, taslak işaretiyle.
+      const modelli = await kartAc();
+      const model = (await malzemeBelgesiEkle(malzemeci, modelli, '3b-model', step())).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.equal(model?.revizyonlar[0]?.durum, 'taslak');
+      assert.equal((await kareYaz(malzemeci, modelli, model?.id ?? 0, model?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
+      const modelResmi = (await oku(operator, `/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=${modelli},${taslakli}`)).json<KucukResimlerCevabi>().resimler;
+      assert.deepEqual(modelResmi.map((r) => [r.hedefId, r.revizyonId, r.taslak]), [[modelli, model?.revizyonlar[0]?.id, true]]);
+      assert.equal((await oku(operator, `/cizimler/kucuk-resim/${model?.revizyonlar[0]?.id}/0`)).statusCode, 200, 'taslak 3B karesi okunur');
 
       const bagsiz = await belgeAc(yonetici, '3b-model', step(), 'Bağsız model');
       const yayin = (await gonder(yonetici, `/cizimler/${bagsiz.id}/revizyonlar/${bagsiz.revizyonlar[0]?.id}/yayinla`, { surum: bagsiz.surum })).json<BelgeAyrintisi>();
@@ -1027,14 +1055,17 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual([...disari.keys()], [uyumlu]);
     });
 
-    test('malzeme yazan yalnız kartına bağlı belgenin yayındaki revizyonuna kare yazar', async () => {
+    test('malzeme yazan yalnız kartına bağlı belgenin yayındaki revizyonuna ve taslak 3B modeline kare yazar', async () => {
       const no = await kartAc();
       const baskaNo = await kartAc();
       const foto = (await malzemeBelgesiEkle(malzemeci, baskaNo, 'fotograf', png())).json<MalzemeBelgeleriCevabi>().belgeler[0];
       assert.equal((await kareYaz(malzemeci, no, foto?.id ?? 0, foto?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 404);
       assert.equal((await kareYaz(operator, baskaNo, foto?.id ?? 0, foto?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 403);
       const resim = (await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf())).json<MalzemeBelgeleriCevabi>().belgeler[0];
-      assert.equal((await kareYaz(malzemeci, no, resim?.id ?? 0, resim?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 409, 'taslağa kare yazılmaz');
+      assert.equal((await kareYaz(malzemeci, no, resim?.id ?? 0, resim?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200, 'yayındaki teknik resme kare yazılır');
+      const model = (await malzemeBelgesiEkle(malzemeci, no, '3b-model', step())).json<MalzemeBelgeleriCevabi>().belgeler.find((b) => b.tur === '3b-model');
+      assert.equal((await kareYaz(malzemeci, no, model?.id ?? 0, model?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200, 'taslak 3B modele kare yazılır (1990 a)');
+      assert.equal((await kareYaz(operator, no, model?.id ?? 0, model?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 403, 'malzeme yazmayan taslağa da yazamaz');
     });
   });
 });

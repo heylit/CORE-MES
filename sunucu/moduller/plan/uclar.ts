@@ -12,7 +12,9 @@ import {
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
+import { atolyeKomutuCevabi, isTasiGovdesi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { isiTasi, olayiEkle } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
@@ -208,6 +210,12 @@ export const uclar = [
       denetimEki([{ calismaSurumu: r.calismaSurumu, donulenSurum: r.donulenSurum }]);
       return r;
     } }),
+  // 1982 a: atölyenin elle düzenlemesi her eylemde ayrı uçtur; çalışma kaydı plan.yaz ister (925 a). Taşı, başka tezgâha, saat kaydır ve
+  // sürükle-bırak (1981 b) işi kilitler; olay motorun olay listesine girer. Plan bir sonraki uygulamada değişir.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/is-tasi', yetki: 'plan.yaz', tekrarKorumali: true, govde: isTasiGovdesi, cevap: atolyeKomutuCevabi,
+    isle: ({ db, kullanici, govde }) => isiTasi(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,
+    isle: ({ db, kullanici, govde }) => olayiEkle(db, kullanici, govde) }),
   // Planlama kartlarının sunucuda hesabı (Soru 357 a, 463 a): başlatma girdiyi okur, kayıt yazmaz; hesap uç transaction'ının dışında koşar,
   // sonuç kimlikle transaction açmadan okunur.
   uc({ yontem: 'POST', yol: '/plan/planlama-degerlendirmesi', yetki: PLANLAMA_OKUR, govde: degerlendirmeGovdesi, cevap: degerlendirmeBaslatCevabi,
