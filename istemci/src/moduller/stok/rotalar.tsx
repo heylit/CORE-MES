@@ -22,6 +22,7 @@ import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { SayimOnaylari } from './SayimOnaylari.tsx';
 import { DefterFarklari } from './DefterFarklari.tsx';
 import { Sepet } from './Sepet.tsx';
+import { SeriListeler } from './SeriListeler.tsx';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
 
 // Alt yollar `/stok` sayfasına aittir; ikinci menüyü kabuk `STOK_IKINCI_MENU` verisinden çizer.
@@ -47,6 +48,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },
   { yol: '/stok/malzeme-fisleri/:id', ekran: MalzemeFisi },
   { yol: '/stok/okutarak-sayim', ekran: OkutarakSayim },
+  { yol: '/stok/seri-listeler', ekran: SeriListeler },
   { yol: '/stok/komut-karti', ekran: KomutKarti },
   { yol: '/stok/sayim-onaylari', ekran: SayimOnaylari },
   { yol: '/stok/defter-farklari', ekran: DefterFarklari },

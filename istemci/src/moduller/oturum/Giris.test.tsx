@@ -193,4 +193,68 @@ describe('Giris', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
     expect(screen.getByLabelText(/Kullanıcı adı/)).toBeTruthy();
   });
+  // 1917: istasyonda kart yöntem ya da alan seçmeden okutulur; okuyucu klavye gibi hızlı yazar ve Enter'a basar.
+  const okut = (hedef: Element, metin: string) => { for (const c of [...metin, 'Enter']) fireEvent.keyDown(hedef, { key: c }); };
+
+  it('1917: PIN ekranindayken okutulan kart arka planda yakalanir; PIN formu gonderilmez, alana dusen kart silinir, secim karta doner', async () => {
+    const cagrilar = sunucuKur();
+    const istemci = kur();
+    const ad = screen.getByLabelText(/Kullanıcı adı/) as HTMLInputElement;
+    fireEvent.change(ad, { target: { value: 'operator1' } });
+    fireEvent.change(ad, { target: { value: 'operator10004123456' } });
+    okut(ad, '0004123456');
+    await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
+    expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '0004123456' } }]);
+    expect(ad.value).toBe('operator1');
+    expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
+  });
+
+  it('1917: odak hicbir alanda degilken de kart girer; kucuk harfli onaltilik kart buyuk harfle gider', async () => {
+    const cagrilar = sunucuKur();
+    kur();
+    okut(document.body, '00041234ab');
+    await waitFor(() => expect(cagrilar).toEqual([{ yol: '/oturum/kart-giris', govde: { kart: '00041234AB' } }]));
+  });
+
+  it('1917 reddedilen: kayitsiz cihazda sunucu reddeder, ileti PIN ekraninda gorunur, PIN girisi gonderilmez', async () => {
+    const cagrilar = sunucuKur();
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: RequestInit = {}) => {
+      cagrilar.push({ yol: adres.replace('/api', ''), govde: JSON.parse(String(secenek.body)) as Record<string, unknown> });
+      return new Response(JSON.stringify({ kod: 'YETKI_YOK', mesaj: 'Kartla giriş yalnız istasyon olarak kayıtlı cihazda açıktır.' }), { status: 403 });
+    }));
+    kur();
+    kullaniciAdiYaz();
+    okut(screen.getByLabelText(/^PIN/), '0004123456');
+    expect(await screen.findByText(/yalnız istasyon olarak kayıtlı cihazda/)).toBeTruthy();
+    expect(cagrilar.map((c) => c.yol)).toEqual(['/oturum/kart-giris']);
+  });
+
+  it('1917 reddedilen: elle yavas yazilan kullanici adi ve PIN kart sanilmaz; kart deseni olmayan hizli girdi de gonderilmez', async () => {
+    const cagrilar = sunucuKur();
+    kur();
+    const ad = screen.getByLabelText(/Kullanıcı adı/);
+    let zaman = 1000;
+    for (const c of ['1', '2', '3', '4', '5', '6', 'Enter']) {
+      zaman += 300;
+      const olay = new KeyboardEvent('keydown', { key: c, bubbles: true, cancelable: true });
+      Object.defineProperty(olay, 'timeStamp', { value: zaman });
+      fireEvent(ad, olay);
+    }
+    okut(ad, 'RP:12');
+    okut(ad, '4006381333931');
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(cagrilar).toEqual([]);
+  });
+
+  it('1917: PIN belirleme adiminda arka plan dinleyicisi kapalidir', async () => {
+    const cagrilar = sunucuKur();
+    kur();
+    kullaniciAdiYaz();
+    tuslaraBas('482913');
+    fireEvent.click(girisDugmesi());
+    await screen.findByLabelText(/^Yeni PIN \(tekrar\)/);
+    okut(document.body, '0004123456');
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(cagrilar.map((c) => c.yol)).toEqual(['/oturum/giris']);
+  });
 });
