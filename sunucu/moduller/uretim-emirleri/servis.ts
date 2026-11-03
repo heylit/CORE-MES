@@ -10,12 +10,12 @@ import type {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
-  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, yetkinMi,
+  aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, yetkinMi,
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
   ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, TERMINAL_FASON, acmaIstasyonIhlali,
-  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
+  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
@@ -588,7 +588,8 @@ export async function emirBaslat(
   const { emir, isEmri } = await baslatanIstasyonunuVer(db, kisiId, kilitli, secilen, isEmriId);
   const istasyonId = komutIstasyonu(emir, isEmri, isEmriId);
   await kapsaminda(db, kisiId, istasyonId);
-  const yetkinlikIhlali = baslatmaYetkinlikIhlali(await yetkinMi(db, kisiId, istasyonId), await kisiBayrakliMi(db, kisiId));
+  const muaf = await kisiBayrakliMi(db, kisiId);
+  const yetkinlikIhlali = baslatmaYetkinlikIhlali(await yetkinMi(db, kisiId, istasyonId), muaf);
   if (yetkinlikIhlali !== null) throw yetkiYok(yetkinlikIhlali);
   const paralel = isEmriId !== undefined && emir.durum === 'basladi';
   const durumIhlali = paralel ? null : baslatmaIhlali(emir.durum);
@@ -607,6 +608,8 @@ export async function emirBaslat(
   await secimiDenetle(db, istasyonId, makineIdleri);
   await ayrimiDenetle(db, id, makineIdleri, isEmri?.makineId ?? null);
   const yer: Yer = { istasyonId, makineler: calisilacakMakineler(makineIdleri, isEmri?.makineId ?? null) };
+  const makineIhlali = yer.makineler.length === 0 ? null : makineYetkinlikIhlali(kisiId, yer.makineler, await makineYetkinlikleri(db), muaf);
+  if (makineIhlali !== null) throw yetkiYok(makineIhlali);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
   const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, isEmri.onculler === null
     ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri));

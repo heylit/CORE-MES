@@ -24,7 +24,7 @@ import {
 import { emirAc as emirYaz } from './servis.ts';
 import { iptaliYaz } from './sorgular.ts';
 import type { HurdaSayimOlayi, SaglamSayimOlayi } from './disari.ts';
-import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, SAYIM_KATILIMSIZ, YETKINLIK_YOK } from './kurallar.ts';
+import { BASLATMA_DURUMU, BITIRME_DURUMU, DEVRAL_DEGISTI, DEVRAL_DURUMU, DURAKLI_DURDUR, EKIP_DISI, ISTASYON_DOLU, KATILIM_ACIK, KATILIM_CALISMIYOR, KATILIM_YOK, MAKINE_DOLU, SAYIM_KATILIMSIZ, MAKINE_YETKINLIGI_YOK, YETKINLIK_YOK } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 const BASLATANLAR = ['mudur', 'operator'];
@@ -431,6 +431,31 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     (await vt().tek<{ calisma: string }>('SELECT calisma FROM uretim_emri WHERE id = $1', [id]))?.calisma;
   const olaySayisi = async (id: number) =>
     (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_olayi WHERE emir_id = $1', [id]))?.n;
+
+  test('2046 a: kayıtlı makinede geçerli makine yetkinliği olmayan kişi başlatamaz; kayıtsız makine istasyon yetkinliğiyle açık; yönetici muaf', async () => {
+    const istasyonId = await istasyonKur();
+    const kayitli = await makineKur(istasyonId, 'Kayıtlı tezgah');
+    const kayitsiz = await makineKur(istasyonId, 'Kayıtsız tezgah');
+    await sahip().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [await kisiId('operator2'), kayitli, yoneticiId]);
+
+    const emir = await emirAc(istasyonId);
+    const red = await baslat(emir.id, 'operator', makinede(kayitli));
+    assert.deepEqual([red.durum, red.govde.kod, red.govde.mesaj], [403, 'YETKI_YOK', MAKINE_YETKINLIGI_YOK]);
+    assert.equal(await durumOku(emir.id), 'planli');
+    assert.equal(await kayitSayisi(emir.id), 0);
+    assert.deepEqual(await acikKullanim(kayitli), []);
+    assert.equal((await baslat(emir.id, 'operator', { makineIdleri: [kayitsiz, kayitli] })).durum, 403, 'seçimdeki her makine aranır');
+    assert.equal((await baslat(emir.id, 'operator', makinede(kayitsiz))).durum, 200, 'kayıtsız makine');
+
+    const emir2 = await emirAc(istasyonId);
+    assert.equal((await baslat(emir2.id, 'operator2', makinede(kayitli))).durum, 200, 'yetkin kişi');
+
+    const ikinci = await istasyonKur();
+    const m2 = await makineKur(ikinci);
+    await sahip().sorgu('INSERT INTO istasyonlar_makine_yetkinlik (kisi_id, makine_id, veren_kisi_id) VALUES ($1, $2, $3)', [await kisiId('operator2'), m2, yoneticiId]);
+    const emir3 = await emirAc(ikinci);
+    assert.equal((await baslat(emir3.id, 'yonetici', makinede(m2))).durum, 200, 'yönetici muaf');
+  });
 
   // Aynı makinede iki başlamış emir: ilki duraklatılmış (makineyi bırakır), ikincisi çalışıyor.
   async function ikiliKur(): Promise<{ istasyonId: number; makineId: number; duraklamis: Emir; calisan: Emir }> {
