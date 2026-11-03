@@ -15,7 +15,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstub
 const postlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
 const anaSayfa = async (istekler: readonly Istek[]) => {
-  await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-ayarlari/sirket-adi')).toBe(true));
+  await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
   await screen.findByText('Yapılacaklar');
 };
 

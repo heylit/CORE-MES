@@ -1136,7 +1136,6 @@ function readSettingsForm(): Settings {
     const k = i.dataset.set!;
     if (k === "monthly") { const v = parseNum(i.value); const c = s.currencies[i.dataset.cur as Currency]; if (v !== null && c) c.monthly = v; }
     else if (k === "w") s.weights[i.dataset.k as keyof Weights] = clamp(parseNum(i.value) || 0, 0, 100);
-    else if (k === "company") s.company = i.value.trim();
     else if (k === "validityDays" || k === "minQuotes" || k === "priceAlertPct") { const v = parseNum(i.value); if (v !== null && v > 0) s[k] = v; }
   });
   s.approvalLimits = $$("#ap-rows tr").map(tr => ({ max: parseNum($("[data-apk=max]", tr).value), role: $("[data-apk=role]", tr).value.trim() }));

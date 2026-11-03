@@ -282,7 +282,7 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
   if (coll === 'settings') {
     const s = d as Settings;
     const a = await uc.post('/satin-alma-ayarlari/kaydet', { govde: {
-      sirket: s.company ?? '', agirliklar: { maliyet: s.weights.cost, termin: s.weights.lead, tedarikci: s.weights.supplier, garanti: s.weights.warranty },
+      agirliklar: { maliyet: s.weights.cost, termin: s.weights.lead, tedarikci: s.weights.supplier, garanti: s.weights.warranty },
       gecerlilikGun: s.validityDays, enAzTeklif: s.minQuotes, fiyatUyariYuzdesi: ond(s.priceAlertPct),
       // Kur ve faiz finansındır (SA3 a, 937 b): yalnız para birimi listesi gider.
       kurlar: (Object.keys(s.currencies) as Currency[]).map((c) => ({ paraBirimi: c })),
