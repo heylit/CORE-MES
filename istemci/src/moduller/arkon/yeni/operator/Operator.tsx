@@ -32,7 +32,7 @@ import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../.
 import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
 import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
-import type { HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimPaylariCevabi, HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { hataliAdet } from '../../../../../../arkon/web/src/data/hatali-adet.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
@@ -1379,6 +1379,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               {kaliteGorunumu ?? sayac}
               <IsEtiketleri is={o} />
               {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
+              {pv ? null : <PayCipi emirId={tmiEmirId(o.pkg)} isEmriId={tmiIsEmriId(o.pkg)} />}
               {pv ? null : <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
               <EtkinKart is={o} kartlar={kartlar} />
               {notlar}
@@ -1514,3 +1515,34 @@ function MenuSatiri({ simge, baslik, alt, tikla }: { simge: SimgeAdi; baslik: st
   return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;
 }
 
+
+// 1979 (2003 c): planda bölünmüş adımın payları terminalde. Kişinin kendi payı önde, "Payın N, saydığın M" (aşan "+K fazla"); öteki
+// paylar adlarıyla. Makine payında sayılan bilinmiyorsa (sayım makine tutana dek) yalnız adet. Bölünmemiş adımda çip çıkmaz.
+const tmiIsEmriId = (p: unknown): number | null => {
+  const t = p && typeof p === 'object' ? (p as { tmi?: { isEmriId?: unknown } | null }).tmi : null;
+  const id = t && typeof t === 'object' ? t.isEmriId : undefined;
+  return typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null;
+};
+export function PayCipi({ emirId, isEmriId }: { emirId: number | null; isEmriId: number | null }) {
+  const benim = useOturum().data?.id ?? null;
+  const [paylar, paylarYaz] = useState<AdimPaylariCevabi['paylar']>([]);
+  useEffect(() => {
+    paylarYaz([]);
+    if (emirId === null || isEmriId === null) return;
+    let canli = true;
+    api.get<AdimPaylariCevabi>(`/adimli-emirler/${String(emirId)}/is-emirleri/${String(isEmriId)}/paylar`)
+      .then((c) => { if (canli) paylarYaz(c.paylar); })
+      .catch(() => undefined);
+    return () => { canli = false; };
+  }, [emirId, isEmriId]);
+  if (paylar.length === 0) return null;
+  const kendi = paylar.find((p) => p.kisi !== null && p.kisi.id === benim) ?? null;
+  const oteki = paylar.filter((p) => p !== kendi).map((p) => `${(p.kisi ?? p.makine)?.ad ?? ''} ${p.sayilan === null ? String(p.adet) : `${String(p.sayilan)}/${String(p.adet)}`}`);
+  return (
+    <div className="tc-ay1-malzeme-cip" role="status" aria-label="Plandaki paylar">
+      <Simge ad="users" boyut="k" />
+      {kendi ? <b>{`Payın ${String(kendi.adet)}, saydığın ${String(kendi.sayilan ?? 0)}${(kendi.fazla ?? 0) > 0 ? ` (+${String(kendi.fazla)} fazla)` : ''}`}</b> : <span>Paylar</span>}
+      {oteki.length > 0 ? <span>{oteki.join(' · ')}</span> : null}
+    </div>
+  );
+}
