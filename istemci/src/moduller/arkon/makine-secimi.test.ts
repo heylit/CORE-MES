@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AZAMI_MAKINE_SECIMI, ayrimAciklamasi, ayrimEtiketi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, seciliMakineler,
+  AZAMI_MAKINE_SECIMI, ayrimAciklamasi, calisabildigiMakineler, ayrimEtiketi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, seciliMakineler,
 } from '../../../../arkon/web/src/data/makine-secimi.ts';
 
 const M = [{ id: 'M1', name: 'Torna 1' }, { id: 'M2', name: 'Torna 2' }, { id: 'M3' }];
@@ -13,6 +13,14 @@ describe('terminal makine seçimi', () => {
     expect(makineSecimiGorunur(M, 'running')).toBe(false);
     expect(makineSecimiGorunur([M[0]!], 'queued')).toBe(false);
     expect(makineSecimiGorunur([], 'queued')).toBe(false);
+  });
+
+  it('2046 a: seçici yalnız kişinin çalışabildiği makineleri gösterir; liste yoksa süzmez', () => {
+    expect(calisabildigiMakineler(M, ['M2', 'X9']).map((m) => m.id)).toEqual(['M2']);
+    expect(calisabildigiMakineler(M, [])).toEqual([]);
+    expect(calisabildigiMakineler(M, null)).toEqual(M);
+    expect(calisabildigiMakineler(M, undefined)).toEqual(M);
+    expect(makineSecimiGorunur(calisabildigiMakineler(M, ['M1']), 'queued')).toBe(false);
   });
 
   it('dokunuş seçer ve bırakır; en çok 20 makine', () => {

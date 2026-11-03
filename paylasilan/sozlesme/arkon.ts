@@ -35,6 +35,9 @@ export const arkonKisiSemasi = z.object({
   istasyon: z.string().nullable(),
   // Kişinin çalışabildiği aktif istasyonların kodları: Vardiya ataması ve Reçete ve Rota yetkinliği (istasyonlar modülü) birlikte.
   istasyonlar: z.array(z.string()).optional(),
+  // 2046 a: kişinin bugün çalışabildiği aktif makinelerin kodları (makine yetkinliği; kaydı olmayan makine açıktır). Alan yoksa
+  // (yönetici ya da eski sunucu) terminal makine listesini süzmez; son söz başlatma komutundadır.
+  makineler: z.array(z.string()).optional(),
   aktif: z.boolean(),
 });
 export const arkonBenCevabi = z.object({ kisi: arkonKisiSemasi });

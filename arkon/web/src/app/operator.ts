@@ -18,7 +18,7 @@ import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/nu
 import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, kaliteMerkeziNumuneYamasi, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
-import { AYRIM_YENILEME_MS, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
+import { AYRIM_YENILEME_MS, calisabildigiMakineler, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
 import { CALLS, Fragment, I, ORDERS, REASONS, ST, dur, fmt, html, isPlannedReason, pl, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
 import { Dial, EtkinKart, Orbs, Queue, Top } from './bilesenler';
 import { FEAT, LS } from './yukleyici';
@@ -48,6 +48,7 @@ export function App({ preview }) {
   const [mv, setMv] = useState(() => (!preview && ozetimGorunur() ? 'ozet' : 'prod'));
   const [theme, setTheme] = useTheme();
   const MACHINE = preview ? (LS.get('pvStation') || myStation()) : myStation();
+  const secilebilir = () => calisabildigiMakineler(machineOf(MACHINE).mcs, (MEU() || {}).mks);
   const curMc = () => (o && o.pkg && o.pkg.mc) || (machineOf(MACHINE).mcs.length === 1 ? machineOf(MACHINE).mcs[0].id : null);
   const [orders, setOrders] = useState<Order[]>(() => (ornekIslerAcik(APPMODE.demo, MACHINE, !!preview) ? ORDERS : []).map(o => ({ ...o, baseGood: o.good })));
   const [ai, setAi] = useState(0);
@@ -57,7 +58,7 @@ export function App({ preview }) {
   // 393 d: seçici açıkken emrin makine ayrımları sunucudan okunur; okunamazsa null ve seçici bugünkü gibidir (son söz başlatmada).
   const [ayrim, setAyrim] = useState<MakineAyrimlari | null>(null);
   const ayrimEmri = tmiEmirId(o.pkg);
-  const seciciAcik = !preview && !o.empty && can('prod.run') && makineSecimiGorunur(machineOf(MACHINE).mcs, o.state);
+  const seciciAcik = !preview && !o.empty && can('prod.run') && makineSecimiGorunur(secilebilir(), o.state);
   useEffect(() => {
     setAyrim(null);
     if (!seciciAcik || ayrimEmri === null) return;
@@ -326,7 +327,7 @@ export function App({ preview }) {
     if (l && l.no === o.no && l.state === o.state) return;
     LS.set(k, { no: o.no, state: o.state, at: Date.now() });
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
-    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), machineOf(MACHINE).mcs, o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
+    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), secilebilir(), o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
     autoRef.current.state = false; lastNoteRef.current = null;
     schedAutoCall(why);
   }, [o.state, o.no]);
@@ -602,7 +603,7 @@ export function App({ preview }) {
           <${EtkinKart} o=${o} kartlar=${kartlar} />
           ${hazirlikUyarisi(o.pkg) ? html`<div className="pnote" role="status"><${I} n="alert" s=${16} /><span>${hazirlikUyarisi(o.pkg)}</span></div>` : null}
           ${o.pkg && o.pkg.note ? html`<div className="pnote"><${I} n="alert" s=${16} /><span>${o.pkg.note}</span></div>` : null}
-          <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+          <${MakineSecici} makineler=${secilebilir()} secili=${kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${(a, t) => { if (a === 'measure' || a === 'drawing') setMv('draw'); act(a, t); }} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
           <div className="sayac">
             <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />
@@ -650,7 +651,7 @@ export function App({ preview }) {
             <div className="facts">${RL.warns.some(w => w.t) ? html`<button className="wchip" onClick=${() => act('warns')} title="Bu işin uyarıları"><${I} n="bell" s=${18} />${RL.warns.filter(w => w.t).length}</button>` : null}<div><span className="over">Çevrim</span><b>${o.cycle} sn</b></div><div><span className="over">Termin</span><b>${o.due}</b></div></div></div>
           <${EtkinKart} o=${o} kartlar=${kartlar} />
           <div className=${'glass stage' + (preview || can('prod.run') ? '' : ' noperm')} title=${preview || can('prod.run') ? null : 'Bu rol üretim kaydı yapamaz'}>
-            <${MakineSecici} makineler=${machineOf(MACHINE).mcs} secili=${kilitsizSecim(seciliMakineler(mcSel, machineOf(MACHINE).mcs), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
+            <${MakineSecici} makineler=${secilebilir()} secili=${kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim)} atanan=${(ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)} ayrim=${ayrim} durum=${preview || o.empty || !can('prod.run') ? 'running' : o.state} onChange=${setMcSel} />
           <${TaskCard} task=${task} onAct=${act} onDismiss=${t => { setSnooze(s => Object.assign({}, s, { [t.key]: Date.now() + 600000 })); say('10 dakika sonra tekrar hatırlatılacak', 'clock', 'var(--idle)'); }} />
             <div className="sayac">
               <${Dial} o=${o} onEdit=${() => iyiSayimOk('prod.fix') && setOv('num')} label=${OT.cnt} unit=${OT.unit} cyc=${cycApi} />

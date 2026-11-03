@@ -26,10 +26,10 @@ import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOne
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
-  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
+  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
-import { kisiAdlari, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
@@ -164,12 +164,29 @@ async function yetkiliIstasyonKodlari(db: Db, kisiId: number | null): Promise<Ma
   return sonuc;
 }
 
+// 2046 a: terminalin makine seçicisi kişinin çalışabildiği makineleri gösterir. Bugün geçerli makine yetkinliği kaydı olan makine
+// yalnız kaydı olan kişiye açıktır; kaydı olmayan makine herkese açıktır (563 c). Kural uretim-emirleri başlatmasıyla aynıdır.
+async function calisabildigiMakineler(db: Db): Promise<(kisiId: number) => string[]> {
+  const aktif = await aktifMakineler(db);
+  const kayitlar = await makineYetkinlikleri(db);
+  const kayitli = new Set(kayitlar.map((k) => k.makineId));
+  const acik = aktif.filter((m) => !kayitli.has(m.id)).map((m) => m.kod);
+  const kod = new Map(aktif.map((m) => [m.id, m.kod]));
+  const kisinin = new Map<number, string[]>();
+  for (const k of kayitlar) {
+    const c = kod.get(k.makineId);
+    if (c !== undefined) kisinin.set(k.kisiId, [...(kisinin.get(k.kisiId) ?? []), c]);
+  }
+  return (kisiId) => [...acik, ...(kisinin.get(kisiId) ?? [])].sort((a, b) => a.localeCompare(b));
+}
+
 export async function ben(db: Db, kullanici: Kullanici): Promise<ArkonKisi> {
   const rol = await rolGerekli(db, kullanici);
   return {
     kimlik: String(kullanici.id), ad: kullanici.ad, rol, isMerkezleri: await isMerkeziKodlari(db, kullanici.id),
     istasyon: (await kisiIstasyonlari(db)).get(kullanici.id) ?? null,
-    istasyonlar: (await yetkiliIstasyonKodlari(db, kullanici.id)).get(kullanici.id) ?? [], aktif: true,
+    istasyonlar: (await yetkiliIstasyonKodlari(db, kullanici.id)).get(kullanici.id) ?? [],
+    ...(await kisiBayrakliMi(db, kullanici.id) ? {} : { makineler: (await calisabildigiMakineler(db))(kullanici.id) }), aktif: true,
   };
 }
 

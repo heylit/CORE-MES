@@ -17,7 +17,7 @@ export type Perm =
 /** rol → izin verilen işlemler · `_known`: matris kaydedildiğinde var olan işlemler (sonradan eklenenler varsayılandan gelir) */
 export type PermMatrix = Partial<Record<Exclude<Role, 'admin'>, Perm[]>> & { _known?: Perm[] };
 
-export interface User { id: Id; name: string; role: Role; wcs?: Id[]; st?: Id | null; sts?: Id[]; active?: boolean; created_at?: string }
+export interface User { id: Id; name: string; role: Role; wcs?: Id[]; st?: Id | null; sts?: Id[]; mks?: Id[] | null; active?: boolean; created_at?: string }
 export interface Session { token?: string; user: User; srv?: string }
 
 /* ── tesis yapısı: İş merkezi › İstasyon › Makine ── */

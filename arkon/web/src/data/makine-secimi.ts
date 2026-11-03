@@ -13,6 +13,11 @@ export function secimiDegistir(secili: readonly string[], id: string): string[] 
   return secili.length >= AZAMI_MAKINE_SECIMI ? [...secili] : [...secili, id];
 }
 
+// 2046 a: seçici kişinin çalışabildiği makineleri gösterir (sunucunun `makineler` listesi). Liste yoksa (yönetici, eski sunucu) süzülmez;
+// son söz başlatma komutundadır.
+export const calisabildigiMakineler = <T extends SecilebilirMakine>(makineler: readonly T[], yetkin: readonly string[] | null | undefined): T[] =>
+  yetkin == null ? [...makineler] : makineler.filter((m) => yetkin.includes(m.id));
+
 // İstasyon ya da iş değişince istasyonda olmayan makine seçimde kalmaz.
 export const seciliMakineler = (secili: readonly string[], makineler: readonly SecilebilirMakine[]): string[] =>
   secili.filter((id) => makineler.some((m) => m.id === id));
