@@ -9,7 +9,7 @@ export type IkKoku = '/ik' | '/ik-islemlerim';
 
 // Görünüm anahtarları çerçevedekilerle aynıdır; adres parçası ikinci menüdeki yoldur (paylasilan/sayfalar/ik.ts).
 export const IK_GORUNUMLERI = [
-  'pano', 'gorev', 'personel', 'calisan', 'org', 'izin', 'devam', 'bordro', 'performans', 'egitim', 'isealim', 'aday', 'pozisyon',
+  'pano', 'gorev', 'personel', 'calisan', 'org', 'bes', 'izin', 'devam', 'bordro', 'performans', 'egitim', 'isealim', 'aday', 'pozisyon',
   'rapor', 'plan', 'hesap', 'log', 'ayarlar',
 ] as const;
 export const ISLEMLERIM_GORUNUMLERI = ['benim', 'izinlerim', 'bordrolarim', 'mesailerim', 'onay', 'ekip', 'uye', 'ekiptakvim'] as const;
@@ -38,6 +38,7 @@ const bordro = () => import('./bordro/index.tsx');
 const isealim = () => import('./isealim/index.tsx');
 const analiz = () => import('./analiz/index.tsx');
 const islemlerim = () => import('./islemlerim/index.tsx');
+const bes = () => import('./bes/index.tsx');
 
 // adres: kökten sonraki parça ('' kök görünümdür). Ayrıntı görünümleri menüde yoktur; üst maddesi `ust`tür.
 export interface GorunumTanimi { kok: IkKoku; adres: string; ekran: LazyExoticComponent<IkEkrani>; ust?: IkGorunum }
@@ -48,6 +49,7 @@ export const GORUNUMLER: Readonly<Record<IkGorunum, GorunumTanimi>> = {
   personel: { kok: '/ik', adres: 'personel', ekran: parca(personel, 'Personel') },
   calisan: { kok: '/ik', adres: 'calisan', ekran: parca(personel, 'Calisan'), ust: 'personel' },
   org: { kok: '/ik', adres: 'organizasyon', ekran: parca(personel, 'Organizasyon') },
+  bes: { kok: '/ik', adres: 'bes', ekran: parca(bes, 'Bes') },
   izin: { kok: '/ik', adres: 'izinler', ekran: parca(izinDevam, 'Izinler') },
   devam: { kok: '/ik', adres: 'devam', ekran: parca(izinDevam, 'DevamVeMesai') },
   bordro: { kok: '/ik', adres: 'bordro', ekran: parca(bordro, 'Bordro') },
