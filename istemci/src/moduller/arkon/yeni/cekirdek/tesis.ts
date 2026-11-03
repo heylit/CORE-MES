@@ -29,7 +29,11 @@ export function istasyonBul(tesis: Plant, id: string): IstasyonSatiri {
   return istasyonListesi(tesis, true).find((m) => m.id === id) ?? { id, l: id || '—', t: 'cnc', wc: '', wcName: '', name: '', active: false, mcs: [] };
 }
 
-// Bu tabletin istasyonu: cihazda seçilen, yoksa kişinin TMI'de atandığı, yoksa ilk yetkili, o da yoksa ilk istasyon.
+// Bu tabletin istasyonu: cihazda seçilen, yoksa kişinin TMI'de atandığı, yoksa ilk yetkili. 2001 b: hiçbiri yoksa boş döner; listedeki
+// ilk istasyon seçilmiş gibi gösterilmez (seçici "atanmış istasyon yok" derken üst şerit başka istasyon yazıyordu).
 export function tabletIstasyonu(tesis: Plant, kayitli: string | null, kisi: Pick<User, 'st' | 'sts'> | null): string {
-  return istasyonSec(kayitli, kisi?.st, istasyonListesi(tesis).map((x) => x.id), kisi?.sts);
+  const liste = istasyonListesi(tesis).map((x) => x.id);
+  const yetkili = kisi?.sts ?? [];
+  const bulunan = (kayitli && liste.includes(kayitli)) || (kisi?.st && liste.includes(kisi.st)) || liste.some((x) => yetkili.includes(x));
+  return bulunan ? istasyonSec(kayitli, kisi?.st, liste, yetkili) : '';
 }

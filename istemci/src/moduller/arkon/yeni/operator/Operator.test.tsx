@@ -133,6 +133,31 @@ describe('A1 Üretim Terminali', () => {
     await ekran();
     expect(screen.queryByRole('button', { name: 'Menü' })).toBeNull();
   }, 40000);
+
+  // 2001 b: istasyonu belli olmayan operatörde üst şerit listedeki ilk istasyonu seçilmiş gibi göstermiyordu; seçici "atanmış istasyon
+  // yok" derken üstte başka istasyon yazıyordu.
+  it('2001 b: istasyonu olmayan operatörde üst şerit "İstasyon seçilmedi" yazar ve seçici açılır (reddedilen)', async () => {
+    const istekler = sunucuKur(OPERATOR, sunucu());
+    arkonAc('/uretim-terminali');
+    expect(await screen.findByRole('dialog', { name: 'Hangi istasyonda?' }, { timeout: 10000 })).toBeTruthy();
+    expect(screen.getByText('Size atanmış istasyon yok')).toBeTruthy();
+    const ust = document.querySelector('.tc-ay1-ust');
+    expect(ust && within(ust as HTMLElement).getByText('İstasyon seçilmedi')).toBeTruthy();
+    expect(ust && within(ust as HTMLElement).queryByText('IST-1')).toBeNull();
+    expect(window.localStorage.getItem('arkon:station')).toBeNull();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
+  it('2001 b: yetkili istasyonu olan operatör onunla açılır, seçici açılmaz', async () => {
+    sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const ust = document.querySelector('.tc-ay1-ust') as HTMLElement;
+    expect(within(ust).getByText('IST-1')).toBeTruthy();
+    expect(within(ust).queryByText('İstasyon seçilmedi')).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Hangi istasyonda?' })).toBeNull();
+  }, 40000);
 });
 
 describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {

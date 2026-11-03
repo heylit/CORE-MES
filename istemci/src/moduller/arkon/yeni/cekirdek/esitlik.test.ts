@@ -200,7 +200,7 @@ describe('Taşınan Arkon hesapları eskisiyle aynı', () => {
     expect(istasyonListesi(a.tesis, true)).toEqual(eski.stationList(true));
     for (const id of ['S1', 'S3']) expect(istasyonBul(a.tesis, id)).toEqual(eski.machineOf(id));
     expect(istasyonBul(a.tesis, 'YOK')).toMatchObject({ id: 'YOK', l: 'YOK', wc: '', mcs: [] });
-    const durumlar: [string | null, { st?: string | null; sts?: string[] } | null][] = [[null, { st: 'S2', sts: [] }], ['S1', { st: 'S2' }], ['S3', { st: null, sts: ['S2'] }], [null, null]];
+    const durumlar: [string | null, { st?: string | null; sts?: string[] } | null][] = [[null, { st: 'S2', sts: [] }], ['S1', { st: 'S2' }], ['S3', { st: null, sts: ['S2'] }]];
     for (const [kayit, kisi] of durumlar) {
       istasyonKaydi = kayit;
       oturumKisisi = kisi === null ? null : { id: 'k', name: 'D', role: 'operator', ...kisi };
@@ -208,5 +208,8 @@ describe('Taşınan Arkon hesapları eskisiyle aynı', () => {
     }
     oturumKisisi = null;
     istasyonKaydi = null;
+    // 2001 b: kayıt ve kişi istasyonu yoksa eski ekran listedeki ilk istasyonu açıyordu; yeni ekran boş döner (bilerek ayrılır).
+    expect(eski.myStation()).toBe('S1');
+    expect(tabletIstasyonu(a.tesis, null, null)).toBe('');
   });
 });
