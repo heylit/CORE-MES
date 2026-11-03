@@ -3,18 +3,12 @@
 Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULANDI (kod ya da komut), VARSAYIM, BİLMİYORUM.
 
 ## Bağlamada kapanacak
-1. TUTAN. Rol x işlem satırı yok: `sayfa.cizimler`, `belge-merkezi.oku`, `belge-merkezi.yaz`, `belge-merkezi.yayinla` yalnız yöneticide (Aşama 1 kuralı).
-   Uyum: ortak yetki matrisinden rol dağılımı (öneri: okuma herkese, yazma teknik ofis, yayınlama kalite ya da üretim şefi).
 2. KISMEN KAPANDI (kart 1793). Merkezden kurulan bağda kart varlığı denetlenir: `servis.ts` `bagEkle` kartı `malzemeler/disari.ts`
    `malzemeOzetleri` ile okur (merkez malzemelerin `disari.ts`'ini zaten ithal ediyor; ADR 0006 yönü bozulmaz), olmayan karta 400.
    Kalan: `belge_merkezi_bag.hedef_id` yabancı anahtar değildir; başka modülün `disari.ts` `kaydaBagla` çağrısında hedef denetlenmez.
    Uyum: Aşama 2'de yabancı anahtar.
 3. TUTAN. Kullanan ekranlar henüz merkezden okumuyor: malzeme kartı, istasyon, atölye, Arkon, kalibrasyon. `disari.ts` hazır
    (`kaydaBagla`, `kaydaBagliBelgeler`, `kayittakiBelgeDosyasi`, `kayittanKaldir`); istekler `BASKA-MODUL-ISTEKLERI.md`.
-4. ETKİLEYEN. Arkon (`draws`, `pkgs` dosyaları) ve atölye krokileri tek seferlik göçle kopyalandı (kart #746,
-   `20261012110000_cizimler_eski_dosyalar.sql`); kaynak tablolar değişmedi, kaynak modüller hâlâ kendi kopyasını okur. Atölye 3B
-   modelleri (`atolye_model`) taşınmadı: GLB tutar, `dosya` GLB almaz (çekirdek isteği C1). Arkon belgesine bağ yok (kimliği metin,
-   `belge_merkezi_bag.hedef_id` sayı). Uyum: bağlamada kaynak modüller merkezden okur, kendi dosya tabloları kalkar; C1 gelince modeller ayrı göçle.
 5. SONRA. `belge_merkezi_revizyon.dosya_turu` dosya satırındaki türün kopyası (liste sorgusu `dosya` tablosunu okumasın diye). Dosya değişmez
    olduğu için kopya bozulmaz; tetikleyici değiştirmeyi reddeder.
 6. SONRA. SHA-256, base64 ve ikili okuma istemcide atölyedekinin kopyası (`dosya-aktarimi.ts`); `api` ikili GET vermiyor. Görüntüleyici
@@ -34,3 +28,14 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
     kendi yüklediği revizyonu yayınlayabilir. DOĞRULANDI: modül testi 2026-11-01, `servis.ts` `revizyonYayinla` yükleyeni denetlemez.
     Taslak revizyonu okuma yetkisi olan her rol indirebilir. Uyum: Aşama 2'de yetki matrisiyle birlikte (yükleyen yayınlamasın, taslak
     indirme yalnız yazana); karar ve göç o turda.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak
+
+- ETKİLEYEN. Arkon (`draws`, `pkgs` dosyaları) ve atölye krokileri tek seferlik göçle kopyalandı (kart #746,
+   `20261012110000_cizimler_eski_dosyalar.sql`); kaynak tablolar değişmedi, kaynak modüller hâlâ kendi kopyasını okur. Atölye 3B
+   modelleri (`atolye_model`) taşınmadı: GLB tutar, `dosya` GLB almaz (çekirdek isteği C1). Arkon belgesine bağ yok (kimliği metin,
+   `belge_merkezi_bag.hedef_id` sayı). Uyum: bağlamada kaynak modüller merkezden okur, kendi dosya tabloları kalkar; C1 gelince modeller ayrı göçle.

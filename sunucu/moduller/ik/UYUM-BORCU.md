@@ -10,26 +10,13 @@ Aşağıda o dosyalara atıf veren KAPANDI satırları kayıttır.
 - KAPANDI (borç değerlendirmesi 19.10.2026, geçersiz: kalıcı bedel, `cekirdek/kapsam.ts` `kapsamdaMi` iş merkezi null ise kapsamda; `ik/kurallar.ts` `kayitIsMerkezi` dept ve ayarlar için null): Departman, ayarlar ve pozisyonsuz aday kapsamsızdır (çekirdek anlamı: iş merkezi olmayan kayıt herkesin kapsamında).
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `kisiSecenekleri` var (`kisiler/disari.ts:30`), ik kullanıyor (`ik/servis.ts:145`). Kişi–personel eşleşmesi personel kartındaki "TMI kullanıcısı" alanıyla; seçim listesi `kisiler.kisiSecenekleri` isteğine bağlı
   (BASKA-MODUL-ISTEKLERI). Girmeden teslim derlenmez.
-- Dışarıdan gelen html/svg: modül html ya da svg kabul etmez; uygulama kullanıcı metnini her yerde kaçışlayarak basar
-  (kod incelemesi). KAPANDI (borç değerlendirmesi 17.10.2026, SZ-4): kaçışlama testli (`istemci/src/moduller/ik/uygulama.test.ts` "İK kullanıcı metni kaçışlama"). İçerik politikası betik yüklemeyi ve dış isteği kapatır.
 
 ## Ekran (K2: olduğu gibi)
-- `istemci/src/moduller/ik/uygulama/paket.ts`: uygulamanın kendi bileşenleri, renkleri, ölçüleri, satır içi stilleri ve simgeleri
-  (tasarım değişkeni dışı). Kendi tasarım belirteçleri çerçevenin içindedir; TMI tokens.css kullanılmaz. Açık/koyu tema TMI'den gelir.
-- `uygulama/yazi.ts`: Instrument Sans (TMI yazı tipi değil); veri adresi olarak gömülü.
-- Uygulamanın üst çubuğu (konum, Ara, Görünüm, Yardım) çerçevenin içinde kalır; TMI'nin sayfa başlığı çubuğu ayrıca üstte durur.
-- 360/768/1280 genişlik: uygulamanın kendi duyarlı düzeni; dar ekranda TMI ikinci menüsü şeride döner, uygulamanınki gizlidir.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): tema iletisi `istemci/src/moduller/ik/IkCercevesi.tsx:51` `yon: 'tema'`. Tema değişince çerçeve yeniden kurulmaz; tema çerçeveye iletiyle gider, açık form korunur (borç 177).
-- Ctrl K ortak palette (kart #137, karar 102 a): çerçevede basılan Ctrl K uygulamanın aramasına ulaşmadan kabuğa gider (`acilis.ts`, yakalama evresi; paket değişmedi). Paletin "Bu sayfa" grubunda "İK'da ara" komutu uygulamanın aramasını açar. Kalan: uygulama arama sonuçlarını ve düz Türkçe komutlarını dışa vermiyor (paket derlenmiş, `api`'de arama yok); ortak palete öneri olarak (kural 8) geçmesi için İK'nın sonraki tesliminde `api` arama işlevi istenir. O zamana kadar uygulamanın araması Ara düğmesi ve `/` ile yerinde; düğmedeki "Ara (Ctrl+K)" ipucu paket metnidir.
 
 ## Ekranda kalan kurallar (sunucu denetlemez)
-- İzin günü sayımı sunucuda da var (GÜNCELLENDİ 23.10.2026, DOĞRULANDI `servis.ts` `izinIsGunuSay` ve `izinIsGunuDenetle`, `GET /ik/izin-gunu`; Soru 55 ve 74): iş günü kişinin Vardiya takviminden sayılır, takvim yoksa yalnız hafta sonu düşer. Ekranda kalanlar: yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;
-  yapılacaklar listesi; akıllı arama; ilan metni ve uygunluk kontrolü;
-  yaka ve kademe önerisi; işe alım aşamaları ve puanlama; performans ortalaması; eğitim takibi. Zimmet 244 a ile İdari İşler'e geçti (#1943, #1963).
-- Sunucu bu kayıtlarda yalnız zorunlu alanları (IK-4), bağlı kaydın varlığını, sürümü ve yetkiyi denetler.
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kesinleşme sunucu motoruyla (`ik/servis.ts` `motorKur`, `motor.payroll`). Bordro hesabı hem ekranda (tahmin) hem sunucuda (kesinleştirme) yapılır; kesinleşen sonuç sunucunundur.
 - KAPANDI (B13, 23.10.2026): T.C. kimlik ve IBAN denetim haneleri personel kaydında ve toplu kayıtta (Excel aktarımı) sunucuda da denetlenir (IK-82, `kurallar.ts` `kimlikIbanDenetle`); hane biçimini veritabanı kısıtı (`ik_personel_tckn_bicimi`, `ik_personel_iban_bicimi`) zaten tutuyordu. Kural yalnız yeni ya da değişen değerde uygulanır; kural öncesinden kalan değer kaydı kilitlemez.
-- 151 a (23.10.2026): tazminat ve fazla mesai hesaplayıcıları, maliyet planı, işe alım puanı, performans ortalaması, yaka ve kademe önerisi, akıllı arama ve ilan metni hesap ya da öneridir; tarayıcıda kalır, borç sayılmaz. T.C. kimlik ve IBAN sunucuya geçer (B13); izin bakiyesi ve hak ediş ayrı iş (B14).
 
 ## JSON sütunlar
 KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ik göçlerinde `jsonb` yok (`grep -c jsonb sunucu/gocler/*_ik_*.sql` hepsi 0). Yok (v2, kullanıcı kararı 08.10.2026). Değişiklik geçmişindeki alan değeri (`ik_kayit_gecmisi_alani.onceki`, `sonraki`) metin
@@ -70,7 +57,6 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): dört göz ayarı sistem ayarından (`ik/servis.ts:280` `sistemAyariOku(db, 'ik.dort-goz')`). Dört göz ayarı yalnız kadro talebi (pozisyon) onayında; izin kararında "kimse kendine karar veremez" her zaman geçerli.
 
 ## v3 (bağlamada kapanacak)
-- Mesailerim ve bordro onayı derlenmiş paket yamasıyla geldi (NOTLAR.md); ik-modulu kaynağına taşınmalı.
 - Mesailerim'de "Devamsızlık (gün)" ayrı gün sayar; aynı güne iki kayıt bir gündür (borç 195, puantaj yaması `DUZELTMELER`).
   Devam ekranındaki "Devamsızlık" rakamı da kişi başına ayrı gün sayar (borç V3-2, aynı yama); Geç kalma kayıt sayısıdır.
 - Devamsızlık günü İK kaynağından gelmeli (borç V3-2): iki ekran şimdilik devam kayıtlarındaki tarihleri sayar; asıl gün
@@ -87,10 +73,8 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
 ## Puantaj, kart #1571 (bağlamada kapanacak)
 - Fazla mesai önerisi vardiya planındaki aralıklara göre hesaplanır; Vardiya'nın plan aralıkları planlı fazla mesaiyi ve duruşu da
   içerebilir, bu yüzden planlı fazla mesai öneride eksik görünebilir. Öneri yalnız öneridir, aktarırken saat düzeltilir.
-- Puantaj satırı değişiklik geçmişine (`ik_kayit_gecmisi`) yazılmaz; satırda yazan ve zaman var, çekirdek denetim kaydı ucu tutar. Testli: `puantaj.test.ts` "puantaj satırı İK değişiklik geçmişine yazılmaz".
 - Gün başına tek giriş-çıkış (ilk giriş, son çıkış); ara çıkış gerekirse alt tablo eklenir (VARSAYIM).
 - Matriste sürükleyerek hücre seçimi yok; toplu giriş tarih aralığı ve kişi listesiyle yapılır. Excel'e aktarma yok.
-- Ekran paket yamasıdır (`uygulama/yama/ik_puantaj_ekran.js`); ik-modulu kaynağı gelirse oraya taşınmalı.
 - Terminal ya da kart okuyucudan otomatik giriş-çıkış yok; saatler elle girilir.
 - IK-73 ekranda: `ik.oku` olup `ik.ozel-veri-oku` olmayan kişide personel formu kan grubu ve engel durumunu boş gösterir (değer sunucuda korunur). Alanı formdan kaldırmak paket yaması ister. Bugün `ik.oku` yalnız insan_kaynaklari ve yöneticide, ikisi de özel veri yetkisini alır; etkisi yok.
 - IK-73 dolaylı iz: bordro kaydındaki engelli indirimi tutarı (`ik_bordro.engelli_indirimi`) engel derecesini ele verir; bordroyu gören `ik.oku` sahibidir. Yetkisiz kişinin ekranındaki bordro önizlemesi engel durumunu bilmediği için indirimsiz hesaplar; kesinleşen bordroyu sunucu tam veriyle hesaplar.
@@ -99,3 +83,24 @@ sütunudur; liste ve nesne alanlarında değer JSON yazımıyla saklanır (geri 
 ## Özlük itmesi (kart 1312)
 - `ik_personel.kisi_id` hâlâ boş olabilir (girişsiz ya da kişisiz personel). 1302 a "her aktif personelin bir kişisi olur": zorunluluk ayrı göçle, bağsız personeli sayıp duran kalıpla (ana veri D fazı).
 - Canlı kurulumdan önce kullanıcıya gösterilecek salt okunur liste (İK'da çıkışı geçmiş, bağlı kişisi aktif): DEVIR'deki sorgu.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### SUNUCUDA ZORUNLU listesinden eksik ya da kısmi kalanlar
+
+- Dışarıdan gelen html/svg: modül html ya da svg kabul etmez; uygulama kullanıcı metnini her yerde kaçışlayarak basar
+  (kod incelemesi). KAPANDI (borç değerlendirmesi 17.10.2026, SZ-4): kaçışlama testli (`istemci/src/moduller/ik/uygulama.test.ts` "İK kullanıcı metni kaçışlama"). İçerik politikası betik yüklemeyi ve dış isteği kapatır.
+
+### Ekranda kalan kurallar (sunucu denetlemez)
+
+- İzin günü sayımı sunucuda da var (GÜNCELLENDİ 23.10.2026, DOĞRULANDI `servis.ts` `izinIsGunuSay` ve `izinIsGunuDenetle`, `GET /ik/izin-gunu`; Soru 55 ve 74): iş günü kişinin Vardiya takviminden sayılır, takvim yoksa yalnız hafta sonu düşer. Ekranda kalanlar: yıllık izin bakiyesi ve hak ediş, çakışma uyarısı; tazminat ve fazla mesai hesaplayıcıları; maliyet planı;
+  yapılacaklar listesi; akıllı arama; ilan metni ve uygunluk kontrolü;
+  yaka ve kademe önerisi; işe alım aşamaları ve puanlama; performans ortalaması; eğitim takibi. Zimmet 244 a ile İdari İşler'e geçti (#1943, #1963).
+- Sunucu bu kayıtlarda yalnız zorunlu alanları (IK-4), bağlı kaydın varlığını, sürümü ve yetkiyi denetler.
+- 151 a (23.10.2026): tazminat ve fazla mesai hesaplayıcıları, maliyet planı, işe alım puanı, performans ortalaması, yaka ve kademe önerisi, akıllı arama ve ilan metni hesap ya da öneridir; tarayıcıda kalır, borç sayılmaz. T.C. kimlik ve IBAN sunucuya geçer (B13); izin bakiyesi ve hak ediş ayrı iş (B14).
+
+### Puantaj, kart #1571 (bağlamada kapanacak)
+
+- Puantaj satırı değişiklik geçmişine (`ik_kayit_gecmisi`) yazılmaz; satırda yazan ve zaman var, çekirdek denetim kaydı ucu tutar. Testli: `puantaj.test.ts` "puantaj satırı İK değişiklik geçmişine yazılmaz".

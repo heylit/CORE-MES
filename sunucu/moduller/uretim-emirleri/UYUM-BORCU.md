@@ -24,4 +24,11 @@
   çağrılıyor (Satın Alma dış operasyonlar, `DisOperasyonlar.tsx`).
 - `POST /adimli-emirler/:id/hazirlik-muafiyeti` ve `GET /adimli-emirler/:id/hazirlik`: ekrana bağlanmaz (882 c: CNC kurulum hazır değil, kural şimdilik
   eklenmez). Uç ve müdür işlemi sunucuda kalır. Açık: CNC Kurulum'da kaydı açılıp son onaya gelmeyen iş emri başlamaz ve ekrandan muaf tutulamaz (soru 889).
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
+
 - Kaldırıldı (238 H3, 266 a): `POST /uretim-emirleri`, `/:id/{iptal, baslat, bitir, sayim, devam, durdur, sayim-ayarla}`. Terminal bu komutları Arkon üzerinden `disari.ts` ile yapar. `POST /uretim-emirleri/:id/{ayar, makine-devral}` de istemcide ve Arkon web'de çağrılmıyor (DOĞRULANDI, `istemci/src` ve `arkon/web/src` araması, 23.10.2026); kaldırma kararı sorulmadı.

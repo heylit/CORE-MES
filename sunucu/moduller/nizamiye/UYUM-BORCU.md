@@ -1,7 +1,6 @@
 # UYUM-BORCU: nizamiye
 
 ## Bağlamada kapanacak
-- Rol satırları Çekirdek'te (CEKIRDEK-ISTEKLERI 1); girene kadar ekranı yalnız yönetici görür.
 - 18 simge gelince ekran simgeleri değişir (CEKIRDEK-ISTEKLERI 2).
 - İstemcideki sözleşme sabiti kopyası (CEKIRDEK-ISTEKLERI 3).
 - Ziyaretçilerim üst çubuk düğmesi 768-1023 genişlikte gizli: yöneticinin dolu çubuğunda /finans başlığını kesiyordu (ekran testi). Çubuğa taşma menüsü gelince geri açılır (CEKIRDEK-ISTEKLERI 4).

@@ -2,12 +2,8 @@
 
 Her madde: kural / istisna / nerede / nasıl uyumlanır. İddia işaretleri: DOĞRULANDI, VARSAYIM, BİLMİYORUM.
 
-## Açık borç (19.10.2026 sayımı: 20 madde, tavan 30; bayat satırlar 19.10.2026'da güncellendi)
-Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/inceleme/borc/2026-10-17-borc-yeniden-degerlendirme.md`): kısmen kapalı maddenin kalan parçası ayrı sayılır; "KAPANDI" ve "BİLGİ NOTU" sayılmaz.
-- Dondurma sonrası (13): madde 1 (jsonb sütuna), 2 (ekran stili, lint), 4 (ekran kuralları sunucuya; ad/açıklama kalıbı dahil), 5 (belge yükleme), 7 (`unsafe-inline`), 10 B9 (kılavuz yazısı),
-  Denetim madde 7 sınırları (rev notu, ham alan yolu), Çekirdek kalıpları: kart listesi sayfalama (#169) ve YM/MM/DB anahtarı, tedarik: kart birimi JSON ve dizinsiz arama, hizmet türü rengi, hizmet standart önerileri.
-- Bağlamada (4): madde 6 bilinen sınır (iç görünüm değişimi adrese yansımaz), birimi boş eski kartlar, tedarikçi metni eşleme, tedarikçi yabancı anahtarı.
-- Kullanıcıda (1): madde 7 cihaz denemesi (indirme, etiket, QR/kamera, pano).
+## Açık borç
+Sayım borç denetimiyle (kart 2049) yenilendi; 19.10.2026 sayımı geçersizdir.
 - Bekleyen (1): Denetim "Ekran borcu" (onay akışı anahtarı bağlıyken herkese kilitli); 18.10.2026'da kullanıcıya sorulmadı, önerilen "böyle kalsın" ile bugünkü gibi kalıyor. Elle stok kodu alanı ve ret nedeni #234 madde 10 ve 18 ile kapandı (Bilinen sınırlar).
 
 1. Serbest jsonb yok / üç sütun jsonb nesne / `malzeme_katalog_karti.kayit`, `malzeme_katalog_sablonu.sablon`, `malzeme_katalog_ayari.deger`
@@ -17,9 +13,6 @@ Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/in
    Benzersiz anahtar ve mükerrer gerekçesi hâlâ özetten gelir (ekranın ürettiği değer; sunucu türetemez).
    Maliyet için ayrı sütunlar (19.10.2026, #1832, kullanıcı kararları 208 a ve 214 a, dolu tablo göçü onaylı): hammaddede `birim_agirlik_kg`, `kalite_adi`, `form_adi` (özetten, ekranın hesabı; sunucu ağırlığı yeniden hesaplamaz),
    mamul ve yarı mamulde `net_agirlik_kg` (`kayit.g.net`'ten, `kurallar.ts` `katalogNetAgirlikKg`). Kartın öteki alanları jsonb'de kalır.
-2. Ortak arayüz ve tasarım değişkeni kullanılır / ekran kendi stilini, rengini ve bileşenlerini taşır / `istemci/src/moduller/malzemeler/katalog/katalog.html`
-   (~800 KB, stil+işaretleme+betik tek dosya). Lint taramaz (stylelint yalnız `.css`, ESLint yalnız `.ts/.tsx`). Uyum: sayfa ortak bileşenlerle ve `tokens.css` ile
-   yeniden kurulur ya da `eslint`/`stylelint` kapsamına bilinçli eklenir (çekirdek kararı, Ç1). Ekran 360/768/1280 kuralı yalnız teslimin kendi ölçümüne dayanır.
 3. localStorage'da veri yok / prototip taslağı ve tercihleri tarayıcıda tutar / `katalog.html` `mk-*` anahtarları: `mk-units`, `mk-recent`, `mk-sablon`, `mk-ayar`,
    `mk-ayar-kaydi`, `mk-malzeme-ayar`, `mk-op`, `mk-opdef`, `mk-roller` + yarım kalan taslak (DKEY/LKEY). Gömülü modda kart, şablon ve ayar sunucudan gelir.
    Gömülü modda `localStorage` bellek içi depodur (madde 7, ön betik): yazılan her şey sayfa yenilenince gider.
@@ -44,35 +37,8 @@ Sayım yöntemi borç yeniden değerlendirmesindeki gibi (`/mnt/project-files/in
      ekranın `kartAnahtari` kuralı); ekranın gönderdiği anahtar okunmaz. Testler `kart-kurallari.test.ts`, `olcu-kurali.test.ts`. Koordinatör kararı b (20.10.2026) bu kararla kalktı.
    - Kalır, borç sayılmaz (151 a, 23.10.2026): GTIN, açıklama biçimi, ölçü aralığı uyarıları (`DIMRULES`), kart uyarıları (`gUyarilar`), form/seçenek uyumu (`compatIssues`; ekran kaydı engellemez, yalnız uyarır),
      ağırlık, maliyet ve amortisman hesabı ile Excel içe aktarma uyarıları hesap ve uyarıdır; tarayıcıda kalır. Koruma kuralları (B11, 157 a dahil) sunucuya geçer.
-5. Kapalı özellik: belge yükleme `kopru.ts` içinde hata verir (dosya saklama yok). Uyum: dosya saklama önkoşul (Ç4).
-   DOĞRULANDI (19.10.2026, `grep -c -E "jsdelivr|cdnjs" katalog.html` = 0): ekran dosyasında dış kitaplık adresi kalmadı. Çerçeve politikası
-   `default-src 'none'; script-src 'unsafe-inline'; ... connect-src 'none'` (`MalzemeKatalogu.tsx` `POLITIKA`); test `MalzemeKatalogu.test.tsx`.
-   QR kapandı (15.10.2026): depodaki jsqr 1.4.0 çerçeveye gömülür (`MalzemeKatalogu.tsx` `qrKitapligi`), prototip dış adrese gitmez; test `MalzemeKatalogu.test.tsx` "QR çözücü depodan". Excel kapandı (#1525, yazılı onay 16.10.2026): depodaki exceljs 4.4.0 köprüden verilir, içe aktarma da ExcelJS ile okur; SheetJS ve dış adresler kalktı. Belge yükleme açık.
-6. İkinci menü (Aşama 1 tur 2): modül menüyü bildirir (`paylasilan/sayfalar/malzemeler.ts` `MALZEMELER_IKINCI_MENU`, çerçeveli, altı madde: prototipin görünüm şeridiyle aynı sıra ve ad);
-   adres görünümü seçer (`/malzemeler/yeni`, `/malzemeler`, `/sablonlar`, `/operasyonlar`, `/ayarlar`, `/kilavuz`), köprü `hazir` cevabında `gorunum` ve adres değişince `gorunum` olayı gönderir, çerçeve yeniden yüklenmez.
-   Prototipin kendi şeridi (`.top .views`) çerçeveye eklenen stille gizlenir, dosyasına dokunulmadı. QR okut ve Ayarlar düğmeleri prototipin üst şeridinde kalır (görünüm değil, işlem).
-   Ekran ölçümü N7 (tur 3): prototipin gömülü moddaki kendi yan menüsü (901 px ve üstü, `html.yanmenu`) kapatıldı (kullanıcı kararı B3 = a, 08.10.2026); QR okut, Ayarlar, iki birim düğmesi ve not prototipin dar ekran
-   düzeniyle üst satırda kalır (`MalzemeKatalogu.tsx` `YAN_MENU_KAPAT`, test `MalzemeKatalogu.test.tsx` "yan menu (B3)"). Çerçeve kabuğun içerik alanını doldurur (B4).
-   Toplayıcı kaydı bu dalda ayrı commit (kullanıcı kararı T1 a); kabuk menüyü çizer.
-   Bilinen sınır (bağlamada kapanacak): prototip kendi içinden görünüm değiştirince (ör. katalogda "Düzenle" yeni kart görünümünü açar) adres ve menüdeki etkin madde değişmez; prototip görünüm değişimini köprüye bildirmiyor.
-   KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kök adres ve "Yeni kart" yetkisi `paylasilan/sayfalar/malzemeler.ts` `kok: '/malzemeler'`, `'Yeni kart' ... islem: 'malzemeler.yaz'`. VARSAYIM (geri alma ucuz, tek dosya): kök adres katalogdur (prototip ilk açılışta yeni kart görünümündeydi); "Yeni malzeme" maddesini yalnız `malzemeler.yaz` taşıyan görür, öteki maddeler `sayfa.malzemeler`.
-7. İçerik politikası (Ç2): çerçeve satır içi betik çalıştırır (`script-src 'unsafe-inline'`). Sunucu bugün politika göndermiyor; dağıtımdaki ters vekil `script-src` kısıtlarsa
-   sayfa açılmaz (BİLMİYORUM: dağıtım yapılandırması).
-   Yalıtım kapandı (kart #236, kullanıcı kararı 07.10.2026: gerçek yalıtım, ekran dosyası değişmez): çerçeve `sandbox="allow-scripts allow-downloads allow-modals"`, `allow="camera; clipboard-write"`,
-   aynı-kök ve üst gezinme izni yok (köken opak); köprü yalnız kendi çerçevesinden ve opak kökenden gelen iletiyi işler; `kopru.ts` boş, `.` ve `..` kimliği reddeder; yazı tipleri veri olarak gömülür;
-   prototipin `localStorage`'ı bellek içi depoya döner (ön betik). Testler `istemci/src/ortak/arayuz/YalitilmisCerceve.test.tsx`, `MalzemeKatalogu.test.tsx`, `kopru.test.ts`. Kalan `script-src 'unsafe-inline'` (dağıtımda bakılır).
-   Çerçeve bileşeni ortak arayüzden ithal edilir (`istemci/src/ortak/arayuz`, #264); bileşenin kendi testleri orada.
-   Dışarıdaki ekrandan farklı: tercihler ve yarım taslak sayfa yenilenince silinir (#227 madde 16 ile uyumlu); `allow-popups` yok, belge bağlantısı yeni pencerede açılmaz;
-   cihazda indirme, etiket yazdırma, QR/kamera ve pano denenmedi (BİLMİYORUM; kullanıcı cihazda denemeden kabul sayılmaz).
 8. Kapandı: `test:modul` Linux'ta da sunucu testlerini bulur (tırnak sorunu #1348 ile düzeldi); desen hiç dosya bulamazsa koşu kırmızı olur (#1557).
 9. Roller: kapandı (Ç5); rol dağılımı verildi, aşağıda.
-10. Ekran ölçümü N7 bulguları, kod yok (kullanıcı kararı 08.10.2026, `tur3-raporlar/ekran-olcumu.md`; prototipin ekranı, dosyasına dokunulmaz):
-   B2: Operasyonlar görünümünde 96 operasyonun her satırı düzenlenebilir (797 etkileşimli öğe; 13x13 px onay kutusu, 21x28 px sil düğmesi); tür seçimi daralıp kesik görünür, "Yeni operasyon" formunda etiket ve kutu karışık akar.
-   Aşama 2'de operasyon listesi istasyonlar kataloğuna bağlanınca bu tablo kalkar. DOĞRULANDI (ölçüm raporu, görüntü).
-   Kapandı: görünüm kalktı, liste istasyonlarda düzenlenir (kart #544).
-   KAPANDI (borç azaltma 18.10.2026, test): boş operasyon listesinde yerel düzenlemenin kapalı kalması (`katalog.html` `operasyonKaynagi` koşulu); test `katalog-kurallari.test.tsx` "istasyonlardan gelen boş operasyon listesi" (kaynaklı boş liste salt okunur ve yerel listeye dönmez; kaynaksız boş liste yerel listeyi bırakır; koşuldan `operasyonKaynagi` çıkarılınca test kırılıyor).
-   KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ikinci menüde operasyonlar maddesi yok (`paylasilan/sayfalar/malzemeler.ts` `gruplar`), liste istasyonlardan salt okunur (`kopru.ts` "MKK-18", kart #544). A7 (#515): liste artık istasyonlardan gelir ve salt okunur; düzenleme öğeleri görünmez. Görünümün kalkıp kalkmayacağı B adımında seçilir.
-   B9: Kılavuz görünümünde 29 örnek satırı 11.5 px (`small`). Prototipin kendi metni; bağlamada ekranla birlikte ele alınır. DOĞRULANDI (ölçüm raporu).
 
 ## Denetimde bulunan açıklar (07.10.2026; kart #163, denetim turu 1 sonrası durum, tur 2 dahil)
 
@@ -95,37 +61,15 @@ KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): onay rolleri `yaz` da 
    (`onay`, `rev`, `updatedAt` dışında) ya da anahtarını değiştiremez; onaydayken içeriği değiştiren kişi kartın göndereni olur. Onay akışı ya da dört göz kapalıyken eskisi gibi. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): 2c madde 2'deki "kalır" kararıyla kapandı.
 5. Kapandı: `POLITIKA`'ya `form-action 'none'; base-uri 'none'`. `sandbox` ve aynı kök kapandı (kart #236, madde 7); `script-src 'unsafe-inline'` madde 7'de açık.
 6. Kapandı: MKK-2 tür, açan ve önek tetikleyici testleri, MKK-10 dizin ve yarış testi, MKK-7 eşzamanlı yazma testi, geçişlerin red testleri.
-7. Kısmen: "kim onayladı, gönderdi, reddetti, pasife aldı" (`kayit.onay.{onay,talep,red,pasif}.{by,byAd,t}`) ve değişiklik talebinin sahibi (`kayit.talep.{by,byAd,t}`) ilgili geçişte
-   sunucudan basılır; geçiş olmayan yazmada kayıtlı değer korunur. Değişiklik geçmişi (`rev`) yalnız sona TEK kayıt eklenebilir (ekran her kaydetmede tek kayıt ekler: `withRev`, `onayUygula`, `talepOlustur`, `talepUygula`; 30 kayıtlık pencere:
-   baştan en çok eklenen kadar düşer); eklenen kaydın `by`, `byAd`, `t` alanını sunucu basar, kayıtlı kayıtlar korunur. Gerekçeli mükerrer kartta anahtar aynıysa kayıtlı gerekçe korunur
-   (ekranın `talepUygula`'sı `mukerrerOnay`'ı geri koymaz).
-   Kapandı (kart #226). KULLANICI KARARI (07.10.2026, #227 madde 3): sunucu farkı doğrulasın. DOĞRULANDI (`katalog.html` `talepPanelHTML`, `talepOlustur`, `talepUygula`): ekran onaycıya SAKLANAN `talep.farklar`'ı gösterir
-   (yeniden hesaplamaz, en çok 30 satır) ve `talep.yeni`'yi uygular. Sunucu kuralı (`kurallar.ts` `katalogFarki`, `katalogTalebiBas`, `katalogTalepUygulamaDenetle`): (a) yeni ya da değişen talepte `farklar` istemcininkinden
-   bağımsız sunucuda yazılır (önerilen kart ile bu yazmadan sonraki kart; ham alan yolu, `{ f: 'com.not', a: 'eski', b: 'yeni' }`; 30 satırı aşarsa fazlası son satırda adı, eski ve yeni değeriyle: `a` = `alan: eski; ...`, `b` = `alan: yeni; ...`, Aşama 1 tur 2); değişmeyen talepte kayıtlı fark korunur;
-   (b) talep uygulanırken (aktif kart talepsiz, içerik değişik yazılıyor) uygulanan içerik `talep.yeni` ile aynı olmalı, yoksa 422; ayrıca talep açıldığı günkü karta göre geçerli olmalı (bugünkü kartın farkı kayıtlı farkla aynı), yoksa 409.
-   VARSAYIM (geri alma maliyeti düşük, yalnız `kurallar.ts`): ekranın biçimlenmiş farkı (etiket, birim, sınıf adı) sunucuda yeniden üretilemez (tanım tabloları ekrandadır); bu yüzden onaycı artık ham alan yolu görür.
-   Sınır: `kayit.rev[].ch` (geçmiş notu) ve `kayit.rev[].not` hâlâ istemci metnidir; benzersiz anahtar ve mükerrer gerekçesi (özet) uygulamada istemciden gelir, önerilen içerikten sunucuda türetilemez;
-   talep uygulanırken `mukerrerOnay`/`yerine` dışarıdan kurulamaz; talep varken onaycının talebi düşürüp içeriği başka yazması artık 422 (önce talep reddedilir ya da talep tutularak düzenlenir; talep bayatlar, 409).
-   Kayıtlı eski biçimli (ekran farklı) talep uygulanamaz (409), reddedilir ya da yeniden açılır. Onaycının gördüğü kayıtlı fark bugünkü farktan (değerli son satır dahil) farklıysa da 409: taşan alanları yalnız adıyla anan tur 1 talepleri değer görülmeden onaylanamaz.
-   Denetim bulguları kapandı (Aşama 1 tur 1): alan yolu dizi olarak anahtarlanır, `"com.ad"` üst anahtarı `com.ad` yaprağını ezemez (gösterimde nokta içeren parça `[com.ad]`);
-   bayat denetimi kesilmiş farka değil sunucunun bastığı `talep.farkOzeti`'ne (kesilmemiş farkın sha256'sı) bakar, 30 satırda yalnız adıyla anılan alanın tabanı değişse de 409;
-   `talep: null` "talep yok" sayılır ve uygulama denetimini atlatmaz. Testler `talep-fark-dogrulama.test.ts`, `kurallar.test.ts`.
-   Bilinen sınır (ekran davranışı, belgelenir): talep ile onay arasında açıklama ya da kod ayarı değişirse ekran türetilen alanları (açıklama, ad) yeniden hesaplar,
-   uygulanan içerik talepteki önerilenden ayrılır ve meşru uygulama 422 alır; talep reddedilip yeniden açılır. Onaycının ham alan yolu görmesi (etiketli fark yerine) dışarıdaki ekrandan farklıdır.
-   KAPANDI (kullanıcı kararıyla kalsın, 16.10.2026; 2c ile tutarlı): dört göz ekranın değişiklik talebinde yalnız ekrandadır (`talepYetkili`); onaycının kendi açtığı talebi sunucuda kendisi uygulaması bugünkü gibi kalır.
 
 Bilinen sınırlar (ekranın kabul ettiği girdiyi sunucunun reddettiği yerler; ret iletisi kullanıcıya "Kayıt yapılamadı" diye görünür, bu yüzden kullanıcı kilitlenebilir):
 - KAPANDI (kart #234 madde 10, kullanıcı kararı 07.10.2026; 18.10.2026): TMI'ye bağlıyken kod alanı salt okunurdur, "Otomatik" düğmesi çizilmez; kodu sunucu verir (test `katalog-kurallari.test.tsx` "madde 10"). Bağlantısız açılışta prototip eskisi gibi. Sunucu kuralı değişmedi: elle yazılan stok kodu: yalnız `TÜR-GRUP(3)-SAYI` biçimi geçer (önek alınır, sayı yok sayılır); serbest önek ("ABC-00001"), "ÖZEL KOD", türe ters önek 400 alır (kart #230, bkz. Logo bölümü madde 5). Kilitli kartta (onayda, aktif, pasif) kodu ya da türü değiştirmek 422 alır.
-- Başka yazarın bekleyen değişiklik talebi olan kartı ikinci bir yazar düzenlerse 403 alır; talebi yalnız sahibi ya da onaycı değiştirir.
-  KAPANDI (kart #234 madde 18, kullanıcı kararı 07.10.2026; 18.10.2026): sunucunun ret iletisi (403, 409, 400, 422) genel "Kayıt yapılamadı" yerine olduğu gibi gösterilir; köprü yalnız sunucunun kendi iletisini işaretler (`MalzemeKatalogu.tsx` `sunucuIletisiMi`), köprünün iç hatası ve zaman aşımı genel iletide kalır (testler `katalog-kurallari.test.tsx` "madde 18", `MalzemeKatalogu.test.tsx`). Kısa gerekçe kodu da artık çerçeveye geçer.
-  Kapandı (kullanıcı kartı 17.10.2026, "Şimdi düzelt"): "Talebi geri çek" gömülü modda yalnız talebin sahibine ve onay yetkilisine görünür; sunucu kuralı değişmedi.
 - Kapandı (kullanıcı kartı 17.10.2026, "Şimdi düzelt"): pasif kart onay yetkisi olmayana salt okunur açılır (Düzenle yok); onaycı sunucuda olduğu gibi düzenleyebilir. Aktif kartın toplu ekran işlemleri ("Kod yapısı geçişi", birleştirme) onay akışı
   açıkken onay yetkisi ister.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): eylemsiz bilgi notu; sunucu kuralı kapalı (Çekirdek bölümü MKK-10 "kapandı, kart #163"). Hammadde ve sarf kartında benzersiz anahtar zorunlu: ekran bu türlerde her zaman üretir (`stepOk`), ihlal yalnız elle hazırlanmış istekte olur.
 
 ### Çekirdek kalıplarıyla uyum
 - Kapandı, gerekçeyle (17.10.2026, koordinatör kararı): sürüm denetimi çekirdek `surumluGuncelle` ile değil (#90), çünkü servisin kuralları kayıtlı kartı okur; kart önce kilitlenir (`katalogKartiKilitle`), sonra sürüm karşılaştırılır. Eşzamanlı iki yazmadan birinin 409 aldığını MKK-7 testi sınar (`katalog-onay-baglama.test.ts`).
-- Kart listesi ucu sayfalı (`sayfa`, `sayfaBoyu`, `sonra`); köprü bütün sayfaları okur (200'lük sayfa, değişenler önbellekle), çünkü ekran arama ve süzgeci kartların hepsi üstünde yapar ve listeyi tek parça çizer. Ekranın sayfa sayfa çizmesi yeni düğme ister; sorulacak (#169).
 - Kapandı (17.10.2026): kart kaydı `kisitKorumali` ile yazılır (#168). Kullanıcının karşılaşabildiği tek yol anahtar dizini yarışıdır (iki kişi aynı malzemeyi aynı anda açar, ön denetim kaydedilmemiş kartı göremez): kaybeden genel "aynı bilgilerle kayıt var" yerine kartın iletisini ve `ozet.benzersiz_anahtar` alanını alır (test `katalog-onay-baglama.test.ts` "anahtar dizinine takılan"). Dört göz ve kod kilidi kısıtları servisin önceki denetimiyle (403/422, kendi iletisiyle) zaten tutulur; kısıt yalnız servisi atlayan yolda tetiklenir, iletisi yine eşlendi.
 - MKK-10: hammadde ve sarfta anahtar zorunlu (kapandı, kart #163); gerekçe en az 10 karakter (kapandı, kullanıcı kararı 16.10.2026: kısa gerekçe 400 ve ekranda nedeniyle; kuraldan önce kaydolmuş kısa gerekçe değişmedikçe kalır). Kalan: yarı mamul, mamul ve demirbaşta ekran resim, müşteri ya da seri girilmemişse anahtar üretemez (null), mükerrer denetimi o kartlarda çalışmaz.
 - Uydurma önek, `kayit.com` nesne değil ve doğrudan `pasif` açılış kapandı (kart #163).
@@ -159,17 +103,6 @@ Bağlantı işinde (kart #232 kapsamı dışı, kullanıcı kararı 08.10.2026; 
   tabloda "Geçersiz" rozetiyle görünür, pencerede "(listede yok)" seçeneği olarak korunur. Aynı sayfadaki "Logo birim setleri" kartı listeyi gösterir; `logo.birim-seti-yaz` olan
   elle ekler ve elle ekleneni kaldırır (LB11 a). Tablo `logo_birim_seti` Logo modülünde kalır (Logo'nun listesinin aynası); birim kavramının ve karşılığın sahibi malzemeler.
   Test `LogoGonderimi.test.tsx`. Sunucu yalnız biçime bakar (bağımlılık yönü logo -> malzemeler, ADR 0006); uymayan kartı gönderimde Logo modülü "hata: geçersiz karşılık" yapar (LB9 a).
-5. Stok kodu kuralları (kart #230). KULLANICI KARARI (07.10.2026, #227 madde 10, 11, 25): kodu her zaman sunucu verir (önek + sıra); aktif olunca kod ve tür kilitlenir; en çok 24 karakter.
-   VARSAYIM (şef önerisiyle ilerledi, kart #230): (a) KAPANDI (borç azaltma 18.10.2026, tekrar): "Bilinen sınırlar" bölümündeki elle stok kodu maddesiyle aynı iş, orada izlenir. Elle kod alanı ekranda duruyor; yazılan kodun yalnız geçerli öneki kullanılır, sayı yok sayılır; alanın kalkması ekran isteği #234 madde 10.
-   (b) KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kod yapısı seçimi gömülü modda kilitli (`katalog.html` `name="kodYapisi"` radyosu `|| kilit ? 'disabled'`, `kilit` `onayAyarKilit`'ten). Kabul edilen önek tam olarak ekranın standart yapısıdır (`katalog.html` `kodOnek`, `KOD_DESEN`): `(HM|YM|MM|SF|DB)-[A-Z0-9]{3}-`; tür kısmı kartın türüyle aynı olmalı; serbest önek 400. Ekranın teknik kod yapısı (`kodYapisi: 'teknik'`, ör. `MET-PAS-316L-...`) bu desene uymaz ve reddedilir
-   (önceki kural sayıyla biten teknik kodları, ör. `MET-PAS-316L-CB-20` ya da `MM-1001`, kabul ediyordu; bu kart onları 400 yapar, uyumsuzluk bilinen bir sonuçtur). Gömülü modda kod yapısı seçimi kilitli
-   (`Host.ayar.kod`, koddan okundu, tarayıcıda denenmedi: VARSAYIM) ve varsayılan standarttır, bu yüzden pratik etkisi yok sayılır. `_g3`/tablo kodlarının ürettiği her grup 3 karakterdir (DOĞRULANDI: kodlar `katalog.html` satır 4855-5619).
-   (c) "Taslakta kod değişebilsin" = hiç aktif olmamış taslakta tür değişince yeni türün önekiyle yeni kod; tür aynıyken gelen kod yok sayılır (kayıtlı kod kalır, içerik kaydedilir). İstisna, KULLANICI KARTI 17.10.2026 ("Yenilensin"): hiç aktif olmamış taslakta gelen kodun geçerli ve türe uyan öneki kayıtlıdan farklıysa (grup, çeşit, kategori değişimi) o önekle yeni kod verilir; geçersiz ya da türe ters önek kodu değiştirmez, firma kodlu türde önek ayardan gelir; aktif olmuş kartın kodu değişmez (`kurallar.ts` `katalogYeniOnek`, test `stok-kodu-kurallari.test.ts` "Kural 1a"). Boşalan eski kod yeniden verilmez, sırada delik kalır; aynı kod iki karta verilmez (eşzamanlı test).
-   (d) Onayda, aktif, pasif ve bir kez aktif olmuş kartta (taslağa çekilse de) tür değişimi 422. "Aktif olmuş" bilgisi yeni sütun `aktif_oldu` (göç, trigger yükseltir, geri düşürmez). Taslaktan çıkarken aynı yazımda tür değişimi serbest: eski durum taslaktır (ekran taslağı hep `onayda` ya da `aktif` olarak kaydeder).
-   (e) KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): gerçek veriyle sunucu yok, geliştirme kartları için etkisiz (VARSAYIM: canlı veriden önce eski kart sorunu doğmaz). Var olan kartlar için `aktif_oldu`: aktif/pasif olanlar ve sunucunun bastığı onay ya da pasife alma damgası (`onaylama`, `kayit.onay.onay`, `kayit.onay.pasif`) taşıyanlar doğru; hiç iz taşımayan taslak ve onaydaki kartlar yanlış (iz bırakmadan aktif olmuş eski kart bilinemez). Ekranın "kod yapısı geçişi" (toplu kod değiştirme) kilitli kartta kodu değiştiremez, istek yok sayılır.
-   (f) 24 sınırı önek kabulünde uygulanır (önek + en büyük `int` sıra, 7 + 10 = 17); sıra aşamasında ayrı denetim yok (erişilemezdi). Önek deseni genişletilirse sınır aynı yerde tutulur.
-   KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): (e) ile aynı gerekçe. Bilinen sınır: iz bırakmadan aktif olmuş eski kart bilinemez; yanlış işaretlenen satır ancak yeni göçle düzelir (tetikleyici işareti düşürmeye izin vermez). `aktif_oldu` aktif ya da pasif durumda yükselir (doldurma, ekleme ve güncelleme tetikleyicisi aynı tanım); şema ve doldurma kullanıcı onaylı (07.10.2026).
-   Göç `20261007210434_malzemeler_taslak_kodu.sql`: `aktif_oldu` sütunu, var olan kartların doldurulması ve koruma işlevi (hiç aktif olmamış taslakta tür, önek, sıra serbest; açan kişi ve sayı kimliği hep kilitli).
 
 ## Bağlama tur 1, tedarik (kart #163, kullanıcı kararları SH4 a, ML1 a, ML2 b, 09.10.2026)
 Kapandı:
@@ -202,12 +135,8 @@ Açık:
 
 ## Bağlama tur 1: hizmet çeşitleri (kart #163, kullanıcı isteği ve "yaz", 09.10.2026)
 Kapandı:
-- Hizmette grup, çeşit, standart ve isterler (ekranın `HZ_KAT` tablosu); kod çeşide göre; mükerrer anahtarı yön, grup, çeşit, standart ve isterlerle.
 - Stok sözleşmesi hizmeti tanıyor (stok #372 ana dalda); önceki turun "stok birleşmeden birleşemez" maddesi kapandı.
 Açık:
-- Standart önerileri genel bilgiden; kullanıcının şartname listesiyle karşılaştırılmadı.
-- BİLGİ NOTU (borç azaltma 18.10.2026; borç değil, istenirse ayrı iş): çeşit ve ister listeleri Ayarlar'dan genişlemez ("Diğer" çeşit ve serbest standart alanı var); sarf alanlarındaki gibi liste düzenleme.
-- BİLGİ NOTU (borç azaltma 18.10.2026; borç değil, bugün isteyen modül yok): çeşit özete, aramaya ve Logo kuyruğuna girmez; rota (fason adımı) ve satın alma çeşide göre süzmek isterse `disari.ts`'e ayrıca eklenir.
 - Kapandı: prototipin çeşit tablosu ve kuralları (kod, ad kurma, çeşit değişince silme, mükerrer anahtarı) `katalog-kurallari.test.tsx` ile testli.
   Bir isterin anahtarı grup, yön, ad, kapsam ya da çeşit anahtarıyla çakışırsa çeşit değişince silinmez (`HZ_AYRILMIS`), ama değeri paylaşır; yeni ister eklerken anahtar ayrı seçilmeli.
 - Kapandı (kullanıcı kartı 17.10.2026, "Yenilensin"): kayıtlı taslakta çeşit ya da kategori değişince sunucu da ekranın yeni önekiyle yeni kod verir (Logo bölümü madde 5 (c)).
@@ -215,7 +144,6 @@ Açık:
 
 ## Akış C düzeltmesi: kart birimi (kart #423, Refs #163, 10.10.2026)
 Kapandı:
-- Kart birimi kaydolmuyordu (H5); kayıt, varyant ve Excel içe aktarma artık ekranın gösterdiği birimi yazar. Tarayıcıda önce ve sonra sınandı (`/mnt/project-files/bagla/malzemeler-akis-c/`).
 Açık:
 - KAPANDI (borç değerlendirmesi 17.10.2026, AC1): kayıt, varyant ve Excel yolları testli (`katalog-kurallari.test.tsx` "birimi boş kayıtlı kart" ve "varyant kaydı her karta ekranın gösterdiği birimi yazar", `MalzemeKatalogu.test.tsx` Excel birimi). Birimsiz kart onaya ve aktife geçmez (kapandı, #1474); taslak birimsiz kaydolur.
 - Ana dalda birimi boş kalmış kartlar kendiliğinden dolmaz; yeniden kaydedilene kadar satın almada "Kataloğa ekle" 400 verir. Aşama 2: gerçek veriyle sunucu yok; canlı veri gelince sayılır, doldurmak dolu tabloyu değiştirdiği için yazılı onayla.
@@ -224,7 +152,6 @@ Açık:
 ## Tedarikçi firması (kart #466, Refs #163, 10.10.2026)
 Firma kartı 13.10.2026'dan beri Müşteriler ve Tedarikçiler modülünde (`musteri_tedarikci_firma.id`, kart #1164); sunucu firmayı `musteri-tedarikci/disari.ts` `firmaOzeti` ile okur, tedarikçi olabilme kuralı `finans/disari.ts` `tedarikciOlabilirMi`'dendir. Ekran ve sunucu iletilerinde "finans" sözcüğü hâlâ geçer (prototip metni ve `servis.ts` ret iletisi); ileti metni değişmedi.
 Kapandı:
-- Kart tedarikçisi firma kartından seçilir; kimlik kartta (`com.tedId`), sunucu firmanın varlığını denetler.
 Açık:
 - Eski kartlardaki tedarikçi metni firmaya eşlenmedi (eşleme kullanıcı onaylı ayrı iş; ad benzerliğiyle otomatik eşleme yapılmadı).
 - Kısmen kapandı (312 b, 20.10.2026): kartın kimliği `tedarikci_firma_id` sütununda da yazılır, firmaya yabancı anahtarla bağlı (`malzeme_katalog_karti_tedarikci_firma`). Açık: eski satırlar doldurulmadı (314: veri aktarılmaz); `com.tedId` jsonb'de kalır, ekran onu okur.
@@ -237,56 +164,147 @@ Açık:
 
 ## Ad, açıklama ve zorunlu alan kuralları (Malzeme ayarları, 15.10.2026)
 Kapandı:
-- Firma kodlu türler genel ayardadır (`genel.firmaKoduTurleri`); öneki sunucu kurar ve listeyi doğrular (`mamul-firma-kodu.test.ts`).
 Açık:
 - Tür başına zorunlu alan onaya göndermede ve aktif yapmada sunucuda denetlenir (kapandı, #1474). KAPANDI (borç azaltma 18.10.2026, tekrar): ad ve açıklama kalıbının (`malzeme` ayarı `kurallar`) yalnız ekranda
   uygulanması ana listedeki madde 4'ün (ekran kuralları sunucuya) parçasıdır, orada izlenir (alanların görünürlük koşulları prototiptedir; sunucu denetimi için alan tanımlarının sunucuya taşınması gerekir).
 - KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): çakışma kuralı sunucuda (`kurallar.ts` "MKK-16", `sorgular.ts` `varsayilan_anahtar`; test `cakisma-kurali.test.ts`). Çakışma alanları (`kurallar[tür].cakisma`) seçili türde benzersiz anahtarı sunucuda kurar; ekranın yerleşik kuralı `varsayilan_anahtar` sütununda saklanır, liste boşalınca kartlar ona döner.
 - Kapandı: kalıp motoru, zorunlu alan ve çakışma ayarı `katalog-kurallari.test.tsx` ile testli.
 
-## Kg fiyatı ve birim fiyat (19.10.2026, #1842)
-- Kartın Ticari bölümünde "Birim fiyat" ve "kg fiyatı (satın alma)" satın almanın kg fiyatı ucundan (`GET /satin-alma-kg-fiyatlari/malzemeler`) gelir, yalnız çerçevenin belleğinde durur, karta yazılmaz.
-  Yetkisiz rolde satır çizilmez; yetkili rolde fiyatı bilinmeyen tutar "—".
-- Bilinen sınır: satırlar prototip dosyasına değil, prototipten sonra eklenen betiğe yazıldı (`kg-fiyati-eki.ts`; prototip ekranlar değişmez). Betik prototipin genel `hostYenile` ve `specHTML` işlevlerini sarar;
-  prototip bu adları değiştirirse satırlar sessizce çıkmaz, `katalog-kurallari.test.tsx` "kartta birim fiyat" kırılır.
-
-## Rotası olan kartta operasyonlar (233 a, 19.10.2026, #1913)
-- Rotası (iptal olmayan revizyonu) olan kartta Operasyonlar adımı salt okunur tablo çizer; düzenleme Reçete ve Rota'nın "Ürün ve rotalar" görünümündedir. Yeni ya da rotasız kartta adım bugünkü gibidir; ilk rota karttan açılır (#688).
-- Sunucu böyle kartta ops, sıra, bom ya da talepte bunları değiştiren kaydı 409 ile reddeder; yalnız yeniden numaralama değişiklik sayılmaz. Rota bilgisi Rota'nın `durumRevizyonlari` işlevinden, `sunucu/kablolama.ts`'te bağlanan çözücüyle gelir (Rota Malzemeler'i ithal ettiği için ters yön).
-- Bilinen sınır: ekran kısmı prototipten sonra eklenen betiktir (`rotali-kart-eki.ts`, `opsHTML` sarılır). Rota durumu okunamazsa düzenleyici açık kalır, kaydı sunucu yine reddeder. Prototipte reçete adımı olmadığı için ekranda yalnız operasyonlar değişir.
-
-## Kartın etiketi Etiket Merkezi'nde (269 a, 20.10.2026, #2033)
-- Kart ayrıntısında prototipin "Etiket" düğmesinin yanında "Etiket Merkezi'nde bas" düğmesi durur; `/etiket-merkezi?tur=malzeme&id=<kart no>` açılır. Yalnız `sayfa.etiket-merkezi` olan kullanıcıda, kayıtlı ve hizmet olmayan kartta görünür.
-- Bilinen sınır: düğme prototipten sonra eklenen betiktedir (`etiket-merkezi-eki.ts`, `openItem` sarılır). Prototipin kendi etiket penceresi yerinde durur; ikisinin birleşmesi ayrı karardır. Aynı düğme QR ile açılan saha görünümünde de durur (`sahaAc` sarılır).
-
-## Alış birimi ve katsayısı (323 b, 20.10.2026)
-- Kartta tek alış birimi ve katsayısı durur (1 alış birimi = katsayı kadar stok birimi; ör. 1 kutu = 50 adet). Kartın `com.alisBirimi` ve `com.alisKatsayisi` alanları `alis_birimi` ve `alis_katsayisi` sütunlarına yazılır;
-  ikisi birlikte dolu ya da boştur, alış birimi stok biriminden farklı ve birim listesinde olmalıdır (yeni ya da değişmişse), katsayı sıfırdan büyük, en çok 6 ondalıktır. Satın alma `malzemeBirimDonusumleri` (disari.ts) ile okur.
-- Bilinen sınır: alanlar prototipten sonra eklenen betiktedir (`birim-donusumu-eki.ts`, `s5` ve `gTicariHTML` sarılır). Alış birimi seçenekleri ekranın bütün birim listelerinin birleşimidir; Excel aktarımı, föy ve değişiklik karşılaştırması alanları göstermez.
-  Eski kartlar boş kalır (314). Satın almada siparişin birimi ve stoka çeviri Satın alma şeridindedir.
-
-## CNC kütüphane kimliği (T3; 153 a, 163 b, 165 a, 23.10.2026)
-- Sarf ya da demirbaş kartı bir CNC kurulum kütüphane kalemine bağlanır: `malzeme_katalog_karti.cnc_kutuphane_kimligi` (boş olabilir, biçim ve tür kısıtı, kısmi tekil dizin). Bağlı kalemin adedi stoktan gelir, azalışı stoktan düşer (cnc-kurulum ve stok). Okuma ve yazma `disari.ts` `cncKimlikliMalzemeler`, `cncKimligiBagla`; yetki çağıranda (cnc-kurulum ucu `malzemeler.yaz` ister).
-- Bilinen sınır: bağ Malzemeler ekranında görünmez ve buradan kurulmaz; yalnız CNC kurulum Kütüphanesindeki köprü bölümünden. Bağ kartın sürümünü artırmaz, kartın değişiklik geçmişine girmez (kim, ne zaman cnc-kurulum ucunun denetim kaydında). Veri taşınmaz (165 a): eski kalemler bağsız başlar. Katalog kaleminin adı yalnız motorda; kartın adı elle girilir. VARSAYIM: iptal kart da bağlı kalabilir (stoğu durabilir). Bağlamada: kart ayrıntısında bağın gösterilmesi.
-
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - `GET /malzeme-birimleri` kalır (139 a, 881 a). Ölçüm (27.10.2026, `origin/main` db65d16): hiçbir ekran ve sunucu yolu çağırmıyor; başka yoldan da aynı liste verilmiyor. Birimin sahibi malzemeler (144 a). Ekrana eklemek prototip farkıdır; istenirse sorulur.
 
-## Yeni ekran malzeme ayarları: Roller tablosu (M3, soru 284 madde 7, 24.10.2026) - bağlamada kapanacak
-- Yeni ekranın "Roller ve yetkiler" bölümü prototipin sabit `YETKI` tablosunu gösterir; ayarı yazma yetkisi ise sunucunun `ayarYazabilir` cevabındandır (213 a). Tablo gerçek yetkiyle ayrışabilir. Kullanıcı "şimdilik kabul" dedi; bağlamada tablo ortak yetki matrisinden doldurulur.
-
 ## Ölçü aleti bağı (885 a, 27.10.2026)
 - KAPANDI: demirbaş kartının kalibrasyon alanları Kalibrasyon'a bağlı değildi. Kart aleti numarasıyla anar (`kayit.g.aletNo`, sütun `olcu_aleti_id`, göç `20261027077000`); numara Kalibrasyon'da olmalı, yalnız demirbaşta; talebin önerdiği numara da denetlenir. Vade ve durum `GET /malzeme-olcu-aletleri` ile Kalibrasyon'dan okunur (malzemeler sayfası yeter, Kalibrasyon yetkisi istenmez). Test `olcu-aleti-bagi.test.ts`.
-- Eski `kalAy`, `sonKal`, `kalKurulus` salt okunurdur: sunucu gelen değeri yok sayar, kayıtlı değeri korur; ekran yalnız değeri olan kartta salt okunur gösterir; yeni kart bu alanları almaz. Aleti bağlı kartta takvim ve uyarı eski tarihten hesaplanmaz.
 - VARSAYIM (geri alma ucuz): alet silinirse kart bağsız kalır (`ON DELETE SET NULL`), karttaki numara metni durur ve ekran "Bu numarada ölçü aleti yok" der. Kullanım dışı alet bağlanabilir; kart durumunu gösterir.
 - KALAN: Excel içe aktarımı ve prototip `katalog.html` eski alanları yazmaya devam eder; sunucu yok sayar. Kart listesinde (katalog tablosu) alet vadesi gösterilmez, yalnız sihirbazın bakım adımında görünür.
 
 ## Etiket yalnız Etiket Merkezi'nde (kart #1308, 1288)
 - SONRA: `kurallar/cekirdek/etiket.ts` (`labelSVG`) ve kural testindeki etiket ölçüleri artık ekranda kullanılmıyor; prototip kural katmanına dokunulmadı, kaldırılması ayrı iş.
-- ETKİLEYEN: madde 66'daki cihaz denemesindeki "etiket yazdırma" artık Etiket Merkezi'nde denenir.
 
 ## Demirbaş teknik bilgisi (kart 1595; 1596 teyit a, 1597 a, 1598 a, 1599 a)
-- Kartın kaydındaki makine kategorisi alanları (güç kW, kapasite, ağırlık, kontrol ünitesi, marka, model, seri, yıl) kayıtta kalır; tipli sütuna taşımak dolu tablodaki jsonb'yi değiştirir, ayrı kart ve onay ister. Kurulu güç bu alandır; tüketim tipli sütundadır.
 - İş mili devri `cnc_kurulum_tezgah.devir/is_mili_devri`'de de var (CNC Kurulum, makine başına); bağlamada tek sahibe bağlanır.
 - Finansın sabit kıymet listesi (Ayarlar > Sabit kıymetler) makine kodunu elle alır; kartlardan beslenmesi ayrı kart adayı.
 - Kart kaydındaki `com.fiyat` (öteki türlerde fiyat) kartı okuyan herkese gider; demirbaşta ekran fiyat istemez. Sunucuda süzme ayrı iştir: süzülen alanla kaydeden kart fiyatı silerdi.
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Açık borç (19.10.2026 sayımı: 20 madde, tavan 30; bayat satırlar 19.10.2026'da güncellendi)
+
+- İkinci menü (Aşama 1 tur 2): modül menüyü bildirir (`paylasilan/sayfalar/malzemeler.ts` `MALZEMELER_IKINCI_MENU`, çerçeveli, altı madde: prototipin görünüm şeridiyle aynı sıra ve ad);
+   adres görünümü seçer (`/malzemeler/yeni`, `/malzemeler`, `/sablonlar`, `/operasyonlar`, `/ayarlar`, `/kilavuz`), köprü `hazir` cevabında `gorunum` ve adres değişince `gorunum` olayı gönderir, çerçeve yeniden yüklenmez.
+   Prototipin kendi şeridi (`.top .views`) çerçeveye eklenen stille gizlenir, dosyasına dokunulmadı. QR okut ve Ayarlar düğmeleri prototipin üst şeridinde kalır (görünüm değil, işlem).
+   Ekran ölçümü N7 (tur 3): prototipin gömülü moddaki kendi yan menüsü (901 px ve üstü, `html.yanmenu`) kapatıldı (kullanıcı kararı B3 = a, 08.10.2026); QR okut, Ayarlar, iki birim düğmesi ve not prototipin dar ekran
+   düzeniyle üst satırda kalır (`MalzemeKatalogu.tsx` `YAN_MENU_KAPAT`, test `MalzemeKatalogu.test.tsx` "yan menu (B3)"). Çerçeve kabuğun içerik alanını doldurur (B4).
+   Toplayıcı kaydı bu dalda ayrı commit (kullanıcı kararı T1 a); kabuk menüyü çizer.
+   Bilinen sınır (bağlamada kapanacak): prototip kendi içinden görünüm değiştirince (ör. katalogda "Düzenle" yeni kart görünümünü açar) adres ve menüdeki etkin madde değişmez; prototip görünüm değişimini köprüye bildirmiyor.
+   KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kök adres ve "Yeni kart" yetkisi `paylasilan/sayfalar/malzemeler.ts` `kok: '/malzemeler'`, `'Yeni kart' ... islem: 'malzemeler.yaz'`. VARSAYIM (geri alma ucuz, tek dosya): kök adres katalogdur (prototip ilk açılışta yeni kart görünümündeydi); "Yeni malzeme" maddesini yalnız `malzemeler.yaz` taşıyan görür, öteki maddeler `sayfa.malzemeler`.
+- Ekran ölçümü N7 bulguları, kod yok (kullanıcı kararı 08.10.2026, `tur3-raporlar/ekran-olcumu.md`; prototipin ekranı, dosyasına dokunulmaz):
+   B2: Operasyonlar görünümünde 96 operasyonun her satırı düzenlenebilir (797 etkileşimli öğe; 13x13 px onay kutusu, 21x28 px sil düğmesi); tür seçimi daralıp kesik görünür, "Yeni operasyon" formunda etiket ve kutu karışık akar.
+   Aşama 2'de operasyon listesi istasyonlar kataloğuna bağlanınca bu tablo kalkar. DOĞRULANDI (ölçüm raporu, görüntü).
+   Kapandı: görünüm kalktı, liste istasyonlarda düzenlenir (kart #544).
+   KAPANDI (borç azaltma 18.10.2026, test): boş operasyon listesinde yerel düzenlemenin kapalı kalması (`katalog.html` `operasyonKaynagi` koşulu); test `katalog-kurallari.test.tsx` "istasyonlardan gelen boş operasyon listesi" (kaynaklı boş liste salt okunur ve yerel listeye dönmez; kaynaksız boş liste yerel listeyi bırakır; koşuldan `operasyonKaynagi` çıkarılınca test kırılıyor).
+   KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): ikinci menüde operasyonlar maddesi yok (`paylasilan/sayfalar/malzemeler.ts` `gruplar`), liste istasyonlardan salt okunur (`kopru.ts` "MKK-18", kart #544). A7 (#515): liste artık istasyonlardan gelir ve salt okunur; düzenleme öğeleri görünmez. Görünümün kalkıp kalkmayacağı B adımında seçilir.
+   B9: Kılavuz görünümünde 29 örnek satırı 11.5 px (`small`). Prototipin kendi metni; bağlamada ekranla birlikte ele alınır. DOĞRULANDI (ölçüm raporu).
+
+### Denetimde bulunan açıklar (07.10.2026; kart #163, denetim turu 1 sonrası durum, tur 2 dahil)
+
+- Kısmen: "kim onayladı, gönderdi, reddetti, pasife aldı" (`kayit.onay.{onay,talep,red,pasif}.{by,byAd,t}`) ve değişiklik talebinin sahibi (`kayit.talep.{by,byAd,t}`) ilgili geçişte
+   sunucudan basılır; geçiş olmayan yazmada kayıtlı değer korunur. Değişiklik geçmişi (`rev`) yalnız sona TEK kayıt eklenebilir (ekran her kaydetmede tek kayıt ekler: `withRev`, `onayUygula`, `talepOlustur`, `talepUygula`; 30 kayıtlık pencere:
+   baştan en çok eklenen kadar düşer); eklenen kaydın `by`, `byAd`, `t` alanını sunucu basar, kayıtlı kayıtlar korunur. Gerekçeli mükerrer kartta anahtar aynıysa kayıtlı gerekçe korunur
+   (ekranın `talepUygula`'sı `mukerrerOnay`'ı geri koymaz).
+   Kapandı (kart #226). KULLANICI KARARI (07.10.2026, #227 madde 3): sunucu farkı doğrulasın. DOĞRULANDI (`katalog.html` `talepPanelHTML`, `talepOlustur`, `talepUygula`): ekran onaycıya SAKLANAN `talep.farklar`'ı gösterir
+   (yeniden hesaplamaz, en çok 30 satır) ve `talep.yeni`'yi uygular. Sunucu kuralı (`kurallar.ts` `katalogFarki`, `katalogTalebiBas`, `katalogTalepUygulamaDenetle`): (a) yeni ya da değişen talepte `farklar` istemcininkinden
+   bağımsız sunucuda yazılır (önerilen kart ile bu yazmadan sonraki kart; ham alan yolu, `{ f: 'com.not', a: 'eski', b: 'yeni' }`; 30 satırı aşarsa fazlası son satırda adı, eski ve yeni değeriyle: `a` = `alan: eski; ...`, `b` = `alan: yeni; ...`, Aşama 1 tur 2); değişmeyen talepte kayıtlı fark korunur;
+   (b) talep uygulanırken (aktif kart talepsiz, içerik değişik yazılıyor) uygulanan içerik `talep.yeni` ile aynı olmalı, yoksa 422; ayrıca talep açıldığı günkü karta göre geçerli olmalı (bugünkü kartın farkı kayıtlı farkla aynı), yoksa 409.
+   VARSAYIM (geri alma maliyeti düşük, yalnız `kurallar.ts`): ekranın biçimlenmiş farkı (etiket, birim, sınıf adı) sunucuda yeniden üretilemez (tanım tabloları ekrandadır); bu yüzden onaycı artık ham alan yolu görür.
+   Sınır: `kayit.rev[].ch` (geçmiş notu) ve `kayit.rev[].not` hâlâ istemci metnidir; benzersiz anahtar ve mükerrer gerekçesi (özet) uygulamada istemciden gelir, önerilen içerikten sunucuda türetilemez;
+   talep uygulanırken `mukerrerOnay`/`yerine` dışarıdan kurulamaz; talep varken onaycının talebi düşürüp içeriği başka yazması artık 422 (önce talep reddedilir ya da talep tutularak düzenlenir; talep bayatlar, 409).
+   Kayıtlı eski biçimli (ekran farklı) talep uygulanamaz (409), reddedilir ya da yeniden açılır. Onaycının gördüğü kayıtlı fark bugünkü farktan (değerli son satır dahil) farklıysa da 409: taşan alanları yalnız adıyla anan tur 1 talepleri değer görülmeden onaylanamaz.
+   Denetim bulguları kapandı (Aşama 1 tur 1): alan yolu dizi olarak anahtarlanır, `"com.ad"` üst anahtarı `com.ad` yaprağını ezemez (gösterimde nokta içeren parça `[com.ad]`);
+   bayat denetimi kesilmiş farka değil sunucunun bastığı `talep.farkOzeti`'ne (kesilmemiş farkın sha256'sı) bakar, 30 satırda yalnız adıyla anılan alanın tabanı değişse de 409;
+   `talep: null` "talep yok" sayılır ve uygulama denetimini atlatmaz. Testler `talep-fark-dogrulama.test.ts`, `kurallar.test.ts`.
+   Bilinen sınır (ekran davranışı, belgelenir): talep ile onay arasında açıklama ya da kod ayarı değişirse ekran türetilen alanları (açıklama, ad) yeniden hesaplar,
+   uygulanan içerik talepteki önerilenden ayrılır ve meşru uygulama 422 alır; talep reddedilip yeniden açılır. Onaycının ham alan yolu görmesi (etiketli fark yerine) dışarıdaki ekrandan farklıdır.
+   KAPANDI (kullanıcı kararıyla kalsın, 16.10.2026; 2c ile tutarlı): dört göz ekranın değişiklik talebinde yalnız ekrandadır (`talepYetkili`); onaycının kendi açtığı talebi sunucuda kendisi uygulaması bugünkü gibi kalır.
+- Başka yazarın bekleyen değişiklik talebi olan kartı ikinci bir yazar düzenlerse 403 alır; talebi yalnız sahibi ya da onaycı değiştirir.
+  KAPANDI (kart #234 madde 18, kullanıcı kararı 07.10.2026; 18.10.2026): sunucunun ret iletisi (403, 409, 400, 422) genel "Kayıt yapılamadı" yerine olduğu gibi gösterilir; köprü yalnız sunucunun kendi iletisini işaretler (`MalzemeKatalogu.tsx` `sunucuIletisiMi`), köprünün iç hatası ve zaman aşımı genel iletide kalır (testler `katalog-kurallari.test.tsx` "madde 18", `MalzemeKatalogu.test.tsx`). Kısa gerekçe kodu da artık çerçeveye geçer.
+  Kapandı (kullanıcı kartı 17.10.2026, "Şimdi düzelt"): "Talebi geri çek" gömülü modda yalnız talebin sahibine ve onay yetkilisine görünür; sunucu kuralı değişmedi.
+
+### Çekirdek kalıplarıyla uyum
+
+- Kart listesi ucu sayfalı (`sayfa`, `sayfaBoyu`, `sonra`); köprü bütün sayfaları okur (200'lük sayfa, değişenler önbellekle), çünkü ekran arama ve süzgeci kartların hepsi üstünde yapar ve listeyi tek parça çizer. Ekranın sayfa sayfa çizmesi yeni düğme ister; sorulacak (#169).
+
+### Logo (ERP) alanları (kart #205)
+
+- Stok kodu kuralları (kart #230). KULLANICI KARARI (07.10.2026, #227 madde 10, 11, 25): kodu her zaman sunucu verir (önek + sıra); aktif olunca kod ve tür kilitlenir; en çok 24 karakter.
+   VARSAYIM (şef önerisiyle ilerledi, kart #230): (a) KAPANDI (borç azaltma 18.10.2026, tekrar): "Bilinen sınırlar" bölümündeki elle stok kodu maddesiyle aynı iş, orada izlenir. Elle kod alanı ekranda duruyor; yazılan kodun yalnız geçerli öneki kullanılır, sayı yok sayılır; alanın kalkması ekran isteği #234 madde 10.
+   (b) KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): kod yapısı seçimi gömülü modda kilitli (`katalog.html` `name="kodYapisi"` radyosu `|| kilit ? 'disabled'`, `kilit` `onayAyarKilit`'ten). Kabul edilen önek tam olarak ekranın standart yapısıdır (`katalog.html` `kodOnek`, `KOD_DESEN`): `(HM|YM|MM|SF|DB)-[A-Z0-9]{3}-`; tür kısmı kartın türüyle aynı olmalı; serbest önek 400. Ekranın teknik kod yapısı (`kodYapisi: 'teknik'`, ör. `MET-PAS-316L-...`) bu desene uymaz ve reddedilir
+   (önceki kural sayıyla biten teknik kodları, ör. `MET-PAS-316L-CB-20` ya da `MM-1001`, kabul ediyordu; bu kart onları 400 yapar, uyumsuzluk bilinen bir sonuçtur). Gömülü modda kod yapısı seçimi kilitli
+   (`Host.ayar.kod`, koddan okundu, tarayıcıda denenmedi: VARSAYIM) ve varsayılan standarttır, bu yüzden pratik etkisi yok sayılır. `_g3`/tablo kodlarının ürettiği her grup 3 karakterdir (DOĞRULANDI: kodlar `katalog.html` satır 4855-5619).
+   (c) "Taslakta kod değişebilsin" = hiç aktif olmamış taslakta tür değişince yeni türün önekiyle yeni kod; tür aynıyken gelen kod yok sayılır (kayıtlı kod kalır, içerik kaydedilir). İstisna, KULLANICI KARTI 17.10.2026 ("Yenilensin"): hiç aktif olmamış taslakta gelen kodun geçerli ve türe uyan öneki kayıtlıdan farklıysa (grup, çeşit, kategori değişimi) o önekle yeni kod verilir; geçersiz ya da türe ters önek kodu değiştirmez, firma kodlu türde önek ayardan gelir; aktif olmuş kartın kodu değişmez (`kurallar.ts` `katalogYeniOnek`, test `stok-kodu-kurallari.test.ts` "Kural 1a"). Boşalan eski kod yeniden verilmez, sırada delik kalır; aynı kod iki karta verilmez (eşzamanlı test).
+   (d) Onayda, aktif, pasif ve bir kez aktif olmuş kartta (taslağa çekilse de) tür değişimi 422. "Aktif olmuş" bilgisi yeni sütun `aktif_oldu` (göç, trigger yükseltir, geri düşürmez). Taslaktan çıkarken aynı yazımda tür değişimi serbest: eski durum taslaktır (ekran taslağı hep `onayda` ya da `aktif` olarak kaydeder).
+   (e) KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): gerçek veriyle sunucu yok, geliştirme kartları için etkisiz (VARSAYIM: canlı veriden önce eski kart sorunu doğmaz). Var olan kartlar için `aktif_oldu`: aktif/pasif olanlar ve sunucunun bastığı onay ya da pasife alma damgası (`onaylama`, `kayit.onay.onay`, `kayit.onay.pasif`) taşıyanlar doğru; hiç iz taşımayan taslak ve onaydaki kartlar yanlış (iz bırakmadan aktif olmuş eski kart bilinemez). Ekranın "kod yapısı geçişi" (toplu kod değiştirme) kilitli kartta kodu değiştiremez, istek yok sayılır.
+   (f) 24 sınırı önek kabulünde uygulanır (önek + en büyük `int` sıra, 7 + 10 = 17); sıra aşamasında ayrı denetim yok (erişilemezdi). Önek deseni genişletilirse sınır aynı yerde tutulur.
+   KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): (e) ile aynı gerekçe. Bilinen sınır: iz bırakmadan aktif olmuş eski kart bilinemez; yanlış işaretlenen satır ancak yeni göçle düzelir (tetikleyici işareti düşürmeye izin vermez). `aktif_oldu` aktif ya da pasif durumda yükselir (doldurma, ekleme ve güncelleme tetikleyicisi aynı tanım); şema ve doldurma kullanıcı onaylı (07.10.2026).
+   Göç `20261007210434_malzemeler_taslak_kodu.sql`: `aktif_oldu` sütunu, var olan kartların doldurulması ve koruma işlevi (hiç aktif olmamış taslakta tür, önek, sıra serbest; açan kişi ve sayı kimliği hep kilitli).
+
+### Bağlama tur 1: hizmet çeşitleri (kart #163, kullanıcı isteği ve "yaz", 09.10.2026)
+
+- Hizmette grup, çeşit, standart ve isterler (ekranın `HZ_KAT` tablosu); kod çeşide göre; mükerrer anahtarı yön, grup, çeşit, standart ve isterlerle.
+- Standart önerileri genel bilgiden; kullanıcının şartname listesiyle karşılaştırılmadı.
+- BİLGİ NOTU (borç azaltma 18.10.2026; borç değil, istenirse ayrı iş): çeşit ve ister listeleri Ayarlar'dan genişlemez ("Diğer" çeşit ve serbest standart alanı var); sarf alanlarındaki gibi liste düzenleme.
+- BİLGİ NOTU (borç azaltma 18.10.2026; borç değil, bugün isteyen modül yok): çeşit özete, aramaya ve Logo kuyruğuna girmez; rota (fason adımı) ve satın alma çeşide göre süzmek isterse `disari.ts`'e ayrıca eklenir.
+
+### Akış C düzeltmesi: kart birimi (kart #423, Refs #163, 10.10.2026)
+
+- Kart birimi kaydolmuyordu (H5); kayıt, varyant ve Excel içe aktarma artık ekranın gösterdiği birimi yazar. Tarayıcıda önce ve sonra sınandı (`/mnt/project-files/bagla/malzemeler-akis-c/`).
+
+### Tedarikçi firması (kart #466, Refs #163, 10.10.2026)
+
+- Kart tedarikçisi firma kartından seçilir; kimlik kartta (`com.tedId`), sunucu firmanın varlığını denetler.
+
+### Ad, açıklama ve zorunlu alan kuralları (Malzeme ayarları, 15.10.2026)
+
+- Firma kodlu türler genel ayardadır (`genel.firmaKoduTurleri`); öneki sunucu kurar ve listeyi doğrular (`mamul-firma-kodu.test.ts`).
+
+### Kg fiyatı ve birim fiyat (19.10.2026, #1842)
+
+- Kartın Ticari bölümünde "Birim fiyat" ve "kg fiyatı (satın alma)" satın almanın kg fiyatı ucundan (`GET /satin-alma-kg-fiyatlari/malzemeler`) gelir, yalnız çerçevenin belleğinde durur, karta yazılmaz.
+  Yetkisiz rolde satır çizilmez; yetkili rolde fiyatı bilinmeyen tutar "—".
+
+### Rotası olan kartta operasyonlar (233 a, 19.10.2026, #1913)
+
+- Rotası (iptal olmayan revizyonu) olan kartta Operasyonlar adımı salt okunur tablo çizer; düzenleme Reçete ve Rota'nın "Ürün ve rotalar" görünümündedir. Yeni ya da rotasız kartta adım bugünkü gibidir; ilk rota karttan açılır (#688).
+- Sunucu böyle kartta ops, sıra, bom ya da talepte bunları değiştiren kaydı 409 ile reddeder; yalnız yeniden numaralama değişiklik sayılmaz. Rota bilgisi Rota'nın `durumRevizyonlari` işlevinden, `sunucu/kablolama.ts`'te bağlanan çözücüyle gelir (Rota Malzemeler'i ithal ettiği için ters yön).
+
+### Kartın etiketi Etiket Merkezi'nde (269 a, 20.10.2026, #2033)
+
+- Kart ayrıntısında prototipin "Etiket" düğmesinin yanında "Etiket Merkezi'nde bas" düğmesi durur; `/etiket-merkezi?tur=malzeme&id=<kart no>` açılır. Yalnız `sayfa.etiket-merkezi` olan kullanıcıda, kayıtlı ve hizmet olmayan kartta görünür.
+
+### Alış birimi ve katsayısı (323 b, 20.10.2026)
+
+- Kartta tek alış birimi ve katsayısı durur (1 alış birimi = katsayı kadar stok birimi; ör. 1 kutu = 50 adet). Kartın `com.alisBirimi` ve `com.alisKatsayisi` alanları `alis_birimi` ve `alis_katsayisi` sütunlarına yazılır;
+  ikisi birlikte dolu ya da boştur, alış birimi stok biriminden farklı ve birim listesinde olmalıdır (yeni ya da değişmişse), katsayı sıfırdan büyük, en çok 6 ondalıktır. Satın alma `malzemeBirimDonusumleri` (disari.ts) ile okur.
+
+### CNC kütüphane kimliği (T3; 153 a, 163 b, 165 a, 23.10.2026)
+
+- Sarf ya da demirbaş kartı bir CNC kurulum kütüphane kalemine bağlanır: `malzeme_katalog_karti.cnc_kutuphane_kimligi` (boş olabilir, biçim ve tür kısıtı, kısmi tekil dizin). Bağlı kalemin adedi stoktan gelir, azalışı stoktan düşer (cnc-kurulum ve stok). Okuma ve yazma `disari.ts` `cncKimlikliMalzemeler`, `cncKimligiBagla`; yetki çağıranda (cnc-kurulum ucu `malzemeler.yaz` ister).
+- Bilinen sınır: bağ Malzemeler ekranında görünmez ve buradan kurulmaz; yalnız CNC kurulum Kütüphanesindeki köprü bölümünden. Bağ kartın sürümünü artırmaz, kartın değişiklik geçmişine girmez (kim, ne zaman cnc-kurulum ucunun denetim kaydında). Veri taşınmaz (165 a): eski kalemler bağsız başlar. Katalog kaleminin adı yalnız motorda; kartın adı elle girilir. VARSAYIM: iptal kart da bağlı kalabilir (stoğu durabilir). Bağlamada: kart ayrıntısında bağın gösterilmesi.
+
+### Yeni ekran malzeme ayarları: Roller tablosu (M3, soru 284 madde 7, 24.10.2026) - bağlamada kapanacak
+
+- Yeni ekranın "Roller ve yetkiler" bölümü prototipin sabit `YETKI` tablosunu gösterir; ayarı yazma yetkisi ise sunucunun `ayarYazabilir` cevabındandır (213 a). Tablo gerçek yetkiyle ayrışabilir. Kullanıcı "şimdilik kabul" dedi; bağlamada tablo ortak yetki matrisinden doldurulur.
+
+### Ölçü aleti bağı (885 a, 27.10.2026)
+
+- Eski `kalAy`, `sonKal`, `kalKurulus` salt okunurdur: sunucu gelen değeri yok sayar, kayıtlı değeri korur; ekran yalnız değeri olan kartta salt okunur gösterir; yeni kart bu alanları almaz. Aleti bağlı kartta takvim ve uyarı eski tarihten hesaplanmaz.
+
+### Etiket yalnız Etiket Merkezi'nde (kart #1308, 1288)
+
+- ETKİLEYEN: madde 66'daki cihaz denemesindeki "etiket yazdırma" artık Etiket Merkezi'nde denenir.
+
+### Demirbaş teknik bilgisi (kart 1595; 1596 teyit a, 1597 a, 1598 a, 1599 a)
+
+- Kartın kaydındaki makine kategorisi alanları (güç kW, kapasite, ağırlık, kontrol ünitesi, marka, model, seri, yıl) kayıtta kalır; tipli sütuna taşımak dolu tablodaki jsonb'yi değiştirir, ayrı kart ve onay ister. Kurulu güç bu alandır; tüketim tipli sütundadır.

@@ -11,7 +11,14 @@
 7. Kilometre taşının üretim emrine, siparişe ya da satın almaya bağı ve tahmini tarihi yok (890 c, ilk sürüm) / `projeler` plan ve üretim emirlerini okuyamaz (ADR 0006) / bağ ve tahmin üst katmanda (proje-maliyet ya da plan) kurulur; o zamana kadar gerçekleşen tarih elle girilir.
 8. Plan ve gerçekleşen zaman çizelgesi Projeler'de hesaplanmaz (908) / plan modülü proje süzgeçli salt okunur uç verir (933 a, 815 sonrası, ayrı dal) / Projeler'e salt okunur sekme API ile eklenir (madde 4 kalıbı).
 9. KAPANDI (940 c, 936 a): görev maliyeti görevde tutulmaz (911 b); üretim dışı masraf belgesi projeye ve görevine proje-maliyet'teki `proje_maliyet_masraf` ile bağlanır, taban fotoğrafı `proje_maliyet_taban`'dadır; Maliyet sekmesinde görünür.
-10. Statü penceresinde kapatılmış güncel statü seçili görünmez (liste yalnız etkin statüleri verir) / yalnız görünüm; geçmişte adıyla kalır.
 
 ## Sonra
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kod tekilliği (`projeler_proje_kod_tekil`) çift kaydı önlüyor; yalnız bilgi notu. Kullanmadığı çekirdek kalıbı: tekrar koruması yok (açma komutu kod tekilliğiyle zaten çift kayıt açmaz). Veri kapsamı yok (proje iş merkezine bağlı değil).
+
+## Bilgi (borç değil)
+
+Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
+
+### Bağlamada kapanacak
+
+- Statü penceresinde kapatılmış güncel statü seçili görünmez (liste yalnız etkin statüleri verir) / yalnız görünüm; geçmişte adıyla kalır.
