@@ -102,10 +102,12 @@ function SipAc({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
       <p className="tc-pym-tp-not">Kalın çizgili adımlar bitişi belirleyen zincir. Adıma dokun, çizelgede açılsın.</p>
       {s.durum === 'iyi'
         ? <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" />{` Termine ${sure(s.pay)} pay var.`}</p>
-        : <p className="tc-pym-tp-not" title={MOTOR_NOTU}><Simge ad="rotate" boyut="k" />{` Çözüm yolları (öne al, tezgâh değiştir): ${MOTOR_NOTU}`}</p>}
+        : <p className="tc-pym-tp-not" title={MOTOR_NOTU}><Simge ad="rotate" boyut="k" />{ort.tasi
+          ? ` Çözüm yolu: adımı seçip tezgâhını ya da saatini değiştirin ya da çubuğu sürükleyin. Öne al: ${MOTOR_NOTU}`
+          : ` Çözüm yolları (öne al, tezgâh değiştir): ${MOTOR_NOTU}`}</p>}
       <div className="tc-pym-tp-eylem">
         {s.adet > 1 && !parcaAyir(s.id)[1] && ort.yaz && (
-          <button type="button" className="tc-dugme" aria-disabled="true" title={`Böl: ${MOTOR_NOTU}`}><Simge ad="layers" boyut="k" />Böl</button>
+          <button type="button" className="tc-dugme" aria-disabled="true" title="Böl: iş emri Reçete ve Rota > Üretim emirlerinde bölünür."><Simge ad="layers" boyut="k" />Böl</button>
         )}
         {s.durum !== 'iyi' && (
           <button type="button" className="tc-dugme" onClick={(e) => ort.kartAc({ tur: 'termin', j: s.id }, ankraj(e))}><Simge ad="clock" boyut="k" />Termin konuş</button>

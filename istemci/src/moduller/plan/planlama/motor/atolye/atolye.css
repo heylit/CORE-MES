@@ -230,6 +230,7 @@
   color: var(--muted); white-space: nowrap;
 }
 .tc-pym-tp-cubuk {
+  translate: var(--dx, 0) var(--dy, 0);
   position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--w); border-radius: var(--b-1); z-index: 2; overflow: hidden; color: var(--ink);
   background: color-mix(in srgb, var(--grafik) 34%, var(--panel-solid)); border: var(--cizgi-ince) solid color-mix(in srgb, var(--grafik) 70%, transparent);
   font: inherit; font-size: var(--yazi-xs); line-height: 1.1; padding: var(--pay-ince) var(--b-1); white-space: nowrap; cursor: pointer; text-align: left; user-select: none;
@@ -327,7 +328,7 @@
 }
 .tc-pym-tp-kart h3 { margin: 0; font-size: var(--yazi-m); display: flex; align-items: center; gap: var(--b-2); }
 .tc-pym-tp-kart label, .tc-pym-tp-etiket { display: block; font-size: var(--yazi-xs); color: var(--muted); margin-top: var(--b-2); }
-.tc-pym-tp-kart select, .tc-pym-tp-kart textarea {
+.tc-pym-tp-kart select, .tc-pym-tp-kart textarea, .tc-pym-tp-kart .tc-pym-tp-girdi {
   width: 100%; min-height: calc(var(--dokunma) - var(--b-2)); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
   padding: 0 var(--b-2); color: var(--ink); font: inherit;
 }
@@ -578,3 +579,7 @@
   .tc-pym-ae aside { max-height: var(--ekran-boy-40); border-top: var(--cizgi-ince) solid var(--edge2); border-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .tc-pym-ae-izgara { scroll-behavior: auto; } }
+
+/* Sürükle-bırak (1981 b): çubuk sürüklenirken geçişsiz izler; hedef satır vurgulanır. */
+.tc-pym-tp-cubuk[data-surukle] { transition: none; z-index: 5; cursor: grabbing; box-shadow: var(--shadow); touch-action: none; }
+.tc-pym-tp-satir[data-hedef] .tc-pym-tp-zaman { background: color-mix(in srgb, var(--grafik) 10%, transparent); }

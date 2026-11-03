@@ -4,6 +4,7 @@ import { Simge, type useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { planGuncel } from '../../durum.ts';
 import { bekleyenListesi } from '../../kayit.ts';
+import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
 import { Kararlar } from './Bugun.tsx';
@@ -18,7 +19,7 @@ import { bilgiAl, type Ortam } from './Pano.tsx';
 // yanında açılır, telefonda alttan; dışına dokunmak ve Esc kapatır. Panonun kabı konum kabı olduğundan kart sayfanın gövdesine çizilir.
 export type AcikKart =
   | { tur: 'op'; id: string } | { tur: 'suz' } | { tur: 'geri' } | { tur: 'gonder' } | { tur: 'menu' } | { tur: 'dondurma' } | { tur: 'gun' }
-  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string };
+  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string } | { tur: 'olay' };
 export interface Ankraj { x: number; y: number }
 type Bildir = ReturnType<typeof useBildirim>['bildir'];
 
@@ -95,13 +96,14 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
                 </div>
               </>
             )}
+            {!sabit && !r.fas && ort.tasi && <Tasi ort={ort} id={kart.id} m={r.m} S={r.S} adaylar={a.c.filter((m) => cx.M[m])} />}
             <div className="tc-pym-tp-eylem">
               {!sabit && yaz && (lk
                 ? <button type="button" className="tc-dugme" onClick={() => kilit(true)}><Simge ad="lock" boyut="k" />Kilidi aç</button>
                 : <button type="button" className="tc-dugme" title="Bu saat ve tezgâhta sabit kalır" onClick={() => kilit(false)}><Simge ad="lock" boyut="k" />Bu saatte kilitle</button>)}
               <button type="button" className="tc-dugme" onClick={() => ort.sipGoster(r.job)}><Simge ad="list" boyut="k" />Siparişi aç</button>
             </div>
-            {!sabit && <Not>{`İpucu: çubuğu sürükleyerek başka saate ya da tezgâha taşımak: ${MOTOR_NOTU}`}</Not>}
+            {!sabit && !r.fas && ort.tasi && <Not>İpucu: çubuğu sürükleyerek de başka saate ya da tezgâha taşıyabilirsiniz.</Not>}
           </>
         ),
       };
@@ -205,6 +207,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         ),
       };
     case 'gun': return gunOzeti(ort);
+    case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} /> } : null;
     case 'termin': {
       const s = bilgiAl(ort, kart.j); if (!s) return null; const metin = terminMetni(c, s);
       const kopyala = () => {
@@ -266,6 +269,113 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
 }
 
 // Donuk bölge seçimi: çalışmanın ağırlığına (w.dondurma) yazılır; plan yeniden çözülünce etkir.
+// Taşı (1981 b): aynı saatte başka tezgâha ya da aynı tezgâhta başka saate. İş o yerde kilitlenir; uygun olmayan yeri motor kabul etmez.
+const KAYDIR: [string, number][] = [['−1 sa', -1], ['+1 sa', 1], ['+4 sa', 4], ['+1 gün', 24]];
+function Tasi({ ort, id, m, S, adaylar }: { ort: Ortam; id: string; m: string; S: number; adaylar: string[] }) {
+  const tasi = ort.tasi; if (!tasi) return null;
+  return (
+    <>
+      <Etiket>Taşı: tezgâh</Etiket>
+      <div className="tc-pym-tp-cipler">
+        {adaylar.map((x) => (
+          <button key={x} type="button" className="tc-pym-tp-cip" aria-pressed={x === m} onClick={() => { if (x !== m) tasi(id, x, S); }}>{x}</button>
+        ))}
+      </div>
+      <Etiket>Taşı: saat</Etiket>
+      <div className="tc-pym-tp-cipler">
+        {KAYDIR.map(([ad, h]) => {
+          const yok = S + h < ort.now;
+          return <button key={ad} type="button" className="tc-pym-tp-cip" aria-disabled={yok} title={yok ? 'Geçmiş saate taşınamaz' : undefined} onClick={() => { if (!yok) tasi(id, m, S + h); }}>{ad}</button>;
+        })}
+      </div>
+    </>
+  );
+}
+
+// Olay ekle (1982 a): arıza, acil sipariş, malzeme gecikmesi, personel eksikliği ya da fason gecikmesi. Olay sunucuda çalışmaya yazılır,
+// motor planı kurarken uygular.
+type OlayTuru = AtolyeOlayi['tip'];
+type OlayAlani = 'm' | 'ofs' | 'saat' | 'urun' | 'adet' | 'termin' | 'kod' | 'gun' | 'vardiya' | 'grup' | 'n' | 'f' | 'tarih';
+const OLAY_TURLERI: [OlayTuru, string][] = [['ariza', 'Arıza'], ['acil', 'Acil sipariş'], ['malzeme', 'Malzeme gecikmesi'], ['eksik', 'Personel eksik'], ['fason', 'Fason gecikmesi']];
+const gunFarki = (bas: string | undefined, gun: string): number | null => {
+  const a = Date.parse(`${(bas ?? '').slice(0, 10)}T00:00:00Z`), b = Date.parse(`${gun}T00:00:00Z`);
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86_400_000) : null;
+};
+function OlayFormu({ ort, ekle }: { ort: Ortam; ekle: (o: AtolyeOlayi) => Promise<boolean> }) {
+  const D = ort.c.D;
+  const tezgahlar = D.tezgahlar; const urunler = D.urunler; const malzemeler = D.malzemeler ?? []; const fasoncular = D.fasoncular ?? [];
+  const vardiyalar = (D.vardiyalar ?? []).flatMap((v) => (typeof v.id === 'string' ? [{ id: v.id, ad: typeof v.ad === 'string' ? v.ad : v.id }] : []));
+  const gruplar = [...new Set(tezgahlar.map((t) => (typeof t.grup === 'string' ? t.grup : '')).filter(Boolean))];
+  const [tur, setTur] = useState<OlayTuru>('ariza');
+  const [f, setF] = useState<Record<OlayAlani, string>>({ m: tezgahlar[0]?.id ?? '', ofs: '0', saat: '8', urun: urunler[0]?.id ?? '', adet: '1', termin: '',
+    kod: malzemeler[0]?.kod ?? '', gun: '1', vardiya: vardiyalar[0]?.id ?? '', grup: gruplar[0] ?? 'ayar', n: '1', f: fasoncular[0]?.id ?? '', tarih: '' });
+  const [gidiyor, setGidiyor] = useState(false);
+  const al = (k: OlayAlani) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const sayi = (k: OlayAlani) => Number(f[k]);
+  const olay = ((): AtolyeOlayi | null => {
+    switch (tur) {
+      case 'ariza': return f.m && sayi('saat') > 0 && sayi('ofs') >= 0 ? { tip: 'ariza', m: f.m, bas: ort.now + sayi('ofs'), saat: sayi('saat') } : null;
+      case 'acil': return f.urun && Number.isInteger(sayi('adet')) && sayi('adet') > 0 && f.termin ? { tip: 'acil', urun: f.urun, adet: sayi('adet'), termin: f.termin.replace('T', ' ') } : null;
+      case 'malzeme': return f.kod && Number.isInteger(sayi('gun')) && sayi('gun') >= 1 ? { tip: 'malzeme', kod: f.kod, gun: sayi('gun') } : null;
+      case 'eksik': {
+        const g = f.tarih ? gunFarki(D.meta?.baslangic, f.tarih) : null;
+        return g !== null && g >= 0 && f.vardiya && Number.isInteger(sayi('n')) && sayi('n') >= 1 ? { tip: 'eksik', gun: g, vardiya: f.vardiya, grup: f.grup, n: sayi('n') } : null;
+      }
+      case 'fason': return f.f && Number.isInteger(sayi('gun')) && sayi('gun') >= 1 ? { tip: 'fason', f: f.f, gun: sayi('gun') } : null;
+    }
+  })();
+  const gonder = async () => {
+    if (!olay) return;
+    setGidiyor(true);
+    if (await ekle(olay)) ort.kartKapat(); else setGidiyor(false);
+  };
+  const alan = (k: OlayAlani, ad: string, ic: ReactNode) => <><label htmlFor={`tc-pym-tp-olay-${k}`}>{ad}</label>{ic}</>;
+  const secim = (k: OlayAlani, l: { id: string; ad: string }[]) => (
+    <select id={`tc-pym-tp-olay-${k}`} value={f[k]} onChange={al(k)}>{l.map((x) => <option key={x.id} value={x.id}>{x.ad}</option>)}</select>
+  );
+  const giris = (k: OlayAlani, tip: 'number' | 'date' | 'datetime-local', min?: number) => (
+    <input id={`tc-pym-tp-olay-${k}`} className="tc-pym-tp-girdi" type={tip} min={min} value={f[k]} onChange={al(k)} />
+  );
+  return (
+    <>
+      <div className="tc-pym-tp-cipler" role="group" aria-label="Olay türü">
+        {OLAY_TURLERI.map(([t, ad]) => <button key={t} type="button" className="tc-pym-tp-cip" aria-pressed={tur === t} onClick={() => setTur(t)}>{ad}</button>)}
+      </div>
+      {tur === 'ariza' && <>
+        {alan('m', 'Tezgâh', secim('m', tezgahlar.map((t) => ({ id: t.id, ad: t.ad ? `${t.id} · ${t.ad}` : t.id }))))}
+        {alan('ofs', 'Kaç saat sonra başlar', giris('ofs', 'number', 0))}
+        {alan('saat', 'Süre (saat)', giris('saat', 'number', 1))}
+      </>}
+      {tur === 'acil' && <>
+        {alan('urun', 'Ürün', secim('urun', urunler.map((u) => ({ id: u.id, ad: u.ad ?? u.id }))))}
+        {alan('adet', 'Adet', giris('adet', 'number', 1))}
+        {alan('termin', 'Termin', giris('termin', 'datetime-local'))}
+      </>}
+      {tur === 'malzeme' && <>
+        {alan('kod', 'Malzeme', secim('kod', malzemeler.map((x) => ({ id: x.kod, ad: x.ad ?? x.kod }))))}
+        {alan('gun', 'Gecikme (gün)', giris('gun', 'number', 1))}
+      </>}
+      {tur === 'eksik' && <>
+        {alan('tarih', 'Gün', giris('tarih', 'date'))}
+        {alan('vardiya', 'Vardiya', secim('vardiya', vardiyalar))}
+        {alan('grup', 'Kim eksik', secim('grup', [...gruplar.map((g) => ({ id: g, ad: `${grupAd(g)} personeli` })), { id: 'ayar', ad: 'Ayarcı' }]))}
+        {alan('n', 'Kişi sayısı', giris('n', 'number', 1))}
+      </>}
+      {tur === 'fason' && <>
+        {alan('f', 'Fasoncu', secim('f', fasoncular.map((x) => ({ id: x.id, ad: x.ad ?? x.id }))))}
+        {alan('gun', 'Gecikme (gün)', giris('gun', 'number', 1))}
+      </>}
+      <div className="tc-pym-tp-eylem">
+        <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" aria-disabled={!olay || gidiyor} onClick={() => void gonder()}>
+          <Simge ad="plus" boyut="k" />{gidiyor ? 'Ekleniyor' : 'Olayı ekle'}
+        </button>
+        <button type="button" className="tc-dugme" onClick={ort.kartKapat}>Vazgeç</button>
+      </div>
+      <Not>Olay çalışmaya yazılır; plan bir sonraki uygulamada hesaba katar.</Not>
+    </>
+  );
+}
+
 function Donuk({ ort }: { ort: Ortam }) {
   const komut = ort.o.komut;
   return (

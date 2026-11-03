@@ -16,6 +16,14 @@ import { planOku } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 
 afterEach(cleanup);
+// jsdom'da PointerEvent yok: fireEvent onsuz olayı konumsuz yollar. Sürükle testleri için fare olayından türetilir.
+if (typeof window.PointerEvent === 'undefined') {
+  class IsaretciOlayi extends MouseEvent {
+    readonly pointerId: number;
+    constructor(tur: string, o: PointerEventInit = {}) { super(tur, o); this.pointerId = o.pointerId ?? 0; }
+  }
+  window.PointerEvent = IsaretciOlayi as unknown as typeof PointerEvent;
+}
 // Brifing günü tarayıcıda; testler öntanımlı olarak bugün görülmüş sayar.
 const BRIF = 'tmi:planlama:brif';
 const bugunAnahtari = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -410,7 +418,7 @@ describe('PlanlamaAtolyesi', () => {
     fireEvent.click(within(ray).getAllByRole('button', { expanded: false })[0] as HTMLElement);
     expect(within(ray).getByText(/Ayrıntı · 50 adet · normal/)).toBeTruthy();
     expect(within(ray).getByText(/fasoncu çıkış günü \(5\)/)).toBeTruthy();
-    expect(within(ray).getByText(/Çözüm yolları/).textContent).toContain(MOTOR_NOTU);
+    expect(within(ray).getByText(/Çözüm yolu: adımı seçip/).textContent).toContain(`Öne al: ${MOTOR_NOTU}`);
     expect(within(ray).getByRole('button', { name: 'Böl' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(within(ray).getByRole('button', { name: 'Termin konuş' }));
     expect((within(kart()).getByRole('textbox') as HTMLTextAreaElement).value).toContain('2 numaralı siparişiniz');
@@ -434,6 +442,89 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(kart()).getByText('Neden bu saatte')).toBeTruthy();
     fireEvent.click(within(kart()).getByRole('button', { name: 'Bu saatte kilitle' }));
     expect(yazilan.at(-1)?.locks['2.40']).toMatchObject({ m: '5' });
+  });
+
+  it('taşı (1981 b, 1982 a): iş kartındaki saat ve tezgâh düğmeleri sunucu komutudur; çalışma önce kaydedilir, cevaptan sonra sayfa yenilenir', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const { yenile } = ac();
+    fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
+    expect(within(kart()).getByRole('button', { name: '5', pressed: true })).toBeTruthy();
+    fireEvent.click(within(kart()).getByRole('button', { name: '+1 sa' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/is-tasi', { isId: '2.40', tezgah: '5', baslangic: 209, calismaSurumu: 8 }, expect.anything()));
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    post.mockRestore();
+  });
+
+  it('sürükle-bırak taşır, kısa dokunuş kartı açar; sunucu reddederse iletisi gösterilir, sayfa yenilenmez', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValue(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlamış iş taşınamaz.' }));
+    const { yenile } = ac();
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    expect(cubuk.dataset['surukle']).toBe('');
+    fireEvent.pointerUp(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    fireEvent.click(cubuk);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(cubuk.dataset['surukle']).toBeUndefined();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    const [yol, govde] = post.mock.calls[0] as [string, { isId: string; tezgah: string; baslangic: number }];
+    expect(yol).toBe('/plan/planlama-calismasi/is-tasi');
+    expect(govde).toMatchObject({ isId: '2.40', tezgah: '5' });
+    expect(govde.baslangic).toBeGreaterThan(208);
+    expect(govde.baslangic * 4).toBe(Math.round(govde.baslangic * 4));
+    await waitFor(() => expect(screen.getByText(/Başlamış iş taşınamaz/)).toBeTruthy());
+    expect(yenile).not.toHaveBeenCalled();
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 2 });
+    fireEvent.pointerUp(cubuk, { clientX: 102, clientY: 10, pointerId: 2 });
+    fireEvent.click(cubuk);
+    expect(within(kart()).getByText('Neden bu saatte')).toBeTruthy();
+    expect(post).toHaveBeenCalledTimes(1);
+    post.mockRestore();
+  });
+
+  it('olay ekle (1982 a): formdan sunucuya gider, kart kapanır; yazamayan için Olay pasif, taşı düğmesi ve sürükleme yok', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const { yenile } = ac();
+    fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
+    const k = screen.getByRole('dialog', { name: 'Olay ekle' });
+    fireEvent.change(within(k).getByLabelText('Kaç saat sonra başlar'), { target: { value: '2' } });
+    fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '6' } });
+    fireEvent.click(within(k).getByRole('button', { name: 'Olayı ekle' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/olay-ekle', { calismaSurumu: 8, olay: { tip: 'ariza', m: '5', bas: 10, saat: 6 } }, expect.anything()));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(yenile).toHaveBeenCalledTimes(1);
+    // Eksik alanla gönderilmez.
+    fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Acil sipariş' }));
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Olayı ekle' }));
+    expect(within(kart()).getByRole('button', { name: 'Olayı ekle' }).getAttribute('aria-disabled')).toBe('true');
+    expect(post.mock.calls.map((c) => c[0])).toEqual(['/plan/planlama-calismasi/olay-ekle']);
+    cleanup();
+    ac({ yaz: false });
+    expect(screen.getByRole('button', { name: /^Olay:/ }).getAttribute('aria-disabled')).toBe('true');
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    expect(cubuk.dataset['surukle']).toBeUndefined();
+    fireEvent.click(cubuk);
+    expect(within(kart()).queryByRole('button', { name: '+1 sa' })).toBeNull();
+    post.mockRestore();
+  });
+
+  it('akış oku çubukların planlı saatinden çizilir: geçiş sürerken ölçülen eski yere kaymaz (1980)', () => {
+    ac();
+    fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
+    const yer = (id: string) => {
+      const s = (document.querySelector(`[data-id="${id}"]`) as HTMLElement).style;
+      return { x: parseFloat(s.getPropertyValue('--x')), w: parseFloat(s.getPropertyValue('--w')) };
+    };
+    const yollar = [...document.querySelectorAll('.tc-pym-tp-oklar > path')].map((p) => p.getAttribute('d') ?? '');
+    expect(yollar.length).toBeGreaterThan(0);
+    // Etiket sütunu jsdom'da ölçülemez, varsayılan genişliği (115 px) kullanılır.
+    const once = yer('2.30'), sonra = yer('2.40');
+    const yol = yollar.find((d) => d.startsWith(`M${String(115 + once.x + once.w)},`));
+    expect(yol, yollar.join(' | ')).toBeTruthy();
+    expect(yol?.split(' ').at(-1)?.split(',')[0]).toBe(String(115 + sonra.x - 3));
   });
 
   it('donuk bölge ağırlığa yazılır; Diğer menüsü ölçek ve sekmeler', () => {
