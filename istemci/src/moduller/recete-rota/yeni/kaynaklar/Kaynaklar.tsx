@@ -34,7 +34,7 @@ const operatorMetni = (oran: number): string => {
   return n >= 2 && n <= 10 && Math.floor(100 / n) / 100 === oran ? `1 operatör ${String(n)} tezgâha bakar` : `${sayi(oran)} operatör/makine`;
 };
 export const ISTASYON_MALIYET_NOTU = 'Doğrudan gider: enerji, bakım, sarf (amortisman ve kira genel giderde)';
-export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine ve personel İstasyonlar sayfasında, vardiya ve tatiller Vardiya sayfasında yazılır; '
+export const ORTAK_KAYNAK_NOTU = 'İş merkezi, istasyon, makine ve personel İstasyonlar sayfasında, vardiya ve tatiller İnsan Kaynakları menüsünde yazılır; '
   + 'burada yalnız okunur.';
 
 // Seçili alt sekme cihaz tercihidir (yalnız bu tarayıcı); depo kapalıysa Genel bakış açılır.

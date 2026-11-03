@@ -33,7 +33,7 @@ function VardiyaBolumu({ v, sayfaVar }: { v: TesisVerisi; sayfaVar: boolean }) {
   return (
     <div className="tc-ist-bolum">
       <div className="tc-ist-arac">
-        <p className="tc-ist-ipucu">Vardiyalar, haftalık düzen, tatil günleri ve kişinin vardiyası Vardiya sayfasında yazılır; kişinin vardiyası Personel bölümünde de seçilir.</p>
+        <p className="tc-ist-ipucu">Vardiyalar, haftalık düzen ve tatil günleri İnsan Kaynakları menüsünde yazılır; kişinin vardiyası Personel bölümünde seçilir.</p>
         {sayfaVar && <div className="tc-ist-arac-sag"><Link to="/vardiya">Vardiya düzenini aç</Link></div>}
       </div>
       <section className="tc-ist-panel" aria-label="Vardiya tanımları">
