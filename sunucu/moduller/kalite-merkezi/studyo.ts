@@ -9,9 +9,9 @@ import type {
 import { alinanRevizyonDosyasi, kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
-import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { kapanisSonuclari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
-  STUDYO_ILETILER, balonPlaniReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
+  STUDYO_ILETILER, balonPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
 } from './kurallar.ts';
 import type { StudyoIletisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -287,6 +287,7 @@ export async function numuneIste(
   db: Db, kisiId: number, g: KmNumuneIstegi,
 ): Promise<KmNumune> {
   const malzemeNo = await emirParcasi(db, g.uretimEmriId);
+  await kapanmisEmreYazma(db, g.uretimEmriId);
   const balonlar = await sorgular.etkinBalonlar(db, g.balonlar);
   const red = numuneIstegiReddi({ emirMalzemeNo: malzemeNo, istenen: g.balonlar, balonlar });
   if (red !== null) throw ret(red, 'balonlar');
@@ -297,10 +298,17 @@ export async function numuneIste(
   return numuneOku(db, id);
 }
 
+// Kapanış sonucu yalnız onaylı kapanışı tamamlanmış emirde doludur (açık ya da onay bekleyen kapanış null).
+async function kapanmisEmreYazma(db: Db, uretimEmriId: number): Promise<void> {
+  const red = kapanmisEmirReddi((await kapanisSonuclari(db, [uretimEmriId])).get(uretimEmriId) != null);
+  if (red !== null) throw cakisma(STUDYO_ILETILER[red]);
+}
+
 // Ölçüm yalnız eklenir; uygunluk balonun sınırından sunucuda hesaplanır. Numuneye giren ölçü numunenin kilidini alır: aynı anda
 // verilen kararla yarışmaz.
 export async function olcumYaz(db: Db, kisiId: number, kaynak: KmOlcumKaynagi, g: KmOlcumVerisi): Promise<KmOlcum[]> {
   const malzemeNo = await emirParcasi(db, g.uretimEmriId);
+  await kapanmisEmreYazma(db, g.uretimEmriId);
   let numune: sorgular.NumuneSatiri | null = null;
   if (g.numuneId !== undefined) {
     if (!(await sorgular.numuneKilitle(db, g.numuneId))) throw bulunamadi(STUDYO_ILETILER.numuneYok);
@@ -329,6 +337,7 @@ export async function olcumYaz(db: Db, kisiId: number, kaynak: KmOlcumKaynagi, g
 export async function numuneKarari(db: Db, kisiId: number, numuneId: number, karar: KmNumuneKarari, not: string | null): Promise<KmNumune> {
   if (!(await sorgular.numuneKilitle(db, numuneId))) throw bulunamadi(STUDYO_ILETILER.numuneYok);
   const n = (await sorgular.numune(db, numuneId))!;
+  await kapanmisEmreYazma(db, n.uretimEmriId);
   if (n.karar !== null) throw cakisma(STUDYO_ILETILER.kararVar);
   const red = numuneKarariReddi(karar, not, n.balonlar, await sorgular.numuneOlcumleri(db, [numuneId]));
   if (red !== null) throw ret(red, red === 'redGerekcesiz' ? 'not' : 'karar');

@@ -196,6 +196,8 @@ describe('A2 Hazırlık ekranı', () => {
     const d = await ekran();
     fireEvent.click(within(d).getByRole('button', { name: /Dokümanlar/ }));
     expect(await within(d).findByText('Yeni revizyon var', undefined, { timeout: 10000 })).toBeTruthy();
+    // 1 KB altı dosya bayt olarak yazılır ("0 KB" değil).
+    expect(within(d).getByText('3 B')).toBeTruthy();
     fireEvent.click(within(d).getByRole('button', { name: /Güncelle/ }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === MERKEZ_EKLE)).toBe(true); }, { timeout: 10000 });
     await waitFor(() => { expect(paketYazimi(istekler).some((p) => p.primary === 'deneme-b.pdf' && p.files.length === 1)).toBe(true); }, { timeout: 10000 });

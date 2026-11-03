@@ -22,7 +22,7 @@ import { numuneIste, olcumYaz, studyoParcasi } from './disari.ts';
 import {
   STUDYO_ILETILER, balonPlaniReddi, numuneKarariReddi, numunePlaniReddi, olcumSonucu, ondalikKarsilastir, sonOlcumler, studyoResimTuru,
 } from './kurallar.ts';
-import { balonYeriYaz, resimMerkezdenEkle } from './studyo.ts';
+import { balonYeriYaz, numuneKarari, resimMerkezdenEkle } from './studyo.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -577,5 +577,28 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     await assert.rejects(o().sahip.sorgu(
       "INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, alt, ust, guncelleyen_id) VALUES ($1, 91, 'x', '1', 'Infinity', $2)", [resimId, yonId],
     ));
+  });
+
+  test('2037 (1080 a): kapanışı onaylanmış emre ölçüm, numune isteği ve numune kararı yazılmaz; kapanış açıkken yazılır', async () => {
+    const olcumYolu = '/kalite-merkezi/studyo/olcumler/yaz';
+    const n = await o().vt.tx((db) => numuneIste(db, yonId, { uretimEmriId: flansEmri, opNo: 40, balonlar: [balon.mastar], neden: 'Kapanış denemesi' }));
+    await o().sahip.sorgu('INSERT INTO uretim_emirleri_kapanis (uretim_emri_id) VALUES ($1)', [flansEmri]);
+    try {
+      const acik = await yaz(kalite, olcumYolu, { uretimEmriId: flansEmri, olcumler: [{ balonId: balon.mastar, nitel: 'gecer' }] });
+      assert.equal(acik.statusCode, 200, 'kapanış onay beklerken ölçüm yazılır');
+      await o().sahip.sorgu("UPDATE uretim_emirleri_kapanis SET durum = 'tamam', eski = true, tamamlanma = now() WHERE uretim_emri_id = $1", [flansEmri]);
+      const sayi = async () => (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_olcum WHERE uretim_emri_id = $1', [flansEmri]))!.n;
+      const once = await sayi();
+      const red = await yaz(kalite, olcumYolu, { uretimEmriId: flansEmri, olcumler: [{ balonId: balon.mastar, nitel: 'gecer' }] });
+      assert.deepEqual([red.statusCode, ileti(red)], [409, STUDYO_ILETILER.emirKapandi]);
+      await assert.rejects(o().vt.tx((db) => numuneIste(db, yonId, { uretimEmriId: flansEmri, opNo: 40, balonlar: [balon.mastar], neden: 'Kapanış sonrası' })),
+        (h: UygulamaHatasi) => h.message === STUDYO_ILETILER.emirKapandi);
+      await assert.rejects(o().vt.tx((db) => olcumYaz(db, kaliteId, 'operator', { uretimEmriId: flansEmri, numuneId: n.id, olcumler: [{ balonId: balon.mastar, nitel: 'gecer' }] })),
+        (h: UygulamaHatasi) => h.message === STUDYO_ILETILER.emirKapandi);
+      await assert.rejects(o().vt.tx((db) => numuneKarari(db, yonId, n.id, 'onay', null)), (h: UygulamaHatasi) => h.message === STUDYO_ILETILER.emirKapandi);
+      assert.equal(await sayi(), once, 'reddedilen yazma ölçüm eklemez');
+    } finally {
+      await o().sahip.sorgu('DELETE FROM uretim_emirleri_kapanis WHERE uretim_emri_id = $1', [flansEmri]);
+    }
   });
 });

@@ -8,6 +8,7 @@ import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { gorunumTanimi, gorunumYolu, STUDYO_YOLU, type KmGecis, type KmGorunum } from './sekmeler.ts';
 import { YENI_KAYIT } from './tipler.ts';
 import { ArsivGorunumuSaglayici } from './ArsivGorunumu.tsx';
+import { KaliteMerkeziCizimOrtami } from './cizim-ortami.tsx';
 import { TerimIsaretleri } from './TerimIsaretleri.tsx';
 import { OnizlemeSaglayici } from './Onizleme.tsx';
 import { kmTercihi, tercihYaz, useKmVerisi } from './veri.ts';
@@ -97,12 +98,14 @@ function Icerik() {
 }
 
 // Kalite Merkezi ekranı (199 b, 582): sayfayı gören herkes açar. Gezinme kabuğun ikinci menü şeridindedir; ekran kendi bölüm
-// sekmesini çizmez (553 1 a).
+// sekmesini çizmez (553 1 a). Teknik resim Üretim Hazırlık'la aynı çizim ortamında açılır (2032 a).
 export function KaliteMerkeziYeni() {
   return (
     <OnizlemeSaglayici>
       <ArsivGorunumuSaglayici>
-        <Icerik />
+        <KaliteMerkeziCizimOrtami>
+          <Icerik />
+        </KaliteMerkeziCizimOrtami>
       </ArsivGorunumuSaglayici>
     </OnizlemeSaglayici>
   );
