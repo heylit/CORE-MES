@@ -160,6 +160,13 @@ describe('Arkon sözleşmesi -> CORE uçları', () => {
     expect(cagrilar.at(-1)?.govde).toEqual({ kaynak: 'x' });
   });
 
+  // Megabaytlık dizide toEqual her baytı ayrı karşılaştırır ve yük altında zaman aşımına uğrar; ilk farklı konum yeter (-1: aynı).
+  const ilkFark = (a: Uint8Array | undefined, b: Uint8Array): number => {
+    if (a === undefined || a.length !== b.length) return 0;
+    for (let i = 0; i < b.length; i++) if (a[i] !== b[i]) return i;
+    return -1;
+  };
+
   it('dosya: içerik parça parça base64 gider, okunan içerik aynen döner', async () => {
     const veri = new Uint8Array(PARCA * 2 + 10).map((_, i) => i % 251);
     const parcalar: string[] = [];
@@ -170,14 +177,16 @@ describe('Arkon sözleşmesi -> CORE uçları', () => {
     expect((await cevapla(istemci, istek('POST', '/blob/missing', '', JSON.stringify(['x'])))).govde).toEqual(['x']);
     expect((await cevapla(istemci, istek('PUT', '/blob/abc', '', veri))).govde).toEqual({ ok: true });
     expect(parcalar).toHaveLength(3);
-    const birlesik = new Uint8Array(parcalar.flatMap((p) => [...base64Oku(p)]));
-    expect(birlesik).toEqual(veri);
+    const okunanParcalar = parcalar.map(base64Oku);
+    const birlesik = new Uint8Array(okunanParcalar.reduce((n, p) => n + p.length, 0));
+    okunanParcalar.reduce((konum, p) => { birlesik.set(p, konum); return konum + p.length; }, 0);
+    expect(ilkFark(birlesik, veri)).toBe(-1);
     const okunanYollar: string[] = [];
     const ikili = async (yol: string) => { okunanYollar.push(yol); return veri; };
     const okunan = await cevapla({ ...istemci, ikili }, istek('GET', '/blob/abc'));
-    expect(okunan.ham).toEqual(veri);
+    expect(ilkFark(okunan.ham, veri)).toBe(-1);
     expect(okunanYollar).toEqual(['/arkon/dosyalar/abc']);
-    expect((await cevapla({ ...istemci, ikili }, istek('GET', '/blob/abc/arka'))).ham).toEqual(veri);
+    expect(ilkFark((await cevapla({ ...istemci, ikili }, istek('GET', '/blob/abc/arka'))).ham, veri)).toBe(-1);
     expect(okunanYollar).toEqual(['/arkon/dosyalar/abc', '/arkon/dosyalar/abc/arka-plan']);
   });
 
