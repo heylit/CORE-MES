@@ -38,7 +38,7 @@ fun AdresEkrani(mevcut: String?, kaydet: (String) -> Unit, sonra: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("TMI sunucu adresi", color = Renkler.soluk, fontSize = 12.sp)
+        Text("CORE sunucu adresi", color = Renkler.soluk, fontSize = 12.sp)
         BasicTextField(
             value = metin,
             onValueChange = { metin = it.trim(); hata = null },
@@ -71,7 +71,7 @@ fun KapaliEkran(adresGir: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("TMI", fontSize = 18.sp, color = Renkler.vurgu)
+        Text("CORE", fontSize = 18.sp, color = Renkler.vurgu)
         Text("Sunucu adresi girilmedi. Özellikler kapalı.", color = Renkler.soluk, fontSize = 12.sp, textAlign = TextAlign.Center)
         Button(onClick = adresGir, modifier = Modifier.fillMaxWidth()) { Text("Sunucu adresi gir", fontSize = 12.sp) }
     }

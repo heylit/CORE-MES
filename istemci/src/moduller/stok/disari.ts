@@ -39,3 +39,4 @@ export function useIsGirdileri(istasyonKodu: string | null, uretimEmriId: number
   return { girdiler, istasyonId };
 }
 export const okutulanKoduCoz = (kod: string): Promise<OkutCozCevabi> => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`);
+export { BEKLEYEN_SAYFA_BOYU, TerminalMalKabul } from './TerminalMalKabul.tsx';

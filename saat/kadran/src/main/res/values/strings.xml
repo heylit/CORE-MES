@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="kadran_adi">TMI Kadran</string>
+    <string name="kadran_adi">CORE Kadran</string>
     <string name="vurgu_rengi">Vurgu rengi</string>
     <string name="vurgu_sari">Sarı</string>
     <string name="vurgu_yesil">Yeşil</string>

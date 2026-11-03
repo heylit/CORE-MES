@@ -859,14 +859,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }, []);
   const dakika = Math.floor(shiftNow);
   useEffect(() => { segsYaz((s) => { const L = s[s.length - 1]; if (!L) return s; return s.map((x, i) => (i === s.length - 1 ? { ...x, t: Math.max(x.t, shiftNow) } : x)); }); }, [dakika]);
-  /* uzak mod: 45 sn dokunulmazsa */
+  /* uzak mod: 45 sn dokunulmazsa; 2031 a: kendiliğinden yalnız operatörde açılır, elle düğme her rolde kalır */
+  const kendiligindenUzak = !pv && kisi?.role === 'operator';
   useEffect(() => {
     const f = () => { lastAct.current = Date.now(); };
     window.addEventListener('pointerdown', f, true);
     window.addEventListener('keydown', f, true);
     return () => { window.removeEventListener('pointerdown', f, true); window.removeEventListener('keydown', f, true); };
   }, []);
-  useEffect(() => { if (!pv && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
+  useEffect(() => { if (kendiligindenUzak && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
 
   const patch = (p: Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === ai ? { ...x, ...p } : x)));
   const undoable = (label: string, icon: SimgeAdi, ton: Ton, f: () => void) => {

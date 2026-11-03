@@ -41,14 +41,18 @@ test('360 genişlikte sayfa adı düğmelerin altında kendi satırında kesilme
     await ac(s.yol);
     const baslik = page.locator('h1.tc-kabuk-baslik');
     await expect(baslik).toHaveText(s.baslik);
-    const olcu = await baslik.evaluate((e) => ({ yatay: e.scrollWidth - e.clientWidth, dikey: e.scrollHeight - e.clientHeight, en: e.clientWidth }));
-    expect(olcu.en, `${s.yol} başlığın genişliği`).toBeGreaterThan(0);
-    expect(olcu.yatay, `${s.yol} başlık yatayda kesiliyor`).toBeLessThanOrEqual(0);
-    expect(olcu.dikey, `${s.yol} başlık dikeyde kesiliyor`).toBeLessThanOrEqual(0);
-    const b = await baslik.boundingBox();
-    const geri = await page.locator('.tc-kabuk-ust > .tc-arama').boundingBox();
-    expect(b !== null && geri !== null && b.y >= geri.y + geri.height, `${s.yol} başlık düğmelerin altında değil`).toBe(true);
-    expect(await ustCubukCakisanlar(page), `${s.yol} üst çubukta üst üste binen düğmeler`).toEqual([]);
+    // Yetkiye bağlı üst eylemler (Okut gibi) oturum işlemleri gelince eklenir ve başlığı alt satıra iter; tek anlık ölçüm o
+    // ekleme öncesine denk gelirse düşüyordu. Düzen oturana kadar yeniden ölçülür; kalıcı bozukluk yine düşer.
+    await expect(async () => {
+      const olcu = await baslik.evaluate((e) => ({ yatay: e.scrollWidth - e.clientWidth, dikey: e.scrollHeight - e.clientHeight, en: e.clientWidth }));
+      expect(olcu.en, `${s.yol} başlığın genişliği`).toBeGreaterThan(0);
+      expect(olcu.yatay, `${s.yol} başlık yatayda kesiliyor`).toBeLessThanOrEqual(0);
+      expect(olcu.dikey, `${s.yol} başlık dikeyde kesiliyor`).toBeLessThanOrEqual(0);
+      const b = await baslik.boundingBox();
+      const geri = await page.locator('.tc-kabuk-ust > .tc-arama').boundingBox();
+      expect(b !== null && geri !== null && b.y >= geri.y + geri.height, `${s.yol} başlık düğmelerin altında değil`).toBe(true);
+      expect(await ustCubukCakisanlar(page), `${s.yol} üst çubukta üst üste binen düğmeler`).toEqual([]);
+    }).toPass({ timeout: 10_000 });
   }
 });
 

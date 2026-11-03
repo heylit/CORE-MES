@@ -66,7 +66,7 @@ abstract class TmiKarosu : TileService() {
         kapsam.launch {
             val depo = Depo(this@TmiKarosu)
             val icerik = try {
-                if (depo.sunucu == null || depo.belirtec == null) KaroIcerigi(listOf(MiniSatir(Renkler.bos, "TMI'ı açıp eşleştirin", "")))
+                if (depo.sunucu == null || depo.belirtec == null) KaroIcerigi(listOf(MiniSatir(Renkler.bos, "CORE'u açıp eşleştirin", "")))
                 else icerik(Api({ depo.sunucu }) { depo.belirtec })
             } catch (e: ApiHatasi) {
                 KaroIcerigi(listOf(MiniSatir(Renkler.bos, e.message ?: "Sunucuya ulaşılamıyor", "")))

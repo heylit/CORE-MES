@@ -7,6 +7,8 @@ yalnız kurulum bilgisi durur. Kurallar `CLAUDE.md`, mimari kararlar `belgeler/a
 
 - Node 24 ve PostgreSQL (Actions'ta 18). Veritabanları: `tmiv2` (geliştirme) ve `tmiv2_test` (test).
 - Sunucu 4100 (`npm run gelistir:sunucu`), istemci 4101 (`npm run gelistir:istemci`).
+  Geliştirme istemcisi Arkon'u (Üretim Terminali, Üretim Hazırlık) `arkon/dist`'ten sunar: ilk kurulumda ve Arkon değişince
+  `npm run derle:arkon` koşulur; koşulmazsa terminal teknik resmi açamaz ve "Doküman yok" yazar.
 - Derlenmiş sürüm tek komutla: `npm run baslat` (Arkon ve istemci derlenir, sonra tek sunucu süreci açılır: API 4100'de, derlenmiş arayüz ve /api
   4101'de (`TMIV2_ARAYUZ_PORT`); 4101 yalnız `TMIV2_ONIZLEME_ADRESI` verilirse ağa açılır; Ctrl+C kapatır). Geliştirme sunucusu açıkken çalıştırılmaz: aynı portlar. Güncelleme klasörü tanımlıysa güncelleyiciyle
   açar ve ekrandan uygulanan paketi kurar (`kurulum/guncelleme.md`).

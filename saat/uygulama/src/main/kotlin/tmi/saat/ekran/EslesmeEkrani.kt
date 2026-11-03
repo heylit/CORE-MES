@@ -32,7 +32,7 @@ import tmi.saat.IstekDurumu
 import tmi.saat.Renkler
 import tmi.saat.cekirdek.Eslesme as EslesmeKurali
 
-// Saat kodu gosterir; kisi TMI'da Profil > Akilli saatimi eslestir'de kodu girip onaylar. Saat onayi kendisi sorar
+// Saat kodu gosterir; kisi CORE'da Profil > Akilli saatimi eslestir'de kodu girip onaylar. Saat onayi kendisi sorar
 // (15 sn arayla) ya da "Devam" ile hemen sorar. Istegin suresi dolunca yeni kod gelir.
 @Composable
 fun EslesmeEkrani(api: Api, adresDegistir: () -> Unit, eslesti: (Eslesme) -> Unit) {
@@ -77,7 +77,7 @@ fun EslesmeEkrani(api: Api, adresDegistir: () -> Unit, eslesti: (Eslesme) -> Uni
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("TMI'da Profil > Akıllı saatimi eşleştir", color = Renkler.soluk, fontSize = 12.sp, textAlign = TextAlign.Center)
+        Text("CORE'da Profil > Akıllı saatimi eşleştir", color = Renkler.soluk, fontSize = 12.sp, textAlign = TextAlign.Center)
         val i = istek
         if (i == null) {
             Text(ileti ?: "Kod alınıyor", color = Renkler.soluk, textAlign = TextAlign.Center)

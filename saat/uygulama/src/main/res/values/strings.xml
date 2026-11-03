@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="uygulama_adi">TMI Saat</string>
-    <string name="karo_istasyonlar">TMI İstasyonlarım</string>
-    <string name="karo_uyarilar">TMI Uyarılar</string>
-    <string name="karo_vardiya">TMI Vardiya</string>
-    <string name="kutucuk_emirler">TMI Açık emirler</string>
-    <string name="kutucuk_istasyonlar">TMI İstasyonlar</string>
-    <string name="kutucuk_logo">TMI Logo</string>
-    <string name="kutucuk_uyarilar">TMI Uyarı sayısı</string>
-    <string name="kutucuk_vardiya">TMI Vardiya bitişi</string>
+    <string name="uygulama_adi">CORE Saat</string>
+    <string name="karo_istasyonlar">CORE İstasyonlarım</string>
+    <string name="karo_uyarilar">CORE Uyarılar</string>
+    <string name="karo_vardiya">CORE Vardiya</string>
+    <string name="kutucuk_emirler">CORE Açık emirler</string>
+    <string name="kutucuk_istasyonlar">CORE İstasyonlar</string>
+    <string name="kutucuk_logo">CORE Logo</string>
+    <string name="kutucuk_uyarilar">CORE Uyarı sayısı</string>
+    <string name="kutucuk_vardiya">CORE Vardiya bitişi</string>
 </resources>
