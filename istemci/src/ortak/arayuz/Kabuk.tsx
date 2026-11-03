@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientContext } from '@tanstack/react-query';
 import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sayfalar.ts';
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
+import { UYGULAMA_ADI, birlesikAd } from '#paylasilan/uygulama.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import type { CerceveSayaclari } from '../rota/cerceve-iletisi.ts';
 import { CerceveSayacBaglami, type CerceveSayacYazici } from '../rota/cerceve-sayaclari.ts';
@@ -172,10 +172,15 @@ function sadeGorunum(menu: IkinciMenuTanimi | null, acik: boolean): IkinciMenuTa
 // Telefonda tek maddelik şeridi çizilmeyen sayfalar: başlıkları kendi ekranlarındadır, şerit yalnız işi aşağı iter.
 const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/kuyruk']);
 
-// Firma adı (kabuk.kurum-adi) logo yokken marka işaretinde durur; girilmemişse işaret çizilmez, yalnız uygulama adı kalır.
-function KurumIsareti() {
+// Firma adı (kabuk.kurum-adi) kabuğa buradan gelir; sekme başlığı "<Firma> CORE" olur, girilmemişse yalnız "CORE".
+// Kurulu uygulamanın adı (PWA) kurulumda sabitlenir; o yalnız CORE kalır.
+function KurumAdiOku({ yaz }: { yaz: (ad: string | null) => void }) {
   const ad = useKurumAdi();
-  return ad === null ? null : <span className="tc-kabuk-marka-isaret mono">{ad}</span>;
+  useEffect(() => {
+    yaz(ad);
+    document.title = birlesikAd(ad);
+  }, [ad, yaz]);
+  return null;
 }
 
 export function Kabuk({
@@ -183,6 +188,7 @@ export function Kabuk({
 }: Ozellikler) {
   // Kabuk sorgu sağlayıcısı olmadan da çizilir (bileşen testleri); o zaman firma adı sorulmaz.
   const sorguVar = useContext(QueryClientContext) !== undefined;
+  const [kurumAdi, kurumAdiYaz] = useState<string | null>(null);
   const anaBaglanti = useMemo<BaglantiSayfasi>(() => ({ yol: anaSayfa, baslik: ANA_SAYFA_BASLIGI, simge: 'home' }), [anaSayfa]);
   const sayfalar = useMemo(() => tumSayfalar.filter((s) => !yolKapaliMi(s.yol, kapali)), [tumSayfalar, kapali]);
   const ikinciMenuler = useMemo(() => kapaliMaddeleriSuz(tumMenuler, kapali), [tumMenuler, kapali]);
@@ -375,7 +381,7 @@ export function Kabuk({
           <NavLink to={anaSayfa} className="tc-kabuk-marka" aria-hidden="true" tabIndex={-1} end>
             {logo !== null
               ? <img className="tc-kabuk-marka-logo" src={logo} alt="" />
-              : sorguVar && <KurumIsareti />}
+              : kurumAdi !== null && <span className="tc-kabuk-marka-isaret mono">{kurumAdi}</span>}
             <span className="tc-kabuk-marka-metin">{UYGULAMA_ADI}</span>
           </NavLink>
           <p className="tc-kabuk-surum mono" title={`Sürüm ${DERLEME.surum}, derleme ${derlemeTarihi(DERLEME.tarih, true)}`}>
@@ -530,8 +536,10 @@ export function Kabuk({
           konular={GENEL_KONULAR}
           kisayollar={olayGruplari}
           tanitimiBaslat={() => { davetYaz(false); tanitimYaz(true); }}
+          kurumAdi={kurumAdi}
         />
-        <TanitimPenceresi acik={tanitimAcik} kapat={tanitimBitti} maddeler={rehber} kisayolVar={olayGruplari.length > 0} />
+        <TanitimPenceresi acik={tanitimAcik} kapat={tanitimBitti} maddeler={rehber} kisayolVar={olayGruplari.length > 0} kurumAdi={kurumAdi} />
+        {sorguVar && <KurumAdiOku yaz={kurumAdiYaz} />}
         {davet && !tanitimAcik && <TanitimDaveti baslat={() => { davetYaz(false); tanitimYaz(true); }} vazgec={tanitimBitti} />}
 
         {tumuAcik && (

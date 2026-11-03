@@ -394,10 +394,12 @@ describe('Kabuk', () => {
     const dolu = kur('Ornek Atolye');
     expect(dolu.container.querySelector('.tc-kabuk-marka-isaret')?.textContent).toBe('Ornek Atolye');
     expect(dolu.container.querySelector('.tc-kabuk-marka-metin')?.textContent).toBe('CORE');
+    expect(document.title).toBe('Ornek Atolye CORE');
     dolu.unmount();
     const bos = kur('  ');
     expect(bos.container.querySelector('.tc-kabuk-marka-isaret')).toBeNull();
     expect(bos.container.querySelector('.tc-kabuk-marka-metin')?.textContent).toBe('CORE');
+    expect(document.title).toBe('CORE');
     bos.unmount();
     // Sözleşme ad'ı metin der; eski ya da eksik bir cevap null getirse de kabuk çökmez.
     const yok = kur(null);

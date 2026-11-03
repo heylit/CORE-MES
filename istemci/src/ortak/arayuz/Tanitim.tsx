@@ -1,4 +1,4 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
+import { birlesikAd } from '#paylasilan/uygulama.ts';
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { RehberMaddesi } from '../rota/rehber.ts';
@@ -17,13 +17,13 @@ interface Adim {
 
 // Tanıtım kişinin rolüne göredir: rol yetkiyi, yetki görülen sayfaları belirler; "Sizin sayfalarınız" adımı yalnız onları anlatır.
 // Ortak parçalar (menü, arama, "Ne oldu?") yalnız kişide varsa anlatılır.
-export function tanitimAdimlari({ maddeler, kisayolVar }: { maddeler: readonly RehberMaddesi[]; kisayolVar: boolean }): Adim[] {
+export function tanitimAdimlari({ maddeler, kisayolVar, kurumAdi = null }: { maddeler: readonly RehberMaddesi[]; kisayolVar: boolean; kurumAdi?: string | null }): Adim[] {
   const gruplar = [...new Set(maddeler.map((m) => m.grup))];
   const adimlar: (Adim | null)[] = [
     {
       anahtar: 'hosgeldin',
       simge: 'home',
-      baslik: `${UYGULAMA_ADI}'a hoş geldiniz`,
+      baslik: `${birlesikAd(kurumAdi)}'a hoş geldiniz`,
       icerik: (
         <>
           <p>Atölyenin işi burada tek yerde: emir, malzeme, istasyon, kalite.</p>
@@ -94,15 +94,16 @@ function SayfaListesi({ maddeler }: { maddeler: readonly RehberMaddesi[] }) {
   );
 }
 
-export function TanitimPenceresi({ acik, kapat, maddeler, kisayolVar }: {
+export function TanitimPenceresi({ acik, kapat, maddeler, kisayolVar, kurumAdi = null }: {
   acik: boolean;
+  kurumAdi?: string | null;
   // Bitince de, yarıda kapatılınca da çağrılır: tanıtım bir kez önerilir, sonra Yardım'dadır.
   kapat: () => void;
   maddeler: readonly RehberMaddesi[];
   kisayolVar: boolean;
 }) {
   const [sira, siraYaz] = useState(0);
-  const adimlar = tanitimAdimlari({ maddeler, kisayolVar });
+  const adimlar = tanitimAdimlari({ maddeler, kisayolVar, kurumAdi });
   const adim = adimlar[Math.min(sira, adimlar.length - 1)];
   const son = sira >= adimlar.length - 1;
   const bitir = () => { siraYaz(0); kapat(); };

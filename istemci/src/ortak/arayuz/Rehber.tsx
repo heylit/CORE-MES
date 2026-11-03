@@ -1,4 +1,4 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
+import { birlesikAd } from '#paylasilan/uygulama.ts';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -18,6 +18,7 @@ interface Ozellikler {
   konular: readonly GenelKonu[];
   kisayollar: readonly HizliIsGrubu[];
   tanitimiBaslat: () => void;
+  kurumAdi?: string | null;
 }
 
 function Liste({ baslik, ogeler }: { baslik: string; ogeler: readonly string[] }) {
@@ -50,7 +51,7 @@ function Acilir({ simge, baslik, acik, children }: { simge: RehberMaddesi['simge
 }
 
 // Sağ üstteki Yardım. Açıldığı sayfanın tarifi en üsttedir; arama soru gibi yazılabilir ("nasıl izin isterim").
-export function RehberPenceresi({ acik, kapat, maddeler, konular, kisayollar, tanitimiBaslat }: Ozellikler) {
+export function RehberPenceresi({ acik, kapat, maddeler, konular, kisayollar, tanitimiBaslat, kurumAdi = null }: Ozellikler) {
   const [sorgu, sorguYaz] = useState('');
   const [kitap, kitapYaz] = useState(false);
   const konum = useLocation();
@@ -151,7 +152,7 @@ export function RehberPenceresi({ acik, kapat, maddeler, konular, kisayollar, ta
           </>
         )}
       </Pencere>
-      {acik && kitap && <Kitapcik maddeler={maddeler} konular={konular} kapat={() => kitapYaz(false)} />}
+      {acik && kitap && <Kitapcik maddeler={maddeler} konular={konular} kurumAdi={kurumAdi} kapat={() => kitapYaz(false)} />}
     </>
   );
 }
@@ -159,7 +160,7 @@ export function RehberPenceresi({ acik, kapat, maddeler, konular, kisayollar, ta
 const bugun = (): string => new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 // Aynı içeriğin yazdırılabilir hali: kişinin gördüğü sayfalar, hepsi açık. Yazdırırken yalnız kitapçık basılır (rehber.css).
-export function Kitapcik({ maddeler, konular, kapat }: { maddeler: readonly RehberMaddesi[]; konular: readonly GenelKonu[]; kapat: () => void }) {
+export function Kitapcik({ maddeler, konular, kurumAdi = null, kapat }: { maddeler: readonly RehberMaddesi[]; konular: readonly GenelKonu[]; kurumAdi?: string | null; kapat: () => void }) {
   const kutu = useKatman<HTMLDivElement>(true, kapat);
   const gruplar = [...new Set(maddeler.map((m) => m.grup))];
   return createPortal(
@@ -170,7 +171,7 @@ export function Kitapcik({ maddeler, konular, kapat }: { maddeler: readonly Rehb
       </div>
       <article className="tc-kitapcik-sayfa">
         <header className="tc-kitapcik-kapak">
-          <p className="tc-kitapcik-ust mono">{UYGULAMA_ADI}</p>
+          <p className="tc-kitapcik-ust mono">{birlesikAd(kurumAdi)}</p>
           <h1>Kullanım kitapçığı</h1>
           <p>Bu kitapçık sizin gördüğünüz sayfaları anlatır. {bugun()}</p>
         </header>
