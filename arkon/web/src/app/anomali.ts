@@ -65,7 +65,7 @@ function Bugun({ sekme }: { sekme: unknown }) {
 
 const yerelGun = (): string => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
 
-/* Gün, hafta, ay (kart #1306): TMI'nin kaydettiği günlerden. Oran Σ üretilen / Σ beklenen, performans standart süre / çalışılan süre. */
+/* Gün, hafta, ay (kart #1306): CORE'un kaydettiği günlerden. Oran Σ üretilen / Σ beklenen, performans standart süre / çalışılan süre. */
 // Dönem sayfasındaki istasyon, makine ve kişi kırılımlarının ortak alanları; plan dışı yalnız istasyonda, emek verimi yalnız kişide gelir.
 type Kirilim = { beklenen: number; uretilen: number; hurda: number; oran: number | null; performans: number | null; isaretliGun: number; gun: number; planDisi?: number; emekVerimi?: number | null };
 function Donem({ sekme, donem, tarih, setTarih }: { sekme: unknown; donem: AnomaliDonemi; tarih: string; setTarih: (t: string) => void }) {

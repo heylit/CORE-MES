@@ -1,4 +1,4 @@
-/* Çağrı bandının alıcısı (298, CEKIRDEK-ISTEKLERI 8): kişinin hangi ekip çağrılarını aldığı TMI bildirim modülünün yönlendirmesindedir
+/* Çağrı bandının alıcısı (298, CEKIRDEK-ISTEKLERI 8): kişinin hangi ekip çağrılarını aldığı CORE bildirim modülünün yönlendirmesindedir
    (GET /bildirimler/cagri-yonlendirme/benim). Bant bu listeyle süzer; böylece bildirim ile bant aynı kişiye gider. Yönetici ve vardiya amirinin
    bütün çağrıları görmesi Arkon kuralıdır, yönlendirme yalnız ekip eşlemesini verir. */
 

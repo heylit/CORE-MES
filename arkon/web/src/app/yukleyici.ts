@@ -84,7 +84,7 @@ const TAKILMA_MS = 100, TAKILMA_SAYISI = 3, TAKILMA_PENCERE_MS = 10000, ACILIS_M
   });
   try { g.observe({ type: tur, buffered: true }); } catch (e) {}
 })();
-// Düğme TMI kabuğunun üst çubuğundadır (tüm uygulama için tek); kabuk aynı 'arkon:lite' anahtarını yazar, açık Arkon ekranı yeniden yüklenmeden uyar.
+// Düğme CORE kabuğunun üst çubuğundadır (tüm uygulama için tek); kabuk aynı 'arkon:lite' anahtarını yazar, açık Arkon ekranı yeniden yüklenmeden uyar.
 window.addEventListener('storage', e => { if (e.key === 'arkon:lite') document.documentElement.classList.toggle('lite', LITE.get()); });
 /** Ekran modülleri (Ayarlar sayfasından açılıp kapanır; bu cihazda saklanır) */
 export const FEAT0 = { spindle: false, autoCount: false };

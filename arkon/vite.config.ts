@@ -3,7 +3,7 @@ import { copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Arkon MES arayüzü değiştirilmeden derlenir (web/, shared/). Çıktı arkon/dist; TMI istemcisi onu /arkon-mes/ altında sunar (arkon/sun.ts).
+// Arkon MES arayüzü değiştirilmeden derlenir (web/, shared/). Çıktı arkon/dist; CORE istemcisi onu /arkon-mes/ altında sunar (arkon/sun.ts).
 const kok = fileURLToPath(new URL('.', import.meta.url));
 const modul = (yol: string) => fileURLToPath(new URL(`../node_modules/${yol}`, import.meta.url));
 
@@ -65,7 +65,7 @@ export default {
   resolve: {
     alias: [
       { find: '@shared', replacement: join(kok, 'shared') },
-      // Arkon'un yazı tipleri TMI'dekilerle aynı dosyalardır; ikinci kopya tutulmaz.
+      // Arkon'un yazı tipleri CORE'dakilerle aynı dosyalardır; ikinci kopya tutulmaz.
       { find: /^\.\.\/assets\/fonts\/(.*)$/, replacement: `${yaziTipleri}$1` },
     ],
   },

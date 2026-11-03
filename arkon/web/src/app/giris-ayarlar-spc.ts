@@ -55,7 +55,7 @@ export function LoginApp({ onDone, lock, onCancel }) {
 }
 
 /* ── başka istasyondan gelen çağrı (kalite, hazırlık ekranlarında görünür) ── */
-/** Çağrı bu kişiye mi? Üstlenme yetkisi olan ve TMI yönlendirmesi çağrılan ekibi ona veren kişi (yönetici ve vardiya amiri hepsini görür); çağrıyı yapan istasyon hariç */
+/** Çağrı bu kişiye mi? Üstlenme yetkisi olan ve CORE yönlendirmesi çağrılan ekibi ona veren kişi (yönetici ve vardiya amiri hepsini görür); çağrıyı yapan istasyon hariç */
 export const callForMe = (m, ekiplerim: CagriEkiplerim) => { if (!can('prod.ack') || (m.machine && m.machine === LS.get('station') && (location.hash || '#') === '#')) return false; const u = MEU(); return cagriBanaMi(m.k, u && u.role, ekiplerim); };
 export function CallBanner({ cur }) {
   const [list, setList] = useState([]);
@@ -301,7 +301,7 @@ export function PermEditor({ say }) {
     ${kilitli ? KILIT(YETKI_KILIDI) : html`<div style=${{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="btn" onClick=${() => { setM(JSON.parse(JSON.stringify(PERMS0))); setDirty(true); }}>Varsayılanlara dön</button><span className="sp" style=${{ flex: 1 }}></span><small className="muted" style=${{ alignSelf: 'center' }}>${dirty ? 'Kaydedilmemiş değişiklik var' : 'Kişinin rolü Kullanıcılar bölümünden seçilir'}</small><button className="btn pri" disabled=${!dirty} onClick=${save}><${I} n="check" s=${18} />Kaydet</button></div>`}
   </div>`;
 }
-// Sunucuya bağlı Arkon'da vardiyalar TMI'nin Vardiya sayfasındadır; sunucu kv/shifts yazımını reddeder (A7, #517). Liste salt okunur gösterilir.
+// Sunucuya bağlı Arkon'da vardiyalar CORE'un Vardiya sayfasındadır; sunucu kv/shifts yazımını reddeder (A7, #517). Liste salt okunur gösterilir.
 const vardiyalarTmide = () => AKStore.status().mode === 'server';
 function ShiftList() {
   return html`<div className="shl">

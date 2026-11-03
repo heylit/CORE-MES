@@ -1,6 +1,6 @@
 import { bolunmusMu } from './parca';
 
-/* Rotalı TMI işinin plan durumu (kart #199, A4). Sunucu iş emri paketine `tmi.plan` yazar: canlı planda yerleşim var mı, yerleştiği kaynaktaki
+/* Rotalı CORE işinin plan durumu (kart #199, A4). Sunucu iş emri paketine `tmi.plan` yazar: canlı planda yerleşim var mı, yerleştiği kaynaktaki
    sırası ve kaynak iş emrininkiyle eşleşiyor mu; `zorunlu` "Operatöre yalnız canlı plandaki iş düşer" ayarıdır (kart #1257, varsayılan kapalı).
    Ayar açıkken operatör yalnız yayındaki ve canlı planda eşleşen işi görür (sunucu başlatmayı da yalnız onda kabul eder); kapalıyken plan durumu
    yalnız bilgidir. Rotasız CORE emri ve Arkon'un kendi paketi bugünkü gibidir: yayınlanınca düşer. */
@@ -48,7 +48,7 @@ export function siraOnayi(p: PlanliPaket | null | undefined): SiraOnayi | null {
   return d && d.canli && (d.siraOnayi === 'taslakta' || d.siraOnayi === 'onayda') ? d.siraOnayi : null;
 }
 
-/* Sıra (kart 527, 519 1 c; A4 "b"nin yerine): Üretim Hazırlık'ın sıraladığı TMI işi Hazırlık sırasıyla önce gelir; sırasız TMI işi (sıralanmamış
+/* Sıra (kart 527, 519 1 c; A4 "b"nin yerine): Üretim Hazırlık'ın sıraladığı CORE işi Hazırlık sırasıyla önce gelir; sırasız CORE işi (sıralanmamış
    istasyon ya da plana sonradan giren iş) ardından plan sırasıyla (aynı istasyondaki makineler kendi sırasıyla iç içe), öteki paketler en son
    kendi kuralıyla (Planlama'nın `seq`'i, termin). Taslağa yazılan plan sırası onaylanıp canlıya alınana dek sıralamaya girmez; yalnız etiketiyle
    (`siraOnayi`) görünür. */
@@ -74,7 +74,7 @@ export const istasyonPaketleri = <T extends PlanliPaket & { machine?: string }>(
 
 export interface SiralamaIstegi { kaynak: PlanKaynagi; onceki: number[]; yeni: number[] }
 
-// Planlama'da TMI işi şeritte taşınınca plana giden istek: yalnız taşınan işle aynı kaynaktaki, canlı planda yerleşmiş TMI işleri; sıra
+// Planlama'da CORE işi şeritte taşınınca plana giden istek: yalnız taşınan işle aynı kaynaktaki, canlı planda yerleşmiş CORE işleri; sıra
 // değişmediyse null. Plana yerleşmemiş iş sıralanamaz (null).
 export function siralamaIstegi(once: readonly PlanliPaket[], sonra: readonly PlanliPaket[], tasinan: PlanliPaket): SiralamaIstegi | null {
   const k = planliSira(tasinan)?.kaynak;
@@ -103,7 +103,7 @@ export async function siralamayiGonder(
   }
 }
 
-// Yukarı/aşağı tuşu: şeritte makineler iç içe dizilir; TMI işi kendi kaynağının kuyruğundaki komşusuyla yer değiştirir. Komşu yoksa null.
+// Yukarı/aşağı tuşu: şeritte makineler iç içe dizilir; CORE işi kendi kaynağının kuyruğundaki komşusuyla yer değiştirir. Komşu yoksa null.
 export function adimIstegi(serit: readonly PlanliPaket[], tasinan: PlanliPaket, yon: -1 | 1): SiralamaIstegi | null {
   const k = planliSira(tasinan)?.kaynak;
   if (!k) return null;
@@ -120,7 +120,7 @@ export function adimIstegi(serit: readonly PlanliPaket[], tasinan: PlanliPaket, 
    iş onayla da gönderilemez (sunucu da reddeder). */
 export interface GonderimUyarisi { neden: string; gorunmez: boolean; taslakta?: boolean }
 export const ISTASYONSUZ_GONDERIM = 'İstasyon seçilmedi: adımın makinesini ya da kişisini Reçete ve Rota\'da seçin. İstasyonsuz iş operatöre gönderilemez.';
-/* Kart #1372: rotasında girdisi seçilmemiş adım olan TMI işi; neden sunucudan gelir, sunucu yayını da reddeder. */
+/* Kart #1372: rotasında girdisi seçilmemiş adım olan CORE işi; neden sunucudan gelir, sunucu yayını da reddeder. */
 export const rotaEksigi = (p: { tmi?: unknown } | null | undefined): string | null => {
   const n = p && p.tmi && typeof p.tmi === 'object' ? (p.tmi as { rotaEksik?: unknown }).rotaEksik : null;
   return typeof n === 'string' && n !== '' ? n : null;
@@ -191,7 +191,7 @@ export function planFarkOzeti(referanslar: Iterable<PlanReferansi>): { tur: Plan
   return { tur: say.farkli ? 'farkli' : say.disi ? 'disi' : 'yeni', metin: `Planla ${fark} fark: ${parca.join(' · ')}` };
 }
 
-/* Kuyruk sırası isteği (kart 527): istasyonun açık TMI iş emri paketleri, ekranın gördüğü ve yeni dizilişle. Sunucu da aynı işleri sayar
+/* Kuyruk sırası isteği (kart 527): istasyonun açık CORE iş emri paketleri, ekranın gördüğü ve yeni dizilişle. Sunucu da aynı işleri sayar
    (bölünmüş işin bütünü ve biten iş girmez); fark varsa 409 ile ekran yenilenir. Sıra değişmediyse null. */
 const KUYRUK_PAKETI = /^tmi-ie-\d+(-p\d+)?$/;
 export const kuyrukIsiMi = (p: PlanliPaket): boolean => typeof p.id === 'string' && KUYRUK_PAKETI.test(p.id) && !bolunmusMu(p) && p.tmi?.bitti !== true;

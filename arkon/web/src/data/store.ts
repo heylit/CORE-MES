@@ -108,7 +108,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   async function sha256(u: Bytes): Promise<string> { try { if (crypto.subtle) return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', u as BufferSource)), b => b.toString(16).padStart(2, '0')).join(''); } catch (e: any) {} return sha256js(u); }
 
   /* ── sunucu bağlantısı ── */
-  // TMI kabuğundaki yeni ekran (istemci arkon/yeni) çerçevesiz çalışır: istekler pencerenin fetch'i ve EventSource'u yerine verilen
+  // CORE kabuğundaki yeni ekran (istemci arkon/yeni) çerçevesiz çalışır: istekler pencerenin fetch'i ve EventSource'u yerine verilen
   // taşıyıcıya gider. Taşıyıcı verilmezse (Arkon'un kendi sayfası, çerçeve) pencereninkiler kullanılır.
   export interface Tasiyici { fetch: (adres: string, ayar?: RequestInit) => Promise<Response>; EventSource: new (adres: string) => EventSource }
   let tasiyici: Tasiyici | null = null;
@@ -240,7 +240,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
       throw e;
     } finally { yolda.delete(k); const n = await bekleyenSay(); if (n !== SRV.pending) { SRV.pending = n; emit(); } }
   }
-  // Kayıt yazıldı ama TMI'ye işlenmedi: ret ekrana döner (sayım ise terminaldeki sayı geri alınır).
+  // Kayıt yazıldı ama CORE'a işlenmedi: ret ekrana döner (sayım ise terminaldeki sayı geri alınır).
   function retleriBildir(kind: string | undefined, rows: any[], cevap: unknown): void {
     for (const { cid, ileti, tmiDurum } of logRetleri(cevap)) {
       try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { store: 'log_' + kind, kind, id: cid, cid, row: rows.find(x => x && x.cid === cid), msg: ileti, tmiDurum } })); } catch (x) {}
@@ -545,11 +545,11 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async merkezKontrol(dosyalar: { belgeId: number; ozet: string }[]): Promise<MerkezDurumu[]> {
       return api('GET', '/merkez/kontrol?d=' + encodeURIComponent(dosyalar.map(x => x.belgeId + ':' + x.ozet).join(',')));
     },
-    /** üretim anomalisi (kart #1149): TMI'de hesaplanır; yetkisi olmayan kişide sunucu 403 verir */
+    /** üretim anomalisi (kart #1149): CORE'da hesaplanır; yetkisi olmayan kişide sunucu 403 verir */
     async anomaliler(): Promise<Anomaliler> { return api('GET', '/anomaliler'); },
     /** zaman olayları (kart 764): geç giriş, geç teslim, sonraki işe etki, teslim riski */
     async anomaliOlaylari(): Promise<AnomaliOlaylari> { return api('GET', '/anomali-olaylari'); },
-    /** gün, hafta, ay istatistiği (kart #1306): TMI'nin kaydettiği günlerden */
+    /** gün, hafta, ay istatistiği (kart #1306): CORE'un kaydettiği günlerden */
     async anomaliIstatistigi(donem: AnomaliDonemi, tarih: string): Promise<AnomaliIstatistigi> {
       return api('GET', '/anomali-istatistik?donem=' + encodeURIComponent(donem) + '&tarih=' + encodeURIComponent(tarih));
     },
@@ -567,10 +567,10 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async cagriEkiplerim(): Promise<CagriEkiplerim> {
       try { return cagriEkipleriniAl(await api('GET', '/cagri-ekiplerim')); } catch { return null; }
     },
-    /** TMI emrinin talimat adımları; işaret TMI'ye yazılır, dönen liste doğruluk kaynağıdır */
+    /** CORE emrinin talimat adımları; işaret CORE'a yazılır, dönen liste doğruluk kaynağıdır */
     async tmiAdimlari(emirId: number): Promise<TmiAdim[]> { return (await api('GET', '/tmi-adimlar/' + emirId)) || []; },
     async tmiAdimIsaretle(emirId: number, adimId: number, tamam: boolean): Promise<TmiAdim[]> { return api('POST', '/tmi-adimlar/' + emirId + '/' + adimId, { tamam }); },
-    /** başlatmadan önce girdi istasyonda mı (kart #1289); eksikse TMI istek açar ve Malzeme · Teslim panelini açar */
+    /** başlatmadan önce girdi istasyonda mı (kart #1289); eksikse CORE istek açar ve Malzeme · Teslim panelini açar */
     async uretimHazirligi(emirId: number, istasyon: string): Promise<{ hazir: boolean; metin?: string }> { return api('POST', '/uretim-hazirligi', { emirId, istasyon }); }
   };
 
@@ -600,12 +600,12 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async stats() { try { const keys = await tx('cache', 'readonly', s => s.getAllKeys()); return { n: keys.length }; } catch (e: any) { return { n: 0 }; } }
   };
 
-  // Arkon Planlama'dan TMI işinin sırası plan taslağına (A4); yalnız TMI'ye bağlıyken.
+  // Arkon Planlama'dan CORE işinin sırası plan taslağına (A4); yalnız CORE'a bağlıyken.
   const Plan = {
     sirala: (g: { kaynak: { tur: string; id: number }; onceki: number[]; yeni: number[]; planSurumu: number }) => api('POST', '/plan-sira', g),
     surum: (): Promise<{ planSurumu: number }> => api('GET', '/plan-sira'),
   };
-  // Üretim Hazırlık kuyruk sırası (kart 527): istasyonun sırası Arkon'da tutulur, plan değişmez; yalnız TMI'ye bağlıyken.
+  // Üretim Hazırlık kuyruk sırası (kart 527): istasyonun sırası Arkon'da tutulur, plan değişmez; yalnız CORE'a bağlıyken.
   const Kuyruk = {
     sirala: (g: { istasyon: string; onceki: string[]; yeni: string[] }): Promise<{ surum: number }> => api('POST', '/kuyruk-sira', g),
     planaDon: (istasyon: string): Promise<{ silinen: number }> => api('POST', '/kuyruk-sira/plana-don', { istasyon }),
@@ -666,7 +666,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
   // Yeni ekran init'ten önce açar. Belgedeki dosya işaretlerini baytla çözer (açılacak paket için); işaret yoksa belge olduğu gibi döner.
   function tembelKur(): void { tembel = true; temizlikIste(); }
   const coz = <T>(x: T): Promise<T> => fromWire(x);
-  // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, TMI'de çıkıp başka
+  // init'ten önce çağrılır. Oturum cihazdan yeniden okunur: çerçevesiz ekranda modül sayfa yenilenmeden kalır, CORE'da çıkıp başka
   // kişiyle girilince kuyruk öğeleri önceki kişinin adına yazılmasın (çerçeve her açılışta yeniden yüklendiği için bunu kendiliğinden yapar).
   function tasiyiciKur(t: Tasiyici | null): void { tasiyici = t; session = LS.get('session'); emit(); }
   export const AKStore = { DB, Bus, Pkg, Folder, Cache, Log, Auth, Backup, Server, Plan, Kuyruk, init, status, tasiyiciKur, tembelKur, kipKur, coz, dosyalariIndir, dosyaDeposunuTemizle, onStatus(f: (s: Status) => void) { statusSubs.add(f); return () => { statusSubs.delete(f); }; }, local: L, sha256, encTA, decTA, merge3 };

@@ -25,7 +25,7 @@ export const NavCtx = React.createContext<{ open: () => void } | null>(null);
 /** Tema tüm sayfalarda ortak (sayfa değişince korunur) */
 export function useTheme() {
   const [t, set] = useState(() => LS.get('theme') || 'dark');
-  /* TMI çerçevesinde tema kabuktan gelir (istemci arkon/baglanti.ts temayiUygula) */
+  /* CORE çerçevesinde tema kabuktan gelir (istemci arkon/baglanti.ts temayiUygula) */
   useEffect(() => { const f = () => set(LS.get('theme') || 'dark'); window.addEventListener('arkon-tema', f); return () => window.removeEventListener('arkon-tema', f); }, []);
   return [t, (v: string) => { set(v); LS.set('theme', v); }];
 }

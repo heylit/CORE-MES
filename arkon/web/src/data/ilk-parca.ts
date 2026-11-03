@@ -32,7 +32,7 @@ export const ilkParcaSayimReddi = (acik: boolean, sayilan: number, adet: number)
 
 // Ekrandaki karar bekleyen sayısı sunucunun yazdığıyla aynıdır: 327 a ile ilk parça dahil onaysız emrin bütün sağlamı karar bekler
 // (sunucu uretim-emirleri `ilkParcaOnaysiz`); ilk parçayı ayrı saymak tableti sunucudan bir eksik gösteriyordu (37 / 38). Kalite Merkezi
-// ilk parçayı reddetmişse reddedilenler TMI'de redde geçmiştir ve ekran ayrımı bilmez: sayı gösterilmez (null), yalnız uyarı kalır.
+// ilk parçayı reddetmişse reddedilenler CORE'da redde geçmiştir ve ekran ayrımı bilmez: sayı gösterilmez (null), yalnız uyarı kalır.
 export function kararBekleyenSayisi(acik: boolean, sayilan: number, retVar: boolean): number | null {
   if (!acik) return 0;
   return retVar ? null : Math.max(0, sayilan);

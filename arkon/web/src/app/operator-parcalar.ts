@@ -22,7 +22,7 @@ import { TEKRAR_OLCUM } from '../data/otomatik-numune';
 import { hurdaNedeniYokIletisi } from '../data/hurda-nedeni';
 
 /* ── steps ── */
-// TMI emrinde adımlar emrin talimatıdır ve işaret TMI'ye yazılır (Üretim Terminali ile aynı uç); yerel pakette paketin adımları yerelde kalır.
+// CORE emrinde adımlar emrin talimatıdır ve işaret CORE'a yazılır (Üretim Terminali ile aynı uç); yerel pakette paketin adımları yerelde kalır.
 export function Steps({ steps, emirId = null, preview = false }: { steps?: any[]; emirId?: number | null; preview?: boolean }) {
   return emirId !== null && !preview && AKStore.status().mode === 'server' ? html`<${TmiSteps} emirId=${emirId} />` : html`<${YerelSteps} steps=${steps} />`;
 }

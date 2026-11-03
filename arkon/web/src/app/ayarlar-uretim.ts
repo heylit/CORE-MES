@@ -8,7 +8,7 @@ import { useSrv } from './giris-ayarlar-spc';
 import { Segs, csvDownload, dmyhm } from './pano-planlama';
 
 /* ══ Ayarlar › Üretim: duruş nedenleri, hurda nedenleri, çalışma kuralları · Sistem: değişiklik günlüğü, makine verisi ══ */
-// Sunucuya bağlı Arkon'da duruş ve hurda nedenleri TMI'nin Duruş ve Hurda Nedenleri sayfasındadır; sunucu bu kayıtların yazımını reddeder
+// Sunucuya bağlı Arkon'da duruş ve hurda nedenleri CORE'un Duruş ve Hurda Nedenleri sayfasındadır; sunucu bu kayıtların yazımını reddeder
 // (tekrar eden sayfalar temizliği, madde 13). Bölüm yalnız sunucusuz kipte görünür.
 export const nedenlerTmide = () => AKStore.status().mode === 'server';
 export const REASON_ICONS = ['truck', 'wrench', 'bolt', 'tool', 'search', 'cpu', 'user', 'gauge', 'coffee', 'list', 'flag', 'clock', 'alert', 'box'];
