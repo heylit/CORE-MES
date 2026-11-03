@@ -5,16 +5,17 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { SayfaBasi } from './ortak.tsx';
 import { paneliAc, type PanelIstegi } from './panel-olayi.ts';
 
-// Okut sayfası kalktı (soru 90 a): eski adres ve menü maddesi Okut panelini açar, sayfa İş kutusuna döner.
+// Okut sayfası kalktı (soru 90 a) ve menü maddesi de kalktı (2022 b): eski adres Okut panelini açar, sayfa İş kutusuna döner.
 // Eski kipler okutmayla başlar (mal kabul, sevk ve depo sepeti okutulan kodun sonucundan seçilir).
-const KIPLER: Record<string, PanelIstegi> = { kabul: { sekme: 'okut' }, sevkiyat: { sekme: 'okut' }, sepet: { sekme: 'sepet', depoSepeti: true } };
+// 2022 b: Okutarak say sayfası da kalktı; eski adresi paneli Say modunda açar.
+const KIPLER: Record<string, PanelIstegi> = { kabul: { sekme: 'okut' }, sevkiyat: { sekme: 'okut' }, sepet: { sekme: 'sepet', depoSepeti: true }, say: { sekme: 'okut', mod: 'say' } };
 
-export function OkutYonlendir() {
+export function OkutYonlendir({ sabitKip }: { sabitKip?: string } = {}) {
   const [adres] = useSearchParams();
   const git = useNavigate();
   const oturum = useOturum();
   const panelVar = oturum.data?.islemler.includes('stok.istek') ?? false;
-  const kip = adres.get('mod') ?? '';
+  const kip = sabitKip ?? adres.get('mod') ?? '';
   useEffect(() => {
     if (!panelVar) return;
     paneliAc(KIPLER[kip] ?? { sekme: 'okut' });

@@ -55,10 +55,30 @@ describe('Malzeme fişleri', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('tur=mal_kabul'))).toBe(true));
   });
 
+  // 2023 b: teslim fişi, toplama listesi ve hareket fişi aynı listede; her biri kendi ekranında açılır.
+  it('teslim fişi, toplama ve hareket fişi kendi ekranına gider; Hareket fişi sekmesi sorguya gider', async () => {
+    const yok = logo({ durum: 'gonderilmez', gonderimSekli: null, neden: "Logo'ya gitmez." });
+    const ortak = { ...FIS, uretimEmriId: null, emirNo: null, satirSayisi: 1, irsaliyeNo: null, surum: 1, logo: yok };
+    const satirlar: MalzemeFisiListeSatiri[] = [
+      { ...ortak, id: 41, no: 'TF-000041', tur: 'teslim_fisi' },
+      { ...ortak, id: 42, no: 'TL-000042', tur: 'toplama' },
+      { ...ortak, id: 43, no: 'HF-000043', tur: 'hareket_fisi' },
+    ];
+    const istekler = sunucuKur(OKUYUCU, { 'GET /stok/malzeme-fisleri': () => json(200, liste(satirlar)) });
+    ac('/stok/malzeme-fisleri');
+    expect(await screen.findByRole('heading', { name: 'Belgeler' })).toBeTruthy();
+    expect((await screen.findByRole('link', { name: 'TF-000041' })).getAttribute('href')).toBe('/stok/fisler/41');
+    expect(screen.getByRole('link', { name: 'TL-000042' }).getAttribute('href')).toBe('/stok/hazirlik/42');
+    expect(screen.getByRole('link', { name: 'HF-000043' }).getAttribute('href')).toBe('/stok/hareketler?metin=HF-000043');
+    expect(screen.getByText('Hazırlık')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Hareket fişi' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol.includes('tur=hareket_fisi'))).toBe(true));
+  });
+
   it('boş listede uydurmaz, söyler', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzeme-fisleri': () => json(200, liste([])) });
     ac('/stok/malzeme-fisleri');
-    expect(await screen.findByText('Bu süzgece uyan fiş yok.')).toBeTruthy();
+    expect(await screen.findByText('Bu süzgece uyan belge yok.')).toBeTruthy();
   });
 
   it('ayrıntı: satırlar ve kartı ya da birimi olmayan satırın uyarısı; yetkisi olmayana Gönder görünmez', async () => {

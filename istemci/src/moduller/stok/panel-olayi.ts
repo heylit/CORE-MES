@@ -1,8 +1,11 @@
 // Okut sayfası kalktı (soru 90 a): eski adresler ve Stok Merkezi düğmeleri Malzeme · Teslim panelini istenen bölümde açar; `okut`
 // kameralı açılış ekranıdır.
 // İstek bir kez bekletilir: panel düğmesi sayfayla aynı anda kuruluyorsa olayı kaçırmaz, kurulunca alır.
+import type { OkutModu } from './okutma-modlari.ts';
+
 export type PanelSekmesi = 'okut' | 'al' | 'sepet' | 'et' | 'iste';
-export interface PanelIstegi { sekme: PanelSekmesi; depoSepeti?: boolean }
+// `mod` paneli o okutma modunda açar (2022 b: okutarak yapılan iş yalnız paneldedir; eski sayfa adresi panele döner).
+export interface PanelIstegi { sekme: PanelSekmesi; depoSepeti?: boolean; mod?: OkutModu }
 export const MALZEME_PANELI_AC = 'tmi:malzeme-paneli-ac';
 
 let bekleyen: PanelIstegi | null = null;

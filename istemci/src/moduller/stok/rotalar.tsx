@@ -15,7 +15,6 @@ import { MalKabul } from './MalKabul.tsx';
 import { MalKabulAyrinti } from './MalKabulAyrinti.tsx';
 import { MalzemeAyrinti } from './MalzemeAyrinti.tsx';
 import { OkutYonlendir } from './OkutYonlendir.tsx';
-import { OkutarakSayim } from './OkutarakSayim.tsx';
 import { Malzemeler } from './Malzemeler.tsx';
 import { Raflar } from './Raflar.tsx';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
@@ -24,6 +23,8 @@ import { DefterFarklari } from './DefterFarklari.tsx';
 import { Sepet } from './Sepet.tsx';
 import { SeriListeler } from './SeriListeler.tsx';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
+
+const SayimYonlendir = () => <OkutYonlendir sabitKip="say" />;
 
 // Alt yollar `/stok` sayfasına aittir; ikinci menüyü kabuk `STOK_IKINCI_MENU` verisinden çizer.
 export const rotalar: ModulRotasi[] = [
@@ -47,7 +48,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/refakat-kartlari', ekran: RefakatKartlari },
   { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },
   { yol: '/stok/malzeme-fisleri/:id', ekran: MalzemeFisi },
-  { yol: '/stok/okutarak-sayim', ekran: OkutarakSayim },
+  { yol: '/stok/okutarak-sayim', ekran: SayimYonlendir },
   { yol: '/stok/seri-listeler', ekran: SeriListeler },
   { yol: '/stok/komut-karti', ekran: KomutKarti },
   { yol: '/stok/sayim-onaylari', ekran: SayimOnaylari },

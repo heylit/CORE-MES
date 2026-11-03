@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { BakiyeSatiri, KodCozCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
+import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { OkutarakSayim } from './OkutarakSayim.tsx';
+import { DEPOCU, OKUYUCU, json, sunucuKur } from './test-ortak.tsx';
 
 // Okutarak sayım ekranı (1905): sentetik kayıtlar.
 const bakiye = (malzemeId: number, partiId: number): BakiyeSatiri => ({
@@ -17,6 +21,12 @@ const LOT: KodCozCevabi = {
   ozet: { id: 1, tur: 'hammadde', kod: 'HM-1', ad: 'Deneme 1', onayDurumu: 'onayli', kullanilabilir: true, birim: 'adet' },
 };
 const cozumler: Record<string, KodCozCevabi> = { 'LOC:A-01-1': GOZ, 'LOT:LT-7': LOT };
+
+// Sayım ekranı yalnız Okut panelinin Say modudur (2022 b); motor burada panelsiz denenir.
+function sayimAc() {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><OkutarakSayim gomulu /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+}
 
 function kur() {
   // Kod çözme sorgu dizgisine göre cevaplanır; sunucuKur yol eşlemesi sorguyu ayırmaz.
@@ -46,7 +56,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('göz ve lot okutulur, sayı artar; okutulmayan satır sorulup 0 olarak kaydedilir; sistem miktarı gösterilmez', async () => {
     const istekler = kur();
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     await okut('LOC:A-01-1');
     expect(await screen.findByText('Göz A-01-1')).toBeTruthy();
     await okut('LOT:LT-7');
@@ -66,7 +76,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('göz okutulmadan gelen lot ve tanınmayan kod eklenmez (reddedilen)', async () => {
     const istekler = kur();
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     await okut('LOT:LT-7');
     expect(await screen.findByText('Önce göz etiketini okut')).toBeTruthy();
     await okut('XYZ:1');
@@ -78,7 +88,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('hafızadan aktarılan kodlar sırayla eklenir; sonuncuyu geri al aktarımdan önceki hale döner', async () => {
     kur();
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     fireEvent.click(await screen.findByRole('button', { name: /Hafızadan aktar/ }));
     const pencere = await screen.findByRole('dialog', { name: 'Hafızadan aktar' });
     fireEvent.change(within(pencere).getByLabelText('Aktarılan kodlar'), { target: { value: 'LOC:A-01-1\r\nLOT:LT-7\r\nLOT:LT-7\r\nLOT:LT-7\r\nXYZ:9\r\n' } });
@@ -92,7 +102,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('1909 komut barkodlari: miktar son satira yazilir, arti ve geri al calisir; Kaydet onayi sorar, Evet hizli okutmayla kaydeder', async () => {
     const istekler = kur();
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     await okut('LOC:A-01-1');
     await okut('CMD:MIKTAR:5');
     expect(await screen.findByText('Önce bir lot ya da malzeme okut')).toBeTruthy();
@@ -117,7 +127,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('1909: Geri al komutu son okutmayi geri alir; Vazgec komutu onayi kapatir, kayit yapilmaz', async () => {
     const istekler = kur();
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     await okut('LOC:A-01-1');
     await okut('LOT:LT-7');
     await okut('LOT:LT-7');
@@ -134,7 +144,7 @@ describe('Okutarak sayım (1905)', () => {
 
   it('sayım yetkisi olmayan ekranı kullanamaz (reddedilen)', async () => {
     sunucuKur(OKUYUCU, {});
-    ac('/stok/okutarak-sayim');
+    sayimAc();
     expect(await screen.findByText(/stok sayım yetkisi gerekir/)).toBeTruthy();
     expect(screen.queryByLabelText('Kod')).toBeNull();
   });

@@ -1818,14 +1818,37 @@ export const malzemeFisiKimlikleri = (db: Db, s: MalzemeFisiSuzgeci, sinir: numb
 export const malzemeFisleriBul = (db: Db, idler: readonly number[]): Promise<MalzemeFisiHam[]> =>
   db.sorgu(`${MALZEME_FISI_SECIMI} WHERE f.id = ANY($1::int[]) ORDER BY f.id`, [[...idler]]);
 // Malzeme fişleri listesi (515 a): fiş ve mal kabul belgesi açılış zamanıyla tek sırada sayfalanır; ayrıntı kimlikle ayrıca okunur.
-export interface ListeFisiAnahtari { kaynak: 'fis' | 'mal_kabul'; id: number }
+// 2023 b: teslim fişi, toplama listesi ve hareket fişi de aynı sırada. Hareket fişi "Tümü"de yoktur: her mal kabul ve teslim aynı
+// komutta bir hareket fişi de açar, Tümü'de aynı iş iki kez görünürdü; hareket fişi yalnız kendi türüyle süzülünce listelenir.
+export type BelgeKaynagi = 'fis' | 'mal_kabul' | 'teslim_fisi' | 'toplama' | 'hareket_fisi';
+export interface ListeFisiAnahtari { kaynak: BelgeKaynagi; id: number }
 const LISTE_FISI_BIRLESIMI = `(SELECT 'fis'::text AS kaynak, f.id, f.acilis FROM stok_malzeme_fisi f
-  UNION ALL SELECT 'mal_kabul'::text, m.id, m.zaman FROM stok_mal_kabul m) b WHERE $1::text IS NULL OR b.kaynak = $1`;
+  UNION ALL SELECT 'mal_kabul'::text, m.id, m.zaman FROM stok_mal_kabul m
+  UNION ALL SELECT 'teslim_fisi'::text, t.id, t.zaman FROM stok_fis t
+  UNION ALL SELECT 'toplama'::text, l.id, l.acilis FROM stok_toplama l
+  UNION ALL SELECT 'hareket_fisi'::text, h.id, h.zaman FROM stok_hareket_fisi h) b
+  WHERE ($1::text IS NULL AND b.kaynak <> 'hareket_fisi') OR b.kaynak = $1`;
 export const LISTE_FISI_SIRALAMASI: SiralamaTanimi<'acilis'> = { sutunlar: { acilis: 'b.acilis' }, ikincil: 'b.id', varsayilan: { sutun: 'b.acilis', yon: 'azalan' } };
 export const listeFisiSay = async (db: Db, kaynak: ListeFisiAnahtari['kaynak'] | null): Promise<number> =>
   (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM ${LISTE_FISI_BIRLESIMI}`, [kaynak]))?.toplam ?? 0;
 export const listeFisleri = (db: Db, kaynak: ListeFisiAnahtari['kaynak'] | null, sira: SiralamaIstegi<'acilis'>, d: Dilim): Promise<ListeFisiAnahtari[]> =>
   db.sorgu(`SELECT b.kaynak, b.id FROM ${LISTE_FISI_BIRLESIMI} ORDER BY ${siralamaSql(LISTE_FISI_SIRALAMASI, sira)}, b.kaynak LIMIT $2 OFFSET $3`, [kaynak, d.sinir, d.atla]);
+// Belgeler listesinde mal kabul ve malzeme fişi dışındaki belgeler: no, zaman, satır sayısı, varsa emir.
+export interface BelgeHam { id: number; no: string; zaman: string; satirSayisi: number; uretimEmriId: number | null; altTur: string | null }
+export const teslimFisleriBul = (db: Db, idler: readonly number[]): Promise<BelgeHam[]> =>
+  db.sorgu(`SELECT f.id, f.no, ${zamanMetni('f.zaman')} AS zaman, (SELECT count(*)::int FROM stok_fis_satiri s WHERE s.fis_id = f.id) AS "satirSayisi",
+    f.uretim_emri_id AS "uretimEmriId", f.cikis_nedeni AS "altTur" FROM stok_fis f WHERE f.id = ANY($1::int[]) ORDER BY f.id`, [[...idler]]);
+export const toplamalarBul = (db: Db, idler: readonly number[]): Promise<BelgeHam[]> =>
+  db.sorgu(`SELECT l.id, l.no, ${zamanMetni('l.acilis')} AS zaman, (SELECT count(*)::int FROM stok_toplama_kalemi k WHERE k.toplama_id = l.id) AS "satirSayisi",
+    NULL::int AS "uretimEmriId", l.ad AS "altTur" FROM stok_toplama l WHERE l.id = ANY($1::int[]) ORDER BY l.id`, [[...idler]]);
+export const hareketFisleriBul = (db: Db, idler: readonly number[]): Promise<BelgeHam[]> =>
+  db.sorgu(`SELECT h.id, h.no, ${zamanMetni('h.zaman')} AS zaman, (SELECT count(*)::int FROM stok_hareket_fisi_satiri s WHERE s.fis_id = h.id) AS "satirSayisi",
+    NULL::int AS "uretimEmriId", h.tur AS "altTur" FROM stok_hareket_fisi h WHERE h.id = ANY($1::int[]) ORDER BY h.id`, [[...idler]]);
+// Numarası ayar kalıbından gelen belgeler önekten çözülmez; numarayla tam eşleşme aranır (büyük küçük harf ayrılmaz).
+export const belgeNoBul = (db: Db, no: string): Promise<ListeFisiAnahtari[]> =>
+  db.sorgu(`SELECT 'teslim_fisi'::text AS kaynak, id FROM stok_fis WHERE upper(no) = upper($1)
+    UNION ALL SELECT 'toplama'::text, id FROM stok_toplama WHERE upper(no) = upper($1)
+    UNION ALL SELECT 'hareket_fisi'::text, id FROM stok_hareket_fisi WHERE upper(no) = upper($1)`, [no.trim()]);
 export const malKabullerBul = (db: Db, idler: readonly number[]): Promise<MalKabulHam[]> =>
   db.sorgu(`${MAL_KABUL_SECIMI} FROM stok_mal_kabul m WHERE m.id = ANY($1::int[]) ORDER BY m.id`, [[...idler]]);
 export const emirlerinMalzemeFisleri = (db: Db, emirIdler: readonly number[]): Promise<MalzemeFisiHam[]> =>
