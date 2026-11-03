@@ -1,7 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { GeometriDosyaTuru, GeometriIsDurumu } from '#paylasilan/sozlesme/geometri.ts';
-import type { Olcum, Yuz, YuzTuru } from './kurallar.ts';
+import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
+import type { Olcum, Ozellik, Yuz, YuzTuru } from './kurallar.ts';
 
 export interface IsSatiri {
   id: number;
@@ -109,6 +110,38 @@ export async function yuzlerYaz(db: Db, revizyonId: number, motor: string, yuzle
     [revizyonId, motor, yuzler.map((_, i) => i + 1), yuzler.map((y) => y.tur), yuzler.map((y) => y.ters), yuzler.map((y) => y.alanMm2),
       yuzler.map((y) => y.yaricapMm), yuzler.map((y) => y.ikinciYaricapMm), yuzler.map((y) => y.yariAciDerece),
       yuzler.map((y) => uc(y.eksen)), yuzler.map((y) => uc(y.konum))],
+  );
+}
+
+// Özellikler yüzlerle aynı işlemde yenilenir; null (yüzler okunamadı) satırsız bırakır. ust 0 tabanlı yerdir, sıra 1'den.
+export async function ozelliklerYaz(db: Db, revizyonId: number, motor: string, ozellikler: readonly Ozellik[] | null): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_ozellik WHERE revizyon_id = $1', [revizyonId]);
+  if (ozellikler === null || ozellikler.length === 0) return;
+  const uc = (d: readonly number[] | null): string | null => (d === null ? null : `{${d.join(',')}}`);
+  const o = ozellikler;
+  await db.sorgu(
+    `INSERT INTO geometri_ozellik (revizyon_id, sira, tur, ust_sira, cap_mm, yaricap_mm, derinlik_mm, aci_derece, genislik_mm, boy_mm, gecis, dip, ic,
+       eksen, konum, yuzler, motor)
+     SELECT $1, u.sira, u.tur, u.ust, u.cap, u.yaricap, u.derinlik, u.aci, u.genislik, u.boy, u.gecis, u.dip, u.ic,
+            u.eksen::numeric[], u.konum::numeric[], u.yuzler::int[], $2
+       FROM unnest($3::int[], $4::text[], $5::int[], $6::numeric[], $7::numeric[], $8::numeric[], $9::numeric[], $10::numeric[], $11::numeric[],
+                   $12::bool[], $13::text[], $14::bool[], $15::text[], $16::text[], $17::text[])
+         AS u(sira, tur, ust, cap, yaricap, derinlik, aci, genislik, boy, gecis, dip, ic, eksen, konum, yuzler)`,
+    [revizyonId, motor, o.map((_, i) => i + 1), o.map((x) => x.tur), o.map((x) => (x.ust === null ? null : x.ust + 1)), o.map((x) => x.capMm),
+      o.map((x) => x.yaricapMm), o.map((x) => x.derinlikMm), o.map((x) => x.aciDerece), o.map((x) => x.genislikMm), o.map((x) => x.boyMm),
+      o.map((x) => x.gecis), o.map((x) => x.dip), o.map((x) => x.ic), o.map((x) => uc(x.eksen)), o.map((x) => uc(x.konum)), o.map((x) => uc(x.yuzler))],
+  );
+}
+
+export interface OzellikSatiri extends GeometriOzellik { motor: string }
+
+export function ozellikler(db: Db, revizyonId: number): Promise<OzellikSatiri[]> {
+  return db.sorgu<OzellikSatiri>(
+    `SELECT sira, tur, ust_sira AS ust, cap_mm::float8 AS "capMm", yaricap_mm::float8 AS "yaricapMm", derinlik_mm::float8 AS "derinlikMm",
+            aci_derece::float8 AS "aciDerece", genislik_mm::float8 AS "genislikMm", boy_mm::float8 AS "boyMm", gecis, dip, ic,
+            eksen::float8[] AS eksen, konum::float8[] AS konum, yuzler, motor
+       FROM geometri_ozellik WHERE revizyon_id = $1 ORDER BY sira`,
+    [revizyonId],
   );
 }
 

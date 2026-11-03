@@ -94,6 +94,43 @@ export const geometriAnalizCevabi = z.object({
 });
 export type GeometriAnalizCevabi = z.output<typeof geometriAnalizCevabi>;
 
+// Özellik tanıma (kart 2044; 1923 b): kesin B-rep yüzlerinden delik, kademe (havşa başı), havşa (koni), pah ve radyüs. Sonuç yalnız
+// öneridir; rotaya, karta ya da Kalite Merkezi'ne kendiliğinden yazılmaz. Türün taşımadığı ölçü null'dır. ust: bağlı olduğu deliğin
+// listedeki sırası (kademe ve havşa için). yuzler: özelliği oluşturan yüzlerin analizdeki sıra numaraları.
+export const GEOMETRI_OZELLIK_TURLERI = ['delik', 'kademe', 'havsa', 'pah', 'radyus'] as const;
+export type GeometriOzellikTuru = (typeof GEOMETRI_OZELLIK_TURLERI)[number];
+export const GEOMETRI_DELIK_DIPLERI = ['duz', 'matkap'] as const;
+export type GeometriDelikDibi = (typeof GEOMETRI_DELIK_DIPLERI)[number];
+const yon3 = z.array(z.number()).length(3);
+export const geometriOzellikSemasi = z.object({
+  sira: z.number().int().min(1),
+  tur: z.enum(GEOMETRI_OZELLIK_TURLERI),
+  ust: z.number().int().min(1).nullable(),
+  capMm: mm.nullable(),
+  yaricapMm: mm.nullable(),
+  derinlikMm: mm.nullable(),
+  aciDerece: z.number().nullable(),
+  genislikMm: mm.nullable(),
+  boyMm: mm.nullable(),
+  // Delikte: dibi yoksa (iki ucu açık) true.
+  gecis: z.boolean().nullable(),
+  dip: z.enum(GEOMETRI_DELIK_DIPLERI).nullable(),
+  // Radyüste: iç köşe (içbükey) ise true, dış kenar ise false.
+  ic: z.boolean().nullable(),
+  // Delikte eksen girişten içeri doğrudur, konum girişteki eksen noktasıdır.
+  eksen: yon3.nullable(),
+  konum: yon3.nullable(),
+  yuzler: z.array(z.number().int().min(1)),
+});
+export type GeometriOzellik = z.output<typeof geometriOzellikSemasi>;
+// Tanıma yoksa (analiz yok, yüzler okunamadı ya da sınırı aştı) ozellikler null; tanındı ama özellik yoksa boş liste.
+export const geometriOzellikCevabi = z.object({
+  revizyonId: z.number().int(),
+  motor: z.string().nullable(),
+  ozellikler: z.array(geometriOzellikSemasi).nullable(),
+});
+export type GeometriOzellikCevabi = z.output<typeof geometriOzellikCevabi>;
+
 // Pay her yüzeye eklenen işleme payıdır (mm). Sorguda yoksa sistem ayarı (geometri.ham-payi-mm) geçerlidir; ayar da boşsa pay 0 ve
 // kaynağı 'yok' döner, ekran bunu söyler. Stok listesi aktif hammadde kartlarıdır (1469 a); kalite verilirse yalnız o kalite.
 export const PAY_EN_COK_MM = 100;

@@ -1,8 +1,8 @@
 // Geometri hesap süreci (1427 a): ana sunucu `surec.ts` ile fork eder; ağa açılmaz, veritabanına bağlanmaz, yalnız IPC ile dosya alır,
 // ölçü döner. STEP/IGES güvenilmeyen girdidir: çökmesi ya da asılması ana sunucuyu durdurmaz, yöneten süreç öldürüp yeniden açar.
 import { createRequire } from 'node:module';
-import { agOlcumu, ILETILER, YUZ_EN_COK, yuzTuru } from './kurallar.ts';
-import type { DosyaTuru, UcgenAgi, Yuz } from './kurallar.ts';
+import { agOlcumu, ILETILER, ozellikleriTani, YUZ_EN_COK, yuzTuru } from './kurallar.ts';
+import type { DosyaTuru, KenarTuru, Ozellik, TanimaYuzu, UcgenAgi, Yuz, YuzKenari } from './kurallar.ts';
 import type { HesapIstegi, HesapYaniti } from './surec.ts';
 
 interface OcctAgi { attributes: { position: { array: ArrayLike<number> } }; index?: { array: ArrayLike<number> } }
@@ -38,19 +38,32 @@ interface Yuzey extends Nesne {
   Sphere(): { Radius(): number; Location(): V3 } & Nesne;
   Torus(): { MajorRadius(): number; MinorRadius(): number; Axis(): Eksen } & Nesne;
 }
-interface Kasif extends Nesne { More(): boolean; Next(): void; Current(): Nesne & { Orientation(): unknown } }
 interface Okuyucu extends Nesne { ReadFile(ad: string): unknown; TransferRoots(): number; OneShape(): Nesne }
+interface SekilListesi extends Nesne { Size(): number; First(): Nesne; Last(): Nesne }
+interface SekilDizini extends Nesne { Extent(): number; FindKey(i: number): Nesne & { Orientation(): unknown }; FindIndex(s: Nesne): number }
+interface AtaDizini extends Nesne { Extent(): number; FindKey(i: number): Nesne; FindFromIndex(i: number): SekilListesi }
 interface Libcascade {
   FS: { writeFile(ad: string, veri: Uint8Array): void; unlink(ad: string): void };
   Interface_Static: { SetCVal(ad: string, deger: string): boolean };
   STEPControl_Reader: new () => Okuyucu;
   IGESControl_Reader: new () => Okuyucu;
-  TopExp_Explorer: new (s: Nesne, bul: string, kacin: string) => Kasif;
-  TopAbs_ShapeEnum: { TopAbs_FACE: string; TopAbs_SHAPE: string };
-  TopoDS: { Face(s: Nesne): Nesne };
+  NCollection_IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher: new () => SekilDizini;
+  NCollection_IndexedDataMap_TopoDS_Shape_NCollection_List_TopoDS_Shape_TopTools_ShapeMapHasher: new () => AtaDizini;
+  TopExp: {
+    MapShapes(s: Nesne, tur: string, m: SekilDizini): void;
+    MapShapesAndAncestors(s: Nesne, tur: string, ata: string, m: AtaDizini): void;
+  };
+  TopAbs_ShapeEnum: { TopAbs_FACE: string; TopAbs_EDGE: string };
+  TopoDS: { Face(s: Nesne): Nesne & { Orientation(): unknown; IsSame(s: Nesne): boolean }; Edge(s: Nesne): Nesne };
   BRepAdaptor_Surface: new (y: Nesne, sinirli: boolean) => Yuzey;
+  BRepLProp_SLProps: new (y: Yuzey, u: number, v: number, n: number, cozunurluk: number) => Nesne & { Normal(): V3; Value(): V3; IsNormalDefined(): boolean };
+  BRepTools: { UVBounds(y: Nesne): { UMin: number; UMax: number; VMin: number; VMax: number } };
+  ChFi3d: { DefineConnectType(k: Nesne, a: Nesne, b: Nesne, sinTol: number, duzelt: boolean): unknown };
   GProp_GProps: new () => Nesne & { Mass(): number };
-  BRepGProp: { SurfaceProperties(s: Nesne, p: Nesne, paylasilanAtla: boolean, ag: boolean): void };
+  BRepGProp: {
+    SurfaceProperties(s: Nesne, p: Nesne, paylasilanAtla: boolean, ag: boolean): void;
+    LinearProperties(s: Nesne, p: Nesne, paylasilanAtla: boolean, ag: boolean): void;
+  };
 }
 
 let kitaplik: Promise<Libcascade> | null = null;
@@ -72,28 +85,41 @@ const eksenOku = (a: Eksen): { eksen: [number, number, number]; konum: [number, 
   return s;
 };
 
-// Yüz listesi okunamazsa ya da sınırı aşarsa null: ağdan ölçüm yine tamamlanır, yüz türü yalnız eksik kalır.
-async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<Yuz[] | null> {
+// Kenar türü için açı sınırı (sinüs): 1 dereceden küçük kırılma teğet sayılır (VARSAYIM, kart 2044; geri alma ucuz).
+const TEGET_SINUS = Math.sin(Math.PI / 180);
+const KENAR_TURU: Readonly<Record<string, KenarTuru>> = { ChFiDS_Concave: 'icbukey', ChFiDS_Convex: 'disbukey', ChFiDS_Tangential: 'teget' };
+
+export interface YuzSonucu { yuzler: Yuz[]; ozellikler: Ozellik[] }
+
+// Yüzler şeklin yüz dizinindeki sırayla (TopExp.MapShapes; aynı yüz bir kez) okunur; sıra geometri_yuz.sira'dır. Yüz listesi okunamazsa
+// ya da sınırı aşarsa null: ağdan ölçüm yine tamamlanır, yüz türü ve özellikler yalnız eksik kalır.
+async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<YuzSonucu | null> {
   const oc = await libcascade();
   const ad = tur === 'step' ? '/model.stp' : '/model.igs';
   oc.FS.writeFile(ad, veri);
   const okuyucu = tur === 'step' ? new oc.STEPControl_Reader() : new oc.IGESControl_Reader();
+  const silinecek: Nesne[] = [];
   try {
     oc.Interface_Static.SetCVal('xstep.cascade.unit', 'MM');
     if (String(okuyucu.ReadFile(ad)) !== 'IFSelect_RetDone' || okuyucu.TransferRoots() === 0) return null;
     const sekil = okuyucu.OneShape();
-    const kasif = new oc.TopExp_Explorer(sekil, oc.TopAbs_ShapeEnum.TopAbs_FACE, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    silinecek.push(sekil);
+    const dizin = new oc.NCollection_IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher();
+    silinecek.push(dizin);
+    oc.TopExp.MapShapes(sekil, oc.TopAbs_ShapeEnum.TopAbs_FACE, dizin);
+    const n = dizin.Extent();
+    if (n > YUZ_EN_COK) return null;
     const yuzler: Yuz[] = [];
-    for (; kasif.More(); kasif.Next()) {
-      if (yuzler.length >= YUZ_EN_COK) { birak(kasif, sekil); return null; }
-      const ham = kasif.Current();
-      const yuz = oc.TopoDS.Face(ham);
+    const tanima: TanimaYuzu[] = [];
+    for (let i = 1; i <= n; i++) {
+      const yuz = oc.TopoDS.Face(dizin.FindKey(i));
       const yuzey = new oc.BRepAdaptor_Surface(yuz, true);
       const ozellik = new oc.GProp_GProps();
       oc.BRepGProp.SurfaceProperties(yuz, ozellik, false, false);
       const t = yuzTuru(String(yuzey.GetType()));
+      const ters = String(yuz.Orientation()) === 'TopAbs_REVERSED';
       const y: Yuz = {
-        tur: t, ters: String(ham.Orientation()) === 'TopAbs_REVERSED', alanMm2: yuvarla(ozellik.Mass()),
+        tur: t, ters, alanMm2: yuvarla(ozellik.Mass()),
         yaricapMm: null, ikinciYaricapMm: null, yariAciDerece: null, eksen: null, konum: null,
       };
       if (t === 'silindir') {
@@ -117,16 +143,66 @@ async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<Yuz[] | nul
         Object.assign(y, eksenOku(g.Axis()));
         birak(g);
       }
-      birak(ozellik, yuzey, yuz, ham);
+      tanima.push(tanimaYuzu(oc, yuz, yuzey, y, ters));
+      birak(ozellik, yuzey, yuz);
       yuzler.push(y);
     }
-    birak(kasif, sekil);
-    return yuzler;
+    const atalar = new oc.NCollection_IndexedDataMap_TopoDS_Shape_NCollection_List_TopoDS_Shape_TopTools_ShapeMapHasher();
+    silinecek.push(atalar);
+    oc.TopExp.MapShapesAndAncestors(sekil, oc.TopAbs_ShapeEnum.TopAbs_EDGE, oc.TopAbs_ShapeEnum.TopAbs_FACE, atalar);
+    const kenarlar: YuzKenari[] = [];
+    for (let i = 1; i <= atalar.Extent(); i++) {
+      const liste = atalar.FindFromIndex(i);
+      if (liste.Size() !== 2) continue;
+      const a = oc.TopoDS.Face(liste.First()), b = oc.TopoDS.Face(liste.Last());
+      if (a.IsSame(b)) { birak(a, b); continue; }
+      const kenar = oc.TopoDS.Edge(atalar.FindKey(i));
+      const boy = new oc.GProp_GProps();
+      oc.BRepGProp.LinearProperties(kenar, boy, false, false);
+      const tur = KENAR_TURU[String(oc.ChFi3d.DefineConnectType(kenar, a, b, TEGET_SINUS, true))] ?? 'diger';
+      kenarlar.push({ a: dizin.FindIndex(a) - 1, b: dizin.FindIndex(b) - 1, tur, uzunlukMm: yuvarla(boy.Mass()) });
+      birak(boy, kenar, a, b);
+    }
+    return { yuzler, ozellikler: ozellikleriTani(tanima, kenarlar) };
   } catch {
     return null;
   } finally {
-    birak(okuyucu);
+    birak(...silinecek, okuyucu);
     oc.FS.unlink(ad);
+  }
+}
+
+// Dış normal yüzün parametre ortasında okunur ve yüz yönüyle çevrilir. yan: normal eğrilik merkezine bakıyorsa 'ic' (silindir ve
+// konide eksen, torusta boru ekseni, kürede merkez). Silindir, koni ve kürede yan yüzün her yerinde aynıdır.
+function tanimaYuzu(oc: Libcascade, yuz: Nesne, yuzey: Yuzey, y: Yuz, ters: boolean): TanimaYuzu {
+  const uv = oc.BRepTools.UVBounds(yuz);
+  const sonuc: TanimaYuzu = { yuz: y, yan: null, normal: null, u: [uv.UMin, uv.UMax], v: [uv.VMin, uv.VMax] };
+  const ozellik = new oc.BRepLProp_SLProps(yuzey, (uv.UMin + uv.UMax) / 2, (uv.VMin + uv.VMax) / 2, 1, 1e-7);
+  try {
+    if (!ozellik.IsNormalDefined()) return sonuc;
+    const n0 = ucDeger(ozellik.Normal(), 1e8);
+    const n: [number, number, number] = ters ? [-n0[0], -n0[1], -n0[2]] : n0;
+    const p = ucDeger(ozellik.Value(), 1e8);
+    if (y.tur === 'duzlem') { sonuc.normal = n; return sonuc; }
+    let merkez: [number, number, number] | null = null;
+    if ((y.tur === 'silindir' || y.tur === 'koni' || y.tur === 'torus') && y.eksen !== null && y.konum !== null) {
+      const e = y.eksen, k = y.konum;
+      const t = (p[0] - k[0]) * e[0] + (p[1] - k[1]) * e[1] + (p[2] - k[2]) * e[2];
+      merkez = [k[0] + t * e[0], k[1] + t * e[1], k[2] + t * e[2]];
+      if (y.tur === 'torus' && y.yaricapMm !== null) {
+        const r = [p[0] - merkez[0], p[1] - merkez[1], p[2] - merkez[2]], l = Math.hypot(...r);
+        if (l > 0) merkez = [merkez[0] + (r[0]! / l) * y.yaricapMm, merkez[1] + (r[1]! / l) * y.yaricapMm, merkez[2] + (r[2]! / l) * y.yaricapMm];
+      }
+    } else if (y.tur === 'kure' && y.konum !== null) {
+      merkez = y.konum;
+    }
+    if (merkez !== null) {
+      const d = (p[0] - merkez[0]) * n[0] + (p[1] - merkez[1]) * n[1] + (p[2] - merkez[2]) * n[2];
+      sonuc.yan = d < 0 ? 'ic' : 'dis';
+    }
+    return sonuc;
+  } finally {
+    birak(ozellik);
   }
 }
 
@@ -143,8 +219,8 @@ async function hesapla(tur: DosyaTuru, veri: Uint8Array): Promise<HesapYaniti> {
   const aglar: UcgenAgi[] = sonuc.meshes.map((m) => ({ konum: m.attributes.position.array, indeks: m.index?.array ?? [] }));
   const olcum = agOlcumu(aglar);
   if (olcum === null) return { tamam: false, kalici: true, hata: ILETILER.bosModel, bellek: process.memoryUsage().rss };
-  const yuzler = await yuzleriOku(tur, veri).catch(() => null);
-  return { tamam: true, olcum, yuzler, sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss };
+  const yuz = await yuzleriOku(tur, veri).catch(() => null);
+  return { tamam: true, olcum, yuzler: yuz?.yuzler ?? null, ozellikler: yuz?.ozellikler ?? null, sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss };
 }
 
 process.on('message', (ileti: HesapIstegi) => {

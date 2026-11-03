@@ -15,3 +15,9 @@
   okuyamazsa ya da yüz sayısı `YUZ_EN_COK`'u aşarsa analiz yine biter, yüz özeti null kalır. İki wasm aynı süreçte: ilk iş birkaç saniye
   yükleme alır, bellek NIST AP242 modellerinde 0,6-0,9 GB ölçüldü (eşik 2 GB).
 - Emscripten nesneleri çöp toplayıcıyla serbest kalmaz: yüz döngüsünde oluşturulan her nesne `delete` ile bırakılır.
+- Özellik tanıma (2044, 1923 b): aynı libcascade okumasında yüz komşuluğu (`TopExp.MapShapesAndAncestors`) ve kenar türü
+  (`ChFi3d.DefineConnectType`: içbükey, dışbükey, teğet; 1 dereceden küçük kırılma teğet) çıkar; kural `kurallar.ts`
+  `ozellikleriTani` saftır. Yüz sırası şeklin yüz dizinindedir (`TopExp.MapShapes`, aynı yüz bir kez); `geometri_yuz.sira` ve
+  `geometri_ozellik.yuzler` bu sıradır. Delik derinliği girişten dibe eksen boyudur; çapraz delikle kesilen ya da iki duvardan geçen aynı
+  çaplı delik tek delik sayılır (matkap tek geçer). Eğik delik de tanınır (eksen yönünden bağımsız; `GEO-OZ9`). Tanınmayan: cep, kanal, basamak, diş,
+  tolerans (PMI); düzlem pah yalnız iki düzlem arasında. Ölçüler yalnız sentetik modelle denendi; gerçek dosyada oran bilinmiyor.
