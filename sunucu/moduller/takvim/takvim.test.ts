@@ -39,11 +39,13 @@ describe('takvim (gerçek PostgreSQL)', () => {
     return cevap.govde;
   };
   const oku = (cerez: string, a = MART) => istek<TakvimCevabi>(cerez, 'GET', `/takvim?baslangic=${a.baslangic}&bitis=${a.bitis}`);
-  // Bugünden en az `gun` gün önceki ilk iş günü: İK hafta sonu izni reddeder.
-  const gunOnce = (gun: number): string => {
+  // Bugünden en az `gun` gün önceki ilk iş günü: İK hafta sonu izni reddeder. `dolu` verilirse oradaki günler de atlanır;
+  // hafta sonu kayması iki yakın günü aynı iş gününe düşürebilir, aynı kişinin iki izni o zaman çakışır.
+  const gunOnce = (gun: number, dolu: ReadonlySet<string> = new Set()): string => {
     let an = Date.parse(`${tesisGunu(Date.now())}T00:00:00Z`) - gun * 86_400_000;
-    while ([0, 6].includes(new Date(an).getUTCDay())) an -= 86_400_000;
-    return new Date(an).toISOString().slice(0, 10);
+    const tarih = () => new Date(an).toISOString().slice(0, 10);
+    while ([0, 6].includes(new Date(an).getUTCDay()) || dolu.has(tarih())) an -= 86_400_000;
+    return tarih();
   };
   const gecikenOku = (cerez: string) => istek<TakvimGecikenCevabi>(cerez, 'GET', '/takvim/gecikenler');
   const islemVer = (ad: string, islem: string) => tamam(c.yonetici, 'POST', `/kisiler/${kisiler[ad]!}/ek-islem-degistir`, { islem, verildi: true });
@@ -83,8 +85,10 @@ describe('takvim (gerçek PostgreSQL)', () => {
     }
     // Geciken taraması (1816): 200 gün önce bekleyen (geciken), 200 gün önce onaylanmış (kapanmış), taramanın dışında bekleyen ve bugünden önceki son iş günü bekleyen izin.
     const gecmis: [string, number, string][] = [['eski_bekleyen', -200, 'Beklemede'], ['eski_onayli', -201, 'Onaylandı'], ['cok_eski', -GECIKEN_GERI_GUN - 5, 'Beklemede'], ['dun', -1, 'Beklemede']];
+    const dolu = new Set<string>();
     for (const [ad, gun, durum] of gecmis) {
-      const t = gunOnce(-gun);
+      const t = gunOnce(-gun, dolu);
+      dolu.add(t);
       await tamam(c.yonetici, 'POST', `/ik/izinler/leave_${ad}/kaydet`, {
         govde: { id: `leave_${ad}`, kind: 'leave', empId: 'emp_operator', tur: 'Mazeret izni', baslangic: t, bitis: t, gun: 1, durum }, surum: null,
       });
