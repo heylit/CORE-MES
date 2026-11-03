@@ -135,7 +135,8 @@ export function CncYeni() {
           <div className="tc-cy-serit" {...{ [SERIT]: '' }}>
             <Sekmeler etiket="CNC Kurulum görünümleri" sekmeler={kayitlar} secili={gorunum} sec={(g) => { git(g); }} />
           </div>
-          <CizimModuSecici />
+          {/* 2B/3D seçimi de bakma biçimidir; şerit gibi eylem sayılmaz. */}
+          <span {...{ [SERIT]: '' }}><CizimModuSecici /></span>
           {gecmisGorebilir && (
             <Dugme simge="clock" onClick={() => { gecmisAcikYaz(true); }} title="Kim neyi ne zaman değiştirdi">Geçmiş</Dugme>
           )}
