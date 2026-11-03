@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AZAMI_MAKINE_SECIMI, ayrimAciklamasi, calisabildigiMakineler, ayrimEtiketi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, seciliMakineler,
+  AZAMI_MAKINE_SECIMI, ayrimAciklamasi, baslatmaMakineReddi, calisabildigiMakineler, varsayilanSecim, ayrimEtiketi, kayittakiMakineler, kilitsizSecim, makineAyrimi, makineSecimiGorunur, secimOzeti, secimiDegistir, seciliMakineler,
 } from '../../../../arkon/web/src/data/makine-secimi.ts';
 
 const M = [{ id: 'M1', name: 'Torna 1' }, { id: 'M2', name: 'Torna 2' }, { id: 'M3' }];
@@ -21,6 +21,24 @@ describe('terminal makine seçimi', () => {
     expect(calisabildigiMakineler(M, null)).toEqual(M);
     expect(calisabildigiMakineler(M, undefined)).toEqual(M);
     expect(makineSecimiGorunur(calisabildigiMakineler(M, ['M1']), 'queued')).toBe(false);
+  });
+
+  it('2055 a: çok makineli istasyonda seçim ya da plan makinesi olmadan Başlat reddedilir; tek makinede ve tek seçenekte geçer', () => {
+    expect(baslatmaMakineReddi(M, M, [], null)).toMatch(/Makine seçin/);
+    expect(baslatmaMakineReddi(M, M, ['M2'], null)).toBeNull();
+    expect(baslatmaMakineReddi(M, M, [], 'M1')).toBeNull();
+    expect(baslatmaMakineReddi([M[0]!], [M[0]!], [], null)).toBeNull();
+    expect(baslatmaMakineReddi([], [], [], null)).toBeNull();
+    expect(baslatmaMakineReddi(M, [M[1]!], [], null)).toBeNull();
+    expect(baslatmaMakineReddi(M, [], [], null)).toMatch(/çalışabileceğiniz makine yok/);
+  });
+
+  it('2055 a: kişinin çalışabildiği tek makine kalınca o makine kayda yazılır; seçim varsa ona dokunulmaz', () => {
+    expect(varsayilanSecim(M, [M[1]!], [])).toEqual(['M2']);
+    expect(varsayilanSecim(M, [M[1]!], ['M3'])).toEqual(['M3']);
+    expect(varsayilanSecim(M, M, [])).toEqual([]);
+    expect(varsayilanSecim([M[0]!], [M[0]!], [])).toEqual([]);
+    expect(kayittakiMakineler(varsayilanSecim(M, [M[1]!], []), [M[1]!], 'running')).toEqual(['M2']);
   });
 
   it('dokunuş seçer ve bırakır; en çok 20 makine', () => {

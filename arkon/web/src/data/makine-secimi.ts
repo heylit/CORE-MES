@@ -18,6 +18,19 @@ export function secimiDegistir(secili: readonly string[], id: string): string[] 
 export const calisabildigiMakineler = <T extends SecilebilirMakine>(makineler: readonly T[], yetkin: readonly string[] | null | undefined): T[] =>
   yetkin == null ? [...makineler] : makineler.filter((m) => yetkin.includes(m.id));
 
+/* 2055 a: makinesi olan istasyonda iş makinesiz başlamaz. İstasyonda tek makine varsa sunucu onu kendisi alır; birden çok makinede
+   seçim ya da planın atadığı makine gerekir. Kişinin çalışabildiği tek makine kalıyorsa seçici görünmez, o makine kayda yazılır.
+   İnsanlı istasyonu ekran bilmez: son söz başlatma komutundadır. */
+export function baslatmaMakineReddi(
+  tum: readonly SecilebilirMakine[], secilebilir: readonly SecilebilirMakine[], secili: readonly string[], atanan: string | null | undefined,
+): string | null {
+  if (tum.length < 2 || atanan || secili.length > 0 || secilebilir.length === 1) return null;
+  return secilebilir.length === 0 ? 'Bu istasyonda çalışabileceğiniz makine yok · amirinize bildirin' : 'Makine seçin · bu istasyonda iş makinesiz başlatılamaz';
+}
+
+export const varsayilanSecim = (tum: readonly SecilebilirMakine[], secilebilir: readonly SecilebilirMakine[], secili: readonly string[]): string[] =>
+  secili.length === 0 && tum.length >= 2 && secilebilir.length === 1 ? [secilebilir[0]!.id] : [...secili];
+
 // İstasyon ya da iş değişince istasyonda olmayan makine seçimde kalmaz.
 export const seciliMakineler = (secili: readonly string[], makineler: readonly SecilebilirMakine[]): string[] =>
   secili.filter((id) => makineler.some((m) => m.id === id));

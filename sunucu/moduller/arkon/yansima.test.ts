@@ -2755,7 +2755,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     await vt().sorgu('INSERT INTO ekip_uye (ekip_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, current_date, 10)', [ekip!.id, await kisiKimligi(kullaniciAdi)]);
   }
 
-  test('makine seçimi: seçilen makinede başlar, seçilmezse istasyon yerinde; bilinmeyen, başka istasyonun ve biçimsiz seçim reddedilir', async () => {
+  test('makine seçimi: seçilen makinede başlar, seçimsiz çok makineli istasyonda reddedilir (2055 a); bilinmeyen, başka istasyonun ve biçimsiz seçim reddedilir', async () => {
     await yeniIstasyon();
     const m1 = await makineEkle('Torna 1');
     const m2 = await makineEkle('Torna 2');
@@ -2765,10 +2765,13 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.deepEqual([c.durum, c.govde.reddedilen, c.govde.uyarilar], [200, [], []]);
     assert.deepEqual((await acikKullanimlar(emir)).map((k) => k.makine_id), [m2.id], 'yalnız seçilen makine tutulur');
     assert.equal((await yansima(String(secili['cid'])))?.sonuc, 'yazildi');
-    // Seçilmezse (mcs yok) iş emrinin makinesi kullanılır; atanmış makine yoksa istasyonun makinesiz yeri.
+    // 2055 a: seçilmezse (mcs yok) iş emrinin makinesi kullanılır; atanmış makine de yoksa çok makineli istasyonda başlatma reddedilir.
     const diger = await emirAc();
-    assert.equal((await olayEkle(operator, olay(diger, 'running'))).govde.reddedilen.length, 0);
-    assert.deepEqual((await acikKullanimlar(diger)).map((k) => k.makine_id), [null]);
+    const secimsiz = await olayEkle(operator, olay(diger, 'running'));
+    assert.match(secimsiz.govde.reddedilen[0]?.ileti ?? '', /makinesiz başlatılamaz/);
+    assert.deepEqual(await acikKullanimlar(diger), []);
+    assert.deepEqual((await olayEkle(operator, olay(diger, 'running', { mcs: [m1.kod] }))).govde.reddedilen, []);
+    assert.deepEqual((await acikKullanimlar(diger)).map((k) => k.makine_id), [m1.id]);
     // Çoklu seçim: bir kişi birden çok makinede tutar.
     await olayEkle(operator, olay(diger, 'paused'));
     await olayEkle(operator, olay(emir, 'paused'));

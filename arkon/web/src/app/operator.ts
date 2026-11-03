@@ -18,7 +18,7 @@ import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../data/nu
 import { ILK_PARCA_ONCE_SAY_ILETISI, ilkParcaKarari, kaliteMerkeziNumuneYamasi, ilkParcaSayimReddi, yenidenIlkParcaAcik, kararBekleyenSayisi, yenidenIlkParcaTabani } from '../data/ilk-parca';
 import { vardiyaUretimi } from '../data/operator-ozeti';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../data/refakat-karti';
-import { AYRIM_YENILEME_MS, calisabildigiMakineler, kayittakiMakineler, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
+import { AYRIM_YENILEME_MS, baslatmaMakineReddi, calisabildigiMakineler, kayittakiMakineler, varsayilanSecim, kilitsizSecim, makineSecimiGorunur, seciliMakineler, type MakineAyrimlari } from '../data/makine-secimi';
 import { CALLS, Fragment, I, ORDERS, REASONS, ST, dur, fmt, html, isPlannedReason, pl, reasonOf, useCallback, useEffect, useMemo, useNow, useRef, useState } from './temel';
 import { Dial, EtkinKart, Orbs, Queue, Top } from './bilesenler';
 import { FEAT, LS } from './yukleyici';
@@ -327,7 +327,7 @@ export function App({ preview }) {
     if (l && l.no === o.no && l.state === o.state) return;
     LS.set(k, { no: o.no, state: o.state, at: Date.now() });
     const why = o.state === 'stopped' ? lastNoteRef.current : null;
-    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(kilitsizSecim(mcSel, ayrim), secilebilir(), o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
+    if (!autoRef.current.state && durumKaydiGerekir(l, o)) AKStore.Log.add('events', { machine: MACHINE, wc: machineOf(MACHINE).wc || null, mc: curMc(), mcs: kayittakiMakineler(varsayilanSecim(machineOf(MACHINE).mcs, secilebilir(), kilitsizSecim(mcSel, ayrim)), secilebilir(), o.state), orderNo: o.no, pkgId: o.pkg ? o.pkg.id : null, state: o.state, reason: why, planned: why ? isPlannedReason(why) : null });
     autoRef.current.state = false; lastNoteRef.current = null;
     schedAutoCall(why);
   }, [o.state, o.no]);
@@ -413,6 +413,7 @@ export function App({ preview }) {
   const hazirlikta = useRef(false);
   const act = (a, t?, warned?, hazir?) => {
     if (['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'].includes(a) && (o.empty || !ok('prod.run'))) return;
+    if (a === 'start' && !preview) { const red = baslatmaMakineReddi(machineOf(MACHINE).mcs, secilebilir(), kilitsizSecim(seciliMakineler(mcSel, secilebilir()), ayrim), (ayrim && ayrim.planMakinesi) || (o.pkg && o.pkg.mc)); if (red) { beep('nok'); say(red, 'alert', 'var(--hazard)'); return; } } // 2055 a
     if (a === 'tool') { const tl = RL.prod.tools.find(x => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { setWarnShow({ list: RL.warns.filter(w => w.t), title: 'Bu işin uyarıları' }); return; }
     if (a === 'stop') return setOv('reason');
