@@ -106,7 +106,9 @@ export const LOGO_FIS_TONU: Record<LogoFisDurumu, RozetTonu> = {
 };
 export const FIS_GONDERIM_ETIKETI: Record<FisGonderimSekli, string> = { kapali: 'Gönderim kapalı', otomatik: 'Otomatik gönderim', elle: 'Elle gönderim' };
 // Listede fiş türlerine mal kabul eklenir (515 a); simgesi menüdeki Mal kabul simgesidir.
-export const LISTE_FISI_ETIKETI: Record<ListeFisiTuru, string> = { ...MALZEME_FISI_ETIKETI, mal_kabul: 'Mal kabul' };
-export const LISTE_FISI_SIMGESI: Record<ListeFisiTuru, SimgeAdi> = { ...MALZEME_FISI_SIMGESI, mal_kabul: 'truck' };
+export const LISTE_FISI_ETIKETI: Record<ListeFisiTuru, string> = {
+  ...MALZEME_FISI_ETIKETI, mal_kabul: 'Mal kabul', teslim_fisi: 'Teslim fişi', toplama: 'Toplama listesi', hareket_fisi: 'Hareket fişi',
+};
+export const LISTE_FISI_SIMGESI: Record<ListeFisiTuru, SimgeAdi> = { ...MALZEME_FISI_SIMGESI, mal_kabul: 'truck', teslim_fisi: 'box', toplama: 'list', hareket_fisi: 'sort' };
 export const LISTE_FISI_TURLERI = anahtarlari(LISTE_FISI_ETIKETI);
 export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez'] as const satisfies readonly LogoFisDurumu[];

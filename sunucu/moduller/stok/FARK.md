@@ -552,3 +552,7 @@ Göç `sunucu/gocler/20261014104100_stok_malzeme_teslim.sql` dolu tabloları de�
 ## Kanal ilkesi (kart 2014, 2022 b)
 
 Okutarak yapılan iş yalnız üst çubuktaki Okut panelinde, masa işi yalnız sayfada. İkinci menüden "Okut" ve "Okutarak say" maddeleri, "Ne oldu?" panelinden ve Ctrl K'dan "Kod okut" kopyaları kalktı. `/stok/okut` ve `/stok/okutarak-sayim` adresleri paneli açar (sayım adresi Say modunda; `PanelIstegi.mod`), sayım yetkisi olmayana panel Otomatik açılır. Uç, kural ve yetki değişmedi; menü sayacından iki anahtar düştü.
+
+## Belgeler listesi (kart 2014, 2023 b)
+
+"Malzeme fişleri" menü maddesi "Belgeler" oldu (yol ve anahtar aynı). `GET /stok/malzeme-fisleri` birleşimine teslim fişi (`stok_fis`), toplama listesi (`stok_toplama`) ve hareket fişi (`stok_hareket_fisi`) girdi; tür listesi `LISTE_FISI_TURLERI` üç türle genişledi. Hareket fişi "Tümü"de yoktur, yalnız kendi türüyle süzülünce gelir (her mal kabul ve teslim aynı komutta bir hareket fişi de açar). Bu üç belge Logo'ya gitmez (`gonderilmez`), Logo ve emir süzgecinde çıkmaz; numaralarıyla tam eşleşmeyle aranır. Satır kendi ekranına gider: teslim fişi `/stok/fisler/:id`, toplama `/stok/hazirlik/:id`, hareket fişi Hareketler'de numarasıyla. Şema, uç ve yetki değişmedi.

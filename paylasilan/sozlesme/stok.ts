@@ -1514,7 +1514,8 @@ export type MalzemeFisiTuru = (typeof MALZEME_FISI_TURLERI)[number];
 export const EMIR_FISI_TURLERI = ['sarf', 'uretim_girisi', 'fire'] as const satisfies readonly MalzemeFisiTuru[];
 // Malzeme fişleri listesinde mal kabul belgesi de görünür (515 a); Logo'ya gitmez, irsaliye Logo'da kesilip mal kabulle eşlenir (K7).
 // Liste türü bu yüzden fiş türünden ayrıdır: Logo'ya giden fiş türleri (MalzemeFisiTuru) değişmez.
-export const LISTE_FISI_TURLERI = [...MALZEME_FISI_TURLERI, 'mal_kabul'] as const;
+// Belgeler listesi (2023 b): malzeme fişleri, mal kabul, teslim fişi, toplama listesi ve hareket fişi tek listede.
+export const LISTE_FISI_TURLERI = [...MALZEME_FISI_TURLERI, 'mal_kabul', 'teslim_fisi', 'toplama', 'hareket_fisi'] as const;
 export type ListeFisiTuru = (typeof LISTE_FISI_TURLERI)[number];
 // Fiş türünün Logo'ya gidiş biçimi Logo ayarıdır; stok yalnız gösterir ve elle gönderim isteğini yazar.
 export const FIS_GONDERIM_SEKILLERI = ['kapali', 'otomatik', 'elle'] as const;

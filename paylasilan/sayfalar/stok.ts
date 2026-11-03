@@ -29,7 +29,7 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'malzemeler', baslik: 'Malzemeler', yol: '/stok/malzemeler', simge: 'layers', islem: 'sayfa.stok' },
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
-        { anahtar: 'malzeme-fisleri', baslik: 'Malzeme fişleri', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
+        { anahtar: 'malzeme-fisleri', baslik: 'Belgeler', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },
         // Göz ve etiket okutarak kör sayım; okuyucunun hafızasından aktarım da buradan (1905).
         // Okut panelinin Seri modunda toplanan listeler; düzeltilip bir işe verilir (1915).
         { anahtar: 'seri-listeler', baslik: 'Seri listeler', yol: '/stok/seri-listeler', simge: 'list', islem: 'stok.istek' },

@@ -97,35 +97,63 @@ const malKabulSatiri = (m: MalKabulHam): MalzemeFisiListeSatiri => ({
 });
 const bosListe = (s: MalzemeFisleriListesi): SayfaliListe<MalzemeFisiListeSatiri> => ({ satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: s.sayfaBoyu ?? 50 });
 
-// Fiş ve mal kabul kimliklerini birleşik sıradaki yerleriyle doldurur.
+// Teslim fişi, toplama listesi ve hareket fişi Logo'ya gitmez; Logo'ya giden, aynı hareketlerin malzeme fişidir.
+const BELGE_LOGO_NEDENI: Record<DigerBelge, string> = {
+  teslim_fisi: "Teslim fişi Logo'ya gitmez; hareket Logo'ya malzeme fişiyle gider.",
+  toplama: "Toplama listesi Logo'ya gitmez; toplanan malzemenin hareketi ayrıca fişlenir.",
+  hareket_fisi: "Hareket fişi CORE içindir; Logo'ya malzeme fişi gider.",
+};
+type DigerBelge = 'teslim_fisi' | 'toplama' | 'hareket_fisi';
+const DIGER_BELGELER: readonly DigerBelge[] = ['teslim_fisi', 'toplama', 'hareket_fisi'];
+const digerBelgeMi = (t: string | undefined): t is DigerBelge => DIGER_BELGELER.includes(t as DigerBelge);
+const BELGE_BUL: Record<DigerBelge, (db: Db, idler: readonly number[]) => Promise<sorgular.BelgeHam[]>> = {
+  teslim_fisi: sorgular.teslimFisleriBul, toplama: sorgular.toplamalarBul, hareket_fisi: sorgular.hareketFisleriBul,
+};
+const belgeSatiri = (tur: DigerBelge, b: sorgular.BelgeHam, emirNo: string | null): MalzemeFisiListeSatiri => ({
+  id: b.id, no: b.no, tur, acilis: b.zaman, uretimEmriId: b.uretimEmriId, emirNo, satirSayisi: b.satirSayisi, gonderimIstegi: null,
+  logo: { ...MAL_KABUL_LOGO, neden: BELGE_LOGO_NEDENI[tur] }, gonderilebilir: false, surum: 1, irsaliyeNo: null,
+});
+
+// Belge kimliklerini birleşik sıradaki yerleriyle doldurur.
 async function listeSatirlari(db: Db, anahtarlar: readonly sorgular.ListeFisiAnahtari[]): Promise<MalzemeFisiListeSatiri[]> {
-  const fisIdler = anahtarlar.filter((a) => a.kaynak === 'fis').map((a) => a.id);
-  const kabulIdler = anahtarlar.filter((a) => a.kaynak === 'mal_kabul').map((a) => a.id);
+  const idler = (k: sorgular.BelgeKaynagi) => anahtarlar.filter((a) => a.kaynak === k).map((a) => a.id);
+  const fisIdler = idler('fis');
+  const kabulIdler = idler('mal_kabul');
   const fisler = fisIdler.length ? (await ozetler(db, await sorgular.malzemeFisleriBul(db, fisIdler))).ozet : [];
   const kabuller = kabulIdler.length ? await sorgular.malKabullerBul(db, kabulIdler) : [];
-  const fis = new Map(fisler.map((f) => [f.id, fisSatiri(f)]));
-  const kabul = new Map(kabuller.map((m) => [m.id, malKabulSatiri(m)]));
+  const harita = new Map<string, MalzemeFisiListeSatiri>();
+  for (const f of fisler) harita.set(`fis-${f.id}`, fisSatiri(f));
+  for (const m of kabuller) harita.set(`mal_kabul-${m.id}`, malKabulSatiri(m));
+  const digerleri: { t: DigerBelge; l: sorgular.BelgeHam[] }[] = [];
+  for (const t of DIGER_BELGELER) digerleri.push({ t, l: idler(t).length ? await BELGE_BUL[t](db, idler(t)) : [] });
+  const nolar = await emirNolari(db, digerleri.flatMap((d) => d.l.flatMap((b) => (b.uretimEmriId === null ? [] : [b.uretimEmriId]))));
+  for (const d of digerleri) for (const b of d.l) harita.set(`${d.t}-${b.id}`, belgeSatiri(d.t, b, b.uretimEmriId === null ? null : (nolar.get(b.uretimEmriId) ?? null)));
   return anahtarlar.flatMap((a) => {
-    const x = (a.kaynak === 'fis' ? fis : kabul).get(a.id);
+    const x = harita.get(`${a.kaynak}-${a.id}`);
     return x ? [x] : [];
   });
 }
 
 export async function malzemeFisiListesi(db: Db, s: MalzemeFisleriListesi): Promise<SayfaliListe<MalzemeFisiListeSatiri>> {
   const no = s.metin ? fisNoKimligi(s.metin) : null;
-  // Arama yalnız sayım, ambar ve mal kabul numarasını çözer; emir fişi emirden (uretimEmriId) süzülür. Çözülemeyen metin boş liste verir, uydurulmaz.
-  if (s.metin && no === null) return bosListe(s);
+  // Arama sayım, ambar ve mal kabul numarasını önekten çözer; teslim fişi, toplama ve hareket fişi numarasıyla bulunur. Emir fişi emirden
+  // (uretimEmriId) süzülür. Çözülemeyen metin boş liste verir, uydurulmaz.
+  if (s.metin && no === null) {
+    if (s.logoDurumu !== undefined || s.uretimEmriId !== undefined) return bosListe(s);
+    const bulunan = (await sorgular.belgeNoBul(db, s.metin)).filter((a) => s.tur === undefined || a.kaynak === s.tur);
+    return sayfaliListe(s, { say: async () => bulunan.length, satirlar: async () => listeSatirlari(db, bulunan) });
+  }
   if (no !== null && s.tur !== undefined && s.tur !== no.tur) return bosListe(s);
   const tur = no?.tur ?? s.tur;
   // Mal kabul Logo'ya gitmez ve emre bağlı değildir: Logo durumu ya da emirle süzülen listede çıkmaz.
   const yalnizFis = s.logoDurumu !== undefined || s.uretimEmriId !== undefined;
-  if (tur === 'mal_kabul' || (tur === undefined && !yalnizFis)) {
-    if (tur === 'mal_kabul' && yalnizFis) return bosListe(s);
+  if (tur === 'mal_kabul' || digerBelgeMi(tur) || (tur === undefined && !yalnizFis)) {
+    if ((tur === 'mal_kabul' || digerBelgeMi(tur)) && yalnizFis) return bosListe(s);
     if (no !== null) {
       const m = await sorgular.malKabullerBul(db, [no.id]);
       return sayfaliListe(s, { say: async () => m.length, satirlar: async () => m.map(malKabulSatiri) });
     }
-    const kaynak = tur === 'mal_kabul' ? 'mal_kabul' : null;
+    const kaynak: sorgular.BelgeKaynagi | null = tur === 'mal_kabul' || digerBelgeMi(tur) ? tur : null;
     const l = await sayfaliListe(s, { say: () => sorgular.listeFisiSay(db, kaynak), satirlar: (d) => sorgular.listeFisleri(db, kaynak, s, d) });
     return { ...l, satirlar: await listeSatirlari(db, l.satirlar) };
   }

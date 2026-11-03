@@ -34,17 +34,27 @@ type KaynakliFis = Pick<MalzemeFisiListeSatiri, 'tur' | 'uretimEmriId' | 'emirNo
 export const kaynakMetni = (f: KaynakliFis) => (f.uretimEmriId !== null
   ? <Link to={`/uretim-emirleri/${f.uretimEmriId}`}>Emir {f.emirNo ?? `#${f.uretimEmriId}`}</Link>
   : f.tur === 'mal_kabul' ? (f.irsaliyeNo ? `İrsaliye ${f.irsaliyeNo}` : 'Mal kabul')
+  : f.tur === 'teslim_fisi' ? 'Taşıma ya da stoktan düşme'
+  : f.tur === 'toplama' ? 'Hazırlık'
+  : f.tur === 'hareket_fisi' ? 'Stok hareketi'
   : f.tur === 'ambar' ? 'Depolar arası taşıma' : 'Sayım');
-// Mal kabul belgesinin ayrıntısı Mal kabul ekranındadır; fiş ayrıntısı değil.
-const ayrintiYolu = (f: MalzemeFisiListeSatiri) => (f.tur === 'mal_kabul' ? `/stok/mal-kabul/${f.id}` : `/stok/malzeme-fisleri/${f.id}`);
+// Her belge kendi ekranında açılır (2023 b): mal kabul Mal kabul'de, teslim fişi fişte, toplama Hazırlık'ta, hareket fişi Hareketler'de
+// fiş numarasıyla süzülmüş.
+const ayrintiYolu = (f: MalzemeFisiListeSatiri) => (
+  f.tur === 'mal_kabul' ? `/stok/mal-kabul/${f.id}`
+  : f.tur === 'teslim_fisi' ? `/stok/fisler/${f.id}`
+  : f.tur === 'toplama' ? `/stok/hazirlik/${f.id}`
+  : f.tur === 'hareket_fisi' ? `/stok/hareketler?metin=${encodeURIComponent(f.no)}`
+  : `/stok/malzeme-fisleri/${f.id}`);
+const ayriKaynak = new Set<ListeFisiTuru>(['mal_kabul', 'teslim_fisi', 'toplama', 'hareket_fisi']);
 
 function csvIndir(satirlar: MalzemeFisiListeSatiri[]) {
   const alan = stokCsvAlani;
-  const basliklar = ['Açılış', 'Fiş no', 'Tür', 'Emir', 'Satır', 'Logo durumu', 'Logo kayıt', 'Son deneme', 'Neden'];
+  const basliklar = ['Açılış', 'Belge no', 'Tür', 'Emir', 'Satır', 'Logo durumu', 'Logo kayıt', 'Son deneme', 'Neden'];
   const govde = satirlar.map((f) => [f.acilis, f.no, LISTE_FISI_ETIKETI[f.tur], f.emirNo, f.satirSayisi, LOGO_FIS_ETIKETI[f.logo.durum], f.logo.kayitNo, f.logo.sonDeneme, f.logo.neden].map(alan).join(';'));
   const blob = new Blob(['﻿' + [basliklar.map(alan).join(';'), ...govde].join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = `malzeme-fisleri-${tesisGunu(Date.now())}.csv`; a.click();
+  a.href = URL.createObjectURL(blob); a.download = `belgeler-${tesisGunu(Date.now())}.csv`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
@@ -60,7 +70,7 @@ export function MalzemeFisleri() {
   const sekmeler = [{ anahtar: '' as const, baslik: 'Tümü' }, ...LISTE_FISI_TURLERI.map((t) => ({ anahtar: t, baslik: LISTE_FISI_ETIKETI[t] }))];
   const sutunlar: Sutun<MalzemeFisiListeSatiri>[] = [
     { anahtar: 'saat', baslik: 'Saat', kirilmaz: true, hucre: (f) => SAAT.format(new Date(f.acilis)) },
-    { anahtar: 'no', baslik: 'Fiş no', mono: true, hucre: (f) => <Link to={ayrintiYolu(f)}>{f.no}</Link> },
+    { anahtar: 'no', baslik: 'Belge no', mono: true, hucre: (f) => <Link to={ayrintiYolu(f)}>{f.no}</Link> },
     { anahtar: 'tur', baslik: 'Tür', hucre: (f) => <FisTuruRozeti tur={f.tur} /> },
     { anahtar: 'kaynak', baslik: 'Kaynak', hucre: kaynakMetni },
     { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (f) => f.satirSayisi },
@@ -75,10 +85,10 @@ export function MalzemeFisleri() {
   }
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Malzeme fişleri" alt="Üretim emri, sayım ve depolar arası taşıma fişleri ile mal kabul belgeleri. Fiş stok hareketinden oluşur; elle düzenlenmez."
+      <SayfaBasi baslik="Belgeler" alt="Stoğun bütün belgeleri tek listede: malzeme fişleri, mal kabul, teslim fişi ve toplama listesi; hareket fişleri kendi sekmesinde. Belge stok hareketinden oluşur; elle düzenlenmez."
         sag={<Dugme simge="download" disabled={!l.data?.satirlar.length} onClick={() => l.data && csvIndir(l.data.satirlar)}>CSV indir</Dugme>} />
       <div className="tc-stok-arac">
-        <Girdi etiket="Ara" placeholder="Fiş no (SF-, SE-, AF-, MK-)" value={arama} onChange={(e) => setArama(e.target.value)} />
+        <Girdi etiket="Ara" placeholder="Belge no" value={arama} onChange={(e) => setArama(e.target.value)} />
         <Secim etiket="Logo durumu" value={liste.suzgecler.logoDurumu} bosSecenek="Tümü"
           secenekler={LOGO_FIS_SUZGECLERI.map((d) => ({ deger: d, baslik: LOGO_FIS_ETIKETI[d] }))}
           onChange={(e) => liste.suzgecDegistir({ logoDurumu: e.target.value as '' | (typeof LOGO_FIS_SUZGECLERI)[number] })} />
@@ -86,10 +96,10 @@ export function MalzemeFisleri() {
       <Sekmeler etiket="Tür" sekmeler={sekmeler} secili={liste.suzgecler.tur} sec={(t) => liste.suzgecDegistir({ tur: t })} />
       {l.isError && <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />}
       {l.isPending && <DurumKutusu durum="yukleniyor" />}
-      {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Bu süzgece uyan fiş yok." />}
+      {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Bu süzgece uyan belge yok." />}
       {gruplar.map((g) => (
         <Kart key={g.anahtar} baslik={g.baslik}>
-          <Tablo etiket="Malzeme fişleri" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => `${f.tur === 'mal_kabul' ? 'mk' : 'fis'}-${f.id}`} bosMesaj="Fiş yok." />
+          <Tablo etiket="Belgeler" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => `${ayriKaynak.has(f.tur) ? f.tur : 'fis'}-${f.id}`} bosMesaj="Belge yok." />
         </Kart>
       ))}
       {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={liste.sayfaDegistir} satirSayisi={l.data.satirlar.length} />}
