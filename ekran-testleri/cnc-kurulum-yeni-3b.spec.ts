@@ -13,10 +13,10 @@ test.describe('3B sahne', () => {
   test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer.
     test.setTimeout(180_000);
-    // Kurulum ve Takım Ömrü'nde sahne 3D çark seçilince çizilir; varsayılan kartlı akışta sürekli sahne yoktur (1843).
+    // Sahneler 3D seçilince çizilir; Kurulum ve Takım Ömrü 3D'de çarktır. Varsayılan 2B'de (kartlı akış) sürekli sahne yoktur (1843, 1921 a).
     await page.addInitScript(() => {
       (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla';
-      localStorage.setItem('tmiv2.cnc-kurulum.akis-modu', 'cark');
+      localStorage.setItem('tmiv2.cnc-kurulum.cizim-modu', '3d');
     });
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
@@ -49,7 +49,8 @@ test.describe('3B sahne', () => {
     // resim beklenir; resim gelince sayfa boştadır ve sonraki denetimler kendi süresiyle koşar.
     await ac('/cnc-kurulum/yeni/kurulum');
     await expect(page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-resim img').first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('button', { name: 'Kartlar' })).toHaveAttribute('aria-pressed', 'true');
+    // Varsayılan 2B'dir; 3D seçilebilir bilgisayarda da kartlı akış gelir (1921 a).
+    await expect(page.getByRole('group', { name: 'Çizim modu' }).getByRole('button', { name: '2B' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.tc-cy-sahne-tuval')).toHaveCount(0);
     await ac('/cnc-kurulum/yeni/takim-omru');
     // Sayfa yeniden yüklenir; çizici ve ilk resmin bedeli yeniden ödenir.
@@ -58,12 +59,11 @@ test.describe('3B sahne', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  // 3D'li bilgisayarda 2B seçilince Ham Malzeme ve G-Kod düz tuvale çizilir; seçim sayfa yenilenince de kalır (1271).
+  // 3D'li bilgisayarda da varsayılan 2B'dir (1921 a): Ham Malzeme ve G-Kod düz tuvale çizilir. 3D seçimi sayfa yenilenince de kalır (1271).
   test('2B modda Ham Malzeme ve G-Kod çizilir, seçim hatırlanır', async ({ page, ac, ag }) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
-    await ac('/cnc-kurulum/yeni/hammadde');
-    await page.getByRole('group', { name: 'Çizim modu' }).getByRole('button', { name: '2B' }).click();
+    const secici = page.getByRole('group', { name: 'Çizim modu' });
     for (const yol of ['hammadde', 'simulasyon']) {
       // Her açılış sayfayı yeniden yükler; örnek parça yeniden seçilir, G-Kod örnek programla açılır.
       await ac(`/cnc-kurulum/yeni/${yol}`);
@@ -82,9 +82,12 @@ test.describe('3B sahne', () => {
         return renkler.size;
       }), { message: yol, timeout: 30_000 }).toBeGreaterThan(8);
     }
+    await expect(secici.getByRole('button', { name: '2B' })).toHaveAttribute('aria-pressed', 'true');
+    await secici.getByRole('button', { name: '3D' }).click();
+    await expect(page.locator('.tc-cy-sahne-tuval').first()).toBeAttached({ timeout: 30_000 });
     await page.reload();
-    await expect(page.locator('.tc-cy-sahne-2b')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole('group', { name: 'Çizim modu' }).getByRole('button', { name: '2B' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(secici.getByRole('button', { name: '3D' })).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 });
+    await expect(page.locator('.tc-cy-sahne-2b')).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
   });
 });

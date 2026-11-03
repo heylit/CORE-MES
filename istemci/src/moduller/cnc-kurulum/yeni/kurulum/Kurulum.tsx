@@ -11,7 +11,7 @@ import { byId, holderIdFor, invKey, machine, material, stockOf, toolById, tools 
 import { coolHint, cutData, holderOf } from '../hesap/kesme.ts';
 import { openDefs, useGorunum, useTuslar } from '../gorunum.ts';
 import { Sahne } from '../sahne/Sahne.tsx';
-import { AkisModuSecici, akisModu, useAkisModu } from '../akis-modu.tsx';
+import { akisModu, useAkisModu } from '../akis-modu.tsx';
 import { KartAkisi } from './KartAkisi.tsx';
 import type { Kalem } from '../veri/tipler.ts';
 import { emirSec, emirler, hazirlikKaydi, kurulumTamam, seciliEmir, useCncYetkisi } from '../veri.ts';
@@ -370,7 +370,6 @@ export function Kurulum() {
           <Dugme simge="printer" onClick={printSheet}>Yazdır</Dugme>
           <Dugme simge="download" onClick={exportCSV}>CSV</Dugme>
           <Dugme simge="download" className="tc-ck-dar-gizle" onClick={exportJSON}>JSON</Dugme>
-          <AkisModuSecici />
           {yetki.yazabilir && <Dugme simge="rotate" title="Kurulumu varsayılana dön" onClick={() => { sifirlaYaz(true); }}>Sıfırla</Dugme>}
         </div>
       </div>

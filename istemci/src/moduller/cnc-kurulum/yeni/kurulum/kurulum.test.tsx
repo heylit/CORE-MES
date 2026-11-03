@@ -7,7 +7,7 @@ import type { CncYetkisi } from '../veri.ts';
 
 // Kurulum görünümünün yazma düğmeleri yetkiye göre görünür; çark ve önizleme sahnesi burada çizilmez. Emir ve kişi uydurmadır.
 const v = vi.hoisted(() => ({ yetki: null as CncYetkisi | null, emir: null as EmirSecenegi | null }));
-vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => null }));
+vi.mock('../sahne/Sahne.tsx', () => ({ Sahne: () => null, cizimModu: () => '2b', useCizimModu: () => '2b' }));
 vi.mock('./cark.ts', () => ({
   carkBasildi: () => undefined, carkBirak: () => undefined, carkBirakildi: () => undefined, carkCikti: () => undefined, carkCiz: () => undefined,
   carkKaydi: () => undefined, sonKartaIn: () => undefined,
@@ -64,12 +64,12 @@ describe('Kurulum düğmeleri (izinli ve reddedilen)', () => {
 });
 
 describe('kartlı akış (1843)', () => {
-  it('3D açılamayan bilgisayarda kartlı akış gelir, çark seçilemez; karta tıklamak seçer ve sonraki adıma geçer', async () => {
+  it('2B modda kartlı akış gelir, sayfada ayrı gezinme anahtarı yoktur (1921 a); karta tıklamak seçer ve sonraki adıma geçer', async () => {
     v.yetki = yetki({ yazabilir: true });
     ac();
     const akis = await screen.findByLabelText('Kurulum adımları');
-    expect((screen.getByRole('button', { name: /3D çark/ }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole('button', { name: /Kartlar/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByRole('button', { name: /3D çark/ })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Gezinme biçimi' })).toBeNull();
     const ilk = K.defs[0]!;
     if (ilk.type !== 'single') throw new Error('ilk adım tek seçimli olmalı');
     const kartlar = within(within(akis).getByRole('group', { name: `${ilk.title} seçenekleri` })).getAllByRole('button');

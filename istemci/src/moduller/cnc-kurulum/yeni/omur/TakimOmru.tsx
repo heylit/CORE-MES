@@ -5,7 +5,7 @@ import {
   type Cizim, type OmurGecisi,
 } from './cekirdek.ts';
 import { lifeCompute, openAnalysis, type AnalizSonucu, type HesapliSonuc } from './analiz.ts';
-import { AkisModuSecici, useAkisModu } from '../akis-modu.tsx';
+import { useAkisModu } from '../akis-modu.tsx';
 import { AnalizPaneli } from './AnalizPaneli.tsx';
 import { OmurCarki } from './cark-sahnesi.ts';
 import { asinmaGrafigi, dagilimGrafigi, hizGrafigi } from './grafikler.ts';
@@ -197,7 +197,6 @@ export function TakimOmru() {
           {!kartli && <Sahne ciz={sahneCiz} sinif="tc-co-tuval" />}
         </div>
         {kartli && <OmurKartAkisi cark={cark} />}
-        {kip !== 'anal' && <div className="tc-co-mod"><AkisModuSecici /></div>}
         <div className="tc-co-bilgi">
           <div className="tc-co-adim-adi">TAKIM ÖMRÜ</div>
           <div className="tc-co-baslik">{baslik}</div>

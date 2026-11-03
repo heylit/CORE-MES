@@ -116,8 +116,9 @@ function tuvaliGizle(r: Kayit): void {
   r.tuval.hidden = true;
 }
 
-// ---------- çizim modu (karar kartları 1138 a ve 1271) ----------
-// 3D, grafik birimli bilgisayarda varsayılandır; 3D açılamayan bilgisayarda (glAl() null) yalnız 2B vardır. Seçim tarayıcıda tutulur:
+// ---------- çizim modu (karar kartları 1138 a, 1271 ve 1921 a) ----------
+// Modülün tek 2B/3D seçimidir: çizimi ve Kurulum ile Takım Ömrü'nün gezinme biçimini (2B kartlı akış, 3D çark) birlikte belirler.
+// Varsayılan 2B'dir (hafif; 1843 ölçümü); 3D açılamayan bilgisayarda (glAl() null) yalnız 2B vardır. Seçim tarayıcıda tutulur:
 // her bilgisayarın kendi tercihidir, sunucuya gitmez.
 export type CizimModu = '3d' | '2b';
 const MOD_ANAHTARI = 'tmiv2.cnc-kurulum.cizim-modu';
@@ -128,7 +129,7 @@ function ilkMod(): CizimModu {
   if (glAl() === null) return '2b';
   let kayitli: string | null = null;
   try { kayitli = localStorage.getItem(MOD_ANAHTARI); } catch { /* tarayıcı deposu kapalı */ }
-  return kayitli === '2b' ? '2b' : '3d';
+  return kayitli === '3d' ? '3d' : '2b';
 }
 export function cizimModu(): CizimModu { return mod; }
 export function cizimModunuSec(m: CizimModu): void {

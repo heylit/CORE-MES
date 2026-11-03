@@ -76,7 +76,7 @@ test.describe('iskelet', () => {
 test.describe('P1 Kurulum ve Hazırlık', () => {
   // Bugünkü akış (prototip 17512-17882, 20916-21793): çark adım adım iner, Hazırlık seçili kurulumun adımlarını sırayla açar.
   // Bakmak ve gezinmek sunucuya yazmaz (kayıt ilk kullanıcı eyleminden sonra ve yalnız değişince yazılır).
-  // Varsayılan gezinme kartlı akıştır (1843); 3D çark 3b dosyasında sınanır.
+  // Varsayılan 2B'dir ve gezinme kartlı akıştır (1843, 1921 a); 3D çark 3b dosyasında sınanır.
   test('Kurulum: kartlı akış ok tuşlarıyla adım değiştirir, kurulum kartı ve önizleme açıktır', async ({ page, ac, ag }) => {
     await ac('/cnc-kurulum/yeni/kurulum');
     const aktifNo = page.locator('.tc-cy-ka-satir[data-aktif] .tc-cy-ka-no');
