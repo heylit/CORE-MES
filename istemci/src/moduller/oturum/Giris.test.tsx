@@ -287,3 +287,19 @@ describe('Giris', () => {
     expect(cagrilar.map((c) => c.yol)).toEqual(['/oturum/giris']);
   });
 });
+
+describe('giriş ekranı marka adı (karar 2002)', () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it('firma adı girilmişse "<Firma> CORE", okunamazsa yalnız CORE yazar', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
+      ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
+      : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
+    kur();
+    expect(await screen.findByText('Deneme Atolye CORE')).toBeTruthy();
+    cleanup();
+    sunucuKur();
+    kur();
+    expect(await screen.findByText('CORE')).toBeTruthy();
+  });
+});

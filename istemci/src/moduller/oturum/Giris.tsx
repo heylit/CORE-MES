@@ -1,4 +1,4 @@
-import { UYGULAMA_ADI } from '#paylasilan/uygulama.ts';
+import { birlesikAd } from '#paylasilan/uygulama.ts';
 import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
@@ -8,6 +8,7 @@ import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
 import { kartTusu, OKUYUCU_BASI } from '../../ortak/veri/kart-degistir.ts';
+import { useGirisKurumAdi } from '../../ortak/veri/kurum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
@@ -80,6 +81,7 @@ const rakamlar = (metin: string): string => metin.replace(/\D/g, '').slice(0, PI
 
 export function Giris() {
   const istemci = useQueryClient();
+  const markaAdi = birlesikAd(useGirisKurumAdi());
   const [kip, kipYaz] = useState<Kip>(kayitliKip);
   const [logoVar, logoVarYaz] = useState(false);
   const [kullaniciAdi, kullaniciAdiYaz] = useState('');
@@ -228,11 +230,11 @@ export function Giris() {
 
   return (
     <main className="tc-giris">
-      <section className="tc-giris-tanitim" aria-label={UYGULAMA_ADI} data-theme="dark">
+      <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark">
         <TakimYolu />
         <div className="tc-giris-tanitim-ic">
           <div className="tc-giris-marka">
-            <span className="tc-giris-ad">{UYGULAMA_ADI}</span>
+            <span className="tc-giris-ad">{markaAdi}</span>
           </div>
           <p className="tc-giris-baslik-buyuk">Plandan sevke, her adım kayıt altında.</p>
           <p className="tc-giris-slogan">Üretim planlama ve izlenebilirlik</p>

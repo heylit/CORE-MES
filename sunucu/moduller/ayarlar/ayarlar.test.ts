@@ -617,6 +617,19 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       assert.equal((await degistir(' Deneme Atölyesi ', yonetici, ANAHTAR)).statusCode, 200);
       for (const { rol, cerez } of bayraksizlar) assert.deepEqual((await oku(cerez)).json(), { ad: 'Deneme Atölyesi' }, rol.ad);
     });
+
+    test('2002: giriş ekranı firma adını oturumsuz okur; cevapta yalnız ad vardır, kurumun öteki ayarları sızmaz', async () => {
+      const girisAdi = (cerez: string | null) => istek(cerez, 'GET', '/giris-kurum-adi');
+      assert.equal((await degistir('Giris Deneme Atolye', yonetici, ANAHTAR)).statusCode, 200);
+      assert.equal((await degistir('Kurum ici karsilama', yonetici, 'kabuk.karsilama-metni')).statusCode, 200);
+      for (const cerez of [null, yonetici]) {
+        const cevap = await girisAdi(cerez);
+        assert.equal(cevap.statusCode, 200, cevap.body);
+        assert.deepEqual(cevap.json(), { ad: 'Giris Deneme Atolye' });
+        assert.ok(!cevap.body.includes('karsilama'), 'karşılama metni giriş cevabında yok');
+      }
+      assert.equal((await istek(null, 'POST', '/giris-kurum-adi')).statusCode, 404);
+    });
   });
 
   describe('hareket dili ve açılış', () => {
