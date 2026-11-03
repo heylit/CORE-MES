@@ -116,12 +116,72 @@ describe('iş merkezi, istasyon ve makine kartı değişiklik defteri (gerçek P
     await kisiyle((db) => db.sorgu('UPDATE istasyon SET aktif = false WHERE id = $1', [istasyon]));
     await kisiyle((db) => db.sorgu("UPDATE makine SET marka_model = 'Deneme model' WHERE id = $1", [makine]));
     assert.deepEqual(ozet(await defter('is_merkezi', merkez)), [['guncelle', yonetici, ['ad']]]);
-    assert.deepEqual(ozet(await defter('istasyon', istasyon)), [['guncelle', yonetici, ['aktif']]]);
+    // İstasyon eklemesi de deftere düşer (1968 a); kurulumdaki ekleme kişisizdir.
+    const ist = ozet(await defter('istasyon', istasyon));
+    assert.deepEqual(ist.map((s) => s.slice(0, 2)), [['ekle', null], ['guncelle', yonetici]]);
+    assert.deepEqual(ist[1]?.[2], ['aktif']);
     assert.deepEqual((await defter('makine', makine))[0]?.alanlar.marka_model, { eski: null, yeni: 'Deneme model' });
   });
 
   test('kişisiz silme (göç) kişi boş yazılır', async () => {
     await o().sahip.sorgu('DELETE FROM makine WHERE id = $1', [makine]);
     assert.deepEqual(ozet(await defter('makine', makine)).at(-1)?.slice(0, 2), ['sil', null]);
+  });
+});
+
+// 1968 a: plan ayarı, makine durumu ve istasyon eklemesi (göç 20261103090500) planın kapasitesidir; değişiklik akışı (1962) okur.
+describe('istasyon plan ayarı, makine durumu ve istasyon eklemesi değişiklik defteri (gerçek PostgreSQL)', () => {
+  let ortam: TestVeritabani | undefined;
+  let yonetici = 0;
+  let merkez = 0;
+
+  const o = (): TestVeritabani => {
+    if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
+    return ortam;
+  };
+  const kisiyle = <T>(is: (db: Db) => Promise<T>): Promise<T> =>
+    o().vt.tx(async (db) => {
+      await db.sorgu("SELECT set_config('tmiv2.kisi_id', $1, true)", [String(yonetici)]);
+      return is(db);
+    });
+  const defter = (tablo: string): Promise<Defter[]> =>
+    o().sahip.sorgu<Defter>('SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 ORDER BY id', [tablo]);
+
+  before(async () => {
+    ortam = await testVeritabaniKur('istasyonlar_plan_defter');
+    yonetici = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Defter Yazan', kullaniciAdi: 'istasyon-plan-defter', parola: 'dogru-parola-1' }));
+    merkez = (await o().sahip.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('DPA', 'Deneme merkez') RETURNING id"))!.id;
+  });
+  after(async () => { await ortam?.kaldir(); });
+
+  test('yeni istasyon ekle olarak yazan kişiyle düşer; sürüm deftere girmez', async () => {
+    await kisiyle((db) => db.sorgu("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('DPA-1', 'Deneme istasyon', $1)", [merkez]));
+    const [ekle] = await defter('istasyon');
+    assert.equal(ekle?.islem, 'ekle');
+    assert.equal(ekle?.kisi_id, yonetici);
+    assert.deepEqual(ekle?.alanlar.kod, { eski: null, yeni: 'DPA-1' });
+    assert.ok(!('surum' in (ekle?.alanlar ?? {})));
+  });
+
+  test('verim değişikliği eski ve yeni değerle düşer; değiştiren kişi ve zaman sütunu deftere girmez', async () => {
+    const istasyon = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('DPA-2', 'Verim istasyonu', $1) RETURNING id", [merkez]))!.id;
+    await kisiyle((db) => db.sorgu('INSERT INTO istasyonlar_plan_ayari (istasyon_id, verim_yuzde, operator_ihtiyaci, degistiren_kisi_id) VALUES ($1, 90, 1, $2)', [istasyon, yonetici]));
+    await kisiyle((db) => db.sorgu('UPDATE istasyonlar_plan_ayari SET verim_yuzde = 75, degisme = now() + interval \'1 minute\', surum = surum + 1 WHERE istasyon_id = $1', [istasyon]));
+    const d = await defter('istasyonlar_plan_ayari');
+    assert.deepEqual(d.map((x) => [x.islem, x.kisi_id]), [['ekle', yonetici], ['guncelle', yonetici]]);
+    assert.deepEqual(d[1]?.alanlar, { verim_yuzde: { eski: 90, yeni: 75 } });
+    for (const alan of ['degistiren_kisi_id', 'degisme', 'surum']) assert.ok(!(alan in (d[0]?.alanlar ?? {})), alan);
+  });
+
+  test('makine arızaya alınıp çalışır yapılması iki güncelleme olarak düşer', async () => {
+    const istasyon = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id) VALUES ('DPA-3', 'Makine istasyonu', $1) RETURNING id", [merkez]))!.id;
+    const makine = (await o().sahip.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id) VALUES ('DPM-1', 'Deneme makine', $1) RETURNING id", [istasyon]))!.id;
+    await kisiyle((db) => db.sorgu("INSERT INTO istasyonlar_makine_durumu (makine_id, durum, degistiren_kisi_id) VALUES ($1, 'calisir', $2)", [makine, yonetici]));
+    await kisiyle((db) => db.sorgu("UPDATE istasyonlar_makine_durumu SET durum = 'ariza', aciklama = 'Deneme arızası' WHERE makine_id = $1", [makine]));
+    await kisiyle((db) => db.sorgu("UPDATE istasyonlar_makine_durumu SET durum = 'calisir', aciklama = NULL WHERE makine_id = $1", [makine]));
+    const d = await defter('istasyonlar_makine_durumu');
+    assert.deepEqual(d.map((x) => x.islem), ['ekle', 'guncelle', 'guncelle']);
+    assert.deepEqual(d[1]?.alanlar.durum, { eski: 'calisir', yeni: 'ariza' });
+    assert.deepEqual(d[2]?.alanlar.durum, { eski: 'ariza', yeni: 'calisir' });
   });
 });
