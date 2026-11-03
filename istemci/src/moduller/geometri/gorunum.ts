@@ -1,4 +1,4 @@
-import type { GeometriDurumu, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriDurumu, GeometriOzellik, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const DURUM_ADI: Readonly<Record<GeometriDurumu, string>> = {
@@ -44,3 +44,38 @@ export const agirlikKg = (hacimMm3: number | null, yogunluk: number | null): num
 const kg = bicim(3);
 export const agirlikMetni = (x: number): string => `${kg.format(x)} kg`;
 export const yogunlukBicimi = (x: number): string => kg.format(x);
+
+// Özellik kartı (2044-2): satır metinleri. Ölçü yoksa parça yazılmaz (sıfır uydurulmaz).
+const aci = (x: number): string => `${uzunluk(x)}°`;
+// Girişin yüzü eksen yönünden (prototip 2044-2): eksen girişten içeri doğrudur; Z bileşeni baskınsa eksi Z üst, artı Z alt yüzdür,
+// X ya da Y baskınsa yan yüz.
+export function girisYuzu(e: readonly number[] | null): string | null {
+  if (e === null || e.length !== 3) return null;
+  const m = e.map(Math.abs);
+  const i = m.indexOf(Math.max(...m));
+  if (i === 2) return (e[2] ?? 0) < 0 ? 'Üst yüz (Z)' : 'Alt yüz (Z)';
+  return `Yan yüz (${i === 0 ? 'X' : 'Y'})`;
+}
+export function delikMetni(d: GeometriOzellik): { ust: string; alt: string } {
+  const parca = [d.capMm === null ? null : `Ø${uzunluk(d.capMm)}`, d.gecis === null ? null : d.gecis ? 'geçiş' : 'kör'].filter((x) => x !== null).join(' ');
+  const ust = d.derinlikMm === null ? parca : `${parca} · ${uzunluk(d.derinlikMm)} mm`;
+  const alt = [girisYuzu(d.eksen), d.dip === 'matkap' ? `matkap ucu${d.aciDerece === null ? '' : ` ${aci(d.aciDerece)}`}` : d.dip === 'duz' ? 'düz dip' : null]
+    .filter((x) => x !== null).join(' · ');
+  return { ust, alt };
+}
+export function bagliMetni(o: GeometriOzellik): string {
+  if (o.tur === 'havsa') return `Havşa${o.capMm === null ? '' : ` Ø${uzunluk(o.capMm)}`}${o.aciDerece === null ? '' : ` x ${aci(o.aciDerece)}`}`;
+  return `Kademe${o.capMm === null ? '' : ` Ø${uzunluk(o.capMm)}`}${o.derinlikMm === null ? '' : ` x ${uzunluk(o.derinlikMm)} mm`}`;
+}
+// Pah ölçüsü büyük komşu yüzdeki bacak boyu x açı: bacak = yüz genişliği x cos(açı). Mil ucunda (çapı olan pah) aynı yazım.
+export function pahMetni(o: GeometriOzellik): { ust: string; alt: string } {
+  const bacak = o.genislikMm !== null && o.aciDerece !== null ? o.genislikMm * Math.cos((o.aciDerece * Math.PI) / 180) : null;
+  const ust = `Pah${bacak === null ? '' : ` ${uzunluk(bacak)}`}${o.aciDerece === null ? '' : ` x ${aci(o.aciDerece)}`}`;
+  const alt = [o.capMm === null ? null : `Ø${uzunluk(o.capMm)} mil ucu`, o.boyMm === null ? null : `Boy ${uzunluk(o.boyMm)} mm`,
+    o.genislikMm === null ? null : `yüz genişliği ${uzunluk(o.genislikMm)} mm`].filter((x) => x !== null).join(' · ');
+  return { ust, alt };
+}
+export function radyusMetni(o: GeometriOzellik): { ust: string; alt: string } {
+  const ust = `R${o.yaricapMm === null ? '' : uzunluk(o.yaricapMm)}${o.ic === null ? '' : o.ic ? ' iç köşe' : ' dış kenar'}`;
+  return { ust, alt: o.boyMm === null ? '' : `Boy ${uzunluk(o.boyMm)} mm` };
+}
