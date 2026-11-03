@@ -59,19 +59,6 @@
 }
 .tc-kabuk-baslik { flex: 1 1 auto; font-size: var(--yazi-xl); font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-kabuk-hesap { display: contents; }
-.tc-kabuk-yuva { display: flex; flex: 1 0 auto; align-items: center; min-width: 0; }
-.tc-kabuk:not([data-ust-yuva]) .tc-kabuk-yuva { display: none; }
-/* 2052-1 a: sayfa şeridi üst çubuktayken başlık kısalır; arama, iş paneli ve üst eylemler gizlenir (bağlı kalır), hesap menüsü
-   yalnız simgeyle kalır. Tek maddelik ikinci menü her genişlikte çizilmez: üç şerit tek satıra iner. */
-.tc-kabuk[data-ust-yuva] .tc-kabuk-baslik { flex: 0 1 auto; }
-.tc-kabuk[data-ust-yuva] .tc-kabuk-yuva ~ :not(.tc-kabuk-hesap) { display: none; }
-.tc-kabuk[data-ust-yuva] .tc-kabuk-kisi-ad { display: none; }
-.tc-kabuk[data-ust-yuva] .tc-kabuk-ust { padding-inline: var(--b-3); gap: var(--b-2); }
-.tc-kabuk[data-ust-yuva][data-ikinci][data-ikinci-tek]:not([data-tam-ekran]) {
-  grid-template-rows: var(--ust-cubuk) minmax(0, 1fr);
-  grid-template-areas: "menu ust" "menu icerik";
-}
-.tc-kabuk[data-ust-yuva][data-ikinci-tek] .tc-ikinci-kap { display: none; }
 .tc-kabuk-hesap > .tc-menu-dugme {
   display: inline-flex; flex: 0 1 auto; align-items: center; gap: var(--b-2); min-width: 0; max-inline-size: var(--acilir-enaz); height: var(--dokunma);
   padding-inline: var(--b-1) var(--b-3);

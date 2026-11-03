@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { anahtarlar } from '../veri/anahtarlar.ts';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
-import { Kabuk, KabukUstYuvasi } from './Kabuk.tsx';
+import { Kabuk } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
 import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
@@ -464,28 +464,5 @@ describe('Kabuk', () => {
     } finally {
       vi.unstubAllGlobals();
     }
-  });
-
-  it('2052-1 a: üst yuvaya konan şerit üst çubukta çizilir, kabuk data-ust-yuva taşır; yuva kalkınca işaret de kalkar', () => {
-    const kur = (yuvada: boolean) => (
-      <MemoryRouter initialEntries={['/']}>
-        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined}>
-          {yuvada ? <KabukUstYuvasi><span>terminal şeridi</span></KabukUstYuvasi> : <p>icerik</p>}
-        </Kabuk>
-      </MemoryRouter>
-    );
-    const { container, rerender } = render(kur(true));
-    const serit = screen.getByText('terminal şeridi');
-    expect(serit.closest('.tc-kabuk-ust')).not.toBeNull();
-    expect(serit.closest('main')).toBeNull();
-    expect(container.querySelector('.tc-kabuk')?.hasAttribute('data-ust-yuva')).toBe(true);
-    expect(screen.getByRole('button', { name: /Hesap/ })).toBeTruthy();
-    rerender(kur(false));
-    expect(container.querySelector('.tc-kabuk')?.hasAttribute('data-ust-yuva')).toBe(false);
-  });
-
-  it('2052-1 a: kabuk dışında üst yuva içeriği yerinde çizer', () => {
-    render(<div data-testid="yer"><KabukUstYuvasi><span>yerinde</span></KabukUstYuvasi></div>);
-    expect(screen.getByText('yerinde').closest('[data-testid="yer"]')).not.toBeNull();
   });
 });
