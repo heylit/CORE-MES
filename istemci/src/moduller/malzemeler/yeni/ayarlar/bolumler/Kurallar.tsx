@@ -44,13 +44,17 @@ export function FirmaKodu({ d, kilitli }: { d: Duzen; kilitli: boolean }) {
   );
 }
 
-function Kalip({ d, tur, yol, baslik, kayitli }: { d: Duzen; tur: string; yol: 'ad' | 'ac0' | 'ac1' | 'ac2'; baslik: string; kayitli: string }) {
+type KalipYolu = 'ad' | 'ac0' | 'ac1' | 'ac2';
+const KALIP_SINIRI = 200;
+const kalipAdi = (yol: KalipYolu) => (yol === 'ad' ? 'Kart adı' : `Açıklama ${Number(yol.slice(2)) + 1}`);
+
+function Kalip({ d, tur, yol, kayitli, odaklan }: { d: Duzen; tur: string; yol: KalipYolu; kayitli: string; odaklan: (y: KalipYolu) => void }) {
   const [deger, degerYaz] = useState(kayitli);
   useEffect(() => { degerYaz(kayitli); }, [kayitli]);
   return (
     <Girdi
-      etiket={baslik} maxLength={200} autoComplete="off" placeholder="Boş: otomatik" disabled={d.ro} value={deger}
-      onChange={(e) => degerYaz(e.target.value)}
+      etiket={kalipAdi(yol)} maxLength={KALIP_SINIRI} autoComplete="off" placeholder="Boş: otomatik" disabled={d.ro} value={deger}
+      onChange={(e) => degerYaz(e.target.value)} onFocus={() => odaklan(yol)}
       onBlur={() => { if (deger.trim() !== kayitli) d.degis(kalipYaz(d.v, tur, yol, deger)); }}
     />
   );
@@ -76,6 +80,15 @@ export function TurKurallari({ d }: { d: Duzen }) {
     else if (secili) d.degis(cakismaVarsayilanaDon(d.v, t));
   };
   const jetonlar = [['OTO', 'bu yerin otomatik değeri'], ['AD', 'kartın adı'], ...alanlar.map((a) => [a.k, a.ad])] as const;
+  // 1948 a: yer tutucu, son odaklanan kalıbın sonuna eklenir ve hemen kaydedilir (kutudan çıkınca kaydedilen değer de aynı yoldan geçer).
+  const [hedef, hedefYaz] = useState<KalipYolu>('ad');
+  const kayitliKalip = (yol: KalipYolu) => (yol === 'ad' ? K.ad ?? '' : ac[Number(yol.slice(2))] ?? '');
+  const jetonEkle = (k: string) => {
+    const once = kayitliKalip(hedef).trim();
+    const yeni = once ? `${once} {${k}}` : `{${k}}`;
+    if (yeni.length > KALIP_SINIRI) { d.bildir('hata', `${kalipAdi(hedef)} kalıbı en çok ${String(KALIP_SINIRI)} karakter olabilir.`); return; }
+    d.degis(kalipYaz(d.v, t, hedef, yeni));
+  };
 
   const firmaTuru = (secili: boolean) => {
     const once = firmaKodluTurler(d.b);
@@ -117,11 +130,19 @@ export function TurKurallari({ d }: { d: Duzen }) {
       </Kutu>
       <Kutu baslik="Kart adı ve açıklamalar">
         <div className="tc-ma-alanlar tc-ma-alanlar-genis">
-          <Kalip key={`${t}-ad`} d={d} tur={t} yol="ad" baslik="Kart adı" kayitli={K.ad ?? ''} />
-          {([0, 1, 2] as const).map((i) => <Kalip key={`${t}-ac${i}`} d={d} tur={t} yol={`ac${i}`} baslik={`Açıklama ${i + 1}`} kayitli={ac[i] ?? ''} />)}
+          <Kalip key={`${t}-ad`} d={d} tur={t} yol="ad" kayitli={K.ad ?? ''} odaklan={hedefYaz} />
+          {([0, 1, 2] as const).map((i) => <Kalip key={`${t}-ac${i}`} d={d} tur={t} yol={`ac${i}`} kayitli={ac[i] ?? ''} odaklan={hedefYaz} />)}
         </div>
-        <p className="tc-ma-yardim">Kullanılabilir yer tutucular:</p>
-        <p className="tc-ma-jetonlar">{jetonlar.map(([k, ad]) => <span key={k}><code>{`{${k}}`}</code> {ad}</span>)}</p>
+        <p className="tc-ma-yardim">Kullanılabilir yer tutucular{d.ro ? ':' : <>; tıklanan <b>{kalipAdi(hedef)}</b> kalıbının sonuna eklenir:</>}</p>
+        <div className="tc-ma-jetonlar" role="group" aria-label="Yer tutucular">
+          {jetonlar.map(([k, ad]) => (
+            <button
+              key={k} type="button" className="tc-ma-jeton" disabled={d.ro} aria-label={`{${k}} ${ad}: ${kalipAdi(hedef)} kalıbına ekle`}
+              onClick={() => { jetonEkle(k); }}
+            ><code>{`{${k}}`}</code> {ad}
+            </button>
+          ))}
+        </div>
         <p className="tc-ma-yardim">
           Örnek: <code>{'{OTO}; {musteri}'}</code> otomatik değerin sonuna müşteri kodunu ekler.
           {(t === 'mamul' || t === 'yarimamul') && ' Bu türde otomatik Açıklama 3 müşteri kodunu zaten başta taşır.'}

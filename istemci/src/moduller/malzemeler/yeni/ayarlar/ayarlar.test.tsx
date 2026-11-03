@@ -176,6 +176,30 @@ describe('Malzeme ayarları: yazma (izinli)', () => {
     await waitFor(() => expect(bolge.getByRole('status').textContent).toMatch(/Varsayılan kural kapalı: yalnız Kart adı/));
   });
 
+  test('1948 a: yer tutucu tıklanınca son odaklanan kalıbın sonuna eklenir; yazılıp kaydedilmemiş metin kaybolmaz', async () => {
+    const istekler = sunucuKur(YONETICI, { [yaz('malzeme')]: tamam });
+    yeniEkranAc(`${KOK}?bolum=kural`);
+    const kural = (i: number) => (kayitlar(istekler, 'malzeme')[i]?.govde as { deger: { kurallar: Record<string, { ad?: string; ac?: string[] }> } }).deger.kurallar['mamul'];
+    const grup = within(await screen.findByRole('group', { name: 'Yer tutucular' }));
+
+    // Odak yoksa hedef Kart adı.
+    fireEvent.click(grup.getByRole('button', { name: /^\{AD\} .*: Kart adı kalıbına ekle$/ }));
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(1));
+    expect(kural(0)?.ad).toBe('{AD}');
+
+    // Açıklama 2'ye yazılır, kutudan çıkılmadan yer tutucu tıklanır: önce yazılan kaydedilir, yer tutucu onun sonuna eklenir.
+    const ac2 = screen.getByRole('textbox', { name: 'Açıklama 2' });
+    fireEvent.focus(ac2);
+    fireEvent.change(ac2, { target: { value: 'Ek' } });
+    fireEvent.blur(ac2);
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(2));
+    fireEvent.click(grup.getByRole('button', { name: /^\{OTO\} .*: Açıklama 2 kalıbına ekle$/ }));
+    await waitFor(() => expect(kayitlar(istekler, 'malzeme')).toHaveLength(3));
+    expect(kural(2)?.ac?.[1]).toBe('Ek {OTO}');
+    expect(kural(2)?.ad).toBe('{AD}');
+    expect(((await screen.findByRole('textbox', { name: 'Açıklama 2' })) as HTMLInputElement).value).toBe('Ek {OTO}');
+  });
+
   test('üst baştaki Ayarlar penceresi sunucunun ayarlarını kilitli gösterir; mükerrer tarama yapılır', async () => {
     sunucuKur(YONETICI);
     yeniEkranAc(KOK);
@@ -221,6 +245,9 @@ describe('Malzeme ayarları: yalnız görme (reddedilen)', () => {
     yeniEkranAc(`${KOK}?bolum=kural`);
     expect(((await screen.findByLabelText('Şirket kodu + tür + numara')) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole('textbox', { name: 'Kart adı' }) as HTMLInputElement).disabled).toBe(true);
+    const jetonlar = within(screen.getByRole('group', { name: 'Yer tutucular' })).getAllByRole('button') as HTMLButtonElement[];
+    expect(jetonlar.length).toBeGreaterThan(2);
+    expect(jetonlar.every((j) => j.disabled), 'yer tutucu düğmeleri kapalı').toBe(true);
     expect(screen.queryByRole('button', { name: 'Bu türü varsayılana döndür' })).toBeNull();
   });
 });
