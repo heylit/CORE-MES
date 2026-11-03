@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { z } from 'zod';
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { kararliJson } from '#cekirdek/tekrar.ts';
 import type { DenetimGirdisi, Denetle } from '#cekirdek/uc.ts';
@@ -11,7 +11,9 @@ import type {
   kayitListesiSorgusu,
 } from '#paylasilan/sozlesme/denetim.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { type DegisiklikAlani, degisiklikAlanlari, gizle, icerenKalibi, kimlikParametreleri } from './kurallar.ts';
+import {
+  type DegisiklikAlani, akisAlanlari, akisIstegiHatasi, degisiklikAlanlari, gizle, icerenKalibi, kimlikParametreleri,
+} from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 type KayitListesiSorgusuCikti = z.output<typeof kayitListesiSorgusu>;
@@ -118,4 +120,40 @@ export async function degisiklikIcerigi(db: Db, id: number): Promise<{ id: numbe
   const kayit = await sorgular.degisiklikIcerigi(db, id);
   if (!kayit) throw bulunamadi('Değişiklik kaydı bulunamadı.');
   return { id: kayit.id, alanlar: degisiklikAlanlari(kayit.alanlar) };
+}
+
+export interface DegisiklikAkisiIstegi {
+  // Tablo -> değeri gösterilecek sütunlar (okuyan modülün sözlüğü).
+  tablolar: Readonly<Record<string, readonly string[]>>;
+  // timestamptz metni; bu andan (dahil) bu yana.
+  baslangic: string;
+  sinir: number;
+  // Sayfalama: önceki sayfanın son satırının kimliği.
+  onceId?: number;
+}
+
+export interface DegisiklikAkisiSatiri {
+  id: number;
+  zaman: string;
+  kisiId: number | null;
+  kisiAd: string | null;
+  tablo: string;
+  anahtar: Record<string, number | string | boolean>;
+  islem: 'ekle' | 'guncelle' | 'sil';
+  alanlar: DegisiklikAlani[];
+  digerAlanlar: string[];
+}
+
+// Yetki denetlemez: çağıran modülün ucu kendi işlemiyle denetler (1966 a). Ham gövde ve sözlük dışı değer dönmez.
+export async function degisiklikAkisi(db: Db, istek: DegisiklikAkisiIstegi): Promise<DegisiklikAkisiSatiri[]> {
+  const hata = akisIstegiHatasi(istek);
+  if (hata !== null) throw gecersiz(hata);
+  const ham = await sorgular.akisSatirlari(db, {
+    tablolar: Object.keys(istek.tablolar), baslangic: istek.baslangic, onceId: istek.onceId ?? null, sinir: istek.sinir,
+  });
+  const adlar = await kisiAdlari(db, ham.flatMap((d) => (d.kisi_id === null ? [] : [d.kisi_id])));
+  return ham.map((d) => ({
+    id: d.id, zaman: d.zaman, kisiId: d.kisi_id, kisiAd: d.kisi_id === null ? null : adlar.get(d.kisi_id) ?? null,
+    tablo: d.tablo, anahtar: d.anahtar, islem: d.islem, ...akisAlanlari(d.alanlar, istek.tablolar[d.tablo] ?? []),
+  }));
 }

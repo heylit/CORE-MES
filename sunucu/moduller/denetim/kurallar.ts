@@ -57,3 +57,37 @@ export function degisiklikAlanlari(alanlar: Record<string, { eski?: unknown; yen
 
 // Yol araması parça eşleşmesidir; kullanıcının yazdığı `%` ve `_` joker değil harf sayılır (ESCAPE '\').
 export const icerenKalibi = (metin: string): string => `%${metin.replace(/[\\%_]/g, (h) => `\\${h}`)}%`;
+
+// Değişiklik akışı (1962, 1966 a): okuyan modül tablo başına hangi alanların değerini göreceğini verir. Değeri yalnız bu alanlar taşır;
+// değişen öteki alanların yalnız adı döner (akış onları "planı etkilemez" diye gösterir). jsonb alanı "sutun.anahtar" biçimindedir,
+// izin sütun adıyla verilir. Gizli ad kuralı izinli alanda da geçerlidir.
+export interface AkisAlanlari { alanlar: DegisiklikAlani[]; digerAlanlar: string[] }
+
+export function akisAlanlari(
+  alanlar: Record<string, { eski?: unknown; yeni?: unknown }>, izinli: readonly string[],
+): AkisAlanlari {
+  const izin = new Set(izinli);
+  const hepsi = degisiklikAlanlari(alanlar);
+  return {
+    alanlar: hepsi.filter((a) => izin.has(a.alan.split('.')[0] ?? a.alan)),
+    digerAlanlar: hepsi.filter((a) => !izin.has(a.alan.split('.')[0] ?? a.alan)).map((a) => a.alan),
+  };
+}
+
+export const AKIS_EN_COK_SATIR = 500;
+export const AKIS_EN_COK_TABLO = 50;
+// Tablo adı tetiğin TG_TABLE_NAME'idir: küçük harf, rakam ve alt çizgi.
+const TABLO_ADI = /^[a-z][a-z0-9_]{0,62}$/;
+
+// Okuyan modülün sözlüğü kod sabitidir; yanlış sözlük sessizce boş akış vermesin diye okumadan önce denetlenir.
+export function akisIstegiHatasi(istek: { tablolar: Readonly<Record<string, readonly string[]>>; sinir: number }): string | null {
+  const tablolar = Object.keys(istek.tablolar);
+  if (tablolar.length === 0) return 'Akış için en az bir tablo verilmeli.';
+  if (tablolar.length > AKIS_EN_COK_TABLO) return `Akış en çok ${String(AKIS_EN_COK_TABLO)} tablodan okunur.`;
+  const bozuk = tablolar.find((t) => !TABLO_ADI.test(t));
+  if (bozuk !== undefined) return `Tablo adı geçersiz: ${bozuk}`;
+  if (!Number.isSafeInteger(istek.sinir) || istek.sinir < 1 || istek.sinir > AKIS_EN_COK_SATIR) {
+    return `Akış sınırı 1 ile ${String(AKIS_EN_COK_SATIR)} arasında olmalı.`;
+  }
+  return null;
+}
