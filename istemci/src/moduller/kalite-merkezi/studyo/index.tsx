@@ -14,6 +14,7 @@ import { NUMUNE_DURUMU, numuneKuraliMetni, planGirdileri, uretimEmriKimligi } fr
 import { CmmPlani } from './CmmPlani.tsx';
 import { CmmYukle } from './CmmYukle.tsx';
 import { MerkezdenAl } from './MerkezdenAl.tsx';
+import { OkumaAyarlari, useOkumaAyari } from './OkumaAyarlari.tsx';
 import { useBalonPlaniYaz, useEmirNumuneleri, useMerkezdenEsitle, useOlcumYaz, usePlanKopyala, useResimAl, useResimKaldir, useStudyoParcasi } from './veri.ts';
 import './studyo.css';
 
@@ -96,6 +97,11 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
   // Görüntüleyicideki plan değişikliği kaydedilene dek taslaktır; resim ya da sürümü değişince düşer.
   const duzenler = yetki.onayla;
   const planDuzenler = duzenler && resim?.eski !== true;
+  // Okuma ayarları çekmecesi (2038 a): resim değişince yeniden okuma isteği ve tanı sıfırlanır (eski resmin sonucu yenisine karışmasın).
+  const okuma = useOkumaAyari();
+  const [okumaAcik, okumaAcikYaz] = useState(false);
+  const okumaSifirla = okuma.sifirla;
+  useEffect(() => { okumaSifirla(); }, [resim?.id, okumaSifirla]);
   const [taslak, taslakYaz] = useState<Balon[] | null>(null);
   useEffect(() => { taslakYaz(null); }, [resim?.id, resim?.surum]);
   const planYaz = useBalonPlaniYaz(malzemeNo);
@@ -228,6 +234,7 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
           <Dugme tur="ikincil" simge="layers" aria-expanded={yanAcik} aria-controls="km-st-sol km-st-sag" onClick={yanDegistir}>
             {yanAcik ? 'Yan panelleri gizle' : 'Yan panelleri göster'}
           </Dugme>
+          <Dugme tur="ikincil" simge="gear" className="km-st-okuma-dugme" aria-expanded={okumaAcik} aria-controls="km-st-okuma" onClick={() => { okumaAcikYaz((a) => !a); }}>Okuma ayarları</Dugme>
           {!yanAcik && kart ? <span className="km-st-soluk"><b className="km-st-kod">{kart.kod}</b>{resim ? ` · ${resim.ad}` : ''}{emir ? ` · ${emir.no ?? ''}` : ''}</span> : null}
         </div>
         {taslak !== null ? (
@@ -238,11 +245,15 @@ export function ResimVeModeller({ veri, yetki, gecis, gecisTamam }: EkranOzellik
             <Dugme tur="birincil" simge="check" disabled={planYaz.isPending} onClick={planKaydet}>Planı kaydet</Dugme>
           </div>
         ) : null}
-        {resim ? (
-          <Resim resim={resim} yerYaz={planDuzenler && taslak === null} kontrol={{
-            balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !planDuzenler,
-          }} />
-        ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
+        <div className="km-st-resim">
+          {resim ? (
+            <Resim resim={resim} yerYaz={planDuzenler && taslak === null} okuma={okuma.okuma} kontrol={{
+              ...okuma.kontrol(okumaAcik),
+              balonlar: taslak ?? balonlar, balonlarYaz: (b) => { taslakYaz(b); }, olcumler: gosterilen, olcumlerYaz, saltOkunur: !planDuzenler,
+            }} />
+          ) : <DurumKutusu durum="bos" mesaj={bos ?? 'Resimler alınamadı.'} />}
+          {okumaAcik ? <OkumaAyarlari d={okuma} kapat={() => { okumaAcikYaz(false); }} degistirir={duzenler} dosyaVar={resim !== null} /> : null}
+        </div>
       </section>
 
       <aside id="km-st-sag" className="km-st-sag" aria-label="Numune planı ve numuneler">

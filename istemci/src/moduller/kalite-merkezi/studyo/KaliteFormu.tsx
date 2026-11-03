@@ -6,6 +6,7 @@ import type { Balon, Olcum } from '../../../ortak/cizim/kurallar.ts';
 import type { TeknikResimKontrolu } from '../../../ortak/cizim/TeknikResim.tsx';
 import { hataIletisi } from '../../../ortak/veri/api.ts';
 import { cizimBalonu, cizimOlcumleri, sonOlcumler, yeniOlcumler } from './kurallar.ts';
+import type { YenidenOkuma } from './OkumaAyarlari.tsx';
 import { studyoAnahtari, useBalonYeriYaz, useEmirOlcumleri, useResimDosyasi, useStudyoParcasi } from './veri.ts';
 
 // Kalite formu (798): parçanın teknik resmi, balonları ve emrin ölçümleri tek kayıttır (kalite_merkezi_olcum). Aynı form Kalite Merkezi
@@ -23,7 +24,10 @@ type BalonYeri = Pick<Balon, 'yer' | 'yerKipi'>;
 // Resmin dosyası gelince ortak parçaya verilir; parça dosyayı adının uzantısından (PDF, STEP, IGES, STL) tanır.
 // `yerYaz` verilince taşınan balonun yeri (913 a) hemen kendi ucuna yazılır; verilmezse yer, açanın balonlarYaz'ına (plan taslağına) gider.
 // Yazılan yer cevap gelene dek ekranda tutulur: yoksa balon bir an eski yerine sıçrar.
-export function Resim({ resim, kontrol, yerYaz = false }: { resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim'>; yerYaz?: boolean }) {
+// `okuma` verilince (Okuma ayarları, 2038 a) resim aynı dosyayla yeniden okunur; numara değişince bir kez, `taze` önbelleği atlar.
+export function Resim({ resim, kontrol, yerYaz = false, okuma = null }: {
+  resim: KmResim; kontrol: Omit<TeknikResimKontrolu, 'anahtar' | 'dosyalar' | 'anaResim' | 'ac'>; yerYaz?: boolean; okuma?: YenidenOkuma | null;
+}) {
   const dosya = useResimDosyasi(resim);
   const { bildir } = useBildirim();
   const yeriYaz = useBalonYeriYaz(resim.malzemeNo);
@@ -51,6 +55,7 @@ export function Resim({ resim, kontrol, yerYaz = false }: { resim: KmResim; kont
     anahtar: `km-resim-${String(resim.id)}-${resim.ozet}`,
     dosyalar: [{ kind: resim.tur === 'resim' ? 'pdf' : 'model', name: ad, bytes: dosya.data.bayt, merkez: resim.merkezBelgeId, merkezOzet: resim.ozet }],
     anaResim: ad,
+    ...(okuma ? { ac: { bytes: dosya.data.bayt, ad, n: okuma.n, taze: okuma.taze } } : {}),
   };
   return <Suspense fallback={<DurumKutusu durum="yukleniyor" />}><TeknikResim kontrol={tam} /></Suspense>;
 }
