@@ -137,7 +137,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const tesis = ayarlar.tesis;
   const POLICY = ayarlar.kurallar;
   const ME = kisi?.name ?? '';
-  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi)) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi);
+  // 2001 b: istasyonu belli olmayan kişide boştur; üst şerit "İstasyon seçilmedi" yazar, seçici açılır. Önizleme ilk istasyonla açılır.
+  const MACHINE = pv ? (yerel.oku<string>('pvStation') || tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi) || (istasyonListesi(tesis)[0]?.id ?? '')) : tabletIstasyonu(tesis, yerel.oku<string>('station'), kisi);
   const ist = istasyonBul(tesis, MACHINE);
   const uretir = !pv && yetkiVar('prod.run');
   const duzeltir = !pv && yetkiVar('prod.fix');
@@ -229,7 +230,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // İlk açılış: bu tablet hangi istasyonda? Kayıtlı değilse ve kişinin istasyonu yoksa sorulur.
   useEffect(() => {
     if (pv || !istasyonListesi(tesis).length) return;
-    const k = ilkAcilis(yerel.oku<string>('station'), kisi?.st, MACHINE, yetkiVar('prod.run'));
+    const k = MACHINE === '' && yetkiVar('prod.run') ? 'sor' : ilkAcilis(yerel.oku<string>('station'), kisi?.st, MACHINE, yetkiVar('prod.run'));
     if (k === 'kaydet') yerel.yaz('station', MACHINE);
     else if (k === 'sor') ovYaz('station');
   }, []); // eslint olmayan bağımlılık: yalnız ilk açılışta
@@ -1417,7 +1418,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     <div className="tc-ay1 tc-ay1-genis" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="">
       <header className="tc-ay1-ust">
         <span className="tc-ay1-istasyon" title="İstasyon · çarkın İstasyonlar şeridinden değişir">
-          <b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small>
+          {MACHINE ? <><b>{ist.id}</b><small>{ist.l.split(' · ').slice(1).join(' · ')}</small></> : <b>İstasyon seçilmedi</b>}
         </span>
         <DurumSuresi durum={o.state} since={since} />
         {pv ? <Rozet ton="uyari">Önizleme · kayıt yapılmaz</Rozet> : null}

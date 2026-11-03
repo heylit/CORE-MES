@@ -25,7 +25,7 @@ import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.t
 import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, numuneIste, numuneKarari, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
-  eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
+  ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
   istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
@@ -103,11 +103,28 @@ async function makineIstasyonlari(db: Db, kisiId: number | null, tarih?: string)
   return sonuc;
 }
 
+// 2001 b: istasyona bağlı aktif ekibin bugünkü üyesi o istasyonda çalışır (ekipten atama terminale ulaşmıyordu). Kişi başına
+// ekiplerinin istasyonları; pasif ekip ve istasyonsuz ekip sayılmaz.
+async function ekipIstasyonlari(db: Db, kisiId: number | null): Promise<Map<number, number[]>> {
+  const sonuc = new Map<number, number[]>();
+  for (const ekip of await ekipler(db)) {
+    if (ekip.istasyonId === null) continue;
+    for (const u of await ekipUyeleri(db, ekip.id)) {
+      if (kisiId === null || u.kisiId === kisiId) sonuc.set(u.kisiId, [...(sonuc.get(u.kisiId) ?? []), ekip.istasyonId]);
+    }
+  }
+  return sonuc;
+}
+
 // Kişi başına tek istasyon, Arkon'un istasyon kimliği olan kodla: en yüksek yüzdeli aktif istasyon ataması (istasyonlar
-// `istasyonKisileri`); istasyon ataması yoksa en yüksek yüzdeli makine atamasının istasyonu.
+// `istasyonKisileri`); istasyon ataması yoksa en yüksek yüzdeli makine atamasının istasyonu, o da yoksa ekibinin istasyonu.
 async function kisiIstasyonlari(db: Db): Promise<Map<number, string>> {
   const kodlar = new Map((await istasyonlar(db, { pasiflerDahil: false })).map((i) => [i.id, i.kod]));
   const sonuc = new Map<number, string>();
+  for (const [kisiId, [istasyonId]] of await ekipIstasyonlari(db, null)) {
+    const kod = istasyonId === undefined ? undefined : kodlar.get(istasyonId);
+    if (kod !== undefined) sonuc.set(kisiId, kod);
+  }
   for (const [kisiId, [istasyonId]] of await makineIstasyonlari(db, null)) {
     const kod = istasyonId === undefined ? undefined : kodlar.get(istasyonId);
     if (kod !== undefined) sonuc.set(kisiId, kod);
@@ -133,13 +150,14 @@ async function yetkiliIstasyonIdleri(db: Db, kisiId: number | null, tarih?: stri
   return sonuc;
 }
 
-// Terminalin seçebileceği istasyonlar: yetkili istasyonlar ve makine atamalarının istasyonları (makineye bakan kişi o istasyonda
-// çalışır). Operatör özetinde makine ataması ayrı listededir, bu yüzden yetkiliIstasyonIdleri'ne katılmaz.
+// Terminalin seçebileceği istasyonlar: yetkili istasyonlar, makine atamalarının istasyonları (makineye bakan kişi o istasyonda
+// çalışır) ve ekiplerinin istasyonları. Operatör özetinde makine ataması ayrı listededir, bu yüzden yetkiliIstasyonIdleri'ne katılmaz.
 async function yetkiliIstasyonKodlari(db: Db, kisiId: number | null): Promise<Map<number, string[]>> {
   const kodlar = new Map((await istasyonlar(db, { pasiflerDahil: false })).map((i) => [i.id, i.kod]));
   const sonuc = new Map<number, string[]>();
   const tum = await yetkiliIstasyonIdleri(db, kisiId);
   for (const [k, makinelerinkiler] of await makineIstasyonlari(db, kisiId)) tum.set(k, new Set([...(tum.get(k) ?? []), ...makinelerinkiler]));
+  for (const [k, ekiptekiler] of await ekipIstasyonlari(db, kisiId)) tum.set(k, new Set([...(tum.get(k) ?? []), ...ekiptekiler]));
   for (const [k, idler] of tum) {
     sonuc.set(k, [...idler].flatMap((id) => { const kod = kodlar.get(id); return kod === undefined ? [] : [kod]; }).sort((a, b) => a.localeCompare(b)));
   }
