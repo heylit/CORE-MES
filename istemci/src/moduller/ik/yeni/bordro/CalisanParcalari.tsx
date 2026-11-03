@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { DurumKutusu } from '../../../../ortak/arayuz/index.ts';
+import { useKurumAdi } from '../../../../ortak/veri/kurum.ts';
 import { adSoyad, para, tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { MOTOR_HAZIRLANIYOR, type IkMotoru } from '../motor.ts';
@@ -58,8 +59,8 @@ export function TazminatHesabi({ o, personel, cikis }: { o: IkEkranOzellikleri; 
 
 /* ---------------- yazdırılan belgeler ---------------- */
 
-function BelgeUstu({ o, ek }: { o: IkEkranOzellikleri; ek?: string }) {
-  const sirket = typeof o.depo.ayarlar.sirket === 'string' && o.depo.ayarlar.sirket ? o.depo.ayarlar.sirket : 'Şirket';
+function BelgeUstu({ ek }: { o: IkEkranOzellikleri; ek?: string }) {
+  const sirket = useKurumAdi() ?? 'Şirket';
   return (
     <div className="tc-ikb-belge-ust">
       <span><b>{sirket}</b>{ek ? ` · ${ek}` : ''}</span>

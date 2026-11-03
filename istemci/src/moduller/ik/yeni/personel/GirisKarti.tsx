@@ -58,5 +58,5 @@ export function GirisKarti({ kisiId }: { kisiId: number }) {
 }
 
 export function GirisKartiYok() {
-  return <Bolum baslik="Giriş kartı"><Not>Kart, kişinin TMI kullanıcısına verilir. Önce İş bölümünde TMI kullanıcısını bağlayın.</Not></Bolum>;
+  return <Bolum baslik="Giriş kartı"><Not>Kart, kişinin CORE kullanıcısına verilir. Önce İş bölümünde CORE kullanıcısını bağlayın.</Not></Bolum>;
 }

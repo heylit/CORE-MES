@@ -1,3 +1,4 @@
+import { useKurumAdi } from '../../../../ortak/veri/kurum.ts';
 import { tarih } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { BelgeYazdir, ImzaAlanlari } from '../ortak/BelgeYazdir.tsx';
@@ -10,7 +11,7 @@ export function CalismaBelgesi({ o, personel: p, kapat }: { o: IkEkranOzellikler
   const gun = bugun();
   const departman = p.departmanId ? depo.tur('dept').find((d) => d.id === p.departmanId)?.ad : undefined;
   const bitis = p.cikisTarihi ? uzunTarih(p.cikisTarihi) : null;
-  const sirket = typeof depo.ayarlar.sirket === 'string' && depo.ayarlar.sirket ? depo.ayarlar.sirket : 'Şirket';
+  const sirket = useKurumAdi() ?? 'Şirket';
   return (
     <BelgeYazdir baslik="Çalışma belgesi" kapat={kapat}>
       <div className="tc-ikp-belge-ust"><b>{sirket}</b><span>{`Düzenleme tarihi: ${tarih(gun)}`}</span></div>

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Dugme, OnayPenceresi, Simge } from '../../../../ortak/arayuz/index.ts';
+import { useKurumAdi } from '../../../../ortak/veri/kurum.ts';
 import { para, paraKisa } from '../bicim.ts';
 import { ikSabitleri } from '../motor.ts';
 import type { Personel } from '../tipler.ts';
@@ -7,7 +8,7 @@ import { yeniKimlik } from '../veri.ts';
 import type { AyarAlanlari, AyarBolumu } from './Ayarlar.tsx';
 import { dilimOzeti, listeKullanimi, sayi, yeniListeSatiri, type ListeAdi } from './kurallar.ts';
 import { ayarSayisi, ayHesabi, donemde, ihbarHaftasi, vergiDilimleri, type Donem } from './motor-yuzu.ts';
-import { Aciklama, Bolum, sayiMetni } from './parcalar.tsx';
+import { Aciklama, Bolum, Not, sayiMetni } from './parcalar.tsx';
 
 // Ayar bölümlerinin içeriği (app.js viewSettings, settingsYanHak, settingsTesvik, settingsAktarim, settingsIlan): alanlar, açıklamalar
 // ve dayanak metinleri bugünkü ekranla aynıdır.
@@ -120,13 +121,19 @@ function ListeDuzenleyici({ a, liste, sutunlar, ekle }: { a: AyarAlanlari; liste
   );
 }
 
+// Firma adının tek kaynağı Sistem Ayarları'dır (1942 a); belgeler ve ilanlar oradan okur.
+function FirmaAdiNotu() {
+  const ad = useKurumAdi();
+  return <Not>{ad ? `Şirket adı Sistem Ayarları > Firma adı'ndan gelir: ${ad}.` : "Şirket adı Sistem Ayarları > Firma adı'ndan gelir; henüz girilmedi."}</Not>;
+}
+
 /* ---------------- bölümler ---------------- */
 
 const genel: Icerik = (a) => (
   <>
     <Panel baslik="Şirket">
       <div className="tc-ikb-alanlar">
-        {a.metin('sirket', 'Şirket adı')}
+        <FirmaAdiNotu />
         {a.isaret('cumartesiIsGunu', 'Cumartesi', 'Cumartesi iş günü sayılsın', 'Yıllık izin gün sayımını etkiler.')}
       </div>
     </Panel>

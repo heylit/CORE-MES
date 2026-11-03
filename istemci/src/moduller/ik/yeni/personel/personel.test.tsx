@@ -22,7 +22,7 @@ describe('P1 personel listesi', () => {
     expect(await screen.findByText('Can Sınama')).toBeTruthy();
   });
 
-  it('1878 a: TMI kullanıcısına bağlı olmayan aktif çalışan işaretlenir', async () => {
+  it('1878 a: CORE kullanıcısına bağlı olmayan aktif çalışan işaretlenir', async () => {
     ikAc('/ik/personel');
     const satir = async (ad: string) => (await screen.findByText(ad)).closest('tr') as HTMLElement;
     expect(within(await satir('Mehmet Deneme')).getByText('Kullanıcı bağı yok')).toBeTruthy();
@@ -274,6 +274,8 @@ describe('P1 kişi sayfası', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Belge oluştur' }));
     fireEvent.click(await screen.findByRole('button', { name: /Çalışma belgesi/ }));
     expect(await screen.findByText(/işyerimizde Üretim departmanında/)).toBeTruthy();
+    expect(await screen.findByText('Deneme Firma')).toBeTruthy();
+    expect(screen.queryByText('Örnek Atölye')).toBeNull();
   });
 });
 
@@ -347,9 +349,9 @@ describe('P1 giriş kartı', () => {
     expect(await screen.findByLabelText(/^Kart/, { selector: 'input' })).toBeTruthy();
   });
 
-  it('TMI kullanıcısı bağlı olmayan personelde kart verilmez, nasıl bağlanacağı yazar', async () => {
+  it('CORE kullanıcısı bağlı olmayan personelde kart verilmez, nasıl bağlanacağı yazar', async () => {
     ikAc('/ik/calisan/emp_b');
-    expect(await screen.findByText(/Önce İş bölümünde TMI kullanıcısını bağlayın/)).toBeTruthy();
+    expect(await screen.findByText(/Önce İş bölümünde CORE kullanıcısını bağlayın/)).toBeTruthy();
     expect(screen.queryByLabelText(/^Kart/, { selector: 'input' })).toBeNull();
   });
 
