@@ -1,4 +1,4 @@
-# TMI Saat (Galaxy Watch, Wear OS)
+# CORE Saat (Galaxy Watch, Wear OS)
 
 Kart #1633. Kullanici onaylari: madde 22 (araclar), 23 (kod bu klasorde), 24 (okuma uclari), 25 (saat oturumu).
 Ilk surum yalniz okur. Akis ornektekiyle ayni: ana menu (Istasyonlarim, Uyarilar), istasyon ayrintisi, Sureler, uyari listesi
@@ -98,7 +98,7 @@ Denemede kabul: saatte sunucu adresi `https://<ip>:4101` girilir, saat 6 rakamli
 
 Sunucu ve saat birlikte guncellenir: uyari cevabinda istasyon artik bos olabilir (kalibrasyon uyarisi), eski saat uygulamasi yeni sunucunun uyarilarini okuyamaz.
 
-## TMI kadrani (Watch Face Format, soru 375 a)
+## CORE kadrani (Watch Face Format, soru 375 a)
 
 Wear OS 6 (Android 16) kodla cizilen eski tip kadrani reddeder; kadran bu yuzden ayri ve kodsuz bir APK'dir (`kadran/`,
 `res/raw/watchface.xml`). Kadran veri cekemez: veri saat uygulamasinin kutucuklarindan (`uygulama/.../kadran/VeriKutucuklari.kt`)
@@ -106,11 +106,11 @@ gelir. Her kutucuk kendi sayfasini acar:
 
 | Yer | Kutucuk | Dokununca |
 |---|---|---|
-| Dis halka (yalniz halka bandi dokunulur) | TMI Açık emirler | Yonetici ozeti |
-| Ust | TMI Logo | Tezgahlar 3B |
-| Sol tus (saat 9) | TMI Uyarı sayısı: sayi, varsa kirmizi, yoksa gri | Uyarilar |
-| Sag tus (saat 3) | TMI Vardiya bitişi: vardiyanin gecen payi halkada, bitise kalan (sistem sayaci); vardiya disinda bos | Vardiya devri |
-| Alt kutu | TMI İstasyonlar: dikkat isteyenler ve durum cubugu | Istasyonlarim |
+| Dis halka (yalniz halka bandi dokunulur) | CORE Açık emirler | Yonetici ozeti |
+| Ust | CORE Logo | Tezgahlar 3B |
+| Sol tus (saat 9) | CORE Uyarı sayısı: sayi, varsa kirmizi, yoksa gri | Uyarilar |
+| Sag tus (saat 3) | CORE Vardiya bitişi: vardiyanin gecen payi halkada, bitise kalan (sistem sayaci); vardiya disinda bos | Vardiya devri |
+| Alt kutu | CORE İstasyonlar: dikkat isteyenler ve durum cubugu | Istasyonlarim |
 
 Sistem kutucuklari en sik 5 dakikada bir ister (logo saatte bir); uygulama acikken uyari sayisi degisince kadrana hemen bildirir.
 Kisik modda kadran yalniz saat, tarih ve uyari sayisini tek renk gosterir. Vurgu rengi (sari, yesil, mavi) kadran duzenleme
@@ -122,22 +122,22 @@ adb.exe install -r uygulama-release.apk
 adb.exe install -r kadran-release.apk
 ```
 
-Cikti `kadran/build/outputs/apk/debug/kadran-debug.apk`. Saatte kadrana uzun basilir, listeden "TMI Kadran" secilir. Kutucuklar
-bos kalirsa kadran duzenleme ekraninda her yere sirasiyla "TMI Açık emirler", "TMI Logo", "TMI İstasyonlar" secilir.
+Cikti `kadran/build/outputs/apk/debug/kadran-debug.apk`. Saatte kadrana uzun basilir, listeden "CORE Kadran" secilir. Kutucuklar
+bos kalirsa kadran duzenleme ekraninda her yere sirasiyla "CORE Açık emirler", "CORE Logo", "CORE İstasyonlar" secilir.
 
 ## Saatte ilk acilis
 
-Saat once TMI sunucu adresini sorar (orn. `tmi.kurum.ic:4100`; https kendiliginden eklenir, http kabul edilmez). Adres
+Saat once CORE sunucu adresini sorar (orn. `tmi.kurum.ic:4100`; https kendiliginden eklenir, http kabul edilmez). Adres
 girilmezse uygulama acilir ama ozellikler kapali kalir; adres sonra uygulamadaki "Sunucu adresi" dugmesinden girilir. Adres
 degisince eslesme biter.
 
-Adres girilince saat 6 rakamli bir kod gosterir. TMI'da Profil > Hesap ve guvenlik > "Akilli saatimi eslestir" penceresinde kodu girip
+Adres girilince saat 6 rakamli bir kod gosterir. CORE'da Profil > Hesap ve guvenlik > "Akilli saatimi eslestir" penceresinde kodu girip
 "Onayla"ya basin; saatte "Devam" (saat 15 sn'de bir kendisi de sorar). Eslesme 12 saat surer; Profil'den ya da yonetici
 tarafindan kesilebilir (kullanici karari, soru 26).
 
 ## Istasyon NFC etiketi
 
-Etikete yalniz istasyonun TMI'daki kodu yazilir (NDEF metin kaydi ya da text/plain; en cok 64 karakter). Saat etiketi yalniz okur ve
+Etikete yalniz istasyonun CORE'daki kodu yazilir (NDEF metin kaydi ya da text/plain; en cok 64 karakter). Saat etiketi yalniz okur ve
 kisinin kendi istasyonlarindan biriyse ayrintisini acar. Etiket herhangi bir NFC yazma uygulamasiyla hazirlanir; saat etikete yazmaz.
 
 ## Dogrulanmayanlar
@@ -147,8 +147,8 @@ kisinin kendi istasyonlarindan biriyse ayrintisini acar. Etiket herhangi bir NFC
 - `-PkurumKok` ile derlenen APK'nin gercek saatte deneme kokunden imzali sunucuya baglanmasi denenmedi (cihaz adimi kullanicida).
 - Kurumsal Wi-Fi istemci yalitimi yapiyorsa kablosuz adb ve saatin sunucuya ulasmasi engellenir.
 - Galaxy Watch'ta NFC okuyucu kipinin (enableReaderMode) uygulamaya acik oldugu ve etiketin okunmasi denenmedi.
-- TMI kadrani gercek saatte denenmedi. Kadran XML'i Google'in Watch Face Format 1 semasina gore gecerlidir (resmi XSD ile denendi);
+- CORE kadrani gercek saatte denenmedi. Kadran XML'i Google'in Watch Face Format 1 semasina gore gecerlidir (resmi XSD ile denendi);
   kutucuk ifadeleri (`[COMPLICATION.*]`), halkanin 12 yonunden baslamasi ve kadranin uygulama kutucuklarini kendiliginden
   secmesi (`DefaultProviderPolicy primaryProvider`) cihazda denenmedi.
-- Vardiya tusundaki geri sayim yazisinin (`TimeDifferenceComplicationText`) kadranda kendiliginden azalmasi ve "TMI Vardiya"
+- Vardiya tusundaki geri sayim yazisinin (`TimeDifferenceComplicationText`) kadranda kendiliginden azalmasi ve "CORE Vardiya"
   karosunun sutun grafigi cihazda denenmedi.

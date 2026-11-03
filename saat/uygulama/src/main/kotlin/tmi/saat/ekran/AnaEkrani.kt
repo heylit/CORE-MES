@@ -29,7 +29,7 @@ fun AnaEkrani(
 ) {
     val acilis = rememberAcilisAni()
     ScalingLazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        item { UstSatir("TMI Core") }
+        item { UstSatir("CORE") }
         if (sessiz) item { Text("Sessiz", fontSize = 11.sp, color = Renkler.uyari) }
         if (durum is Yukleme.Hata) item { Text(durum.ileti, color = Renkler.soluk, fontSize = 12.sp) }
         item { BayatSatiri(durum) }

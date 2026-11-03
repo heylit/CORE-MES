@@ -57,7 +57,7 @@
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
         </service>
-        <!-- TMI kadraninin (saat/kadran, Watch Face Format) veri kutucuklari; baska kadranlarda da secilebilir.
+        <!-- CORE kadraninin (saat/kadran, Watch Face Format) veri kutucuklari; baska kadranlarda da secilebilir.
              Sistem en sik 5 dakikada bir ister (pil); logo saatte bir. Dokununca Tezgahlar 3B acilir. -->
         <service
             android:name=".kadran.EmirHalkasi"

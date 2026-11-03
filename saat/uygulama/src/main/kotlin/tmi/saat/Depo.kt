@@ -3,7 +3,7 @@ package tmi.saat
 import android.content.Context
 
 // Belirtec uygulamanin ozel deposunda durur; yedekleme kapalidir (AndroidManifest). Belirtec yalniz okur ve en cok 12 saat
-// gecerlidir: saat kaybolursa kisi ya da yonetici TMI'dan baglantiyi keser.
+// gecerlidir: saat kaybolursa kisi ya da yonetici CORE'dan baglantiyi keser.
 class Depo(baglam: Context) {
     private val tercihler = baglam.getSharedPreferences("tmi-saat", Context.MODE_PRIVATE)
 

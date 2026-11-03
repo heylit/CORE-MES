@@ -43,7 +43,7 @@ import tmi.saat.cekirdek.Zaman
 // Sistem kutucugu manifestteki surede bir ister (pil); ag hatasinda null doner ve kadran son degeri gostermeye devam eder.
 // Kurum logosu gunde bir yenilenir; arada saatin onbelleginden verilir.
 private const val LOGO_TAZELIK_MS = 24 * 60 * 60_000L
-private const val ESLESMEDI = "TMI'ı açıp eşleştirin"
+private const val ESLESMEDI = "CORE'u açıp eşleştirin"
 
 private fun metin(m: String) = PlainComplicationText.Builder(m).build()
 
@@ -123,7 +123,7 @@ class IstasyonOzeti : TmiKutucugu() {
     override val sayfa = AnaEtkinlik.LISTE
 
     override suspend fun veri(request: ComplicationRequest): ComplicationData? {
-        if (!eslesti) return uzun("TMI", ESLESMEDI, null)
+        if (!eslesti) return uzun("CORE", ESLESMEDI, null)
         val liste = istasyonlar() ?: return null
         val (baslik, metin) = Kadran.ozet(liste.map { it.ad to it.durum })
         return uzun(baslik, metin, Kadran.dagilim(liste.map { it.durum }))
@@ -220,7 +220,7 @@ class VardiyaKalan : TmiKutucugu() {
     }
 }
 
-// Sistem Ayarlari'ndaki giris logosu; logo yoksa ya da eslesme yoksa "TMI" yazisi. Dokununca Tezgahlar 3B.
+// Sistem Ayarlari'ndaki giris logosu; logo yoksa ya da eslesme yoksa "CORE" yazisi. Dokununca Tezgahlar 3B.
 class KurumLogosu : TmiKutucugu() {
     override val sayfa = AnaEtkinlik.VITRIN
 
@@ -247,7 +247,7 @@ class KurumLogosu : TmiKutucugu() {
         if (type == ComplicationType.SHORT_TEXT) yazi() else null
 
     private fun yazi(): ComplicationData =
-        ShortTextComplicationData.Builder(metin("TMI"), metin("TMI")).setTapAction(dokunus()).build()
+        ShortTextComplicationData.Builder(metin("CORE"), metin("CORE")).setTapAction(dokunus()).build()
 
     // Kadrandaki logo yeri 8:5'tir; logo oranini koruyarak bu kutuya ortalanir, boylece kadran logoyu germez.
     private fun kutuya(logo: Bitmap): Bitmap {

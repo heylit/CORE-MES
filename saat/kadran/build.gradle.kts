@@ -16,7 +16,7 @@ if (imzaDeposu != null) {
     if (imzaDeposu.canonicalFile.startsWith(depo)) throw GradleException("imzaDeposu depo disinda olmali: ${imzaDeposu.path}")
 }
 
-// TMI kadrani Watch Face Format ile yazilir (375 a): Wear OS 6 kodla cizilen kadrani reddeder. Bu APK kod tasimaz
+// CORE kadrani Watch Face Format ile yazilir (375 a): Wear OS 6 kodla cizilen kadrani reddeder. Bu APK kod tasimaz
 // (hasCode=false) ve bagimliligi yoktur; veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir.
 android {
     namespace = "tmi.saat.kadran"

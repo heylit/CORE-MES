@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TMI kadrani (375 a, 86). Veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir: acik emir halkasi, uyari sayisi (sol),
+<!-- CORE kadrani (375 a, 86). Veri saat uygulamasinin (tmi.saat) kutucuklarindan gelir: acik emir halkasi, uyari sayisi (sol),
      dikkat isteyen istasyonlar ve durum dagilimi (alt), kurum logosu (ust). Her kutucuk kendi ekranini acar (dokunus verisi
      uygulamadadir). Kisik modda yalniz saat, tarih ve uyari sayisi kalir, tek renk. Vurgu rengi kadran duzenlemeden secilir. -->
 <WatchFace width="450" height="450">
