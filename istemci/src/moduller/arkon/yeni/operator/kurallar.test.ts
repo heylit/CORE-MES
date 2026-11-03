@@ -15,13 +15,14 @@ const ortam = { planliMi: () => false, durusPencereleri: () => [] };
 const girdi: VardiyaOzetGirdisi = { kisi: 'Deneme Operator', istasyon: 'IST-1', cevrim: 30, olcumUygun: 2, olcumRed: 1, cagriSureleri: [], cagriAcik: false, nedenAdi: (k) => k };
 
 describe('A1 operatör kuralları', () => {
-  it('durum düğmeleri: geri alması zor olan Durdur ve Bitir basılı tutulur, her durumda bir ana düğme vardır', () => {
+  it('durum düğmeleri (2000 b): Durdur dokunuşla neden sorar, nedensiz Duraklat ve Bitir basılı tutulur, her durumda bir ana düğme vardır', () => {
     for (const d of ['queued', 'setup', 'running', 'paused', 'stopped', 'done']) {
       const l = durumDugmeleri(d);
       expect(l.filter((x) => x.ana).length).toBe(1);
-      for (const x of l) expect(!!x.tut).toBe(x.eylem === 'stop' || x.eylem === 'finish');
+      for (const x of l) expect(!!x.tut).toBe(x.eylem === 'pause' || x.eylem === 'finish');
     }
     expect(durumDugmeleri('running').map((x) => x.eylem)).toEqual(['stop', 'pause', 'finish']);
+    expect(durumDugmeleri('running').find((x) => x.ana)?.eylem).toBe('stop');
   });
 
   it('ton ve çağrı renkleri tasarımdaki durum adlarına düşer', () => {

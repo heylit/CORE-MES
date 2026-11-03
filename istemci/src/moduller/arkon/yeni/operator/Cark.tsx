@@ -7,7 +7,7 @@ import './cark.css';
 
 /* 790: iş ve makine çarkı (CNC Kurulum'un kart dizisi gibi). Tek çark, şerit başına bir liste. Çevirmek yalnız bakar: düğme, yana
    kaydırma, fare tekerleği (üstündeyken) ve ←/→ ekrandaki işi değiştirmez; geçiş ve seçim şeridin kendi eylemidir. Ekrandaki öğe
-   de kısa kartla çizilir; komşular arkada üst üste görünür (prototip, 828 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir.
+   de kısa kartla çizilir; yalnız bakılan kart çizilir (1999 a). Tekerlek sayfayı kaydırmasın diye dinleyici edilgen değildir.
    Tek öğeli şeritte çevirecek bir şey yoktur: ok, sıra ve ipucu çizilmez, kart tek başına durur (888 a). */
 
 export interface CarkSeridi {
@@ -24,8 +24,8 @@ export interface CarkSeridi {
   eylem: (i: number) => ReactNode;
 }
 
-// Çizilen komşu sayısı: ötesi görünmez, DOM'a da girmez.
-const KOMSU = 2;
+// 1999 a: yalnız bakılan kart çizilir; komşu kartlar üst şeridi kalabalıklaştırıyordu, gezinme ok, kaydırma ve sayaçla kalır.
+const KOMSU = 0;
 // Sürükleme bu kadar yürüyünce işaretçi sahneye bağlanır: dışarıda bırakılan sürükleme de sayılır (888 c), ama yerinde dokunuş
 // komşu kartın tıklaması olarak kalır (yakalanan işaretçinin tıklaması sahneye gider).
 const YAKALA = 8;
@@ -130,7 +130,8 @@ export function IsOnizKarti({ is, siradaki, ekranda = false, makine = null }: { 
       </span>
       <b className="tc-ay1-mono">{is.no}</b>
       <span className="tc-ay1-tcark-ad">{is.part || '—'}</span>
-      <small>{[is.op, is.pkg?.partNo].filter(Boolean).join(' · ')}</small>
+      {/* Kompakt kipte satır kısalır; tam metin ipucunda kalır. */}
+      {((t) => <small title={t}>{t}</small>)([is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null, is.pkg?.proje].filter(Boolean).join(' · '))}
       {is.empty ? null : (
         <>
           <progress className="tc-ay1-tcark-ilerleme" max={1} value={oran} aria-label="İlerleme" />

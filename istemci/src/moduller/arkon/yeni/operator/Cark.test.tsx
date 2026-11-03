@@ -141,14 +141,14 @@ describe('790: iş ve makine çarkı', () => {
     expect(container.querySelector('[data-fark="0"]')!.textContent).toContain('Acil');
   });
 
-  it('828 a: ekrandaki iş kısa kartla ortada; komşular arkada üst üste çizilir, ötesi çizilmez', () => {
+  it('1999 a: ekrandaki iş kısa kartla tek başına çizilir; komşu kart çizilmez', () => {
     const { container, getByText } = render(<Deneme gecilen={[]} secilen={[]} />);
     const orta = container.querySelector('[data-fark="0"]')!;
     expect(orta.textContent).toContain('Ekranda');
     expect(orta.textContent).toContain('2 / 10 adet · Termin 27 Eki');
     expect(orta.textContent).toContain('Makine: M-1');
     expect(orta.querySelector('progress')!.getAttribute('value')).toBe('0.2');
-    expect([...container.querySelectorAll('.tc-ay1-tcark-oge')].map((x) => x.getAttribute('data-fark'))).toEqual(['0', '1', '2']);
+    expect([...container.querySelectorAll('.tc-ay1-tcark-oge')].map((x) => x.getAttribute('data-fark'))).toEqual(['0']);
     expect(getByText(/yalnız bakar/, { selector: '.tc-ay1-tcark-ipucu' })).toBeTruthy();
   });
 

@@ -738,3 +738,14 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 }
 /* Kısa düzeltme tuşunda simge ve yazı tek satırdır; "Hurda −1" iki satıra kırılınca tuş sıradan uzuyordu. */
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus[data-duzeltme] { gap: var(--pay-ince); white-space: nowrap; }
+/* 1999 a: malzeme ve sepet çipleri tek satırda; çark varken iş kimliği çarktaki karttadır, kart tek satırlık şeride iner. */
+.tc-ay1-genis .tc-ay1-aktif[data-cark] { padding: var(--b-2) var(--b-3); align-items: center; }
+.tc-ay1-genis .tc-ay1-aktif[data-cark] > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-ay1-aktif-ozet { display: inline-flex; align-items: center; gap: var(--b-1); margin: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 800; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay1-cip-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-cip-satiri:empty { display: none; }
+.tc-ay1-gizli { position: absolute; inline-size: var(--cizgi-ince); block-size: var(--cizgi-ince); margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* 1999 a: düzeltme (−1) tuşları sık kullanılmaz; ikincil boyda ve yazıda durur, sayım tuşlarıyla karışmaz. */
+.tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus[data-duzeltme] { font-size: var(--yazi-xs); font-weight: 600; }
+.tc-ay1-adim-sayfa { display: flex; align-items: center; justify-content: center; gap: var(--b-3); }
+.tc-ay1-adimlar { touch-action: pan-y; }

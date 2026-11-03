@@ -1231,14 +1231,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       siradaki: D.next ? { olcu: D.next.b.id, v: D.next.v, u: D.next.u } : null, ilkKarar: ilkKarari,
     }} />
   ) : null;
+  // 1999 a: genişte Resim sağ sütunun sekmesidir; alttaki tekrarı çizilmez.
   const durumDugmeleri = (mobil: boolean) => (uretir ? (
-    <DurumDugmeleri durum={o.state} pasif={!!o.empty} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
+    <DurumDugmeleri durum={o.state} pasif={!!o.empty} gizle={mobil ? undefined : 'drawing'} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
   ) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
   // 702: Şimdi kartı ve numune şeridi tek şeritte (şerit görevin başlığının altında); ikisi de yoksa şerit çizilmez.
+  // 1999 a: genişte sıradaki işin "İşi başlat" görevi alttaki ana düğmenin tekrarıdır; çizilmez.
   const simdiSeridi = (mobil: boolean) => {
     const sr = kaliteGorunumu ? null : serit;
-    return task || sr ? <div className="tc-ay1-simdi">{task ? gorev(mobil, sr) : sr}</div> : null;
+    const g = !mobil && o.state === 'queued' && task?.act === 'start' ? null : task;
+    return g || sr ? <div className="tc-ay1-simdi">{g ? gorev(mobil, sr) : sr}</div> : null;
   };
   // 790: tek çark, iki şerit. Çarkta her iş kısa kartladır; ekrandaki işin tam kartı çarkın altındadır (828 a, prototip). Başka işe
   // bakmak önizlemedir, geçiş "Bu işe geç" ile ve bugünkü geçiş sorusuyla olur. Geçiş işi başlatmaz.
@@ -1247,8 +1250,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const carkIstasyonlari = secilebilirIstasyonlar(istasyonListesi(tesis).filter((m) => isMerkezinde(kisi, m.wc)), yetkiVar('prod.station'), kisi && kisi.sts);
   const istSira = carkIstasyonlari.findIndex((m) => m.id === MACHINE);
   const istasyonaGec = (id: string) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); };
+  const carkVar = isler.length >= 2 || makineler.length > 0 || carkIstasyonlari.length >= 2;
   const carki = (ekranda: ReactNode) => {
-    if (isler.length < 2 && !makineler.length && carkIstasyonlari.length < 2) return ekranda;
+    if (!carkVar) return ekranda;
     const isSeridi: CarkSeridi = {
       anahtar: 'is', ad: 'İşler', simge: 'list', sayi: isler.length, etkin: ai, bak: b ? bi : ai, bakYaz,
       ciz: (i) => {
@@ -1426,7 +1430,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
         {ozetVar ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('ozetim')} title="Özetim" aria-label="Özetim"><Simge ad="user" /></button> : null}
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
-        <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>
+        {/* 1999 a: çark görünürken iş listesi çarkın İşler şerididir; düğme tekrar olur. */}
+        {carkVar ? null : <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>}
         {!pv ? <Dugme tur="ikincil" simge="bell" onClick={() => ovYaz('call')}>Çağrı</Dugme> : null}
         <BaglantiDurumu />
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span>
@@ -1443,13 +1448,20 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <div className="tc-ay1-orta tc-ay1-sutun">
           {bantlar}
           {carki(
-          <section className="tc-ay1-aktif" aria-label="Aktif iş emri">
+          <section className="tc-ay1-aktif" aria-label="Aktif iş emri" data-cark={carkVar || undefined}>
             <div>
-              <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
-              <IsAlanlari is={o} baslik />
+              {/* 1999 a: çarktaki kart işin kimliğini taşır (proje, emir, op, parça, rev); burada tek satırda malzeme, sepet ve notlar kalır. */}
+              {carkVar ? <h2 className="tc-ay1-aktif-ozet"><Simge ad="play" boyut="k" />Aktif iş emri <span className="tc-ay1-gizli">{o.no}</span>{o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</h2> : <>
+                <span className="tc-ay1-ust-yazi">Aktif iş emri {o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
+                <IsAlanlari is={o} baslik />
+              </>}
               <IsEtiketleri is={o} />
-              {pv ? null : <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
-              {pv ? null : <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />}
+              {pv ? null : (
+                <span className="tc-ay1-cip-satiri">
+                  <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />
+                  <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />
+                </span>
+              )}
               {notlar}
             </div>
             <div className="tc-ay1-olgular">
