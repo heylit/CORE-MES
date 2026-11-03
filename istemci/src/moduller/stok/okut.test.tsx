@@ -82,7 +82,7 @@ async function okutVeBekle(pencere: HTMLElement, kod: string, metin: RegExp) {
 }
 
 async function pencereAc(): Promise<HTMLElement> {
-  fireEvent.click(await screen.findByRole('button', { name: /^Malzeme ve teslim/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
   return screen.findByRole('dialog');
 }
 

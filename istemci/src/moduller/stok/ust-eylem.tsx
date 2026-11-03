@@ -3,14 +3,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimYeri, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Simge, useBildirim, type Secenek } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Simge, useBildirim, type KomutIsleyici, type Secenek } from '../../ortak/arayuz/index.ts';
 import type { UstEylem } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { durumMetni, isMalzemeDurumu, isMalzemeleriAnahtari, TESLIM_KUTUSU } from './is-malzeme-durumu.ts';
 import { teslimAlIstasyonu } from './teslim-yeri.ts';
-import { OkutAlani } from './OkutPaneli.tsx';
+import { BilgiOkut, OkutAlani } from './OkutPaneli.tsx';
+import { OkutarakSayim } from './OkutarakSayim.tsx';
+import { ToplaModu } from './Hazirlik.tsx';
+import { acilisModu, izinliModlar, kayitliMod, komuttanMod, modTanimi, moduKaydet, type ModTanimi, type OkutModu } from './okutma-modlari.ts';
 import { ELDEN_NOTU, okutulanHedef, type OkutulanHedef } from './okut-akisi.ts';
 import { Qr } from './Qr.tsx';
 import { MALZEME_TESLIM_AC, type MalzemeTeslimOdagi } from './disari.ts';
@@ -31,7 +34,7 @@ import { TasimaYolu, tasimaYolu } from './TasimaYolu.tsx';
 import { sutunAdi } from './yerlesim.ts';
 import './stok.css';
 
-// Malzeme · Teslim (kart #1208): her sayfanın üst çubuğunda; teslim et, teslim al, malzeme iste. 372 a: ayrı QR tuşu yok; okuyucu bu
+// Okut (kart #1208; ad 1912): her sayfanın üst çubuğunda; teslim et, teslim al, malzeme iste. 372 a: ayrı QR tuşu yok; okuyucu bu
 // pencerenin üstündedir. Okuma yalnız stok.istek ister; tam stok okuması (sayfa.stok) açılmaz.
 const KUTU = TESLIM_KUTUSU;
 const yeniKimlik = yeniIstekKimligi;
@@ -81,7 +84,7 @@ function TeslimDugmesi() {
     retry: false,
   });
   const gelen = sayac.data?.gelen ?? 0;
-  const etiket = gelen > 0 ? `Malzeme ve teslim, ${gelen} gelen teslim` : 'Malzeme ve teslim';
+  const etiket = gelen > 0 ? `Okut, ${gelen} gelen teslim` : 'Okut';
   return (
     <>
       <button type="button" className="tc-kabuk-tema tc-stok-teslim-dugme" onClick={() => setAcik(true)} aria-haspopup="dialog" aria-label={etiket} title={etiket}>
@@ -95,6 +98,24 @@ function TeslimDugmesi() {
 
 const SONUC_GORUNUMU: Record<SonucEylemi, Gorunum> = { kabul: 'al', sevk: 'et', 'okutarak-al': 'iste' };
 
+// Mod şeridi (1912): seçili mod büyük durur; açıklama ve "önce ne, sonra ne" altında. Mod komut kartından da seçilir.
+function ModSeridi({ modlar, mod, sec }: { modlar: readonly ModTanimi[]; mod: OkutModu; sec: (m: OkutModu) => void }) {
+  const t = modTanimi(mod);
+  return (
+    <section className="tc-stok-mod" aria-label="Okut modu">
+      <div className="tc-stok-mod-cipler" role="radiogroup" aria-label="Mod">
+        {modlar.map((m) => (
+          <button key={m.mod} type="button" role="radio" aria-checked={m.mod === mod} className="tc-stok-mod-cip" onClick={() => sec(m.mod)}>
+            <Simge ad={m.simge} />{m.ad}
+          </button>
+        ))}
+      </div>
+      <p className="tc-stok-mod-bilgi"><strong>{t.ad}</strong> · {t.aciklama}</p>
+      {t.adimlar.length > 1 && <ol className="tc-stok-okut-adimlar" aria-label="Bu modda sıra">{t.adimlar.map((a) => <li key={a}>{a}</li>)}</ol>}
+    </section>
+  );
+}
+
 function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null; istek: PanelIstegi | null; kapat: () => void }) {
   const [gorunum, setGorunum] = useState<Gorunum>(() => ilkGorunum(odak, istek));
   // Okuyucuda ilk okutulan kişi kodu Elimdekiler'i o kişiye hedefli açar; her okutma formu yeniden kurar.
@@ -105,7 +126,13 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
   const kutu = useQuery({ queryKey: KUTU, queryFn: () => api.get<TeslimKutusuCevabi>('/stok/teslim-kutusu') });
   const tasimaSepeti = useTasimaSepeti();
   // Bulunduğum istasyon (1338 a, madde 1): panelde tek seçim; Bana gelen, sepet, Malzeme iste ve Teslim et bunu kullanır.
-  const kisiId = useOturum().data?.id ?? null;
+  const oturum = useOturum().data;
+  const kisiId = oturum?.id ?? null;
+  const islemler: readonly string[] = oturum?.islemler ?? [];
+  const modlar = izinliModlar((i) => islemler.includes(i));
+  // Terminalden ya da bir bölüm isteğiyle açılış o işin ekranıdır: Otomatik açılır, kayıtlı mod değişmez.
+  const [modSecimi, setModSecimi] = useState<OkutModu>(() => (odak || istek ? 'otomatik' : kayitliMod()));
+  const mod = acilisModu(modSecimi, modlar);
   const [istasyonSecimi, setIstasyonSecimi] = useState<number | null>(null);
   const son = sonSecilen !== null && sonSecilen.kisiId === kisiId ? sonSecilen.istasyonId : null;
   const istasyonId = istasyonSecimi ?? (kutu.data ? teslimAlIstasyonu(kutu.data, odak?.istasyonId ?? null, son) : null);
@@ -115,6 +142,15 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
     setOkunan((o) => (cevap.tur === 'bilinmiyor' ? null : { kod, cevap, sira: (o?.sira ?? 0) + 1 }));
   };
   const git = (g: Gorunum) => { setGorunum(g); setKisiHedefi(null); };
+  const modSec = (m: OkutModu) => { setModSecimi(m); moduKaydet(m); setOkunan(null); setSifir((n) => n + 1); git('ana'); };
+  const panelKomutu: KomutIsleyici = (k) => {
+    if (k.ad !== 'MOD') return null;
+    const t = komuttanMod(k.mod);
+    if (!t) return { ton: 'hata', metin: 'Böyle bir mod yok' };
+    if (!modlar.includes(t)) return { ton: 'hata', metin: `${t.ad} modu için yetkin yok` };
+    modSec(t.mod);
+    return { ton: 'tamam', metin: `Mod: ${t.ad}` };
+  };
   const sonucSecildi = (e: SonucEylemi) => { setSifir((n) => n + 1); git(SONUC_GORUNUMU[e]); };
   const sonuc = okunan && <OkutmaSonucu key={okunan.sira} okunan={okunan} sec={sonucSecildi} kapat={() => setOkunan(null)} />;
   const icerik = kutu.isPending ? <DurumKutusu durum="yukleniyor" />
@@ -127,15 +163,24 @@ function TeslimPaneli({ odak, istek, kapat }: { odak: MalzemeTeslimOdagi | null;
   const yer = kutu.data ? <IstasyonCipi kutu={kutu.data} istasyonId={istasyonId} sec={istasyonSec} /> : null;
   const serit = <SepetSeridi satirlar={tasimaSepeti.data?.satirlar ?? []} />;
   return (
-    <Pencere acik kapat={kapat} baslik={gorunum === 'ana' ? 'Malzeme · Teslim' : GORUNUM_BASLIGI[gorunum]} tur="yan">
+    <Pencere acik kapat={kapat} baslik={gorunum === 'ana' ? 'Okut' : GORUNUM_BASLIGI[gorunum]} tur="yan">
       <div className="tc-stok-form tc-stok-teslim-panel">
         {gorunum === 'ana' ? (
           <>
-            {yer}
-            <OkutAlani kamerali sepetli teslimEteGec={(hedef) => { setGorunum('et'); setKisiHedefi((k) => ({ hedef, sira: (k?.sira ?? 0) + 1 })); }} okundu={okundu} sifir={sifir} sonuc={sonuc}>
-              {icerik}
-            </OkutAlani>
-            {serit}
+            <ModSeridi modlar={modlar} mod={mod} sec={modSec} />
+            {mod === 'bilgi' ? <BilgiOkut komut={panelKomutu} />
+              : mod === 'say' ? <OkutarakSayim gomulu ustKomut={panelKomutu} />
+              : mod === 'topla' ? <ToplaModu ustKomut={panelKomutu} />
+              : (
+                <>
+                  {yer}
+                  <OkutAlani key={mod} kamerali sepetli komut={panelKomutu} teslimEteGec={(hedef) => { setGorunum('et'); setKisiHedefi((k) => ({ hedef, sira: (k?.sira ?? 0) + 1 })); }}
+                    {...(mod === 'otomatik' ? { okundu, sonuc } : {})} sifir={sifir}>
+                    {mod === 'otomatik' ? icerik : <p className="tc-stok-not">Malzeme ya da lot okut, sepete düşer; sonra bırakacağın yeri ya da alacak kişiyi okut.</p>}
+                  </OkutAlani>
+                  {serit}
+                </>
+              )}
           </>
         ) : (
           <>

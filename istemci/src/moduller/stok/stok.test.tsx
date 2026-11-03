@@ -740,7 +740,7 @@ describe('Okut adresi (soru 90 a)', () => {
   it('panel yetkisi olmayan okuyucuya okutmanın panelde olduğunu söyler', async () => {
     sunucuKur(OKUYUCU, {});
     ac('/stok/okut');
-    expect(await screen.findByText(/Okutma, üst çubuktaki Malzeme · Teslim panelindedir/)).toBeTruthy();
+    expect(await screen.findByText(/Okutma, üst çubuktaki Okut panelindedir/)).toBeTruthy();
   });
 });
 

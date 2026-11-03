@@ -21,7 +21,7 @@ export function tusEkle(d: OkuyucuDurumu, tus: string, zaman: number): { durum: 
 }
 
 // Terminal refakat kartını (RP:<kimlik>) işi açmak için okur. Lot ve malzeme etiketi (1908 a) çalışan işin rota girdisiyle
-// karşılaştırılır; alma ve teslim yine üst çubuktaki Malzeme · Teslim panelindedir.
+// karşılaştırılır; alma ve teslim yine üst çubuktaki Okut panelindedir.
 // Önek ve biçim paylasilan/kod-sozlugu.ts ile aynıdır (test eşliği sabitler); okutma buraya `okutmaDuzelt`ten geçmiş gelir.
 export type TerminalOkutmasi = { tur: 'kart'; kartId: number } | { tur: 'etiket'; kod: string } | { tur: 'baska'; kod: string };
 export function terminalOkutmasi(ham: string): TerminalOkutmasi {
@@ -30,7 +30,7 @@ export function terminalOkutmasi(ham: string): TerminalOkutmasi {
   const t = kodTuru(ham);
   return t.tur === 'lot' || t.tur === 'malzeme' ? { tur: 'etiket', kod: ham.trim() } : { tur: 'baska', kod: ham.trim() };
 }
-export const KART_DEGIL_ILETISI = 'Refakat kartı değil; malzeme ve lot üst çubuktaki Malzeme · Teslim panelinde okutulur';
+export const KART_DEGIL_ILETISI = 'Refakat kartı değil; malzeme ve lot üst çubuktaki Okut panelinde okutulur';
 export const KART_YOK_ILETISI = 'Bu kart bu istasyondaki işlerin kartı değil';
 
 const yaziAlani = (h: EventTarget | null): boolean =>

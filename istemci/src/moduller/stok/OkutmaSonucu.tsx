@@ -114,7 +114,8 @@ function KartlaGelenler({ gelenler }: { gelenler: Teslim[] }) {
   );
 }
 
-export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void }) {
+// `salt` (1912, Bilgi modu): yalnız ne, nerede, ne kadar; iş düğmesi ve teslim alma yok.
+export function OkutmaSonucu({ okunan, sec, kapat, salt = false }: { okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void; salt?: boolean }) {
   const c = okunan.cevap;
   // Tam stok çözümü okutma cevabıyla gelir (tek istek); okuyucu onu Mal kabul ve Sevk bölümlerinin önbelleğine de yazar.
   const stokCevabi = c.tur === 'malzeme' || c.tur === 'yer' ? c.stok : undefined;
@@ -154,10 +155,10 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
           </p>
         )}
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
-        {malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
-        {refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
+        {!salt && malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} />}
+        {!salt && refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
         {refakat && anaEylem !== 'isi-ac' && refakat.durum !== 'iptal' && <KartRotasi r={refakat} />}
-        {refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Başka yere: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
+        {!salt && refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Başka yere: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
         {refakat && malzeme?.kartSatirlari && (!tekKart || baskaAcik) && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">
@@ -169,8 +170,8 @@ export function OkutmaSonucu({ okunan, sec, kapat }: { okunan: Okunan; sec: (e: 
             {digerleri.map((d) => <li key={d.istasyonId}><span>{d.ad} ({d.kod})</span><strong>{miktarMetni(d.miktar)}</strong></li>)}
           </ul>
         )}
-        {tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>Başka işlem</Dugme></div>}
-        {(!tekKart || baskaAcik) && <div className="tc-stok-eylem">
+        {!salt && tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>Başka işlem</Dugme></div>}
+        {!salt && (!tekKart || baskaAcik) && <div className="tc-stok-eylem">
           {refakat && anaEylem !== 'isi-ac' && <IsEmriniAc r={refakat} />}
           {malzeme && giris && <Dugme tur="birincil" simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}

@@ -46,8 +46,8 @@ describe('Malzeme · Teslim kamera önce (809)', () => {
     const getUserMedia = vi.fn(() => Promise.reject(new Error('izin yok')));
     vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } });
     ciz({ 'GET /stok/teslim-kutusu/sepet/gelecek': () => json(200, { satirlar: [] }) });
-    fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
-    const panel = await screen.findByRole('dialog', { name: 'Malzeme · Teslim' });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    const panel = await screen.findByRole('dialog', { name: 'Okut' });
     await waitFor(() => expect(getUserMedia).toHaveBeenCalled());
     expect(within(panel).queryByRole('tablist')).toBeNull();
     expect(await within(panel).findByRole('button', { name: 'Bana gelen, 1' })).toBeTruthy();
@@ -59,20 +59,20 @@ describe('Malzeme · Teslim kamera önce (809)', () => {
 
   it('sayı okunamazsa kutucuk sayısız kalır (sıfır yazılmaz)', async () => {
     ciz({ 'GET /stok/teslim-kutusu/sepet/gelecek': () => json(500, { kod: 'HATA', mesaj: 'Olmadı.' }) });
-    fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
     expect(await screen.findByRole('button', { name: 'Elimdekiler, 1' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Bana gelen' })).toBeTruthy();
   });
 
   it('kutucuk kendi ekranını açar, Kameraya dön kutucuklara getirir', async () => {
     ciz({ 'GET /stok/teslim-kutusu/sepet/gelecek': () => json(200, { satirlar: [] }) });
-    fireEvent.click(await screen.findByRole('button', { name: /Malzeme ve teslim/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Bana gelen, 1' }));
     const ekran = await screen.findByRole('dialog', { name: 'Bana gelen' });
     expect(within(await within(ekran).findByRole('list', { name: 'Bana gelenler' })).getByText(/Deneme mil/)).toBeTruthy();
     expect(within(ekran).queryByRole('textbox', { name: /Kod/ })).toBeNull();
     fireEvent.click(within(ekran).getByRole('button', { name: 'Kameraya dön' }));
-    expect(await screen.findByRole('dialog', { name: 'Malzeme · Teslim' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'Okut' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: /Kod/ })).toBeTruthy();
   });
 

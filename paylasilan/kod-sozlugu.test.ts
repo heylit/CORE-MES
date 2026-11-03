@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { kodTuru, okutmaDuzelt } from './kod-sozlugu.ts';
+import { kodTuru, komutKodu, okutmaDuzelt } from './kod-sozlugu.ts';
 
 test('kod sözlüğü: her önek kendi türüne yönlendirir', () => {
   assert.deepEqual(kodTuru('LOC:A-01-01'), { tur: 'konum', deger: 'A-01-01' });
@@ -55,4 +55,16 @@ test('kod sözlüğü: düzeltme yalnız bilinen koda dönüşen okutmaya uygula
     assert.equal(okutmaDuzelt(ham), ham, ham);
   }
   assert.deepEqual(kodTuru('XYZŞ12'), { tur: 'bilinmiyor', deger: 'XYZŞ12' });
+});
+
+test('kod sözlüğü: komut kartı (1909) sabit komut, miktar ve modu tanır; bozuk komut bilinmiyordur', () => {
+  assert.deepEqual(kodTuru('CMD:KAYDET'), { tur: 'komut', komut: { ad: 'KAYDET' } });
+  assert.deepEqual(kodTuru(' cmd : geri-al '), { tur: 'komut', komut: { ad: 'GERI-AL' } });
+  assert.deepEqual(kodTuru('CMD:MIKTAR:12'), { tur: 'komut', komut: { ad: 'MIKTAR', miktar: 12 } });
+  assert.deepEqual(kodTuru('CMD:MOD:SAY'), { tur: 'komut', komut: { ad: 'MOD', mod: 'SAY' } });
+  for (const ham of ['CMD:', 'CMD:SIL', 'CMD:MIKTAR:', 'CMD:MIKTAR:-3', 'CMD:MIKTAR:1.5', 'CMD:MOD:', 'CMD:MOD:S4Y']) assert.equal(kodTuru(ham).tur, 'bilinmiyor');
+  // Fabrika ayarındaki okuyucunun Türkçe Q klavyede bozduğu ayraç düzelir.
+  assert.deepEqual(kodTuru('CMDŞMIKTARŞ10'), { tur: 'komut', komut: { ad: 'MIKTAR', miktar: 10 } });
+  assert.deepEqual(kodTuru('CMDŞGERI*AL'), { tur: 'komut', komut: { ad: 'GERI-AL' } });
+  for (const k of [{ ad: 'KAYDET' }, { ad: 'MIKTAR', miktar: 25 }, { ad: 'MOD', mod: 'TASI' }] as const) assert.deepEqual(kodTuru(komutKodu(k)), { tur: 'komut', komut: k });
 });

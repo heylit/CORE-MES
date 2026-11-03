@@ -1,6 +1,6 @@
 import type { HizliIs } from '../../ortak/rota/hizli-isler.ts';
 
-// Malzeme teslim et, teslim al ve malzeme iste üst çubuktaki "Malzeme · Teslim" düğmesindedir; burada depo işleri var.
+// Malzeme teslim et, teslim al ve malzeme iste üst çubuktaki "Okut" düğmesindedir; burada depo işleri var.
 export const hizliIsler: readonly HizliIs[] = [
   { anahtar: 'stok-mal-kabul', sira: 10, baslik: 'Malzeme geldi', aciklama: 'Mal kabul: gelen malzemeyi siparişe ve konuma bağlayarak stoğa alın.', simge: 'truck', yol: '/stok/mal-kabul', islem: 'stok.giris' },
   { anahtar: 'stok-hazirlik', sira: 20, baslik: 'Malzeme hazırlayıp göndereceğim', aciklama: 'Hazırlık listesi: istekler ve toplanacak malzemeler.', simge: 'list', yol: '/stok/hazirlik', islem: 'stok.transfer', veya: ['stok.toplama'] },

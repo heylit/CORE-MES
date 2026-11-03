@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { KodCozCevabi, SayimCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
-import { CokSatir, DurumKutusu, Dugme, Kart, KodOkuyucu, OnayPenceresi, Pencere, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import { okutmaDuzelt, type Komut } from '#paylasilan/kod-sozlugu.ts';
+import {
+  CokSatir, DurumKutusu, Dugme, Kart, KodOkuyucu, KOMUT_YOK, OnayPenceresi, Pencere, Rozet, Simge, useBildirim, useOkuyucuKomutu, type KomutIsleyici, type KomutSonucu,
+} from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem } from './ortak.tsx';
@@ -20,7 +22,10 @@ const SONUC_SIMGESI = { tamam: 'check', uyari: 'alert', hata: 'x' } as const;
 
 // Okutarak sayım (1905): göz, sonra o gözün etiketleri; okuyucunun hafızasından aktarılan okutmalar da aynı yoldan geçer.
 // Kayıt göz başına mevcut kör sayım ucudur (POST /stok/sayim); eşiği aşan fark Sayım onaylarına düşer.
-export function OkutarakSayim() {
+// Komut barkodları (1909): Kaydet, Geri al; Artı, Eksi ve Miktar son okutulan satıra yazılır; onay penceresinde Evet ve Vazgeç.
+// `gomulu` (1912, Okut panelinin Say modu): sayfa başlığı yerine düğme satırı; bu ekranın bilmediği komut `ustKomut`a gider.
+interface SonSatir { konumId: number; malzemeId: number; partiId: number | null | undefined }
+export function OkutarakSayim({ gomulu = false, ustKomut }: { gomulu?: boolean; ustKomut?: KomutIsleyici } = {}) {
   const sayabilir = useIslem('stok.sayim');
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -34,6 +39,12 @@ export function OkutarakSayim() {
   const [aktarim, setAktarim] = useState<string | null>(null);
   const [kayitOnayi, setKayitOnayi] = useState(false);
   const [kaydediliyor, setKaydediliyor] = useState(false);
+  const sonSatir = useRef<SonSatir | null>(null);
+  useOkuyucuKomutu(kayitOnayi, (k: Komut) => {
+    if (k.ad === 'EVET') { void kaydet(); return true; }
+    if (k.ad === 'VAZGEC') { setKayitOnayi(false); return true; }
+    return false;
+  });
   if (!sayabilir) return <DurumKutusu durum="hata" mesaj="Sayım için stok sayım yetkisi gerekir." />;
 
   // Okutmalar sırayla çözülür: göz okutmasının sonucu bir sonraki etiketin hangi göze yazılacağını belirler.
@@ -43,6 +54,9 @@ export function OkutarakSayim() {
     try {
       const c = await api.get<KodCozCevabi>(`/stok/kod-coz?kod=${encodeURIComponent(kod)}`);
       r = okutmaUygula(durumRef.current, kod, c);
+      if (r.sonuc.ton !== 'hata' && (c.tur === 'lot' || c.tur === 'malzeme') && r.durum.acik !== null) {
+        sonSatir.current = { konumId: r.durum.acik, malzemeId: c.ozet.id, partiId: c.tur === 'lot' ? c.parti.id : undefined };
+      }
     } catch (hata) {
       r = { durum: durumRef.current, sonuc: { ton: 'hata', baslik: 'Kod çözülemedi', alt: hataMetni(hata) } };
     }
@@ -105,17 +119,60 @@ export function OkutarakSayim() {
   };
   const kaydetBas = () => (okutulmayan > 0 ? setKayitOnayi(true) : void kaydet());
 
+  const goster = (s: KomutSonucu, ham: string) => {
+    setSonuc({ ton: s.ton, baslik: s.metin, alt: '' });
+    setSon((l) => [{ kod: ham, ton: s.ton, not: s.metin }, ...l].slice(0, SON_SAYISI));
+    okutmaSesi(s.ton);
+  };
+  const uyari = (metin: string): KomutSonucu => ({ ton: 'uyari', metin });
+  const satirMiktari = (k: Komut): KomutSonucu => {
+    const ss = sonSatir.current;
+    const g = ss ? durum.gozler.find((x) => x.konumId === ss.konumId) : undefined;
+    const i = ss && g ? g.satirlar.findIndex((x) => x.malzemeId === ss.malzemeId && (ss.partiId === undefined || x.partiId === ss.partiId)) : -1;
+    const s = g?.satirlar[i];
+    if (!g || !s) return uyari('Önce bir lot ya da malzeme okut');
+    if (!('miktar' in k) && s.elle) return uyari(`${s.birim ?? 'Bu'} birimde miktar yazılır; Miktar kartını okut`);
+    const yeni = 'miktar' in k ? k.miktar : Math.max(0, Number(s.miktar || '0') + (k.ad === 'ARTI' ? 1 : -1));
+    setDurum(miktarDegistir(durum, g.konumId, i, String(yeni)));
+    return { ton: 'tamam', metin: `${s.malzemeAd ?? `Kart ${s.malzemeId}`}: ${yeni}` };
+  };
+  const komutIsle = (k: Komut): KomutSonucu | null => {
+    switch (k.ad) {
+      case 'KAYDET':
+        if (durum.gozler.length === 0) return uyari('Kaydedilecek sayım yok');
+        if (eksik > 0) return uyari(`${eksik} satırın miktarı yazılmadı`);
+        if (cozuluyor || kaydediliyor) return uyari('Önceki iş bitmedi; biraz sonra yeniden okut');
+        kaydetBas();
+        return okutulmayan > 0 ? uyari('Okutulmayan satır var: Evet ya da Vazgeç okut') : { ton: 'tamam', metin: 'Sayım kaydediliyor' };
+      case 'GERI-AL':
+        if (!onceki || cozuluyor) return uyari('Geri alınacak okutma yok');
+        geriAl();
+        return { ton: 'tamam', metin: 'Son okutma geri alındı' };
+      case 'ARTI': case 'EKSI': case 'MIKTAR':
+        return satirMiktari(k);
+      case 'EVET': case 'VAZGEC': case 'MOD':
+        return ustKomut?.(k) ?? null;
+    }
+  };
+  const komut: KomutIsleyici = (k) => {
+    const s = komutIsle(k);
+    // MOD gibi panelin komutu sonucu kendi gösterir; burada yalnız bu ekranın sonucu yazılır.
+    if (k.ad !== 'MOD') goster(s ?? uyari(KOMUT_YOK), `CMD:${k.ad}`);
+    return s;
+  };
+  const eylemler = <>
+    <Dugme simge="list" onClick={() => setAktarim('')} disabled={cozuluyor}>Hafızadan aktar</Dugme>
+    <Dugme simge="x" onClick={vazgec} disabled={durum.gozler.length === 0 || kaydediliyor}>Vazgeç</Dugme>
+    <Dugme tur="birincil" simge="check" onClick={kaydetBas} yukleniyor={kaydediliyor} disabled={durum.gozler.length === 0 || eksik > 0 || cozuluyor}>
+      {durum.gozler.length ? `Sayımı kaydet (${durum.gozler.length} göz)` : 'Sayımı kaydet'}
+    </Dugme>
+  </>;
+
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Okutarak sayım" alt="Kör sayım · önce göz, sonra lot ya da malzeme okut" sag={<>
-        <Dugme simge="list" onClick={() => setAktarim('')} disabled={cozuluyor}>Hafızadan aktar</Dugme>
-        <Dugme simge="x" onClick={vazgec} disabled={durum.gozler.length === 0 || kaydediliyor}>Vazgeç</Dugme>
-        <Dugme tur="birincil" simge="check" onClick={kaydetBas} yukleniyor={kaydediliyor} disabled={durum.gozler.length === 0 || eksik > 0 || cozuluyor}>
-          {durum.gozler.length ? `Sayımı kaydet (${durum.gozler.length} göz)` : 'Sayımı kaydet'}
-        </Dugme>
-      </>} />
+      {gomulu ? <div className="tc-stok-eylem">{eylemler}</div> : <SayfaBasi baslik="Okutarak sayım" alt="Kör sayım · önce göz, sonra lot ya da malzeme okut" sag={eylemler} />}
       <Kart>
-        <KodOkuyucu sik okundu={okundu} bekliyor={cozuluyor} ipucu="Okuyucu alan seçmeden de çalışır." />
+        <KodOkuyucu sik okundu={okundu} bekliyor={cozuluyor} komut={komut} ipucu="Okuyucu alan seçmeden de çalışır. Komut kartıyla kaydet, geri al ve miktar yaz." />
         <div className={`tc-stok-is ${sonuc ? SONUC_SINIFI[sonuc.ton] : ''}`} role="status" aria-live="polite">
           <Simge ad={sonuc ? SONUC_SIMGESI[sonuc.ton] : 'scan'} />
           <div>
@@ -170,6 +227,7 @@ export function OkutarakSayim() {
       </Pencere>
       <OnayPenceresi acik={kayitOnayi} baslik="Okutulmayan satırlar" onayMetni="Kaydet" onayla={() => void kaydet()} vazgec={() => setKayitOnayi(false)}>
         <p>Sayılan gözlerde sistemde olup okutulmayan {okutulmayan} satır var. Kaydedince bunlar 0 sayılır; eşiği aşan fark onaya gider.</p>
+        <p className="tc-stok-not">Komut kartından Evet ya da Vazgeç de okutulabilir.</p>
       </OnayPenceresi>
     </section>
   );

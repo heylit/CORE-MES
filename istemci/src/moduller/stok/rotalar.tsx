@@ -8,6 +8,7 @@ import { MalzemeFisi } from './MalzemeFisi.tsx';
 import { MalzemeFisleri } from './MalzemeFisleri.tsx';
 import { EskiToplamaYolu, Hazirlik } from './Hazirlik.tsx';
 import { IsKutusu } from './IsKutusu.tsx';
+import { KomutKarti } from './KomutKarti.tsx';
 import { KonumAyrinti } from './KonumAyrinti.tsx';
 import { Konumlar } from './Konumlar.tsx';
 import { MalKabul } from './MalKabul.tsx';
@@ -46,6 +47,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/malzeme-fisleri', ekran: MalzemeFisleri },
   { yol: '/stok/malzeme-fisleri/:id', ekran: MalzemeFisi },
   { yol: '/stok/okutarak-sayim', ekran: OkutarakSayim },
+  { yol: '/stok/komut-karti', ekran: KomutKarti },
   { yol: '/stok/sayim-onaylari', ekran: SayimOnaylari },
   { yol: '/stok/defter-farklari', ekran: DefterFarklari },
   { yol: '/stok/konumlar', ekran: Konumlar },

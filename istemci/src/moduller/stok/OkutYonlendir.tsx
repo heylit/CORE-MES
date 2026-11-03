@@ -5,7 +5,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { SayfaBasi } from './ortak.tsx';
 import { paneliAc, type PanelIstegi } from './panel-olayi.ts';
 
-// Okut sayfası kalktı (soru 90 a): eski adres ve menü maddesi Malzeme · Teslim panelini açar, sayfa İş kutusuna döner.
+// Okut sayfası kalktı (soru 90 a): eski adres ve menü maddesi Okut panelini açar, sayfa İş kutusuna döner.
 // Eski kipler okutmayla başlar (mal kabul, sevk ve depo sepeti okutulan kodun sonucundan seçilir).
 const KIPLER: Record<string, PanelIstegi> = { kabul: { sekme: 'okut' }, sevkiyat: { sekme: 'okut' }, sepet: { sekme: 'sepet', depoSepeti: true } };
 
@@ -24,7 +24,7 @@ export function OkutYonlendir() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Okut" />
-      <DurumKutusu durum="bos" mesaj="Okutma, üst çubuktaki Malzeme · Teslim panelindedir; panel malzeme isteme yetkisiyle açılır." />
+      <DurumKutusu durum="bos" mesaj="Okutma, üst çubuktaki Okut panelindedir; panel malzeme isteme yetkisiyle açılır." />
     </section>
   );
 }

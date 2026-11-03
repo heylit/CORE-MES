@@ -9,7 +9,7 @@ export const rehber: readonly SayfaRehberi[] = [
       '"Okut"ta ürün ya da raf kodunu okutun (kamera, fotoğraf ya da el okuyucu); "Sepete ekle" ya da "Stoktan düş".',
       '"Mal kabul"de malı sayıp "Teslim al"a, ardından "Etiket bas"a basın.',
       '"Taşı"da her satıra hedef seçip "Hepsini taşı"; "Hazırlık"ta istekleri toplayıp "Teslim et".',
-      'Üst çubuktaki "Malzeme · Teslim" düğmesi teslim al, teslim et ve malzeme iste işlerini her sayfadan açar.',
+      'Üst çubuktaki "Okut" düğmesi teslim al, teslim et ve malzeme iste işlerini her sayfadan açar; modu (Otomatik, Bilgi, Taşı, Say, Topla) panelin üstünden ya da Komut kartından seçilir.',
     ],
     sinirlar: [
       'Mal kabul, taşıma, toplama ve stoktan düşme ayrı yetkiler ister.',

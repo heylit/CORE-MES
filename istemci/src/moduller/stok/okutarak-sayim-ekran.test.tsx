@@ -90,6 +90,48 @@ describe('Okutarak sayım (1905)', () => {
     await waitFor(() => expect(screen.queryByLabelText('Sayılan Deneme 1')).toBeNull());
   });
 
+  it('1909 komut barkodlari: miktar son satira yazilir, arti ve geri al calisir; Kaydet onayi sorar, Evet hizli okutmayla kaydeder', async () => {
+    const istekler = kur();
+    ac('/stok/okutarak-sayim');
+    await okut('LOC:A-01-1');
+    await okut('CMD:MIKTAR:5');
+    expect(await screen.findByText('Önce bir lot ya da malzeme okut')).toBeTruthy();
+    await okut('LOT:LT-7');
+    await waitFor(() => expect((screen.getByLabelText('Sayılan Deneme 1') as HTMLInputElement).value).toBe('1'));
+    await okut('CMDŞMIKTARŞ12');
+    await waitFor(() => expect((screen.getByLabelText('Sayılan Deneme 1') as HTMLInputElement).value).toBe('12'));
+    await okut('CMD:ARTI');
+    await waitFor(() => expect((screen.getByLabelText('Sayılan Deneme 1') as HTMLInputElement).value).toBe('13'));
+    await okut('CMD:EVET');
+    expect(await screen.findByText('Bu ekranda bu komut yok')).toBeTruthy();
+    await okut('CMD:KAYDET');
+    const onay = await screen.findByRole('dialog', { name: 'Okutulmayan satırlar' });
+    const vazgec = within(onay).getByRole('button', { name: 'Vazgeç' });
+    vazgec.focus();
+    for (const t of 'CMD:EVET') fireEvent.keyDown(vazgec, { key: t });
+    expect(fireEvent.keyDown(vazgec, { key: 'Enter' })).toBe(false);
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sayim')?.govde).toEqual({
+      konumId: 41, satirlar: [{ malzemeId: 1, partiId: 7, sayilanMiktar: '13' }, { malzemeId: 2, partiId: 8, sayilanMiktar: '0' }],
+    }));
+  });
+
+  it('1909: Geri al komutu son okutmayi geri alir; Vazgec komutu onayi kapatir, kayit yapilmaz', async () => {
+    const istekler = kur();
+    ac('/stok/okutarak-sayim');
+    await okut('LOC:A-01-1');
+    await okut('LOT:LT-7');
+    await okut('LOT:LT-7');
+    await waitFor(() => expect((screen.getByLabelText('Sayılan Deneme 1') as HTMLInputElement).value).toBe('2'));
+    await okut('CMD:GERI-AL');
+    await waitFor(() => expect((screen.getByLabelText('Sayılan Deneme 1') as HTMLInputElement).value).toBe('1'));
+    await okut('CMD:KAYDET');
+    const onay = await screen.findByRole('dialog', { name: 'Okutulmayan satırlar' });
+    for (const t of 'CMD:VAZGEC') fireEvent.keyDown(document.body, { key: t });
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    await waitFor(() => expect(onay.isConnected).toBe(false));
+    expect(istekler.some((i) => i.yol === '/stok/sayim')).toBe(false);
+  });
+
   it('sayım yetkisi olmayan ekranı kullanamaz (reddedilen)', async () => {
     sunucuKur(OKUYUCU, {});
     ac('/stok/okutarak-sayim');

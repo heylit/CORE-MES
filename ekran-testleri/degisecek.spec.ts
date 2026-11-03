@@ -19,8 +19,8 @@ test.describe('Stok', () => {
   test('depocunun Hareketler ekranı ve teslim paneli yetkisiz istek göndermez (statü listesi 403)', ETIKET, async ({ page, ag, ac }) => {
     test.fail();
     await ac('/stok/hareketler');
-    await page.getByRole('button', { name: /^Malzeme ve teslim/ }).filter({ visible: true }).first().click();
-    const panel = page.getByRole('dialog', { name: 'Malzeme · Teslim' });
+    await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
+    const panel = page.getByRole('dialog', { name: 'Okut' });
     for (const ad of [/^Bana gelen/, /^Elimdekiler/, /^Malzeme iste/]) {
       await panel.getByRole('button', { name: ad }).click();
       await page.getByRole('button', { name: 'Kameraya dön' }).click();

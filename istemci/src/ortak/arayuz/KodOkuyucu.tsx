@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
+import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { useKamera } from '../veri/kamera.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
 import type { OkutmaGecmisi, OkutmaTonu } from './okutma-geribildirimi.ts';
+import { KOMUT_YOK, type KomutIsleyici } from './okuyucu-komutu.ts';
 import './kod-okuyucu.css';
 
 // Kamera, fotoğraf ve el okuyucu tek yerde: okunan metin `okundu`ya gider, ne olduğuna çağıran karar verir. Klavyeden gelen metin
@@ -13,12 +14,18 @@ import './kod-okuyucu.css';
 // `sik` okuyucuyu tek satıra indirir (kamera, kod, bul, fotoğraf); kamera görüntüsü yalnız açıkken yer kaplar, ipucu alanın açıklaması olur.
 // `geribildirim` (1906, `useOkutmaGecmisi`): çağıranın bildirdiği sonuçla alan bir an yeşil, turuncu ya da kırmızı yanar; son beş okutma
 // altta şerittir, ses oradan kapatılır.
+// `komut` (1909, 1912): komut barkodu (CMD:...) `okundu`ya gitmez, ekranın işleyicisine gider; sonucu şeritte görünür. Verilmezse
+// komut da sıradan kod gibi `okundu`ya gider.
 // Kod alanı açılışta odak alır; pencere içindeyse de (pencere ilk odağı `data-ilk-odak`a verir). `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
 }
 function yaziAlaniMi(hedef: EventTarget | null): boolean {
   return hedef instanceof HTMLElement && (hedef.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(hedef.tagName));
+}
+// Okuyucunun dışında bir pencere (onay gibi) açıkken tuşlar o pencerenindir.
+function baskaPencereAcik(kok: HTMLElement | null): boolean {
+  return [...document.querySelectorAll('[role="dialog"]')].some((p) => kok === null || !p.contains(kok));
 }
 const PARLAMA_MS = 1200;
 const TON_ADI: Readonly<Record<OkutmaTonu, string>> = { tamam: 'doğru', uyari: 'uyarı', hata: 'yanlış' };
@@ -59,10 +66,16 @@ function useParlama(g: OkutmaGecmisi | undefined): OkutmaTonu | null {
   return parlak?.ton ?? null;
 }
 
-export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false, geribildirim }: {
+export function KodOkuyucu({ okundu: kodOkundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false, geribildirim, komut }: {
   okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean; dokunmatikteOdakYok?: boolean; sik?: boolean;
-  geribildirim?: OkutmaGecmisi;
+  geribildirim?: OkutmaGecmisi; komut?: KomutIsleyici;
 }) {
+  const okundu = (kod: string) => {
+    const k = komut ? kodTuru(kod) : null;
+    if (!komut || k?.tur !== 'komut') { kodOkundu(kod); return; }
+    const s = komut(k.komut);
+    geribildirim?.bildir(kod, s?.ton ?? 'uyari', s?.metin ?? KOMUT_YOK);
+  };
   const parlak = useParlama(geribildirim);
   const tonu = parlak ? { 'data-ton': parlak } : {};
   const [elle, setElleDurumu] = useState('');
@@ -73,6 +86,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
   useEffect(() => { if (kendiliginden) void ac(); }, [kendiliginden, ac]);
   const [acilistaOdak] = useState(() => !dokunmatikteOdakYok || inceIsaretci());
   const form = useRef<HTMLFormElement | null>(null);
+  const kok = useRef<HTMLDivElement | null>(null);
   useEffect(() => { if (dokunmatikteOdakYok && kamera.hata) form.current?.querySelector('input')?.focus(); }, [dokunmatikteOdakYok, kamera.hata]);
   // Alan odaksızken (tablet) el okuyucunun fiziksel tuşları hiçbir yere yazılmazdı. Odak bir yazı alanında değilse yazdırılabilir tuşlar
   // koda eklenir, Enter gönderir; alan odak almadığı için ekran klavyesi yine açılmaz. Yakalama aşamasında dinlenir: odaktaki düğme
@@ -82,7 +96,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
   useEffect(() => {
     if (acilistaOdak) return;
     const tus = (o: KeyboardEvent) => {
-      if (o.defaultPrevented || o.ctrlKey || o.altKey || o.metaKey || yaziAlaniMi(o.target)) return;
+      if (o.defaultPrevented || o.ctrlKey || o.altKey || o.metaKey || yaziAlaniMi(o.target) || baskaPencereAcik(kok.current)) return;
       if (o.key === 'Enter') {
         const kod = elleSon.current.trim();
         if (kod === '') return;
@@ -112,7 +126,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
   );
   if (sik) {
     return (
-      <div className="tc-kod-okuyucu tc-kod-okuyucu-sik" {...tonu}>
+      <div ref={kok} className="tc-kod-okuyucu tc-kod-okuyucu-sik" {...tonu}>
         <form ref={form} className="tc-kod-okuyucu-satir" onSubmit={gonder}>
           {kamera.acik
             ? <Dugme simge="x" aria-label="Kamerayı kapat" title="Kamerayı kapat" onClick={kamera.kapat} />
@@ -133,7 +147,7 @@ export function KodOkuyucu({ okundu, bekliyor = false, ipucu, kendiliginden = fa
     );
   }
   return (
-    <div className="tc-kod-okuyucu" {...tonu}>
+    <div ref={kok} className="tc-kod-okuyucu" {...tonu}>
       <div className="tc-kod-okuyucu-kamera" data-acik={kamera.acik ? '' : undefined}>
         <video ref={kamera.video} muted playsInline aria-label="Kamera görüntüsü" />
         <canvas ref={kamera.tuval} hidden />

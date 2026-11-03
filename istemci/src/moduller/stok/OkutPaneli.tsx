@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HareketCevabi, OkutCozCevabi, OkutYeri, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Girdi, KodOkuyucu, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, KodOkuyucu, useOkutmaGecmisi, type KomutIsleyici } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
@@ -10,7 +10,7 @@ import {
   type OkutDurumu, type OkutHedefi, type OkutKaynagi, type OkutulanHedef,
 } from './okut-akisi.ts';
 import { BaskaSepetler, Birakma, useSepeteAt, useTasimaSepeti } from './TasimaSepeti.tsx';
-import { stokKodCozAnahtari } from './OkutmaSonucu.tsx';
+import { OkutmaSonucu, stokKodCozAnahtari, type Okunan } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
 import './stok.css';
@@ -35,8 +35,10 @@ const hedefAdi = (h: OkutHedefi): string => (kisiHedefiMi(h) ? h.alici.ad ?? h.i
 // Soru 89: ilk okutmanın sonucu (`sonuc`) okuyucunun altında durur; oradan seçilen iş `sifir`ı artırıp akışı başa alır.
 // `kamerali` (809): kamera açılışta kendiliğinden başlar, görüntü büyük durur; dokunmatikte kod alanı odak almaz ki ekran klavyesi kamerayı örtmesin.
 // `sepetli` (1338 a): art arda okutulan statüsüz malzeme taşıma sepetine düşer; sepet doluyken okutulan yer ya da kişi bırakma ekranını açar.
-export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, sepetli = false, children }: {
-  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; kamerali?: boolean; sepetli?: boolean; children: ReactNode;
+// `komut` (1909, 1912): okuyucunun komut barkodu işleyicisi (Okut panelinde mod seçimi).
+export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, kamerali = false, sepetli = false, komut, children }: {
+  teslimEteGec: (h: OkutulanHedef) => void; okundu?: (kod: string, c: OkutCozCevabi) => void; sifir?: number; sonuc?: ReactNode; kamerali?: boolean; sepetli?: boolean;
+  komut?: KomutIsleyici; children: ReactNode;
 }) {
   const [durum, setDurum] = useState<OkutDurumu>(OKUT_BASI);
   const [sonuc, setSonuc] = useState<string | null>(null);
@@ -86,8 +88,8 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         {sonuc && <p className="tc-stok-bilgi" role="status">{sonuc}</p>}
         {sepetli && sonCevap && sonCevap.tur !== 'raf' && <BaskaSepetler c={sonCevap} />}
         {durum.adim !== 'onay' && (kamerali
-          ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} />
-          : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} />)}
+          ? <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} {...(komut ? { komut } : {})} />
+          : <KodOkuyucu sik okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} ipucu={ipucu} geribildirim={gecmis} {...(komut ? { komut } : {})} />)}
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {raf && raf.gozler.length > 0 && (sepetli
@@ -224,5 +226,34 @@ function Onay({ kaynak, hedef, geri, bitti }: { kaynak: OkutKaynagi; hedef: Okut
       {tasima.onayPenceresi}
       {teslim.onayPenceresi}
     </form>
+  );
+}
+
+// Bilgi modu (1912): okutulan kod çözülür ve gösterilir; akış başlamaz, hiçbir şey yazılmaz. Çözüm panelin okumasıdır (stok.istek);
+// gözler ve lotlar yalnız stok okuması olana görünür (soru 93 a).
+export function BilgiOkut({ komut }: { komut?: KomutIsleyici }) {
+  const gecmis = useOkutmaGecmisi();
+  const sorgu = useQueryClient();
+  const [okunan, setOkunan] = useState<(Okunan & { sira: number }) | null>(null);
+  const coz = useMutation({
+    mutationFn: (kod: string) => api.get<OkutCozCevabi>(`/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent(kod)}`),
+    onError: (e, kod) => gecmis.bildir(kod, 'hata', hataMetni(e)),
+    onSuccess: (c, kod) => {
+      gecmis.bildir(kod, c.tur === 'bilinmiyor' ? 'hata' : 'tamam', okutmaAdi(c));
+      if ((c.tur === 'malzeme' || c.tur === 'yer') && c.stok) sorgu.setQueryData(stokKodCozAnahtari(kod), c.stok);
+      setOkunan((o) => ({ kod, cevap: c, sira: (o?.sira ?? 0) + 1 }));
+    },
+  });
+  const c = okunan?.cevap;
+  return (
+    <div className="tc-stok-okut-ust">
+      <KodOkuyucu kendiliginden dokunmatikteOdakYok okundu={(kod) => coz.mutate(kod)} bekliyor={coz.isPending} geribildirim={gecmis}
+        ipucu="Herhangi bir etiketi okut; ne olduğu ve nerede durduğu görünür, kayıt yapılmaz." {...(komut ? { komut } : {})} />
+      {okunan && c && (c.tur === 'malzeme' || c.tur === 'yer')
+        ? <OkutmaSonucu key={okunan.sira} okunan={okunan} salt sec={() => undefined} kapat={() => setOkunan(null)} />
+        : c?.tur === 'raf' ? <p className="tc-stok-bilgi" role="status">Raf {c.raf.kod} · {c.gozler.length} göz: {c.gozler.map((g) => g.kod).join(', ')}</p>
+        : c && c.tur !== 'bilinmiyor' ? <p className="tc-stok-bilgi" role="status">{okutmaAdi(c)}</p>
+        : !okunan && <DurumKutusu durum="bos" mesaj="Bir etiket okut." />}
+    </div>
   );
 }
