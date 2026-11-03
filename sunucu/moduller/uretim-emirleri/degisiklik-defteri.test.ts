@@ -60,14 +60,27 @@ describe('üretim emri değişiklik defteri (gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('yeni emir deftere yazılmaz; güncelleme eski, yeni değer ve yazan kişiyle düşer, sürüm defterde yer almaz', async () => {
-    assert.deepEqual(await defter('uretim_emri', emir), []);
+  test('yeni emir ekle olarak düşer (1968 a); güncelleme eski, yeni değer ve yazan kişiyle düşer, sürüm defterde yer almaz', async () => {
+    const [ekle, ...fazla] = await defter('uretim_emri', emir);
+    assert.deepEqual(fazla, []);
+    assert.equal(ekle?.islem, 'ekle');
+    assert.equal(ekle?.kisi_id, null);
+    assert.deepEqual(ekle?.alanlar.adet, { eski: null, yeni: 5 });
+    assert.equal(ekle?.alanlar.surum, undefined);
     await kisiyle((db) => db.sorgu('UPDATE uretim_emri SET adet = 7, surum = surum + 1 WHERE id = $1', [emir]));
     const satirlar = await defter('uretim_emri', emir);
-    assert.equal(satirlar.length, 1);
-    assert.deepEqual(satirlar.map(({ islem, alanlar, kisi_id }) => ({ islem, alanlar, kisi_id })), [
+    assert.equal(satirlar.length, 2);
+    assert.deepEqual(satirlar.slice(1).map(({ islem, alanlar, kisi_id }) => ({ islem, alanlar, kisi_id })), [
       { islem: 'guncelle', alanlar: { adet: { eski: 5, yeni: 7 } }, kisi_id: kisi },
     ]);
+  });
+
+  test('uygulamanın açtığı emir yazan kişiyle ekle olarak düşer', async () => {
+    const ist = (await o().sahip.tek<{ id: number }>("SELECT id FROM istasyon WHERE kod = 'DDI'"))!.id;
+    const yeni = (await kisiyle((db) => db.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id) VALUES ('P-DD2', 'Deneme 2', 3, $1, $2) RETURNING id", [ist, kisi]))) as { id: number };
+    const satirlar = await defter('uretim_emri', yeni.id);
+    assert.deepEqual(satirlar.map((x) => [x.islem, x.kisi_id]), [['ekle', kisi]]);
   });
 
   test('değer değişmeyen yazım (yalnız sürüm artışı dahil) satır yazmaz', async () => {

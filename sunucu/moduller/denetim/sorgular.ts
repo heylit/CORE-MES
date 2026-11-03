@@ -173,3 +173,27 @@ export function degisiklikIcerigi(db: Db, id: number): Promise<{ id: number; ala
     'SELECT id, alanlar FROM denetim_degisiklik WHERE id = $1', [id],
   );
 }
+
+export interface AkisSatiriHam {
+  id: number;
+  zaman: string;
+  kisi_id: number | null;
+  tablo: string;
+  anahtar: Record<string, number | string | boolean>;
+  islem: 'ekle' | 'guncelle' | 'sil';
+  alanlar: Record<string, { eski?: unknown; yeni?: unknown }>;
+}
+
+// Değişiklik akışı (1962): verilen tablolarda bir andan bu yana, en yeni önce. Tablo dizini (tablo, zaman DESC) daraltır; önceki
+// sayfanın son kimliği verilirse ondan eskiler gelir.
+export function akisSatirlari(
+  db: Db, s: { tablolar: readonly string[]; baslangic: string; onceId: number | null; sinir: number },
+): Promise<AkisSatiriHam[]> {
+  return db.sorgu<AkisSatiriHam>(
+    `SELECT d.id, ${zamanMetni('d.zaman')} AS zaman, d.kisi_id, d.tablo, d.anahtar, d.islem, d.alanlar
+       FROM denetim_degisiklik d
+      WHERE d.tablo = ANY($1::text[]) AND d.zaman >= $2::timestamptz AND ($3::bigint IS NULL OR d.id < $3)
+      ORDER BY d.zaman DESC, d.id DESC LIMIT $4`,
+    [[...s.tablolar], s.baslangic, s.onceId, s.sinir],
+  );
+}
