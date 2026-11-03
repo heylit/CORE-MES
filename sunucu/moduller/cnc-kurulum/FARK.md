@@ -84,6 +84,7 @@ Doğrulama (tarayıcıda, çerçevesiz prototip):
 ## Eşleştirme Çizim Merkezi'nde (15.10.2026)
 - Kullanıcı isteği: CNC Kurulum'daki makineler doğrudan Çizim Merkezi'nde görünsün, eşleştirme orada yapılsın; "Çizime aktar" kalksın.
 - Toplu aktarım sayfası Çizim Merkezi'nin "CNC makineleri" bölümü oldu (`/cizimler/cnc-makineleri`, ikinci menüde, `belge-merkezi.yaz`).
+- Çizim Merkezi'nin CNC makineleri listesi gömülü listeden değil İstasyonlar'ın aktif CNC makinelerinden kurulur, ayarı eksik olan işaretlenemez (1986, 1988 b, 1989 a); model kurulumdaki katalog modelinden üretilir.
   Ekran bu modülde kalır (modeli prototipin kütüphanesi üretir; cnc-kurulum zaten cizimler/disari.ts'yi ithal eder, ters ithal döngü olurdu).
 - Satır makinenin Çizim Merkezi'ndeki durumunu gösterir (aynı adlı 3B model belgesi ve bağlı istasyon); var olan eşleşme seçili gelir.
 - CNC ikinci menüsündeki "Çizim Merkezi'ne aktar" maddesi ve çerçevenin köşe düğmesi kalktı; eski `/cnc-kurulum/aktar` adresi yeni sayfaya

@@ -3,8 +3,9 @@ import type { Baglama } from './durum.ts';
 import { defaults } from './durum.ts';
 import { D } from './veri/cncdata.ts';
 import { htype, isLatheTool } from './veri/takim-turu.ts';
+import { kullanilabilir, tezgahKimligi, tezgahSatiri, type TezgahSatiri } from './tezgah-satiri.ts';
 import type { Tezgah as SunucuTezgahi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
-import type { IsMalzemesi, Kalem, Kontrol, Tezgah, TezgahTuru } from './veri/tipler.ts';
+import type { IsMalzemesi, Kalem, Tezgah } from './veri/tipler.ts';
 
 // Prototipin seçici işlevleri (satır 17299-17357); adlar, sıra ve yan etkiler prototipinkidir (bt eksik bağlamayı, tools eksik
 // magazini durumda kurar: prototip de okurken tamamlar, kayıt ilk kullanıcı eyleminde yazılır).
@@ -35,44 +36,12 @@ export function sunucuTezgahiGuncelle(t: SunucuTezgahi): void {
   dirtyUsage();
 }
 
-const MODEL_VARSAYILANI: Record<TezgahTuru, string> = { mill: 'm_vmc', lathe: 'm_lathe', millturn: 'm_tf' };
-const KONTROL_ADI: Record<Kontrol, string> = { heid: 'Heidenhain', iso: 'ISO' };
-const TIP_ADI: Record<TezgahTuru, string> = { mill: 'Freze', lathe: 'Torna', millturn: 'Torna-freze' };
 // Sunucuya taşınan alanlar; `mo` bunların dışında yalnız `info` ve öteki ayrıntıları taşır.
 export const MOTOR_ALANLARI = ['type', 'ctrl', 'taper', 'pockets', 'rpm', 'spindle', 'live', 'liveRpm', 'manual', 'kind'] as const;
 
-export const tezgahKimligi = (t: Pick<SunucuTezgahi, 'makineId' | 'kod'>): string => D.MACHINES.find((m) => m.no === t.kod)?.id ?? `mk${String(t.makineId)}`;
-
-export interface TezgahSatiri { sunucu: SunucuTezgahi; tezgah: Partial<Tezgah> & { id: string }; tam: boolean }
-
-function sunucudan(t: SunucuTezgahi): TezgahSatiri {
-  const id = tezgahKimligi(t);
-  const gomulu = D.MACHINES.find((m) => m.id === id);
-  const a = t.ayar;
-  const ayar: Partial<Tezgah> = {};
-  if (a) {
-    if (a.tur !== null) ayar.type = a.tur;
-    if (a.kontrol !== null) ayar.ctrl = a.kontrol;
-    if (a.konik !== null) ayar.taper = a.konik;
-    if (a.cepSayisi !== null) ayar.pockets = a.cepSayisi;
-    if (a.devir !== null) ayar.rpm = a.devir;
-    if (a.isMiliDevri !== null) ayar.spindle = a.isMiliDevri;
-    if (a.canliTakim !== null) ayar.live = a.canliTakim;
-    if (a.canliDevir !== null) ayar.liveRpm = a.canliDevir;
-    if (a.elle !== null) ayar.manual = a.elle;
-    if (a.modelTuru !== null) ayar.kind = a.modelTuru;
-  }
-  const mo = state.mo[id] ?? {};
-  const duzeltme: Partial<Tezgah> = {};
-  for (const [k, v] of Object.entries(mo)) if (k !== 'name' && k !== 'no' && k !== 'id' && v !== undefined) (duzeltme as Record<string, unknown>)[k] = v;
-  const r: Partial<Tezgah> & { id: string } = Object.assign({}, gomulu ?? {}, ayar, duzeltme, {
-    id, no: t.kod, name: t.ad, makineId: t.makineId, istasyonId: t.istasyonId,
-  });
-  if (r.type && !r.kind) r.kind = MODEL_VARSAYILANI[r.type];
-  const tam = !!(r.type && r.ctrl && r.taper && r.pockets && r.rpm);
-  if (tam && !gomulu) r.code = `${TIP_ADI[r.type!]} · ${r.taper!} · ${KONTROL_ADI[r.ctrl!]}`;
-  return { sunucu: t, tezgah: r, tam };
-}
+export { tezgahKimligi };
+export type { TezgahSatiri };
+const sunucudan = (t: SunucuTezgahi): TezgahSatiri => tezgahSatiri(t, state.mo[tezgahKimligi(t)]);
 
 // Tanımlar'ın tezgâh satırları; null: liste kurulmadı.
 export function sunucuTezgahSatirlari(): TezgahSatiri[] | null {
@@ -86,8 +55,7 @@ export function allMachines(): Tezgah[] {
   const satirlar = tezgahKaynagi() === 'sunucu' ? sunucuTezgahSatirlari() : null;
   const liste: Tezgah[] = satirlar === null
     ? D.MACHINES.concat(state.customMachines ?? []).map((m) => Object.assign({}, m, state.mo[m.id] ?? {}))
-    // Pasif makine yalnız seçiliyse kalır (kurulumu açılabilsin).
-    : satirlar.filter((x) => x.tam && (x.sunucu.aktif || x.tezgah.id === state.machine)).map((x) => x.tezgah as Tezgah);
+    : satirlar.filter((x) => kullanilabilir(x, state.machine)).map((x) => x.tezgah as Tezgah);
   return liste.map((m) => {
     const r: Tezgah = Object.assign({}, m);
     r.baseName = r.name;

@@ -5,19 +5,21 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { Tezgah } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { MakineOzeti } from './yeni/sahne/model-uret.ts';
-import { onerilenIstasyon } from './CncEslestirme.tsx';
+import { onerilenIstasyon, varsayilanIstasyon } from './CncEslestirme.tsx';
 import { rotalar } from './rotalar.tsx';
 
 // Sahne testte model üretmez (model-uret.test.ts sınar): liste ve hata testten verilir, üretilen GLB tek bayttır.
 const sahne = vi.hoisted(() => ({
   liste: [] as MakineOzeti[], hatalar: new Map<string, string>(), metinler: [] as (string | undefined)[], uretilen: [] as string[],
+  tezgahlar: [] as unknown[],
 }));
 vi.mock('./yeni/sahne/model-uret.ts', () => ({
-  makineListesi: (metin: string | undefined) => { sahne.metinler.push(metin); return sahne.liste; },
-  modelUret: (id: string, metin: string | undefined) => {
-    sahne.uretilen.push(id); sahne.metinler.push(metin);
+  makineListesi: (tezgahlar: unknown, metin: string | undefined) => { sahne.tezgahlar.push(tezgahlar); sahne.metinler.push(metin); return sahne.liste; },
+  modelUret: (id: string, tezgahlar: unknown, metin: string | undefined) => {
+    sahne.uretilen.push(id); sahne.tezgahlar.push(tezgahlar); sahne.metinler.push(metin);
     const h = sahne.hatalar.get(id);
     if (h !== undefined) throw new Error(h);
     const m = sahne.liste.find((x) => x.makineId === id);
@@ -40,6 +42,8 @@ const GRUPLAR: IstasyonSecimiCevabi['gruplar'] = [
 // Ekranın kaydı; sayfa onu yalnız sahneye verir.
 const KAYIT_ANAHTARI = 'cnc-kurulum-motoru.v1';
 const KAYIT = JSON.stringify({ customMachines: [{ id: 'ozel', name: 'Elle' }] });
+// Sunucunun makine kayıtları; sayfa onları yalnız sahneye verir (liste kuralını model-uret.test.ts sınar).
+const TEZGAHLAR: Tezgah[] = [{ makineId: 7, kod: 'F-01', ad: 'Beş eksen', istasyonId: 5, aktif: true, ayar: null, surum: 0 }];
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown }
 
@@ -56,6 +60,7 @@ function sunucuKur(kullanici: Kullanici, gruplar: IstasyonSecimiCevabi['gruplar'
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/cnc-kurulum/ben') return json(200, { kisi: { id: 5, ad: 'Deneme Yazar' }, yazabilir: false, hazirlikOnaylayabilir: false, takimDegistirebilir: false });
     if (yol === '/cnc-kurulum/kayitlar') return json(200, { kayitlar: [{ anahtar: KAYIT_ANAHTARI, bicim: 'metin', deger: KAYIT, surum: 3 }] });
+    if (yol === '/cnc-kurulum/tezgahlar') return json(200, { tezgahlar: TEZGAHLAR });
     if (yol === '/istasyonlar/secim') return json(200, { gruplar } satisfies IstasyonSecimiCevabi);
     if (yontem === 'GET' && yol.startsWith('/cizimler?')) {
       const ara = new URLSearchParams(yol.slice(yol.indexOf('?') + 1)).get('ara');
@@ -86,11 +91,11 @@ function ac(yol = '/cizimler/cnc-makineleri') {
 }
 
 const makineler = (...l: MakineOzeti[]) => { sahne.liste = l; };
-const F01: MakineOzeti = { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen' };
+const F01: MakineOzeti = { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen', istasyonId: null, eksik: false };
 
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); cizimler.onizlemeGonder.mockReset();
-  sahne.liste = []; sahne.hatalar.clear(); sahne.metinler = []; sahne.uretilen = [];
+  sahne.liste = []; sahne.hatalar.clear(); sahne.metinler = []; sahne.uretilen = []; sahne.tezgahlar = [];
 });
 
 describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () => {
@@ -100,9 +105,39 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     expect(onerilenIstasyon(null, GRUPLAR)).toBeNull();
   });
 
+  it('TA-11: makinenin İstasyonlar\'daki istasyonu önerilir; seçilemeyen istasyonda aynı kodlu istasyona düşer (1989 a)', () => {
+    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'F-01', ad: 'Freze', istasyonId: 6, eksik: false }, GRUPLAR)).toBe(6);
+    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'F-01', ad: 'Freze', istasyonId: 99, eksik: false }, GRUPLAR)).toBe(5);
+    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'X', ad: 'Freze', istasyonId: null, eksik: false }, GRUPLAR)).toBeNull();
+  });
+
+  it('TA-12: makinenin istasyonu satırda seçili gelir, kod tutmasa da', async () => {
+    sunucuKur(YAZAR);
+    makineler({ makineId: 'mk8', no: 'X-9', ad: 'Kodsuz', istasyonId: 6, eksik: false });
+    ac();
+    const satir = (await screen.findByText('X-9 · Kodsuz')).closest('li') as HTMLElement;
+    await waitFor(() => { expect((within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('6'); });
+  });
+
+  it('TA-13: ayarı eksik makine listede görünür, işaretlenemez, Tümünü seç onu almaz (1988 b)', async () => {
+    sunucuKur(YAZAR);
+    makineler(F01, { makineId: 'mk9', no: 'F-90', ad: 'Eksik', istasyonId: null, eksik: true });
+    ac('/cizimler/cnc-makineleri?makine=mk9');
+    const eksik = (await screen.findByText('F-90 · Eksik')).closest('li') as HTMLElement;
+    const kutu = within(eksik).getByRole('checkbox') as HTMLInputElement;
+    expect(kutu.disabled).toBe(true);
+    expect(kutu.checked).toBe(false);
+    expect(within(eksik).getByRole('note').textContent).toContain('Ayarı eksik');
+    await within(eksik).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Tümünü seç' }));
+    expect(screen.getByRole('button', { name: '1 makineyi eşleştir' })).toBeTruthy();
+    expect(kutu.checked).toBe(false);
+    expect((screen.getByRole('checkbox', { name: 'Tümünü seç' }) as HTMLInputElement).checked).toBe(true);
+  });
+
   it('TA-02: işaretlenen makine Çizim Merkezi\'ne yazılır, yayınlanır ve seçilen istasyona bağlanır; sayfa kayıt yazmaz', async () => {
     const istekler = sunucuKur(YAZAR);
-    makineler(F01, { makineId: 'ozel', no: null, ad: 'Elle' });
+    makineler(F01, { makineId: 'ozel', no: null, ad: 'Elle', istasyonId: null, eksik: false });
     ac();
     const satir = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
     const secim = within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement;
@@ -116,6 +151,9 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     // 1135 a: model sahneden, ekranın kaydıyla (elle eklenen makineler ve düzeltmeler) üretilir.
     expect(sahne.uretilen).toEqual(['f5a']);
     expect(sahne.metinler.every((m) => m === KAYIT)).toBe(true);
+    // 1986: makineler sunucudaki kayıtlardır; sahne listeyi ve modeli onlarla kurar.
+    expect(sahne.tezgahlar.length).toBeGreaterThan(0);
+    expect(sahne.tezgahlar.every((t) => JSON.stringify(t) === JSON.stringify(TEZGAHLAR))).toBe(true);
     // 780 a: küçük resim yayındaki revizyonun önizlemesidir; kareler elde olan GLB'den üretilir, dosya yeniden indirilmez.
     expect(cizimler.onizlemeGonder).toHaveBeenCalledTimes(1);
     expect(cizimler.onizlemeGonder.mock.calls[0]?.[0]).toMatchObject({ id: 30, durum: 'yayinda' });
@@ -130,7 +168,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
 
   it('TA-03: modeli üretilemeyen makinede hata satırda görünür, öbür işlem yapılmaz', async () => {
     const istekler = sunucuKur(YAZAR);
-    makineler({ makineId: 'ozel', no: null, ad: 'Elle' });
+    makineler({ makineId: 'ozel', no: null, ad: 'Elle', istasyonId: null, eksik: false });
     sahne.hatalar.set('ozel', 'Makine modeli bulunamadı.');
     ac();
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Elle' }));
@@ -150,7 +188,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
 
   it('TA-05: ana sayfadan gelen makine işaretli gelir; eşleşmeyen işaretli satır istasyonun nasıl açılacağını ve İstasyonlar bağlantısını gösterir', async () => {
     sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.istasyonlar'] });
-    makineler(F01, { makineId: 'ozel', no: 'F-77', ad: 'Elle' });
+    makineler(F01, { makineId: 'ozel', no: 'F-77', ad: 'Elle', istasyonId: null, eksik: false });
     ac('/cizimler/cnc-makineleri?makine=ozel');
     const ozel = (await screen.findByText('F-77 · Elle')).closest('li') as HTMLElement;
     const dmu = screen.getByText('F-01 · Beş eksen').closest('li') as HTMLElement;
@@ -180,7 +218,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
       { id: 40, ad: 'F-01 · Beş eksen', yayinda: true, istasyonId: 6 },
       { id: 41, ad: 'T-09 · Taslak torna', yayinda: false, istasyonId: null },
     ]);
-    makineler(F01, { makineId: 't9', no: 'T-09', ad: 'Taslak torna' }, { makineId: 'yeni', no: null, ad: 'Yeni' });
+    makineler(F01, { makineId: 't9', no: 'T-09', ad: 'Taslak torna', istasyonId: null, eksik: false }, { makineId: 'yeni', no: null, ad: 'Yeni', istasyonId: null, eksik: false });
     ac();
     const dmu = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
     expect(await within(dmu).findByText('Eşleşti: T-01 - Deneme torna. Haritaya eklenebilir.')).toBeTruthy();
