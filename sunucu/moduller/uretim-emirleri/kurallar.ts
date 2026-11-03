@@ -1537,3 +1537,17 @@ export function emirIlerlemesi(adet: number, adimlar: readonly IlerlemeAdimi[], 
     adimlar: satirlar.map((x) => ({ opNo: x.a.opNo, ad: x.a.ad, dal: x.a.dal, durum: x.a.durum, hedef: x.hedef, yapilan: x.yapilan, yuzde: x.yuzde })),
   };
 }
+
+// 1979 (2003 c): plandaki pay terminalde izindir; sayaç adımda tektir. Payın ilerlemesi kişinin bu adımda saydığıdır (sağlam ve karar bekleyen); makine payının
+// sayılanı sayım makine tutana dek (2009 b göçü) bilinmez: null. fazla payı aşan adettir, iş engellenmez.
+export const PAYI_YOK_MAKINE = 'Bu makinenin bu adımda planda payı yok; çalışan adıma yalnız payı olan makine eklenir.';
+export const MAKINE_ZATEN_ADIMDA = 'Bu makine bu adımda zaten çalışıyor.';
+export interface PlanPayi { no: number; adet: number; makineId: number | null; kisiId: number | null }
+export const payiVarMi = (paylar: readonly PlanPayi[], k: { kisiId?: number; makineId?: number }): boolean =>
+  paylar.some((p) => (k.kisiId !== undefined && p.kisiId === k.kisiId) || (k.makineId !== undefined && p.makineId === k.makineId));
+export function payIlerlemesi(paylar: readonly PlanPayi[], kisiSaglami: ReadonlyMap<number, number>) {
+  return [...paylar].sort((a, b) => a.no - b.no).map((p) => {
+    const sayilan = p.kisiId === null ? null : (kisiSaglami.get(p.kisiId) ?? 0);
+    return { ...p, sayilan, fazla: sayilan === null ? null : Math.max(0, sayilan - p.adet) };
+  });
+}

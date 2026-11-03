@@ -105,6 +105,16 @@ export const makineDoluAyrintisi = z.object({
   baslama: z.string(),
 });
 export const makineDevralGovdesi = z.object({ kullanimId: KIMLIK }).strict();
+// 1979 (2003 c): çalışan adıma planda payı olan makine eklenir.
+export const makineEkleGovdesi = z.object({ makineId: KIMLIK }).strict();
+// Adımın plandaki payları: kaynak makine ya da kişi; sayilan kişinin bu adımda saydığı (sağlam ve karar bekleyen),
+// makine payında null. fazla payı aşan adettir. Bölünmemiş adımda liste boştur.
+export const adimPaylariCevabi = z.object({
+  paylar: z.array(z.object({
+    no: KIMLIK, adet: z.number().int().positive(), makine: z.object({ id: KIMLIK, ad: z.string() }).nullable(), kisi: z.object({ id: KIMLIK, ad: z.string() }).nullable(),
+    sayilan: z.number().int().nullable(), fazla: z.number().int().nonnegative().nullable(),
+  })),
+});
 // Aynı işe katılım (kart #1144): kişinin o işte kesintisiz çalıştığı aralık. Kapanış: kişi duraklattı, kişi ayrıldı ya da
 // emir duraklatıldı/durduruldu/bitti ("emir"). Açık aralık kapanış taşımaz.
 export const KATILIM_KAPANISLARI = ['duraklat', 'ayril', 'emir'] as const;
@@ -337,6 +347,8 @@ export type SayimKaydi = z.output<typeof sayimGovdesi>;
 export type SayimGovdesi = z.input<typeof sayimGovdesi>;
 export type MakineDoluAyrintisi = z.output<typeof makineDoluAyrintisi>;
 export type MakineDevralGovdesi = z.input<typeof makineDevralGovdesi>;
+export type MakineEkleGovdesi = z.input<typeof makineEkleGovdesi>;
+export type AdimPaylariCevabi = z.output<typeof adimPaylariCevabi>;
 export type Katilim = z.output<typeof katilimSemasi>;
 export type KatilimCevabi = z.output<typeof katilimCevabi>;
 export type KatilimKapanisi = (typeof KATILIM_KAPANISLARI)[number];

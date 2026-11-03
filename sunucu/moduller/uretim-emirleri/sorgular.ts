@@ -2665,3 +2665,10 @@ export function tasinanGirdileriGetir(db: Db, emirIdleri: readonly number[]): Pr
     [[...new Set(emirIdleri)]],
   );
 }
+
+// 1979: adımın kişi başına net saydığı (sağlam ve ilk parça kararı bekleyen, düzeltme dahil); pay ilerlemesi bundan okunur.
+export const kisiSaglamlariGetir = (db: Db, isEmriId: number): Promise<{ kisiId: number; saglam: number }[]> =>
+  db.sorgu(
+    `SELECT kisi_id AS "kisiId", sum(adet)::int AS saglam FROM uretim_sayimi WHERE is_emri_id = $1 AND tur IN ('saglam', 'karar_bekliyor') GROUP BY kisi_id ORDER BY kisi_id`,
+    [isEmriId],
+  );
