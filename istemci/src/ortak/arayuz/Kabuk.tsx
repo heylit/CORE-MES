@@ -20,13 +20,17 @@ import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomu
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_GRUBU, yeniEkranAdresiMi, yeniEkranBaglantilari, yeniEkranEslesmesi } from '../rota/yeni-ekran-menusu.ts';
-import { usePerformans } from '../veri/gorunum.ts';
+import { performansOturumdaAc, usePerformans } from '../veri/gorunum.ts';
+import { hareketliEtki } from '../veri/etki.ts';
+import { takilmaIzle } from '../veri/takilma.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { useKurumAdi } from '../veri/kurum.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
 import { useTema } from '../veri/tema.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { BaglantiSeridi } from './BaglantiSeridi.tsx';
+import { KisayolYardimi } from './KisayolYardimi.tsx';
+import { YuklemeCizgisi } from './YuklemeCizgisi.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
 import { GenelArama } from './GenelArama.tsx';
 import { GeziDugmeleri } from './GeziDugmeleri.tsx';
@@ -320,6 +324,14 @@ export function Kabuk({
 
   useEffect(() => { tumuYaz(false); }, [konum.pathname]);
 
+  // Takılma koruması (kart 2092, karar 2081-29): kare hızı düşünce bu oturumda sade kipe geçilir ve bir kez söylenir.
+  const [sadelesti, sadelestiYaz] = useState(false);
+  useEffect(() => {
+    // Hareket yoksa (kapalı, azaltılmış, ölçülemeyen ortam) koruyacak bir şey de yoktur.
+    if (performans || !hareketliEtki('takilma-korumasi')) return undefined;
+    return takilmaIzle(() => { performansOturumdaAc(); sadelestiYaz(true); });
+  }, [performans]);
+
   // Sayfa değişince içerik bir kez girer: öznitelik kaldırılıp yeniden konunca CSS animasyonu baştan oynar (hareket.css).
   const kok = useRef<HTMLDivElement>(null);
   const ilkSayfa = useRef(true);
@@ -392,6 +404,14 @@ export function Kabuk({
     <div className="tc-kabuk-cati">
       {seritler.map((s) => <s.serit key={s.anahtar} />)}
       <BaglantiSeridi />
+      <YuklemeCizgisi />
+      <KisayolYardimi />
+      {sadelesti && (
+        <div className="tc-kabuk-sade-not" role="status">
+          <span>Cihaz yavaşladı; bu oturumda hareketler sadeleşti.</span>
+          <button type="button" className="tc-kabuk-sade-kapat" onClick={() => { sadelestiYaz(false); }}>Tamam</button>
+        </div>
+      )}
       <div
         ref={kok}
         className="tc-kabuk"

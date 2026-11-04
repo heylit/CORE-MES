@@ -1,0 +1,11 @@
+/* Ekranın üstünde ince yükleme çizgisi (kart 2092, karar 2081-22): bekleyiş sürerken yavaşlayarak ilerler, bitince
+   tamamlanıp söner. Azaltılmış harekette ilerlemez, yalnız görünür. */
+.tc-yukleme-cizgisi {
+  position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-bildirim); height: 3px;
+  background: var(--hazard); transform-origin: left; transform: scaleX(.85); pointer-events: none;
+}
+.tc-yukleme-cizgisi[data-durum="bitti"] { transform: scaleX(1); opacity: 0; transition: transform var(--hareket-sure) ease-out, opacity var(--hareket-panel) ease-out var(--hareket-sure); }
+@media (prefers-reduced-motion: no-preference) {
+  .tc-yukleme-cizgisi[data-durum="suruyor"] { animation: tc-yukleme-ilerle 8s cubic-bezier(.1, .7, .2, 1); }
+}
+@keyframes tc-yukleme-ilerle { from { transform: scaleX(0); } }

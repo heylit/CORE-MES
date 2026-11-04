@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ETKI_OZNITELIGI, etkileriUygula } from './gorunum.ts';
 
 const kok = document.documentElement;
-const YENI_ACIK = { 'pencere-kayma': true, 'pencere-cekme': true, 'sekme-cizgi': true, 'menu-gecis': true, 'bildirim-kayma': true, 'hizli-artis': true, 'satir-kaydirma': true, 'tablo-iskelet': true, 'kopyala': true };
+const YENI_ACIK = { 'pencere-kayma': true, 'pencere-cekme': true, 'sekme-cizgi': true, 'menu-gecis': true, 'bildirim-kayma': true, 'hizli-artis': true, 'satir-kaydirma': true, 'tablo-iskelet': true, 'kopyala': true, 'canli-vurgu': true, 'yukleme-cizgisi': true, 'hata-odagi': true, 'toplu-islem': true, 'kisayol-yardimi': true, 'kaydedildi': true, 'yapiskan-baslik': true, 'takilma-korumasi': true };
 afterEach(() => { kok.removeAttribute(ETKI_OZNITELIGI); });
 
 describe('etkileşim etkileri kökte (kart 2086)', () => {
