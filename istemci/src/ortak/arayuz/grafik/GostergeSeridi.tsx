@@ -1,6 +1,7 @@
 import type { GidisatOlcusu } from '#paylasilan/sozlesme/pano.ts';
 import { birimli, kiyasYonu } from '../GidisatKarti.tsx';
 import { Simge } from '../Simge.tsx';
+import { useSayac } from './hareket.ts';
 import './grafik.css';
 
 function Egilim({ seri }: { seri: readonly number[] }) {
@@ -16,6 +17,12 @@ function Egilim({ seri }: { seri: readonly number[] }) {
   );
 }
 
+// Değer sayarak gelir; tam sayı hedefin ara değerleri de tam yazılır, kesir titremesi olmaz.
+function SayanDeger({ deger, birim }: { deger: number; birim: string }) {
+  const gorunen = useSayac(deger) ?? deger;
+  return <>{birimli(Number.isInteger(deger) ? Math.round(gorunen) : gorunen, birim)}</>;
+}
+
 // "Bir bakışta" (kart 1773): gidişat ölçüleri kutu kutu; değer, kıyas ve eğilim. Dağılım ölçüsü grafik bölgesindedir.
 export function GostergeSeridi({ olcular }: { olcular: readonly GidisatOlcusu[] }) {
   const tekil = olcular.filter((o) => o.dagilim.length === 0);
@@ -28,7 +35,7 @@ export function GostergeSeridi({ olcular }: { olcular: readonly GidisatOlcusu[] 
         return (
           <li key={o.anahtar} className="tc-kart tc-gosterge">
             <span className="tc-gosterge-ad">{o.ad}</span>
-            <span className="tc-gosterge-deger mono" data-bos={o.deger === null || undefined}>{o.deger === null ? 'Veri yok' : birimli(o.deger, o.birim)}</span>
+            <span className="tc-gosterge-deger mono" data-bos={o.deger === null || undefined}>{o.deger === null ? 'Veri yok' : <SayanDeger deger={o.deger} birim={o.birim} />}</span>
             {kiyas !== null && (
               <span className="tc-gosterge-kiyas" data-yon={yon}>
                 {yon !== 'notr' && <Simge ad={(o.deger ?? 0) > (o.kiyas?.deger ?? 0) ? 'up' : 'down'} boyut="k" />}{kiyas}
