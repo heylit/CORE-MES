@@ -633,6 +633,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
   });
 
   describe('hareket dili ve açılış', () => {
+    const HEPSI_ACIK = { 'grafik-hareket': true, 'deger-balonu': true, dalga: true, 'gantt-yardim': true, 'gantt-kayma': true, 'durdur-basili': true };
     const oku = (cerez: string | null = yonetici) => istek(cerez, 'GET', '/gorunum');
 
     test('her oturum varsayılanı okur; oturumsuz 401; yalnız ayar yazan değiştirir; listede olmayan değer reddedilir', async () => {
@@ -640,7 +641,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       for (const { rol, cerez } of bayraksizlar) {
         const cevap = await oku(cerez);
         assert.equal(cevap.statusCode, 200, `${rol.ad}: ${cevap.body}`);
-        assert.deepEqual(cevap.json(), { hareket: 'orta', acilis: 'yok', acilisSuresi: 2, gecisHizi: 'normal' }, rol.ad);
+        assert.deepEqual(cevap.json(), { hareket: 'orta', acilis: 'yok', acilisSuresi: 2, gecisHizi: 'normal', etkiler: HEPSI_ACIK }, rol.ad);
         assert.equal((await degistir('ultra', cerez, 'kabuk.hareket')).statusCode, 403, rol.ad);
       }
       for (const kotu of ['', 'hizli', 'Ultra', 5, null, true]) {
@@ -656,8 +657,12 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       for (const kotu of ['', 'ultra', 'Hizli']) assert.equal((await degistir(kotu, yonetici, 'kabuk.gecis-hizi')).statusCode, 400, kotu);
       assert.equal((await degistir(3.5, yonetici, 'kabuk.acilis-suresi')).statusCode, 200);
       assert.equal((await degistir('yavas', yonetici, 'kabuk.gecis-hizi')).statusCode, 200);
+      // Kart 2086: etkiler tek tek kapanır; boolean dışı değer reddedilir.
+      for (const kotu of ['', 'acik', 1, null]) assert.equal((await degistir(kotu, yonetici, 'kabuk.etki-dalga')).statusCode, 400, String(kotu));
+      assert.equal((await degistir(false, yonetici, 'kabuk.etki-dalga')).statusCode, 200);
+      assert.equal((await degistir(false, yonetici, 'kabuk.etki-durdur-basili')).statusCode, 200);
       for (const { rol, cerez } of bayraksizlar) {
-        assert.deepEqual((await oku(cerez)).json(), { hareket: 'ultra', acilis: 'rastgele', acilisSuresi: 3.5, gecisHizi: 'yavas' }, rol.ad);
+        assert.deepEqual((await oku(cerez)).json(), { hareket: 'ultra', acilis: 'rastgele', acilisSuresi: 3.5, gecisHizi: 'yavas', etkiler: { ...HEPSI_ACIK, dalga: false, 'durdur-basili': false } }, rol.ad);
       }
     });
   });

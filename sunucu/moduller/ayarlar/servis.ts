@@ -6,7 +6,7 @@ import { AYAR_ANAHTARLARI, AYAR_TANIMLARI, ayarAnahtariMi, ayarTanimi } from '#p
 import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
 import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
-import { gorunumCevabi, kurumLogosuSemasi } from '#paylasilan/sozlesme/ayarlar.ts';
+import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayar, AyarlarCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
@@ -87,6 +87,13 @@ export async function karsilamaOku(db: Db): Promise<KarsilamaCevabi> {
   };
 }
 
+// Sorgular sırayla: aynı istemciye eşzamanlı sorgu verilmez.
+async function etkileriOku(db: Db): Promise<NonNullable<GorunumCevabi['etkiler']>> {
+  const etkiler = {} as Record<Etki, boolean>;
+  for (const e of ETKILER) etkiler[e] = await sistemAyariOku(db, `kabuk.etki-${e}`);
+  return etkiler;
+}
+
 // Değer tanımın seçeneklerinden gelir; seçenek listesi sözleşmedeki listeyle aynıdır (paylasilan testi denetler).
 export async function gorunumOku(db: Db): Promise<GorunumCevabi> {
   return gorunumCevabi.parse({
@@ -94,6 +101,7 @@ export async function gorunumOku(db: Db): Promise<GorunumCevabi> {
     acilis: await sistemAyariOku(db, 'kabuk.acilis'),
     acilisSuresi: await sistemAyariOku(db, 'kabuk.acilis-suresi'),
     gecisHizi: await sistemAyariOku(db, 'kabuk.gecis-hizi'),
+    etkiler: await etkileriOku(db),
   });
 }
 

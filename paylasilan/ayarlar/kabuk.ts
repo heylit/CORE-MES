@@ -111,4 +111,48 @@ export const KABUK_AYARLARI = {
     baslik: 'Geçiş hızı',
     aciklama: 'Sayfa geçişleri ve panellerin hızı; hareket dilinin sürelerini kısaltır ya da uzatır.',
   },
+  // Etkileşim etkileri (kart 2086, kararlar 2081-7..10): kurum geneli, tek tek kapatılır; varsayılan açık. İstemci kapalıları kökte
+  // data-etki-kapali ile taşır (istemci/src/ortak/veri/etki.ts).
+  'kabuk.etki-grafik-hareket': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Grafik hareketi',
+    aciklama: 'Grafikler açılırken çubuklar büyür, çizgiler çizilir; özet sayılar sayarak gelir.',
+  },
+  'kabuk.etki-deger-balonu': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Grafik değer balonu',
+    aciklama: 'Grafikte imlecin ya da seçili noktanın yanında değer balonu açılır, diğer çubuklar soluklaşır.',
+  },
+  'kabuk.etki-dalga': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Düğme dalgası',
+    aciklama: 'Düğmeye dokunulan yerden kısa bir dalga yayılır.',
+  },
+  'kabuk.etki-gantt-yardim': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Gantt sürükleme yardımları',
+    aciklama: 'Atölye çizelgesinde iş sürüklenirken eski yerde kesikli kutu, tezgâh ve saat ipucu, çakışma çerçevesi; iş bilgisi tema uyumlu kartta görünür.',
+  },
+  'kabuk.etki-gantt-kayma': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Gantt kenarda kayma',
+    aciklama: 'Atölye çizelgesinde iş kenara sürüklenince çizelge o yöne kendiliğinden kayar.',
+  },
+  'kabuk.etki-durdur-basili': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Terminalde Durdur için basılı tut',
+    aciklama: "Üretim Terminali'nde Durdur kısa süre basılı tutulunca çalışır; kapalıyken tek dokunuşla duruş nedeni penceresi açılır.",
+  },
 } as const satisfies Record<string, AyarTanimi>;

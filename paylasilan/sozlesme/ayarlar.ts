@@ -119,12 +119,21 @@ export type KarsilamaCevabi = z.output<typeof karsilamaCevabi>;
 export const HAREKET_SEVIYELERI = ['kapali', 'sade', 'orta', 'cesur', 'ultra'] as const;
 export const ACILIS_TURLERI = ['yok', 'tezgah', 'talas', 'lazer', 'cmm', 'dokum', '3b', 'rastgele'] as const;
 export const GECIS_HIZLARI = ['hizli', 'normal', 'yavas'] as const;
+// Ayar anahtarı `kabuk.etki-<ad>`; istemcideki liste (ortak/veri/etki.ts) bununla aynıdır.
+export const ETKILER = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili'] as const;
+export type Etki = (typeof ETKILER)[number];
 export const gorunumCevabi = z.object({
   hareket: z.enum(HAREKET_SEVIYELERI),
   acilis: z.enum(ACILIS_TURLERI),
   // Saniye; ayar boşsa gösteri kendi süresiyle oynar.
   acilisSuresi: z.number().min(0.5).max(5).nullable(),
   gecisHizi: z.enum(GECIS_HIZLARI),
+  // Etkileşim etkileri (kart 2086): her biri kurumca kapatılabilir; true açık. Sunucu hep yazar; alan yoksa (eski sunucu)
+  // istemci hepsini açık sayar.
+  etkiler: z.object({
+    'grafik-hareket': z.boolean(), 'deger-balonu': z.boolean(), dalga: z.boolean(),
+    'gantt-yardim': z.boolean(), 'gantt-kayma': z.boolean(), 'durdur-basili': z.boolean(),
+  }).optional(),
 });
 export type GorunumCevabi = z.output<typeof gorunumCevabi>;
 export type HareketSeviyesi = (typeof HAREKET_SEVIYELERI)[number];
