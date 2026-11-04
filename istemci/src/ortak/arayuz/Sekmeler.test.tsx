@@ -79,3 +79,31 @@ describe('Sekmeler kaydırma işareti', () => {
     expect(uc.defaultPrevented).toBe(false);
   });
 });
+
+describe('Sekmeler kayan alt çizgi (kart 2090, karar 2081-13)', () => {
+  it('ölçülemeyen ortamda çizgi kurulmaz; ölçülünce seçili sekmenin yerine ve genişliğine oturur, seçim değişince kayar', () => {
+    render(<Sekmeler etiket="Ölçüsüz" sekmeler={SEKMELER} secili="a" sec={() => undefined} />);
+    expect(screen.getByRole('tablist', { name: 'Ölçüsüz' }).hasAttribute('data-cizgi')).toBe(false);
+    cleanup();
+
+    const en = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    const sol = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetLeft');
+    const sira = (el: HTMLElement) => [...(el.parentElement?.querySelectorAll('[role="tab"]') ?? [])].indexOf(el);
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get(this: HTMLElement) { return this.getAttribute('role') === 'tab' ? 80 + sira(this) * 10 : 0; } });
+    Object.defineProperty(HTMLElement.prototype, 'offsetLeft', { configurable: true, get(this: HTMLElement) { return this.getAttribute('role') === 'tab' ? sira(this) * 100 : 0; } });
+    try {
+      const { rerender } = render(<Sekmeler etiket="Ölçülü" sekmeler={SEKMELER} secili="a" sec={() => undefined} />);
+      const serit = screen.getByRole('tablist', { name: 'Ölçülü' });
+      const cizgi = serit.querySelector<HTMLElement>('.tc-sekmeler-cizgi');
+      expect(serit.hasAttribute('data-cizgi')).toBe(true);
+      expect(cizgi?.style.getPropertyValue('--cizgi-x')).toBe('0px');
+      expect(cizgi?.style.getPropertyValue('--cizgi-en')).toBe('80px');
+      rerender(<Sekmeler etiket="Ölçülü" sekmeler={SEKMELER} secili="c" sec={() => undefined} />);
+      expect(cizgi?.style.getPropertyValue('--cizgi-x')).toBe('200px');
+      expect(cizgi?.style.getPropertyValue('--cizgi-en')).toBe('100px');
+    } finally {
+      if (en) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', en);
+      if (sol) Object.defineProperty(HTMLElement.prototype, 'offsetLeft', sol);
+    }
+  });
+});

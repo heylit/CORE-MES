@@ -34,3 +34,9 @@
 @supports not (position-area: bottom) {
   .tc-menu { inset: auto var(--b-3) var(--b-3); max-width: none; margin: 0; }
 }
+
+/* Kısa açılış (kart 2090, karar 2081-14): menü düğmeden hafif aşağı kayarak belirir; kapanış anındadır. */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="menu-gecis"]) .tc-menu { animation: tc-menu-gir var(--hareket-sure) var(--hareket-egri); }
+}
+@keyframes tc-menu-gir { from { opacity: 0; transform: translateY(calc(-1 * var(--hareket-kayma))) scale(var(--hareket-kucul)); } }

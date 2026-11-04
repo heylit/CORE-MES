@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { Simge } from './Simge.tsx';
 import { useSeritKaydirma } from './serit-kaydirma.ts';
@@ -22,6 +22,30 @@ interface Ozellikler<A extends string> {
 export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Ozellikler<A>) {
   const kutu = useRef<HTMLDivElement>(null);
   const { kenar, okOlaylari } = useSeritKaydirma(kutu);
+  const cizgi = useRef<HTMLSpanElement>(null);
+
+  // Seçili sekmenin alt çizgisi tek parçadır ve yeni sekmeye kayarak geçer (kart 2090, karar 2081-13). Ölçülemeyen
+  // ortamda (genişlik 0) çizgi kurulmaz, sekmenin kendi alt kenarı görünür. İlk yerleşim kaymaz; geçiş ölçümden sonra açılır.
+  useLayoutEffect(() => {
+    const kap = kutu.current;
+    const c = cizgi.current;
+    if (!kap || !c) return undefined;
+    const yerlestir = () => {
+      const sekme = kap.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!sekme || sekme.offsetWidth === 0) { kap.removeAttribute('data-cizgi'); return; }
+      c.style.setProperty('--cizgi-x', `${String(sekme.offsetLeft)}px`);
+      c.style.setProperty('--cizgi-en', `${String(sekme.offsetWidth)}px`);
+      if (!kap.hasAttribute('data-cizgi')) {
+        kap.setAttribute('data-cizgi', '');
+        requestAnimationFrame(() => { c.setAttribute('data-hazir', ''); });
+      }
+    };
+    yerlestir();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const izle = new ResizeObserver(yerlestir);
+    izle.observe(kap);
+    return () => { izle.disconnect(); };
+  }, [secili, sekmeler]);
 
   const tus = (o: KeyboardEvent) => {
     const sira = sekmeler.findIndex((s) => s.anahtar === secili);
@@ -66,6 +90,7 @@ export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Oz
         </button>
       ))}
       <span className="tc-sekmeler-ok tc-sekmeler-ok-sag" aria-hidden="true" {...okOlaylari(1)}><Simge ad="chev-right" boyut="k" /></span>
+      <span ref={cizgi} className="tc-sekmeler-cizgi" aria-hidden="true" />
     </div>
   );
 }

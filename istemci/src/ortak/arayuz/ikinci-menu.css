@@ -36,3 +36,11 @@
 .tc-ikinci-ok-sol { left: 0; padding-left: var(--b-1); background: linear-gradient(to right, var(--bg2) 45%, transparent); }
 .tc-ikinci-ok-sag { right: 0; justify-content: flex-end; padding-right: var(--b-1); background: linear-gradient(to left, var(--bg2) 45%, transparent); }
 .tc-ikinci-kap[data-sol] .tc-ikinci-ok-sol, .tc-ikinci-kap[data-sag] .tc-ikinci-ok-sag { display: flex; }
+
+/* Etkin madde değişince vurgu çizgisi ortadan açılır, zemin belirir (kart 2090, karar 2081-14). */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="menu-gecis"]) .tc-ikinci-madde-etkin { animation: tc-ikinci-etkin var(--hareket-sure) ease-out; }
+  :root:not([data-etki-kapali~="menu-gecis"]) .tc-ikinci-madde-etkin::before { animation: tc-ikinci-vurgu var(--hareket-panel) var(--hareket-egri-panel); }
+}
+@keyframes tc-ikinci-etkin { from { background: transparent; box-shadow: none; } }
+@keyframes tc-ikinci-vurgu { from { transform: scaleX(0); } }

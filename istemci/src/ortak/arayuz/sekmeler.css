@@ -28,3 +28,14 @@
   min-width: var(--b-5); padding: 0 var(--b-1); border-radius: var(--yari-tam); background: var(--stop); color: var(--parlak);
   font-size: var(--yazi-xs); line-height: var(--b-5); text-align: center;
 }
+
+/* Kayan alt çizgi (kart 2090, karar 2081-13): ölçüldükten sonra seçili sekmenin kendi kenarının yerine geçer. Etki
+   kapatıldıysa sekmenin kendi kenarı kalır. */
+.tc-sekmeler { position: relative; }
+.tc-sekmeler-cizgi { display: none; }
+:root:not([data-etki-kapali~="sekme-cizgi"]) .tc-sekmeler[data-cizgi] > .tc-sekme[aria-selected="true"] { border-bottom-color: transparent; }
+:root:not([data-etki-kapali~="sekme-cizgi"]) .tc-sekmeler[data-cizgi] > .tc-sekmeler-cizgi {
+  display: block; position: absolute; left: 0; bottom: 0; width: var(--cizgi-en); height: 3px;
+  transform: translateX(var(--cizgi-x)); background: var(--hazard); pointer-events: none;
+}
+.tc-sekmeler-cizgi[data-hazir] { transition: transform var(--hareket-panel) var(--hareket-egri-panel), width var(--hareket-panel) var(--hareket-egri-panel); }
