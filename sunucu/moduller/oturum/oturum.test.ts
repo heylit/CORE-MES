@@ -363,6 +363,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
     muhasebe_finans: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'finans.oku', 'finans.maliyet-oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...FIRMA, 'satin-alma.oku', ...SAYFA('uretim-emirleri', 'emirler', 'stok', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.finans', ...SIPARIS_YAZ, 'projeler.oku',
       // Fatura-sipariş bağını dar işlemle kurar, satın alma kaydı yazmaz (modul-test K8 a, 2077-3 a).
       'satin-alma.fatura-bagla',
+      // Vergi beyanını "verildi" işaretler (1846, TKV-2 a).
+      'finans.beyan-yaz',
     ],
     idari_isler: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'kisiler.oku', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU,
       // Kapı kaydını yazar, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).

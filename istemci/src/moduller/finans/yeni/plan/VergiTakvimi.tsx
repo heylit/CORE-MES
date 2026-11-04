@@ -5,11 +5,13 @@ import { kisaTarih, tarih, tl, YOK } from '../bicim.ts';
 import { taxDay, ymAdd, ymLabel, ymLong, type FinansMotoru, type KdvAyi } from '../motor.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { Grafik, saydam, temelAyar, type Renkler } from './grafik.tsx';
+import { GecmisBeyanlar } from './GecmisBeyanlar.tsx';
 import { OzetSeridi } from './parcalar.tsx';
 import { kalanGun, kalanGunTonu, vergiOzeti } from './plan.ts';
 
-// Vergi takvimi (prototip VIEWS.vergi): kayıtlardan hesaplanan KDV ve yaklaşan beyan tarihleri. Yalnız okuma.
-export function VergiTakvimi({ finans }: EkranOzellikleri) {
+// Vergi takvimi (prototip VIEWS.vergi): kayıtlardan hesaplanan KDV ve yaklaşan beyan tarihleri. Tek yazma geçmiş
+// beyanın "verildi" işaretidir (1846).
+export function VergiTakvimi({ finans, yetki }: EkranOzellikleri) {
   if (!finans) return null;
   const { motor } = finans;
   const v = vergiOzeti(motor);
@@ -56,6 +58,7 @@ export function VergiTakvimi({ finans }: EkranOzellikleri) {
           <KdvGrafigi motor={motor} />
         </Kart>
       </div>
+      <GecmisBeyanlar bugun={motor.bugun} yazabilir={yetki.beyanYaz} />
       <Kart baslik="KDV dönem tablosu" baslikEki={<span className="tc-fy-not">Devreden KDV sonraki aya aktarılır</span>}>
         <Tablo<KdvAyi> etiket="KDV dönem tablosu" sutunlar={sutunlar} satirlar={v.aylar.slice().reverse()} satirAnahtari={(m) => m.ym} />
       </Kart>

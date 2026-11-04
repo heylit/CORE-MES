@@ -625,3 +625,12 @@ export const siparisFaturalari = (db: Db, siparisIdler: readonly number[]) => db
           b.sevkiyat_isi_id AS "sevkiyatIsiId", b.iade_belge_id AS "iadeBelgeId", rtrim(b.para_birimi) AS "paraBirimi", b.tutar::text AS tutar,
           b.toplam::text AS toplam, round(b.tutar * b.kur, 2)::text AS "netTl", b.toplam_tl::text AS "toplamTl"
      FROM finans_belge b WHERE b.siparis_id = ANY($1::int[]) AND b.durum <> 'iptal' ORDER BY b.siparis_id, b.belge_tarihi, b.id`, [siparisIdler]);
+
+// Vergi beyanı işaretleri (1846); satır yoksa beyan verilmemiştir.
+export interface BeyanSatiri { sonGun: string; kod: string; isaretleyenId: number; isaretleme: string }
+export const beyanlar = (db: Db, baslangic: string, bitis: string) =>
+  db.sorgu<BeyanSatiri>(`SELECT to_char(son_gun, 'YYYY-MM-DD') AS "sonGun", kod, isaretleyen_id AS "isaretleyenId", ${zamanMetni('isaretleme')} AS isaretleme
+       FROM finans_vergi_beyani WHERE son_gun BETWEEN $1::date AND $2::date ORDER BY son_gun, kod`, [baslangic, bitis]);
+export const beyanYaz = (db: Db, sonGun: string, kod: string, verildi: boolean, kisi: number) => verildi
+  ? db.sorgu(`INSERT INTO finans_vergi_beyani (son_gun, kod, isaretleyen_id) VALUES ($1, $2, $3) ON CONFLICT (son_gun, kod) DO NOTHING`, [sonGun, kod, kisi])
+  : db.sorgu('DELETE FROM finans_vergi_beyani WHERE son_gun = $1 AND kod = $2', [sonGun, kod]);

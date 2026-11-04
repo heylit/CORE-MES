@@ -13,7 +13,7 @@ import {
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
-  skorListesiCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
+  skorListesiCevabi, vergiBeyaniGovdesi, vergiBeyaniSorgusu, vergiBeyanlariCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
 } from '#paylasilan/sozlesme/finans.ts';
 import type { ListeAdi } from './sorgular.ts';
 
@@ -200,6 +200,11 @@ export const paraUclari = [
 
   // ---- danışman ve süreç ----
   uc({ yontem: 'POST', yol: '/finans/oneriler/durum', yetki: 'finans.yaz', govde: oneriDurumuGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.oneriDurumu(db, kullanici, govde) }),
+  // Vergi beyanı (1846): okuma finans.oku, işaret ayrı işlem; zaman ve kişi sunucudan.
+  uc({ yontem: 'GET', yol: '/finans/vergi-beyanlari', yetki: 'finans.oku', sorgu: vergiBeyaniSorgusu, cevap: vergiBeyanlariCevabi,
+    isle: ({ db, sorgu }) => servis.vergiBeyanlari(db, sorgu.baslangic, sorgu.bitis) }),
+  uc({ yontem: 'POST', yol: '/finans/vergi-beyani/isaretle', yetki: 'finans.beyan-yaz', tekrarKorumali: true, govde: vergiBeyaniGovdesi, cevap: vergiBeyaniGovdesi,
+    isle: ({ db, kullanici, govde }) => servis.vergiBeyaniIsaretle(db, kullanici, govde, tesisGunu(new Date())) }),
   uc({ yontem: 'POST', yol: '/finans/kapanis/isaretle', yetki: 'finans.yaz', govde: kapanisGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kapanisIsaretle(db, kullanici, govde) }),
 ];
 

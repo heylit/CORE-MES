@@ -112,11 +112,12 @@ export interface FinansYetkisi {
   kurYaz: boolean;
   firmaOku: boolean;
   firmaYaz: boolean;
+  beyanYaz: boolean;
 }
 export function yetkiHesapla(y: Pick<Yetki, 'var'>): FinansYetkisi {
   return {
     oku: y.var('finans.oku'), yaz: y.var('finans.yaz'), yonet: y.var('finans.yonet'), kurYaz: y.var('finans.kur-yaz'),
-    firmaOku: y.var('musteri-tedarikci.oku'), firmaYaz: y.var('musteri-tedarikci.yaz'),
+    firmaOku: y.var('musteri-tedarikci.oku'), firmaYaz: y.var('musteri-tedarikci.yaz'), beyanYaz: y.var('finans.beyan-yaz'),
   };
 }
 export function useFinansYetkisi(): FinansYetkisi {

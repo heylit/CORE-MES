@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { VergiBeyaniSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { ornekHamVeri } from '../ornek-ham-veri.ts';
 import { json, sunucuKur, YAZAN } from '../test-ortak.tsx';
 import { Butce, NakitPlani, VergiTakvimi } from './index.tsx';
 import { finansiKur } from '../veri.ts';
-import { ekranAc, finansKur, OKUR, tuvalsiz, YAZAR, YONETICI } from './test-yardim.tsx';
+import { BUGUN, ekranAc, finansKur, OKUR, tuvalsiz, YAZAR, YONETICI } from './test-yardim.tsx';
 
 beforeEach(tuvalsiz);
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -98,8 +99,49 @@ describe('Bütçe', () => {
   });
 });
 
+// Geçmiş beyanlar (1846): biri verilmiş, biri işaretsiz; bugün son günü olan liste dışıdır.
+const beyanSunucusu = () => {
+  let satirlar: VergiBeyaniSatiri[] = [
+    { sonGun: '2026-09-26', kod: 'muhtasar', ad: 'Muhtasar ve Prim Hizmet', donem: 'Ağustos 2026', verildi: true, isaretleyen: 'Deneme Muhasebe', isaretleme: '2026-09-25T10:00:00.000Z' },
+    { sonGun: '2026-09-28', kod: 'kdv', ad: 'KDV beyannamesi', donem: 'Ağustos 2026', verildi: false, isaretleyen: null, isaretleme: null },
+    { sonGun: BUGUN, kod: 'kdv-tevkifat', ad: 'KDV tevkifat', donem: 'Eylül 2026', verildi: false, isaretleyen: null, isaretleme: null },
+  ];
+  return sunucuKur(YAZAN, {
+    'GET /finans/vergi-beyanlari': () => json(200, { satirlar }),
+    'POST /finans/vergi-beyani/isaretle': (g) => {
+      const { sonGun, kod, verildi } = g as Pick<VergiBeyaniSatiri, 'sonGun' | 'kod' | 'verildi'>;
+      satirlar = satirlar.map((s) => (s.sonGun === sonGun && s.kod === kod ? { ...s, verildi, isaretleyen: verildi ? 'Deneme Yönetici' : null } : s));
+      return json(200, { tamam: true });
+    },
+  });
+};
+
 describe('Vergi takvimi', () => {
+  it('geçmiş beyanlar: verilmemiş "Kaçırıldı", işaretlenince "Verildi" (finans.beyan-yaz)', async () => {
+    const istekler = beyanSunucusu();
+    ekranAc(VergiTakvimi, YONETICI);
+    const liste = await screen.findByRole('list', { name: 'Geçmiş beyanlar' });
+    expect(within(liste).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(liste).getByText('Kaçırıldı')).toBeTruthy();
+    expect(within(liste).getByText(/İşaretleyen: Deneme Muhasebe/)).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/finans/vergi-beyanlari')).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: /KDV beyannamesi.*verildi/ }));
+    await waitFor(() => expect(within(liste).queryByText('Kaçırıldı')).toBeNull());
+    expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ sonGun: '2026-09-28', kod: 'kdv', verildi: true });
+  });
+
+  it('reddedilen: finans.beyan-yaz yoksa işaret kutusu kapalı, istek gitmez', async () => {
+    const istekler = beyanSunucusu();
+    ekranAc(VergiTakvimi, YAZAR);
+    await screen.findByRole('list', { name: 'Geçmiş beyanlar' });
+    const kutu = screen.getByRole<HTMLInputElement>('checkbox', { name: /KDV beyannamesi.*verildi/ });
+    expect(kutu.disabled).toBe(true);
+    fireEvent.click(kutu);
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
   it('özet, yaklaşan beyanlar ve KDV dönem tablosu; yazma düğmesi yok', () => {
+    beyanSunucusu();
     ekranAc(VergiTakvimi, YONETICI);
     expect(within(screen.getByLabelText('KDV özeti')).getByText('Geçen ay ödenecek KDV')).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Yaklaşan beyan ve ödemeler' })).getAllByRole('listitem').length).toBeGreaterThan(0);
@@ -108,6 +150,7 @@ describe('Vergi takvimi', () => {
   });
 
   it('ayın kaydı yoksa bu ayın tutarları "—" yazar, sıfır uydurmaz', () => {
+    beyanSunucusu();
     ekranAc(VergiTakvimi, OKUR, finansiKur(ornekHamVeri(), '2030-01-15'));
     const ozet = screen.getByLabelText('KDV özeti');
     expect(within(ozet).getAllByText('—').length).toBeGreaterThanOrEqual(3);
