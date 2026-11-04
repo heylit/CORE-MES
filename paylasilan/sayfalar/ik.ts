@@ -24,6 +24,7 @@ export const IK_IKINCI_MENU = {
     { baslik: 'Çalışanlar', maddeler: [
       { anahtar: 'personel', baslik: 'Personel', yol: '/ik/personel', simge: 'user', islem: 'ik.oku' },
       { anahtar: 'org', baslik: 'Organizasyon', yol: '/ik/organizasyon', simge: 'layers', islem: 'ik.oku' },
+      { anahtar: 'bes', baslik: 'BES takibi', yol: '/ik/bes', simge: 'lira', islem: 'ik.oku' },
     ] },
     { baslik: 'Süreçler', maddeler: [
       { anahtar: 'izin', baslik: 'İzinler', yol: '/ik/izinler', simge: 'flag', islem: 'ik.oku' },

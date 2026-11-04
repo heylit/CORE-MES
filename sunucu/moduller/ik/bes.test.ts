@@ -4,7 +4,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 
-// BES hareketleri (kart 1939): tablonun kendi korumaları. Uç sınamaları sunucu parçasıyla bu dosyaya eklenir.
+// BES hareketleri (kart 1939): tablonun kendi korumaları. Uç sınamaları bes-uclar.test.ts'tedir.
 const kisit = (ad: string) => (h: unknown) => (h as { constraint?: string }).constraint === ad;
 
 describe('İK BES hareketi tablosu (gerçek PostgreSQL)', () => {
@@ -51,6 +51,7 @@ describe('İK BES hareketi tablosu (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().sorgu('DELETE FROM ik_bes_hareket WHERE no = $1', [no]), kisit('ik_bes_hareket_silinmez'));
     await assert.rejects(vt().sorgu("UPDATE ik_bes_hareket SET tarih = '2026-04-02' WHERE no = $1", [no]), kisit('ik_bes_hareket_degismez'));
     await assert.rejects(vt().sorgu("UPDATE ik_bes_hareket SET tur = 'cayma', katki_orani = NULL WHERE no = $1", [no]), kisit('ik_bes_hareket_degismez'));
+    await assert.rejects(vt().sorgu('UPDATE ik_bes_hareket SET onceki_bes_katilim = true WHERE no = $1', [no]), kisit('ik_bes_hareket_degismez'));
     await vt().sorgu('UPDATE ik_bes_hareket SET iptal = true WHERE no = $1', [no]);
     await assert.rejects(vt().sorgu('UPDATE ik_bes_hareket SET iptal = false WHERE no = $1', [no]), kisit('ik_bes_hareket_iptal_kesin'));
   });

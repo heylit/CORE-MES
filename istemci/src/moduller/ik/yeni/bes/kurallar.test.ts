@@ -68,5 +68,8 @@ describe('BES kuralları', () => {
     expect(besGirdisiDenetle({ ...bos, tur: 'cayma' }, eski, GUN)['tur']).toMatch(/süresi dolmuş/);
     const gonullu = besSatiri(a, [h('emp_a', 'gonullu_katilim', '2026-10-01')]);
     expect(besGirdisiDenetle({ ...bos, tur: 'cayma' }, gonullu, GUN)['tur']).toMatch(/yalnız otomatik/);
+    const cikti = besSatiri(a, [h('emp_a', 'gonullu_katilim', '2026-08-01'), h('emp_a', 'ayrilma', '2026-10-01')]);
+    expect(besGirdisiDenetle({ ...bos, tur: 'gonullu_katilim', tarih: '2026-09-15' }, cikti, GUN)['tarih']).toMatch(/son hareketin/);
+    expect(besGirdisiDenetle({ ...bos, tur: 'gonullu_katilim', tarih: '2026-10-01' }, cikti, GUN)).toEqual({});
   });
 });

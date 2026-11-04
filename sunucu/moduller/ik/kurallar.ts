@@ -1,5 +1,7 @@
 import type { VeriIslemi } from '#paylasilan/islemler.ts';
 import type { IkAlani, IkRolu, IkTuru, PuantajDurumu } from '#paylasilan/sozlesme/ik.ts';
+import { BES_GIRIS_TURLERI } from '#paylasilan/sozlesme/ik-bes.ts';
+import type { BesTuru } from '#paylasilan/sozlesme/ik-bes.ts';
 
 /* İnsan Kaynakları kuralları: IK-1..IK-26. Saf fonksiyonlar; veritabanı ve saat yok (bugün parametre olarak gelir). */
 
@@ -808,4 +810,60 @@ export function ilkIstasyonHatasi(istasyon: { isMerkeziId: number } | undefined,
 // İlk atama işe giriş gününde başlar; işe giriş geçmişteyse atama bugünden (geçmiş tarihli atama girilmez).
 export function ilkAtamaGunu(iseGiris: unknown, bugun: string): string | undefined {
   return typeof iseGiris === 'string' && iseGiris > bugun ? iseGiris : undefined;
+}
+
+/* ---------------- BES hareketi (kart 1939, 1940 a) ---------------- */
+
+export const besGirisiMi = (t: string): boolean => (BES_GIRIS_TURLERI as readonly string[]).includes(t);
+export interface BesHareketOzu { no: number; tur: string; tarih: string; iptal: boolean }
+const besSirasi = (a: BesHareketOzu, b: BesHareketOzu): number => (a.tarih === b.tarih ? a.no - b.no : a.tarih < b.tarih ? -1 : 1);
+const gecerliBes = (h: readonly BesHareketOzu[]): BesHareketOzu[] => h.filter((x) => !x.iptal).sort(besSirasi);
+
+// Cayma süresi otomatik katılımdan sonra 2 aydır (VARSAYIM: ekranla aynı kural; mevzuat metniyle doğrulanmadı).
+export const BES_CAYMA_AYI = 2;
+export function besAyEkle(gun: string, ay: number): string {
+  const [y, a, g] = gun.split('-').map(Number) as [number, number, number];
+  const toplam = y * 12 + (a - 1) + ay;
+  const yy = Math.floor(toplam / 12);
+  const aa = (toplam % 12) + 1;
+  const sonGun = new Date(Date.UTC(yy, aa, 0)).getUTCDate();
+  return `${String(yy).padStart(4, '0')}-${String(aa).padStart(2, '0')}-${String(Math.min(g, sonGun)).padStart(2, '0')}`;
+}
+
+export interface BesGirdiOzu { tur: BesTuru; tarih: string; oran: number | null; sirket: string | null }
+// Ekrandaki besGirdisiDenetle ile aynı kurallar; durum kişinin geçerli hareketlerinin sonuncusundan çıkar.
+export function besHareketDenetle(g: BesGirdiOzu, hareketler: readonly BesHareketOzu[], bugun: string): KuralHatasi | null {
+  if (g.tarih > bugun) return dogrulama('İleri tarihli hareket girilmez.', 'tarih');
+  const gecerli = gecerliBes(hareketler);
+  const son = gecerli.at(-1) ?? null;
+  const icerde = son !== null && besGirisiMi(son.tur);
+  if (son !== null && g.tarih < son.tarih) return dogrulama('Hareket tarihi son hareketin tarihinden önce olamaz.', 'tarih');
+  if (besGirisiMi(g.tur)) {
+    if (icerde) return dogrulama('Personel zaten BES\'te; önce çıkışını girin.', 'tur');
+    return null;
+  }
+  if (g.oran !== null) return dogrulama('Katkı oranı yalnız girişte yazılır.', 'oran');
+  if (g.sirket !== null) return dogrulama('Emeklilik şirketi yalnız girişte yazılır.', 'sirket');
+  if (!icerde) return dogrulama('Personel BES\'te değil; çıkış girilemez.', 'tur');
+  if (g.tur === 'cayma') {
+    if (son.tur !== 'otomatik_katilim') return dogrulama('Cayma yalnız otomatik katılımda vardır; Ayrılma seçin.', 'tur');
+    if (g.tarih > besAyEkle(son.tarih, BES_CAYMA_AYI)) return dogrulama('Cayma süresi dolmuş; Ayrılma seçin.', 'tur');
+  }
+  return null;
+}
+
+// 1940 a: bordrodaki BES kesinti işareti son geçerli hareketten çıkar (giriş açar, çıkış kapatır). Geçerli hareket kalmadıysa
+// işaret ilk hareket yazılmadan önceki değerine döner.
+export function besIsareti(hareketler: readonly (BesHareketOzu & { onceki: boolean | null })[]): boolean | null {
+  const son = gecerliBes(hareketler).at(-1);
+  if (son !== undefined) return besGirisiMi(son.tur);
+  const ilk = [...hareketler].sort((a, b) => a.no - b.no)[0];
+  return ilk === undefined ? null : ilk.onceki;
+}
+
+// 1940 a: personel formundaki BES işareti salt okunurdur; kayıt yazımı işareti kayıttaki gibi bırakır (yeni kayıtta işaret yoktur).
+// Dönen değer undefined ise gövdede işaret alanı olmaz.
+export function korunanBesIsareti(kayitli: Govde | null): unknown {
+  const v = kayitli?.['besKatilim'];
+  return v === null ? undefined : v;
 }

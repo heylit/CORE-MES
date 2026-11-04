@@ -91,7 +91,7 @@ export function AlanGirdisi({ f, deger, degistir, hata, b }: {
     case 'isaret':
       return (
         <div className="tc-ikp-genis">
-          <IsaretKutusu etiket={f.l} name={f.k} checked={Boolean(deger)} onChange={(o) => { degistir(o.target.checked); }} />
+          <IsaretKutusu etiket={f.l} name={f.k} checked={Boolean(deger)} disabled={f.salt} onChange={(o) => { degistir(o.target.checked); }} />
           {f.ipucu && <p className="tc-ikp-ipucu">{f.ipucu}</p>}
         </div>
       );

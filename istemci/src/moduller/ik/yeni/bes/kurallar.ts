@@ -107,6 +107,7 @@ export function besGirdisiDenetle(g: BesGirdisi, durum: BesSatiri | null, gun: s
   if (!g.tur || !durum) return h;
   if (girisMi(g.tur)) {
     if (durum.durum === 'bes') h['tur'] = 'Personel zaten BES\'te; önce çıkışını girin.';
+    else if (durum.cikis && g.tarih && g.tarih < durum.cikis.tarih) h['tarih'] = 'Hareket tarihi son hareketin tarihinden önce olamaz.';
     if (g.oran.trim() !== '') {
       const oran = Number(g.oran.replace(',', '.'));
       if (!Number.isFinite(oran) || oran <= 0 || oran > 100) h['oran'] = 'Oran 0 ile 100 arasında olmalı.';

@@ -7,6 +7,7 @@ import {
   ikTopluCevabi, ikTopluGovde, ikVeriCevabi, ikYazCevabi,
   girisKartiCevabi, girisKartiKaldirGovdesi, girisKartiParametresi, girisKartiVerGovdesi, ikGirisKartlariCevabi, ikHesapRolleriCevabi, ikIseAlCevabi, ikIseAlGovdesi, ikIstasyonUyumsuzluklariCevabi,
 } from '#paylasilan/sozlesme/ik.ts';
+import { ikBesCevabi, ikBesHareketGirdisi, ikBesIptalGovdesi, ikBesIptalParametresi, ikBesYazCevabi } from '#paylasilan/sozlesme/ik-bes.ts';
 import { IK_ALANLARI } from './kurallar.ts';
 import * as servis from './servis.ts';
 
@@ -35,6 +36,16 @@ export const uclar: Uc[] = [
   uc({ yontem: 'GET', yol: '/ik/ozet', yetki: 'ik.oku', cevap: ikOzetiCevabi, isle: ({ db, kullanici }) => servis.panoOzeti(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/ik/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi, isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
   ...alanUclari,
+  // BES takibi (kart 1939, 1940 a): okuma İK kapsamına göre süzülür; hareket ve iptal ayrı komutlar, ücret yetkisiyle (BES kesintisi bordroya girer).
+  uc({ yontem: 'GET', yol: '/ik/bes', yetki: 'ik.oku', cevap: ikBesCevabi, isle: ({ db, kullanici }) => servis.besGetir(db, kullanici) }),
+  uc({
+    yontem: 'POST', yol: '/ik/bes/hareket', yetki: 'ik.ucret-yaz', govde: ikBesHareketGirdisi, cevap: ikBesYazCevabi,
+    isle: ({ db, kullanici, govde }) => servis.besHareketEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ik/bes/hareket/:id/iptal', yetki: 'ik.ucret-yaz', parametre: ikBesIptalParametresi, govde: ikBesIptalGovdesi, cevap: ikBesYazCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.besHareketIptal(db, kullanici, parametre.id, govde.surum),
+  }),
   // Çalışanın kendi izin talebi (IK-9) ve onaycının kararı (IK-7, IK-8).
   uc({
     yontem: 'POST', yol: '/ik/izinler/:kimlik/talep', yetki: 'ik.izin-talep', parametre: ikKimlikParametresi, govde: ikKaydetGovdesi, cevap: ikYazCevabi,

@@ -611,3 +611,60 @@ export function takvimIzinSatirlari(db: Db, baslangic: string, bitis: string, ki
 export function girisKartiPersoneli(db: Db, kisiId: number): Promise<{ is_merkezi_id: number | null } | null> {
   return db.tek<{ is_merkezi_id: number | null }>('SELECT is_merkezi_id FROM ik_personel WHERE kisi_id = $1 AND NOT iptal', [kisiId]);
 }
+
+/* ---------------- BES hareketi (kart 1939) ---------------- */
+
+export interface BesHareketSatiri {
+  no: number;
+  personel: string;
+  tur: string;
+  tarih: string;
+  katki_orani: number | null;
+  emeklilik_sirketi: string | null;
+  aciklama: string | null;
+  onceki_bes_katilim: boolean | null;
+  iptal: boolean;
+  surum: number;
+  yazan_kisi_id: number;
+}
+const BES_SECIMI = `h.no, p.kimlik AS personel, h.tur, h.tarih::text AS tarih, h.katki_orani::float8 AS katki_orani, h.emeklilik_sirketi, h.aciklama,
+  h.onceki_bes_katilim, h.iptal, h.surum, h.yazan_kisi_id`;
+
+// Verilen personelin (null: bütün personelin) hareketleri, iptal edilenler dahil; sıra tarih, sonra yazılış.
+export function besHareketleri(db: Db, personeller: readonly string[] | null = null): Promise<BesHareketSatiri[]> {
+  return db.sorgu<BesHareketSatiri>(
+    `SELECT ${BES_SECIMI} FROM ik_bes_hareket h JOIN ik_personel p ON p.no = h.personel_no
+      WHERE $1::text[] IS NULL OR p.kimlik = ANY($1::text[]) ORDER BY h.tarih, h.no`,
+    [personeller === null ? null : [...personeller]],
+  );
+}
+
+export function besHareketKilitle(db: Db, no: number): Promise<BesHareketSatiri | null> {
+  return db.tek<BesHareketSatiri>(`SELECT ${BES_SECIMI} FROM ik_bes_hareket h JOIN ik_personel p ON p.no = h.personel_no WHERE h.no = $1 FOR UPDATE OF h`, [no]);
+}
+
+export interface BesHareketYazimi {
+  personel: string; tur: string; tarih: string; oran: number | null; sirket: string | null; aciklama: string | null; onceki: boolean | null; kisiId: number;
+}
+export async function besHareketEkle(db: Db, y: BesHareketYazimi): Promise<number> {
+  const r = await db.tek<{ no: number }>(
+    `INSERT INTO ik_bes_hareket (personel_no, tur, tarih, katki_orani, emeklilik_sirketi, aciklama, onceki_bes_katilim, yazan_kisi_id)
+     SELECT p.no, $2, $3::date, $4, $5, $6, $7, $8 FROM ik_personel p WHERE p.kimlik = $1 RETURNING no`,
+    [y.personel, y.tur, y.tarih, y.oran, y.sirket, y.aciklama, y.onceki, y.kisiId],
+  );
+  return r!.no;
+}
+
+// Sürüm koşullu; false: sürüm ilerlemiş.
+export async function besHareketIptal(db: Db, no: number, surum: number): Promise<boolean> {
+  return (await db.tek('UPDATE ik_bes_hareket SET iptal = true, surum = surum + 1 WHERE no = $1 AND surum = $2 AND NOT iptal RETURNING no', [no, surum])) !== null;
+}
+
+// 1940 a: BES kesinti işareti yalnız BES hareketinden yazılır; personel kaydının sürümü ilerler (açık form eski sürümle yazamaz).
+export async function personelBesIsaretiYaz(db: Db, kimlik: string, deger: boolean | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE ik_personel SET bes_katilim = $2, surum = surum + 1, guncelleyen_kisi_id = $3, guncelleme = now()
+      WHERE kimlik = $1 AND bes_katilim IS DISTINCT FROM $2`,
+    [kimlik, deger, kisiId],
+  );
+}

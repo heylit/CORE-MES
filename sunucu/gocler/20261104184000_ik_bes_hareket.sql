@@ -12,6 +12,9 @@ CREATE TABLE ik_bes_hareket (
   emeklilik_sirketi text CONSTRAINT ik_bes_hareket_sirket_bicimi
     CHECK (emeklilik_sirketi IS NULL OR (btrim(emeklilik_sirketi) <> '' AND char_length(emeklilik_sirketi) <= 120)),
   aciklama text CONSTRAINT ik_bes_hareket_aciklama_bicimi CHECK (aciklama IS NULL OR (btrim(aciklama) <> '' AND char_length(aciklama) <= 300)),
+  -- 1940 a: hareket yazılırken personelin BES kesinti işareti (ik_personel.bes_katilim). Kişinin bütün hareketleri iptal edilince işaret
+  -- ilk hareketin bu değerine döner; işaret null olabildiği için sütun da null olabilir.
+  onceki_bes_katilim boolean,
   iptal boolean NOT NULL DEFAULT false,
   surum int NOT NULL DEFAULT 1 CONSTRAINT ik_bes_hareket_surum_pozitif CHECK (surum > 0),
   yazan_kisi_id int NOT NULL CONSTRAINT ik_bes_hareket_yazan_fk REFERENCES kisi (id),
@@ -28,7 +31,7 @@ BEGIN
   IF TG_OP IN ('DELETE', 'TRUNCATE') THEN
     RAISE EXCEPTION 'BES hareketi silinmez; iptal edilir' USING ERRCODE = 'check_violation', CONSTRAINT = 'ik_bes_hareket_silinmez';
   END IF;
-  IF (NEW.personel_no, NEW.tur, NEW.tarih) IS DISTINCT FROM (OLD.personel_no, OLD.tur, OLD.tarih) THEN
+  IF (NEW.personel_no, NEW.tur, NEW.tarih, NEW.onceki_bes_katilim) IS DISTINCT FROM (OLD.personel_no, OLD.tur, OLD.tarih, OLD.onceki_bes_katilim) THEN
     RAISE EXCEPTION 'BES hareketinin personeli, türü ve tarihi değişmez; iptal edip yenisini girin'
       USING ERRCODE = 'check_violation', CONSTRAINT = 'ik_bes_hareket_degismez';
   END IF;
