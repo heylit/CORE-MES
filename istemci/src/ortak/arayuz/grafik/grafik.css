@@ -105,3 +105,40 @@ a.tc-gp-yatay-etiket { color: var(--ink); }
 .tc-pano-bolumleri { display: flex; gap: var(--b-2); overflow-x: auto; padding-block-end: 2px; }
 .tc-pano-ust { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--b-2); }
 .tc-gp-bolge-baslik { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
+
+/* Değer balonu (karar 2081-8): seçili noktanın yanında; diğer işaretler soluklaşır. Okuma satırı yerinde kalır. */
+.tc-gp-cizim-kap { position: relative; }
+.tc-gp-balon {
+  position: absolute; inset-block-start: var(--b-1); inset-inline-start: var(--gp-balon-x, 0); z-index: 2; pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; max-inline-size: 60%; padding: var(--b-1) var(--b-2);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--muted);
+  font-size: var(--yazi-xs); white-space: nowrap;
+  transform: translateX(var(--b-2));
+}
+.tc-gp-balon[data-yan="sol"] { transform: translateX(calc(-100% - var(--b-2))); }
+.tc-gp-svg[data-odak] .tc-gp-isaret:not([data-secili]) rect:not(.tc-gp-vurgu) { opacity: .45; }
+.tc-gp-svg[data-odak] .tc-gp-isaret rect:not(.tc-gp-vurgu) { transition: opacity var(--hareket-sure) ease-out; }
+.tc-gp-secili-nokta { stroke: var(--panel-solid); stroke-width: 2px; }
+:root[data-etki-kapali~="deger-balonu"] .tc-gp-svg[data-odak] .tc-gp-isaret:not([data-secili]) rect:not(.tc-gp-vurgu) { opacity: 1; }
+
+/* Açılış (karar 2081-7): çubuk tabandan büyür, çizgi soldan çizilir, yatay çubuk soldan dolar. Bir kez, çizim ilk gelince.
+   Hareket kapalı, azaltılmış hareket ya da kurum "grafik hareketi"ni kapattıysa hiç oynamaz. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Grup büyür: kökü eksen tabanıdır (vurgu bandı tam yükseklikte), yığılı seriler birlikte yükselir. */
+  :root:not([data-etki-kapali~="grafik-hareket"]) .tc-gp-isaret {
+    transform-box: fill-box; transform-origin: 50% 100%; animation: tc-gp-buyu calc(var(--hareket-sure) * 3) var(--hareket-egri) both;
+  }
+  :root:not([data-etki-kapali~="grafik-hareket"]) .tc-gp-cizgi {
+    stroke-dasharray: 1; animation: tc-gp-ciz calc(var(--hareket-sure) * 4) ease-out both;
+  }
+  :root:not([data-etki-kapali~="grafik-hareket"]) .tc-gp-nokta:not(.tc-gp-secili-nokta), :root:not([data-etki-kapali~="grafik-hareket"]) .tc-gp-dogrudan {
+    animation: tc-gp-belir var(--hareket-sure) ease-out calc(var(--hareket-sure) * 3) both;
+  }
+  :root:not([data-etki-kapali~="grafik-hareket"]) .tc-gp-yatay-iz rect.tc-seri-1 {
+    transform-box: fill-box; transform-origin: 0 50%; animation: tc-gp-dol calc(var(--hareket-sure) * 3) var(--hareket-egri) both;
+  }
+}
+@keyframes tc-gp-buyu { from { transform: scaleY(0); } }
+@keyframes tc-gp-ciz { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes tc-gp-belir { from { opacity: 0; } }
+@keyframes tc-gp-dol { from { transform: scaleX(0); } }

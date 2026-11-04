@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { CizgiGrafikKarti, CubukGrafikKarti, MakineDurumuKarti, YatayCubukKarti, guzelTavan } from './grafikler.tsx';
 import { GostergeSeridi } from './GostergeSeridi.tsx';
 
 afterEach(cleanup);
 const ciz = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+// jsdom isaretci turunu yazmaz; olay elle kurulur.
+const cik = (el: Element, pointerType: string) => {
+  const olay = createEvent.pointerOut(el, { relatedTarget: document.body });
+  Object.defineProperty(olay, 'pointerType', { value: pointerType });
+  fireEvent(el, olay);
+};
 
 describe('grafik kabugu (kart 1773)', () => {
   it('yuklenirken, alinamayinca ve veri yokken cizmez; sifir uydurmaz', () => {
@@ -32,6 +38,41 @@ describe('grafik kabugu (kart 1773)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Tablo/ }));
     const satirlar = within(screen.getByRole('table')).getAllByRole('row').map((r) => r.textContent);
     expect(satirlar).toEqual(['SağlamHurda', '30.10101', '31.10--', '01.11302']);
+  });
+
+  it('deger balonu: imlec gelince secili noktanin yaninda acilir, digerleri soluklasir; fare cikinca kapanir, dokunmada kalir', () => {
+    ciz(<CubukGrafikKarti baslik="Üretim" simge="chart" yuklendi etiketler={['30.10', '31.10', '01.11']}
+      seriler={[{ ad: 'Sağlam', degerler: [10, 20, 30] }]} />);
+    const svg = screen.getByRole('img');
+    const balon = () => document.querySelector('.tc-gp-balon');
+    expect(balon()).toBeNull();
+    const isaretler = document.querySelectorAll('.tc-gp-isaret');
+    fireEvent.pointerEnter(isaretler[0]!);
+    expect(balon()?.textContent).toContain('30.10');
+    expect(balon()?.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.hasAttribute('data-odak')).toBe(true);
+    expect(document.querySelector('.tc-gp-okuma')?.textContent).toContain('30.10');
+    cik(svg, 'touch');
+    expect(balon()).not.toBeNull();
+    cik(svg, 'mouse');
+    expect(balon()).toBeNull();
+    expect(document.querySelector('.tc-gp-okuma')?.textContent).toContain('01.11');
+    fireEvent.keyDown(svg, { key: 'ArrowLeft' });
+    expect(balon()?.textContent).toContain('31.10');
+    fireEvent.keyDown(svg, { key: 'Escape' });
+    expect(balon()).toBeNull();
+  });
+
+  it('kurum deger balonunu kapattiysa balon cizilmez; okuma satiri calisir', () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'deger-balonu');
+    try {
+      ciz(<CubukGrafikKarti baslik="Üretim" simge="chart" yuklendi etiketler={['30.10', '31.10']} seriler={[{ ad: 'Sağlam', degerler: [10, 20] }]} />);
+      fireEvent.keyDown(screen.getByRole('img'), { key: 'ArrowLeft' });
+      expect(document.querySelector('.tc-gp-balon')).toBeNull();
+      expect(document.querySelector('.tc-gp-okuma')?.textContent).toContain('30.10');
+    } finally {
+      document.documentElement.removeAttribute('data-etki-kapali');
+    }
   });
 
   it('cizgi: bos gun cizgiyi boler; son deger dogrudan etiketlenir', () => {

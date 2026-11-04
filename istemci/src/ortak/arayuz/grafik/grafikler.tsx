@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { SimgeAdi } from '../../tasarim/simgeler.ts';
 import { Simge } from '../Simge.tsx';
+import { etkiAcik } from '../../veri/etki.ts';
 import { GrafikCercevesi, type GrafikDurumu, type SeriAnahtari } from './GrafikCercevesi.tsx';
 import './grafik.css';
 
@@ -55,15 +56,30 @@ export function guzelTavan(enBuyuk: number): number {
   return 10 * us;
 }
 
-// Okuma satırı ve klavye: ok tuşları seçili noktayı gezdirir; seçim yoksa son nokta okunur.
+// Okuma satırı ve klavye: ok tuşları seçili noktayı gezdirir; seçim yoksa son nokta okunur. İmleç çıkınca ya da odak
+// gidince seçim düşer: balon kapanır, okuma satırı son noktaya döner.
 function useSecim(uzunluk: number) {
   const [secili, seciliYaz] = useState<number | null>(null);
   const etkin = secili === null ? uzunluk - 1 : Math.min(secili, uzunluk - 1);
   const tus = (e: KeyboardEvent) => {
     if (e.key === 'ArrowLeft') { e.preventDefault(); seciliYaz(Math.max(0, etkin - 1)); }
     if (e.key === 'ArrowRight') { e.preventDefault(); seciliYaz(Math.min(uzunluk - 1, etkin + 1)); }
+    if (e.key === 'Escape') seciliYaz(null);
   };
-  return { etkin, seciliYaz, tus };
+  // Dokunmada parmak kalkınca da "çıkış" gelir; orada seçim kalır, okuma satırı dokunulan noktada durur.
+  const birak = () => { seciliYaz(null); };
+  const imlecCikti = (e: { pointerType?: string }) => { if (e.pointerType === 'mouse') birak(); };
+  return { etkin, secimVar: secili !== null && uzunluk > 0, seciliYaz, tus, birak, imlecCikti };
+}
+
+// Değer balonu: seçili noktanın yanında, grafiğin içinde kalacak yana açılır. Okuma satırı ekran okuyucu ve dokunma için
+// yerinde kalır; balon onun görsel kopyasıdır (aria-hidden). Konum ölçüden gelir: tasarım değişkeni olarak yazılır.
+function Balon({ x, genislik, children }: { x: number; genislik: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const sola = x > genislik * 0.6;
+  if (!etkiAcik('deger-balonu')) return null;
+  useLayoutEffect(() => { ref.current?.style.setProperty('--gp-balon-x', `${Math.round(x)}px`); }, [x]);
+  return <div ref={ref} className="tc-gp-balon" data-yan={sola ? 'sol' : 'sag'} aria-hidden="true">{children}</div>;
 }
 
 function Okuma({ etiket, seriler, i, bicim }: { etiket: string; seriler: readonly Seri[]; i: number; bicim: (n: number) => string }) {
@@ -118,7 +134,7 @@ export function CubukGrafikKarti({ etiketler, seriler, bicim = (n) => sayi(n), y
   yuklendi: boolean;
 }) {
   const [ref, genislik] = useGenislik();
-  const { etkin, seciliYaz, tus } = useSecim(etiketler.length);
+  const { etkin, secimVar, seciliYaz, tus, birak, imlecCikti } = useSecim(etiketler.length);
   const toplamlar = etiketler.map((_, i) => seriler.reduce((t, s) => t + Math.max(0, s.degerler[i] ?? 0), 0));
   const dolu = etiketler.length > 0 && seriler.some((s) => s.degerler.some((v) => v !== null));
   const tavan = guzelTavan(Math.max(0, ...toplamlar));
@@ -131,8 +147,9 @@ export function CubukGrafikKarti({ etiketler, seriler, bicim = (n) => sayi(n), y
   return (
     <GrafikCercevesi {...kabuk} durum={durumOf(kabuk.hata, yuklendi, dolu)} tablo={tablo} lejant={lejantOf(seriler)}
       okuma={etiketler.length > 0 ? <Okuma etiket={etiketler[etkin] ?? ''} seriler={seriler} i={etkin} bicim={bicim} /> : undefined}>
-      <div ref={ref}>
-        <svg className="tc-gp-svg" width={genislik} height={YUKSEKLIK} role="img" aria-label={`${kabuk.baslik}; değerler tablo görünümünde`} tabIndex={0} onKeyDown={tus}>
+      <div ref={ref} className="tc-gp-cizim-kap">
+        <svg className="tc-gp-svg" width={genislik} height={YUKSEKLIK} role="img" aria-label={`${kabuk.baslik}; değerler tablo görünümünde`} tabIndex={0} onKeyDown={tus}
+          data-odak={secimVar || undefined} onPointerLeave={imlecCikti} onBlur={birak}>
           <Eksen genislik={genislik} sag={sag} tavan={tavan} bicim={(n) => sayi(n, 0)} />
           {etiketler.map((e, i) => {
             let taban = 0;
@@ -153,6 +170,7 @@ export function CubukGrafikKarti({ etiketler, seriler, bicim = (n) => sayi(n), y
           })}
           <XEtiketleri etiketler={etiketler} x={x} genislik={genislik} />
         </svg>
+        {secimVar && <Balon x={x(etkin)} genislik={genislik}><Okuma etiket={etiketler[etkin] ?? ''} seriler={seriler} i={etkin} bicim={bicim} /></Balon>}
       </div>
     </GrafikCercevesi>
   );
@@ -168,7 +186,7 @@ export function CizgiGrafikKarti({ etiketler, seriler, bicim = (n) => sayi(n), t
   yuklendi: boolean;
 }) {
   const [ref, genislik] = useGenislik();
-  const { etkin, seciliYaz, tus } = useSecim(etiketler.length);
+  const { etkin, secimVar, seciliYaz, tus, birak, imlecCikti } = useSecim(etiketler.length);
   const degerler = seriler.flatMap((s) => s.degerler.filter((v): v is number => v !== null));
   const dolu = degerler.length > 0;
   const tavan = sabitTavan ?? guzelTavan(Math.max(0, ...degerler));
@@ -202,20 +220,23 @@ export function CizgiGrafikKarti({ etiketler, seriler, bicim = (n) => sayi(n), t
   return (
     <GrafikCercevesi {...kabuk} durum={durumOf(kabuk.hata, yuklendi, dolu)} tablo={tablo} lejant={lejantOf(seriler, true)}
       okuma={n > 0 ? <Okuma etiket={etiketler[etkin] ?? ''} seriler={seriler} i={etkin} bicim={bicim} /> : undefined}>
-      <div ref={ref}>
-        <svg className="tc-gp-svg" width={genislik} height={YUKSEKLIK} role="img" aria-label={`${kabuk.baslik}; değerler tablo görünümünde`} tabIndex={0} onKeyDown={tus}>
+      <div ref={ref} className="tc-gp-cizim-kap">
+        <svg className="tc-gp-svg" width={genislik} height={YUKSEKLIK} role="img" aria-label={`${kabuk.baslik}; değerler tablo görünümünde`} tabIndex={0} onKeyDown={tus}
+          data-odak={secimVar || undefined} onPointerLeave={imlecCikti} onBlur={birak}>
           <Eksen genislik={genislik} sag={sag} tavan={tavan} taban={taban} bicim={bicim} />
           <XEtiketleri etiketler={etiketler} x={x} genislik={genislik} />
           {n > 0 && <line className="tc-gp-imlec" x1={x(etkin)} x2={x(etkin)} y1={UST} y2={YUKSEKLIK - ALT} />}
-          {seriler.map((s, j) => <path key={s.ad} className={`tc-gp-cizgi tc-seri-${SERI_NO[j] ?? 3}`} d={yol(s)} />)}
+          {seriler.map((s, j) => <path key={s.ad} className={`tc-gp-cizgi tc-seri-${SERI_NO[j] ?? 3}`} d={yol(s)} pathLength={1} />)}
+          {secimVar && seriler.map((s, j) => { const v = s.degerler[etkin] ?? null; return v === null ? null : <circle key={s.ad} className={`tc-gp-nokta tc-gp-secili-nokta tc-seri-${SERI_NO[j] ?? 3}`} cx={x(etkin)} cy={yy(v)} r={4.5} />; })}
           {etiketY.map((s) => (
             <g key={s.j}>
               <circle className={`tc-gp-nokta tc-seri-${SERI_NO[s.j] ?? 3}`} cx={x(s.i)} cy={s.y} r={3.5} />
               <text className="tc-gp-dogrudan" x={x(s.i) + 8} y={s.ey + 4}>{bicim(s.v)}</text>
             </g>
           ))}
-          <rect className="tc-gp-alan" x={SOL} y={UST} width={Math.max(0, genislik - SOL - sag)} height={YUKSEKLIK - UST - ALT} onPointerMove={isaretci} />
+          <rect className="tc-gp-alan" x={SOL} y={UST} width={Math.max(0, genislik - SOL - sag)} height={YUKSEKLIK - UST - ALT} onPointerMove={isaretci} onPointerDown={isaretci} />
         </svg>
+        {secimVar && <Balon x={x(etkin)} genislik={genislik}><Okuma etiket={etiketler[etkin] ?? ''} seriler={seriler} i={etkin} bicim={bicim} /></Balon>}
       </div>
     </GrafikCercevesi>
   );
