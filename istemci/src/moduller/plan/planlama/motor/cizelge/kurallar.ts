@@ -33,6 +33,18 @@ const kilitli = (c: PlanlamaCalismasi, id: string): { gun: number | null } | nul
   const g = (l as Record<string, unknown>).gun; return { gun: typeof g === 'number' ? g : null };
 };
 
+// Gün dondurma (2078-1 a): o gün başlayan işler, Burada sabitle ile aynı kilide (locks) günün numarasıyla yazılır; elle sabitlenen işe
+// dokunulmaz. Kaldırmada yalnız o günün kilitleri silinir. Gün numarası mutlak saatin 24'e bölümüdür (gunCizelgesi ile aynı).
+export const gunNumarasi = (now: number, g: number): number => Math.floor(now / 24) + g;
+export const gunBaslayanlar = (p: OkunanPlan, gNo: number): PlanIslemi[] => yerlesen(p).filter((r) => r.S >= gNo * 24 && r.S < gNo * 24 + 24);
+export const gunDonuk = (c: PlanlamaCalismasi, gNo: number): boolean => Object.keys(c.locks).some((id) => kilitli(c, id)?.gun === gNo);
+export function gunuDondur(x: PlanlamaCalismasi, p: OkunanPlan, gNo: number): void {
+  for (const r of gunBaslayanlar(p, gNo)) if (!kilitli(x, r.id)) x.locks[r.id] = { m: r.m, S: r.S, gun: gNo };
+}
+export function gunDondurmasiniKaldir(x: PlanlamaCalismasi, gNo: number): void {
+  for (const id of Object.keys(x.locks)) if (kilitli(x, id)?.gun === gNo) delete x.locks[id];
+}
+
 // --- hafta, ay, yıl: tezgâh satırlarında işler gün ızgarasında; yılda hafta başına doluluk ısısı ---
 export interface OlcekBasligi { t: number; x: number; w: number; ad: string; bugun: boolean; baslik: string }
 export interface OlcekIsi { x: number; w: number; d: 1 | 2 | 3; o: number; baslik: string }

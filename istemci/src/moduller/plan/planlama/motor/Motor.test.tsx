@@ -274,6 +274,30 @@ describe('PlanlamaMotoru', () => {
     expect(k2.yazilan.at(-1)?.locks[id]).toBeUndefined();
   });
 
+  it('gün katmanında Günü dondur o gün başlayan işlere gün kilidi yazar; donuk günde Dondurmayı kaldır siler', () => {
+    const c = ornekCalisma();
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Çizelge, hafta' })).getByRole('button', { name: '24.10 Cmt' }));
+    const d = within(screen.getByRole('region', { name: 'Gün katmanı: 24.10 Cmt' })).getByRole('button', { name: /Günü dondur/ });
+    expect(d.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(d);
+    expect(komut.degistir).toHaveBeenCalledWith('Gün donduruldu', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    const yeni = yazilan.at(-1);
+    const gunlu = Object.entries(yeni?.locks ?? {}).filter(([, l]) => typeof (l as { gun?: unknown }).gun === 'number');
+    expect(gunlu.map(([id]) => id)).toContain('3.10');
+    cleanup();
+    const c2 = structuredClone(c); c2.locks = { ...(yeni?.locks ?? {}), 'x.1': { m: 'T', S: 1 } };
+    const k2 = komutKur(c2);
+    ac({ c: c2, komut: k2.komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Çizelge, hafta' })).getByRole('button', { name: '24.10 Cmt' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Gün katmanı: 24.10 Cmt' })).getByRole('button', { name: /Dondurmayı kaldır/ }));
+    expect(k2.komut.degistir).toHaveBeenCalledWith('Gün dondurması kaldırıldı', expect.any(Function), expect.anything());
+    expect(k2.yazilan.at(-1)?.locks).toEqual({ 'x.1': { m: 'T', S: 1 } });
+  });
+
   it('yardımcıdaki Planı onaya gönder Plan atölyesini açar', () => {
     const { git } = ac({ komut: komutKur(ornekCalisma()).komut });
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));

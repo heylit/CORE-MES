@@ -21,6 +21,7 @@ import {
   rotaRecetesi, rotaUrunu, siparisSatirlari, simdikiOlcu, TUR_AD, type KartTuru, type OlcuAnahtari, type PlanOlcusu, type SiparisSirasi, type SiparisSuzgeci,
 } from './kurallar.ts';
 import { planDisi } from '../../tipler.ts';
+import { gunBaslayanlar, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur } from '../../motor/cizelge/kurallar.ts';
 
 // Kartların gövdeleri (z-komuta kmPlan; za-merkez mzSiparis, mzKuyruk, mzAg). Okurlar; çalışmaya yazan tek yol kararların eylemidir (eylem.ts).
 // Motor isteyen hamleler (öne al, öncelik, sürükleyip sıralama, planı toparla) görünür ve pasiftir (357 b).
@@ -62,6 +63,17 @@ export function KartGovdesi({ tur, b }: { tur: KartTuru; b: KartBaglami }) {
   return <p className="tc-pym-kucuk-yazi">{HAZIRLANIYOR}</p>;
 }
 
+// Bugünü dondur (2078-1 a): gün katmanındaki Günü dondur ile aynı kilit; bugün başlayan işler sabitlenir, ikinci basış kaldırır.
+function BugunuDondur({ b }: { b: KartBaglami }) {
+  const gNo = gunNumarasi(b.cx.now, 0); const dondu = gunDonuk(b.c, gNo); const komut = b.planYaz ? b.komut : null;
+  const ad = dondu ? 'Bugünün dondurmasını kaldır' : 'Bugünü dondur';
+  if (!komut || (!dondu && gunBaslayanlar(b.p, gNo).length === 0)) return <Pasif ad={ad} simge="lock" not={!b.planYaz ? YETKISIZ : komut ? 'Bugün başlayan iş yok.' : HAZIRLANIYOR} />;
+  return (
+    <button type="button" className="tc-dugme tc-pym-kucuk" aria-pressed={dondu} onClick={() => {
+      komut.degistir(dondu ? 'Gün dondurması kaldırıldı' : 'Gün donduruldu', (x) => { if (dondu) gunDondurmasiniKaldir(x, gNo); else gunuDondur(x, b.p, gNo); }, { ayrinti: 'bugün', planKoru: true });
+    }}><Simge ad="lock" boyut="k" /><span>{ad}</span></button>
+  );
+}
 function PlanGovdesi({ b }: { b: KartBaglami }) {
   const { c, p, cx } = b; const k = useMemo(() => planKarti(c, p, cx), [c, p, cx]);
   return (
@@ -89,7 +101,7 @@ function PlanGovdesi({ b }: { b: KartBaglami }) {
       <Bolum baslik="Bütün plana yön ver" simge="target">
         <div className="tc-pym-dugmeler">
           <Pasif ad="Planı toparla" simge="bolt" not={b.planYaz ? MOTOR_NOTU : YETKISIZ} />
-          <Pasif ad="Bugünü dondur" simge="lock" not={b.planYaz ? HAZIRLANIYOR : YETKISIZ} />
+          <BugunuDondur b={b} />
           <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={b.kilavuzAc}><Simge ad="help" boyut="k" /><span>Nasıl okunur</span></button>
         </div>
         <p className="tc-pym-kucuk-yazi">Bir tezgâha, siparişe ya da sıra çipine tıklayın; onunla yapabilecekleriniz seçim panelinde çıkar.</p>
