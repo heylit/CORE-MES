@@ -167,6 +167,20 @@ function GirisKontrolu() {
   );
 }
 
+// 2099-3 b: son kullanma takibi karttan açılır, türün varsayılanı yoktur. Açıksa mal kabulde her lot için SKT istenir.
+function SktTakibi() {
+  const { taslak: d, degistir } = useSihirbaz();
+  const acik = d.com.skt === true;
+  return (
+    <SecenekGrubu baslik="Son kullanma takibi">
+      <CipGrubu etiket="Son kullanma takibi">
+        <Cip basili={acik} tikla={() => { degistir((t) => { t.com.skt = !acik; }); }}>SKT takibi</Cip>
+      </CipGrubu>
+      <p className="tc-my-kucuk">Açıksa mal kabulde her lotun son kullanma tarihi istenir; önce bozulan önce çıkar.</p>
+    </SecenekGrubu>
+  );
+}
+
 function Notlar({ ipucu }: { ipucu: string }) {
   const { taslak: d, degistir } = useSihirbaz();
   return <CokSatirAlani etiket="Notlar" deger={d.com.not} ipucu={ipucu} yaz={(v) => { degistir((t) => { t.com.not = v; }); }} />;
@@ -205,6 +219,7 @@ export function TicariAdimi() {
       </Alanlar>
       <Sertifikalar />
       <GirisKontrolu />
+      <SktTakibi />
       <Notlar ipucu="Depo yeri, kullanım alanı, özel uyarılar" />
       <Belgeler />
     </>
@@ -250,6 +265,7 @@ export function GenelTicari() {
       {(t === 'yarimamul' || t === 'mamul') && <GenelSecim a={{ k: 'tedarik', ad: 'Tedarik tipi', tip: 'sec', opts: ['Üretim', 'Fason üretim', 'Satın alma'] }} />}
       {t !== 'demirbas' && t !== 'hizmet' && <Sertifikalar />}
       {t !== 'demirbas' && t !== 'hizmet' && <GirisKontrolu />}
+      {t !== 'demirbas' && t !== 'hizmet' && <SktTakibi />}
       {(t === 'yarimamul' || t === 'mamul') && <RotaOzeti />}
       <Notlar ipucu="Kullanım yeri, uyarılar" />
       <Belgeler />

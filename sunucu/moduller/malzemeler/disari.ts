@@ -14,6 +14,10 @@ export { malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [malzemeAramaKaynagi];
 // 1247 d: satın alma kabulünde giriş kalite kontrolü isteyen kartlar.
 export { gkkGerekenKartlar } from './servis.ts';
+// 2099: Stok Merkezi'nin tür listeleri ve son kullanma takibi. SKT işareti kartın kaydındadır (2099-3 b); kategori süzgeci ve türe özel
+// alanlar yalnız okunur, stok kopyalamaz.
+export { kartAlanDegerleri, kategoriKartlari, sktTakipliKartlar } from './servis.ts';
+export type { KartAlanDegeri } from './servis.ts';
 // Logo bağlantısı (kart #232): kuyruğu okur, her kartın sonucunu bildirir. Yetki denetlemez; nasıl kullanılacağı NOTLAR.md "Logo bağlantısı".
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).

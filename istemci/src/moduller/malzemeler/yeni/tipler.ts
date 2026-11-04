@@ -45,6 +45,8 @@ export interface TicariBilgi {
   eskiKod?: string;
   // 1247 d: giriş kalite kontrolü; yoksa türün varsayılanı (sunucu da aynı kuralla okur).
   gkk?: boolean;
+  // 2099-3 b: son kullanma takibi; yalnız true açıktır (varsayılan yok).
+  skt?: boolean;
   [alan: string]: unknown;
 }
 
