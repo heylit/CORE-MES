@@ -216,8 +216,15 @@ namespace LogoYardimcisi
         static void T_var_mi_okumasi_yoksa_0_doner()
         {
             var s = Logo();
-            Esit(s.MalzemeRef(Malzeme), Ref(C(s, "GET", "/api/Material/exists/" + Malzeme, null)), "var");
-            Esit(0, Ref(C(s, "GET", "/api/Material/exists/YOK", null)), "yok");
+            var c = C(s, "GET", "/api/Material/exists/" + Malzeme, null);
+            Esit(s.MalzemeRef(Malzeme), Ref(c), "var");
+            Esit(s.Malzeme(Malzeme).Ad, Convert.ToString(Z(c)["name"]), "Logo'daki ad");
+            var yok = C(s, "GET", "/api/Material/exists/YOK", null);
+            Esit(0, Ref(yok), "yok");
+            Dogru(!Z(yok).ContainsKey("name"), "kart yoksa ad dönmez");
+            var kodlar = (object[])C(s, "GET", "/api/Material/codes", null).Govde;
+            Dogru(kodlar.Contains(Malzeme), "kod listesi Logo'daki kartı içerir");
+            Esit(s.MalzemeKodlari().Count, kodlar.Length, "bütün kodlar");
         }
 
         /* ---------------- Hizmet kartı ---------------- */
@@ -590,9 +597,10 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(22, hepsi.Count, "sorgu sayısı");
+            Esit(23, hepsi.Count, "sorgu sayısı");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
+            Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");
             Icerir(q.Siparis, "LG_007_03_ORFICHE");
             Icerir(q.Siparis, "O.TRCODE = @tr");
             foreach (var yazan in new[] { "UPDATE LG_007_ITEMS SET NAME = 'x'", "SELECT 1; DELETE FROM LG_007_ITEMS", "SELECT * INTO X FROM LG_007_ITEMS", "EXEC sp_who" })

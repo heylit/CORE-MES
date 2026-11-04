@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeKodlari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari;
 
@@ -33,6 +33,7 @@ namespace LogoYardimcisi
             MalzemeRef = "SELECT LOGICALREF FROM " + f("ITEMS") + " WHERE CODE = @kod";
             Malzeme = "SELECT I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE FROM " + f("ITEMS") + " I LEFT JOIN "
                 + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.CODE = @kod";
+            MalzemeKodlari = "SELECT CODE FROM " + f("ITEMS") + " ORDER BY CODE";
             BirimSetleri = "SELECT CODE, NAME FROM " + f("UNITSETF") + " ORDER BY CODE";
             Ambarlar = "SELECT NR, NAME FROM L_CAPIWHOUSE WHERE FIRMNR = @firma ORDER BY NR";
             Cariler = "SELECT CODE, DEFINITION_ FROM " + f("CLCARD") + " WHERE ACTIVE = 0 ORDER BY CODE";
@@ -194,6 +195,17 @@ namespace LogoYardimcisi
         }
 
         public List<KodAd> BirimSetleri() { return KodAdlar(q.BirimSetleri); }
+
+        public List<string> MalzemeKodlari()
+        {
+            var l = new List<string>();
+            foreach (var s in Sorgula(q.MalzemeKodlari))
+            {
+                var k = Metin(s[0]);
+                if (k != null) l.Add(k);
+            }
+            return l;
+        }
         public List<KodAd> Ambarlar() { return KodAdlar(q.Ambarlar, P("@firma", firma)); }
         public List<KodAd> Cariler() { return KodAdlar(q.Cariler); }
         public int CariRef(string kod) { return Ilk(q.CariRef, P("@kod", kod)); }

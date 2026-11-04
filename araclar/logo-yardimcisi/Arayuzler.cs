@@ -145,6 +145,8 @@ namespace LogoYardimcisi
     {
         int MalzemeRef(string kod);
         MalzemeKaydi Malzeme(string kod);
+        // Logo'daki bütün malzeme kartı kodları; TMI yeni kod verirken bunları atlar (2089-2 a).
+        List<string> MalzemeKodlari();
         List<KodAd> BirimSetleri();
         List<KodAd> Ambarlar();
         List<KodAd> Cariler();
