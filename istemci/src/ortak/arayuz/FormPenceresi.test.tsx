@@ -79,3 +79,56 @@ describe('FormPenceresi', () => {
     expect(screen.queryByRole('button', { name: 'Kaydı yenile' })).toBeNull();
   });
 });
+
+function UzunForm({ kaydet }: { kaydet: (d: { ad: string; tezgah: string }) => Promise<unknown> }) {
+  const form = useForm<{ ad: string; tezgah: string }>({
+    ilk: { ad: 'Flanş', tezgah: '' }, hataIletisi: 'Kaydedilemedi.', kaydet,
+    dogrula: (d): Record<string, string> => (d.tezgah === '' ? { tezgah: 'Tezgâh seçilmeli.' } : {}),
+  });
+  return (
+    <FormPenceresi acik kapat={() => undefined} baslik="Uzun" form={form}>
+      <Girdi etiket="Ad" {...form.alan('ad')} />
+      <Girdi etiket="Tezgâh" {...form.alan('tezgah')} />
+    </FormPenceresi>
+  );
+}
+
+describe('FormPenceresi hata odağı ve Kaydedildi (kart 2092, kararlar 2081-23 ve 27)', () => {
+  afterEach(() => { document.documentElement.removeAttribute('data-etki-kapali'); vi.useRealTimers(); });
+
+  it('alan hatasıyla dönen gönderimde ilk hatalı alana kayar ve odaklanır', async () => {
+    const kaydir = vi.fn();
+    Element.prototype.scrollIntoView = kaydir;
+    render(<UzunForm kaydet={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByLabelText('Tezgâh')); });
+    expect(kaydir).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+  });
+
+  it('etki kapatıldıysa odak yerinde kalır', () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'hata-odagi');
+    render(<UzunForm kaydet={vi.fn()} />);
+    const dugme = screen.getByRole('button', { name: 'Kaydet' });
+    dugme.focus();
+    fireEvent.click(dugme);
+    expect(document.activeElement).toBe(dugme);
+  });
+
+  it('başarılı kayıttan sonra pencere açık kalırsa Kaydet kısa süre Kaydedildi olur', async () => {
+    render(<UzunForm kaydet={async () => ({})} />);
+    fireEvent.change(screen.getByLabelText('Tezgâh'), { target: { value: 'CNC-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Kaydedildi' })).toBeTruthy(); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Kaydet' })).toBeTruthy(); }, { timeout: 2500 });
+  });
+
+  it('etki kapatıldıysa Kaydedildi görünmez', async () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'kaydedildi');
+    const kaydet = vi.fn(async () => ({}));
+    render(<UzunForm kaydet={kaydet} />);
+    fireEvent.change(screen.getByLabelText('Tezgâh'), { target: { value: 'CNC-03' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(kaydet).toHaveBeenCalled(); });
+    expect(screen.queryByRole('button', { name: 'Kaydedildi' })).toBeNull();
+  });
+});
