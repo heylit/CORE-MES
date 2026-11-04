@@ -111,7 +111,7 @@ export const KABUK_AYARLARI = {
     baslik: 'Geçiş hızı',
     aciklama: 'Sayfa geçişleri ve panellerin hızı; hareket dilinin sürelerini kısaltır ya da uzatır.',
   },
-  // Etkileşim etkileri (kart 2086, kararlar 2081-7..10): kurum geneli, tek tek kapatılır; varsayılan açık. İstemci kapalıları kökte
+  // Etkileşim etkileri (kart 2086 ve 2090, kararlar 2081-7..18, 20): kurum geneli, tek tek kapatılır; varsayılan açık. İstemci kapalıları kökte
   // data-etki-kapali ile taşır (istemci/src/ortak/veri/etki.ts).
   'kabuk.etki-grafik-hareket': {
     modul: 'kabuk',
@@ -154,5 +154,68 @@ export const KABUK_AYARLARI = {
     varsayilan: true,
     baslik: 'Terminalde Durdur için basılı tut',
     aciklama: "Üretim Terminali'nde Durdur kısa süre basılı tutulunca çalışır; kapalıyken tek dokunuşla duruş nedeni penceresi açılır.",
+  },
+  'kabuk.etki-pencere-kayma': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Pencere ve çekmece kayması',
+    aciklama: 'Pencere ortadan büyüyerek, yan çekmece kenardan kayarak açılır ve kapanır.',
+  },
+  'kabuk.etki-pencere-cekme': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Telefonda pencereyi aşağı çekip kapatma',
+    aciklama: 'Telefonda pencere ve çekmece başlığından aşağı çekilince kapanır.',
+  },
+  'kabuk.etki-sekme-cizgi': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Sekme çizgisi kayması',
+    aciklama: 'Sekme değişince alt çizgi yeni sekmeye kayarak geçer.',
+  },
+  'kabuk.etki-menu-gecis': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Menü geçişi',
+    aciklama: 'Açılır menü ve ikinci menü kısa bir geçişle açılır.',
+  },
+  'kabuk.etki-bildirim-kayma': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Bildirim kayması',
+    aciklama: 'Bildirim kenardan kayarak gelir; yana itilince kapanır.',
+  },
+  'kabuk.etki-hizli-artis': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Basılı tutunca hızlanan artış',
+    aciklama: 'Artır ve azalt düğmeleri basılı tutulunca değer hızlanarak değişir; terminaldeki sayım düğmeleri bunun dışındadır.',
+  },
+  'kabuk.etki-satir-kaydirma': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Satırı yana kaydırma',
+    aciklama: 'Telefonda liste satırı yana kaydırılınca ekranın verdiği hızlı eylem çıkar.',
+  },
+  'kabuk.etki-tablo-iskelet': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Tablo iskelet satırları',
+    aciklama: 'Tablo yüklenirken boş yerine satır biçiminde iskelet görünür.',
+  },
+  'kabuk.etki-kopyala': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Belge numarası kopyala düğmesi',
+    aciklama: 'Belge numarasının yanında tek dokunuşla kopyalayan düğme görünür.',
   },
 } as const satisfies Record<string, AyarTanimi>;
