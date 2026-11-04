@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { AcilisTuru, GecisHizi, HareketSeviyesi } from '#paylasilan/sozlesme/ayarlar.ts';
-import { AcilisOnizleme, Dugme, DurumKutusu, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
+import type { AcilisTuru, Etki, GecisHizi, HareketSeviyesi } from '#paylasilan/sozlesme/ayarlar.ts';
+import { AcKapa, AcilisOnizleme, Dugme, DurumKutusu, Kart, Rozet, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -12,7 +12,11 @@ import { anahtarlar } from './anahtarlar.ts';
 import { gorulenDeger } from './gorulen.ts';
 import './gorunum.css';
 
-export const GORUNUM_ANAHTARLARI = ['kabuk.hareket', 'kabuk.gecis-hizi', 'kabuk.acilis', 'kabuk.acilis-suresi'] as const;
+// Etki anahtarları (kart 2086) aynı sekmede Etkileşim kartındadır; Genel'e düşmez.
+// Sıra karttaki sıradır; liste sözleşmedeki ETKILER ile aynıdır (tip denetler).
+const ETKI_SIRASI = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili'] as const satisfies readonly Etki[];
+export const ETKI_ANAHTARLARI = ETKI_SIRASI.map((e) => `kabuk.etki-${e}` as const);
+export const GORUNUM_ANAHTARLARI = ['kabuk.hareket', 'kabuk.gecis-hizi', 'kabuk.acilis', 'kabuk.acilis-suresi', ...ETKI_ANAHTARLARI] as const;
 
 const HAREKETLER: readonly { deger: HareketSeviyesi; ad: string; aciklama: string }[] = [
   { deger: 'kapali', ad: 'Kapalı', aciklama: 'Hiç geçiş, animasyon ve bulanıklık yok; açılış gösterisi de oynamaz. Takılan cihaz için.' },
@@ -68,7 +72,7 @@ export function GorunumAyarlari() {
   const onizlemeBitti = useCallback(() => { onizlenenYaz(null); }, []);
 
   const degistir = useMutation({
-    mutationFn: ({ anahtar, deger }: { anahtar: string; deger: string | number }) =>
+    mutationFn: ({ anahtar, deger }: { anahtar: string; deger: string | number | boolean }) =>
       api.post<Ayar>(`/ayarlar/${encodeURIComponent(anahtar)}/degistir`, { deger, beklenen: gorulenDeger(istemci, anahtar) } satisfies AyarDegistirGovdesi),
     onSuccess: (guncel) => {
       istemci.setQueryData<AyarlarCevabi>(anahtarlar.liste, (onceki) =>
@@ -99,6 +103,8 @@ export function GorunumAyarlari() {
     surukleYaz(null);
   };
   const sec = (anahtar: string, yeni: string) => { if (deger(anahtar) !== yeni) degistir.mutate({ anahtar, deger: yeni }); };
+  const etkiAyarlari = ETKI_ANAHTARLARI.map((anahtar) => liste.data?.ayarlar.find((a) => a.anahtar === anahtar))
+    .filter((a): a is Extract<Ayar, { tur: 'boolean' }> => a?.tur === 'boolean');
   const yenidenOynat = (seviye: string) => { oynatYaz((o) => ({ ...o, [seviye]: (o[seviye] ?? 0) + 1 })); };
 
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -162,6 +168,23 @@ export function GorunumAyarlari() {
           ))}
         </div>
       </Kart>
+      {etkiAyarlari.length > 0 && (
+        <Kart baslik="Etkileşim">
+          <p className="tc-ayar-aciklama">Grafik, Gantt, düğme ve terminal etkileri herkese uygulanır; biri kapatılınca o etki her ekranda kalkar, işin kendisi değişmez. Hareket dili Kapalı ise animasyonlu olanlar zaten oynamaz.</p>
+          <ul className="tc-ayarlar" aria-label="Etkileşim">
+            {etkiAyarlari.map((a) => (
+              <li key={a.anahtar} className="tc-ayar">
+                <div className="tc-ayar-metin">
+                  <p className="tc-ayar-baslik">{a.baslik}</p>
+                  <p className="tc-ayar-aciklama">{a.aciklama}</p>
+                </div>
+                <AcKapa etiket={a.baslik} acik={a.deger ?? true} disabled={degistir.isPending}
+                  degistir={(acik) => { degistir.mutate({ anahtar: a.anahtar, deger: acik }); }} />
+              </li>
+            ))}
+          </ul>
+        </Kart>
+      )}
       <Kart baslik="Açılış gösterisi">
         <p className="tc-ayar-aciklama">Her girişte ve her çıkışta kurum logosuyla bir kez oynar; girişi ve çıkışı bekletmez, dokununca geçilir. Logo yoksa uygulama adı işlenir.</p>
         <label className="tc-gorunum-sure">

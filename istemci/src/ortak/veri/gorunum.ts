@@ -15,12 +15,22 @@ export function useGorunum(acik: boolean) {
         throw hata;
       });
       gorunumuSakla(g);
+      etkileriUygula(g.etkiler);
       bekleyenGirisiOynat(g);
       return g;
     },
     enabled: acik,
     staleTime: Infinity,
   });
+}
+
+// Kurumun kapattığı etkileşim etkileri (kart 2086) kökte boşlukla ayrılmış liste olarak durur; CSS `~=`, kod etkiAcik ile okur.
+// Ayar her okunduğunda yeniden yazılır; Sistem Ayarları'nda değişince bu sorgu tazelenir. Alan yoksa hepsi açıktır.
+export const ETKI_OZNITELIGI = 'data-etki-kapali';
+export function etkileriUygula(etkiler: GorunumCevabi['etkiler']): void {
+  const kapali = etkiler ? Object.entries(etkiler).filter(([, acik]) => !acik).map(([e]) => e) : [];
+  const kok = document.documentElement;
+  if (kapali.length === 0) kok.removeAttribute(ETKI_OZNITELIGI); else kok.setAttribute(ETKI_OZNITELIGI, kapali.join(' '));
 }
 
 // Performans modu cihaza aittir (zayıf tablet, eski bilgisayar): açıkken hareket sade, açılış ve süren animasyonlar kapalıdır.
