@@ -5,7 +5,7 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 
 // Sahte Logo köprüsü: YALNIZ test ve yerel deneme içindir (kart #207, kullanıcı kararı 3). Üretim kodu bunu ithal etmez;
 // sunucu köprü adresini yalnız TMIV2_LOGO_KOPRU_ADRESI'nden alır. Yalnız 127.0.0.1'de dinler.
-// Taklit edilen: GET /api/Material/exists/{kod}, POST /api/Material/AddRich, GET /api/Lookup/unitsets, GET /api/Lookup/warehouses ve
+// Taklit edilen: GET /api/Material/exists/{kod} (kart varsa adıyla), GET /api/Material/codes, POST /api/Material/AddRich, GET /api/Lookup/unitsets, GET /api/Lookup/warehouses ve
 // { success, logicalRef, error, validate } cevabı. Cevap biçiminin bilinmeyen kısımları VARSAYIM'dır (LB8).
 // Hizmet: POST /api/PurchaseService/AddRich ve /api/SalesService/AddRich (gövdede CODE). Hizmet "var mı" için sahte köprüdeki
 // GET /sahte/hizmet-var-mi/{alinan|verilen}/{kod} yalnız test yoludur; gerçek yol kopru.ts HIZMET_VAR_MI_YOLU.
@@ -53,6 +53,8 @@ export interface SahteKopru {
   gecikmeMs: number;
   // Logo'daki kartlar: kod -> logicalRef. Teste önceden kart konabilir ("kod zaten var").
   kartlar: Map<string, number>;
+  // Logo'daki kartların adı (kod -> ad); "var mı" cevabında `name` olarak döner.
+  kartAdlari: Map<string, string>;
   // Kod başına açılan kart sayısı (çift açma ölçüsü).
   acilan: Map<string, number>;
   // Logo'daki hizmet kartları (ayrı tablo): kod -> logicalRef; kod başına açılan sayı.
@@ -125,6 +127,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     senaryo: 'basari',
     gecikmeMs: 0,
     kartlar: new Map(),
+    kartAdlari: new Map(),
     acilan: new Map(),
     hizmetKartlari: new Map(),
     hizmetAcilan: new Map(),
@@ -185,7 +188,12 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       const varMi = /^\/api\/Material\/exists\/(.+)$/.exec(yol);
       if (istek.method === 'GET' && varMi) {
         const ref = kopru.kartlar.get(varMi[1] ?? '') ?? 0;
-        json(cevap, 200, { success: true, logicalRef: ref, error: null, validate: null });
+        const ad = kopru.kartAdlari.get(varMi[1] ?? '');
+        json(cevap, 200, { success: true, logicalRef: ref, error: null, validate: null, ...(ref > 0 && ad !== undefined ? { name: ad } : {}) });
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/Material/codes') {
+        json(cevap, 200, [...kopru.kartlar.keys()].sort());
         return;
       }
       const hizmetVarMi = /^\/sahte\/hizmet-var-mi\/(alinan|verilen)\/(.+)$/.exec(yol);
@@ -397,7 +405,11 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       const deger = nesne[alan];
       const kod = typeof deger === 'string' ? deger : '';
       const satirSayisi = Array.isArray(nesne['lines']) ? nesne['lines'].length : 0;
-      const kartAc = (k: string): number => (hizmet ? ac(kopru.hizmetKartlari, kopru.hizmetAcilan, k) : ac(kopru.kartlar, kopru.acilan, k));
+      const kartAc = (k: string): number => {
+        if (hizmet) return ac(kopru.hizmetKartlari, kopru.hizmetAcilan, k);
+        if (typeof nesne['name'] === 'string') kopru.kartAdlari.set(k, nesne['name']);
+        return ac(kopru.kartlar, kopru.acilan, k);
+      };
       // Açar ve başarı cevabını kurar: siparişte order.lines da döner (not 3b).
       const acCevap = (): Record<string, unknown> => {
         if (!siparis) return { success: true, logicalRef: kartAc(kod), error: null, validate: null };

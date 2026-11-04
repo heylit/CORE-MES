@@ -100,6 +100,12 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    "gönderilmez" görünür ve gitmez. DOĞRULANMADI: fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51 tür kodları ve ambar alanları (SOURCE_WH, DEST_WH; başlıkta
    tek depo çifti, birden çok çift reddedilir); yardımcının uçları kart #494. Geri alma: göç sütun ve tablo ekler; numara çevirme geri alınırsa emir kimliğine döner.
 
+## Kod çakışması (2089-1 a, 2089-2 a)
+- Açma isteği hiç gitmemişken "var mı" kartı bulursa kart eşlenmez, "hata" olur; aktif kartın kodu TMI'de değişmez, düzeltme Logo'daki kodu değiştirmek
+  ya da TMI kartını iptal edip yeniden açmaktır. Bu karardan önce eşlenmiş kartlar kendiliğinden düzelmez / elle.
+- Malzeme kodu aynası (`logo_malzeme_kodu`) yardımcının `GET /api/Material/codes` ucuyla, "Logo bağlantısı" açıkken saatte bir okunur; bütün kodlar
+  tek cevapta gelir (VARSAYIM: on binler). Aynanın eskiyebileceği aralıkta Logo'da açılan kod gönderimde çakışma olarak yakalanır.
+
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026)
 - KAPANDI: üç uç da malzemelerin Logo gönderimi ekranından çağrılıyor (`istemci/src/moduller/malzemeler/LogoGonderimi.tsx`, "Logo birim setleri" kartı):
   `GET /logo/birim-setleri` (liste ve bağlantı notu), `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a).

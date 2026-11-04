@@ -9,7 +9,7 @@ import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSipar
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
 import { ortamKoprusu } from './baglanti.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
-import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
+import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeKoduTuru, malzemeTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
 import type { MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 
 // İş her zaman koşar; istek ancak "Logo bağlantısı" ayarı açık ve köprü değişkenleri varken çıkar (malzemeTuru).
@@ -97,4 +97,6 @@ export const isler = [
   kopruIsi('logo-mal-kabul-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malKabulTuru(vt, okumaOrtami())),
   kopruIsi('logo-liste-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => listeOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-fatura-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => faturaTuru(vt, okumaOrtami())),
+  // Logo malzeme kodu aynası (2089-2 a): yeni stok kodu Logo'da kullanılan numarayı atlar.
+  kopruIsi('logo-malzeme-kodu-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malzemeKoduTuru(vt, okumaOrtami())),
 ];

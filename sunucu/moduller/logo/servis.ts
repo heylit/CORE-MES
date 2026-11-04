@@ -10,7 +10,7 @@ import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, eklemeGovdesi, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
 } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
@@ -92,7 +92,7 @@ export type TurSonucu =
   | { tur: 'guncelleme' | 'kapatma' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
   | { tur: 'satis-kapali' }
   | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' }
-  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
+  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
@@ -184,7 +184,7 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
     }
     // Niyet bu turda kullanılır: tur yarıda kalsa da bu süreçte bir daha taze sayılmaz.
     o.bellek.niyetler.delete(kart.no);
-    return turla(() => gonder(o, kart, g, gonderim), (sonuc) => ({ tur: 'gonderim', no: kart.no, sonuc }));
+    return turla(() => gonder(o, kart, g, gonderim, taze), (sonuc) => ({ tur: 'gonderim', no: kart.no, sonuc }));
   }
   return guncellemeTuru(db, o, kopru);
 }
@@ -295,7 +295,8 @@ const reddet = (db: Db, o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri
   basarisizYaz(db, o, kart, g, 'reddedildi', hata, undefined);
 
 // Köprü adımları transaction dışında; dönen iş sonucu ikinci transaction'da yazar.
-async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri | null, k: Gonderim): Promise<Yazici<GidenSonucu>> {
+// `taze`: niyet bu süreçte bir önceki turda yazıldı ve hiç kullanılmadı; bu kart için Logo'ya hiç açma isteği gitmemiştir.
+async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri | null, k: Gonderim, taze: boolean): Promise<Yazici<GidenSonucu>> {
   const ardisik = g?.ardisikHata ?? 0;
   const basarisiz = (sonuc: GidenSonucu, hata: string, niyet: Date | null | undefined, bekleme?: number): Yazici<GidenSonucu> =>
     (db) => basarisizYaz(db, o, kart, g, sonuc, hata, niyet, bekleme);
@@ -304,6 +305,7 @@ async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri |
     const kayitNo = String(logicalRef);
     // Karta tur sırasında değişmiş karşılık değil, bu turda gönderilen (kuyruktan okunan) değerler yazılır.
     const yazilamadi = await sonucuBildir(db, kart.no, { kayitNo, logoKartTuru: kart.logoKartTuru, logoBirimSeti: kart.logoBirimSeti });
+    if (k.belge === 'malzeme') await s.malzemeKoduEkle(db, kart.stokKodu.trim(), simdi);
     if (yazilamadi) {
       // Logo'da kayıt var ama TMI kartı almadı: yeniden denemede "var mı" aynı kaydı bulur; yeni kart açılmaz.
       await s.denemeYaz(db, k.belge, kart.no, {
@@ -324,7 +326,12 @@ async function gonder(o: TurOrtami, kart: LogoyaGidecekMalzeme, g: GidenSatiri |
   if (k.varMi !== null) {
     const varMi = await k.varMi();
     if (varMi.tur !== 'basarili') return okumaHatasi(varMi);
-    if (varMi.logicalRef !== null) return basarili('zaten-vardi', varMi.logicalRef);
+    if (varMi.logicalRef !== null) {
+      // 2089-1 a, 2089-2 a: açma isteği hiç gitmemişken bulunan kart TMI'nin değildir; eşlenmez. Niyet boşalır: sonraki deneme yine
+      // taze niyetle başlar ve yine eşlemez. Eski niyette (önceki süreç ya da belirsiz istek) kart TMI'nin olabilir: eşlenir, ikinci kart açılmaz.
+      if (k.belge === 'malzeme' && taze) return basarisiz('reddedildi', kodCakismasiMetni(varMi.logoAdi), null);
+      return basarili('zaten-vardi', varMi.logicalRef);
+    }
   }
 
   o.bellek.acmaIstekleri.set(kart.no, o.saat());
@@ -826,6 +833,31 @@ export function listeOkumaTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
     }
     return { tur: 'bos' };
   });
+}
+
+// Logo malzeme kodu listesi (2089-2 a): malzemeler yeni kod verirken Logo'da kullanılanı atlar. "Logo bağlantısı" açık ve köprü varken saatte bir okunur.
+export function malzemeKoduTuru(vt: TxAcan, o: TurOrtami): Promise<TurSonucu> {
+  return turuKos(vt, async (db) => {
+    if (!(await sistemAyariOku(db, 'logo.baglanti'))) return { tur: 'kapali' };
+    const kopru = o.kopru;
+    if (kopru === null) return { tur: 'ortam-degiskeni-yok' };
+    const okuma = await s.listeOkumasi(db, 'malzeme');
+    if (!listeOkunmaliMi(okuma?.sonOkumaAn ?? null, o.bellek.okumaDenemeleri.get('malzeme-kodu') ?? null, o.saat())) return { tur: 'bos' };
+    return async (): Promise<Yazici<TurSonucu>> => {
+      o.bellek.okumaDenemeleri.set('malzeme-kodu', o.saat());
+      const r = await kopru.malzemeKodlari();
+      if (r.tur !== 'basarili') return async () => ({ tur: 'okuma', akis: 'malzeme-kodu', sonuc: r.tur, sayi: 0 });
+      return async (db2) => {
+        await s.malzemeKodlariniYaz(db2, r.kodlar, o.saat());
+        return { tur: 'okuma', akis: 'malzeme-kodu', sonuc: 'okundu', sayi: r.kodlar.length };
+      };
+    };
+  });
+}
+
+// Ters yöndeki bağ (2089-2 a): malzemeler logoyu ithal edemez; sunucu/kablolama.ts bu çözücüyü malzemelere kaydeder. Yetki denetlemez.
+export function logodaKullanilanMalzemeKodlari(db: Db, kodlar: readonly string[]): Promise<string[]> {
+  return s.logodaOlanMalzemeKodlari(db, kodlar);
 }
 
 // Fatura: Logo'ya giden siparişlerin numarası logo_giden'den (kayıt) ve logo_siparis_no'dan gelir; okuması en eski sipariş önce, sıralı, turda

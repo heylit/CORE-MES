@@ -1,11 +1,14 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, cevabiYorumla, faturalariAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU } from './kurallar.ts';
+import { agHatasiniYorumla, cevabiYorumla, faturalariAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, varMiAdi } from './kurallar.ts';
 import type { FaturaKaydi, HizmetYonu, KopruSonucu, LogoFisTuru, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
+  // Kart varsa başarılı sonuçta Logo'daki ad da gelir (logoAdi).
   malzemeVarMi(kod: string): Promise<KopruSonucu>;
   malzemeEkle(govde: MalzemeEklemeGovdesi): Promise<KopruSonucu>;
+  // Logo'daki bütün malzeme kartı kodları (2089-2 a); yalnız okunur.
+  malzemeKodlari(): Promise<{ tur: 'basarili'; kodlar: string[] } | Exclude<KopruSonucu, { tur: 'basarili' }>>;
   birimSetleri(): Promise<{ tur: 'basarili'; setler: BirimSeti[] } | Exclude<KopruSonucu, { tur: 'basarili' }>>;
   // Yol verilmemişse istek atmaz, "reddedildi" döner.
   hizmetVarMi(yon: HizmetYonu, kod: string): Promise<KopruSonucu>;
@@ -196,7 +199,19 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
       return yorumla(c);
     },
     async malzemeVarMi(kod) {
-      return yorumla(await istek('GET', `/api/Material/exists/${encodeURIComponent(kod)}`));
+      const c = await istek('GET', `/api/Material/exists/${encodeURIComponent(kod)}`);
+      const r = yorumla(c);
+      return r.tur === 'basarili' && !('tur' in c) ? { ...r, logoAdi: varMiAdi(c.govde) } : r;
+    },
+    async malzemeKodlari() {
+      const c = await istek('GET', '/api/Material/codes');
+      if ('tur' in c) return c.tur === 'basarili' ? { tur: 'belirsiz', ileti: 'Beklenmeyen cevap.' } : c;
+      if (c.durum >= 200 && c.durum < 300) {
+        const kodlar = malzemeKodlariniAyikla(c.govde);
+        if (kodlar !== null) return { tur: 'basarili', kodlar };
+      }
+      const sonuc = cevabiYorumla(c.durum, zarfMi(c.govde) ? c.govde : null);
+      return sonuc.tur === 'basarili' ? { tur: 'belirsiz', ileti: 'Malzeme kodu listesi okunamadı.' } : sonuc;
     },
     async malzemeEkle(govde) {
       return yorumla(await istek('POST', '/api/Material/AddRich', govde));
