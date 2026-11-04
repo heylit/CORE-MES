@@ -29,6 +29,23 @@ const girdiSayisi = (metin: string): number | null => {
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 };
+// 2083: değerin yanında bir önceki tarihli değere göre artış/azalış işareti; önceki yoksa ya da eşitse işaret yok.
+type Yon = 'artti' | 'azaldi';
+const yonu = (simdi: string, onceki: string | null): Yon | null => {
+  if (onceki === null) return null;
+  const fark = Number(simdi) - Number(onceki);
+  return fark > 0 ? 'artti' : fark < 0 ? 'azaldi' : null;
+};
+function YonIsareti({ simdi, onceki, basamak }: { simdi: string; onceki: string | null; basamak: number }) {
+  const yon = yonu(simdi, onceki);
+  if (!yon || onceki === null) return null;
+  const metin = `${yon === 'artti' ? 'arttı' : 'azaldı'}, önceki ${sayi(onceki, basamak)}`;
+  return (
+    <span className="tc-kfs-yon" data-yon={yon} title={metin}>
+      <Simge ad={yon === 'artti' ? 'up' : 'down'} boyut="k" /><span className="tc-kfs-gizli">{metin}</span>
+    </span>
+  );
+}
 // 1383 a: aylık faizin yıllık karşılığı basit faizle (aylık x 12), finansmanın tek tanımıyla; girişin yanında gösterilir, kaydedilen aylıktır.
 export const yillikFaiz = aylikFaizdenYillik;
 const gunMetni = (tarih: string, bugun: string): string => (tarih === bugun ? 'bugün' : tarih.split('-').reverse().slice(0, 2).join('.'));
@@ -63,6 +80,7 @@ export function KurFaizSeridi() {
               <span key={p} className="tc-kfs-kalem" data-kfs={`kur-${p}`}>
                 <span className="tc-kfs-ad">{p}</span>
                 <b className="mono">{k ? sayi(k.kur, 4) : 'yok'}</b>
+                {k && <YonIsareti simdi={k.kur} onceki={k.oncekiKur} basamak={4} />}
                 {k && k.tarih !== o.bugun && <span className="tc-kfs-eski">{gunMetni(k.tarih, o.bugun)}</span>}
               </span>
             );
@@ -74,6 +92,7 @@ export function KurFaizSeridi() {
               <span key={p} className="tc-kfs-kalem" data-kfs={`faiz-${p}`}>
                 <span className="tc-kfs-ad">{p} faiz</span>
                 <b className="mono">{f ? `%${sayi(f.aylikYuzde, 2)}` : 'yok'}</b>
+                {f && <YonIsareti simdi={f.aylikYuzde} onceki={f.oncekiAylikYuzde} basamak={2} />}
                 <span className="tc-kfs-ad">/ay</span>
               </span>
             );

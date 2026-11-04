@@ -9,6 +9,11 @@
 .tc-kfs-kalem { display: inline-flex; align-items: baseline; gap: var(--b-1); white-space: nowrap; }
 .tc-kfs-kalem b { font-weight: 600; }
 .tc-kfs-ad { color: var(--muted); font-size: var(--yazi-xs); letter-spacing: .04em; text-transform: uppercase; }
+/* 2083: önceki tarihli değere göre artış (yeşil) ve azalış (kırmızı) işareti; metni yalnız ekran okuyucu için. */
+.tc-kfs-yon { display: inline-flex; align-self: center; }
+.tc-kfs-yon[data-yon="artti"] { color: var(--run); }
+.tc-kfs-yon[data-yon="azaldi"] { color: var(--stop); }
+.tc-kfs-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-kfs-eski { color: var(--hazard-ink); font-size: var(--yazi-xs); }
 .tc-kfs-ayrac { flex: none; align-self: stretch; width: 1px; margin-block: var(--b-2); background: var(--edge2); }
 .tc-kfs-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; }

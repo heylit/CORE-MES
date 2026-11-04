@@ -72,8 +72,8 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
     const istekler = sunucuKur(['musteri-tedarikci.oku']);
     ac();
     expect((await screen.findByText(/Son kur girişi:/)).textContent).toBe('Son kur girişi: bugün 09:44, Deneme Satinalma');
-    expect(document.querySelector('[data-kfs="kur-USD"]')?.textContent).toBe('USD41,5');
-    expect(document.querySelector('[data-kfs="kur-EUR"]')?.textContent).toBe('EUR45,110.10');
+    expect(document.querySelector('[data-kfs="kur-USD"]')?.textContent).toBe('USD41,5arttı, önceki 41,2');
+    expect(document.querySelector('[data-kfs="kur-EUR"]')?.textContent).toBe('EUR45,1azaldı, önceki 45,310.10');
     expect(document.querySelector('[data-kfs="kur-GBP"]')?.textContent).toBe('GBPyok');
     expect(document.querySelector('[data-kfs="faiz-TRY"]')?.textContent).toBe('TRY faiz%3,5/ay');
     expect(screen.queryByText('Bugün girilmedi')).toBeNull();
@@ -83,6 +83,18 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a)', () => {
     expect(screen.queryByRole('button', { name: 'Kurları kaydet' })).toBeNull();
     expect(screen.getByText('düzeltme')).toBeTruthy();
     expect(yazmalar(istekler)).toEqual([]);
+  });
+
+  it('2083: değerin yanında önceki tarihli değere göre artış ve azalış işareti; eşitse ya da değer yoksa işaret yok', async () => {
+    sunucuKur(['musteri-tedarikci.oku']);
+    ac();
+    await screen.findByText(/Son kur girişi:/);
+    const yon = (k: string) => document.querySelector(`[data-kfs="${k}"] .tc-kfs-yon`);
+    expect(yon('kur-USD')?.getAttribute('data-yon')).toBe('artti');
+    expect(yon('kur-USD')?.getAttribute('title')).toBe('arttı, önceki 41,2');
+    expect(yon('kur-EUR')?.getAttribute('data-yon')).toBe('azaldi');
+    expect(yon('kur-GBP')).toBeNull();
+    expect(yon('faiz-TRY')).toBeNull();
   });
 
   it('finans.kur-yaz bugünün kurlarını birlikte yazar: bugün girilmiş olan sürümüyle düzeltilir, girilmemiş olana satır açılır, değişmeyen gitmez', async () => {
