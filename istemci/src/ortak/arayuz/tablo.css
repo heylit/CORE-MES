@@ -90,3 +90,35 @@
   font-size: var(--yazi-xs); font-weight: 700; cursor: pointer;
 }
 .tc-tablo-eylem-tehlike { background: var(--stop); color: var(--parlak); }
+
+/* Canlı değişiklik vurgusu (kart 2092, karar 2081-21): içeriği değişen satır bir an sarıya döner ve söner. */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="canli-vurgu"]) .tc-tablo tr[data-degisti] > td { animation: tc-tablo-vurgu 1.4s var(--hareket-egri); }
+}
+@keyframes tc-tablo-vurgu { 0%, 30% { background: color-mix(in srgb, var(--hazard) 26%, transparent); } }
+
+/* Yapışık başlık (kart 2092, karar 2081-28): tablo kipinde kap kaydırma kabı olmaz (içerik zaten sığar, sığmazsa kart
+   kipine geçer); başlık satırı sayfanın kaydırma kabına göre üstte kalır. */
+:root:not([data-etki-kapali~="yapiskan-baslik"]) .tc-tablo-kap:not([data-kip]) { overflow-x: clip; }
+:root:not([data-etki-kapali~="yapiskan-baslik"]) .tc-tablo-kap:not([data-kip]) .tc-tablo thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--panel-solid);
+}
+
+/* Çoklu seçim ve toplu işlem çubuğu (kart 2092, karar 2081-24). */
+.tc-tablo .tc-tablo-sec { width: var(--dokunma); padding-right: 0; }
+.tc-tablo-sec input { width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); cursor: pointer; }
+.tc-tablo tr[data-secili] > td { background: color-mix(in srgb, var(--hazard) 10%, transparent); }
+[data-kip="kart"] .tc-tablo td.tc-tablo-sec { width: auto; }
+.tc-tablo-toplu {
+  position: sticky; bottom: var(--b-3); z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);
+  margin-top: var(--b-3); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2);
+  background: var(--panel-solid); border: 1px solid var(--edge2); box-shadow: var(--shadow);
+}
+.tc-tablo-toplu-sayi { font-weight: 700; margin-right: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="toplu-islem"]) .tc-tablo-toplu { animation: tc-tablo-toplu-gir var(--hareket-panel) var(--hareket-egri-panel); }
+}
+@keyframes tc-tablo-toplu-gir { from { opacity: 0; transform: translateY(var(--b-2)); } }
+@media (max-width: 767px) {
+  .tc-tablo-toplu { bottom: calc(var(--alt-cubuk) + var(--b-3)); }
+}
