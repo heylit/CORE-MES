@@ -28,7 +28,7 @@ import * as sorgular from '../sorgular.ts';
 import type { BakiyeHam, IstekHam, TeslimHam } from '../sorgular.ts';
 import { adimParcasi } from './dis-akis.ts';
 import { uretimGirisi } from './giris.ts';
-import { belgeNo, uretimPartisi, korumali, adlar, bakiyeDegistir, siraliKilitle, kilitliEksik, eksiUyarisi, hareket, teslimYaz } from './ortak.ts';
+import { belgeNo, uretimPartisi, korumali, adlar, bakiyeDegistir, siraliKilitle, kilitliEksik, eksiUyarisi, hareket, teslimYaz, sktBugun } from './ortak.ts';
 import { refakatPartileriCevir, refakatKartlariniBirlestir } from './refakat.ts';
 import {
   kalaniAc, depodakiMiktar, kapsamOku, kapsamdakiIstasyonlar, istasyonKonumuBul, yerCoz, istasyonKodlari, teslimOku, istenebilirKart, banaGelen, serbestDenetle, kisiKoduCoz, birakmaItirazSuresi,
@@ -72,7 +72,7 @@ export async function kalanIhtiyacPlani(
     let alinan = 0n;
     if (kalan > 0n) {
       const b = await onbellekliBakiyeler(db, malzemeId, onbellek);
-      const o2 = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris })), bindenMetin(kalan));
+      const o2 = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris, sonKullanma: x.sonKullanma })), bindenMetin(kalan), sktBugun());
       mevcut = binde(o2.mevcut);
       for (const a of o2.oneriler) {
         sarflar.push({ malzemeId, konumId: a.konumId, partiId: a.partiId, miktar: a.miktar });

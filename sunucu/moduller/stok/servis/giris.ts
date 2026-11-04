@@ -9,14 +9,14 @@ import type {
 } from '#paylasilan/sozlesme/stok.ts';
 import { belgeAcVeBagla, kaydaBagla } from '../../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { gkkGerekenKartlar, malzemeKullanilabilirMi, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
+import { gkkGerekenKartlar, malzemeKullanilabilirMi, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
 import { siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
 import { depoKabulunuGeriAl } from '../../sevkiyat/disari.ts';
 import { uretimEmriOzeti, emirDugumleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, fasonDonusKonumuEngeli,
   KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
-  uretimGirisiKartEngeli, uretimGirisiKesirEngeli,
+  uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli,
 } from '../kurallar.ts';
 import type { MalzemeTuru } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -94,13 +94,26 @@ async function malKabulSatirlariniYaz(
     if (gkkEngeli) throw dogrulama(gkkEngeli, `${alan}.konumId`);
     const kalite: KaliteDurumu = gkk ? 'karar_bekliyor' : 'serbest';
     let parti: number | null = partiId ?? null;
+    // 2099-3 b: SKT takipli kartın satırı tarihle gelir ve lot açar (tarih lota yazılır).
+    const sonKullanma = s.sonKullanma ?? null;
+    const sktTakipli = satirTuru.tur !== 'fason' && (await sktTakipliKartlar(db, [malzemeId])).has(malzemeId);
+    const sktEngeli = sktGirisEngeli({ takipli: sktTakipli, sonKullanma, lotunki: parti === null ? null : await sorgular.partiSonKullanma(db, parti) });
+    if (sktEngeli) throw dogrulama(`${o.ad ?? o.kod}: ${sktEngeli}`, `${alan}.sonKullanma`);
     // Lotlu türde numarasız satır da parti açar (#1018); sarfta parti yalnız numara girilince açılır.
     const lotlu = partiGereksinimi(o.tur as MalzemeTuru, 'mal_kabul') === 'lot';
-    if (parti === null && (lotlu || (s.parti && (s.parti.tedarikciPartiNo || s.parti.dokumNo)))) {
+    if (parti === null && (lotlu || sonKullanma !== null || (s.parti && (s.parti.tedarikciPartiNo || s.parti.dokumNo)))) {
       const p = s.parti;
       parti = await korumali(() => partiBulVeyaAc(db, { malzemeId, tedarikciPartiNo: p?.tedarikciPartiNo ?? null, dokumNo: p?.dokumNo ?? null, sertifikaNo: p?.sertifikaNo ?? null, uretimEmriId: null, kisiId }, ss?.parcaRevizyonu ?? null));
     }
     if (s.sertifika && parti === null) throw dogrulama(SERTIFIKA_PARTISIZ, `${alan}.sertifika`);
+    if (sonKullanma !== null && parti === null) throw dogrulama('Son kullanma tarihi lota yazılır; bu satır lot açmıyor.', `${alan}.sonKullanma`);
+    if (sonKullanma !== null && parti !== null) {
+      // Aynı tedarikçi parti no'suyla var olan lota eklenen satırın tarihi lotunkiyle aynı olmalı.
+      const lotunki = await sorgular.partiSonKullanma(db, parti);
+      const ayni = sktGirisEngeli({ takipli: sktTakipli, sonKullanma, lotunki });
+      if (ayni) throw dogrulama(`${o.ad ?? o.kod}: ${ayni}`, `${alan}.sonKullanma`);
+      if (lotunki === null) await sorgular.partiSonKullanmaYaz(db, { partiId: parti, sonKullanma, kisiId });
+    }
     // Kalite kararı partiye verilir; GKK kartı lotsuz türde olamaz (malzemeler kuralı), bu yalnız savunmadır.
     if (gkk && parti === null) throw dogrulama('Giriş kalite kontrolü isteyen satır lotla girer.', `${alan}.parti`);
     const a = s.ambalaj ?? null;

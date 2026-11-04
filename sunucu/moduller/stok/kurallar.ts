@@ -103,8 +103,26 @@ export function uretimGirisiDurumEngeli(durum: string, kapanisTamam: boolean): s
   return null;
 }
 
+// ---- Son kullanma tarihi (2099-2 c, 2099-3 b, 2099-4 a, 2099-5 a) -----------------------------------------------------
+// Tarihler YYYY-AA-GG metnidir; metin sırası tarih sırasıdır.
+export const sktGecmisMi = (sonKullanma: string | null, bugun: string): boolean => sonKullanma !== null && sonKullanma < bugun;
+const sktSirasi = (a: string | null, b: string | null): number => (a === b ? 0 : a === null ? 1 : b === null ? -1 : a < b ? -1 : 1);
+export const SKT_GECMIS_ONAY_GEREKLI = 'Bu lotun son kullanma tarihi geçmiş; çıkış için müdür onayı gerekir.';
+// Mal kabul satırı: takipli kartta tarih zorunludur (tarihi olan var olan lota eklenen satır hariç); var olan lota eklenen satırın tarihi lotunkiyle aynı olmalıdır (lot başına tek tarih).
+export function sktGirisEngeli(g: { takipli: boolean; sonKullanma: string | null; lotunki: string | null }): string | null {
+  if (g.takipli && g.sonKullanma === null && g.lotunki === null) return 'Bu kart son kullanma takipli; lotun son kullanma tarihini girin.';
+  if (g.sonKullanma !== null && g.lotunki !== null && g.sonKullanma !== g.lotunki) {
+    return `Bu lotun son kullanma tarihi ${g.lotunki}; farklı tarihli mal yeni lotla girer, yanlış tarihi müdür düzeltir.`;
+  }
+  return null;
+}
+
 // ---- Çıkış önerisi: en eski giriş önce (DEP-05, DEP-06, DEP-07, DEP-08) --------------------------------------------
-export interface OneriSatiri { bakiyeId: number; konumId: number; konumKod: string; konumTur: string; partiId: number | null; partiEtiketi: string | null; miktar: string; ilkGiris: string }
+// sonKullanma: lotun SKT'si (2099-2 c, YYYY-AA-GG); takipsiz lotta yok ya da null.
+export interface OneriSatiri {
+  bakiyeId: number; konumId: number; konumKod: string; konumTur: string; partiId: number | null; partiEtiketi: string | null; miktar: string; ilkGiris: string;
+  sonKullanma?: string | null;
+}
 // Ayrılmış yer: hurda, karantina ve sevkiyat kutusundaki stok kimseye ayrılmaz, üretime ve çıkışa önerilmez (karar 108 a).
 export const AYRILMIS_KONUM_TURLERI = ['hurda', 'karantina', 'sevkiyat'] as const satisfies readonly KonumTuru[];
 // Kullanılabilir stok (rezerve, öneri, kritik seviye) yalnız serbest ve şartlı kalitedir; karar bekleyen ve red parça üretimde uyarıyla
@@ -117,10 +135,12 @@ export const DEGER_GRUPLARI = ['kullanilabilir', 'kalite', 'hurda', 'fason', 'yo
 export type DegerGrubu = (typeof DEGER_GRUPLARI)[number];
 // Fason kutusu, üretim çıkışı, istasyon ve ayrılmış yerler öneriye kaynak olmaz; eksi bakiye öneri değildir.
 const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', ...AYRILMIS_KONUM_TURLERI] satisfies KonumTuru[]);
-export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string) {
+// 2099-4 a: SKT'li lot önce bozulan önce çıkar (FEFO), SKT'siz lotlar ardından ilk giren önce; SKT'siz kartta sıra değişmez.
+// 2099-5 a: SKT'si geçmiş lot öneriye girmez (bugün tesis günüdür, sunucudan); son gün henüz geçmiş sayılmaz.
+export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string, bugun: string | null = null) {
   const uygun = satirlar
-    .filter((s) => !ONERI_DISI.has(s.konumTur) && binde(s.miktar) > 0n)
-    .sort((a, b) => Date.parse(a.ilkGiris) - Date.parse(b.ilkGiris) || a.bakiyeId - b.bakiyeId);
+    .filter((s) => !ONERI_DISI.has(s.konumTur) && binde(s.miktar) > 0n && !(bugun !== null && sktGecmisMi(s.sonKullanma ?? null, bugun)))
+    .sort((a, b) => sktSirasi(a.sonKullanma ?? null, b.sonKullanma ?? null) || Date.parse(a.ilkGiris) - Date.parse(b.ilkGiris) || a.bakiyeId - b.bakiyeId);
   const mevcut = uygun.reduce((t, s) => t + binde(s.miktar), 0n);
   if (uygun.length === 0) return { veriYetersiz: true, yeterli: false, mevcut: '0', oneriler: [] };
   let kalan = binde(istenen);

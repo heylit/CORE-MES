@@ -37,7 +37,7 @@ import type { BakiyeHam, IstekHam, RefakatPartisiHam, TeslimHam } from '../sorgu
 import { zeminDurumu, say, anaDepo } from './depo.ts';
 import { kaynakPartisi, sevkCikisiniDenetle, eksiKaliteDenetle } from './hareket.ts';
 import { STOKLANIR_TURLER } from './malzeme.ts';
-import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket, teslimYaz } from './ortak.ts';
+import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket, teslimYaz, sktBugun } from './ortak.ts';
 import { refakatPartileriCevir } from './refakat.ts';
 import { sarfEmriDenetle, emreKartiSagla, teslimGonder, kartaBagliLotuReddet, teslimAlabilir, teslimiKapat, istegiYenidenDene, adimStatusu, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
 
@@ -161,7 +161,7 @@ async function sepetiAyir(db: Db, kisiId: number, eksiOnay: boolean): Promise<{ 
       continue;
     }
     const b = await sorgular.serbestBakiyeler(db, s.malzemeId);
-    const o = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris })), s.miktar);
+    const o = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris, sonKullanma: x.sonKullanma })), s.miktar, sktBugun());
     let kalan = binde(s.miktar);
     for (const x of o.oneriler) { ayirmalar.push({ satirId: s.id, malzemeId: s.malzemeId, konumId: x.konumId, partiId: x.partiId, partiSecimi: x.partiId === null ? null : 'en_eski', miktar: x.miktar, onayliEksi: false }); kalan -= binde(x.miktar); }
     if (kalan > 0n) {

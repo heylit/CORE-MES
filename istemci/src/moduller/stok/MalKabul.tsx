@@ -35,11 +35,13 @@ interface Satir {
   sertifikaOzet: string; sertifikaAdi: string; sertifikaYukleniyor: boolean;
   // Sevkiyatın geliş kalemi (944, 957 a): kabul kalemi kapatır; kısmi kabulde kalem açık kalır ('' bağsız).
   sevkKalemiId: string; sevkEtiketi: string;
+  // 2099-3 b: lotun son kullanma tarihi (GGGG-AA-GG, '' girilmedi); kart SKT takipliyse sunucu zorunlu tutar.
+  sonKullanma: string;
 }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
   hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '',
-  sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '' });
+  sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '', sonKullanma: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
 const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '' && s.sevkKalemiId === '';
 const sayi = (v: string): number => Number(miktarGirdisi(v || '0'));
@@ -237,6 +239,7 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
           <Girdi etiket="Tedarikçi parti no" value={s.tedarikciPartiNo} onChange={(e) => degistir({ tedarikciPartiNo: e.target.value })} {...(lotluMu(tur) ? { ipucu: LOT_IPUCU } : {})} />
           <Girdi etiket="Döküm no" value={s.dokumNo} onChange={(e) => degistir({ dokumNo: e.target.value })} />
           <Girdi etiket="Sertifika no" value={s.sertifikaNo} onChange={(e) => degistir({ sertifikaNo: e.target.value })} />
+          <Girdi etiket="Son kullanma tarihi" type="date" value={s.sonKullanma} onChange={(e) => degistir({ sonKullanma: e.target.value })} ipucu="SKT takipli kartta zorunlu; lot başına tek tarih." />
           <SertifikaDosyasi s={s} degistir={degistir} />
         </>
       )}
@@ -264,6 +267,7 @@ function satirGirdisi(s: Satir): MalKabulGovdesi['satirlar'][number] {
     ...(s.siparisSatirId ? { siparisSatirId: Number(s.siparisSatirId) } : {}), ...fason,
     ambalaj: s.ambalajTur ? { tur: s.ambalajTur, olcu: s.ambalajOlcu, ozelOlcu: ozel, adet: s.ambalajSayisi ? Number(s.ambalajSayisi) : null } : null,
     ...(s.sertifikaOzet ? { sertifika: { ozet: s.sertifikaOzet, dosyaAdi: s.sertifikaAdi } } : {}),
+    ...(s.sonKullanma ? { sonKullanma: s.sonKullanma } : {}),
   };
 }
 

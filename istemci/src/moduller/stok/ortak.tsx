@@ -95,11 +95,15 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
   const { bildir } = useBildirim();
   const [onay, setOnay] = useState<{ govde: G; mevcut: string } | null>(null);
   const [kartOnayi, setKartOnayi] = useState<{ govde: G; bilgi: KartOnayi } | null>(null);
+  // 2099-5 a: SKT'si geçmiş lot; onayı yalnız stok.skt-onayla taşıyan verir, öteki kişiye yalnız neden gösterilir.
+  const [skt, setSkt] = useState<{ govde: G; sonKullanma: string | null } | null>(null);
+  const sktOnaylayabilir = useIslem('stok.skt-onayla');
   const komut = useMutation({
     mutationFn: (govde: G) => (belirsizMiktarVar(govde) ? Promise.reject(new BelirsizMiktarHatasi()) : gonder(govde)),
     onSuccess: async () => {
       setOnay(null);
       setKartOnayi(null);
+      setSkt(null);
       bildir('tamam', basarili);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
       sonra?.();
@@ -109,7 +113,8 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
       if (kart) { setKartOnayi({ govde, bilgi: kart }); return; }
       setKartOnayi(null);
       if (hata instanceof ApiHatasi && hata.govde.kod === 'ONAY_GEREKLI') {
-        const ayrinti = (hata.govde as { ayrinti?: { mevcut?: string } }).ayrinti;
+        const ayrinti = (hata.govde as { ayrinti?: { mevcut?: string; sktOnayi?: boolean; sonKullanma?: string | null } }).ayrinti;
+        if (ayrinti?.sktOnayi === true) { setSkt({ govde, sonKullanma: ayrinti.sonKullanma ?? null }); return; }
         setOnay({ govde, mevcut: ayrinti?.mevcut ?? '0' });
         return;
       }
@@ -133,7 +138,20 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
     <KartOnayiPenceresi bilgi={kartOnayi?.bilgi ?? null} yukleniyor={komut.isPending}
       onayla={() => { if (kartOnayi) komut.mutate({ ...kartOnayi.govde, kartOnayi: true }); }} vazgec={() => setKartOnayi(null)} />
   );
-  return { komut, onayPenceresi: <>{onayPenceresi}{kartPenceresi}</> };
+  const sktPenceresi = (
+    <OnayPenceresi
+      acik={skt !== null}
+      baslik="Son kullanma tarihi geçmiş"
+      onayMetni={sktOnaylayabilir ? 'Onayla ve çıkar' : 'Tamam'}
+      tehlikeli={sktOnaylayabilir}
+      yukleniyor={komut.isPending}
+      onayla={() => { if (skt && sktOnaylayabilir) komut.mutate({ ...skt.govde, sktOnay: true }); else setSkt(null); }}
+      vazgec={() => setSkt(null)}
+    >
+      <p>Lotun son kullanma tarihi <strong>{skt?.sonKullanma ?? '—'}</strong>. {sktOnaylayabilir ? 'Onaylarsanız çıkış yazılır ve onay hareketle kalır.' : 'Bu çıkışı müdür onaylar.'}</p>
+    </OnayPenceresi>
+  );
+  return { komut, onayPenceresi: <>{onayPenceresi}{kartPenceresi}{sktPenceresi}</> };
 }
 
 export const hataMetni = (hata: unknown): string =>

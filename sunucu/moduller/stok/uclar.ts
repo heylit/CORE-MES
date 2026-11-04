@@ -5,7 +5,7 @@ import {
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
-  rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi,
+  rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
@@ -82,6 +82,10 @@ export const uclar = [
 
   uc({ yontem: 'GET', yol: '/stok/partiler', yetki: OKUMA, sorgu: partilerSorgusu, cevap: partilerCevabi, isle: ({ db, sorgu }) => s.partiListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/belgeler/:belgeId', yetki: OKUMA, parametre: partiBelgeParametresi, cevap: ikiliCevap, isle: ({ db, parametre }) => s.partiBelgeDosyasi(db, parametre.id, parametre.belgeId) }),
+  // 2099-6 a: tür listeleri (kimyasal, kesici takım, aparat) Stok Merkezi okumasıyla açılır.
+  uc({ yontem: 'GET', yol: '/stok/tur-listeleri/:liste', yetki: OKUMA, parametre: turListesiParametresi, cevap: turListesiCevabi, isle: ({ db, parametre }) => s.turListesi(db, parametre.liste) }),
+  // 2099-2 c, 2099-5 a: lotun SKT düzeltmesi yalnız müdürdedir (stok.skt-onayla); eski ve yeni tarih değişiklik defterine düşer.
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/partiler/:id/son-kullanma', yetki: 'stok.skt-onayla', parametre: kimlikParametresi, govde: sktDuzeltGovdesi, cevap: sktDuzeltCevabi, isle: ({ db, kullanici, parametre, govde }) => s.sktDuzelt(db, kullanici.id, parametre.id, govde) }),
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/iz', yetki: OKUMA, parametre: kimlikParametresi, cevap: partiIziCevabi, isle: ({ db, parametre }) => s.partiIzi(db, parametre.id) }),
 
   uc({ yontem: 'GET', yol: '/stok/fason-isleri', yetki: 'stok.giris', sorgu: fasonIsleriSorgusu, cevap: fasonIsleriCevabi, isle: ({ db, sorgu }) => s.fasonIsleri(db, sorgu.konumId) }),
@@ -105,7 +109,7 @@ export const uclar = [
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-et', yetki: 'stok.statu-degistir', govde: rezerveEtGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveEt(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-kaldir', yetki: 'stok.statu-degistir', govde: rezerveKaldirGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveKaldir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/statu-degistir', yetki: 'stok.statu-degistir', govde: statuDegistirGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.statuDegistir(db, kullanici.id, govde) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.cikisYap(db, kullanici.id, govde); } }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); s.sktOnayiDenetle(kullanici, govde); return s.cikisYap(db, kullanici.id, govde); } }),
   // Depo sevk (944, 962 a): sevkiyatın tetiklediği gidişin son çıkışı; gelişler mal kabul satırıyla (sevkKalemiId) kapanır.
   uc({ yontem: 'GET', yol: '/stok/depo-sevk', yetki: { biri: ['stok.cikis', 'stok.giris'] }, cevap: depoSevkCevabi, isle: ({ db }) => s.depoSevkListesi(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/depo-sevk/:id/cikis', yetki: 'stok.cikis', parametre: kimlikParametresi, cevap: depoCikisCevabi, isle: ({ db, kullanici, parametre }) => s.depoCikisiYap(db, kullanici.id, parametre.id) }),

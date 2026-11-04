@@ -7,15 +7,16 @@ import { KATALOG_TURLERI, type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   KaliteDurumu, CikisOnerisiCevabi, MalzemeAyarKomutu, MalzemeAyrintiCevabi, MalzemeKartBilgileriCevabi, MalzemelerListesi, MalzemeOzetiCevabi, MalzemeStokSatiri, Parti, PartiIziCevabi,
-  PartilerListesi, GozOnerisiCevabi, PanelCevabi, LotEtiketi,
+  PartilerListesi, GozOnerisiCevabi, PanelCevabi, LotEtiketi, SktDuzeltCevabi, SktDuzeltGovdesi, StokTurListesi, TurListesiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
+import { STOK_TUR_LISTELERI } from '#paylasilan/sozlesme/stok.ts';
+import { kartAlanDegerleri, kategoriKartlari, malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
 import { emirlerinSevkleri } from '../../sevkiyat/disari.ts';
 import { emirDurumlari } from '../../uretim-emirleri/disari.ts';
 import { binde, bindenMetin, cikisOnerisi, partiEtiketi, statuAramasi, statuKirilimi, statuKodlari, stoksuzStatuler, stoklanirMi, malKabulGozOnerisi, stokDurumu } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { zeminDurumu } from './depo.ts';
-import { korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir } from './ortak.ts';
+import { korumali, adlar, emirNoDe, emirNoHaritasi, bakiyeSatiri, hareketleriCevir, sktBugun } from './ortak.ts';
 import { refakatPartileriCevir, kartlarinCiktiVeSevkleri } from './refakat.ts';
 import { statuler, bekleyenEmirler, rezerveListesi } from './uretim.ts';
 
@@ -136,9 +137,9 @@ export async function cikisOnerisiOku(db: Db, id: number, miktar: string): Promi
   const b = await sorgular.serbestBakiyeler(db, id);
   const nolar = await emirNoHaritasi(db, b.map((x) => x.uretimEmriId));
   return cikisOnerisi(b.map((x) => ({
-    bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, miktar: x.miktar, ilkGiris: x.ilkGiris,
+    bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, miktar: x.miktar, ilkGiris: x.ilkGiris, sonKullanma: x.sonKullanma,
     partiEtiketi: x.partiId === null ? null : partiEtiketi({ lotNo: x.lotNo, tedarikciPartiNo: x.tedarikciPartiNo, dokumNo: x.dokumNo, uretimEmriId: x.uretimEmriId }, emirNoDe(nolar, x.uretimEmriId)),
-  })), miktar);
+  })), miktar, sktBugun());
 }
 
 // Göz önerisi (DEP-34): kural saf fonksiyondadır; veri yoksa null döner, göz uydurulmaz.
@@ -225,5 +226,51 @@ export async function kaliteEtiketleri(db: Db, bakiyeIdler: readonly number[]): 
     if (!h) return [];
     const o = ozet.get(h.malzemeId);
     return [{ ...h, malzemeAd: o?.ad ?? null, malzemeKod: o?.kod ?? null, birim: o?.birim ?? null }];
+  });
+}
+
+// ---- Tür listeleri ve SKT düzeltmesi (2099) -------------------------------------------------------------------------
+// 2099-6 a: kartlar malzemelerden kategoriyle gelir (silinmiş hariç, stoğu olmayan da); stok sayıları ve SKT özeti stoktandır.
+// Liste kategori başına sayfalanmaz: bir kategorideki kart sayısı yüzlerle sınırlı varsayılır (VARSAYIM, DEVIR.md).
+export async function turListesi(db: Db, liste: StokTurListesi): Promise<TurListesiCevabi> {
+  const t = STOK_TUR_LISTELERI[liste];
+  const idler = await kategoriKartlari(db, t.tur, t.kategori);
+  const bugun = sktBugun();
+  if (idler.length === 0) return { bugun, satirlar: [] };
+  // Tek bağlantıda sorgular sırayla gider.
+  const stok = await sorgular.kartStoklari(db, idler);
+  const ozet = await malzemeOzetleri(db, idler);
+  const rezerve = await rezerveToplamlari(db, idler);
+  const alanlar = await kartAlanDegerleri(db, idler);
+  const takipli = await sktTakipliKartlar(db, idler);
+  const skt = await sorgular.kartSktOzetleri(db, idler, bugun);
+  const sktHaritasi = new Map(skt.map((x) => [x.malzemeId, x]));
+  return {
+    bugun,
+    satirlar: stok.map((h) => ({
+      ...malzemeSatiri(h, ozet.get(h.malzemeId), rezerve.get(h.malzemeId) ?? 0n),
+      alanlar: alanlar.get(h.malzemeId) ?? {},
+      sktTakipli: takipli.has(h.malzemeId),
+      enYakinSkt: sktHaritasi.get(h.malzemeId)?.enYakin ?? null,
+      sktGecmisMiktar: bindenMetin(binde(sktHaritasi.get(h.malzemeId)?.gecmisMiktar ?? '0')),
+    })),
+  };
+}
+// 2099-2 c: lotun SKT'si yalnız müdürün işlemiyle düzeltilir (yetki uçta); kartı SKT takipli olmayan lota tarih yazılmaz.
+export async function sktDuzelt(db: Db, kisiId: number, partiId: number, g: SktDuzeltGovdesi): Promise<SktDuzeltCevabi> {
+  const malzemeId = await sorgular.partiMalzemesi(db, partiId);
+  if (malzemeId === null) throw bulunamadi('Lot bulunamadı.');
+  if (!(await sktTakipliKartlar(db, [malzemeId])).has(malzemeId)) throw gecersiz('Bu lotun kartı son kullanma takipli değil; önce kartta SKT takibini açın.');
+  return korumali(async () => {
+    const mevcut = await sorgular.partiSonKullanmaKilitle(db, partiId);
+    if (mevcut === null) {
+      if (g.surum !== null) throw cakisma('Bu lotun son kullanma tarihi kaydı yok; sayfayı yenileyin.');
+      await sorgular.partiSonKullanmaYaz(db, { partiId, sonKullanma: g.sonKullanma, kisiId });
+      return { partiId, sonKullanma: g.sonKullanma, surum: 1 };
+    }
+    if (g.surum === null || !(await sorgular.partiSonKullanmaDuzelt(db, { partiId, sonKullanma: g.sonKullanma, kisiId, surum: g.surum }))) {
+      throw cakisma('Lotun son kullanma tarihi az önce değişti; yeniden okuyun.');
+    }
+    return { partiId, sonKullanma: g.sonKullanma, surum: g.surum + 1 };
   });
 }

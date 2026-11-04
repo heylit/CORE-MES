@@ -43,6 +43,7 @@ Oturtmada yazıldı (teslimde yoktu). Kaynak: göçler `20261008142031`..`202610
 | Malzeme teslimi | iki kişi arası teslim (gönderen, alan), yol, red nedeni | `stok_teslim` (`malzeme_id`, `parti_id`, `statu_id`, `kaynak_konum_id`, `hedef_konum_id`, `istek_id`, `uretim_emri_id`, `gonderen_kisi_id`, `kapatan_kisi_id`) | Arkon kutusu bağlamada bu uçlara bağlanır (kart #1208); statü Reçete ve Rota'nın (`recete_rota_statu`) |
 | İstasyon konumu | istasyonun stok konumu | `stok_konum` (`tur = 'istasyon'`, `istasyon_id`) | istasyon kaydı `istasyonlar` modülünün; konum kendiliğinden açılır |
 | Malzeme isteği | bütün sayfalardan gelen istek, durum ve karşılanan | `stok_malzeme_istegi` (`malzeme_id`, `istasyon_id`, `uretim_emri_id`, `kaynak_kimligi`, `durum`) | Arkon `logi` `req` belgesi `kaynak_kimligi` ile bağlanır (`arkon:logi:<id>`); istasyon yabancı anahtar, emir düz sayı (STK6 b) |
+| Son kullanma tarihi | lotun SKT'si, düzeltmeyi yapan | `stok_parti_son_kullanma` (`parti_id`, `son_kullanma`, `kisi_id`, `surum`) | takip işareti kartta (malzemeler `kayit.com.skt`); kategori ve türe özel alanlar malzemelerin (`kayit.g`), stok yalnız okur (kart 2099) |
 
 ## Başkasına verilen (`disari.ts`)
 

@@ -3,6 +3,7 @@ import { UygulamaHatasi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts'
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { KisitEslemesi } from '#cekirdek/kisit.ts';
 import type { NumaraAnahtari } from '#paylasilan/ayarlar.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { BakiyeSatiri, KaliteDurumu, Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { numaraAl } from '../../ayarlar/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
@@ -31,6 +32,8 @@ export async function partiBulVeyaAc(db: Db, p: sorgular.PartiAnahtari, siparisR
   const lotNo = await numaraAl(db, 'stok.lot-no', { varMi: (no) => sorgular.lotNoVarMi(db, no) });
   return (await sorgular.partiAc(db, { ...p, lotNo, parcaRevizyonu: siparisRevizyonu ?? await partiRevizyonu(db, p.malzemeId) })) ?? (await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId!))!;
 }
+// 2099-5 a: SKT karşılaştırması tesis günüyle yapılır; gün sunucudan, istemciden alınmaz.
+export const sktBugun = (): string => tesisGunu(Date.now());
 // Üretim girişinin partisi: refakat kartıyla sayılan parça kartın partisine, kartsız sayım emrin partisine girer (#126).
 export async function uretimPartisi(db: Db, p: { malzemeId: number; uretimEmriId: number; refakatPartisiId: number | null; kisiId: number }): Promise<number> {
   if (p.refakatPartisiId === null) {
@@ -82,6 +85,7 @@ export function bakiyeSatiri(b: BakiyeHam, ad: Map<number, string>, nolar: EmirN
     partiEtiketi: b.partiId === null ? null : partiEtiketi({ lotNo: b.lotNo, tedarikciPartiNo: b.tedarikciPartiNo, dokumNo: b.dokumNo, uretimEmriId: b.uretimEmriId }, emirNoDe(nolar, b.uretimEmriId)),
     miktar: b.miktar, ilkGiris: b.ilkGiris,
     ambalaj: b.ambalajTur === null ? null : { tur: b.ambalajTur, olcu: b.ambalajOlcu ?? '', adet: b.ambalajAdet }, statuId: b.statuId, kaliteDurumu: b.kaliteDurumu,
+    sonKullanma: b.sonKullanma,
   };
 }
 export async function hareketleriCevir(db: Db, satirlar: HareketHam[]): Promise<Hareket[]> {

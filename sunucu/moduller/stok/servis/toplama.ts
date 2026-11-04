@@ -12,7 +12,7 @@ import { binde, bindenMetin, cikisOnerisi, partiEtiketi, rotaSirala, ISTEK_GECIS
 import * as sorgular from '../sorgular.ts';
 import type { IstekHam } from '../sorgular.ts';
 import { dusumDenetle } from './hareket.ts';
-import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, bakiyeDegistir, siraliKilitle, hareket } from './ortak.ts';
+import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, bakiyeDegistir, siraliKilitle, hareket, sktBugun } from './ortak.ts';
 import { ISTASYON_ISTEGI, kalaniAc, kapsamOku, istasyonKapsamiIdleri, istasyonKapsaminiDenetle, istasyonKonumuBul, toplamaHedefiGoster } from './teslim.ts';
 import { rezerveyiAsmasin } from './uretim.ts';
 
@@ -65,7 +65,7 @@ export async function toplamaAc(db: Db, k: Kullanici, g: ToplamaAcKomutu): Promi
   const kalemler: { malzemeId: number; istenen: string; eksik: string }[] = [];
   for (const [malzemeId, miktar] of istenen) {
     const b = (await sorgular.serbestBakiyeler(db, malzemeId)).filter((x) => x.konumId !== hedef);
-    const o = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris })), bindenMetin(miktar));
+    const o = cikisOnerisi(b.map((x) => ({ bakiyeId: x.id, konumId: x.konumId, konumKod: x.konumKod, konumTur: x.konumTur, partiId: x.partiId, partiEtiketi: null, miktar: x.miktar, ilkGiris: x.ilkGiris, sonKullanma: x.sonKullanma })), bindenMetin(miktar), sktBugun());
     const karsilanan = o.oneriler.reduce((t, x) => t + binde(x.miktar), 0n);
     kalemler.push({ malzemeId, istenen: bindenMetin(miktar), eksik: bindenMetin(miktar - karsilanan) });
     for (const x of o.oneriler) plan.push({ malzemeId, konumId: x.konumId, partiId: x.partiId, miktar: x.miktar });
