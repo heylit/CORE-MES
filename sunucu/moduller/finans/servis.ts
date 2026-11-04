@@ -1129,13 +1129,17 @@ export async function siparisFaturalari(db: Db, siparisIdler: readonly number[])
   return sonuc;
 }
 
-// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri. Beyanın verildiği kayıtlı değildir: geçmiş son gün kapanmış sayılır.
-// Yetki denetlemez; çağıran finans.oku'yu denetler.
-export function takvimKayitlari(_db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
-  return Promise.resolve(vergiTakvimi(baslangic, bitis).map((v): TakvimKaydi => ({
-    kaynak: 'vergi', kimlik: `${v.tarih}-${v.kod}`, tarih: v.tarih, no: null, baslik: v.ad, ilgili: `Dönem: ${v.donem}`,
-    durum: v.tarih < bugun ? 'Son günü geçti' : 'Son gün', bitti: v.tarih < bugun,
-  })));
+// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri. TKV-2 a (1846): "verildi" işaretli beyan kapanır; son günü geçmiş ve
+// işaretsiz beyan açık kalır ("Kaçırıldı", takvimde gecikmiş ve kırmızı). Yetki denetlemez; çağıran finans.oku'yu denetler.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
+  const verilen = new Set((await sorgular.beyanlar(db, baslangic, bitis)).map((b) => `${b.sonGun}-${b.kod}`));
+  return vergiTakvimi(baslangic, bitis).map((v): TakvimKaydi => {
+    const verildi = verilen.has(`${v.tarih}-${v.kod}`);
+    return {
+      kaynak: 'vergi', kimlik: `${v.tarih}-${v.kod}`, tarih: v.tarih, no: null, baslik: v.ad, ilgili: `Dönem: ${v.donem}`,
+      durum: verildi ? 'Verildi' : v.tarih < bugun ? 'Kaçırıldı' : 'Son gün', bitti: verildi,
+    };
+  });
 }
 
 // ---- Vergi beyanı (1846, TKV-2 a) ----

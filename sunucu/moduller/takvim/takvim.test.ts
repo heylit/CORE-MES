@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { GECIKEN_GERI_GUN } from '#paylasilan/sozlesme/takvim.ts';
 import type { TakvimCevabi, TakvimGecikenCevabi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -29,12 +31,12 @@ describe('takvim (gerçek PostgreSQL)', () => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam.vt;
   };
-  async function istek<T>(cerez: string, yontem: 'GET' | 'POST', url: string, payload?: unknown): Promise<Cevap<T>> {
-    const cevap = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: cerez }, payload: payload as object | undefined });
+  async function istek<T>(cerez: string, yontem: 'GET' | 'POST', url: string, payload?: unknown, ek: Record<string, string> = {}): Promise<Cevap<T>> {
+    const cevap = await app.inject({ method: yontem, url: `/api${url}`, headers: { cookie: cerez, ...ek }, payload: payload as object | undefined });
     return { durum: cevap.statusCode, govde: cevap.json() as T };
   }
-  const tamam = async <T>(cerez: string, yontem: 'GET' | 'POST', url: string, payload?: unknown): Promise<T> => {
-    const cevap = await istek<T>(cerez, yontem, url, payload);
+  const tamam = async <T>(cerez: string, yontem: 'GET' | 'POST', url: string, payload?: unknown, ek: Record<string, string> = {}): Promise<T> => {
+    const cevap = await istek<T>(cerez, yontem, url, payload, ek);
     assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
     return cevap.govde;
   };
@@ -144,5 +146,17 @@ describe('takvim (gerçek PostgreSQL)', () => {
     const z = (await gecikenOku(c.izleyici)).govde;
     assert.ok(z.kayitlar.every((k) => ['izin', 'vergi', 'planli-durus'].includes(k.kaynak)));
     assert.deepEqual(z.kayitlar.filter((k) => k.kaynak === 'izin').map((k) => k.kimlik).sort(), ['leave_dun', 'leave_eski_bekleyen']);
+  });
+
+  test('TK-07 (1846, TKV-2 a): işaretsiz geçmiş vergi günü geciken ve "Kaçırıldı"; "verildi" işaretlenince kapanır ve gecikenden düşer', async () => {
+    const vergiler = async () => (await gecikenOku(c.yonetici)).govde.kayitlar.filter((k) => k.kaynak === 'vergi');
+    const ilk = (await vergiler())[0]!;
+    assert.equal(ilk.durum, 'Kaçırıldı');
+    const [sonGun, kod] = [ilk.tarih, ilk.kimlik.slice(11)];
+    // Finans ucu tekrar korumalıdır; istek kimliği ister.
+    await tamam(c.yonetici, 'POST', '/finans/vergi-beyani/isaretle', { sonGun, kod, verildi: true }, { [ISTEK_KIMLIGI_BASLIGI]: randomUUID() });
+    assert.ok(!(await vergiler()).some((k) => k.kimlik === ilk.kimlik));
+    const gun = (await oku(c.yonetici, { baslangic: sonGun, bitis: sonGun })).govde.kayitlar.find((k) => k.kimlik === ilk.kimlik)!;
+    assert.deepEqual([gun.durum, gun.bitti], ['Verildi', true]);
   });
 });

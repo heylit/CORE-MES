@@ -14,3 +14,4 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 
 - İzin (1191 a): `ik.oku` ya da `ik.izin-oku` olan bütün izinleri, öteki kişi yalnız kendi personel kaydının iznini görür; kullanıcıya bağlı personel kaydı olmayan izin görmez.
 - Sipariş ayrıntısına `/siparisler/:id`, emir ayrıntısına `/uretim-emirleri/:id`, ölçü aletine `/kalibrasyon?alet=:id` ile gidilir (TKV-4). Sevk, satın alma, denetim, izin, vergi ve planlı duruşta kaydın kendi ekranı yerine modülün liste ekranı açılır: o modüllerde kayda doğrudan adres yok (sevk aramasında irsaliye no yok, satın alma adresi talep açar, İK izin ekranı kimliği okumaz).
+- Vergi (1846, TKV-2 a): beyan, Finans'ta "verildi" işaretlenince kapanır; işaretsiz geçmiş son gün açık ve gecikmiştir ("Kaçırıldı"). İşaretin ekranı Finans'tadır; ekran gelene kadar işaret yalnız uçtan konur.
