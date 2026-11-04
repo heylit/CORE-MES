@@ -633,7 +633,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
   });
 
   describe('hareket dili ve açılış', () => {
-    const HEPSI_ACIK = { 'grafik-hareket': true, 'deger-balonu': true, dalga: true, 'gantt-yardim': true, 'gantt-kayma': true, 'durdur-basili': true, 'pencere-kayma': true, 'pencere-cekme': true, 'sekme-cizgi': true, 'menu-gecis': true, 'bildirim-kayma': true, 'hizli-artis': true, 'satir-kaydirma': true, 'tablo-iskelet': true, 'kopyala': true };
+    const HEPSI_ACIK = { 'grafik-hareket': true, 'deger-balonu': true, dalga: true, 'gantt-yardim': true, 'gantt-kayma': true, 'durdur-basili': true, 'pencere-kayma': true, 'pencere-cekme': true, 'sekme-cizgi': true, 'menu-gecis': true, 'bildirim-kayma': true, 'hizli-artis': true, 'satir-kaydirma': true, 'tablo-iskelet': true, 'kopyala': true, 'canli-vurgu': true, 'yukleme-cizgisi': true, 'hata-odagi': true, 'toplu-islem': true, 'kisayol-yardimi': true, 'kaydedildi': true, 'yapiskan-baslik': true, 'takilma-korumasi': true };
     const oku = (cerez: string | null = yonetici) => istek(cerez, 'GET', '/gorunum');
 
     test('her oturum varsayılanı okur; oturumsuz 401; yalnız ayar yazan değiştirir; listede olmayan değer reddedilir', async () => {
