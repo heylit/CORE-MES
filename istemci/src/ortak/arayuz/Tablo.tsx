@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type HTMLAttributes, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type PointerEvent, type ReactNode } from 'react';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { csvIndir, type CsvDegeri } from '../veri/csv.ts';
 import { etkiAcik } from '../veri/etki.ts';
@@ -63,6 +63,25 @@ interface Ozellikler<S> {
   // Kart kipinde (dar kap) satır sola kaydırılınca açılan tek hızlı eylem (kart 2090, karar 2081-20). Hangi listede ve hangi
   // eylemle kullanılacağı bağlamada ekran ekran kararlaştırılır (2090-1). Düğme klavye ve ekran okuyucuyla da erişilir.
   satirEylemi?: SatirEylemi<S>;
+  // Verilince satırlar seçilebilir ve seçim olunca tablonun altında toplu işlem çubuğu çıkar (kart 2092, karar 2081-24).
+  // Hangi listede hangi eylemin olacağı bağlamada kararlaştırılır. Etki kapatıldıysa seçim sütunu çizilmez.
+  toplu?: { eylemler: readonly TopluEylem<S>[] };
+}
+
+export interface TopluEylem<S> {
+  anahtar: string;
+  baslik: string;
+  simge: SimgeAdi;
+  yap: (secili: readonly S[]) => void;
+  ton?: 'tehlike';
+}
+
+// Satırın içeriği değişince (canlı veri) satır bir an vurgulanır (kart 2092, karar 2081-21). Karşılaştırma içerikledir:
+// ekran her çizimde yeni nesne üretse de değişmeyen satır vurgulanmaz. İlk çizimde ve yeni gelen satırda (sayfa değişimi)
+// vurgu yoktur.
+const VURGU_MS = 1400;
+function satirImzasi(satir: unknown): string | null {
+  try { return JSON.stringify(satir) ?? null; } catch { return null; }
 }
 
 export interface SatirEylemi<S> {
@@ -212,11 +231,42 @@ function useSatirKaydirma(etkin: boolean) {
 
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
-  yukleniyor = false, satirEylemi,
+  yukleniyor = false, satirEylemi, toplu,
 }: Ozellikler<S>) {
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
   const kaydirma = useSatirKaydirma(kart && satirEylemi !== undefined);
+  const imzalar = useRef<Map<string, string | null> | null>(null);
+  const topluAcik = toplu !== undefined && toplu.eylemler.length > 0 && etkiAcik('toplu-islem');
+  const [secili, seciliYaz] = useState<ReadonlySet<string>>(() => new Set());
+  const anahtar = (satir: S) => String(satirAnahtari(satir));
+
+  useLayoutEffect(() => {
+    const yeni = new Map(satirlar.map((satir) => [anahtar(satir), satirImzasi(satir)] as const));
+    const onceki = imzalar.current;
+    imzalar.current = yeni;
+    const el = kap.current;
+    if (!onceki || !el || !etkiAcik('canli-vurgu')) return;
+    for (const tr of el.querySelectorAll<HTMLTableRowElement>('tbody tr[data-satir]')) {
+      const k = tr.getAttribute('data-satir') ?? '';
+      const eski = onceki.get(k);
+      if (eski === undefined || eski === null || eski === yeni.get(k)) continue;
+      tr.removeAttribute('data-degisti');
+      void tr.offsetWidth;
+      tr.setAttribute('data-degisti', '');
+      setTimeout(() => { tr.removeAttribute('data-degisti'); }, VURGU_MS);
+    }
+  });
+
+  // Listede artık olmayan satır seçimden düşer (sayfa değişti, kayıt silindi).
+  useEffect(() => {
+    seciliYaz((onceki) => {
+      if (onceki.size === 0) return onceki;
+      const var_ = new Set(satirlar.map((satir) => String(satirAnahtari(satir))));
+      const kalan = [...onceki].filter((k) => var_.has(k));
+      return kalan.length === onceki.size ? onceki : new Set(kalan);
+    });
+  }, [satirlar, satirAnahtari]);
 
   const bos = satirlar.length === 0;
 
@@ -291,6 +341,16 @@ export function Tablo<S>({
         <table className="tc-tablo" aria-label={etiket}>
           <thead>
             <tr>
+              {topluAcik && (
+                <th scope="col" className="tc-tablo-sec">
+                  <input
+                    type="checkbox" aria-label="Tümünü seç"
+                    checked={secili.size > 0 && secili.size === satirlar.length}
+                    ref={(el) => { if (el) el.indeterminate = secili.size > 0 && secili.size < satirlar.length; }}
+                    onChange={(o) => { seciliYaz(o.target.checked ? new Set(satirlar.map(anahtar)) : new Set()); }}
+                  />
+                </th>
+              )}
               {sutunlar.map((s) => {
                 const siralanir = siralanan.includes(s);
                 const y = yon(s);
@@ -311,6 +371,8 @@ export function Tablo<S>({
             {satirlar.map((satir) => (
               <tr
                 key={satirAnahtari(satir)}
+                data-satir={anahtar(satir)}
+                data-secili={topluAcik && secili.has(anahtar(satir)) ? '' : undefined}
                 className={satirSec ? 'tc-tablo-secilir' : undefined}
                 tabIndex={satirSec ? 0 : undefined}
                 {...kaydirma()}
@@ -321,6 +383,19 @@ export function Tablo<S>({
                   satirSec(satir);
                 } : undefined}
               >
+                {topluAcik && (
+                  <td className="tc-tablo-sec" data-baslik="Seç" onClick={(o) => { o.stopPropagation(); }}>
+                    <input
+                      type="checkbox" aria-label={`Seç: ${String(sutunlar[0]?.hucre(satir) ?? anahtar(satir))}`}
+                      checked={secili.has(anahtar(satir))}
+                      onChange={(o) => {
+                        const k = anahtar(satir);
+                        const acik = o.target.checked;
+                        seciliYaz((onceki) => { const y = new Set(onceki); if (acik) y.add(k); else y.delete(k); return y; });
+                      }}
+                    />
+                  </td>
+                )}
                 {sutunlar.map((s) => {
                   const icerik = s.hucre(satir);
                   const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz'].filter(Boolean).join(' ');
@@ -346,6 +421,18 @@ export function Tablo<S>({
           </tbody>
         </table>
       </div>
+      {topluAcik && secili.size > 0 && (
+        <div className="tc-tablo-toplu" role="toolbar" aria-label={`${etiket}: toplu işlem`}>
+          <span className="tc-tablo-toplu-sayi" role="status">{secili.size} seçili</span>
+          {toplu?.eylemler.map((e) => (
+            <Dugme key={e.anahtar} simge={e.simge} tur={e.ton === 'tehlike' ? 'tehlike' : 'ikincil'}
+              onClick={() => { e.yap(satirlar.filter((satir) => secili.has(anahtar(satir)))); }}>
+              {e.baslik}
+            </Dugme>
+          ))}
+          <Dugme simge="x" onClick={() => { seciliYaz(new Set()); }}>Seçimi kaldır</Dugme>
+        </div>
+      )}
       {alt}
     </>
   );

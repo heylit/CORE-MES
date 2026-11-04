@@ -283,3 +283,49 @@ describe('Tablo: iskelet satırlar ve satır kaydırma (kart 2090, kararlar 2081
     expect(satir.hasAttribute('data-eylem-acik')).toBe(false);
   });
 });
+
+describe('Tablo: canlı vurgu ve toplu işlem (kart 2092, kararlar 2081-21 ve 24)', () => {
+  afterEach(() => { document.documentElement.removeAttribute('data-etki-kapali'); });
+
+  it('içeriği değişen satır vurgulanır; yeni nesneyle gelen aynı içerik ve ilk çizim vurgulanmaz', () => {
+    const { rerender } = render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} />);
+    const satirlar = () => screen.getAllByRole('row').slice(1);
+    expect(satirlar().some((tr) => tr.hasAttribute('data-degisti'))).toBe(false);
+    rerender(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR.map((s) => ({ ...s }))} satirAnahtari={(s) => s.no} />);
+    expect(satirlar().some((tr) => tr.hasAttribute('data-degisti'))).toBe(false);
+    rerender(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[SATIRLAR[0] as Satir, { no: 2, ad: 'B', adet: 9 }]} satirAnahtari={(s) => s.no} />);
+    expect(satirlar().map((tr) => tr.hasAttribute('data-degisti'))).toEqual([false, true]);
+  });
+
+  it('etki kapatıldıysa vurgu yok', () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'canli-vurgu');
+    const { rerender } = render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} />);
+    rerender(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[SATIRLAR[0] as Satir, { no: 2, ad: 'B', adet: 9 }]} satirAnahtari={(s) => s.no} />);
+    expect(screen.getAllByRole('row').some((tr) => tr.hasAttribute('data-degisti'))).toBe(false);
+  });
+
+  it('satır seçilince toplu çubuk çıkar; eylem seçili satırları alır; seçim satırı açmaz; listeden düşen satır seçimden çıkar', () => {
+    const yazdir = vi.fn();
+    const sec = vi.fn();
+    const toplu = { eylemler: [{ anahtar: 'y', baslik: 'Yazdır', simge: 'printer' as const, yap: yazdir }] };
+    const { rerender } = render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} satirSec={sec} toplu={toplu} />);
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seç: A' }));
+    expect(sec).not.toHaveBeenCalled();
+    expect(within(screen.getByRole('toolbar', { name: 'Liste: toplu işlem' })).getByRole('status').textContent).toBe('1 seçili');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Tümünü seç' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yazdır' }));
+    expect(yazdir).toHaveBeenCalledWith(SATIRLAR);
+    rerender(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[SATIRLAR[1] as Satir]} satirAnahtari={(s) => s.no} satirSec={sec} toplu={toplu} />);
+    expect(screen.getByRole('status').textContent).toBe('1 seçili');
+    fireEvent.click(screen.getByRole('button', { name: 'Seçimi kaldır' }));
+    expect(screen.queryByRole('toolbar')).toBeNull();
+  });
+
+  it('etki kapatıldıysa seçim sütunu çizilmez', () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'toplu-islem');
+    render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no}
+      toplu={{ eylemler: [{ anahtar: 'y', baslik: 'Yazdır', simge: 'printer', yap: () => undefined }] }} />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+});
