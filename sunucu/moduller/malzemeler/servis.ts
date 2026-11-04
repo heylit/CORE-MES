@@ -373,18 +373,37 @@ export async function firmaKodu(db: Db): Promise<string | null> {
   return katalogFirmaKodu(await katalogGenelAyari(db));
 }
 
+// 2089-2 a: Logo'da kullanılan malzeme kodları Logo modülündedir; Logo bu modülü ithal ettiği için tersini sunucu/kablolama.ts kaydeder.
+// Çözücü verilen kodlardan Logo'da olanları döner (Logo'nun yerel aynası, ağ yok). Kayıt yokken (yalnız birim testleri) atlama yapılmaz.
+export type LogoKodCozucusu = (db: Db, kodlar: readonly string[]) => Promise<string[]>;
+let logodaKullanilanKodlar: LogoKodCozucusu | null = null;
+export function logoKodCozucusuKaydet(cozucu: LogoKodCozucusu): void { logodaKullanilanKodlar = cozucu; }
+
+// Logo'da art arda bu kadar dolu numaradan sonra sıradaki verilir; çakışma gönderimde yakalanır (kart "hata").
+export const LOGO_KOD_ATLAMA_EN_COK = 1000;
+
+// Sıradaki numara; Logo'da kullanılıyorsa atlanır, atlanan numara bu önekte bir daha verilmez (2089-2 a).
+async function logoyuAtlayanSira(db: Db, onek: string): Promise<number> {
+  let sira = await s.katalogSiraAl(db, onek);
+  if (logodaKullanilanKodlar === null) return sira;
+  for (let i = 0; i < LOGO_KOD_ATLAMA_EN_COK && (await logodaKullanilanKodlar(db, [katalogStokKodu(onek, sira)])).length > 0; i += 1) {
+    sira = await s.katalogSiraAl(db, onek);
+  }
+  return sira;
+}
+
 // Yeni kart ve taslakta tür değişimi: önek ekranın kodundan (yalnız standart biçim), sıra sunucudan; boşalan eski kod yeniden verilmez.
 // Firma kodu ayarlıysa firma kodlu türün (varsayılan mamul ve yarı mamul) önekini ayar verir; ekranın gönderdiği önek yok sayılır.
 async function yeniStokKodu(db: Db, gelenKod: string | null, tur: string): Promise<{ onek: string; sira: number; stokKodu: string }> {
   const firmaOneki = katalogFirmaOneki(await katalogGenelAyari(db), tur);
   if (firmaOneki) {
-    const sira = await s.katalogSiraAl(db, firmaOneki);
+    const sira = await logoyuAtlayanSira(db, firmaOneki);
     return { onek: firmaOneki, sira, stokKodu: katalogStokKodu(firmaOneki, sira) };
   }
   const onek = katalogKodOneki(gelenKod);
   if (!onek) throw dogrulama('Stok kodu öneki tür-grup-sıra biçiminde olmalı (ör. HM-PAS-00001); kodu sunucu verir.', 'kayit.com.kod');
   if (!katalogOnekiTureUyarMi(onek, tur)) throw dogrulama('Stok kodu öneki malzeme türüne uymuyor.', 'kayit.com.kod');
-  const sira = await s.katalogSiraAl(db, onek);
+  const sira = await logoyuAtlayanSira(db, onek);
   return { onek, sira, stokKodu: katalogStokKodu(onek, sira) };
 }
 

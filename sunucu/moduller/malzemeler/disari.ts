@@ -46,6 +46,8 @@ export type { RotaRevizyonlariCozucusu } from './servis.ts';
 export { rotaRevizyonlariCozucusuKaydet as rotaRevizyonlariCozucusu } from './servis.ts';
 export type { LogoBirimSetiCozucusu } from './servis.ts';
 export { logoBirimSetiCozucusuKaydet as logoBirimSetiCozucusu } from './servis.ts';
+// Ters yöndeki bağ (2089-2 a): yeni stok kodu Logo'da kullanılan numarayı atlar; sunucu/kablolama.ts logonun aynasını bağlar.
+export { logoKodCozucusuKaydet as logoKodCozucusu } from './servis.ts';
 // 1104 a: satın almanın talep, teklif ve siparişte gösterdiği kart ayrıntısı (kalite, standart, tolerans, durum, yüzey, sertifikalar, en az sipariş ...).
 // Kartın sürümü de döner: satın alma siparişteki kopyanın karttan geri kaldığını bununla bilir (1105 a). İptal ve olmayan kart haritada yok.
 export { malzemeSatinAlmaAyrintilari } from './servis.ts';
