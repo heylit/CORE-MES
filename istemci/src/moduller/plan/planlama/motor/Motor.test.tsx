@@ -224,7 +224,7 @@ describe('PlanlamaMotoru', () => {
     expect((screen.getByRole('combobox', { name: 'Referans' }) as HTMLSelectElement).disabled).toBe(true);
   });
 
-  it('Çizelge: araç satırında Başka yok; hafta ızgarası, iş seçimi, gün başlığından saatlik gün; motor ve kilit düğmeleri pasif', () => {
+  it('Çizelge: araç satırında Başka yok; hafta ızgarası, iş seçimi, gün başlığından saatlik gün; motor düğmeleri pasif', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
     const arac = screen.getByRole('toolbar', { name: 'Plan araçları' });
@@ -242,6 +242,46 @@ describe('PlanlamaMotoru', () => {
     expect(within(gun).getByRole('button', { name: /Çoklu seç/ }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(within(gun).getByRole('button', { name: 'Önceki gün' }));
     expect(screen.getByRole('region', { name: 'Gün katmanı: 23.10 Cum' })).toBeTruthy();
+  });
+
+  it('gün katmanında Burada sabitle çalışmaya kilit yazar, Sabitliği kaldır siler; komut yoksa pasif kalır', () => {
+    const c = ornekCalisma();
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    const ol = screen.getByRole('region', { name: 'Çizelge, hafta' });
+    fireEvent.click(within(ol).getByRole('button', { name: '3.10' }));
+    fireEvent.click(within(ol).getByRole('button', { name: '24.10 Cmt' }));
+    const gun = screen.getByRole('region', { name: 'Gün katmanı: 24.10 Cmt' });
+    const d = within(gun).getByRole('button', { name: /Burada sabitle/ });
+    expect(d.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(d);
+    expect(komut.degistir).toHaveBeenCalledWith('İş sabitlendi', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    const yeni = yazilan.at(-1);
+    const id = Object.keys(yeni?.locks ?? {})[0] ?? '';
+    expect(id).not.toBe('');
+    expect(c.locks[id]).toBeUndefined();
+    cleanup();
+    const c2 = structuredClone(c); c2.locks = { ...(yeni?.locks ?? {}) };
+    const k2 = komutKur(c2);
+    ac({ c: c2, komut: k2.komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    const ol2 = screen.getByRole('region', { name: 'Çizelge, hafta' });
+    fireEvent.click(within(ol2).getByRole('button', { name: '3.10' }));
+    fireEvent.click(within(ol2).getByRole('button', { name: '24.10 Cmt' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Gün katmanı: 24.10 Cmt' })).getByRole('button', { name: /Sabitliği kaldır/ }));
+    expect(k2.komut.degistir).toHaveBeenCalledWith('Sabitlik kaldırıldı', expect.any(Function), expect.objectContaining({ ayrinti: id }));
+    expect(k2.yazilan.at(-1)?.locks[id]).toBeUndefined();
+  });
+
+  it('yardımcıdaki Planı onaya gönder Plan atölyesini açar', () => {
+    const { git } = ac({ komut: komutKur(ornekCalisma()).komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Yardımcı' }));
+    const d = within(screen.getByRole('complementary', { name: 'Plan yardımcısı' })).getByRole('button', { name: /Planı onaya gönder/ });
+    expect(d.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(d);
+    expect(git).toHaveBeenCalledWith('studio');
   });
 
   it('Siparişler merceği: tezgâh grupları katlanır, işe basmak seçer ve öteki siparişleri soldurur; kaynak yükü ve geri alma pasif', () => {

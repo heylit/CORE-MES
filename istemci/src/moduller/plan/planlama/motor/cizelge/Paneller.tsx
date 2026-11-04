@@ -105,6 +105,8 @@ interface SagOzellikleri {
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; kuyrukAc: (m: string) => void;
   veriAc: ((bolum: string) => void) | null; hesapAc: (() => void) | null; tezStudyo: ((m: string) => void) | null;
   tasi?: AtolyeKomutlari['tasi'] | undefined;
+  // Plan atölyesini açar; onaya gönderme orada, değişikliklerin karşılaştırmasıyla birlikte yapılır.
+  atolyeAc?: (() => void) | undefined;
 }
 export function SagPanel(o: SagOzellikleri) {
   let govde: ReactNode;
@@ -124,7 +126,7 @@ export function SagPanel(o: SagOzellikleri) {
 // Sade yardımcı (zz24-sade.betik sdYardimci): durum, sık işler, ipucu. Onay bekleyen plan ve canlı farkı Onay bölümüyle gelir; sepet boş
 // olduğundan "Son yaptıklarınız" çıkmaz.
 type Gorev = [SimgeAdi, string, string, (() => void) | null, string];
-function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }: SagOzellikleri) {
+function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec, atolyeAc }: SagOzellikleri) {
   const gec = gecikenler(c, p); const top = c.D.siparisler.filter((s) => !planDisi(s) && s.termin != null).length; const g = gec[0];
   const durum: [SimgeAdi, string, string, string][] = [];
   if (!guncel) durum.push(['rotate', 'uyari', 'Veri plandan sonra değişti.', 'Gösterilen saatler eski. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.']);
@@ -138,7 +140,7 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec }
     gorevler.push(['wrench', 'Tezgâh arızası gir', 'Duran tezgâhın işleri başka tezgâha ya da sonraya kayar.', null, MOTOR_NOTU]);
     gorevler.push(['box', 'Malzeme gecikti', 'Malzemesi geç gelen işler bekletilir.', null, MOTOR_NOTU]);
   }
-  if (yaz || kil) gorevler.push(['flag', 'Planı onaya gönder', 'Bütün değişiklikler Planlama stüdyosunda karşılaştırılır ve onaylanır.', null, HAZIRLANIYOR]);
+  if (yaz || kil) gorevler.push(['flag', 'Planı onaya gönder', 'Plan atölyesi açılır; değişiklikler orada karşılaştırılır ve onaya gönderilir.', atolyeAc ?? null, HAZIRLANIYOR]);
   return (
     <div className="tc-pym-sd-yrd">
       <ul className="tc-pym-sd-durum">

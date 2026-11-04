@@ -120,7 +120,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
   if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} komut={o.komut} />;
   else if (mercek === 'kuyruk') govde = <KuyrukCizelgesi c={c} p={p} cx={cx} planYaz={o.planYaz} gun={kGun} gunSec={setKGun} odak={kTez} masadaGor={masadaGor} />;
   else if (mercek === 'matris') govde = <MatrisCizelgesi c={c} p={p} cx={cx} olcek={olcek} gor={mGor} gorSec={setMGor} gun={mGun} gunSec={setMGun} kuyrukAc={kuyrukAc} sipSec={sipSec} />;
-  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} />;
+  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} komut={o.planYaz ? o.komut : null} />;
   else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} />;
 
   return (
@@ -154,7 +154,7 @@ export function CizelgeGorunumu(o: Ozellikler) {
         {sol && <SolPanel sol={sol} solSec={setSol} kapat={() => setSol(null)} c={c} p={p} planYaz={o.planYaz} secJob={secJob} />}
         <div className="tc-pym-tb" data-mercek={mercek}>{govde}</div>
         {sag && (
-          <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null}
+          <SagPanel sag={sag} sagSec={setSagSek} kapat={() => setSagAcik(false)} c={c} p={p} cx={cx} sor={o.sor} guncel={o.guncel} komut={o.planYaz ? o.komut : null} atolyeAc={o.studyo}
             planYaz={o.planYaz} planKilitle={o.planKilitle} planCanliyaAl={o.planCanliyaAl} secim={secim} secJob={secJob} sipSec={sipSec} isAc={isAc} solAc={solAc} mercekSec={mercekSec}
             opSec={opSec} secimTemizle={secimTemizle} tezKapat={tezKapat} kuyrukAc={kuyrukAc} veriAc={o.veriAc ?? null} hesapAc={o.hesapAc ?? null} tezStudyo={o.tezStudyo ?? null} tasi={o.tasi} />
         )}
