@@ -45,3 +45,19 @@ body:has(.tc-pencere-yan, .tc-pencere-tam) .tc-bildirimler { top: var(--b-5); bo
     left: var(--b-3); right: calc(var(--dokunma) + var(--b-4) + var(--b-3)); top: var(--b-3); bottom: auto;
   }
 }
+
+/* Kayarak geliş ve yana itip kapatma (kart 2090, karar 2081-15): genişte sağdan, telefonda alttan gelir. İtilen bildirim
+   parmağı izler ve soluklaşır; bırakılınca eşik geçilmediyse yerine döner. */
+:root:not([data-etki-kapali~="bildirim-kayma"]) .tc-bildirim {
+  touch-action: pan-y; transform: translateX(var(--itme-x, 0px)); opacity: var(--itme-saydam, 1);
+  transition: transform var(--hareket-sure) var(--hareket-egri), opacity var(--hareket-sure) var(--hareket-egri);
+}
+:root:not([data-etki-kapali~="bildirim-kayma"]) .tc-bildirim[data-itiliyor] { transition: none; cursor: grabbing; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="bildirim-kayma"]) .tc-bildirim { animation: tc-bildirim-gir var(--hareket-panel) var(--hareket-egri-panel); }
+  @media (max-width: 767px) {
+    :root:not([data-etki-kapali~="bildirim-kayma"]) .tc-bildirim { animation-name: tc-bildirim-alttan; }
+  }
+}
+@keyframes tc-bildirim-gir { from { opacity: 0; transform: translateX(var(--b-5)); } }
+@keyframes tc-bildirim-alttan { from { opacity: 0; transform: translateY(var(--b-4)); } }

@@ -1,10 +1,11 @@
 import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { ETKI_OZNITELIGI } from '../veri/etki.ts';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { BILDIRIM_SURESI_MS, BildirimSaglayici, BildirimSayfaIzleyici, EYLEMLI_BILDIRIM_SURESI_MS, useBildirim } from './Bildirim.tsx';
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); document.documentElement.removeAttribute(ETKI_OZNITELIGI); });
 
 function Tetik({ geriAl }: { geriAl: () => void }) {
   const { bildir } = useBildirim();
@@ -128,5 +129,45 @@ describe('Bildirimi numarasıyla kaldırma', () => {
     expect(screen.queryByText('Duruş kaydedildi')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'reddedildi' }));
     expect(screen.queryByText('Duruş kaydedildi')).toBeNull();
+  });
+});
+
+function it_(el: Element, tur: 'pointerDown' | 'pointerMove' | 'pointerUp', x: number) {
+  const o = createEvent[tur](el);
+  Object.defineProperties(o, { clientX: { value: x }, pointerId: { value: 1 }, button: { value: 0 } });
+  fireEvent(el, o);
+}
+
+describe('Bildirimi yana itip kapatma (kart 2090, karar 2081-15)', () => {
+  it('eşiği geçen itiş bildirimi kapatır, kısa itiş yerine döndürür; düğmeden başlayan itiş sayılmaz', () => {
+    render(<BildirimSaglayici><Tetik geriAl={vi.fn()} /></BildirimSaglayici>);
+    fireEvent.click(screen.getByRole('button', { name: 'hata' }));
+    const kutu = screen.getByRole('alert');
+    const mesaj = screen.getByText('Silinemedi');
+    it_(mesaj, 'pointerDown', 100);
+    it_(mesaj, 'pointerMove', 140);
+    expect(kutu.style.getPropertyValue('--itme-x')).toBe('40px');
+    it_(mesaj, 'pointerUp', 140);
+    expect(kutu.style.getPropertyValue('--itme-x')).toBe('');
+    const dugme = screen.getByRole('button', { name: 'Yeniden dene' });
+    it_(dugme, 'pointerDown', 100);
+    it_(dugme, 'pointerMove', 300);
+    it_(dugme, 'pointerUp', 300);
+    expect(screen.getByRole('alert')).toBeTruthy();
+    it_(mesaj, 'pointerDown', 100);
+    it_(mesaj, 'pointerMove', -20);
+    it_(mesaj, 'pointerUp', -20);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('etki kapatıldıysa itiş bildirimi kapatmaz', () => {
+    document.documentElement.setAttribute(ETKI_OZNITELIGI, 'bildirim-kayma');
+    render(<BildirimSaglayici><Tetik geriAl={vi.fn()} /></BildirimSaglayici>);
+    fireEvent.click(screen.getByRole('button', { name: 'hata' }));
+    const mesaj = screen.getByText('Silinemedi');
+    it_(mesaj, 'pointerDown', 100);
+    it_(mesaj, 'pointerMove', 300);
+    it_(mesaj, 'pointerUp', 300);
+    expect(screen.getByRole('alert')).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Dugme } from './Dugme.tsx';
 
 const kok = document.documentElement;
@@ -33,5 +33,55 @@ describe('Dugme dalgasi (karar 2081-9)', () => {
     kok.setAttribute('data-hareket', 'kapali');
     fireEvent.pointerDown(screen.getByRole('button'));
     expect(document.querySelector('.tc-dugme-dalga')).toBeNull();
+  });
+});
+
+describe('Dugme basılı tutunca yineleme (kart 2090, karar 2081-17)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('tek dokunuş tek adımdır; basılı tutunca hızlanarak yinelenir, bırakınca gelen tıklama ikilemez', () => {
+    vi.useFakeTimers();
+    const artir = vi.fn();
+    render(<Dugme aria-label="Artır" basiliTekrar onClick={artir} />);
+    const d = screen.getByRole('button', { name: 'Artır' });
+    fireEvent.pointerDown(d); fireEvent.pointerUp(d); fireEvent.click(d, { detail: 1 });
+    expect(artir).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(d);
+    act(() => { vi.advanceTimersByTime(399); });
+    expect(artir).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(artir).toHaveBeenCalledTimes(2);
+    act(() => { vi.advanceTimersByTime(320 + 256 + 205); });
+    expect(artir).toHaveBeenCalledTimes(5);
+    fireEvent.pointerUp(d); fireEvent.click(d, { detail: 1 });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(artir).toHaveBeenCalledTimes(5);
+    fireEvent.click(d, { detail: 0 });
+    expect(artir).toHaveBeenCalledTimes(6);
+  });
+
+  it('düğme pasifleşince durur; özellik verilmediyse ya da etki kapatıldıysa yinelemez', () => {
+    vi.useFakeTimers();
+    const artir = vi.fn();
+    const { rerender } = render(<Dugme aria-label="Artır" basiliTekrar onClick={artir} />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Artır' }));
+    act(() => { vi.advanceTimersByTime(400); });
+    rerender(<Dugme aria-label="Artır" basiliTekrar onClick={artir} disabled />);
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(artir).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const sade = vi.fn();
+    render(<Dugme aria-label="Sade" onClick={sade} />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Sade' }));
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(sade).not.toHaveBeenCalled();
+    cleanup();
+
+    kok.setAttribute('data-etki-kapali', 'hizli-artis');
+    render(<Dugme aria-label="Artır" basiliTekrar onClick={sade} />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Artır' }));
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(sade).not.toHaveBeenCalled();
   });
 });
