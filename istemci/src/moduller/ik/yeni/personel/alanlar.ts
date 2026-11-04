@@ -23,6 +23,8 @@ export interface FormAlani<K extends string = string> {
   ipucu?: string;
   varsayilan?: string;
   genis?: boolean;
+  // Formda gösterilir, değiştirilmez; değeri başka ekrandan yazılır.
+  salt?: boolean;
 }
 
 const SOZLESME = ['Belirsiz süreli', 'Belirli süreli', 'Kısmi süreli', 'Çağrı üzerine', 'Stajyer'] as const;
@@ -83,7 +85,7 @@ export const PERSONEL_ALANLARI: readonly FormAlani<keyof Personel & string>[] = 
   { bolum: 'Ücret', k: 'yolDeger', l: 'Yol tutarı veya oranı', tur: 'sayi', ipucu: 'Boşsa genel ayar.' },
   { bolum: 'Ücret', k: 'tesvikId', l: 'SGK teşviki', tur: 'tesvik' },
   { bolum: 'Ücret', k: 'primler', l: 'Prim ve ikramiyeler', tur: 'primler', genis: true },
-  { bolum: 'Ücret', k: 'besKatilim', l: 'Otomatik BES kesintisi yapılsın', tur: 'isaret', genis: true, ipucu: '45 yaşını doldurmamış çalışanlar sisteme otomatik dahil edilir; cayma hakkını kullananlarda işareti kaldırın.' },
+  { bolum: 'Ücret', k: 'besKatilim', l: 'Otomatik BES kesintisi yapılsın', tur: 'isaret', genis: true, salt: true, ipucu: 'BES takibi sayfasındaki giriş ve çıkış hareketinden gelir (1940 a).' },
   { bolum: 'Ücret', k: 'banka', l: 'Banka' },
   { bolum: 'Ücret', k: 'iban', l: 'IBAN', tur: 'iban' },
   { bolum: 'Ücret', k: 'oncekiKullanim', l: 'Sistem öncesi kullanılan yıllık izin (gün)', tur: 'sayi', ipucu: 'İşe girişten bu yana, sisteme kaydetmediğiniz dönemde kullanılan toplam yıllık izin.' },

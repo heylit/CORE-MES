@@ -12,6 +12,8 @@ import type {
 import type {
   GirisKartiCevabi, IkGirisKartlariCevabi, IkHesapRolleriCevabi, IkIseAlCevabi, IkIstasyonUyumsuzluklariCevabi,
 } from '#paylasilan/sozlesme/ik.ts';
+import type { IkBesCevabi, IkBesHareketi, IkBesYazCevabi } from '#paylasilan/sozlesme/ik-bes.ts';
+import type { BesTuru } from '#paylasilan/sozlesme/ik-bes.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
@@ -27,7 +29,7 @@ import {
   EKIP_ALANLARI, FAZLA_MESAI_TURLERI, IS_GUNU_IZIN_TURLERI, GIZLI_AYARLAR, IK_ALANLARI, IK_YAZMA_ISLEMLERI, ILETISIM_ALANLARI, YONETICI_ALANLARI, alanlariSec, ayarDegisikligiDenetle,
   bordroKaydi, bordroKimligi, bordroOnayDenetle, boyutDenetle, bugunIzindekiler, degisiklikler, devamGorunurMu, devamOnayDenetle, devamOnayiKur, ekipKimlikleri, enErkenDonemBaslangici, etiket, govdeKimligiDenetle, ikRolu,
   adayGecisiDenetle, GORUSMECI_ADAY_ALANLARI, GORUSMECI_POZISYON_ALANLARI, gorusmeAdayiDenetle, gorusmeciMi, iletisimDenetle, istemciAlanlariniAyikla, kimlikIbanDenetle, izinBakiyeUyarisi, izinCakismasiDenetle, izinGecisiDenetle, izinTarihiDenetle, izinGunuDenetle, izinIcerigiDegistiMi, izinIsGunu, katilimciIsMerkezleri, kayitIsMerkezi, kesinlestirmeDenetle, personelBul,
-  ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
+  besHareketDenetle, besIsareti, korunanBesIsareti, ozelVeriDenetle, ozelVeriyiAyikla, ozelVeriyiKoru, OZEL_VERI_ISLEMI, gecmisteGizliMi, pozisyonGecisiDenetle, turDenetle, ucretDenetle, yillikMesaiSiniri,
   OZLUK_SON_YONETICI_UYARISI, YENI_KISI_SICIL_CAKISMASI, ilkAtamaGunu, ilkIstasyonHatasi, ozlukItmesi, yeniPersonelKisiAdi, calismaAraligi, calismaHesabi, cikisZimmetUyarisi, fazlaTuru, izinOnayBildirimi, haftalikVardiyaPlani, puantajGunuDenetle, puantajKilidiDenetle, puantajTarihiDenetle,
 } from './kurallar.ts';
 import type { GunPlani, VardiyaMatrisSatiri, VardiyaTanimi } from './kurallar.ts';
@@ -286,6 +288,11 @@ async function yaz(db: Db, kullanici: Kullanici, g: YazGirdisi, d: Durum): Promi
     devamUyarisi = o.uyari;
   }
   if (g.tur === 'emp' && g.uc !== 'iletisim') firlat(ucretDenetle(onceki, yeni, islemler));
+  if (g.tur === 'emp') {
+    const bes = korunanBesIsareti(kayitli?.govde ?? null);
+    if (bes === undefined) delete yeni['besKatilim'];
+    else yeni['besKatilim'] = bes;
+  }
   if (g.tur === 'emp') {
     firlat(kimlikIbanDenetle(onceki, yeni));
     firlat(ozelVeriDenetle(onceki, yeni, islemler));
@@ -1048,4 +1055,86 @@ export async function girisKartlari(db: Db, kullanici: Kullanici): Promise<IkGir
       return kimlik === undefined ? [] : [{ kisiId: k.kisiId, personel: kimlik, kartSon4: k.kartSon4, kaydedildi: k.kaydedildi }];
     }),
   };
+}
+
+/* ---------------- BES hareketi (kart 1939, 1940 a) ---------------- */
+
+const BES_KISITLARI = {
+  ik_bes_hareket_gunde_tek: { ileti: 'Bu personelin bu güne ait aynı türde BES hareketi var; sayfayı yenileyin.' },
+  ik_bes_hareket_oran_araligi: { ileti: 'Oran 0 ile 100 arasında olmalı.', alan: 'oran' },
+  ik_bes_hareket_sirket_bicimi: { ileti: 'Emeklilik şirketi en çok 120 karakter olabilir.', alan: 'sirket' },
+  ik_bes_hareket_aciklama_bicimi: { ileti: 'Açıklama en çok 300 karakter olabilir.', alan: 'aciklama' },
+  ik_bes_hareket_oran_yalniz_giriste: { ileti: 'Katkı oranı ve şirket yalnız girişte yazılır.', alan: 'oran' },
+} as const;
+
+const besOzu = (r: s.BesHareketSatiri) => ({ no: r.no, tur: r.tur, tarih: r.tarih, iptal: r.iptal, onceki: r.onceki_bes_katilim });
+function besCevabi(r: s.BesHareketSatiri, adlar: ReadonlyMap<number, string>): IkBesHareketi {
+  return {
+    id: r.no, personel: r.personel, tur: r.tur as BesTuru, tarih: r.tarih, oran: r.katki_orani, sirket: r.emeklilik_sirketi, aciklama: r.aciklama,
+    iptal: r.iptal, surum: r.surum, yazan: adlar.get(r.yazan_kisi_id) ?? null,
+  };
+}
+
+// Okuma ik.oku ile (uçta), okuyanın İK iş merkezi kapsamındaki personelin hareketleri (IK-27).
+export async function besGetir(db: Db, kullanici: Kullanici): Promise<IkBesCevabi> {
+  const d = await durumOku(db, kullanici);
+  const satirlar = (await s.besHareketleri(db)).filter((r) => {
+    const e = d.harita.get(r.personel);
+    return e !== undefined && e.tur === 'emp' && kapsamdaGorunurMu(e, d);
+  });
+  const adlar = await kisiAdlari(db, satirlar.map((r) => r.yazan_kisi_id));
+  return { hareketler: satirlar.map((r) => besCevabi(r, adlar)) };
+}
+
+// Personel satırı kilitlenir: aynı kişiye eşzamanlı iki hareket birbirinin durumunu görmeden yazılmaz. İşaret aynı işlemde yazılır
+// ve personelin değişiklik geçmişine düşer.
+async function besPersoneliKilitle(db: Db, d: Durum, personel: string): Promise<Kayit> {
+  const satir = await s.kayitKilitle(db, 'emp', personel);
+  if (!satir || satir.iptal) throw bulunamadi('Personel bulunamadı.');
+  const e = kayitKur(satir);
+  kapsamDenetle('emp', e.govde, d);
+  return e;
+}
+async function besIsaretiniKur(db: Db, kullanici: Kullanici, d: Durum, e: Kayit): Promise<void> {
+  const deger = besIsareti((await s.besHareketleri(db, [e.kimlik])).map(besOzu));
+  const once = e.govde['besKatilim'] ?? null;
+  if (once === deger) return;
+  await s.personelBesIsaretiYaz(db, e.kimlik, deger, kullanici.id);
+  const sonra: Govde = { ...e.govde, besKatilim: deger };
+  await s.gecmisYaz(db, {
+    kimlik: e.kimlik, tur: 'emp', islem: 'guncelle', etiket: etiket('emp', sonra, adHaritasi(d)), degisiklikler: degisiklikler(e.govde, sonra),
+    notu: 'BES hareketi', kisiId: kullanici.id,
+  });
+}
+async function besYazCevabi(db: Db, no: number): Promise<IkBesYazCevabi> {
+  const r = (await s.besHareketKilitle(db, no))!;
+  return { hareket: besCevabi(r, await kisiAdlari(db, [r.yazan_kisi_id])) };
+}
+
+export interface BesHareketGirdisi { personel: string; tur: BesTuru; tarih: string; oran: number | null; sirket: string | null; aciklama: string | null }
+export async function besHareketEkle(db: Db, kullanici: Kullanici, g: BesHareketGirdisi, simdi: Date = new Date()): Promise<IkBesYazCevabi> {
+  const d = await durumOku(db, kullanici);
+  const e = await besPersoneliKilitle(db, d, g.personel);
+  const hareketler = await s.besHareketleri(db, [g.personel]);
+  firlat(besHareketDenetle(g, hareketler.map(besOzu), bugun(simdi)));
+  const onceki = e.govde['besKatilim'];
+  const no = await kisitKorumali(BES_KISITLARI, () => s.besHareketEkle(db, {
+    ...g, onceki: typeof onceki === 'boolean' ? onceki : null, kisiId: kullanici.id,
+  }));
+  await besIsaretiniKur(db, kullanici, d, e);
+  return besYazCevabi(db, no);
+}
+
+// Hareket silinmez, iptal edilir (geri açılmaz); işaret kalan son geçerli harekete göre yeniden kurulur.
+export async function besHareketIptal(db: Db, kullanici: Kullanici, no: number, surum: number): Promise<IkBesYazCevabi> {
+  const d = await durumOku(db, kullanici);
+  const ilk = await s.besHareketKilitle(db, no);
+  if (!ilk || !d.harita.has(ilk.personel)) throw bulunamadi('BES hareketi bulunamadı.');
+  const e = await besPersoneliKilitle(db, d, ilk.personel);
+  const r = await s.besHareketKilitle(db, no);
+  if (!r || r.iptal) throw bulunamadi('BES hareketi bulunamadı.');
+  if (r.surum !== surum) throw eskiSurum();
+  if (!(await s.besHareketIptal(db, no, surum))) throw eskiSurum();
+  await besIsaretiniKur(db, kullanici, d, e);
+  return besYazCevabi(db, no);
 }

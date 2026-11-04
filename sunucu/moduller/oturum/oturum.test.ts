@@ -197,8 +197,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
   const FIRMA = [...FIRMA_OKU, 'musteri-tedarikci.yaz'];
   // Stok (kart #223, kullanıcı kararı RC1 R4-R6, R13; kart #1225): müdür ve depo bütün stok işlemlerini taşır.
   const DEPO_STOK = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.toplama', 'stok.tanim'];
-  // Hareket geri alma ve elle eksiye düşüm onayı yalnız müdürde (1387 a); depo kendi hareketini geri alamaz.
-  const MUDUR_STOK = ['stok.geri-al', 'stok.eksi-onayla'];
+  // Hareket geri alma ve elle eksiye düşüm onayı yalnız müdürde (1387 a); depo kendi hareketini geri alamaz. SKT'si geçmiş lotun
+  // çıkış onayı ve SKT düzeltmesi de yalnız müdürde (2099-5 a, teyit).
+  const MUDUR_STOK = ['stok.geri-al', 'stok.eksi-onayla', 'stok.skt-onayla'];
   // Sayım farkı onayı yalnız müdürde (1279 a, 1691 teyit).
   const MUDUR_SAYIM_ONAYI = ['stok.sayim-onayla'];
   // Malzeme fişini Logo'ya elle gönderme yalnız depoda (295 a, 299 a; kart #495); müdür depo stok işlemlerini alsa da bunu almaz.

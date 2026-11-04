@@ -305,11 +305,6 @@ export function personelKayitOncesi(onceki: Personel | null, veri: Personel, b: 
   if (d.cikisTarihi && d.cikisTarihi <= b.gun) d.durum = 'Ayrıldı';
   if (!d.cikisTarihi && d.durum === 'Ayrıldı' && b.bolum === 'Ayrılış') d.durum = 'Aktif';
   if (!onceki && !d.sicilNo) d.sicilNo = sonrakiSicil(b.personeller);
-  if (!onceki && d.besKatilim === undefined && d.dogumTarihi) {
-    const dt = gunTarihi(d.dogumTarihi);
-    const bt = gunTarihi(b.gun);
-    if (dt && bt && tamYil(dt, bt) < 45) d.besKatilim = true;
-  }
   return d;
 }
 

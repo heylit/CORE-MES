@@ -96,12 +96,12 @@ describe('kayıt öncesi düzen', () => {
     gun: GUN, personeller: [p('x', { sicilNo: '1005' })], denemeAy: 2, bolum: null,
     departmanAdi: (id) => `D-${id}`, personelAdi: (id) => `P-${id}`, yakaTahmini: () => 'Mavi yaka', kademeTahmini: () => 'Uzman',
   };
-  it('yeni kişide sicil, deneme bitişi, ücret geçmişi, yaka ve BES varsayılanı', () => {
+  it('yeni kişide sicil, deneme bitişi, ücret geçmişi ve yaka; BES işareti formdan gelmez (1940 a)', () => {
     const d = personelKayitOncesi(null, { id: 'n', kind: 'emp', ad: 'N', soyad: 'S', iseGiris: '2026-10-01', brutMaas: 40000, pozisyon: 'Operatör', dogumTarihi: '1990-01-01' }, b);
     expect(d.sicilNo).toBe('1006');
     expect(d.denemeBitis).toBe('2026-11-30');
     expect(d.ucretGecmisi).toEqual([{ tarih: '2026-10-01', brut: 40000, neden: 'İşe giriş' }]);
-    expect([d.yakaTipi, d.kademe, d.besKatilim]).toEqual(['Mavi yaka', 'Uzman', true]);
+    expect([d.yakaTipi, d.kademe, d.besKatilim]).toEqual(['Mavi yaka', 'Uzman', undefined]);
   });
   it('çıkış tarihi geçmişse durum Ayrıldı; Ayrılış bölümünde tarih silinince Aktif', () => {
     const o = p('a', { denemeBitis: '2020-02-29' });
