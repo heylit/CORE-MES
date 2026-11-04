@@ -633,7 +633,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
   });
 
   describe('hareket dili ve açılış', () => {
-    const HEPSI_ACIK = { 'grafik-hareket': true, 'deger-balonu': true, dalga: true, 'gantt-yardim': true, 'gantt-kayma': true, 'durdur-basili': true };
+    const HEPSI_ACIK = { 'grafik-hareket': true, 'deger-balonu': true, dalga: true, 'gantt-yardim': true, 'gantt-kayma': true, 'durdur-basili': true, 'pencere-kayma': true, 'pencere-cekme': true, 'sekme-cizgi': true, 'menu-gecis': true, 'bildirim-kayma': true, 'hizli-artis': true, 'satir-kaydirma': true, 'tablo-iskelet': true, 'kopyala': true };
     const oku = (cerez: string | null = yonetici) => istek(cerez, 'GET', '/gorunum');
 
     test('her oturum varsayılanı okur; oturumsuz 401; yalnız ayar yazan değiştirir; listede olmayan değer reddedilir', async () => {
@@ -661,8 +661,9 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       for (const kotu of ['', 'acik', 1, null]) assert.equal((await degistir(kotu, yonetici, 'kabuk.etki-dalga')).statusCode, 400, String(kotu));
       assert.equal((await degistir(false, yonetici, 'kabuk.etki-dalga')).statusCode, 200);
       assert.equal((await degistir(false, yonetici, 'kabuk.etki-durdur-basili')).statusCode, 200);
+      assert.equal((await degistir(false, yonetici, 'kabuk.etki-satir-kaydirma')).statusCode, 200);
       for (const { rol, cerez } of bayraksizlar) {
-        assert.deepEqual((await oku(cerez)).json(), { hareket: 'ultra', acilis: 'rastgele', acilisSuresi: 3.5, gecisHizi: 'yavas', etkiler: { ...HEPSI_ACIK, dalga: false, 'durdur-basili': false } }, rol.ad);
+        assert.deepEqual((await oku(cerez)).json(), { hareket: 'ultra', acilis: 'rastgele', acilisSuresi: 3.5, gecisHizi: 'yavas', etkiler: { ...HEPSI_ACIK, dalga: false, 'durdur-basili': false, 'satir-kaydirma': false } }, rol.ad);
       }
     });
   });
