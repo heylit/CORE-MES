@@ -4,7 +4,7 @@ import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
   agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
-  HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, OZEL_KOD,
+  HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
 describe('logo ayarı (kart #210)', () => {
@@ -230,5 +230,24 @@ describe('çift gönderim kalkanı ve yeniden deneme (kart #207 B)', () => {
     assert.deepEqual([1, 2, 3, 4].map(geriCekilmeMs), [30_000, 60_000, 120_000, 240_000]);
     assert.equal(geriCekilmeMs(50), 30 * 60_000);
     assert.equal(geriCekilmeMs(0), 30_000);
+  });
+});
+
+describe('kod çakışması ve Logo kod listesi (2089)', () => {
+  test('2089-1 a: "var mı" cevabındaki ad okunur; ad yoksa, boşsa ya da gövde nesne değilse null', () => {
+    assert.equal(varMiAdi({ success: true, logicalRef: 5, name: '  Logo ad ' }), 'Logo ad');
+    for (const g of [{ success: true, logicalRef: 5 }, { name: ' ' }, { name: 3 }, null, [], 'x']) assert.equal(varMiAdi(g), null, JSON.stringify(g));
+  });
+
+  test('2089-1 a: çakışma iletisi Logo adını taşır, ad yoksa adsız; düzeltme yolunu söyler', () => {
+    assert.match(kodCakismasiMetni('Eski ad'), /^Logo'da bu kod başka kartta \(Logo adı: Eski ad\); kart eşlenmedi/);
+    assert.match(kodCakismasiMetni(null), /^Logo'da bu kod başka kartta; kart eşlenmedi/);
+    assert.match(kodCakismasiMetni(' '), /kodunu değiştirin ya da TMI kartını iptal edip yeni kodla açın\.$/);
+  });
+
+  test('2089-2 a: kod listesi metin dizisidir; boş, metin olmayan ve 64 karakteri aşan atlanır, tekrar teke iner; dizi değilse null', () => {
+    assert.deepEqual(malzemeKodlariniAyikla([' A-1 ', 'A-1', '', 5, null, 'X'.repeat(65), 'B-2']), ['A-1', 'B-2']);
+    assert.deepEqual(malzemeKodlariniAyikla([]), []);
+    for (const g of [null, {}, { data: ['A'] }, 'A']) assert.equal(malzemeKodlariniAyikla(g), null, JSON.stringify(g));
   });
 });

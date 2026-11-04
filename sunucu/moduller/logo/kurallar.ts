@@ -29,7 +29,8 @@ const GERI_CEKILME_EN_COK_MS = 30 * 60_000;
 // - reddedildi / yetkisiz / ulasilamadi: kayıt kesin açılmadı;
 // - belirsiz: istek köprüye ulaşmış olabilir, sonucu bilinmez (zaman aşımı, kopan bağlantı, 5xx, okunamayan cevap).
 export type KopruSonucu =
-  | { tur: 'basarili'; logicalRef: number | null }
+  // logoAdi: yalnız malzeme "var mı" okumasında, kart varsa Logo'daki adı (2089).
+  | { tur: 'basarili'; logicalRef: number | null; logoAdi?: string | null }
   | { tur: 'reddedildi'; ileti: string }
   | { tur: 'yetkisiz'; ileti: string }
   | { tur: 'ulasilamadi'; ileti: string }
@@ -59,6 +60,32 @@ export function dogrulamaMetni(validate: unknown): string | null {
 export function kirp(metin: string): string {
   const temiz = metin.replace(/\s+/g, ' ').trim();
   return temiz.length > HATA_EN_COK ? temiz.slice(0, HATA_EN_COK) : temiz;
+}
+
+// Yardımcının "var mı" cevabında kart varsa `name` (Logo'daki ad) da gelir; yoksa ya da boşsa null.
+export function varMiAdi(govde: unknown): string | null {
+  if (govde === null || typeof govde !== 'object' || Array.isArray(govde)) return null;
+  const ad = (govde as Record<string, unknown>)['name'];
+  return typeof ad === 'string' && ad.trim() !== '' ? ad.trim() : null;
+}
+
+// Yardımcının malzeme kodu listesi metin dizisidir; dizi değilse okunamadı (null), boş ve fazla uzun kod atlanır, tekrarlar teke iner.
+export const MALZEME_KODU_EN_COK = 64;
+export function malzemeKodlariniAyikla(govde: unknown): string[] | null {
+  if (!Array.isArray(govde)) return null;
+  const kodlar = new Set<string>();
+  for (const d of govde) {
+    if (typeof d !== 'string') continue;
+    const kod = d.trim();
+    if (kod !== '' && kod.length <= MALZEME_KODU_EN_COK) kodlar.add(kod);
+  }
+  return [...kodlar];
+}
+
+// 2089-1 a, 2089-2 a: kod Logo'da TMI'nin açmadığı başka bir kartta; kart eşlenmez, Logo'ya dokunulmaz.
+export function kodCakismasiMetni(logoAdi: string | null | undefined): string {
+  const ad = logoAdi?.trim() ? ` (Logo adı: ${logoAdi.trim()})` : '';
+  return kirp(`Logo'da bu kod başka kartta${ad}; kart eşlenmedi, gönderilmedi. Logo'daki kartın kodunu değiştirin ya da TMI kartını iptal edip yeni kodla açın.`);
 }
 
 function logoKayitNo(d: unknown): number | null {

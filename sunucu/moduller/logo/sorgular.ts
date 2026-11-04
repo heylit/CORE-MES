@@ -183,7 +183,7 @@ export async function malKabulYaz(db: Db, satirlar: readonly MalKabulSatiri[], z
   );
 }
 
-export function listeOkumasi(db: Db, liste: 'cari' | 'ambar'): Promise<{ sonOkumaAn: Date } | null> {
+export function listeOkumasi(db: Db, liste: 'cari' | 'ambar' | 'malzeme'): Promise<{ sonOkumaAn: Date } | null> {
   return db.tek<{ sonOkumaAn: Date }>('SELECT son_okuma AS "sonOkumaAn" FROM logo_liste_okuma WHERE liste = $1', [liste]);
 }
 
@@ -202,6 +202,34 @@ export async function listeYaz(db: Db, liste: 'cari' | 'ambar', kayitlar: readon
      ON CONFLICT (liste) DO UPDATE SET son_okuma = EXCLUDED.son_okuma, sayi = EXCLUDED.sayi`,
     [liste, zaman, kodlar.length],
   );
+}
+
+// Logo malzeme kodlarının aynası (2089-2 a); boş cevap (okuma kazası olabilir) aynayı boşaltmaz.
+export async function malzemeKodlariniYaz(db: Db, kodlar: readonly string[], zaman: Date): Promise<void> {
+  if (kodlar.length > 0) {
+    await db.sorgu(
+      'INSERT INTO logo_malzeme_kodu (kod, son_okuma) SELECT k, $2 FROM unnest($1::text[]) AS t(k) ON CONFLICT (kod) DO UPDATE SET son_okuma = EXCLUDED.son_okuma',
+      [kodlar, zaman],
+    );
+    await db.sorgu('DELETE FROM logo_malzeme_kodu WHERE son_okuma < $1', [zaman]);
+  }
+  await db.sorgu(
+    `INSERT INTO logo_liste_okuma (liste, son_okuma, sayi) VALUES ('malzeme', $1, $2)
+     ON CONFLICT (liste) DO UPDATE SET son_okuma = EXCLUDED.son_okuma, sayi = EXCLUDED.sayi`,
+    [zaman, kodlar.length],
+  );
+}
+
+// TMI'nin Logo'da açtığı ya da eşlediği kartın kodu liste beklenmeden aynaya girer.
+export async function malzemeKoduEkle(db: Db, kod: string, zaman: Date): Promise<void> {
+  await db.sorgu('INSERT INTO logo_malzeme_kodu (kod, son_okuma) VALUES ($1, $2) ON CONFLICT (kod) DO NOTHING', [kod, zaman]);
+}
+
+// Verilen kodlardan Logo'da kullanılanlar (aynaya göre).
+export async function logodaOlanMalzemeKodlari(db: Db, kodlar: readonly string[]): Promise<string[]> {
+  if (kodlar.length === 0) return [];
+  const satirlar = await db.sorgu<{ kod: string }>('SELECT kod FROM logo_malzeme_kodu WHERE kod = ANY($1::text[])', [kodlar]);
+  return satirlar.map((r) => r.kod);
 }
 
 // Fatura okuması siparişin numarasıyla gider; numarayı sipariş Logo'ya giderken buraya yazılır (logo_giden yalnız kimliği tutar).
