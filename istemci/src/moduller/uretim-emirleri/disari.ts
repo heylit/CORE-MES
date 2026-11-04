@@ -9,3 +9,5 @@ export { StokTamamlama } from './StokTamamlama.tsx';
 export { CALISMA_DURUMU, EMIR_DURUMU, IS_EMRI_DURUMU, KAPANIS_SONUCU, emirDurumuGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
 // Kapanış onayları emrin evinde verilir (1416 a): Reçete ve Rota bu listeyi `duzenlenir` ile çizer.
 export { KAPANIS_EVI, KapanisOnaylari } from './KapanisOnaylari.tsx';
+// Hazırlık maddelerinin adı ve sahibi, iş emri hücresinin hâli (2057 a: emir ayrıntısı ve Üretim Terminali aynı listeyi okur).
+export { MADDE as HAZIRLIK_MADDE_BILGISI, hucreHali as hazirlikHucreHali } from './HazirlikListesi.tsx';

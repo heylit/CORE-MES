@@ -1,0 +1,31 @@
+/* Üretim Terminali hazırlık listesi ve çipi (2079-1 b, prototip arastirma/terminal-hazirlik). */
+.tc-ay1-hz-cip {
+  --c: var(--idle);
+  display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); align-self: flex-start;
+  border: var(--cizgi-ince) solid color-mix(in srgb, var(--c) 45%, transparent); border-radius: var(--yari-tam);
+  background: color-mix(in srgb, var(--c) 12%, var(--panel2)); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer;
+}
+.tc-ay1-hz-cip svg { color: var(--c); }
+.tc-ay1-hz-cip[data-sakin] { cursor: default; }
+[data-ton="hata"].tc-ay1-hz-cip, .tc-ay1-hz li[data-ton="hata"] { --c: var(--stop); }
+[data-ton="uyari"].tc-ay1-hz-cip, .tc-ay1-hz li[data-ton="uyari"] { --c: var(--hold); }
+[data-ton="tamam"].tc-ay1-hz-cip, .tc-ay1-hz li[data-ton="tamam"] { --c: var(--run); }
+.tc-ay1-hz { display: grid; gap: var(--b-2); }
+.tc-ay1-hz-bas { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; justify-content: space-between; }
+.tc-ay1-hz-bas h3 { margin: 0; font-size: var(--yazi-m); display: inline-flex; gap: var(--b-2); align-items: center; }
+.tc-ay1-hz ul { margin: 0; padding: 0; list-style: none; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); overflow: hidden; }
+.tc-ay1-hz li { --c: var(--idle); display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--b-1) var(--b-3); padding: var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); }
+.tc-ay1-hz li:first-child { border-top: 0; }
+.tc-ay1-hz li > svg { color: var(--c); }
+.tc-ay1-hz li[data-ton="hata"] { background: color-mix(in srgb, var(--stop) 7%, transparent); }
+.tc-ay1-hz li[data-hal="gerekmez"] { opacity: .55; }
+.tc-ay1-hz-ad { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-2); align-items: baseline; min-width: 0; }
+.tc-ay1-hz-hal { font-size: var(--yazi-s); font-weight: 700; color: var(--c); }
+.tc-ay1-hz li[data-ton="pasif"] .tc-ay1-hz-hal, .tc-ay1-hz-ad small, .tc-ay1-hz-ac, .tc-ay1-hz-alt { color: var(--muted); }
+.tc-ay1-hz-ad small, .tc-ay1-hz-alt { font-size: var(--yazi-xs); }
+.tc-ay1-hz-ac, .tc-ay1-hz-muaf, .tc-ay1-hz-eylem { grid-column: 2; font-size: var(--yazi-s); }
+.tc-ay1-hz-muaf { display: flex; gap: var(--b-2); align-items: flex-start; }
+.tc-ay1-hz-muaf svg { color: var(--hold); }
+.tc-ay1-hz-eylem { display: flex; flex-wrap: wrap; gap: var(--b-3); }
+.tc-ay1-hz-lnk { display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0; border: 0; background: none; color: var(--done); font: inherit; font-size: var(--yazi-s); font-weight: 700; cursor: pointer; }
+.tc-ay1-hz-alt { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); align-items: center; }

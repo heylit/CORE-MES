@@ -342,7 +342,7 @@ export const EYLEM_DURUMU: Readonly<Record<string, 'running' | 'paused' | 'setup
 export const URETIM_EYLEMLERI: readonly string[] = ['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'];
 
 /* ── sekmeler (operator.ts tabs, MV) ── */
-export interface EkranSekmesi { id: 'st' | 'draw' | 'steps' | 'ana' | 'ozet' | 'prod' | 'queue'; l: string; simge: SimgeAdi; n?: number | null }
+export interface EkranSekmesi { id: 'st' | 'hz' | 'draw' | 'steps' | 'ana' | 'ozet' | 'prod' | 'queue'; l: string; simge: SimgeAdi; n?: number | null }
 // 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; Resim sekmesi çizimsiz ölçü listesine döner. Sekme dosyaya değil
 // kontrol planına bağlıdır: dosyası olup planı boş işte telefonda açılacak bir şey yoktur.
 const resimSekmesiVar = (o: Is, panelVar: boolean, telefon: boolean): boolean => (telefon

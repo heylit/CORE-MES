@@ -43,6 +43,7 @@ import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts'
 import { durusNedeni, planliNedenMi } from '../cekirdek/ayarlar.ts';
 import { GUN_ADLARI, basHarfler, iki, sayi } from '../cekirdek/bicim.ts';
 import { CAGRI_EKIPLERI, YETKI_ADLARI } from '../cekirdek/sabitler.ts';
+import { HazirlikCipi, HazirlikListesi, hazirlikOzeti, hazirlikSatirlari, useHazirlik } from './HazirlikListesi.tsx';
 import { bip } from '../cekirdek/ses.ts';
 import { istasyonBul, istasyonListesi, tabletIstasyonu } from '../cekirdek/tesis.ts';
 import type { Perm } from '../cekirdek/tipler.ts';
@@ -108,7 +109,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir';
+type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -1144,10 +1145,20 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const pdSimdi = suankiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis);
   const pdSonra = pdSimdi ? null : siradakiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis, 30 * 60e3);
 
+  const hz = useHazirlik(pv ? null : tmiEmirId(o.pkg), o.state);
   /* ekran parçaları */
   const uyarili = RL.warns.some((w) => w.t);
   const panelSimgesi = OT.simge;
+  // 2079-1 b: sistemin hazırlık listesi (emir ayrıntısındakiyle aynı kaynak); genişte sağ sütunun sekmesi, darda pencere. Başlat'ı kapatmaz.
+  const hzSatirlari = hz.v && !pv ? hazirlikSatirlari(hz.v, tmiIsEmriId(o.pkg)) : null;
+  const hzEksik = hzSatirlari ? hazirlikOzeti(hzSatirlari).eksik : 0;
+  const hazirlikAc = () => { if (dar) ovYaz('hazirlik'); else tabYaz('hz'); };
+  const hzCipi = hzSatirlari ? <HazirlikCipi satirlar={hzSatirlari} ac={hazirlikAc} /> : null;
+  const hzListesi = hzSatirlari ? (
+    <HazirlikListesi satirlar={hzSatirlari} baslik={[o.no, o.op].filter(Boolean).join(' ')} zaman={hz.zaman} yenile={hz.yenile} cagir={uretir && !call ? (k, not) => startCall(k, not) : null} />
+  ) : null;
   const sekmeler = isSekmeleri(o, !!Panel, OT.tab || OT.short, panelSimgesi, D, telefon);
+  if (hzSatirlari) sekmeler.splice(sekmeler[0]?.id === 'st' ? 1 : 0, 0, { id: 'hz', l: 'Hazırlık', simge: 'flag', n: hzEksik || null });
   // 600 a: kalite istasyonunda sayaç, toplu giriş, numune şeridi ve takım kartı yerine gelen numunelerin ve lotun Kabul/Red'i.
   const kaliteIstasyonu = ist.t === 'kalite';
   const takimKarti = kaliteIstasyonu ? null : <TakimKarti takimlar={RL.prod.tools} is={o} degisti={changeTool} kilitli={!uretir} />;
@@ -1325,6 +1336,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       ) : null}
       {ov === 'call' ? <CagriPenceresi kapat={() => ovYaz(null)} cagir={(c) => { ovYaz(null); startCall(c); }} /> : null}
       {ov === 'calltrack' && call ? <CagriTakibi cagri={call} kapat={() => ovYaz(null)} yanitla={replyCall} bitir={endCall} /> : null}
+      {ov === 'hazirlik' && hzListesi ? <Pencere acik kapat={() => ovYaz(null)} baslik="Hazırlık">{hzListesi}</Pencere> : null}
       {ov === 'prepnext' && nextOrder ? <SonrakiHazirlik is={nextOrder} kapat={() => ovYaz(null)} degistir={setReady} /> : null}
       {ov === 'shift' ? (
         <VardiyaPenceresi ozet={shiftStats()} vardiyaEtiketi={vardiya.label} kapat={() => ovYaz(null)}
@@ -1376,6 +1388,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               {bantlar}
               {carki(<IsOzeti is={o} acik={isAcik} degistir={() => isAcikYaz((x) => !x)} />)}
               {uyariCipi(false)}
+              {hzCipi}
               {/* 685, 702: sayaç ilk ekrandadır; üstünde yalnız tek satırlık Şimdi ve numune şeridi. */}
               {simdiSeridi(true)}
               {kaliteGorunumu ?? sayac}
@@ -1467,6 +1480,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
               <IsEtiketleri is={o} />
               {pv ? null : (
                 <span className="tc-ay1-cip-satiri">
+                  {hzCipi}
                   <MalzemeCipi istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />
                   <Sepetler istasyon={MACHINE} emirId={tmiEmirId(o.pkg)} />
                 </span>
@@ -1491,6 +1505,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {gecerliSekme === 'draw' || gecerliSekme === 'steps' ? onizBandi : null}
           <div className="tc-ay1-bolme" role="tabpanel">
             {gecerliSekme === 'st' ? panel : null}
+            {gecerliSekme === 'hz' ? hzListesi : null}
             {gecerliSekme === 'draw' ? resim : null}
             {gecerliSekme === 'steps' ? adimlar : null}
             {gecerliSekme === 'ana' ? <>{takimKarti}{analiz}</> : null}

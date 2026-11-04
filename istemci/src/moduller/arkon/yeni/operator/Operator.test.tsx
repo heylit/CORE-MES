@@ -372,6 +372,62 @@ describe('A1 Üretim Terminali hatalı parça (1034)', () => {
   }, 40000);
 });
 
+describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
+  const cevap = (cnc: string, muafiyetler: unknown[] = []) => ({
+    maddeler: [
+      { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false },
+      { madde: 'kalibrasyon', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false }, { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
+    ],
+    muafiyetler,
+    isEmirleri: [
+      { isEmriId: 90, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: cnc }] },
+      { isEmriId: 91, opNo: 20, ad: 'Freze', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }] },
+    ],
+  });
+  const kur = (govde: unknown) => {
+    const tmi = { ...PAKET, id: 'tmi-ie-90', no: 'UE-DENEME-9', tmi: { emirId: 9, isEmriId: 90 } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    const okunan: string[] = [];
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (String(adres).includes('/adimli-emirler/9/hazirlik')) { okunan.push(String(adres)); return new Response(JSON.stringify(govde), { status: 200 }); }
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    return { istekler, okunan };
+  };
+
+  it('eksik maddede çip ve sekme sayıyı gösterir; liste bu iş emrinin satırıdır; Başlat açık kalır; Sorumluya haber ver çağrı açar', async () => {
+    const { istekler, okunan } = kur(cevap('eksik'));
+    const d = await ekran();
+    const cip = await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazırlık · 1 eksik' }, { timeout: 10000 });
+    expect(okunan.length).toBeGreaterThan(0);
+    expect(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }).getAttribute('aria-disabled')).not.toBe('true');
+    fireEvent.click(cip);
+    const l = await screen.findByRole('region', { name: 'Hazırlık' });
+    const satirlar = within(l).getAllByRole('listitem');
+    expect(satirlar.map((x) => x.getAttribute('data-hal'))).toEqual(['eksik', 'bilinmiyor', 'tamam', 'gerekmez']);
+    expect(within(satirlar[0]!).getByText('CNC kurulumu')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('bu iş emri')).toBeTruthy();
+    expect(within(l).queryByRole('button', { name: /muaf tut/i })).toBeNull();
+    fireEvent.click(within(satirlar[0]!).getByRole('button', { name: /Sorumluya haber ver/ }));
+    await waitFor(() => {
+      const c = istekler.filter((i) => i.yol === '/arkon/kayitlar/calls/ekle').flatMap((i) => (i.govde as { satirlar?: { team?: string; note?: string }[] }).satirlar ?? []);
+      expect(c.some((x) => x.team === 'amir' && x.note === 'Hazırlık eksik: CNC kurulumu')).toBe(true);
+    }, { timeout: 10000 });
+  }, 40000);
+
+  it('muaf madde kişi, zaman ve gerekçeyle görünür; çip muafiyetle hazır der', async () => {
+    kur(cevap('muaf', [{ madde: 'cnc', isEmriId: 90, kisiId: 3, kisiAdi: 'Deneme Müdür', gerekce: 'Program tezgâhta doğrulandı.', zaman: '2026-11-04T08:40:00.000Z' }]));
+    const d = await ekran();
+    fireEvent.click(await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazır · muafiyetle' }, { timeout: 10000 }));
+    const l = await screen.findByRole('region', { name: 'Hazırlık' });
+    expect(within(l).getByText(/Müdür muaf tuttu · Deneme Müdür/)).toBeTruthy();
+    expect(within(l).getByText(/Gerekçe: Program tezgâhta doğrulandı\./)).toBeTruthy();
+    expect(within(l).queryByRole('button', { name: /Sorumluya haber ver/ })).toBeNull();
+  }, 40000);
+});
+
 describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   const okut = (kod: string) => { for (const c of [...kod, 'Enter']) fireEvent.keyDown(document.body, { key: c }); };
   let kartOkundu = false;
