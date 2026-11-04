@@ -470,6 +470,7 @@ namespace LogoYardimcisi
 
         public int MalzemeRef(string kod) { var k = Malzeme(kod); return k == null ? 0 : k.Ref; }
         public MalzemeKaydi Malzeme(string kod) { return Kartlar.FirstOrDefault(x => x.Kod == kod); }
+        public List<string> MalzemeKodlari() { return Kartlar.Select(x => x.Kod).OrderBy(x => x, StringComparer.Ordinal).ToList(); }
         public List<KodAd> BirimSetleri() { return Birimler; }
 
         public List<KodAd> Ambarlar()
