@@ -2,11 +2,14 @@ import type { Db } from '#cekirdek/db.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { GeriBildirim, GeriBildirimGonderGovdesi, GeriBildirimKonusu, GeriBildirimTuru, ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
+import { eskiSurum } from '#cekirdek/hata.ts';
+import type {
+  GeriBildirim, GeriBildirimGonderGovdesi, GeriBildirimKonusu, GeriBildirimTuru, ProfilCevabi, TemaCevabi, TemaSecGovdesi,
+} from '#paylasilan/sozlesme/profil.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, kisininPersonelKarti } from '../ik/disari.ts';
 import { kisiAdlari, kisiGorevi } from '../kisiler/disari.ts';
-import { mesaiToplami, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari } from './kurallar.ts';
+import { mesaiToplami, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari, temaCevabiYap } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 const disaGeriBildirim = ({ kisiId: _kisi, ...g }: s.GeriBildirimSatiri): GeriBildirim => g;
@@ -54,4 +57,18 @@ export async function geriBildirimListesi(
       return satirlar.map((r) => ({ ...disaGeriBildirim(r), kisiAdi: adlar.get(r.kisiId) ?? `Kişi ${r.kisiId}` }));
     },
   });
+}
+
+// Tema yalnız oturumdaki kişinindir; başka kişiyi seçen girdi yoktur.
+export async function temaOku(db: Db, kullanici: Kullanici): Promise<TemaCevabi> {
+  return temaCevabiYap(await s.temaOku(db, kullanici.id));
+}
+
+// PRF-5: ilk seçim sürüm 0 ile, sonrakiler okunan sürümle yazılır; tutmayan sürüm eski sürüm reddidir.
+export async function temaSec(db: Db, kullanici: Kullanici, govde: TemaSecGovdesi): Promise<TemaCevabi> {
+  const yazilan = govde.surum === 0
+    ? await s.temaEkle(db, kullanici.id, govde.tema)
+    : await s.temaGuncelle(db, kullanici.id, govde.tema, govde.surum);
+  if (yazilan === null) throw eskiSurum();
+  return temaCevabiYap(yazilan);
 }

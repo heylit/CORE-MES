@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { mesaiToplami, profilAraliklari } from './kurallar.ts';
+import { mesaiToplami, profilAraliklari, temaCevabiYap } from './kurallar.ts';
 
 describe('profil kuralları', () => {
   test('PRF-2/3: izin aralığı bir yıl geri ve ileri, fazla mesai yılın başından bugüne', () => {
@@ -19,5 +19,10 @@ describe('profil kuralları', () => {
     assert.equal(mesaiToplami([]), null);
     assert.equal(mesaiToplami([{ saat: null }]), null);
     assert.equal(mesaiToplami([{ saat: 2.5 }, { saat: null }, { saat: 1.25 }]), 3.75);
+  });
+
+  test('PRF-5: kaydı olmayan kişide tema null ve sürüm 0', () => {
+    assert.deepEqual(temaCevabiYap(null), { tema: null, surum: 0 });
+    assert.deepEqual(temaCevabiYap({ tema: 'gun', surum: 3 }), { tema: 'gun', surum: 3 });
   });
 });

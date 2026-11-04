@@ -41,6 +41,7 @@ const OTURUM_UCLARI: readonly string[] = [
   'GET /plan/surum',
   'GET /planli-duruslar',
   'GET /profil',
+  'GET /profil/tema',
   'GET /rota/is-emri-sartnameleri',
   'GET /rota/malzeme-ara',
   'GET /rota/malzeme-kullanimi',
@@ -85,6 +86,7 @@ const OTURUM_UCLARI: readonly string[] = [
   'POST /oturum/nabiz',
   'POST /portal/ben/hazirla',
   'POST /profil/geri-bildirim-gonder',
+  'POST /profil/tema-sec',
   'POST /ziyaretcilerim/:id/iptal',
   'POST /ziyaretcilerim/on-kayit',
 ];

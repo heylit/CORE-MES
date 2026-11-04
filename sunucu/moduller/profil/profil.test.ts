@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { geriBildirimListeCevabi, profilCevabi } from '#paylasilan/sozlesme/profil.ts';
+import { geriBildirimListeCevabi, profilCevabi, temaCevabi } from '#paylasilan/sozlesme/profil.ts';
 import type { ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -173,5 +173,38 @@ describe('profil ve şikayet/istek/öneri kutusu (gerçek PostgreSQL, gerçek gi
     assert.equal(p.fazlaMesai?.toplamSaat, null);
     // Başka kişinin profili İK kartını almaz.
     assert.equal((await profil('cam')).personel, null);
+  });
+
+  const temaSec = (ad: string | null, govde: unknown) => istek<Record<string, unknown>>(ad, 'POST', '/profil/tema-sec', govde);
+  const tema = async (ad: string) => {
+    const c = await istek<unknown>(ad, 'GET', '/profil/tema');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return temaCevabi.parse(c.govde);
+  };
+
+  test('PRF-5: tema oturum ister; kaydı olmayan kişide null ve sürüm 0, tema uydurulmaz', async () => {
+    assert.equal((await istek(null, 'GET', '/profil/tema')).durum, 401);
+    assert.equal((await temaSec(null, { tema: 'gun', surum: 0 })).durum, 401);
+    assert.deepEqual(await tema('operator'), { tema: null, surum: 0 });
+  });
+
+  test('PRF-5: tema seçimi sürümle yazılır; eski sürüm ve ikinci ilk seçim reddedilir, kişiler birbirini etkilemez', async () => {
+    const ilk = await temaSec('cam', { tema: 'kontrast', surum: 0 });
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.deepEqual(ilk.govde, { tema: 'kontrast', surum: 1 });
+    assert.equal((await temaSec('cam', { tema: 'gun', surum: 0 })).durum, 409);
+    assert.deepEqual((await temaSec('cam', { tema: 'gun', surum: 1 })).govde, { tema: 'gun', surum: 2 });
+    assert.equal((await temaSec('cam', { tema: 'dark', surum: 1 })).durum, 409);
+    assert.deepEqual(await tema('cam'), { tema: 'gun', surum: 2 });
+    assert.deepEqual(await tema('yonetici'), { tema: null, surum: 0 });
+  });
+
+  test('PRF-5: tema gövdesi başka kişiyi seçemez; geçersiz tema ve sürüm reddedilir', async () => {
+    assert.equal((await temaSec('operator', { tema: 'dark', surum: 0, kisiId: kisiler.get('cam') })).durum, 400);
+    assert.equal((await temaSec('operator', { tema: 'cam', surum: 0 })).durum, 400);
+    assert.equal((await temaSec('operator', { tema: 'dark', surum: -1 })).durum, 400);
+    assert.equal((await temaSec('operator', { tema: 'dark' })).durum, 400);
+    assert.deepEqual(await tema('operator'), { tema: null, surum: 0 });
+    await assert.rejects(o().sahip.sorgu("INSERT INTO profil_tema_tercihi (kisi_id, tema) VALUES ($1, 'mor')", [kisiler.get('operator')]), /profil_tema_tercihi_tema_gecerli/);
   });
 });
