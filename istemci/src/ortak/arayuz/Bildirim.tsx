@@ -1,9 +1,10 @@
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode,
 } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { Simge } from './Simge.tsx';
+import { etkiAcik } from '../veri/etki.ts';
 import './bildirim.css';
 
 export type BildirimTonu = 'tamam' | 'bilgi' | 'hata';
@@ -77,22 +78,64 @@ export function BildirimSaglayici({ children }: { children: ReactNode }) {
     <BildirimBaglami.Provider value={deger}>
       <SayfaDegistiBaglami.Provider value={sayfaDegisti}>{children}</SayfaDegistiBaglami.Provider>
       <div className="tc-bildirimler" role="region" aria-label="Bildirimler">
-        {kayitlar.map((k) => (
-          <div key={k.no} className={`tc-bildirim tc-bildirim-${k.ton}`} role={k.ton === 'hata' ? 'alert' : 'status'}>
-            <Simge ad={SIMGE[k.ton]} />
-            <p className="tc-bildirim-mesaj">{k.mesaj}</p>
-            {k.eylem && (
-              <button type="button" className="tc-bildirim-eylem" onClick={() => { kaldir(k.no); k.eylem?.yap(); }}>
-                {k.eylem.etiket}
-              </button>
-            )}
-            <button type="button" className="tc-bildirim-kapat" onClick={() => kaldir(k.no)} aria-label="Bildirimi kapat">
-              <Simge ad="x" boyut="k" />
-            </button>
-          </div>
-        ))}
+        {kayitlar.map((k) => <BildirimKutusu key={k.no} kayit={k} kaldir={kaldir} />)}
       </div>
     </BildirimBaglami.Provider>
+  );
+}
+
+// Yana itilen bildirim eşiği geçince kapanır, geçmezse yerine döner (kart 2090, karar 2081-15). Düğmeden başlayan itiş
+// sayılmaz; dikey kaydırma tarayıcıda kalır.
+const ITME_ESIGI_PX = 80;
+interface Itis { x0: number; dx: number; kimlik: number }
+
+function BildirimKutusu({ kayit: k, kaldir }: { kayit: Kayit; kaldir: (no: number) => void }) {
+  const itis = useRef<Itis | null>(null);
+  const basla = (o: PointerEvent<HTMLDivElement>) => {
+    if (o.button !== 0 || !etkiAcik('bildirim-kayma')) return;
+    if (o.target instanceof Element && o.target.closest('button')) return;
+    itis.current = { x0: o.clientX, dx: 0, kimlik: o.pointerId };
+    o.currentTarget.setPointerCapture?.(o.pointerId);
+  };
+  const sur = (o: PointerEvent<HTMLDivElement>) => {
+    const i = itis.current;
+    if (i?.kimlik !== o.pointerId) return;
+    i.dx = o.clientX - i.x0;
+    o.currentTarget.setAttribute('data-itiliyor', '');
+    o.currentTarget.style.setProperty('--itme-x', `${String(i.dx)}px`);
+    o.currentTarget.style.setProperty('--itme-saydam', String(Math.max(0.2, 1 - Math.abs(i.dx) / (ITME_ESIGI_PX * 2.5))));
+  };
+  const birak = (o: PointerEvent<HTMLDivElement>, iptal: boolean) => {
+    const i = itis.current;
+    if (i?.kimlik !== o.pointerId) return;
+    itis.current = null;
+    const el = o.currentTarget;
+    el.removeAttribute('data-itiliyor');
+    if (!iptal && Math.abs(i.dx) > ITME_ESIGI_PX) { kaldir(k.no); return; }
+    el.style.removeProperty('--itme-x');
+    el.style.removeProperty('--itme-saydam');
+  };
+
+  return (
+    <div
+      className={`tc-bildirim tc-bildirim-${k.ton}`}
+      role={k.ton === 'hata' ? 'alert' : 'status'}
+      onPointerDown={basla}
+      onPointerMove={sur}
+      onPointerUp={(o) => { birak(o, false); }}
+      onPointerCancel={(o) => { birak(o, true); }}
+    >
+      <Simge ad={SIMGE[k.ton]} />
+      <p className="tc-bildirim-mesaj">{k.mesaj}</p>
+      {k.eylem && (
+        <button type="button" className="tc-bildirim-eylem" onClick={() => { kaldir(k.no); k.eylem?.yap(); }}>
+          {k.eylem.etiket}
+        </button>
+      )}
+      <button type="button" className="tc-bildirim-kapat" onClick={() => kaldir(k.no)} aria-label="Bildirimi kapat">
+        <Simge ad="x" boyut="k" />
+      </button>
+    </div>
   );
 }
 
