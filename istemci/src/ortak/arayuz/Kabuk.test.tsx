@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { anahtarlar } from '../veri/anahtarlar.ts';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
@@ -8,6 +8,7 @@ import { Kabuk, KabukUstYuvasi } from './Kabuk.tsx';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
 import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
+import { KaliciEkranlar } from '../rota/kalici.tsx';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
@@ -482,6 +483,31 @@ describe('Kabuk', () => {
     expect(screen.getByRole('button', { name: /Hesap/ })).toBeTruthy();
     rerender(kur(false));
     expect(container.querySelector('.tc-kabuk')?.hasAttribute('data-ust-yuva')).toBe(false);
+  });
+
+  it('2097: kalıcı terminal görünürken şeridi üst çubukta; başka sayfada gizlenince üst çubuk normale döner', () => {
+    function Terminal() { return <KabukUstYuvasi><span>terminal şeridi</span></KabukUstYuvasi>; }
+    let git: NavigateFunction = () => undefined;
+    function Gezgin() { git = useNavigate(); return null; }
+    const { container } = render(
+      <MemoryRouter initialEntries={['/uretim-terminali']}>
+        <Gezgin />
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined}>
+          <KaliciEkranlar rotalar={[{ yol: '/uretim-terminali', ekran: Terminal, kalici: true }]} />
+        </Kabuk>
+      </MemoryRouter>,
+    );
+    const kabuk = () => container.querySelector('.tc-kabuk');
+    expect(screen.getByText('terminal şeridi').closest('.tc-kabuk-ust')).not.toBeNull();
+    expect(kabuk()?.hasAttribute('data-ust-yuva')).toBe(true);
+    // Ret: terminal gizliyken şeridi üst çubukta kalmaz, yuva dolu sayılmaz.
+    act(() => { void git('/etiket-merkezi'); });
+    expect(screen.queryByText('terminal şeridi')).toBeNull();
+    expect(kabuk()?.hasAttribute('data-ust-yuva')).toBe(false);
+    expect(container.querySelector('.tc-kalici-ekran')?.hasAttribute('hidden')).toBe(true);
+    act(() => { void git('/uretim-terminali'); });
+    expect(screen.getByText('terminal şeridi').closest('.tc-kabuk-ust')).not.toBeNull();
+    expect(kabuk()?.hasAttribute('data-ust-yuva')).toBe(true);
   });
 
   it('2052-1 a: kabuk dışında üst yuva içeriği yerinde çizer', () => {

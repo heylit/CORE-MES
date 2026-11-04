@@ -16,6 +16,7 @@ import { GENEL_KONULAR } from '../rota/rehber-genel.ts';
 import { gorunenUstEylemler, type UstEylem } from '../rota/ust-eylemler.ts';
 import { gorunenUstSeritler, type UstSerit } from '../rota/ust-seritler.ts';
 import { rotaninSayfasi } from '../rota/sayfa.ts';
+import { useEkranGorunur } from '../rota/kalici.tsx';
 import { PaletSorgusuBaglami, SayfaKomutBaglami, paletSorgusuKur, type SayfaKomutu, type SayfaKomutYazici } from '../rota/sayfa-komutlari.ts';
 import { sayaclarAyniMi, useIkinciMenuSayaclari } from '../veri/ikinci-menu-sayaclari.ts';
 import { useCihazTercihi } from '../veri/cihaz-tercihi.ts';
@@ -142,15 +143,19 @@ const AnaMenuSayacBaglami = createContext<ReadonlyMap<string, number>>(new Map()
 interface UstYuva { yer: HTMLElement | null; doldur: (dolu: boolean) => void }
 const UstYuvaBaglami = createContext<UstYuva | null>(null);
 
+// Kalıcı ekran (Üretim Terminali) başka sayfada gizlenir ama kurulu kalır; şeridi o sürede üst çubukta kalırsa başka sayfanın
+// başlığını kaplar ve arama, iş paneli, üst eylemler gizli kalır. Gizliyken yuva boşaltılır, şerit çizilmez.
 export function KabukUstYuvasi({ children }: { children: ReactNode }) {
   const yuva = useContext(UstYuvaBaglami);
+  const gorunur = useEkranGorunur();
   const doldur = yuva?.doldur;
   const yer = yuva?.yer ?? null;
   useEffect(() => {
-    if (!doldur || yer === null) return undefined;
+    if (!doldur || yer === null || !gorunur) return undefined;
     doldur(true);
     return () => { doldur(false); };
-  }, [doldur, yer]);
+  }, [doldur, yer, gorunur]);
+  if (!gorunur) return null;
   if (yer === null) return <>{children}</>;
   return createPortal(children, yer);
 }
