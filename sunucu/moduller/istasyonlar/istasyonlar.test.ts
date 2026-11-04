@@ -378,11 +378,11 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal((await yaz('/makineler', { kod: yeniKod('MK'), ad: 'Hayalet', istasyonId: 999999 })).durum, 400);
   });
 
-  test('ARK-IST-02: istasyon tipi altı değerden biridir, varsayılan talaşlıdır; veritabanı da başka değeri reddeder', async () => {
+  test('ARK-IST-02: istasyon tipi yedi değerden biridir (2012 a: tesviye), varsayılan talaşlıdır; veritabanı da başka değeri reddeder', async () => {
     const im = await isMerkeziKur();
     const varsayilan = await yaz<{ tip: string }>('/istasyonlar', { kod: yeniKod('IS'), ad: 'Tipsiz', isMerkeziId: im.id });
     assert.equal(varsayilan.govde.tip, 'talasli');
-    for (const tip of ['kalite', 'depo', 'markalama', 'boya', 'montaj', 'talasli']) {
+    for (const tip of ['kalite', 'depo', 'markalama', 'boya', 'montaj', 'tesviye', 'talasli']) {
       const c = await yaz<{ tip: string }>('/istasyonlar', { kod: yeniKod('IS'), ad: 'Tipli', isMerkeziId: im.id, tip });
       assert.equal(c.govde.tip, tip);
     }

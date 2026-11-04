@@ -23,7 +23,7 @@ import './ayarlar.css';
 // Ayarlar (giris-ayarlar-spc.ts SettingsApp): sunucuya bağlı Arkon'un bugün gösterdiği kartlar. Tesis, kişiler, yetkiler, vardiyalar ve
 // nedenler TMI'dedir, burada salt okunur listelenir; değişen yalnız çalışma kuralları (kv/policy) ve bu cihazın ekran modülleridir.
 
-const ISTASYON_SIMGESI: Readonly<Record<Station['t'], SimgeAdi>> = { cnc: 'cpu', kalite: 'search', depo: 'truck', mark: 'tag', boya: 'drop', montaj: 'box' };
+const ISTASYON_SIMGESI: Readonly<Record<Station['t'], SimgeAdi>> = { cnc: 'cpu', kalite: 'search', depo: 'truck', mark: 'tag', boya: 'drop', montaj: 'box', tesviye: 'users' };
 
 function AyarKarti({ ust, baslik, genis = false, children }: { ust: string; baslik: string; genis?: boolean; children: ReactNode }) {
   return (

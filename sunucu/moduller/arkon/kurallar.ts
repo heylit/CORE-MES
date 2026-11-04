@@ -195,7 +195,7 @@ export const silmeCakisiyorMu = (mevcut: number | null, taban: number): boolean 
 
 // Arkon'un tesis yapısı: kimlikler TMI kodlarıdır (istasyon kodu Arkon'da makine adıyla da anılır).
 const TIP: Record<Istasyon['tip'], string> = {
-  talasli: 'cnc', kalite: 'kalite', depo: 'depo', markalama: 'mark', boya: 'boya', montaj: 'montaj',
+  talasli: 'cnc', kalite: 'kalite', depo: 'depo', markalama: 'mark', boya: 'boya', montaj: 'montaj', tesviye: 'tesviye',
 };
 const BAGLANTI: Record<NonNullable<Makine['baglantiTuru']>, string> = {
   focas: 'focas', opcua: 'opcua', mtconnect: 'mtc', modbus: 'modbus', dijital_giris: 'io',
@@ -370,9 +370,10 @@ function ilkParcasizKural(kural: unknown): Record<string, unknown> {
 
 // 744 a: TMI'de adımın sağlamı ilk parça kararını bekler mi. Rota seçimi "her kurulumda" ve iş talaşlıysa bekler (tanınmayan, istasyonsuz iş
 // talaşlı sayılır, `ilkParcaOlculeri` gibi). Talaşlı olmayan adımda (kalite, depo, boya, montaj) Arkon kapısı ilk parça ölçüsü istemez; orada
-// kilit, kararı tabletten hiç sorulmayan bir bekleyiş olurdu (VARSAYIM).
+// kilit, kararı tabletten hiç sorulmayan bir bekleyiş olurdu (VARSAYIM). Tesviye rota seçimine uyar (2056 c): kontrol planı ölçüsü
+// istemez, karar Kalite Merkezi'nden gelir ve terminal bekleyişi `tmi.ilkParcaGerekli` ile söyler.
 export function ilkParcaGereksinimi(secim: IlkParcaSecimi, istasyonTipi: Istasyon['tip'] | null): 'gerekli' | 'gerekmez' {
-  return secim === 'her_kurulum' && (istasyonTipi === null || istasyonTipi === 'talasli') ? 'gerekli' : 'gerekmez';
+  return secim === 'her_kurulum' && (istasyonTipi === null || istasyonTipi === 'talasli' || istasyonTipi === 'tesviye') ? 'gerekli' : 'gerekmez';
 }
 
 // Bölünmüş işin kayıtlı bütün paketi parçalara şablondur; yayındaysa parça da onun yayınıyla açılır (parça planın kararıdır, Hazırlık'ı
@@ -1919,7 +1920,7 @@ export const ISTEK_KILIT_BUTCESI_MS = 4000;
 // (kullanıcı kararları 129, 130 a): kapı Başlat'ı değil, kalite kararına kadar ilk parçadan sonraki sağlam sayımı durdurur. Yalnız talaşlı (cnc) pakette; tanınmayan iş türü talaşlı sayılır (istasyonlar.ts `opOf`).
 // Ölçeni kalite olan ölçü yalnız kalitenin karar verdiği numune isteğinden kapanır: sonuç belgesindeki ölçümü operatör de yazabildiği için kanıt sayılmaz.
 // Ölçeni operatör olan ölçü (tezgahta ölçüm kuralı) tablette olduğu gibi sonuç belgesindeki uygun ya da sapmalı ölçümle kapanır.
-const IS_TURLERI: ReadonlySet<string> = new Set(['cnc', 'kalite', 'depo', 'mark', 'boya', 'montaj']);
+const IS_TURLERI: ReadonlySet<string> = new Set(['cnc', 'kalite', 'depo', 'mark', 'boya', 'montaj', 'tesviye']);
 export interface IlkParcaOlcusu { id: string; olcen: 'q' | 'op' }
 
 export function ilkParcaOlculeri(paket: unknown): IlkParcaOlcusu[] {

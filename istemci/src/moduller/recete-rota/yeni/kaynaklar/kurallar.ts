@@ -156,7 +156,7 @@ export function vardiyaHaftaSaati(hafta: Hafta | undefined, v: Vardiya): number 
 }
 
 // Kapasite kaynağı (İstasyonlar modülü): seçilmemişse türden türetilir. Elle yapılan işler personel saatiyle, ötekiler makine saatiyle.
-const INSAN_TURLERI = ['kalite', 'montaj', 'depo'];
+const INSAN_TURLERI = ['kalite', 'montaj', 'tesviye', 'depo'];
 export type KapasiteKaynagi = 'makine' | 'insan';
 export function kapasiteKaynagi(tip: string | null, secili: string | null): KapasiteKaynagi {
   if (secili === 'insan' || secili === 'makine') return secili;

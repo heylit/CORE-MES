@@ -187,6 +187,7 @@ test('ilk parça ölçüleri tabletin numune planından çıkar (B-006): eski pa
   assert.deepEqual(ilkParcaOlculeri({ plan, rules: { q: { who: 'operator' } } }).map((o) => o.olcen), ['op', 'op']);
   assert.deepEqual(ilkParcaOlculeri({ plan, rules: { q: { firstPiece: false } } }), []);
   assert.deepEqual(ilkParcaOlculeri({ plan, opType: 'montaj' }), []);
+  assert.deepEqual(ilkParcaOlculeri({ plan, opType: 'tesviye' }), []);
   assert.equal(ilkParcaOlculeri({ plan, opType: 'bilinmeyen' }).length, 2);
   const samp = [{ when: 'first', gate: true, who: ['op', 'q'], items: 'crit' }, { when: 'first', gate: false, items: [1] }, { when: 'every', n: 5, gate: true, items: [2] }];
   assert.deepEqual(ilkParcaOlculeri({ plan, samp }), [{ id: '3', olcen: 'op' }]);
@@ -462,6 +463,15 @@ test('744 a: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () 
   assert.equal(ilkParcaGereksinimi('her_kurulum', null), 'gerekli');
   assert.equal(ilkParcaGereksinimi('yok', 'talasli'), 'gerekmez');
   for (const tip of ['kalite', 'depo', 'markalama', 'boya', 'montaj'] as const) assert.equal(ilkParcaGereksinimi('her_kurulum', tip), 'gerekmez');
+  // 2056 c: tesviye rota seçimine uyar.
+  assert.equal(ilkParcaGereksinimi('her_kurulum', 'tesviye'), 'gerekli');
+  assert.equal(ilkParcaGereksinimi('yok', 'tesviye'), 'gerekmez');
+});
+
+// 2012 a, 2026: tesviye istasyonundaki adım tesviye görünümüyle açılır (el işi: kontrol listesi; sayım ve pay ortak sayaçta).
+test('tesviye istasyonunun paketi tesviye iş türündedir', () => {
+  assert.equal(isEmrindenTaslakPaket(girdi({ istasyon: { ...ISTASYON!, tip: 'tesviye' } }))['opType'], 'tesviye');
+  assert.equal(isEmrindenTaslakPaket(girdi({ istasyon: { ...ISTASYON!, tip: 'montaj' } }))['opType'], 'montaj');
 });
 
 // 664: terminal başlığında Proje; paket emrin proje adını taşır, projesizde boş. TMI alanıdır: kayıtlı pakette de her okumada yazılır.

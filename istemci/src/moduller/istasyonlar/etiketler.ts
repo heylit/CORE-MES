@@ -12,6 +12,7 @@ export const TIP_ADLARI: Record<IstasyonTipi, string> = {
   markalama: 'Markalama',
   boya: 'Boya-kaplama',
   montaj: 'Montaj',
+  tesviye: 'Tesviye',
 };
 
 export const BAGLANTI_ADLARI: Record<BaglantiTuru, string> = {

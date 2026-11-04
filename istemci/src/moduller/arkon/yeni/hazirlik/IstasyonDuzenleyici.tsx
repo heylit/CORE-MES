@@ -28,7 +28,7 @@ export function TurSecici({ deger, degistir, kilitli }: { deger: OpType; degisti
 type Yama = (ch: Partial<Pkg>) => void;
 const SERI_PARCALARI = ['{PARCA}', '{IE}', '{REV}', '{YY}', '{YYYY}', '{MM}', '{WW}', '{DD}', '{SEQ:4}', '{SEQ:5}'];
 
-// İstasyona özel düzenleyici (StEditor): depo, markalama, boya, montaj ve kalite; talaşlıda düzenleyici yoktur.
+// İstasyona özel düzenleyici (StEditor): depo, markalama, boya, montaj, tesviye ve kalite; talaşlıda düzenleyici yoktur.
 export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama }) {
   const { bildir } = useBildirim();
   const t = isTuru(paket);
@@ -239,6 +239,26 @@ export function IstasyonDuzenleyici({ paket, yama }: { paket: Pkg; yama: Yama })
           <div className="tc-ay2-sablon-kaydet">
             <input value={yapistir} aria-label="Yeni kusur" placeholder="Yeni kusur · örn. Boya akıntısı" onChange={(e) => yapistirYaz(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') kusurEkle(); }} />
             <Dugme tur="ikincil" simge="plus" disabled={!yapistir.trim()} onClick={kusurEkle}>Ekle</Dugme>
+          </div>
+        </section>
+      </div>
+    );
+  }
+  if (t === 'tesviye') {
+    const kontroller = c.checks || [];
+    const kontrolEkle = () => { const k = yapistir.trim(); if (!k || kontroller.includes(k)) return; yaz({ checks: [...kontroller, k] }); yapistirYaz(''); };
+    return (
+      <div className="tc-ay2-kurallar">
+        <section className="tc-ay2-kart tc-ay2-genis" aria-label="Kontrol listesi">
+          <KartBasligi simge={<Simge ad="check" />} ton="run" baslik="Kontrol listesi" aciklama="Operatör işte işaretler · sayım ve kişi payı terminalin ortak sayacında" sag={kontroller.length + ' kontrol'} />
+          <div className="tc-ay2-hazirlar">
+            {kontroller.map((k) => (
+              <button key={k} type="button" className="tc-ay2-hazir" data-ton="run" aria-pressed title="Kaldır" onClick={() => yaz({ checks: kontroller.filter((x) => x !== k) })}><i aria-hidden="true" />{k} ×</button>
+            ))}
+          </div>
+          <div className="tc-ay2-sablon-kaydet">
+            <input value={yapistir} aria-label="Yeni kontrol" placeholder="Yeni kontrol · örn. Pah 0,5×45°" onChange={(e) => yapistirYaz(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') kontrolEkle(); }} />
+            <Dugme tur="ikincil" simge="plus" disabled={!yapistir.trim()} onClick={kontrolEkle}>Ekle</Dugme>
           </div>
         </section>
       </div>
