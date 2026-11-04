@@ -144,14 +144,14 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
   });
   afterEach(async () => { await kopru.kapat(); });
 
-  test('LGB-5 (334 a) uçtan uca: kartın Açıklama 1-3\'ü malzemelerden Logo isteğine name2, name3, name4 olarak gider', async () => {
+  test('LGB-5 (334 a, 2088-1) uçtan uca: Açıklama 1 Logo isteğinde ad (name), Açıklama 2-3 name3, name4; name2 gitmez, kart açılır', async () => {
     const k = await aktifKart({ aciklamalar: ['Aciklama bir', 'Aciklama iki', 'Aciklama uc'] });
     const bellek = yeniSurecBellegi();
     assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'niyet', no: k.no });
     simdi += 5000;
     assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'gonderim', no: k.no, sonuc: 'gonderildi' });
     const govde = kopru.istekler.find((i) => i.yontem === 'POST')?.govde as Record<string, unknown> | undefined;
-    assert.deepEqual([govde?.['name2'], govde?.['name3'], govde?.['name4']], ['Aciklama bir', 'Aciklama iki', 'Aciklama uc']);
+    assert.deepEqual([govde?.['name'], govde?.['name2'], govde?.['name3'], govde?.['name4']], ['Aciklama bir', undefined, 'Aciklama iki', 'Aciklama uc']);
   });
 
   test('LGB-8 kabul: kart aktif olur, "bekliyor"a düşer, işçi niyet yazar, sonraki turda gönderir; kart "gonderildi" ve kayıt numarası yazılır', async () => {

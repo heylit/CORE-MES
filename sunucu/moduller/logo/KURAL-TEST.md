@@ -62,7 +62,7 @@ Kırmızı: kod testlerle aynı turda yazıldı; kırmızı her kural için kodu
 | LOGO-O18 artımlı fiş (233): değişen fiş silinip aynı numarayla açılır, boşalınca silinir, silme reddinde Logo'da kalır ve stoğa hata görünür; "Yeniden gönder" geri çekilmeyi beklemeden gönderir | `okuma.test.ts` `LOGO-O18` | görüldü değil |
 | LOGO-O19 fişin Logo durumu (295 a): gönderildi, bekliyor, hata, gönderilmez ve nedeni; kapalı tür ve fire; elle türde istek yokken bekler | `okuma-kurallar.test.ts` `LOGO-O19` | görüldü değil |
 | LOGO-O20 gerçek stok akışıyla imleç ilerler, aynı değişiklik bir kez sayılır, izleme öncesi değişmemiş fiş gönderilmez | `okuma.test.ts` `LOGO-O20` | görüldü değil |
-| LGB-5 (334 a) kartın Açıklama 1-3'ü `name2`-`name4` ile gider, boşsa alan yok | `kurallar.test.ts` `LGB-5 (334 a)` | görüldü değil |
+| LGB-5 (334 a, 2088-1) Açıklama 1 Logo adı (`name`; boşsa TMI adı), Açıklama 2-3 `name3`, `name4`, `name2` yok, boşsa alan yok | `kurallar.test.ts` `LGB-5 (334 a, 2088-1)` | görüldü değil |
 | LGS-20 (genişledi) ad güncellemesi yalnız `logo.malzeme-guncelleme-gonderimi` açıkken; kapalıyken kuyruk okunmaz, istek yok | `siparis.test.ts` `LGS-20` | görüldü değil |
 
 Testlerde gerçek ağ çağrısı yok: köprü `sahte-kopru.ts` (127.0.0.1), kapalı durumda `fetch` çağrılınca test düşer.

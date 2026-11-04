@@ -99,14 +99,19 @@ export interface GonderilecekKart {
   ad: string | null;
   logoKartTuru: string | null;
   logoBirimSeti: string | null;
-  // Kartın Açıklama 1-3'ü (334 a); boşsa gövdede yoktur.
+  // Kartın Açıklama 1-3'ü (334 a); Açıklama 1 doluysa Logo adıdır (logoKartAdi), 2-3 boşsa gövdede yoktur.
   aciklama1?: string | null;
   aciklama2?: string | null;
   aciklama3?: string | null;
 }
 
-// DOĞRULANMADI: kartın adı Logo'da NAME (name), Açıklama 1-3 NAME2-NAME4 sayıldı; JSON adları name'in kalıbıyla VARSAYILDI. Doğrulanınca yalnız bu harita değişir.
-export const KART_ACIKLAMA_ALANLARI = Object.freeze({ aciklama1: 'name2', aciklama2: 'name3', aciklama3: 'name4' } as const);
+// Logo malzeme kartında NAME2 yok (kullanıcı ölçümü, karar 2088-1): Açıklama 1 kartın Logo adıdır (NAME, `name`), Açıklama 2 NAME3, Açıklama 3 NAME4.
+// Açıklama 1 boşsa Logo adı TMI adıdır. Yardımcı name2'yi yine reddeder.
+export const KART_ACIKLAMA_ALANLARI = Object.freeze({ aciklama2: 'name3', aciklama3: 'name4' } as const);
+export const logoKartAdi = (k: { ad: string | null; aciklama1?: string | null | undefined }): string => {
+  const aciklama1 = k.aciklama1?.trim() ?? '';
+  return aciklama1 !== '' ? aciklama1 : (k.ad?.trim() ?? '');
+};
 
 export interface MalzemeEklemeGovdesi {
   code: string;
@@ -114,7 +119,6 @@ export interface MalzemeEklemeGovdesi {
   cardType: number;
   unitSetCode: string;
   auxilCode: string;
-  name2?: string;
   name3?: string;
   name4?: string;
   // Alış ve satış KDV oranı; ayar boşken gövdede yoktur (LB3).
@@ -135,7 +139,7 @@ export function eklemeGovdesi(k: GonderilecekKart, o: GovdeSecenegi): { govde: M
   if (k.tur === 'hizmet') return { hata: 'Hizmet kartı malzeme olarak gönderilmez.' };
   const kod = k.stokKodu.trim();
   if (kod === '' || kod.length > STOK_KODU_EN_COK) return { hata: `Stok kodu 1-${STOK_KODU_EN_COK} karakter olmalı.` };
-  const ad = k.ad?.trim() ?? '';
+  const ad = logoKartAdi(k);
   if (ad === '') return { hata: 'Kartın adı yok.' };
   const tur = Number(k.logoKartTuru);
   if (!/^\d+$/.test(k.logoKartTuru ?? '') || !LOGO_KART_TURLERI.includes(tur)) {
@@ -145,7 +149,7 @@ export function eklemeGovdesi(k: GonderilecekKart, o: GovdeSecenegi): { govde: M
   if (birim === '') return { hata: 'Birim karşılığı yok.' };
   if (!o.gecerliBirimler.has(birim)) return { hata: kirp(`Geçersiz karşılık: birim seti ${birim} Logo birim seti listesinde yok.`) };
   const govde: MalzemeEklemeGovdesi = { code: kod, name: ad, cardType: tur, unitSetCode: birim, auxilCode: OZEL_KOD };
-  for (const alan of ['aciklama1', 'aciklama2', 'aciklama3'] as const) {
+  for (const alan of ['aciklama2', 'aciklama3'] as const) {
     const metin = k[alan]?.trim() ?? '';
     if (metin !== '') govde[KART_ACIKLAMA_ALANLARI[alan]] = metin;
   }
