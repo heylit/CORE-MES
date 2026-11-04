@@ -187,6 +187,15 @@ export async function takimKullanimlari(db: Db, istasyonIdler: readonly number[]
 const TEZGAH_SUTUNLARI = `makine_id AS "makineId", tur, kontrol, konik, cep_sayisi AS "cepSayisi", devir, is_mili_devri AS "isMiliDevri",
   canli_takim AS "canliTakim", canli_devir AS "canliDevir", elle, model_turu AS "modelTuru", surum`;
 
+// Seçilmiş 3B görünümü olan makinelerin model türü (2100-1 a); ayarı ya da seçimi olmayan makine listede yoktur.
+export async function makineModelTurleri(db: Db, makineIdleri: readonly number[]): Promise<{ makineId: number; modelTuru: string }[]> {
+  return db.sorgu<{ makineId: number; modelTuru: string }>(
+    `SELECT makine_id AS "makineId", model_turu AS "modelTuru" FROM cnc_kurulum_tezgah
+      WHERE makine_id = ANY($1::int[]) AND model_turu IS NOT NULL ORDER BY makine_id`,
+    [makineIdleri],
+  );
+}
+
 export async function tezgahAyarlari(db: Db): Promise<TezgahAyarSatiri[]> {
   return db.sorgu<TezgahAyarSatiri>(`SELECT ${TEZGAH_SUTUNLARI} FROM cnc_kurulum_tezgah ORDER BY makine_id`);
 }

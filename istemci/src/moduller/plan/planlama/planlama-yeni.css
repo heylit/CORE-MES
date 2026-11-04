@@ -1,7 +1,16 @@
 /* Planlama TS ekranı iskeleti (tc-py-). Görünümler kendi önekleriyle gelir (PARCA-SOZLESMESI); ortak çizelge tc-pyc-. Ekran ikinci menünün
    yanındaki alanı doldurur; görünüm şeridi kabuğun ikinci menüsüdür, kaydırma görünüm alanındadır. */
 .tc-py { display: grid; grid-template-rows: minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--bg); }
-.tc-py[data-calisma-yok] { grid-template-rows: auto minmax(0, 1fr); }
+.tc-py:is([data-calisma-yok], [data-serit]) { grid-template-rows: auto minmax(0, 1fr); }
+/* 1965 a: değişiklik akışı şeridi; görünüm alanının üstünde tek satır, liste düğmeyle altında açılır ve kendi içinde kayar. */
+.tc-py-ds { border-bottom: 1px solid var(--edge); font-size: var(--yazi-s); min-width: 0; }
+.tc-py-ds-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-2) var(--b-5); color: var(--muted); }
+.tc-py-ds[data-durum='eski'] .tc-py-ds-satir { color: var(--ink); }
+.tc-py-ds-metin { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tc-py-ds-liste { list-style: none; margin: 0; padding: 0 var(--b-5) var(--b-3); display: grid; gap: var(--b-2); max-height: 40vh; overflow: auto; }
+.tc-py-ds-liste > li { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-py-ds-ne { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-py-ds-kim, .tc-py-ds-ayrinti, .tc-py-ds-not { color: var(--muted); overflow-wrap: anywhere; }
 /* 1395 a: çalışma kaydı yokken yazabilene açma düğmesi; görünüm alanının üstünde tek satır. */
 .tc-py-calisma-yok { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); padding: var(--b-2) var(--b-5); border-bottom: 1px solid var(--edge); color: var(--muted); font-size: var(--yazi-s); }
 .tc-py-gorunum { min-height: 0; min-width: 0; overflow: auto; }

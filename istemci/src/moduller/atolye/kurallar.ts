@@ -7,6 +7,8 @@ import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozl
 
 type ArkonSonOlayTuru = ArkonSonOlaylarCevabi['olaylar'][number]['tur'];
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
+import { katalogModeli } from '#paylasilan/tezgah-katalogu.ts';
+import type { GovdeTipi } from '#paylasilan/tezgah-katalogu.ts';
 
 // Ekranın gösterim yardımcıları: iş kuralı değildir, sunucunun verdiği durumu ekrana çevirir.
 
@@ -205,6 +207,35 @@ export function makineCinsi(tip: IstasyonTipi | string, ad: string): MakineCinsi
   const kucuk = ad.toLocaleLowerCase('tr');
   if (kucuk.includes('torna')) return 'torna';
   return kucuk.includes('5 eksen') || kucuk.includes('beş eksen') ? 'bes_eksen' : 'dik_isleme';
+}
+
+// 3B gövde (2100-2 a): makinenin CNC Kurulum'da seçilen katalog modeli biliniyorsa cins gövde tipinden, ölçü üreticinin dış
+// ölçüsünden (metre) gelir; torna-freze ve kayar otomat torna gövdesiyle çizilir. Model yoksa, katalogda değilse ya da istasyon
+// talaşlı veya kalite değilse ad kuralı ve ayak izi geçerlidir (dis null). Plan simgesi ve kart adları bu karardan etkilenmez.
+const GOVDE_CINSI: Record<GovdeTipi, MakineCinsi> = {
+  m_vmc: 'dik_isleme', m_gk: 'dik_isleme', m_hmc: 'dik_isleme', m_5ax: 'bes_eksen', m_5axh: 'bes_eksen',
+  m_lathe: 'torna', m_ulathe: 'torna', m_tf: 'torna', m_swiss: 'torna', m_cmm: 'cmm',
+};
+
+export interface GovdeGorunumu { cins: MakineCinsi; dis: { en: number; derinlik: number; yukseklik: number } | null }
+
+export function govdeGorunumu(tip: IstasyonTipi | string, ad: string, modelTuru: string | null | undefined): GovdeGorunumu {
+  const ada = makineCinsi(tip, ad);
+  const k = modelTuru && (tip === 'talasli' || tip === 'kalite') ? katalogModeli(modelTuru) : null;
+  if (!k) return { cins: ada, dis: null };
+  const d = k.dis;
+  return { cins: GOVDE_CINSI[k.govde], dis: d ? { en: d.en / 1000, derinlik: d.derinlik / 1000, yukseklik: d.yukseklik / 1000 } : null };
+}
+
+// Haritadaki nesnenin model türü: makine yerinde makinenin kendisi, istasyon yerinde istasyonun tek makinesi (birden çoksa bilinmez).
+export function sahneModelTurleri(y: YerlesimCevabi): Map<string, string> {
+  const h = new Map<string, string>();
+  for (const m of y.makineYerleri) if (m.modelTuru) h.set(`makine:${m.makineId}`, m.modelTuru);
+  for (const i of y.istasyonYerleri) {
+    const tek = i.makineler.length === 1 ? i.makineler[0]?.modelTuru : null;
+    if (tek) h.set(`istasyon:${i.istasyonId}`, tek);
+  }
+  return h;
 }
 
 export const MAKINE_CINSI_ADI: Record<MakineCinsi, string> = {

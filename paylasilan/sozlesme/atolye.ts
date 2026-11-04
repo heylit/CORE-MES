@@ -297,12 +297,15 @@ export const salonSemasi = salonOzetiSemasi.extend({
   satirlar: z.array(z.string()),
 });
 
+// modelTuru: makinenin CNC Kurulum Tanımlar'da seçilen 3B görünümü (2100-2 a); seçim yoksa null. Alan isteğe bağlıdır: yoksa
+// görünüm bilinmez, harita gövdeyi istasyon tipinden ve ayak izinden çizer.
 export const makineOzetiSemasi = z.object({
   id: kimlik,
   kod: z.string(),
   ad: z.string(),
   tur: z.string().nullable(),
   markaModel: z.string().nullable(),
+  modelTuru: z.string().nullable().optional(),
 });
 
 // İstasyona atanmış modelin gösterimde gereken alanları.
@@ -352,6 +355,7 @@ export const makineYeriSemasi = z.object({
   ad: z.string(),
   tur: z.string().nullable(),
   markaModel: z.string().nullable(),
+  modelTuru: z.string().nullable().optional(),
   aktif: z.boolean(),
   istasyon: z.object({ id: kimlik, kod: z.string(), ad: z.string(), tip: istasyonTipi, aktif: z.boolean() }).nullable(),
   x: metinOlcu,

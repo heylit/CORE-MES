@@ -166,6 +166,20 @@ export class CalismaYazici implements CalismaKomutu {
     return tamam ? null : CATISMA;
   };
 
+  // 1972: sunucu birleşmesinin bulduğu başka sayfa değişikliği bekleyene girer. Veri sürümü sunucuda artmıştır, burada artmaz; geri alma
+  // yığınına ve ize girmez (kişisi bilinmez). Sessiz yazılır: çatışmada sayfa yeniden okur, sunucu farkı yeniden bulur.
+  kaynakDegisikliginiYaz = (satir: BekleyenDegisiklik): boolean => {
+    if (this.#durdu) return false;
+    const once = this.#calisma;
+    if (once.plan === null || once.plan.dataVer === once.dataVer) return false;
+    const l = bekleyenler(once);
+    if (l.some((b) => b.id === satir.id)) return false;
+    const taslak = kopya(once);
+    taslak.bekleyen = [...l, satir];
+    this.#koy(taslak);
+    return true;
+  };
+
   // Bekleyen değişikliği hemen yazar (sayfadan çıkarken); yolda olan yazma da beklenir.
   async hepsiniYaz(): Promise<void> {
     if (this.#zamanlayici !== null) { clearTimeout(this.#zamanlayici); this.#zamanlayici = null; }

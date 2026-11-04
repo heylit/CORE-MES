@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { KAYNAK_DEGISIKLIK_ALANLARI, KAYNAK_FARKI_EN_COK, type KaynakDegisikligi, type KaynakDegisiklikAlani } from '#paylasilan/sozlesme/planlama.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import { tipliKaynakBirlestir, type KaynakBirlestir } from './girdi/birlestirme.ts';
+import { girdiFarki, type GirdiFarki } from './girdi/esdegerlik.ts';
 import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { taslakEkMesaisi } from './planlama-kurallar.ts';
 import type { MotorDurumu, MotorPlani } from './plan-motoru.ts';
@@ -36,17 +38,65 @@ export interface GirdiIstegi {
   // 1720 kaynak: bayrak (plan.tipli-girdi) açıksa tipli kaynak dilimi okuması; kaynak alanlarını o kurar (girdi/birlestirme.ts).
   kaynakDilimi?: KaynakDilimiOkumasi | null;
 }
-export interface PlanGirdisi { S: Record<string, unknown>; st: MotorDurumu }
+// kaynakDegisikligi: birleşme planı eskittiyse neyin değiştiği (1962); eskitmediyse null.
+export interface PlanGirdisi { S: Record<string, unknown>; st: MotorDurumu; kaynakDegisikligi?: KaynakDegisikligi | null }
+
+// 1962: birleşmenin bulduğu değişiklik atılmasın. Betik değişmez: kaynakBirlestir ve otoArizaUygula bağlamın genel nesnesindedir, girdiKur
+// onları adıyla çağırır (tipli dilim de aynı yolla sarılır). Sarmalayan çağrıdan önceki değeri alır, değişen alanın farkını toplar.
+interface Izci { alanlar: Set<KaynakDegisiklikAlani>; farklar: GirdiFarki[]; kesik: boolean; artis: number }
+const KAYNAK_ALANI = new Set<string>(KAYNAK_DEGISIKLIK_ALANLARI);
+const jsonKopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
+
+function farkEkle(izci: Izci, eski: unknown, yeni: unknown, yol: KaynakDegisiklikAlani): void {
+  const kalan = KAYNAK_FARKI_EN_COK - izci.farklar.length;
+  if (kalan <= 0) { izci.kesik = true; return; }
+  const l = girdiFarki(eski, yeni, kalan + 1).map((f) => ({ ...f, yol: f.yol === '' ? yol : `${yol}${f.yol.startsWith('[') ? '' : '.'}${f.yol}` }));
+  if (l.length > kalan) izci.kesik = true;
+  izci.farklar.push(...l.slice(0, kalan));
+}
+
+function izle(baglam: object, izci: Izci): void {
+  const g = baglam as { kaynakBirlestir: KaynakBirlestir; otoArizaUygula: (S: Record<string, unknown>, ...x: unknown[]) => boolean };
+  const birlestir = g.kaynakBirlestir;
+  g.kaynakBirlestir = (D0, kayit, kaynak, bugun) => {
+    const once = jsonKopya(D0);
+    const alanlar = birlestir(D0, kayit, kaynak, bugun);
+    if (alanlar.length > 0) izci.artis += 1;
+    for (const a of alanlar) {
+      if (!KAYNAK_ALANI.has(a)) continue;
+      const alan = a as KaynakDegisiklikAlani;
+      izci.alanlar.add(alan);
+      farkEkle(izci, once[a], jsonKopya(D0[a]), alan);
+    }
+    return alanlar;
+  };
+  const ariza = g.otoArizaUygula;
+  g.otoArizaUygula = (S, ...x) => {
+    const once = jsonKopya(S.down);
+    const oldu = ariza(S, ...x);
+    if (oldu) { izci.artis += 1; izci.alanlar.add('ariza'); farkEkle(izci, once, jsonKopya(S.down), 'ariza'); }
+    return oldu;
+  };
+}
+
+// Veri sürümü arttıysa değişiklik vardır. Sarılan iki çağrının açıklamadığı artış Reçete ve Rota kaydının yeniden çevrilmesidir (girdiKur ilk adımı).
+function kaynakDegisikligiKur(oncekiSurum: unknown, S: Record<string, unknown>, izci: Izci): KaynakDegisikligi | null {
+  const once = Number(oncekiSurum), sonra = Number(S.dataVer);
+  if (!Number.isFinite(once) || !Number.isFinite(sonra) || sonra <= once) return null;
+  if (sonra - once > izci.artis) izci.alanlar.add('receteRotaKaydi');
+  return { alanlar: KAYNAK_DEGISIKLIK_ALANLARI.filter((a) => izci.alanlar.has(a)), farklar: izci.farklar, kesik: izci.kesik };
+}
 
 // Bağlam kurulur ve betikler yüklenir. Tipli dilim verilmişse bağlamın kaynakBirlestir'i onu da uygulayan sürümle değişir: betiğin
 // işlevleri bağlamın genel nesnesindedir, girdiKur onu adıyla çağırır. Betik dosyası değişmez; eski yol bayrak kapalıyken aynen koşar.
-function baglamla<T>(kod: string, dosya: string, kaynakDilimi: KaynakDilimiOkumasi | null | undefined): T {
+function baglamla<T>(kod: string, dosya: string, kaynakDilimi: KaynakDilimiOkumasi | null | undefined, izci?: Izci): T {
   const baglam = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI });
   const sonuc = vm.runInContext(kod, baglam, { filename: dosya }) as T;
   if (kaynakDilimi) {
     const g = baglam as { kaynakBirlestir: KaynakBirlestir };
     g.kaynakBirlestir = tipliKaynakBirlestir(g.kaynakBirlestir, kaynakDilimi);
   }
+  if (izci) izle(baglam, izci);
   return sonuc;
 }
 
@@ -54,11 +104,14 @@ type GirdiKur = (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null,
 
 // Her çağrı yeni bağlam kurar; girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function planGirdisi(istek: GirdiIstegi, simdi: number = Date.now()): PlanGirdisi | null {
-  const { girdiKur } = baglamla<{ girdiKur: GirdiKur }>(girdiKodu(), 'plan-girdisi.js', istek.kaynakDilimi);
-  const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
-  const sonuc = girdiKur(kopya(istek.calisma), kopya(istek.kayit), kopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
+  const izci: Izci = { alanlar: new Set(), farklar: [], kesik: false, artis: 0 };
+  const { girdiKur } = baglamla<{ girdiKur: GirdiKur }>(girdiKodu(), 'plan-girdisi.js', istek.kaynakDilimi, izci);
+  const sonuc = girdiKur(jsonKopya(istek.calisma), jsonKopya(istek.kayit), jsonKopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
+  if (sonuc === null) return null;
   // Bağlamın nesneleri onun dizi ve nesne türlerindendir; sunucunun türlerine yapılandırılmış kopyayla geçer (sonsuz değer korunur).
-  return sonuc === null ? null : structuredClone(sonuc);
+  const g = structuredClone(sonuc);
+  const oncekiSurum = (istek.calisma as { dataVer?: unknown } | null)?.dataVer;
+  return { ...g, kaynakDegisikligi: structuredClone(kaynakDegisikligiKur(oncekiSurum, g.S, izci)) };
 }
 
 // 657 a: kayıt yoksa sayfanın açacağı boş çalışma (çerçevenin yeniCalisma'sı); veri Reçete ve Rota kaydından ve kaynak okumasından.

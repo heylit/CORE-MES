@@ -24,6 +24,11 @@ import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, SalonOlcusu } from
 import * as sorgular from './sorgular.ts';
 import type { AlanSatiri, GozKalemiSatiri, KrokiKapsami, KrokiSatiri, ModelSatiri, RafSatiri, SalonSatiri } from './sorgular.ts';
 
+// Makinenin CNC Kurulum'daki 3B görünümü (2100-2 a): bağ kablolama.ts'te kurulur; kurulmamışsa görünüm bilinmez (alan null).
+export type MakineModelTuruCozucusu = (db: Db, makineIdleri: readonly number[]) => Promise<ReadonlyMap<number, string>>;
+let modelTuruCozucusu: MakineModelTuruCozucusu | null = null;
+export function makineModelTuruCozucusuKaydet(cozucu: MakineModelTuruCozucusu): void { modelTuruCozucusu = cozucu; }
+
 const SALON_YOK = 'Salon bulunamadı.';
 const RAF_YOK = 'Raf bulunamadı.';
 
@@ -108,6 +113,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
   const modeller = modelIdleri.length ? await sorgular.modelleriBul(db, modelIdleri) : [] as ModelSatiri[];
   const modelHaritasi = new Map(modeller.map((m) => [m.id, istasyonModeli(m)]));
   const merkezBaglari = await kayitlaraBagliBelgeler(db, 'istasyonlar', yerler.map((y) => y.istasyonId));
+  const modelTurleri = modelTuruCozucusu ? await modelTuruCozucusu(db, [...makineler.map((m) => m.id), ...makineYerleri.map((y) => y.makineId)]) : new Map<number, string>();
   const istasyonHaritasi = new Map(istasyonlar.map((i) => [i.id, i]));
   const istasyonYerleri: IstasyonYeri[] = yerler.flatMap((y) => {
     const i = istasyonHaritasi.get(y.istasyonId);
@@ -119,7 +125,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
       hucre: hucreAdi(sayi(y.x), sayi(y.z), o),
       makineler: makineler
         .filter((m) => m.istasyonId === y.istasyonId)
-        .map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, tur: m.tur, markaModel: m.markaModel })),
+        .map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, tur: m.tur, markaModel: m.markaModel, modelTuru: modelTurleri.get(m.id) ?? null })),
       model: y.modelId === null ? null : modelHaritasi.get(y.modelId) ?? null,
       merkezModeli: merkezModeliSec(merkezBaglari.get(y.istasyonId) ?? []),
     }];
@@ -129,7 +135,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
     if (!m) return [];
     const i = m.istasyonId === null ? undefined : istasyonHaritasi.get(m.istasyonId);
     return [{
-      makineId: m.id, kod: m.kod, ad: m.ad, tur: m.tur, markaModel: m.markaModel, aktif: m.aktif,
+      makineId: m.id, kod: m.kod, ad: m.ad, tur: m.tur, markaModel: m.markaModel, modelTuru: modelTurleri.get(m.id) ?? null, aktif: m.aktif,
       istasyon: i ? { id: i.id, kod: i.kod, ad: i.ad, tip: i.tip, aktif: i.aktif } : null,
       x: y.x, z: y.z, donus: y.donus, genislik: y.genislik, derinlik: y.derinlik,
       hucre: hucreAdi(sayi(y.x), sayi(y.z), o),

@@ -95,3 +95,7 @@ export const zemin = (db: Db) => servis.zemin(db);
 // Bütün bölümlerin yerleşimi fabrikadaki yeriyle (GET /atolye/fabrika ile aynı cevap, kart #114): Stok Merkezi tek fabrika
 // zeminini bununla çizer. Okuma yetkisini çağıran (stok) kendi ucunda denetler.
 export const fabrikaPlani = (db: Db): Promise<FabrikaCevabi> => servis.fabrika(db);
+
+// Makinenin 3B görünümünü (CNC Kurulum `model_turu`, 2100-2 a) veren işlevi kaydeder; bağ kablolama.ts'tedir.
+export type { MakineModelTuruCozucusu } from './servis.ts';
+export const makineModelTuruCozucusu = (cozucu: servis.MakineModelTuruCozucusu): void => servis.makineModelTuruCozucusuKaydet(cozucu);

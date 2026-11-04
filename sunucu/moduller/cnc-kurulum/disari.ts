@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kayit } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { SON_ONAY_ADIMI } from './kurallar.ts';
-import { isEmriHazirlikOzetleri, kayitGetir, secilmisIsEmirleri } from './sorgular.ts';
+import { isEmriHazirlikOzetleri, kayitGetir, makineModelTurleri as modelTurleriniOku, secilmisIsEmirleri } from './sorgular.ts';
 
 // Bağlamada (Aşama 2) başka modül bu modülün kaydını yalnız buradan okur; yazma dışarı açılmaz. Prototipin durumu
 // `cnc-kurulum-motoru.v1` anahtarındadır (alanları ORTAKLIK-cnc-kurulum.md'de).
@@ -36,6 +36,14 @@ export async function isEmriHazirlikDurumlari(db: Db, isEmriIdleri: readonly num
 
 export async function isEmriHazirlikDurumu(db: Db, isEmriId: number): Promise<EmirHazirlikDurumu> {
   return (await isEmriHazirlikDurumlari(db, [isEmriId])).get(isEmriId) ?? { durum: 'yok', zaman: null, secildi: false };
+}
+
+// Makinenin Tanımlar'da seçilen 3B görünümü (`model_turu`, 2100-2 a): Atölye haritası gövdeyi buna göre çizer; bağ
+// kablolama.ts'tedir. Seçimi olmayan makine haritada yoktur.
+export async function makineModelTurleri(db: Db, makineIdleri: readonly number[]): Promise<Map<number, string>> {
+  const idler = [...new Set(makineIdleri)];
+  if (!idler.length) return new Map();
+  return new Map((await modelTurleriniOku(db, idler)).map((r) => [r.makineId, r.modelTuru]));
 }
 
 // Takım ömrü (295 a). Sayım dinleyicisi kablolama.ts'te Üretim emirlerinin sağlam ve hurda sayımına bağlanır. Okuyucu istasyon
