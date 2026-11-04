@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { KATALOG_TURLERI } from './malzemeler.ts';
@@ -94,6 +94,8 @@ export const bakiyeSatiri = z.object({
   // DEP-63: konumun yerdeki karesi Fabrika Haritası ızgarasından ("DEPO1 C4", kart #1304); raftaki malzemenin de karesi vardır. Ayrıntı
   // ekranlarında gelir; haritada yeri olmayan konumda null.
   zemin: z.string().nullable().optional(),
+  // 2099-2 c: lotun son kullanma tarihi (YYYY-AA-GG); tarihi olmayan lotta null.
+  sonKullanma: z.string().nullable().optional(),
 });
 export type BakiyeSatiri = z.output<typeof bakiyeSatiri>;
 
@@ -358,6 +360,34 @@ export const malzemelerSorgusu = z.object({
   kapsam: z.enum(['kartlar']).optional(),
 });
 export type MalzemelerSorgusu = z.input<typeof malzemelerSorgusu>;
+// ---- Tür listeleri (2099-6 a, teyit): Stok Merkezi'nin ikinci menüsünde kimyasallar, kesici takımlar ve aparatlar ayrı liste ----
+// Liste malzeme kartının türü ve kategorisiyle tanımlanır (malzemeler `kayit.g.kat`, 2099-1 a); stok kategori tutmaz.
+export const STOK_TUR_LISTELERI = {
+  kimyasal: { baslik: 'Kimyasallar', tur: 'sarf', kategori: 'kimyasal' },
+  takim: { baslik: 'Kesici takımlar', tur: 'sarf', kategori: 'takim' },
+  aparat: { baslik: 'Aparatlar', tur: 'demirbas', kategori: 'kalip' },
+} as const satisfies Record<string, { baslik: string; tur: (typeof MALZEME_TURLERI)[number]; kategori: string }>;
+export type StokTurListesi = keyof typeof STOK_TUR_LISTELERI;
+export const STOK_TUR_LISTESI_ANAHTARLARI = Object.keys(STOK_TUR_LISTELERI) as [StokTurListesi, ...StokTurListesi[]];
+export const turListesiParametresi = z.object({ liste: z.enum(STOK_TUR_LISTESI_ANAHTARLARI) });
+// Kartın türe özel alan değeri (malzemeler `kartAlanDegerleri`): metin, sayı, mantık ya da metin dizisi.
+const kartAlanDegeri = z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]);
+export const turListesiSatiri = malzemeStokSatiri.extend({
+  alanlar: z.record(z.string(), kartAlanDegeri),
+  sktTakipli: z.boolean(),
+  // Stoktaki lotların en yakın son kullanma tarihi; tarihli lot yoksa null.
+  enYakinSkt: z.string().nullable(),
+  // SKT'si geçmiş lotlardaki miktar (müdür onayı olmadan çıkmaz, 2099-5 a).
+  sktGecmisMiktar: ondalikMetinSemasi,
+});
+export type TurListesiSatiri = z.output<typeof turListesiSatiri>;
+export const turListesiCevabi = z.object({ bugun: z.string(), satirlar: z.array(turListesiSatiri) });
+export type TurListesiCevabi = z.output<typeof turListesiCevabi>;
+// Lotun SKT düzeltmesi (2099-2 c): yalnız stok.skt-onayla; ilk kayıtta sürüm null, sonra okunan sürüm. Eski ve yeni tarih defterde kalır.
+export const sktDuzeltGovdesi = z.object({ sonKullanma: tarihSemasi, surum: z.number().int().positive().nullable() });
+export type SktDuzeltGovdesi = z.input<typeof sktDuzeltGovdesi>;
+export const sktDuzeltCevabi = z.object({ partiId: z.number().int(), sonKullanma: z.string(), surum: z.number().int() });
+export type SktDuzeltCevabi = z.output<typeof sktDuzeltCevabi>;
 export const malzemelerCevabi = listeCevapSemasi(malzemeStokSatiri);
 export type MalzemelerCevabi = z.output<typeof malzemelerCevabi>;
 
@@ -538,6 +568,8 @@ const malKabulSatirGirdisi = z.object({
   sertifika: z.object({ ozet: dosyaOzeti, dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120) }).optional(),
   // Depo kabulü (944, 957 a): satır sevkiyatın geliş kalemini (fason dönüşü, alım, elle dönüş) kapatır; kısmi kabulde kalem açık kalır.
   sevkKalemiId: kimlik.optional(),
+  // 2099-3 b: lotun son kullanma tarihi; kart SKT takipliyse zorunludur, lot başına tek tarih.
+  sonKullanma: tarihSemasi.optional(),
 });
 export type MalKabulSatirGirdisi = z.input<typeof malKabulSatirGirdisi>;
 // Mal kabulün fason kutusundaki açık fason işleri (kart #1289): rotaya göre dönecek kart; statülüyse yarı parça adımın statüsüne geçer.
@@ -722,6 +754,8 @@ export const cikisGovdesi = z.object({
   aciklama: bosOlabilir(200),
   // Verilmezse serbest satırdan düşülür; red sevke uyarıyla çıkar, karar bekleyen çıkamaz (147 b).
   kaliteDurumu: z.enum(KALITE_DURUMLARI).optional(),
+  // 2099-5 a: SKT'si geçmiş lotun çıkış onayı; yalnız stok.skt-onayla taşıyan verir.
+  sktOnay: z.boolean().optional(),
 });
 export type CikisGovdesi = z.input<typeof cikisGovdesi>;
 export const sayimGovdesi = z.object({
