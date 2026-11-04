@@ -11,6 +11,7 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi, kisaCommit } from '../../ortak/veri/surum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { GuncellemeIlerlemesi } from './GuncellemeIlerlemesi.tsx';
 
 // Sunucunun parça boyu ve paket sınırı (`paylasilan/sozlesme/ayarlar.ts`); sözleşme zod taşıdığı için burada sayı olarak durur.
 export const PARCA_BAYT = 512 * 1024;
@@ -171,6 +172,7 @@ export function Guncelleme() {
   const [secilen, setSecilen] = useState<string | null>(null);
   const [onay, setOnay] = useState(false);
   const [uygulaniyor, setUygulaniyor] = useState(false);
+  const [istenen, setIstenen] = useState<{ commit: string; an: string } | null>(null);
   const [silinecek, setSilinecek] = useState<Silinecek | null>(null);
   const [siliniyor, setSiliniyor] = useState(false);
   // Yeni göç sayısı sunucunun son göçüyle çıkar; o bilgi yalnız sağlık ayrıntısını okuyabilene açıktır.
@@ -200,8 +202,9 @@ export function Guncelleme() {
   const uygula = async (paket: GuncellemeListePaketi) => {
     setUygulaniyor(true);
     try {
-      await api.post<GuncellemeUygulamaIstegi>(`/guncelleme/paketler/${paket.commit}/uygula`, {});
-      bildir('tamam', `${paket.surum} uygulanacak: önce yedek alınır, sunucu birkaç dakika kapalı kalır. Sonra sayfayı yenileyin.`);
+      const istek = await api.post<GuncellemeUygulamaIstegi>(`/guncelleme/paketler/${paket.commit}/uygula`, {});
+      setIstenen({ commit: istek.commit, an: istek.istenme });
+      bildir('tamam', `${paket.surum} uygulanacak: önce yedek alınır, sunucu birkaç dakika kapalı kalır. Adımlar bu sayfada görünür.`);
       setOnay(false);
     } catch (hata) {
       bildir('hata', hataIletisi(hata, 'Uygulama istenemedi.'));
@@ -294,6 +297,7 @@ export function Guncelleme() {
           </div>
           <Dugme simge="rotate" disabled={uygulamaEngeli !== null} onClick={() => { setOnay(true); }}>Uygula</Dugme>
         </div>
+        <GuncellemeIlerlemesi veri={liste.data} istenen={istenen} />
         {liste.data && (
           <Tablo
             etiket="Yüklenen güncelleme paketleri" satirlar={paketler}

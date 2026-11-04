@@ -324,3 +324,18 @@ export type YedekIndirmeIzniCevabi = z.output<typeof yedekIndirmeIzniCevabi>;
 export type YedekDiziniGovdesi = z.input<typeof yedekDiziniGovdesi>;
 export type YedekDiziniCevabi = z.output<typeof yedekDiziniCevabi>;
 export type YedekDiziniKaynagi = (typeof YEDEK_DIZINI_KAYNAKLARI)[number];
+
+// Güncelleyicinin uygulama adımları, sırasıyla (araclar/guncelleyici.ts Adim). "durdur"dan sonra sunucu kapalıdır:
+// yedek, göç ve açılış canlı okunamaz; ekran bunları sunucu yeniden açılınca sonuçtan işaretler.
+export const GUNCELLEME_ADIMLARI = ['dogrula', 'hazirla', 'durdur', 'yedek', 'goc', 'acilis'] as const;
+export const guncellemeIlerlemesiCevabi = z.object({
+  // Güncelleyicinin şu an uyguladığı paket ve adımı; uygulama yoksa null.
+  suren: z.object({
+    commit: z.string().regex(/^[0-9a-f]{40}$/),
+    surum: z.string(),
+    adim: z.enum(GUNCELLEME_ADIMLARI),
+    baslangic: zamanSemasi,
+  }).nullable(),
+});
+export type GuncellemeAdimi = (typeof GUNCELLEME_ADIMLARI)[number];
+export type GuncellemeIlerlemesiCevabi = z.output<typeof guncellemeIlerlemesiCevabi>;
