@@ -356,8 +356,14 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // okumaları için Markalama sayfası (2048 b + teyit).
       'markalama.seri-ver', ...SAYFA('markalama')],
     insan_kaynaklari: [...MESAJ, ...STOK_ISTEK, ...IK_UZMANI, 'kisiler.oku', 'kisiler.yaz', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU, 'profil.geri-bildirim-oku'],
-    satin_alma: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA, 'satin-alma.oku', TALEP, TALEP_SAYFASI, 'satin-alma.yaz', 'satin-alma.ayar', 'finans.kur-yaz', 'uretim-emirleri.fason', ...SAYFA('stok', 'malzemeler', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.satinalma'],
-    muhasebe_finans: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'finans.oku', 'finans.maliyet-oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...FIRMA, 'satin-alma.oku', ...SAYFA('uretim-emirleri', 'emirler', 'stok', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.finans', ...SIPARIS_YAZ, 'projeler.oku'],
+    satin_alma: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA, 'satin-alma.oku', TALEP, TALEP_SAYFASI, 'satin-alma.yaz', 'satin-alma.ayar', 'finans.kur-yaz', 'uretim-emirleri.fason', ...SAYFA('stok', 'malzemeler', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.satinalma',
+      // Fatura-sipariş bağı (2077-3 a).
+      'satin-alma.fatura-bagla',
+    ],
+    muhasebe_finans: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'finans.oku', 'finans.maliyet-oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...FIRMA, 'satin-alma.oku', ...SAYFA('uretim-emirleri', 'emirler', 'stok', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.finans', ...SIPARIS_YAZ, 'projeler.oku',
+      // Fatura-sipariş bağını dar işlemle kurar, satın alma kaydı yazmaz (modul-test K8 a, 2077-3 a).
+      'satin-alma.fatura-bagla',
+    ],
     idari_isler: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'kisiler.oku', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU,
       // Kapı kaydını yazar, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).
       'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz', 'nizamiye.kart-yonet'],
@@ -575,7 +581,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
       ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-terminali', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
-        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', 'sayfa.geometri', 'geometri.oku', ...TESIS_TALEBI].sort(),
+        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', 'sayfa.geometri', 'geometri.oku', 'satin-alma.fatura-bagla', ...TESIS_TALEBI].sort(),
     );
   });
 

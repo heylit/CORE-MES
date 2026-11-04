@@ -15,6 +15,8 @@ const katalogParametresi = z.object({ id: z.string().uuid() });
 const KG_FIYATI_OKUR = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 // 534 1 a: tedarik terminini satın almayı yazan ve planı yazan girer (Planlama ekranındaki giriş de bu uca gelir); yeni işlem yok.
 const TERMIN_YAZAR = ['satin-alma.yaz', 'plan.yaz'] as const;
+// K8 a (2077-3 a): muhasebe fatura-sipariş bağını yalnız bu dar işlemle kurar, satın alma kaydı yazmaz.
+const FATURA_BAGLAR = ['satin-alma.yaz', 'satin-alma.fatura-bagla'] as const;
 
 // Tekrar korumalı (#188): talep açma, katalog kaydı ve teslim alma. Cevabı yitirilen komut aynı kimlikle yeniden gönderilince
 // ilk cevap döner; kimliksiz gönderim 400 alır.
@@ -140,14 +142,14 @@ export const uclar = [
     parametre: siparisBelgesiParametresi, cevap: siparisBelgeleriCevabi,
     isle: ({ db, parametre }) => servis.siparisBelgesiKaldir(db, parametre.id, parametre.belgeId),
   }),
-  // D6 b: sipariş ve finanstaki alış faturası bağı. Seçici tutarsız liste okur; bağı satın almayı yazan işlem kurar.
+  // D6 b: sipariş ve finanstaki alış faturası bağı. Seçici tutarsız liste okur; bağı satın almayı yazan ya da yalnız fatura bağlayan işlem kurar.
   // Ağ kopunca aynı kimlikle yinelenen bağ ilk cevabı alır; geçmişe ikinci satır yazılmaz.
   uc({
-    yontem: 'GET', yol: '/satin-alma-siparis-faturalari', yetki: 'satin-alma.yaz', sorgu: siparisFaturalariSorgusu, cevap: siparisFaturalariCevabi,
+    yontem: 'GET', yol: '/satin-alma-siparis-faturalari', yetki: { biri: FATURA_BAGLAR }, sorgu: siparisFaturalariSorgusu, cevap: siparisFaturalariCevabi,
     isle: ({ db, sorgu }) => servis.siparisFaturalari(db, sorgu.talepId, sorgu.teklifId),
   }),
   uc({
-    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-faturasi', yetki: 'satin-alma.yaz', parametre: talepParametresi,
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/siparis-faturasi', yetki: { biri: FATURA_BAGLAR }, parametre: talepParametresi,
     govde: siparisFaturasiGovdesi, cevap: siparisFaturalariCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => servis.siparisFaturasiYaz(db, kullanici, parametre.id, govde),
