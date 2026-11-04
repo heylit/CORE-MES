@@ -9,6 +9,8 @@ import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
 export const ISLEM = {
   oku: 'satin-alma.oku', talepAc: 'satin-alma.talep-ac', yaz: 'satin-alma.yaz', onayla: 'satin-alma.onayla', ayar: 'satin-alma.ayar',
+  // Fatura-sipariş bağını satın almayı yazmadan kurar (modul-test K8 a, 2077-3 a): muhasebe başka satın alma kaydı yazmaz.
+  faturaBagla: 'satin-alma.fatura-bagla',
 } as const;
 export type SatinAlmaIslemi = (typeof ISLEM)[keyof typeof ISLEM];
 

@@ -1194,6 +1194,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Yalnız satın almayı yazan işlem; talep eden 403.
     assert.equal((await liste(s.id, a, c.talep)).statusCode, 403);
     assert.equal((await yaz(s.id, a, f1, true, c.talep)).statusCode, 403);
+    // Muhasebe bağı satin-alma.fatura-bagla ile kurar ve kaldırır (K8 a, 2077-3 a); satın alma kaydı yazamaz.
+    const muhasebe = await rolluKisi('muhasebeci', 'muhasebe_finans');
+    assert.deepEqual(durumlar(await yaz(s.id, a, f2, true, muhasebe)), [[f1, false, true], [f2, true, false]].sort());
+    assert.deepEqual(durumlar(await liste(s.id, a, muhasebe)), [[f1, false, true], [f2, true, false]].sort());
+    assert.deepEqual(durumlar(await yaz(s.id, a, f2, false, muhasebe)), [[f1, false, true], [f2, false, false]].sort());
+    assert.equal((await istek(muhasebe, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: firmaA, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null })).statusCode, 403);
   });
 
   test('SAT-73 SAT-74 FNS-63 FNS-64 #1124: siparişe çevrilince plan tekliften finansa düşer; yazan değiştirir, okuyan görür; fatura bağlanınca plan kilitlenir ve beklenenden düşer', async () => {
