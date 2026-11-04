@@ -1,8 +1,0 @@
-.tc-kisayollar { display: grid; gap: var(--b-2); margin: 0; }
-.tc-kisayol { display: grid; grid-template-columns: minmax(0, 10em) minmax(0, 1fr); align-items: center; gap: var(--b-3); }
-.tc-kisayol dt { display: flex; flex-wrap: wrap; gap: var(--b-1); }
-.tc-kisayol dd { margin: 0; color: var(--ink); }
-.tc-kisayol kbd {
-  font-family: var(--font-mono); font-size: var(--yazi-xs); padding: var(--pay-ince) var(--b-2);
-  border: 1px solid var(--edge2); border-bottom-width: 2px; border-radius: var(--yari-1); background: var(--panel2);
-}

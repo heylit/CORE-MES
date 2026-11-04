@@ -250,18 +250,3 @@
   .tc-kabuk-menu .tc-kabuk-bag-sayi { position: absolute; top: 0; right: 0; margin: 0; }
 }
 .tc-kabuk[data-menu-dar] .tc-kabuk-menu .tc-kabuk-bag-sayi { position: absolute; top: 0; right: 0; margin: 0; }
-
-/* Takılma koruması notu (kart 2092, karar 2081-29): bir kez çıkar, kişi kapatır. */
-.tc-kabuk-sade-not {
-  position: fixed; left: var(--b-4); bottom: var(--b-4); z-index: var(--z-bildirim); display: flex; align-items: center; gap: var(--b-3);
-  max-width: min(var(--bildirim-genis), calc(100vw - 2 * var(--b-4))); padding: var(--b-2) var(--b-2) var(--b-2) var(--b-4);
-  background: var(--panel-solid); color: var(--ink); border: 1px solid var(--edge2); border-left: var(--b-1) solid var(--hold);
-  border-radius: var(--yari-2); box-shadow: var(--shadow); font-weight: 600;
-}
-.tc-kabuk-sade-kapat {
-  flex: none; min-height: var(--dokunma); padding: 0 var(--b-3); border: 0; border-radius: var(--yari-1);
-  background: transparent; color: var(--hazard-ink); font-weight: 700; cursor: pointer;
-}
-@media (max-width: 767px) {
-  .tc-kabuk-sade-not { bottom: calc(var(--alt-cubuk) + var(--b-3)); left: var(--b-3); }
-}

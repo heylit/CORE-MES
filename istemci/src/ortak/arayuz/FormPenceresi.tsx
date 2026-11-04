@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { useHataOdagi, type FormDurumu } from '../veri/form.ts';
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import type { FormDurumu } from '../veri/form.ts';
 import { Dugme } from './Dugme.tsx';
 import { OnayPenceresi } from './OnayPenceresi.tsx';
 import { Pencere } from './Pencere.tsx';
@@ -29,8 +29,6 @@ export function FormPenceresi<D extends object>({
   const kimlik = useId();
   const [acilis, acilisYaz] = useState<D | null>(null);
   const [soruyor, soruyorYaz] = useState(false);
-  const formKok = useRef<HTMLFormElement>(null);
-  useHataOdagi(form.hataNo, formKok);
 
   // Açılıştaki değer, pencere her açıldığında yeniden alınır; ekran açmadan önce `form.sifirla(kayit)` çağırmış olabilir.
   useEffect(() => {
@@ -53,7 +51,7 @@ export function FormPenceresi<D extends object>({
         alt={(
           <>
             <Dugme onClick={kapatmayiIste} disabled={form.gonderiliyor}>Vazgeç</Dugme>
-            <Dugme tur="birincil" type="submit" form={kimlik} yukleniyor={form.gonderiliyor} tamam={form.kaydedildi}>{kaydetMetni}</Dugme>
+            <Dugme tur="birincil" type="submit" form={kimlik} yukleniyor={form.gonderiliyor}>{kaydetMetni}</Dugme>
           </>
         )}
       >
@@ -63,7 +61,7 @@ export function FormPenceresi<D extends object>({
             {form.eskiSurum && yenile && <Dugme simge="rotate" onClick={yenile}>Kaydı yenile</Dugme>}
           </div>
         )}
-        <form ref={formKok} id={kimlik} className="tc-fpencere-form" aria-label={baslik} noValidate onSubmit={form.gonder}>
+        <form id={kimlik} className="tc-fpencere-form" aria-label={baslik} noValidate onSubmit={form.gonder}>
           {children}
         </form>
       </Pencere>

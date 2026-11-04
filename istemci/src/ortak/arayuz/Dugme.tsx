@@ -12,9 +12,6 @@ interface Ozellikler extends ButtonHTMLAttributes<HTMLButtonElement> {
   // Basılı tutulunca onClick hızlanarak yinelenir (artır, azalt; kart 2090, karar 2081-17). Bırakınca gelen tıklama ayrıca
   // sayılmaz. Her dokunuşun ayrı bir olay olduğu düğmede (terminaldeki sayım) verilmez.
   basiliTekrar?: boolean;
-  // Kayıt bitti: düğme kısa süre tikli "Kaydedildi" olur (kart 2092, karar 2081-27). Süreyi çağıran yönetir (useForm).
-  tamam?: boolean;
-  tamamMetni?: string;
 }
 
 // İlk yineleme bekler ki tek dokunuş tek adım kalsın; sonra her adımda kısalır.
@@ -24,7 +21,7 @@ const TEKRAR_HIZLANMA = 0.8;
 
 export function Dugme({
   tur = 'ikincil', boyut = 'normal', simge, yukleniyor = false,
-  children, disabled, className, type = 'button', onPointerDown, basiliTekrar = false, tamam = false, tamamMetni = 'Kaydedildi', onClick, ...geri
+  children, disabled, className, type = 'button', onPointerDown, basiliTekrar = false, onClick, ...geri
 }: Ozellikler) {
   const sinif = ['tc-dugme', `tc-dugme-${tur}`, `tc-dugme-${boyut}`, className].filter(Boolean).join(' ');
   const [dalga, dalgaYaz] = useState<{ no: number; x: number; y: number } | null>(null);
@@ -62,7 +59,7 @@ export function Dugme({
     dalgaYaz((d) => ({ no: (d?.no ?? 0) + 1, x: e.clientX - r.left, y: e.clientY - r.top }));
   };
   return (
-    <button {...geri} type={type} className={sinif} data-tamam={tamam && !yukleniyor ? '' : undefined} disabled={disabled || yukleniyor} aria-busy={yukleniyor || undefined} onPointerDown={bas}
+    <button {...geri} type={type} className={sinif} disabled={disabled || yukleniyor} aria-busy={yukleniyor || undefined} onPointerDown={bas}
       {...tekrarOlaylari}
       onClick={onClick && ((o) => {
         // Basılı tutma yinelediyse bırakınca gelen tıklama son adımı ikiler; yutulur.
@@ -72,8 +69,8 @@ export function Dugme({
         if (yutulur) return;
         onClick(o);
       })}>
-      {yukleniyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : tamam ? <Simge ad="check" /> : simge ? <Simge ad={simge} /> : null}
-      {tamam && !yukleniyor ? tamamMetni : children}
+      {yukleniyor ? <span className="tc-dugme-doner" aria-hidden="true" /> : simge ? <Simge ad={simge} /> : null}
+      {children}
       {dalga && (
         <span className="tc-dugme-dalga-kap" aria-hidden="true">
           <span key={dalga.no} className="tc-dugme-dalga" onAnimationEnd={() => { dalgaYaz(null); }}

@@ -180,11 +180,3 @@ export function bekleyenGirisiOynat(g: GorunumCevabi): void {
   // Açılış kapalıysa gösteri kurulmaz; bekleme bittiğini dinleyenler yine duymalı.
   if (gosteri === null) gosteriDuyur();
 }
-
-// Takılma koruması (kart 2092, karar 2081-29) sade kipe yalnız bu oturum için geçer: cihazın kayıtlı tercihi değişmez,
-// sayfa yenilenince eski tercih döner.
-export function performansOturumdaAc(): void {
-  if (performansOku()) return;
-  gecerli = true;
-  for (const d of dinleyenler) d();
-}

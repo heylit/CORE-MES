@@ -29,10 +29,3 @@
 @keyframes tc-dugme-dalga { from { transform: scale(0); opacity: .28; } to { transform: scale(6); opacity: 0; } }
 :root[data-etki-kapali~="dalga"] .tc-dugme-dalga { display: none; }
 @media (prefers-reduced-motion: reduce) { .tc-dugme-dalga { display: none; } }
-
-/* Kaydedildi onayı (kart 2092, karar 2081-27): düğme kısa süre yeşil ve tikli olur; tik küçükten büyür. */
-.tc-dugme[data-tamam] { background: var(--run); border-color: var(--run); color: var(--on-sig); }
-@media (prefers-reduced-motion: no-preference) {
-  .tc-dugme[data-tamam] > .tc-simge { animation: tc-dugme-tik var(--hareket-panel) var(--hareket-egri-panel); }
-}
-@keyframes tc-dugme-tik { from { transform: scale(0); } }

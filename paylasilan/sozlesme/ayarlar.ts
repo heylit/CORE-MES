@@ -120,7 +120,7 @@ export const HAREKET_SEVIYELERI = ['kapali', 'sade', 'orta', 'cesur', 'ultra'] a
 export const ACILIS_TURLERI = ['yok', 'tezgah', 'talas', 'lazer', 'cmm', 'dokum', '3b', 'rastgele'] as const;
 export const GECIS_HIZLARI = ['hizli', 'normal', 'yavas'] as const;
 // Ayar anahtarı `kabuk.etki-<ad>`; istemcideki liste (ortak/veri/etki.ts) bununla aynıdır.
-export const ETKILER = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili', 'pencere-kayma', 'pencere-cekme', 'sekme-cizgi', 'menu-gecis', 'bildirim-kayma', 'hizli-artis', 'satir-kaydirma', 'tablo-iskelet', 'kopyala', 'canli-vurgu', 'yukleme-cizgisi', 'hata-odagi', 'toplu-islem', 'kisayol-yardimi', 'kaydedildi', 'yapiskan-baslik', 'takilma-korumasi'] as const;
+export const ETKILER = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili', 'pencere-kayma', 'pencere-cekme', 'sekme-cizgi', 'menu-gecis', 'bildirim-kayma', 'hizli-artis', 'satir-kaydirma', 'tablo-iskelet', 'kopyala'] as const;
 export type Etki = (typeof ETKILER)[number];
 export const gorunumCevabi = z.object({
   hareket: z.enum(HAREKET_SEVIYELERI),
@@ -133,7 +133,7 @@ export const gorunumCevabi = z.object({
   etkiler: z.object({
     'grafik-hareket': z.boolean(), 'deger-balonu': z.boolean(), dalga: z.boolean(),
     'gantt-yardim': z.boolean(), 'gantt-kayma': z.boolean(), 'durdur-basili': z.boolean(),
-    'pencere-kayma': z.boolean(), 'pencere-cekme': z.boolean(), 'sekme-cizgi': z.boolean(), 'menu-gecis': z.boolean(), 'bildirim-kayma': z.boolean(), 'hizli-artis': z.boolean(), 'satir-kaydirma': z.boolean(), 'tablo-iskelet': z.boolean(), 'kopyala': z.boolean(), 'canli-vurgu': z.boolean(), 'yukleme-cizgisi': z.boolean(), 'hata-odagi': z.boolean(), 'toplu-islem': z.boolean(), 'kisayol-yardimi': z.boolean(), 'kaydedildi': z.boolean(), 'yapiskan-baslik': z.boolean(), 'takilma-korumasi': z.boolean(),
+    'pencere-kayma': z.boolean(), 'pencere-cekme': z.boolean(), 'sekme-cizgi': z.boolean(), 'menu-gecis': z.boolean(), 'bildirim-kayma': z.boolean(), 'hizli-artis': z.boolean(), 'satir-kaydirma': z.boolean(), 'tablo-iskelet': z.boolean(), 'kopyala': z.boolean(),
   }).optional(),
 });
 export type GorunumCevabi = z.output<typeof gorunumCevabi>;

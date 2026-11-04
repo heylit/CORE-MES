@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { eskiSurumMu } from '#paylasilan/hata.ts';
 import { ApiHatasi, hataIletisi } from './api.ts';
-import { etkiAcik, hareketliEtki } from './etki.ts';
 
 // Anahtar alan yoludur: 'ad', iç içe alanda sunucunun yazdığı gibi 'adimlar.0.ad'.
 export type AlanHatalari = Record<string, string>;
@@ -46,15 +45,9 @@ export interface FormDurumu<D extends object> {
   // Kayıt açıldıktan sonra başkası değiştirmiş: ekran kaydı yeniden okur, kullanıcı değişikliğini yeniden yapar.
   eskiSurum: boolean;
   gonderiliyor: boolean;
-  // Her başarısız gönderimde (alan hatası çıkınca) artar; ekran ilk hatalı alana gider (useHataOdagi).
-  hataNo: number;
-  // Başarılı kayıttan sonra kısa süre true: Kaydet düğmesi tikli "Kaydedildi" olur (kart 2092, karar 2081-27).
-  kaydedildi: boolean;
   gonder: (olay?: { preventDefault: () => void }) => void;
   sifirla: (degerler?: D) => void;
 }
-
-const KAYDEDILDI_MS = 1500;
 
 // Formun ortak durumu: değerler, alan hataları, gönderim kilidi ve sunucu hatasının ilgili alana düşürülmesi.
 // Doğrulama kuralı yazmaz (ekran `dogrula` verir) ve bir şey çizmez; var olan alan parçalarıyla kullanılır.
@@ -64,9 +57,6 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
   const [hatalar, hataYaz] = useState<AlanHatalari>({});
   const [genel, genelYaz] = useState<{ ileti: string; eskiSurum: boolean } | null>(null);
   const [gonderiliyor, gonderiliyorYaz] = useState(false);
-  const [hataNo, hataNoYaz] = useState(0);
-  const [kaydedildi, kaydedildiYaz] = useState(false);
-  const kaydedildiZamani = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Durum yeniden çizimle gelir; aynı dokunuşun ikinci olayı (çift tık, Enter + tık) onu göremez.
   const mesgul = useRef(false);
   const guncel = useRef(degerler);
@@ -75,10 +65,7 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
   const ayrildi = useRef(false);
   useEffect(() => {
     ayrildi.current = false;
-    return () => {
-      ayrildi.current = true;
-      if (kaydedildiZamani.current) clearTimeout(kaydedildiZamani.current);
-    };
+    return () => { ayrildi.current = true; };
   }, []);
 
   const degistir = (yama: Partial<D>) => {
@@ -100,7 +87,7 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
     const yol = sunucuYolu === undefined ? null : s.alanEsle ? s.alanEsle(sunucuYolu, gonderilen) : sunucuYolu;
     // Formda olmayan alanın hatası görünmez kalmasın: ilk parçası form değeri değilse genel hatadır.
     const bagli = yol !== null && !eskiSurum && Object.prototype.hasOwnProperty.call(gonderilen, yol.split('.')[0] ?? '');
-    if (bagli) { hataYaz({ [yol]: ileti }); hataNoYaz((n) => n + 1); }
+    if (bagli) hataYaz({ [yol]: ileti });
     else genelYaz({ ileti, eskiSurum });
     s.hatada?.(hata);
   };
@@ -112,7 +99,7 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
     const istemciHatalari = secenekRef.current.dogrula?.(gonderilen) ?? {};
     genelYaz(null);
     hataYaz(istemciHatalari);
-    if (Object.keys(istemciHatalari).length > 0) { hataNoYaz((n) => n + 1); return; }
+    if (Object.keys(istemciHatalari).length > 0) return;
     mesgul.current = true;
     gonderiliyorYaz(true);
     void (async () => {
@@ -129,11 +116,6 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
       mesgul.current = false;
       if (ayrildi.current) return;
       gonderiliyorYaz(false);
-      if (etkiAcik('kaydedildi')) {
-        kaydedildiYaz(true);
-        if (kaydedildiZamani.current) clearTimeout(kaydedildiZamani.current);
-        kaydedildiZamani.current = setTimeout(() => { if (!ayrildi.current) kaydedildiYaz(false); }, KAYDEDILDI_MS);
-      }
       secenekRef.current.basarili?.(cevap, gonderilen);
     })();
   };
@@ -159,21 +141,7 @@ export function useForm<D extends object, C = unknown>(secenek: FormSecenegi<D, 
     genelHata: genel?.ileti ?? null,
     eskiSurum: genel?.eskiSurum ?? false,
     gonderiliyor,
-    hataNo,
-    kaydedildi,
     gonder,
     sifirla,
   };
-}
-
-// Gönderim alan hatasıyla dönünce ilk hatalı alan görünür yere kayar ve imleç oraya geçer (kart 2092, karar 2081-23).
-// Uzun formda hata görünmeyen alanda kalmaz. Hatalı alan, Alan parçasının yazdığı aria-invalid ile bulunur.
-export function useHataOdagi(hataNo: number, kok: RefObject<HTMLElement | null>): void {
-  useEffect(() => {
-    if (hataNo === 0 || !etkiAcik('hata-odagi')) return;
-    const alan = kok.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
-    if (!alan) return;
-    alan.scrollIntoView?.({ block: 'center', behavior: hareketliEtki('hata-odagi') ? 'smooth' : 'auto' });
-    alan.focus({ preventScroll: true });
-  }, [hataNo, kok]);
 }
