@@ -4,12 +4,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { SaatCihazlariCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { GeriBildirim, GeriBildirimListeCevabi, ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirim, GeriBildirimListeCevabi, ProfilCevabi, TemaCevabi } from '#paylasilan/sozlesme/profil.ts';
+import { temayiSifirla } from '../../ortak/veri/tema.ts';
+import { TemaEsitleyici } from './tema-tercihi.ts';
 import { gorunenUstEylemler } from '../../ortak/rota/ust-eylemler.ts';
 import { rotalar } from './rotalar.tsx';
 import { ustEylemler } from './ust-eylem.tsx';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); temayiSifirla(); localStorage.clear(); });
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown; basliklar: Record<string, string> }
@@ -123,9 +125,9 @@ describe('Profil sayfası', () => {
 });
 
 describe('Şikayet, istek ve öneri düğmesi', () => {
-  it('her oturumda görünür (işlem istemez)', () => {
-    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum']]);
-    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['geri-bildirim']);
+  it('her oturumda görünür (işlem istemez); tema eşitleyicisi de her oturumda durur', () => {
+    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum'], ['tema-tercihi', 'oturum']]);
+    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['geri-bildirim', 'tema-tercihi']);
   });
 
   it('çubukta yer tutmaz, Hesap menüsünden açılır (516 a)', async () => {
@@ -207,4 +209,52 @@ describe('Akıllı saat eşleştirme (kart #1632)', () => {
     expect(await screen.findByText(/6 rakamı girin/)).toBeTruthy();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
+
+describe('Profilde tema (2072 a)', () => {
+  const OTURUM = { kullanici: { id: 9, ad: 'Deneme Operatör', islemler: [] } };
+
+  it('girende profildeki tema uygulanır; profildeki seçim sürümle yazılır', async () => {
+    const yazilan: unknown[] = [];
+    const istekler = sunucuKur({
+      'GET /oturum': () => json(200, OTURUM),
+      'GET /profil': () => json(200, PROFIL),
+      'GET /profil/tema': () => json(200, { tema: 'kontrast', surum: 2 } satisfies TemaCevabi),
+      'POST /profil/tema-sec': (g) => { yazilan.push(g); return json(200, { tema: (g as { tema: string }).tema, surum: 3 }); },
+    });
+    ac('/profil', <TemaEsitleyici />);
+    await waitFor(() => expect(document.documentElement.hasAttribute('data-kontrast')).toBe(true));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    const gun = await screen.findByRole('radio', { name: /Gün ışığı/ });
+    expect(screen.getByRole('radio', { name: /Yüksek kontrast/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(gun);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    await waitFor(() => expect(yazilan).toEqual([{ tema: 'gun', surum: 2 }]));
+    expect(istekler.find((i) => i.yol === '/profil/tema-sec')?.basliklar['istek-kimligi']).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: /Koyu/ }));
+    await waitFor(() => expect(yazilan).toEqual([{ tema: 'gun', surum: 2 }, { tema: 'dark', surum: 3 }]));
+  });
+
+  it('kaydı olmayan kişide cihazın teması kalır; eski sürümde güncel sürümle bir kez daha yazılır', async () => {
+    localStorage.setItem('tmi-tema', 'dark');
+    const yazilan: unknown[] = [];
+    let okuma = 0;
+    sunucuKur({
+      'GET /oturum': () => json(200, OTURUM),
+      'GET /profil': () => json(200, PROFIL),
+      'GET /profil/tema': () => { okuma += 1; return json(200, okuma === 1 ? { tema: null, surum: 0 } : { tema: 'light', surum: 4 }); },
+      'POST /profil/tema-sec': (g) => {
+        yazilan.push(g);
+        return (g as { surum: number }).surum === 0
+          ? json(409, { kod: 'CAKISMA', mesaj: 'Kayıt siz açtıktan sonra değişti.', ayrinti: { neden: 'eski-surum' } })
+          : json(200, { tema: 'gun', surum: 5 });
+      },
+    });
+    ac('/profil', <TemaEsitleyici />);
+    const gun = await screen.findByRole('radio', { name: /Gün ışığı/ });
+    await waitFor(() => expect(okuma).toBe(1));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    fireEvent.click(gun);
+    await waitFor(() => expect(yazilan).toEqual([{ tema: 'gun', surum: 0 }, { tema: 'gun', surum: 4 }]));
+  });
+});
 });

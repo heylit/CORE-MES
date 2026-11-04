@@ -43,6 +43,33 @@
   --aura-strength: 30%;
   color-scheme: light;
 }
+/* Yüksek kontrastlı iki tema (karar 2072 a, kişi profilinde seçer): taban data-theme üstüne data-kontrast. Saydamlık, gölge ve
+   bulanıklık yoktur: ışıkta ve yansımada okunur, düşük donanımda bulanıklık maliyeti olmaz. Değerler 2072 önizlemesinde ölçüldü
+   (yazı ve durum renkleri WCAG eşiklerini geçer). Grafik serisi durum renklerinden ayrı tutulur. */
+[data-theme="dark"][data-kontrast] {
+  --bg: #000000; --bg2: #000000;
+  --panel: #0b0b0b; --panel-solid: #0b0b0b; --panel2: #161616;
+  --edge: #7a7a7a; --edge2: #ffffff; --hi: transparent; --grid: rgba(255,255,255,.14);
+  --ink: #ffffff; --muted: #e0e0e0; --faint: #b0b0b0;
+  --hazard: #ffe600; --on-hazard: #000000; --hazard-ink: #ffe600;
+  --run: #00f59b; --hold: #ffb000; --stop: #ff5a72; --done: #8fc4ff; --idle: #c8c8c8;
+  --grafik: #3d9bff; --grafik-2: #ff7ab0; --grafik-3: #ffd000;
+  --on-sig: #000000;
+  --shadow: none; --aura-strength: 0%;
+  --bulanik-cam: none; --bulanik-kart: none; --bulanik-perde: none; --bulanik-ozet: none;
+}
+[data-theme="light"][data-kontrast] {
+  --bg: #f4f4f2; --bg2: #ffffff;
+  --panel: #ffffff; --panel-solid: #ffffff; --panel2: #eeeeec;
+  --edge: #5c5c5c; --edge2: #000000; --hi: transparent; --grid: rgba(0,0,0,.12);
+  --ink: #000000; --muted: #2e2e2e; --faint: #5a5a5a;
+  --hazard: #ffd000; --on-hazard: #000000; --hazard-ink: #5c4300;
+  --run: #00703f; --hold: #8f4a00; --stop: #b3001f; --done: #003fae; --idle: #3d3d3d;
+  --grafik: #0b57d0; --grafik-2: #b3005a; --grafik-3: #8f5a00;
+  --on-sig: #ffffff;
+  --shadow: none; --aura-strength: 0%;
+  --bulanik-cam: none; --bulanik-kart: none; --bulanik-perde: none; --bulanik-ozet: none;
+}
 :root { transition: --sig .9s ease; }
 
 /* Hareket dili (Sistem Ayarları, kabuk.hareket): kök öğedeki data-hareket süreleri, kaymayı ve eğriyi verir.
