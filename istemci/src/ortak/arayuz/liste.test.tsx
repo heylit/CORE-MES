@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { Sayfalama, Tablo, type Sutun } from './index.ts';
 import type { Siralama } from '../veri/liste-durumu.ts';
@@ -224,5 +224,62 @@ describe('Tablo: siralama ve sayfalama', () => {
     expect(kap.getAttribute('aria-busy')).toBe('true');
     rerender(<Tablo {...ortak} />);
     expect(kap.hasAttribute('aria-busy')).toBe(false);
+  });
+});
+
+describe('Tablo: iskelet satırlar ve satır kaydırma (kart 2090, kararlar 2081-16 ve 20)', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); document.documentElement.removeAttribute('data-etki-kapali'); });
+
+  it('ilk yüklemede sütun başlıklarıyla iskelet çizilir; etki kapatıldıysa Yükleniyor kutusu; veri gelince satırlar', () => {
+    render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[]} satirAnahtari={(s) => s.no} yukleniyor />);
+    expect(screen.getByRole('status').textContent).toBe('Yükleniyor');
+    expect(document.querySelectorAll('.tc-iskelet')).toHaveLength(5 * SUTUNLAR.length);
+    expect(screen.queryByText('Kayıt yok')).toBeNull();
+    cleanup();
+    document.documentElement.setAttribute('data-etki-kapali', 'tablo-iskelet');
+    const { rerender } = render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[]} satirAnahtari={(s) => s.no} yukleniyor />);
+    expect(document.querySelectorAll('.tc-iskelet')).toHaveLength(0);
+    expect(screen.getByText('Yükleniyor')).toBeTruthy();
+    rerender(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} />);
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+  });
+
+  function kaydir(el: Element, x0: number, x1: number) {
+    for (const [tur, x] of [['pointerDown', x0], ['pointerMove', x0 + (x1 - x0) / 2], ['pointerMove', x1], ['pointerUp', x1]] as const) {
+      const o = createEvent[tur](el);
+      Object.defineProperties(o, { clientX: { value: x }, clientY: { value: 10 }, pointerId: { value: 1 }, button: { value: 0 } });
+      fireEvent(el, o);
+    }
+  }
+
+  it('kart kipinde satır sola kaydırılınca eylem açılır, bırakılan tıklama satırı açmaz; eylem düğmesi işi yapar', () => {
+    kartKipi();
+    const sec = vi.fn();
+    const yap = vi.fn();
+    render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} satirSec={sec}
+      satirEylemi={{ etiket: (s) => `${s.ad} bitir`, simge: 'check', yap }} />);
+    const satir = screen.getAllByRole('row')[1] as HTMLElement;
+    kaydir(satir, 200, 100);
+    fireEvent.click(satir);
+    expect(satir.hasAttribute('data-eylem-acik')).toBe(true);
+    expect(sec).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'A bitir' }));
+    expect(yap).toHaveBeenCalledWith(SATIRLAR[0]);
+    expect(sec).not.toHaveBeenCalled();
+    kaydir(satir, 100, 200);
+    expect(satir.hasAttribute('data-eylem-acik')).toBe(false);
+  });
+
+  it('tablo kipinde ve etki kapatıldıysa satır kaymaz', () => {
+    const yap = vi.fn();
+    render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} satirEylemi={{ etiket: () => 'Bitir', simge: 'check', yap }} />);
+    expect(screen.queryByRole('button', { name: 'Bitir' })).toBeNull();
+    cleanup();
+    kartKipi();
+    document.documentElement.setAttribute('data-etki-kapali', 'satir-kaydirma');
+    render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} satirEylemi={{ etiket: () => 'Bitir', simge: 'check', yap }} />);
+    const satir = screen.getAllByRole('row')[1] as HTMLElement;
+    kaydir(satir, 200, 100);
+    expect(satir.hasAttribute('data-eylem-acik')).toBe(false);
   });
 });

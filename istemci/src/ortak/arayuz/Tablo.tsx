@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type HTMLAttributes, type PointerEvent, type ReactNode } from 'react';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { csvIndir, type CsvDegeri } from '../veri/csv.ts';
+import { etkiAcik } from '../veri/etki.ts';
 import { sonrakiSiralama, type Siralama } from '../veri/liste-durumu.ts';
 import { Girdi } from './Alan.tsx';
 import { Dugme } from './Dugme.tsx';
@@ -56,7 +57,25 @@ interface Ozellikler<S> {
   mesgul?: boolean;
   // Verilince tablonun üstünde arama, süzgeç çipleri ve CSV düğmesi çizilir; boş listede de görünür (aramayı geri almak için).
   arac?: TabloAraci<S>;
+  // İlk yükleme: satır yokken sütun başlıklarıyla iskelet satırlar çizilir (kart 2090, karar 2081-16). Etki kapatıldıysa
+  // "Yükleniyor" kutusu görünür.
+  yukleniyor?: boolean;
+  // Kart kipinde (dar kap) satır sola kaydırılınca açılan tek hızlı eylem (kart 2090, karar 2081-20). Hangi listede ve hangi
+  // eylemle kullanılacağı bağlamada ekran ekran kararlaştırılır (2090-1). Düğme klavye ve ekran okuyucuyla da erişilir.
+  satirEylemi?: SatirEylemi<S>;
 }
+
+export interface SatirEylemi<S> {
+  etiket: (satir: S) => string;
+  simge: SimgeAdi;
+  yap: (satir: S) => void;
+  ton?: 'tehlike';
+}
+
+const ISKELET_SATIRI = 5;
+// Kaydırma eşiği ve sürüklenme sayılan en az yol; sürüklenen satıra bırakınca gelen tıklama satırı açmaz.
+const KAYDIRMA_ESIGI_PX = 48;
+const SURUKLEME_PX = 8;
 
 function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
   if (typeof s.csv === 'function') return s.csv(satir);
@@ -113,11 +132,91 @@ function AracCubugu<S>({ arac, sutunlar, satirlar }: { arac: TabloAraci<S>; sutu
 
 // Tablo kabına sığmayınca her satır karta döner; sütun başlığı hücrenin önünde yazılır, sütun gizlenmez.
 // Eşik ekran genişliği değildir: aynı ekranda dar tablo sığar, geniş tablo sığmaz; ölçü içerikten gelir.
+function TabloIskeleti<S>({ etiket, sutunlar }: { etiket: string; sutunlar: readonly Sutun<S>[] }) {
+  return (
+    <div className="tc-tablo-kap" aria-busy="true">
+      <span className="tc-gizli-etiket" role="status">Yükleniyor</span>
+      <table className="tc-tablo tc-tablo-iskelet" aria-label={etiket} aria-hidden="true">
+        <thead><tr>{sutunlar.map((s) => <th key={s.anahtar} scope="col">{s.baslik}</th>)}</tr></thead>
+        <tbody>
+          {Array.from({ length: ISKELET_SATIRI }, (_, i) => (
+            <tr key={i}>{sutunlar.map((s) => <td key={s.anahtar}><span className="tc-iskelet" /></td>)}</tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+interface Kaydirma { x0: number; y0: number; dx: number; kimlik: number; satir: HTMLTableRowElement; acikti: boolean }
+
+// Kart kipinde satır sola kaydırılınca hızlı eylem açılır; eşiği geçmeyen kaydırma kapanır. Aynı anda tek satır açıktır.
+function useSatirKaydirma(etkin: boolean) {
+  const suren = useRef<Kaydirma | null>(null);
+  const acik = useRef<HTMLTableRowElement | null>(null);
+  const yutulacak = useRef(false);
+  const kapat = (tr: HTMLTableRowElement | null) => {
+    tr?.removeAttribute('data-eylem-acik');
+    tr?.style.removeProperty('--kaydir-x');
+  };
+  const olaylar = (): Pick<HTMLAttributes<HTMLTableRowElement>, 'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel' | 'onClickCapture'> => {
+    if (!etkin) return {};
+    return {
+      onPointerDown: (o: PointerEvent<HTMLTableRowElement>) => {
+        if (o.button !== 0 || !etkiAcik('satir-kaydirma')) return;
+        if (o.target instanceof Element && o.target.closest('.tc-tablo-eylem')) return;
+        const tr = o.currentTarget;
+        if (acik.current && acik.current !== tr) { kapat(acik.current); acik.current = null; }
+        suren.current = { x0: o.clientX, y0: o.clientY, dx: 0, kimlik: o.pointerId, satir: tr, acikti: tr.hasAttribute('data-eylem-acik') };
+      },
+      onPointerMove: (o: PointerEvent<HTMLTableRowElement>) => {
+        const k = suren.current;
+        if (k?.kimlik !== o.pointerId) return;
+        const dx = o.clientX - k.x0;
+        if (Math.abs(dx) < SURUKLEME_PX && k.dx === 0) return;
+        if (k.dx === 0 && Math.abs(o.clientY - k.y0) > Math.abs(dx)) { suren.current = null; return; }
+        k.dx = dx;
+        k.satir.setAttribute('data-kaydiriliyor', '');
+        k.satir.style.setProperty('--kaydir-x', `${String(Math.min(0, dx + (k.acikti ? -KAYDIRMA_ESIGI_PX * 2 : 0)))}px`);
+      },
+      onPointerUp: (o: PointerEvent<HTMLTableRowElement>) => {
+        const k = suren.current;
+        if (k?.kimlik !== o.pointerId) return;
+        suren.current = null;
+        k.satir.removeAttribute('data-kaydiriliyor');
+        if (k.dx === 0) {
+          if (k.acikti) { kapat(k.satir); acik.current = null; yutulacak.current = true; }
+          return;
+        }
+        yutulacak.current = true;
+        k.satir.style.removeProperty('--kaydir-x');
+        const ac = k.acikti ? k.dx < KAYDIRMA_ESIGI_PX : k.dx < -KAYDIRMA_ESIGI_PX;
+        if (ac) { k.satir.setAttribute('data-eylem-acik', ''); acik.current = k.satir; }
+        else { kapat(k.satir); acik.current = null; }
+      },
+      onPointerCancel: () => {
+        const k = suren.current;
+        suren.current = null;
+        if (k) { k.satir.removeAttribute('data-kaydiriliyor'); k.satir.style.removeProperty('--kaydir-x'); }
+      },
+      onClickCapture: (o) => {
+        if (!yutulacak.current) return;
+        yutulacak.current = false;
+        if (o.target instanceof Element && o.target.closest('.tc-tablo-eylem')) return;
+        o.stopPropagation();
+      },
+    };
+  };
+  return olaylar;
+}
+
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
+  yukleniyor = false, satirEylemi,
 }: Ozellikler<S>) {
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
+  const kaydirma = useSatirKaydirma(kart && satirEylemi !== undefined);
 
   const bos = satirlar.length === 0;
 
@@ -158,6 +257,9 @@ export function Tablo<S>({
 
   const ust = arac && <AracCubugu arac={arac} sutunlar={sutunlar} satirlar={satirlar} />;
 
+  if (bos && yukleniyor) {
+    return <>{ust}{etkiAcik('tablo-iskelet') ? <TabloIskeleti etiket={etiket} sutunlar={sutunlar} /> : <DurumKutusu durum="yukleniyor" />}</>;
+  }
   if (bos) return <>{ust}<DurumKutusu durum="bos" mesaj={bosMesaj} />{alt}</>;
 
   const siralanan = siralamaDegistir ? sutunlar.filter((s) => s.sirala) : [];
@@ -211,6 +313,7 @@ export function Tablo<S>({
                 key={satirAnahtari(satir)}
                 className={satirSec ? 'tc-tablo-secilir' : undefined}
                 tabIndex={satirSec ? 0 : undefined}
+                {...kaydirma()}
                 onClick={satirSec ? () => satirSec(satir) : undefined}
                 onKeyDown={satirSec ? (o) => {
                   if (o.target !== o.currentTarget || (o.key !== 'Enter' && o.key !== ' ')) return;
@@ -227,6 +330,17 @@ export function Tablo<S>({
                     </td>
                   );
                 })}
+                {kart && satirEylemi && (
+                  <td className="tc-tablo-eylem">
+                    <button
+                      type="button" className={`tc-tablo-eylem-dugme${satirEylemi.ton === 'tehlike' ? ' tc-tablo-eylem-tehlike' : ''}`}
+                      onClick={(o) => { o.stopPropagation(); o.currentTarget.closest('tr')?.removeAttribute('data-eylem-acik'); satirEylemi.yap(satir); }}
+                    >
+                      <Simge ad={satirEylemi.simge} />
+                      <span>{satirEylemi.etiket(satir)}</span>
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

@@ -56,3 +56,37 @@
 .tc-tablo-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; }
 .tc-tablo-cipler [aria-pressed="true"] { border-color: var(--hazard-ink); }
 .tc-tablo-arac-sag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin-left: auto; }
+
+/* İlk yüklemede iskelet satırlar (kart 2090, karar 2081-16): sütun başlıkları gerçek, hücreler yer tutucudur. */
+.tc-iskelet {
+  display: block; height: var(--b-3); border-radius: var(--yari-1);
+  background: linear-gradient(90deg, var(--panel2) 25%, var(--edge) 50%, var(--panel2) 75%); background-size: 200% 100%;
+}
+.tc-tablo-iskelet tr:nth-child(2n) .tc-iskelet { width: 70%; }
+@media (prefers-reduced-motion: no-preference) {
+  .tc-iskelet { animation: tc-iskelet-parilti 1.2s linear infinite; }
+}
+@keyframes tc-iskelet-parilti { to { background-position: -200% 0; } }
+
+/* Satırı kaydırınca hızlı eylem (kart 2090, karar 2081-20): yalnız kart kipinde. Düğme hücrelerin arkasında durur; kaydırma,
+   açık satır ya da klavye odağı onu gösterir. Etki kapatıldıysa kaydırma başlamaz, düğme odakla yine açılır. */
+.tc-tablo-eylem { display: none; }
+[data-kip="kart"] .tc-tablo tr:has(> .tc-tablo-eylem) { position: relative; overflow: hidden; touch-action: pan-y; }
+[data-kip="kart"] .tc-tablo td.tc-tablo-eylem {
+  display: flex; position: absolute; inset: 0 0 0 auto; min-height: 0; padding: 0;
+  opacity: 0; pointer-events: none;
+}
+[data-kip="kart"] .tc-tablo td.tc-tablo-eylem::before { content: none; }
+[data-kip="kart"] .tc-tablo tr:has(> .tc-tablo-eylem) > td:not(.tc-tablo-eylem) {
+  position: relative; z-index: 1; background: var(--panel);
+  transition: transform var(--hareket-sure) var(--hareket-egri);
+}
+[data-kip="kart"] .tc-tablo tr:is([data-eylem-acik], [data-kaydiriliyor], :focus-visible, :has(:focus-visible)) > td.tc-tablo-eylem { opacity: 1; pointer-events: auto; }
+[data-kip="kart"] .tc-tablo tr:is([data-eylem-acik], :focus-visible, :has(:focus-visible)) > td:not(.tc-tablo-eylem) { transform: translateX(calc(var(--dokunma) * -2)); }
+[data-kip="kart"] .tc-tablo tr[data-kaydiriliyor] > td:not(.tc-tablo-eylem) { transform: translateX(var(--kaydir-x, 0px)); transition: none; }
+.tc-tablo-eylem-dugme {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--b-1);
+  width: calc(var(--dokunma) * 2); border: 0; background: var(--hazard); color: var(--on-hazard);
+  font-size: var(--yazi-xs); font-weight: 700; cursor: pointer;
+}
+.tc-tablo-eylem-tehlike { background: var(--stop); color: var(--parlak); }
