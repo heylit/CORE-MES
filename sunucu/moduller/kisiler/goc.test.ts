@@ -147,8 +147,6 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'projeler.gorev-yaz', 'projeler.statu-yaz',
     // Emir kapanışı göçü (kullanıcı kararı 1078 a, 28.10.2026).
     'uretim-emirleri.kapanis-oku',
-    // 5.6 rol göçü (1706 a, 2068-2 teyit).
-    'sayfa.geometri', 'geometri.oku',
   ].sort();
   const OPERATOR_SONUNDA = [
     'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama',
