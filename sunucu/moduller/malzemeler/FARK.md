@@ -310,3 +310,7 @@ Kullanıcı isteği 09.10.2026: hizmette çeşit, çeşidin kalitesi ve standard
 - `GET /malzemeler/secim-ara?q&tur&pasifler&sayfa` -> `{ sonuclar: [{ id (kart no), kod (stok kodu), ad, aktif, ust: null }], dahaVar }`; var olan `malzemeAra` üstünde.
   Ortak `MalzemeSecici` (kart #1317) bunu çağırır. Şema, göç ve rol değişmedi.
 - Yetki karar 1321 b: malzemeler, stok, markalama, siparişler, Arkon sayfaları. VARSAYIM: çağıranlar bugün malzeme seçen modüller (istemci kodunda arandı); A5'te modül eklenir.
+
+## SKT takibi ve tür listesi okumaları (kart 2099)
+
+Kart sihirbazının ticari adımına "SKT takibi" seçeneği girdi (2099-3 b); işaret GKK gibi kartın kaydında (`kayit.com.skt`), göç yok. Hizmet ve demirbaş kartta seçenek görünmez ve sayılmaz. `disari.ts`'e stokun tür listeleri için üç okuma girdi: `sktTakipliKartlar`, `kategoriKartlari` (tür ve kategoriyle, iptal kart dışarıda) ve `kartAlanDegerleri` (`kayit.g`, `kat` hariç; yalnız metin, sayı, mantık, metin dizisi). Uç ve yetki değişmedi.

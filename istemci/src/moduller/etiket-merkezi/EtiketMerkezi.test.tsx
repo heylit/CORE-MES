@@ -109,6 +109,10 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
       const idler = (url.searchParams.get('id') ?? '').split(',').map(Number);
       // Mal kabul kimliği değil, ondan açılan lotlar döner.
       const malKabul = url.searchParams.get('tur') === 'mal-kabul';
+      // Sunucu sınırı basılacak lot sayısıyla (burada 5) denetler; ekran yalnız kabul sayısını bilir.
+      if (malKabul && Number(url.searchParams.get('adet')) * 5 > 500) {
+        return json(400, { kod: 'DOGRULAMA', mesaj: 'Bir baskıda en çok 500 etiket basılır (5 kayıt x 120 adet).', alan: 'adet' } satisfies HataGovdesi);
+      }
       const govde: KayitCiktiCevabi = {
         ...cikti(kayitEslesme[1], url.searchParams),
         kayitlar: malKabul ? [{ id: 501, baslik: 'LT-000501' }, { id: 502, baslik: 'LT-000502' }] : idler.filter((id) => KONUMLAR[id]).map((id) => ({ id, baslik: KONUMLAR[id]! })),
@@ -357,6 +361,17 @@ describe('EtiketMerkezi', () => {
     expect(istekler).toContain('/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=mal-kabul&id=7');
   });
 
+  it('EM-2: önizleme 400 dönünce sunucu iletisi görünür, yeniden deneme sunulmaz ve basma kapanır', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=mal-kabul&id=1,2');
+    await screen.findByText('LT-000501');
+    fireEvent.change(screen.getByLabelText('Kayıt başına adet'), { target: { value: '120' } });
+    expect(await screen.findByText('Bir baskıda en çok 500 etiket basılır (5 kayıt x 120 adet).')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Yazıcı'), { target: { value: '2' } });
+    expect((screen.getByRole('button', { name: 'Yazıcı için indir' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('sevk koli adresinde koli sayısı ve koli içi adet çıktı isteğine ve baskı gövdesine gider; koli sayısı sınırı denetlenir', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=sevk-koli&id=11');
@@ -401,6 +416,13 @@ describe('EtiketMerkezi', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
     expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
     expect(istekler.some((i) => i.startsWith('/stok/'))).toBe(false);
+    cleanup();
+    // EM-1: stok.istek (malzeme isteme) stok okuması açmaz; vardiya sorumlusu hata kutusu değil açıklamayı görür.
+    const istekci = sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.istek'] });
+    ac(<HazirSablonlar />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
+    expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
+    expect(istekci.some((i) => i.startsWith('/stok/'))).toBe(false);
     cleanup();
     sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.giris'] });
     ac(<HazirSablonlar />);

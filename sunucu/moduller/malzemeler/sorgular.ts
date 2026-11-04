@@ -244,6 +244,30 @@ export async function gkkGerekenKartlar(db: Db, nolar: readonly number[]): Promi
     `SELECT no FROM malzeme_katalog_karti WHERE no = ANY($1::int[]) AND COALESCE(gkk_gerekli, tur IN (${varsayilan}))`, [nolar])).map((r) => r.no);
 }
 
+// 2099-3 b: kartta "SKT takibi" işareti (`kayit.com.skt`, GKK gibi kartın kaydında). Yalnız true işaretlidir; yoksa ya da başka
+// değerse takip yok. Hizmet ve demirbaş parti almaz, işaret onlarda sayılmaz.
+export async function sktTakipliKartlar(db: Db, nolar: readonly number[]): Promise<number[]> {
+  return (await db.sorgu<{ no: number }>(
+    `SELECT no FROM malzeme_katalog_karti WHERE no = ANY($1::int[]) AND tur NOT IN ('hizmet', 'demirbas')
+        AND jsonb_typeof(kayit -> 'com') = 'object' AND kayit -> 'com' -> 'skt' = 'true'::jsonb`, [nolar])).map((r) => r.no);
+}
+
+// 2099-6 a: Stok Merkezi'nin tür listeleri (kimyasal, kesici takım, aparat) kartları kategoriyle süzer. Silinmiş kart dışarıda.
+export async function kategoriKartlari(db: Db, tur: string, kategori: string): Promise<number[]> {
+  return (await db.sorgu<{ no: number }>(
+    `SELECT k.no FROM malzeme_katalog_karti k WHERE k.tur = $1 AND ${KATALOG_KATEGORI} = $2 AND k.onay_durumu <> 'iptal' ORDER BY k.no`,
+    [tur, kategori])).map((r) => r.no);
+}
+
+// 2099: tür listelerinin sütunları kartın türe özel alanlarıdır (`kayit.g`; kategori kodu `kat` hariç). Yalnız metin, sayı, mantık ve
+// metin dizisi değer döner; nesne ve boş değer yazılmaz.
+export async function kartAlanSatirlari(db: Db, nolar: readonly number[]): Promise<{ no: number; alanlar: Record<string, unknown> }[]> {
+  return db.sorgu<{ no: number; alanlar: Record<string, unknown> }>(
+    `SELECT k.no, COALESCE((SELECT jsonb_object_agg(e.key, e.value) FROM jsonb_each(k.kayit -> 'g') e
+                             WHERE e.key <> 'kat' AND jsonb_typeof(e.value) IN ('string', 'number', 'boolean', 'array')), '{}'::jsonb) AS alanlar
+       FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND jsonb_typeof(k.kayit -> 'g') = 'object'`, [nolar]);
+}
+
 export function katalogMalzemeOzetleri(db: Db, nolar: number[]): Promise<KatalogMalzemeOzeti[]> {
   return db.sorgu<KatalogMalzemeOzeti>(`SELECT ${OZET_SECIMI} WHERE k.no = ANY($1::int[])`, [nolar]);
 }

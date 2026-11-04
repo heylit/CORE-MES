@@ -23,7 +23,12 @@ export interface KatalogModeli {
   // Takım mili (tornada ana iş mili) en büyük devri, d/dk; CMM'de yok.
   devir: number | null;
   konik: string | null;
+  // Üreticinin verdiği taban alanı ve yükseklik; bilinmiyorsa null ve gövde çalışma alanı oranıyla çizilir.
+  dis: DisOlcu | null;
 }
+
+// Dış ölçü mm: en (sahnede x), derinlik (z), yükseklik (y). Üretici taban alanı talaş konveyörü ve dolapları içerir.
+export interface DisOlcu { en: number; derinlik: number; yukseklik: number }
 
 export const GOVDE_ADI: Record<GovdeTipi, string> = {
   m_vmc: 'Dikey işleme merkezi (3 eksen)', m_5ax: '5 eksen · döner-devrilir tabla', m_5axh: '5 eksen · döner kafa + döner tabla',
@@ -62,8 +67,8 @@ const SATIRLAR: readonly Satir[] = [
   ['m_dmgnlx2500', 'DMG MORI', 'NLX 2500/700', 'm_lathe', 366, 0, 705, 4000, null],
   ['m_dmgnlx2500sy', 'DMG MORI', 'NLX 2500SY/700', 'm_lathe', 366, 100, 705, 4000, null],
   ['m_dmgclx450', 'DMG MORI', 'CLX 450', 'm_lathe', 400, 0, 600, 4000, null],
-  ['m_dmgntx2000', 'DMG MORI', 'NTX 2000', 'm_tf', 500, 200, 1500, 5000, 'Capto C6'],
-  ['m_dmgntx3000', 'DMG MORI', 'NTX 3000', 'm_tf', 668, 300, 1549, 3000, 'Capto C6'],
+  ['m_dmgntx2000', 'DMG MORI', 'NTX 2000', 'm_tf', 670, 200, 1538, 5000, 'Capto C6'],
+  ['m_dmgntx3000', 'DMG MORI', 'NTX 3000', 'm_tf', 670, 300, 1519, 3000, 'Capto C6'],
   ['m_dnsdnm5700', 'DN Solutions', 'DNM 5700', 'm_vmc', 1050, 570, 510, 12000, 'BT40'],
   ['m_dnsdvf5000', 'DN Solutions', 'DVF 5000', 'm_5ax', 625, 450, 400, 12000, 'BT40'],
   ['m_dnslynx2100', 'DN Solutions', 'Lynx 2100', 'm_lathe', 300, 0, 410, 6000, null],
@@ -113,8 +118,27 @@ const SATIRLAR: readonly Satir[] = [
   ['m_mitucrystas574', 'Mitutoyo', 'CRYSTA-Apex S 574', 'm_cmm', 505, 705, 405, null, null],
 ];
 
+// Dış ölçü (2100-1 a): yalnız üreticinin yayımladığı değer, model adı birebir tutan kayıttan; bulunamayan yazılmaz.
+// Kaynak: DMG MORI 2. nesil NTX bülteni (2018, taban 5825 x 2830) ve üretici verisiyle yayımlanan makine kataloğu
+// (kikaicatalog.com); seçenek donanımıyla değişir, görünüm içindir.
+type Dis = [en: number, derinlik: number, yukseklik: number];
+const DIS_OLCU: Readonly<Record<string, Dis>> = {
+  m_dmgdmu50: [3440, 2735, 2752], m_dmgcmx1100: [3190, 2752, 2937], m_dmgnhx4000: [2680, 4183, 2538],
+  m_dmgnlx2500: [3981, 2106, 2200], m_dmgntx2000: [5825, 2830, 2750], m_dmgntx3000: [5825, 2830, 2750],
+  m_haasvf2: [2286, 2311, 2769], m_haasvf4: [3128, 2056, 3093], m_haasumc750: [3601, 3387, 3140], m_haasec400: [4242, 2294, 2504],
+  m_haasst20y: [3999, 2602, 1998], m_haasst30: [4496, 2642, 2057],
+  m_hermlec22: [2567, 3874, 2986], m_hermlec32: [3447, 3678, 3253], m_hermlec42: [3381, 3994, 3353],
+  m_matmam7235v: [4850, 8710, 3200], m_mazakvari600: [2200, 3980, 3187], m_mazakhcn5000: [2623, 5769, 2813],
+  m_okumam560v: [2564, 3194, 2746], m_okumamu5000v: [3995, 2750, 3435],
+};
+
+function disOlcusu(anahtar: string): DisOlcu | null {
+  const d = DIS_OLCU[anahtar];
+  return d ? { en: d[0], derinlik: d[1], yukseklik: d[2] } : null;
+}
+
 export const KATALOG: readonly KatalogModeli[] = SATIRLAR.map(([anahtar, marka, model, govde, x, y, z, devir, konik]) => ({
-  anahtar, marka, model, govde, tur: GOVDE_TURU[govde], alan: { x, y, z }, devir, konik,
+  anahtar, marka, model, govde, tur: GOVDE_TURU[govde], alan: { x, y, z }, devir, konik, dis: disOlcusu(anahtar),
 }));
 
 const ANAHTARLA = new Map(KATALOG.map((m) => [m.anahtar, m]));

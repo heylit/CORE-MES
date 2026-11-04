@@ -58,6 +58,35 @@ export async function gkkGerekenKartlar(db: Db, idler: readonly number[]): Promi
   return new Set(benzersiz.length === 0 ? [] : await s.gkkGerekenKartlar(db, benzersiz));
 }
 
+// 2099-3 b: mal kabulde son kullanma tarihi istenecek kartlar. Boş dizide sorgu atılmaz; olmayan kart kümede yok.
+export async function sktTakipliKartlar(db: Db, idler: readonly number[]): Promise<ReadonlySet<number>> {
+  const benzersiz = [...new Set(idler)];
+  return new Set(benzersiz.length === 0 ? [] : await s.sktTakipliKartlar(db, benzersiz));
+}
+
+// 2099-6 a: bir türün bir kategorisindeki kartlar (silinmiş hariç), no sırasıyla.
+export function kategoriKartlari(db: Db, tur: KatalogTuru, kategori: string): Promise<number[]> {
+  return s.kategoriKartlari(db, tur, kategori);
+}
+
+// 2099: kartın türe özel alan değerleri (anahtar ekranın alan kodu: `tur`, `marka`, `ambalaj`, `raf` ...). Değer biçimi ekranın yazdığıdır;
+// metin dizisi dışındaki diziler ve nesneler atlanır. Olmayan kart ya da alanı olmayan kart haritada yok.
+export type KartAlanDegeri = string | number | boolean | string[];
+export async function kartAlanDegerleri(db: Db, idler: readonly number[]): Promise<Map<number, Record<string, KartAlanDegeri>>> {
+  const benzersiz = [...new Set(idler)];
+  if (benzersiz.length === 0) return new Map();
+  const sonuc = new Map<number, Record<string, KartAlanDegeri>>();
+  for (const r of await s.kartAlanSatirlari(db, benzersiz)) {
+    const alanlar: Record<string, KartAlanDegeri> = {};
+    for (const [k, v] of Object.entries(r.alanlar)) {
+      if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') alanlar[k] = v;
+      else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) alanlar[k] = v;
+    }
+    sonuc.set(r.no, alanlar);
+  }
+  return sonuc;
+}
+
 // Satın almanın kg fiyatı için (19.10.2026): kartın kalitesi, ailesi, formu ve stok birimi. Olmayan kart haritada yok.
 // birimKg (stok birimi başına kg), kaliteAdi ve formAdi hammaddede ekranın kayıtta yazdığı değerdir; ekran hesaplayamadıysa null, uydurulmaz.
 // netKg yalnız mamul ve yarı mamulde, parçanın net ağırlığı: talaş = kütük ağırlığı - netKg (214 a).

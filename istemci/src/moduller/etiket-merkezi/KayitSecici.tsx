@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { KonumlarCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { KayitSecimi, RaflarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Secim, Sekmeler } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -13,7 +14,11 @@ import { secimSiniri } from './kayit-secimi.ts';
 // görmez (sunucu aynısını ister), stok ekranından gelen seçimle basmaya devam eder.
 type Tur = 'raf' | 'konum';
 interface Satir { id: number; kod: string; alt: string | null; grup: string }
-const stokOkurMu = (i: string): boolean => i === 'sayfa.stok' || i.startsWith('stok.');
+// Konum listesini sunucu yalnız stok sayfası ya da stok okuması açan işlemle verir (stok OKUMA); stok.istek okuma açmaz (EM-1).
+// Liste istemcide yazılır (paylasilan değeri zod taşıyabilir); stok/ortak.tsx gibi eksik işlem tip denetiminde yakalanır.
+const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla'] as const;
+const stokOkumaTam: [Exclude<(typeof STOK_ISLEMLERI)[number], (typeof STOK_OKUMA)[number]>] extends [never] ? true : never = true;
+const stokOkurMu = (i: string): boolean => stokOkumaTam && (STOK_OKUMA as readonly string[]).includes(i);
 const KONUM_SAYFASI = 500;
 
 function useSatirlar(tur: Tur, stokOkur: boolean) {
