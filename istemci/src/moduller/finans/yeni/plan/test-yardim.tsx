@@ -13,10 +13,10 @@ import { finansiKur, type FinansYetkisi } from '../veri.ts';
 export const BUGUN = '2026-10-15';
 export const finansKur = (ham = ornekHamVeri()) => finansiKur(ham, BUGUN);
 
-const yetkiKur = (y: Partial<FinansYetkisi>): FinansYetkisi => ({ oku: true, yaz: false, yonet: false, kurYaz: false, firmaOku: true, firmaYaz: false, ...y });
+const yetkiKur = (y: Partial<FinansYetkisi>): FinansYetkisi => ({ oku: true, yaz: false, yonet: false, kurYaz: false, firmaOku: true, firmaYaz: false, beyanYaz: false, ...y });
 export const OKUR = yetkiKur({});
 export const YAZAR = yetkiKur({ yaz: true });
-export const YONETICI = yetkiKur({ yaz: true, yonet: true });
+export const YONETICI = yetkiKur({ yaz: true, yonet: true, beyanYaz: true });
 
 export function tuvalsiz() {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((() => null) as never);

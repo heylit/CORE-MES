@@ -35,7 +35,7 @@ function cevap(
   };
 }
 
-function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response = () => json(200, PAKET), saglik: Record<string, unknown> = {}) {
+function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response | Promise<Response> = () => json(200, PAKET), saglik: Record<string, unknown> = {}) {
   const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
   let paketler = liste;
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
@@ -51,7 +51,7 @@ function sunucuKur(liste: GuncellemePaketleriCevabi, bitir: () => Response = () 
       return json(200, { alinan: sira + 1, toplam: 2 } satisfies GuncellemeParcasiCevabi);
     }
     if (/\/bitir$/.test(yol)) {
-      const yanit = bitir();
+      const yanit = await bitir();
       if (yanit.status === 200) paketler = cevap('acik', [LISTEDE]);
       return yanit;
     }
@@ -126,6 +126,23 @@ describe('Sistem Ayarları, güncelleme', () => {
     expect(screen.getByText('#12: Deneme degisikligi')).toBeTruthy();
     // Sağlık ayrıntısını okuyamayan kullanıcıya yeni göç sayısı bilinmiyor görünür.
     expect(screen.getByText(/kaçının yeni olduğu okunamadı/)).toBeTruthy();
+  });
+
+  it('yüklerken yüzde ve aktarılan MB yazar; son parçadan sonra imza doğrulanıyor der', async () => {
+    let birak: () => void = () => {};
+    const bekle = new Promise<void>((coz) => { birak = coz; });
+    sunucuKur(cevap('acik', []), async () => { await bekle; return json(200, PAKET); });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    await screen.findByText('Kanal açık');
+    const dosya = new File([new Uint8Array(PARCA_BAYT + 10).fill(7)], 'paket.tmip');
+    fireEvent.change(screen.getByLabelText('Güncelleme paketi'), { target: { files: [dosya] } });
+    expect(await screen.findByText(/İmza ve içerik doğrulanıyor/)).toBeTruthy();
+    expect(screen.getByText('0,5 MB aktarıldı.')).toBeTruthy();
+    expect(screen.getByRole('progressbar', { name: 'Yükleme tamam' })).toBeTruthy();
+    birak();
+    expect(await screen.findByText(/paketi yüklendi ve imzası doğrulandı/)).toBeTruthy();
+    expect(screen.queryByText(/doğrulanıyor/)).toBeNull();
   });
 
   it('seçilen paketin değişikliklerini ve sunucuda olmayan göç sayısını gösterir', async () => {

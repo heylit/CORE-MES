@@ -492,3 +492,11 @@ export function faizSec(tercih: FaizBirimi, aylik: FaizAdayi | undefined, gunluk
   if (tercih === 'gunluk') return gunluk ? gunlukle(gunluk) : aylik ? aylikla(aylik) : null;
   return aylik ? aylikla(aylik) : gunluk ? gunlukle(gunluk) : null;
 }
+
+// Beyan işareti (1846): yalnız kuralın ürettiği bir son güne konur; dönemi bitmemiş (son günü 31 günden ileride) beyan işaretlenmez.
+export const BEYAN_ILERI_GUN = 31;
+export function beyanIsaretHatasi(sonGun: string, kod: string, bugun: string): string | null {
+  if (!vergiTakvimi(sonGun, sonGun).some((v) => v.kod === kod)) return 'Bu gün bu beyanın son günü değil.';
+  const ileri = (Date.parse(`${sonGun}T00:00:00Z`) - Date.parse(`${bugun}T00:00:00Z`)) / 86_400_000;
+  return ileri > BEYAN_ILERI_GUN ? 'Dönemi bitmemiş beyan işaretlenmez.' : null;
+}

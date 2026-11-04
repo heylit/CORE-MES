@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
@@ -20,7 +20,7 @@ import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirm
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
 import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
-import type { MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
+import type { vergiBeyaniGovdesi, VergiBeyaniSatiri, MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
@@ -1129,11 +1129,38 @@ export async function siparisFaturalari(db: Db, siparisIdler: readonly number[])
   return sonuc;
 }
 
-// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri. Beyanın verildiği kayıtlı değildir: geçmiş son gün kapanmış sayılır.
-// Yetki denetlemez; çağıran finans.oku'yu denetler.
-export function takvimKayitlari(_db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
-  return Promise.resolve(vergiTakvimi(baslangic, bitis).map((v): TakvimKaydi => ({
-    kaynak: 'vergi', kimlik: `${v.tarih}-${v.kod}`, tarih: v.tarih, no: null, baslik: v.ad, ilgili: `Dönem: ${v.donem}`,
-    durum: v.tarih < bugun ? 'Son günü geçti' : 'Son gün', bitti: v.tarih < bugun,
-  })));
+// Takvim (891): aralıktaki vergi beyan ve ödeme son günleri. TKV-2 a (1846): "verildi" işaretli beyan kapanır; son günü geçmiş ve
+// işaretsiz beyan açık kalır ("Kaçırıldı", takvimde gecikmiş ve kırmızı). Yetki denetlemez; çağıran finans.oku'yu denetler.
+export async function takvimKayitlari(db: Db, baslangic: string, bitis: string, bugun = tesisGunu(new Date())): Promise<TakvimKaydi[]> {
+  const verilen = new Set((await sorgular.beyanlar(db, baslangic, bitis)).map((b) => `${b.sonGun}-${b.kod}`));
+  return vergiTakvimi(baslangic, bitis).map((v): TakvimKaydi => {
+    const verildi = verilen.has(`${v.tarih}-${v.kod}`);
+    return {
+      kaynak: 'vergi', kimlik: `${v.tarih}-${v.kod}`, tarih: v.tarih, no: null, baslik: v.ad, ilgili: `Dönem: ${v.donem}`,
+      durum: verildi ? 'Verildi' : v.tarih < bugun ? 'Kaçırıldı' : 'Son gün', bitti: verildi,
+    };
+  });
+}
+
+// ---- Vergi beyanı (1846, TKV-2 a) ----
+// Aralıktaki son günler ve işaretleri; işareti koyanın adı kişiler modülünden.
+export async function vergiBeyanlari(db: Db, baslangic: string, bitis: string): Promise<{ satirlar: VergiBeyaniSatiri[] }> {
+  const isaretler = new Map((await sorgular.beyanlar(db, baslangic, bitis)).map((b) => [`${b.sonGun}-${b.kod}`, b]));
+  const adlar = await kisiAdlari(db, [...isaretler.values()].map((b) => b.isaretleyenId));
+  return {
+    satirlar: vergiTakvimi(baslangic, bitis).map((v) => {
+      const b = isaretler.get(`${v.tarih}-${v.kod}`);
+      return {
+        sonGun: v.tarih, kod: v.kod as VergiBeyaniSatiri['kod'], ad: v.ad, donem: v.donem, verildi: b !== undefined,
+        isaretleyen: b ? (adlar.get(b.isaretleyenId) ?? null) : null, isaretleme: b?.isaretleme ?? null,
+      };
+    }),
+  };
+}
+
+export async function vergiBeyaniIsaretle(db: Db, k: Kullanici, g: z.output<typeof vergiBeyaniGovdesi>, bugun: string) {
+  const hata = beyanIsaretHatasi(g.sonGun, g.kod, bugun);
+  if (hata) throw dogrulama(hata, 'sonGun');
+  await sorgular.beyanYaz(db, g.sonGun, g.kod, g.verildi, k.id);
+  return g;
 }

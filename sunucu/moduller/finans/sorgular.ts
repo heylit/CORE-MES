@@ -292,16 +292,22 @@ export const sonGenelGiderOrani = (db: Db, gun: string) =>
     `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil"
        FROM finans_genel_gider_orani WHERE gecerlilik_baslangic <= $1::date ORDER BY gecerlilik_baslangic DESC, id DESC LIMIT 1`, [gun]);
 // Kur ve faiz şeridi: o güne kadar geçerli son kur ve faiz, son yazanı ve zamanıyla (düzeltme de giriş sayılır).
-export interface KurOzetiSatiri { paraBirimi: string; tarih: string; kur: string; girenId: number; giris: string; surum: number }
+// Önceki değer şeridin artış/azalış işaretidir (2083): kurda bir önceki tarihli satır, çünkü aynı günün düzeltmesi eski değeri tutmaz;
+// faizde bir önceki geçerlilik tarihli son oran, çünkü aynı güne sonra girilen öncekini düzeltir. Yoksa null.
+export interface KurOzetiSatiri { paraBirimi: string; tarih: string; kur: string; oncekiKur: string | null; girenId: number; giris: string; surum: number }
 export const kurOzeti = (db: Db, tarih: string) => db.sorgu<KurOzetiSatiri>(
-  `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, kur::text AS kur,
-          coalesce(guncelleyen_id, olusturan_id) AS "girenId", ${zamanMetni('coalesce(guncelleme, olusturma)')} AS giris, surum
-     FROM finans_kur WHERE tarih <= $1::date ORDER BY para_birimi, tarih DESC`, [tarih]);
-export interface FaizOzetiSatiri { paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string; girenId: number; giris: string }
+  `SELECT DISTINCT ON (k.para_birimi) rtrim(k.para_birimi) AS "paraBirimi", ${tarihMetni('k.tarih')} AS tarih, k.kur::text AS kur,
+          (SELECT o.kur::text FROM finans_kur o WHERE o.para_birimi = k.para_birimi AND o.tarih < k.tarih ORDER BY o.tarih DESC LIMIT 1) AS "oncekiKur",
+          coalesce(k.guncelleyen_id, k.olusturan_id) AS "girenId", ${zamanMetni('coalesce(k.guncelleme, k.olusturma)')} AS giris, k.surum
+     FROM finans_kur k WHERE k.tarih <= $1::date ORDER BY k.para_birimi, k.tarih DESC`, [tarih]);
+export interface FaizOzetiSatiri { paraBirimi: string; gecerlilikBaslangic: string; aylikYuzde: string; oncekiAylikYuzde: string | null; girenId: number; giris: string }
 export const faizOzeti = (db: Db, tarih: string) => db.sorgu<FaizOzetiSatiri>(
-  `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic",
-          aylik_yuzde::text AS "aylikYuzde", olusturan_id AS "girenId", ${zamanMetni('olusturma')} AS giris
-     FROM finans_faiz WHERE gecerlilik_baslangic <= $1::date ORDER BY para_birimi, gecerlilik_baslangic DESC, id DESC`, [tarih]);
+  `SELECT DISTINCT ON (f.para_birimi) rtrim(f.para_birimi) AS "paraBirimi", ${tarihMetni('f.gecerlilik_baslangic')} AS "gecerlilikBaslangic",
+          f.aylik_yuzde::text AS "aylikYuzde",
+          (SELECT o.aylik_yuzde::text FROM finans_faiz o WHERE o.para_birimi = f.para_birimi AND o.gecerlilik_baslangic < f.gecerlilik_baslangic
+            ORDER BY o.gecerlilik_baslangic DESC, o.id DESC LIMIT 1) AS "oncekiAylikYuzde",
+          f.olusturan_id AS "girenId", ${zamanMetni('f.olusturma')} AS giris
+     FROM finans_faiz f WHERE f.gecerlilik_baslangic <= $1::date ORDER BY f.para_birimi, f.gecerlilik_baslangic DESC, f.id DESC`, [tarih]);
 export interface GunlukFaizOzetiSatiri { paraBirimi: string; gecerlilikBaslangic: string; gunlukYuzde: string; girenId: number; giris: string }
 export const gunlukFaizOzeti = (db: Db, tarih: string) => db.sorgu<GunlukFaizOzetiSatiri>(
   `SELECT DISTINCT ON (para_birimi) rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic",
@@ -625,3 +631,12 @@ export const siparisFaturalari = (db: Db, siparisIdler: readonly number[]) => db
           b.sevkiyat_isi_id AS "sevkiyatIsiId", b.iade_belge_id AS "iadeBelgeId", rtrim(b.para_birimi) AS "paraBirimi", b.tutar::text AS tutar,
           b.toplam::text AS toplam, round(b.tutar * b.kur, 2)::text AS "netTl", b.toplam_tl::text AS "toplamTl"
      FROM finans_belge b WHERE b.siparis_id = ANY($1::int[]) AND b.durum <> 'iptal' ORDER BY b.siparis_id, b.belge_tarihi, b.id`, [siparisIdler]);
+
+// Vergi beyanı işaretleri (1846); satır yoksa beyan verilmemiştir.
+export interface BeyanSatiri { sonGun: string; kod: string; isaretleyenId: number; isaretleme: string }
+export const beyanlar = (db: Db, baslangic: string, bitis: string) =>
+  db.sorgu<BeyanSatiri>(`SELECT to_char(son_gun, 'YYYY-MM-DD') AS "sonGun", kod, isaretleyen_id AS "isaretleyenId", ${zamanMetni('isaretleme')} AS isaretleme
+       FROM finans_vergi_beyani WHERE son_gun BETWEEN $1::date AND $2::date ORDER BY son_gun, kod`, [baslangic, bitis]);
+export const beyanYaz = (db: Db, sonGun: string, kod: string, verildi: boolean, kisi: number) => verildi
+  ? db.sorgu(`INSERT INTO finans_vergi_beyani (son_gun, kod, isaretleyen_id) VALUES ($1, $2, $3) ON CONFLICT (son_gun, kod) DO NOTHING`, [sonGun, kod, kisi])
+  : db.sorgu('DELETE FROM finans_vergi_beyani WHERE son_gun = $1 AND kod = $2', [sonGun, kod]);

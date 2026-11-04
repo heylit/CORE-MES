@@ -451,7 +451,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     await girisliKisi('duzelten', ['finans.kur-yaz']);
     tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: bugun, kur: 50 }));
     type Ozet = {
-      bugun: string; kurlar: { paraBirimi: string; kur: string; girenAd: string | null; giris: string; surum: number }[]; faizler: { paraBirimi: string; girenAd: string | null }[];
+      bugun: string; kurlar: { paraBirimi: string; kur: string; oncekiKur: string | null; girenAd: string | null; giris: string; surum: number }[]; faizler: { paraBirimi: string; aylikYuzde: string; oncekiAylikYuzde: string | null; girenAd: string | null }[];
       sonGiris: { tur: string; girenAd: string | null } | null; gecmis: { tur: string; paraBirimi: string; deger: string; tarih: string; duzeltme: boolean; girenAd: string | null }[];
     };
     const oku = async (kim = 'okuyan') => tamam(await istek<Ozet>(kim, 'GET', '/finans/kur-ozeti'));
@@ -461,6 +461,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(Number(gbp()?.kur), 50);
     assert.equal(gbp()?.girenAd, 'Deneme yonetim');
     assert.ok(gbp()?.giris);
+    assert.equal(gbp()?.oncekiKur, null, 'önceki tarihli kur yoksa işaret yok (2083)');
     assert.deepEqual(o.sonGiris && { tur: o.sonGiris.tur, ad: o.sonGiris.girenAd }, { tur: 'kur', ad: 'Deneme yonetim' });
     tamam(await yaz('/finans/kurlar/guncelle', { paraBirimi: 'GBP', tarih: bugun, kur: 51, surum: 1 }, 'duzelten'));
     o = await oku();
@@ -470,6 +471,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     tamam(await yaz('/finans/faizler/ekle', { paraBirimi: 'GBP', gecerlilikBaslangic: bugun, aylikYuzde: 1 }));
     o = await oku();
     assert.equal(o.faizler.find((f) => f.paraBirimi === 'GBP')?.girenAd, 'Deneme yonetim');
+    assert.equal(o.faizler.find((f) => f.paraBirimi === 'GBP')?.oncekiAylikYuzde, null);
     assert.equal(o.sonGiris?.tur, 'faiz');
     // 939: son girişler en yeni başta; düzeltilen kur düzeltme olarak, düzeltenin adıyla.
     assert.ok(o.gecmis.length <= 8);
@@ -477,6 +479,15 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
       ['faiz', 'GBP', 1, bugun, false, 'Deneme yonetim'],
       ['kur', 'GBP', 51, bugun, true, 'Deneme duzelten'],
     ]);
+    // 2083: önceki değer bir önceki tarihli değerdir; aynı günün düzeltmesi önceki sayılmaz (kurun eski değeri tutulmaz).
+    const dun = new Date(`${bugun}T12:00:00Z`); dun.setUTCDate(dun.getUTCDate() - 1);
+    const dunGunu = dun.toISOString().slice(0, 10);
+    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: dunGunu, kur: 49.5 }));
+    tamam(await yaz('/finans/faizler/ekle', { paraBirimi: 'GBP', gecerlilikBaslangic: dunGunu, aylikYuzde: 1.5 }));
+    o = await oku();
+    assert.deepEqual([Number(gbp()?.kur), Number(gbp()?.oncekiKur)], [51, 49.5]);
+    const gbpFaiz = o.faizler.find((f) => f.paraBirimi === 'GBP');
+    assert.deepEqual([Number(gbpFaiz?.aylikYuzde), Number(gbpFaiz?.oncekiAylikYuzde)], [1, 1.5]);
     // 952 a: şerit her sayfadadır; finans işlemi olmayan kişi de okur (yalnız kur, faiz ve giren kişi).
     assert.equal((await istek('firmaci', 'GET', '/finans/kur-ozeti')).durum, 200);
     assert.equal((await istek('firmaci', 'GET', '/finans/kurlar')).durum, 403);

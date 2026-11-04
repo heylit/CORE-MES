@@ -242,14 +242,15 @@ export const amortismanCevabi = z.object({ aylar: z.array(z.object({ ay: z.strin
 // Kur ve faiz şeridi: bugüne kadar geçerli son kur ve faiz, kimin ne zaman girdiğiyle; sonGiris ileri tarihli giriş dahil en son yazılandır.
 // Ortak kur ve faiz şeridi (939, 952 a): giriş yapan herkes okur. Kur satırının sürümü aynı günün düzeltmesi içindir; geçmiş son girişlerdir
 // (düzeltme de giriş sayılır), en yeni başta.
+// oncekiKur ve oncekiAylikYuzde şeridin artış/azalış işaretidir (2083): bir önceki tarihli değer, yoksa null.
 export const KUR_FAIZ_GECMISI_BOYU = 8;
 // 1700 b, 1725 a: günlük faiz kendi birimiyle ayrı tutulur; hesaplar finans ayarındaki birimi kullanır, o birimde oran yoksa öbürünü çevirir.
 export const FAIZ_BIRIMLERI = ['aylik', 'gunluk'] as const;
 const KUR_FAIZ_TURLERI = ['kur', 'faiz', 'gunluk_faiz'] as const;
 export const kurFaizOzetiCevabi = z.object({
   bugun: tarihSemasi,
-  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
-  faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
+  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, oncekiKur: numerik.nullable(), girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
+  faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, oncekiAylikYuzde: numerik.nullable(), girenAd: z.string().nullable(), giris: zamanSemasi })),
   gunlukFaizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, gunlukYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
   faizBirimi: z.enum(FAIZ_BIRIMLERI),
   sonGiris: z.object({ tur: z.enum(KUR_FAIZ_TURLERI), giris: zamanSemasi, girenAd: z.string().nullable() }).nullable(),
@@ -454,3 +455,19 @@ export const satisSevkiSemasi = z.object({ id: z.number().int(), tarih: tarihSem
 export const satisSevkleriCevabi = z.object({ sevkler: z.array(satisSevkiSemasi) });
 export type SatisSevki = z.output<typeof satisSevkiSemasi>;
 export type SatisSevkleriCevabi = z.output<typeof satisSevkleriCevabi>;
+
+// ---- Vergi beyanı (1846, TKV-2 a) ----
+// Son günler kuraldan üretilir; yalnız "verildi" işareti saklanır. İşaret hedef durumu söyler: ikinci kez gelirse sonuç değişmez, sürüm gerekmez.
+export const VERGI_KODLARI = ['kdv-tevkifat', 'muhtasar', 'kdv', 'gecici-vergi', 'kurumlar-vergisi', 'gelir-vergisi'] as const;
+export const vergiBeyaniGovdesi = z.object({ sonGun: tarihSemasi, kod: z.enum(VERGI_KODLARI), verildi: z.boolean() });
+const gunAraligi = (s: { baslangic: string; bitis: string }): number => (Date.parse(`${s.bitis}T00:00:00Z`) - Date.parse(`${s.baslangic}T00:00:00Z`)) / 86_400_000;
+export const VERGI_BEYANI_AZAMI_GUN = 400;
+export const vergiBeyaniSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi })
+  .refine((s) => !(gunAraligi(s) >= 0 && gunAraligi(s) <= VERGI_BEYANI_AZAMI_GUN) ? Number.isNaN(gunAraligi(s)) : true,
+    { message: `Aralık en çok ${VERGI_BEYANI_AZAMI_GUN} gündür ve bitiş başlangıçtan önce olamaz.`, path: ['bitis'] });
+export const vergiBeyaniSatiri = z.object({
+  sonGun: tarihSemasi, kod: z.enum(VERGI_KODLARI), ad: z.string(), donem: z.string(), verildi: z.boolean(),
+  isaretleyen: z.string().nullable(), isaretleme: zamanSemasi.nullable(),
+});
+export const vergiBeyanlariCevabi = z.object({ satirlar: z.array(vergiBeyaniSatiri) });
+export type VergiBeyaniSatiri = z.output<typeof vergiBeyaniSatiri>;
