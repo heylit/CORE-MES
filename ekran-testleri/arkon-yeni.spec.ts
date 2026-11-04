@@ -449,7 +449,7 @@ const YENIDE_ACILAN: Readonly<Record<Hesap, readonly string[]>> = {
   'ornek.planlama': ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'raporlar', 'cizim', 'ayarlar', 'kuyruk'],
   'ornek.operator1': ['operator', 'kuyruk'],
   'ornek.operator2': ['operator', 'kuyruk'],
-  'ornek.kalite': ['pano', 'kalite', 'raporlar', 'ayarlar'],
+  'ornek.kalite': ['pano', 'kalite', 'raporlar', 'ayarlar', 'operator'],
   'ornek.depo': [],
   'ornek.satis': [],
   'ornek.satinalma': [],
