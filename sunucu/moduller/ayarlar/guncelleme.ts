@@ -3,12 +3,14 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { bulunamadi, cakisma, cokIstek, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import {
-  GUNCELLEME_GECMISI_EN_COK, GUNCELLEME_PARCASI, guncellemePaketiSemasi, type GuncellemeKanali, type GuncellemePaketi, type GuncellemePaketleriCevabi,
+  GUNCELLEME_ADIMLARI, GUNCELLEME_GECMISI_EN_COK, GUNCELLEME_PARCASI, guncellemePaketiSemasi, type GuncellemeIlerlemesiCevabi, type GuncellemeKanali,
+  type GuncellemePaketi, type GuncellemePaketleriCevabi,
   type GuncellemeKuruluSurum, type GuncellemeParcasiCevabi, type GuncellemeParcasiGovdesi, type GuncellemeUygulamaIstegi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
+import { zamanSemasi } from '#paylasilan/zaman.ts';
 import {
   ACIK_GUNCELLEME_YUKLEMESI, AZAMI_PAKET_BASLIGI, BAYAT_GUNCELLEME_SAAT, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI,
   PAKET_REDDI_ILETISI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULANIYOR_DOSYASI, atlamaUyarisi, gecmisiAyikla, guncelleyiciSemasi,
@@ -319,6 +321,32 @@ export async function paketleriListele(o: GuncellemeOrtami): Promise<GuncellemeP
     surumler: await kuruluSurumler(dizin, bildirimListesi, durum),
     sonUygulama: await jsonOku(path.join(dizin, UYGULAMA_SONUCU_DOSYASI), uygulamaSonucuSemasi),
     gecmis: gecmisiAyikla(await readFile(path.join(dizin, UYGULAMA_GECMISI_DOSYASI), 'utf8').catch(() => ''), GUNCELLEME_GECMISI_EN_COK),
+  };
+}
+
+// Güncelleyicinin her adımdan önce yazdığı kendi durum dosyası (araclar/guncelleyici.ts UYGULAMA_DURUMU_DOSYASI). Sunucu yalnız
+// adımı ve sürümü okur; eski sürüm klasörü ve yedek yolu ekrana çıkmaz. Elle geri yükleme bekleyen dosya süren uygulama değildir.
+export const UYGULAMA_DURUMU_DOSYASI = 'uygulama-durumu.json';
+const uygulamaDurumuSemasi = z.object({
+  istek: uygulamaIstegiSemasi,
+  surum: z.string(),
+  adim: z.enum(GUNCELLEME_ADIMLARI),
+  baslangic: zamanSemasi,
+  elle: z.boolean().default(false),
+});
+
+// İstek alınıp ilk adım yazılana kadar durum dosyası yoktur: o arada uygulama "dogrula"dadır.
+export async function ilerlemeOku(o: GuncellemeOrtami): Promise<GuncellemeIlerlemesiCevabi> {
+  const k = await kanal(o);
+  if (k.durum !== 'acik') return { suren: null };
+  const { uygulaniyor } = await istekler(k.dizin);
+  if (uygulaniyor === null) return { suren: null };
+  const durum = await jsonOku(path.join(k.dizin, UYGULAMA_DURUMU_DOSYASI), uygulamaDurumuSemasi);
+  const ayni = durum !== null && !durum.elle && durum.istek.commit === uygulaniyor.commit;
+  return {
+    suren: ayni
+      ? { commit: uygulaniyor.commit, surum: durum.surum, adim: durum.adim, baslangic: durum.baslangic }
+      : { commit: uygulaniyor.commit, surum: uygulaniyor.commit.slice(0, 7), adim: 'dogrula', baslangic: uygulaniyor.istenme },
   };
 }
 

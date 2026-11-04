@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
-  GuncellemeKanali, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi, GuncellemeParcasiCevabi,
+  GuncellemeIlerlemesiCevabi, GuncellemeKanali, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi, GuncellemeParcasiCevabi,
+  GuncellemeUygulamaSonucu,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { PARCA_BAYT, yeniGocSayisi } from './Guncelleme.tsx';
+import { GuncellemeIlerlemesi, adimSatirlari } from './GuncellemeIlerlemesi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
@@ -280,5 +283,81 @@ describe('Sistem Ayarları, güncelleme', () => {
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual([
       `/guncelleme/surumler/${eski}/sil`, `/guncelleme/paketler/${PAKET.commit}/sil`,
     ]);
+  });
+});
+
+describe('Güncelleme, kurulum adımları', () => {
+  const SONUC: GuncellemeUygulamaSonucu = {
+    commit: PAKET.commit, surum: '0.1.0', sonuc: 'geri-alindi', adim: 'goc', hata: 'Deneme göç hatası',
+    baslangic: '2026-10-14T08:00:05.000Z', bitis: '2026-10-14T08:04:17.000Z',
+  };
+  const durumlar = (g: Parameters<typeof adimSatirlari>[0]) => adimSatirlari(g).map((s) => s.durum);
+
+  it('süren adımdan öncesi tamam, sonrası bekler; sunucu kapalıyken durdur sonrası sürüyor sayılır', () => {
+    expect(durumlar({ tur: 'sirada' })).toEqual(['bekliyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor']);
+    expect(durumlar({ tur: 'suruyor', adim: 'hazirla' })).toEqual(['tamam', 'suruyor', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor']);
+    expect(durumlar({ tur: 'kapali' })).toEqual(['tamam', 'tamam', 'tamam', 'suruyor', 'suruyor', 'suruyor']);
+  });
+
+  it('bozulan adım hatalı ve hata metniyle, sonrası yapılmamış; kurulan uygulamada hepsi tamam', () => {
+    const satirlar = adimSatirlari({ tur: 'bitti', sonuc: SONUC });
+    expect(satirlar.map((s) => s.durum)).toEqual(['tamam', 'tamam', 'tamam', 'tamam', 'hata', 'bekliyor']);
+    expect(satirlar[4]).toMatchObject({ metin: 'Göçler: hata', not: 'Deneme göç hatası' });
+    expect(durumlar({ tur: 'bitti', sonuc: { ...SONUC, sonuc: 'kuruldu', adim: null, hata: null } })).toEqual(Array(6).fill('tamam'));
+  });
+
+  it('izlenen uygulama canlı adımla başlar, sunucu kapanınca yeniden başlıyor der, açılınca sonucu bozulan adımla gösterir', async () => {
+    const istenme = '2026-10-14T08:00:00.000Z';
+    let asama: 'canli' | 'kapali' | 'bitti' = 'canli';
+    let liste = cevap('acik', [LISTEDE], { uygulaniyor: { commit: PAKET.commit, isteyenId: 1, istenme } });
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (asama === 'kapali') throw new TypeError('Failed to fetch');
+      if (yol === '/guncelleme/paketler') return json(200, liste);
+      if (yol === '/guncelleme/ilerleme') {
+        const govde: GuncellemeIlerlemesiCevabi = asama === 'canli'
+          ? { suren: { commit: PAKET.commit, surum: '0.1.0', adim: 'hazirla', baslangic: '2026-10-14T08:00:05.000Z' } }
+          : { suren: null };
+        return json(200, govde);
+      }
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let yenile: (v: GuncellemePaketleriCevabi) => void = () => undefined;
+    function Sarmal() {
+      const [veri, setVeri] = useState(liste);
+      yenile = setVeri;
+      return <GuncellemeIlerlemesi veri={veri} istenen={null} yoklamaMs={30} />;
+    }
+    render(<QueryClientProvider client={istemci}><Sarmal /></QueryClientProvider>);
+
+    expect(await screen.findByText('Hazırlanıyor')).toBeTruthy();
+    expect(screen.getByText('Paket doğrulandı')).toBeTruthy();
+
+    asama = 'kapali';
+    expect(await screen.findByText('Sunucu yeniden başlıyor')).toBeTruthy();
+    expect(screen.getByText('Yedek, göç ve açılış sürüyor')).toBeTruthy();
+
+    asama = 'bitti';
+    liste = cevap('acik', [LISTEDE], { sonUygulama: SONUC });
+    act(() => { yenile(liste); });
+    expect(await screen.findByText('Göçler: hata')).toBeTruthy();
+    expect(screen.getByText('Deneme göç hatası')).toBeTruthy();
+    expect(screen.getByText('Geri alındı')).toBeTruthy();
+    expect(screen.getByText('Veritabanı yedeklendi')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Kapat/ }));
+    await waitFor(() => { expect(screen.queryByText('Göçler: hata')).toBeNull(); });
+  });
+
+  it('eski sunucuda ilerleme ucu yoksa adım listesi çıkmaz', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' })));
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const liste = cevap('acik', [LISTEDE], { uygulaniyor: { commit: PAKET.commit, isteyenId: 1, istenme: '2026-10-14T08:00:00.000Z' } });
+    const { container } = render(
+      <QueryClientProvider client={istemci}><GuncellemeIlerlemesi veri={liste} istenen={null} yoklamaMs={30} /></QueryClientProvider>,
+    );
+    await waitFor(() => { expect(container.querySelector('.tc-guncelleme-adimlar')).toBeNull(); });
+    await new Promise((coz) => setTimeout(coz, 100));
+    expect(container.querySelector('.tc-guncelleme-adimlar')).toBeNull();
   });
 });

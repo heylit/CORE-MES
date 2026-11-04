@@ -8,7 +8,9 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { GUNCELLEME_PARCASI, type GuncellemePaketi, type GuncellemePaketleriCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import {
+  GUNCELLEME_PARCASI, type GuncellemeIlerlemesiCevabi, type GuncellemePaketi, type GuncellemePaketleriCevabi,
+} from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -16,6 +18,7 @@ import {
   AZAMI_DEGISIKLIK, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULAMA_GECMISI_DOSYASI,
   UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
 } from './kurallar.ts';
+import { UYGULAMA_DURUMU_DOSYASI } from './guncelleme.ts';
 import { YEDEK_DIZINI_DOSYASI } from './yedek-dizini.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -334,6 +337,42 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     const cevap = await uygula(yeni);
     assert.equal(cevap.statusCode, 200, cevap.body);
     assert.equal((await istekDosyasi())['commit'], yeni);
+  });
+
+  test('süren uygulamanın adımı okunur; eski sürüm klasörü ve yedek yolu dönmez; yalnız yönetici okur', async () => {
+    const yol = '/guncelleme/ilerleme';
+    const oku = async (): Promise<GuncellemeIlerlemesiCevabi> => {
+      const cevap = await istek(yonetici, 'GET', yol);
+      assert.equal(cevap.statusCode, 200, cevap.body);
+      return cevap.json() as GuncellemeIlerlemesiCevabi;
+    };
+    for (const { rol, cerez } of bayraksizlar) assert.equal((await istek(cerez, 'GET', yol)).statusCode, 403, rol.ad);
+    assert.equal((await istek(null, 'GET', yol)).statusCode, 401);
+    assert.deepEqual(await oku(), { suren: null }, 'uygulama yokken');
+
+    const suren = yeniCommit('9');
+    const istenme = '2026-10-14T09:00:00.000Z';
+    await writeFile(path.join(dizin, UYGULANIYOR_DOSYASI), JSON.stringify({ commit: suren, isteyenId: yoneticiId, istenme }));
+    assert.deepEqual(await oku(), { suren: { commit: suren, surum: suren.slice(0, 7), adim: 'dogrula', baslangic: istenme } }, 'durum dosyası yazılmadan');
+
+    const durum = {
+      istek: { commit: suren, isteyenId: yoneticiId, istenme }, surum: 'v9', adim: 'hazirla',
+      eski: { klasor: path.join(dizin, 'eski-klasor'), surum: { commit: COMMIT, surum: 'v8', gocler: [] } },
+      yedek: path.join(dizin, 'yedek', 'gizli.yedek'), baslangic: '2026-10-14T09:00:05.000Z', elle: false,
+    };
+    await writeFile(path.join(dizin, UYGULAMA_DURUMU_DOSYASI), JSON.stringify(durum));
+    const cevap = await istek(yonetici, 'GET', yol);
+    assert.deepEqual(cevap.json(), { suren: { commit: suren, surum: 'v9', adim: 'hazirla', baslangic: '2026-10-14T09:00:05.000Z' } });
+    assert.equal(cevap.body.includes('eski-klasor') || cevap.body.includes('gizli.yedek'), false, 'iç yollar ekrana çıkmaz');
+
+    // Önceki uygulamadan kalan ya da bozuk dosya süren adımı uydurmaz.
+    await writeFile(path.join(dizin, UYGULAMA_DURUMU_DOSYASI), JSON.stringify({ ...durum, istek: { ...durum.istek, commit: yeniCommit('8') } }));
+    assert.equal((await oku()).suren?.adim, 'dogrula');
+    await writeFile(path.join(dizin, UYGULAMA_DURUMU_DOSYASI), '{bozuk');
+    assert.equal((await oku()).suren?.adim, 'dogrula');
+
+    await rm(path.join(dizin, UYGULANIYOR_DOSYASI));
+    assert.deepEqual(await oku(), { suren: null }, 'işaret kalkınca');
   });
 
   test('yedek klasörü yoksa ya da sunucuda bulunmuyorsa uygulama isteği 422 alır ve yazılmaz; listede yedek durumu görünür', async () => {

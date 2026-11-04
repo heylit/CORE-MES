@@ -1,11 +1,11 @@
 import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
-  ayarDegistirGovdesi, ayarParametresi, ayarSemasi, ayarlarCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
+  ayarDegistirGovdesi, ayarParametresi, ayarSemasi, ayarlarCevabi, guncellemeIlerlemesiCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
   gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
-import { ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
+import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
   ayarDegistir, ayarlariListele, girisLogosuOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
@@ -109,6 +109,14 @@ export const uclar = [
     yetki: 'ayarlar.guncelleme-yukle',
     cevap: guncellemePaketleriCevabi,
     isle: () => paketleriListele(ortamdanOku()),
+  }),
+  // Süren uygulamanın adımı; ekran kurulum sürerken sık yoklar, paket listesini her seferinde okumasın diye ayrı uçtur.
+  uc({
+    yontem: 'GET',
+    yol: '/guncelleme/ilerleme',
+    yetki: 'ayarlar.guncelleme-yukle',
+    cevap: guncellemeIlerlemesiCevabi,
+    isle: () => ilerlemeOku(ortamdanOku()),
   }),
   uc({
     yontem: 'POST',
