@@ -1,3 +1,5 @@
+import type { TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
+
 // PRF-1: kişinin profilinde son 50 geri bildirimi görünür; daha eskisi okuyanın listesindedir.
 export const PROFIL_GERI_BILDIRIM_SINIRI = 50;
 
@@ -18,4 +20,9 @@ export function mesaiToplami(satirlar: readonly { saat: number | null }[]): numb
   const saatler = satirlar.map((s) => s.saat).filter((s): s is number => s !== null);
   if (saatler.length === 0) return null;
   return Math.round(saatler.reduce((t, s) => t + s, 0) * 100) / 100;
+}
+
+// PRF-5: kaydı olmayan kişinin teması null, sürümü 0 (ilk seçim bu sürümle yazılır); tema uydurulmaz.
+export function temaCevabiYap(satir: { tema: TemaTercihi; surum: number } | null): TemaCevabi {
+  return satir === null ? { tema: null, surum: 0 } : { tema: satir.tema, surum: satir.surum };
 }

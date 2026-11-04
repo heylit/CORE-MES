@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { GeriBildirimKonusu, GeriBildirimTuru } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimKonusu, GeriBildirimTuru, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
 
 export interface GeriBildirimSatiri {
   id: number;
@@ -43,5 +43,28 @@ export function geriBildirimSatirlari(db: Db, s: ListeSuzgeci, dilim: Dilim): Pr
   return db.sorgu<GeriBildirimSatiri>(
     `SELECT ${SECIM} ${SUZGEC} ORDER BY gonderildi DESC, id DESC LIMIT $3 OFFSET $4`,
     [s.konu, s.tur, dilim.sinir, dilim.atla],
+  );
+}
+
+export interface TemaSatiri { tema: TemaTercihi; surum: number }
+
+export function temaOku(db: Db, kisiId: number): Promise<TemaSatiri | null> {
+  return db.tek<TemaSatiri>('SELECT tema, surum FROM profil_tema_tercihi WHERE kisi_id = $1', [kisiId]);
+}
+
+// İlk seçim: aynı anda gelen ikinci ilk seçim satır açmaz, null döner (sürüm çakışması).
+export function temaEkle(db: Db, kisiId: number, tema: TemaTercihi): Promise<TemaSatiri | null> {
+  return db.tek<TemaSatiri>(
+    'INSERT INTO profil_tema_tercihi (kisi_id, tema) VALUES ($1, $2) ON CONFLICT (kisi_id) DO NOTHING RETURNING tema, surum',
+    [kisiId, tema],
+  );
+}
+
+// Okunan sürüm tutmazsa satır değişmez, null döner.
+export function temaGuncelle(db: Db, kisiId: number, tema: TemaTercihi, surum: number): Promise<TemaSatiri | null> {
+  return db.tek<TemaSatiri>(
+    `UPDATE profil_tema_tercihi SET tema = $2, surum = surum + 1, guncellendi = now()
+      WHERE kisi_id = $1 AND surum = $3 RETURNING tema, surum`,
+    [kisiId, tema, surum],
   );
 }

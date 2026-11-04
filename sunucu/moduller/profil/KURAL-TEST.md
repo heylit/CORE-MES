@@ -14,3 +14,4 @@ Testler: `kurallar.test.ts` (saf), `profil.test.ts` (gerçek PostgreSQL, gerçek
 | Yinelenen gönderim tek kayıt | `aynı istek kimliğiyle yinelenen gönderim ikinci kayıt açmaz` |
 | Başkasının yazdığını yalnız okuma işlemi olan görür | `başkalarının yazdıklarını yalnız profil.geri-bildirim-oku okur ...` |
 | İK kartından ücret, kimlik, banka alanı dönmez | `İK kartına bağlı kişi kendi kartını ... ücret ve kimlik alanı dönmez` |
+| PRF-5 Tema kişinindir: dört değer (light, dark, kontrast, gun); kayıt yoksa null ve sürüm 0; sürümle yazılır | `PRF-5: kaydı olmayan kişide tema null ve sürüm 0`; `PRF-5: tema oturum ister ...`; `PRF-5: tema seçimi sürümle yazılır ...`; `PRF-5: tema gövdesi başka kişiyi seçemez ...`; `profil_tema_tercihi_tema_gecerli` kısıtı |

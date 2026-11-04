@@ -66,8 +66,18 @@ export const profilCevabi = z.object({
   geriBildirimOkur: z.boolean(),
 });
 
+// Görünüm teması (karar 2072 a): kişi kendi profilinde seçer. kontrast yüksek kontrastlı koyu, gun gün ışığı (yüksek
+// kontrastlı açık) temadır. Kaydı olmayan kişide tema null ve sürüm 0: istemci cihazdaki son temayı kullanır.
+export const TEMALAR = ['light', 'dark', 'kontrast', 'gun'] as const;
+export type TemaTercihi = (typeof TEMALAR)[number];
+export const temaCevabi = z.object({ tema: z.enum(TEMALAR).nullable(), surum: z.number().int().min(0) });
+// surum okunan sürümdür; ilk seçimde 0.
+export const temaSecGovdesi = z.object({ tema: z.enum(TEMALAR), surum: z.number().int().min(0) }).strict();
+
 export type GeriBildirimGonderGovdesi = z.input<typeof geriBildirimGonderGovdesi>;
 export type GeriBildirim = z.output<typeof geriBildirimSemasi>;
 export type GeriBildirimListeSorgusu = z.input<typeof geriBildirimListeSorgusu>;
 export type GeriBildirimListeCevabi = z.output<typeof geriBildirimListeCevabi>;
 export type ProfilCevabi = z.output<typeof profilCevabi>;
+export type TemaCevabi = z.output<typeof temaCevabi>;
+export type TemaSecGovdesi = z.input<typeof temaSecGovdesi>;
