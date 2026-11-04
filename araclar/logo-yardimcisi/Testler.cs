@@ -597,9 +597,10 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(22, hepsi.Count, "sorgu sayısı");
+            Esit(23, hepsi.Count, "sorgu sayısı");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
+            Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");
             Icerir(q.Siparis, "LG_007_03_ORFICHE");
             Icerir(q.Siparis, "O.TRCODE = @tr");
             foreach (var yazan in new[] { "UPDATE LG_007_ITEMS SET NAME = 'x'", "SELECT 1; DELETE FROM LG_007_ITEMS", "SELECT * INTO X FROM LG_007_ITEMS", "EXEC sp_who" })
