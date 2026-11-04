@@ -297,7 +297,10 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Kalite Merkezi'nde yazar ve onaylar, çizimi yayınlar (kullanıcı kararları 139 a ve 160 a).
       'kalite-merkezi.yaz', 'kalite-merkezi.onayla', 'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yayinla', ...SIPARIS_OKU,
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku'],
+      'plan.oku',
+      // Terminalden üretim girer (modul-test K6 a, 1209 b); karne için Müşteriler ve Tedarikçiler (K10 a); 3D Atölyesi okuma (1706 a).
+      ...SAYFA('uretim-terminali', 'musteri-tedarikci', 'geometri'), 'geometri.oku',
+    ],
     planlama_proje: [
       // Birim maliyeti görmez (kullanıcı kararı 200 a, 19.10.2026).
       ...MESAJ, ...STOK_ISTEK, 'sayfa.akis',
@@ -342,6 +345,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
       ...ETIKET_BASAN,
       // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
       'sayfa.durus-nedenleri', 'durus-nedenleri.yaz', 'sayfa.smartes', 'plan.kilitle', 'plan.studyo', 'rota.talimat-yaz', ...SIPARIS_YAZ,
+      // 3D Atölyesi okuma (1706 a).
+      ...SAYFA('geometri'), 'geometri.oku',
     ],
     operator: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'terminal.uret', 'arkon.operator', ...SAYFA('terminal', 'kuyruk', 'uretim-terminali'),
       // CNC Kurulum'u görmez, okumaz, takım değişimi yazmaz (1393 c+, 1458 a, kart #1454).
@@ -361,7 +366,10 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
       'plan.oku',
       // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
-      'cnc-kurulum.takim-degistir'],
+      'cnc-kurulum.takim-degistir',
+      // 3D Atölyesi okuma (1706 a).
+      ...SAYFA('geometri'), 'geometri.oku',
+    ],
     depo: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA_OKU, ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SAYFA('stok', 'malzemeler', 'atolye'), ...SEVKIYAT_TAM, ...ETIKET_BASAN, ...SIPARIS_OKU,
       // Depo istasyonunun terminalinden mal kabul; Arkon rolü yok (2034 a + teyit, 2039 a).
       ...SAYFA('uretim-terminali')],
@@ -385,8 +393,11 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'cnc-kurulum.takim-degistir'],
     // Kapı görevlisi yalnız her çalışanın ortak işlemlerini alır, stok isteği almaz (kullanıcı kararları 165 a, 182 a).
     guvenlik_gorevlisi: [...MESAJ, ...IK_TALEP, 'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz'],
-    // Teklifi plana dener, termini ve maliyet toplamını görür, fiyatı verir; firmayı görür, yazmaz (kullanıcı kararı 65 a, 21.10.2026).
-    satis: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...SIPARIS_YAZ, 'siparisler.fiyat-oku', 'siparisler.termin-dene', ...FIRMA_OKU],
+    // Teklifi plana dener, termini ve maliyet toplamını görür, fiyatı verir; firmayı görür (kullanıcı kararı 65 a, 21.10.2026).
+    satis: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...SIPARIS_YAZ, 'siparisler.fiyat-oku', 'siparisler.termin-dene', ...FIRMA_OKU,
+      // Yeni müşteriyi kendisi açar (modul-test K9 b).
+      'musteri-tedarikci.yaz',
+    ],
   };
   // Bütün personel kendi tesis talebini açar (kullanıcı kararı 216 a, 19.10.2026).
   for (const [rol, islemler] of Object.entries(MATRIS)) {
@@ -564,7 +575,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
       ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-terminali', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
-        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', ...TESIS_TALEBI].sort(),
+        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', 'sayfa.geometri', 'geometri.oku', ...TESIS_TALEBI].sort(),
     );
   });
 
