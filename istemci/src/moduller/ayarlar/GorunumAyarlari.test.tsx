@@ -15,6 +15,8 @@ const AYARLAR: AyarlarCevabi = {
     secim('kabuk.acilis', 'yok', ['yok', 'tezgah', 'talas', 'lazer', 'cmm', 'dokum', '3b', 'rastgele']),
     secim('kabuk.gecis-hizi', 'normal', ['hizli', 'normal', 'yavas']),
     { anahtar: 'kabuk.acilis-suresi', baslik: 'S', aciklama: 'A', tur: 'sayi', deger: 2, enAz: 0.5, enCok: 5, ondalik: 1 },
+    { anahtar: 'kabuk.etki-dalga', baslik: 'Düğme dalgası', aciklama: 'A', tur: 'boolean', deger: true },
+    { anahtar: 'kabuk.etki-durdur-basili', baslik: 'Terminalde Durdur için basılı tut', aciklama: 'A', tur: 'boolean', deger: false },
   ],
 };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -45,6 +47,17 @@ function kur() {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('görünüm ve hareket', () => {
+  it('etkileşim (kart 2086): her etki kendi anahtarıyla açılır ya da kapanır, seçim hemen kaydedilir; etki anahtarları Genel\'e düşmez', async () => {
+    const yazilanlar = kur();
+    const dalga = await screen.findByRole('switch', { name: 'Düğme dalgası' });
+    expect(dalga.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('switch', { name: 'Terminalde Durdur için basılı tut' }).getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(dalga);
+    await waitFor(() => expect(yazilanlar).toEqual([{ yol: '/ayarlar/kabuk.etki-dalga/degistir', govde: { deger: false, beklenen: true } }]));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Düğme dalgası' }).getAttribute('aria-checked')).toBe('false'));
+    expect(ayarKategorisi({ anahtar: 'kabuk.etki-gantt-kayma', tur: 'boolean' })).toBe('gorunum');
+  });
+
   it('kayıtlı seçim işaretli gelir; karta dokununca yeni seçim kaydedilir ve işaret ona geçer', async () => {
     const yazilanlar = kur();
     const orta = await screen.findByRole('radio', { name: /^Orta/ });
