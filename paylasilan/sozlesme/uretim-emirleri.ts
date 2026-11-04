@@ -684,10 +684,17 @@ export const hazirlikMuafiyetiGovdesi = z.object({
 const hazirlikMuafiyeti = z.object({
   madde: z.enum(MUAF_TUTULABILEN_MADDELER), isEmriId: KIMLIK.nullable(), kisiId: KIMLIK, kisiAdi: z.string().nullable(), gerekce: z.string(), zaman: zamanSemasi,
 });
+const hazirlikHaliSemasi = z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']);
 export const hazirlikCevabi = z.object({
   // Madde başına: sahibi bağlı değilse 'bilinmiyor'; emirde aranmıyorsa 'gerekmez'; eksikse 'eksik', muafsa 'muaf'.
-  maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']), muafTutulur: z.boolean() })),
+  maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi, muafTutulur: z.boolean(), isEmriDuzeyi: z.boolean() })),
   muafiyetler: z.array(hazirlikMuafiyeti),
+  // Matris (2060 a): emrin bütün iş emirleri sırasıyla; yalnız iş emri düzeyindeki maddeler (CNC) satırda, ötekiler emir genelidir.
+  // Biten iş emri de listelenir; emir görünümündeki madde hâli onu saymaz.
+  isEmirleri: z.array(z.object({
+    isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), bitti: z.boolean(),
+    maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi })),
+  })),
 });
 
 export type RefakatKartiCevabi = z.output<typeof refakatKartiCevabi>;

@@ -60,9 +60,26 @@ export async function hazirlik(db: Db, uretimEmriId: number): Promise<HazirlikCe
   const durum = await maddeler(db, uretimEmriId, null, muaf);
   const adlar = await kisiAdlari(db, [...new Set(muaf.map((x) => x.kisiId))]);
   return {
-    maddeler: [...durum].map(([madde, h]) => ({ madde, durum: h, muafTutulur: MUAF_TUTULUR.has(madde) })),
+    maddeler: [...durum].map(([madde, h]) => ({ madde, durum: h, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) })),
     muafiyetler: muaf.map((x) => ({ ...x, kisiAdi: adlar.get(x.kisiId) ?? null })),
+    isEmirleri: await isEmriSatirlari(db, uretimEmriId, muaf),
   };
+}
+
+// Matris satırları (2060 a): iş emri düzeyindeki her madde iş emri başına çözülür; biten iş emri de sorulur ki satırı boş kalmasın.
+async function isEmriSatirlari(db: Db, uretimEmriId: number, muaf: readonly s.MuafiyetSatiri[]): Promise<HazirlikCevabi['isEmirleri']> {
+  const isEmirleri = [...(await s.isEmirleriGetir(db, [uretimEmriId]))].sort((a, b) => a.sira - b.sira);
+  const idler = isEmirleri.map((i) => i.id);
+  const durumlar: [HazirlikMaddesi, ReadonlyMap<number, HazirlikBilgisi> | null][] = [];
+  for (const m of HAZIRLIK_MADDELERI) {
+    if (!IS_EMRI_DUZEYI.has(m)) continue;
+    const c = cozuculer.get(m);
+    durumlar.push([m, c && idler.length > 0 ? await c(db, idler) : null]);
+  }
+  return isEmirleri.map((i) => ({
+    isEmriId: i.id, opNo: i.opNo, ad: i.ad, bitti: i.durum === 'tamam',
+    maddeler: durumlar.map(([madde, d]) => ({ madde, durum: hazirlikHali(d?.get(i.id), muafMi(muaf, madde, i.id)) })),
+  }));
 }
 
 // 264 a: yalnız müdür (uretim-emirleri.hazirlik-muaf); kişi, gerekçe ve zamanla yazılır, silinmez.
