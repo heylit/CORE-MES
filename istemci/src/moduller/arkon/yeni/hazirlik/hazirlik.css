@@ -245,6 +245,18 @@
 .tc-ay2-muayeneler span[data-durum="tamam"] { border: 0; background: var(--run); color: var(--on-sig); }
 .tc-ay2-muayeneler span[data-durum="red"] { border: 0; background: var(--stop); color: var(--on-sig); }
 .tc-ay2-kalite-kaydet { display: flex; justify-content: flex-end; }
+/* 2011 a: kalite alt görünümleri */
+.tc-ay2-alt-gorunum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-ay2-alt-gorunum b { color: var(--ink); font-size: var(--yazi-l); }
+.tc-ay2-gorsel-nedenler { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--sutun-dar)), 1fr)); gap: var(--b-2); }
+.tc-ay2-gorsel-nedenler button {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-3);
+  border-radius: var(--yari-2); border: var(--cizgi-ince) solid var(--edge); background: var(--panel2); color: var(--ink); font: inherit; cursor: pointer; text-align: start;
+}
+.tc-ay2-gorsel-nedenler b { color: var(--stop); font-size: var(--yazi-l); font-family: var(--font-mono); }
+.tc-ay2-pareto { display: grid; gap: var(--b-2); }
+.tc-ay2-pareto > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); }
+.tc-ay2-pareto meter { inline-size: 100%; block-size: var(--b-3); }
 
 /* istasyon düzenleyici */
 /* İş türü seçimi eski .typepick düzeninde: 3x2 ızgara, simge solda iki satır boyunca (dar ekranda 2 sütun). */

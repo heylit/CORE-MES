@@ -9,7 +9,7 @@ import { useSimdi } from '../veri/baglam.ts';
 import { Cip } from './denetimler.tsx';
 import { etiketSvg, etiketYazdir } from './etiket.ts';
 import {
-  cigNoktasi, kalemBitti, kodaUyanKalem, olcuUygun, olcumYontemi, ondalik, seriNo, sinirYakin, toplamaSirasi, torkUygun,
+  cigNoktasi, kaliteAltGorunumu, kalemBitti, kodaUyanKalem, olcuUygun, olcumYontemi, ondalik, seriNo, sinirYakin, toplamaSirasi, torkUygun,
   type DepoKalemi, type IstasyonAyari, type MontajKalemi, type TorkAdimi,
 } from './kurallar.ts';
 import type { IsKurallari, OpType, Order, PlanItem, Pkg, Ton } from './tipler.ts';
@@ -26,6 +26,8 @@ export interface IstasyonKaydi {
   units?: { sn: string; comps: Record<string, unknown>; tq: Record<string, number>; at: number }[];
   insp?: { i: number; vals: Record<string, number | string>; def: string[]; ok: boolean; at: number }[];
   tes?: Record<string, number>;
+  // %100 görsel kontrolde kusur nedeni başına kusurlu sayısı.
+  gm?: Record<string, number>;
 }
 export type IsDegisikligi = (x: Order) => Partial<Order>;
 export interface PanelArayuzu {
@@ -579,6 +581,81 @@ export function KalitePaneli({ api, kurallar }: PanelOzellikleri) {
   );
 }
 
+// 2011 a: GKK lotun numune muayenesidir; lot kararı bugünkü gibi Kalite Merkezi'ne yazılır.
+export function GkkPaneli(ozellik: PanelOzellikleri) {
+  return (
+    <div className="tc-ay2-panel">
+      <p className="tc-ay2-alt-gorunum"><Simge ad="target" boyut="k" /><b>Giriş kontrolü</b><span>numune muayenesi · lot kararı Kalite Merkezi'ne yazılır</span></p>
+      <KalitePaneli {...ozellik} />
+    </div>
+  );
+}
+
+// 2011 a: %100 görsel kontrol tek dokunuşla sayar: sağlam +1, kusurlu parça nedenine dokunarak (+1); Pareto sayımdan çıkar.
+export function GorselPaneli({ api }: PanelOzellikleri) {
+  const { ayar, kayit, is } = api;
+  const nedenler = ayar.defects || [];
+  const sayim = kayit.gm || {};
+  const kontrol = is.good + is.scrap;
+  const pareto = nedenler.map((d) => ({ d, n: sayim[d] || 0 })).sort((a, b) => b.n - a.n);
+  const enCok = Math.max(1, ...pareto.map((p) => p.n));
+  const saglam = () => { bip('ok'); api.yap('Sağlam +1', 'check', 'run', (x) => ({ good: x.good + 1 })); };
+  const kusurlu = (d: string) => {
+    bip('nok');
+    api.yap('Kusurlu · ' + d, 'x', 'stop', (x) => {
+      const s = { ...(kayitOf(x).gm || {}) };
+      s[d] = (s[d] || 0) + 1;
+      return { ...srYaz(x, { gm: s }), scrap: x.scrap + 1 };
+    });
+  };
+  return (
+    <div className="tc-ay2-panel tc-ay2-gorsel">
+      <div className="tc-ay2-kalite-ust">
+        <div><span className="tc-ay2-ust-yazi">Kontrol edilen</span><b>{sayi(kontrol)} / {sayi(is.target)}</b></div>
+        <Dugme boyut="ana" tur="birincil" simge="plus" onClick={saglam}>Sağlam +1</Dugme>
+      </div>
+      <div className="tc-ay2-kart">
+        <div className="tc-ay2-kb"><b>Kusurlu: nedene dokun (+1)</b></div>
+        <div className="tc-ay2-gorsel-nedenler">
+          {nedenler.map((d) => (
+            <button key={d} type="button" onClick={() => kusurlu(d)}><span>{d}</span><b>{sayi(sayim[d] || 0)}</b></button>
+          ))}
+        </div>
+        {!nedenler.length ? <p className="tc-ay2-soluk">Kusur listesi boş · hazırlıkta kusur ekle.</p> : null}
+        <p className="tc-ay2-ust-yazi">Sağlam {sayi(is.good)} · kusurlu {sayi(is.scrap)} · kalan {sayi(Math.max(0, is.target - kontrol))}</p>
+      </div>
+      <div className="tc-ay2-kart">
+        <div className="tc-ay2-kb"><b>Pareto</b><span className="tc-ay2-ust-yazi tc-ay2-sag">kusur nedenleri</span></div>
+        <div className="tc-ay2-pareto">
+          {pareto.map((p) => (
+            <div key={p.d}><span>{p.d}</span><meter min={0} max={enCok} value={p.n} aria-label={p.d} /><b>{sayi(p.n)}</b></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 2011 a: CMM ölçümü Kalite Merkezi'ndedir (sonuç dosyası orada alınır, balonlara yazılır, karar orada kalır); terminal programın
+// CMM ve elle ölçülen balonlarını ayırır, elle ölçüleri bugünkü muayene görünümünde alır.
+export function CmmPaneli(ozellik: PanelOzellikleri) {
+  const plan: PlanItem[] = (ozellik.api.paket && ozellik.api.paket.plan) || [];
+  const cmm = plan.filter((b) => olcumYontemi(b) === 'cmm').length;
+  return (
+    <div className="tc-ay2-panel">
+      <p className="tc-ay2-alt-gorunum"><Simge ad="target" boyut="k" /><b>CMM</b><span>{cmm} balon CMM'de · {plan.length - cmm} elle · sonuç dosyası ve karar Kalite Merkezi'nde</span></p>
+      <KalitePaneli {...ozellik} />
+    </div>
+  );
+}
+
 export const ISTASYON_PANELLERI: Readonly<Partial<Record<OpType, ComponentType<PanelOzellikleri>>>> = {
   kalite: KalitePaneli, depo: DepoPaneli, mark: MarkaPaneli, boya: BoyaPaneli, montaj: MontajPaneli, tesviye: TesviyePaneli,
 };
+const KALITE_ALT_PANELLERI = { gkk: GkkPaneli, gorsel: GorselPaneli, cmm: CmmPaneli } as const;
+
+// Panel istasyon tipinden gelir; kalite istasyonunda adımın operasyon tipi alt görünümü seçer (2011 a).
+export function istasyonPaneli(opT: OpType, paket: Pkg | null | undefined): ComponentType<PanelOzellikleri> | undefined {
+  const alt = opT === 'kalite' ? kaliteAltGorunumu(paket) : null;
+  return alt === null ? ISTASYON_PANELLERI[opT] : KALITE_ALT_PANELLERI[alt];
+}

@@ -451,6 +451,16 @@ test('CORE ilk parça kapısı paketin tmi alanında', () => {
   assert.equal('ilkParcaGerekli' in tmi(girdi()), false);
 });
 
+// 2011 a: terminal kalite istasyonunda alt görünümü adımın operasyon tipi kodu seçer; kod yoksa ya da istasyon kalite değilse alan yazılmaz.
+test('kalite istasyonunda adımın operasyon tipi kodu paketin tmi alanında', () => {
+  const tmi = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['tmi'] as Record<string, unknown>;
+  const kalite = { ...ISTASYON, tip: 'kalite' } as typeof ISTASYON;
+  assert.equal(tmi(girdi({ istasyon: kalite, opTipi: 'KMM' }))['opTipi'], 'KMM');
+  assert.equal('opTipi' in tmi(girdi({ istasyon: kalite, opTipi: null })), false);
+  assert.equal('opTipi' in tmi(girdi({ istasyon: kalite })), false);
+  assert.equal('opTipi' in tmi(girdi({ opTipi: 'KMM' })), false);
+});
+
 // 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
 // yalnız "her kurulumda" ve talaşlı (ya da istasyonsuz) adımdadır.
 test('744 a: adımın ilk parça seçimi taslak kuralına ve CORE kilidine', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  IS_TURLERI, PLAN_YOK_UYARISI, araNumuneSikligi, istasyonAyari, istasyonDenetimi, kalemBitti, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
+  IS_TURLERI, PLAN_YOK_UYARISI, araNumuneSikligi, istasyonAyari, istasyonDenetimi, kalemBitti, kaliteAltGorunumu, paketDenetimi, planYokUyarisiGerekir, kodaUyanKalem, numuneOlaylari, olcuUygun, olcumYontemi, toplamaSirasi, torkUygun, yapistirilanKalemler, type DepoKalemi,
 } from './kurallar.ts';
 import type { NumuneKurali, Pkg } from './tipler.ts';
 import { takimKullanimi } from './TakimKarti.tsx';
@@ -108,5 +108,22 @@ describe('tesviye iş türü', () => {
     expect(istasyonAyari(paket({})).checks).toEqual(['Çapak yok', 'Keskin kenar yok', 'Diş temiz']);
     expect(istasyonDenetimi(paket({}))).toEqual([{ k: 'st', ok: true, l: 'Kontrol listesi', d: '3 kontrol', soft: true }]);
     expect(istasyonDenetimi(paket({ checks: [] }))[0]!.ok).toBe(false);
+  });
+});
+
+// 2011 a: kalite istasyonunda adımın operasyon tipi kodu alt görünümü seçer; başka istasyonda ve tanınmayan kodda seçilmez.
+describe('kalite alt görünümü', () => {
+  const paket = (opType: string, opTipi?: string) => ({ id: 'p', opType, ...(opTipi === undefined ? {} : { tmi: { emirId: 1, isEmriId: 2, opNo: 30, opTipi } }) }) as unknown as Pkg;
+  it('GKK, GM ve KMM kalite istasyonunda alt görünüm seçer', () => {
+    expect(kaliteAltGorunumu(paket('kalite', 'GKK'))).toBe('gkk');
+    expect(kaliteAltGorunumu(paket('kalite', 'GM'))).toBe('gorsel');
+    expect(kaliteAltGorunumu(paket('kalite', 'KMM'))).toBe('cmm');
+  });
+  it('kodsuz, tanınmayan kodlu ya da kalite dışı pakette alt görünüm yok', () => {
+    expect(kaliteAltGorunumu(paket('kalite'))).toBeNull();
+    expect(kaliteAltGorunumu(paket('kalite', 'SKK'))).toBeNull();
+    expect(kaliteAltGorunumu(paket('kalite', 'constructor'))).toBeNull();
+    expect(kaliteAltGorunumu(paket('cnc', 'KMM'))).toBeNull();
+    expect(kaliteAltGorunumu(null)).toBeNull();
   });
 });

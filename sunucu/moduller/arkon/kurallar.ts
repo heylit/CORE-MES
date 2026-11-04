@@ -270,6 +270,9 @@ export interface IsEmriPaketGirdisi {
     kaynakRotaRevizyonId?: number | null | undefined;
   };
   ekAciklama?: string | null | undefined;
+  // Adımın operasyon tipi kodu (GKK, GM, KMM...); terminal kalite istasyonunda alt görünümü seçer (2011 a). Yalnız kalite istasyonundaki
+  // pakete yazılır: öteki istasyonlarda görünümü istasyon tipi seçer.
+  opTipi?: string | null | undefined;
   emir: Pick<Emir, 'parcaNo' | 'parcaAd' | 'acan' | 'acilma'>;
   // Emrin projesinin adı (projeler modülü); projesiz emirde boş metin.
   proje?: string | undefined;
@@ -357,7 +360,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
-    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}),
+    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.opTipi && istasyon?.tip === 'kalite' ? { opTipi: g.opTipi } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
 }
