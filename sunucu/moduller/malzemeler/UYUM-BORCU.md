@@ -308,3 +308,8 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Demirbaş teknik bilgisi (kart 1595; 1596 teyit a, 1597 a, 1598 a, 1599 a)
 
 - Kartın kaydındaki makine kategorisi alanları (güç kW, kapasite, ağırlık, kontrol ünitesi, marka, model, seri, yıl) kayıtta kalır; tipli sütuna taşımak dolu tablodaki jsonb'yi değiştirir, ayrı kart ve onay ister. Kurulu güç bu alandır; tüketim tipli sütundadır.
+
+## Logo kod atlama (2089-2 a)
+- Yeni stok kodu Logo'da kullanılan numarayı atlar (`logoyuAtlayanSira`); Logo'nun kod aynası logo modülündedir, `sunucu/kablolama.ts` bağlar.
+  Ayna saatte bir tazelenir; arada Logo'da açılan kod gönderimde "hata" olarak yakalanır. Art arda 1000 dolu numaradan sonra sıradaki verilir.
+  Aktif kartın kodu değişmez (MKK kuralı); çakışan aktif kart için Logo'daki kod değiştirilir ya da kart iptal edilip yeniden açılır.
