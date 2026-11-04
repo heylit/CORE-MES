@@ -77,8 +77,9 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    16 karakteri aşan numara reddedilir; tarih ve saat fişin TMI'de açıldığı an (İstanbul); proje kodu gönderilmez; hurda girişte ayrı "Hurda"
    satırıdır, sarftaki fire stoğun sarfının içindedir; kartı ya da birimi olmayan satır fişi reddettirir; satırın kartı Logo'ya gitmiş mi bakılmaz.
    Sonuç yalnız giden kutusundadır, stok hareketine yazılmaz (`stok_hareketi_logo` boş kalır) / bağlamada sahiple.
-28. Malzeme kartı Açıklama 1-3 (334 a) / `name2`, `name3`, `name4` alan adları ve Logo'daki karşılığı (NAME2-NAME4) DOĞRULANMADI (`KART_ACIKLAMA_ALANLARI`);
-   uzunluk kırpılmaz, Logo sınırı BİLMİYORUM. Yalnız kart açılışında gider; ad güncellemesi (`UpdateRich`) açıklamaları taşımaz / gerçek köprüde doğrulanınca.
+28. Malzeme kartı Açıklama 1-3 (334 a, 2088-1) / Logo'da NAME2 yok (kullanıcı ölçümü): Açıklama 1 Logo adı (NAME; boşsa TMI adı), Açıklama 2 NAME3,
+   Açıklama 3 NAME4 (`KART_ACIKLAMA_ALANLARI`, `logoKartAdi`); uzunluk kırpılmaz, Logo sınırı BİLMİYORUM. Ad güncellemesi (`UpdateRich`) bugün TMI adını
+   gönderir ve yalnız ad değişince kuyruğa girer: malzemelerin güncelleme kuyruğu Açıklama 1'i verince kapanır. Yalnız kart açılışında gider; ad güncellemesi (`UpdateRich`) açıklamaları taşımaz / gerçek köprüde doğrulanınca.
 
 ## Sonra
 6. `logo_giden.belge_no` yabancı anahtar taşımaz (belge türü çok olacak); malzeme kartı silinmez (tetikleyici). Belge türü başına ayrı sütun ve

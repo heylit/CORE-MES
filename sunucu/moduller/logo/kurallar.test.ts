@@ -97,12 +97,19 @@ describe('kart açma gövdesi (kart #207 C)', () => {
     assert.equal('govde' in ticari ? ticari.govde.cardType : ticari.hata, 1);
   });
 
-  test('LGB-5 (334 a): kartın Açıklama 1-3\'ü name2, name3, name4 ile gider; boş ya da yoksa alan gönderilmez', () => {
+  test('LGB-5 (334 a, 2088-1): Açıklama 1 Logo adı (name), Açıklama 2-3 name3, name4; Açıklama 1 boşsa ad TMI adı; boş alan gönderilmez, name2 hiç gitmez', () => {
     const r = eklemeGovdesi({ ...kart, aciklama1: ' Bir ', aciklama2: null, aciklama3: 'Uc' }, secenek);
-    assert.deepEqual(r, { govde: { code: 'HM-ABC-00001', name: 'Deneme', cardType: 10, unitSetCode: '06', auxilCode: OZEL_KOD, name2: 'Bir', name4: 'Uc' } });
+    assert.deepEqual(r, { govde: { code: 'HM-ABC-00001', name: 'Bir', cardType: 10, unitSetCode: '06', auxilCode: OZEL_KOD, name4: 'Uc' } });
     assert.deepEqual(eklemeGovdesi({ ...kart, aciklama1: '  ', aciklama2: '', aciklama3: null }, secenek), eklemeGovdesi(kart, secenek));
+    const bos = eklemeGovdesi({ ...kart, aciklama1: null }, secenek);
+    assert.equal('govde' in bos ? bos.govde.name : bos.hata, 'Deneme');
     const uc = eklemeGovdesi({ ...kart, aciklama1: 'A1', aciklama2: 'A2', aciklama3: 'A3' }, secenek);
-    assert.deepEqual('govde' in uc ? [uc.govde.name2, uc.govde.name3, uc.govde.name4] : uc.hata, ['A1', 'A2', 'A3']);
+    assert.ok('govde' in uc && !('name2' in uc.govde));
+    assert.deepEqual([uc.govde.name, uc.govde.name3, uc.govde.name4], ['A1', 'A2', 'A3']);
+    // Adı boş kart Açıklama 1 doluysa Logo'ya gider; ikisi de boşsa gitmez.
+    const adsiz = eklemeGovdesi({ ...kart, ad: ' ', aciklama1: 'A1' }, secenek);
+    assert.equal('govde' in adsiz ? adsiz.govde.name : adsiz.hata, 'A1');
+    assert.ok('hata' in eklemeGovdesi({ ...kart, ad: null, aciklama1: ' ' }, secenek));
   });
 
   test('LGB-5 (ret): izinli olmayan kart türü, 24 karakteri aşan kod, boş ad ve boş birim gönderilmez', () => {
