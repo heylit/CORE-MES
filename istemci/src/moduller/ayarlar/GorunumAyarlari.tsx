@@ -14,7 +14,7 @@ import './gorunum.css';
 
 // Etki anahtarları (kart 2086) aynı sekmede Etkileşim kartındadır; Genel'e düşmez.
 // Sıra karttaki sıradır; liste sözleşmedeki ETKILER ile aynıdır (tip denetler).
-const ETKI_SIRASI = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili', 'pencere-kayma', 'pencere-cekme', 'sekme-cizgi', 'menu-gecis', 'bildirim-kayma', 'hizli-artis', 'satir-kaydirma', 'tablo-iskelet', 'kopyala'] as const satisfies readonly Etki[];
+const ETKI_SIRASI = ['grafik-hareket', 'deger-balonu', 'dalga', 'gantt-yardim', 'gantt-kayma', 'durdur-basili', 'pencere-kayma', 'pencere-cekme', 'sekme-cizgi', 'menu-gecis', 'bildirim-kayma', 'hizli-artis', 'satir-kaydirma', 'tablo-iskelet', 'kopyala', 'canli-vurgu', 'yukleme-cizgisi', 'hata-odagi', 'toplu-islem', 'kisayol-yardimi', 'kaydedildi', 'yapiskan-baslik', 'takilma-korumasi'] as const satisfies readonly Etki[];
 export const ETKI_ANAHTARLARI = ETKI_SIRASI.map((e) => `kabuk.etki-${e}` as const);
 export const GORUNUM_ANAHTARLARI = ['kabuk.hareket', 'kabuk.gecis-hizi', 'kabuk.acilis', 'kabuk.acilis-suresi', ...ETKI_ANAHTARLARI] as const;
 
