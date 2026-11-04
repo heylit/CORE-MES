@@ -1543,6 +1543,8 @@ export interface PlanIsEmri {
   sira: number;
   opNo: number;
   ad: string;
+  // Terminalin kalite istasyonunda alt görünümü adımın operasyon tipi seçer (2011 a).
+  operasyonTipiId?: number;
   kaynak: AtanabilirKaynak | null;
   // İş emrine yazılmış istasyon (sabit kimlik: istasyon iş emrinindir); Arkon paketi makine ya da kişiden türetmeden okur. Planın kendi
   // denediği emirde yoktur.
@@ -1630,7 +1632,7 @@ async function acikAdimlar<R extends number | null>(
       id: i.id, uretimEmriId: e.id, emirNo: e.emirNo, malzemeNo: e.malzemeNo, adet: e.adet, teslim: e.teslim, oncelik: e.oncelik, acilma: e.acilma, baslangic: e.baslangic,
       kaynakRotaRevizyonId: revizyon, ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, birlesmeOpNo: e.birlesmeOpNo, tur: i.tur, emirTuru: e.emirTuru,
       siparisSatiriId: e.siparisSatiriId, adimAdedi: adimAdedi.get(e.id)?.get(i.sira) ?? e.adet,
-      sira: i.sira, opNo: i.opNo, ad: i.ad, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
+      sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
       devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
       fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi),
