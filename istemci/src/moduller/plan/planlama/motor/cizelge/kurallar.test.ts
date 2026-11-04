@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, adaySureleri, gunAcilimlari, gunCizelgesi, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 import { ufukKur } from '../../ufuk-olcegi.ts';
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
@@ -29,6 +29,26 @@ describe('çizelge hesapları', () => {
       ['1', [['3.10', 76.19, 1.188, null]]], ['2', []], ['3', [['2.20', 82.51, 17.49, '2']]], ['4', [['3.20', 77.378, 0.982, null]]], ['5', []], ['fason 5', []],
     ]);
     expect(yz(o.simdi ?? -1)).toBe(4.762); expect(o.ufuk).toBeNull();
+  });
+
+  it('gün dondurma: o gün başlayan işler gün numarasıyla kilitlenir, elle sabite dokunulmaz; kaldırma yalnız o günün kilitlerini siler', () => {
+    const { c, p, cx } = kur();
+    const gNo = gunNumarasi(cx.now, 5);
+    const ids = gunBaslayanlar(p, gNo).map((r) => r.id);
+    expect(ids).toContain('3.10');
+    expect(gunBaslayanlar(p, gNo).every((r) => r.S >= gNo * 24 && r.S < gNo * 24 + 24)).toBe(true);
+    const x = structuredClone(c); x.locks = { '3.10': { m: '1', S: 1 } };
+    gunuDondur(x, p, gNo);
+    expect(x.locks['3.10']).toEqual({ m: '1', S: 1 });
+    for (const id of ids.filter((i) => i !== '3.10')) expect(x.locks[id]).toEqual({ m: p.ops[id]?.m, S: p.ops[id]?.S, gun: gNo });
+    const y = structuredClone(c); y.locks = {};
+    gunuDondur(y, p, gNo);
+    expect(gunDonuk(y, gNo)).toBe(true); expect(gunDonuk(y, gNo + 1)).toBe(false);
+    const g = gunCizelgesi(y, p, cx, 5, null, null);
+    expect(g.gunler[5]?.dondu).toBe(true); expect(g.kilit.donukBu).toBe(ids.length);
+    y.locks['x.1'] = { m: 'T', S: 1 };
+    gunDondurmasiniKaldir(y, gNo);
+    expect(y.locks).toEqual({ 'x.1': { m: 'T', S: 1 } });
   });
 
   it('saatlik gün: kapalı saatler, bloklar, doluluk ve en erken başlama eski gün katmanıyla aynı', () => {

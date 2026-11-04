@@ -10,7 +10,8 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
 import { PlanlamaMotoru } from '../../motor/index.tsx';
-import { derle, girdiKur, planOku, plandanBitenler } from '../../motor/kurallar.ts';
+import { derle, girdiKur, planOku, plandanBitenler, simdiSaati } from '../../motor/kurallar.ts';
+import { gunBaslayanlar, gunNumarasi } from '../../motor/cizelge/kurallar.ts';
 import { ornekCalisma } from '../../motor/ornek.ts';
 import type { Bolge } from '../../motor/harita/kurallar.ts';
 import { SENARYOLAR } from '../gecmis/test-senaryo.ts';
@@ -155,6 +156,26 @@ describe('Tahta kartları', () => {
     fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Kartları bölgelere diz/ }));
     expect(kart('Siparişler')).toBeTruthy();
+  });
+
+  it('Plan kartında Bugünü dondur bugün başlayan işleri gün kilidiyle yazar; komut yoksa pasif', () => {
+    const yazilan: PlanlamaCalismasi[] = []; const c0 = ornekCalisma(); const p0 = planOku(c0); if (!p0) throw new Error('plan yok');
+    const gNo = gunNumarasi(simdiSaati(c0), 0); const bugun = gunBaslayanlar(p0, gNo).map((r) => r.id);
+    const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => unknown) => { const t = structuredClone(c0); fn(t); yazilan.push(t); return true; }) } as unknown as CalismaKomutu;
+    ac(true, komut);
+    menudenAc(/^Plan/);
+    const d = within(kart('Plan')).getByRole('button', { name: 'Bugünü dondur' });
+    if (bugun.length === 0) { expect(d.getAttribute('title')).toContain('Bugün başlayan iş yok.'); return; }
+    expect(d.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(d);
+    expect(komut.degistir).toHaveBeenCalledWith('Gün donduruldu', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    for (const id of bugun) expect((yazilan[0]?.locks[id] as { gun?: number } | undefined)?.gun).toBe(gNo);
+  });
+
+  it('Plan kartında Bugünü dondur yazma yetkisi yoksa pasif', () => {
+    ac(false);
+    menudenAc(/^Plan/);
+    expect(within(kart('Plan')).getByRole('button', { name: 'Bugünü dondur' }).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('Kısıt ve veri anahtarı çalışmaya yazar, motor isteyenler pasif; Hesaplar göstergeleri; Reçete ve Rota ürünü seçer, düzenleme pasif', async () => {

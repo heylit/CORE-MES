@@ -7,7 +7,7 @@ import { saatYazi, saatYaz, type Derleme, type OkunanPlan } from '../kurallar.ts
 import { HAZIRLANIYOR, MOTOR_NOTU, degisken, yuzde } from '../ortak.tsx';
 import { siparisRengi } from '../harita/kurallar.ts';
 import { useIpucu } from './Ipucu.tsx';
-import { gunAcilimlari, gunCizelgesi, isIpucu, tezgahAdi } from './kurallar.ts';
+import { gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunNumarasi, gunuDondur, isIpucu, tezgahAdi } from './kurallar.ts';
 
 // Saatlik gün (s-gun sGunYuzey ve gyYan, w-v20 kilit şeridi): tezgâh satırları ve saatler; kapalı saat, arıza, şimdi ve dondurma bölgesi.
 // İş seçilince yapabilen tezgâhlar yanar, sağda işin ayrıntısı açılır. Taşıma, saat kapatma, çoklu kaydırma ve formlar motorla gelir (357 b).
@@ -16,7 +16,7 @@ const SAATLER = Array.from({ length: 12 }, (_, i) => i * 2);
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; g: number; planYaz: boolean; planKilitle: boolean;
   secili: string | null; secJob: string | null; isSec: (id: string) => void; tezSec: (m: string) => void; gunSec: (g: number) => void;
-  // Sabitleme çalışmaya yazılır (İş kartındaki Burada sabitle ile aynı komut); komut yoksa düğme pasif kalır.
+  // Sabitleme ve gün dondurma çalışmaya yazılır (İş kartındaki Burada sabitle ile aynı komut); komut yoksa düğmeler pasif kalır.
   komut?: CalismaKomutu | null;
 }
 
@@ -26,7 +26,7 @@ export function GunCizelgesi(o: Ozellikler) {
   const [vurgu, setVurgu] = useState(false);
   const v = useMemo(() => gunCizelgesi(c, p, cx, g, o.secili, o.secJob), [c, p, cx, g, o.secili, o.secJob]);
   const sec = o.secili ? p.ops[o.secili] ?? null : null; const secO = sec ? cx.byId[sec.id] : undefined;
-  const gunAd = saatYaz(D, v.a).slice(0, 9); const oz = p.ozet; const dondu = v.gunler[g]?.dondu ?? false;
+  const gunAd = saatYaz(D, v.a).slice(0, 9); const oz = p.ozet; const dondu = v.gunler[g]?.dondu ?? false; const gNo = gunNumarasi(cx.now, g);
   const ip = useIpucu();
   // İş bloğu ipucu (v-yardim isIpucu): iş, tezgâh ve saat, neden burada, sabitlik ve siparişin durumu.
   const icerik = (id: string) => {
@@ -54,7 +54,11 @@ export function GunCizelgesi(o: Ozellikler) {
         <span className="tc-pym-ara" />
         {o.planYaz && <>{pasif('check', 'Çoklu seç')}{pasif('wrench', 'Saat kapat')}</>}
         <button type="button" className="tc-dugme tc-pym-kucuk" aria-pressed={istisna} title="Yalnız istisna" onClick={() => setIstisna((x) => !x)}><Simge ad="alert" boyut="k" /><span>Yalnız istisna</span></button>
-        {o.planKilitle && pasif('lock', dondu ? 'Dondurmayı kaldır' : 'Günü dondur', HAZIRLANIYOR)}
+        {o.planKilitle && (o.komut && (dondu || gunBaslayanlar(p, gNo).length > 0) ? (
+          <button type="button" className="tc-dugme tc-pym-kucuk" aria-pressed={dondu} onClick={() => {
+            o.komut?.degistir(dondu ? 'Gün dondurması kaldırıldı' : 'Gün donduruldu', (x) => { if (dondu) gunDondurmasiniKaldir(x, gNo); else gunuDondur(x, p, gNo); }, { ayrinti: gunAd, planKoru: true });
+          }}><Simge ad="lock" boyut="k" /><span>{dondu ? 'Dondurmayı kaldır' : 'Günü dondur'}</span></button>
+        ) : pasif('lock', dondu ? 'Dondurmayı kaldır' : 'Günü dondur', o.komut ? 'Bu günde başlayan iş yok.' : HAZIRLANIYOR))}
         <span className="tc-pym-gy-oz tc-pym-mono" data-ton={oz.late ? 'hata' : undefined}>gecikme {saatYazi(oz.wT)} · geciken {oz.late}</span>
       </header>
       <div className="tc-pym-gy-kilit" role="status">
