@@ -1,0 +1,4 @@
+/* Body'ye taşınan açılır liste (kart 2094): konum `useAcilirKonum`'dan gelir; pencere perdesinin üstünde, bildirimin altında durur. */
+.tc-acilir-katman { position: fixed; z-index: calc(var(--z-katman) + 5); left: var(--tc-acilir-x, 0); max-block-size: var(--tc-acilir-sigar, none); }
+.tc-acilir-katman[data-yon='asagi'] { top: calc(var(--tc-acilir-ust) + var(--b-1)); }
+.tc-acilir-katman[data-yon='yukari'] { bottom: calc(var(--tc-acilir-alt) + var(--b-1)); }

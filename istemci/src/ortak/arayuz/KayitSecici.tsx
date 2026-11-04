@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, hataIletisi } from '../veri/api.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { Simge } from './Simge.tsx';
+import { useAcilirKonum } from './acilir-konum.ts';
 import './kayit-secici.css';
 
 // Sahip modülün seçim arama ucunun ortak cevabı (kart #1317): her `*/secim-ara` ucu bu biçimde döner. `ust` gruplamadır
@@ -48,6 +50,7 @@ export function KayitSecici({ etiket, deger, sec, disabled, bosaltilabilir, pasi
   const [sayfa, sayfaYaz] = useState(1);
   const [etkin, etkinYaz] = useState(0);
   const kok = useRef<HTMLDivElement>(null);
+  const { capa, katman } = useAcilirKonum<HTMLButtonElement, HTMLDivElement>(acik);
   const kimlik = useId();
 
   useEffect(() => {
@@ -56,10 +59,14 @@ export function KayitSecici({ etiket, deger, sec, disabled, bosaltilabilir, pasi
   }, [ara]);
   useEffect(() => {
     if (!acik) return undefined;
-    const disari = (o: MouseEvent) => { if (!kok.current?.contains(o.target as Node)) acikYaz(false); };
+    // Liste body'dedir: içine basmak dışarı sayılmaz.
+    const disari = (o: MouseEvent) => {
+      const hedef = o.target as Node;
+      if (!kok.current?.contains(hedef) && !katman.current?.contains(hedef)) acikYaz(false);
+    };
     document.addEventListener('mousedown', disari);
     return () => document.removeEventListener('mousedown', disari);
-  }, [acik]);
+  }, [acik, katman]);
 
   const adres = `${yol}?${sorguMetni({ ...suzgec, q: aranan, pasifler, sayfa })}`;
   const sonuc = useQuery({
@@ -79,15 +86,15 @@ export function KayitSecici({ etiket, deger, sec, disabled, bosaltilabilir, pasi
   return (
     <div className="tc-ksecici" ref={kok}>
       <button
-        type="button" className="tc-alan-kutu tc-ksecici-dugme" aria-label={etiket} aria-haspopup="listbox" aria-expanded={acik}
+        ref={capa} type="button" className="tc-alan-kutu tc-ksecici-dugme" aria-label={etiket} aria-haspopup="listbox" aria-expanded={acik}
         disabled={disabled} onClick={() => (acik ? kapat() : acikYaz(true))}
       >
         <Simge ad={simge} boyut="k" />
         <span className="tc-ksecici-metin">{deger ? `${deger.kod} ${deger.ad}` : yerTutucu}</span>
         <Simge ad="down" boyut="k" />
       </button>
-      {acik && (
-        <div className="tc-ksecici-acilir">
+      {acik && createPortal(
+        <div ref={katman} className="tc-ksecici-acilir tc-acilir-katman">
           <input
             className="tc-alan-kutu" type="search" role="combobox" aria-label={`${etiket} ara`} aria-controls={kimlik} aria-expanded="true"
             aria-activedescendant={liste[etkin] ? `${kimlik}-${etkin}` : undefined} placeholder="Kod ya da ad yazın" value={ara} autoFocus
@@ -97,6 +104,8 @@ export function KayitSecici({ etiket, deger, sec, disabled, bosaltilabilir, pasi
               if (o.key === 'ArrowUp') { o.preventDefault(); etkinYaz((e) => Math.max(e - 1, 0)); }
               if (o.key === 'Enter') { o.preventDefault(); const k = liste[etkin]; if (k) sonucSec(k); }
               if (o.key === 'Escape') { o.stopPropagation(); kapat(); }
+              // Liste sayfanın sonundadır; Tab odağı düğmeden sıradaki alana taşısın.
+              if (o.key === 'Tab') { capa.current?.focus(); kapat(); }
             }}
           />
           {bosaltilabilir && deger && (
@@ -133,7 +142,8 @@ export function KayitSecici({ etiket, deger, sec, disabled, bosaltilabilir, pasi
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

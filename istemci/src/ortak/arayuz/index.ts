@@ -50,3 +50,4 @@ export {
   IstasyonSecici, KayitSecici, KisiSecici, MakineSecici, MalzemeSecici,
   type KayitSeciciOzellikleri, type SecimAramaCevabi, type SecimKaydi, type SeciliKayit,
 } from './KayitSecici.tsx';
+export { acilirYonu, useAcilirKonum, type AcilirYonu } from './acilir-konum.ts';

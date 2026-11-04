@@ -13,8 +13,9 @@ describe('kısayol yardımı (kart 2092, karar 2081-26)', () => {
     fireEvent.keyDown(screen.getByLabelText('Ara'), { key: '?' });
     await act(async () => { await new Promise((r) => { setTimeout(r, 0); }); });
     expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.keyDown(document.body, { key: '?' });
-    const pencere = await screen.findByRole('dialog', { name: 'Klavye kısayolları' });
+    // Liste zamanlayıcıyla açılır; act içinde beklenir ki pencerenin Esc dinleyicisi (katman, useEffect) Esc'ten önce takılsın.
+    await act(async () => { fireEvent.keyDown(document.body, { key: '?' }); await new Promise((r) => { setTimeout(r, 0); }); });
+    const pencere = screen.getByRole('dialog', { name: 'Klavye kısayolları' });
     expect(pencere.textContent).toContain('Ara ve git');
     fireEvent.keyDown(pencere, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -39,8 +40,8 @@ describe('kısayol yardımı (kart 2092, karar 2081-26)', () => {
       expect(ekranActi).toBe(1);
       expect(screen.queryByRole('dialog')).toBeNull();
     } finally { window.removeEventListener('keydown', ekran); }
-    fireEvent.keyDown(document.body, { key: '?' });
-    expect(await screen.findByRole('dialog', { name: 'Klavye kısayolları' })).toBeTruthy();
+    await act(async () => { fireEvent.keyDown(document.body, { key: '?' }); await new Promise((r) => { setTimeout(r, 0); }); });
+    expect(screen.getByRole('dialog', { name: 'Klavye kısayolları' })).toBeTruthy();
   });
 });
 
