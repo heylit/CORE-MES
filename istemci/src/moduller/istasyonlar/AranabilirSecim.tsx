@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Simge } from '../../ortak/arayuz/index.ts';
+import { createPortal } from 'react-dom';
+import { Simge, useAcilirKonum } from '../../ortak/arayuz/index.ts';
 import { aramayaUyar } from './ListeAraclari.tsx';
 
 export interface AranabilirSecenek {
@@ -32,14 +33,19 @@ export function AranabilirSecim({ etiket, secenekler, deger, sec, bos, disabled,
   const [ara, araYaz] = useState('');
   const [etkin, etkinYaz] = useState(0);
   const kok = useRef<HTMLDivElement>(null);
+  const { capa, katman } = useAcilirKonum<HTMLButtonElement, HTMLDivElement>(acik);
   const kimlik = useId();
 
   useEffect(() => {
     if (!acik) return undefined;
-    const disari = (o: MouseEvent) => { if (!kok.current?.contains(o.target as Node)) acikYaz(false); };
+    // Liste body'dedir: içine basmak dışarı sayılmaz.
+    const disari = (o: MouseEvent) => {
+      const hedef = o.target as Node;
+      if (!kok.current?.contains(hedef) && !katman.current?.contains(hedef)) acikYaz(false);
+    };
     document.addEventListener('mousedown', disari);
     return () => document.removeEventListener('mousedown', disari);
-  }, [acik]);
+  }, [acik, katman]);
 
   const secili = secenekler.find((s) => s.deger === deger);
   const sonlar = ara.trim() === ''
@@ -59,14 +65,14 @@ export function AranabilirSecim({ etiket, secenekler, deger, sec, bos, disabled,
   return (
     <div className="tc-ist-secici" ref={kok}>
       <button
-        type="button" className="tc-alan-kutu tc-ist-hucre tc-ist-secici-dugme" aria-label={etiket} aria-haspopup="listbox" aria-expanded={acik}
+        ref={capa} type="button" className="tc-alan-kutu tc-ist-hucre tc-ist-secici-dugme" aria-label={etiket} aria-haspopup="listbox" aria-expanded={acik}
         disabled={disabled} onClick={() => (acik ? kapat() : acikYaz(true))}
       >
         <span className="tc-ist-secici-metin">{secili?.baslik ?? (deger === '' && bos !== undefined ? bos : yerTutucu)}</span>
         <Simge ad="down" boyut="k" />
       </button>
-      {acik && (
-        <div className="tc-ist-acilir">
+      {acik && createPortal(
+        <div ref={katman} className="tc-ist-acilir tc-acilir-katman">
           <input
             className="tc-alan-kutu" type="search" role="combobox" aria-label={`${etiket} ara`} aria-controls={kimlik} aria-expanded="true"
             aria-activedescendant={liste[etkin] ? `${kimlik}-${etkin}` : undefined} placeholder="Kod ya da ad yazın" value={ara} autoFocus
@@ -76,6 +82,8 @@ export function AranabilirSecim({ etiket, secenekler, deger, sec, bos, disabled,
               if (o.key === 'ArrowUp') { o.preventDefault(); etkinYaz((e) => Math.max(e - 1, 0)); }
               if (o.key === 'Enter') { o.preventDefault(); const s = liste[etkin]; if (s) sonuc(s.deger); }
               if (o.key === 'Escape') { o.stopPropagation(); kapat(); }
+              // Liste sayfanın sonundadır; Tab odağı düğmeden sıradaki alana taşısın.
+              if (o.key === 'Tab') { capa.current?.focus(); kapat(); }
             }}
           />
           <ul id={kimlik} role="listbox" aria-label={etiket} className="tc-ist-acilir-liste">
@@ -95,7 +103,8 @@ export function AranabilirSecim({ etiket, secenekler, deger, sec, bos, disabled,
           </ul>
           {liste.length === 0 && <p className="tc-ist-ipucu">Aramaya uyan yok.</p>}
           {tum.length > liste.length && <p className="tc-ist-ipucu">İlk {EN_COK_SATIR} gösteriliyor; aramayı daraltın.</p>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
