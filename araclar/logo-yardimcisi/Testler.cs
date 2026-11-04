@@ -216,15 +216,8 @@ namespace LogoYardimcisi
         static void T_var_mi_okumasi_yoksa_0_doner()
         {
             var s = Logo();
-            var c = C(s, "GET", "/api/Material/exists/" + Malzeme, null);
-            Esit(s.MalzemeRef(Malzeme), Ref(c), "var");
-            Esit(s.Malzeme(Malzeme).Ad, Convert.ToString(Z(c)["name"]), "Logo'daki ad");
-            var yok = C(s, "GET", "/api/Material/exists/YOK", null);
-            Esit(0, Ref(yok), "yok");
-            Dogru(!Z(yok).ContainsKey("name"), "kart yoksa ad dönmez");
-            var kodlar = (object[])C(s, "GET", "/api/Material/codes", null).Govde;
-            Dogru(kodlar.Contains(Malzeme), "kod listesi Logo'daki kartı içerir");
-            Esit(s.MalzemeKodlari().Count, kodlar.Length, "bütün kodlar");
+            Esit(s.MalzemeRef(Malzeme), Ref(C(s, "GET", "/api/Material/exists/" + Malzeme, null)), "var");
+            Esit(0, Ref(C(s, "GET", "/api/Material/exists/YOK", null)), "yok");
         }
 
         /* ---------------- Hizmet kartı ---------------- */

@@ -82,7 +82,6 @@ namespace LogoYardimcisi
             if (yontem == "GET")
             {
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
-                if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
                 if (yol == "/api/Lookup/unitsets") return BirimSetleri();
                 if (yol == "/api/Lookup/warehouses") return Ambarlar();
                 if (yol == "/api/Arp/list") return Cariler();
@@ -228,11 +227,9 @@ namespace LogoYardimcisi
 
         /* ---------------- Malzeme kartı (rehber §3) ---------------- */
 
-        // Kart varsa Logo'daki adı da döner: TMI eşlemede ad farkını uyarır (2089). Ad yalnız okunur, değiştirilmez.
         Cevap MalzemeVarMiOku(string kod)
         {
-            var k = oku.Malzeme(kod);
-            return k == null ? Cevap.Basari(0) : Cevap.Basari(k.Ref, "name", k.Ad);
+            return Cevap.Basari(oku.MalzemeRef(kod));
         }
 
         Cevap BirimSetleri()
