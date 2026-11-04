@@ -964,6 +964,8 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
     assert.deepEqual(ilk.govde.makineYerleri.map((y) => [y.makineId, y.istasyon?.id, y.model?.id ?? null]), [[m1.id, ist.id, model.id], [m2.id, ist.id, null]]);
     assert.equal(ilk.govde.makineYerleri[0]?.markaModel, 'Deneme 500');
+    // 2100-2 a: CNC Kurulum'da görünüm seçilmemiş makinenin model türü null'dur, uydurulmaz.
+    assert.deepEqual(ilk.govde.makineYerleri.map((y) => y.modelTuru ?? null), [null, null]);
     // Gönderilmeyen makine yerleri kalır.
     const korunan = await kaydet(s.id, bosYerlesim({ ...s, surum: ilk.govde.salon.surum }, { istasyonYerleri: [istasyonYeri] }));
     assert.equal(korunan.durum, 200, JSON.stringify(korunan.govde));

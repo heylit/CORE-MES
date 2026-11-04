@@ -1,11 +1,12 @@
 import {
-  AdditiveBlending, BoxGeometry, CanvasTexture, CylinderGeometry, DoubleSide, ExtrudeGeometry, Group, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, PlaneGeometry, PointLight, RepeatWrapping, SRGBColorSpace, Shape, SphereGeometry, Sprite, SpriteMaterial,
+  AdditiveBlending, Box3, BoxGeometry, CanvasTexture, CylinderGeometry, DoubleSide, ExtrudeGeometry, Group, Mesh, MeshBasicMaterial,
+  MeshStandardMaterial, PlaneGeometry, PointLight, RepeatWrapping, SRGBColorSpace, Shape, SphereGeometry, Sprite, SpriteMaterial, Vector3,
 } from 'three';
 import type { BufferGeometry, Color, Material, Object3D, Texture } from 'three';
 import type { GecisTuru } from '#paylasilan/sozlesme/atolye.ts';
 import type { Palet } from './renkler.ts';
 import { makineCinsi } from '../kurallar.ts';
+import type { GovdeGorunumu, MakineCinsi } from '../kurallar.ts';
 
 // Sahne nesneleri ölçülerinden üretilir; gerçek makine modeli ya da çizim yoktur. Ölçü metredir, y yukarıdır,
 // istasyonun ön yüzü (operatör tarafı) yerel +z yönüdür.
@@ -855,9 +856,28 @@ function depo(m: Malzemeler, g: number, d: number, h: IstasyonGovdesi): void {
   h.andonYeri = [w / 2 - 0.03, 2.0, -d / 2 + 0.03];
 }
 
-export function istasyonGovdesi(tip: string, ad: string, g: number, d: number, p: Palet, m: Malzemeler, hale: Texture): IstasyonGovdesi {
+// `gorunum` (2100-2 a): katalog modelinden gelen cins ve üretici dış ölçüsü (metre). Dış ölçü varsa gövde o ölçüyle kurulur ve
+// kutusu en, derinlik ve yüksekliğe getirilir; ayak izi yalnız yerleşim kutusudur, gövde ondan taşabilir.
+export function istasyonGovdesi(tip: string, ad: string, g: number, d: number, p: Palet, m: Malzemeler, hale: Texture, gorunum: GovdeGorunumu | null = null): IstasyonGovdesi {
+  const cins = gorunum?.cins ?? makineCinsi(tip, ad);
+  const dis = gorunum?.dis ?? null;
+  if (!dis) return cinsGovdesi(cins, g, d, p, m, hale);
+  const ic = cinsGovdesi(cins, dis.en, dis.derinlik, p, m, hale);
+  ic.grup.updateMatrixWorld(true);
+  const olcu = new Box3().setFromObject(ic.grup).getSize(new Vector3());
+  if (!(olcu.x > 0) || !(olcu.y > 0) || !(olcu.z > 0)) return ic;
+  const sx = dis.en / olcu.x;
+  const sy = dis.yukseklik / olcu.y;
+  const sz = dis.derinlik / olcu.z;
+  ic.grup.scale.set(sx, sy, sz);
+  const kap = new Group();
+  kap.add(ic.grup);
+  const [ax, ay, az] = ic.andonYeri;
+  return { ...ic, grup: kap, ust: ic.ust * sy, andonYeri: [ax * sx, ay * sy, az * sz] };
+}
+
+function cinsGovdesi(cins: MakineCinsi, g: number, d: number, p: Palet, m: Malzemeler, hale: Texture): IstasyonGovdesi {
   const h: IstasyonGovdesi = { grup: new Group(), hareketli: new Set(), anim: {}, ust: 2, andonYeri: [0, 2, 0], ekran: null };
-  const cins = makineCinsi(tip, ad);
   if (cins === 'cmm') cmm(m, g, d, h);
   else if (cins === 'montaj') tezgah(m, g, d, h);
   else if (cins === 'boya') boyaKabini(m, g, d, h);

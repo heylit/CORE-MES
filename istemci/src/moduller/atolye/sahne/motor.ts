@@ -14,7 +14,7 @@ import { varsayilanAyar } from '../model-dosyasi.ts';
 import type { Nokta2 } from '../fabrika.ts';
 import { DIS, GECIS_TURU_ADI, acikliklar, bolumYolu, disYolu, distaSerbestMi, gecisOrtasi, kapiKusagindaMi, kapilar } from '../gecis.ts';
 import type { Aciklik, GecisliBolum, Kapi } from '../gecis.ts';
-import { dolulukKademesi, hucreAnahtari, sayi } from '../kurallar.ts';
+import { dolulukKademesi, govdeGorunumu, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from '../kurallar.ts';
 import { modelDizisi, modelSahnesi, modelYerlestir, parcaOnizlemesi, vekilMi } from './model.ts';
 import type { ModelDizisi, ModelYerlesimi } from './model.ts';
@@ -841,6 +841,7 @@ export class SahneMotoru {
 
     // İstasyonlar: her biri kendi içinde birleşir; hareketli parçalar, andon, hale ve seçim çerçevesi ayrı kalır.
     // Gerçek modeli atanmış istasyon önce tipinden çizilir, model gelince değişir (aynı model bir kez okunur).
+    const modelTurleri = sahneModelTurleri(y);
     for (const yer of sahneNesneleri(y)) {
       const kk = yer.kutu;
       const [x, z] = yerel(kk.x, kk.z);
@@ -848,7 +849,7 @@ export class SahneMotoru {
       ig.position.set(x, 0, z);
       ig.rotation.y = (-kk.donus * Math.PI) / 180;
       grup.add(ig);
-      const govde = istasyonGovdesi(yer.tip, yer.ad, kk.genislik, kk.derinlik, this.palet, m, this.hale);
+      const govde = istasyonGovdesi(yer.tip, yer.ad, kk.genislik, kk.derinlik, this.palet, m, this.hale, govdeGorunumu(yer.tip, yer.ad, modelTurleri.get(yer.anahtar)));
       ig.add(govde.grup);
       birlestir(govde.grup, govde.hareketli);
       if (!yer.aktif) govde.grup.traverse((c) => { if (c instanceof Mesh) c.material = this.solukMalzeme(c.material as Material); });

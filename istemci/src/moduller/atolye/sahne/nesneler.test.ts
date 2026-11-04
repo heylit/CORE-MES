@@ -228,3 +228,27 @@ describe('zemindeki durum izi (kart 1588)', () => {
     expect(durumIziDokusu(4.4, 3, 0.6)).toBeInstanceOf(Texture);
   });
 });
+
+describe('katalog dış ölçüsüyle gövde (2100-2 a)', () => {
+  it('dış ölçü verilen torna-freze gövdesi üretici ölçüsüne gelir; andon gövdenin üstündedir', () => {
+    const m = malzeme();
+    const p = paletOku();
+    const dis = { en: 5.825, derinlik: 2.83, yukseklik: 2.75 };
+    const h = istasyonGovdesi('talasli', 'NTX 3000', 3, 2, p, m, new Texture(), { cins: 'torna', dis });
+    h.grup.updateMatrixWorld(true);
+    const b = new Box3().setFromObject(h.grup);
+    expect(b.max.x - b.min.x).toBeCloseTo(dis.en, 3);
+    expect(b.max.y - b.min.y).toBeCloseTo(dis.yukseklik, 3);
+    expect(b.max.z - b.min.z).toBeCloseTo(dis.derinlik, 3);
+    expect(h.ust).toBeGreaterThan(2.5);
+    expect(h.andonYeri[1]).toBeCloseTo(h.ust, 6);
+  });
+
+  it('dış ölçü yoksa gövde ayak izinden çizilir (önceki davranış)', () => {
+    const m = malzeme();
+    const p = paletOku();
+    const once = new Box3().setFromObject(istasyonGovdesi('talasli', 'CNC torna', 3.9, 2.5, p, m, new Texture()).grup);
+    const simdi = new Box3().setFromObject(istasyonGovdesi('talasli', 'CNC torna', 3.9, 2.5, p, m, new Texture(), { cins: 'torna', dis: null }).grup);
+    expect(simdi.equals(once)).toBe(true);
+  });
+});

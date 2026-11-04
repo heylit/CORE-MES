@@ -8,7 +8,7 @@ import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
   depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, gozKalemiYukleri, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
-  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi,
+  istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, sahneModelTurleri,
 } from './kurallar.ts';
 
 const emir = (istasyonId: number, calisma: 'calisiyor' | 'durakli' | 'durdu' | null, saglam = 0): Emir => ({
@@ -328,5 +328,33 @@ describe('haritaya eklenebilen makineler', () => {
     expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 0 })).toBeNull();
     expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 })).toBe('Stok: 2 göz ya da alanın stok konumu yok. Stok Merkezi > Konumlar\'da "Haritadan eşle" ile güncelleyin.');
     expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 1 })).toContain('1 stoklu konumun haritada yeri kalmadı');
+  });
+});
+
+describe('katalog modeliyle 3B gövde (2100-2 a)', () => {
+  it('katalogdaki torna-freze torna gövdesi ve metre cinsinden üretici ölçüsü alır; ad kuralını geçer', () => {
+    expect(govdeGorunumu('talasli', 'NTX 3000', 'm_dmgntx3000')).toEqual({ cins: 'torna', dis: { en: 5.825, derinlik: 2.83, yukseklik: 2.75 } });
+  });
+
+  it('model yoksa, katalogda değilse ya da talaşlı veya kalite değilse ad kuralı geçer, ölçü yoktur', () => {
+    expect(govdeGorunumu('talasli', 'CNC torna', null)).toEqual({ cins: 'torna', dis: null });
+    expect(govdeGorunumu('talasli', 'Dik işleme', 'm_yok')).toEqual({ cins: 'dik_isleme', dis: null });
+    expect(govdeGorunumu('montaj', 'Montaj', 'm_dmgntx3000')).toEqual({ cins: 'montaj', dis: null });
+  });
+
+  it('ölçüsü bilinmeyen katalog modeli cinsini verir, ölçüsü null kalır', () => {
+    expect(govdeGorunumu('talasli', 'NTX', 'm_okumau3000')).toEqual({ cins: 'torna', dis: null });
+    expect(govdeGorunumu('kalite', 'CMM', 'm_zeisscontura')).toEqual({ cins: 'cmm', dis: null });
+  });
+
+  it('model türü makine yerinden ve tek makineli istasyondan gelir; çok makineli istasyonda bilinmez', () => {
+    const ist = (istasyonId: number, turler: (string | null)[]) => ({
+      istasyonId, makineler: turler.map((modelTuru, i) => ({ id: istasyonId * 10 + i, kod: 'M', ad: 'M', tur: null, markaModel: null, modelTuru })),
+    });
+    const y = {
+      makineYerleri: [{ makineId: 7, modelTuru: 'm_haasvf2' }, { makineId: 8, modelTuru: null }],
+      istasyonYerleri: [ist(1, ['m_haasst30']), ist(2, ['m_haasvf2', 'm_haasvf4']), ist(3, [null])],
+    } as unknown as YerlesimCevabi;
+    expect([...sahneModelTurleri(y)]).toEqual([['makine:7', 'm_haasvf2'], ['istasyon:1', 'm_haasst30']]);
   });
 });
