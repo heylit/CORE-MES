@@ -49,3 +49,40 @@
 }
 
 .tc-pencere-ileti { font-weight: 600; color: var(--ink); }
+
+/* Tutamak yalnız telefonda ve aşağı çekme açıkken görünür (kart 2090, karar 2081-12). */
+.tc-pencere-tutamak { display: none; }
+@media (max-width: 767px) {
+  :root:not([data-etki-kapali~="pencere-cekme"]) .tc-pencere-tutamak {
+    display: block; flex: none; align-self: center; width: var(--dokunma); height: var(--b-1);
+    margin-top: var(--b-2); border-radius: var(--yari-1); background: var(--edge2); touch-action: none;
+  }
+  :root:not([data-etki-kapali~="pencere-cekme"]) :is(.tc-pencere-orta, .tc-pencere-yan) > .tc-pencere-ust { touch-action: none; }
+  .tc-pencere:not(.tc-pencere-tam) { transform: translateY(var(--pencere-cek, 0px)); transition: transform var(--hareket-panel) var(--hareket-egri-panel); }
+  .tc-pencere[data-cekiliyor] { transition: none; }
+}
+
+/* Açılış ve kapanış kayması (kart 2090, karar 2081-11): orta pencere hafif büyüyerek, çekmece kenardan, telefonda ikisi
+   alttan gelir. Tam ekran çalışma alanı kaymaz. Hareket kapalıysa ya da etki kapatıldıysa anında açılır ve kapanır. */
+.tc-perde[data-kapaniyor] { pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-etki-kapali~="pencere-kayma"]) .tc-perde { animation: tc-perde-gir var(--hareket-panel) ease-out; }
+  :root:not([data-etki-kapali~="pencere-kayma"]) .tc-perde[data-kapaniyor] { animation: tc-perde-cik var(--hareket-sure) ease-in forwards; }
+  :root:not([data-etki-kapali~="pencere-kayma"]) .tc-pencere-orta { animation: tc-pencere-gir var(--hareket-panel) var(--hareket-egri-panel); }
+  :root:not([data-etki-kapali~="pencere-kayma"]) .tc-pencere-yan { animation: tc-cekmece-gir var(--hareket-panel) var(--hareket-egri-panel); }
+  :root:not([data-etki-kapali~="pencere-kayma"]) [data-kapaniyor] > .tc-pencere-orta { animation: tc-pencere-cik var(--hareket-sure) ease-in forwards; }
+  :root:not([data-etki-kapali~="pencere-kayma"]) [data-kapaniyor] > .tc-pencere-yan { animation: tc-cekmece-cik var(--hareket-sure) ease-in forwards; }
+  @media (max-width: 767px) {
+    :root:not([data-etki-kapali~="pencere-kayma"]) :is(.tc-pencere-orta, .tc-pencere-yan) { animation-name: tc-pencere-alttan; }
+    :root:not([data-etki-kapali~="pencere-kayma"]) [data-kapaniyor] > :is(.tc-pencere-orta, .tc-pencere-yan) { animation-name: tc-pencere-asagi; }
+  }
+  :root:not([data-etki-kapali~="pencere-kayma"]) .tc-perde:has(> .tc-pencere-tam) { animation: none; }
+}
+@keyframes tc-perde-gir { from { opacity: 0; } }
+@keyframes tc-perde-cik { to { opacity: 0; } }
+@keyframes tc-pencere-gir { from { opacity: 0; transform: translateY(var(--hareket-kayma)) scale(var(--hareket-kucul)); } }
+@keyframes tc-pencere-cik { to { opacity: 0; transform: scale(var(--hareket-kucul)); } }
+@keyframes tc-cekmece-gir { from { transform: translateX(100%); } }
+@keyframes tc-cekmece-cik { to { transform: translateX(100%); } }
+@keyframes tc-pencere-alttan { from { transform: translateY(100%); } }
+@keyframes tc-pencere-asagi { from { transform: translateY(var(--pencere-cek, 0px)); } to { transform: translateY(100%); } }
