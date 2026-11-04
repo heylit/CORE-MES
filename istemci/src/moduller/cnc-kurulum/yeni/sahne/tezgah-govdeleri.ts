@@ -1,7 +1,8 @@
 import { GOVDE_ALANI, katalogModeli, type GovdeTipi } from '../veri/tezgah-katalogu.ts';
 
-// Katalog modelinin gövdeye göre oranı (1893 a). Gövde tek ölçüde çizilir; model çalışma alanı büyüdükçe o yönde uzar. Oran
-// karekökle yumuşatılır ve 0,75-1,5 aralığında tutulur: gövde tanınır kalır, iş mili ve kapı gibi parçalar bozulmaz.
+// Katalog modelinin gövdeye göre oranı (1893 a). Gövde tek ölçüde çizilir. Üretici dış ölçüsü bilinen modelde gövde o ölçüye
+// getirilir (2100-1 a); bilinmeyende model çalışma alanı büyüdükçe o yönde uzar, oran karekökle yumuşatılır ve 0,75-1,5
+// aralığında tutulur: gövde tanınır kalır, iş mili ve kapı gibi parçalar bozulmaz.
 // Sahne ekseni: x en, y yükseklik, z derinlik. Frezede X kursu ene, Y derinliğe, Z yüksekliğe; tornada boy ene, çap yükseklik ve
 // derinliğe; CMM'de X ene, Y derinliğe, Z yüksekliğe gider.
 
@@ -15,6 +16,13 @@ function oran(model: number, govde: number): number {
 }
 
 const TORNA = new Set<GovdeTipi>(['m_lathe', 'm_ulathe', 'm_tf', 'm_swiss']);
+
+// Modelin dış ölçüsüne göre oran: `cizilen` gövdenin sahnedeki kutusu (metre). Dış ölçüsü olmayan model çalışma alanı oranını alır.
+export function govdeOlcegi(kind: string, cizilen: Oran): Oran {
+  const d = katalogModeli(kind)?.dis;
+  if (!d || !(cizilen.x > 0) || !(cizilen.y > 0) || !(cizilen.z > 0)) return katalogOrani(kind);
+  return { x: d.en / 1000 / cizilen.x, y: d.yukseklik / 1000 / cizilen.y, z: d.derinlik / 1000 / cizilen.z };
+}
 
 // Kayıttaki model türünün oranı; gövde tipi ya da bilinmeyen anahtar birim orandır.
 export function katalogOrani(kind: string): Oran {

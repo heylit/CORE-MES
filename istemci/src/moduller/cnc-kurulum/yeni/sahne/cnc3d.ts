@@ -3,7 +3,7 @@ import { htype, isLatheTool, isMillTool } from '../veri/takim-turu.ts';
 import type { Kalem, Tezgah } from '../veri/tipler.ts';
 import { kutuyaOturt, modelDinlemeyiBirak, modelIste, modelKopyasi, type ModelDurumu } from './glb-yukle.ts';
 import { govdesi, type GovdeTipi } from '../veri/tezgah-katalogu.ts';
-import { katalogOrani, type Oran } from './tezgah-govdeleri.ts';
+import { govdeOlcegi } from './tezgah-govdeleri.ts';
 import { sahneRengi3 } from './renkler.ts';
 
 // Prototipin CNC 3B model kütüphanesi (CNC3D): takım, tutucu, aparat, çene, ölçüm, sarf ve tezgâh modelleri koddan çizilir, dış
@@ -1047,12 +1047,14 @@ function machCMM(): THREE.Group {
 }
 
 // Tezgâh gövdesi: katalog modeli gövdesinin oranıyla (tezgah-govdeleri.ts) iç grupta uzar; çağıranın ölçeği dışta kalır.
-function tezgahGovdesi(govde: GovdeTipi, o: Oran): THREE.Group {
+function tezgahGovdesi(govde: GovdeTipi, kind: string): THREE.Group {
   const govdeler: Record<GovdeTipi, () => THREE.Group> = {
     m_vmc: machVMC, m_5ax: machTrunnion, m_5axh: machSwivel, m_gk: machGKnew, m_lathe: machLatheNew, m_tf: machTFnew, m_hmc: machHMC,
     m_ulathe: machULathe, m_swiss: machSwiss, m_cmm: machCMM,
   };
   const ic = govdeler[govde]();
+  const kutu = new THREE.Box3().setFromObject(ic).getSize(new THREE.Vector3());
+  const o = govdeOlcegi(kind, { x: kutu.x, y: kutu.y, z: kutu.z });
   if (o.x === 1 && o.y === 1 && o.z === 1) return ic;
   ic.scale.set(o.x, o.y, o.z);
   return add(G(), ic);
@@ -1120,7 +1122,7 @@ function cizilen(it: Kalem): THREE.Object3D {
   const takim = TOOL[k] ?? LATHE[k];
   if (takim) return takim(it);
   const govde = govdesi(k);
-  if (govde !== null) return tezgahGovdesi(govde, katalogOrani(k));
+  if (govde !== null) return tezgahGovdesi(govde, k);
   switch (k) {
     case 'insert': return insertItem(it); case 'lholder': return lholder(it);
     case 'f_cvise': return cvise(); case 'f_tomb': return tomb(); case 'f_angle': return anglePlate(); case 'f_vblock': return vblock(); case 'f_ch6': return chuck(6);
