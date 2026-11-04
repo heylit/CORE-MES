@@ -35,6 +35,8 @@
 
 .tc-guncelleme-ayrinti { padding-top: var(--b-3); }
 .tc-guncelleme-liste { margin: 0; padding-left: var(--b-5); display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-guncelleme-aktarim { display: flex; flex-direction: column; gap: var(--b-1); margin-top: var(--b-1); }
+.tc-guncelleme-aktarim progress { width: 100%; height: var(--b-2); accent-color: var(--hazard); }
 
 /* Bağlantılar > Hazırlık ve akış */
 .tc-hazirlik { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }

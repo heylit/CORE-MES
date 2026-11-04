@@ -46,6 +46,29 @@ export async function paketYukle(dosya: Blob, ilerle: (alinan: number, toplam: n
   return api.post<GuncellemePaketi>(`/guncelleme/yuklemeler/${kimlik}/bitir`, {});
 }
 
+const MB = 1024 * 1024;
+// Küçük pakette tam MB sıfır görünmesin diye 10 MB altı tek ondalıkla yazılır.
+const mbMetni = (bayt: number): string =>
+  (bayt / MB).toLocaleString('tr-TR', { maximumFractionDigits: bayt < 10 * MB ? 1 : 0 });
+
+interface Yukleme { alinan: number; toplam: number; bayt: number }
+
+// Son parçadan sonra sunucu paketin imzasını ve içeriğini doğrular; o süre aktarımdan ayrı yazılır, ekran donmuş görünmesin.
+function YuklemeIlerlemesi({ alinan, toplam, bayt }: Yukleme) {
+  const yuzde = Math.floor((alinan / toplam) * 100);
+  const bitti = alinan >= toplam;
+  return (
+    <div className="tc-guncelleme-aktarim" role="status">
+      <progress max={toplam} value={alinan} aria-label={bitti ? 'Yükleme tamam' : `Yükleme yüzde ${String(yuzde)}`} />
+      <p className="tc-ayar-aciklama">
+        {bitti
+          ? <><b>{mbMetni(bayt)} MB aktarıldı.</b> İmza ve içerik doğrulanıyor…</>
+          : <><b>%{yuzde}</b> · {mbMetni(Math.min(alinan * PARCA_BAYT, bayt))} / {mbMetni(bayt)} MB aktarıldı</>}
+      </p>
+    </div>
+  );
+}
+
 const ACILIS: Readonly<Record<OtomatikAcilis['durum'], { ton: RozetTonu; metin: string; uyari: string | null }>> = {
   kurulu: { ton: 'tamam', metin: 'Kurulu', uyari: null },
   kapali: {
@@ -168,7 +191,7 @@ export function Guncelleme() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const secici = useRef<HTMLInputElement>(null);
-  const [ilerleme, setIlerleme] = useState<{ alinan: number; toplam: number } | null>(null);
+  const [ilerleme, setIlerleme] = useState<Yukleme | null>(null);
   const [secilen, setSecilen] = useState<string | null>(null);
   const [onay, setOnay] = useState(false);
   const [uygulaniyor, setUygulaniyor] = useState(false);
@@ -187,9 +210,9 @@ export function Guncelleme() {
     if (secici.current) secici.current.value = '';
     if (!dosya) return;
     if (dosya.size === 0 || dosya.size > AZAMI_BAYT) { bildir('hata', 'Paket boş olamaz; en çok 200 MB olabilir.'); return; }
-    setIlerleme({ alinan: 0, toplam: Math.ceil(dosya.size / PARCA_BAYT) });
+    setIlerleme({ alinan: 0, toplam: Math.ceil(dosya.size / PARCA_BAYT), bayt: dosya.size });
     try {
-      const paket = await paketYukle(dosya, (alinan, toplam) => { setIlerleme({ alinan, toplam }); });
+      const paket = await paketYukle(dosya, (alinan, toplam) => { setIlerleme({ alinan, toplam, bayt: dosya.size }); });
       bildir('tamam', `${paket.surum} (${kisaCommit(paket.commit) ?? ''}) paketi yüklendi ve imzası doğrulandı.`);
     } catch (hata) {
       bildir('hata', hataIletisi(hata, 'Paket yüklenemedi.'));
@@ -264,7 +287,7 @@ export function Guncelleme() {
                   ? 'İmzalı .tmip paketini seçin; en çok 200 MB. Paket saklanır; uygulamak için aşağıdan seçin.'
                   : KAPALI_METNI[kanal]}
               </p>
-              {ilerleme && <p className="tc-ayar-aciklama" role="status">Yükleniyor: {ilerleme.alinan} / {ilerleme.toplam} parça</p>}
+              {ilerleme && <YuklemeIlerlemesi {...ilerleme} />}
             </div>
             <div className="tc-ayar-sayi">
               <input
