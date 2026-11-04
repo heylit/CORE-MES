@@ -16,3 +16,16 @@
   animation: tc-don .8s linear infinite;
 }
 @keyframes tc-don { to { transform: rotate(360deg); } }
+
+/* Dalga (karar 2081-9): dokunulan yerden yayılan halka; düğmenin köşesine kırpılır, tıklamayı engellemez. Konum kökü
+   :where ile sıfır özgüllüktedir; modüllerin kendi konumladığı düğme (mutlak) bozulmaz. */
+:where(.tc-dugme) { position: relative; }
+.tc-dugme-dalga-kap { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.tc-dugme-dalga {
+  position: absolute; left: var(--dalga-x); top: var(--dalga-y); width: var(--dokunma-ana); height: var(--dokunma-ana);
+  margin: calc(var(--dokunma-ana) / -2) 0 0 calc(var(--dokunma-ana) / -2); border-radius: 50%; background: currentColor; opacity: 0;
+  animation: tc-dugme-dalga calc(var(--hareket-sure) * 3) ease-out;
+}
+@keyframes tc-dugme-dalga { from { transform: scale(0); opacity: .28; } to { transform: scale(6); opacity: 0; } }
+:root[data-etki-kapali~="dalga"] .tc-dugme-dalga { display: none; }
+@media (prefers-reduced-motion: reduce) { .tc-dugme-dalga { display: none; } }
