@@ -1,5 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
+import { etkiAcik } from '../../../../../ortak/veri/etki.ts';
+import { tasimaSaati } from './gonder.ts';
 import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
@@ -98,39 +100,166 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   }, [secJob, k, H, p, cx, yil, R, gen.e]);
   // Sürükle-bırak (1981 b): yatay kayma saati, bırakılan satır tezgâhı verir; iş orada kilitlenir (sunucu komutu). Altı pikselden kısa hareket
   // dokunmadır, iş kartını açar. Uygun olmayan tezgâha bırakılan iş kendi tezgâhında kalır, yalnız saati değişir.
-  const suruk = useRef<{ id: string; m: string; S: number; x0: number; y0: number; el: HTMLElement; oldu: boolean; hedef: HTMLElement | null } | null>(null);
+  // Kararlar 2081-1..5: çubuk gönderilecek saatle (çeyrek saat, şimdiden önce değil) adım adım ilerler; eski yerinde kesikli kutu kalır;
+  // yanında tezgâh ve saat ipucu, başka işle üst üste binince kırmızı çerçeve (motor bırakınca yine çözer); kenara gelince çizelge kayar.
+  // Klavyede oklar aynı önizlemeyi kurar, Enter taşır, Esc vazgeçer. Yardımlar ve kayma kurum ayarıyla kapanır (etki.ts).
+  type Suruk = {
+    id: string; m: string; S: number; C: number; x0: number; y0: number; el: HTMLElement; oldu: boolean; hedef: HTMLElement | null;
+    sl0: number; px: number; py: number; hayalet: HTMLElement | null; kare: number; klavye: { dS: number; m: string } | null;
+  };
+  const suruk = useRef<Suruk | null>(null);
   const birakti = useRef(false);
+  const yuzen = useRef<HTMLDivElement | null>(null);
+  const bilgiZamani = useRef(0);
   const hedefSatir = (x: number, y: number): HTMLElement | null =>
     (typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : []).map((e) => e.closest<HTMLElement>('.tc-pym-tp-satir[data-m]')).find((e) => e) ?? null;
+  // Yüzen kart (ipucu ve iş bilgisi) panonun içinde tek öğedir; konum ölçüden gelir, tasarım değişkeni olarak yazılır.
+  const yuzenGoster = (satirlar: readonly string[], x: number, y: number, ton: 'bilgi' | 'tasima' | 'cakisma') => {
+    const pn = pano.current; if (!pn) return;
+    let el = yuzen.current;
+    if (!el) { el = document.createElement('div'); el.className = 'tc-pym-tp-yuzen'; el.setAttribute('role', 'status'); pn.appendChild(el); yuzen.current = el; }
+    el.replaceChildren(...satirlar.map((t, i) => { const d = document.createElement(i === 0 ? 'b' : 'span'); d.textContent = t; return d; }));
+    const pr = pn.getBoundingClientRect();
+    el.style.setProperty('--yx', `${x - pr.left + pn.scrollLeft}px`); el.style.setProperty('--yy', `${y - pr.top + pn.scrollTop}px`);
+    el.dataset.ton = ton; el.dataset.acik = '';
+    // Sağ kenara sığmayan kart imlecin soluna açılır (dar ekranda pano dışına taşmasın).
+    if (x + el.offsetWidth + 24 > pr.right && x - pr.left > pr.right - x) el.dataset.yan = 'sol'; else delete el.dataset.yan;
+  };
+  const yuzenGizle = () => { window.clearTimeout(bilgiZamani.current); if (yuzen.current) delete yuzen.current.dataset.acik; };
+  useEffect(() => () => { window.clearTimeout(bilgiZamani.current); yuzen.current?.remove(); yuzen.current = null; }, []);
+  const cakisiyor = (id: string, m: string, S: number, C: number) => (opsM.get(m) ?? []).some((o) => o.id !== id && o.S < C - 1e-9 && o.C > S + 1e-9);
   const surukBit = () => {
     const s = suruk.current; suruk.current = null; if (!s) return;
-    delete s.el.dataset.surukle; s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy');
+    cancelAnimationFrame(s.kare);
+    delete s.el.dataset.surukle; delete s.el.dataset.cakisma; s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy');
+    s.hayalet?.remove();
     if (s.hedef) delete s.hedef.dataset.hedef;
+    yuzenGizle();
   };
+  // Önizleme: gönderilecek saat ve tezgâh; çubuk oraya oturur, ipucu ve çakışma ona göre yazılır.
+  const onizle = (s: Suruk): { m: string; S: number } => {
+    const yardim = etkiAcik('gantt-yardim');
+    const adaylar = cx.byId[s.id]?.c ?? [];
+    let m: string; let S: number; let dy: number; let x: number; let y: number; let uygunsuz = false;
+    if (s.klavye) {
+      m = s.klavye.m; S = tasimaSaati(s.S + s.klavye.dS, now);
+      const kendi = s.el.closest<HTMLElement>('.tc-pym-tp-satir'); const hedef = alan.current?.querySelector<HTMLElement>(`.tc-pym-tp-satir[data-m="${secKacis(m)}"]`) ?? null;
+      dy = kendi && hedef ? hedef.offsetTop - kendi.offsetTop : 0;
+      if (hedef !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (hedef && m !== s.m) hedef.dataset.hedef = ''; s.hedef = m !== s.m ? hedef : null; }
+      const b = s.el.getBoundingClientRect(); x = b.left + (S - s.S) * k; y = b.top + dy;
+    } else {
+      const kayma = (pano.current?.scrollLeft ?? s.sl0) - s.sl0;
+      const hm = s.hedef?.dataset.m ?? null; m = hm && adaylar.includes(hm) ? hm : s.m; uygunsuz = hm !== null && hm !== s.m && m === s.m;
+      S = tasimaSaati(s.S + (s.px - s.x0 + kayma) / k, now); dy = s.py - s.y0; x = s.px; y = s.py;
+    }
+    s.el.style.setProperty('--dx', `${(S - s.S) * k}px`); s.el.style.setProperty('--dy', `${dy}px`);
+    const C = S + (s.C - s.S); const cak = yardim && cakisiyor(s.id, m, S, C);
+    if (cak) s.el.dataset.cakisma = ''; else delete s.el.dataset.cakisma;
+    if (yardim) {
+      if (!s.hayalet && s.el.parentElement) {
+        const h = document.createElement('div'); h.className = 'tc-pym-tp-hayalet'; h.setAttribute('aria-hidden', 'true');
+        for (const v of ['--x', '--w']) h.style.setProperty(v, s.el.style.getPropertyValue(v));
+        s.el.parentElement.insertBefore(h, s.el); s.hayalet = h;
+      }
+      yuzenGoster([`${m} · ${tz(D, S)} → ${tz(D, C)}`, ...(uygunsuz ? ['Bu tezgâha uygun değil; kendi tezgâhında kalır'] : []), ...(cak ? ['Başka işle üst üste; bırakınca motor yeniden dizer'] : []), ...(s.klavye ? ['Enter taşır, Esc vazgeçer'] : [])], x, y, cak ? 'cakisma' : 'tasima');
+    }
+    return { m, S };
+  };
+  // Kenarda kayma: imleç panonun sol (etiket sütunundan sonra) ya da sağ kenarına yaklaştıkça çizelge o yöne hızlanarak kayar.
+  const KENAR = 48; const KAYMA_HIZI = 14;
+  const kenarKay = (s: Suruk) => {
+    const pn = pano.current; if (!pn || !etkiAcik('gantt-kayma')) return;
+    const r = pn.getBoundingClientRect();
+    const sol = r.left + gen.e + KENAR - s.px, sag = s.px - (r.right - KENAR);
+    const hiz = sol > 0 ? -Math.min(1, sol / KENAR) * KAYMA_HIZI : sag > 0 ? Math.min(1, sag / KENAR) * KAYMA_HIZI : 0;
+    cancelAnimationFrame(s.kare);
+    if (hiz === 0) return;
+    const adim = () => {
+      if (suruk.current !== s) return;
+      const once = pn.scrollLeft; pn.scrollLeft = once + hiz;
+      if (pn.scrollLeft === once) return;
+      onizle(s); s.kare = requestAnimationFrame(adim);
+    };
+    s.kare = requestAnimationFrame(adim);
+  };
+  const yeniSuruk = (r: PlanIslemi, el: HTMLElement, x: number, y: number): Suruk => ({
+    id: r.id, m: r.m, S: r.S, C: r.C, x0: x, y0: y, el, oldu: false, hedef: null, sl0: pano.current?.scrollLeft ?? 0, px: x, py: y, hayalet: null, kare: 0, klavye: null,
+  });
   const surukle = (r: PlanIslemi, acik: boolean) => (acik ? {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button > 0 || !ort.tasi) return;
-      suruk.current = { id: r.id, m: r.m, S: r.S, x0: e.clientX, y0: e.clientY, el: e.currentTarget, oldu: false, hedef: null };
+      surukBit(); yuzenGizle();
+      suruk.current = yeniSuruk(r, e.currentTarget, e.clientX, e.clientY);
     },
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
-      const s = suruk.current; if (!s || s.id !== r.id) return;
+      const s = suruk.current; if (!s || s.id !== r.id || s.klavye) return;
       const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
       if (!s.oldu) { if (Math.hypot(dx, dy) < 6) return; s.oldu = true; s.el.setPointerCapture?.(e.pointerId); s.el.dataset.surukle = ''; }
-      s.el.style.setProperty('--dx', `${dx}px`); s.el.style.setProperty('--dy', `${dy}px`);
+      s.px = e.clientX; s.py = e.clientY;
       const h = hedefSatir(e.clientX, e.clientY);
       if (h !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (h) h.dataset.hedef = ''; s.hedef = h; }
+      onizle(s); kenarKay(s);
     },
     onPointerUp: (e: ReactPointerEvent<HTMLElement>) => {
-      const s = suruk.current; if (!s || s.id !== r.id) return;
-      const oldu = s.oldu; const hm = s.hedef?.dataset.m ?? null; const dx = e.clientX - s.x0;
+      const s = suruk.current; if (!s || s.id !== r.id || s.klavye) return;
+      const oldu = s.oldu; s.px = e.clientX; s.py = e.clientY;
+      const varis = oldu && Number.isFinite(e.clientX) ? onizle(s) : null;
       surukBit();
-      if (!oldu || !ort.tasi || !Number.isFinite(dx)) return;
+      if (!varis || !ort.tasi) return;
       birakti.current = true;
-      const adaylar = cx.byId[r.id]?.c ?? [];
-      ort.tasi(r.id, hm && adaylar.includes(hm) ? hm : r.m, r.S + dx / k);
+      ort.tasi(r.id, varis.m, varis.S);
     },
     onPointerCancel: surukBit,
-  } : {});
+    onKeyDown: (e: ReactKeyboardEvent<HTMLElement>) => {
+      if (!ort.tasi) return;
+      let s = suruk.current;
+      // Fareyle sürüklerken Esc vazgeçer; ardından gelen tıklama iş kartını açmaz.
+      if (e.key === 'Escape' && (s?.klavye || s?.oldu)) { e.preventDefault(); if (s.oldu) birakti.current = true; surukBit(); return; }
+      if (e.key === 'Enter' && s?.klavye && s.id === r.id) {
+        e.preventDefault();
+        const varis = onizle(s); const degisti = varis.m !== r.m || varis.S !== tasimaSaati(r.S, now);
+        surukBit();
+        if (degisti) ort.tasi(r.id, varis.m, varis.S);
+        return;
+      }
+      const yatay = e.key === 'ArrowLeft' || e.key === 'ArrowRight'; const dikey = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+      if (!yatay && !dikey) return;
+      e.preventDefault();
+      if (!s || s.id !== r.id || !s.klavye) {
+        surukBit(); yuzenGizle();
+        const b = e.currentTarget.getBoundingClientRect();
+        s = yeniSuruk(r, e.currentTarget, b.left, b.top); s.klavye = { dS: 0, m: r.m }; s.el.dataset.surukle = ''; suruk.current = s;
+      }
+      const kl = s.klavye!;
+      if (yatay) kl.dS += (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 1 : 0.25);
+      else {
+        const adaylar = R.map((x) => x.m).filter((m) => (cx.byId[r.id]?.c ?? []).includes(m) || m === r.m);
+        const i = adaylar.indexOf(kl.m); const j = Math.max(0, Math.min(adaylar.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+        kl.m = adaylar[j] ?? kl.m;
+      }
+      onizle(s);
+    },
+    onBlur: () => { if (suruk.current?.klavye && suruk.current.id === r.id) surukBit(); else yuzenGizle(); },
+  } : { onBlur: () => { yuzenGizle(); } });
+  // İş bilgisi (karar 2081-6): tarayıcı başlığı yerine tema uyumlu kart; fareyle kısa beklemede, klavye odağında ve dokunmada basılı tutunca açılır.
+  // Kurum yardımları kapattıysa eski başlık kalır.
+  const bilgi = (r: PlanIslemi, ad: string, il: number | null) => [`${r.job} · ${ad}`, `${tz(D, r.S)} → ${tz(D, r.C)}`, ...(il != null ? [`İlerleme %${Math.round(il * 100)}`] : [])];
+  const bilgiOlaylari = (satirlarBilgi: readonly string[]) => {
+    const ac = (el: HTMLElement, gecikme: number) => {
+      window.clearTimeout(bilgiZamani.current);
+      bilgiZamani.current = window.setTimeout(() => {
+        if (suruk.current?.oldu || suruk.current?.klavye) return;
+        const b = el.getBoundingClientRect(); yuzenGoster(satirlarBilgi, b.left, b.bottom + 4, 'bilgi');
+      }, gecikme);
+    };
+    return {
+      onPointerEnter: (e: ReactPointerEvent<HTMLElement>) => { if (e.pointerType !== 'touch') ac(e.currentTarget, 350); },
+      onPointerLeave: () => { if (!suruk.current?.oldu) yuzenGizle(); },
+      onTouchStart: (e: ReactTouchEvent<HTMLElement>) => ac(e.currentTarget, 450),
+      onTouchEnd: () => { window.setTimeout(yuzenGizle, 1500); },
+      onFocus: (e: ReactFocusEvent<HTMLElement>) => { if (e.currentTarget.matches(':focus-visible')) ac(e.currentTarget, 0); },
+    };
+  };
 
   const sb = secJob ? ort.bilgi.get(secJob) : null; const A = secJob && !yil ? akis(p, cx, ort.hazir, secJob) : null;
   const ofs = gen.e;
@@ -186,12 +315,13 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const g = gercekOku(c, r.id); const il = ilerleme(r, g, cx.jobs[r.job]?.adet ?? 0, now);
     const sap = g && g.plan != null ? g.S - g.plan : 0;
     const yz = cubukYazisi(r, ka, ad, w);
+    const yardim = etkiAcik('gantt-yardim'); const bilgiMetni = bilgi(r, ad, il);
     return (
       <button key={r.id} type="button" className="tc-pym-tp-cubuk" data-id={r.id} data-durum={b && b.durum !== 'iyi' ? b.durum : undefined} data-sabit={sabit ? '' : undefined}
         data-fason={r.fas ? '' : undefined} data-soluk={soluk ? '' : undefined} data-vurgu={vur ? '' : undefined} data-parla={pr ? '' : undefined}
         data-grup={tezGrup(D, r.m)} aria-pressed={secOp === r.id}
-        title={`${r.job} · ${ad} · ${tz(D, r.S)} → ${tz(D, r.C)}${il != null ? ` · ilerleme %${Math.round(il * 100)}` : ''}`}
-        ref={degisken({ '--x': `${xx}px`, '--w': `${w}px` })} {...surukle(r, !sabit && !r.fas && !!x.tasi)}
+        title={yardim ? undefined : bilgiMetni.join(' · ')} aria-description={yardim ? bilgiMetni.join(' · ') : undefined}
+        ref={degisken({ '--x': `${xx}px`, '--w': `${w}px` })} {...(yardim ? bilgiOlaylari(bilgiMetni) : {})} {...surukle(r, !sabit && !r.fas && !!x.tasi)}
         onClick={(e) => { if (birakti.current) { birakti.current = false; return; } x.opSec(r.id, ankraj(e)); }}>
         {il != null && <span className="tc-pym-tp-ilerleme" ref={degisken({ '--o': `${Math.min(100, il * 100)}%` })} />}
         {r.su > 0 && r.Su != null && r.Su > r.S && <span className="tc-pym-tp-ayar" ref={degisken({ '--a': `${Math.min(w, (r.Su - r.S) * kk)}px` })} />}

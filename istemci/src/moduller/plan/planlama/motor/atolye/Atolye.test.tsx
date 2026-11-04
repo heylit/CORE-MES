@@ -484,6 +484,55 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('2081-1, 2, 5: sürüklerken eski yerde kesikli kutu ve ipucu; bırakınca kalkar. Klavyede oklar önizler, Enter taşır, Esc vazgeçer', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac();
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    const hayalet = () => document.querySelector('.tc-pym-tp-hayalet');
+    const ipucu = () => document.querySelector('.tc-pym-tp-yuzen[data-acik]');
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    expect(hayalet()).not.toBeNull();
+    expect(ipucu()?.textContent).toMatch(/^5 · /);
+    fireEvent.pointerUp(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    expect(hayalet()).toBeNull();
+    expect(ipucu()).toBeNull();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    post.mockClear();
+    cubuk.focus();
+    fireEvent.keyDown(cubuk, { key: 'ArrowRight' });
+    fireEvent.keyDown(cubuk, { key: 'ArrowRight' });
+    expect(hayalet()).not.toBeNull();
+    expect(ipucu()?.textContent).toContain('Enter taşır');
+    fireEvent.keyDown(cubuk, { key: 'Escape' });
+    expect(hayalet()).toBeNull();
+    expect(post).not.toHaveBeenCalled();
+    fireEvent.keyDown(cubuk, { key: 'ArrowRight' });
+    fireEvent.keyDown(cubuk, { key: 'ArrowRight' });
+    fireEvent.keyDown(cubuk, { key: 'Enter' });
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/is-tasi', expect.objectContaining({ isId: '2.40', tezgah: '5', baslangic: 208.5 }), expect.anything()));
+    post.mockRestore();
+  });
+
+  it('kurum Gantt yardımlarını kapattıysa kesikli kutu ve ipucu çizilmez, iş bilgisi tarayıcı başlığında kalır; taşıma çalışır', async () => {
+    document.documentElement.setAttribute('data-etki-kapali', 'gantt-yardim');
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    try {
+      ac();
+      const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+      expect(cubuk.getAttribute('title')).toContain(' → ');
+      fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+      fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+      expect(document.querySelector('.tc-pym-tp-hayalet')).toBeNull();
+      expect(document.querySelector('.tc-pym-tp-yuzen[data-acik]')).toBeNull();
+      fireEvent.pointerUp(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+      await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    } finally {
+      document.documentElement.removeAttribute('data-etki-kapali');
+      post.mockRestore();
+    }
+  });
+
   it('ek mesai (2053): tezgâh günlüğündeki düğme boş vardiyaları gösterir, seçilen sunucuya gider; arıza bildir olay formunu o tezgâhla açar', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
     const c = ornekCalisma();
