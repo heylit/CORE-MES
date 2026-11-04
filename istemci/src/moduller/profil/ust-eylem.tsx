@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Simge } from '../../ortak/arayuz/index.ts';
 import type { UstEylem, UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
+import { TemaEsitleyici } from './tema-tercihi.ts';
 import './profil.css';
 
 function GeriBildirimDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
@@ -22,4 +23,7 @@ function GeriBildirimDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
 export const ustEylemler: readonly UstEylem[] = [{
   anahtar: 'geri-bildirim', sira: 90, islem: 'oturum', yer: 'hesap', hesapMaddesi: { baslik: 'Şikayet, istek ve öneri', simge: 'edit' },
   dugme: GeriBildirimDugmesi,
+}, {
+  // Görünür düğmesi yoktur: giren kişinin temasını profilinden uygular, seçimini profiline yazar (2072 a).
+  anahtar: 'tema-tercihi', sira: 91, islem: 'oturum', dugme: TemaEsitleyici,
 }];

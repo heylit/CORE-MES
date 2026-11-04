@@ -6,6 +6,7 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { DurumKutusu, Dugme, Kart, ParolaPenceresi, PinPenceresi, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { tabanTema, useTemaTercihi, type TemaTercihi } from '../../ortak/veri/tema.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
 import { SaatPenceresi } from './SaatPenceresi.tsx';
@@ -181,6 +182,46 @@ function HesapKarti() {
   );
 }
 
+// Kişinin görünüm teması (2072 a): seçim hemen uygulanır ve profile yazılır; ortak terminalde giren kişiyle gelir.
+const TEMA_SECENEKLERI: readonly { tema: TemaTercihi; ad: string; aciklama: string; simge: Parameters<typeof Simge>[0]['ad'] }[] = [
+  { tema: 'light', ad: 'Açık', aciklama: 'Ofis ışığı', simge: 'sun' },
+  { tema: 'dark', ad: 'Koyu', aciklama: 'Loş ortam', simge: 'moon' },
+  { tema: 'kontrast', ad: 'Yüksek kontrast', aciklama: 'Uzaktan okuma, terminal', simge: 'eye' },
+  { tema: 'gun', ad: 'Gün ışığı', aciklama: 'Parlak ışık ve yansıma', simge: 'target' },
+];
+
+function GorunumKarti() {
+  const { tercih, sec } = useTemaTercihi();
+  return (
+    <Kart baslik="Görünüm" baslikEki={<span className="tc-profil-soluk">Bu hesapla girdiğiniz her ekranda</span>}>
+      <div className="tc-profil-temalar" role="radiogroup" aria-label="Tema">
+        {TEMA_SECENEKLERI.map((t) => (
+          <button
+            key={t.tema}
+            type="button"
+            role="radio"
+            aria-checked={tercih === t.tema}
+            className="tc-profil-tema"
+            onClick={() => sec(t.tema)}
+          >
+            <span
+              className="tc-profil-tema-ornek"
+              data-theme={tabanTema(t.tema)}
+              data-kontrast={t.tema === 'kontrast' || t.tema === 'gun' ? '' : undefined}
+              aria-hidden="true"
+            >
+              <Simge ad={t.simge} boyut="k" />
+              <i data-durum="calisiyor" /><i data-durum="durdu" />
+            </span>
+            <span className="tc-profil-tema-ad"><strong>{t.ad}</strong><span className="tc-profil-soluk">{t.aciklama}</span></span>
+            {tercih === t.tema && <Simge ad="check" boyut="k" />}
+          </button>
+        ))}
+      </div>
+    </Kart>
+  );
+}
+
 function GeriBildirimKarti({ veri }: { veri: ProfilCevabi }) {
   const [acik, acikYaz] = useState(false);
   return (
@@ -225,6 +266,7 @@ export function Profil() {
         <BilgiKarti veri={veri} />
         <IletisimKarti veri={veri} />
         <HesapKarti />
+        <GorunumKarti />
       </div>
       <GeriBildirimKarti veri={veri} />
     </div>
