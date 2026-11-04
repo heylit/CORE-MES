@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
+import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYazi, saatYaz, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { HAZIRLANIYOR, MOTOR_NOTU, degisken, yuzde } from '../ortak.tsx';
@@ -15,6 +16,8 @@ const SAATLER = Array.from({ length: 12 }, (_, i) => i * 2);
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; g: number; planYaz: boolean; planKilitle: boolean;
   secili: string | null; secJob: string | null; isSec: (id: string) => void; tezSec: (m: string) => void; gunSec: (g: number) => void;
+  // Sabitleme çalışmaya yazılır (İş kartındaki Burada sabitle ile aynı komut); komut yoksa düğme pasif kalır.
+  komut?: CalismaKomutu | null;
 }
 
 export function GunCizelgesi(o: Ozellikler) {
@@ -115,7 +118,12 @@ export function GunCizelgesi(o: Ozellikler) {
                 <>
                   <p className="tc-pym-kucuk-yazi"><Simge ad="target" boyut="k" /> Yanan satırda saate tıklayın, işi oraya sürükleyin ya da ok tuşlarıyla kaydırın (←/→ bir saat, Shift ile çeyrek saat, ↑/↓ başka tezgâh).{secO && secO.c.filter((m) => m !== sec.m && !m.startsWith('@')).length ? '' : ' Bu adımı yalnız bu tezgâh yapabiliyor.'}</p>
                   <div className="tc-pym-dugmeler">
-                    {o.planKilitle && pasif('lock', c.locks[sec.id] ? 'Sabitliği kaldır' : 'Burada sabitle', HAZIRLANIYOR)}
+                    {o.planKilitle && (o.komut ? (
+                      <button type="button" className="tc-dugme tc-pym-kucuk" aria-pressed={!!c.locks[sec.id]} onClick={() => {
+                        const kl = !!c.locks[sec.id];
+                        o.komut?.degistir(kl ? 'Sabitlik kaldırıldı' : 'İş sabitlendi', (x) => { if (kl) delete x.locks[sec.id]; else x.locks[sec.id] = { m: sec.m, S: sec.S }; }, { ayrinti: sec.id, planKoru: true });
+                      }}><Simge ad="lock" boyut="k" /><span>{c.locks[sec.id] ? 'Sabitliği kaldır' : 'Burada sabitle'}</span></button>
+                    ) : pasif('lock', c.locks[sec.id] ? 'Sabitliği kaldır' : 'Burada sabitle', HAZIRLANIYOR))}
                     {pasif('list', 'Siparişin yolu', HAZIRLANIYOR)}
                     <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Seçimi bırak" aria-label="Seçimi bırak" onClick={() => o.isSec(sec.id)}><Simge ad="x" boyut="k" /></button>
                   </div>
