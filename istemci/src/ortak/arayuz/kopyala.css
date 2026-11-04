@@ -1,0 +1,11 @@
+.tc-kopyala { display: inline-flex; align-items: center; gap: var(--b-2); vertical-align: middle; }
+.tc-kopyala-dugme {
+  display: inline-grid; place-items: center; flex: none; width: var(--dugme-boy); height: var(--dugme-boy);
+  border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.tc-kopyala-dugme:hover { border-color: var(--hazard-ink); }
+.tc-kopyala-dugme[data-sonuc="tamam"] { color: var(--run); border-color: var(--run); }
+.tc-kopyala-dugme[data-sonuc="olmadi"] { color: var(--stop); border-color: var(--stop); }
+.tc-kopyala-ileti { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-kopyala-ileti:empty { display: none; }
+.tc-kopyala-gecici { position: fixed; top: 0; left: 0; opacity: 0; pointer-events: none; }
