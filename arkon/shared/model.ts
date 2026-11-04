@@ -62,7 +62,7 @@ export interface Pkg {
   seq?: number; approval?: Approval | null; apReq?: { at: Ms; by: string; version?: number } | null; history?: PublishHistory[];
   /** CORE emrinden gelen pakette ürünün malzeme kartı numarası; adımsız eski emirde null */ malzemeNo?: number | null;
   /** ayar süresi (dk); rotalı CORE emrinin iş emri paketinde rotadan */ setup?: number | null;
-  /** rotalı CORE emrinin iş emri paketinde bağ (sunucu yazar) */ tmi?: { emirId: number; isEmriId: number; opNo: number; /** kol adımı: rework, tamir ya da ek (rota adımında yok) */ tur?: string; ekAciklama?: string; plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: { tur: 'makine' | 'kisi'; id: number } | null } };
+  /** rotalı CORE emrinin iş emri paketinde bağ (sunucu yazar) */ tmi?: { emirId: number; isEmriId: number; opNo: number; /** adımın operasyon tipi kodu (GKK, GM, KMM...): kalite alt görünümü (2011 a) */ opTipi?: string; /** kol adımı: rework, tamir ya da ek (rota adımında yok) */ tur?: string; ekAciklama?: string; plan?: { canli: boolean; sira: number | null; eslesiyor: boolean; kaynak?: { tur: 'makine' | 'kisi'; id: number } | null } };
   /** ara onay kararı (Terminal kural 1/5); by, at ve once sunucudan */ fpRe?: { on: boolean; key: string; why: 'red' | 'revizyon' | 'degisiklik'; by?: string; at?: Ms; once?: string[] } | null;
   /** son yayındaki içerik imzası (arkon/web/src/data/ara-onay.ts) */ yayinImza?: Record<string, string> | null;
   /** karar 732 a: kayıtsız CORE taslağına malzemenin Çizimler'deki yayında belgeleri (sunucu önerir, Hazırlık merkezden alır) */

@@ -7,7 +7,7 @@ export { UyariPenceresi } from './UyariPenceresi.tsx';
 export { TakimKarti, takimKullanimi } from './TakimKarti.tsx';
 export { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 export {
-  BoyaPaneli, Cubuk, DepoPaneli, ISTASYON_PANELLERI, Ilerleme, KalitePaneli, KodCubugu, MarkaPaneli, MontajPaneli,
+  BoyaPaneli, Cubuk, DepoPaneli, ISTASYON_PANELLERI, Ilerleme, KalitePaneli, KodCubugu, MarkaPaneli, MontajPaneli, istasyonPaneli,
   type IsDegisikligi, type IstasyonKaydi, type PanelArayuzu, type PanelOzellikleri,
 } from './IstasyonPanelleri.tsx';
 export { IstasyonSecici, IstasyonSecimi } from './IstasyonSecici.tsx';

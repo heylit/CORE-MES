@@ -82,6 +82,15 @@ export const IS_TURLERI: Readonly<Record<OpType, IsTuruTanimi>> = {
 export const isTuru = (p: { opType?: unknown } | null | undefined): OpType =>
   p && typeof p.opType === 'string' && Object.hasOwn(IS_TURLERI, p.opType) ? (p.opType as OpType) : 'cnc';
 
+// 2011 a: kalite istasyonunda adımın operasyon tipi kodu (istasyonlar operasyon tipi kataloğu) alt görünümü seçer.
+// Kodu tanınmayan, kodsuz ya da önce kaydedilmiş paket bugünkü muayene görünümüyle açılır.
+export type KaliteAltGorunumu = 'gkk' | 'gorsel' | 'cmm';
+const KALITE_ALT_GORUNUMLERI: Readonly<Record<string, KaliteAltGorunumu>> = { GKK: 'gkk', GM: 'gorsel', KMM: 'cmm' };
+export function kaliteAltGorunumu(p: { opType?: unknown; tmi?: { opTipi?: string } } | null | undefined): KaliteAltGorunumu | null {
+  const kod = p?.tmi?.opTipi;
+  return isTuru(p) === 'kalite' && kod !== undefined && Object.hasOwn(KALITE_ALT_GORUNUMLERI, kod) ? KALITE_ALT_GORUNUMLERI[kod]! : null;
+}
+
 // RAL renk kartı: değer kayda yazılan renktir (operatöre örnek olarak gösterilir), tasarım rengi değildir.
 export const RAL: Readonly<Record<string, readonly [string, string]>> = {
   '9005': ['Siyah', '#0a0a0a'], '9010': ['Saf beyaz', '#f1ece1'], '9016': ['Trafik beyazı', '#f1f0ea'], '7016': ['Antrasit gri', '#383e42'],

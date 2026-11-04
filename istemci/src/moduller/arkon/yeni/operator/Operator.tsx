@@ -55,7 +55,7 @@ import type { ArkonEkranOzellikleri, ArkonSayfasi } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import type { Ileti } from '../veri/depo.ts';
 import {
-  IS_TURLERI, ISTASYON_PANELLERI, IstasyonSecici, SEVIYELER, TakimKarti, UyariPenceresi, isKurallari, istasyonAyari, isTuru,
+  IS_TURLERI, IstasyonSecici, SEVIYELER, TakimKarti, UyariPenceresi, isKurallari, istasyonAyari, istasyonPaneli, isTuru,
   OLCENLER, numuneEtiketi, numuneOlculeri, numunePlani, sinirYakin, type IstasyonKaydi, type PanelArayuzu, type Uyari,
 } from '../hazirlik/index.tsx';
 import { Adimlar } from './Adimlar.tsx';
@@ -537,7 +537,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const RL = useMemo(() => isKurallari(o.pkg), [o.pkg]);
   const opT = isTuru(o.pkg);
   const OT = IS_TURLERI[opT];
-  const Panel = ISTASYON_PANELLERI[opT];
+  const Panel = istasyonPaneli(opT, o.pkg);
   useEffect(() => { tabYaz(Panel ? 'st' : 'draw'); if (dar) mvYaz((v) => (v === 'ozet' ? v : 'prod')); }, [o.no]);
   const stUpd = (f: (x: Is) => Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === aiRef.current ? { ...x, ...f(x) } : x)));
   const stApi: PanelArayuzu = {

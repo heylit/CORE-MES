@@ -26,7 +26,7 @@ import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOne
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
-  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz,
+  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
@@ -298,6 +298,8 @@ async function isEmriTaslaklari(
   const bolmeler = new Map(yerlesimler.flatMap((y) => (y.parcalar?.length ? [[y.isEmriId, y.parcalar] as const] : [])));
   const taslakta = await taslaktakiler(db, rotali.filter((i) => !planlar.has(i.id)).map((i) => i.id));
   const makineler = new Map((await aktifMakineler(db)).map((m) => [m.id, m]));
+  // 2011 a: kalite istasyonunun alt görünümü adımın operasyon tipi kodundan seçilir; pasif tip de adı geçen adımda kalır.
+  const tipKodlari = new Map((await operasyonTipleri(db, { pasiflerDahil: true })).map((t) => [t.id, t.kod]));
   const anahtarlar = await rotaAnahtarlari(db, isEmirleri);
   const anahtar = (ie: { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null }) => anahtarlar.get(ie.id) ?? rotaAnahtari(ie, undefined, new Map());
   const rotaEksik = await girdisiEksikRevizyonlar(db, [...anahtarlar.values()].flatMap((a) => (a.revizyonId === null ? [] : [a.revizyonId])));
@@ -324,6 +326,7 @@ async function isEmriTaslaklari(
       isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(talimatAnahtari) ?? null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
+      opTipi: ie.operasyonTipiId === undefined ? null : tipKodlari.get(ie.operasyonTipiId) ?? null,
     };
     const parcalar = bolmeler.get(ie.id);
     girdiler.push(parcalar === undefined ? girdi : { ...girdi, bolunmus: true });
