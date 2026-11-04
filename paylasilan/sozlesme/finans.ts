@@ -242,14 +242,15 @@ export const amortismanCevabi = z.object({ aylar: z.array(z.object({ ay: z.strin
 // Kur ve faiz şeridi: bugüne kadar geçerli son kur ve faiz, kimin ne zaman girdiğiyle; sonGiris ileri tarihli giriş dahil en son yazılandır.
 // Ortak kur ve faiz şeridi (939, 952 a): giriş yapan herkes okur. Kur satırının sürümü aynı günün düzeltmesi içindir; geçmiş son girişlerdir
 // (düzeltme de giriş sayılır), en yeni başta.
+// oncekiKur ve oncekiAylikYuzde şeridin artış/azalış işaretidir (2083): bir önceki tarihli değer, yoksa null.
 export const KUR_FAIZ_GECMISI_BOYU = 8;
 // 1700 b, 1725 a: günlük faiz kendi birimiyle ayrı tutulur; hesaplar finans ayarındaki birimi kullanır, o birimde oran yoksa öbürünü çevirir.
 export const FAIZ_BIRIMLERI = ['aylik', 'gunluk'] as const;
 const KUR_FAIZ_TURLERI = ['kur', 'faiz', 'gunluk_faiz'] as const;
 export const kurFaizOzetiCevabi = z.object({
   bugun: tarihSemasi,
-  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
-  faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
+  kurlar: z.array(z.object({ paraBirimi: z.string(), tarih: tarihSemasi, kur: numerik, oncekiKur: numerik.nullable(), girenAd: z.string().nullable(), giris: zamanSemasi, surum: surumSemasi })),
+  faizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, aylikYuzde: numerik, oncekiAylikYuzde: numerik.nullable(), girenAd: z.string().nullable(), giris: zamanSemasi })),
   gunlukFaizler: z.array(z.object({ paraBirimi: z.string(), gecerlilikBaslangic: tarihSemasi, gunlukYuzde: numerik, girenAd: z.string().nullable(), giris: zamanSemasi })),
   faizBirimi: z.enum(FAIZ_BIRIMLERI),
   sonGiris: z.object({ tur: z.enum(KUR_FAIZ_TURLERI), giris: zamanSemasi, girenAd: z.string().nullable() }).nullable(),
