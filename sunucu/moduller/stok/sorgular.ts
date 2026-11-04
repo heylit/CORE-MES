@@ -28,6 +28,8 @@ export interface BakiyeHam {
   lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; uretimEmriId: number | null; miktar: string; ilkGiris: string;
   ambalajTur: 'kasa' | 'koli' | 'palet' | 'bidon' | 'makara' | null; ambalajOlcu: string | null; ambalajAdet: number | null;
   statuId: number | null; kaliteDurumu: KaliteDurumu;
+  // 2099-2 c: lotun son kullanma tarihi (YYYY-AA-GG); tarihi olmayan lotta ve partisiz satırda null.
+  sonKullanma: string | null;
 }
 export interface HareketHam {
   id: number; zaman: string; tur: 'giris' | 'cikis' | 'transfer' | 'sayim_fazla' | 'sayim_eksik' | 'geri_alma'; malzemeId: number; partiId: number | null;
@@ -220,8 +222,9 @@ export const rafinGozleri = (db: Db, rafId: number): Promise<GozHam[]> => db.sor
 const BAKIYE_SECIMI = `SELECT b.id, b.malzeme_id AS "malzemeId", b.konum_id AS "konumId", k.kod AS "konumKod", k.tur AS "konumTur", b.parti_id AS "partiId",
   p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "uretimEmriId", b.miktar,
   ${zamanMetni('b.ilk_giris')} AS "ilkGiris", b.ambalaj_tur AS "ambalajTur", b.ambalaj_olcu AS "ambalajOlcu", b.ambalaj_adet AS "ambalajAdet", b.statu_id AS "statuId",
-  b.kalite_durumu AS "kaliteDurumu"
-  FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id LEFT JOIN stok_parti p ON p.id = b.parti_id`;
+  b.kalite_durumu AS "kaliteDurumu", sk.son_kullanma AS "sonKullanma"
+  FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id LEFT JOIN stok_parti p ON p.id = b.parti_id
+  LEFT JOIN stok_parti_son_kullanma sk ON sk.parti_id = b.parti_id`;
 // Statü verilmezse serbest (statüsüz) satır: düşüm, sayım ve taşıma yalnız serbest stoğa dokunur (STK-S3); statülü stok statü
 // değişimiyle serbeste döner. Kalite durumu da aynı kuraldır: verilmezse serbest satır.
 export const bakiyeKilitle = (db: Db, malzemeId: number, konumId: number, partiId: number | null, statuId: number | null = null, kalite: KaliteDurumu = 'serbest'): Promise<BakiyeHam | null> =>
@@ -2033,3 +2036,30 @@ export const seriIslendi = (db: Db, listeId: number, satirIdler: number[]): Prom
   db.sorgu('UPDATE stok_seri_okutma SET islendi = now() WHERE liste_id = $1 AND id = ANY($2::bigint[]) AND islendi IS NULL RETURNING id', [listeId, satirIdler]);
 export const seriDegisti = (db: Db, listeId: number): Promise<unknown> => db.sorgu('UPDATE stok_seri_liste SET degisim = now() WHERE id = $1', [listeId]);
 export const seriListeKapat = (db: Db, listeId: number): Promise<unknown> => db.sorgu('UPDATE stok_seri_liste SET kapanis = now(), degisim = now() WHERE id = $1 AND kapanis IS NULL', [listeId]);
+
+// ---- Son kullanma tarihi (2099-2 c) -------------------------------------------------------------------------------
+// Lot başına tek tarih; satır yoksa null.
+export const partiSonKullanma = async (db: Db, partiId: number): Promise<string | null> =>
+  (await db.tek<{ t: string }>('SELECT son_kullanma AS t FROM stok_parti_son_kullanma WHERE parti_id = $1', [partiId]))?.t ?? null;
+export const partiSonKullanmaKilitle = (db: Db, partiId: number): Promise<{ sonKullanma: string; surum: number } | null> =>
+  db.tek('SELECT son_kullanma AS "sonKullanma", surum FROM stok_parti_son_kullanma WHERE parti_id = $1 FOR UPDATE', [partiId]);
+// Var olan tarih değişmez (çakışmada satır dönmez); farklı tarih sktGirisEngeli ile önceden reddedilir.
+export const partiSonKullanmaYaz = async (db: Db, a: { partiId: number; sonKullanma: string; kisiId: number }): Promise<void> => {
+  await db.sorgu('INSERT INTO stok_parti_son_kullanma (parti_id, son_kullanma, kisi_id) VALUES ($1, $2, $3) ON CONFLICT (parti_id) DO NOTHING',
+    [a.partiId, a.sonKullanma, a.kisiId]);
+};
+// Düzeltme sürümle yazılır; eski ve yeni değer değişiklik defterine tetikle düşer.
+export const partiSonKullanmaDuzelt = async (db: Db, a: { partiId: number; sonKullanma: string; kisiId: number; surum: number }): Promise<boolean> =>
+  (await db.tek<{ parti_id: number }>(
+    `UPDATE stok_parti_son_kullanma SET son_kullanma = $2, kisi_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE parti_id = $1 AND surum = $4 RETURNING parti_id`, [a.partiId, a.sonKullanma, a.kisiId, a.surum])) !== null;
+// Partinin malzemesi (düzeltmede kartın takipli olduğu denetlenir).
+export const partiMalzemesi = async (db: Db, partiId: number): Promise<number | null> =>
+  (await db.tek<{ m: number }>('SELECT malzeme_id AS m FROM stok_parti WHERE id = $1', [partiId]))?.m ?? null;
+// Tür listesi (2099-6 a): kartların en yakın SKT'si ve geçmiş SKT'li serbest miktarı. Bakiyesi olmayan kart satır vermez.
+export const kartSktOzetleri = (db: Db, idler: readonly number[], bugun: string): Promise<{ malzemeId: number; enYakin: string | null; gecmisMiktar: string }[]> =>
+  db.sorgu(
+    `SELECT b.malzeme_id AS "malzemeId", min(sk.son_kullanma) FILTER (WHERE b.miktar > 0) AS "enYakin",
+            COALESCE(sum(b.miktar) FILTER (WHERE b.miktar > 0 AND sk.son_kullanma < $2::date), 0)::text AS "gecmisMiktar"
+       FROM stok_bakiye b LEFT JOIN stok_parti_son_kullanma sk ON sk.parti_id = b.parti_id
+      WHERE b.malzeme_id = ANY($1::int[]) GROUP BY b.malzeme_id`, [idler, bugun]);

@@ -27,6 +27,10 @@ export const STOK_IKINCI_MENU = {
       baslik: 'Stok',
       maddeler: [
         { anahtar: 'malzemeler', baslik: 'Malzemeler', yol: '/stok/malzemeler', simge: 'layers', islem: 'sayfa.stok' },
+        // 2099-6 a (teyit): türe göre ayrı listeler; kart ve kategori Malzemeler ve Hizmetler'dendir, miktar ve SKT stoktan.
+        { anahtar: 'kimyasallar', baslik: 'Kimyasallar', yol: '/stok/kimyasallar', simge: 'drop', islem: 'sayfa.stok' },
+        { anahtar: 'kesici-takimlar', baslik: 'Kesici takımlar', yol: '/stok/kesici-takimlar', simge: 'tool', islem: 'sayfa.stok' },
+        { anahtar: 'aparatlar', baslik: 'Aparatlar', yol: '/stok/aparatlar', simge: 'cube', islem: 'sayfa.stok' },
         { anahtar: 'hareketler', baslik: 'Hareketler', yol: '/stok/hareketler', simge: 'sort', islem: 'sayfa.stok' },
         { anahtar: 'refakat-kartlari', baslik: 'Refakat kartları', yol: '/stok/refakat-kartlari', simge: 'route', islem: 'sayfa.stok' },
         { anahtar: 'malzeme-fisleri', baslik: 'Belgeler', yol: '/stok/malzeme-fisleri', simge: 'list', islem: 'sayfa.stok' },

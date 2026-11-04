@@ -150,3 +150,9 @@ Kart #99 (soru 104 a): `POST /stok/mal-kabul` (`stok.giris`) satın alma satır�
 |---|---|---|---|
 | `GET /stok/malzeme-fisleri`, `GET /stok/malzeme-fisleri/:id` (stok okuma) | yalnız okuma; fiş elle düzenlenmez, satır stok hareketinden | `malzeme-fisi.test.ts` liste ve ayrıntı 200 | olmayan fiş 404 |
 | `POST /stok/malzeme-fisleri/:id/gonder` (`stok.malzeme-fisi-gonder`) | sürüm; Logo durumu bilinmiyorsa 409; yalnız elle türde bekleyen ya da hatalı fişte (kapalı tür, satırsız fiş 409); zaman ve kişi sunucudan | sahte çözücüyle elle fiş 200 | kalite rolü 403, eski sürüm 409, Logo bağlı değil 409 |
+
+| Uç (kart 2099) | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|
+| `GET /stok/tur-listeleri/:liste` (stok okuma) | yalnız okuma; liste adı üç değerden biri | `skt.test.ts` kimyasal ve takım listesi 200 | bilinmeyen liste 400, oturumsuz 401 |
+| `POST /stok/partiler/:id/son-kullanma` (`stok.skt-onayla`) | sürüm; tekrar korumalı; yalnız SKT takipli kartın lotu; eski ve yeni tarih, kişiyle değişiklik defterinde | müdür ilk düzeltme 200; aynı istek kimliği ilk cevabı döner | depocu 403, eski ya da boş sürüm 409, takipsiz kart 422, kimliksiz 400 |
+| `POST /stok/cikis` `sktOnay` | SKT'si geçmiş lot onaysız ONAY_GEREKLI; onay yalnız `stok.skt-onayla` ile; not harekette | müdür onayı 200 | onaysız 409, depocunun onayı 403 |

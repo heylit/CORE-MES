@@ -11,10 +11,11 @@ import { sevkIsiOzeti } from '../../sevkiyat/disari.ts';
 import {
   binde, bindenMetin, dusumKarari, geriAlmaEngeli, partiEtiketi, statuDegisimiEngeli, stoklanirMi, partiSec, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, tersYon, serbestMiktarEngeli,
   cikisKaliteKarari, kaliteDegisimiEngeli, kaliteKarariHareketiMi, karantinaEngeli, gozTamSayildiMi, eksiKaliteEngeli, statuKartEngeli, sevkTeslimIsi, faturaliSevkEngeli, sevkCikisEngeli,
+  sktGecmisMi, SKT_GECMIS_ONAY_GEREKLI,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { cikisOnerisiOku } from './malzeme.ts';
-import { korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, bakiyeDegistir, siraliKilitle, hareket } from './ortak.ts';
+import { korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, bakiyeDegistir, siraliKilitle, hareket, sktBugun } from './ortak.ts';
 import { kalanKimligi } from './teslim.ts';
 import { sarfEmriDenetle, statuler, rezerveyiAsmasin, rezerveDegistir } from './uretim.ts';
 
@@ -63,6 +64,7 @@ export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<
   if (karantina) throw gecersiz(karantina);
   await sarfEmriDenetle(db, kisiId, g.uretimEmriId === undefined || g.uretimEmriId === null ? null : Number(g.uretimEmriId));
   const p = await kaynakPartisi(db, malzemeId, konumId, g.partiId === undefined ? undefined : g.partiId === null ? null : Number(g.partiId), 'partiId', kalite);
+  const sktNotu = await sktGecmisDenetle(db, p.partiId, g.sktOnay === true);
   const miktar = bindenMetin(binde(g.miktar));
   return korumali(async () => {
     const b = await sorgular.bakiyeKilitle(db, malzemeId, konumId, p.partiId, null, kalite);
@@ -72,7 +74,7 @@ export async function cikisYap(db: Db, kisiId: number, g: CikisKomutu): Promise<
     const emir = g.uretimEmriId === undefined || g.uretimEmriId === null ? null : Number(g.uretimEmriId);
     // Karar bekleyen ve red parça rezerveye girmez (135): ayrılanı ne yer ne düşürür.
     if (kalite === 'serbest') await rezerveyiAsmasin(db, malzemeId, null, emir, binde(miktar));
-    const not = karar?.not ?? null;
+    const not = [karar?.not ?? null, sktNotu].filter(Boolean).join(' · ') || null;
     const id = await sorgular.hareketYaz(db, hareket({
       tur: 'cikis', malzemeId, miktar, kisiId, partiId: p.partiId, partiSecimi: p.secim, kaynakKonumId: konumId, onayliEksi, kaynakKaliteDurumu: kalite,
       cikisNedeni: g.cikisNedeni, uretimEmriId: emir, aciklama: not === null ? g.aciklama ?? null : [not, g.aciklama].filter(Boolean).join(' · ').slice(0, 200),
@@ -425,6 +427,18 @@ async function faturaliSevkDenetle(db: Db, h: { tur: string; cikisNedeni: string
 }
 // 1387 a: elle eksiye düşüm onayı ayrı işlemdir (stok.eksi-onayla, yalnız müdür). Terminalin ve akışların kendi eksisi bu onayı istemez;
 // onlar uçtan değil, çağıranın işleminden yazar.
+// 2099-5 a: SKT'si geçmiş lot müdür onayı olmadan çıkmaz; onay ayrı işlemdir (stok.skt-onayla), eksi onayını açmaz.
+// Onaylı çıkışta hareketin açıklamasına yazılacak not döner (onay hareketle kalır); geçmemiş lotta null.
+export async function sktGecmisDenetle(db: Db, partiId: number | null, onayli: boolean): Promise<string | null> {
+  if (partiId === null) return null;
+  const skt = await sorgular.partiSonKullanma(db, partiId);
+  if (!sktGecmisMi(skt, sktBugun())) return null;
+  if (!onayli) throw onayGerekli(SKT_GECMIS_ONAY_GEREKLI, { sonKullanma: skt, sktOnayi: true });
+  return `SKT ${skt} geçmiş, müdür onayıyla`;
+}
+export function sktOnayiDenetle(k: Kullanici, g: { sktOnay?: boolean | undefined }): void {
+  if (g.sktOnay === true && !islemVarMi(k, 'stok.skt-onayla')) throw yetkiYok('Son kullanma tarihi geçmiş lotu çıkarma onayı yetkiniz yok; müdür onaylar.');
+}
 export function eksiOnayiDenetle(k: Kullanici, g: { eksiOnay?: boolean | undefined }): void {
   if (g.eksiOnay === true && !islemVarMi(k, 'stok.eksi-onayla')) throw yetkiYok('Stoğu eksiye düşürme onayı yetkiniz yok; müdür onaylar.');
 }
