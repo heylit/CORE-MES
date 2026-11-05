@@ -44,11 +44,15 @@ export function birimFarki(onceki: Taslak | null | undefined, yeni: Taslak | nul
     const b = yeni && yeni.com ? String(yeni.com.birim || '').trim() : '';
     return b && !String((onceki && onceki.com && onceki.com.birim) || '').trim() ? { f: 'Stok birimi', a: '—', b } : null;
 }
+// Türetilen satırlar (otomatik kod ve açıklama, ağırlık, fiyat) başka alanın sonucudur, ayrı fark sayılmaz. Elle yazılan açıklama
+// türetilmez: atlanırsa onaylı kartta yalnız açıklama değişince talep boş kalır ve gönderilmez.
 export function diffItems(a: Taslak, b: Taslak): RevizyonFarki[] {
     const skip = /^(Kod ve açıklama\||Eşdeğerler\||Form ve ölçüler\|(Ağırlık|Metre ağırlığı|m² ağırlığı)|Ticari\|(kg fiyatı|Parça fiyatı))/;
+    const elle = (k: string): boolean => { const r = /^Kod ve açıklama\|Açıklama ([123])$/.exec(k); if (!r)
+        return false; const i = +r[1]! - 1; return !!((a.acManual as boolean[] | undefined)?.[i] || (b.acManual as boolean[] | undefined)?.[i]); };
     const m = (rows: DuzSatir[]): Sozluk<string> => Object.fromEntries(rows.map(([s, k, v]) => [s + '|' + k, v]));
     const A = m(flatItem(a, true)), B = m(flatItem(b, true));
-    const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])].filter(k => !skip.test(k));
+    const keys = [...new Set([...Object.keys(A), ...Object.keys(B)])].filter(k => !skip.test(k) || elle(k));
     return keys.filter(k => (A[k] ?? '—') !== (B[k] ?? '—')).map(k => ({ f: k.split('|')[1]!, a: A[k] ?? '—', b: B[k] ?? '—' })).slice(0, 40);
 }
 export function withRev(item: Taslak, prev?: Taslak | null): Taslak {
