@@ -107,7 +107,7 @@ describe('kişi kartı değişiklik defteri (gerçek PostgreSQL)', () => {
     });
   const defter = (): Promise<Defter[]> =>
     o().sahip.sorgu<Defter>(
-      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'kisi' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY id",
+      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'kisi' AND anahtar = jsonb_build_object('id', $1::int) ORDER BY denetim_degisiklik.id",
       [kisi],
     );
 

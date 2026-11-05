@@ -3,7 +3,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import { islemleriBirlestir } from './kurallar.ts';
 import {
-  etkinKisiSecenekleri, kisiAra, kisiAdlariniBul, kisiGorevBul, kisiGorevleriniBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kullaniciAdindanKisiNo, rolKodSatirlari,
+  etkinKisiSecenekleri, kisiAra, kisiAdlariniBul, kisiGorevBul, kisiGorevleriniBul, kisiIslemSatirlari, kisiRolIslemSatirlari, kisininRolSatirlari, kullaniciAdindanKisiNo, rolBayrakSatirlari, rolKodSatirlari,
   rollerdekiKisiSatirlari,
 } from './sorgular.ts';
 
@@ -70,6 +70,18 @@ export async function kisiGorevleri(db: Db, idler: readonly number[]): Promise<M
 // Bütün roller (kimlik, kod, ad); ekip çağrısı yönlendirmesinin seçenekleri (298 a). Yetki denetlemez: çağıran uç denetler.
 export function rolSecenekleri(db: Db): Promise<{ id: number; kod: string; ad: string }[]> {
   return rolKodSatirlari(db);
+}
+
+// Kişinin rolleri (kimlik, kod, yönetici bayrağı); rol başına yetki boyutu tutan modül (ortak-dosyalar klasör yetkisi, ADR 0030)
+// kişinin düzeyini bundan çözer. Kişiye verilen ek işlem rol değildir, girmez. Yetki denetlemez: çağıran uç denetler.
+export function kisininRolleri(db: Db, kisiId: number): Promise<{ id: number; kod: string; yonetici: boolean }[]> {
+  return kisininRolSatirlari(db, kisiId);
+}
+
+// Bütün roller yönetici bayrağıyla (ad sırasıyla); rol başına yetki yazan ekran bayraklı rolü sabit gösterir ve ona satır yazmaz.
+// Yetki denetlemez: çağıran uç denetler.
+export function rollerVeBayraklari(db: Db): Promise<{ id: number; kod: string; ad: string; yonetici: boolean }[]> {
+  return rolBayrakSatirlari(db);
 }
 
 // Verilen rollerden birini taşıyan etkin ve girişli kişiler, kimlik sırasıyla. Boş dizide sorgu atılmaz.
