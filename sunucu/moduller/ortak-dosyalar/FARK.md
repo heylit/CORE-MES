@@ -6,6 +6,7 @@ Başvuru: onaylı prototip (2067-1 a) ve ADR 0030 (2067-2 a), kodu "2067 teyit".
 ## Eklenen
 - ADR `belgeler/adr/0030-ortak-dosyalar.md` (onaylı taslağın aynısı) ve dizin satırı.
 - Göç `sunucu/gocler/20261105085000_ortak_dosyalar_tablolar.sql`: yalnız yeni, boş tablolar (`ortak_dosyalar_klasor`, `_yetki`, `_dosya`, `_surum`).
+- Göç `sunucu/gocler/20261105086000_kisiler_ortak_dosyalar_sayfasi.sql` (karar 2067-3 b): yönetici olmayan bütün rollere `sayfa.ortak-dosyalar`; veri silinmez.
 - Sözleşme `paylasilan/sozlesme/ortak-dosyalar.ts`, işlem `paylasilan/islemler/ortak-dosyalar.ts` (`ortak-dosyalar.yetki-ver`), sayfa ve ikinci menü
   `paylasilan/sayfalar/ortak-dosyalar.ts` (`/ortak-dosyalar`, grup Yönetim; Klasörler, Son eklenenler, Arşiv).
 - Toplayıcı satırları ayrı commit'te: `paylasilan/islemler.ts`, `paylasilan/sayfalar.ts`, `paylasilan/islem-adlari.ts` (yalnız bu modülün satırları).

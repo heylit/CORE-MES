@@ -270,6 +270,7 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
       'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama',
       'uretim-emirleri.ara-istasyon',
       'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
+      'sayfa.ortak-dosyalar',
     ].sort();
     assert.deepEqual(await islemler(), OPERATOR);
     assert.equal((await o.istek(hedefCerezi, 'GET', '/kisiler')).statusCode, 403);
