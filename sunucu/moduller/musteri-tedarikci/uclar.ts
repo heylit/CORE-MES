@@ -2,7 +2,8 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
   firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi,
-  kimlikParametresi, yillikKarneGovdesi,
+  kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logodanFirmaAlGovdesi, logoyaBaglaGovdesi,
+  yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import * as servis from './servis.ts';
 
@@ -107,5 +108,43 @@ export const uclar = [
     govde: yillikKarneGovdesi,
     cevap: karneCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.yillikKarneEkle(db, kullanici, parametre.id, govde),
+  }),
+  // Logo'dan cari (2118-3 a): yalnız firma yazabilen arar ve alır. Okumalar köprüyü beklediği için transaction dışındadır;
+  // komutlar köprüye gitmez, aynı kişinin son okumasını kullanır.
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/logo-cari/ara',
+    yetki: 'musteri-tedarikci.yaz',
+    txDisi: true,
+    sorgu: logoCariAramaSorgusu,
+    cevap: logoCariAramaCevabi,
+    isle: ({ db, kullanici, sorgu }) => servis.logodaCariAra(db, kullanici, sorgu.q),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/logo-cari',
+    yetki: 'musteri-tedarikci.yaz',
+    txDisi: true,
+    sorgu: logoCariSorgusu,
+    cevap: logoCariCevabi,
+    isle: ({ db, kullanici, sorgu }) => servis.logodanCariOku(db, kullanici, sorgu.kod),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/logo-cari/al',
+    yetki: 'musteri-tedarikci.yaz',
+    tekrarKorumali: true,
+    govde: logodanFirmaAlGovdesi,
+    cevap: firmaCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ firma: await servis.logodanFirmaAl(db, kullanici, govde) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/firmalar/:id/logo-bagla',
+    yetki: 'musteri-tedarikci.yaz',
+    parametre: kimlikParametresi,
+    govde: logoyaBaglaGovdesi,
+    cevap: firmaCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => ({ firma: await servis.firmayiLogoyaBagla(db, kullanici, parametre.id, govde) }),
   }),
 ];

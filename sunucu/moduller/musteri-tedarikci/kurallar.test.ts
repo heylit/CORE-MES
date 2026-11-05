@@ -147,3 +147,18 @@ test('MT-17: karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır'
   assert.equal(karneYazmaHatasi('ikisi'), null);
   assert.notEqual(karneYazmaHatasi('musteri'), null);
 });
+
+test('MT-30 (2118): Logo carisinin türü, kod sınırı, bağlanabilirlik ve bellek süresi', async () => {
+  const k = await import('./kurallar.ts');
+  assert.deepEqual([1, 2, 3, null, 7].map(k.logoCariTuru), ['musteri', 'tedarikci', 'ikisi', 'ikisi', 'ikisi']);
+  assert.equal(k.logoCariKoduHatasi('LG.1'), null);
+  assert.notEqual(k.logoCariKoduHatasi('X'.repeat(41)), null);
+  assert.notEqual(k.logoCariKoduHatasi(' LG.1'), null);
+  assert.equal(k.logoyaBaglanabilir({ logoKayitNo: null, logoCariKodu: null }, 'LG.1'), true);
+  assert.equal(k.logoyaBaglanabilir({ logoKayitNo: null, logoCariKodu: 'lg.1' }, 'LG.1'), true);
+  assert.equal(k.logoyaBaglanabilir({ logoKayitNo: null, logoCariKodu: 'LG.2' }, 'LG.1'), false);
+  assert.equal(k.logoyaBaglanabilir({ logoKayitNo: 9, logoCariKodu: null }, 'LG.1'), false);
+  assert.equal(k.logoCariBellegiGecerliMi(1000, 1000 + k.LOGO_CARI_BELLEK_MS - 1), true);
+  assert.equal(k.logoCariBellegiGecerliMi(1000, 1000 + k.LOGO_CARI_BELLEK_MS), false);
+  assert.equal(k.logoCariBellegiGecerliMi(1000, 999), false);
+});

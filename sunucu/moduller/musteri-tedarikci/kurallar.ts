@@ -2,7 +2,9 @@ import {
   ADRES_SINIRI, FIRMA_ARAMA_SINIRI, KARNE_AGIRLIKLARI, KARNE_DONEM_AYI, KARNE_EN_AZ_LOT, KARNE_EN_AZ_TESLIM, KARNE_SINIFLARI,
   KARNE_SINIF_ALT_SINIRLARI, LOT_KARARLARI, LOT_KARAR_PUANI, TESLIM_TOLERANS_GUNU,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import type { FirmaKimligi, FirmaTuru, KarneOlayKaynagi, KarneOzeti, KarneSinifi, LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type {
+  FirmaKimligi, FirmaTuru, KarneOlayKaynagi, KarneOzeti, KarneSinifi, LogoCariEslesmesi, LogoCariOnerisi, LotKarari,
+} from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Müşteri ve tedarikçi iş kuralları (saf). Numara (MT-n) KURAL-TEST.md ile aynıdır; finanstan gelenlerin eski numarası parantezde.
 
@@ -240,4 +242,89 @@ export function gecikmeOzetleri(ornekler: readonly GecikmeOrnegi[]): GecikmeOzet
         enCokGecikmeGun: gecikmeler[n - 1]!,
       };
     });
+}
+
+// MT-30 (2118): Logo carisi. Logo modülünün okuduğu cari burada kendi tipiyle tutulur; modül logoyu ithal etmez (ters bağ kablolamada).
+export interface LogoCariBilgisi {
+  logoKayitNo: number;
+  kod: string;
+  ad: string | null;
+  kartTuru: number | null;
+  vergiNo: string | null;
+  tcKimlikNo: string | null;
+  vergiDairesi: string | null;
+  adres: string | null;
+  ilce: string | null;
+  il: string | null;
+  postaKodu: string | null;
+  telefon: string | null;
+  ePosta: string | null;
+  aktif: boolean;
+}
+
+// VARSAYIM (Logo CLCARD.CARDTYPE): 1 alıcı, 2 satıcı, 3 alıcı + satıcı; bilinmeyen tür "ikisi" önerilir, kullanıcı formda düzeltir.
+export function logoCariTuru(kartTuru: number | null): FirmaTuru {
+  if (kartTuru === 1) return 'musteri';
+  if (kartTuru === 2) return 'tedarikci';
+  return 'ikisi';
+}
+
+const kirp = (m: string | null, azami: number): string | null => {
+  const t = m?.trim() ?? '';
+  return t === '' ? null : t.slice(0, azami);
+};
+const EPOSTA = /^[^@\s]+@[^@\s]+$/;
+
+// Kod TMI firma kodu kısıtına (1-40 karakter, baştaki ve sondaki boşluk yok) sığmazsa cari alınamaz ve bağlanamaz.
+export function logoCariKoduHatasi(kod: string): string | null {
+  if (kod.length === 0 || kod.length > 40) return 'Logo cari kodu 1-40 karakter olmalı; bu cari TMI\'ye alınamaz.';
+  if (kod.trim() !== kod) return 'Logo cari kodunun başında ya da sonunda boşluk var; bu cari TMI\'ye alınamaz.';
+  return null;
+}
+
+// Forma öneri (2118-1 a: kod Logo kodudur). Vergi numarası Türkiye biçimine uymuyorsa önerilmez (kısıt reddederdi); ülke TR varsayılır.
+export function logoCariOnerisi(c: LogoCariBilgisi): LogoCariOnerisi {
+  const vergi = [c.vergiNo, c.tcKimlikNo].map((v) => v?.trim() ?? '').find((v) => TR_VERGI_NO.test(v)) ?? null;
+  const ePosta = kirp(c.ePosta, 200);
+  return {
+    kod: c.kod, ad: kirp(c.ad, 200) ?? c.kod.slice(0, 200), tur: logoCariTuru(c.kartTuru), ulkeKodu: 'TR', vergiNo: vergi,
+    vergiDairesi: kirp(c.vergiDairesi, 100), adres: kirp(c.adres, 500), ilce: kirp(c.ilce, 100), il: kirp(c.il, 100),
+    postaKodu: kirp(c.postaKodu, 20), telefon: kirp(c.telefon, 40), ePosta: ePosta !== null && EPOSTA.test(ePosta) ? ePosta : null,
+    logoCariKodu: c.kod,
+  };
+}
+
+// 2118-2 a: eşleşen firma varsa yeni kart açılmaz. Sıra: Logo kayıt numarası, Logo cari kodu, firma kodu, vergi numarası
+// (kod karşılaştırması büyük/küçük harfe duyarsızdır, tekil indeks gibi).
+type LogoCariEslesmeNedeni = LogoCariEslesmesi['neden'];
+export interface LogoCariAdayi {
+  id: number; kod: string | null; ad: string; vergiNo: string | null; logoKayitNo: number | null; logoCariKodu: string | null; surum: number;
+}
+const ayni = (a: string | null, b: string): boolean => a !== null && a.toUpperCase() === b.toUpperCase();
+export function logoCariEslesmesi(c: LogoCariBilgisi, adaylar: readonly LogoCariAdayi[]): LogoCariEslesmesi | null {
+  const vergi = logoCariOnerisi(c).vergiNo;
+  const sira: [LogoCariEslesmeNedeni, (a: LogoCariAdayi) => boolean][] = [
+    ['kayit-no', (a) => a.logoKayitNo === c.logoKayitNo],
+    ['cari-kodu', (a) => ayni(a.logoCariKodu, c.kod)],
+    ['kod', (a) => ayni(a.kod, c.kod)],
+    ['vergi-no', (a) => vergi !== null && a.vergiNo === vergi],
+  ];
+  for (const [neden, uyar] of sira) {
+    const a = adaylar.find(uyar);
+    if (a) return { firmaId: a.id, kod: a.kod, ad: a.ad, neden, baglanabilir: logoyaBaglanabilir(a, c.kod), surum: a.surum };
+  }
+  return null;
+}
+
+// Bağlama yalnız Logo alanlarını yazar (TMI kazanır, 2116-2 a ile aynı): firma Logo'ya bağlı olmamalı, cari kodu boş ya da aynı olmalı;
+// kodu doluysa ve Logo kodundan farklıysa kod korunur (bağlama kodu değiştirmez). Kodu TMI'ye sığmayan cari bağlanmaz.
+export function logoyaBaglanabilir(a: Pick<LogoCariAdayi, 'logoKayitNo' | 'logoCariKodu'>, logoKodu: string): boolean {
+  return a.logoKayitNo === null && (a.logoCariKodu === null || ayni(a.logoCariKodu, logoKodu)) && logoCariKoduHatasi(logoKodu) === null;
+}
+
+// Alma ve bağlama komutu köprüye gitmez (POST transaction'ında 60 saniyelik köprü beklenmez): aynı kişinin aramasında görülen cari
+// bu süre içinde kullanılır, sonra yeniden aranır.
+export const LOGO_CARI_BELLEK_MS = 10 * 60_000;
+export function logoCariBellegiGecerliMi(zaman: number, simdi: number): boolean {
+  return simdi - zaman >= 0 && simdi - zaman < LOGO_CARI_BELLEK_MS;
 }

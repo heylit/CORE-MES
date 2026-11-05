@@ -20,3 +20,7 @@ export type { OrnekFirmaAnahtari } from './ornek-veri.ts';
 
 // Ctrl K genel araması (sözleşme 1233): çekirdek bu adı bulur ve yetkiyi kaynağı çağırmadan önce denetler.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [firmaKayitKaynagi];
+// 2118: Logo cari araması ve tek cari okuması ters yöndedir (logo bu modülü ithal eder); sunucu/kablolama.ts bağlar.
+export { logoCariCozuculeriKaydet } from './servis.ts';
+export type { LogoCariAramaCozucusu, LogoCariOkumaCozucusu, LogoCariSonucu } from './servis.ts';
+export type { LogoCariBilgisi } from './kurallar.ts';

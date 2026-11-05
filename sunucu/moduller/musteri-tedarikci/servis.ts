@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import type { KisitEslemesi } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -14,6 +14,8 @@ import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import { LOGO_CARI_SONUC_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { LogoCariAramaCevabi, LogoCariCevabi, LogoCariSatiri, LogodanFirmaAlGovdesi, LogoyaBaglaGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
   Adres, AdresKimligi, Firma, FirmaAyrintiCevabi, FirmaDuzeltmesi, FirmaKimligi, FirmaSatiri, FirmaTuru, MusteriSinifi, firmaListeSorgusu,
   firmaSecimSorgusu,
@@ -22,7 +24,8 @@ import type { z } from 'zod';
 import {
   FASON_SECIM_SINIRI, LOGO_KILIDI_ILETISI, adresSiniriHatasi, gecikmeOzetleri, karneDonemi, karneHesapla, karneYazmaHatasi, zamanindaMi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami,
 } from './kurallar.ts';
-import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari } from './kurallar.ts';
+import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari, LogoCariBilgisi } from './kurallar.ts';
+import { logoCariBellegiGecerliMi, logoCariEslesmesi, logoCariKoduHatasi, logoCariOnerisi, logoyaBaglanabilir } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Uç katmanının denetim eki (çekirdek `denetimEki`): komut başına bir kez çağrılır.
@@ -394,4 +397,110 @@ export async function yillikKarneEkle(db: Db, kullanici: Kullanici, id: number, 
     puan: karne.puan, sinif: karne.sinif, not: g.not ?? null, degerlendirenId: kullanici.id,
   }));
   return firmaKarnesi(db, id);
+}
+
+// ---- Logo'dan cari (2118; 2118-1 a, 2118-2 a, 2118-3 a) ----
+
+// Logo modülü bu modülü ithal eder; ters yöndeki okuma sunucu/kablolama.ts'nin bağladığı çözücülerledir. Bağlanmamışsa okuma "kapalı" döner.
+export type LogoCariSonucu<T> = { tur: 'tamam'; veri: T } | { tur: 'kapali' | 'ortam-degiskeni-yok' | 'hata'; ileti: string };
+export type LogoCariAramaCozucusu = (db: Db, metin: string) => Promise<LogoCariSonucu<LogoCariBilgisi[]>>;
+export type LogoCariOkumaCozucusu = (db: Db, kod: string) => Promise<LogoCariSonucu<LogoCariBilgisi | null>>;
+let logoCariAramasi: LogoCariAramaCozucusu | null = null;
+let logoCariOkumasi: LogoCariOkumaCozucusu | null = null;
+export function logoCariCozuculeriKaydet(c: { ara: LogoCariAramaCozucusu; oku: LogoCariOkumaCozucusu } | null): void {
+  logoCariAramasi = c?.ara ?? null;
+  logoCariOkumasi = c?.oku ?? null;
+}
+const BAGLI_DEGIL: LogoCariSonucu<never> = { tur: 'kapali', ileti: 'Logo cari okuması bu sunucuda bağlı değil.' };
+
+// Alma ve bağlama komutu köprüye gitmez: kişinin aramada ya da tek okumada gördüğü cari süreç belleğinde tutulur (tek sunucu).
+// Bellek sınırlıdır; dolunca en eski girdi düşer. Sunucu yeniden başlarsa kullanıcı yeniden arar.
+const BELLEK_EN_COK = 2000;
+const cariBellegi = new Map<string, { cari: LogoCariBilgisi; zaman: number }>();
+const bellekAnahtari = (kisiId: number, kod: string) => `${kisiId}:${kod.toUpperCase()}`;
+let saat: () => number = Date.now;
+export function logoCariSaatiKur(s: (() => number) | null): void { saat = s ?? Date.now; }
+function bellegeYaz(kisiId: number, cariler: readonly LogoCariBilgisi[]): void {
+  const simdi = saat();
+  for (const cari of cariler) {
+    const anahtar = bellekAnahtari(kisiId, cari.kod);
+    cariBellegi.delete(anahtar);
+    cariBellegi.set(anahtar, { cari, zaman: simdi });
+  }
+  for (const anahtar of cariBellegi.keys()) {
+    if (cariBellegi.size <= BELLEK_EN_COK) break;
+    cariBellegi.delete(anahtar);
+  }
+}
+function bellektenOku(kisiId: number, kod: string): LogoCariBilgisi {
+  const girdi = cariBellegi.get(bellekAnahtari(kisiId, kod));
+  if (!girdi || !logoCariBellegiGecerliMi(girdi.zaman, saat())) {
+    throw cakisma('Logo carisinin bilgisi eskidi ya da bulunamadı; cariyi Logo\'da yeniden arayın.');
+  }
+  return girdi.cari;
+}
+
+async function logoCariSatirlari(db: Db, cariler: readonly LogoCariBilgisi[]): Promise<LogoCariSatiri[]> {
+  if (cariler.length === 0) return [];
+  const oneriler = cariler.map(logoCariOnerisi);
+  const adaylar = await sorgular.logoCariAdaylari(db, {
+    kayitNolar: cariler.map((c) => c.logoKayitNo),
+    kodlar: cariler.map((c) => c.kod.toUpperCase()),
+    vergiNolar: oneriler.flatMap((o) => (o.vergiNo === null ? [] : [o.vergiNo])),
+  });
+  return cariler.map((c, i) => ({
+    logoKayitNo: c.logoKayitNo, kod: c.kod, ad: c.ad, aktif: c.aktif, vergiNo: c.vergiNo ?? c.tcKimlikNo, il: c.il, telefon: c.telefon,
+    eslesme: logoCariEslesmesi(c, adaylar), alinamaz: logoCariKoduHatasi(c.kod), oneri: oneriler[i]!,
+  }));
+}
+
+// Okuma transaction dışındadır (uç txDisi): köprü 60 saniyeye kadar bekleyebilir; eşleşme sorgusu doğrudan veritabanıyla koşar.
+export async function logodaCariAra(db: Db, kullanici: Kullanici, metin: string): Promise<LogoCariAramaCevabi> {
+  const r = logoCariAramasi ? await logoCariAramasi(db, metin) : BAGLI_DEGIL;
+  if (r.tur !== 'tamam') return { durum: r.tur, ileti: r.ileti, cariler: [] };
+  const cariler = r.veri.slice(0, LOGO_CARI_SONUC_SINIRI);
+  bellegeYaz(kullanici.id, cariler);
+  return { durum: 'tamam', ileti: r.veri.length > cariler.length ? `İlk ${LOGO_CARI_SONUC_SINIRI} cari gösteriliyor; aramayı daraltın.` : null, cariler: await logoCariSatirlari(db, cariler) };
+}
+
+export async function logodanCariOku(db: Db, kullanici: Kullanici, kod: string): Promise<LogoCariCevabi> {
+  const r = logoCariOkumasi ? await logoCariOkumasi(db, kod) : BAGLI_DEGIL;
+  if (r.tur !== 'tamam') return { durum: r.tur, ileti: r.ileti, cari: null };
+  if (r.veri === null) return { durum: 'tamam', ileti: 'Bu kodla Logo\'da cari yok.', cari: null };
+  bellegeYaz(kullanici.id, [r.veri]);
+  return { durum: 'tamam', ileti: null, cari: (await logoCariSatirlari(db, [r.veri]))[0]! };
+}
+
+// 2118-2 a: TMI'de eşleşen firma varsa yeni kart açılmaz. Kod ve Logo cari kodu Logo kodudur (2118-1 a); kalan alanlar formdan gelir.
+export async function logodanFirmaAl(db: Db, kullanici: Kullanici, g: LogodanFirmaAlGovdesi & FirmaKimligi): Promise<Firma> {
+  const cari = bellektenOku(kullanici.id, g.logoKodu);
+  const kodHatasi = logoCariKoduHatasi(cari.kod);
+  if (kodHatasi) throw gecersiz(kodHatasi);
+  const oneri = logoCariOnerisi(cari);
+  const eslesme = logoCariEslesmesi(cari, await sorgular.logoCariAdaylari(db, {
+    kayitNolar: [cari.logoKayitNo], kodlar: [cari.kod.toUpperCase()], vergiNolar: oneri.vergiNo === null ? [] : [oneri.vergiNo],
+  }));
+  if (eslesme) {
+    const ad = eslesme.kod === null ? eslesme.ad : `${eslesme.kod} ${eslesme.ad}`;
+    throw cakisma(`Bu cari TMI'de var: ${ad}. Yeni kart açılmaz; firmayı Logo'ya bağlayın.`, { firmaId: eslesme.firmaId });
+  }
+  const { logoKodu: _, ...kimlik } = g;
+  const firma = await firmaEkle(db, kullanici, { ...kimlik, kod: cari.kod, logoCariKodu: cari.kod });
+  const bagli = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.logoBagiYaz(db, firma.id, firma.surum, { logoCariKodu: cari.kod, logoKayitNo: cari.logoKayitNo }, kullanici.id));
+  if (!bagli) throw new Error('Logo bağı yazılamadı.');
+  return bagli;
+}
+
+// Bağlama yalnız Logo kayıt numarasını ve cari kodunu yazar; firmanın öteki alanlarına dokunmaz (TMI kazanır, 2116-2 a ile aynı).
+export async function firmayiLogoyaBagla(db: Db, kullanici: Kullanici, id: number, g: LogoyaBaglaGovdesi & { surum: number }): Promise<Firma> {
+  const cari = bellektenOku(kullanici.id, g.logoKodu);
+  const eski = await kilitliGetir(db, id, g.surum);
+  if (!logoyaBaglanabilir(eski, cari.kod)) {
+    throw gecersiz(eski.logoKayitNo !== null
+      ? 'Firma zaten Logo\'ya bağlı.'
+      : logoCariKoduHatasi(cari.kod) ?? 'Firmanın Logo cari kodu bu cariyle aynı değil; bağlanamaz.');
+  }
+  const yeni = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.logoBagiYaz(db, id, g.surum, { logoCariKodu: cari.kod, logoKayitNo: cari.logoKayitNo }, kullanici.id));
+  if (!yeni) throw eskiSurum();
+  return yeni;
 }

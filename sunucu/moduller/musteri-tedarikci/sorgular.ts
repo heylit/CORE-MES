@@ -300,3 +300,31 @@ export function yillikKarneler(db: Db, firmaId: number, sinir: number): Promise<
   return db.sorgu<YillikKarneSatiri>(
     `SELECT ${YILLIK} FROM musteri_tedarikci_yillik_karne WHERE firma_id = $1 ORDER BY yil DESC LIMIT $2`, [firmaId, sinir]);
 }
+
+// 2118: Logo carisiyle eşleşebilecek firmalar (kayıt no, cari kodu ya da kod, vergi no). Kodlar büyük harfle gelir (tekil indeks gibi).
+export interface LogoCariAdaySatiri {
+  id: number; kod: string | null; ad: string; vergiNo: string | null; logoKayitNo: number | null; logoCariKodu: string | null; surum: number;
+}
+export function logoCariAdaylari(db: Db, a: { kayitNolar: number[]; kodlar: string[]; vergiNolar: string[] }): Promise<LogoCariAdaySatiri[]> {
+  return db.sorgu<LogoCariAdaySatiri>(
+    `SELECT id, kod, ad, vergi_no AS "vergiNo", logo_kayit_no AS "logoKayitNo", logo_cari_kodu AS "logoCariKodu", surum
+       FROM musteri_tedarikci_firma
+      WHERE logo_kayit_no = ANY($1::int[]) OR upper(logo_cari_kodu) = ANY($2::text[]) OR upper(kod) = ANY($2::text[])
+         OR vergi_no = ANY($3::text[])
+      ORDER BY id`,
+    [a.kayitNolar, a.kodlar, a.vergiNolar],
+  );
+}
+
+// Logo bağı yalnız Logo alanlarını yazar; firma Logo'ya bağlı değilken ve cari kodu boş ya da aynıyken (kod kilidi tetikte).
+export function logoBagiYaz(
+  db: Db, id: number, surum: number, b: { logoCariKodu: string; logoKayitNo: number }, kisiId: number,
+): Promise<Firma | null> {
+  return db.tek<Firma>(
+    `UPDATE musteri_tedarikci_firma
+        SET logo_cari_kodu = $3, logo_kayit_no = $4, logo_gonderim_durumu = 'gonderildi', guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 AND logo_kayit_no IS NULL AND (logo_cari_kodu IS NULL OR upper(logo_cari_kodu) = upper($3))
+      RETURNING ${FIRMA}`,
+    [id, surum, b.logoCariKodu, b.logoKayitNo, kisiId],
+  );
+}
