@@ -1,5 +1,6 @@
 import type { AyarTanimi, TurDegerleri } from './ayar-tanimi.ts';
 import { ARKON_AYARLARI } from './ayarlar/arkon.ts';
+import { ATOLYE_AYARLARI } from './ayarlar/atolye.ts';
 import { KABUK_AYARLARI } from './ayarlar/kabuk.ts';
 import { ETIKET_MERKEZI_AYARLARI } from './ayarlar/etiket-merkezi.ts';
 import { GEOMETRI_AYARLARI } from './ayarlar/geometri.ts';
@@ -26,6 +27,7 @@ export type { AyarTuru } from './ayar-tanimi.ts';
 // Değer hiç yazılmamışsa tanımın varsayılanı geçerlidir. Modül ayarlarını `ayarlar/<modül>.ts` dosyasında bildirir.
 export const AYAR_TANIMLARI = {
   ...ARKON_AYARLARI,
+  ...ATOLYE_AYARLARI,
   ...KABUK_AYARLARI,
   ...ETIKET_MERKEZI_AYARLARI,
   ...GEOMETRI_AYARLARI,

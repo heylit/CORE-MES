@@ -210,6 +210,13 @@ export const krokiGovdesi = z.object({
   ozet: z.string().regex(/^[0-9a-f]{64}$/, 'Özet SHA-256 onaltılık olmalı.'),
   sayfa: z.number().int().min(1, 'Sayfa en az 1.').max(9999),
 });
+// Ortak kroki saydamlığı (yüzde, tam sayı): fabrika ve bütün bölümlerde tek değer (2122-2 b); sistem ayarı atolye.kroki-saydamligi.
+export const KROKI_SAYDAMLIGI = { enAz: 10, enCok: 100, varsayilan: 70 } as const;
+const saydamlikSemasi = z.number().int().min(KROKI_SAYDAMLIGI.enAz).max(KROKI_SAYDAMLIGI.enCok);
+export const krokiAyariCevabi = z.object({ saydamlik: saydamlikSemasi });
+// Sürüm denetimi: ekranın gördüğü değer `beklenen`dir; arada başkası değiştirdiyse komut reddedilir (409).
+export const krokiAyariGovdesi = z.object({ saydamlik: saydamlikSemasi, beklenen: saydamlikSemasi });
+
 // Hizalama: PDF noktası (punto, sol üst köken) -> salon metresi; ölçek metre/punto, dönüş derece.
 export const krokiHizalaGovdesi = z.object({
   surum: z.number().int().min(1).max(TAM_SAYI_UST),
@@ -679,6 +686,9 @@ export type KrokiMerkezdenGovdesi = z.input<typeof krokiMerkezdenGovdesi>;
 export type KrokiGovdesi = z.input<typeof krokiGovdesi>;
 export type KrokiKaydi = z.output<typeof krokiGovdesi>;
 export type KrokiHizalaGovdesi = z.input<typeof krokiHizalaGovdesi>;
+export type KrokiAyariCevabi = z.output<typeof krokiAyariCevabi>;
+export type KrokiAyariGovdesi = z.input<typeof krokiAyariGovdesi>;
+export type KrokiAyariKaydi = z.output<typeof krokiAyariGovdesi>;
 export type KrokiHizalama = z.output<typeof krokiHizalaGovdesi>;
 export type KalemAmbalaji = z.output<typeof kalemAmbalaji>;
 export type RaftaGosterim = z.output<typeof raftaGosterim>;
