@@ -74,8 +74,8 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
 
   it('adımlar salt okunur gösterilir; tamamlayan ve saat notta; adımsız emirde bölüm yok', async () => {
     const adimlar: EmirAdimi[] = [
-      { id: 1, sira: 1, ad: 'Ölçü kontrol', aciklama: 'Kumpasla', asama: 'uretim', tamam: true, tamamlayan: { id: 5, ad: 'Deneme Operator' }, tamamlanma: '2026-10-06T09:30:00+00:00' },
-      { id: 2, sira: 2, ad: 'Yüzey kontrol', aciklama: null, asama: 'uretim', tamam: false, tamamlayan: null, tamamlanma: null },
+      { id: 1, sira: 1, ad: 'Ölçü kontrol', aciklama: 'Kumpasla', asama: 'uretim', tamam: true, tamamlayan: { id: 5, ad: 'Deneme Operator' }, tamamlanma: '2026-10-06T09:30:00+00:00', kanit: null, gecenNot: null, buNot: null, talimat: null },
+      { id: 2, sira: 2, ad: 'Yüzey kontrol', aciklama: null, asama: 'uretim', tamam: false, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null },
     ];
     await ayrintiAc(basladi(6, CANLI), { adimlar });
     const grup = screen.getByRole('group', { name: 'Talimat adımları' });
