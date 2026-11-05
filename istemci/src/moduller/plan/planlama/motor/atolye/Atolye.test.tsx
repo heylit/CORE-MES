@@ -229,7 +229,9 @@ describe('PlanlamaAtolyesi', () => {
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
-    for (const ad of ['Şu olursa: denemeler', 'İyileştirme ara']) expect(within(ust).getByRole('button', { name: ad }).getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(within(ust).getByRole('button', { name: 'Şu olursa: denemeler' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    // 2129-1 b: güncel planda iyileştirme araması açıktır, sonucu önizlenir.
+    expect(within(ust).getByRole('button', { name: 'İyileştirme ara' }).getAttribute('aria-disabled')).toBeNull();
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
     fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).getByText('1 → 1')).toBeTruthy();

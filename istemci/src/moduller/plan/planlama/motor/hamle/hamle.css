@@ -1,0 +1,11 @@
+/* 2129-1 b: hamle önizlemesi şeridi; plan çubuğunun altında, tahtanın üstünde. */
+.tc-pym-hm {
+  display: grid; gap: var(--b-2); margin: 0 var(--b-2) var(--b-2); padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid);
+}
+.tc-pym-hm-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); min-width: 0; }
+.tc-pym-hm-ozet { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nokta); color: var(--muted); }
+.tc-pym-hm-dugmeler { display: inline-flex; gap: var(--b-2); margin-inline-start: auto; }
+.tc-pym-hm-liste { display: grid; gap: var(--nokta); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-xs); }
+.tc-pym-hm-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-pym-hm-kalan { color: var(--muted); }

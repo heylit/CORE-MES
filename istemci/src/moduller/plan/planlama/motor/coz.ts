@@ -6,8 +6,8 @@ import type { BekleyenDegisiklik, CozulmusPlan, PlanlamaCalismasi } from '../tip
 import { degerlendirmeHatasi, degerlendirmeIste } from '../siparis/degerlendirme.ts';
 
 // Planı kur (576, eski e-coz coz 'sifir'): motor sunucuda koşar (288 a, ADR 0018), plan değerlendirme ucunun `plan-kur` turuyla; ekran
-// sonucu kendi yazma yoluyla çalışmaya alır (geri alınabilir). Kayıtlı planı iyileştirme HiGHS gelene kadar pasiftir (579 b).
-// Hesap sürerken sayfanın bütün "Planı kur" düğmeleri tek durumu görür; aynı anda tek hesap.
+// sonucu kendi yazma yoluyla çalışmaya alır (geri alınabilir). Kayıtlı planı iyileştirme ve öne alma önizlemelidir (2129-1 b, hamle/).
+// Hesap sürerken sayfanın bütün motor düğmeleri tek durumu görür; aynı anda tek hesap.
 
 export const KURULUYOR = 'Plan kuruluyor; bir dakikaya kadar sürebilir.';
 export const KAYDEDILEMEDI = 'Çalışma kaydedilemedi; plan kurulmadı. Sayfayı yenileyip yeniden deneyin.';
@@ -15,8 +15,9 @@ export const VERI_DEGISTI = 'Plan kurulurken veri değişti; plan alınmadı. Sa
 
 let suruyor = false;
 const dinleyiciler = new Set<() => void>();
-const koy = (x: boolean): void => { suruyor = x; for (const f of dinleyiciler) f(); };
-const abone = (f: () => void) => { dinleyiciler.add(f); return () => { dinleyiciler.delete(f); }; };
+export const koy = (x: boolean): void => { suruyor = x; for (const f of dinleyiciler) f(); };
+export const abone = (f: () => void) => { dinleyiciler.add(f); return () => { dinleyiciler.delete(f); }; };
+export const hesapSuruyor = (): boolean => suruyor;
 
 // Sunucunun planı çalışmaya alınır (eski coz'un S.plan kaydı). Plan, değişikliğin artırdığı veri sürümüyle güncel sayılır (degistir dataVer'i
 // fn'den sonra bir artırır). Plan başka veri sürümünden kurulduysa false: plan bayat olurdu.

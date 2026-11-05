@@ -16,6 +16,7 @@ import { isoYerel, mesaiAdaylari, tezgahYazi, yolculuk, type PanelSecimi } from 
 import { RotaSekmesi, TakvimSekmesi } from './Sekmeler.tsx';
 import './secim.css';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
+import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
 
 // Yan panel (zl-yan dkHtml) ve seçim kartı (zc-tahta tkSecim, z-komuta kmSiparis, kmTezgah, kmIs): Özet, Harita ve Keşfet'te seçim olunca
 // görünümün sağında açılır, dar ekranda alttan. Taşı, kaydır ve ek mesai sunucu komutudur (1982 a, 2053); öteki motor hamleleri (öne al,
@@ -34,6 +35,8 @@ export interface Ozellikler {
   odakla?: ((m: string) => void) | null;
   // Sunucu komutları (1982 a, 2053): taşı ve ek mesai; verilmezse pasif.
   tasi?: AtolyeKomutlari['tasi'] | undefined; ekMesai?: AtolyeKomutlari['ekMesai'] | undefined;
+  // 2129-1 b: öne al önizlemesi; verilmezse pasif.
+  hamle?: Hamleci | null;
 }
 
 const Bolum = ({ baslik, simge, children }: { baslik: string; simge: SimgeAdi; children: ReactNode }) => (
@@ -107,7 +110,7 @@ export function SecimPaneli(o: Ozellikler) {
 
 // Bitişi ne belirliyor (kmSiparis): süre ayrışımının çubuğu, en büyük dört kalem; tezgâhta sıra beklemesi.
 const KAT_SIRA = Object.keys(KATEGORI_AD) as SureKategorisi[];
-function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani }: Ozellikler & { j: string }) {
+function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani, hamle }: Ozellikler & { j: string }) {
   const D = c.D; const sp = D.siparisler.find((x) => x.id === j); const J = p.J[j]; const due = cx.jobs[j]?.due ?? null;
   const urun = D.urunler.find((u) => u.id === sp?.urun)?.ad ?? sp?.urun ?? '';
   const a = ayristir(p, cx, j); const m = bekleme(p, cx, j); const l = yolculuk(c, s, j, t);
@@ -143,7 +146,7 @@ function SiparisKarti({ c, p, cx, s, t, j, planYaz: yaz, opSec, gunPlani }: Ozel
       </Bolum>
       <Bolum baslik="Yön ver" simge="target">
         <div className="tc-pym-km-hamleler">
-          <Dg ad="Öne al" simge="flag" birincil={gec} not={pasif} />
+          <Dg ad="Öne al" simge="flag" birincil={gec} {...(yaz ? hamleYapisi(hamle, (h) => { h.oneAl(j); }) : { not: pasif })} ipucu="Öne almanın yollarını dener, en iyisini önizler" />
           {l[0] && <Dg ad="Gün planı" simge="gantt" hayalet yap={() => { const r = l[0]?.r; if (r) gunPlani(r.S, { adim: r.id }); }} />}
         </div>
         <p className="tc-pym-km-alt">Öncelik</p>

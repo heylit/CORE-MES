@@ -399,10 +399,115 @@ function planUygula(isler) {
   return { plan: { ...planKaydi(cur, st, ref), ilk, dataVer: S.dataVer } };
 }
 
+/* ---------- önizlemeli hamleler (2129-1 b; sayfanın c-masa hamleDene, hamleKur, oneAlAdaylari) ----------
+   Kayıtlı plan taban alınır; sonuç yazılmaz, ekran kabul ederse çalışmaya yazar. Kullanıcının kilitleri yerinde kalır: öne al kilitli
+   adımı taşımaz (sayfa taşınan adımın kilidini kaldırırdı; burada kilit yalnız elle kalkar). */
+const HAMLE_DEGISEN_EN_COK = 200;
+function hamleFarki(k) {
+  const l = [];
+  for (const j of Object.keys(k.J)) {
+    const a = S.plan.J[j] ? S.plan.J[j].C : null, b = k.J[j].C;
+    if (a == null && b == null) continue;
+    const d = (b == null ? 1e4 : b) - (a == null ? 1e4 : a);
+    if (Math.abs(d) < 0.05) continue;
+    const ta = S.plan.J[j] ? S.plan.J[j].T : null, tb = k.J[j].T;
+    const durum = (ta == null || ta > 0.01) && tb != null && tb <= 0.01 ? 'zamanina-girdi' : (ta != null && ta <= 0.01) && (tb == null || tb > 0.01) ? 'gecikmeye-dustu' : 'ayni';
+    l.push({ siparisId: j, once: a, sonra: b, durum, d: Math.abs(d) });
+  }
+  return l.sort((x, y) => y.d - x.d).slice(0, HAMLE_DEGISEN_EN_COK).map(({ d, ...x }) => x);
+}
+/* kayıtlı planın gecikmesi aynı ölçüyle yeniden hesaplanır: kayıttaki özet eski bir hesaptan kalmış olabilir */
+function kayitliGecikme() { const st = stHazirla(stOf()); const cx = compile(st); return evaluate(lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false), st, null, true).wT; }
+
+/* İyileştirme ara: kayıtlı plan çözülür, çalışmanın çözüm bütçesinde LNS; kayıtlı plana göre değişim bedeli sayılır. Daha iyisi yoksa plan null. */
+function planIyilestir() {
+  const st = stHazirla(dengeKilit(stOf())); const cx = compile(st); const ms = (+S.w.sure || 10) * 1000; const t0 = Date.now(); const ref = { ops: S.plan.ops };
+  let cur = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, false); slack(cur, cx);
+  const E0 = evaluate(cur, st, ref, true); let E = E0, bulundu = false;
+  let seed = 17, durgun = 0;
+  while (Date.now() - t0 < ms && durgun < 4) {
+    const L = lns(st, cur, ref, { ms: Math.max(250, Math.min(1500, ms - (Date.now() - t0))), seed: seed++, free: true });
+    if (cmpEv(L.e, E) > 0 && (L.plan.fail || []).length <= (cur.fail || []).length) { cur = L.plan; E = L.e; durgun = 0; bulundu = true; } else durgun++;
+  }
+  if (!bulundu) return { plan: null, gecikmeOnce: E0.wT, gecikmeSonra: null, degisen: [] };
+  const k = planKaydi(cur, st, ref);
+  return { plan: { ...k, ilk: E0.wT, dataVer: S.dataVer }, gecikmeOnce: E0.wT, gecikmeSonra: k.ozet.wT, degisen: hamleFarki(k) };
+}
+
+/* Elle hamle (c-masa hamleDene): taşınan adımlar [id, tezgâh, anahtar saat] ile kod çözülür; öncülünü bekleyen adımlar yeniden anahtarlanır,
+   taşınanlar yerinde tutulup çevre kısa süre toparlanır, yalnız daha iyiyse alınır. */
+function dgHamle(mods) {
+  const st = stHazirla(stOf());
+  const cx = compile(st); let p = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, mods, cx, true, true);
+  const tas = +cx.A.tasimaSaat || 0, tasinan = new Set(mods.map(x => x[0]));
+  for (let i = 0; i < 4; i++) {
+    const yeni = [];
+    for (const r of Object.values(p.ops)) {
+      if (tasinan.has(r.id) || r.fas || !r.why || r.why.t !== 'tezgah') continue;
+      const o = cx.byId[r.id]; let hazir = 7; const j = cx.jobs[r.job]; if (j.rel != null) hazir = Math.max(hazir, j.rel);
+      for (const [pid, ty] of o.pr) { const q = p.ops[pid]; if (q) hazir = Math.max(hazir, (ty === 'o' && !q.fas ? q.lot1 : q.C) + (q.fas ? 0 : tas)); }
+      if (hazir < r.S - 1) yeni.push([r.id, r.m, hazir]);
+    }
+    if (!yeni.length) break;
+    const q = lnsDecode(st, p, yeni, cx, true, true);
+    if (cmpEv(evaluate(q, st, null, true), evaluate(p, st, null, true)) > 0) p = q; else break;
+  }
+  slack(p, cx);
+  if (mods.length) {
+    const stR = { ...st, locks: { ...st.locks } };
+    for (const [id] of mods) { const r = p.ops[id]; if (r) stR.locks[id] = { m: r.m, S: r.S }; }
+    const cxR = compile(stR); const pR = lnsDecode(stR, p, [], cxR, true);
+    const L = lns(stR, pR, null, { ms: 450, seed: 7, free: true });
+    const e0 = evaluate(p, st, null, true);
+    const geri = mods.map(([id]) => p.ops[id] && [id, p.ops[id].m, p.ops[id].S - 1e-3]).filter(Boolean);
+    const p2 = lnsDecode(stR, L.plan, geri, cxR, true, true); slack(p2, cxR);
+    const e1 = evaluate(p2, st, null, true);
+    const yerinde = geri.every(([id]) => { const a = p.ops[id], b = p2.ops[id]; return a && b && b.S <= a.S + 0.25; });
+    if (yerinde && cmpEv(e1, e0) > 0 && (p2.fail || []).length <= (p.fail || []).length) p = p2;
+  }
+  return { p, st };
+}
+
+/* Siparişi öne al (c-masa oneAl): her adım kapasitesiz en erken başlama anının hemen önüne, üç yolla denenir (yalnız kaynak bekleyenler,
+   bütün adımlar aynı tezgâhta, bütün adımlar en hızlı tezgâhta); sipariş için daha erken biten, eşitse toplam gecikmesi az olan seçilir. */
+const ONE_AL_YOLLARI = [[false, true, 'yalnız kaynak bekleyen adımlar'], [false, false, 'bütün adımlar, aynı tezgâhlarda'], [true, false, 'bütün adımlar, en hızlı tezgâhlarda']];
+function oneAl(jid) {
+  const bos = neden => ({ siparisId: jid, plan: null, yol: null, neden, bitisOnce: S.plan.J[jid] ? S.plan.J[jid].C : null, bitisSonra: null, gecikmeOnce: kayitliGecikme(), gecikmeSonra: null, degisen: [] });
+  const cx = cxAl(); if (!cx.jobs[jid]) return bos('Sipariş planda değil.');
+  const st = stOf(); const HT = lbHeadsTails(st, cx); const p = S.plan; const kilit = S.locks || {};
+  const byM = {}; for (const r of Object.values(p.ops)) if (isFinite(r.C)) (byM[r.m] = byM[r.m] || []).push(r);
+  for (const m in byM) byM[m].sort((a, b) => a.S - b.S);
+  const BEKLEME = new Set(['tezgah', 'personel', 'yetkin', 'ayarci', 'aparat']);
+  const modsOf = (hizli, yalnizBekleyen) => cx.jobs[jid].ops.map(o => {
+    const r = p.ops[o.id]; if (!r || r.done || r.act || kilit[o.id] || !isFinite(HT.head[o.id])) return null;
+    if (yalnizBekleyen && !(r.why && BEKLEME.has(r.why.t))) return null;
+    let m = r.m;
+    if (hizli && !r.fas) { const ms = o.c.filter(c => !c.fas && !c.opt); if (ms.length) m = ms.reduce((a, b) => (b.run + b.su < a.run + a.su ? b : a)).m; }
+    const tgt = Math.max(7, HT.head[o.id]); const q = (byM[m] || []).filter(z => z.id !== o.id);
+    let i = q.findIndex(z => z.S >= tgt - 1e-9); if (i < 0) i = q.length;
+    while (i > 0 && kilit[q[i - 1].id] && q[i - 1].S >= tgt) i--;
+    const lo = i > 0 ? q[i - 1].S : 7, hi = i < q.length ? q[i].S : lo + 48;
+    return [o.id, m, i < q.length ? Math.min(hi - 1e-3, Math.max(lo, tgt)) : Math.max(lo, tgt) + 1e-3];
+  }).filter(Boolean);
+  const c0 = p.J[jid] ? (p.J[jid].C ?? 1e9) : 1e9; let en = null;
+  for (const [hizli, yb, ad] of ONE_AL_YOLLARI) {
+    const mods = modsOf(hizli, yb); if (!mods.length) continue;
+    const { p: q, st: stq } = dgHamle(mods); const k = planKaydi(q, stq, null);
+    const c = k.J[jid] ? (k.J[jid].C ?? 1e9) : 1e9; const x = { c, k, ad, iyi: c < c0 - 0.05 };
+    if (!en || (x.iyi && !en.iyi) || (x.iyi === en.iyi && (x.c < en.c - 0.05 || (Math.abs(x.c - en.c) <= 0.05 && x.k.ozet.wT < en.k.ozet.wT - 0.05)))) en = x;
+  }
+  if (!en) return bos('Öne alınacak adım yok: adımlar başlamış, kilitli ya da bitmiş.');
+  if (!en.iyi) return bos('Sipariş daha erken bitirilemiyor; asıl bekleme kilitli ya da başlamış işlerde.');
+  return { siparisId: jid, plan: { ...en.k, dataVer: S.dataVer }, yol: en.ad, neden: null, bitisOnce: p.J[jid] ? p.J[jid].C : null, bitisSonra: en.k.J[jid] ? en.k.J[jid].C : null,
+    gecikmeOnce: kayitliGecikme(), gecikmeSonra: en.k.ozet.wT, degisen: hamleFarki(en.k) };
+}
+
 /* ---------- giriş ----------
    calisma, kayit ve kaynak planlama çalışması ucunun birleştirdiği girdidir (288 a); an: sunucunun şimdisi (ms); istek: sözleşmedeki tur ve alanları.
    Hata { hata: 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi' }: çağıran uygun koda çevirir. */
-const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari']);
+const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari', 'plan-iyilestir', 'one-al']);
+/* Hamle kayıtlı planı taban alır: plan veriden eskiyse önce bekleyen değişiklik uygulanır. */
+const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   S = null; U = {}; DG_CX = null; msOn = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
@@ -412,6 +517,7 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   saatSabitle(an, cxAl().ops.length);
   const zarf = sonuc => ({ dataVer: S.dataVer, baslangic: (S.D.meta && S.D.meta.baslangic) || null, simdi: cxAl().st.now, sonuc: { tur: istek.tur, ...sonuc } });
   if (DG_PLANLI.has(istek.tur) && !(S.plan && S.plan.ops)) return { hata: 'plan-yok' };
+  if (DG_GUNCEL.has(istek.tur) && !planGuncel()) return { hata: 'plan-bayat' };
   if (istek.siparisId != null) { const s = S.D.siparisler.find(x => x.id === istek.siparisId); if (!s) return { hata: 'siparis-yok' };
     if (istek.tur === 'parti-bolme') {
       if (!S.plan.J[s.id] || basladiMi(s.id)) return { hata: 'basladi' };
@@ -426,5 +532,7 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   if (istek.tur === 'malzeme-one-cekme') return zarf(moHesapla());
   if (istek.tur === 'parti-bolme') return zarf(partiBol(istek.siparisId, istek.dagitim, istek.adetler));
   if (istek.tur === 'siparis-kari') return zarf(siparisKari());
+  if (istek.tur === 'plan-iyilestir') return zarf(planIyilestir());
+  if (istek.tur === 'one-al') return zarf(oneAl(istek.siparisId));
   return null;
 }

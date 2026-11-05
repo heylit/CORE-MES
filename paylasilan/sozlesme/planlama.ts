@@ -166,6 +166,7 @@ export const satinAlmaEkiCevabi = z.object({
 // dataVer çalışmanınki); ekran seçeneği alırsa kendi yazma yoluyla yazar.
 export const DEGERLENDIRME_TURLERI = [
   'plan-kur', 'plan-uygula', 'plan-secenekleri', 'termin-secenekleri', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari',
+  'plan-iyilestir', 'one-al',
 ] as const;
 export const TERMIN_UZATMA_GUNLERI = [1, 2, 3, 5] as const;
 export const PARTI_SAYISI_EN_COK = 20;
@@ -187,6 +188,9 @@ export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
     adetler: z.array(z.number().int().positive()).min(2).max(PARTI_SAYISI_EN_COK).nullable(),
   }).strict(),
   z.object({ tur: z.literal('siparis-kari') }).strict(),
+  // 2129-1 b: kayıtlı planı iyileştirme araması ve siparişi öne alma önizlemesi. Plan güncel olmalı; sonuç yazılmaz, ekran kabul ederse yazar.
+  z.object({ tur: z.literal('plan-iyilestir') }).strict(),
+  z.object({ tur: z.literal('one-al'), siparisId: planSiparisi }).strict(),
 ]);
 // İki adım (463 a): başlatma girdiyi okur ve hesabı başlatır, sonuç kimlikle transaction açmadan okunur; hesap uç transaction'ını beklemez.
 export const degerlendirmeGovdesi = z.object({ surum: z.number().int().positive(), istek: degerlendirmeIstegi }).strict();
@@ -277,8 +281,23 @@ const siparisKari = z.object({
   })),
   bekleme: z.object({ tl, fin: tl, saat: saatDegeri }),
 });
+// Önizlemede bitişi değişen sipariş: önceki ve yeni bitiş (plan saati; yerleşmediyse null) ve gecikme durumundaki değişim.
+export const HAMLE_DURUMLARI = ['zamanina-girdi', 'gecikmeye-dustu', 'ayni'] as const;
+const degisenSiparis = z.object({ siparisId: z.string(), once: z.number().nullable(), sonra: z.number().nullable(), durum: z.enum(HAMLE_DURUMLARI) });
+// plan null: daha iyisi bulunamadı (iyileştirme) ya da sipariş öne alınamadı (öne al); neden metni yalnız o durumda.
+const planIyilestir = z.object({
+  tur: z.literal('plan-iyilestir'),
+  plan: planKaydiSemasi.nullable(), gecikmeOnce: saatDegeri, gecikmeSonra: z.number().nullable(), degisen: z.array(degisenSiparis),
+});
+const oneAl = z.object({
+  tur: z.literal('one-al'),
+  siparisId: z.string(), plan: planKaydiSemasi.nullable(), yol: z.string().nullable(), neden: z.string().nullable(),
+  bitisOnce: z.number().nullable(), bitisSonra: z.number().nullable(), gecikmeOnce: saatDegeri, gecikmeSonra: z.number().nullable(),
+  degisen: z.array(degisenSiparis),
+});
 export const degerlendirmeSonucu = z.discriminatedUnion('tur', [
   planKur, planUygula, planSecenekleri, terminSecenekleri, terminUzatma, malzemeTerminleri, malzemeOneCekme, partiBolme, siparisKari,
+  planIyilestir, oneAl,
 ]);
 export const degerlendirmeCevabi = z.object({
   calismaSurumu: z.number().int(),

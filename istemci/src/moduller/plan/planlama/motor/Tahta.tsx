@@ -33,6 +33,8 @@ import type { KbPanel } from './Duzenle.tsx';
 import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
 import { useAtolyeKomutlari, useOtomatikUygula } from './atolye/gonder.ts';
+import { HamleOnizlemesi } from './hamle/Onizleme.tsx';
+import { useHamle } from './hamle/hamle.ts';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -179,6 +181,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const uyar = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);
   const planKur = usePlanKur(o, uyar);
   const bekleyenUygula = useBekleyenUygula(o, uyar);
+  // 2129-1 b: iyileştirme ara ve öne al; sonuç önizlenir, kişi uygular.
+  const hamle = useHamle(o, uyar);
   // Taşı ve ek mesai sunucu komutudur (1982 a, 2053); ardından plan kendiliğinden uygulanır (2053-1 a).
   useOtomatikUygula(o, uyar);
   const { tasi, ekMesai } = useAtolyeKomutlari(o, c);
@@ -247,7 +251,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   return (
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
       <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} gecmis={gecmisAc && (() => gecmisAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
-        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} />
+        ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} hamle={hamle} />
+      <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
       <div className="tc-pym-govde">
         <div className="tc-pym-govde-ana">
           {fark && !odak && <FarkSeridi d={canliD} p={p} kapat={() => setFark(false)} />}
@@ -295,7 +300,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <SecimPaneli kok={dk} c={c} p={p} cx={cx} s={sahne} r={r} olcek={donem} t={zaman} secim={ps} sek={sek} sekSec={sekSec}
             komut={komut} planYaz={yetki.planYaz} planKilitle={yetki.planYaz} kapat={secimBirak} opSec={opSec} sipSec={(j) => sipSec(j, false)}
             rotaSec={(j) => { sipSec(j, false); setSekD({ k: `siparis:${j}`, x: 'rota' }); }}
-            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} odakla={(m) => odakAc({ g: tezgahGrubu(c.D, m), m })} tasi={tasi} ekMesai={ekMesai} />
+            zamanSec={zamanSec} gunPlani={gunPlani} hazirlikAc={hazirlikAc} odakla={(m) => odakAc({ g: tezgahGrubu(c.D, m), m })} tasi={tasi} ekMesai={ekMesai} hamle={hamle} />
         )}
       </div>
       {p && yetki.planYaz && (
