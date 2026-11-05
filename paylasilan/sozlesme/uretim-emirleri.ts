@@ -3,6 +3,7 @@ import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { TALIMAT_ASAMALARI } from './talimat-asamasi.ts';
 import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
 import { EMIR_TURLERI, EMIR_TURU_ADLARI } from './emir-turleri.ts';
 
@@ -208,6 +209,8 @@ export const adimSemasi = z.object({
   sira: z.number().int().positive(),
   ad: z.string(),
   aciklama: z.string().nullable(),
+  // Rotadaki talimat adımının aşaması (2098-1 a); talimatsız ya da eski emirde üretimdir.
+  asama: z.enum(TALIMAT_ASAMALARI),
   tamam: z.boolean(),
   // İkisi birlikte dolu ya da birlikte null: işaret geri alınınca kim ve ne zaman da silinir.
   tamamlayan: adliKayit.nullable(),

@@ -7,6 +7,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { AZAMI_ADIM, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type {
@@ -69,7 +70,8 @@ export interface IsEmriGirdisi {
   bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz';
   devirAdedi: number | null;
   talimatSurumu: number | null;
-  kontrolListesi: { ad: string; aciklama: string | null }[];
+  // Aşaması olmayan madde (düz talimat, rotasız emir) üretimdir.
+  kontrolListesi: { ad: string; aciklama: string | null; asama?: TalimatAsamasi }[];
   adaylar?: { kaynak: AtanabilirKaynak; ayarSuresiDk: string | null; birimSureDk: string | null }[];
   bilesenler?: { malzemeNo: number; miktar: string; fireYuzde?: string }[];
   firePayiYuzde?: string;
@@ -232,7 +234,7 @@ async function eklerYaz(db: Db, emirId: number, isEmriId: number, g: IsEmriGirdi
     await s.adayEkle(db, isEmriId, { makineId: k.makineId, kisiId: k.kisiId, ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk });
   }
   for (const b of g.bilesenler ?? []) await s.bilesenEkle(db, isEmriId, { malzemeNo: b.malzemeNo, miktar: b.miktar, fireYuzde: b.fireYuzde ?? '0' });
-  for (const [i, m] of g.kontrolListesi.entries()) await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId);
+  for (const [i, m] of g.kontrolListesi.entries()) await s.adimEkle(db, emirId, i + 1, m.ad.trim(), m.aciklama?.trim() || null, isEmriId, m.asama ?? 'uretim');
 }
 
 function girdiDenetle(isEmirleri: readonly IsEmriGirdisi[]): void {
@@ -1009,7 +1011,7 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
     const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && i.fasonFirmaId === null, ilkSira + n));
     for (const a of adaylar.filter((x) => x.isEmriId === i.id)) await s.adayEkle(db, yeni, a);
     for (const b of bilesenler.filter((x) => x.isEmriId === i.id)) await s.bilesenEkle(db, yeni, b);
-    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni);
+    for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama);
     kopyalar.push({ kaynak: i, yeniId: yeni });
   }
   // Kola gelmeyen öncül düşer: kolun o adımı dal başı olur, üstü bekleme kuralı kolBaslamaIhlali'ndedir.
@@ -1662,11 +1664,14 @@ function plandakiOnculler(emrin: readonly IsEmriSatiri[], adim: IsEmriSatiri, pl
 
 // İş emrine kopyalanan kontrol listesi (emir açılırken rotanın talimatından); Arkon paketi rotanın bugünkü talimatı yerine bunu gösterir.
 // Listesi olmayan iş emri haritada yoktur.
-export async function isEmriKontrolListesi(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { sira: number; ad: string; aciklama: string | null }[]>> {
+export type KontrolMaddesi = { sira: number; ad: string; aciklama: string | null; asama: TalimatAsamasi };
+export async function isEmriKontrolListesi(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, KontrolMaddesi[]>> {
   const tekil = [...new Set(isEmriIdleri)];
-  const harita = new Map<number, { sira: number; ad: string; aciklama: string | null }[]>();
+  const harita = new Map<number, KontrolMaddesi[]>();
   if (tekil.length === 0) return harita;
-  for (const r of await s.kontrolListesiGetir(db, tekil)) harita.set(r.isEmriId, [...(harita.get(r.isEmriId) ?? []), { sira: r.sira, ad: r.ad, aciklama: r.aciklama }]);
+  for (const r of await s.kontrolListesiGetir(db, tekil)) {
+    harita.set(r.isEmriId, [...(harita.get(r.isEmriId) ?? []), { sira: r.sira, ad: r.ad, aciklama: r.aciklama, asama: r.asama }]);
+  }
   return harita;
 }
 

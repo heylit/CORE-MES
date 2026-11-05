@@ -106,8 +106,8 @@ describe('İzlenebilirlik ipliği', () => {
     sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/5': () => json(200, {
       ...AYRINTI,
       adimlar: [
-        { id: 1, sira: 1, ad: 'Kesim', aciklama: null, tamam: true, tamamlayan: { id: 7, ad: 'Deneme Planlamaci' }, tamamlanma: '2026-10-06T08:30:00+00:00' },
-        { id: 2, sira: 2, ad: 'Çapak alma', aciklama: null, tamam: false, tamamlayan: null, tamamlanma: null },
+        { id: 1, sira: 1, ad: 'Kesim', aciklama: null, asama: 'uretim', tamam: true, tamamlayan: { id: 7, ad: 'Deneme Planlamaci' }, tamamlanma: '2026-10-06T08:30:00+00:00' },
+        { id: 2, sira: 2, ad: 'Çapak alma', aciklama: null, asama: 'uretim', tamam: false, tamamlayan: null, tamamlanma: null },
       ],
     } satisfies EmirAyrintiCevabi) });
     ac(ekran, '/uretim-emirleri/5');
