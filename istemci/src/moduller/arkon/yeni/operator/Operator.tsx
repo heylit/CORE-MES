@@ -31,7 +31,6 @@ import {
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
 import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
-import { otomatikNumuneOlculeri } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { AdimPaylariCevabi, HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
@@ -117,6 +116,7 @@ interface Devir { note: string; by: string; at: number }
 interface Ek { undo?: () => void; action?: { l: string; fn: () => void } }
 
 const BOS_TAKVIM: KontrolTakvimi = { due: [], next: null, who: {}, why: {} };
+const NUMUNE_SESI_MS = 60_000;
 const YAZAN: ReadonlySet<GorevEylemi> = new Set<GorevEylemi>(['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish', 'tool', 'sample', 'next', 'call']);
 
 export function Operator(_o: ArkonEkranOzellikleri) { return <IstasyonluEkran onizleme={null} />; }
@@ -256,7 +256,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
 
   /* paketler */
   const pkgsRef = useRef<Record<string, Pkg>>({});
-  const live = useRef<{ o?: Is; call?: Cagri | null; sendSample?: (auto?: boolean) => Promise<void>; startCall?: (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => void; mcData?: (m: Ileti) => void }>({});
+  const live = useRef<{ o?: Is; call?: Cagri | null; sendSample?: () => Promise<void>; startCall?: (c: (typeof CAGRI_EKIPLERI)[number], note?: string) => void; mcData?: (m: Ileti) => void }>({});
   const loadPkgs = async (msg?: Ileti) => {
     const pk = (await depo.DB.all('pkgs')) as Pkg[];
     pkgsRef.current = Object.fromEntries(pk.map((p) => [p.id, p]));
@@ -603,9 +603,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const taze = D.due.filter((b) => !once.has(String(b.id)));
     const tazeQ = taze.filter((b) => D.who[b.id] !== 'op');
     const tazeO = taze.filter((b) => D.who[b.id] === 'op');
-    if (otomatikNumuneOlculeri(tazeQ, D.why, o.lastDecision).length && o.pkg && RL.q.autoSend && !o.pendingReq && !pv) {
-      setTimeout(() => { void live.current.sendSample?.(true); }, 400);
-    } else if (taze.length && o.pkg && !(o.lastDecision && o.lastDecision.status === 'rejected' && !tazeO.length)) {
+    if (taze.length && o.pkg && !(o.lastDecision && o.lastDecision.status === 'rejected' && !tazeO.length)) {
       // Ret kartı ekrandayken kalite ölçüsü için ayrıca uyarı verilmez: RED iletisi ve kart operatöre düzeltip göndermesini zaten söyler.
       const b = tazeQ[0] || tazeO[0]!;
       awayYaz(false); tabYaz('draw'); mvYaz('prod'); odakYaz({ id: b.id, n: Date.now() });
@@ -614,6 +612,16 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         tazeQ.length ? 'target' : 'ruler', b.crit ? 'stop' : tazeQ.length ? 'hazard' : 'run');
     }
   }, [dueKey]);
+  // 2124-1 b: numuneyi yalnız operatör gönderir; unutulmasın diye kalite numunesi gönderilene kadar ses dakikada bir yinelenir.
+  // Ret kartı ekrandayken yinelenmez: RED iletisi operatöre düzeltip göndermesini zaten söyler.
+  const numuneSesi = useRef(0);
+  useEffect(() => {
+    const bekliyor = !pv && !!o.pkg && !o.pendingReq && o.lastDecision?.status !== 'rejected' && D.due.some((b) => D.who[b.id] !== 'op');
+    if (!bekliyor) { numuneSesi.current = 0; return; }
+    const an = Date.now();
+    if (numuneSesi.current === 0) numuneSesi.current = an;
+    else if (an - numuneSesi.current >= NUMUNE_SESI_MS) { numuneSesi.current = an; bip('due'); }
+  }, [bes, dueKey, o.pendingReq]);
   const nextOrder = isler.find((x, i) => i !== ai && x.state === 'queued');
   const siraRef = useRef<string[]>([]);
   const [ondeNo, ondeNoYaz] = useState<string | null>(null);
@@ -972,17 +980,16 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   };
   const actRef = useRef(act);
   actRef.current = act;
-  const sendSample = async (auto?: boolean) => {
+  const sendSample = async () => {
     if (!o.pkg) { say('Bu iş için kontrol planı yok', 'alert', 'hold'); return; }
     let items = D.due.filter((b) => D.who[b.id] !== 'op');
     // Numune stoktan teslim edilir (115 a): ilk parça önce sağlam sayılmış olmalı, hazırlıkta yapılan parça stokta yoktur (129).
     if (ilk.acik && (o.state !== 'running' || ilk.sayilan < 1) && items.some((b) => ilkParcaKapisi(o).some((f) => f.id === b.id))) {
-      if (auto !== true) say(o.state === 'running' ? ILK_PARCA_ONCE_SAY_ILETISI : 'İlk parça Başlat\'tan sonra üretilir · önce başlat', 'alert', 'hold');
+      say(o.state === 'running' ? ILK_PARCA_ONCE_SAY_ILETISI : 'İlk parça Başlat\'tan sonra üretilir · önce başlat', 'alert', 'hold');
       return;
     }
-    if (auto === true) items = otomatikNumuneOlculeri(items, D.why, o.lastDecision);
     // Zamanı gelen ölçü yokken operatör yine de numune gönderebilir (şüphe, takım değişimi): planın bütün ölçüleri gider.
-    const elle = !items.length && auto !== true;
+    const elle = !items.length;
     if (elle && o.pendingReq) { say('Önceki numune kalitede · sonuç bekleniyor', 'clock', 'idle'); return; }
     if (elle) items = elleNumuneOlculeri(o.pkg.plan || []);
     if (!items.length) { say('Kontrol planında ölçü yok', 'check'); return; }
@@ -996,7 +1003,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     depo.Bus.send({ type: 'sample', reqId: req.id, no: o.no, machine: MACHINE, reason });
     patch(yeniNumuneYamasi(req));
     bip('call');
-    say(`${auto === true ? 'Otomatik numune isteği · ' : 'Numune isteği kalitede · onay bekleniyor · '}${items.length} ölçü · etiketle: ${o.no} #${sayi(o.good)}`, 'target', 'hold');
+    say(`Numune isteği kalitede · onay bekleniyor · ${items.length} ölçü · etiketle: ${o.no} #${sayi(o.good)}`, 'target', 'hold');
   };
   // Hurda yalnız nedenle yazılır (116 a).
   const addScrap = () => { if (!sayimOk('prod.run')) return; ovYaz('scrap'); };
