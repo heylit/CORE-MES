@@ -167,6 +167,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const bakYaz = (i: number) => { const x = isler[i]; bakilanYaz(!x || i === ai ? null : siraAnahtari(x)); };
   const curMc = () => (o.pkg && o.pkg.mc) || (ist.mcs.length === 1 ? ist.mcs[0]!.id : null);
   const [mcSel, mcSelYaz] = useState<string[]>([]);
+  // Seçim ekrandaki işindir: başka işe geçince bırakılır, yoksa öteki işin makinesi bu işin başlatmasına gider (dolu makine reddi).
+  const ekrandakiAnahtar = siraAnahtari(o);
+  useEffect(() => { mcSelYaz([]); }, [ekrandakiAnahtar, MACHINE]);
   // Bu durumda geçen sürenin başlangıcı; null: bilinmiyor ("—"). Yereldeki kayıt yalnız aynı işin aynı durumu içinse ön değerdir.
   const [since, sinceYaz] = useState<number | null>(() => {
     const l = yerel.oku<{ no?: string; anahtar?: string; state?: string; at?: number | null }>(`lastState:${MACHINE}`);
