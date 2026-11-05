@@ -108,14 +108,18 @@ function Ilerleme({ oran }: { oran: number | null }) {
   );
 }
 
-function BelgeEkle({ no, kapat }: { no: number; kapat: () => void }) {
+// 2138-1 a: antet revizyonu kartın revizyonuyla dolu açılır; kartla yalnız antet karşılaştırılır. Fotoğrafın anteti yoktur.
+const antetOnDegeri = (tur: MalzemeBelgeTuru, kartRev: string | null): string => (tur === 'fotograf' ? '' : kartRev ?? '');
+
+function BelgeEkle({ no, kartRev, kapat }: { no: number; kartRev: string | null; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [tur, turYaz] = useState<MalzemeBelgeTuru>('fotograf');
   const [dosya, dosyaYaz] = useState<File | null>(null);
   const [ad, adYaz] = useState('');
   const [resimNo, resimNoYaz] = useState('');
-  const [antetRev, antetRevYaz] = useState('');
+  const [antetRev, antetRevYaz] = useState(antetOnDegeri('fotograf', kartRev));
+  const [antetElle, antetElleYaz] = useState(false);
   const [ilerleme, ilerlemeYaz] = useState<number | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   const komut = useMutation({
@@ -139,7 +143,7 @@ function BelgeEkle({ no, kapat }: { no: number; kapat: () => void }) {
       alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.isPending} disabled={!dosya || red !== null} onClick={() => { if (dosya) komut.mutate(dosya); }}>Yükle</Dugme>}
     >
       <div className="tc-cz-form">
-        <Secim etiket="Tür" value={tur} onChange={(e) => { turYaz(e.target.value as MalzemeBelgeTuru); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
+        <Secim etiket="Tür" value={tur} onChange={(e) => { const t = e.target.value as MalzemeBelgeTuru; turYaz(t); if (!antetElle) antetRevYaz(antetOnDegeri(t, kartRev)); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
         <Girdi
           etiket="Dosya" type="file" accept={kabulMetni(tur)} required
           onChange={(e) => { const d = e.target.files?.[0] ?? null; dosyaYaz(d); if (d && ad.trim() === '') adYaz(adindan(d.name)); }}
@@ -148,7 +152,7 @@ function BelgeEkle({ no, kapat }: { no: number; kapat: () => void }) {
         />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
         <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Kartın teknik resim numarasıyla karşılaştırılır." />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. A ya da 00. Boşsa merkezin revizyon harfi kullanılır." />
+        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa karşılaştırılmaz." />
         <Ilerleme oran={ilerleme} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
       </div>
@@ -156,11 +160,11 @@ function BelgeEkle({ no, kapat }: { no: number; kapat: () => void }) {
   );
 }
 
-function RevizyonYukle({ no, belge, kapat }: { no: number; belge: MalzemeBelgesi; kapat: () => void }) {
+function RevizyonYukle({ no, belge, kartRev, kapat }: { no: number; belge: MalzemeBelgesi; kartRev: string | null; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [dosya, dosyaYaz] = useState<File | null>(null);
-  const [antetRev, antetRevYaz] = useState('');
+  const [antetRev, antetRevYaz] = useState(antetOnDegeri(belge.tur as MalzemeBelgeTuru, kartRev));
   const [not, notYaz] = useState('');
   const [kimlik, kimlikYaz] = useState(yeniIstekKimligi);
   const [hata, hataYaz] = useState<string | null>(null);
@@ -202,7 +206,7 @@ function RevizyonYukle({ no, belge, kapat }: { no: number; belge: MalzemeBelgesi
           ipucu={dosya ? `${dosya.name} · ${boyutMetni(dosya.size)}` : `${izinliMetni(tur)}; en çok 200 MB.`}
           {...(red ? { hata: red } : {})}
         />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. B ya da 01." />
+        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
       </div>
@@ -245,7 +249,11 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
           <div className="tc-cz-rp">
             <div className="tc-cz-rp-ust">
               <KucukResimKutusu resim={veri.kucukResim} ad="Malzeme resmi" boy="buyuk" />
-              {veri.kucukResim?.revUyumu === false && <p className="tc-cz-uyari" role="status">Resmin revizyonu ({veri.kucukResim.harf}) kartın revizyonuna uymuyor.</p>}
+              {veri.kucukResim?.revUyumu === false && (
+                <p className="tc-cz-uyari" role="status">
+                  Resim kartla uyuşmuyor: resmin antet revizyonu {veri.kucukResim.antetRev ?? 'yok'}, kartın revizyonu {veri.kartRevizyon ?? 'yok'}. Teknik resim numarasını da denetleyin.
+                </p>
+              )}
               {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model çizim merkezinde yayınlanınca atölyeye gider.</p>}
               {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Foto, teknik resim ya da 3B model ekleyin.</p>}
             </div>
@@ -312,8 +320,8 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
             )}
           </div>
         )}
-      {acik === 'ekle' && <BelgeEkle no={malzemeNo} kapat={() => { acikYaz(null); }} />}
-      {acik !== null && acik !== 'ekle' && <RevizyonYukle no={malzemeNo} belge={acik.revizyon} kapat={() => { acikYaz(null); }} />}
+      {acik === 'ekle' && <BelgeEkle no={malzemeNo} kartRev={sorgu.data?.kartRevizyon ?? null} kapat={() => { acikYaz(null); }} />}
+      {acik !== null && acik !== 'ekle' && <RevizyonYukle no={malzemeNo} belge={acik.revizyon} kartRev={sorgu.data?.kartRevizyon ?? null} kapat={() => { acikYaz(null); }} />}
     </Kart>
   );
 }

@@ -994,6 +994,7 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       const uyumlu = await kartAc({ resim: 'TR-77', rev: 'B' });
       const uyumsuz = await kartAc({ resim: 'TR-77', rev: 'C' });
       const revsiz = await kartAc();
+      const antetsiz = await kartAc({ resim: 'TR-77', rev: 'C' });
       const resimsiz = await kartAc();
       const kareler = [png(), png()];
       const ilk = (await malzemeBelgesiEkle(malzemeci, uyumlu, 'fotograf', png(), { resimNo: 'TR-77', antetRev: 'A' })).json<MalzemeBelgeleriCevabi>().belgeler[0];
@@ -1007,13 +1008,19 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
         const b = (await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png(), { resimNo: 'TR-77', antetRev: 'B' })).json<MalzemeBelgeleriCevabi>().belgeler[0];
         assert.equal((await kareYaz(malzemeci, no, b?.id ?? 0, b?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
       }
+      // 2138-1 a: anteti boş resimde merkezin harfi (A) kartın revizyonuyla karşılaştırılmaz.
+      const harfli = (await malzemeBelgesiEkle(malzemeci, antetsiz, 'fotograf', png(), { resimNo: 'TR-77' })).json<MalzemeBelgeleriCevabi>();
+      assert.equal(harfli.kartRevizyon, 'C', 'kartın revizyonu yükleme formuna ön değer olarak döner');
+      const hb = harfli.belgeler[0];
+      assert.equal((await kareYaz(malzemeci, antetsiz, hb?.id ?? 0, hb?.revizyonlar[0]?.id ?? 0, [png()])).statusCode, 200);
 
-      const c = await oku(operator, `/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=${uyumlu},${uyumsuz},${revsiz},${resimsiz}`);
+      const c = await oku(operator, `/cizimler/kucuk-resimler?hedefModul=malzemeler&idler=${uyumlu},${uyumsuz},${revsiz},${antetsiz},${resimsiz}`);
       assert.equal(c.statusCode, 200, c.body);
       const resimler = new Map(c.json<KucukResimlerCevabi>().resimler.map((r) => [r.hedefId, r]));
       assert.deepEqual([resimler.get(uyumlu)?.revizyonId, resimler.get(uyumlu)?.revUyumu, resimler.get(uyumlu)?.kareSayisi], [revB.id, true, 2]);
-      assert.equal(resimler.get(uyumsuz)?.revUyumu, false);
+      assert.deepEqual([resimler.get(uyumsuz)?.revUyumu, resimler.get(uyumsuz)?.antetRev], [false, 'B']);
       assert.equal(resimler.get(revsiz)?.revUyumu, null);
+      assert.deepEqual([resimler.get(antetsiz)?.harf, resimler.get(antetsiz)?.antetRev, resimler.get(antetsiz)?.revUyumu], ['A', null, null]);
       assert.equal(resimler.has(resimsiz), false);
 
       const kare = await oku(operator, `/cizimler/kucuk-resim/${revB.id}/1`);

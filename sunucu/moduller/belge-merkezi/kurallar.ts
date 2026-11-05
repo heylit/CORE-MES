@@ -145,14 +145,17 @@ export interface KucukResimSecimi {
   belgeId: number;
   revizyonId: number;
   sira: number;
+  antetRev: string | null;
   kareSayisi: number;
   revUyumu: boolean | null;
   taslak: boolean;
 }
 
-// CZ-20: kaydın küçük resmi. Kapak, yoksa CZ-19 sırası; ilk resmi olan belge seçilir. Belgede kartın revizyonuna uyan
-// yayına girmiş (yayında ya da eski) revizyon, yoksa yayındaki revizyon gösterilir; ikincisinde ve resim numarası kartınkiyle
-// çeliştiğinde revUyumu false olur (resim yine gösterilir, ekran uyarır). Kartta revizyon yoksa karşılaştırma yapılmaz (null).
+// CZ-20: kaydın küçük resmi. Kapak, yoksa CZ-19 sırası; ilk resmi olan belge seçilir. Belgede antet revizyonu kartın revizyonuna
+// uyan yayına girmiş (yayında ya da eski) revizyon, yoksa yayındaki revizyon gösterilir. 2138-1 a: kartla yalnız antet revizyonu
+// karşılaştırılır; merkezin harfi (A, B) yükleme sırasıdır, parça revizyonu değildir (1608 a). Yayındakinin anteti kartınkinden
+// farklıysa ya da resim numarası kartınkiyle çelişirse revUyumu false olur (resim yine gösterilir, ekran uyarır); anteti boşsa ya da
+// kartta revizyon yoksa revizyon karşılaştırılmaz (null).
 // Taslak yalnız 3B modelde ve belgenin yayına girmiş resimli revizyonu yokken seçilir (en yeni taslak, 1990 a); taslak=true döner,
 // ekran işaretler. Taslakta revizyon karşılaştırması yapılmaz (null).
 export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari | null): KucukResimSecimi | null {
@@ -164,20 +167,19 @@ export function kucukResimSec(belgeler: readonly AdayBelge[], kart: KartAnahtari
     const resimli = b.revizyonlar.filter((r) => r.durum !== 'taslak' && r.kareSayisi > 0);
     const yayinda = resimli.find((r) => r.durum === 'yayinda');
     const resimCeliskili = kartResim !== null && anahtarMetni(b.resimNo) !== null && anahtarMetni(b.resimNo) !== kartResim;
-    let secilen: AdayRevizyon | undefined;
-    let uyum: boolean | null;
-    if (kartRev === null) {
-      secilen = yayinda;
-      uyum = resimCeliskili ? false : null;
-    } else {
-      const uyan = resimli.filter((r) => (anahtarMetni(r.antetRev) ?? revizyonHarfi(r.sira)) === kartRev).sort((x, y) => y.sira - x.sira)[0];
-      secilen = uyan ?? yayinda;
-      uyum = uyan !== undefined && !resimCeliskili;
+    const uyan = kartRev === null ? undefined
+      : resimli.filter((r) => anahtarMetni(r.antetRev) === kartRev).sort((x, y) => y.sira - x.sira)[0];
+    const secilen = uyan ?? yayinda;
+    const revCeliskili = kartRev !== null && uyan === undefined && anahtarMetni(secilen?.antetRev) !== null;
+    const uyum = resimCeliskili || revCeliskili ? false : uyan !== undefined ? true : null;
+    if (secilen !== undefined) {
+      return { belgeId: b.belgeId, revizyonId: secilen.id, sira: secilen.sira, antetRev: secilen.antetRev?.trim() || null, kareSayisi: secilen.kareSayisi, revUyumu: uyum, taslak: false };
     }
-    if (secilen !== undefined) return { belgeId: b.belgeId, revizyonId: secilen.id, sira: secilen.sira, kareSayisi: secilen.kareSayisi, revUyumu: uyum, taslak: false };
     if (resimli.length === 0 && taslakResimli(b.tur)) {
       const t = b.revizyonlar.filter((r) => r.durum === 'taslak' && r.kareSayisi > 0).sort((x, y) => y.sira - x.sira)[0];
-      if (t !== undefined) return { belgeId: b.belgeId, revizyonId: t.id, sira: t.sira, kareSayisi: t.kareSayisi, revUyumu: resimCeliskili ? false : null, taslak: true };
+      if (t !== undefined) {
+        return { belgeId: b.belgeId, revizyonId: t.id, sira: t.sira, antetRev: t.antetRev?.trim() || null, kareSayisi: t.kareSayisi, revUyumu: resimCeliskili ? false : null, taslak: true };
+      }
     }
   }
   return null;

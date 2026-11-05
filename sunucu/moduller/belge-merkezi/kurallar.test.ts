@@ -116,9 +116,9 @@ describe('CZ-19/CZ-20 küçük resim seçimi', () => {
 
   test('1990 a: yayına girmiş resmi olmayan 3B modelde en yeni karesi olan taslak seçilir, taslak işaretli; yayındaki varken seçilmez', () => {
     const model = belge(1, '3b-model', [rev(11, 1, 'taslak'), rev(12, 2, 'taslak'), rev(13, 3, 'taslak', 0)]);
-    assert.deepEqual(kucukResimSec([model], { resimNo: null, revizyon: 'A' }), { belgeId: 1, revizyonId: 12, sira: 2, kareSayisi: 1, revUyumu: null, taslak: true });
+    assert.deepEqual(kucukResimSec([model], { resimNo: null, revizyon: 'A' }), { belgeId: 1, revizyonId: 12, sira: 2, antetRev: null, kareSayisi: 1, revUyumu: null, taslak: true });
     const yayindaModel = belge(2, '3b-model', [rev(21, 1, 'yayinda'), rev(22, 2, 'taslak')]);
-    assert.deepEqual(kucukResimSec([yayindaModel], null), { belgeId: 2, revizyonId: 21, sira: 1, kareSayisi: 1, revUyumu: null, taslak: false });
+    assert.deepEqual(kucukResimSec([yayindaModel], null), { belgeId: 2, revizyonId: 21, sira: 1, antetRev: null, kareSayisi: 1, revUyumu: null, taslak: false });
     const resim = belge(3, 'teknik-resim', [rev(31, 1, 'taslak')]);
     assert.equal(kucukResimSec([resim], null), null);
     const foto = belge(4, 'fotograf', [rev(41, 1, 'yayinda')]);
@@ -127,17 +127,30 @@ describe('CZ-19/CZ-20 küçük resim seçimi', () => {
     assert.equal(kucukResimSec([celiskili], { resimNo: 'TR-2', revizyon: null })?.revUyumu, false);
   });
 
-  test('kartın revizyonuna uyan yayına girmiş revizyon seçilir (antet revizyonu, yoksa harf); uyan yoksa yayındaki, uyumsuz', () => {
+  test('kartın revizyonuna antet revizyonu uyan yayına girmiş revizyon seçilir; uyan yoksa yayındaki, anteti varsa uyumsuz', () => {
     const b = belge(1, 'teknik-resim', [rev(11, 1, 'eski', 1, '00'), rev(12, 2, 'yayinda', 1, '01'), rev(13, 3, 'taslak', 1, '02')]);
-    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: '00' }), { belgeId: 1, revizyonId: 11, sira: 1, kareSayisi: 1, revUyumu: true, taslak: false });
+    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: '00' }), { belgeId: 1, revizyonId: 11, sira: 1, antetRev: '00', kareSayisi: 1, revUyumu: true, taslak: false });
     assert.equal(kucukResimSec([b], { resimNo: null, revizyon: ' 01 ' })?.revizyonId, 12);
-    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: '02' }), { belgeId: 1, revizyonId: 12, sira: 2, kareSayisi: 1, revUyumu: false, taslak: false });
+    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: '02' }), { belgeId: 1, revizyonId: 12, sira: 2, antetRev: '01', kareSayisi: 1, revUyumu: false, taslak: false });
+  });
+
+  test('2138-1 a: merkezin harfi kartla karşılaştırılmaz; anteti boş resimde uyarı çıkmaz', () => {
     const harfli = belge(2, '3b-model', [rev(21, 1, 'eski'), rev(22, 2, 'yayinda')]);
-    assert.equal(kucukResimSec([harfli], { resimNo: null, revizyon: 'a' })?.revizyonId, 21);
+    assert.deepEqual(kucukResimSec([harfli], { resimNo: null, revizyon: '00' }), { belgeId: 2, revizyonId: 22, sira: 2, antetRev: null, kareSayisi: 1, revUyumu: null, taslak: false });
+    assert.equal(kucukResimSec([harfli], { resimNo: null, revizyon: 'a' })?.revizyonId, 22, 'harf A kartın A revizyonu sayılmaz');
+    assert.equal(kucukResimSec([harfli], { resimNo: null, revizyon: 'B' })?.revUyumu, null, 'yayındaki harf B olsa da karşılaştırılmaz');
+    const karisik = belge(3, 'teknik-resim', [rev(31, 1, 'eski', 1, '00'), rev(32, 2, 'yayinda')]);
+    assert.deepEqual(kucukResimSec([karisik], { resimNo: null, revizyon: '00' }), { belgeId: 3, revizyonId: 31, sira: 1, antetRev: '00', kareSayisi: 1, revUyumu: true, taslak: false });
+    assert.equal(kucukResimSec([karisik], { resimNo: null, revizyon: '01' })?.revUyumu, null, 'yayındakinin anteti boş: karşılaştırılmaz');
+  });
+
+  test('antet revizyonu kırpılıp büyük-küçük harf gözetmeden karşılaştırılır; dönen antet kırpılmış asıl yazımdır', () => {
+    const b = belge(1, 'teknik-resim', [rev(11, 1, 'yayinda', 1, ' rev-a ')]);
+    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: 'REV-A' }), { belgeId: 1, revizyonId: 11, sira: 1, antetRev: 'rev-a', kareSayisi: 1, revUyumu: true, taslak: false });
   });
 
   test('kartta revizyon yoksa yayındaki gösterilir, karşılaştırma yapılmaz; resim numarası çelişirse uyumsuz', () => {
-    const b = belge(1, 'teknik-resim', [rev(11, 1, 'eski'), rev(12, 2, 'yayinda')], { resimNo: 'TR-1' });
+    const b = belge(1, 'teknik-resim', [rev(11, 1, 'eski'), rev(12, 2, 'yayinda', 1, 'B')], { resimNo: 'TR-1' });
     assert.equal(kucukResimSec([b], null)?.revUyumu, null);
     assert.equal(kucukResimSec([b], { resimNo: null, revizyon: null })?.revizyonId, 12);
     assert.equal(kucukResimSec([b], { resimNo: 'tr-1', revizyon: 'B' })?.revUyumu, true);
@@ -147,6 +160,6 @@ describe('CZ-19/CZ-20 küçük resim seçimi', () => {
 
   test('uyan revizyonun karesi yoksa yayındaki gösterilir ve uyumsuz sayılır', () => {
     const b = belge(1, 'teknik-resim', [rev(11, 1, 'eski', 0, 'A'), rev(12, 2, 'yayinda', 1, 'B')]);
-    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: 'A' }), { belgeId: 1, revizyonId: 12, sira: 2, kareSayisi: 1, revUyumu: false, taslak: false });
+    assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: 'A' }), { belgeId: 1, revizyonId: 12, sira: 2, antetRev: 'B', kareSayisi: 1, revUyumu: false, taslak: false });
   });
 });

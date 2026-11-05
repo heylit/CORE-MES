@@ -341,7 +341,8 @@ export async function malzemeBelgeleri(db: Db, no: number): Promise<MalzemeBelge
   }
   const kart = await kartAnahtari(db, no);
   const oneriler = kart?.resimNo ? await sorgular.resimNoyaUyanBelgeler(db, kart.resimNo, 'malzemeler', no) : [];
-  return { belgeler, oneriler, kucukResim: (await kayitlarinKucukResimleri(db, 'malzemeler', [no])).get(no) ?? null };
+  // 2138-1 a: kartın revizyonu yükleme formunda antet revizyonunun ön değeridir.
+  return { belgeler, oneriler, kucukResim: (await kayitlarinKucukResimleri(db, 'malzemeler', [no])).get(no) ?? null, kartRevizyon: kart?.revizyon ?? null };
 }
 
 export async function malzemeBelgeEkle(
@@ -415,7 +416,7 @@ export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, he
   }
   for (const [hedefId, belgeler] of kayitlar) {
     const s = kucukResimSec([...belgeler.values()], kartlar.get(hedefId) ?? null);
-    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), kareSayisi: s.kareSayisi, revUyumu: s.revUyumu, taslak: s.taslak });
+    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), antetRev: s.antetRev, kareSayisi: s.kareSayisi, revUyumu: s.revUyumu, taslak: s.taslak });
   }
   return sonuc;
 }
