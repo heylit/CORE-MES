@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
-import { IsEylemi, IsOnizKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi } from './Cark.tsx';
+import { IsEylemi, IsimEylemi, IsimKarti, IsOnizKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkIsim, type CarkMakinesi, type CarkSeridi } from './Cark.tsx';
 import { bosIs } from './kurallar.ts';
 import type { Is } from './tipler.ts';
 
@@ -171,5 +171,35 @@ describe('790: iş ve makine çarkı', () => {
     fireEvent.click(getByRole('button', { name: /Makineler · 3/ }));
     expect(queryByRole('button', { name: 'Seçimden çıkar' })).toBeNull();
     expect(getByText('Çalışan işte makine değişmez')).toBeTruthy();
+  });
+
+  // 2125-1 b: İşlerim şeridi makine başına; ekrandaki iş bilgi, burada ve başka istasyondaki iş geçiş düğmesi, seçilemeyen istasyon kilit notu.
+  it('2125-1 b: İşlerim kartı makineyi başlık yapar; geçiş yalnız düğmeyle, seçilemeyen istasyonda düğme yok (reddedilen)', () => {
+    const ISIMLER: CarkIsim[] = [
+      { anahtar: 'a', yer: { kod: 'M-1', ad: 'Makine 1' }, istasyon: 'IST-A', istasyonAd: 'Deneme A', etiket: 'UE-1 · Op 20', giris: 0, durum: 'ekranda' },
+      { anahtar: 'b', yer: { kod: 'M-7', ad: 'Makine 7' }, istasyon: 'IST-B', istasyonAd: 'Deneme B', etiket: 'UE-5 · Op 10', giris: 0, durum: 'baska' },
+      { anahtar: 'c', yer: { kod: 'M-9', ad: 'Makine 9' }, istasyon: 'IST-C', istasyonAd: 'Deneme C', etiket: 'UE-6', giris: 0, durum: 'kapali' },
+    ];
+    const gecilen: string[] = [];
+    function IsimDenemesi() {
+      const [bak, bakYaz] = useState(0);
+      return (
+        <TerminalCarki seritler={[{
+          anahtar: 'isim', ad: 'İşlerim', simge: 'user', sayi: ISIMLER.length, etkin: 0, bak, bakYaz,
+          ciz: (i) => <IsimKarti isim={ISIMLER[i]!} sure="12 dk" />,
+          eylem: (i) => <IsimEylemi isim={ISIMLER[i]!} gec={() => gecilen.push(ISIMLER[i]!.anahtar)} />,
+        }]} />
+      );
+    }
+    const { getByRole, getByText, queryByRole } = render(<IsimDenemesi />);
+    expect(getByText(/Ekranda · sayaç/)).toBeTruthy();
+    expect(queryByRole('button', { name: 'İstasyona geç' })).toBeNull();
+    fireEvent.click(getByRole('button', { name: 'Sonraki: işlerim' }));
+    expect(gecilen).toEqual([]);
+    fireEvent.click(getByRole('button', { name: 'İstasyona geç' }));
+    expect(gecilen).toEqual(['b']);
+    fireEvent.click(getByRole('button', { name: 'Sonraki: işlerim' }));
+    expect(getByText(/IST-C bu cihazda seçilemez/)).toBeTruthy();
+    expect(queryByRole('button', { name: 'İstasyona geç' })).toBeNull();
   });
 });

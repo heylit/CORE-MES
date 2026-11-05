@@ -2,7 +2,7 @@
 // adresine gider, bu katman onları TMI'nin /api/arkon uçlarına çevirir. Oturum TMI'nindir (çerez); Arkon'a ayrı giriş yoktur.
 import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, AnomaliOlaylariCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
-  CalismaDevralRedAyrintisi, EksikDosyaCevabi, IletilerCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
+  CalismaDevralRedAyrintisi, EksikDosyaCevabi, IletilerCevabi, IslerimCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
   RefakatKartlariCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import type { CagriEkiplerimCevabi } from '#paylasilan/sozlesme/bildirim.ts';
@@ -291,6 +291,8 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     const q = new URLSearchParams({ emirId: g.sorgu.get('emirId') ?? '' });
     return tamam(await istemci.get<MakineAyrimlariCevabi>(`/arkon/makine-ayrimlari?${q.toString()}`));
   }
+  // 2125-1 b: çarkın İşlerim şeridi; kişi yalnız kendi çalışan işlerini okur.
+  if (ilk === 'islerim' && g.yontem === 'GET') return tamam(await istemci.get<IslerimCevabi>('/arkon/islerim'));
   // Kart #156: işin altındaki refakat kartları; istasyon ve emirler olduğu gibi geçer, doğrulamayı TMI ucu yapar.
   if (ilk === 'refakat-kartlari' && g.yontem === 'GET') {
     const q = new URLSearchParams({ istasyon: g.sorgu.get('istasyon') ?? '', emirler: g.sorgu.get('emirler') ?? '' });

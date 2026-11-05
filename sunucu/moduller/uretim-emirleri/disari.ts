@@ -14,11 +14,11 @@ import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
-  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininHurdalariGetir,
+  tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
   bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
-  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiIsEmriSatiri, SayimKirilimi,
+  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiAcikIsSatiri, KisiIsEmriSatiri, SayimKirilimi,
 } from './sorgular.ts';
 import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 
@@ -479,6 +479,8 @@ export type { KartSayimi } from './is-emri-servis.ts';
 
 // Malzeme · Teslim (kart #1208): kişinin açık işinin istasyonu, "nereden" kendiliğinden dolsun diye. Yetki denetlemez.
 export const acikIstasyon = (db: Db, kisiId: number): Promise<number | null> => kisininAcikIstasyonu(db, kisiId);
+export type { KisiAcikIsSatiri as KisiAcikIs } from './sorgular.ts';
+export const kisininAcikIsleri = (db: Db, kisiId: number): Promise<KisiAcikIsSatiri[]> => kisininAcikIsleriGetir(db, kisiId);
 
 // Sağlam ve hurda sayım olayı (kart #1289): sayım yazan her komut (terminal, Arkon) farkı sayımla aynı işlemde dinleyicilere verir.
 // Stok kendi dinleyicisini kaydeder; stok bu modülü okuduğu için çağrı bu yönde kurulur (modül döngüsü olmaz).

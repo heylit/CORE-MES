@@ -141,6 +141,31 @@ describe('A1 Üretim Terminali', () => {
     expect(baslatma?.mcs).toBeUndefined();
   }, 40000);
 
+  it('2125-1 b: İşlerim şeridi başka istasyondaki makinede çalışan işi gösterir; "İstasyona geç" cihazın istasyonunu değiştirir, yazma yok', async () => {
+    const tesis = { ...TESIS, sts: [...TESIS.sts, { id: 'IST-2', name: 'Deneme ikinci tezgah', wc: 'TAL', t: 'cnc' }] };
+    const istekler = sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }], kv: [{ kimlik: 'plant', surum: 3, govde: { v: tesis } }] } });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      if (new URL(adres, 'http://tmi.yerel').pathname === '/api/arkon/islerim') {
+        istekler.push({ yontem: 'GET', yol: '/arkon/islerim', govde: null });
+        return new Response(JSON.stringify({ isler: [{
+          emirId: 55, emirNo: 'UE-DENEME-55', isEmriId: 550, opNo: 30, istasyon: 'IST-2', istasyonAd: 'Deneme ikinci tezgah', mc: 'MK-9', makineAd: 'Deneme makine 9',
+          giris: new Date(Date.now() - 25 * 60_000).toISOString(),
+        }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return asil(adres, ayar);
+    }));
+    arkonAc('/uretim-terminali');
+    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
+    fireEvent.click(await within(cark).findByRole('button', { name: /İşlerim · 1/ }, { timeout: 10000 }));
+    expect(within(cark).getByText('MK-9')).toBeTruthy();
+    expect(within(cark).getByText(/UE-DENEME-55 · Op 30/)).toBeTruthy();
+    expect(within(cark).getByText(/Çalışıyor · 2\d dk/)).toBeTruthy();
+    fireEvent.click(within(cark).getByRole('button', { name: 'İstasyona geç' }));
+    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('arkon:station') ?? 'null')).toBe('IST-2'); });
+    expect(yazmalar(istekler)).toEqual([]);
+  }, 40000);
+
   it('820 b, 848 a: genişte Menü düğmesi yalnız geçiş varsa; yönetici Çizim\'e geçer', async () => {
     sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
     arkonAc('/uretim-terminali');

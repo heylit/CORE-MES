@@ -1881,6 +1881,33 @@ export async function kisininAcikIstasyonu(db: Db, kisiId: number): Promise<numb
      ) acik ORDER BY zaman DESC LIMIT 1`, [kisiId]))?.istasyonId ?? null;
 }
 
+// 2125-1 b: kişinin şu an içinde olduğu işler (açık katılım) ve her birinin açık makine kullanımları; makinesiz işte tek satır, makine null.
+// Duraklatma ve durdurma katılımı da kullanımı da kapatır: satırlar çalışan işlerdir. Makine sırasıyla, en son girilen iş önce.
+export interface KisiAcikIsSatiri {
+  emirId: number;
+  emirNo: string;
+  isEmriId: number | null;
+  opNo: number | null;
+  istasyonId: number;
+  makineId: number | null;
+  giris: string;
+}
+
+export function kisininAcikIsleriGetir(db: Db, kisiId: number): Promise<KisiAcikIsSatiri[]> {
+  return db.sorgu<KisiAcikIsSatiri>(
+    `SELECT ka.emir_id AS "emirId", e.emir_no AS "emirNo", ka.is_emri_id AS "isEmriId", ie.op_no AS "opNo", ka.istasyon_id AS "istasyonId",
+            k.makine_id AS "makineId", ${ISO('ka.giris')} AS giris
+       FROM uretim_emirleri_katilim ka
+       JOIN uretim_emri e ON e.id = ka.emir_id
+       LEFT JOIN uretim_emirleri_is_emri ie ON ie.id = ka.is_emri_id
+       LEFT JOIN uretim_emirleri_makine_kullanimi k ON k.emir_id = ka.emir_id AND k.is_emri_id IS NOT DISTINCT FROM ka.is_emri_id
+                                                    AND k.makine_id IS NOT NULL AND k.bitis IS NULL
+      WHERE ka.kisi_id = $1 AND ka.cikis IS NULL
+      ORDER BY ka.giris DESC, ka.id DESC, k.makine_id`,
+    [kisiId],
+  );
+}
+
 /* ---------------- kişinin özeti (kart #1295, Operatör Özetim) ---------------- */
 
 export interface KisiIsEmriSatiri {

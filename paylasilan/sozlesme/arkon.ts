@@ -500,6 +500,15 @@ export const makineAyrimlariCevabi = z.object({
   ayrimlar: z.array(z.object({ mc: z.string(), emirNo: z.string(), opNo: z.number().int(), baslangic: zamanSemasi })),
 });
 export type MakineAyrimlariCevabi = z.infer<typeof makineAyrimlariCevabi>;
+// 2125-1 b: terminal çarkının "İşlerim" şeridi. Oturumdaki kişinin şu an içinde olduğu (açık katılımlı) işleri, makine başına bir satır;
+// makinesiz işte `mc` null. Kodlar TMI istasyon ve makine kodlarıdır (terminalin istasyon ve makine kimlikleri); `giris` kişinin işe girişidir.
+export const islerimCevabi = z.object({
+  isler: z.array(z.object({
+    emirId: z.number().int(), emirNo: z.string(), isEmriId: z.number().int().nullable(), opNo: z.number().int().nullable(),
+    istasyon: z.string(), istasyonAd: z.string(), mc: z.string().nullable(), makineAd: z.string().nullable(), giris: zamanSemasi,
+  })),
+});
+export type IslerimCevabi = z.infer<typeof islerimCevabi>;
 // Refakat kartları (kart #156, Soru 134): Arkon'da okutma yoktur; terminal sıradaki işlerin kartlarını tek okumada alır, iş "Aç" ile kartla
 // açılır. `istasyon` terminalin istasyon kodudur (kartın o istasyonda satırı var mı); `emirler` en çok 50 üretim emri kimliği.
 export const refakatKartlariSorgusu = z.object({

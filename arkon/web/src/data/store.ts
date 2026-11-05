@@ -3,6 +3,7 @@ import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler } f
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
+import type { IslerimSatiri } from './islerim';
 import type { RefakatKarti } from './refakat-karti';
 import { cagriEkipleriniAl } from './cagri-ekiplerim';
 import type { CagriEkiplerim } from './cagri-ekiplerim';
@@ -557,6 +558,8 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async operatorOzeti(donem: OzetDonemi, kisiId?: number | null): Promise<OperatorOzeti> { return api('GET', '/operator-ozeti?donem=' + donem + (kisiId ? '&kisiId=' + kisiId : '')); },
     /** 393 d: emrin istasyonundaki makinelerin ayrımı (başlatmayı reddettirecek olanlar); sunucunun başlatma denetimiyle aynı kural */
     async makineAyrimlari(emirId: number): Promise<MakineAyrimlari | undefined> { return api('GET', '/makine-ayrimlari?emirId=' + emirId); },
+    /** 2125-1 b: kişinin çalışan işleri, makine başına (çarkın İşlerim şeridi) */
+    async islerim(): Promise<IslerimSatiri[]> { const c = await api('GET', '/islerim'); return (c && c.isler) || []; },
     /** refakat kartları (kart #156): istasyonun sıradaki işlerinin emirlerine ait açık kartlar, istasyonda satırı olup olmadığıyla */
     async refakatKartlari(istasyon: string, emirler: readonly number[]): Promise<RefakatKarti[]> {
       if (!emirler.length) return [];
