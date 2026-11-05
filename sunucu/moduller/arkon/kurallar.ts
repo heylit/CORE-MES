@@ -2183,7 +2183,7 @@ export function stokIstegiKarari(govde: unknown, onceki: unknown): { ret: keyof 
 
 // Numune teslimi (kullanıcı kararı 115 a, 125 a): operatörün kaliteye gönderdiği yeni numune isteği stokta haritadaki "Kalite numune"
 // kutusuna teslim açar. Yalnız yeni istek (önceki yok, bekliyor) açar; aynı kaynak kimliği ikinci teslimi açmaz. Malzeme ve statüyü stok emirden
-// çözer (VARSAYIM: miktar bir parça). Kendiliğinden gitmeme kuralı tablettedir (data/otomatik-numune.ts).
+// çözer (VARSAYIM: miktar bir parça). İsteği yalnız operatör açar (2124-1 b); kendiliğinden istek terminalde kapalıdır.
 export const numuneTeslimKaynagi = (kimlik: string) => `arkon:requests:${kimlik}`;
 export interface NumuneTeslimGirdisi { istasyonKodu: string; uretimEmriId: number | null; isEmriId: number | null; miktar: number; kaynakKimligi: string }
 

@@ -30,8 +30,9 @@ export const HAZIR_UYARILAR: readonly Omit<Uyari, 'id'>[] = [
   { t: 'Koruyucu gözlük ve eldiven zorunlu', lvl: 'warn', when: 'shift', ack: true },
   { t: 'Talaş konveyörünü boşalt', lvl: 'info', when: 'interval', n: 120, ack: false },
 ];
-// Numune zamanı gelince istek kendiliğinden kaliteye düşer: operatör düğmeye basmayı unutunca numune kaçıyordu.
-export const VARSAYILAN_KALITE: KaliteKurallari = { who: 'quality', firstPiece: true, nok: 'warn', band: 80, critTwice: false, autoSend: true };
+// 2124-1 b: numune isteğini yalnız operatör açar. İstek stokta bir parçayı kalite numune kutusuna taşıdığı için kendiliğinden açılan
+// istek, ayrılmamış parçayı kalitede gösteriyordu. Kayıtlı eski `autoSend` değeri okunmaz.
+export const VARSAYILAN_KALITE: KaliteKurallari = { who: 'quality', firstPiece: true, nok: 'warn', band: 80, critTwice: false, autoSend: false };
 export const VARSAYILAN_URETIM: UretimKurallari = { scrapPct: 3, scrapMin: 20, maxPauseMin: 15, tools: [] };
 
 type KuralKaydi = { warns?: Uyari[]; q?: Partial<KaliteKurallari>; prod?: Partial<UretimKurallari> } | null | undefined;
@@ -40,7 +41,7 @@ export function isKurallari(p: { rules?: unknown } | null | undefined): IsKurall
   const r: NonNullable<KuralKaydi> = ((p && p.rules) as KuralKaydi) || {};
   return {
     warns: r.warns || [],
-    q: { ...VARSAYILAN_KALITE, ...r.q },
+    q: { ...VARSAYILAN_KALITE, ...r.q, autoSend: false },
     prod: { ...VARSAYILAN_URETIM, ...r.prod, tools: (r.prod && r.prod.tools) || [] },
   };
 }

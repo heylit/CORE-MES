@@ -130,10 +130,6 @@ export function KuralSekmesi({ paket, yama, sonuc, kilitli }: {
           </>
         )}
         <Anahtar
-          acik={R.q.autoSend} degistir={(v) => kaliteYaz({ autoSend: v })} kilitli={kilitli}
-          baslik="Numune zamanı gelince otomatik kaliteye gönder" aciklama="Operatörün düğmeye basmasını beklemez; istek kalite sırasına düşer"
-        />
-        <Anahtar
           acik={R.q.critTwice} degistir={(v) => kaliteYaz({ critTwice: v })} kilitli={kilitli}
           baslik="Kritik ölçüde ikinci kontrol iste" aciklama="Kalite, kritik (KK) ölçüleri onaylarken ikinci kontrolü işaretlemeli"
         />
