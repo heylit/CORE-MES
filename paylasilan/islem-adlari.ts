@@ -194,6 +194,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'markalama.tanim-yaz': 'Markalama tanımını düzenleme',
   'markalama.seri-ver': 'Seri no verme ve markayı doğrulama',
   'markalama.durum-yaz': 'Markalı birime red, rework, kabul ve hurda girme',
+  'ortak-dosyalar.yetki-ver': 'Ortak klasör yetkisini değiştirme',
 };
 
 // Grup modül önekidir; sayfanın görme işlemi o modülün grubunda durur.
@@ -222,6 +223,7 @@ export const MODUL_ADLARI: Readonly<Record<string, string>> = {
   markalama: 'Markalama',
   mesaj: 'Mesaj',
   'musteri-tedarikci': 'Müşteriler ve tedarikçiler',
+  'ortak-dosyalar': 'Ortak dosyalar',
   oturum: 'Oturum ve cihazlar',
   pano: 'Ana sayfa',
   plan: 'Planlama',
