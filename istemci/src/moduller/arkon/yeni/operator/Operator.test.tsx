@@ -428,6 +428,51 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
   }, 40000);
 });
 
+describe('A1 Üretim Terminali hazırlık talimatı (2098c)', () => {
+  const adim = (id: number, sira: number, asama: string, ad: string) => ({
+    id, sira, ad, aciklama: null, asama, tamam: false, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null,
+  });
+  const kur = (adimlar: unknown[]) => {
+    const tmi = { ...PAKET, id: 'tmi-ie-70', no: 'UE-DENEME-7', tmi: { emirId: 7, isEmriId: 70 } };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      if (/\/uretim-emirleri\/7$/.test(String(adres))) return new Response(JSON.stringify({ emir: {}, kayitlar: [], adimlar }), { status: 200 });
+      return asil(adres, istek);
+    });
+    arkonAc('/uretim-terminali');
+    return istekler;
+  };
+  // Paket yüklenene dek durum düğmeleri pasiftir.
+  const ayarla = async () => {
+    const d = await ekran();
+    await within(d).findByRole('heading', { name: /UE-DENEME-7/ }, { timeout: 10000 });
+    const b = within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Hazırlık/ }) as HTMLButtonElement;
+    await waitFor(() => { expect(b.disabled).toBe(false); }, { timeout: 10000 });
+    fireEvent.click(b);
+  };
+
+  it('ayar başlayınca üretim hazırlığı tam sayfa açılır; bitişte Başlat işi başlatır', async () => {
+    const istekler = kur([adim(71, 1, 'hazirlik', 'Mengeneyi hizala'), adim(72, 2, 'uretim', 'İlk parça')]);
+    await ayarla();
+    const sayfa = await screen.findByRole('dialog', { name: /UE-DENEME-7/ }, { timeout: 10000 });
+    expect(await within(sayfa).findByRole('heading', { name: 'Mengeneyi hizala' })).toBeTruthy();
+    expect(within(sayfa).getByText('Üretim hazırlığı')).toBeTruthy();
+    fireEvent.click(within(sayfa).getByRole('button', { name: 'Sonraki adım' }));
+    fireEvent.click(within(sayfa).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running' && e.orderNo === 'UE-DENEME-7')).toBe(true); }, { timeout: 10000 });
+    expect(screen.queryByRole('dialog', { name: /UE-DENEME-7/ })).toBeNull();
+  }, 40000);
+
+  it('hazırlık adımı yoksa ayar talimat açmaz', async () => {
+    const istekler = kur([adim(72, 1, 'uretim', 'İlk parça')]);
+    await ayarla();
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'setup')).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByRole('dialog', { name: /UE-DENEME-7/ })).toBeNull();
+  }, 40000);
+});
+
 describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   const okut = (kod: string) => { for (const c of [...kod, 'Enter']) fireEvent.keyDown(document.body, { key: c }); };
   let kartOkundu = false;

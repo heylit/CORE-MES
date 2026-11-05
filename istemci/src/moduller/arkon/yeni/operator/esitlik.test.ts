@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { sayi, sure } from '../cekirdek/bicim.ts';
 import type { Plant } from '../cekirdek/tipler.ts';
-import { CAGRI_ASAMALARI, HAZIRLIK_MADDELERI, hazirlikSayisi, ilkParcaKalemleri, ilkParcaKapisi, kontrolTakvimi, siradakiGorev, simgeSec, tonAdi } from './kurallar.ts';
+import { CAGRI_ASAMALARI, ilkParcaKalemleri, ilkParcaKapisi, kontrolTakvimi, siradakiGorev, simgeSec, tonAdi } from './kurallar.ts';
 import type { IlkParcaDurumu, Is, Pkg } from './tipler.ts';
 import { KALITE_MERKEZI_RET_UYARISI } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 
@@ -49,8 +49,8 @@ type EskiIslev = (...girdi: unknown[]) => unknown;
 interface EskiOperator {
   dueControls(o: unknown, simdi: number): { due: unknown; next: unknown; who: unknown; why: unknown };
   nextTask(...girdi: unknown[]): Record<string, unknown> | null;
-  ilkParcaKalemleri: EskiIslev; firstGate: EskiIslev; readyCount: EskiIslev;
-  READY: { k: string; l: string; d: string }[]; CALL_STAGES: unknown;
+  ilkParcaKalemleri: EskiIslev; firstGate: EskiIslev;
+  CALL_STAGES: unknown;
 }
 let O: EskiOperator;
 const YOL = '../../../../../../arkon/web/src/app/';
@@ -96,7 +96,7 @@ const ISLER: Is[] = [
   is({ state: 'running', good: 3, pkg: paket({ tmi: { emirId: 1, isEmriId: 1, opNo: 10, ilkParca: { karar: 'onay', zaman: '2026-10-24T08:00:00Z' } }, fpRe: { on: true, at: Date.parse('2026-10-24T09:00:00Z') } } as unknown as Partial<Pkg>) }),
 ];
 const ILKLER: (IlkParcaDurumu | undefined)[] = [undefined, { acik: true, sayilan: 0 }, { acik: true, sayilan: 1 }, { acik: true, sayilan: 3, kararBekleyen: 2 }, { acik: true, yeniden: true, sayilan: 3 }];
-const SIRADAKI = is({ no: 'IE-2', part: 'Deneme ikinci', state: 'queued', ready: { mat: true, prog: true } });
+const SIRADAKI = is({ no: 'IE-2', part: 'Deneme ikinci', state: 'queued' });
 
 describe('A1 kurallar eski hesaplarla aynı', () => {
   it('süre ve sayı biçimi', () => {
@@ -140,7 +140,10 @@ describe('A1 kurallar eski hesaplarla aynı', () => {
         const D = kontrolTakvimi(o, SIMDI, VARDIYA_BASI);
         const yeni = siradakiGorev(o, D, sira, ilk, SIMDI);
         const eski = O.nextTask(o, O.dueControls(o, SIMDI), sira, ilk);
-        const cevir = (g: Record<string, unknown> | null) => (g ? { ...g, tone: tonAdi(g['tone'] as string), icon: simgeSec(g['icon'] as string) } : null);
+        // 2098-4 b: dört maddelik hazırlık sayısı kalktı (hazırlık talimattan gelir); eski metindeki "hazırlık n/4" eki karşılaştırılmaz.
+        const cevir = (g: Record<string, unknown> | null) => (g ? {
+          ...g, tone: tonAdi(g['tone'] as string), icon: simgeSec(g['icon'] as string), ...(typeof g['d'] === 'string' ? { d: g['d'].replace(/ · hazırlık \d\/4$/, '') } : {}),
+        } : null);
         expect(yeni).toEqual(cevir(eski));
         if (yeni) basliklar.add(yeni.t.split(' · ')[0]!);
       }
@@ -148,9 +151,7 @@ describe('A1 kurallar eski hesaplarla aynı', () => {
     expect(basliklar.size).toBeGreaterThanOrEqual(15);
   });
 
-  it('hazırlık maddeleri ve çağrı aşamaları', () => {
-    expect(HAZIRLIK_MADDELERI.map((x) => [x.k, x.l, x.d])).toEqual(O.READY.map((x: { k: string; l: string; d: string }) => [x.k, x.l, x.d]));
-    for (const r of [{}, { mat: true }, { mat: true, tool: true, prog: true, draw: true }, { yok: true }] as Record<string, boolean>[]) expect(hazirlikSayisi({ ready: r })).toBe(O.readyCount({ ready: r }));
+  it('çağrı aşamaları', () => {
     expect([...CAGRI_ASAMALARI]).toEqual(O.CALL_STAGES);
   });
 });

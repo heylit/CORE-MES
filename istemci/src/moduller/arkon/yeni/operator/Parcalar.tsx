@@ -18,7 +18,7 @@ import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { DurusGerceklesmesi } from '../cekirdek/vardiya.ts';
 import { yerel } from '../cekirdek/yerel.ts';
 import { useSimdi } from '../veri/baglam.ts';
-import { CAGRI_ASAMALARI, cagriTonu, durumDugmeleri, hazirlikSayisi, tonDurumu, type DurumDugmesi } from './kurallar.ts';
+import { CAGRI_ASAMALARI, cagriTonu, durumDugmeleri, tonDurumu, type DurumDugmesi } from './kurallar.ts';
 import type { Cagri, Gorev, GorevEylemi, Is } from './tipler.ts';
 
 // Operatör ekranının parçaları (bilesenler.ts Queue, EtkinKart, Dial, Orbs; operator-parcalar.ts TaskCard, PlanBanner, TopluPanel,
@@ -194,7 +194,6 @@ function MiniHalka({ oran }: { oran: number }) {
     </span>
   );
 }
-export { MiniHalka };
 
 export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }: {
   isler: readonly Is[]; aktif: number; sec: (i: number) => void; siradaki: string | undefined; onde: string | null;
@@ -217,7 +216,7 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
           {at ? <span className="tc-ay1-adimtur"><span className="tc-ay1-etiket">{at.etiket}</span>{at.aciklama ? <span className="tc-ay1-soluk">{at.aciklama}</span> : null}</span> : null}
           <span className="tc-ay1-is-rozetler">
             <span className="tc-ay1-cip" data-durum={durumRengi(o.state)}><i aria-hidden="true" />{durumAdi(o.state)}</span>
-            {siraAnahtari(o) === siradaki ? <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />Sıradaki · hazırlık {hazirlikSayisi(o)}/4</span> : null}
+            {siraAnahtari(o) === siradaki ? <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />Sıradaki</span> : null}
             {siraAnahtari(o) === onde ? <span className="tc-ay1-cip" data-durum="ayar"><i aria-hidden="true" />Öne alındı</span> : null}
             {eksi !== null ? <span className="tc-ay1-cip" data-durum="durdu"><i aria-hidden="true" />{eksiBakiyeMetni(eksi)}</span> : null}
           </span>

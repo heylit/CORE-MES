@@ -169,15 +169,6 @@ export function kontrolTakvimi(o: TakvimIsi | null | undefined, simdi: number, v
   return { due: liste, next, who, why };
 }
 
-/* ── sonraki işe hazırlık (operator-parcalar.ts READY) ── */
-export const HAZIRLIK_MADDELERI: readonly { k: string; l: string; d: string; simge: SimgeAdi }[] = [
-  { k: 'mat', l: 'Malzeme hazır', d: 'Ham madde ve kasa makine yanında', simge: 'truck' },
-  { k: 'tool', l: 'Takımlar hazır', d: 'Takım listesi ve ofsetler', simge: 'tool' },
-  { k: 'prog', l: 'Program yüklendi', d: 'Program no iş paketi ile aynı', simge: 'cpu' },
-  { k: 'draw', l: 'Resim incelendi', d: 'Revizyon ve kritik ölçüler', simge: 'ruler' },
-];
-export const hazirlikSayisi = (o: Pick<Is, 'ready'>): number => HAZIRLIK_MADDELERI.filter((r) => (o.ready || {})[r.k]).length;
-
 /* ── "Şimdi" kartı (nextTask) ── */
 type GorevIsi = Is & { _skip?: boolean };
 
@@ -213,7 +204,7 @@ export function siradakiGorev(o: GorevIsi | null | undefined, D: KontrolTakvimi,
   if (ilk && ilk.acik && ilk.sayilan < 1 && o.state === 'running') return { tone: 'hazard', icon: 'plus', t: 'İlk parçayı say', d: 'İlk parça bitince İyi +1 · sonra kaliteye gönder', act: null, quiet: true, key: 'ilk' };
   const kalanDk = kalanAdet(o.target, o.good, o.scrap) * (o.cycle || 30) / 60;
   const nx = D.next ? `Sıradaki kontrol: ${D.next.b.nom} · ${D.next.v} ${D.next.u} sonra${D.next.who ? ` · ${D.next.who === 'op' ? 'sen ölçeceksin' : 'kaliteye'}` : ''}` : null;
-  if (o.state === 'done') return { tone: 'done', icon: 'next', t: 'Sıradaki işe geç', d: siradaki ? `${siradaki.no} · ${siradaki.part} · hazırlık ${hazirlikSayisi(siradaki)}/4` : 'Kuyrukta iş yok', act: 'next', btn: 'Geç' };
+  if (o.state === 'done') return { tone: 'done', icon: 'next', t: 'Sıradaki işe geç', d: siradaki ? `${siradaki.no} · ${siradaki.part}` : 'Kuyrukta iş yok', act: 'next', btn: 'Geç' };
   if (o.state === 'stopped') return { tone: 'stop', icon: 'rotate', t: 'Makine duruşta', d: 'Sorun giderildiyse yeniden başlat · yardım gerekiyorsa çağrı aç', act: 'restart', btn: 'Yeniden başlat', act2: 'call', btn2: 'Çağrı' };
   if (asinan && o.state !== 'queued') return { tone: 'stop', icon: 'tool', t: `Takım ömrü doldu · ${asinan.name}`, d: `${sayi(asinan.life)} parça işlendi · takımı değiştir, ofseti doğrula`, act: 'tool', btn: 'Değiştirildi', toolId: asinan.id, key: `tool:${asinan.id}:${(o.toolsAt || {})[asinan.id] || 0}` };
   const qd = D.due.filter((b) => D.who[b.id] !== 'op');
@@ -241,7 +232,7 @@ export function siradakiGorev(o: GorevIsi | null | undefined, D: KontrolTakvimi,
       ? { tone: 'hazard', icon: 'wrench', t: 'Hazırlık yapılıyor', d: 'İlk parçayı işle, sonra kaliteye gönder', act: 'sample', btn: 'İlk parçayı gönder' }
       : { tone: 'run', icon: 'check', t: 'İlk parça onaylandı', d: 'Kalite onayı geldi · üretime geçebilirsin', act: 'start', btn: 'Üretime geç' };
   }
-  if (siradaki && kalanDk < 45) return { tone: 'done', icon: 'layers', t: 'Sıradaki işe hazırlan', d: `${siradaki.no} · ${siradaki.part} · ${Math.round(kalanDk)} dk sonra · hazırlık ${hazirlikSayisi(siradaki)}/4`, act: 'prepnext', btn: 'Hazırla', dismiss: true, key: 'prep' };
+  if (siradaki && kalanDk < 45) return { tone: 'done', icon: 'layers', t: 'Sıradaki işe hazırlan', d: `${siradaki.no} · ${siradaki.part} · ${Math.round(kalanDk)} dk sonra`, act: 'prepnext', btn: 'Hazırla', dismiss: true, key: 'prep' };
   return { tone: 'run', icon: 'gauge', t: 'Üretim sürüyor', d: nx || 'Planlı kontrol yok', act: siradaki ? 'prepnext' : null, btn: siradaki ? 'Sonraki iş' : null, quiet: true };
 }
 
@@ -287,7 +278,7 @@ export const eksikTakimTabanlari = (o: Pick<Is, 'good' | 'toolsAt'>, takimlar: r
 export interface OneriGirdisi {
   o: Is; D: KontrolTakvimi; takimlar: readonly { id: string; name: string; life: number }[];
   planliDurus: { reason?: string; title?: string } | null; molada: boolean;
-  sonDurusNedeni: string | null; siradaki: Is | null | undefined;
+  sonDurusNedeni: string | null;
 }
 export function durusOnerileri(g: OneriGirdisi): { code: string; why: string }[] {
   const { o, D } = g;
@@ -300,7 +291,6 @@ export function durusOnerileri(g: OneriGirdisi): { code: string; why: string }[]
   if (g.planliDurus && g.planliDurus.reason) cikti.unshift({ code: g.planliDurus.reason, why: `Takvimde planlı: ${g.planliDurus.title || ''}` });
   if (g.molada) cikti.push({ code: 'D-08', why: 'Mola saati' });
   if (g.sonDurusNedeni) cikti.push({ code: g.sonDurusNedeni, why: 'Son duruş nedeni' });
-  if (g.siradaki && hazirlikSayisi(g.siradaki) < 2 && Math.max(0, o.target - o.good) < 30) cikti.push({ code: 'D-01', why: 'Sıradaki iş için malzeme hazır değil' });
   return cikti;
 }
 

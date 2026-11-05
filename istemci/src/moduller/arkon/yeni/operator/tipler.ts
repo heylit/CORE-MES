@@ -17,7 +17,6 @@ export interface Is extends Order {
   pkg?: Pkg;
   meas?: Record<string, Meas>;
   lastDecision?: KaliteKarari | null;
-  ready?: Record<string, boolean>;
   toolEvt?: number;
   acks?: Record<string, UyariOnayi>;
   kart?: number | null;

@@ -33,10 +33,10 @@ describe('A1 operatör kuralları', () => {
   it('duruş önerileri: takvimdeki planlı duruş başa gelir', () => {
     const l = durusOnerileri({
       o: is({ good: 95, toolsAt: { t: 0 } }), D: BOS, takimlar: [{ id: 't', name: 'T1', life: 100 }], planliDurus: { reason: 'P-01', title: 'Bakım' }, molada: true,
-      sonDurusNedeni: 'D-02', siradaki: is({ no: 'IE-2', ready: {} }),
+      sonDurusNedeni: 'D-02',
     });
-    expect(l.map((x) => x.code)).toEqual(['P-01', 'D-04', 'D-08', 'D-02', 'D-01']);
-    expect(durusOnerileri({ o: is(), D: BOS, takimlar: [], planliDurus: null, molada: false, sonDurusNedeni: null, siradaki: null })).toEqual([]);
+    expect(l.map((x) => x.code)).toEqual(['P-01', 'D-04', 'D-08', 'D-02']);
+    expect(durusOnerileri({ o: is(), D: BOS, takimlar: [], planliDurus: null, molada: false, sonDurusNedeni: null })).toEqual([]);
   });
 
   it('hurda uyarısı oran sınırında, yoksa son 20 parçada üç hurdada', () => {

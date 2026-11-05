@@ -12,11 +12,10 @@ import { yerel } from '../cekirdek/yerel.ts';
 import { useSimdi } from '../veri/baglam.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
 import type { NumuneIstegi } from '../kalite/index.tsx';
-import { CAGRI_ASAMALARI, HAZIRLIK_MADDELERI, HIZLI_YANITLAR, cagriTonu, hazirlikSayisi, simgeSec, tonDurumu, type VardiyaOzeti } from './kurallar.ts';
-import { MiniHalka } from './Parcalar.tsx';
-import type { Cagri, Is } from './tipler.ts';
+import { CAGRI_ASAMALARI, HIZLI_YANITLAR, cagriTonu, simgeSec, tonDurumu, type VardiyaOzeti } from './kurallar.ts';
+import type { Cagri } from './tipler.ts';
 
-// Operatör ekranının pencereleri (operator-parcalar.ts ScrapOv, ReasonOv, CallOv, CallTrackOv, NextPrepOv, ShiftOv).
+// Operatör ekranının pencereleri (operator-parcalar.ts ScrapOv, ReasonOv, CallOv, CallTrackOv, ShiftOv).
 
 const saatSaniye = (t: number) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const saatDakika = (t: number) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -191,35 +190,6 @@ export function CagriTakibi({ cagri, kapat, yanitla, bitir }: {
         {cagri.msgs.map((m, i) => <div key={i} className="tc-ay1-balon" data-kimden={m.from}><span>{m.text}</span><small>{saatDakika(m.at)}</small></div>)}
       </div>
       <div className="tc-ay1-hizli">{HIZLI_YANITLAR.map((q) => <Dugme key={q.t} tur="ikincil" onClick={() => yanitla(q)}>{q.t}</Dugme>)}</div>
-    </Pencere>
-  );
-}
-
-/* ── sonraki işe ön hazırlık ── */
-export function SonrakiHazirlik({ is, kapat, degistir }: { is: Is; kapat: () => void; degistir: (k: string) => void }) {
-  const r = (is.ready || {}) as Record<string, boolean>;
-  const n = hazirlikSayisi(is);
-  return (
-    <Pencere acik kapat={kapat} baslik={is.no} alt={<Dugme onClick={kapat}>Tamam</Dugme>}>
-      <p className="tc-ay1-soluk">Sonraki iş · ön hazırlık · {is.part} · {is.op}{is.pkg ? ` · Rev ${is.pkg.rev}` : ''} · Termin {is.due}</p>
-      <div className="tc-ay1-hazirlik-ozet">
-        <MiniHalka oran={n / 4} />
-        <div><b>{n === 4 ? 'Her şey hazır · iş bitince hemen başlayabilirsin' : 'Mevcut iş sürerken hazırla, hazırlık süresi kısalsın'}</b><small>{n}/4 tamamlandı</small></div>
-      </div>
-      <div className="tc-ay1-hazirlik">
-        {HAZIRLIK_MADDELERI.map((x) => (
-          <button key={x.k} type="button" role="checkbox" aria-checked={!!r[x.k]} className="tc-ay1-hazirlik-madde" onClick={() => degistir(x.k)}>
-            <span className="tc-ay1-kutu" aria-hidden="true"><Simge ad="check" /></span><Simge ad={x.simge} /><span><b>{x.l}</b><small>{x.d}</small></span>
-          </button>
-        ))}
-      </div>
-      {is.pkg ? (
-        <div className="tc-ay1-dosyalar">
-          <span className="tc-ay1-ust-yazi">Paketteki dokümanlar</span>
-          {is.pkg.files.map((f) => <span key={f.name} className="tc-ay1-cip" data-durum={f.kind === 'pdf' ? 'durdu' : 'calisiyor'}><i aria-hidden="true" />{f.name}</span>)}
-          <span className="tc-ay1-cip" data-durum="bitti"><i aria-hidden="true" />{is.pkg.plan.length} kontrol · {is.pkg.steps.length} adım</span>
-        </div>
-      ) : null}
     </Pencere>
   );
 }
