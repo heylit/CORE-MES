@@ -1269,6 +1269,34 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual((await plan()).map((x) => x.vade), ['2026-10-10', '2026-12-19']);
   });
 
+  test('2132a: iptal edilen siparişin planı beklenen ödemelerden çıkar; faturalı siparişin planı takipte kalır; iptal geri alınınca plan yeniden kurulur; yetkisiz iptal planı silmez', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const beklenen = async () => tamam<BeklenenOdemelerCevabi>(await istek(c.yonetici, 'GET', '/finans/beklenen-odemeler')).odemeler
+      .filter((x) => x.talepId === s.id).map((x) => x.teklifId).sort();
+    const plan = async (teklifId: string) => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`))
+      .siparisler.find((x) => x.teklifId === teklifId)!.odemePlani;
+    assert.deepEqual(await beklenen(), [a, b].sort());
+    // Yetkisiz kişi iptal edemez; plan yerinde kalır.
+    assert.equal((await kaydet(c.operator, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme' })).statusCode, 403);
+    assert.deepEqual(await beklenen(), [a, b].sort());
+    // a'ya fatura bağlanır: a beklenenden düşer, planı takipte görünür.
+    const fatura = tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+      yon: 'gider', kategori: 'mal_alimi', firmaId: firmaA, belgeNo: 'DN-2132', belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar: 20, kdvOrani: 20,
+    })).belge.id;
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId: fatura, bagla: true }));
+    assert.deepEqual(await beklenen(), [b]);
+    const aPlani = await plan(a);
+    const ip = tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme' }));
+    assert.equal(ip.durum, 'iptal');
+    assert.deepEqual(await beklenen(), []);
+    assert.deepEqual(await plan(a), aPlani, 'faturalı siparişin planı silinmez');
+    assert.deepEqual(await plan(b), []);
+    // İptal geri alınır: faturasız siparişe varsayılan plan yeniden kurulur.
+    tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'siparis_verildi', iptalNedeni: '' }));
+    assert.deepEqual(await beklenen(), [b]);
+    assert.equal((await plan(b)).length, 1);
+  });
+
   test('#489 pano: onay bekleyen onaylayana, açık talep ve teslim bekleyen satır yazana, açık sipariş okuyana sayılır; yetkisiz sayı null', async () => {
     const ozet = async (cerez: string) => tamam<SatinAlmaOzetiCevabi>(await istek(cerez, 'GET', '/satin-alma/ozet'));
     const [sa0, md0] = [await ozet(c.sa), await ozet(c.mudur)];
