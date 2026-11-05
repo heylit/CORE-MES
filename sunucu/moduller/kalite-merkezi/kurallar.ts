@@ -338,22 +338,6 @@ export function yeniOlcumCihazlari(koleksiyon: string, onceki: Record<string, un
   return [...new Set(yeniler.map((c) => metin(c.cihaz)))];
 }
 
-// KM-K88: emrin kalibrasyon hazırlığı (Üretim emirlerinin hazırlık kapısı). Emrin cihazları emrin muayenelerindeki karakteristiklerin
-// cihazlarıdır; cihazı olmayan emir seçili değildir. Hepsi geçerliyse tamam; kalibrasyonun bir tamamlanma anı yoktur, zaman boştur.
-export interface KalibrasyonHazirligi { durum: 'yok' | 'tamam'; zaman: null; secildi: boolean }
-
-export function emirCihazlari(muayeneler: readonly (Record<string, unknown> | null)[]): string[] {
-  return [...new Set(muayeneler.flatMap((m) => karakteristikler(m).map((c) => metin(c.cihaz)).filter((id) => id !== '')))];
-}
-
-export function kalibrasyonHazirligi(
-  cihazIdleri: readonly string[], cihazlar: ReadonlyMap<string, Record<string, unknown>>, aletDurumlari: ReadonlyMap<string, AletDurumu>,
-): KalibrasyonHazirligi {
-  if (cihazIdleri.length === 0) return { durum: 'yok', zaman: null, secildi: false };
-  const hepsi = cihazIdleri.every((id) => cihazGecerliMi(cihazlar.get(id) ?? null, aletDurumlari));
-  return { durum: hepsi ? 'tamam' : 'yok', zaman: null, secildi: true };
-}
-
 // KM-K90 (229 a, 147 b; koordinatör kararı 19.10.2026): NCR MRB kararı "Olduğu gibi kullan" ya da "Tamir" ile kapanınca karantinaya
 // aldığı partiler serbest bırakılır. Yeniden işle, Hurda ve Tedarikçiye iade stoğa dokunmaz: parti karantinada kalır, çıkışı depo ya da
 // ilgili modül yapar. Kapalı kayıt değişmediğinden (KM-K89) istek yalnız kapanışta bir kez doğar.

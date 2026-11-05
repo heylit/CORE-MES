@@ -29,7 +29,6 @@ interface MaddeBilgisi { ad: string; kisa: string; sahip: string; git: { yol: st
 export const MADDE: Record<HazirlikMaddesi, MaddeBilgisi> = {
   cnc: { ad: 'CNC kurulumu', kisa: 'CNC', sahip: 'CNC Kurulum', git: { yol: '/cnc-kurulum', islem: 'sayfa.cnc-kurulum', ad: "CNC Kurulum'da aç" } },
   cizim: { ad: 'Çizim revizyonu', kisa: 'Çizim', sahip: 'Kalite Merkezi', git: { yol: '/kalite-merkezi', islem: 'sayfa.kalite-merkezi', ad: 'Çizimi aç' } },
-  kalibrasyon: { ad: 'Ölçü aleti kalibrasyonu', kisa: 'Kalibr.', sahip: 'Kalibrasyon', git: { yol: '/kalibrasyon', islem: 'sayfa.kalibrasyon', ad: "Kalibrasyon'da aç" } },
   'ozel-proses': { ad: 'Özel proses', kisa: 'Özel pr.', sahip: 'sahibi belli değil', git: null },
 };
 

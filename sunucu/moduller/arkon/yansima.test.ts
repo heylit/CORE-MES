@@ -3213,6 +3213,75 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM kalite_merkezi_olcum WHERE uretim_emri_id = $1 AND numune_id IS NULL', [r.emirId]))?.n, 1, 'değişmeyen ölçü yeniden gitmez');
   });
 
+  // 2131-2 a: periyodik numune RED olunca NCR açılır ve sonraki sağlam, kalite onay verene kadar karar bekler; sonraki periyodik karar
+  // bekleyeni kapatır (onayda sağlama). Karar Arkon'dan da Kalite Merkezi'nden de verilebilir.
+  test('2131-2 a: periyodik numune reddi NCR açar, sonraki sağlam karar bekler; Kalite Merkezi onayı bekleyeni sağlama geçirir; ilk parça kapısı yokken de', async () => {
+    const sahip = ortam!.sahip;
+    const r = await rotaliEmirKur({ ilkParcasizOp: 10 });
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const icerik = Buffer.from(`%PDF-1.4\n% km-p-${r.emirId}\n%%EOF\n`);
+    const ozet = createHash('sha256').update(icerik).digest('hex');
+    await sahip.sorgu("INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, $2, 'pdf', $3)", [ozet, icerik.length, yoneticiId]);
+    const belge = (await sahip.tek<{ id: number }>("INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ('KM resmi', 'teknik-resim', $1) RETURNING id", [yoneticiId]))!.id;
+    const resim = (await sahip.tek<{ id: number }>(
+      "INSERT INTO kalite_merkezi_resim (malzeme_no, tur, merkez_belge_id, ozet, ad, ekleyen_id, guncelleyen_id) VALUES ($1, 'resim', $2, $3, 'KM resmi', $4, $4) RETURNING id",
+      [r.kart, belge, ozet, yoneticiId]))!.id;
+    const olcu = (await sahip.tek<{ id: number }>(
+      "INSERT INTO kalite_merkezi_balon (resim_id, no, nominal, alt, ust, guncelleyen_id) VALUES ($1, 1, 'Ø10', '9.95', '10.05', $2) RETURNING id", [resim, yoneticiId]))!.id;
+    const pkgId = ieKimligi(ie1!);
+    const taslak = (await paketler()).get(pkgId)!.govde;
+    // Rotada ilk parçası yok, ölçüler periyodik: ilk parça kapısı ve kilidi yok; yalnız periyodik ret kapısı denenir.
+    assert.equal((await paketYaz(pkgId, null, { ...taslak, status: 'published', steps: [{ id: 's1' }], plan: [{ id: 1, freq: 'Her 10 parça', kmBalon: olcu, min: 9.95, max: 10.05 }], rules: {} })).durum, 200);
+    const bekleyen = async () => (await kararSayaclari(vt(), [r.emirId])).get(r.emirId)?.kararBekliyor ?? 0;
+    const yaz = async (tur: string, satir: Record<string, unknown>) => {
+      const c = await ekle(operator, tur, { ...satir, machine: r.ilk });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      assert.equal((await yansima(String(satir['cid'])))?.sonuc, 'yazildi', JSON.stringify(await yansima(String(satir['cid']))));
+    };
+    const istegiYaz = (kimlik: string, taban: number, govde: Record<string, unknown>) =>
+      istek<{ surum: number }>(kimlik.startsWith('op:') ? operator : yonetici, 'POST', `/arkon/belgeler/requests/${kimlik.replace('op:', '')}/yaz`, { taban, govde, kaynak: 'y1' });
+    const istegiOku = async (kimlik: string) => (await istek<{ belge: { surum: number; govde: Record<string, unknown> } }>(yonetici, 'GET', `/arkon/belgeler/requests/${kimlik}`)).govde.belge!;
+    const numuneAc = async (kimlik: string, deger: string): Promise<number> => {
+      const g = { id: kimlik, pkgId, no: 'E', machine: r.ilk, at: Date.now(), reason: 'Her 10 parça', items: [1], cnt: 10, status: 'waiting', results: {} };
+      assert.equal((await istegiYaz(`op:${kimlik}`, 0, g)).durum, 200);
+      assert.equal((await istek(operator, 'POST', `/arkon/numuneler/${kimlik}/olcum`, { olcumler: [{ balonId: olcu, deger }], kaynak: 'y1' })).durum, 200);
+      return (await istegiOku(kimlik)).govde['kmNumune'] as number;
+    };
+
+    await yaz('events', ieOlay(ie1!, 'running'));
+    await yaz('counts', ieSayim(ie1!, 'good', 5));
+    assert.equal(await bekleyen(), 0, 'ilk parça kapısı yok, periyodik ret yok');
+
+    // Arkon'dan ret: Kalite Merkezi kararı ve NCR aynı işlemde; sonraki sağlamın tamamı karar bekler.
+    const k1 = `rq-p1-${r.emirId}`;
+    const n1 = await numuneAc(k1, '10.2');
+    const b1 = await istegiOku(k1);
+    const ret = await istegiYaz(k1, b1.surum, { ...b1.govde, status: 'rejected', note: 'Çap büyük' });
+    assert.equal(ret.durum, 200, JSON.stringify(ret.govde));
+    const ncr = await sahip.tek<{ govde: Record<string, unknown> }>("SELECT govde FROM kalite_merkezi_belge WHERE koleksiyon = 'ncr' AND kimlik = $1", [`ncr-numune-${n1}`]);
+    assert.equal(ncr?.govde['durum'], 'Açık', 'ret NCR açar');
+    assert.equal(await bekleyen(), 0, 'retten önceki sayım beklemez');
+    await yaz('counts', ieSayim(ie1!, 'good', 3));
+    assert.equal(await bekleyen(), 3, 'retten sonraki sağlam karar bekler');
+
+    // Sonraki periyodik numunenin Kalite Merkezi onayı aynalanınca bekleyen sağlama geçer, kapı kapanır.
+    const k2 = `rq-p2-${r.emirId}`;
+    const n2 = await numuneAc(k2, '10.01');
+    await yaz('counts', ieSayim(ie1!, 'good', 2));
+    assert.equal(await bekleyen(), 5);
+    assert.equal((await istek(yonetici, 'POST', `/kalite-merkezi/studyo/numuneler/${n2}/karar`, { karar: 'onay' })).durum, 200);
+    await yaz('counts', ieSayim(ie1!, 'good', 1));
+    assert.equal(await bekleyen(), 5, 'Kalite Merkezi onayı kapıyı kapatır; bekleyen aynada kapanır');
+    const ayna = isler.find((i) => i.ad === 'arkon-km-karar-aynasi');
+    if (ayna === undefined) throw new Error('iş yok');
+    await isiBirKezCalistir(vt(), ayna);
+    assert.equal((await istegiOku(k2)).govde['status'], 'approved');
+    assert.equal(await bekleyen(), 0, 'onay bekleyeni sağlama geçirir');
+    await isiBirKezCalistir(vt(), ayna);
+    await yaz('counts', ieSayim(ie1!, 'good', 1));
+    assert.equal(await bekleyen(), 0);
+  });
+
   // 744 a: uçtan uca denemedeki hata: Op 20, Op 10'un onayıyla ölçümsüz üretiyordu. Kilit ve karar adım başınadır; rotada "yok" seçilen adım beklemez.
   test('744 a: Op 10 onaylı emirde Op 20 sağlamı kendi ilk parça kararını bekler; karar o adıma gider; rotada ilk parçası "yok" adımda kapı ve kilit yoktur', async () => {
     const r = await rotaliEmirKur();

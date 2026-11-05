@@ -433,7 +433,6 @@ export type { AcikIsEmri } from './sorgular.ts';
 // Hazırlık durdurucuları (120-122 a, denetim #14): maddenin sahibi durumunu verir, bağı kablolama.ts kurar (sahipler bu modülü okur).
 export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cnc', c); };
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
-export const kalibrasyonHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('kalibrasyon', c); };
 export type { HazirlikCozucusu };
 // Onaylı kapanış (1072 a, 1074 a): dış maddenin sahibi durumunu verir, bağı kablolama.ts kurar. Kayıtsız ya da null dönen madde 'bilinmiyor'dur
 // ve durdurmaz; yalnız 'eksik' durdurur, müdür gerekçeyle muaf tutabilir (1076 a).

@@ -76,12 +76,12 @@ describe('uretim-emirleri hazırlık matrisi (2060, gerçek PostgreSQL)', () => 
     const cnc = new Map<number, HazirlikBilgisi>([[ie1!, { durum: 'tamam', secildi: true }], [ie2!, { durum: 'yok', secildi: true }]]);
     const cozucu = (m: HazirlikMaddesi): HazirlikCozucusu => async (_db, idler) =>
       (m === 'cnc' ? new Map(idler.flatMap((x) => (cnc.has(x) ? [[x, cnc.get(x)!] as const] : [])))
-        : new Map(idler.map((x) => [x, { durum: m === 'kalibrasyon' ? 'suruyor' : 'tamam', secildi: true } as const])));
-    const onceki = (['cnc', 'cizim', 'kalibrasyon', 'ozel-proses'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, m === 'ozel-proses' ? null : cozucu(m))] as const);
+        : new Map(idler.map((x) => [x, { durum: m === 'cizim' ? 'suruyor' : 'tamam', secildi: true } as const])));
+    const onceki = (['cnc', 'cizim', 'ozel-proses'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, m === 'ozel-proses' ? null : cozucu(m))] as const);
     try {
       const v = hazirlikCevabi.parse(await o().vt.okumaTx((db) => hazirlik(db, id)));
       assert.deepEqual(v.maddeler.map((m) => [m.madde, m.durum, m.isEmriDuzeyi]),
-        [['cnc', 'eksik', true], ['cizim', 'tamam', false], ['kalibrasyon', 'eksik', false], ['ozel-proses', 'bilinmiyor', false]]);
+        [['cnc', 'eksik', true], ['cizim', 'eksik', false], ['ozel-proses', 'bilinmiyor', false]]);
       assert.deepEqual(v.isEmirleri.map((s) => [s.isEmriId, s.opNo, s.bitti, s.maddeler.map((m) => [m.madde, m.durum])]), [
         [ie1, 10, false, [['cnc', 'tamam']]],
         [ie2, 20, false, [['cnc', 'eksik']]],

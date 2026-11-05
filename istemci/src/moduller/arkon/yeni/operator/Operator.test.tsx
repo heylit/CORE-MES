@@ -425,8 +425,8 @@ describe('A1 Üretim Terminali hatalı parça (1034)', () => {
 describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
   const cevap = (cnc: string, muafiyetler: unknown[] = []) => ({
     maddeler: [
-      { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false },
-      { madde: 'kalibrasyon', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false }, { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
+      { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false },
+      { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
     ],
     muafiyetler,
     isEmirleri: [
@@ -456,7 +456,7 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
     fireEvent.click(cip);
     const l = await screen.findByRole('region', { name: 'Hazırlık' });
     const satirlar = within(l).getAllByRole('listitem');
-    expect(satirlar.map((x) => x.getAttribute('data-hal'))).toEqual(['eksik', 'bilinmiyor', 'tamam', 'gerekmez']);
+    expect(satirlar.map((x) => x.getAttribute('data-hal'))).toEqual(['eksik', 'bilinmiyor', 'gerekmez']);
     expect(within(satirlar[0]!).getByText('CNC kurulumu')).toBeTruthy();
     expect(within(satirlar[0]!).getByText('bu iş emri')).toBeTruthy();
     expect(within(l).queryByRole('button', { name: /muaf tut/i })).toBeNull();

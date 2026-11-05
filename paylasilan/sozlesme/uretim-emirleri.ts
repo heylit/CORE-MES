@@ -693,9 +693,10 @@ export const refakatKartiCevabi = z.object({
   adimlar: z.array(z.object({ opNo: z.number().int(), ad: z.string(), yer: z.string().nullable(), fason: z.boolean() })),
 });
 
-// Hazırlık durdurucuları (120-122 a, denetim #14): eksik madde iş emrinin başlamasını durdurur. Kalibrasyon ve çizim muaf tutulamaz (121 a);
+// Hazırlık durdurucuları (120-122 a, denetim #14): eksik madde iş emrinin başlamasını durdurur. Çizim muaf tutulamaz (121 a);
 // CNC kurulumu ve özel proses müdürün gerekçesiyle geçilir (264 a). Maddenin durumunu sahibi modül verir; vermeyen madde emirde aranmaz.
-export const HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'kalibrasyon', 'ozel-proses'] as const;
+// Kalibrasyon başlatmada sorulmaz, yalnız ölçüm anında denetlenir (2131-1 c).
+export const HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'ozel-proses'] as const;
 export const MUAF_TUTULABILEN_MADDELER = ['cnc', 'ozel-proses'] as const;
 export const hazirlikMaddesi = z.enum(HAZIRLIK_MADDELERI);
 export const hazirlikMuafiyetiGovdesi = z.object({

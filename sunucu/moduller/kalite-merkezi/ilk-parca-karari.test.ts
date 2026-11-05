@@ -12,8 +12,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimKararSayaclari, adimliEmirAyrintisi, emirBaslat, emirBitir, emirNolari, emirSayim, kararSayaclari, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimIlkParcaKararlari, ilkParcaKarari, ilkParcaKararlari, kalibrasyonHazirlikDurumlari } from './disari.ts';
-import * as sorgular from './sorgular.ts';
+import { adimIlkParcaKararlari, ilkParcaKarari, ilkParcaKararlari } from './disari.ts';
 
 // 229 a: ilk parça kararı Kalite Merkezi'nden çıkar; emrin karar bekleyen sayımı onayda sağlama, retde redde geçer.
 describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
@@ -245,47 +244,5 @@ describe('Kalite Merkezi ilk parça kararı (gerçek PostgreSQL)', () => {
     assert.deepEqual(await o().vt.sorgu<{ isEmriId: number | null; karar: string }>(
       'SELECT is_emri_id AS "isEmriId", karar FROM kalite_merkezi_ilk_parca_karari WHERE uretim_emri_id = $1 ORDER BY id', [emir]),
     [{ isEmriId: op10, karar: 'onay' }, { isEmriId: op20, karar: 'ret' }]);
-  });
-
-  // 262 a: Üretim emirlerinin hazırlık kapısı kalibrasyonu emir başına buradan okur; emrin cihazları emrin muayenelerindedir.
-  test('KM-K88 kalibrasyon hazırlığı: emrin muayenelerindeki her cihaz kalibrasyonda geçerliyse tamam; cihazsız emir seçili değil', async () => {
-    const emir = await baslamisEmir();
-    const cihazsiz = await baslamisEmir();
-    const no = (await o().vt.tx((db) => emirNolari(db, [emir]))).get(emir)!;
-    const tur = (await o().sahip.tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'"))!.id;
-    for (const [aletNo, tarih] of [['K88-1', 'current_date'], ['K88-2', "current_date - 400"]] as const) {
-      const a = await o().sahip.tek<{ id: number }>('INSERT INTO olcu_aleti (no, tur_id, periyot_gun) VALUES ($1, $2, 365) RETURNING id', [aletNo, tur]);
-      await o().sahip.sorgu(`INSERT INTO kalibrasyon_kaydi (alet_id, tarih, kisi_id, sonuc) VALUES ($1, ${tarih}, $2, 'uygun')`, [a!.id, yoneticiId]);
-    }
-    const yaz = (koleksiyon: string, kimlik: string, govde: Record<string, unknown>) =>
-      o().vt.tx((db) => sorgular.yaz(db, koleksiyon, kimlik, govde, yoneticiId));
-    await yaz('dev', 'dev_k88_1', { kod: 'K88-1' });
-    await yaz('dev', 'dev_k88_2', { kod: 'K88-2' });
-    const okur = async () => o().vt.tx((db) => kalibrasyonHazirlikDurumlari(db, [emir, cihazsiz]));
-    const bos = { durum: 'yok', zaman: null, secildi: false };
-    assert.deepEqual(await okur(), new Map([[emir, bos], [cihazsiz, bos]]));
-    assert.deepEqual(await o().vt.tx((db) => kalibrasyonHazirlikDurumlari(db, [])), new Map());
-    await yaz('insp', 'insp_k88', { no: 'MUA-K88', emir: ` ${no} `, chars: [{ ad: 'Çap', cihaz: 'dev_k88_1' }] });
-    await yaz('insp', 'insp_k88_baska', { no: 'MUA-K88B', emir: 'BASKA-EMIR', chars: [{ ad: 'Çap', cihaz: 'dev_k88_2' }] });
-    assert.deepEqual((await okur()).get(emir), { durum: 'tamam', zaman: null, secildi: true });
-    assert.deepEqual((await okur()).get(cihazsiz), bos, 'başka emrin muayenesi sayılmaz');
-    await yaz('insp', 'insp_k88_2', { no: 'MUA-K88-2', emir: no, chars: [{ ad: 'Boy', cihaz: 'dev_k88_2' }] });
-    assert.deepEqual((await okur()).get(emir), { durum: 'yok', zaman: null, secildi: true }, 'süresi dolmuş alet');
-  });
-
-  // 329 a: Kalibrasyondan gelen `kal-<alet>` kimlikli cihazın kaydı yoktur; hazırlık kapısı aleti Kalibrasyondan okur.
-  test('329 a kalibrasyon hazırlığı: kal- kimlikli cihaz Kalibrasyondaki alet durumuyla değerlendirilir; olmayan alet hazır değil', async () => {
-    const emir = await baslamisEmir();
-    const no = (await o().vt.tx((db) => emirNolari(db, [emir]))).get(emir)!;
-    const tur = (await o().sahip.tek<{ id: number }>("SELECT id FROM olcu_aleti_turu WHERE ad = 'Kumpas'"))!.id;
-    const alet = await o().sahip.tek<{ id: number }>('INSERT INTO olcu_aleti (no, tur_id, periyot_gun) VALUES ($1, $2, 365) RETURNING id', ['K329-1', tur]);
-    await o().sahip.sorgu("INSERT INTO kalibrasyon_kaydi (alet_id, tarih, kisi_id, sonuc) VALUES ($1, current_date, $2, 'uygun')", [alet!.id, yoneticiId]);
-    const yaz = (kimlik: string, cihaz: string) =>
-      o().vt.tx((db) => sorgular.yaz(db, 'insp', kimlik, { no: kimlik, emir: no, chars: [{ ad: 'Çap', cihaz }] }, yoneticiId));
-    await yaz('insp_k329_a', `kal-${alet!.id}`);
-    const okur = () => o().vt.tx((db) => kalibrasyonHazirlikDurumlari(db, [emir]));
-    assert.deepEqual((await okur()).get(emir), { durum: 'tamam', zaman: null, secildi: true });
-    await yaz('insp_k329_b', 'kal-999999');
-    assert.deepEqual((await okur()).get(emir), { durum: 'yok', zaman: null, secildi: true }, 'olmayan alet');
   });
 });

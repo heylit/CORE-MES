@@ -30,7 +30,7 @@ import {
 import {
   CIHAZ_KOLEKSIYONU, GECERSIZ_CIHAZ_ALANI, ILETILER, KM_DOSYA_SINIRI, KM_MODULU, ONAY_ALANI_HATASI, UYGUNSUZLUK_KAPALI, UYGUNSUZLUK_KOLEKSIYONU, geriYuklenecekler, ilkParcaBekleyenleri, izReddi,
   HATALI_NCR_KAYNAGI, bindeMetni, ncrKarantinaMiktari, HATALI_NCR_TANIM_ONEKI, kaynakEmirBagi, ncrAcikMi, ncrKapanisMaddesi, olcumKapanisMaddesi, onayAlaniVarMi, onayDegeriGecerliMi, onayDegisiklikleri, onayiGeriAlinmis, onayliFormMu, onayliFormReddi, pinsiz, sunucuOnayi,
-  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
+  OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
 import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
@@ -38,7 +38,7 @@ import { numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { girisDurumu, girisGkkEngeli, girisNcrGovdesi } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
-import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
+import type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
 import type { AqlSiddeti, LotKarariIstegi, MuayeneAqlAyari, MuayenePlani } from './kurallar.ts';
 import {
@@ -169,28 +169,6 @@ async function cihazKaydi(db: Db, kimlik: string, aletler: readonly { id: number
 export async function olcuAletleri(db: Db): Promise<KmOlcuAletleriCevabi> {
   const aletler = await aletlerVeKayitlari(db, OLCU_ALETI_KAYIT_ADEDI);
   return { cihazlar: olcuAletleriListesi(aletler, await sorgular.koleksiyonKayitlari(db, CIHAZ_KOLEKSIYONU)) };
-}
-
-// KM-K88: emir başına kalibrasyon hazırlığı; istenen her emir haritada olur, bilinmeyen emir cihazsız sayılır.
-export async function kalibrasyonHazirlikDurumlari(db: Db, emirIdler: readonly number[]): Promise<Map<number, KalibrasyonHazirligi>> {
-  const tekil = [...new Set(emirIdler)];
-  if (tekil.length === 0) return new Map();
-  const nolar = await emirNolari(db, tekil);
-  const muayeneler = await sorgular.emirMuayeneleri(db, [...new Set(nolar.values())]);
-  const emirBasina = new Map<number, string[]>(tekil.map((id) => {
-    const no = nolar.get(id);
-    return [id, no === undefined ? [] : emirCihazlari(muayeneler.filter((m) => m.emirNo === no).map((m) => m.govde))];
-  }));
-  const tumCihazlar = [...new Set([...emirBasina.values()].flat())];
-  const cihazlar = new Map((await sorgular.kayitGovdeleri(db, CIHAZ_KOLEKSIYONU, tumCihazlar.filter((id) => kalibrasyonAletKimligi(id) === null))).map((c) => [c.kimlik, c.govde]));
-  const aletler = tumCihazlar.length === 0 ? [] : await aletlerVeKayitlari(db, 0);
-  for (const id of tumCihazlar) {
-    const aletId = kalibrasyonAletKimligi(id);
-    const cihaz = aletId === null ? null : kalibrasyonCihazi(aletler, aletId);
-    if (cihaz !== null) cihazlar.set(id, cihaz);
-  }
-  const durumlar = aletDurumlari(aletler);
-  return new Map([...emirBasina].map(([id, ids]) => [id, kalibrasyonHazirligi(ids, cihazlar, durumlar)]));
 }
 
 // KM-3 (K2 a): değişiklik izinin kişisi, rolü ve zamanı oturumdan ve sunucu saatinden yazılır; istemcinin gönderdiği değerler sayılmaz.
