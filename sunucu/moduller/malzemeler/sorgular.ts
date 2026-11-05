@@ -800,3 +800,54 @@ export function katalogKartTuru(db: Db, kimlik: string): Promise<{ tur: string; 
   return db.tek<{ tur: string; onayDurumu: string }>(
     'SELECT tur, onay_durumu AS "onayDurumu" FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]);
 }
+
+/* ---------------- Logo'dan gelen kartlar (2116) ---------------- */
+
+export interface LogoIcinTmiKarti {
+  kimlik: string; stokKodu: string; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
+  onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null;
+}
+// Logo kayıt numarasıyla bağlı ya da aynı stok kodlu kartlar (iptal dahil: kodu yeniden verilmez).
+export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
+  return db.sorgu(
+    `SELECT kimlik, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3,
+            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu"
+       FROM malzeme_katalog_karti WHERE logo_kayit_no = ANY($1::text[]) OR stok_kodu = ANY($2::text[])`,
+    [refler, kodlar],
+  );
+}
+
+// Logo'daki kodla açılan kartın sırası önekin sayacını geçmişse sayaç ileri alınır: TMI aynı kodu bir daha vermez.
+export async function katalogSirasiniIlerlet(db: Db, onek: string, sira: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, $2)
+     ON CONFLICT (onek) DO UPDATE SET son_sira = GREATEST(malzeme_katalog_kod_sirasi.son_sira, EXCLUDED.son_sira)`,
+    [onek, sira],
+  );
+}
+
+// Kart Logo'da var: gönderilmiş sayılır, gönderim kuyruğu onu almaz (döngü önlemi). Bağlamada kartın sürümü tutmalı ve Logo kaydı boş olmalı.
+export async function logoKaydiYaz(
+  db: Db, kimlik: string, l: { kayitNo: string; kartTuru: string | null; birimSeti: string | null }, o: { surum: number | null; kisiId: number },
+): Promise<{ surum: number } | null> {
+  return db.tek(
+    `UPDATE malzeme_katalog_karti
+        SET logo_kayit_no = $2, logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now(), logo_hata = NULL,
+            logo_kart_turu = $3, logo_birim_seti = $4, surum = surum + 1, guncelleyen_kisi_id = $6, guncelleme = now()
+      WHERE kimlik = $1 AND logo_kayit_no IS NULL AND ($5::int IS NULL OR surum = $5)
+      RETURNING surum`,
+    [kimlik, l.kayitNo, l.kartTuru, l.birimSeti, o.surum, o.kisiId],
+  );
+}
+
+// 2116-2 a: kullanıcı Logo'dakini alınca açıklamalar Logo'dan yazılır; ad güncellemesi kuyruğa girmez (Logo'da zaten bu değer var).
+export async function logoAciklamalariniYaz(
+  db: Db, kimlik: string, a: [string | null, string | null, string | null], o: { surum: number; kisiId: number },
+): Promise<{ surum: number } | null> {
+  return db.tek(
+    `UPDATE malzeme_katalog_karti SET aciklama_1 = $2, aciklama_2 = $3, aciklama_3 = $4, surum = surum + 1, guncelleyen_kisi_id = $6, guncelleme = now()
+      WHERE kimlik = $1 AND surum = $5 AND logo_kayit_no IS NOT NULL
+      RETURNING surum`,
+    [kimlik, a[0], a[1], a[2], o.surum, o.kisiId],
+  );
+}

@@ -299,3 +299,52 @@ export const demirbasMakineSecenekleriCevabi = z.object({
   makineler: z.array(demirbasMakinesi.extend({ bagliKart: z.string().nullable() })),
 });
 export type DemirbasMakineSecenekleriCevabi = z.output<typeof demirbasMakineSecenekleriCevabi>;
+
+/* ---------------- Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a) ---------------- */
+// Logo'daki kart TMI'de: yok (alınabilir), bağsız aynı kodlu kart var (bağlanır, yeniden gönderilmez) ya da bağlı (fark listelenir).
+export const LOGO_GELEN_DURUMLARI = ['yeni', 'bagsiz', 'bagli'] as const;
+export const LOGO_FARK_ALANLARI = ['aciklama_1', 'aciklama_2', 'aciklama_3'] as const;
+export const LOGO_GELEN_SAYFA_BOYU = 100;
+export const logoGelenSorgusu = z.object({
+  // Logo kayıt numarası imleci: bu numaradan sonrakiler.
+  sonra: z.coerce.number().int().min(0).default(0),
+  // Tam Logo kodu; verilirse yalnız o kart.
+  kod: z.string().trim().min(1).max(64).optional(),
+});
+export const logoGelenParametresi = z.object({ ref: z.coerce.number().int().positive() });
+export const logoGelenCevabi = z.object({
+  // Logo malzeme okuması bağlı değilse ya da hiç okumadıysa false: liste boş, neden ekranda.
+  baglanti: z.boolean(),
+  kartlar: z.array(z.object({
+    logoKayitNo: z.number().int(),
+    kod: z.string(),
+    ad: z.string().nullable(),
+    aciklama2: z.string().nullable(),
+    aciklama3: z.string().nullable(),
+    // Logo kart türü kodu (ITEMS.CARDTYPE) ve birim seti kodu; TMI karşılığını istemci karşılık listesinden önerir.
+    kartTuru: z.string().nullable(),
+    birimSeti: z.string().nullable(),
+    aktif: z.boolean(),
+    sonOkuma: zamanSemasi,
+    durum: z.enum(LOGO_GELEN_DURUMLARI),
+    // Logo kodu TMI kod biçimine uyuyor mu; uymuyorsa alırken önek seçilir, eşleme tutulur (2116-3 c).
+    koduUyar: z.boolean(),
+    tmi: z.object({ kimlik: z.string(), stokKodu: z.string(), ad: z.string().nullable(), onayDurumu: z.enum(KATALOG_KART_DURUMLARI), surum: surumSemasi }).nullable(),
+    farklar: z.array(z.object({ alan: z.enum(LOGO_FARK_ALANLARI), logo: z.string().nullable(), tmi: z.string().nullable() })),
+  })),
+  sonraki: z.number().int().nullable(),
+});
+export type LogoGelenCevabi = z.output<typeof logoGelenCevabi>;
+export type LogoGelenDurumu = (typeof LOGO_GELEN_DURUMLARI)[number];
+export const logodanAlGovdesi = z.object({
+  tur: z.enum(LOGO_TUR_KARSILIGI_TURLERI),
+  birim: z.string().trim().min(1).max(40),
+  // Logo kodu TMI biçimine uymuyorsa yeni kodun öneki (ör. HM-GEN-); uyuyorsa yok sayılır.
+  onek: z.string().trim().max(20).nullable(),
+}).strict();
+export type LogodanAlGovdesi = z.input<typeof logodanAlGovdesi>;
+export const logodanAlCevabi = z.object({ id: z.string(), stok_kodu: z.string(), eslendi: z.boolean() });
+export type LogodanAlCevabi = z.output<typeof logodanAlCevabi>;
+// Bağlama ve farkı alma kartın sürümüyle: arada kartı değiştiren varsa reddedilir.
+export const logoKartSurumGovdesi = z.object({ surum: surumSemasi }).strict();
+export const logoKartSurumCevabi = z.object({ id: z.string(), surum: surumSemasi });

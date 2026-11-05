@@ -36,3 +36,9 @@ Bağlantıyı yazacak modül için. Bu modül Logo'ya bağlanmaz; yalnız kuyru�
 6. `operasyonluAktifKartlar(db)` (kart #688): Rota'nın kendiliğinden taslak işi için; aktif, mamul ya da yarı mamul ve en az bir kodlu operasyonu olan kartlar `{ no, kisiId }[]`. kisiId onaylayan kişi, yoksa son güncelleyen. Rotası olup olmadığına bakmaz (o Rota'nın tablosu). Yetki denetlemez.
 7. Rota şablonları (kart #688): kartın Operasyonlar adımı şablonu istemcide Rota'nın `GET /rota/sablonlar` ucundan okur (köprü `rota-sablon-liste`); sunucu tarafında okunamaz, çünkü rota zaten malzemeler'i ithal eder (sınır kuralı f, döngü).
 
+8. Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a): liste logo modülünün aynasıdır, üç çözücüyle okunur (ayna, kod eşlemesi
+   yazıcısı, Logo kodu -> TMI kodu); bağları `sunucu/kablolama.ts` kurar, bağ yokken liste boş, alma ve bağlama reddedilir. Alınan kart taslaktır,
+   `logo_kayit_no` dolu ve `logo_gonderim_durumu = 'gonderildi'` yazılır: gönderim kuyruğu almaz, aktif olunca da "bekliyor" olmaz (tetikleyici yalnız boş durumu
+   değiştirir). Logo kodu TMI biçimine ve türe uyuyorsa aynı kodla açılır ve önekin sayacı o sıraya ilerler; uymuyorsa seçilen önekle yeni kod alır, eşleme logo
+   modülüne yazılır. Bağlama ve Logo'dakini alma kartın sürümüyle; Logo'dakini alma yalnız Açıklama 1-3'ü yazar, ad güncellemesini kuyruğa koymaz.
+   Yeni işlem yok: okuma `sayfa.malzemeler`, yazma `malzemeler.yaz`. Ekran Logo gönderimi sayfasındaki "Logo'dan gelenler" kartıdır.

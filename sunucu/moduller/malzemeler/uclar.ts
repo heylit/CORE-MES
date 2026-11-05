@@ -3,7 +3,8 @@ import {
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
-  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
+  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoGelenCevabi, logoGelenParametresi, logoGelenSorgusu, logodanAlCevabi, logodanAlGovdesi,
+  logoKartSurumCevabi, logoKartSurumGovdesi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import * as servis from './servis.ts';
@@ -88,6 +89,23 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/malzeme-birimleri', yetki: OKUMA, cevap: olcuBirimleriCevabi, isle: ({ db }) => servis.olcuBirimleriniGetir(db) }),
   // Logo'ya gönderime hazırlık (kart #232): durum salt okunur; karşılığı malzeme tanımlarını yazan doldurur (yeni işlem yok, kullanıcı kararı 08.10.2026).
   uc({ yontem: 'GET', yol: '/malzeme-logo-durumu', yetki: OKUMA, cevap: logoDurumuCevabi, isle: ({ db, kullanici }) => servis.logoDurumunuGetir(db, kullanici) }),
+  // Logo'dan gelen kartlar (2116): liste okuyana açık; almak, bağlamak ve Logo'dakini almak kart yazma işlemiyle (yeni işlem yok).
+  uc({
+    yontem: 'GET', yol: '/malzeme-logo-kartlari', yetki: OKUMA, sorgu: logoGelenSorgusu, cevap: logoGelenCevabi,
+    isle: ({ db, sorgu }) => servis.logodanGelenler(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/al', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logodanAlGovdesi, cevap: logodanAlCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.logodanKartAl(db, kullanici, parametre.ref, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/bagla', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logoKartSurumGovdesi, cevap: logoKartSurumCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.logoKartiBagla(db, kullanici, parametre.ref, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/farki-al', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logoKartSurumGovdesi, cevap: logoKartSurumCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.logoFarkiniAl(db, kullanici, parametre.ref, govde.surum),
+  }),
   uc({
     yontem: 'POST', yol: '/malzeme-logo-karsiliklari/kaydet', yetki: 'malzemeler.tanim-yaz', govde: logoKarsiligiKaydetGovdesi, cevap: katalogKimlikCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoKarsiligiKaydet(db, kullanici, govde),

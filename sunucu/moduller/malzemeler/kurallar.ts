@@ -1128,3 +1128,57 @@ export function tekrarlananOzellik(adlar: readonly string[]): string | null {
   }
   return null;
 }
+
+/* ---------------- Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a) ---------------- */
+
+// Logo kodu TMI kod biçimine uyuyorsa kart aynı koduyla açılır: tür-grup-sıra (HM-PAS-00012) ya da firma kodlu tür önekiyle sıra.
+// Sıra kodun kendisidir; baştaki sıfırlar TMI'nin yazdığı gibi olmalı (kod geri üretilince aynısı çıkmalı).
+const SIRA_DESENI = /^(\d+)$/;
+export function logoKodBicimi(kod: string, firmaKodu: string | null): { onek: string; sira: number } | null {
+  const k = kod.trim();
+  if (k !== kod || k.length > STOK_KODU_EN_COK) return null;
+  const standart = KOD_ONEKI_DESENI.exec(k)?.[1] ?? null;
+  const firma = firmaKodu === null ? null : new RegExp(`^(${firmaKodu}-(?:${TUR_KISALTMALARI.join('|')})-)\\d+$`).exec(k)?.[1] ?? null;
+  const onek = standart ?? firma;
+  if (onek === null) return null;
+  const sayi = SIRA_DESENI.exec(k.slice(onek.length))?.[1];
+  const sira = sayi === undefined ? NaN : Number(sayi);
+  if (!Number.isSafeInteger(sira) || sira < 1 || sira > EN_BUYUK_SIRA || katalogStokKodu(onek, sira) !== k) return null;
+  return { onek, sira };
+}
+
+// Biçime uyan kod, kartın türüne de uymalı: standart önekte tür kısaltması, firma kodlu türde ayarın öneki.
+export function logoKoduTureUyar(b: { onek: string }, tur: string, firmaOneki: string | null): boolean {
+  if (firmaOneki !== null) return b.onek === firmaOneki;
+  return KOD_ONEKI_DESENI.test(`${b.onek}1`) && katalogOnekiTureUyarMi(b.onek, tur);
+}
+
+export type LogoGelenDurumu = 'yeni' | 'bagsiz' | 'bagli';
+export interface LogoyaBagliTmiKarti { kimlik: string; stokKodu: string; logoKayitNo: string | null }
+
+// Eşleşme sırası: Logo kayıt numarası, kod eşlemesi (2116-3 c), aynı stok kodu. Aynı kodlu kart başka Logo kaydına bağlıysa "bagsiz"
+// görünür ama bağlanamaz (servis reddeder).
+export function logoGelenDurumu<T extends LogoyaBagliTmiKarti>(
+  k: { logoKayitNo: number; kod: string }, refle: ReadonlyMap<string, T>, kodla: ReadonlyMap<string, T>, esleme: ReadonlyMap<string, string>,
+): { durum: LogoGelenDurumu; tmi: T | null } {
+  const bagli = refle.get(String(k.logoKayitNo)) ?? (esleme.has(k.kod) ? kodla.get(esleme.get(k.kod)!) : undefined);
+  if (bagli) return { durum: 'bagli', tmi: bagli };
+  const ayni = kodla.get(k.kod);
+  return ayni ? { durum: 'bagsiz', tmi: ayni } : { durum: 'yeni', tmi: null };
+}
+
+// 2088-1: Açıklama 1 Logo adıdır (boşsa TMI adı gider), Açıklama 2 ve 3 NAME3 ve NAME4. Fark bu üç alanda aranır; boşluklar kırpılır.
+export type LogoFarkAlani = 'aciklama_1' | 'aciklama_2' | 'aciklama_3';
+export interface LogoFarki { alan: LogoFarkAlani; logo: string | null; tmi: string | null }
+const dolu = (d: string | null | undefined): string | null => (typeof d === 'string' && d.trim() !== '' ? d.trim() : null);
+export function logoKartFarklari(
+  logo: { ad: string | null; aciklama2: string | null; aciklama3: string | null },
+  tmi: { ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null },
+): LogoFarki[] {
+  const ciftler: [LogoFarkAlani, string | null, string | null][] = [
+    ['aciklama_1', dolu(logo.ad), dolu(tmi.aciklama1) ?? dolu(tmi.ad)],
+    ['aciklama_2', dolu(logo.aciklama2), dolu(tmi.aciklama2)],
+    ['aciklama_3', dolu(logo.aciklama3), dolu(tmi.aciklama3)],
+  ];
+  return ciftler.filter(([, l, t]) => l !== t).map(([alan, l, t]) => ({ alan, logo: l, tmi: t }));
+}

@@ -10,6 +10,7 @@ import {
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { LogodanGelenler } from './LogodanGelenler.tsx';
 import './malzemeler.css';
 
 // Logo gönderimi (kart #232): gönderimi bağlantı işi yapar; bu sayfa durumu salt okunur gösterir, karşılıkları tanım yazan doldurur.
@@ -379,6 +380,7 @@ export function LogoGonderimi() {
           {karsilikEksik > 0 && <p className="tc-logo-not tc-logo-eksik" role="status">{karsilikEksik.toLocaleString('tr-TR')} kartta tür ya da birim karşılığı eksik.</p>}
           <Tablo etiket="Logo gönderim durumu" sutunlar={KART_SUTUNLARI} satirlar={durum.data.kartlar} satirAnahtari={(k) => k.id} bosMesaj="Logo'ya gidecek kart yok" />
         </Kart>
+        <LogodanGelenler turAdlari={TUR_ADLARI} karsiliklar={durum.data.karsiliklar} />
         <LogoKarsiliklari />
       </>
     );
