@@ -1600,7 +1600,9 @@ async function acikAdimlar<R extends number | null>(
   const taban = (emirId: number, adet: number) => (sira: number) => adet + (kollar.get(emirId) ?? [])
     .filter((p) => p.bolunmeSira > sira || (p.birlesmeSira !== null && sira >= p.birlesmeSira)).reduce((t, p) => t + p.adet, 0);
   const adetler = new Map(satirlar.map((i) => [i.emir.id, i.emir.adet]));
-  const adimAdedi = new Map([...adetler].map(([id, adet]) => [id, adimAdetleri(butun.filter((x) => x.uretimEmriId === id), taban(id, adet))]));
+  const kararBekleyen = new Map((await s.adimKararSayaclariGetir(db, emirIdleri)).flatMap((k) => (k.isEmriId === null ? [] : [[k.isEmriId, k.kararBekliyor] as const])));
+  const adimAdedi = new Map([...adetler].map(([id, adet]) => [id, adimAdetleri(
+    butun.filter((x) => x.uretimEmriId === id).map((x) => ({ ...x, kararBekleyen: kararBekleyen.get(x.id) ?? 0 })), taban(id, adet))]));
   // Termini olmayan bitmemiş fason adımlar tek çağrıda sorulur; anahtar emir ve sıra.
   const tahminler = new Map<string, number | null>();
   if (fasonTahmini) {

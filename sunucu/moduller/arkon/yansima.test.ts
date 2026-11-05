@@ -3050,8 +3050,8 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
 
   // Uçtan uca test raporu 2026-10-25 K1 ve T1 (kart 526, 521 1 a): terminal yolundan sayılan sağlam, ilk parça kararı Kalite Merkezi'nden gelene dek
   // karar bekler; ölçümü süren numune karar değildir, karar yalnız Kalite Merkezi'ndedir (798, 789-2a) ve açık Arkon numunesine aynalanır.
-  // Bitirilen adımın sağlamı ve sonraki adımın hedefi kararla dolar. Rol reddinde modül adı geçmez (G1).
-  test('K1, T1, 521 1 a, G1, 798: terminal sayımı ilk parça kararına dek bekler; ölçümdeki numune karar değil; Arkon Kabulü reddedilir, Kalite Merkezi kararı bitmiş adıma ve sonraki adımın hedefine yazar ve numuneye aynalanır; operatör karar veremez, paket yazamaz', async () => {
+  // Bitirilen adımın sağlamı kararla dolar; sonraki adımın hedefi karar bekleyeni de sayar (2102-2 b, ARK-2). Rol reddinde modül adı geçmez (G1).
+  test('K1, T1, 521 1 a, G1, 798: terminal sayımı ilk parça kararına dek bekler; ölçümdeki numune karar değil; Arkon Kabulü reddedilir, sonraki adımın hedefi karar bekleyeni sayar (2102-2 b); Kalite Merkezi kararı bitmiş adıma yazar ve numuneye aynalanır; operatör karar veremez, paket yazamaz', async () => {
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
@@ -3084,8 +3084,8 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
     assert.equal((await durum()).kararBekliyor, 18, 'ölçümü süren numune ilk parça kararı değildir');
     await yaz('events', ieOlay(ie1!, 'done'));
-    assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'tamam', saglam: 0 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 0 },
-      'raporun gördüğü hâl: karar gelmeden bitirilen adımın sağlamı 0, sonraki adımın hedefi 0');
+    assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'tamam', saglam: 0 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 18 },
+      'karar gelmeden bitirilen adımın sağlamı 0; karar bekleyen kayıp sayılmaz, sonraki adımın hedefi 18');
     // Reddedilen: operatör ilk parça kararı veremez; paket yazma reddinde modül adı rol adı gibi geçmez.
     const ret = await istek(operator, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
     assert.equal(ret.durum, 403, JSON.stringify(ret.govde));
