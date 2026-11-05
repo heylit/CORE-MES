@@ -14,8 +14,9 @@ import {
   agirlikKg, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
   uzunluk, yogunlukBicimi, yogunlukOku,
 } from './gorunum.ts';
-import type { ParcaKutusu, Vurgu } from './Goruntu3B.tsx';
+import type { ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
 import { MontajKarti } from './MontajKarti.tsx';
+import { YuzeyKarti, type YuzeySahnesi } from './YuzeyKarti.tsx';
 import './geometri.css';
 
 const Goruntu3B = lazy(() => import('./Goruntu3B.tsx'));
@@ -335,6 +336,11 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
   });
   const [secili, seciliYaz] = useState<GeometriOzellik | null>(null);
   const [kutular, kutularYaz] = useState<ParcaKutusu[] | null>(null);
+  // Yüzey kartı (2144) görüntüye renk ve seçim verir; görüntü yüz sırası denetiminin sonucunu ve resim alma işlevini geri verir.
+  const [yuzeySahnesi, yuzeySahnesiYaz] = useState<YuzeySahnesi | null>(null);
+  const [yuzDurumu, yuzDurumuYaz] = useState<YuzDurumu>('bekliyor');
+  const [resimAl, resimAlYaz] = useState<ResimAl | null>(null);
+  const resimAlici = useCallback((al: ResimAl | null) => resimAlYaz(() => al), []);
   const yeniden = useYenidenHesapla(revizyonId, analiz.data?.is?.surum ?? null);
   if (analiz.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Analiz okunuyor" />;
   if (analiz.isError) {
@@ -352,7 +358,8 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
         : dosya.isError ? <div className="tc-g3b-sahne"><DurumKutusu durum="hata" mesaj={yetkiyse(dosya.error, 'Model dosyası alınamadı.')} /></div>
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
-              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} kutular={kutular} />
+              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} kutular={kutular}
+                yuzBoyasi={yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzDurumuYaz }} arac={yuzeySahnesi?.arac ?? null} bilgi={yuzeySahnesi?.bilgi ?? null} resimAlici={resimAlici} />
             </Suspense>
           )}
       <div className="tc-g3b-kartlar">
@@ -360,6 +367,8 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
         <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
         <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />
         <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />
+        <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu}
+          sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
       </div>
     </div>
   );

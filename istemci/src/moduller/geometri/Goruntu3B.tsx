@@ -1,13 +1,13 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   Box3, BoxGeometry, BufferGeometry, Color, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments, Matrix4,
-  Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Scene, SRGBColorSpace, TorusGeometry, Vector3, WebGLRenderer,
+  Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Quaternion, Raycaster, Scene, SRGBColorSpace, TorusGeometry, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import type { Material, Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Dugme, DurumKutusu, Simge } from '../../ortak/arayuz/index.ts';
 import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
-import { patlatmaKaymasi } from './gorunum.ts';
+import { agYuzAlanlari, MASKE_RENGI, patlatmaKaymasi, ucgeninYuzu, yuzSirasiUyar } from './gorunum.ts';
 
 // Sahne renkleri tasarım değişkenlerinden okunur; değişken yoksa (test ortamı) nötr gri.
 function renk(ad: string): Color {
@@ -101,9 +101,68 @@ export function PatlatmaCubugu({ oran, oranYaz }: { oran: number; oranYaz: (x: n
   );
 }
 
+// Yüzey işaretleri (2144): yüzler okuyucunun B-rep yüz aralıklarıyla boyanır ve tıklanınca seçilir. Görüntünün yüz sırası
+// sunucununkiyle denetlenir (gorunum.ts yuzSirasiUyar); uymazsa ya da okuyucu aralık vermezse (STL, glTF) boyama ve tıklama kapalıdır.
+export type YuzDurumu = 'bekliyor' | 'hazir' | 'yok' | 'uyusmuyor';
+export interface YuzBoyasi {
+  // Sunucunun yüz alanları, sıra 1'den.
+  alanlar: readonly number[];
+  // Yüz sırası -> tasarım değişkeni (yüzün rengi); listede olmayan yüz modelin rengindedir.
+  renkler: ReadonlyMap<number, string>;
+  secili: ReadonlySet<number>;
+  // Verilince tıklanan yüz bu işleve gider (seçim açık).
+  sec: ((sira: number) => void) | null;
+  durumYaz: (d: YuzDurumu) => void;
+}
+interface YuzAgi { ag: Mesh; araliklar: Uint32Array; ilkSira: number }
+
+function yuzAglari(ic: Object3D): YuzAgi[] | null {
+  const aglar: YuzAgi[] = [];
+  let sira = 1;
+  let eksik = false;
+  ic.traverse((n) => {
+    if (!(n instanceof Mesh)) return;
+    const a = n.userData['yuzler'];
+    if (!(a instanceof Uint32Array)) { eksik = true; return; }
+    aglar.push({ ag: n, araliklar: a, ilkSira: sira });
+    sira += a.length / 2;
+  });
+  return eksik || aglar.length === 0 ? null : aglar;
+}
+
+function yuzAlanlari(aglar: readonly YuzAgi[]): number[] {
+  return aglar.flatMap(({ ag, araliklar }) => {
+    const g = ag.geometry as BufferGeometry;
+    const dizin = g.getIndex();
+    return dizin === null ? [] : agYuzAlanlari(g.getAttribute('position').array, dizin.array, araliklar);
+  });
+}
+
+// Maske taralı çizilir (prototip v2): ağda doku koordinatı olmadığı için çizgiler ekran koordinatındadır (45 derece, sabit aralık).
+// Zemin görüntü arka planı, çizgi tarama rengidir; ışık ikisine de uygulanır.
+function taraliMalzeme(olcek: number): MeshStandardMaterial {
+  const m = new MeshStandardMaterial({ color: renk('--sahne-arka'), roughness: 0.7, metalness: 0 });
+  const cizgi = renk(MASKE_RENGI);
+  m.onBeforeCompile = (g) => {
+    g.uniforms['uTaramaRengi'] = { value: cizgi };
+    g.uniforms['uTaramaOlcek'] = { value: olcek };
+    g.fragmentShader = `uniform vec3 uTaramaRengi;\nuniform float uTaramaOlcek;\n${g.fragmentShader}`.replace(
+      '#include <color_fragment>',
+      '#include <color_fragment>\n  float tarama = step(0.6, fract((gl_FragCoord.x + gl_FragCoord.y) / (9.0 * uTaramaOlcek)));\n  diffuseColor.rgb = mix(diffuseColor.rgb, uTaramaRengi, tarama);',
+    );
+  };
+  m.customProgramCacheKey = () => 'tc-g3b-tarama';
+  return m;
+}
+
+// Görüntüden PNG (maske resmi): çizim hemen ardından alınır; çizim tamponu korunmadığı için ayrı karede okunmaz.
+export type ResimAl = () => Promise<Blob | null>;
+
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
-export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }: {
+export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, yuzBoyasi = null, arac = null, bilgi = null, resimAlici }: {
   veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null;
+  // Görüntünün üstünde (sağ üst) araç düğmeleri ve altında bilgi satırı (2144 prototip v2).
+  yuzBoyasi?: YuzBoyasi | null; arac?: ReactNode; bilgi?: string | null; resimAlici?: (al: ResimAl | null) => void;
 }) {
   const kap = useRef<HTMLDivElement>(null);
   const [hata, hataYaz] = useState<string | null>(null);
@@ -115,6 +174,13 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
   const [parcaSayisi, parcaSayisiYaz] = useState(0);
   // Yüzde, 0-100; sayfa yenilenince sıfırdır.
   const [oran, oranYaz] = useState(0);
+  const yuzAglariRef = useRef<YuzAgi[] | null>(null);
+  const [yuzDurumu, yuzDurumuYaz] = useState<YuzDurumu>('bekliyor');
+  // Tıklama işleyicisi sahne kurulurken bağlanır; güncel seçim işlevini buradan okur.
+  const secRef = useRef<((sira: number) => void) | null>(null);
+  secRef.current = yuzDurumu === 'hazir' ? (yuzBoyasi?.sec ?? null) : null;
+  const resimAliciRef = useRef(resimAlici);
+  resimAliciRef.current = resimAlici;
 
   useEffect(() => {
     const el = kap.current;
@@ -153,6 +219,7 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
       if (iptal) { birak(m); return; }
       model = m;
       icGrup.current = m.children[0] ?? m;
+      yuzAglariRef.current = yuzAglari(icGrup.current);
       patlatma.current = patlatmaKur(icGrup.current);
       parcaSayisiYaz(patlatma.current.parcalar.length);
       yuklendiYaz((n) => n + 1);
@@ -174,8 +241,36 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
       cizer.render(sahne, kamera);
     };
     dongu();
+    // Tıklama: basılan yerden az kayan bırakma seçimdir (döndürme sürüklemesi seçmez).
+    const SURUKLEME_PX = 4;
+    let basilan: { x: number; y: number } | null = null;
+    const isinci = new Raycaster();
+    const bas = (e: PointerEvent) => { basilan = { x: e.clientX, y: e.clientY }; };
+    const birakildi = (e: PointerEvent) => {
+      const b = basilan;
+      basilan = null;
+      const sec = secRef.current, aglar = yuzAglariRef.current, ic = icGrup.current;
+      if (b === null || sec === null || aglar === null || ic === null || Math.hypot(e.clientX - b.x, e.clientY - b.y) > SURUKLEME_PX) return;
+      const r = cizer.domElement.getBoundingClientRect();
+      isinci.setFromCamera(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), kamera);
+      const vurus = isinci.intersectObject(ic, true).find((v) => v.object instanceof Mesh && aglar.some((a) => a.ag === v.object));
+      const ag = aglar.find((a) => a.ag === vurus?.object);
+      if (vurus?.faceIndex === undefined || vurus.faceIndex === null || ag === undefined) return;
+      const k = ucgeninYuzu(ag.araliklar, vurus.faceIndex);
+      if (k !== null) sec(ag.ilkSira + k);
+    };
+    cizer.domElement.addEventListener('pointerdown', bas);
+    cizer.domElement.addEventListener('pointerup', birakildi);
+    resimAliciRef.current?.(() => new Promise((coz) => {
+      cizer.render(sahne, kamera);
+      cizer.domElement.toBlob(coz, 'image/png');
+    }));
     return () => {
       iptal = true;
+      resimAliciRef.current?.(null);
+      cizer.domElement.removeEventListener('pointerdown', bas);
+      cizer.domElement.removeEventListener('pointerup', birakildi);
+      yuzAglariRef.current = null;
       cancelAnimationFrame(kare);
       gozcu?.disconnect();
       kontrol.dispose();
@@ -245,11 +340,66 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
     };
   }, [yuklendi, kutuAnahtari]);
 
+  // Yüz sırası denetimi model yüklenince ve sunucu alanları gelince bir kez yapılır.
+  const alanAnahtari = yuzBoyasi === null ? '' : yuzBoyasi.alanlar.join(',');
+  useEffect(() => {
+    if (yuklendi === 0 || alanAnahtari === '') { yuzDurumuYaz('bekliyor'); return; }
+    const aglar = yuzAglariRef.current;
+    yuzDurumuYaz(aglar === null ? 'yok' : yuzSirasiUyar(yuzAlanlari(aglar), alanAnahtari.split(',').map(Number)) ? 'hazir' : 'uyusmuyor');
+  }, [yuklendi, alanAnahtari]);
+  const durumYaz = yuzBoyasi?.durumYaz;
+  useEffect(() => { durumYaz?.(yuzDurumu); }, [yuzDurumu, durumYaz]);
+
+  // Boyama: her ağın yüzleri çizim grubu olur; grup malzemesi yüzün rengidir (seçili yüz vurgu rengi). Kalkınca özgün malzeme döner.
+  const renkAnahtari = yuzBoyasi === null ? '' : JSON.stringify([...yuzBoyasi.renkler]);
+  const seciliAnahtari = yuzBoyasi === null ? '' : [...yuzBoyasi.secili].join(',');
+  useEffect(() => {
+    const aglar = yuzAglariRef.current;
+    if (yuzDurumu !== 'hazir' || aglar === null || renkAnahtari === '') return undefined;
+    const renkler = new Map(JSON.parse(renkAnahtari) as [number, string][]);
+    const secili = new Set(seciliAnahtari === '' ? [] : seciliAnahtari.split(',').map(Number));
+    const malzemeler = new Map<string, MeshStandardMaterial>();
+    const malzemesi = (ad: string): MeshStandardMaterial => {
+      let m = malzemeler.get(ad);
+      if (m === undefined) {
+        m = ad === MASKE_RENGI ? taraliMalzeme(Math.min(window.devicePixelRatio || 1, 2)) : new MeshStandardMaterial({ color: renk(ad), roughness: 0.6, metalness: 0.1 });
+        malzemeler.set(ad, m);
+      }
+      return m;
+    };
+    const eski: { ag: Mesh; malzeme: Material | Material[] }[] = [];
+    for (const { ag, araliklar, ilkSira } of aglar) {
+      const ozgun = ag.material as Material | Material[];
+      if (Array.isArray(ozgun)) continue;
+      eski.push({ ag, malzeme: ozgun });
+      const liste: Material[] = [ozgun];
+      const sirasi = new Map<Material, number>([[ozgun, 0]]);
+      const g = ag.geometry as BufferGeometry;
+      g.clearGroups();
+      for (let k = 0; k < araliklar.length / 2; k++) {
+        const sira = ilkSira + k;
+        const ad = secili.has(sira) ? '--hazard' : renkler.get(sira);
+        const m = ad === undefined ? ozgun : malzemesi(ad);
+        if (!sirasi.has(m)) { sirasi.set(m, liste.length); liste.push(m); }
+        const ilk = araliklar[2 * k] ?? 0, son = araliklar[2 * k + 1] ?? 0;
+        g.addGroup(ilk * 3, (son - ilk + 1) * 3, sirasi.get(m) ?? 0);
+      }
+      ag.material = liste;
+    }
+    return () => {
+      for (const e of eski) { e.ag.material = e.malzeme; (e.ag.geometry as BufferGeometry).clearGroups(); }
+      for (const m of malzemeler.values()) m.dispose();
+    };
+  }, [yuklendi, yuzDurumu, renkAnahtari, seciliAnahtari]);
+
+  const seciyor = yuzDurumu === 'hazir' && yuzBoyasi?.sec != null;
   return (
-    <div className="tc-g3b-sahne-kap">
+    <div className={`tc-g3b-sahne-kap${seciyor ? ' tc-g3b-seciyor' : ''}${parcaSayisi >= 2 ? ' tc-g3b-patlatmali' : ''}`}>
       <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
         {hata && <DurumKutusu durum="hata" mesaj={hata} />}
       </div>
+      {arac !== null && <div className="tc-g3b-sahne-arac">{arac}</div>}
+      {bilgi !== null && <p className="tc-g3b-sahne-bilgi">{bilgi}</p>}
       {parcaSayisi >= 2 && <PatlatmaCubugu oran={oran} oranYaz={oranYaz} />}
     </div>
   );

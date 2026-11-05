@@ -14,6 +14,13 @@ export interface ModelAgi {
   konum: Float32Array;
   normal: Float32Array | null;
   dizin: Uint32Array;
+  // B-rep yüzlerinin üçgen aralıkları, yüz başına [ilk, son] çifti (dosyadaki yüz sırasıyla). Okuyucu vermezse yoktur.
+  yuzler?: Uint32Array;
+}
+
+// Okuyucunun yayımlanmamış alanı: her B-rep yüzünün üçgen aralığı (ilk ve son üçgen dahil).
+declare module 'occt-import-js' {
+  interface OcctAgi { brep_faces?: { first: number; last: number }[] }
 }
 
 export type ModelCevabi = { aglar: ModelAgi[] } | { hata: string };
@@ -42,8 +49,9 @@ isci.onmessage = (o) => {
         konum: new Float32Array(m.attributes.position.array),
         normal: m.attributes.normal ? new Float32Array(m.attributes.normal.array) : null,
         dizin: new Uint32Array(m.index.array),
+        ...(m.brep_faces ? { yuzler: new Uint32Array(m.brep_faces.flatMap((y) => [y.first, y.last])) } : {}),
       }));
-      isci.postMessage({ aglar }, aglar.flatMap((a) => [a.konum.buffer, a.dizin.buffer, ...(a.normal ? [a.normal.buffer] : [])]));
+      isci.postMessage({ aglar }, aglar.flatMap((a) => [a.konum.buffer, a.dizin.buffer, ...(a.normal ? [a.normal.buffer] : []), ...(a.yuzler ? [a.yuzler.buffer] : [])]));
     } catch (hata) {
       isci.postMessage({ hata: `Model açılamadı: ${hata instanceof Error ? hata.message : String(hata)}` });
     }
