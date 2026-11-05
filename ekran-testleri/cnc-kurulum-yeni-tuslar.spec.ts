@@ -35,10 +35,13 @@ test('Tab ile gelinen sekmede oklar sekmeler arasında gezer', async ({ page, ac
   const sekme = page.getByRole('tab', { name: 'Kurulum' });
   await sekme.click();
   await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/kurulum$/);
-  // Odak sekmeden çıkar, sonra yalnız Tab ile sekmeye döner.
-  await page.locator('body').focus();
-  await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur(); });
-  for (let i = 0; i < 60 && !(await sekme.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press('Tab');
+  // Adres şeritten önce değişir; şerit seçimi çizmeden basılan tuş eski sekme sırasında (Kurulum tabindex -1) gezer.
+  await expect(sekme).toHaveAttribute('aria-selected', 'true');
+  // Odak sekmeden bir önceki durağa çıkar, sonra tek Tab ile sekmeye döner. Gövdeden Tab'la yürümek bütün ana menüden geçer;
+  // menüye her sayfa eklendiğinde adım sayısı değişirdi.
+  await page.keyboard.press('Shift+Tab');
+  await expect(sekme).not.toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(sekme).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/hazirlik$/);
