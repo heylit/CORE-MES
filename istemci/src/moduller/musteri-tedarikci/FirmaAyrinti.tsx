@@ -14,6 +14,7 @@ import { FirmaKarnesi } from './FirmaKarnesi.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
 import { ADRES_TURU_ETIKETI, LOGO_DURUMU, SINIF_ETIKETI, TUR_ETIKETI } from './gorunum.ts';
 import { koordinatMetni } from './koordinat.ts';
+import { LogoCariArama } from './LogoCariArama.tsx';
 import { cevabiYaz, eskiyseYenile, useYazabilir, yazmaIletisi } from './yazma.ts';
 
 function Satir({ etiket, children }: { etiket: string; children: ReactNode }) {
@@ -35,7 +36,8 @@ type Acik =
   | { tur: 'firma' }
   | { tur: 'adres'; adres: Adres | null }
   | { tur: 'kaldir'; adres: Adres }
-  | { tur: 'pasif' };
+  | { tur: 'pasif' }
+  | { tur: 'logo' };
 
 type Bolum = 'kart' | 'karne';
 // Değerlendirme yalnız tedarikçi ya da iki yönlü firmada vardır (1259 c).
@@ -126,6 +128,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
             {yazabilir && firma && (
               <>
                 <Dugme simge="edit" onClick={() => acikYaz({ tur: 'firma' })}>Düzenle</Dugme>
+                {firma.logoKayitNo === null && <Dugme simge="search" onClick={() => acikYaz({ tur: 'logo' })}>Logo'ya bağla</Dugme>}
                 {firma.aktif
                   ? <Dugme simge="stop" disabled={durumDegistir.isPending} onClick={() => acikYaz({ tur: 'pasif' })}>Pasife al</Dugme>
                   : (
@@ -199,6 +202,12 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
       </Pencere>
       {yazabilir && firma && acik?.tur === 'firma' && (
         <FirmaFormu firma={firma} kapat={kapatAcik} kaydedildi={kapatAcik} />
+      )}
+      {yazabilir && firma && acik?.tur === 'logo' && (
+        <Pencere acik kapat={kapatAcik} baslik={`Logo'ya bağla: ${firma.ad}`} alt={<Dugme onClick={kapatAcik}>Kapat</Dugme>}>
+          <p className="tc-mt-yok">Bağlama yalnız Logo cari kodunu ve kaydını yazar; firmanın öteki bilgileri değişmez.</p>
+          <LogoCariArama hedef={firma} baglandi={kapatAcik} />
+        </Pencere>
       )}
       {yazabilir && firma && acik?.tur === 'adres' && (
         <AdresFormu firmaId={firma.id} kartSurumu={firma.surum} adres={acik.adres} kapat={kapatAcik} />

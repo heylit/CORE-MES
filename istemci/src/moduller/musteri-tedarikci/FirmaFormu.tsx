@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  Firma, FirmaCevabi, FirmaEkleGovdesi, FirmaGuncelleGovdesi, FirmaListesiCevabi, FirmaTuru, MusteriSinifi,
+  Firma, FirmaCevabi, FirmaEkleGovdesi, FirmaGuncelleGovdesi, FirmaListesiCevabi, FirmaTuru, LogoCariSatiri, LogodanFirmaAlGovdesi, MusteriSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { Girdi, IsaretKutusu, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, IsaretKutusu, Rozet, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { sorguMetni } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FormPenceresi } from './FormPenceresi.tsx';
 import { KonumGirisi } from './KonumGirisi.tsx';
+import { LogoCariArama } from './LogoCariArama.tsx';
 import { SINIF_SECENEKLERI, TUR_SECENEKLERI, adSade, sinifMi, turMu } from './gorunum.ts';
 import { koordinatiDenetle } from './koordinat.ts';
 import { cevabiYaz, eskiyseYenile, useKorumaliEkleme } from './yazma.ts';
@@ -93,6 +94,9 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
   const ekle = useKorumaliEkleme();
   // Form açıldığındaki sürüm: sonradan yenilenen kart, başkasının değişikliğini görmeden ezmesin.
   const [acilisSurumu] = useState(firma?.surum ?? null);
+  // Yeni firma Logo carisinden açılırsa kod ve Logo cari kodu Logo kodudur (2118-1 a); kayıt Logo'dan alma komutuyla gider.
+  const [logoAramasi, logoAramasiYaz] = useState(false);
+  const [logoCari, logoCariYaz] = useState<LogoCariSatiri | null>(null);
 
   const form = useForm<Degerler, FirmaCevabi>({
     ilk: ilkDegerler(firma, varsayilanTur, varsayilanFason),
@@ -124,6 +128,9 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
         // Tedarikçide plan bedeli yoktur; sınıf boş gider.
         musteriSinifi: d.tur === 'tedarikci' || d.musteriSinifi === '' ? null : d.musteriSinifi,
       } satisfies FirmaEkleGovdesi;
+      if (firma === null && logoCari !== null) {
+        return ekle<FirmaCevabi>('/musteri-tedarikci/logo-cari/al', { ...govde, logoKodu: logoCari.kod } satisfies LogodanFirmaAlGovdesi);
+      }
       if (firma === null || acilisSurumu === null) return ekle<FirmaCevabi>('/musteri-tedarikci/firmalar/ekle', govde);
       return api.post<FirmaCevabi>(
         `/musteri-tedarikci/firmalar/${firma.id}/guncelle`,
@@ -132,19 +139,48 @@ export function FirmaFormu({ firma, varsayilanTur = 'musteri', varsayilanFason =
     },
     basarili: (cevap) => {
       cevabiYaz(istemci, cevap);
-      bildir('tamam', firma === null ? 'Firma eklendi.' : 'Firma güncellendi.');
+      bildir('tamam', firma !== null ? 'Firma güncellendi.' : logoCari !== null ? 'Firma Logo\'dan alındı.' : 'Firma eklendi.');
       kaydedildi(cevap.firma);
     },
     hatada: (hata) => { if (firma !== null) eskiyseYenile(istemci, firma.id, hata); },
   });
 
+  const formaAl = (c: LogoCariSatiri) => {
+    const o = c.oneri;
+    form.degistir({
+      kod: o.kod, ad: o.ad, tur: o.tur, ulkeKodu: o.ulkeKodu, vergiNo: metin(o.vergiNo), vergiDairesi: metin(o.vergiDairesi), adres: metin(o.adres),
+      ilce: metin(o.ilce), il: metin(o.il), postaKodu: metin(o.postaKodu), telefon: metin(o.telefon), ePosta: metin(o.ePosta),
+    });
+    logoCariYaz(c);
+    logoAramasiYaz(false);
+  };
+
   const d = form.degerler;
   const ayniAdlar = useAyniAdliFirmalar(d.ad, firma?.id ?? null);
   return (
     <FormPenceresi baslik={firma === null ? 'Yeni firma' : `Düzenle: ${firma.ad}`} kimlik="tc-mt-firma-form" kapat={kapat} form={form}>
+      {firma === null && (
+        <div className="tc-mt-logo-secili">
+          {logoCari === null
+            ? <span className="tc-mt-yok">Firma Logo'da kayıtlıysa oradan alın; kod Logo kodu olur.</span>
+            : <Rozet ton="bilgi"><Simge ad="download" boyut="k" />Logo'dan: {logoCari.kod}</Rozet>}
+          {logoCari === null
+            ? <Dugme simge="search" onClick={() => logoAramasiYaz((a) => !a)}>{logoAramasi ? 'Aramayı kapat' : 'Logo\'dan ara'}</Dugme>
+            : <Dugme simge="x" onClick={() => { logoCariYaz(null); form.degistir({ kod: '' }); }}>Logo bağını bırak</Dugme>}
+        </div>
+      )}
+      {firma === null && logoAramasi && (
+        <LogoCariArama hedef={null} formaAl={formaAl} baglandi={kaydedildi} />
+      )}
       <section className="tc-mt-bolum" aria-label="Firma kartı">
         <div className="tc-mt-ikili">
-          <Girdi etiket="Kod" autoComplete="off" ipucu={firma === null ? 'Boş bırakılırsa kayıtta otomatik verilir.' : undefined} {...form.alan('kod')} />
+          <Girdi
+            etiket="Kod"
+            autoComplete="off"
+            readOnly={logoCari !== null}
+            ipucu={logoCari !== null ? 'Logo cari kodu; değiştirilemez.' : firma === null ? 'Boş bırakılırsa kayıtta otomatik verilir.' : undefined}
+            {...form.alan('kod')}
+          />
           <Secim
             etiket="Tür"
             secenekler={TUR_SECENEKLERI}

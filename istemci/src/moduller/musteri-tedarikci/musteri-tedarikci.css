@@ -31,3 +31,9 @@
 @media (max-width: 479px) {
   .tc-mt-arac, .tc-mt-ozellikler, .tc-mt-ikili, .tc-mt-uclu { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Logo'dan cari arama (2118) */
+.tc-mt-logo-ara { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); min-width: 0; }
+.tc-mt-logo-ara > :first-child { flex: 1 1 0; min-width: 0; }
+.tc-mt-logo-durum { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-mt-logo-secili { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }

@@ -295,3 +295,62 @@ export const karneCevabi = z.object({
   hizmetPuanlari: z.array(hizmetPuaniSemasi).max(HIZMET_PUANI_SINIRI),
 });
 export type KarneCevabi = z.output<typeof karneCevabi>;
+
+// Logo'dan cari arama ve alma (2118; kararlar 2118-1 a, 2118-2 a, 2118-3 a). Arama ve tek cari okuması köprüyü transaction dışında
+// çağırır; alma ve bağlama komutu köprüye gitmez, aynı kişinin son aramasında görülen cariyi kullanır (süresi dolduysa yeniden aranır).
+export const LOGO_CARI_ARAMA_EN_AZ = 3;
+export const LOGO_CARI_ARAMA_EN_COK = 100;
+export const LOGO_CARI_SONUC_SINIRI = 50;
+export const LOGO_CARI_DURUMLARI = ['tamam', 'kapali', 'ortam-degiskeni-yok', 'hata'] as const;
+// Eşleşme sırası: Logo kayıt numarası, Logo cari kodu, firma kodu, vergi numarası (2118-2 a: eşleşen varsa yeni kart açılmaz).
+export const LOGO_CARI_ESLESME_NEDENLERI = ['kayit-no', 'cari-kodu', 'kod', 'vergi-no'] as const;
+
+const logoKodu = z.string().trim().min(1, 'Logo cari kodu boş olamaz.').max(40, 'En çok 40 karakter.');
+export const logoCariAramaSorgusu = z.object({
+  q: z.string().trim().min(LOGO_CARI_ARAMA_EN_AZ, `En az ${LOGO_CARI_ARAMA_EN_AZ} karakter yazın.`).max(LOGO_CARI_ARAMA_EN_COK),
+});
+export type LogoCariAramaSorgusu = z.input<typeof logoCariAramaSorgusu>;
+export const logoCariSorgusu = z.object({ kod: logoKodu });
+export type LogoCariSorgusu = z.input<typeof logoCariSorgusu>;
+
+export const logoCariEslesmesi = z.object({
+  firmaId: z.number().int().positive(),
+  kod: z.string().nullable(),
+  ad: z.string(),
+  neden: z.enum(LOGO_CARI_ESLESME_NEDENLERI),
+  // Firma Logo'ya bağlı değilse ve cari kodu boş ya da aynıysa bağlanabilir; bağlama yalnız Logo alanlarını yazar.
+  baglanabilir: z.boolean(),
+  surum: surumSemasi,
+});
+export type LogoCariEslesmesi = z.output<typeof logoCariEslesmesi>;
+// Yeni firma formuna öneri: kod ve Logo cari kodu Logo kodudur (2118-1 a) ve değiştirilemez; kalanını kullanıcı düzeltebilir.
+export const logoCariOnerisi = firmaKimligi.pick({
+  kod: true, ad: true, tur: true, ulkeKodu: true, vergiNo: true, vergiDairesi: true, adres: true, ilce: true, il: true, postaKodu: true,
+  telefon: true, ePosta: true, logoCariKodu: true,
+}).extend({ kod: z.string(), logoCariKodu: z.string() });
+export type LogoCariOnerisi = z.output<typeof logoCariOnerisi>;
+export const logoCariSatiri = z.object({
+  logoKayitNo: z.number().int().positive(),
+  kod: z.string(),
+  ad: z.string().nullable(),
+  aktif: z.boolean(),
+  vergiNo: z.string().nullable(),
+  il: z.string().nullable(),
+  telefon: z.string().nullable(),
+  eslesme: logoCariEslesmesi.nullable(),
+  // Kodu TMI'ye sığmayan (40 karakterden uzun ya da baştaki/sondaki boşluklu) cari alınamaz; ileti nedenini söyler.
+  alinamaz: z.string().nullable(),
+  oneri: logoCariOnerisi,
+});
+export type LogoCariSatiri = z.output<typeof logoCariSatiri>;
+const logoCariDurumu = { durum: z.enum(LOGO_CARI_DURUMLARI), ileti: z.string().nullable() };
+export const logoCariAramaCevabi = z.object({ ...logoCariDurumu, cariler: z.array(logoCariSatiri).max(LOGO_CARI_SONUC_SINIRI) });
+export type LogoCariAramaCevabi = z.output<typeof logoCariAramaCevabi>;
+export const logoCariCevabi = z.object({ ...logoCariDurumu, cari: logoCariSatiri.nullable() });
+export type LogoCariCevabi = z.output<typeof logoCariCevabi>;
+
+// Formdaki kod ve Logo cari kodu sunucuda Logo koduyla değiştirilir; gövdede başka değer gelse de yazılmaz.
+export const logodanFirmaAlGovdesi = firmaKimligi.extend({ logoKodu });
+export type LogodanFirmaAlGovdesi = z.input<typeof logodanFirmaAlGovdesi>;
+export const logoyaBaglaGovdesi = z.object({ logoKodu, ...beklenenSurum });
+export type LogoyaBaglaGovdesi = z.input<typeof logoyaBaglaGovdesi>;
