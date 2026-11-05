@@ -148,6 +148,20 @@ export function OgeKarti({
 }: Ozellikler) {
   const [tur, kimlikMetni] = anahtar.split(':');
   const kimlik = Number(kimlikMetni);
+  // 2142-1 a: makine kartı kısa açılır (iş emri, parça, adet, neden); geri kalanı Ayrıntı ile açılır.
+  const [ayrinti, ayrintiYaz] = useState(false);
+  const kisaEylem = (x: string, z: string) => (
+    <div className="tc-atolye-kart-eylem">
+      <Dugme simge="target" onClick={() => yakinlas({ x: sayi(x), z: sayi(z) })}>Yakınlaş</Dugme>
+      <Dugme simge={ayrinti ? 'up' : 'down'} aria-expanded={ayrinti} onClick={() => ayrintiYaz((v) => !v)}>Ayrıntı</Dugme>
+    </div>
+  );
+  const yolDugmesi = (x: string, z: string) => (
+    <div className="tc-atolye-kart-eylem">
+      <Dugme simge="next" disabled={!girisVar} title={girisVar ? undefined : 'Bölümün giriş noktası tanımlı değil'} onClick={() => yolGoster({ x: sayi(x), z: sayi(z) })}>Girişten yol</Dugme>
+    </div>
+  );
+  const adetMetni = (emir: Emir) => `${emir.canli ? sayiMetni(emir.canli.saglam) : 'sayaç yok'} / ${sayiMetni(emir.adet)}${emir.canli && emir.canli.hurda > 0 ? ` · hurda ${sayiMetni(emir.canli.hurda)}` : ''}`;
   const eylemler = (x: string, z: string) => {
     const hedef = { x: sayi(x), z: sayi(z) };
     return (
@@ -162,9 +176,9 @@ export function OgeKarti({
       <OgeSimgesi ad={simge} />
       <div>
         <p className="tc-atolye-ust-baslik">{eyebrow}</p>
-        <h3>{baslik}</h3>
+        {/* Durum kodun yanındadır; dar kartta altına iner, kod sütunu daralmaz. */}
+        <div className="tc-atolye-kart-kod"><h3>{baslik}</h3>{ek}</div>
       </div>
-      {ek}
       <Dugme simge="x" aria-label="Kartı kapat" onClick={kapat} />
     </header>
   );
@@ -178,27 +192,38 @@ export function OgeKarti({
       <section className="tc-atolye-kart" aria-label={`${yer.kod} ayrıntısı`}>
         {ust(makineCinsi(yer.tip, yer.ad), `${ISTASYON_TIPI_ADI[yer.tip]} · Hücre ${yer.hucre}`, yer.kod, <DurumRozeti durum={g.durum}>{g.metin}</DurumRozeti>)}
         <dl className="tc-atolye-dl">
-          <dt>Ad</dt><dd>{yer.ad}</dd>
-          <dt>Makine</dt>
-          <dd>{yer.makineler.length === 0 ? 'Bağlı makine yok' : yer.makineler.map((m) => [m.kod, m.markaModel ?? m.ad, m.tur].filter(Boolean).join(' · ')).join(', ')}</dd>
           {emir ? (
             <>
               <dt>Emir</dt><dd className="mono">{emir.emirNo}</dd>
               <dt>Parça</dt><dd>{emir.parcaNo} · {emir.parcaAd}</dd>
-              <dt>Parça modeli</dt><dd>{parcaModeliMetni(parcalar.get(yer.istasyonId))}</dd>
-              <dt>Adet</dt><dd className="mono">{emir.canli ? sayiMetni(emir.canli.saglam) : 'sayaç yok'} / {sayiMetni(emir.adet)}{emir.canli && emir.canli.hurda > 0 ? ` · hurda ${sayiMetni(emir.canli.hurda)}` : ''}</dd>
-              <dt>Başlama</dt><dd>{saatMetni(emir.baslama) ?? 'bilinmiyor'}</dd>
+              <dt>Adet</dt><dd className="mono">{adetMetni(emir)}</dd>
               {emir.canli?.durusNedeni && <><dt>Neden</dt><dd className="tc-atolye-neden">{emir.canli.durusNedeni.ad}</dd></>}
             </>
           ) : (
             <><dt>Emir</dt><dd>{yer.aktif ? 'Başlamış emir yok' : 'Makine pasif'}</dd></>
           )}
-          {yer.aktif && <SiradakiIs emir={siradakiler.get(yer.istasyonId)} parca={emir ? undefined : parcalar.get(yer.istasyonId)} />}
-          <dt>Ayak izi</dt><dd>{olcuMetni(sayi(yer.genislik))} × {olcuMetni(sayi(yer.derinlik))}</dd>
-          <dt>3B model</dt><dd>{yer.merkezModeli ? `${yer.merkezModeli.ad} (Çizim Merkezi, Rev ${yer.merkezModeli.harf})` : yer.model ? yer.model.ad : 'Yok (tipten çizilir)'}</dd>
         </dl>
-        {eylemler(yer.x, yer.z)}
-        <UretilenParcalar istasyonId={yer.istasyonId} emirler={tumEmirler} />
+        {kisaEylem(yer.x, yer.z)}
+        {ayrinti && (
+          <div className="tc-atolye-kart-ayrinti">
+            <dl className="tc-atolye-dl">
+              <dt>Ad</dt><dd>{yer.ad}</dd>
+              <dt>Makine</dt>
+              <dd>{yer.makineler.length === 0 ? 'Bağlı makine yok' : yer.makineler.map((m) => [m.kod, m.markaModel ?? m.ad, m.tur].filter(Boolean).join(' · ')).join(', ')}</dd>
+              {emir && (
+                <>
+                  <dt>Parça modeli</dt><dd>{parcaModeliMetni(parcalar.get(yer.istasyonId))}</dd>
+                  <dt>Başlama</dt><dd>{saatMetni(emir.baslama) ?? 'bilinmiyor'}</dd>
+                </>
+              )}
+              {yer.aktif && <SiradakiIs emir={siradakiler.get(yer.istasyonId)} parca={emir ? undefined : parcalar.get(yer.istasyonId)} />}
+              <dt>Ayak izi</dt><dd>{olcuMetni(sayi(yer.genislik))} × {olcuMetni(sayi(yer.derinlik))}</dd>
+              <dt>3B model</dt><dd>{yer.merkezModeli ? `${yer.merkezModeli.ad} (Çizim Merkezi, Rev ${yer.merkezModeli.harf})` : yer.model ? yer.model.ad : 'Yok (tipten çizilir)'}</dd>
+            </dl>
+            {yolDugmesi(yer.x, yer.z)}
+            <UretilenParcalar istasyonId={yer.istasyonId} emirler={tumEmirler} />
+          </div>
+        )}
       </section>
     );
   }
@@ -215,30 +240,41 @@ export function OgeKarti({
       <section className="tc-atolye-kart" aria-label={`${mk.kod} ayrıntısı`}>
         {ust(makineCinsi(tip, mk.ad), `${ist ? `${ist.kod} · ${ISTASYON_TIPI_ADI[ist.tip]}` : 'Makinesiz ekipman'} · Hücre ${mk.hucre}`, mk.kod, <DurumRozeti durum={g.durum}>{g.metin}</DurumRozeti>)}
         <dl className="tc-atolye-dl">
-          <dt>Ad</dt><dd>{mk.ad}</dd>
-          {mk.markaModel && <><dt>Marka, model</dt><dd>{mk.markaModel}</dd></>}
-          {mk.tur && <><dt>Tür</dt><dd>{mk.tur}</dd></>}
-          <dt>Makine</dt><dd>{ist ? `${ist.kod} · ${ist.ad}` : 'Bağlı değil'}</dd>
           {c?.ariza && <><dt>{c.ariza.durum === 'ariza' ? 'Arıza' : 'Bakım'}</dt><dd className="tc-atolye-neden">{c.ariza.aciklama ?? 'Açıklama yok'}</dd></>}
           {emir ? (
             <>
-              <dt>Emir</dt><dd className="mono">{emir.emirNo}</dd>
               <dt>İş emri</dt><dd>{c?.isEmri ?? 'Bilinmiyor (iş emirsiz emir ya da adımlar arası)'}</dd>
               <dt>Parça</dt><dd>{emir.parcaNo} · {emir.parcaAd}</dd>
-              <dt>Parça modeli</dt><dd>{parcaModeliMetni(ist ? parcalar.get(ist.id) : undefined)}</dd>
-              <dt>Adet</dt><dd className="mono">{emir.canli ? sayiMetni(emir.canli.saglam) : 'sayaç yok'} / {sayiMetni(emir.adet)}{emir.canli && emir.canli.hurda > 0 ? ` · hurda ${sayiMetni(emir.canli.hurda)}` : ''}</dd>
-              <dt>Başlama</dt><dd>{saatMetni(emir.baslama) ?? 'bilinmiyor'}</dd>
+              <dt>Adet</dt><dd className="mono">{adetMetni(emir)}</dd>
               {emir.canli?.durusNedeni && <><dt>Neden</dt><dd className="tc-atolye-neden">{emir.canli.durusNedeni.ad}</dd></>}
             </>
           ) : (
             <><dt>Emir</dt><dd>{!mk.aktif ? 'Makine pasif' : ist ? 'Bu makinede başlamış emir yok' : 'Bilinmiyor (istasyona bağlı değil)'}</dd></>
           )}
-          {ist && mk.aktif && <SiradakiIs emir={siradakiler.get(ist.id)} parca={emir ? undefined : parcalar.get(ist.id)} />}
-          <dt>Ayak izi</dt><dd>{olcuMetni(sayi(mk.genislik))} × {olcuMetni(sayi(mk.derinlik))}</dd>
-          <dt>3B model</dt><dd>{mk.model ? mk.model.ad : 'Yok (tipten çizilir)'}</dd>
         </dl>
-        {eylemler(mk.x, mk.z)}
-        {ist && <UretilenParcalar istasyonId={ist.id} emirler={tumEmirler} />}
+        {kisaEylem(mk.x, mk.z)}
+        {ayrinti && (
+          <div className="tc-atolye-kart-ayrinti">
+            <dl className="tc-atolye-dl">
+              <dt>Ad</dt><dd>{mk.ad}</dd>
+              {mk.markaModel && <><dt>Marka, model</dt><dd>{mk.markaModel}</dd></>}
+              {mk.tur && <><dt>Tür</dt><dd>{mk.tur}</dd></>}
+              <dt>Makine</dt><dd>{ist ? `${ist.kod} · ${ist.ad}` : 'Bağlı değil'}</dd>
+              {emir && (
+                <>
+                  <dt>Emir</dt><dd className="mono">{emir.emirNo}</dd>
+                  <dt>Parça modeli</dt><dd>{parcaModeliMetni(ist ? parcalar.get(ist.id) : undefined)}</dd>
+                  <dt>Başlama</dt><dd>{saatMetni(emir.baslama) ?? 'bilinmiyor'}</dd>
+                </>
+              )}
+              {ist && mk.aktif && <SiradakiIs emir={siradakiler.get(ist.id)} parca={emir ? undefined : parcalar.get(ist.id)} />}
+              <dt>Ayak izi</dt><dd>{olcuMetni(sayi(mk.genislik))} × {olcuMetni(sayi(mk.derinlik))}</dd>
+              <dt>3B model</dt><dd>{mk.model ? mk.model.ad : 'Yok (tipten çizilir)'}</dd>
+            </dl>
+            {yolDugmesi(mk.x, mk.z)}
+            {ist && <UretilenParcalar istasyonId={ist.id} emirler={tumEmirler} />}
+          </div>
+        )}
       </section>
     );
   }
