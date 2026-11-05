@@ -63,6 +63,9 @@ Taban: `main` 326c58a. Yeni modül; depoda önceki hâli yok. İnceleme raporu: 
 ## CNC makineleri bölümü (15.10.2026)
 - İkinci menüye "CNC makineleri" (`/cizimler/cnc-makineleri`, `belge-merkezi.yaz`) girdi: CNC Kurulum Motoru'ndaki makineler burada istasyonla
   eşleştirilir. Ekran `cnc-kurulum` modülündedir (rotası orada); bu modülün uçları ve yetkisi değişmedi.
+- Kart 2126 (2126-1 a, 05.11.2026): makine-istasyon bağının tek kaynağı İstasyonlar'dır (`makine.istasyon_id`). CNC makineleri sayfasında istasyon
+  seçilmez (1989 a'daki açılır liste kalktı); model makinenin kendi istasyonuna bağlanır, başka istasyona kalmış 3B bağı `bag-kaldir` ile kalkar.
+  İstasyonu olmayan makinenin modeli yazılır, bağlanmaz; satır İstasyonlar'a yönlendirir. Uç, yetki ve göç değişmedi.
 
 ## Belge merkezine taşıma (kart 1623, ADR 0026, kararlar 1601 b ve 1631 a)
 - Modül `cizimler` adıyla geldi, `belge-merkezi` oldu: klasörler, sözleşme, işlemler (`belge-merkezi.oku`, `.yaz`, `.yayinla`), dosya bağı modül adı.

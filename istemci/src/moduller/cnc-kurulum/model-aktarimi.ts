@@ -5,7 +5,7 @@ import { dosyaYukle, onizlemeGonder } from '../belge-merkezi/disari.ts';
 
 // Seçili makinenin modeli Çizimler'e 3B model belgesi olarak gider (taslak; yayın Çizimler ekranından). Aynı makine ikinci kez
 // aktarılınca yeni belge açılmaz: adıyla bulunan belgeye revizyon eklenir, dosya aynıysa hiçbir şey yazılmaz. İstasyona bağ
-// Çizim Merkezi'nin CNC makineleri sayfasında kullanıcının seçtiği istasyonla kurulur (yayinlaVeEslestir).
+// Çizim Merkezi'nin CNC makineleri sayfasında makinenin İstasyonlar'daki istasyonuyla kurulur (yayinlaVeEslestir, 2126-1 a).
 
 export interface AktarilacakModel { makineId: string; no: string | null; ad: string; glb: Uint8Array }
 
@@ -47,6 +47,10 @@ export async function yayinlaVeEslestir(a: Pick<AktarimSonucu, 'belgeId' | 'ozet
   }
   if (!belge.baglar.some((b) => b.hedefModul === 'istasyonlar' && b.hedefId === istasyonId)) {
     belge = await api.post<BelgeAyrintisi>(`/cizimler/${a.belgeId}/bag-ekle`, { hedefModul: 'istasyonlar', hedefId: istasyonId, surum: belge.surum } satisfies BagGovdesi);
+  }
+  // Makine-istasyon bağının tek kaynağı İstasyonlar'dır (2126-1 a): modelin başka istasyona kalmış bağı kalkar, harita iki yerde göstermez.
+  for (const eski of belge.baglar.filter((b) => b.hedefModul === 'istasyonlar' && b.hedefId !== istasyonId)) {
+    belge = await api.post<BelgeAyrintisi>(`/cizimler/${a.belgeId}/bag-kaldir`, { hedefModul: 'istasyonlar', hedefId: eski.hedefId, surum: belge.surum } satisfies BagGovdesi);
   }
   return { yayinda: belge.revizyonlar.some((x) => x.ozet === a.ozet && x.durum === 'yayinda') };
 }

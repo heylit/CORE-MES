@@ -8,7 +8,7 @@ import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Tezgah } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { MakineOzeti } from './yeni/sahne/model-uret.ts';
-import { onerilenIstasyon, varsayilanIstasyon } from './CncEslestirme.tsx';
+import { durumMetni } from './CncEslestirme.tsx';
 import { rotalar } from './rotalar.tsx';
 
 // Sahne testte model üretmez (model-uret.test.ts sınar): liste ve hata testten verilir, üretilen GLB tek bayttır.
@@ -91,7 +91,7 @@ function ac(yol = '/cizimler/cnc-makineleri') {
 }
 
 const makineler = (...l: MakineOzeti[]) => { sahne.liste = l; };
-const F01: MakineOzeti = { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen', istasyonId: null, eksik: false };
+const F01: MakineOzeti = { makineId: 'f5a', no: 'F-01', ad: 'Beş eksen', istasyonId: 5, eksik: false };
 
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); cizimler.onizlemeGonder.mockReset();
@@ -99,24 +99,22 @@ afterEach(() => {
 });
 
 describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () => {
-  it('TA-01: makine numarası istasyon koduyla eşleşirse o istasyon önerilir', () => {
-    expect(onerilenIstasyon('f-01 ', GRUPLAR)).toBe(5);
-    expect(onerilenIstasyon('F-99', GRUPLAR)).toBeNull();
-    expect(onerilenIstasyon(null, GRUPLAR)).toBeNull();
+  it('TA-01: Çizim Merkezi\'ndeki bağ İstasyonlar\'dakinden farklıysa satır bunu ve taşınacağı istasyonu söyler (2126-1 a)', () => {
+    const adlar = new Map([[5, 'F-01 - Deneme freze'], [6, 'T-01 - Deneme torna']]);
+    expect(durumMetni({ belgeId: 1, yayinda: true, istasyonId: 6 }, 5, adlar))
+      .toBe('Model T-01 - Deneme torna istasyonuna bağlı; İstasyonlar\'daki istasyonu farklı. Eşleştirince F-01 - Deneme freze istasyonuna taşınır.');
+    expect(durumMetni({ belgeId: 1, yayinda: true, istasyonId: 5 }, 5, adlar)).toBe('Eşleşti: F-01 - Deneme freze. Haritaya eklenebilir.');
+    expect(durumMetni({ belgeId: 1, yayinda: false, istasyonId: 99 }, null, adlar)).toBe('Eşleşti: İstasyonlar\'daki istasyon. Çizim yayınlanınca haritaya eklenebilir.');
   });
 
-  it('TA-11: makinenin İstasyonlar\'daki istasyonu önerilir; seçilemeyen istasyonda aynı kodlu istasyona düşer (1989 a)', () => {
-    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'F-01', ad: 'Freze', istasyonId: 6, eksik: false }, GRUPLAR)).toBe(6);
-    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'F-01', ad: 'Freze', istasyonId: 99, eksik: false }, GRUPLAR)).toBe(5);
-    expect(varsayilanIstasyon({ makineId: 'mk7', no: 'X', ad: 'Freze', istasyonId: null, eksik: false }, GRUPLAR)).toBeNull();
-  });
-
-  it('TA-12: makinenin istasyonu satırda seçili gelir, kod tutmasa da', async () => {
+  it('TA-12: istasyon seçilmez; satır makinenin İstasyonlar\'daki istasyonunu yazar, kod tutmasa da (2126-1 a)', async () => {
     sunucuKur(YAZAR);
-    makineler({ makineId: 'mk8', no: 'X-9', ad: 'Kodsuz', istasyonId: 6, eksik: false });
+    makineler({ makineId: 'mk8', no: 'F-01', ad: 'Kodsuz', istasyonId: 6, eksik: false });
     ac();
-    const satir = (await screen.findByText('X-9 · Kodsuz')).closest('li') as HTMLElement;
-    await waitFor(() => { expect((within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('6'); });
+    const satir = (await screen.findByText('F-01 · Kodsuz')).closest('li') as HTMLElement;
+    expect(await within(satir).findByText('İstasyon: T-01 - Deneme torna')).toBeTruthy();
+    expect(within(satir).queryByLabelText('Sistemdeki makine')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
   });
 
   it('TA-13: ayarı eksik makine listede görünür, işaretlenemez, Tümünü seç onu almaz (1988 b)', async () => {
@@ -131,22 +129,21 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     await within(eksik).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
     // Satır seçimleri durum metninden sonraki etkide kurulur; kurulmadan basılan Tümünü seç boşa gider.
     const f01 = screen.getByText('F-01 · Beş eksen').closest('li') as HTMLElement;
-    await waitFor(() => { expect((within(f01).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('5'); });
+    await within(f01).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Tümünü seç' }));
     expect(screen.getByRole('button', { name: '1 makineyi eşleştir' })).toBeTruthy();
     expect(kutu.checked).toBe(false);
     expect((screen.getByRole('checkbox', { name: 'Tümünü seç' }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it('TA-02: işaretlenen makine Çizim Merkezi\'ne yazılır, yayınlanır ve seçilen istasyona bağlanır; sayfa kayıt yazmaz', async () => {
+  it('TA-02: işaretlenen makine Çizim Merkezi\'ne yazılır, yayınlanır ve İstasyonlar\'daki istasyonuna bağlanır; sayfa kayıt yazmaz', async () => {
     const istekler = sunucuKur(YAZAR);
     makineler(F01, { makineId: 'ozel', no: null, ad: 'Elle', istasyonId: null, eksik: false });
     ac();
     const satir = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
-    const secim = within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement;
-    await waitFor(() => { expect(secim.value).toBe('5'); });
+    await within(satir).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
     const ozel = screen.getByText('Elle').closest('li') as HTMLElement;
-    expect((within(ozel).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('');
+    expect(within(ozel).getByRole('note').textContent).toContain('İstasyonu yok');
 
     fireEvent.click(within(satir).getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: '1 makineyi eşleştir' }));
@@ -189,7 +186,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     expect(sahne.metinler).toEqual([]);
   });
 
-  it('TA-05: ana sayfadan gelen makine işaretli gelir; eşleşmeyen işaretli satır istasyonun nasıl açılacağını ve İstasyonlar bağlantısını gösterir', async () => {
+  it('TA-05: ana sayfadan gelen makine işaretli gelir; istasyonu olmayan satır İstasyonlar\'a yönlendirir', async () => {
     sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.istasyonlar'] });
     makineler(F01, { makineId: 'ozel', no: 'F-77', ad: 'Elle', istasyonId: null, eksik: false });
     ac('/cizimler/cnc-makineleri?makine=ozel');
@@ -199,24 +196,36 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     expect((within(dmu).getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
     expect(screen.getByRole('button', { name: '1 makineyi eşleştir' })).toBeTruthy();
     const not = await within(ozel).findByRole('note');
-    expect(not.textContent).toContain('İstasyonlar ekranında F-77 koduyla açın');
+    expect(not.textContent).toContain('İstasyonlar ekranında bu makineye istasyon seçin');
     expect(within(not).getByRole('link', { name: 'İstasyonlar' }).getAttribute('href')).toBe('/istasyonlar/is-merkezleri');
-    // Eşleşen satırda açıklama yoktur.
+    // İstasyonu olan satırda açıklama yoktur.
     fireEvent.click(within(dmu).getByRole('checkbox'));
     expect(within(dmu).queryByRole('note')).toBeNull();
   });
 
-  it('TA-06: İstasyonlar sayfasını göremeyen kişiye bağlantı konmaz; sistemde istasyon yoksa uyarı görünür', async () => {
+  it('TA-11: istasyonu olmayan makine eşleştirilince model yazılır ama hiçbir istasyona bağlanmaz (reddedilen, 2126-1 a)', async () => {
+    const istekler = sunucuKur(YAZAR);
+    makineler({ makineId: 'ozel', no: 'F-77', ad: 'Elle', istasyonId: null, eksik: false });
+    ac('/cizimler/cnc-makineleri?makine=ozel');
+    const satir = (await screen.findByText('F-77 · Elle')).closest('li') as HTMLElement;
+    await waitFor(() => { expect((within(satir).getByRole('checkbox') as HTMLInputElement).checked).toBe(true); });
+    fireEvent.click(screen.getByRole('button', { name: '1 makineyi eşleştir' }));
+    expect(await within(satir).findByText('Yeni belge, istasyonu olmadığı için eşleşmedi; İstasyonlar\'da istasyon seçin.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.endsWith('/bag-ekle'))).toBe(false);
+  });
+
+  it('TA-06: İstasyonlar sayfasını göremeyen kişiye bağlantı konmaz; istasyon adı okunamazsa genel ad yazılır', async () => {
     sunucuKur(YAZAR, []);
-    makineler(F01);
+    makineler(F01, { makineId: 'ozel', no: 'F-77', ad: 'Elle', istasyonId: null, eksik: false });
     ac('/cnc-kurulum/aktar?makine=f5a');
     const satir = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
-    expect((await within(satir).findByRole('note')).textContent).toContain('F-01 koduyla açın');
-    expect(screen.getByRole('alert').textContent).toContain('Sistemde istasyon kaydı yok');
+    expect(await within(satir).findByText('İstasyon: İstasyonlar\'daki istasyon')).toBeTruthy();
+    const ozel = screen.getByText('F-77 · Elle').closest('li') as HTMLElement;
+    expect((await within(ozel).findByRole('note')).textContent).toContain('İstasyonu yok');
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('TA-07: makinenin Çizim Merkezi\'ndeki durumu satırda görünür; var olan eşleşme seçili gelir, önerinin önüne geçer', async () => {
+  it('TA-07: makinenin Çizim Merkezi\'ndeki durumu satırda görünür; farklı istasyona kalmış bağ işaretlenir, İstasyonlar\'daki istasyon geçerlidir', async () => {
     sunucuKur(YAZAR, GRUPLAR, [
       { id: 40, ad: 'F-01 · Beş eksen', yayinda: true, istasyonId: 6 },
       { id: 41, ad: 'T-09 · Taslak torna', yayinda: false, istasyonId: null },
@@ -224,9 +233,8 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
     makineler(F01, { makineId: 't9', no: 'T-09', ad: 'Taslak torna', istasyonId: null, eksik: false }, { makineId: 'yeni', no: null, ad: 'Yeni', istasyonId: null, eksik: false });
     ac();
     const dmu = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
-    expect(await within(dmu).findByText('Eşleşti: T-01 - Deneme torna. Haritaya eklenebilir.')).toBeTruthy();
-    // Kod F-01 istasyonunu önerirdi; Çizim Merkezi'ndeki bağ (T-01) önce gelir.
-    await waitFor(() => { expect((within(dmu).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('6'); });
+    expect(await within(dmu).findByText('Model T-01 - Deneme torna istasyonuna bağlı; İstasyonlar\'daki istasyonu farklı. Eşleştirince F-01 - Deneme freze istasyonuna taşınır.')).toBeTruthy();
+    expect(within(dmu).getByText('İstasyon: F-01 - Deneme freze')).toBeTruthy();
     const t9 = screen.getByText('T-09 · Taslak torna').closest('li') as HTMLElement;
     expect(within(t9).getByText('Çizim Merkezi\'nde modeli var, eşleşmedi; haritaya eklenemez.')).toBeTruthy();
     const yeni = screen.getByText('Yeni').closest('li') as HTMLElement;
@@ -244,7 +252,7 @@ describe('Çizim Merkezi CNC makineleri eşleştirmesi (kart #1196, #1238)', () 
   // 780 a: küçük resim eşleşmenin parçası değildir; üretilemezse bağ ve yayın kalır, neden satırda yazar.
   const eslestir = async () => {
     const satir = (await screen.findByText('F-01 · Beş eksen')).closest('li') as HTMLElement;
-    await waitFor(() => { expect((within(satir).getByLabelText('Sistemdeki makine') as HTMLSelectElement).value).toBe('5'); });
+    await within(satir).findByText('Çizim Merkezi\'nde modeli yok, eşleşmedi.');
     fireEvent.click(within(satir).getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: '1 makineyi eşleştir' }));
     return satir;

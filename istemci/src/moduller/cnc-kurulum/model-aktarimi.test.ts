@@ -84,7 +84,11 @@ describe('yayınlama ve makine eşleştirmesi (kart #1196)', () => {
       const yontem = secenek?.method ?? 'GET';
       istekler.push({ yontem, yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) as unknown : null });
       if (yontem === 'POST' && yol === '/cizimler/7/revizyonlar/21/yayinla') belge = { ...belge, surum: 5, revizyonlar: [{ id: 21, ozet: OZET, durum: 'yayinda' }] };
-      if (yontem === 'POST' && yol === '/cizimler/7/bag-ekle') belge = { ...belge, surum: belge.surum + 1, baglar: [{ hedefModul: 'istasyonlar', hedefId: 5 }] };
+      if (yontem === 'POST' && yol === '/cizimler/7/bag-ekle') belge = { ...belge, surum: belge.surum + 1, baglar: [...belge.baglar, { hedefModul: 'istasyonlar', hedefId: 5 }] };
+      if (yontem === 'POST' && yol === '/cizimler/7/bag-kaldir') {
+        const g = JSON.parse(String(secenek?.body)) as { hedefId: number };
+        belge = { ...belge, surum: belge.surum + 1, baglar: belge.baglar.filter((b) => b.hedefId !== g.hedefId) };
+      }
       return json(200, belge);
     }));
     return istekler;
@@ -106,5 +110,14 @@ describe('yayınlama ve makine eşleştirmesi (kart #1196)', () => {
     istekler = belgeSunucusu('yayinda', [{ hedefModul: 'istasyonlar', hedefId: 5 }]);
     expect(await yayinlaVeEslestir({ belgeId: 7, ozet: OZET }, 5, true)).toEqual({ yayinda: true });
     expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(0);
+  });
+
+  it('MA-06: model başka istasyona bağlıysa o bağ kalkar; bağın tek kaynağı İstasyonlar\'dır (2126-1 a)', async () => {
+    const istekler = belgeSunucusu('yayinda', [{ hedefModul: 'istasyonlar', hedefId: 6 }, { hedefModul: 'malzemeler', hedefId: 9 }]);
+    expect(await yayinlaVeEslestir({ belgeId: 7, ozet: OZET }, 5, true)).toEqual({ yayinda: true });
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([
+      ['/cizimler/7/bag-ekle', { hedefModul: 'istasyonlar', hedefId: 5, surum: 4 }],
+      ['/cizimler/7/bag-kaldir', { hedefModul: 'istasyonlar', hedefId: 6, surum: 5 }],
+    ]);
   });
 });
