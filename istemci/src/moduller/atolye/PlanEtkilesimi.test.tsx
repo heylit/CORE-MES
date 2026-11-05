@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import type { Kroki, KrokiAyariCevabi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
@@ -30,16 +30,34 @@ const YERLESIM = {
 
 const cevap = (govde: unknown, durum = 200) => new Response(JSON.stringify(govde), { status: durum, headers: { 'Content-Type': 'application/json' } });
 
-function sunucuKur() {
-  vi.stubGlobal('fetch', vi.fn((adres: string) => {
+const FABRIKA_KROKISI = {
+  salonId: null, ad: 'Vaziyet planı', boyutBayt: 1000, parcaSayisi: 1, ozet: 'c'.repeat(64), sayfa: 1,
+  hizalama: { olcek: '0.05', donus: '0', x: '0', z: '0' }, tamam: true, surum: 2,
+  kaydeden: { id: 1, ad: 'Deneme Yönetici' }, kaydedildi: '2026-10-07T08:00:00Z', merkez: null,
+} satisfies Kroki;
+
+interface Cagri { yontem: string; yol: string; govde: unknown }
+
+function sunucuKur(ek: { fabrikaKrokisi?: Kroki; saydamlik?: number } = {}): Cagri[] {
+  const cagrilar: Cagri[] = [];
+  vi.stubGlobal('fetch', vi.fn((adres: string, secenek: RequestInit = {}) => {
     const yol = adres.replace('/api', '');
+    const yontem = secenek.method ?? 'GET';
+    cagrilar.push({ yontem, yol, govde: typeof secenek.body === 'string' ? JSON.parse(secenek.body) : undefined });
     if (yol === '/oturum') return Promise.resolve(cevap({ kullanici: YAZAN } satisfies OturumCevabi));
+    if (yol === '/atolye/fabrika/kroki') return Promise.resolve(cevap({ kroki: ek.fabrikaKrokisi ?? null }));
     if (yol.endsWith('/kroki')) return Promise.resolve(cevap({ kroki: null }));
+    if (yol === '/atolye/kroki-ayari') return Promise.resolve(cevap({ saydamlik: ek.saydamlik ?? 70 } satisfies KrokiAyariCevabi));
+    if (yol === '/atolye/kroki-ayari/degistir' && yontem === 'POST') {
+      const g = JSON.parse(String(secenek.body)) as { saydamlik: number };
+      return Promise.resolve(cevap({ saydamlik: g.saydamlik } satisfies KrokiAyariCevabi));
+    }
     if (yol.startsWith('/istasyonlar')) return Promise.resolve(cevap({ istasyonlar: [] }));
     if (yol === '/makineler') return Promise.resolve(cevap({ makineler: [] }));
     if (yol === '/atolye/cizim-merkezi/modeller') return Promise.resolve(cevap({ belgeler: [], istasyonlar: [] }));
     return Promise.resolve(cevap({ kod: 'BULUNAMADI', mesaj: 'yok' }, 404));
   }));
+  return cagrilar;
 }
 
 // jsdom'da PointerEvent yok: fireEvent düz Event üretir ve imleç konumu kaybolur.
@@ -172,5 +190,28 @@ describe('plan düzenleyici etkileşimi (2122)', () => {
     expect(x).toBeLessThanOrEqual(70);
     expect(z).toBeGreaterThanOrEqual(0);
     expect(z).toBeLessThanOrEqual(20);
+  });
+
+  it('bölümün krokisi yoksa fabrika krokisi kullanılır: ölçek ve hizalama sorulmaz, bölüme ayrı kroki yüklenebilir (2122-3 a)', async () => {
+    sunucuKur({ fabrikaKrokisi: FABRIKA_KROKISI });
+    const { duzen } = goster();
+    fireEvent.click(within(duzen).getByRole('button', { name: 'Kroki' }));
+    const panel = within(duzen).getByRole('complementary', { name: 'Kroki' });
+    expect(await within(panel).findByText(/Vaziyet planı/)).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Bölüme ayrı kroki' })).toBeTruthy();
+    expect(within(panel).queryByRole('region', { name: 'Hizalama' })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: '1 · Ölçek' })).toBeNull();
+  });
+
+  it('kroki saydamlığı sunucudan gelir; kaydırıcı bırakılınca gördüğü değerle herkes için saklanır (2122-2 b, 2122-5 a)', async () => {
+    const cagrilar = sunucuKur({ fabrikaKrokisi: FABRIKA_KROKISI, saydamlik: 40 });
+    const { duzen } = goster();
+    fireEvent.click(within(duzen).getByRole('button', { name: 'Kroki' }));
+    const panel = within(duzen).getByRole('complementary', { name: 'Kroki' });
+    expect(await within(panel).findByText('Saydamlık %40')).toBeTruthy();
+    fireEvent.change(within(panel).getByRole('slider'), { target: { value: '55' } });
+    expect(within(panel).getByText('Saydamlık %55')).toBeTruthy();
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/kroki-ayari/degistir')).toBe(true));
+    expect(cagrilar.filter((c) => c.yol === '/atolye/kroki-ayari/degistir').map((c) => c.govde)).toEqual([{ saydamlik: 55, beklenen: 40 }]);
   });
 });

@@ -23,6 +23,8 @@ export const anahtarlar = {
   tumEmirler: ['atolye', 'tum-emirler'] as const,
   // null: fabrika krokisi.
   kroki: (kapsam: number | null) => ['atolye', 'kroki', kapsam] as const,
+  // Ortak kroki saydamlığı (fabrika ve bütün bölümler).
+  krokiAyari: ['atolye', 'kroki-ayari'] as const,
   fabrika: ['atolye', 'fabrika'] as const,
   // Çizim Merkezi'nde yayındaki kroki belgeleri (bölüm krokisi seçicisi).
   merkezKrokileri: ['atolye', 'merkez-krokileri'] as const,
