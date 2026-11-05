@@ -40,6 +40,10 @@ Sayım borç denetimiyle (kart 2049) yenilendi; 19.10.2026 sayımı geçersizdir
 8. Kapandı: `test:modul` Linux'ta da sunucu testlerini bulur (tırnak sorunu #1348 ile düzeldi); desen hiç dosya bulamazsa koşu kırmızı olur (#1557).
 9. Roller: kapandı (Ç5); rol dağılımı verildi, aşağıda.
 
+- [bağlama] Logo'dan gelen kartlar (2116): üç çözücü `sunucu/kablolama.ts`'te logo `disari.ts`'e bağlanacak (kart F); bağlanana kadar liste "bağlı değil" der.
+  VARSAYIM: "kod eşit bağsız kart bağlanır" (2116-2 a) kullanıcının düğmesiyle yapılır, kendiliğinden değil. Liste yalnız tam Logo koduyla aranır; adla arama yok.
+  Logo kart türünden TMI türü yalnız tek karşılık varsa önerilir; hizmet Logo'dan alınmaz (Logo hizmet kartı ayrı tablodadır).
+
 ## Denetimde bulunan açıklar (07.10.2026; kart #163, denetim turu 1 sonrası durum, tur 2 dahil)
 
 Kurallar `kurallar.ts` (MKK-1..MKK-15), testleri `katalog-onay-baglama.test.ts`. Rol dağılımı verildi (göç `20261007192028_kisiler_malzemeler_islemleri.sql`, kullanıcı kararı 07.10.2026; test `rol-dagilimi.test.ts`):

@@ -10,12 +10,13 @@ import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
-import { KATALOG_TURLERI, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
+import { KATALOG_TURLERI, LOGO_GELEN_SAYFA_BOYU, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   DemirbasMakineSecenekleriCevabi, DemirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
+  LogoGelenCevabi, LogodanAlCevabi, logodanAlGovdesi, logoGelenSorgusu,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -32,6 +33,7 @@ import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, Ornek
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
+import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -837,4 +839,129 @@ export async function demirbasMakineSecenekleri(db: Db): Promise<DemirbasMakineS
   const liste = await makineler(db, { pasiflerDahil: true });
   const bagli = await s.makineBagliKartlari(db);
   return { makineler: liste.map((m) => ({ id: m.id, kod: m.kod, ad: m.ad, aktif: m.aktif, bagliKart: bagli.get(m.id) ?? null })) };
+}
+
+/* ---------------- Logo'dan gelen kartlar (2116; kararlar 2116-2 a, 2116-3 c, 2116-4 a) ---------------- */
+
+// Logo'daki kartların aynası, kod eşlemesi ve ters çevirisi logo modülündedir; logo bu modülü ithal ettiği için sunucu/kablolama.ts kaydeder.
+// Kayıt yokken (bağ kurulmamış) liste boş döner, alma ve bağlama reddedilir. Ağ yok: hepsi logo modülünün yerel tablosu.
+export interface LogoAynaKarti {
+  logoKayitNo: number; kod: string; ad: string | null; aciklama2: string | null; aciklama3: string | null;
+  kartTuru: number | null; birimSeti: string | null; aktif: boolean; sonOkuma: string;
+}
+export type LogoKartAynasiCozucusu = (db: Db, o: { kodlar?: readonly string[]; sinir: number; sonra: number }) => Promise<LogoAynaKarti[]>;
+export type LogoEslemeYazici = (db: Db, e: { stokKodu: string; logoKodu: string; logoKayitNo: number }) => Promise<void>;
+export type LogoTmiKodCozucusu = (db: Db, logoKodlari: readonly string[]) => Promise<Map<string, string>>;
+let logoKartAynasi: LogoKartAynasiCozucusu | null = null;
+let logoEslemeYazici: LogoEslemeYazici | null = null;
+let logoTmiKodlari: LogoTmiKodCozucusu | null = null;
+export function logoKartAynasiKaydet(c: LogoKartAynasiCozucusu): void { logoKartAynasi = c; }
+export function logoEslemeYaziciKaydet(c: LogoEslemeYazici): void { logoEslemeYazici = c; }
+export function logoTmiKodCozucusuKaydet(c: LogoTmiKodCozucusu): void { logoTmiKodlari = c; }
+
+const LOGO_BAGI_YOK = 'Logo malzeme okuması bağlı değil; Sistem Ayarları\'nda "Logo: malzeme kartı okuması"nı açın.';
+
+async function logoGelenTmiKartlari(db: Db, kartlar: readonly LogoAynaKarti[]) {
+  const esleme = kartlar.length && logoTmiKodlari ? await logoTmiKodlari(db, kartlar.map((k) => k.kod)) : new Map<string, string>();
+  const tmi = await s.logoIcinTmiKartlari(db, kartlar.map((k) => String(k.logoKayitNo)), [...kartlar.map((k) => k.kod), ...esleme.values()]);
+  return {
+    esleme,
+    refle: new Map(tmi.filter((k) => k.logoKayitNo !== null).map((k) => [k.logoKayitNo!, k])),
+    kodla: new Map(tmi.map((k) => [k.stokKodu, k])),
+  };
+}
+
+export async function logodanGelenler(db: Db, q: z.output<typeof logoGelenSorgusu>): Promise<LogoGelenCevabi> {
+  if (!logoKartAynasi) return { baglanti: false, kartlar: [], sonraki: null };
+  const kartlar = await logoKartAynasi(db, { ...(q.kod ? { kodlar: [q.kod] } : {}), sinir: LOGO_GELEN_SAYFA_BOYU, sonra: q.sonra });
+  const { esleme, refle, kodla } = await logoGelenTmiKartlari(db, kartlar);
+  const firma = katalogFirmaKodu(await katalogGenelAyari(db));
+  return {
+    baglanti: true,
+    kartlar: kartlar.map((k) => {
+      const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+      return {
+        logoKayitNo: k.logoKayitNo, kod: k.kod, ad: k.ad, aciklama2: k.aciklama2, aciklama3: k.aciklama3,
+        kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti, aktif: k.aktif, sonOkuma: k.sonOkuma, durum,
+        koduUyar: logoKodBicimi(k.kod, firma) !== null,
+        tmi: tmi && { kimlik: tmi.kimlik, stokKodu: tmi.stokKodu, ad: tmi.ad, onayDurumu: tmi.onayDurumu, surum: tmi.surum },
+        farklar: durum === 'bagli' && tmi ? logoKartFarklari(k, tmi) : [],
+      };
+    }),
+    sonraki: kartlar.length < LOGO_GELEN_SAYFA_BOYU ? null : kartlar.at(-1)!.logoKayitNo,
+  };
+}
+
+async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {
+  if (!logoKartAynasi) throw gecersiz(LOGO_BAGI_YOK);
+  const k = (await logoKartAynasi(db, { sinir: 1, sonra: ref - 1 }))[0];
+  if (!k || k.logoKayitNo !== ref) throw bulunamadi('Logo kartı okunan listede yok; Logo malzeme okumasını bekleyin.');
+  return k;
+}
+
+// 2116-4 a: Logo'daki kart TMI'de taslak açılır; tür ve birim seçilir, öteki zorunlu alanlar onaydan önce sihirbazda tamamlanır.
+// Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez); kodu TMI biçimine uymuyorsa yeni kod alır ve eşlemesi yazılır (2116-3 c).
+export async function logodanKartAl(
+  db: Db, kullanici: Kullanici, ref: number, g: z.output<typeof logodanAlGovdesi>,
+): Promise<LogodanAlCevabi> {
+  const k = await aynadakiKart(db, ref);
+  if (!k.aktif) throw gecersiz('Logo\'da kullanım dışı kart alınmaz.');
+  const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
+  const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+  if (durum === 'bagli') throw cakisma(`Bu Logo kartı TMI'de zaten var: ${tmi!.stokKodu}.`);
+  if (durum === 'bagsiz') throw cakisma(`TMI'de aynı kodlu kart var: ${tmi!.stokKodu}. Yeni kart açmak yerine bağlayın.`);
+  if (!(await s.birimSecilebilirMi(db, g.birim))) throw dogrulama(`"${g.birim}" birim listesinde yok; Ayarlar'daki birim listesinden seçin.`, 'birim');
+  const genel = await katalogGenelAyari(db);
+  const firmaOneki = katalogFirmaOneki(genel, g.tur);
+  const bicim = logoKodBicimi(k.kod, katalogFirmaKodu(genel));
+  let kod: { onek: string; sira: number; stokKodu: string };
+  if (bicim && logoKoduTureUyar(bicim, g.tur, firmaOneki)) {
+    await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
+    kod = { ...bicim, stokKodu: k.kod };
+  } else {
+    if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
+    if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
+    kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
+  }
+  if (kodla.has(kod.stokKodu)) throw cakisma(`TMI'de ${kod.stokKodu} kodlu kart var.`);
+  const ad = k.ad ?? k.kod;
+  const kimlik = `logo-${ref}`;
+  const kayit = { id: kimlik, tur: g.tur, com: { kod: kod.stokKodu, ad, birim: g.birim }, onay: { durum: 'taslak' } };
+  const yazim: s.KatalogKartiYazimi = {
+    kimlik, tur: g.tur, hizmetYonu: null, benzersizAnahtar: null, varsayilanAnahtar: null, mukerrerGerekcesi: null, onayDurumu: 'taslak', kayit,
+    kisiId: kullanici.id, gonderenKisiId: null, onaylayanKisiId: null, onaylandi: false, dortGozsuz: false, logoAdGuncellemesi: false,
+    agirlik: null, netAgirlikKg: null, tedarikciFirmaId: null, olcuAletiId: null, aciklamalar: [k.ad, k.aciklama2, k.aciklama3],
+    birimDonusumu: null, gkk: { yaz: false, deger: null },
+  };
+  const r = await kisitKorumali(KART_KISITLARI, () => s.katalogKartiEkle(db, yazim, kod.onek, kod.sira));
+  await s.logoKaydiYaz(db, kimlik, { kayitNo: String(ref), kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti }, { surum: null, kisiId: kullanici.id });
+  const eslendi = r.stokKodu !== k.kod;
+  if (eslendi) await logoEslemeYazici!(db, { stokKodu: r.stokKodu, logoKodu: k.kod, logoKayitNo: ref });
+  return { id: kimlik, stok_kodu: r.stokKodu, eslendi };
+}
+
+// 2116-2 a: aynı kodlu bağsız kart bağlanır: Logo kayıt numarası yazılır, kart yeniden gönderilmez; TMI'deki alanlar ezilmez.
+export async function logoKartiBagla(db: Db, kullanici: Kullanici, ref: number, surum: number): Promise<{ id: string; surum: number }> {
+  const k = await aynadakiKart(db, ref);
+  const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
+  const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+  if (durum === 'bagli') throw cakisma(`Bu Logo kartı zaten ${tmi!.stokKodu} kartına bağlı.`);
+  if (!tmi) throw bulunamadi('TMI\'de aynı kodlu kart yok; kartı Logo\'dan alın.');
+  if (tmi.logoKayitNo !== null) throw cakisma(`${tmi.stokKodu} başka bir Logo kaydına bağlı.`);
+  if (tmi.onayDurumu === 'iptal') throw gecersiz('Silinmiş kart bağlanmaz.');
+  const r = await s.logoKaydiYaz(db, tmi.kimlik, { kayitNo: String(ref), kartTuru: k.kartTuru === null ? null : String(k.kartTuru), birimSeti: k.birimSeti }, { surum, kisiId: kullanici.id });
+  if (!r) throw eskiSurum();
+  return { id: tmi.kimlik, surum: r.surum };
+}
+
+// 2116-2 a: bağlı kartta kullanıcı isterse Logo'daki açıklamalar alınır (kart kart). Logo'ya geri gönderilmez.
+export async function logoFarkiniAl(db: Db, kullanici: Kullanici, ref: number, surum: number): Promise<{ id: string; surum: number }> {
+  const k = await aynadakiKart(db, ref);
+  const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
+  const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+  if (durum !== 'bagli' || !tmi) throw gecersiz('Logo\'dakini almak için kart önce bağlanmalı.');
+  if (tmi.onayDurumu === 'iptal') throw gecersiz('Silinmiş kart değiştirilmez.');
+  const r = await s.logoAciklamalariniYaz(db, tmi.kimlik, [k.ad, k.aciklama2, k.aciklama3], { surum, kisiId: kullanici.id });
+  if (!r) throw eskiSurum();
+  return { id: tmi.kimlik, surum: r.surum };
 }

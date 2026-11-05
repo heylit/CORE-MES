@@ -8,6 +8,9 @@
 .tc-logo-eksik { color: var(--stop); overflow-wrap: anywhere; }
 /* Gönderim durumu ile ad güncellemesi tek hücrede: kart görünümünde birlikte sağa yaslanır, dar ekranda alt alta iner. */
 .tc-logo-durum { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-1); }
+.tc-logo-ara { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-3); margin-bottom: var(--b-3); }
+.tc-logo-fark { display: flex; flex-direction: column; gap: var(--b-1); overflow-wrap: anywhere; }
+.tc-logo-sayfa-dugmeleri { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-3); margin-top: var(--b-3); }
 .tc-logo-karsiliklar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pencere-genis)), 1fr)); gap: var(--b-4); }
 
 /* Sistem Ayarları'nda çerçeve sayfanın içinde bir bölümdür: yüksekliği kendi verir, kaydırmayı yine prototip yapar. */
