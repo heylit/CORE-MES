@@ -368,6 +368,51 @@ namespace LogoYardimcisi
             Dogru(Basari(C(s, "GET", "/api/Arp/find/" + Satici, null)), "cari var");
         }
 
+        /* ---------------- 2116 ve 2118: kart, stok ve cari okumaları ---------------- */
+
+        static Dictionary<string, object> D(object o) { return (Dictionary<string, object>)o; }
+
+        static void T_malzeme_listesi_ve_stok_toplamlari_imlecle_sayfalanir()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            var k2 = s.Kartlar[1];
+            k2.Pasif = true;
+            s.Stoklar.Add(new StokToplami { MalzemeRef = k1.Ref, MalzemeKodu = k1.Kod, AmbarNo = 0, Miktar = 12.5m });
+            s.Stoklar.Add(new StokToplami { MalzemeRef = k1.Ref, MalzemeKodu = k1.Kod, AmbarNo = 1, Miktar = 3 });
+            var m = D(C(s, "GET", "/api/Material/list", null).Govde);
+            var kartlar = (object[])m["data"];
+            Esit(2, kartlar.Length, "iki kart");
+            Esit(k1.Kod, D(kartlar[0])["code"], "kayıt sırası");
+            Esit(false, D(kartlar[1])["active"], "pasif kart");
+            Esit(null, m["next"], "son sayfa");
+            var sonraki = (object[])D(C(s, "GET", "/api/Material/list", null, new Dictionary<string, string> { { "since", k1.Ref.ToString(System.Globalization.CultureInfo.InvariantCulture) } }).Govde)["data"];
+            Esit(1, sonraki.Length, "imleçten sonrası");
+            Esit(400, C(s, "GET", "/api/Material/list", null, new Dictionary<string, string> { { "since", "-1" } }).Durum, "imleç sayı değil");
+            var t = (object[])D(C(s, "GET", "/api/Stock/totals", null).Govde)["data"];
+            Esit(2, t.Length, "ambar başına satır");
+            Esit(12.5m, Convert.ToDecimal(D(t[0])["onHand"], System.Globalization.CultureInfo.InvariantCulture), "miktar");
+            Esit(1, D(t[1])["warehouseNr"], "ambar no");
+        }
+
+        static void T_cari_arama_en_az_uc_karakter_kod_unvan_ve_vergi_noyla_bulur()
+        {
+            var s = Logo();
+            s.CariDetaylari.Add(new CariKaydi { Ref = 501, Kod = "120.01.001", Ad = "Ornek Metal Sanayi", KartTuru = 3, VergiNo = "1234567890", Il = "Il-1" });
+            s.CariDetaylari.Add(new CariKaydi { Ref = 502, Kod = "320.01.002", Ad = "Deneme Tedarik", KartTuru = 2, VergiNo = "1111111111", Pasif = true });
+            Func<string, object[]> ara = q => (object[])C(s, "GET", "/api/Arp/search", null, new Dictionary<string, string> { { "q", q } }).Govde;
+            Esit(1, ara("metal").Length, "ünvanda büyük/küçük harf duyarsız");
+            Esit(1, ara("120.01").Length, "kodda");
+            Esit("120.01.001", D(ara("1234567890")[0])["code"], "vergi no tam");
+            Esit(0, ara("1111111111").Length, "pasif cari aranmaz");
+            Esit(400, C(s, "GET", "/api/Arp/search", null, new Dictionary<string, string> { { "q", "ab" } }).Durum, "iki karakter reddedilir");
+            var c = D(C(s, "GET", "/api/Arp/card/120.01.001", null).Govde);
+            Esit(501, c["logicalRef"], "tek cari");
+            Esit("Il-1", c["city"], "il");
+            Esit(404, C(s, "GET", "/api/Arp/card/YOK", null).Durum, "olmayan cari 404");
+            Esit(0, s.Cagrilar.Count, "okumalar Logo'ya yazmaz");
+        }
+
         /* ---------------- Talep fişi ve karşılama ---------------- */
 
         static Cevap Talep(SahteLogo s, string no, int durum)
@@ -597,12 +642,15 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(23, hepsi.Count, "sorgu sayısı");
+            Esit(27, hepsi.Count, "sorgu sayısı");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");
             Icerir(q.Siparis, "LG_007_03_ORFICHE");
             Icerir(q.Siparis, "O.TRCODE = @tr");
+            Icerir(q.StokToplamlari, "LG_007_03_GNTOTST");
+            Icerir(q.CariAra, "LG_007_CLCARD");
+            Esit("%a\\%b\\_c\\[d\\\\%", SqlOkuma.Desen("a%b_c[d\\"), "LIKE deseni kaçırılır");
             foreach (var yazan in new[] { "UPDATE LG_007_ITEMS SET NAME = 'x'", "SELECT 1; DELETE FROM LG_007_ITEMS", "SELECT * INTO X FROM LG_007_ITEMS", "EXEC sp_who" })
             {
                 var reddedildi = false;

@@ -144,6 +144,21 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   ayarı kapalı gelir (Sistem Ayarları, "Logo: ... fişi gönderimi"). Açmadan önce deneme firmasında `--deneme` koşun: dört tür de denenir; ambar fişi
   için ayar dosyasına `deneme_hedef_ambar` yazın (kaynak `ambar_no`). Logo'da açılan fişin türünü ve ambarlarını gözle denetleyin.
 
+## Logo'dan okuma: malzeme kartı, stok toplamı, cari (kartlar 2116, 2118)
+
+Hepsi yalnız `GET` ve yalnız SQL `SELECT`; Logo'ya hiç yazmaz, COM oturumu kullanmaz.
+
+- `GET /api/Material/list?since={kayıt}`: malzeme kartları kayıt sırasıyla, sayfada en çok 500. Cevap `{ data: [...], next }`;
+  satır `logicalRef, code, name, name3, name4, cardType, unitSetCode, active`. `next` sayfa doluysa son kartın kaydıdır, son sayfada `null`.
+- `GET /api/Stock/totals?since={kayıt}`: aynı kart sayfasının ambar başına eldeki miktarı (`GNTOTST`, ambar no 0 ve üstü; -1 toplam satırı alınmaz).
+  Satır `itemRef, itemCode, warehouseNr, onHand`; stoku olmayan kart satır vermez, `next` yine kart sayfasından gelir.
+- `GET /api/Arp/search?q={metin}`: kullanımdaki (`ACTIVE = 0`) cariler kodda ya da ünvanda (içinde, `LIKE` özel karakterleri kaçırılır) ya da vergi /
+  T.C. kimlik numarasında (tam) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç.
+- `GET /api/Arp/card/{kod}`: tek carinin alanları (`logicalRef, code, name, cardType, taxNr, tckNo, taxOffice, address1, address2, town, city,
+  postCode, phone, email, active`); yoksa 404.
+- DOĞRULANMADI: `ITEMS.ACTIVE`, `GNTOTST` sütunları ve -1 toplam satırı, `CLCARD` adres, vergi ve iletişim sütunları (`Sorgular.Dogrulanmadi`).
+  Deneme firmasında `--olc` ve SQL ile bakın; fark çıkarsa yalnız `SqlOkuma.cs` değişir.
+
 ## Gerçek Logo'ya geçmeden önce
 
 1. Yardımcıyı derleyin, `test` ile sahte Logo testlerinin geçtiğini görün.
@@ -161,7 +176,8 @@ Yardımcı rehberin ölçülmüş etiket ve alan listesiyle yazıldı ve sahte L
 ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 
 1. Rehberin veri sözlüğünde geçmeyen sütunlar (`SqlOkuma.cs` `Sorgular.Dogrulanmadi`): hizmet kartı türü (`SRVCARD.CARDTYPE` 1 alınan, 2 verilen),
-   `STLINE` satır sütunları, talep satırını `LOGICALREF` ile okuma, satış teklifi başlık ve satır sütunları.
+   `STLINE` satır sütunları, talep satırını `LOGICALREF` ile okuma, satış teklifi başlık ve satır sütunları; 2116 ve 2118 okumalarının
+   `ITEMS.ACTIVE`, `GNTOTST` ve `CLCARD` sütunları.
 2. Dövizli satın alma siparişinde `CURRSEL_TOTAL` 1 kalır.
 3. Talep fişi satırlarında `INTERNAL_REFERENCE` okunabilir (satır eşleme ve karşılama için).
 4. Malzeme XML'indeki `FACTORY_PARAMS` bloğu rehberin ölçülmüş örneğinden alındı.

@@ -13,6 +13,10 @@ namespace LogoYardimcisi
         public const int StokKoduEnCok = 24;
         public const int FisNoEnCok = 16;
         public const int MalKabulEnCok = 500;
+        // 2116 ve 2118 okumaları: sayfa başına kart sayısı ve arama sonucu sınırı.
+        public const int KartSayfasi = 500;
+        public const int CariAramaEnCok = 20;
+        public const int CariAramaEnAz = 3;
         // 4 (sabit kıymet) DEPREC_TYPE, REVAL_FLAG ister; değerleri ölçülmedi, gönderilmez.
         static readonly int[] KartTurleri = { 1, 10, 11, 12, 13 };
         const string OzelKod = "TMI";
@@ -33,6 +37,7 @@ namespace LogoYardimcisi
 
         static readonly Regex MalzemeVarMi = new Regex("^/api/Material/exists/([^/]+)$");
         static readonly Regex CariBul = new Regex("^/api/Arp/find/([^/]+)$");
+        static readonly Regex CariKarti = new Regex("^/api/Arp/card/([^/]+)$");
         static readonly Regex HizmetVarMi = new Regex("^/api/(Purchase|Sales)Service/exists/([^/]+)$");
         static readonly Regex HizmetYaz = new Regex("^/api/(Purchase|Sales)Service/(AddRich|UpdateRich)$");
         static readonly Regex SiparisBul = new Regex("^/api/PurchaseOrder/find/([^/]+)$");
@@ -83,6 +88,10 @@ namespace LogoYardimcisi
             {
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
                 if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
+                if (yol == "/api/Material/list") return MalzemeListesi(sorgu);
+                if (yol == "/api/Stock/totals") return StokToplamlari(sorgu);
+                if (yol == "/api/Arp/search") return CariAra(sorgu);
+                if ((m = CariKarti.Match(yol)).Success) return CariOku(Coz(m, 1));
                 if (yol == "/api/Lookup/unitsets") return BirimSetleri();
                 if (yol == "/api/Lookup/warehouses") return Ambarlar();
                 if (yol == "/api/Arp/list") return Cariler();
@@ -259,6 +268,106 @@ namespace LogoYardimcisi
                 l.Add(s);
             }
             return new Cevap(200, l);
+        }
+
+        static int Imlec(Dictionary<string, string> sorgu)
+        {
+            string m;
+            var son = 0;
+            if (sorgu.TryGetValue("since", out m) && m != "" && (!int.TryParse(m, NumberStyles.None, CultureInfo.InvariantCulture, out son)))
+                throw new GecersizIstek("since tam sayı olmalı.");
+            return son;
+        }
+
+        // Sayfa: { data, next }. next, sayfa doluysa son kartın kaydıdır (sonraki istek since=next); son sayfada null.
+        static Dictionary<string, object> Sayfa(List<object> veri, int sonRef, bool dolu)
+        {
+            var z = new Dictionary<string, object>();
+            z["data"] = veri;
+            z["next"] = dolu ? (object)sonRef : null;
+            return z;
+        }
+
+        Cevap MalzemeListesi(Dictionary<string, string> sorgu)
+        {
+            var kartlar = oku.MalzemeKartlari(Imlec(sorgu), KartSayfasi);
+            var l = new List<object>();
+            var son = 0;
+            foreach (var k in kartlar)
+            {
+                var o = new Dictionary<string, object>();
+                o["logicalRef"] = k.Ref;
+                o["code"] = k.Kod;
+                o["name"] = k.Ad;
+                o["name3"] = k.Aciklama2;
+                o["name4"] = k.Aciklama3;
+                o["cardType"] = k.KartTuru;
+                o["unitSetCode"] = k.BirimSeti;
+                o["active"] = !k.Pasif;
+                l.Add(o);
+                if (k.Ref > son) son = k.Ref;
+            }
+            return new Cevap(200, Sayfa(l, son, kartlar.Count >= KartSayfasi));
+        }
+
+        // Stok satırı olmayan kart dönmez; sayfa kart sayısıyla ölçülür, sonraki imleç sayfadaki en büyük kart kaydıdır.
+        Cevap StokToplamlari(Dictionary<string, string> sorgu)
+        {
+            var since = Imlec(sorgu);
+            var satirlar = oku.StokToplamlari(since, KartSayfasi);
+            var kartlar = oku.MalzemeKartlari(since, KartSayfasi);
+            var l = new List<object>();
+            foreach (var x in satirlar)
+            {
+                var o = new Dictionary<string, object>();
+                o["itemRef"] = x.MalzemeRef;
+                o["itemCode"] = x.MalzemeKodu;
+                o["warehouseNr"] = x.AmbarNo;
+                o["onHand"] = x.Miktar;
+                l.Add(o);
+            }
+            var son = 0;
+            foreach (var k in kartlar) if (k.Ref > son) son = k.Ref;
+            return new Cevap(200, Sayfa(l, son, kartlar.Count >= KartSayfasi));
+        }
+
+        static Dictionary<string, object> CariNesnesi(CariKaydi c)
+        {
+            var o = new Dictionary<string, object>();
+            o["logicalRef"] = c.Ref;
+            o["code"] = c.Kod;
+            o["name"] = c.Ad;
+            o["cardType"] = c.KartTuru;
+            o["taxNr"] = c.VergiNo;
+            o["tckNo"] = c.TcNo;
+            o["taxOffice"] = c.VergiDairesi;
+            o["address1"] = c.Adres1;
+            o["address2"] = c.Adres2;
+            o["town"] = c.Ilce;
+            o["city"] = c.Il;
+            o["postCode"] = c.PostaKodu;
+            o["phone"] = c.Telefon;
+            o["email"] = c.EPosta;
+            o["active"] = !c.Pasif;
+            return o;
+        }
+
+        Cevap CariAra(Dictionary<string, string> sorgu)
+        {
+            string q;
+            if (!sorgu.TryGetValue("q", out q) || q == null || q.Trim().Length < CariAramaEnAz)
+                throw new GecersizIstek("q en az " + CariAramaEnAz + " karakter olmalı.");
+            q = q.Trim();
+            if (q.Length > 100) throw new GecersizIstek("q en çok 100 karakter olabilir.");
+            var l = new List<object>();
+            foreach (var c in oku.CariAra(q, CariAramaEnCok)) l.Add(CariNesnesi(c));
+            return new Cevap(200, l);
+        }
+
+        Cevap CariOku(string kod)
+        {
+            var c = oku.Cari(kod);
+            return c == null ? Cevap.Hata(404, "Arp not found") : new Cevap(200, CariNesnesi(c));
         }
 
         Cevap Cariler()
