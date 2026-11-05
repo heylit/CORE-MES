@@ -1,14 +1,15 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CokSatir, Dugme, DurumKutusu, FormPenceresi, Girdi, IsaretKutusu, Pencere, Rozet, Secim, useBildirim, type Secenek,
 } from '../../../ortak/arayuz/index.ts';
-import { hataIletisi } from '../../../ortak/veri/api.ts';
+import { api, hataIletisi } from '../../../ortak/veri/api.ts';
+import type { FirmaAyrintiCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { useForm } from '../../../ortak/veri/form.ts';
 import { yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
 import {
   acikKalemler, akisKomutu, aktifHesaplar, bosDegerler, cekDugmeleri, cekDurumKomutu, cekEkAlanIster, duzenliOdendiKomutu, firmaCoz,
-  firmaEtiketleri, gecerliKdvOranlari, OLAY_KATEGORILERI, OLAYLAR, olayTarafi, paraBirimleri, planAlloc, takiptekiCekler,
+  firmaEtiketleri, gecerliKdvOranlari, OLAY_KATEGORILERI, OLAYLAR, olayTarafi, paraBirimleri, planAlloc, takiptekiCekler, vadeVarsayilani,
   type AkisDegerleri, type CekDurumu, type KomutSonucu, type OdemeSekli, type OlayTuru,
 } from './akislar.ts';
 import { kisaTarih, paraMetni, tl } from './bicim.ts';
@@ -202,6 +203,21 @@ function FirmaIpucu({ d, finans, side }: GovdeOzellikleri) {
 function FaturaAlanlari(p: GovdeOzellikleri) {
   const { d, dg, hata, V, finans, side, tur } = p;
   const kategoriler = tur === 'satis' ? OLAY_KATEGORILERI.satis : OLAY_KATEGORILERI.alis;
+  // 2132-3: firma seçilince vadesi kartından okunur; kullanıcı ödeme şeklini ya da vadeyi değiştirdiyse varsayılan üstüne yazılmaz.
+  const fr = firmaCoz(V, d.party, side);
+  const firmaId = 'id' in fr ? fr.id : null;
+  const firmaKarti = useQuery({
+    queryKey: ['finans', 'yeni', 'firma-vadesi', firmaId], enabled: firmaId !== null,
+    queryFn: () => api.get<FirmaAyrintiCevabi>(`/musteri-tedarikci/firmalar/${firmaId}`),
+  });
+  const [elle, elleYaz] = useState(false);
+  const vadeGunu = firmaKarti.data === undefined ? undefined : firmaKarti.data.firma.vadeGunu;
+  useEffect(() => {
+    if (elle || firmaId === null || vadeGunu === undefined || !d.date) return;
+    const v = vadeVarsayilani(vadeGunu, d.date);
+    if (v.method !== d.method || (v.due !== undefined && v.due !== d.due)) dg(v);
+  }, [elle, firmaId, vadeGunu, d.date, d.method, d.due, dg]);
+  const elleDegistir = (yama: Partial<AkisDegerleri>) => { elleYaz(true); dg(yama); };
   const kdvler = gecerliKdvOranlari(V, finans.motor.bugun);
   const k = sayi(d.kdv), a = sayi(d.amount);
   const net = d.incl ? a / (1 + k / 100) : a;
@@ -225,13 +241,13 @@ function FaturaAlanlari(p: GovdeOzellikleri) {
       <Secim etiket="Tevkifat" value={d.tevk} secenekler={TEVKIFATLAR.map(([deger, baslik]) => ({ deger, baslik }))} onChange={(e) => dg({ tevk: e.target.value })} />
       <IsaretKutusu etiket="Girdiğim tutar KDV dahil" checked={d.incl} onChange={(e) => dg({ incl: e.target.checked })} />
       {a > 0 && <p className="tc-fy-not">KDV hariç {paraMetni(net, d.pb)} · KDV dahil {paraMetni(net * (1 + k / 100), d.pb)}</p>}
-      <Serit etiket={side === 'gelir' ? 'Para ne zaman geliyor?' : 'Ne zaman ödenecek?'} secenekler={yontemler} secili={d.method} sec={(method) => dg({ method })} />
+      <Serit etiket={side === 'gelir' ? 'Para ne zaman geliyor?' : 'Ne zaman ödenecek?'} secenekler={yontemler} secili={d.method} sec={(method) => elleDegistir({ method })} />
       {d.method === 'vadeli' && (
         <div className="tc-fy-grup">
-          <Girdi etiket="Vade tarihi" type="date" value={d.due} hata={hata('due')} onChange={(e) => dg({ due: e.target.value })} />
+          <Girdi etiket="Vade tarihi" type="date" value={d.due} hata={hata('due')} onChange={(e) => elleDegistir({ due: e.target.value })} />
           <div className="tc-fy-cipler" role="group" aria-label="Vade kısayolu">
             {VADE_KISAYOLLARI.map((g) => (
-              <button key={g} type="button" className="tc-fy-serit-dugme" onClick={() => dg({ due: addDays(d.date || finans.motor.bugun, g) })}>{g ? `+${g} gün` : 'Bugün'}</button>
+              <button key={g} type="button" className="tc-fy-serit-dugme" onClick={() => elleDegistir({ due: addDays(d.date || finans.motor.bugun, g) })}>{g ? `+${g} gün` : 'Bugün'}</button>
             ))}
           </div>
         </div>

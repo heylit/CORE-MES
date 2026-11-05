@@ -82,4 +82,42 @@ describe('KayitCekmecesi', () => {
       { yontem: 'POST', yol: '/finans/cekler/1/tahsile-ver', govde: { surum: 1 } },
     ]));
   });
+
+  // 2132-3 teyit: vade varsayılanı firmanın vadesidir; vadesi yoksa peşin. Kullanıcının seçimi korunur.
+  const firmaCevabi = (vadeGunu: number | null) => () => json(200, { firma: { id: 1, vadeGunu }, adresler: [] });
+  const firmaSec = (p: HTMLElement) => fireEvent.change(within(p).getByLabelText(/^Müşteri/), { target: { value: finans.V.etiket.get(1) } });
+  const secili = (p: HTMLElement) => within(within(p).getByRole('group', { name: 'Para ne zaman geliyor?' })).getAllByRole('button').find((b) => b.getAttribute('aria-pressed') === 'true')?.textContent;
+
+  it('2132-3: satışta firma seçilince vade firmanın vade günüyle dolar; fatura tarihi değişince kayar', async () => {
+    sunucuKur(YAZAN, { 'GET /musteri-tedarikci/firmalar/1': firmaCevabi(45) });
+    const p = ac('satis');
+    fireEvent.change(within(p).getByLabelText(/^Fatura tarihi/), { target: { value: '2026-10-01' } });
+    firmaSec(p);
+    await waitFor(() => expect((within(p).getByLabelText(/^Vade tarihi/) as HTMLInputElement).value).toBe('2026-11-15'));
+    expect(secili(p)).toBe('Vadeli, sonra gelecek');
+    fireEvent.change(within(p).getByLabelText(/^Fatura tarihi/), { target: { value: '2026-10-10' } });
+    await waitFor(() => expect((within(p).getByLabelText(/^Vade tarihi/) as HTMLInputElement).value).toBe('2026-11-24'));
+  });
+
+  it('2132-3: firmanın vadesi yoksa ödeme şekli peşin gelir; kullanıcı değiştirince varsayılan geri yazılmaz', async () => {
+    sunucuKur(YAZAN, { 'GET /musteri-tedarikci/firmalar/1': firmaCevabi(null) });
+    const p = ac('satis');
+    firmaSec(p);
+    await waitFor(() => expect(secili(p)).toBe('Peşin, para geldi'));
+    fireEvent.click(within(p).getByRole('button', { name: 'Vadeli, sonra gelecek' }));
+    fireEvent.change(within(p).getByLabelText(/^Vade tarihi/), { target: { value: '2026-12-31' } });
+    fireEvent.change(within(p).getByLabelText(/^Fatura tarihi/), { target: { value: '2026-10-12' } });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(secili(p)).toBe('Vadeli, sonra gelecek');
+    expect((within(p).getByLabelText(/^Vade tarihi/) as HTMLInputElement).value).toBe('2026-12-31');
+  });
+
+  it('2132-3: firma kartı okunamazsa (yetki yok) form eski varsayılanla kalır: vadeli, bugün + 30', async () => {
+    sunucuKur(YAZAN, { 'GET /musteri-tedarikci/firmalar/1': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Yetkiniz yok.' }) });
+    const p = ac('satis');
+    firmaSec(p);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(secili(p)).toBe('Vadeli, sonra gelecek');
+    expect((within(p).getByLabelText(/^Vade tarihi/) as HTMLInputElement).value).toBe('2026-11-14');
+  });
 });
