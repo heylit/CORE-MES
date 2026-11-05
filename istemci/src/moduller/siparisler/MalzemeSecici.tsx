@@ -11,13 +11,27 @@ export interface SecilenKart {
   kod: string | null;
   ad: string;
   birim: string | null;
+  aciklamalar: readonly string[];
 }
+
+// 2120: satırda kartın adı, altında Açıklama 1-3; ad yoksa tire, açıklama yoksa ikinci satır çizilmez.
+export function KalemMetni({ ad, aciklamalar }: { ad: string | null; aciklamalar: readonly string[] }) {
+  return (
+    <span className="tc-sp-kalem">
+      <span>{ad ?? '—'}</span>
+      {aciklamalar.length > 0 && <span className="tc-sp-kalem-ac">{aciklamalar.join(' · ')}</span>}
+    </span>
+  );
+}
+
+export const secilenKartMetni = (k: SecilenKart): string =>
+  [`${k.kod ?? ''} ${k.ad}${k.birim ? ` (${k.birim})` : ''}`.trim(), ...k.aciklamalar].join(' · ');
 
 
 // Sunucu yalnız aktif mamul, yarı mamul ve ticari mal kartlarını verir (SIP-02).
 const SUTUNLAR: readonly Sutun<MalzemeSecenegi>[] = [
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, kirilmaz: true, hucre: (m) => m.kod },
-  { anahtar: 'ad', baslik: 'Ad', hucre: (m) => m.ad ?? '—' },
+  { anahtar: 'ad', baslik: 'Ad', hucre: (m) => <KalemMetni ad={m.ad} aciklamalar={m.aciklamalar} /> },
   { anahtar: 'birim', baslik: 'Birim', hucre: (m) => m.birim ?? '—' },
 ];
 
@@ -51,7 +65,7 @@ export function MalzemeSecici({ acik, kapat, sec }: Ozellikler) {
             sutunlar={SUTUNLAR}
             satirlar={satirlar}
             satirAnahtari={(m) => m.no}
-            satirSec={(m) => sec({ no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim })}
+            satirSec={(m) => sec({ no: m.no, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, aciklamalar: m.aciklamalar })}
             mesgul={liste.isPending}
             bosMesaj={liste.isPending ? 'Yükleniyor' : 'Satılabilir kart bulunamadı.'}
           />

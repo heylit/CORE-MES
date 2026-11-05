@@ -95,6 +95,8 @@ export const siparisSatiriSemasi = z.object({
   // Kod, ad ve birim malzemeden okunur; bulunamazsa null (uydurulmaz).
   malzemeKodu: z.string().nullable(),
   malzemeAdi: z.string().nullable(),
+  // 2120: kartın Açıklama 1-3'ü, dolu olanlar sırasıyla; kart iptal ya da açıklamasızsa boş.
+  aciklamalar: z.array(z.string()),
   birim: z.string().nullable(),
   miktar: ondalikMetinSemasi,
   // Fiyatsız kalemde (201 a) ya da fiyatı görmeyene (180) null.
@@ -242,6 +244,9 @@ export const teklifSatiriSemasi = z.object({
   sira: z.number().int(),
   malzemeNo: z.number().int().nullable(),
   malzemeKodu: z.string().nullable(),
+  // 2120: kartın adı ve Açıklama 1-3'ü; kartsız satırda null ve boş.
+  malzemeAdi: z.string().nullable(),
+  aciklamalar: z.array(z.string()),
   tanim: z.string(),
   birim: z.string().nullable(),
   miktar: ondalikMetinSemasi,
@@ -326,6 +331,7 @@ export const malzemeSecenegiSemasi = z.object({
   ad: z.string().nullable(),
   tur: z.string(),
   birim: z.string().nullable(),
+  aciklamalar: z.array(z.string()),
 });
 export const malzemeSecenekleriCevabi = z.object({
   satirlar: z.array(malzemeSecenegiSemasi), toplam: z.number().int().nullable(), sayfa: z.number().int(), sayfaBoyu: z.number().int(),

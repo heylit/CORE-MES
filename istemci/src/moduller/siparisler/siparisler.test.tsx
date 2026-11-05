@@ -34,13 +34,13 @@ const SIPARIS_TASLAK = {
 const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'onayli', musteriSiparisNo: null, firmaAd: 'Deneme Musteri B', firmaId: 8, onayZamani: '2026-10-02T10:00:00+03:00' } satisfies Siparis;
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
 const SATIR = {
-  id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', birim: 'adet', miktar: '100', birimFiyat: '12.5000',
+  id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1', 'Deneme aciklama 2'], birim: 'adet', miktar: '100', birimFiyat: '12.5000',
   tutar: '1250.00', termin: null, aciklama: null,
 };
 const AYRINTI_TASLAK = { ...SIPARIS_TASLAK, satirlar: [SATIR] } satisfies SiparisAyrintisi;
 const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-10-02T10:00:00+03:00', surum: 3 } satisfies SiparisAyrintisi;
 
-const TEKLIF_SATIR = { id: 11, sira: 1, malzemeNo: null, malzemeKodu: null, tanim: 'Deneme Mil 20mm', birim: null, miktar: '40' };
+const TEKLIF_SATIR = { id: 11, sira: 1, malzemeNo: null, malzemeKodu: null, malzemeAdi: null, aciklamalar: [] as string[], tanim: 'Deneme Mil 20mm', birim: null, miktar: '40' };
 const TEKLIF = {
   id: 21, no: 'TK-2026-0021', durum: 'verildi', firmaId: 7, firmaAd: 'Deneme Musteri A', baslik: 'Deneme braket ihtiyacı', paraBirimi: 'TRY',
   istenenTarih: '2026-11-15', aciklama: 'Deneme açıklaması', not: null, kabulSurumu: null, siparisId: null, sonSurumNo: 1,
@@ -70,7 +70,7 @@ const FIRMALAR = {
 } satisfies FirmaSecimCevabi;
 // Satılan türlerin süzgeci sunucudadır; seçici gelen satırları olduğu gibi gösterir.
 const MALZEMELER = {
-  satirlar: [{ no: 31, kod: 'DNM-001', ad: 'Deneme Braket', tur: 'mamul', birim: 'adet' }, { no: 32, kod: 'DNM-002', ad: 'Deneme Mil', tur: 'mamul', birim: 'adet' }],
+  satirlar: [{ no: 31, kod: 'DNM-001', ad: 'Deneme Braket', tur: 'mamul', birim: 'adet', aciklamalar: ['Deneme aciklama 1'] }, { no: 32, kod: 'DNM-002', ad: 'Deneme Mil', tur: 'mamul', birim: 'adet', aciklamalar: [] }],
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 } satisfies MalzemeSecenekleriCevabi;
 
@@ -208,6 +208,13 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(screen.getByText('12,50 TRY')).toBeTruthy();
     expect(screen.getByText('Genel toplam').closest('div')!.textContent).toContain('1.500,00 TRY');
     expect(screen.getByText('Taslak sipariş')).toBeTruthy();
+  });
+
+  it('kalemde kartın adı ve Açıklama 1-3 görünür (2120)', async () => {
+    sunucuKur(FIYAT_OKUYUCU);
+    ac('/siparisler/5');
+    await screen.findByText('Deneme Braket');
+    expect(screen.getByText('Deneme aciklama 1 · Deneme aciklama 2')).toBeTruthy();
   });
 
   it('fiyat yetkisi olmayan kalem ve miktarı görür; fiyat, tutar ve toplamlar gizlenir (180)', async () => {
@@ -668,7 +675,7 @@ describe('Teklifler', () => {
     const istekler = sunucuKur(YAZAR, (yontem, yol) => {
       if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, TEKLIF_KABUL);
       if (yontem === 'POST' && yol === '/siparisler/teklifler/21/satirlar/11/kart-bagla') {
-        return json(200, { ...TEKLIF_KABUL, satirlar: [{ ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001' }] } satisfies TeklifAyrintisi);
+        return json(200, { ...TEKLIF_KABUL, satirlar: [{ ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1'] }] } satisfies TeklifAyrintisi);
       }
       return undefined;
     });
@@ -680,6 +687,10 @@ describe('Teklifler', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/satirlar/11/kart-bagla', govde: { surum: 5, malzemeNo: 31 } });
     await waitFor(() => expect(screen.queryByText(/satırda malzeme seçilmedi/)).toBeNull());
+    // 2120: bağlanan kartın kodu, adı ve açıklaması satırda görünür.
+    const satir = screen.getByText('DNM-001').closest('tr')!;
+    expect(within(satir).getByText('Deneme Braket')).toBeTruthy();
+    expect(within(satir).getByText('Deneme aciklama 1')).toBeTruthy();
   });
 
   it('yeni teklif talebi: firma kimlikle, kartsız satır tanımla gider; istek kimliği taşır', async () => {
@@ -731,7 +742,7 @@ describe('Teklif termin ve fiyat (44)', () => {
   // 65 a: satış rolü dener, fiyat ve maliyet toplamını görür; döküm maliyet okuyanda.
   const SATISCI: Kullanici = { id: 9, ad: 'Deneme Satisci', islemler: [...KOK, 'siparisler.yaz', 'siparisler.fiyat-oku', 'siparisler.termin-dene'] };
   const MUDUR: Kullanici = { ...SATISCI, islemler: [...SATISCI.islemler, 'siparisler.maliyet-oku'] };
-  const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', birim: 'adet' };
+  const KARTLI_SATIR = { ...TEKLIF_SATIR, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1'], birim: 'adet' };
   const TEKLIF_KARTLI = { ...TEKLIF_YENI, satirlar: [KARTLI_SATIR] } satisfies TeklifAyrintisi;
   const DENEME = {
     durum: 'hazir', planSurumu: '412', gecerlilik: '2099-06-30', istenenTermin: null, planTermini: '2099-07-14', termin: '2099-07-14', terminGun: 14,
