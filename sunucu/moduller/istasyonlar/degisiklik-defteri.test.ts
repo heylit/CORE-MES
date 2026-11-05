@@ -95,7 +95,7 @@ describe('iş merkezi, istasyon ve makine kartı değişiklik defteri (gerçek P
     });
   const defter = (tablo: string, id: number): Promise<Defter[]> =>
     o().sahip.sorgu<Defter>(
-      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 AND anahtar = jsonb_build_object('id', $2::int) ORDER BY id",
+      "SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 AND anahtar = jsonb_build_object('id', $2::int) ORDER BY denetim_degisiklik.id",
       [tablo, id],
     );
   const ozet = (satirlar: Defter[]): [string, number | null, string[]][] => satirlar.map((s) => [s.islem, s.kisi_id, Object.keys(s.alanlar)]);
@@ -145,7 +145,7 @@ describe('istasyon plan ayarı, makine durumu ve istasyon eklemesi değişiklik 
       return is(db);
     });
   const defter = (tablo: string): Promise<Defter[]> =>
-    o().sahip.sorgu<Defter>('SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 ORDER BY id', [tablo]);
+    o().sahip.sorgu<Defter>('SELECT id::text, islem, alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = $1 ORDER BY denetim_degisiklik.id', [tablo]);
 
   before(async () => {
     ortam = await testVeritabaniKur('istasyonlar_plan_defter');
