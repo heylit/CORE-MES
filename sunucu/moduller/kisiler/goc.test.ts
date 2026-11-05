@@ -149,6 +149,8 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'uretim-emirleri.kapanis-oku',
     // 5.6 rol göçü (1706 a, 2068-2 teyit).
     'sayfa.geometri', 'geometri.oku',
+    // Ortak Dosyalar sayfası bütün rollere (2067-3 b).
+    'sayfa.ortak-dosyalar',
   ].sort();
   const OPERATOR_SONUNDA = [
     'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama',
@@ -157,6 +159,8 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'uretim-emirleri.ara-istasyon',
     // İdari İşler göçü (kullanıcı kararı 216 a, 19.10.2026).
     'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
+    // Ortak Dosyalar sayfası bütün rollere (2067-3 b).
+    'sayfa.ortak-dosyalar',
   ].sort();
 
   // Her biri elle yapılmış bir değişikliktir; göç hangisini görürse görsün üstüne yazmadan durmalıdır.
