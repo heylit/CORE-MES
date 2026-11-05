@@ -218,6 +218,8 @@ export const odemePlaniSatiri = z.object({
 export const odemePlaniGovdesi = z.object({
   teklifId: uuid,
   satirlar: z.array(odemePlaniSatiri).min(1, 'Ödeme planında en az bir satır olur.').max(12),
+  // 2132-7: siparişin KDV oranı (plan KDV dahildir). Gelmezse siparişteki seçim değişmez.
+  kdvOrani: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/, 'KDV oranı geçersiz.').optional(),
   ...beklenenSurum,
 });
 export const siparisTakibiCevabi = z.object({
@@ -226,6 +228,10 @@ export const siparisTakibiCevabi = z.object({
     // Stok mal kabulündeki irsaliyeyi sipariş satırından okumak için (GET /stok/siparis-irsaliyeleri).
     satirIdleri: z.array(z.number().int()),
     paraBirimi: z.string(),
+    // 2132-7: planın KDV oranı (elle seçilmediyse finansın genel oranı; finansta geçerli oran yoksa boş) ve seçilebilecek oranlar.
+    kdvOrani: z.string().nullable(),
+    kdvElle: z.boolean(),
+    kdvSecenekleri: z.array(z.string()),
     odemePlani: z.array(odemePlaniSatiri),
     // Bağlı alış faturaları (finansta girilir); tutar gelmez (FNS-48).
     faturalar: z.array(z.object({ belgeNo: z.string().nullable(), belgeTarihi: tarih, vade: tarih })),

@@ -876,7 +876,7 @@ export async function siparisSatiriVarMi(db: Db, id: number): Promise<boolean> {
 
 // Kart #1124 (SAT-74): siparişin KDV hariç toplamı (teklif toplamı formülü, sipariş satırlarının miktarıyla; kalem bazlı kararda
 // yalnız bu tedarikçiye düşen kalemler), avans ve kalan tutarı, vade günü ve tarihleri. numeric ile hesaplanır.
-export interface SiparisOdemeKosulu { teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null }
+export interface SiparisOdemeKosulu { teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; kdvOrani: string | null }
 export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisOdemeKosulu[]> {
   return db.sorgu<SiparisOdemeKosulu>(
     `WITH t AS (
@@ -885,12 +885,17 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,
-         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim
+         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim, o.kdv_orani
          FROM satin_alma_siparis o JOIN satin_alma_teklif q ON q.talep_id = o.talep_id AND q.id = o.teklif_id
         WHERE o.talep_id = $1)
      SELECT teklif_id AS "teklifId", toplam, round(toplam * avans_yuzdesi / 100, 2) AS avans, toplam - round(toplam * avans_yuzdesi / 100, 2) AS kalan,
-            vade_gun AS "vadeGun", ${ISO('siparis_tarihi')} AS "siparisTarihi", ${ISO('beklenen_teslim')} AS "beklenenTeslim"
+            vade_gun AS "vadeGun", ${ISO('siparis_tarihi')} AS "siparisTarihi", ${ISO('beklenen_teslim')} AS "beklenenTeslim",
+            kdv_orani::text AS "kdvOrani"
        FROM t`, [talepId]);
+}
+// 2132-7: siparişin elle seçilen KDV oranı (boş: genel oran).
+export async function siparisKdvOraniYaz(db: Db, talepId: string, teklifId: string, oran: string | null): Promise<void> {
+  await db.sorgu('UPDATE satin_alma_siparis SET kdv_orani = $3 WHERE talep_id = $1 AND teklif_id = $2', [talepId, teklifId, oran]);
 }
 
 // ---- Kg fiyatı (SAT-77): yalnız eklenir. TL karşılığı çağıranın verdiği kurla (para birimi, kur dizileri); kuru olmayan boş.

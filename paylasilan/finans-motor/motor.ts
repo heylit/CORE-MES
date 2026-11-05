@@ -505,7 +505,7 @@ export function finansMotoru(baslangic?: string) {
     return { weeks, open, min, end: bal };
   }
 
-  // Siparişten beklenen ödemeler: satın almanın siparişte girdiği plan, KDV hariç tahmin. Nakit planına ayrı satır olarak
+  // Siparişten beklenen ödemeler: satın almanın siparişte girdiği plan, KDV dahil tahmin. Nakit planına ayrı satır olarak
   // girer; forecast, Monte Carlo ve skor bunları saymaz. Kuru girilmemiş kalem toplama katılmaz, sayısı ayrıca döner (tutar
   // uydurulmaz). Tutar sunucunun tahminTl'sidir (ödenmiş avans düşülmüş); vadesi geçmiş kalem ödenmiş olabilir, tahmine girmez.
   const siparisTahmini = (o: SiparisKalemi): string | null | undefined => (o.tahminTl !== undefined ? o.tahminTl : o.tutarTl);
@@ -522,7 +522,7 @@ export function finansMotoru(baslangic?: string) {
       if (!tl) continue;
       const w = weeks[i]!;
       w.tutar += tl;
-      w.items.push({ date: o.vade, amt: -tl, label: 'Sipariş ' + (o.siparisNo || '') + ': ' + (o.firmaAdi || '') + ' (KDV hariç tahmin)' });
+      w.items.push({ date: o.vade, amt: -tl, label: 'Sipariş ' + (o.siparisNo || '') + ': ' + (o.firmaAdi || '') + ' (KDV dahil tahmin)' });
     }
     return { weeks, toplam: sum(weeks, (w) => w.tutar), kursuz, gecikmis };
   }

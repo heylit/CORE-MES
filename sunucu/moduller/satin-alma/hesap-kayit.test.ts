@@ -67,7 +67,7 @@ test('SA-HESAP H6: GKK kalitesi [boş, hepsi uygun, hepsi ret, karışık]', () 
 
 test('SA-HESAP H6: varsayılan ödeme planı, avans 30 vade 60 teslimden sayılır', () => {
   assert.deepEqual(
-    varsayilanOdemePlani({ toplam: '100', avans: '30', kalan: '70', vadeGun: 60, siparisTarihi: '2026-10-15', beklenenTeslim: '2026-11-01' }, '2026-10-15'),
+    varsayilanOdemePlani({ toplam: '100', avans: '30', kalan: '70', vadeGun: 60, siparisTarihi: '2026-10-15', beklenenTeslim: '2026-11-01' }, '2026-10-15', null),
     [
       { tur: 'avans', vade: '2026-10-15', yontem: 'banka', tutar: '30' },
       { tur: 'vade', vade: '2026-12-31', yontem: 'banka', tutar: '70' },
@@ -77,9 +77,21 @@ test('SA-HESAP H6: varsayılan ödeme planı, avans 30 vade 60 teslimden sayıl�
 
 test('SA-HESAP H6: varsayılan ödeme planı, peşin tek satır bugün', () => {
   assert.deepEqual(
-    varsayilanOdemePlani({ toplam: '100', avans: '0', kalan: '100', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null }, '2026-10-15'),
+    varsayilanOdemePlani({ toplam: '100', avans: '0', kalan: '100', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null }, '2026-10-15', null),
     [{ tur: 'vade', vade: '2026-10-15', yontem: 'banka', tutar: '100' }],
   );
+});
+
+test('2132-2, 2132-7: varsayılan plan KDV dahildir; avans ve toplam ayrı yuvarlanır, satırların toplamı KDV dahil toplamdır', () => {
+  // 109 x 1,20 = 130,80; avans 32,70 x 1,20 = 39,24; kalan 91,56.
+  assert.deepEqual(
+    varsayilanOdemePlani({ toplam: '109', avans: '32.7', kalan: '76.3', vadeGun: 60, siparisTarihi: '2026-10-10', beklenenTeslim: '2026-10-20' }, '2026-10-15', '20').map((x) => x.tutar),
+    ['39.24', '91.56'],
+  );
+  // Yuvarlama: 33,33 x 1,10 = 36,663 -> 36,66; toplam 100 x 1,10 = 110; kalan 73,34. Oran %1 ve %0.
+  assert.deepEqual(varsayilanOdemePlani({ toplam: '100', avans: '33.33', kalan: '66.67', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null }, '2026-10-15', '10').map((x) => x.tutar), ['36.66', '73.34']);
+  assert.deepEqual(varsayilanOdemePlani({ toplam: '0.5', avans: '0', kalan: '0.5', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null }, '2026-10-15', '1').map((x) => x.tutar), ['0.51']);
+  assert.deepEqual(varsayilanOdemePlani({ toplam: '100', avans: '0', kalan: '100', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null }, '2026-10-15', '0').map((x) => x.tutar), ['100']);
 });
 
 test('SA-HESAP H6: gecikme günü [termin yok, açık 5 gün geç, termin ileride, dönüş İstanbul gününe göre]', () => {

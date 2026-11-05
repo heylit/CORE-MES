@@ -171,7 +171,7 @@ function HaftaHafta({ finans }: { finans: FinansVerisi }) {
   const spVar = sp.toplam > 0 || sp.kursuz > 0 || sp.gecikmis > 0;
   const spK = useMemo(() => motor.siparisDahilKapanis(f, sp), [motor, f, sp]);
   const ton = (v: number) => (v < 0 ? 'eksi' as const : v < th ? 'uyari' as const : null);
-  const spNotu = `Faturası gelmemiş siparişlerin ödeme planı da düşülür: siparişten ${tl(sp.toplam)}, KDV hariç tahmin.`
+  const spNotu = `Faturası gelmemiş siparişlerin ödeme planı da düşülür: siparişten ${tl(sp.toplam)}, KDV dahil tahmin.`
     + (sp.kursuz ? ` ${sp.kursuz} kalemin kuru girilmediği için katılmadı.` : '')
     + (sp.gecikmis ? ` Vadesi geçmiş ${sp.gecikmis} kalem katılmadı; listede kontrol edin.` : '')
     + ' Firmaya ödenmiş avans düşülür. Fatura gelince açık borç olarak plana zaten girer ve bu satırdan düşer.';
@@ -311,8 +311,8 @@ function BeklenenOdemeler({ liste, bugun }: { liste: readonly BeklenenOdeme[]; b
     <Kart baslik="Siparişten beklenen ödemeler" baslikEki={<span className="tc-fy-not">Satın almanın siparişte girdiği vadeler</span>}>
       <Tablo<BeklenenOdeme> etiket="Siparişten beklenen ödemeler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(o) => o.id} bosMesaj="Siparişten beklenen ödeme yok." />
       <p className="tc-fy-not">
-        Tutarlar KDV hariç tahminidir; hafta hafta planda, vade takviminde ve ana sayfada ayrı satır olarak görünür, öteki sayılara ve olasılık hesabına katılmaz.
-        Fatura girilip siparişe bağlanınca ödeme açık borç olarak faturadan izlenir ve bu listeden düşer. Vadesi geçmiş satır tahmine girmez; ödendiyse ödemeyi girin.
+        Tutarlar KDV dahil tahminidir; hafta hafta planda, vade takviminde ve ana sayfada ayrı satır olarak görünür, öteki sayılara ve olasılık hesabına katılmaz.
+        Fatura girilip siparişe bağlanınca faturanın tutarı açık borç olarak faturadan izlenir ve planın en erken satırlarından düşer; kalan bu listede kalır. Vadesi geçmiş satır tahmine girmez; ödendiyse ödemeyi girin.
         Firmaya ödenip faturaya dağıtılmamış para avans satırından düşülür. "Bağlanmamış fatura var" görünürse faturayı satın almada siparişe bağlayın; bağlanana kadar tutar düşülmez.
       </p>
     </Kart>

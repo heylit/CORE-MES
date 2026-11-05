@@ -1207,14 +1207,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const takip = async (cerez = c.sa) => istek(cerez, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`);
     const siparisi = (t: SiparisTakibiCevabi, teklifId: string) => t.siparisler.find((x) => x.teklifId === teklifId)!;
     const ilk = tamam<SiparisTakibiCevabi>(await takip());
-    // Vade 30 gün, avans yok, beklenen teslim boş: kalan sipariş tarihinden 30 gün sonra; tutar siparişin KDV hariç toplamı (4 x 5, 10 x 9).
-    assert.deepEqual(siparisi(ilk, a).odemePlani, [{ tur: 'vade', vade: '2026-11-06', yontem: 'banka', tutar: '20' }]);
-    assert.deepEqual(siparisi(ilk, b).odemePlani, [{ tur: 'vade', vade: '2026-11-07', yontem: 'banka', tutar: '90' }]);
+    // Vade 30 gün, avans yok, beklenen teslim boş: kalan sipariş tarihinden 30 gün sonra; tutar siparişin KDV dahil toplamı (4 x 5, 10 x 9; genel oran %20).
+    assert.deepEqual(siparisi(ilk, a).odemePlani, [{ tur: 'vade', vade: '2026-11-06', yontem: 'banka', tutar: '24' }]);
+    assert.deepEqual(siparisi(ilk, b).odemePlani, [{ tur: 'vade', vade: '2026-11-07', yontem: 'banka', tutar: '108' }]);
     assert.equal(siparisi(ilk, a).satirIdleri.length, 1);
     assert.deepEqual(siparisi(ilk, a).faturalar, []);
     const beklenen = async () => tamam<BeklenenOdemelerCevabi>(await istek(c.yonetici, 'GET', '/finans/beklenen-odemeler')).odemeler
       .filter((x) => x.talepId === s.id).map((x) => [x.teklifId, x.vade, x.tutar, x.firmaAdi, x.paraBirimi]);
-    assert.deepEqual(await beklenen(), [[a, '2026-11-06', '20.00', 'Deneme Tedarik A', 'TRY'], [b, '2026-11-07', '90.00', 'Deneme Tedarik B', 'TRY']]);
+    assert.deepEqual(await beklenen(), [[a, '2026-11-06', '24.00', 'Deneme Tedarik A', 'TRY'], [b, '2026-11-07', '108.00', 'Deneme Tedarik B', 'TRY']]);
     assert.equal((await istek(c.sa, 'GET', '/finans/beklenen-odemeler')).statusCode, 403);
 
     const yaz = async (satirlar: unknown[], cerez = c.sa, teklifId = a, surum?: number) =>
@@ -1248,7 +1248,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId: fatura, bagla: true }));
     assert.deepEqual(siparisi(tamam<SiparisTakibiCevabi>(await takip()), a).faturalar, [{ belgeNo: 'DN-P1', belgeTarihi: '2026-10-09', vade: '2026-11-09' }]);
     assert.deepEqual(ileti(await yaz(plan)), [422, 'Faturası bağlanmış siparişin ödeme planı değişmez; vade faturadadır.']);
-    assert.deepEqual(await beklenen(), [[b, '2026-11-07', '90.00', 'Deneme Tedarik B', 'TRY']]);
+    assert.deepEqual(await beklenen(), [[b, '2026-11-07', '108.00', 'Deneme Tedarik B', 'TRY']]);
   });
 
   test('SAT-74 #1124: avanslı teklifte plan avans ve kalan olarak kurulur; kalan beklenen teslimden vade günü sonradır; yeniden kayıt planı değiştirmez', async () => {
@@ -1262,9 +1262,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
     const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
       karar: { ...onayli.karar!, siparisler: [{ teklifId: a.id, siparisNo: '', siparisTarihi: '2026-10-10', beklenenTeslim: '2026-10-20' }] } }));
-    // (10 x 10 + 4 x 2.5) x 0.9 + 7 + 3 = 109; avans 32.70, kalan 76.30.
+    // (10 x 10 + 4 x 2.5) x 0.9 + 7 + 3 = 109; KDV dahil (genel %20) 130.80: avans 32.70 x 1.2 = 39.24, kalan 91.56.
     const plan = async () => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`)).siparisler[0]!.odemePlani;
-    assert.deepEqual(await plan(), [{ tur: 'avans', vade: '2026-10-10', yontem: 'banka', tutar: '32.7' }, { tur: 'vade', vade: '2026-12-19', yontem: 'banka', tutar: '76.3' }]);
+    assert.deepEqual(await plan(), [{ tur: 'avans', vade: '2026-10-10', yontem: 'banka', tutar: '39.24' }, { tur: 'vade', vade: '2026-12-19', yontem: 'banka', tutar: '91.56' }]);
     tamam(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: [{ teklifId: a.id, siparisNo: 'L-9', siparisTarihi: '2026-10-11', beklenenTeslim: '2026-10-25' }] } }));
     assert.deepEqual((await plan()).map((x) => x.vade), ['2026-10-10', '2026-12-19']);
   });
@@ -1295,6 +1295,46 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'siparis_verildi', iptalNedeni: '' }));
     assert.deepEqual(await beklenen(), [b]);
     assert.equal((await plan(b)).length, 1);
+  });
+
+  test('2132-5, 2132-7: siparişin KDV oranı seçilir ve plan o oranla yazılır; kısmi fatura planın en erken satırlarından düşer, kalan beklenende kalır', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const takipA = async () => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`)).siparisler.find((x) => x.teklifId === a)!;
+    const ilk = await takipA();
+    assert.deepEqual([ilk.kdvOrani, ilk.kdvElle, ilk.kdvSecenekleri], ['20', false, ['0', '1', '10', '20']]);
+    const yaz = async (govde: Record<string, unknown>) => istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: a, surum: (await acilistaki(s.id)).surum, ...govde });
+    const plan = [{ tur: 'avans', vade: '2026-10-07', yontem: 'nakit', tutar: '10' }, { tur: 'vade', vade: '2026-12-01', yontem: 'banka', tutar: '12' }];
+    const red = await yaz({ satirlar: plan, kdvOrani: '18' });
+    assert.deepEqual([red.statusCode, (red.json() as { mesaj?: string }).mesaj], [422, ILETILER.planKdvGecersiz]);
+    assert.equal((await takipA()).kdvElle, false, 'reddedilen oran yazılmaz');
+    tamam(await yaz({ satirlar: plan, kdvOrani: '10' }));
+    const sonra = await takipA();
+    assert.deepEqual([sonra.kdvOrani, sonra.kdvElle], ['10', true]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı güncellendi (KDV %10 dahil): 2026-10-07 10 TRY, 2026-12-01 12 TRY')));
+    // Oran gönderilmezse siparişteki seçim kalır.
+    tamam(await yaz({ satirlar: plan }));
+    assert.equal((await takipA()).kdvOrani, '10');
+
+    const beklenen = async () => tamam<BeklenenOdemelerCevabi>(await istek(c.yonetici, 'GET', '/finans/beklenen-odemeler')).odemeler
+      .filter((x) => x.talepId === s.id).map((x) => [x.teklifId === a ? 'a' : 'b', x.vade, x.tutar]).sort();
+    assert.deepEqual(await beklenen(), [['a', '2026-10-07', '10.00'], ['a', '2026-12-01', '12.00'], ['b', '2026-11-07', '108.00']]);
+    const fatura = async (no: string, tutar: number) => {
+      const id = tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+        yon: 'gider', kategori: 'mal_alimi', firmaId: firmaA, belgeNo: no, belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar, kdvOrani: 20,
+      })).belge.id;
+      tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId: id, bagla: true }));
+      return id;
+    };
+    // 5 + %20 = 6: avanstan düşer, avansın 4'ü ve vadeli satır kalır.
+    await fatura('DN-K1', 5);
+    assert.deepEqual(await beklenen(), [['a', '2026-10-07', '4.00'], ['a', '2026-12-01', '12.00'], ['b', '2026-11-07', '108.00']]);
+    // 10 + %20 = 12, toplam 18: avans biter, vadeli satırdan 8 düşer.
+    const ikinci = await fatura('DN-K2', 10);
+    assert.deepEqual(await beklenen(), [['a', '2026-12-01', '4.00'], ['b', '2026-11-07', '108.00']]);
+    // İptal edilen fatura sayılmaz.
+    const { surum } = (await vt().tx((db) => db.tek<{ surum: number }>('SELECT surum FROM finans_belge WHERE id = $1', [ikinci])))!;
+    tamam(await istek(c.yonetici, 'POST', `/finans/belgeler/${ikinci}/iptal`, { surum, neden: 'Deneme' }));
+    assert.deepEqual(await beklenen(), [['a', '2026-10-07', '4.00'], ['a', '2026-12-01', '12.00'], ['b', '2026-11-07', '108.00']]);
   });
 
   test('#489 pano: onay bekleyen onaylayana, açık talep ve teslim bekleyen satır yazana, açık sipariş okuyana sayılır; yetkisiz sayı null', async () => {

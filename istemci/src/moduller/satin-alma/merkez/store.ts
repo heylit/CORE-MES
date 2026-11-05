@@ -199,7 +199,7 @@ export interface Backend {
   /** Kart #1124: siparişlerin ödeme planı ve bağlı faturaları. Başarısızsa ileti gösterilir, null döner. */
   siparisTakibi(talepId: string): Promise<SiparisTakibiCevabi | null>;
   /** Kart #1124: siparişin ödeme planı finansa yazılır; sunucu geçmişe yazar. Güncel takibi ya da null döner. */
-  odemePlaniKaydet(talepId: string, teklifId: string, satirlar: OdemePlaniSatiri[]): Promise<SiparisTakibiCevabi | null>;
+  odemePlaniKaydet(talepId: string, teklifId: string, satirlar: OdemePlaniSatiri[], kdvOrani?: string): Promise<SiparisTakibiCevabi | null>;
   /** Kart #1124: sipariş satırlarının stoktaki mal kabul irsaliyeleri. Başarısızsa ileti gösterilir, null döner. */
   siparisIrsaliyeleri(siparisSatirIdler: number[]): Promise<SiparisIrsaliyesi[] | null>;
 }

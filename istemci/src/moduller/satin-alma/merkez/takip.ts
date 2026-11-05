@@ -56,7 +56,7 @@ function siparisHTML(o: OrderInfo, t: SiparisTakibi, irsaliyeler: SiparisIrsaliy
     ? `<div class="tw"><table class="rt"><thead><tr><th>Ödeme</th><th>Vade</th><th>Ödeme şekli</th><th class="r">Tutar</th></tr></thead><tbody>${t.odemePlani.map(p => `<tr>
         <td>${p.tur === "avans" ? "Avans" : "Vadeli"}</td><td class="num">${fmtDate(p.vade)}</td><td>${esc(ODEME_SEKLI[p.yontem])}</td><td class="num r">${money(Number(p.tutar), t.paraBirimi)}</td></tr>`).join("")}</tbody></table></div>`
     : '<p class="small muted">Ödeme planı yok.</p>';
-  const not = t.faturalar.length ? "Fatura geldi; borcun vadesi faturadadır." : "Finansa beklenen ödeme olarak düşer; tutarlar KDV hariç tahminidir.";
+  const not = t.faturalar.length ? "Fatura geldi; borcun vadesi faturadadır." : "Finansa beklenen ödeme olarak düşer; tutarlar KDV dahil tahminidir.";
   return `<div class="stack" data-sa-siparis-takibi="${esc(o.qid)}">
     ${tekil ? "" : `<p><b>${esc(supName(o.q))}</b>${siparisEtiketi(o) ? `, ${esc(siparisEtiketi(o))}` : ""}</p>`}
     <ul class="todo" data-sa-takip-listesi>${irsaliye}${fatura}</ul>

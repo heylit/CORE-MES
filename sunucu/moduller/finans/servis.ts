@@ -31,7 +31,7 @@ import type {
 import { cakisma } from '#cekirdek/hata.ts';
 import {
   belgeDuzeltmeHatasi, cekGecisiHatasi, iadeAsimi, iadeHatasi, satisBagiHatasi, satisSevkleri, sevkBagiHatasi, siparisBagiHatasi, siparisOdemePlaniHatasi, dagitimHesapla, farkTutar, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
-  caprazKurHatasi, defterFarki, hesapPasifHatasi, kdvDahildenNet, kdvOraniGecerliMi, mahsupTutarlari,
+  caprazKurHatasi, defterFarki, gecerliKdvOranlari, genelKdvOrani, hesapPasifHatasi, kdvDahildenNet, kdvOraniGecerliMi, mahsupTutarlari,
   genelGiderSaatBasi, maliyetYazimi, amortismanPlani, ayEkle, aylikAmortisman, birikmisAmortisman, beklenenOdemeKorumasi, gunEkle, yaklasanSiparisTahmini,
 } from './kurallar.ts';
 import type { AmortismanGirdisi, MaliyetTuru } from './kurallar.ts';
@@ -914,6 +914,11 @@ export function siparisOdemePlaniYaz(db: Db, kisiId: number, g: { siparis: Sipar
 }
 // İptal edilen siparişin beklenen ödemesi kalmaz: plan silinir. Faturası bağlanmış siparişin planı zaten beklenene girmez ve takipte
 // geçmiş olarak kalır, silinmez. Silme tekrarlanabilir; satın almanın ucu çağırır, finans siparişi okumaz.
+// 2132-7: satın almanın sipariş KDV seçimi için gündeki geçerli oranlar ve genel oran (en yükseği). Para tutarı değildir (FNS-48 dışı).
+export async function kdvSecenekleri(db: Db, tarih: string): Promise<{ oranlar: string[]; genel: string | null }> {
+  const l = await sorgular.kdvOranlari(db);
+  return { oranlar: gecerliKdvOranlari(l, tarih), genel: genelKdvOrani(l, tarih) };
+}
 export function siparisOdemePlaniKaldir(db: Db, siparis: SiparisAnahtari): Promise<void> {
   return korumali(async () => {
     if (await sorgular.siparisFaturasiVarMi(db, siparis.talepId, siparis.teklifId)) return;
