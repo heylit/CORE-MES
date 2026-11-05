@@ -5,6 +5,7 @@ import type { MalzemeYetkisi } from '../yetki.ts';
 import { cekirdekSec, derinKopya, type BaslatGirdisi } from './cekirdek/baglam.ts';
 import { SABIT_NESNELER } from './cekirdek/hepsi.ts';
 import type * as C from './cekirdek/hepsi.ts';
+import { esliAdlariCoz, standartAdlari } from '../standart-adlari.ts';
 
 // Prototipin işlevleri aynı ad ve aynı parametre sırasıyla (PARCA-SOZLESMESI.md, imza kuralı): taslağa (prototipte genel `D`) bakan
 // işlev taslağı parametre olarak alır, genel duruma bakan her işlev son parametre olarak bağlamı alır. Çekirdek (cekirdek/) prototipin
@@ -395,8 +396,10 @@ export function muadilKaliteler(d: KartKaydi, b: KuralBaglami): ReturnType<Cekir
 export function diffItems(a: Parameters<Cekirdek['diffItems']>[0], ikinci: Parameters<Cekirdek['diffItems']>[1], b: KuralBaglami): ReturnType<Cekirdek['diffItems']> { return cekirdek(b).diffItems(a, ikinci); }
 export function birimFarki(onceki: Parameters<Cekirdek['birimFarki']>[0], yeni: Parameters<Cekirdek['birimFarki']>[1], b: KuralBaglami): ReturnType<Cekirdek['birimFarki']> { return cekirdek(b).birimFarki(onceki, yeni); }
 export function talepVar(x: Parameters<Cekirdek['talepVar']>[0], b: KuralBaglami): ReturnType<Cekirdek['talepVar']> { return cekirdek(b).talepVar(x); }
-export function hizliAra(metin: Parameters<Cekirdek['hizliAra']>[0], liste: Parameters<Cekirdek['hizliAra']>[1], b: KuralBaglami): ReturnType<Cekirdek['hizliAra']> { return cekirdek(b).hizliAra(metin, liste); }
-export function metinAyristir(metin: Parameters<Cekirdek['metinAyristir']>[0], b: KuralBaglami): ReturnType<Cekirdek['metinAyristir']> { return cekirdek(b).metinAyristir(metin); }
+// 2117: yazılan EN ya da ASTM adı (ör. P1070) çekirdeğe gitmeden listedeki değerin koduna çevrilir; çekirdek iki standardı bilmez.
+const esliCoz = (metin: unknown, b: KuralBaglami): unknown => (typeof metin === 'string' ? esliAdlariCoz(metin, standartAdlari(b.ortam.malzemeAyari)) : metin);
+export function hizliAra(metin: Parameters<Cekirdek['hizliAra']>[0], liste: Parameters<Cekirdek['hizliAra']>[1], b: KuralBaglami): ReturnType<Cekirdek['hizliAra']> { return cekirdek(b).hizliAra(esliCoz(metin, b), liste); }
+export function metinAyristir(metin: Parameters<Cekirdek['metinAyristir']>[0], b: KuralBaglami): ReturnType<Cekirdek['metinAyristir']> { return cekirdek(b).metinAyristir(esliCoz(metin, b)); }
 export function hizliTaslak(p: Parameters<Cekirdek['hizliTaslak']>[0], b: KuralBaglami): ReturnType<Cekirdek['hizliTaslak']> { return cekirdek(b).hizliTaslak(p); }
 export function tplSummary(t: Parameters<Cekirdek['tplSummary']>[0], b: KuralBaglami): ReturnType<Cekirdek['tplSummary']> { return cekirdek(b).tplSummary(t); }
 export function gSablonOzet(t: Parameters<Cekirdek['gSablonOzet']>[0], b: KuralBaglami): ReturnType<Cekirdek['gSablonOzet']> { return cekirdek(b).gSablonOzet(t); }

@@ -10,6 +10,7 @@ import type { KatalogKarti, Sablon } from '../tipler.ts';
 import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { useKartlar, useSablonlar } from '../veri.ts';
 import { AdimCubugu, adimlariKur } from './AdimCubugu.tsx';
+import { kartStandardi } from '../standart-adlari.ts';
 import { SihirbazBaglami, type EkranSecimi, type Sihirbaz } from './baglam.ts';
 import { kopyala, useSihirbazDurumu, type Taslak } from './durum.ts';
 import { FoyGorunumu } from './FoyGorunumu.tsx';
@@ -179,6 +180,17 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
             <header className="tc-my-adim-ust">
               <h2 id="tc-my-adim-baslik">{SD?.ad}</h2>
               {SD?.help && <p className="tc-my-yardim">{SD.help}</p>}
+              {(!K.isGen(d, b) || d.tur === 'hizmet') && (
+                <div className="tc-myeni-araclar" role="group" aria-label="Bu kartta durum ve işlem adlarının standardı">
+                  {(['astm', 'en'] as const).map((x) => (
+                    <button
+                      key={x} type="button" aria-pressed={kartStandardi(d) === x} onClick={() => { degistir((t) => { t.standart = x; }); }}
+                      title={x === 'astm' ? 'ASTM adı önce, EN adı parantez içinde' : 'EN adı önce, ASTM adı parantez içinde'}
+                    >{x === 'astm' ? 'ASTM' : 'EN'}
+                    </button>
+                  ))}
+                </div>
+              )}
             </header>
             <KategoriUyarisi />
             <AdimGovdesi />

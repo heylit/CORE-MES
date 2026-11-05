@@ -16,7 +16,7 @@ export function DurumSecenekleri({ d }: { d: Duzen }) {
     <>
       <BolumBasligi
         baslik="Durum ve işlem seçenekleri"
-        aciklama={'Hammaddenin "Durum ve işlem" adımındaki listeler. Aileyi seç, listeyi aç; kullanmadığın değerleri kapat, yenilerini üstteki kutudan ekle. Sınıfa bağlı listelere (ör. teslim durumu) eklenen değer ailenin tüm sınıflarında görünür.'}
+        aciklama={'Hammaddenin "Durum ve işlem" adımındaki listeler. Aileyi seç, listeyi aç; kullanmadığın değerleri kapat, yenilerini üstteki kutudan ekle. Sınıfa bağlı listelere (ör. teslim durumu) eklenen değer ailenin tüm sınıflarında görünür. Durum ve işlem değerlerine ASTM / EN düğmesiyle iki standardın adını ver; kart açan, üst baştaki seçime göre birini önce, diğerini parantez içinde görür.'}
       />
       <Secici<string>
         satirlar={[{ anahtar: 'aile', baslik: 'Aile', secenekler: aileSecenekleri(d, false), secili: aile, sec: (k) => d.sec({ aile: k, sinif: '' }) }]}
