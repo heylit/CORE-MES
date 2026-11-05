@@ -14,7 +14,8 @@ import {
   agirlikKg, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
   uzunluk, yogunlukBicimi, yogunlukOku,
 } from './gorunum.ts';
-import type { Vurgu } from './Goruntu3B.tsx';
+import type { ParcaKutusu, Vurgu } from './Goruntu3B.tsx';
+import { MontajKarti } from './MontajKarti.tsx';
 import './geometri.css';
 
 const Goruntu3B = lazy(() => import('./Goruntu3B.tsx'));
@@ -85,11 +86,12 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
   );
 }
 
-function AnalizKarti({ revizyonId, cevap }: { revizyonId: number; cevap: GeometriAnalizCevabi }) {
+// Yeniden hesaplatma Analiz ve Montaj kartında aynı komuttur (sürüm analiz cevabından).
+function useYenidenHesapla(revizyonId: number, surum: number | null) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const yeniden = useKorumaliKomut<void, GeometriAnalizCevabi>({
-    gonder: (_g, d) => api.post<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}/yeniden-hesapla`, { surum: cevap.is?.surum ?? null }, d),
+    gonder: (_g, d) => api.post<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}/yeniden-hesapla`, { surum }, d),
     onSuccess: (c) => {
       istemci.setQueryData(anahtarlar.analiz(revizyonId), c);
       void istemci.invalidateQueries({ queryKey: ['geometri', 'modeller'] });
@@ -97,11 +99,15 @@ function AnalizKarti({ revizyonId, cevap }: { revizyonId: number; cevap: Geometr
     },
     onError: (h) => bildir('hata', yetkiyse(h, 'Yeniden hesaplatılamadı.')),
   });
+  return { calistir: () => yeniden.mutate(), bekliyor: yeniden.isPending };
+}
+
+function AnalizKarti({ cevap, yeniden }: { cevap: GeometriAnalizCevabi; yeniden: { calistir: () => void; bekliyor: boolean } }) {
   const a = cevap.analiz;
   const surer = suruyorMu(cevap.durum);
   return (
     <Kart baslik="Analiz (yaklaşık)" simge="ruler" baslikEki={<Rozet ton={DURUM_TONU[cevap.durum]}>{DURUM_ADI[cevap.durum]}</Rozet>}
-      sag={<Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.isPending} disabled={surer} onClick={() => yeniden.mutate()}>Yeniden hesapla</Dugme>}>
+      sag={<Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.bekliyor} disabled={surer} onClick={yeniden.calistir}>Yeniden hesapla</Dugme>}>
       {cevap.durum === 'hata' && <p className="tc-g3b-hata">{cevap.is?.hataMetni}</p>}
       {a === null ? (
         <p className="tc-g3b-soluk">{surer ? 'Hesap sürüyor; sonuç gelince burada görünür.' : 'Analiz yok.'}</p>
@@ -328,6 +334,8 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
     retry: false,
   });
   const [secili, seciliYaz] = useState<GeometriOzellik | null>(null);
+  const [kutular, kutularYaz] = useState<ParcaKutusu[] | null>(null);
+  const yeniden = useYenidenHesapla(revizyonId, analiz.data?.is?.surum ?? null);
   if (analiz.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Analiz okunuyor" />;
   if (analiz.isError) {
     if (analiz.error instanceof ApiHatasi && analiz.error.durum === 404) return <EskiRevizyon revizyonId={revizyonId} yonlendir={yonlendir} />;
@@ -344,13 +352,14 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
         : dosya.isError ? <div className="tc-g3b-sahne"><DurumKutusu durum="hata" mesaj={yetkiyse(dosya.error, 'Model dosyası alınamadı.')} /></div>
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
-              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} />
+              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} kutular={kutular} />
             </Suspense>
           )}
       <div className="tc-g3b-kartlar">
-        <AnalizKarti revizyonId={revizyonId} cevap={analiz.data} />
+        <AnalizKarti cevap={analiz.data} yeniden={yeniden} />
         <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
         <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />
+        <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />
       </div>
     </div>
   );

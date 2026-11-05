@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Box3, BufferGeometry, Color, DirectionalLight, Group, HemisphereLight, Line, LineDashedMaterial, LinearSRGBColorSpace, Mesh, MeshBasicMaterial, PerspectiveCamera,
-  Quaternion, Scene, SRGBColorSpace, TorusGeometry, Vector3, WebGLRenderer,
+  Box3, BoxGeometry, BufferGeometry, Color, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments,
+  Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Scene, SRGBColorSpace, TorusGeometry, Vector3, WebGLRenderer,
 } from 'three';
-import type { Object3D } from 'three';
+import type { Material, Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DurumKutusu } from '../../ortak/arayuz/index.ts';
 import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
@@ -37,8 +37,29 @@ function vurguKur(v: Vurgu): Group {
   return g;
 }
 
+// Seçilen montaj parçalarının vurgusu (2113): sunucunun dünya kutuları (model koordinatı, mm) kenar çizgisi ve yarı saydam dolguyla çizilir.
+// Ağ ile düğüm eşlemesi tutulmaz; kutu yerleşimi yeter.
+export interface ParcaKutusu { en: readonly number[]; ust: readonly number[] }
+
+function kutularKur(kutular: readonly ParcaKutusu[]): Group {
+  const g = new Group();
+  const renkli = renk('--hazard');
+  for (const k of kutular) {
+    const en = new Vector3(k.en[0] ?? 0, k.en[1] ?? 0, k.en[2] ?? 0), ust = new Vector3(k.ust[0] ?? 0, k.ust[1] ?? 0, k.ust[2] ?? 0);
+    const boyut = ust.clone().sub(en).max(new Vector3(0.01, 0.01, 0.01));
+    const govde = new BoxGeometry(boyut.x, boyut.y, boyut.z);
+    const merkez = en.clone().add(ust).multiplyScalar(0.5);
+    const dolgu = new Mesh(govde, new MeshBasicMaterial({ color: renkli, transparent: true, opacity: 0.35, depthTest: false }));
+    const kenar = new LineSegments(new EdgesGeometry(govde), new LineBasicMaterial({ color: renkli, depthTest: false }));
+    for (const n of [dolgu, kenar]) { n.position.copy(merkez); n.renderOrder = 10; g.add(n); }
+  }
+  return g;
+}
+
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
-export default function Goruntu3B({ veri, bicim, vurgu = null }: { veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null }) {
+export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }: {
+  veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null;
+}) {
   const kap = useRef<HTMLDivElement>(null);
   const [hata, hataYaz] = useState<string | null>(null);
   // Modelin iç grubu (CAD koordinatı; dış grup Z'yi Y yukarı çevirir). Vurgu buna eklenir, model dönüşüyle birlikte durur.
@@ -129,6 +150,31 @@ export default function Goruntu3B({ veri, bicim, vurgu = null }: { veri: Uint8Ar
       }
     };
   }, [yuklendi, kx, ky, kz, ex, ey, ez, cap, derinlik]);
+
+  // Montaj seçimi varken model solar, seçilen parçaların kutuları öne çıkar; seçim kalkınca malzemeler eski haline döner.
+  const kutuAnahtari = kutular === null || kutular.length === 0 ? '' : JSON.stringify(kutular);
+  useEffect(() => {
+    const ic = icGrup.current;
+    if (ic === null || kutuAnahtari === '') return undefined;
+    const eski: { m: Material; saydam: boolean; opaklik: number }[] = [];
+    ic.traverse((n) => {
+      if (!(n instanceof Mesh)) return;
+      for (const m of (Array.isArray(n.material) ? n.material : [n.material]) as Material[]) {
+        eski.push({ m, saydam: m.transparent, opaklik: m.opacity });
+        m.transparent = true;
+        m.opacity = 0.2;
+      }
+    });
+    const g = kutularKur(JSON.parse(kutuAnahtari) as ParcaKutusu[]);
+    ic.add(g);
+    return () => {
+      ic.remove(g);
+      for (const c of g.children) {
+        if (c instanceof Mesh || c instanceof LineSegments) { (c.geometry as BufferGeometry).dispose(); (c.material as Material).dispose(); }
+      }
+      for (const e of eski) { e.m.transparent = e.saydam; e.m.opacity = e.opaklik; }
+    };
+  }, [yuklendi, kutuAnahtari]);
 
   return (
     <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
