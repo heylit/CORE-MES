@@ -88,6 +88,7 @@ export async function planUygula(a: PlanKurmaAyari & { liste: readonly BekleyenD
     const n = secilen.length;
     a.komut.degistir(n > 1 ? `${String(n)} bekleyen değişiklik uygulandı` : 'Bekleyen değişiklik uygulandı',
       (t) => (alindi = uygulananiAl(t, plan, cv.dataVer, secilen.map((e) => e.id), a.kim, (a.simdi ?? Date.now)())), { ayrinti: isler.includes('*') ? 'Bütün işler' : isler.join(', '), planKoru: true });
+    if (alindi) a.komut.uygulananlariBildir?.(secilen.map((e) => e.id));
     return alindi ? null : VERI_DEGISTI;
   } catch (h) {
     return degerlendirmeHatasi(h).metin;
@@ -109,7 +110,7 @@ export function usePlanKur(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' |
 }
 
 // Atölyenin bekleyen değişiklik düğmeleri: uygula sunucuda, reddet çalışmada. Yazamayan için null.
-export interface BekleyenKarari { uygula: (liste: readonly BekleyenDegisiklik[], idler: readonly string[]) => void; reddet: (idler: readonly string[]) => void; suruyor: boolean }
+export interface BekleyenKarari { uygula: (liste: readonly BekleyenDegisiklik[], idler: readonly string[]) => void; reddet: (idler: readonly string[], gerekce: string) => boolean; suruyor: boolean }
 export function useBekleyenKarari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void): BekleyenKarari | null {
   const s = useSyncExternalStore(abone, () => suruyor);
   const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
@@ -117,7 +118,7 @@ export function useBekleyenKarari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
     if (!komut) return;
     void planUygula({ komut, kim, liste, idler }).then((h) => { if (h) uyar(h); });
   }, [komut, kim, uyar]);
-  const reddet = useCallback((idler: readonly string[]) => { komut?.bekleyeniReddet?.(idler); }, [komut]);
+  const reddet = useCallback((idler: readonly string[], gerekce: string) => (komut?.bekleyeniReddet ? komut.bekleyeniReddet(idler, gerekce) === null : false), [komut]);
   return komut && calisma && o.yetki.planYaz ? { uygula, reddet, suruyor: s } : null;
 }
 

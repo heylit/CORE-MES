@@ -11,7 +11,32 @@ const kimlikMetni = z.string();
 
 // Planlama çalışması ve sayfa tercihleri plan modülünün kayıt tablosundadır; gövde Reçete ve Rota'nın kayıt biçimidir, anahtar yalnız planlama anahtarı.
 const planlamaAnahtari = z.string().regex(PLANLAMA_ANAHTARI_BICIMI, 'Geçersiz planlama anahtarı.');
-export const planlamaYazGovdesi = yazGovdesi.extend({ anahtar: planlamaAnahtari });
+// 2129-2 b: çalışmadan düşen bekleyen değişikliğin kararı. Sunucu defteri önceki ve yeni bekleyen listesinden yazar; karar yalnız düşen
+// satıra işler. Reddin gerekçesi zorunludur. Kararı gelmeyen düşen satır, plan güncellendiyse uygulanmış, değilse geri alınmış sayılır.
+export const BEKLEYEN_KARARLARI = ['uygulandi', 'reddedildi'] as const;
+export const DEFTER_GEREKCESI_EN_COK = 500;
+export const bekleyenKarari = z.discriminatedUnion('karar', [
+  z.object({ id: z.string().min(1).max(200), karar: z.literal('uygulandi') }).strict(),
+  z.object({ id: z.string().min(1).max(200), karar: z.literal('reddedildi'), gerekce: z.string().trim().min(1).max(DEFTER_GEREKCESI_EN_COK) }).strict(),
+]);
+export const planlamaYazGovdesi = yazGovdesi.extend({ anahtar: planlamaAnahtari, kararlar: z.array(bekleyenKarari).max(400).optional() });
+
+// Değişiklik defteri (2129-2 b): en yeni önde, sayfa sayfa. `once` verilirse ondan küçük kimlikliler gelir.
+export const DEFTER_OLAYLARI = ['degisiklik', 'kaynak', 'uygulandi', 'reddedildi', 'geri-alindi'] as const;
+export const DEFTER_SAYFASI = 100;
+export const degisiklikDefteriSorgusu = z.object({ once: z.coerce.number().int().positive().optional() }).strict();
+export const defterSatiri = z.object({
+  id: z.number().int(),
+  olay: z.enum(DEFTER_OLAYLARI),
+  bekleyenId: z.string(),
+  ne: z.string(),
+  ayrinti: z.string(),
+  isler: z.array(z.string()),
+  gerekce: z.string().nullable(),
+  kisi: z.string().nullable(),
+  zaman: zamanSemasi,
+});
+export const degisiklikDefteriCevabi = z.object({ satirlar: z.array(defterSatiri), dahaVar: z.boolean() });
 export const planlamaSilGovdesi = z.object({ anahtar: planlamaAnahtari, beklenenSurum: z.number().int() });
 
 // Planlama sayfasının açılış verisi (288 a): çalışma kaydı (`:planlama`) Reçete ve Rota kaydı ve kaynak okumasıyla sunucuda birleşmiş olarak
@@ -342,6 +367,10 @@ export const yillikCozDurumuCevabi = z.discriminatedUnion('durum', [
   z.object({ durum: z.literal('hata'), mesaj: z.string() }),
 ]);
 export type PlanlamaYazGovdesi = z.output<typeof planlamaYazGovdesi>;
+export type BekleyenKarari = z.output<typeof bekleyenKarari>;
+export type DefterOlayi = (typeof DEFTER_OLAYLARI)[number];
+export type DefterSatiri = z.output<typeof defterSatiri>;
+export type DegisiklikDefteriCevabi = z.output<typeof degisiklikDefteriCevabi>;
 export type PlanlamaSilGovdesi = z.output<typeof planlamaSilGovdesi>;
 export type PlanlamaCalismasiCevabi = z.output<typeof planlamaCalismasiCevabi>;
 export type KaynakDegisikligi = z.output<typeof kaynakDegisikligi>;

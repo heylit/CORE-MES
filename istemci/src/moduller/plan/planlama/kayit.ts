@@ -1,4 +1,5 @@
-import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { BekleyenKarari, PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
+import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { GeriAlYigini, VERI_GERI_ALMA } from './durum.ts';
 import type { BekleyenDegisiklik, GeriYama, PlanlamaCalismasi } from './tipler.ts';
@@ -13,11 +14,16 @@ export const BEKLEME_MS = 2000;
 export const AZAMI_BAYT = 1_000_000;
 // Değişiklik izi en çok bu kadar satır tutar (a-durum.betik iz).
 export const IZ_SINIRI = 400;
+// Bir yazmanın taşıdığı en çok karar (sözleşmenin sınırı).
+const KARAR_EN_COK = 400;
+// Ret gerekçesinin en çok uzunluğu (sözleşmenin DEFTER_GEREKCESI_EN_COK'u; istemci paylasilan'dan değer ithal etmez).
+export const GEREKCE_EN_COK = 500;
 
 export const CATISMA = 'Planlama çalışması başka bir kişi tarafından değiştirildi; son değişikliğiniz kaydedilmedi. Sayfayı yenileyin.';
 export const BUYUK = 'Planlama çalışması 1 MB sınırını aştı ve sunucuya yazılamadı.';
 export const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
 export const PLAN_YETKI = 'Plan yazma yetkiniz yok; son değişikliğiniz kaydedilmedi.';
+export const GEREKCE_YOK = 'Ret gerekçesi yazın; değişiklik defterine girer.';
 export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 
 // Geri almanın kopyaladığı alanlar (a-durum.betik degistir): veri, arıza, ek mesai, kilitler, tercihler, ağırlıklar, parametreler, kapalı kısıtlar
@@ -49,8 +55,11 @@ export interface CalismaKomutu {
   // Bekleyen değişikliği hemen, her zamanki yazmayla (sürüm denetimli) gönderir ve kayıtlı sürümü verir; yazılamadıysa (çatışma, hata) null.
   // Sunucu kayıtlı çalışmayı okuyan komuttan (taslak-yaz) önce çağrılır.
   kaydet: () => Promise<number | null>;
-  // Bekleyen değişiklikleri reddeder (755 a): her birinin geri dönüş farkı uygulanır. Dönen: hata iletisi; reddedildiyse null.
-  bekleyeniReddet?: (idler: readonly string[]) => string | null;
+  // Bekleyen değişiklikleri reddeder (755 a): her birinin geri dönüş farkı uygulanır. Gerekçe zorunludur, değişiklik defterine girer
+  // (2129-2 b). Dönen: hata iletisi; reddedildiyse null.
+  bekleyeniReddet?: (idler: readonly string[], gerekce: string) => string | null;
+  // Uygulanan bekleyen değişiklikleri sonraki yazmayla değişiklik defterine bildirir (2129-2 b).
+  uygulananlariBildir?: (idler: readonly string[]) => void;
 }
 
 export interface YaziciAyari {
@@ -62,7 +71,7 @@ export interface YaziciAyari {
   // Değişiklik izine yazılan kişi (oturumdaki kişinin adı) ve sayfa adı.
   kim: string;
   sayfa: () => string;
-  yaz: (govde: YazGovdesi) => Promise<YazCevabi>;
+  yaz: (govde: PlanlamaYazGovdesi) => Promise<YazCevabi>;
   uyar: (ileti: string) => void;
   // Başarılı değişikliğin iletisi (eski sayfanın bildir 'tamam'ı); `geriAl` verilirse bildirimin Geri al düğmesidir.
   bildir?: (ileti: string, geriAl?: () => void) => void;
@@ -89,6 +98,8 @@ export class CalismaYazici implements CalismaKomutu {
   #durdu = false;
   readonly #yenileVar: boolean;
   #buyukUyarildi = false;
+  // Çalışmadan düşen bekleyenlerin kararı; yazmayla gider, sunucu deftere yazar. Çakışmada değişiklikle birlikte düşer.
+  #kararlar: BekleyenKarari[] = [];
 
   constructor(ayar: YaziciAyari) {
     this.#a = { beklemeMs: BEKLEME_MS, azamiBayt: AZAMI_BAYT, simdi: () => Date.now(), bildir: () => {}, catismadaYenile: () => {}, ...ayar };
@@ -158,13 +169,25 @@ export class CalismaYazici implements CalismaKomutu {
     return true;
   }
 
-  bekleyeniReddet = (idler: readonly string[]): string | null => {
-    const ret = reddedilemez(bekleyenler(this.#calisma), idler);
+  bekleyeniReddet = (idler: readonly string[], gerekce: string): string | null => {
+    const g = gerekce.trim().slice(0, GEREKCE_EN_COK);
+    const ret = g === '' ? GEREKCE_YOK : reddedilemez(bekleyenler(this.#calisma), idler);
     if (ret !== null) { this.#a.uyar(ret); return ret; }
     const n = idler.length;
-    const tamam = this.degistir(n > 1 ? `${String(n)} bekleyen değişiklik reddedildi` : 'Bekleyen değişiklik reddedildi', (t) => reddet(t, idler), { planKoru: true });
-    return tamam ? null : CATISMA;
+    const tamam = this.degistir(n > 1 ? `${String(n)} bekleyen değişiklik reddedildi` : 'Bekleyen değişiklik reddedildi', (t) => reddet(t, idler), { planKoru: true, ayrinti: g });
+    if (!tamam) return CATISMA;
+    this.#kararEkle(idler.map((id) => ({ id, karar: 'reddedildi' as const, gerekce: g })));
+    return null;
   };
+
+  uygulananlariBildir = (idler: readonly string[]): void => {
+    this.#kararEkle(idler.map((id) => ({ id, karar: 'uygulandi' as const })));
+  };
+
+  #kararEkle(l: BekleyenKarari[]): void {
+    const yeni = new Set(l.map((k) => k.id));
+    this.#kararlar = [...this.#kararlar.filter((k) => !yeni.has(k.id)), ...l].slice(-KARAR_EN_COK);
+  }
 
   // 1972: sunucu birleşmesinin bulduğu başka sayfa değişikliği bekleyene girer. Veri sürümü sunucuda artmıştır, burada artmaz; geri alma
   // yığınına ve ize girmez (kişisi bilinmez). Sessiz yazılır: çatışmada sayfa yeniden okur, sunucu farkı yeniden bulur.
@@ -216,10 +239,13 @@ export class CalismaYazici implements CalismaKomutu {
     this.#kirli = false;
     const sessiz = this.#yalnizSessiz;
     this.#yalnizSessiz = true;
-    this.#yolda = this.#a.yaz({ anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, beklenenSurum: this.#surum }).then(
-      (cevap) => { this.#surum = cevap.kayit.surum; },
+    const kararlar = this.#kararlar;
+    const birak = () => { this.#kararlar = this.#kararlar.filter((k) => !kararlar.includes(k)); };
+    this.#yolda = this.#a.yaz({ anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger, beklenenSurum: this.#surum, ...(kararlar.length > 0 ? { kararlar } : {}) }).then(
+      (cevap) => { this.#surum = cevap.kayit.surum; birak(); },
       (e: unknown) => {
         const durum = e instanceof ApiHatasi ? e.durum : null;
+        if (durum === 409) birak();
         // Yalnız sessiz değişiklik çatıştıysa ve ardından da yalnız sessiz değişiklik geldiyse hata gösterilmez: bunlar bırakılır, sayfa yeniden okur.
         if (durum === 409 && sessiz && this.#yalnizSessiz) {
           this.#durdu = true;

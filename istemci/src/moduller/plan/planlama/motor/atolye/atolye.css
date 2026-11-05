@@ -469,6 +469,8 @@
 .tc-pym-pa-yol-l button:hover, .tc-pym-pa-yol-l button:focus-visible { border-color: var(--hazard); }
 .tc-pym-pa-yol-l small { margin-left: auto; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pym-pa-kucuk { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pym-pa-ret { display: grid; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-pym-pa-ret label { display: grid; gap: var(--pay-ince); min-width: 0; font-size: var(--yazi-s); }
 .tc-pym-pa-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
 .tc-pym-pa-kap { overflow-x: auto; min-width: 0; }
 .tc-pym-pa-num { text-align: right; }

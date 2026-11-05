@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { DefterSatiri } from '#paylasilan/sozlesme/planlama.ts';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
+import { api } from '../../../../../ortak/veri/api.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { IzSatiri, PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
@@ -108,6 +110,26 @@ describe('Geçmiş ekranı', () => {
     cleanup();
     ac(null, PLANCI, 'senaryolar', { ...SENARYOLAR, senaryolar: [] });
     expect(screen.getByText(/^Taslak yok\./)).toBeTruthy();
+  });
+
+  it('2129-2 b Değişiklik defteri: sunucudan en yeni önde okunur; olay, kişi ve ret gerekçesi görünür; daha eskisi sayfa sayfa gelir', async () => {
+    const satir = (id: number, olay: DefterSatiri['olay'], gerekce: string | null = null): DefterSatiri =>
+      ({ id, olay, bekleyenId: `b${String(id)}`, ne: `Değişiklik ${String(id)}`, ayrinti: '', isler: ['S1'], gerekce, kisi: 'Deneme planci', zaman: '2026-11-05T08:00:00.000Z' });
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => Promise.resolve(yol.endsWith('?once=8')
+      ? { satirlar: [satir(7, 'degisiklik')], dahaVar: false }
+      : { satirlar: [satir(9, 'reddedildi', 'Termin değişmedi'), satir(8, 'uygulandi')], dahaVar: true })) as never);
+    ac(izli(), OKUYAN, 'defter');
+    const tablo = await screen.findByRole('table', { name: 'Değişiklik defteri' });
+    const satirlar = () => within(tablo).getAllByRole('row').slice(1);
+    expect(satirlar()[0]?.textContent).toContain('Reddedildi');
+    expect(satirlar()[0]?.textContent).toContain('Termin değişmedi');
+    expect(satirlar()[0]?.textContent).toContain('Deneme planci');
+    expect(satirlar()[1]?.textContent).toContain('Uygulandı');
+    fireEvent.click(screen.getByRole('button', { name: 'Daha eski kayıtlar' }));
+    await waitFor(() => { expect(satirlar()).toHaveLength(3); });
+    expect(get).toHaveBeenLastCalledWith('/plan/degisiklik-defteri?once=8');
+    expect(screen.queryByRole('button', { name: 'Daha eski kayıtlar' })).toBeNull();
+    get.mockRestore();
   });
 
   it('her rolde aynı görünüm: okuyan da yazan da aynı bölümleri, süzgeci ve satırları görür', () => {

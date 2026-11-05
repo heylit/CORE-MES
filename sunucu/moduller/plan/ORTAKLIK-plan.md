@@ -25,7 +25,8 @@
 | Kavram | Planda | Sahibi / öteki yer |
 |---|---|---|
 | Plan onay geçişleri | `plan_senaryo_onay_kaydi` (senaryo_id, islem, kisi_id, metin, dort_gozsuz, zaman) | plan; dört göz ayarı `plan.dort-goz` ayarlar modülünde (değeri), tanımı paylasilan/ayarlar |
-| Kişi | `plan_senaryo_onay_kaydi.kisi_id`, `plan_senaryo_siparis_carpani.kisi_id` -> `kisi` | kisiler |
+| Kişi | `plan_senaryo_onay_kaydi.kisi_id`, `plan_senaryo_siparis_carpani.kisi_id`, `plan_degisiklik_defteri.kisi_id` -> `kisi` | kisiler |
+| Plan değişiklik defteri (2129-2 b) | `plan_degisiklik_defteri` (olay, bekleyen_id, ne, ayrinti, isler, gerekce, kisi_id, zaman) | plan; satırı çalışma yazması girer, yalnız ekleme |
 | Taslak bedel ayarı | `plan_senaryo_bedel_ayari` (plan_ayari bedel sütunlarının kopyası) | plan |
 | Sipariş | `plan_senaryo_siparis_carpani.siparis_id` -> `siparisler_siparis` | siparisler |
 | Bekleyen Arkon sırası | okunur: `plan_senaryo_degisikligi` (tur sirala) | plan; Arkon `bekleyenSiralar` ile okur |
