@@ -116,6 +116,31 @@ describe('A1 Üretim Terminali', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
+  it('2125: makine seçimi ekrandaki işindir; başka işe geçince bırakılır, yeni işin başlatması seçimsiz gider', async () => {
+    const ikinci = { ...PAKET, id: 'pk-deneme-secim', no: 'IE-DENEME-4', part: 'Deneme dördüncü parça' };
+    const tesis = { ...TESIS, mcs: [{ id: 'MK-1', name: 'Deneme makine 1', st: 'IST-1' }, { id: 'MK-2', name: 'Deneme makine 2', st: 'IST-1' }] };
+    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: PAKET.id, surum: 1, govde: PAKET }, { kimlik: ikinci.id, surum: 1, govde: ikinci }], kv: [{ kimlik: 'plant', surum: 2, govde: { v: tesis } }] } });
+    arkonAc('/uretim-terminali');
+    const cark = await screen.findByRole('region', { name: 'İş ve makine çarkı' }, { timeout: 10000 });
+    const makineler = () => fireEvent.click(within(within(cark).getByRole('group', { name: 'Çark şeridi' })).getByRole('button', { name: /Makineler/ }));
+    const isler = () => fireEvent.click(within(within(cark).getByRole('group', { name: 'Çark şeridi' })).getByRole('button', { name: /İşler/ }));
+    // Önceki testlerin yerel kopyası kalabilir: tesis yeni sürümle gelir, listede en az iki iş yeter.
+    await within(cark).findByRole('button', { name: /^İşler · ([2-9]|\d{2,})$/ }, { timeout: 10000 });
+    makineler();
+    fireEvent.click(within(cark).getByRole('button', { name: 'Bu makinede çalış' }));
+    expect(within(cark).getByText('1 makine seçili')).toBeTruthy();
+    isler();
+    fireEvent.click(within(cark).getByRole('button', { name: 'Sonraki: işler' }));
+    fireEvent.click(within(cark).getByRole('button', { name: 'Bu işe geç' }));
+    makineler();
+    await waitFor(() => { expect(within(cark).queryByText('1 makine seçili')).toBeNull(); });
+    expect(within(cark).getByRole('button', { name: 'Bu makinede çalış' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    const baslatma = olaylar(istekler).find((e) => e.state === 'running') as { mcs?: unknown } | undefined;
+    expect(baslatma?.mcs).toBeUndefined();
+  }, 40000);
+
   it('820 b, 848 a: genişte Menü düğmesi yalnız geçiş varsa; yönetici Çizim\'e geçer', async () => {
     sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
     arkonAc('/uretim-terminali');
