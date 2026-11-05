@@ -127,6 +127,69 @@ export async function numuneTeslimi(db: Db, g: NumuneTeslimi): Promise<NumuneTes
   return { teslim: { id: t.id, no: t.no } };
 }
 
+// ---- Numune kararı (2131-3 a) ---------------------------------------------------------------------------------------------------
+// Kaliteye giden numunenin kararı parçaya yansır: onay ve sapmada parça hatta döner (geldiği istasyona yolda teslim; hat "Teslim al" ile
+// alır), retde bulunduğu yerde red kalitesine geçer (parça yerinde kalır, 135). Teslimi hâlâ yoldaysa: onayda teslim iptal olur, parça
+// istasyondan hiç çıkmamış sayılır; retde kalite almış sayılır (karar ölçülmüş parçaya verilir). Karar numuneyi durdurmaz: teslimi olmayan,
+// reddedilmiş ya da iptal edilmiş numunede ya da parça yerinde değilse stok yazılmaz, neden döner. Aynı numunenin ikinci yansıması
+// ikinci dönüş ya da ikinci ret yazmaz: dönüş teslimi kaynak kimliğiyle tektir, ret teslimin notuyla işaretlenir.
+export interface NumuneKarariYansimasi { kaynakKimligi: string; karar: 'onay' | 'ret' | 'sapma'; kisiId: number }
+export type NumuneKarariSonucu = { donus: { id: number; no: string } } | { iptal: { id: number; no: string } } | { red: string } | { atlandi: string };
+const NUMUNE_RED_NOTU = 'Numune reddedildi';
+export async function numuneKarariYansit(db: Db, g: NumuneKarariYansimasi): Promise<NumuneKarariSonucu> {
+  const kaynakKimligi = `numune:${g.kaynakKimligi}`.slice(0, 120);
+  let t = await sorgular.teslimKaynaktan(db, kaynakKimligi);
+  if (t === null) return { atlandi: 'Numunenin stok teslimi yok; karar stoğa yazılmadı.' };
+  if (t.durum === 'red' || t.durum === 'iptal') return { atlandi: 'Numunenin teslimi kapanmış (reddedildi ya da iptal); karar stoğa yazılmadı.' };
+  if (t.durum === 'yolda' && g.karar !== 'ret') {
+    const kapanan = await sorgular.teslimKapat(db, t.id, t.surum, { durum: 'iptal', alinan: null, redNedeni: null, hareketId: null, kisiId: g.kisiId });
+    if (kapanan === null) throw cakisma('Numunenin teslimi bu arada değişti; yeniden deneyin.');
+    await sorgular.teslimeNotYaz(db, t.id, 'Numune onaylandı; parça istasyonda kaldı');
+    return { iptal: { id: t.id, no: t.no } };
+  }
+  if (t.durum === 'yolda') {
+    await teslimiKapat(db, g.kisiId, t, t.miktar, t.surum, 'miktar');
+    t = (await sorgular.teslimBul(db, t.id))!;
+  }
+  const miktar = binde(t.alinan ?? t.miktar);
+  const emir = t.uretimEmriId === null ? null : await uretimEmriOzeti(db, t.uretimEmriId);
+  const emirNo = emir?.emirNo ?? (t.uretimEmriId === null ? '' : String(t.uretimEmriId));
+  if (g.karar === 'ret') {
+    if ((t.aciklama ?? '').startsWith(NUMUNE_RED_NOTU)) return { red: bindenMetin(0n) };
+    const gecen = await korumali(async () => {
+      const b = await sorgular.bakiyeKilitle(db, t.malzemeId, t.hedefKonumId, t.partiId, t.statuId, 'serbest');
+      const yolda = binde(await sorgular.yoldaAyrilan(db, t.malzemeId, t.hedefKonumId, t.partiId, t.statuId, 'serbest'));
+      const bos = binde(b?.miktar ?? '0') - yolda;
+      const m = bos < miktar ? bos : miktar;
+      if (m <= 0n) return 0n;
+      await kaliteDegistir(db, g.kisiId, {
+        malzemeId: t.malzemeId, konumId: t.hedefKonumId, partiId: t.partiId, statuId: t.statuId, kaynak: 'serbest', hedef: 'red', miktar: m,
+        uretimEmriId: t.uretimEmriId, aciklama: `Numune reddi · teslim ${t.no}${emirNo === '' ? '' : ` · emir ${emirNo}`}`,
+      });
+      return m;
+    });
+    if (gecen === 0n) return { atlandi: 'Numunenin parçası teslim edildiği yerde serbest değil; ret stoğa yazılmadı.' };
+    await sorgular.teslimeNotYaz(db, t.id, NUMUNE_RED_NOTU);
+    return { red: bindenMetin(gecen) };
+  }
+  const donusKimligi = `numune-donus:${g.kaynakKimligi}`.slice(0, 120);
+  const onceki = await sorgular.teslimKaynaktan(db, donusKimligi);
+  if (onceki !== null) return { donus: { id: onceki.id, no: onceki.no } };
+  const id = await korumali(async () => {
+    const b = await sorgular.bakiyeKilitle(db, t.malzemeId, t.hedefKonumId, t.partiId, t.statuId, 'serbest');
+    const yolda = binde(await sorgular.yoldaAyrilan(db, t.malzemeId, t.hedefKonumId, t.partiId, t.statuId, 'serbest'));
+    if (binde(b?.miktar ?? '0') - yolda < miktar) return null;
+    return teslimYaz(db, {
+      no: await belgeNo(db, 'stok.teslim-no', 'stok_teslim'), kaynakKimligi: donusKimligi, malzemeId: t.malzemeId, miktar: bindenMetin(miktar), partiId: t.partiId,
+      statuId: t.statuId, kaliteDurumu: 'serbest', kaynakKonumId: t.hedefKonumId, hedefKonumId: t.kaynakKonumId, uretimEmriId: t.uretimEmriId, istekId: null,
+      aciklama: `Numune dönüşü · ${g.karar === 'sapma' ? 'sapma' : 'onay'}${emirNo === '' ? '' : ` · emir ${emirNo}`}`, gonderenKisiId: g.kisiId,
+    });
+  });
+  const donus = await sorgular.teslimKaynaktan(db, donusKimligi);
+  if (id === null && donus === null) return { atlandi: 'Numunenin parçası teslim edildiği yerde serbest değil; dönüş stoğa yazılmadı.' };
+  return { donus: { id: donus!.id, no: donus!.no } };
+}
+
 // ---- Fasona gönderim (kart #1310, iki adım) ------------------------------------------------------------------------------------
 // Gönderimde parça önceki adımın istasyonundan firmanın "Yolda" konumuna geçer; sevkiyat işi tamamlanınca firmanın fason konumuna.
 // Sağlam dönüşü mal kabul alır (giden fason konumundan düşer); Dış operasyonlardaki dönüş yalnız hurdayı firmadan düşer. Kalan

@@ -183,6 +183,10 @@ export const hurdaSayimiYansitUyarili = (db: Db, g: servis.HurdaSayimiYansimasi)
 // Arkon'dan operatörün gönderdiği numune (karar 115 a, 125 a): teslim kaydı; engel değildir, yazılamazsa neden döner.
 export type { NumuneTeslimi, NumuneTeslimSonucu } from './servis.ts';
 export const numuneTeslimi = (db: Db, g: servis.NumuneTeslimi): Promise<servis.NumuneTeslimSonucu> => akistan(db, 'terminal', () => servis.numuneTeslimi(db, g));
+// 2131-3 a: numunenin kalite kararı parçasına yansır (onayda hatta dönüş teslimi, retde red). Engel değildir: yazılamazsa neden döner.
+// Çağıranın transaction'ında yürür; kararı ve yetkiyi çağıran yazar.
+export type { NumuneKarariSonucu, NumuneKarariYansimasi } from './servis.ts';
+export const numuneKarariYansit = (db: Db, g: servis.NumuneKarariYansimasi): Promise<servis.NumuneKarariSonucu> => akistan(db, 'kalite', () => servis.numuneKarariYansit(db, g));
 // 564 6 a: kalite istasyonunun lot reddi emrin istasyondaki serbest parçasını red kalitesine geçirir (kabul değiştirmez); geçen miktar döner.
 // Çağıranın transaction'ında yürür; yetkiyi ve Kalite Merkezi lot kaydını çağıran yazar.
 export type { IstasyonLotKarari } from './servis.ts';

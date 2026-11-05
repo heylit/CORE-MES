@@ -19,7 +19,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi, emirBaslat, emirBitir, emirIptalEt, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { adimCiktisiCozucusuKaydet, adimStatusuCozucusuKaydet, cikisYap, emirTamamlamaOku, geriAl, hurdaSayimiYansit, istasyondanTeslimEdilen, kaliteKarariYansit, kisiKodu, konumAc, statuDegistir, suresiDolanTeslimleriIptal, uretimGirdiUyarisi, uretimSayimiYansit } from './servis.ts';
-import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, istasyonLotKarari, malzemeStokDurumlari, numuneTeslimi } from './disari.ts';
+import { emirlerinNetSarfi, emirMalzemeFisleri, emrinRefakatKartlari, istasyonKonumlari, istasyonLotKarari, malzemeStokDurumlari, numuneKarariYansit, numuneTeslimi } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 
 // Malzeme · Teslim (kart #1208): STK-T1 (stok yok), STK-T2 (yalnız yoldayken kapanır), STK-T3 (iptal gönderenin),
@@ -2094,6 +2094,80 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual([await kalite('serbest'), await kalite('red')], ['2.000', '2.000']);
     assert.equal(await lot('ret', '5'), '2', 'serbest kalandan fazlası geçmez');
     assert.deepEqual([await kalite('serbest'), await kalite('red')], [null, '4.000']);
+  });
+  test('2131-3 a numune kararı: onayda parça geldiği istasyona döner (yolda teslim), retde bulunduğu yerde redde geçer; yoldaki teslimde onay iptal eder, ret alıp redder; tekrar ikinci kayıt açmaz', async () => {
+    const ym = await kart('yarimamul');
+    const [a, k] = [await istasyon(), await istasyon()];
+    const e = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id) VALUES ($1, $2, 5, $3, $4, $5, $6) RETURNING id',
+      [`P-NK${sira}`, 'Deneme', a.id, kisiler.get('yonetici'), ym, await revizyon(ym)]))!.id;
+    const operator = kisiler.get('operator')!;
+    const kaliteci = kisiler.get('kalite')!;
+    await o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId: null, istasyonId: a.id, kisiId: operator, fark: '4' }));
+    const ka = (await istasyonKonumu(a.id))!;
+    let kk = 0;
+    const gonderilen = async (alinsin: boolean): Promise<string> => {
+      const kimlik = randomUUID();
+      const n = await o().vt.tx((db) => numuneTeslimi(db, { uretimEmriId: e, isEmriId: null, istasyonId: a.id, kisiId: operator, adet: 1, kaynakKimligi: kimlik, hedefIstasyonId: k.id }));
+      assert.ok('teslim' in n, JSON.stringify(n));
+      if (alinsin) {
+        const surum = (await o().vt.tek<{ surum: number }>('SELECT surum FROM stok_teslim WHERE id = $1', [n.teslim.id]))!.surum;
+        assert.equal((await istek('kalite', 'POST', `/stok/teslimler/${n.teslim.id}/teslim-al`, { surum, alinan: '1' })).durum, 200);
+      }
+      kk = (await istasyonKonumu(k.id))!;
+      return kimlik;
+    };
+    const karar = (kaynakKimligi: string, k: 'onay' | 'ret' | 'sapma') => o().vt.tx((db) => numuneKarariYansit(db, { kaynakKimligi, karar: k, kisiId: kaliteci }));
+    const kalite = async (konum: number, d: string) => (await o().vt.tek<{ m: string | null }>('SELECT sum(miktar)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2 AND kalite_durumu = $3', [ym, konum, d]))?.m ?? null;
+    const teslim = async (id: number) => (await o().vt.tek<{ durum: string; kaynak: number; hedef: number; miktar: string; kalite: string; surum: number; aciklama: string | null }>(
+      'SELECT durum, kaynak_konum_id AS kaynak, hedef_konum_id AS hedef, miktar::text, kalite_durumu AS kalite, surum, aciklama FROM stok_teslim WHERE id = $1', [id]))!;
+
+    assert.ok('atlandi' in await karar(randomUUID(), 'onay'), 'teslimi olmayan numune stoğa yazılmaz');
+
+    // Onay: kalitedeki parça geldiği istasyona yolda teslimle döner; hat Teslim al ile alır. Tekrar aynı teslimi döner.
+    const onay = await gonderilen(true);
+    const d = await karar(onay, 'onay');
+    assert.ok('donus' in d, JSON.stringify(d));
+    const dt = await teslim(d.donus.id);
+    assert.deepEqual([dt.durum, dt.kaynak, dt.hedef, dt.miktar, dt.kalite], ['yolda', kk, ka, '1.000', 'serbest']);
+    assert.deepEqual(await karar(onay, 'onay'), d, 'ikinci yansıma ikinci dönüş açmaz');
+    assert.equal((await istek('operator', 'POST', `/stok/teslimler/${d.donus.id}/teslim-al`, { surum: dt.surum, alinan: '1' })).durum, 200);
+    assert.deepEqual([await bakiye(ym, ka), await bakiye(ym, kk)], ['4.000', null]);
+
+    // Sapma onay gibi döner.
+    const sapma = await gonderilen(true);
+    const ds = await karar(sapma, 'sapma');
+    assert.ok('donus' in ds && (await teslim(ds.donus.id)).aciklama?.includes('sapma'), JSON.stringify(ds));
+    const st = await teslim((ds as { donus: { id: number } }).donus.id);
+    assert.equal((await istek('operator', 'POST', `/stok/teslimler/${(ds as { donus: { id: number } }).donus.id}/teslim-al`, { surum: st.surum, alinan: '1' })).durum, 200);
+
+    // Ret: parça kalitede kalır, red kalitesine geçer; tekrar ikinci ret yazmaz.
+    const ret = await gonderilen(true);
+    assert.deepEqual(await karar(ret, 'ret'), { red: '1' });
+    assert.deepEqual([await kalite(kk, 'serbest'), await kalite(kk, 'red')], [null, '1.000']);
+    assert.deepEqual(await karar(ret, 'ret'), { red: '0' }, 'ikinci ret yazılmaz');
+    assert.equal(await kalite(kk, 'red'), '1.000');
+
+    // Yolda onay: teslim iptal olur, parça istasyonda kalır; sonra gelen karar stoğa yazılmaz.
+    const yoldaOnay = await gonderilen(false);
+    const iptal = await karar(yoldaOnay, 'onay');
+    assert.ok('iptal' in iptal, JSON.stringify(iptal));
+    const it = await teslim(iptal.iptal.id);
+    assert.equal(it.durum, 'iptal');
+    assert.match(it.aciklama ?? '', /^Numune onaylandı/);
+    assert.equal(await bakiye(ym, ka), '3.000');
+    assert.ok('atlandi' in await karar(yoldaOnay, 'ret'), 'kapanmış teslim stoğa yazılmaz');
+
+    // Yolda ret: kalite parçayı alır, red kalitesine geçirir.
+    const yoldaRet = await gonderilen(false);
+    assert.deepEqual(await karar(yoldaRet, 'ret'), { red: '1' });
+    assert.deepEqual([await bakiye(ym, ka), await kalite(kk, 'red'), await kalite(kk, 'serbest')], ['2.000', '2.000', null]);
+
+    // Kalitedeki parça başka yere gittiyse dönüş yazılmaz, neden döner.
+    const gitti = await gonderilen(true);
+    const g = await gonder('kalite', { malzemeId: ym, miktar: '1', kaynak: { istasyonId: k.id }, hedef: { istasyonId: a.id } });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    assert.ok('atlandi' in await karar(gitti, 'onay'), 'yoldaki parça ikinci kez gönderilmez');
   });
   // Kart #95, soru 96: istasyon yetkilisi ve isteyen ayrı kapsamlarda iki operatördür.
   const istasyonluOperator = async (ad: string, isMerkeziId: number): Promise<void> => {

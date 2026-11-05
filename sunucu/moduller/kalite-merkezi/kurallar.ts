@@ -1059,6 +1059,27 @@ export function hataliNcrGovdesi(
   };
 }
 
+// 2131-2 a: periyodik numunenin reddi NCR açar. Kimlik numuneden türer: aynı numune ikinci NCR açmaz. Emir ve lot alanı boştur (hatalı
+// parça NCR'si gibi): NCR emre kaynak bağıyla bağlanır, emrin stoğunu karantinaya almaz; numunenin parçası stokta ayrıca redde geçer (2131-3 a).
+// Ciddiyet istenen balonlardan biri kritikse Kritik, değilse ekranın varsayılanı Majör.
+export const NUMUNE_NCR_TANIM_ONEKI = 'Numune reddi: ';
+export const numuneNcrKimligi = (numuneId: number): string => `ncr-numune-${String(numuneId)}`;
+export interface NumuneNcrGirdisi {
+  numuneId: number; opNo: number; kritik: boolean; neden: string; parcaSayisi: number | null; not: string | null;
+  emir: { emirNo: string; parcaNo: string; parcaAd: string } | null; uygunsuzBalonlar: readonly number[];
+}
+export function numuneNcrGovdesi(g: NumuneNcrGirdisi, ncrNo: string, sorumlu: string, gun: string): Record<string, unknown> {
+  const balonlar = g.uygunsuzBalonlar.length === 0 ? '' : ` Uygunsuz balon: ${g.uygunsuzBalonlar.join(', ')}.`;
+  const sayim = g.parcaSayisi === null ? '' : `, ${String(g.parcaSayisi)}. parça`;
+  const not = g.not === null ? '' : ` Kalite notu: ${g.not}`;
+  return {
+    no: ncrNo, tarih: gun, kaynak: HATALI_NCR_KAYNAGI, ciddiyet: g.kritik ? 'Kritik' : 'Majör', parcaNo: g.emir?.parcaNo ?? '', parcaAdi: g.emir?.parcaAd ?? '',
+    rev: '', lot: '', proje: '', emir: '', miktar: '', hataTipi: '', sorumlu, durum: 'Açık',
+    tanim: `${NUMUNE_NCR_TANIM_ONEKI}${g.emir?.emirNo ?? ''} OP ${String(g.opNo)}, numune ${String(g.numuneId)} (${g.neden}${sayim}).${balonlar}${not}`,
+    mrb: 'Karar bekliyor', mrbGerekce: '',
+  };
+}
+
 // 1074 a-netleştirme: hatalı parça kararından açılan NCR'nin kaynak üretim emri. Yalnız sunucu yazar: genel yazma ve onay ucu bu alanı
 // getirse de yok sayılır, var olan kaydın bağı her yazmada korunur (ekran alanı bilmeden kaydı geri yazsa da bağ düşmez).
 // Bağdan önce açılmış NCR'de alan yoktur; o NCR emre bağlanmaz.
