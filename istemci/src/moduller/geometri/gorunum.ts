@@ -95,3 +95,12 @@ export function altParcalar(dugumler: readonly GeometriMontajDugumu[], sira: num
   return sonuc;
 }
 export const hacimMetni = (h: number | null): string => (h === null ? 'Yok (açık yüzey)' : buyukSayi(h, 'mm³'));
+
+// Patlatma (2139-1 c): parça, kendi merkezinden modelin merkezine çizilen doğru boyunca dışa kayar; kayma uzaklıkla orantılıdır.
+// Oran 0-1; 1'de kenardaki parça modelin yarı köşegeninin bir buçuk katı uzaklaşır (kamera çerçevesinde kalsın diye). Merkezi modelin merkezinde olan parça yerinde kalır.
+export const PATLATMA_KATI = 1.5;
+export function patlatmaKaymasi(parca: readonly number[], merkez: readonly number[], oran: number): [number, number, number] {
+  const k = Math.min(1, Math.max(0, oran)) * PATLATMA_KATI;
+  // + 0: eksi sıfır yazılmasın.
+  return [0, 1, 2].map((i) => ((parca[i] ?? 0) - (merkez[i] ?? 0)) * k + 0) as [number, number, number];
+}

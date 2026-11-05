@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
-  Box3, BoxGeometry, BufferGeometry, Color, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments,
+  Box3, BoxGeometry, BufferGeometry, Color, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments, Matrix4,
   Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Scene, SRGBColorSpace, TorusGeometry, Vector3, WebGLRenderer,
 } from 'three';
 import type { Material, Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { DurumKutusu } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Simge } from '../../ortak/arayuz/index.ts';
 import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
+import { patlatmaKaymasi } from './gorunum.ts';
 
 // Sahne renkleri tasarım değişkenlerinden okunur; değişken yoksa (test ortamı) nötr gri.
 function renk(ad: string): Color {
@@ -51,9 +52,53 @@ function kutularKur(kutular: readonly ParcaKutusu[]): Group {
     const merkez = en.clone().add(ust).multiplyScalar(0.5);
     const dolgu = new Mesh(govde, new MeshBasicMaterial({ color: renkli, transparent: true, opacity: 0.35, depthTest: false }));
     const kenar = new LineSegments(new EdgesGeometry(govde), new LineBasicMaterial({ color: renkli, depthTest: false }));
-    for (const n of [dolgu, kenar]) { n.position.copy(merkez); n.renderOrder = 10; g.add(n); }
+    for (const n of [dolgu, kenar]) { n.userData['merkez'] = merkez; n.position.copy(merkez); n.renderOrder = 10; g.add(n); }
   }
   return g;
+}
+
+// Patlatma (2139-1 c): her ağ (katı parça) kendi yerinden, oran 1'deki kaymasıyla (ebeveyninin koordinatında) tutulur.
+// Kayma modelin iç grubunda (CAD koordinatı) hesaplanır; vurgu kutuları da aynı kuralla kayar. Yalnız görünümdür.
+export interface PatlatmaParcasi { ag: Mesh; ilk: Vector3; birim: Vector3 }
+export interface Patlatma { merkez: Vector3; parcalar: PatlatmaParcasi[] }
+
+export function patlatmaKur(ic: Object3D): Patlatma {
+  ic.updateWorldMatrix(true, true);
+  const icTers = ic.matrixWorld.clone().invert();
+  const aglar: { ag: Mesh; merkez: Vector3 }[] = [];
+  const tum = new Box3();
+  ic.traverse((n) => {
+    if (!(n instanceof Mesh)) return;
+    const g = n.geometry as BufferGeometry;
+    if (g.boundingBox === null) g.computeBoundingBox();
+    const kutu = (g.boundingBox ?? new Box3()).clone().applyMatrix4(new Matrix4().multiplyMatrices(icTers, n.matrixWorld));
+    if (kutu.isEmpty()) return;
+    tum.union(kutu);
+    aglar.push({ ag: n, merkez: kutu.getCenter(new Vector3()) });
+  });
+  const merkez = tum.isEmpty() ? new Vector3() : tum.getCenter(new Vector3());
+  const parcalar = aglar.map(({ ag, merkez: m }) => {
+    const kayma = new Vector3(...patlatmaKaymasi(m.toArray(), merkez.toArray(), 1));
+    // Kayma ebeveynin koordinatına çevrilir (occt'de ebeveyn iç gruptur, çeviri birimdir; glTF'de iç içe düğüm olabilir).
+    const cevir = new Matrix4().multiplyMatrices((ag.parent ?? ic).matrixWorld.clone().invert(), ic.matrixWorld);
+    const birim = kayma.clone().applyMatrix4(cevir).sub(new Vector3().applyMatrix4(cevir));
+    return { ag, ilk: ag.position.clone(), birim };
+  });
+  return { merkez, parcalar };
+}
+
+// Çubuk yalnız en az iki katı parçalı modelde görünür (2139-1 c); oran yüzde, 0-100.
+export function PatlatmaCubugu({ oran, oranYaz }: { oran: number; oranYaz: (x: number) => void }) {
+  const kimlik = useId();
+  return (
+    <div className="tc-g3b-patlat">
+      <label className="tc-g3b-patlat-etiket" htmlFor={kimlik}><Simge ad="expand" />Patlatma</label>
+      <input id={kimlik} type="range" min={0} max={100} step={1} value={oran} aria-valuetext={`yüzde ${String(oran)}`}
+        onChange={(e) => oranYaz(Number(e.target.value))} />
+      <output htmlFor={kimlik} className="tc-g3b-patlat-deger">%{oran}</output>
+      <Dugme tur="ikincil" simge="rotate" disabled={oran === 0} onClick={() => oranYaz(0)}>Topla</Dugme>
+    </div>
+  );
 }
 
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
@@ -65,6 +110,11 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
   // Modelin iç grubu (CAD koordinatı; dış grup Z'yi Y yukarı çevirir). Vurgu buna eklenir, model dönüşüyle birlikte durur.
   const icGrup = useRef<Object3D | null>(null);
   const [yuklendi, yuklendiYaz] = useState(0);
+  const patlatma = useRef<Patlatma | null>(null);
+  const kutuGrubu = useRef<Group | null>(null);
+  const [parcaSayisi, parcaSayisiYaz] = useState(0);
+  // Yüzde, 0-100; sayfa yenilenince sıfırdır.
+  const [oran, oranYaz] = useState(0);
 
   useEffect(() => {
     const el = kap.current;
@@ -103,6 +153,8 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
       if (iptal) { birak(m); return; }
       model = m;
       icGrup.current = m.children[0] ?? m;
+      patlatma.current = patlatmaKur(icGrup.current);
+      parcaSayisiYaz(patlatma.current.parcalar.length);
       yuklendiYaz((n) => n + 1);
       sahne.add(m);
       const kutu = new Box3().setFromObject(m);
@@ -129,6 +181,7 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
       kontrol.dispose();
       if (model) birak(model);
       icGrup.current = null;
+      patlatma.current = null;
       cizer.forceContextLoss();
       cizer.dispose();
       cizer.domElement.remove();
@@ -151,6 +204,19 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
     };
   }, [yuklendi, kx, ky, kz, ex, ey, ez, cap, derinlik]);
 
+  // Parçalar ve vurgu kutuları orana göre yerine konur; oran değişince yalnız konum değişir, ağ yeniden kurulmaz.
+  const yerlestir = () => {
+    const p = patlatma.current;
+    if (p === null) return;
+    const k = oran / 100;
+    for (const x of p.parcalar) x.ag.position.copy(x.ilk).addScaledVector(x.birim, k);
+    for (const n of kutuGrubu.current?.children ?? []) {
+      const m = n.userData['merkez'] as Vector3;
+      n.position.copy(m).add(new Vector3(...patlatmaKaymasi(m.toArray(), p.merkez.toArray(), k)));
+    }
+  };
+  useEffect(() => { yerlestir(); }, [yuklendi, oran]);
+
   // Montaj seçimi varken model solar, seçilen parçaların kutuları öne çıkar; seçim kalkınca malzemeler eski haline döner.
   const kutuAnahtari = kutular === null || kutular.length === 0 ? '' : JSON.stringify(kutular);
   useEffect(() => {
@@ -167,7 +233,10 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
     });
     const g = kutularKur(JSON.parse(kutuAnahtari) as ParcaKutusu[]);
     ic.add(g);
+    kutuGrubu.current = g;
+    yerlestir();
     return () => {
+      kutuGrubu.current = null;
       ic.remove(g);
       for (const c of g.children) {
         if (c instanceof Mesh || c instanceof LineSegments) { (c.geometry as BufferGeometry).dispose(); (c.material as Material).dispose(); }
@@ -177,8 +246,11 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null }:
   }, [yuklendi, kutuAnahtari]);
 
   return (
-    <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
-      {hata && <DurumKutusu durum="hata" mesaj={hata} />}
+    <div className="tc-g3b-sahne-kap">
+      <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
+        {hata && <DurumKutusu durum="hata" mesaj={hata} />}
+      </div>
+      {parcaSayisi >= 2 && <PatlatmaCubugu oran={oran} oranYaz={oranYaz} />}
     </div>
   );
 }

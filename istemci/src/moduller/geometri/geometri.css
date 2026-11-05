@@ -85,3 +85,15 @@ span.tc-g3b-mo-ac { cursor: default; }
 .tc-g3b-mo-secim { margin-block-start: var(--b-3); }
 .tc-g3b-mo-bos { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-2); }
 @media (max-width: 519px) { .tc-g3b-mo-olcu { display: none; } }
+/* Patlatma çubuğu (2139): dar ekranda görüntünün altında, genişte görüntünün sol alt köşesinde. */
+.tc-g3b-sahne-kap { position: relative; display: grid; gap: var(--b-2); min-width: 0; }
+.tc-g3b-patlat {
+  display: flex; align-items: center; gap: var(--b-2); flex-wrap: wrap; padding: var(--b-1) var(--b-2);
+  border-radius: var(--yari-1); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge2);
+}
+.tc-g3b-patlat-etiket { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 600; }
+.tc-g3b-patlat input[type='range'] { flex: 1; min-inline-size: calc(var(--b-6) * 4); min-block-size: var(--dokunma); accent-color: var(--hazard); }
+.tc-g3b-patlat-deger { min-inline-size: calc(var(--b-6) * 1.5); text-align: end; color: var(--muted); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
+@media (min-width: 520px) {
+  .tc-g3b-patlat { position: absolute; inset-inline-start: var(--b-2); inset-block-end: var(--b-2); max-inline-size: calc(var(--b-6) * 13); }
+}
