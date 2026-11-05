@@ -66,6 +66,8 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     kok.querySelector<HTMLElement>('.fsec-h[data-tab="order"]')!.click();
     await vi.waitFor(() => expect(kok.querySelectorAll('[data-sa-takip]')).toHaveLength(2));
     const [irs, fat] = [...kok.querySelectorAll<HTMLElement>('[data-sa-takip]')];
+    // Ana sayfa .todo izgarası (nokta, no, metin, düğme) iki sütunlu takip satırını ezmesin diye liste kendi işaretini taşır.
+    expect(irs!.parentElement!.hasAttribute('data-sa-takip-listesi')).toBe(true);
     expect(irs!.dataset.saTakip).toBe('tamam');
     expect(irs!.textContent).toContain('Mal kabul: irsaliye girildi');
     expect(irs!.textContent).toContain('İrsaliye DN-IRS-9');

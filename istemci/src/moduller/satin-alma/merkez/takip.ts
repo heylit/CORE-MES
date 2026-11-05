@@ -59,7 +59,7 @@ function siparisHTML(o: OrderInfo, t: SiparisTakibi, irsaliyeler: SiparisIrsaliy
   const not = t.faturalar.length ? "Fatura geldi; borcun vadesi faturadadır." : "Finansa beklenen ödeme olarak düşer; tutarlar KDV hariç tahminidir.";
   return `<div class="stack" data-sa-siparis-takibi="${esc(o.qid)}">
     ${tekil ? "" : `<p><b>${esc(supName(o.q))}</b>${siparisEtiketi(o) ? `, ${esc(siparisEtiketi(o))}` : ""}</p>`}
-    <ul class="todo">${irsaliye}${fatura}</ul>
+    <ul class="todo" data-sa-takip-listesi>${irsaliye}${fatura}</ul>
     <div class="row"><b>Ödeme planı</b><span class="small muted">${not}</span><span class="spacer"></span>${!t.faturalar.length ? `<button class="btn sm" data-act="odeme-plani" data-qid="${esc(o.qid)}">Ödeme planını düzenle</button>` : ""}</div>
     ${plan}</div>`;
 }
