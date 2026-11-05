@@ -16,7 +16,7 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
-import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
+import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kurGetir, kurlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
@@ -612,7 +612,11 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     await s.siparisleriLogoyaIsaretle(db, id, ILETILER.logoKayitsizTedarikci);
     await varsayilanPlanlariYaz(db, k, id);
   }
-  if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') await s.siparisIptaliniLogoyaIsaretle(db, id);
+  if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') {
+    await s.siparisIptaliniLogoyaIsaretle(db, id);
+    // Sipariş satırları iptalde kalır (geri alınabilir); finanstaki beklenen ödeme kalmamalı. Geri alınınca varsayılan plan yeniden kurulur.
+    if (siparisteMi(eski.durum)) for (const x of eski.karar?.siparisler ?? []) await siparisOdemePlaniKaldir(db, { talepId: id, teklifId: x.teklifId });
+  }
   // Sipariş bilgisi (beklenen teslim, tedarikçi) ya da durum değişmiş olabilir: alım satırları her kayıtta eşitlenir.
   if (siparisteMi(yazilacak.durum) || siparisteMi(eski.durum)) await alimlariBildir(db, k, id);
   if (siparisteMi(yazilacak.durum)) await kartKopyalariniAl(db, id);

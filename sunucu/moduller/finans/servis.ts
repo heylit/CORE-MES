@@ -912,6 +912,14 @@ export function siparisOdemePlaniYaz(db: Db, kisiId: number, g: { siparis: Sipar
     }
   });
 }
+// İptal edilen siparişin beklenen ödemesi kalmaz: plan silinir. Faturası bağlanmış siparişin planı zaten beklenene girmez ve takipte
+// geçmiş olarak kalır, silinmez. Silme tekrarlanabilir; satın almanın ucu çağırır, finans siparişi okumaz.
+export function siparisOdemePlaniKaldir(db: Db, siparis: SiparisAnahtari): Promise<void> {
+  return korumali(async () => {
+    if (await sorgular.siparisFaturasiVarMi(db, siparis.talepId, siparis.teklifId)) return;
+    await sorgular.siparisOdemeleriniSil(db, siparis.talepId, siparis.teklifId);
+  });
+}
 // Siparişin planı ve bağlı faturaları (no, tarih, vade); anahtar "talepId:teklifId". Planı ya da faturası olmayan sipariş haritada boş gelir.
 // Plan tutarı satın almanın yazdığı rakamdır; faturanın tutarı gelmez (FNS-48).
 export async function siparisPlanlari(db: Db, siparisler: readonly SiparisAnahtari[]): Promise<Map<string, SiparisPlani>> {
