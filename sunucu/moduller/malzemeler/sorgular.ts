@@ -217,6 +217,41 @@ export async function katalogKartiIptal(db: Db, kimlik: string, kisiId: number):
 const KATALOG_AD = `CASE WHEN jsonb_typeof(kayit -> 'com') = 'object' AND jsonb_typeof(kayit -> 'com' -> 'ad') = 'string'
                          THEN NULLIF(btrim(kayit -> 'com' ->> 'ad'), '') END`;
 
+// Arşiv (2114c): iptal kartlar. Silen ve silinme, iptal satırına son yazandır: iptal kart değiştirilemez (kurallar), son yazım silmedir.
+export interface ArsivSatiri {
+  kimlik: string;
+  no: number;
+  stokKodu: string;
+  ad: string | null;
+  tur: KatalogTuru;
+  silenId: number;
+  silinme: string;
+  logoyaGitti: boolean;
+  aktifOlmus: boolean;
+}
+
+const ARSIV_SUTUNLARI = `kimlik, no, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, tur, guncelleyen_kisi_id AS "silenId",
+       ${zamanMetni('guncelleme')} AS silinme, logo_kayit_no IS NOT NULL AS "logoyaGitti", aktif_oldu AS "aktifOlmus"`;
+
+export function arsivKartlari(db: Db): Promise<ArsivSatiri[]> {
+  return db.sorgu<ArsivSatiri>(`SELECT ${ARSIV_SUTUNLARI} FROM malzeme_katalog_karti WHERE onay_durumu = 'iptal' ORDER BY guncelleme DESC, no DESC`);
+}
+
+export function arsivKarti(db: Db, kimlik: string, kilitle: boolean): Promise<ArsivSatiri | null> {
+  return db.tek<ArsivSatiri>(
+    `SELECT ${ARSIV_SUTUNLARI} FROM malzeme_katalog_karti WHERE kimlik = $1 AND onay_durumu = 'iptal'${kilitle ? ' FOR UPDATE' : ''}`,
+    [kimlik],
+  );
+}
+
+export async function arsivdenGeriGetir(db: Db, kimlik: string, durum: 'taslak' | 'pasif', kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE malzeme_katalog_karti SET onay_durumu = $2, surum = surum + 1, guncelleyen_kisi_id = $3, guncelleme = now()
+      WHERE kimlik = $1 AND onay_durumu = 'iptal'`,
+    [kimlik, durum, kisiId],
+  );
+}
+
 // Birim ekranın yazdığı yerde durur: `kayit.com.birim` (her tür). Yalnız dolu metin birimdir; ekranın varsayılan birimi ('adet' vb.) uydurulmaz.
 const KATALOG_BIRIM = `CASE WHEN jsonb_typeof(kayit -> 'com') = 'object' AND jsonb_typeof(kayit -> 'com' -> 'birim') = 'string'
                            THEN NULLIF(btrim(kayit -> 'com' ->> 'birim'), '') END`;

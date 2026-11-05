@@ -863,6 +863,33 @@ export function katalogHicOnaylanmadiMi(kayit: Nesne): boolean {
 // Logo'da karşılığı olan kart TMI'den tek başına silinmez: Logo'da sahipsiz kart kalır (2114-2 teyit).
 export const katalogSilinirMi = (logoKayitNo: string | null): boolean => logoKayitNo === null;
 
+// Arşivden geri gelen kart (2114c): bir kez aktif olmuşsa pasif döner (seçimlere kendiliğinden girmez), hiç aktif olmamışsa taslak.
+export const arsivdenDonusDurumu = (aktifOlmus: boolean): 'taslak' | 'pasif' => (aktifOlmus ? 'pasif' : 'taslak');
+
+export interface ArsivIzi {
+  modul: string;
+  kayit: string;
+  tur: 'kesin' | 'olasi';
+  adet: number;
+  ornek: string | null;
+}
+
+export const arsivIzAdetleri = (izler: readonly ArsivIzi[] | null): { kesin: number | null; olasi: number | null } => {
+  if (izler === null) return { kesin: null, olasi: null };
+  const topla = (tur: ArsivIzi['tur']): number => izler.filter((i) => i.tur === tur).reduce((t, i) => t + i.adet, 0);
+  return { kesin: topla('kesin'), olasi: topla('olasi') };
+};
+
+// Kalıcı silme (2114-4 a): kesin bağ da olası iz de engeller; bağ sayımı bağlı değilse (izler null) bilinmeyen bağ var sayılır.
+// Stok kodu yeniden yazılarak onaylanır; Logo'ya gönderilmiş kart önce Logo'dan silinir (2114b).
+export function arsivKaliciSilmeEngeli(g: { izler: readonly ArsivIzi[] | null; logoyaGitti: boolean; stokKodu: string; girilenKod: string }): string | null {
+  if (g.girilenKod.trim() !== g.stokKodu) return 'Yazılan stok kodu kartla aynı değil.';
+  if (g.logoyaGitti) return 'Kart Logo\'ya gönderilmiş; Logo\'dan silinmeden kalıcı silinemez.';
+  if (g.izler === null) return 'Bağ sayımı bağlı değil; kartın bağları bilinmeden kalıcı silinmez.';
+  if (g.izler.length > 0) return 'Kartın bağı ya da olası izi var; kalıcı silinemez.';
+  return null;
+}
+
 // MKK-7: sürüm, okunan sürümle aynı olmalı; değilse başkası yazmıştır.
 export const katalogSurumUyarMi = (kayitli: number, gelen: number | null): boolean => gelen === kayitli;
 

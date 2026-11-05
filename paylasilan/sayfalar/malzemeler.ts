@@ -19,6 +19,7 @@ export const MALZEMELER_IKINCI_MENU = {
     ] },
     { baslik: 'Tanımlar', maddeler: [
       { anahtar: 'tpl', baslik: 'Şablonlar', yol: '/malzemeler/sablonlar', simge: 'grid', islem: 'sayfa.malzemeler' },
+      { anahtar: 'arsiv', baslik: 'Arşiv', yol: '/malzemeler/arsiv', simge: 'box', islem: 'sayfa.malzemeler', okur: ['/malzeme-arsivi'] },
       { anahtar: 'mayar', baslik: 'Malzeme ayarları', yol: '/malzemeler/ayarlar', simge: 'gear', islem: 'sayfa.malzemeler' },
     ] },
     // Prototipin görünümü değil, kabuğun kendi sayfası (kart #232): Logo gönderim durumu salt okunur, karşılıklar tanım yazanın.
