@@ -19,7 +19,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi } from '../uretim-emirleri/disari.ts';
 import { EK_ADIM_SARTNAME_ROTA } from './kurallar.ts';
-import { isEmriSartnameleri, talimatSurumuAdimlari } from './disari.ts';
+import { isEmriSartnameleri, talimatSurumuAdimlari, yuzeyIslemiAdimlari } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -369,6 +369,26 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.deepEqual([yeni.get(e2.isEmriIdleri[0]!)?.[0]?.surum.surumNo, yeni.get(e2.isEmriIdleri[0]!)?.[0]?.degerler.sinif], [2, 'C4']);
     // Sabitleme yalnız eklenir.
     await assert.rejects(ortam!.sahip.sorgu("UPDATE rota_is_emri_sartnamesi SET degerler = '{}' WHERE is_emri_id = $1", [ie10]));
+  });
+
+  test('2144: 3D Atölyesi yüzey işlemi listesi yürürlükteki rotanın KPL, DNS, AST, BYA, YHZ şartnameli adımlarıdır; ısıl işlem girmez, rota yoksa null', async () => {
+    const x = await kendiSartnamesi();
+    const zn = sartname('KPL-ZN');
+    const isil = sartname('ISL-STM');
+    const { id, surum, urun } = await taslak();
+    assert.equal(await vt().tx((db) => yuzeyIslemiAdimlari(db, urun)), null, 'yürürlükte rota yok');
+    const b1 = await bagla(id, surum, 10, [{ sartnameId: x.id, degerler: { renk: 'RAL 9005' } }]);
+    const b2 = await bagla(id, b1.json<KomutCevabi>().surum, 20, [
+      { sartnameId: zn.id, degerler: { kalinlik: '12 µm (Fe/Zn12)' } }, { sartnameId: isil.id, degerler: {} },
+    ]);
+    assert.equal(b2.statusCode, 200, b2.body);
+    await yururlugeAl(id, b2.json<KomutCevabi>().surum);
+    const kategori = kutuphane.kategoriler.find((k) => k.id === x.kategoriId)!.kod;
+    const adimlar = await vt().tx((db) => yuzeyIslemiAdimlari(db, urun));
+    assert.deepEqual(adimlar, [
+      { opNo: 10, adimAdi: 'Tornalama', fason: false, talimatVar: false, sartname: { id: x.id, kod: x.kod, ad: x.ad, kategoriKodu: kategori } },
+      { opNo: 20, adimAdi: 'Kaplama', fason: true, talimatVar: false, sartname: { id: zn.id, kod: 'KPL-ZN', ad: zn.ad, kategoriKodu: 'KPL' } },
+    ]);
   });
 
   test('aynı ürünün revizyonundan açılan taslak bağları alır; yürürlükteki rota emre uygulanınca başlamamış iş emri yeni bağı alır', async () => {

@@ -2,3 +2,8 @@
 // okuma işlemini ister; geometri.oku istenmez.
 export { malzemeGeometrisi } from './servis.ts';
 export type { MalzemeGeometrisi } from './servis.ts';
+// Yüzey işaretlemenin işlem listesi (kart 2144, 2140-3): rota yürürlükteki revizyonun yüzey işlemi adımlarını verir; bağı kablolama.ts kurar
+// (ADR 0006 madde 6). Bağ kurulmadıysa liste boştur ve neden 'rota-bagli-degil'.
+export { yuzeyAdimlariCozucusuKaydet as yuzeyAdimlariCozucusu } from './servis.ts';
+export type { YuzeyAdimlariCozucusu } from './servis.ts';
+export type { GeometriYuzeyAdimi } from '#paylasilan/sozlesme/geometri.ts';

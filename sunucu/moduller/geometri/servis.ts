@@ -1,18 +1,23 @@
 import type { Db, Veritabani } from '#cekirdek/db.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { bulunamadi, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi, GeometriSaglikCevabi,
+  GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
+import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, bilesenListesi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, saglikDegerlendir, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU,
+  bicimDenetimi, bilesenListesi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, saglikDegerlendir, STOK_FORMLARI,
+  stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
+import type { YuzeyIsaretGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
 
@@ -194,6 +199,91 @@ export async function malzemeGeometrisi(
     malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, kapak: m.kapak, modelSayisi: liste.length,
     analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu),
   };
+}
+
+// ---------------- Yüzey işaretleri (kart 2144) ----------------
+
+// İşlem listesi rotadandır (2140-3). Rota geometriyi okur (ham önerisi), geometri rotayı ithal edemez (ADR 0006); adımları rota verir,
+// bağı sunucu/kablolama.ts kurar. Çözücü malzemenin yürürlükteki rota revizyonundaki yüzey işlemi adımlarını verir; rota yoksa null.
+// Yetki denetlemez.
+export type YuzeyAdimlariCozucusu = (db: Db, malzemeNo: number) => Promise<GeometriYuzeyAdimi[] | null>;
+let yuzeyAdimlari: YuzeyAdimlariCozucusu | null = null;
+// Önceki çözücüyü döner (test kurup geri koyar).
+export function yuzeyAdimlariCozucusuKaydet(cozucu: YuzeyAdimlariCozucusu | null): YuzeyAdimlariCozucusu | null {
+  const onceki = yuzeyAdimlari;
+  yuzeyAdimlari = cozucu;
+  return onceki;
+}
+
+async function rotaAdimlari(db: Db, malzemeNo: number): Promise<GeometriYuzeyCevabi['rota']> {
+  if (yuzeyAdimlari === null) return { durum: 'rota-bagli-degil', adimlar: [] };
+  const adimlar = await yuzeyAdimlari(db, malzemeNo);
+  return adimlar === null ? { durum: 'rota-yok', adimlar: [] } : { durum: 'bagli', adimlar };
+}
+
+const rotaAnahtarlari = (r: GeometriYuzeyCevabi['rota']): Set<string> =>
+  new Set(r.adimlar.map((a) => islemAnahtari({ tur: 'rota', opNo: a.opNo, sartnameId: a.sartname.id })));
+
+// Kayıt yoksa aynı belgenin önceki işaretli revizyonundan eşleşen yüzlere öneri (2140-4 a); öneri kaydedilmez, kaydedilince onaylanana kadar
+// oneri işaretiyle kalır. Yüzler revizyonun B-rep okumasındandır; yüzleri okunmamış analiz 'yuz-yok'.
+export async function yuzeyOku(db: Db, revizyonId: number): Promise<GeometriYuzeyCevabi> {
+  const m = await model(db, revizyonId);
+  const rota = await rotaAdimlari(db, m.malzemeNo);
+  const bos: GeometriYuzeyCevabi = {
+    revizyonId, oneri: true, neden: null, yuzler: [], rota, isaretler: [], alanlar: [], isaretsizMm2: 0, toplamMm2: 0,
+    surum: null, guncelleyen: null, guncelleme: null, tasima: null,
+  };
+  const a = await sorgular.analiz(db, revizyonId);
+  if (a === null || a.ozet !== m.ozet) return { ...bos, neden: 'analiz-yok' };
+  const yuzler = await sorgular.yuzler(db, revizyonId);
+  if (yuzler.length === 0) return { ...bos, neden: 'yuz-yok' };
+  const siralar = new Set(yuzler.map((y) => y.sira));
+  const baslik = await sorgular.yuzeyBasligi(db, revizyonId);
+  let isaretler: YuzeyIsaretGirdisi[] = [];
+  let tasima: GeometriYuzeyCevabi['tasima'] = null;
+  if (baslik !== null) {
+    isaretler = (await sorgular.yuzeyIsaretleri(db, revizyonId)).filter((x) => siralar.has(x.yuzSira));
+  } else {
+    const kaynak = await sorgular.oncekiIsaretliRevizyon(db, m.belgeId, revizyonId);
+    if (kaynak !== null) {
+      const eski = await sorgular.yuzeyIsaretleri(db, kaynak);
+      const isaretli = new Set(eski.map((x) => x.yuzSira));
+      const eslesme = yuzleriEslestir((await sorgular.yuzler(db, kaynak)).filter((y) => isaretli.has(y.sira)), yuzler);
+      isaretler = eski.flatMap((x) => {
+        const yeni = eslesme.get(x.yuzSira);
+        return yeni === undefined ? [] : [{ yuzSira: yeni, islem: x.islem, oneri: true }];
+      }).sort((p, q) => p.yuzSira - q.yuzSira);
+      tasima = { kaynakRevizyonId: kaynak, eslesen: isaretler.length, eslesmeyen: eski.length - isaretler.length };
+    }
+  }
+  const anahtarlar = rotaAnahtarlari(rota);
+  const ad = baslik === null ? null : (await kisiAdlari(db, [baslik.guncelleyenKisiId])).get(baslik.guncelleyenKisiId) ?? null;
+  return {
+    ...bos,
+    yuzler: yuzler.map((y) => ({ sira: y.sira, tur: y.tur, ters: y.ters, alanMm2: y.alanMm2 })),
+    isaretler: isaretler.map((x) => ({ ...x, rotadaVar: x.islem.tur === 'maske' || anahtarlar.has(islemAnahtari(x.islem)) })),
+    ...yuzeyAlanlari(yuzler, isaretler),
+    surum: baslik?.surum ?? null,
+    guncelleyen: baslik === null ? null : { id: baslik.guncelleyenKisiId, ad },
+    guncelleme: baslik?.guncelleme ?? null,
+    tasima,
+  };
+}
+
+// Bütün işaretler tek komutla, sürüm koşuluyla yazılır; kişi ve zaman sunucudandır.
+export async function yuzeyKaydet(db: Db, kullanici: Kullanici, revizyonId: number, govde: GeometriYuzeyKaydetGovdesi): Promise<GeometriYuzeyCevabi> {
+  const m = await model(db, revizyonId);
+  const a = await sorgular.analiz(db, revizyonId);
+  if (a === null || a.ozet !== m.ozet) throw gecersiz(YUZEY_ILETILERI.analizYok);
+  const yuzler = await sorgular.yuzler(db, revizyonId);
+  if (yuzler.length === 0) throw gecersiz(YUZEY_ILETILERI.yuzYok);
+  const baslik = await sorgular.yuzeyBasligi(db, revizyonId, true);
+  if (baslik === null ? govde.surum !== null : govde.surum !== baslik.surum) throw eskiSurum();
+  const kayitli = baslik === null ? [] : await sorgular.yuzeyIsaretleri(db, revizyonId);
+  const hata = yuzeyKaydiDenetle(new Set(yuzler.map((y) => y.sira)), rotaAnahtarlari(await rotaAdimlari(db, m.malzemeNo)), kayitli, govde.isaretler);
+  if (hata !== null) throw dogrulama(hata, 'isaretler');
+  if ((await sorgular.yuzeyYaz(db, revizyonId, govde.surum, kullanici.id, govde.isaretler)) === null) throw eskiSurum();
+  return yuzeyOku(db, revizyonId);
 }
 
 // İş yoksa (tarama yakalamadı) açılır; varsa sürüm koşuluyla yeniden kuyruğa girer. Süren iş de yeniden kuyruğa alınabilir:

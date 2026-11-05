@@ -21,7 +21,8 @@ import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri } from './moduller/rota/disari.ts';
+import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
+import { yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -91,6 +92,7 @@ export function sunucununBaglari(): Bag[] {
     bag('parça revizyonu -> stok partisi', stok.parcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
+    bag('rota yüzey adımları -> geometri yüzey işaretleri', yuzeyAdimlariCozucusu, yuzeyIslemiAdimlari),
     bag('emir bitti -> sevkiyat', uretimEmirleri.emirBittiDinle, sevkiyat.emirBittiYansit),
     bag('logo durumu -> stok malzeme fişi', stok.malzemeFisiLogoCozucusu, logo.malzemeFisiLogoDurumlari),
     bag('logo birim setleri -> malzemeler karşılık', logoBirimSetiCozucusu, logo.gecerliBirimSetiKodlari),

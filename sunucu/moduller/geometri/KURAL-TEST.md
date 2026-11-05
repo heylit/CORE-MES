@@ -34,3 +34,7 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Sağlık raporu (2143): açık kenar, geçersiz yüz ya da geçersiz şekil, kapanmayan ağ, 0,1 mm üstü tolerans "guvenme"; 0,01 mm üstü tolerans, 0,01 mm'den kısa kenar, mm olmayan birim, 1 mm'den küçük ya da 10 m'den büyük parça "dikkat"; bulgu yoksa "iyi" | `GEO-SA1`..`GEO-SA4`, `GEO-SA-A1`..`GEO-SA-A4` |
 | Birim: STEP'te okuyucunun bildirdiği ad, IGES'te global bölümün 14./15. alanı; okunamazsa null ve bulgu yok | `GEO-SA4`, `GEO-SA5`, `GEO-SA6`, `GEO-SA-A3` |
 | Sağlık analizle aynı işlemde yenilenir, yinelenmez; satırı olmayan analiz 'saglik-yok' | `GEO-SA-A5` |
+| Yüzey işaretleri (2144, 2144-1 a): bir yüz tek işleme atanır; işlem rotadaki yüzey adımı ya da maske; alan işlem başına B-rep yüz alanından, işaretsiz = toplam - işaretli | `GEO-YZ1`, `GEO-YZ-A1` |
+| Kayıt sürümlü ve bütün olarak; yüz modelde olmalı, yinelenmez; rota adımı bugünkü rotada olmalı, kalkan adımın kayıtlı işareti uyarıyla kalır (2140-3) | `GEO-YZ2`, `GEO-YZ-A1`..`GEO-YZ-A3` |
+| Rota bağı kurulmadıysa liste boş ve 'rota-bagli-degil'; malzemenin yürürlükte rotası yoksa 'rota-yok' | `GEO-YZ-A1`, `GEO-YZ-A3` |
+| Yeni revizyon (2140-4 a): önceki işaretli revizyonun işaretleri tür, yön, alan, yarıçap, eksen ve konumu aynı yüzlere öneri olarak gelir; okumada yazılmaz; eşleşmeyen taşınmaz | `GEO-YZ3`, `GEO-YZ-A4` |
