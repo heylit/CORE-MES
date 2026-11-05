@@ -9,6 +9,7 @@ import type {
 // Listeler tiple bağlıdır: sözleşmeye yeni tür gelirse aşağıdaki etiket tabloları derlenmez.
 export const AZAMI_TALIMAT_ADIMI = 30;
 export const AZAMI_ADIM_MEDYASI = 5;
+export const AZAMI_HEDEF_SURE_DK = 1440;
 export const AZAMI_KONTROL_SECENEGI = 10;
 export const AZAMI_PARAMETRE = 40;
 export const AZAMI_ATIF = 30;
@@ -74,19 +75,28 @@ export interface AdimTaslagi {
   kontrol: KontrolNoktasi;
   zorunlu: boolean;
   asama: TalimatAsamasi;
+  // 2098-8 a: dakika, yazıldığı gibi; boş hedef yok demektir. Operatöre gösterilmez.
+  hedefSure: string;
   medya: TalimatMedyasi[];
+}
+
+// Boş ya da okunamayan hedef null'dır; geçerliliği adimEksikleri söyler.
+export function hedefSureOku(metin: string): number | null {
+  const t = metin.trim();
+  return /^\d+$/.test(t) ? Number(t) : null;
 }
 
 let sayac = 0;
 const yeniAnahtar = (): string => { sayac += 1; return `a${String(sayac)}`; };
 
-export const bosAdim = (): AdimTaslagi => ({ anahtar: yeniAnahtar(), baslik: '', metin: '', kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', medya: [] });
+export const bosAdim = (): AdimTaslagi => ({ anahtar: yeniAnahtar(), baslik: '', metin: '', kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', hedefSure: '', medya: [] });
 export const taslagaCevir = (a: TalimatAdimi): AdimTaslagi => ({
-  anahtar: yeniAnahtar(), baslik: a.baslik, metin: a.metin ?? '', kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama, medya: a.medya,
+  anahtar: yeniAnahtar(), baslik: a.baslik, metin: a.metin ?? '', kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama,
+  hedefSure: a.hedefSureDk === null ? '' : String(a.hedefSureDk), medya: a.medya,
 });
 export const girdiyeCevir = (a: AdimTaslagi): TalimatAdimiGirdisi => ({
   baslik: a.baslik.trim(), metin: a.metin.trim() === '' ? null : a.metin.trim(), kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama,
-  medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })),
+  hedefSureDk: hedefSureOku(a.hedefSure), medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })),
 });
 
 // Sunucunun da reddettiği eksikler; gönderilmeden önce gösterilir ki tek tek 400 alınmasın.
@@ -102,6 +112,10 @@ export function adimEksikleri(adimlar: readonly AdimTaslagi[]): string[] {
       eksik.push(`${no}: alt sınır üst sınırdan büyük.`);
     }
     if (a.kontrol.tur === 'secim' && a.kontrol.secenekler.filter((s) => s.trim() !== '').length < 2) eksik.push(`${no}: seçimde en az iki seçenek olur.`);
+    const hedef = hedefSureOku(a.hedefSure);
+    if (a.hedefSure.trim() !== '' && (hedef === null || hedef < 1 || hedef > AZAMI_HEDEF_SURE_DK)) {
+      eksik.push(`${no}: hedef süre 1 ile ${String(AZAMI_HEDEF_SURE_DK)} arasında tam dakika olur.`);
+    }
     if (a.medya.length > AZAMI_ADIM_MEDYASI) eksik.push(`${no}: en çok ${String(AZAMI_ADIM_MEDYASI)} resim ya da video.`);
   });
   return eksik;

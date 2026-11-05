@@ -124,6 +124,8 @@ export function AdimDuzenleyici({ adimlar, degistir, sablonlar, alt, kapali = fa
             <Secim etiket="Aşama" ipucu={ASAMA_IPUCLARI[adim.asama]} disabled={kapali} value={adim.asama}
               secenekler={ASAMA_SIRASI.map((a) => ({ deger: a, baslik: ASAMA_ADLARI[a] }))}
               onChange={(e) => { const s = ASAMA_SIRASI.find((a) => a === e.target.value); if (s) yaz({ asama: s }); }} />
+            <Girdi etiket="Hedef süre (dk)" ipucu="Boş bırakılabilir · operatöre gösterilmez, planlama geçen süreyle karşılaştırır" inputMode="numeric"
+              value={adim.hedefSure} maxLength={4} disabled={kapali} placeholder="boş" onChange={(e) => { yaz({ hedefSure: e.target.value }); }} />
             <CokSatir etiket="Açıklama" value={adim.metin} maxLength={2000} rows={3} disabled={kapali} onChange={(e) => { yaz({ metin: e.target.value }); }} />
             <MedyaAlani adim={adim} kapali={kapali} yaz={(medya) => { yaz({ medya }); }} />
             <KontrolAlani kontrol={adim.kontrol} zorunlu={adim.zorunlu} kapali={kapali} yaz={yaz} />
