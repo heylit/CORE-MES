@@ -4,7 +4,7 @@ import { DurumKutusu } from '../../../ortak/arayuz/index.ts';
 import { DIS_SAYFALAR, malzemeEtiketiYolu } from '../gorunumler.ts';
 import { GenelAyarPenceresi, MalzemeAyarlari } from './ayarlar/index.tsx';
 import { BOLUMLER, YENI_KOK, adrestekiBolum, bolumYolu, type Gezinti } from './sekmeler.ts';
-import { useBirimSistemi } from './tercihler.ts';
+import { useBirimSistemi, useStandartTercihi } from './tercihler.ts';
 import { useKatalogOrtami } from './veri.ts';
 import { useMalzemeYetkisi } from './yetki.ts';
 import './malzemeler-yeni.css';
@@ -85,6 +85,7 @@ function Icerik() {
 // Prototipin üst başı: her görünümde aynı büyük başlık ve açıklama; sağda QR okut, Ayarlar ve birim düğmeleri, altında kayıt yeri notu.
 function UstBas({ qrAc, ayarAc }: { qrAc: () => void; ayarAc: () => void }) {
   const [birim, birimYaz] = useBirimSistemi();
+  const [standart, standartYaz] = useStandartTercihi();
   return (
     <header className="tc-myeni-ust">
       <div className="tc-myeni-ust-bas">
@@ -99,6 +100,10 @@ function UstBas({ qrAc, ayarAc }: { qrAc: () => void; ayarAc: () => void }) {
           <button type="button" title="Onay akışı, kod, QR ve mükerrer tarama" onClick={ayarAc}>Ayarlar</button>
           <button type="button" aria-pressed={birim === 'met'} onClick={() => birimYaz('met')}>mm, kg</button>
           <button type="button" aria-pressed={birim === 'imp'} onClick={() => birimYaz('imp')}>in, lb</button>
+        </div>
+        <div className="tc-myeni-araclar" role="group" aria-label="Durum ve işlem adlarında standart">
+          <button type="button" title="Durum ve işlem adlarında ASTM adı önce, EN adı parantez içinde" aria-pressed={standart === 'astm'} onClick={() => standartYaz('astm')}>ASTM</button>
+          <button type="button" title="Durum ve işlem adlarında EN adı önce, ASTM adı parantez içinde" aria-pressed={standart === 'en'} onClick={() => standartYaz('en')}>EN</button>
         </div>
         <p className="tc-myeni-not">Kartlar CORE veritabanında</p>
       </div>

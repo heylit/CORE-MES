@@ -7,6 +7,8 @@ import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import type { MalzemeYetkisi } from '../yetki.ts';
+import { standartAdlari, standartEtiketi, type Standart } from '../standart-adlari.ts';
+import { useStandartTercihi } from '../tercihler.ts';
 import { kimlikOf, yerineOf } from './liste.ts';
 import { OnayRozeti } from './paneller.tsx';
 
@@ -31,7 +33,10 @@ export function QrPenceresi({ kartlar, b, kapat, bulundu }: {
 }
 
 // Prototipin sahaAc'ı: atölyede telefonla okunan kartın kısa bilgisi.
-export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][] {
+// Durum ve işlem değerleri kişinin seçtiği standartla gösterilir (2117); tercih verilmezse ASTM önce.
+export function sahaSatirlari(x: KartKaydi, b: KuralBaglami, standart: Standart = 'astm'): [string, string][] {
+  const adlar = standartAdlari(b.ortam.malzemeAyari);
+  const etiket = (v: unknown) => (typeof v === 'string' && v ? standartEtiketi(v, adlar, standart) : v);
   const sat: [string, string][] = [];
   const ek = (a: string, v: unknown) => { if (v !== undefined && v !== null && String(v).trim() !== '') sat.push([a, String(v)]); };
   const t = (x.tur ?? 'hammadde') as keyof typeof TURLER;
@@ -43,7 +48,7 @@ export function sahaSatirlari(x: KartKaydi, b: KuralBaglami): [string, string][]
     ek('Kalite', s.g ? s.g.ad : '');
     ek('Standart', K.finalStd(x, b));
     ek('Ölçü', K.dimsStr(x, true, b));
-    ek('Durum', [x.opts?.durum, x.opts?.yuzey].filter(Boolean).join(', '));
+    ek('Durum', [etiket(x.opts?.durum), x.opts?.yuzey].filter(Boolean).join(', '));
     ek('Birim ağırlık', w ? kgFmt(w.kg, b.birim) : '');
   } else {
     ek(t === 'hizmet' ? 'Hizmet grubu' : 'Kategori', K.turKat(x, b)?.ad);
@@ -72,6 +77,7 @@ export function SahaGorunumu({ kart, b, yetki, kapat, ac, tamFoy, qr, etiketMerk
   tamFoy: () => void; qr: () => void; etiketMerkezi: () => void;
 }) {
   const x = kart.kayit;
+  const [standart] = useStandartTercihi();
   const hizmet = x.tur === 'hizmet';
   const yerine = yerineOf(x);
   const tarihler = x.tur === 'demirbas' ? K.gTarihler(x, b) : [];
@@ -101,7 +107,7 @@ export function SahaGorunumu({ kart, b, yetki, kapat, ac, tamFoy, qr, etiketMerk
         </div>
       </div>
       <dl className="tc-mk-dl">
-        {sahaSatirlari(x, b).map(([a, v]) => <div key={a}><dt>{a}</dt><dd>{v}</dd></div>)}
+        {sahaSatirlari(x, b, standart).map(([a, v]) => <div key={a}><dt>{a}</dt><dd>{v}</dd></div>)}
       </dl>
       {tarihler.length > 0 && (
         <ul className="tc-mk-tarihler">

@@ -9,6 +9,7 @@ import * as K from '../kurallar/index.ts';
 import { useKuralBaglami, type KuralBaglami } from '../kurallar/index.ts';
 import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
+import { standartAdlari } from '../standart-adlari.ts';
 import { useBirimSistemi } from '../tercihler.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import { kayitHatasi, useKartIptal, useKartKaydet, useKartlar, useKgFiyatlari } from '../veri.ts';
@@ -139,7 +140,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   // Küçük resim yalnız görünen sayfanın yarı mamul ve mamul kartları için tek istekle okunur.
   const resimliNolar = useMemo(() => sayfaSatirlari.filter((k) => resimliTur(k.kayit.tur)).map((k) => k.no), [sayfaSatirlari]);
   const resimler = useKucukResimler('malzemeler', resimliNolar);
-  const metinTabani = useMemo(() => metinListesi(kartlar, ara).map((k) => k.kayit), [kartlar, ara]);
+  const metinTabani = useMemo(() => metinListesi(kartlar, ara, standartAdlari(ortam.malzemeAyari)).map((k) => k.kayit), [kartlar, ara, ortam.malzemeAyari]);
 
   useEffect(() => { seciliYaz((s) => secimiBuda(s, kartlar)); }, [kartlar]);
   useEffect(() => { sayfaYaz(1); }, [ara, sec]);

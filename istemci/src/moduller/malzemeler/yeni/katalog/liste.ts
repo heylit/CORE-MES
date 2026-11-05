@@ -2,6 +2,7 @@
 import { tlc } from '../bicim.ts';
 import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
+import { aramaMetinleri, standartAdlari, type StandartAdlari } from '../standart-adlari.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 
 // Süzgeç seçimi prototipin `KF` biçimidir: { <faset>: [değerler], olcu: { <ölçü>: { min, max } } }.
@@ -22,18 +23,22 @@ export const yerineOf = (x: KartKaydi): { id: string; kod: string } | null => {
   return y && typeof y.id === 'string' ? { id: y.id, kod: String(y.kod ?? '') } : null;
 };
 
-// Arama alanları prototipteki gibi: kod, ad, tedarikçi, teknik kod, ERP kodu, Açıklama 1-3.
-export function metinListesi(kartlar: readonly KatalogKarti[], ara: string): KatalogKarti[] {
+// Arama alanları prototipteki gibi: kod, ad, tedarikçi, teknik kod, ERP kodu, Açıklama 1-3; 2117 ile durum ve işlem değerleri ve
+// onların ASTM ve EN adları (kart H1025 tutsa da P1070 yazan bulur).
+export function metinListesi(kartlar: readonly KatalogKarti[], ara: string, adlar: StandartAdlari = {}): KatalogKarti[] {
   const q = tlc(ara.trim());
   if (!q) return [...kartlar];
   return kartlar.filter((k) => {
     const c = k.kayit.com ?? {};
-    return [c.kod, c.ad, c.ted, c.tkod, c.eskiKod, c.ac1, c.ac2, c.ac3].some((s) => tlc(String(s ?? '')).includes(q));
+    const o = k.kayit.opts ?? {};
+    const islem: unknown[] = Array.isArray(o.islem) ? o.islem : [o.islem];
+    return [c.kod, c.ad, c.ted, c.tkod, c.eskiKod, c.ac1, c.ac2, c.ac3, ...aramaMetinleri([o.durum, ...islem], adlar)]
+      .some((s) => tlc(String(s ?? '')).includes(q));
   });
 }
 
 export function suzulmus(kartlar: readonly KatalogKarti[], ara: string, sec: FiltreSecimi, b: KuralBaglami): KatalogKarti[] {
-  const metin = metinListesi(kartlar, ara);
+  const metin = metinListesi(kartlar, ara, standartAdlari(b.ortam.malzemeAyari));
   const kalan = new Set(K.filtreUygula(metin.map((k) => k.kayit), sec, undefined, b).map(kimlikOf));
   return metin.filter((k) => kalan.has(k.kimlik)).sort((a, z) => (z.kayit.updatedAt ?? 0) - (a.kayit.updatedAt ?? 0));
 }

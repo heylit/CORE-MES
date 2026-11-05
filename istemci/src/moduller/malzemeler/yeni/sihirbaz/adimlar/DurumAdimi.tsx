@@ -1,4 +1,5 @@
-import { Dugme } from '../../../../../ortak/arayuz/index.ts';
+import { useMemo, useState } from 'react';
+import { Dugme, Girdi } from '../../../../../ortak/arayuz/index.ts';
 import { tlc } from '../../bicim.ts';
 import * as K from '../../kurallar/index.ts';
 import * as S from '../../sabitler/index.ts';
@@ -6,6 +7,8 @@ import { useSihirbaz } from '../baglam.ts';
 import { aileler, formlar } from '../turler.ts';
 import type { AileSecenegi } from '../../kurallar/index.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
+import { standartAdlari, standartEtiketi, standartlaEslesir } from '../../standart-adlari.ts';
+import { useStandartTercihi } from '../../tercihler.ts';
 import { BagDugmesi, Cip, CipGrubu, MetinAlani, SecenekGrubu, Uyari, type CipTonu } from '../parcalar.tsx';
 
 type Secenek = AileSecenegi;
@@ -15,6 +18,9 @@ const TON: Record<string, CipTonu | undefined> = { rec: 'yaygin', warn: 'dikkat'
 // Hammadde 4. adım (prototipte `s3`): seçenekler kalite ve forma göre süzülür; uyumsuz olanlar istenirse görünür.
 export function DurumAdimi() {
   const { taslak: d, b, degistir, yenisiniKur, secim, secimYaz, bildir } = useSihirbaz();
+  const [standart] = useStandartTercihi();
+  const [ara, araYaz] = useState('');
+  const adlar = useMemo(() => standartAdlari(b.ortam.malzemeAyari), [b.ortam.malzemeAyari]);
   const f = d.fam ? aileler(b)[d.fam] : undefined;
   if (!f) return <p className="tc-my-bos">Önce bir malzeme ailesi seç.</p>;
   const c = d.fam && d.cls ? f.classes[d.cls] : undefined;
@@ -72,8 +78,10 @@ export function DurumAdimi() {
     if (o.type === 'select' || o.type === 'multi') {
       const cur = o.type === 'select' ? (d.opts[o.k] ? [String(d.opts[o.k])] : []) : ((d.opts[o.k] as string[] | undefined) ?? []);
       const l = liste(o);
-      const gorunen = l.filter((x) => secim.tumSecenekler || cur.includes(x) || K.optStatus(o.k, x, d, b).s !== 'no');
-      gizli += l.length - gorunen.length;
+      const uyanlar = l.filter((x) => secim.tumSecenekler || cur.includes(x) || K.optStatus(o.k, x, d, b).s !== 'no');
+      gizli += l.length - uyanlar.length;
+      // Arama değerin kendisinde, ASTM ve EN adında bakar; seçili değer süzülse de görünür kalır.
+      const gorunen = uyanlar.filter((x) => cur.includes(x) || standartlaEslesir(x, adlar, ara));
       if (!gorunen.length) return null;
       const mods = gorunen.filter((x) => S.MODS[x]);
       return (
@@ -82,8 +90,8 @@ export function DurumAdimi() {
             {gorunen.map((x) => (
               <Cip
                 key={x} radyo={o.type === 'select'} basili={cur.includes(x)} ton={TON[K.optStatus(o.k, x, d, b).s]} ipucu
-                baslik={S.INFO[x]?.split('||')[0]} tikla={() => { sec(o, x); }}
-              >{x}
+                baslik={S.INFO[x]?.split('||')[0] ?? (standartEtiketi(x, adlar, standart) === x ? undefined : x)} tikla={() => { sec(o, x); }}
+              >{standartEtiketi(x, adlar, standart)}
               </Cip>
             ))}
           </CipGrubu>
@@ -132,6 +140,11 @@ export function DurumAdimi() {
           </BagDugmesi>
         )}
       </div>
+      <Girdi
+        etiket="Durum ve işlemde ara" type="search" value={ara} onChange={(e) => { araYaz(e.target.value); }}
+        placeholder="Ad, ASTM ya da EN adı (ör. H1025, P1070)" autoComplete="off"
+      />
+      {ara.trim() !== '' && !govde.some(Boolean) && <p className="tc-my-bos">Aramaya uyan seçenek yok.</p>}
       {sorunlar.length > 0 && (
         <Uyari ton={uyumsuz ? 'uyumsuz' : 'dikkat'}>
           <b>{uyumsuz ? `${String(uyumsuz)} seçim bu kalite veya formla uyumsuz` : 'Dikkat gerektiren seçimler var'}</b>

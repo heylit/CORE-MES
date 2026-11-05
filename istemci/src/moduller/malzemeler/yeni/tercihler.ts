@@ -1,9 +1,10 @@
 import { useCallback, useState, useSyncExternalStore } from 'react';
+import type { Standart } from './standart-adlari.ts';
 import type { BirimSistemi, KartKaydi } from './tipler.ts';
 
 // K4 a (VARSAYIM, geri alma ucuz): yalnız üç kişisel kolaylık tarayıcıda kalır; ortak veri sunucudadır. Depo kapalıysa
 // (gizli pencere) tercih bellekte yaşar, ekran yine çalışır.
-const ANAHTAR = { birim: 'tmi-malzemeler-birim', son: 'tmi-malzemeler-son-kaliteler', taslak: 'tmi-malzemeler-yarim-taslak' } as const;
+const ANAHTAR = { birim: 'tmi-malzemeler-birim', standart: 'tmi-malzemeler-standart', son: 'tmi-malzemeler-son-kaliteler', taslak: 'tmi-malzemeler-yarim-taslak' } as const;
 
 function oku<T>(anahtar: string, dogrula: (v: unknown) => v is T): T | null {
   try {
@@ -43,6 +44,21 @@ function birimYaz(v: BirimSistemi): void {
 }
 export function useBirimSistemi(): [BirimSistemi, (v: BirimSistemi) => void] {
   return [useSyncExternalStore(birimDinle, birimAnlik, birimAnlik), birimYaz];
+}
+
+// 2117-1 a (VARSAYIM, geri alma ucuz): durum ve işlem adlarında önce gösterilen standart kişiye özeldir, birim gibi tarayıcıda kalır.
+const standartMi = (v: unknown): v is Standart => v === 'astm' || v === 'en';
+let standartDegeri: Standart | null = null;
+const standartDinleyenler = new Set<() => void>();
+const standartAnlik = (): Standart => (standartDegeri ??= oku(ANAHTAR.standart, standartMi) ?? 'astm');
+const standartDinle = (f: () => void) => { standartDinleyenler.add(f); return () => { standartDinleyenler.delete(f); }; };
+function standartYaz(v: Standart): void {
+  standartDegeri = v;
+  yaz(ANAHTAR.standart, v);
+  for (const f of standartDinleyenler) f();
+}
+export function useStandartTercihi(): [Standart, (v: Standart) => void] {
+  return [useSyncExternalStore(standartDinle, standartAnlik, standartAnlik), standartYaz];
 }
 
 export interface SonKullanilan { fam: string; cls: string; grade: string; t: number }
