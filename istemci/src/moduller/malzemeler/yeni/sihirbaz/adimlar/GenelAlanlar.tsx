@@ -13,6 +13,16 @@ import { TurKartlari } from './Baslangic.tsx';
 import { AnalizAgirligi } from './AnalizAgirligi.tsx';
 import { useOlcuAletleri } from '../../veri.ts';
 import type { OlcuAleti } from '../../veri.ts';
+import { kartStandardi, standartAdlari, standartEtiketi } from '../../standart-adlari.ts';
+import type { KuralBaglami } from '../../kurallar/index.ts';
+
+// 2117: hizmette ısıl işlem ve yüzey seçimleri (ör. hedef temper) hammaddedeki durumla aynı ASTM / EN adlarıyla görünür.
+function hizmetEtiketi(d: Taslak, b: KuralBaglami): (x: string) => string {
+  if (d.tur !== 'hizmet') return (x) => x;
+  const adlar = standartAdlari(b.ortam.malzemeAyari);
+  const standart = kartStandardi(d);
+  return (x) => standartEtiketi(x, adlar, standart);
+}
 
 // Öteki türlerin ilk adımı (prototipte `gStep0`): tür ve kategori.
 export function GenelBaslangic() {
@@ -66,6 +76,7 @@ export function GenelBaslangic() {
 // Seçimli alan (prototipte `gAlanHTML` sec/coklu kolu).
 export function GenelSecim({ a }: { a: Alan }) {
   const { taslak: d, b, degistir } = useSihirbaz();
+  const gosterim = hizmetEtiketi(d, b);
   const v = d.g[a.k];
   const cur = a.tip === 'sec' ? (v ? [String(v)] : []) : (Array.isArray(v) ? v.map(String) : []);
   const etiket = a.ad + (K.alanZorunlu(d, a, b) ? ' *' : '');
@@ -90,7 +101,7 @@ export function GenelSecim({ a }: { a: Alan }) {
     <SecenekGrubu baslik={etiket} ikon={K.gAlanIkon(a, d, b)} ikonAcik={cur.length > 0} sayac={a.tip === 'coklu' ? cur.length : undefined}>
       <CipGrubu etiket={a.ad} radyo={a.tip === 'sec'}>
         {(a.opts ?? []).map((x) => (
-          <Cip key={x} radyo={a.tip === 'sec'} basili={cur.includes(x)} ipucu={!!S.INFO[x]} baslik={S.INFO[x]?.split('||')[0]} tikla={() => { sec(x); }}>{x}</Cip>
+          <Cip key={x} radyo={a.tip === 'sec'} basili={cur.includes(x)} ipucu={!!S.INFO[x]} baslik={S.INFO[x]?.split('||')[0]} tikla={() => { sec(x); }}>{gosterim(x)}</Cip>
         ))}
       </CipGrubu>
     </SecenekGrubu>
@@ -100,6 +111,7 @@ export function GenelSecim({ a }: { a: Alan }) {
 // Metin, sayı ve tarih alanı; öneri çipleri varsa altında (prototipte `gAlanHTML` öteki kolu).
 function GenelAlan({ a }: { a: Alan }) {
   const { taslak: d, b, degistir } = useSihirbaz();
+  const gosterim = hizmetEtiketi(d, b);
   const v = d.g[a.k];
   const salt = ESKI_KALIBRASYON.has(a.k);
   const etiket = salt ? <>{a.ad} <small>— eski kayıt, Kalibrasyon'dan okunur</small></> : a.ad + (K.alanZorunlu(d, a, b) ? ' *' : '');
@@ -116,7 +128,7 @@ function GenelAlan({ a }: { a: Alan }) {
                 const n = typeof o === 'string' && /^-?\d+(\.\d+)?$/.test(o) ? Number(o) : o;
                 degistir((t) => { t.g[a.k] = String(t.g[a.k]) === String(n) ? '' : n; });
               }}
-            >{typeof o === 'number' ? fmt(o) : o}
+            >{typeof o === 'number' ? fmt(o) : gosterim(o)}
             </Cip>
           ))}
         </CipGrubu>
