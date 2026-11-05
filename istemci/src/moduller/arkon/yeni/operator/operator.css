@@ -114,13 +114,12 @@
 }
 .tc-ay1-bant > div { display: grid; gap: var(--pay-ince); flex: 1 1 auto; min-width: 0; }
 .tc-ay1-bant b { overflow-wrap: anywhere; }
-/* 566: numune planı şeridi; dar ekranda düzen değişmez, şerit yatay kayar */
+/* 566: numune planı şeridi. 2130: yer yetmeyince kural alt satıra iner; yatay kaydırma terminalde kuralları gizliyor ve sıkıştırıyordu. */
 .tc-ay1-numune-serit {
-  display: flex; gap: var(--b-2); margin: 0; padding: 0; list-style: none; min-width: 0;
-  overflow-x: auto; scroll-snap-type: x proximity;
+  display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; padding: 0; list-style: none; min-width: 0;
 }
 .tc-ay1-numune-serit-parca {
-  display: flex; align-items: flex-start; gap: var(--b-2); flex: 1 0 auto; min-width: 0; padding: var(--b-2) var(--b-3); scroll-snap-align: start;
+  display: flex; align-items: flex-start; gap: var(--b-2); flex: 1 1 auto; min-width: 0; max-inline-size: 100%; padding: var(--b-2) var(--b-3);
   border: var(--cizgi-ince) solid var(--sig); border-block-start-width: var(--b-1); border-radius: var(--yari-2); background: color-mix(in srgb, var(--sig) 8%, var(--panel));
 }
 .tc-ay1-numune-serit-parca > svg { color: var(--sig-yazi); flex: none; }
@@ -623,11 +622,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-simdi .tc-ay1-gorev > :not(.tc-ay1-gorev-simge, .tc-ay1-gorev-metin) { grid-row: 1; margin-inline-start: var(--b-2); }
 .tc-ay1-simdi .tc-ay1-gorev-metin > .tc-ay1-numune-serit { grid-row: 2; grid-column: 2 / -1; margin-block-start: var(--pay-ince); }
 /* Numune tek satır: kural, yaklaşma çizgisi, kalan; ölçen ve ölçü sayısı Kalite sekmesinde. */
-.tc-ay1-simdi .tc-ay1-numune-serit { gap: var(--b-3); }
+.tc-ay1-simdi .tc-ay1-numune-serit { gap: var(--b-1) var(--b-3); }
 .tc-ay1-simdi .tc-ay1-numune-serit-parca, .tc-ay1-simdi .tc-ay1-numune-serit-parca[data-cizgili] {
   flex-wrap: nowrap; align-items: center; gap: var(--b-2); padding: 0; border: 0; background: none;
 }
 .tc-ay1-simdi .tc-ay1-numune-serit-metin { display: flex; align-items: baseline; gap: var(--b-2); }
+.tc-ay1-simdi .tc-ay1-numune-serit-metin > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-simdi .tc-ay1-numune-serit-metin b { font-size: var(--yazi-s); }
 .tc-ay1-simdi .tc-ay1-numune-serit-metin small:not(.tc-ay1-numune-serit-durum) { display: none; }
 .tc-ay1-simdi .tc-ay1-numune-cizgi { display: flex; align-items: center; gap: var(--b-2); flex: 1 1 0; }
