@@ -8,6 +8,7 @@ import { DIS_KAPANIS_MADDELERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { bag, kablola, sunucununBaglari } from './kablolama.ts';
 import { emirIptalBildir } from './moduller/uretim-emirleri/emir-olaylari.ts';
 import { kapanisCozucusuKaydet } from './moduller/uretim-emirleri/kapanis.ts';
+import { logodaCariAra } from './moduller/musteri-tedarikci/servis.ts';
 
 // Dinleyicinin koştuğu, gönderdiği sorgulardan anlaşılır: sahte bağlantı her sorguyu sayar, boş sonuç döner.
 function sayanDb(): { db: Db; sayi: () => number } {
@@ -51,6 +52,15 @@ test('kablolanmadan bütün modüller yüklenince hiçbir dinleyici kendiliğind
 
 test('sunucunun bütün bağlarının iki ucu da çalışma anında var', () => {
   assert.deepEqual(sunucununBaglari().filter((b) => b.eksik).map((b) => b.ad), []);
+});
+
+test('kablola: müşteri-tedarikçinin Logo cari araması logo modülüne ulaşır (2118); ayar kapalıyken köprüye gitmez', async () => {
+  kablola();
+  const { db, sayi } = sayanDb();
+  const c = await logodaCariAra(db, { id: 1, ad: 'Deneme', islemler: [] }, 'DEN');
+  assert.equal(c.durum, 'kapali');
+  assert.match(c.ileti ?? '', /Sistem Ayarları/);
+  assert.ok(sayi() > 0, 'logo ayarı okunmadı');
 });
 
 // Çözücüsü henüz yazılmamış maddeler (1214 G1 d). Çözücü gelince bağı eklenir ve buradan çıkar; çıkmazsa test kırılır.
