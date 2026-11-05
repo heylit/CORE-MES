@@ -40,7 +40,7 @@ describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
     return ortam.vt;
   };
 
-  // Deneme rolü sayfa işlemiyle açılır (yalnız test veritabanında; canlı dağıtım 2067-3 kararıyla gelir).
+  // Göçten sonra açılan rol sayfayı kendiliğinden almaz; deneme rolü sayfa işlemini burada alır ya da almaz (OD-8).
   async function rolAc(kod: string, sayfa: boolean): Promise<number> {
     const r = await vt().tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [kod]);
     assert.ok(r);
@@ -130,6 +130,18 @@ describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
   test('OD-8 sayfa işlemi olmayan kişi hiçbir uca giremez (403)', async () => {
     assert.equal((await oku(sayfasiz, '/ortak-dosyalar/klasorler')).statusCode, 403);
     assert.equal((await gonder(sayfasiz, '/ortak-dosyalar/klasorler', { ustId: ortak.id, ad: 'X' })).statusCode, 403);
+  });
+
+  test('OD-17 göçle var olan her yönetici olmayan rol sayfayı alır; yetki-ver yalnız yönetici rolünde kalır', async () => {
+    const eksik = await vt().sorgu<{ kod: string }>(
+      `SELECT r.kod FROM rol r
+        WHERE NOT r.yonetici AND r.kod NOT LIKE 'deneme\\_%'
+          AND NOT EXISTS (SELECT 1 FROM rol_islemi ri WHERE ri.rol_id = r.id AND ri.islem = 'sayfa.ortak-dosyalar')`,
+    );
+    assert.deepEqual(eksik, []);
+    assert.ok(((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM rol WHERE NOT yonetici AND kod NOT LIKE 'deneme\\_%'"))?.n ?? 0) > 0);
+    const yetkiVeren = await vt().sorgu("SELECT 1 FROM rol_islemi WHERE islem = 'ortak-dosyalar.yetki-ver'");
+    assert.deepEqual(yetkiVeren, []);
   });
 
   test('OD-9 üst düzey klasör: yönetici açar, özel yetkiyle ve satırsız; başkası açamaz', async () => {
