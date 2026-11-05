@@ -19,19 +19,20 @@ export interface YeniBildirim {
   yol: string | null;
   kaynakModul: string;
   tekilAnahtar: string | null;
-  // Ekran ortasında çıkar (2147-3 a); otomatikte acil önem.
+  // Ekran ortasında çıkar ve onay ister (2147-3 a, Y4); otomatikte türün gösterimi.
   ortada?: boolean;
+  onayIstenir?: boolean;
 }
 
 // Okunmamış aynı tekil anahtar varsa yeni satır açılmaz: sayaç artar, metin ve zaman tazelenir (zilde yeniden üste çıkar).
 export async function bildirimYaz(db: Db, b: YeniBildirim): Promise<void> {
   await db.sorgu(
-    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, ortada)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, ortada, onay_istenir)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (kisi_id, tekil_anahtar) WHERE tekil_anahtar IS NOT NULL AND okundu IS NULL AND arsivlendi IS NULL
      DO UPDATE SET tekrar_sayisi = bildirim_kaydi.tekrar_sayisi + 1, baslik = EXCLUDED.baslik, metin = EXCLUDED.metin,
-       yol = EXCLUDED.yol, onem = EXCLUDED.onem, ortada = EXCLUDED.ortada, olusturuldu = now()`,
-    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar, b.ortada ?? false],
+       yol = EXCLUDED.yol, onem = EXCLUDED.onem, ortada = EXCLUDED.ortada, onay_istenir = EXCLUDED.onay_istenir, olusturuldu = now()`,
+    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar, b.ortada ?? false, b.onayIstenir ?? false],
   );
 }
 
@@ -205,6 +206,43 @@ export async function turAyariYaz(
   await db.sorgu('INSERT INTO bildirim_tur_rolu (tur, rol_id) SELECT $1, unnest($2::int[])', [tur, a.rolIdleri]);
   await db.sorgu('INSERT INTO bildirim_tur_kisisi (tur, kisi_id) SELECT $1, unnest($2::int[])', [tur, a.kisiIdleri]);
   return true;
+}
+
+/* ---------------- otomatik gösterim (2147 Y4) ---------------- */
+
+export interface TurGosterimiSatiri {
+  tur: string; ortada: boolean; onayIstenir: boolean; surum: number; degistirenKisiId: number | null; degistirildi: string;
+}
+
+export function turGosterimleri(db: Db): Promise<TurGosterimiSatiri[]> {
+  return db.sorgu<TurGosterimiSatiri>(
+    `SELECT tur, ortada, onay_istenir AS "onayIstenir", surum, degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('degistirildi')} AS degistirildi
+       FROM bildirim_tur_gosterimi ORDER BY tur`,
+  );
+}
+
+export function turGosterimi(db: Db, tur: string): Promise<{ ortada: boolean; onayIstenir: boolean } | null> {
+  return db.tek('SELECT ortada, onay_istenir AS "onayIstenir" FROM bildirim_tur_gosterimi WHERE tur = $1', [tur]);
+}
+
+// Sürüm tutmazsa false. Sürümsüz yazım yalnız ayarlanmamış türü açar; varsayılana dönen değer satırı siler.
+export async function turGosterimiYaz(
+  db: Db, tur: string, g: { ortada: boolean; onayIstenir: boolean; surum: number | null; varsayilan: boolean }, kisiId: number,
+): Promise<boolean> {
+  if (g.surum === null) {
+    if (g.varsayilan) return (await db.tek('SELECT 1 FROM bildirim_tur_gosterimi WHERE tur = $1', [tur])) === null;
+    return (await db.tek(
+      `INSERT INTO bildirim_tur_gosterimi (tur, ortada, onay_istenir, degistiren_kisi_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tur) DO NOTHING RETURNING 1`,
+      [tur, g.ortada, g.onayIstenir, kisiId],
+    )) !== null;
+  }
+  if (g.varsayilan) return (await db.tek('DELETE FROM bildirim_tur_gosterimi WHERE tur = $1 AND surum = $2 RETURNING 1', [tur, g.surum])) !== null;
+  return (await db.tek(
+    `UPDATE bildirim_tur_gosterimi SET ortada = $3, onay_istenir = $4, surum = surum + 1, degistiren_kisi_id = $5, degistirildi = now()
+      WHERE tur = $1 AND surum = $2 RETURNING 1`,
+    [tur, g.surum, g.ortada, g.onayIstenir, kisiId],
+  )) !== null;
 }
 
 /* ---------------- elle bildirim (2147) ---------------- */

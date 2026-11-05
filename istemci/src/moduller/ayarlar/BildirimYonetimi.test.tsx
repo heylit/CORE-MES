@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type {
-  BildirimAliciDegistirGovdesi, BildirimAlicilariCevabi, CagriYonlendirmeCevabi, CagriYonlendirmeDegistirGovdesi,
+  BildirimAliciDegistirGovdesi, BildirimAlicilariCevabi, BildirimGosterimleriCevabi, CagriYonlendirmeCevabi, CagriYonlendirmeDegistirGovdesi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { BildirimYonetimi } from './BildirimYonetimi.tsx';
@@ -157,5 +157,33 @@ describe('bildirim yönetimi: bildirim alıcıları (760 c)', () => {
     await waitFor(() => { expect(yazilanlar[1]).toEqual({ tur: 'satin-alma.talep-onay-bekliyor', govde: { rolIdleri: [2], kisiIdleri: [8], surum: 4 } }); });
     fireEvent.click(await screen.findByRole('button', { name: 'Seçimi kaldır' }));
     await waitFor(() => { expect(yazilanlar[2]).toEqual({ tur: 'satin-alma.talep-onay-bekliyor', govde: { rolIdleri: [], kisiIdleri: [], surum: 5 } }); });
+  });
+});
+
+describe('bildirim yönetimi: ekran ortası ve onay (2147 Y4)', () => {
+  const GOSTERIM: BildirimGosterimleriCevabi = {
+    satirlar: [
+      { tur: 'istasyonlar.makine-durdu', baslik: 'Makine durdu', onem: 'acil', kaynakModul: 'istasyonlar', ortada: true, onayIstenir: false, surum: null, degistiren: null, degistirildi: null },
+      { tur: 'stok.birakildi', baslik: 'Malzeme bırakıldı', onem: 'bilgi', kaynakModul: 'stok', ortada: true, onayIstenir: true, surum: 2, degistiren: { id: 9, ad: 'Deneme Yönetici' }, degistirildi: '2026-11-05T09:00:00Z' },
+    ],
+  };
+  it('varsayılan ve ayarlı türü gösterir; işaret değişince türün okunan sürümüyle yazar', async () => {
+    const yazilanlar: { tur: string; govde: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { body?: string } = {}) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/bildirimler/gosterim') return json(200, GOSTERIM);
+      const m = /^\/bildirimler\/gosterim\/([a-z.-]+)\/degistir$/.exec(yol);
+      if (m?.[1]) { yazilanlar.push({ tur: m[1], govde: JSON.parse(secenek.body ?? '{}') }); return json(200, GOSTERIM); }
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    ac();
+    const makine = await screen.findByRole('group', { name: 'Makine durdu gösterimi' });
+    expect((within(makine).getByRole('checkbox', { name: 'Ekran ortasında' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText('Varsayılan')).toBeTruthy();
+    fireEvent.click(within(makine).getByRole('checkbox', { name: 'Onay iste' }));
+    const stok = screen.getByRole('group', { name: 'Malzeme bırakıldı gösterimi' });
+    await waitFor(() => { expect(yazilanlar[0]).toEqual({ tur: 'istasyonlar.makine-durdu', govde: { ortada: true, onayIstenir: true, surum: null } }); });
+    fireEvent.click(within(stok).getByRole('checkbox', { name: 'Ekran ortasında' }));
+    await waitFor(() => { expect(yazilanlar[1]).toEqual({ tur: 'stok.birakildi', govde: { ortada: false, onayIstenir: true, surum: 2 } }); });
   });
 });

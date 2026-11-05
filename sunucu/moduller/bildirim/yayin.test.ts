@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import {
-  bildirimCevabi, bildirimListeCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, ortadakiBildirimlerCevabi,
+  bildirimCevabi, bildirimGosterimleriCevabi, bildirimListeCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, ortadakiBildirimlerCevabi,
   type BildirimYayinlaGovdesi, type BildirimYayini, type OrtadakiBildirim,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -286,5 +286,37 @@ describe('elle bildirim, ekran ortası ve onay (gerçek PostgreSQL, gerçek giri
     assert.equal(b?.onayIstenir, false);
     assert.equal((await istek('yonetici', 'POST', `/bildirimler/${b?.id}/okundu`)).durum, 200);
     assert.deepEqual(await ortada('yonetici'), []);
+  });
+
+  test('Y4: tür gösterimi ayarlanınca otomatik bildirim ortada ve onaylı çıkar; varsayılana dönünce ayar kalkar; sürüm ve yetki', async () => {
+    await bosalt();
+    await o().sahip.sorgu('DELETE FROM bildirim_tur_gosterimi');
+    const oku = async () => bildirimGosterimleriCevabi.parse((await istek('yonetici', 'GET', '/bildirimler/gosterim')).govde).satirlar;
+    const satir = async (tur: string) => (await oku()).find((r) => r.tur === tur);
+    const once = await satir('saglik.esik-uyarisi');
+    assert.equal(once?.onem, 'uyari');
+    assert.deepEqual([once?.ortada, once?.onayIstenir, once?.surum, once?.degistiren], [false, false, null, null]);
+    assert.equal((await satir('guvenlik.kritik-alarm'))?.ortada, true);
+    assert.equal((await istek('operator', 'GET', '/bildirimler/gosterim')).durum, 403);
+    const yaz = (tur: string, g: { ortada: boolean; onayIstenir: boolean; surum: number | null }) =>
+      istek('yonetici', 'POST', `/bildirimler/gosterim/${tur}/degistir`, g);
+    assert.equal((await yaz('saglik.esik-uyarisi', { ortada: true, onayIstenir: true, surum: null })).durum, 200);
+    const ayarli = await satir('saglik.esik-uyarisi');
+    assert.equal(ayarli?.surum, 1);
+    assert.equal(ayarli?.degistiren?.ad, 'Deneme Yönetici');
+    // Eski sürümle ikinci açılış reddedilir.
+    assert.equal((await yaz('saglik.esik-uyarisi', { ortada: true, onayIstenir: false, surum: null })).durum, 409);
+    assert.equal((await istek('yonetici', 'POST', '/bildirimler/gosterim/yok.tur/degistir', { ortada: true, onayIstenir: false, surum: null })).durum, 400);
+    await o().vt.tx((db) => bildirimGonder(db, { tur: 'saglik.esik-uyarisi', baslik: 'Eşik aşıldı', yol: '/ayarlar' }));
+    const [b] = await ortada('yonetici');
+    assert.equal(b?.onayIstenir, true);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/${b?.id}/arsivle`)).durum, 400);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/${b?.id}/onayla`)).durum, 200);
+    // Acil türü ortadan kaldırılabilir; varsayılana dönen değer satırı siler.
+    assert.equal((await yaz('guvenlik.kritik-alarm', { ortada: false, onayIstenir: false, surum: null })).durum, 200);
+    await o().vt.tx((db) => bildirimGonder(db, { tur: 'guvenlik.kritik-alarm', baslik: 'Kritik alarm', yol: '/guvenlik' }));
+    assert.deepEqual(await ortada('yonetici'), []);
+    assert.equal((await yaz('saglik.esik-uyarisi', { ortada: false, onayIstenir: false, surum: 1 })).durum, 200);
+    assert.equal((await satir('saglik.esik-uyarisi'))?.surum, null);
   });
 });

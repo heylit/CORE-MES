@@ -4,9 +4,10 @@ import {
   bildirimTercihleriCevabi, cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
   bildirimOnayCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, bildirimYayinListeSorgusu,
   bildirimYayinlaGovdesi, bildirimYayinParametresi, ortadakiBildirimlerCevabi,
+  bildirimGosterimDegistirGovdesi, bildirimGosterimleriCevabi, bildirimGosterimParametresi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+  arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimGosterimleri, bildirimGosterimiYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
 } from './servis.ts';
 import {
   geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
@@ -52,6 +53,13 @@ export const uclar = [
     yontem: 'POST', yol: '/bildirimler/alicilar/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimAliciParametresi,
     govde: bildirimAliciDegistirGovdesi, cevap: bildirimAlicilariCevabi,
     isle: ({ db, kullanici, parametre, govde }) => bildirimAlicilariYaz(db, kullanici, parametre.tur, govde),
+  }),
+  // Otomatik bildirimin gösterimi (2147 Y4): Sistem Ayarları'nın işlemiyle okunur ve yazılır.
+  uc({ yontem: 'GET', yol: '/bildirimler/gosterim', yetki: 'ayarlar.yaz', cevap: bildirimGosterimleriCevabi, isle: ({ db }) => bildirimGosterimleri(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/gosterim/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimGosterimParametresi,
+    govde: bildirimGosterimDegistirGovdesi, cevap: bildirimGosterimleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => bildirimGosterimiYaz(db, kullanici, parametre.tur, govde),
   }),
   // Ekran ortası (2147-3 a): kişinin kendi bekleyenleri; onay yalnız kendi satırına.
   uc({ yontem: 'GET', yol: '/bildirimler/ortada', yetki: 'oturum', cevap: ortadakiBildirimlerCevabi, isle: ({ db, kullanici }) => ortadakiBildirimler(db, kullanici) }),

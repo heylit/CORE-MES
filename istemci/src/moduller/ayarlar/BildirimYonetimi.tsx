@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { islemAdi } from '#paylasilan/islem-adlari.ts';
 import type {
-  BildirimAliciDegistirGovdesi, BildirimAliciSatiri, BildirimAlicilariCevabi, BildirimOnemi, CagriYonlendirmeCevabi, CagriYonlendirmeSatiri,
+  BildirimAliciDegistirGovdesi, BildirimAliciSatiri, BildirimAlicilariCevabi, BildirimGosterimDegistirGovdesi, BildirimGosterimSatiri,
+  BildirimGosterimleriCevabi, BildirimOnemi, CagriYonlendirmeCevabi, CagriYonlendirmeSatiri,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Kart, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -24,6 +25,7 @@ export function BildirimYonetimi() {
     <>
       <EkipCagrilari />
       <BildirimAlicilari />
+      <BildirimGosterimi />
     </>
   );
 }
@@ -202,6 +204,66 @@ function BildirimAlicilari() {
             </li>
           );
         })}
+      </ul>
+    </Kart>
+  );
+}
+
+// Sistem Ayarları'nın kendi önbellek anahtarı (ayarlar/anahtarlar.ts bu kartın kilidinde değil).
+const GOSTERIM_ANAHTARI = ['ayarlar', 'bildirim-gosterim'] as const;
+interface GosterimDegisimi extends BildirimGosterimDegistirGovdesi { tur: BildirimGosterimSatiri['tur'] }
+
+// Otomatik bildirimin gösterimi (2147 Y4): tür başına ekran ortasında çıkar mı, "Okudum, anladım" ister mi. Ayarlanmayan türde
+// varsayılan geçer: yalnız acil ortada, onay yok. Değişiklik sonraki bildirimden geçerlidir; yazılmış bildirim değişmez.
+function BildirimGosterimi() {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const liste = useQuery({ queryKey: GOSTERIM_ANAHTARI, queryFn: () => api.get<BildirimGosterimleriCevabi>('/bildirimler/gosterim') });
+  const degisim = useMutation({
+    mutationFn: ({ tur, ...govde }: GosterimDegisimi) => api.post<BildirimGosterimleriCevabi>(`/bildirimler/gosterim/${tur}/degistir`, govde),
+    onSuccess: (guncel) => {
+      istemci.setQueryData(GOSTERIM_ANAHTARI, guncel);
+      bildir('tamam', 'Bildirim gösterimi kaydedildi.');
+    },
+    onError: (hata) => {
+      bildir('hata', hataIletisi(hata, 'Bildirim gösterimi kaydedilemedi.'));
+      void liste.refetch();
+    },
+  });
+
+  if (liste.isPending) return <Kart baslik="Ekran ortası ve onay"><DurumKutusu durum="yukleniyor" /></Kart>;
+  if (liste.isError) {
+    return (
+      <Kart baslik="Ekran ortası ve onay">
+        <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Bildirim gösterimi alınamadı.')} yenile={() => { void liste.refetch(); }} />
+      </Kart>
+    );
+  }
+  const yaz = (s: BildirimGosterimSatiri, ek: Partial<BildirimGosterimDegistirGovdesi>) => {
+    degisim.mutate({ tur: s.tur, ortada: s.ortada, onayIstenir: s.onayIstenir, surum: s.surum, ...ek });
+  };
+  return (
+    <Kart baslik="Ekran ortası ve onay">
+      <p className="tc-ayar-aciklama">
+        Otomatik bildirimin ekranın ortasında çıkıp çıkmayacağını ve "Okudum, anladım" onayı isteyip istemeyeceğini seçin. Seçilmeyen türde
+        yalnız acil olanlar ortada çıkar. Değişiklik bundan sonraki bildirimlerde geçerlidir.
+      </p>
+      <ul className="tc-ayarlar" aria-label="Ekran ortası ve onay">
+        {liste.data.satirlar.map((s) => (
+          <li key={s.tur} className="tc-ayar tc-cagri-ekibi">
+            <div className="tc-ayar-metin">
+              <p className="tc-ayar-baslik"><Simge ad={ONEM_SIMGELERI[s.onem]} boyut="k" /> {s.baslik}</p>
+              <p className="tc-ayar-aciklama">
+                {s.surum === null ? 'Varsayılan' : 'Ayarlandı'}
+                {s.degistiren !== null && s.degistirildi !== null && ` · ${s.degistiren.ad ?? 'Silinmiş kişi'}, ${zaman(s.degistirildi)}`}
+              </p>
+            </div>
+            <div className="tc-cagri-rolleri" role="group" aria-label={`${s.baslik} gösterimi`}>
+              <IsaretKutusu etiket="Ekran ortasında" checked={s.ortada} disabled={degisim.isPending} onChange={(o) => { yaz(s, { ortada: o.target.checked }); }} />
+              <IsaretKutusu etiket="Onay iste" checked={s.onayIstenir} disabled={degisim.isPending} onChange={(o) => { yaz(s, { onayIstenir: o.target.checked }); }} />
+            </div>
+          </li>
+        ))}
       </ul>
     </Kart>
   );

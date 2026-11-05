@@ -115,6 +115,14 @@ export const ONAY_ILETILERI = {
   yazanDegil: 'Yayını yalnız yazan geri çekebilir.',
 } as const;
 
-// BIL-16 (2147-3 a): otomatik bildirimden yalnız acil olanı ortada çıkar ve onay istemez. Tür başına ayar Bildirim yönetimi'ne gelince
-// (2147 Y4) bu varsayılan olur.
+// BIL-16 (2147-3 a): otomatik bildirimden yalnız acil olanı ortada çıkar ve onay istemez; tür ayarlanmadıysa bu geçer.
 export const otomatikOrtadaMi = (onem: BildirimOnemi): boolean => onem === 'acil';
+
+export interface Gosterim { ortada: boolean; onayIstenir: boolean }
+// BIL-17 (2147 Y4): türün Bildirim yönetimi'ndeki gösterimi varsayılanın yerine geçer.
+export const varsayilanGosterim = (onem: BildirimOnemi): Gosterim => ({ ortada: otomatikOrtadaMi(onem), onayIstenir: false });
+export const otomatikGosterim = (onem: BildirimOnemi, ayar: Gosterim | null): Gosterim => ayar ?? varsayilanGosterim(onem);
+export const varsayilanMi = (onem: BildirimOnemi, g: Gosterim): boolean => {
+  const v = varsayilanGosterim(onem);
+  return v.ortada === g.ortada && v.onayIstenir === g.onayIstenir;
+};

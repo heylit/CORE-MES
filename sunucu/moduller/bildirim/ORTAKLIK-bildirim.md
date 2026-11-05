@@ -17,3 +17,4 @@
 | Yayın hedefi | `bildirim_yayin_hedefi.hedef_id` (rol, istasyon ya da kişi kimliği; `hedef_turu`) | kisiler (rol, kişi), istasyonlar (istasyon) | çok tablolu olduğundan yabancı anahtar yok; yayın anında sahibinin okumasıyla sınanır |
 | İstasyon ataması (yayın alıcısı) | (tablo yok) | istasyonlar | kablolama ile `aktifIstasyonlar`, `istasyondakiKisiler` (ters bağ, döngü yok) |
 | Yayın görseli | dosya bağı `bildirim` / `yayin:<id>`; `bildirim_yayini.gorsel_ozet` | dosya | yerel disk deposu |
+| Tür gösterimi değiştiren | `bildirim_tur_gosterimi.degistiren_kisi_id` | kisiler | `kisi.id` yabancı anahtar |

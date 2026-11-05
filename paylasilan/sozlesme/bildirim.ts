@@ -259,6 +259,28 @@ export const bildirimAliciDegistirGovdesi = z.object({
   surum: surumSemasi.nullable(),
 }).strict();
 
+// Otomatik bildirimin gösterimi (2147 Y4): tür başına "ekran ortasında" ve "onay iste". Ayarlanmamış türde varsayılan geçer (yalnız
+// acil ortada, onay yok). Okuma ve yazma `ayarlar.yaz` ister; değer varsayılana dönünce ayar kalkar.
+export const bildirimGosterimParametresi = z.object({ tur: z.enum(BILDIRIM_TUR_ANAHTARLARI) });
+export const bildirimGosterimSatiri = z.object({
+  tur: z.enum(BILDIRIM_TUR_ANAHTARLARI),
+  baslik: z.string(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  kaynakModul: z.string(),
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  // Tür ayarlanmadıysa null (varsayılan geçer).
+  surum: z.number().int().nullable(),
+  degistiren: z.object({ id: z.number().int(), ad: z.string().nullable() }).nullable(),
+  degistirildi: zamanSemasi.nullable(),
+});
+export const bildirimGosterimleriCevabi = z.object({ satirlar: z.array(bildirimGosterimSatiri) });
+export const bildirimGosterimDegistirGovdesi = z.object({
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  surum: surumSemasi.nullable(),
+}).strict();
+
 export const YAYIN_HEDEF_EN_COK = 100;
 // Görsel dosya modülünün yerel deposundadır; dış servis yoktur.
 export const YAYIN_GORSEL_TURLERI = ['png', 'jpeg', 'webp'] as const;
@@ -366,6 +388,9 @@ export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDeg
 export type BildirimAliciSatiri = z.output<typeof bildirimAliciSatiri>;
 export type BildirimAlicilariCevabi = z.output<typeof bildirimAlicilariCevabi>;
 export type BildirimAliciDegistirGovdesi = z.input<typeof bildirimAliciDegistirGovdesi>;
+export type BildirimGosterimSatiri = z.output<typeof bildirimGosterimSatiri>;
+export type BildirimGosterimleriCevabi = z.output<typeof bildirimGosterimleriCevabi>;
+export type BildirimGosterimDegistirGovdesi = z.input<typeof bildirimGosterimDegistirGovdesi>;
 export type YayinSimgesi = (typeof YAYIN_SIMGELERI)[number];
 export type BildirimYayinlaGovdesi = z.input<typeof bildirimYayinlaGovdesi>;
 export type BildirimYayinlaGirdisi = z.output<typeof bildirimYayinlaGovdesi>;
