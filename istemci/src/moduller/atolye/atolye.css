@@ -8,13 +8,13 @@
 .tc-atolye-hata { color: var(--stop); font-weight: 700; }
 .tc-atolye-not { color: var(--faint); font-size: var(--yazi-xs); }
 
-/* Özet şeridi: durum sayıları yan yana çip; renkli nokta lejant da olur. */
-.tc-atolye-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-4); min-width: 0; }
+/* Özet şeridi: durum sayıları tek ince satırda çip; sığmazsa yana kayar, harita alanı küçülmez (2142-1 a). */
+.tc-atolye-serit { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
 .tc-atolye-tam-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); margin-right: auto; }
 .tc-atolye-tam-baslik strong { font-size: var(--yazi-l); font-weight: 800; }
-.tc-atolye-gostergeler { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: 0; }
+.tc-atolye-gostergeler { display: flex; flex-wrap: nowrap; flex: 1 1 0; gap: var(--b-2); margin: 0; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .tc-atolye-gosterge {
-  display: inline-flex; align-items: baseline; gap: var(--b-2); min-width: 0; padding: var(--b-1) var(--b-3);
+  display: inline-flex; flex: none; align-items: baseline; gap: var(--b-2); min-width: 0; padding: var(--pay-ince) var(--b-3);
   background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-tam);
 }
 .tc-atolye-gosterge dt {
@@ -22,7 +22,8 @@
   letter-spacing: var(--harf-aralik-06); text-transform: uppercase; color: var(--muted); white-space: nowrap;
 }
 .tc-atolye-gosterge dt i { flex: none; width: var(--nokta); height: var(--nokta); border-radius: var(--yari-tam); background: var(--sig); }
-.tc-atolye-gosterge dd { margin: 0; font-size: var(--yazi-l); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tc-atolye-gosterge dd { margin: 0; font-size: var(--yazi-m); font-weight: 800; font-variant-numeric: tabular-nums; }
+.tc-atolye-ozet-ayrinti { flex: none; }
 .tc-atolye-gosterge small { font-size: var(--yazi-xs); color: var(--muted); font-weight: 600; }
 .tc-atolye-gosterge[data-durum="durdu"] { border-color: var(--sig); }
 
@@ -55,10 +56,13 @@
 .tc-atolye-arac .tc-dugme[aria-pressed="true"] { background: var(--hazard); color: var(--on-hazard); }
 .tc-atolye-sahne-alani[data-yuruyus="true"] .tc-atolye-arac { top: calc(var(--dokunma) + var(--b-5)); }
 
-/* Ana alan: sahne ve istasyon listesi; sahne ekranın büyük kısmını alır, liste aynı boyda. */
-.tc-atolye-ana { display: grid; grid-template-columns: minmax(0, 1fr) var(--kuyruk-genis); gap: var(--b-4); align-items: stretch; min-width: 0; }
-.tc-atolye-ana[data-liste="false"] { grid-template-columns: minmax(0, 1fr); }
-.tc-atolye-ana > .tc-kuyruk { max-height: max(var(--kadran-enaz), var(--ekran-boy-70)); overflow: auto; }
+/* Ana alan: sahne bütün genişliği alır; makine listesi açılınca sahnenin üstünde, araç sütununun solunda çekmecedir (2142-1 a). */
+.tc-atolye-ana { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.tc-atolye-ana > .tc-kuyruk {
+  position: absolute; right: calc(var(--dokunma) + var(--b-5)); top: var(--b-2); bottom: var(--b-2); z-index: var(--z-ust);
+  width: min(calc(var(--kuyruk-genis) + var(--b-6)), calc(100% - var(--dokunma) - var(--b-6))); min-height: 0; overflow: auto; padding: var(--b-3);
+  background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
+}
 .tc-atolye-sahne-alani { position: relative; min-width: 0; }
 .tc-atolye-sahne-kap, .tc-atolye-sahne-plan, .tc-atolye-yukleniyor {
   position: relative; height: max(var(--kadran-enaz), var(--ekran-boy-70)); width: 100%;
@@ -96,13 +100,15 @@
 
 /* Öğe kartı: geniş ekranda sahnenin üstünde, dar ekranda altında. */
 .tc-atolye-kart {
-  display: grid; gap: var(--b-3); padding: var(--b-4); min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); padding: var(--b-4); min-width: 0;
   background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
 }
 .tc-atolye-kart-ust { display: flex; align-items: flex-start; gap: var(--b-2); }
 .tc-atolye-kart-ust > div { flex: 1; min-width: 0; }
+.tc-atolye-kart-kod { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
 .tc-atolye-kart-ust h3 { font-size: var(--yazi-l); font-weight: 800; overflow-wrap: anywhere; }
-.tc-atolye-ust-baslik { font-size: var(--yazi-xs); letter-spacing: var(--harf-aralik-10); text-transform: uppercase; color: var(--muted); }
+.tc-atolye-ust-baslik { font-size: var(--yazi-xs); letter-spacing: var(--harf-aralik-10); text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-atolye-kart-ayrinti { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-3); padding-top: var(--b-3); border-top: 1px solid var(--edge); min-width: 0; }
 .tc-atolye-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-3); margin: 0; font-size: var(--yazi-s); }
 .tc-atolye-dl dt { color: var(--muted); font-weight: 700; }
 .tc-atolye-dl dd { margin: 0; overflow-wrap: anywhere; }
@@ -264,9 +270,6 @@
 @media (max-width: 1279px) {
   /* ATL-5: dar sahnede bölüm etiketi yalnız kodu taşır; ad sahne kenarından ve arama kutusunun altından taşmasın. */
   .tc-atolye-etiket-bolum span { display: none; }
-  .tc-atolye-ana { grid-template-columns: minmax(0, 1fr); }
-  .tc-atolye-ana > .tc-kuyruk { max-height: none; }
-  .tc-atolye-gostergeler { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (min-width: 768px) {
   .tc-atolye-kart { position: absolute; left: var(--b-3); bottom: var(--b-3); width: min(var(--tus-pencere-genis), calc(100% - var(--b-6))); max-height: var(--oran-62); overflow: auto; z-index: var(--z-kabuk); }
@@ -279,6 +282,8 @@
   .tc-atolye-gosterge dt { letter-spacing: var(--harf-aralik-02); }
   .tc-atolye-ust-sag .tc-alan { min-width: 0; width: 100%; }
   .tc-atolye-sahne-kap, .tc-atolye-sahne-plan, .tc-atolye-yukleniyor { height: max(var(--kadran-enaz), var(--ekran-boy-62)); }
+  /* Dar ekranda öğe kartı sahnenin altındadır; liste yalnız sahnenin boyunca açılır, kartı örtmez. */
+  .tc-atolye-ana > .tc-kuyruk { bottom: auto; max-height: calc(max(var(--kadran-enaz), var(--ekran-boy-62)) - var(--b-4)); }
   .tc-atolye-arama { width: calc(100% - var(--dokunma) * 2 - var(--b-5)); }
   .tc-atolye-gosterge { padding: var(--pay-ince) var(--b-2); }
   .tc-atolye-duzen-govde { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
@@ -336,16 +341,7 @@
 }
 .tc-atolye-tam .tc-atolye-ana { min-height: 0; position: relative; }
 .tc-atolye-tam .tc-atolye-sahne-alani, .tc-atolye-tam .tc-atolye-sahne-kap, .tc-atolye-tam .tc-atolye-sahne-plan, .tc-atolye-tam .tc-atolye-yukleniyor { height: 100%; min-height: 0; }
-.tc-atolye-tam .tc-atolye-ana > .tc-kuyruk { max-height: none; min-height: 0; overflow: auto; }
 .tc-atolye-tam .tc-atolye-gosterge dd { font-size: var(--yazi-xl); }
-@media (max-width: 1279px) {
-  /* Dar tam ekranda liste sahnenin üstünde çekmece. */
-  .tc-atolye-tam .tc-atolye-ana { grid-template-columns: minmax(0, 1fr); }
-  .tc-atolye-tam .tc-atolye-ana > .tc-kuyruk {
-    position: absolute; right: calc(var(--dokunma) + var(--b-5)); top: 0; bottom: 0; z-index: var(--z-ust);
-    width: min(var(--kuyruk-genis), calc(100% - var(--dokunma-x20) - var(--b-6))); box-shadow: var(--shadow);
-  }
-}
 /* Arama sahne üstünde: etiket ekran okuyucuya kalır, görünmez. */
 .tc-atolye-arama .tc-alan-etiket { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 

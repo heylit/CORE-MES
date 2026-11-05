@@ -155,7 +155,10 @@ export function AtolyeHaritasi() {
   const [tur, turYaz] = useState(false);
   const [turDurdu, turDurduYaz] = useState(false);
   // Tam ekranda istasyon listesi çekmecedir; geniş ekranda açık başlar.
-  const [listeAcik, listeAcikYaz] = useState(() => typeof matchMedia === 'function' && matchMedia('(min-width: 1280px)').matches);
+  // 2142-1 a: makine listesi kapalı gelir (adresteki süzgeç listeyi açar); araç sütunundaki düğmeyle haritanın üstünde açılır, haritayı daraltmaz.
+  const [listeAcik, listeAcikYaz] = useState(() => adres.get('suzgec') === 'yerlesmemis');
+  // 2142-1 a: özet tek satırdır; sağlam, yerleşik istasyon ve bölüm sayıları ayrıntıdadır.
+  const [ozetAyrinti, ozetAyrintiYaz] = useState(false);
   const konum = useLocation();
   const git = useNavigate();
   const sekme = sekmeOku(konum.pathname);
@@ -330,7 +333,7 @@ export function AtolyeHaritasi() {
   const sirali = [...yerler].sort((a, b) => a.kod.localeCompare(b.kod, 'tr'));
   const bos = gorunen.every((b) => b.istasyonYerleri.length === 0 && b.raflar.length === 0 && b.alanlar.length === 0 && b.duvarlar.length === 0);
   // Bölmeye bakarken sahne bütün genişliği alır.
-  const listeGorunur = !rafOdak && (!tamEkran.acik || listeAcik);
+  const listeGorunur = !rafOdak && listeAcik;
   const baslik = fabrikaGorunumu ? 'Tüm fabrika' : y?.salon.ad ?? '';
   // Bölmeye bakılan rafın bölümü.
   const odakBolumu = rafOdak ? gorunen.find((b) => b.raflar.some((r) => r.id === rafOdak.rafId)) : undefined;
@@ -353,10 +356,22 @@ export function AtolyeHaritasi() {
           <Gosterge ad="Durdu" deger={sayiMetni(ozet.durdu)} durum="durdu" />
           <Gosterge ad="Bekliyor" deger={sayiMetni(ozet.bekliyor)} durum="sirada" />
           {arizaOkundu && <Gosterge ad="Arıza, bakım (makine)" deger={sayiMetni(arizaSayisi)} durum={arizaSayisi > 0 ? 'durdu' : undefined} />}
-          <Gosterge ad="Sağlam (süren işler)" deger={ozet.saglam === null ? '—' : sayiMetni(ozet.saglam)} birim={ozet.saglam === null ? undefined : 'adet'} />
-          <Gosterge ad="Yerleşik istasyon" deger={sayiMetni(yerler.length)} />
-          {fabrikaGorunumu && <Gosterge ad="Bölüm" deger={sayiMetni(gorunen.length)} />}
+          {ozetAyrinti && (
+            <>
+              <Gosterge ad="Sağlam (süren işler)" deger={ozet.saglam === null ? '—' : sayiMetni(ozet.saglam)} birim={ozet.saglam === null ? undefined : 'adet'} />
+              <Gosterge ad="Yerleşik istasyon" deger={sayiMetni(yerler.length)} />
+              {fabrikaGorunumu && <Gosterge ad="Bölüm" deger={sayiMetni(gorunen.length)} />}
+            </>
+          )}
         </dl>
+        <Dugme
+          className="tc-atolye-ozet-ayrinti"
+          simge={ozetAyrinti ? 'chev-left' : 'more'}
+          aria-expanded={ozetAyrinti}
+          aria-label={ozetAyrinti ? 'Özet ayrıntısını gizle' : 'Özet ayrıntısı'}
+          title={ozetAyrinti ? 'Özet ayrıntısını gizle' : 'Sağlam, yerleşik istasyon ve bölüm sayıları'}
+          onClick={() => ozetAyrintiYaz((v) => !v)}
+        />
       </div>
 
       <div className="tc-atolye-ana" data-liste={listeGorunur}>
@@ -481,6 +496,7 @@ export function AtolyeHaritasi() {
           {bos && <p className="tc-atolye-bos">{fabrikaGorunumu ? 'Bölümler boş.' : 'Bölüm boş.'} {yazabilir ? '"Yerleşimi düzenle" ile istasyon, raf ve alan ekleyin.' : 'Yerleşimi, yetkisi olan kişi düzenler.'}</p>}
           {secili && seciliBolum && !yuruyus && !rafOdak && (
             <OgeKarti
+              key={secili}
               yerlesim={seciliBolum}
               anahtar={secili}
               emirler={canli.emirler}
