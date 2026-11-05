@@ -198,6 +198,11 @@
 .sa-kok .sev.h{ background:var(--sa-bad); } .sa-kok .sev.m{ background:var(--sa-warn); } .sa-kok .sev.l{ background:var(--sa-c3); }
 .sa-kok .todo .no{ font-variant-numeric:tabular-nums; color:var(--sa-muted); font-size:13px; }
 @media (max-width:640px){ .sa-kok .todo li{ grid-template-columns:8px minmax(0,1fr); } .sa-kok .todo .no, .sa-kok .todo .act{ display:none; } }
+/* Sipariş takibi .todo görünümünü paylaşır ama satırında önem noktası ve no yoktur: iki sütun, tıklanmaz. */
+.sa-kok .todo[data-sa-takip-listesi] li{ grid-template-columns:minmax(0,1fr) minmax(0,1.6fr); cursor:default; padding-left:0; padding-right:0; }
+.sa-kok .todo[data-sa-takip-listesi] li:hover{ background:none; }
+.sa-kok .todo[data-sa-takip-listesi] li > span:first-child{ display:flex; align-items:center; gap:8px; }
+@media (max-width:640px){ .sa-kok .todo[data-sa-takip-listesi] li{ grid-template-columns:minmax(0,1fr); gap:4px; } }
 
 /* sıralama */
 .sa-kok .rank{ list-style:none; margin:0; padding:0; }
