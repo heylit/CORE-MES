@@ -4,6 +4,7 @@ import {
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoGelenCevabi, logoGelenParametresi, logoGelenSorgusu, logodanAlCevabi, logodanAlGovdesi,
+  arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi,
   logoKartSurumCevabi, logoKartSurumGovdesi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -109,5 +110,19 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-logo-karsiliklari/kaydet', yetki: 'malzemeler.tanim-yaz', govde: logoKarsiligiKaydetGovdesi, cevap: katalogKimlikCevabi,
     isle: ({ db, kullanici, govde }) => servis.logoKarsiligiKaydet(db, kullanici, govde),
+  }),
+  // Arşiv (2114c): silinen kartlar ve bağları sayfayı okuyana açık; geri getirme ve kalıcı silme yalnız onaycıda (2114-4 a).
+  uc({ yontem: 'GET', yol: '/malzeme-arsivi', yetki: OKUMA, cevap: arsivKartlariCevabi, isle: ({ db }) => servis.arsivKartlariniGetir(db) }),
+  uc({
+    yontem: 'GET', yol: '/malzeme-arsivi/:kimlik', yetki: OKUMA, parametre: katalogKimlikParametresi, cevap: arsivKartiCevabi,
+    isle: ({ db, parametre }) => servis.arsivKartiniGetir(db, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-arsivi/:kimlik/geri-getir', yetki: 'malzemeler.onayla', parametre: katalogKimlikParametresi, cevap: katalogKimlikCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.arsivdenGeriGetir(db, kullanici, parametre.kimlik),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-arsivi/:kimlik/kalici-sil', yetki: 'malzemeler.onayla', parametre: katalogKimlikParametresi, govde: arsivKaliciSilGovdesi,
+    cevap: katalogKimlikCevabi, isle: ({ db, parametre, govde }) => servis.arsivdenKaliciSil(db, parametre.kimlik, govde.stokKodu),
   }),
 ];

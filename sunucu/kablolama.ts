@@ -4,23 +4,27 @@ import { satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, 
 import * as arkon from './moduller/arkon/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
-import { yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
+import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
+import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
+import { malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
+import { malzemeKartiIzleri as markalamaKartIzleri } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
-import { acilSiparisOnaylandi, canliMakineAyrimlari, canliPaylar, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
+import { acilSiparisOnaylandi, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteDurumuCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
-  logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu,
+  logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit } from './moduller/rota/disari.ts';
+import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import * as stok from './moduller/stok/disari.ts';
 import * as uretimEmirleri from './moduller/uretim-emirleri/disari.ts';
 import * as vardiya from './moduller/vardiya/disari.ts';
@@ -47,6 +51,20 @@ export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, 
 // 2118: cari okuması uçta transaction dışında koşar (köprü 60 sn bekleyebilir); logonun ayar okuması aynı bağlantıyı kullanır.
 const cariAra = (db: Db, metin: string) => logo.logodaCariAra({ tx: (f) => f(db) }, metin);
 const cariOku = (db: Db, kod: string) => logo.logodanCariOku({ tx: (f) => f(db) }, kod);
+
+type KartIzleri = (db: Db, kartlar: readonly MalzemeKartiAnahtari[]) => Promise<MalzemeKartiIzi[]>;
+
+// Arşiv (2114c): kartın izini tutan her modülün sayımı modül adıyla birleşir. Biri yoksa bağ eksik sayılır; eksik sayım kalıcı
+// silmeye "bağı yok" dedirtirdi. Sayımlar sırayla koşar: aynı işlemin tek bağlantısını paylaşırlar.
+function kartIzleriTopla(kaynaklar: Readonly<Record<string, KartIzleri | undefined>>) {
+  const liste = Object.entries(kaynaklar);
+  if (liste.some(([, sayim]) => typeof sayim !== 'function')) return undefined;
+  return async (db: Db, kartlar: readonly MalzemeKartiAnahtari[]) => {
+    const izler: (MalzemeKartiIzi & { modul: string })[] = [];
+    for (const [modul, sayim] of liste) for (const iz of await sayim!(db, kartlar)) izler.push({ ...iz, modul });
+    return izler;
+  };
+}
 
 export function sunucununBaglari(): Bag[] {
   return [
@@ -141,6 +159,13 @@ export function sunucununBaglari(): Bag[] {
     bag('izlenebilirlik -> kapanış', uretimEmirleri.izlenebilirlikKapanisCozucusu, stok.kapanisIzlenebilirlikDurumu),
     bag('stok -> kapanış', uretimEmirleri.stokKapanisCozucusu, stok.kapanisStokDurumu),
     bag('sevkiyat -> kapanış', uretimEmirleri.sevkiyatKapanisCozucusu, sevkiyat.kapanisSevkiyatDurumu),
+    bag('kart izleri -> malzemeler arşivi', kartIzleriCozucusu, kartIzleriTopla({
+      'Değişiklik yönetimi': degisiklikKartIzleri, 'Finans': finansKartIzleri, 'İstasyonlar': istasyonKartIzleri, 'Markalama': markalamaKartIzleri,
+      'Plan': planKartIzleri, 'Satın alma': satinAlmaKartIzleri, 'Rota': rotaKartIzleri, 'Siparişler': siparisKartIzleri,
+      'CNC kurulum': cncKurulum.malzemeKartiIzleri, 'Kalite merkezi': kaliteMerkezi.malzemeKartiIzleri, 'Logo': logo.malzemeKartiIzleri,
+      'Reçete-rota': receteRota.malzemeKartiIzleri, 'Sevkiyat': sevkiyat.malzemeKartiIzleri, 'Stok': stok.malzemeKartiIzleri,
+      'Üretim emirleri': uretimEmirleri.malzemeKartiIzleri,
+    })),
   ];
 }
 

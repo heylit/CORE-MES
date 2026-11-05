@@ -1,0 +1,40 @@
+/* Arşiv (2114c): solda kart listesi, sağda seçili kartın bağları; dar ekranda tek sütun, seçilince ayrıntı listenin yerini alır. */
+.tc-ar { display: grid; gap: var(--b-4); min-width: 0; }
+@media (min-width: 1024px) {
+  .tc-ar { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
+  .tc-ar-don { display: none; }
+}
+@media (max-width: 1023px) {
+  .tc-ar[data-acik='true'] .tc-ar-liste { display: none; }
+  .tc-ar[data-acik='false'] .tc-ar-ayrinti { display: none; }
+}
+
+.tc-ar-liste, .tc-ar-ayrinti, .tc-ar-govde, .tc-ar-izler { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ar-ayrinti { padding: var(--b-4); border: 1px solid var(--edge2); border-radius: var(--yari-1); background: var(--panel); }
+.tc-ar-not, .tc-ar-bos, .tc-ar-sayac { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-ar-suzgec { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+
+.tc-ar-kartlar { display: grid; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-ar-kart {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); width: 100%; min-height: var(--dokunma);
+  padding: var(--b-3); border: 1px solid var(--edge2); border-left: var(--b-1) solid var(--tur-renk, var(--muted)); border-radius: var(--yari-1);
+  background: var(--panel); color: inherit; text-align: left; cursor: pointer;
+}
+.tc-ar-kart:hover { border-color: var(--muted); border-left-color: var(--tur-renk, var(--muted)); }
+.tc-ar-kart[aria-current='true'] { border-color: var(--bp); border-left-color: var(--tur-renk, var(--bp)); }
+.tc-ar-kart:focus-visible { outline: 2px solid var(--bp); outline-offset: -2px; }
+.tc-ar-kart-metin { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-ar-kart-metin span { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-ar-kod { margin: 0; font-family: var(--font-mono); font-weight: 700; overflow-wrap: anywhere; }
+
+.tc-ar-baslik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-ar-bilgi { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 5)), 1fr)); gap: var(--b-3); margin: 0; }
+.tc-ar-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-ar-bilgi dd { margin: 0; overflow-wrap: anywhere; }
+.tc-ar-ozet { margin: 0; padding: var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-ar-ozet[data-durum='bagsiz'] { border-left: var(--b-1) solid var(--run); }
+.tc-ar-ozet[data-durum='kesin'] { border-left: var(--b-1) solid var(--stop); }
+.tc-ar-ozet[data-durum='olasi'], .tc-ar-ozet[data-durum='bilinmiyor'] { border-left: var(--b-1) solid var(--hold); }
+.tc-ar-izler h4 { margin: 0; font-size: var(--yazi-s); font-weight: 600; }
+.tc-ar-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-ar-kart > .tc-rozet { flex: none; }

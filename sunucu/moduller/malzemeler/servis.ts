@@ -17,6 +17,7 @@ import type {
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
   LogoGelenCevabi, LogodanAlCevabi, logodanAlGovdesi, logoGelenSorgusu,
+  ArsivKarti, ArsivKartiCevabi, ArsivKartlariCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -33,6 +34,8 @@ import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, Ornek
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
+import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
+import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -670,6 +673,65 @@ export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: st
   });
   if (!deneme.tamam && deneme.hata !== DENEME_BITTI) throw deneme.hata.kod === 'BAGIMLI_KAYIT' ? bagimliKayit(KART_KULLANIMDA) : deneme.hata;
   await s.katalogKartiIptal(db, kimlik, kullanici.id);
+  return { id: kimlik };
+}
+
+// Arşiv (2114c): kartın başka modüllerdeki izi. Modüller kendi tablolarını sayar; ters yöndeki bağ sunucu/kablolama.ts'tedir.
+export type KartIzleriCozucusu = (db: Db, kartlar: readonly MalzemeKartiAnahtari[]) => Promise<readonly (MalzemeKartiIzi & { modul: string })[]>;
+let kartIzleri: KartIzleriCozucusu | null = null;
+export function kartIzleriCozucusuKaydet(cozucu: KartIzleriCozucusu): void { kartIzleri = cozucu; }
+
+async function arsivIzleri(db: Db, satirlar: readonly s.ArsivSatiri[]): Promise<Map<number, ArsivIzi[]> | null> {
+  if (!kartIzleri) return null;
+  const izler = new Map<number, ArsivIzi[]>(satirlar.map((k) => [k.no, []]));
+  if (satirlar.length === 0) return izler;
+  for (const iz of await kartIzleri(db, satirlar.map((k) => ({ no: k.no, kimlik: k.kimlik, stokKodu: k.stokKodu })))) {
+    izler.get(iz.no)?.push({ modul: iz.modul, kayit: iz.kayit, tur: iz.tur, adet: iz.adet, ornek: iz.ornek });
+  }
+  return izler;
+}
+
+function arsivKartiCevabi(k: s.ArsivSatiri, adlar: ReadonlyMap<number, string>, izler: readonly ArsivIzi[] | null): ArsivKarti {
+  const adet = arsivIzAdetleri(izler);
+  const silenAd = adlar.get(k.silenId);
+  return {
+    kimlik: k.kimlik, no: k.no, stokKodu: k.stokKodu, ad: k.ad, tur: k.tur, silinme: k.silinme, logoyaGitti: k.logoyaGitti,
+    silen: silenAd === undefined ? null : { id: k.silenId, ad: silenAd }, kesinAdet: adet.kesin, olasiAdet: adet.olasi,
+  };
+}
+
+export async function arsivKartlariniGetir(db: Db): Promise<ArsivKartlariCevabi> {
+  const satirlar = await s.arsivKartlari(db);
+  const adlar = await kisiAdlari(db, satirlar.map((k) => k.silenId));
+  const izler = await arsivIzleri(db, satirlar);
+  return { kartlar: satirlar.map((k) => arsivKartiCevabi(k, adlar, izler?.get(k.no) ?? null)) };
+}
+
+export async function arsivKartiniGetir(db: Db, kimlik: string): Promise<ArsivKartiCevabi> {
+  const k = await s.arsivKarti(db, kimlik, false);
+  if (!k) throw bulunamadi('Arşivde bu kart yok.');
+  const adlar = await kisiAdlari(db, [k.silenId]);
+  const izler = await arsivIzleri(db, [k]);
+  const kartIzi = izler?.get(k.no) ?? null;
+  return { kart: arsivKartiCevabi(k, adlar, kartIzi), izler: kartIzi };
+}
+
+export async function arsivdenGeriGetir(db: Db, kullanici: Kullanici, kimlik: string): Promise<{ id: string }> {
+  const k = await s.arsivKarti(db, kimlik, true);
+  if (!k) throw bulunamadi('Arşivde bu kart yok.');
+  await s.arsivdenGeriGetir(db, kimlik, arsivdenDonusDurumu(k.aktifOlmus), kullanici.id);
+  return { id: kimlik };
+}
+
+// Kalıcı silme: izler kilitli satırla yeniden sayılır; sayımın görmediği yabancı anahtarlı bağı silmenin kendisi reddeder.
+export async function arsivdenKaliciSil(db: Db, kimlik: string, girilenKod: string): Promise<{ id: string }> {
+  const k = await s.arsivKarti(db, kimlik, true);
+  if (!k) throw bulunamadi('Arşivde bu kart yok.');
+  const izler = (await arsivIzleri(db, [k]))?.get(k.no) ?? null;
+  const engel = arsivKaliciSilmeEngeli({ izler, logoyaGitti: k.logoyaGitti, stokKodu: k.stokKodu, girilenKod });
+  if (engel !== null) throw izler !== null && izler.length > 0 ? bagimliKayit(engel) : gecersiz(engel);
+  const silme = await kayitNoktasi(db, () => s.katalogKartiSilmeyiDene(db, kimlik));
+  if (!silme.tamam) throw silme.hata.kod === 'BAGIMLI_KAYIT' ? bagimliKayit('Kart başka kayıtlarda kullanılıyor; kalıcı silinemez.') : silme.hata;
   return { id: kimlik };
 }
 

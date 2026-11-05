@@ -6,6 +6,7 @@ import {
   katalogTalepDenetle, katalogKaydiAlanlari, katalogFirmaKoduGecerliMi, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIptalYetkiliMi, katalogFarki, katalogTalepUygulamaDenetle,
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
 } from './kurallar.ts';
+import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli } from './kurallar.ts';
 import type { KatalogGecisi } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
 
@@ -443,4 +444,18 @@ test('MLZ-5 a: bildirim metni kartın kırpılmış adını alır; geri çekme r
   assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, geri: true } } }), true);
   assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak', red: { by: 1, neden: 'eksik' } } }), false);
   assert.equal(katalogGeriCekildiMi({ onay: { durum: 'taslak' } }), false);
+});
+
+test('Arşiv (2114c, 2114-4 a): kalıcı silme kodu, Logo kaydı, bilinmeyen bağ, kesin bağ ve olası izle engellenir; dönüş durumu ve adetler', () => {
+  const iz = (tur: 'kesin' | 'olasi', adet: number) => ({ modul: 'Stok', kayit: 'Parti', tur, adet, ornek: null });
+  const temel = { izler: [], logoyaGitti: false, stokKodu: 'HM-00001', girilenKod: ' HM-00001 ' };
+  assert.equal(arsivKaliciSilmeEngeli(temel), null);
+  assert.match(arsivKaliciSilmeEngeli({ ...temel, girilenKod: 'HM-00002' })!, /stok kodu/);
+  assert.match(arsivKaliciSilmeEngeli({ ...temel, logoyaGitti: true })!, /Logo/);
+  assert.match(arsivKaliciSilmeEngeli({ ...temel, izler: null })!, /bağlı değil/);
+  assert.match(arsivKaliciSilmeEngeli({ ...temel, izler: [iz('kesin', 1)] })!, /kalıcı silinemez/);
+  assert.match(arsivKaliciSilmeEngeli({ ...temel, izler: [iz('olasi', 1)] })!, /kalıcı silinemez/);
+  assert.deepEqual([arsivdenDonusDurumu(true), arsivdenDonusDurumu(false)], ['pasif', 'taslak']);
+  assert.deepEqual(arsivIzAdetleri(null), { kesin: null, olasi: null });
+  assert.deepEqual(arsivIzAdetleri([iz('kesin', 2), iz('kesin', 1), iz('olasi', 4)]), { kesin: 3, olasi: 4 });
 });

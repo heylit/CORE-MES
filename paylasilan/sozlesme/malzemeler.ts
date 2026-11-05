@@ -348,3 +348,29 @@ export type LogodanAlCevabi = z.output<typeof logodanAlCevabi>;
 // Bağlama ve farkı alma kartın sürümüyle: arada kartı değiştiren varsa reddedilir.
 export const logoKartSurumGovdesi = z.object({ surum: surumSemasi }).strict();
 export const logoKartSurumCevabi = z.object({ id: z.string(), surum: surumSemasi });
+
+// Arşiv (2114c, 2114-3 a, 2114-4 a): katalogdan silinen (iptal) kartlar ve başka modüllerdeki izleri. Kesin bağ sütun eşleşmesidir,
+// olası iz kayıt içinde kartın kodu ya da numarasıdır; ikisi de kalıcı silmeyi engeller. Bağ sayımı bağlı değilse adetler null.
+export const ARSIV_IZ_TURLERI = ['kesin', 'olasi'] as const;
+const arsivKarti = z.object({
+  kimlik: z.string(),
+  no: z.number().int(),
+  stokKodu: z.string(),
+  ad: z.string().nullable(),
+  tur: z.enum(KATALOG_TURLERI),
+  silen: z.object({ id: z.number().int(), ad: z.string() }).nullable(),
+  silinme: zamanSemasi,
+  logoyaGitti: z.boolean(),
+  kesinAdet: z.number().int().nullable(),
+  olasiAdet: z.number().int().nullable(),
+});
+export type ArsivKarti = z.output<typeof arsivKarti>;
+export const arsivKartlariCevabi = z.object({ kartlar: z.array(arsivKarti) });
+export type ArsivKartlariCevabi = z.output<typeof arsivKartlariCevabi>;
+export const arsivKartiCevabi = z.object({
+  kart: arsivKarti,
+  izler: z.array(z.object({ modul: z.string(), kayit: z.string(), tur: z.enum(ARSIV_IZ_TURLERI), adet: z.number().int(), ornek: z.string().nullable() })).nullable(),
+});
+export type ArsivKartiCevabi = z.output<typeof arsivKartiCevabi>;
+// Kalıcı silme stok kodunu yeniden yazarak onaylanır; yanlış karta basılan düğme kartı silmesin.
+export const arsivKaliciSilGovdesi = z.object({ stokKodu: z.string().trim().min(1).max(64) }).strict();

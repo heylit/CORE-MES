@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  ArsivKartiCevabi, ArsivKartlariCevabi,
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
   KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -27,6 +28,7 @@ export const anahtar = {
   rotaliUrunler: [...MALZEMELER_YENI, 'rotali-urunler'] as const,
   olcuAletleri: [...MALZEMELER_YENI, 'olcu-aletleri'] as const,
   analizAgirligi: (no: number) => [...MALZEMELER_YENI, 'analiz-agirligi', no] as const,
+  arsiv: [...MALZEMELER_YENI, 'arsiv'] as const,
 };
 
 // Kimlik yolun tek parçasıdır; ".." bir üst yola çıkardı.
@@ -329,3 +331,27 @@ export function kayitHatasi(e: unknown): { kod: KayitHataKodu | null; ileti: str
   if (e.govde.alan === 'kayit.g.kat') return { kod: 'kategori-yok', ileti };
   return { kod: e.govde.alan === 'ozet.mukerrer_gerekcesi' ? 'gerekce-kisa' : null, ileti };
 }
+
+// Arşiv (2114c): silinen kartlar ve bağları. Geri getirme ve kalıcı silme arşivi ve katalog listesini tazeler.
+export function useArsiv() {
+  return useQuery({ queryKey: anahtar.arsiv, queryFn: () => api.get<ArsivKartlariCevabi>('/malzeme-arsivi') });
+}
+
+export function useArsivKarti(kimlik: string) {
+  return useQuery({ queryKey: [...anahtar.arsiv, kimlik], queryFn: () => api.get<ArsivKartiCevabi>(`/malzeme-arsivi/${yolParcasi(kimlik)}`) });
+}
+
+function useArsivKomutu<G>(yol: (g: G) => [string, unknown?]) {
+  const istemci = useQueryClient();
+  return useMutation({
+    mutationFn: (g: G) => api.post(...yol(g)),
+    onSettled: async () => {
+      await istemci.invalidateQueries({ queryKey: anahtar.arsiv });
+      await istemci.invalidateQueries({ queryKey: [...MALZEMELER_YENI, 'kartlar'] });
+    },
+  });
+}
+
+export const useArsivdenGeriGetir = () => useArsivKomutu((kimlik: string) => [`/malzeme-arsivi/${yolParcasi(kimlik)}/geri-getir`]);
+export const useArsivKaliciSil = () =>
+  useArsivKomutu((g: { kimlik: string; stokKodu: string }) => [`/malzeme-arsivi/${yolParcasi(g.kimlik)}/kalici-sil`, { stokKodu: g.stokKodu }]);
