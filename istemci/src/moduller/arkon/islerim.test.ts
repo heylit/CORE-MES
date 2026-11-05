@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isimDurumu, isimEtiketi, isimYeri, type IslerimSatiri } from '../../../../arkon/web/src/data/islerim.ts';
+import { isimDurumu, isimEtiketi, isimSuresi, isimYeri, type IslerimSatiri } from '../../../../arkon/web/src/data/islerim.ts';
 
 // 2125-1 b: İşlerim şeridinin kartı nereye götürür. Kodlar uydurmadır.
 const satir = (ek: Partial<IslerimSatiri> = {}): IslerimSatiri => ({
@@ -26,5 +26,14 @@ describe('2125-1 b İşlerim', () => {
     expect(isimYeri(satir({ mc: null, makineAd: null }))).toEqual({ kod: 'IST-A', ad: 'Deneme A' });
     expect(isimEtiketi(satir())).toBe('UE-DENEME-7 · Op 20');
     expect(isimEtiketi(satir({ opNo: null }))).toBe('UE-DENEME-7');
+  });
+
+  it('süre işe girişten; eksi sapma sıfır, bilinmeyen giriş "—"', () => {
+    const t0 = Date.parse('2026-01-01T08:00:00.000Z');
+    expect(isimSuresi(t0, t0 + 30_000)).toBe("1 dk'dan az");
+    expect(isimSuresi(t0, t0 + 12 * 60_000)).toBe('12 dk');
+    expect(isimSuresi(t0, t0 + 135 * 60_000)).toBe('2 sa 15 dk');
+    expect(isimSuresi(t0, t0 - 60_000)).toBe("1 dk'dan az");
+    expect(isimSuresi(Number.NaN, t0)).toBe('—');
   });
 });

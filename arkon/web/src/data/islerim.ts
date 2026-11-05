@@ -40,3 +40,11 @@ export const isimYeri = (s: IslerimSatiri): { kod: string; ad: string } =>
 
 // Liste saatle değişmez ama başka cihazda başlatılan ya da durdurulan iş buraya düşer: şerit açıkken yarım dakikada bir okunur.
 export const ISLERIM_YENILEME_MS = 30_000;
+
+// Kartın süresi: işe girişten bu yana; saat sapmasıyla eksiye düşerse sıfırdır.
+export function isimSuresi(girisMs: number, simdi: number): string {
+  if (!Number.isFinite(girisMs)) return '—';
+  const dk = Math.max(0, Math.floor((simdi - girisMs) / 60_000));
+  if (dk < 1) return '1 dk\'dan az';
+  return dk < 60 ? `${dk} dk` : `${Math.floor(dk / 60)} sa ${dk % 60} dk`;
+}

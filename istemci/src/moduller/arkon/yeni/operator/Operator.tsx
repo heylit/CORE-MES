@@ -34,6 +34,7 @@ import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../ar
 import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { AdimPaylariCevabi, HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
+import { ISLERIM_YENILEME_MS, isimDurumu, isimEtiketi, isimSuresi, isimYeri, type IslerimSatiri } from '../../../../../../arkon/web/src/data/islerim.ts';
 import { hataliAdet } from '../../../../../../arkon/web/src/data/hatali-adet.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useOturum } from '../../../../ortak/veri/oturum.ts';
@@ -76,7 +77,7 @@ import {
   TopluGiris, type CevrimOlcer, type SayimTusu,
 } from './Parcalar.tsx';
 import {
-  IsEylemi, IsOnizKarti, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkMakinesi, type CarkSeridi,
+  IsEylemi, IsimEylemi, IsimKarti, IsOnizKarti, IstasyonEylemi, IstasyonKarti, MakineEylemi, MakineKarti, TerminalCarki, type CarkIsim, type CarkMakinesi, type CarkSeridi,
 } from './Cark.tsx';
 import { DurumSuresi } from './DurumSuresi.tsx';
 import {
@@ -488,6 +489,18 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     }, () => undefined);
     return () => { bitti = true; };
   }, [etkinAnahtar, o.state, pkgId, depo]);
+  /* 2125-1 b: kişinin bütün istasyonlardaki çalışan işleri (İşlerim şeridi); iş ya da durumu değişince ve yarım dakikada bir okunur.
+     Okunamazsa eldeki liste kalır; şerit yalnız gösterir ve götürür. */
+  const [islerim, islerimYaz] = useState<IslerimSatiri[]>([]);
+  const [isimBak, isimBakYaz] = useState<number | null>(null);
+  useEffect(() => {
+    if (pv || depo.status().mode !== 'server') return undefined;
+    let bitti = false;
+    const oku = () => { depo.Server.islerim().then((l) => { if (!bitti) islerimYaz(l); }, () => undefined); };
+    oku();
+    const t = setInterval(oku, ISLERIM_YENILEME_MS);
+    return () => { bitti = true; clearInterval(t); };
+  }, [etkinAnahtar, o.state, depo]);
 
   /* refakat kartları: bitmemiş işlerin kartları okunur; okunamazsa liste olduğu gibi kalır, iş kartsız da açılır */
   const [kartlar, kartlarYaz] = useState<RefakatKarti[]>([]);
@@ -1273,7 +1286,27 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const carkIstasyonlari = secilebilirIstasyonlar(istasyonListesi(tesis).filter((m) => isMerkezinde(kisi, m.wc)), yetkiVar('prod.station'), kisi && kisi.sts);
   const istSira = carkIstasyonlari.findIndex((m) => m.id === MACHINE);
   const istasyonaGec = (id: string) => { if (pv) yerel.yaz('pvStation', id); else yerel.yaz('station', id); yenidenKur(); };
-  const carkVar = isler.length >= 2 || makineler.length > 0 || carkIstasyonlari.length >= 2;
+  const ekrandakiEmir = tmiEmirId(o.pkg);
+  const isimOrtami = { istasyon: MACHINE, ekrandaki: ekrandakiEmir === null ? null : { emirId: ekrandakiEmir, isEmriId: tmiIsEmriId(o.pkg) }, gecilebilir: carkIstasyonlari.map((m) => m.id) };
+  const isimler: CarkIsim[] = islerim.map((x, i) => ({
+    anahtar: `${x.emirId}:${x.isEmriId ?? ''}:${x.mc ?? i}`, yer: isimYeri(x), istasyon: x.istasyon, istasyonAd: x.istasyonAd, etiket: isimEtiketi(x),
+    giris: Date.parse(x.giris), durum: isimDurumu(x, isimOrtami),
+  }));
+  // Yalnız ekrandaki iş varsa şerit bir şey söylemez: çizilmez.
+  const isimSeridiVar = !pv && isimler.some((x) => x.durum !== 'ekranda');
+  // Bu istasyondaki iş listeden seçilir; başka istasyondaki iş için istasyon değişir ve yeni ekran emri Ctrl K seçimiyle açar.
+  const isimeGec = (x: IslerimSatiri) => {
+    if (x.istasyon !== MACHINE) {
+      (window as unknown as EmirSecimiPenceresi).__tmiEmirSec = x.emirId;
+      istasyonaGec(x.istasyon);
+      return;
+    }
+    const adimda = x.isEmriId === null ? -1 : isler.findIndex((y) => tmiIsEmriId(y.pkg) === x.isEmriId);
+    const i = adimda >= 0 ? adimda : emirSirasi(isler, x.emirId);
+    if (i >= 0) isSec(i);
+    else say(`${x.emirNo} bu istasyonun listesinde yok · ekranı yenileyin`, 'alert', 'hold');
+  };
+  const carkVar = isler.length >= 2 || makineler.length > 0 || carkIstasyonlari.length >= 2 || isimSeridiVar;
   const carki = (ekranda: ReactNode) => {
     if (!carkVar) return ekranda;
     const isSeridi: CarkSeridi = {
@@ -1285,6 +1318,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       eylem: (i) => <IsEylemi ekranda={i === ai || !isler[i]} don={() => bakilanYaz(null)} gec={() => isSec(i)} />,
     };
     const seritler: CarkSeridi[] = [isSeridi];
+    if (isimSeridiVar) {
+      const etkinIsim = isimler.findIndex((x) => x.durum === 'ekranda');
+      seritler.push({
+        anahtar: 'isim', ad: 'İşlerim', simge: 'user', sayi: isimler.length, etkin: etkinIsim,
+        bak: Math.min(isimBak ?? Math.max(etkinIsim, 0), isimler.length - 1), bakYaz: isimBakYaz,
+        ciz: (i) => <IsimKarti isim={isimler[i]!} sure={isimSuresi(isimler[i]!.giris, simdi)} />,
+        eylem: (i) => <IsimEylemi isim={isimler[i]!} gec={isimler[i]!.durum === 'kapali' ? null : () => isimeGec(islerim[i]!)} />,
+      });
+    }
     if (makineler.length) {
       seritler.push({
         anahtar: 'mak', ad: 'Makineler', simge: 'cpu', sayi: makineler.length, etkin: -1, bak: Math.min(makBak, makineler.length - 1), bakYaz: makBakYaz,
