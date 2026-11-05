@@ -122,8 +122,18 @@ export const degisiklikVarMi = (g: Gecmis): boolean => g.simdi.some((l) => l.len
 
 // Kaynak belge ve gerekçe yeni belgenin ilk revizyon notuna yazılır (not alanı en çok 300 karakter).
 export const NOT_EN_UZUN = 300;
-export function duzenlemeNotu(kaynakAd: string, kaynakHarf: string, gerekce: string): string {
-  const bas = `Düzenlendi: ${kaynakAd} Rev ${kaynakHarf}. Gerekçe: `;
+export interface SilinenSayilari { yazi: number; resim: number; cizim: number; ortulenResim: number; not: number }
+
+// Ayıklamanın (2123b) özeti; revizyon notuna ve kaydet penceresine yazılır.
+export function silinenOzeti(s: SilinenSayilari): string {
+  const parca = ([[s.yazi, 'yazı'], [s.resim, 'resim'], [s.cizim, 'çizim'], [s.not, 'not']] as const)
+    .filter(([n]) => n > 0).map(([n, ad]) => `${String(n)} ${ad}`);
+  const bas = parca.length > 0 ? `PDF'ten silinen: ${parca.join(', ')}.` : "PDF'ten silinen nesne yok.";
+  return s.ortulenResim > 0 ? `${bas} Alanın dışına taşan ${String(s.ortulenResim)} resim yalnız örtüldü.` : bas;
+}
+
+export function duzenlemeNotu(kaynakAd: string, kaynakHarf: string, gerekce: string, silinen?: SilinenSayilari | null): string {
+  const bas = `Düzenlendi: ${kaynakAd} Rev ${kaynakHarf}. ${silinen ? `${silinenOzeti(silinen)} ` : ''}Gerekçe: `;
   const metin = bas + gerekce.trim();
   return metin.length <= NOT_EN_UZUN ? metin : `${metin.slice(0, NOT_EN_UZUN - 1)}…`;
 }

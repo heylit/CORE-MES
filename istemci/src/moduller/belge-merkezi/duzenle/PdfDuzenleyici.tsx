@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { BelgeAyrintisi, BelgeOlusturGovdesi, Revizyon } from '#paylasilan/sozlesme/belge-merkezi.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Simge } from '../../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Pencere, Rozet, Secim, Simge } from '../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useKurumLogosu } from '../../../ortak/veri/kurum-logosu.ts';
@@ -17,12 +17,12 @@ import { kaydir, katmanCiz, logoPng, ogeIcindeMi, resimYukle, yaziPng } from './
 import type { Gecmis, Oge, SayfaKutusu } from './duzenleme.ts';
 import {
   CIZGI_KALINLIKLARI, VARSAYILAN_CIZGI, VARSAYILAN_DOLGU, YAZI_BOYLARI, YAZI_EN_UZUN, degisiklikVarMi, degistir,
-  duzenlemeNotu, gecmisBaslat, geriAl, gorunumOlcusu, ileriAl, kutuNormalle, ogeReddi, renkGecerliMi,
+  duzenlemeNotu, gecmisBaslat, geriAl, gorunumOlcusu, ileriAl, kutuNormalle, ogeReddi, renkGecerliMi, silinenOzeti,
 } from './duzenleme.ts';
-import type { ResimliOge } from './pdf-yaz.ts';
+import type { DuzenlemeSonucu, ResimliOge, Silinen } from './pdf-yaz.ts';
 
 // Çizim Merkezi PDF düzenleyicisi (kart 2123; kararlar 2123-1 b pdf-lib, 2123-2 b ayrı yeni belge, 2123-3 b belge-merkezi.yaz,
-// 2123-4 b dolgu, logo, yazı, renk ve çizgi). Asıl belge değişmez; düzenlenen dosya yeni belge olarak yüklenir.
+// 2123-4 b dolgu, logo, yazı, renk ve çizgi; 2123-5 c alttaki nesnelerin PDF'ten silinmesi). Asıl belge değişmez; düzenlenen dosya yeni belge olarak yüklenir.
 
 type Arac = 'sec' | 'dolgu' | 'logo' | 'yazi' | 'cizgi';
 const ARACLAR: { arac: Arac; ad: string; simge: SimgeAdi; tus: string; ipucu: string }[] = [
@@ -42,8 +42,8 @@ interface Tasima { tur: 'tasi'; px: number; py: number; ilk: Oge; simdi: Oge }
 const dosyaAdiYap = (ad: string): string => `${ad.replace(/\.pdf$/i, '')}-duzenlenmis.pdf`.slice(-120);
 const belgeAdiYap = (ad: string): string => `${ad.slice(0, 104)} (düzenlenmiş)`;
 
-function KaydetPenceresi({ belge, revizyon, olustur, kapat }: {
-  belge: BelgeAyrintisi; revizyon: Revizyon; olustur: () => Promise<Uint8Array>; kapat: () => void;
+function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
+  belge: BelgeAyrintisi; revizyon: Revizyon; dolguVar: boolean; olustur: (ayikla: boolean) => Promise<DuzenlemeSonucu>; kapat: () => void;
 }) {
   const yonlendir = useNavigate();
   const [ad, adYaz] = useState(belgeAdiYap(belge.ad));
@@ -51,23 +51,34 @@ function KaydetPenceresi({ belge, revizyon, olustur, kapat }: {
   const [antetRev, antetRevYaz] = useState(revizyon.antetRev ?? '');
   const [gerekce, gerekceYaz] = useState('');
   const [hazirlik, hazirlikYaz] = useState<{ calisiyor: boolean; hata: string | null }>({ calisiyor: false, hata: null });
+  // 2123-5 c: varsayılan, temizlenen alandaki yazı ve resmin PDF'in içinden silinmesidir.
+  const [ayikla, ayiklaYaz] = useState(true);
+  // Alanın dışına taşan resim (çoğu zaman taranmış çizimin kendisi) yalnız örtülebildiyse yükleme ikinci basışa kalır.
+  const [hazir, hazirYaz] = useState<DuzenlemeSonucu | null>(null);
+  const silinen = useRef<Silinen | null>(null);
   const komut = useDosyaliKomut(
     '/cizimler',
     (ozet): BelgeOlusturGovdesi => ({
       ad: ad.trim(), tur: belge.tur, aciklama: belge.aciklama ?? '', resimNo: belge.resimNo ?? '', antetRev,
-      not: duzenlemeNotu(belge.ad, revizyon.harf, gerekce), ozet, dosyaAdi: dosyaAdi.trim(),
+      not: duzenlemeNotu(belge.ad, revizyon.harf, gerekce, silinen.current), ozet, dosyaAdi: dosyaAdi.trim(),
     }),
     (c) => { kapat(); void yonlendir(`/cizimler/belge/${String(c.id)}`); },
     'Belge kaydedilemedi',
   );
   const eksik = ad.trim() === '' ? 'Belge adı zorunlu.' : gerekce.trim() === '' ? 'Gerekçe zorunlu.'
     : !/\.pdf$/i.test(dosyaAdi.trim()) ? 'Dosya adı .pdf ile bitmeli.' : null;
+  const gonder = (s: DuzenlemeSonucu) => {
+    silinen.current = s.silinen;
+    komut.gonder(new File([new Uint8Array(s.veri)], dosyaAdi.trim(), { type: 'application/pdf' }));
+  };
   const kaydet = () => {
+    if (hazir) { gonder(hazir); return; }
     hazirlikYaz({ calisiyor: true, hata: null });
-    olustur().then(
-      (veri) => {
+    olustur(dolguVar && ayikla).then(
+      (s) => {
         hazirlikYaz({ calisiyor: false, hata: null });
-        komut.gonder(new File([new Uint8Array(veri)], dosyaAdi.trim(), { type: 'application/pdf' }));
+        if (s.silinen && s.silinen.ortulenResim > 0) hazirYaz(s);
+        else gonder(s);
       },
       (e: unknown) => { hazirlikYaz({ calisiyor: false, hata: e instanceof Error ? e.message : 'PDF hazırlanamadı.' }); },
     );
@@ -81,16 +92,28 @@ function KaydetPenceresi({ belge, revizyon, olustur, kapat }: {
       alt={(
         <>
           <Dugme onClick={kapat}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="download" yukleniyor={hazirlik.calisiyor || komut.yukleniyor} disabled={eksik !== null} onClick={kaydet}>Kaydet</Dugme>
+          <Dugme tur="birincil" simge="download" yukleniyor={hazirlik.calisiyor || komut.yukleniyor} disabled={eksik !== null} onClick={kaydet}>{hazir ? 'Yine de kaydet' : 'Kaydet'}</Dugme>
         </>
       )}
     >
       <div className="tc-cz-form">
         <p className="tc-cz-dz-uyari">
           Asıl belge ve revizyonları değişmez. Düzenlenen dosya <b>ayrı yeni belge</b> olur, ilk revizyonu taslak açılır; malzeme ve istasyon
-          bağları yeni belgeye ayrıca kurulur. Temizlenen alan beyaz kutuyla <b>örtülür</b>: çizgiler vektör kalır, ama örtülen logo ve yazı
-          dosyanın içinde durur.
+          bağları yeni belgeye ayrıca kurulur.
         </p>
+        {dolguVar && (
+          <>
+            <IsaretKutusu
+              etiket="Alttaki yazı ve resmi PDF'ten sil" checked={ayikla}
+              onChange={(e) => { ayiklaYaz(e.target.checked); hazirYaz(null); }}
+            />
+            <p className="tc-cz-ipucu">
+              {ayikla
+                ? <>Temizlenen alana değen yazı harfleri ve çoğu alanda kalan resimler dosyanın <b>içinden silinir</b>; tümü alanda kalan çizgiler de gider. Alandan geçen çerçeve çizgileri kalır, çizim vektör kalır.</>
+                : <>Temizlenen alan yalnız beyaz kutuyla <b>örtülür</b>: örtülen logo ve yazı dosyanın içinde durur, kopyalanabilir.</>}
+            </p>
+          </>
+        )}
         <Girdi etiket="Yeni belge adı" value={ad} maxLength={120} required onChange={(e) => { adYaz(e.target.value); }} />
         <Girdi etiket="Kaynak" value={`${belge.ad} · Rev ${revizyon.harf}`} readOnly />
         <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} />
@@ -99,6 +122,11 @@ function KaydetPenceresi({ belge, revizyon, olustur, kapat }: {
           etiket="Gerekçe" value={gerekce} maxLength={200} required onChange={(e) => { gerekceYaz(e.target.value); }}
           ipucu="Yeni belgenin revizyon notuna kaynakla birlikte yazılır; belge açılışı denetim kaydına düşer."
         />
+        {hazir?.silinen && (
+          <p className="tc-cz-dz-uyari" role="status">
+            {silinenOzeti(hazir.silinen)} Taşan resim taranmış çizimin kendisi olabilir; silinmedi, örtülen kısmı dosyada kalır.
+          </p>
+        )}
         {komut.ilerleme !== null && <progress max={1} value={komut.ilerleme} aria-label="Yükleme" />}
         {(hata ?? eksik) !== null && <p className="tc-cz-hata" role="alert">{hata ?? eksik}</p>}
       </div>
@@ -318,7 +346,7 @@ export function PdfDuzenleyici() {
     if (a && (a.arac !== 'logo' || logo)) aracSec(a.arac);
   };
 
-  const olustur = async (): Promise<Uint8Array> => {
+  const olustur = async (ayikla: boolean): Promise<DuzenlemeSonucu> => {
     if (!dosya.data) throw new Error('Dosya yok.');
     const logoVerisi = logo && gecmis.simdi.some((l) => l.some((o) => o.tur === 'logo')) ? await logoPng(logo) : undefined;
     const sayfalar: ResimliOge[][] = [];
@@ -332,7 +360,7 @@ export function PdfDuzenleyici() {
       sayfalar.push(satir);
     }
     const { duzenlenmisPdf } = await import('./pdf-yaz.ts');
-    return duzenlenmisPdf(dosya.data, sayfalar, kutular);
+    return duzenlenmisPdf(dosya.data, sayfalar, kutular, { ayikla });
   };
 
   if (!gecerli) return <DurumKutusu durum="hata" mesaj="Belge bulunamadı" />;
@@ -438,7 +466,12 @@ export function PdfDuzenleyici() {
         </div>
       </div>
 
-      {kaydetAcik && <KaydetPenceresi belge={belge} revizyon={revizyon} olustur={olustur} kapat={() => { kaydetAcikYaz(false); }} />}
+      {kaydetAcik && (
+        <KaydetPenceresi
+          belge={belge} revizyon={revizyon} dolguVar={gecmis.simdi.some((l) => l.some((o) => o.tur === 'dolgu'))}
+          olustur={olustur} kapat={() => { kaydetAcikYaz(false); }}
+        />
+      )}
       {vazgecAcik && (
         <Pencere
           acik kapat={() => { vazgecAcikYaz(false); }} baslik="Değişiklikler kaydedilmedi"
