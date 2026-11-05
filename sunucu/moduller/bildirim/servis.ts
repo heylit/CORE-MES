@@ -7,7 +7,7 @@ import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
   ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
-  type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi,
+  type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
@@ -71,12 +71,33 @@ export async function bildirimKapat(db: Db, k: BildirimKapanisi): Promise<number
   return s.kaynaktanOkunduIsaretle(db, anahtar);
 }
 
+// Elle yayının künyesi (tür, simge, gönderen, görsel, geri çekilme) satıra eklenir; otomatik satırda null.
+async function kunyeEkle(db: Db, satirlar: readonly s.BildirimSatiri[]): Promise<Bildirim[]> {
+  const kunyeler = await s.yayinKunyeleri(db, satirlar.flatMap((r) => (r.yayinId === null ? [] : [r.yayinId])));
+  const adlar = await kisiAdlari(db, kunyeler.map((k) => k.yazanKisiId));
+  const yayinlar = new Map(kunyeler.map((k) => [k.id, k]));
+  return satirlar.map(({ yayinId, ...r }) => {
+    const k = yayinId === null ? undefined : yayinlar.get(yayinId);
+    return {
+      ...r,
+      yayin: k === undefined ? null : {
+        id: k.id, tur: k.tur as YayinTuru, simge: k.simge as YayinSimgesi, gonderen: adlar.get(k.yazanKisiId) ?? null,
+        gorselVar: k.gorselVar, geriCekildi: k.geriCekildi,
+      },
+    };
+  });
+}
+
+async function tekKunye(db: Db, satir: s.BildirimSatiri | null): Promise<Bildirim | null> {
+  return satir === null ? null : (await kunyeEkle(db, [satir]))[0] ?? null;
+}
+
 export function bildirimListesi(
   db: Db, kullanici: Kullanici, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; durum: BildirimListeDurumu },
 ): Promise<SayfaliListe<Bildirim>> {
   return sayfaliListe(sorgu, {
     say: () => s.kisininBildirimSayisi(db, kullanici.id, sorgu.durum),
-    satirlar: (dilim) => s.kisininBildirimleri(db, kullanici.id, sorgu.durum, dilim),
+    satirlar: async (dilim) => kunyeEkle(db, await s.kisininBildirimleri(db, kullanici.id, sorgu.durum, dilim)),
   });
 }
 
@@ -85,7 +106,7 @@ export function bildirimSayaci(db: Db, kullanici: Kullanici): Promise<BildirimSa
 }
 
 export async function okundu(db: Db, kullanici: Kullanici, id: number): Promise<Bildirim> {
-  const b = await s.okunduIsaretle(db, kullanici.id, id);
+  const b = await tekKunye(db, await s.okunduIsaretle(db, kullanici.id, id));
   if (b === null) throw bulunamadi(BULUNAMADI);
   return b;
 }
@@ -96,7 +117,7 @@ export async function tumunuOkundu(db: Db, kullanici: Kullanici): Promise<Tumunu
 
 // BIL-15: onay bekleyen satır arşive kaldırılamaz; başkasının satırı yine "bulunamadı".
 export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise<Bildirim> {
-  const b = await s.arsivle(db, kullanici.id, id);
+  const b = await tekKunye(db, await s.arsivle(db, kullanici.id, id));
   if (b !== null) return b;
   if ((await s.onayBekliyorMu(db, kullanici.id, id))?.bekliyor === true) throw dogrulama(ONAY_ILETILERI.onaysizArsiv);
   throw bulunamadi(BULUNAMADI);

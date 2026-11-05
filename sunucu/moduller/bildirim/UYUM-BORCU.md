@@ -25,8 +25,10 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 - Olay türü kataloğu bu modülün sözleşmesinde (`BILDIRIM_TURLERI`). Faz 2'de tür sayısı artınca modül başına `paylasilan/bildirimler/<modul>.ts` ve toplayıcıya geçebilir (çekirdek işi).
 
 ## Elle bildirim (2147)
-11. Ekranlar (Hazırla, Yayınlar ve okunma, ekran ortası penceresi, merkezde "Duyuru" ve "Onay bekleyen" süzgeci) Y2'de; liste satırının yayın künyesi (`bildirimSemasi`'na tür, simge, gönderen, geri çekildi) Y2 ile, istemci kilidiyle gelir.
+11. ~~Ekranlar Y2'de~~ Y2 ile geldi (Hazırla, Yayınlar ve okunma, ekran ortası penceresi, süzgeçler, liste satırına yayın künyesi).
 12. Üretim Terminali'nde ortadaki pencerenin Arkon hazırlık uyarısıyla sırası Y3'te (Operator.tsx kilit zinciri sonrası). İstasyon hedefi bugün yalnız o günkü atamadan; terminal oturumu Y3'te.
 13. Otomatik türlere "ortada" ve "onay" sütunu (Bildirim yönetimi) Y4'te; o zamana kadar BIL-16 (yalnız acil ortada) geçer.
 14. Hedef seçimi yayınlayanın kendi kapsamıyla daraltılmaz (prototip notu); işlem bugün yalnız yönetici taşıdığından gerek yok. Role verilirse ayrı karar.
+16. Y3'e kadar ortadaki pencere terminal yollarında (`/uretim-terminali`, `/arkon/operator`, `/terminal`) çıkmaz ve sorulmaz (`istemci/src/moduller/bildirim/gorunum.ts` `ortadaBekletilirMi`); bildirim zilde ve merkezde durur. Y3'te Arkon hazırlık uyarısıyla sıra kurulunca bu bekletme kalkar.
+17. Ortadaki pencere başka kipli pencere (karşılama, açılış gösterisi, açık form) açıkken bekler; bekleme DOM'daki `aria-modal` pencereyi gözler. Kabukta katman sırası ortak parçası olursa ona geçer (çekirdek isteği 2147-a).
 15. `bildirim-yayin-dagit` işinin okunur adı `istemci/src/moduller/sistem/is-adlari.ts`'de yok (kod adıyla görünür); Y2'de eklenir.

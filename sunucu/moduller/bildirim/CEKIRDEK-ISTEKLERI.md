@@ -13,3 +13,7 @@ başlık ve çubuk düzeni kabuktadır.
 - Başlığın iki satıra inmesi tabletle sınırlı kalmasın, 1279'a kadar geçerli olsun: `.tc-kabuk-ileri, .tc-kabuk-yerler` gizleme kuralı
   768-1023'te kalır; `.tc-kabuk-baslik` iki satır kuralı ayrı `@media (min-width: 768px) and (max-width: 1279px)` bloğuna taşınır.
 - Sık kullanılan düğmenin adı (`.tc-kabuk-dugme-ad`, bugün yalnız "Öneri") 1280 yerine 1440'tan itibaren yazılır.
+
+## 2147-a: istemci dosya yükleme ve katman sırası (öneri, acil değil)
+- SHA-256 ve base64 yükleme yardımcısı üçüncü kez modül içinde kopyalandı (`belge-merkezi/dosya-aktarimi.ts`, `atolye/model-dosyasi.ts`, `bildirim/gorsel.ts`); `istemci/src/ortak/veri/` altında tek parça olması önerilir.
+- Kipli pencerelerin sırası (karşılama, açılış gösterisi, ekran ortası bildirim) bugün her parçanın kendi beklemesiyle çözülüyor; `katman.ts`'den "üstte başka katman var mı" okuması önerilir.

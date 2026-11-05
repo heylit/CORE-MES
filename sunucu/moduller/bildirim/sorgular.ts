@@ -4,7 +4,11 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { Bildirim, BildirimListeDurumu, BildirimOnemi } from '#paylasilan/sozlesme/bildirim.ts';
 
 const SECIM = `id, tur, onem, baslik, metin, yol, kaynak_modul AS "kaynakModul", tekrar_sayisi AS "tekrarSayisi",
-  ${zamanMetni('olusturuldu')} AS olusturuldu, ${zamanMetni('okundu')} AS okundu, ${zamanMetni('arsivlendi')} AS arsivlendi`;
+  ${zamanMetni('olusturuldu')} AS olusturuldu, ${zamanMetni('okundu')} AS okundu, ${zamanMetni('arsivlendi')} AS arsivlendi,
+  onay_istenir AS "onayIstenir", ${zamanMetni('onaylandi')} AS onaylandi, yayin_id AS "yayinId"`;
+
+// Kişinin satırı; yayın künyesi servis katmanında eklenir (yazanın adı kisiler modülündedir).
+export type BildirimSatiri = Omit<Bildirim, 'yayin'> & { yayinId: number | null };
 
 export interface YeniBildirim {
   kisiId: number;
@@ -34,7 +38,10 @@ export async function bildirimYaz(db: Db, b: YeniBildirim): Promise<void> {
 const DURUM_KOSULU: Record<BildirimListeDurumu, string> = {
   gelen: 'arsivlendi IS NULL',
   okunmamis: 'arsivlendi IS NULL AND okundu IS NULL',
+  'onay-bekleyen': 'arsivlendi IS NULL AND onay_istenir AND onaylandi IS NULL',
   onemli: "arsivlendi IS NULL AND onem <> 'bilgi'",
+  duyuru: "arsivlendi IS NULL AND yayin_id IN (SELECT id FROM bildirim_yayini WHERE tur = 'duyuru')",
+  bilgi: "arsivlendi IS NULL AND onem = 'bilgi'",
   arsiv: 'arsivlendi IS NOT NULL',
 };
 
@@ -46,9 +53,9 @@ export async function kisininBildirimSayisi(db: Db, kisiId: number, durum: Bildi
   return r?.toplam ?? 0;
 }
 
-export function kisininBildirimleri(db: Db, kisiId: number, durum: BildirimListeDurumu, dilim: Dilim): Promise<Bildirim[]> {
+export function kisininBildirimleri(db: Db, kisiId: number, durum: BildirimListeDurumu, dilim: Dilim): Promise<BildirimSatiri[]> {
   const sira = durum === 'arsiv' ? 'arsivlendi DESC, id DESC' : 'olusturuldu DESC, id DESC';
-  return db.sorgu<Bildirim>(
+  return db.sorgu<BildirimSatiri>(
     `SELECT ${SECIM} FROM bildirim_kaydi WHERE kisi_id = $1 AND ${DURUM_KOSULU[durum]} ORDER BY ${sira} LIMIT $2 OFFSET $3`,
     [kisiId, dilim.sinir, dilim.atla],
   );
@@ -64,8 +71,8 @@ export async function kisininSayaci(db: Db, kisiId: number): Promise<{ okunmamis
 }
 
 // Yalnız kişinin kendi satırı: başkasının kimliği "bulunamadı"dan ayırt edilmez.
-export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<Bildirim | null> {
-  return db.tek<Bildirim>(
+export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<BildirimSatiri | null> {
+  return db.tek<BildirimSatiri>(
     `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()) WHERE id = $1 AND kisi_id = $2 RETURNING ${SECIM}`,
     [id, kisiId],
   );
@@ -90,8 +97,8 @@ export async function tumunuOkunduIsaretle(db: Db, kisiId: number): Promise<numb
 }
 
 // Arşive kaldırılan okunmuş da sayılır (açılmadan kaldırılan haber zilde kalmasın).
-export function arsivle(db: Db, kisiId: number, id: number): Promise<Bildirim | null> {
-  return db.tek<Bildirim>(
+export function arsivle(db: Db, kisiId: number, id: number): Promise<BildirimSatiri | null> {
+  return db.tek<BildirimSatiri>(
     `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()), arsivlendi = coalesce(arsivlendi, now())
       WHERE id = $1 AND kisi_id = $2 AND NOT (onay_istenir AND onaylandi IS NULL) RETURNING ${SECIM}`,
     [id, kisiId],
@@ -342,4 +349,19 @@ export function onayla(db: Db, kisiId: number, id: number): Promise<{ id: number
 
 export async function kisininSatiriVarMi(db: Db, kisiId: number, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM bildirim_kaydi WHERE id = $1 AND kisi_id = $2', [id, kisiId])) !== null;
+}
+
+export interface YayinKunyesiSatiri {
+  id: number; tur: string; simge: string; yazanKisiId: number; gorselVar: boolean; geriCekildi: string | null;
+}
+
+// Merkez listesindeki elle bildirimlerin künyesi; kişinin satırı zaten süzülmüştür, burada yalnız yayının kendisi okunur.
+export function yayinKunyeleri(db: Db, idler: readonly number[]): Promise<YayinKunyesiSatiri[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu<YayinKunyesiSatiri>(
+    `SELECT id, tur, simge, yazan_kisi_id AS "yazanKisiId", (gorsel_ozet IS NOT NULL) AS "gorselVar",
+            ${zamanMetni('geri_cekildi')} AS "geriCekildi"
+       FROM bildirim_yayini WHERE id = ANY($1::int[])`,
+    [[...new Set(idler)]],
+  );
 }

@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import {
-  bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, ortadakiBildirimlerCevabi,
+  bildirimCevabi, bildirimListeCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, ortadakiBildirimlerCevabi,
   type BildirimYayinlaGovdesi, type BildirimYayini, type OrtadakiBildirim,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -200,6 +200,34 @@ describe('elle bildirim, ekran ortası ve onay (gerçek PostgreSQL, gerçek giri
     const secenek = bildirimYayinHedefleriCevabi.parse((await istek('yonetici', 'GET', '/bildirimler/yayinlar/hedefler')).govde);
     assert.ok(secenek.istasyonlar.some((i) => i.id === istasyonId));
     assert.equal(secenek.herkesSayisi, 5);
+  });
+
+  test('merkez listesi yayın künyesini taşır; onay bekleyen, duyuru ve bilgi süzgeçleri; geri çekilen üstü çizili kalır', async () => {
+    await bosalt();
+    const uyari = await yayinlaTamam('yonetici', taslak());
+    await yayinlaTamam('yonetici', taslak({ tur: 'duyuru', simge: 'calendar', onayIstenir: false }));
+    const liste = async (durum: string) => {
+      const c = await istek('kalite', 'GET', `/bildirimler?durum=${durum}`);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return bildirimListeCevabi.parse(c.govde).satirlar;
+    };
+    const hepsi = await liste('gelen');
+    assert.equal(hepsi.length, 2);
+    const u = hepsi.find((b) => b.yayin?.id === uyari.id);
+    assert.ok(u);
+    assert.deepEqual(u.yayin, { id: uyari.id, tur: 'uyari', simge: 'wrench', gonderen: 'Deneme Yönetici', gorselVar: false, geriCekildi: null });
+    assert.equal(u.onayIstenir, true);
+    assert.equal(u.onaylandi, null);
+    assert.deepEqual((await liste('onay-bekleyen')).map((b) => b.yayin?.tur), ['uyari']);
+    assert.deepEqual((await liste('duyuru')).map((b) => b.yayin?.tur), ['duyuru']);
+    assert.deepEqual((await liste('bilgi')).map((b) => b.yayin?.tur), ['duyuru']);
+    // Okundu cevabı da künyeyi taşır.
+    const ok = bildirimCevabi.parse((await istek('kalite', 'POST', `/bildirimler/${u.id}/okundu`)).govde);
+    assert.equal(ok.yayin?.gonderen, 'Deneme Yönetici');
+    assert.equal((await istek('kalite', 'POST', `/bildirimler/${u.id}/onayla`)).durum, 200);
+    assert.deepEqual(await liste('onay-bekleyen'), []);
+    assert.equal((await istek('yonetici', 'POST', `/bildirimler/yayinlar/${uyari.id}/geri-cek`)).durum, 200);
+    assert.ok((await liste('gelen')).find((b) => b.yayin?.id === uyari.id)?.yayin?.geriCekildi);
   });
 
   test('geri çekilen yayın ortada çıkmaz; yalnız yazan geri çeker, ikinci kez çekilemez', async () => {

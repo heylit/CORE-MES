@@ -52,7 +52,8 @@ function ac(adres: string, ek?: React.ReactNode) {
 
 const B = (ek: Partial<Bildirim>): Bildirim => ({
   id: 1, tur: 'istasyonlar.makine-durdu', onem: 'acil', baslik: 'Makine durdu: Tezgah 4', metin: 'Arıza', yol: '/istasyonlar',
-  kaynakModul: 'istasyonlar', tekrarSayisi: 1, olusturuldu: '2026-10-19T09:00:00+03:00', okundu: null, arsivlendi: null, ...ek,
+  kaynakModul: 'istasyonlar', tekrarSayisi: 1, olusturuldu: '2026-10-19T09:00:00+03:00', okundu: null, arsivlendi: null,
+  onayIstenir: false, onaylandi: null, yayin: null, ...ek,
 });
 const liste = (satirlar: Bildirim[]): BildirimListeCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });
 const TERCIH: BildirimTercihleriCevabi = {
