@@ -217,3 +217,44 @@ export function IstasyonEylemi({ bu, gec }: { bu: boolean; gec: () => void }) {
     </>
   );
 }
+
+/* 2125-1 b: İşlerim şeridi. Kişinin çalışan işleri makine başına; başlık makinedir (makinesizde istasyon). Kart yalnız gösterir:
+   ekrandaki iş "Ekranda", bu istasyondaki başka iş "Bu işe geç", başka istasyondaki iş "İstasyona geç" ile açılır; istasyon bu cihazda
+   seçilemiyorsa yalnız bilgi verir. */
+export interface CarkIsim {
+  anahtar: string;
+  yer: { kod: string; ad: string };
+  istasyon: string;
+  istasyonAd: string;
+  etiket: string;
+  // Kişinin işe girdiği an (ms); süre bundan hesaplanır.
+  giris: number;
+  durum: 'ekranda' | 'burada' | 'baska' | 'kapali';
+}
+
+export function IsimKarti({ isim, sure }: { isim: CarkIsim; sure: string }) {
+  return (
+    <article className="tc-ay1-tcark-kart" data-durum="calisiyor">
+      <span className="tc-ay1-tcark-etiketler">
+        <span className="tc-ay1-cip" data-durum="calisiyor"><i aria-hidden="true" />Çalışıyor · {sure}</span>
+        {isim.durum === 'ekranda' ? <span className="tc-ay1-etiket">Ekranda</span> : isim.durum === 'burada' ? null : <span className="tc-ay1-etiket">{isim.istasyon}</span>}
+      </span>
+      <b className="tc-ay1-mono">{isim.yer.kod}</b>
+      <span className="tc-ay1-tcark-ad">{isim.yer.ad}</span>
+      <small>{isim.etiket} · {isim.istasyonAd || isim.istasyon}</small>
+    </article>
+  );
+}
+
+export function IsimEylemi({ isim, gec }: { isim: CarkIsim; gec: (() => void) | null }) {
+  if (isim.durum === 'ekranda') return <span className="tc-ay1-tcark-not"><i className="tc-ay1-tcark-nokta" aria-hidden="true" />Ekranda · sayaç ve eylemler bu işe yazılır</span>;
+  if (isim.durum === 'kapali' || !gec) return <span className="tc-ay1-tcark-not"><Simge ad="lock" boyut="k" />{isim.istasyon} bu cihazda seçilemez · işi o istasyonun terminalinden açın</span>;
+  return (
+    <>
+      <span className="tc-ay1-tcark-not"><Simge ad="pin" boyut="k" />{isim.durum === 'burada' ? 'Bu istasyonda · sayaç ekrandaki işe yazılır' : `${isim.istasyon} istasyonunda · geçince ekran o istasyonla kurulur`}</span>
+      <span className="tc-ay1-tcark-dugmeler">
+        <Dugme tur="birincil" simge="next" onClick={gec}>{isim.durum === 'burada' ? 'Bu işe geç' : 'İstasyona geç'}</Dugme>
+      </span>
+    </>
+  );
+}

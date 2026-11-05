@@ -3,7 +3,7 @@ import {
   anomaliCevabi, anomaliIstatistikCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi, calismaDevralGovdesi,
-  kayitParametresi, kayitSorgusu, kayitlarCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
+  kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
   numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
@@ -295,6 +295,14 @@ export const uclar = [
     sorgu: makineAyrimlariSorgusu,
     cevap: makineAyrimlariCevabi,
     isle: ({ db, kullanici, sorgu }) => servis.makineAyrimlari(db, kullanici, sorgu.emirId),
+  }),
+  // 2125-1 b: çarkın "İşlerim" şeridi; kişi yalnız kendi çalışan işlerini okur.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/islerim',
+    yetki: ARKON_SAYFASI,
+    cevap: islerimCevabi,
+    isle: ({ db, kullanici }) => servis.islerim(db, kullanici),
   }),
   uc({
     yontem: 'GET',

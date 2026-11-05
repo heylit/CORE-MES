@@ -13,7 +13,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  ArkonDeposu, ArkonRefakatKarti, CalismaDevralGovdesi, CalismaDevralRedAyrintisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
+  ArkonDeposu, ArkonRefakatKarti, CalismaDevralGovdesi, CalismaDevralRedAyrintisi, ArkonKayitTuru, ArkonOzetiCevabi, ArkonKisi, ArkonRolu, BelgeYazCevabi, IletilerCevabi, IslerimCevabi, KayitEkleCevabi, MakineAyrimlariCevabi, MakineDevralGovdesi, MakineDoluRedAyrintisi, YansimalarCevabi, YansimaYenidenCevabi, YansimaSonucu as ListeSonucu,
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -46,7 +46,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   calismaDevral, hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
+  makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -1406,6 +1406,27 @@ export async function makineAyrimlari(db: Db, kullanici: Kullanici, emirId: numb
   return {
     planMakinesi: atanan === null ? null : kodlar.get(atanan) ?? null,
     ayrimlar: ayrimlar.flatMap((a) => { const mc = kodlar.get(a.makineId); return mc === undefined ? [] : [{ mc, emirNo: a.emirNo, opNo: a.opNo, baslangic: a.baslangic }]; }),
+  };
+}
+
+// 2125-1 b: oturumdaki kişinin çalışan işleri, istasyon ve makine kodlarıyla. Kişi yalnız kendi işini okur; kapsam süzülmez, işe girmiş olmak
+// yeterlidir. Pasif istasyon ya da makine de adıyla gelir (iş üzerindeyken pasife alınmış olabilir).
+export async function islerim(db: Db, kullanici: Kullanici): Promise<IslerimCevabi> {
+  await rolGerekli(db, kullanici);
+  const satirlar = await kisininAcikIsleri(db, kullanici.id);
+  if (satirlar.length === 0) return { isler: [] };
+  const istasyonlarById = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
+  const makinelerById = new Map((satirlar.some((r) => r.makineId !== null) ? await makineler(db, { pasiflerDahil: true }) : []).map((m) => [m.id, m]));
+  return {
+    isler: satirlar.flatMap((r) => {
+      const ist = istasyonlarById.get(r.istasyonId);
+      if (ist === undefined) return [];
+      const mak = r.makineId === null ? null : makinelerById.get(r.makineId) ?? null;
+      return [{
+        emirId: r.emirId, emirNo: r.emirNo, isEmriId: r.isEmriId, opNo: r.opNo, istasyon: ist.kod, istasyonAd: ist.ad,
+        mc: mak?.kod ?? null, makineAd: mak?.ad ?? null, giris: r.giris,
+      }];
+    }),
   };
 }
 

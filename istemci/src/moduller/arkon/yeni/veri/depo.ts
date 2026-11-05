@@ -6,6 +6,7 @@ import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler } f
 import type { CagriEkiplerim } from '../../../../../../arkon/web/src/data/cagri-ekiplerim.ts';
 import type { MerkezDurumu } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import type { MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
+import type { IslerimSatiri } from '../../../../../../arkon/web/src/data/islerim.ts';
 import type { OperatorOzeti, OzetDonemi } from '../../../../../../arkon/web/src/data/ozetim.ts';
 import type { RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { PkgFile } from '../../../../../../arkon/shared/model.ts';
@@ -57,6 +58,7 @@ export interface ArkonDeposu {
     anomaliIstatistigi(donem: AnomaliDonemi, tarih: string): Promise<AnomaliIstatistigi>;
     operatorOzeti(donem: OzetDonemi, kisiId?: number | null): Promise<OperatorOzeti>;
     makineAyrimlari(emirId: number): Promise<MakineAyrimlari | undefined>;
+    islerim(): Promise<IslerimSatiri[]>;
     refakatKartlari(istasyon: string, emirler: readonly number[]): Promise<RefakatKarti[]>;
     cagriEkiplerim(): Promise<CagriEkiplerim>;
     tmiAdimlari(emirId: number): Promise<TmiAdim[]>;
