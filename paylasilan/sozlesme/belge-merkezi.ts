@@ -164,11 +164,13 @@ export const malzemeBelgeSurumGovdesi = z.object({ ...beklenenSurum });
 
 // Listelerin küçük resmi: kayıt başına seçilmiş revizyon ve kare sayısı. revUyumu: true kartın revizyonuna uyuyor, false uymuyor
 // (resim yine gösterilir, uyarıyla), null karşılaştırılacak bilgi yok. taslak: true resim yayına girmemiş 3B modelin karesidir (yoksa yayına girmiş).
+// antetRev: seçilen revizyonun antet revizyonu; kartla yalnız bu karşılaştırılır (2138-1 a), harf merkezin yükleme sırasıdır.
 export const kucukResim = z.object({
   hedefId: z.number().int(),
   belgeId: z.number().int(),
   revizyonId: z.number().int(),
   harf: z.string(),
+  antetRev: z.string().nullable().optional(),
   kareSayisi: z.number().int().min(1),
   revUyumu: z.boolean().nullable(),
   taslak: z.boolean().optional(),
@@ -189,6 +191,8 @@ export const malzemeBelgeleriCevabi = z.object({
   oneriler: z.array(z.object({ id: z.number().int(), ad: z.string(), tur: z.enum(BELGE_TURLERI), surum: surumSemasi })),
   // Kart başına seçilen küçük resim; yoksa null.
   kucukResim: kucukResim.nullable(),
+  // Kartın revizyonu (mamul ve yarı mamulde); yükleme formunda antet revizyonunun ön değeri (2138-1 a).
+  kartRevizyon: z.string().nullable().optional(),
 });
 
 export const KUCUK_RESIM_AZAMI_KAYIT = 200;

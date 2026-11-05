@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { BelgeAyrintisi, BelgeListesiCevabi, BelgeSatiri } from '#paylasilan/sozlesme/belge-merkezi.ts';
+import type { BelgeAyrintisi, BelgeListesiCevabi, BelgeSatiri, MalzemeBelgeleriCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { CerceveSayacBaglami } from '../../ortak/rota/cerceve-sayaclari.ts';
 import { gorunenKomutlar } from '../../ortak/rota/komutlar.ts';
@@ -20,7 +20,7 @@ import { modelOku } from './goruntu/model.ts';
 import { IZINLI_DOSYA_TURLERI, dosyaTuruBul, gorunumTuru, kabulMetni, modelBicimi } from './gosterim.ts';
 import { COZUNURLUKLER, KARE_BAYT_SINIRI, KARE_SAYISI, OnizlemeAtlandi, kareAcisi, sinirdaKareler } from './onizleme-kurallari.ts';
 import { KucukResimKutusu } from './KucukResim.tsx';
-import { resimUretilir } from './ResimPaneli.tsx';
+import { ResimPaneli, resimUretilir } from './ResimPaneli.tsx';
 
 // Çizim (three, occt) tarayıcı ister; üretimin kendisi taklit edilir, akış gerçektir.
 const { onizlemeKareleri } = vi.hoisted(() => ({ onizlemeKareleri: vi.fn() }));
@@ -628,6 +628,49 @@ describe('cizimler malzeme küçük resmi (1990 a)', () => {
     cleanup();
     render(<KucukResimKutusu resim={resim} ad="Parça" />);
     expect(screen.queryByRole('img', { name: 'Taslak' })).toBeNull();
+  });
+});
+
+describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
+  const MALZEMECI: Kullanici = { id: 4, ad: 'Deneme Planlama', islemler: ['malzemeler.yaz'] };
+  const RESIM_REV = AYRINTI.revizyonlar[1];
+  const cevap = (kucukResim: MalzemeBelgeleriCevabi['kucukResim']): MalzemeBelgeleriCevabi => ({
+    belgeler: [{ id: 7, ad: 'Deneme flanş', tur: 'teknik-resim', resimNo: null, surum: 3, kapak: false, revizyonlar: RESIM_REV ? [RESIM_REV] : [] }],
+    oneriler: [], kucukResim, kartRevizyon: '00',
+  });
+  function paneliAc(govde: MalzemeBelgeleriCevabi) {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/oturum') return json(200, { kullanici: MALZEMECI } satisfies OturumCevabi);
+      if (yol === '/cizimler/malzemeler/41/belgeler') return json(200, govde);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><ResimPaneli malzemeNo={41} /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+  }
+
+  it('antet revizyonu karttan dolu açılır; fotoğrafta boş, elle yazılan tür değişince korunur', async () => {
+    paneliAc(cevap(null));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ekle' }));
+    const antet = await screen.findByLabelText<HTMLInputElement>('Antet revizyonu');
+    expect(antet.value).toBe('');
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'teknik-resim' } });
+    expect(antet.value).toBe('00');
+    fireEvent.change(antet, { target: { value: '01' } });
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: '3b-model' } });
+    expect(antet.value).toBe('01');
+  });
+
+  it('yeni revizyon penceresinde antet kartın revizyonuyla dolu gelir', async () => {
+    paneliAc(cevap(null));
+    fireEvent.click(await screen.findByRole('button', { name: /yeni revizyon/i }));
+    expect((await screen.findByLabelText<HTMLInputElement>('Antet revizyonu')).value).toBe('00');
+  });
+
+  it('uyarı merkezin harfini değil resmin antet revizyonunu ve kartın revizyonunu gösterir', async () => {
+    paneliAc(cevap({ hedefId: 41, belgeId: 7, revizyonId: 11, harf: 'A', antetRev: '01', kareSayisi: 1, revUyumu: false }));
+    const uyari = await screen.findByText(/antet revizyonu 01, kartın revizyonu 00/);
+    expect(uyari.textContent).not.toContain('(A)');
   });
 });
 
