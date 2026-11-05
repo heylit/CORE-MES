@@ -16,4 +16,6 @@ export type { PatlatmaDugumu } from './servis.ts';
 export {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, etkinSure, girdiOlabilirMi, isEmriKaynagi, kaynaktakiSure, teorikSure, yeniOpNo,
 } from './kurallar.ts';
+// 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
+export { yuzeyIslemiAdimlari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';

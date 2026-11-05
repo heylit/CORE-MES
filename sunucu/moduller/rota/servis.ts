@@ -15,10 +15,12 @@ import type {
   IsEmriSartnamesi, IsEmriSartnameleriCevabi, ParametreDegerleri, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameKapsami, SartnameOzeti, SartnameSurumu, SartnameTaslakGovdesiCikti,
   SartnamelerCevabi, StandartCevabi, TalimatAdimi, TalimatSablonlariCevabi, TalimatSablonuCevabi, HamOnerisiCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
+import { GEOMETRI_YUZEY_KATEGORILERI } from '#paylasilan/sozlesme/geometri.ts';
 import { AZAMI_AGAC_DERINLIGI, HAM_ONERI_SAYISI, MEDYA_SINIRI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeGeometrisi } from '../geometri/disari.ts';
+import type { GeometriYuzeyAdimi } from '../geometri/disari.ts';
 import { firmaAdlari, firmaAra, firmaOzetleri } from '../musteri-tedarikci/disari.ts';
 import {
   aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri,
@@ -2040,6 +2042,33 @@ export async function revizyonSartnameleri(db: Db, revizyonId: number): Promise<
       }];
     }),
   };
+}
+
+// 3D Atölyesi yüzey işaretlemesinin işlem listesi (kart 2144, 2140-3): yürürlükteki revizyonun yüzey işlemi kategorisindeki (KPL, DNS,
+// AST, BYA, YHZ) şartnameli adımları, adım ve şartname sırasıyla. Yürürlükte rota yoksa null. Yetki denetlemez; geometri rotayı ithal
+// edemediği için bağı kablolama.ts kurar (ADR 0006 madde 6).
+export async function yuzeyIslemiAdimlari(db: Db, malzemeId: number): Promise<GeometriYuzeyAdimi[] | null> {
+  const revizyonId = await s.yururluktekiRevizyonId(db, malzemeId);
+  if (revizyonId === null) return null;
+  const baglar = await s.adimSartnameleri(db, [revizyonId]);
+  if (baglar.length === 0) return [];
+  const icerik = await s.icerikOku(db, revizyonId);
+  const sartnameler = new Map((await s.sartnameleriOku(db, [...new Set(baglar.map((x) => x.sartnameId))])).map((x) => [x.id, x]));
+  const kategori = new Map((await s.kategoriler(db)).map((k) => [k.id, k.kod]));
+  const sonuc: GeometriYuzeyAdimi[] = [];
+  for (const a of [...icerik.adimlar].sort((p, q) => p.sira - q.sira)) {
+    const kendi = baglar.filter((x) => x.opNo === a.opNo);
+    if (kendi.length === 0) continue;
+    const talimatVar = (await gecerliTalimat(db, malzemeId, a.opNo)) !== null;
+    for (const x of kendi) {
+      const sartname = sartnameler.get(x.sartnameId);
+      const kod = sartname === undefined ? undefined : kategori.get(sartname.kategoriId);
+      const kategoriKodu = GEOMETRI_YUZEY_KATEGORILERI.find((k) => k === kod);
+      if (sartname === undefined || kategoriKodu === undefined) continue;
+      sonuc.push({ opNo: a.opNo, adimAdi: a.ad, fason: fasonAdimMi(a), talimatVar, sartname: { id: sartname.id, kod: sartname.kod, ad: sartname.ad, kategoriKodu } });
+    }
+  }
+  return sonuc;
 }
 
 // Adımın şartnameleri bütün olarak yazılır; yalnız taslak revizyonda (rota.yaz). Yeni bağ kullanımdaki, yayınlanmış ve adımın
