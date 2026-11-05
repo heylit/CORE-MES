@@ -5,13 +5,13 @@ import { bulunamadi, eskiSurum } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriOzellikCevabi,
+  GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
-  bicimDenetimi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU,
+  bicimDenetimi, bilesenListesi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, MOTOR, STOK_FORMLARI, stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { GeometriSureci } from './surec.ts';
@@ -120,6 +120,20 @@ export async function ozellikOku(db: Db, revizyonId: number): Promise<GeometriOz
   if (a === null || a.ozet !== m.ozet || (await sorgular.yuzOzeti(db, revizyonId)).length === 0) return { revizyonId, motor: null, ozellikler: null };
   const satirlar = await sorgular.ozellikler(db, revizyonId);
   return { revizyonId, motor: YUZ_MOTORU, ozellikler: satirlar.map(({ motor: _m, ...o }) => o) };
+}
+
+// Montaj ağacı ve bileşen listesi (kart 2109, M1). Bileşen listesi kayıttan her okumada hesaplanır (saf kural); yalnız öneridir.
+export async function montajOku(db: Db, revizyonId: number): Promise<GeometriMontajCevabi> {
+  const m = await model(db, revizyonId);
+  const bos = { revizyonId, oneri: true as const, motor: null, montaj: null, dugumler: null, bilesenler: null };
+  const a = await sorgular.analiz(db, revizyonId);
+  if (a === null || a.ozet !== m.ozet) return { ...bos, neden: 'analiz-yok' };
+  const t = await sorgular.montaj(db, revizyonId);
+  if (t === null) return { ...bos, neden: 'montaj-yok' };
+  return {
+    revizyonId, oneri: true, motor: t.motor, montaj: t.dugumler.some((d) => d.tur === 'montaj'),
+    dugumler: t.dugumler, bilesenler: bilesenListesi(t.dugumler), neden: null,
+  };
 }
 
 // Pay sorgudan, yoksa sistem ayarından; ikisi de yoksa 0 ve kaynak 'yok' (ekran söyler). Stok listesi aktif hammadde kartları (1469 a).
@@ -237,6 +251,7 @@ export async function geometriTuru(vt: Veritabani, surec: GeometriSureci, gunluk
     await vt.tx(async (db) => {
       if (yanit.tamam) {
         await sorgular.analizYaz(db, { revizyonId: is.revizyonId, belgeId: is.belgeId, ozet: is.ozet, motor: MOTOR, olcum: yanit.olcum, sureMs: yanit.sureMs });
+        await sorgular.montajYaz(db, is.revizyonId, MOTOR, yanit.montaj);
         await sorgular.yuzlerYaz(db, is.revizyonId, YUZ_MOTORU, yanit.yuzler);
         await sorgular.ozelliklerYaz(db, is.revizyonId, YUZ_MOTORU, yanit.yuzler === null ? null : yanit.ozellikler);
         await sorgular.isBitir(db, is.id, 'bitti', null);

@@ -191,3 +191,50 @@ export const agirlikOzetiCevabi = z.object({
   kalite: z.object({ ad: z.string().nullable(), aile: z.string().nullable(), kaliteKodu: z.string().nullable(), yogunluk: z.number().positive().nullable() }).nullable(),
 });
 export type AgirlikOzetiCevabi = z.output<typeof agirlikOzetiCevabi>;
+
+// Montaj ağacı (kart 2109, M1): STEP montajının düğümleri ve bileşen listesi. Ölçüler üçgen ağındandır ve yalnız öneridir (2101-2 b,
+// oneri her zaman true): gerçek montaj dosyasıyla denenmedi; rotaya, reçeteye ya da karta kendiliğinden yazılmaz. Analiz yoksa ya da
+// başka içeriğe aitse neden 'analiz-yok'; analiz montajı okumadıysa (2109 öncesi hesap, parça yok ya da düğüm sınırı aşıldı) 'montaj-yok'.
+// Tek parçalı modelde ağaç tek düğümdür ve montaj false'tur.
+export const GEOMETRI_MONTAJ_DUGUM_TURLERI = ['montaj', 'parca'] as const;
+export const GEOMETRI_MONTAJ_NEDENLERI = ['analiz-yok', 'montaj-yok'] as const;
+const kose = z.array(z.number()).length(3);
+const kenarlar3 = z.object({ a: mm, b: mm, c: mm });
+// sira 1'den ve ön sıralı (üst alttan önce); ust kökte null. kutuEn/kutuUst modelin koordinatında eksenlere hizalı kutunun köşeleri
+// (montajda altındaki parçaları kapsar, parçası yoksa null). Parçada obb (döndürülmüş kutu kenarları, büyükten küçüğe), alan ve kapali
+// doludur; montajda null. Ad dosyadakidir, yoksa null.
+export const geometriMontajDugumuSemasi = z.object({
+  sira: z.number().int().min(1),
+  ust: z.number().int().min(1).nullable(),
+  tur: z.enum(GEOMETRI_MONTAJ_DUGUM_TURLERI),
+  ad: z.string().nullable(),
+  kutuEn: kose.nullable(),
+  kutuUst: kose.nullable(),
+  obb: kenarlar3.nullable(),
+  hacimMm3: z.number().positive().nullable(),
+  alanMm2: mm.nullable(),
+  kapali: z.boolean().nullable(),
+});
+export type GeometriMontajDugumu = z.output<typeof geometriMontajDugumuSemasi>;
+// Aynı ad ve ölçüdeki parçalar tek satırdır (yerleşim yönünden bağımsız); dugumler o parçaların düğüm sıraları.
+export const geometriMontajBileseniSemasi = z.object({
+  sira: z.number().int().min(1),
+  ad: z.string().nullable(),
+  adet: z.number().int().min(1),
+  obb: kenarlar3,
+  hacimMm3: z.number().positive().nullable(),
+  alanMm2: mm,
+  kapali: z.boolean(),
+  dugumler: z.array(z.number().int().min(1)).min(1),
+});
+export type GeometriMontajBileseni = z.output<typeof geometriMontajBileseniSemasi>;
+export const geometriMontajCevabi = z.object({
+  revizyonId: z.number().int(),
+  oneri: z.literal(true),
+  motor: z.string().nullable(),
+  montaj: z.boolean().nullable(),
+  dugumler: z.array(geometriMontajDugumuSemasi).nullable(),
+  bilesenler: z.array(geometriMontajBileseniSemasi).nullable(),
+  neden: z.enum(GEOMETRI_MONTAJ_NEDENLERI).nullable(),
+});
+export type GeometriMontajCevabi = z.output<typeof geometriMontajCevabi>;

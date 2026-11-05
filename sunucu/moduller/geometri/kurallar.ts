@@ -648,3 +648,132 @@ export function ozellikleriTani(yuzler: readonly TanimaYuzu[], kenarlar: readonl
   });
   return sonuc;
 }
+
+// Montaj ağacı (kart 2109, M1). occt-import-js çıktısı: düğümler montajdır, parçalar düğümün ağlarıdır (`meshes`); ağ konumları dünya
+// koordinatındadır (montaj yerleşimi uygulanmış). Alt düğümü olmayan ve tek ağlı düğüm parçanın kendisidir (bazı yazıcılar parçayı
+// düğüm yapar, ağa genel ad verir). Ölçüler yalnız öneridir (2101-2 b): gerçek montaj dosyasıyla denenmedi.
+export const MONTAJ_DUGUM_EN_COK = 20_000;
+export const MONTAJ_AD_EN_UZUN = 200;
+
+export interface OcctDugumu { name?: unknown; meshes?: unknown; children?: unknown }
+export interface AdliAg extends UcgenAgi { ad: string | null }
+export type MontajDugumTuru = 'montaj' | 'parca';
+
+// sira 1'den, ön sıralı (üst her zaman alttan önce); ust üstün sırası, kökte null. Parçada obb, hacim, alan ve kapalı dolu; montajda
+// null. kutuEn ve kutuUst dünya koordinatında eksenlere hizalı kutu; montajda altındaki parçaların kapsayanı, parçası yoksa null.
+export interface MontajDugumu {
+  sira: number;
+  ust: number | null;
+  tur: MontajDugumTuru;
+  ad: string | null;
+  kutuEn: V3 | null;
+  kutuUst: V3 | null;
+  obb: { a: number; b: number; c: number } | null;
+  hacimMm3: number | null;
+  alanMm2: number | null;
+  kapali: boolean | null;
+}
+
+export function montajAdi(ad: unknown): string | null {
+  if (typeof ad !== 'string') return null;
+  const t = ad.trim().slice(0, MONTAJ_AD_EN_UZUN);
+  return t === '' ? null : t;
+}
+
+const agIndeksleri = (d: OcctDugumu): number[] =>
+  (Array.isArray(d.meshes) ? d.meshes : []).filter((i): i is number => Number.isInteger(i) && (i as number) >= 0);
+const altDugumler = (d: OcctDugumu): OcctDugumu[] =>
+  (Array.isArray(d.children) ? d.children : []).filter((c): c is OcctDugumu => typeof c === 'object' && c !== null);
+
+function agSiniri(ag: UcgenAgi): { en: V3; ust: V3 } {
+  const en: V3 = [Infinity, Infinity, Infinity], ust: V3 = [-Infinity, -Infinity, -Infinity];
+  const k = ag.konum;
+  for (let i = 0; i + 2 < k.length; i += 3) for (let e = 0; e < 3; e++) {
+    const d = k[i + e] as number;
+    if (d < en[e]!) en[e] = d;
+    if (d > ust[e]!) ust[e] = d;
+  }
+  return { en: en.map((x) => yuvarla(x) + 0) as V3, ust: ust.map((x) => yuvarla(x) + 0) as V3 };
+}
+
+// Ağdan parça düğümü; katısı olmayan (boş) ağ parça sayılmaz.
+function parcaDugumu(ag: AdliAg | undefined, ad: string | null, ust: number | null): Omit<MontajDugumu, 'sira'> | null {
+  if (ag === undefined) return null;
+  const o = agOlcumu([ag]);
+  if (o === null) return null;
+  const s = agSiniri(ag);
+  return {
+    ust, tur: 'parca', ad: ad ?? ag.ad, kutuEn: s.en, kutuUst: s.ust,
+    obb: { a: o.obb.a, b: o.obb.b, c: o.obb.c }, hacimMm3: o.hacimMm3, alanMm2: o.alanMm2, kapali: o.kapali,
+  };
+}
+
+// Kökün adsız tek sarmalayıcısı (dosya kökü) atlanır. Düğüm sınırını aşan ya da parçasız model null verir. Yığınla gezilir: güvenilmeyen
+// dosyada derin iç içe yapı çağrı yığınını taşırmaz.
+export function montajAgaci(kok: OcctDugumu, aglar: readonly AdliAg[]): MontajDugumu[] | null {
+  let bas = kok;
+  while (montajAdi(bas.name) === null && agIndeksleri(bas).length === 0 && altDugumler(bas).length === 1) bas = altDugumler(bas)[0]!;
+  const dugumler: MontajDugumu[] = [];
+  const ekle = (d: Omit<MontajDugumu, 'sira'>): number => {
+    dugumler.push({ sira: dugumler.length + 1, ...d });
+    return dugumler.length;
+  };
+  const yigin: { d: OcctDugumu; ust: number | null }[] = [{ d: bas, ust: null }];
+  while (yigin.length > 0) {
+    const { d, ust } = yigin.pop()!;
+    if (dugumler.length > MONTAJ_DUGUM_EN_COK || yigin.length > MONTAJ_DUGUM_EN_COK) return null;
+    const indeksler = agIndeksleri(d), altlar = altDugumler(d);
+    if (altlar.length === 0 && indeksler.length === 1) {
+      const p = parcaDugumu(aglar[indeksler[0]!], montajAdi(d.name), ust);
+      if (p !== null) ekle(p);
+      continue;
+    }
+    const sira = ekle({ ust, tur: 'montaj', ad: montajAdi(d.name), kutuEn: null, kutuUst: null, obb: null, hacimMm3: null, alanMm2: null, kapali: null });
+    for (const i of indeksler) {
+      const p = parcaDugumu(aglar[i], null, sira);
+      if (p !== null) ekle(p);
+    }
+    for (let i = altlar.length - 1; i >= 0; i--) yigin.push({ d: altlar[i]!, ust: sira });
+  }
+  if (dugumler.length > MONTAJ_DUGUM_EN_COK || !dugumler.some((d) => d.tur === 'parca')) return null;
+  // Montaj kutusu: ön sırada alt her zaman üstten sonra gelir; sondan başa gezmek her üste altlarının kutusunu taşır.
+  for (let i = dugumler.length - 1; i >= 0; i--) {
+    const d = dugumler[i]!;
+    if (d.ust === null || d.kutuEn === null || d.kutuUst === null) continue;
+    const u = dugumler[d.ust - 1]!;
+    u.kutuEn = u.kutuEn === null ? [...d.kutuEn] : (u.kutuEn.map((x, e) => Math.min(x, d.kutuEn![e]!)) as V3);
+    u.kutuUst = u.kutuUst === null ? [...d.kutuUst] : (u.kutuUst.map((x, e) => Math.max(x, d.kutuUst![e]!)) as V3);
+  }
+  return dugumler;
+}
+
+// Bileşen listesi: aynı ad ve aynı ölçüdeki (döndürülmüş kutu ve hacim, 0,01 mm ve 1 mm3 duyarlıkla) parçalar tek satırda toplanır;
+// yerleşim yönü sonucu değiştirmez. Sıra ilk görünüşe göre. dugumler: o bileşenin parça düğümlerinin sıraları.
+export interface MontajBileseni {
+  sira: number;
+  ad: string | null;
+  adet: number;
+  obb: { a: number; b: number; c: number };
+  hacimMm3: number | null;
+  alanMm2: number;
+  kapali: boolean;
+  dugumler: number[];
+}
+
+export function bilesenListesi(dugumler: readonly MontajDugumu[]): MontajBileseni[] {
+  const gruplar = new Map<string, MontajBileseni>();
+  for (const d of dugumler) {
+    if (d.tur !== 'parca' || d.obb === null) continue;
+    const anahtar = JSON.stringify([d.ad, Math.round(d.obb.a * 100), Math.round(d.obb.b * 100), Math.round(d.obb.c * 100), d.hacimMm3 === null ? null : Math.round(d.hacimMm3)]);
+    const g = gruplar.get(anahtar);
+    if (g !== undefined) {
+      g.adet++;
+      g.dugumler.push(d.sira);
+      continue;
+    }
+    gruplar.set(anahtar, {
+      sira: gruplar.size + 1, ad: d.ad, adet: 1, obb: { ...d.obb }, hacimMm3: d.hacimMm3, alanMm2: d.alanMm2 ?? 0, kapali: d.kapali ?? false, dugumler: [d.sira],
+    });
+  }
+  return [...gruplar.values()];
+}

@@ -1,10 +1,11 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriOzellikCevabi, revizyonParametresi,
+  geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi,
+  revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, ozellikOku, yenidenHesapla } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, yenidenHesapla } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -47,6 +48,12 @@ export const uclar = [
     yontem: 'GET', yol: '/geometri/ozellikler/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, cevap: geometriOzellikCevabi,
     isle: ({ db, parametre }) => ozellikOku(db, parametre.revizyonId),
+  }),
+  // 2109: montaj ağacı ve bileşen listesi (yalnız öneri). Ekranı yok; 2098 H3 ve montajdan reçete bunu okur.
+  uc({
+    yontem: 'GET', yol: '/geometri/montaj/:revizyonId', yetki: 'geometri.oku',
+    parametre: revizyonParametresi, cevap: geometriMontajCevabi,
+    isle: ({ db, parametre }) => montajOku(db, parametre.revizyonId),
   }),
   uc({
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',

@@ -1,11 +1,62 @@
 // Yalnız testler için: eksenlere hizalı kutunun en küçük STEP (AP214) dosyası. Gerçek parça dosyası depoya girmez; ölçüsü bilinen sentetik
 // model ayrı süreçte okunur ve sonuç kesin değerle karşılaştırılır.
 export function kutuStep(x: number, y: number, z: number): string {
+  const y_ = stepYazici();
+  const kati = kutuKatisi(y_, x, y, z, 'kutu');
+  const bag = y_.baglam();
+  const temsil = y_.e(`ADVANCED_BREP_SHAPE_REPRESENTATION('',(#${String(y_.eksen([0, 0, 0]))},#${String(kati)}),#${String(bag)})`);
+  const uyg = y_.e("APPLICATION_CONTEXT('automotive design')");
+  y_.e(`APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#${String(uyg)})`);
+  y_.urun(uyg, 'kutu', temsil);
+  return y_.metin('kutu.step');
+}
+
+interface StepYazici {
+  e(t: string): number;
+  nok(p: number[]): number;
+  yon(d: number[]): number;
+  eksen(p: number[], x?: number[]): number;
+  baglam(): number;
+  urun(uyg: number, ad: string, temsil: number): { tanim: number };
+  metin(dosyaAdi: string): string;
+}
+
+function stepYazici(): StepYazici {
   const s: string[] = [];
   let n = 0;
+  let bag: number | null = null;
   const e = (t: string): number => { s.push(`#${String(++n)}=${t};`); return n; };
   const nok = (p: number[]): number => e(`CARTESIAN_POINT('',(${p.map((v) => v.toFixed(4)).join(',')}))`);
   const yon = (d: number[]): number => e(`DIRECTION('',(${d.map((v) => v.toFixed(4)).join(',')}))`);
+  return {
+    e, nok, yon,
+    eksen: (p, x = [1, 0, 0]) => e(`AXIS2_PLACEMENT_3D('',#${String(nok(p))},#${String(yon([0, 0, 1]))},#${String(yon(x))})`),
+    baglam: () => {
+      if (bag !== null) return bag;
+      const uz = e('( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) )');
+      const aci = e('( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) )');
+      const kat = e('( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() )');
+      const bel = e(`UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-07),#${String(uz)},'distance_accuracy_value','')`);
+      bag = e(`( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#${String(bel)})) GLOBAL_UNIT_ASSIGNED_CONTEXT((#${String(uz)},#${String(aci)},#${String(kat)})) REPRESENTATION_CONTEXT('','') )`);
+      return bag;
+    },
+    urun: (uyg, ad, temsil) => {
+      const urunBag = e(`PRODUCT_CONTEXT('',#${String(uyg)},'mechanical')`);
+      const urun = e(`PRODUCT('${ad}','${ad}','',(#${String(urunBag)}))`);
+      const bicim = e(`PRODUCT_DEFINITION_FORMATION('','',#${String(urun)})`);
+      const tanimBag = e(`PRODUCT_DEFINITION_CONTEXT('part definition',#${String(uyg)},'design')`);
+      const tanim = e(`PRODUCT_DEFINITION('design','',#${String(bicim)},#${String(tanimBag)})`);
+      const sekil = e(`PRODUCT_DEFINITION_SHAPE('','',#${String(tanim)})`);
+      e(`SHAPE_DEFINITION_REPRESENTATION(#${String(sekil)},#${String(temsil)})`);
+      return { tanim };
+    },
+    metin: (dosyaAdi) => `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\nFILE_NAME('${dosyaAdi}','',(''),(''),'','','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\nENDSEC;\nDATA;\n${s.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`,
+  };
+}
+
+// Eksenlere hizalı, köşesi orijinde x*y*z kutu katısı.
+function kutuKatisi(y_: StepYazici, x: number, y: number, z: number, ad: string): number {
+  const { e, nok, yon } = y_;
   const k = [[0, 0, 0], [x, 0, 0], [x, y, 0], [0, y, 0], [0, 0, z], [x, 0, z], [x, y, z], [0, y, z]];
   const vx = k.map((p) => e(`VERTEX_POINT('',#${String(nok(p))})`));
   const kenarlar = new Map<string, number>();
@@ -37,24 +88,50 @@ export function kutuStep(x: number, y: number, z: number): string {
     return e(`ADVANCED_FACE('',(#${String(sinir)}),#${String(duz)},.T.)`);
   });
   const kabuk = e(`CLOSED_SHELL('',(${fids.map((f) => `#${String(f)}`).join(',')}))`);
-  const kati = e(`MANIFOLD_SOLID_BREP('kutu',#${String(kabuk)})`);
-  const uz = e('( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) )');
-  const aci = e('( NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.) )');
-  const kat = e('( NAMED_UNIT(*) SI_UNIT($,.STERADIAN.) SOLID_ANGLE_UNIT() )');
-  const bel = e(`UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(1.E-07),#${String(uz)},'distance_accuracy_value','')`);
-  const bag = e(`( GEOMETRIC_REPRESENTATION_CONTEXT(3) GLOBAL_UNCERTAINTY_ASSIGNED_CONTEXT((#${String(bel)})) GLOBAL_UNIT_ASSIGNED_CONTEXT((#${String(uz)},#${String(aci)},#${String(kat)})) REPRESENTATION_CONTEXT('','') )`);
-  const kok = e(`AXIS2_PLACEMENT_3D('',#${String(nok([0, 0, 0]))},#${String(yon([0, 0, 1]))},#${String(yon([1, 0, 0]))})`);
-  const temsil = e(`ADVANCED_BREP_SHAPE_REPRESENTATION('',(#${String(kok)},#${String(kati)}),#${String(bag)})`);
-  const uyg = e("APPLICATION_CONTEXT('automotive design')");
-  e(`APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#${String(uyg)})`);
-  const urunBag = e(`PRODUCT_CONTEXT('',#${String(uyg)},'mechanical')`);
-  const urun = e(`PRODUCT('kutu','kutu','',(#${String(urunBag)}))`);
-  const bicim = e(`PRODUCT_DEFINITION_FORMATION('','',#${String(urun)})`);
-  const tanimBag = e(`PRODUCT_DEFINITION_CONTEXT('part definition',#${String(uyg)},'design')`);
-  const tanim = e(`PRODUCT_DEFINITION('design','',#${String(bicim)},#${String(tanimBag)})`);
-  const sekil = e(`PRODUCT_DEFINITION_SHAPE('','',#${String(tanim)})`);
-  e(`SHAPE_DEFINITION_REPRESENTATION(#${String(sekil)},#${String(temsil)})`);
-  return `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\nFILE_NAME('kutu.step','',(''),(''),'','','');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\nENDSEC;\nDATA;\n${s.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`;
+  return e(`MANIFOLD_SOLID_BREP('${ad}',#${String(kabuk)})`);
+}
+
+// Yalnız testler için (kart 2109): ölçüsü ve yapısı bilinen sentetik montaj (AP214 montaj yapısı: NEXT_ASSEMBLY_USAGE_OCCURRENCE ve
+// yerleşim dönüşümü). Gerçek montaj dosyası depoya girmez.
+// govde (kök montaj): taban 100x60x10 orijinde; pim 10x10x30 (20,10,10)'da ve z çevresinde 90 derece döndürülmüş (80,40,10)'da;
+// tutucu-montaji iki kez, (40,0,10) ve (40,40,10)'da. tutucu-montaji: tutucu 20x20x20 orijinde, pim (5,5,20)'de.
+// Toplam: taban 1, pim 4, tutucu 2; montaj düğümleri govde ve iki tutucu-montaji.
+export function montajStep(): string {
+  const y_ = stepYazici();
+  const bag = y_.baglam();
+  const uyg = y_.e("APPLICATION_CONTEXT('automotive design')");
+  y_.e(`APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#${String(uyg)})`);
+  const parca = (ad: string, x: number, y: number, z: number): { tanim: number; temsil: number; eksen: number } => {
+    const eksen = y_.eksen([0, 0, 0]);
+    const temsil = y_.e(`ADVANCED_BREP_SHAPE_REPRESENTATION('${ad}',(#${String(eksen)},#${String(kutuKatisi(y_, x, y, z, ad))}),#${String(bag)})`);
+    return { ...y_.urun(uyg, ad, temsil), temsil, eksen };
+  };
+  type Bilesen = { tanim: number; temsil: number; eksen: number };
+  let ornek = 0;
+  const montaj = (ad: string, altlar: { b: Bilesen; konum: number[]; x?: number[] }[]): Bilesen => {
+    const eksen = y_.eksen([0, 0, 0]);
+    const yerler = altlar.map((a) => y_.eksen(a.konum, a.x));
+    const temsil = y_.e(`SHAPE_REPRESENTATION('${ad}',(${[eksen, ...yerler].map((i) => `#${String(i)}`).join(',')}),#${String(bag)})`);
+    const { tanim } = y_.urun(uyg, ad, temsil);
+    altlar.forEach((a, i) => {
+      ornek++;
+      const kullanim = y_.e(`NEXT_ASSEMBLY_USAGE_OCCURRENCE('${String(ornek)}','${String(ornek)}','',#${String(tanim)},#${String(a.b.tanim)},$)`);
+      const sekil = y_.e(`PRODUCT_DEFINITION_SHAPE('','',#${String(kullanim)})`);
+      const donusum = y_.e(`ITEM_DEFINED_TRANSFORMATION('','',#${String(a.b.eksen)},#${String(yerler[i]!)})`);
+      const iliski = y_.e(`( REPRESENTATION_RELATIONSHIP('','',#${String(a.b.temsil)},#${String(temsil)}) REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#${String(donusum)}) SHAPE_REPRESENTATION_RELATIONSHIP() )`);
+      y_.e(`CONTEXT_DEPENDENT_SHAPE_REPRESENTATION(#${String(iliski)},#${String(sekil)})`);
+    });
+    return { tanim, temsil, eksen };
+  };
+  const taban = parca('taban', 100, 60, 10);
+  const pim = parca('pim', 10, 10, 30);
+  const tutucu = parca('tutucu', 20, 20, 20);
+  const tutucuMontaji = montaj('tutucu-montaji', [{ b: tutucu, konum: [0, 0, 0] }, { b: pim, konum: [5, 5, 20] }]);
+  montaj('govde', [
+    { b: taban, konum: [0, 0, 0] }, { b: pim, konum: [20, 10, 10] }, { b: pim, konum: [80, 40, 10], x: [0, 1, 0] },
+    { b: tutucuMontaji, konum: [40, 0, 10] }, { b: tutucuMontaji, konum: [40, 40, 10] },
+  ]);
+  return y_.metin('govde.step');
 }
 
 // Yalnız testler için: 40x20x10 mm kutunun ortasından Ø10 geçen delikli kutu, libcascade ile üretilir (kart 1984). Üçüncü taraf ya da
