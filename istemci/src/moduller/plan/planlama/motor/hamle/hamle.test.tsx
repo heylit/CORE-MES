@@ -4,10 +4,12 @@ import type { DegerlendirmeCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { KAYDEDILEMEDI, planKurSifirla } from '../coz.ts';
+import type { OkunanPlan } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import { HamleOnizlemesi } from './Onizleme.tsx';
 import {
-  BAYAT, DAHA_IYISI_YOK, HAMLE_ESKIDI, hamleIste, hamleSifirla, hamleUygula, hamleYapisi, onizlemeAl, YETKISIZ_HAMLE, type Hamleci,
+  BAYAT, DAHA_IYISI_YOK, FASON_SIRASI, HAMLE_ESKIDI, hamleIste, hamleSifirla, hamleUygula, hamleYapisi, komsuSirasi, KUYRUK_BASI, KUYRUK_SONU, onizlemeAl,
+  SIRA_TUTULMADI, siraAdimi, YETKISIZ_HAMLE, type Hamleci,
 } from './hamle.ts';
 
 afterEach(() => { cleanup(); planKurSifirla(); hamleSifirla(); });
@@ -76,9 +78,9 @@ describe('hamle önizlemesi (2129-1 b)', () => {
 
   it('şerit: gecikme önce ve sonra, değişen sipariş, Uygula ve Vazgeç', () => {
     const uygula = vi.fn(); const vazgec = vi.fn(); const c = calisma();
-    const h = { kapali: null, suruyor: false, iyilestir: vi.fn(), oneAl: vi.fn(), uygula, vazgec,
+    const h = { kapali: null, suruyor: false, iyilestir: vi.fn(), oneAl: vi.fn(), sirala: vi.fn(), uygula, vazgec,
       onizleme: { tur: 'plan-iyilestir', ad: 'Plan iyileştirildi', plan: PLAN, dataVer: 4, gecikmeOnce: 3, gecikmeSonra: 0.5,
-        degisen: [{ siparisId: 'O1', once: 12, sonra: 9, durum: 'zamanina-girdi' }], siparisId: null, yol: null, bitisOnce: null, bitisSonra: null } } as Hamleci;
+        degisen: [{ siparisId: 'O1', once: 12, sonra: 9, durum: 'zamanina-girdi' }], siparisId: null, yol: null, bitisOnce: null, bitisSonra: null, tezgah: null } } as Hamleci;
     render(<HamleOnizlemesi h={h} D={c.D} ad={(j) => `Sip ${j}`} />);
     const bolge = screen.getByRole('region', { name: 'Hamle önizlemesi' });
     expect(bolge.textContent).toContain('Plan iyileştirildi');
@@ -87,5 +89,56 @@ describe('hamle önizlemesi (2129-1 b)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
     fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
     expect(uygula).toHaveBeenCalledOnce(); expect(vazgec).toHaveBeenCalledOnce();
+  });
+});
+
+// 2149: tezgâh sırası hamlesi. Sunucu cevabı uydurmadır.
+const siraCevabi = (dataVer: number, plan: Record<string, unknown> | null = PLAN, neden: string | null = null): DegerlendirmeCevabi => ({
+  calismaSurumu: 7, dataVer, baslangic: '2026-10-19', simdi: 9, maliyetGorunur: true,
+  sonuc: { tur: 'sira-degistir', tezgah: '100', sira: ['O2.10', 'O1.10'], plan, neden, gecikmeOnce: 3, gecikmeSonra: plan ? 4 : null,
+    degisen: plan ? [{ siparisId: 'O1', once: 9, sonra: 11, durum: 'gecikmeye-dustu' }] : [] },
+});
+const op = (id: string, m: string, S: number, x: Partial<{ act: boolean; fas: boolean }> = {}) => ({ id, job: id.split('.')[0]!, m, S, C: S + 1, act: false, fas: false, ...x });
+const PLAN_OKU = { ops: { 'O1.10': op('O1.10', '100', 8), 'O2.10': op('O2.10', '100', 10), 'O3.10': op('O3.10', '100', 12), 'O4.10': op('O4.10', '@F', 9, { fas: true }), 'O5.10': op('O5.10', '100', 6, { act: true }) } } as unknown as OkunanPlan;
+
+describe('tezgâh sırası hamlesi (2149)', () => {
+  it('sıra önizlenir, Uygula planı "sira-degistir" kaynağıyla yazar; plan kötüleşse de önizlenir', async () => {
+    const c = calisma(); const { komut, durum } = komutKur(c);
+    const iste = vi.fn(async () => siraCevabi(4));
+    expect(await hamleIste({ komut, iste }, { tur: 'sira-degistir', tezgah: '100', sira: ['O2.10', 'O1.10'] })).toBeNull();
+    expect(iste).toHaveBeenCalledWith(7, { tur: 'sira-degistir', tezgah: '100', sira: ['O2.10', 'O1.10'] });
+    expect(onizlemeAl()).toMatchObject({ tur: 'sira-degistir', ad: '100 sırası değişti', tezgah: '100', gecikmeOnce: 3, gecikmeSonra: 4 });
+    expect(hamleUygula(komut, 'Deneme Kisi', 1000)).toBeNull();
+    expect(durum.c.plan).toMatchObject({ dataVer: 5, kaynak: 'oneri', oneriKaynak: 'sira-degistir' });
+  });
+
+  it('motor sırayı tutamazsa ya da reddederse önizleme kurulmaz, sunucunun nedeni döner', async () => {
+    const { komut } = komutKur(calisma());
+    expect(await hamleIste({ komut, iste: async () => siraCevabi(4, null, 'O2.10 sabit; sıradaki yeri değişmez.') }, { tur: 'sira-degistir', tezgah: '100', sira: ['O2.10', 'O1.10'] }))
+      .toBe('O2.10 sabit; sıradaki yeri değişmez.');
+    expect(await hamleIste({ komut, iste: async () => siraCevabi(4, null) }, { tur: 'sira-degistir', tezgah: '100', sira: ['O2.10', 'O1.10'] })).toBe(SIRA_TUTULMADI);
+    expect(onizlemeAl()).toBeNull();
+  });
+
+  it('komşu sırası: bir öne ve bir arkaya iki adım, sınırda null', () => {
+    const q = ['a', 'b', 'c'];
+    expect(komsuSirasi(q, 'b', -1)).toEqual(['b', 'a']);
+    expect(komsuSirasi(q, 'b', 1)).toEqual(['c', 'b']);
+    expect(komsuSirasi(q, 'a', -1)).toBeNull();
+    expect(komsuSirasi(q, 'c', 1)).toBeNull();
+    expect(komsuSirasi(q, 'x', 1)).toBeNull();
+  });
+
+  it('sıra adımı: başlamış iş kuyrukta sayılmaz; başta, sonda, fasonda ve yetkisizde pasif, nedeniyle', () => {
+    const sirala = vi.fn(); const h = { kapali: null, suruyor: false, sirala } as unknown as Hamleci;
+    expect(siraAdimi(h, PLAN_OKU, 'O1.10', -1)).toEqual({ yap: null, not: KUYRUK_BASI });
+    expect(siraAdimi(h, PLAN_OKU, 'O3.10', 1)).toEqual({ yap: null, not: KUYRUK_SONU });
+    expect(siraAdimi(h, PLAN_OKU, 'O4.10', 1)).toEqual({ yap: null, not: FASON_SIRASI });
+    expect(siraAdimi(h, PLAN_OKU, 'O5.10', 1).yap).toBeNull();
+    expect(siraAdimi(null, PLAN_OKU, 'O2.10', -1)).toEqual({ yap: null, not: YETKISIZ_HAMLE });
+    expect(siraAdimi({ ...h, kapali: BAYAT }, PLAN_OKU, 'O2.10', -1)).toEqual({ yap: null, not: BAYAT });
+    siraAdimi(h, PLAN_OKU, 'O2.10', -1).yap?.();
+    siraAdimi(h, PLAN_OKU, 'O2.10', 1).yap?.();
+    expect(sirala.mock.calls).toEqual([['100', ['O2.10', 'O1.10']], ['100', ['O3.10', 'O2.10']]]);
   });
 });

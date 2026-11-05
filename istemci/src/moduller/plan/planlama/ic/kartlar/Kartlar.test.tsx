@@ -158,6 +158,41 @@ describe('Tahta kartları', () => {
     expect(kart('Siparişler')).toBeTruthy();
   });
 
+  it('Kuyruklar kartında kart aynı sütunda sürüklenip bırakılınca yeni sıra motora önizletilir (2149); okuyanda kart tutulmaz', async () => {
+    // Örnekte her tezgâhta tek taşınabilir iş var: 3.20 aynı tezgâha (1) 3.10'dan sonra konur; plan veriyle güncel sayılır.
+    const c = structuredClone(ornekCalisma()); if (!c.plan) throw new Error('plan yok');
+    const ops = c.plan.ops as Record<string, { m: string; S: number; C: number }>; const o = ops['3.20']!; const d = o.C - o.S;
+    Object.assign(o, { m: '1', S: ops['3.10']!.C + 1, C: ops['3.10']!.C + 1 + d });
+    const c0 = { ...c, plan: { ...c.plan, dataVer: c.dataVer } } as PlanlamaCalismasi;
+    const komut = { degistir: vi.fn(() => true), kaydet: vi.fn(async () => 7) } as unknown as CalismaKomutu;
+    const post = vi.spyOn(api, 'post').mockImplementation((() => new Promise(() => undefined)) as never);
+    vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? Promise.resolve({ planSurumu: null, isler: [] }) : Promise.reject(new Error('yok')))) as never);
+    render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={c0} komut={komut} git={vi.fn()} yenile={vi.fn()}
+      yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: true })} /></BildirimSaglayici>);
+    menudenAc(/^Plan/);
+    fireEvent.keyDown(window, { key: '3' });
+    fireEvent.click(within(within(kart('Kuyruklar')).getByRole('group', { name: 'Tezgâh grubu' })).getByRole('button', { name: '1' }));
+    const kol = within(kart('Kuyruklar')).getAllByRole('region', { name: /kuyruğu$/ }).find((x) => x.querySelectorAll('li[draggable="true"]').length >= 2);
+    if (!kol) throw new Error(`iki taşınabilir işi olan sütun yok: ${kart('Kuyruklar').textContent?.slice(0, 300) ?? ''}`);
+    const [a, b] = [...kol.querySelectorAll<HTMLElement>('li[draggable="true"]')];
+    const ad = (x: HTMLElement) => x.querySelector('b')?.textContent ?? '';
+    const dt = { effectAllowed: '', setData: () => undefined };
+    fireEvent.dragStart(b!, { dataTransfer: dt });
+    fireEvent.dragOver(a!, { dataTransfer: dt });
+    fireEvent.drop(a!, { dataTransfer: dt });
+    await waitFor(() => { expect(post).toHaveBeenCalled(); });
+    const govde = post.mock.calls[0]?.[1] as { surum: number; istek: { tur: string; tezgah: string; sira: string[] } };
+    expect(govde.surum).toBe(7);
+    expect(govde.istek.tur).toBe('sira-degistir');
+    expect(govde.istek.tezgah).toBe('1');
+    expect(govde.istek.sira.filter((x) => x === ad(a!) || x === ad(b!))).toEqual([ad(b!), ad(a!)]);
+    cleanup(); try { localStorage.clear(); } catch { /* yok */ }
+    ac(false);
+    menudenAc(/^Plan/);
+    fireEvent.keyDown(window, { key: '3' });
+    expect(kart('Kuyruklar').querySelectorAll('li[draggable="true"]')).toHaveLength(0);
+  });
+
   it('Plan kartında Bugünü dondur bugün başlayan işleri gün kilidiyle yazar; komut yoksa pasif', () => {
     const yazilan: PlanlamaCalismasi[] = []; const c0 = ornekCalisma(); const p0 = planOku(c0); if (!p0) throw new Error('plan yok');
     const gNo = gunNumarasi(simdiSaati(c0), 0); const bugun = gunBaslayanlar(p0, gNo).map((r) => r.id);

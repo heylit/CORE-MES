@@ -184,6 +184,7 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'plan-uygula':
     case 'plan-iyilestir':
     case 'one-al':
+    case 'sira-degistir':
       return s;
     case 'siparis-kari':
       throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');

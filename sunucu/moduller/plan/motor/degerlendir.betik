@@ -502,12 +502,56 @@ function oneAl(jid) {
     gecikmeOnce: kayitliGecikme(), gecikmeSonra: en.k.ozet.wT, degisen: hamleFarki(en.k) };
 }
 
+/* Tezgâh sırası (2149; c-masa pmSirala, v20 sıra Uygula, kuyrukta bir öne/arkaya): `sira` adımların bu tezgâhtaki istenen sırasıdır.
+   Tezgâhtaki adımlar kendi sıra anahtarlarını yeni sırayla paylaşır (kuyruğun geri kalanı yerinde kalır); başka tezgâhtan gelen adım
+   komşularının arasına anahtarlanır. Sabit (kilitli) adım sıradaki yerini korumalıdır; başlamış, bitmiş, fason adım oynamaz.
+   Kişinin hamlesidir: plan kötüleşse de önizlenir; motor istenen sırayı tutamazsa (öncül bekleyişi) plan null. */
+function siraDegistir(m, sira) {
+  const p = S.plan; const kilit = S.locks || {};
+  const mevcut = () => Object.values(p.ops).filter(r => r.m === m && isFinite(r.S) && !r.done).sort((a, b) => a.S - b.S).map(r => r.id);
+  const bos = neden => ({ tezgah: m, sira: mevcut(), plan: null, neden, gecikmeOnce: kayitliGecikme(), gecikmeSonra: null, degisen: [] });
+  const cx = cxAl(); const st = stOf();
+  if (m.startsWith('@') || !cx.M[m]) return bos('Tezgâh planda yok ya da fason.');
+  for (const id of sira) {
+    const r = p.ops[id], o = cx.byId[id];
+    if (!r || !o) return bos(`${id} planda yok.`);
+    if (!isFinite(r.S)) return bos(`${id} planlanmadı; önce plana girmeli.`);
+    if (r.done || r.act || r.fas || (S.gercek && S.gercek[id])) return bos(`${id} başlamış, bitmiş ya da fason; yeri değişmez.`);
+    if (r.m !== m) {
+      if (kilit[id]) return bos(`${id} sabit; başka tezgâha taşınmaz.`);
+      if (!o.c.some(c => c.m === m && !c.fas)) return bos(`${id} bu tezgâhta yapılamaz.`);
+      if (st.pref && st.pref[id] && st.pref[id] !== m) return bos(`${id} başka tezgâha bağlı.`);
+    }
+  }
+  const yerli = sira.filter(id => p.ops[id].m === m);
+  const eski = yerli.slice().sort((a, b) => p.ops[a].S - p.ops[b].S);
+  for (const id of yerli) if (kilit[id] && yerli.indexOf(id) !== eski.indexOf(id)) return bos(`${id} sabit; sıradaki yeri değişmez.`);
+  if (yerli.length === sira.length && yerli.every((id, i) => id === eski[i])) return bos('Sıra değişmedi.');
+  const anahtar = {}; eski.forEach((id, i) => { anahtar[yerli[i]] = p.ops[id].S; });
+  const diger = mevcut().filter(x => !sira.includes(x)).map(x => p.ops[x].S);
+  sira.forEach((id, i) => {
+    if (anahtar[id] != null) return;
+    const once = sira.slice(0, i).reverse().find(x => anahtar[x] != null), sonra = sira.slice(i + 1).find(x => anahtar[x] != null);
+    const a = once != null ? anahtar[once] : null, b = sonra != null ? anahtar[sonra] : null;
+    if (a != null && b != null) anahtar[id] = (a + b) / 2;
+    else if (a != null) { const n = diger.find(v => v > a + 1e-9); anahtar[id] = n != null ? (a + n) / 2 : a + 1e-3; }
+    else if (b != null) { const n = diger.filter(v => v < b - 1e-9).pop(); anahtar[id] = n != null ? (n + b) / 2 : b - 1e-3; }
+    else anahtar[id] = p.ops[id].S;
+  });
+  const mods = sira.map(id => [id, m, anahtar[id]]);
+  const { p: q, st: stq } = dgHamle(mods); const k = planKaydi(q, stq, null);
+  const sonuc = Object.values(q.ops).filter(r => r.m === m && isFinite(r.S) && sira.includes(r.id)).sort((a, b) => a.S - b.S).map(r => r.id);
+  if (sonuc.length !== sira.length || sonuc.some((id, i) => id !== sira[i])) return bos('Motor bu sırayı tutamadı: öne alınan adım öncülünü bekliyor ya da tezgâh kısıtı var.');
+  const tum = Object.values(q.ops).filter(r => r.m === m && isFinite(r.S) && !r.done).sort((a, b) => a.S - b.S).map(r => r.id);
+  return { tezgah: m, sira: tum, plan: { ...k, dataVer: S.dataVer }, neden: null, gecikmeOnce: kayitliGecikme(), gecikmeSonra: k.ozet.wT, degisen: hamleFarki(k) };
+}
+
 /* ---------- giriş ----------
    calisma, kayit ve kaynak planlama çalışması ucunun birleştirdiği girdidir (288 a); an: sunucunun şimdisi (ms); istek: sözleşmedeki tur ve alanları.
    Hata { hata: 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi' }: çağıran uygun koda çevirir. */
-const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari', 'plan-iyilestir', 'one-al']);
+const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari', 'plan-iyilestir', 'one-al', 'sira-degistir']);
 /* Hamle kayıtlı planı taban alır: plan veriden eskiyse önce bekleyen değişiklik uygulanır. */
-const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al']);
+const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al', 'sira-degistir']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   S = null; U = {}; DG_CX = null; msOn = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
@@ -534,5 +578,6 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   if (istek.tur === 'siparis-kari') return zarf(siparisKari());
   if (istek.tur === 'plan-iyilestir') return zarf(planIyilestir());
   if (istek.tur === 'one-al') return zarf(oneAl(istek.siparisId));
+  if (istek.tur === 'sira-degistir') return zarf(siraDegistir(istek.tezgah, istek.sira));
   return null;
 }

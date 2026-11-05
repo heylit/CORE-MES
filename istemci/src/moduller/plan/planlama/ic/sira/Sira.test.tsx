@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../../motor/kurallar.ts';
-import { MOTOR_NOTU } from '../../motor/ortak.tsx';
 import { ornekCalisma } from '../../motor/ornek.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
+import { HamleBaglami, type Hamleci } from '../../motor/hamle/hamle.ts';
 import { TezgahSirasiPaneli } from './index.tsx';
 import { SIRA_SINIRI, siraDegisti, siraKur, siraTasi, siraTezgahlari, siraYon } from './kurallar.ts';
 
@@ -48,14 +48,17 @@ describe('Tezgâh sırası hesapları', () => {
   });
 });
 
-function ac(o: { c: PlanlamaCalismasi; p: OkunanPlan; cx: ReturnType<typeof kur>['cx'] }, yaz = true, m: string | null = '1') {
-  render(<BildirimSaglayici><TezgahSirasiPaneli c={o.c} p={o.p} cx={o.cx} m={m} yaz={yaz} kapat={() => undefined} /></BildirimSaglayici>);
+// 2149: Uygula motorun önizlemesini ister; hamleci sayfadan bağlamla gelir (burada sahte).
+const sirala = vi.fn();
+const hamleci = { kapali: null, suruyor: false, sirala } as unknown as Hamleci;
+function ac(o: { c: PlanlamaCalismasi; p: OkunanPlan; cx: ReturnType<typeof kur>['cx'] }, yaz = true, m: string | null = '1', h: Hamleci | null = hamleci) {
+  render(<BildirimSaglayici><HamleBaglami.Provider value={h}><TezgahSirasiPaneli c={o.c} p={o.p} cx={o.cx} m={m} yaz={yaz} kapat={() => undefined} /></HamleBaglami.Provider></BildirimSaglayici>);
   return screen.getByRole('dialog', { name: 'Tezgâh sırası' });
 }
 const sira = (d: HTMLElement) => within(d).getAllByRole('listitem').map((x) => x.querySelector('b')?.textContent);
 
 describe('Tezgâh sırası penceresi', () => {
-  it('oklar sırayı değiştirir, değişen satır işaretlenir; baştaki sıraya dönülür; Uygula motorla açılır; tezgâh değişince liste değişir', () => {
+  it('oklar sırayı değiştirir, değişen satır işaretlenir; Uygula yeni sırayı motora önizletir; baştaki sıraya dönülür; tezgâh değişince liste değişir', () => {
     const d = ac(kur());
     expect(within(d).getByRole('list', { name: '1 kuyruğu' })).toBeTruthy();
     expect(sira(d)).toEqual(['3.10', '3.20', '2.40']);
@@ -65,8 +68,9 @@ describe('Tezgâh sırası penceresi', () => {
     expect(sira(d)).toEqual(['3.20', '3.10', '2.40']);
     expect(within(d).getAllByRole('listitem').map((x) => x.hasAttribute('data-yeni'))).toEqual([true, true, false]);
     const uygula = within(d).getByRole('button', { name: 'Uygula' });
-    expect(uygula.getAttribute('aria-disabled')).toBe('true');
-    expect(uygula.getAttribute('title')).toBe(`Uygula: ${MOTOR_NOTU}`);
+    expect(uygula.getAttribute('aria-disabled')).toBeNull();
+    sirala.mockClear(); fireEvent.click(uygula);
+    expect(sirala).toHaveBeenCalledWith('1', ['3.20', '3.10', '2.40']);
     fireEvent.click(within(d).getByRole('button', { name: 'Baştaki sıraya dön' }));
     expect(sira(d)).toEqual(['3.10', '3.20', '2.40']);
     fireEvent.change(within(d).getByRole('combobox', { name: 'Tezgâh' }), { target: { value: '2' } });

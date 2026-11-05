@@ -12,6 +12,7 @@ import { yetkiKur } from '../yetki.ts';
 import { KAYDEDILEMEDI } from './coz.ts';
 import { PlanlamaMotoru } from './index.tsx';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
+import { BASLAMIS_SIRA } from './hamle/hamle.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ufukKur } from '../ufuk-olcegi.ts';
 
@@ -534,7 +535,8 @@ describe('PlanlamaMotoru', () => {
     expect(within(k).getByText('Aralık dışında 1 iş daha')).toBeTruthy();
     expect(within(k).getByText('Cmt 09:59 → 11:38')).toBeTruthy();
     const ok = within(k).getAllByRole('button', { name: 'Sırada öne al' })[0]!;
-    expect([ok.getAttribute('aria-disabled'), ok.getAttribute('title')]).toEqual(['true', `Sırada öne al: ${MOTOR_NOTU}`]);
+    // 2149: başlamış işin oku pasif kalır; sırası değişebilen işin oku motorun önizlemesini ister (hamle.test.tsx).
+    expect([ok.getAttribute('aria-disabled'), ok.getAttribute('title')]).toEqual(['true', `Sırada öne al: ${BASLAMIS_SIRA}`]);
     fireEvent.click(screen.getByRole('tab', { name: 'Bugün' }));
     expect(within(k).getAllByText('Bu aralıkta iş yok.')).toHaveLength(5);
     fireEvent.click(screen.getByRole('tab', { name: '1 hafta' }));

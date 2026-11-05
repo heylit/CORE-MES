@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYazi, sayiYaz, type Derleme, type OkunanPlan } from '../kurallar.ts';
-import { degisken, MOTOR_NOTU } from '../ortak.tsx';
+import { degisken } from '../ortak.tsx';
+import { hamleYapisi, siraAdimi, useHamleci } from '../hamle/hamle.ts';
 import { KUYRUK_ARALIKLARI, KUYRUK_DURUM, kuyruk } from './kurallar.ts';
 
 // Kuyruk merceği (k-gorunum sKanban, kanbanBagla): her tezgâh bir sütun, kartlar plandaki sırasıyla. Sırayı ve tezgâhı değiştirmek motorun
-// hamlesidir: oklar ve tezgâh seçimi görünür, pasiftir (357 b); sürükleme kapalıdır (459/4 a). "Plan masasında gör" işi Siparişler'de seçer.
+// hamlesidir: oklar ve tezgâh seçimi motorun önizlemesini ister (2149), kişi önizlemeyi uygular; sürükleme kapalıdır (459/4 a). "Plan masasında gör" işi Siparişler'de seçer.
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; planYaz: boolean;
   gun: number; gunSec: (n: number) => void; odak: string | null; masadaGor: (id: string) => void;
@@ -22,7 +23,10 @@ export function KuyrukCizelgesi(o: Ozellikler) {
     const s = [...k.querySelectorAll<HTMLElement>('.tc-pym-k-sutun')].find((x) => x.dataset.m === odak);
     if (s) k.scrollLeft = s.offsetLeft - k.offsetLeft - 8;
   }, [odak]);
-  const pasif = (ad: string) => `${ad}: ${MOTOR_NOTU}`;
+  const h = useHamleci();
+  const ok = (ad: string, y: { yap: (() => void) | null; not: string }) => ({
+    'aria-disabled': y.yap ? undefined : 'true' as const, title: y.yap ? ad : `${ad}: ${y.not}`, onClick: y.yap ?? undefined,
+  });
 
   return (
     <div className="tc-pym-tb-mercek" data-mercek="kuyruk">
@@ -46,7 +50,7 @@ export function KuyrukCizelgesi(o: Ozellikler) {
             </header>
             <ol className="tc-pym-k-liste" data-m={s.m}>
               {s.kartlar.map((k, i) => {
-                const [dad, dsm] = KUYRUK_DURUM[k.durum];
+                const [dad, dsm] = KUYRUK_DURUM[k.durum]; const tasi = hamleYapisi(h, () => undefined);
                 return (
                   <li key={k.id} className="tc-pym-k-kart" data-id={k.id} data-durum={k.durum} data-gec={k.gec != null ? '' : undefined} ref={degisken({ '--c': k.renk })}>
                     <div className="tc-pym-k-ust">
@@ -64,10 +68,11 @@ export function KuyrukCizelgesi(o: Ozellikler) {
                     <div className="tc-pym-k-arac">
                       {o.planYaz && (
                         <>
-                          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-disabled="true" aria-label="Sırada öne al" title={pasif('Sırada öne al')}><Simge ad="up" boyut="k" /></button>
-                          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-disabled="true" aria-label="Sırada geriye al" title={pasif('Sırada geriye al')}><Simge ad="down" boyut="k" /></button>
+                          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label="Sırada öne al" {...ok('Sırada öne al', siraAdimi(h, p, k.id, -1))}><Simge ad="up" boyut="k" /></button>
+                          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label="Sırada geriye al" {...ok('Sırada geriye al', siraAdimi(h, p, k.id, 1))}><Simge ad="down" boyut="k" /></button>
                           {k.alt.length > 0 && (
-                            <select className="tc-alan-kutu tc-pym-k-tasi" aria-label="Başka tezgâha taşı" title={pasif('Başka tezgâha taşı')} disabled value="">
+                            <select className="tc-alan-kutu tc-pym-k-tasi" aria-label="Başka tezgâha taşı" title={tasi.yap ? 'Başka tezgâha taşı; motor önizler' : `Başka tezgâha taşı: ${tasi.not}`}
+                              disabled={!tasi.yap || k.kilit} value="" onChange={(e) => { const m = e.target.value; if (m && h) h.sirala(m, [k.id]); }}>
                               <option value="">Tezgâh değiştir</option>
                               {k.alt.map((a) => <option key={a} value={a}>{a}</option>)}
                             </select>
