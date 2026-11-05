@@ -133,9 +133,20 @@ export const katilimSemasi = z.object({
 // Katılınca başka çalışan varsa uyarı döner; işlem reddedilmez.
 export const katilimCevabi = z.object({ katilimlar: z.array(katilimSemasi), uyari: z.string().nullable() });
 export const durdurGovdesi = z.object({ durusNedeniId: KIMLIK }).strict();
-export const adimTamamlaGovdesi = z.object({ tamam: z.boolean() }).strict();
+// Hazırlık talimatı kanıtı (2098d): ölçülen değer, seçilen seçenek ya da çekilen fotoğrafın dosya özeti; en az biri.
+// Sınır denetimi terminalde yapılır (zorunlu adımda Tamam kanıtsız açılmaz); sunucu kaydeder.
+export const AZAMI_KANIT_SECIMI = 60;
+export const AZAMI_ADIM_NOTU = 300;
+export const adimKanitiGirdisi = z.object({
+  olcum: z.number().finite().optional(),
+  secim: z.string().trim().min(1).max(AZAMI_KANIT_SECIMI).optional(),
+  foto: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+}).strict().refine((k) => k.olcum !== undefined || k.secim !== undefined || k.foto !== undefined, { message: 'Kanıt boş olamaz.' });
+export const adimTamamlaGovdesi = z.object({ tamam: z.boolean(), kanit: adimKanitiGirdisi.optional() }).strict();
+export const adimNotuGovdesi = z.object({ metin: z.string().trim().min(1).max(AZAMI_ADIM_NOTU) }).strict();
 
 const adliKayit = z.object({ id: KIMLIK, ad: z.string() });
+const adimNotuSemasi = z.object({ metin: z.string(), yazan: adliKayit, zaman, emirId: KIMLIK });
 
 // Başlamış emrin anlık hali. Sayaç sıfırı gerçek sıfırdır ("henüz sayılmadı"); sayacın olmaması `canli: null` ile söylenir.
 export const canliSemasi = z.object({
@@ -215,6 +226,13 @@ export const adimSemasi = z.object({
   // İkisi birlikte dolu ya da birlikte null: işaret geri alınınca kim ve ne zaman da silinir.
   tamamlayan: adliKayit.nullable(),
   tamamlanma: zaman.nullable(),
+  // Son tamamlamanın kanıtı; kanıtsız tamamlanmış ya da işaretsiz adımda null.
+  kanit: z.object({ olcum: z.number().nullable(), secim: z.string().nullable(), foto: z.string().nullable() }).nullable(),
+  // 2098-9 a: aynı ürün, OP ve adım sırasında başka emirde bırakılan son not (geçen sefer) ve bu emirde bırakılan son not.
+  gecenNot: adimNotuSemasi.nullable(),
+  buNot: adimNotuSemasi.nullable(),
+  // Adımın kopyalandığı rota talimatı (ürün, OP, sürüm; adım sırası talimattaki sıradır). Talimatsız ya da rotasız emirde null.
+  talimat: z.object({ urunId: KIMLIK, opNo: z.number().int().positive(), surum: z.number().int().positive() }).nullable(),
 });
 
 // Yalnız eklenen defterin satırı.
@@ -359,6 +377,8 @@ export type Katilim = z.output<typeof katilimSemasi>;
 export type KatilimCevabi = z.output<typeof katilimCevabi>;
 export type KatilimKapanisi = (typeof KATILIM_KAPANISLARI)[number];
 export type AdimTamamlaGovdesi = z.input<typeof adimTamamlaGovdesi>;
+export type AdimKanitiGirdisi = z.output<typeof adimKanitiGirdisi>;
+export type AdimNotuGovdesi = z.input<typeof adimNotuGovdesi>;
 export type EmirlerSorgusu = z.input<typeof emirlerSorgusu>;
 export type EmirlerCevabi = z.output<typeof emirlerCevabi>;
 export type IzlemeListeCevabi = z.output<typeof izlemeListeCevabi>;

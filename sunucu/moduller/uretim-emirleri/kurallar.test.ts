@@ -6,7 +6,7 @@ import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
   BASLATMA_DURUMU, BITIRME_DURUMU, DURAKLI_DURDUR, MAKINEDE_AYNI_IS, MAKINE_DOLU, ISTASYON_PASIF_ACMA, ISTASYON_PASIF_BASLATMA, ISTASYON_YOK,
   AYAR_PLANLI_DEGIL, AYAR_YINELENDI, REFAKAT_IPTAL, adimliOzetSay, ayarIhlali, isEmriSureOzeti, refakatIhlali, refakatQrMetni,
-  acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
+  acmaIstasyonIhlali, adimDegisiyorMu, adimIhlali, adimNotuIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, bitirmeIhlali, calismaDurumu, devamIhlali, duraklatmaIhlali,
   durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, calisilacakMakineler, makineDoluIhlali, saglamToplamIhlali, sayimIhlali, toplamAsimiIhlali,
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
@@ -100,6 +100,15 @@ describe('üretim emri kuralları', () => {
   test('adım yalnız başlamış emirde işaretlenir; aynı duruma ayarlama değişiklik sayılmaz', () => {
     assert.equal(adimIhlali('basladi'), null);
     for (const d of digerleri('basladi')) assert.notEqual(adimIhlali(d), null, d);
+    // 2098-2 teyit, 2098-10: ön hazırlık planlıda; üretim hazırlığı planlıda yalnız ayar varsa; bitmiş ve iptal emirde hiçbiri.
+    assert.equal(adimIhlali('planli', 'on_hazirlik'), null);
+    assert.equal(adimIhlali('planli', 'hazirlik', true), null);
+    assert.notEqual(adimIhlali('planli', 'hazirlik', false), null);
+    assert.notEqual(adimIhlali('planli', 'uretim', true), null);
+    for (const d of ['taslak', 'bitti', 'iptal'] as const) for (const a of ['on_hazirlik', 'hazirlik', 'uretim'] as const) assert.notEqual(adimIhlali(d, a, true), null, `${d} ${a}`);
+    assert.equal(adimNotuIhlali('planli', true), null);
+    assert.notEqual(adimNotuIhlali('planli', false), null);
+    assert.notEqual(adimNotuIhlali('bitti', true), null);
     assert.equal(adimDegisiyorMu(false, true), true);
     assert.equal(adimDegisiyorMu(true, false), true);
     assert.equal(adimDegisiyorMu(true, true), false);

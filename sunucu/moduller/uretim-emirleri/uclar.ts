@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
+  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
@@ -16,7 +16,7 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
-  adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
+  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
   izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
@@ -89,7 +89,17 @@ const emirUclari = [
     parametre: adimParametresi,
     govde: adimTamamlaGovdesi,
     cevap: adimCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => adimTamamla(db, kullanici.id, parametre.id, parametre.adimId, govde.tamam),
+    isle: ({ db, kullanici, parametre, govde }) => adimTamamla(db, kullanici.id, parametre.id, parametre.adimId, govde.tamam, govde.kanit),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/adimlar/:adimId/not',
+    yetki: 'terminal.uret',
+    tekrarKorumali: true,
+    parametre: adimParametresi,
+    govde: adimNotuGovdesi,
+    cevap: adimCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => adimNotuYaz(db, kullanici.id, parametre.id, parametre.adimId, govde.metin),
   }),
 ];
 
