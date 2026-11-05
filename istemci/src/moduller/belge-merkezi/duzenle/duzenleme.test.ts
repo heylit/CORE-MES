@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { Oge, SayfaKutusu } from './duzenleme.ts';
 import {
-  degistir, degisiklikVarMi, duzenlemeNotu, gecmisBaslat, geriAl, gorunumNoktasi, gorunumOlcusu, ileriAl, NOT_EN_UZUN, ogeReddi,
+  degistir, degisiklikVarMi, duzenlemeNotu, silinenOzeti, gecmisBaslat, geriAl, gorunumNoktasi, gorunumOlcusu, ileriAl, NOT_EN_UZUN, ogeReddi,
   pdfKutusu, pdfNoktasi, renkBilesenleri, resimYerlesimi,
 } from './duzenleme.ts';
 
@@ -85,5 +85,13 @@ describe('PDF düzenleme koordinatları (2123)', () => {
   test('DZ-08: düzenleme notu kaynağı ve gerekçeyi taşır, sınırı aşmaz', () => {
     expect(duzenlemeNotu('Parça çizimi', 'B', ' antet değişti ')).toBe('Düzenlendi: Parça çizimi Rev B. Gerekçe: antet değişti');
     expect(duzenlemeNotu('x', 'A', 'g'.repeat(400)).length).toBe(NOT_EN_UZUN);
+  });
+
+  test('DZ-09: silinen özeti sıfır olmayanları sayar, örtülen resmi ayrıca söyler; nota gerekçeden önce girer', () => {
+    const sifir = { yazi: 0, resim: 0, cizim: 0, ortulenResim: 0, not: 0 };
+    expect(silinenOzeti(sifir)).toBe("PDF'ten silinen nesne yok.");
+    expect(silinenOzeti({ ...sifir, yazi: 2, resim: 1, ortulenResim: 1 }))
+      .toBe("PDF'ten silinen: 2 yazı, 1 resim. Alanın dışına taşan 1 resim yalnız örtüldü.");
+    expect(duzenlemeNotu('x', 'A', 'g', { ...sifir, cizim: 3 })).toBe("Düzenlendi: x Rev A. PDF'ten silinen: 3 çizim. Gerekçe: g");
   });
 });

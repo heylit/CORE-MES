@@ -13,7 +13,8 @@ import { Belgeler } from './Belgeler.tsx';
 import { komutlar } from './komutlar.ts';
 import { BelgeSayfasi } from './BelgeSayfasi.tsx';
 import { PdfDuzenleyici } from './duzenle/PdfDuzenleyici.tsx';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import type { PDFPage } from 'pdf-lib';
 import { base64Yaz, dosyaYukle, PARCA_BAYT, sha256Yazilim } from './dosya-aktarimi.ts';
 import { Box3, Color, Vector3 } from 'three';
 import { modelOku } from './goruntu/model.ts';
@@ -675,6 +676,8 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
 });
 
 describe('cizimler PDF düzenleme (2123)', () => {
+  // 1x1 beyaz PNG (sentetik).
+  const BEYAZ_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
   // jsdom'da tuval çizimi ve PointerEvent yoktur: çizim boş bağlamla atlanır, işaretçi olayı fare olayından kurulur.
   beforeEach(() => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
@@ -696,9 +699,10 @@ describe('cizimler PDF düzenleme (2123)', () => {
   });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  async function pdfSunucusu(kullanici: Kullanici) {
+  async function pdfSunucusu(kullanici: Kullanici, ciz?: (b: PDFDocument, s: PDFPage) => Promise<void>) {
     const b = await PDFDocument.create();
-    b.addPage([595, 842]);
+    const sayfa = b.addPage([595, 842]);
+    if (ciz) await ciz(b, sayfa);
     const pdf = await b.save();
     const cagrilar: Cagri[] = [];
     vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
@@ -747,8 +751,8 @@ describe('cizimler PDF düzenleme (2123)', () => {
     expect((screen.getByRole('button', { name: 'Yeni belge olarak kaydet' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('temizlenen alan yeni belge olarak yüklenir; asıl belgeye yazılmaz, not kaynağı ve gerekçeyi taşır, gerekçe zorunlu', async () => {
-    const cagrilar = await pdfSunucusu(YAZAR);
+  // Sağ alt köşedeki antet alanını temizler ve kaydet penceresini açar (görünüm 595x842, PDF ile bire bir).
+  async function temizleVeKaydetAc() {
     ac('/cizimler/belge/7/duzenle/11');
     const alan = await screen.findByLabelText('Sayfa 1 düzenleme alanı');
     alan.getBoundingClientRect = () => ({ left: 0, top: 0, width: 595, height: 842, right: 595, bottom: 842, x: 0, y: 0, toJSON: () => ({}) });
@@ -758,16 +762,53 @@ describe('cizimler PDF düzenleme (2123)', () => {
     fireEvent.pointerUp(alan, { clientX: 580, clientY: 830, pointerId: 1 });
     expect(await screen.findByRole('button', { name: 'Dolgu alanı' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Yeni belge olarak kaydet' }));
-    const pencere = await screen.findByRole('dialog');
-    expect(within(pencere).getByText(/örtülür/)).toBeTruthy();
+    return screen.findByRole('dialog');
+  }
+  const yuklenen = (cagrilar: Cagri[]) => cagrilar.find((c) => c.yontem === 'POST' && c.yol === '/cizimler')?.govde as Record<string, unknown> | undefined;
+  const yaziliAntet = async (b: PDFDocument, s: PDFPage) => {
+    s.drawText('SENTETIK FIRMA', { x: 420, y: 60, size: 12, font: await b.embedFont(StandardFonts.Helvetica) });
+  };
+
+  it('temizlenen alan yeni belge olarak yüklenir; asıl belgeye yazılmaz, not kaynağı ve gerekçeyi taşır, gerekçe zorunlu', async () => {
+    const cagrilar = await pdfSunucusu(YAZAR, yaziliAntet);
+    const pencere = await temizleVeKaydetAc();
+    expect((within(pencere).getByRole('checkbox', { name: "Alttaki yazı ve resmi PDF'ten sil" }) as HTMLInputElement).checked).toBe(true);
+    expect(within(pencere).getByText(/içinden silinir/)).toBeTruthy();
     const kaydet = within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
     expect(kaydet.disabled).toBe(true);
     fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
     expect(kaydet.disabled).toBe(false);
     fireEvent.click(kaydet);
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/cizimler')).toBe(true); });
-    const govde = cagrilar.find((c) => c.yontem === 'POST' && c.yol === '/cizimler')?.govde as Record<string, unknown>;
-    expect(govde).toMatchObject({ ad: 'Deneme flanş (düzenlenmiş)', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf', not: 'Düzenlendi: Deneme flanş Rev A. Gerekçe: Kurum anteti' });
+    expect(yuklenen(cagrilar)).toMatchObject({
+      ad: 'Deneme flanş (düzenlenmiş)', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf',
+      not: "Düzenlendi: Deneme flanş Rev A. PDF'ten silinen: 1 yazı. Gerekçe: Kurum anteti",
+    });
     expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol.startsWith('/cizimler/7'))).toBe(false);
+  });
+
+  it('silme seçimi kaldırılırsa alan yalnız örtülür ve not silinen saymaz', async () => {
+    const cagrilar = await pdfSunucusu(YAZAR, yaziliAntet);
+    const pencere = await temizleVeKaydetAc();
+    fireEvent.click(within(pencere).getByRole('checkbox', { name: "Alttaki yazı ve resmi PDF'ten sil" }));
+    expect(within(pencere).getByText(/örtülür/)).toBeTruthy();
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
+    expect(yuklenen(cagrilar)?.not).toBe('Düzenlendi: Deneme flanş Rev A. Gerekçe: Kurum anteti');
+  });
+
+  it('alanın dışına taşan resim silinmez; kullanıcıya söylenir ve yükleme ikinci basışa kalır', async () => {
+    const cagrilar = await pdfSunucusu(YAZAR, async (b, s) => {
+      s.drawImage(await b.embedPng(BEYAZ_PNG), { x: 0, y: 0, width: 595, height: 842 });
+    });
+    const pencere = await temizleVeKaydetAc();
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    expect(await within(pencere).findByText(/1 resim yalnız örtüldü/)).toBeTruthy();
+    expect(yuklenen(cagrilar)).toBeUndefined();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yine de kaydet' }));
+    await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
+    expect(yuklenen(cagrilar)?.not).toContain('yalnız örtüldü');
   });
 });
