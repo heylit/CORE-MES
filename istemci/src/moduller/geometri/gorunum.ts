@@ -1,4 +1,4 @@
-import type { GeometriDurumu, GeometriOzellik, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
+import type { GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const DURUM_ADI: Readonly<Record<GeometriDurumu, string>> = {
@@ -79,3 +79,19 @@ export function radyusMetni(o: GeometriOzellik): { ust: string; alt: string } {
   const ust = `R${o.yaricapMm === null ? '' : uzunluk(o.yaricapMm)}${o.ic === null ? '' : o.ic ? ' iç köşe' : ' dış kenar'}`;
   return { ust, alt: o.boyMm === null ? '' : `Boy ${uzunluk(o.boyMm)} mm` };
 }
+
+// Montaj (2113): düğümün altındaki parça düğümleri (parçada kendisi); ön sıra korunur.
+export function altParcalar(dugumler: readonly GeometriMontajDugumu[], sira: number): number[] {
+  const altlar = new Map<number, number[]>();
+  for (const d of dugumler) if (d.ust !== null) altlar.set(d.ust, [...(altlar.get(d.ust) ?? []), d.sira]);
+  const tur = new Map(dugumler.map((d) => [d.sira, d.tur]));
+  const sonuc: number[] = [];
+  const yigin = [sira];
+  while (yigin.length > 0) {
+    const s = yigin.pop()!;
+    if (tur.get(s) === 'parca') sonuc.push(s);
+    yigin.push(...[...(altlar.get(s) ?? [])].reverse());
+  }
+  return sonuc;
+}
+export const hacimMetni = (h: number | null): string => (h === null ? 'Yok (açık yüzey)' : buyukSayi(h, 'mm³'));

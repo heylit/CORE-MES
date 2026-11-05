@@ -33,6 +33,25 @@ const OZELLIK = {
     gecis: true, dip: null, ic: null, eksen: [0, 0, -1], konum: [10, 10, 10], yuzler: [1],
   }],
 };
+// Montaj kartının okuduğu cevap (2113; uç 2109): sentetik iki seviyeli montaj, iki aynı pim.
+const dugum = (sira: number, ust: number | null, tur: string, ad: string, en: number[], ustK: number[], obb: number[] | null, hacim: number | null) => ({
+  sira, ust, tur, ad, kutuEn: en, kutuUst: ustK, obb: obb === null ? null : { a: obb[0], b: obb[1], c: obb[2] }, hacimMm3: hacim,
+  alanMm2: tur === 'parca' ? 100 : null, kapali: tur === 'parca' ? true : null,
+});
+const MONTAJ = {
+  revizyonId: 8, oneri: true, motor: 'ornek-motor', montaj: true, neden: null,
+  dugumler: [
+    dugum(1, null, 'montaj', 'ornek-govde', [0, 0, 0], [45, 20, 40], null, null),
+    dugum(2, 1, 'parca', 'ornek-taban', [0, 0, 0], [45, 20, 10], [45, 20, 10], 9000),
+    dugum(3, 1, 'montaj', 'ornek-tutucu-montaji-uzun-adli-alt-montaj', [5, 5, 10], [40, 15, 40], null, null),
+    dugum(4, 3, 'parca', 'ornek-pim', [5, 5, 10], [15, 15, 40], [30, 10, 10], 3000),
+    dugum(5, 3, 'parca', 'ornek-pim', [30, 5, 10], [40, 15, 40], [30, 10, 10], 3000),
+  ],
+  bilesenler: [
+    { sira: 1, ad: 'ornek-taban', adet: 1, obb: { a: 45, b: 20, c: 10 }, hacimMm3: 9000, alanMm2: 100, kapali: true, dugumler: [2] },
+    { sira: 2, ad: 'ornek-pim', adet: 2, obb: { a: 30, b: 10, c: 10 }, hacimMm3: 3000, alanMm2: 100, kapali: true, dugumler: [4, 5] },
+  ],
+};
 const BULUNAMADI = { kod: 'BULUNAMADI', mesaj: 'Bu revizyon bir malzeme kartına bağlı, yayındaki STEP ya da IGES modeli değil.' };
 
 async function sunucu(page: Page): Promise<void> {
@@ -43,6 +62,7 @@ async function sunucu(page: Page): Promise<void> {
     if (yol === '/geometri/analizler/8') return json(200, ANALIZ);
     if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, HAM);
     if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
+    if (yol === '/geometri/montaj/8') return json(200, MONTAJ);
     if (yol === '/geometri/modeller/8/dosya') return r.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.alloc(0) });
     if (yol === '/geometri/modeller/1/guncel') return json(200, { revizyonId: 8 });
     if (yol === '/geometri/modeller/2/guncel') return json(200, { revizyonId: null });
@@ -91,5 +111,21 @@ test.describe('3D Atölyesi', () => {
     await page.getByLabel('Durum', { exact: true }).selectOption('calisiyor');
     await expect(page.getByText('Aramaya ya da süzgece uyan model yok.')).toBeVisible();
     await expect(page.getByText(/3B modeli olan malzeme yok/)).toHaveCount(0);
+  });
+
+  test('montaj kartı (2113): ağaç ve bileşen listesi her genişlikte taşmadan çalışır; seçim özeti adedi söyler', async ({ page, ac, ag }) => {
+    await sunucu(page);
+    await ac('/geometri?rev=8');
+    const kart = page.locator('.tc-g3b-mo');
+    await expect(kart.getByText('Öneri')).toBeVisible();
+    await expect(kart.getByText('1 alt montaj')).toBeVisible();
+    await kart.getByRole('button', { name: /ornek-tutucu-montaji-uzun-adli-alt-montaj/ }).last().click();
+    await expect(kart.getByText('ornek-tutucu-montaji-uzun-adli-alt-montaj (alt montaj, 2 parça)')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    await kart.getByRole('tab', { name: /Bileşen listesi/ }).click();
+    await kart.getByText('ornek-pim', { exact: true }).first().click();
+    await expect(kart.getByText('ornek-pim (2 adet)')).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
   });
 });

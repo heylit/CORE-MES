@@ -264,8 +264,8 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller/42/dosya': DOSYA,
     });
     ac('/geometri?rev=42');
-    // Analiz kartı eski analizi gösterir; özellikler kartı hesap bitene kadar bekler.
-    expect(await screen.findByText('Hesap sürüyor; sonuç gelince burada görünür.')).toBeTruthy();
-    expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler'))).toBe(false);
+    // Analiz kartı eski analizi gösterir; özellikler ve montaj kartı (2113) hesap bitene kadar bekler.
+    expect(await screen.findAllByText('Hesap sürüyor; sonuç gelince burada görünür.')).toHaveLength(2);
+    expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler') || i.yol.startsWith('/geometri/montaj'))).toBe(false);
   });
 });
