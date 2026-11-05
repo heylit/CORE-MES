@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
   MIKTAR_TAM_SAYI, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
-  duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
+  BAGLI_ACIK_EMIR, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
@@ -82,6 +82,16 @@ describe('siparisler kuralları (saf)', () => {
     for (const d of ['onayli', 'kapandi', 'iptal'] as const) assert.equal(duzenlemeReddi(d), YALNIZ_TASLAK);
   });
 
+  test('SIP-04 (2103 a) iptal: bağlı taslak, planlı ya da başlamış emir reddeder; bitmiş ve iptal emir, emirsiz sipariş ve öteki komutlar geçer', () => {
+    assert.equal(bagliEmirReddi('iptal', []), null);
+    assert.equal(bagliEmirReddi('iptal', [{ emirNo: 'E-1', durum: 'bitti' }, { emirNo: 'E-2', durum: 'iptal' }]), null);
+    for (const durum of ['taslak', 'planli', 'basladi'] as const) {
+      assert.equal(bagliEmirReddi('iptal', [{ emirNo: 'E-1', durum: 'bitti' }, { emirNo: 'E-3', durum }]), `${BAGLI_ACIK_EMIR}: E-3.`, durum);
+    }
+    for (const komut of ['onayla', 'kapat'] as const) assert.equal(bagliEmirReddi(komut, [{ emirNo: 'E-3', durum: 'basladi' }]), null, komut);
+    const cok = Array.from({ length: 7 }, (_, i) => ({ emirNo: `E-${i + 1}`, durum: 'planli' as const }));
+    assert.equal(bagliEmirReddi('iptal', cok), `${BAGLI_ACIK_EMIR}: E-1, E-2, E-3, E-4, E-5 ve 2 emir daha.`);
+  });
   test('SIP-04 geçişler: taslak onaylanır, onaylı kapanır, taslak ve onaylı iptal edilir; son durumlardan geçiş yok', () => {
     assert.equal(gecisReddi('taslak', 'onayla'), null);
     assert.equal(gecisReddi('onayli', 'kapat'), null);

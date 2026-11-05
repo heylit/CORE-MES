@@ -1,6 +1,7 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, type TerminAraligi } from '#paylasilan/sozlesme/siparisler.ts';
+import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
   TerminDenemesiKalemi,
@@ -108,6 +109,19 @@ export function gecisHedefi(komut: DurumKomutu): SiparisDurumu {
 
 export function gecisReddi(durum: SiparisDurumu, komut: DurumKomutu): string | null {
   return GECISLER[komut].kaynak.includes(durum) ? null : `${DURUM_ADI[durum]} sipariş ${KOMUT_ADI[komut]}.`.replace(/^./, (h) => h.toLocaleUpperCase('tr'));
+}
+
+// SIP-04 (2103 a): bağlı açık üretim emri olan sipariş iptal edilmez; önce emir kapatılır ya da iptal edilir. İptal olayı yoktur:
+// emir ve plan iptalden habersiz çalışmaya devam ederdi. Açık, bitmemiş ve iptal edilmemiş emirdir (taslak, planlı, başlamış).
+export const BAGLI_ACIK_EMIR = 'Siparişe bağlı açık üretim emri var; önce emirleri kapatın ya da iptal edin';
+const GOSTERILEN_EMIR = 5;
+
+export function bagliEmirReddi(komut: DurumKomutu, emirler: readonly { emirNo: string; durum: EmirDurumu }[]): string | null {
+  if (komut !== 'iptal') return null;
+  const acik = emirler.filter((e) => !(BITEN_EMIR_DURUMLARI as readonly EmirDurumu[]).includes(e.durum)).map((e) => e.emirNo);
+  if (acik.length === 0) return null;
+  const fazla = acik.length > GOSTERILEN_EMIR ? ` ve ${acik.length - GOSTERILEN_EMIR} emir daha` : '';
+  return `${BAGLI_ACIK_EMIR}: ${acik.slice(0, GOSTERILEN_EMIR).join(', ')}${fazla}.`;
 }
 
 // SIP-03: içerik yalnız taslakta değişir; onaylı kayıt onaysız değişmez.

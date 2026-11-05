@@ -16,9 +16,10 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
-  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
+  FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
   TAKVIM_SIPARIS_DURUMU, malzemeReddi, miktarReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
+import { bagliEmirler } from './bagli-emirler.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
@@ -171,6 +172,10 @@ export async function durumDegistir(
   if (komut === 'onayla') {
     const eksik = fiyatEksikReddi((await sorgular.kalemler(db, id)).map((k) => ({ birimFiyat: k.birim_fiyat })));
     if (eksik !== null) throw cakisma(eksik);
+  }
+  if (komut === 'iptal') {
+    const bagli = bagliEmirReddi(komut, await bagliEmirler(db, (await sorgular.kalemler(db, id)).map((k) => k.id)));
+    if (bagli !== null) throw cakisma(bagli);
   }
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
     guncelle: () => sorgular.durumYaz(db, id, { hedef: gecisHedefi(komut), surum: g.surum, kisiId: kullanici.id, iptalNedeni: g.neden ?? null }),

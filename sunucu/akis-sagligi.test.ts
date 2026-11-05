@@ -569,4 +569,30 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       assert.equal(await maliyet(), sinifsiz, 'müşteri sınıfı plan bedeline girmez');
     } finally { mock.timers.reset(); }
   });
+
+  test('15 sipariş iptali (2103 a): bağlı açık emir varken 409 ve sipariş onaylı kalır; emir iptal edilince sipariş iptal edilir', async () => {
+    const f = tamam(await yaz<{ firma: { id: number } }>('planlama', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Iptal Musteri AS', tur: 'musteri' }));
+    const govde = (fiyat: string | null) => ({
+      firmaId: f.firma.id, musteriSiparisNo: 'MS-DENEME-3', siparisTarihi: S.bugun, termin: S.ileri, kdvOrani: '20', odemeKosulu: null, aciklama: null,
+      satirlar: [{ malzemeNo: S.mm, miktar: String(MAMUL_ADET), birimFiyat: fiyat, termin: null, aciklama: null }],
+    });
+    const s = tamam(await yaz<{ id: number; surum: number }>('planlama', '/siparisler/ekle', govde(null)));
+    const gu = tamam(await yaz<{ surum: number }>('mudur', `/siparisler/${s.id}/guncelle`, { ...govde('250'), surum: s.surum }));
+    tamam(await yaz('mudur', `/siparisler/${s.id}/onayla`, { surum: gu.surum }));
+    const sip = tamam(await oku<{ surum: number; satirlar: { id: number }[] }>('mudur', `/siparisler/${s.id}`));
+    const p = tamam(await yaz<{ id: number }>('planlama', `/projeler/siparisten/${s.id}/ac`, { kod: 'E2E.P3', ad: 'Deneme iptal proje', baslangic: S.bugun, bitis: S.ileri, aciklama: null }));
+    const e = tamam(await yaz<{ uretimEmriId: number }>('planlama', `/rota/revizyonlar/${S.rev}/emre-kopyala`,
+      { adet: MAMUL_ADET, teslim: S.ileri, projeId: p.id, siparisSatiriId: sip.satirlar[0]?.id, stoktanRezerve: false }));
+    const em = tamam(await oku<{ emir: { emirNo: string; durum: string; surum: number } }>('planlama', `/adimli-emirler/${e.uretimEmriId}`)).emir;
+
+    const red = await yaz('mudur', `/siparisler/${s.id}/iptal`, { surum: sip.surum, neden: 'müşteri vazgeçti' });
+    assert.equal(red.durum, 409, JSON.stringify(red.govde));
+    assert.match(red.govde.mesaj ?? '', /açık üretim emri var/);
+    assert.ok(red.govde.mesaj?.includes(em.emirNo), red.govde.mesaj);
+    assert.equal(tamam(await oku<{ durum: string }>('mudur', `/siparisler/${s.id}`)).durum, 'onayli');
+
+    tamam(await yaz('planlama', `/adimli-emirler/${e.uretimEmriId}/iptal`, { surum: em.surum }));
+    const iptal = tamam(await yaz<{ durum: string }>('mudur', `/siparisler/${s.id}/iptal`, { surum: sip.surum, neden: 'müşteri vazgeçti' }));
+    assert.equal(iptal.durum, 'iptal');
+  });
 });
