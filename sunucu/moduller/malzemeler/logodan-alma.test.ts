@@ -107,7 +107,7 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  // Bağ kurulmadan önceki test (LMA-3) önce koşar; sonra sahte ayna bağlanır (kablolama'nın bağladığı logo yerine).
+  // LMA-3 kablolamanın bağladığı gerçek logo aynasıyla (boş) önce koşar; sonra sahte ayna bağlanır.
   const baglaCozuculeri = (): void => {
     logoKartAynasiCozucusu(async (_db, o) => ayna
       .filter((k) => k.logoKayitNo > o.sonra && (o.kodlar === undefined || o.kodlar.includes(k.kod)))
@@ -116,11 +116,10 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     logoTmiKodCozucusu(async (_db, kodlar) => new Map([...eslemeler].filter(([l]) => kodlar.includes(l))));
   };
 
-  test('LMA-3 bağ kurulmamışken liste boş ve "bağlı değil" der; alma reddedilir, kart açılmaz', async () => {
-    assert.deepEqual(await liste(), { baglanti: false, kartlar: [], sonraki: null });
+  test('LMA-3 logo aynası boşken liste boş; alma 404 alır, kart açılmaz', async () => {
+    assert.deepEqual(await liste(), { baglanti: true, kartlar: [], sonraki: null });
     const c = await istek('POST', '/malzeme-logo-kartlari/1/al', { tur: 'hammadde', birim: 'kg', onek: null });
-    assert.equal(c.statusCode, 422, c.body);
-    assert.match(c.body, /bağlı değil/);
+    assert.equal(c.statusCode, 404, c.body);
     assert.equal(await vt().tek("SELECT 1 FROM malzeme_katalog_karti WHERE kimlik LIKE 'logo-%'"), null);
   });
 

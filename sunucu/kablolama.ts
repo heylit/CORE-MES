@@ -13,7 +13,10 @@ import { acilSiparisOnaylandi, canliMakineAyrimlari, canliPaylar, malzemeMaliyet
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, kaliteDurumuCozucusu, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
-import { logoBirimSetiCozucusu, logoKodCozucusu, rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
+import {
+  logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu,
+} from './moduller/malzemeler/disari.ts';
+import { logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -40,6 +43,10 @@ export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, 
     kur: () => { kur!(karsilik!); },
   };
 }
+
+// 2118: cari okuması uçta transaction dışında koşar (köprü 60 sn bekleyebilir); logonun ayar okuması aynı bağlantıyı kullanır.
+const cariAra = (db: Db, metin: string) => logo.logodaCariAra({ tx: (f) => f(db) }, metin);
+const cariOku = (db: Db, kod: string) => logo.logodanCariOku({ tx: (f) => f(db) }, kod);
 
 export function sunucununBaglari(): Bag[] {
   return [
@@ -69,6 +76,11 @@ export function sunucununBaglari(): Bag[] {
     bag('logo durumu -> stok malzeme fişi', stok.malzemeFisiLogoCozucusu, logo.malzemeFisiLogoDurumlari),
     bag('logo birim setleri -> malzemeler karşılık', logoBirimSetiCozucusu, logo.gecerliBirimSetiKodlari),
     bag('logo malzeme kodları -> malzemeler yeni stok kodu', logoKodCozucusu, logo.logodaKullanilanMalzemeKodlari),
+    bag('logo malzeme aynası -> malzemeler Logo\'dan gelenler', logoKartAynasiCozucusu, logo.logodakiMalzemeKartlari),
+    bag('logo kod eşlemesi -> malzemeler Logo\'dan alma', logoEslemeYaziciCozucusu, logo.malzemeEslemesiYaz),
+    bag('logo kodundan TMI kodu -> malzemeler', logoTmiKodCozucusu, logo.tmiStokKodlari),
+    bag('logo cari okuması -> müşteri-tedarikçi', (ara: typeof cariAra) => logoCariCozuculeriKaydet({ ara, oku: cariOku }),
+      [logo.logodaCariAra, logo.logodanCariOku].every((f) => typeof f === 'function') ? cariAra : undefined),
     bag('emir bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.emirBittiDinle, rotaEmirBittiYansit),
     bag('iş emri kopyalandı -> rota şartname sabiti', uretimEmirleri.isEmriKopyalandiDinle, isEmriKopyalandiYansit),
     bag('fason hareketi -> sevkiyat', uretimEmirleri.fasonHareketiDinle, sevkiyat.fasonHareketiYansit),
