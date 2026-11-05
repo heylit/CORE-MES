@@ -12,6 +12,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
+import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
+import { kablola } from '../../kablolama.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -400,6 +402,51 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     for (const hatali of [{ odemeVadesiGun: -1 }, { odemeVadesiGun: 366 }, { odemeVadesiGun: 30.5 }]) {
       assert.equal((await gonder(yonetici, '/siparisler/ekle', govde(hatali))).statusCode, 400, JSON.stringify(hatali));
     }
+  });
+
+  test('2132c (2132-1): onaylanan sipariş finansa beklenen tahsilat düşer; vade termin + sipariş vadesi, yoksa firma vadesi, yoksa 0; fatura kalanı düşürür; iptal siler; okuma finans.oku ister', async () => {
+    kablola();
+    const liste = async () => (await oku(yonetici, '/finans/beklenen-tahsilatlar')).json<BeklenenTahsilatlarCevabi>().tahsilatlar;
+    const satiri = async (id: number) => (await liste()).find((x) => x.siparisId === id);
+    const onayla = async (x: SiparisAyrintisi) => {
+      const c = await gonder(yonetici, `/siparisler/${x.id}/onayla`, { surum: x.surum });
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<SiparisAyrintisi>();
+    };
+    // Taslak sipariş tahsilat açmaz.
+    const a = await siparisAc({ odemeVadesiGun: 60 });
+    assert.equal(await satiri(a.id), undefined);
+    const ao = await onayla(a);
+    const t = await satiri(a.id);
+    assert.deepEqual([t?.tutar, t?.kalan, t?.sevkTarihi, t?.sevkKaynagi, t?.vadeGun, t?.vade, t?.siparisNo], ['1500.00', '1500.00', '2026-11-15', 'termin', 60, '2027-01-14', a.no]);
+    // Sipariş vadesi boşsa firmanın varsayılan vadesi, o da boşsa 0.
+    const vadeliFirma = (await gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: `Deneme Firma ${(sayac += 1)}`, tur: 'musteri', vadeGunu: 45 })).json<{ firma: { id: number } }>().firma.id;
+    const b = await onayla(await siparisAc({ firmaId: vadeliFirma }));
+    assert.deepEqual([(await satiri(b.id))?.vadeGun, (await satiri(b.id))?.vade], [45, '2026-12-30']);
+    const c = await onayla(await siparisAc());
+    assert.deepEqual([(await satiri(c.id))?.vadeGun, (await satiri(c.id))?.vade], [0, '2026-11-15']);
+    // Kısmi satış faturası kalanı düşürür; tamamı faturalanınca satır listeden çıkar.
+    const fatura = (tutar: number) => gonder(yonetici, '/finans/belgeler/ekle', {
+      yon: 'gelir', kategori: 'urun_satisi', firmaId: musteriId, belgeNo: `DS-${(sayac += 1)}`, belgeTarihi: '2026-10-20', vade: '2026-12-20', tutar, kdvOrani: 20, siparisId: a.id,
+    });
+    const f1 = await fatura(500);
+    assert.equal(f1.statusCode, 200, f1.body);
+    assert.deepEqual([(await satiri(a.id))?.faturalanan, (await satiri(a.id))?.kalan], ['600.00', '900.00']);
+    assert.equal((await fatura(750)).statusCode, 200);
+    assert.equal(await satiri(a.id), undefined);
+    // Kapanan sipariş kalır; iptal edilen siparişin satırı silinir.
+    const k = await gonder(yonetici, `/siparisler/${b.id}/kapat`, { surum: b.surum });
+    assert.equal(k.statusCode, 200, k.body);
+    assert.notEqual(await satiri(b.id), undefined);
+    const ip = await gonder(yonetici, `/siparisler/${c.id}/iptal`, { surum: c.surum, neden: 'müşteri vazgeçti' });
+    assert.equal(ip.statusCode, 200, ip.body);
+    assert.equal(await satiri(c.id), undefined);
+    // Okuma finans.oku ister; yetkisiz onay da tahsilat yazmaz.
+    assert.equal((await oku(operator, '/finans/beklenen-tahsilatlar')).statusCode, 403);
+    const d = await siparisAc();
+    assert.equal((await gonder(operator, `/siparisler/${d.id}/onayla`, { surum: d.surum })).statusCode, 403);
+    assert.equal(await satiri(d.id), undefined);
+    assert.equal(ao.durum, 'onayli');
   });
 
   test('SIP-15 (E-24) ret: işlemi olmayana her uç 403, salt okuyana yazma 403, planlamaya onay geçişleri 403; olmayan siparişe 404; kayıt değişmez', async () => {

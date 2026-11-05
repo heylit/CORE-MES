@@ -426,6 +426,21 @@ export const beklenenOdemelerCevabi = z.object({
 });
 export type BeklenenOdemelerCevabi = z.output<typeof beklenenOdemelerCevabi>;
 
+// ---- Satış siparişinden beklenen tahsilat (kart 2132c, karar 2132-1) ----
+// Onaylanan sipariş KDV dahil toplamıyla düşer; vade sevk günü artı vade günüdür. Kalan, siparişe bağlı satış faturalarının (iade düşülerek)
+// siparişin para birimindeki toplamı çıkarılmış tutardır; kalanı olmayan sipariş listede yoktur.
+export const SEVK_KAYNAKLARI = ['termin', 'plan', 'gercek'] as const;
+export const beklenenTahsilatlarCevabi = z.object({
+  tahsilatlar: z.array(z.object({
+    id: z.number().int(), siparisId: z.number().int(), siparisNo: z.string(), firmaId: z.number().int(), firmaAdi: z.string(), paraBirimi: z.string(),
+    tutar: numerik, faturalanan: numerik, kalan: numerik, kalanTl: numerik.nullable(),
+    sevkTarihi: tarihSemasi, sevkKaynagi: z.enum(SEVK_KAYNAKLARI), vadeGun: z.number().int(), vade: tarihSemasi, gecikmis: z.boolean(),
+    // Siparişe başka para biriminde fatura bağlanmış: kalan o faturayı saymaz, kullanıcı kontrol eder.
+    baskaParaBirimi: z.boolean(),
+  })),
+});
+export type BeklenenTahsilatlarCevabi = z.output<typeof beklenenTahsilatlarCevabi>;
+
 // ---- Birim maliyetleri (kart #1187): malzeme birim maliyeti, istasyon ve kişi saatlik maliyeti ----
 // Satır yoksa maliyet bilinmiyordur. Tutar dört ondalıktır; cevapta metindir (numeric).
 export const MALIYET_TURLERI = ['malzeme', 'istasyon', 'kisi'] as const;

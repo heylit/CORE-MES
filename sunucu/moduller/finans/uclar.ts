@@ -9,7 +9,7 @@ import {
   satisSevkleriCevabi, satisSevkleriSorgusu, satisSiparisleriCevabi, satisSiparisleriSorgusu, ayarCevabi, ayarGuncelleGovdesi, belgeCevabi, belgeDuzeltGovdesi, belgeEkleGovdesi, belgeListesiCevabi, butceGovdesi, butceListesiCevabi,
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
-  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
+  aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
   kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
@@ -90,6 +90,8 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/ozet', yetki: 'finans.oku', cevap: finansOzetiCevabi, isle: ({ db }) => servis.panoOzeti(db) }),
   // Kart #1124: faturası gelmemiş satın alma siparişlerinin ödeme planı, vadeye göre.
   uc({ yontem: 'GET', yol: '/finans/beklenen-odemeler', yetki: 'finans.oku', cevap: beklenenOdemelerCevabi, isle: ({ db }) => servis.beklenenOdemeler(db) }),
+  // 2132c: onaylı satış siparişlerinin faturalanmamış kalanı, vadeye göre.
+  uc({ yontem: 'GET', yol: '/finans/beklenen-tahsilatlar', yetki: 'finans.oku', cevap: beklenenTahsilatlarCevabi, isle: ({ db }) => servis.beklenenTahsilatlar(db) }),
   // Sayaç oturumla açılır; finans.oku yoksa sayılar null döner (rakam sızmaz).
   uc({
     yontem: 'GET', yol: '/finans/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
