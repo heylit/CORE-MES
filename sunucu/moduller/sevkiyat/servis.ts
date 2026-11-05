@@ -17,8 +17,8 @@ import { emirNolari, fasonHareketiOzeti, siparisSatirlarininEmirleri, uretimEmri
 import type { EmirBittiOlayi, FasonHareketiOlayi } from '../uretim-emirleri/disari.ts';
 import { talepNolari } from '../satin-alma/disari.ts';
 import type { AlimOlayi } from '../satin-alma/disari.ts';
-import { ara, aramaDiziniKur, konumCoz } from './arama.ts';
-import type { AramaDizini, AramaVerisi } from './arama.ts';
+import { ara, ARAMA_SINIRI, aramaDiziniKur, konumCoz } from './arama.ts';
+import type { AramaDizini, AramaSonucu, AramaVerisi } from './arama.ts';
 import { filoPlani, YOL_BAGLANTISI_NEDENLERI } from './cozucu.ts';
 import type { CozucuAraci, CozucuIsi, CozucuNoktasi, CozumKipi, FiloPlani, FiloRotasi, Matris } from './cozucu.ts';
 import {
@@ -837,7 +837,47 @@ export async function adresAra(db: Db, metin: string, kaynak: HaritaKaynagi): Pr
   const noktalar = await noktalariOku(db), paket = await kaynak();
   const aktif = noktalar.filter((n) => n.aktif).map((n) => ({ id: n.id, ad: n.ad, adres: n.adres, boylam: Number(n.boylam), enlem: Number(n.enlem) }));
   const sinir = paket?.yol.bbox ?? null;
-  return { sonuclar: ara(paket?.arama ?? null, aktif, metin, undefined, sinir), kisaBaglanti: konumCoz(metin, sinir) === 'kisa', dizinVar: Boolean(paket?.arama) };
+  const kayitlar = konumCoz(metin, sinir) === null ? await kayitNoktalari(db, metin) : [];
+  const adresler = ara(paket?.arama ?? null, aktif, metin, undefined, sinir);
+  return { sonuclar: [...kayitlar, ...adresler].slice(0, ARAMA_SINIRI), kisaBaglanti: konumCoz(metin, sinir) === 'kisa', dizinVar: Boolean(paket?.arama) };
+}
+
+// Lot numarasından emre çözücü (2106 a): stok bu modülü okuduğu için bu modül stoğu ithal edemez (ADR 0006); kaydı `sunucu/kablolama.ts`
+// yapar. Kayıtsızken lot araması sonuç vermez. Tanınmayan lotta null.
+export type LotEmriCozucusu = (db: Db, lotNo: string) => Promise<number | null>;
+let lotEmriCozucusu: LotEmriCozucusu | null = null;
+// Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
+export function lotEmriCozucusuKaydet(cozucu: LotEmriCozucusu | null): LotEmriCozucusu | null {
+  const onceki = lotEmriCozucusu;
+  lotEmriCozucusu = cozucu;
+  return onceki;
+}
+
+// Kısa metin her emir numarasının içinde geçer; adres sonuçları emir satırları altında kaybolmasın diye kayıt araması üç karakterden başlar.
+const KAYIT_ARAMA_EN_KISA = 3;
+const IS_TURU_ADI: Readonly<Record<sorgu.EmirIsNoktasi['tur'], string>> = { teslimat: 'Teslimat', alim: 'Alım', aktarma: 'Aktarma' };
+const IS_DURUMU_ADI: Readonly<Record<sorgu.EmirIsNoktasi['durum'], string>> = { havuzda: 'Havuzda', planlandi: 'Planlandı', yolda: 'Yolda', tamamlandi: 'Tamamlandı' };
+
+// Emir ve lot numarası (2106 a): o emrin kalemini taşıyan işlerin noktası, yeni iş önce. Lot tam numarayla (büyük küçük harf duyarsız), emir
+// numaranın bir parçasıyla bulunur; lot önce gelir.
+async function kayitNoktalari(db: Db, metin: string): Promise<AramaSonucu[]> {
+  const aranan = metin.trim();
+  if (aranan.length < KAYIT_ARAMA_EN_KISA) return [];
+  const kucuk = aranan.toLocaleLowerCase('tr-TR');
+  const kalemli = await sorgu.kalemliEmirler(db);
+  if (kalemli.length === 0) return [];
+  const nolar = await emirNolari(db, kalemli);
+  const lotEmri = lotEmriCozucusu === null ? null : await lotEmriCozucusu(db, aranan);
+  const lotlu = lotEmri !== null && nolar.has(lotEmri) ? [lotEmri] : [];
+  const emirli = kalemli.filter((id) => !lotlu.includes(id) && (nolar.get(id)?.toLocaleLowerCase('tr-TR').includes(kucuk) ?? false));
+  const satirlar = async (idler: number[]) => (idler.length === 0 ? [] : sorgu.emirlerinIsNoktalari(db, idler, ARAMA_SINIRI));
+  const sonuc = (r: sorgu.EmirIsNoktasi, kategori: 'Lot' | 'Emir'): AramaSonucu => ({
+    ad: r.noktaAd, boylam: Number(r.boylam), enlem: Number(r.enlem), kategori,
+    baglam: [kategori === 'Lot' ? aranan : null, nolar.get(r.uretimEmriId) ?? null, IS_TURU_ADI[r.tur], IS_DURUMU_ADI[r.durum], r.tarih.split('-').reverse().join('.')]
+      .filter((p) => p !== null).join(' · '),
+    tur: 'nokta', noktaId: r.noktaId,
+  });
+  return [...(await satirlar(lotlu)).map((r) => sonuc(r, 'Lot')), ...(await satirlar(emirli)).map((r) => sonuc(r, 'Emir'))].slice(0, ARAMA_SINIRI);
 }
 
 
