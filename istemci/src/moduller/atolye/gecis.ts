@@ -120,6 +120,65 @@ export function acikliklar(bolumler: readonly GecisliBolum[]): Map<number, Acikl
   return sonuc;
 }
 
+// İki bölümün üst üste gelen duvarları (2122-4 a): bölümün her kenarının komşu bölümün bir kenarıyla aynı doğruda (duvar payı
+// içinde) çakışan kısmı, bu bölümün kenarı boyunca [baş, son] (metre). Kapı, geçiş ve sınır kaldırma buradan açılır.
+export interface OrtakDuvar {
+  komsu: number;
+  kenar: KapiKenari;
+  bas: number;
+  son: number;
+}
+
+const KENARLAR: readonly KapiKenari[] = ['arka', 'on', 'sol', 'sag'];
+
+export function ortakDuvarlar(bolumler: readonly GecisliBolum[], salonId: number): OrtakDuvar[] {
+  const a = bolumler.find((b) => b.salonId === salonId);
+  if (!a) return [];
+  const sonuc: OrtakDuvar[] = [];
+  for (const kenar of KENARLAR) {
+    const boy = kenarBoyu(kenar, a.g, a.d);
+    const u0 = fabrikayaCevir(a.konum, kenarNoktasi(kenar, 0, a.g, a.d));
+    const u1 = fabrikayaCevir(a.konum, kenarNoktasi(kenar, boy, a.g, a.d));
+    for (const b of bolumler) {
+      if (b.salonId === a.salonId) continue;
+      const p0 = bolumeCevir(b.konum, u0);
+      const p1 = bolumeCevir(b.konum, u1);
+      for (const kb of KENARLAR) {
+        // Komşunun kenarı: o kenarın doğrusuna dik uzaklık ve kenar boyunca konum (komşunun metresi).
+        const dik = (p: Nokta2) => (kb === 'arka' ? p.z : kb === 'on' ? p.z - b.d : kb === 'sol' ? p.x : p.x - b.g);
+        if (Math.abs(dik(p0)) > DUVAR_PAYI || Math.abs(dik(p1)) > DUVAR_PAYI) continue;
+        const boyunca = (p: Nokta2) => (yatay(kb) ? p.x : p.z);
+        const t0 = boyunca(p0);
+        const t1 = boyunca(p1);
+        if (Math.abs(t1 - t0) < 1e-9) continue;
+        // Komşunun kenarının [0, boyu] aralığı bu kenarın parametresine (0 baş, boy son) çevrilir.
+        const bb = kenarBoyu(kb, b.g, b.d);
+        const v0 = ((0 - t0) / (t1 - t0)) * boy;
+        const v1 = ((bb - t0) / (t1 - t0)) * boy;
+        const bas = Math.max(0, Math.min(v0, v1));
+        const son = Math.min(boy, Math.max(v0, v1));
+        if (son - bas >= ENAZ_ORTAK) sonuc.push({ komsu: b.salonId, kenar, bas: r2(bas), son: r2(son) });
+      }
+    }
+  }
+  return sonuc;
+}
+
+// Ortak duvarı baştan sona açan açık geçişler: en çok GECIS_ENCOK genişlikte, uç uca. Sınırlar 2 cm'lik adımlarda ve
+// uçlardan 1 cm içeride kurulur: geçiş ortası tam santimetrede kalır, kayıttaki yuvarlama geçişi kenardan taşırmaz.
+export function sinirParcalari(d: Pick<OrtakDuvar, 'bas' | 'son'>): { orta: number; genislik: number }[] {
+  const b = Math.ceil((Math.round(d.bas * 100) + 1) / 2);
+  const e = Math.floor((Math.round(d.son * 100) - 1) / 2);
+  const boy = e - b;
+  if (boy * 2 < GECIS_ENAZ * 100) return [];
+  const n = Math.ceil(boy / (GECIS_ENCOK * 50));
+  const sinir = Array.from({ length: n + 1 }, (_, i) => b + Math.round((boy * i) / n));
+  return sinir.slice(1).map((son, i) => {
+    const bas = sinir[i] ?? b;
+    return { orta: (bas + son) / 100, genislik: (son - bas) / 50 };
+  });
+}
+
 export interface Kapi {
   // Geçilen iki bölüm; açıklık birinci bölümün kenarında, ortak kısmı [bas, son] (o bölümün metresi).
   bir: number;

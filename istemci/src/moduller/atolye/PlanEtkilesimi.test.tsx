@@ -90,13 +90,13 @@ const YERLESIM_B = {
   ],
 } satisfies YerlesimCevabi;
 
-function goster(bolum: YerlesimCevabi = YERLESIM, fabrika = false) {
+function goster(bolum: YerlesimCevabi = YERLESIM, fabrika = false, ikinci: YerlesimCevabi = YERLESIM_B) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <MemoryRouter>
       <QueryClientProvider client={istemci}>
         <BildirimSaglayici>
-          <YerlesimDuzenleyici salonId={fabrika ? null : 1} bolumler={fabrika ? [bolum, YERLESIM_B] : [bolum]} kapat={() => {}} kaydedildi={() => {}} />
+          <YerlesimDuzenleyici salonId={fabrika ? null : 1} bolumler={fabrika ? [bolum, ikinci] : [bolum]} kapat={() => {}} kaydedildi={() => {}} />
         </BildirimSaglayici>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -213,5 +213,19 @@ describe('plan düzenleyici etkileşimi (2122)', () => {
     expect(within(panel).getByText('Saydamlık %55')).toBeTruthy();
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/kroki-ayari/degistir')).toBe(true));
     expect(cagrilar.filter((c) => c.yol === '/atolye/kroki-ayari/degistir').map((c) => c.govde)).toEqual([{ saydamlik: 55, beklenen: 40 }]);
+  });
+
+  it('fabrika planında seçili bölümün komşuyla ortak duvarı listelenir; sınır kaldırılınca geçiş komşuyu bağlar (2122-4 a)', () => {
+    sunucuKur();
+    // B, A'nın sağ duvarına (x 40) değecek yerde: fabrikada x 40-50, z 0-20.
+    const bitisik = { ...YERLESIM_B, salon: { ...YERLESIM_B.salon, fabrika: { x: '50.00', z: '0.00', donus: '90.0' } } } satisfies YerlesimCevabi;
+    const { duzen, plan } = goster(YERLESIM, true, bitisik);
+    fireEvent.pointerDown(within(plan).getByText('S1 · Deneme salonu').closest('g') as Element, { pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    const komsu = within(duzen).getByRole('region', { name: 'Komşu bölümler' });
+    expect(within(komsu).getByText(/sağ duvar · 20 m/)).toBeTruthy();
+    fireEvent.click(within(komsu).getByRole('button', { name: 'Sınırı kaldır' }));
+    expect(within(duzen).getByRole('heading', { name: /Açık geçiş · S1/ })).toBeTruthy();
+    expect(within(duzen).getByText('S2 · İkinci bölüm ile bağlar.')).toBeTruthy();
   });
 });
