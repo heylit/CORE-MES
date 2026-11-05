@@ -52,6 +52,8 @@ interface Ozellikler {
   // null: fabrika krokisi (bölümler üstüne yerleşir); dolu: bölümün krokisi.
   kapsam: KrokiKapsami;
   kroki: Kroki | null | undefined;
+  // Bölümün kendi krokisi yokken kullanılan fabrika krokisi (2122-3 a): görünüm ayarlanır, hizalama fabrikada kalır.
+  ortak?: Kroki | null;
   sayfa: KrokiSayfasi | null;
   yukleniyor: boolean;
   hata: string | null;
@@ -191,6 +193,19 @@ export function KrokiPaneli(o: Ozellikler) {
     <Dugme simge="fit" onClick={() => merkezAcikYaz(true)}>Çizim Merkezi'nden</Dugme>
   );
 
+  const gorunum = (
+    <section className="tc-atolye-palet-grup" aria-label="Görünüm">
+      <h4>Görünüm</h4>
+      <IsaretKutusu etiket="Krokiyi göster" checked={o.gorunur} onChange={(e) => o.gorunurYaz(e.target.checked)} />
+      <label className="tc-atolye-kaydirac">
+        <span>Saydamlık %{Math.round(o.saydamlik * 100)}</span>
+        <input type="range" min={10} max={100} step={5} value={Math.round(o.saydamlik * 100)} onChange={(e) => o.saydamlikYaz(Number(e.target.value) / 100)} />
+      </label>
+      <IsaretKutusu etiket="Krokinin çizgilerine yapış" checked={o.yapis} onChange={(e) => o.yapisYaz(e.target.checked)} />
+      {sayfa && sayfa.cizgiler.length === 0 && <p className="tc-atolye-ipucu">Bu PDF'te çizgi yok (taranmış görüntü): yapışma çalışmaz, ölçek yine iki noktayla ayarlanır.</p>}
+    </section>
+  );
+
   return (
     <aside className="tc-atolye-palet tc-atolye-kroki-panel" aria-label="Kroki">
       <div className="tc-atolye-palet-ust">
@@ -225,6 +240,23 @@ export function KrokiPaneli(o: Ozellikler) {
           </div>
           {tamam && <p className="tc-atolye-ipucu">Yüklenince mevcut krokinin ve hizalamasının yerini alır.</p>}
         </section>
+      ) : !tamam && o.ortak ? (
+        <>
+          <section className="tc-atolye-palet-grup" aria-label="Ortak kroki">
+            <p className="tc-atolye-ipucu">
+              <b>Fabrika krokisi</b> · {o.ortak.ad}
+              <br />Bölüm fabrika planındaki yerine göre krokiye oturur; ölçek ve hizalama fabrika planında ayarlanır.
+            </p>
+            {o.yukleniyor && <DurumKutusu durum="yukleniyor" mesaj="Kroki okunuyor" />}
+            {o.hata && <p className="tc-atolye-hata">{o.hata}</p>}
+            <div className="tc-atolye-kart-eylem">
+              <Dugme simge="upload" yukleniyor={okunuyor} onClick={() => girdi.current?.click()}>Bölüme ayrı kroki</Dugme>
+              {merkezDugmesi}
+            </div>
+            {merkezSecici}
+          </section>
+          {gorunum}
+        </>
       ) : !tamam ? (
         <section className="tc-atolye-palet-grup">
           <p className="tc-atolye-ipucu">{fabrika
@@ -261,16 +293,7 @@ export function KrokiPaneli(o: Ozellikler) {
             {merkezSecici}
           </section>
 
-          <section className="tc-atolye-palet-grup" aria-label="Görünüm">
-            <h4>Görünüm</h4>
-            <IsaretKutusu etiket="Krokiyi göster" checked={o.gorunur} onChange={(e) => o.gorunurYaz(e.target.checked)} />
-            <label className="tc-atolye-kaydirac">
-              <span>Saydamlık %{Math.round(o.saydamlik * 100)}</span>
-              <input type="range" min={10} max={100} step={5} value={Math.round(o.saydamlik * 100)} onChange={(e) => o.saydamlikYaz(Number(e.target.value) / 100)} />
-            </label>
-            <IsaretKutusu etiket="Krokinin çizgilerine yapış" checked={o.yapis} onChange={(e) => o.yapisYaz(e.target.checked)} />
-            {sayfa && sayfa.cizgiler.length === 0 && <p className="tc-atolye-ipucu">Bu PDF'te çizgi yok (taranmış görüntü): yapışma çalışmaz, ölçek yine iki noktayla ayarlanır.</p>}
-          </section>
+          {gorunum}
 
           <section className="tc-atolye-palet-grup" aria-label="Hizalama">
             <h4>Hizalama</h4>

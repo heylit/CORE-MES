@@ -18,7 +18,7 @@ import { useDepoYazimi } from './depo-yazimi.ts';
 import { OgeSimgesi } from './plan-simgeleri.tsx';
 import { OzellikPaneli } from './OzellikPaneli.tsx';
 import { PlanCizimi } from './PlanCizimi.tsx';
-import { fabrikaKaydet, krokiHizala, stokEslemeDurumu, stokOkurMu, useKroki, useMerkezModelleri, useModeller } from './veri.ts';
+import { fabrikaKaydet, krokiAyariDegistir, krokiHizala, stokEslemeDurumu, stokOkurMu, useKroki, useKrokiAyari, useMerkezModelleri, useModeller } from './veri.ts';
 import {
   dondur as krokiDondur, eksenOturt, hizalamaYuvarla, ilkHizalama, kutuyaYapis, metreMetni, noktayaTasi, noktayaYapis, olcekAyarla,
   tasi as krokiTasi, uzaklik, yapismaVerisiKur, yerelle, yerlestir,
@@ -78,6 +78,8 @@ type Arac =
 
 const HIZA_SIRASI: HizaAdimi[] = ['olcek', 'yon', 'kose', 'salon'];
 const YAPISMA_PIKSEL = 10;
+// Ortak saydamlık okunamazsa (yetki yok, sunucu yanıtı gelmedi) ayarın varsayılanı (%70) kullanılır.
+const SAYDAMLIK_YEDEGI = 0.7;
 // Seçmek için basmak öğeyi oynatmasın: imleç bu kadar piksel kaymadan sürükleme başlamaz (parmakta daha geniş).
 const SURUKLEME_ESIGI = { fare: 4, dokunma: 8 };
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -121,10 +123,47 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   // ---------- kroki stüdyosu ----------
   const krokiSorgusu = useKroki(salonId);
   const kroki = krokiSorgusu.data?.kroki;
-  const altlik = useKrokiAltligi(kroki);
+  // Ortak kroki (2122-3 a): bölümün kendi krokisi yoksa fabrikada bir kez yüklenip hizalanan kroki bölümün metresine
+  // getirilir ve bölüm krokisi gibi kullanılır (yapışma, çizerek ekleme); ölçek ve hizalama yalnız fabrikada değişir.
+  const fabrikaKroki = useKroki(null, salonId !== null).data?.kroki;
+  const fabrikaHizasi = fabrikaKroki?.tamam ? fabrikaKroki.hizalama : null;
+  const ortakKroki = salonId !== null && krokiSorgusu.isSuccess && !kroki?.tamam && fabrikaHizasi !== null && bolumYeri !== null;
+  const altlik = useKrokiAltligi(ortakKroki ? fabrikaKroki : kroki);
   const [krokiAcik, krokiAcikYaz] = useState(false);
   const [krokiGorunur, krokiGorunurYaz] = useState(true);
-  const [saydamlik, saydamlikYaz] = useState(0.7);
+  // Saydamlık herkes için tek değerdir (2122-2 b): sunucudan gelir, kaydırıcı bırakılınca haritayı düzenleyen (atolye.yaz,
+  // 2122-5 a) için saklanır. Yetkisi olmayan yalnız bu açılışta değiştirir.
+  const krokiAyari = useKrokiAyari(!yalnizRaf);
+  const saydamlikYazar = oturum.data?.islemler.includes('atolye.yaz') === true;
+  const [yerelSaydamlik, yerelSaydamlikYaz] = useState<number | null>(null);
+  const saydamlik = yerelSaydamlik ?? (krokiAyari.data ? krokiAyari.data.saydamlik / 100 : SAYDAMLIK_YEDEGI);
+  const saydamlikKaydet = useMutation({
+    mutationFn: krokiAyariDegistir,
+    onSuccess: (c) => {
+      istemci.setQueryData(anahtarlar.krokiAyari, c);
+      yerelSaydamlikYaz((y) => (y !== null && Math.round(y * 100) === c.saydamlik ? null : y));
+    },
+    onError: (hata) => {
+      yerelSaydamlikYaz(null);
+      if (hata instanceof ApiHatasi && hata.durum === 409) bildir('bilgi', 'Kroki saydamlığını başkası değiştirdi; güncel değer geldi.');
+      else bildir('hata', hataIletisi(hata, 'Saydamlık kaydedilemedi.'));
+      void krokiAyari.refetch();
+    },
+  });
+  // Kaydırıcı sürüklenirken her adım kaydedilmez: son değer kısa bir bekleyişten sonra (ya da düzenleyici kapanırken) gider.
+  const saydamlikBekleyen = useRef<{ zaman: ReturnType<typeof setTimeout>; gonder: () => void } | null>(null);
+  const saydamlikYaz = (v: number) => {
+    yerelSaydamlikYaz(v);
+    if (!saydamlikYazar || !krokiAyari.isSuccess) return;
+    const beklenen = krokiAyari.data.saydamlik;
+    if (saydamlikBekleyen.current) clearTimeout(saydamlikBekleyen.current.zaman);
+    const gonder = () => { saydamlikBekleyen.current = null; saydamlikKaydet.mutate({ saydamlik: Math.round(v * 100), beklenen }); };
+    saydamlikBekleyen.current = { zaman: setTimeout(gonder, 600), gonder };
+  };
+  useEffect(() => () => {
+    const b = saydamlikBekleyen.current;
+    if (b) { clearTimeout(b.zaman); b.gonder(); }
+  }, []);
   const [yapis, yapisYaz] = useState(true);
   const [cizerekEkle, cizerekEkleYaz] = useState(true);
   const [arac, aracYaz] = useState<Arac | null>(null);
@@ -136,11 +175,12 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   // Sürüklerken ve kayıt sürerken gösterilen hizalama (kayıt bitince sunucununki geçer).
   const [taslakHiza, taslakHizaYaz] = useState<Hizalama | null>(null);
   const sayfa = altlik.sayfa;
-  const kh = kroki?.hizalama ?? null;
-  const kayitliHiza = useMemo<Hizalama | null>(
-    () => (kh ? { olcek: Number(kh.olcek), donus: Number(kh.donus), x: Number(kh.x), z: Number(kh.z) } : null),
-    [kh?.olcek, kh?.donus, kh?.x, kh?.z],
-  );
+  const kh = (ortakKroki ? fabrikaHizasi : kroki?.hizalama) ?? null;
+  const kayitliHiza = useMemo<Hizalama | null>(() => {
+    if (!kh) return null;
+    const h = { olcek: Number(kh.olcek), donus: Number(kh.donus), x: Number(kh.x), z: Number(kh.z) };
+    return ortakKroki && bolumYeri ? yerelle(h, bolumYeri) : h;
+  }, [kh?.olcek, kh?.donus, kh?.x, kh?.z, ortakKroki, bolumYeri]);
   const salonG = t.salon.genislik;
   const salonD = t.salon.derinlik;
   const geciciHiza = useMemo(() => {
@@ -845,6 +885,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
           <KrokiPaneli
             kapsam={salonId}
             kroki={kroki}
+            ortak={ortakKroki ? fabrikaKroki : null}
             sayfa={sayfa}
             yukleniyor={altlik.yukleniyor}
             hata={altlik.hata}
@@ -895,7 +936,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
             altlik={krokiGorunur ? (
               <>
                 {/* Öbür kapsamın krokileri (yalnız görüntü): bölümde fabrika krokisi, fabrikada bölümlerin krokileri. */}
-                {bolumYeri && <EkKroki kapsam={null} donustur={(h) => yerelle(h, bolumYeri)} saydamlik={saydamlik * 0.6} />}
+                {bolumYeri && !ortakKroki && <EkKroki kapsam={null} donustur={(h) => yerelle(h, bolumYeri)} saydamlik={saydamlik * 0.6} />}
                 {t.bolumler?.map((b) => <EkKroki key={b.anahtar} kapsam={b.salonId} donustur={(h) => yerlestir(h, b)} saydamlik={saydamlik} />)}
                 {sayfa && hiza && <KrokiAltligi sayfa={sayfa} hizalama={hiza} saydamlik={saydamlik} parcalar={yapismaVerisi?.parcalar ?? null} />}
               </>

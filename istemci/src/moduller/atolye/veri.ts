@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
   AramaCevabi, FabrikaCevabi, FabrikaKayitCevabi, FabrikaKayitGovdesi, Kroki, KrokiCevabi, KrokiHizalaGovdesi, GozKalemi, GozKalemiGovdesi, GozKalemleriCevabi, GozlerCevabi, Model, ModelGovdesi, ModelParcaCevabi, ModelParcaYazCevabi, KalemGorunumleriCevabi, KalemGorunumuGovdesi, MerkezKrokileriCevabi, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaGovdesi, MerkezModelleriCevabi, MalzemeModelleriCevabi, ModellerCevabi, YerlesmemisIstasyonlarCevabi, RotaCevabi,
-  SalonlarCevabi, YerlesimCevabi,
+  SalonlarCevabi, YerlesimCevabi, KrokiAyariCevabi, KrokiAyariGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
 import type { GozStoklariCevabi, HaritaOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozlesme/arkon.ts';
@@ -364,6 +364,21 @@ export async function krokiGonder(kapsam: KrokiKapsami, ad: string, sayfa: numbe
 
 export function krokiHizala(kapsam: KrokiKapsami, govde: KrokiHizalaGovdesi): Promise<Kroki> {
   return api.post<Kroki>(`${krokiYolu(kapsam)}/hizala`, govde);
+}
+
+// Ortak kroki saydamlığı (2122-2 b). Okuma yetkisi olmayan (ör. depo kipi) varsayılanla çalışır: sorgu hata verir, ekran
+// tanımdaki varsayılanı kullanır.
+export function useKrokiAyari(acik = true) {
+  return useQuery({
+    queryKey: anahtarlar.krokiAyari,
+    queryFn: () => api.get<KrokiAyariCevabi>('/atolye/kroki-ayari'),
+    enabled: acik,
+    retry: false,
+  });
+}
+
+export function krokiAyariDegistir(govde: KrokiAyariGovdesi): Promise<KrokiAyariCevabi> {
+  return api.post<KrokiAyariCevabi>('/atolye/kroki-ayari/degistir', govde);
 }
 
 export function krokiSil(kapsam: KrokiKapsami): Promise<void> {
