@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ArsivKartiCevabi, ArsivKartlariCevabi,
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
-  KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
+  KatalogKartiIptalCevabi, KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
@@ -267,7 +267,7 @@ export function useKartKaydet() {
 export function useKartIptal() {
   const istemci = useQueryClient();
   return useMutation({
-    mutationFn: (kimlik: string) => api.post(`/malzeme-katalogu-kartlari/${yolParcasi(kimlik)}/iptal`),
+    mutationFn: (kimlik: string) => api.post<KatalogKartiIptalCevabi>(`/malzeme-katalogu-kartlari/${yolParcasi(kimlik)}/iptal`),
     onSettled: () => istemci.invalidateQueries({ queryKey: [...MALZEMELER_YENI, 'kartlar'] }),
   });
 }

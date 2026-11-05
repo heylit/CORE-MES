@@ -199,8 +199,10 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
 
   const sil = async (k: KatalogKarti): Promise<boolean> => {
     try {
-      await iptal.mutateAsync(k.kimlik);
-      bildir('tamam', `${k.kayit.com.kod} silindi.`);
+      const c = await iptal.mutateAsync(k.kimlik);
+      bildir('tamam', c.logodaPasifeAliniyor
+        ? `${k.kayit.com.kod} Logo'da pasife alınmak üzere sıraya alındı; o sürede pasif. Sonucu Logo gönderimi sayfasında görünür.`
+        : `${k.kayit.com.kod} silindi.`);
       return true;
     } catch (e) {
       bildir('hata', kayitHatasi(e).ileti);

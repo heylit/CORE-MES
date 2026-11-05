@@ -17,7 +17,8 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
 // Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
-// /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Hepsinin cevap biçimi VARSAYIM.
+// /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Kartı kullanım dışı bırakma (2114b):
+// POST /api/Material/{ref}/deactivate ve /api/{Purchase|Sales}Service/{ref}/deactivate (gövde { code }). Hepsinin cevap biçimi VARSAYIM.
 
 const FIS_UCLARI = Object.values(MALZEME_FISI_UCU).join('|');
 const FIS_EKLE = new RegExp(`^/api/MaterialSlip/(Add(?:${FIS_UCLARI}))$`);
@@ -97,6 +98,8 @@ export interface SahteKopru {
   logoStoklari: Record<string, unknown>[];
   logoCarileri: Record<string, unknown>[];
   sayfaBoyu: number;
+  // 2114b: Logo'da kullanım dışı bırakılan kart kodları (istek sırasıyla; kart haritada kalır).
+  pasifKartlar: string[];
   kapat(): Promise<void>;
 }
 
@@ -163,6 +166,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     logoStoklari: [],
     logoCarileri: [],
     sayfaBoyu: 500,
+    pasifKartlar: [],
     istekler: [],
     birimSetleri: [
       { code: '05', name: 'ADET' }, { code: '06', name: 'KG' }, { code: '07', name: 'M' },
@@ -427,6 +431,20 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         if (ref === undefined) { json(cevap, 200, { success: false, logicalRef: 0, error: 'Card not found', validate: null }); return; }
         if (kopru.senaryo === 'dogrulama') { ret(); return; }
         kopru.adGuncellemeleri.set(kod, String(nesne[malzeme ? 'name' : 'DESCRIPTION'] ?? ''));
+        basari(ref);
+        return;
+      }
+      // 2114b: kart kayıt numarasıyla kullanım dışı bırakılır (silinmez); `code` kayıttaki kartın koduyla uyuşmalı. Zaten kullanım dışı kart başarıdır.
+      const kartPasif = /^\/api\/(Material|PurchaseService|SalesService)\/(\d+)\/deactivate$/.exec(yol);
+      if (istek.method === 'POST' && kartPasif) {
+        const harita = kartPasif[1] === 'Material' ? kopru.kartlar : kopru.hizmetKartlari;
+        const ref = Number(kartPasif[2]);
+        const kod = [...harita.entries()].find(([, r]) => r === ref)?.[0];
+        if (kod === undefined) { json(cevap, 404, { success: false, logicalRef: 0, error: 'Card not found', validate: null }); return; }
+        if (nesne['code'] !== kod) { json(cevap, 200, { success: false, logicalRef: 0, error: `Kayıttaki kartın kodu farklı (${kod}).`, validate: null }); return; }
+        if (kopru.senaryo === 'dogrulama') { ret(); return; }
+        if (!kopru.pasifKartlar.includes(kod)) kopru.pasifKartlar.push(kod);
+        if (kopru.senaryo === 'cevap-kayboldu') { istek.socket.destroy(); return; }
         basari(ref);
         return;
       }

@@ -52,6 +52,13 @@ const zamanMetni = (z: string | null): string | null =>
 // Demirbaşa tür karşılığı verilemez (sunucu reddeder), bu yüzden bekleyen demirbaş hiç gitmez: "Bekliyor" ve eksik yerine bunu söyler.
 const demirbasGitmez = (k: DurumKarti): boolean => k.tur === 'demirbas' && k.durum === 'bekliyor';
 
+const PASIF = {
+  bekliyor: { ad: "Logo'da pasife alınmayı bekliyor", ton: 'uyari', simge: 'clock' },
+  hata: { ad: "Logo'da pasife alınamadı, yeniden denenecek", ton: 'hata', simge: 'alert' },
+  reddedildi: { ad: "Logo pasife almayı reddetti; kart pasif", ton: 'hata', simge: 'alert' },
+  tamam: { ad: "Logo'da kullanım dışı", ton: 'pasif', simge: 'pause' },
+} as const;
+
 const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, kirilmaz: true, hucre: (k) => k.kod },
   { anahtar: 'ad', baslik: 'Ad', hucre: (k) => k.ad },
@@ -67,6 +74,8 @@ const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
         {/* Logo'daki kartın adı değişince yeni ad bağlantıyla gider; gidene kadar burada görünür (kart #783). */}
         {k.guncelleme?.durum === 'bekliyor' && <Rozet ton="uyari"><Simge ad="clock" boyut="k" />Ad güncellemesi bekliyor</Rozet>}
         {k.guncelleme?.durum === 'hata' && <Rozet ton="hata"><Simge ad="alert" boyut="k" />Ad güncelleme hatası</Rozet>}
+        {/* 2114b: silinen kart Logo'dan silinmez, Logo'da pasife alınır; ret kalıcıdır, kart pasif kalır. */}
+        {k.pasif && <Rozet ton={PASIF[k.pasif.durum].ton}><Simge ad={PASIF[k.pasif.durum].simge} boyut="k" />{PASIF[k.pasif.durum].ad}</Rozet>}
       </span>
     ),
   },
@@ -74,7 +83,7 @@ const KART_SUTUNLARI: readonly Sutun<DurumKarti>[] = [
     anahtar: 'eksikler', baslik: 'Eksikler',
     hucre: (k) => (k.eksikler.length === 0 || demirbasGitmez(k) ? null : <span className="tc-logo-eksik">{k.eksikler.map((e) => EKSIK_ADLARI[e]).join(', ')}</span>),
   },
-  { anahtar: 'hata', baslik: 'Son hata', hucre: (k) => (k.guncelleme?.durum === 'hata' ? k.guncelleme.hata : k.hata) },
+  { anahtar: 'hata', baslik: 'Son hata', hucre: (k) => k.pasif?.hata ?? (k.guncelleme?.durum === 'hata' ? k.guncelleme.hata : k.hata) },
   { anahtar: 'kayitNo', baslik: 'Logo kayıt no', mono: true, hucre: (k) => k.kayitNo },
   { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (k) => zamanMetni(k.zaman) },
 ];

@@ -29,6 +29,21 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
    ayar dosyasındadır (depo dışı); TMI tarafı yalnız `TMIV2_LOGO_KOPRU_*` değişkenlerini okur. Depoda yalnız yer tutuculu `ornek.ayar` vardır.
 7. **Canlı deneme yalnız test kayıtlarıyla.** `--deneme` yalnız `TMI-ERP-TEST-001` malzemesini ve `TMI-ERP-` önekli fişleri kullanır,
    açtığını siler; gerçek kayıt silinmez.
+8. **Silinen kartın Logo'da pasife alınması (2114b, kararlar 2114-2 teyit, 2114-5 a, 2114-7).** TMI'de silinen ve Logo'ya gönderilmiş
+   malzeme ya da hizmet kartı Logo'dan silinmez; yardımcı onu Logo'da kullanım dışı bırakır: `POST /api/Material/{logoKayitNo}/deactivate`
+   (hizmet: `/api/PurchaseService|SalesService/{logoKayitNo}/deactivate`), gövde `{ "code": kod }`.
+   - Kayıttaki kartın kodu `code` ile tutmazsa dokunmaz. Logo Objects ile kartın `ACTIVE` alanına 1 yazılır (SQL ile yazılmaz, madde 4);
+     ardından SQL ile (yalnız `SELECT`) kartın kullanım dışı olduğu doğrulanır. Zaten kullanım dışı kart yazılmadan başarıdır. Kart yoksa
+     `404 Card not found` döner; TMI bunu ret sayar. Logo'daki hareketler ve kart durur; Logo kullanımı engel değildir.
+   - TMI tarafında istek kartta kuyruğa girer (kart o sürede pasif) ve gönderim gibi giden kutusundan gider: `logo_giden`'de işlem türü
+     `pasif` olan satır (var olan satırlar `gonder`). Niyet önce kalıcı yazılır, köprü çağrısı sonraki turda ve işlem dışındadır. İstek yoldayken
+     silinen kartın Logo'da açıldığı anlaşılırsa o kart da pasife alınmak üzere kuyruğa girer.
+   - Logo onaylarsa TMI kartı arşive düşer (iptal; 2114-3 a); Logo kayıt numarası ve gönderim kaydı kalır. Kart Logo'da durduğu için Arşiv'den
+     kalıcı silinmez. Arşiv'den geri gelen kart TMI'de pasif döner, Logo'da kullanım dışı kalır.
+   - Logo reddederse kart pasif kalır; neden Logo gönderimi sayfasında kartın satırında görünür ve yeniden denenmez (kullanıcı yeniden
+     isteyebilir). Köprüye ulaşılamazsa geri çekilerek yeniden denenir. Logo bağlantısı kapalıyken istek alınmaz.
+   - Canlı deneme yalnız `TMI-ERP-TEST-001` ile (madde 7): test kartı kullanım dışı bırakılmaz; `--deneme` ucu yanlış kodla çağırıp kod
+     kalkanını ve `ACTIVE` okumasını dener.
 
 ## Sonuçlar
 
@@ -47,3 +62,5 @@ Logo istemcisi TMI sunucusuyla aynı bilgisayardadır. Yazma kuralları kullanı
 - Gerçek Logo'da hiçbir yazma denenmedi; sözleşme sahte Logo ile sınandı. Varsayılan sütun ve etiketler `SqlOkuma.cs` `Sorgular.Dogrulanmadi`
   listesinde ve `kurulum/logo-yardimcisi.md`'de; `--deneme` ile gerçek Logo'da doğrulanır.
 - Logo bilgisayarında .NET Framework 4.x'in kurulu olduğu (VARSAYIM; Logo istemcisi .NET Framework ister).
+- Kartı pasife alma (madde 8): Logo Objects'te malzeme ve hizmet kartının `ACTIVE` alanının adı ve değeri (1 kullanım dışı) ile
+  `SRVCARD.ACTIVE` sütunu gerçek Logo'da denenmedi (`--deneme` gerçek kartı değiştirmez).

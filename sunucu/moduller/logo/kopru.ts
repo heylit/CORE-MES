@@ -31,6 +31,10 @@ export interface KopruIstemcisi {
   // Kart güncelleme (not 2.1, 2.2: UpdateRich, koddan kayıt bulunur).
   malzemeGuncelle(govde: { code: string; name: string }): Promise<KopruSonucu>;
   hizmetGuncelle(yon: HizmetYonu, govde: Record<string, string | number>): Promise<KopruSonucu>;
+  // 2114b (ADR 0017 eki 8, 2114-7): kartı Logo kayıt numarasıyla kullanım dışı bırakır, silmez; yardımcı kayıttaki kartın kodunu `kod`la
+  // karşılaştırır. Zaten kullanım dışı kart başarıdır. 404 (kart yok, eski yardımcı ya da bilinmeyen yol) reddir.
+  malzemePasifeAl(logoKayitNo: string, kod: string): Promise<KopruSonucu>;
+  hizmetPasifeAl(yon: HizmetYonu, logoKayitNo: string, kod: string): Promise<KopruSonucu>;
   // Satış teklifi ve tekliften sipariş (not 2.6, 2.7). Müşterinin Logo'da CRM satış müşterisi kaydı olmalı (yoksa validate 4208); 404 "yok".
   satisMusterisiVarMi(cariKodu: string): Promise<KopruSonucu>;
   satisTeklifiEkle(govde: Record<string, unknown>): Promise<SatirliSonuc>;
@@ -306,6 +310,12 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     },
     async hizmetGuncelle(yon, govde) {
       return yorumla(await istek('POST', `${HIZMET_KOKU[yon]}/UpdateRich`, govde));
+    },
+    async malzemePasifeAl(no, kod) {
+      return yorumla(await istek('POST', `/api/Material/${encodeURIComponent(no)}/deactivate`, { code: kod }));
+    },
+    async hizmetPasifeAl(yon, no, kod) {
+      return yorumla(await istek('POST', `${HIZMET_KOKU[yon]}/${encodeURIComponent(no)}/deactivate`, { code: kod }));
     },
     hizmetVarMiYoluVar: secenek.hizmetVarMiYolu !== undefined,
     async kontrolOku(yol) {

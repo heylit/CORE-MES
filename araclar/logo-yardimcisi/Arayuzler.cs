@@ -98,6 +98,8 @@ namespace LogoYardimcisi
         public int Ref;
         public string Kod;
         public string Ad;
+        // SRVCARD.ACTIVE 1 (VARSAYIM: ITEMS.ACTIVE gibi 0 kullanımda, 1 kullanım dışı; Sorgular.Dogrulanmadi).
+        public bool Pasif;
     }
 
     public sealed class FisBasligi
@@ -176,6 +178,9 @@ namespace LogoYardimcisi
     {
         int MalzemeRef(string kod);
         MalzemeKaydi Malzeme(string kod);
+        // 2114b: kart kayıt numarasıyla, kullanım dışı bilgisiyle; yoksa null. Hizmet kart türüyle (alınan 1, verilen 2) aranır.
+        MalzemeKaydi MalzemeRefIle(int kayit);
+        HizmetKaydi HizmetRefIle(int kayit, int kartTuru);
         // Logo'daki bütün malzeme kartı kodları; TMI yeni kod verirken bunları atlar (2089-2 a).
         List<string> MalzemeKodlari();
         // Malzeme kartları kayıt sırasıyla, sonGorulen'den sonrası, en çok enCok kart (2116: Logo'dan kart okuması).

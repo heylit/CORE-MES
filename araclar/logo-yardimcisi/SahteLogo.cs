@@ -52,9 +52,9 @@ namespace LogoYardimcisi
             { Nesne.TalepKarsilama, K("DEMAND_REFERENCE", "CHILD_TYPE", "CHILD_REFERENCE", "LINE_TYPE", "FICHE_TYPE", "MEET_AMNT", "MAIN_MEET_AMNT", "ORD_PERIOD",
                 "ITEM_CODE", "MAIN_ITEM_CODE", "U_EDIT", "MAIN_U_EDIT", "ARP_CODE", "PARENTTYPE", "DET_LINE") },
             { Nesne.SatinAlmaSiparisi, K("DATE", "DOC_NUMBER", "PROJECT_CODE", "OHP_CODE", "PAYMENT_CODE", "SOURCE_WH", "ORDER_STATUS", "CANCELLED") },
-            { Nesne.Malzeme, K("NAME", "NAME3", "NAME4") },
-            { Nesne.AlinanHizmet, K("DESCRIPTION") },
-            { Nesne.VerilenHizmet, K("DESCRIPTION") },
+            { Nesne.Malzeme, K("NAME", "NAME3", "NAME4", "ACTIVE") },
+            { Nesne.AlinanHizmet, K("DESCRIPTION", "ACTIVE") },
+            { Nesne.VerilenHizmet, K("DESCRIPTION", "ACTIVE") },
             { Nesne.TalepFisi, K("STATUS") },
         };
 
@@ -396,14 +396,17 @@ namespace LogoYardimcisi
             {
                 var k = Kartlar.FirstOrDefault(x => x.Ref == kayit);
                 if (k == null) return new LogoHatasi(-1, "Read false");
-                k.Ad = (string)baslik.Deger("NAME");
+                if (baslik.Var("NAME")) k.Ad = (string)baslik.Deger("NAME");
+                if (baslik.Var("ACTIVE")) k.Pasif = I(baslik.Deger("ACTIVE")) == 1;
                 return null;
             }
             if (nesne == Nesne.AlinanHizmet || nesne == Nesne.VerilenHizmet)
             {
-                var k = Hizmetler.FirstOrDefault(x => x.Item1.Ref == kayit);
+                var tur = nesne == Nesne.AlinanHizmet ? 1 : 2;
+                var k = Hizmetler.FirstOrDefault(x => x.Item1.Ref == kayit && x.Item2 == tur);
                 if (k == null) return new LogoHatasi(-1, "Read false");
-                k.Item1.Ad = (string)baslik.Deger("DESCRIPTION");
+                if (baslik.Var("DESCRIPTION")) k.Item1.Ad = (string)baslik.Deger("DESCRIPTION");
+                if (baslik.Var("ACTIVE")) k.Item1.Pasif = I(baslik.Deger("ACTIVE")) == 1;
                 return null;
             }
             if (nesne == Nesne.TalepKarsilama)
@@ -472,6 +475,14 @@ namespace LogoYardimcisi
 
         public int MalzemeRef(string kod) { var k = Malzeme(kod); return k == null ? 0 : k.Ref; }
         public MalzemeKaydi Malzeme(string kod) { return Kartlar.FirstOrDefault(x => x.Kod == kod); }
+        public MalzemeKaydi MalzemeRefIle(int kayit) { return Kartlar.FirstOrDefault(x => x.Ref == kayit); }
+
+        public HizmetKaydi HizmetRefIle(int kayit, int kartTuru)
+        {
+            var h = Hizmetler.FirstOrDefault(x => x.Item1.Ref == kayit && x.Item2 == kartTuru);
+            return h == null ? null : h.Item1;
+        }
+
         public List<string> MalzemeKodlari() { return Kartlar.Select(x => x.Kod).OrderBy(x => x, StringComparer.Ordinal).ToList(); }
         public List<KodAd> BirimSetleri() { return Birimler; }
 

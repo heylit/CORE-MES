@@ -130,6 +130,17 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   kapalı gelir. Hizmet "var mı" ucu yardımcıda vardır (`GET /api/PurchaseService|SalesService/exists/{kod}`); sonucu bilinmeyen gönderim
   önce bununla okunur. Açmadan önce deneme firmasında bir kartla deneyin.
 
+## Silinen kartı Logo'da pasife alma (2114b, ADR 0017 madde 8)
+
+- TMI'de silinen ve Logo'ya gönderilmiş kart Logo'dan silinmez, kullanım dışı bırakılır: `POST /api/Material/{kayıtNo}/deactivate`, hizmet
+  kartı `POST /api/PurchaseService|SalesService/{kayıtNo}/deactivate`, gövde `{ "code": kod }`. Kayıttaki kartın kodu tutmazsa dokunulmaz.
+  Logo Objects ile `ACTIVE = 1` yazılır, SQL'den doğrulanır; zaten kullanım dışıysa yazılmaz. Kart yoksa `404 Card not found` (TMI ret sayar).
+- TMI'de istek yalnız "Logo bağlantısı" açıkken alınır; kart o sürede pasif bekler, Logo gönderimi sayfasında "Logo'da pasife alınmayı
+  bekliyor" görünür. Logo reddederse kart pasif kalır ve neden aynı satırda görünür; Logo onaylarsa kart Arşiv'e düşer, Logo'da kullanım dışı durur.
+- Eski yardımcı bu ucu bilmez: bilinmeyen yol 404 "Not found" döner, TMI bunu ret sayar (kart pasif kalır). Yardımcıyı güncelleyip kartı yeniden silin.
+- DOĞRULANMADI: Logo Objects'te `ACTIVE` alanı gerçek Logo'da denenmedi. `--deneme` test malzemesine dokunmaz; ucu yanlış kodla çağırıp kod
+  kalkanını dener. İlk gerçek isteği deneme firmasında bir kartla yapın ve kartın Logo'da "kullanım dışı" göründüğüne bakın.
+
 ## Malzeme fişi
 
 - Açma `POST /api/MaterialSlip/Add{Tür}`; numarayla bulma `GET /api/MaterialSlip/{Tür}/find/{no}` (SQL, `STFICHE` FICHENO + TRCODE), yoksa 404;
@@ -184,6 +195,7 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 5. Logo bilgisayarında .NET Framework 4.x kurulu; yardımcı yönetici olmadan kullanıcı süreci olarak çalışır.
 6. Malzeme fişi TRCODE'ları (sarf 12, giriş 13, fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51) ve ambar fişinin `SOURCE_WH`/`DEST_WH` alanları.
 7. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
+8. Kartı pasife alma: Logo Objects'te malzeme ve hizmet kartının `ACTIVE` alanı (1 kullanım dışı) ve `SRVCARD.ACTIVE` sütunu.
 
 TMI tarafındaki eski varsayımlar (cevap zarfı, 60 saniye, 5 dakika bekleme, kart türleri, sipariş alanları) yardımcının sözleşmesiyle aynıdır;
 yardımcı bunları `kopru.ts`'in beklediği biçimde döner (`Islemler.cs`).

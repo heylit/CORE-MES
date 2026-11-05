@@ -14,13 +14,13 @@ const YONETICI: Kullanici = { id: 3, ad: 'Deneme Yönetici', islemler: ['sayfa.m
 
 const durum = (yazabilir: boolean): LogoDurumuCevabi => ({
   kartlar: [
-    { id: 4, kod: 'SF-DNM-00001', ad: null, tur: 'sarf', birim: null, durum: 'bekliyor', eksikler: ['ad', 'birim', 'tur_karsiligi', 'birim_karsiligi'], hata: null, zaman: null, kayitNo: null, guncelleme: null },
-    { id: 2, kod: 'HM-DNM-00002', ad: 'Deneme hata', tur: 'hammadde', birim: 'kg', durum: 'hata', eksikler: [], hata: 'Deneme Logo hatası', zaman: '2026-10-08T12:00:00+00:00', kayitNo: null, guncelleme: null },
-    { id: 1, kod: 'HM-DNM-00001', ad: 'Deneme gitti', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-1', guncelleme: null },
-    { id: 7, kod: 'HZ-FSN-00001', ad: 'Deneme hizmet', tur: 'hizmet', birim: 'saat', durum: 'bekliyor', eksikler: [], hata: null, zaman: null, kayitNo: null, guncelleme: null },
-    { id: 8, kod: 'HZ-NAK-00001', ad: 'Deneme hizmet hata', tur: 'hizmet', birim: 'sefer', durum: 'hata', eksikler: [], hata: 'Deneme hizmet hatası', zaman: '2026-10-08T13:00:00+00:00', kayitNo: null, guncelleme: null },
-    { id: 9, kod: 'HM-DNM-00003', ad: 'Deneme yeni ad', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-3', guncelleme: { durum: 'bekliyor', hata: null, zaman: '2026-10-12T09:00:00+00:00' } },
-    { id: 10, kod: 'HM-DNM-00004', ad: 'Deneme ad hata', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-4', guncelleme: { durum: 'hata', hata: 'Deneme ad güncelleme hatası', zaman: '2026-10-12T09:30:00+00:00' } },
+    { id: 4, kod: 'SF-DNM-00001', ad: null, tur: 'sarf', birim: null, durum: 'bekliyor', eksikler: ['ad', 'birim', 'tur_karsiligi', 'birim_karsiligi'], hata: null, zaman: null, kayitNo: null, guncelleme: null, pasif: null },
+    { id: 2, kod: 'HM-DNM-00002', ad: 'Deneme hata', tur: 'hammadde', birim: 'kg', durum: 'hata', eksikler: [], hata: 'Deneme Logo hatası', zaman: '2026-10-08T12:00:00+00:00', kayitNo: null, guncelleme: null, pasif: null },
+    { id: 1, kod: 'HM-DNM-00001', ad: 'Deneme gitti', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-1', guncelleme: null, pasif: null },
+    { id: 7, kod: 'HZ-FSN-00001', ad: 'Deneme hizmet', tur: 'hizmet', birim: 'saat', durum: 'bekliyor', eksikler: [], hata: null, zaman: null, kayitNo: null, guncelleme: null, pasif: null },
+    { id: 8, kod: 'HZ-NAK-00001', ad: 'Deneme hizmet hata', tur: 'hizmet', birim: 'sefer', durum: 'hata', eksikler: [], hata: 'Deneme hizmet hatası', zaman: '2026-10-08T13:00:00+00:00', kayitNo: null, guncelleme: null, pasif: null },
+    { id: 9, kod: 'HM-DNM-00003', ad: 'Deneme yeni ad', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-3', guncelleme: { durum: 'bekliyor', hata: null, zaman: '2026-10-12T09:00:00+00:00' }, pasif: null },
+    { id: 10, kod: 'HM-DNM-00004', ad: 'Deneme ad hata', tur: 'hammadde', birim: 'kg', durum: 'gonderildi', eksikler: [], hata: null, zaman: '2026-10-08T11:00:00+00:00', kayitNo: 'LG-4', guncelleme: { durum: 'hata', hata: 'Deneme ad güncelleme hatası', zaman: '2026-10-12T09:30:00+00:00' }, pasif: null },
   ],
   karsiliklar: [
     { cesit: 'tur', tmiDegeri: 'hammadde', logoDegeri: '10' },
@@ -97,7 +97,7 @@ describe('LogoGonderimi (kart #232)', () => {
 
   it('bekleyen demirbaş "Logo\'ya gitmez" der; "Bekliyor" ve tür karşılığı eksiği görünmez (LOG-4)', async () => {
     const d = durum(false);
-    d.kartlar = [{ id: 12, kod: 'DB-DNM-00001', ad: 'Deneme demirbaş', tur: 'demirbas', birim: 'adet', durum: 'bekliyor', eksikler: ['tur_karsiligi', 'birim_karsiligi'], hata: null, zaman: null, kayitNo: null, guncelleme: null }];
+    d.kartlar = [{ id: 12, kod: 'DB-DNM-00001', ad: 'Deneme demirbaş', tur: 'demirbas', birim: 'adet', durum: 'bekliyor', eksikler: ['tur_karsiligi', 'birim_karsiligi'], hata: null, zaman: null, kayitNo: null, guncelleme: null, pasif: null }];
     sunucuKur(OKUYUCU, BIRIM_SETLERI, d);
     ac();
     const tablo = await screen.findByRole('table', { name: 'Logo gönderim durumu' });
