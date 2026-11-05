@@ -1,12 +1,19 @@
 import type { PlanGostergeleri, SenaryoDurumu, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { DefterOlayi } from '#paylasilan/sozlesme/planlama.ts';
+import type { RozetTonu } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { IzSatiri } from '../../tipler.ts';
 
 // "Geçmiş" ekranı (bugünkü sayfa b-kabuk.betik EKRANLAR gecmis, 03-katman.betik sIz): bölümleri ve değişiklik izinin süzgeci.
-export const GECMIS_BOLUMLERI = [['senaryolar', 'Senaryolar', 'flag'], ['iz', 'Değişiklik izi', 'book']] as const satisfies readonly (readonly [string, string, SimgeAdi])[];
+export const GECMIS_BOLUMLERI = [['senaryolar', 'Senaryolar', 'flag'], ['defter', 'Değişiklik defteri', 'clipboard-check'], ['iz', 'Değişiklik izi', 'book']] as const satisfies readonly (readonly [string, string, SimgeAdi])[];
 export type GecmisBolumu = (typeof GECMIS_BOLUMLERI)[number][0];
 export const ILK_GECMIS: GecmisBolumu = 'senaryolar';
 export const gecmisBolumuOku = (v: unknown): GecmisBolumu | null => GECMIS_BOLUMLERI.find((x) => x[0] === v)?.[0] ?? null;
+
+// Değişiklik defterinin olay adı ve rozet tonu (2129-2 b).
+export const DEFTER_OLAY_ADI: Record<DefterOlayi, [string, RozetTonu]> = {
+  degisiklik: ['Değişiklik', 'bilgi'], kaynak: ['Başka sayfa', 'bilgi'], uygulandi: ['Uygulandı', 'tamam'], reddedildi: ['Reddedildi', 'uyari'], 'geri-alindi': ['Geri alındı', 'pasif'],
+};
 
 // Ekranda en çok 200 satır; kişi süzgeci izdeki kişilerden, ilk görünme sırasıyla.
 export const IZ_GOSTERIM = 200;

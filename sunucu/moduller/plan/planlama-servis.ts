@@ -3,13 +3,13 @@ import { cakisma, cokBuyuk, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type {
-  DurumCevabi, KapasiteCevabi, PlanlamaCalismasiCevabi, PlanlamaSilGovdesi, PlanlamaYazGovdesi, SatinAlmaEkiCevabi,
+  DegisiklikDefteriCevabi, DurumCevabi, KapasiteCevabi, PlanlamaCalismasiCevabi, PlanlamaSilGovdesi, PlanlamaYazGovdesi, SatinAlmaEkiCevabi,
 } from '#paylasilan/sozlesme/planlama.ts';
-import { KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
+import { DEFTER_SAYFASI, KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
 import type { KayitlarCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ekipler, ekipUyeleri, isMerkezleri, istasyonlar, kapasiteKaynaklari, makineDurumlari } from '../istasyonlar/disari.ts';
-import { kisiGorevleri } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiGorevleri } from '../kisiler/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   aktifMalzemeListesi, DURUM_ANAHTARI, degerBicimeUyarMi, degerCokBuyukMu, durumVeEmirler, KAYNAK_OKUMA, nulKarakteriVarMi, receteRotaDurumu, surumUyarMi,
@@ -22,6 +22,7 @@ import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
@@ -70,16 +71,29 @@ export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGo
   if (!surumUyarMi(mevcut, g.beklenenSurum)) throw cakisma(CAKISMA_ILETISI);
   // Bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
   const calisma = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
-  const deger = calisma
-    ? bitisAkisiEkle(g.deger, mevcut === null ? null : (await sorgular.planlamaKaydi(db, g.anahtar))?.deger, kullanici.ad, Date.now())
-    : g.deger;
+  const onceki = calisma && mevcut !== null ? (await sorgular.planlamaKaydi(db, g.anahtar))?.deger : null;
+  const deger = calisma ? bitisAkisiEkle(g.deger, onceki, kullanici.ad, Date.now()) : g.deger;
   if (deger !== g.deger && degerCokBuyukMu(deger)) throw cokBuyuk(BUYUK_ILETISI);
   const satir = { anahtar: g.anahtar, bicim: g.bicim, deger, kisiId: kullanici.id };
   const kayit = mevcut === null ? await sorgular.planlamaKaydiEkle(db, satir) : await sorgular.planlamaKaydiGuncelle(db, satir);
   // Eşzamanlı ilk yazmada öteki kazandı.
   if (kayit === null) throw cakisma(CAKISMA_ILETISI);
-  if (calisma) await gerekenTarihleriBildir(db, deger);
+  if (calisma) {
+    await sorgular.defterYaz(db, kullanici.id, defterSatirlari(onceki, deger, g.kararlar));
+    await gerekenTarihleriBildir(db, deger);
+  }
   return { kayit };
+}
+
+// 2129-2 b: değişiklik defteri, en yeni önde; kişi adı kisiler modülünden.
+export async function degisiklikDefteri(db: Db, once: number | null): Promise<DegisiklikDefteriCevabi> {
+  const l = await sorgular.defterOku(db, once, DEFTER_SAYFASI + 1);
+  const sayfa = l.slice(0, DEFTER_SAYFASI);
+  const adlar = await kisiAdlari(db, [...new Set(sayfa.map((x) => x.kisiId))]);
+  return {
+    satirlar: sayfa.map(({ kisiId, zaman, ...x }) => ({ ...x, kisi: adlar.get(kisiId) ?? null, zaman: zaman.toISOString() })),
+    dahaVar: l.length > DEFTER_SAYFASI,
+  };
 }
 
 export async function planlamaSil(db: Db, kullanici: Kullanici, g: PlanlamaSilGovdesi): Promise<SilCevabi> {
@@ -322,7 +336,7 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   // Motor ayarı, ölçek ve finansman oranı girdi kurulurken aynı istekte okundu; oran gününe bağlıdır, gün başkaysa yeniden okunur.
   const { degerler, olcek, finansman } = k.okunan!;
   const fin = finansman.gun === tesisGunu(simdi) ? finansman.oran : await planFinansmanOrani(db, tesisGunu(simdi));
-  return { calisma: calismayaMotorAyari(g.S, degerler, fin, olcek) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum };
+  return { calisma: calismayaMotorAyari(g.S, degerler, fin, olcek) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota

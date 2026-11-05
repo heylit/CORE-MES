@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
+import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { DurumKutusu, Dugme, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
@@ -59,7 +60,7 @@ function PlanlamaEkrani() {
     return new CalismaYazici({
       calisma: durum.depo.calisma, surum: durum.depo.calismaSurumu, kim: kullanici.ad,
       sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
-      yaz: (g: YazGovdesi) => api.post<YazCevabi>('/plan/planlama-kayitlari/yaz', g),
+      yaz: (g: PlanlamaYazGovdesi) => api.post<YazCevabi>('/plan/planlama-kayitlari/yaz', g),
       uyar: (ileti) => { bildir('hata', ileti); },
       catismadaYenile: tazele,
       bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },

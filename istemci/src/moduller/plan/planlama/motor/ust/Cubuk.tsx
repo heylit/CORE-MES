@@ -3,6 +3,7 @@ import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
 import { MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
+import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 
 // Plan çubuğu (zk-kabuk.betik sdCubuk, zr-agirlik sdNabiz): ekranlar, üç nabız sayısı, durum ve iki eylem. Arama (Ctrl K paleti) ve
@@ -19,6 +20,8 @@ interface Ozellikler {
   planKur?: PlanKurucu | null;
   // Plan veriden eskiyse bekleyen değişiklikleri uygular (1786 PLN-2); verilmezse düğme eskisi gibi pasif.
   bekleyenUygula?: BekleyenUygulayici | null;
+  // Plan güncelken kayıtlı planı iyileştirme araması, önizlemeli (2129-1 b); verilmezse düğme pasif.
+  hamle?: Hamleci | null;
 }
 
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'gecikme', true], ['dar', 'darboğaz', true]];
@@ -63,7 +66,7 @@ export function Cubuk(o: Ozellikler) {
             </button>
           )}
           {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. Planı kur sunucudaki motorla açıktır (576). */}
-          {o.planYaz && !kur && !uyg && <small className="tc-pym-sb-not">Motor kapalı</small>}
+          {o.planYaz && !kur && !uyg && !o.hamle && <small className="tc-pym-sb-not">Motor kapalı</small>}
           {o.planYaz && uyg ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
@@ -75,6 +78,8 @@ export function Cubuk(o: Ozellikler) {
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
               <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
             </button>
+          ) : o.plan && o.hamle ? (
+            <IyilestirDugmesi h={o.hamle} />
           ) : (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
               title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
@@ -88,6 +93,16 @@ export function Cubuk(o: Ozellikler) {
   );
 }
 
+function IyilestirDugmesi({ h }: { h: Hamleci }) {
+  const y = hamleYapisi(h, (x) => { x.iyilestir(); });
+  return (
+    <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi" aria-disabled={y.yap ? undefined : 'true'} aria-busy={h.suruyor || undefined}
+      title={y.yap ? 'Plan iyileştirme ara: motor daha iyi bir plan arar; bulursa önizlersiniz, siz uygularsınız.' : `Plan iyileştirme ara: ${y.not}`}
+      aria-label="Plan iyileştirme ara" onClick={y.yap ?? undefined}>
+      <Simge ad="play" boyut="k" /><span>{h.suruyor ? 'Aranıyor' : 'Plan iyileştirme ara'}</span>
+    </button>
+  );
+}
 function NabizPaneli(o: Ozellikler & { n: NabizDurumu }) {
   const { n } = o; const kok = useRef<HTMLDivElement>(null);
   useEffect(() => {

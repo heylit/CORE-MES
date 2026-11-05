@@ -1,7 +1,9 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { BedelAyari, BedelAyariGovdesi, PlanAyari, SenaryoDurumu } from '#paylasilan/sozlesme/plan.ts';
+import type { DefterOlayi } from '#paylasilan/sozlesme/planlama.ts';
 import type { Kaynak } from './kurallar.ts';
+import type { DefterYazimi } from './degisiklik-defteri-kurallar.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Hedef: null canlı plan, sayı taslak (senaryo). Canlıya yalnız canlıya alma yazar (P6).
@@ -549,6 +551,29 @@ export async function planlamaKaydiSil(db: Db, anahtar: string): Promise<boolean
 // 508 2 a: kaydın geçmişteki son (bir önceki) sürümü; geçmiş yoksa null.
 export async function planlamaSonGecmis(db: Db, anahtar: string): Promise<{ surum: number; bicim: string; deger: unknown } | null> {
   return db.tek('SELECT surum, bicim, deger FROM plan_planlama_kaydi_gecmisi WHERE anahtar = $1 ORDER BY id DESC LIMIT 1', [anahtar]);
+}
+
+/* ---------------- değişiklik defteri (2129-2 b) ---------------- */
+// Yalnız ekleme; satırlar çalışma yazmasıyla aynı işlemde girer. Kişi adı kisiler modülünden alınır.
+export async function defterYaz(db: Db, kisiId: number, l: readonly DefterYazimi[]): Promise<void> {
+  if (l.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO plan_degisiklik_defteri (olay, bekleyen_id, ne, ayrinti, isler, gerekce, kisi_id)
+     SELECT x.olay, x.bekleyen_id, x.ne, x.ayrinti, ARRAY(SELECT jsonb_array_elements_text(x.isler)), x.gerekce, $2
+       FROM ROWS FROM (jsonb_to_recordset($1::jsonb) AS (olay text, bekleyen_id text, ne text, ayrinti text, isler jsonb, gerekce text)) WITH ORDINALITY
+            AS x(olay, bekleyen_id, ne, ayrinti, isler, gerekce, sira)
+      ORDER BY x.sira`,
+    [JSON.stringify(l.map((x) => ({ olay: x.olay, bekleyen_id: x.bekleyenId, ne: x.ne, ayrinti: x.ayrinti, isler: x.isler, gerekce: x.gerekce }))), kisiId],
+  );
+}
+
+export interface DefterOkumasi { id: number; olay: DefterOlayi; bekleyenId: string; ne: string; ayrinti: string; isler: string[]; gerekce: string | null; kisiId: number; zaman: Date }
+export async function defterOku(db: Db, once: number | null, sinir: number): Promise<DefterOkumasi[]> {
+  return db.sorgu<DefterOkumasi>(
+    `SELECT id::int AS id, olay, bekleyen_id AS "bekleyenId", ne, ayrinti, isler, gerekce, kisi_id AS "kisiId", zaman
+       FROM plan_degisiklik_defteri WHERE ($1::bigint IS NULL OR id < $1) ORDER BY id DESC LIMIT $2`,
+    [once, sinir],
+  );
 }
 
 /* ---------------- ölçüm (1470 a) ---------------- */

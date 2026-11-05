@@ -8,7 +8,7 @@ import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts
 import { IKINCI_MENU_TANIMLARI } from '../../../../../ortak/rota/ikinci-menu.ts';
 import { ONERILEN_IKINCI_MENU } from '../../../planlama-menusu.ts';
 import { planGuncel } from '../../durum.ts';
-import { bekleyenListesi } from '../../kayit.ts';
+import { bekleyenListesi, GEREKCE_EN_COK } from '../../kayit.ts';
 import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
 import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
@@ -424,12 +424,16 @@ function CalismaSecili({ K, c, bekleyen, karar, o, not, notYaz, gidiyor, gonder 
 
 // Bekleyen değişiklikler (755 a): plan bayatlatan her değişiklik burada uygulanır ya da reddedilir; bekleyen kalmayınca gönderme açılır.
 // Uygula yalnız etkilediği işleri yeniden dizer (kilitli ve donuk işler yerinde); reddet değişikliği geri alır. Kaydı olmayan önceki
-// değişiklik yalnız uygulanır (787 a).
+// değişiklik yalnız uygulanır (787 a). Ret gerekçe ister; gerekçe ve karar değişiklik defterine girer (2129-2 b).
 function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: BekleyenDegisiklik[]; karar: BekleyenKarari | null; gidiyor: boolean }) {
   const ad = (id: string) => c.D.siparisler.find((x) => x.id === id)?.ad ?? id;
   const isler = (e: BekleyenDegisiklik) => (e.isler.includes('*') ? 'Bütün işler' : e.isler.map(ad).join(', ') || '—');
-  const kapali = gidiyor || !karar || karar.suruyor;
+  const [ret, retYaz] = useState<string[] | null>(null);
+  const [gerekce, gerekceYaz] = useState('');
+  const kapali = gidiyor || !karar || karar.suruyor || ret !== null;
   const reddedilir = l.filter((e) => e.geri !== null).map((e) => e.id);
+  const retAc = (idler: string[]) => { gerekceYaz(''); retYaz(idler); };
+  const reddet = () => { if (karar && ret && gerekce.trim() && karar.reddet(ret, gerekce)) retYaz(null); };
   return (
     <section className="tc-pym-pa-bolum">
       <h3><Simge ad="rotate" boyut="k" /> Bekleyen değişiklikler ({l.length})</h3>
@@ -442,7 +446,7 @@ function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: Bekley
               <span className="tc-pym-pa-dugmeler">
                 <button type="button" className="tc-dugme tc-pym-kucuk" disabled={kapali} onClick={() => karar.uygula(l, [e.id])}><Simge ad="play" boyut="k" />Uygula</button>
                 <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" disabled={kapali || e.geri === null} title={e.geri === null ? 'Ayrıntısı tutulmadı; yalnız uygulanabilir.' : undefined}
-                  onClick={() => karar.reddet([e.id])}><Simge ad="x" boyut="k" />Reddet</button>
+                  onClick={() => retAc([e.id])}><Simge ad="x" boyut="k" />Reddet</button>
               </span>
             )}
           </li>
@@ -451,8 +455,21 @@ function Bekleyenler({ c, l, karar, gidiyor }: { c: PlanlamaCalismasi; l: Bekley
       {karar && l.length > 1 && (
         <div className="tc-pym-pa-dugmeler">
           <button type="button" className="tc-dugme tc-pym-kucuk" disabled={kapali} onClick={() => karar.uygula(l, l.map((e) => e.id))}><Simge ad="play" boyut="k" />Hepsini uygula</button>
-          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" disabled={kapali || reddedilir.length === 0} onClick={() => karar.reddet(reddedilir)}><Simge ad="x" boyut="k" />Hepsini reddet</button>
+          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" disabled={kapali || reddedilir.length === 0} onClick={() => retAc(reddedilir)}><Simge ad="x" boyut="k" />Hepsini reddet</button>
         </div>
+      )}
+      {karar && ret !== null && (
+        <form className="tc-pym-pa-ret" aria-label="Ret gerekçesi" onSubmit={(ev) => { ev.preventDefault(); reddet(); }}>
+          <label>
+            <span>{ret.length > 1 ? `${String(ret.length)} değişikliği reddetme gerekçesi` : 'Reddetme gerekçesi'}</span>
+            <input className="tc-alan-kutu" value={gerekce} maxLength={GEREKCE_EN_COK} onChange={(ev) => { gerekceYaz(ev.target.value); }} />
+          </label>
+          <span className="tc-pym-pa-dugmeler">
+            <button type="submit" className="tc-dugme tc-pym-kucuk" disabled={gidiyor || karar.suruyor || gerekce.trim() === ''}><Simge ad="x" boyut="k" />Reddet</button>
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={() => { retYaz(null); }}>Vazgeç</button>
+          </span>
+          <span className="tc-pym-pa-kucuk">Gerekçe değişiklik defterine kişi ve zamanla yazılır.</span>
+        </form>
       )}
       {karar?.suruyor && <p className="tc-pym-pa-kucuk">{KURULUYOR}</p>}
     </section>

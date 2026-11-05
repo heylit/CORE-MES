@@ -34,7 +34,7 @@ export interface DegerlendirmeGirdisi {
   calisma: unknown; kayit: unknown; kaynak: KaynakOkumasi | null; bugun?: string; istek: DegerlendirmeIstegi; sira?: number; kaynakDilimi?: KaynakDilimiOkumasi | null;
 }
 // Betiğin dönüşü: çalışma yoksa null, isteğin çalışmayla uyuşmadığı durum hata kodu, aksi halde cevabın zarfı (sonuç sözleşmenin biçimindedir).
-export type DegerlendirmeHatasi = 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi';
+export type DegerlendirmeHatasi = 'plan-yok' | 'plan-bayat' | 'siparis-yok' | 'adet' | 'basladi';
 export interface DegerlendirmeZarfi { dataVer: number; baslangic: string | null; simdi: number; sonuc: Record<string, unknown> & { tur: DegerlendirmeIstegi['tur'] } }
 export type DegerlendirmeDonusu = { hata: DegerlendirmeHatasi } | DegerlendirmeZarfi | null;
 
@@ -101,6 +101,7 @@ const MALIYET_ISLEMI = 'finans.maliyet-oku';
 const CALISMA_YOK = 'Planlama çalışması yok; planlama sayfasını açıp bir kez kaydedin.';
 const HATALAR: Record<DegerlendirmeHatasi, () => Error> = {
   'plan-yok': () => cakisma('Önce plan kurulmalı.'),
+  'plan-bayat': () => cakisma('Plan verinin gerisinde; önce bekleyen değişiklikleri uygulayın.'),
   'siparis-yok': () => bulunamadi('Sipariş planlama çalışmasında yok.'),
   adet: () => dogrulama('Partilerin toplamı iş emrinin adedi olmalı, her parti en az 1 adet.', 'adetler'),
   basladi: () => dogrulama('Başlamış ya da plana girmemiş iş emri bölünmez.', 'siparisId'),
@@ -181,6 +182,8 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'malzeme-terminleri':
     case 'plan-kur':
     case 'plan-uygula':
+    case 'plan-iyilestir':
+    case 'one-al':
       return s;
     case 'siparis-kari':
       throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');

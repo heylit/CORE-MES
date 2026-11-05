@@ -229,7 +229,9 @@ describe('PlanlamaAtolyesi', () => {
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
-    for (const ad of ['Şu olursa: denemeler', 'İyileştirme ara']) expect(within(ust).getByRole('button', { name: ad }).getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(within(ust).getByRole('button', { name: 'Şu olursa: denemeler' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    // 2129-1 b: güncel planda iyileştirme araması açıktır, sonucu önizlenir.
+    expect(within(ust).getByRole('button', { name: 'İyileştirme ara' }).getAttribute('aria-disabled')).toBeNull();
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
     fireEvent.click(within(ust).getByRole('button', { name: 'Onaya gönder' }));
     expect(within(kart()).getByText('1 → 1')).toBeTruthy();
@@ -317,7 +319,7 @@ describe('PlanlamaAtolyesi', () => {
       { id: 'b1', ne: 'Adet değişti', ayrinti: '', kim: 'Deneme Planlamaci', t: Date.parse('2026-10-20T08:00:00Z'), isler: [s1.id], geri: [{ yol: ['D', 'siparisler'], id: s1.id, once: s1 }] },
     ];
     const { komut } = komutKur(c);
-    const reddet = vi.fn(() => null);
+    const reddet = vi.fn((_idler: readonly string[], _gerekce: string) => null);
     ac({ c, komut: { ...komut, bekleyeniReddet: reddet } as CalismaKomutu });
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/senaryolar' ? Promise.resolve(DEPO.senaryolar) : Promise.reject(new Error('yok')))) as never);
     const post = vi.spyOn(api, 'post').mockImplementation((() => Promise.reject(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'x' }))) as never);
@@ -332,12 +334,22 @@ describe('PlanlamaAtolyesi', () => {
     expect(eski!.textContent).toContain('Etkilenen: Bütün işler');
     expect((within(eski!).getByRole('button', { name: 'Reddet' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(yeni!).getByRole('button', { name: 'Reddet' }));
-    expect(reddet).toHaveBeenCalledWith(['b1']);
+    // 2129-2 b: ret gerekçe ister; gerekçe yazılmadan gönderilmez, satır düğmeleri form açıkken kapalı.
+    let form = screen.getByRole('form', { name: 'Ret gerekçesi' });
+    expect((within(form).getByRole('button', { name: 'Reddet' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(yeni!).getByRole('button', { name: 'Uygula' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(form).getByLabelText('Reddetme gerekçesi'), { target: { value: 'Termin değişmedi' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Reddet' }));
+    expect(reddet).toHaveBeenCalledWith(['b1'], 'Termin değişmedi');
+    expect(screen.queryByRole('form', { name: 'Ret gerekçesi' })).toBeNull();
     fireEvent.click(within(yeni!).getByRole('button', { name: 'Uygula' }));
     await waitFor(() => expect(post.mock.calls[0]?.slice(0, 2)).toEqual(['/plan/planlama-degerlendirmesi', { surum: 8, istek: { tur: 'plan-uygula', isler: [s1.id] } }]));
     await waitFor(() => expect((within(bolum).getByRole('button', { name: 'Hepsini reddet' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(within(bolum).getByRole('button', { name: 'Hepsini reddet' }));
-    expect(reddet).toHaveBeenLastCalledWith(['b1']);
+    form = screen.getByRole('form', { name: 'Ret gerekçesi' });
+    fireEvent.change(within(form).getByLabelText('Reddetme gerekçesi'), { target: { value: 'Yanlış giriş' } });
+    fireEvent.submit(form);
+    expect(reddet).toHaveBeenLastCalledWith(['b1'], 'Yanlış giriş');
     post.mockRestore();
     get.mockRestore();
   });

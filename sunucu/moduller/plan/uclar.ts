@@ -8,7 +8,7 @@ import {
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
-  calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
+  calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
@@ -168,6 +168,9 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => planlama.planlamaYaz(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/sil', yetki: KAYIT_YAZAR, govde: planlamaSilGovdesi, cevap: silCevabi,
     isle: ({ db, kullanici, govde }) => planlama.planlamaSil(db, kullanici, govde) }),
+  // 2129-2 b: planı etkileyen değişikliklerin defteri (eklendi, uygulandı, reddedildi ve gerekçesi); satırı çalışma yazması girer, uç yalnız okur.
+  uc({ yontem: 'GET', yol: '/plan/degisiklik-defteri', yetki: PLANLAMA_OKUR, sorgu: degisiklikDefteriSorgusu, cevap: degisiklikDefteriCevabi,
+    isle: ({ db, sorgu }) => planlama.degisiklikDefteri(db, sorgu.once ?? null) }),
   // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi', yetki: PLANLAMA_OKUR, cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlama.planlamaCalismasi(db, kullanici) }),

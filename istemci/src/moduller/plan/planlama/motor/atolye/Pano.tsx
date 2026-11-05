@@ -17,6 +17,8 @@ import {
   gecikenIpucu, gecikenSay, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
+import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
+import { hamleYapisi, useHamle } from '../hamle/hamle.ts';
 
 // Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor isteyen her
 // eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı, olay ve ek mesai sunucu komutudur (1982 a), ardından plan kendiliğinden uygulanır (2053-1 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
@@ -74,6 +76,9 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const uyar = useCallback((ileti: string) => { bildir('hata', ileti); }, [bildir]);
   useOtomatikUygula(o, uyar);
   const { tasi, olayEkle, ekMesai, isleniyor } = useAtolyeKomutlari(o, c);
+  // 2129-1 b: iyileştirme ara; sonuç önizlenir, kişi uygular.
+  const hamle = useHamle(o, uyar);
+  const iyiY = hamleYapisi(hamle, (h) => { h.iyilestir(); });
 
   // Seçili adımın siparişi seçili sipariş sayılır.
   const secOp = secim.adim && p.ops[secim.adim] ? secim.adim : null;
@@ -202,8 +207,9 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         title={olayEkle ? 'Olay: arıza, acil sipariş, malzeme, personel ya da fason' : 'Olay eklemek plan yazma yetkisi ister.'} onClick={(e) => { if (olayEkle) kartAc({ tur: 'olay' }, ankraj(e)); }}>
         <Simge ad="plus" boyut="k" /><span data-ikincil="" data-metin="">Olay</span>
       </button>
-      <button type="button" className="tc-dugme" aria-disabled="true" aria-label="İyileştirme ara" title={`Motor daha iyi bir plan arar; bulursa önizlersiniz. ${MOTOR_NOTU}`}>
-        <Simge ad="bolt" boyut="k" /><span data-ikincil="" data-metin="">İyileştir</span>
+      <button type="button" className="tc-dugme" aria-disabled={iyiY.yap ? undefined : 'true'} aria-busy={hamle?.suruyor || undefined} aria-label="İyileştirme ara"
+        title={iyiY.yap ? 'Motor daha iyi bir plan arar; bulursa önizlersiniz.' : `İyileştirme ara: ${iyiY.not}`} onClick={iyiY.yap ?? undefined}>
+        <Simge ad="bolt" boyut="k" /><span data-ikincil="" data-metin="">{hamle?.suruyor ? 'Aranıyor' : 'İyileştir'}</span>
       </button>
       {farkli && yaz && yetki.planStudyo && (
         <button type="button" className="tc-dugme tc-dugme-birincil" aria-label="Onaya gönder" onClick={(e) => kartAc({ tur: 'gonder' }, ankraj(e))}>
@@ -217,6 +223,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   return (
     <div className="tc-pym-tp-kap" ref={kap}>
       {ust}
+      <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
       {brif && <Brif ort={ort} kapat={brifKapat} />}
       <div className="tc-pym-tp-govde" data-ray={rayAcik ? '' : undefined}>
         <Ray ort={ort} />
