@@ -21,3 +21,9 @@
   `geometri_ozellik.yuzler` bu sıradır. Delik derinliği girişten dibe eksen boyudur; çapraz delikle kesilen ya da iki duvardan geçen aynı
   çaplı delik tek delik sayılır (matkap tek geçer). Eğik delik de tanınır (eksen yönünden bağımsız; `GEO-OZ9`). Tanınmayan: cep, kanal, basamak, diş,
   tolerans (PMI); düzlem pah yalnız iki düzlem arasında. Ölçüler yalnız sentetik modelle denendi; gerçek dosyada oran bilinmiyor.
+- Montaj ağacı (kart 2109, M1; 2101-1 b): occt-import-js'in aynı okumasından (`root`), ek okuma ve paket yok. Düğümler montajdır, parçalar
+  düğümün ağlarıdır; ağ konumları dünya koordinatındadır (yerleşim uygulanmış; paketin CAx-IF as1 örneğiyle ve `montajStep` ile denendi).
+  Alt düğümü olmayan tek ağlı düğüm parçanın kendisidir: bazı yazıcılar parçayı düğüm yapar ve ağa genel ad verir (as1_pe_203'te ağ adı
+  "SOLID"). Tersi de var: birden çok ağlı düğümde ağ adları genel kalabilir. Bileşen listesi okumada hesaplanır (ad ve döndürülmüş kutu,
+  hacim). Alt montajın kendisi bileşen listesinde satır değildir; adedi ağaçtan sayılır. Yerleşim dönüşümü (matris) tutulmaz; patlatma
+  (2098 H3) için dünya kutusu var. Ölçüler yalnız öneri (2101-2 b): gerçek montaj dosyasıyla denenmedi.

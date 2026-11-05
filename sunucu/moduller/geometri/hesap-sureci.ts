@@ -1,12 +1,12 @@
 // Geometri hesap süreci (1427 a): ana sunucu `surec.ts` ile fork eder; ağa açılmaz, veritabanına bağlanmaz, yalnız IPC ile dosya alır,
 // ölçü döner. STEP/IGES güvenilmeyen girdidir: çökmesi ya da asılması ana sunucuyu durdurmaz, yöneten süreç öldürüp yeniden açar.
 import { createRequire } from 'node:module';
-import { agOlcumu, ILETILER, ozellikleriTani, YUZ_EN_COK, yuzTuru } from './kurallar.ts';
-import type { DosyaTuru, KenarTuru, Ozellik, TanimaYuzu, UcgenAgi, Yuz, YuzKenari } from './kurallar.ts';
+import { agOlcumu, ILETILER, montajAdi, montajAgaci, ozellikleriTani, YUZ_EN_COK, yuzTuru } from './kurallar.ts';
+import type { AdliAg, DosyaTuru, KenarTuru, OcctDugumu, Ozellik, TanimaYuzu, Yuz, YuzKenari } from './kurallar.ts';
 import type { HesapIstegi, HesapYaniti } from './surec.ts';
 
-interface OcctAgi { attributes: { position: { array: ArrayLike<number> } }; index?: { array: ArrayLike<number> } }
-interface OcctSonucu { success: boolean; meshes: OcctAgi[] }
+interface OcctAgi { name?: unknown; attributes: { position: { array: ArrayLike<number> } }; index?: { array: ArrayLike<number> } }
+interface OcctSonucu { success: boolean; meshes: OcctAgi[]; root?: OcctDugumu }
 interface Occt {
   ReadStepFile(veri: Uint8Array, ayar: object | null): OcctSonucu;
   ReadIgesFile(veri: Uint8Array, ayar: object | null): OcctSonucu;
@@ -216,11 +216,12 @@ async function hesapla(tur: DosyaTuru, veri: Uint8Array): Promise<HesapYaniti> {
     return { tamam: false, kalici: true, hata: ILETILER.okunamadi, bellek: process.memoryUsage().rss };
   }
   if (!sonuc.success) return { tamam: false, kalici: true, hata: ILETILER.okunamadi, bellek: process.memoryUsage().rss };
-  const aglar: UcgenAgi[] = sonuc.meshes.map((m) => ({ konum: m.attributes.position.array, indeks: m.index?.array ?? [] }));
+  const aglar: AdliAg[] = sonuc.meshes.map((m) => ({ ad: montajAdi(m.name), konum: m.attributes.position.array, indeks: m.index?.array ?? [] }));
   const olcum = agOlcumu(aglar);
   if (olcum === null) return { tamam: false, kalici: true, hata: ILETILER.bosModel, bellek: process.memoryUsage().rss };
+  const montaj = sonuc.root === undefined ? null : montajAgaci(sonuc.root, aglar);
   const yuz = await yuzleriOku(tur, veri).catch(() => null);
-  return { tamam: true, olcum, yuzler: yuz?.yuzler ?? null, ozellikler: yuz?.ozellikler ?? null, sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss };
+  return { tamam: true, olcum, montaj, yuzler: yuz?.yuzler ?? null, ozellikler: yuz?.ozellikler ?? null, sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss };
 }
 
 process.on('message', (ileti: HesapIstegi) => {

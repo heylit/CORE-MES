@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { GeometriDosyaTuru, GeometriIsDurumu } from '#paylasilan/sozlesme/geometri.ts';
 import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
-import type { Olcum, Ozellik, Yuz, YuzTuru } from './kurallar.ts';
+import type { MontajDugumu, Olcum, Ozellik, Yuz, YuzTuru } from './kurallar.ts';
 
 export interface IsSatiri {
   id: number;
@@ -179,4 +179,45 @@ export function analiz(db: Db, revizyonId: number): Promise<AnalizSatiri | null>
        FROM geometri_analiz WHERE revizyon_id = $1`,
     [revizyonId],
   );
+}
+
+// Montaj ağacı (kart 2109) analizle aynı işlemde yenilenir; null (kök yok, parça yok ya da düğüm sınırı aşıldı) satırsız bırakır.
+export async function montajYaz(db: Db, revizyonId: number, motor: string, dugumler: readonly MontajDugumu[] | null): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_montaj WHERE revizyon_id = $1', [revizyonId]);
+  if (dugumler === null || dugumler.length === 0) return;
+  const uc = (d: readonly number[] | null): string | null => (d === null ? null : `{${d.join(',')}}`);
+  const d = dugumler;
+  await db.sorgu(
+    `INSERT INTO geometri_montaj (revizyon_id, sira, ust_sira, tur, ad, kutu_en, kutu_ust, obb_a_mm, obb_b_mm, obb_c_mm, hacim_mm3, alan_mm2, kapali, motor)
+     SELECT $1, u.sira, u.ust, u.tur, u.ad, u.kutu_en::numeric[], u.kutu_ust::numeric[], u.a, u.b, u.c, u.hacim, u.alan, u.kapali, $2
+       FROM unnest($3::int[], $4::int[], $5::text[], $6::text[], $7::text[], $8::text[], $9::numeric[], $10::numeric[], $11::numeric[],
+                   $12::numeric[], $13::numeric[], $14::bool[])
+         AS u(sira, ust, tur, ad, kutu_en, kutu_ust, a, b, c, hacim, alan, kapali)`,
+    [revizyonId, motor, d.map((x) => x.sira), d.map((x) => x.ust), d.map((x) => x.tur), d.map((x) => x.ad), d.map((x) => uc(x.kutuEn)),
+      d.map((x) => uc(x.kutuUst)), d.map((x) => x.obb?.a ?? null), d.map((x) => x.obb?.b ?? null), d.map((x) => x.obb?.c ?? null),
+      d.map((x) => x.hacimMm3), d.map((x) => x.alanMm2), d.map((x) => x.kapali)],
+  );
+}
+
+interface MontajSatiri {
+  sira: number; ust: number | null; tur: MontajDugumu['tur']; ad: string | null;
+  kutuEn: [number, number, number] | null; kutuUst: [number, number, number] | null;
+  obbA: number | null; obbB: number | null; obbC: number | null;
+  hacimMm3: number | null; alanMm2: number | null; kapali: boolean | null; motor: string;
+}
+
+export async function montaj(db: Db, revizyonId: number): Promise<{ motor: string; dugumler: MontajDugumu[] } | null> {
+  const satirlar = await db.sorgu<MontajSatiri>(
+    `SELECT sira, ust_sira AS ust, tur, ad, kutu_en::float8[] AS "kutuEn", kutu_ust::float8[] AS "kutuUst", obb_a_mm::float8 AS "obbA",
+            obb_b_mm::float8 AS "obbB", obb_c_mm::float8 AS "obbC", hacim_mm3::float8 AS "hacimMm3", alan_mm2::float8 AS "alanMm2", kapali, motor
+       FROM geometri_montaj WHERE revizyon_id = $1 ORDER BY sira`,
+    [revizyonId],
+  );
+  if (satirlar.length === 0) return null;
+  return {
+    motor: satirlar[0]!.motor,
+    dugumler: satirlar.map(({ obbA, obbB, obbC, motor: _m, ...x }) => ({
+      ...x, obb: obbA === null || obbB === null || obbC === null ? null : { a: obbA, b: obbB, c: obbC },
+    })),
+  };
 }

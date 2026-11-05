@@ -26,3 +26,8 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Radyüs: iki komşusuna teğet silindir, torus ya da küre; iç ya da dış | `GEO-OZ4`, `G-A9` |
 | Pah: iki düzlem komşu arasındaki açıyı bölen, dışbükey kenarlı dar düzlem; mil ucunda aynı eksenli dış silindire bağlı dış koni | `GEO-OZ5`, `GEO-OZ6`, `G-A9` |
 | Özellikler yalnız öneridir; analizle aynı işlemde yenilenir, yinelenmez | `G-A9` |
+| Montaj ağacı (2109): adsız dosya kökü atlanır; düğümler ön sıralı; montaj kutusu altlarını kapsar; konumlar dünya koordinatında | `GEO-MO1`, `GEO-MO-A1` |
+| Bileşen listesi: aynı ad ve ölçüdeki parça tek satır ve adetli; döndürülmüş yerleşim aynı bileşen | `GEO-MO2`, `GEO-MO-A1` |
+| Tek parçalı model tek düğümdür (montaj false); montajı okunmamış analiz 'montaj-yok', analiz yoksa 'analiz-yok' | `GEO-MO3`, `GEO-MO-A2`, `GEO-MO-A1` |
+| Güvenilmeyen girdi: boş ağ parça değil, parçasız ve sınırı aşan model null, bozuk alan yok sayılır, ad kısalır, derin yapı yığını taşırmaz | `GEO-MO4` |
+| Montaj analizle aynı işlemde yenilenir, yinelenmez; yalnız öneri | `GEO-MO-A1` |
