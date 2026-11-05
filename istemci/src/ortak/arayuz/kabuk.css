@@ -65,6 +65,14 @@
    yalnız simgeyle kalır. Tek maddelik ikinci menü her genişlikte çizilmez: üç şerit tek satıra iner. */
 .tc-kabuk[data-ust-yuva] .tc-kabuk-baslik { flex: none; }
 .tc-kabuk[data-ust-yuva] .tc-kabuk-yuva ~ :not(.tc-kabuk-hesap) { display: none; }
+/* 2137-1 a: Okut ve Bildirimler şerit üst çubuktayken de görünür; aynı güçteki seçici sonra durduğu için üstteki gizlemeyi yener. */
+.tc-kabuk-seritte, .tc-kabuk[data-ust-yuva] .tc-kabuk-yuva ~ .tc-kabuk-seritte { display: contents; }
+/* 2137-2 c: 1440 altında şeritle iki simge başlığa yer bırakmaz; başlık gizlenir, sayfa sol menüde seçili kalır. Ekran okuyucu için başlık yerinde kalır. */
+@media (max-width: 1439px) {
+  .tc-kabuk[data-ust-yuva] .tc-kabuk-baslik {
+    position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}
 .tc-kabuk[data-ust-yuva] .tc-kabuk-kisi-ad { display: none; }
 .tc-kabuk[data-ust-yuva] .tc-kabuk-ileri { display: none; }
 .tc-kabuk[data-ust-yuva] .tc-kabuk-ust { padding-inline: var(--b-3); gap: var(--b-2); }

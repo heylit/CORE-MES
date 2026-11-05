@@ -33,6 +33,12 @@ describe('ustEylemleriTopla', () => {
     expect(hesapta?.isaret).toBe(Dugme);
     expect(yanlis({ isaret: 'nokta' })).toThrow(/işareti bileşen değil/);
   });
+
+  it('2137-1 a: seritte gorunen eylem yalniz sagda ve Hesap menusu maddesiz olur', () => {
+    expect(ustEylemleriTopla(dosya(eylem('e', { seritte: true })))[0]?.seritte).toBe(true);
+    expect(yanlis({ seritte: true, yer: 'sol' })).toThrow(/Şeritte görünen üst eylem/);
+    expect(yanlis({ seritte: true, hesapMaddesi: { baslik: 'Durum', simge: 'cpu' } })).toThrow(/Şeritte görünen üst eylem/);
+  });
 });
 
 describe('gorunenUstEylemler', () => {
