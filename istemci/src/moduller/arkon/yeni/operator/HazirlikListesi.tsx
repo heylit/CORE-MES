@@ -9,28 +9,33 @@ import './hazirlik-listesi.css';
 
 // Üretim Terminali hazırlık listesi (2057 a, 2079-1 b): emir ayrıntısındaki matrisle aynı kaynak, yalnız ekrandaki iş emrinin satırı.
 // Yalnız sistemin doğruladığı maddeler (2059 a). Terminal muaf tutmaz, muafiyeti gösterir (2068-1 a). Başlat'ı kapatmaz: eksikte
-// sunucu reddeder (2079-1 b).
+// sunucu reddeder (2079-1 b). Uyaran maddenin (2146-1 a) eksiği "Uyarı" görünür; iş başlar.
 type Hal = HazirlikCevabi['maddeler'][number]['durum'];
 export type Ton = 'hata' | 'uyari' | 'tamam' | 'pasif';
 const HAL: Record<Hal, { ton: Ton; simge: SimgeAdi; ad: string }> = {
   eksik: { ton: 'hata', simge: 'x', ad: 'Eksik' }, muaf: { ton: 'uyari', simge: 'lock', ad: 'Muaf' }, bilinmiyor: { ton: 'pasif', simge: 'help', ad: 'Denetlenmiyor' },
   tamam: { ton: 'tamam', simge: 'check', ad: 'Tamam' }, gerekmez: { ton: 'pasif', simge: 'minus', ad: 'Gerekmez' },
 };
-const SIRA: readonly Hal[] = ['eksik', 'muaf', 'bilinmiyor', 'tamam', 'gerekmez'];
+const UYARI = { ton: 'uyari' as Ton, simge: 'alert' as SimgeAdi, ad: 'Uyarı' };
+const SIRA: readonly (Hal | 'uyari')[] = ['eksik', 'uyari', 'muaf', 'bilinmiyor', 'tamam', 'gerekmez'];
+const sira = (x: HazirlikSatiri) => SIRA.indexOf(x.hal === 'eksik' && x.uyarir ? 'uyari' : x.hal);
+const gorunum = (x: HazirlikSatiri) => (x.hal === 'eksik' && x.uyarir ? UYARI : HAL[x.hal]);
 // Eksik maddede çağrı her zaman vardiya amirine gider; amir ilgili ekibe yönlendirir (2095-1 b).
 const EKIP: (typeof CAGRI_EKIPLERI)[number]['k'] = 'amir';
 
-export interface HazirlikSatiri { madde: HazirlikMaddesi; hal: Hal; isEmriDuzeyi: boolean; muafTutulur: boolean; muaf: HazirlikCevabi['muafiyetler'][number] | null }
+export interface HazirlikSatiri { madde: HazirlikMaddesi; hal: Hal; isEmriDuzeyi: boolean; muafTutulur: boolean; uyarir: boolean; muaf: HazirlikCevabi['muafiyetler'][number] | null }
 export function hazirlikSatirlari(v: HazirlikCevabi, isEmriId: number | null): HazirlikSatiri[] {
   return v.maddeler.map((m) => {
     const hal = m.isEmriDuzeyi && isEmriId !== null ? hazirlikHucreHali(v, { madde: m.madde, isEmriId }) : m.durum;
     const muaf = hal === 'muaf' ? v.muafiyetler.find((x) => x.madde === m.madde && (x.isEmriId === null || x.isEmriId === isEmriId)) ?? null : null;
-    return { madde: m.madde, hal, isEmriDuzeyi: m.isEmriDuzeyi, muafTutulur: m.muafTutulur, muaf };
-  }).sort((a, b) => SIRA.indexOf(a.hal) - SIRA.indexOf(b.hal));
+    return { madde: m.madde, hal, isEmriDuzeyi: m.isEmriDuzeyi, muafTutulur: m.muafTutulur, uyarir: HAZIRLIK_MADDE_BILGISI[m.madde].uyarir, muaf };
+  }).sort((a, b) => sira(a) - sira(b));
 }
 export function hazirlikOzeti(l: readonly HazirlikSatiri[]): { ton: Ton; simge: SimgeAdi; metin: string; eksik: number } {
-  const eksik = l.filter((x) => x.hal === 'eksik').length;
+  const eksik = l.filter((x) => x.hal === 'eksik' && !x.uyarir).length;
+  const uyari = l.filter((x) => x.hal === 'eksik' && x.uyarir).length;
   if (eksik) return { ton: 'hata', simge: 'x', metin: `Hazırlık · ${String(eksik)} eksik`, eksik };
+  if (uyari) return { ton: 'uyari', simge: 'alert', metin: `Hazır · ${String(uyari)} uyarı`, eksik };
   if (l.some((x) => x.hal === 'muaf')) return { ton: 'uyari', simge: 'lock', metin: 'Hazır · muafiyetle', eksik };
   return { ton: 'tamam', simge: 'check', metin: 'Hazır', eksik };
 }
@@ -75,9 +80,10 @@ export function HazirlikListesi({ satirlar, baslik, zaman, yenile, cagir }: {
       </div>
       <ul>
         {satirlar.map((x) => {
-          const h = HAL[x.hal]; const b = HAZIRLIK_MADDE_BILGISI[x.madde]; const ekip = CAGRI_EKIPLERI.find((e) => e.k === EKIP) ?? null;
+          const h = gorunum(x); const b = HAZIRLIK_MADDE_BILGISI[x.madde]; const ekip = CAGRI_EKIPLERI.find((e) => e.k === EKIP) ?? null;
           let ac: string | null = null;
-          if (x.hal === 'eksik') ac = `Tamamlanmadan bu iş emri başlamaz${x.muafTutulur ? '; müdür emir ayrıntısında gerekçeyle muaf tutabilir' : ''}. Sorumlu: ${b.sahip}.`;
+          if (x.hal === 'eksik' && x.uyarir) ac = `Eksik, ama iş başlar; uyarıdır. Sorumlu: ${b.sahip}.`;
+          else if (x.hal === 'eksik') ac = `Tamamlanmadan bu iş emri başlamaz${x.muafTutulur ? '; müdür emir ayrıntısında gerekçeyle muaf tutabilir' : ''}. Sorumlu: ${b.sahip}.`;
           if (x.hal === 'tamam') ac = `Sistem doğruladı · ${b.sahip}`;
           if (x.hal === 'gerekmez') ac = 'Bu iş emrinde gerekmiyor.';
           if (x.hal === 'bilinmiyor') ac = 'Sistem bu maddeyi henüz denetlemiyor; başlatmayı durdurmaz.';

@@ -1,5 +1,5 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { MUAF_TUTULABILEN_MADDELER } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1033,9 +1033,20 @@ export function fasonBeklemesi(
 // Hazırlık durdurucuları (120-122 a, denetim #14). Madde emirde seçiliyse (sahibi modül söyler) ve tamam değilse, muafiyeti yoksa iş emri
 // başlamaz. Çizim muaf tutulamaz (121 a).
 export const HAZIRLIK_ADI: Readonly<Record<HazirlikMaddesi, string>> = {
-  cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', 'ozel-proses': 'Özel proses',
+  cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu',
 };
-export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(MUAF_TUTULABILEN_MADDELER);
+// Muafiyet yalnız matristeki durduran maddeye verilir; özel proses matristen çıktı (2146-1 a), uyaran madde zaten durdurmaz.
+export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(
+  HAZIRLIK_MADDELERI.filter((m) => !hazirlikUyarirMi(m) && (MUAF_TUTULABILEN_MADDELER as readonly string[]).includes(m)),
+);
+export const MUAF_MADDE_YOK = 'Bu madde muaf tutulamaz.';
+// 2146-1 a: makine durumu yalnız uyarır. İş emrinde makine seçiliyse o makinenin durumu, seçili değilse istasyonda çalışır makine
+// kalıp kalmadığı sorulur. Makinesi olmayan istasyon ve fason ya da kişiye verilen iş emrinde madde gerekmez.
+export function makineHazirligi(a: { secili: 'calisir' | 'ariza' | 'bakim' | null; istasyondaMakine: number; calisir: number }): HazirlikBilgisi {
+  if (a.secili !== null) return { durum: a.secili === 'calisir' ? 'tamam' : 'yok', secildi: true };
+  if (a.istasyondaMakine === 0) return { durum: 'yok', secildi: false };
+  return { durum: a.calisir > 0 ? 'tamam' : 'yok', secildi: true };
+}
 export interface HazirlikBilgisi { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean }
 export type HazirlikHali = 'tamam' | 'eksik' | 'muaf' | 'gerekmez' | 'bilinmiyor';
 export function hazirlikHali(bilgi: HazirlikBilgisi | undefined, muaf: boolean): HazirlikHali {
@@ -1044,7 +1055,9 @@ export function hazirlikHali(bilgi: HazirlikBilgisi | undefined, muaf: boolean):
   if (bilgi.durum === 'tamam') return 'tamam';
   return muaf ? 'muaf' : 'eksik';
 }
-export function hazirlikEngeli(eksikler: readonly HazirlikMaddesi[]): string | null {
+// Uyaran madde (2146-1 a) eksik olsa da engel değildir.
+export function hazirlikEngeli(tumEksikler: readonly HazirlikMaddesi[]): string | null {
+  const eksikler = tumEksikler.filter((m) => !hazirlikUyarirMi(m));
   if (eksikler.length === 0) return null;
   const adlar = eksikler.map((m) => HAZIRLIK_ADI[m]).join(', ');
   return eksikler.every((m) => MUAF_TUTULUR.has(m))

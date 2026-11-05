@@ -1,6 +1,8 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kayit } from '#paylasilan/sozlesme/cnc-kurulum.ts';
+import { isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { SON_ONAY_ADIMI } from './kurallar.ts';
+import { takimOmruDurumlari } from './servis.ts';
 import { isEmriHazirlikOzetleri, kayitGetir, makineModelTurleri as modelTurleriniOku, secilmisIsEmirleri } from './sorgular.ts';
 
 // Bağlamada (Aşama 2) başka modül bu modülün kaydını yalnız buradan okur; yazma dışarı açılmaz. Prototipin durumu
@@ -51,3 +53,19 @@ export async function makineModelTurleri(db: Db, makineIdleri: readonly number[]
 export { takimOmruDurumlari, takimSayimiYansit } from './servis.ts';
 export type { TakimOmruDurumu, TakimSayimOlayi } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// Hazırlık matrisinin takım ömrü maddesi (2146-1 a, yalnız uyarır): iş emrinin istasyonuna yüklü, ömür hedefi olan takımlardan biri
+// kritik (kalan pay yüzde 20'nin altında) ya da ömrünü doldurmuşsa eksiktir. Hedefli takımı olmayan istasyonda madde gerekmez.
+// Bağı kablolama.ts kurar; yetki denetlemez.
+export async function isEmriTakimHazirliklari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
+  const planlar = await isEmriPlanBilgileri(db, isEmriIdleri);
+  const istasyonlar = [...new Set([...planlar.values()].flatMap((p) => (p.istasyonId === null ? [] : [p.istasyonId])))];
+  const takimlar = istasyonlar.length === 0 ? [] : (await takimOmruDurumlari(db, istasyonlar)).filter((t) => t.durum !== null);
+  const sonuc = new Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>();
+  for (const [id, p] of planlar) {
+    const burada = takimlar.filter((t) => t.istasyonId === p.istasyonId);
+    sonuc.set(id, burada.length === 0 ? { durum: 'yok', secildi: false }
+      : { durum: burada.some((t) => t.durum === 'crit' || t.durum === 'over') ? 'yok' : 'tamam', secildi: true });
+  }
+  return sonuc;
+}

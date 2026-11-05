@@ -77,12 +77,15 @@ describe('uretim-emirleri hazırlık matrisi (2060, gerçek PostgreSQL)', () => 
     const cozucu = (m: HazirlikMaddesi): HazirlikCozucusu => async (_db, idler) =>
       (m === 'cnc' ? new Map(idler.flatMap((x) => (cnc.has(x) ? [[x, cnc.get(x)!] as const] : [])))
         : new Map(idler.map((x) => [x, { durum: m === 'cizim' ? 'suruyor' : 'tamam', secildi: true } as const])));
-    const onceki = (['cnc', 'cizim', 'ozel-proses'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, m === 'ozel-proses' ? null : cozucu(m))] as const);
+    const onceki = (['cnc', 'cizim'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, cozucu(m))] as const);
     try {
       const v = hazirlikCevabi.parse(await o().vt.okumaTx((db) => hazirlik(db, id)));
-      assert.deepEqual(v.maddeler.map((m) => [m.madde, m.durum, m.isEmriDuzeyi]),
-        [['cnc', 'eksik', true], ['cizim', 'eksik', false], ['ozel-proses', 'bilinmiyor', false]]);
-      assert.deepEqual(v.isEmirleri.map((s) => [s.isEmriId, s.opNo, s.bitti, s.maddeler.map((m) => [m.madde, m.durum])]), [
+      // Özel proses matristen çıktı (2146-1 a); uyaran maddelerin hâli kendi testinde (hazirlik-uyari.test.ts), çözücüleri kablolamaya bağlı.
+      assert.deepEqual(v.maddeler.map((m) => [m.madde, m.isEmriDuzeyi]), [
+        ['cnc', true], ['cizim', false], ['rota', false], ['malzeme', true], ['takim-omru', true], ['makine', true],
+      ]);
+      assert.deepEqual(v.maddeler.slice(0, 2).map((m) => [m.madde, m.durum]), [['cnc', 'eksik'], ['cizim', 'eksik']]);
+      assert.deepEqual(v.isEmirleri.map((s) => [s.isEmriId, s.opNo, s.bitti, s.maddeler.filter((m) => m.madde === 'cnc').map((m) => [m.madde, m.durum])]), [
         [ie1, 10, false, [['cnc', 'tamam']]],
         [ie2, 20, false, [['cnc', 'eksik']]],
         [ie3, 30, false, [['cnc', 'bilinmiyor']]],
@@ -108,7 +111,7 @@ describe('uretim-emirleri hazırlık matrisi (2060, gerçek PostgreSQL)', () => 
     const onceki = hazirlikCozucusuKaydet('cnc', null);
     try {
       const v = await o().vt.okumaTx((db) => hazirlik(db, id));
-      assert.deepEqual(v.isEmirleri.map((s) => s.maddeler.map((m) => m.durum)), [['bilinmiyor']]);
+      assert.deepEqual(v.isEmirleri.map((s) => s.maddeler.filter((m) => m.madde === 'cnc').map((m) => m.durum)), [['bilinmiyor']]);
     } finally {
       hazirlikCozucusuKaydet('cnc', onceki);
     }

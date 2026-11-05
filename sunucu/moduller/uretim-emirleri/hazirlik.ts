@@ -1,19 +1,20 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { HAZIRLIK_MADDELERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { HAZIRLIK_MADDELERI, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BaslatmaOlayi } from './baslatma-denetimi.ts';
-import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali } from './kurallar.ts';
+import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, makineHazirligi } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Hazırlık durdurucuları (120-122 a, denetim #14): maddenin durumunu sahibi modül verir. Sahipler (cnc-kurulum, Arkon, Kalite Merkezi)
 // bu modülü okuduğu için çözücüler kablolama.ts'te kaydedilir; kayıtsız madde emirde aranmaz. CNC kurulumu iş emri başınadır (266 a),
-// çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği.
+// çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği. Uyaran maddeler (2146-1 a) başlatmada sorulmaz, yalnız görünümde.
 export type HazirlikCozucusu = (db: Db, idler: readonly number[]) => Promise<ReadonlyMap<number, HazirlikBilgisi>>;
-const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc']);
+const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine']);
 const cozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu>();
 // Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
 export function hazirlikCozucusuKaydet(madde: HazirlikMaddesi, cozucu: HazirlikCozucusu | null): HazirlikCozucusu | null {
@@ -29,11 +30,12 @@ const muafMi = (l: readonly s.MuafiyetSatiri[], madde: HazirlikMaddesi, isEmriId
 const HAL_SIRASI: readonly HazirlikHali[] = ['eksik', 'bilinmiyor', 'muaf', 'tamam', 'gerekmez'];
 const enKotu = (l: readonly HazirlikHali[]): HazirlikHali => HAL_SIRASI.find((h) => l.includes(h)) ?? 'gerekmez';
 
-// isEmriId verilirse yalnız o iş emri (başlatma), verilmezse emrin bitmemiş iş emirleri (görünüm) sorulur.
+// isEmriId verilirse yalnız o iş emri ve yalnız durduran maddeler (başlatma), verilmezse emrin bitmemiş iş emirleri (görünüm) sorulur.
 async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, muaf: readonly s.MuafiyetSatiri[]): Promise<Map<HazirlikMaddesi, HazirlikHali>> {
   const sonuc = new Map<HazirlikMaddesi, HazirlikHali>();
   let isEmirleri: number[] | null = isEmriId === null ? null : [isEmriId];
   for (const m of HAZIRLIK_MADDELERI) {
+    if (isEmriId !== null && hazirlikUyarirMi(m)) continue;
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {
       sonuc.set(m, hazirlikHali(c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined, muafMi(muaf, m, isEmriId)));
@@ -87,8 +89,31 @@ export async function muafiyetVer(db: Db, kullanici: Kullanici, uretimEmriId: nu
   const e = await s.ustEmirBul(db, uretimEmriId, true);
   if (e === null || e.malzemeNo === null) throw bulunamadi(EMIR_YOK);
   if (e.durum === 'bitti' || e.durum === 'iptal') throw cakisma(MUAF_KAPALI_EMIR);
+  if (!(MUAF_TUTULUR as ReadonlySet<string>).has(g.madde)) throw dogrulama(MUAF_MADDE_YOK, 'madde');
   if (g.isEmriId !== null && !(await s.isEmirleriGetir(db, [uretimEmriId])).some((i) => i.id === g.isEmriId)) throw dogrulama(MUAF_IS_EMRI_YOK, 'isEmriId');
   if ((await s.muafiyetler(db, uretimEmriId)).some((x) => x.madde === g.madde && x.isEmriId === g.isEmriId)) throw cakisma(MUAF_ZATEN);
   await s.muafiyetEkle(db, { uretimEmriId, isEmriId: g.isEmriId, madde: g.madde, kisiId: kullanici.id, gerekce: g.gerekce });
   return hazirlik(db, uretimEmriId);
 }
+
+// Makine durumu (2146-1 a): sahibi İstasyonlar'dır; bu modül onu zaten okuduğu için çözücü burada kayıtlıdır (İstasyonlar üretim
+// emirlerini okuyamaz, döngü olur). Durum satırı olmayan makine çalışır sayılır (İstasyonlar'daki kural).
+export async function makineHazirlikDurumlari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, HazirlikBilgisi>> {
+  const planlar = await s.isEmriPlanBilgileriGetir(db, [...new Set(isEmriIdleri)]);
+  if (planlar.length === 0) return new Map();
+  const durum = new Map((await makineDurumlari(db)).map((d) => [d.makineId, d.durum]));
+  const aktif = await makineler(db, { pasiflerDahil: false });
+  const sonuc = new Map<number, HazirlikBilgisi>();
+  for (const p of planlar) {
+    const istasyonda = p.istasyonId === null ? [] : aktif.filter((m) => m.istasyonId === p.istasyonId);
+    sonuc.set(p.id, p.fasonFirmaId !== null || (p.makineId === null && p.istasyonId === null)
+      ? { durum: 'yok', secildi: false }
+      : makineHazirligi({
+        secili: p.makineId === null ? null : (durum.get(p.makineId) ?? 'calisir'),
+        istasyondaMakine: istasyonda.length,
+        calisir: istasyonda.filter((m) => (durum.get(m.id) ?? 'calisir') === 'calisir').length,
+      }));
+  }
+  return sonuc;
+}
+hazirlikCozucusuKaydet('makine', makineHazirlikDurumlari);

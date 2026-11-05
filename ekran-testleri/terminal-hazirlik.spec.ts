@@ -11,10 +11,10 @@ const paket = {
 const hazirlik = {
   maddeler: [
     { madde: 'cnc', durum: 'eksik', muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false },
-    { madde: 'ozel-proses', durum: 'muaf', muafTutulur: true, isEmriDuzeyi: false },
+    { madde: 'makine', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true },
   ],
-  muafiyetler: [{ madde: 'ozel-proses', isEmriId: null, kisiId: 1, kisiAdi: 'Örnek Müdür', gerekce: 'Deneme gerekçesi.', zaman: '2026-11-04T08:40:00.000Z' }],
-  isEmirleri: [{ isEmriId: 99010, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: 'eksik' }] }],
+  muafiyetler: [],
+  isEmirleri: [{ isEmriId: 99010, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: 'eksik' }, { madde: 'makine', durum: 'eksik' }] }],
 };
 
 test.describe('2079-1 b terminal hazırlık listesi', () => {
@@ -33,8 +33,8 @@ test.describe('2079-1 b terminal hazırlık listesi', () => {
     await expect(liste).toBeVisible();
     await expect(liste.getByRole('listitem')).toHaveCount(3);
     await expect(liste.getByRole('listitem').first()).toHaveAttribute('data-hal', 'eksik');
-    await expect(liste.getByRole('button', { name: /Sorumluya haber ver/ })).toBeVisible();
-    await expect(liste.getByText(/Müdür muaf tuttu · Örnek Müdür/)).toBeVisible();
+    await expect(liste.getByRole('button', { name: /Sorumluya haber ver/ }).first()).toBeVisible();
+    await expect(liste.getByText('Uyarı', { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     if (klasor) await page.screenshot({ path: `${klasor}/terminal-${bilgi.project.name}-liste.png`, fullPage: true });
     expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);

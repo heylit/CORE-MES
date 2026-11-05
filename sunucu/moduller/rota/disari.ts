@@ -1,3 +1,6 @@
+import type { Db } from '#cekirdek/db.ts';
+import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { yururluktekiRevizyonIdleri } from './sorgular.ts';
 export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } from './servis.ts';
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
@@ -19,3 +22,17 @@ export {
 // 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
 export { yuzeyIslemiAdimlari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış
+// emirde madde gerekmez; ürünün yürürlükte revizyonu yoksa ya da emir eski revizyonla açıldıysa eksiktir. Bağı kablolama.ts kurar.
+export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
+  const emirler = [];
+  for (const id of new Set(emirIdleri)) {
+    const e = await uretimEmriOzeti(db, id);
+    if (e !== null) emirler.push(e);
+  }
+  const yururlukte = await yururluktekiRevizyonIdleri(db, [...new Set(emirler.flatMap((e) => (e.malzemeNo === null ? [] : [e.malzemeNo])))]);
+  return new Map(emirler.map((e) => [e.id, e.kaynakRotaRevizyonId === null || e.malzemeNo === null
+    ? { durum: 'yok' as const, secildi: false }
+    : { durum: yururlukte.get(e.malzemeNo) === e.kaynakRotaRevizyonId ? 'tamam' as const : 'yok' as const, secildi: true }]));
+}

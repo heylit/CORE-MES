@@ -591,7 +591,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(await o().vt.okumaTx((db) => acikIsEmri(db, 2_000_000_000)), null);
   });
 
-  test('denetim #14, 120-122 a, 264 a: eksik hazırlık iş emrini durdurur; CNC ve özel proses yalnız müdürün gerekçeli muafiyetiyle geçer; çizim muaf tutulamaz; kalibrasyon madde değil (2131-1 c)', async () => {
+  test('denetim #14, 120-122 a, 264 a: eksik hazırlık iş emrini durdurur; CNC yalnız müdürün gerekçeli muafiyetiyle geçer; çizim muaf tutulamaz; kalibrasyon (2131-1 c) ve özel proses (2146-1 a) madde değil', async () => {
     const ist = await istasyonKur();
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: await makineKur(ist) })], { adet: 4 });
     const durumlar = new Map<HazirlikMaddesi, { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean }>([
@@ -601,7 +601,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     // CNC iş emri başınadır (266 a): çözücüsü iş emri kimliği alır, ötekiler üretim emri kimliği.
     const cozucu = (m: HazirlikMaddesi): HazirlikCozucusu => async (_db, idler) =>
       new Map(idler.filter((x) => x === (m === 'cnc' ? ie1 : id)).map((x) => [x, durumlar.get(m)!]));
-    const onceki = (['cnc', 'cizim', 'ozel-proses'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, m === 'ozel-proses' ? null : cozucu(m))] as const);
+    const onceki = (['cnc', 'cizim'] as const).map((m) => [m, hazirlikCozucusuKaydet(m, cozucu(m))] as const);
     const muafiyet = (govde: unknown, kisi = 'mudur') => istek<HazirlikCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/hazirlik-muafiyeti`, govde);
     const oku = async () => (await istek<HazirlikCevabi>('planlama_proje', 'GET', `/adimli-emirler/${id}/hazirlik`)).govde;
     try {
@@ -609,12 +609,15 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       const ret = await terminal(`/${id}/baslat`);
       assert.deepEqual([ret.durum, ret.govde.mesaj], [409, 'Hazırlık eksik: CNC kurulumu (NC), Çizim revizyonu. Tamamlanmadan başlamaz.']);
       hazirlikCevabi.parse(await oku());
-      assert.deepEqual((await oku()).maddeler.map((m) => [m.madde, m.durum, m.muafTutulur]),
-        [['cnc', 'eksik', true], ['cizim', 'eksik', false], ['ozel-proses', 'bilinmiyor', true]]);
+      assert.deepEqual((await oku()).maddeler.filter((m) => m.madde === 'cnc' || m.madde === 'cizim').map((m) => [m.madde, m.durum, m.muafTutulur]),
+        [['cnc', 'eksik', true], ['cizim', 'eksik', false]]);
+      assert.equal((await oku()).maddeler.some((m) => (m.madde as string) === 'ozel-proses'), false, 'özel proses matriste yok (2146-1 a)');
 
       assert.equal((await muafiyet({ madde: 'cnc', isEmriId: null, gerekce: 'Program elde denendi' }, 'planlama_proje')).durum, 403, 'yalnız müdür');
       assert.equal((await muafiyet({ madde: 'cizim', isEmriId: null, gerekce: 'Deneme' })).durum, 400, 'çizim muaf tutulamaz (121 a)');
       assert.equal((await muafiyet({ madde: 'kalibrasyon', isEmriId: null, gerekce: 'Deneme' })).durum, 400, 'kalibrasyon hazırlık maddesi değil (2131-1 c)');
+      assert.equal((await muafiyet({ madde: 'ozel-proses', isEmriId: null, gerekce: 'Deneme' })).durum, 400, 'özel proses muaf tutulmaz (2146-1 a)');
+      assert.equal((await muafiyet({ madde: 'malzeme', isEmriId: null, gerekce: 'Deneme' })).durum, 400, 'uyaran madde muaf tutulmaz');
       assert.equal((await muafiyet({ madde: 'cnc', isEmriId: null, gerekce: '  ' })).durum, 400, 'gerekçe zorunlu');
       assert.equal((await muafiyet({ madde: 'cnc', isEmriId: 2_000_000_000, gerekce: 'Deneme' })).durum, 400, 'başka emrin iş emri');
       const verildi = await muafiyet({ madde: 'cnc', isEmriId: ie1, gerekce: 'Program elde denendi' });
@@ -628,7 +631,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       assert.deepEqual([cizimde.durum, cizimde.govde.mesaj], [409, 'Hazırlık eksik: Çizim revizyonu. Tamamlanmadan başlamaz.'], 'muafiyet yalnız kendi maddesini geçer');
       durumlar.set('cizim', { durum: 'yok', secildi: false });
       assert.equal((await terminal(`/${id}/baslat`)).durum, 200, 'seçilmeyen madde aranmaz; CNC muaf');
-      assert.equal((await muafiyet({ madde: 'ozel-proses', isEmriId: null, gerekce: 'Deneme' })).durum, 200, 'başlamış emirde de verilir');
+      assert.equal((await muafiyet({ madde: 'cnc', isEmriId: null, gerekce: 'Deneme' })).durum, 200, 'başlamış emirde de verilir');
     } finally {
       for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c);
     }
