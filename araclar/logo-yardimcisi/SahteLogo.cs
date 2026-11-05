@@ -96,6 +96,8 @@ namespace LogoYardimcisi
         public Dictionary<string, string> CrmMusterileri = new Dictionary<string, string>();
         public List<KodAd> Birimler = new List<KodAd>();
         public List<MalKabulSatiri> MalKabulSatirlari = new List<MalKabulSatiri>();
+        public List<StokToplami> Stoklar = new List<StokToplami>();
+        public List<CariKaydi> CariDetaylari = new List<CariKaydi>();
         public Dictionary<int, List<FaturaOzeti>> FaturaListesi = new Dictionary<int, List<FaturaOzeti>>();
 
         public List<string> Cagrilar = new List<string>();
@@ -472,6 +474,26 @@ namespace LogoYardimcisi
         public MalzemeKaydi Malzeme(string kod) { return Kartlar.FirstOrDefault(x => x.Kod == kod); }
         public List<string> MalzemeKodlari() { return Kartlar.Select(x => x.Kod).OrderBy(x => x, StringComparer.Ordinal).ToList(); }
         public List<KodAd> BirimSetleri() { return Birimler; }
+
+        public List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok)
+        {
+            return Kartlar.Where(x => x.Ref > sonGorulen).OrderBy(x => x.Ref).Take(enCok).ToList();
+        }
+
+        public List<StokToplami> StokToplamlari(int sonGorulen, int enCok)
+        {
+            var refler = new HashSet<int>(MalzemeKartlari(sonGorulen, enCok).Select(x => x.Ref));
+            return Stoklar.Where(x => refler.Contains(x.MalzemeRef) && x.AmbarNo >= 0).OrderBy(x => x.MalzemeRef).ThenBy(x => x.AmbarNo).ToList();
+        }
+
+        public List<CariKaydi> CariAra(string metin, int enCok)
+        {
+            Func<string, bool> icinde = a => a != null && a.IndexOf(metin, StringComparison.OrdinalIgnoreCase) >= 0;
+            return CariDetaylari.Where(c => !c.Pasif && (icinde(c.Kod) || icinde(c.Ad) || c.VergiNo == metin || c.TcNo == metin))
+                .OrderBy(c => c.Kod, StringComparer.Ordinal).Take(enCok).ToList();
+        }
+
+        public CariKaydi Cari(string kod) { return CariDetaylari.FirstOrDefault(c => c.Kod == kod); }
 
         public List<KodAd> Ambarlar()
         {

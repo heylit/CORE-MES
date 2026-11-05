@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, MalzemeKodlari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari;
 
@@ -21,6 +21,8 @@ namespace LogoYardimcisi
         {
             "LG_<f>_SRVCARD.CARDTYPE (1 alınan, 2 verilen)", "LG_<f>_<d>_STLINE.IOCODE, LINETYPE, STOCKREF, UOMREF", "LG_<f>_<d>_DEMANDLINE.LOGICALREF ile satır okuma",
             "LG_<f>_PURCHOFFER.CLIENTREF, NETTOTAL, TRCURR, TRRATE", "LG_<f>_PURCHOFFERLN.STOCKREF, LINETYPE, AMOUNT, PRICE, UOMREF",
+            "LG_<f>_ITEMS.ACTIVE (0 kullanımda)", "LG_<f>_<d>_GNTOTST.STOCKREF, INVENNO (-1 bütün ambarların toplamı), ONHAND",
+            "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
         };
 
         public Sorgular(int firma, int donem)
@@ -34,6 +36,16 @@ namespace LogoYardimcisi
             Malzeme = "SELECT I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE FROM " + f("ITEMS") + " I LEFT JOIN "
                 + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.CODE = @kod";
             MalzemeKodlari = "SELECT CODE FROM " + f("ITEMS") + " ORDER BY CODE";
+            MalzemeKartlari = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
+                + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.LOGICALREF > @son ORDER BY I.LOGICALREF";
+            StokToplamlari = "SELECT T.STOCKREF, I.CODE, T.INVENNO, T.ONHAND FROM " + d("GNTOTST") + " T JOIN " + f("ITEMS") + " I ON I.LOGICALREF = T.STOCKREF"
+                + " WHERE T.INVENNO >= 0 AND T.STOCKREF IN (SELECT TOP (@enCok) LOGICALREF FROM " + f("ITEMS") + " WHERE LOGICALREF > @son ORDER BY LOGICALREF)"
+                + " ORDER BY T.STOCKREF, T.INVENNO";
+            var cariAlanlari = "SELECT TOP (@enCok) LOGICALREF, CODE, DEFINITION_, CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR, ACTIVE FROM "
+                + f("CLCARD");
+            // LIKE deseni parametredir; %, _ ve [ yardımcıda kaçırılır (SqlOkuma.Desen).
+            CariAra = cariAlanlari + " WHERE ACTIVE = 0 AND (CODE LIKE @desen ESCAPE '\\' OR DEFINITION_ LIKE @desen ESCAPE '\\' OR TAXNR = @tam OR TCKNO = @tam) ORDER BY CODE";
+            Cari = cariAlanlari + " WHERE CODE = @kod";
             BirimSetleri = "SELECT CODE, NAME FROM " + f("UNITSETF") + " ORDER BY CODE";
             Ambarlar = "SELECT NR, NAME FROM L_CAPIWHOUSE WHERE FIRMNR = @firma ORDER BY NR";
             Cariler = "SELECT CODE, DEFINITION_ FROM " + f("CLCARD") + " WHERE ACTIVE = 0 ORDER BY CODE";
@@ -195,6 +207,90 @@ namespace LogoYardimcisi
         }
 
         public List<KodAd> BirimSetleri() { return KodAdlar(q.BirimSetleri); }
+
+        static bool Bayrak(object o)
+        {
+            return o != null && Convert.ToInt32(o, CultureInfo.InvariantCulture) != 0;
+        }
+
+        public List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok)
+        {
+            var l = new List<MalzemeKaydi>();
+            foreach (var s in Sorgula(q.MalzemeKartlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            {
+                var k = new MalzemeKaydi();
+                k.Ref = Tam(s[0]);
+                k.Kod = Metin(s[1]);
+                k.Ad = Metin(s[2]);
+                k.KartTuru = Tam(s[3]);
+                k.OzelKod = Metin(s[4]);
+                k.Aciklama2 = Metin(s[5]);
+                k.Aciklama3 = Metin(s[6]);
+                k.BirimSeti = Metin(s[7]);
+                k.Pasif = Bayrak(s[8]);
+                if (k.Kod != null) l.Add(k);
+            }
+            return l;
+        }
+
+        public List<StokToplami> StokToplamlari(int sonGorulen, int enCok)
+        {
+            var l = new List<StokToplami>();
+            foreach (var s in Sorgula(q.StokToplamlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            {
+                var x = new StokToplami();
+                x.MalzemeRef = Tam(s[0]);
+                x.MalzemeKodu = Metin(s[1]);
+                x.AmbarNo = Tam(s[2]);
+                x.Miktar = Ondalik(s[3]);
+                if (x.MalzemeKodu != null) l.Add(x);
+            }
+            return l;
+        }
+
+        // LIKE'ın özel karakterleri kaçırılır: arama metni desen olarak yorumlanmaz.
+        public static string Desen(string metin)
+        {
+            return "%" + metin.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[") + "%";
+        }
+
+        static CariKaydi CariSatiri(object[] s)
+        {
+            var c = new CariKaydi();
+            c.Ref = Tam(s[0]);
+            c.Kod = Metin(s[1]);
+            c.Ad = Metin(s[2]);
+            c.KartTuru = Tam(s[3]);
+            c.VergiNo = Metin(s[4]);
+            c.TcNo = Metin(s[5]);
+            c.VergiDairesi = Metin(s[6]);
+            c.Adres1 = Metin(s[7]);
+            c.Adres2 = Metin(s[8]);
+            c.Ilce = Metin(s[9]);
+            c.Il = Metin(s[10]);
+            c.PostaKodu = Metin(s[11]);
+            c.Telefon = Metin(s[12]);
+            c.EPosta = Metin(s[13]);
+            c.Pasif = Bayrak(s[14]);
+            return c;
+        }
+
+        public List<CariKaydi> CariAra(string metin, int enCok)
+        {
+            var l = new List<CariKaydi>();
+            foreach (var s in Sorgula(q.CariAra, P("@desen", Desen(metin)), P("@tam", metin), P("@enCok", enCok)))
+            {
+                var c = CariSatiri(s);
+                if (c.Kod != null) l.Add(c);
+            }
+            return l;
+        }
+
+        public CariKaydi Cari(string kod)
+        {
+            var l = Sorgula(q.Cari, P("@kod", kod), P("@enCok", 1));
+            return l.Count == 0 ? null : CariSatiri(l[0]);
+        }
 
         public List<string> MalzemeKodlari()
         {

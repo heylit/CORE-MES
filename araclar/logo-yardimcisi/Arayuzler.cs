@@ -60,6 +60,37 @@ namespace LogoYardimcisi
         public string Aciklama2;
         public string Aciklama3;
         public string BirimSeti;
+        // ITEMS.ACTIVE 1 (VARSAYIM: 0 kullanımda, 1 kullanım dışı; --olc ile doğrulanır).
+        public bool Pasif;
+    }
+
+    // Logo stok toplamı: malzeme ve ambar başına eldeki miktar (GNTOTST, VARSAYIM; --olc ile doğrulanır).
+    public sealed class StokToplami
+    {
+        public int MalzemeRef;
+        public string MalzemeKodu;
+        public int AmbarNo;
+        public decimal Miktar;
+    }
+
+    // Cari kart (CLCARD). Alan adları Logo'nun genel adlandırmasından (VARSAYIM; Sorgular.Dogrulanmadi).
+    public sealed class CariKaydi
+    {
+        public int Ref;
+        public string Kod;
+        public string Ad;
+        public int KartTuru;
+        public string VergiNo;
+        public string TcNo;
+        public string VergiDairesi;
+        public string Adres1;
+        public string Adres2;
+        public string Ilce;
+        public string Il;
+        public string PostaKodu;
+        public string Telefon;
+        public string EPosta;
+        public bool Pasif;
     }
 
     public sealed class HizmetKaydi
@@ -147,6 +178,13 @@ namespace LogoYardimcisi
         MalzemeKaydi Malzeme(string kod);
         // Logo'daki bütün malzeme kartı kodları; TMI yeni kod verirken bunları atlar (2089-2 a).
         List<string> MalzemeKodlari();
+        // Malzeme kartları kayıt sırasıyla, sonGorulen'den sonrası, en çok enCok kart (2116: Logo'dan kart okuması).
+        List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok);
+        // Kayıt sırasıyla sonGorulen'den sonraki en çok enCok kartın ambar başına stok toplamı; satırı olmayan kart dönmez.
+        List<StokToplami> StokToplamlari(int sonGorulen, int enCok);
+        // Kullanımdaki cariler kodda, ünvanda (içinde) ya da vergi / T.C. kimlik numarasında (tam) aranır (2118).
+        List<CariKaydi> CariAra(string metin, int enCok);
+        CariKaydi Cari(string kod);
         List<KodAd> BirimSetleri();
         List<KodAd> Ambarlar();
         List<KodAd> Cariler();
