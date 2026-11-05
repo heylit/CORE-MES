@@ -17,6 +17,9 @@ export type { TaslakSiparisVerisi } from './servis.ts';
 export type { DurumKomutu } from './kurallar.ts';
 // Onay olayı (286 b): dinleyici onayla aynı işlemde çağrılır; reddi onayı geri alır. Plan kablolama.ts'te bağlanır.
 export { siparisOnaylandiDinle } from './siparis-olaylari.ts';
+// İptal reddi (2103 a): bağlı açık emir varsa iptal 409. Emirleri üretim emirleri verir, kablolama.ts kaydeder (ADR 0006).
+export { bagliEmirCozucusuKaydet as bagliEmirCozucusu } from './bagli-emirler.ts';
+export type { BagliEmir, BagliEmirCozucusu } from './bagli-emirler.ts';
 export type { SiparisOnaylandiDinleyicisi, SiparisOnaylandiOlayi } from './siparis-olaylari.ts';
 // Teklif (soru 148): okuma, talep, sürüm, kabul, revizyon ya da red ve siparişe dönüşüm; hepsi siparisler.yaz.
 export {

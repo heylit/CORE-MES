@@ -16,7 +16,7 @@ import * as receteRota from './moduller/recete-rota/disari.ts';
 import { logoBirimSetiCozucusu, logoKodCozucusu, rotaRevizyonlariCozucusu } from './moduller/malzemeler/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import * as stok from './moduller/stok/disari.ts';
 import * as uretimEmirleri from './moduller/uretim-emirleri/disari.ts';
@@ -78,6 +78,12 @@ export function sunucununBaglari(): Bag[] {
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, teklifDene),
+    bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && (async (db: Db, satirIdleri: readonly number[]) => {
+      const idler = [...(await uretimEmirleri.siparisSatirlarininEmirleri(db, satirIdleri)).values()].flat();
+      const durumlar = await uretimEmirleri.emirDurumlari(db, idler);
+      const nolar = await uretimEmirleri.emirNolari(db, idler);
+      return idler.flatMap((id) => { const durum = durumlar.get(id); return durum === undefined ? [] : [{ emirNo: nolar.get(id) ?? String(id), durum }]; });
+    })),
     // ADR 0018, 627 a: canlıya almada asıl planın son sözü ortak motordadır. Çözücü de plan modülündedir (ADR 0020); kayıt bağı kalkınca
     // plan servisi onu doğrudan çağırır (UYUM-BORCU P-B35).
     bag('plan motoru -> plan', planMotoruCozucusu, sunucuPlanCozucusu),
