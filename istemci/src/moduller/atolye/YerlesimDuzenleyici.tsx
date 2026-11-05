@@ -276,9 +276,8 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     () => new Map((merkezListesi.data?.taslaklar ?? []).map((i) => [i.istasyonId, i.ad] as const)),
     [merkezListesi.data],
   );
-  // Haritaya yalnız Çizim Merkezi'nde makineyle eşleşmiş istasyon eklenir; örnek istasyonlar "Örnek" etiketiyle eşleşmesiz de
-  // eklenebilir. Daha önce yerleşmiş eşleşmesiz istasyon haritada kalır. Yerleşimi kullanıcı yapar (kart #1258).
-  const { eklenecek, eslesmemis } = useMemo(() => {
+  // Haritada olmayan her aktif istasyon eklenebilir (2126-1 a); 3B modeli olan önce gelir. Yerleşimi kullanıcı yapar (kart #1258).
+  const eklenecek = useMemo(() => {
     const yerlesik = new Set(t.istasyonlar.map((i) => i.istasyonId));
     const liste = (istasyonlar.data?.istasyonlar ?? []).filter((i) => !yerlesik.has(i.id));
     return eklenebilirIstasyonlar(liste, (id) => bekleyenModeller.has(id) || taslakModeller.has(id));
@@ -308,7 +307,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
         key={i.id}
         className="tc-atolye-palet-oge"
         data-tur="istasyon"
-        title={[i.ad, ornek ? 'Örnek makine' : null, ISTASYON_TIPI_ADI[i.tip], MAKINE_CINSI_ADI[makineCinsi(i.tip, i.ad)], model ? `3B model: ${model.ad} (Rev ${model.harf})` : null, taslak ? `3B model: ${taslak} (taslak)` : null].filter(Boolean).join(' · ')}
+        title={[i.ad, ornek ? 'Örnek makine' : null, ISTASYON_TIPI_ADI[i.tip], MAKINE_CINSI_ADI[makineCinsi(i.tip, i.ad)], model ? `3B model: ${model.ad} (Rev ${model.harf})` : null, taslak ? `3B model: ${taslak} (taslak)` : null, model || taslak ? null : '3B model yok, kutu olarak çizilir'].filter(Boolean).join(' · ')}
         onClick={() => {
           if (ciziliyor) {
             aracYaz({ tur: 'ciz', hedef: { istasyon: i }, ad: `${i.kod} · ${i.ad}` });
@@ -843,15 +842,10 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
             ))}
             <section className="tc-atolye-palet-grup" aria-label="Eklenecek makineler">
               <h4>Eklenecek makineler</h4>
-              <p className="tc-atolye-ipucu">Çizim Merkezi'nde eşleşen makineler ve örnekler. Dokunup yerleştirin.</p>
+              <p className="tc-atolye-ipucu">Haritada olmayan makineler; 3B modeli olanlar önce. Dokunup yerleştirin.</p>
               {istasyonlar.isError && <p className="tc-atolye-ipucu">Makine listesi alınamadı.</p>}
-              {eklenecek.length === 0 && istasyonlar.isSuccess && <p className="tc-atolye-ipucu">Eklenecek eşleşmiş makine yok.</p>}
+              {eklenecek.length === 0 && istasyonlar.isSuccess && <p className="tc-atolye-ipucu">Eklenecek makine yok.</p>}
               <div className="tc-atolye-palet-ogeler">{eklenecek.map(istasyonDugmesi)}</div>
-              {eslesmemis > 0 && (
-                <p className="tc-atolye-ipucu" role="note">
-                  Eşleşmemiş {eslesmemis} makine eklenemez; önce Çizim Merkezi'nde "CNC makineleri" bölümünde eşleştirin.
-                </p>
-              )}
             </section>
             <section className="tc-atolye-palet-grup">
               {/* Haritada istasyon kaydı "makine" adıyla görünür (kullanıcı kararı, kart #1196); istasyonun altındaki makine kayıtları ekipmandır. */}

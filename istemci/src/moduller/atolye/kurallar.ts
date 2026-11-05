@@ -156,15 +156,14 @@ export function emirlerIstasyonaGore(emirler: readonly Emir[]): Map<number, Emir
 // Örnek veri istasyonları ORN- koduyla gelir (sunucu/moduller/istasyonlar/ornek-veri.ts).
 export const ornekIstasyonMu = (kod: string): boolean => kod.startsWith('ORN-');
 
-// Haritaya yalnız Çizim Merkezi'nde makineyle eşleşmiş istasyon eklenir (kullanıcı kararı 15.10.2026); örnek istasyonlar denemek
-// için eşleşmesiz de eklenebilir. Eşleşenler önce gelir. `eslesmemis`: listeye girmeyen istasyon sayısı (kullanıcıya söylenir).
-export function eklenebilirIstasyonlar<T extends { id: number; kod: string }>(
+// Haritaya her aktif istasyon eklenir; makine-istasyon bağının tek kaynağı İstasyonlar'dır, Çizim Merkezi eşleşmesi şart değildir
+// (2126-1 a; 15.10.2026 kuralı kalktı). 3B modeli olan (yayında ya da taslak) önce gelir; modelsiz istasyon haritada kutu olarak çizilir.
+export function eklenebilirIstasyonlar<T extends { id: number; aktif: boolean }>(
   liste: readonly T[],
-  eslesmis: (id: number) => boolean,
-): { eklenecek: T[]; eslesmemis: number } {
-  const esli = liste.filter((i) => eslesmis(i.id));
-  const ornek = liste.filter((i) => !eslesmis(i.id) && ornekIstasyonMu(i.kod));
-  return { eklenecek: [...esli, ...ornek], eslesmemis: liste.length - esli.length - ornek.length };
+  modeliVar: (id: number) => boolean,
+): T[] {
+  const aktif = liste.filter((i) => i.aktif);
+  return [...aktif.filter((i) => modeliVar(i.id)), ...aktif.filter((i) => !modeliVar(i.id))];
 }
 
 // Başlamış emri olan ama fabrikanın hiçbir bölümüne (istasyon ya da ekipmanıyla) yerleşmemiş istasyonlar (kart #1284):

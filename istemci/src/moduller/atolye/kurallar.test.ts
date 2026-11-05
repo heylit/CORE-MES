@@ -313,13 +313,13 @@ describe('haritada olmayan makinede çalışan iş (kart #1284)', () => {
 });
 
 describe('haritaya eklenebilen makineler', () => {
-  it('yalnız eşleşmiş istasyonlar ve örnek istasyonlar gelir; eşleşenler önce, kalanlar sayılır', () => {
+  it('her aktif istasyon gelir, Çizim Merkezi eşleşmesi şart değil; modeli olan önce, pasif gelmez (2126-1 a)', () => {
     const liste = [
-      { id: 1, kod: 'ORN-TORNA-1' }, { id: 2, kod: 'CNC-01' }, { id: 3, kod: 'CNC-02' }, { id: 4, kod: 'ORN-FREZE-1' }, { id: 5, kod: 'ORNEK-9' },
+      { id: 1, kod: 'ORN-TORNA-1', aktif: true }, { id: 2, kod: 'CNC-01', aktif: true }, { id: 3, kod: 'CNC-02', aktif: true },
+      { id: 4, kod: 'ORN-FREZE-1', aktif: true }, { id: 5, kod: 'CNC-05', aktif: false },
     ];
-    const sonuc = eklenebilirIstasyonlar(liste, (id) => id === 3 || id === 4);
-    expect(sonuc.eklenecek.map((i) => i.id)).toEqual([3, 4, 1]);
-    expect(sonuc.eslesmemis).toBe(2);
+    expect(eklenebilirIstasyonlar(liste, (id) => id === 3 || id === 4).map((i) => i.id)).toEqual([3, 4, 1, 2]);
+    expect(eklenebilirIstasyonlar(liste, () => false).map((i) => i.id)).toEqual([1, 2, 3, 4]);
     expect(ornekIstasyonMu('ORN-KONTROL')).toBe(true);
     expect(ornekIstasyonMu('orn-1')).toBe(false);
   });
