@@ -7,7 +7,8 @@ import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
 import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
 import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
-import { malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
+import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
+import { istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
@@ -164,6 +165,14 @@ export function sunucununBaglari(): Bag[] {
     // 2133-1 b ve 2133-4 a: firma ya da fabrika ayarı kaydedilince sevkiyat noktası açılır ya da eşitlenir.
     bag('firma değişti -> sevkiyat noktası', firmaDegistiDinle, sevkiyat.firmaDegistiYansit),
     bag('ayar değişti -> sevkiyat fabrika noktası', ayarDegistiDinle, sevkiyat.ayarDegistiYansit),
+    // 2147: istasyona elle bildirim, o günkü istasyon atamasındaki kişilere (bildirim istasyonları ithal edemez: döngü).
+    bag('istasyon kişileri -> bildirim yayını', bildirimIstasyonCozucusu, [aktifIstasyonlar, istasyondakiKisiler].every((f) => typeof f === 'function')
+      ? async (db: Db) => {
+        const sonuc: { id: number; ad: string; kisiIdleri: number[] }[] = [];
+        for (const i of await aktifIstasyonlar(db)) sonuc.push({ id: i.id, ad: i.ad, kisiIdleri: (await istasyondakiKisiler(db, i.id)).map((k) => k.kisiId) });
+        return sonuc;
+      }
+      : undefined),
     bag('kart izleri -> malzemeler arşivi', kartIzleriCozucusu, kartIzleriTopla({
       'Değişiklik yönetimi': degisiklikKartIzleri, 'Finans': finansKartIzleri, 'İstasyonlar': istasyonKartIzleri, 'Markalama': markalamaKartIzleri,
       'Plan': planKartIzleri, 'Satın alma': satinAlmaKartIzleri, 'Rota': rotaKartIzleri, 'Siparişler': siparisKartIzleri,

@@ -1,6 +1,6 @@
 import type { Islem } from '#paylasilan/islemler.ts';
 import {
-  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimKanali, type BildirimTuru,
+  BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TURLERI, type BildirimKanali, type BildirimOnemi, type BildirimTuru, type YayinTuru,
 } from '#paylasilan/sozlesme/bildirim.ts';
 
 // BIL-1: mesaj ve e-posta kanalları bu aşamada kapalıdır (223 a e-postayı üçüncü, Mesaj kanalını dördüncü aşamaya koydu);
@@ -79,3 +79,42 @@ export function tercihHatasi(
   if (govde.eposta && !epostaVar) return { mesaj: TERCIH_ILETILERI.epostaYok, alan: 'eposta' };
   return null;
 }
+
+// BIL-11 (2147): elle yayının önemi türünden gelir; önem listesi (zil rengi, "uyarı ve acil" süzgeci) değişmez.
+export const YAYIN_ONEMI: Record<YayinTuru, BildirimOnemi> = { uyari: 'uyari', acil: 'acil', duyuru: 'bilgi', bilgi: 'bilgi' };
+// Elle yayının satır türü; otomatik türlerin kataloğunda yoktur (tercih ve alıcı ayarına girmez, yayının kendi hedefi geçer).
+export const YAYIN_SATIR_TURU = 'bildirim.yayin';
+export const yayinKaydi = (yayinId: number): string => `yayin:${yayinId}`;
+
+// BIL-12: yayın zamanı boşsa ya da geçmişteyse hemen yayınlanır; en çok 90 gün ileri. Bitiş yayın zamanından sonradır.
+export const YAYIN_ILERI_EN_COK_GUN = 90;
+export function yayinZamaniHatasi(
+  simdiMs: number, yayinZamani: string | null, bitis: string | null,
+): { mesaj: string; alan: 'yayinZamani' | 'bitis' } | null {
+  const yayinMs = yayinZamani === null ? simdiMs : Math.max(simdiMs, Date.parse(yayinZamani));
+  if (yayinMs - simdiMs > YAYIN_ILERI_EN_COK_GUN * 86_400_000) return { mesaj: `Yayın zamanı en çok ${YAYIN_ILERI_EN_COK_GUN} gün ileri olabilir.`, alan: 'yayinZamani' };
+  if (bitis !== null && Date.parse(bitis) <= yayinMs) return { mesaj: 'Bitiş yayın zamanından sonra olmalı.', alan: 'bitis' };
+  return null;
+}
+export const hemenMi = (simdiMs: number, yayinZamani: string | null): boolean => yayinZamani === null || Date.parse(yayinZamani) <= simdiMs;
+
+// BIL-13: alıcı yayın anında etkin ve girişli adaylardır, kimlik sırasıyla ve tekil; yazan kendi yayınını almaz (BIL-3 gibi).
+export function yayinAlicilari(adaylar: readonly number[], girisli: ReadonlySet<number>, yazanId: number): number[] {
+  return [...new Set(adaylar)].filter((k) => girisli.has(k) && k !== yazanId).sort((a, b) => a - b);
+}
+
+// BIL-14: yayının raporunu yazanı ve `bildirim.yayin-oku` taşıyan görür; geri çekmek yalnız yazanındır.
+export const yayiniGorurMu = (kullanici: { id: number; islemler: readonly string[] }, yazanId: number): boolean =>
+  kullanici.id === yazanId || kullanici.islemler.includes('bildirim.yayin-oku');
+
+// BIL-15 (2147-3 a): onay isteyen bildirim onaylanmadan arşive kaldırılamaz; "Okudum, anladım" denene dek ortada kalır.
+export const ONAY_ILETILERI = {
+  onayIstemiyor: 'Bu bildirim onay istemiyor.',
+  onaysizArsiv: 'Onay isteyen bildirim "Okudum, anladım" denmeden arşive kaldırılamaz.',
+  geriCekilmis: 'Yayın zaten geri çekildi.',
+  yazanDegil: 'Yayını yalnız yazan geri çekebilir.',
+} as const;
+
+// BIL-16 (2147-3 a): otomatik bildirimden yalnız acil olanı ortada çıkar ve onay istemez. Tür başına ayar Bildirim yönetimi'ne gelince
+// (2147 Y4) bu varsayılan olur.
+export const otomatikOrtadaMi = (onem: BildirimOnemi): boolean => onem === 'acil';

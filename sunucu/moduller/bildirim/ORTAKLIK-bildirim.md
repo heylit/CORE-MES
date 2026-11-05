@@ -13,3 +13,7 @@
 | Rol (çağrı alıcısı) | `bildirim_cagri_alicisi.rol_id` -> `rol.id` | kisiler | yabancı anahtar, rol silinince satır düşer; kişiler `kisiler/disari.ts` `rollerdekiKisiler` ile |
 | Çağrı ekibi | `bildirim_cagri_ekibi.ekip`, `bildirim_cagri_alicisi.ekip` | durus-nedenleri sözleşmesi (`CAGRI_EKIPLERI`) | aynı liste `durus_nedeni.cagri_ekibi` kısıtında; Arkon `CALLS` listesi Arkon'da |
 | Değiştiren kişi | `bildirim_cagri_ekibi.degistiren_kisi_id` -> `kisi.id` | kisiler | |
+| Elle yayın (2147) | `bildirim_yayini`, `bildirim_yayin_hedefi`; `bildirim_kaydi.yayin_id`, `ortada`, `onay_istenir`, `onaylandi` | bildirim | yazan ve geri çeken `kisi.id` yabancı anahtar |
+| Yayın hedefi | `bildirim_yayin_hedefi.hedef_id` (rol, istasyon ya da kişi kimliği; `hedef_turu`) | kisiler (rol, kişi), istasyonlar (istasyon) | çok tablolu olduğundan yabancı anahtar yok; yayın anında sahibinin okumasıyla sınanır |
+| İstasyon ataması (yayın alıcısı) | (tablo yok) | istasyonlar | kablolama ile `aktifIstasyonlar`, `istasyondakiKisiler` (ters bağ, döngü yok) |
+| Yayın görseli | dosya bağı `bildirim` / `yayin:<id>`; `bildirim_yayini.gorsel_ozet` | dosya | yerel disk deposu |

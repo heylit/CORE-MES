@@ -1,11 +1,19 @@
-import { uc } from '#cekirdek/uc.ts';
+import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   bildirimAliciDegistirGovdesi, bildirimAliciParametresi, bildirimAlicilariCevabi, bildirimCevabi, bildirimListeCevabi, bildirimListeSorgusu, bildirimParametresi, bildirimSayacCevabi, bildirimTercihDegistirGovdesi,
   bildirimTercihleriCevabi, cagriEkiplerimCevabi, cagriYonlendirmeCevabi, cagriYonlendirmeDegistirGovdesi, cagriYonlendirmeParametresi, tumunuOkunduCevabi,
+  bildirimOnayCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, bildirimYayinListeSorgusu,
+  bildirimYayinlaGovdesi, bildirimYayinParametresi, ortadakiBildirimlerCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
   arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
 } from './servis.ts';
+import {
+  geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
+} from './yayin.ts';
+
+// Rapor uçları: yayınlayan kendininkini, `bildirim.yayin-oku` taşıyan hepsini görür (servis süzer).
+const YAYIN_GORME = { biri: ['bildirim.yayinla', 'bildirim.yayin-oku'] } as const;
 
 // Kişinin kendi bildirimleri (222 a): her uç yalnız oturum ister ve yalnız oturumdaki kişinin satırına dokunur; adres ya da
 // gövde başka kişiyi seçemez. Başkasının bildirim kimliği "bulunamadı" döner.
@@ -44,5 +52,34 @@ export const uclar = [
     yontem: 'POST', yol: '/bildirimler/alicilar/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimAliciParametresi,
     govde: bildirimAliciDegistirGovdesi, cevap: bildirimAlicilariCevabi,
     isle: ({ db, kullanici, parametre, govde }) => bildirimAlicilariYaz(db, kullanici, parametre.tur, govde),
+  }),
+  // Ekran ortası (2147-3 a): kişinin kendi bekleyenleri; onay yalnız kendi satırına.
+  uc({ yontem: 'GET', yol: '/bildirimler/ortada', yetki: 'oturum', cevap: ortadakiBildirimlerCevabi, isle: ({ db, kullanici }) => ortadakiBildirimler(db, kullanici) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/:id/onayla', yetki: 'oturum', parametre: bildirimParametresi, cevap: bildirimOnayCevabi,
+    isle: ({ db, kullanici, parametre }) => onayla(db, kullanici, parametre.id),
+  }),
+  // Elle bildirim (2147-2 c): yayınlamak `bildirim.yayinla` ister; işlem hiçbir role göçle verilmedi, başta yalnız yönetici.
+  uc({ yontem: 'GET', yol: '/bildirimler/yayinlar/hedefler', yetki: 'bildirim.yayinla', cevap: bildirimYayinHedefleriCevabi, isle: ({ db }) => hedefSecenekleri(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/yayinlar/yayinla', yetki: 'bildirim.yayinla', tekrarKorumali: true, govde: bildirimYayinlaGovdesi, cevap: bildirimYayinCevabi,
+    isle: ({ db, kullanici, govde, denetimEki }) => yayinla(db, kullanici, govde, denetimEki),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/yayinlar/:id/geri-cek', yetki: 'bildirim.yayinla', parametre: bildirimYayinParametresi, cevap: bildirimYayinCevabi,
+    isle: ({ db, kullanici, parametre }) => geriCek(db, kullanici, parametre.id),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirimler/yayinlar', yetki: YAYIN_GORME, sorgu: bildirimYayinListeSorgusu, cevap: bildirimYayinListeCevabi,
+    isle: ({ db, kullanici, sorgu }) => yayinListesi(db, kullanici, sorgu),
+  }),
+  uc({
+    yontem: 'GET', yol: '/bildirimler/yayinlar/:id/alicilar', yetki: YAYIN_GORME, parametre: bildirimYayinParametresi, cevap: bildirimYayinAlicilariCevabi,
+    isle: ({ db, kullanici, parametre }) => yayinAyrintisi(db, kullanici, parametre.id),
+  }),
+  // Görsel alıcıya da açıktır: oturum ister, servis alıcı, yazan ya da rapor işlemi olmayana "bulunamadı" der.
+  uc({
+    yontem: 'GET', yol: '/bildirimler/yayinlar/:id/gorsel', yetki: 'oturum', parametre: bildirimYayinParametresi, cevap: ikiliCevap,
+    isle: ({ db, kullanici, parametre }) => yayinGorseli(db, kullanici, parametre.id),
   }),
 ];

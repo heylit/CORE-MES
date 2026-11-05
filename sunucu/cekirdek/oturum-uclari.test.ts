@@ -8,8 +8,10 @@ import { modulBasinaUclar } from './uygulama.ts';
 const OTURUM_UCLARI: readonly string[] = [
   'GET /bildirimler',
   'GET /bildirimler/cagri-yonlendirme/benim',
+  'GET /bildirimler/ortada',
   'GET /bildirimler/sayac',
   'GET /bildirimler/tercihler',
+  'GET /bildirimler/yayinlar/:id/gorsel',
   'GET /calisma-takvimi',
   'GET /cizimler/kucuk-resim/:revizyonId/:kare',
   'GET /cizimler/kucuk-resimler',
@@ -74,6 +76,7 @@ const OTURUM_UCLARI: readonly string[] = [
   'GET /ziyaretcilerim',
   'POST /bildirimler/:id/arsivle',
   'POST /bildirimler/:id/okundu',
+  'POST /bildirimler/:id/onayla',
   'POST /bildirimler/tercihler/degistir',
   'POST /bildirimler/tumunu-okundu',
   'POST /dosyalar/:ozet/parca',
