@@ -438,6 +438,19 @@ export function rolKodSatirlari(db: Db): Promise<{ id: number; kod: string; ad: 
   return db.sorgu('SELECT id, kod, ad FROM rol ORDER BY ad, id');
 }
 
+// Bütün roller bayrağıyla, ad sırasıyla.
+export function rolBayrakSatirlari(db: Db): Promise<{ id: number; kod: string; ad: string; yonetici: boolean }[]> {
+  return db.sorgu('SELECT id, kod, ad, yonetici FROM rol ORDER BY ad, id');
+}
+
+// Kişinin rolleri (kimlik, kod, bayrak), kimlik sırasıyla. Kişi yoksa ya da rolü yoksa boş dizi.
+export function kisininRolSatirlari(db: Db, kisiId: number): Promise<{ id: number; kod: string; yonetici: boolean }[]> {
+  return db.sorgu(
+    'SELECT r.id, r.kod, r.yonetici FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = $1 ORDER BY r.id',
+    [kisiId],
+  );
+}
+
 // Rollerden birini taşıyan etkin ve girişli kişiler; bildirim alıcısı olabilecek kapsam kisiIslemSatirlari ile aynıdır.
 export async function rollerdekiKisiSatirlari(db: Db, rolIdleri: readonly number[]): Promise<number[]> {
   const satirlar = await db.sorgu<{ id: number }>(
