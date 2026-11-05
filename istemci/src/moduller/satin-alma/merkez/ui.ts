@@ -1271,16 +1271,19 @@ ACTIONS["order-invoices"] = (_el, r) => {
 };
 /* ---------------- siparişin ödeme planı (kart #1124) ---------------- */
 // Plan finansın beklenen ödemesidir; sipariş verilince tekliften kurulur. Satır yoksa öneri yine tekliften gelir: avans sipariş
-// tarihinde, kalan beklenen teslimden vade günü sonra. Tutar KDV hariç sipariş toplamıdır.
-let planDuzeni: { talepId: string; teklifId: string; paraBirimi: string; satirlar: OdemePlaniSatiri[] } | null = null;
-function onerilenPlan(r: PurchaseRequest, o: ReturnType<typeof awardOrders>[number]): OdemePlaniSatiri[] {
+// tarihinde, kalan beklenen teslimden vade günü sonra. Tutar KDV dahildir (2132-2 a); oran siparişte seçilir, yoksa finansın genel
+// oranıdır (2132-7). Oran bilinmiyorsa KDV hariç kalır. Oran değişince öneri yeniden kurulur; yalnız değişen oran sunucuya gider.
+let planDuzeni: { talepId: string; teklifId: string; paraBirimi: string; satirlar: OdemePlaniSatiri[]; kdvOrani: string | null; kdvSecenekleri: string[]; kdvDegisti: boolean } | null = null;
+const kdvli = (x: number, oran: string | null) => oran === null ? x : Math.round(x * (1 + Number(oran) / 100) * 100) / 100;
+function onerilenPlan(r: PurchaseRequest, o: ReturnType<typeof awardOrders>[number], oran: string | null): OdemePlaniSatiri[] {
   const disc = clamp((parseNum(o.q.discountPct) || 0) / 100, 0, 1);
   const toplam = (r.award?.mode === "split"
     ? o.items.reduce((t, it) => t + (parseNum(o.q.prices?.[it.id]) || 0) * (parseNum(it.qty) || 0), 0) * (1 - disc)
       + (o.q.deliveryIncluded ? 0 : parseNum(o.q.shipping) || 0) + (parseNum(o.q.otherCost) || 0)
     : quoteCalc(r, o.q).total);
-  const avans = Math.round(toplam * clamp((parseNum(o.q.advancePct) || 0) / 100, 0, 1) * 100) / 100;
-  const kalan = Math.round((toplam - avans) * 100) / 100;
+  const avansHaric = Math.round(toplam * clamp((parseNum(o.q.advancePct) || 0) / 100, 0, 1) * 100) / 100;
+  const avans = kdvli(avansHaric, oran);
+  const kalan = Math.round((kdvli(Math.round(toplam * 100) / 100, oran) - avans) * 100) / 100;
   const baslangic = o.orderDate || todayStr();
   return [
     ...(avans > 0 ? [{ tur: "avans" as const, vade: baslangic, yontem: "banka" as const, tutar: avans.toFixed(2) }] : []),
@@ -1311,8 +1314,14 @@ ACTIONS["odeme-plani"] = (el, r) => {
   const o = awardOrders(r).find(x => x.qid === el.dataset.qid);
   const t = o ? siparisTakibi(r.id, o.qid) : null;
   if (!o || !t) { toast("Sipariş takibi henüz yüklenmedi."); return; }
-  planDuzeni = { talepId: r.id, teklifId: o.qid, paraBirimi: t.paraBirimi, satirlar: t.odemePlani.length ? t.odemePlani.map(x => ({ ...x })) : onerilenPlan(r, o) };
-  openModal(`<div class="mh"><h2>Ödeme planı</h2></div><div class="mb"><p class="small muted">${esc(supName(o.q))}${siparisEtiketi(o) ? `, ${esc(siparisEtiketi(o))}` : ""}. Plan finansa beklenen ödeme olarak düşer; fatura bağlanınca vade faturadan gelir. Tutarlar KDV hariçtir. Teklif: ${esc(payText(o.q))}.</p>
+  planDuzeni = { talepId: r.id, teklifId: o.qid, paraBirimi: t.paraBirimi, kdvOrani: t.kdvOrani, kdvSecenekleri: t.kdvSecenekleri, kdvDegisti: false,
+    satirlar: t.odemePlani.length ? t.odemePlani.map(x => ({ ...x })) : onerilenPlan(r, o, t.kdvOrani) };
+  const kdvSecimi = t.kdvSecenekleri.length
+    ? `<label class="small">KDV <select id="op-kdv">${t.kdvSecenekleri.map(x => `<option value="${esc(x)}"${t.kdvOrani !== null && Number(x) === Number(t.kdvOrani) ? " selected" : ""}>${Number(x) ? `%${esc(x)}` : "KDV yok"}</option>`).join("")}</select></label>
+       <span class="small muted">${t.kdvElle ? "Siparişte seçildi." : "Finansın genel oranı."} Oran değişince plan tekliften yeniden kurulur.</span>`
+    : `<span class="small muted">Finansta geçerli KDV oranı yok; tutarlar KDV hariçtir.</span>`;
+  openModal(`<div class="mh"><h2>Ödeme planı</h2></div><div class="mb"><p class="small muted">${esc(supName(o.q))}${siparisEtiketi(o) ? `, ${esc(siparisEtiketi(o))}` : ""}. Plan finansa beklenen ödeme olarak düşer; fatura bağlanınca vade faturadan gelir. Tutarlar KDV dahildir. Teklif: ${esc(payText(o.q))}.</p>
+    <div class="row">${kdvSecimi}</div>
     <div id="op-rows">${planSatirlariHTML(planDuzeni)}</div>
     <div class="row"><button class="btn sm" data-act="odeme-plani-ekle">Satır ekle</button><button class="btn sm ghost" data-act="odeme-plani-oneri">Tekliften yeniden kur</button></div></div>
     <div class="mf"><button class="btn primary" data-act="odeme-plani-kaydet">Kaydet</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, "wide", true);
@@ -1332,16 +1341,23 @@ ACTIONS["odeme-plani-sil"] = (el) => {
 ACTIONS["odeme-plani-oneri"] = (_el, r) => {
   const o = r && planDuzeni ? awardOrders(r).find(x => x.qid === planDuzeni!.teklifId) : undefined;
   if (!o || !planDuzeni) return;
-  planDuzeni.satirlar = onerilenPlan(r!, o);
+  planDuzeni.satirlar = onerilenPlan(r!, o, planDuzeni.kdvOrani);
   planCiz();
 };
+document.addEventListener("change", (e) => {
+  if (!kokIcinde(e) || (e.target as FormEl).id !== "op-kdv" || !planDuzeni) return;
+  const r = S.requests[planDuzeni.talepId], o = r ? awardOrders(r).find(x => x.qid === planDuzeni!.teklifId) : undefined;
+  planDuzeni.kdvOrani = (e.target as FormEl).value;
+  planDuzeni.kdvDegisti = true;
+  if (r && o) { planDuzeni.satirlar = onerilenPlan(r, o, planDuzeni.kdvOrani); planCiz(); }
+});
 ACTIONS["odeme-plani-kaydet"] = (el) => {
   const p = planDuzeni; if (!p || !canWrite()) return;
   const satirlar = planOku();
   if (!satirlar.length) { toast("Ödeme planında en az bir satır olur."); return; }
   if (satirlar.some(x => x === null)) { toast("Her satıra vade ve sıfırdan büyük tutar girin."); return; }
   (el as HTMLButtonElement).disabled = true;
-  void backend.odemePlaniKaydet(p.talepId, p.teklifId, satirlar as OdemePlaniSatiri[]).then(c => {
+  void backend.odemePlaniKaydet(p.talepId, p.teklifId, satirlar as OdemePlaniSatiri[], p.kdvDegisti && p.kdvOrani !== null ? p.kdvOrani : undefined).then(c => {
     (el as HTMLButtonElement).disabled = false;
     if (c === null) return;
     closeModal();

@@ -50,6 +50,13 @@ export function kdvOraniGecerliMi(oranlar: readonly KdvOraniKaydi[], oran: strin
   return oranlar.some((o) => Number(o.oran) === Number(oran) && o.gecerlilikBaslangic <= tarih && (o.gecerlilikBitis === null || tarih < o.gecerlilikBitis));
 }
 
+// 2132-7: satın alma ödeme planının varsayılan KDV oranı, gündeki geçerli oranların en yükseğidir (genel oran). Geçerli oran yoksa null.
+export function gecerliKdvOranlari(oranlar: readonly KdvOraniKaydi[], tarih: string): string[] {
+  const l = oranlar.filter((o) => o.gecerlilikBaslangic <= tarih && (o.gecerlilikBitis === null || tarih < o.gecerlilikBitis)).map((o) => Number(o.oran));
+  return [...new Set(l)].sort((x, y) => x - y).map((x) => x.toFixed(2));
+}
+export const genelKdvOrani = (oranlar: readonly KdvOraniKaydi[], tarih: string): string | null => gecerliKdvOranlari(oranlar, tarih).at(-1) ?? null;
+
 // FNS-51: satış yalnız müşteri ya da "ikisi", alış yalnız tedarikçi ya da "ikisi" türündeki firmaya açılır.
 export function firmaYonaUygunMu(tur: FirmaTuru, yon: Yon): boolean {
   return tur === 'ikisi' || (yon === 'gelir' ? tur === 'musteri' : tur === 'tedarikci');

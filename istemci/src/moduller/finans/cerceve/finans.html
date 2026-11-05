@@ -702,7 +702,7 @@ function forecast(sc = state.scen) {
   const min = weeks.reduce((a, w) => w.close < a.close ? w : a, weeks[0]);
   return { weeks, open, min, end: bal };
 }
-/* Siparişten beklenen ödemeler (#162): satın almanın siparişte girdiği plan, KDV hariç tahmin. Nakit planına ayrı satır olarak
+/* Siparişten beklenen ödemeler (#162): satın almanın siparişte girdiği plan, KDV dahil tahmin. Nakit planına ayrı satır olarak
    girer; forecast, Monte Carlo ve skor bunları saymaz (bugünkü sayılar değişmesin diye). TL karşılığı olmayan (kuru girilmemiş)
    kalem toplama katılmaz, sayısı ayrıca döner: eksik kurla tutar uydurulmaz.
    Borç B15: tutar sunucunun tahminTl'sidir (ödenmiş avans düşülmüş). Vadesi geçmiş kalem ödenmiş olabilir; tahmine girmez, sayısı döner. */
@@ -717,7 +717,7 @@ function siparisPlani(liste) {
     if (t === null || t === undefined) { kursuz++; continue; }
     const tl = Number(t); if (!tl) continue;
     weeks[i].tutar += tl;
-    weeks[i].items.push({ date: o.vade, amt: -tl, label: "Sipariş " + (o.siparisNo || "") + ": " + (o.firmaAdi || "") + " (KDV hariç tahmin)" });
+    weeks[i].items.push({ date: o.vade, amt: -tl, label: "Sipariş " + (o.siparisNo || "") + ": " + (o.firmaAdi || "") + " (KDV dahil tahmin)" });
   }
   return { weeks, toplam: sum(weeks, w => w.tutar), kursuz, gecikmis };
 }
@@ -1664,7 +1664,7 @@ VIEWS.cek = () => {
 VIEWS.cek.after = () => {
   const c = colors(), weeks = Array.from({ length: 12 }, (_, i) => ({ s: addDays(TODAY, i * 7), in: 0, out: 0 }));
   for (const q of state.cheques) { const d = diffDays(q.due, TODAY); if (d < 0 || d >= 84) continue; const w = weeks[Math.floor(d / 7)]; if (q.dir === "alinan" && ["portfoy", "tahsilde"].includes(q.status)) w.in += q.amount; if (q.dir === "verilen" && q.status === "bekliyor") w.out -= q.amount; }
-  // Siparişten beklenen ödemeler ayrı dilimdir (KDV hariç tahmin); çek toplamlarına karışmaz.
+  // Siparişten beklenen ödemeler ayrı dilimdir (KDV dahil tahmin); çek toplamlarına karışmaz.
   const sp = siparisPlani(siparisListesi()), spDilim = sp.weeks.slice(0, 12).some(w => w.tutar) ? [{ label: "Siparişten (tahmin)", data: sp.weeks.slice(0, 12).map(w => -w.tutar), backgroundColor: alpha(c.madder, .45), borderRadius: 4 }] : [];
   mk("cChq", { type: "bar", data: { labels: weeks.map(w => fmtD(w.s)), datasets: [{ label: "Alınan", data: weeks.map(w => w.in), backgroundColor: alpha(c.teal, .8), borderRadius: 4 }, { label: "Verilen", data: weeks.map(w => w.out), backgroundColor: alpha(c.brass, .8), borderRadius: 4 }, ...spDilim] }, options: baseOpts({ scales: { x: { stacked: true, grid: { display: false }, ticks: { color: c.ink3 } }, y: { stacked: true, grid: { color: c.grid }, ticks: { color: c.ink3, callback: v => fmtK(v) } } } }) });
 };
@@ -1701,7 +1701,7 @@ VIEWS.nakit = () => {
     <div><div class="lbl">13 hafta giriş</div><div class="val pos">${fmt(sum(f.weeks, w => w.inflow))}</div></div>
     <div><div class="lbl">13 hafta çıkış</div><div class="val neg">${fmt(sum(f.weeks, w => w.outflow))}</div></div>
     <div><div class="lbl">En düşük nokta</div><div class="val ${f.min.close < 0 ? "neg" : f.min.close < th ? "warn" : ""}">${fmt(f.min.close)}</div><div class="sub">${f.min.i + 1}. hafta, ${fmtD(f.min.start)}</div></div>
-    <div><div class="lbl">13. hafta sonu</div><div class="val">${fmt(f.end)}</div>${spVar ? `<div class="sub">Siparişler dahil <b class="${spK[12] < 0 ? "neg" : spK[12] < th ? "warn" : ""}">${fmt(spK[12])}</b> ${hint("Faturası gelmemiş siparişlerin ödeme planı da düşülür: siparişten " + fmt(sp.toplam) + ", KDV hariç tahmin." + (sp.kursuz ? " " + sp.kursuz + " kalemin kuru girilmediği için katılmadı." : "") + (sp.gecikmis ? " Vadesi geçmiş " + sp.gecikmis + " kalem katılmadı; listede kontrol edin." : "") + " Firmaya ödenmiş avans düşülür. Fatura gelince açık borç olarak plana zaten girer ve bu satırdan düşer.")}</div>` : ""}</div>
+    <div><div class="lbl">13. hafta sonu</div><div class="val">${fmt(f.end)}</div>${spVar ? `<div class="sub">Siparişler dahil <b class="${spK[12] < 0 ? "neg" : spK[12] < th ? "warn" : ""}">${fmt(spK[12])}</b> ${hint("Faturası gelmemiş siparişlerin ödeme planı da düşülür: siparişten " + fmt(sp.toplam) + ", KDV dahil tahmin." + (sp.kursuz ? " " + sp.kursuz + " kalemin kuru girilmediği için katılmadı." : "") + (sp.gecikmis ? " Vadesi geçmiş " + sp.gecikmis + " kalem katılmadı; listede kontrol edin." : "") + " Firmaya ödenmiş avans düşülür. Fatura gelince açık borç olarak plana zaten girer ve bu satırdan düşer.")}</div>` : ""}</div>
   </div>
   <section class="panel" style="margin-bottom:18px"><div class="panel-head"><h2>Haftalık plan</h2><p>Çubuklar giriş ve çıkış, çizgi hafta sonu bakiyesi</p></div><div class="chart tall"><canvas id="cFc"></canvas></div></section>
   <section class="panel"><div class="panel-head"><h2>Hafta hafta</h2><p>Satıra tıklayarak kalemleri görün</p></div>
@@ -3795,7 +3795,7 @@ function beklenenOdemelerPaneli() {
     <td>${esc(o.siparisNo || '—')} <span class="pill">Siparişten beklenen</span></td><td>${o.tur === 'avans' ? 'Avans' : 'Vadeli'}</td><td>${esc(ODEME_SEKLI[o.yontem] || o.yontem)}</td><td class="n">${fmtPb(o.tutar, o.paraBirimi)}${dusulen(o)}</td></tr>`;
   return `<section class="panel" style="margin-top:18px" data-beklenen-odemeler><div class="panel-head"><h2>Siparişten beklenen ödemeler</h2><p>Satın almanın siparişte girdiği vadeler</p></div>
     ${liste.length ? `<div class="tbl plain"><table><thead><tr><th>Vade</th><th>Tedarikçi</th><th>Sipariş</th><th>Ödeme</th><th>Ödeme şekli</th><th class="n">Tutar</th></tr></thead><tbody>${liste.map(satir).join('')}</tbody></table></div>` : '<p class="empty">Siparişten beklenen ödeme yok.</p>'}
-    <p class="note">Tutarlar KDV hariç tahminidir; hafta hafta planda, vade takviminde ve ana sayfada ayrı satır olarak görünür, öteki sayılara ve olasılık hesabına katılmaz. Fatura girilip siparişe bağlanınca ödeme açık borç olarak faturadan izlenir ve bu listeden düşer. Vadesi geçmiş satır tahmine girmez; ödendiyse ödemeyi girin. Firmaya ödenip faturaya dağıtılmamış para avans satırından düşülür. "Bağlanmamış fatura var" görünürse faturayı satın almada siparişe bağlayın; bağlanana kadar tutar düşülmez.</p></section>`;
+    <p class="note">Tutarlar KDV dahil tahminidir; hafta hafta planda, vade takviminde ve ana sayfada ayrı satır olarak görünür, öteki sayılara ve olasılık hesabına katılmaz. Fatura girilip siparişe bağlanınca faturanın tutarı açık borç olarak faturadan izlenir ve planın en erken satırlarından düşer; kalan bu listede kalır. Vadesi geçmiş satır tahmine girmez; ödendiyse ödemeyi girin. Firmaya ödenip faturaya dağıtılmamış para avans satırından düşülür. "Bağlanmamış fatura var" görünürse faturayı satın almada siparişe bağlayın; bağlanana kadar tutar düşülmez.</p></section>`;
 }
 
 /* ---------- Tam kipin kurulumu ---------- */
@@ -3822,7 +3822,7 @@ function tamBaslat() {
   tabsBar = (v) => (v === 'plan' || v === 'rapor' ? '' : asilSekme(v));
   TABS.ayar = [...TABS.ayar.filter(([k]) => k !== 'sistem'), ['hesaplar', 'Hesaplar'], ['kdv', 'KDV oranları'], ['kurlar', 'Kurlar ve faiz'], ['sabit', 'Sabit kıymetler'], ['kurulum', 'İlk kurulum']];
   // Siparişten beklenen ödemeler (#1124): satın almanın siparişte girdiği plan; fatura bağlanınca borç faturaya geçer ve buradan düşer.
-  // Tahmine ayrı satır olarak girer (siparisPlani): tutar KDV hariç tahmindir, fatura gelince açık borç olarak zaten girer.
+  // Tahmine ayrı satır olarak girer (siparisPlani): tutar KDV dahil tahmindir, fatura gelince açık borç olarak zaten girer.
   const asilNakit = VIEWS.nakit, asilNakitSonra = VIEWS.nakit.after;
   VIEWS.nakit = () => asilNakit() + beklenenOdemelerPaneli();
   VIEWS.nakit.after = asilNakitSonra;

@@ -279,9 +279,10 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
     // İptal edilen ödeme avans sayılmaz.
     tamam(await yaz('muhasebe', `/finans/odemeler/${odeme.id}/iptal`, { surum: odeme.surum, neden: 'Deneme' }));
     assert.deepEqual((await liste()).map((x) => x[2]), ['0.00', '0.00', '0.00']);
+    // 2132-5 a: bağlanan fatura (800 + %20 = 960) planın en erken satırlarından düşer; kalan 840 son satırda beklenende kalır.
     await vt().tx((db) => belgeSiparisBagla(db, yoneticiId, { belgeId: fatura.id, siparis: { talepId, teklifId }, siparisFirmaId: firma }));
-    assert.deepEqual(await liste(), []);
-    assert.deepEqual(await ozet(), { sayi: 0, tutarTl: '0.00' });
+    assert.deepEqual(await liste(), [[3, '840.00', '0.00', false, false]]);
+    assert.deepEqual(await ozet(), { sayi: 1, tutarTl: '840.00' });
     await vt().sorgu('DELETE FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [talepId, teklifId]);
   });
 });

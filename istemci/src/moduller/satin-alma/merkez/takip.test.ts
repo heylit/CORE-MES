@@ -37,7 +37,7 @@ afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
   it('sipariş sekmesinde irsaliye ve fatura satırları ile plan görünür; plan düzenlenip talebin sürümüyle kaydedilir', async () => {
-    let takip: SiparisTakibiCevabi = { siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', faturalar: [],
+    let takip: SiparisTakibiCevabi = { siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', faturalar: [], kdvOrani: '20', kdvElle: false, kdvSecenekleri: ['0', '1', '10', '20'],
       odemePlani: [{ tur: 'vade', vade: '2026-11-06', yontem: 'banka', tutar: '1000' }] }] };
     const irsaliyeler: SiparisIrsaliyeleriCevabi = { irsaliyeler: [{ siparisSatirId: 41, malKabulId: 3, malKabulNo: 'MK-000003', irsaliyeNo: 'DN-IRS-9', zaman: '2026-10-10T07:00:00.000Z' }] };
     const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
@@ -94,11 +94,30 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
       { tur: 'avans', vade: '2026-10-07', yontem: 'banka', tutar: '300.00' }, { tur: 'vade', vade: '2026-12-06', yontem: 'cek', tutar: '700.00' },
     ] });
     expect(kok.querySelector('[data-sa-takip-paneli] tbody')!.textContent).toContain('Avans');
+
+    // 2132-7: KDV oranı değişince plan tekliften o oranla yeniden kurulur; yalnız değişen oran gönderilir.
+    kok.querySelector<HTMLElement>('[data-act="odeme-plani"]')!.click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLSelectElement>('#op-kdv')).not.toBeNull());
+    const kdv = document.querySelector<HTMLSelectElement>('#op-kdv')!;
+    expect(kdv.value).toBe('20');
+    expect(document.body.textContent).toContain('Finansın genel oranı.');
+    const toplam = () => [...document.querySelectorAll<HTMLInputElement>('#op-rows [data-op="tutar"]')].reduce((t, x) => t + Number(x.value.replace(/\./g, '').replace(',', '.')), 0);
+    kdv.value = '10';
+    kdv.dispatchEvent(new Event('change', { bubbles: true }));
+    const on = toplam();
+    kdv.value = '20';
+    kdv.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(on).toBeGreaterThan(0);
+    expect(toplam() / on).toBeCloseTo(1.2 / 1.1, 3);
+    document.querySelector<HTMLElement>('[data-act="odeme-plani-kaydet"]')!.click();
+    await vi.waitFor(() => expect(istekler.filter((x) => x.yol.endsWith('/odeme-plani'))).toHaveLength(2));
+    expect((istekler.filter((x) => x.yol.endsWith('/odeme-plani'))[1]!.govde as { kdvOrani?: string }).kdvOrani).toBe('20');
+    await vi.waitFor(() => expect(document.querySelector('#op-rows')).toBeNull());
     kapat();
   });
 
   it('fatura bağlıysa fatura satırı no, tarih ve vadeyle işaretlenir; plan düzenlenmez', async () => {
-    const takip: SiparisTakibiCevabi = { siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', odemePlani: [],
+    const takip: SiparisTakibiCevabi = { siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', odemePlani: [], kdvOrani: '20', kdvElle: false, kdvSecenekleri: ['20'],
       faturalar: [{ belgeNo: 'DN-F7', belgeTarihi: '2026-10-09', vade: '2026-11-09' }] }] };
     vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
       const yol = String(adres).replace('/api', '');

@@ -487,11 +487,11 @@ const backend: Backend = {
     }
   },
   // Plan talebin sürümüyle yazılır ve sürümü bir artırır: sonraki kayıt eski sürümle gitmesin diye yerel sürüm de artar.
-  async odemePlaniKaydet(talepId, teklifId, satirlar) {
+  async odemePlaniKaydet(talepId, teklifId, satirlar, kdvOrani) {
     const sun = talepSunucu.get(talepId);
     if (sun === undefined) return null;
     try {
-      const c = await uc.post('/satin-alma-talepleri/:id/odeme-plani', { parametre: { id: talepId }, govde: { teklifId, satirlar, surum: sun.surum }, ...sure });
+      const c = await uc.post('/satin-alma-talepleri/:id/odeme-plani', { parametre: { id: talepId }, govde: { teklifId, satirlar, ...(kdvOrani === undefined ? {} : { kdvOrani }), surum: sun.surum }, ...sure });
       sun.surum += 1;
       return c;
     } catch (h) {

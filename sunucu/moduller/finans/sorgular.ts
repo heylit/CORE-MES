@@ -520,10 +520,14 @@ export const siparisOdemeleriOku = (db: Db, talepIdler: readonly string[], tekli
    ORDER BY o.satin_alma_talep_id, o.satin_alma_teklif_id, o.sira`, [talepIdler, teklifIdler]);
 export const siparisOdemeleriniSil = (db: Db, talepId: string, teklifId: string) =>
   db.sorgu('DELETE FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2', [talepId, teklifId]);
-export async function siparisOdemesiEkle(db: Db, o: SiparisOdemesiSatiri, kisiId: number): Promise<void> {
-  await db.sorgu(`INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId]);
+export async function siparisOdemesiEkle(db: Db, o: SiparisOdemesiSatiri, kisiId: number, kaynak: 'elle' | 'otomatik'): Promise<void> {
+  await db.sorgu(`INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id, kaynak)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId, kaynak]);
 }
+// 2132-6: planın bütün satırları tekliften kurulduysa (otomatik) true; plan yoksa ya da bir satırı elle yazıldıysa false.
+export const siparisPlaniOtomatikMi = async (db: Db, talepId: string, teklifId: string): Promise<boolean> => (await db.tek<{ v: boolean }>(
+  `SELECT COALESCE(bool_and(kaynak = 'otomatik'), false) AS v FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2`,
+  [talepId, teklifId]))!.v;
 export const siparisFaturasiVarMi = async (db: Db, talepId: string, teklifId: string): Promise<boolean> => (await db.tek(
   `SELECT 1 FROM finans_belge WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2 AND durum <> 'iptal' LIMIT 1`, [talepId, teklifId])) !== null;
 export interface SiparisFaturasiSatiri { talepId: string; teklifId: string; id: number; belgeNo: string | null; belgeTarihi: string; vade: string }
@@ -538,8 +542,21 @@ export const siparisFaturalariOku = (db: Db, talepIdler: readonly string[], tekl
 // Borç B15: aynı tedarikçinin siparişe bağlanmamış alış faturası plan yazıldıktan sonra girildiyse ya da tarihliyse satır uyarı taşır;
 // tutar düşülmez, çünkü faturanın hangi siparişe ait olduğu bilinmez.
 export interface BeklenenOdemeSatiri extends SiparisOdemesiSatiri { id: number; tutarTl: string | null; bagsizFatura: boolean }
-const BEKLENEN_ODEME = `FROM finans_siparis_odemesi o
-    WHERE NOT EXISTS (SELECT 1 FROM finans_belge b WHERE b.satin_alma_talep_id = o.satin_alma_talep_id AND b.satin_alma_teklif_id = o.satin_alma_teklif_id AND b.durum <> 'iptal')`;
+// 2132-5 a: siparişe bağlı alış faturalarının KDV dahil toplamı (iadesi düşülür) planın en erken vadeli satırlarından düşülür; kalan
+// satırlar kalan tutarlarıyla beklenen ödemede durur. Planın para biriminden başka bir para biriminde bağlı belge varsa tutarlar
+// karşılaştırılamaz: plan eskisi gibi tamamen düşer (vade faturadadır).
+const BEKLENEN_ODEME = `FROM (
+    SELECT p.id, p.satin_alma_talep_id, p.satin_alma_teklif_id, p.siparis_no, p.sira, p.tur, p.vade, p.yontem, p.firma_id, p.para_birimi, p.olusturma,
+           LEAST(p.tutar, GREATEST(0, p.kum - p.faturalanan)) AS tutar
+      FROM (SELECT x.*, sum(x.tutar) OVER (PARTITION BY x.satin_alma_talep_id, x.satin_alma_teklif_id ORDER BY x.vade, x.sira) AS kum,
+                   COALESCE((SELECT sum(CASE WHEN b.tur = 'iade' THEN -b.toplam ELSE b.toplam END) FROM finans_belge b
+                              WHERE b.satin_alma_talep_id = x.satin_alma_talep_id AND b.satin_alma_teklif_id = x.satin_alma_teklif_id
+                                AND b.durum <> 'iptal' AND b.para_birimi = x.para_birimi
+                                AND ((b.yon = 'gider' AND b.tur = 'fatura') OR (b.yon = 'gelir' AND b.tur = 'iade'))), 0) AS faturalanan
+              FROM finans_siparis_odemesi x
+             WHERE NOT EXISTS (SELECT 1 FROM finans_belge b WHERE b.satin_alma_talep_id = x.satin_alma_talep_id AND b.satin_alma_teklif_id = x.satin_alma_teklif_id
+                                 AND b.durum <> 'iptal' AND b.para_birimi <> x.para_birimi)) p) o
+    WHERE o.tutar > 0`;
 const BAGSIZ_FATURA = `EXISTS (SELECT 1 FROM finans_belge f WHERE f.firma_id = o.firma_id AND f.yon = 'gider' AND f.tur = 'fatura' AND f.durum <> 'iptal'
     AND f.satin_alma_talep_id IS NULL AND (f.belge_tarihi >= o.olusturma::date OR f.olusturma >= o.olusturma))`;
 const siparisTutariTl = (gun: string) => `(CASE WHEN rtrim(o.para_birimi) = 'TRY' THEN o.tutar
