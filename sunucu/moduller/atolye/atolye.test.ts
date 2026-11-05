@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
-  AramaCevabi, MerkezKrokileriCevabi, FabrikaCevabi, FabrikaKayitCevabi, GozlerCevabi, IhlalAyrintisi, KayitCevabi, Kroki, KrokiCevabi, Model, ModelParcaCevabi, ModellerCevabi, KalemGorunumleriCevabi, GozKalemi, GozKalemleriCevabi, RotaCevabi, SalonOzeti,
+  AramaCevabi, KrokiAyariCevabi, MerkezKrokileriCevabi, FabrikaCevabi, FabrikaKayitCevabi, GozlerCevabi, IhlalAyrintisi, KayitCevabi, Kroki, KrokiCevabi, Model, ModelParcaCevabi, ModellerCevabi, KalemGorunumleriCevabi, GozKalemi, GozKalemleriCevabi, RotaCevabi, SalonOzeti,
   SalonlarCevabi,
   MalzemeModelleriCevabi, YerlesmemisIstasyonlarCevabi, MerkezModeliBaglaCevabi, MerkezModelleriCevabi, SurumCakismasi, YerlesimCevabi, YerlesimGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
@@ -314,6 +314,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
       { uc: '/atolye/fabrika/kroki/tamamla', yol: '/atolye/fabrika/kroki/tamamla', govde: () => undefined },
       { uc: '/atolye/fabrika/kroki/hizala', yol: '/atolye/fabrika/kroki/hizala', govde: async () => ({ surum: await fabrikaKrokiSurumu(), sayfa: 1, olcek: 0.0353, donus: 0, x: 0, z: 0 }) },
       { uc: '/atolye/fabrika/kroki/sil', yol: '/atolye/fabrika/kroki/sil', govde: () => undefined },
+      { uc: '/atolye/kroki-ayari/degistir', yol: '/atolye/kroki-ayari/degistir', govde: async () => ({ saydamlik: 35, beklenen: (await oku<KrokiAyariCevabi>('/atolye/kroki-ayari')).govde.saydamlik }) },
     ];
     assert.deepEqual(yazilar.map((y) => y.uc).sort(), uclar.filter((u) => u.yontem !== 'GET').map((u) => u.yol).sort());
     const durum = async () => ({
@@ -324,6 +325,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
       kroki: (await oku(`/atolye/salonlar/${s.id}/kroki`)).govde,
       krokiParca: (await vt().tek('SELECT count(*)::int AS n FROM atolye_kroki_parca'))?.valueOf(),
       fabrikaKroki: (await oku('/atolye/fabrika/kroki')).govde,
+      krokiAyari: (await oku('/atolye/kroki-ayari')).govde,
     });
     for (const { uc, yol, govde } of yazilar) {
       const once = await durum();
@@ -335,6 +337,31 @@ describe('atolye (gerçek PostgreSQL)', () => {
       const kabul = await istek(planlamaci, 'POST', yol, await govde());
       assert.ok([200, 204].includes(kabul.durum), `${uc}: ${kabul.durum} ${JSON.stringify(kabul.govde)}`);
     }
+  });
+
+  test('2122: ortak kroki saydamlığı tek değer; düzenleyen gördüğü değerle değiştirir, eskiyse 409, sınır dışı 400; kayıt atölye yetkisiyle düşer', async () => {
+    const ilk = await oku<KrokiAyariCevabi>('/atolye/kroki-ayari');
+    assert.equal(ilk.durum, 200);
+    assert.equal(typeof ilk.govde.saydamlik, 'number');
+    const once = ilk.govde.saydamlik;
+    const yeni = once === 55 ? 60 : 55;
+    assert.equal((await istek(gorur, 'GET', '/atolye/kroki-ayari')).durum, 200);
+    const d = await yaz<KrokiAyariCevabi>('/atolye/kroki-ayari/degistir', { saydamlik: yeni, beklenen: once });
+    assert.equal(d.durum, 200);
+    assert.deepEqual(d.govde, { saydamlik: yeni });
+    assert.deepEqual((await istek<KrokiAyariCevabi>(gorur, 'GET', '/atolye/kroki-ayari')).govde, { saydamlik: yeni });
+    // Arada başkası değiştirdi: ekranın gördüğü değer eski.
+    assert.equal((await yaz('/atolye/kroki-ayari/degistir', { saydamlik: 80, beklenen: once })).durum, 409);
+    for (const saydamlik of [5, 101, 50.5]) {
+      assert.equal((await yaz('/atolye/kroki-ayari/degistir', { saydamlik, beklenen: yeni })).durum, 400, String(saydamlik));
+    }
+    assert.deepEqual((await oku<KrokiAyariCevabi>('/atolye/kroki-ayari')).govde, { saydamlik: yeni });
+    const kayit = await vt().tek<{ modul: string; yetki: string; govde: { eski: unknown; yeni: unknown } }>(
+      "SELECT modul, yetki, govde FROM denetim_kaydi WHERE yol = '/atolye/kroki-ayari/degistir' AND parametre->>'anahtar' = 'atolye.kroki-saydamligi' ORDER BY id DESC LIMIT 1",
+    );
+    assert.equal(kayit?.modul, 'atolye');
+    assert.equal(kayit?.yetki, 'atolye.yaz');
+    assert.deepEqual(kayit?.govde, { eski: once, yeni });
   });
 
   test('ATL-01 salon ölçüsü ve hücre boyu sınırda kabul, dışında red; veritabanı da reddeder', async () => {

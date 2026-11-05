@@ -1,6 +1,6 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  aramaCevabi, aramaSorgusu, fabrikaCevabi, fabrikaKayitCevabi, fabrikaKayitGovdesi, gozSorgusu, krokiCevabi, krokiSiraParametresi, krokiGovdesi, krokiHizalaGovdesi, krokiMerkezdenGovdesi, krokiParcaParametresi, krokiSemasi, merkezKrokileriCevabi, merkezModeliBaglaCevabi, merkezModeliBaglaGovdesi, merkezModelleriCevabi, malzemeModelleriCevabi, malzemeParametresi, yerlesmemisIstasyonlarCevabi, gozlerCevabi, kayitCevabi, modelAyarlaGovdesi, modelGovdesi, modelParametresi, modelParcaCevabi,
+  aramaCevabi, aramaSorgusu, fabrikaCevabi, fabrikaKayitCevabi, fabrikaKayitGovdesi, gozSorgusu, krokiAyariCevabi, krokiAyariGovdesi, krokiCevabi, krokiSiraParametresi, krokiGovdesi, krokiHizalaGovdesi, krokiMerkezdenGovdesi, krokiParcaParametresi, krokiSemasi, merkezKrokileriCevabi, merkezModeliBaglaCevabi, merkezModeliBaglaGovdesi, merkezModelleriCevabi, malzemeModelleriCevabi, malzemeParametresi, yerlesmemisIstasyonlarCevabi, gozlerCevabi, kayitCevabi, modelAyarlaGovdesi, modelGovdesi, modelParametresi, modelParcaCevabi,
   modelParcaGovdesi, modelParcaParametresi, modelParcaYazCevabi, modelSemasi, modelSilCevabi, modellerCevabi, kalemGorunumuGovdesi,
   kalemGorunumleriCevabi, kalemSilGovdesi, gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, gozKalemleriCevabi,
   gozKalemleriSorgusu, hucreAtaGovdesi, istasyonParametresi, rafParametresi, rotaCevabi, rotaSorgusu,
@@ -104,6 +104,14 @@ export const uclar = [
     yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
     cevap: fabrikaCevabi,
     isle: ({ db }) => servis.fabrika(db),
+  }),
+  // Ortak kroki saydamlığı (fabrika ve bütün bölümler, 2122-2 b).
+  uc({
+    yontem: 'GET',
+    yol: '/atolye/kroki-ayari',
+    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    cevap: krokiAyariCevabi,
+    isle: ({ db }) => servis.krokiAyari(db),
   }),
   // Fabrika krokisi (tüm fabrikanın tek paftası; yoksa null) ve dosya parçaları.
   uc({
@@ -212,6 +220,15 @@ export const uclar = [
     yetki: 'atolye.yaz',
     cevap: krokiSemasi,
     isle: ({ db }) => servis.krokiTamamla(db, null),
+  }),
+  // Haritayı düzenleyen ortak saydamlığı değiştirir (2122-5 a; kroki hizalamasıyla aynı yetki).
+  uc({
+    yontem: 'POST',
+    yol: '/atolye/kroki-ayari/degistir',
+    yetki: 'atolye.yaz',
+    govde: krokiAyariGovdesi,
+    cevap: krokiAyariCevabi,
+    isle: ({ db, govde, kullanici }) => servis.krokiAyariDegistir(db, govde, kullanici.id),
   }),
   uc({
     yontem: 'POST',

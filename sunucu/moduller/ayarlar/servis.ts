@@ -135,7 +135,14 @@ export async function kapaliSayfalariDegistir(db: Db, kisiId: number, yol: strin
   return { kapali: yeni };
 }
 
-export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham: unknown, beklenen?: unknown): Promise<Ayar> {
+// Ayarı kendi ekranından değiştiren modülün komutu (2122-5 a): değişiklik kaydı o modülün yolu ve yetkisiyle düşer.
+export interface AyarKaynagi {
+  modul: string;
+  yol: string;
+  yetki: string;
+}
+
+export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham: unknown, beklenen?: unknown, kaynak?: AyarKaynagi): Promise<Ayar> {
   if (!ayarAnahtariMi(anahtar)) throw bulunamadi('Ayar bulunamadı.');
   const sonuc = degeriDogrula(anahtar, ham);
   if ('hata' in sonuc) throw dogrulama(sonuc.hata, 'deger');
@@ -152,10 +159,20 @@ export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham:
     await ayarDegeriniYaz(db, anahtar, yeni, kisiId);
     // Uç katmanının kendi kaydı yalnız komutu ve yeni değeri taşır; eski değer burada bilinir.
     await denetimYaz(db, {
-      kisiId, yontem: 'POST', yol: DEGISTIR_YOLU, parametre: { anahtar }, govde: { eski, yeni }, modul: 'ayarlar', yetki: 'ayarlar.yaz',
+      kisiId, yontem: 'POST', yol: kaynak?.yol ?? DEGISTIR_YOLU, parametre: { anahtar }, govde: { eski, yeni },
+      modul: kaynak?.modul ?? 'ayarlar', yetki: kaynak?.yetki ?? 'ayarlar.yaz',
     });
   }
   return ayarGorunumu(anahtar, yeni);
+}
+
+// Modül yalnız kendi ayarını (tanımdaki `modul`) kendi komutundan değiştirir; başka modülün ayarı reddedilir.
+export async function modulAyariDegistir<A extends AyarAnahtari>(
+  db: Db, kisiId: number, anahtar: A, deger: AyarDegeri<A>, beklenen: AyarDegeri<A>, kaynak: AyarKaynagi,
+): Promise<AyarDegeri<A>> {
+  if (ayarTanimi(anahtar).modul !== kaynak.modul) throw new Error(`${kaynak.modul} modülü ${anahtar} ayarını değiştiremez.`);
+  await ayarDegistir(db, kisiId, anahtar, deger, beklenen, kaynak);
+  return sistemAyariOku(db, anahtar);
 }
 
 // Logo ayar tanımı değildir (açık-kapalı ya da sayı değil): ayar listesinde görünmez, genel değiştirme ucu ona yazamaz.

@@ -3,9 +3,9 @@ import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi, bagimliKayit, bulunamadi, cakisma, gecersiz } from '#cekirdek/hata.ts';
 import type {
   Alan, AramaSonucu, Bulgu, FabrikaCevabi, FabrikaKaydi, FabrikaKayitCevabi, GozlerCevabi, Kroki, KrokiHizalama, KrokiKaydi, MerkezKrokileriCevabi, IhlalAyrintisi, IstasyonModeli, IstasyonYeri, MakineYeri, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaKaydi, MerkezModelleriCevabi, MalzemeModelleriCevabi, YerlesmemisIstasyonlarCevabi, KayitCevabi, Model, ModelAyari, ModelKaydi, KalemGorunumu, KalemGorunumuKaydi, KalemMalzemesi, MakineYeriKaydi, GozKalemi, GozKalemiKaydi, Raf, RafKaydi,
-  HucreAtaGovdesi, RotaCevabi, RotaSorgusu, Salon, SalonKaydi, SalonOzeti, SurumCakismasi, YerlesimCevabi, YerlesimKaydi,
+  HucreAtaGovdesi, KrokiAyariCevabi, KrokiAyariKaydi, RotaCevabi, RotaSorgusu, Salon, SalonKaydi, SalonOzeti, SurumCakismasi, YerlesimCevabi, YerlesimKaydi,
 } from '#paylasilan/sozlesme/atolye.ts';
-import { ARAMA_AZAMI_SONUC, MERKEZ_MODEL_TURLERI } from '#paylasilan/sozlesme/atolye.ts';
+import { ARAMA_AZAMI_SONUC, KROKI_SAYDAMLIGI, MERKEZ_MODEL_TURLERI } from '#paylasilan/sozlesme/atolye.ts';
 import { MODEL_AZAMI_BAYT, MODEL_PARCA_BAYT, parcaAnahtari } from '#paylasilan/atolye-sabitleri.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -14,6 +14,7 @@ import type { BagliBelge } from '../belge-merkezi/disari.ts';
 import { istasyonGetir, istasyonlar as istasyonListesi, aktifMakineler, makineGetir } from '../istasyonlar/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
+import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
 import {
@@ -1044,6 +1045,19 @@ export async function krokiTamamla(db: Db, kapsam: KrokiKapsami): Promise<Kroki>
   if (d.ozet !== k.ozet) throw gecersiz('Dosyanın özeti tutmuyor: yükleme bozulmuş, yeniden yükleyin.');
   await sorgular.krokiTamamla(db, k.id);
   return krokiOku(db, kapsam);
+}
+
+// Ortak kroki saydamlığı (2122-2 b): fabrika ve bütün bölümlerde tek değer, sistem ayarında. Boş ayar olmaz (varsayılan %70).
+export async function krokiAyari(db: Db): Promise<KrokiAyariCevabi> {
+  return { saydamlik: (await sistemAyariOku(db, 'atolye.kroki-saydamligi')) ?? KROKI_SAYDAMLIGI.varsayilan };
+}
+
+// Haritayı düzenleyen değiştirir (2122-5 a); ekranın gördüğü değer `beklenen`dir, arada değiştiyse 409.
+export async function krokiAyariDegistir(db: Db, govde: KrokiAyariKaydi, kisiId: number): Promise<KrokiAyariCevabi> {
+  const yeni = await modulAyariDegistir(db, kisiId, 'atolye.kroki-saydamligi', govde.saydamlik, govde.beklenen, {
+    modul: 'atolye', yol: '/atolye/kroki-ayari/degistir', yetki: 'atolye.yaz',
+  });
+  return { saydamlik: yeni ?? KROKI_SAYDAMLIGI.varsayilan };
 }
 
 export async function krokiHizala(db: Db, kapsam: KrokiKapsami, h: KrokiHizalama, kisiId: number): Promise<Kroki> {
