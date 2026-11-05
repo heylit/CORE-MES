@@ -90,6 +90,28 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: fatura okuması',
     aciklama: 'Açıkken Logo\'ya gitmiş satın alma siparişlerinin faturaları sırayla okunur ve yalnız saklanır (turda en çok birkaç sipariş). "Logo bağlantısı" da açık olmalı.',
   },
+  // 2116, 2118 (kullanıcı onayı 05.11 "ayarlara ekle bağlantılar"): Logo'dan okuma, yalnız GET; varsayılan kapalı.
+  'logo.malzeme-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme kartı okuması',
+    aciklama: 'Açıkken Logo\'daki malzeme kartları saatte bir okunur; Malzemeler\'de "Logo\'dan gelenler" listesinde görünür. TMI kartı kendiliğinden değişmez, Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.stok-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: stok okuması',
+    aciklama: 'Açıkken Logo\'daki ambar başına stok miktarı saatte bir okunur; Stok\'ta TMI miktarıyla yan yana görünür. TMI stoğuna kendiliğinden yazılmaz. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.cari-aramasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: cari arama',
+    aciklama: 'Açıkken Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi aranıp forma doldurulabilir. Yalnız okur, Logo\'ya yazmaz. "Logo bağlantısı" da açık olmalı.',
+  },
   // Malzeme fişlerinin ana anahtarı; tür başına gönderim şekli aşağıda (298 a).
   'logo.malzeme-fisi-gonderimi': {
     modul: 'logo',

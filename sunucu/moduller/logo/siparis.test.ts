@@ -17,7 +17,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
+import { malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
 import type {
   LogoyaGidecekKarsilama, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaGuncellemeGidecekMalzeme, SatinAlmaKaynagi, SatirBaglari,
   SatinAlmaTurOrtami, SiparisLogoSonucu, Tamam, TurOrtami, TurSonucu, TxAcan,
@@ -381,6 +381,22 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(x.satirRefleri, t.satirlar.map((k, i) => ({ satirId: k.satirId, logoSatirRef: String(logo.satirlar[i]) })));
     assert.equal((await giden('talep', t.id))?.son_sonuc, 'gonderildi');
     assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: s.id }, 'talep kuyruğu boşalınca sipariş başlar');
+  });
+
+  test('LGS-23 (2116-3 c) eşlemesi olan malzeme talepte ve siparişte Logo koduyla gider; eşlemesi olmayan satır aynen kalır', async () => {
+    await vt().tx((db) => malzemeEslemesiYaz(db, { stokKodu: 'HM-DEN-00002', logoKodu: 'LG.DEN.2', logoKayitNo: 777002 }));
+    const s = siparisEkle();
+    const t = talepEkle();
+    const bellek = yeniSurecBellegi();
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep-niyet', no: t.id });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'talep', no: t.id, sonuc: 'gonderildi' });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'niyet', no: s.id });
+    assert.deepEqual(await tur(ortami(bellek)), { tur: 'gonderim', no: s.id, sonuc: 'gonderildi' });
+    const kodlar = (yol: string, alan: string) => ((kopru.istekler.find((i) => i.yol === yol)?.govde as { lines: Record<string, unknown>[] }).lines).map((x) => x[alan]);
+    assert.deepEqual(kodlar('/api/DemandFiche/AddRich', 'itemCode'), ['HM-DEN-00001', 'LG.DEN.2']);
+    assert.deepEqual(kodlar('/api/PurchaseOrder/AddRich', 'masterCode'), ['HM-DEN-00001', 'LG.DEN.2']);
+    // Kaynağın satırları değişmez: TMI kodu TMI'de kalır.
+    assert.deepEqual(t.satirlar.map((x) => x.stokKodu), ['HM-DEN-00001', 'HM-DEN-00002']);
   });
 
   test('LGS-16 talep kalkanı (ret): cevap kaybolursa talep yeniden açılmaz; 5 dk sonra "Logo\'da kontrol edin" hatası, yeni süreçte de', async () => {

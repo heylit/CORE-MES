@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI } from './kurallar.ts';
-import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, MalKabulSatiri } from './kurallar.ts';
+import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
@@ -408,4 +408,103 @@ export async function silmeHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zama
       WHERE belge_turu = $1 AND belge_no = $2`,
     [tur, id, d.sonuc, d.hata, d.zaman, d.sonrakiDeneme],
   );
+}
+
+/* ---------------- 2116: Logo malzeme kartı ve stok toplamı aynası, kod eşlemesi ---------------- */
+
+export type SayfaliAkis = 'malzeme-karti' | 'stok';
+export interface OkumaImleci { sonRef: number; turBasi: Date; sonTamam: Date | null; sonTamamMetni: string | null; sayi: number }
+
+export function okumaImleci(db: Db, akis: SayfaliAkis): Promise<OkumaImleci | null> {
+  return db.tek<OkumaImleci>(
+    `SELECT son_ref::float8 AS "sonRef", tur_basi AS "turBasi", son_tamam AS "sonTamam", ${zamanMetni('son_tamam')} AS "sonTamamMetni", sayi
+       FROM logo_okuma_imleci WHERE akis = $1`,
+    [akis],
+  );
+}
+
+// Sayfa yazılır; son sayfada turda görülmeyen satırlar silinir ve imleç başa döner. Boş tam tur (okuma kazası olabilir) aynayı boşaltmaz.
+export async function sayfaYaz(
+  db: Db, akis: SayfaliAkis, turBasi: Date, zaman: Date, sonraki: number | null, sayfaSayisi: number,
+  yaz: () => Promise<void>,
+): Promise<void> {
+  await yaz();
+  const onceki = await okumaImleci(db, akis);
+  const sayi = (onceki && onceki.sonRef > 0 ? onceki.sayi : 0) + sayfaSayisi;
+  if (sonraki === null && sayi > 0) {
+    await db.sorgu(akis === 'malzeme-karti' ? 'DELETE FROM logo_malzeme_karti WHERE son_okuma < $1' : 'DELETE FROM logo_stok_toplami WHERE son_okuma < $1', [turBasi]);
+  }
+  await db.sorgu(
+    `INSERT INTO logo_okuma_imleci (akis, son_ref, tur_basi, son_tamam, sayi) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (akis) DO UPDATE SET son_ref = EXCLUDED.son_ref, tur_basi = EXCLUDED.tur_basi,
+       son_tamam = coalesce(EXCLUDED.son_tamam, logo_okuma_imleci.son_tamam), sayi = EXCLUDED.sayi`,
+    [akis, sonraki ?? 0, turBasi, sonraki === null ? zaman : null, sayi],
+  );
+}
+
+export async function malzemeKartlariniYaz(db: Db, kartlar: readonly LogoMalzemeKarti[], zaman: Date): Promise<void> {
+  if (kartlar.length === 0) return;
+  // Kod Logo'da tekildir; kartın kodu değiştiyse eski kayıttaki aynı kod önce boşaltılır (tekil kısıt sıraya takılmasın).
+  await db.sorgu('DELETE FROM logo_malzeme_karti WHERE kod = ANY($1::text[]) AND NOT (logical_ref = ANY($2::bigint[]))',
+    [kartlar.map((k) => k.kod), kartlar.map((k) => k.logoKayitNo)]);
+  await db.sorgu(
+    `INSERT INTO logo_malzeme_karti (logical_ref, kod, ad, aciklama_2, aciklama_3, kart_turu, birim_seti, aktif, son_okuma)
+     SELECT * , $9::timestamptz FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::int[], $7::text[], $8::boolean[])
+     ON CONFLICT (logical_ref) DO UPDATE SET kod = EXCLUDED.kod, ad = EXCLUDED.ad, aciklama_2 = EXCLUDED.aciklama_2, aciklama_3 = EXCLUDED.aciklama_3,
+       kart_turu = EXCLUDED.kart_turu, birim_seti = EXCLUDED.birim_seti, aktif = EXCLUDED.aktif, son_okuma = EXCLUDED.son_okuma`,
+    [kartlar.map((k) => k.logoKayitNo), kartlar.map((k) => k.kod), kartlar.map((k) => k.ad), kartlar.map((k) => k.aciklama2), kartlar.map((k) => k.aciklama3),
+      kartlar.map((k) => k.kartTuru), kartlar.map((k) => k.birimSeti), kartlar.map((k) => k.aktif), zaman],
+  );
+}
+
+export async function stokToplamlariniYaz(db: Db, satirlar: readonly LogoStokSatiri[], zaman: Date): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO logo_stok_toplami (malzeme_kodu, ambar_no, miktar, son_okuma)
+     SELECT k, a, m, $4 FROM unnest($1::text[], $2::int[], $3::numeric[]) AS t(k, a, m)
+     ON CONFLICT (malzeme_kodu, ambar_no) DO UPDATE SET miktar = EXCLUDED.miktar, son_okuma = EXCLUDED.son_okuma`,
+    [satirlar.map((x) => x.malzemeKodu), satirlar.map((x) => x.ambarNo), satirlar.map((x) => x.miktar), zaman],
+  );
+}
+
+export interface AynadakiKart extends LogoMalzemeKarti { sonOkuma: string }
+
+export function aynadakiKartlar(db: Db, o: { kodlar?: readonly string[]; sinir: number; sonra: number }): Promise<AynadakiKart[]> {
+  return db.sorgu<AynadakiKart>(
+    `SELECT logical_ref::float8 AS "logoKayitNo", kod, ad, aciklama_2 AS "aciklama2", aciklama_3 AS "aciklama3", kart_turu AS "kartTuru",
+            birim_seti AS "birimSeti", aktif, ${zamanMetni('son_okuma')} AS "sonOkuma"
+       FROM logo_malzeme_karti WHERE logical_ref > $3 AND ($1::text[] IS NULL OR kod = ANY($1::text[]))
+      ORDER BY logical_ref LIMIT $2`,
+    [o.kodlar ?? null, o.sinir, o.sonra],
+  );
+}
+
+export function aynadakiStoklar(db: Db, kodlar: readonly string[]): Promise<(LogoStokSatiri & { sonOkuma: string })[]> {
+  return db.sorgu(
+    `SELECT malzeme_kodu AS "malzemeKodu", ambar_no AS "ambarNo", miktar::text AS miktar, ${zamanMetni('son_okuma')} AS "sonOkuma"
+       FROM logo_stok_toplami WHERE malzeme_kodu = ANY($1::text[]) ORDER BY malzeme_kodu, ambar_no`,
+    [kodlar],
+  );
+}
+
+// TMI stok kodu -> Logo kodu; yalnız eşlemesi olan kodlar döner.
+export async function logoKodHaritasi(db: Db, stokKodlari: readonly string[]): Promise<Map<string, string>> {
+  if (stokKodlari.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ stokKodu: string; logoKodu: string }>(
+    'SELECT stok_kodu AS "stokKodu", logo_kodu AS "logoKodu" FROM logo_malzeme_eslemesi WHERE stok_kodu = ANY($1::text[])', [stokKodlari],
+  );
+  return new Map(satirlar.map((x) => [x.stokKodu, x.logoKodu]));
+}
+
+// Logo kodu -> TMI stok kodu (okunan mal kabul ve fatura satırları için).
+export async function tmiKodHaritasi(db: Db, logoKodlari: readonly string[]): Promise<Map<string, string>> {
+  if (logoKodlari.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ stokKodu: string; logoKodu: string }>(
+    'SELECT stok_kodu AS "stokKodu", logo_kodu AS "logoKodu" FROM logo_malzeme_eslemesi WHERE logo_kodu = ANY($1::text[])', [logoKodlari],
+  );
+  return new Map(satirlar.map((x) => [x.logoKodu, x.stokKodu]));
+}
+
+export async function eslemeYaz(db: Db, e: { stokKodu: string; logoKodu: string; logoKayitNo: number }): Promise<void> {
+  await db.sorgu('INSERT INTO logo_malzeme_eslemesi (stok_kodu, logo_kodu, logo_kayit_no) VALUES ($1, $2, $3)', [e.stokKodu, e.logoKodu, e.logoKayitNo]);
 }

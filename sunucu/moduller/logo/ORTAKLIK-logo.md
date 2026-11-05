@@ -11,3 +11,8 @@
 | Firma (cari) | tutmaz; Logo cari kodunu gönderirken okur | `finans/disari.ts` `firmaOzeti().logoCariKodu` | sahibi finans (`finans_firma.logo_cari_kodu`) |
 | Para birimi | Logo döviz türü eşlemesi (USD 1, EUR 20) | `kurallar.ts` `LOGO_DOVIZ_TURLERI` | para biriminin sahibi finans (bugün satın almada) |
 | Kişi | elle ekleyen | `logo_birim_seti.ekleyen_kisi_id` | sahibi kisiler (yabancı anahtar `kisi`) |
+| Malzeme (Logo kartı) | Logo malzeme kartlarının aynası (kod, ad, açıklama, kart türü, birim seti, aktif) | `logo_malzeme_karti` | sahibi malzemeler (2116-1 a); ayna TMI kartı değildir |
+| Malzeme kodu eşlemesi | TMI stok kodu -> Logo kodu (2116-3 c) | `logo_malzeme_eslemesi.stok_kodu`, `logo_kodu` | TMI kodu malzemelerde (`malzeme_katalog_karti.stok_kodu`); yabancı anahtar yok |
+| Stok miktarı (Logo) | malzeme ve Logo ambarı başına eldeki miktar | `logo_stok_toplami` | sahibi stok (2116-1 a); yalnız karşılaştırma ve açılış devri |
+| Depo (Logo ambarı) | ambar no | `logo_stok_toplami.ambar_no` | depo sahibi stok; ambar adı `logo_ambar` |
+| Firma (Logo cari) | tutmaz; aramada okunur, saklanmaz | `logoCariAra`, `logoCariOku` | sahibi müşteri-tedarikçi (2118) |

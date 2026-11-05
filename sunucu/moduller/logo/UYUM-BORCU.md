@@ -81,6 +81,11 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
    Açıklama 3 NAME4 (`KART_ACIKLAMA_ALANLARI`, `logoKartAdi`); uzunluk kırpılmaz, Logo sınırı BİLMİYORUM. Ad güncellemesi (`UpdateRich`) bugün TMI adını
    gönderir ve yalnız ad değişince kuyruğa girer: malzemelerin güncelleme kuyruğu Açıklama 1'i verince kapanır. Yalnız kart açılışında gider; ad güncellemesi (`UpdateRich`) açıklamaları taşımaz / gerçek köprüde doğrulanınca.
 
+29. [bağlama] Logo'dan çekme (kartlar 2116, 2118) / logo yalnız aynayı, eşlemeyi ve cari okumasını verir; kullanan uçlar başka modüllerde
+   (C malzemeler "Logo'dan gelenler" ve kartı alma, D stok karşılaştırması ve açılış devri, E müşteri-tedarikçi cari arama, F `sunucu/kablolama.ts`).
+   Bağlanana kadar aynada okunan kart ve stok ekranda görünmez. Mal kabul ve fatura satırlarının Logo kodunu TMI koduna çevirmek (`tmiStokKodlari`)
+   o satırları kullanan modülün işidir; bugün çevrilmeden saklanır. Gerçek Logo'da sütun karşılıkları ve büyük tabloda sayfa süresi DENENMEDİ.
+
 ## Sonra
 6. `logo_giden.belge_no` yabancı anahtar taşımaz (belge türü çok olacak); malzeme kartı silinmez (tetikleyici). Belge türü başına ayrı sütun ve
    yabancı anahtar istenirse ayrı göç.
