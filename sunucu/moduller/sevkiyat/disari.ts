@@ -42,6 +42,8 @@ export type { SevkIsDurumu, UrunSevkiDinleyicisi, UrunSevkiOlayi, UrunSevkSatiri
 // uretim-emirleri ve satın alma sevkiyatı ithal edemez; bağı sunucu/kablolama.ts kurar. Olay komutla aynı işlemde gelir; sevkiyatın reddi
 // komutu da geri alır.
 export { alimYansit, emirBittiYansit, fasonHareketiYansit } from './servis.ts';
+// 2133-1 b ve 2133-4 a: firma kaydedilince firmanın, fabrika ayarı değişince fabrikanın noktası açılır ya da eşitlenir; bağ sunucu/kablolama.ts'te.
+export { ayarDegistiYansit, firmaDegistiYansit } from './servis.ts';
 
 // Koli etiketi (kart 1525, Etiket Merkezi okur): müşteriye giden kalemin işi, belge no, tarih ve firması; kimlik sırası korunmaz.
 export type KoliKalemi = sorgu.KoliKalemiSatiri & { firmaAdi: string | null };

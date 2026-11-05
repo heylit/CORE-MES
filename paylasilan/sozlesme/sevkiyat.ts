@@ -62,7 +62,9 @@ export const firmaSecenegi = z.object({
 });
 export const firmaAramaCevabi = z.object({ firmalar: z.array(firmaSecenegi) });
 // fabrikaAyardan: fabrika noktasının konumu Sistem Ayarları'ndan geliyor (noktada yazılı konum kullanılmaz).
-export const noktalarCevabi = z.object({ noktalar: z.array(noktaSemasi), fabrikaAyardan: z.boolean() });
+// konumsuzFirmalar (2133-2 a): aktif noktası ve koordinatlı adresi olmayan aktif firmalar; konum girilince nokta açılır. Sunucu her zaman
+// yazar; isteğe bağlı olması alandan önce yazılmış istemci örneklerini kırmamak içindir.
+export const noktalarCevabi = z.object({ noktalar: z.array(noktaSemasi), fabrikaAyardan: z.boolean(), konumsuzFirmalar: z.array(firmaSecenegi).optional() });
 export const noktaCevabi = z.object({ nokta: noktaSemasi });
 export type FirmaKonumu = z.infer<typeof firmaKonumuSemasi>;
 
@@ -291,6 +293,9 @@ export const aramaSonucuSemasi = z.object({
 });
 // kisaBaglanti: kısa harita bağlantısı ağa çıkmadan çözülemez; açık adres ya da koordinat istenir.
 export const aramaCevabi = z.object({ sonuclar: z.array(aramaSonucuSemasi), kisaBaglanti: z.boolean(), dizinVar: z.boolean() });
+// 2133-3 a: konumsuz firmanın adresinden çevrimdışı dizin önerisi. aramaMetni sonuç veren (yoksa ilk denenen) arama; yazmaz.
+export const konumOnerisiSorgusu = z.object({ firmaId: z.coerce.number().int().positive() });
+export const konumOnerisiCevabi = z.object({ aramaMetni: z.string().nullable(), sonuclar: z.array(aramaSonucuSemasi), dizinVar: z.boolean() });
 
 // ---------- tek rota ----------
 // duraklar: virgülle ayrılmış "<noktaId>[s<durak dk>][a|b<çift no>]"; a alış, b bırakış (ör. "12s20a1,15,7b1").
@@ -379,6 +384,7 @@ export type HaritaCevabi = z.output<typeof haritaCevabi>;
 export type TrafikCevabi = z.output<typeof trafikCevabi>;
 export type AramaSonucu = z.output<typeof aramaSonucuSemasi>;
 export type AramaCevabi = z.output<typeof aramaCevabi>;
+export type KonumOnerisiCevabi = z.output<typeof konumOnerisiCevabi>;
 export type TekRotaSorgusu = z.input<typeof tekRotaSorgusu>;
 export type TekRotaPlani = z.output<typeof tekRotaPlaniSemasi>;
 export type TekRotaCevabi = z.output<typeof tekRotaCevabi>;

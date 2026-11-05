@@ -37,6 +37,11 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
    Stok bu modülü okuduğu için bu modül stoğu ithal edemez (ADR 0006); karşılığı `stok` `lotunEmri`, bağı `sunucu/kablolama.ts`. Bağ yokken lot araması sonuç vermez.
    Sonuç yeni tür açmaz: emrin kalemini taşıyan işin noktası `tur: 'nokta'`, kategori "Emir" ya da "Lot" olarak döner; sözleşme ve ekran değişmez.
 
+- Kendiliğinden açılan noktalar (2133-1 b, 2133-2 a, 2133-4 a): firma kartı ya da adresi yazılınca `musteri-tedarikci` `firmaDegistiDinle`, fabrika ayarı
+   değişince `ayarlar` `ayarDegistiDinle` olayı verir; karşılıkları bu modülün `firmaDegistiYansit` ve `ayarDegistiYansit`, bağı `sunucu/kablolama.ts`.
+   Bağ yokken nokta elle açılır; bağdan önce kaydedilmiş firmalar göç 20261105083000 ile bir kez doldurulur. Koordinatsız firmaya nokta açılmaz,
+   Noktalar'da "Konum eksik" listesinde kalır. Konum önerisi (2133-3 a) yalnız depodaki çevrimdışı dizinden okunur; dış servis yoktur.
+
 - Ana menü simgesi `next` (kamyon simgesi satın almada). Uyum: ortak simge setine sevkiyat simgesi istenirse çekirdek işi.
 - İSTİSNA (kullanıcının yazılı onayı 16.10.2026): "Sürücüye gönder" Google Haritalar / Yandex rota bağlantısı üretir (`istemci/src/moduller/sevkiyat/SurucuBaglantisi.tsx`).
    Ekranda dört öğe kalır (kullanıcı kararı 16.10.2026 "Kalsın"): "Google Haritalar'da aç" ve "Yandex'te aç" bağlantıları ile "Google/Yandex bağlantısını kopyala" düğmeleri.

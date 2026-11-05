@@ -40,6 +40,37 @@ export function noktaGuncelle(db: Db, id: number, surum: number, n: NoktaYazisi)
     [id, n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId, surum, n.adresId ?? null],
   );
 }
+// 2133-1 b: firmanın bütün noktaları (pasif dahil; adres bağı pasifte de durur).
+export function firmaninButunNoktalari(db: Db, firmaId: number): Promise<NoktaSatiri[]> {
+  return db.sorgu<NoktaSatiri>(`SELECT ${NOKTA_ALANLARI} FROM sevkiyat_noktasi WHERE firma_id = $1 ORDER BY aktif DESC, id`, [firmaId]);
+}
+export async function aktifNoktaAdiVarMi(db: Db, ad: string): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM sevkiyat_noktasi WHERE aktif AND lower(ad) = lower($1)) AS "var"', [ad]);
+  return satir?.var ?? false;
+}
+// Kendiliğinden açılan nokta: aynı anda açılan ikinci nokta (firma ya da fabrika tekliği, ad tekliği) eklenmez, null döner.
+export function otomatikNoktaEkle(db: Db, n: NoktaYazisi): Promise<NoktaSatiri | null> {
+  return db.tek<NoktaSatiri>(
+    `INSERT INTO sevkiyat_noktasi (ad, tur, enlem, boylam, adres, durak_suresi_dakika, firma_id, adres_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING RETURNING ${NOKTA_ALANLARI}`,
+    [n.ad, n.tur, n.enlem, n.boylam, n.adres, n.durakSuresiDakika, n.firmaId, n.adresId ?? null],
+  );
+}
+// Kaynaktan (firma kartı, fabrika ayarı) gelen konumun kopyası; değişmeyen satıra yazılmaz, sürüm de artmaz.
+export function noktaKonumunuYaz(
+  db: Db, id: number, k: { enlem: number; boylam: number; adres: string | null; adresId: number | null },
+): Promise<NoktaSatiri | null> {
+  return db.tek<NoktaSatiri>(
+    `UPDATE sevkiyat_noktasi SET enlem = $2, boylam = $3, adres = $4, adres_id = $5, surum = surum + 1
+      WHERE id = $1 AND (enlem, boylam, adres, adres_id) IS DISTINCT FROM ($2::numeric(9, 6), $3::numeric(9, 6), $4::text, $5::int)
+      RETURNING ${NOKTA_ALANLARI}`,
+    [id, k.enlem, k.boylam, k.adres, k.adresId],
+  );
+}
+// Kaldırılan adrese bağlı noktanın bağı çözülür; konum ve adres son kopya olarak kalır.
+export async function noktaAdresBaginiCoz(db: Db, adresId: number): Promise<void> {
+  await db.sorgu('UPDATE sevkiyat_noktasi SET adres_id = NULL, surum = surum + 1 WHERE adres_id = $1', [adresId]);
+}
 // İptal edilmemiş bir işte alış ya da bırakış noktası mı?
 export async function noktaIsteKullaniliyor(db: Db, id: number): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(

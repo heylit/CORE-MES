@@ -4,6 +4,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Arac, ElleTuru, GunPlaniCevabi, KalemKaynagi, KalemYonu, Tasima, TekRotaCevabi, TumIsAsamasi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import type { RotaOgesi } from './cozucu.ts';
+import { sadelestir } from './arama.ts';
 
 export type GunTipi = 'hafta-ici' | 'cuma' | 'cumartesi' | 'pazar';
 export type AracTuru = 'binek' | 'kamyonet' | 'kamyon';
@@ -212,6 +213,54 @@ export function noktaKonumuSec<K extends FirmaKonumuSecenegi>(konumlar: readonly
   return konumlar.find((k) => k.adresId === adresId) ?? null;
 }
 export const ADRES_FIRMASIZ = 'Adres yalnız firmaya bağlı noktada seçilir.';
+
+// 2133-1 b: firma kaydedilince açılan noktanın türü. Fason işaretli firma fason, iki yönlü firma müşteri noktası olur (formdaki
+// öneriyle aynı; tür sonradan elle değiştirilebilir).
+export function firmaNoktaTuru(f: { tur: 'musteri' | 'tedarikci' | 'ikisi'; fason: boolean }): 'musteri' | 'tedarikci' | 'fason' {
+  if (f.fason) return 'fason';
+  return f.tur === 'tedarikci' ? 'tedarikci' : 'musteri';
+}
+// Kendiliğinden açılan ya da adresi kalkan noktanın konumu: önce merkez, sonra teslim, şube, fatura adresi; kaldırılan adres seçilmez.
+const KONUM_ONCELIGI: readonly string[] = ['merkez', 'teslim', 'sube', 'fatura'];
+export function otomatikKonumSec<K extends FirmaKonumuSecenegi & { tur: string }>(konumlar: readonly K[], haricAdresId: number | null = null): K | null {
+  const adaylar = konumlar.filter((k) => haricAdresId === null || k.adresId !== haricAdresId);
+  for (const tur of KONUM_ONCELIGI) {
+    const k = adaylar.find((x) => x.tur === tur);
+    if (k) return k;
+  }
+  return adaylar[0] ?? null;
+}
+// Aynı adlı başka aktif nokta varsa (ad tekildir) firmanın kodu, kodu yoksa numarası eklenir.
+export function otomatikNoktaAdi(f: { id: number; ad: string; kod: string | null }, adKullaniliyor: boolean): string {
+  const ad = f.ad.trim().slice(0, 100);
+  return adKullaniliyor ? `${ad} (${f.kod?.trim() || `#${f.id}`})` : ad;
+}
+export const OTOMATIK_DURAK_SURESI = 20;
+export const FABRIKA_NOKTASI_ADI = 'Fabrika';
+
+// 2133-3 a: firma adresinden çevrimdışı dizinde aranacak metinler, en ayrıntılıdan en kabaya. Dizin araması her kelimenin eşleşmesini
+// ister; kapı numarası, kat ve "mahallesi", "caddesi" gibi ekler aramayı boşa düşürür, bu yüzden atılır. Sonuç yalnız öneridir.
+const ADRES_DOLGUSU = new Set([
+  'no', 'numara', 'kat', 'daire', 'd', 'k', 'blok', 'apt', 'apartmani', 'mah', 'mahallesi', 'mh', 'cad', 'caddesi', 'cd', 'sok', 'sokak',
+  'sokagi', 'sk', 'bulvari', 'blv', 'bul', 'osb', 'organize', 'sanayi', 'bolgesi', 'site', 'sitesi', 'is', 'merkezi', 'tr', 'turkiye',
+]);
+const ADRES_ARAMA_EN_COK = 10;
+export function adresAramaMetinleri(adres: string | null, ilce: string | null, il: string | null): string[] {
+  const kelimeler = sadelestir(adres ?? '').split(' ')
+    .filter((k) => k !== '' && !ADRES_DOLGUSU.has(k) && (/^\d+$/.test(k) ? k.length >= 3 : k.length >= 2));
+  const ilceMetni = sadelestir(ilce ?? '');
+  const ilMetni = sadelestir(il ?? '');
+  const bolge = ilceMetni !== '' && !kelimeler.includes(ilceMetni) ? ` ${ilceMetni}` : '';
+  const sonuc: string[] = [];
+  const ekle = (m: string) => { const t = m.trim(); if (t !== '' && !sonuc.includes(t)) sonuc.push(t); };
+  if (kelimeler.length >= 2) ekle(`${kelimeler[0]} ${kelimeler[1]}${bolge}`);
+  if (kelimeler.length >= 1) ekle(`${kelimeler[0]}${bolge}`);
+  for (let i = 0; i + 1 < kelimeler.length && i < 4; i++) ekle(`${kelimeler[i]} ${kelimeler[i + 1]}`);
+  for (const k of kelimeler.slice(0, 4)) if (k.length >= 4) ekle(k);
+  ekle(ilceMetni);
+  if (sonuc.length === 0) ekle(ilMetni);
+  return sonuc.slice(0, ADRES_ARAMA_EN_COK);
+}
 export const ADRES_FIRMADA_YOK = 'Seçilen adres bu firmanın değil ya da koordinatı yok.';
 
 export const AKTIF_FABRIKA_KALDIRILAMAZ = 'Aktif fabrika noktası pasifleştirilemez ya da başka türe çevrilemez; fabrika taşındıysa konumunu Sistem Ayarları\'nda güncelleyin.';

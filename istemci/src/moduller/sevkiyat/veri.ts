@@ -1,7 +1,7 @@
 // Modülün sunucu çağrıları. Yazma komutu dönen gün planını önbelleğe koyar; ekran yeniden sormaz.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
+  AracCevabi, AracGovdesi, ElleKalemGovdesi, AracGuncelleGovdesi, AraclarCevabi, AramaCevabi, KonumOnerisiCevabi, BekleyenBolCevabi, BekleyenBolGovdesi, BekleyenlerCevabi, DagitGovdesi, FirmaAramaCevabi, GunPlaniCevabi, HaritaCevabi, IsCevabi, IsDurumuGovdesi, IsGovdesi, IsGuncelleGovdesi,
   KaydetGovdesi, KalemCevabi, NoktaCevabi, NoktaGovdesi, NoktaGuncelleGovdesi, NoktalarCevabi, SerbestBirakCevabi, SerbestBirakGovdesi, Tasima, TekRotaCevabi,
   TrafikCevabi, TumIslerCevabi,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
@@ -37,6 +37,15 @@ export const useNoktalar = () =>
 // Fabrikanın konumu Sistem Ayarları'ndan mı geliyor (aynı istek, ayrı seçim).
 export const useFabrikaAyardan = () =>
   useQuery({ queryKey: anahtarlar.noktalar, queryFn: noktalariGetir, select: (c) => c.fabrikaAyardan }).data ?? false;
+// 2133-2 a: noktası açılamayan (koordinatı olmayan) aktif firmalar; aynı istek, ayrı seçim.
+export const useKonumsuzFirmalar = () =>
+  useQuery({ queryKey: anahtarlar.noktalar, queryFn: noktalariGetir, select: (c) => c.konumsuzFirmalar ?? [] }).data ?? [];
+// 2133-3 a: konumsuz firmanın adresinden çevrimdışı dizinde aranacak metin; yalnız okur.
+export const useKonumOnerisi = (firmaId: number | null) =>
+  useQuery({
+    queryKey: ['sevkiyat', 'konum-onerisi', firmaId], enabled: firmaId !== null, staleTime: 60_000,
+    queryFn: () => api.get<KonumOnerisiCevabi>(`/sevkiyat/noktalar/konum-onerisi?firmaId=${firmaId}`),
+  });
 export const useAraclar = () =>
   useQuery({ queryKey: anahtarlar.araclar, queryFn: () => api.get<AraclarCevabi>('/sevkiyat/araclar') });
 // Harita verisi büyüktür ve oturum boyunca değişmez.
