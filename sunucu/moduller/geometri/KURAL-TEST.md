@@ -31,3 +31,6 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Tek parçalı model tek düğümdür (montaj false); montajı okunmamış analiz 'montaj-yok', analiz yoksa 'analiz-yok' | `GEO-MO3`, `GEO-MO-A2`, `GEO-MO-A1` |
 | Güvenilmeyen girdi: boş ağ parça değil, parçasız ve sınırı aşan model null, bozuk alan yok sayılır, ad kısalır, derin yapı yığını taşırmaz | `GEO-MO4` |
 | Montaj analizle aynı işlemde yenilenir, yinelenmez; yalnız öneri | `GEO-MO-A1` |
+| Sağlık raporu (2143): açık kenar, geçersiz yüz ya da geçersiz şekil, kapanmayan ağ, 0,1 mm üstü tolerans "guvenme"; 0,01 mm üstü tolerans, 0,01 mm'den kısa kenar, mm olmayan birim, 1 mm'den küçük ya da 10 m'den büyük parça "dikkat"; bulgu yoksa "iyi" | `GEO-SA1`..`GEO-SA4`, `GEO-SA-A1`..`GEO-SA-A4` |
+| Birim: STEP'te okuyucunun bildirdiği ad, IGES'te global bölümün 14./15. alanı; okunamazsa null ve bulgu yok | `GEO-SA4`, `GEO-SA5`, `GEO-SA6`, `GEO-SA-A3` |
+| Sağlık analizle aynı işlemde yenilenir, yinelenmez; satırı olmayan analiz 'saglik-yok' | `GEO-SA-A5` |

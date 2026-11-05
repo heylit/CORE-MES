@@ -11,6 +11,35 @@ export function kutuStep(x: number, y: number, z: number): string {
   return y_.metin('kutu.step');
 }
 
+// Yalnız testler için (kart 2143): kutuStep'in bozulmuş kopyaları; her biri sağlık raporunun bir bulgusunu bilinen değerle üretir.
+// Açık kutu: kabuktan ilk yüz (alt yüz) çıkarılır; 4 açık kenar, 1 açık sınır.
+export function acikKutuStep(x: number, y: number, z: number): string {
+  const m = kutuStep(x, y, z);
+  const s = m.replace(/CLOSED_SHELL\('',\(#\d+,/, "CLOSED_SHELL('',(");
+  if (s === m) throw new Error('kabuk bulunamadı');
+  return s;
+}
+// İnç kutu: uzunluk birimi INCH (25,4 mm); ölçüler dosyada inçtir.
+export function incKutuStep(x: number, y: number, z: number): string {
+  const m = kutuStep(x, y, z);
+  const mm = '( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) )';
+  if (!m.includes(mm)) throw new Error('birim bulunamadı');
+  return m.replace(mm, "( CONVERSION_BASED_UNIT('INCH',#9999) LENGTH_UNIT() NAMED_UNIT(#9998) )")
+    .replace('DATA;\n', `DATA;\n#9997=${mm};\n#9998=DIMENSIONAL_EXPONENTS(1.,0.,0.,0.,0.,0.,0.);\n#9999=LENGTH_MEASURE_WITH_UNIT(LENGTH_MEASURE(25.4),#9997);\n`);
+}
+// Kaymış yüzlü kutu: üst yüzün düzlemi kenarlarından kayma kadar yukarıdadır; okuyucu onarımı kenar toleransını kayma kadar büyütür.
+export function kaymisYuzluKutuStep(x: number, y: number, z: number, kayma: number): string {
+  const m = kutuStep(x, y, z);
+  const eksen = [...m.matchAll(/#\d+=PLANE\('',#(\d+)\);/g)][1]?.[1];
+  const nokta = eksen === undefined ? undefined : new RegExp(`#${eksen}=AXIS2_PLACEMENT_3D\\('',#(\\d+),`).exec(m)?.[1];
+  if (nokta === undefined) throw new Error('üst yüz bulunamadı');
+  return m.replace(new RegExp(`#${nokta}=CARTESIAN_POINT\\('',\\(([^)]*)\\)\\)`), (_t, p: string) => {
+    const v = p.split(',').map(Number);
+    v[2] = v[2]! + kayma;
+    return `#${nokta}=CARTESIAN_POINT('',(${v.map((d) => d.toFixed(4)).join(',')}))`;
+  });
+}
+
 interface StepYazici {
   e(t: string): number;
   nok(p: number[]): number;

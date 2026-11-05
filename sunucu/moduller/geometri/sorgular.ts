@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { GeometriDosyaTuru, GeometriIsDurumu } from '#paylasilan/sozlesme/geometri.ts';
 import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
-import type { MontajDugumu, Olcum, Ozellik, Yuz, YuzTuru } from './kurallar.ts';
+import type { MontajDugumu, Olcum, Ozellik, SaglikOlcumu, Yuz, YuzTuru } from './kurallar.ts';
 
 export interface IsSatiri {
   id: number;
@@ -220,4 +220,28 @@ export async function montaj(db: Db, revizyonId: number): Promise<{ motor: strin
       ...x, obb: obbA === null || obbB === null || obbC === null ? null : { a: obbA, b: obbB, c: obbC },
     })),
   };
+}
+
+// Sağlık ölçümü (kart 2143) analizle aynı işlemde yenilenir; null (B-rep okunamadı) satırsız bırakır.
+export async function saglikYaz(db: Db, revizyonId: number, motor: string, o: SaglikOlcumu | null): Promise<void> {
+  await db.sorgu('DELETE FROM geometri_saglik WHERE revizyon_id = $1', [revizyonId]);
+  if (o === null) return;
+  await db.sorgu(
+    `INSERT INTO geometri_saglik (revizyon_id, acik_kenar_sayisi, acik_sinir_sayisi, gecersiz_yuz_sayisi, sekil_gecerli, en_buyuk_tolerans_mm,
+       kucuk_kenar_sayisi, dosya_birimi, motor)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [revizyonId, o.acikKenarSayisi, o.acikSinirSayisi, o.gecersizYuzSayisi, o.sekilGecerli, o.enBuyukToleransMm, o.kucukKenarSayisi, o.dosyaBirimi, motor],
+  );
+}
+
+export interface SaglikSatiri extends SaglikOlcumu { motor: string; hesapZamani: string }
+
+export function saglik(db: Db, revizyonId: number): Promise<SaglikSatiri | null> {
+  return db.tek<SaglikSatiri>(
+    `SELECT acik_kenar_sayisi AS "acikKenarSayisi", acik_sinir_sayisi AS "acikSinirSayisi", gecersiz_yuz_sayisi AS "gecersizYuzSayisi",
+            sekil_gecerli AS "sekilGecerli", en_buyuk_tolerans_mm::float8 AS "enBuyukToleransMm", kucuk_kenar_sayisi AS "kucukKenarSayisi",
+            dosya_birimi AS "dosyaBirimi", motor, ${zamanMetni('hesap_zamani')} AS "hesapZamani"
+       FROM geometri_saglik WHERE revizyon_id = $1`,
+    [revizyonId],
+  );
 }

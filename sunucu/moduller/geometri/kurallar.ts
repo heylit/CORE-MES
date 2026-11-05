@@ -777,3 +777,123 @@ export function bilesenListesi(dugumler: readonly MontajDugumu[]): MontajBilesen
   }
   return [...gruplar.values()];
 }
+
+// Dosya sağlık raporu (kart 2143, 2140-1 a). Ölçüm B-rep okumasında, okuyucunun kendi onarımından sonra yapılır: onarımın kapattığı
+// kusur görünmez, onarılamayan kalır. Onarımın yüzeyi kaydırarak kapattığı boşluk kenar toleransını büyütür (ölçülen: 5 mm kaymış yüzde
+// tolerans 5 mm); bu yüzden tolerans da bulgudur.
+export interface SaglikOlcumu {
+  acikKenarSayisi: number;
+  acikSinirSayisi: number;
+  gecersizYuzSayisi: number;
+  sekilGecerli: boolean;
+  enBuyukToleransMm: number;
+  kucukKenarSayisi: number;
+  dosyaBirimi: string | null;
+}
+
+// Sınırlar (VARSAYIM, kart 2143; geri alma ucuz). Kenar 0,01 mm'den kısaysa ağ ve ölçü hesabını bozar; tolerans 0,01 mm'yi aşarsa ölçü o
+// kadar belirsizdir, 0,1 mm'yi aşarsa CNC ölçüsü için güvenilmez. Parçanın en uzun kenarı 1 mm'den kısa ya da 10 m'den uzunsa birim
+// büyük olasılıkla yanlıştır (inç dosya mm diye yazılmış ya da tersi). Serbest kenar dikişi 0,001 mm içinde aranır.
+export const KUCUK_KENAR_MM = 0.01;
+export const TOLERANS_DIKKAT_MM = 0.01;
+export const TOLERANS_GUVENME_MM = 0.1;
+export const OLCU_EN_AZ_MM = 1;
+export const OLCU_EN_COK_MM = 10_000;
+export const SERBEST_KENAR_DIKIS_MM = 0.001;
+export const BIRIM_EN_UZUN = 40;
+
+const MM_ADLARI = new Set(['millimetre', 'millimeter', 'mm']);
+
+export type SaglikDurumu = 'iyi' | 'dikkat' | 'guvenme';
+export type SaglikBulguKodu =
+  | 'acik-kenar' | 'gecersiz-yuz' | 'gecersiz-sekil' | 'acik-ag' | 'buyuk-tolerans' | 'tolerans' | 'kucuk-kenar' | 'birim-mm-degil'
+  | 'olcu-cok-kucuk' | 'olcu-cok-buyuk';
+export interface SaglikBulgusu { kod: SaglikBulguKodu; durum: Exclude<SaglikDurumu, 'iyi'>; metin: string }
+
+const sayi = (x: number): string => x.toLocaleString('tr-TR', { maximumFractionDigits: 4 });
+
+// Bulgular ve genel durum. kapali ağ ölçümünden (occt-import-js), enBuyukOlcuMm döndürülmüş kutunun en uzun kenarıdır; ikisi de
+// analizden gelir. Herhangi bir "guvenme" bulgusu genel durumu "guvenme", yalnız "dikkat" bulgusu "dikkat" yapar.
+export function saglikDegerlendir(
+  o: SaglikOlcumu, analiz: { kapali: boolean; enBuyukOlcuMm: number } | null,
+): { durum: SaglikDurumu; bulgular: SaglikBulgusu[] } {
+  const b: SaglikBulgusu[] = [];
+  if (o.acikKenarSayisi > 0) {
+    b.push({ kod: 'acik-kenar', durum: 'guvenme', metin: `${String(o.acikKenarSayisi)} açık kenar (${String(o.acikSinirSayisi)} açık sınır): model kapalı değil, hacim ve ağırlık güvenilmez.` });
+  }
+  if (o.gecersizYuzSayisi > 0) {
+    b.push({ kod: 'gecersiz-yuz', durum: 'guvenme', metin: `${String(o.gecersizYuzSayisi)} geçersiz yüz: bu yüzlerdeki delik ve ölçü önerilerine güvenme.` });
+  } else if (!o.sekilGecerli) {
+    b.push({ kod: 'gecersiz-sekil', durum: 'guvenme', metin: 'Şekil geçerlilik denetiminden geçmedi (yüzler tek tek geçerli, aralarındaki bağ bozuk).' });
+  }
+  if (analiz !== null && !analiz.kapali && o.acikKenarSayisi === 0) {
+    b.push({ kod: 'acik-ag', durum: 'guvenme', metin: 'Üçgen ağı kapanmadı: hacim hesaplanamadı.' });
+  }
+  if (o.enBuyukToleransMm > TOLERANS_GUVENME_MM) {
+    b.push({ kod: 'buyuk-tolerans', durum: 'guvenme', metin: `En büyük kenar toleransı ${sayi(o.enBuyukToleransMm)} mm: yüzler arasında boşluk ya da kayma var, ölçüler bu kadar belirsiz.` });
+  } else if (o.enBuyukToleransMm > TOLERANS_DIKKAT_MM) {
+    b.push({ kod: 'tolerans', durum: 'dikkat', metin: `En büyük kenar toleransı ${sayi(o.enBuyukToleransMm)} mm: ince ölçülerde dikkat.` });
+  }
+  if (o.kucukKenarSayisi > 0) {
+    b.push({ kod: 'kucuk-kenar', durum: 'dikkat', metin: `${String(o.kucukKenarSayisi)} kenar ${sayi(KUCUK_KENAR_MM)} mm'den kısa.` });
+  }
+  if (o.dosyaBirimi !== null && !MM_ADLARI.has(o.dosyaBirimi.toLowerCase())) {
+    b.push({ kod: 'birim-mm-degil', durum: 'dikkat', metin: `Dosya birimi ${o.dosyaBirimi}; ölçüler mm'ye çevrildi, ilk parçada denetle.` });
+  }
+  if (analiz !== null && analiz.enBuyukOlcuMm < OLCU_EN_AZ_MM) {
+    b.push({ kod: 'olcu-cok-kucuk', durum: 'dikkat', metin: `En uzun ölçü ${sayi(analiz.enBuyukOlcuMm)} mm: birim yanlış olabilir.` });
+  } else if (analiz !== null && analiz.enBuyukOlcuMm > OLCU_EN_COK_MM) {
+    b.push({ kod: 'olcu-cok-buyuk', durum: 'dikkat', metin: `En uzun ölçü ${sayi(analiz.enBuyukOlcuMm)} mm: birim yanlış olabilir.` });
+  }
+  const durum: SaglikDurumu = b.some((x) => x.durum === 'guvenme') ? 'guvenme' : b.length > 0 ? 'dikkat' : 'iyi';
+  return { durum, bulgular: b };
+}
+
+// Dosyadaki birim adı: boşluk kırpılır, 40 karakteri aşan ya da boş ad null (güvenilmeyen girdi).
+export function birimAdi(ad: unknown): string | null {
+  if (typeof ad !== 'string') return null;
+  const t = ad.trim();
+  return t === '' || t.length > BIRIM_EN_UZUN ? null : t;
+}
+
+// IGES global bölümünün (sütun 73 'G') 14. alanı birim bayrağıdır; 3 ise 15. alandaki ad geçerlidir. Alan ayıracı 1., kayıt ayıracı 2.
+// alandadır (boşsa ',' ve ';'). Metin Hollerith biçimindedir (nHxxx). Okunamazsa null.
+const IGES_BIRIMLERI: Readonly<Record<number, string>> = {
+  1: 'INCH', 2: 'MM', 4: 'FT', 5: 'MI', 6: 'M', 7: 'KM', 8: 'MIL', 9: 'UM', 10: 'CM', 11: 'UIN',
+};
+const IGES_GLOBAL_EN_COK_SATIR = 200;
+export function igesBirimi(veri: Uint8Array): string | null {
+  const metin = new TextDecoder('latin1').decode(veri.subarray(0, 82 * (IGES_GLOBAL_EN_COK_SATIR + 100)));
+  const g = metin.split(/\r?\n/).filter((s) => s.length >= 73 && s[72] === 'G').slice(0, IGES_GLOBAL_EN_COK_SATIR).map((s) => s.slice(0, 72)).join('');
+  if (g === '') return null;
+  let i = 0;
+  const ayirac = (): string | null => {
+    if (g.startsWith('1H', i)) { const c = g[i + 2]; i += 3; return c ?? null; }
+    return null;
+  };
+  const p = ayirac() ?? ',';
+  if (g[i] === p) i++;
+  const k = ayirac() ?? ';';
+  const alanlar: string[] = [p, k];
+  if (g[i] === p) i++;
+  while (i < g.length && alanlar.length < 15) {
+    const h = /^(\d+)H/.exec(g.slice(i, i + 12));
+    let deger: string;
+    if (h !== null) {
+      const n = Number(h[1]);
+      deger = g.slice(i + h[0].length, i + h[0].length + n);
+      i += h[0].length + n;
+      while (i < g.length && g[i] !== p && g[i] !== k) i++;
+    } else {
+      const j0 = i;
+      while (i < g.length && g[i] !== p && g[i] !== k) i++;
+      deger = g.slice(j0, i).trim();
+    }
+    alanlar.push(deger);
+    if (g[i] === k) break;
+    i++;
+  }
+  const bayrak = Number(alanlar[13]);
+  if (bayrak === 3) return birimAdi(alanlar[14]);
+  return IGES_BIRIMLERI[bayrak] ?? null;
+}

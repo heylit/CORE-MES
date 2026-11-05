@@ -27,3 +27,10 @@
   "SOLID"). Tersi de var: birden çok ağlı düğümde ağ adları genel kalabilir. Bileşen listesi okumada hesaplanır (ad ve döndürülmüş kutu,
   hacim). Alt montajın kendisi bileşen listesinde satır değildir; adedi ağaçtan sayılır. Yerleşim dönüşümü (matris) tutulmaz; patlatma
   (2098 H3) için dünya kutusu var. Ölçüler yalnız öneri (2101-2 b): gerçek montaj dosyasıyla denenmedi.
+- Dosya sağlık raporu (kart 2143, 2140-1 a): aynı libcascade okumasında `ShapeAnalysis_FreeBounds` (0,001 mm dikiş) açık kenar ve sınırı,
+  `BRepCheck_Analyzer` şekil ve (şekil geçersizse) yüz geçerliliğini, `BRep_Tool.Tolerance` en büyük kenar toleransını, kenar boyu kısa kenarı,
+  STEP'te `FileUnits` dosya birimini verir; IGES birimi global bölümden saf kuralla okunur. Ölçüm okuyucunun kendi onarımından sonradır:
+  STEP okuyucusu (FromSTEP sırası) yüzeyi kenardan kaymış yüzü geçerli yapar ama kenar toleransını kayma kadar büyütür (5 mm kaymada 5 mm
+  ölçüldü); bu yüzden tolerans bulgudur. Onarımdan sonra geçersiz kalan yüzü üreten sentetik dosya bulunamadı: geçersiz yüz yolu yalnız saf
+  kural testiyle denendi. Değerlendirme (`saglikDegerlendir`) okumada yapılır, eşikler kayıtta değil kuraldadır. Sağlık ölçümü yüz
+  sınırından (`YUZ_EN_COK`) bağımsızdır. Gerçek dosyayla denenmedi.
