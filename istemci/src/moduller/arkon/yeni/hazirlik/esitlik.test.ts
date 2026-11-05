@@ -86,7 +86,9 @@ describe('A2 kurallar eski hesaplarla aynı', () => {
   it('iş kuralları, sınıra yakınlık, parça ailesi, özet', () => {
     const girdiler = [null, {}, { rules: { warns: [{ id: 'a', t: 'x', lvl: 'warn', when: 'start' }], q: { band: 60, who: 'operator' }, prod: { scrapPct: 5 } } }, { rules: { prod: { tools: [{ id: 't', name: 'T1', life: 10, warnPct: 80 }] }, q: { nok: 'stop' } } }];
     for (const g of girdiler) {
-      expect(isKurallari(g)).toEqual(K.rulesOf(g));
+      // 2124-1 b: numune isteğini yalnız operatör açar; eski tabletin otomatik gönderimi (autoSend) yeni ekranda hep kapalıdır (bilinçli fark).
+      const eski = K.rulesOf(g) as ReturnType<typeof isKurallari>;
+      expect(isKurallari(g)).toEqual({ ...eski, q: { ...eski.q, autoSend: false } });
       // 564 7 a: kalite reddi makineyi durdurmaz; eski 'stop' kuralı uyarı olarak özetlenir (bilinçli fark).
       expect(kuralOzeti(isKurallari(g))).toBe(K.rulesSummary(K.rulesOf(g)).replace('redde dur', 'redde uyar'));
     }
