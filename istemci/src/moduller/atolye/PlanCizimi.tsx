@@ -29,6 +29,8 @@ interface Ozellikler {
   duzenlenir?: boolean;
   etiket: string;
   svgRef?: Ref<SVGSVGElement>;
+  // Bir ekran pikselinin metresi: tutamaklar yakınlaştırmadan bağımsız, tutulabilir boyda çizilir.
+  pm?: number;
   ogeBas?: (anahtar: string, o: ReactPointerEvent) => void;
   bosBas?: (o: ReactPointerEvent) => void;
   // Fabrika planında bölümün zeminine basmak (seçer; sürükleme bölümün başlığından).
@@ -53,7 +55,7 @@ function kisalt(metin: string, genislik: number, boy: number): string {
 const nokta = (k: [number, number][]): string => k.map(([x, z]) => `${x.toFixed(3)},${z.toFixed(3)}`).join(' ');
 
 export function PlanCizimi({
-  taslak: t, sutunlar, satirlar, secili, isaretli, durumlar, rota, kutu, duzenlenir = false, etiket, svgRef,
+  taslak: t, sutunlar, satirlar, secili, isaretli, durumlar, rota, kutu, duzenlenir = false, etiket, svgRef, pm,
   ogeBas, bosBas, bolumBas, dondurBas, ucBas, altlik, ust,
 }: Ozellikler) {
   const { genislik: G, derinlik: D, hucreBoyu: H } = t.salon;
@@ -71,6 +73,8 @@ export function PlanCizimi({
       viewBox={`${kutu.x} ${kutu.y} ${kutu.g} ${kutu.d}`}
       role="img"
       aria-label={etiket}
+      // Düzenlerken plana basınca klavye odağı planda kalır (Delete, R, ok tuşları düzenleyicinin tuş dinleyicisine ulaşır).
+      tabIndex={duzenlenir ? -1 : undefined}
       onPointerDown={(o) => bosBas?.(o)}
     >
       {t.bolumler ? (
@@ -230,7 +234,7 @@ export function PlanCizimi({
 
       {rota && rota.length > 1 && <polyline className="tc-plan-rota" points={rota.map((n) => `${n.x},${n.z}`).join(' ')} />}
 
-      {duzenlenir && secili && <Tutamaklar t={t} secili={secili} dondurBas={dondurBas} ucBas={ucBas} />}
+      {duzenlenir && secili && <Tutamaklar t={t} secili={secili} pm={pm} dondurBas={dondurBas} ucBas={ucBas} />}
       {ust}
     </svg>
   );
@@ -280,18 +284,24 @@ function AlanEtiketi({ a }: { a: Taslak['alanlar'][number] }) {
   );
 }
 
-function Tutamaklar({ t, secili, dondurBas, ucBas }: {
+// Tutamak yarıçapı ekran pikseliyle (metre ölçüsü uzakta birkaç piksele iner); yakında öğe boyundan büyümez.
+const TUTAMAK_PIKSEL = 10;
+const TUTAMAK_UZAKLIK_PIKSEL = 28;
+
+function Tutamaklar({ t, secili, pm, dondurBas, ucBas }: {
   t: Taslak;
   secili: string;
+  pm?: number;
   dondurBas?: (anahtar: string, o: ReactPointerEvent) => void;
   ucBas?: (anahtar: string, uc: 'bas' | 'son', o: ReactPointerEvent) => void;
 }) {
+  const r = Math.max(0.3, (pm ?? 0) * TUTAMAK_PIKSEL);
   const duvar = t.duvarlar.find((d) => d.anahtar === secili);
   if (duvar) {
     return (
       <g className="tc-plan-tutamaklar">
-        <circle cx={duvar.basX} cy={duvar.basZ} r={0.3} onPointerDown={(o) => { o.stopPropagation(); ucBas?.(secili, 'bas', o); }} />
-        <circle cx={duvar.sonX} cy={duvar.sonZ} r={0.3} onPointerDown={(o) => { o.stopPropagation(); ucBas?.(secili, 'son', o); }} />
+        <circle cx={duvar.basX} cy={duvar.basZ} r={r} onPointerDown={(o) => { o.stopPropagation(); ucBas?.(secili, 'bas', o); }} />
+        <circle cx={duvar.sonX} cy={duvar.sonZ} r={r} onPointerDown={(o) => { o.stopPropagation(); ucBas?.(secili, 'son', o); }} />
       </g>
     );
   }
@@ -299,13 +309,13 @@ function Tutamaklar({ t, secili, dondurBas, ucBas }: {
     ?? t.raflar.map((r) => ({ ...r, genislik: r.bolmeSayisi * r.bolmeGenisligi })).find((r) => r.anahtar === secili);
   if (!oge) return null;
   const a = (oge.donus * Math.PI) / 180;
-  const uzaklik = oge.derinlik / 2 + 0.8;
+  const uzaklik = oge.derinlik / 2 + Math.max(0.8, (pm ?? 0) * TUTAMAK_UZAKLIK_PIKSEL);
   const hx = oge.x + uzaklik * Math.sin(a);
   const hz = oge.z - uzaklik * Math.cos(a);
   return (
     <g className="tc-plan-tutamaklar">
       <line x1={oge.x} y1={oge.z} x2={hx} y2={hz} />
-      <circle cx={hx} cy={hz} r={0.32} aria-label="Döndür" onPointerDown={(o) => { o.stopPropagation(); dondurBas?.(secili, o); }} />
+      <circle cx={hx} cy={hz} r={Math.max(0.32, r)} aria-label="Döndür" onPointerDown={(o) => { o.stopPropagation(); dondurBas?.(secili, o); }} />
     </g>
   );
 }

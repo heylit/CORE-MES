@@ -9,7 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, gecmisiDegistir, geriAl,
-  govdeyeCevir, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
+  bolumunu, govdeyeCevir, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import { bolumeCevir, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { EklenecekTur, Gecmis, Taslak } from './duzenleyici-durumu.ts';
@@ -52,7 +52,7 @@ const IZGARA_SECENEKLERI = [
 const ACI_SECENEKLERI = [{ deger: '5', baslik: '5°' }, { deger: '15', baslik: '15°' }, { deger: '45', baslik: '45°' }, { deger: '90', baslik: '90°' }];
 
 type Surukleme =
-  | { tur: 'oge'; anahtar: string; dx: number; dz: number; once: Taslak; kimlik: number }
+  | { tur: 'oge'; anahtar: string; dx: number; dz: number; once: Taslak; kimlik: number; bx: number; by: number; esik: number; basladi: boolean }
   | { tur: 'ciz'; a: Nokta; kimlik: number }
   | { tur: 'kroki'; bas: Nokta; once: Hizalama; kimlik: number }
   | { tur: 'dondur'; anahtar: string; once: Taslak; kimlik: number; ilkAci: number; ilkDonus: number }
@@ -78,6 +78,8 @@ type Arac =
 
 const HIZA_SIRASI: HizaAdimi[] = ['olcek', 'yon', 'kose', 'salon'];
 const YAPISMA_PIKSEL = 10;
+// Seçmek için basmak öğeyi oynatmasın: imleç bu kadar piksel kaymadan sürükleme başlamaz (parmakta daha geniş).
+const SURUKLEME_ESIGI = { fare: 4, dokunma: 8 };
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 const donusAl = (t: Taslak, anahtar: string): number =>
@@ -437,7 +439,10 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     const n = svgNoktasi(o);
     const k = konumu(t, anahtar);
     if (!n || !k) return;
-    surukleme.current = { tur: 'oge', anahtar, dx: n.x - k.x, dz: n.z - k.z, once: t, kimlik: o.pointerId };
+    surukleme.current = {
+      tur: 'oge', anahtar, dx: n.x - k.x, dz: n.z - k.z, once: t, kimlik: o.pointerId,
+      bx: o.clientX, by: o.clientY, esik: o.pointerType === 'touch' ? SURUKLEME_ESIGI.dokunma : SURUKLEME_ESIGI.fare, basladi: false,
+    };
   };
   const dondurBas = (anahtar: string, o: ReactPointerEvent) => {
     if (!dokunulur(anahtar)) return;
@@ -489,6 +494,10 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
         const olcek = s.kutu.g / Math.max(1, el.clientWidth);
         kutuYaz({ ...s.kutu, x: s.kutu.x - (o.clientX - s.x) * olcek, y: s.kutu.y - (o.clientY - s.y) * olcek });
         return;
+      }
+      if (s.tur === 'oge' && !s.basladi) {
+        if (Math.hypot(o.clientX - s.bx, o.clientY - s.by) < s.esik) return;
+        s.basladi = true;
       }
       const n = svgNoktasi(o);
       if (!n) return;
@@ -583,13 +592,26 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     return () => el.removeEventListener('wheel', tekerlek);
   }, [yakinlas]);
 
+  // Seçili öğe silinir; kayıtlı raf (gözleri ve stok bağı olan) silinmez, pasife alınır. Bölüm burada silinmez.
+  const silme = ((): { pasif: boolean } | null => {
+    if (!secili || !dokunulur(secili) || t.bolumler?.some((o) => o.anahtar === secili)) return null;
+    const raf = t.raflar.find((r) => r.anahtar === secili);
+    if (raf) return raf.id === null ? { pasif: false } : raf.aktif ? { pasif: true } : null;
+    return konumu(t, secili) ? { pasif: false } : null;
+  })();
+  const sil = () => {
+    if (!secili || !silme) return;
+    yaz(kaldir(t, secili));
+    seciliYaz(null);
+  };
+
   // Klavye: sil, ok tuşlarıyla ızgara adımı kadar kaydır, R ile döndür, Ctrl+Z / Ctrl+Y.
   const tus = (o: ReactKeyboardEvent) => {
     if ((o.target as HTMLElement).closest('input, select, textarea')) return;
     if ((o.ctrlKey || o.metaKey) && o.key.toLowerCase() === 'z') { o.preventDefault(); gecmisYaz(o.shiftKey ? yinele : geriAl); return; }
     if ((o.ctrlKey || o.metaKey) && o.key.toLowerCase() === 'y') { o.preventDefault(); gecmisYaz(yinele); return; }
     if (!secili) return;
-    if (o.key === 'Delete' || o.key === 'Backspace') { o.preventDefault(); yaz(kaldir(t, secili)); seciliYaz(null); return; }
+    if (o.key === 'Delete' || o.key === 'Backspace') { o.preventDefault(); sil(); return; }
     if (o.key.toLowerCase() === 'r') { o.preventDefault(); yaz(dondur(t, secili, o.shiftKey ? -aci : aci)); return; }
     const yon: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const y = yon[o.key];
@@ -597,7 +619,37 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     if (y && k) { o.preventDefault(); yaz(tasi(t, secili, izgarayaOtur(k.x + y[0] * izgara, izgara), izgarayaOtur(k.z + y[1] * izgara, izgara))); }
   };
 
+  // Eklenen öğenin yeri: fabrika planında seçili bölüm (ya da seçili öğenin bölümü), yoksa görünümün ortasındaki ya da ona
+  // en yakın bölüm; nokta o bölümün içine çekilir. Görünüm ortası iki bölüm arasına ya da komşu bölüme düşebildiği için
+  // öğe başka bölüme giriyordu.
+  const hedefBolum = (orta: { x: number; z: number }) => {
+    const b = t.bolumler;
+    if (!b || b.length === 0) return null;
+    if (secili) {
+      const s = b.find((o) => o.anahtar === secili);
+      if (s) return s;
+      const k = konumu(t, secili);
+      const sb = k ? bolumunu(t, k) : null;
+      if (sb) return sb;
+    }
+    const icinde = bolumunu(t, orta);
+    if (icinde) return icinde;
+    const uzak = (o: (typeof b)[number]) => { const m = fabrikayaCevir(o, { x: o.genislik / 2, z: o.derinlik / 2 }); return Math.hypot(m.x - orta.x, m.z - orta.z); };
+    return [...b].sort((a, c) => uzak(a) - uzak(c))[0] ?? null;
+  };
   const merkez = () => {
+    const orta = { x: kutu.x + kutu.g / 2, z: kutu.y + kutu.d / 2 };
+    const b = hedefBolum(orta);
+    if (b) {
+      const y = bolumeCevir(b, orta);
+      const pay = Math.min(1, b.genislik / 4, b.derinlik / 4);
+      const ic = { x: Math.min(b.genislik - pay, Math.max(pay, y.x)), z: Math.min(b.derinlik - pay, Math.max(pay, y.z)) };
+      const f = fabrikayaCevir(b, ic);
+      const x = izgarayaOtur(f.x, izgara);
+      const z = izgarayaOtur(f.z, izgara);
+      // Izgaraya oturtmak noktayı bölüm dışına itebilir (dönük bölüm, dar kenar): o zaman ızgarasız kalır.
+      return bolumunu(t, { x, z })?.salonId === b.salonId ? { x, z } : { x: r2(f.x), z: r2(f.z) };
+    }
     const k = kapsamKutusu(t);
     return { x: izgarayaOtur(Math.min(k.x1, Math.max(k.x0, kutu.x + kutu.g / 2)), izgara), z: izgarayaOtur(Math.min(k.z1, Math.max(k.z0, kutu.y + kutu.d / 2)), izgara) };
   };
@@ -694,6 +746,9 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
         </div>
         {secili && !secili.startsWith('giris') && !secili.startsWith('gecis') && (
           <Dugme simge="rotate" onClick={() => yaz(dondur(t, secili, aci))}>{aci}°</Dugme>
+        )}
+        {silme && (
+          <Dugme tur="tehlike" simge={silme.pasif ? 'minus' : 'trash'} title="Delete" onClick={sil}>{silme.pasif ? 'Pasife al' : 'Sil'}</Dugme>
         )}
         {!yalnizRaf && <Dugme simge="cube" onClick={() => kutuphaneYaz(true)}>3B modeller</Dugme>}
         <div className="tc-atolye-duzen-sag">
@@ -831,6 +886,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
             duzenlenir
             etiket={fabrikaMi ? 'Fabrika planı (düzenleniyor)' : 'Yerleşim planı (düzenleniyor)'}
             svgRef={svg}
+            pm={pm}
             ogeBas={ogeBas}
             bosBas={bosBas}
             bolumBas={bolumBas}
