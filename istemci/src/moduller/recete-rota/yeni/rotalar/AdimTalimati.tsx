@@ -4,7 +4,7 @@ import type { TalimatlarCevabi, TalimatSablonuCevabi } from '#paylasilan/sozlesm
 import { Dugme, Pencere, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { AdimDuzenleyici } from '../sartnameler/index.tsx';
-import { adimEksikleri, AZAMI_TALIMAT_ADIMI, girdiyeCevir, kontrolOzeti, taslagaCevir, type AdimTaslagi } from '../sartnameler/kurallar.ts';
+import { adimEksikleri, ASAMA_ADLARI, AZAMI_TALIMAT_ADIMI, girdiyeCevir, kontrolOzeti, taslagaCevir, type AdimTaslagi } from '../sartnameler/kurallar.ts';
 import { anahtarlar, useSablonlar, useTalimatKomutu, useTalimatlar } from '../sartnameler/veri.ts';
 import { useRrYetkisi } from '../yetki.ts';
 import { Bolme } from './ortak.tsx';
@@ -59,6 +59,7 @@ function AdimOzeti({ adimlar }: { adimlar: Talimat['adimlar'] }) {
         return (
           <li key={a.sira}>
             <b>{a.baslik}</b>
+            {a.asama !== 'uretim' && <small className="tc-rr1-ipucu"><Simge ad="layers" boyut="k" />{ASAMA_ADLARI[a.asama]}</small>}
             {(kontrol || a.medya.length > 0) && (
               <small className="tc-rr1-ipucu">
                 {a.medya.length > 0 && <><Simge ad="camera" boyut="k" />{a.medya.length} </>}

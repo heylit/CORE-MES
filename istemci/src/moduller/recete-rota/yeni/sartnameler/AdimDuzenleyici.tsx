@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { KontrolNoktasi } from '#paylasilan/sozlesme/rota.ts';
-import { CokSatir, Dugme, Girdi, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, Girdi, IsaretKutusu, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { DosyaHatasi, dosyaYukle } from '../../../belge-merkezi/disari.ts';
 import {
-  adimArkasinaTasi, adimTasi, AZAMI_ADIM_MEDYASI, AZAMI_KONTROL_SECENEGI, AZAMI_TALIMAT_ADIMI, bosAdim, KONTROL_ADLARI, KONTROL_TURLERI, kontrolKur, kontrolOzeti, MEDYA_IPUCU, medyaAdresi, medyaHatasi, medyaTuru, sayiOku, videoSuresiHatasi,
+  adimArkasinaTasi, adimTasi, ASAMA_ADLARI, ASAMA_IPUCLARI, AZAMI_ADIM_MEDYASI, AZAMI_KONTROL_SECENEGI, AZAMI_TALIMAT_ADIMI, bosAdim, KONTROL_ADLARI, KONTROL_TURLERI, kontrolKur, kontrolOzeti, MEDYA_IPUCU, medyaAdresi, medyaHatasi, medyaTuru, sayiOku, videoSuresiHatasi,
   type AdimTaslagi,
 } from './kurallar.ts';
 
@@ -22,6 +22,7 @@ interface Ozellikler {
 // Yüklenip henüz kaydedilmemiş medya sunucuda bağsızdır; önizlemesi tarayıcıdaki dosyadan çizilir.
 // Sürüklenen adımın sırası bu türle taşınır; başka sürükleme (dosya, rota şeması) bırakılmaz.
 const SURUKLE_TURU = 'application/x-tc-talimat-adimi';
+const ASAMA_SIRASI = ['on_hazirlik', 'hazirlik', 'uretim'] as const;
 
 const yerelAdresler = new Map<string, string>();
 const onizlemeAdresi = (ozet: string): string => yerelAdresler.get(ozet) ?? medyaAdresi(ozet);
@@ -84,7 +85,7 @@ export function AdimDuzenleyici({ adimlar, degistir, sablonlar, alt, kapali = fa
             const kontrol = kontrolOzeti(a.kontrol);
             const resim = a.medya.filter((m) => m.tur === 'resim').length;
             const video = a.medya.length - resim;
-            const ozet = [resim ? `${String(resim)} resim` : '', video ? `${String(video)} video` : '', kontrol ?? ''].filter(Boolean).join(' · ');
+            const ozet = [a.asama === 'uretim' ? '' : ASAMA_ADLARI[a.asama], resim ? `${String(resim)} resim` : '', video ? `${String(video)} video` : '', kontrol ?? ''].filter(Boolean).join(' · ');
             return (
               <li key={a.anahtar} data-birak={ustunde === j ? '' : undefined} {...birakmaYeri(j)}>
                 <button type="button" className="tc-st-adim-sec" aria-current={j === i ? 'step' : undefined} onClick={() => { setSecili(j); }}
@@ -120,6 +121,9 @@ export function AdimDuzenleyici({ adimlar, degistir, sablonlar, alt, kapali = fa
               )}
             </div>
             <Girdi etiket="Başlık" value={adim.baslik} maxLength={120} disabled={kapali} required onChange={(e) => { yaz({ baslik: e.target.value }); }} />
+            <Secim etiket="Aşama" ipucu={ASAMA_IPUCLARI[adim.asama]} disabled={kapali} value={adim.asama}
+              secenekler={ASAMA_SIRASI.map((a) => ({ deger: a, baslik: ASAMA_ADLARI[a] }))}
+              onChange={(e) => { const s = ASAMA_SIRASI.find((a) => a === e.target.value); if (s) yaz({ asama: s }); }} />
             <CokSatir etiket="Açıklama" value={adim.metin} maxLength={2000} rows={3} disabled={kapali} onChange={(e) => { yaz({ metin: e.target.value }); }} />
             <MedyaAlani adim={adim} kapali={kapali} yaz={(medya) => { yaz({ medya }); }} />
             <KontrolAlani kontrol={adim.kontrol} zorunlu={adim.zorunlu} kapali={kapali} yaz={yaz} />

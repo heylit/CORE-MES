@@ -1,6 +1,6 @@
 import type { TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
-import { kontrolOzeti, medyaAdresi } from './kurallar.ts';
+import { ASAMA_ADLARI, kontrolOzeti, medyaAdresi } from './kurallar.ts';
 
 // Şablon önizlemesinin adım kartı (prototip Main): numara, ilk resim ya da video, başlık, metin ve kontrol noktası çipi.
 export function AdimOnizleme({ adimlar }: { adimlar: readonly TalimatAdimi[] }) {
@@ -27,6 +27,7 @@ export function AdimOnizleme({ adimlar }: { adimlar: readonly TalimatAdimi[] }) 
             </div>
             <div className="tc-st-adim-metin">
               <strong>{a.baslik}</strong>
+              {a.asama !== 'uretim' && <span className="tc-st-cip"><Simge ad="layers" boyut="k" />{ASAMA_ADLARI[a.asama]}</span>}
               {a.metin && <span className="tc-st-soluk">{a.metin}</span>}
               {kontrol && (
                 <span className="tc-st-cip"><Simge ad="check" boyut="k" />{a.zorunlu ? `${kontrol} · zorunlu` : kontrol}</span>

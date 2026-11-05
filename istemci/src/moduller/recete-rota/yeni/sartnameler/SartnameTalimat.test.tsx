@@ -108,11 +108,14 @@ describe('Şartname ve talimatlar: yazan', () => {
     fireEvent.click(await within(onizleme).findByRole('button', { name: 'Yeni sürüm' }));
     const pencere = await screen.findByRole('dialog', { name: 'TS-DNM · yeni sürüm' });
     fireEvent.change(within(pencere).getByLabelText(/^Başlık/), { target: { value: 'Programı ve sıfırı doğrula' } });
+    // 2098-1 a: aşama adımla kaydedilir; listede üretim dışındaki aşama görünür.
+    fireEvent.change(within(pencere).getByLabelText(/^Aşama/), { target: { value: 'hazirlik' } });
+    expect(within(pencere).getByText(/Ayar başlayınca açılır/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Yeni sürümü kaydet' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')).toBe(true); });
-    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string }[] };
+    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string; asama: string }[] };
     expect(govde.surum).toBe(2);
-    expect(govde.adimlar.map((a) => a.baslik)).toEqual(['Programı ve sıfırı doğrula', 'İlk parçayı ölç']);
+    expect(govde.adimlar.map((a) => [a.baslik, a.asama])).toEqual([['Programı ve sıfırı doğrula', 'hazirlik'], ['İlk parçayı ölç', 'uretim']]);
   });
 
   it('adım sürüklenip başlığa bırakılınca başa geçer (1186 b)', async () => {

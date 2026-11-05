@@ -21,7 +21,7 @@ describe('şartname ve talimat kuralları', () => {
 
   it('girdiye çevirirken boş metin null olur, medyadan yalnız özet ve ad gider', () => {
     const a = { ...bosAdim(), baslik: ' Bağla ', metin: '  ', medya: [{ ozet: 'a'.repeat(64), ad: 'r.png', tur: 'resim' as const, boyut: 10 }] };
-    expect(girdiyeCevir(a)).toEqual({ baslik: 'Bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [{ ozet: 'a'.repeat(64), ad: 'r.png' }] });
+    expect(girdiyeCevir(a)).toEqual({ baslik: 'Bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', medya: [{ ozet: 'a'.repeat(64), ad: 'r.png' }] });
   });
 
   it('eksikler gönderilmeden gösterilir', () => {

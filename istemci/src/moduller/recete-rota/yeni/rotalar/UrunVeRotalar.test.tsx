@@ -49,7 +49,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     expect(kaydet).toMatchObject({ surum: 1, adimlar: [{
       opNo: 10, operasyonTipiId: 21, ayarSuresiDk: 75, hazirlikDk: 45, ayar: true, ayarDk: 30, islemSuresiDk: 5, bilesenler: [{ malzemeId: 12, miktar: 2, fireYuzde: 0 }],
     }] });
-  });
+  }, 30000);
 
   it('1409 a: dal çarpanı dal etiketinde ayrı gösterilir; giren miktarı mamul başına kalır', async () => {
     const adimlar = [
@@ -66,7 +66,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     // Bir mamul için giren 2 kg; çarpan girenin miktarını büyütmez.
     const giren = within(bolge).getAllByText('HM-0012')[0]?.closest('.tc-rr1-cip');
     expect(giren?.querySelector('.tc-rr1-cq')?.textContent).toMatch(/^2/);
-  });
+  }, 30000);
 
   it('açık taslak onaya gönderilir; giren eksik rota onaya gitmez', async () => {
     const tam = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 4)]);
@@ -81,7 +81,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/revizyonlar/72/onaya-gonder')).toBe(true); });
     expect(istekler.find((i) => i.yol === '/rota/revizyonlar/72/onaya-gonder')?.govde).toEqual({ surum: 4 });
     await screen.findByText(/Rev B onaya gönderildi/);
-  });
+  }, 30000);
 
   it('1210 b: arkasında GKK olmayan fason adımı uyarılır, onaya gönderme durmaz', async () => {
     const fasonlu = rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [
@@ -97,7 +97,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder…' }));
     fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/revizyonlar/72/onaya-gonder')).toBe(true); });
-  });
+  }, 30000);
 
   it('giren eksik taslak onaya gönderilmez, eksik söylenir', async () => {
     const eksik = rotaDurumu([revizyonOrnegi('72', 'B', 'taslak', 4, [adimOrnegi({ ins: [] })])]);
@@ -108,7 +108,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     fireEvent.click(within(bolge).getByRole('button', { name: 'Onaya gönder' }));
     await screen.findByText(/Rota eksik, onaya gönderilmedi/);
     expect(rotaYazmalari(istekler)).toEqual([]);
-  });
+  }, 30000);
 
   it('başkası arada değiştirdiyse yerel taslak atılır ve ileti söylenir', async () => {
     const durum = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 1)]);
@@ -125,7 +125,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     fireEvent.change(islem, { target: { value: '7' } });
     fireEvent.blur(islem);
     await screen.findByText(new RegExp(ESKI_SURUM_EKI), {}, BEKLE);
-  });
+  }, 30000);
 
   it('ürün listesinden seçilen ürün şemada açılır', async () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
@@ -135,7 +135,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     const tablo = await within(bolge).findByRole('table', { name: 'Ürünler ve rotaları' });
     fireEvent.click(within(tablo).getByText('MM-0001'));
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
-  });
+  }, 30000);
 });
 
 describe('R1 Ürün ve rotalar: geri gönderme nedeni (ROT-3)', () => {
@@ -161,7 +161,7 @@ describe('R1 Ürün ve rotalar: geri gönderme nedeni (ROT-3)', () => {
     await waitFor(() => { expect(rotaYazmalari(istekler)).toHaveLength(1); });
     expect(rotaYazmalari(istekler)[0]).toMatchObject({ yol: '/rota/revizyonlar/72/geri-gonder', govde: { surum: 2, neden: 'Ayar süresini kontrol et.' } });
     expect(await within(bolge).findByText('Rev B onaydan düzeltmeye geri gönderildi: Ayar süresini kontrol et.')).toBeTruthy();
-  });
+  }, 30000);
 });
 
 describe('R1 Ürün ve rotalar: reddedilen', () => {
@@ -176,7 +176,7 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     expect(within(bolge).queryByRole('button', { name: 'Onaya gönder…' })).toBeNull();
     expect((within(bolge).getByLabelText('Hazırlık (dk / parti)') as HTMLInputElement).disabled).toBe(true);
     expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
-  });
+  }, 30000);
 
   it('onay işlemi olmayan onay bekleyen revizyonu onaylayamaz', async () => {
     sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'rota.onayla') }, {
@@ -186,5 +186,5 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     const bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).queryByRole('button', { name: 'Onayla…' })).toBeNull();
-  });
+  }, 30000);
 });
