@@ -426,7 +426,7 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
   const cevap = (cnc: string, muafiyetler: unknown[] = []) => ({
     maddeler: [
       { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false },
-      { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
+      { madde: 'rota', durum: 'bilinmiyor', muafTutulur: false, isEmriDuzeyi: false },
     ],
     muafiyetler,
     isEmirleri: [

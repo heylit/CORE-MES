@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { HazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { HazirlikListesi, satirDurur } from './HazirlikListesi.tsx';
+import { HazirlikListesi, satirDurur, uyariSayisi } from './HazirlikListesi.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 // Emir ayrıntısındaki hazırlık matrisi (2060 a). Veriler uydurmadır.
@@ -11,7 +11,7 @@ const cevap = (cnc20: 'eksik' | 'muaf' | 'tamam', ek: Partial<HazirlikCevabi> = 
   maddeler: [
     { madde: 'cnc', durum: cnc20 === 'eksik' ? 'eksik' : cnc20, muafTutulur: true, isEmriDuzeyi: true },
     { madde: 'cizim', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: false },
-    { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
+    { madde: 'rota', durum: 'bilinmiyor', muafTutulur: false, isEmriDuzeyi: false },
   ],
   muafiyetler: [],
   isEmirleri: [
@@ -75,6 +75,35 @@ describe('Emir hazırlık matrisi', () => {
     const v = cevap('tamam');
     expect(satirDurur(v, v.isEmirleri[1]!)).toBe(true);
     expect(satirDurur({ ...v, maddeler: v.maddeler.map((m) => ({ ...m, durum: m.madde === 'cizim' ? 'tamam' : m.durum })) }, v.isEmirleri[1]!)).toBe(false);
+  });
+
+  // 2146-1 a: uyaran madde (rota, malzeme, takım ömrü, makine) eksikken satır durmaz; hücre "Uyarı" der, sahibine bağlantı verir.
+  it('uyaran maddenin eksiği satırı durdurmaz, Uyarı görünür ve sahibine bağlantı verir; muafiyet açılmaz', async () => {
+    const uyarili = cevap('tamam', {
+      maddeler: [
+        { madde: 'cnc', durum: 'tamam', muafTutulur: true, isEmriDuzeyi: true },
+        { madde: 'cizim', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false },
+        { madde: 'rota', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: false },
+        { madde: 'makine', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true },
+      ],
+      isEmirleri: [
+        { isEmriId: 12, opNo: 20, ad: 'Freze', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }, { madde: 'makine', durum: 'eksik' }] },
+        { isEmriId: 13, opNo: 30, ad: 'Taşlama', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }, { madde: 'makine', durum: 'tamam' }] },
+      ],
+    });
+    expect(uyarili.isEmirleri.map((i) => satirDurur(uyarili, i))).toEqual([false, false]);
+    expect(uyariSayisi(uyarili)).toBe(2);
+    sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'sayfa.istasyonlar'] }, { 'GET /adimli-emirler/3/hazirlik': () => json(200, uyarili) });
+    ac(ekran(), '/e/3');
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    expect(within(tablo).queryByText('Durur')).toBeNull();
+    expect(screen.getByText('Hazır, 2 uyarı')).toBeTruthy();
+    expect(within(tablo).getByRole('button', { name: 'Rota yürürlükte: Uyarı' })).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Makine durumu, OP 20: Uyarı' }));
+    expect(screen.getByText(/başlatmayı durdurmaz/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: "İstasyonlar'da aç" })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Gerekçeyle muaf tut' })).toBeNull();
+    expect(screen.queryByText('Bu madde muaf tutulamaz.')).toBeNull();
   });
 
   it('malzemesiz emirde ya da okuma yetkisi olmayanda bölüm çizilmez, sunucu sorulmaz', async () => {

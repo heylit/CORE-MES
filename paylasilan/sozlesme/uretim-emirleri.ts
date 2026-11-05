@@ -695,8 +695,13 @@ export const refakatKartiCevabi = z.object({
 
 // Hazırlık durdurucuları (120-122 a, denetim #14): eksik madde iş emrinin başlamasını durdurur. Çizim muaf tutulamaz (121 a);
 // CNC kurulumu ve özel proses müdürün gerekçesiyle geçilir (264 a). Maddenin durumunu sahibi modül verir; vermeyen madde emirde aranmaz.
-// Kalibrasyon başlatmada sorulmaz, yalnız ölçüm anında denetlenir (2131-1 c).
-export const HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'ozel-proses'] as const;
+// Kalibrasyon başlatmada sorulmaz, yalnız ölçüm anında denetlenir (2131-1 c). Özel prosesin sahibi yok; matristen çıktı (2146-1 a).
+// Uyaran maddeler (2146-1 a) eksikken de iş emri başlar; matris ve terminal yalnız uyarır.
+export const DURDURAN_HAZIRLIK_MADDELERI = ['cnc', 'cizim'] as const;
+export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine'] as const;
+export const HAZIRLIK_MADDELERI = [...DURDURAN_HAZIRLIK_MADDELERI, ...UYARAN_HAZIRLIK_MADDELERI] as const;
+export const hazirlikUyarirMi = (m: string): boolean => (UYARAN_HAZIRLIK_MADDELERI as readonly string[]).includes(m);
+// Özel proses muafiyeti eski kayıtlarda kalabilir; değer listeden çıkarılmaz ki okunabilsin.
 export const MUAF_TUTULABILEN_MADDELER = ['cnc', 'ozel-proses'] as const;
 export const hazirlikMaddesi = z.enum(HAZIRLIK_MADDELERI);
 export const hazirlikMuafiyetiGovdesi = z.object({
@@ -710,10 +715,11 @@ const hazirlikMuafiyeti = z.object({
 });
 const hazirlikHaliSemasi = z.enum(['tamam', 'eksik', 'muaf', 'gerekmez', 'bilinmiyor']);
 export const hazirlikCevabi = z.object({
-  // Madde başına: sahibi bağlı değilse 'bilinmiyor'; emirde aranmıyorsa 'gerekmez'; eksikse 'eksik', muafsa 'muaf'.
+  // Madde başına: sahibi bağlı değilse 'bilinmiyor'; emirde aranmıyorsa 'gerekmez'; eksikse 'eksik', muafsa 'muaf'. Uyaran maddenin
+  // 'eksik' hâli başlatmayı durdurmaz (hazirlikUyarirMi).
   maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi, muafTutulur: z.boolean(), isEmriDuzeyi: z.boolean() })),
   muafiyetler: z.array(hazirlikMuafiyeti),
-  // Matris (2060 a): emrin bütün iş emirleri sırasıyla; yalnız iş emri düzeyindeki maddeler (CNC) satırda, ötekiler emir genelidir.
+  // Matris (2060 a): emrin bütün iş emirleri sırasıyla; yalnız iş emri düzeyindeki maddeler (CNC, malzeme, takım ömrü, makine) satırda, ötekiler emir genelidir.
   // Biten iş emri de listelenir; emir görünümündeki madde hâli onu saymaz.
   isEmirleri: z.array(z.object({
     isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), bitti: z.boolean(),

@@ -3,8 +3,9 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Hareket, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
-import { stokDurumu, type StokDurumu } from './kurallar.ts';
-import { refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
+import { binde, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
+import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
@@ -282,3 +283,24 @@ export { kayitAramaKaynaklari } from './kayit-aramasi.ts';
 export type { MalzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// Hazırlık matrisinin malzeme maddesi (2146-1 a, yalnız uyarır): iş emrinin stoklanan her girdisinin serbest stoğu var mı (istasyon
+// ve depo; başlatmadaki girdi uyarısıyla aynı kaynak okuması, miktar değil varlık). Girdisi olmayan adımda madde gerekmez.
+// Bağı kablolama.ts kurar; yetki denetlemez.
+export async function isEmriMalzemeHazirliklari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
+  const planlar = await isEmriPlanBilgileri(db, isEmriIdleri);
+  const sonuc = new Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>();
+  for (const [id, p] of planlar) {
+    const bilgi = await servis.adimBilgisi(db, id);
+    const kartlar = await malzemeOzetleri(db, [...new Set((bilgi?.girdiler ?? []).map((g) => g.malzemeNo))]);
+    const girdiler = [...new Set((bilgi?.girdiler ?? []).map((g) => g.malzemeNo))].filter((m) => stoklanirMi(kartlar.get(m)?.tur ?? ''));
+    if (girdiler.length === 0) { sonuc.set(id, { durum: 'yok', secildi: false }); continue; }
+    const konumId = p.istasyonId === null ? 0 : ((await sorgular.istasyonKonumu(db, p.istasyonId)) ?? 0);
+    let yeterli = true;
+    for (const m of girdiler) {
+      if ((await sorgular.uretimGirdiKaynaklari(db, m, null, konumId, p.uretimEmriId)).every((k) => binde(k.serbest) <= 0n)) { yeterli = false; break; }
+    }
+    sonuc.set(id, { durum: yeterli ? 'tamam' : 'yok', secildi: true });
+  }
+  return sonuc;
+}

@@ -15,6 +15,7 @@
 | UE-B11 | Paralel adım (639) uçları ekransız: adım uçları ve `asimlar` yalnız sunucuda; terminal ekranı 639e/f'de. `kurallar.ts` `adimGirdiAsimiIhlali` ve `ADIM_GIRDI_ASIMI` artık servisten çağrılmıyor (sınır 647 a ile uyarı); kendi testi (`kurallar.test.ts`) kilit dışında olduğu için kaldırılmadı | Evet | 639e, 639f; temizlik ayrı kartla |
 | UE-B12 | Çok dallı emirde (1248 a) parti bölme, planlı birleşme, ileri adım bölmesi, `siradakiIsEmri` (terminalin varsayılan adımı) ve `fasonBeklemesi` sıra ile çalışır, dalı bilmez. Kol yalnız kopyalanan adımlar arasındaki öncülleri taşır. Dal çarpanı (1257) ve ara adım malzemesi (1258) yok | Hayır | 1257, 1258 ve bağlamada |
 | UE-B12 | Onaylı kapanış (K1): dış maddeler (ölçüm, izlenebilirlik, fason, stok, sevkiyat, NCR) çözücü bağlanana kadar `bilinmiyor`; kapanış ekranı ve etiket K7'de; rol satırları K2'de. Kapanış okumaları açık kapanışları bellekte süzer (VARSAYIM: yüzlerle sınırlı) | Evet (K7) | K2, K3, K4, K7 |
+| UE-B13 | Hazırlık uyaran maddeleri (2146-1 a: rota, malzeme, takım ömrü, makine) yalnız emir ayrıntısındaki matriste ve Üretim Terminali listesinde görünür; başlatma cevabının uyarılarına eklenmez, Plan Keşfet > Hazırlık bunları okumaz (2062). Malzeme maddesi miktar değil serbest stok varlığına bakar | Evet (plan) | 2062 |
 
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026) - bağlamada kapanacak
 - KAPANDI (881 a, 27.10.2026; ölçüm `origin/main` db65d16, istemci ve Arkon aramasında şablon dizgileri dahil): bu uçlar kalır, işlerini başka yol yapar.
