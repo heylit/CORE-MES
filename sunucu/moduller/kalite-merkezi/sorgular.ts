@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { NcrAramaSatiri } from './kurallar.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 export interface DegisiklikSatiri {
   koleksiyon: string;
@@ -675,5 +676,25 @@ export async function girisKarariYaz(db: Db, k: {
     `INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, karar, ncr_kimlik, ncr_no, aciklama, kisi_id)
      VALUES ($1, $2, $3::numeric, $4::numeric, $5, $6, $7, $8, $9)`,
     [k.malKabulSatirId, k.asama, k.kabulMiktar, k.hataliMiktar, k.karar, k.ncrKimlik, k.ncrNo, k.aciklama, k.kisiId],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Numune planı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN kalite_merkezi_numune_plani t ON t.malzeme_no = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Kalite resmi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN kalite_merkezi_resim t ON t.malzeme_no = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Kalite belgesi' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.koleksiyon || '/' || t.kimlik) AS ornek
+       FROM k JOIN kalite_merkezi_belge t ON jsonb_path_exists(t.govde, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Numune planı kuralı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN kalite_merkezi_numune_plani t ON jsonb_path_exists(t.kurallar, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }

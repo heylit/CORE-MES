@@ -103,3 +103,4 @@ export { sunucuPlanCozucusu } from './plan-cozucusu.ts';
 // Satış teklifi denemesi (Y4): siparişlerin teklif çözücüsü kaydının karşılığı; bağ sunucu/kablolama.ts'te kurulur.
 export { teklifDene } from './planlama-servis.ts';
 export type { SatisTaslagiGirdisi, TeklifDenemeGirdisi, TeklifDenemeSonucu, TeklifIslemi, TeklifKalemiGirdisi, TeklifKalemiSonucu } from './planlama-servis.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Saatler "SS:DD" metni, numeric alanlar metin, tarih "YYYY-AA-GG" döner; dönüşüm burada, kural serviste.
 
@@ -805,5 +806,16 @@ export function koliKalemleri(db: Db, kalemIdler: readonly number[]): Promise<Ko
       WHERE b.id = ANY($1::int[]) AND b.yon = 'gidis' AND b.kaynak IN ('urun', 'elle') AND b.kaldirildi IS NULL
         AND (b.is_id IS NULL OR i.iptal_edildi IS NULL)`,
     [kalemIdler],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Sevk bekleyen' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN sevkiyat_bekleyen t ON t.malzeme_no = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
   );
 }

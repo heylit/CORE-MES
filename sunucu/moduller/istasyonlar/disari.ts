@@ -246,3 +246,4 @@ export const kisiTezgahSinirlari = (db: Db): Promise<{ kisiId: number; enCok: nu
 
 // Bütün kişilerin kısıtı (Arkon KD-008); kısıtsız kişi (satırı yok ya da bütün işlemleri taşıyan rolü var) haritada yoktur.
 export const kisilerinIzinliIsMerkezleri = (db: Db): Promise<Map<number, number[]>> => servis.kisilerinIzinliIsMerkezleri(db);
+export { malzemeKartiIzleri } from './sorgular.ts';

@@ -7,6 +7,7 @@ import type {
   OperasyonTipiGuncellemesi, OperasyonTipiKaydi, SurumluOperasyonTipi, SurumluIsMerkezi as IsMerkezi, SurumluIstasyon, SurumluMakine as Makine,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { AtamaSatiri, AtamaTuru, SecimSatiri } from './kurallar.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Veritabanı satırı: sorumlunun adını servis kisiler modülünden ekler.
 export type Istasyon = Omit<SurumluIstasyon, 'sorumluAd'>;
@@ -843,5 +844,16 @@ export function ayarYetkinligiGecmisi(db: Db, kisiId: number): Promise<AyarYetki
             degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('zaman')} AS zaman
        FROM istasyonlar_ayar_yetkinligi_gecmisi WHERE kisi_id = $1 ORDER BY zaman DESC, id DESC LIMIT 500`,
     [kisiId],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Aparat kapasitesi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN istasyonlar_aparat_kapasitesi t ON t.aparat_karti_id = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
   );
 }

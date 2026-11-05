@@ -277,3 +277,4 @@ export { kayitAramaKaynaklari } from './kayit-aramasi.ts';
 // Markalı kimlik pilotu (ADR 0025 kural 8, 1580): çağıran modül malzeme kimliğini bu dönüştürücüyle markalar.
 export type { MalzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

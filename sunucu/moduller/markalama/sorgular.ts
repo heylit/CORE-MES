@@ -3,6 +3,7 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
   AlanGovdesi, BirimDurumu, BirimOlayi, BirimOlayKaydi, MarkalamaAlani, MarkalamaBirimi, SayacKapsami,
 } from '#paylasilan/sozlesme/markalama.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 export interface TanimSatiri {
   id: number;
@@ -254,5 +255,22 @@ export async function emirSayilari(
     `SELECT durum, count(*)::int AS adet, count(dogrulama_zamani)::int AS dogrulanan
        FROM markalama_birimi WHERE uretim_emri_id = $1 AND ($2::int IS NULL OR tanim_id = $2) GROUP BY durum`,
     [emirId, tanimId],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Markalama tanımı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN markalama_tanimi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Markalı birim' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN markalama_birimi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Seri sayacı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN markalama_sayaci t ON t.malzeme_id = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
   );
 }

@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type { BedelAyari, BedelAyariGovdesi, PlanAyari, SenaryoDurumu } from '#paylasilan/sozlesme/plan.ts';
 import type { Kaynak } from './kurallar.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Hedef: null canlı plan, sayı taslak (senaryo). Canlıya yalnız canlıya alma yazar (P6).
 export type Hedef = number | null;
@@ -589,3 +590,14 @@ export const emirTahminleri = (db: Db, baslangic: Date): Promise<EmirTahminiSati
   db.sorgu(`SELECT e.olcum_id::int AS "olcumId", to_json(o.zaman) #>> '{}' AS zaman, e.uretim_emri_id AS "uretimEmriId",
       to_json(e.tahmini_bitis) #>> '{}' AS "tahminiBitis", e.termin::text AS termin
     FROM plan_olcumu_emri e JOIN plan_olcumu o ON o.id = e.olcum_id WHERE o.zaman >= $1 ORDER BY o.zaman, o.id, e.uretim_emri_id`, [baslangic]);
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Planlama kaydı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.anahtar)::text AS ornek
+       FROM k JOIN plan_planlama_kaydi t ON jsonb_path_exists(t.deger, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
+  );
+}
