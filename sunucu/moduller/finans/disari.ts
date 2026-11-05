@@ -7,6 +7,9 @@ export {
 } from './servis.ts';
 // 260 a: satış siparişinin faturaları ve iadeleri (tutar finans rakamıdır; FNS-48 yetkisi çağıranın ucundadır).
 export { siparisFaturalari } from './servis.ts';
+// 2132c (karar 2132-1): satış siparişinden beklenen tahsilat; siparişlerin ucu yazar ve siler. Yetki denetlemez.
+export { beklenenTahsilatKaldir, beklenenTahsilatYaz } from './servis.ts';
+export type { BeklenenTahsilatYazimi } from './servis.ts';
 // 911 b, 940 c: projeye bağlanan gider belgeleri ve seçicisi (tutar KDV hariç TL; FNS-48 yetkisi çağıranın ucundadır).
 export { giderBelgeleri, giderBelgesiSecenekleri } from './servis.ts';
 export type { GecerliGunlukFaiz } from './servis.ts';

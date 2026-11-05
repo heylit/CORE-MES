@@ -20,7 +20,7 @@ import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirm
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
 import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
-import type { vergiBeyaniGovdesi, VergiBeyaniSatiri, MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
+import type { vergiBeyaniGovdesi, VergiBeyaniSatiri, MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, BeklenenTahsilatlarCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
@@ -946,6 +946,20 @@ export async function beklenenOdemeler(db: Db): Promise<BeklenenOdemelerCevabi> 
   const satirlar = await korunanBeklenenler(db, tesisGunu(new Date()));
   const adlar = await firmaAdlari(db, satirlar.map((x) => x.firmaId));
   return { odemeler: satirlar.map(({ yontem, ...x }) => ({ ...x, firmaAdi: adlar.get(x.firmaId) ?? '', yontem: yontem as SiparisOdemeYontemi })) };
+}
+
+// 2132c (karar 2132-1): satış siparişinden beklenen tahsilat. Siparişlerin ucu çağırır; siparişi, firmayı ve vadeyi parametre olarak verir,
+// finans siparişi okumaz. Yazım siparişin satırını yeniler, silme tekrarlanabilir.
+export type BeklenenTahsilatYazimi = sorgular.BeklenenTahsilatYazimi;
+export const beklenenTahsilatYaz = (db: Db, kisiId: number, t: BeklenenTahsilatYazimi): Promise<void> =>
+  korumali(() => sorgular.beklenenTahsilatYaz(db, t, kisiId));
+export const beklenenTahsilatKaldir = (db: Db, siparisId: number): Promise<void> =>
+  korumali(async () => { await sorgular.beklenenTahsilatSil(db, siparisId); });
+export async function beklenenTahsilatlar(db: Db): Promise<BeklenenTahsilatlarCevabi> {
+  const bugun = tesisGunu(new Date());
+  const satirlar = await sorgular.beklenenTahsilatlar(db, bugun);
+  const adlar = await firmaAdlari(db, satirlar.map((x) => x.firmaId));
+  return { tahsilatlar: satirlar.map((x) => ({ ...x, firmaAdi: adlar.get(x.firmaId) ?? '', gecikmis: x.vade < bugun })) };
 }
 
 // ---- Sabit kıymet ve amortisman (yönetim amaçlı; Logo'ya gitmez) ----

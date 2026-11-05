@@ -14,6 +14,7 @@ import type {
 import { numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
+import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
@@ -186,7 +187,21 @@ export async function durumDegistir(
     bulunamadiIletisi: SIPARIS_YOK,
   }));
   if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici });
+  if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
+  if (komut === 'iptal') await beklenenTahsilatKaldir(db, id);
   return siparisAyrintisi(db, id);
+}
+
+// 2132c (karar 2132-1): onaylanan sipariş finansa beklenen tahsilat olarak düşer. Sevk günü sevk planlanana kadar siparişin terminidir;
+// vade günü siparişin ödeme vadesi, boşsa firmanın varsayılan vadesi, o da yoksa 0'dır (peşin). Tutarı sıfır olan siparişin tahsilatı yoktur.
+// Kapanan sipariş tahsil edilmemiş olabilir: satır kalır, fatura bağlanınca kalanı düşer.
+async function tahsilatiFinansaYaz(db: Db, kisiId: number, id: number): Promise<void> {
+  const s = await siparisAyrintisi(db, id);
+  if (s.genelToplam === null || Number(s.genelToplam) <= 0) { await beklenenTahsilatKaldir(db, id); return; }
+  const vadeGun = s.odemeVadesiGun ?? (await firmaOzeti(db, s.firmaId))?.vadeGunu ?? 0;
+  await beklenenTahsilatYaz(db, kisiId, {
+    siparisId: id, siparisNo: s.no, firmaId: s.firmaId, paraBirimi: s.paraBirimi, tutar: s.genelToplam, sevkTarihi: s.termin, sevkKaynagi: 'termin', vadeGun,
+  });
 }
 
 // SIP-02 seçim tarafında: yalnız aktif ve satılan türdeki kartlar listelenir; kayıt yine malzemeReddi'nden geçer.

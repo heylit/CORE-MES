@@ -30,6 +30,32 @@ describe('Nakit planı', () => {
     expect(within(panel).getByText(/Ödenmiş avans düşüldü/)).toBeTruthy();
   });
 
+  it('2132c: satış siparişinden beklenen tahsilatlar paneli sunucudan okunur; gecikmiş, kısmi faturalı ve başka para birimli satır işaretlenir', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      if (adres.includes('/finans/beklenen-tahsilatlar')) {
+        return json(200, { tahsilatlar: [{
+          id: 1, siparisId: 7, siparisNo: 'SS-2026-001', firmaId: 3, firmaAdi: 'Deneme Musteri', paraBirimi: 'TRY', tutar: '1500.00', faturalanan: '600.00', kalan: '900.00',
+          kalanTl: '900.00', sevkTarihi: '2026-10-01', sevkKaynagi: 'termin', vadeGun: 10, vade: '2026-10-11', gecikmis: true, baskaParaBirimi: true,
+        }] });
+      }
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    ekranAc(NakitPlani, OKUR, beklenenli());
+    const panel = await screen.findByRole('table', { name: 'Siparişten beklenen tahsilatlar' });
+    expect(within(panel).getByText('SS-2026-001')).toBeTruthy();
+    expect(within(panel).getByText('Gecikmiş, kontrol edin')).toBeTruthy();
+    expect(within(panel).getByText('Başka para biriminde fatura var')).toBeTruthy();
+    expect(within(panel).getByText(/faturalanan/)).toBeTruthy();
+    expect(within(panel).getByText(/Termine göre · 10 gün vade/)).toBeTruthy();
+  });
+
+  it('2132c: beklenen tahsilatlar okunamazsa panel hata gösterir, öteki bölümler çalışır', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(403, { kod: 'YETKI_YOK', mesaj: 'Yetkiniz yok.' })));
+    ekranAc(NakitPlani, OKUR, beklenenli());
+    expect(await screen.findByText('Beklenen tahsilatlar okunamadı.')).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Siparişten beklenen ödemeler' })).toBeTruthy();
+  });
+
   it('hafta hafta: 13 hafta, siparişten sütunu; varsayım değişince plan yeniden hesaplanır; satır kalemleri açar', () => {
     ekranAc(NakitPlani, OKUR, beklenenli());
     fireEvent.click(screen.getByRole('button', { name: 'Hafta hafta plan' }));

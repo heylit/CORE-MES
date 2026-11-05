@@ -1,5 +1,8 @@
 import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import type { ChartConfiguration } from 'chart.js';
 import { Dugme, DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import '../../../../ortak/arayuz/tablo.css';
@@ -35,6 +38,7 @@ export function NakitPlani({ finans }: EkranOzellikleri) {
         ? <DurumKutusu durum="bos" mesaj="Tahmin için kayıt gerekiyor." />
         : gorunum === 'olasilik' ? <GenelGorunum finans={finans} /> : <HaftaHafta finans={finans} />}
       <BeklenenOdemeler liste={V.beklenenOdemeler} bugun={motor.bugun} />
+      <BeklenenTahsilatlar />
     </div>
   );
 }
@@ -314,3 +318,39 @@ function BeklenenOdemeler({ liste, bugun }: { liste: readonly BeklenenOdeme[]; b
     </Kart>
   );
 }
+
+/* ---------- Satış siparişinden beklenen tahsilatlar (2132c, karar 2132-1) ---------- */
+type BeklenenTahsilat = BeklenenTahsilatlarCevabi['tahsilatlar'][number];
+const SEVK_KAYNAGI: Record<BeklenenTahsilat['sevkKaynagi'], string> = { termin: 'Termine göre', plan: 'Sevk planına göre', gercek: 'Sevk edildi' };
+
+function BeklenenTahsilatlar() {
+  const sorgu = useQuery({ queryKey: ['finans', 'beklenen-tahsilatlar'], queryFn: () => api.get<BeklenenTahsilatlarCevabi>('/finans/beklenen-tahsilatlar') });
+  const sutunlar: Sutun<BeklenenTahsilat>[] = [
+    { anahtar: 'vade', baslik: 'Vade', kirilmaz: true, hucre: (o) => <span className="tc-fc-yigin"><span>{tarih(o.vade)}</span>{o.gecikmis && <Rozet ton="hata">Gecikmiş, kontrol edin</Rozet>}</span>, csv: (o) => o.vade },
+    { anahtar: 'musteri', baslik: 'Müşteri', hucre: (o) => <span className="tc-fc-yigin"><b>{o.firmaAdi}</b>{o.baskaParaBirimi && <Rozet ton="uyari">Başka para biriminde fatura var</Rozet>}</span>, csv: (o) => o.firmaAdi },
+    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (o) => <span className="tc-fc-yigin"><span>{o.siparisNo}</span><Rozet>Siparişten beklenen</Rozet></span>, csv: (o) => o.siparisNo },
+    { anahtar: 'sevk', baslik: 'Sevk', hucre: (o) => <span className="tc-fc-yigin"><span>{kisaTarih(o.sevkTarihi)}</span><small className="tc-fy-not">{SEVK_KAYNAGI[o.sevkKaynagi]} · {o.vadeGun} gün vade</small></span>, csv: (o) => o.sevkTarihi },
+    {
+      anahtar: 'kalan', baslik: 'Beklenen', hizala: 'sag', mono: true,
+      hucre: (o) => (
+        <span className="tc-fc-yigin">
+          <span>{paraMetni(o.kalan, o.paraBirimi)}</span>
+          {sayi(o.faturalanan) > 0 && <small className="tc-fy-not">Sipariş {paraMetni(o.tutar, o.paraBirimi)}, faturalanan {paraMetni(o.faturalanan, o.paraBirimi)}</small>}
+        </span>
+      ),
+      csv: (o) => sayi(o.kalan),
+    },
+  ];
+  return (
+    <Kart baslik="Siparişten beklenen tahsilatlar" baslikEki={<span className="tc-fy-not">Onaylı satış siparişlerinin faturalanmamış kalanı</span>}>
+      {sorgu.isError ? <DurumKutusu durum="hata" mesaj="Beklenen tahsilatlar okunamadı." />
+        : sorgu.data === undefined ? <DurumKutusu durum="yukleniyor" mesaj="Beklenen tahsilatlar okunuyor." />
+          : <Tablo<BeklenenTahsilat> etiket="Siparişten beklenen tahsilatlar" sutunlar={sutunlar} satirlar={sorgu.data.tahsilatlar} satirAnahtari={(o) => o.id} bosMesaj="Siparişten beklenen tahsilat yok." />}
+      <p className="tc-fy-not">
+        Tutarlar KDV dahil sipariş toplamıdır. Vade, sevk günü artı siparişin ödeme vadesidir (boşsa firmanın vadesi, o da yoksa peşin). Satış faturası
+        siparişe bağlandıkça kalan düşer; tamamı faturalanınca alacak faturadan izlenir. Bu liste nakit tahminine ve olasılık hesabına henüz katılmaz.
+      </p>
+    </Kart>
+  );
+}
+

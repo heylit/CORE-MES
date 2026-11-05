@@ -548,6 +548,42 @@ const siparisTutariTl = (gun: string) => `(CASE WHEN rtrim(o.para_birimi) = 'TRY
 export const beklenenOdemeler = (db: Db, bugun: string, sonGun?: string) => db.sorgu<BeklenenOdemeSatiri>(
   `SELECT o.id, ${SIPARIS_ODEMESI}, ${siparisTutariTl('$1')}::numeric(18,2)::text AS "tutarTl", ${BAGSIZ_FATURA} AS "bagsizFatura" ${BEKLENEN_ODEME}
     ${sonGun === undefined ? '' : 'AND o.vade <= $2::date'} ORDER BY o.vade, o.id ${sonGun === undefined ? 'LIMIT 500' : ''}`, sonGun === undefined ? [bugun] : [bugun, sonGun]);
+// 2132c (karar 2132-1): satış siparişinden beklenen tahsilat. Yazım siparişlerin ucundan finansın komutuyla gelir; sipariş başına tek satır.
+export interface BeklenenTahsilatYazimi {
+  siparisId: number; siparisNo: string; firmaId: number; paraBirimi: string; tutar: string; sevkTarihi: string; sevkKaynagi: 'termin' | 'plan' | 'gercek'; vadeGun: number;
+}
+export async function beklenenTahsilatYaz(db: Db, t: BeklenenTahsilatYazimi, kisiId: number): Promise<void> {
+  await db.sorgu(`INSERT INTO finans_beklenen_tahsilat (siparis_id, siparis_no, firma_id, para_birimi, tutar, sevk_tarihi, sevk_kaynagi, vade_gun, yazan_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (siparis_id) DO UPDATE SET siparis_no = EXCLUDED.siparis_no, firma_id = EXCLUDED.firma_id, para_birimi = EXCLUDED.para_birimi,
+      tutar = EXCLUDED.tutar, sevk_tarihi = EXCLUDED.sevk_tarihi, sevk_kaynagi = EXCLUDED.sevk_kaynagi, vade_gun = EXCLUDED.vade_gun,
+      yazan_id = EXCLUDED.yazan_id, zaman = now()`,
+  [t.siparisId, t.siparisNo, t.firmaId, t.paraBirimi, t.tutar, t.sevkTarihi, t.sevkKaynagi, t.vadeGun, kisiId]);
+}
+export const beklenenTahsilatSil = (db: Db, siparisId: number) => db.sorgu('DELETE FROM finans_beklenen_tahsilat WHERE siparis_id = $1', [siparisId]);
+// Kalan: sipariş toplamından siparişe bağlı, iptal edilmemiş satış faturalarının toplamı düşülür, iadeleri geri eklenir. Yalnız siparişin para
+// birimindeki belgeler sayılır (başka para birimindeki belge kurla çevrilmez; satır "başka para biriminde fatura" işareti taşır). Kalanı
+// olmayan satır gelmez. TL karşılığı bugüne kadar girilmiş son kurladır; kur yoksa null.
+export interface BeklenenTahsilatSatiri {
+  id: number; siparisId: number; siparisNo: string; firmaId: number; paraBirimi: string; tutar: string; faturalanan: string; kalan: string; kalanTl: string | null;
+  sevkTarihi: string; sevkKaynagi: 'termin' | 'plan' | 'gercek'; vadeGun: number; vade: string; baskaParaBirimi: boolean;
+}
+export const beklenenTahsilatlar = (db: Db, bugun: string) => db.sorgu<BeklenenTahsilatSatiri>(
+  `WITH f AS (
+     SELECT t.id,
+            COALESCE((SELECT sum(CASE WHEN b.tur = 'iade' THEN -b.toplam ELSE b.toplam END) FROM finans_belge b
+                       WHERE b.siparis_id = t.siparis_id AND b.durum <> 'iptal' AND b.para_birimi = t.para_birimi
+                         AND ((b.yon = 'gelir' AND b.tur = 'fatura') OR (b.yon = 'gider' AND b.tur = 'iade'))), 0) AS faturalanan,
+            EXISTS (SELECT 1 FROM finans_belge b WHERE b.siparis_id = t.siparis_id AND b.durum <> 'iptal' AND b.para_birimi <> t.para_birimi) AS baska
+       FROM finans_beklenen_tahsilat t)
+   SELECT t.id, t.siparis_id AS "siparisId", t.siparis_no AS "siparisNo", t.firma_id AS "firmaId", rtrim(t.para_birimi) AS "paraBirimi", t.tutar::text AS tutar,
+          f.faturalanan::numeric(18,2)::text AS faturalanan, (t.tutar - f.faturalanan)::numeric(18,2)::text AS kalan,
+          (CASE WHEN rtrim(t.para_birimi) = 'TRY' THEN t.tutar - f.faturalanan
+                ELSE (t.tutar - f.faturalanan) * (SELECT k.kur FROM finans_kur k WHERE k.para_birimi = t.para_birimi AND k.tarih <= $1::date ORDER BY k.tarih DESC LIMIT 1) END)::numeric(18,2)::text AS "kalanTl",
+          ${tarihMetni('t.sevk_tarihi')} AS "sevkTarihi", t.sevk_kaynagi AS "sevkKaynagi", t.vade_gun AS "vadeGun", ${tarihMetni('t.vade')} AS vade, f.baska AS "baskaParaBirimi"
+     FROM finans_beklenen_tahsilat t JOIN f ON f.id = t.id
+    WHERE t.tutar - f.faturalanan > 0
+    ORDER BY t.vade, t.id LIMIT 500`, [bugun]);
 // Borç B15: firmaya yapılmış, iptal edilmemiş ve faturaya dağıtılmamış ödemelerin TL toplamı (avans); firma başına.
 export const firmaAvanslari = (db: Db, firmaIdler: readonly number[]) => db.sorgu<{ firmaId: number; tl: string }>(
   `SELECT o.firma_id AS "firmaId",
