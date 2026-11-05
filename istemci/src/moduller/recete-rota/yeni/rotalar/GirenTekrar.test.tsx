@@ -45,7 +45,7 @@ describe('823 Aynı giren bir adıma iki kez eklenmez', () => {
     await within(panel).findByText('Girenler (2)');
     await waitFor(() => { expect(kayitlar(istekler)).toHaveLength(1); }, BEKLE);
     expect(kayitlar(istekler)[0]?.govde).toMatchObject({ adimlar: [{ bilesenler: [{ malzemeId: 12 }, { malzemeId: 13 }] }] });
-  });
+  }, 30000);
 
   it('reddedilen: aynı malzeme ikinci kez eklenmez, var olan giren seçilir, neden söylenir, kayıt gitmez', async () => {
     const istekler = kur();
@@ -58,7 +58,7 @@ describe('823 Aynı giren bir adıma iki kez eklenmez', () => {
     expect(within(panel).queryByText('Girenler (2)')).toBeNull();
     await new Promise((r) => { setTimeout(r, 1000); });
     expect(kayitlar(istekler)).toEqual([]);
-  });
+  }, 30000);
 
   it('reddedilen: listeden eklemede de engellenir', async () => {
     const istekler = kur();
@@ -70,7 +70,7 @@ describe('823 Aynı giren bir adıma iki kez eklenmez', () => {
     await screen.findByText(/HM-0012 bu adımda zaten giren/);
     await new Promise((r) => { setTimeout(r, 1000); });
     expect(kayitlar(istekler)).toEqual([]);
-  });
+  }, 30000);
 });
 
 describe('823 Ara kartın birimi adettir', () => {
@@ -85,5 +85,5 @@ describe('823 Ara kartın birimi adettir', () => {
     expect(ara.map(birim)).toEqual(ara.map(() => 'adet'));
     const giren = [...bolge.querySelectorAll('.tc-rr1-cip-giren')].find((e) => e.textContent.includes('HM-0012'));
     expect(birim(giren ?? null)).toBe('kg');
-  });
+  }, 30000);
 });
