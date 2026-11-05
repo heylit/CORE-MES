@@ -56,6 +56,7 @@ export function sunucununBaglari(): Bag[] {
     bag('fason sevki -> stok', sevkiyat.fasonSevkiDinle, stok.fasonSevkiYansit),
     bag('depo çıkışı fason gidişi -> üretim emirleri', stok.fasonGidisYaziciKaydet, uretimEmirleri.fasonGidisYaz),
     bag('ürün sevki -> stok', sevkiyat.urunSevkiDinle, stok.urunSevkiYansit),
+    bag('lot no -> sevkiyat adres araması', sevkiyat.lotEmriCozucusuKaydet, stok.lotunEmri),
     bag('açık NCR partileri -> stok sevki', stok.acikNcrPartiCozucusu, kaliteMerkezi.acikNcrPartileri),
     bag('adım statüsü çözücüsü -> stok', stok.adimStatusuCozucusu, receteRota.adimStatusu),
     bag('makine 3B görünümü -> atölye', atolye.makineModelTuruCozucusu, cncKurulum.makineModelTurleri),

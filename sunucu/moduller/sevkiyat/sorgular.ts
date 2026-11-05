@@ -626,6 +626,21 @@ export function emirlerinKalemleri(db: Db, emirIdleri: readonly number[], sinir:
     [[...new Set(emirIdleri)], sinir],
   );
 }
+// Adres araması (2106 a): emirlerin kalemlerini taşıyan işler ve işin noktası; iptal edilen iş, kaldırılan kalem ve işe girmemiş kalem çıkmaz.
+export interface EmirIsNoktasi {
+  uretimEmriId: number; isId: number; tarih: string; durum: 'havuzda' | 'planlandi' | 'yolda' | 'tamamlandi'; tur: 'teslimat' | 'alim' | 'aktarma';
+  noktaId: number; noktaAd: string; adres: string | null; enlem: string; boylam: string;
+}
+export function emirlerinIsNoktalari(db: Db, emirIdleri: readonly number[], sinir: number): Promise<EmirIsNoktasi[]> {
+  return db.sorgu<EmirIsNoktasi>(
+    `SELECT DISTINCT ON (i.tarih, i.id, b.uretim_emri_id) b.uretim_emri_id AS "uretimEmriId", i.id AS "isId", i.tarih::text AS tarih, i.durum, i.tur,
+            n.id AS "noktaId", n.ad AS "noktaAd", n.adres, n.enlem::text AS enlem, n.boylam::text AS boylam
+       FROM ${KALEM_KAYNAKLARI}
+      WHERE b.uretim_emri_id = ANY($1::int[]) AND b.kaldirildi IS NULL AND i.id IS NOT NULL AND i.iptal_edildi IS NULL AND n.id IS NOT NULL
+      ORDER BY i.tarih DESC, i.id DESC, b.uretim_emri_id LIMIT $2`,
+    [[...new Set(emirIdleri)], sinir],
+  );
+}
 // Onaylı kapanış (1075 a): emrin depodan çıkan ürün adedi. Kalem depo çıkışıyla, eski akışta işi tamamlanınca çıkmış sayılır (Tüm işler
 // kalıbı); kaldırılan ve iptal edilen işte kalan kayıt sayılmaz (yükü yeni açık kayda geçmiştir).
 export async function emrinCikanUrunu(db: Db, uretimEmriId: number): Promise<string> {

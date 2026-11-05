@@ -44,14 +44,6 @@ interface PlanCevabi {
 }
 interface Yansima { sonuc: string; neden: string | null; kayit: { cid: string } }
 
-// Denetimin bulduğu kusuru bugünkü hâliyle sabitler. Davranış değişirse (düzeltme ya da yeni bozulma) test kırılır ve ileti ne yapılacağını söyler.
-function bilinenKusur(bulguNo: number | string, bugunku: unknown, gercek: unknown, dogrusu?: unknown): void {
-  const yaz = (d: unknown): string => JSON.stringify(d) ?? String(d);
-  const dogru = dogrusu === undefined ? 'dogru deger kullanici kararini bekliyor' : yaz(dogrusu);
-  assert.deepEqual(gercek, bugunku,
-    `Denetim bulgusu #${bulguNo} degisti: bugun ${yaz(bugunku)} bekleniyordu, ${yaz(gercek)} geldi. Duzelttiysen bu satiri dogru degerle (${dogru}) normal assert'e cevir.`);
-}
-
 describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rollerle (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
@@ -532,8 +524,13 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.equal(await toplam(S.hm), HAMMADDE_KABUL - MAMUL_ADET);
     const ak = tamam(await oku<{ emir: { id: number; durum: string } }>('mudur', `/akis/emirler/${S.emir}`));
     assert.deepEqual([ak.emir.id, ak.emir.durum], [S.emir, 'bitti']);
-    const sv = tamam(await oku<{ sonuclar: unknown[] }>('sevkiyat', `/sevkiyat/arama?metin=${encodeURIComponent(S.emirNo)}`));
-    bilinenKusur(40, [], sv.sonuclar);
+    // Bulgu 40 kapandı (2106 a): sevkiyat araması emir ve lot numarasıyla emrin sevk işinin noktasını verir; lot stoktan kablolamayla çözülür.
+    type SevkArama = { sonuclar: { ad: string; kategori: string; tur: string; baglam: string | null }[] };
+    const sv = tamam(await oku<SevkArama>('sevkiyat', `/sevkiyat/arama?metin=${encodeURIComponent(S.emirNo)}`));
+    assert.deepEqual(sv.sonuclar.map((x) => [x.ad, x.kategori, x.tur]), [['Deneme Musteri AS', 'Emir', 'nokta']]);
+    assert.ok(sv.sonuclar[0]?.baglam?.includes(S.emirNo));
+    const lot = tamam(await oku<SevkArama>('sevkiyat', `/sevkiyat/arama?metin=${encodeURIComponent(mamul.parti.lotNo)}`));
+    assert.deepEqual(lot.sonuclar.map((x) => [x.ad, x.kategori, x.tur]), [['Deneme Musteri AS', 'Lot', 'nokta']]);
   });
 
   test('14 geciken sipariş: plan bedeli sipariş termininden işler, emrin teslimi ertelese de; müşteri sınıfı bedele girmez (815)', async () => {

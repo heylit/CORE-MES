@@ -37,6 +37,9 @@ export const degerGrubuToplamlari = (db: Db, malzemeIdler: readonly number[] | n
 // Kalite Merkezi (229 a): lot numarası ya da üretim emriyle parti kimlikleri; ve partinin bütün bakiyesini hedef kaliteye geçiren karar
 // (yoldaki teslime ayrılan miktar hariç; değişen satırlar döner). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);
+// Sevkiyat adres araması (2106 a): lot numarasının üretim emri (büyük küçük harf duyarsız); lot yoksa ya da emre bağlı değilse null.
+// Bağı `sunucu/kablolama.ts` kurar; yetkiyi çağıran korur.
+export const lotunEmri = async (db: Db, lotNo: string): Promise<number | null> => (await sorgular.lotNoylaParti(db, lotNo))?.uretimEmriId ?? null;
 // Satır verilirse (320 a) yalnız o bakiyeler çevrilir; `enCok` verilirse (KM-11 a) bakiyeler sırayla o toplama kadar; `karantinadanBirak` sonucunun `hedefKonumId`, `statuId`, `kaliteDurumu`, `miktar` alanları verilir.
 export const partiKaliteDurumuYap = (db: Db, kisiId: number, g: Parameters<typeof servis.partiKaliteDurumuYap>[2]) =>
   akistan(db, 'kalite', () => servis.partiKaliteDurumuYap(db, kisiId, g));

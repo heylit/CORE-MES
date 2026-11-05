@@ -73,6 +73,10 @@ export { tasimaDegistir } from './tum-isler.ts';
 // `sunucu/kablolama.ts` yapar. Tanınmayan ya da bitmemiş emirde null.
 export { kapanisSevkiyatDurumu } from './servis.ts';
 
+// Adres araması (2106 a): lot numarasından emre çözücü; stoktaki karşılığını `sunucu/kablolama.ts` bağlar.
+export { lotEmriCozucusuKaydet } from './servis.ts';
+export type { LotEmriCozucusu } from './servis.ts';
+
 // Takvim (891): günü aralıktaki sevkiyat işleri; yetkiyi çağıran denetler (sevkiyat.oku).
 export { takvimKayitlari } from './servis.ts';
 
