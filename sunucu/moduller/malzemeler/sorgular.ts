@@ -272,7 +272,8 @@ const COM_METNI = (alan: string): string => `CASE WHEN jsonb_typeof(k.kayit -> '
 const SADE = (ifade: string): string => `public.arama_sade(${ifade})`;
 const ARAMA_KOSULU = `k.onay_durumu <> 'iptal'
         AND ($1::text IS NULL OR ${SADE('k.stok_kodu')} LIKE $1 OR ${SADE(KATALOG_AD.replaceAll('kayit', 'k.kayit'))} LIKE $1 OR k.no = $2::int
-             OR ${SADE(COM_METNI('eskiKod'))} LIKE $1 OR ${SADE(COM_METNI('tkod'))} LIKE $1)
+             OR ${SADE(COM_METNI('eskiKod'))} LIKE $1 OR ${SADE(COM_METNI('tkod'))} LIKE $1
+             OR ${SADE('malzeme_onceki_kodlar_metni(k.onceki_kodlar)')} LIKE $1)
         AND (cardinality($3::text[]) = 0 OR k.tur = ANY($3::text[]))
         AND (NOT $4::boolean OR k.onay_durumu = 'aktif')
         AND ($5::text IS NULL OR k.hizmet_yonu = $5)`;
@@ -816,8 +817,12 @@ export async function onayBekleyenKartSayisi(db: Db): Promise<number> {
 
 /* ---------------- Koddan kart ve örnek veri (kart #906) ---------------- */
 
+// Güncel kod önce; yoksa yeni koda geçmiş kartın önceki kodu (2116h: basılı etiket ve eski kayıtlar onu taşır). Önceki kod aynı
+// önekte bir daha verilmez; Logo'dan alınan kart aynı kodu alırsa güncel kod kazanır.
 export async function katalogKartNoKoddan(db: Db, stokKodu: string): Promise<number | null> {
-  return (await db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE stok_kodu = $1', [stokKodu]))?.no ?? null;
+  return (await db.tek<{ no: number }>(
+    `SELECT no FROM malzeme_katalog_karti WHERE stok_kodu = $1 OR onceki_kodlar @> ARRAY[$1::text] ORDER BY (stok_kodu = $1) DESC, no LIMIT 1`, [stokKodu],
+  ))?.no ?? null;
 }
 
 export async function katalogKartNoKimlikten(db: Db, kimlik: string): Promise<number | null> {
@@ -912,6 +917,28 @@ export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: r
        FROM malzeme_katalog_karti WHERE logo_kayit_no = ANY($1::text[]) OR stok_kodu = ANY($2::text[])`,
     [refler, kodlar],
   );
+}
+
+// 2116h: yeni koda geçiş yalnız sırayı değiştirir ve eski kodu önceki kodlara ekler (tetik başka değişikliği reddeder).
+// Gönderimi hata almış kart yeniden kuyruğa girer: hata çoğunlukla Logo'daki aynı koddur.
+export function yeniKodaGec(
+  db: Db, kimlik: string, sira: number, o: { surum: number; kisiId: number },
+): Promise<{ surum: number; stokKodu: string; eskiKod: string } | null> {
+  return db.tek(
+    `UPDATE malzeme_katalog_karti k
+        SET sira_no = $2, onceki_kodlar = k.onceki_kodlar || k.stok_kodu,
+            logo_gonderim_durumu = CASE WHEN k.logo_gonderim_durumu = 'hata' THEN 'bekliyor' ELSE k.logo_gonderim_durumu END,
+            logo_hata = CASE WHEN k.logo_gonderim_durumu = 'hata' THEN NULL ELSE k.logo_hata END,
+            logo_gonderim_zamani = CASE WHEN k.logo_gonderim_durumu = 'hata' THEN NULL ELSE k.logo_gonderim_zamani END,
+            surum = k.surum + 1, guncelleyen_kisi_id = $4, guncelleme = now()
+      WHERE k.kimlik = $1 AND k.surum = $3 AND k.logo_kayit_no IS NULL
+      RETURNING k.surum, k.stok_kodu AS "stokKodu", k.onceki_kodlar[cardinality(k.onceki_kodlar)] AS "eskiKod"`,
+    [kimlik, sira, o.surum, o.kisiId],
+  );
+}
+
+export async function kartinOneki(db: Db, kimlik: string): Promise<string | null> {
+  return (await db.tek<{ onek: string }>('SELECT onek FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))?.onek ?? null;
 }
 
 // Logo'daki kodla açılan kartın sırası önekin sayacını geçmişse sayaç ileri alınır: TMI aynı kodu bir daha vermez.

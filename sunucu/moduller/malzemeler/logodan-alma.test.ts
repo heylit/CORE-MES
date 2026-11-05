@@ -9,7 +9,7 @@ import type { LogoGelenCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoTmiKodCozucusu } from './disari.ts';
+import { logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, malzemeAra, malzemeNoKoddan } from './disari.ts';
 import type { LogoAynaKarti } from './disari.ts';
 import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import { tamGovde } from './test-kart.ts';
@@ -204,6 +204,40 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.deepEqual((await liste('?ara=deneme%20mil')).kartlar.map((k) => k.kod), ['HM-ARA-00001']);
     assert.deepEqual((await liste('?ara=ozel')).kartlar.map((k) => k.kod), ['HM-ARA-00001']);
     assert.equal((await istek('GET', '/malzeme-logo-kartlari?ara=x')).statusCode, 400);
+  });
+
+  test('LMA-9 farklı malzeme (2116h): aktif kart aynı önekte Logo\'da boş sıradaki koda geçer, eski kod önceki kod olarak aranır ve çözülür; Logo kaydı olan kart, eski sürüm ve okuyucu reddedilir; tetikleyici elle değişimi engeller', async () => {
+    logoKodCozucusu(async (_db, kodlar) => ayna.filter((k) => kodlar.includes(k.kod)).map((k) => k.kod));
+    const t = await taslakAc('HM-YKG-00001');
+    assert.equal(t.kod, 'HM-YKG-00001');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'aktif' WHERE kimlik = $1", [t.kimlik]);
+    const surum = (await kartSatiri(t.kimlik))!.surum;
+    const no = await vt().tx((db) => malzemeNoKoddan(db, t.kod));
+    ayna.push(kart(107, t.kod, { ad: 'Baska malzeme' }), kart(108, 'HM-YKG-00002'));
+    assert.equal((await liste(`?ara=${t.kod}`)).kartlar[0]?.tmi?.logoKayitli, false);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/107/yeni-koda-gec', { surum }, okuyucuCerezi)).statusCode, 403);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/107/yeni-koda-gec', { surum: surum + 5 })).statusCode, 409, 'eski sürüm');
+    const c = await istek('POST', '/malzeme-logo-kartlari/107/yeni-koda-gec', { surum });
+    assert.equal(c.statusCode, 200, c.body);
+    assert.deepEqual(c.json(), { id: t.kimlik, stok_kodu: 'HM-YKG-00003', eski_kod: 'HM-YKG-00001', surum: surum + 1 }, "Logo'da kullanılan 00002 atlanır");
+    const s = await vt().tek<{ kod: string; onceki: string[]; durum: string; no: number }>(
+      'SELECT stok_kodu AS kod, onceki_kodlar AS onceki, onay_durumu AS durum, no FROM malzeme_katalog_karti WHERE kimlik = $1', [t.kimlik]);
+    assert.deepEqual({ ...s }, { kod: 'HM-YKG-00003', onceki: ['HM-YKG-00001'], durum: 'aktif', no });
+    assert.equal((await liste(`?ara=${t.kod}`)).kartlar[0]?.durum, 'yeni', 'Logo kartı artık TMI\'de yok sayılır, alınabilir');
+    assert.equal(await vt().tx((db) => malzemeNoKoddan(db, 'hm-ykg-00001')), no, 'eski kodla yazılmış bağ çözülmeye devam eder');
+    assert.deepEqual((await vt().tx((db) => malzemeAra(db, { metin: 'YKG-00001', sayfa: 1 }))).satirlar.map((k) => k.kod), ['HM-YKG-00003']);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/107/yeni-koda-gec', { surum: surum + 1 })).statusCode, 404, 'aynı kodlu kart kalmadı');
+
+    const g = await taslakAc('HM-YKG-00001');
+    assert.equal(g.kod, 'HM-YKG-00004');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_kayit_no = '9999', logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now() WHERE kimlik = $1", [g.kimlik]);
+    ayna.push(kart(109, g.kod));
+    assert.equal((await liste(`?ara=${g.kod}`)).kartlar[0]?.tmi?.logoKayitli, true);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/109/yeni-koda-gec', { surum: (await kartSatiri(g.kimlik))!.surum })).statusCode, 422);
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/103/yeni-koda-gec', { surum: 1 })).statusCode, 409, 'bağlı kart aynı malzemedir');
+
+    await assert.rejects(vt().sorgu("UPDATE malzeme_katalog_karti SET onceki_kodlar = '{}' WHERE kimlik = $1", [t.kimlik]), /Önceki kodlar/);
+    await assert.rejects(vt().sorgu('UPDATE malzeme_katalog_karti SET sira_no = 50 WHERE kimlik = $1', [t.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_degismez');
   });
 });
 

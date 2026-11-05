@@ -11,7 +11,7 @@ import { malzemeAra } from './servis.ts';
 // sıralı taramayı ya da başka indeksi seçer; bu yüzden katalog sentetik satırlarla doldurulur. VACUUM, GIN'in bekleyen listesini
 // indekse yazar: liste doluyken planlayıcı indeksi pahalı sayar ve sıralı taramayı seçer.
 const SATIR = 20_000;
-const INDEKSLER = ['stok_kodu', 'ad', 'eski_kod', 'tkod'].map((s) => `malzemeler_malzeme_katalog_karti_${s}_trgm`);
+const INDEKSLER = ['stok_kodu', 'ad', 'eski_kod', 'tkod', 'onceki_kod'].map((s) => `malzemeler_malzeme_katalog_karti_${s}_trgm`);
 describe('malzemeler arama indeksi (kart #1244, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   const vt = (): TestVeritabani['vt'] => {
@@ -50,7 +50,7 @@ describe('malzemeler arama indeksi (kart #1244, gerçek PostgreSQL)', () => {
     });
   }
 
-  test('kodda ya da adda geçen metin araması (liste ve sayım) dört trigram indeksini kullanır', async () => {
+  test('kodda ya da adda geçen metin araması (liste ve sayım) beş trigram indeksini kullanır', async () => {
     for (const plan of await planlar('çubuk 1234')) {
       for (const ad of INDEKSLER) assert.ok(plan.includes(ad), `${ad}\n${plan}`);
       assert.doesNotMatch(plan, /Seq Scan on malzeme_katalog_karti/, plan);

@@ -23,11 +23,11 @@ const LISTE: LogoGelenCevabi = {
     { ...ortak, logoKayitNo: 2, kod: '150.01', ad: 'Deneme eslenecek', kartTuru: '13', durum: 'yeni', koduUyar: false, tmi: null, farklar: [] },
     {
       ...ortak, logoKayitNo: 3, kod: 'HM-DEN-00003', ad: 'Deneme bagsiz', kartTuru: '10', durum: 'bagsiz', koduUyar: true,
-      tmi: { kimlik: 'k3', stokKodu: 'HM-DEN-00003', ad: 'TMI', onayDurumu: 'aktif', surum: 4 }, farklar: [],
+      tmi: { kimlik: 'k3', stokKodu: 'HM-DEN-00003', ad: 'TMI', onayDurumu: 'aktif', surum: 4, logoKayitli: false }, farklar: [],
     },
     {
       ...ortak, logoKayitNo: 4, kod: 'HM-DEN-00004', ad: 'Logo adi', kartTuru: '10', durum: 'bagli', koduUyar: true,
-      tmi: { kimlik: 'k4', stokKodu: 'HM-DEN-00004', ad: 'TMI', onayDurumu: 'aktif', surum: 2 }, farklar: [{ alan: 'aciklama_1', logo: 'Logo adi', tmi: 'TMI' }],
+      tmi: { kimlik: 'k4', stokKodu: 'HM-DEN-00004', ad: 'TMI', onayDurumu: 'aktif', surum: 2, logoKayitli: true }, farklar: [{ alan: 'aciklama_1', logo: 'Logo adi', tmi: 'TMI' }],
     },
   ],
   sonraki: 4,
@@ -45,6 +45,7 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGelenCevabi = LISTE) {
     if (yol.startsWith('/malzeme-logo-kartlari/') && secenek?.method === 'POST') {
       istekler.push({ yol, govde: JSON.parse(String(secenek.body)) });
       if (yol.endsWith('/al')) return json(200, { id: 'logo-1', stok_kodu: 'HM-DEN-00001', eslendi: false });
+      if (yol.endsWith('/yeni-koda-gec')) return json(200, { id: 'k3', stok_kodu: 'HM-DEN-00007', eski_kod: 'HM-DEN-00003', surum: 5 });
       return json(200, { id: 'x', surum: 5 });
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
@@ -106,6 +107,28 @@ describe('LogodanGelenler (2116)', () => {
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-kartlari/3/bagla')?.govde).toEqual({ surum: 4 }));
     fireEvent.click(screen.getByRole('button', { name: 'Sonraki sayfa' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-kartlari?sonra=4')).toBe(true));
+  });
+
+  it('farklı malzeme: bağsız kart onayla yeni koda geçer, yeni kod bildirilir; Logo kaydı olan kartta düğme yok', async () => {
+    const liste: LogoGelenCevabi = {
+      ...LISTE,
+      kartlar: [
+        ...LISTE.kartlar,
+        {
+          ...ortak, logoKayitNo: 5, kod: 'HM-DEN-00005', ad: 'Deneme gonderilmis', kartTuru: '10', durum: 'bagsiz', koduUyar: true,
+          tmi: { kimlik: 'k5', stokKodu: 'HM-DEN-00005', ad: 'TMI', onayDurumu: 'aktif', surum: 1, logoKayitli: true }, farklar: [],
+        },
+      ],
+    };
+    const istekler = sunucuKur(YAZAN, liste);
+    ac();
+    await screen.findByText('Deneme gonderilmis');
+    expect(within(satir('Deneme gonderilmis')).queryByRole('button', { name: /yeni koda geçir/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'HM-DEN-00003 CORE kartını yeni koda geçir' }));
+    expect(await screen.findByText(/önceki kod olarak kalır/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni koda geç' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-kartlari/3/yeni-koda-gec')?.govde).toEqual({ surum: 4 }));
+    expect(await screen.findByText(/HM-DEN-00007/)).toBeTruthy();
   });
 
   it('bağ yoksa neden yazılır, tablo çizilmez', async () => {
