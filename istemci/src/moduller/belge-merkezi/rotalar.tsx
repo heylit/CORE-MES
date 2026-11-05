@@ -1,6 +1,7 @@
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { BelgeSayfasi } from './BelgeSayfasi.tsx';
 import { Belgeler } from './Belgeler.tsx';
+import { PdfDuzenleyici } from './duzenle/PdfDuzenleyici.tsx';
 
 // Her ikinci menü adresi kendi bölümüdür (paylasilan/sayfalar/belge-merkezi.ts).
 export const rotalar: ModulRotasi[] = [
@@ -15,4 +16,5 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/cizimler/diger', ekran: () => <Belgeler tur="diger" /> },
   { yol: '/cizimler/arsiv', ekran: () => <Belgeler arsiv /> },
   { yol: '/cizimler/belge/:id', ekran: BelgeSayfasi },
+  { yol: '/cizimler/belge/:id/duzenle/:revizyonId', ekran: PdfDuzenleyici },
 ];

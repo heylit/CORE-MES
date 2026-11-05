@@ -12,6 +12,8 @@ import { IKINCI_MENULER, SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { Belgeler } from './Belgeler.tsx';
 import { komutlar } from './komutlar.ts';
 import { BelgeSayfasi } from './BelgeSayfasi.tsx';
+import { PdfDuzenleyici } from './duzenle/PdfDuzenleyici.tsx';
+import { PDFDocument } from 'pdf-lib';
 import { base64Yaz, dosyaYukle, PARCA_BAYT, sha256Yazilim } from './dosya-aktarimi.ts';
 import { Box3, Color, Vector3 } from 'three';
 import { modelOku } from './goruntu/model.ts';
@@ -25,6 +27,11 @@ const { onizlemeKareleri } = vi.hoisted(() => ({ onizlemeKareleri: vi.fn() }));
 vi.mock('./goruntu/onizleme.ts', () => ({ onizlemeKareleri }));
 
 // Görüntüleyici (pdf.js, three, occt) tarayıcı ister; ekran testinde yer tutucuyla değişir.
+// pdf.js iş parçacığı ister; düzenleyici testinde tek sayfalık sahte belge açılır, sayfa çizimi boştur.
+vi.mock('./goruntu/pdf.ts', () => ({
+  pdfAc: () => Promise.resolve({ numPages: 1, getPage: () => Promise.resolve({ view: [0, 0, 595, 842], rotate: 0 }), loadingTask: { destroy: () => Promise.resolve() } }),
+  sayfaCiz: () => Promise.resolve(),
+}));
 vi.mock('./goruntu/Goruntuleyici.tsx', () => ({ default: ({ revizyonId }: { revizyonId: number }) => <p>Görüntü {revizyonId}</p> }));
 
 const YAZAR: Kullanici = { id: 1, ad: 'Deneme Teknik', islemler: ['sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz'] };
@@ -89,6 +96,7 @@ function ac(adres: string) {
             <Route path="/cizimler/3b-model" element={<Belgeler tur="3b-model" />} />
             <Route path="/cizimler/sertifika" element={<Belgeler tur="sertifika" />} />
             <Route path="/cizimler/belge/:id" element={<BelgeSayfasi />} />
+            <Route path="/cizimler/belge/:id/duzenle/:revizyonId" element={<PdfDuzenleyici />} />
           </Routes>
         </MemoryRouter>
       </BildirimSaglayici>
@@ -620,5 +628,103 @@ describe('cizimler malzeme küçük resmi (1990 a)', () => {
     cleanup();
     render(<KucukResimKutusu resim={resim} ad="Parça" />);
     expect(screen.queryByRole('img', { name: 'Taslak' })).toBeNull();
+  });
+});
+
+describe('cizimler PDF düzenleme (2123)', () => {
+  // jsdom'da tuval çizimi ve PointerEvent yoktur: çizim boş bağlamla atlanır, işaretçi olayı fare olayından kurulur.
+  beforeEach(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    if (!('PointerEvent' in window)) {
+      vi.stubGlobal('PointerEvent', class extends MouseEvent {
+        pointerId: number;
+        constructor(tur: string, ayar: PointerEventInit = {}) { super(tur, ayar); this.pointerId = ayar.pointerId ?? 0; }
+      });
+    }
+    // jsdom'un File'ında arrayBuffer yok; tarayıcıdaki davranış FileReader ile verilir.
+    if (!('arrayBuffer' in File.prototype)) {
+      Object.defineProperty(File.prototype, 'arrayBuffer', {
+        configurable: true,
+        value(this: File) {
+          return new Promise<ArrayBuffer>((coz) => { const r = new FileReader(); r.onload = () => { coz(r.result as ArrayBuffer); }; r.readAsArrayBuffer(this); });
+        },
+      });
+    }
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  async function pdfSunucusu(kullanici: Kullanici) {
+    const b = await PDFDocument.create();
+    b.addPage([595, 842]);
+    const pdf = await b.save();
+    const cagrilar: Cagri[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      const yontem = ayar?.method ?? 'GET';
+      cagrilar.push({ yontem, yol, govde: typeof ayar?.body === 'string' ? JSON.parse(ayar.body) : undefined });
+      if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
+      if (yol === '/kurum-logosu') return json(200, { logo: null });
+      if (yontem === 'GET' && yol === '/cizimler/7') return json(200, AYRINTI);
+      if (yontem === 'GET' && yol === '/cizimler/7/revizyonlar/11/dosya') return new Response(new Uint8Array(pdf), { status: 200 });
+      if (yontem === 'POST' && yol === '/dosyalar/eksikler') return json(200, { eksikler: [] });
+      if (yontem === 'POST' && yol === '/cizimler') return json(200, { ...AYRINTI, id: 8, ad: 'Deneme flanş (düzenlenmiş)' });
+      if (yontem === 'GET' && yol === '/cizimler/8') return json(200, { ...AYRINTI, id: 8, ad: 'Deneme flanş (düzenlenmiş)' });
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    return cagrilar;
+  }
+
+  it('PDF revizyonunda yazara PDF düzenle düğmesi görünür ve düzenleyiciyi açar; okur görmez', async () => {
+    sunucuKur(OKUR);
+    ac('/cizimler/belge/7');
+    await screen.findByText('Revizyonlar');
+    expect(screen.queryByRole('button', { name: /PDF'ini düzenle/ })).toBeNull();
+    cleanup();
+    await pdfSunucusu(YAZAR);
+    ac('/cizimler/belge/7');
+    fireEvent.click(await screen.findByRole('button', { name: "Revizyon A PDF'ini düzenle" }));
+    expect(await screen.findByRole('heading', { name: /PDF düzenle/ })).toBeTruthy();
+    expect(screen.getByText('Kaynak: Revizyon A · Yayında')).toBeTruthy();
+  });
+
+  it('reddedilen: belge-merkezi.yaz taşımayan düzenleyici adresini açsa da düzenleyemez', async () => {
+    const cagrilar = await pdfSunucusu(OKUR);
+    ac('/cizimler/belge/7/duzenle/11');
+    expect(await screen.findByText(/çizim yükleme yetkisi gerekir/)).toBeTruthy();
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
+  });
+
+  it('kurum logosu yoksa Logo aracı kapalıdır; değişiklik yokken kaydedilemez', async () => {
+    await pdfSunucusu(YAZAR);
+    ac('/cizimler/belge/7/duzenle/11');
+    const arac = await screen.findByRole('toolbar', { name: 'Düzenleme araçları' });
+    expect((within(arac).getByRole('button', { name: 'Logo' }) as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByRole('button', { name: 'Sonraki' });
+    expect((screen.getByRole('button', { name: 'Yeni belge olarak kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('temizlenen alan yeni belge olarak yüklenir; asıl belgeye yazılmaz, not kaynağı ve gerekçeyi taşır, gerekçe zorunlu', async () => {
+    const cagrilar = await pdfSunucusu(YAZAR);
+    ac('/cizimler/belge/7/duzenle/11');
+    const alan = await screen.findByLabelText('Sayfa 1 düzenleme alanı');
+    alan.getBoundingClientRect = () => ({ left: 0, top: 0, width: 595, height: 842, right: 595, bottom: 842, x: 0, y: 0, toJSON: () => ({}) });
+    await screen.findByRole('button', { name: 'Sonraki' });
+    fireEvent.pointerDown(alan, { clientX: 400, clientY: 700, pointerId: 1 });
+    fireEvent.pointerMove(alan, { clientX: 580, clientY: 830, pointerId: 1 });
+    fireEvent.pointerUp(alan, { clientX: 580, clientY: 830, pointerId: 1 });
+    expect(await screen.findByRole('button', { name: 'Dolgu alanı' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni belge olarak kaydet' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByText(/örtülür/)).toBeTruthy();
+    const kaydet = within(pencere).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
+    expect(kaydet.disabled).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
+    expect(kaydet.disabled).toBe(false);
+    fireEvent.click(kaydet);
+    await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/cizimler')).toBe(true); });
+    const govde = cagrilar.find((c) => c.yontem === 'POST' && c.yol === '/cizimler')?.govde as Record<string, unknown>;
+    expect(govde).toMatchObject({ ad: 'Deneme flanş (düzenlenmiş)', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf', not: 'Düzenlendi: Deneme flanş Rev A. Gerekçe: Kurum anteti' });
+    expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol.startsWith('/cizimler/7'))).toBe(false);
   });
 });
