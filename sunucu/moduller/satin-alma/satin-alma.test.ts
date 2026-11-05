@@ -1251,7 +1251,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await beklenen(), [[b, '2026-11-07', '108.00', 'Deneme Tedarik B', 'TRY']]);
   });
 
-  test('SAT-74 #1124: avanslı teklifte plan avans ve kalan olarak kurulur; kalan beklenen teslimden vade günü sonradır; yeniden kayıt planı değiştirmez', async () => {
+  test('SAT-74 #1124 2132-6: avanslı teklifte plan avans ve kalan olarak kurulur; kalan beklenen teslimden vade günü sonradır; otomatik plan yeni tarihlerle yeniden kurulur', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10'], [k2, '2.5']], { avansYuzdesi: '30', vadeGun: 60, iskontoYuzdesi: '10', nakliye: '7', nakliyeDahil: false, digerMasraf: '3' });
@@ -1265,8 +1265,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // (10 x 10 + 4 x 2.5) x 0.9 + 7 + 3 = 109; KDV dahil (genel %20) 130.80: avans 32.70 x 1.2 = 39.24, kalan 91.56.
     const plan = async () => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`)).siparisler[0]!.odemePlani;
     assert.deepEqual(await plan(), [{ tur: 'avans', vade: '2026-10-10', yontem: 'banka', tutar: '39.24' }, { tur: 'vade', vade: '2026-12-19', yontem: 'banka', tutar: '91.56' }]);
+    // 2132-6 a: tekliften kurulan plan sipariş tarihi ve beklenen teslimle yeniden kurulur (önceden bir kez kurulurdu).
     tamam(await kaydet(c.sa, { ...govde(s), karar: { ...s.karar!, siparisler: [{ teklifId: a.id, siparisNo: 'L-9', siparisTarihi: '2026-10-11', beklenenTeslim: '2026-10-25' }] } }));
-    assert.deepEqual((await plan()).map((x) => x.vade), ['2026-10-10', '2026-12-19']);
+    assert.deepEqual((await plan()).map((x) => x.vade), ['2026-10-11', '2026-12-24']);
   });
 
   test('2132a: iptal edilen siparişin planı beklenen ödemelerden çıkar; faturalı siparişin planı takipte kalır; iptal geri alınınca plan yeniden kurulur; yetkisiz iptal planı silmez', async () => {
@@ -1335,6 +1336,38 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const { surum } = (await vt().tx((db) => db.tek<{ surum: number }>('SELECT surum FROM finans_belge WHERE id = $1', [ikinci])))!;
     tamam(await istek(c.yonetici, 'POST', `/finans/belgeler/${ikinci}/iptal`, { surum, neden: 'Deneme' }));
     assert.deepEqual(await beklenen(), [['a', '2026-10-07', '4.00'], ['a', '2026-12-01', '12.00'], ['b', '2026-11-07', '108.00']]);
+  });
+
+  test('2132-6, 2132-11: otomatik plan beklenen teslim ve mal kabulle yeniden kurulur, geri alınan teslim sayılmaz; elle yazılan plan değişmez', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const satirA = siparisi(s, a).satirlar[0]!.id;
+    const plan = async (teklifId: string) => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`))
+      .siparisler.find((x) => x.teklifId === teklifId)!.odemePlani.map((x) => [x.vade, x.tutar]);
+    const teslimGunu = async (teklifId: string, beklenenTeslim: string) => {
+      const t = await acilistaki(s.id);
+      return kaydet(c.sa, { ...govde(t), karar: { ...t.karar!, siparisler: t.karar!.siparisler.map((x) => ({
+        teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.teklifId === teklifId ? beklenenTeslim : x.beklenenTeslim })) } });
+    };
+    assert.deepEqual(await plan(a), [['2026-11-06', '24']]);
+    tamam(await teslimGunu(a, '2026-10-20'));
+    assert.deepEqual(await plan(a), [['2026-11-19', '24']]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı teslim tarihine göre yeniden kuruldu: 2026-11-19 24 TRY')));
+    // Elle yazılan plan teslim değişince yerinde kalır.
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: b, surum: (await acilistaki(s.id)).surum,
+      satirlar: [{ tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '100' }] }));
+    tamam(await teslimGunu(b, '2026-10-25'));
+    assert.deepEqual(await plan(b), [['2026-12-15', '100']]);
+    // Mal kabul: vade son mal kabul gününden sayılır; geri alınınca beklenen teslime döner.
+    const bugun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+    const otuzGunSonra = new Date(Date.parse(`${bugun}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10);
+    await teslimEt(satirA, '2', 213261);
+    assert.deepEqual(await plan(a), [[otuzGunSonra, '24']]);
+    await geriAl(213261);
+    assert.deepEqual(await plan(a), [['2026-11-19', '24']]);
+    // Mevcut (göç öncesi) satırlar 'elle' sayılır: kaynağı elle olan plan mal kabulle değişmez.
+    await vt().tx((db) => db.sorgu("UPDATE finans_siparis_odemesi SET kaynak = 'elle' WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2", [s.id, a]));
+    await teslimEt(satirA, '2', 213262);
+    assert.deepEqual(await plan(a), [['2026-11-19', '24']]);
   });
 
   test('#489 pano: onay bekleyen onaylayana, açık talep ve teslim bekleyen satır yazana, açık sipariş okuyana sayılır; yetkisiz sayı null', async () => {

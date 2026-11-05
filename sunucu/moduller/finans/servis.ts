@@ -902,23 +902,28 @@ export const giderBelgesiSecenekleri = (db: Db, kalip: string | null, kategorile
 // birimini siparişten verir, finans siparişi okumaz. Plan bütün olarak yenilenir; faturası bağlanmış siparişin planı değişmez.
 export interface SiparisOdemesi { tur: 'avans' | 'vade'; vade: string; yontem: SiparisOdemeYontemi; tutar: string }
 export interface SiparisPlani { satirlar: SiparisOdemesi[]; faturalar: { id: number; belgeNo: string | null; belgeTarihi: string; vade: string }[] }
-export function siparisOdemePlaniYaz(db: Db, kisiId: number, g: { siparis: SiparisAnahtari; siparisNo: string; firmaId: number; paraBirimi: string; satirlar: readonly SiparisOdemesi[] }): Promise<void> {
+// 2132-6: kaynak 'otomatik' tekliften kurulan plandır (teslim değişince yeniden kurulur); verilmezse 'elle'.
+export function siparisOdemePlaniYaz(db: Db, kisiId: number, g: { siparis: SiparisAnahtari; siparisNo: string; firmaId: number; paraBirimi: string; satirlar: readonly SiparisOdemesi[]; kaynak?: 'elle' | 'otomatik' }): Promise<void> {
   return korumali(async () => {
     const hata = siparisOdemePlaniHatasi(g.satirlar, await sorgular.siparisFaturasiVarMi(db, g.siparis.talepId, g.siparis.teklifId));
     if (hata) throw gecersiz(hata);
     await sorgular.siparisOdemeleriniSil(db, g.siparis.talepId, g.siparis.teklifId);
     for (const [i, x] of g.satirlar.entries()) {
-      await sorgular.siparisOdemesiEkle(db, { ...g.siparis, siparisNo: g.siparisNo, sira: i + 1, tur: x.tur, vade: x.vade, yontem: x.yontem, firmaId: g.firmaId, paraBirimi: g.paraBirimi, tutar: x.tutar }, kisiId);
+      await sorgular.siparisOdemesiEkle(db, { ...g.siparis, siparisNo: g.siparisNo, sira: i + 1, tur: x.tur, vade: x.vade, yontem: x.yontem, firmaId: g.firmaId, paraBirimi: g.paraBirimi, tutar: x.tutar }, kisiId, g.kaynak ?? 'elle');
     }
   });
 }
-// İptal edilen siparişin beklenen ödemesi kalmaz: plan silinir. Faturası bağlanmış siparişin planı zaten beklenene girmez ve takipte
-// geçmiş olarak kalır, silinmez. Silme tekrarlanabilir; satın almanın ucu çağırır, finans siparişi okumaz.
+// 2132-6: teslimle yeniden kurulabilecek plan: bütün satırları otomatik ve siparişe fatura bağlanmamış.
+export async function siparisOtomatikPlaniVarMi(db: Db, siparis: SiparisAnahtari): Promise<boolean> {
+  return (await sorgular.siparisPlaniOtomatikMi(db, siparis.talepId, siparis.teklifId)) && !(await sorgular.siparisFaturasiVarMi(db, siparis.talepId, siparis.teklifId));
+}
 // 2132-7: satın almanın sipariş KDV seçimi için gündeki geçerli oranlar ve genel oran (en yükseği). Para tutarı değildir (FNS-48 dışı).
 export async function kdvSecenekleri(db: Db, tarih: string): Promise<{ oranlar: string[]; genel: string | null }> {
   const l = await sorgular.kdvOranlari(db);
   return { oranlar: gecerliKdvOranlari(l, tarih), genel: genelKdvOrani(l, tarih) };
 }
+// İptal edilen siparişin beklenen ödemesi kalmaz: plan silinir. Faturası bağlanmış siparişin planı zaten beklenene girmez ve takipte
+// geçmiş olarak kalır, silinmez. Silme tekrarlanabilir; satın almanın ucu çağırır, finans siparişi okumaz.
 export function siparisOdemePlaniKaldir(db: Db, siparis: SiparisAnahtari): Promise<void> {
   return korumali(async () => {
     if (await sorgular.siparisFaturasiVarMi(db, siparis.talepId, siparis.teklifId)) return;

@@ -604,7 +604,8 @@ export function odemePlaniHedefi(t: Pick<Talep, 'durum' | 'teklifler' | 'karar'>
 // tarihinden) vade günü sonra; ödeme şekli banka havalesi. 2132-2 a: tutarlar KDV dahildir (ödenecek para faturanın toplamıdır);
 // oran siparişte elle seçilen, yoksa finansın genel oranı (2132-7). Oran bilinmiyorsa KDV hariç kalır (sıfır uydurulmaz, KDV eklenmez).
 // Avans ve toplam ayrı ayrı kuruşa yuvarlanır, kalan farktır: satırların toplamı KDV dahil toplama eşittir.
-export interface OdemeKosulu { toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null }
+// 2132-6 a: vadeli satır mal kabul günü varsa ondan, yoksa beklenen teslimden sayılır.
+export interface OdemeKosulu { toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul?: string | null }
 export function kdvEkle(tutar: string, oran: string): string {
   const kurus = tamSayiya(tutar) / 10n ** BigInt(OLCEK - 2);
   const c = kurus * (10_000n + tamSayiya(oran) / 10n ** BigInt(OLCEK - 2));
@@ -618,7 +619,7 @@ export function varsayilanOdemePlani(k: OdemeKosulu, bugun: string, kdvOrani: st
   const kalan = kdvOrani === null ? k.kalan : ondalikMetni(tamSayiya(kdvEkle(k.toplam, kdvOrani)) - tamSayiya(avans));
   const plan: { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] = [];
   if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem: 'banka', tutar: avans });
-  if (ondalikKiyas(kalan, '0') > 0) plan.push({ tur: 'vade', vade: gunEkle(k.beklenenTeslim ?? baslangic, k.vadeGun), yontem: 'banka', tutar: kalan });
+  if (ondalikKiyas(kalan, '0') > 0) plan.push({ tur: 'vade', vade: gunEkle(k.malKabul ?? k.beklenenTeslim ?? baslangic, k.vadeGun), yontem: 'banka', tutar: kalan });
   return plan;
 }
 // Dış operasyon gecikmesi (kart #542; D3 b: dönüş ilk dönüştür). Termin yoksa bilinmez (null). Dönüş geldiyse termini

@@ -3,7 +3,7 @@
 import { satisSevkleriCozucusuKaydet, satisSiparisleriCozucusuKaydet, sevkIsiOzetiCozucusuKaydet, siparisOzetiCozucusuKaydet } from './servis.ts';
 import type { SatisSevkleriCozucusu, SatisSiparisleriCozucusu, SevkIsiOzetiCozucusu, SiparisOzetiCozucusu } from './servis.ts';
 export {
-  alisBelgeleri, belgeSiparisBagla, faizGetir, gunlukFaizGetir, kdvSecenekleri, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisPlanlari, faizler, kurGetir, kurlar, makineAmortismani, birimMaliyetleri, genelGiderOrani,
+  alisBelgeleri, belgeSiparisBagla, faizGetir, gunlukFaizGetir, kdvSecenekleri, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari, faizler, kurGetir, kurlar, makineAmortismani, birimMaliyetleri, genelGiderOrani,
 } from './servis.ts';
 // 260 a: satış siparişinin faturaları ve iadeleri (tutar finans rakamıdır; FNS-48 yetkisi çağıranın ucundadır).
 export { siparisFaturalari } from './servis.ts';

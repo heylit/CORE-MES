@@ -778,9 +778,9 @@ export function teslimToplamlari(db: Db, siparisSatirIdler: readonly number[]): 
   );
 }
 // Teslim yazılacak sipariş satırının talebi kilitlenir: aynı anda talep kaydı ya da başka teslim beklesin.
-export function teslimHedefiKilitle(db: Db, siparisSatirId: number): Promise<{ talepDurumu: string; kapali: boolean } | null> {
-  return db.tek<{ talepDurumu: string; kapali: boolean }>(
-    `SELECT t.durum AS "talepDurumu", p.logo_kapatma_durumu IS NOT NULL AS kapali
+export function teslimHedefiKilitle(db: Db, siparisSatirId: number): Promise<{ talepId: string; talepDurumu: string; kapali: boolean } | null> {
+  return db.tek<{ talepId: string; talepDurumu: string; kapali: boolean }>(
+    `SELECT t.id AS "talepId", t.durum AS "talepDurumu", p.logo_kapatma_durumu IS NOT NULL AS kapali
        FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
       WHERE s.id = $1 FOR UPDATE OF t`,
@@ -876,7 +876,7 @@ export async function siparisSatiriVarMi(db: Db, id: number): Promise<boolean> {
 
 // Kart #1124 (SAT-74): siparişin KDV hariç toplamı (teklif toplamı formülü, sipariş satırlarının miktarıyla; kalem bazlı kararda
 // yalnız bu tedarikçiye düşen kalemler), avans ve kalan tutarı, vade günü ve tarihleri. numeric ile hesaplanır.
-export interface SiparisOdemeKosulu { teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; kdvOrani: string | null }
+export interface SiparisOdemeKosulu { teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul: string | null; kdvOrani: string | null }
 export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisOdemeKosulu[]> {
   return db.sorgu<SiparisOdemeKosulu>(
     `WITH t AS (
@@ -885,12 +885,16 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,
-         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim, o.kdv_orani
+         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim, o.kdv_orani,
+         -- 2132-6: net teslimi kalan siparişin son mal kabul günü (tesis günü); geri alınmış teslim sayılmaz.
+         (SELECT CASE WHEN sum(x.miktar) > 0 THEN (max(x.zaman) FILTER (WHERE x.miktar > 0) AT TIME ZONE 'Europe/Istanbul')::date END
+            FROM satin_alma_teslim x JOIN satin_alma_siparis_satiri ss ON ss.id = x.siparis_satiri_id
+           WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id) AS mal_kabul
          FROM satin_alma_siparis o JOIN satin_alma_teklif q ON q.talep_id = o.talep_id AND q.id = o.teklif_id
         WHERE o.talep_id = $1)
      SELECT teklif_id AS "teklifId", toplam, round(toplam * avans_yuzdesi / 100, 2) AS avans, toplam - round(toplam * avans_yuzdesi / 100, 2) AS kalan,
             vade_gun AS "vadeGun", ${ISO('siparis_tarihi')} AS "siparisTarihi", ${ISO('beklenen_teslim')} AS "beklenenTeslim",
-            kdv_orani::text AS "kdvOrani"
+            ${ISO('mal_kabul')} AS "malKabul", kdv_orani::text AS "kdvOrani"
        FROM t`, [talepId]);
 }
 // 2132-7: siparişin elle seçilen KDV oranı (boş: genel oran).

@@ -520,10 +520,14 @@ export const siparisOdemeleriOku = (db: Db, talepIdler: readonly string[], tekli
    ORDER BY o.satin_alma_talep_id, o.satin_alma_teklif_id, o.sira`, [talepIdler, teklifIdler]);
 export const siparisOdemeleriniSil = (db: Db, talepId: string, teklifId: string) =>
   db.sorgu('DELETE FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2', [talepId, teklifId]);
-export async function siparisOdemesiEkle(db: Db, o: SiparisOdemesiSatiri, kisiId: number): Promise<void> {
-  await db.sorgu(`INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId]);
+export async function siparisOdemesiEkle(db: Db, o: SiparisOdemesiSatiri, kisiId: number, kaynak: 'elle' | 'otomatik'): Promise<void> {
+  await db.sorgu(`INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id, kaynak)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId, kaynak]);
 }
+// 2132-6: planın bütün satırları tekliften kurulduysa (otomatik) true; plan yoksa ya da bir satırı elle yazıldıysa false.
+export const siparisPlaniOtomatikMi = async (db: Db, talepId: string, teklifId: string): Promise<boolean> => (await db.tek<{ v: boolean }>(
+  `SELECT COALESCE(bool_and(kaynak = 'otomatik'), false) AS v FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2`,
+  [talepId, teklifId]))!.v;
 export const siparisFaturasiVarMi = async (db: Db, talepId: string, teklifId: string): Promise<boolean> => (await db.tek(
   `SELECT 1 FROM finans_belge WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2 AND durum <> 'iptal' LIMIT 1`, [talepId, teklifId])) !== null;
 export interface SiparisFaturasiSatiri { talepId: string; teklifId: string; id: number; belgeNo: string | null; belgeTarihi: string; vade: string }
