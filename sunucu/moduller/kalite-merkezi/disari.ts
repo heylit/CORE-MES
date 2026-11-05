@@ -32,6 +32,8 @@ export type { AqlSinifi, LotBulunani, LotKarariIstegi, MuayeneAqlAyari, MuayeneP
 // istasyonu ve Hazırlık parçanın resim ve planını buradan okur; numuneyi, ölçümü (kaynak: operatör, kalite, CMM) ve numune kararını
 // buraya yazar. Yetkiyi ve emrin kapsamını çağıranın ucu denetler; yazan kişi kayıtta tutulur.
 export { acikNumuneler, emirNumuneleri, emirOlcumleri, numuneIste, numuneKarari, numuneOku, olcumYaz, resimDosyasi, studyoParcasi } from './studyo.ts';
+// 2131-2 a: numune kararı; ret aynı işlemde NCR açar ve NCR'yi döner. Arkon `numuneKarari` yerine bunu çağırır.
+export { numuneKarariVer } from './servis.ts';
 export type { KmNumune, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmStudyoParcaCevabi } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 // Kapanış maddeleri (1074 a): Üretim Emirleri emrin kapanışında "ölçüm ve numune kararları" ile "açık NCR" maddelerini emir başına
 // buradan okur (bağı kablolama.ts kurar). Var olmayan emirde null döner. NCR emre hatalı parça kararının kaynak bağıyla ya da emir

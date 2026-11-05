@@ -450,6 +450,6 @@ export const uclar: Uc[] = [
     govde: kmNumuneKarariGovdesi,
     cevap: kmNumuneCevabi,
     isle: async ({ db, kullanici, parametre, govde }) =>
-      ({ numune: await studyo.numuneKarari(db, kullanici.id, parametre.numuneId, govde.karar, govde.not ?? null) }),
+      ({ numune: (await servis.numuneKarariVer(db, kullanici, parametre.numuneId, govde.karar, govde.not ?? null)).numune }),
   }),
 ];

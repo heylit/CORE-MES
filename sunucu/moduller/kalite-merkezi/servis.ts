@@ -33,7 +33,9 @@ import {
   OLCU_ALETI_KAYIT_ADEDI, TEDARIKCI_ASKIDA, TEDARIKCI_KOLEKSIYONU, cihazGecerliMi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, emirCihazlari, kapanmisKayitMi, kaliteSatirlari, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, kalibrasyonHazirligi, arsivDegisiyor, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, yalnizArsivDegisiyor, yeniOlcumCihazlari, yoneticiKoleksiyonuMu,
 } from './kurallar.ts';
 import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedarikciFirmasiMi, tedarikciOnayDurumlari as onayDurumlari } from './kurallar.ts';
-import { hataliNcrGovdesi } from './kurallar.ts';
+import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
+import { numuneKarari } from './studyo.ts';
+import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
 import { girisDurumu, girisGkkEngeli, girisNcrGovdesi } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi, KalibrasyonHazirligi } from './kurallar.ts';
@@ -670,6 +672,31 @@ export async function dofAc(
   const no = await numaraAl(db, 'kalite-merkezi.dof-no', { varMi: (n) => sorgular.noVarMi(db, DOF_KOLEKSIYONU, n) });
   await kayitYaz(db, kullanici, DOF_KOLEKSIYONU, kimlik, dofGovdesi(istek, no, tesisGunu(Date.now())), null, false, null, [], null, false);
   return { kimlik, no, durum: 'Açık', yeni: true };
+}
+
+// 2131-2 a: numune kararı Kalite Merkezi ucunun ve Arkon'un tek yoludur. Ret aynı işlemde NCR açar (numara Sistem Ayarları'ndan); NCR
+// numunenin emrine kaynak bağıyla bağlanır, emir kapanışının NCR maddesi onu bekler. Karar tektir (ikinci karar 409), NCR de numune başına
+// tektir. Yetkiyi çağıran korur.
+export async function numuneKarariVer(
+  db: Db, kullanici: Kullanici, numuneId: number, karar: KmNumuneKarari, not: string | null,
+): Promise<{ numune: KmNumune; ncr: { kimlik: string; no: string } | null }> {
+  const numune = await numuneKarari(db, kullanici.id, numuneId, karar, not);
+  if (karar !== 'ret') return { numune, ncr: null };
+  const kimlik = numuneNcrKimligi(numune.id);
+  await sorgular.yazmaKilidi(db);
+  const onceki = await sorgular.kayitGovdesi(db, UYGUNSUZLUK_KOLEKSIYONU, kimlik);
+  if (onceki !== null) return { numune, ncr: { kimlik, no: ncrNo(kimlik, onceki) } };
+  const emir = await uretimEmriOzeti(db, numune.uretimEmriId);
+  const parca = emir?.malzemeNo == null ? undefined : (await malzemeOzetleri(db, [emir.malzemeNo])).get(emir.malzemeNo);
+  const uygunsuz = new Set([...sonOlcumler(numune.olcumler).values()].filter((o) => !o.uygun).map((o) => o.balonId));
+  const balonNolari = (await sorgular.etkinBalonlar(db, [...uygunsuz])).map((b) => b.no).sort((a, b) => a - b);
+  const no = await numaraAl(db, 'kalite-merkezi.ncr-no', { varMi: (n) => sorgular.noVarMi(db, UYGUNSUZLUK_KOLEKSIYONU, n) });
+  const govde = numuneNcrGovdesi({
+    numuneId: numune.id, opNo: numune.opNo, kritik: numune.kritik, neden: numune.neden, parcaSayisi: numune.parcaSayisi, not,
+    emir: emir === null ? null : { emirNo: emir.emirNo, parcaNo: parca?.kod ?? '', parcaAd: parca?.ad ?? '' }, uygunsuzBalonlar: balonNolari,
+  }, no, kullanici.ad, tesisGunu(Date.now()));
+  await kayitYaz(db, kullanici, UYGUNSUZLUK_KOLEKSIYONU, kimlik, govde, null, false, null, [], numune.uretimEmriId, false);
+  return { numune, ncr: { kimlik, no } };
 }
 
 // Kaynak anahtarı başına DÖF'ün durumu; DÖF'ü açılmamış ya da silinmiş anahtar haritada yoktur. Yetki denetlemez.
