@@ -2,14 +2,14 @@ import type { Db } from '#cekirdek/db.ts';
 import { yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  Ekip, IsMerkezi, Istasyon, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuGovdesi, OperasyonTipi,
+  AparatKapasitesi, Ekip, IsMerkezi, Istasyon, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuGovdesi, OperasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 
 export type {
-  Ekip, IsMerkezi, Istasyon, IstasyonPlanAyari, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuDegeri, OperasyonTipi,
+  AparatKapasitesi, Ekip, IsMerkezi, Istasyon, IstasyonPlanAyari, KapasiteKaynagi, Makine, MakineDurumu, MakineDurumuDegeri, OperasyonTipi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { MAKINE_DURUMU_ISLEMLERI, kapasiteKaynagiCoz, sentYuzdeMetni, yuzdeSente } from './kurallar.ts';
 export { isMerkeziIzinliMi } from './kurallar.ts';
@@ -157,6 +157,8 @@ export const operasyonTipleri = (
 // Plan girdileri (T2, #409). Satırı olmayan istasyon verim %100 ve operatör 1, satırı olmayan makine çalışır sayılır: listede yalnız yazılmış satırlar vardır.
 export const planAyarlari = (db: Db) => servis.planAyarlari(db);
 export const makineDurumlari = (db: Db) => servis.makineDurumlari(db);
+// 2112 (2099-1 a): aparat plan kapasitesi; `aparatKartiId` malzemelerin kart kimliğidir, adı çağıran ekler. İstasyonu boş satır ortak aparattır.
+export const aparatKapasiteleri = (db: Db): Promise<AparatKapasitesi[]> => servis.aparatKapasiteleri(db);
 
 // Uç katmanı işlemi yalnız kendi ucunda arar; başka modülün ucundan gelen çağrıda (plan stüdyosunu canlıya alma, 281 a)
 // /makineler/:id/durum ucunun işlemi aranmamıştır, bu yüzden aynı işlemi burada arar. Çağıranın transaction'ında yazar.

@@ -14,6 +14,7 @@ Sabit kimlik (proje talimatı): istasyon ve makine bu modülündür.
 - `istasyon_kisi`, `makine_kisi`, `ekip_uye`: `id`, hedef (`istasyon_id` / `makine_id` / `ekip_id`), `kisi_id` (kisiler), `baslangic` (date), `yuzde` (numeric(5,2), boşsa çıkarıldı), `iptal_zamani` (timestamptz, boşsa geçerli)
 - `ekip`: `id`, `kod`, `ad`, `istasyon_id` (boş olabilir), `aktif`, `surum`
 - `istasyonlar_operasyon_tipi`: `id`, `kod`, `ad`, `grup` (13 kod; adları sözleşmede `OPERASYON_GRUP_ADLARI`), `aktif`, `surum`, `kisaltma`, `varsayilan_ayar_dk`, `varsayilan_birim_dk`, `varsayilan_istasyon_id` (#324, boş olabilir) (`20261008111500_istasyonlar_operasyon_tipi_surum.sql`); 96 tiple tohumlu
+- `istasyonlar_aparat_kapasitesi` (2112, `20261105042600_istasyonlar_aparat_kapasitesi.sql`): `id`, `aparat_karti_id` (malzemeler kartı, anahtarsız), `istasyon_id` (boş olabilir: ortak), `adet` (1-10000), `degistiren_kisi_id`, `degisme`, `surum`; (kart, istasyon) tekil
 
 ## Kavramlar
 
@@ -35,9 +36,10 @@ Sabit kimlik (proje talimatı): istasyon ve makine bu modülündür.
 | Makine yetkinliği (kişinin baktığı makineler) | `istasyonlar_makine_yetkinlik`, defteri `istasyonlar_makine_yetkinlik_gecmisi` | plan (motorda kişi ataması, 569b) | sahibi bu modül (563 c) |
 | Ayar yetkinliği (kişinin ayar yapabildiği makineler) | `istasyonlar_ayar_yetkinligi` (`kisi_id`, `makine_id`, `gecerlilik_bitis`, `dayanak`), defteri `istasyonlar_ayar_yetkinligi_gecmisi` | plan (ayarcı; görev metni yerine, plan dalı ayrı) | sahibi bu modül (1303 a) |
 | Kişinin aynı anda en çok tezgâhı | `istasyonlar_kisi_tezgah_siniri.en_cok` | plan (motor, 569b); kisiler kişi kartı | sahibi bu modül (563 2 a) |
+| Aparat plan kapasitesi (aynı anda kullanılabilen adet) | `istasyonlar_aparat_kapasitesi` (`aparat_karti_id` düz sayı, `istasyon_id` boş olabilir, `adet`, `surum`) | malzemeler (aparat kartı, demirbaş/kalıp), stok (adet ve yer), recete-rota `plan.aparatlar[]` (kopya, A8'de buradan okur), plan motoru `aparatlar` | sahibi bu modül (2099-1 a, 2112) |
 | Tesis kodunun geçmişi (iş merkezi, istasyon, makine) | `istasyonlar_kod_gecmisi` (`kod`, `birakildi`) | Arkon eski kayıttaki kodu `eskiKoddanKimlikCoz` ile çözer | sahibi bu modül (AG2-2) |
 
 ## Dışa açtıkları (`disari.ts`)
 
 `istasyonGetir`, `aktifIstasyonlar`, `istasyonlar`, `isMerkezleri`, `makineGetir`, `istasyondakiMakineler`, `aktifMakineler`,
-`kisininIzinliIsMerkezleri`, `isMerkeziIzinliMi`, `istasyonAdlari`, `operasyonTipleri`, `istasyondakiKisiler`, `makineKisiAtamalari`, `ekipler`, `ekipUyeleri` (#105), `istasyonKisiAtamalari` (#324), `uretimAlanlari`, `aktifUretimAlaniMi` (#368), `eskiKoddanKimlikCoz` ve `TesisDuzeyi` (#385), `planAyarlari`, `makineDurumlari`, `calisirMakineler`, `isMerkeziPersonelSayilari`, `istasyonKisileri`, `istasyonYetkinlikleri`, `yetkinMi`, `kisilerinIzinliIsMerkezleri` (#409), `makineYetkinlikleri`, `kisiTezgahSinirlari` (563). Tipler sürüm taşımaz.
+`kisininIzinliIsMerkezleri`, `isMerkeziIzinliMi`, `istasyonAdlari`, `operasyonTipleri`, `istasyondakiKisiler`, `makineKisiAtamalari`, `ekipler`, `ekipUyeleri` (#105), `istasyonKisiAtamalari` (#324), `uretimAlanlari`, `aktifUretimAlaniMi` (#368), `eskiKoddanKimlikCoz` ve `TesisDuzeyi` (#385), `planAyarlari`, `makineDurumlari`, `calisirMakineler`, `isMerkeziPersonelSayilari`, `istasyonKisileri`, `istasyonYetkinlikleri`, `yetkinMi`, `kisilerinIzinliIsMerkezleri` (#409), `makineYetkinlikleri`, `kisiTezgahSinirlari` (563), `aparatKapasiteleri` ve `AparatKapasitesi` (2112). Tipler sürüm taşımaz.

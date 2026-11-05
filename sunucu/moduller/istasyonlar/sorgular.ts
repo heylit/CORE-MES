@@ -469,6 +469,48 @@ export async function planAyariYaz(
   return satir !== null;
 }
 
+// 2112: aparat plan kapasitesi. Kart ile istasyon çifti tekildir (kısıt); güncelleme ve silme okunan sürümle koşulludur.
+export interface AparatKapasitesiSatiri {
+  id: number; aparatKartiId: number; istasyonId: number | null; adet: number; degistirenKisiId: number; degisme: string; surum: number;
+}
+const APARAT_KAPASITESI = `id, aparat_karti_id AS "aparatKartiId", istasyon_id AS "istasyonId", adet, degistiren_kisi_id AS "degistirenKisiId",
+  ${zamanMetni('degisme')} AS degisme, surum`;
+
+export function aparatKapasiteleri(db: Db): Promise<AparatKapasitesiSatiri[]> {
+  return db.sorgu<AparatKapasitesiSatiri>(
+    `SELECT ${APARAT_KAPASITESI} FROM istasyonlar_aparat_kapasitesi ORDER BY aparat_karti_id, istasyon_id NULLS FIRST`,
+  );
+}
+
+export function aparatKapasitesiEkle(
+  db: Db, g: { aparatKartiId: number; istasyonId: number | null; adet: number }, kisiId: number,
+): Promise<AparatKapasitesiSatiri | null> {
+  return db.tek<AparatKapasitesiSatiri>(
+    `INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, istasyon_id, adet, degistiren_kisi_id) VALUES ($1, $2, $3, $4)
+     RETURNING ${APARAT_KAPASITESI}`,
+    [g.aparatKartiId, g.istasyonId, g.adet, kisiId],
+  );
+}
+
+export function aparatKapasitesiGuncelle(
+  db: Db, id: number, g: { istasyonId: number | null; adet: number; surum: number }, kisiId: number,
+): Promise<AparatKapasitesiSatiri | null> {
+  return db.tek<AparatKapasitesiSatiri>(
+    `UPDATE istasyonlar_aparat_kapasitesi SET istasyon_id = $2, adet = $3, degistiren_kisi_id = $4, degisme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $5
+     RETURNING ${APARAT_KAPASITESI}`,
+    [id, g.istasyonId, g.adet, kisiId, g.surum],
+  );
+}
+
+export async function aparatKapasitesiSil(db: Db, id: number, surum: number): Promise<boolean> {
+  return (await db.sorgu('DELETE FROM istasyonlar_aparat_kapasitesi WHERE id = $1 AND surum = $2 RETURNING id', [id, surum])).length > 0;
+}
+
+export async function aparatKapasitesiVarMi(db: Db, id: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM istasyonlar_aparat_kapasitesi WHERE id = $1', [id])) !== null;
+}
+
 export interface MakineDurumuSatiri {
   makineId: number; durum: MakineDurumuDegeri; aciklama: string | null; degistirenKisiId: number; degisme: string; surum: number;
 }

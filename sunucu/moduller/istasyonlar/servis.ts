@@ -5,7 +5,7 @@ import { UygulamaHatasi, bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
   EkipGuncellemesi, EkipKaydi, SurumluEkip, IsMerkeziGuncellemesi, IsMerkeziKaydi, IstasyonGuncellemesi, IstasyonKaydi, MakineGuncellemesi, MakineKaydi, OperasyonTipiGuncellemesi,
-  IstasyonCokluEkleGovdesi, IstasyonPlanAyari, IstasyonTopluTasiGovdesi, MakineCokluEkleGovdesi, MakineDurumu, MakineDurumuGovdesi, MakineTopluDurumGovdesi, MakineTopluTasiGovdesi, TopluAktiflikGovdesi, OperasyonTipiKaydi, PanoOzetiCevabi, PlanAyariGovdesi, SecimGrubu, SurumluIsMerkezi as IsMerkezi, SurumluOperasyonTipi, SurumluIstasyon, SurumluMakine as Makine,
+  AparatKapasitesi, AparatKapasitesiGovdesi, AparatKapasitesiGuncellemeGovdesi, IstasyonCokluEkleGovdesi, IstasyonPlanAyari, IstasyonTopluTasiGovdesi, MakineCokluEkleGovdesi, MakineDurumu, MakineDurumuGovdesi, MakineTopluDurumGovdesi, MakineTopluTasiGovdesi, TopluAktiflikGovdesi, OperasyonTipiKaydi, PanoOzetiCevabi, PlanAyariGovdesi, SecimGrubu, SurumluIsMerkezi as IsMerkezi, SurumluOperasyonTipi, SurumluIstasyon, SurumluMakine as Makine,
   AyarYetkinligiAyrintisi, AyarYetkinligiBelirleGovdesi, YetkinlikAyrintiGovdesi, YetkinlikAyrintisi, YetkinlikGecmisiCevabi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -474,6 +474,51 @@ export async function planAyariYaz(db: Db, kullanici: Kullanici, istasyonId: num
   const yazildi = await sorgular.planAyariYaz(db, istasyonId, { verimYuzde: g.verimYuzde, operatorIhtiyaci: g.operatorIhtiyaci, surum: g.surum ?? null }, kullanici.id);
   if (!yazildi) throw eskiSurum();
   return planAyarlari(db);
+}
+
+// 2112 (2099-1 a): aparat plan kapasitesi. Aparat kartının varlığı burada denetlenmez: kart malzemelerindir ve bu modül onu
+// okuyamaz (ADR 0006 yönü); bağlayan modül kartı kendi tarafında çözer (UYUM-BORCU).
+const APARAT_KAPASITESI_YOK = 'Aparat kapasitesi bulunamadı.';
+const APARAT_ISTASYONDA_VAR = 'Bu aparatın bu istasyonda (ya da ortakta) kapasitesi zaten var.';
+const APARAT_PASIF_ISTASYON = 'İstasyon var olan, aktif bir kayıt olmalı; pasif istasyona aparat kapasitesi yazılmaz.';
+
+async function aparatIstasyonuDenetle(db: Db, istasyonId: number | null): Promise<void> {
+  if (istasyonId !== null && (await sorgular.aktifIstasyonIdleri(db, [istasyonId])).length === 0) throw dogrulama(APARAT_PASIF_ISTASYON, 'istasyonId');
+}
+
+async function aparatTekligiKorumali<T>(is: () => Promise<T>): Promise<T> {
+  try {
+    return await is();
+  } catch (hata) {
+    if (kisitIhlali(hata)?.hata.kod === 'CAKISMA') throw cakisma(APARAT_ISTASYONDA_VAR);
+    throw hata;
+  }
+}
+
+export const aparatKapasiteleri = async (db: Db): Promise<AparatKapasitesi[]> => degistirenleAdlandir(db, await sorgular.aparatKapasiteleri(db));
+
+export async function aparatKapasitesiEkle(db: Db, kullanici: Kullanici, g: AparatKapasitesiGovdesi): Promise<AparatKapasitesi> {
+  await aparatIstasyonuDenetle(db, g.istasyonId);
+  const satir = varOlan(await aparatTekligiKorumali(() => sorgular.aparatKapasitesiEkle(db, g, kullanici.id)), APARAT_KAPASITESI_YOK);
+  const [kayit] = await degistirenleAdlandir(db, [satir]);
+  return varOlan(kayit ?? null, APARAT_KAPASITESI_YOK);
+}
+
+export async function aparatKapasitesiGuncelle(db: Db, kullanici: Kullanici, id: number, g: AparatKapasitesiGuncellemeGovdesi): Promise<AparatKapasitesi> {
+  if (!(await sorgular.aparatKapasitesiVarMi(db, id))) throw bulunamadi(APARAT_KAPASITESI_YOK);
+  await aparatIstasyonuDenetle(db, g.istasyonId);
+  const satir = await aparatTekligiKorumali(() => surumluGuncelle({
+    guncelle: () => sorgular.aparatKapasitesiGuncelle(db, id, g, kullanici.id),
+    varMi: () => sorgular.aparatKapasitesiVarMi(db, id),
+    bulunamadiIletisi: APARAT_KAPASITESI_YOK,
+  }));
+  const [kayit] = await degistirenleAdlandir(db, [satir]);
+  return varOlan(kayit ?? null, APARAT_KAPASITESI_YOK);
+}
+
+export async function aparatKapasitesiSil(db: Db, id: number, surum: number): Promise<void> {
+  if (await sorgular.aparatKapasitesiSil(db, id, surum)) return;
+  throw (await sorgular.aparatKapasitesiVarMi(db, id)) ? eskiSurum() : bulunamadi(APARAT_KAPASITESI_YOK);
 }
 
 export const makineDurumlari = async (db: Db): Promise<MakineDurumu[]> => degistirenleAdlandir(db, await sorgular.makineDurumlari(db));

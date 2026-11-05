@@ -12,6 +12,13 @@ Okuma uçlarındaki yetki boşluğu (#247) kapandı: üç tanım listesi `sayfa.
 
 ## Bağlamada kapanacak
 
+22. Aparat plan kapasitesi (2112, 2099-1 a): `istasyonlar_aparat_kapasitesi.aparat_karti_id` malzemelerin kart kimliğidir, yabancı anahtarsız düz sayı.
+   Bu modül malzemeleri ithal edemez (malzemeler istasyonları ithal ediyor; ADR 0006 yönü, DOĞRULANDI `npm run harita -- --modul istasyonlar`), bu yüzden kartın
+   varlığı ve demirbaş/kalıp türü yazmada denetlenmez, adı da burada yok. Nasıl uyumlanır: aparatı seçtiren ekran (Reçete ve Rota > Fason ve aparat, A8) kartı
+   malzemeler seçicisinden verir ve adı kendisi ekler; silinen kart için temizlik ya da kablolama çözücüsü bağlamada ayrı işle sorulur. Ekran yok: kayıt bugün yalnız
+   uçla yazılır; okuma tanım listeleri gibi `sayfa.istasyonlar | istasyonlar.yaz` ister, Reçete ve Rota ile plan okuması A8'de açılır. VARSAYIM: istasyonu boş satır
+   istasyonlar arası ortak aparattır (koordinatör B tipi, 05.11).
+
 6. KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): plan ve vardiya kapasiteyi istasyonlar `disari.ts`'inden okuyor (`vardiya/servis.ts` `ekipler, ekipUyeleri, ... makineKisiAtamalari` ithali, `plan/servis.ts` `istasyonKisileri` ithali). Ekip ve yüzdeli kapasite (#105) `105-ekip-kapasite` dalında yeniden yazıldı. Kapasite hesabı (kişi saati x yüzde, ekibin istasyona sayılması, pasif ekibin düşmesi)
    bu modülde yok; plan ve vardiya `disari.ts` (`istasyondakiKisiler`, `makineKisiAtamalari`, `ekipler`, `ekipUyeleri`) ile okur. Akış B (plan) öncesi.
 10. Kapasite kaynağı (IK4) bugün yalnız ekranda zorunlu; sunucu boşu kabul eder (E2z). Bağlamada sunucu da zorunlu kılacak (IK4): Arkon ve çekirdek test kurulumları
