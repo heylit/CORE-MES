@@ -572,19 +572,19 @@ describe('Malzeme kataloğu onay bağlamaları (gerçek PostgreSQL, gerçek giri
     }
   });
 
-  test('MKK-6: onay yetkisi olmayan yalnız kendi açtığı, hiç onaylanmamış taslağı iptal eder', async () => {
+  test('MKK-6 (2114-1 a): onay yetkisi olmayan yalnız kendi açtığı kartı siler; bir kez aktif olmuş kart da silinir', async () => {
     const kendi = yeni();
     await kaydet(yazar, kendi, 'taslak');
     const baskasi = yeni();
     await kaydet(yazar2, baskasi, 'taslak');
     await ret(403, 'YETKI_YOK', yazar, `/malzeme-katalogu-kartlari/${baskasi.kimlik}/iptal`);
     await tamam(yazar, `/malzeme-katalogu-kartlari/${kendi.kimlik}/iptal`);
-    // Bir zamanlar aktif olmuş kart, kendi açtığı olsa da, taslağa dönünce yazar iptal edemez; onaycı edebilir.
+    // Bir zamanlar aktif olmuş, kullanılmamış kartı onu açan yazar da siler.
     const eskiAktif = await aktifKart();
     await kaydet(sorumlu.cerez, eskiAktif, 'onayda');
     await kaydet(onayci2, eskiAktif, 'taslak');
-    await ret(403, 'YETKI_YOK', yazar, `/malzeme-katalogu-kartlari/${eskiAktif.kimlik}/iptal`);
-    await tamam(sorumlu.cerez, `/malzeme-katalogu-kartlari/${eskiAktif.kimlik}/iptal`);
+    await ret(403, 'YETKI_YOK', yazar2, `/malzeme-katalogu-kartlari/${eskiAktif.kimlik}/iptal`);
+    await tamam(yazar, `/malzeme-katalogu-kartlari/${eskiAktif.kimlik}/iptal`);
     await tamam(sorumlu.cerez, `/malzeme-katalogu-kartlari/${baskasi.kimlik}/iptal`);
   });
 

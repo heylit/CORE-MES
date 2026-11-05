@@ -41,8 +41,6 @@ export function KartPenceresi({
   const ayni = yerine ? [] : K.benzerKartlar(x, kayitlar, b).filter((r) => r.seviye === 'ayni');
   const hizmet = x.tur === 'hizmet';
   const kilitli = K.pasifKilitli(x, b);
-  // Sunucu yalnız taslağı iptal eder (MKK-6); kullanılan kart pasife alınır.
-  const silinir = K.onayDurum(x, b) === 'taslak';
   const baslik = `${x.com.kod} ${x.com.ad}`.trim();
   return (
     <Pencere
@@ -60,7 +58,8 @@ export function KartPenceresi({
             </>
           )}
           {!hizmet && yetki.etiketMerkezi && <Dugme simge="printer" onClick={() => { git.etiketMerkezi([kart.no]); }}>Etiket Merkezi'nde bas</Dugme>}
-          {yetki.yaz && yetki.onayla && silinir && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
+          {/* Kartın kullanılıp kullanılmadığını ve kimin silebileceğini sunucu bilir (2114-1 a); ret iletisi bildirimde görünür. */}
+          {yetki.yaz && <Dugme tur="tehlike" simge="trash" onClick={() => silSorYaz(true)}>Sil</Dugme>}
           <Dugme simge="scan" onClick={() => saha(kart.kimlik)}>Saha görünümü</Dugme>
           <GecmisDugmesi kayitlar={[{ tablo: 'malzeme_katalog_karti', anahtar: { kimlik: kart.kimlik } }]} />
           <Dugme className="tc-mk-sona" onClick={kapat}>Kapat</Dugme>
@@ -99,7 +98,7 @@ export function KartPenceresi({
         vazgec={() => silSorYaz(false)}
         onayla={() => { void sil(kart).then((ok) => { silSorYaz(false); if (ok) kapat(); }); }}
       >
-        <p>Kart iptal edilir ve katalogdan kalkar.</p>
+        <p>Kart katalogdan ve seçimlerden kalkar. Başka kayıtlarda kullanılan ya da Logo'ya gönderilmiş kart silinmez; onu pasife alın.</p>
       </OnayPenceresi>
     </Pencere>
   );

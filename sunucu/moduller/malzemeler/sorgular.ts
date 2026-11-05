@@ -198,6 +198,14 @@ export async function katalogAnahtarlariYaz(db: Db, satirlar: readonly { kimlik:
   );
 }
 
+// Silme denemesi: kartın kendi alt kayıtları (demirbaş teknik bilgisi) da silinir; başka modülün bağı yabancı anahtarla reddeder.
+// Çağıran bunu kayıt noktasında koşar ve her durumda geri döner: kart iptal edilir, satır kalır (2114-3 a).
+export async function katalogKartiSilmeyiDene(db: Db, kimlik: string): Promise<void> {
+  await db.sorgu('DELETE FROM malzemeler_demirbas_ozellik WHERE kart_kimlik = $1', [kimlik]);
+  await db.sorgu('DELETE FROM malzemeler_demirbas_teknik WHERE kart_kimlik = $1', [kimlik]);
+  await db.sorgu('DELETE FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]);
+}
+
 export async function katalogKartiIptal(db: Db, kimlik: string, kisiId: number): Promise<void> {
   await db.sorgu(
     `UPDATE malzeme_katalog_karti SET onay_durumu = 'iptal', surum = surum + 1, guncelleyen_kisi_id = $2, guncelleme = now() WHERE kimlik = $1`,
@@ -528,7 +536,7 @@ export function logoKuyrugu(db: Db, sinir: number, hizmetDahil: boolean): Promis
   return db.sorgu<LogoKartSatiri>(
     `SELECT ${LOGO_KART_ALANLARI}
        FROM malzeme_katalog_karti k ${LOGO_KARSILIK_BAGI}
-      WHERE k.logo_gonderim_durumu IN ('bekliyor', 'hata') AND ($2::boolean OR k.tur <> 'hizmet')
+      WHERE k.logo_gonderim_durumu IN ('bekliyor', 'hata') AND k.onay_durumu <> 'iptal' AND ($2::boolean OR k.tur <> 'hizmet')
       ORDER BY COALESCE(k.onaylama, k.acilma), k.no
       LIMIT $1`,
     [sinir, hizmetDahil],

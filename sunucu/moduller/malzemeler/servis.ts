@@ -1,12 +1,13 @@
 
+import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
-import { istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { KATALOG_TURLERI, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -22,7 +23,7 @@ import type { z } from 'zod';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi } from '../kisiler/disari.ts';
 import {
-  katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogIptalEdilirMi,
+  katalogAnahtarCakismalari, katalogAnahtarZorunluMu, katalogOnayEksigi, katalogCakismaAlanlari, katalogKuralAnahtari, katalogKurallariGecerliMi, katalogYeniAnahtar, katalogGecisiDenetle, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIcerigiDegistiMi, katalogSilinirMi,
   katalogIptalYetkiliMi, katalogHicOnaylanmadiMi, katalogKodDegisebilirMi, katalogYeniOnek, katalogFirmaKodu, katalogFirmaKoduGecerliMi, katalogFirmaKoduTurleriGecerliMi, katalogKodOneki, katalogFirmaOneki, katalogOnayAkisiAcikMi, katalogStokKodu,
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
@@ -646,13 +647,26 @@ async function kartOnayiBildir(db: Db, g: {
   }
 }
 
+const KART_KULLANIMDA = 'Kart başka kayıtlarda kullanılıyor; silinemez, pasife alın.';
+// Silme denemesinin başarı işareti: kayıt noktası bununla geri döner, kart satırı kalır.
+const DENEME_BITTI = gecersiz('Silme denemesi geri alındı.');
+
+// Kullanılmamış kart silinir (2114-1 a): katalogdan ve seçimlerden kalkar, satırı iptal olarak kalır (2114-3 a). Kullanımı
+// başka modüllerin yabancı anahtarı bir silme denemesiyle söyler; aparat kapasitesi karta anahtarsız bağlı olduğundan ayrıca
+// sorulur (yön malzemeler -> istasyonlar). Satır kaldığı için anahtarsız bağlar ve kayıtlardaki kart izi kopmaz.
 export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: string): Promise<{ id: string }> {
   const kayitli = await s.katalogKartiKilitle(db, kimlik);
-  if (!kayitli) throw bulunamadi('Malzeme kataloğu kartı bulunamadı.');
-  if (!katalogIptalEdilirMi(kayitli.onayDurumu)) throw gecersiz('Yalnız taslak kart silinir; kullanılan kart pasife alınır.');
-  if (!katalogIptalYetkiliMi({ islemler: kullanici.islemler, kisiId: kullanici.id, acanKisiId: kayitli.acanKisiId, kayit: kayitli.kayit })) {
-    throw yetkiYok('Onay yetkisi olmayan yalnız kendi açtığı, hiç onaylanmamış taslağı siler.');
+  if (!kayitli || kayitli.onayDurumu === 'iptal') throw bulunamadi('Malzeme kataloğu kartı bulunamadı.');
+  if (!katalogIptalYetkiliMi({ islemler: kullanici.islemler, kisiId: kullanici.id, acanKisiId: kayitli.acanKisiId })) {
+    throw yetkiYok('Onay yetkisi olmayan yalnız kendi açtığı kartı siler.');
   }
+  if (!katalogSilinirMi(kayitli.logoKayitNo)) throw gecersiz('Kart Logo\'ya gönderilmiş; Logo\'dan silinmeden silinemez, pasife alın.');
+  if ((await aparatKapasiteleri(db)).some((a) => a.aparatKartiId === kayitli.no)) throw bagimliKayit(KART_KULLANIMDA);
+  const deneme = await kayitNoktasi(db, async () => {
+    await s.katalogKartiSilmeyiDene(db, kimlik);
+    throw DENEME_BITTI;
+  });
+  if (!deneme.tamam && deneme.hata !== DENEME_BITTI) throw deneme.hata.kod === 'BAGIMLI_KAYIT' ? bagimliKayit(KART_KULLANIMDA) : deneme.hata;
   await s.katalogKartiIptal(db, kimlik, kullanici.id);
   return { id: kimlik };
 }

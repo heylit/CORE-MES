@@ -149,12 +149,12 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     }
   });
 
-  test('Sil yalnız taslakta görünür; aktif, onaydaki ve pasif kartta yoktur (sunucu yalnız taslağı iptal eder)', async () => {
+  test('Sil yazana her durumdaki kartta görünür (2114-1 a); kullanımı ve kimin sileceğini sunucu denetler', async () => {
     const satirlar = [
       satir('m1', 1, taslak('m1', 'HM-T')), satir('m2', 2, ornekKayit('m2', 'HM-AK', 'Aktif çubuk')),
       satir('m3', 3, onayda('m3', 'HM-O', 3)), satir('m4', 4, pasif('m4', 'HM-P')),
     ];
-    for (const [kimlik, gorunur] of [['m1', true], ['m2', false], ['m3', false], ['m4', false]] as const) {
+    for (const [kimlik, gorunur] of [['m1', true], ['m2', true], ['m3', true], ['m4', true]] as const) {
       cleanup();
       kur(YONETICI, kartlar(...satirlar));
       yeniEkranAc(`${KOK}?kart=${kimlik}`);
@@ -172,13 +172,13 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     expect(p.queryByRole('button', { name: 'Etiket' })).toBeNull();
   });
 
-  test('onay yetkisi olmayan yazan onay bekleyen kartta ileti görür; Sil görünmez', async () => {
+  test('onay yetkisi olmayan yazan onay bekleyen kartta ileti görür; Sil görünür, sunucu yalnız kendi açtığını siler', async () => {
     kur(YAZAN, kartlar(satir('m1', 1, onayda('m1', 'HM-A', 3))));
     yeniEkranAc(KOK);
     const p = within(await kartiAc('HM-A'));
     expect(p.getByText('Onay ana veri sorumlusu ya da yöneticidedir.')).toBeTruthy();
     expect(p.queryByRole('button', { name: 'Onayla' })).toBeNull();
-    expect(p.queryByRole('button', { name: 'Sil' })).toBeNull();
+    expect(p.getByRole('button', { name: 'Sil' })).toBeTruthy();
   });
 
   test('MLZ-5 a: onaya gönderen yazan kartı onaydan geri çeker; başkasının kartında ve onaylanmış kartta düğme yok', async () => {
@@ -311,6 +311,20 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     const soru = await screen.findByRole('dialog', { name: /silinsin mi/ });
     fireEvent.click(within(soru).getByRole('button', { name: 'Sil' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-katalogu-kartlari/m1/iptal')).toBe(true));
+  });
+
+  test('kullanılan kartın silme reddi bildirimde görünür; pencere açık kalır', async () => {
+    kur(YONETICI, {
+      ...kartlar(satir('m1', 1, ornekKayit('m1', 'HM-AK', 'Aktif çubuk'))),
+      'POST /malzeme-katalogu-kartlari/m1/iptal': () => json(409, { kod: 'BAGIMLI_KAYIT', mesaj: 'Kart başka kayıtlarda kullanılıyor; silinemez, pasife alın.' }),
+    });
+    yeniEkranAc(KOK);
+    const p = within(await kartiAc('HM-AK'));
+    fireEvent.click(p.getByRole('button', { name: 'Sil' }));
+    const soru = await screen.findByRole('dialog', { name: /silinsin mi/ });
+    fireEvent.click(within(soru).getByRole('button', { name: 'Sil' }));
+    expect(await screen.findByText('Kart başka kayıtlarda kullanılıyor; silinemez, pasife alın.')).toBeTruthy();
+    expect(p.getByText('Aktif çubuk', { exact: false })).toBeTruthy();
   });
 
   test('sunucunun ret iletisi olduğu gibi gösterilir', async () => {
