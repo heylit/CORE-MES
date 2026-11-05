@@ -620,7 +620,7 @@ describe('fabrika haritası', () => {
     expect(dugme.getAttribute('title')).toContain('3B model: Taslak model (taslak)');
   });
 
-  it('düzenleyici: Ekle listesine yalnız eşleşmiş makine ve "Örnek" etiketli örnek makine gelir; eşleşmeyenler sayılır', async () => {
+  it('düzenleyici: Ekle listesine haritada olmayan her aktif makine gelir, Çizim Merkezi eşleşmesi şart değil; örnek "Örnek" etiketli (2126-1 a)', async () => {
     const ornek = { id: 20, kod: 'ORN-TORNA-1', ad: 'Örnek Torna 1', isMerkeziId: 1, tip: 'talasli' as const, aktif: true, surum: 1, sorumluKisiId: null, kapasiteKaynagi: null, uretimAlani: true, sorumluAd: null };
     sunucuKur(YAZAN, { istasyonlar: { istasyonlar: [...ISTASYONLAR.istasyonlar, ornek] } });
     goster(<AtolyeHaritasi />);
@@ -630,8 +630,9 @@ describe('fabrika haritası', () => {
     const grup = within(duzen).getByRole('region', { name: 'Eklenecek makineler' });
     const dugme = await within(grup).findByRole('button', { name: /ORN-TORNA-1/ });
     expect(within(dugme).getByText('Örnek')).toBeTruthy();
-    expect(within(duzen).queryByRole('button', { name: /MON-01/ })).toBeNull();
-    expect(within(grup).getByRole('note').textContent).toContain('Eşleşmemiş 1 makine eklenemez');
+    const modelsiz = within(grup).getByRole('button', { name: /MON-01/ });
+    expect(modelsiz.getAttribute('title')).toContain('3B model yok, kutu olarak çizilir');
+    expect(within(grup).queryByRole('note')).toBeNull();
   });
 
   it('düzenleyici: istasyonun Çizim Merkezi modeli seçilince hemen bağlanır; panelin gördüğü model beklenen olarak gider', async () => {

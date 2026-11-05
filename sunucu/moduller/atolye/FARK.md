@@ -416,6 +416,9 @@ npm ls occt-import-js three pdfjs-dist → occt-import-js@0.0.23, three@0.186.1,
   örnek istasyonlar (`ORN-` kodu, "Örnek" etiketiyle, eşleşmesiz de) durur; ayrı "Makineler" grubu kalktı, eşleşmeyenlerin sayısı ve
   Çizim Merkezi'nde "CNC makineleri" bölümüne yönlendiren not yazar. Daha önce yerleşmiş eşleşmesiz istasyon haritada kalır. Kural istemcidedir
   (`kurallar.ts` `eklenebilirIstasyonlar`); sunucu kaydı eşleşme denetlemez. Göç ve yeni işlem yok.
+- Kart 2126 (2126-1 a, 05.11.2026): yukarıdaki 15.10 kuralı kalktı. Makine-istasyon bağının tek kaynağı İstasyonlar'dır; "Eklenecek makineler"
+  haritada olmayan her aktif istasyonu gösterir, 3B modeli (yayında ya da taslak) olan önce gelir. Modelsiz istasyon kutu olarak çizilir
+  (düğme ipucu bunu söyler); "eşleşmemiş makine eklenemez" notu kalktı. Sunucu, uç, yetki ve göç değişmedi.
 
 ## Tek fabrika zemini dışarıya (kart #114; Soru 106-109, Soru 109 a prototip değişikliği onaylı)
 - İstemci `disari.ts`: `FabrikaZemini` (salt okunur): bütün bölümler tek zeminde, fabrikadaki yer, dönüş ve gerçek ölçüyle; raf, alan (stok kutuları,
