@@ -191,6 +191,15 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
       surum: a.revizyon.surum, aciklama: 'Deneme rota',
       adimlar: [adim(10, 'TRN', 'Tornalama', S.mak[0] ?? 0, true), adim(20, 'FRZ', 'Frezeleme', S.mak[1] ?? 0, false)],
     }));
+    // 2098 H1: rota talimatı aşamalı adımlarla yazılır; emir açılırken iş emrinin kontrol listesine aşamasıyla geçer (test 6, 6b).
+    const t = tamam(await yaz<{ surumler: { adimlar: { asama: string }[] }[] }>('planlama', `/rota/urunler/${S.mm}/talimat-adimli-yaz`, {
+      opNo: 10, okunanSurum: null, adimlar: [
+        { baslik: 'Malzemeyi tezgaha getir', metin: null, kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'on_hazirlik' },
+        { baslik: 'Sifir noktasini al', metin: null, kontrol: { tur: 'olcum', ad: 'Sapma', alt: 0, ust: 0.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'hazirlik' },
+        { baslik: 'Capagi al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' },
+      ],
+    }));
+    assert.deepEqual(t.surumler[0]?.adimlar.map((x) => x.asama), ['on_hazirlik', 'hazirlik', 'uretim']);
     const g = tamam(await yaz<{ durum: string; surum: number }>('planlama', `/rota/revizyonlar/${S.rev}/onaya-gonder`, { surum: k.surum }));
     assert.equal(g.durum, 'onay_bekliyor');
     yasak(await yaz('planlama', `/rota/revizyonlar/${S.rev}/onayla`, { surum: g.surum, yururlugeAl: true }));
@@ -250,6 +259,24 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     assert.deepEqual(ie.map((x) => [x.opNo, x.durum, x.kaynak?.tur]), [[10, 'bekliyor', 'makine'], [20, 'bekliyor', 'makine']]);
     S.ie = ie.map((x) => x.id);
     S.emirNo = em.emirNo;
+    const u = tamam(await oku<{ adimlar: { ad: string; asama: string }[] }>('planlama', `/uretim-emirleri/${S.emir}`));
+    assert.deepEqual(u.adimlar.map((x) => [x.ad, x.asama]), [['Malzemeyi tezgaha getir', 'on_hazirlik'], ['Sifir noktasini al', 'hazirlik'], ['Capagi al', 'uretim']]);
+  });
+
+  test('6b hazırlık (2098 H1): operatör planlı emirde ön hazırlığı işaretler ve not düşer; üretim hazırlığı ayarsız, üretim adımı başlamadan işaretlenmez', async () => {
+    type Adim = { id: number; asama: string; tamam: boolean; buNot: { metin: string } | null };
+    const adimlar = tamam(await oku<{ adimlar: Adim[] }>('operator', `/uretim-emirleri/${S.emir}`)).adimlar;
+    const [on, hz, ur] = adimlar.map((a) => a.id);
+    const isaretle = (id: number | undefined) => yaz<{ adimlar: Adim[] } & Hata>('operator', `/uretim-emirleri/${S.emir}/adimlar/${id}/tamamla`, { tamam: true });
+    const c = tamam(await isaretle(on));
+    assert.deepEqual(c.adimlar.map((a) => [a.asama, a.tamam]), [['on_hazirlik', true], ['hazirlik', false], ['uretim', false]]);
+    const h = await isaretle(hz);
+    assert.equal(h.durum, 409, JSON.stringify(h.govde));
+    assert.match(h.govde.mesaj ?? '', /ayar başlayınca/);
+    assert.match((await isaretle(ur)).govde.mesaj ?? '', /başlamış emirde/);
+    const n = tamam(await yaz<{ adimlar: Adim[] }>('operator', `/uretim-emirleri/${S.emir}/adimlar/${on}/not`, { metin: 'Deneme notu' }));
+    assert.equal(n.adimlar[0]?.buNot?.metin, 'Deneme notu');
+    assert.equal(tamam(await oku<AdimliEmir>('planlama', `/adimli-emirler/${S.emir}`)).emir.durum, 'planli', 'ön hazırlık emri başlatmaz');
   });
 
   test('7 satın alma ve stok: dört göz onay, mal kabulde lot ve tedarikçi partisi, emre sarf', async () => {
