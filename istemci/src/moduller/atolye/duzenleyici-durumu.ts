@@ -4,7 +4,8 @@ import type {
 import type { Istasyon, IstasyonTipi, Makine } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { bolumIcinde, bolumeCevir, fabrikaKutusu, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { BolumKonumu, Kutu } from './fabrika.ts';
-import { GECIS_ENAZ, GECIS_ENCOK, GECIS_GENISLIGI, GECIS_TURU_ADI, gecisOrtasi, kenaraOtur } from './gecis.ts';
+import { GECIS_ENAZ, GECIS_ENCOK, GECIS_GENISLIGI, GECIS_TURU_ADI, gecisAraligi, gecisOrtasi, kenarBoyu, kenaraOtur, ortakDuvarlar, sinirParcalari } from './gecis.ts';
+import type { GecisliBolum, OrtakDuvar } from './gecis.ts';
 import { sayi } from './kurallar.ts';
 
 // Düzenleyicinin taslağı: kayıtlı yerleşimin düzenlenebilir kopyası. Her öğenin taslakta yerel bir anahtarı vardır;
@@ -455,6 +456,79 @@ export function konumu(t: Taslak, anahtar: string): Konum | null {
 // Ortası ve dönüşüyle yerleşen öğelerin listesi (istasyon, makine, raf, alan).
 function kutuListesi(t: Taslak, tur: OgeTuru): readonly { anahtar: string; x: number; z: number; donus: number }[] {
   return tur === 'istasyon' ? t.istasyonlar : tur === 'makine' ? t.makineler : tur === 'raf' ? t.raflar : t.alanlar;
+}
+
+// ---------- bölümleri bağlama (2122-4 a) ----------
+
+export function gecisliBolumler(t: Taslak): GecisliBolum[] {
+  return (t.bolumler ?? []).map((b) => ({
+    salonId: b.salonId, konum: { x: b.x, z: b.z, donus: b.donus }, g: b.genislik, d: b.derinlik,
+    gecisler: t.gecisler.filter((g) => g.salonId === b.salonId),
+  }));
+}
+
+export const bolumunOrtakDuvarlari = (t: Taslak, salonId: number): OrtakDuvar[] => ortakDuvarlar(gecisliBolumler(t), salonId);
+
+export type DuvarAcma = 'kapi' | 'acik' | 'sinir';
+
+// Ortak duvarda açıklık: kapı ve açık geçiş duvarın ortasına konur (sonra sürüklenir); sınır kaldırma duvarı baştan sona
+// açık geçişlerle açar, bu bölümün o kısımdaki eski geçişlerini kaldırır. Sonuçtaki anahtar seçilecek geçiştir.
+export function ortakDuvarAc(t: Taslak, salonId: number, d: OrtakDuvar, ne: DuvarAcma): { taslak: Taslak; anahtar: string | null } {
+  const b = t.bolumler?.find((o) => o.salonId === salonId);
+  if (!b) return { taslak: t, anahtar: null };
+  const boy = kenarBoyu(d.kenar, b.genislik, b.derinlik);
+  const yeni = (tur: GecisTuru, orta: number, genislik: number): TaslakGecis =>
+    ({ anahtar: yeniAnahtar('gecis'), salonId, tur, kenar: d.kenar, ofset: r2(orta - boy / 2) + 0, genislik: r2(genislik) });
+  if (ne === 'sinir') {
+    const parcalar = sinirParcalari(d);
+    if (parcalar.length === 0) return { taslak: t, anahtar: null };
+    const kalan = t.gecisler.filter((g) => {
+      if (g.salonId !== salonId || g.kenar !== d.kenar) return true;
+      const [a0, a1] = gecisAraligi(g, b.genislik, b.derinlik);
+      return Math.min(a1, d.son) - Math.max(a0, d.bas) <= 0.01;
+    });
+    const eklenen = parcalar.map((p) => yeni('acik', p.orta, p.genislik));
+    return { taslak: { ...t, gecisler: [...kalan, ...eklenen] }, anahtar: eklenen[0]?.anahtar ?? null };
+  }
+  const tur: GecisTuru = ne === 'kapi' ? 'kapi' : 'acik';
+  const genislik = Math.min(GECIS_GENISLIGI[tur], d.son - d.bas - 0.02);
+  if (genislik < GECIS_ENAZ) return { taslak: t, anahtar: null };
+  const g = yeni(tur, (d.bas + d.son) / 2, genislik);
+  return { taslak: { ...t, gecisler: [...t.gecisler, g] }, anahtar: g.anahtar };
+}
+
+// Bölüm sürüklenirken kenarı komşu bölümün kenarına yapışır (aynı doğruya ya da uç uca), böylece duvarlar üst üste gelir
+// ve ortak duvar oluşur. Yalnız eksene dik dönük bölümlerde (dönük kenar kutu kenarı değildir). Tolerans metredir.
+export function bolumYapistir(t: Taslak, anahtar: string, x: number, z: number, tolerans: number): { x: number; z: number; kilavuzX: number | null; kilavuzZ: number | null } {
+  const bos = { x, z, kilavuzX: null, kilavuzZ: null };
+  const b = t.bolumler?.find((o) => o.anahtar === anahtar);
+  const dik = (donus: number) => Math.abs(donusIndir(donus) % 90) < 1e-6;
+  if (!b || !dik(b.donus)) return bos;
+  const k = fabrikaKutusu([{ konum: { x, z, donus: b.donus }, g: b.genislik, d: b.derinlik }]);
+  if (!k) return bos;
+  let enX: { fark: number; cizgi: number } | null = null;
+  let enZ: { fark: number; cizgi: number } | null = null;
+  for (const o of t.bolumler ?? []) {
+    if (o.anahtar === anahtar || !dik(o.donus)) continue;
+    const ok = fabrikaKutusu([{ konum: o, g: o.genislik, d: o.derinlik }]);
+    if (!ok) continue;
+    // Öbür eksende değmeyen bölüme yapışılmaz (uzaktaki bölümün hizası çekmesin).
+    const zYakin = Math.min(k.z1, ok.z1) - Math.max(k.z0, ok.z0) > -tolerans;
+    const xYakin = Math.min(k.x1, ok.x1) - Math.max(k.x0, ok.x0) > -tolerans;
+    if (zYakin) {
+      for (const [benim, onun] of [[k.x0, ok.x1], [k.x1, ok.x0], [k.x0, ok.x0], [k.x1, ok.x1]] as const) {
+        const fark = onun - benim;
+        if (Math.abs(fark) <= tolerans && (!enX || Math.abs(fark) < Math.abs(enX.fark))) enX = { fark, cizgi: onun };
+      }
+    }
+    if (xYakin) {
+      for (const [benim, onun] of [[k.z0, ok.z1], [k.z1, ok.z0], [k.z0, ok.z0], [k.z1, ok.z1]] as const) {
+        const fark = onun - benim;
+        if (Math.abs(fark) <= tolerans && (!enZ || Math.abs(fark) < Math.abs(enZ.fark))) enZ = { fark, cizgi: onun };
+      }
+    }
+  }
+  return { x: r2(x + (enX?.fark ?? 0)), z: r2(z + (enZ?.fark ?? 0)), kilavuzX: enX?.cizgi ?? null, kilavuzZ: enZ?.cizgi ?? null };
 }
 
 export function tasi(t: Taslak, anahtar: string, x: number, z: number): Taslak {

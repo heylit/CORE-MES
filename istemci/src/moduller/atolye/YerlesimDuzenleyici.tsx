@@ -9,7 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, gecmisiDegistir, geriAl,
-  bolumunu, govdeyeCevir, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
+  bolumYapistir, bolumunu, govdeyeCevir, ortakDuvarAc, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import { bolumeCevir, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { EklenecekTur, Gecmis, Taslak } from './duzenleyici-durumu.ts';
@@ -560,6 +560,12 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
           let x = izgarayaOtur(hx, izgara);
           let z = izgarayaOtur(hz, izgara);
           // Krokiye yapışma: öğenin kenarı yakındaki paralel çizgiye kayar (ızgaranın önüne geçer).
+          // Bölüm komşu bölümün kenarına yapışır (2122-4 a): duvarlar üst üste gelir, ortak duvar oluşur.
+          if (s.anahtar.startsWith('bolum:')) {
+            const y = bolumYapistir(temel, s.anahtar, x, z, Math.max(0.3, YAPISMA_PIKSEL * st.pm));
+            kilavuzYaz(y.kilavuzX !== null || y.kilavuzZ !== null ? { x: y.kilavuzX, z: y.kilavuzZ } : null);
+            return gecmisiDegistir(g, tasi(temel, s.anahtar, y.x, y.z));
+          }
           const kutu_ = st.yapis && st.veri ? eksenKutusu(tasi(temel, s.anahtar, hx, hz), s.anahtar) : null;
           if (kutu_ && st.veri) {
             const y = kutuyaYapis(st.veri, kutu_, YAPISMA_PIKSEL * st.pm);
@@ -998,6 +1004,13 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
               const m = merkez(); yaz({ ...t, salon: { ...t.salon, giris: m } }); seciliYaz('giris');
             }}
             sec={seciliYaz}
+            duvarAc={(salonId, d, ne) => {
+              const r = ortakDuvarAc(t, salonId, d, ne);
+              if (!r.anahtar) { bildir('bilgi', 'Ortak duvar bu açıklık için çok kısa.'); return; }
+              yaz(r.taslak);
+              seciliYaz(r.anahtar);
+              if (ne === 'sinir') bildir('tamam', 'Sınır açık geçişlerle kaldırıldı; "Kaydet" ile saklanır.');
+            }}
           />
           )}
         </aside>

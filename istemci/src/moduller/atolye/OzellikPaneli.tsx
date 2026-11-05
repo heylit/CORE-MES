@@ -1,8 +1,9 @@
 import { Dugme, Girdi, IsaretKutusu, Secim } from '../../ortak/arayuz/index.ts';
 import type { AlanTuru, GecisTuru, KapiKenari, MerkezModeli, Model, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
-import type { Taslak, TaslakBolum } from './duzenleyici-durumu.ts';
-import { ogeTuru } from './duzenleyici-durumu.ts';
-import { GECIS_TURU_ADI } from './gecis.ts';
+import type { DuvarAcma, Taslak, TaslakBolum } from './duzenleyici-durumu.ts';
+import { bolumunOrtakDuvarlari, gecisliBolumler, ogeTuru } from './duzenleyici-durumu.ts';
+import { GECIS_TURU_ADI, acikliklar } from './gecis.ts';
+import type { OrtakDuvar } from './gecis.ts';
 import { MerkezModeliSecimi } from './MerkezModeliSecimi.tsx';
 import { ALAN_TURU_ADI, ISTASYON_TIPI_ADI, RAF_TURU_ADI } from './kurallar.ts';
 
@@ -17,6 +18,8 @@ interface Ozellikler {
   // Fabrikada bölümün girişi (bölümün ortasına); tek bölümde salonun.
   girisKoy: (bolum?: TaslakBolum) => void;
   sec: (anahtar: string | null) => void;
+  // Fabrika planında seçili bölümün komşuyla ortak duvarında kapı, geçiş açar ya da sınırı kaldırır (2122-4 a).
+  duvarAc?: (salonId: number, d: OrtakDuvar, ne: DuvarAcma) => void;
   // Atanabilir (yüklemesi tamam) modeller; yüklenmediyse boş.
   modeller: readonly Model[];
   kutuphaneAc: () => void;
@@ -108,7 +111,7 @@ function NetOlculer({ raf, degistir }: { raf: Taslak['raflar'][number]; degistir
   );
 }
 
-export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kaldir, girisKoy, sec, modeller, kutuphaneAc, merkezModelleri, merkezModeliDegisti }: Ozellikler) {
+export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kaldir, girisKoy, sec, duvarAc, modeller, kutuphaneAc, merkezModelleri, merkezModeliDegisti }: Ozellikler) {
   if (secili === null && t.bolumler) {
     return (
       <div className="tc-atolye-ozellik">
@@ -141,6 +144,7 @@ export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kald
           <Sayi etiket="Dönüş (°)" deger={bolum.donus} degistir={(donus) => degistir(secili, { donus })} adim={90} />
         </div>
         {bolum.giris === null && <Dugme simge="flag" onClick={() => girisKoy(bolum)}>Giriş noktası koy</Dugme>}
+        <KomsuDuvarlar t={t} bolum={bolum} duvarAc={duvarAc} />
       </div>
     );
   }
@@ -203,6 +207,7 @@ export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kald
           <Sayi etiket="Duvar ortasından kayma (m)" deger={gecis.ofset} degistir={(ofset) => degistir(secili, { ofset })} adim={0.5} />
           <Sayi etiket="Genişlik (m)" deger={gecis.genislik} degistir={(genislik) => degistir(secili, { genislik })} adim={0.1} />
         </div>
+        {bolumu && <p className="tc-atolye-ipucu" role="note">{gecisBaglantisi(t, gecis.anahtar, gecis.salonId)}</p>}
         <p className="tc-atolye-ipucu">Geçişi duvar boyunca sürükleyin; en yakın duvara oturur. İki bölümün ortak duvarındaki geçişten bölümden bölüme yürünür.</p>
         {sil('Geçişi kaldır')}
       </div>
@@ -358,4 +363,44 @@ export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kald
     );
   }
   return null;
+}
+
+const KENAR_ADI: Record<KapiKenari, string> = { on: 'ön', arka: 'arka', sol: 'sol', sag: 'sağ' };
+const metre = (n: number): string => `${n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} m`;
+
+// Seçili geçiş komşu bölüme mi açılıyor, dışarı mı (yürüyüş ve rota buradan geçer).
+function gecisBaglantisi(t: Taslak, anahtar: string, salonId: number | null): string {
+  if (salonId === null) return '';
+  const bolumler = gecisliBolumler(t);
+  // acikliklar bölümün kendi geçişlerini taslaktaki sırayla verir (gecisliBolumler aynı sırayla süzer).
+  const sira = t.gecisler.filter((g) => g.salonId === salonId).findIndex((g) => g.anahtar === anahtar);
+  const a = (acikliklar(bolumler).get(salonId) ?? []).filter((o) => o.kendi)[sira];
+  if (!a) return '';
+  if (a.komsu === null) return 'Dışarı açılır: bu duvarda komşu bölüm yok.';
+  const k = t.bolumler?.find((o) => o.salonId === a.komsu);
+  return `${k ? `${k.kod} · ${k.ad}` : 'Komşu bölüm'} ile bağlar.`;
+}
+
+// Komşuyla ortak duvarlar: kapı ya da açık geçiş ortaya konur; "Sınırı kaldır" duvarı baştan sona açar.
+function KomsuDuvarlar({ t, bolum, duvarAc }: { t: Taslak; bolum: TaslakBolum; duvarAc?: (salonId: number, d: OrtakDuvar, ne: DuvarAcma) => void }) {
+  if (!duvarAc) return null;
+  const duvarlar = bolumunOrtakDuvarlari(t, bolum.salonId);
+  return (
+    <section className="tc-atolye-palet-grup" aria-label="Komşu bölümler">
+      <h4>Komşu bölümler</h4>
+      {duvarlar.length === 0 ? (
+        <p className="tc-atolye-ipucu">Duvarı başka bölüme değen kenar yok. Bölümü başlığından sürükleyin; komşu bölümün kenarına yapışır.</p>
+      ) : duvarlar.map((d) => {
+        const k = t.bolumler?.find((o) => o.salonId === d.komsu);
+        return (
+          <div key={`${d.komsu}-${d.kenar}-${d.bas}`} className="tc-atolye-kart-eylem" role="group" aria-label={`${k?.kod ?? ''} ile ${KENAR_ADI[d.kenar]} duvar`}>
+            <p className="tc-atolye-ipucu"><b>{k ? `${k.kod} · ${k.ad}` : 'Komşu'}</b> · {KENAR_ADI[d.kenar]} duvar · {metre(d.son - d.bas)}</p>
+            <Dugme simge="door" onClick={() => duvarAc(bolum.salonId, d, 'kapi')}>Kapı aç</Dugme>
+            <Dugme simge="route" onClick={() => duvarAc(bolum.salonId, d, 'acik')}>Geçiş aç</Dugme>
+            <Dugme simge="expand" onClick={() => duvarAc(bolum.salonId, d, 'sinir')}>Sınırı kaldır</Dugme>
+          </div>
+        );
+      })}
+    </section>
+  );
 }

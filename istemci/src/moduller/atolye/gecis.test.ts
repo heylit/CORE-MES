@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
-import { fabrikaGovdesi, fabrikaTaslagiKur, govdeyeCevir, kaldir, konumu, ogeCiz, ogeEkle, taslakKur, tasi } from './duzenleyici-durumu.ts';
-import { DIS, acikliklar, bolumYolu, disYolu, distaSerbestMi, kapiKusagindaMi, kapilar, kenaraOtur } from './gecis.ts';
+import { bolumYapistir, bolumunOrtakDuvarlari, fabrikaGovdesi, fabrikaTaslagiKur, gecisliBolumler, govdeyeCevir, kaldir, konumu, ogeCiz, ogeEkle, ortakDuvarAc, taslakKur, tasi } from './duzenleyici-durumu.ts';
+import { DIS, GECIS_ENCOK, acikliklar, bolumYolu, disYolu, distaSerbestMi, kapiKusagindaMi, kapilar, kenaraOtur, sinirParcalari } from './gecis.ts';
 import type { GecisliBolum } from './gecis.ts';
 
 const SIFIR = { x: 0, z: 0, donus: 0 };
@@ -142,5 +142,71 @@ describe('düzenleyicide geçiş', () => {
       [{ tur: 'acik', kenar: 'on', ofset: -5, genislik: 3 }],
     ]);
     expect(h.eslesme.get('salon:2/gecis:0')).toBe(e.anahtar);
+  });
+});
+
+describe('bölümleri bağlama (2122-4 a)', () => {
+  // B1 (20x10) 0,0'da; B2 sağında, sol duvarı B1'in sağ duvarıyla 0..10 boyunca çakışıyor; B3 uzakta.
+  const kur = () => fabrikaTaslagiKur([
+    yerlesim(1, { x: '0.00', z: '0.00', donus: '0.00' }),
+    yerlesim(2, { x: '20.00', z: '0.00', donus: '0.00' }),
+    yerlesim(3, { x: '0.00', z: '40.00', donus: '0.00' }),
+  ]);
+
+  it('ortak duvar: komşunun kenarıyla aynı doğrudaki kısım, kendi kenarı boyunca; değmeyen bölüm komşu değildir', () => {
+    const t = kur();
+    expect(bolumunOrtakDuvarlari(t, 1)).toEqual([{ komsu: 2, kenar: 'sag', bas: 0, son: 10 }]);
+    expect(bolumunOrtakDuvarlari(t, 2)).toEqual([{ komsu: 1, kenar: 'sol', bas: 0, son: 10 }]);
+    expect(bolumunOrtakDuvarlari(t, 3)).toEqual([]);
+    // Kısmi çakışma: B2 4 m aşağıda, ortak kısım B1'in sağ duvarında 4..10.
+    const k = tasi(t, 'bolum:2', 20, 4);
+    expect(bolumunOrtakDuvarlari(k, 1)).toEqual([{ komsu: 2, kenar: 'sag', bas: 4, son: 10 }]);
+  });
+
+  it('kapı ve geçiş ortak duvarın ortasına konur ve komşuyu bağlar', () => {
+    const t = kur();
+    const [d] = bolumunOrtakDuvarlari(t, 1);
+    if (!d) throw new Error('ortak duvar yok');
+    const k = ortakDuvarAc(t, 1, d, 'kapi');
+    const g = k.taslak.gecisler.find((o) => o.anahtar === k.anahtar);
+    expect(g).toMatchObject({ salonId: 1, tur: 'kapi', kenar: 'sag', ofset: 0, genislik: 1 });
+    const ac = acikliklar(gecisliBolumler(k.taslak)).get(1)?.find((a) => a.kendi);
+    expect(ac?.komsu).toBe(2);
+    const a = ortakDuvarAc(t, 1, d, 'acik');
+    expect(a.taslak.gecisler.find((o) => o.anahtar === a.anahtar)).toMatchObject({ tur: 'acik', genislik: 3 });
+  });
+
+  it('sınır kaldırma: duvar baştan sona en çok 20 m açık geçişlerle açılır, eski geçiş kalkar; kayıt kuralı (taşma, üst üste) geçer', () => {
+    expect(sinirParcalari({ bas: 0, son: 10 })).toEqual([{ orta: 5, genislik: 9.96 }]);
+    const uzun = sinirParcalari({ bas: 0, son: 45 });
+    expect(uzun).toHaveLength(3);
+    for (const p of uzun) expect(p.genislik).toBeLessThanOrEqual(GECIS_ENCOK);
+    for (let i = 1; i < uzun.length; i++) {
+      const o = uzun[i - 1]; const p = uzun[i];
+      if (!o || !p) continue;
+      // Uç uca: arada duvar kalmaz.
+      expect(Math.abs((o.orta + o.genislik / 2) - (p.orta - p.genislik / 2))).toBeLessThan(1e-9);
+    }
+    expect(sinirParcalari({ bas: 0, son: 0.5 })).toEqual([]);
+
+    let t = kur();
+    const [d] = bolumunOrtakDuvarlari(t, 1);
+    if (!d) throw new Error('ortak duvar yok');
+    t = ortakDuvarAc(t, 1, d, 'kapi').taslak;
+    const s = ortakDuvarAc(t, 1, d, 'sinir');
+    const sag = s.taslak.gecisler.filter((g) => g.salonId === 1 && g.kenar === 'sag');
+    expect(sag.map((g) => [g.tur, g.ofset, g.genislik])).toEqual([['acik', 0, 9.96]]);
+    // Sunucu kuralı (ATL-34): kenardan taşmaz.
+    for (const g of sag) expect(Math.abs(g.ofset) + g.genislik / 2).toBeLessThanOrEqual(10 / 2 + 1e-9);
+  });
+
+  it('bölüm sürüklenirken komşu kenara yapışır; uzaktaki bölüme yapışmaz', () => {
+    const t = kur();
+    // B2'yi 20,3 m'ye sürükleyen: sol kenarı B1'in sağ kenarına (20) çekilir.
+    expect(bolumYapistir(t, 'bolum:2', 20.3, 0, 0.5)).toEqual({ x: 20, z: 0, kilavuzX: 20, kilavuzZ: 0 });
+    // Tolerans dışında serbest.
+    expect(bolumYapistir(t, 'bolum:2', 21, 0.8, 0.5)).toMatchObject({ x: 21, kilavuzX: null });
+    // B3 (z 40-50) B2'nin z aralığına değmez: B2 x'i B3'ün kenarına çekilmez.
+    expect(bolumYapistir(t, 'bolum:2', 0.3, 20.2, 0.5).kilavuzX).toBe(null);
   });
 });
