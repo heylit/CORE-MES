@@ -16,3 +16,4 @@ export type { PatlatmaDugumu } from './servis.ts';
 export {
   adimMiktarlari, agaciAc, akisiCikar, akisliBaslayabilirMi, akisliIslenebilirAdet, etkinSure, girdiOlabilirMi, isEmriKaynagi, kaynaktakiSure, teorikSure, yeniOpNo,
 } from './kurallar.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

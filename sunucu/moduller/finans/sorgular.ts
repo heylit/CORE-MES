@@ -4,6 +4,7 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { Dilim as ListeDilimi } from '#cekirdek/liste.ts';
 import { MALIYET_TABLOLARI } from './kurallar.ts';
 import type { MaliyetTuru } from './kurallar.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Örnek veri hesap adları ORNEK ile başlar; yüklü mü denetimi örnek kasaya bakar.
 export async function ornekHesapVarMi(db: Db): Promise<boolean> {
@@ -640,3 +641,14 @@ export const beyanlar = (db: Db, baslangic: string, bitis: string) =>
 export const beyanYaz = (db: Db, sonGun: string, kod: string, verildi: boolean, kisi: number) => verildi
   ? db.sorgu(`INSERT INTO finans_vergi_beyani (son_gun, kod, isaretleyen_id) VALUES ($1, $2, $3) ON CONFLICT (son_gun, kod) DO NOTHING`, [sonGun, kod, kisi])
   : db.sorgu('DELETE FROM finans_vergi_beyani WHERE son_gun = $1 AND kod = $2', [sonGun, kod]);
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Malzeme maliyeti' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN finans_malzeme_maliyet t ON t.malzeme_no = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
+  );
+}

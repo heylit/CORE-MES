@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
 export type FisTuru = LogoFisTuru;
@@ -507,4 +508,23 @@ export async function tmiKodHaritasi(db: Db, logoKodlari: readonly string[]): Pr
 
 export async function eslemeYaz(db: Db, e: { stokKodu: string; logoKodu: string; logoKayitNo: number }): Promise<void> {
   await db.sorgu('INSERT INTO logo_malzeme_eslemesi (stok_kodu, logo_kodu, logo_kayit_no) VALUES ($1, $2, $3)', [e.stokKodu, e.logoKodu, e.logoKayitNo]);
+}
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Logo mal kabul satırı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.logical_ref)::text AS ornek
+       FROM k JOIN logo_mal_kabul_satiri t ON t.malzeme_kodu = k.kod GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Logo kod eşlemesi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.logo_kodu) AS ornek
+       FROM k JOIN logo_malzeme_eslemesi t ON t.stok_kodu = k.kod GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Logo mal kabul ham kaydı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.logical_ref)::text AS ornek
+       FROM k JOIN logo_mal_kabul_satiri t ON jsonb_path_exists(t.ham, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Logo faturası ham kaydı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN logo_fatura t ON jsonb_path_exists(t.ham, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
+  );
 }

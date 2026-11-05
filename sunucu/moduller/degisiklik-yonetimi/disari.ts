@@ -11,3 +11,4 @@ export async function yururluktekiParcaRevizyonlari(db: Db, malzemeIdleri: reado
   }
   return sonuc;
 }
+export { malzemeKartiIzleri } from './sorgular.ts';

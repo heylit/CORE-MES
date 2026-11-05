@@ -35,3 +35,4 @@ export {
   logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu,
 } from './logo-gonderim.ts';
 export type { SiparislerLogoSiparisi, SiparislerLogoSonucu, SiparislerLogoTeklifi } from './logo-gonderim.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

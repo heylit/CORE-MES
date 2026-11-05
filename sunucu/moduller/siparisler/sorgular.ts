@@ -3,6 +3,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 export interface SiparisSatiri {
   id: number;
@@ -759,5 +760,31 @@ export function siparisAra(db: Db, sade: string, icinde: string, bas: string, si
                (public.arama_sade(s.no) LIKE $3) DESC, s.id DESC
       LIMIT $4`,
     [sade, icinde, bas, sinir],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Sipariş satırı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_siparis_satiri t ON t.malzeme_no = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Teklif satırı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_teklif_satiri t ON t.malzeme_no = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Teklif plan taslağı (kalemler)' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_teklif_plan_taslagi t ON jsonb_path_exists(t.kalemler, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Teklif plan taslağı (kayanlar)' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_teklif_plan_taslagi t ON jsonb_path_exists(t.kayanlar, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Teklif plan taslağı (kilitler)' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_teklif_plan_taslagi t ON jsonb_path_exists(t.kilitler, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Logo gönderim satırı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN siparisler_logo_gonderim t ON jsonb_path_exists(t.satir_refleri, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
