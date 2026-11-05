@@ -5,7 +5,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   aracCevabi, aracGovdesi, aracGuncelleGovdesi, araclarCevabi, aramaCevabi, aramaSorgusu, bekleyenBolCevabi, bekleyenBolGovdesi, bekleyenKaldirCevabi, bekleyenlerCevabi, dagitGovdesi, gunPlaniCevabi, haritaCevabi, idParametresi, isCevabi,
-  isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
+  isDurumuGovdesi, isGovdesi, isGuncelleGovdesi, kaydetGovdesi, firmaAramaCevabi, firmaAramaSorgusu, konumOnerisiCevabi, konumOnerisiSorgusu, noktaCevabi, noktaGovdesi, noktaGuncelleGovdesi, noktalarCevabi, onayGovdesi, ozetCevabi, tarihParametresi, tekRotaCevabi, tekRotaSorgusu,
   trafikCevabi, trafikSorgusu, urunSevkleriCevabi, urunSevkleriSorgusu, elleKalemGovdesi, kalemCevabi, serbestBirakCevabi, serbestBirakGovdesi, tasimaGovdesi,
   tumIslerCevabi, tumIslerSorgusu,
 } from '#paylasilan/sozlesme/sevkiyat.ts';
@@ -30,6 +30,11 @@ export function sevkiyatUclari(kaynak: HaritaKaynagi) {
     uc({
       yontem: 'GET', yol: '/sevkiyat/firmalar', yetki: 'sevkiyat.tanim-yaz', sorgu: firmaAramaSorgusu, cevap: firmaAramaCevabi,
       isle: async ({ db, sorgu }) => ({ firmalar: await servis.firmaSecenekleri(db, sorgu.metin) }),
+    }),
+    // 2133-3 a: konumsuz firmanın adresinden konum önerisi; nokta tanımlayan görür, yazmaz.
+    uc({
+      yontem: 'GET', yol: '/sevkiyat/noktalar/konum-onerisi', yetki: 'sevkiyat.tanim-yaz', sorgu: konumOnerisiSorgusu, cevap: konumOnerisiCevabi,
+      isle: ({ db, sorgu }) => servis.konumOnerisi(db, sorgu.firmaId, kaynak),
     }),
     uc({
       yontem: 'POST', yol: '/sevkiyat/noktalar/ekle', yetki: 'sevkiyat.tanim-yaz', tekrarKorumali: true, govde: noktaGovdesi, cevap: noktaCevabi,

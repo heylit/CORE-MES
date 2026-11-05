@@ -10,4 +10,9 @@ export const SEVKIYAT_AYARLARI = {
     modul: 'sevkiyat', tur: 'sayi', varsayilan: null, enAz: -180, enCok: 180, ondalik: 6,
     baslik: 'Fabrika boylamı', aciklama: 'Ondalık derece (ör. 29,123456). Boş bırakılabilir.',
   },
+  // 2133-4 a: fabrika noktasının adresi; konum doluysa fabrika noktası bu adresle kendiliğinden açılır.
+  'sevkiyat.fabrika-adres': {
+    modul: 'sevkiyat', tur: 'metin', varsayilan: '', enUzun: 400, bosOlabilir: true,
+    baslik: 'Fabrika adresi', aciklama: 'Sevkiyat noktalarında ve sürücü rotasında görünen açık adres. Boş bırakılabilir.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

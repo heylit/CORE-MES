@@ -2,7 +2,7 @@
 // Form harita yanında açılır (pencere değil): konum haritaya tıklanarak seçilebilsin.
 // Müşteri, tedarikçi ve fason noktası finanstaki firmadan alınır: ad firmadan gelir, konum firmanın iliyle aranır.
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { FirmaKonumu, FirmaSecenegi, Nokta, NoktaGovdesi, NoktaTuru } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
@@ -10,7 +10,7 @@ import { AdresArama } from './AdresArama.tsx';
 import { FirmaSecimi } from './FirmaSecimi.tsx';
 import { bugun, NOKTA_TURLERI, NOKTA_TURU_ADI } from './bicim.ts';
 import { HaritaPaneli } from './HaritaPaneli.tsx';
-import { useFabrikaAyardan, useNoktaKomutu, useNoktalar, useYetki } from './veri.ts';
+import { useFabrikaAyardan, useKonumOnerisi, useKonumsuzFirmalar, useNoktaKomutu, useNoktalar, useYetki } from './veri.ts';
 import './sevkiyat.css';
 
 interface Taslak {
@@ -20,11 +20,13 @@ interface Taslak {
   adresId: number | null; konumlar: FirmaKonumu[];
   // Konum aramasına önceden yazılan metin; firma seçilince değişir ve arama yeniden kurulur.
   konumAramasi: string;
+  // 2133-3 a: koordinatsız firma seçildi; arama metni firma adresinden çevrimdışı dizin önerisiyle gelir.
+  oneriFirmaId: number | null;
 }
-const bosTaslak = (): Taslak => ({ id: null, surum: 0, ad: '', tur: 'musteri', enlem: '', boylam: '', adres: '', durakSuresiDakika: '20', firmaId: null, adresId: null, konumlar: [], konumAramasi: '' });
+const bosTaslak = (): Taslak => ({ id: null, surum: 0, ad: '', tur: 'musteri', enlem: '', boylam: '', adres: '', durakSuresiDakika: '20', firmaId: null, adresId: null, konumlar: [], konumAramasi: '', oneriFirmaId: null });
 const taslakOf = (n: Nokta): Taslak => ({
   id: n.id, surum: n.surum, ad: n.ad, tur: n.tur, enlem: String(n.enlem), boylam: String(n.boylam), adres: n.adres ?? '', durakSuresiDakika: String(n.durakSuresiDakika), firmaId: n.firmaId,
-  adresId: n.adresId ?? null, konumlar: n.konumlar ?? [], konumAramasi: '',
+  adresId: n.adresId ?? null, konumlar: n.konumlar ?? [], konumAramasi: '', oneriFirmaId: null,
 });
 const KONUM_TURU_ADI: Record<FirmaKonumu['tur'], string> = { merkez: 'Merkez', fatura: 'Fatura', teslim: 'Teslim', sube: 'Şube' };
 const konumSecenegi = (k: FirmaKonumu) => ({ deger: String(k.adresId ?? ''), baslik: k.adresId === null ? 'Merkez adresi' : `${KONUM_TURU_ADI[k.tur]} · ${k.ad}` });
@@ -33,6 +35,18 @@ const FIRMALI_TURLER: readonly NoktaTuru[] = ['musteri', 'tedarikci', 'fason'];
 // Fason işi yapan firma fason noktası olur; iki yönlü firma, formda seçili tür firmaya uyuyorsa onu korur.
 const firmaTuru = (f: FirmaSecenegi, simdiki: NoktaTuru): NoktaTuru =>
   f.fason ? 'fason' : f.tur === 'ikisi' ? (simdiki === 'tedarikci' ? 'tedarikci' : 'musteri') : f.tur;
+// Firma seçilince form firmadan dolar: ad, tür, adres; kartta koordinatlı adres yoksa konum önerisi istenir.
+function firmadanTaslak(t: Taslak, f: FirmaSecenegi): Taslak {
+  const konumlar = f.konumlar ?? [];
+  const secili = {
+    ...t, ad: f.ad, firmaId: f.id, tur: firmaTuru(f, t.tur), adresId: null, konumlar,
+    adres: t.adres || [f.adres, f.ilce, f.il].filter(Boolean).join(', '), konumAramasi: [f.ilce, f.il].filter(Boolean).join(' '),
+    oneriFirmaId: konumlar.length === 0 ? f.id : null,
+  };
+  const ilk = konumlar.find((k) => k.adresId === null) ?? konumlar[0];
+  return ilk ? konumuYaz(secili, ilk) : secili;
+}
+const firmaAdresi = (f: FirmaSecenegi) => [f.adres, f.ilce, f.il].filter(Boolean).join(', ');
 const sayi = (x: string) => Number(x.replace(',', '.'));
 const FABRIKA_KONUMU_NOTU = "Fabrikanın konumu Sistem Ayarları > Genel > Firma konumu'ndan gelir; rotalar oradan çıkar.";
 const konumMetni = (enlem: number, boylam: number) => `${enlem.toFixed(5)}, ${boylam.toFixed(5)}`;
@@ -47,6 +61,7 @@ export function Noktalar() {
   const komut = useNoktaKomutu();
   const yetki = useYetki();
   const fabrikaAyardan = useFabrikaAyardan();
+  const konumsuzlar = useKonumsuzFirmalar();
   const { bildir } = useBildirim();
   const [taslak, setTaslak] = useState<Taslak | null>(null);
   const [haritadanSec, setHaritadanSec] = useState(false);
@@ -73,21 +88,14 @@ export function Noktalar() {
     setAdres((o) => { const s = new URLSearchParams(o); s.delete('yeni'); return s; }, { replace: true });
   }, [yeniIstegi, yetki.tanimYaz, setAdres]);
   const formKapat = () => { setTaslak(null); setHaritadanSec(false); };
-  const firmaSec = (f: FirmaSecenegi) => setTaslak((t) => {
-    if (!t) return t;
-    const konumlar = f.konumlar ?? [];
-    const secili = {
-      ...t, ad: f.ad, firmaId: f.id, tur: firmaTuru(f, t.tur), adresId: null, konumlar,
-      adres: t.adres || [f.adres, f.ilce, f.il].filter(Boolean).join(', '), konumAramasi: [f.ilce, f.il].filter(Boolean).join(' '),
-    };
-    const ilk = konumlar.find((k) => k.adresId === null) ?? konumlar[0];
-    return ilk ? konumuYaz(secili, ilk) : secili;
-  });
+  const firmaSec = (f: FirmaSecenegi) => setTaslak((t) => (t ? firmadanTaslak(t, f) : t));
+  const oneri = useKonumOnerisi(taslak?.oneriFirmaId ?? null);
+  const konumAramasi = (taslak?.oneriFirmaId != null ? oneri.data?.aramaMetni : null) ?? taslak?.konumAramasi ?? '';
   const adresSec = (deger: string) => setTaslak((t) => {
     const k = t?.konumlar.find((x) => String(x.adresId ?? '') === deger);
     return t && k ? konumuYaz(t, k) : t;
   });
-  const turSec = (tur: NoktaTuru) => setTaslak((t) => (t ? { ...t, tur, ...(FIRMALI_TURLER.includes(tur) ? {} : { firmaId: null, adresId: null, konumlar: [] }) } : t));
+  const turSec = (tur: NoktaTuru) => setTaslak((t) => (t ? { ...t, tur, ...(FIRMALI_TURLER.includes(tur) ? {} : { firmaId: null, adresId: null, konumlar: [], oneriFirmaId: null }) } : t));
   const karttanKonum = taslak !== null && taslak.firmaId !== null && taslak.konumlar.length > 0;
 
   const kaydet = (e: FormEvent) => {
@@ -130,6 +138,16 @@ export function Noktalar() {
     }] : []),
   ];
 
+  const firmaKartiGorur = yetki.sahip('musteri-tedarikci.oku');
+  const konumsuzSutunlari: Sutun<FirmaSecenegi>[] = [
+    { anahtar: 'ad', baslik: 'Firma', hucre: (f) => (firmaKartiGorur ? <Link to={`/musteri-tedarikci?firma=${f.id}`}>{f.ad}</Link> : f.ad) },
+    { anahtar: 'adres', baslik: 'Adres', hucre: (f) => firmaAdresi(f) || <span className="tc-sevkiyat-ince">Adres yok</span> },
+    ...(yetki.tanimYaz ? [{
+      anahtar: 'islem', baslik: 'İşlem', hizala: 'sag' as const,
+      hucre: (f: FirmaSecenegi) => <Dugme simge="target" aria-label={`${f.ad} için konum ver`} onClick={() => formAc(firmadanTaslak(bosTaslak(), f))}>Konum ver</Dugme>,
+    }] : []),
+  ];
+
   if (sorgu.isPending) return <div className="tc-sevkiyat"><DurumKutusu durum="yukleniyor" /></div>;
   if (sorgu.isError) return <div className="tc-sevkiyat"><DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Noktalar alınamadı')} yenile={() => void sorgu.refetch()} /></div>;
 
@@ -145,7 +163,7 @@ export function Noktalar() {
                   : (
                     <p className="tc-sevkiyat-satir">
                       <Rozet>Firma</Rozet> <span>Ad finanstaki firmadan gelir; firma adı değişince nokta adı da değişir.</span>
-                      <Dugme simge="x" onClick={() => setTaslak((t) => (t ? { ...t, firmaId: null, adresId: null, konumlar: [] } : t))}>Firmayı değiştir</Dugme>
+                      <Dugme simge="x" onClick={() => setTaslak((t) => (t ? { ...t, firmaId: null, adresId: null, konumlar: [], oneriFirmaId: null } : t))}>Firmayı değiştir</Dugme>
                     </p>
                   ))}
                 <div className="tc-sevkiyat-alanlar">
@@ -163,7 +181,14 @@ export function Noktalar() {
                 {taslak.tur === 'fabrika'
                   ? <p className="tc-sevkiyat-ince">{FABRIKA_KONUMU_NOTU}</p>
                   : !karttanKonum && <>
-                    <AdresArama key={taslak.konumAramasi} baslangic={taslak.konumAramasi} etiket="Konum ara" sec={(s) => setTaslak((t) => (t ? {
+                    {taslak.oneriFirmaId !== null && (
+                      <p className="tc-sevkiyat-ince" role="status">
+                        {oneri.isPending ? 'Firma adresinden konum aranıyor…'
+                          : oneri.data && oneri.data.sonuclar.length > 0 ? 'Firma adresine göre önerilen yerler aşağıda; doğru olanı seçin, yoksa haritadan işaretleyin. Kaydet ile onaylanır.'
+                            : 'Firma adresi çevrimdışı adres dizininde bulunamadı; konumu haritadan seçin ya da koordinat yapıştırın.'}
+                      </p>
+                    )}
+                    <AdresArama key={konumAramasi} baslangic={konumAramasi} etiket="Konum ara" sec={(s) => setTaslak((t) => (t ? {
                       ...t, enlem: s.enlem.toFixed(6), boylam: s.boylam.toFixed(6), ad: t.ad || (s.tur === 'yer' && s.kategori !== 'Cadde' && s.kategori !== 'Semt' ? s.ad : t.ad),
                       adres: t.adres || [s.tur === 'yer' ? s.ad : '', s.baglam ?? ''].filter(Boolean).join(', '),
                     } : t))} />
@@ -189,6 +214,12 @@ export function Noktalar() {
             <Tablo etiket="Noktalar" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(n) => n.id} bosMesaj="Bu türde nokta yok." />
             <p className="tc-sevkiyat-ince">Noktalar bu sunucuda saklanır; konum yalnız sürücüye gönderilen rota bağlantısıyla telefondaki harita uygulamasına gider.</p>
           </Kart>
+          {konumsuzlar.length > 0 && (
+            <Kart baslik={`Konum eksik · ${konumsuzlar.length}`}>
+              <p className="tc-sevkiyat-ince">Bu firmaların kartında koordinatlı adres yok; nokta açılmadı. Konum firma kartında girilince nokta kendiliğinden açılır{yetki.tanimYaz ? ', ya da buradan konum verin' : ''}.</p>
+              <Tablo etiket="Konumu eksik firmalar" sutunlar={konumsuzSutunlari} satirlar={konumsuzlar} satirAnahtari={(f) => f.id} bosMesaj="Konumu eksik firma yok." />
+            </Kart>
+          )}
           <OnayPenceresi acik={pasifOnayi !== null} baslik="Nokta pasifleştirilsin mi?" onayMetni="Pasifleştir" tehlikeli yukleniyor={komut.isPending}
             onayla={pasiflestir} vazgec={() => setPasifOnayi(null)}>
             <p><b>{pasifOnayi?.ad}</b> yeni işte seçilemez; plandaki işleri onayı engeller.</p>

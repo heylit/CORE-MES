@@ -8,6 +8,9 @@ export {
   fasonFirmalari, firmaAdlari, firmaAra, firmaDurumuDegistir, firmaKonumlari, firmaNoKoddan, firmaOzeti, firmaOzetleri, firmaVarMi, musteriSiniflari, tumFirmalar,
 } from './servis.ts';
 export type { FirmaKonumu, FirmaOzeti } from './servis.ts';
+// 2133-1 b: firma ya da adresi yazılınca sevkiyat noktasını açar ya da günceller; bağ sunucu/kablolama.ts'te.
+export { firmaDegistiDinle } from './firma-olaylari.ts';
+export type { FirmaDegistiDinleyicisi, FirmaDegistiOlayi } from './firma-olaylari.ts';
 // Tedarikçi karnesi (1259 c): satın alma ve Kalite Merkezi olayı kendi transaction'ında iter; teklif kıyası karneyi okur.
 export { karneOlayiYaz, karneOzetleri } from './servis.ts';
 // Kart 1474: geri alınan teslimin olayı kalkar; plan ve malzeme planlaması tedarikçi gecikmesini buradan okur.

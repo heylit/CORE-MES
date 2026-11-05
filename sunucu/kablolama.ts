@@ -1,5 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
+import { ayarDegistiDinle } from './moduller/ayarlar/disari.ts';
 import { satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
@@ -19,7 +20,7 @@ import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
-import { logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
+import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
 import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri } from './moduller/rota/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -159,6 +160,9 @@ export function sunucununBaglari(): Bag[] {
     bag('izlenebilirlik -> kapanış', uretimEmirleri.izlenebilirlikKapanisCozucusu, stok.kapanisIzlenebilirlikDurumu),
     bag('stok -> kapanış', uretimEmirleri.stokKapanisCozucusu, stok.kapanisStokDurumu),
     bag('sevkiyat -> kapanış', uretimEmirleri.sevkiyatKapanisCozucusu, sevkiyat.kapanisSevkiyatDurumu),
+    // 2133-1 b ve 2133-4 a: firma ya da fabrika ayarı kaydedilince sevkiyat noktası açılır ya da eşitlenir.
+    bag('firma değişti -> sevkiyat noktası', firmaDegistiDinle, sevkiyat.firmaDegistiYansit),
+    bag('ayar değişti -> sevkiyat fabrika noktası', ayarDegistiDinle, sevkiyat.ayarDegistiYansit),
     bag('kart izleri -> malzemeler arşivi', kartIzleriCozucusu, kartIzleriTopla({
       'Değişiklik yönetimi': degisiklikKartIzleri, 'Finans': finansKartIzleri, 'İstasyonlar': istasyonKartIzleri, 'Markalama': markalamaKartIzleri,
       'Plan': planKartIzleri, 'Satın alma': satinAlmaKartIzleri, 'Rota': rotaKartIzleri, 'Siparişler': siparisKartIzleri,

@@ -26,6 +26,7 @@ import {
 } from './kurallar.ts';
 import type { DefterSatiri, FirmaDurumu, GecikmeOrnegi, GecikmeOzeti, KarneSayilari, LogoCariBilgisi } from './kurallar.ts';
 import { logoCariBellegiGecerliMi, logoCariEslesmesi, logoCariKoduHatasi, logoCariOnerisi, logoyaBaglanabilir } from './kurallar.ts';
+import { firmaDegistiBildir } from './firma-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 
 // Uç katmanının denetim eki (çekirdek `denetimEki`): komut başına bir kez çağrılır.
@@ -95,6 +96,7 @@ export async function firmaEkle(db: Db, kullanici: Kullanici, govde: FirmaKimlig
   if (k.kod === null || k.kod.trim() === '') k.kod = await firmaKoduVer(db, k.tur);
   const firma = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaEkle(db, k, kullanici.id));
   if (!firma) throw new Error('Firma eklenemedi.');
+  await firmaDegistiBildir(db, { firmaId: firma.id, kaldirilanAdresId: null });
   return firma;
 }
 
@@ -133,6 +135,7 @@ export async function firmaGuncelle(db: Db, kullanici: Kullanici, id: number, d:
     bulunamadiIletisi: 'Firma bulunamadı.',
   }));
   farkYaz(ek, `firma:${id}`, eski, yeni);
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
   return yeni;
 }
 
@@ -148,11 +151,13 @@ export async function firmaDurumuDegistir(
     const engel = await pasifEngeli(id);
     if (engel) throw gecersiz(engel);
   }
-  return surumluGuncelle({
+  const yeni = await surumluGuncelle({
     guncelle: () => sorgular.firmaAktiflikYaz(db, id, surum, hedef === 'aktif', kisiId),
     varMi: async () => (await sorgular.firmaVarMi(db, id)) !== null,
     bulunamadiIletisi: 'Firma bulunamadı.',
   });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
+  return yeni;
 }
 
 // ---- Adresler (MT-9, MT-10, MT-11) ----
@@ -176,6 +181,7 @@ export async function adresEkle(db: Db, kullanici: Kullanici, id: number, a: Adr
   const sinir = adresSiniriHatasi(await sorgular.adresSayisi(db, id));
   if (sinir) throw gecersiz(sinir);
   await kisitKorumali(ADRES_KISITLARI, () => sorgular.adresEkle(db, id, a, kullanici.id));
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }
 
@@ -189,11 +195,15 @@ export async function adresGuncelle(
   const yeni = await kisitKorumali(ADRES_KISITLARI, () => sorgular.adresGuncelle(db, id, adresId, a, kullanici.id));
   if (!yeni) throw bulunamadi('Adres bulunamadı.');
   farkYaz(ek, `adres:${adresId}`, eski, yeni);
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }
 
 export async function adresKaldir(db: Db, kullanici: Kullanici, id: number, adresId: number, surum: number): Promise<FirmaAyrintiCevabi> {
   const firma = await karttanSonra(db, kullanici.id, id, surum);
+  if (!(await sorgular.adresleriGetir(db, id)).some((x) => x.id === adresId)) throw bulunamadi('Adres bulunamadı.');
+  // Adrese bağlı kayıt (sevkiyat noktası) silmeden önce başka adrese taşınır; yoksa bağ silmeyi engellerdi.
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: adresId });
   if (!(await sorgular.adresSil(db, id, adresId))) throw bulunamadi('Adres bulunamadı.');
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }

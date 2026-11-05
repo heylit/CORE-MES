@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { FirmaAramaCevabi, HaritaCevabi, NoktaGovdesi, NoktalarCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
+import type { AramaCevabi, FirmaAramaCevabi, FirmaSecenegi, HaritaCevabi, KonumOnerisiCevabi, NoktaGovdesi, NoktalarCevabi } from '#paylasilan/sozlesme/sevkiyat.ts';
 import { Noktalar } from './Noktalar.tsx';
 import { NOKTALAR } from './test-verisi.ts';
 
@@ -16,6 +16,8 @@ const FIRMALAR = { firmalar: [
   { id: 11, ad: 'Örnek Tedarikçi Firma', kod: 'T-1', tur: 'ikisi', fason: true, adres: 'Örnek Cad. 5', ilce: 'Deneme İlçesi', il: 'Deneme İli', noktaId: null },
   { id: 12, ad: 'Örnek Müşteri A', kod: null, tur: 'musteri', fason: false, adres: null, ilce: null, il: null, noktaId: 2 },
 ] } satisfies FirmaAramaCevabi;
+const ONERI: AramaCevabi['sonuclar'][number] = { ad: 'Gazi', boylam: 32.71, enlem: 39.93, kategori: 'Semt / mahalle', baglam: 'Deneme', tur: 'yer', noktaId: null };
+const KONUMSUZ: FirmaSecenegi = { id: 21, ad: 'Örnek Konumsuz Firma', kod: 'K-1', tur: 'tedarikci', fason: false, adres: 'Gazi Mah. No: 3', ilce: 'Deneme', il: 'Deneme İli', noktaId: null, konumlar: [] };
 let okunan: string[] = [];
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -29,7 +31,8 @@ function sunucuKur(kullanici: Kullanici, yazma: () => Response = () => json(200,
     if (yol === '/sevkiyat/harita') return json(200, { harita: null } satisfies HaritaCevabi);
     if (yol === '/sevkiyat/noktalar') return json(200, noktalar);
     if (yol.startsWith('/sevkiyat/firmalar')) return json(200, FIRMALAR);
-    if (yol.startsWith('/sevkiyat/arama')) return json(200, { sonuclar: [], dizinVar: true, kisaBaglanti: false });
+    if (yol.startsWith('/sevkiyat/noktalar/konum-onerisi')) return json(200, { aramaMetni: 'gazi deneme', sonuclar: [ONERI], dizinVar: true } satisfies KonumOnerisiCevabi);
+    if (yol.startsWith('/sevkiyat/arama')) return json(200, { sonuclar: yol.includes('gazi') ? [ONERI] : [], dizinVar: true, kisaBaglanti: false });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return yazilan;
@@ -136,6 +139,32 @@ describe('Noktalar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilan).toHaveLength(1));
     expect(yazilan[0]?.govde).toMatchObject({ firmaId: 13, adresId: 31, enlem: 39.97, boylam: 32.77, adres: 'Depo Yolu 2' });
+  });
+
+  it('2133-2 a, 2133-3 a: konumu eksik firma listelenir; konum ver formu firmadan dolar, öneri seçilip kaydedilince nokta açılır', async () => {
+    const yazilan = sunucuKur(TANIMCI, undefined, { ...NOKTALAR, konumsuzFirmalar: [KONUMSUZ] });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Konumu eksik firmalar' });
+    expect(within(tablo).getByText('Gazi Mah. No: 3, Deneme, Deneme İli')).toBeTruthy();
+    expect(screen.getByText('Konum eksik · 1')).toBeTruthy();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'Örnek Konumsuz Firma için konum ver' }));
+    const form = screen.getByRole('form', { name: 'Yeni nokta' });
+    expect((within(form).getByLabelText(/^Ad/) as HTMLInputElement).value).toBe('Örnek Konumsuz Firma');
+    expect((within(form).getByLabelText('Tür') as HTMLSelectElement).value).toBe('tedarikci');
+    await waitFor(() => expect(okunan).toContain('/sevkiyat/noktalar/konum-onerisi?firmaId=21'));
+    expect(await within(form).findByText(/Firma adresine göre önerilen yerler/)).toBeTruthy();
+    fireEvent.click(await within(form).findByRole('button', { name: /Gazi/ }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazilan).toHaveLength(1));
+    expect(yazilan[0]?.govde).toMatchObject({ firmaId: 21, tur: 'tedarikci', enlem: 39.93, boylam: 32.71, adres: 'Gazi Mah. No: 3, Deneme, Deneme İli' });
+  });
+
+  it('konumu eksik firma listesi okuyucuda konum ver düğmesi göstermez', async () => {
+    sunucuKur(OKUYUCU, undefined, { ...NOKTALAR, konumsuzFirmalar: [KONUMSUZ] });
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Konumu eksik firmalar' });
+    expect(within(tablo).queryByRole('button')).toBeNull();
+    expect(within(tablo).getByText('Örnek Konumsuz Firma')).toBeTruthy();
   });
 
   it('bütün noktalar firmalıysa Firmasız süzgeci çıkmaz', async () => {

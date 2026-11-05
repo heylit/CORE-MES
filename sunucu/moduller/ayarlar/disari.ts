@@ -1,6 +1,8 @@
 export { numaraAl, sistemAyariOku, type NumaraIstegi } from './servis.ts';
 // Modül kendi ayarını kendi ekranından değiştirir (Fabrika Haritası kroki saydamlığı, 2122-5 a).
 export { modulAyariDegistir, type AyarKaynagi } from './servis.ts';
+// 2133-4 a: fabrika ayarı değişince sevkiyat fabrika noktasını açar ya da günceller; bağ sunucu/kablolama.ts'te.
+export { ayarDegistiDinle, type AyarDegistiDinleyicisi, type AyarDegistiOlayi } from './ayar-olaylari.ts';
 // Paket üretici (araclar/paket-yap.ts) biçimi buradan alır; doğrulayan kodla aynı kaynak.
 export { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, PAKET_IMLECI, paketBasliginiCoz, ortakAnahtar } from './kurallar.ts';
 // Güncelleyici (araclar/guncelleyici.ts) istek, sonuç ve çalışan sürüm dosyalarını ve geri gitme kuralını buradan alır (kart #1210).

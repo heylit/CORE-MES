@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  kabulGeriAlimi,
+  adresAramaMetinleri, firmaNoktaTuru, kabulGeriAlimi, otomatikKonumSec, otomatikNoktaAdi,
   aracIhlalleri, araDonusleriTemizle, bolmeIhlali, durumGecisiIhlali, ileriSonucIhlali, gunTipi, isDegistirilebilir, isDuzenlenebilir, isIhlalleri, onayEngelleri, planDegistirilebilir, yeniIsDurumu,
   planYapisiIhlalleri, rotalariTamamla, saattenDakika, tekRotaIhlalleri, yinelemeButcesi,
   depoGeriAlIhlali, elleKalemIhlalleri, kapanisSevki, serbestBirakmaIhlali, tasimaIhlali, tetikGeriAlIhlali, tetikIhlali, tumIsAsamasi,
@@ -287,4 +287,24 @@ test('B-4 kabulGeriAlimi (1405 a): geri alınan adet düşer; sıfırsa adet bo�
   assert.deepEqual(kabulGeriAlimi('5', '7.0000', '2'), { kabulAdet: '5', acik: false }, 'fazla kabulün bir kısmı geri alınırsa kalem kapalı kalır');
   assert.deepEqual(kabulGeriAlimi(null, '4.0000', '1.5'), { kabulAdet: '2.5', acik: false }, 'adedi bilinmeyen kalem kabul kaldıkça kapalı');
   assert.deepEqual(kabulGeriAlimi('5', '2.0000', '3'), { kabulAdet: null, acik: true }, 'kaydı aşan geri alma sıfırda durur');
+});
+
+test('2133: firma noktasının türü, kendiliğinden konum seçimi ve adres arama metinleri', () => {
+  assert.equal(firmaNoktaTuru({ tur: 'musteri', fason: false }), 'musteri');
+  assert.equal(firmaNoktaTuru({ tur: 'ikisi', fason: false }), 'musteri');
+  assert.equal(firmaNoktaTuru({ tur: 'tedarikci', fason: false }), 'tedarikci');
+  assert.equal(firmaNoktaTuru({ tur: 'tedarikci', fason: true }), 'fason');
+  const k = (adresId: number | null, tur: string) => ({ adresId, tur, enlem: 1, boylam: 1, adres: null });
+  assert.equal(otomatikKonumSec([k(3, 'fatura'), k(2, 'teslim'), k(null, 'merkez')])?.adresId, null);
+  assert.equal(otomatikKonumSec([k(3, 'fatura'), k(4, 'sube'), k(2, 'teslim')])?.adresId, 2);
+  assert.equal(otomatikKonumSec([k(3, 'fatura'), k(2, 'teslim')], 2)?.adresId, 3);
+  assert.equal(otomatikKonumSec([k(3, 'fatura')], 3), null);
+  assert.equal(otomatikNoktaAdi({ id: 7, ad: ' Alfa ', kod: null }, false), 'Alfa');
+  assert.equal(otomatikNoktaAdi({ id: 7, ad: 'Alfa', kod: 'A-1' }, true), 'Alfa (A-1)');
+  assert.equal(otomatikNoktaAdi({ id: 7, ad: 'Alfa', kod: ' ' }, true), 'Alfa (#7)');
+  assert.deepEqual(adresAramaMetinleri('Örnek Mah. Cumhuriyet Bulvarı No: 5 Kat 2', 'Deneme İlçe', 'Deneme İl'),
+    ['ornek cumhuriyet deneme ilce', 'ornek deneme ilce', 'ornek cumhuriyet', 'ornek', 'cumhuriyet', 'deneme ilce']);
+  assert.deepEqual(adresAramaMetinleri('1234. Cadde No: 5', null, null), ['1234 cadde', '1234', 'cadde']);
+  assert.deepEqual(adresAramaMetinleri(null, null, 'Ornek'), ['ornek']);
+  assert.deepEqual(adresAramaMetinleri(null, null, null), []);
 });

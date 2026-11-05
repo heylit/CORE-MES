@@ -25,6 +25,7 @@ type Islem = (typeof SEVKIYAT_ISLEMLERI)[number];
 const BEKLENEN: Record<string, Islem | { biri: readonly string[] }> = {
   'GET /sevkiyat/noktalar': 'sevkiyat.oku',
   'GET /sevkiyat/firmalar': 'sevkiyat.tanim-yaz',
+  'GET /sevkiyat/noktalar/konum-onerisi': 'sevkiyat.tanim-yaz',
   'GET /sevkiyat/ozet': 'sevkiyat.oku',
   'POST /sevkiyat/noktalar/ekle': 'sevkiyat.tanim-yaz',
   'POST /sevkiyat/noktalar/:id/guncelle': 'sevkiyat.tanim-yaz',
@@ -116,7 +117,7 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
   test('uygulama modülü klasörden bulur: yönetici gerçek girişle noktaları okur', async () => {
     const cevap = await iste(app, 'GET', '/sevkiyat/noktalar', yonetici);
     assert.equal(cevap.statusCode, 200, cevap.body);
-    assert.deepEqual(cevap.json(), { noktalar: [], fabrikaAyardan: false });
+    assert.deepEqual(cevap.json(), { noktalar: [], fabrikaAyardan: false, konumsuzFirmalar: [] });
   });
 
   test('her uç beklenen işlemi ister; kimliksiz 401, sayfa işlemi ya da başka işlem 403, doğru işlem geçer', async () => {
