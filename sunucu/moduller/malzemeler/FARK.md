@@ -1,3 +1,15 @@
+# FARK: operasyon tipi ve istasyon kimliği okumada, eski operasyonlar ayarı salt okunur (kart 2111, bağla A7, ana veri C1)
+
+Taban main cb79a3f. Karar: ana veri C1 (1298-1305 raporu), OS1, RT1 a. Göç yok, sözleşme ve ekran değişmedi.
+## Değişen
+- `POST /malzeme-katalogu-ayarlari/operasyonlar/kaydet` 422 GECERSIZ döner (`OPERASYON_AYARI_ILETISI`); `malzeme` ve `genel` ayarları değişmedi. Okuma ucu `operasyonlar` alanını vermeye devam eder.
+- `malzemeOperasyonlari` (disari.ts, Rota'nın "Karttan aktar"ı) her satırda `operasyonTipiId` ve `istasyonId` verir. Kural `kartOperasyonKimlikleri` (saf): kod tipe, eski `ops[].merkez` metni istasyona (önce kod, sonra ad) eşlenir; tek adaya uymayan null. Kimlik karta yazılmaz.
+- Sürüm testi (`sablon-ve-okuma-yetkisi.test.ts`) `genel` ayarına taşındı; davranış aynı.
+## Bu turda varsayılanlar
+1. Pasif tip ve istasyon da eşlenir; kullanıp kullanmamaya okuyan karar verir. Geri alma: `kartOperasyonKimlikleri` süzgeci.
+2. Merkez metni yalnız istasyona eşlenir, iş merkezine değil; boşsa tipin varsayılan istasyonu verilmez (Rota kendi okur). Geri alma: aynı işlev.
+3. Kartta istasyon alanı açılmadı; soru 2111-1 (prototip değişikliği). Geri alma: yok, kod yazılmadı.
+
 # FARK: malzeme araması trigram indeksiyle; Ctrl K kaynağı çekirdeğin tek arama ucuna geçti (kart #1244; 1231 a, 1233 sözleşmesi)
 
 - Göç `20261029133000_malzemeler_arama_trigram.sql`: `malzeme_katalog_karti` üzerinde stok kodu, ad, eski kod ve tedarikçi kodu ifadelerinin `public.arama_sade` sadeleşmesine dört GIN (`public.gin_trgm_ops`). Veri değişmez. Uzantı 1233 göçünde (`20261029125000`).

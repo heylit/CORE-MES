@@ -6,7 +6,7 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { tedarikciOlabilirMi } from '../finans/disari.ts';
 import { firmaAra, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
-import { makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { KATALOG_TURLERI, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -27,7 +27,8 @@ import {
   katalogAgirlikAlanlari, katalogGkkAyari, katalogNetAgirlikKg, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogSurumUyarMi, katalogTalebiBas, katalogTalepBicimiGecerliMi, katalogTalepYokMu,
   katalogTalepDenetle, katalogTalepUygulamaDenetle, katalogKaydiAlanlari, ayarBirimleri, ayarKaliteYogunluklari, ayarKategorileri, kartBilesenKimlikleri, kartOperasyonlari, kartRotaIcerigiDegistiMi, ROTALI_KART_ILETISI, hammaddeOlcuHatasi, hammaddeTanimHatasi, kartZorunluAlanEksigi, katalogSunucuAnahtari, kartTedarikciFirmaId, katalogAciklamalari, kartBirimDonusumu, kartBirimDonusumleri, kartBirimi, kartTedarikciKimlikleri, tedarikciDegistiMi, kartAletNo, kartAletNolari, kartAletNoYaz, eskiKalibrasyonAlanlariniKoru, denetlenecekKategoriler, MUKERRER_GEREKCE_ILETISI, mukerrerGerekcesiKisaMi, logoAdiDegistiMi, logoBirimiDegistiMi, logoGuncellemeSonucuDurumu, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoDurumSirasi, logoEksikleri, logoHataMetni, ornekKartKimligi,
 } from './kurallar.ts';
-import type { BirimDonusumu, KartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
+import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
+import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -174,9 +175,14 @@ export async function malzemeKullanilabilirMi(db: Db, id: number): Promise<boole
 }
 
 // Kart yoksa null; operasyonu olmayan kartta boş dizi. Yetki denetlemez, çağıran modül kendi yetkisiyle çağırır.
-export async function malzemeOperasyonlari(db: Db, id: number): Promise<KartOperasyonu[] | null> {
+// C1: satır, operasyon tipinin ve (eski merkez metninden) istasyonun kimliğini de taşır; çözülemeyen null.
+export async function malzemeOperasyonlari(db: Db, id: number): Promise<KimlikliKartOperasyonu[] | null> {
   const k = await s.katalogKartKaydiNoIle(db, id);
-  return k === null ? null : kartOperasyonlari(k.kayit);
+  if (k === null) return null;
+  if (kartOperasyonlari(k.kayit).length === 0) return [];
+  const tipler = await operasyonTipleri(db, { pasiflerDahil: true });
+  const istasyonlar = await istasyonListesi(db, { pasiflerDahil: true });
+  return kartOperasyonKimlikleri(k.kayit, tipler, istasyonlar);
 }
 
 // 233 a: kartın rotası Rota modülündedir; Rota bu modülü ithal ettiği için tersini sunucu/kablolama.ts kaydeder. Kayıt yokken kartın
@@ -696,6 +702,7 @@ export async function katalogAyarlariniGetir(db: Db, kullanici: Kullanici): Prom
 export async function katalogAyariKaydet(
   db: Db, kullanici: Kullanici, anahtar: string, deger: Record<string, unknown>, surum: number | null,
 ): Promise<{ id: string; surum: number }> {
+  if (anahtar === 'operasyonlar') throw gecersiz(OPERASYON_AYARI_ILETISI);
   // Onay akışını yalnız bayraklı yönetici açıp kapatır (#227 madde 1): tanım ve onay işlemlerini birlikte taşıyan rol (müdür) ya da iki rollü kişi
   // onay adımını kapatıp dört gözü dolanamaz. İşlem listesi bayrağı söylemez (iki rol aynı listeyi verir); bayrak kişiden sorulur.
   if (anahtar === 'genel' && katalogOnayAkisiAcikMi(deger) !== katalogOnayAkisiAcikMi(await katalogGenelAyari(db)) && !(await kisiBayrakliMi(db, kullanici.id))) {

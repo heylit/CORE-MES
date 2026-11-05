@@ -30,3 +30,6 @@ Malzemeler `ticari_mal` türünü ekledi (stok kodu TM, Logo kart türü 1). Aş
 - recete-rota: ticari mal reçetede görünmez (kullanıcı kararı); bağlı durum çevirisinde ticari mal kartları süzülsün ya da geçici 'ham' eşlemesi kalksın (malzemeler UYUM-BORCU).
 - arkon: `sunucu/moduller/arkon/servis.ts` `STOKLANAN_TURLER` değişmez (VARSAYIM: operatör isteğinde ticari mal yok; üretimde kullanılmaz).
 - portal: satış satırı `malzemeOzeti` ile ticari malı alır; prototipteki ürün seçicinin türe göre süzüp süzmediği BİLMİYORUM.
+
+## Bağla A7 (kart 2111, ana veri C1, 05.11.2026): malzemelerin verdiği, Rota'nın kullanması istenen
+- rota: "Karttan aktar" (`karttanAdimlar`) satırı kodla eşliyor. `malzemeOperasyonlari` artık `operasyonTipiId` ve `istasyonId` veriyor (çözülemeyen null). İstek: tip kimliği doluysa kodla aramak yerine onu kullanmak, `istasyonId` doluysa adımın istasyonuna yazmak; null ise bugünkü davranış. Yazılmadı; ayrı rota kartı.

@@ -63,6 +63,10 @@ export interface LogoyaGuncellemeGidecekMalzeme {
   logoKayitNo: string;
   tur: string;
   hizmetYonu: HizmetYonu | null;
+  // Malzeme kartında Logo adı ve NAME3-NAME4 bunlardan çıkar (2115-1 a); kaynak vermezse yalnız TMI adı gider.
+  aciklama1?: string | null;
+  aciklama2?: string | null;
+  aciklama3?: string | null;
 }
 export interface MalzemeGuncellemeKaynagi {
   gidecekler(db: Db, sinir: number): Promise<LogoyaGuncellemeGidecekMalzeme[]>;
@@ -191,7 +195,7 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
 
 const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belge için Logo\'da "var mı" okunamıyor; Logo\'da kontrol edin. Kendiliğinden yeniden gönderilmez.';
 
-// Logo'ya gitmiş kartın ad güncellemesi: açma kuyruğu boşken tek kart. Güncelleme yinelenirse aynı adı yazar (zararsız), niyet gerekmez.
+// Logo'ya gitmiş kartın ad ve açıklama güncellemesi: açma kuyruğu boşken tek kart. Güncelleme yinelenirse aynı değerleri yazar (zararsız), niyet gerekmez.
 async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<TurSonucu | KopruAdimi> {
   if (!o.malzemeGuncelleme) return { tur: 'bos' };
   // Kapalıyken kuyruk okunmaz, istek atılmaz; kartlar "bekliyor" kalır, kart açma etkilenmez.
@@ -200,7 +204,8 @@ async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Prom
   for (const kart of await kaynak.gidecekler(db, KUYRUK_SINIRI)) {
     const g = await s.gidenSatiri(db, 'malzeme-guncelleme', kart.no);
     if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
-    const r = malzemeGuncellemeGovdesi(kart);
+    // Hizmet Logo'da açılırken TMI adıyla açılır (hizmetGovdesi); açıklama kuralı yalnız malzeme kartınındır.
+    const r = malzemeGuncellemeGovdesi(kart.tur === 'hizmet' ? { stokKodu: kart.stokKodu, ad: kart.ad } : kart);
     const yon = kart.hizmetYonu;
     const adim = tekAdim(o, g, {
       belge: 'malzeme-guncelleme', id: kart.no,

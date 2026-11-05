@@ -248,7 +248,8 @@ export function katalogGeriCekildiMi(kayit: Nesne): boolean {
 // Numara ekranın kuralıyla verilir (`katalog.html` `opNoDuzenle`, `opSirala`): numarası olmayan satır kendinden öncekinin 10 fazlasını alır,
 // sonra numaraya göre sıralanır (eşitler kart sırasını korur). Rota adım numarası tekil ve artan olmalı: eşit numara bir öncekinin 1 fazlasını alır.
 export interface KartOperasyonu { no: number; kod: string; ad: string | null }
-export function kartOperasyonlari(kayit: Nesne): KartOperasyonu[] {
+interface KartOperasyonSatiri extends KartOperasyonu { merkez: string | null }
+function kartOperasyonSatirlari(kayit: Nesne): KartOperasyonSatiri[] {
   const ops = Array.isArray(kayit['ops']) ? kayit['ops'].filter(nesneMi) : [];
   let son = 0;
   const satirlar = ops.map((o) => {
@@ -256,7 +257,8 @@ export function kartOperasyonlari(kayit: Nesne): KartOperasyonu[] {
     son = n;
     const kod = typeof o['kod'] === 'string' ? o['kod'].trim() : '';
     const ad = typeof o['ad'] === 'string' && o['ad'].trim() !== '' ? o['ad'].trim() : null;
-    return { no: n, kod, ad };
+    const merkez = typeof o['merkez'] === 'string' && o['merkez'].trim() !== '' ? o['merkez'].trim() : null;
+    return { no: n, kod, ad, merkez };
   }).filter((o) => o.kod !== '');
   let onceki = 0;
   return satirlar.map((s, i) => ({ s, i }))
@@ -266,6 +268,34 @@ export function kartOperasyonlari(kayit: Nesne): KartOperasyonu[] {
       return { ...s, no: onceki };
     });
 }
+export function kartOperasyonlari(kayit: Nesne): KartOperasyonu[] {
+  return kartOperasyonSatirlari(kayit).map(({ no, kod, ad }) => ({ no, kod, ad }));
+}
+
+// C1 (ana veri 1298-1305; OS1): operasyon tipi ve istasyonun sahibi İstasyonlar'dır. Kart kodu ve eski "merkez" metnini tutar;
+// kimlikler okumada çözülür, karta yazılmaz (jsonb değişmez, rotalı kartın içerik denetimi etkilenmez). Kod büyük-küçük harf ve
+// kenar boşluğu farkı gözetmeden eşlenir; pasif tip ve istasyon da eşlenir (kimlik kimliktir, kullanılıp kullanılmayacağına okuyan
+// karar verir). Birden çok adaya uyan ya da hiçbirine uymayan değer null kalır, tahmin edilmez. İstasyon kodla, kod tutmazsa adla aranır.
+export interface KimlikliKartOperasyonu extends KartOperasyonu { operasyonTipiId: number | null; istasyonId: number | null }
+export function kartOperasyonKimlikleri(
+  kayit: Nesne,
+  tipler: readonly { id: number; kod: string }[],
+  istasyonlar: readonly { id: number; kod: string; ad: string }[],
+): KimlikliKartOperasyonu[] {
+  const anahtar = (m: string) => m.trim().toLocaleLowerCase('tr-TR');
+  const tek = <T extends { id: number }>(l: readonly T[], deger: (x: T) => string, aranan: string): number | null => {
+    const bulunan = l.filter((x) => anahtar(deger(x)) === aranan);
+    return bulunan.length === 1 ? bulunan[0]!.id : null;
+  };
+  return kartOperasyonSatirlari(kayit).map(({ no, kod, ad, merkez }) => {
+    const m = merkez === null ? null : anahtar(merkez);
+    const istasyonId = m === null ? null : tek(istasyonlar, (x) => x.kod, m) ?? tek(istasyonlar, (x) => x.ad, m);
+    return { no, kod, ad, operasyonTipiId: tek(tipler, (x) => x.kod, anahtar(kod)), istasyonId };
+  });
+}
+
+// C1: operasyon listesi İstasyonlar > Operasyon tipleri'ndedir; katalogun eski `operasyonlar` ayarı okunur ama yazılmaz.
+export const OPERASYON_AYARI_ILETISI = 'Operasyon listesi İstasyonlar > Operasyon tipleri sayfasında düzenlenir; bu ayar salt okunur.';
 
 // 233 a: rotası olan kartın operasyonları ve reçetesi Reçete ve Rota'da düzenlenir, kart yalnız gösterir. Ekran Operasyonlar adımını
 // her çizişte yeniden numaralar; numara kartOperasyonlari kuralıyla verilip sıralanır, böylece yalnız satır içeriği ya da sırası değişince

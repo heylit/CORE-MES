@@ -185,11 +185,11 @@ describe('Malzemeler şablon sahipliği ve okuma yetkisi (gerçek PostgreSQL, ge
   test('Sürüm: aynı ayarı okuyan iki kişiden ikincisinin kaydı 409 olur ve öncekini ezmez; ilk kayıt sürümsüz, sonrakiler okunan sürümle', async () => {
     const birinci = await girisYap('s-surum-2', 'yonetici');
     const ikinciKisi = await girisYap('s-surum-2b', 'yonetici');
-    const yol = '/malzeme-katalogu-ayarlari/operasyonlar/kaydet';
+    const yol = '/malzeme-katalogu-ayarlari/genel/kaydet';
     const okunan = async (): Promise<number | null> =>
-      ((await istek(birinci, 'GET', '/malzeme-katalogu-ayarlari')).json() as KatalogAyarlariCevabi).surumler.operasyonlar;
+      ((await istek(birinci, 'GET', '/malzeme-katalogu-ayarlari')).json() as KatalogAyarlariCevabi).surumler.genel;
     assert.equal(await okunan(), null);
-    assert.deepEqual((await istek(birinci, 'POST', yol, { deger: { ad: 'ilk' }, surum: null })).json(), { id: 'operasyonlar', surum: 1 });
+    assert.deepEqual((await istek(birinci, 'POST', yol, { deger: { ad: 'ilk' }, surum: null })).json(), { id: 'genel', surum: 1 });
     // İki sekme 1'i okudu; önce gelen yazar, sonra gelen reddedilir.
     assert.equal((await istek(ikinciKisi, 'POST', yol, { deger: { ad: 'ikinci kişi' }, surum: 1 })).statusCode, 200);
     const gec = await istek(birinci, 'POST', yol, { deger: { ad: 'birinci kişi' }, surum: 1 });
@@ -197,7 +197,7 @@ describe('Malzemeler şablon sahipliği ve okuma yetkisi (gerçek PostgreSQL, ge
     // Kayıtlı ayarın üstüne sürümsüz yazılamaz.
     assert.equal((await istek(birinci, 'POST', yol, { deger: { ad: 'sürümsüz' }, surum: null })).statusCode, 409);
     const ayar = (await istek(birinci, 'GET', '/malzeme-katalogu-ayarlari')).json() as KatalogAyarlariCevabi;
-    assert.deepEqual({ deger: ayar.operasyonlar, surum: ayar.surumler.operasyonlar }, { deger: { ad: 'ikinci kişi' }, surum: 2 });
+    assert.deepEqual({ deger: ayar.genel, surum: ayar.surumler.genel }, { deger: { ad: 'ikinci kişi' }, surum: 2 });
   });
 
   test('olmayan şablonu kaldırmak 404', async () => {
