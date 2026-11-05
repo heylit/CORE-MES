@@ -949,7 +949,7 @@ export interface LogoAynaKarti {
   logoKayitNo: number; kod: string; ad: string | null; aciklama2: string | null; aciklama3: string | null;
   kartTuru: number | null; birimSeti: string | null; aktif: boolean; sonOkuma: string;
 }
-export type LogoKartAynasiCozucusu = (db: Db, o: { kodlar?: readonly string[]; sinir: number; sonra: number }) => Promise<LogoAynaKarti[]>;
+export type LogoKartAynasiCozucusu = (db: Db, o: { kodlar?: readonly string[]; ara?: string; sinir: number; sonra: number }) => Promise<LogoAynaKarti[]>;
 export type LogoEslemeYazici = (db: Db, e: { stokKodu: string; logoKodu: string; logoKayitNo: number }) => Promise<void>;
 export type LogoTmiKodCozucusu = (db: Db, logoKodlari: readonly string[]) => Promise<Map<string, string>>;
 let logoKartAynasi: LogoKartAynasiCozucusu | null = null;
@@ -973,7 +973,7 @@ async function logoGelenTmiKartlari(db: Db, kartlar: readonly LogoAynaKarti[]) {
 
 export async function logodanGelenler(db: Db, q: z.output<typeof logoGelenSorgusu>): Promise<LogoGelenCevabi> {
   if (!logoKartAynasi) return { baglanti: false, kartlar: [], sonraki: null };
-  const kartlar = await logoKartAynasi(db, { ...(q.kod ? { kodlar: [q.kod] } : {}), sinir: LOGO_GELEN_SAYFA_BOYU, sonra: q.sonra });
+  const kartlar = await logoKartAynasi(db, { ...(q.ara ? { ara: q.ara } : {}), sinir: LOGO_GELEN_SAYFA_BOYU, sonra: q.sonra });
   const { esleme, refle, kodla } = await logoGelenTmiKartlari(db, kartlar);
   const firma = katalogFirmaKodu(await katalogGenelAyari(db));
   return {

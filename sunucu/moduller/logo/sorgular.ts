@@ -2,6 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI } from './kurallar.ts';
 import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Belge no sahibi modüldeki kimliktir: kart no, sipariş, talep ya da sipariş satırı kimliği; adım türleri (güncelleme, kapatma, iptal) aynı belgenin ayrı izidir.
@@ -490,13 +491,20 @@ export async function stokToplamlariniYaz(db: Db, satirlar: readonly LogoStokSat
 
 export interface AynadakiKart extends LogoMalzemeKarti { sonOkuma: string }
 
-export function aynadakiKartlar(db: Db, o: { kodlar?: readonly string[]; sinir: number; sonra: number }): Promise<AynadakiKart[]> {
+// `ara` kod, ad ve açıklamaların içinde geçen parçadır; Türkçe harf sadeleştirmesiyle (public.arama_sade) büyük/küçük harf duyarsız.
+// Desen parametredir, metin SQL'e yazılmaz.
+export function aynadakiKartlar(
+  db: Db, o: { kodlar?: readonly string[]; ara?: string; sinir: number; sonra: number },
+): Promise<AynadakiKart[]> {
+  const ara = o.ara?.trim() ? icindeDeseni(o.ara) : null;
   return db.sorgu<AynadakiKart>(
     `SELECT logical_ref::float8 AS "logoKayitNo", kod, ad, aciklama_2 AS "aciklama2", aciklama_3 AS "aciklama3", kart_turu AS "kartTuru",
             birim_seti AS "birimSeti", aktif, ${zamanMetni('son_okuma')} AS "sonOkuma"
        FROM logo_malzeme_karti WHERE logical_ref > $3 AND ($1::text[] IS NULL OR kod = ANY($1::text[]))
+        AND ($4::text IS NULL OR public.arama_sade(kod) LIKE $4 OR public.arama_sade(ad) LIKE $4
+             OR public.arama_sade(aciklama_2) LIKE $4 OR public.arama_sade(aciklama_3) LIKE $4)
       ORDER BY logical_ref LIMIT $2`,
-    [o.kodlar ?? null, o.sinir, o.sonra],
+    [o.kodlar ?? null, o.sinir, o.sonra, ara],
   );
 }
 

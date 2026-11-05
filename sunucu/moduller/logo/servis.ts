@@ -968,7 +968,7 @@ export const stokOkumaTuru = sayfaliOkumaTuru<LogoStokSatiri>(
 );
 
 // Malzemeler "Logo'dan gelenler" listesini ve stok karşılaştırmasını bunlarla okur (sunucu/kablolama.ts bağlar). Yetki denetlemez; okuyan uç denetler.
-export function logodakiMalzemeKartlari(db: Db, o: { kodlar?: readonly string[]; sinir: number; sonra: number }): Promise<s.AynadakiKart[]> {
+export function logodakiMalzemeKartlari(db: Db, o: { kodlar?: readonly string[]; ara?: string; sinir: number; sonra: number }): Promise<s.AynadakiKart[]> {
   return s.aynadakiKartlar(db, o);
 }
 export function logodakiStokToplamlari(db: Db, malzemeKodlari: readonly string[]): Promise<(LogoStokSatiri & { sonOkuma: string })[]> {

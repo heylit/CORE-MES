@@ -35,14 +35,14 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
   const oturum = useOturum();
   const [sonra, sonraYaz] = useState(0);
   const [ara, araYaz] = useState('');
-  const [kod, kodYaz] = useState('');
+  const [aranan, arananYaz] = useState('');
   const [alinan, alinanYaz] = useState<GelenKart | null>(null);
   const [onaylanan, onaylananYaz] = useState<{ kart: GelenKart; islem: 'bagla' | 'farki-al' } | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const liste = useQuery({
-    queryKey: [...LOGO_GELEN_ANAHTARI, sonra, kod],
-    queryFn: () => api.get<LogoGelenCevabi>(`/malzeme-logo-kartlari?sonra=${sonra}${kod ? `&kod=${encodeURIComponent(kod)}` : ''}`),
+    queryKey: [...LOGO_GELEN_ANAHTARI, sonra, aranan],
+    queryFn: () => api.get<LogoGelenCevabi>(`/malzeme-logo-kartlari?sonra=${sonra}${aranan ? `&ara=${encodeURIComponent(aranan)}` : ''}`),
   });
   const onayla = useTekGonderim({
     mutationFn: (o: { kart: GelenKart; islem: 'bagla' | 'farki-al' }) =>
@@ -102,7 +102,8 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
   const aramaGonder = (o: FormEvent) => {
     o.preventDefault();
     sonraYaz(0);
-    kodYaz(ara.trim());
+    const t = ara.trim();
+    if (t.length !== 1) arananYaz(t);
   };
   return (
     <>
@@ -115,7 +116,7 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
               Logo'daki kartlar okunduğu haliyle listelenir; CORE'daki kart Logo'dan değişmez. Alınan kart taslak açılır, onaydan önce sihirbazda tamamlanır.
             </p>
             <form className="tc-logo-ara" onSubmit={aramaGonder}>
-              <Girdi etiket="Logo kodu" ipucu="Tam kodla arar; boş bırakılırsa bütün liste." value={ara} maxLength={64} onChange={(o) => araYaz(o.target.value)} />
+              <Girdi etiket="Logo'da ara" ipucu="Kod, ad ya da açıklamanın bir parçası (en az 2 karakter); boş bırakılırsa bütün liste." value={ara} maxLength={100} onChange={(o) => araYaz(o.target.value)} />
               <Dugme simge="search" type="submit">Ara</Dugme>
             </form>
             <Tablo etiket="Logo'dan gelen kartlar" sutunlar={sutunlar} satirlar={kartlar} satirAnahtari={(k) => String(k.logoKayitNo)} bosMesaj="Logo'dan okunmuş kart yok" />

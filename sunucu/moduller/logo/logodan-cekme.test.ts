@@ -285,4 +285,24 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     await assert.rejects(vt().sorgu('DELETE FROM logo_malzeme_eslemesi WHERE stok_kodu = $1', [tmi]), /değişmez/);
     await assert.rejects(vt().tx((db) => malzemeEslemesiYaz(db, { stokKodu: `${tmi}X`, logoKodu: logo, logoKayitNo: simdi + 1 })), 'Logo kodu tek kartla eşleşir');
   });
+
+  test('LGC-12 aynada arama (2116g): kod, ad ve açıklama parçasıyla; Türkçe harf ve büyük/küçük harf farkı gözetilmez; % harf sayılır', async () => {
+    const r = 970000;
+    await vt().sorgu(
+      `INSERT INTO logo_malzeme_karti (logical_ref, kod, ad, aciklama_2, aciklama_3, aktif, son_okuma) VALUES
+         ($1, 'ARA.MIL.01', 'Çelik mil Ø20', NULL, NULL, true, now()),
+         ($1 + 1, 'ARA.BURC.02', 'Pirinç burç', 'İŞLENMİŞ yüzey', NULL, true, now()),
+         ($1 + 2, 'ARA.PUL.03', 'Pul', NULL, '%50 indirim', true, now())`,
+      [r],
+    );
+    const ara = async (metin: string): Promise<string[]> =>
+      (await vt().tx((db) => logodakiMalzemeKartlari(db, { ara: metin, sinir: 100, sonra: r - 1 }))).map((k) => k.kod);
+    assert.deepEqual(await ara('mil.0'), ['ARA.MIL.01']);
+    assert.deepEqual(await ara('celik'), ['ARA.MIL.01']);
+    assert.deepEqual(await ara('islenmis'), ['ARA.BURC.02']);
+    assert.deepEqual(await ara('%5'), ['ARA.PUL.03']);
+    assert.deepEqual(await ara('ARA.'), ['ARA.MIL.01', 'ARA.BURC.02', 'ARA.PUL.03']);
+    assert.deepEqual(await ara('yok-boyle'), []);
+    assert.equal((await ara('  ')).length >= 3, true, 'boş arama süzmez');
+  });
 });
