@@ -236,6 +236,108 @@ export const bildirimAliciDegistirGovdesi = z.object({
   surum: surumSemasi.nullable(),
 }).strict();
 
+// Elle bildirim (2147): yetkilinin hazırladığı haber. Tür ekranda rengi ve simgeyi seçer; önem eşlemesi sunucudadır
+// (uyarı -> uyari, acil -> acil, duyuru ve bilgi -> bilgi). Alıcılar yayın anında çözülür; yayın düzenlenmez, geri çekilir.
+export const YAYIN_TURLERI = ['uyari', 'duyuru', 'bilgi', 'acil'] as const;
+export type YayinTuru = (typeof YAYIN_TURLERI)[number];
+export const YAYIN_HEDEF_TURLERI = ['herkes', 'rol', 'istasyon', 'kisi'] as const;
+export type YayinHedefTuru = (typeof YAYIN_HEDEF_TURLERI)[number];
+// Seçilebilen simgeler ortak simge setinin adlarıdır; liste dışı ad reddedilir (ekran olmayan simgeyi çizemez).
+export const YAYIN_SIMGELERI = [
+  'bell', 'alert', 'fire', 'flag', 'wrench', 'helmet', 'calendar', 'cpu', 'users', 'gear', 'bolt', 'clipboard-check', 'truck', 'meal', 'drop', 'thermometer', 'lock',
+] as const;
+export const YAYIN_HEDEF_EN_COK = 100;
+// Görsel dosya modülünün yerel deposundadır; dış servis yoktur.
+export const YAYIN_GORSEL_TURLERI = ['png', 'jpeg', 'webp'] as const;
+export const YAYIN_GORSEL_EN_COK_BAYT = 5 * 1024 * 1024;
+
+const OZET = z.string().regex(/^[0-9a-f]{64}$/, 'Dosya özeti geçersiz.');
+export const bildirimYayinlaGovdesi = z.object({
+  tur: z.enum(YAYIN_TURLERI),
+  simge: z.enum(YAYIN_SIMGELERI),
+  baslik: z.string().trim().min(1, 'Başlık boş olamaz.').max(BILDIRIM_BASLIK_EN_COK),
+  metin: z.string().trim().max(BILDIRIM_METIN_EN_COK).nullable(),
+  gorsel: z.object({ ozet: OZET, ad: z.string().trim().min(1).max(255) }).strict().nullable(),
+  hedef: z.object({
+    tur: z.enum(YAYIN_HEDEF_TURLERI),
+    // Herkese yayında boştur; öteki türlerde rol, istasyon ya da kişi kimlikleri.
+    idler: z.array(KIMLIK).max(YAYIN_HEDEF_EN_COK, `En çok ${YAYIN_HEDEF_EN_COK} hedef seçilir.`)
+      .refine((l) => new Set(l).size === l.length, 'Aynı hedef iki kez seçilemez.'),
+  }).strict().refine((h) => (h.tur === 'herkes') === (h.idler.length === 0), 'Herkese yayında hedef seçilmez; öteki türlerde en az bir hedef seçilir.'),
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  // Boşsa hemen yayınlanır.
+  yayinZamani: zamanSemasi.nullable(),
+  bitis: zamanSemasi.nullable(),
+}).strict();
+
+export const bildirimYayinParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const bildirimYayinListeSorgusu = z.object({ ...sayfaSorguAlanlari });
+
+const kisiKunyesi = z.object({ id: z.number().int(), ad: z.string().nullable() });
+export const bildirimYayinSemasi = z.object({
+  id: z.number().int(),
+  tur: z.enum(YAYIN_TURLERI),
+  simge: z.enum(YAYIN_SIMGELERI),
+  baslik: z.string(),
+  metin: z.string().nullable(),
+  gorselVar: z.boolean(),
+  yazan: kisiKunyesi,
+  hedef: z.object({ tur: z.enum(YAYIN_HEDEF_TURLERI), idler: z.array(z.number().int()), adlar: z.array(z.string()) }),
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  yayinZamani: zamanSemasi,
+  bitis: zamanSemasi.nullable(),
+  // Alıcılara yazılmadıysa (ileri tarihli) null; sayılar da null.
+  dagitildi: zamanSemasi.nullable(),
+  aliciSayisi: z.number().int().nullable(),
+  okuyanSayisi: z.number().int().nullable(),
+  onaylayanSayisi: z.number().int().nullable(),
+  olusturuldu: zamanSemasi,
+  geriCekildi: zamanSemasi.nullable(),
+  geriCeken: kisiKunyesi.nullable(),
+});
+export const bildirimYayinCevabi = bildirimYayinSemasi;
+export const bildirimYayinListeCevabi = listeCevapSemasi(bildirimYayinSemasi);
+
+export const bildirimYayinAlicisi = z.object({
+  kisi: kisiKunyesi,
+  okundu: zamanSemasi.nullable(),
+  onaylandi: zamanSemasi.nullable(),
+});
+export const bildirimYayinAlicilariCevabi = z.object({ yayinId: z.number().int(), satirlar: z.array(bildirimYayinAlicisi) });
+
+// Hazırla ekranının seçenekleri: roller, etkin istasyonlar, etkin ve girişli kişiler.
+export const bildirimYayinHedefleriCevabi = z.object({
+  roller: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string() })),
+  istasyonlar: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+  kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
+  // Herkese yayının bugünkü alıcı sayısı (etkin ve girişli kişiler).
+  herkesSayisi: z.number().int().nonnegative(),
+});
+
+// Ekran ortası (2147-3 a): kişinin ortada bekleyen bildirimleri, eskiden yeniye. Onay isteyen "Okudum, anladım" denene dek,
+// onaysız olan okunana dek gelir; geri çekilen ve bitişi geçen yayın gelmez.
+export const ortadakiBildirimSemasi = z.object({
+  id: z.number().int(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  // Elle yayının türü; otomatik bildirimde null (ekran önemden çizer).
+  yayinTuru: z.enum(YAYIN_TURLERI).nullable(),
+  simge: z.enum(YAYIN_SIMGELERI).nullable(),
+  baslik: z.string(),
+  metin: z.string().nullable(),
+  yol: z.string().refine(kayitYoluMu).nullable(),
+  kaynakModul: z.string(),
+  // Elle yayında yazanın adı; otomatikte null.
+  gonderen: z.string().nullable(),
+  yayinId: z.number().int().nullable(),
+  gorselVar: z.boolean(),
+  onayIstenir: z.boolean(),
+  olusturuldu: zamanSemasi,
+});
+export const ortadakiBildirimlerCevabi = z.object({ satirlar: z.array(ortadakiBildirimSemasi) });
+export const bildirimOnayCevabi = z.object({ id: z.number().int(), okundu: zamanSemasi, onaylandi: zamanSemasi });
+
 export type Bildirim = z.output<typeof bildirimSemasi>;
 export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;
@@ -251,3 +353,13 @@ export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDeg
 export type BildirimAliciSatiri = z.output<typeof bildirimAliciSatiri>;
 export type BildirimAlicilariCevabi = z.output<typeof bildirimAlicilariCevabi>;
 export type BildirimAliciDegistirGovdesi = z.input<typeof bildirimAliciDegistirGovdesi>;
+export type YayinSimgesi = (typeof YAYIN_SIMGELERI)[number];
+export type BildirimYayinlaGovdesi = z.input<typeof bildirimYayinlaGovdesi>;
+export type BildirimYayinlaGirdisi = z.output<typeof bildirimYayinlaGovdesi>;
+export type BildirimYayini = z.output<typeof bildirimYayinSemasi>;
+export type BildirimYayinListeCevabi = z.output<typeof bildirimYayinListeCevabi>;
+export type BildirimYayinAlicilariCevabi = z.output<typeof bildirimYayinAlicilariCevabi>;
+export type BildirimYayinHedefleriCevabi = z.output<typeof bildirimYayinHedefleriCevabi>;
+export type OrtadakiBildirim = z.output<typeof ortadakiBildirimSemasi>;
+export type OrtadakiBildirimlerCevabi = z.output<typeof ortadakiBildirimlerCevabi>;
+export type BildirimOnayCevabi = z.output<typeof bildirimOnayCevabi>;

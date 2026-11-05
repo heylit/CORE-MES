@@ -34,3 +34,12 @@ Kararlar: 298 a ("298 a, yetki genişletme onaylı"; "bildirim yönetim ayarlar�
 ## Çağrı alıcıları okuması (Arkon CEKIRDEK-ISTEKLERI 8) — dal `cekirdek-cagri-alicilari`, taban 298 yaması
 - `GET /bildirimler/cagri-yonlendirme/benim` (`oturum`): oturumdaki kişinin rollerinden çıkan ekip listesi, `{ ekipler }`. Alıcı seçimi
   `ekipCagrisiBildir` ile aynı yoldan (`rollerdekiKisiler`) yapılır; iki kaynak oluşmaz. Yeni SQL, işlem, rol satırı ve göç yok.
+
+## 2147 Y1 elle bildirim, ekran ortası, onay (sunucu) — dal `2147-bildirim-yayini`
+Kararlar: 2147-1 a (bildirim modülünde), 2147-2 c (işlemler açılır, rol satırı yok), 2147-3 a (ekran ortası prototipteki gibi). Prototip `devir-heylit/2147/prototip/bildirim-merkezi.html`.
+- Göç `20261105093000_bildirim_yayini.sql`: yeni boş `bildirim_yayini`, `bildirim_yayin_hedefi`; `bildirim_kaydi`'ye boş ya da varsayılanlı dört sütun ve iki kısıt (dolu satır değişmez).
+- `paylasilan/islemler/bildirim.ts` (yeni), toplayıcıda iki satır, `islem-adlari.ts`'de üç satır (iki işlem, modül adı).
+- `paylasilan/sozlesme/bildirim.ts`: yayın, hedef, ortadaki bildirim ve onay şemaları; `bildirimSemasi` değişmedi (istemci Y2'de).
+- `sunucu/moduller/bildirim/yayin.ts` (yeni), `isler.ts` (yeni, dakikada bir ileri tarihli yayın), 9 uç; `arsivle` onay bekleyeni reddeder; `bildirimGonder` acil olanı ortada işaretler.
+- `sunucu/kablolama.ts`: istasyonlar import satırına iki ad, bir bildirim importu, bir bağ (istasyon kişileri -> bildirim yayını).
+- Simgeler ortak simge setinden 17 ad (prototipteki megafon setde yok; duyuru için `bell`/`calendar` kullanılır).

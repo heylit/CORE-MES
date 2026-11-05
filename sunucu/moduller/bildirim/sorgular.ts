@@ -15,17 +15,19 @@ export interface YeniBildirim {
   yol: string | null;
   kaynakModul: string;
   tekilAnahtar: string | null;
+  // Ekran ortasında çıkar (2147-3 a); otomatikte acil önem.
+  ortada?: boolean;
 }
 
 // Okunmamış aynı tekil anahtar varsa yeni satır açılmaz: sayaç artar, metin ve zaman tazelenir (zilde yeniden üste çıkar).
 export async function bildirimYaz(db: Db, b: YeniBildirim): Promise<void> {
   await db.sorgu(
-    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, ortada)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (kisi_id, tekil_anahtar) WHERE tekil_anahtar IS NOT NULL AND okundu IS NULL AND arsivlendi IS NULL
      DO UPDATE SET tekrar_sayisi = bildirim_kaydi.tekrar_sayisi + 1, baslik = EXCLUDED.baslik, metin = EXCLUDED.metin,
-       yol = EXCLUDED.yol, onem = EXCLUDED.onem, olusturuldu = now()`,
-    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar],
+       yol = EXCLUDED.yol, onem = EXCLUDED.onem, ortada = EXCLUDED.ortada, olusturuldu = now()`,
+    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar, b.ortada ?? false],
   );
 }
 
@@ -91,8 +93,15 @@ export async function tumunuOkunduIsaretle(db: Db, kisiId: number): Promise<numb
 export function arsivle(db: Db, kisiId: number, id: number): Promise<Bildirim | null> {
   return db.tek<Bildirim>(
     `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()), arsivlendi = coalesce(arsivlendi, now())
-      WHERE id = $1 AND kisi_id = $2 RETURNING ${SECIM}`,
+      WHERE id = $1 AND kisi_id = $2 AND NOT (onay_istenir AND onaylandi IS NULL) RETURNING ${SECIM}`,
     [id, kisiId],
+  );
+}
+
+// Kişinin satırı onay bekliyor mu (arşiv reddinin iletisi için); başkasının satırı null.
+export function onayBekliyorMu(db: Db, kisiId: number, id: number): Promise<{ bekliyor: boolean } | null> {
+  return db.tek(
+    'SELECT (onay_istenir AND onaylandi IS NULL) AS bekliyor FROM bildirim_kaydi WHERE id = $1 AND kisi_id = $2', [id, kisiId],
   );
 }
 
@@ -189,4 +198,148 @@ export async function turAyariYaz(
   await db.sorgu('INSERT INTO bildirim_tur_rolu (tur, rol_id) SELECT $1, unnest($2::int[])', [tur, a.rolIdleri]);
   await db.sorgu('INSERT INTO bildirim_tur_kisisi (tur, kisi_id) SELECT $1, unnest($2::int[])', [tur, a.kisiIdleri]);
   return true;
+}
+
+/* ---------------- elle bildirim (2147) ---------------- */
+
+export async function simdi(db: Db): Promise<string> {
+  const r = await db.tek<{ an: string }>(`SELECT ${zamanMetni('now()')} AS an`);
+  if (r === null) throw new Error('Veritabanı saati okunamadı.');
+  return r.an;
+}
+
+export interface YeniYayin {
+  yazanKisiId: number; tur: string; simge: string; baslik: string; metin: string | null; gorsel: { ozet: string; ad: string } | null;
+  hedefTuru: string; hedefIdleri: readonly number[]; ortada: boolean; onayIstenir: boolean; yayinZamani: string | null; bitis: string | null;
+}
+
+// Yayın zamanı boşsa veritabanı saatidir; geçmiş zaman da şimdiye çekilir (kural BIL-12).
+export async function yayinYaz(db: Db, y: YeniYayin): Promise<number> {
+  const r = await db.tek<{ id: number }>(
+    `INSERT INTO bildirim_yayini (yazan_kisi_id, tur, simge, baslik, metin, gorsel_ozet, gorsel_ad, hedef_turu, ortada, onay_istenir, yayin_zamani, bitis)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, greatest(now(), coalesce($11::timestamptz, now())), $12) RETURNING id`,
+    [y.yazanKisiId, y.tur, y.simge, y.baslik, y.metin, y.gorsel?.ozet ?? null, y.gorsel?.ad ?? null, y.hedefTuru, y.ortada, y.onayIstenir,
+      y.yayinZamani, y.bitis],
+  );
+  if (r === null) throw new Error('Yayın yazılamadı.');
+  await db.sorgu('INSERT INTO bildirim_yayin_hedefi (yayin_id, hedef_id) SELECT $1, unnest($2::int[])', [r.id, y.hedefIdleri]);
+  return r.id;
+}
+
+export interface YayinSatiri {
+  id: number; yazanKisiId: number; tur: string; simge: string; baslik: string; metin: string | null; gorselOzet: string | null;
+  hedefTuru: string; hedefIdleri: number[]; ortada: boolean; onayIstenir: boolean; yayinZamani: string; bitis: string | null;
+  dagitildi: string | null; aliciSayisi: number | null; okuyanSayisi: number | null; onaylayanSayisi: number | null;
+  olusturuldu: string; geriCekildi: string | null; geriCekenKisiId: number | null;
+}
+
+const YAYIN_SECIM = `y.id, y.yazan_kisi_id AS "yazanKisiId", y.tur, y.simge, y.baslik, y.metin, y.gorsel_ozet AS "gorselOzet",
+  y.hedef_turu AS "hedefTuru",
+  COALESCE((SELECT array_agg(h.hedef_id ORDER BY h.hedef_id) FROM bildirim_yayin_hedefi h WHERE h.yayin_id = y.id), '{}') AS "hedefIdleri",
+  y.ortada, y.onay_istenir AS "onayIstenir", ${zamanMetni('y.yayin_zamani')} AS "yayinZamani", ${zamanMetni('y.bitis')} AS bitis,
+  ${zamanMetni('y.dagitildi')} AS dagitildi, y.alici_sayisi AS "aliciSayisi",
+  CASE WHEN y.dagitildi IS NULL THEN NULL
+       ELSE (SELECT count(*)::int FROM bildirim_kaydi k WHERE k.yayin_id = y.id AND k.okundu IS NOT NULL) END AS "okuyanSayisi",
+  CASE WHEN y.dagitildi IS NULL OR NOT y.onay_istenir THEN NULL
+       ELSE (SELECT count(*)::int FROM bildirim_kaydi k WHERE k.yayin_id = y.id AND k.onaylandi IS NOT NULL) END AS "onaylayanSayisi",
+  ${zamanMetni('y.olusturuldu')} AS olusturuldu, ${zamanMetni('y.geri_cekildi')} AS "geriCekildi", y.geri_ceken_kisi_id AS "geriCekenKisiId"`;
+
+export function yayinBul(db: Db, id: number): Promise<YayinSatiri | null> {
+  return db.tek<YayinSatiri>(`SELECT ${YAYIN_SECIM} FROM bildirim_yayini y WHERE y.id = $1`, [id]);
+}
+
+// yazanKisiId null ise bütün yayınlar (rapor işlemi), değilse yalnız o kişinin yazdıkları.
+export async function yayinSayisi(db: Db, yazanKisiId: number | null): Promise<number> {
+  const r = await db.tek<{ toplam: number }>(
+    'SELECT count(*)::int AS toplam FROM bildirim_yayini WHERE $1::int IS NULL OR yazan_kisi_id = $1', [yazanKisiId],
+  );
+  return r?.toplam ?? 0;
+}
+
+export function yayinlar(db: Db, yazanKisiId: number | null, dilim: Dilim): Promise<YayinSatiri[]> {
+  return db.sorgu<YayinSatiri>(
+    `SELECT ${YAYIN_SECIM} FROM bildirim_yayini y WHERE $1::int IS NULL OR y.yazan_kisi_id = $1
+      ORDER BY y.olusturuldu DESC, y.id DESC LIMIT $2 OFFSET $3`,
+    [yazanKisiId, dilim.sinir, dilim.atla],
+  );
+}
+
+// Dağıtım bir kez olur: satır kilitlenir, dağıtılmış ya da geri çekilmiş yayın atlanır (false).
+export async function dagitimaKilitle(db: Db, id: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM bildirim_yayini WHERE id = $1 AND dagitildi IS NULL AND geri_cekildi IS NULL FOR UPDATE', [id])) !== null;
+}
+
+export async function yayinAlicilariYaz(
+  db: Db, y: { id: number; onem: BildirimOnemi; baslik: string; metin: string | null; ortada: boolean; onayIstenir: boolean }, tur: string,
+  kisiIdleri: readonly number[],
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, yayin_id, ortada, onay_istenir)
+     SELECT k, $2, $3, $4, $5, NULL, 'bildirim', NULL, $1, $6, $7 FROM unnest($8::int[]) AS k`,
+    [y.id, tur, y.onem, y.baslik, y.metin, y.ortada, y.onayIstenir, kisiIdleri],
+  );
+  await db.sorgu('UPDATE bildirim_yayini SET dagitildi = now(), alici_sayisi = $2 WHERE id = $1', [y.id, kisiIdleri.length]);
+}
+
+// Zamanı gelmiş, dağıtılmamış ve geri çekilmemiş yayınlar; aynı anda koşan ikinci tur kilitli satırı atlar.
+export async function zamaniGelenYayinlar(db: Db, sinir: number): Promise<number[]> {
+  const r = await db.sorgu<{ id: number }>(
+    `SELECT id FROM bildirim_yayini WHERE dagitildi IS NULL AND geri_cekildi IS NULL AND yayin_zamani <= now()
+      ORDER BY yayin_zamani, id LIMIT $1 FOR UPDATE SKIP LOCKED`,
+    [sinir],
+  );
+  return r.map((x) => x.id);
+}
+
+export async function geriCek(db: Db, id: number, kisiId: number): Promise<boolean> {
+  return (await db.tek(
+    'UPDATE bildirim_yayini SET geri_cekildi = now(), geri_ceken_kisi_id = $2 WHERE id = $1 AND geri_cekildi IS NULL RETURNING 1', [id, kisiId],
+  )) !== null;
+}
+
+export interface YayinAlicisiSatiri { kisiId: number; okundu: string | null; onaylandi: string | null }
+export function yayinAlicilari(db: Db, yayinId: number): Promise<YayinAlicisiSatiri[]> {
+  return db.sorgu<YayinAlicisiSatiri>(
+    `SELECT kisi_id AS "kisiId", ${zamanMetni('okundu')} AS okundu, ${zamanMetni('onaylandi')} AS onaylandi
+       FROM bildirim_kaydi WHERE yayin_id = $1 ORDER BY kisi_id`,
+    [yayinId],
+  );
+}
+
+export async function yayinAlicisiMi(db: Db, yayinId: number, kisiId: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM bildirim_kaydi WHERE yayin_id = $1 AND kisi_id = $2', [yayinId, kisiId])) !== null;
+}
+
+export interface OrtadakiSatir {
+  id: number; onem: BildirimOnemi; yayinTuru: string | null; simge: string | null; baslik: string; metin: string | null; yol: `/${string}` | null;
+  kaynakModul: string; yazanKisiId: number | null; yayinId: number | null; gorselVar: boolean; onayIstenir: boolean; olusturuldu: string;
+}
+
+// Ekran ortası (BIL-15): onay isteyen onaylanana, onaysız olan okunana dek; arşivdeki, geri çekilen ve bitişi geçen yayın gelmez.
+export function ortadakiler(db: Db, kisiId: number, sinir: number): Promise<OrtadakiSatir[]> {
+  return db.sorgu<OrtadakiSatir>(
+    `SELECT k.id, k.onem, y.tur AS "yayinTuru", y.simge, k.baslik, k.metin, k.yol, k.kaynak_modul AS "kaynakModul",
+            y.yazan_kisi_id AS "yazanKisiId", k.yayin_id AS "yayinId", (y.gorsel_ozet IS NOT NULL) AS "gorselVar",
+            k.onay_istenir AS "onayIstenir", ${zamanMetni('k.olusturuldu')} AS olusturuldu
+       FROM bildirim_kaydi k LEFT JOIN bildirim_yayini y ON y.id = k.yayin_id
+      WHERE k.kisi_id = $1 AND k.ortada AND k.arsivlendi IS NULL
+        AND (CASE WHEN k.onay_istenir THEN k.onaylandi IS NULL ELSE k.okundu IS NULL END)
+        AND (y.id IS NULL OR (y.geri_cekildi IS NULL AND (y.bitis IS NULL OR y.bitis > now())))
+      ORDER BY k.id LIMIT $2`,
+    [kisiId, sinir],
+  );
+}
+
+// Yalnız kişinin onay isteyen satırı; ilk onay zamanı korunur.
+export function onayla(db: Db, kisiId: number, id: number): Promise<{ id: number; okundu: string; onaylandi: string } | null> {
+  return db.tek(
+    `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()), onaylandi = coalesce(onaylandi, now())
+      WHERE id = $1 AND kisi_id = $2 AND onay_istenir
+      RETURNING id, ${zamanMetni('okundu')} AS okundu, ${zamanMetni('onaylandi')} AS onaylandi`,
+    [id, kisiId],
+  );
+}
+
+export async function kisininSatiriVarMi(db: Db, kisiId: number, id: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM bildirim_kaydi WHERE id = $1 AND kisi_id = $2', [id, kisiId])) !== null;
 }

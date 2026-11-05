@@ -23,3 +23,10 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Sonra
 
 - Olay türü kataloğu bu modülün sözleşmesinde (`BILDIRIM_TURLERI`). Faz 2'de tür sayısı artınca modül başına `paylasilan/bildirimler/<modul>.ts` ve toplayıcıya geçebilir (çekirdek işi).
+
+## Elle bildirim (2147)
+11. Ekranlar (Hazırla, Yayınlar ve okunma, ekran ortası penceresi, merkezde "Duyuru" ve "Onay bekleyen" süzgeci) Y2'de; liste satırının yayın künyesi (`bildirimSemasi`'na tür, simge, gönderen, geri çekildi) Y2 ile, istemci kilidiyle gelir.
+12. Üretim Terminali'nde ortadaki pencerenin Arkon hazırlık uyarısıyla sırası Y3'te (Operator.tsx kilit zinciri sonrası). İstasyon hedefi bugün yalnız o günkü atamadan; terminal oturumu Y3'te.
+13. Otomatik türlere "ortada" ve "onay" sütunu (Bildirim yönetimi) Y4'te; o zamana kadar BIL-16 (yalnız acil ortada) geçer.
+14. Hedef seçimi yayınlayanın kendi kapsamıyla daraltılmaz (prototip notu); işlem bugün yalnız yönetici taşıdığından gerek yok. Role verilirse ayrı karar.
+15. `bildirim-yayin-dagit` işinin okunur adı `istemci/src/moduller/sistem/is-adlari.ts`'de yok (kod adıyla görünür); Y2'de eklenir.

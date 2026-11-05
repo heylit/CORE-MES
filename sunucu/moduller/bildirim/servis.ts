@@ -11,7 +11,7 @@ import {
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, tekilAnahtar, tercihHatasi, yolTureUyar,
+  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikOrtadaMi, tekilAnahtar, tercihHatasi, yolTureUyar,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -51,6 +51,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   for (const kisiId of alicilar) {
     await s.bildirimYaz(db, {
       kisiId, tur: olay.tur, onem: tanim.onem, baslik, metin, yol: olay.yol ?? null, kaynakModul: kaynakModulu(olay.tur), tekilAnahtar: anahtar,
+      ortada: otomatikOrtadaMi(tanim.onem),
     });
   }
   return alicilar.length;
@@ -93,10 +94,12 @@ export async function tumunuOkundu(db: Db, kullanici: Kullanici): Promise<Tumunu
   return { isaretlenen: await s.tumunuOkunduIsaretle(db, kullanici.id) };
 }
 
+// BIL-15: onay bekleyen satır arşive kaldırılamaz; başkasının satırı yine "bulunamadı".
 export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise<Bildirim> {
   const b = await s.arsivle(db, kullanici.id, id);
-  if (b === null) throw bulunamadi(BULUNAMADI);
-  return b;
+  if (b !== null) return b;
+  if ((await s.onayBekliyorMu(db, kullanici.id, id))?.bekliyor === true) throw dogrulama(ONAY_ILETILERI.onaysizArsiv);
+  throw bulunamadi(BULUNAMADI);
 }
 
 // Kişi yalnız alabileceği olayları görür: türde alıcı seçimi varsa seçilmişse, yoksa türün işlemlerinden birini taşıyorsa.
