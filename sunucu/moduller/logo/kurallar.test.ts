@@ -4,7 +4,7 @@ import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
   agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
-  HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
+  HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
 describe('logo ayarı (kart #210)', () => {
@@ -136,6 +136,21 @@ describe('kart açma gövdesi (kart #207 C)', () => {
     assert.equal(dolu.govde.sellVat, 20);
     const sifir = eklemeGovdesi(kart, { ...secenek, kdv: 0 });
     assert.ok('govde' in sifir && sifir.govde.vat === 0 && sifir.govde.sellVat === 0);
+  });
+});
+
+describe('kart güncelleme gövdesi (2115-1 a, 2088-1)', () => {
+  test('LGB-22: Açıklama 1 doluysa Logo adı odur, boşsa TMI adı; Açıklama 2-3 name3, name4; boş açıklama gövdede yok', () => {
+    assert.deepEqual(malzemeGuncellemeGovdesi({ stokKodu: ' HM-A-1 ', ad: 'TMI', aciklama1: ' Logo ', aciklama2: 'Iki', aciklama3: 'Uc' }),
+      { govde: { code: 'HM-A-1', name: 'Logo', name3: 'Iki', name4: 'Uc' } });
+    assert.deepEqual(malzemeGuncellemeGovdesi({ stokKodu: 'HM-A-1', ad: ' TMI ', aciklama1: '  ', aciklama2: '', aciklama3: null }), { govde: { code: 'HM-A-1', name: 'TMI' } });
+    assert.deepEqual(malzemeGuncellemeGovdesi({ stokKodu: 'HM-A-1', ad: 'TMI' }), { govde: { code: 'HM-A-1', name: 'TMI' } }, 'kaynak açıklama vermezse bugünkü gövde');
+  });
+  test('LGB-22 reddedilen: ad ve Açıklama 1 boşsa, stok kodu boş ya da 24 karakteri aşarsa hata', () => {
+    assert.deepEqual(malzemeGuncellemeGovdesi({ stokKodu: 'HM-A-1', ad: null, aciklama1: ' ' }), { hata: 'Kartın adı yok.' });
+    assert.ok('hata' in malzemeGuncellemeGovdesi({ stokKodu: ' ', ad: 'TMI' }));
+    assert.ok('hata' in malzemeGuncellemeGovdesi({ stokKodu: 'X'.repeat(25), ad: 'TMI' }));
+    assert.ok('govde' in malzemeGuncellemeGovdesi({ stokKodu: 'X', ad: null, aciklama1: 'Logo' }), 'ad boş, Açıklama 1 dolu: Logo adı Açıklama 1');
   });
 });
 

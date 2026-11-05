@@ -541,12 +541,28 @@ export function karsilamaKaydiBul(govde: unknown, siparisSatirRef: number): numb
 }
 
 // Malzeme kartı güncelleme (not 2.1: UpdateRich, CODE'dan LOGICALREF bulunur). Kod, tür ve birim kilitlidir (MKL-3); yalnız ad gider.
-export function malzemeGuncellemeGovdesi(k: { stokKodu: string; ad: string | null }): { govde: { code: string; name: string } } | { hata: string } {
+export interface MalzemeGuncellemeGovdesi {
+  code: string;
+  name: string;
+  name3?: string;
+  name4?: string;
+}
+
+// Güncelleme, açmadaki ad kuralını izler (2115-1 a, 2088-1): Açıklama 1 doluysa Logo adı odur, Açıklama 2-3 doluysa NAME3-NAME4'e gider.
+// Kuyruk açıklamaları taşımıyorsa yalnız TMI adı gider; boş açıklama gövdede yoktur.
+export function malzemeGuncellemeGovdesi(k: {
+  stokKodu: string; ad: string | null; aciklama1?: string | null; aciklama2?: string | null; aciklama3?: string | null;
+}): { govde: MalzemeGuncellemeGovdesi } | { hata: string } {
   const kod = k.stokKodu.trim();
   if (kod === '' || kod.length > STOK_KODU_EN_COK) return { hata: `Stok kodu 1-${STOK_KODU_EN_COK} karakter olmalı.` };
-  const ad = k.ad?.trim() ?? '';
+  const ad = logoKartAdi(k);
   if (ad === '') return { hata: 'Kartın adı yok.' };
-  return { govde: { code: kod, name: ad } };
+  const govde: MalzemeGuncellemeGovdesi = { code: kod, name: ad };
+  for (const alan of ['aciklama2', 'aciklama3'] as const) {
+    const metin = k[alan]?.trim() ?? '';
+    if (metin !== '') govde[KART_ACIKLAMA_ALANLARI[alan]] = metin;
+  }
+  return { govde };
 }
 
 /* ---------------- Satış teklifi ve tekliften satış siparişi (Siparişler) ---------------- */

@@ -154,6 +154,39 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     assert.deepEqual([govde?.['name'], govde?.['name2'], govde?.['name3'], govde?.['name4']], ['Aciklama bir', undefined, 'Aciklama iki', 'Aciklama uc']);
   });
 
+  test('LGB-22 (2115-1 a, 2088-1) güncelleme açmadaki ad kuralını izler: Açıklama 1 Logo adı, Açıklama 2-3 name3, name4; boş açıklama gitmez; hizmet TMI adıyla güncellenir', async () => {
+    await tamam('/ayarlar/logo.malzeme-guncelleme-gonderimi/degistir', { deger: true });
+    try {
+      kopru.kartlar.set('HM-GNC-00001', 501);
+      kopru.kartlar.set('HM-GNC-00002', 502);
+      kopru.hizmetKartlari.set('HZ-GNC-00001', 503);
+      const gidecek = [
+        { no: 9001, stokKodu: 'HM-GNC-00001', ad: 'TMI adi', logoKayitNo: '501', tur: 'hammadde', hizmetYonu: null, aciklama1: 'Logo adi', aciklama2: 'Iki', aciklama3: ' ' },
+        { no: 9002, stokKodu: 'HM-GNC-00002', ad: 'Yalniz TMI adi', logoKayitNo: '502', tur: 'hammadde', hizmetYonu: null, aciklama1: null, aciklama2: null, aciklama3: 'Uc' },
+        { no: 9003, stokKodu: 'HZ-GNC-00001', ad: 'Hizmet adi', logoKayitNo: '503', tur: 'hizmet', hizmetYonu: 'alinan' as const, aciklama1: 'Kullanilmaz', aciklama2: null, aciklama3: null },
+      ];
+      const sonuclar = new Map<number, unknown>();
+      const o: TurOrtami = {
+        ...turOrtami(yeniSurecBellegi()),
+        malzemeGuncelleme: {
+          gidecekler: async () => gidecek.filter((g) => !sonuclar.has(g.no)),
+          sonuc: async (_db, no, x) => { sonuclar.set(no, x); },
+        },
+      };
+      for (const no of [9001, 9002, 9003]) assert.deepEqual(await tur(o), { tur: 'guncelleme', no, sonuc: 'gonderildi' });
+      const govdeler = kopru.istekler.filter((i) => i.yol.endsWith('UpdateRich')).map((i) => i.govde);
+      assert.deepEqual(govdeler, [
+        { code: 'HM-GNC-00001', name: 'Logo adi', name3: 'Iki' },
+        { code: 'HM-GNC-00002', name: 'Yalniz TMI adi', name4: 'Uc' },
+        { CODE: 'HZ-GNC-00001', DESCRIPTION: 'Hizmet adi' },
+      ]);
+      // Sahibin karşılaştırması TMI adıyla yapılır: kuyruktaki ad olduğu gibi döner.
+      assert.deepEqual(sonuclar.get(9001), { ad: 'TMI adi', tamam: true });
+    } finally {
+      await tamam('/ayarlar/logo.malzeme-guncelleme-gonderimi/degistir', { deger: false });
+    }
+  });
+
   test('LGB-8 kabul: kart aktif olur, "bekliyor"a düşer, işçi niyet yazar, sonraki turda gönderir; kart "gonderildi" ve kayıt numarası yazılır', async () => {
     const k = await aktifKart();
     const bellek = yeniSurecBellegi();
