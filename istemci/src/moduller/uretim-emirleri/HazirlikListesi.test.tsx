@@ -10,8 +10,7 @@ const MUDUR: Kullanici = { id: 5, ad: 'Deneme Mudur', islemler: ['sayfa.uretim-e
 const cevap = (cnc20: 'eksik' | 'muaf' | 'tamam', ek: Partial<HazirlikCevabi> = {}): HazirlikCevabi => ({
   maddeler: [
     { madde: 'cnc', durum: cnc20 === 'eksik' ? 'eksik' : cnc20, muafTutulur: true, isEmriDuzeyi: true },
-    { madde: 'cizim', durum: 'tamam', muafTutulur: false, isEmriDuzeyi: false },
-    { madde: 'kalibrasyon', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: false },
+    { madde: 'cizim', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: false },
     { madde: 'ozel-proses', durum: 'bilinmiyor', muafTutulur: true, isEmriDuzeyi: false },
   ],
   muafiyetler: [],
@@ -31,7 +30,7 @@ describe('Emir hazırlık matrisi', () => {
     ac(ekran(), '/e/3');
     const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
     expect(within(tablo).getAllByRole('row')).toHaveLength(4);
-    expect(within(tablo).getAllByRole('button', { name: /^Ölçü aleti kalibrasyonu: / })).toHaveLength(1);
+    expect(within(tablo).getAllByRole('button', { name: /^Çizim revizyonu: / })).toHaveLength(1);
     expect(within(tablo).getAllByRole('button', { name: /^CNC kurulumu, OP / })).toHaveLength(3);
     expect(within(tablo).getByRole('button', { name: 'CNC kurulumu, OP 20: Eksik' })).toBeTruthy();
     expect(within(tablo).getAllByText('Durur')).toHaveLength(2);
@@ -42,7 +41,7 @@ describe('Emir hazırlık matrisi', () => {
   it('hücre ayrıntısı muaf tutulamayan maddede muafiyet açmaz; okuyucu muaf tutamaz', async () => {
     sunucuKur(OKUYUCU, { 'GET /adimli-emirler/3/hazirlik': () => json(200, cevap('eksik')) });
     ac(ekran(), '/e/3');
-    fireEvent.click(await screen.findByRole('button', { name: 'Ölçü aleti kalibrasyonu: Eksik' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Çizim revizyonu: Eksik' }));
     expect(screen.getByText('Bu madde muaf tutulamaz.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'CNC kurulumu, OP 20: Eksik' }));
     expect(screen.queryByRole('button', { name: 'Gerekçeyle muaf tut' })).toBeNull();
@@ -75,7 +74,7 @@ describe('Emir hazırlık matrisi', () => {
     expect(screen.queryByRole('button', { name: 'Gerekçeyle muaf tut' })).toBeNull();
     const v = cevap('tamam');
     expect(satirDurur(v, v.isEmirleri[1]!)).toBe(true);
-    expect(satirDurur({ ...v, maddeler: v.maddeler.map((m) => ({ ...m, durum: m.madde === 'kalibrasyon' ? 'tamam' : m.durum })) }, v.isEmirleri[1]!)).toBe(false);
+    expect(satirDurur({ ...v, maddeler: v.maddeler.map((m) => ({ ...m, durum: m.madde === 'cizim' ? 'tamam' : m.durum })) }, v.isEmirleri[1]!)).toBe(false);
   });
 
   it('malzemesiz emirde ya da okuma yetkisi olmayanda bölüm çizilmez, sunucu sorulmaz', async () => {

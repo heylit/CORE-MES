@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { onayAlaniDegisiyor as ekranOnayDegisiyor } from '../../../istemci/src/moduller/kalite-merkezi/yeni/kurallar.ts';
-import { KM_DOSYA_SINIRI, arsivDegisiyor, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, emirCihazlari, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, kalibrasyonHazirligi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
+import { KM_DOSYA_SINIRI, arsivDegisiyor, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -202,17 +202,6 @@ describe('Kalite Merkezi kuralları', () => {
     for (const kod of ['K-3', 'K-4', 'K-5', 'K-9', '']) assert.equal(cihazGecerliMi({ kod, sonKal: '2026-10-19' }, durumlar), false, kod);
     assert.equal(cihazGecerliMi({ sonKal: '2026-10-19' }, durumlar), false, 'kodsuz');
     assert.equal(cihazGecerliMi(null, durumlar), false, 'kaydı yok');
-  });
-
-  test('KM-K88 emir kalibrasyon hazırlığı: emrin muayenelerindeki cihazlar; hepsi geçerliyse tamam, cihazsız emir seçili değil', () => {
-    const durumlar = new Map([['K-1', 'gecerli'], ['K-2', 'gecmis']] as const);
-    const cihazlar = new Map<string, Record<string, unknown>>([['d1', { kod: 'K-1' }], ['d2', { kod: 'K-2' }]]);
-    const muayene = (...ids: string[]) => ({ chars: ids.map((cihaz) => ({ ad: 'Çap', cihaz })) });
-    assert.deepEqual(emirCihazlari([muayene('d1', '', 'd1'), muayene('d2'), { chars: 'bozuk' }]), ['d1', 'd2']);
-    assert.deepEqual(kalibrasyonHazirligi(['d1'], cihazlar, durumlar), { durum: 'tamam', zaman: null, secildi: true });
-    assert.deepEqual(kalibrasyonHazirligi(['d1', 'd2'], cihazlar, durumlar), { durum: 'yok', zaman: null, secildi: true });
-    assert.deepEqual(kalibrasyonHazirligi(['d9'], cihazlar, durumlar), { durum: 'yok', zaman: null, secildi: true }, 'silinmiş cihaz');
-    assert.deepEqual(kalibrasyonHazirligi([], cihazlar, durumlar), { durum: 'yok', zaman: null, secildi: false });
   });
 
   test('KM-K85 yeni ölçüm: yalnız muayenede, cihazlı ve değerli karakteristik; önceki hâlde aynen duran ölçüm yeni sayılmaz', () => {

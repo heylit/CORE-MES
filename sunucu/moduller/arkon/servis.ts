@@ -22,7 +22,7 @@ import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
-import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, numuneIste, numuneKarari, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
+import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOner, emirNumuneleri, numuneIste, numuneKarariVer, numuneOku, olcumYaz } from '../kalite-merkezi/disari.ts';
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
@@ -31,7 +31,7 @@ import {
 import { projeAdlari } from '../projeler/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { malzemeIstegiAc, malzemeIstekleri, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
+import { malzemeIstegiAc, malzemeIstekleri, numuneKarariYansit, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
 import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimat, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
@@ -46,7 +46,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   calismaDevral, hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri,
+  makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -57,7 +57,7 @@ import {
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
-  icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
+  icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
@@ -827,7 +827,7 @@ export async function belgeYaz(
   }
   if (depo === 'results') govde = await lotKarariniYaz(db, kullanici, rol, kimlik, govde, guncel?.govde);
   if (depo === 'results') govde = await tezgahOlcumunuKmyeYaz(db, kullanici, rol, kimlik, govde, guncel?.govde);
-  if (depo === 'requests') govde = await istegiKmyeBagla(db, kullanici, govde, guncel?.govde);
+  if (depo === 'requests') govde = await istegiKmyeBagla(db, kullanici, kimlik, govde, guncel?.govde);
   await sorgular.belgeYaz(db, depo, kimlik, govde, surum, kullanici.id);
   await sorgular.iletiEkle(db, g.kaynak, { type: '$db', store: depo, id: kimlik });
   await arizayiMakineyeYansit(db, kullanici, depo, kimlik, govde, guncel?.govde);
@@ -1743,7 +1743,8 @@ async function istekPaketi(db: Db, istek: unknown): Promise<unknown> {
 // isteğe yazılır; açılamazsa (bağsız plan, emir yok, Kalite Merkezi reddi) istek yine yazılır, nedeni `kmUyari`'dadır (796 a). Karar:
 // ilk parça numunesinde Arkon kararı reddedilir (789-2a, karar Kalite Merkezi'nin ilk parça kararıdır); öteki numunede karar Kalite
 // Merkezi'ne yazılır, onun reddi (ikinci karar, ölçümsüz ret) yazımı durdurur. Kararı vereni belgeRoluReddi kalite ve yöneticiyle sınırlar.
-async function istegiKmyeBagla(db: Db, kullanici: Kullanici, istek: unknown, onceki: unknown): Promise<unknown> {
+// 2131: karar Kalite Merkezi'nde retde NCR açar (numuneKarariVer), parçaya ve periyodik ret kapısındaki sayıma yansır (numuneKarariniYansit).
+async function istegiKmyeBagla(db: Db, kullanici: Kullanici, kimlik: string, istek: unknown, onceki: unknown): Promise<unknown> {
   if (onceki === undefined) {
     const plan = istekKmPlani(istek, await istekPaketi(db, istek));
     if (plan.ilkParca && istekKarari(istek, undefined) !== null) throw yetkiYok(ILETILER.ilkParcaKmde);
@@ -1766,8 +1767,29 @@ async function istegiKmyeBagla(db: Db, kullanici: Kullanici, istek: unknown, onc
   const kmNumune = alanOku(onceki, 'kmNumune');
   if (typeof kmNumune !== 'number') return istek;
   const not = alanOku(istek, 'note');
-  await numuneKarari(db, kullanici.id, kmNumune, karar, typeof not === 'string' && not.trim() !== '' ? not.trim() : null);
+  await numuneKarariVer(db, kullanici, kmNumune, karar, typeof not === 'string' && not.trim() !== '' ? not.trim() : null);
+  await numuneKarariniYansit(db, kullanici.id, kimlik, alanOku(onceki, 'pkgId'), karar, kmNumune);
   return istek;
+}
+
+// 2131-3 a: kararı verilen fiziksel numune stokta hatta döner ya da redde geçer; teslimi olmayan numunede stok neden döner, karar durmaz.
+// 2131-2 a: periyodik ret kapısı açıksa (bu numuneden önceki son periyodik karar ret) bu karar karar bekleyen sayımı kapatır. İlk parça
+// numunesinin (kmNumune null) sayımı ilk parça kararınındır. Kapanmış emirde sayım yazılamaz; karar yine yazılır (kayıt noktası).
+async function numuneKarariniYansit(db: Db, kisiId: number, kimlik: string, paketId: unknown, karar: 'onay' | 'ret' | 'sapma', kmNumune: number | null): Promise<void> {
+  await kayitNoktasi(db, () => numuneKarariYansit(db, { kaynakKimligi: numuneTeslimKaynagi(kimlik), karar, kisiId }));
+  if (kmNumune === null || typeof paketId !== 'string' || paketId === '') return;
+  const emirId = await periyodikRetKapisi(db, paketId, kmNumune);
+  if (emirId === null) return;
+  await kayitNoktasi(db, () => kararliSayimiSonuclandir(db, kisiId, emirId, karar === 'ret' ? 'ret' : 'onay', paketIsEmri(paketId)));
+}
+
+// Kapı açıksa paketin emri döner. Kalite Merkezi emrin son numunelerini verir (sınırlı); son periyodik karar onların içindedir.
+async function periyodikRetKapisi(db: Db, paketId: string, haric: number | null): Promise<number | null> {
+  const periyodik = periyodikNumuneler(await sorgular.paketIstekleri(db, paketId));
+  if (periyodik.size === 0) return null;
+  const emirId = await paketinUretimEmri(db, paketId);
+  if (emirId === null) return null;
+  return periyodikRetAcik(periyodik, await emirNumuneleri(db, emirId), haric) ? emirId : null;
 }
 
 // 798, 796 a: tezgah ölçümü Kalite Merkezi'nin ölçüm kaydına operatörün (kalite ve yöneticide kalitenin) ölçümü olarak yazılır. Bağsız
@@ -1842,6 +1864,8 @@ export async function kmKararlariniAynala(db: Db): Promise<void> {
       ilkParcaKarari: fai === undefined || (fai.karar !== 'onay' && fai.karar !== 'ret') ? null : { karar: fai.karar, zaman: fai.zaman },
     });
     if (govde === null) continue;
+    const karar = istekKarari(govde, guncel.govde);
+    if (karar !== null) await numuneKarariniYansit(db, aday.degistirenId, aday.kimlik, paketId, karar, alanOku(guncel.govde, 'ilkParca') === true || typeof kmNumune !== 'number' ? null : kmNumune);
     await sorgular.belgeYaz(db, 'requests', aday.kimlik, govde, yeniSurum(aday.surum, Date.now()), aday.degistirenId);
     await sorgular.iletiEkle(db, SUNUCU_KAYNAGI, { type: '$db', store: 'requests', id: aday.kimlik });
     if (!acikIstekMi(govde)) {
@@ -1860,6 +1884,18 @@ async function paketinUretimEmri(db: Db, paketId: unknown): Promise<number | nul
 // da bekler, 136 a); Arkon'daki kalite Kabul/Red'i bu kararı yazar (564 5 a, ilkParcaKarariniYaz), tezgah ölçümü kapıyı kapatmaz. Kural `kurallar.ts kararBekleyenAdet`; yeniden ilk parça (hazırlık kararı)
 // beklenirken sayım reddedilir (VARSAYIM: 131 b ilk ilk parçanın kararıdır), tabanı hazırlık kararının damgasıdır, kapanışı kararın ardından
 // gelen Kalite Merkezi onayıdır (`yenidenIlkParcaAcik`).
+async function sayimKapisi(db: Db, satir: Readonly<Record<string, unknown>>, onbellek: OkumaOnbellegi): Promise<number> {
+  const ilk = await ilkParcaKapisi(db, satir, onbellek);
+  return ilk > 0 ? ilk : periyodikNumuneKapisi(db, satir, onbellek);
+}
+
+// 2131-2 a: periyodik numunenin son kararı ret ise sağlam sayımın tamamı karar bekler (ilk parça payı yoktur); emri olmayan pakette kapı yok.
+async function periyodikNumuneKapisi(db: Db, satir: Readonly<Record<string, unknown>>, onbellek: OkumaOnbellegi): Promise<number> {
+  const paketId = satir['pkgId'], delta = satir['delta'];
+  if (typeof paketId !== 'string' || paketId === '' || satir['kind'] !== 'good' || typeof delta !== 'number' || delta <= 0) return 0;
+  return (await onbellek.oku(`periyodik-ret:${paketId}`, () => periyodikRetKapisi(db, paketId, null))) === null ? 0 : delta;
+}
+
 async function ilkParcaKapisi(db: Db, satir: Readonly<Record<string, unknown>>, onbellek: OkumaOnbellegi): Promise<number> {
   const paketId = satir['pkgId'];
   if (typeof paketId !== 'string' || paketId === '' || !ilkParcaSayimiAsildi(satir, ILK_PARCA_ADEDI)) return 0;
@@ -1994,7 +2030,7 @@ export async function kayitEkle(
     if (partiRet !== null) throw cakisma(partiRet);
     if (sinir !== null) await sinir.reddet(kayitKonumu(satir));
     if (tur === 'events') await cizimRevizyonuKapisi(db, satir, onbellek);
-    const kararBekleyen = tur === 'counts' ? await ilkParcaKapisi(db, satir, onbellek) : 0;
+    const kararBekleyen = tur === 'counts' ? await sayimKapisi(db, satir, onbellek) : 0;
     const sutunlar = tumSutunlar[sira] ?? null;
     if (sutunlar === null) throw dogrulama('Kayıt kimliği (cid) yok.', `satirlar.${sira}.cid`);
     const temel = kayitGovdesi(satir, kullanici, simdi);

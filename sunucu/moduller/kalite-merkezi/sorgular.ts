@@ -178,15 +178,6 @@ export function ilkParcaSonKararlari(db: Db, uretimEmriIdler: readonly number[])
   );
 }
 
-// Kaydın emir alanı uygulamada elle yazılır; kırpılarak eşlenir.
-export function emirMuayeneleri(db: Db, emirNolari: readonly string[]): Promise<{ emirNo: string; govde: Record<string, unknown> }[]> {
-  return db.sorgu(
-    `SELECT btrim(govde->>'emir') AS "emirNo", govde FROM kalite_merkezi_belge
-     WHERE koleksiyon = 'insp' AND govde IS NOT NULL AND btrim(govde->>'emir') = ANY($1::text[]) ORDER BY surum`,
-    [[...emirNolari]],
-  );
-}
-
 export function kayitGovdeleri(db: Db, koleksiyon: string, kimlikler: readonly string[]): Promise<{ kimlik: string; govde: Record<string, unknown> }[]> {
   return db.sorgu(
     'SELECT kimlik, govde FROM kalite_merkezi_belge WHERE koleksiyon = $1 AND govde IS NOT NULL AND kimlik = ANY($2::text[])',

@@ -1999,6 +1999,28 @@ export function istekKarari(istek: unknown, onceki: unknown): 'onay' | 'ret' | '
 
 export const acikIstekMi = (istek: unknown): boolean => ACIK_ISTEK_DURUMLARI.has(alanOku(istek, 'status'));
 
+// 2131-2 a: periyodik numune, Kalite Merkezi numunesi olan ve ilk parça olmayan istektir. Son kararı ret ise sayım, ilk parçadaki gibi kalite
+// onay verene kadar karar bekler; sonraki periyodik karar bekleyeni kapatır (onayda sağlama, retde redde). Son karar Kalite Merkezi'nin karar
+// anına göredir (Arkon'daki `decidedAt` istemcinin saatidir); `haric` henüz yansımamış yeni karardır, sayılmaz.
+export function periyodikNumuneler(istekler: readonly unknown[]): Set<number> {
+  return new Set(istekler.flatMap((i) => {
+    const n = alanOku(i, 'kmNumune');
+    return typeof n === 'number' && alanOku(i, 'ilkParca') !== true ? [n] : [];
+  }));
+}
+export function periyodikRetAcik(
+  periyodik: ReadonlySet<number>, numuneler: readonly { id: number; karar: { karar: string; zaman: string } | null }[], haric: number | null = null,
+): boolean {
+  let son: { an: number; id: number; ret: boolean } | null = null;
+  for (const n of numuneler) {
+    if (n.karar === null || n.id === haric || !periyodik.has(n.id)) continue;
+    const an = Date.parse(n.karar.zaman);
+    if (son !== null && (an < son.an || (an === son.an && n.id < son.id))) continue;
+    son = { an, id: n.id, ret: n.karar.karar === 'ret' };
+  }
+  return son?.ret === true;
+}
+
 // Kalite Merkezi'nde verilen karar Arkon isteğine aynalanır: terminal bekleyen numunesini kapatır, operatöre sonuç gider. İlk parça
 // numunesinde karar Kalite Merkezi'nin ilk parça kararıdır, istekten sonra verilmiş olmalı.
 // Ölçülen balon sayısı (`kmOlculen`) Kalite Merkezi'nde girilen ölçüyle de güncellenir.
