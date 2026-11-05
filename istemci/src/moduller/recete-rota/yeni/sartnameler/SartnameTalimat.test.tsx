@@ -29,8 +29,8 @@ const SABLON: TalimatSablonuCevabi = {
   sablon: {
     id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0,
     adimlar: [
-      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [] },
-      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [] },
+      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim' },
+      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim' },
     ],
   },
 };

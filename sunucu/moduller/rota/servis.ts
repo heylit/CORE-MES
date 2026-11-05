@@ -389,7 +389,7 @@ function talimatAdimlariKur(adimlar: readonly s.TalimatAdimiSatiri[], medyalar: 
   for (const x of adimlar) {
     const adim: TalimatAdimi = {
       sira: x.sira, baslik: x.baslik, metin: x.metin, kontrol: kontrolKur(x.kontrolTuru, x.kontrolAyari), zorunlu: x.zorunlu,
-      medya: medya.get(`${x.sahipId}:${x.sira}`) ?? [],
+      medya: medya.get(`${x.sahipId}:${x.sira}`) ?? [], asama: x.asama,
     };
     harita.set(x.sahipId, [...(harita.get(x.sahipId) ?? []), adim]);
   }
@@ -437,7 +437,7 @@ async function adimYazilari(
     const medya: s.MedyaYazisi[] = [];
     for (const m of a.medya) medya.push(await medyaCoz(db, kullanici, m, denetimEki));
     const { tur, ayar } = kontrolAyrisi(a.kontrol);
-    sonuc.push({ baslik: a.baslik, metin: a.metin, kontrolTuru: tur, kontrolAyari: ayar, zorunlu: a.zorunlu, medya });
+    sonuc.push({ baslik: a.baslik, metin: a.metin, kontrolTuru: tur, kontrolAyari: ayar, zorunlu: a.zorunlu, medya, asama: a.asama });
   }
   return sonuc;
 }
@@ -1110,7 +1110,7 @@ export async function talimatYayinla(
   const satirlar = await s.taslakAdimlari(db, t.id);
   const medyalar = await s.taslakMedyalari(db, t.id);
   const yazilar: s.TalimatAdimiYazisi[] = satirlar.map((a) => ({
-    baslik: a.baslik, metin: a.metin, kontrolTuru: a.kontrolTuru, kontrolAyari: a.kontrolAyari, zorunlu: a.zorunlu,
+    baslik: a.baslik, metin: a.metin, kontrolTuru: a.kontrolTuru, kontrolAyari: a.kontrolAyari, zorunlu: a.zorunlu, asama: a.asama,
     medya: medyalar.filter((m) => m.adimSira === a.sira).map((m) => ({ ozet: m.ozet, ad: m.ad, tur: m.tur, boyut: m.boyut })),
   }));
   const id = await s.talimatEkle(db, urunId, govde.opNo, (son ?? 0) + 1, adimliTalimatMetni(yazilar), kullanici.id);

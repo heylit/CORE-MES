@@ -10,14 +10,14 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); 
 // Uydurma talimat: yayında 2. sürüm (tek adım) ve bir şablon.
 const kisi = { id: 1, ad: 'Deneme 1' };
 const YAZAN: Kullanici = { ...YONETICI, islemler: [...YONETICI.islemler, 'rota.talimat-yaz'] };
-const yayin = (baslik: string) => ({ sira: 1, baslik, metin: null, kontrol: { tur: 'onay' as const }, zorunlu: true, medya: [] });
+const yayin = (baslik: string) => ({ sira: 1, baslik, metin: null, kontrol: { tur: 'onay' as const }, zorunlu: true, medya: [], asama: 'uretim' as const });
 const YAYINDA: TalimatlarCevabi = {
   surumler: [{ surum: 2, metin: 'Programı doğrula', yazan: kisi, yazma: '2026-10-28T10:00:00.000Z', adimli: true, adimlar: [yayin('Programı doğrula')] }],
   taslak: null,
 };
 const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 1, adimSayisi: 1, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0 }] };
 const SABLON: TalimatSablonuCevabi = {
-  sablon: { ...SABLONLAR.sablonlar[0]!, adimlar: [{ sira: 1, baslik: 'Çapak al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [] }] },
+  sablon: { ...SABLONLAR.sablonlar[0]!, adimlar: [{ sira: 1, baslik: 'Çapak al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' }] },
 };
 
 function kur(kullanici: Kullanici) {

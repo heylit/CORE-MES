@@ -434,8 +434,8 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(c.operator, null, [adim()])).statusCode, 403);
     await tamam(c.planlama, 'POST', `/rota/urunler/${t.urun}/talimat-yaz`, { opNo: 10, metin: 'Eski talimat\nİkinci satır', okunanSurum: null });
     const adimlar = [
-      adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true }),
-      adim({ baslik: 'İlk parçayı ölç', metin: 'Kritik ölçü ölçüm planından.', kontrol: { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' }, zorunlu: true }),
+      adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true, asama: 'on_hazirlik' }),
+      adim({ baslik: 'İlk parçayı ölç', metin: 'Kritik ölçü ölçüm planından.', kontrol: { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' }, zorunlu: true, asama: 'hazirlik' }),
       adim({ baslik: 'Rengi karşılaştır', kontrol: { tur: 'secim', secenekler: ['Uygun', 'Uygun değil'] } }),
       adim({ baslik: 'Kutula', kontrol: { tur: 'foto', aciklama: 'Kutulanmış parça' } }),
     ];
@@ -445,7 +445,8 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const l = cevap.json<TalimatlarCevabi>();
     assert.deepEqual(l.surumler.map((x) => [x.surum, x.adimli, x.adimlar.length]), [[2, true, 4], [1, false, 1]]);
     assert.equal(l.surumler[0]?.metin, 'Programı doğrula\nİlk parçayı ölç\nRengi karşılaştır\nKutula');
-    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false, medya: [] });
+    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' });
+    assert.deepEqual(l.surumler[0]?.adimlar.map((x) => x.asama), ['on_hazirlik', 'hazirlik', 'uretim', 'uretim']);
     assert.deepEqual(l.surumler[0]?.adimlar[1]?.kontrol, { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' });
 
     await yururlugeAl(t.id, t.surum);
@@ -457,6 +458,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     ]);
     const okunan = await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 2));
     assert.equal(okunan?.[0]?.zorunlu, true);
+    assert.equal(okunan?.[0]?.asama, 'on_hazirlik');
     assert.equal((await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 1)))?.length, 1);
     assert.equal(await vt().tx((db) => talimatSurumuAdimlari(db, t.urun, 10, 9)), null);
   });

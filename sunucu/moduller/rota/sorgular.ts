@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type {
-  Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami,
+  Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
@@ -538,14 +538,15 @@ export async function talimatEkle(db: Db, malzemeId: number, opNo: number, surum
   ))!.id;
 }
 
-export interface TalimatAdimiSatiri { sahipId: number; sira: number; baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean }
+export interface TalimatAdimiSatiri { sahipId: number; sira: number; baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean; asama: TalimatAsamasi }
 export interface MedyaYazisi { ozet: string; ad: string; tur: 'resim' | 'video'; boyut: number }
 export interface TalimatAdimiYazisi {
   baslik: string; metin: string | null; kontrolTuru: string; kontrolAyari: Record<string, unknown>; zorunlu: boolean; medya: readonly MedyaYazisi[];
+  asama: TalimatAsamasi;
 }
 export interface MedyaSatiri extends MedyaYazisi { sahipId: number; adimSira: number }
 
-const ADIM_SUTUNLARI = `sira, baslik, metin, kontrol_turu AS "kontrolTuru", kontrol_ayari AS "kontrolAyari", zorunlu`;
+const ADIM_SUTUNLARI = `sira, baslik, metin, kontrol_turu AS "kontrolTuru", kontrol_ayari AS "kontrolAyari", zorunlu, asama`;
 
 export function talimatAdimlari(db: Db, talimatIdleri: readonly number[]): Promise<TalimatAdimiSatiri[]> {
   return db.sorgu<TalimatAdimiSatiri>(
@@ -561,11 +562,11 @@ async function adimlariEkle(
   if (adimlar.length === 0) return;
   const { adim: tablo, sahip: sahipSutunu } = t;
   await db.sorgu(
-    `INSERT INTO ${tablo} (${sahipSutunu}, sira, baslik, metin, kontrol_turu, kontrol_ayari, zorunlu)
-     SELECT $1, x.sira, x.baslik, x.metin, x.kontrol_turu, x.kontrol_ayari, x.zorunlu
-       FROM jsonb_to_recordset($2::jsonb) AS x (sira int, baslik text, metin text, kontrol_turu text, kontrol_ayari jsonb, zorunlu boolean)`,
+    `INSERT INTO ${tablo} (${sahipSutunu}, sira, baslik, metin, kontrol_turu, kontrol_ayari, zorunlu, asama)
+     SELECT $1, x.sira, x.baslik, x.metin, x.kontrol_turu, x.kontrol_ayari, x.zorunlu, x.asama
+       FROM jsonb_to_recordset($2::jsonb) AS x (sira int, baslik text, metin text, kontrol_turu text, kontrol_ayari jsonb, zorunlu boolean, asama text)`,
     [sahipId, JSON.stringify(adimlar.map((a, i) => ({
-      sira: i + 1, baslik: a.baslik, metin: a.metin, kontrol_turu: a.kontrolTuru, kontrol_ayari: a.kontrolAyari, zorunlu: a.zorunlu,
+      sira: i + 1, baslik: a.baslik, metin: a.metin, kontrol_turu: a.kontrolTuru, kontrol_ayari: a.kontrolAyari, zorunlu: a.zorunlu, asama: a.asama,
     })))],
   );
   const medya = adimlar.flatMap((a, i) => a.medya.map((m, j) => ({ adim_sira: i + 1, sira: j + 1, ozet: m.ozet, tur: m.tur, ad: m.ad, boyut: m.boyut })));
