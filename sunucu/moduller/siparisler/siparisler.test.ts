@@ -315,6 +315,23 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await oku(yonetici, `/siparisler/${once.id}`)).json<SiparisAyrintisi>().no, once.no);
   });
 
+  test('2120: kalem ve kart seçeneği kartın Açıklama 1-3\'ünü dolu olanlar sırasıyla taşır; açıklamasız kartta boş dizi', async () => {
+    const aciklamali = await kartAc('mamul');
+    await o().sahip.sorgu("UPDATE malzeme_katalog_karti SET aciklama_1 = 'Deneme ac 1', aciklama_2 = NULL, aciklama_3 = 'Deneme ac 3' WHERE no = $1", [aciklamali]);
+    const s = await siparisAc({
+      satirlar: [
+        { malzemeNo: aciklamali, miktar: '1', birimFiyat: '1', termin: null, aciklama: null },
+        { malzemeNo: mamulNo, miktar: '1', birimFiyat: '1', termin: null, aciklama: null },
+      ],
+    });
+    assert.deepEqual(s.satirlar.map((r) => r.aciklamalar), [['Deneme ac 1', 'Deneme ac 3'], []]);
+    const okunan = (await oku(yonetici, `/siparisler/${s.id}`)).json<SiparisAyrintisi>();
+    assert.deepEqual(okunan.satirlar[0]?.aciklamalar, ['Deneme ac 1', 'Deneme ac 3']);
+    const c = await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=SIP-DNM');
+    const secenek = c.json<{ satirlar: { no: number; aciklamalar: string[] }[] }>().satirlar.find((m) => m.no === aciklamali);
+    assert.deepEqual(secenek?.aciklamalar, ['Deneme ac 1', 'Deneme ac 3']);
+  });
+
   test('SIP-02 seçim: kart seçenekleri yalnız aktif satılan türleri verir, aramayla süzülür; işlemi olmayan rol 403', async () => {
     const c = await oku(yonetici, '/siparisler/malzeme-secenekleri?ara=SIP-DNM');
     assert.equal(c.statusCode, 200, c.body);

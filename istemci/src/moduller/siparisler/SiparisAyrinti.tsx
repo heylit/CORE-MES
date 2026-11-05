@@ -10,6 +10,7 @@ import { SIPARIS_DURUMU, fiyatMetni, kalanGun, miktarMetni, paraMetni, tarihMetn
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { SiparisCarpani } from './SiparisCarpani.tsx';
 import { SiparisProjeleri } from './SiparisProjeleri.tsx';
+import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
@@ -75,7 +76,7 @@ export function SiparisAyrinti() {
     // 224: emir açılırken satır bu numarayla seçilir.
     { anahtar: 'sira', baslik: 'No', mono: true, kirilmaz: true, hucre: (m) => m.sira },
     { anahtar: 'kod', baslik: 'Kod', mono: true, kirilmaz: true, hucre: (m) => m.malzemeKodu ?? `Kart ${m.malzemeNo}` },
-    { anahtar: 'ad', baslik: 'Kalem', hucre: (m) => m.malzemeAdi ?? '—' },
+    { anahtar: 'ad', baslik: 'Kalem', hucre: (m) => <KalemMetni ad={m.malzemeAdi} aciklamalar={m.aciklamalar} /> },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (m) => `${miktarMetni(m.miktar)}${m.birim ? ` ${m.birim}` : ''}` },
     { anahtar: 'fiyat', baslik: 'Birim fiyat', hizala: 'sag', kirilmaz: true, hucre: (m) => fiyatMetni(m.birimFiyat, s.paraBirimi) },
     { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (m) => (m.termin === null ? 'Sipariş termini' : tarihMetni(m.termin)) },

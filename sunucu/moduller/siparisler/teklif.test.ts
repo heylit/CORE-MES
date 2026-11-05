@@ -204,6 +204,8 @@ describe('siparisler teklif (gerçek PostgreSQL, gerçek giriş)', () => {
     const bos = t.satirlar.find((s) => s.malzemeNo === null)!;
     await komut(t, `satirlar/${bos.id}/kart-bagla`, { malzemeNo: sarfNo }, 400);
     t = await komut(t, `satirlar/${bos.id}/kart-bagla`, { malzemeNo: mamulNo });
+    // 2120: bağlanan kartın adı satırda gelir; açıklamasız kartta açıklama dizisi boş.
+    assert.deepEqual(t.satirlar.filter((x) => x.id === bos.id).map((x) => [x.malzemeAdi, x.aciklamalar]), [['Deneme mamul', []]]);
     const c = await gonder(yonetici, `/siparisler/teklifler/${t.id}/siparise-donustur`, { surum: t.surum, ...donusum });
     assert.equal(c.statusCode, 200, c.body);
     const sonuc = c.json<SiparisDonusumCevabi>();

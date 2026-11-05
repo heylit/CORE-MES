@@ -12,7 +12,7 @@ import type {
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, NUMARA_UZUN, ONAYLANACAK_ISKONTO_YOK, ONAYLANACAK_TERMIN_YOK, SURUM_YOK, TEKLIF_YOK, aramaKalibi, fiyatReddi, firmaReddi, iskontoOnayiGerekir,
@@ -53,7 +53,9 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
   const [teklif] = await cevir(db, [satir]);
   if (teklif === undefined) throw new Error('Teklif çevrilemedi');
   const talep = await sorgular.talepSatirlari(db, id);
-  const kartlar = await malzemeOzetleri(db, talep.flatMap((t) => (t.malzeme_no === null ? [] : [t.malzeme_no])));
+  const nolar = talep.flatMap((t) => (t.malzeme_no === null ? [] : [t.malzeme_no]));
+  const kartlar = await malzemeOzetleri(db, nolar);
+  const ayrintilar = await malzemeSatinAlmaAyrintilari(db, nolar);
   const fiyatlar = await sorgular.teklifFiyatlari(db, id);
   const ham = await sorgular.teklifSurumleri(db, id);
   const onaylayanlar = await kisiAdlari(db, ham.flatMap((v) => (v.onaylayan_id === null ? [] : [v.onaylayan_id])));
@@ -71,7 +73,11 @@ export async function teklifAyrintisi(db: Db, id: number): Promise<TeklifAyrinti
     ...teklif,
     satirlar: talep.map((t) => {
       const kart = t.malzeme_no === null ? undefined : kartlar.get(t.malzeme_no);
-      return { id: t.id, sira: t.sira, malzemeNo: t.malzeme_no, malzemeKodu: kart?.kod ?? null, tanim: t.tanim, birim: kart?.birim ?? null, miktar: t.miktar };
+      const aciklamalar = t.malzeme_no === null ? [] : (ayrintilar.get(t.malzeme_no)?.aciklamalar ?? []);
+      return {
+        id: t.id, sira: t.sira, malzemeNo: t.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null, aciklamalar,
+        tanim: t.tanim, birim: kart?.birim ?? null, miktar: t.miktar,
+      };
     }),
     surumler,
   };

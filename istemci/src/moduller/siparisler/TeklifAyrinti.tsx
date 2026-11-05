@@ -7,7 +7,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
 import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
-import { MalzemeSecici } from './MalzemeSecici.tsx';
+import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { TerminFiyat } from './TerminFiyat.tsx';
@@ -97,7 +97,12 @@ export function TeklifAyrinti() {
       baslik: 'Malzeme kartı',
       hucre: (s) => (
         <span className="tc-sp-kart-sec">
-          {s.malzemeNo === null ? <Rozet ton="uyari">Kart yok</Rozet> : <span className="mono">{s.malzemeKodu ?? `Kart ${s.malzemeNo}`}</span>}
+          {s.malzemeNo === null ? <Rozet ton="uyari">Kart yok</Rozet> : (
+            <span className="tc-sp-kalem">
+              <span className="mono">{s.malzemeKodu ?? `Kart ${s.malzemeNo}`}</span>
+              <KalemMetni ad={s.malzemeAdi} aciklamalar={s.aciklamalar} />
+            </span>
+          )}
           {yazabilir && kartDegisir && (
             <Dugme simge="search" aria-label={`${s.tanim} için malzeme ${s.malzemeNo === null ? 'seç' : 'değiştir'}`} onClick={() => kartSatiriYaz(s)} />
           )}

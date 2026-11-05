@@ -13,7 +13,7 @@ import type {
 } from '#paylasilan/sozlesme/siparisler.ts';
 import { numaraAl } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
-import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
@@ -44,11 +44,14 @@ async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
 }
 
 async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisSatiri[]> {
-  const kartlar = await malzemeOzetleri(db, kalemler.map((k) => k.malzeme_no));
+  const nolar = kalemler.map((k) => k.malzeme_no);
+  const kartlar = await malzemeOzetleri(db, nolar);
+  const ayrintilar = await malzemeSatinAlmaAyrintilari(db, nolar);
   return kalemler.map((k) => {
     const kart = kartlar.get(k.malzeme_no);
     return {
-      id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null, birim: kart?.birim ?? null,
+      id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null,
+      aciklamalar: ayrintilar.get(k.malzeme_no)?.aciklamalar ?? [], birim: kart?.birim ?? null,
       miktar: k.miktar, birimFiyat: k.birim_fiyat, tutar: k.tutar, termin: k.termin, aciklama: k.aciklama,
     };
   });
@@ -189,8 +192,9 @@ export async function durumDegistir(
 // SIP-02 seçim tarafında: yalnız aktif ve satılan türdeki kartlar listelenir; kayıt yine malzemeReddi'nden geçer.
 export async function malzemeSecenekleri(db: Db, g: { ara: string | null; sayfa: number }): Promise<MalzemeSecenekleriCevabi> {
   const r = await malzemeAra(db, { metin: g.ara, turler: SATILAN_TURLER, yalnizAktif: true, sayfa: g.sayfa });
+  const ayrintilar = await malzemeSatinAlmaAyrintilari(db, r.satirlar.map((m) => m.id));
   return {
-    satirlar: r.satirlar.map((m) => ({ no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim })),
+    satirlar: r.satirlar.map((m) => ({ no: m.id, kod: m.kod, ad: m.ad, tur: m.tur, birim: m.birim, aciklamalar: ayrintilar.get(m.id)?.aciklamalar ?? [] })),
     toplam: r.toplam, sayfa: r.sayfa, sayfaBoyu: r.sayfaBoyu,
   };
 }

@@ -8,7 +8,7 @@ import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, girdiMetni, paraBirimiSecenekleri, sayiGirdisi } from './gorunum.ts';
-import { MalzemeSecici, type SecilenKart } from './MalzemeSecici.tsx';
+import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useKorumaliGonderim } from './yazma.ts';
 import './siparisler.css';
@@ -43,7 +43,7 @@ function ilkDegerler(t: TeklifAyrintiCevabi | null): Degerler {
     aciklama: t.aciklama ?? '',
     satirlar: t.satirlar.map((s) => ({
       anahtar: ++satirSayaci,
-      kart: s.malzemeNo === null ? null : { no: s.malzemeNo, kod: s.malzemeKodu, ad: s.tanim, birim: s.birim },
+      kart: s.malzemeNo === null ? null : { no: s.malzemeNo, kod: s.malzemeKodu, ad: s.malzemeAdi ?? s.tanim, birim: s.birim, aciklamalar: s.aciklamalar },
       tanim: s.tanim,
       miktar: girdiMetni(s.miktar),
     })),
@@ -162,7 +162,7 @@ function Form({ teklif }: { teklif: TeklifAyrintiCevabi | null }) {
                   <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzemeden seç' : 'Malzemeyi değiştir'}</Dugme>
                   {s.kart !== null && <Dugme aria-label={`Kalem ${i + 1} kartını kaldır`} simge="x" onClick={() => satirDegistir(i, { kart: null })} />}
                   <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
-                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Katalogda yoksa tanımı yazın; siparişe dönüşmeden malzeme seçilir.' : `${s.kart.kod ?? ''} ${s.kart.ad}${s.kart.birim ? ` (${s.kart.birim})` : ''}`.trim())}
+                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Katalogda yoksa tanımı yazın; siparişe dönüşmeden malzeme seçilir.' : secilenKartMetni(s.kart))}
                   </span>
                 </div>
               </li>

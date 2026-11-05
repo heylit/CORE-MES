@@ -8,7 +8,7 @@ import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
 import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
-import { MalzemeSecici, type SecilenKart } from './MalzemeSecici.tsx';
+import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useFiyatGorur, useKorumaliGonderim } from './yazma.ts';
 import './siparisler.css';
@@ -58,7 +58,7 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
     odemeVadesiGun: s.odemeVadesiGun === null ? '' : String(s.odemeVadesiGun),
     satirlar: s.satirlar.map((m) => ({
       anahtar: ++satirSayaci,
-      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim },
+      kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar },
       miktar: girdiMetni(m.miktar),
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
       termin: m.termin ?? '',
@@ -192,7 +192,7 @@ function Form({ siparis }: FormOzellikleri) {
                 <div className="tc-sp-kart-sec">
                   <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzeme kartı seç' : 'Kartı değiştir'}</Dugme>
                   <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
-                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Kart seçilmedi' : `${s.kart.kod ?? ''} ${s.kart.ad}${s.kart.birim ? ` (${s.kart.birim})` : ''}`.trim())}
+                    {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Kart seçilmedi' : secilenKartMetni(s.kart))}
                   </span>
                 </div>
                 <div className="tc-sp-izgara">
