@@ -144,7 +144,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     await girisliKisiEkle('planlamaci1', planlamaciRolu.id);
     const planlamaci = await girisCerezi('planlamaci1');
     for (const yol of ['/istasyonlar', '/is-merkezleri', '/makineler', '/operasyon-tipleri', '/istasyon-kisileri', '/makine-kisileri', '/ekipler', '/ekip-uyeleri',
-      '/istasyon-plan-ayarlari', '/makine-durumlari', '/kisi-yetkinlikleri', `/kisi-yetkinlikleri/${operatorId}/gecmis`]) {
+      '/istasyon-plan-ayarlari', '/makine-durumlari', '/kisi-yetkinlikleri', `/kisi-yetkinlikleri/${operatorId}/gecmis`, '/istasyonlar/aparat-kapasiteleri']) {
       assert.equal((await istek(null, 'GET', yol)).durum, 401, yol);
       const red = await istek(operator, 'GET', yol);
       assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], yol);
@@ -247,6 +247,8 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     const [topluMk1, topluMk2, topluMk3] = [await makineKur(), await makineKur(), await makineKur()];
     const [topluIst1, topluIst2] = [await istasyonKur(digerMerkez.id), await istasyonKur(digerMerkez.id)];
     const ucuncuMerkez = await isMerkeziKur();
+    const aparat = await yaz<{ id: number }>('/istasyonlar/aparat-kapasiteleri', { aparatKartiId: 910001, istasyonId: null, adet: 1 });
+    assert.equal(aparat.durum, 200, JSON.stringify(aparat.govde));
     const durum = async (): Promise<unknown> => ({
       operasyonTipleri: (await oku('/operasyon-tipleri?pasifler=true')).govde,
       isMerkezleri: (await oku('/is-merkezleri?pasifler=true')).govde,
@@ -260,6 +262,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       planAyarlari: (await oku('/istasyon-plan-ayarlari')).govde,
       makineDurumlari: (await oku('/makine-durumlari')).govde,
       yetkinlikler: (await oku('/kisi-yetkinlikleri')).govde,
+      aparatKapasiteleri: (await oku('/istasyonlar/aparat-kapasiteleri')).govde,
     });
     // Sıra önemlidir: silmeler bağlı kayıttan başlar; gövdeler geçerlidir, yoksa red yetkiden değil doğrulamadan gelirdi.
     const yazilar: { uc: string; yol: string; govde?: unknown; basari: number }[] = [
@@ -285,6 +288,12 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       { uc: '/ekipler/:id/uyeler/:kisiId/cikar', yol: `/ekipler/${ekip.govde.id}/uyeler/${operatorId}/cikar`, basari: 200 },
       { uc: '/istasyonlar/:id/plan-ayari', yol: `/istasyonlar/${ist.id}/plan-ayari`, govde: { verimYuzde: 90, operatorIhtiyaci: 1 }, basari: 200 },
       { uc: '/makineler/:id/durum', yol: `/makineler/${mk.id}/durum`, govde: { durum: 'bakim' }, basari: 200 },
+      { uc: '/istasyonlar/aparat-kapasiteleri', yol: '/istasyonlar/aparat-kapasiteleri', govde: { aparatKartiId: 910002, istasyonId: null, adet: 2 }, basari: 200 },
+      {
+        uc: '/istasyonlar/aparat-kapasiteleri/:id/guncelle', yol: `/istasyonlar/aparat-kapasiteleri/${aparat.govde.id}/guncelle`,
+        govde: { istasyonId: null, adet: 3, surum: 1 }, basari: 200,
+      },
+      { uc: '/istasyonlar/aparat-kapasiteleri/:id/sil', yol: `/istasyonlar/aparat-kapasiteleri/${aparat.govde.id}/sil`, govde: { surum: 2 }, basari: 204 },
       { uc: '/kisi-yetkinlikleri/:kisiId/belirle', yol: `/kisi-yetkinlikleri/${operatorId}/belirle`, govde: { istasyonIdleri: [atamaIst.id] }, basari: 200 },
       {
         uc: '/kisi-yetkinlikleri/toplu', yol: '/kisi-yetkinlikleri/toplu',

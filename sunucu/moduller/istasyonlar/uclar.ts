@@ -8,6 +8,7 @@ import {
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
   yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
   ayarYetkinligiBelirleGovdesi, ayarYetkinligiParametresi, makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
+  aparatKapasiteleriCevabi, aparatKapasitesi, aparatKapasitesiGovdesi, aparatKapasitesiGuncellemeGovdesi, aparatKapasitesiSilmeGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
@@ -358,6 +359,43 @@ export const uclar = [
     govde: planAyariGovdesi,
     cevap: planAyarlariCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ ayarlar: await servis.planAyariYaz(db, kullanici, parametre.id, govde) }),
+  }),
+  // 2112 (2099-1 a): aparat plan kapasitesi. Okuma tanım listeleri gibi; Reçete ve Rota ile plan bağlamada (A8) ayrıca açılır.
+  uc({
+    yontem: 'GET',
+    yol: '/istasyonlar/aparat-kapasiteleri',
+    yetki: OKUMA,
+    cevap: aparatKapasiteleriCevabi,
+    isle: async ({ db }) => ({ kapasiteler: await servis.aparatKapasiteleri(db) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/istasyonlar/aparat-kapasiteleri',
+    yetki: 'istasyonlar.yaz',
+    govde: aparatKapasitesiGovdesi,
+    cevap: aparatKapasitesi,
+    isle: async ({ db, kullanici, govde }) => servis.aparatKapasitesiEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/istasyonlar/aparat-kapasiteleri/:id/guncelle',
+    yetki: 'istasyonlar.yaz',
+    parametre: kimlikParametresi,
+    govde: aparatKapasitesiGuncellemeGovdesi,
+    cevap: aparatKapasitesi,
+    isle: async ({ db, kullanici, parametre, govde }) => servis.aparatKapasitesiGuncelle(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/istasyonlar/aparat-kapasiteleri/:id/sil',
+    yetki: 'istasyonlar.yaz',
+    parametre: kimlikParametresi,
+    govde: aparatKapasitesiSilmeGovdesi,
+    cevap: bosCevap,
+    isle: async ({ db, parametre, govde }) => {
+      await servis.aparatKapasitesiSil(db, parametre.id, govde.surum);
+      return undefined;
+    },
   }),
   uc({
     yontem: 'GET',

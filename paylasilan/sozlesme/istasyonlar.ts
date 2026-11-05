@@ -514,3 +514,29 @@ export const tesisSecimCevabi = z.object({
 });
 export type TesisSecimSorgusu = z.input<typeof tesisSecimSorgusu>;
 export type TesisSecimCevabi = z.output<typeof tesisSecimCevabi>;
+
+// 2112 (2099-1 a): aparatın plan kapasitesi, yani planın aynı anda kullanabileceği adet. Kart Malzemeler'de, adet ve yer Stok'ta.
+// `aparatKartiId` malzemelerin kart kimliğidir; bu modül malzemeleri okumaz (ADR 0006 yönü), kartın adını çağıran modül ekler.
+// İstasyon boşsa aparat istasyonlar arasında ortaktır. Kart değişmez: başka karta geçmek silip yeniden eklemektir.
+export const APARAT_ADET_TAVANI = 10000;
+const aparatAdedi = z.number().int().min(1, 'Adet en az 1.').max(APARAT_ADET_TAVANI);
+// Sütun `int`: aşan kimlik sorguya varırsa 400 yerine 500 döner.
+const intKimlik = kimlik.max(2147483647);
+export const aparatKapasitesiGovdesi = z.object({ aparatKartiId: intKimlik, istasyonId: intKimlik.nullable(), adet: aparatAdedi });
+export const aparatKapasitesiGuncellemeGovdesi = z.object({ ...beklenenSurum, istasyonId: intKimlik.nullable(), adet: aparatAdedi });
+export const aparatKapasitesiSilmeGovdesi = z.object({ ...beklenenSurum });
+export const aparatKapasitesi = z.object({
+  id: z.number().int(),
+  aparatKartiId: z.number().int(),
+  istasyonId: z.number().int().nullable(),
+  adet: z.number().int(),
+  degistiren,
+  degisme: zamanSemasi,
+  surum: surumSemasi,
+});
+export const aparatKapasiteleriCevabi = z.object({ kapasiteler: z.array(aparatKapasitesi) });
+export type AparatKapasitesiGovdesi = z.input<typeof aparatKapasitesiGovdesi>;
+export type AparatKapasitesiGuncellemeGovdesi = z.input<typeof aparatKapasitesiGuncellemeGovdesi>;
+export type AparatKapasitesiSilmeGovdesi = z.input<typeof aparatKapasitesiSilmeGovdesi>;
+export type AparatKapasitesi = z.output<typeof aparatKapasitesi>;
+export type AparatKapasiteleriCevabi = z.output<typeof aparatKapasiteleriCevabi>;
