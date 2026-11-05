@@ -335,7 +335,11 @@ export const logoGelenCevabi = z.object({
     durum: z.enum(LOGO_GELEN_DURUMLARI),
     // Logo kodu TMI kod biçimine uyuyor mu; uymuyorsa alırken önek seçilir, eşleme tutulur (2116-3 c).
     koduUyar: z.boolean(),
-    tmi: z.object({ kimlik: z.string(), stokKodu: z.string(), ad: z.string().nullable(), onayDurumu: z.enum(KATALOG_KART_DURUMLARI), surum: surumSemasi }).nullable(),
+    tmi: z.object({
+      kimlik: z.string(), stokKodu: z.string(), ad: z.string().nullable(), onayDurumu: z.enum(KATALOG_KART_DURUMLARI), surum: surumSemasi,
+      // Logo'ya gönderilmiş (Logo kaydı olan) kartın kodu değişmez; yeni koda geçiş sunulmaz (2116h).
+      logoKayitli: z.boolean(),
+    }).nullable(),
     farklar: z.array(z.object({ alan: z.enum(LOGO_FARK_ALANLARI), logo: z.string().nullable(), tmi: z.string().nullable() })),
   })),
   sonraki: z.number().int().nullable(),
@@ -354,6 +358,9 @@ export type LogodanAlCevabi = z.output<typeof logodanAlCevabi>;
 // Bağlama ve farkı alma kartın sürümüyle: arada kartı değiştiren varsa reddedilir.
 export const logoKartSurumGovdesi = z.object({ surum: surumSemasi }).strict();
 export const logoKartSurumCevabi = z.object({ id: z.string(), surum: surumSemasi });
+// 2116h: aynı kodlu TMI kartı Logo'dakinden farklı malzemeyse yeni koda geçer; eski kod kartta "önceki kod" olarak kalır.
+export const logoYeniKodCevabi = z.object({ id: z.string(), stok_kodu: z.string(), eski_kod: z.string(), surum: surumSemasi });
+export type LogoYeniKodCevabi = z.output<typeof logoYeniKodCevabi>;
 
 // Arşiv (2114c, 2114-3 a, 2114-4 a): katalogdan silinen (iptal) kartlar ve başka modüllerdeki izleri. Kesin bağ sütun eşleşmesidir,
 // olası iz kayıt içinde kartın kodu ya da numarasıdır; ikisi de kalıcı silmeyi engeller. Bağ sayımı bağlı değilse adetler null.

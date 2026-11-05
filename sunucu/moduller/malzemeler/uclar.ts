@@ -5,7 +5,7 @@ import {
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoGelenCevabi, logoGelenParametresi, logoGelenSorgusu, logodanAlCevabi, logodanAlGovdesi,
   arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi, katalogKartiIptalCevabi,
-  logoKartSurumCevabi, logoKartSurumGovdesi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
+  logoKartSurumCevabi, logoKartSurumGovdesi, logoYeniKodCevabi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
 import * as servis from './servis.ts';
@@ -106,6 +106,11 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/farki-al', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logoKartSurumGovdesi, cevap: logoKartSurumCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.logoFarkiniAl(db, kullanici, parametre.ref, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/yeni-koda-gec', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logoKartSurumGovdesi,
+    cevap: logoYeniKodCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.logoKartiYeniKodaGec(db, kullanici, parametre.ref, govde.surum),
   }),
   uc({
     yontem: 'POST', yol: '/malzeme-logo-karsiliklari/kaydet', yetki: 'malzemeler.tanim-yaz', govde: logoKarsiligiKaydetGovdesi, cevap: katalogKimlikCevabi,

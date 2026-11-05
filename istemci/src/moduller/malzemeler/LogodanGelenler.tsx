@@ -10,15 +10,22 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useTekGonderim } from '../../ortak/veri/korumali-komut.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 
-// Logo'dan gelen kartlar (2116): Logo'daki kart TMI'de yoksa taslak olarak alınır (2116-4 a), aynı kodlu bağsız kart bağlanır,
+// Logo'dan gelen kartlar (2116): Logo'daki kart TMI'de yoksa taslak olarak alınır (2116-4 a); aynı kodlu bağsız kart aynı malzemeyse
+// bağlanır, farklı malzemeyse yeni koda geçer (2116h: aynı kod aynı malzeme demek değildir),
 // bağlı kartta Logo'daki açıklama farkı görünür ve istenirse alınır (2116-2 a). Liste logo modülünün okuduğu aynadır; Logo'ya istek gitmez.
 export const LOGO_GELEN_ANAHTARI = ['malzemeler', 'logo-gelenler'] as const;
 
 type GelenKart = LogoGelenCevabi['kartlar'][number];
+type Islem = 'bagla' | 'farki-al' | 'yeni-koda-gec';
+const ONAY: Record<Islem, { baslik: string; dugme: string; basari: string }> = {
+  bagla: { baslik: 'Aynı malzeme: kart Logo kaydına bağlansın mı?', dugme: 'Bağla', basari: 'Kart Logo kaydına bağlandı' },
+  'farki-al': { baslik: "Logo'daki açıklamalar alınsın mı?", dugme: 'Al', basari: "Logo'daki açıklamalar alındı" },
+  'yeni-koda-gec': { baslik: 'Farklı malzeme: CORE kartı yeni koda geçsin mi?', dugme: 'Yeni koda geç', basari: 'Kart yeni koda geçti' },
+};
 
 const DURUM: Record<LogoGelenDurumu, { ad: string; ton: RozetTonu; simge: 'plus' | 'alert' | 'check' }> = {
   yeni: { ad: "TMI'de yok", ton: 'bilgi', simge: 'plus' },
-  bagsiz: { ad: 'Aynı kodlu kart bağsız', ton: 'uyari', simge: 'alert' },
+  bagsiz: { ad: "Aynı kod CORE'da var", ton: 'uyari', simge: 'alert' },
   bagli: { ad: 'Bağlı', ton: 'tamam', simge: 'check' },
 };
 const FARK_ADLARI: Record<string, string> = { aciklama_1: 'Açıklama 1', aciklama_2: 'Açıklama 2', aciklama_3: 'Açıklama 3' };
@@ -37,7 +44,7 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
   const [ara, araYaz] = useState('');
   const [aranan, arananYaz] = useState('');
   const [alinan, alinanYaz] = useState<GelenKart | null>(null);
-  const [onaylanan, onaylananYaz] = useState<{ kart: GelenKart; islem: 'bagla' | 'farki-al' } | null>(null);
+  const [onaylanan, onaylananYaz] = useState<{ kart: GelenKart; islem: Islem } | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const liste = useQuery({
@@ -45,11 +52,11 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
     queryFn: () => api.get<LogoGelenCevabi>(`/malzeme-logo-kartlari?sonra=${sonra}${aranan ? `&ara=${encodeURIComponent(aranan)}` : ''}`),
   });
   const onayla = useTekGonderim({
-    mutationFn: (o: { kart: GelenKart; islem: 'bagla' | 'farki-al' }) =>
+    mutationFn: (o: { kart: GelenKart; islem: Islem }) =>
       api.post(`/malzeme-logo-kartlari/${o.kart.logoKayitNo}/${o.islem}`, { surum: o.kart.tmi?.surum }),
-    onSuccess: async (_c, o) => {
+    onSuccess: async (c, o) => {
       onaylananYaz(null);
-      bildir('tamam', o.islem === 'bagla' ? 'Kart Logo kaydına bağlandı' : "Logo'daki açıklamalar alındı");
+      bildir('tamam', o.islem === 'yeni-koda-gec' && c && typeof c === 'object' && 'stok_kodu' in c ? `${ONAY[o.islem].basari}: ${String(c.stok_kodu)}` : ONAY[o.islem].basari);
       await istemci.invalidateQueries({ queryKey: LOGO_GELEN_ANAHTARI });
     },
     onError: (e) => {
@@ -90,7 +97,16 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
       hucre: (k: GelenKart) => {
         if (k.durum === 'yeni' && k.aktif) return <Dugme simge="download" aria-label={`${k.kod} al`} onClick={() => alinanYaz(k)}>Al</Dugme>;
         if (k.durum === 'bagsiz' && k.tmi && k.tmi.onayDurumu !== 'iptal') {
-          return <Dugme simge="tag" aria-label={`${k.kod} bağla`} onClick={() => onaylananYaz({ kart: k, islem: 'bagla' })}>Bağla</Dugme>;
+          return (
+            <span className="tc-logo-durum">
+              <Dugme simge="tag" aria-label={`${k.kod} bağla`} onClick={() => onaylananYaz({ kart: k, islem: 'bagla' })}>Aynı malzeme: bağla</Dugme>
+              {!k.tmi.logoKayitli && (
+                <Dugme simge="next" aria-label={`${k.kod} CORE kartını yeni koda geçir`} onClick={() => onaylananYaz({ kart: k, islem: 'yeni-koda-gec' })}>
+                  Farklı malzeme: yeni koda geç
+                </Dugme>
+              )}
+            </span>
+          );
         }
         if (k.durum === 'bagli' && k.farklar.length > 0 && k.tmi && k.tmi.onayDurumu !== 'iptal') {
           return <Dugme simge="download" aria-label={`${k.kod} Logo'dakini al`} onClick={() => onaylananYaz({ kart: k, islem: 'farki-al' })}>Logo'dakini al</Dugme>;
@@ -130,15 +146,17 @@ export function LogodanGelenler({ turAdlari, karsiliklar }: Ozellikler) {
       {alinan && <AlmaPenceresi key={alinan.logoKayitNo} kart={alinan} turAdlari={turAdlari} karsiliklar={karsiliklar} kapat={() => alinanYaz(null)} />}
       <OnayPenceresi
         acik={onaylanan !== null}
-        baslik={onaylanan?.islem === 'bagla' ? 'Kart Logo kaydına bağlansın mı?' : "Logo'daki açıklamalar alınsın mı?"}
-        onayMetni={onaylanan?.islem === 'bagla' ? 'Bağla' : 'Al'}
+        baslik={onaylanan ? ONAY[onaylanan.islem].baslik : ''}
+        onayMetni={onaylanan ? ONAY[onaylanan.islem].dugme : ''}
         yukleniyor={onayla.isPending}
         onayla={() => { if (onaylanan) onayla.mutate(onaylanan); }}
         vazgec={() => onaylananYaz(null)}
       >
         {onaylanan?.islem === 'bagla'
-          ? `${onaylanan.kart.tmi?.stokKodu ?? ''} Logo'daki kartla eşlenir ve Logo'ya yeniden gönderilmez. CORE'daki bilgiler değişmez.`
-          : `${onaylanan?.kart.tmi?.stokKodu ?? ''} kartının açıklamaları Logo'daki değerlerle değişir. Logo'ya bir şey gönderilmez.`}
+          ? `${onaylanan.kart.tmi?.stokKodu ?? ''} Logo'daki kartla aynı malzeme sayılır, eşlenir ve Logo'ya yeniden gönderilmez. CORE'daki bilgiler değişmez.`
+          : onaylanan?.islem === 'yeni-koda-gec'
+            ? `${onaylanan.kart.tmi?.stokKodu ?? ''} Logo'daki ${onaylanan.kart.ad ?? onaylanan.kart.kod} ile farklı malzeme sayılır ve aynı önekte sıradaki boş koda geçer. Eski kod kartta önceki kod olarak kalır ve aramada bulunur; basılı etiketler yeniden basılmalıdır. Bağlı kayıtlar değişmez.`
+            : `${onaylanan?.kart.tmi?.stokKodu ?? ''} kartının açıklamaları Logo'daki değerlerle değişir. Logo'ya bir şey gönderilmez.`}
       </OnayPenceresi>
     </>
   );

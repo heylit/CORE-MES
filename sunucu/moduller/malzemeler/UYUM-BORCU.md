@@ -43,6 +43,8 @@ Sayım borç denetimiyle (kart 2049) yenilendi; 19.10.2026 sayımı geçersizdir
 - [bağlama] Logo'dan gelen kartlar (2116): üç çözücü `sunucu/kablolama.ts`'te logo `disari.ts`'e bağlanacak (kart F); bağlanana kadar liste "bağlı değil" der.
   VARSAYIM: "kod eşit bağsız kart bağlanır" (2116-2 a) kullanıcının düğmesiyle yapılır, kendiliğinden değil. Liste yalnız tam Logo koduyla aranır; adla arama yok.
   Logo kart türünden TMI türü yalnız tek karşılık varsa önerilir; hizmet Logo'dan alınmaz (Logo hizmet kartı ayrı tablodadır).
+  VARSAYIM (2116h): Logo kaydı olan kart yeni koda geçmez (kodu Logo'da yaşar). Başka modülün metin olarak tuttuğu eski kod `onceki_kodlar` ile
+  çözülür; aynı kod sonra Logo'dan alınırsa güncel kodlu kart öne geçer. Basılı etiketlerin yeniden basımı kullanıcıya bırakılır.
 
 ## Denetimde bulunan açıklar (07.10.2026; kart #163, denetim turu 1 sonrası durum, tur 2 dahil)
 

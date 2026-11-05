@@ -42,3 +42,6 @@ Bağlantıyı yazacak modül için. Bu modül Logo'ya bağlanmaz; yalnız kuyru�
    değiştirir). Logo kodu TMI biçimine ve türe uyuyorsa aynı kodla açılır ve önekin sayacı o sıraya ilerler; uymuyorsa seçilen önekle yeni kod alır, eşleme logo
    modülüne yazılır. Bağlama ve Logo'dakini alma kartın sürümüyle; Logo'dakini alma yalnız Açıklama 1-3'ü yazar, ad güncellemesini kuyruğa koymaz.
    Yeni işlem yok: okuma `sayfa.malzemeler`, yazma `malzemeler.yaz`. Ekran Logo gönderimi sayfasındaki "Logo'dan gelenler" kartıdır.
+   Aynı kod aynı malzeme demek değildir (2116h): aynı kodlu bağsız kart kullanıcı seçimiyle ya bağlanır ya da "yeni koda geçer": aynı önekte,
+   Logo'da da boş sıradaki kod (`logoyuAtlayanSira`); eski kod `onceki_kodlar`'a eklenir, aramada (trigram indeksi) ve `malzemeNoKoddan`'da bulunur
+   (önce güncel kod). Tetikleyici `onceki_kodlar`'a yalnız bu geçişte ekleme yapılmasına izin verir; Logo kaydı olan kart geçemez.
