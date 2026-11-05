@@ -314,8 +314,8 @@ export const LOGO_GELEN_SAYFA_BOYU = 100;
 export const logoGelenSorgusu = z.object({
   // Logo kayıt numarası imleci: bu numaradan sonrakiler.
   sonra: z.coerce.number().int().min(0).default(0),
-  // Tam Logo kodu; verilirse yalnız o kart.
-  kod: z.string().trim().min(1).max(64).optional(),
+  // Kod, ad ya da açıklamanın bir parçası (2116g); büyük/küçük harf ve Türkçe harf farkı gözetilmez.
+  ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
 });
 export const logoGelenParametresi = z.object({ ref: z.coerce.number().int().positive() });
 export const logoGelenCevabi = z.object({

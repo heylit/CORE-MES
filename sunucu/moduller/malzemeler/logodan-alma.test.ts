@@ -110,7 +110,8 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
   // LMA-3 kablolamanın bağladığı gerçek logo aynasıyla (boş) önce koşar; sonra sahte ayna bağlanır.
   const baglaCozuculeri = (): void => {
     logoKartAynasiCozucusu(async (_db, o) => ayna
-      .filter((k) => k.logoKayitNo > o.sonra && (o.kodlar === undefined || o.kodlar.includes(k.kod)))
+      .filter((k) => k.logoKayitNo > o.sonra && (o.kodlar === undefined || o.kodlar.includes(k.kod))
+        && (o.ara === undefined || [k.kod, k.ad, k.aciklama2, k.aciklama3].some((v) => v?.toLowerCase().includes(o.ara!.toLowerCase()))))
       .sort((a, b) => a.logoKayitNo - b.logoKayitNo).slice(0, o.sinir));
     logoEslemeYaziciCozucusu(async (_db, e) => { yazilanEslemeler.push(e); eslemeler.set(e.logoKodu, e.stokKodu); });
     logoTmiKodCozucusu(async (_db, kodlar) => new Map([...eslemeler].filter(([l]) => kodlar.includes(l))));
@@ -148,7 +149,7 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
 
   test('LMA-5 uymayan kod: önek istenir; önekle yeni TMI kodu ve eşleme yazılır; türe uymayan önek ve listede olmayan birim reddedilir', async () => {
     ayna.push(kart(102, '150.01.0003', { ad: null }));
-    assert.equal((await liste('?kod=150.01.0003')).kartlar[0]?.koduUyar, false);
+    assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.koduUyar, false);
     const onekYok = await istek('POST', '/malzeme-logo-kartlari/102/al', { tur: 'sarf', birim: 'kg', onek: null });
     assert.equal(onekYok.statusCode, 400, onekYok.body);
     assert.equal((onekYok.json() as { alan?: string }).alan, 'onek');
@@ -160,13 +161,13 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.deepEqual(yazilanEslemeler, [{ stokKodu: 'SF-GEN-00001', logoKodu: '150.01.0003', logoKayitNo: 102 }]);
     // Adı olmayan Logo kartı koduyla adlanır; liste eşleme üzerinden bağlı gösterir.
     assert.equal((await vt().tek<{ ad: string }>("SELECT kayit -> 'com' ->> 'ad' AS ad FROM malzeme_katalog_karti WHERE kimlik = 'logo-102'"))?.ad, '150.01.0003');
-    assert.equal((await liste('?kod=150.01.0003')).kartlar[0]?.durum, 'bagli');
+    assert.equal((await liste('?ara=150.01.0003')).kartlar[0]?.durum, 'bagli');
   });
 
   test('LMA-6 aynı kodlu bağsız kart bağlanır (yeni kart açılmaz, sürüm denetlenir); bağlı kartta fark listelenir, Logo\'dakini almak açıklamaları yazar, ad güncellemesi kuyruğa girmez', async () => {
     const t = await taslakAc('HM-BAG-00001');
     ayna.push(kart(103, t.kod, { ad: 'Logo adi', aciklama2: 'Logo iki' }));
-    const once = (await liste(`?kod=${t.kod}`)).kartlar[0]!;
+    const once = (await liste(`?ara=${t.kod}`)).kartlar[0]!;
     assert.equal(once.durum, 'bagsiz');
     assert.equal(once.tmi?.kimlik, t.kimlik);
     assert.equal((await istek('POST', '/malzeme-logo-kartlari/103/al', { tur: 'hammadde', birim: 'kg', onek: null })).statusCode, 409, 'yeni kart açılmaz, bağlanır');
@@ -177,14 +178,14 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.equal(s?.logo, '103');
     assert.equal(s?.gonderim, 'gonderildi');
     assert.equal((await istek('POST', '/malzeme-logo-kartlari/103/bagla', { surum: s!.surum })).statusCode, 409, 'ikinci bağlama yok');
-    const sonra = (await liste(`?kod=${t.kod}`)).kartlar[0]!;
+    const sonra = (await liste(`?ara=${t.kod}`)).kartlar[0]!;
     assert.equal(sonra.durum, 'bagli');
     assert.deepEqual(sonra.farklar.map((f) => [f.alan, f.logo]), [['aciklama_1', 'Logo adi'], ['aciklama_2', 'Logo iki']]);
     const f = await istek('POST', '/malzeme-logo-kartlari/103/farki-al', { surum: s!.surum });
     assert.equal(f.statusCode, 200, f.body);
     const son = await kartSatiri(t.kimlik);
     assert.deepEqual([son?.a1, son?.a2, son?.guncelleme], ['Logo adi', 'Logo iki', null]);
-    assert.deepEqual((await liste(`?kod=${t.kod}`)).kartlar[0]?.farklar, []);
+    assert.deepEqual((await liste(`?ara=${t.kod}`)).kartlar[0]?.farklar, []);
   });
 
   test('LMA-7 Logo\'da kullanım dışı kart alınmaz; aynada olmayan kart 404; okuyucu listeyi görür ama alamaz, bağlayamaz', async () => {
@@ -197,4 +198,12 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     assert.equal((await istek('POST', '/malzeme-logo-kartlari/105/bagla', { surum: 1 }, okuyucuCerezi)).statusCode, 403);
     assert.equal(await vt().tek("SELECT 1 FROM malzeme_katalog_karti WHERE kimlik IN ('logo-104', 'logo-105', 'logo-999')"), null);
   });
+
+  test('LMA-8 arama (2116g): ad ya da açıklama parçası listeyi süzer ve aynaya iletilir; tek karakter 400 alır', async () => {
+    ayna.push(kart(106, 'HM-ARA-00001', { ad: 'Arama deneme mili', aciklama3: 'Ozel yuzey' }));
+    assert.deepEqual((await liste('?ara=deneme%20mil')).kartlar.map((k) => k.kod), ['HM-ARA-00001']);
+    assert.deepEqual((await liste('?ara=ozel')).kartlar.map((k) => k.kod), ['HM-ARA-00001']);
+    assert.equal((await istek('GET', '/malzeme-logo-kartlari?ara=x')).statusCode, 400);
+  });
 });
+
