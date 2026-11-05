@@ -224,6 +224,9 @@
 .tc-plan-istasyon[data-aktif="false"] { opacity: var(--saydam-50); }
 /* Makinesi yerleşik istasyon: makinelerin arkasında kesik çerçeve. */
 .tc-plan-istasyon.tc-plan-cerceve > polygon { fill: none; stroke: var(--muted); stroke-dasharray: var(--kesik-uzun); }
+/* Düzenlerken çerçevenin içi de tutulur (yalnız kesik kenarı değil); makineler üstte çizildiği için onları örtmez. */
+.tc-plan-duzen .tc-plan-istasyon.tc-plan-cerceve > polygon { pointer-events: all; }
+.tc-plan-duzen:focus { outline: none; }
 .tc-plan-on { fill: var(--muted); }
 .tc-plan-durum { fill: var(--sig); }
 .tc-plan-kod { fill: var(--ink); font-family: var(--font-mono); font-weight: 800; pointer-events: none; }
