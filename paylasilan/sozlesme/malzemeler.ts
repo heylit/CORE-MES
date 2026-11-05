@@ -108,6 +108,9 @@ export const katalogKartlariCevabi = listeCevapSemasi(
   z.object({ kimlik: z.string(), no: z.number().int(), kayit: katalogNesnesi.nullable(), surum: z.number().int() }),
 ).extend({ an: zamanSemasi });
 export const katalogKimlikCevabi = z.object({ id: z.string() });
+// 2114b: Logo'ya gönderilmiş kartın silinmesi Logo'da pasife alınmayı bekler (kart o sürede pasif; Logo'dan silinmez); öbür kart hemen silinir.
+export const katalogKartiIptalCevabi = z.object({ id: z.string(), logodaPasifeAliniyor: z.boolean() });
+export type KatalogKartiIptalCevabi = z.output<typeof katalogKartiIptalCevabi>;
 // 233 a: rotası olan kartın operasyon ve reçetesi Reçete ve Rota'da düzenlenir; ekran kartta salt okunur gösterir.
 export const katalogKartiRotasiCevabi = z.object({ rotali: z.boolean() });
 export type KatalogKartiRotasiCevabi = z.infer<typeof katalogKartiRotasiCevabi>;
@@ -155,6 +158,7 @@ export const katalogAyarlariCevabi = z.object({
 
 // Tablo kısıtıyla (`malzeme_katalog_karti_logo_durumu`) aynı üç değer.
 export const LOGO_GONDERIM_DURUMLARI = ['bekliyor', 'gonderildi', 'hata'] as const;
+export const LOGO_PASIF_DURUMLARI = ['bekliyor', 'hata', 'reddedildi', 'tamam'] as const;
 // Kartın Logo'ya gidebilmesi için gerekenler (MKL-4); eksik kart aktif olur, gönderilmez.
 export const LOGO_EKSIKLERI = ['stok_kodu', 'ad', 'birim', 'tur_karsiligi', 'birim_karsiligi'] as const;
 export const LOGO_KARSILIK_CESITLERI = ['tur', 'birim'] as const;
@@ -193,6 +197,8 @@ export const logoDurumuCevabi = z.object({
     kayitNo: z.string().nullable(),
     // Logo'ya gitmiş kartın ad güncellemesi (kart #783); hiç istenmemişse null.
     guncelleme: z.object({ durum: z.enum(LOGO_GONDERIM_DURUMLARI), hata: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+    // Logo'da pasife alma (2114b); istenmemişse null. Ret kalıcıdır: kart pasif kalır, neden burada görünür. tamam: Logo'da kullanım dışı.
+    pasif: z.object({ durum: z.enum(LOGO_PASIF_DURUMLARI), hata: z.string().nullable(), zaman: zamanSemasi }).nullable(),
   })),
   // Türün beş satırı her zaman; birim satırları kartlarda geçen ve karşılığı yazılmış birimlerdir.
   karsiliklar: z.array(logoKarsiligi),

@@ -1,6 +1,6 @@
 import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
 import type { IsBekliyor, IsTanimi } from '#cekirdek/zamanlayici.ts';
-import { logoyaGuncellemeGidecekMalzemeler, malzemeLogoGuncellemeSonucu } from '../malzemeler/disari.ts';
+import { logoyaGuncellemeGidecekMalzemeler, logoyaPasifGidecekMalzemeler, malzemeLogoGuncellemeSonucu, malzemeLogoPasifSonucu } from '../malzemeler/disari.ts';
 import {
   karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaIptalGidecekSiparisler,
   logoyaKapatmaGidecekSiparisler, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu, talepLogoSonucu,
@@ -31,7 +31,7 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
     case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
-    case 'bos': case 'gonderim': case 'guncelleme': case 'iptal': case 'kapatma': case 'karsilama': case 'liste':
+    case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'karsilama': case 'liste':
     case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
     case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
     case 'talep':
@@ -74,6 +74,8 @@ export const isler = [
       kopru: ortamKoprusu, bellek, saat: () => new Date(),
       // Kuyruğu ve sonucu malzemelerin işlevleridir; istek ancak "Logo: malzeme adı güncellemesi" açıkken çıkar.
       malzemeGuncelleme: { gidecekler: logoyaGuncellemeGidecekMalzemeler, sonuc: malzemeLogoGuncellemeSonucu },
+      // 2114b: silinen Logo kartı Logo'da pasife alınır; istek ancak "Logo bağlantısı" açıkken çıkar (istek de yalnız o zaman alınır).
+      malzemePasif: { gidecekler: logoyaPasifGidecekMalzemeler, sonuc: malzemeLogoPasifSonucu },
     })),
   satinAlmaIsi({
     gidecekler: logoyaGidecekSiparisler,

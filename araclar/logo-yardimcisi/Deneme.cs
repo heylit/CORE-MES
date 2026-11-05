@@ -75,6 +75,17 @@ namespace LogoYardimcisi
             }));
         }
 
+        // 2114b: test malzemesi kullanım dışı bırakılmaz. Uç yanlış kodla çağrılır (kayıt numarasıyla bulma, ACTIVE okuması ve kod kalkanı
+        // denenir, Logo Objects yazımına varılmaz). Gerçek bir kartın ACTIVE yazımı bu kipte denenmez.
+        void KartPasifKalkani(int kayit)
+        {
+            var c = islemler.Isle("POST", "/api/Material/" + kayit + "/deactivate", new Dictionary<string, string>(), Json.Yaz(new Dictionary<string, object> { { "code", Onek + "YANLIS-KOD" } }));
+            var z = c.Govde as Dictionary<string, object>;
+            var tamam = c.Durum == 200 && z != null && Equals(z["success"], false) && Convert.ToString(z["error"], CultureInfo.InvariantCulture).Contains("kodu farklı");
+            if (!tamam) hata++;
+            Console.WriteLine((tamam ? "TAMAM " : "HATA  ") + "Kart pasife alma kod kalkanı (" + TestMalzemesi + " değişmez)" + (tamam ? "" : " (" + c.Durum + ") " + Json.Yaz(c.Govde)));
+        }
+
         public int Calistir()
         {
             if (ayar.DenemeSatici == null) { Console.Error.WriteLine("Ayar eksik: deneme_satici (Logo'daki test satıcı cari kodu)."); return 1; }
@@ -84,6 +95,7 @@ namespace LogoYardimcisi
             {
                 var m = Adim("Malzeme var mı (" + TestMalzemesi + ")", "GET", "/api/Material/exists/" + TestMalzemesi, null);
                 if (Ref(m) == 0) { Console.WriteLine("DURDU: test malzemesi Logo'da yok; Logo'da elle açın."); return 1; }
+                KartPasifKalkani(Ref(m));
                 Adim("Birim setleri", "GET", "/api/Lookup/unitsets", null);
                 Adim("Ambarlar", "GET", "/api/Lookup/warehouses", null);
                 Adim("Mal kabul okuma", "GET", "/api/PurchaseOrder/receipts", null);

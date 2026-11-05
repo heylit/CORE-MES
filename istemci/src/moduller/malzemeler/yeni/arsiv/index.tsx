@@ -92,7 +92,7 @@ function Ayrinti({ kimlik, onayci, kapat }: { kimlik: string; onayci: boolean; k
   const { kart, izler } = ayrinti.data;
   const d = izDurumu(kart);
   const ozet = kart.logoyaGitti
-    ? "Kart Logo'ya gönderilmiş; Logo'dan silinmeden kalıcı silinemez."
+    ? "Kart Logo'ya gönderilmiş; Logo'da kullanım dışı olarak durduğu için kalıcı silinemez."
     : d === 'bagsiz' ? 'Bu kartın bağı yok. Kalıcı silinebilir.'
       : d === 'bilinmiyor' ? 'Bağ sayımı bağlı değil; kartın bağları bilinmeden kalıcı silinmez.'
         : 'Kart başka kayıtlarda kullanılıyor; kalıcı silinemez. Bağlı kayıtlar değişince ya da kapanınca yeniden bakın.';

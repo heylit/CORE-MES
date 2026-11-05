@@ -213,6 +213,42 @@ namespace LogoYardimcisi
             Dogru(!Basari(C(s, "POST", "/api/Material/UpdateRich", N("code", "YOK", "name", "x"))), "olmayan kart");
         }
 
+        static void T_kart_kayit_numarasi_ve_koduyla_kullanim_disi_birakilir_silinmez()
+        {
+            var s = Logo();
+            var r = s.MalzemeRef(Malzeme);
+            var yol = "/api/Material/" + r + "/deactivate";
+            Esit(400, C(s, "POST", yol, N()).Durum, "kod verilmedi");
+            var c = C(s, "POST", yol, N("code", "TMI-ERP-TEST-002"));
+            Dogru(!Basari(c) && Hata(c).Contains("kodu farklı"), "kayıttaki kod uyuşmazsa dokunulmaz: " + Json.Yaz(c.Govde));
+            Dogru(!s.Malzeme(Malzeme).Pasif, "kart kullanımda");
+            c = C(s, "POST", yol, N("code", Malzeme));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit(r, Ref(c), "kayıt numarası döner");
+            Esit("Guncelle " + Nesne.Malzeme + " " + r + " ACTIVE=1", s.Cagrilar.Last(), "Logo Objects ACTIVE yazılır");
+            Dogru(s.Malzeme(Malzeme) != null && s.Malzeme(Malzeme).Pasif, "kart duruyor, kullanım dışı");
+            var sayi = s.Cagrilar.Count;
+            Dogru(Basari(C(s, "POST", yol, N("code", Malzeme))), "zaten kullanım dışı: başarı");
+            Dogru(!s.Cagrilar.Skip(sayi).Any(x => x.StartsWith("Guncelle ")), "ikinci istekte yazılmaz");
+            Dogru(!s.Cagrilar.Any(x => x.StartsWith("Sil ")), "Delete hiç çağrılmaz");
+            c = C(s, "POST", "/api/Material/999999/deactivate", N("code", Malzeme));
+            Esit(404, c.Durum, "kayıt yok");
+            Esit(Islemler.KartYok, Hata(c), "TMI'nin tanıdığı metin");
+            Esit(400, C(s, "POST", "/api/Material/abc/deactivate", N("code", Malzeme)).Durum, "sayı olmayan kayıt");
+        }
+
+        static void T_hizmet_karti_yonuyle_kullanim_disi_birakilir()
+        {
+            var s = Logo();
+            var r = s.Hizmet("HZM-1", 1).Ref;
+            var c = C(s, "POST", "/api/SalesService/" + r + "/deactivate", N("code", "HZM-1"));
+            Esit(404, c.Durum, "verilen hizmette yok");
+            c = C(s, "POST", "/api/PurchaseService/" + r + "/deactivate", N("code", "HZM-1"));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            Esit("Guncelle " + Nesne.AlinanHizmet + " " + r + " ACTIVE=1", s.Cagrilar.Last(), "alınan hizmet nesnesi");
+            Dogru(s.Hizmet("HZM-1", 1) != null && s.Hizmet("HZM-1", 1).Pasif, "hizmet duruyor, kullanım dışı");
+        }
+
         static void T_var_mi_okumasi_yoksa_0_doner()
         {
             var s = Logo();
@@ -642,7 +678,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(27, hepsi.Count, "sorgu sayısı");
+            Esit(29, hepsi.Count, "sorgu sayısı");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");
@@ -650,6 +686,9 @@ namespace LogoYardimcisi
             Icerir(q.Siparis, "O.TRCODE = @tr");
             Icerir(q.StokToplamlari, "LG_007_03_GNTOTST");
             Icerir(q.CariAra, "LG_007_CLCARD");
+            Icerir(q.MalzemeRefIle, "I.ACTIVE");
+            Icerir(q.HizmetRefIle, "LG_007_SRVCARD");
+            Icerir(q.HizmetRefIle, "ACTIVE");
             Esit("%a\\%b\\_c\\[d\\\\%", SqlOkuma.Desen("a%b_c[d\\"), "LIKE deseni kaçırılır");
             foreach (var yazan in new[] { "UPDATE LG_007_ITEMS SET NAME = 'x'", "SELECT 1; DELETE FROM LG_007_ITEMS", "SELECT * INTO X FROM LG_007_ITEMS", "EXEC sp_who" })
             {

@@ -29,20 +29,39 @@ const ALANLAR = `belge_no AS "belgeNo", niyet_zamani AS "niyetZamani", deneme_sa
 const tablo = (belgeTuru: BelgeTuru): 'logo_giden' | 'logo_malzeme_fisi_giden' =>
   (LOGO_FIS_TURLERI as readonly string[]).includes(belgeTuru) ? 'logo_malzeme_fisi_giden' : 'logo_giden';
 
-export function gidenSatirlari(db: Db, belgeTuru: BelgeTuru, nolar: readonly number[]): Promise<GidenSatiri[]> {
-  return db.sorgu<GidenSatiri>(`SELECT ${ALANLAR} FROM ${tablo(belgeTuru)} WHERE belge_turu = $1 AND belge_no = ANY($2::int[])`, [belgeTuru, nolar]);
+// logo_giden'de işlem türü (2114b): kart belgesinin gönderim ve Logo'da pasife alma izi ayrı satırdır. Fiş giden kutusunda işlem yoktur (yalnız gönderim).
+export type GidenIslemi = 'gonder' | 'pasif';
+// Koşul ve çakışma hedefi tabloya göre; işlem parametresi yalnız logo_giden'de verilir (fazla parametre sorguyu bozar).
+const islemli = (belgeTuru: BelgeTuru): boolean => tablo(belgeTuru) === 'logo_giden';
+const islemKosulu = (belgeTuru: BelgeTuru, yer: number): string => (islemli(belgeTuru) ? ` AND islem = $${yer}` : '');
+const islemDegeri = (belgeTuru: BelgeTuru, islem: GidenIslemi): GidenIslemi[] => (islemli(belgeTuru) ? [islem] : []);
+const cakisma = (belgeTuru: BelgeTuru): string => (islemli(belgeTuru) ? '(belge_turu, belge_no, islem)' : '(belge_turu, belge_no)');
+
+export function gidenSatirlari(db: Db, belgeTuru: BelgeTuru, nolar: readonly number[], islem: GidenIslemi = 'gonder'): Promise<GidenSatiri[]> {
+  return db.sorgu<GidenSatiri>(
+    `SELECT ${ALANLAR} FROM ${tablo(belgeTuru)} WHERE belge_turu = $1 AND belge_no = ANY($2::int[])${islemKosulu(belgeTuru, 3)}`,
+    [belgeTuru, nolar, ...islemDegeri(belgeTuru, islem)],
+  );
 }
 
-export function gidenSatiri(db: Db, belgeTuru: BelgeTuru, no: number): Promise<GidenSatiri | null> {
-  return db.tek<GidenSatiri>(`SELECT ${ALANLAR} FROM ${tablo(belgeTuru)} WHERE belge_turu = $1 AND belge_no = $2`, [belgeTuru, no]);
+export function gidenSatiri(db: Db, belgeTuru: BelgeTuru, no: number, islem: GidenIslemi = 'gonder'): Promise<GidenSatiri | null> {
+  return db.tek<GidenSatiri>(
+    `SELECT ${ALANLAR} FROM ${tablo(belgeTuru)} WHERE belge_turu = $1 AND belge_no = $2${islemKosulu(belgeTuru, 3)}`,
+    [belgeTuru, no, ...islemDegeri(belgeTuru, islem)],
+  );
 }
 
-// Niyet: bu belge için açma isteği gidecek. Transaction bitince kalıcıdır; istek bir sonraki turda gider.
-export async function niyetYaz(db: Db, belgeTuru: BelgeTuru, no: number, zaman: Date): Promise<void> {
+// Niyet: bu belge için istek gidecek. Transaction bitince kalıcıdır; istek bir sonraki turda gider.
+// Pasife alma yeniden istenebilir (Arşiv'den dönen kart yeniden silinir): satır yeni isteğe açılır, son sonuç boşalır (deneme sayısı kalır).
+export async function niyetYaz(db: Db, belgeTuru: BelgeTuru, no: number, zaman: Date, islem: GidenIslemi = 'gonder'): Promise<void> {
+  const i = islemli(belgeTuru);
+  const yeniIstek = i && islem === 'pasif'
+    ? ', son_sonuc = NULL, son_deneme = NULL, son_hata = NULL, logo_kayit_no = NULL, sonraki_deneme = NULL, ardisik_hata = 0'
+    : '';
   await db.sorgu(
-    `INSERT INTO ${tablo(belgeTuru)} (belge_turu, belge_no, niyet_zamani) VALUES ($1, $2, $3)
-     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET niyet_zamani = EXCLUDED.niyet_zamani`,
-    [belgeTuru, no, zaman],
+    `INSERT INTO ${tablo(belgeTuru)} (belge_turu, belge_no, niyet_zamani${i ? ', islem' : ''}) VALUES ($1, $2, $3${i ? ', $4' : ''})
+     ON CONFLICT ${cakisma(belgeTuru)} DO UPDATE SET niyet_zamani = EXCLUDED.niyet_zamani${yeniIstek}`,
+    [belgeTuru, no, zaman, ...islemDegeri(belgeTuru, islem)],
   );
 }
 
@@ -57,16 +76,17 @@ export interface DenemeSonucu {
   basarili: boolean;
 }
 
-export async function denemeYaz(db: Db, belgeTuru: BelgeTuru, no: number, d: DenemeSonucu): Promise<void> {
+export async function denemeYaz(db: Db, belgeTuru: BelgeTuru, no: number, d: DenemeSonucu, islem: GidenIslemi = 'gonder'): Promise<void> {
+  const i = islemli(belgeTuru);
   await db.sorgu(
-    `INSERT INTO ${tablo(belgeTuru)} AS g (belge_turu, belge_no, niyet_zamani, deneme_sayisi, ardisik_hata, son_deneme, son_sonuc, son_hata, sonraki_deneme, logo_kayit_no)
-     VALUES ($1, $2, CASE WHEN $8 THEN $9::timestamptz END, 1, CASE WHEN $10 THEN 0 ELSE 1 END, $3, $4, $5, $6, $7)
-     ON CONFLICT (belge_turu, belge_no) DO UPDATE SET
+    `INSERT INTO ${tablo(belgeTuru)} AS g (belge_turu, belge_no, niyet_zamani, deneme_sayisi, ardisik_hata, son_deneme, son_sonuc, son_hata, sonraki_deneme, logo_kayit_no${i ? ', islem' : ''})
+     VALUES ($1, $2, CASE WHEN $8 THEN $9::timestamptz END, 1, CASE WHEN $10 THEN 0 ELSE 1 END, $3, $4, $5, $6, $7${i ? ', $11' : ''})
+     ON CONFLICT ${cakisma(belgeTuru)} DO UPDATE SET
        niyet_zamani = CASE WHEN $8 THEN $9::timestamptz ELSE g.niyet_zamani END,
        deneme_sayisi = g.deneme_sayisi + 1,
        ardisik_hata = CASE WHEN $10 THEN 0 ELSE g.ardisik_hata + 1 END,
        son_deneme = $3, son_sonuc = $4, son_hata = $5, sonraki_deneme = $6, logo_kayit_no = $7`,
-    [belgeTuru, no, d.zaman, d.sonuc, d.hata, d.sonrakiDeneme, d.logoKayitNo, d.niyetZamani !== undefined, d.niyetZamani ?? null, d.basarili],
+    [belgeTuru, no, d.zaman, d.sonuc, d.hata, d.sonrakiDeneme, d.logoKayitNo, d.niyetZamani !== undefined, d.niyetZamani ?? null, d.basarili, ...islemDegeri(belgeTuru, islem)],
   );
 }
 
@@ -144,14 +164,14 @@ export interface GidenOzeti {
   sonDeneme: string | null;
 }
 
-// Belge türü başına son sonuç: Logo'da açılmış (ya da zaten vardı) ve son denemesi başarısız olan kayıt sayısı.
+// Belge türü başına son sonuç (yalnız gönderim; pasife alma izi sayılmaz): Logo'da açılmış (ya da zaten vardı) ve son denemesi başarısız olan kayıt sayısı.
 export function gidenOzetleri(db: Db): Promise<GidenOzeti[]> {
   return db.sorgu<GidenOzeti>(
     `SELECT belge_turu AS "belgeTuru",
        count(*) FILTER (WHERE son_sonuc IN ('gonderildi', 'zaten-vardi'))::int AS gonderilen,
        count(*) FILTER (WHERE son_sonuc IS NOT NULL AND son_sonuc NOT IN ('gonderildi', 'zaten-vardi'))::int AS hatali,
        ${zamanMetni('max(son_deneme)')} AS "sonDeneme"
-     FROM (SELECT belge_turu, son_sonuc, son_deneme FROM logo_giden UNION ALL SELECT belge_turu, son_sonuc, son_deneme FROM logo_malzeme_fisi_giden) g GROUP BY belge_turu`,
+     FROM (SELECT belge_turu, son_sonuc, son_deneme FROM logo_giden WHERE islem = 'gonder' UNION ALL SELECT belge_turu, son_sonuc, son_deneme FROM logo_malzeme_fisi_giden) g GROUP BY belge_turu`,
   );
 }
 
@@ -245,7 +265,7 @@ export function faturaSiparisleri(db: Db, eskiden: Date, sinir: number): Promise
      FROM logo_giden g
      JOIN logo_siparis_no n ON n.belge_no = g.belge_no
      LEFT JOIN logo_fatura_okuma o ON o.siparis_no = n.siparis_no
-     WHERE g.belge_turu = 'siparis' AND g.son_sonuc IN ('gonderildi', 'zaten-vardi') AND g.logo_kayit_no IS NOT NULL
+     WHERE g.belge_turu = 'siparis' AND g.islem = 'gonder' AND g.son_sonuc IN ('gonderildi', 'zaten-vardi') AND g.logo_kayit_no IS NOT NULL
        AND (o.son_okuma IS NULL OR o.son_okuma <= $1)
      ORDER BY o.son_okuma NULLS FIRST, n.belge_no
      LIMIT $2`,
@@ -402,7 +422,7 @@ export async function silindiYaz(db: Db, tur: FisTuru, id: number, zaman: Date):
 }
 
 // Silme başarısız: fiş Logo'da durur, kayıt no kalır; geri çekilmeyle yeniden denenir.
-export async function silmeHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zaman: Date; sonuc: GidenSonucu; hata: string; sonrakiDeneme: Date }): Promise<void> {
+export async function pasifHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zaman: Date; sonuc: GidenSonucu; hata: string; sonrakiDeneme: Date }): Promise<void> {
   await db.sorgu(
     `UPDATE logo_malzeme_fisi_giden SET son_sonuc = $3, son_hata = $4, son_deneme = $5, sonraki_deneme = $6, deneme_sayisi = deneme_sayisi + 1,
             ardisik_hata = ardisik_hata + 1

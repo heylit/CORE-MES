@@ -17,7 +17,7 @@ import type {
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
   LogoGelenCevabi, LogodanAlCevabi, logodanAlGovdesi, logoGelenSorgusu,
-  ArsivKarti, ArsivKartiCevabi, ArsivKartlariCevabi,
+  ArsivKarti, ArsivKartiCevabi, ArsivKartlariCevabi, KatalogKartiIptalCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -287,6 +287,8 @@ export async function malzemeLogoSonucu(db: Db, no: number, sonuc: MalzemeLogoSo
       { malzeme_katalog_karti_logo_kayit_no_tek: { ileti: 'Bu Logo kayıt numarası başka bir karta yazılmış.', alan: 'kayitNo' } },
       () => s.logoGonderildiYaz(db, no, kayitNo, gonderilen),
     );
+    // Gönderim yarışı (2114b): istek yoldayken kart silindiyse Logo'da açılan kart da pasife alınmak üzere kuyruğa girer; silen, isteyendir.
+    if (kart.iptal) await s.logoPasifIste(db, no, kart.silenId);
     return;
   }
   const hata = logoHataMetni(sonuc.hata);
@@ -314,6 +316,31 @@ export async function malzemeLogoGuncellemeSonucu(db: Db, no: number, sonuc: Log
   if (yazilacak !== null) await s.logoGuncellemeSonucuYaz(db, no, yazilacak.durum, yazilacak.hata);
 }
 
+/* ---------------- Logo'da pasife alma (2114b, 2114-7, ADR 0017 eki 8) ---------------- */
+
+export type LogoyaPasifGidecekMalzeme = s.LogoPasifSatiri;
+// `kalici`: Logo reddetti (kart yok ya da kod uyuşmuyor); yeniden denenmez, kart pasif kalır. Değilse (ulaşılamadı, belirsiz) iş yeniden dener.
+export type LogoPasifSonucu = { tamam: true } | { hata: string; kalici: boolean };
+
+// Logo'da pasife alınması istenen kartlar (bekleyen ve hatalı), en eski önce. Yetki denetlemez; çağıran Logo işidir.
+export async function logoyaPasifGidecekMalzemeler(db: Db, sinir: number): Promise<LogoyaPasifGidecekMalzeme[]> {
+  if (!Number.isSafeInteger(sinir) || sinir < 1) throw new Error(`Logo pasife alma kuyruğu sınırı pozitif tam sayı olmalı: ${sinir}`);
+  return s.logoPasifKuyrugu(db, sinir);
+}
+
+export async function malzemeLogoPasifSonucu(db: Db, no: number, sonuc: LogoPasifSonucu): Promise<void> {
+  const kart = await s.logoPasifKilitle(db, no);
+  if (!kart) throw bulunamadi('Malzeme kartı bulunamadı.');
+  if (kart.durum !== 'bekliyor' && kart.durum !== 'hata') throw gecersiz('Kart Logo pasife alma kuyruğunda değil.');
+  if ('tamam' in sonuc) {
+    await s.logodaPasifYaz(db, no);
+    return;
+  }
+  const hata = logoHataMetni(sonuc.hata);
+  if (hata === null) throw dogrulama('Logo hata metni boş olamaz.', 'hata');
+  await s.logoPasifHataYaz(db, no, sonuc.kalici ? 'reddedildi' : 'hata', hata);
+}
+
 /* ---------------- Logo durumu ekranı ve karşılık tablosu ---------------- */
 
 // LOG-1 a: geçerli Logo birim seti kodlarının listesi Logo modülündedir; Logo bu modülü ithal ettiği için tersini sunucu/kablolama.ts
@@ -327,6 +354,7 @@ export async function logoDurumunuGetir(db: Db, kullanici: Kullanici): Promise<L
   const kartlar = (await s.logoDurumluKartlar(db)).map((k) => ({
     id: k.id, kod: k.kod, ad: k.ad, tur: k.tur, birim: k.birim, durum: k.durum, hata: k.hata, zaman: k.zaman, kayitNo: k.kayitNo,
     guncelleme: k.guncellemeDurumu === null || k.guncellemeZamani === null ? null : { durum: k.guncellemeDurumu, hata: k.guncellemeHata, zaman: k.guncellemeZamani },
+    pasif: k.pasifDurumu === null || k.pasifZamani === null ? null : { durum: k.pasifDurumu, hata: k.pasifHata, zaman: k.pasifZamani },
     eksikler: k.durum === 'gonderildi' ? [] : logoEksikleri({ tur: k.tur, stokKodu: k.kod, ad: k.ad, birim: k.birim, logoKartTuru: k.logoKartTuru, logoBirimSeti: k.logoBirimSeti }, gecerli),
   }));
   return {
@@ -656,24 +684,34 @@ const KART_KULLANIMDA = 'Kart başka kayıtlarda kullanılıyor; silinemez, pasi
 // Silme denemesinin başarı işareti: kayıt noktası bununla geri döner, kart satırı kalır.
 const DENEME_BITTI = gecersiz('Silme denemesi geri alındı.');
 
+// Logo'ya gönderilmiş kart Logo'dan silinmez, Logo'da kullanım dışı bırakılır (2114-7): istek kuyruğa girer, kart o sürede pasiftir; Logo
+// bağlantısı kapalıyken istek alınmaz. Logo onaylayınca kart iptal olur, reddederse pasif kalır (Logo işi, malzemeLogoPasifSonucu).
 // Kullanılmamış kart silinir (2114-1 a): katalogdan ve seçimlerden kalkar, satırı iptal olarak kalır (2114-3 a). Kullanımı
 // başka modüllerin yabancı anahtarı bir silme denemesiyle söyler; aparat kapasitesi karta anahtarsız bağlı olduğundan ayrıca
 // sorulur (yön malzemeler -> istasyonlar). Satır kaldığı için anahtarsız bağlar ve kayıtlardaki kart izi kopmaz.
-export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: string): Promise<{ id: string }> {
+export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: string): Promise<KatalogKartiIptalCevabi> {
   const kayitli = await s.katalogKartiKilitle(db, kimlik);
   if (!kayitli || kayitli.onayDurumu === 'iptal') throw bulunamadi('Malzeme kataloğu kartı bulunamadı.');
   if (!katalogIptalYetkiliMi({ islemler: kullanici.islemler, kisiId: kullanici.id, acanKisiId: kayitli.acanKisiId })) {
     throw yetkiYok('Onay yetkisi olmayan yalnız kendi açtığı kartı siler.');
   }
-  if (!katalogSilinirMi(kayitli.logoKayitNo)) throw gecersiz('Kart Logo\'ya gönderilmiş; Logo\'dan silinmeden silinemez, pasife alın.');
+  const logoda = !katalogSilinirMi(kayitli.logoKayitNo);
+  if (logoda) {
+    if (kayitli.logoPasifDurumu === 'bekliyor' || kayitli.logoPasifDurumu === 'hata') throw gecersiz('Kart Logo\'da pasife alınmayı bekliyor.');
+    if (!(await sistemAyariOku(db, 'logo.baglanti'))) throw gecersiz('Logo bağlantısı kapalı; Logo\'ya gönderilmiş kart şimdi silinemez, pasife alın.');
+  }
   if ((await aparatKapasiteleri(db)).some((a) => a.aparatKartiId === kayitli.no)) throw bagimliKayit(KART_KULLANIMDA);
+  // Logo'daki kartın pasife alma isteği denemeden önce yazılır: tetik silme denemesine yalnız bekleyen istekte izin verir. Kullanılan kartta
+  // hata transaction'ı, istekle birlikte geri alır.
+  if (logoda) await s.logoPasifIste(db, kayitli.no, kullanici.id);
   const deneme = await kayitNoktasi(db, async () => {
     await s.katalogKartiSilmeyiDene(db, kimlik);
     throw DENEME_BITTI;
   });
   if (!deneme.tamam && deneme.hata !== DENEME_BITTI) throw deneme.hata.kod === 'BAGIMLI_KAYIT' ? bagimliKayit(KART_KULLANIMDA) : deneme.hata;
+  if (logoda) return { id: kimlik, logodaPasifeAliniyor: true };
   await s.katalogKartiIptal(db, kimlik, kullanici.id);
-  return { id: kimlik };
+  return { id: kimlik, logodaPasifeAliniyor: false };
 }
 
 // Arşiv (2114c): kartın başka modüllerdeki izi. Modüller kendi tablolarını sayar; ters yöndeki bağ sunucu/kablolama.ts'tedir.

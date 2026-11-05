@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari;
 
@@ -23,6 +23,7 @@ namespace LogoYardimcisi
             "LG_<f>_PURCHOFFER.CLIENTREF, NETTOTAL, TRCURR, TRRATE", "LG_<f>_PURCHOFFERLN.STOCKREF, LINETYPE, AMOUNT, PRICE, UOMREF",
             "LG_<f>_ITEMS.ACTIVE (0 kullanımda)", "LG_<f>_<d>_GNTOTST.STOCKREF, INVENNO (-1 bütün ambarların toplamı), ONHAND",
             "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
+            "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects ACTIVE alanı (malzeme ve hizmet kartı) kart pasife almada",
         };
 
         public Sorgular(int firma, int donem)
@@ -33,8 +34,10 @@ namespace LogoYardimcisi
             var kodBirlesimi = " LEFT JOIN " + f("ITEMS") + " I ON I.LOGICALREF = L.STOCKREF LEFT JOIN " + f("SRVCARD") + " S ON S.LOGICALREF = L.STOCKREF";
 
             MalzemeRef = "SELECT LOGICALREF FROM " + f("ITEMS") + " WHERE CODE = @kod";
-            Malzeme = "SELECT I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE FROM " + f("ITEMS") + " I LEFT JOIN "
-                + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.CODE = @kod";
+            var malzemeAlanlari = "SELECT I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
+                + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE ";
+            Malzeme = malzemeAlanlari + "I.CODE = @kod";
+            MalzemeRefIle = malzemeAlanlari + "I.LOGICALREF = @ref";
             MalzemeKodlari = "SELECT CODE FROM " + f("ITEMS") + " ORDER BY CODE";
             MalzemeKartlari = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
                 + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.LOGICALREF > @son ORDER BY I.LOGICALREF";
@@ -50,7 +53,8 @@ namespace LogoYardimcisi
             Ambarlar = "SELECT NR, NAME FROM L_CAPIWHOUSE WHERE FIRMNR = @firma ORDER BY NR";
             Cariler = "SELECT CODE, DEFINITION_ FROM " + f("CLCARD") + " WHERE ACTIVE = 0 ORDER BY CODE";
             CariRef = "SELECT LOGICALREF FROM " + f("CLCARD") + " WHERE CODE = @kod";
-            Hizmet = "SELECT LOGICALREF, CODE, DEFINITION_ FROM " + f("SRVCARD") + " WHERE CODE = @kod AND CARDTYPE = @tur";
+            Hizmet = "SELECT LOGICALREF, CODE, DEFINITION_, ACTIVE FROM " + f("SRVCARD") + " WHERE CODE = @kod AND CARDTYPE = @tur";
+            HizmetRefIle = "SELECT LOGICALREF, CODE, DEFINITION_, ACTIVE FROM " + f("SRVCARD") + " WHERE LOGICALREF = @ref AND CARDTYPE = @tur";
             var siparisBasligi = "SELECT O.LOGICALREF, O.FICHENO, O.STATUS, O.CANCELLED, C.CODE, O.NETTOTAL, O.TRCURR, O.TRRATE FROM " + d("ORFICHE")
                 + " O LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = O.CLIENTREF WHERE O.TRCODE = @tr AND ";
             Siparis = siparisBasligi + "O.FICHENO = @no";
@@ -176,9 +180,11 @@ namespace LogoYardimcisi
             return Ilk(q.MalzemeRef, P("@kod", kod));
         }
 
-        public MalzemeKaydi Malzeme(string kod)
+        public MalzemeKaydi Malzeme(string kod) { return MalzemeOku(Sorgula(q.Malzeme, P("@kod", kod))); }
+        public MalzemeKaydi MalzemeRefIle(int kayit) { return MalzemeOku(Sorgula(q.MalzemeRefIle, P("@ref", kayit))); }
+
+        static MalzemeKaydi MalzemeOku(List<object[]> l)
         {
-            var l = Sorgula(q.Malzeme, P("@kod", kod));
             if (l.Count == 0) return null;
             var s = l[0];
             var k = new MalzemeKaydi();
@@ -190,6 +196,7 @@ namespace LogoYardimcisi
             k.Aciklama2 = Metin(s[5]);
             k.Aciklama3 = Metin(s[6]);
             k.BirimSeti = Metin(s[7]);
+            k.Pasif = Bayrak(s[8]);
             return k;
         }
 
@@ -306,14 +313,17 @@ namespace LogoYardimcisi
         public List<KodAd> Cariler() { return KodAdlar(q.Cariler); }
         public int CariRef(string kod) { return Ilk(q.CariRef, P("@kod", kod)); }
 
-        public HizmetKaydi Hizmet(string kod, int kartTuru)
+        public HizmetKaydi Hizmet(string kod, int kartTuru) { return HizmetOku(Sorgula(q.Hizmet, P("@kod", kod), P("@tur", kartTuru))); }
+        public HizmetKaydi HizmetRefIle(int kayit, int kartTuru) { return HizmetOku(Sorgula(q.HizmetRefIle, P("@ref", kayit), P("@tur", kartTuru))); }
+
+        static HizmetKaydi HizmetOku(List<object[]> l)
         {
-            var l = Sorgula(q.Hizmet, P("@kod", kod), P("@tur", kartTuru));
             if (l.Count == 0) return null;
             var k = new HizmetKaydi();
             k.Ref = Tam(l[0][0]);
             k.Kod = Metin(l[0][1]);
             k.Ad = Metin(l[0][2]);
+            k.Pasif = Bayrak(l[0][3]);
             return k;
         }
 

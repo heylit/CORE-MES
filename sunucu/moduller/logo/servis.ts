@@ -17,7 +17,7 @@ import {
 import type { LogoCari, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
-import type { BelgeTuru, FisTuru, GidenSatiri, GidenSonucu } from './sorgular.ts';
+import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
 
 // Sürecin belleği: veritabanı geri alınsa da süreç içinde çift açmayı önler. Süreç yeniden başlayınca boştur;
 // o zaman kalıcı niyet ve BELIRSIZ_BEKLEME_MS korur.
@@ -58,6 +58,8 @@ export interface TurOrtami {
   hizmetAcik?: Readonly<Record<HizmetYonu, boolean>>;
   // Logo'ya gitmiş kartın ad güncellemesi (S4 b): kuyruğu ve sonucu malzemelerin işlevleridir; gelene kadar verilmez (UYUM-BORCU).
   malzemeGuncelleme?: MalzemeGuncellemeKaynagi;
+  // Silinen Logo kartının Logo'da pasife alınması (2114b, 2114-7, ADR 0017 madde 8): kuyruğu ve sonucu malzemelerin işlevleridir.
+  malzemePasif?: MalzemePasifKaynagi;
 }
 
 export interface LogoyaGuncellemeGidecekMalzeme {
@@ -71,6 +73,18 @@ export interface LogoyaGuncellemeGidecekMalzeme {
   aciklama1?: string | null;
   aciklama2?: string | null;
   aciklama3?: string | null;
+}
+export interface LogoyaPasifGidecekMalzeme {
+  no: number;
+  stokKodu: string;
+  logoKayitNo: string;
+  tur: string;
+  hizmetYonu: HizmetYonu | null;
+}
+export interface MalzemePasifKaynagi {
+  gidecekler(db: Db, sinir: number): Promise<LogoyaPasifGidecekMalzeme[]>;
+  // `kalici`: Logo reddetti; sahibi yeniden denemez, kart pasif kalır.
+  sonuc(db: Db, no: number, sonuc: { tamam: true } | { hata: string; kalici: boolean }): Promise<void>;
 }
 export interface MalzemeGuncellemeKaynagi {
   gidecekler(db: Db, sinir: number): Promise<LogoyaGuncellemeGidecekMalzeme[]>;
@@ -97,7 +111,8 @@ export type TurSonucu =
   | { tur: 'niyet'; no: number }
   | { tur: 'gonderim'; no: number; sonuc: GidenSonucu }
   | { tur: 'satin-alma-kapali' }
-  | { tur: 'guncelleme' | 'kapatma' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
+  | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
+  | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
   | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' }
   | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
@@ -165,7 +180,7 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
   // Kapalı yöndeki hizmet kartı atlanır: istek yok, satır yok, kart bekler.
   const kuyruk = (await logoyaGidecekMalzemeler(db, KUYRUK_SINIRI, { hizmetDahil: true }))
     .filter((k) => uygunMu(k) && (k.tur !== 'hizmet' || (k.hizmetYonu !== null && hizmetAcik[k.hizmetYonu])));
-  if (kuyruk.length === 0) return guncellemeTuru(db, o, kopru);
+  if (kuyruk.length === 0) return pasifTuru(db, o, kopru);
   // Kart numarası türler arasında tekildir (tek kart tablosu).
   const satirlar = new Map<number, GidenSatiri>();
   for (const belge of ['malzeme', 'hizmet'] as const) {
@@ -194,10 +209,40 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
     o.bellek.niyetler.delete(kart.no);
     return turla(() => gonder(o, kart, g, gonderim, taze), (sonuc) => ({ tur: 'gonderim', no: kart.no, sonuc }));
   }
-  return guncellemeTuru(db, o, kopru);
+  return pasifTuru(db, o, kopru);
 }
 
 const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belge için Logo\'da "var mı" okunamıyor; Logo\'da kontrol edin. Kendiliğinden yeniden gönderilmez.';
+
+// Silinen Logo kartının Logo'da kullanım dışı bırakılması (2114b, 2114-7, ADR 0017 madde 8): açma kuyruğu boşken, güncellemeden önce tek kart.
+// İstek yalnız bağlantı açıkken alınır; tur da yalnız bağlantı açıkken koşar. Giden kutusunda kart belgesinin "pasif" satırıdır: önce niyet
+// kalıcı yazılır (tur biter), sonraki turda istek gider. Yineleme zararsızdır: zaten kullanım dışı kart yardımcıda başarıdır.
+async function pasifTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<TurSonucu | KopruAdimi> {
+  if (!o.malzemePasif) return guncellemeTuru(db, o, kopru);
+  const kaynak = o.malzemePasif;
+  for (const kart of await kaynak.gidecekler(db, KUYRUK_SINIRI)) {
+    const belge: BelgeTuru = kart.tur === 'hizmet' ? 'hizmet' : 'malzeme';
+    const g = await s.gidenSatiri(db, belge, kart.no, 'pasif');
+    if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;
+    if (!g?.niyetZamani) {
+      await s.niyetYaz(db, belge, kart.no, o.saat(), 'pasif');
+      return { tur: 'pasif-niyet', no: kart.no };
+    }
+    const kod = (await logoKoduyla(db, { stokKodu: kart.stokKodu })).stokKodu.trim();
+    const yon = kart.hizmetYonu;
+    const adim = tekAdim(o, g, {
+      belge, id: kart.no, islem: 'pasif',
+      calis: async () => {
+        if (kart.tur === 'hizmet' && yon === null) return { sonuc: 'reddedildi', hata: 'Hizmet kartının yönü yok.' };
+        const c = kart.tur === 'hizmet' && yon !== null ? await kopru.hizmetPasifeAl(yon, kart.logoKayitNo, kod) : await kopru.malzemePasifeAl(kart.logoKayitNo, kod);
+        return c.tur === 'basarili' ? { tamam: true, kayitNo: kart.logoKayitNo, deger: { tamam: true as const } } : { sonuc: c.tur, hata: `Logo'da pasife alma: ${c.ileti}` };
+      },
+      bildir: (yazDb, x, sonuc) => kaynak.sonuc(yazDb, kart.no, 'tamam' in x ? x : { hata: x.hata, kalici: sonuc === 'reddedildi' }),
+    });
+    return turla(adim, (sonuc) => ({ tur: 'pasif', no: kart.no, sonuc }));
+  }
+  return guncellemeTuru(db, o, kopru);
+}
 
 // Logo'ya gitmiş kartın ad ve açıklama güncellemesi: açma kuyruğu boşken tek kart. Güncelleme yinelenirse aynı değerleri yazar (zararsız), niyet gerekmez.
 async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<TurSonucu | KopruAdimi> {
@@ -234,7 +279,10 @@ async function guncellemeTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Prom
 type AdimSonucu<T> = { tamam: true; kayitNo: string; deger: T } | { sonuc: Exclude<GidenSonucu, 'gonderildi' | 'zaten-vardi'>; hata: string };
 function tekAdim<T>(
   o: TurOrtami, g: GidenSatiri | null,
-  a: { belge: BelgeTuru; id: number; calis: () => Promise<AdimSonucu<T>>; bildir: (db: Db, x: T | { hata: string }) => Promise<void> },
+  a: {
+    belge: BelgeTuru; id: number; islem?: GidenIslemi; calis: () => Promise<AdimSonucu<T>>;
+    bildir: (db: Db, x: T | { hata: string }, sonuc: GidenSonucu) => Promise<void>;
+  },
 ): KopruAdimi<GidenSonucu> {
   return async () => {
     const r = await a.calis();
@@ -244,17 +292,17 @@ function tekAdim<T>(
       const yazilamadi = (b: Awaited<ReturnType<typeof kayitNoktasi>>): string | null =>
         b.tamam ? null : kirp(`CORE kaydına yazılamadı: ${b.hata instanceof UygulamaHatasi ? b.hata.mesaj : 'kural reddetti'}`);
       if ('tamam' in r) {
-        const hata = yazilamadi(await kayitNoktasi(db, () => a.bildir(db, r.deger)));
+        const hata = yazilamadi(await kayitNoktasi(db, () => a.bildir(db, r.deger, 'gonderildi')));
         await s.denemeYaz(db, a.belge, a.id, hata === null
           ? { zaman, sonuc: 'gonderildi', hata: null, logoKayitNo: r.kayitNo, niyetZamani: null, sonrakiDeneme: null, basarili: true }
-          : { zaman, sonuc: 'yazilamadi', hata, logoKayitNo: null, niyetZamani: null, sonrakiDeneme: bekleme, basarili: false });
+          : { zaman, sonuc: 'yazilamadi', hata, logoKayitNo: null, niyetZamani: null, sonrakiDeneme: bekleme, basarili: false }, a.islem);
         return hata === null ? 'gonderildi' : 'yazilamadi';
       }
       const hata = kirp(r.hata);
-      const ek = yazilamadi(await kayitNoktasi(db, () => a.bildir(db, { hata })));
+      const ek = yazilamadi(await kayitNoktasi(db, () => a.bildir(db, { hata }, r.sonuc)));
       await s.denemeYaz(db, a.belge, a.id, {
         zaman, sonuc: r.sonuc, hata: ek ? kirp(`${hata} ${ek}`) : hata, logoKayitNo: null, niyetZamani: null, sonrakiDeneme: bekleme, basarili: false,
-      });
+      }, a.islem);
       return r.sonuc;
     };
   };
@@ -1214,7 +1262,7 @@ function fisSilmeAdimi(o: MalzemeFisiTurOrtami, kopru: KopruIstemcisi, f: Esitle
     const hata = kirp(`Logo'daki fiş değişiklik için silinemedi: ${sil.ileti}`);
     return async (yazDb) => {
       const b = await kayitNoktasi(yazDb, () => o.kaynak.sonuc(yazDb, f.tur, f.id, { hata }));
-      await s.silmeHatasiYaz(yazDb, f.tur, f.id, {
+      await s.pasifHatasiYaz(yazDb, f.tur, f.id, {
         zaman: simdi, sonuc: sil.tur, hata: b.tamam ? hata : kirp(`${hata} ${yazilamadiMetni(b)}`),
         sonrakiDeneme: new Date(simdi.getTime() + geriCekilmeMs((g?.ardisikHata ?? 0) + 1)),
       });

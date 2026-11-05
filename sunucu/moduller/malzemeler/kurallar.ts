@@ -881,10 +881,10 @@ export const arsivIzAdetleri = (izler: readonly ArsivIzi[] | null): { kesin: num
 };
 
 // Kalıcı silme (2114-4 a): kesin bağ da olası iz de engeller; bağ sayımı bağlı değilse (izler null) bilinmeyen bağ var sayılır.
-// Stok kodu yeniden yazılarak onaylanır; Logo'ya gönderilmiş kart önce Logo'dan silinir (2114b).
+// Stok kodu yeniden yazılarak onaylanır; Logo'ya gönderilmiş kart kalıcı silinmez: Logo'dan silinmez, orada kullanım dışı durur (2114-7).
 export function arsivKaliciSilmeEngeli(g: { izler: readonly ArsivIzi[] | null; logoyaGitti: boolean; stokKodu: string; girilenKod: string }): string | null {
   if (g.girilenKod.trim() !== g.stokKodu) return 'Yazılan stok kodu kartla aynı değil.';
-  if (g.logoyaGitti) return 'Kart Logo\'ya gönderilmiş; Logo\'dan silinmeden kalıcı silinemez.';
+  if (g.logoyaGitti) return 'Kart Logo\'ya gönderilmiş; Logo\'da kullanım dışı olarak durduğu için kalıcı silinemez.';
   if (g.izler === null) return 'Bağ sayımı bağlı değil; kartın bağları bilinmeden kalıcı silinmez.';
   if (g.izler.length > 0) return 'Kartın bağı ya da olası izi var; kalıcı silinemez.';
   return null;

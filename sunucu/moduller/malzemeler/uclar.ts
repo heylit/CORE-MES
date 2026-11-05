@@ -4,7 +4,7 @@ import {
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   firmaSecenekleriCevabi, firmaSecenekleriSorgusu, logoDurumuCevabi, logoGelenCevabi, logoGelenParametresi, logoGelenSorgusu, logodanAlCevabi, logodanAlGovdesi,
-  arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi,
+  arsivKaliciSilGovdesi, arsivKartiCevabi, arsivKartlariCevabi, katalogKartiIptalCevabi,
   logoKartSurumCevabi, logoKartSurumGovdesi, malzemeSecimCevabi, malzemeSecimSorgusu, logoKarsiligiKaydetGovdesi, malzemelerOzetiCevabi, olcuAletiSecenekleriCevabi, olcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { katalogKaydiAlanlari } from './kurallar.ts';
@@ -47,7 +47,7 @@ export const uclar = [
     isle: ({ db, parametre }) => servis.katalogKartiRotasi(db, parametre.kimlik),
   }),
   uc({
-    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/iptal', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi, cevap: katalogKimlikCevabi,
+    yontem: 'POST', yol: '/malzeme-katalogu-kartlari/:kimlik/iptal', yetki: 'malzemeler.yaz', parametre: katalogKimlikParametresi, cevap: katalogKartiIptalCevabi,
     isle: ({ db, kullanici, parametre }) => servis.katalogKartiIptal(db, kullanici, parametre.kimlik),
   }),
   // Demirbaş teknik bilgisi (1595): sınırlar, enerji ve serbest özellikler; kartı okuyan görür, kartı yazan girer. Fiyat burada yok (finans, 1599 a).

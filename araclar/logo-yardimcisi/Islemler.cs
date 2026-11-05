@@ -49,6 +49,7 @@ namespace LogoYardimcisi
         const string FisTurAdlari = "Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage";
         static readonly Regex MalzemeFisiYaz = new Regex("^/api/MaterialSlip/Add(" + FisTurAdlari + ")$");
         static readonly Regex MalzemeFisiBul = new Regex("^/api/MaterialSlip/(" + FisTurAdlari + ")/find/([^/]+)$");
+        static readonly Regex KartPasifi = new Regex("^/api/(Material|PurchaseService|SalesService)/([^/]+)/deactivate$");
         static readonly Regex MalzemeFisiKayit = new Regex("^/api/MaterialSlip/(" + FisTurAdlari + ")/([^/]+)$");
         // Uç adı -> STFICHE TRCODE; gerçek Logo'da denenmedi (kurulum/logo-yardimcisi.md). 11, 25, 50, 51 için TMI'de gönderim ayarı kapalı gelir.
         static readonly Dictionary<string, int> FisTrcode = new Dictionary<string, int>
@@ -132,6 +133,7 @@ namespace LogoYardimcisi
                 if (yol == "/api/SalesOffer/AddRich") return TeklifEkle(Json.Nesne(govde));
                 if ((m = TekliftenSiparis.Match(yol)).Success) return SatisSiparisiAc(RefCoz(m), Json.Nesne(govde));
                 if ((m = MalzemeFisiYaz.Match(yol)).Success) return MalzemeFisiEkle(FisTuru(m), Json.Nesne(govde));
+                if ((m = KartPasifi.Match(yol)).Success) return KartPasifeAl(m.Groups[1].Value, m.Groups[2].Value, Json.Nesne(govde));
             }
             else if (yontem == "DELETE")
             {
@@ -1200,6 +1202,45 @@ namespace LogoYardimcisi
             var f = new List<string>();
             SatirlariKarsilastir(f, satirlar, okunan);
             return f.Count > 0 ? DogrulamaTutmadi("Malzeme fişi", b.Ref, f) : Cevap.Basari(b.Ref);
+        }
+
+        /* ---------------- Kartı kullanım dışı bırakma (2114b, ADR 0017 eki 8) ---------------- */
+
+        // TMI bu hatayı kalıcı ret sayar (kart Logo'da yok): metin kopru.ts KART_YOK ile aynı kalmalı.
+        public const string KartYok = "Card not found";
+
+        // Kart kayıt numarasıyla bulunur; kayıttaki kartın kodu TMI'nin verdiği kodla karşılaştırılır (başka karta dokunulmaz). Kart silinmez:
+        // Logo Objects ile ACTIVE = 1 yazılır, ardından SQL'den kartın kullanım dışı olduğu doğrulanır. Zaten kullanım dışıysa yazılmaz, başarıdır
+        // (yinelenen istek aynı sonucu verir). ACTIVE alan adı ve değeri gerçek Logo'da denenmedi (kurulum/logo-yardimcisi.md).
+        Cevap KartPasifeAl(string uc, string refMetni, Dictionary<string, object> g)
+        {
+            int kayit;
+            if (!int.TryParse(refMetni, NumberStyles.None, CultureInfo.InvariantCulture, out kayit) || kayit <= 0) throw new GecersizIstek("Kayıt numarası geçersiz.");
+            var kod = Kod(g, "code", StokKoduEnCok);
+            var hizmet = uc != "Material";
+            var kartTuru = hizmet ? HizmetKartTuru(uc == "PurchaseService") : 0;
+            var k = KayittakiKart(hizmet, kayit, kartTuru);
+            if (k == null) return Cevap.Hata(404, KartYok);
+            if (k.Item1 != kod) return Cevap.Ret("Kayıttaki kartın kodu farklı (" + k.Item1 + "); kullanım dışı bırakılmadı.");
+            if (k.Item2) return Cevap.Basari(kayit);
+            var nesne = !hizmet ? Nesne.Malzeme : uc == "PurchaseService" ? Nesne.AlinanHizmet : Nesne.VerilenHizmet;
+            var h = yaz.Guncelle(nesne, kayit, new AlanListesi().Ekle("ACTIVE", 1), new Dictionary<int, AlanListesi>(), new List<AlanListesi>());
+            if (h != null) return Cevap.Ret(h);
+            var y = KayittakiKart(hizmet, kayit, kartTuru);
+            if (y == null || !y.Item2) return DogrulamaTutmadi(hizmet ? "Hizmet kartı" : "Malzeme kartı", kayit, new List<string> { "ACTIVE beklenen '1', Logo'da '" + (y == null ? "kart yok" : "0") + "'" });
+            return Cevap.Basari(kayit);
+        }
+
+        // Kayıttaki kartın kodu ve kullanım dışı olup olmadığı; kart yoksa null.
+        Tuple<string, bool> KayittakiKart(bool hizmet, int kayit, int kartTuru)
+        {
+            if (hizmet)
+            {
+                var h = oku.HizmetRefIle(kayit, kartTuru);
+                return h == null ? null : Tuple.Create(h.Kod, h.Pasif);
+            }
+            var m = oku.MalzemeRefIle(kayit);
+            return m == null ? null : Tuple.Create(m.Kod, m.Pasif);
         }
 
         // 233: TMI fişi Logo'da silip aynı numarayla yeniden açar (Logo'da satır silme yok) ve miktar sıfıra inince siler.

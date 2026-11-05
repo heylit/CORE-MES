@@ -27,6 +27,9 @@ export type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from './servis.ts';
 // ad bu arada yine değiştiyse güncelleme bekliyor kalır. Yetki denetlemez.
 export { logoyaGuncellemeGidecekMalzemeler, malzemeLogoGuncellemeSonucu } from './servis.ts';
 export type { LogoyaGuncellemeGidecekMalzeme } from './servis.ts';
+// 2114b: Logo'da pasife alınması istenen kartlar ve sonucu (Logo işi okur ve yazar).
+export { logoyaPasifGidecekMalzemeler, malzemeLogoPasifSonucu } from './servis.ts';
+export type { LogoyaPasifGidecekMalzeme, LogoPasifSonucu } from './servis.ts';
 export type { LogoGuncellemeSonucu } from './kurallar.ts';
 // Kart #688: kartın Operasyonlar adımı, rota taslağı açmak için ({ no, kod, ad }, no sırasıyla); kart yoksa null.
 export { malzemeOperasyonlari } from './servis.ts';

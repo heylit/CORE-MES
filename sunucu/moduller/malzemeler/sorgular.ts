@@ -14,6 +14,7 @@ export interface KatalogKartiSatiri {
   kimlik: string;
   aktifOlmus: boolean;
   logoKayitNo: string | null;
+  logoPasifDurumu: LogoPasifDurumu | null;
   stokKodu: string;
   onek: string;
   onayDurumu: KatalogKartDurumu;
@@ -55,7 +56,7 @@ export async function okumaAni(db: Db): Promise<string> {
 
 export function katalogKartiKilitle(db: Db, kimlik: string): Promise<KatalogKartiSatiri | null> {
   return db.tek<KatalogKartiSatiri>(
-    `SELECT no, kimlik, aktif_oldu AS "aktifOlmus", logo_kayit_no AS "logoKayitNo", stok_kodu AS "stokKodu", onek, onay_durumu AS "onayDurumu", surum, gonderen_kisi_id AS "gonderenKisiId",
+    `SELECT no, kimlik, aktif_oldu AS "aktifOlmus", logo_kayit_no AS "logoKayitNo", logo_pasif_durumu AS "logoPasifDurumu", stok_kodu AS "stokKodu", onek, onay_durumu AS "onayDurumu", surum, gonderen_kisi_id AS "gonderenKisiId",
             acan_kisi_id AS "acanKisiId", tur, hizmet_yonu AS "hizmetYonu", benzersiz_anahtar AS "benzersizAnahtar",
             mukerrer_gerekcesi AS "mukerrerGerekcesi", kayit
        FROM malzeme_katalog_karti WHERE kimlik = $1 FOR UPDATE`,
@@ -549,6 +550,9 @@ export interface LogoKartSatiri {
   logoKartTuru: string | null;
   logoBirimSeti: string | null;
   guncellemeDurumu: LogoGonderimDurumu | null;
+  pasifDurumu: LogoPasifDurumu | null;
+  pasifHata: string | null;
+  pasifZamani: string | null;
   guncellemeHata: string | null;
   guncellemeZamani: string | null;
   aciklama1: string | null;
@@ -562,7 +566,8 @@ const LOGO_KART_ALANLARI = `k.no AS id, k.stok_kodu AS kod, ${KATALOG_AD.replace
        CASE WHEN k.logo_gonderim_durumu = 'gonderildi' THEN k.logo_kart_turu ELSE kt.logo_degeri END AS "logoKartTuru",
        CASE WHEN k.logo_gonderim_durumu = 'gonderildi' THEN k.logo_birim_seti ELSE kb.logo_degeri END AS "logoBirimSeti",
        k.logo_guncelleme_durumu AS "guncellemeDurumu", k.logo_guncelleme_hata AS "guncellemeHata",
-       ${zamanMetni('k.logo_guncelleme_zamani')} AS "guncellemeZamani", k.aciklama_1 AS aciklama1, k.aciklama_2 AS aciklama2, k.aciklama_3 AS aciklama3`;
+       ${zamanMetni('k.logo_guncelleme_zamani')} AS "guncellemeZamani", k.logo_pasif_durumu AS "pasifDurumu", k.logo_pasif_hata AS "pasifHata",
+       ${zamanMetni('k.logo_pasif_zamani')} AS "pasifZamani", k.aciklama_1 AS aciklama1, k.aciklama_2 AS aciklama2, k.aciklama_3 AS aciklama3`;
 const LOGO_KARSILIK_BAGI = `LEFT JOIN malzeme_logo_karsiligi kt ON kt.cesit = 'tur' AND kt.tmi_degeri = k.tur
   LEFT JOIN malzeme_logo_karsiligi kb ON kb.cesit = 'birim' AND kb.tmi_degeri = ${KATALOG_BIRIM.replaceAll('kayit', 'k.kayit')}`;
 
@@ -586,18 +591,19 @@ export async function katalogBilesenOlamayanKodlar(db: Db, kimlikler: readonly s
   )).map((r) => r.kod);
 }
 
-// Durum listesi: durumu olan bütün kartlar (sıralama kuralı `kurallar.ts` `logoDurumSirasi`).
+// Durum listesi: durumu olan kartlar, silinmiş olan yalnız Logo'da pasife alınmayı bekliyorsa (sıralama kuralı `kurallar.ts` `logoDurumSirasi`).
 export function logoDurumluKartlar(db: Db): Promise<LogoKartSatiri[]> {
   return db.sorgu<LogoKartSatiri>(
     `SELECT ${LOGO_KART_ALANLARI}
        FROM malzeme_katalog_karti k ${LOGO_KARSILIK_BAGI}
-      WHERE k.logo_gonderim_durumu IS NOT NULL`,
+      WHERE k.logo_gonderim_durumu IS NOT NULL AND (k.onay_durumu <> 'iptal' OR k.logo_pasif_durumu IN ('bekliyor', 'hata'))`,
   );
 }
 
-export function logoKartiKilitle(db: Db, no: number): Promise<{ durum: LogoGonderimDurumu | null } | null> {
-  return db.tek<{ durum: LogoGonderimDurumu | null }>(
-    'SELECT logo_gonderim_durumu AS durum FROM malzeme_katalog_karti WHERE no = $1 FOR UPDATE',
+export function logoKartiKilitle(db: Db, no: number): Promise<{ durum: LogoGonderimDurumu | null; iptal: boolean; silenId: number } | null> {
+  return db.tek<{ durum: LogoGonderimDurumu | null; iptal: boolean; silenId: number }>(
+    `SELECT logo_gonderim_durumu AS durum, onay_durumu = 'iptal' AS iptal, guncelleyen_kisi_id AS "silenId"
+       FROM malzeme_katalog_karti WHERE no = $1 FOR UPDATE`,
     [no],
   );
 }
@@ -655,6 +661,62 @@ export function logoGuncellemeKilitle(db: Db, no: number): Promise<{ durum: Logo
 export async function logoGuncellemeSonucuYaz(db: Db, no: number, durum: 'gonderildi' | 'hata', hata: string | null): Promise<void> {
   await db.sorgu(
     `UPDATE malzeme_katalog_karti SET logo_guncelleme_durumu = $2, logo_guncelleme_hata = $3, logo_guncelleme_zamani = now() WHERE no = $1`,
+    [no, durum, hata],
+  );
+}
+
+/* ---------------- Logo'da pasife alma (2114b, 2114-7, ADR 0017 eki 8) ---------------- */
+
+// tamam: Logo'da kullanım dışı (kart Logo'da durur, kayıt numarası kalır).
+export type LogoPasifDurumu = 'bekliyor' | 'hata' | 'reddedildi' | 'tamam';
+
+// İstek: kart pasife alınır (iptal kart iptal kalır: gönderim yarışında Logo'da açılmış silinmiş kart). Önceki ret metni silinir.
+export async function logoPasifIste(db: Db, no: number, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE malzeme_katalog_karti
+        SET logo_pasif_durumu = 'bekliyor', logo_pasif_hata = NULL, logo_pasif_zamani = now(), logo_pasif_kisi_id = $2,
+            onay_durumu = CASE WHEN onay_durumu = 'iptal' THEN 'iptal' ELSE 'pasif' END,
+            surum = surum + 1, guncelleyen_kisi_id = CASE WHEN onay_durumu = 'iptal' THEN guncelleyen_kisi_id ELSE $2 END,
+            guncelleme = CASE WHEN onay_durumu = 'iptal' THEN guncelleme ELSE now() END
+      WHERE no = $1`,
+    [no, kisiId],
+  );
+}
+
+export interface LogoPasifSatiri {
+  no: number; stokKodu: string; logoKayitNo: string; tur: KatalogTuru; hizmetYonu: HizmetYonu | null; durum: 'bekliyor' | 'hata';
+}
+
+// Bekleyen ve hatalı istekler, en eski istek ya da son deneme önce.
+export function logoPasifKuyrugu(db: Db, sinir: number): Promise<LogoPasifSatiri[]> {
+  return db.sorgu<LogoPasifSatiri>(
+    `SELECT no, stok_kodu AS "stokKodu", logo_kayit_no AS "logoKayitNo", tur, hizmet_yonu AS "hizmetYonu", logo_pasif_durumu AS durum
+       FROM malzeme_katalog_karti
+      WHERE logo_pasif_durumu IN ('bekliyor', 'hata')
+      ORDER BY logo_pasif_zamani, no
+      LIMIT $1`,
+    [sinir],
+  );
+}
+
+export function logoPasifKilitle(db: Db, no: number): Promise<{ durum: LogoPasifDurumu | null } | null> {
+  return db.tek<{ durum: LogoPasifDurumu | null }>('SELECT logo_pasif_durumu AS durum FROM malzeme_katalog_karti WHERE no = $1 FOR UPDATE', [no]);
+}
+
+// Logo kullanım dışı bıraktı: kart iptal (Arşiv; silen, isteyen kişidir). Logo alanları kalır: kart Logo'da durur.
+export async function logodaPasifYaz(db: Db, no: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE malzeme_katalog_karti
+        SET onay_durumu = 'iptal', surum = surum + 1, guncelleyen_kisi_id = logo_pasif_kisi_id, guncelleme = now(),
+            logo_pasif_durumu = 'tamam', logo_pasif_hata = NULL, logo_pasif_zamani = now()
+      WHERE no = $1`,
+    [no],
+  );
+}
+
+export async function logoPasifHataYaz(db: Db, no: number, durum: 'hata' | 'reddedildi', hata: string): Promise<void> {
+  await db.sorgu(
+    'UPDATE malzeme_katalog_karti SET logo_pasif_durumu = $2, logo_pasif_hata = $3, logo_pasif_zamani = now() WHERE no = $1',
     [no, durum, hata],
   );
 }
