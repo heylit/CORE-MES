@@ -114,6 +114,12 @@ export function bosDegerler(tur: OlayTuru, bugun: string): AkisDegerleri {
   };
 }
 
+// 2132-3 teyit: fatura formunda vade varsayılanı firmanın varsayılan vade günüdür (fatura tarihi + gün, ödeme şekli vadeli); firmanın
+// vadesi yoksa ödeme şekli peşin gelir. Kullanıcı ikisini de değiştirebilir; değiştirdikten sonra varsayılan bir daha yazılmaz.
+export function vadeVarsayilani(vadeGunu: number | null, faturaTarihi: string): Pick<AkisDegerleri, 'method'> & Partial<Pick<AkisDegerleri, 'due'>> {
+  return vadeGunu === null ? { method: 'pesin' } : { method: 'vadeli', due: addDays(faturaTarihi, vadeGunu) };
+}
+
 /* ---------- Seçim yardımcıları ---------- */
 export const aktifHesaplar = (V: HazirVeri, turler?: readonly Hesap['tur'][] | null): Hesap[] =>
   V.hesaplar.filter((h) => h.aktif && (!turler || turler.includes(h.tur)));
