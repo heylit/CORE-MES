@@ -10,7 +10,7 @@ import type {
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { malzemeKullanilabilirMi, malzemeOzeti } from './disari.ts';
+import { logoyaGidecekMalzemeler, malzemeKullanilabilirMi, malzemeOzeti } from './disari.ts';
 import { tamGovde } from './test-kart.ts';
 import { surumlu } from './test-surum.ts';
 
@@ -191,20 +191,76 @@ describe('Malzeme Kataloğu kartları (gerçek PostgreSQL, gerçek giriş)', () 
     });
   });
 
-  test('MKK-5, MKK-6: pasife alma onay ister; yalnız taslak iptal edilir; kart silinmez, stok kodu değişmez', async () => {
+  test('MKK-5: pasife alma onay ister; stok kodu değişmez', async () => {
     const k = kart();
     let r = await kaydet(onayci, k, null, 'onayda');
     r = await kaydet(onayci2, k, r.surum, 'aktif');
     await ret(403, 'YETKI_YOK', yazar, 'POST', `/malzeme-katalogu-kartlari/${k.kimlik}/kaydet`, k.govde(r.surum, 'pasif'));
-    r = await kaydet(onayci, k, r.surum, 'pasif');
-    await ret(422, 'GECERSIZ', yazar, 'POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`);
+    await kaydet(onayci, k, r.surum, 'pasif');
+    await assert.rejects(vt().sorgu('UPDATE malzeme_katalog_karti SET sira_no = sira_no + 100 WHERE kimlik = $1', [k.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_degismez');
+  });
+
+  test('MKK-6 (2114-1 a, 2114-3 a): kullanılmamış kart her durumda silinir; satırı iptal olarak kalır, listede gövdesiz gelir', async () => {
+    const k = kart();
+    let r = await kaydet(onayci, k, null, 'onayda');
+    r = await kaydet(onayci2, k, r.surum, 'aktif');
+    await kaydet(onayci, k, r.surum, 'pasif');
+    // Kartın kendi alt kaydı (demirbaş teknik bilgisi) silme denemesini engellemez.
+    await vt().sorgu('INSERT INTO malzemeler_demirbas_teknik (kart_kimlik, guncelleyen_kisi_id) SELECT kimlik, acan_kisi_id FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]);
+    await vt().sorgu("INSERT INTO malzemeler_demirbas_ozellik (kart_kimlik, sira, ad, deger) VALUES ($1, 1, 'Palet', '2')", [k.kimlik]);
+    await tamam(onayci, 'POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`);
+    const satir = await vt().tek<{ onay_durumu: string; silen: string; teknik: boolean }>(
+      `SELECT k.onay_durumu, p.kullanici_adi AS silen, EXISTS (SELECT 1 FROM malzemeler_demirbas_teknik t WHERE t.kart_kimlik = k.kimlik) AS teknik
+         FROM malzeme_katalog_karti k JOIN kisi p ON p.id = k.guncelleyen_kisi_id WHERE k.kimlik = $1`, [k.kimlik],
+    );
+    assert.deepEqual(satir, { onay_durumu: 'iptal', silen: 'k-onayci', teknik: true }, 'deneme geri alınır, kart iptal olarak kalır');
+    const liste = await tamam<KatalogKartlariCevabi>(okuyucu, 'GET', '/malzeme-katalogu-kartlari?sayfaBoyu=500');
+    assert.deepEqual(liste.satirlar.filter((x) => x.kimlik === k.kimlik).map((x) => x.kayit), [null], 'silinen kart gövdesiz gelir');
+    await ret(404, 'BULUNAMADI', onayci, 'POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`);
+    // Onay yetkisi olmayan kendi açtığı kartı siler, başkasınınkini silemez.
     const t = kart();
     await kaydet(yazar, t, null);
+    const b = kart();
+    await kaydet(onayci, b, null);
+    await ret(403, 'YETKI_YOK', yazar, 'POST', `/malzeme-katalogu-kartlari/${b.kimlik}/iptal`);
     await tamam(yazar, 'POST', `/malzeme-katalogu-kartlari/${t.kimlik}/iptal`);
-    const liste = await tamam<KatalogKartlariCevabi>(okuyucu, 'GET', '/malzeme-katalogu-kartlari?sayfaBoyu=500');
-    assert.deepEqual(liste.satirlar.filter((x) => x.kimlik === t.kimlik).map((x) => x.kayit), [null], 'iptal kart gövdesiz gelir');
-    await assert.rejects(vt().sorgu('DELETE FROM malzeme_katalog_karti WHERE kimlik = $1', [t.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_silinmez');
-    await assert.rejects(vt().sorgu('UPDATE malzeme_katalog_karti SET sira_no = sira_no + 100 WHERE kimlik = $1', [k.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_degismez');
+    await ret(403, 'YETKI_YOK', okuyucu, 'POST', `/malzeme-katalogu-kartlari/${b.kimlik}/iptal`);
+  });
+
+  test('MKK-6 (2114-3 a): Logo kuyruğunda bekleyen kart silinince kuyruktan çıkar', async () => {
+    const k = kart();
+    let r = await kaydet(onayci, k, null, 'onayda');
+    r = await kaydet(onayci2, k, r.surum, 'aktif');
+    const kuyrukta = async () => (await vt().tek<{ v: boolean }>(
+      "SELECT logo_gonderim_durumu = 'bekliyor' AS v FROM malzeme_katalog_karti WHERE kimlik = $1", [k.kimlik]))!.v;
+    assert.equal(await kuyrukta(), true, 'aktif olan kart Logo kuyruğuna girer');
+    await tamam(onayci, 'POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`);
+    const no = (await vt().tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]))!.no;
+    const gidecek = await vt().tx((db) => logoyaGidecekMalzemeler(db, 10_000, { hizmetDahil: true }));
+    assert.ok(!gidecek.some((x) => x.no === no), 'iptal kart Logo\'ya gönderilmez');
+  });
+
+  test('MKK-6 (2114-1 a, 2114-2): kullanılan kart ve Logo\'ya gönderilmiş kart silinmez', async () => {
+    const no = async (k: ReturnType<typeof kart>) => (await vt().tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]))!.no;
+    // Başka modülün yabancı anahtarı.
+    const fk = kart();
+    await kaydet(onayci, fk, null);
+    await vt().sorgu('INSERT INTO satin_alma_tedarik_termini (malzeme_no) VALUES ($1)', [await no(fk)]);
+    const c1 = await ret(409, 'BAGIMLI_KAYIT', onayci, 'POST', `/malzeme-katalogu-kartlari/${fk.kimlik}/iptal`);
+    assert.match(c1.json().mesaj, /kullanılıyor/);
+    // Anahtarsız bağ: istasyonların aparat kapasitesi.
+    const ap = kart();
+    await kaydet(onayci, ap, null);
+    await vt().sorgu('INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, adet, degistiren_kisi_id) SELECT no, 1, acan_kisi_id FROM malzeme_katalog_karti WHERE kimlik = $1', [ap.kimlik]);
+    await ret(409, 'BAGIMLI_KAYIT', onayci, 'POST', `/malzeme-katalogu-kartlari/${ap.kimlik}/iptal`);
+    // Logo kaydı olan kart: uç da tetik de reddeder.
+    const lg = kart();
+    let r = await kaydet(onayci, lg, null, 'onayda');
+    r = await kaydet(onayci2, lg, r.surum, 'aktif');
+    await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_gonderim_durumu = 'gonderildi', logo_kayit_no = 'L-2114', logo_gonderim_zamani = now() WHERE kimlik = $1", [lg.kimlik]);
+    await ret(422, 'GECERSIZ', onayci, 'POST', `/malzeme-katalogu-kartlari/${lg.kimlik}/iptal`);
+    await assert.rejects(vt().sorgu('DELETE FROM malzeme_katalog_karti WHERE kimlik = $1', [lg.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_silinmez');
+    for (const k of [fk, ap, lg]) assert.ok(await vt().tek('SELECT 1 FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]), 'reddedilen kart yerinde kalır');
   });
 
   test('Liste sayfalıdır: sayfalar kart numarası sırasıyla bütün kartları bir kez verir; araya düşen iptal ve düzenleme kart atlatmaz', async () => {

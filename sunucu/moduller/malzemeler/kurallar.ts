@@ -848,10 +848,10 @@ export function katalogGecmisiniBas(kayitli: Nesne | null, kayit: Nesne, kim: Ka
   return { ...kayit, rev: [...h.temel, ...eklenen] };
 }
 
-// Prototipte "Sil" yalnız onay yetkisi olan rollere görünür; yetkisi olmayan yalnız kendi açtığı ve hiç onaylanmamış taslağı iptal eder.
-export function katalogIptalYetkiliMi(g: { islemler: readonly string[]; kisiId: number; acanKisiId: number; kayit: Nesne }): boolean {
+// Onay yetkilisi kullanılmamış her kartı siler; yetkisi olmayan yalnız kendi açtığı kartı (2114-1 a). Kullanımı veritabanı denetler.
+export function katalogIptalYetkiliMi(g: { islemler: readonly string[]; kisiId: number; acanKisiId: number }): boolean {
   if (g.islemler.includes('malzemeler.onayla')) return true;
-  return g.acanKisiId === g.kisiId && katalogHicOnaylanmadiMi(g.kayit);
+  return g.acanKisiId === g.kisiId;
 }
 
 // Kartın onay damgası (`onay.onay`) hiç basılmadıysa kart hiç aktif olmamıştır.
@@ -860,8 +860,8 @@ export function katalogHicOnaylanmadiMi(kayit: Nesne): boolean {
   return !nesneMi(onay['onay']);
 }
 
-// MKK-6: yalnız taslak iptal edilir (prototipte "sil"); kart hiç silinmez.
-export const katalogIptalEdilirMi = (durum: KatalogKartDurumu): boolean => durum === 'taslak';
+// Logo'da karşılığı olan kart TMI'den tek başına silinmez: Logo'da sahipsiz kart kalır (2114-2 teyit).
+export const katalogSilinirMi = (logoKayitNo: string | null): boolean => logoKayitNo === null;
 
 // MKK-7: sürüm, okunan sürümle aynı olmalı; değilse başkası yazmıştır.
 export const katalogSurumUyarMi = (kayitli: number, gelen: number | null): boolean => gelen === kayitli;

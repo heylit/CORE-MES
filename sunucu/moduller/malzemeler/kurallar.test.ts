@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  kartBilesenKimlikleri, kartHizmetYonu, katalogAnahtarZorunluMu, katalogGecisiDenetle, katalogIcerigiDegistiMi, katalogIptalEdilirMi, katalogKodDegisebilirMi, katalogKodOneki,
+  kartBilesenKimlikleri, kartHizmetYonu, katalogAnahtarZorunluMu, katalogGecisiDenetle, katalogIcerigiDegistiMi, katalogKodDegisebilirMi, katalogSilinirMi, katalogKodOneki,
   katalogOnayAkisiAcikMi, katalogOnayiBas, katalogOnekiTureUyarMi, katalogRolu, katalogStokKodu, katalogSurumUyarMi, katalogTalebiBas,
   katalogTalepDenetle, katalogKaydiAlanlari, katalogFirmaKoduGecerliMi, katalogGecmisiDenetle, katalogGecmisiniBas, katalogIptalYetkiliMi, katalogFarki, katalogTalepUygulamaDenetle,
   katalogAgirlikAlanlari, katalogNetAgirlikKg, katalogGkkAyari, GKK_TURU_ILETISI, hammaddeOlcuHatasi, LOGO_HATA_EN_COK, logoAdiDegistiMi, logoKarsiligiHatasi, logoBirimSetiGecersizHatasi, logoGuncellemeSonucuDurumu, logoBirimiDegistiMi, logoDurumSirasi, logoEksikleri, logoHataMetni,
@@ -60,9 +60,9 @@ test('MKK-5: pasife alma ve pasiften çıkarma onay yetkisi ister; iptal kart de
   assert.equal(katalogGecisiDenetle(gecis({ onceki: 'iptal', yeni: 'taslak' }))?.kod, 'GECERSIZ');
 });
 
-test('MKK-6, MKK-7: yalnız taslak iptal edilir; sürüm okunanla aynı olmalı', () => {
-  assert.equal(katalogIptalEdilirMi('taslak'), true);
-  assert.equal(katalogIptalEdilirMi('aktif'), false);
+test('MKK-6, MKK-7: Logo kaydı olan kart silinmez (2114-2); sürüm okunanla aynı olmalı', () => {
+  assert.equal(katalogSilinirMi(null), true);
+  assert.equal(katalogSilinirMi('L-1'), false);
   assert.equal(katalogSurumUyarMi(3, 3), true);
   assert.equal(katalogSurumUyarMi(3, 2), false);
   assert.equal(katalogSurumUyarMi(3, null), false);
@@ -213,11 +213,10 @@ test('MKK-15 (kart #163): geçmiş sona tek kayıt eklenir, kayıtlı kayıtlar 
   assert.equal(katalogGecmisiDenetle(null, { rev: 'x' })?.kod, 'DOGRULAMA');
 });
 
-test('MKK-6 (kart #163): iptal: onay yetkilisi her taslağı, yetkisiz yalnız kendi açtığı hiç onaylanmamış taslağı iptal eder', () => {
-  const g = { islemler: ['malzemeler.yaz'], kisiId: 1, acanKisiId: 1, kayit: { onay: { durum: 'taslak' } } };
+test('MKK-6 (2114-1 a): silme: onay yetkilisi her kartı, yetkisiz yalnız kendi açtığı kartı siler', () => {
+  const g = { islemler: ['malzemeler.yaz'], kisiId: 1, acanKisiId: 1 };
   assert.equal(katalogIptalYetkiliMi(g), true);
   assert.equal(katalogIptalYetkiliMi({ ...g, acanKisiId: 2 }), false);
-  assert.equal(katalogIptalYetkiliMi({ ...g, kayit: { onay: { durum: 'taslak', onay: { by: 4 } } } }), false);
   assert.equal(katalogIptalYetkiliMi({ ...g, acanKisiId: 2, islemler: ['malzemeler.onayla'] }), true);
 });
 
