@@ -53,3 +53,23 @@ Bütün uçlar `oturum` ile herkese açıktır (222 a, yetki genişletme onaylı
 - Yeni işlem ve rol satırı yok: ekran ve uçlar Sistem Ayarları'nın `ayarlar.yaz` işlemini kullanır.
 - Kayda bağlı alıcı (talebi açan, istasyona atanmış kişi) çağıran modülden gelir, seçimden bağımsızdır.
 - Yalnız ekranda kalan kural: yok.
+
+## Elle bildirim ve ekran ortası (2147, kararlar 2147-1 a, 2147-2 c, 2147-3 a)
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| `GET /bildirimler/ortada` | oturum | yalnız oturumdaki kişinin satırları; onay isteyen onaylanana, onaysız olan okunana dek; geri çekilen ve bitişi geçen yayın gelmez | herkese yayın, istasyon, otomatik acil | oturumsuz 401; yazan kendi yayınını görmez |
+| `POST /bildirimler/:id/onayla` | oturum | yalnız kişinin onay isteyen satırı; zaman sunucudan, ilk onay korunur | onay sonrası ortadan düşer | oturumsuz 401; başkasının satırı 404; onay istemeyen 400 |
+| `POST /bildirimler/:id/arsivle` (değişti) | oturum | onay bekleyen satır arşivlenemez (BIL-15) | onaydan sonra 200 | onaysız 400 |
+| `GET /bildirimler/yayinlar/hedefler` | `bildirim.yayinla` | roller, etkin istasyonlar, etkin girişli kişiler | yönetici 200 | operatör, kalite, müdür 403 |
+| `POST /bildirimler/yayinlar/yayinla` | `bildirim.yayinla`, tekrar korumalı | gövde katı; tür, simge ve hedef türü listeden; hedef var olmalı; herkese yayında hedef yok, ötekinde en az bir; zaman en çok 90 gün ileri, bitiş sonra; görseli yalnız yükleyen bağlar (png, jpeg, webp, 5 MB); yazan, zaman ve alıcılar sunucudan; yazan kendi yayınını almaz | herkes, rol, kişi, istasyon, ileri tarihli, görselli | 403 (yetkisiz roller); istek kimliksiz 400; aynı kimlik ikinci kez yazmaz; olmayan rol, istasyon, kişi 400; tutarsız hedef 400; geçersiz zaman 400 |
+| `POST /bildirimler/yayinlar/:id/geri-cek` | `bildirim.yayinla` | yalnız yazan; bir kez | geri çekilen ortadan düşer | yetkisiz 403; ikinci kez 409 |
+| `GET /bildirimler/yayinlar` | `bildirim.yayinla` ya da `bildirim.yayin-oku` | yayınlayan kendininkini, rapor işlemi olan hepsini görür; okuyan ve onaylayan sayıları sunucudan | yönetici liste | yetkisiz roller 403 |
+| `GET /bildirimler/yayinlar/:id/alicilar` | `bildirim.yayinla` ya da `bildirim.yayin-oku` | aynı görme kuralı; göremeyene 404 | rapor satırı onay zamanıyla | (rapor işlemi olmayan başkası 404, BIL-14 saf) |
+| `GET /bildirimler/yayinlar/:id/gorsel` | oturum | yalnız alıcı, yazan ya da rapor işlemi olan; yerel depodan | alıcı ve yazan 200 | alıcı olmayan 404 |
+
+- Yetki modeli değişikliği: iki yeni işlem (`bildirim.yayinla`, `bildirim.yayin-oku`); göç rol x işlem satırı yazmaz (2147-2 c), başta yalnız yönetici taşır.
+  Test `2147-2 c: işlemler hiçbir role göçle verilmedi ...` satır yokluğunu ölçer.
+- Davranış değişikliği (2147-3 a): otomatik acil bildirim (ekip çağrısı, makine durdu, teslim riski, güvenlik alarmı) ortadaki listeye girer; onay istemez. Ekran Y2'de gelir.
+- Görsel dosya modülünün yerel deposundadır (`medyaTutamagi('bildirim')`); dış servis yoktur.
+- Yalnız ekranda kalan kural: yok.

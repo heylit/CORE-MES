@@ -3,6 +3,7 @@ import { ARKON_ISLEMLERI } from './islemler/arkon.ts';
 import { ATOLYE_ISLEMLERI } from './islemler/atolye.ts';
 import { AYARLAR_ISLEMLERI } from './islemler/ayarlar.ts';
 import { BELGE_MERKEZI_ISLEMLERI } from './islemler/belge-merkezi.ts';
+import { BILDIRIM_ISLEMLERI } from './islemler/bildirim.ts';
 import { CNC_KURULUM_ISLEMLERI } from './islemler/cnc-kurulum.ts';
 import { RECETE_ROTA_ISLEMLERI } from './islemler/recete-rota.ts';
 import { DEGISIKLIK_YONETIMI_ISLEMLERI } from './islemler/degisiklik-yonetimi.ts';
@@ -56,6 +57,7 @@ export const VERI_ISLEMLERI = [
   ...ATOLYE_ISLEMLERI,
   ...AYARLAR_ISLEMLERI,
   ...BELGE_MERKEZI_ISLEMLERI,
+  ...BILDIRIM_ISLEMLERI,
   ...CNC_KURULUM_ISLEMLERI,
   ...RECETE_ROTA_ISLEMLERI,
   ...DEGISIKLIK_YONETIMI_ISLEMLERI,
