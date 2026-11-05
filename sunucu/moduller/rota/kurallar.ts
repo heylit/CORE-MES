@@ -921,6 +921,7 @@ export function sartnameOnayEngeli(durumlar: readonly AdimSartnameDurumu[]): str
 
 export interface TalimatAdimiYazisi {
   baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: readonly { ozet: string; ad: string }[]; asama: TalimatAsamasi;
+  hedefSureDk: number | null;
 }
 
 // Şemanın tek başına göremediği adım kuralları; hata yoksa null.
@@ -972,10 +973,10 @@ export function adimliKontrolListesi(
 
 // Düz metinle yazılmış eski sürüm tek adımdır: başlık ilk dolu satır, metin bütün talimat; kontrol noktası yok (993 a).
 export function eskiTalimatAdimi(metin: string): {
-  sira: number; baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: []; asama: TalimatAsamasi;
+  sira: number; baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: []; asama: TalimatAsamasi; hedefSureDk: null;
 } {
   const ilk = metin.split(/\r?\n/).map((x) => x.trim()).find((x) => x !== '') ?? 'Talimat';
-  return { sira: 1, baslik: ilk.slice(0, KONTROL_SATIRI_EN_COK), metin, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' };
+  return { sira: 1, baslik: ilk.slice(0, KONTROL_SATIRI_EN_COK), metin, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null };
 }
 
 // Dosya türünden medya türü; resim ve video dışı tür medya olamaz (null).

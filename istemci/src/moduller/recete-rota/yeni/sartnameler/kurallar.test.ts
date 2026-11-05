@@ -21,13 +21,18 @@ describe('şartname ve talimat kuralları', () => {
 
   it('girdiye çevirirken boş metin null olur, medyadan yalnız özet ve ad gider', () => {
     const a = { ...bosAdim(), baslik: ' Bağla ', metin: '  ', medya: [{ ozet: 'a'.repeat(64), ad: 'r.png', tur: 'resim' as const, boyut: 10 }] };
-    expect(girdiyeCevir(a)).toEqual({ baslik: 'Bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', medya: [{ ozet: 'a'.repeat(64), ad: 'r.png' }] });
+    expect(girdiyeCevir(a)).toEqual({ baslik: 'Bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', hedefSureDk: null, medya: [{ ozet: 'a'.repeat(64), ad: 'r.png' }] });
+    expect(girdiyeCevir({ ...a, hedefSure: ' 15 ' }).hedefSureDk).toBe(15);
   });
 
   it('eksikler gönderilmeden gösterilir', () => {
     expect(adimEksikleri([])).toEqual(['En az bir adım gerekir.']);
     const e = adimEksikleri([{ ...bosAdim(), kontrol: { tur: 'olcum', ad: '', alt: 3, ust: 1, birim: '' } }]);
     expect(e).toEqual(['Adım 1: başlık zorunlu.', 'Adım 1: ölçümün adı zorunlu.', 'Adım 1: alt sınır üst sınırdan büyük.']);
+    for (const hedefSure of ['0', '1441', '2,5', 'on']) {
+      expect(adimEksikleri([{ ...bosAdim(), baslik: 'Bağla', hedefSure }])).toEqual(['Adım 1: hedef süre 1 ile 1440 arasında tam dakika olur.']);
+    }
+    expect(adimEksikleri([{ ...bosAdim(), baslik: 'Bağla', hedefSure: '1440' }])).toEqual([]);
   });
 
   it('sürüklenen adım hedefin ardına, başlığa bırakılan başa girer (1186 b)', () => {

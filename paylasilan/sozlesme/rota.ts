@@ -366,6 +366,9 @@ export const AZAMI_ADIM_MEDYASI = 5;
 export const medyaGirdisi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/, 'Geçersiz dosya özeti.'), ad: metin(120, 'Dosya adı zorunlu.') });
 const medyaSemasi = z.object({ ozet: z.string(), ad: z.string(), tur: z.enum(MEDYA_TURLERI), boyut: z.number().int().positive() });
 export const medyaParametresi = z.object({ ozet: z.string().regex(/^[0-9a-f]{64}$/) });
+// Adımın hedef süresi (2098-8 a), dakika: boş olabilir; operatöre gösterilmez, planlama geçen süreyle karşılaştırır.
+export const AZAMI_HEDEF_SURE_DK = 1440;
+const hedefSuresi = z.number().int('Hedef süre tam dakika olur.').min(1, 'Hedef süre en az 1 dakika.').max(AZAMI_HEDEF_SURE_DK, 'Hedef süre en çok 1440 dakika.');
 export const talimatAdimiGirdisi = z.object({
   baslik: metin(AZAMI_ADIM_BASLIGI, 'Adım başlığı zorunlu.'),
   metin: kisaMetin(AZAMI_ADIM_METNI).nullable().transform((x) => (x === '' ? null : x)),
@@ -373,13 +376,14 @@ export const talimatAdimiGirdisi = z.object({
   zorunlu: z.boolean(),
   medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).default([]),
   asama: z.enum(TALIMAT_ASAMALARI).default(VARSAYILAN_TALIMAT_ASAMASI),
+  hedefSureDk: hedefSuresi.nullable().default(null),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
 export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
 export const talimatAdimiSemasi = z.object({
   sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
-  asama: z.enum(TALIMAT_ASAMALARI),
+  asama: z.enum(TALIMAT_ASAMALARI), hedefSureDk: z.number().int().nullable(),
 });
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).

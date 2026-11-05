@@ -434,7 +434,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(c.operator, null, [adim()])).statusCode, 403);
     await tamam(c.planlama, 'POST', `/rota/urunler/${t.urun}/talimat-yaz`, { opNo: 10, metin: 'Eski talimat\nİkinci satır', okunanSurum: null });
     const adimlar = [
-      adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true, asama: 'on_hazirlik' }),
+      adim({ baslik: 'Programı doğrula', kontrol: { tur: 'onay' }, zorunlu: true, asama: 'on_hazirlik', hedefSureDk: 15 }),
       adim({ baslik: 'İlk parçayı ölç', metin: 'Kritik ölçü ölçüm planından.', kontrol: { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' }, zorunlu: true, asama: 'hazirlik' }),
       adim({ baslik: 'Rengi karşılaştır', kontrol: { tur: 'secim', secenekler: ['Uygun', 'Uygun değil'] } }),
       adim({ baslik: 'Kutula', kontrol: { tur: 'foto', aciklama: 'Kutulanmış parça' } }),
@@ -445,8 +445,10 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const l = cevap.json<TalimatlarCevabi>();
     assert.deepEqual(l.surumler.map((x) => [x.surum, x.adimli, x.adimlar.length]), [[2, true, 4], [1, false, 1]]);
     assert.equal(l.surumler[0]?.metin, 'Programı doğrula\nİlk parçayı ölç\nRengi karşılaştır\nKutula');
-    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' });
+    assert.deepEqual(l.surumler[1]?.adimlar[0], { sira: 1, baslik: 'Eski talimat', metin: 'Eski talimat\nİkinci satır', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null });
     assert.deepEqual(l.surumler[0]?.adimlar.map((x) => x.asama), ['on_hazirlik', 'hazirlik', 'uretim', 'uretim']);
+    // 2098-8 a: hedef süre yazıldığı gibi okunur, verilmeyen adımda null.
+    assert.deepEqual(l.surumler[0]?.adimlar.map((x) => x.hedefSureDk), [15, null, null, null]);
     assert.deepEqual(l.surumler[0]?.adimlar[1]?.kontrol, { tur: 'olcum', ad: 'Çap', alt: 11.95, ust: 12.05, birim: 'mm' });
 
     await yururlugeAl(t.id, t.surum);
@@ -470,6 +472,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ kontrol: { tur: 'olcum', ad: 'Çap', alt: 2, ust: 1, birim: 'mm' } })] }, 400, /alt sınırı/);
     await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ kontrol: { tur: 'secim', secenekler: ['Var', 'var'] } })] }, 400, /farklı/);
     await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [] }, 400);
+    for (const hedefSureDk of [0, 1441, 2.5]) await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: [adim({ hedefSureDk })] }, 400, /Hedef süre/);
     await red(c.planlama, url, { opNo: 10, okunanSurum: null, adimlar: Array.from({ length: 31 }, () => adim()) }, 400);
     await red(c.planlama, url, { opNo: 90, okunanSurum: null, adimlar: [adim()] }, 400, /OP 90/);
     await tamam(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, adimlar: [adim()] });

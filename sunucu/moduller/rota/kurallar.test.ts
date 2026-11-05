@@ -551,7 +551,7 @@ describe('işlem şartnamesi kuralları (971 a)', () => {
 });
 
 describe('adım adım talimat (989 a, 993 a)', () => {
-  const adim = { baslik: 'Ölç', metin: null, zorunlu: false, medya: [], asama: 'uretim' } as const;
+  const adim = { baslik: 'Ölç', metin: null, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null } as const;
   test('zorunlu adım kontrol noktası ister; ölçüm sınırı ters olamaz; seçenekler büyük-küçük harf ayrımsız tekil', () => {
     assert.match(talimatAdimiHatasi({ ...adim, zorunlu: true, kontrol: { tur: 'yok' } }) ?? '', /zorunlu olamaz/);
     assert.match(talimatAdimiHatasi({ ...adim, kontrol: { tur: 'olcum', ad: 'Çap', alt: 5, ust: 4, birim: 'mm' } }) ?? '', /alt sınırı/);
@@ -572,7 +572,7 @@ describe('adım adım talimat (989 a, 993 a)', () => {
     assert.equal(l[1]?.aciklama, null);
     // 2098-1 a: aşama maddeyle emre gider.
     assert.deepEqual(l.map((x) => x.asama), ['on_hazirlik', 'uretim']);
-    assert.deepEqual(eskiTalimatAdimi('\n  İlk satır \nİkinci'), { sira: 1, baslik: 'İlk satır', metin: '\n  İlk satır \nİkinci', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' });
+    assert.deepEqual(eskiTalimatAdimi('\n  İlk satır \nİkinci'), { sira: 1, baslik: 'İlk satır', metin: '\n  İlk satır \nİkinci', kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null });
   });
 });
 

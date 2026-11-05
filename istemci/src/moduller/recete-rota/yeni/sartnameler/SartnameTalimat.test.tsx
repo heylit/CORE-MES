@@ -29,8 +29,8 @@ const SABLON: TalimatSablonuCevabi = {
   sablon: {
     id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0,
     adimlar: [
-      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim' },
-      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim' },
+      { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: 5 },
+      { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: null },
     ],
   },
 };
@@ -111,11 +111,15 @@ describe('Şartname ve talimatlar: yazan', () => {
     // 2098-1 a: aşama adımla kaydedilir; listede üretim dışındaki aşama görünür.
     fireEvent.change(within(pencere).getByLabelText(/^Aşama/), { target: { value: 'hazirlik' } });
     expect(within(pencere).getByText(/Ayar başlayınca açılır/)).toBeTruthy();
+    // 2098-8 a: hedef süre adımla gider; boş bırakılan hedef null'dır.
+    const hedef = within(pencere).getByLabelText(/^Hedef süre/) as HTMLInputElement;
+    expect(hedef.value).toBe('5');
+    fireEvent.change(hedef, { target: { value: '8' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Yeni sürümü kaydet' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')).toBe(true); });
-    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string; asama: string }[] };
+    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string; asama: string; hedefSureDk: number | null }[] };
     expect(govde.surum).toBe(2);
-    expect(govde.adimlar.map((a) => [a.baslik, a.asama])).toEqual([['Programı ve sıfırı doğrula', 'hazirlik'], ['İlk parçayı ölç', 'uretim']]);
+    expect(govde.adimlar.map((a) => [a.baslik, a.asama, a.hedefSureDk])).toEqual([['Programı ve sıfırı doğrula', 'hazirlik', 8], ['İlk parçayı ölç', 'uretim', null]]);
   });
 
   it('adım sürüklenip başlığa bırakılınca başa geçer (1186 b)', async () => {
