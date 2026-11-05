@@ -1,6 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import type { EmirDurumu, EmirKaydi, EmirTuru, HataliKarari, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 import type { AdimOnculu } from './kurallar.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
@@ -464,23 +465,24 @@ export interface AdimSatiri {
   sira: number;
   ad: string;
   aciklama: string | null;
+  asama: TalimatAsamasi;
   tamam: boolean;
   tamamlayanId: number | null;
   tamamlanma: string | null;
 }
 
 export async function adimEkle(
-  db: Db, emirId: number, sira: number, ad: string, aciklama: string | null, isEmriId: number | null = null,
+  db: Db, emirId: number, sira: number, ad: string, aciklama: string | null, isEmriId: number | null = null, asama: TalimatAsamasi = 'uretim',
 ): Promise<void> {
   await db.sorgu(
-    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id) VALUES ($1, $2, $3, $4, $5)', [emirId, sira, ad, aciklama, isEmriId],
+    'INSERT INTO emir_adimi (emir_id, sira, ad, aciklama, is_emri_id, asama) VALUES ($1, $2, $3, $4, $5, $6)', [emirId, sira, ad, aciklama, isEmriId, asama],
   );
 }
 
 // Güncel durum son olaydan türer; geri alınmış adımda tamamlayan ve zaman yoktur.
 export function adimlariGetir(db: Db, emirId: number): Promise<AdimSatiri[]> {
   return db.sorgu<AdimSatiri>(
-    `SELECT a.id, a.sira, a.ad, a.aciklama, COALESCE(o.olay = 'tamamla', false) AS tamam,
+    `SELECT a.id, a.sira, a.ad, a.aciklama, a.asama, COALESCE(o.olay = 'tamamla', false) AS tamam,
             CASE WHEN o.olay = 'tamamla' THEN o.kisi_id END AS "tamamlayanId",
             CASE WHEN o.olay = 'tamamla' THEN ${ISO('o.zaman')} END AS tamamlanma
        FROM emir_adimi a
@@ -686,9 +688,11 @@ export function altPartilerGetir(db: Db, idler: readonly number[]): Promise<AltP
   );
 }
 
-export function kontrolListesiGetir(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; sira: number; ad: string; aciklama: string | null }[]> {
+export function kontrolListesiGetir(
+  db: Db, isEmriIdleri: readonly number[],
+): Promise<{ isEmriId: number; sira: number; ad: string; aciklama: string | null; asama: TalimatAsamasi }[]> {
   return db.sorgu(
-    `SELECT is_emri_id AS "isEmriId", sira, ad, aciklama FROM emir_adimi WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
+    `SELECT is_emri_id AS "isEmriId", sira, ad, aciklama, asama FROM emir_adimi WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
     [[...isEmriIdleri]],
   );
 }

@@ -4,6 +4,9 @@ import { tarihSemasi } from '../zaman.ts';
 import { OPERASYON_GRUP_KODLARI } from './istasyonlar.ts';
 import { EMIR_TURLERI } from './uretim-emirleri.ts';
 import { HAM_STOK_NEDENLERI, hamStokOnerisi } from './geometri.ts';
+import { TALIMAT_ASAMALARI, VARSAYILAN_TALIMAT_ASAMASI } from './talimat-asamasi.ts';
+
+export { TALIMAT_ASAMALARI, VARSAYILAN_TALIMAT_ASAMASI, type TalimatAsamasi } from './talimat-asamasi.ts';
 
 export const REVIZYON_DURUMLARI = ['taslak', 'onay_bekliyor', 'onayli', 'yururlukte', 'iptal'] as const;
 export const BAGIMLILIKLAR = ['bagimsiz', 'bekleyen', 'akisli'] as const;
@@ -340,9 +343,6 @@ export const seceneklerCevabi = z.object({
 
 // Adımlı talimatın her adımı bir kontrol noktası taşıyabilir; zorunlu nokta geçilmeden terminal sonraki adıma geçirmez.
 export const KONTROL_TURLERI = ['yok', 'onay', 'olcum', 'foto', 'secim'] as const;
-// Adımın aşaması (2098-1 a): üretim öncesi hazırlık başka iş sürerken, hazırlık ayarda, üretim işin kendisidir. Eski adımlar üretimdir.
-export const TALIMAT_ASAMALARI = ['on_hazirlik', 'hazirlik', 'uretim'] as const;
-export const VARSAYILAN_TALIMAT_ASAMASI = 'uretim';
 // İş emri kontrol listesi en çok 30 maddedir; adım başlığı madde adı olur, sayılar bu yüzden ona eşit.
 export const AZAMI_TALIMAT_ADIMI = 30;
 export const AZAMI_ADIM_BASLIGI = 120;
@@ -777,7 +777,6 @@ export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend
 export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
 export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
 export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
-export type TalimatAsamasi = (typeof TALIMAT_ASAMALARI)[number];
 export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
 export type TalimatTaslakKaydetGovdesi = z.input<typeof talimatTaslakKaydetGovdesi>;

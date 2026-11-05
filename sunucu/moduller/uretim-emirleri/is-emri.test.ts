@@ -243,20 +243,21 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: id, isEmriIdleri } = await ac([
       adim(1, { tur: 'makine', id: m1 }, { kontrolListesi: [{ ad: 'Çapak al', aciklama: null }] }),
       adim(2, { tur: 'fason', id: firmaId }),
-      adim(3, { tur: 'makine', id: m3 }, { kontrolListesi: [{ ad: 'Son kontrol', aciklama: null }, { ad: 'Paketle', aciklama: null }] }),
+      adim(3, { tur: 'makine', id: m3 }, { kontrolListesi: [{ ad: 'Son kontrol', aciklama: null, asama: 'hazirlik' }, { ad: 'Paketle', aciklama: null }] }),
     ], { adet: 10 });
     const [ie1, ie2, ie3] = isEmriIdleri as [number, number, number];
     // Arkon paketi (istek 11, 12): kontrol listesi iş emrinden, istasyon plan satırından okunur.
     const liste = await o().vt.tx((db) => isEmriKontrolListesi(db, [ie1, ie2, ie3, ie3]));
     assert.deepEqual([...liste.keys()].sort((x, y) => x - y), [ie1, ie3], 'listesi olmayan iş emri haritada yok');
-    assert.deepEqual(liste.get(ie3), [{ sira: 1, ad: 'Son kontrol', aciklama: null }, { sira: 2, ad: 'Paketle', aciklama: null }]);
+    // 2098-1 a: aşama maddeyle kopyalanır; aşaması gelmeyen madde üretimdir.
+    assert.deepEqual(liste.get(ie3), [{ sira: 1, ad: 'Son kontrol', aciklama: null, asama: 'hazirlik' }, { sira: 2, ad: 'Paketle', aciklama: null, asama: 'uretim' }]);
     assert.equal((await o().vt.tx((db) => isEmriKontrolListesi(db, []))).size, 0);
     const planSatirlari = (await o().vt.tx((db) => planlanacakIsEmirleri(db))).filter((i) => i.uretimEmriId === id);
     assert.deepEqual(planSatirlari.map((i) => [i.id, i.istasyonId]), [[ie1, ist1], [ie3, ist3]], 'fason plana girmez; makine adımı iş emrinin istasyonuyla');
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
-    const ayr1 = await istek<{ adimlar: { ad: string }[] }>('operator', 'GET', `/uretim-emirleri/${id}`);
-    assert.deepEqual(ayr1.govde.adimlar.map((a) => a.ad), ['Çapak al'], 'kontrol listesi çalışan iş emrinindir');
+    const ayr1 = await istek<{ adimlar: { ad: string; asama: string }[] }>('operator', 'GET', `/uretim-emirleri/${id}`);
+    assert.deepEqual(ayr1.govde.adimlar.map((a) => [a.ad, a.asama]), [['Çapak al', 'uretim']], 'kontrol listesi çalışan iş emrinindir');
     assert.equal((await terminal(`/${id}/sayim`, { tur: 'saglam', adet: 9 })).durum, 200);
     await ilkParcaOnay(id);
     // 1944: adım yüzdesi canlı sağlamdan; rota yüzdesi adım yüzdelerinin ortalaması (1945 b).
