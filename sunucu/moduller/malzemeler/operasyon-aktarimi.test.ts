@@ -6,6 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { KatalogKartiKaydetCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -63,7 +64,11 @@ describe('malzemeOperasyonlari (kart #688, gerçek PostgreSQL)', () => {
     };
     const dolu = await kaydet('op1', [{ no: 20, kod: 'FRZ', ad: 'Freze (CNC)' }, { no: 10, kod: 'TRN', ad: 'Torna (CNC)' }]);
     const bos = await kaydet('op2');
-    assert.deepEqual(await malzemeOperasyonlari(vt, dolu), [{ no: 10, kod: 'TRN', ad: 'Torna (CNC)' }, { no: 20, kod: 'FRZ', ad: 'Freze (CNC)' }]);
+    const tipId = new Map((await operasyonTipleri(vt)).map((t) => [t.kod, t.id]));
+    assert.deepEqual(await malzemeOperasyonlari(vt, dolu), [
+      { no: 10, kod: 'TRN', ad: 'Torna (CNC)', operasyonTipiId: tipId.get('TRN'), istasyonId: null },
+      { no: 20, kod: 'FRZ', ad: 'Freze (CNC)', operasyonTipiId: tipId.get('FRZ'), istasyonId: null },
+    ]);
     assert.deepEqual(await malzemeOperasyonlari(vt, bos), []);
     assert.equal(await malzemeOperasyonlari(vt, 999_999), null);
   });

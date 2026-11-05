@@ -16,8 +16,8 @@ Kaynak: göçler `sunucu/gocler/*malzeme*`, `paylasilan/sozlesme/malzemeler.ts`,
 | Firma: müşteri | yarı mamulde müşteri parça no | `kayit.g.musteri` | metin |
 | Kişi | açan, gönderen, onaylayan, güncelleyen, şablonu kaydeden | `*_kisi_id` sütunları | yabancı anahtar `kisi` |
 | Kişi (kopya) | onay, talep, ret, revizyon damgalarında ad | `kayit.onay.*.by/byAd`, `kayit.talep.by/byAd`, `kayit.rev[].by/byAd`; demirbaş zimmetlisi `kayit.g.sorumlu` | metin |
-| İstasyon, iş merkezi | rota satırında merkez; varsayılan istasyon | `kayit.ops[].merkez`; ayar `operasyonlar` | metin |
-| Operasyon listesi | operasyon adları ve kodları; A7 (#515) sonrası `istasyonlar_operasyon_tipi`'nden okunur (`istasyonlar/disari.ts`) | ekran sabitleri `OPS`, `OP_VARSAYILAN`; ayar `operasyonlar` (yedek) | istasyonlar |
+| İstasyon, iş merkezi | rota satırında merkez (yeni ekran yazmaz); varsayılan istasyon | `kayit.ops[].merkez`; ayar `operasyonlar` (salt okunur, 2111) | metin; `malzemeOperasyonlari` okumada `istasyonId`'ye çözer (2111) |
+| Operasyon listesi | operasyon adları ve kodları; A7 (#515) sonrası `istasyonlar_operasyon_tipi`'nden okunur (`istasyonlar/disari.ts`); `malzemeOperasyonlari` satırı `operasyonTipiId` taşır (2111) | ekran sabitleri `OPS`, `OP_VARSAYILAN`; ayar `operasyonlar` (yedek, sunucu yazmaz: 2111) | istasyonlar |
 | Rota ve reçete | operasyon sırası, süre; reçete kalemleri. Kullanıcı kararı (#688, 12.10.2026): kart onaylanınca `ops[]` rotaya taslak olarak aktarılır, kopya kartta kalır (RT1 a değişti) | `kayit.ops[]`, `kayit.bom[]` (`ref` başka kartın metin kimliği); dışa `malzemeOperasyonlari` | metin |
 | Depo, raf, konum | depo yeri; demirbaş konumu | `kayit.g.depoYeri`, `kayit.g.konum` | metin |
 | Birim | stok birimi; birim listesi (sahibi, SH4 a) | `kayit.com.birim`; `malzeme_birimi` (prototipin `BIRIMLER`, `BIRIM_T` listeleri ve Ayarlar farkından) | metin; liste tabloda |
