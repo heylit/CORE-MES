@@ -1,11 +1,11 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi, geometriSaglikCevabi,
-  revizyonParametresi,
+  geometriYuzeyCevabi, geometriYuzeyKaydetGovdesi, revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, yenidenHesapla } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, yenidenHesapla, yuzeyKaydet, yuzeyOku } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -61,6 +61,12 @@ export const uclar = [
     parametre: revizyonParametresi, cevap: geometriSaglikCevabi,
     isle: ({ db, parametre }) => saglikOku(db, parametre.revizyonId),
   }),
+  // 2144: boya, kaplama ve maske yüzey işaretleri; işlem listesi rotadan, alanlar B-rep yüzlerinden (yalnız öneri).
+  uc({
+    yontem: 'GET', yol: '/geometri/yuzey/:revizyonId', yetki: 'geometri.oku',
+    parametre: revizyonParametresi, cevap: geometriYuzeyCevabi,
+    isle: ({ db, parametre }) => yuzeyOku(db, parametre.revizyonId),
+  }),
   uc({
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, sorgu: geometriHamSorgusu, cevap: geometriHamCevabi,
@@ -76,5 +82,10 @@ export const uclar = [
     yontem: 'POST', yol: '/geometri/analizler/:revizyonId/yeniden-hesapla', yetki: 'geometri.hesapla', tekrarKorumali: true,
     parametre: revizyonParametresi, govde: yenidenHesaplaGovdesi, cevap: yenidenHesaplaCevabi,
     isle: ({ db, parametre, govde }) => yenidenHesapla(db, parametre.revizyonId, govde.surum),
+  }),
+  uc({
+    yontem: 'POST', yol: '/geometri/yuzey/:revizyonId/kaydet', yetki: 'geometri.yuzey-yaz', tekrarKorumali: true,
+    parametre: revizyonParametresi, govde: geometriYuzeyKaydetGovdesi, cevap: geometriYuzeyCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => yuzeyKaydet(db, kullanici, parametre.revizyonId, govde),
   }),
 ];

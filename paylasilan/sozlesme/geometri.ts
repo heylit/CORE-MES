@@ -271,3 +271,64 @@ export const geometriSaglikCevabi = z.object({
   neden: z.enum(GEOMETRI_SAGLIK_NEDENLERI).nullable(),
 });
 export type GeometriSaglikCevabi = z.output<typeof geometriSaglikCevabi>;
+
+// Yüzey işaretleri (kart 2144; 2144-1 a, 2140-3, 2140-4 a): revizyonun B-rep yüzlerine boya, kaplama ya da maske. Bir yüz tek işleme
+// atanır. İşlem listesi malzemenin yürürlükteki rota revizyonundaki yüzey işlemi adımlarıdır (şartname kategorisi KPL, DNS, AST, BYA,
+// YHZ); maske rotada adım değildir, "bu yüze işlem uygulanmaz" demektir. Alanlar B-rep yüz alanından, mm²; yalnız öneridir.
+export const GEOMETRI_YUZEY_KATEGORILERI = ['KPL', 'DNS', 'AST', 'BYA', 'YHZ'] as const;
+export const GEOMETRI_YUZEY_NEDENLERI = ['analiz-yok', 'yuz-yok'] as const;
+// bagli: rota okundu; rota-yok: malzemenin yürürlükte rotası yok; rota-bagli-degil: rota bağı kurulmadı (liste boş, yalnız maske).
+export const GEOMETRI_YUZEY_ROTA_DURUMLARI = ['bagli', 'rota-yok', 'rota-bagli-degil'] as const;
+export const GEOMETRI_YUZEY_EN_COK_ISARET = 20000;
+
+const kimlik = z.number().int().min(1);
+export const geometriYuzeyIslemiSemasi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('maske') }).strict(),
+  z.object({ tur: z.literal('rota'), opNo: kimlik, sartnameId: kimlik }).strict(),
+]);
+export type GeometriYuzeyIslemi = z.output<typeof geometriYuzeyIslemiSemasi>;
+
+export const geometriYuzeyAdimiSemasi = z.object({
+  opNo: kimlik,
+  adimAdi: z.string(),
+  fason: z.boolean(),
+  talimatVar: z.boolean(),
+  sartname: z.object({ id: kimlik, kod: z.string(), ad: z.string(), kategoriKodu: z.enum(GEOMETRI_YUZEY_KATEGORILERI) }),
+});
+export type GeometriYuzeyAdimi = z.output<typeof geometriYuzeyAdimiSemasi>;
+
+// oneri: önceki revizyondan (2140-4 a) taşınan, henüz onaylanmamış işaret; onaylanana kadar terminale ve maske resmine girmez.
+// rotadaVar: rota işaretinin adımı bugünkü rotada var mı (rotadan kalkan adımın işareti silinmez, uyarıyla görünür).
+export const geometriYuzeyIsaretiSemasi = z.object({
+  yuzSira: kimlik,
+  islem: geometriYuzeyIslemiSemasi,
+  oneri: z.boolean(),
+  rotadaVar: z.boolean(),
+});
+export type GeometriYuzeyIsareti = z.output<typeof geometriYuzeyIsaretiSemasi>;
+
+export const geometriYuzeyCevabi = z.object({
+  revizyonId: z.number().int(),
+  oneri: z.literal(true),
+  neden: z.enum(GEOMETRI_YUZEY_NEDENLERI).nullable(),
+  yuzler: z.array(z.object({ sira: kimlik, tur: z.enum(GEOMETRI_YUZ_TURLERI), ters: z.boolean(), alanMm2: mm })),
+  rota: z.object({ durum: z.enum(GEOMETRI_YUZEY_ROTA_DURUMLARI), adimlar: z.array(geometriYuzeyAdimiSemasi) }),
+  isaretler: z.array(geometriYuzeyIsaretiSemasi),
+  alanlar: z.array(z.object({ islem: geometriYuzeyIslemiSemasi, yuzSayisi: z.number().int().min(1), alanMm2: mm, oneriVar: z.boolean() })),
+  isaretsizMm2: mm,
+  toplamMm2: mm,
+  // Kaydedilmiş işaret yoksa surum, guncelleyen ve guncelleme null.
+  surum: surumSemasi.nullable(),
+  guncelleyen: z.object({ id: kimlik, ad: z.string().nullable() }).nullable(),
+  guncelleme: zamanSemasi.nullable(),
+  // Önceki revizyondan öneri taşındıysa kaynağı ve eşleşme sayıları; kayıt varsa null.
+  tasima: z.object({ kaynakRevizyonId: kimlik, eslesen: z.number().int().min(0), eslesmeyen: z.number().int().min(0) }).nullable(),
+});
+export type GeometriYuzeyCevabi = z.output<typeof geometriYuzeyCevabi>;
+
+// Bütün işaretler tek komutla yazılır (boş dizi hepsini kaldırır). Kaydı ilk kez açan istek surum null gönderir.
+export const geometriYuzeyKaydetGovdesi = z.object({
+  surum: surumSemasi.nullable(),
+  isaretler: z.array(z.object({ yuzSira: kimlik, islem: geometriYuzeyIslemiSemasi, oneri: z.boolean() }).strict()).max(GEOMETRI_YUZEY_EN_COK_ISARET),
+}).strict();
+export type GeometriYuzeyKaydetGovdesi = z.output<typeof geometriYuzeyKaydetGovdesi>;

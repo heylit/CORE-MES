@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   agOlcumu, bicimDenetimi, bilesenListesi, kapsayanDaireCapi, enAzHam, stokEslestir, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER,
-  MONTAJ_AD_EN_UZUN, MONTAJ_DUGUM_EN_COK, montajAdi, montajAgaci, birimAdi, igesBirimi, saglikDegerlendir,
+  MONTAJ_AD_EN_UZUN, MONTAJ_DUGUM_EN_COK, montajAdi, montajAgaci, birimAdi, igesBirimi, islemAnahtari, saglikDegerlendir, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
-import type { AdliAg, OcctDugumu, SaglikOlcumu, StokAdayi, UcgenAgi } from './kurallar.ts';
+import type { AdliAg, EslesenYuz, OcctDugumu, SaglikOlcumu, StokAdayi, UcgenAgi } from './kurallar.ts';
 
 // Eksenlere hizalı kutu ağı: 8 köşe, 12 üçgen, dışa bakan yüzler.
 function kutu(x: number, y: number, z: number, d: [number, number, number] = [0, 0, 0]): UcgenAgi {
@@ -222,5 +222,45 @@ describe('geometri: dosya sağlık raporu kuralları (2143)', () => {
     assert.equal(birimAdi('  '), null);
     assert.equal(birimAdi(3), null);
     assert.equal(birimAdi('x'.repeat(41)), null);
+  });
+});
+
+describe('yüzey işaretleri (kart 2144)', () => {
+  const yuz = (sira: number, alanMm2: number, ek: Partial<EslesenYuz> = {}): EslesenYuz =>
+    ({ sira, tur: 'duzlem', ters: false, alanMm2, yaricapMm: null, eksen: [0, 0, 1], konum: [0, 0, 0], ...ek });
+
+  test('GEO-YZ1 alanlar işlem başına toplanır; modelde olmayan yüz sayılmaz; işaretsiz = toplam - işaretli', () => {
+    const r = yuzeyAlanlari([{ sira: 1, alanMm2: 100 }, { sira: 2, alanMm2: 50 }, { sira: 3, alanMm2: 25 }], [
+      { yuzSira: 1, islem: { tur: 'rota', opNo: 40, sartnameId: 7 }, oneri: false },
+      { yuzSira: 2, islem: { tur: 'maske' }, oneri: true },
+      { yuzSira: 9, islem: { tur: 'maske' }, oneri: false },
+    ]);
+    assert.deepEqual(r.alanlar.map((x) => [islemAnahtari(x.islem), x.yuzSayisi, x.alanMm2, x.oneriVar]), [['rota:40:7', 1, 100, false], ['maske', 1, 50, true]]);
+    assert.deepEqual([r.isaretsizMm2, r.toplamMm2], [25, 175]);
+  });
+
+  test('GEO-YZ2 kayıt denetimi: olmayan ve yinelenen yüz, rotada olmayan adım reddedilir; kalkan adımın aynı yüzdeki işareti kalabilir', () => {
+    const yuzler = new Set([1, 2, 3]);
+    const rota = new Set(['rota:40:7']);
+    const boya = { tur: 'rota', opNo: 40, sartnameId: 7 } as const;
+    const eski = { tur: 'rota', opNo: 30, sartnameId: 5 } as const;
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [], [{ yuzSira: 1, islem: boya, oneri: false }]), null);
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [], [{ yuzSira: 4, islem: boya, oneri: false }]), YUZEY_ILETILERI.yuzBilinmiyor(4));
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [], [{ yuzSira: 1, islem: boya, oneri: false }, { yuzSira: 1, islem: { tur: 'maske' }, oneri: false }]),
+      YUZEY_ILETILERI.yuzYinelendi(1));
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [], [{ yuzSira: 2, islem: eski, oneri: false }]), YUZEY_ILETILERI.adimYok(30));
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [{ yuzSira: 2, islem: eski, oneri: false }], [{ yuzSira: 2, islem: eski, oneri: false }]), null);
+    assert.equal(yuzeyKaydiDenetle(yuzler, rota, [{ yuzSira: 2, islem: eski, oneri: false }], [{ yuzSira: 3, islem: eski, oneri: false }]), YUZEY_ILETILERI.adimYok(30));
+  });
+
+  test('GEO-YZ3 eşleştirme: sıra değişse de tür, yön, alan, yarıçap, eksen ve konumla bulunur; farklı yüz eşleşmez, bir yüz bir kez alınır', () => {
+    const eski = [yuz(1, 800), yuz(2, 200, { konum: [40, 0, 0], eksen: [1, 0, 0] }), yuz(3, 31.4, { tur: 'silindir', ters: true, yaricapMm: 5, eksen: [0, 0, 1] })];
+    const yeni = [yuz(1, 31.4, { tur: 'silindir', ters: true, yaricapMm: 5 }), yuz(2, 800), yuz(3, 200, { konum: [45, 0, 0], eksen: [1, 0, 0] })];
+    assert.deepEqual([...yuzleriEslestir(eski, yeni)], [[1, 2], [3, 1]]);
+    assert.deepEqual([...yuzleriEslestir([yuz(1, 800), yuz(2, 800)], [yuz(5, 800)])], [[1, 5]]);
+    assert.equal(yuzleriEslestir([yuz(1, 31.4, { tur: 'silindir', ters: true, yaricapMm: 5 })], [yuz(1, 31.4, { tur: 'silindir', ters: false, yaricapMm: 5 })]).size, 0, 'delik ile mil');
+    assert.equal(yuzleriEslestir([yuz(1, 31.4, { tur: 'silindir', yaricapMm: 5 })], [yuz(1, 31.4, { tur: 'silindir', yaricapMm: 6 })]).size, 0);
+    assert.equal(yuzleriEslestir([yuz(1, 800, { eksen: [0, 0, 1] })], [yuz(1, 800, { eksen: [0, 1, 0] })]).size, 0);
+    assert.deepEqual([...yuzleriEslestir([yuz(1, 800)], [yuz(1, 800.5)])], [[1, 1]], 'binde bir alan farkı aynı yüzdür');
   });
 });

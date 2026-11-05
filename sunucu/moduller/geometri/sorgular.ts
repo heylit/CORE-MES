@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { GeometriDosyaTuru, GeometriIsDurumu } from '#paylasilan/sozlesme/geometri.ts';
 import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
-import type { MontajDugumu, Olcum, Ozellik, SaglikOlcumu, Yuz, YuzTuru } from './kurallar.ts';
+import type { EslesenYuz, MontajDugumu, Olcum, Ozellik, SaglikOlcumu, Yuz, YuzeyIsaretGirdisi, YuzTuru } from './kurallar.ts';
 
 export interface IsSatiri {
   id: number;
@@ -244,4 +244,78 @@ export function saglik(db: Db, revizyonId: number): Promise<SaglikSatiri | null>
        FROM geometri_saglik WHERE revizyon_id = $1`,
     [revizyonId],
   );
+}
+
+// ---------------- Yüzey işaretleri (kart 2144) ----------------
+
+// Yüzey işaretlemenin yüzleri: tür, yön, alan ve eşleştirme için yarıçap, eksen, konum.
+export function yuzler(db: Db, revizyonId: number): Promise<EslesenYuz[]> {
+  return db.sorgu<EslesenYuz>(
+    `SELECT sira, tur, ters, alan_mm2::float8 AS "alanMm2", yaricap_mm::float8 AS "yaricapMm", eksen::float8[] AS eksen, konum::float8[] AS konum
+       FROM geometri_yuz WHERE revizyon_id = $1 ORDER BY sira`,
+    [revizyonId],
+  );
+}
+
+export interface YuzeyBasligi { revizyonId: number; surum: number; guncelleyenKisiId: number; guncelleme: string }
+
+export function yuzeyBasligi(db: Db, revizyonId: number, kilitle = false): Promise<YuzeyBasligi | null> {
+  return db.tek<YuzeyBasligi>(
+    `SELECT revizyon_id AS "revizyonId", surum, guncelleyen_kisi_id AS "guncelleyenKisiId", ${zamanMetni('guncelleme')} AS guncelleme
+       FROM geometri_yuzey_isaret WHERE revizyon_id = $1${kilitle ? ' FOR UPDATE' : ''}`,
+    [revizyonId],
+  );
+}
+
+interface YuzeyIslemSatiri { yuzSira: number; islem: 'maske' | 'rota'; opNo: number | null; sartnameId: number | null; oneri: boolean }
+
+export async function yuzeyIsaretleri(db: Db, revizyonId: number): Promise<YuzeyIsaretGirdisi[]> {
+  const satirlar = await db.sorgu<YuzeyIslemSatiri>(
+    `SELECT yuz_sira AS "yuzSira", islem, op_no AS "opNo", sartname_id AS "sartnameId", oneri
+       FROM geometri_yuzey_islem WHERE revizyon_id = $1 ORDER BY yuz_sira`,
+    [revizyonId],
+  );
+  return satirlar.map((x) => ({
+    yuzSira: x.yuzSira, oneri: x.oneri,
+    islem: x.islem === 'rota' && x.opNo !== null && x.sartnameId !== null ? { tur: 'rota', opNo: x.opNo, sartnameId: x.sartnameId } : { tur: 'maske' },
+  }));
+}
+
+// Aynı belgenin bu revizyondan önceki, işareti kaydedilmiş en son revizyonu (2140-4 a: öneri kaynağı). Belge kimliği kuyruğun kaydındandır.
+export async function oncekiIsaretliRevizyon(db: Db, belgeId: number, revizyonId: number): Promise<number | null> {
+  const r = await db.tek<{ revizyonId: number }>(
+    `SELECT h.revizyon_id AS "revizyonId" FROM geometri_yuzey_isaret h JOIN geometri_is i ON i.revizyon_id = h.revizyon_id
+      WHERE i.belge_id = $1 AND h.revizyon_id < $2 ORDER BY h.revizyon_id DESC LIMIT 1`,
+    [belgeId, revizyonId],
+  );
+  return r?.revizyonId ?? null;
+}
+
+// Başlık sürüm koşuluyla yazılır (ilk kayıtta surum null); koşul tutmazsa null. İşaretler bütün olarak yenilenir.
+export async function yuzeyYaz(
+  db: Db, revizyonId: number, surum: number | null, kisiId: number, isaretler: readonly YuzeyIsaretGirdisi[],
+): Promise<number | null> {
+  const baslik = surum === null
+    ? await db.tek<{ surum: number }>(
+      `INSERT INTO geometri_yuzey_isaret (revizyon_id, guncelleyen_kisi_id) VALUES ($1, $2) ON CONFLICT (revizyon_id) DO NOTHING RETURNING surum`,
+      [revizyonId, kisiId],
+    )
+    : await db.tek<{ surum: number }>(
+      `UPDATE geometri_yuzey_isaret SET surum = surum + 1, guncelleyen_kisi_id = $3, guncelleme = now()
+        WHERE revizyon_id = $1 AND surum = $2 RETURNING surum`,
+      [revizyonId, surum, kisiId],
+    );
+  if (baslik === null) return null;
+  await db.sorgu('DELETE FROM geometri_yuzey_islem WHERE revizyon_id = $1', [revizyonId]);
+  if (isaretler.length > 0) {
+    await db.sorgu(
+      `INSERT INTO geometri_yuzey_islem (revizyon_id, yuz_sira, islem, op_no, sartname_id, oneri)
+       SELECT $1, u.sira, u.islem, u.op_no, u.sartname_id, u.oneri FROM unnest($2::int[], $3::text[], $4::int[], $5::int[], $6::bool[])
+         AS u(sira, islem, op_no, sartname_id, oneri)`,
+      [revizyonId, isaretler.map((x) => x.yuzSira), isaretler.map((x) => x.islem.tur),
+        isaretler.map((x) => (x.islem.tur === 'rota' ? x.islem.opNo : null)), isaretler.map((x) => (x.islem.tur === 'rota' ? x.islem.sartnameId : null)),
+        isaretler.map((x) => x.oneri)],
+    );
+  }
+  return baslik.surum;
 }

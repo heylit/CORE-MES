@@ -897,3 +897,106 @@ export function igesBirimi(veri: Uint8Array): string | null {
   if (bayrak === 3) return birimAdi(alanlar[14]);
   return IGES_BIRIMLERI[bayrak] ?? null;
 }
+
+// ---------------- Yüzey işaretleri (kart 2144) ----------------
+
+export const YUZEY_ILETILERI = {
+  analizYok: 'Model analizi bitmeden yüzey işaretlenemez.',
+  yuzYok: 'Bu modelin yüzleri okunamadı; yüzey işaretlenemez.',
+  yuzBilinmiyor: (sira: number): string => `${String(sira)} numaralı yüz bu modelde yok.`,
+  yuzYinelendi: (sira: number): string => `${String(sira)} numaralı yüz birden çok kez işaretlendi; bir yüz tek işleme atanır.`,
+  adimYok: (opNo: number): string => `OP ${String(opNo)} adımı ya da şartnamesi bugünkü rotada yüzey işlemi olarak yok.`,
+} as const;
+
+export type YuzeyIslemi = { tur: 'maske' } | { tur: 'rota'; opNo: number; sartnameId: number };
+
+export const islemAnahtari = (i: YuzeyIslemi): string => (i.tur === 'maske' ? 'maske' : `rota:${String(i.opNo)}:${String(i.sartnameId)}`);
+
+export interface YuzeyAlanYuzu { sira: number; alanMm2: number }
+export interface YuzeyIsaretGirdisi { yuzSira: number; islem: YuzeyIslemi; oneri: boolean }
+
+// İşlem başına toplam alan (ilk geçiş sırasıyla), işaretsiz ve toplam alan. Modelde olmayan yüzün işareti sayılmaz.
+export function yuzeyAlanlari(yuzler: readonly YuzeyAlanYuzu[], isaretler: readonly YuzeyIsaretGirdisi[]): {
+  alanlar: { islem: YuzeyIslemi; yuzSayisi: number; alanMm2: number; oneriVar: boolean }[];
+  isaretsizMm2: number;
+  toplamMm2: number;
+} {
+  const alan = new Map(yuzler.map((y) => [y.sira, y.alanMm2]));
+  const gruplar = new Map<string, { islem: YuzeyIslemi; yuzSayisi: number; alanMm2: number; oneriVar: boolean }>();
+  let isaretli = 0;
+  for (const x of isaretler) {
+    const a = alan.get(x.yuzSira);
+    if (a === undefined) continue;
+    const k = islemAnahtari(x.islem);
+    const g = gruplar.get(k) ?? { islem: x.islem, yuzSayisi: 0, alanMm2: 0, oneriVar: false };
+    g.yuzSayisi += 1;
+    g.alanMm2 += a;
+    g.oneriVar ||= x.oneri;
+    gruplar.set(k, g);
+    isaretli += a;
+  }
+  const toplamMm2 = yuzler.reduce((t, y) => t + y.alanMm2, 0);
+  return { alanlar: [...gruplar.values()], isaretsizMm2: Math.max(0, toplamMm2 - isaretli), toplamMm2 };
+}
+
+// Kayıt denetimi: yüz modelde olmalı ve bir kez geçmeli; rota işaretinin adımı bugünkü rotada olmalı. Rotadan kalkmış adımın aynı yüzdeki
+// kayıtlı işareti kalabilir (silinmez, uyarıyla görünür); yeni atama yapılamaz. Hata yoksa null.
+export function yuzeyKaydiDenetle(
+  yuzSiralari: ReadonlySet<number>, rotadaki: ReadonlySet<string>, kayitli: readonly YuzeyIsaretGirdisi[], isaretler: readonly YuzeyIsaretGirdisi[],
+): string | null {
+  const eski = new Map(kayitli.map((x) => [x.yuzSira, islemAnahtari(x.islem)]));
+  const gorulen = new Set<number>();
+  for (const x of isaretler) {
+    if (!yuzSiralari.has(x.yuzSira)) return YUZEY_ILETILERI.yuzBilinmiyor(x.yuzSira);
+    if (gorulen.has(x.yuzSira)) return YUZEY_ILETILERI.yuzYinelendi(x.yuzSira);
+    gorulen.add(x.yuzSira);
+    if (x.islem.tur === 'rota') {
+      const k = islemAnahtari(x.islem);
+      if (!rotadaki.has(k) && eski.get(x.yuzSira) !== k) return YUZEY_ILETILERI.adimYok(x.islem.opNo);
+    }
+  }
+  return null;
+}
+
+export interface EslesenYuz {
+  sira: number;
+  tur: YuzTuru;
+  ters: boolean;
+  alanMm2: number;
+  yaricapMm: number | null;
+  eksen: readonly number[] | null;
+  konum: readonly number[] | null;
+}
+
+const ESLESME_ALAN_ORANI = 1e-3;
+const ESLESME_ALAN_MM2 = 0.01;
+const ESLESME_UZUNLUK_MM = 0.01;
+const ESLESME_YON = 1 - 1e-6;
+
+function ayniYuzMu(a: EslesenYuz, b: EslesenYuz): boolean {
+  if (a.tur !== b.tur || a.ters !== b.ters) return false;
+  if (Math.abs(a.alanMm2 - b.alanMm2) > Math.max(ESLESME_ALAN_MM2, ESLESME_ALAN_ORANI * Math.max(a.alanMm2, b.alanMm2))) return false;
+  if ((a.yaricapMm === null) !== (b.yaricapMm === null)) return false;
+  if (a.yaricapMm !== null && b.yaricapMm !== null && Math.abs(a.yaricapMm - b.yaricapMm) > ESLESME_UZUNLUK_MM) return false;
+  if (a.eksen !== null && b.eksen !== null) {
+    const nokta = Math.abs(a.eksen.reduce((t, v, i) => t + v * (b.eksen![i] ?? 0), 0));
+    if (nokta < ESLESME_YON) return false;
+  }
+  if (a.konum !== null && b.konum !== null && a.konum.some((v, i) => Math.abs(v - (b.konum![i] ?? Number.NaN)) > ESLESME_UZUNLUK_MM)) return false;
+  return true;
+}
+
+// Önceki revizyonun yüzünü yeni revizyonda bulur (2140-4 a): tür, yön, alan, yarıçap, eksen ve konum aynı olan, daha önce alınmamış ilk yüz.
+// Yüz sırası revizyonlar arasında değişebilir; eşleşmeyen işaret taşınmaz. Sonuç eski sıra -> yeni sıra.
+export function yuzleriEslestir(eski: readonly EslesenYuz[], yeni: readonly EslesenYuz[]): Map<number, number> {
+  const alinan = new Set<number>();
+  const sonuc = new Map<number, number>();
+  for (const e of eski) {
+    const ayniSira = yeni.find((y) => y.sira === e.sira && !alinan.has(y.sira) && ayniYuzMu(e, y));
+    const bulunan = ayniSira ?? yeni.find((y) => !alinan.has(y.sira) && ayniYuzMu(e, y));
+    if (bulunan === undefined) continue;
+    alinan.add(bulunan.sira);
+    sonuc.set(e.sira, bulunan.sira);
+  }
+  return sonuc;
+}
