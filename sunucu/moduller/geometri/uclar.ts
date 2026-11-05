@@ -1,11 +1,11 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi,
+  geometriAnalizCevabi, geometriGuncelRevizyonCevabi, geometriHamCevabi, geometriHamSorgusu, geometriModelListeCevabi, geometriModelListeSorgusu, geometriMontajCevabi, geometriOzellikCevabi, geometriSaglikCevabi,
   revizyonParametresi,
   yenidenHesaplaCevabi, yenidenHesaplaGovdesi, agirlikOzetiCevabi, malzemeParametresi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
-import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, yenidenHesapla } from './servis.ts';
+import { analizOku, guncelRevizyon, hamOnerisi, malzemeGeometrisi, modelDosyasi, modelListesi, montajOku, ozellikOku, saglikOku, yenidenHesapla } from './servis.ts';
 import type { MalzemeGeometrisi } from './servis.ts';
 
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
@@ -54,6 +54,12 @@ export const uclar = [
     yontem: 'GET', yol: '/geometri/montaj/:revizyonId', yetki: 'geometri.oku',
     parametre: revizyonParametresi, cevap: geometriMontajCevabi,
     isle: ({ db, parametre }) => montajOku(db, parametre.revizyonId),
+  }),
+  // 2143: dosya sağlık raporu (açık kenar, geçersiz yüz, tolerans, kısa kenar, birim); yalnız uyarı.
+  uc({
+    yontem: 'GET', yol: '/geometri/saglik/:revizyonId', yetki: 'geometri.oku',
+    parametre: revizyonParametresi, cevap: geometriSaglikCevabi,
+    isle: ({ db, parametre }) => saglikOku(db, parametre.revizyonId),
   }),
   uc({
     yontem: 'GET', yol: '/geometri/ham-onerisi/:revizyonId', yetki: 'geometri.oku',

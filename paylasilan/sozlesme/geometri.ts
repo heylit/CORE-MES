@@ -238,3 +238,36 @@ export const geometriMontajCevabi = z.object({
   neden: z.enum(GEOMETRI_MONTAJ_NEDENLERI).nullable(),
 });
 export type GeometriMontajCevabi = z.output<typeof geometriMontajCevabi>;
+
+// Dosya sağlık raporu (kart 2143, 2140-1 a): okuyucunun kendi onarımından sonra kalan açık kenar, geçersiz yüz, büyük tolerans, çok kısa
+// kenar ve birim şüphesi. Yalnız uyarıdır; ölçüye ne kadar güvenileceğini söyler, dosyayı değiştirmez.
+export const GEOMETRI_SAGLIK_DURUMLARI = ['iyi', 'dikkat', 'guvenme'] as const;
+export type GeometriSaglikDurumu = (typeof GEOMETRI_SAGLIK_DURUMLARI)[number];
+export const GEOMETRI_SAGLIK_BULGULARI = [
+  'acik-kenar', 'gecersiz-yuz', 'gecersiz-sekil', 'acik-ag', 'buyuk-tolerans', 'tolerans', 'kucuk-kenar', 'birim-mm-degil', 'olcu-cok-kucuk', 'olcu-cok-buyuk',
+] as const;
+export const GEOMETRI_SAGLIK_NEDENLERI = ['analiz-yok', 'saglik-yok'] as const;
+export const geometriSaglikBulgusu = z.object({
+  kod: z.enum(GEOMETRI_SAGLIK_BULGULARI),
+  durum: z.enum(['dikkat', 'guvenme']),
+  metin: z.string(),
+});
+export type GeometriSaglikBulgusu = z.output<typeof geometriSaglikBulgusu>;
+export const geometriSaglikCevabi = z.object({
+  revizyonId: z.number().int(),
+  oneri: z.literal(true),
+  motor: z.string().nullable(),
+  durum: z.enum(GEOMETRI_SAGLIK_DURUMLARI).nullable(),
+  acikKenarSayisi: z.number().int().nullable(),
+  acikSinirSayisi: z.number().int().nullable(),
+  gecersizYuzSayisi: z.number().int().nullable(),
+  sekilGecerli: z.boolean().nullable(),
+  enBuyukToleransMm: z.number().nullable(),
+  kucukKenarSayisi: z.number().int().nullable(),
+  dosyaBirimi: z.string().nullable(),
+  kapali: z.boolean().nullable(),
+  bulgular: z.array(geometriSaglikBulgusu),
+  hesapZamani: zamanSemasi.nullable(),
+  neden: z.enum(GEOMETRI_SAGLIK_NEDENLERI).nullable(),
+});
+export type GeometriSaglikCevabi = z.output<typeof geometriSaglikCevabi>;

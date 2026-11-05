@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   agOlcumu, bicimDenetimi, bilesenListesi, kapsayanDaireCapi, enAzHam, stokEslestir, EN_COK_DENEME, hataMetniKisalt, hataSonrasiDurum, HATA_METNI_EN_UZUN, ILETILER,
-  MONTAJ_AD_EN_UZUN, MONTAJ_DUGUM_EN_COK, montajAdi, montajAgaci,
+  MONTAJ_AD_EN_UZUN, MONTAJ_DUGUM_EN_COK, montajAdi, montajAgaci, birimAdi, igesBirimi, saglikDegerlendir,
 } from './kurallar.ts';
-import type { AdliAg, OcctDugumu, StokAdayi, UcgenAgi } from './kurallar.ts';
+import type { AdliAg, OcctDugumu, SaglikOlcumu, StokAdayi, UcgenAgi } from './kurallar.ts';
 
 // Eksenlere hizalı kutu ağı: 8 köşe, 12 üçgen, dışa bakan yüzler.
 function kutu(x: number, y: number, z: number, d: [number, number, number] = [0, 0, 0]): UcgenAgi {
@@ -165,3 +165,62 @@ function dondurAdli(a: AdliAg, derece: number): AdliAg {
   return { ad: a.ad, ...dondur(a, derece) };
 }
 
+
+// Sağlık raporu (kart 2143): değerlendirme saftır; ölçüm hesap sürecinde, saglik.test.ts gerçek dosyayla dener.
+const temiz: SaglikOlcumu = {
+  acikKenarSayisi: 0, acikSinirSayisi: 0, gecersizYuzSayisi: 0, sekilGecerli: true, enBuyukToleransMm: 1e-7, kucukKenarSayisi: 0, dosyaBirimi: 'millimetre',
+};
+const kapaliKutu = { kapali: true, enBuyukOlcuMm: 40 };
+const kodlar = (o: SaglikOlcumu, a: { kapali: boolean; enBuyukOlcuMm: number } | null = kapaliKutu): [string, string[]] => {
+  const d = saglikDegerlendir(o, a);
+  return [d.durum, d.bulgular.map((b) => `${b.kod}:${b.durum}`)];
+};
+
+// IGES global bölümü: 72 sütun veri, 73. sütun 'G', sıra numarası.
+function igesGlobal(alanlar: string): Uint8Array {
+  const satirlar = ['Deneme'.padEnd(72) + 'S      1'];
+  for (let i = 0; i * 72 < alanlar.length; i++) satirlar.push(alanlar.slice(i * 72, i * 72 + 72).padEnd(72) + 'G' + String(i + 1).padStart(7));
+  return new TextEncoder().encode(satirlar.join('\n') + '\n');
+}
+const igesAlanlari = (bayrak: string, ad: string, ayirac = '1H,,1H;,'): string =>
+  `${ayirac}4HPART,8Hpart.igs,4HCAD1,4HCAD1,32,38,6,308,15,4HPART,1.,${bayrak},${ad},1,0.01,15H20261105.120000,0.001,1000.,,,11,0;`;
+
+describe('geometri: dosya sağlık raporu kuralları (2143)', () => {
+  test('GEO-SA1 temiz kapalı kutu "iyi", bulgu yok', () => {
+    assert.deepEqual(kodlar(temiz), ['iyi', []]);
+  });
+  test('GEO-SA2 açık kenar ve geçersiz yüz "guvenme"; açık kenar varken açık ağ ayrıca yazılmaz', () => {
+    assert.deepEqual(kodlar({ ...temiz, acikKenarSayisi: 4, acikSinirSayisi: 1 }, { kapali: false, enBuyukOlcuMm: 40 }), ['guvenme', ['acik-kenar:guvenme']]);
+    assert.deepEqual(kodlar({ ...temiz, gecersizYuzSayisi: 2, sekilGecerli: false }), ['guvenme', ['gecersiz-yuz:guvenme']]);
+    assert.deepEqual(kodlar({ ...temiz, sekilGecerli: false }), ['guvenme', ['gecersiz-sekil:guvenme']]);
+    assert.deepEqual(kodlar(temiz, { kapali: false, enBuyukOlcuMm: 40 }), ['guvenme', ['acik-ag:guvenme']]);
+  });
+  test('GEO-SA3 tolerans: 0,01 mm sınırda iyi, üstü dikkat, 0,1 mm üstü guvenme', () => {
+    assert.deepEqual(kodlar({ ...temiz, enBuyukToleransMm: 0.01 }), ['iyi', []]);
+    assert.deepEqual(kodlar({ ...temiz, enBuyukToleransMm: 0.02 }), ['dikkat', ['tolerans:dikkat']]);
+    assert.deepEqual(kodlar({ ...temiz, enBuyukToleransMm: 5 }), ['guvenme', ['buyuk-tolerans:guvenme']]);
+  });
+  test('GEO-SA4 kısa kenar, mm olmayan birim ve uç ölçü "dikkat"; birimi bilinmeyen dosya bulgu vermez', () => {
+    assert.deepEqual(kodlar({ ...temiz, kucukKenarSayisi: 3 }), ['dikkat', ['kucuk-kenar:dikkat']]);
+    assert.deepEqual(kodlar({ ...temiz, dosyaBirimi: 'INCH' }), ['dikkat', ['birim-mm-degil:dikkat']]);
+    assert.deepEqual(kodlar({ ...temiz, dosyaBirimi: 'MM' }), ['iyi', []]);
+    assert.deepEqual(kodlar({ ...temiz, dosyaBirimi: null }), ['iyi', []]);
+    assert.deepEqual(kodlar(temiz, { kapali: true, enBuyukOlcuMm: 0.5 }), ['dikkat', ['olcu-cok-kucuk:dikkat']]);
+    assert.deepEqual(kodlar(temiz, { kapali: true, enBuyukOlcuMm: 12_000 }), ['dikkat', ['olcu-cok-buyuk:dikkat']]);
+    assert.deepEqual(kodlar(temiz, null), ['iyi', []]);
+  });
+  test('GEO-SA5 IGES birimi global bölümden: bayrak 2 MM, 1 INCH, 3 ise ad; varsayılan ayıraç; bozuk ya da global bölümsüz null', () => {
+    assert.equal(igesBirimi(igesGlobal(igesAlanlari('2', '2HMM'))), 'MM');
+    assert.equal(igesBirimi(igesGlobal(igesAlanlari('1', '4HINCH'))), 'INCH');
+    assert.equal(igesBirimi(igesGlobal(igesAlanlari('3', '2HFT'))), 'FT');
+    assert.equal(igesBirimi(igesGlobal(igesAlanlari('2', '2HMM', ',,'))), 'MM');
+    assert.equal(igesBirimi(igesGlobal(igesAlanlari('99', '2HMM'))), null);
+    assert.equal(igesBirimi(new TextEncoder().encode('ISO-10303-21;')), null);
+  });
+  test('GEO-SA6 birim adı kırpılır; boş, metin olmayan ya da 40 karakteri aşan ad null', () => {
+    assert.equal(birimAdi(' INCH '), 'INCH');
+    assert.equal(birimAdi('  '), null);
+    assert.equal(birimAdi(3), null);
+    assert.equal(birimAdi('x'.repeat(41)), null);
+  });
+});

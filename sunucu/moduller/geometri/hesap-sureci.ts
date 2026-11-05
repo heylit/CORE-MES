@@ -1,8 +1,10 @@
 // Geometri hesap süreci (1427 a): ana sunucu `surec.ts` ile fork eder; ağa açılmaz, veritabanına bağlanmaz, yalnız IPC ile dosya alır,
 // ölçü döner. STEP/IGES güvenilmeyen girdidir: çökmesi ya da asılması ana sunucuyu durdurmaz, yöneten süreç öldürüp yeniden açar.
 import { createRequire } from 'node:module';
-import { agOlcumu, ILETILER, montajAdi, montajAgaci, ozellikleriTani, YUZ_EN_COK, yuzTuru } from './kurallar.ts';
-import type { AdliAg, DosyaTuru, KenarTuru, OcctDugumu, Ozellik, TanimaYuzu, Yuz, YuzKenari } from './kurallar.ts';
+import {
+  agOlcumu, birimAdi, igesBirimi, ILETILER, KUCUK_KENAR_MM, montajAdi, montajAgaci, ozellikleriTani, SERBEST_KENAR_DIKIS_MM, YUZ_EN_COK, yuzTuru,
+} from './kurallar.ts';
+import type { AdliAg, DosyaTuru, KenarTuru, OcctDugumu, Ozellik, SaglikOlcumu, TanimaYuzu, Yuz, YuzKenari } from './kurallar.ts';
 import type { HesapIstegi, HesapYaniti } from './surec.ts';
 
 interface OcctAgi { name?: unknown; attributes: { position: { array: ArrayLike<number> } }; index?: { array: ArrayLike<number> } }
@@ -38,7 +40,11 @@ interface Yuzey extends Nesne {
   Sphere(): { Radius(): number; Location(): V3 } & Nesne;
   Torus(): { MajorRadius(): number; MinorRadius(): number; Axis(): Eksen } & Nesne;
 }
-interface Okuyucu extends Nesne { ReadFile(ad: string): unknown; TransferRoots(): number; OneShape(): Nesne }
+interface Okuyucu extends Nesne {
+  ReadFile(ad: string): unknown; TransferRoots(): number; OneShape(): Nesne;
+  FileUnits?(uzunluk: AdDizisi, aci: AdDizisi, katiAci: AdDizisi): void;
+}
+interface AdDizisi extends Nesne { Size(): number; Value(i: number): { ToCString(): string } }
 interface SekilListesi extends Nesne { Size(): number; First(): Nesne; Last(): Nesne }
 interface SekilDizini extends Nesne { Extent(): number; FindKey(i: number): Nesne & { Orientation(): unknown }; FindIndex(s: Nesne): number }
 interface AtaDizini extends Nesne { Extent(): number; FindKey(i: number): Nesne; FindFromIndex(i: number): SekilListesi }
@@ -53,7 +59,11 @@ interface Libcascade {
     MapShapes(s: Nesne, tur: string, m: SekilDizini): void;
     MapShapesAndAncestors(s: Nesne, tur: string, ata: string, m: AtaDizini): void;
   };
-  TopAbs_ShapeEnum: { TopAbs_FACE: string; TopAbs_EDGE: string };
+  TopAbs_ShapeEnum: { TopAbs_FACE: string; TopAbs_EDGE: string; TopAbs_WIRE: string };
+  NCollection_Sequence_TCollection_AsciiString: new () => AdDizisi;
+  ShapeAnalysis_FreeBounds: new (s: Nesne, tolerans: number, kapaliBol: boolean, acikBol: boolean) => Nesne & { GetClosedWires(): Nesne; GetOpenWires(): Nesne };
+  BRepCheck_Analyzer: new (s: Nesne, geometri: boolean, paralel: boolean, kesin: boolean) => Nesne & { IsValid(s: Nesne): boolean };
+  BRep_Tool: { Tolerance(k: Nesne): number; Degenerated(k: Nesne): boolean };
   TopoDS: { Face(s: Nesne): Nesne & { Orientation(): unknown; IsSame(s: Nesne): boolean }; Edge(s: Nesne): Nesne };
   BRepAdaptor_Surface: new (y: Nesne, sinirli: boolean) => Yuzey;
   BRepLProp_SLProps: new (y: Yuzey, u: number, v: number, n: number, cozunurluk: number) => Nesne & { Normal(): V3; Value(): V3; IsNormalDefined(): boolean };
@@ -90,10 +100,10 @@ const TEGET_SINUS = Math.sin(Math.PI / 180);
 const KENAR_TURU: Readonly<Record<string, KenarTuru>> = { ChFiDS_Concave: 'icbukey', ChFiDS_Convex: 'disbukey', ChFiDS_Tangential: 'teget' };
 
 export interface YuzSonucu { yuzler: Yuz[]; ozellikler: Ozellik[] }
+export interface BrepSonucu { yuz: YuzSonucu | null; saglik: SaglikOlcumu | null }
 
-// Yüzler şeklin yüz dizinindeki sırayla (TopExp.MapShapes; aynı yüz bir kez) okunur; sıra geometri_yuz.sira'dır. Yüz listesi okunamazsa
-// ya da sınırı aşarsa null: ağdan ölçüm yine tamamlanır, yüz türü ve özellikler yalnız eksik kalır.
-async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<YuzSonucu | null> {
+// libcascade dosyayı bir kez okur; aynı şekilden sağlık ölçümü (2143) ve yüzler çıkar. Biri düşerse öteki yine döner; okunamazsa ikisi null.
+async function brepOku(tur: DosyaTuru, veri: Uint8Array): Promise<BrepSonucu> {
   const oc = await libcascade();
   const ad = tur === 'step' ? '/model.stp' : '/model.igs';
   oc.FS.writeFile(ad, veri);
@@ -101,9 +111,105 @@ async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<YuzSonucu |
   const silinecek: Nesne[] = [];
   try {
     oc.Interface_Static.SetCVal('xstep.cascade.unit', 'MM');
-    if (String(okuyucu.ReadFile(ad)) !== 'IFSelect_RetDone' || okuyucu.TransferRoots() === 0) return null;
+    if (String(okuyucu.ReadFile(ad)) !== 'IFSelect_RetDone' || okuyucu.TransferRoots() === 0) return { yuz: null, saglik: null };
     const sekil = okuyucu.OneShape();
     silinecek.push(sekil);
+    let saglik: SaglikOlcumu | null = null;
+    try {
+      saglik = saglikOlc(oc, sekil, tur === 'step' ? stepBirimi(oc, okuyucu) : igesBirimi(veri));
+    } catch {
+      saglik = null;
+    }
+    let yuz: YuzSonucu | null = null;
+    try {
+      yuz = yuzleriOku(oc, sekil);
+    } catch {
+      yuz = null;
+    }
+    return { yuz, saglik };
+  } catch {
+    return { yuz: null, saglik: null };
+  } finally {
+    birak(...silinecek, okuyucu);
+    oc.FS.unlink(ad);
+  }
+}
+
+// Okuyucunun bildirdiği dosya uzunluk birimi (STEP). Birden çok bağlam varsa mm olmayan ilk ad, yoksa ilki.
+function stepBirimi(oc: Libcascade, okuyucu: Okuyucu): string | null {
+  if (okuyucu.FileUnits === undefined) return null;
+  const d = [new oc.NCollection_Sequence_TCollection_AsciiString(), new oc.NCollection_Sequence_TCollection_AsciiString(), new oc.NCollection_Sequence_TCollection_AsciiString()] as const;
+  try {
+    okuyucu.FileUnits(d[0], d[1], d[2]);
+    const adlar: string[] = [];
+    for (let i = 1; i <= d[0].Size(); i++) {
+      const a = birimAdi(d[0].Value(i).ToCString());
+      if (a !== null) adlar.push(a);
+    }
+    return adlar.find((a) => !['millimetre', 'millimeter', 'mm'].includes(a.toLowerCase())) ?? adlar[0] ?? null;
+  } finally {
+    birak(...d);
+  }
+}
+
+// Sağlık ölçümü (kart 2143). Serbest kenar dikişsiz değil, çok küçük toleransla aranır: aynı yerdeki iki ayrı kenar açık sayılmaz.
+// Yüz yüz geçerlilik yalnız şekil geçersizse denetlenir (geçerli şekilde her yüz geçerlidir).
+function saglikOlc(oc: Libcascade, sekil: Nesne, dosyaBirimi: string | null): SaglikOlcumu {
+  const silinecek: Nesne[] = [];
+  const dizin = (s: Nesne, tur: string): SekilDizini => {
+    const m = new oc.NCollection_IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher();
+    silinecek.push(m);
+    oc.TopExp.MapShapes(s, tur, m);
+    return m;
+  };
+  try {
+    const serbest = new oc.ShapeAnalysis_FreeBounds(sekil, SERBEST_KENAR_DIKIS_MM, false, false);
+    silinecek.push(serbest);
+    let acikKenarSayisi = 0, acikSinirSayisi = 0;
+    for (const tel of [serbest.GetClosedWires(), serbest.GetOpenWires()]) {
+      silinecek.push(tel);
+      acikKenarSayisi += dizin(tel, oc.TopAbs_ShapeEnum.TopAbs_EDGE).Extent();
+      acikSinirSayisi += dizin(tel, oc.TopAbs_ShapeEnum.TopAbs_WIRE).Extent();
+    }
+    const denetim = new oc.BRepCheck_Analyzer(sekil, true, false, false);
+    silinecek.push(denetim);
+    const sekilGecerli = denetim.IsValid(sekil);
+    let gecersizYuzSayisi = 0;
+    if (!sekilGecerli) {
+      const yuzler = dizin(sekil, oc.TopAbs_ShapeEnum.TopAbs_FACE);
+      for (let i = 1; i <= yuzler.Extent(); i++) {
+        const y = yuzler.FindKey(i);
+        const d = new oc.BRepCheck_Analyzer(y, true, false, false);
+        if (!d.IsValid(y)) gecersizYuzSayisi++;
+        birak(d);
+      }
+    }
+    const kenarlar = dizin(sekil, oc.TopAbs_ShapeEnum.TopAbs_EDGE);
+    let enBuyukToleransMm = 0, kucukKenarSayisi = 0;
+    for (let i = 1; i <= kenarlar.Extent(); i++) {
+      const k = oc.TopoDS.Edge(kenarlar.FindKey(i));
+      enBuyukToleransMm = Math.max(enBuyukToleransMm, oc.BRep_Tool.Tolerance(k));
+      if (!oc.BRep_Tool.Degenerated(k)) {
+        const boy = new oc.GProp_GProps();
+        oc.BRepGProp.LinearProperties(k, boy, false, false);
+        if (boy.Mass() < KUCUK_KENAR_MM) kucukKenarSayisi++;
+        birak(boy);
+      }
+      birak(k);
+    }
+    return {
+      acikKenarSayisi, acikSinirSayisi, gecersizYuzSayisi, sekilGecerli, enBuyukToleransMm: Math.round(enBuyukToleransMm * 1e7) / 1e7, kucukKenarSayisi, dosyaBirimi,
+    };
+  } finally {
+    birak(...silinecek);
+  }
+}
+
+// Yüzler şeklin yüz dizinindeki sırayla (TopExp.MapShapes; aynı yüz bir kez) okunur; sıra geometri_yuz.sira'dır. Yüz listesi sınırı
+// aşarsa null: ağdan ölçüm yine tamamlanır, yüz türü ve özellikler yalnız eksik kalır.
+function yuzleriOku(oc: Libcascade, sekil: Nesne): YuzSonucu | null {
+  const silinecek: Nesne[] = [];
+  try {
     const dizin = new oc.NCollection_IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher();
     silinecek.push(dizin);
     oc.TopExp.MapShapes(sekil, oc.TopAbs_ShapeEnum.TopAbs_FACE, dizin);
@@ -164,11 +270,8 @@ async function yuzleriOku(tur: DosyaTuru, veri: Uint8Array): Promise<YuzSonucu |
       birak(boy, kenar, a, b);
     }
     return { yuzler, ozellikler: ozellikleriTani(tanima, kenarlar) };
-  } catch {
-    return null;
   } finally {
-    birak(...silinecek, okuyucu);
-    oc.FS.unlink(ad);
+    birak(...silinecek);
   }
 }
 
@@ -220,8 +323,11 @@ async function hesapla(tur: DosyaTuru, veri: Uint8Array): Promise<HesapYaniti> {
   const olcum = agOlcumu(aglar);
   if (olcum === null) return { tamam: false, kalici: true, hata: ILETILER.bosModel, bellek: process.memoryUsage().rss };
   const montaj = sonuc.root === undefined ? null : montajAgaci(sonuc.root, aglar);
-  const yuz = await yuzleriOku(tur, veri).catch(() => null);
-  return { tamam: true, olcum, montaj, yuzler: yuz?.yuzler ?? null, ozellikler: yuz?.ozellikler ?? null, sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss };
+  const brep = await brepOku(tur, veri).catch((): BrepSonucu => ({ yuz: null, saglik: null }));
+  return {
+    tamam: true, olcum, montaj, yuzler: brep.yuz?.yuzler ?? null, ozellikler: brep.yuz?.ozellikler ?? null, saglik: brep.saglik,
+    sureMs: Math.round(performance.now() - baslangic), bellek: process.memoryUsage().rss,
+  };
 }
 
 process.on('message', (ileti: HesapIstegi) => {

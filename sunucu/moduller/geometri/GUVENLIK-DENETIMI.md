@@ -9,6 +9,7 @@
 | `GET /geometri/ham-onerisi/:revizyonId` | `geometri.oku` | pay 0-100 mm (yoksa ayar), kalite en çok 100 karakter; analiz yoksa enAz null; hammadde kartlarından yalnız kod, ad, kalite, form, ölçü döner | `G-A1` | `G-A4`: eksi pay 400 |
 | `GET /geometri/ozellikler/:revizyonId` | `geometri.oku` | listede olmayan revizyon 404; analiz başka içeriğe aitse ya da yüzler okunamadıysa null; yalnız tanınan özellik ölçüleri döner (dosya içeriği dönmez); yazma yok | `G-A9` (okur 200) | `G-A9`: işlemsiz 403, oturumsuz 401, bağsız revizyon 404 |
 | `GET /geometri/montaj/:revizyonId` | `geometri.oku` | listede olmayan revizyon 404; analiz başka içeriğe aitse 'analiz-yok', montaj okunmadıysa 'montaj-yok'; yalnız düğüm adı, kutu ve ölçü döner (dosya içeriği dönmez); yazma yok; yalnız öneri (2109) | `GEO-MO-A1`, `GEO-MO-A2` (okur 200) | `GEO-MO-A1`: işlemsiz 403, oturumsuz 401, bağsız revizyon 404 |
+| `GET /geometri/saglik/:revizyonId` | `geometri.oku` | listede olmayan revizyon 404; analiz başka içeriğe aitse 'analiz-yok', B-rep okunmadıysa 'saglik-yok'; yalnız sayılar, tolerans, birim adı ve bulgu metni döner (dosya içeriği dönmez); yazma yok; yalnız uyarı (2143) | `GEO-SA-A1`..`GEO-SA-A5` (okur 200) | `GEO-SA-A1`: işlemsiz 403, oturumsuz 401, bağsız revizyon 404, geçersiz kimlik 400 |
 | `POST /geometri/analizler/:revizyonId/yeniden-hesapla` | `geometri.hesapla`, tekrar korumalı | sürüm koşullu (iş yokken null); gövde katı; yalnız kuyruğa yazar | `G-A3`, `G-A4` | `G-A3`: okur 403, oturumsuz 401; `G-A4`: eski sürüm 409, bağsız revizyon 404 |
 
 Rol x işlem (1445 a): Aşama 1'de yalnız yönetici; roller 1390 rol menüsüyle verilir, göç yok.
@@ -18,3 +19,4 @@ süreç belleği 2 GB'ı aşınca öldürülür; süreç ağa açılmaz, veritab
 kapanınca kendisi de kapanır. Hata metni kısaltılır (500 karakter); dosya içeriği hata metnine girmez.
 Montaj ağacı (2109): dosyadaki ad 200 karaktere kısaltılır, boş ad null; ağaç yığınla gezilir (derin iç içe yapı çağrı yığınını taşırmaz); 20.000 düğümü aşan model ağaç yazmaz; geçersiz ağ dizini ve bozuk alan yok sayılır (`GEO-MO4`).
 Zaman ve kişi sunucudan; denetim kaydı yeniden hesaplatmada tam gövdeyle (çekirdeğin varsayılanı).
+Sağlık raporu (2143): ölçüm aynı ayrı süreçte, aynı süre ve bellek sınırıyla yapılır; dosyadaki birim adı 40 karakteri aşarsa ya da boşsa null; IGES global bölümü en çok 200 satır okunur. Sağlık ölçümü düşerse analiz ve yüzler yine yazılır.
