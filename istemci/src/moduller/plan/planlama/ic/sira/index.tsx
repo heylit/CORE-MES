@@ -2,13 +2,13 @@ import { useRef, useState } from 'react';
 import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYaz, type Derleme, type OkunanPlan } from '../../motor/kurallar.ts';
-import { MOTOR_NOTU } from '../../motor/ortak.tsx';
+import { hamleYapisi, useHamleci } from '../../motor/hamle/hamle.ts';
 import { siraDegisti, siraKur, siraTasi, siraTezgahlari, siraYon, type TezgahSirasi } from './kurallar.ts';
 import './sira.css';
 
 // Tezgâh sırası aracı (w-v20 v20SiraGovde): tezgâh seçilir, sıradaki işler tutup sürüklenir ya da oklarla taşınır. Uygula yeni sırayı motora
-// verir (hamleDene); motorun önizlemesi yeni ekranda yok, Uygula görünür ve pasiftir (357 b). Deneme sırası yalnız bu pencerededir, çalışmaya
-// yazılmaz; plan değişince baştan kurulur. Okuyan da aynı listeyi ve düğmeleri görür; düğmeler ona pasiftir.
+// verir (2149, `sira-degistir`); motorun önizlemesi sayfanın hamle şeridinde açılır, kişi orada uygular. Deneme sırası yalnız bu pencerededir,
+// çalışmaya yazılmaz; plan değişince baştan kurulur. Okuyan da aynı listeyi ve düğmeleri görür; düğmeler ona pasiftir.
 const YETKISIZ = 'Plan yazma yetkiniz yok.';
 
 export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
@@ -30,6 +30,8 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
     requestAnimationFrame(() => kok.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"] [data-yon="${y}"]`)?.focus());
   };
   const degisti = q ? siraDegisti(q) : false;
+  const h = useHamleci();
+  const uygula = !yaz ? { yap: null, not: YETKISIZ } : !q || !degisti ? { yap: null, not: 'Sıra değişmedi.' } : hamleYapisi(h, (x) => { x.sirala(q.m, q.ids); });
   return (
     <section ref={kok} className="tc-pym-yp tc-pym-kb tc-pyr" role="dialog" aria-label="Tezgâh sırası">
       <header>
@@ -79,7 +81,8 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
           ) : <p className="tc-pym-kucuk-yazi">Bu tezgâhta sırada iş yok.</p>}
           <div className="tc-pym-dugmeler">
             {degisti && <button type="button" className="tc-dugme tc-pym-kucuk" onClick={() => setQ({ ...q, ids: q.ilk })}><Simge ad="rotate" boyut="k" />Baştaki sıraya dön</button>}
-            <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" aria-disabled="true" title={`Uygula: ${yaz ? (degisti ? MOTOR_NOTU : 'Sıra değişmedi.') : YETKISIZ}`}>
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" aria-disabled={uygula.yap ? undefined : 'true'}
+              title={uygula.yap ? 'Uygula: motor yeni sırayı önizler' : `Uygula: ${uygula.not}`} onClick={uygula.yap ?? undefined}>
               <Simge ad="check" boyut="k" />Uygula
             </button>
           </div>

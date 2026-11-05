@@ -18,6 +18,7 @@ import {
 } from './kurallar.ts';
 import './odak.css';
 import type { AtolyeKomutlari } from '../../motor/atolye/gonder.ts';
+import { siraAdimi, useHamleci } from '../../motor/hamle/hamle.ts';
 
 // Odak tahtası (zg-odak.betik odHtml): tahtanın içinde bir bölüm ya da tek tezgâh. Konum izi, kardeş seçimi, görünen süre; etki satırı,
 // şeritler ve lejant; yanda seçili iş, bekleyenler ya da kuyruk, ek mesai ve takvim. Sürükleyip taşımak, sıra ve ek mesai denemesi motor
@@ -162,9 +163,10 @@ function Serit({ o, m, a, b, secJob, isSec }: { o: OdakOzellikleri; m: string; a
 
 function SeciliIs({ o, izin }: { o: OdakOzellikleri; izin: (m: string) => boolean }) {
   const { c, p } = o; const D = c.D; const id = o.secim.adim; const r = id ? p.ops[id] : undefined;
+  const h = useHamleci();
   if (!id || !r || !izin(r.m)) return null;
   const s = D.siparisler.find((x) => x.id === r.job); const J = p.J[r.job];
-  const pasif = o.planYaz ? MOTOR_NOTU : YETKISIZ;
+  const one = o.planYaz ? siraAdimi(h, p, id, -1) : { yap: null, not: YETKISIZ }, arka = o.planYaz ? siraAdimi(h, p, id, 1) : { yap: null, not: YETKISIZ };
   return (
     <section className="tc-pyo-blok tc-pyo-secili" aria-label={`Seçili iş ${id}`}>
       <h4><Simge ad="target" boyut="k" /><span className="tc-pym-mono">{id}</span></h4>
@@ -172,8 +174,8 @@ function SeciliIs({ o, izin }: { o: OdakOzellikleri; izin: (m: string) => boolea
       <p><span className="tc-pym-mono">{odakAdi(r.m, tezgahKodlari(o.c.D))}</span>{' · '}<span className="tc-pym-mono">{`${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`}</span></p>
       <p className="tc-pyo-k">{`ayar ${saatYazi(r.su)}, işleme ${saatYazi(r.run)}${J?.T != null && J.T > 0.05 ? ` · sipariş ${saatYazi(J.T)} geç` : ' · sipariş termine yetişiyor'}`}</p>
       <div className="tc-pyo-dugmeler">
-        <Dg ad="Sırada öne" simge="up" not={pasif} />
-        <Dg ad="Sırada geriye" simge="down" not={pasif} />
+        <Dg ad="Sırada öne" simge="up" yap={one.yap} not={one.not} />
+        <Dg ad="Sırada geriye" simge="down" yap={arka.yap} not={arka.not} />
         {o.yer.m !== r.m && <Dg ad={`${odakAdi(r.m, tezgahKodlari(o.c.D))} tezgâhına odaklan`} simge="zin" hayalet yap={() => o.ac({ g: o.yer.g, m: r.m })} />}
       </div>
     </section>

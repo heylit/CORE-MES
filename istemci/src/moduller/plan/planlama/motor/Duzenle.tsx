@@ -6,6 +6,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import { adaylar } from './cizelge/kurallar.ts';
 import { saatYaz, saatYazi, type Derleme, type OkunanPlan, type PlanIslemi } from './kurallar.ts';
 import { MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
+import { hamleYapisi, siraAdimi, type Hamleci } from './hamle/hamle.ts';
 
 // Düzenle menüsü ve Değişiklikler (zp-klavye.betik): seçilene göre numaralı komutlar; sayıya basmak komutu çalıştırır. Plana dokunan
 // komutlar motorun hamlesiyle gelir, görünür ve pasiftir (357 b); sabitlemek çalışmaya yazar (223 a). Tezgâhın "sırasını düzenle"si Tezgâh sırası aracını açar.
@@ -31,12 +32,25 @@ export function kbHedefler(p: OkunanPlan, cx: Derleme, s: PlanlamaSecimi): KbHed
 }
 export const kbBaglam = (l: KbHedef[], hedef: KbHedef['k'] | null): KbHedef | null => l.find((h) => h.k === hedef) ?? l[0] ?? null;
 
-interface Baglam { c: PlanlamaCalismasi; cx: Derleme; komut: CalismaKomutu | null; altAc: () => void; siraAc?: ((m: string) => void) | null }
+// p ve hamle (2149): kuyrukta sıra ve başka tezgâha taşıma motorun önizlemesini ister; verilmezse komutlar pasiftir.
+interface Baglam {
+  c: PlanlamaCalismasi; cx: Derleme; komut: CalismaKomutu | null; altAc: () => void; siraAc?: ((m: string) => void) | null;
+  p?: OkunanPlan | null; hamle?: Hamleci | null;
+}
 const motor = (ad: string, simge: SimgeAdi, ipucu: string): KbKomut => ({ ad, simge, ipucu, yap: null, not: MOTOR_NOTU });
 // Yapabilen tezgâhlar, süresi kısadan uzuna, en çok dokuz.
 function tasiKomutlari(o: Baglam, r: PlanIslemi): KbKomut[] {
+  const sabit = !!o.c.locks[r.id] || r.act || r.fas;
   return adaylar(o.c, o.cx, r.id).filter((a) => a.m !== r.m).sort((a, b) => (a.sure ?? Infinity) - (b.sure ?? Infinity)).slice(0, 9)
-    .map((a) => motor(kbTez(a.m), a.m.startsWith('@') ? 'truck' : 'target', `${saatYazi(a.sure)} sürer`));
+    .map((a): KbKomut => {
+      const ipucu = `${saatYazi(a.sure)} sürer`;
+      if (a.m.startsWith('@')) return motor(kbTez(a.m), 'truck', ipucu);
+      const y = sabit ? { yap: null, not: 'Sabit ya da başlamış iş taşınmaz.' } : hamleYapisi(o.hamle, (h) => { h.sirala(a.m, [r.id]); });
+      return { ad: kbTez(a.m), simge: 'target', ipucu, ...y };
+    });
+}
+function siraKomutu(o: Baglam, r: PlanIslemi, ad: string, simge: SimgeAdi, ipucu: string, yon: -1 | 1): KbKomut {
+  return { ad, simge, ipucu, ...(o.p ? siraAdimi(o.hamle, o.p, r.id, yon) : { yap: null, not: MOTOR_NOTU }) };
 }
 export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut[] {
   if (!b) return [];
@@ -52,7 +66,7 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
   const l: KbKomut[] = [motor(`${r.job} siparişini öne al`, 'flag', 'öne almanın yollarını dener, en iyisini uygular')];
   if (n) l.push({ ad: 'Başka tezgâha taşı', simge: 'next', ipucu: `yapabilen ${n} tezgâh`, yap: o.altAc, not: '', alt: true });
   l.push(motor('1 saat sonraya', 'chev-right', '→, Shift ile çeyrek saat'), motor('1 saat önceye', 'chev-left', '←'),
-    motor('Kuyrukta bir öne', 'up', '['), motor('Kuyrukta bir arkaya', 'down', ']'));
+    siraKomutu(o, r, 'Kuyrukta bir öne', 'up', '[', -1), siraKomutu(o, r, 'Kuyrukta bir arkaya', 'down', ']', 1));
   l.push({
     ad: sabit ? 'Sabitliği kaldır' : 'Bu saate sabitle', simge: 'lock', ipucu: 'motor sabit işe dokunmaz', not: 'Kilitleme yetkiniz yok.',
     yap: komut ? () => {

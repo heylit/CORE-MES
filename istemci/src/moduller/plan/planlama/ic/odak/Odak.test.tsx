@@ -7,11 +7,11 @@ import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaO
 import { PlanlamaMotoru } from '../../motor/index.tsx';
 import { derle, girdiKur, planOku } from '../../motor/kurallar.ts';
 import { ornekCalisma } from '../../motor/ornek.ts';
-import { MOTOR_NOTU } from '../../motor/ortak.tsx';
 import { ozetVerisi } from '../../motor/ozet/veri.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
 import { eksen, kapaliPencereler, kaydirma, kuyruk, odakDolulugu, odakGruplari, odakTezgahlari, otomatikOdak, pencere, serit, varsayilanGun } from './kurallar.ts';
+import { BASLAMIS_SIRA } from '../../motor/hamle/hamle.ts';
 
 afterEach(cleanup);
 
@@ -86,7 +86,7 @@ describe('Odak tahtası ekranı', () => {
     expect(k.getByText('3 takvimi')).toBeTruthy();
     fireEvent.click(odak()?.querySelector('.tc-pyo-is') as HTMLElement);
     const secili = within(k.getByRole('region', { name: 'Seçili iş 2.20' }));
-    expect(secili.getByRole('button', { name: 'Sırada öne' }).getAttribute('title')).toBe(`Sırada öne: ${MOTOR_NOTU}`);
+    expect(secili.getByRole('button', { name: 'Sırada öne' }).getAttribute('title')).toBe(`Sırada öne: ${BASLAMIS_SIRA}`);
     fireEvent.click(k.getByRole('button', { name: '3 gün' }));
     expect(odak()?.querySelectorAll('.tc-pyo-satir')).toHaveLength(3);
     tus('Escape');

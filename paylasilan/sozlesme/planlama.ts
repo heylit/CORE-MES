@@ -191,10 +191,11 @@ export const satinAlmaEkiCevabi = z.object({
 // dataVer çalışmanınki); ekran seçeneği alırsa kendi yazma yoluyla yazar.
 export const DEGERLENDIRME_TURLERI = [
   'plan-kur', 'plan-uygula', 'plan-secenekleri', 'termin-secenekleri', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari',
-  'plan-iyilestir', 'one-al',
+  'plan-iyilestir', 'one-al', 'sira-degistir',
 ] as const;
 export const TERMIN_UZATMA_GUNLERI = [1, 2, 3, 5] as const;
 export const PARTI_SAYISI_EN_COK = 20;
+export const SIRA_EN_COK = 60;
 const planSiparisi = z.string().min(1).max(80);
 export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
   // Planı kur (576): kuraldan sıfırdan kurar; kayıtlı plan kullanılmaz.
@@ -216,6 +217,11 @@ export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
   // 2129-1 b: kayıtlı planı iyileştirme araması ve siparişi öne alma önizlemesi. Plan güncel olmalı; sonuç yazılmaz, ekran kabul ederse yazar.
   z.object({ tur: z.literal('plan-iyilestir') }).strict(),
   z.object({ tur: z.literal('one-al'), siparisId: planSiparisi }).strict(),
+  // 2149: tezgâh kuyruğunda sıra. `sira` adımların istenen sırasıdır; başka tezgâhtaki adım bu tezgâha taşınır. Sabit ve başlamış adım yerinde kalır.
+  z.object({
+    tur: z.literal('sira-degistir'), tezgah: planSiparisi,
+    sira: z.array(planSiparisi).min(1).max(SIRA_EN_COK).refine((l) => new Set(l).size === l.length, 'Aynı adım iki kez verilemez.'),
+  }).strict(),
 ]);
 // İki adım (463 a): başlatma girdiyi okur ve hesabı başlatır, sonuç kimlikle transaction açmadan okunur; hesap uç transaction'ını beklemez.
 export const degerlendirmeGovdesi = z.object({ surum: z.number().int().positive(), istek: degerlendirmeIstegi }).strict();
@@ -320,9 +326,15 @@ const oneAl = z.object({
   bitisOnce: z.number().nullable(), bitisSonra: z.number().nullable(), gecikmeOnce: saatDegeri, gecikmeSonra: z.number().nullable(),
   degisen: z.array(degisenSiparis),
 });
+// plan null: sıra kurulamadı ya da motor istenen sırayı tutamadı; neden metni yalnız o durumda. `sira` sonuçtaki sıradır (plan null ise kayıtlı).
+const siraDegistir = z.object({
+  tur: z.literal('sira-degistir'),
+  tezgah: z.string(), sira: z.array(z.string()), plan: planKaydiSemasi.nullable(), neden: z.string().nullable(),
+  gecikmeOnce: saatDegeri, gecikmeSonra: z.number().nullable(), degisen: z.array(degisenSiparis),
+});
 export const degerlendirmeSonucu = z.discriminatedUnion('tur', [
   planKur, planUygula, planSecenekleri, terminSecenekleri, terminUzatma, malzemeTerminleri, malzemeOneCekme, partiBolme, siparisKari,
-  planIyilestir, oneAl,
+  planIyilestir, oneAl, siraDegistir,
 ]);
 export const degerlendirmeCevabi = z.object({
   calismaSurumu: z.number().int(),

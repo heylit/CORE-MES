@@ -20,7 +20,6 @@ import { canliPlani, useCanliPlan } from './fark.ts';
 import { FarkSeridi } from './ust/FarkSeridi.tsx';
 import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
-import { MOTOR_NOTU } from './ortak.tsx';
 import { Ozet, type OzetDurumu } from './ozet/Ozet.tsx';
 import { panelSecimi } from './secim/kurallar.ts';
 import { SecimPaneli, type PanelSekmesi } from './secim/SecimPaneli.tsx';
@@ -34,7 +33,7 @@ import { Yapilacaklar } from './Yapilacaklar.tsx';
 import './motor.css';
 import { useAtolyeKomutlari, useOtomatikUygula } from './atolye/gonder.ts';
 import { HamleOnizlemesi } from './hamle/Onizleme.tsx';
-import { useHamle } from './hamle/hamle.ts';
+import { HamleBaglami, siraAdimi, useHamle } from './hamle/hamle.ts';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -187,8 +186,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   useOtomatikUygula(o, uyar);
   const { tasi, ekMesai } = useAtolyeKomutlari(o, c);
   const sonKart = gorunum === 'atolye' && !odak ? kartlar[kartlar.length - 1]?.tur ?? null : null;
-  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p });
-  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p };
+  const tuslar = useRef({ gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p, p, hamle });
+  tuslar.current = { gorunumSec, panDegis, ypAc, ypAcik, sec, secim, olcekSec: o.olcekSec, donem, planYaz: yetki.planYaz && !!p, bildir, odak, odakAc, kartDegistir, sonKart, kartDegis, plan: !!p, p, hamle };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
@@ -216,7 +215,11 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       if (k === '?') { dur(); x.panDegis('kl'); return; }
       if (h === 'e') { dur(); x.panDegis('dz'); return; }
       if (h === 'd') { dur(); x.panDegis('sp'); return; }
-      if ((k === '[' || k === ']') && x.secim.adim) { dur(); x.bildir('bilgi', `Kuyrukta sıra: ${MOTOR_NOTU}`); return; }
+      // 2149: kuyrukta bir öne / bir arkaya; motor önizler, kişi uygular.
+      if ((k === '[' || k === ']') && x.secim.adim && x.p) {
+        dur(); const y = siraAdimi(x.hamle, x.p, x.secim.adim, k === '[' ? -1 : 1);
+        if (y.yap) y.yap(); else x.bildir('bilgi', `Kuyrukta sıra: ${y.not}`); return;
+      }
       const g = ({ g: 'genel', h: 'atolye', k: 'kesif', c: 'cizelge', ç: 'cizelge' } as Record<string, TahtaGorunumu>)[h];
       if (g) { dur(); x.gorunumSec(g); }
     };
@@ -249,6 +252,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const iz: RotaIzi | null = rotaU ? { adimlar: (rotaU.rota ?? []).map((x) => ({ k: x.k, yerler: rotaYerleri(x) })), ust: rotaUst.k, ustM: rotaUst.m } : null;
 
   return (
+    <HamleBaglami.Provider value={hamle}>
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
       <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} gecmis={gecmisAc && (() => gecmisAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} hamle={hamle} />
@@ -307,5 +311,6 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} veriAc={veriAc} />
       )}
     </div>
+    </HamleBaglami.Provider>
   );
 }

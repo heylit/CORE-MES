@@ -10,6 +10,7 @@ import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
+import { siraAdimi, useHamleci } from '../hamle/hamle.ts';
 
 // Ayrıntı sekmesinin seçim panelleri: iş (c-masa.betik opDenetci), sipariş (isDenetci), tezgâh (o-tahta.betik tbTezPaneli).
 // Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
@@ -75,6 +76,7 @@ function Adimlar({ o, jid, secili, kilitGoster }: { o: DenetciOzellikleri; jid: 
 
 export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
   const { c, p, cx, komut, planYaz: yaz, planKilitle } = o; const D = c.D;
+  const h = useHamleci();
   const r = p.ops[id]; if (!r) return null;
   const tasiyabilir = !!o.tasi && !r.fas && !r.act;
   const ad = cx.byId[id]; const s = D.siparisler.find((z) => z.id === r.job); const j = p.J[r.job];
@@ -85,6 +87,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
   const kilitle = planKilitle && komut ? () => { komut.degistir('İş kilitlendi', (t) => { t.locks[id] = { m: r.m, S: r.S }; }, { ayrinti: `${id} → ${r.m} ${saatYaz(D, r.S)}`, planKoru: true }); } : null;
   const kilitAc = planKilitle && komut ? () => { komut.degistir('Kilit açıldı', (t) => { delete t.locks[id]; }, { ayrinti: id, planKoru: true }); } : null;
   const kS = kilit && typeof kilit.S === 'number' ? kilit.S : null;
+  const one = siraAdimi(h, p, id, -1), arka = siraAdimi(h, p, id, 1);
   return (
     <section className="tc-pym-panel tc-pym-denetci" aria-label={`${r.job} adım ${kisaId(id)}`}>
       <div className="tc-pym-panel-ust"><h2><span className="tc-pym-mono">{r.job}</span> · adım {kisaId(id)}</h2><Kapat yap={o.secimTemizle} /></div>
@@ -120,8 +123,8 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
             ))}
           </ul>
           <div className="tc-pym-dugmeler">
-            <Dg ad="Bir öne" simge="up" not={i > 0 ? MOTOR_NOTU : 'Kuyruğun başında.'} />
-            <Dg ad="Bir arkaya" simge="down" not={i < q.length - 1 ? MOTOR_NOTU : 'Kuyruğun sonunda.'} />
+            <Dg ad="Bir öne" simge="up" yap={one.yap} not={one.not} />
+            <Dg ad="Bir arkaya" simge="down" yap={arka.yap} not={arka.not} />
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
@@ -22,6 +22,8 @@ import {
 } from './kurallar.ts';
 import { planDisi } from '../../tipler.ts';
 import { gunBaslayanlar, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur } from '../../motor/cizelge/kurallar.ts';
+import { hamleYapisi, useHamleci } from '../../motor/hamle/hamle.ts';
+import { siraTasi } from '../sira/kurallar.ts';
 
 // Kartların gövdeleri (z-komuta kmPlan; za-merkez mzSiparis, mzKuyruk, mzAg). Okurlar; çalışmaya yazan tek yol kararların eylemidir (eylem.ts).
 // Motor isteyen hamleler (öne al, öncelik, sürükleyip sıralama, planı toparla) görünür ve pasiftir (357 b).
@@ -176,6 +178,23 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
   const g = kuyrukGrubu(c, p, b.secim, secilen); const gruplar = kuyrukGruplari(c);
   const tez = D.tezgahlar.filter((m) => m.grup === g).map((m) => m.id);
   const sj = b.secim.adim ? p.ops[b.secim.adim]?.job ?? null : b.secim.siparis; const gun = dilimNo(b.r, now);
+  // 2149: kart aynı sütunda bırakıldığı işin yerine geçer, başka sütunda bırakıldığı işin önüne (boş yere bırakılırsa sona); motor önizler.
+  const h = useHamleci(); const surukle = b.planYaz ? hamleYapisi(h, () => undefined) : { yap: null, not: YETKISIZ };
+  const tutulan = useRef<{ id: string; m: string } | null>(null);
+  const yapabilir = (id: string, m: string) => (cx.byId[id]?.c ?? []).includes(m);
+  const birak = (e: DragEvent, m: string, hedef: string | null, sira: string[]) => {
+    const t = tutulan.current; tutulan.current = null; if (!t || !h) return;
+    e.preventDefault(); e.stopPropagation();
+    if (t.m === m) {
+      if (!hedef) return;
+      const y = siraTasi({ m, ids: sira, ilk: sira }, t.id, hedef, (x) => !!c.locks[x]);
+      if (y === 'sabit') { b.uyar('Sabit işin sırası değişmez.'); return; }
+      if (y) h.sirala(m, y.ids);
+      return;
+    }
+    if (!yapabilir(t.id, m)) { b.uyar(`${t.id} ${m} tezgâhında yapılamaz.`); return; }
+    h.sirala(m, hedef ? [t.id, hedef] : [...sira, t.id]);
+  };
   return (
     <>
       <div className="tc-pyt-arac">
@@ -183,12 +202,17 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
           {gruplar.map((x) => <button key={x} type="button" aria-pressed={x === g} onClick={() => setSecilen(x)}>{x}</button>)}
         </div>
         <small className="tc-pym-kucuk-yazi">
-          {b.planYaz ? `Kartı tutup aynı sütunda sıralamak ya da başka tezgâha bırakmak: ${MOTOR_NOTU} Çalışan ve sabit iş yerinden oynamaz.` : 'Sırayı değiştirme yetkiniz yok; yalnız görürsünüz.'}
+          {b.planYaz ? `Kartı tutup aynı sütunda sıralayın ya da başka tezgâha bırakın; motor önizler.${surukle.yap ? '' : ` ${surukle.not}`} Çalışan ve sabit iş yerinden oynamaz.` : 'Sırayı değiştirme yetkiniz yok; yalnız görürsünüz.'}
         </small>
       </div>
       <div className="tc-pyt-kolonlar">
         {tez.map((m) => {
           const l = kuyrukListesi(p, m, now); const st = s.ist[m] ? tezgahDurumu(s, b.durus, m, b.t) : null; const d = s.dol[m]?.[gun];
+          const sira = l.slice(0, KUYRUK_GOSTERIM).filter((r) => r.S > now).map((r) => r.id);
+          const uzerinde = (e: DragEvent, hedef: string | null) => {
+            const t = tutulan.current; if (!t || t.id === hedef || (hedef && c.locks[hedef]) || (t.m !== m && !yapabilir(t.id, m))) return;
+            e.preventDefault();
+          };
           return (
             <section key={m} className="tc-pyt-kol" aria-label={`${m} kuyruğu`} data-secili={b.secim.tezgah === m ? '' : undefined}>
               <header>
@@ -196,12 +220,16 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
                 <small className="tc-pym-mono" title="Şimdiki dilimde doluluk" data-ton={d != null && d > 0.97 ? 'hata' : undefined}>{d == null ? 'kapalı' : `%${Math.round(d * 100)}`}</small>
                 <small className="tc-pym-mono">{l.length} iş</small>
               </header>
-              <ol>
+              <ol onDragOver={(e) => uzerinde(e, null)} onDrop={(e) => birak(e, m, null, sira)}>
                 {l.length ? l.slice(0, KUYRUK_GOSTERIM).map((r) => {
                   const cal = r.S <= now; const kl = !!c.locks[r.id]; const gec = (p.J[r.job]?.T ?? 0) > 0.05;
                   return (
                     <li key={r.id} data-sabit={kl || cal ? '' : undefined} data-secili={b.secim.adim === r.id ? '' : undefined} data-is={b.secim.adim !== r.id && sj === r.job ? '' : undefined}
-                      ref={degisken({ '--c': `var(--tc-pym-is-${siparisRengi(D, r.job)})` })}>
+                      ref={degisken({ '--c': `var(--tc-pym-is-${siparisRengi(D, r.job)})` })}
+                      draggable={!!surukle.yap && !kl && !cal}
+                      onDragStart={(e) => { tutulan.current = { id: r.id, m }; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', r.id); } catch { /* bazı tarayıcılar reddeder */ } }}
+                      onDragOver={cal ? undefined : (e) => uzerinde(e, r.id)} onDrop={cal ? undefined : (e) => birak(e, m, r.id, sira)}
+                      onDragEnd={() => { tutulan.current = null; }}>
                       <button type="button" onClick={() => b.opSec(r.id)}>
                         <span><b className="tc-pym-mono">{r.id}</b><small className="tc-pym-mono">{saatYaz(D, r.S).slice(6)}</small></span>
                         <small>{cx.byId[r.id]?.ad ?? ''} · {saatYazi(r.C - r.S)}</small>
