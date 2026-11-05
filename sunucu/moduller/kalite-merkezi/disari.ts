@@ -44,3 +44,4 @@ export { acikNcrPartileri } from './servis.ts';
 // Ctrl K kayıt kaynakları (1238): çekirdeğin genel araması NCR ve karar bekleyen hatalı parçayı buradan bulur (ad kuralıyla, kayıt satırı
 // yok). Yetkiyi çekirdek kaynağın `yetki` alanıyla denetler; sonuç kaydı açar, yazma ekrandadır.
 export { kayitAramaKaynaklari } from './servis.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

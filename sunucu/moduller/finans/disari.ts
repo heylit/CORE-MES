@@ -31,3 +31,4 @@ export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId:
   if (b === null || b.yon !== 'gider' || b.durum === 'iptal' || b.firmaId !== firmaId) return null;
   return { tutar: b.tutar, paraBirimi: b.paraBirimi };
 }
+export { malzemeKartiIzleri } from './sorgular.ts';

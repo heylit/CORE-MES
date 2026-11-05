@@ -607,3 +607,4 @@ export const takvimKayitlari = isEmri.takvimKayitlari;
 // Markalı kimlik pilotu (ADR 0025 kural 8, 1580): çağıran modül kimliği bu dönüştürücülerle markalar; imzalar sonraki adımda markalı olur.
 export type { IsEmriKimligi, UretimEmriKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { isEmriKimligi, uretimEmriKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

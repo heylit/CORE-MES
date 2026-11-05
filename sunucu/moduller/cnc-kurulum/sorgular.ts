@@ -3,6 +3,7 @@ import { EMIR_ANAHTARI, EMIR_ANLIK_ONEKI, IS_EMRI_ANLIK_ONEKI } from '#paylasila
 import type { Kayit, TezgahAyari } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { KURULUM_ADIMI } from './kurallar.ts';
 import type { ModelHedefSutunu, ModelSatiri, TezgahAyarSatiri } from './kurallar.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // CNC kurulum kayıt deposunun SQL'i. Sürüm tek sayaçtan gelir.
 
@@ -280,5 +281,16 @@ export async function kayitUstBilgisi(db: Db, anahtar: string): Promise<{ surum:
   return db.tek(
     `SELECT surum::int AS surum, guncelleyen_kisi_id AS "yazanId", ${ISO('guncellendi')} AS yazildi FROM cnc_kurulum_kayit WHERE anahtar = $1`,
     [anahtar],
+  );
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Kurulum kaydı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, min(t.anahtar)::text AS ornek
+       FROM k JOIN cnc_kurulum_kayit t ON jsonb_path_exists(t.deger, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }

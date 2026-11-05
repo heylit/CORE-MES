@@ -3,6 +3,7 @@ import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type {
   Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -1125,4 +1126,54 @@ export function patlatmaSatirlariOku(db: Db, id: number): Promise<PatlatmaSatiri
     `SELECT sira, dugum, katman, malzeme_id AS "malzemeId", rota_revizyonu_id AS "revizyonId", rota_adimi_id AS "rotaAdimiId",
             kaynak_op_no AS "kaynakOpNo", birim_carpani::text AS "birimCarpani", tuketen_dugum AS "tuketenDugum", tuketen_op_no AS "tuketenOpNo"
        FROM rota_patlamis_rota WHERE patlatma_id = $1 ORDER BY sira`, [id]);
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Rota adımı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_adimi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rota bileşeni' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_bileseni t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Gerçekleşen süre' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_gerceklesen_sure t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rota kopya isteği (hedef)' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_kopya_istegi t ON t.hedef_malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rota kopya isteği (kaynak)' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_kopya_istegi t ON t.kaynak_malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Op numarası' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_op_numarasi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Patlamış rota' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_patlamis_rota t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rota patlatma' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_patlatma t ON t.kok_malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rota revizyonu' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_revizyonu t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Talimat taslağı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_talimat_taslagi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Talimat' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_talimati t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Yan ürün' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN rota_yan_urunu t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Adım şartnamesi' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_adim_sartnamesi t ON jsonb_path_exists(t.degerler, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'İş emri şartnamesi' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN rota_is_emri_sartnamesi t ON jsonb_path_exists(t.degerler, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
+  );
 }

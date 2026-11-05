@@ -91,3 +91,4 @@ export const stokMiktariCozucusu = (cozucu: servis.StokMiktariCozucusu): void =>
 export const kaliteDurumuCozucusu = (cozucu: servis.KaliteDurumuCozucusu): void => servis.kaliteDurumuCozucusuKaydet(cozucu);
 // Takvim (891): beklenen teslim günündeki siparişler. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';

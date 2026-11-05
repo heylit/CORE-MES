@@ -6,6 +6,7 @@ import type {
   OgeTuru, OlayIlgilisi, OlayTuru, Sinif, TalepDurumu,
 } from '#paylasilan/sozlesme/degisiklik-yonetimi.ts';
 import type { Cevaplar } from './kurallar.ts';
+import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Değişiklik yönetiminin SQL'i. Her durum değiştiren yazma sürüm koşulludur ve ana satırın sürümünü artırır.
 
@@ -591,4 +592,33 @@ export async function oncekiYil(db: Db): Promise<{ baslangic: string; bitis: str
   return (await db.tek<{ baslangic: string; bitis: string }>(
     `SELECT (current_date - interval '12 months')::date::text AS baslangic, current_date::text AS bitis`,
   )) ?? { baslangic: '', bitis: '' };
+}
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Değişiklik emri (son ürün)' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_emir t ON t.gecerlilik_son_urun_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Değişiklik emri kalemi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_emir_kalemi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Konfigürasyon' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_konfigurasyon t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Değişiklik talebi kalemi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_talep_kalemi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Değişiklik olayı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_olay t ON jsonb_path_exists(t.alanlar, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Değişiklik talebi cevabı' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_talep t ON jsonb_path_exists(t.cevaplar, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Değişiklik talebi etkisi' AS kayit, 'olasi' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN degisiklik_yonetimi_talep t ON jsonb_path_exists(t.etki, $4::jsonpath, jsonb_build_object('no', k.no, 'kod', k.kod, 'kimlik', k.kimlik)) GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
+  );
 }

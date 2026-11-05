@@ -7,6 +7,7 @@ import { zamanMetni } from '#cekirdek/zaman.ts';
 import { aramaSade, basDeseni, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, SAYIM_DISI_KONUMLAR, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Sabit tür adları; kullanıcı girdisi değildir.
 const AYRILMIS_SQL = AYRILMIS_KONUM_TURLERI.map((t) => `'${t}'`).join(', ');
@@ -2063,3 +2064,62 @@ export const kartSktOzetleri = (db: Db, idler: readonly number[], bugun: string)
             COALESCE(sum(b.miktar) FILTER (WHERE b.miktar > 0 AND sk.son_kullanma < $2::date), 0)::text AS "gecmisMiktar"
        FROM stok_bakiye b LEFT JOIN stok_parti_son_kullanma sk ON sk.parti_id = b.parti_id
       WHERE b.malzeme_id = ANY($1::int[]) GROUP BY b.malzeme_id`, [idler, bugun]);
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'Bakiye' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_bakiye t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Bakiye defteri bekleyeni' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN stok_bakiye_defter_bekleyen t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Defter farkı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_defter_farki t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Stok hareketi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_hareketi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Mal kabul satırı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_mal_kabul_satiri t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Ambalaj' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN stok_malzeme_ambalaji t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Malzeme ayarı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, NULL::text AS ornek
+       FROM k JOIN stok_malzeme_ayari t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Malzeme isteği' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_malzeme_istegi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Parti' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_parti t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Refakat partisi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_refakat_partisi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rezerve' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_rezerve t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Rezerve kaydı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_rezerve_kaydi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Sayım farkı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_sayim_farki t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Sepet satırı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_sepet_satiri t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Teslim' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_teslim t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Toplama adımı' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN stok_toplama_adimi t ON t.malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Toplama kalemi' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.toplama_id)::text AS ornek
+       FROM k JOIN stok_toplama_kalemi t ON t.malzeme_id = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
+  );
+}

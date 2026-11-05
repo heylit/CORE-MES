@@ -82,3 +82,4 @@ export { takvimKayitlari } from './servis.ts';
 
 // Ctrl K tek arama ucunun sevkiyat kaynağı (1233 sözleşmesi, 1239): emir no ile sevk kalemleri, irsaliye no ile sevk işi.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [sevkAramaKaynagi];
+export { malzemeKartiIzleri } from './sorgular.ts';

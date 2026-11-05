@@ -3,6 +3,7 @@ import type { Dilim } from '#cekirdek/liste.ts';
 import type { EmirDurumu, EmirKaydi, EmirTuru, HataliKarari, KatilimKapanisi, KayitOlayi, SayimTuru, SonOlayTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 import type { AdimOnculu } from './kurallar.ts';
+import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
@@ -2737,3 +2738,20 @@ export const adiminAcikMakineleri = (db: Db, isEmriId: number): Promise<{ makine
       WHERE is_emri_id = $1 AND makine_id IS NOT NULL AND bitis IS NULL ORDER BY baslama, id`,
     [isEmriId],
   );
+
+// Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.
+export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiAnahtari[]): Promise<MalzemeKartiIzi[]> {
+  if (kartlar.length === 0) return [];
+  return db.sorgu<MalzemeKartiIzi>(
+    `WITH k AS (SELECT * FROM unnest($1::int[], $2::text[], $3::text[]) AS k(no, kod, kimlik))
+     SELECT k.no, 'İş emri (düğüm)' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN uretim_emirleri_is_emri t ON t.dugum_malzeme_id = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'İş emri bileşeni' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN uretim_emirleri_is_emri_bileseni t ON t.malzeme_no = k.no GROUP BY k.no
+      UNION ALL
+     SELECT k.no, 'Üretim emri' AS kayit, 'kesin' AS tur, count(*)::int AS adet, min(t.id)::text AS ornek
+       FROM k JOIN uretim_emri t ON t.malzeme_no = k.no GROUP BY k.no`,
+    [...malzemeKartiIzParametreleri(kartlar)],
+  );
+}

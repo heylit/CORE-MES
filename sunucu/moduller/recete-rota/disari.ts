@@ -33,3 +33,4 @@ export type { EmirKaydi } from './kurallar.ts';
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
   { tur: 'rota', yetki: ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'], ara: rotaAra },
 ];
+export { malzemeKartiIzleri } from './sorgular.ts';

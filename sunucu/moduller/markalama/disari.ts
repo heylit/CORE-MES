@@ -6,3 +6,4 @@ import { seriKayitAra } from './servis.ts';
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [
   { tur: 'seri', yetki: ['sayfa.markalama'], ara: (db, istek) => seriKayitAra(db, istek.q, istek.sinir) },
 ];
+export { malzemeKartiIzleri } from './sorgular.ts';

@@ -50,3 +50,4 @@ export async function makineModelTurleri(db: Db, makineIdleri: readonly number[]
 // başına yüklü cepleri verir; ömür hedefi yoksa kalan pay ve durum null'dur.
 export { takimOmruDurumlari, takimSayimiYansit } from './servis.ts';
 export type { TakimOmruDurumu, TakimSayimOlayi } from './servis.ts';
+export { malzemeKartiIzleri } from './sorgular.ts';
