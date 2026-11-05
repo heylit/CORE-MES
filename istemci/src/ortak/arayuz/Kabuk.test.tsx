@@ -510,6 +510,23 @@ describe('Kabuk', () => {
     expect(kabuk()?.hasAttribute('data-ust-yuva')).toBe(true);
   });
 
+  it('2137-1 a: seritte isaretli eylem uste yuva doluyken gorunur sarmalayicida, isaretsiz eylem sarmalayicisiz cizilir', () => {
+    const okut = { anahtar: 'okut', sira: 1, islem: 'oturum' as const, seritte: true, dugme: () => <button type="button">Okut</button> };
+    const arama = { anahtar: 'diger', sira: 2, islem: 'oturum' as const, dugme: () => <button type="button">Diğer</button> };
+    const { container } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={[]} ustEylemler={[okut, arama]}>
+          <KabukUstYuvasi><span>terminal şeridi</span></KabukUstYuvasi>
+        </Kabuk>
+      </MemoryRouter>,
+    );
+    expect(container.querySelector('.tc-kabuk')?.hasAttribute('data-ust-yuva')).toBe(true);
+    // kabuk.css: yuvanın ardındaki öğeler gizlenir, .tc-kabuk-seritte gizlenmez (jsdom stil uygulamaz, sınıf denetlenir).
+    expect(screen.getByRole('button', { name: 'Okut' }).parentElement?.classList.contains('tc-kabuk-seritte')).toBe(true);
+    // Ret: işaretsiz eylem sarmalanmaz, şeritli sayfada gizli kalır.
+    expect(screen.getByRole('button', { name: 'Diğer' }).closest('.tc-kabuk-seritte')).toBeNull();
+  });
+
   it('2052-1 a: kabuk dışında üst yuva içeriği yerinde çizer', () => {
     render(<div data-testid="yer"><KabukUstYuvasi><span>yerinde</span></KabukUstYuvasi></div>);
     expect(screen.getByText('yerinde').closest('[data-testid="yer"]')).not.toBeNull();

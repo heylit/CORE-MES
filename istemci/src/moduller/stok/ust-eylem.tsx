@@ -874,5 +874,6 @@ function MalzemeIste({ kutu, okunan, istasyonId }: { kutu: TeslimKutusuCevabi; o
 }
 
 export const ustEylemler: readonly UstEylem[] = [
-  { anahtar: 'malzeme-teslim', sira: 100, islem: 'stok.istek', dugme: TeslimDugmesi },
+  // Terminalde de görünür (2137-1 a): operatör teslim ve malzeme isteğine terminalden ulaşır.
+  { anahtar: 'malzeme-teslim', sira: 100, islem: 'stok.istek', seritte: true, dugme: TeslimDugmesi },
 ];

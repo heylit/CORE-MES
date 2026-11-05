@@ -498,8 +498,9 @@ export function Kabuk({
             sonYerler={sonYerListesi}
           />
           <IsPaneli gruplar={olayGruplari} />
+          {/* Sarmalayıcı yalnız sayfa şeridi üst çubuktayken anlam taşır (kabuk.css); başka sayfada görünüm değişmez. */}
           {gorunenler.filter((e) => e.yer !== 'sol').map((e) => (e.hesapMaddesi === undefined
-            ? <e.dugme key={e.anahtar} />
+            ? (e.seritte === true ? <span key={e.anahtar} className="tc-kabuk-seritte"><e.dugme /></span> : <e.dugme key={e.anahtar} />)
             : (
               <span key={e.anahtar} className={e.yer === 'hesap' ? 'tc-kabuk-yalniz-hesapta' : 'tc-kabuk-hesapta'}>
                 <e.dugme acmaIstegi={acmaIstekleri[e.anahtar] ?? 0} />
