@@ -162,6 +162,9 @@ export function BelgeSayfasi() {
                   <div className="tc-cz-rev-arac">
                     {r.id !== gosterilen?.id && <Dugme simge="eye" onClick={() => { seciliYaz(r.id); }}>Görüntüle</Dugme>}
                     <IndirDugmesi belgeId={belge.id} r={r} />
+                    {degisir && r.dosyaTuru === 'pdf' && (
+                      <Dugme simge="edit" onClick={() => { void yonlendir(`/cizimler/belge/${belge.id}/duzenle/${r.id}`); }} aria-label={`Revizyon ${r.harf} PDF'ini düzenle`}>PDF düzenle</Dugme>
+                    )}
                     {yayinlar && belge.aktif && r.durum !== 'yayinda' && <Dugme tur="birincil" simge="check" onClick={() => { acikYaz({ yayinla: r }); }}>Yayınla</Dugme>}
                     {yayinlar && belge.aktif && r.durum === 'yayinda' && onizlemeTuruMu(r.dosyaTuru) && r.onizlemeKareSayisi === 0 && (
                       <Dugme

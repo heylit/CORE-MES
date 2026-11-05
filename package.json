@@ -67,6 +67,7 @@
     "htm": "3.1.1",
     "libcascade": "3.1.0",
     "occt-import-js": "0.0.23",
+    "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.4.299",
     "pg": "^8.13.1",
     "qrcode-generator": "1.4.4",
