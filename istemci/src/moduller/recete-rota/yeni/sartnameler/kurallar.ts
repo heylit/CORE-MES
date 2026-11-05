@@ -1,6 +1,6 @@
 import type {
   AtifGirdisi, KontrolNoktasi, ParametreDegeri, ParametreTuru, SartnameKapsami, SartnameParametresiSatiri, SartnameSurumu, TalimatAdimi, TalimatAdimiGirdisi,
-  TalimatMedyasi,
+  TalimatAsamasi, TalimatMedyasi,
 } from '#paylasilan/sozlesme/rota.ts';
 
 // Şartname ve talimat sayfasının saf kuralları: etiketler, adım taslağı ve sunucuya gidecek girdi, medya sınırları.
@@ -17,6 +17,11 @@ export const MEDYA_SINIRI = { resimBayt: 10 * 1024 ** 2, videoBayt: 200 * 1024 *
 
 export type KontrolTuru = KontrolNoktasi['tur'];
 export const KONTROL_ADLARI: Readonly<Record<KontrolTuru, string>> = { yok: 'Yok', onay: 'Onay', olcum: 'Ölçüm', foto: 'Fotoğraf', secim: 'Seçim' };
+// Aşama terminalde hangi listede açılacağını söyler (2098-1 a): ön hazırlık başka iş sürerken, hazırlık ayarda, üretim işin kendisi.
+export const ASAMA_ADLARI: Readonly<Record<TalimatAsamasi, string>> = { on_hazirlik: 'Üretim öncesi hazırlık', hazirlik: 'Üretim hazırlığı', uretim: 'Üretim' };
+export const ASAMA_IPUCLARI: Readonly<Record<TalimatAsamasi, string>> = {
+  on_hazirlik: 'Makine başka işi işlerken yapılır: malzeme, takım, aparat.', hazirlik: 'Ayar başlayınca açılır: bağlama, sıfır, kuru çalıştırma.', uretim: 'İş sürerken.',
+};
 export const KAPSAM_ADLARI: Readonly<Record<SartnameKapsami, string>> = { ic: 'iç', fason: 'fason', ikisi: 'iç ve fason' };
 export const SURUM_DURUMU_ADLARI: Readonly<Record<SartnameSurumu['durum'], string>> = { taslak: 'taslak', yururlukte: 'yürürlükte', eski: 'eski' };
 export const ATIF_ROLU_ADLARI: Readonly<Record<AtifGirdisi['rol'], string>> = {
@@ -68,18 +73,19 @@ export interface AdimTaslagi {
   metin: string;
   kontrol: KontrolNoktasi;
   zorunlu: boolean;
+  asama: TalimatAsamasi;
   medya: TalimatMedyasi[];
 }
 
 let sayac = 0;
 const yeniAnahtar = (): string => { sayac += 1; return `a${String(sayac)}`; };
 
-export const bosAdim = (): AdimTaslagi => ({ anahtar: yeniAnahtar(), baslik: '', metin: '', kontrol: { tur: 'yok' }, zorunlu: false, medya: [] });
+export const bosAdim = (): AdimTaslagi => ({ anahtar: yeniAnahtar(), baslik: '', metin: '', kontrol: { tur: 'yok' }, zorunlu: false, asama: 'uretim', medya: [] });
 export const taslagaCevir = (a: TalimatAdimi): AdimTaslagi => ({
-  anahtar: yeniAnahtar(), baslik: a.baslik, metin: a.metin ?? '', kontrol: a.kontrol, zorunlu: a.zorunlu, medya: a.medya,
+  anahtar: yeniAnahtar(), baslik: a.baslik, metin: a.metin ?? '', kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama, medya: a.medya,
 });
 export const girdiyeCevir = (a: AdimTaslagi): TalimatAdimiGirdisi => ({
-  baslik: a.baslik.trim(), metin: a.metin.trim() === '' ? null : a.metin.trim(), kontrol: a.kontrol, zorunlu: a.zorunlu,
+  baslik: a.baslik.trim(), metin: a.metin.trim() === '' ? null : a.metin.trim(), kontrol: a.kontrol, zorunlu: a.zorunlu, asama: a.asama,
   medya: a.medya.map((m) => ({ ozet: m.ozet, ad: m.ad })),
 });
 
