@@ -4,6 +4,7 @@ import type {
   CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
+import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 
 export type IstasyonDurumu = 'yok' | 'pasif' | 'aktif';
 
@@ -180,9 +181,25 @@ export const toplamAsimiIhlali = (mevcut: number, fark: number): string | null =
 
 export const ADIM_YOK = 'Adım bu emirde bulunamadı.';
 export const ADIM_BASLAMAMIS = 'Adımlar yalnız başlamış emirde işaretlenir.';
+export const ON_HAZIRLIK_KAPALI = 'Ön hazırlık adımları yalnız planlı ya da başlamış emirde işaretlenir.';
+export const HAZIRLIK_AYARSIZ = 'Üretim hazırlığı adımları ayar başlayınca işaretlenir.';
 
-// Adım işaretleme çalışma durumundan bağımsızdır (çalışırken, duraklıyken, durmuşken); yalnız başlamış emirde.
-export const adimIhlali = (durum: EmirDurumu): string | null => (durum === 'basladi' ? null : ADIM_BASLAMAMIS);
+// Adım işaretleme çalışma durumundan bağımsızdır (çalışırken, duraklıyken, durmuşken). Üretim adımı yalnız başlamış emirde.
+// Ön hazırlık başka iş sürerken yapılır: planlı emirde de işaretlenir, emrin durumu değişmez (2098-2 teyit).
+// Üretim hazırlığı ayarda yapılır ve ayar emri başlatmaz: planlı emirde ayar açılmışsa işaretlenir (2098-10).
+export const adimIhlali = (durum: EmirDurumu, asama: TalimatAsamasi = 'uretim', ayarVar = false): string | null => {
+  if (durum === 'basladi') return null;
+  if (asama === 'on_hazirlik') return durum === 'planli' ? null : ON_HAZIRLIK_KAPALI;
+  if (asama === 'hazirlik' && durum === 'planli') return ayarVar ? null : HAZIRLIK_AYARSIZ;
+  return ADIM_BASLAMAMIS;
+};
+
+export const NOT_ROTASIZ = 'Adım notu yalnız rotalı emirde bırakılır.';
+export const NOT_KAPALI = 'Adım notu yalnız açık emirde bırakılır.';
+export const adimNotuIhlali = (durum: EmirDurumu, rotali: boolean): string | null => {
+  if (!rotali) return NOT_ROTASIZ;
+  return durum === 'planli' || durum === 'basladi' ? null : NOT_KAPALI;
+};
 
 // Aynı duruma yeniden ayarlama olay yazmaz: çift dokunuş defteri kirletmez.
 export const adimDegisiyorMu = (suAnTamam: boolean, istenen: boolean): boolean => suAnTamam !== istenen;

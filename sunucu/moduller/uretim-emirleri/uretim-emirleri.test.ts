@@ -2032,7 +2032,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       await assert.rejects(vt().sorgu(`TRUNCATE ${tablo}`), izinYok, `${tablo} TRUNCATE (uygulama)`);
     }
     // Yabancı anahtar tek tabloyu boşaltmayı önce durdurur; ikisi birlikte boşaltılınca tetikleyici ölçülür.
-    await assert.rejects(sahip().sorgu('TRUNCATE emir_adimi, emir_adimi_olayi'), /yalnız ekleme/, 'TRUNCATE (sahip)');
+    await assert.rejects(sahip().sorgu('TRUNCATE emir_adimi, emir_adimi_olayi, emir_adimi_kaniti'), /yalnız ekleme/, 'TRUNCATE (sahip)');
     assert.equal(await adimOlaySayisi(emir.id), 1);
   });
 

@@ -6,7 +6,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
-  AcikAdim, AdimCevabi, AdimPaylariCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
+  AcikAdim, AdimCevabi, AdimKanitiGirdisi, AdimPaylariCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
@@ -15,7 +15,7 @@ import {
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
   ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, MAKINE_SECILMELI, TERMINAL_FASON, acmaIstasyonIhlali,
-  adimDegisiyorMu, adimIhlali, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, kendiligindenMakine, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
+  adimDegisiyorMu, adimIhlali, adimNotuIhlali, NOT_ROTASIZ, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, kendiligindenMakine, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
@@ -261,9 +261,22 @@ async function adimlariCevir(db: Db, emirId: number): Promise<EmirAdimi[]> {
   const satirlar: AdimSatiri[] = await sorgular.adimlariGetir(db, emirId);
   if (satirlar.length === 0) return [];
   const adlar = await adlariAl(db);
-  return satirlar.map(({ tamamlayanId, ...kalan }) => ({
+  const isEmriId = satirlar[0]?.isEmriId ?? null;
+  const anahtar = isEmriId === null ? null : await sorgular.notAnahtari(db, isEmriId);
+  const notlar = anahtar === null ? [] : await sorgular.adimNotlari(db, emirId, anahtar, satirlar.map((a) => a.sira));
+  // Terminal adımın resim ve videosunu rotanın talimat ucundan bu künyeyle okur; emir açılırken sabitlenen sürümdür.
+  const kunye = anahtar === null || anahtar.talimatSurumu === null ? null : { urunId: anahtar.malzemeNo, opNo: anahtar.opNo, surum: anahtar.talimatSurumu };
+  const not = (sira: number, buEmir: boolean) => {
+    const n = notlar.find((x) => x.sira === sira && x.buEmir === buEmir);
+    return n === undefined ? null : { metin: n.metin, yazan: adli(adlar.kisi, n.kisiId, 'Kişi'), zaman: n.zaman, emirId: n.emirId };
+  };
+  return satirlar.map(({ tamamlayanId, isEmriId: _ie, kanitOlcum, kanitSecim, kanitFoto, ...kalan }) => ({
     ...kalan,
     tamamlayan: tamamlayanId === null ? null : adli(adlar.kisi, tamamlayanId, 'Kişi'),
+    kanit: kanitOlcum === null && kanitSecim === null && kanitFoto === null ? null : { olcum: kanitOlcum, secim: kanitSecim, foto: kanitFoto },
+    gecenNot: not(kalan.sira, false),
+    buNot: not(kalan.sira, true),
+    talimat: kunye,
   }));
 }
 
@@ -999,16 +1012,37 @@ export async function calismaDevral(db: Db, kisiId: number, id: number, isEmriId
 }
 
 // Sıra zorunlu değildir, işaret geri alınabilir, adımlar bitirmeyi engellemez. Aynı duruma yeniden ayarlama olay yazmaz.
-export async function adimTamamla(db: Db, kisiId: number, emirId: number, adimId: number, tamam: boolean): Promise<AdimCevabi> {
+// Kanıt yalnız tamamlamayla yazılır; zaten tamam olan adıma gelen kanıt yazılmaz (yeniden ölçmek için önce geri alınır).
+export async function adimTamamla(
+  db: Db, kisiId: number, emirId: number, adimId: number, tamam: boolean, kanit?: AdimKanitiGirdisi,
+): Promise<AdimCevabi> {
   const emir = await kilitliEmir(db, emirId);
   await kapsaminda(db, kisiId, istasyonu(emir));
   if (!(await sorgular.adimEmirdeVarMi(db, emirId, adimId))) throw bulunamadi(ADIM_YOK);
-  const ihlal = adimIhlali(emir.durum);
-  if (ihlal !== null) throw cakisma(ihlal);
   const suAn = (await sorgular.adimlariGetir(db, emirId)).find((a) => a.id === adimId);
+  const asama = suAn?.asama ?? 'uretim';
+  const ayarVar = emir.durum === 'planli' && asama === 'hazirlik' ? await sorgular.ayarVarMi(db, emirId, suAn?.isEmriId ?? null) : false;
+  const ihlal = adimIhlali(emir.durum, asama, ayarVar);
+  if (ihlal !== null) throw cakisma(ihlal);
   if (suAn !== undefined && adimDegisiyorMu(suAn.tamam, tamam)) {
-    await sorgular.adimOlayiEkle(db, adimId, kisiId, tamam ? 'tamamla' : 'geri-al', await sorgular.anAl(db));
+    const olayId = await sorgular.adimOlayiEkle(db, adimId, kisiId, tamam ? 'tamamla' : 'geri-al', await sorgular.anAl(db));
+    if (tamam && kanit !== undefined) {
+      await sorgular.adimKanitiEkle(db, olayId, { olcum: kanit.olcum ?? null, secim: kanit.secim ?? null, foto: kanit.foto ?? null });
+    }
   }
+  return { emir: (await emirdenCevap(db, emirId)).emir, adimlar: await adimlariCevir(db, emirId) };
+}
+
+// 2098-9 a: "sonraki sefere not". Not ürün + OP + adım sırasına yazılır; aynı adımda sonraki emirde "geçen sefer" olarak okunur.
+export async function adimNotuYaz(db: Db, kisiId: number, emirId: number, adimId: number, metin: string): Promise<AdimCevabi> {
+  const emir = await kilitliEmir(db, emirId);
+  await kapsaminda(db, kisiId, istasyonu(emir));
+  const adim = (await sorgular.adimlariGetir(db, emirId)).find((a) => a.id === adimId);
+  if (adim === undefined) throw bulunamadi(ADIM_YOK);
+  const anahtar = adim.isEmriId === null ? null : await sorgular.notAnahtari(db, adim.isEmriId);
+  const ihlal = adimNotuIhlali(emir.durum, anahtar !== null);
+  if (ihlal !== null || anahtar === null) throw cakisma(ihlal ?? NOT_ROTASIZ);
+  await sorgular.adimNotuEkle(db, { ...anahtar, emirId, sira: adim.sira, kisiId, metin, an: await sorgular.anAl(db) });
   return { emir: (await emirdenCevap(db, emirId)).emir, adimlar: await adimlariCevir(db, emirId) };
 }
 

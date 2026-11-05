@@ -11,7 +11,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirAyrintiCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimCevabi, adimliBitenlerCevabi, adimliEmirCevabi, hazirlikCevabi, adimliListeCevabi, adimliOzetCevabi, emirAyrintiCevabi, emirCevabi, ozetCevabi, durusDagilimiCevabi, emirlerCevabi, izlemeListeCevabi, gunlukUretimCevabi, partiBolCevabi, sonOlaylarCevabi, refakatKartiCevabi, sayimGovdesi, sureOzetiCevabi, siradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AdimliBitenlerCevabi, AdimliEmirAyrintisi, EmirTuru, HazirlikCevabi, HazirlikMaddesi, AdimliListeCevabi, DurusDagilimiCevabi, Emir, EmirAyrintiCevabi, GunlukUretimCevabi, OzetCevabi, PartiBolCevabi, RefakatKartiCevabi, SureOzetiCevabi, SiradakiFasonCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -25,7 +25,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
+  ADIM_BASLAMAMIS, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -474,6 +474,49 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await karar(ie2)).adet, 2);
     assert.deepEqual(await bekleyen(), [[ie1, 10, 0], [ie2, 20, 0]]);
     assert.equal((await o().vt.tx((db) => adimKararSayaclari(db, []))).size, 0);
+  });
+
+  test('2098d: ön hazırlık planlı emirde, üretim hazırlığı ayardan sonra işaretlenir, üretim adımı başlamadan işaretlenmez; kanıt ve geçen sefer notu', async () => {
+    const ist = await istasyonKur();
+    const m = await makineKur(ist);
+    const liste = { talimatSurumu: 2, kontrolListesi: [
+      { ad: 'Malzemeyi al', aciklama: null, asama: 'on_hazirlik' as const },
+      { ad: 'Hizala', aciklama: null, asama: 'hazirlik' as const },
+      { ad: 'Ölç', aciklama: null },
+    ] };
+    const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
+    type AdimC = { adimlar: { id: number; asama: string; tamam: boolean; kanit: unknown; talimat: unknown; gecenNot: { metin: string } | null; buNot: { metin: string } | null }[] } & Hata;
+    const adimlar = async (emir = id) => (await istek<AdimC>('operator', 'GET', `/uretim-emirleri/${emir}`)).govde.adimlar;
+    const isaretle = (emir: number, adimId: number, govde: unknown) => istek<AdimC>('operator', 'POST', `/uretim-emirleri/${emir}/adimlar/${adimId}/tamamla`, govde);
+    const [on, hz, ur] = (await adimlar()).map((a) => a.id) as [number, number, number];
+
+    const c1 = await isaretle(id, on, { tamam: true, kanit: { foto: 'a'.repeat(64) } });
+    assert.equal(c1.durum, 200, JSON.stringify(c1.govde));
+    adimCevabi.parse(c1.govde);
+    assert.deepEqual(c1.govde.adimlar[0]?.kanit, { olcum: null, secim: null, foto: 'a'.repeat(64) });
+    assert.deepEqual(c1.govde.adimlar[0]?.talimat, { urunId: urunNo, opNo: 10, surum: 2 }, 'terminal medyayı bu künyeyle rotadan okur');
+    assert.equal((await ayrinti(id)).durum, 'planli', 'ön hazırlık emrin durumunu değiştirmez');
+    assert.equal((await isaretle(id, hz, { tamam: true })).govde.mesaj, HAZIRLIK_AYARSIZ);
+    assert.equal((await isaretle(id, ur, { tamam: true })).govde.mesaj, ADIM_BASLAMAMIS);
+    assert.equal((await terminal(`/${id}/ayar`)).durum, 200);
+    const c2 = await isaretle(id, hz, { tamam: true, kanit: { olcum: 0.015 } });
+    assert.equal(c2.durum, 200, JSON.stringify(c2.govde));
+    assert.deepEqual(c2.govde.adimlar[1]?.kanit, { olcum: 0.015, secim: null, foto: null });
+    assert.equal((await isaretle(id, hz, { tamam: true, kanit: {} })).durum, 400, 'boş kanıt reddedilir');
+    assert.equal((await isaretle(id, ur, { tamam: true })).govde.mesaj, ADIM_BASLAMAMIS, 'ayar üretim adımını açmaz');
+    // Geri alınan adımın kanıtı görünmez; yeniden tamamlanınca yeni kanıt gelir.
+    await isaretle(id, hz, { tamam: false });
+    assert.equal((await adimlar())[1]?.kanit, null);
+
+    const not = await istek<AdimC>('operator', 'POST', `/uretim-emirleri/${id}/adimlar/${on}/not`, { metin: 'Kasa 2 rafın arkasında' });
+    assert.equal(not.durum, 200, JSON.stringify(not.govde));
+    assert.deepEqual([not.govde.adimlar[0]?.buNot?.metin, not.govde.adimlar[0]?.gecenNot], ['Kasa 2 rafın arkasında', null]);
+    assert.equal((await istek<Hata>('operator', 'POST', `/uretim-emirleri/${id}/adimlar/${on}/not`, { metin: ' ' })).durum, 400);
+    const { uretimEmriId: sonraki } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
+    const ikinci = await adimlar(sonraki);
+    assert.deepEqual([ikinci[0]?.gecenNot?.metin, ikinci[0]?.buNot, ikinci[1]?.gecenNot], ['Kasa 2 rafın arkasında', null, null], 'not aynı ürün, OP ve sırada sonraki emre geçer');
+    await assert.rejects(o().sahip.sorgu('DELETE FROM emir_adim_notu'), /yalnız ekleme/);
+    await assert.rejects(o().sahip.sorgu('UPDATE emir_adimi_kaniti SET olcum = 1'), /yalnız ekleme/);
   });
 
   test('ayar ve süre özeti: ayar planlı işte bir kez yazılır, başlatma kapatır; özet hazırlık, birim süre ve 1\'er dizisini verir', async () => {
