@@ -795,6 +795,143 @@ export function faturalariAyikla(govde: unknown): FaturaKaydi[] | null {
   return [...kayitlar.values()];
 }
 
+/* ---------------- Logo'dan kart, stok ve cari okuması (kartlar 2116, 2118) ---------------- */
+
+// Yardımcının sözleşmesi (araclar/logo-yardimcisi Islemler.cs): sayfa { data, next }, cari arama dizi, tek cari nesne.
+// Sütun karşılıkları gerçek Logo'da doğrulanmadı (kurulum/logo-yardimcisi.md); biçim yardımcınındır.
+export interface Sayfa<T> {
+  kayitlar: T[];
+  // Sonraki sayfanın imleci; null: son sayfa.
+  sonraki: number | null;
+}
+
+export interface LogoMalzemeKarti {
+  logoKayitNo: number;
+  kod: string;
+  ad: string | null;
+  aciklama2: string | null;
+  aciklama3: string | null;
+  // ITEMS.CARDTYPE; TMI türüne karşılığı malzemelerin işidir.
+  kartTuru: number | null;
+  birimSeti: string | null;
+  aktif: boolean;
+}
+
+export interface LogoStokSatiri {
+  malzemeKodu: string;
+  ambarNo: number;
+  // Ondalık metin; sayıya çevrilmez.
+  miktar: string;
+}
+
+export interface LogoCari {
+  logoKayitNo: number;
+  kod: string;
+  ad: string | null;
+  // CLCARD.CARDTYPE (VARSAYIM: 1 alıcı, 2 satıcı, 3 alıcı + satıcı).
+  kartTuru: number | null;
+  vergiNo: string | null;
+  tcKimlikNo: string | null;
+  vergiDairesi: string | null;
+  adres: string | null;
+  ilce: string | null;
+  il: string | null;
+  postaKodu: string | null;
+  telefon: string | null;
+  ePosta: string | null;
+  aktif: boolean;
+}
+
+function sayfaAyikla<T>(govde: unknown, satir: (o: Record<string, unknown>) => T | null): Sayfa<T> | null {
+  if (!kayitMi(govde) || !Array.isArray(govde['data'])) return null;
+  const n = govde['next'];
+  if (n !== null && n !== undefined && !(typeof n === 'number' && Number.isSafeInteger(n) && n > 0)) return null;
+  const kayitlar: T[] = [];
+  for (const o of govde['data'] as unknown[]) {
+    const k = kayitMi(o) ? satir(o) : null;
+    if (k !== null) kayitlar.push(k);
+  }
+  return { kayitlar, sonraki: typeof n === 'number' ? n : null };
+}
+
+const aktifMi = (o: Record<string, unknown>): boolean => o['active'] !== false;
+
+// Kaydı ya da kodu olmayan satır atlanır (anahtarı yok); sayfa biçimi bozuksa null (imleç ilerlemez, satır yazılmaz).
+export function malzemeKartlariniAyikla(govde: unknown): Sayfa<LogoMalzemeKarti> | null {
+  return sayfaAyikla(govde, (o) => {
+    const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+    const kod = ilkMetin(o, ['code'], 64);
+    if (logoKayitNo === null || kod === null) return null;
+    const tur = ilkSayi(o, ['cardType']);
+    return {
+      logoKayitNo, kod, ad: ilkMetin(o, ['name'], 200), aciklama2: ilkMetin(o, ['name3'], 200), aciklama3: ilkMetin(o, ['name4'], 200),
+      kartTuru: tur !== null && Number.isSafeInteger(tur) ? tur : null, birimSeti: ilkMetin(o, ['unitSetCode'], 40), aktif: aktifMi(o),
+    };
+  });
+}
+
+export function stokToplamlariniAyikla(govde: unknown): Sayfa<LogoStokSatiri> | null {
+  return sayfaAyikla(govde, (o) => {
+    const malzemeKodu = ilkMetin(o, ['itemCode'], 64);
+    const ambarNo = ilkSayi(o, ['warehouseNr']);
+    const miktar = ilkSayi(o, ['onHand']);
+    if (malzemeKodu === null || ambarNo === null || !Number.isSafeInteger(ambarNo) || ambarNo < 0 || miktar === null) return null;
+    return { malzemeKodu, ambarNo, miktar: String(miktar) };
+  });
+}
+
+export function cariKaydiniAyikla(o: unknown): LogoCari | null {
+  if (!kayitMi(o)) return null;
+  const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+  const kod = ilkMetin(o, ['code'], 64);
+  if (logoKayitNo === null || kod === null) return null;
+  const tur = ilkSayi(o, ['cardType']);
+  const adres = [ilkMetin(o, ['address1'], 500), ilkMetin(o, ['address2'], 500)].filter((a) => a !== null).join(' ');
+  return {
+    logoKayitNo, kod, ad: ilkMetin(o, ['name'], 200), kartTuru: tur !== null && Number.isSafeInteger(tur) ? tur : null,
+    vergiNo: ilkMetin(o, ['taxNr'], 30), tcKimlikNo: ilkMetin(o, ['tckNo'], 30), vergiDairesi: ilkMetin(o, ['taxOffice'], 100),
+    adres: adres === '' ? null : adres.slice(0, 500), ilce: ilkMetin(o, ['town'], 100), il: ilkMetin(o, ['city'], 100),
+    postaKodu: ilkMetin(o, ['postCode'], 20), telefon: ilkMetin(o, ['phone'], 40), ePosta: ilkMetin(o, ['email'], 200), aktif: aktifMi(o),
+  };
+}
+
+export function cariListesiniAyikla(govde: unknown): LogoCari[] | null {
+  if (!Array.isArray(govde)) return null;
+  return govde.map(cariKaydiniAyikla).filter((c): c is LogoCari => c !== null);
+}
+
+// Cari arama metni: yardımcı en az 3, en çok 100 karakter kabul eder.
+export const CARI_ARAMA_EN_AZ = 3;
+export const CARI_ARAMA_EN_COK = 100;
+// Sayfalı okumanın tam turu en çok saatte bir başlar; tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
+export const SAYFALI_OKUMA_TAZELEME_MS = 60 * 60_000;
+
+export function sayfaliOkumaSirasi(i: { sonRef: number; sonTamam: Date | null } | null, simdi: Date): 'devam' | 'bastan' | 'bekle' {
+  if (i !== null && i.sonRef > 0) return 'devam';
+  if (i === null || i.sonTamam === null) return 'bastan';
+  return simdi.getTime() - i.sonTamam.getTime() >= SAYFALI_OKUMA_TAZELEME_MS ? 'bastan' : 'bekle';
+}
+
+/* ---------------- Malzeme kodu eşlemesi (2116-3 c) ---------------- */
+
+// Logo'ya giden belgenin malzeme kodları: kartın kendi kodu ve satırlardaki kodlar.
+type KodluBelge = { stokKodu?: string | null; satirlar?: readonly { stokKodu?: string | null }[] };
+
+export function belgeStokKodlari(b: KodluBelge): string[] {
+  const kodlar = [b.stokKodu, ...(b.satirlar ?? []).map((x) => x.stokKodu)];
+  return [...new Set(kodlar.filter((k): k is string => typeof k === 'string' && k.trim() !== '').map((k) => k.trim()))];
+}
+
+// Eşlemesi olan TMI stok kodu Logo koduyla değişir; eşlemesi olmayan kod aynen kalır. Belgenin başka alanına dokunulmaz.
+export function logoKodlarinaCevir<T extends KodluBelge>(b: T, harita: ReadonlyMap<string, string>): T {
+  if (harita.size === 0) return b;
+  const cevir = <K extends string | null | undefined>(k: K): K => (typeof k === 'string' ? ((harita.get(k.trim()) ?? k) as K) : k);
+  const yeni: T = { ...b };
+  if ('stokKodu' in b) yeni.stokKodu = cevir(b.stokKodu);
+  if (b.satirlar) yeni.satirlar = b.satirlar.map((x) => ('stokKodu' in x ? { ...x, stokKodu: cevir(x.stokKodu) } : x));
+  return yeni;
+}
+
 /* ---------------- Malzeme fişi (kaynağı stok; 294 c, 298 a) ---------------- */
 
 // Sarf 12 ve üretimden giriş 13 köprü notundadır. DOĞRULANMADI (298 a, gerçek Logo'da denenecek): fire 11, ambar transferi 25,
@@ -972,7 +1109,7 @@ export interface LogoAkisTanimi {
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
-  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura';
+  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'cari';
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
@@ -1003,6 +1140,12 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Saatte bir Arp/list ve Lookup/warehouses okunup önbelleğe (kod, ad) yazılır. Sayı okunan kayıt sayısıdır.' },
   { anahtar: 'fatura', yon: 'logo-tmi', baslik: 'Fatura ve irsaliye', kaynak: 'bagli', ayarlar: ['logo.fatura-okumasi'], belgeTurleri: [], okuma: 'fatura',
     aciklama: 'Logo\'ya giden satın alma siparişlerinin faturaları (PurchaseOrder/{no}/invoices) sırayla okunup saklanır; Logo\'ya hiç yazılmaz. Okunacak sipariş, bu sürümden sonra Logo\'da açılan satın alma siparişleridir. Sayı okunan fatura sayısıdır.' },
+  { anahtar: 'malzeme-karti-okuma', yon: 'logo-tmi', baslik: 'Malzeme kartı okuması', kaynak: 'bagli', ayarlar: ['logo.malzeme-okumasi'], belgeTurleri: [], okuma: 'malzeme-karti',
+    aciklama: 'Logo malzeme kartları (Material/list) en çok saatte bir, sayfa sayfa okunur ve aynaya yazılır; Malzemeler\'de "Logo\'dan gelenler" listesi buradan beslenir. TMI kartı kendiliğinden değişmez, Logo\'ya hiçbir şey gitmez. Sayı son turda okunan kart sayısıdır.' },
+  { anahtar: 'stok-okuma', yon: 'logo-tmi', baslik: 'Stok toplamı okuması', kaynak: 'bagli', ayarlar: ['logo.stok-okumasi'], belgeTurleri: [], okuma: 'stok',
+    aciklama: 'Logo\'daki ambar başına eldeki miktar (Stock/totals) en çok saatte bir okunur; yalnız TMI stoğuyla karşılaştırma ve bir kezlik açılış devri içindir, TMI stoğuna kendiliğinden yazılmaz. Sayı son turda okunan satır sayısıdır.' },
+  { anahtar: 'cari-arama', yon: 'logo-tmi', baslik: 'Cari arama (müşteri ve tedarikçi)', kaynak: 'bagli', ayarlar: ['logo.cari-aramasi'], belgeTurleri: [], okuma: 'cari',
+    aciklama: 'Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi kod, ünvan ya da vergi numarasıyla aranır (Arp/search) ve seçilen cari forma doldurulur; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
 ];
 
 export type LogoAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi' | 'kodda-yok';

@@ -1,6 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, cevabiYorumla, faturalariAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, varMiAdi } from './kurallar.ts';
-import type { FaturaKaydi, HizmetYonu, KopruSonucu, LogoFisTuru, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi } from './kurallar.ts';
+import { agHatasiniYorumla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, varMiAdi } from './kurallar.ts';
+import type { FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
@@ -42,6 +42,12 @@ export interface KopruIstemcisi {
   ambarListesiOku(): Promise<OkumaSonucu<ListeKaydi[]>>;
   // Siparişin faturaları; 404 "fatura yok" sayılır (VARSAYIM).
   faturaOku(siparisNo: string): Promise<OkumaSonucu<FaturaKaydi[]>>;
+  // 2116: malzeme kartları ve ambar başına stok toplamı, kart kaydı sırasıyla sayfa sayfa (since = önceki sayfanın imleci).
+  malzemeKartlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeKarti>>>;
+  stokToplamlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoStokSatiri>>>;
+  // 2118: kullanımdaki carilerde arama (en çok 20) ve tek cari; olmayan cari null.
+  cariAra(metin: string): Promise<OkumaSonucu<LogoCari[]>>;
+  cariOku(kod: string): Promise<OkumaSonucu<LogoCari | null>>;
   // Malzeme fişi (türler ve uçlar kurallar.ts MALZEME_FISI_TURU, MALZEME_FISI_UCU). Açmada kalkan yalnız niyettir (yardımcının numarayla
   // bulma ucu TMI'de kullanılmıyor).
   malzemeFisiEkle(tur: LogoFisTuru, govde: Record<string, unknown>): Promise<KopruSonucu>;
@@ -190,6 +196,10 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     cariListesiOku: () => oku('/api/Arp/list', (g) => listeKayitlariniAyikla(g, 'cari')),
     ambarListesiOku: () => oku('/api/Lookup/warehouses', (g) => listeKayitlariniAyikla(g, 'ambar')),
     faturaOku: (no) => oku(`/api/PurchaseOrder/${encodeURIComponent(no)}/invoices`, faturalariAyikla, []),
+    malzemeKartlariOku: (since) => oku(`/api/Material/list?since=${since}`, malzemeKartlariniAyikla),
+    stokToplamlariOku: (since) => oku(`/api/Stock/totals?since=${since}`, stokToplamlariniAyikla),
+    cariAra: (metin) => oku(`/api/Arp/search?q=${encodeURIComponent(metin)}`, cariListesiniAyikla),
+    cariOku: (kod) => oku<LogoCari | null>(`/api/Arp/card/${encodeURIComponent(kod)}`, (g) => cariKaydiniAyikla(g), null),
     async malzemeFisiEkle(tur, govde) {
       return yorumla(await istek('POST', `/api/MaterialSlip/Add${MALZEME_FISI_UCU[tur]}`, govde));
     },

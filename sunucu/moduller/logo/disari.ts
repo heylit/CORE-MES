@@ -4,3 +4,10 @@ export { malzemeFisiLogoDurumlari } from './servis.ts';
 export { gecerliBirimSetiKodlari } from './servis.ts';
 // Ters yöndeki bağ (2089-2 a): malzemeler yeni stok kodu verirken Logo'da kullanılan kodları bununla atlar; sunucu/kablolama.ts bağlar.
 export { logodaKullanilanMalzemeKodlari } from './servis.ts';
+// 2116 (kararlar 2116-2 a, 2116-3 c): malzemeler "Logo'dan gelenler" listesini aynadan okur, Logo'dan alınan kartın kod eşlemesini yazar;
+// stok Logo toplamını karşılaştırma ve açılış devri için okur. Hepsini sunucu/kablolama.ts bağlar; yetki denetlemezler.
+export { logodakiMalzemeKartlari, logodakiStokToplamlari, malzemeEslemesiYaz, tmiStokKodlari } from './servis.ts';
+export type { CariOkumasi } from './servis.ts';
+export type { LogoCari, LogoMalzemeKarti, LogoStokSatiri } from './kurallar.ts';
+// 2118: müşteri-tedarikçi Logo carisini arar ve tek cariyi okur (yalnız GET); sunucu/kablolama.ts bağlar.
+export { logodaCariAra, logodanCariOku } from './isler.ts';

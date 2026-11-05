@@ -16,7 +16,7 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 // GET ve DELETE /api/DemandFiche/peg/byOrder/{ref}. Kart güncelleme: POST /api/Material/UpdateRich, /api/{Purchase|Sales}Service/UpdateRich.
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
-// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404). Malzeme fişi: POST
+// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
 // /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Hepsinin cevap biçimi VARSAYIM.
 
 const FIS_UCLARI = Object.values(MALZEME_FISI_UCU).join('|');
@@ -91,6 +91,12 @@ export interface SahteKopru {
   ambarlar: unknown;
   faturalar: Map<string, unknown[]>;
   malzemeFisleri: { uc: string; no: string; ref: number; govde: unknown }[];
+  // 2116 ve 2118 okumaları (yardımcının sözleşmesi): Logo malzeme kartları ve stok satırları kayıt sırasıyla sayfa sayfa (sayfaBoyu),
+  // cariler. Okuma istekleri `istekler`de görünür; Logo'ya yazmazlar.
+  logoKartlari: Record<string, unknown>[];
+  logoStoklari: Record<string, unknown>[];
+  logoCarileri: Record<string, unknown>[];
+  sayfaBoyu: number;
   kapat(): Promise<void>;
 }
 
@@ -153,6 +159,10 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     ambarlar: [{ nr: 0, name: 'Merkez' }],
     faturalar: new Map(),
     malzemeFisleri: [],
+    logoKartlari: [],
+    logoStoklari: [],
+    logoCarileri: [],
+    sayfaBoyu: 500,
     istekler: [],
     birimSetleri: [
       { code: '05', name: 'ADET' }, { code: '06', name: 'KG' }, { code: '07', name: 'M' },
@@ -221,6 +231,31 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       }
       if (istek.method === 'GET' && yol === '/api/Arp/list') {
         json(cevap, 200, kopru.cariListesi);
+        return;
+      }
+      if (istek.method === 'GET' && (yol === '/api/Material/list' || yol === '/api/Stock/totals')) {
+        const since = Number(new URL(istek.url ?? '', 'http://sahte').searchParams.get('since') ?? 0);
+        const kartlar = kopru.logoKartlari.filter((x) => Number(x['logicalRef']) > since)
+          .sort((a, b) => Number(a['logicalRef']) - Number(b['logicalRef'])).slice(0, kopru.sayfaBoyu);
+        const sonraki = kartlar.length >= kopru.sayfaBoyu ? Number(kartlar.at(-1)?.['logicalRef']) : null;
+        const refler = new Set(kartlar.map((x) => Number(x['logicalRef'])));
+        const data = yol === '/api/Material/list' ? kartlar : kopru.logoStoklari.filter((x) => refler.has(Number(x['itemRef'])));
+        json(cevap, 200, { data, next: sonraki });
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/Arp/search') {
+        const q = (new URL(istek.url ?? '', 'http://sahte').searchParams.get('q') ?? '').trim();
+        if (q.length < 3) { json(cevap, 400, { success: false, logicalRef: 0, error: 'q', validate: null }); return; }
+        const icinde = (d: unknown): boolean => typeof d === 'string' && d.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr'));
+        json(cevap, 200, kopru.logoCarileri.filter((c) => c['active'] !== false
+          && (icinde(c['code']) || icinde(c['name']) || c['taxNr'] === q || c['tckNo'] === q)).slice(0, 20));
+        return;
+      }
+      const cariKarti = /^\/api\/Arp\/card\/(.+)$/.exec(yol);
+      if (istek.method === 'GET' && cariKarti) {
+        const c = kopru.logoCarileri.find((x) => x['code'] === decodeURIComponent(cariKarti[1] ?? ''));
+        if (c) json(cevap, 200, c);
+        else json(cevap, 404, { success: false, logicalRef: 0, error: 'Arp not found', validate: null });
         return;
       }
       const faturalar = /^\/api\/PurchaseOrder\/(.+)\/invoices$/.exec(yol);

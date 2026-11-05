@@ -14,7 +14,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { BELIRSIZ_BEKLEME_MS } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
-import { logodaKullanilanMalzemeKodlari, malzemeKoduTuru, malzemeTuru, yeniSurecBellegi } from './servis.ts';
+import { logodaKullanilanMalzemeKodlari, malzemeEslemesiYaz, malzemeKoduTuru, malzemeTuru, yeniSurecBellegi } from './servis.ts';
 import { birimSetiOkumasi, kopruListesiniYaz } from './sorgular.ts';
 import type { SurecBellegi, TurOrtami, TurSonucu, TxAcan } from './servis.ts';
 
@@ -207,6 +207,21 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     // Yinelenen turlar gönderilmiş kartı yeniden göndermez.
     for (let i = 0; i < 3; i++) { simdi += BELIRSIZ_BEKLEME_MS; assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'bos' }); }
     assert.equal(acmaSayisi(k.kod), 1);
+  });
+
+  test('LGB-31 (2116-3 c) eşlemesi olan kart Logo\'ya Logo koduyla gider: var mı sorgusu ve açma aynı kodla; TMI kodu Logo\'ya hiç gitmez', async () => {
+    await kuyruguBosalt();
+    const k = await aktifKart();
+    const logoKodu = `LG.ESL.${k.no}`;
+    await vt().tx((db) => malzemeEslemesiYaz(db, { stokKodu: k.kod, logoKodu, logoKayitNo: 800000 + k.no }));
+    const bellek = yeniSurecBellegi();
+    assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'niyet', no: k.no });
+    simdi += 5000;
+    assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'gonderim', no: k.no, sonuc: 'gonderildi' });
+    assert.ok(kopru.kartlar.get(logoKodu), 'kart Logo kodunda açıldı');
+    assert.equal(kopru.kartlar.get(k.kod), undefined);
+    assert.equal(istekSayisi(k.kod), 0, 'TMI kodu hiçbir istekte yok');
+    assert.equal((await kartLogo(k.no))?.durum, 'gonderildi');
   });
 
   test('LGB-8 gönderilen karşılık: tur sırasında karşılık değişse de karta Logo\'ya giden tür ve birim seti yazılır', async () => {
@@ -515,7 +530,7 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
   test('LGB-1 anahtar açık + değişken yok: istek çıkmaz, iş "bekliyor" döner; neden sağlık ayrıntısında görünür', async () => {
     const k = await aktifKart();
     assert.equal(process.env['TMIV2_LOGO_KOPRU_ADRESI'], undefined, 'test ortamında köprü değişkeni yok');
-    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi']);
+    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi', 'logo-malzeme-karti-okumasi', 'logo-stok-okumasi']);
     const { cagri } = await agsiz(async () => {
       assert.deepEqual(await tur({ kopru: null, bellek: yeniSurecBellegi(), saat: () => new Date(simdi) }), { tur: 'ortam-degiskeni-yok' });
       assert.equal(await isiBirKezCalistir(vt(), isler[0]!), 'bekliyor');

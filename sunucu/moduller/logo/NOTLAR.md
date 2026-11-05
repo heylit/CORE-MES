@@ -31,3 +31,16 @@
   siler (Logo'da satır silinmez) ve sonraki turda aynı numarayla açar, boşsa siler. Sayaç işaret değil sayaçtır: istek sürerken gelen sayım kaybolmaz.
   VARSAYIM: Logo boş fişi kabul etmez (bu yüzden boş fiş TMI'dedir); fiş tarihi fişin TMI'de açıldığı andır; gerçek Logo'da silme denenmedi.
 - Tüm Logo işleri `isler.ts` `sirali` kuyruğundan geçer: ayrı zamanlayıcıda koşsalar da köprüye aynı anda iki istek gitmez (tek COM oturumu).
+
+## Logo'dan çekme (kartlar 2116, 2118; kararlar 2116-1..5, 2118-1..3)
+- Malzeme kartı ve stok toplamı ayrı anahtarla (`logo.malzeme-okumasi`, `logo.stok-okumasi`, kapalı gelir) sayfa sayfa okunur: iş turunda tek sayfa,
+  imleç `logo_okuma_imleci`'nde; tam tur en çok saatte bir başlar. Okunan yalnız aynaya yazılır (`logo_malzeme_karti`, `logo_stok_toplami`); TMI kartına
+  ve stoğuna işlemek malzemelerin ve stoğun işidir (2116-1 a: TMI sahiptir). Son sayfada turda görülmeyen satır silinir; boş tam tur aynayı boşaltmaz
+  (okuma kazası olabilir). Logo'ya hiçbir şey gitmez.
+- Döngü yok: gönderim kuyruğu yalnız `bekliyor` ve `hata` kartları alır; Logo'dan alınan kart `gonderildi` yazılır, açılış devri fiş olarak gitmez (malzemeler, stok).
+- Kod eşlemesi (2116-3 c): Logo kodu TMI biçimine uymayan kart TMI'de kendi koduyla açılır, `logo_malzeme_eslemesi` yazılır (değişmez, silinmez). Logo'ya giden
+  her belge (kart açma ve güncelleme, sipariş, düzenleme, talep, karşılama, satış teklifi, malzeme fişi) `logoKoduyla` ile çevrilir; okunan satır (mal kabul, fatura)
+  `tmiStokKodlari` ile geri çevrilir. Eşlemesi olmayan kod aynen gider.
+- Cari arama (2118) kullanıcının isteğiyle, yalnız GET, `logo.cari-aramasi` açıkken; arama 3-100 karakter, en çok 20 sonuç, kullanım dışı cari gelmez.
+  Cari kodu Logo'daki gibi alınır (2118-1 a); bağlama ve form doldurma müşteri-tedarikçinindir.
+- DOĞRULANMADI: yardımcı uçlarının gerçek Logo'daki sütun karşılıkları (ITEMS, GNTOTST, CLCARD; `kurulum/logo-yardimcisi.md`).
