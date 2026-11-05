@@ -9,6 +9,7 @@ import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
 import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayar, AyarlarCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { ayarDegistiBildir } from './ayar-olaylari.ts';
 import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
 import { ayarDegeriniOku, ayarDegeriniSil, ayarDegeriniYaz, ayarDegerleriniOku, ayarKilitle, sayacArtir, simdikiYilAy } from './sorgular.ts';
 
@@ -162,6 +163,7 @@ export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham:
       kisiId, yontem: 'POST', yol: kaynak?.yol ?? DEGISTIR_YOLU, parametre: { anahtar }, govde: { eski, yeni },
       modul: kaynak?.modul ?? 'ayarlar', yetki: kaynak?.yetki ?? 'ayarlar.yaz',
     });
+    await ayarDegistiBildir(db, { anahtar, kisiId });
   }
   return ayarGorunumu(anahtar, yeni);
 }
