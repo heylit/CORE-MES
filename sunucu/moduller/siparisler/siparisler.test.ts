@@ -14,6 +14,8 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { siparisinSatirOzetleri, siparisSatiriOzetleri } from './disari.ts';
 import type { BeklenenTahsilatlarCevabi } from '#paylasilan/sozlesme/finans.ts';
 import { kablola } from '../../kablolama.ts';
+import { satisSevkleriCozucusu } from '../finans/disari.ts';
+import { siparisinSevkleri } from '../sevkiyat/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -419,6 +421,18 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     const ao = await onayla(a);
     const t = await satiri(a.id);
     assert.deepEqual([t?.tutar, t?.kalan, t?.sevkTarihi, t?.sevkKaynagi, t?.vadeGun, t?.vade, t?.siparisNo], ['1500.00', '1500.00', '2026-11-15', 'termin', 60, '2027-01-14', a.no]);
+    // 2132-1 teyit: sevk günü okumada sevkiyattan gelir; planlanan gün vadeyi oynatır, yola çıkan iş (erken sevk) öne çeker, iptal iş sayılmaz.
+    const sevkler: { isId: number; tarih: string; belgeNo: string | null; durum: string; iptal: boolean }[] = [];
+    satisSevkleriCozucusu(async (_db, id) => (id === a.id ? sevkler : []));
+    try {
+      const sevk = async () => { const x = await satiri(a.id); return [x?.sevkTarihi, x?.sevkKaynagi, x?.vade]; };
+      sevkler.push({ isId: 1, tarih: '2026-11-20', belgeNo: null, durum: 'planlandi', iptal: false }, { isId: 2, tarih: '2026-11-10', belgeNo: null, durum: 'yolda', iptal: true });
+      assert.deepEqual(await sevk(), ['2026-11-20', 'plan', '2027-01-19']);
+      sevkler.push({ isId: 3, tarih: '2026-11-12', belgeNo: 'IRS-1', durum: 'yolda', iptal: false });
+      assert.deepEqual(await sevk(), ['2026-11-12', 'gercek', '2027-01-11']);
+    } finally {
+      satisSevkleriCozucusu(siparisinSevkleri);
+    }
     // Sipariş vadesi boşsa firmanın varsayılan vadesi, o da boşsa 0.
     const vadeliFirma = (await gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: `Deneme Firma ${(sayac += 1)}`, tur: 'musteri', vadeGunu: 45 })).json<{ firma: { id: number } }>().firma.id;
     const b = await onayla(await siparisAc({ firmaId: vadeliFirma }));

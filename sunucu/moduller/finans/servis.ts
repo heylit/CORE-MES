@@ -30,7 +30,7 @@ import type {
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import {
-  belgeDuzeltmeHatasi, cekGecisiHatasi, iadeAsimi, iadeHatasi, satisBagiHatasi, satisSevkleri, sevkBagiHatasi, siparisBagiHatasi, siparisOdemePlaniHatasi, dagitimHesapla, farkTutar, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
+  belgeDuzeltmeHatasi, cekGecisiHatasi, tahsilatSevki, iadeAsimi, iadeHatasi, satisBagiHatasi, satisSevkleri, sevkBagiHatasi, siparisBagiHatasi, siparisOdemePlaniHatasi, dagitimHesapla, farkTutar, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
   caprazKurHatasi, defterFarki, gecerliKdvOranlari, genelKdvOrani, hesapPasifHatasi, kdvDahildenNet, kdvOraniGecerliMi, mahsupTutarlari,
   genelGiderSaatBasi, maliyetYazimi, amortismanPlani, ayEkle, aylikAmortisman, birikmisAmortisman, beklenenOdemeKorumasi, gunEkle, yaklasanSiparisTahmini,
 } from './kurallar.ts';
@@ -965,11 +965,19 @@ export const beklenenTahsilatYaz = (db: Db, kisiId: number, t: BeklenenTahsilatY
   korumali(() => sorgular.beklenenTahsilatYaz(db, t, kisiId));
 export const beklenenTahsilatKaldir = (db: Db, siparisId: number): Promise<void> =>
   korumali(async () => { await sorgular.beklenenTahsilatSil(db, siparisId); });
+// Sevk günü okumada sevkiyattan gelir (kablolamadaki sipariş sevkleri çözücüsü): planlanan ya da gerçek sevk değişince vade
+// kendiliğinden oynar. Kayıttaki gün siparişin terminidir; çözücü yoksa o kullanılır. Sipariş başına bir çözücü çağrısı yapılır.
 export async function beklenenTahsilatlar(db: Db): Promise<BeklenenTahsilatlarCevabi> {
   const bugun = tesisGunu(new Date());
   const satirlar = await sorgular.beklenenTahsilatlar(db, bugun);
   const adlar = await firmaAdlari(db, satirlar.map((x) => x.firmaId));
-  return { tahsilatlar: satirlar.map((x) => ({ ...x, firmaAdi: adlar.get(x.firmaId) ?? '', gecikmis: x.vade < bugun })) };
+  const tahsilatlar = [];
+  for (const x of satirlar) {
+    const sevk = satisSevkleriCozucu === null ? { tarih: x.sevkTarihi, kaynak: x.sevkKaynagi } : tahsilatSevki(x.sevkTarihi, await satisSevkleriCozucu(db, x.siparisId));
+    const vade = new Date(Date.parse(`${sevk.tarih}T00:00:00Z`) + x.vadeGun * 86_400_000).toISOString().slice(0, 10);
+    tahsilatlar.push({ ...x, sevkTarihi: sevk.tarih, sevkKaynagi: sevk.kaynak, vade, firmaAdi: adlar.get(x.firmaId) ?? '', gecikmis: vade < bugun });
+  }
+  return { tahsilatlar: tahsilatlar.sort((a, b) => (a.vade < b.vade ? -1 : a.vade > b.vade ? 1 : a.id - b.id)) };
 }
 
 // ---- Sabit kıymet ve amortisman (yönetim amaçlı; Logo'ya gitmez) ----

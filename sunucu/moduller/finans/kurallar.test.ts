@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Db } from '#cekirdek/db.ts';
 import { takvimKayitlari } from './disari.ts';
-import { faizSec, pasifeAlmaEngeli, vergiSonGunu, vergiTakvimi } from './kurallar.ts';
+import { faizSec, pasifeAlmaEngeli, tahsilatSevki, vergiSonGunu, vergiTakvimi } from './kurallar.ts';
 import {
   asiyorMu, belgeDuzeltmeHatasi, cekGecisiHatasi, dagitimHesapla, firmaEsle, firmaYonaUygunMu, geriAlinanDurum, hesapAcilisHatasi,
   hesapPasifHatasi, kdvOraniGecerliMi, mahsupTutarlari,
@@ -342,4 +342,12 @@ test('1700 b, 1725 a: faizSec ayardaki birimi alır, o birimde oran yoksa öbür
   assert.equal(faizSec('gunluk', aylik, undefined)?.birim, 'aylik');
   assert.equal(faizSec('aylik', undefined, undefined), null);
   assert.equal(faizSec('gunluk', undefined, undefined), null);
+});
+
+test('2132-1: tahsilatın sevk günü [iş yok: termin, planlı: en erken plan, yola çıkan ya da tamamlanan: en erken gerçek, iptal sayılmaz]', () => {
+  const is = (tarih: string, durum: string, iptal = false) => ({ tarih, durum, iptal });
+  assert.deepEqual(tahsilatSevki('2026-11-15', []), { tarih: '2026-11-15', kaynak: 'termin' });
+  assert.deepEqual(tahsilatSevki('2026-11-15', [is('2026-11-30', 'havuzda'), is('2026-11-20', 'planlandi')]), { tarih: '2026-11-20', kaynak: 'plan' });
+  assert.deepEqual(tahsilatSevki('2026-11-15', [is('2026-11-20', 'planlandi'), is('2026-11-25', 'tamamlandi'), is('2026-11-22', 'yolda')]), { tarih: '2026-11-22', kaynak: 'gercek' });
+  assert.deepEqual(tahsilatSevki('2026-11-15', [is('2026-11-10', 'yolda', true)]), { tarih: '2026-11-15', kaynak: 'termin' });
 });

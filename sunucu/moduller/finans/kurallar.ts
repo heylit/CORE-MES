@@ -57,6 +57,17 @@ export function gecerliKdvOranlari(oranlar: readonly KdvOraniKaydi[], tarih: str
 }
 export const genelKdvOrani = (oranlar: readonly KdvOraniKaydi[], tarih: string): string | null => gecerliKdvOranlari(oranlar, tarih).at(-1) ?? null;
 
+// 2132-1 teyit: beklenen tahsilatın sevk günü. İptal edilmemiş sevk işlerinden yola çıkmış ya da tamamlanmış olanın en erken günü
+// (gerçek sevk; plandan erken çıkan iş vadeyi öne çeker), yoksa planlanan en erken gün, iş yoksa siparişin termini.
+export function tahsilatSevki(termin: string, sevkler: readonly { tarih: string; durum: string; iptal: boolean }[]): { tarih: string; kaynak: 'termin' | 'plan' | 'gercek' } {
+  const acik = sevkler.filter((x) => !x.iptal);
+  const enErken = (l: readonly { tarih: string }[]) => l.map((x) => x.tarih.slice(0, 10)).sort()[0];
+  const gercek = enErken(acik.filter((x) => x.durum === 'yolda' || x.durum === 'tamamlandi'));
+  if (gercek !== undefined) return { tarih: gercek, kaynak: 'gercek' };
+  const plan = enErken(acik);
+  return plan !== undefined ? { tarih: plan, kaynak: 'plan' } : { tarih: termin, kaynak: 'termin' };
+}
+
 // FNS-51: satış yalnız müşteri ya da "ikisi", alış yalnız tedarikçi ya da "ikisi" türündeki firmaya açılır.
 export function firmaYonaUygunMu(tur: FirmaTuru, yon: Yon): boolean {
   return tur === 'ikisi' || (yon === 'gelir' ? tur === 'musteri' : tur === 'tedarikci');
