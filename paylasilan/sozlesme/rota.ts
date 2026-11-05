@@ -340,6 +340,9 @@ export const seceneklerCevabi = z.object({
 
 // Adımlı talimatın her adımı bir kontrol noktası taşıyabilir; zorunlu nokta geçilmeden terminal sonraki adıma geçirmez.
 export const KONTROL_TURLERI = ['yok', 'onay', 'olcum', 'foto', 'secim'] as const;
+// Adımın aşaması (2098-1 a): üretim öncesi hazırlık başka iş sürerken, hazırlık ayarda, üretim işin kendisidir. Eski adımlar üretimdir.
+export const TALIMAT_ASAMALARI = ['on_hazirlik', 'hazirlik', 'uretim'] as const;
+export const VARSAYILAN_TALIMAT_ASAMASI = 'uretim';
 // İş emri kontrol listesi en çok 30 maddedir; adım başlığı madde adı olur, sayılar bu yüzden ona eşit.
 export const AZAMI_TALIMAT_ADIMI = 30;
 export const AZAMI_ADIM_BASLIGI = 120;
@@ -369,12 +372,14 @@ export const talimatAdimiGirdisi = z.object({
   kontrol: kontrolSemasi,
   zorunlu: z.boolean(),
   medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).default([]),
+  asama: z.enum(TALIMAT_ASAMALARI).default(VARSAYILAN_TALIMAT_ASAMASI),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
 export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
 export const talimatAdimiSemasi = z.object({
   sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
+  asama: z.enum(TALIMAT_ASAMALARI),
 });
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
@@ -772,6 +777,7 @@ export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend
 export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
 export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
 export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
+export type TalimatAsamasi = (typeof TALIMAT_ASAMALARI)[number];
 export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
 export type TalimatTaslakKaydetGovdesi = z.input<typeof talimatTaslakKaydetGovdesi>;

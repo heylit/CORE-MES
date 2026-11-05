@@ -1,4 +1,4 @@
-import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami } from '#paylasilan/sozlesme/rota.ts';
+import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 
@@ -919,7 +919,9 @@ export function sartnameOnayEngeli(durumlar: readonly AdimSartnameDurumu[]): str
 
 /* ---------------- adım adım talimat (989 a, 993 a) ---------------- */
 
-export interface TalimatAdimiYazisi { baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: readonly { ozet: string; ad: string }[] }
+export interface TalimatAdimiYazisi {
+  baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: readonly { ozet: string; ad: string }[]; asama: TalimatAsamasi;
+}
 
 // Şemanın tek başına göremediği adım kuralları; hata yoksa null.
 export function talimatAdimiHatasi(a: TalimatAdimiYazisi): string | null {
@@ -958,17 +960,22 @@ export const adimliTalimatMetni = (adimlar: readonly { baslik: string }[]): stri
 export const EMIR_ACIKLAMASI_EN_COK = 300;
 
 // Adımlı sürümde kontrol listesi maddesi adımın başlığı, açıklaması adımın metnidir (emir adımı açıklaması en çok 300 karakter).
-export function adimliKontrolListesi(adimlar: readonly { baslik: string; metin: string | null }[]): { ad: string; aciklama: string | null }[] {
+// Aşama maddeyle emre gider (2098-1 a): terminal hazırlık listelerini emrin kendi kopyasından kurar.
+export function adimliKontrolListesi(
+  adimlar: readonly { baslik: string; metin: string | null; asama: TalimatAsamasi }[],
+): { ad: string; aciklama: string | null; asama: TalimatAsamasi }[] {
   return adimlar.map((a) => ({
-    ad: a.baslik,
+    ad: a.baslik, asama: a.asama,
     aciklama: a.metin === null || a.metin.length <= EMIR_ACIKLAMASI_EN_COK ? a.metin : `${a.metin.slice(0, EMIR_ACIKLAMASI_EN_COK - 1)}…`,
   }));
 }
 
 // Düz metinle yazılmış eski sürüm tek adımdır: başlık ilk dolu satır, metin bütün talimat; kontrol noktası yok (993 a).
-export function eskiTalimatAdimi(metin: string): { sira: number; baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: [] } {
+export function eskiTalimatAdimi(metin: string): {
+  sira: number; baslik: string; metin: string | null; kontrol: KontrolNoktasi; zorunlu: boolean; medya: []; asama: TalimatAsamasi;
+} {
   const ilk = metin.split(/\r?\n/).map((x) => x.trim()).find((x) => x !== '') ?? 'Talimat';
-  return { sira: 1, baslik: ilk.slice(0, KONTROL_SATIRI_EN_COK), metin, kontrol: { tur: 'yok' }, zorunlu: false, medya: [] };
+  return { sira: 1, baslik: ilk.slice(0, KONTROL_SATIRI_EN_COK), metin, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim' };
 }
 
 // Dosya türünden medya türü; resim ve video dışı tür medya olamaz (null).
