@@ -78,7 +78,7 @@ describe('planlama değerlendirmesi: hesap', () => {
   test('PD-01: her tur sözleşmenin biçiminde döner; şimdi sunucunun anından (09:00), aynı girdi aynı sonucu verir', async () => {
     const istekler: DegerlendirmeIstegi[] = [
       { tur: 'plan-kur' }, { tur: 'plan-uygula', isler: ['O1'] }, { tur: 'plan-secenekleri' }, { tur: 'termin-secenekleri', siparisId: 'O2' }, { tur: 'termin-uzatma', gun: 2 }, { tur: 'malzeme-terminleri' },
-      { tur: 'malzeme-one-cekme' }, { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }, { tur: 'siparis-kari' },
+      { tur: 'malzeme-one-cekme' }, { tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] },
     ];
     for (const istek of istekler) {
       const a = await dene(istek);
@@ -119,18 +119,6 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.ok(s.satirlar.some((x) => x.secenek === '14-gun'));
   });
 
-  test('PD-05: sipariş maliyeti tezgâh ücretinden ve malzeme fiyatından: O1 10 adet × 0,5 sa × 750, malzeme 20 kg × 10; tutar yoksa kâr null', async () => {
-    const s = sonuc(await dene({ tur: 'siparis-kari' }));
-    if (s.tur !== 'siparis-kari') return assert.fail(s.tur);
-    const o1 = s.satirlar.find((x) => x.siparisId === 'O1');
-    assert.equal(o1?.planda, true);
-    assert.equal(o1?.isleme, 10 * 0.5 * 750);
-    assert.equal(o1?.malzeme, 200);
-    assert.equal(o1?.tutar, null);
-    assert.equal(o1?.kar, null);
-    assert.equal(o1?.net, null);
-  });
-
   test('PD-06: partiyi böl: darboğaz adımı ve partiler; adetsiz istek yalnız darboğazı verir', async () => {
     const yalniz = sonuc(await dene({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: null }));
     if (yalniz.tur !== 'parti-bolme') return assert.fail(yalniz.tur);
@@ -146,12 +134,11 @@ describe('planlama değerlendirmesi: hesap', () => {
   test('PD-07: reddedilenler: adet toplamı tutmayan bölme, çalışmada olmayan sipariş, plan gereken turde plansız çalışma; çalışma yoksa null', async () => {
     assert.deepEqual(await dene({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 7] }), { hata: 'adet' });
     assert.deepEqual(await dene({ tur: 'termin-secenekleri', siparisId: 'YOK' }), { hata: 'siparis-yok' });
-    assert.deepEqual(await dene({ tur: 'siparis-kari' }, calismaKur()), { hata: 'plan-yok' });
     assert.deepEqual(await dene({ tur: 'malzeme-terminleri' }, calismaKur()), { hata: 'plan-yok' });
     assert.equal(await dene({ tur: 'plan-secenekleri' }, null), null);
   });
 
-  test('PD-08: maliyeti görmeyende TL alanları null, saat ve plan kalır; sipariş kârı hiç dönmez', async () => {
+  test('PD-08: maliyeti görmeyende TL alanları null, saat ve plan kalır', async () => {
     const s = sonuc(await dene({ tur: 'plan-secenekleri' }));
     const m = maliyetsiz(s);
     if (m.tur !== 'plan-secenekleri' || s.tur !== 'plan-secenekleri') return assert.fail(m.tur);
@@ -159,8 +146,6 @@ describe('planlama değerlendirmesi: hesap', () => {
     const b = sonuc(await dene({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }));
     const mb = maliyetsiz(b); if (mb.tur !== 'parti-bolme') return assert.fail(mb.tur);
     assert.equal(mb.sonuc?.tl, null);
-    const k = sonuc(await dene({ tur: 'siparis-kari' }));
-    assert.throws(() => maliyetsiz(k), /maliyeti görene/);
   });
 
   test('PD-18: planı kur (576): kuraldan sıfırdan kurar; iki emir yerleşir, plan çalışmanın veri sürümünde, alt sınır ve ilk gecikme kayıtta', async () => {
@@ -372,14 +357,12 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.equal((await iste(yalnizYazar, surum, { tur: 'plan-kur' })).statusCode, 403);
   });
 
-  test('PD-11: işlemi olmayan (yalnız recete-rota.yaz) 403, oturumsuz 401; sipariş kârı maliyeti görmeyene 403, yöneticiye 200', async () => {
+  test('PD-11: işlemi olmayan (yalnız recete-rota.yaz) 403, oturumsuz 401; kaldırılan sipariş kârı türü herkese 400 (2172)', async () => {
     const surum = await calismaYaz(planli());
     assert.equal((await iste(yalnizYazar, surum, { tur: 'plan-secenekleri' })).statusCode, 403);
     assert.equal((await iste(null, surum, { tur: 'plan-secenekleri' })).statusCode, 401);
-    assert.equal((await iste(planlamaci, surum, { tur: 'siparis-kari' })).statusCode, 403);
-    const k = await iste(tam, surum, { tur: 'siparis-kari' });
-    assert.equal(k.statusCode, 200, k.body);
-    assert.equal(degerlendirmeCevabi.parse(k.json()).sonuc.tur, 'siparis-kari');
+    // Sipariş kârı Maliyetler sayfasındadır (2169-3 a); değerlendirme türü kalktı, istek gövde doğrulamasında düşer.
+    for (const k of [planlamaci, tam]) assert.equal((await iste(k, surum, { tur: 'siparis-kari' } as unknown as DegerlendirmeIstegi)).statusCode, 400);
   });
 
   test('PD-12: eski sürüm 409; çalışma kaydı yoksa 409; plan gereken turde plansız çalışma 409; bilinmeyen tur 400', async () => {
