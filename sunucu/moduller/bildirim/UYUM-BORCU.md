@@ -36,3 +36,8 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ## Sınıf (2174-2 a)
 18. Görev sınıfı bugün yalnız `malzemeler.kart-onay-bekliyor`'da: kapanışı (`bildirimKapat`) yalnız malzemeler çağırıyor. Satın alma talebi, sipariş, teklif iskonto/termin ve izin onayı kendi modüllerinin kartlarında kapanış çağrısı girince sözleşmede `sinif: 'gorev'` alır (kapanışsız görev Görevlerim'de hiç kapanmadan kalırdı).
 19. Hatırlatma sınıfını yazan tür yok; kademe işi (2174-4 a, aşama 2) ile gelir.
+
+## Web Push (ADR 0031)
+20. Türe göre sinyal açma kapama yalnız uçta (`/bildirimler/push/turler`, `ayarlar.yaz`); ekranı Bildirim yönetimi ile gelir (2174 aşama 3).
+21. `bildirim-push-gonder` işinin okunur adı `istemci/src/moduller/sistem/is-adlari.ts`'de yok (kod adıyla görünür).
+22. Push servisi ana bilgisayar listesi (`PUSH_SERVISLERI`) ve dört servisin gövdesiz isteği kabul ettiği gerçek cihazda denenmedi; ilk kurulumda Chrome, Edge, Firefox ve ana ekrana eklenmiş iPhone ile denenir.

@@ -411,3 +411,82 @@ export function yayinKunyeleri(db: Db, idler: readonly number[]): Promise<YayinK
     [[...new Set(idler)]],
   );
 }
+
+// Web Push (ADR 0031). Uç nokta tekildir: aynı cihaz başka kişiyle oturum açıp abone olursa abonelik o kişiye geçer.
+export async function pushAboneligiYaz(db: Db, kisiId: number, ucNokta: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO bildirim_push_abonelik (kisi_id, uc_nokta) VALUES ($1, $2)
+     ON CONFLICT (uc_nokta) DO UPDATE SET kisi_id = EXCLUDED.kisi_id, olusturuldu = now(), son_gonderim = NULL`,
+    [kisiId, ucNokta],
+  );
+}
+
+// Yalnız kişinin kendi aboneliği silinir; başkasının adresi silinmez (false).
+export async function pushAboneligiSil(db: Db, kisiId: number, ucNokta: string): Promise<boolean> {
+  return (await db.tek('DELETE FROM bildirim_push_abonelik WHERE kisi_id = $1 AND uc_nokta = $2 RETURNING 1', [kisiId, ucNokta])) !== null;
+}
+
+export async function pushCihazSayisi(db: Db, kisiId: number): Promise<number> {
+  const r = await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM bildirim_push_abonelik WHERE kisi_id = $1', [kisiId]);
+  return r?.n ?? 0;
+}
+
+// Yalnız aboneliği olan kişiler kuyruğa girer; zaten bekleyenin zamanı değişmez.
+export async function pushKuyrugaIsaretle(db: Db, kisiIdleri: readonly number[]): Promise<void> {
+  if (kisiIdleri.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO bildirim_push_kuyruk (kisi_id, bekleyen)
+     SELECT DISTINCT kisi_id, now() FROM bildirim_push_abonelik WHERE kisi_id = ANY($1::int[])
+     ON CONFLICT (kisi_id) DO UPDATE SET bekleyen = coalesce(bildirim_push_kuyruk.bekleyen, EXCLUDED.bekleyen)`,
+    [kisiIdleri],
+  );
+}
+
+// Sırası gelen (bekleyen dolu, son gönderimden en az aralık geçmiş) kişileri alır ve işaretler; kişinin bütün cihazları döner.
+// SKIP LOCKED: iki tur aynı kişiyi almaz.
+export function pushSirasiAl(db: Db, enSikSn: number): Promise<{ id: number; kisiId: number; ucNokta: string }[]> {
+  return db.sorgu(
+    `WITH alinan AS (
+       UPDATE bildirim_push_kuyruk k SET bekleyen = NULL, son_gonderim = now()
+       WHERE k.kisi_id IN (
+         SELECT kisi_id FROM bildirim_push_kuyruk
+         WHERE bekleyen IS NOT NULL AND (son_gonderim IS NULL OR son_gonderim <= now() - make_interval(secs => $1))
+         ORDER BY bekleyen LIMIT 200 FOR UPDATE SKIP LOCKED)
+       RETURNING k.kisi_id)
+     SELECT a.id::int AS id, a.kisi_id AS "kisiId", a.uc_nokta AS "ucNokta"
+     FROM bildirim_push_abonelik a JOIN alinan USING (kisi_id) ORDER BY a.kisi_id, a.id`,
+    [enSikSn],
+  );
+}
+
+export async function pushAbonelikleriSil(db: Db, idler: readonly number[]): Promise<void> {
+  if (idler.length === 0) return;
+  await db.sorgu('DELETE FROM bildirim_push_abonelik WHERE id = ANY($1::bigint[])', [idler]);
+}
+
+export async function pushBasariIsle(db: Db, idler: readonly number[]): Promise<void> {
+  if (idler.length === 0) return;
+  await db.sorgu('UPDATE bildirim_push_abonelik SET son_gonderim = now() WHERE id = ANY($1::bigint[])', [idler]);
+}
+
+export function pushTurAyarlari(db: Db): Promise<{ tur: string; acik: boolean }[]> {
+  return db.sorgu('SELECT tur, acik FROM bildirim_push_turu ORDER BY tur');
+}
+
+export async function pushTurAcikMi(db: Db, tur: string): Promise<boolean | null> {
+  const r = await db.tek<{ acik: boolean }>('SELECT acik FROM bildirim_push_turu WHERE tur = $1', [tur]);
+  return r?.acik ?? null;
+}
+
+// Varsayılana dönen değer satırı siler; tablo yalnız yöneticinin farklı seçtiği türleri tutar.
+export async function pushTurYaz(db: Db, tur: string, acik: boolean, varsayilan: boolean, kisiId: number): Promise<void> {
+  if (acik === varsayilan) {
+    await db.sorgu('DELETE FROM bildirim_push_turu WHERE tur = $1', [tur]);
+    return;
+  }
+  await db.sorgu(
+    `INSERT INTO bildirim_push_turu (tur, acik, degistiren_kisi_id) VALUES ($1, $2, $3)
+     ON CONFLICT (tur) DO UPDATE SET acik = EXCLUDED.acik, degistiren_kisi_id = EXCLUDED.degistiren_kisi_id, degisti = now()`,
+    [tur, acik, kisiId],
+  );
+}

@@ -5,9 +5,11 @@ import {
   bildirimOnayCevabi, bildirimYayinAlicilariCevabi, bildirimYayinCevabi, bildirimYayinHedefleriCevabi, bildirimYayinListeCevabi, bildirimYayinListeSorgusu,
   bildirimYayinlaGovdesi, bildirimYayinParametresi, ortadakiBildirimlerCevabi,
   bildirimGosterimDegistirGovdesi, bildirimGosterimleriCevabi, bildirimGosterimParametresi,
+  bildirimPushAbonelikGovdesi, bildirimPushDurumuCevabi, bildirimPushTurDegistirGovdesi, bildirimPushTurleriCevabi,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import {
   arsivle, bildirimAlicilari, bildirimAlicilariYaz, bildirimGosterimleri, bildirimGosterimiYaz, bildirimListesi, bildirimSayaci, cagriEkiplerim, cagriYonlendirmesi, cagriYonlendirmesiYaz, okundu, tercihDegistir, tercihler, tumunuOkundu,
+  pushAboneOl, pushAbonelikSil, pushDurumu, pushTuruYaz, pushTurleri,
 } from './servis.ts';
 import {
   geriCek, hedefSecenekleri, onayla, ortadakiBildirimler, yayinAyrintisi, yayinGorseli, yayinla, yayinListesi,
@@ -37,6 +39,23 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/bildirimler/tercihler/degistir', yetki: 'oturum', govde: bildirimTercihDegistirGovdesi, cevap: bildirimTercihleriCevabi,
     isle: ({ db, kullanici, govde }) => tercihDegistir(db, kullanici, govde),
+  }),
+  // Web Push (ADR 0031): kişi yalnız kendi cihazını açar ve kapatır; gövde kişi seçemez. Açık anahtar gizli değildir.
+  uc({ yontem: 'GET', yol: '/bildirimler/push', yetki: 'oturum', cevap: bildirimPushDurumuCevabi, isle: ({ db, kullanici }) => pushDurumu(db, kullanici) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/push/abone-ol', yetki: 'oturum', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
+    isle: ({ db, kullanici, govde }) => pushAboneOl(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/push/abonelik-sil', yetki: 'oturum', govde: bildirimPushAbonelikGovdesi, cevap: bildirimPushDurumuCevabi,
+    isle: ({ db, kullanici, govde }) => pushAbonelikSil(db, kullanici, govde),
+  }),
+  // Türe göre sinyal (ADR 0031 madde 7): Sistem Ayarları'nın işlemiyle okunur ve yazılır.
+  uc({ yontem: 'GET', yol: '/bildirimler/push/turler', yetki: 'ayarlar.yaz', cevap: bildirimPushTurleriCevabi, isle: ({ db }) => pushTurleri(db) }),
+  uc({
+    yontem: 'POST', yol: '/bildirimler/push/turler/:tur/degistir', yetki: 'ayarlar.yaz', parametre: bildirimGosterimParametresi,
+    govde: bildirimPushTurDegistirGovdesi, cevap: bildirimPushTurleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => pushTuruYaz(db, kullanici, parametre.tur, govde),
   }),
   // Ekip çağrısı yönlendirmesi (298 a): Sistem Ayarları'nın işlemiyle okunur ve yazılır; rol yetkisi vermez, yalnız alıcıyı seçer.
   // Arkon çağrı bandı için: oturumdaki kişinin hangi ekip çağrılarını aldığı; eşlemenin kendisini ve başka kişiyi göstermez.

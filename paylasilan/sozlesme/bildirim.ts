@@ -385,6 +385,32 @@ export const ortadakiBildirimSemasi = z.object({
 export const ortadakiBildirimlerCevabi = z.object({ satirlar: z.array(ortadakiBildirimSemasi) });
 export const bildirimOnayCevabi = z.object({ id: z.number().int(), okundu: zamanSemasi, onaylandi: zamanSemasi });
 
+// Web Push (ADR 0031): uygulama kapalıyken cihaza içeriksiz sinyal. Varsayılan olarak görev, hatırlatma ve acil sinyal üretir;
+// bilgi üretmez. Yönetici türe göre açıp kapatabilir; kişi kendi cihazını açıp kapatır.
+export const turPushVarsayilani = (tur: BildirimTuru): boolean => turSinifi(tur) !== 'bilgi' || BILDIRIM_TURLERI[tur].onem === 'acil';
+
+// Push servisinin cihaza verdiği adres; yalnız izin listesindeki servis adresleri kabul edilir (sunucu denetler).
+export const PUSH_UC_NOKTA_EN_UZUN = 2048;
+export const bildirimPushDurumuCevabi = z.object({
+  // Sunucuda Web Push açık mı (ortam değişkeni); kapalıysa abonelik düğmesi görünmez.
+  acik: z.boolean(),
+  // VAPID açık anahtarı (gizli değildir); tarayıcı aboneliği bu anahtarla açar. Kapalıyken null.
+  acikAnahtar: z.string().nullable(),
+  // Kişinin açık cihaz sayısı.
+  cihazSayisi: z.number().int().nonnegative(),
+});
+export const bildirimPushAbonelikGovdesi = z.object({ ucNokta: z.string().min(1).max(PUSH_UC_NOKTA_EN_UZUN) }).strict();
+export const bildirimPushTurSatiri = z.object({
+  tur: z.enum(BILDIRIM_TUR_ANAHTARLARI),
+  baslik: z.string(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  kaynakModul: z.string(),
+  acik: z.boolean(),
+  varsayilan: z.boolean(),
+});
+export const bildirimPushTurleriCevabi = z.object({ satirlar: z.array(bildirimPushTurSatiri) });
+export const bildirimPushTurDegistirGovdesi = z.object({ acik: z.boolean() }).strict();
+
 export type Bildirim = z.output<typeof bildirimSemasi>;
 export type BildirimListeSorgusu = z.input<typeof bildirimListeSorgusu>;
 export type BildirimListeCevabi = z.output<typeof bildirimListeCevabi>;
@@ -413,3 +439,8 @@ export type BildirimYayinHedefleriCevabi = z.output<typeof bildirimYayinHedefler
 export type OrtadakiBildirim = z.output<typeof ortadakiBildirimSemasi>;
 export type OrtadakiBildirimlerCevabi = z.output<typeof ortadakiBildirimlerCevabi>;
 export type BildirimOnayCevabi = z.output<typeof bildirimOnayCevabi>;
+export type BildirimPushDurumuCevabi = z.output<typeof bildirimPushDurumuCevabi>;
+export type BildirimPushAbonelikGovdesi = z.input<typeof bildirimPushAbonelikGovdesi>;
+export type BildirimPushTurSatiri = z.output<typeof bildirimPushTurSatiri>;
+export type BildirimPushTurleriCevabi = z.output<typeof bildirimPushTurleriCevabi>;
+export type BildirimPushTurDegistirGovdesi = z.input<typeof bildirimPushTurDegistirGovdesi>;
