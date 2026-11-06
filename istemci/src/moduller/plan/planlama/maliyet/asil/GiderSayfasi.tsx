@@ -25,7 +25,7 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
   const M = maliyetSistemi(D);
   const kapali = !yaz;
   const y: Y = (f) => (yaz ? f(yaz) : false);
-  const gg = ymAyar(D).genelGider ?? 0;
+  const gg = ymAyar(D).genelGider;
   return (
     <div className="tc-pyk-ms">
       <VeriDurumu c={c} git={git} />

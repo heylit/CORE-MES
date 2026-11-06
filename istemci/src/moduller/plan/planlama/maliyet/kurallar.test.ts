@@ -216,6 +216,19 @@ describe('P3 saf hesaplar', () => {
     expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
   });
 
+  it('genel gider tek oranı girilmemişse oran ve siparişin genel gideri bilinmez (null), 120 TL/sa varsayılmaz (2173-1 a); toplam onu atlar', () => {
+    const c = ornekCalisma({ D: { planTL: {}, maliyetSis: { kip: 'tek', kalemler: [] } } });
+    const b = maliyetBaglami(c); const s = c.D.siparisler[0];
+    if (!b || !s) throw new Error('bağlam yok');
+    expect(genelGiderOrani(c.D, b.G, 'T1')).toBeNull();
+    const m = siparisMaliyeti(b, s);
+    expect(m?.gg).toBeNull();
+    expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
+    const k = ornekCalisma({ D: { planTL: {}, maliyetSis: { kip: 'kalem', kalemler: [] } } });
+    const G = genelGiderHesabi(k, takvimKur(k));
+    expect(genelGiderOrani(k.D, { ...G, tez: [], ort: null }, 'T1')).toBeNull();
+  });
+
   it('tezgâhın oranı yoksa atölye ortalaması; ortalama yoksa ya da sıfırsa tek orana düşer', () => {
     const c = ornekCalisma({ D: { maliyetSis: { kip: 'kalem', kalemler: [] }, planTL: { genelGider: 80 } } });
     const G = genelGiderHesabi(c, takvimKur(c));

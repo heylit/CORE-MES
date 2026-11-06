@@ -107,7 +107,7 @@ function agUygula(st, S, kiyasEski) {
    Operatör ücreti girilince tezgâh saat maliyetine operatör payıyla eklenir; fire payı malzeme ihtiyacını büyütür; fason taşıma adet fiyatına eklenir.
    Ağırlıklar ve amaç işçiye st içinde gider: işçi motoru kendi PW sözlüğüyle başlar, sipariş ağırlıklarını oradan alamaz. */
 var TL_AMAC = { ac: false, birim: 5, risk: 0.25 };
-const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: 120 };
+const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: null };
 /* bekleme maliyeti yalnız finansmandır (212 a): alan ve elleçleme genel giderde, bozulma riski hurda payında; hesap bu bileşenleri taşır ama kapalı tutar.
    Finansman oranı ayrı değildir: Öncelik ve ağırlıktaki günlük oran kullanılır. Ödeme vadesi terminde başlar (1650 kararı 3 b). */
 const WIP0 = { ac: true, vadeBas: 'termin', alanAc: false, ellAc: false, alfaAc: false, alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };

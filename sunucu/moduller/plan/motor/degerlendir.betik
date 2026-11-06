@@ -107,20 +107,23 @@ function msHesap() {
   if (msOn && msOn.dv === S.dataVer && msOn.p === S.plan) return msOn.v;
   const M = msSis(D); const now = cx.st.now; const son = now + 720;
   const tez = D.tezgahlar.map(t => { const W = cx.M[t.id] && cx.M[t.id].rw; const acik = W ? workIn(W, now, son) : 0; const x = M.tez[t.id] || {};
-    const kap = acik * (+M.verim || 85) / 100; const amort = x.bedel > 0 && x.omur > 0 ? (+x.bedel * (1 - (+x.hurda || 0) / 100)) / (+x.omur * 12) : 0;
+    const kap = acik * (+M.verim || 85) / 100; const amort = x.bedel > 0 && x.omur > 0 ? (+x.bedel * (1 - (+x.hurda || 0) / 100)) / (+x.omur * 12) : null;
     const op = t.opOran == null ? 1 : +t.opOran;
     let mesgul = 0; if (S.plan) for (const r of Object.values(S.plan.ops)) if (r.m === t.id && isFinite(r.C)) mesgul += Math.max(0, Math.min(son, r.C) - Math.max(now, r.S));
     return { t, acik, kap, amort, op, pay: 0, kalem: {}, mesgul, x }; });
   const taban = (k, z) => k.anahtar === 'alan' ? +z.x.alan || 0 : k.anahtar === 'kw' ? +z.x.kw || 0 : k.anahtar === 'kisi' ? z.op : k.anahtar === 'esit' ? 1 : z.kap;
   for (const k of M.kalemler) { const tl = msKalemTL(k, D); const l = tez.filter(z => !k.kapsam || z.t.grup === k.kapsam); const top = l.reduce((a, z) => a + taban(k, z), 0); if (!(top > 0) || !tl) continue;
     for (const z of l) { const p = tl * taban(k, z) / top; z.pay += p; z.kalem[k.id] = p; } }
-  for (const z of tez) { z.aylik = z.pay + z.amort; z.oran = z.kap > 0 ? z.aylik / z.kap : null; }
+  // Bedel ya da ömür girilmemişse amortisman, dolayısıyla oran bilinmez (2173-1 a): sıfır uydurulmaz.
+  for (const z of tez) { z.aylik = z.pay + (z.amort || 0); z.oran = z.kap > 0 && z.amort != null ? z.aylik / z.kap : null; }
   const top = k => tez.reduce((a, z) => a + (z[k] || 0), 0);
   const v = { tez, byM: Object.fromEntries(tez.map(z => [z.t.id, z])), aylik: top('aylik'), kap: top('kap') };
-  v.ort = v.kap > 0 ? v.aylik / v.kap : null;
+  v.ort = v.kap > 0 && tez.every(z => z.amort != null) ? v.aylik / v.kap : null;
   msOn = { dv: S.dataVer, p: S.plan, v }; return v;
 }
-function msGgOran(m) { const v = msHesap(); const z = v && v.byM[m]; return z && z.oran != null ? z.oran : (v && v.ort) || +ymAyar().genelGider || 0; }
+/* tek oran girilmemişse genel gider bilinmez (null, 2173-1 a); kalem kipinde amortismanı bilinmeyen tezgâhın oranı da bilinmez */
+const ggTek = () => { const g = ymAyar().genelGider; return g == null || g === '' ? null : +g; };
+function msGgOran(m) { const v = msHesap(); const z = v && v.byM[m]; if (z && z.amort == null && z.kap > 0) return null; if (z && z.oran != null) return z.oran; return v && v.ort ? v.ort : ggTek(); }
 const msKalemli = () => { const M = msSis(); return !!(M && M.kip === 'kalem' && mesSis() && Array.isArray(M.kalemler) && M.tez); };
 function msGunTur(D, gun) { const iso = isoT(D, gun * 24).slice(0, 10); if ((D.tatiller || []).includes(iso)) return 'tatil'; const g = fmtDT(D, gun * 24).slice(6, 9); return g === 'Cmt' ? 'cmt' : g === 'Paz' ? 'paz' : 'hi'; }
 function ymMesaiTL(D, cx, e) {
@@ -141,11 +144,11 @@ function ymMesaiPay(p, cx) {
 /* sipariş maliyeti son plandan: tezgâh seçimi, ayar ve fason planın kendisidir; malzeme fire payıyla */
 function ymSipMaliyetYalin(s, p, cx, W, MP) {
   if (!p || !cx) return null; const A = cx.A; const ops = Object.values(p.ops).filter(r => r.job === s.id); if (!ops.length) return null;
-  let isl = 0, ayar = 0, fas = 0, gg = 0; const eksik = [];
+  let isl = 0, ayar = 0, fas = 0, gg = 0; const eksik = []; const tek = ggTek();
   for (const r of ops) {
     if (r.fas) { const t = ymFasonTL(cx, r); if (t == null) eksik.push('fason fiyatı'); else fas += t; continue; }
     const M = cx.M[r.m]; if (!M || M.ucret == null) { eksik.push(r.m + ' saat maliyeti'); continue; }
-    isl += r.run * (1 - (M.pay || 0)) * M.ucret; ayar += r.su * (M.ucret + (+A.ayarciUcret || 0)); gg += (r.run + r.su) * (+ymAyar().genelGider || 0);
+    isl += r.run * (1 - (M.pay || 0)) * M.ucret; ayar += r.su * (M.ucret + (+A.ayarciUcret || 0)); if (gg != null) gg = tek == null ? null : gg + (r.run + r.su) * tek;
   }
   const mr = cx.mat.res[s.id]; const mal = mr ? mr.fiyat : null; if (mal == null && (s.malzeme || []).length) eksik.push('malzeme kg fiyatı');
   const J = p.J[s.id] || {}; const due = parseT(S.D, s.termin); const A2 = agAyar();
@@ -155,7 +158,7 @@ function ymSipMaliyetYalin(s, p, cx, W, MP) {
   const tal = ymTalas(S.D, s); const talas = tal && tal.tl > 0 ? tal.tl : 0;
   const bek = W && W.J[s.id] ? W.J[s.id] : null;
   const mes = MP && MP[s.id] !== undefined ? MP[s.id] : 0; if (mes === null) eksik.push('mesai ücreti');
-  const top = (mal || 0) - talas + isl + ayar + gg + fas + (mes || 0);
+  const top = (mal || 0) - talas + isl + ayar + (gg || 0) + fas + (mes || 0);
   const gec = J.T > 0.05 ? agGecTL(agBedel(S.D, s), J.T) : 0;
   return { mal, talas, talasKg: tal ? tal.kg : null, isl, ayar, gg, mes, fas, fin, bek, top, eksik: [...new Set(eksik)], tutar, gec, T: J.T, erken, kar: tutar == null || eksik.length ? null : tutar - top, net: tutar == null || eksik.length ? null : tutar - top - gec - (fin || 0) - (bek ? bek.tl : 0) };
 }
@@ -163,8 +166,8 @@ function ymSipMaliyetYalin(s, p, cx, W, MP) {
 function ymSipMaliyet(s, p, cx, W, MP) {
   const x = ymSipMaliyetYalin(s, p, cx, W, MP); if (!x || !msKalemli()) return x;
   const ops = Object.values(p.ops).filter(r => r.job === s.id && !r.fas);
-  let gg = 0; for (const r of ops) gg += (r.run + r.su) * msGgOran(r.m);
-  const fark = gg - x.gg; const y = { ...x, gg, top: x.top + fark };
+  let gg = 0; for (const r of ops) { const o = msGgOran(r.m); gg = gg == null || o == null ? null : gg + (r.run + r.su) * o; }
+  const fark = (gg || 0) - (x.gg || 0); const y = { ...x, gg, top: x.top + fark };
   if (y.kar != null) y.kar -= fark; if (y.net != null) y.net -= fark;
   return y;
 }
