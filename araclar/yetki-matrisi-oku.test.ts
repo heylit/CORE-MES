@@ -45,7 +45,7 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
 
   test('--islem işlemin rollerini ve kişilerini, nereden geldiğiyle gösterir', () => {
     const metin = matrisMetni(matris, { tur: 'islem', deger: 'arkon.planlama' });
-    assert.match(metin, /roller: yonetici planlama_proje/);
+    assert.match(metin, /roller: yonetici planlama_muduru planlama_proje/);
     assert.match(metin, /ornek\.op \(Örnek Operatör\): ek işlem/);
     assert.match(metin, /ornek\.yon \(Örnek Yönetici\): rolden yonetici/);
     assert.doesNotMatch(metin, /ornek\.iki/);

@@ -61,6 +61,11 @@ describe('emir kapanışı rol yetkileri (gerçek PostgreSQL, gerçek giriş)', 
       kalite: ['uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-oku'],
       mudur: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay'],
       planlama_proje: ['uretim-emirleri.kapanis-oku'],
+      // 2177-1: genel müdür ve yardımcısı Müdür gibidir; planlama ve üretim müdürü müdür onayını verir.
+      genel_mudur: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay'],
+      genel_mudur_yardimcisi: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay'],
+      planlama_muduru: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay'],
+      uretim_muduru: ['uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay'],
     };
     const roller = (await vt().sorgu<{ kod: string }>('SELECT kod FROM rol ORDER BY kod')).map((r) => r.kod);
     for (const kod of Object.keys(BEKLENEN)) assert.ok(roller.includes(kod), kod);

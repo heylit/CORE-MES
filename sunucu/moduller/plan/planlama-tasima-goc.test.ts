@@ -72,11 +72,15 @@ describe('planlama kaydı ve işlemi plan modülüne taşınır (gerçek Postgre
     assert.equal(Number(sonraki!.n), 10, 'sürüm taşınan en büyük sürümden devam eder');
 
     assert.deepEqual(await sahip.sorgu("SELECT islem FROM rol_islemi WHERE islem = 'recete-rota.planlama-oku'"), []);
-    assert.deepEqual(await sahip.sorgu("SELECT rol_id FROM rol_islemi WHERE islem = 'plan.planlama-oku' ORDER BY rol_id"), once);
+    // Taşımadan sonra açılan müdür rolleri (2177) işlemi kendi göçlerinden alır.
+    const mudurRolleri = await sahip.sorgu<{ rol_id: number }>(
+      "SELECT id AS rol_id FROM rol WHERE kod IN ('genel_mudur', 'genel_mudur_yardimcisi', 'planlama_muduru', 'uretim_muduru')");
+    assert.deepEqual(await sahip.sorgu("SELECT rol_id FROM rol_islemi WHERE islem = 'plan.planlama-oku' ORDER BY rol_id"),
+      [...once, ...mudurRolleri].sort((a, b) => a.rol_id - b.rol_id));
     assert.deepEqual(await sahip.sorgu("SELECT kisi_id FROM kisi_islemi WHERE islem LIKE '%planlama-oku'"), [{ kisi_id: kisi }]);
     assert.deepEqual(await sahip.sorgu("SELECT islem FROM kisi_islemi WHERE kisi_id = $1", [kisi]), [{ islem: 'plan.planlama-oku' }]);
     assert.deepEqual(
       await sahip.sorgu("SELECT rol_id FROM rol_islemi WHERE islem = 'sayfa.plan' ORDER BY rol_id"),
-      [{ rol_id: await rol('mudur') }, { rol_id: await rol('planlama_proje') }].sort((a, b) => a.rol_id - b.rol_id));
+      [{ rol_id: await rol('mudur') }, { rol_id: await rol('planlama_proje') }, ...mudurRolleri].sort((a, b) => a.rol_id - b.rol_id));
   });
 });

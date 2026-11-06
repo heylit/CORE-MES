@@ -5,7 +5,9 @@
 
 // Menü en çok 8 sayfadır; Akış Süresi için müdür ve planlamada 9 (1851 a). Telefon alt çubuğu ilk dört maddeyi aldığı için değişmez.
 export const MENU_SINIRI = 8;
-export const GENIS_MENU: Readonly<Record<string, number>> = { mudur: 9, planlama_proje: 9 };
+export const GENIS_MENU: Readonly<Record<string, number>> = {
+  mudur: 9, planlama_proje: 9, genel_mudur: 9, genel_mudur_yardimcisi: 9, planlama_muduru: 9,
+};
 
 export interface RolGorunumu {
   // Ana menüdeki sırayla; telefondaki alt çubuk ilk maddeleri alır.
@@ -19,7 +21,7 @@ export interface RolGorunumu {
 
 const KISISEL = '/ik-islemlerim';
 
-export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
+const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
   operator: {
     sayfalar: ['/uretim-terminali', '/kuyruk', KISISEL, '/idari-isler'],
     kartlar: ['arkon-ozetim', 'uretim-emirleri-kuyrugum', 'vardiya-vardiyam', 'istasyonlar-duran-makine'],
@@ -115,12 +117,26 @@ export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
   },
 };
 
+// Müdür rolleri (2177): genel müdür ve yardımcısı Müdür'ün görünümünü, alan müdürleri yetkisinin türediği ekip rolünün görünümünü alır.
+const TUREYEN_GORUNUMLER: Readonly<Record<string, string>> = {
+  genel_mudur: 'mudur', genel_mudur_yardimcisi: 'mudur', planlama_muduru: 'planlama_proje', satin_alma_muduru: 'satin_alma',
+  uretim_muduru: 'vardiya_sorumlusu',
+};
+
+export const ROL_GORUNUMLERI: Readonly<Record<string, RolGorunumu>> = {
+  ...TEMEL_GORUNUMLER,
+  ...Object.fromEntries(Object.entries(TUREYEN_GORUNUMLER).flatMap(([rol, kaynak]) => {
+    const gorunum = TEMEL_GORUNUMLER[kaynak];
+    return gorunum ? [[rol, gorunum]] : [];
+  })),
+};
+
 // Kart süzgeci olmayan roller (bütün kartlar, işlem süzgeciyle).
-const TUM_KARTLI_ROLLER: ReadonlySet<string> = new Set(['mudur']);
+const TUM_KARTLI_ROLLER: ReadonlySet<string> = new Set(['mudur', 'genel_mudur', 'genel_mudur_yardimcisi']);
 
 // Kur ve faiz şeridi (1394 a) yalnız bu rollerde. Yönetici rolü her zaman görür.
 export const SERIT_ROLLERI: Readonly<Record<string, readonly string[]>> = {
-  'kur-faiz': ['muhasebe_finans', 'satin_alma', 'mudur'],
+  'kur-faiz': ['muhasebe_finans', 'satin_alma', 'mudur', 'genel_mudur', 'genel_mudur_yardimcisi', 'satin_alma_muduru'],
 };
 
 export const YONETICI_ROLU = 'yonetici';

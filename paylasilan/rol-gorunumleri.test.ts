@@ -59,4 +59,14 @@ describe('rol görünümleri (1390 a)', () => {
     assert.equal(seritRolGorunurMu('kur-faiz', undefined), false);
     assert.equal(seritRolGorunurMu('baska-serit', ['operator']), true);
   });
+
+  test('müdür rolleri (2177): genel müdür ve yardımcısı Müdür görünümünü, alan müdürleri ekip rolünün görünümünü alır', () => {
+    for (const [rol, kaynak] of [
+      ['genel_mudur', 'mudur'], ['genel_mudur_yardimcisi', 'mudur'], ['planlama_muduru', 'planlama_proje'], ['satin_alma_muduru', 'satin_alma'],
+      ['uretim_muduru', 'vardiya_sorumlusu'],
+    ] as const) assert.deepEqual(ROL_GORUNUMLERI[rol], ROL_GORUNUMLERI[kaynak], rol);
+    assert.equal(etkinGorunum(['genel_mudur']).kartlar, null);
+    for (const rol of ['genel_mudur', 'genel_mudur_yardimcisi', 'satin_alma_muduru']) assert.equal(seritRolGorunurMu('kur-faiz', [rol]), true, rol);
+    for (const rol of ['planlama_muduru', 'uretim_muduru']) assert.equal(seritRolGorunurMu('kur-faiz', [rol]), false, rol);
+  });
 });
