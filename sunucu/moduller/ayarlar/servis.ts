@@ -7,7 +7,7 @@ import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
 import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
 import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { Ayar, AyarlarCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { Ayar, AyarlarCevabi, GirisSesiCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { ayarDegistiBildir } from './ayar-olaylari.ts';
 import { beklenenTutarMi, degeriDogrula, gecerliDeger, listeDegeri, oncekiDeger } from './kurallar.ts';
@@ -108,6 +108,10 @@ export async function gorunumOku(db: Db): Promise<GorunumCevabi> {
 
 export async function kurumOku(db: Db): Promise<KurumCevabi> {
   return { ad: await sistemAyariOku(db, 'kabuk.kurum-adi') };
+}
+
+export async function girisSesiOku(db: Db): Promise<GirisSesiCevabi> {
+  return { acik: await sistemAyariOku(db, 'kabuk.giris-sesi') };
 }
 
 const KAPALI_SAYFALAR_ANAHTARI = 'kabuk.kapali-sayfalar';

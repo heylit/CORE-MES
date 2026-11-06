@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { akorNo, AKORLAR, bekleme, cihazPartisi, DIZI, IZGARA_MS, notalar, PARTI_SAYISI, PENCERE_MS, sesAcikMi, sesCal, sesTercihiYaz } from './ses.ts';
+import { akorNo, AKORLAR, bekleme, cihazPartisi, cihazTercihi, DIZI, IZGARA_MS, notalar, PARTI_SAYISI, PENCERE_MS, sesAcikMi, sesCal, sesTercihiYaz } from './ses.ts';
 
 describe('acilis sesi: kalabalikta uyum (2170)', () => {
   it('butun akorlar ve butun partilerin butun notalari Re majör pentatonikte: ust uste binen terminaller catismaz', () => {
@@ -29,6 +29,14 @@ describe('acilis sesi: kalabalikta uyum (2170)', () => {
 
 describe('acilis sesi: cihaz tercihi', () => {
   afterEach(() => { window.localStorage.clear(); });
+  it('cihaz secimi yoksa kurum ayari gecer; cihaz secimi kurum ayarini iki yonde de gecersiz kilar (2175)', () => {
+    expect(cihazTercihi()).toBeNull();
+    expect(sesAcikMi(true)).toBe(true);
+    sesTercihiYaz(false);
+    expect(sesAcikMi(true)).toBe(false);
+    sesTercihiYaz(true);
+    expect(sesAcikMi(false)).toBe(true);
+  });
   it('varsayilan kapali; tercih yalniz bu cihazda saklanir', () => {
     expect(sesAcikMi()).toBe(false);
     sesTercihiYaz(true);

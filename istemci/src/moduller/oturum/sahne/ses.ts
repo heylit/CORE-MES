@@ -51,10 +51,15 @@ export function cihazPartisi(): number {
   }
 }
 
-// Varsayılan kapalıdır; yalnız bu cihazda açılır.
-export function sesAcikMi(): boolean {
-  try { return window.localStorage.getItem(TERCIH_ANAHTARI) === 'acik'; } catch { return false; }
+// Cihazın kendi seçimi (giriş ekranındaki düğme); seçim yoksa null ve kurum ayarı geçerlidir (kart 2175).
+export function cihazTercihi(): boolean | null {
+  try {
+    const d = window.localStorage.getItem(TERCIH_ANAHTARI);
+    return d === 'acik' ? true : d === 'kapali' ? false : null;
+  } catch { return null; }
 }
+// Cihaz seçimi kurum ayarını geçersiz kılar; ikisi de yoksa kapalıdır.
+export const sesAcikMi = (kurumAcik = false): boolean => cihazTercihi() ?? kurumAcik;
 export function sesTercihiYaz(acik: boolean): void {
   try { window.localStorage.setItem(TERCIH_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* saklanamazsa yalnız bu açılış için geçerlidir */ }
 }

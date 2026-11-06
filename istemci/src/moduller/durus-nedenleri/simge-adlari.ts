@@ -89,4 +89,6 @@ export const SIMGE_ADLARI: Record<SimgeAdi, string> = {
   laptop: 'Dizüstü bilgisayar',
   calendar: 'Takvim',
   kanban: 'Kanban panosu',
+  ses: 'Ses açık',
+  'ses-kapali': 'Ses kapalı',
 };
