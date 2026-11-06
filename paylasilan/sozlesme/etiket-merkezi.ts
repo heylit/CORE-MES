@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { KARO_TURLERI, PIKTOGRAM_ADLARI } from '../etiket-piktogramlari.ts';
 
 // Etiket yazıcısının dili sunucuda üretilir; istemci yalnız önizlemeyi çizer ve komut dosyasını indirir.
 export const YAZICI_DILLERI = ['zpl', 'pplb'] as const;
@@ -45,14 +46,18 @@ export const SATIR_ARALIGI = 1.2 as const;
 export const QR_KENAR_MODUL = 2 as const;
 
 // Ölçüler milimetredir; yazıcı noktasına sunucu çevirir.
+// kosul: verilirse öğe yalnız o alanın değeri varken basılır (alan başlığı değeri olmayan satırda kalmaz; red çerçevesi yalnız redde).
+// ters: siyah zemin üstüne beyaz yazı. simge: alanın değeri "<karo>:<piktogram>" (etiket-piktogramlari.ts), "=" ile sabit.
 const mm = z.number().nonnegative();
+const kosul = z.string().optional();
 const metinOgesi = z.object({
   tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yukseklik: mm,
-  yaziMm: z.number().positive(), kalin: z.boolean(), alan: z.string(),
+  yaziMm: z.number().positive(), kalin: z.boolean(), alan: z.string(), ters: z.boolean().optional(), kosul,
 });
 const qrOgesi = z.object({ tur: z.literal('qr'), x: mm, y: mm, boyut: mm, alan: z.string() });
-const kutuOgesi = z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm });
-export const sablonOgesiSemasi = z.discriminatedUnion('tur', [metinOgesi, qrOgesi, kutuOgesi]);
+const kutuOgesi = z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm, kosul });
+const simgeOgesi = z.object({ tur: z.literal('simge'), x: mm, y: mm, boyut: mm, alan: z.string(), kosul });
+export const sablonOgesiSemasi = z.discriminatedUnion('tur', [metinOgesi, qrOgesi, kutuOgesi, simgeOgesi]);
 export type SablonOgesi = z.infer<typeof sablonOgesiSemasi>;
 
 export const sablonSemasi = z.object({
@@ -115,9 +120,10 @@ export type RaflarCevabi = z.infer<typeof raflarCevabi>;
 
 // Önizleme, yazıcıya gidenle aynı yerleşimden çıkar: metin satırlara bölünmüş, QR kare matrisiyle gelir.
 export const onizlemeOgesiSemasi = z.discriminatedUnion('tur', [
-  z.object({ tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yaziMm: z.number(), kalin: z.boolean(), satirlar: z.array(z.string()) }),
+  z.object({ tur: z.literal('metin'), x: mm, y: mm, genislik: mm, yaziMm: z.number(), kalin: z.boolean(), satirlar: z.array(z.string()), ters: z.boolean().optional() }),
   z.object({ tur: z.literal('qr'), x: mm, y: mm, boyut: mm, veri: z.string(), kareler: z.array(z.array(z.boolean())) }),
   z.object({ tur: z.literal('kutu'), x: mm, y: mm, genislik: mm, yukseklik: mm, kalinlik: mm }),
+  z.object({ tur: z.literal('simge'), x: mm, y: mm, boyut: mm, ad: z.enum(PIKTOGRAM_ADLARI), karo: z.enum(KARO_TURLERI) }),
 ]);
 export type OnizlemeOgesi = z.infer<typeof onizlemeOgesiSemasi>;
 

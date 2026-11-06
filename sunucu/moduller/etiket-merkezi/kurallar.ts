@@ -7,6 +7,7 @@ import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
 
 // Saf kurallar: yerleşim (mm -> satır ve QR matrisi), sınır denetimi ve yazıcıya giden metnin arındırılması.
@@ -19,7 +20,7 @@ export function sablonHatalari(s: Sablon): string[] {
   const hatalar: string[] = [];
   if (s.genislik <= 0 || s.yukseklik <= 0) hatalar.push('Etiket ölçüsü sıfırdan büyük olmalı.');
   s.ogeler.forEach((o, i) => {
-    const [gen, yuk] = o.tur === 'qr' ? [o.boyut, o.boyut] : [o.genislik, o.yukseklik];
+    const [gen, yuk] = o.tur === 'qr' || o.tur === 'simge' ? [o.boyut, o.boyut] : [o.genislik, o.yukseklik];
     if (o.x + gen > s.genislik + 1e-9 || o.y + yuk > s.yukseklik + 1e-9) hatalar.push(`${i + 1}. öğe etiketin dışına taşıyor.`);
     if (o.tur === 'metin' && o.yaziMm > o.yukseklik + 1e-9) hatalar.push(`${i + 1}. öğenin yazısı kutusundan büyük.`);
   });
@@ -108,15 +109,20 @@ export function yerlesim(s: Sablon, veri: AlanDegerleri, sade: boolean): Onizlem
   return ogeler;
 }
 
+// EM-26 (kart 2168): koşullu öğe yalnız koşul alanının değeri varken basılır; tanınmayan simge değeri basılmaz.
 function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): OnizlemeOgesi | null {
-  if (o.tur === 'kutu') return { ...o };
+  if (o.tur !== 'qr' && o.kosul !== undefined && alanDegeri(o.kosul, veri) === null) return null;
+  if (o.tur === 'kutu') return { tur: 'kutu', x: o.x, y: o.y, genislik: o.genislik, yukseklik: o.yukseklik, kalinlik: o.kalinlik };
   const ham = alanDegeri(o.alan, veri);
   if (ham === null) return null;
   // QR içeriği kimliktir ve ASCII'dir; sadeleştirme yalnız okunan yazıya uygulanır.
   if (o.tur === 'qr') { const v = tekSatir(ham); return { tur: 'qr', x: o.x, y: o.y, boyut: o.boyut, veri: v, kareler: qrMatrisi(v) }; }
+  if (o.tur === 'simge') { const c = simgeCoz(tekSatir(ham)); return c === null ? null : { tur: 'simge', x: o.x, y: o.y, boyut: o.boyut, ...c }; }
   const metin = tekSatir(sade ? sadelestir(ham) : ham);
   const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yaziMm);
-  return { tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm) };
+  return {
+    tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm), ...(o.ters ? { ters: true } : {}),
+  };
 }
 
 // Koyu modüller satır satır birleşik dikdörtgenlere çevrilir; iki dil de QR'ı yazıcının QR komutuyla değil, kutu komutuyla basar.
@@ -279,7 +285,27 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     adimlar: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(' · '),
     rota: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(SATIR_BASI),
     lot: null,
+    adet: String(k.adet),
+    termin: k.teslim === null ? null : gunAyYil(k.teslim),
+    ...refakatAdimlari(k.adimlar),
   };
+}
+
+// EM-27 (kart 2168): refakat kartında her işlem kendi satırındadır (no, ad, yer, piktogram, imza kutusu). Kartta REFAKAT_ADIM_SAYISI
+// satır vardır; daha çok işlem varsa son satır kalan işlem sayısını yazar. Fason işlem kamyon, diğerleri tezgâh piktogramıyla.
+export const REFAKAT_ADIM_SAYISI = 7;
+export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<string, string | null> {
+  const sonuc: Record<string, string | null> = {};
+  const tasan = adimlar.length > REFAKAT_ADIM_SAYISI;
+  for (let i = 1; i <= REFAKAT_ADIM_SAYISI; i++) {
+    const a = adimlar[i - 1];
+    const ozet = tasan && i === REFAKAT_ADIM_SAYISI;
+    sonuc[`adim${i}No`] = a === undefined || ozet ? null : String(a.opNo);
+    sonuc[`adim${i}Ad`] = a === undefined ? null : ozet ? `+${adimlar.length - REFAKAT_ADIM_SAYISI + 1} işlem daha` : a.ad;
+    sonuc[`adim${i}Yer`] = a === undefined || ozet ? null : [a.yer, a.fason && 'fason'].filter(Boolean).join(' · ') || null;
+    sonuc[`adim${i}Simge`] = a === undefined || ozet ? null : a.fason ? 'siyah:fason' : 'siyah:tezgah';
+  }
+  return sonuc;
 }
 
 // EM-20 (kart #127): refakat partisinin kartı emrin kartıdır; QR ve başlık partinin (RP, emir no-P sıra), lot satırı depodan verilen lotun
@@ -314,12 +340,21 @@ export function hataliParcaDegerleri(h: HataliKaydiOzeti): AlanDegerleri {
     karar: h.karar === null ? null : birlestir([
       h.kararKisi?.ad ? `Karar ${h.kararKisi.ad}` : null, h.kararZamani && anYazisi(h.kararZamani), h.ncrKimlik && `NCR ${h.ncrKimlik}`, h.kararNotu,
     ]),
+    kararSimge: HATALI_KARAR_SIMGESI[h.karar ?? 'bekliyor'],
+    redCerceve: h.karar === 'red' ? 'evet' : null,
   };
 }
 
+// EM-28 (2168-3 a): karar sağ üst karoda resimle ve karonun dolgusuyla ayrılır; red etiketin tamamı kalın çerçeve alır.
+export const HATALI_KARAR_SIMGESI: Record<NonNullable<HataliKaydiOzeti['karar']> | 'bekliyor', string> = {
+  bekliyor: 'cizgili:bekliyor', kabul: 'beyaz:onay', sartli_kabul: 'siyah:uyari', rework: 'beyaz:rework', hurda: 'siyah:hurda', red: 'siyah:red',
+};
+export const KALITE_KARAR_SIMGESI: Record<KaliteDurumu, string> = { karar_bekliyor: 'cizgili:bekliyor', serbest: 'beyaz:onay', sartli: 'siyah:uyari', red: 'siyah:red' };
+
 // EM-22 (1286 a): kalite durum etiketi stokun bakiye satırını basar; durum satırdan okunur, elle seçilmez. Adlar stok ekranındaki
-// hal adlarıyla aynı (stok/ortak.tsx KALITE_ROZETI); ortak sözlük çekirdek isteği. QR lotu gösterir.
-export const KALITE_DURUM_ADLARI: Record<KaliteDurumu, string> = { serbest: 'SERBEST', karar_bekliyor: 'KARAR BEKLİYOR', sartli: 'ŞARTLI', red: 'RED' };
+// hal adlarıdır (stok/ortak.tsx KALITE_ROZETI); yalnız şartlı karar etikette tam adıyla basılır (2168-4), ekranda kısadır.
+// Ortak sözlük çekirdek isteği. QR lotu gösterir.
+export const KALITE_DURUM_ADLARI: Record<KaliteDurumu, string> = { serbest: 'SERBEST', karar_bekliyor: 'KARAR BEKLİYOR', sartli: 'ŞARTLI KABUL', red: 'RED' };
 export function kaliteDurumDegerleri(e: {
   lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; birim: string | null; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu;
 }): AlanDegerleri {
@@ -329,6 +364,8 @@ export function kaliteDurumDegerleri(e: {
     lotNo: e.lotNo,
     malzeme: birlestir([e.malzemeAd ?? `Kart ${e.malzemeId}`, e.malzemeKod]),
     miktar: birlestir([[miktarYazisi(e.miktar), e.birim].filter(Boolean).join(' '), `Konum ${e.konumKod}`]),
+    kararSimge: KALITE_KARAR_SIMGESI[e.kaliteDurumu],
+    redCerceve: e.kaliteDurumu === 'red' ? 'evet' : null,
   };
 }
 
@@ -345,6 +382,10 @@ export function sevkKoliDegerleri(k: {
     parca: malzeme === null ? k.aciklama : birlestir([malzeme.kod, malzeme.ad]),
     adet: adet === null ? null : `${ici !== null ? 'Koli içi ' : ''}${adet} adet`,
     koli: `Koli ${sira}/${toplam}`,
+    koliSira: `${sira}/${toplam}`,
+    adetSayi: adet,
+    // Koli içi girilmediyse ve birden çok koli varsa sayı kalemin toplamıdır; koli içi diye basılmaz.
+    adetBaslik: ici !== null || toplam === 1 ? 'KOLİ İÇİ' : 'KALEM TOPLAMI',
     emirNo,
     sevk: birlestir([k.tarih && gunAyYil(k.tarih), k.belgeNo && `Belge ${k.belgeNo}`]),
   };

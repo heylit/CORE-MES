@@ -1,5 +1,6 @@
 import { SATIR_ARALIGI, type OnizlemeOgesi, type YaziciDili } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { HARF_ORANI, noktaya, qrDikdortgenleri, qrModulNoktasi } from './kurallar.ts';
+import { noktaDikdortgenleri, simgeNoktalari } from './piktogram.ts';
 
 // Yerleşimi yazıcı diline çeviren saf fonksiyonlar. Komutlar Zebra ZPL II ve Argox PPLB kılavuzlarındaki temel komutlardır;
 // atölyedeki yazıcıda denenmeden "doğrulanmadı" sayılır (Yazıcı denemesi şablonu bunun içindir).
@@ -24,14 +25,19 @@ export function zpl(g: CiktiGirdisi): string {
       for (const d of qrDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) {
         satirlar.push(`^FO${d.x},${d.y}^GB${d.genislik},${d.yukseklik},${Math.min(d.genislik, d.yukseklik)}^FS`);
       }
+    } else if (o.tur === 'simge') {
+      for (const d of noktaDikdortgenleri(simgeNoktalari(o.ad, o.karo, n(o.boyut)), n(o.x), n(o.y))) {
+        satirlar.push(`^FO${d.x},${d.y}^GB${d.genislik},${d.yukseklik},${Math.min(d.genislik, d.yukseklik)}^FS`);
+      }
     } else {
       const h = Math.max(1, n(o.yaziMm));
       o.satirlar.forEach((s, i) => {
         const y = n(o.y + i * o.yaziMm * SATIR_ARALIGI);
-        const alan = `^A0N,${h},${h}^FH_^FD${zplKacir(s)}^FS`;
+        // ^FR alanı alttaki baskıya göre tersler (siyah zeminde beyaz yazı); kılavuzdan, cihazda doğrulanmadı.
+        const alan = `${o.ters ? '^FR' : ''}^A0N,${h},${h}^FH_^FD${zplKacir(s)}^FS`;
         satirlar.push(`^FO${n(o.x)},${y}${alan}`);
-        // Yerleşik yazı tipinde kalın yok: bir nokta kaydırılmış ikinci baskı.
-        if (o.kalin) satirlar.push(`^FO${n(o.x) + 1},${y}${alan}`);
+        // Yerleşik yazı tipinde kalın yok: bir nokta kaydırılmış ikinci baskı. Ters yazıda ikinci baskı ilkini geri tersler; atlanır.
+        if (o.kalin && !o.ters) satirlar.push(`^FO${n(o.x) + 1},${y}${alan}`);
       });
     }
   }
@@ -70,12 +76,16 @@ export function pplb(g: CiktiGirdisi): string {
     } else if (o.tur === 'qr') {
       const modul = qrModulNoktasi(n(o.boyut), o.kareler.length);
       for (const d of qrDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
+    } else if (o.tur === 'simge') {
+      for (const d of noktaDikdortgenleri(simgeNoktalari(o.ad, o.karo, n(o.boyut)), n(o.x), n(o.y))) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
     } else {
       const { no, carpan } = pplbYaziSecimi(n(o.yaziMm), g.dpi);
+      // R: ters yazı (kılavuzdan, cihazda doğrulanmadı); ters yazıda kalın için ikinci baskı yapılmaz.
+      const kip = o.ters ? 'R' : 'N';
       o.satirlar.forEach((s, i) => {
         const y = n(o.y + i * o.yaziMm * SATIR_ARALIGI);
-        satirlar.push(`A${n(o.x)},${y},0,${no},${carpan},${carpan},N,"${pplbKacir(s)}"`);
-        if (o.kalin) satirlar.push(`A${n(o.x) + 1},${y},0,${no},${carpan},${carpan},N,"${pplbKacir(s)}"`);
+        satirlar.push(`A${n(o.x)},${y},0,${no},${carpan},${carpan},${kip},"${pplbKacir(s)}"`);
+        if (o.kalin && !o.ters) satirlar.push(`A${n(o.x) + 1},${y},0,${no},${carpan},${carpan},N,"${pplbKacir(s)}"`);
       });
     }
   }
