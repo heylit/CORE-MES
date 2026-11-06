@@ -118,6 +118,16 @@ export const bildirimTuruMu = (deger: string): deger is BildirimTuru => Object.h
 export const BILDIRIM_BASLIK_EN_COK = 200;
 export const BILDIRIM_METIN_EN_COK = 1000;
 
+// Elle bildirim (2147): yetkilinin hazırladığı haber. Tür ekranda rengi ve simgeyi seçer; önem eşlemesi sunucudadır
+// (uyarı -> uyari, acil -> acil, duyuru ve bilgi -> bilgi). Alıcılar yayın anında çözülür; yayın düzenlenmez, geri çekilir.
+export const YAYIN_TURLERI = ['uyari', 'duyuru', 'bilgi', 'acil'] as const;
+export type YayinTuru = (typeof YAYIN_TURLERI)[number];
+export const YAYIN_HEDEF_TURLERI = ['herkes', 'rol', 'istasyon', 'kisi'] as const;
+export type YayinHedefTuru = (typeof YAYIN_HEDEF_TURLERI)[number];
+// Seçilebilen simgeler ortak simge setinin adlarıdır; liste dışı ad reddedilir (ekran olmayan simgeyi çizemez).
+export const YAYIN_SIMGELERI = [
+  'bell', 'alert', 'fire', 'flag', 'wrench', 'helmet', 'calendar', 'cpu', 'users', 'gear', 'bolt', 'clipboard-check', 'truck', 'meal', 'drop', 'thermometer', 'lock',
+] as const;
 const KIMLIK = z.number().int().positive().max(2147483647);
 export const bildirimParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
 
@@ -134,10 +144,23 @@ export const bildirimSemasi = z.object({
   olusturuldu: zamanSemasi,
   okundu: zamanSemasi.nullable(),
   arsivlendi: zamanSemasi.nullable(),
+  // Onay isteyen satır "Okudum, anladım" denene dek arşive kaldırılamaz (2147).
+  onayIstenir: z.boolean(),
+  onaylandi: zamanSemasi.nullable(),
+  // Elle yayının künyesi; otomatik bildirimde null. Geri çekilen yayın merkezde üstü çizili kalır.
+  yayin: z.object({
+    id: z.number().int(),
+    tur: z.enum(YAYIN_TURLERI),
+    simge: z.enum(YAYIN_SIMGELERI),
+    gonderen: z.string().nullable(),
+    gorselVar: z.boolean(),
+    geriCekildi: zamanSemasi.nullable(),
+  }).nullable(),
 });
 
-// gelen: arşivlenmemiş hepsi; okunmamis; onemli: uyarı ve acil (arşivlenmemiş); arsiv: kişinin kaldırdıkları.
-export const BILDIRIM_LISTE_DURUMLARI = ['gelen', 'okunmamis', 'onemli', 'arsiv'] as const;
+// gelen: arşivlenmemiş hepsi; okunmamis; onay-bekleyen: onay isteyip onaylanmamış; onemli: uyarı ve acil; duyuru: duyuru türündeki
+// elle yayın; bilgi: bilgi önemi (hepsi arşivlenmemiş); arsiv: kişinin kaldırdıkları.
+export const BILDIRIM_LISTE_DURUMLARI = ['gelen', 'okunmamis', 'onay-bekleyen', 'onemli', 'duyuru', 'bilgi', 'arsiv'] as const;
 export type BildirimListeDurumu = (typeof BILDIRIM_LISTE_DURUMLARI)[number];
 export const bildirimListeSorgusu = z.object({
   ...sayfaSorguAlanlari,
@@ -236,16 +259,28 @@ export const bildirimAliciDegistirGovdesi = z.object({
   surum: surumSemasi.nullable(),
 }).strict();
 
-// Elle bildirim (2147): yetkilinin hazırladığı haber. Tür ekranda rengi ve simgeyi seçer; önem eşlemesi sunucudadır
-// (uyarı -> uyari, acil -> acil, duyuru ve bilgi -> bilgi). Alıcılar yayın anında çözülür; yayın düzenlenmez, geri çekilir.
-export const YAYIN_TURLERI = ['uyari', 'duyuru', 'bilgi', 'acil'] as const;
-export type YayinTuru = (typeof YAYIN_TURLERI)[number];
-export const YAYIN_HEDEF_TURLERI = ['herkes', 'rol', 'istasyon', 'kisi'] as const;
-export type YayinHedefTuru = (typeof YAYIN_HEDEF_TURLERI)[number];
-// Seçilebilen simgeler ortak simge setinin adlarıdır; liste dışı ad reddedilir (ekran olmayan simgeyi çizemez).
-export const YAYIN_SIMGELERI = [
-  'bell', 'alert', 'fire', 'flag', 'wrench', 'helmet', 'calendar', 'cpu', 'users', 'gear', 'bolt', 'clipboard-check', 'truck', 'meal', 'drop', 'thermometer', 'lock',
-] as const;
+// Otomatik bildirimin gösterimi (2147 Y4): tür başına "ekran ortasında" ve "onay iste". Ayarlanmamış türde varsayılan geçer (yalnız
+// acil ortada, onay yok). Okuma ve yazma `ayarlar.yaz` ister; değer varsayılana dönünce ayar kalkar.
+export const bildirimGosterimParametresi = z.object({ tur: z.enum(BILDIRIM_TUR_ANAHTARLARI) });
+export const bildirimGosterimSatiri = z.object({
+  tur: z.enum(BILDIRIM_TUR_ANAHTARLARI),
+  baslik: z.string(),
+  onem: z.enum(BILDIRIM_ONEMLERI),
+  kaynakModul: z.string(),
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  // Tür ayarlanmadıysa null (varsayılan geçer).
+  surum: z.number().int().nullable(),
+  degistiren: z.object({ id: z.number().int(), ad: z.string().nullable() }).nullable(),
+  degistirildi: zamanSemasi.nullable(),
+});
+export const bildirimGosterimleriCevabi = z.object({ satirlar: z.array(bildirimGosterimSatiri) });
+export const bildirimGosterimDegistirGovdesi = z.object({
+  ortada: z.boolean(),
+  onayIstenir: z.boolean(),
+  surum: surumSemasi.nullable(),
+}).strict();
+
 export const YAYIN_HEDEF_EN_COK = 100;
 // Görsel dosya modülünün yerel deposundadır; dış servis yoktur.
 export const YAYIN_GORSEL_TURLERI = ['png', 'jpeg', 'webp'] as const;
@@ -353,6 +388,9 @@ export type CagriYonlendirmeDegistirGovdesi = z.input<typeof cagriYonlendirmeDeg
 export type BildirimAliciSatiri = z.output<typeof bildirimAliciSatiri>;
 export type BildirimAlicilariCevabi = z.output<typeof bildirimAlicilariCevabi>;
 export type BildirimAliciDegistirGovdesi = z.input<typeof bildirimAliciDegistirGovdesi>;
+export type BildirimGosterimSatiri = z.output<typeof bildirimGosterimSatiri>;
+export type BildirimGosterimleriCevabi = z.output<typeof bildirimGosterimleriCevabi>;
+export type BildirimGosterimDegistirGovdesi = z.input<typeof bildirimGosterimDegistirGovdesi>;
 export type YayinSimgesi = (typeof YAYIN_SIMGELERI)[number];
 export type BildirimYayinlaGovdesi = z.input<typeof bildirimYayinlaGovdesi>;
 export type BildirimYayinlaGirdisi = z.output<typeof bildirimYayinlaGovdesi>;

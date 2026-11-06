@@ -8,6 +8,7 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CIHAZ_LISTE_BOYU, cihazBildirimi, tarayiciCihazOrtami, yeniBildirimler, type CihazIzni, type CihazOrtami } from './cihaz.ts';
 import { SAYAC_YOKLAMA_MS, sayacMetni } from './gorunum.ts';
+import { OrtadakiPencere } from './OrtadakiPencere.tsx';
 import { BildirimSatiri, BosListe, useBildirimKomutlari } from './ortak.tsx';
 import './bildirim.css';
 
@@ -109,6 +110,7 @@ export function ZilDugmesi({ cihaz }: UstEylemOzellikleri & { cihaz?: CihazOrtam
         )}
       </button>
       {acik && <Cekmece kapat={() => acikYaz(false)} cihaz={{ izin, iste: izinIste }} />}
+      <OrtadakiPencere />
     </>
   );
 }

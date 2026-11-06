@@ -23,3 +23,4 @@
 | BIL-15 Onay isteyen onaylanana dek ortada kalır ve arşivlenemez; onaysız okunana dek | `sorgular.ts` `ortadakiler`, `arsivle`; kısıtlar `bildirim_kaydi_onay_*` | `yayin.test.ts`: `herkese yayın ...`, `onaysız ortadaki ...` |
 | BIL-16 Otomatikte yalnız acil önem ortada | `kurallar.ts` `otomatikOrtadaMi`; `servis.ts` `bildirimGonder` | `BIL-16` (saf); `yayin.test.ts`: `2147-3 a: otomatik acil ...` |
 | Görseli yalnız yükleyen bağlar; alıcı, yazan ve rapor işlemi görür | `yayin.ts` `yayinla`, `yayinGorseli` | `yayin.test.ts`: `görsel yerel depoda ...` |
+| BIL-17 Türün gösterim ayarı (ortada, onay) varsayılanın yerine geçer; varsayılana eşit değer ayarı kaldırır | `kurallar.ts` `otomatikGosterim`, `varsayilanMi`; `servis.ts` `bildirimGonder`, `bildirimGosterimiYaz` | `BIL-17` (saf); `yayin.test.ts`: `Y4: tür gösterimi ...` |

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { BILDIRIM_BASLIK_EN_COK, BILDIRIM_METIN_EN_COK, BILDIRIM_TUR_ANAHTARLARI } from '#paylasilan/sozlesme/bildirim.ts';
 import {
-  alicilariSec, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikOrtadaMi, tekilAnahtar, TERCIH_ILETILERI, tercihHatasi, YAYIN_ONEMI,
+  alicilariSec, epostaSecilebilir, hemenMi, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, otomatikOrtadaMi, varsayilanMi, tekilAnahtar, TERCIH_ILETILERI, tercihHatasi, YAYIN_ONEMI,
   yayinAlicilari, yayiniGorurMu, yayinZamaniHatasi, yolTureUyar,
 } from './kurallar.ts';
 
@@ -126,4 +126,14 @@ test('BIL-16: otomatikte yalnız acil önem ortada çıkar', () => {
   assert.equal(otomatikOrtadaMi('acil'), true);
   assert.equal(otomatikOrtadaMi('uyari'), false);
   assert.equal(otomatikOrtadaMi('bilgi'), false);
+});
+
+test('BIL-17: türün gösterim ayarı varsayılanın yerine geçer; varsayılana eşit değer ayar sayılmaz', () => {
+  assert.deepEqual(otomatikGosterim('acil', null), { ortada: true, onayIstenir: false });
+  assert.deepEqual(otomatikGosterim('uyari', null), { ortada: false, onayIstenir: false });
+  assert.deepEqual(otomatikGosterim('uyari', { ortada: true, onayIstenir: true }), { ortada: true, onayIstenir: true });
+  assert.deepEqual(otomatikGosterim('acil', { ortada: false, onayIstenir: false }), { ortada: false, onayIstenir: false });
+  assert.equal(varsayilanMi('acil', { ortada: true, onayIstenir: false }), true);
+  assert.equal(varsayilanMi('bilgi', { ortada: false, onayIstenir: false }), true);
+  assert.equal(varsayilanMi('bilgi', { ortada: false, onayIstenir: true }), false);
 });

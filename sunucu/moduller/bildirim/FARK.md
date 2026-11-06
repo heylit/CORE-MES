@@ -43,3 +43,15 @@ Kararlar: 2147-1 a (bildirim modülünde), 2147-2 c (işlemler açılır, rol sa
 - `sunucu/moduller/bildirim/yayin.ts` (yeni), `isler.ts` (yeni, dakikada bir ileri tarihli yayın), 9 uç; `arsivle` onay bekleyeni reddeder; `bildirimGonder` acil olanı ortada işaretler.
 - `sunucu/kablolama.ts`: istasyonlar import satırına iki ad, bir bildirim importu, bir bağ (istasyon kişileri -> bildirim yayını).
 - Simgeler ortak simge setinden 17 ad (prototipteki megafon setde yok; duyuru için `bell`/`calendar` kullanılır).
+
+## 2147 Y2 elle bildirim ekranları (istemci) — dal `2147-y2`
+- `paylasilan/sozlesme/bildirim.ts`: `bildirimSemasi`'na `onayIstenir`, `onaylandi`, `yayin` (tür, simge, gönderen, görsel, geri çekildi; otomatikte null); liste durumuna `onay-bekleyen`, `duyuru`, `bilgi`.
+- Sunucu: liste, okundu ve arşiv cevabı yayın künyesini taşır (`yayinKunyeleri` + `kisiAdlari`); yeni uç, işlem, göç yok.
+- İstemci: `OrtadakiPencere.tsx` (zil düğmesiyle her sayfada; onaylı olan "Okudum, anladım" demeden kapanmaz), `Hazirla.tsx`, `Yayinlar.tsx`, `gorsel.ts`; `/profil/bildirimler/hazirla` ve `/yayinlar` sekmeleri yalnız işlemi olana görünür; menü ve `paylasilan/sayfalar` değişmedi.
+- Kabuk ve üst çubuğa dokunulmadı: pencere modülün üst eylem düğmesinden çizilir (`ust-eylemler.ts` "açtığı pencere modülündür").
+
+## 2147 Y4 otomatik bildirimin gösterimi — dal `2147-y2`
+- Göç `20261105094000_bildirim_tur_gosterimi.sql`: yeni boş `bildirim_tur_gosterimi` (tür, ortada, onay, sürüm); dolu tablo değişmez.
+- Uçlar `GET /bildirimler/gosterim`, `POST /bildirimler/gosterim/:tur/degistir` (`ayarlar.yaz`, sürümlü); varsayılana eşit değer satırı siler.
+- `bildirimGonder` türün gösterimini yazar (BIL-17); `bildirimYaz` `onay_istenir` alır.
+- İstemci: `ayarlar/BildirimYonetimi.tsx`'e "Ekran ortası ve onay" kartı (bütün türler, iki işaret).

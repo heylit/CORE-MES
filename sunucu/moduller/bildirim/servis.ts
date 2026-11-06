@@ -6,12 +6,12 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { kayitYoluMu } from '#paylasilan/sayfa-tanimi.ts';
 import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
-  ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
-  type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi,
+  ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
+  type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
-  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikOrtadaMi, tekilAnahtar, tercihHatasi, yolTureUyar,
+  ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, yolTureUyar,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -48,10 +48,11 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
     kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur),
   });
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
+  const gosterim = otomatikGosterim(tanim.onem, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));
   for (const kisiId of alicilar) {
     await s.bildirimYaz(db, {
       kisiId, tur: olay.tur, onem: tanim.onem, baslik, metin, yol: olay.yol ?? null, kaynakModul: kaynakModulu(olay.tur), tekilAnahtar: anahtar,
-      ortada: otomatikOrtadaMi(tanim.onem),
+      ortada: gosterim.ortada, onayIstenir: gosterim.onayIstenir,
     });
   }
   return alicilar.length;
@@ -71,12 +72,33 @@ export async function bildirimKapat(db: Db, k: BildirimKapanisi): Promise<number
   return s.kaynaktanOkunduIsaretle(db, anahtar);
 }
 
+// Elle yayının künyesi (tür, simge, gönderen, görsel, geri çekilme) satıra eklenir; otomatik satırda null.
+async function kunyeEkle(db: Db, satirlar: readonly s.BildirimSatiri[]): Promise<Bildirim[]> {
+  const kunyeler = await s.yayinKunyeleri(db, satirlar.flatMap((r) => (r.yayinId === null ? [] : [r.yayinId])));
+  const adlar = await kisiAdlari(db, kunyeler.map((k) => k.yazanKisiId));
+  const yayinlar = new Map(kunyeler.map((k) => [k.id, k]));
+  return satirlar.map(({ yayinId, ...r }) => {
+    const k = yayinId === null ? undefined : yayinlar.get(yayinId);
+    return {
+      ...r,
+      yayin: k === undefined ? null : {
+        id: k.id, tur: k.tur as YayinTuru, simge: k.simge as YayinSimgesi, gonderen: adlar.get(k.yazanKisiId) ?? null,
+        gorselVar: k.gorselVar, geriCekildi: k.geriCekildi,
+      },
+    };
+  });
+}
+
+async function tekKunye(db: Db, satir: s.BildirimSatiri | null): Promise<Bildirim | null> {
+  return satir === null ? null : (await kunyeEkle(db, [satir]))[0] ?? null;
+}
+
 export function bildirimListesi(
   db: Db, kullanici: Kullanici, sorgu: { sayfa: number; sayfaBoyu?: number | undefined; durum: BildirimListeDurumu },
 ): Promise<SayfaliListe<Bildirim>> {
   return sayfaliListe(sorgu, {
     say: () => s.kisininBildirimSayisi(db, kullanici.id, sorgu.durum),
-    satirlar: (dilim) => s.kisininBildirimleri(db, kullanici.id, sorgu.durum, dilim),
+    satirlar: async (dilim) => kunyeEkle(db, await s.kisininBildirimleri(db, kullanici.id, sorgu.durum, dilim)),
   });
 }
 
@@ -85,7 +107,7 @@ export function bildirimSayaci(db: Db, kullanici: Kullanici): Promise<BildirimSa
 }
 
 export async function okundu(db: Db, kullanici: Kullanici, id: number): Promise<Bildirim> {
-  const b = await s.okunduIsaretle(db, kullanici.id, id);
+  const b = await tekKunye(db, await s.okunduIsaretle(db, kullanici.id, id));
   if (b === null) throw bulunamadi(BULUNAMADI);
   return b;
 }
@@ -96,7 +118,7 @@ export async function tumunuOkundu(db: Db, kullanici: Kullanici): Promise<Tumunu
 
 // BIL-15: onay bekleyen satır arşive kaldırılamaz; başkasının satırı yine "bulunamadı".
 export async function arsivle(db: Db, kullanici: Kullanici, id: number): Promise<Bildirim> {
-  const b = await s.arsivle(db, kullanici.id, id);
+  const b = await tekKunye(db, await s.arsivle(db, kullanici.id, id));
   if (b !== null) return b;
   if ((await s.onayBekliyorMu(db, kullanici.id, id))?.bekliyor === true) throw dogrulama(ONAY_ILETILERI.onaysizArsiv);
   throw bulunamadi(BULUNAMADI);
@@ -180,6 +202,32 @@ export async function bildirimAlicilari(db: Db): Promise<BildirimAlicilariCevabi
     roller: await rolSecenekleri(db),
     kisiler: await secilebilirKisiler(db),
   };
+}
+
+// Otomatik türlerin gösterimi (2147 Y4): bütün türler, ayarlanmamışta varsayılanla.
+export async function bildirimGosterimleri(db: Db): Promise<BildirimGosterimleriCevabi> {
+  const ayarlar = new Map((await s.turGosterimleri(db)).map((a) => [a.tur, a]));
+  const adlar = await kisiAdlari(db, [...ayarlar.values()].flatMap((a) => (a.degistirenKisiId === null ? [] : [a.degistirenKisiId])));
+  return {
+    satirlar: BILDIRIM_TUR_ANAHTARLARI.map((tur) => {
+      const t = BILDIRIM_TURLERI[tur];
+      const a = ayarlar.get(tur);
+      const g = a ?? varsayilanGosterim(t.onem);
+      return {
+        tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur), ortada: g.ortada, onayIstenir: g.onayIstenir, surum: a?.surum ?? null,
+        degistiren: a === undefined || a.degistirenKisiId === null ? null : { id: a.degistirenKisiId, ad: adlar.get(a.degistirenKisiId) ?? null },
+        degistirildi: a?.degistirildi ?? null,
+      };
+    }),
+  };
+}
+
+export async function bildirimGosterimiYaz(
+  db: Db, kullanici: Kullanici, tur: BildirimTuru, govde: BildirimGosterimDegistirGovdesi,
+): Promise<BildirimGosterimleriCevabi> {
+  const varsayilan = varsayilanMi(BILDIRIM_TURLERI[tur].onem, govde);
+  if (!(await s.turGosterimiYaz(db, tur, { ...govde, surum: govde.surum ?? null, varsayilan }, kullanici.id))) throw eskiSurum();
+  return bildirimGosterimleri(db);
 }
 
 export async function bildirimAlicilariYaz(

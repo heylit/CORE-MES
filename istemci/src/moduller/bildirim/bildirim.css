@@ -85,3 +85,54 @@
   .tc-bildirim-tercih { grid-template-columns: auto minmax(0, 1fr); }
   .tc-bildirim-kanallar { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+.tc-bildirim-orta-ust { display: flex; align-items: center; gap: var(--b-3); padding: var(--b-4); border-block-end: 1px solid var(--edge); }
+.tc-bildirim-orta-ust h2 { margin: 0; font-size: var(--yazi-l); overflow-wrap: anywhere; }
+.tc-bildirim-orta-ust[data-ton="uyari"] { box-shadow: inset 0 var(--b-1) 0 var(--hold); }
+.tc-bildirim-orta-ust[data-ton="acil"] { box-shadow: inset 0 var(--b-1) 0 var(--stop); }
+.tc-bildirim-orta-ust[data-ton="bilgi"] { box-shadow: inset 0 var(--b-1) 0 var(--done); }
+.tc-bildirim-orta-tur { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-bildirim-orta { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-bildirim-orta-gorsel { display: block; max-inline-size: 100%; max-block-size: 40vh; object-fit: contain; border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-bildirim-orta-metin { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.tc-bildirim-orta-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); justify-content: flex-end; }
+.tc-bildirim-geri { text-decoration: line-through; color: var(--faint); }
+.tc-bildirim-onayla { color: var(--hold); }
+
+.tc-bildirim-izgara { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-bildirim-form { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-bildirim-simgeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-bildirim-simge-sec {
+  display: grid; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border: 1px solid var(--edge);
+  border-radius: var(--yari-2); background: var(--panel-solid); color: var(--muted); cursor: pointer;
+}
+.tc-bildirim-simge-sec[aria-checked="true"], .tc-bildirim-cip[aria-checked="true"] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.tc-bildirim-simge-sec:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-bildirim-cip { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-bildirim-hedef { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-bildirim-hedef-liste {
+  margin: 0; padding: var(--b-1) 0; list-style: none; max-block-size: calc(var(--dokunma) * 6); overflow-y: auto;
+  border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid);
+}
+.tc-bildirim-hedef-satir { display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3); cursor: pointer; }
+.tc-bildirim-hedef-satir span { overflow-wrap: anywhere; }
+.tc-bildirim-secenek {
+  display: flex; align-items: center; gap: var(--b-3); min-block-size: var(--dokunma); padding: var(--b-2) var(--b-3);
+  border: 1px solid var(--edge); border-radius: var(--yari-2); cursor: pointer;
+}
+.tc-bildirim-secenek span { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
+.tc-bildirim-secenek small { color: var(--faint); font-size: var(--yazi-xs); }
+.tc-bildirim-zamanlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3); }
+.tc-bildirim-maddeler { margin: 0; padding-inline-start: var(--b-5); color: var(--muted); font-size: var(--yazi-s); display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-bildirim-satir[aria-current="true"] .tc-bildirim-ac { background: var(--panel2); }
+.tc-bildirim-kisi { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-2); align-items: center; padding: var(--b-2) 0; border-block-start: 1px solid var(--edge); }
+.tc-bildirim-kisi:first-child { border-block-start: 0; }
+
+@media (max-width: 1023px) {
+  .tc-bildirim-izgara { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .tc-bildirim-zamanlar { grid-template-columns: minmax(0, 1fr); }
+  .tc-bildirim-kisi { grid-template-columns: auto minmax(0, 1fr); }
+  .tc-bildirim-kisi .tc-bildirim-zaman { grid-column: 2; }
+}
