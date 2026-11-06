@@ -31,7 +31,7 @@ export const cezaTavaniSemasi = z.string().trim().regex(ORAN, 'Ceza tavanı en �
 export const odemeVadesiSemasi = z.number().int('Ödeme vadesi tam gün olmalı.').min(0, 'Ödeme vadesi 0 ile 365 gün arasındadır.').max(365, 'Ödeme vadesi 0 ile 365 gün arasındadır.');
 // SIP-4 a: para birimi kur tutulan listeden seçilir (satın almayla aynı liste); serbest kod raporda çevrilemezdi.
 export const PARA_BIRIMI_LISTEDE_YOK = `Para birimi şunlardan biri olmalı: ${PARA_BIRIMLERI.join(', ')}.`;
-export const paraBirimiSemasi = z.string().trim().toUpperCase().pipe(z.enum(PARA_BIRIMLERI, { errorMap: () => ({ message: PARA_BIRIMI_LISTEDE_YOK }) }));
+export const paraBirimiSemasi = z.string().trim().toUpperCase().pipe(z.enum(PARA_BIRIMLERI, { error: PARA_BIRIMI_LISTEDE_YOK }));
 
 // Boş ya da yalnız boşluk "yok" demektir; boş dizgi saklanmaz.
 const istege = (azami: number) =>
@@ -55,7 +55,7 @@ const siparisAlanlari = {
   musteriSiparisNo: istege(40),
   siparisTarihi: tarihSemasi,
   termin: tarihSemasi,
-  paraBirimi: paraBirimiSemasi.default('TRY'),
+  paraBirimi: paraBirimiSemasi.prefault('TRY'),
   kdvOrani: kdvOraniSemasi,
   odemeKosulu: istege(200),
   aciklama: istege(1000),
@@ -70,7 +70,7 @@ type Tarihli = { siparisTarihi: string; termin: string; satirlar: { termin: stri
 const tarihSirasi = (g: Tarihli) => g.termin >= g.siparisTarihi && g.satirlar.every((s) => s.termin === null || s.termin >= g.siparisTarihi);
 const TARIH_SIRASI = { message: 'Termin sipariş tarihinden önce olamaz.', path: ['termin'] };
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 
 export const siparisEkleGovdesi = z.object(siparisAlanlari).refine(tarihSirasi, TARIH_SIRASI);
 // Güncelleme tam kayıttır: satırlar bütün olarak yeniden yazılır (SIP-03: yalnız taslak).
@@ -85,7 +85,7 @@ export const siparisListesiSorgusu = z.object({
   ...listeSorguAlanlari(['no', 'siparisTarihi', 'termin']),
   ara: z.string().trim().max(80).optional(),
   durum: siparisDurumuSemasi.optional(),
-  firmaId: z.coerce.number().int().positive().max(2147483647).optional(),
+  firmaId: z.coerce.number<number>().int().positive().max(2147483647).optional(),
 });
 
 export const siparisSatiriSemasi = z.object({
@@ -173,7 +173,7 @@ export const teklifSatiriGovdesi = z.object({
 const teklifAlanlari = {
   firmaId: z.number().int().positive(),
   baslik: z.string().trim().min(1, 'Başlık zorunlu.').max(200, 'En çok 200 karakter.'),
-  paraBirimi: paraBirimiSemasi.default('TRY'),
+  paraBirimi: paraBirimiSemasi.prefault('TRY'),
   istenenTarih: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(1000),
   satirlar: z.array(teklifSatiriGovdesi).min(1, 'Teklifte en az bir satır olmalı.').max(SATIR_EN_COK, `Teklifte en çok ${SATIR_EN_COK} satır olabilir.`),
@@ -197,7 +197,7 @@ export const teklifSurumuGovdesi = z.object({
   ...beklenenSurum,
   // Talep satırlarının her biri için birim fiyat, satır sırasıyla (TKL-04).
   fiyatlar: z.array(z.object({ satirId: z.number().int().positive(), birimFiyat: birimFiyatSemasi })).min(1).max(SATIR_EN_COK),
-  iskontoOrani: iskontoSemasi.default('0'),
+  iskontoOrani: iskontoSemasi.prefault('0'),
   teslimGun: z.number().int().min(1).max(365).nullish().transform((t) => t ?? null),
   odemeKosulu: istege(200),
   gecerlilik: tarihSemasi.nullish().transform((t) => t ?? null),
@@ -228,15 +228,15 @@ export const siparisDonusumGovdesi = z.object({
 }).refine((g) => g.termin >= g.siparisTarihi, TARIH_SIRASI);
 
 export const teklifSatirParametresi = z.object({
-  id: z.coerce.number().int().positive().max(2147483647),
-  satirId: z.coerce.number().int().positive().max(2147483647),
+  id: z.coerce.number<number>().int().positive().max(2147483647),
+  satirId: z.coerce.number<number>().int().positive().max(2147483647),
 });
 
 export const teklifListesiSorgusu = z.object({
   ...listeSorguAlanlari(['no', 'olusturma']),
   ara: z.string().trim().max(80).optional(),
   durum: teklifDurumuSemasi.optional(),
-  firmaId: z.coerce.number().int().positive().max(2147483647).optional(),
+  firmaId: z.coerce.number<number>().int().positive().max(2147483647).optional(),
 });
 
 export const teklifSatiriSemasi = z.object({
@@ -323,7 +323,7 @@ export type TeklifAyrintiCevabi = z.output<typeof teklifAyrintiCevabi>;
 // Satılabilir kart seçimi: yalnız aktif mamul, yarı mamul ve ticari mal (SIP-02); arama stok kodu ve adda.
 export const malzemeSecenekSorgusu = z.object({
   ara: z.string().trim().max(60).optional().transform((m) => (m ? m : null)),
-  sayfa: z.coerce.number().int().min(1).max(10_000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(10_000).prefault(1),
 });
 export const malzemeSecenegiSemasi = z.object({
   no: z.number().int(),

@@ -29,7 +29,7 @@ function kur(uclar: readonly Uc[]): FastifyInstance {
 }
 
 const okuma = uc({
-  yontem: 'GET', yol: '/istasyonlar/:id', yetki: 'kisiler.oku', parametre: z.object({ id: z.coerce.number().int() }),
+  yontem: 'GET', yol: '/istasyonlar/:id', yetki: 'kisiler.oku', parametre: z.object({ id: z.coerce.number<number>().int() }),
   cevap: z.object({ id: z.number() }),
   isle: ({ parametre }) => {
     if (parametre.id === 99) throw kapsamDisi();

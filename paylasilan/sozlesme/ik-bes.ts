@@ -37,7 +37,7 @@ export const ikBesHareketGirdisi = z.object({
   aciklama: bosMetin(300),
 }).strict();
 export const ikBesIptalGovdesi = z.object({ surum: surumSemasi }).strict();
-export const ikBesIptalParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const ikBesIptalParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const ikBesYazCevabi = z.object({ hareket: besHareketi });
 
 export type IkBesHareketi = z.output<typeof besHareketi>;

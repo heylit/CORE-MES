@@ -70,7 +70,7 @@ test('işlem listesi dolu, kayıtlı ve yinelenmeyen işlemlerle kurulur; okuma 
 const yazmaGirdileri: DenetimGirdisi[] = [];
 const yazma = uc({
   yontem: 'POST', yol: '/istasyonlar/:id/not', yetki: { biri: ['sayfa.istasyonlar', 'sayfa.uretim-emirleri'] },
-  parametre: z.object({ id: z.coerce.number().int() }), govde: z.object({ not: z.string() }),
+  parametre: z.object({ id: z.coerce.number<number>().int() }), govde: z.object({ not: z.string() }),
   cevap: z.object({ kim: z.string() }),
   isle: ({ kullanici }) => ({ kim: kullanici.ad }),
 });

@@ -53,8 +53,8 @@ export const kisiEkIslemleriCevabi = z.object({
   islemler: z.array(z.string()), devredilmez: z.array(z.string()), kisiler: z.array(kisiEkIslemleriSemasi),
 });
 
-export const kisiParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
-export const rolParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const kisiParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
+export const rolParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 // Hedef durumu söyler (ver ya da al): aynı komut ikinci kez gelirse sonuç değişmez, sürüm gerekmez.
 export const rolIslemiGovdesi = z.object({ islem: z.string().max(100), verildi: z.boolean() });
 // Kişi satırını ya da rollerini değiştiren her komut istemcinin okuduğu sürümü taşır; eskiyse 409.
@@ -115,9 +115,9 @@ export type SinirliHesapGovdesi = z.input<typeof sinirliHesapGovdesi>;
 // Cevap ortak seçici biçimindedir: `kod` sicil no'dur (yoksa boş), `ust` yok. Varsayılan yalnız aktif kişiler.
 export const KISI_SECIM_SAYFA_BOYU = 30;
 export const kisiSecimSorgusu = z.object({
-  q: z.string().trim().max(80).default(''),
+  q: z.string().trim().max(80).prefault(''),
   pasifler: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
-  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(1000).prefault(1),
 });
 export const kisiSecimCevabi = z.object({
   sonuclar: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string(), aktif: z.boolean(), ust: z.null() })),

@@ -26,16 +26,16 @@ const istege = (azami: number) =>
     return kirpik ? kirpik : null;
   });
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive() });
-export const revizyonParametresi = z.object({ id: z.coerce.number().int().positive(), revizyonId: z.coerce.number().int().positive() });
+export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+export const revizyonParametresi = z.object({ id: z.coerce.number<number>().int().positive(), revizyonId: z.coerce.number<number>().int().positive() });
 
 // Revizyonun önizleme kareleri: tarayıcı üretir (3B modelde dönen 8 kare, PDF ve fotoda tek kare), dosya deposuna yükler,
 // özetlerini sırayla bildirir.
 export const ONIZLEME_SINIRLARI = { azamiKare: 16, kareBayt: 64 * 1024, toplamBayt: 512 * 1024 } as const;
 export const onizlemeKareParametresi = z.object({
-  id: z.coerce.number().int().positive(),
-  revizyonId: z.coerce.number().int().positive(),
-  kare: z.coerce.number().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
+  id: z.coerce.number<number>().int().positive(),
+  revizyonId: z.coerce.number<number>().int().positive(),
+  kare: z.coerce.number<number>().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
 });
 export const onizlemeGovdesi = z.object({
   kareler: z.array(z.object({ kare: z.number().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1), ozet: dosyaOzeti })).min(1).max(ONIZLEME_SINIRLARI.azamiKare),
@@ -48,7 +48,7 @@ export const belgeListesiSorgusu = z.object({
   // 3B listesinin iki sekmesi: makine, bir istasyona (makineye) bağlı belge; malzeme, istasyona bağlı olmayan belge (bağsız dahil).
   makine: z.enum(['evet', 'hayir']).optional(),
   // Arşivdekiler ayrı görünümdür; varsayılan liste etkin belgelerdir.
-  arsiv: z.enum(['evet', 'hayir']).default('hayir'),
+  arsiv: z.enum(['evet', 'hayir']).prefault('hayir'),
 });
 
 // İlk revizyonun dosyası: istemci önce `/dosyalar/:ozet/parca` ile yükler, sonra özeti burada bağlatır.
@@ -134,7 +134,7 @@ export const belgeAyrintisi = z.object({
 export const belgeListesiCevabi = listeCevapSemasi(belgeSatiri);
 
 // "Malzeme kartına bağla" seçicisi: stok kodu, ad ya da kart no ile aranır; yalnız aktif kartlar döner.
-export const malzemeSecimiSorgusu = z.object({ ara: z.string().trim().max(80).default('') });
+export const malzemeSecimiSorgusu = z.object({ ara: z.string().trim().max(80).prefault('') });
 export const malzemeSecimiCevabi = z.object({
   malzemeler: z.array(z.object({ id: z.number().int(), kod: z.string(), ad: z.string().nullable(), birim: z.string().nullable() })),
 });
@@ -146,10 +146,10 @@ export const malzemeSecimiCevabi = z.object({
 export const MALZEME_BELGE_TURLERI = ['fotograf', 'teknik-resim', '3b-model'] as const;
 export type MalzemeBelgeTuru = (typeof MALZEME_BELGE_TURLERI)[number];
 
-export const malzemeParametresi = z.object({ no: z.coerce.number().int().positive() });
-export const malzemeBelgeParametresi = z.object({ no: z.coerce.number().int().positive(), id: z.coerce.number().int().positive() });
+export const malzemeParametresi = z.object({ no: z.coerce.number<number>().int().positive() });
+export const malzemeBelgeParametresi = z.object({ no: z.coerce.number<number>().int().positive(), id: z.coerce.number<number>().int().positive() });
 export const malzemeRevizyonParametresi = z.object({
-  no: z.coerce.number().int().positive(), id: z.coerce.number().int().positive(), revizyonId: z.coerce.number().int().positive(),
+  no: z.coerce.number<number>().int().positive(), id: z.coerce.number<number>().int().positive(), revizyonId: z.coerce.number<number>().int().positive(),
 });
 
 export const malzemeBelgeEkleGovdesi = z.object({
@@ -210,8 +210,8 @@ export const kucukResimSorgusu = z.object({
 });
 export const kucukResimlerCevabi = z.object({ resimler: z.array(kucukResim) });
 export const kucukResimKareParametresi = z.object({
-  revizyonId: z.coerce.number().int().positive(),
-  kare: z.coerce.number().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
+  revizyonId: z.coerce.number<number>().int().positive(),
+  kare: z.coerce.number<number>().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
 });
 
 export type MalzemeBelgeEkleGovdesi = z.input<typeof malzemeBelgeEkleGovdesi>;

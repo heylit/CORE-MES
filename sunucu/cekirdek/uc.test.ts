@@ -130,8 +130,8 @@ test('parametre ve sorgu şemadan geçer, tipleri dönüşür; hatalı parametre
     yontem: 'GET',
     yol: '/stok/:id',
     yetki: 'kisiler.oku',
-    parametre: z.object({ id: z.coerce.number().int().positive() }),
-    sorgu: z.object({ sayfa: z.coerce.number().int().default(1) }),
+    parametre: z.object({ id: z.coerce.number<number>().int().positive() }),
+    sorgu: z.object({ sayfa: z.coerce.number<number>().int().prefault(1) }),
     cevap: z.object({ id: z.number(), sayfa: z.number() }),
     isle: ({ parametre, sorgu }) => ({ id: parametre.id, sayfa: sorgu.sayfa }),
   });
@@ -341,7 +341,7 @@ test('denetim: başarılı yazma komutu aynı transactionda kaydedilir; okuma ve
     uc({ yontem: 'GET', yol: '/stok/:id', yetki: 'kisiler.oku', cevap, isle: () => ({ tamam: true }) }),
     uc({
       yontem: 'POST', yol: '/stok/:id/duzelt', yetki: 'kisiler.yaz',
-      parametre: z.object({ id: z.coerce.number() }),
+      parametre: z.object({ id: z.coerce.number<number>() }),
       govde: z.object({ adet: z.number() }),
       cevap,
       isle: ({ govde }) => { if (govde.adet < 0) throw cakisma('Eksiye düşemez.'); return { tamam: true }; },
@@ -536,7 +536,7 @@ test('durum kodu: yazma komutunda ve geçersiz kodda 500 SUNUCU; yazma geri alı
     }),
     uc({
       yontem: 'GET', yol: '/kod/:kod', yetki: 'acik', cevap,
-      parametre: z.object({ kod: z.coerce.number() }),
+      parametre: z.object({ kod: z.coerce.number<number>() }),
       isle: ({ parametre, istek }) => { istek.durumKoduYaz(parametre.kod); kabulEdilen.push(parametre.kod); return { tamam: true }; },
     }),
   ];
@@ -559,7 +559,7 @@ test('durum kodu: yazma komutunda ve geçersiz kodda 500 SUNUCU; yazma geri alı
 });
 
 test('durum kodu ve gövde: gövdesiz dönüş yazılan kodla gider; gövdeyle 204 ya da 304 yazmak 500 SUNUCU', async () => {
-  const kodParametresi = z.object({ kod: z.coerce.number() });
+  const kodParametresi = z.object({ kod: z.coerce.number<number>() });
   const uclar = [
     uc({
       yontem: 'GET', yol: '/bos/:kod', yetki: 'acik', parametre: kodParametresi, cevap: z.undefined(),

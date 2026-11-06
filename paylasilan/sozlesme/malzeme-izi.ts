@@ -10,11 +10,11 @@ const TAM_SAYI_UST = 2147483647;
 const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
 const miktar = z.string();
 
-export const malzemeParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const malzemeParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 
 export const malzemeAramaSorgusu = z.object({
   metin: z.string().trim().max(60).optional(),
-  sayfa: z.coerce.number().int().min(1).max(100_000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(100_000).prefault(1),
 });
 export const malzemeAramaSatiri = z.object({
   id: KIMLIK, kod: z.string(), ad: z.string().nullable(), tur: z.enum(KATALOG_TURLERI), birim: z.string().nullable(),

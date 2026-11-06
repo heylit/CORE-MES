@@ -26,7 +26,7 @@ export type AlarmDurumu = (typeof ALARM_DURUMLARI)[number];
 export type AlarmGorunumu = (typeof ALARM_GORUNUMLERI)[number];
 export type KorumaDurumu = (typeof KORUMA_DURUMLARI)[number];
 
-export const guvenlikKimligi = z.object({ id: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER) });
+export const guvenlikKimligi = z.object({ id: z.coerce.number<number>().int().positive().max(Number.MAX_SAFE_INTEGER) });
 
 const metinVeyaYok = z.string().nullable();
 const sayi = z.number().int().nonnegative();
@@ -54,7 +54,7 @@ export const alarmSemasi = z.object({
 
 export const alarmListeSorgusu = z.object({
   ...sayfaSorguAlanlari,
-  gorunum: z.enum(ALARM_GORUNUMLERI).default('etkin'),
+  gorunum: z.enum(ALARM_GORUNUMLERI).prefault('etkin'),
 });
 export const alarmListeCevabi = listeCevapSemasi(alarmSemasi);
 

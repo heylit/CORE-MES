@@ -26,14 +26,14 @@ const istege = (azami: number) =>
     return kirpik ? kirpik : null;
   });
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 
 // Talep açan yalnız konu, yer ve aciliyeti seçer; açan kişi ve zaman sunucudan (IDR-01).
 export const talepAcGovdesi = z.object({
   kategori: talepKategorisiSemasi,
   yer: z.string().trim().min(1, 'Yer boş olamaz.').max(YER_EN_UZUN, `En çok ${YER_EN_UZUN} karakter.`),
   aciklama: istege(ACIKLAMA_EN_UZUN),
-  aciliyet: talepAciliyetiSemasi.default('normal'),
+  aciliyet: talepAciliyetiSemasi.prefault('normal'),
 });
 
 export const durumGovdesi = z.object({ ...beklenenSurum });
@@ -167,7 +167,7 @@ export const kontrolKaydiSemasi = z.object({
 });
 export const kontrolKayitlariCevabi = z.object({ kayitlar: z.array(kontrolKaydiSemasi) });
 
-export const firmaSecimSorgusu = z.object({ ara: z.string().trim().max(100).default('') });
+export const firmaSecimSorgusu = z.object({ ara: z.string().trim().max(100).prefault('') });
 export const firmaSecenekleriCevabi = z.object({ firmalar: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
 
 // Filo araç kartı (172 a). Plaka sunucuda biçimlenir ("34 ABC 123"); km azalmaz. Görev ve masraf sonraki parçalarda.
@@ -190,12 +190,12 @@ const aracAlanlari = {
   tur: aracTuruSemasi,
   markaModel: istege(MARKA_MODEL_EN_UZUN),
   sahiplik: sahiplikSemasi,
-  durum: aracDurumuSemasi.default('musait'),
+  durum: aracDurumuSemasi.prefault('musait'),
   km: kmSemasi,
   sonrakiBakimKm: kmSemasi,
   muayeneTarihi: tarihSemasi.nullish().transform((t) => t ?? null),
   sigortaTarihi: tarihSemasi.nullish().transform((t) => t ?? null),
-  sevkiyatta: z.boolean().default(false),
+  sevkiyatta: z.boolean().prefault(false),
   aciklama: istege(NOT_EN_UZUN),
 };
 export const aracEkleGovdesi = z.object(aracAlanlari);
@@ -449,7 +449,7 @@ export const yemekBildirGovdesi = z.object({
   izinli: adet,
   fazlaMesai: adet,
   ziyaretci: adet,
-  duzeltme: z.number().int().min(-YEMEK_ADET_EN_COK).max(YEMEK_ADET_EN_COK).default(0),
+  duzeltme: z.number().int().min(-YEMEK_ADET_EN_COK).max(YEMEK_ADET_EN_COK).prefault(0),
   duzeltmeNedeni: istege(DUZELTME_NEDENI_EN_UZUN),
 });
 

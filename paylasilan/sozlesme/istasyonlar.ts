@@ -30,13 +30,13 @@ export const istasyonTipi = z.enum(ISTASYON_TIPLERI);
 export const baglantiTuru = z.enum(BAGLANTI_TURLERI);
 export const kapasiteKaynagi = z.enum(KAPASITE_KAYNAKLARI);
 
-export const kimlikParametresi = z.object({ id: z.coerce.number().int().positive() });
-export const kisiParametresi = z.object({ kisiId: z.coerce.number().int().positive() });
+export const kimlikParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+export const kisiParametresi = z.object({ kisiId: z.coerce.number<number>().int().positive() });
 const mantiksal = z.enum(['true', 'false']).optional().transform((d) => d === 'true');
 export const pasifSorgusu = z.object({ pasifler: mantiksal });
 export const makineSorgusu = z.object({
   pasifler: mantiksal,
-  istasyonId: z.coerce.number().int().positive().optional(),
+  istasyonId: z.coerce.number<number>().int().positive().optional(),
 });
 
 // Yazma uçlarının gövdesi tüm kaydı taşır: güncelleme de tam kayıttır (pasife alma `aktif` ile).
@@ -44,20 +44,20 @@ export const isMerkeziGovdesi = z.object({
   kod: kodSemasi,
   ad: adSemasi,
   aciklama: istegeBagliMetin,
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
 });
 
 export const istasyonGovdesi = z.object({
   kod: kodSemasi,
   ad: adSemasi,
   isMerkeziId: kimlik,
-  tip: istasyonTipi.default('talasli'),
+  tip: istasyonTipi.prefault('talasli'),
   // Sorumlu bilgi alanıdır, yetki vermez. Kapasite kaynağını bugün ekran zorunlu tutar; sunucu boşu kabul eder (E2z, borçta).
   sorumluKisiId: kimlik.nullish().transform((k) => k ?? null),
   kapasiteKaynagi: kapasiteKaynagi.nullish().transform((k) => k ?? null),
   // Stok üretim alanı konumunu yalnız işaretli istasyona bağlar (SH5 b).
-  uretimAlani: z.boolean().default(false),
-  aktif: z.boolean().default(true),
+  uretimAlani: z.boolean().prefault(false),
+  aktif: z.boolean().prefault(true),
 });
 
 const makineAlanlari = z.object({
@@ -69,7 +69,7 @@ const makineAlanlari = z.object({
   istasyonId: kimlik.nullish().transform((k) => k ?? null),
   baglantiTuru: baglantiTuru.nullish().transform((t) => t ?? null),
   baglantiAdresi: istegeBagliMetin,
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
 });
 const adresTurIster = {
   kosul: (m: { baglantiAdresi: string | null; baglantiTuru: string | null }) => m.baglantiAdresi === null || m.baglantiTuru !== null,
@@ -87,8 +87,8 @@ export const kisiIsMerkezleriGovdesi = z.object({ isMerkeziIdleri: z.array(kimli
 
 // Kişi atamaları (IK1-IK3): yüzde iki ondalıklı metindir, sayıya çevrilip taşınmaz; tarih geçerlilik başlangıcıdır.
 export const idKisiParametresi = z.object({
-  id: z.coerce.number().int().positive(),
-  kisiId: z.coerce.number().int().positive(),
+  id: z.coerce.number<number>().int().positive(),
+  kisiId: z.coerce.number<number>().int().positive(),
 });
 export const yuzdeMetni = z
   .string()
@@ -102,25 +102,25 @@ export const tarihMetni = z
   .refine((t) => !Number.isNaN(Date.parse(t)) && new Date(t).toISOString().startsWith(t), 'Geçerli bir tarih girin.');
 // Başlangıç verilmezse bugündür.
 export const atamaGovdesi = z.object({ kisiId: kimlik, yuzde: yuzdeMetni, baslangic: tarihMetni.optional() });
-export const atamaKaldirGovdesi = z.object({ baslangic: tarihMetni.optional() }).default({});
+export const atamaKaldirGovdesi = z.object({ baslangic: tarihMetni.optional() }).prefault({});
 // Ekip silinmez; pasife alma `aktif` ile (IK7).
 export const ATAMA_TURLERI = ['istasyon', 'makine', 'ekip'] as const;
 export const iptalOnizlemeSorgusu = z.object({
   tur: z.enum(ATAMA_TURLERI),
-  hedefId: z.coerce.number().int().positive(),
-  kisiId: z.coerce.number().int().positive(),
+  hedefId: z.coerce.number<number>().int().positive(),
+  kisiId: z.coerce.number<number>().int().positive(),
   baslangic: tarihMetni.optional(),
 });
 export const ekipGovdesi = z.object({
   kod: kodSemasi,
   ad: adSemasi,
   istasyonId: kimlik.nullish().transform((k) => k ?? null),
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
 });
 export const ekipGuncellemeGovdesi = ekipGovdesi.extend(beklenenSurum);
-export const ekipUyeSorgusu = z.object({ ekipId: z.coerce.number().int().positive().optional(), tarih: tarihMetni.optional() });
-export const istasyonKisiSorgusu = z.object({ istasyonId: z.coerce.number().int().positive().optional(), tarih: tarihMetni.optional() });
-export const makineKisiSorgusu = z.object({ makineId: z.coerce.number().int().positive().optional(), tarih: tarihMetni.optional() });
+export const ekipUyeSorgusu = z.object({ ekipId: z.coerce.number<number>().int().positive().optional(), tarih: tarihMetni.optional() });
+export const istasyonKisiSorgusu = z.object({ istasyonId: z.coerce.number<number>().int().positive().optional(), tarih: tarihMetni.optional() });
+export const makineKisiSorgusu = z.object({ makineId: z.coerce.number<number>().int().positive().optional(), tarih: tarihMetni.optional() });
 
 export const isMerkeziSemasi = z.object({
   id: z.number().int(),
@@ -200,7 +200,7 @@ export const operasyonTipiGovdesi = z.object({
   kod: kodSemasi,
   ad: adSemasi,
   grup: operasyonGrubu,
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
   // Büyük harfe çevrilir; en çok 6 harf ya da rakam.
   kisaltma: z
     .string()
@@ -317,8 +317,8 @@ export const yetkinlikGovdesi = z.object({ istasyonIdleri: z.array(kimlik).max(5
 // 565 a: yetkinlik matrisinde toplu aç ve kapat (satır ya da sütun); her kişinin listesi tek uçtaki gibi fark olarak yazılır, hepsi ya da hiçbiri.
 // 563 c: makine sütunları da aynı uçtan gider; istasyon değişiklikleri önce uygulanır (istasyonu ve makinesi birlikte açılabilsin).
 export const yetkinlikTopluGovdesi = z.object({
-  degisiklikler: z.array(z.object({ kisiId: kimlik, istasyonId: kimlik, yetkin: z.boolean() })).max(2000).default([]),
-  makineler: z.array(z.object({ kisiId: kimlik, makineId: kimlik, yetkin: z.boolean() })).max(2000).default([]),
+  degisiklikler: z.array(z.object({ kisiId: kimlik, istasyonId: kimlik, yetkin: z.boolean() })).max(2000).prefault([]),
+  makineler: z.array(z.object({ kisiId: kimlik, makineId: kimlik, yetkin: z.boolean() })).max(2000).prefault([]),
 }).refine((g) => g.degisiklikler.length + g.makineler.length > 0, 'En az bir değişiklik gerekli.');
 // 563 c: kişinin bakabildiği makineler; yalnız yetkin olduğu istasyonun makineleri. Liste tümden yazılır, fark deftere girer.
 export const makineYetkinlikGovdesi = z.object({ makineIdleri: z.array(kimlik).max(500) });
@@ -347,12 +347,12 @@ const kisiYetkinligiAlanlari = {
 export const kisiYetkinligiSemasi = z.object({ kisiId: z.number().int(), ...kisiYetkinligiAlanlari });
 export const yetkinliklerCevabi = z.object({ yetkinlikler: z.array(kisiYetkinligiSemasi) });
 export const kisiYetkinligiCevabi = z.object(kisiYetkinligiAlanlari);
-export const yetkinlikParametresi = z.object({ kisiId: z.coerce.number().int().positive(), istasyonId: z.coerce.number().int().positive() });
-export const ayarYetkinligiParametresi = z.object({ kisiId: z.coerce.number().int().positive(), makineId: z.coerce.number().int().positive() });
+export const yetkinlikParametresi = z.object({ kisiId: z.coerce.number<number>().int().positive(), istasyonId: z.coerce.number<number>().int().positive() });
+export const ayarYetkinligiParametresi = z.object({ kisiId: z.coerce.number<number>().int().positive(), makineId: z.coerce.number<number>().int().positive() });
 // Liste tümden yazılır: seçilen makineler ve seçilen istasyonların bütün aktif makineleri (1303 a).
 export const ayarYetkinligiBelirleGovdesi = z.object({
-  makineIdleri: z.array(kimlik).max(500).default([]),
-  istasyonIdleri: z.array(kimlik).max(200).default([]),
+  makineIdleri: z.array(kimlik).max(500).prefault([]),
+  istasyonIdleri: z.array(kimlik).max(200).prefault([]),
 });
 export const yetkinlikAyrintiGovdesi = z.object({
   ...beklenenSurum,
@@ -412,7 +412,7 @@ export const makineCokluEkleGovdesi = z.object({ kayitlar: cokluKayitlar, tur: i
 export const istasyonCokluEkleGovdesi = z.object({
   kayitlar: cokluKayitlar,
   isMerkeziId: kimlik,
-  tip: istasyonTipi.default('talasli'),
+  tip: istasyonTipi.prefault('talasli'),
   kapasiteKaynagi: kapasiteKaynagi,
 });
 
@@ -497,10 +497,10 @@ export type IstasyonCokluEkleGovdesi = z.input<typeof istasyonCokluEkleGovdesi>;
 export const SECIM_SAYFA_BOYU = 30;
 export const tesisSecimSorgusu = z.object({
   tur: z.enum(['istasyon', 'makine']),
-  q: z.string().trim().max(80).default(''),
-  istasyonId: z.coerce.number().int().positive().optional(),
+  q: z.string().trim().max(80).prefault(''),
+  istasyonId: z.coerce.number<number>().int().positive().optional(),
   pasifler: mantiksal,
-  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(1000).prefault(1),
 });
 export const tesisSecimCevabi = z.object({
   sonuclar: z.array(z.object({

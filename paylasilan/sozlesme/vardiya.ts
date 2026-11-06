@@ -18,11 +18,11 @@ export const vardiyaGovdesi = z.object({
   baslangic: saat,
   bitis: saat,
   molalar: z.array(mola).max(AZAMI_MOLA),
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
 });
 // Güncelleme okunan sürümü taşır: arada başkası yazdıysa 409 alır, üstüne yazmaz.
 export const vardiyaGuncelleGovdesi = vardiyaGovdesi.extend(beklenenSurum);
-export const vardiyaParametresi = z.object({ id: z.coerce.number().pipe(kimlik) });
+export const vardiyaParametresi = z.object({ id: z.coerce.number<number>().pipe(kimlik) });
 export const matrisGovdesi = z.object({ isMerkeziId: kimlik, gun: z.number().int().min(1).max(7), vardiyaId: kimlik, acik: z.boolean() });
 // Kaynak iş merkezinin haftalık düzeni bütün öbür iş merkezlerine kopyalanır (onları siler, yerine yazar).
 export const haftaUygulaGovdesi = z.object({ kaynakIsMerkeziId: kimlik });
@@ -62,7 +62,7 @@ export const takvimGunuGovdesi = z.object({
 });
 export const tarihParametresi = z.object({ tarih: tarihSemasi });
 export const resmiTatilGovdesi = z.object({ yil: z.number().int().min(2000).max(2100) });
-export const kisiParametresi = z.object({ kisiId: z.coerce.number().pipe(kimlik) });
+export const kisiParametresi = z.object({ kisiId: z.coerce.number<number>().pipe(kimlik) });
 // null kişinin vardiyasını kaldırır: kişi iş merkezinin bütün açık vardiyalarında sayılır.
 export const kisiVardiyasiGovdesi = z.object({ vardiyaId: kimlik.nullable() });
 
@@ -97,7 +97,7 @@ export const vardiyaPersoneliCevabi = z.object({
 export const KAYNAK_TURLERI = ['is-merkezi', 'istasyon', 'makine', 'kisi'] as const;
 export const calismaTakvimiSorgusu = z.object({
   tur: z.enum(KAYNAK_TURLERI),
-  id: z.coerce.number().pipe(kimlik),
+  id: z.coerce.number<number>().pipe(kimlik),
   baslangic: tarihSemasi,
   bitis: tarihSemasi,
 });
@@ -136,14 +136,14 @@ export const fazlaMesaiGovdesi = z.object({
   baslangic: saat,
   bitis: saat,
   kapsam: z.enum(FAZLA_MESAI_KAPSAMLARI),
-  isMerkeziId: kimlik.nullable().default(null),
-  istasyonId: kimlik.nullable().default(null),
-  kisiIdleri: z.array(kimlik).max(AZAMI_TOPLU_KISI).refine((d) => new Set(d).size === d.length, 'Aynı kişi iki kez seçilmiş.').default([]),
+  isMerkeziId: kimlik.nullable().prefault(null),
+  istasyonId: kimlik.nullable().prefault(null),
+  kisiIdleri: z.array(kimlik).max(AZAMI_TOPLU_KISI).refine((d) => new Set(d).size === d.length, 'Aynı kişi iki kez seçilmiş.').prefault([]),
   aciklama: z.string().trim().max(300, 'Açıklama en çok 300 karakter olur.').nullish().transform((a) => (a ? a : null)),
 });
 export const fazlaMesaiGuncelleGovdesi = fazlaMesaiGovdesi.extend(beklenenSurum);
 export const fazlaMesaiIptalGovdesi = z.object(beklenenSurum);
-export const fazlaMesaiParametresi = z.object({ id: z.coerce.number().pipe(kimlik) });
+export const fazlaMesaiParametresi = z.object({ id: z.coerce.number<number>().pipe(kimlik) });
 export const fazlaMesaiListeSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi });
 export const fazlaMesaiSemasi = z.object({
   id: kimlik,
@@ -189,23 +189,23 @@ export const PLANLI_DURUS_KAPSAMLARI = ['tesis', 'is-merkezi', 'istasyon'] as co
 export const PLANLI_DURUS_TEKRARLARI = ['yok', 'gunluk', 'haftalik'] as const;
 export const planliDurusGovdesi = z.object({
   baslik: z.string().trim().min(1, 'Başlık zorunlu.').max(80, 'Başlık en çok 80 karakter olur.'),
-  durusNedeniId: kimlik.nullable().default(null),
+  durusNedeniId: kimlik.nullable().prefault(null),
   kapsam: z.enum(PLANLI_DURUS_KAPSAMLARI),
-  isMerkeziId: kimlik.nullable().default(null),
-  istasyonId: kimlik.nullable().default(null),
+  isMerkeziId: kimlik.nullable().prefault(null),
+  istasyonId: kimlik.nullable().prefault(null),
   baslangic: zamanSemasi,
   bitis: zamanSemasi,
-  tekrar: z.enum(PLANLI_DURUS_TEKRARLARI).default('yok'),
+  tekrar: z.enum(PLANLI_DURUS_TEKRARLARI).prefault('yok'),
   // Haftalık tekrarda ISO günler: 1 pazartesi ... 7 pazar.
-  gunler: z.array(z.number().int().min(1).max(7)).max(7).default([]),
+  gunler: z.array(z.number().int().min(1).max(7)).max(7).prefault([]),
   // Tekrar bu andan sonra başlamaz; null süresizdir.
-  tekrarBitis: zamanSemasi.nullable().default(null),
+  tekrarBitis: zamanSemasi.nullable().prefault(null),
   aciklama: z.string().trim().max(300, 'Açıklama en çok 300 karakter olur.').nullish().transform((n) => (n ? n : null)),
-  aktif: z.boolean().default(true),
+  aktif: z.boolean().prefault(true),
 });
 export const planliDurusGuncelleGovdesi = planliDurusGovdesi.extend(beklenenSurum);
 export const planliDurusKaldirGovdesi = z.object(beklenenSurum);
-export const planliDurusParametresi = z.object({ id: z.coerce.number().pipe(kimlik) });
+export const planliDurusParametresi = z.object({ id: z.coerce.number<number>().pipe(kimlik) });
 export const planliDurusListeSorgusu = z.object({
   ...listeSorguAlanlari(['baslangic', 'baslik']),
   yalnizAktif: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),

@@ -18,7 +18,7 @@ export const YAZI_TIPLERI = ['gotik', 'iso_3098', 'tek_cizgi', 'nokta_matris_5x7
 export const AZAMI_YAZI_YUKSEKLIGI_MM = 100;
 export const AZAMI_YAZI_DERINLIGI_MM = 10;
 
-const id = z.coerce.number().int().positive().max(2147483647);
+const id = z.coerce.number<number>().int().positive().max(2147483647);
 const metin = (azami: number) => z.string().trim().min(1).max(azami);
 const olcu = z.number().finite();
 
@@ -36,30 +36,30 @@ const yerSemasi = z.object({
 export const alanGovdesi = z.object({
   ad: metin(60),
   icerik: z.enum(ICERIKLER),
-  sabitMetin: metin(40).nullable().default(null),
-  kodTuru: z.enum(KOD_TURLERI).default('yok'),
+  sabitMetin: metin(40).nullable().prefault(null),
+  kodTuru: z.enum(KOD_TURLERI).prefault('yok'),
   yontem: z.enum(YONTEMLER),
   // Yükseklik ve derinlik ayrı ölçülerdir; ikisi de istenmeyebilir.
-  yaziYuksekligiMm: z.number().positive('Yazı yüksekliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_YUKSEKLIGI_MM).nullable().default(null),
-  yaziDerinligiMm: z.number().positive('Yazı derinliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_DERINLIGI_MM).nullable().default(null),
-  yaziTipi: z.enum(YAZI_TIPLERI).nullable().default(null),
-  program: metin(40).nullable().default(null),
-  yuzey: metin(120).nullable().default(null),
-  yer: yerSemasi.nullable().default(null),
+  yaziYuksekligiMm: z.number().positive('Yazı yüksekliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_YUKSEKLIGI_MM).nullable().prefault(null),
+  yaziDerinligiMm: z.number().positive('Yazı derinliği 0\'dan büyük olmalı.').max(AZAMI_YAZI_DERINLIGI_MM).nullable().prefault(null),
+  yaziTipi: z.enum(YAZI_TIPLERI).nullable().prefault(null),
+  program: metin(40).nullable().prefault(null),
+  yuzey: metin(120).nullable().prefault(null),
+  yer: yerSemasi.nullable().prefault(null),
 });
 
 const tanimAlanlari = z.object({
   seriSablonu: metin(60),
-  sayacKapsami: z.enum(SAYAC_KAPSAMLARI).default('malzeme'),
-  baslangicSirasi: z.number().int().min(1).max(99999999).default(1),
-  dogrulama: z.boolean().default(true),
-  model: z.object({ belgeId: id, revizyon: metin(10) }).nullable().default(null),
+  sayacKapsami: z.enum(SAYAC_KAPSAMLARI).prefault('malzeme'),
+  baslangicSirasi: z.number().int().min(1).max(99999999).prefault(1),
+  dogrulama: z.boolean().prefault(true),
+  model: z.object({ belgeId: id, revizyon: metin(10) }).nullable().prefault(null),
   alanlar: z.array(alanGovdesi).min(1, 'En az bir marka gerekir.').max(AZAMI_ALAN),
 });
 
 export const tanimEkleGovdesi = tanimAlanlari.extend({
   malzemeId: id,
-  opNo: z.coerce.number().int('Rota operasyon no tam sayı olmalı.').positive('Rota operasyon no 0\'dan büyük olmalı.').max(2147483647),
+  opNo: z.coerce.number<number>().int('Rota operasyon no tam sayı olmalı.').positive('Rota operasyon no 0\'dan büyük olmalı.').max(2147483647),
 });
 export const tanimKaydetGovdesi = tanimAlanlari.extend(beklenenSurum);
 
@@ -114,7 +114,7 @@ export const tanimEmirleriCevabi = z.object({
 export const markalaGovdesi = z.object({
   tanimId: id,
   uretimEmriId: id,
-  istasyonId: id.nullable().default(null),
+  istasyonId: id.nullable().prefault(null),
   // 'hatali': numara yanar, birim hurdaya düşer.
   sonuc: z.enum(['iyi', 'hatali']),
 });
@@ -123,8 +123,8 @@ export const dogrulaGovdesi = z.object({ tanimId: id, seriNo: metin(80) });
 
 export const durumGovdesi = z.object({
   komut: z.enum(DURUM_KOMUTLARI),
-  hurdaNedeniId: id.nullable().default(null),
-  aciklama: metin(300).nullable().default(null),
+  hurdaNedeniId: id.nullable().prefault(null),
+  aciklama: metin(300).nullable().prefault(null),
   ...beklenenSurum,
 });
 

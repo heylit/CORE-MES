@@ -122,7 +122,7 @@ export const KUTUPHANE_KIMLIGI = /^[A-Za-z0-9_.-]{1,64}$/;
 const kutuphaneKimligi = z.string().regex(KUTUPHANE_KIMLIGI, 'Geçersiz kütüphane kimliği.');
 export const stokDusGovdesi = z.object({ kimlik: kutuphaneKimligi, miktar: z.number().int().min(1).max(10000) });
 export const stokDusCevabi = z.object({ hareketSayisi: z.number().int().nonnegative() });
-export const stokKartlariSorgusu = z.object({ metin: z.string().trim().max(100).optional(), sayfa: z.coerce.number().int().min(1).max(10000).default(1) });
+export const stokKartlariSorgusu = z.object({ metin: z.string().trim().max(100).optional(), sayfa: z.coerce.number<number>().int().min(1).max(10000).prefault(1) });
 export const stokKartiSemasi = z.object({ malzemeId: z.number().int(), kod: z.string(), ad: z.string().nullable(), birim: z.string().nullable() });
 export const stokKartlariCevabi = z.object({ kartlar: z.array(stokKartiSemasi), toplam: z.number().int().nullable() });
 // malzemeId null bağı kaldırır.
@@ -153,7 +153,7 @@ export const tezgahSemasi = z.object({
   surum: z.number().int().nonnegative(),
 });
 export const tezgahlarCevabi = z.object({ tezgahlar: z.array(tezgahSemasi) });
-export const tezgahParametresi = z.object({ makineId: z.coerce.number().int().positive().max(2147483647) });
+export const tezgahParametresi = z.object({ makineId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const tezgahAyarGovdesi = tezgahAyariSemasi.extend({ beklenenSurum: z.number().int().min(0).max(2147483647) })
   .refine((g) => g.canliDevir === null || g.canliTakim === true, { message: 'Canlı takım devri yalnız canlı takımlı tezgâhta girilir.', path: ['canliDevir'] });
 export const tezgahAyarCevabi = z.object({ tezgah: tezgahSemasi });
@@ -190,7 +190,7 @@ export const hamAnaliziCevabi = z.object({
 });
 export const modelSecenekleriSorgusu = z.object({ ara: z.string().trim().max(100).optional() });
 export const modelSecenekleriCevabi = z.object({ belgeler: z.array(modelBelgesiSemasi) });
-export const modelParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const modelParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 
 export type Kayit = z.output<typeof kayitSemasi>;
 export type KayitlarCevabi = z.output<typeof kayitlarCevabi>;

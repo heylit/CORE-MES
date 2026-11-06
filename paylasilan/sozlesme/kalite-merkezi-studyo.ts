@@ -4,7 +4,7 @@ import { zamanSemasi } from '../zaman.ts';
 // Teknik resim, model, balon, numune planı, numune ve ölçüm (595 1 b, 597 a, 600 a): sahibi Kalite Merkezi'dir. Arkon kalite istasyonu
 // ve Hazırlık bunları okur; ölçümü ve numune kararını Kalite Merkezi'nin disari.ts komutuyla yazar.
 
-const kimlik = z.coerce.number().int().positive().max(2147483647);
+const kimlik = z.coerce.number<number>().int().positive().max(2147483647);
 export const kmStudyoParcaParametresi = z.object({ malzemeNo: kimlik });
 export const kmStudyoResimParametresi = z.object({ resimId: kimlik });
 export const kmStudyoEmirParametresi = z.object({ uretimEmriId: kimlik });
@@ -108,7 +108,7 @@ export const kmPlanKopyalaGovdesi = z.object({ kaynakResimId: kimlik, surum: z.n
 // Resim alma seçicisi: belge merkezinde yayında olan PDF ve 3B modeller (belge-merkezi/disari.ts yayindakiBelgeler); arama belge adında.
 export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
 // Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
-export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzemeNo: z.coerce.number().int().positive().max(2147483647).optional() });
+export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzemeNo: z.coerce.number<number>().int().positive().max(2147483647).optional() });
 export const kmMerkezBelgesi = z.object({
   id: z.number().int().positive(), ad: z.string(), harf: z.string(), tur: z.enum(KM_RESIM_TURLERI), bicim: z.enum(KM_MERKEZ_BICIMLERI), ozet: z.string(),
   bagli: z.boolean(),

@@ -450,7 +450,7 @@ export function ucEnvanteri(uclar: readonly Uc[]): UcOzeti[] {
 
 function semadanGecir(sema: Sema | null, deger: unknown, kaynak: string): unknown {
   if (sema === null) return undefined;
-  const sonuc = sema.safeParse(deger, { errorMap: turkceIleti });
+  const sonuc = sema.safeParse(deger, { error: turkceIleti });
   if (sonuc.success) return sonuc.data;
   const sorunlar = sonuc.error.issues.map((s) => ({ alan: s.path.join('.') || kaynak, mesaj: s.message }));
   const ilk = sorunlar[0];

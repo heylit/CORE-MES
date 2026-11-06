@@ -22,7 +22,7 @@ export const birimSetleriCevabi = z.object({
 
 export const birimSetiEkleGovdesi = z.object({
   kod: kodSemasi,
-  ad: z.string().trim().min(1).max(80).nullable().default(null),
+  ad: z.string().trim().min(1).max(80).nullable().prefault(null),
 });
 export const birimSetiParametresi = z.object({ kod: kodSemasi });
 export const birimSetiCevabi = z.object({ kod: z.string() });

@@ -141,7 +141,7 @@ function kaydeden(gunluk: string[], hata?: Error): { denetle: Denetle; kayitlar:
 
 const parametreliIndir = (): Uc =>
   uc({
-    yontem: 'GET', yol: '/belgeler/:id', yetki: 'kisiler.oku', parametre: z.object({ id: z.coerce.number().int() }), cevap: ikiliCevap,
+    yontem: 'GET', yol: '/belgeler/:id', yetki: 'kisiler.oku', parametre: z.object({ id: z.coerce.number<number>().int() }), cevap: ikiliCevap,
     isle: () => ({ tur: 'application/pdf', ad: 'Çizim A.pdf', boyut: BOYUT, akis: async function* (db: Db) { await db.sorgu('SELECT parca'); yield* PARCALAR; } }),
   });
 

@@ -206,7 +206,7 @@ export function yuklemeyiBitir(o: GuncellemeOrtami, kisiId: number, kimlik: stri
   });
 }
 
-async function jsonOku<T>(yol: string, sema: z.ZodType<T, z.ZodTypeDef, unknown>): Promise<T | null> {
+async function jsonOku<T>(yol: string, sema: z.ZodType<T>): Promise<T | null> {
   const metin = await readFile(yol, 'utf8').catch(() => null);
   if (metin === null) return null;
   try {
@@ -345,7 +345,7 @@ const uygulamaDurumuSemasi = z.object({
   surum: z.string(),
   adim: z.enum(GUNCELLEME_ADIMLARI),
   baslangic: zamanSemasi,
-  elle: z.boolean().default(false),
+  elle: z.boolean().prefault(false),
 });
 
 // İstek alınıp ilk adım yazılana kadar durum dosyası yoktur: o arada uygulama "dogrula"dadır.

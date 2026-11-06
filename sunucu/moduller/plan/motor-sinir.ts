@@ -15,7 +15,7 @@ const sayiYaBos = z.number().finite().nullable().optional();
 const motorVerisi = z.object({
   meta: z.object({ baslangic: tarih }).passthrough(),
   vardiyalar: z.array(z.object({ id: kimlik, bas: saat, bit: saat, molalar: z.array(z.object({ bas: saat, bit: saat }).passthrough()).optional() }).passthrough()),
-  calismaGunleri: z.record(z.array(kimlik)),
+  calismaGunleri: z.record(z.string(), z.array(kimlik)),
   tatiller: z.array(tarih).optional(),
   tezgahlar: z.array(z.object({
     id: kimlik, grup: kimlik, verim: z.number().finite().positive().nullable().optional(), ucret: sayiYaBos, opOran: z.number().finite().nonnegative().nullable().optional(),
@@ -41,9 +41,9 @@ const yerlesim = z.object({
   Su: z.number().finite().optional(), pin: z.number().optional(), act: z.number().optional(), done: z.number().optional(), fas: z.number().optional(),
 }).passthrough();
 // Taban planda sabit kip yalnız tezgâh ve başlangıç sırasını okur (engine.betik schedule): planlamacının öne aldığı işin bitişi eski kalabilir.
-const tabanPlani = z.object({ ops: z.record(yerlesim), fail: z.array(z.unknown()).optional() });
+const tabanPlani = z.object({ ops: z.record(z.string(), yerlesim), fail: z.array(z.unknown()).optional() });
 export const motorYerlesimi = yerlesim.refine((r) => r.C >= r.S - 1e-9, { message: 'bitiş başlangıçtan önce' });
-export const motorPlani = z.object({ ops: z.record(motorYerlesimi), fail: z.array(z.unknown()).optional() });
+export const motorPlani = z.object({ ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional() });
 
 export type MotorYerlesimi = z.output<typeof motorYerlesimi>;
 export type MotorPlani = z.output<typeof motorPlani>;

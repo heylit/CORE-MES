@@ -48,7 +48,7 @@ const projeAlanlari = {
 const tarihSirasi = (g: { baslangic: string | null; bitis: string | null }) => g.baslangic === null || g.bitis === null || g.bitis >= g.baslangic;
 const TARIH_SIRASI = { message: 'Bitiş başlangıçtan önce olamaz.', path: ['bitis'] };
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 
 // Siparişten açılışta firma siparişten alınır; gövdede firma yoktur (PRJ-07, PRJ-08).
 const siparistenAlanlar = {
@@ -60,10 +60,10 @@ export const siparistenProjeGovdesi = z.object(siparistenAlanlar).refine(tarihSi
 export const projeOlusturGovdesi = z
   .object({
     ...siparistenAlanlar,
-    siparisId: z.number({ required_error: 'Sipariş seçimi zorunlu.', invalid_type_error: 'Sipariş seçimi zorunlu.' }).int().positive().max(2147483647),
+    siparisId: z.number({ error: 'Sipariş seçimi zorunlu.' }).int().positive().max(2147483647),
   })
   .refine(tarihSirasi, TARIH_SIRASI);
-export const siparisParametresi = z.object({ siparisId: z.coerce.number().int().positive().max(2147483647) });
+export const siparisParametresi = z.object({ siparisId: z.coerce.number<number>().int().positive().max(2147483647) });
 
 // Güncelleme tam kayıttır; kod yoktur (PRJ-03: açıldıktan sonra değişmez). PRJ-16: gönderilmeyen alan sessizce silinmez, gövde reddedilir;
 // silmek için alan `null` gönderilir. Bütçe istisnadır: maliyet görmeyen onu hiç göndermez; yoksa var olan kalır, `null` siler.
@@ -90,7 +90,7 @@ export const projeListesiSorgusu = z.object({
   ...listeSorguAlanlari(['kod', 'ad', 'baslangic']),
   ara: z.string().trim().max(80).optional(),
   durum: projeDurumuSemasi.optional(),
-  statuId: z.coerce.number().int().positive().max(2147483647).optional(),
+  statuId: z.coerce.number<number>().int().positive().max(2147483647).optional(),
 });
 
 export const projeSemasi = z.object({
@@ -123,12 +123,12 @@ export const projeListesiCevabi = listeCevapSemasi(projeSemasi);
 export const siparisProjeleriCevabi = z.object({ projeler: z.array(projeSemasi) });
 
 // Proje açarken sipariş seçici: yalnız onaylı siparişler, sipariş no ya da müşteri sipariş no ile aranır.
-export const siparisSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).default('') });
+export const siparisSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).prefault('') });
 export const siparisSecenekleriCevabi = z.object({
   siparisler: z.array(z.object({ id: z.number().int(), no: z.string(), firmaAd: z.string().nullable(), termin: tarihSemasi })),
 });
 
-export const firmaSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).default('') });
+export const firmaSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).prefault('') });
 export const firmaSecenekleriCevabi = z.object({
   firmalar: z.array(z.object({ id: z.number().int(), ad: z.string(), kod: z.string().nullable() })),
 });
@@ -186,7 +186,7 @@ export const statuKaydiSemasi = guncelStatuSemasi.extend({
   kisiAd: z.string().nullable(),
 });
 
-export const kilometreTasiParametresi = z.object({ tasId: z.coerce.number().int().positive().max(2147483647) });
+export const kilometreTasiParametresi = z.object({ tasId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const kilometreTasiEkleGovdesi = z.object({
   ad: zorunluMetin(200, 'Kilometre taşı adı zorunlu.'),
   sira: z.number().int().min(0).max(10000),
@@ -221,7 +221,7 @@ export const kilometreTasiSemasi = z.object({
 
 export const GOREV_DURUMLARI = ['yapilacak', 'suruyor', 'bekliyor', 'bitti', 'iptal'] as const;
 export const gorevDurumuSemasi = z.enum(GOREV_DURUMLARI);
-export const gorevParametresi = z.object({ gorevId: z.coerce.number().int().positive().max(2147483647) });
+export const gorevParametresi = z.object({ gorevId: z.coerce.number<number>().int().positive().max(2147483647) });
 const kimlikYaDaYok = z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null);
 const gorevPlanAlanlari = {
   kilometreTasiId: kimlikYaDaYok,

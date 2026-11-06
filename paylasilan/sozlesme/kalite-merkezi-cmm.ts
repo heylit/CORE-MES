@@ -5,7 +5,7 @@ import { kmOlcum } from './kalite-merkezi-studyo.ts';
 // girer. Önce önizlenir (yazmaz); yazma aynı dosyayı sunucuda yeniden okur, istemcinin gönderdiği değer yazılmaz.
 // CMM yazılımına özgü biçim tanımı burada tutulmaz: sütun eşlemesi her yüklemede seçilir.
 
-const kimlik = z.coerce.number().int().positive().max(2147483647);
+const kimlik = z.coerce.number<number>().int().positive().max(2147483647);
 
 // Dosya metni (istemci kodlamayı çözer). Fastify'ın 1 MiB gövde sınırına sığması için en çok 900 000 karakter.
 export const KM_CMM_METIN_SINIRI = 900000;
@@ -31,7 +31,7 @@ export const kmCmmYazGovdesi = kmCmmOnizleGovdesi.extend({
   resimSurumu: z.number().int().positive().max(2147483647),
   numuneId: kimlik.optional(),
   parcaSayisi: z.number().int().nonnegative().max(2147483647).optional(),
-  onaylananlar: z.array(z.number().int().positive().max(KM_CMM_SATIR_SINIRI + 1)).max(500).default([]),
+  onaylananlar: z.array(z.number().int().positive().max(KM_CMM_SATIR_SINIRI + 1)).max(500).prefault([]),
 });
 
 const sayiMetni = z.string().regex(/^-?\d+(\.\d+)?$/);

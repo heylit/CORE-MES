@@ -24,7 +24,7 @@ export const planlamaYazGovdesi = yazGovdesi.extend({ anahtar: planlamaAnahtari,
 // Değişiklik defteri (2129-2 b): en yeni önde, sayfa sayfa. `once` verilirse ondan küçük kimlikliler gelir.
 export const DEFTER_OLAYLARI = ['degisiklik', 'kaynak', 'uygulandi', 'reddedildi', 'geri-alindi'] as const;
 export const DEFTER_SAYFASI = 100;
-export const degisiklikDefteriSorgusu = z.object({ once: z.coerce.number().int().positive().optional() }).strict();
+export const degisiklikDefteriSorgusu = z.object({ once: z.coerce.number<number>().int().positive().optional() }).strict();
 export const defterSatiri = z.object({
   id: z.number().int(),
   olay: z.enum(DEFTER_OLAYLARI),
@@ -225,8 +225,8 @@ export const degerlendirmeIstegi = z.discriminatedUnion('tur', [
 ]);
 // İki adım (463 a): başlatma girdiyi okur ve hesabı başlatır, sonuç kimlikle transaction açmadan okunur; hesap uç transaction'ını beklemez.
 export const degerlendirmeGovdesi = z.object({ surum: z.number().int().positive(), istek: degerlendirmeIstegi }).strict();
-export const degerlendirmeBaslatCevabi = z.object({ is: z.string().uuid() });
-export const degerlendirmeParametresi = z.object({ is: z.string().uuid() });
+export const degerlendirmeBaslatCevabi = z.object({ is: z.guid() });
+export const degerlendirmeParametresi = z.object({ is: z.guid() });
 
 const tl = z.number().nullable();
 const saatDegeri = z.number();
@@ -363,8 +363,8 @@ export const yillikCozGovdesi = z.object({
   // değeri ve gölge fiyatı istenen sütunlar
   want: z.array(z.string().min(1).max(80)).max(YILLIK_SUTUN_AZAMI),
 });
-export const yillikCozBaslatCevabi = z.object({ is: z.string().uuid() });
-export const yillikCozParametresi = z.object({ is: z.string().uuid() });
+export const yillikCozBaslatCevabi = z.object({ is: z.guid() });
+export const yillikCozParametresi = z.object({ is: z.guid() });
 // HiGHS'in cevabı: model durumu (7 en iyi, 13 süre doldu, 8 çözüm yok, 14 adım sınırı), amaç (sonlu değilse null), istenen sütunların
 // değeri ve indirgenmiş maliyeti (çözücü vermezse null).
 export const yillikCozumSemasi = z.object({

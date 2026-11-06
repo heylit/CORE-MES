@@ -11,10 +11,10 @@ const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
 
 export const KAYNAK_TURLERI = ['istasyon', 'makine', 'kisi'] as const;
 export type KaynakTuru = (typeof KAYNAK_TURLERI)[number];
-export const kaynakParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const kaynakParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 
 export const KAYNAK_ARAMA_EN_COK = 50;
-export const kaynakAramaSorgusu = z.object({ metin: z.string().trim().max(60).default('') });
+export const kaynakAramaSorgusu = z.object({ metin: z.string().trim().max(60).prefault('') });
 export const kaynakAramaCevabi = z.object({
   satirlar: z.array(z.object({ tur: z.enum(KAYNAK_TURLERI), id: KIMLIK, kod: z.string().nullable(), ad: z.string(), aktif: z.boolean(), ust: z.string().nullable() })),
   dahaVar: z.boolean(),

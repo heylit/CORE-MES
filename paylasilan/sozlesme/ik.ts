@@ -203,7 +203,7 @@ export type IkPuantajYazCevabi = z.output<typeof ikPuantajYazCevabi>;
 
 // Personel giriş kartı (1902 b, 1903 b): kartı yalnız İK verir ve kaldırır (ik.personel-yaz); kayıt Nizamiye'de durur. Kart istasyonda
 // PIN'siz giriş açar (1897 b): numara düz dönmez, yalnız son dört hanesi.
-export const girisKartiParametresi = z.object({ kisiId: z.coerce.number().int().positive().max(2147483647) });
+export const girisKartiParametresi = z.object({ kisiId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const girisKartiSemasi = z.object({ kartSon4: z.string(), kaydedildi: zamanSemasi, surum: surumSemasi });
 export const girisKartiCevabi = z.object({ kart: girisKartiSemasi.nullable() });
 export const girisKartiVerGovdesi = z.object({ kartNo: gizli(z.string().trim().min(1, 'Kartı okutun.').max(64, 'Kart numarası çok uzun.')) }).strict();

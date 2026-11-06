@@ -23,7 +23,7 @@ export type GeometriYuzTuru = (typeof GEOMETRI_YUZ_TURLERI)[number];
 export const geometriYuzOzetiSemasi = z.object({
   motor: z.string(),
   toplam: z.number().int().min(0),
-  sayilar: z.record(z.enum(GEOMETRI_YUZ_TURLERI), z.number().int().min(1)),
+  sayilar: z.partialRecord(z.enum(GEOMETRI_YUZ_TURLERI), z.number().int().min(1)),
 });
 
 export const geometriAnaliziSemasi = z.object({
@@ -55,7 +55,7 @@ export const geometriIsSemasi = z.object({
   surum: surumSemasi,
 });
 
-export const revizyonParametresi = z.object({ revizyonId: z.coerce.number().int().min(1) });
+export const revizyonParametresi = z.object({ revizyonId: z.coerce.number<number>().int().min(1) });
 
 // Model listesi: 3B modeli olan malzemeler, model başına bir satır.
 export const geometriModelListeSorgusu = z.object({
@@ -135,7 +135,7 @@ export type GeometriOzellikCevabi = z.output<typeof geometriOzellikCevabi>;
 // kaynağı 'yok' döner, ekran bunu söyler. Stok listesi aktif hammadde kartlarıdır (1469 a); kalite verilirse yalnız o kalite.
 export const PAY_EN_COK_MM = 100;
 export const geometriHamSorgusu = z.object({
-  payMm: z.coerce.number().min(0).max(PAY_EN_COK_MM).optional(),
+  payMm: z.coerce.number<number>().min(0).max(PAY_EN_COK_MM).optional(),
   kalite: z.string().trim().min(1).max(100).optional(),
 });
 export const HAM_STOK_FORMLARI = ['cubuk', 'altigen', 'lama', 'levha', 'blok'] as const;
@@ -181,7 +181,7 @@ export const yenidenHesaplaCevabi = geometriAnalizCevabi;
 // Malzeme kartında net ağırlık (1710, 1704 a): kartın yayındaki en yeni modelinin hacmi ve yoğunluk ön değeri için ilk stok
 // önerisinin kalitesi (3D Atölyesi ekranının kuralı, 1480). Ağırlığı ekran hesaplar ve yalnız düğmeyle forma yazar; kart her
 // zamanki kaydetmeyle yazılır. neden: model-yok, analiz-yok, hacim-yok (ağ kapalı değil); hacim varsa null.
-export const malzemeParametresi = z.object({ malzemeNo: z.coerce.number().int().min(1) });
+export const malzemeParametresi = z.object({ malzemeNo: z.coerce.number<number>().int().min(1) });
 export const agirlikOzetiCevabi = z.object({
   // kapak: model kartta kapak seçili olduğu için alındı (GEO-2 a); değilse en son yayınlanan. modelSayisi: karta bağlı yayındaki 3B model sayısı.
   model: z.object({ belgeAdi: z.string(), harf: z.string(), kapak: z.boolean() }).nullable(),

@@ -27,7 +27,7 @@ export const sonucSemasi = z.enum(SONUCLAR);
 export const durumSemasi = z.enum(DURUMLAR);
 
 // Kimlikler veritabanında int'tir; sınırı aşan sayı veritabanına gitmeden 400 alır.
-const kimlik = z.coerce.number().int().positive().max(2_147_483_647);
+const kimlik = z.coerce.number<number>().int().positive().max(2_147_483_647);
 export const idParametresi = z.object({ id: kimlik });
 export const kayitParametresi = z.object({ id: kimlik, kayitId: kimlik });
 export const listeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
@@ -51,7 +51,7 @@ const aletAlanlari = {
 
 export const aletOlusturGovdesi = z.object({
   ...aletAlanlari,
-  periyotGun: aletAlanlari.periyotGun.default(365),
+  periyotGun: aletAlanlari.periyotGun.prefault(365),
   ilkKalibrasyon: kalibrasyonGovdesi.optional(),
 });
 // Güncelleme gövdesi tam kayıttır: varsayılan yalnız eklemede geçerlidir, yoksa eksik periyot vadeyi kaydırır.

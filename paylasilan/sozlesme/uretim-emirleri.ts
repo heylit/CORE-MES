@@ -27,7 +27,7 @@ export const ACIK_EMIR_DURUMLARI = ['planli', 'basladi'] as const satisfies read
 // Veritabanı tam sayısının üst sınırı; iş kuralı değildir.
 const TAM_SAYI_UST = 2147483647;
 const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
-const yolKimligi = z.coerce.number().pipe(KIMLIK);
+const yolKimligi = z.coerce.number<number>().pipe(KIMLIK);
 // Zaman ISO 8601 metnidir (timestamptz); istemci yerel saate kendisi çevirir.
 const zaman = z.string();
 const metin = (azami: number, bosIleti: string) => z.string().trim().min(1, bosIleti).max(azami);
@@ -44,13 +44,13 @@ export const adimParametresi = z.object({ id: yolKimligi, adimId: yolKimligi });
 // 'hepsi' biten emirleri de isteyen ekranlar içindir (hangi makinede üretildi, parti ağacı).
 export const LISTE_KAPSAMLARI = ['acik', 'hepsi'] as const;
 export const BITEN_EMIR_DURUMLARI = ['bitti', 'iptal'] as const satisfies readonly (typeof EMIR_DURUMLARI)[number][];
-const listeKapsami = z.enum(LISTE_KAPSAMLARI).default('acik');
+const listeKapsami = z.enum(LISTE_KAPSAMLARI).prefault('acik');
 // Emir no, parça no ya da parça adında geçen metin; büyük küçük harf ayrılmaz.
 const aramaMetni = z.string().trim().max(60).optional().transform((m) => (m === '' ? undefined : m));
 // bitenGun=N: yalnız son N günde kapanan (biten ya da iptal) emirler; durum ve kapsam o zaman bakılmaz.
 export const emirlerSorgusu = z.object({
   durum: emirDurumu.optional(), istasyonsuz: z.literal('1').optional(), kapsam: listeKapsami,
-  bitenGun: z.coerce.number().int().min(1).max(31).optional(),
+  bitenGun: z.coerce.number<number>().int().min(1).max(31).optional(),
 });
 export const bitenEmirlerSorgusu = z.object({
   ...sayfaSorguAlanlari, durum: z.enum(BITEN_EMIR_DURUMLARI).optional(), istasyonsuz: z.literal('1').optional(), ara: aramaMetni,
@@ -315,7 +315,7 @@ export const ozetCevabi = z.object({
 // Panel serileri: son N gün (tesis günü, bugün dahil). Kaydı olmayan gün listede yer almaz.
 export const AZAMI_PANEL_GUNU = 366;
 export const panelSorgusu = (varsayilan: number) => z.object({
-  gun: z.coerce.number().int().min(1).max(AZAMI_PANEL_GUNU).default(varsayilan),
+  gun: z.coerce.number<number>().int().min(1).max(AZAMI_PANEL_GUNU).prefault(varsayilan),
 });
 export const gunlukUretimCevabi = z.object({
   gunler: z.array(z.object({ gun: tarihSemasi, saglam: z.number().int(), hurda: z.number().int() })),
@@ -331,7 +331,7 @@ export const SON_OLAY_TURLERI = [...DEFTER_OLAYLARI, 'saglam'] as const;
 export const AZAMI_SON_OLAY = 200;
 export const sonOlaylarSorgusu = z.object({
   sonra: zamanSemasi.optional(),
-  sayi: z.coerce.number().int().min(1).max(AZAMI_SON_OLAY).default(50),
+  sayi: z.coerce.number<number>().int().min(1).max(AZAMI_SON_OLAY).prefault(50),
 });
 export const sonOlaylarCevabi = z.object({
   olaylar: z.array(z.object({
@@ -409,7 +409,7 @@ export const adimliListeSorgusu = z.object({
   // Arşivdeki eski (adımsız) emirler ayrı listedir, salt okunur.
   arsiv: z.enum(['true', 'false']).optional().transform((a) => a === 'true'),
   // Verilince yalnız o projeye bağlı, arşiv dışı emirler (projeler sayfasındaki liste); kapsam uygulanmaz.
-  projeId: z.coerce.number().int().positive().optional(),
+  projeId: z.coerce.number<number>().int().positive().optional(),
   kapsam: listeKapsami,
 });
 export const adimliBitenlerSorgusu = z.object({ ...sayfaSorguAlanlari, durum: z.enum(BITEN_EMIR_DURUMLARI).optional(), ara: aramaMetni });
@@ -479,7 +479,7 @@ export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 
 // E-1, 224: emir açma ekranlarının (rotasız emir, Emre kopyala) proje ve sipariş satırı seçenekleri. Satırlar sunucunun bağlayacağı
 // satırlardır (projenin onaylı siparişi, aynı malzeme). Tek satırlı projede seçim gerekmez, sunucu bağlar; birden çoksa seçilir. Fiyat yok.
-export const acilisSecenekleriSorgusu = z.object({ malzemeNo: z.coerce.number().int().positive(), emirTuru: z.enum(EMIR_TURLERI).optional() });
+export const acilisSecenekleriSorgusu = z.object({ malzemeNo: z.coerce.number<number>().int().positive(), emirTuru: z.enum(EMIR_TURLERI).optional() });
 export const acilisSecenekleriCevabi = z.object({
   projeZorunlu: z.boolean(),
   projeler: z.array(z.object({

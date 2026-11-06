@@ -35,7 +35,7 @@ describe('uç süresi ve sorgu sayısı günlüğü (gerçek PostgreSQL)', () =>
       app,
       [
         uc({
-          yontem: 'GET', yetki: 'acik', yol: '/uc-sayi/:kac', parametre: z.object({ kac: z.coerce.number() }), cevap,
+          yontem: 'GET', yetki: 'acik', yol: '/uc-sayi/:kac', parametre: z.object({ kac: z.coerce.number<number>() }), cevap,
           isle: async ({ db: d, parametre }) => {
             for (let i = 0; i < parametre.kac; i += 1) await d.sorgu('SELECT 1');
             return { n: parametre.kac };

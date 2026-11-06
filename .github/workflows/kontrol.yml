@@ -153,10 +153,9 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
       - if: steps.paketler.outputs.cache-hit != 'true'
         run: npm ci
-      # Canlı pakete giren bağımlılıklarda bilinen açık yeni girmesin (2150-1 a). Eşik geçici olarak kritiktir: zod 3'teki
-      # yüksek seviyeli açık zod 4 geçişiyle kapanınca eşik yükseğe iner.
+      # Canlı pakete giren bağımlılıklarda yüksek ya da kritik seviyeli bilinen açık yeni girmesin (2150-1 a, 2162).
       - name: Canlı paketlerde bilinen açık
-        run: npm audit --omit=dev --audit-level=critical
+        run: npm audit --omit=dev --audit-level=high
       # Geliştirme olarak kayıtlı paketlerin bir kısmı (exceljs, jsqr, tesseract, three-147) derlenmiş ekrana girer; yukarıdaki
       # adım onları görmez. Tam ağaç uyarı olarak bakılır, iş kırılmaz (2160-1 b). Depo herkese açık: özete yalnız seviye sayıları
       # yazılır, paket ve açık ayrıntısı yerelde `npm audit` ile okunur.

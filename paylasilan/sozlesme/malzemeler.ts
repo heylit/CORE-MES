@@ -129,7 +129,7 @@ export type OlcuAletiSecenekleriCevabi = z.output<typeof olcuAletiSecenekleriCev
 
 // Şablon ve ayar son okunan sürümle yazılır; arada başkası yazmışsa 409 döner (kullanıcı onayı 16.10.2026). Yeni kayıt sürümsüz gelir;
 // sürümsüz istek kayıtlı satırın üstüne yazamaz, böylece eski istemci de sessizce ezemez.
-const okunanSurum = z.number().int().positive().nullable().default(null);
+const okunanSurum = z.number().int().positive().nullable().prefault(null);
 export const katalogSurumluKayitCevabi = z.object({ id: z.string(), surum: z.number().int() });
 
 export const katalogSablonlariCevabi = z.object({
@@ -236,10 +236,10 @@ export type MalzemelerOzetiCevabi = z.output<typeof malzemelerOzetiCevabi>;
 // Cevap ortak seçici biçimindedir (`ust` malzemede yok). Varsayılan yalnız aktif kartlar.
 export const MALZEME_SECIM_SAYFA_BOYU = 30;
 export const malzemeSecimSorgusu = z.object({
-  q: z.string().trim().max(80).default(''),
+  q: z.string().trim().max(80).prefault(''),
   tur: z.enum(KATALOG_TURLERI).optional(),
   pasifler: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
-  sayfa: z.coerce.number().int().min(1).max(1000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(1000).prefault(1),
 });
 export const malzemeSecimCevabi = z.object({
   sonuclar: z.array(z.object({
@@ -313,11 +313,11 @@ export const LOGO_FARK_ALANLARI = ['aciklama_1', 'aciklama_2', 'aciklama_3'] as 
 export const LOGO_GELEN_SAYFA_BOYU = 100;
 export const logoGelenSorgusu = z.object({
   // Logo kayıt numarası imleci: bu numaradan sonrakiler.
-  sonra: z.coerce.number().int().min(0).default(0),
+  sonra: z.coerce.number<number>().int().min(0).prefault(0),
   // Kod, ad ya da açıklamanın bir parçası (2116g); büyük/küçük harf ve Türkçe harf farkı gözetilmez.
   ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
 });
-export const logoGelenParametresi = z.object({ ref: z.coerce.number().int().positive() });
+export const logoGelenParametresi = z.object({ ref: z.coerce.number<number>().int().positive() });
 export const logoGelenCevabi = z.object({
   // Logo malzeme okuması bağlı değilse ya da hiç okumadıysa false: liste boş, neden ekranda.
   baglanti: z.boolean(),

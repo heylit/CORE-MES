@@ -63,7 +63,7 @@ describe('denetim kipi (gerçek PostgreSQL)', () => {
     ...(['tam', 'govdesiz'] as const).map((kip) => uc({
       yontem: 'POST', yol: `/deneme-denetim/:tur/yol-${kip}/:token/:parola/:id/:ozet/:kimlik`, yetki: 'oturum',
       ...(kip === 'govdesiz' ? { denetim: kip } : {}),
-      parametre: z.object({ tur: z.string(), token: z.string(), parola: z.string(), id: z.coerce.number(), ozet: z.string(), kimlik: z.string() }),
+      parametre: z.object({ tur: z.string(), token: z.string(), parola: z.string(), id: z.coerce.number<number>(), ozet: z.string(), kimlik: z.string() }),
       govde, cevap, isle,
     })),
   ];

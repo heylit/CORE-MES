@@ -94,7 +94,7 @@ export const satinAlmaAnaliziCevabi = z.object({
   }),
   // Aynı malzemenin aynı para birimi ve birimdeki son iki siparişi: TL birim fiyat değişimi, fiyat etkisi ve kur etkisi (toplamları değişime eşittir).
   fiyatDegisimleri: z.array(z.object({
-    katalogId: z.string().uuid(),
+    katalogId: z.guid(),
     ad: z.string(),
     paraBirimi: z.string(),
     birim: z.string(),

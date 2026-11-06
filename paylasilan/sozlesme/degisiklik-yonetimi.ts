@@ -49,7 +49,7 @@ export * from './degisiklik-yonetimi-sabitleri.ts';
 // Veritabanı tam sayısının üst sınırı; iş kuralı değildir.
 const TAM_SAYI_UST = 2147483647;
 const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
-const yolKimligi = z.coerce.number().pipe(KIMLIK);
+const yolKimligi = z.coerce.number<number>().pipe(KIMLIK);
 const metin = (azami: number, bosIleti: string) => z.string().trim().min(1, bosIleti).max(azami);
 // Boş açıklama null olur.
 const aciklama = z.string().trim().max(1000, 'Açıklama en çok 1000 karakter.').nullish().transform((d) => (d ? d : null));
@@ -65,7 +65,7 @@ export const kararModu = z.enum(KARAR_MODLARI);
 export const ogeTuru = z.enum(OGE_TURLERI);
 
 export const idParametresi = z.object({ id: yolKimligi });
-const listeKapsami = z.enum(LISTE_KAPSAMLARI).default('acik');
+const listeKapsami = z.enum(LISTE_KAPSAMLARI).prefault('acik');
 export const malzemeParametresi = z.object({ malzemeId: yolKimligi });
 
 // Komutlar.
@@ -104,7 +104,7 @@ export const kalemKaydetGovdesi = z.object({
   yeniParcaAdi: z.string().trim().max(160).nullish().transform((d) => (d ? d : null)),
   // Tasarım sınıfında tasarım otoritesinin revizyonu (müşteri parçasında antet revizyonu, 1608 a); proseste verilmez.
   yeniParcaRevizyonu: z.string().trim().max(20).nullish().transform((d) => (d ? d : null)),
-  ozet: z.string().trim().max(1000).default(''),
+  ozet: z.string().trim().max(1000).prefault(''),
   surum: surumSemasi,
 }).strict().refine((g) => g.ogeler === undefined || (g.yeniCizimRevizyonuId === null && g.yeniRotaRevizyonuId === null), {
   message: 'Öğe listesi verilince yeni çizim ve rota alanları boş kalır.', path: ['ogeler'],
@@ -259,7 +259,7 @@ export const gorevSatiri = z.object({
   adim: z.string(), islem: z.enum(GOREV_ISLEMLERI),
   yasIsGunu: z.number().int().nonnegative(), hedefIsGunu: z.number().int().positive(), gecikti: z.boolean(),
 });
-export const gorevlerimSorgusu = z.object({ kapsam: z.enum(GOREV_KAPSAMLARI).default('benim') });
+export const gorevlerimSorgusu = z.object({ kapsam: z.enum(GOREV_KAPSAMLARI).prefault('benim') });
 export const gorevlerimCevabi = z.object({
   gorevler: z.array(gorevSatiri),
   // Düğme etiketleri için iki kapsamın sayısı; seçili kapsamdan bağımsız.
@@ -330,7 +330,7 @@ export const konfigurasyonCevabi = z.object({
   // Rota, üretim emirleri ya da markalama bağlı değilse null.
   aileIpligi: aileIpligi.nullable(),
 });
-export const izlenebilirlikSorgusu = z.object({ sonUrunMalzemeId: z.coerce.number().pipe(KIMLIK), seriNo: metin(60, 'Seri numarasını yazın.') });
+export const izlenebilirlikSorgusu = z.object({ sonUrunMalzemeId: z.coerce.number<number>().pipe(KIMLIK), seriNo: metin(60, 'Seri numarasını yazın.') });
 export const iplikDugumu = z.object({
   katman: z.enum(IPLIK_KATMANLARI), etiket: z.string(), revizyon: z.string().nullable(), degisiklikNo: z.string().nullable(),
 });

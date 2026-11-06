@@ -13,7 +13,7 @@ export type VerilenDuzey = (typeof VERILEN_DUZEYLER)[number];
 export const AZAMI_AD = 120;
 export const SON_EKLENEN_SINIRI = 20;
 
-const id = z.coerce.number().int().positive().max(2147483647);
+const id = z.coerce.number<number>().int().positive().max(2147483647);
 // Ad dosya ve klasör adıdır: yol ayırıcısı, denetim karakteri ve yalnız nokta taşımaz (indirmede dosya adı olur).
 const ad = z.string().trim().min(1).max(AZAMI_AD)
   .refine((d) => !/[\\/\u0000-\u001f\u007f]/.test(d), 'Ad / ve \\ ile denetim karakteri taşıyamaz.')

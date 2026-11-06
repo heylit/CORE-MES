@@ -23,13 +23,13 @@ export const TESLIM_YONTEMLERI = ['firma_getirir', 'biz_alacagiz'] as const;
 export type TalepDurumu = (typeof TALEP_DURUMLARI)[number];
 export type Kalite = (typeof KALITELER)[number];
 
-const uuid = z.string().uuid();
+const uuid = z.guid();
 const tarih = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde olur.');
 const firmaKimligi = z.number().int().positive().max(2147483647);
 const kisiKimligi = z.number().int().positive().max(2147483647);
 const eksiOlmayan = ondalikMetinSemasi.refine((d) => !d.startsWith('-'), 'Değer eksi olamaz.');
 const yuzde = z.string().regex(/^(100(\.0+)?|\d{1,2}(\.\d+)?)$/, 'Yüzde 0 ile 100 arasında olur.');
-const metin = (azami: number) => z.string().max(azami).default('');
+const metin = (azami: number) => z.string().max(azami).prefault('');
 const agirlik = z.number().int().min(0).max(100);
 
 export const agirliklarSemasi = z.object({ maliyet: agirlik, termin: agirlik, tedarikci: agirlik, garanti: agirlik });
@@ -174,7 +174,7 @@ const talepAlanlari = {
   durum: z.enum(TALEP_DURUMLARI),
   iptalNedeni: metin(500),
   // Talebin açıldığı üretim emri; yalnız açık (planlı ya da başlamış) emir seçilir. Boş: emre bağlı değil.
-  uretimEmriId: z.number().int().positive().max(2147483647).nullable().default(null),
+  uretimEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
   agirliklar: agirliklarSemasi.nullable(),
   kalemler: z.array(kalemSemasi).max(200),
   teklifIstekleri: z.array(teklifIstegiSemasi).max(50),
@@ -407,9 +407,9 @@ export const firmaSecenekleriCevabi = z.object({
 // Sertifika ve rapor sipariş satırına bağlanır (kullanıcı isteği 13.10.2026): belge Çizimler'de açılır ve yayınlanır, satır
 // kayıttan görünür; stok mal kabulde satırın belgesini okur. İstemci dosyayı önce `/dosyalar/:ozet/parca` ile yükler.
 export const SIPARIS_BELGE_TURLERI = ['sertifika', 'rapor'] as const;
-export const siparisSatiriParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const siparisSatiriParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 export const siparisBelgesiParametresi = z.object({
-  id: z.coerce.number().int().positive().max(2147483647), belgeId: z.coerce.number().int().positive().max(2147483647),
+  id: z.coerce.number<number>().int().positive().max(2147483647), belgeId: z.coerce.number<number>().int().positive().max(2147483647),
 });
 export const siparisBelgesiGovdesi = z.object({
   tur: z.enum(SIPARIS_BELGE_TURLERI),
@@ -426,7 +426,7 @@ export type SiparisBelgeleriCevabi = z.output<typeof siparisBelgeleriCevabi>;
 export const TALEP_TURLERI = ['malzeme', 'hizmet'] as const;
 export type TalepTuru = (typeof TALEP_TURLERI)[number];
 // Boş arama açılır listenin ilk sayfasıdır.
-export const malzemeSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).default(''), tur: z.enum(TALEP_TURLERI).default('malzeme') });
+export const malzemeSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).prefault(''), tur: z.enum(TALEP_TURLERI).prefault('malzeme') });
 export const malzemeSecenekleriCevabi = z.object({
   malzemeler: z.array(z.object({
     no: z.number().int(), kod: z.string(), ad: z.string(), birim: z.string().nullable(), kategori: z.string().nullable(), katalogId: uuid.nullable(),
@@ -436,21 +436,21 @@ export const malzemeSecenekleriCevabi = z.object({
 // Ana sayfadan talep (kart #375): talep eden kalemi malzeme kartından seçer ya da adıyla yazar ("kart bekliyor").
 // Kişi alanı yoktur: talep oturumdaki kişi adına açılır, gövdede gelen başka alan yok sayılır.
 export const hizliKalemSemasi = z.object({
-  malzemeNo: z.number().int().positive().max(2147483647).nullable().default(null),
-  ad: z.string().trim().max(160).default(''),
-  birim: z.string().trim().max(20).default(''),
+  malzemeNo: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  ad: z.string().trim().max(160).prefault(''),
+  birim: z.string().trim().max(20).prefault(''),
   miktar: ondalikMetinSemasi.refine((d) => !d.startsWith('-') && Number(d) > 0, 'Miktar sıfırdan büyük olur.'),
   aciklama: metin(500),
   // 898 a: hizmet kalemi hangi parça ya da malzeme üzerinde yapılacak; fason ön talepten gelen kalem iş emrini taşır. İkisi yalnız hizmette.
-  uygulananMalzemeNo: z.number().int().positive().max(2147483647).nullable().default(null),
-  isEmriId: z.number().int().positive().max(2147483647).nullable().default(null),
+  uygulananMalzemeNo: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  isEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
 });
 export const hizliAcGovdesi = z.object({
   id: uuid,
-  tur: z.enum(TALEP_TURLERI).default('malzeme'),
-  ihtiyacTarihi: tarih.nullable().default(null),
+  tur: z.enum(TALEP_TURLERI).prefault('malzeme'),
+  ihtiyacTarihi: tarih.nullable().prefault(null),
   aciklama: metin(4000),
-  uretimEmriId: z.number().int().positive().max(2147483647).nullable().default(null),
+  uretimEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
   kalemler: z.array(hizliKalemSemasi).min(1, 'En az bir kalem girin.').max(50),
 });
 // Talep edenin gördüğü: fiyat, teklif, tedarikçi, karar, bütçe, kur yok.
@@ -468,7 +468,7 @@ export const talebimSemasi = z.object({
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
   })),
 });
-export const taleplerimSorgusu = z.object({ sinir: z.coerce.number().int().min(1).max(500).default(10) });
+export const taleplerimSorgusu = z.object({ sinir: z.coerce.number<number>().int().min(1).max(500).prefault(10) });
 export const taleplerimCevabi = z.object({ talepler: z.array(talebimSemasi), toplam: z.number().int() });
 
 // 898 a: ön talep. Fason: açık emrin, siparişe ve açık talebe bağlanmamış, yoksayılmamış fason iş emri. Gereken tarih emrin teslim günüdür
@@ -520,7 +520,7 @@ export type OnTalepleriCevabi = z.output<typeof onTalepleriCevabi>;
 export type OnTalepYoksayYazimi = z.output<typeof onTalepYoksayGovdesi>;
 
 export const talepParametresi = z.object({ id: uuid });
-export const firmaParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const firmaParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 export const tamamCevabi = z.object({ tamam: z.literal(true) });
 
 export type Talep = z.output<typeof talepSemasi>;
@@ -703,7 +703,7 @@ export type DisOperasyon = z.output<typeof disOperasyonSemasi>;
 export type DisOperasyonlarCevabi = z.output<typeof disOperasyonlarCevabi>;
 
 // Fason süre ve termin grafikleri: gidişi ve dönüşü olan fason iş emirlerinin gerçekleşen geçmişi. Veri yoksa listeler boş gelir.
-export const fasonSureleriSorgusu = z.object({ sonGun: z.coerce.number().int().min(1).max(3650).default(365) });
+export const fasonSureleriSorgusu = z.object({ sonGun: z.coerce.number<number>().int().min(1).max(3650).prefault(365) });
 // Kırılım: malzeme, operasyon, firma ve gönderilen adet. Süre ilk gidişten son dönüşe takvim günüdür (ondalık); aynı kırılımdaki
 // iş emirlerinin ortalamasıdır. Malzemesi olmayan emirde malzeme alanları boş gelir.
 export const fasonSureSatiri = z.object({
@@ -784,12 +784,12 @@ export const kgFiyatiEkleGovdesi = z.object({
     kaliteKodu,
     form: z.string().trim().min(1).max(40).nullable(),
     kgFiyati: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Kg fiyatı sıfırdan büyük olur.'),
-    talasKgFiyati: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Talaş fiyatı sıfırdan büyük olur.').nullable().default(null),
-    islemKatsayisi: katsayi.nullable().default(null),
-    araciKatsayisi: katsayi.nullable().default(null),
+    talasKgFiyati: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Talaş fiyatı sıfırdan büyük olur.').nullable().prefault(null),
+    islemKatsayisi: katsayi.nullable().prefault(null),
+    araciKatsayisi: katsayi.nullable().prefault(null),
     paraBirimi: z.enum(PARA_BIRIMLERI),
     gecerlilik: tarih,
-    aciklama: z.string().trim().max(500).default(''),
+    aciklama: z.string().trim().max(500).prefault(''),
   })).min(1, 'En az bir fiyat girin.').max(500),
 });
 // Malzeme ekranı (köprü) malzemenin birim fiyatını buradan okur: en çok 200 malzeme no, virgülle. Fiyatı olmayan malzeme listede yoktur.
@@ -836,7 +836,7 @@ export const tedarikTerminleriCevabi = z.object({
 export const tedarikTerminiKaydetGovdesi = z.object({
   malzemeNo: z.number().int().positive().max(2147483647),
   termin: tarihSemasi.nullable(),
-  aciklama: z.string().trim().max(200).default(''),
+  aciklama: z.string().trim().max(200).prefault(''),
   surum: surumSemasi.nullable(),
 });
 export const tedarikTerminiKaydetCevabi = z.object({ termin: tedarikTerminiSemasi });

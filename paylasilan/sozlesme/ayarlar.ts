@@ -19,7 +19,7 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
   if (tanim.tur === 'numara') {
     const { alanlar } = tanim;
     return z
-      .string({ required_error: 'Değer zorunlu.', invalid_type_error: 'Bu ayar numara kalıbıdır.' })
+      .string({ error: (s) => (s.input === undefined ? 'Değer zorunlu.' : 'Bu ayar numara kalıbıdır.') })
       .superRefine((kalip, ctx) => {
         const hata = kalipHatasi(kalip, alanlar);
         if (hata !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: hata });
@@ -28,17 +28,17 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
   if (tanim.tur === 'secim') {
     const degerler = tanim.secenekler.map((s) => s.deger);
     return z
-      .string({ required_error: 'Değer zorunlu.', invalid_type_error: 'Bu ayar listedeki seçeneklerden biri olabilir.' })
+      .string({ error: (s) => (s.input === undefined ? 'Değer zorunlu.' : 'Bu ayar listedeki seçeneklerden biri olabilir.') })
       .refine((d) => degerler.includes(d), 'Bu değer listede yok.');
   }
   if (tanim.tur === 'boolean') {
-    return z.boolean({ required_error: 'Değer zorunlu.', invalid_type_error: 'Bu ayar yalnız açık ya da kapalı olabilir.' });
+    return z.boolean({ error: (s) => (s.input === undefined ? 'Değer zorunlu.' : 'Bu ayar yalnız açık ya da kapalı olabilir.') });
   }
   if (tanim.tur === 'metin') {
     // Baştaki ve sondaki boşluk saklanmaz: aynı görünen iki metin ayrı değer sayılmasın.
     const { bicim, bosOlabilir } = tanim;
     return z
-      .string({ required_error: 'Değer zorunlu.', invalid_type_error: 'Bu ayar yalnız metin olabilir.' })
+      .string({ error: (s) => (s.input === undefined ? 'Değer zorunlu.' : 'Bu ayar yalnız metin olabilir.') })
       .trim()
       .min(bosOlabilir === true ? 0 : 1, 'Metin boş olamaz.')
       .max(tanim.enUzun, `En çok ${String(tanim.enUzun)} karakter olabilir.`)
@@ -49,7 +49,7 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
   }
   const { enAz, enCok, ondalik } = tanim;
   return z
-    .number({ required_error: 'Değer zorunlu; boş bırakmak için null gönderin.', invalid_type_error: 'Bu ayar sayı ya da boş olabilir.' })
+    .number({ error: (s) => (s.input === undefined ? 'Değer zorunlu; boş bırakmak için null gönderin.' : 'Bu ayar sayı ya da boş olabilir.') })
     .finite('Bu ayar sayı ya da boş olabilir.')
     .min(enAz, `En az ${sayiBicimi(enAz, ondalik)} olabilir.`)
     .max(enCok, `En çok ${sayiBicimi(enCok, ondalik)} olabilir.`)
@@ -198,11 +198,11 @@ export const guncellemePaketiSemasi = z.object({
   gocler: z.array(z.string()),
   not: z.string().nullable(),
   // Kart #886'dan önceki paketlerin bildiriminde yoktur.
-  degisiklikler: z.array(z.string()).default([]),
+  degisiklikler: z.array(z.string()).prefault([]),
   // degisiklikler'in başladığı yayın; ilk yayında ve 1065'ten önceki paketlerde null.
-  oncekiYayin: z.string().nullable().default(null),
+  oncekiYayin: z.string().nullable().prefault(null),
   // 2163'ten önceki paketlerde yoktur: ekranda "Tarama yok".
-  tarama: paketTaramasiSemasi.nullable().default(null),
+  tarama: paketTaramasiSemasi.nullable().prefault(null),
   boyut: z.number().int().positive(),
   yukleyenId: z.number().int(),
   yuklenme: zamanSemasi,
