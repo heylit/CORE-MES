@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { etkinMadde, menuMaddeleri, type IkinciMenu as Tanim } from '../rota/ikinci-menu.ts';
@@ -30,15 +30,22 @@ function kaydir(el: HTMLElement, hedef: number) {
   el.scrollLeft = Math.min(kaydirmaSiniri(el), Math.max(0, hedef));
 }
 
-// Modülün kendi sayfaları. Kabuk çizer; modül yalnız tanımı verir. Her genişlikte başlığın altında yatay sekme şerididir:
-// açılıp kapanmaz, sığmayan madde yana kayar (kullanıcı kararı, kart #172). Fare kaydırma çubuğu olmadan da kaydırır:
-// kenardaki okta beklemek sürekli kaydırır, oka tıklamak bir sayfa atlatır, tekerlek yana çevrilir.
+// Modülün kendi sayfaları. Kabuk çizer; modül yalnız tanımı verir. Her genişlikte başlığın altında yatay sekme şerididir;
+// sığmayan madde yana kayar (kart #172). Sağda gizli madde varsa belirgin "Diğer N" düğmesi çıkar; tıklanınca şerit satırlara
+// açılır ve kalan sekmelerin hepsi görünür, sayfa değişince kapanır (kullanıcı kararı 2155-7). Solda okta beklemek sürekli
+// kaydırır, oka tıklamak bir sayfa atlatır; tekerlek yana çevrilir.
 export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
   const kutu = useRef<HTMLElement>(null);
   const etkin = etkinMadde(menuMaddeleri(menu), adres);
   const etkinAnahtar = etkin?.anahtar ?? null;
   // Şeritte gizli madde olan kenar: işaret orada görünür (dokunulmaz, yalnız gösterir).
   const [kenar, kenarYaz] = useState({ sol: false, sag: false });
+  // Sağda tamamı görünmeyen madde sayısı; düğmenin yazısıdır.
+  const [gizli, gizliYaz] = useState(0);
+  const [acik, acikYaz] = useState(false);
+  const dugme = useRef<HTMLButtonElement>(null);
+  const olcRef = useRef<() => void>(() => undefined);
+  const serit = useId();
   const kayma = useRef<number | null>(null);
   // Kullanıcı şeridi kendisi kaydırdıysa sonradan gelen sayı ya da yazı tipi şeridi etkin maddeye geri çekmez.
   const elle = useRef(false);
@@ -83,6 +90,12 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
 
   useEffect(() => dur, []);
 
+  // Düğme çıkınca kendi genişliği kadar madde daha örter: sayı yeniden ölçülür.
+  useEffect(() => { olcRef.current(); }, [kenar.sag, acik]);
+
+  // Açık şerit sayfa değişince kapanır; seçilen sekme kapalı şeritte görünür kalır.
+  useEffect(() => { acikYaz(false); }, [adres]);
+
   // Tekerlek dikey döner; şerit kayabiliyorsa yana çevrilir, uca gelince sayfa kayar. React tekerlek olayı
   // pasif olduğundan dinleyici elle eklenir.
   useEffect(() => {
@@ -106,7 +119,12 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       const sol = el.scrollLeft > 1;
       const sag = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
       kenarYaz((o) => (o.sol === sol && o.sag === sag ? o : { sol, sag }));
+      // Düğmenin altında kalan madde de gizli sayılır.
+      const sinir = el.getBoundingClientRect().right - (dugme.current?.offsetWidth ?? 0);
+      const sayi = sag ? [...el.querySelectorAll('a')].filter((a) => a.getBoundingClientRect().right > sinir + 1).length : 0;
+      gizliYaz(sayi);
     };
+    olcRef.current = olc;
     olc();
     void document.fonts?.ready.then(olc);
     el.addEventListener('scroll', olc, { passive: true });
@@ -140,6 +158,11 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
   }, [etkinAnahtar, sayaclar]);
 
   const tus = (o: KeyboardEvent<HTMLElement>) => {
+    if (o.key === 'Escape' && acik) {
+      acikYaz(false);
+      dugme.current?.focus();
+      return;
+    }
     const baglar = [...(kutu.current?.querySelectorAll<HTMLAnchorElement>('a') ?? [])];
     const simdi = baglar.findIndex((b) => b === document.activeElement);
     if (simdi === -1) return;
@@ -158,12 +181,13 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       className="tc-ikinci-kap"
       data-sol={kenar.sol ? '' : undefined}
       data-sag={kenar.sag ? '' : undefined}
+      data-acik={acik ? '' : undefined}
       onPointerDown={elleKaydirdi}
       onTouchStart={elleKaydirdi}
       onWheel={elleKaydirdi}
       onKeyDown={elleKaydirdi}
     >
-      <nav ref={kutu} className="tc-ikinci" aria-label={`${menu.baslik} menüsü`} onKeyDown={tus}>
+      <nav ref={kutu} id={serit} className="tc-ikinci" aria-label={`${menu.baslik} menüsü`} onKeyDown={tus}>
         {menu.gruplar.map((g) => (
           <div
             className="tc-ikinci-grup"
@@ -189,7 +213,7 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
           </div>
         ))}
       </nav>
-      {/* Klavye maddeler arasında okla gezer; bu işaretler yalnız fare ve dokunma içindir. */}
+      {/* Klavye maddeler arasında okla gezer; sol işaret yalnız fare ve dokunma içindir. */}
       <span
         className="tc-ikinci-ok tc-ikinci-ok-sol"
         aria-hidden="true"
@@ -199,15 +223,22 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       >
         <Simge ad="chev-left" boyut="k" />
       </span>
-      <span
-        className="tc-ikinci-ok tc-ikinci-ok-sag"
-        aria-hidden="true"
-        onPointerEnter={okaGir(1)}
-        onPointerLeave={dur}
-        onClick={sayfaAtla(1)}
-      >
-        <Simge ad="chev-right" boyut="k" />
-      </span>
+      {(kenar.sag || acik) && (
+        <button
+          ref={dugme}
+          type="button"
+          className="tc-ikinci-diger"
+          aria-expanded={acik}
+          aria-controls={serit}
+          aria-label={acik ? 'Sekmeleri daralt' : gizli > 0 ? `Diğer sekmeler: ${gizli}` : 'Diğer sekmeler'}
+          onClick={() => { dur(); acikYaz((o) => !o); }}
+        >
+          <span className="tc-ikinci-diger-ad">
+            {acik ? 'Daralt' : gizli > 0 ? `Diğer ${gizli}` : 'Diğer'}
+            <Simge ad={acik ? 'up' : 'down'} boyut="k" />
+          </span>
+        </button>
+      )}
     </div>
   );
 }

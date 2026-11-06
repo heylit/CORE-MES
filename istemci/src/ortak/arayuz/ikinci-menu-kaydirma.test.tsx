@@ -40,7 +40,7 @@ function olcu(el: HTMLElement, { kap: genislik, icerik, kaydirma }: { kap: numbe
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const solOk = () => kap().querySelector('.tc-ikinci-ok-sol') as HTMLElement;
-const sagOk = () => kap().querySelector('.tc-ikinci-ok-sag') as HTMLElement;
+const diger = () => kap().querySelector('.tc-ikinci-diger') as HTMLButtonElement | null;
 const fare = { pointerType: 'mouse' };
 
 // jsdom işaretçi olayını tanımaz; olayın türü (fare ya da dokunma) taşınabilsin diye en küçük karşılık verilir.
@@ -72,10 +72,10 @@ describe('Şerit kaydırma işareti', () => {
     expect(kenarlar()).toEqual({ sol: true, sag: false });
   });
 
-  it('işaret ekran okuyucuya gizlidir ve sekme sırasına girmez', () => {
+  it('sol işaret ekran okuyucuya gizlidir ve sekme sırasına girmez', () => {
     ciz();
     const oklar = kap().querySelectorAll('.tc-ikinci-ok');
-    expect(oklar).toHaveLength(2);
+    expect(oklar).toHaveLength(1);
     for (const ok of oklar) expect(ok.getAttribute('aria-hidden')).toBe('true');
     expect(kap().querySelectorAll('.tc-ikinci-ok button, .tc-ikinci-ok a, .tc-ikinci-ok [tabindex]')).toHaveLength(0);
   });
@@ -87,18 +87,57 @@ describe('Şerit kaydırma işareti', () => {
   });
 });
 
+describe('Diğer düğmesi (karar 2155-7)', () => {
+  it('sağda gizli madde varken görünür, klavyeyle erişilir; sığan şeritte çıkmaz', () => {
+    ciz();
+    olcu(ikinci(), { kap: 700, icerik: 700, kaydirma: 0 });
+    expect(diger()).toBeNull();
+    olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
+    const d = diger();
+    expect(d?.tagName).toBe('BUTTON');
+    expect(d?.getAttribute('aria-expanded')).toBe('false');
+    expect(d?.getAttribute('aria-controls')).toBe(ikinci().id);
+    expect(d?.textContent).toContain('Diğer');
+  });
+
+  it('tıklanınca şerit açılır, kalan sekmeler satırlara iner; yeniden tıklanınca kapanır', () => {
+    ciz();
+    olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
+    fireEvent.click(diger()!);
+    expect(kap().hasAttribute('data-acik')).toBe(true);
+    expect(diger()?.getAttribute('aria-expanded')).toBe('true');
+    expect(diger()?.textContent).toContain('Daralt');
+    fireEvent.click(diger()!);
+    expect(kap().hasAttribute('data-acik')).toBe(false);
+  });
+
+  it('açık şerit Escape ile ve sekme seçilince kapanır', () => {
+    ciz();
+    olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
+    fireEvent.click(diger()!);
+    const bag = screen.getByRole('link', { name: /İş kutusu/ });
+    bag.focus();
+    fireEvent.keyDown(bag, { key: 'Escape' });
+    expect(kap().hasAttribute('data-acik')).toBe(false);
+    fireEvent.click(diger()!);
+    expect(kap().hasAttribute('data-acik')).toBe(true);
+    fireEvent.click(bag);
+    expect(kap().hasAttribute('data-acik')).toBe(false);
+  });
+});
+
 describe('Fareyle kaydırma', () => {
-  it('fare sağ okta bekledikçe şerit sağa kayar, çıkınca durur', () => {
+  it('fare sol okta bekledikçe şerit sola kayar, çıkınca durur', () => {
     sahteKareler();
     ciz();
-    olcu(ikinci(), { kap: 300, icerik: 1000, kaydirma: 0 });
-    fireEvent.pointerEnter(sagOk(), fare);
+    olcu(ikinci(), { kap: 300, icerik: 1000, kaydirma: 700 });
+    fireEvent.pointerEnter(solOk(), fare);
     act(() => { vi.advanceTimersByTime(200); });
     const bekledi = ikinci().scrollLeft;
-    expect(bekledi).toBeGreaterThan(0);
+    expect(bekledi).toBeLessThan(700);
     act(() => { vi.advanceTimersByTime(200); });
-    expect(ikinci().scrollLeft).toBeGreaterThan(bekledi);
-    fireEvent.pointerLeave(sagOk(), fare);
+    expect(ikinci().scrollLeft).toBeLessThan(bekledi);
+    fireEvent.pointerLeave(solOk(), fare);
     const cikti = ikinci().scrollLeft;
     act(() => { vi.advanceTimersByTime(500); });
     expect(ikinci().scrollLeft).toBe(cikti);
@@ -111,32 +150,25 @@ describe('Fareyle kaydırma', () => {
     fireEvent.pointerEnter(solOk(), fare);
     act(() => { vi.advanceTimersByTime(2000); });
     expect(ikinci().scrollLeft).toBe(0);
-    fireEvent.pointerEnter(sagOk(), fare);
-    act(() => { vi.advanceTimersByTime(5000); });
-    expect(ikinci().scrollLeft).toBe(700);
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it('reddedilen: dokunmada okun üstüne gelmek sürekli kaydırmaz', () => {
     sahteKareler();
     ciz();
-    olcu(ikinci(), { kap: 300, icerik: 1000, kaydirma: 0 });
-    fireEvent.pointerEnter(sagOk(), { pointerType: 'touch' });
+    olcu(ikinci(), { kap: 300, icerik: 1000, kaydirma: 300 });
+    fireEvent.pointerEnter(solOk(), { pointerType: 'touch' });
     act(() => { vi.advanceTimersByTime(500); });
-    expect(ikinci().scrollLeft).toBe(0);
+    expect(ikinci().scrollLeft).toBe(300);
   });
 
-  it('oka tıklamak görünen genişliğin dörtte üçü kadar atlatır', () => {
+  it('sol oka tıklamak görünen genişliğin dörtte üçü kadar atlatır', () => {
     ciz();
-    olcu(ikinci(), { kap: 400, icerik: 1000, kaydirma: 0 });
-    fireEvent.click(sagOk());
-    expect(ikinci().scrollLeft).toBe(300);
-    fireEvent.click(sagOk());
-    expect(ikinci().scrollLeft).toBe(600);
-    fireEvent.click(sagOk());
-    expect(ikinci().scrollLeft).toBe(600);
+    olcu(ikinci(), { kap: 400, icerik: 2000, kaydirma: 1600 });
     fireEvent.click(solOk());
-    expect(ikinci().scrollLeft).toBe(300);
+    expect(ikinci().scrollLeft).toBe(1300);
+    fireEvent.click(solOk());
+    expect(ikinci().scrollLeft).toBe(1000);
   });
 
   it('uca atlayış payından az yer kalınca tek tıkta uca gider', () => {
@@ -144,8 +176,6 @@ describe('Fareyle kaydırma', () => {
     olcu(ikinci(), { kap: 1080, icerik: 1901, kaydirma: 821 });
     fireEvent.click(solOk());
     expect(ikinci().scrollLeft).toBe(0);
-    fireEvent.click(sagOk());
-    expect(ikinci().scrollLeft).toBe(821);
   });
 
   it('reddedilen: uca bir atlayıştan çok yer varken uca sıçranmaz', () => {

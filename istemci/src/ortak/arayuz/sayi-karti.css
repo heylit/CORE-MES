@@ -16,9 +16,19 @@ a.tc-sayi-karti:focus-visible { outline: 2px solid var(--c); outline-offset: 2px
 }
 .tc-sayi-govde { flex: 1; display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
 .tc-sayi-baslik { font-size: var(--yazi-s); font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
-.tc-sayi-deger { font-size: var(--yazi-xl); font-weight: 700; line-height: 1.1; }
+/* Yazı özeti (vardiya adı) önceki boyunda kalır. Sayı kalın ve büyüktür, rakamlar eşit genişliktedir ki yan yana kartlar
+   hizalı okunsun (kart 2155, karar 2). Boy sabittir: kart genişliğine bağlanırsa dar ızgarada başlık harf harf kırılır. */
+.tc-sayi-deger { font-size: var(--yazi-l); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
+.tc-sayi-deger[data-sayisal] {
+  font-size: var(--sayi-boy); font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.tc-sayi-okunan { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-sayi-birim { font-size: var(--sayi-birim); font-weight: 600; letter-spacing: 0; color: var(--muted); }
 .tc-sayi-karti[data-ton] .tc-sayi-deger { color: var(--c); }
-.tc-sayi-deger[data-bos] { font-family: var(--font-ana); font-size: var(--yazi-m); font-weight: 600; color: var(--faint); }
-.tc-sayi-deger:not(.mono) { font-size: var(--yazi-l); }
+/* Veri yokken sayı boyunda yazı çıkmaz: soluk tire ve küçük açıklama (karar 9). */
+.tc-sayi-deger[data-bos] { display: flex; align-items: baseline; gap: var(--b-2); color: var(--faint); }
+.tc-sayi-tire { font-size: var(--yazi-xl); font-weight: 700; }
+.tc-sayi-bos { font-size: var(--yazi-s); font-weight: 600; }
 .tc-sayi-alt { font-size: var(--yazi-xs); color: var(--muted); overflow-wrap: anywhere; }
 .tc-sayi-git { flex: none; color: var(--faint); }

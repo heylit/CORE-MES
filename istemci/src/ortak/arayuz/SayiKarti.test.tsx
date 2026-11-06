@@ -49,4 +49,37 @@ describe('SayiKarti', () => {
     expect(hatali.container.querySelector('[data-ton]')).toBeNull();
     expect(screen.queryByRole('link')).toBeNull();
   });
+
+  it('sayi buyuk ve sayisal isaretli; sayiyla baslayan ozet sayi ve kucuk birim olarak ayrilir, metni degismez', () => {
+    const sayili = ciz({ sayi: 1234 });
+    expect(sayili.container.querySelector('.tc-sayi-deger')?.hasAttribute('data-sayisal')).toBe(true);
+    cleanup();
+    const birimli = ciz({ sayi: undefined, metin: '12,5 sa' });
+    const deger = birimli.container.querySelector('.tc-sayi-deger') as HTMLElement;
+    expect(screen.getByText('12,5 sa')).toBeTruthy();
+    expect(deger.hasAttribute('data-sayisal')).toBe(true);
+    expect(deger.querySelector('.tc-sayi-birim')?.textContent).toBe(' sa');
+    expect(deger.querySelector('.tc-sayi-birim')?.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('para birimiyle baslayan tutar sayisaldir', () => {
+    const tutar = ciz({ sayi: undefined, metin: '₺1.044.000' });
+    expect(tutar.container.querySelector('.tc-sayi-deger')?.hasAttribute('data-sayisal')).toBe(true);
+  });
+
+  it('reddedilen: yazi ozeti ve uzun cumle bolunmez, sayisal isaret almaz', () => {
+    const yazi = ciz({ sayi: undefined, metin: 'Akşam' });
+    expect(yazi.container.querySelector('.tc-sayi-deger')?.hasAttribute('data-sayisal')).toBe(false);
+    cleanup();
+    const cumle = ciz({ sayi: undefined, metin: '3 makine bekliyor' });
+    expect(cumle.container.querySelector('.tc-sayi-birim')).toBeNull();
+    expect(cumle.container.querySelector('.tc-sayi-deger')?.textContent).toBe('3 makine bekliyor');
+  });
+
+  it('veri yokken tire ekran okuyucuya gizlidir; okunan ad "Veri yok"tur', () => {
+    ciz({ sayi: null, yol: '/stok' });
+    expect(screen.getByRole('link').getAttribute('href')).toBe('/stok');
+    expect(document.querySelector('.tc-sayi-tire')?.getAttribute('aria-hidden')).toBe('true');
+    expect(document.querySelector('.tc-sayi-deger')?.hasAttribute('data-sayisal')).toBe(false);
+  });
 });
