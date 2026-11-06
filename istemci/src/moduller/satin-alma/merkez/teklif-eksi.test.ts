@@ -22,9 +22,12 @@ const acilis: AcilisCevabi = {
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 const istekler: string[] = [];
+const bildirimler: string[] = [];
+const bildirim = { bildir: (_ton: string, mesaj: string) => { bildirimler.push(mesaj); return bildirimler.length; }, kaldir: () => {} };
 async function ac(durum: Talep['durum']): Promise<{ kok: HTMLElement; kapat: () => void }> {
   const veri: AcilisCevabi = { ...acilis, talepler: [{ ...talep, durum }] };
   istekler.length = 0;
+  bildirimler.length = 0;
   vi.stubGlobal('fetch', vi.fn(async (_adres: string, i?: RequestInit) => {
     istekler.push(i?.method ?? 'GET');
     return new Response(JSON.stringify(veri), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -33,7 +36,7 @@ async function ac(durum: Talep['durum']): Promise<{ kok: HTMLElement; kapat: () 
   window.scrollTo = () => {};
   const kok = document.createElement('div');
   document.body.append(kok);
-  const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+  const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, bildirim });
   await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${talep.id}"]`)).not.toBeNull());
   kok.querySelector<HTMLElement>(`tr[data-id="${talep.id}"]`)!.click();
   await vi.waitFor(() => expect(kok.querySelector('[data-act="tab"][data-tab="quotes"]')).not.toBeNull());
@@ -74,7 +77,7 @@ describe('teklif tablosu eksi değer (TMI A5)', () => {
     await new Promise((bitti) => { setTimeout(bitti, 0); });
     expect(istekler.filter((y) => y !== 'GET')).toEqual([]);
     // İkinci bağlamada açılış yenilemesi tabloyu durumundan yeniden çizebilir; değerler durumda kalır, ileti görünür.
-    expect(kok.querySelector('#toast')?.textContent).toBe('Yüzde 0 ile 100 arasında olur.');
+    expect(bildirimler.at(-1)).toBe('Yüzde 0 ile 100 arasında olur.');
     expect([kok.querySelector<HTMLInputElement>('#bulk [data-bf="discountPct"][data-col="0"]')!.value, kok.querySelector<HTMLInputElement>('#bulk [data-bi][data-col="0"]')!.value]).toEqual(['150', '12']);
     kapat();
   });

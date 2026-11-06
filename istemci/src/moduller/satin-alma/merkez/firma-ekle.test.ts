@@ -56,19 +56,21 @@ describe('tedarikçi penceresinden yeni firma', () => {
     await vi.waitFor(() => expect(kok.querySelector('[data-act="new-supplier"]')).not.toBeNull());
     kok.querySelector<HTMLElement>('[data-act="new-supplier"]')!.click();
 
-    const ara = kok.querySelector<HTMLInputElement>('#s-firma-ara')!;
+    // Pencere kökü sayfanın gövdesindedir (2165).
+    const pencere = document.getElementById('modal-root')!;
+    const ara = pencere.querySelector<HTMLInputElement>('#s-firma-ara')!;
     ara.value = 'Deneme Tedarik Yeni';
     ara.dispatchEvent(new Event('input', { bubbles: true }));
-    await vi.waitFor(() => expect(kok.querySelector('[data-act="firma-yeni"]')).not.toBeNull(), { timeout: 2000 });
-    kok.querySelector<HTMLElement>('[data-act="firma-yeni"]')!.click();
-    expect(kok.querySelector<HTMLInputElement>('#s-yf-ad')!.value).toBe('Deneme Tedarik Yeni');
-    kok.querySelector<HTMLInputElement>('#s-yf-vergi')!.value = '1234567890';
+    await vi.waitFor(() => expect(pencere.querySelector('[data-act="firma-yeni"]')).not.toBeNull(), { timeout: 2000 });
+    pencere.querySelector<HTMLElement>('[data-act="firma-yeni"]')!.click();
+    expect(pencere.querySelector<HTMLInputElement>('#s-yf-ad')!.value).toBe('Deneme Tedarik Yeni');
+    pencere.querySelector<HTMLInputElement>('#s-yf-vergi')!.value = '1234567890';
 
-    const ac = () => kok.querySelector<HTMLButtonElement>('[data-act="firma-ac"]')!;
+    const ac = () => pencere.querySelector<HTMLButtonElement>('[data-act="firma-ac"]')!;
     ac().click();
     await vi.waitFor(() => expect(ac().disabled).toBe(false));
     ac().click();
-    await vi.waitFor(() => expect(kok.querySelector('#s-firma-sonuc')!.textContent).toContain('açıldı ve seçildi'));
+    await vi.waitFor(() => expect(pencere.querySelector('#s-firma-sonuc')!.textContent).toContain('açıldı ve seçildi'));
 
     const ekleme = istekler.filter((i) => i.yol.endsWith('/musteri-tedarikci/firmalar/ekle'));
     expect(ekleme).toHaveLength(2);
@@ -76,7 +78,7 @@ describe('tedarikçi penceresinden yeni firma', () => {
     expect(ekleme[0]!.kimlik).toMatch(/^[0-9a-f-]{36}$/);
     expect(ekleme[1]!.kimlik).toBe(ekleme[0]!.kimlik);
 
-    kok.querySelector<HTMLElement>('[data-act="save-supplier"]')!.click();
+    pencere.querySelector<HTMLElement>('[data-act="save-supplier"]')!.click();
     await vi.waitFor(() => expect(istekler.some((i) => i.yol.endsWith('/satin-alma-tedarikcileri/kaydet'))).toBe(true));
     expect(istekler.find((i) => i.yol.endsWith('/satin-alma-tedarikcileri/kaydet'))!.govde).toMatchObject({ firmaId: 41 });
     kapat();

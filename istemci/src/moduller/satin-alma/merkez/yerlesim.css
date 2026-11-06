@@ -5,6 +5,8 @@
 @media (max-width: 767px) {
   .sa-kok { margin: calc(-1 * var(--b-4)); height: calc(100% + 2 * var(--b-4)); }
 }
+/* Pencere kökü sayfanın gövdesindedir (bagla.ts); stil kökü olarak yalnız değişken ve yazı taşır, yer kaplamaz. */
+.sa-kok.sa-pencere-kok, .sa-kok.sa-pencere-kok:empty { margin: 0; height: auto; overflow: visible; background: none; }
 
 /* Paylaştırma, "Karşılaştır ve karar ver" içinde açık durur (kullanıcı kararı); başlığı bölüm içi alt başlıktır. */
 .sa-kok .sa-paylastir { margin-top: var(--b-4); scroll-margin-top: var(--b-3); }
