@@ -2,6 +2,7 @@ import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import {
   DisOperasyonlarSayfasi, IsKutusuSayfasi, KgFiyatlariSayfasi, MalzemelerSayfasi, OnaylarSayfasi, RaporlarSayfasi, TaleplerSayfasi, TedarikcilerSayfasi, TedarikTerminleriSayfasi,
 } from './SatinAlma.tsx';
+import { SatinAlmaAnalizi } from './analiz/SatinAlmaAnalizi.tsx';
 import { TaleplerimSayfasi } from './talep/TaleplerimSayfasi.tsx';
 
 // İkinci menüdeki her maddenin rotası (şartname: testle denetlenir).
@@ -15,5 +16,6 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/satin-alma/kg-fiyatlari', ekran: KgFiyatlariSayfasi },
   { yol: '/satin-alma/tedarikciler', ekran: TedarikcilerSayfasi },
   { yol: '/satin-alma/raporlar', ekran: RaporlarSayfasi },
+  { yol: '/satin-alma/analiz', ekran: SatinAlmaAnalizi },
   { yol: '/taleplerim', ekran: TaleplerimSayfasi },
 ];

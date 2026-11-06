@@ -1178,3 +1178,32 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
+
+// 2151: Satın alma analizi için sipariş satırları (iptal edilmemiş talep, sipariş günü verilen günden sonra). Fiyat teklif para
+// biriminde ve iskontosuzdur; teslim toplamı ve son teslimin tesis günü yanında gelir. Hesap analiz-kurallar.ts'tedir.
+export interface AnalizSiparisSatiri {
+  id: number; siparisTarihi: string; firmaId: number | null; tedarikciAdi: string; paraBirimi: string; kur: string | null;
+  genelIskonto: string; birimFiyat: string | null; satirIskonto: string | null; terminGun: number | null; miktar: string; birim: string;
+  katalogId: string | null; ad: string; malzemeNo: number | null; teslimMiktari: string | null; sonTeslimGunu: string | null;
+}
+export function analizSiparisSatirlari(db: Db, basTarih: string, saatDilimi: string): Promise<AnalizSiparisSatiri[]> {
+  return db.sorgu<AnalizSiparisSatiri>(
+    `SELECT r.id, s.siparis_tarihi::text AS "siparisTarihi", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
+            trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur, q.iskonto_yuzdesi::text AS "genelIskonto",
+            f.birim_fiyat::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto", COALESCE(f.termin_gun, q.termin_gun) AS "terminGun",
+            r.miktar::text AS miktar, r.birim, k.katalog_id::text AS "katalogId", k.ad, c.malzeme_no AS "malzemeNo",
+            t.teslim::text AS "teslimMiktari", t.son AS "sonTeslimGunu"
+       FROM satin_alma_siparis_satiri r
+       JOIN satin_alma_siparis s ON s.talep_id = r.talep_id AND s.teklif_id = r.teklif_id
+       JOIN satin_alma_talep tl ON tl.id = r.talep_id AND tl.durum <> 'iptal'
+       JOIN satin_alma_teklif q ON q.talep_id = r.talep_id AND q.id = r.teklif_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = r.talep_id AND k.id = r.kalem_id
+       LEFT JOIN satin_alma_teklif_satiri f ON f.talep_id = r.talep_id AND f.teklif_id = r.teklif_id AND f.kalem_id = r.kalem_id
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN LATERAL (SELECT sum(e.miktar) AS teslim, ((max(e.zaman) FILTER (WHERE e.miktar > 0) AT TIME ZONE $2)::date)::text AS son
+                            FROM satin_alma_teslim e WHERE e.siparis_satiri_id = r.id) t ON true
+      WHERE s.siparis_tarihi >= $1::date
+      ORDER BY s.siparis_tarihi, r.id`,
+    [basTarih, saatDilimi],
+  );
+}

@@ -16,7 +16,7 @@ import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import { acilSiparisOnaylandi, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
@@ -123,6 +123,7 @@ export function sunucununBaglari(): Bag[] {
     // plan servisi onu doğrudan çağırır (UYUM-BORCU P-B35).
     bag('plan motoru -> plan', planMotoruCozucusu, sunucuPlanCozucusu),
     bag('stok değer grupları -> satın alma kg stok değeri', stokMiktariCozucusu, stok.degerGrubuToplamlari),
+    bag('stok tüketim serisi -> satın alma analizi', tuketimSerisiCozucusu, stok.tuketimSerisi),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
     bag('kalite onay durumu -> satın alma siparişi', kaliteDurumuCozucusu, kaliteMerkezi.tedarikciOnayDurumlari),
     bag('vardiya takvimi -> İK puantaj', ik.puantajTakvimCozucusu, vardiya.calismaTakvimleri),

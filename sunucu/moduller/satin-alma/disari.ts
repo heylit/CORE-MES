@@ -87,6 +87,8 @@ export const parcaRevizyonuCozucusu = (cozucu: servis.ParcaRevizyonuCozucusu): v
 export const stokYokCozucusu = (cozucu: servis.StokYokCozucusu): void => servis.stokYokCozucusuKaydet(cozucu);
 // SAT-77: kg fiyatları sayfasındaki hammadde stok değeri için stok miktarı (kablolama stok/disari stokMiktarlari ile bağlar).
 export const stokMiktariCozucusu = (cozucu: servis.StokMiktariCozucusu): void => servis.stokMiktariCozucusuKaydet(cozucu);
+// 2151: satın alma analizinin tüketim tahmini için stok tüketim serisi (kablolama stok/disari tuketimSerisi ile bağlar).
+export { tuketimSerisiCozucusuKaydet as tuketimSerisiCozucusu } from './analiz.ts';
 // E-13, 236 a: Kalite Merkezi'nin tedarikçi onay durumu, firma kimliğiyle (kablolama kalite-merkezi/disari tedarikciOnayDurumlari ile bağlar).
 export const kaliteDurumuCozucusu = (cozucu: servis.KaliteDurumuCozucusu): void => servis.kaliteDurumuCozucusuKaydet(cozucu);
 // Takvim (891): beklenen teslim günündeki siparişler. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
