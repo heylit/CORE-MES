@@ -36,3 +36,8 @@
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/cnc-kurulum`: birincil 3: "2B", "Tezgâh hazırla", "Hazırlığa devam" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).

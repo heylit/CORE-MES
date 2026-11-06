@@ -39,3 +39,8 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Bağlamada kapanacak
 
 - Kural, sürüm ve sunucu kuralları akış akış kapanır; kabul kullanıcı deneyince.
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/degisiklik-yonetimi`: birincil 2: "Yeni değişiklik talebi", "Benim işlerim (0)" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
