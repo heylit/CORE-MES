@@ -5,6 +5,7 @@ import { cutData, holderOf } from '../hesap/kesme.ts';
 import type { IsMalzemesi, Tezgah } from '../veri/tipler.ts';
 import { download, fname } from '../indir.ts';
 import { GENEL_ADIM, K } from './satirlar.ts';
+import { formulKoru } from '../../../../ortak/veri/csv.ts';
 
 // Kurulum kartının dışa aktarımı (prototip 17748-17777): CSV, JSON ve yazdırma. Biçimler prototipteki gibidir; hepsi tarayıcıda üretilir.
 
@@ -28,7 +29,8 @@ export function rowsForExport(): KurulumAktarimi {
   return { m, mat, gen, tl, g, c };
 }
 
-const q = (v: unknown): string => { const s = String(v == null ? '' : v as string); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+// Elle yazılan alanlar (parça no, operatör, takım adı) Excel'de formül olarak çalışmasın; düz sayı metni ('-0,02') olduğu gibi kalır.
+const q = (v: unknown): string => { const s = formulKoru(String(v == null ? '' : v as string), { sayiSerbest: true }); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 
 export function csvMetni(r: KurulumAktarimi, tarih: string): string {
   const L: unknown[][] = [];

@@ -144,4 +144,14 @@ describe('özet ve Stok CSV', () => {
     expect(metin).toContain('"Raf; ""A"""');
     expect(stokCsvAdi(new Date('2026-10-23T10:00:00Z'))).toBe('CNC_Stok_2026-10-23.csv');
   });
+
+  it('CSV formülle başlayan metni kesme işaretiyle yazar, düz sayı metnine dokunmaz', () => {
+    const key = invKey(ilkKalem().it);
+    setLoc(key, '=1+1');
+    expect(stokCsvMetni()).toContain(";'=1+1;");
+    setLoc(key, '-0,02');
+    const metin = stokCsvMetni();
+    expect(metin).toContain(';-0,02;');
+    expect(metin).not.toContain("'-0,02");
+  });
 });
