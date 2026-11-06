@@ -12,6 +12,8 @@ export {
   girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir, kendiPininiDegistir, kisiBayrakliMi, kisileriListele, kisiKullaniciAdi, kisiVarMi, kullaniciYukle, yoneticiOlustur, yeniPinHatasi,
 } from './servis.ts';
 export type { CikisSonucu, GirisSirri } from './servis.ts';
+// Sınırlı hesabın kendi gizlilik taahhüdü (2158-5 a): yalnız oturum modülü (hesabım) çağırır.
+export { gizlilikTaahhuduVer } from './servis.ts';
 // İK personel kartının itmesi (1302 a, 1315): ad, sicil no, görev ve çıkış tarihi bağlı kişiye yazılır, kişi kartında salt okunur
 // olur; çıkış tarihi geçmişse kişi pasife alınır. Bayraklı kişiye yalnız bayraklı aktör iter. Yetki İK ucunda denetlenir.
 export { ozlukBaginiKaldir, ozluguIkdenYaz } from './servis.ts';

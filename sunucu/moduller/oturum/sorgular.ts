@@ -23,6 +23,8 @@ export interface GecerliOturum {
   bayat: boolean;
   // Son görülmeden bu yana geçen süre: hareketsizlik sınırı cihaz profiline bağlıdır, sınırı kurallar verir.
   bosta_gecen_sn: number;
+  // Açılıştan bu yana geçen süre: sınırlı hesabın azami oturumu (kart 2158) kurallardadır.
+  acik_gecen_sn: number;
 }
 
 export interface OturumVeProfil {
@@ -37,6 +39,7 @@ interface OturumVeProfilSatiri extends CihazProfiliCozumu {
   acildi_metin: string | null;
   bayat: boolean | null;
   bosta_gecen_sn: number | null;
+  acik_gecen_sn: number | null;
 }
 
 // Kimlik her istekte koşar: cihaz profili ve oturum tek gidiş-dönüşte okunur (1874 a).
@@ -50,20 +53,22 @@ export async function oturumVeProfilBul(
     `WITH ${CIHAZ_CTE},
      o AS (
        SELECT id, kisi_id, acildi::text AS acildi_metin, son_gorulme < now() - make_interval(secs => $4) AS bayat,
-              extract(epoch FROM now() - son_gorulme)::float8 AS bosta_gecen_sn
+              extract(epoch FROM now() - son_gorulme)::float8 AS bosta_gecen_sn,
+              extract(epoch FROM now() - acildi)::float8 AS acik_gecen_sn
          FROM oturum
         WHERE anahtar_ozeti = $2 AND kapandi IS NULL AND acildi > now() - make_interval(secs => $3)
      )
-     SELECT ${PROFIL_ALANLARI_COZUM}, o.id AS oturum_id, o.kisi_id, o.acildi_metin, o.bayat, o.bosta_gecen_sn
+     SELECT ${PROFIL_ALANLARI_COZUM}, o.id AS oturum_id, o.kisi_id, o.acildi_metin, o.bayat, o.bosta_gecen_sn, o.acik_gecen_sn
        ${PROFIL_KAYNAGI}
        LEFT JOIN o ON true`,
     [cihazOzeti, oturumOzeti, sure.azamiSn, sure.gorulmeAraligiSn],
   );
   if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
-  const { oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, ...profil } = satir;
+  const { oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn, ...profil } = satir;
   const oturum = oturum_id === null || kisi_id === null || acildi_metin === null || bayat === null || bosta_gecen_sn === null
+    || acik_gecen_sn === null
     ? null
-    : { id: oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn };
+    : { id: oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn };
   return { profil, oturum };
 }
 

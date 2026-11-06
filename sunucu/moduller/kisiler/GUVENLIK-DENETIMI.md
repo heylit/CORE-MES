@@ -51,3 +51,17 @@ Günlük iş `kisiler-cikis-pasif` istek değildir; yalnız çıkış tarihi ge�
 
 Dışa açık okuma `kisilerinIslemleri` (toplu işlem okuması) yetki sormaz; çağıran modül kendi ucunda yetkiyi sorar. Kapsamı oturum yüklemesiyle
 aynıdır (pasif ve girişsiz kişi yok): `kisi-islemleri.test.ts`.
+
+## Sınırlı hesap (kart 2158; 2158-1 a, 2158-5 a)
+
+`kisi.hesap_turu` 'ic' ya da 'sinirli'. Sınırlı hesabın bitişi (son geçerli gün) ve sorumlu iç kişisi zorunludur (kısıt `kisi_sinirli_butun`).
+Bitiş günü geçince kişi kullanıcı değildir: giriş kaydı ve yetki kaydı okunmaz, toplu işlem okuması ve bildirim kapsamı onu almaz.
+Bayraklı rol sınırlı hesaba bütün işlemleri vermez (sorguda ikinci kilit). Yazma ve dosya kapısı çekirdektedir (`uc.ts` `sinirliGirerMi`).
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| POST /kisiler/:id/sinirli-hesap | `kisiler.rol-yonet` | aç ya da uzat; bitiş bugün ile 90 gün sonrası arası (tesis günü); sorumlu aktif, girişli, iç hesap ve kişinin kendisi değil; bayraklı kişi sınırlı olamaz; kişi kendini değiştiremez; sürüm (KS-1); uzatma onaylanmış taahhüdü korur | `sinirli-hesap.test.ts` "rol yöneten sınırlı hesap açar ...", "bitiş bugünden önce ...", "eski sürüm 409 ...; uzatır ..." | aynı dosya: "rol yönetmeyen 403 ...", "bitiş ...", "sorumlu ...", "bayraklı rolü olan kişi ..." (422) |
+| POST /kisiler/:id/ic-hesap | `kisiler.rol-yonet` | bitiş, sorumlu ve taahhüt silinir; iç hesapta 422; kişi kendini değiştiremez; sürüm | `sinirli-hesap.test.ts` "iç hesaba alma ..." | aynı test (iç hesapta 422) |
+| POST /kisiler/:id/rol-ata (ek kural) | `kisiler.rol-yonet` | sınırlı hesaba bayraklı rol atanmaz | | `sinirli-hesap.test.ts` "bayraklı rolü olan kişi ... sınırlı hesaba bayraklı rol atanamaz" |
+
+`gizlilikTaahhuduVer` dışarıdadır: yalnız oturum modülünün `POST /hesabim/gizlilik-taahhudu` ucu kişinin kendisi için çağırır; ilk onay zamanı kalır.

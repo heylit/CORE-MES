@@ -30,6 +30,9 @@ export const kisiSemasi = z.object({
   ozlukCikisTarihi: tarihSemasi.nullable(),
   // true: kişi tüm yetkileri veren role sahip, okuyan değil; kaydına düzenleme ve durum değişikliği yapamaz (sunucu da reddeder).
   korumali: z.boolean(),
+  // Sınırlı hesap (kart 2158): yalnız okur, bitişten (son geçerli gün) sonra giremez; iç hesapta null. Sunucu hep gönderir; Personel
+  // ekranı (2158 P4) gelene kadar istemci tarafında isteğe bağlıdır.
+  sinirli: z.object({ bitis: tarihSemasi, sorumluId: KIMLIK, taahhut: z.boolean() }).nullable().optional(),
 });
 
 export const kisilerCevabi = z.object({ kisiler: z.array(kisiSemasi) });
@@ -80,6 +83,9 @@ export const hesapGovdesi = z.object({
   rolId: KIMLIK,
 });
 
+// Sınırlı hesap aç ya da uzat: bitiş en çok 90 gün sonrası (2158-5 a), sorumlu aktif iç hesap.
+export const sinirliHesapGovdesi = z.object({ ...beklenenSurum, bitis: tarihSemasi, sorumluId: KIMLIK });
+
 export const parolaGovdesi = z.object({ ...beklenenSurum, yeniParola: gizli(z.string().max(200)) });
 // Verilen PIN geçicidir: kişi ilk girişte kendi PIN'ini belirler.
 export const pinVerGovdesi = z.object({ ...beklenenSurum, pin: gizli(z.string().max(20)) });
@@ -103,6 +109,7 @@ export type SurumGovdesi = z.input<typeof surumGovdesi>;
 export type HesapGovdesi = z.input<typeof hesapGovdesi>;
 export type ParolaGovdesi = z.input<typeof parolaGovdesi>;
 export type PinVerGovdesi = z.input<typeof pinVerGovdesi>;
+export type SinirliHesapGovdesi = z.input<typeof sinirliHesapGovdesi>;
 
 // Ortak seçicinin (KisiSecici) arama ucu (kart #1320): adda ya da sicil no'da arar; sayfa başına KISI_SECIM_SAYFA_BOYU kişi.
 // Cevap ortak seçici biçimindedir: `kod` sicil no'dur (yoksa boş), `ust` yok. Varsayılan yalnız aktif kişiler.

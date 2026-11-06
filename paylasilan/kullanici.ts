@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { islemMi } from './islemler.ts';
 import type { Islem } from './islemler.ts';
+import { tarihSemasi } from './zaman.ts';
 
 // Cihaz profili (kart #1358, 1347 a): kişinin yetkisi rolüyle bulunduğu cihazın profilinin kesişimidir. Cihazı sunucu ortak cihaz
 // çerezinden bulur; istemcinin beyanı değildir.
@@ -19,6 +20,9 @@ export const kullaniciSemasi = z.object({
   roller: z.array(z.string()).optional(),
   // Firma kişisi (1224 a): işlemlerinden bağımsız olarak yalnız portal ve oturum uçlarına girer. Yoksa iç kişidir.
   disIzleyici: z.boolean().optional(),
+  // Sınırlı hesap (2158-1 a): yalnız okur; çekirdek yazmayı ve dosya indirmeyi kapatır. Yoksa iç kişidir.
+  // bitis: son geçerli gün (GGGG-AA-GG); taahhut: gizlilik taahhüdü onaylandı mı (onaylanmadan oturum dışına girilmez).
+  sinirli: z.object({ bitis: tarihSemasi, taahhut: z.boolean() }).optional(),
   // Oturumun açık olduğu cihazın profili; yoksa sınır yoktur (akıllı saat belirteci gibi). İşlem listesi buna göre süzülmüş gelir.
   cihazProfili: z.enum(CIHAZ_PROFILLERI).optional(),
 });

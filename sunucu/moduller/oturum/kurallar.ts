@@ -164,6 +164,21 @@ export function bostaSuresiSn(profil: CihazProfili): number {
   return profil === 'istasyon' ? ISTASYON_BOSTA_SN : BOSTA_SN;
 }
 
+/* ---------------- sınırlı hesap (kart 2158, 2158-5 a) ---------------- */
+
+// Sınırlı hesabın oturumu kısadır: 30 dk boşta, en çok 8 saat. Kayıtlı (ortak) cihazda hiç açılmaz: dış kişinin oturumu kurumun
+// paylaşılan ekranında kalmasın. Bitiş günü kişiler modülünde denetlenir (kullanıcı yüklenmez).
+export const SINIRLI_BOSTA_SN = 30 * 60;
+export const SINIRLI_AZAMI_SN = 8 * 60 * 60;
+export const SINIRLI_ORTAK_CIHAZ = 'Sınırlı hesap kurumun ortak cihazında açılmaz; kendi cihazınızdan girin.';
+
+export function sinirliOturumGecerMi(girdi: { bostaGecenSn: number; acikGecenSn: number; kayitliCihaz: boolean }): boolean {
+  return !girdi.kayitliCihaz && girdi.bostaGecenSn < SINIRLI_BOSTA_SN && girdi.acikGecenSn < SINIRLI_AZAMI_SN;
+}
+
+// Çerez ömrü: sınırlı hesapta oturumun azami süresiyle aynı.
+export const oturumCerezSn = (kullanici: Kullanici): number => (kullanici.sinirli === undefined ? AZAMI_SN : SINIRLI_AZAMI_SN);
+
 // Profil, atama ve kayıtsız cihaz ayarı yalnız Tam profilli cihazdan değişir: telefondan giren yönetici kendi cihazını genişletemez.
 // Profili olmayan kimlik (akıllı saat) de değiştiremez.
 export function profilYonetebilirMi(kullanici: Kullanici): boolean {

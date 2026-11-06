@@ -1,6 +1,11 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { KisiAlanlari } from './kurallar.ts';
 
+// Sınırlı hesap (2158-1 a) bitiş gününden sonra kullanıcı değildir: giremez, oturumu yüklenmez. Bayraklı rol ona bütün işlemleri
+// vermez; atama zaten reddedilir, bu ikinci kilittir. CURRENT_DATE tesis günüdür (veritabanı oturumu tesis dilimindedir).
+const SINIRLI_GECERLI = "(k.hesap_turu = 'ic' OR k.sinirli_bitis >= CURRENT_DATE)";
+const BAYRAKLI_ROL = `k.hesap_turu = 'ic' AND EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id AND r.yonetici)`;
+
 export interface GirisKaydi {
   id: number;
   parola_ozeti: string;
@@ -14,9 +19,9 @@ export interface GirisKaydi {
 export function girisKaydiBul(db: Db, kullaniciAdi: string): Promise<GirisKaydi | null> {
   return db.tek<GirisKaydi>(
     `SELECT k.id, k.parola_ozeti, k.pin_ozeti, k.pin_belirlenecek,
-            EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id AND r.yonetici) AS bayrakli
+            ${BAYRAKLI_ROL} AS bayrakli
        FROM kisi k
-      WHERE k.kullanici_adi = $1 AND k.aktif AND k.parola_ozeti IS NOT NULL
+      WHERE k.kullanici_adi = $1 AND k.aktif AND k.parola_ozeti IS NOT NULL AND ${SINIRLI_GECERLI}
         FOR SHARE OF k`,
     [kullaniciAdi],
   );
@@ -29,6 +34,8 @@ export interface YetkiKaydi {
   islemler: unknown[];
   acilis_sayfasi: string | null;
   roller: string[];
+  sinirli_bitis: string | null;
+  taahhut: boolean;
 }
 
 // Oturumun açılışı kişinin "bundan önceki oturumlar geçersiz" zamanından eskiyse kişi yüklenmez. Koşul yalnız oturum
@@ -38,9 +45,8 @@ const GECERSIZ_ONCE_SARTI = ' AND (k.oturumlar_gecersiz_once IS NULL OR $2::time
 // Pasif kişi ve giriş bilgisi olmayan kişi kullanıcı değildir.
 export function yetkiKaydiBul(db: Db, kisiId: number, oturumAcildi: string | null = null): Promise<YetkiKaydi | null> {
   return db.tek<YetkiKaydi>(
-    `SELECT k.id, k.ad,
-            EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id
-                     WHERE kr.kisi_id = k.id AND r.yonetici) AS butun_islemler,
+    `SELECT k.id, k.ad, k.sinirli_bitis::text AS sinirli_bitis, k.gizlilik_taahhudu IS NOT NULL AS taahhut,
+            ${BAYRAKLI_ROL} AS butun_islemler,
             -- Rollerin işlemleri ve kişiye verilen ek işlemler (kart #1233) birleşir.
             COALESCE((SELECT jsonb_agg(DISTINCT t.islem) FROM (
                         SELECT ri.islem FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id WHERE kr.kisi_id = k.id
@@ -54,7 +60,7 @@ export function yetkiKaydiBul(db: Db, kisiId: number, oturumAcildi: string | nul
             -- Rol kodları yalnız istemcinin varsayılan görünümü içindir (1390 a); yetki işlem listesindedir.
             ARRAY(SELECT r.kod FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id ORDER BY r.kod) AS roller
        FROM kisi k
-      WHERE k.id = $1 AND k.aktif AND k.kullanici_adi IS NOT NULL${oturumAcildi === null ? '' : GECERSIZ_ONCE_SARTI}`,
+      WHERE k.id = $1 AND k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI}${oturumAcildi === null ? '' : GECERSIZ_ONCE_SARTI}`,
     oturumAcildi === null ? [kisiId] : [kisiId, oturumAcildi],
   );
 }
@@ -79,6 +85,9 @@ export interface KisiSatiri {
   ozluk_ik: boolean;
   ozluk_cikis_tarihi: string | null;
   cikis_gecti: boolean;
+  sinirli_bitis: string | null;
+  sinirli_sorumlu_id: number | null;
+  taahhut: boolean;
 }
 
 // Parola ve PIN özeti hiçbir zaman seçilmez; yalnız var olup olmadığı döner. Kullanıcı adını kime göstereceğine servis karar verir.
@@ -86,6 +95,7 @@ export function kisiSatirlari(db: Db, kisiId?: number): Promise<KisiSatiri[]> {
   return db.sorgu<KisiSatiri>(
     `SELECT k.id, k.ad, k.aktif, k.kullanici_adi IS NOT NULL AS giris_var, k.kullanici_adi, k.pin_ozeti IS NOT NULL AS pin_var, k.sicil_no, k.gorev, k.surum,
             k.ozluk_ik, k.ozluk_cikis_tarihi::text AS ozluk_cikis_tarihi, COALESCE(k.ozluk_cikis_tarihi <= CURRENT_DATE, false) AS cikis_gecti,
+            k.sinirli_bitis::text AS sinirli_bitis, k.sinirli_sorumlu_id, k.gizlilik_taahhudu IS NOT NULL AS taahhut,
             COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'ad', r.ad, 'yonetici', r.yonetici) ORDER BY r.ad, r.id)
                         FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id), '[]'::jsonb) AS roller
        FROM kisi k
@@ -359,13 +369,13 @@ export interface KisiIslemSatiri {
 export function kisiIslemSatirlari(db: Db): Promise<KisiIslemSatiri[]> {
   return db.sorgu<KisiIslemSatiri>(
     `SELECT k.id,
-            EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id AND r.yonetici) AS butun_islemler,
+            ${BAYRAKLI_ROL} AS butun_islemler,
             COALESCE((SELECT jsonb_agg(DISTINCT t.islem) FROM (
                         SELECT ri.islem FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id WHERE kr.kisi_id = k.id
                         UNION ALL
                         SELECT ki.islem FROM kisi_islemi ki WHERE ki.kisi_id = k.id) t), '[]'::jsonb) AS islemler
        FROM kisi k
-      WHERE k.aktif AND k.kullanici_adi IS NOT NULL`,
+      WHERE k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI}`,
   );
 }
 
@@ -379,11 +389,11 @@ export interface KisiRolIslemSatiri {
 export function kisiRolIslemSatirlari(db: Db, kisiId?: number): Promise<KisiRolIslemSatiri[]> {
   return db.sorgu<KisiRolIslemSatiri>(
     `SELECT k.id,
-            EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id AND r.yonetici) AS butun_islemler,
+            ${BAYRAKLI_ROL} AS butun_islemler,
             COALESCE((SELECT jsonb_agg(DISTINCT ri.islem) FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id
                        WHERE kr.kisi_id = k.id), '[]'::jsonb) AS islemler
        FROM kisi k
-      WHERE k.aktif AND k.kullanici_adi IS NOT NULL AND ($1::int IS NULL OR k.id = $1)`,
+      WHERE k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI} AND ($1::int IS NULL OR k.id = $1)`,
     [kisiId ?? null],
   );
 }
@@ -455,7 +465,7 @@ export function kisininRolSatirlari(db: Db, kisiId: number): Promise<{ id: numbe
 export async function rollerdekiKisiSatirlari(db: Db, rolIdleri: readonly number[]): Promise<number[]> {
   const satirlar = await db.sorgu<{ id: number }>(
     `SELECT DISTINCT k.id FROM kisi k JOIN kisi_rolu kr ON kr.kisi_id = k.id
-      WHERE kr.rol_id = ANY($1::int[]) AND k.aktif AND k.kullanici_adi IS NOT NULL ORDER BY k.id`,
+      WHERE kr.rol_id = ANY($1::int[]) AND k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI} ORDER BY k.id`,
     [rolIdleri],
   );
   return satirlar.map((s) => s.id);
@@ -519,4 +529,41 @@ export async function kokluKullaniciAdlari(db: Db, kok: string): Promise<Set<str
     [kok.slice(0, 36).replace(/[\\%_]/g, (h) => `\\${h}`)],
   );
   return new Set(satirlar.map((s) => s.kullanici_adi));
+}
+
+// Sınırlı hesap (kart 2158). Sorumlu: aktif, girişli, iç hesaplı başka kişi.
+export async function sinirliSorumluUygunMu(db: Db, sorumluId: number): Promise<boolean> {
+  const satir = await db.tek(
+    "SELECT 1 FROM kisi k WHERE k.id = $1 AND k.aktif AND k.kullanici_adi IS NOT NULL AND k.hesap_turu = 'ic'",
+    [sorumluId],
+  );
+  return satir !== null;
+}
+
+// Hesap sınırlı olur ya da bitişi ve sorumlusu değişir. Taahhüt yalnız iç hesaptan sınırlıya geçişte sıfırlanır.
+export async function sinirliYaz(db: Db, kisiId: number, bitis: string, sorumluId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE kisi SET gizlilik_taahhudu = CASE WHEN hesap_turu = 'sinirli' THEN gizlilik_taahhudu END,
+                     hesap_turu = 'sinirli', sinirli_bitis = $2::date, sinirli_sorumlu_id = $3
+      WHERE id = $1`,
+    [kisiId, bitis, sorumluId],
+  );
+}
+
+export async function icHesapYaz(db: Db, kisiId: number): Promise<void> {
+  await db.sorgu(
+    "UPDATE kisi SET hesap_turu = 'ic', sinirli_bitis = NULL, sinirli_sorumlu_id = NULL, gizlilik_taahhudu = NULL WHERE id = $1",
+    [kisiId],
+  );
+}
+
+// Yalnız geçerli sınırlı hesapta ve ilk onayda yazar; ikinci onay ilk zamanı değiştirmez.
+export async function gizlilikTaahhuduYaz(db: Db, kisiId: number): Promise<boolean> {
+  const satir = await db.tek<{ yazildi: boolean }>(
+    `UPDATE kisi k SET gizlilik_taahhudu = COALESCE(k.gizlilik_taahhudu, now())
+      WHERE k.id = $1 AND k.hesap_turu = 'sinirli' AND ${SINIRLI_GECERLI}
+      RETURNING true AS yazildi`,
+    [kisiId],
+  );
+  return satir !== null;
 }

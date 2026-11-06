@@ -81,6 +81,7 @@ const OTURUM_UCLARI: readonly string[] = [
   'POST /bildirimler/tumunu-okundu',
   'POST /dosyalar/:ozet/parca',
   'POST /dosyalar/eksikler',
+  'POST /hesabim/gizlilik-taahhudu',
   'POST /hesabim/parola-degistir',
   'POST /hesabim/pin-degistir',
   'POST /hesabim/saat-cihazlari/:id/kapat',

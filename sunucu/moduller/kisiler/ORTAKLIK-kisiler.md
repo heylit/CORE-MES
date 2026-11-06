@@ -6,7 +6,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 
 | Tablo | Sütunlar | Sahibi |
 |---|---|---|
-| `kisi` | id, ad, aktif, kullanici_adi?, parola_ozeti?, olusturuldu, sicil_no?, gorev?, oturumlar_gecersiz_once?, ozluk_ik, ozluk_cikis_tarihi? | kisiler (ad, sicil no, görev ve çıkış İK'ya bağlı kişide İK'nın, 1302 a) |
+| `kisi` | id, ad, aktif, kullanici_adi?, parola_ozeti?, olusturuldu, sicil_no?, gorev?, oturumlar_gecersiz_once?, ozluk_ik, ozluk_cikis_tarihi?, hesap_turu, sinirli_bitis?, sinirli_sorumlu_id? -> kisi, gizlilik_taahhudu? | kisiler (ad, sicil no, görev ve çıkış İK'ya bağlı kişide İK'nın, 1302 a) |
 | `kisi_rolu` | kisi_id -> kisi, rol_id -> rol | kisiler |
 | `rol` | id, kod, ad, yerlesik, yonetici | kisiler (K2 a) |
 | `rol_islemi` | rol_id -> rol, islem | kisiler (K2 a) |
@@ -21,6 +21,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 | görev | `kisi.gorev` | `ik_personel.pozisyon` | İK'ya bağlı kişide İK iter (1302 a); ayarcı görevden değil yetkinlikten okunacak (1303 a) |
 | çıkış tarihi | `kisi.ozluk_cikis_tarihi` | `ik_personel.cikis_tarihi` (asıl) | İK'nın kopyası; tarih gelince kişi pasif (1315 a) |
 | kullanıcı (giriş) | `kisi.kullanici_adi`, `kisi.parola_ozeti` | oturum okur | giriş akışı oturumda, doğrulama `girisDogrula` |
+| hesap türü (iç, sınırlı) | `kisi.hesap_turu`, `kisi.sinirli_bitis`, `kisi.sinirli_sorumlu_id`, `kisi.gizlilik_taahhudu` | yok; oturum `Kullanici.sinirli` ile okur, çekirdek kapıda kullanır | kart 2158 |
 | rol | `rol.kod`, `rol.ad`, `rol.yonetici` | yok | `yonetici` bayrağı "bütün işlemler" demektir |
 | rol x işlem | `rol_islemi (rol_id, islem)` | işlem adları bütün modüllerde (`paylasilan/islemler.ts`) | aşağıda |
 | kişiye ek işlem | `kisi_islemi (kisi_id, islem)` | yok | rolün üstüne eklenir, rolden işlem almaz; oturumdaki işlem listesine girer |

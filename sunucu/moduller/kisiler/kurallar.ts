@@ -58,6 +58,13 @@ export const ILETILER = {
   ekIslemKullaniciDegil: 'Ek yetki yalnızca aktif ve girişi olan kişiye verilir.',
   ozlukIkte: 'Ad, sicil no ve görev bu kişide İK personel kartından gelir; İK\'da değiştirin.',
   cikisVar: 'Kişinin İK\'da çıkış tarihi geçmiş; aktif yapmak için önce İK\'da çıkışı kaldırın.',
+  sinirliBayrakli: 'Tüm yetkileri veren role sahip kişi sınırlı hesap olamaz; sınırlı hesaba bu rol verilmez.',
+  sinirliKendi: 'Kendi hesabınızın türünü değiştiremezsiniz; başka bir yetkili değiştirmeli.',
+  sinirliSorumlu: 'Sorumlu, aktif ve girişi olan bir iç hesap olmalı; kişinin kendisi olamaz.',
+  sinirliBitisGecmis: 'Bitiş tarihi bugünden önce olamaz.',
+  sinirliBitisUzun: 'Bitiş tarihi en çok 90 gün sonrası olabilir; gerekirse sonra uzatılır.',
+  sinirliDegil: 'Kişi zaten iç hesap.',
+  taahhutSinirliDegil: 'Gizlilik taahhüdü yalnız sınırlı hesapta istenir.',
   ozlukBayrakliYetkisiz: 'Tüm yetkileri veren role sahip kişinin özlük bilgisini yalnızca bu role sahip bir kişi değiştirebilir.',
 } as const;
 
@@ -285,4 +292,36 @@ export function rastgelePin(rakam: () => number): string {
     const pin = Array.from({ length: PIN_UZUNLUK }, () => String(rakam())).join('');
     if (pinHatasi(pin) === null) return pin;
   }
+}
+
+// Sınırlı hesap (kart 2158, 2158-5 a): bitiş en çok 90 gün sonrasıdır; uzatma aynı sınırla yeniden verilir.
+export const SINIRLI_EN_UZUN_GUN = 90;
+
+// 'GGGG-AA-GG' tarihine gün ekler (takvim günü; saat dilimi karışmaz).
+export function gunEkle(tarih: string, gun: number): string {
+  const [y, a, g] = tarih.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, a - 1, g + gun)).toISOString().slice(0, 10);
+}
+
+// bugun: tesis günü. Tarihler 'GGGG-AA-GG' olduğu için metin karşılaştırması takvim sırasıdır.
+export function sinirliHesapReddi(girdi: {
+  kendiKendine: boolean; hedefBayrakli: boolean; sorumluUygun: boolean; sorumluKendisi: boolean; bitis: string; bugun: string;
+}): Ret | null {
+  if (girdi.kendiKendine) return { tur: 'yetki', ileti: ILETILER.sinirliKendi };
+  if (girdi.hedefBayrakli) return { tur: 'gecersiz', ileti: ILETILER.sinirliBayrakli };
+  if (girdi.sorumluKendisi || !girdi.sorumluUygun) return { tur: 'gecersiz', ileti: ILETILER.sinirliSorumlu };
+  if (girdi.bitis < girdi.bugun) return { tur: 'gecersiz', ileti: ILETILER.sinirliBitisGecmis };
+  if (girdi.bitis > gunEkle(girdi.bugun, SINIRLI_EN_UZUN_GUN)) return { tur: 'gecersiz', ileti: ILETILER.sinirliBitisUzun };
+  return null;
+}
+
+export function icHesapReddi(girdi: { kendiKendine: boolean; hedefSinirli: boolean }): Ret | null {
+  if (girdi.kendiKendine) return { tur: 'yetki', ileti: ILETILER.sinirliKendi };
+  if (!girdi.hedefSinirli) return { tur: 'gecersiz', ileti: ILETILER.sinirliDegil };
+  return null;
+}
+
+// Sınırlı hesaba bayraklı rol verilmez (rol atama ve hesap açma).
+export function sinirliRolReddi(girdi: { rolBayrakli: boolean; hedefSinirli: boolean }): Ret | null {
+  return girdi.rolBayrakli && girdi.hedefSinirli ? { tur: 'gecersiz', ileti: ILETILER.sinirliBayrakli } : null;
 }
