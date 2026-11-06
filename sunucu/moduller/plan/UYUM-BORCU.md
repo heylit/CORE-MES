@@ -77,3 +77,9 @@
 - P-B36 (1329): planın malzeme fiyatı Satın Alma'nın bütün teslimlerinin ortalamasıdır; 1291 a'daki 12 aylık ağırlıklı ortalama Satın Alma'dan
   okunur olunca ona geçer. Sunucu plan motoru (iç okuyucu) finans.maliyet-oku taşımaz, fiyatı null alır: malzeme fiyatı yalnız tutarı etkiler,
   sırayı etkilemez (ağırlık kipi öncelik, 815). Motorun tutar raporu gerekirse bağlamada sorulur.
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/plan`: birincil 3: "Planlama çalışmasını aç", "Planı kur" (iki kez) (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
+- `/recete-rota/plan`: birincil 3: aynı Planlama ekranı (eski adres yönlenir) (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).

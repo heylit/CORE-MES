@@ -104,3 +104,8 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Puantaj, kart #1571 (bağlamada kapanacak)
 
 - Puantaj satırı değişiklik geçmişine (`ik_kayit_gecmisi`) yazılmaz; satırda yazan ve zaman var, çekirdek denetim kaydı ucu tutar. Testli: `puantaj.test.ts` "puantaj satırı İK değişiklik geçmişine yazılmaz".
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/ik`: birincil 3: "Personel ekle", "İzin talebi", "Onayla" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
