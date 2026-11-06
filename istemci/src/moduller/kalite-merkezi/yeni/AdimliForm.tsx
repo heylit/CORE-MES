@@ -463,7 +463,7 @@ export function AdimliForm({ baslik, alanlar, ilk, adimlar, kaydet, topla, denet
 
   return (
     <>
-      <Pencere acik kapat={kapatmayiDene} baslik={baslik} tur={pencere} alt={alt}>
+      <Pencere acik kapat={kapatmayiDene} baslik={baslik} tur={pencere} genis alt={alt}>
         <div ref={govde} className={`tc-km-form${tekTek ? ' tc-km-fq-acik' : ''}`} onKeyDown={tus}>
           {!tekAdim && (
             <div className="tc-km-fq-ust">

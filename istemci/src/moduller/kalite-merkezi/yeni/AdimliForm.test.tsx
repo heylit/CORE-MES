@@ -143,6 +143,19 @@ describe('AdimliForm ikinci kaydet ve pencere', () => {
     expect(kaydet).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Kaydet ve onaya gönder' })).toBeTruthy();
   });
+
+  it('yan formlar geniş çekmecede açılır (2167); tam pencere tam kalır', async () => {
+    ac();
+    const yan = await screen.findByRole('dialog', { name: 'Deneme' });
+    expect(yan.classList.contains('tc-pencere-yan')).toBe(true);
+    expect(yan.classList.contains('tc-pencere-genis')).toBe(true);
+  });
+
+  it('tam pencerede geniş sınıfı yoktur', async () => {
+    ac(vi.fn(), { pencere: 'tam' });
+    const tam = await screen.findByRole('dialog', { name: 'Deneme' });
+    expect(tam.classList.contains('tc-pencere-genis')).toBe(false);
+  });
 });
 
 describe('AdimliForm formun gizlediği alan', () => {

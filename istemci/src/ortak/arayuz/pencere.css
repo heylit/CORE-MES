@@ -11,6 +11,9 @@
   box-shadow: var(--shadow);
 }
 .tc-pencere-yan { max-width: var(--cekmece-genis); border-radius: 0; border-width: 0 0 0 1px; }
+/* Geniş çekmece: iki sütunlu uzun form (kalite formları) 440 px'te sütun başına çok dar kalır. */
+.tc-pencere { --cekmece-genis-l: 780px; }
+.tc-pencere-yan.tc-pencere-genis { max-width: var(--cekmece-genis-l); }
 /* Tam ekran: bütün görüntü, köşesiz ve çerçevesiz; üst satır (başlık ya da araç çubuğu) ve gövde. Gövde kendi düzenini kurar. */
 .tc-perde:has(.tc-pencere-tam) { align-items: stretch; justify-content: stretch; padding: 0; }
 .tc-pencere-tam {

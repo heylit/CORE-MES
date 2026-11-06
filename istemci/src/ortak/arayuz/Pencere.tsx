@@ -12,6 +12,8 @@ interface Ozellikler {
   // orta: kısa form ve onay; yan: uzun form ve ayrıntı. Telefonda ikisi de tam genişliktir. tam: bütün görüntüyü kaplayan
   // çalışma alanı (düzenleyici); Esc kapat'ı çağırır, kaydedilmemiş iş varsa önce onay sormak kapat'ın işidir.
   tur?: 'orta' | 'yan' | 'tam';
+  // Yalnız yan pencerede: iki sütunlu uzun form için geniş çekmece. Telefonda yine tam genişliktir.
+  genis?: boolean;
   // Başlık satırının yerine çizilen araç çubuğu; verilince başlık görünmez, pencerenin adı olarak kalır ve kapatma düğmesi
   // çubuğun işidir.
   ust?: ReactNode;
@@ -29,7 +31,7 @@ const CIKIS_EN_COK_MS = 600;
 
 interface Cekis { y0: number; t0: number; dy: number; kimlik: number }
 
-export function Pencere({ acik, kapat, baslik, tur = 'orta', ust, alt, children }: Ozellikler) {
+export function Pencere({ acik, kapat, baslik, tur = 'orta', genis = false, ust, alt, children }: Ozellikler) {
   const kutu = useKatman<HTMLDivElement>(acik, kapat);
   const baslikKimlik = useId();
   // Kapanırken içerik son açık hâliyle kalır; çağıran veriyi hemen boşaltsa da çıkış yarım pencere göstermez.
@@ -95,7 +97,7 @@ export function Pencere({ acik, kapat, baslik, tur = 'orta', ust, alt, children 
     >
       <div
         ref={kutu}
-        className={`tc-pencere tc-pencere-${tur}`}
+        className={`tc-pencere tc-pencere-${tur}${genis && tur === 'yan' ? ' tc-pencere-genis' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={gorunen.ust === undefined ? baslikKimlik : undefined}
