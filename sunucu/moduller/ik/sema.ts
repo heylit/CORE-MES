@@ -121,6 +121,16 @@ const DEPARTMAN: TurTanimi = {
   listeler: [],
 };
 
+// Pozisyon tanımı (2177-3 a): departmana bağlı unvan listesi; personelin pozisyon alanı metin kalır, ekran buradan seçtirir.
+const POZISYON_TANIMI: TurTanimi = {
+  tur: 'title', tablo: 'ik_pozisyon_tanimi', bagSutunu: 'pozisyon_tanimi_no',
+  alanlar: [
+    m('ad', 'ad', { zorunlu: true }), bag('departmanId', 'departman_no', 'dept'), sec('yakaTipi', 'yaka_tipi', COLLARS), sec('kademe', 'kademe', LEVELS),
+    m('aciklama', 'aciklama'),
+  ],
+  listeler: [],
+};
+
 const IZIN: TurTanimi = {
   tur: 'leave', tablo: 'ik_izin', bagSutunu: 'izin_no',
   alanlar: [
@@ -247,7 +257,7 @@ const BORDRO: TurTanimi = {
 };
 
 export const TUR_TANIMLARI: Record<IkTuru, TurTanimi> = {
-  emp: PERSONEL, dept: DEPARTMAN, leave: IZIN, att: DEVAM, perf: PERFORMANS, train: EGITIM_KAYDI,
+  emp: PERSONEL, dept: DEPARTMAN, title: POZISYON_TANIMI, leave: IZIN, att: DEVAM, perf: PERFORMANS, train: EGITIM_KAYDI,
   job: POZISYON, cand: ADAY, intv: GORUSME, pay: BORDRO,
 };
 

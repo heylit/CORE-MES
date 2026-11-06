@@ -37,6 +37,12 @@ export interface Departman extends Kayit {
   ad?: string; kod?: string; giderHesabi?: string; yoneticiId?: string; butce?: number; aciklama?: string;
 }
 
+// Pozisyon tanımı (2177-3 a): departmana bağlı unvan; personelin pozisyon alanı bu adı metin olarak taşır.
+export interface PozisyonTanimi extends Kayit {
+  kind: 'title';
+  ad?: string; departmanId?: string; yakaTipi?: string; kademe?: string; aciklama?: string;
+}
+
 export interface Izin extends Kayit {
   kind: 'leave';
   empId?: string; tur?: string; baslangic?: string; bitis?: string; gun?: number; durum?: string; vekil?: string; aciklama?: string;
@@ -97,7 +103,7 @@ export interface Gorusme extends Kayit {
 }
 
 export interface KayitTurleri {
-  emp: Personel; dept: Departman; leave: Izin; att: Devam; pay: Bordro; perf: Performans; train: Egitim; job: Pozisyon; cand: Aday; intv: Gorusme;
+  emp: Personel; dept: Departman; title: PozisyonTanimi; leave: Izin; att: Devam; pay: Bordro; perf: Performans; train: Egitim; job: Pozisyon; cand: Aday; intv: Gorusme;
 }
 
 // Ayarlar tek nesnedir; alanlarını ayar ekranı ve motor okur (VERI-MODELI.md "Ayarlar").

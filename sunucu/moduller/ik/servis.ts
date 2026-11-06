@@ -195,6 +195,7 @@ export async function veriGetir(db: Db, kullanici: Kullanici): Promise<IkVeriCev
     const p = typeof k.govde['empId'] === 'string' ? k.govde['empId'] : null;
     switch (k.tur) {
       case 'dept': return { ...c, govde: alanlariSec(c.govde, ['id', 'kind', 'ad', 'kod', 'yoneticiId']) };
+      case 'title': return { ...c, govde: alanlariSec(c.govde, ['id', 'kind', 'ad', 'departmanId']) };
       case 'emp':
         if (k.kimlik === benim) return c;
         if (d.ekip.has(k.kimlik)) return { ...c, govde: alanlariSec(c.govde, EKIP_ALANLARI) };
