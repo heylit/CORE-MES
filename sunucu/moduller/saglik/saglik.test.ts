@@ -347,7 +347,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     // Kabulün nedeni işlemin olmasıdır: yönetici olmayan rol de aynı işlemle girer.
     assert.deepEqual([...operator.kullanici.islemler].sort(), [
       'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'kisiler.oku', 'markalama.seri-ver', 'mesaj.oku', 'mesaj.yaz',
-      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
+      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
     ]);
     assert.deepEqual(izleyen.kullanici.islemler, ['saglik.ayrinti-oku']);
     operatorCerezi = operator.cerez;
