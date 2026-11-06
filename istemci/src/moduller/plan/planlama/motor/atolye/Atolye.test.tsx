@@ -98,6 +98,19 @@ describe('PlanlamaAtolyesi', () => {
     expect(studyoAc).toHaveBeenCalledTimes(2);
   });
 
+  it('olay isteği (2171): tahtadaki olay düğmesi atölyenin olay formunu türü seçili açar; yazamayana kart açılmaz', () => {
+    const studyoAc = vi.fn();
+    ac({ istek: { tur: 'olay', v: 'acil' }, studyoAc });
+    const k = screen.getByRole('dialog', { name: 'Olay ekle' });
+    expect(within(k).getByRole('button', { name: 'Acil sipariş' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(k).getByRole('button', { name: 'Arıza' }).getAttribute('aria-pressed')).toBe('false');
+    expect(studyoAc).toHaveBeenCalledWith(null);
+    cleanup();
+    ac({ yaz: false, istek: { tur: 'olay', v: 'ariza' }, studyoAc });
+    expect(screen.queryByRole('dialog', { name: 'Olay ekle' })).toBeNull();
+    expect(studyoAc).toHaveBeenCalledTimes(2);
+  });
+
   it('kimlik satırı, üç sekme ve onay sayısı; geri düğmesi motora döner', () => {
     const { git } = ac();
     expect(screen.getByText('Canlı sürüm 3')).toBeTruthy();

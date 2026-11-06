@@ -4,6 +4,7 @@ import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
 import { MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
 import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
+import { OLAY_YOK, useOlayAc } from '../../gorunumler.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
 
 // Plan çubuğu (zk-kabuk.betik sdCubuk, zr-agirlik sdNabiz): ekranlar, üç nabız sayısı, durum ve iki eylem. Arama (Ctrl K paleti) ve
@@ -27,6 +28,7 @@ interface Ozellikler {
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'gecikme', true], ['dar', 'darboğaz', true]];
 
 export function Cubuk(o: Ozellikler) {
+  const olayAc = useOlayAc();
   const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
   return (
     <div className="tc-pym-sb-kap">
@@ -61,7 +63,8 @@ export function Cubuk(o: Ozellikler) {
         <span className="tc-pym-sb-sag">
           {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
           {o.planYaz && o.plan && (
-            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-sb-iyi" data-olay="" aria-disabled="true" title={`Olay ekle: acil sipariş, arıza, malzeme gecikmesi. ${MOTOR_NOTU}`} aria-label="Olay ekle">
+            <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-sb-iyi" data-olay="" aria-disabled={olayAc ? undefined : 'true'}
+              title={`Olay ekle: acil sipariş, arıza, malzeme gecikmesi.${olayAc ? '' : ` ${OLAY_YOK}`}`} aria-label="Olay ekle" onClick={olayAc ? () => { olayAc('ariza'); } : undefined}>
               <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
             </button>
           )}

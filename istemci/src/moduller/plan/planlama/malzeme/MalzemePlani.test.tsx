@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
-import { OneCekme, oneCekmeAdresi } from './OneCekme.tsx';
+import { OneCekme, oneCekmeAdresi, SURUM_YOK } from './OneCekme.tsx';
 
 // Veri uydurmadır. Plan bugünden başlar; saatler bugünün 00:00'ından (UTC).
 const bugun = new Date().toISOString().slice(0, 10);
@@ -57,8 +57,8 @@ describe('Malzeme satın alma planı', () => {
     expect(screen.getByLabelText('11 tedarik termini')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Açık siparişler' })).getByText('S-1')).toBeTruthy();
     expect(screen.getAllByText('100 TL').length).toBeGreaterThan(0);
-    expect(screen.getByText('Plan motoru bağlanınca açılır.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Hesapla' }) as HTMLButtonElement).disabled).toBe(true);
+    // Sayfa kayıtlı çalışmanın sürümüyle açılır; öne çekme düğmesi açık, kişi basana kadar uca istek gitmez.
+    expect((screen.getByRole('button', { name: 'Hesapla' }) as HTMLButtonElement).disabled).toBe(false);
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
@@ -153,11 +153,11 @@ describe('Malzeme öne çekme', () => {
     expect(await screen.findByText(/Hesap tamamlanamadı: Çalışma değişti; sayfayı yenileyip yeniden hesaplayın\./)).toBeTruthy();
   });
 
-  it('kapalıyken düğme görünür ama pasif (357 b), uca gitmez', () => {
+  it('sürüm yokken (kayıtsız çalışma, Satın Alma görünümü) düğme yerinde pasif, uca gitmez', () => {
     const f = vi.fn();
     vi.stubGlobal('fetch', f);
-    render(<OneCekme surum={4} malzemeAdi={() => ''} />);
-    expect(screen.getByText('Plan motoru bağlanınca açılır.')).toBeTruthy();
+    render(<OneCekme surum={null} malzemeAdi={() => ''} />);
+    expect(screen.getByText(SURUM_YOK)).toBeTruthy();
     const d = screen.getByRole('button', { name: 'Hesapla' }) as HTMLButtonElement;
     expect(d.disabled).toBe(true);
     fireEvent.click(d);

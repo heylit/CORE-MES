@@ -1,4 +1,4 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
+import { createContext, lazy, useContext, type ComponentType, type LazyExoticComponent } from 'react';
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { MALIYET_ANAHTARLARI, ONERILEN_IKINCI_MENU } from '../planlama-menusu.ts';
 import type { CalismaKomutu } from './kayit.ts';
@@ -40,12 +40,20 @@ export const MOTOR_EKRANLARI = ['tahta', 'veri', 'gecmis', 'bugun', 'hesap'] as 
 export type MotorEkrani = (typeof MOTOR_EKRANLARI)[number];
 export interface PlanlamaAltEkrani { ekran: MotorEkrani; bolum: string | null }
 // Planlama atölyesine istek (zz36 TP.istek): stüdyo düğmeleri (tezgâhın "Stüdyoda aç"ı) atölyeyi açar, pano isteneni açar: tezgâhta süzgeç ve
-// tezgâh günlüğü, siparişte rayda sipariş. Adresin sorgusundadır (`studio?istek=tez&v=T1`); pano işleyince sorgu silinir.
-export interface StudyoIstegi { tur: 'tez' | 'sip'; v: string }
+// tezgâh günlüğü, siparişte rayda sipariş, olayda olay formu (v olay türüdür, formda ön seçili gelir; 2171). Adresin sorgusundadır
+// (`studio?istek=tez&v=T1`); pano işleyince sorgu silinir.
+export const STUDYO_OLAY_TURLERI = ['ariza', 'acil', 'malzeme', 'eksik', 'fason'] as const;
+export type StudyoOlayTuru = (typeof STUDYO_OLAY_TURLERI)[number];
+export type StudyoIstegi = { tur: 'tez' | 'sip'; v: string } | { tur: 'olay'; v: StudyoOlayTuru };
 export function studyoIstegiOku(q: URLSearchParams): StudyoIstegi | null {
   const t = q.get('istek'), v = q.get('v');
+  if (t === 'olay') { const o = STUDYO_OLAY_TURLERI.find((x) => x === v); return o ? { tur: 'olay', v: o } : null; }
   return (t === 'tez' || t === 'sip') && v ? { tur: t, v } : null;
 }
+// Tahtadaki olay düğmeleri (plan çubuğu, yardımcı) atölyenin olay formunu açar; tahta bağlamla verir, yazamayana ve tahta dışında null.
+export const OLAY_YOK = 'Olay Planlama atölyesinden eklenir.';
+export const OlayAcBaglami = createContext<((t: StudyoOlayTuru) => void) | null>(null);
+export const useOlayAc = (): ((t: StudyoOlayTuru) => void) | null => useContext(OlayAcBaglami);
 export function studyoAdresi(i: StudyoIstegi | null): string {
   return i ? `${gorunumAdresi('studio')}?${new URLSearchParams({ istek: i.tur, v: i.v }).toString()}` : gorunumAdresi('studio');
 }

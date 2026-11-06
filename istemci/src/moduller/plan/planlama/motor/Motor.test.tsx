@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { api } from '../../../../ortak/veri/api.ts';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
-import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
+import { ACILIS_OLCEGI, BOS_SECIM, OLAY_YOK, type PlanlamaEkranOzellikleri, type PlanlamaOlcegi, type PlanlamaSecimi } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -12,7 +12,7 @@ import { yetkiKur } from '../yetki.ts';
 import { KAYDEDILEMEDI } from './coz.ts';
 import { PlanlamaMotoru } from './index.tsx';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
-import { BASLAMIS_SIRA } from './hamle/hamle.ts';
+import { BASLAMIS_SIRA, BAYAT } from './hamle/hamle.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ufukKur } from '../ufuk-olcegi.ts';
 
@@ -328,6 +328,36 @@ describe('PlanlamaMotoru', () => {
     expect(within(g).getByRole('button', { name: /^3\.10 · / })).toBeTruthy();
   });
 
+  it('2171: plan güncelken yardımcının olay görevleri atölyenin olay formunu türüyle ister, iyileştirme ve Siparişi öne al açıktır (izinli)', () => {
+    const c = ornekCalisma(); if (c.plan) c.plan.dataVer = c.dataVer;
+    const { komut } = komutKur(c); const studyoAc = vi.fn();
+    ac({ c, komut, studyoAc });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Ayrıntı' }));
+    expect(within(screen.getByRole('region', { name: '3 adım 10' })).getByRole('button', { name: 'Siparişi öne al' }).getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Yardımcı' }));
+    const yrd = screen.getByRole('complementary', { name: 'Plan yardımcısı' });
+    expect(within(yrd).getAllByRole('button', { name: /Plan iyileştirme ara/ }).every((b) => b.getAttribute('aria-disabled') === null)).toBe(true);
+    fireEvent.click(within(yrd).getByRole('button', { name: /Acil sipariş ekle/ }));
+    expect(studyoAc).toHaveBeenLastCalledWith({ tur: 'olay', v: 'acil' });
+    fireEvent.click(within(yrd).getByRole('button', { name: /Tezgâh arızası gir/ }));
+    expect(studyoAc).toHaveBeenLastCalledWith({ tur: 'olay', v: 'ariza' });
+    fireEvent.click(screen.getByRole('button', { name: 'Olay ekle' }));
+    expect(studyoAc).toHaveBeenLastCalledWith({ tur: 'olay', v: 'ariza' });
+  });
+
+  it('2171: plan yazamayana olay görevleri ve öne al gösterilmez ya da pasif kalır (reddedilen)', () => {
+    const studyoAc = vi.fn();
+    ac({ yaz: false, studyoAc });
+    expect(screen.queryByRole('button', { name: 'Olay ekle' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Plan araçları' })).getByRole('button', { name: 'Yardımcı' }));
+    expect(within(screen.getByRole('complementary', { name: 'Plan yardımcısı' })).queryByRole('button', { name: /Acil sipariş ekle/ })).toBeNull();
+    expect(studyoAc).not.toHaveBeenCalled();
+  });
+
   it('Çizelge panelleri: yardımcı, karar paneli, sepet ve havuz; seçim ayrıntıya geçer, motor düğmeleri pasif, denge ve sabitler degistir ile', () => {
     const c = ornekCalisma(); c.locks = { 'x.1': { m: 'T', S: 1 } }; c.plan = { ...c.plan, dataVer: c.plan?.dataVer ?? 0, lbC: { 2: 201.92105263157893, 3: null } };
     const { komut, yazilan } = komutKur(c);
@@ -337,7 +367,8 @@ describe('PlanlamaMotoru', () => {
     fireEvent.click(within(arac).getByRole('button', { name: 'Yardımcı' }));
     const yrd = screen.getByRole('complementary', { name: 'Plan yardımcısı' });
     expect(within(yrd).getByText(/siparişten 1 tanesi geç bitiyor\./)).toBeTruthy();
-    expect(within(yrd).getByRole('button', { name: /Acil sipariş ekle/ }).getAttribute('title')).toContain(MOTOR_NOTU);
+    // Olay atölyenin formuyla girer; tahta atölyeyi açamıyorsa (studyoAc yok) düğme yerinde pasif, nedeniyle (2171).
+    expect(within(yrd).getByRole('button', { name: /Acil sipariş ekle/ }).getAttribute('title')).toContain(OLAY_YOK);
     fireEvent.click(within(yrd).getByRole('button', { name: 'Otomatik' }));
     expect(komut.degistir).toHaveBeenCalledWith('Denge: Otomatik', expect.any(Function), { planKoru: true });
     expect(yazilan.at(-1)?.w.denge).toBe('otomatik');
@@ -385,7 +416,8 @@ describe('PlanlamaMotoru', () => {
     expect(within(op).getByText('5,4 sa kayabilir')).toBeTruthy();
     expect(within(op).getByText('Planda')).toBeTruthy();
     expect(within(op).getByRole('button', { name: 'Bir öne' }).getAttribute('aria-disabled')).toBe('true');
-    expect(within(op).getByRole('button', { name: 'Siparişi öne al' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    // Öne al motorun önizlemeli hamlesidir (2171); plan veriden eskiyken pasif, nedeni ipucunda.
+    expect(within(op).getByRole('button', { name: 'Siparişi öne al' }).getAttribute('title')).toContain(BAYAT);
     fireEvent.click(within(op).getByRole('button', { name: 'Kilitle' }));
     expect(komut.degistir).toHaveBeenCalledWith('İş kilitlendi', expect.any(Function), expect.objectContaining({ planKoru: true }));
     expect(Object.keys(yazilan.at(-1)?.locks ?? {})).toEqual(['3.10']);
@@ -450,7 +482,7 @@ describe('PlanlamaMotoru', () => {
     fireEvent.keyDown(window, { key: 'e' });
     const dz = screen.getByRole('dialog', { name: 'Düzenle' });
     expect(within(dz).getByText('İş adımı')).toBeTruthy();
-    expect(within(dz).getByRole('button', { name: /3 siparişini öne al/ }).getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(within(dz).getByRole('button', { name: /3 siparişini öne al/ }).getAttribute('title')).toContain(BAYAT);
     expect(within(dz).getByRole('button', { name: /sırasını düzenle/ }).getAttribute('aria-disabled')).toBeNull();
     fireEvent.keyDown(document, { key: 'ArrowRight' });
     expect(screen.getByText(`İşi kaydırmak: ${MOTOR_NOTU}`)).toBeTruthy();

@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { OnayPenceresi, Rozet, Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import type { PlanlamaSecimi } from '../../gorunumler.ts';
+import { OLAY_YOK, useOlayAc, type PlanlamaSecimi } from '../../gorunumler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { eylemYapisi } from '../eylem.ts';
@@ -15,6 +15,7 @@ import { Dg } from './Dugme.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { planDisi } from '../../tipler.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
+import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
 
 // Çizelgenin yan panelleri (t-tekyer.betik solPanel ve sagPanel): solda sepet ve havuz, sağda yardımcı (zz24-sade sdYardimci, altında
 // teknik ayrıntı) ve ayrıntı (n-karar.betik kararPaneli). Motor isteyen düğme görünür ve pasiftir (357 b), nedeni ipucunda.
@@ -133,12 +134,16 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec, 
   if (!g) durum.push(top ? ['check', 'tamam', `Termini olan ${top} siparişin hepsi zamanında bitiyor.`, ''] : ['flag', 'bilgi', 'Termini olan sipariş yok.', '']);
   else durum.push(['clock', 'hata', `${top} siparişten ${gec.length} tanesi geç bitiyor.`, `En çok geciken ${g.s.id}: ${g.T == null ? 'planlanamadı' : `${saatYazi(g.T)} geç`} (termin ${terminYaz(c, g.s.termin)}).`]);
   const gorevler: Gorev[] = [];
-  if (yaz) gorevler.push(['play', 'Plan iyileştirme ara', 'Motor gecikmeyi azaltmaya çalışır; sonucu görüp siz kabul edersiniz.', null, MOTOR_NOTU]);
+  const h = useHamleci(); const olayAc = useOlayAc();
+  const iyi = hamleYapisi(h, (x) => { x.iyilestir(); });
+  if (yaz) gorevler.push(['play', 'Plan iyileştirme ara', 'Motor gecikmeyi azaltmaya çalışır; sonucu görüp siz kabul edersiniz.', iyi.yap, iyi.not]);
   if (g) gorevler.push(['search', `${g.s.id} siparişine bak`, 'Tahtada bu siparişin işleri seçili gelir; tezgâh ya da sıra değiştirebilirsiniz.', () => sipSec(g.s.id), '']);
   if (yaz) {
-    gorevler.push(['plus', 'Acil sipariş ekle', 'Yeni siparişi plana sokar ve neyin kaydığını gösterir.', null, MOTOR_NOTU]);
-    gorevler.push(['wrench', 'Tezgâh arızası gir', 'Duran tezgâhın işleri başka tezgâha ya da sonraya kayar.', null, MOTOR_NOTU]);
-    gorevler.push(['box', 'Malzeme gecikti', 'Malzemesi geç gelen işler bekletilir.', null, MOTOR_NOTU]);
+    // Olay atölyenin olay formuyla girer (sunucu komutu, plan yeniden dizilir); form türü seçili açılır.
+    const olay = (t: 'acil' | 'ariza' | 'malzeme') => (olayAc ? () => { olayAc(t); } : null);
+    gorevler.push(['plus', 'Acil sipariş ekle', 'Yeni siparişi plana sokar ve neyin kaydığını gösterir.', olay('acil'), OLAY_YOK]);
+    gorevler.push(['wrench', 'Tezgâh arızası gir', 'Duran tezgâhın işleri başka tezgâha ya da sonraya kayar.', olay('ariza'), OLAY_YOK]);
+    gorevler.push(['box', 'Malzeme gecikti', 'Malzemesi geç gelen işler bekletilir.', olay('malzeme'), OLAY_YOK]);
   }
   if (yaz || kil) gorevler.push(['flag', 'Planı onaya gönder', 'Plan atölyesi açılır; değişiklikler orada karşılaştırılır ve onaya gönderilir.', atolyeAc ?? null, HAZIRLANIYOR]);
   return (
@@ -168,6 +173,7 @@ function SadeYardimci({ c, p, guncel, planYaz: yaz, planCanliyaAl: kil, sipSec, 
 function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mercekSec, veriAc, hesapAc }: SagOzellikleri) {
   const { bildir } = useBildirim();
   const [sabitOnay, setSabitOnay] = useState(false);
+  const iyi = hamleYapisi(useHamleci(), (x) => { x.iyilestir(); });
   const dg = dengeAl(c); const el = elleSayilari(c); const kap = c.kapali.length; const nHav = c.D.siparisler.filter((s) => s.havuz && !s.iptal).length;
   const bul = useMemo(() => veriDenetimi(c, cx), [c, cx]); const ciddi = bul.filter((b) => ['personel', 'tezgah', 'hata'].includes(b.k)).length;
   const es = c.ekipSon && typeof c.ekipSon === 'object' ? (c.ekipSon as { wT?: unknown }) : null; const esT = typeof es?.wT === 'number' ? es.wT : null;
@@ -217,7 +223,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
         {adim(4, 'play', 'Motor', `gecikme ${saatYazi(p.ozet.wT)} · ${p.ozet.late}/${p.ozet.n} geciken`, p.ozet.late ? 'uyari' : 'tamam', <>
           <p className="tc-pym-kucuk-yazi">Motor planı kuran tek parçadır. Önce kural tabanlı ilk planı dizer, sonra yerel aramayla (LNS) bir bölgeyi söküp yeniden kurar, iyiyse alır. Amaç sırası: ağırlıklı gecikme (öncelik 1 dört, 2 iki kat), tampon ihlali, önceki plana göre değişiklik, ayar süresi, bilinen maliyet. Önceki eşitse sonrakine bakılır.</p>
           <p className="tc-pym-kucuk-yazi"><b>{DENGE[dg].ad}:</b> {DENGE[dg].m}</p>
-          {yaz && <div className="tc-pym-dugmeler"><Dg ad="Plan iyileştirme ara" simge="play" birincil /><Dg ad="Sıfırdan kur" simge="rotate" /></div>}
+          {yaz && <div className="tc-pym-dugmeler"><Dg ad="Plan iyileştirme ara" simge="play" birincil yap={iyi.yap} not={iyi.not} /><Dg ad="Sıfırdan kur" simge="rotate" /></div>}
         </>, true)}
         {adim(5, 'gauge', 'HiGHS · ölçüm', 'alt sınır hesaplanmadı', '', <>
           <p className="tc-pym-kucuk-yazi">HiGHS planı kurmaz, ölçer. Atölyeyi saat dilimli tamsayılı modele çevirip gevşetir; bulduğu değer alt sınırdır: hiçbir plan bundan iyi olamaz. Ayrıca hangi grupta hangi vardiyaya ek mesainin gecikmeyi en çok azalttığını bulur; her aday motorda gerçek plana çevrilip ölçülür.</p>
@@ -244,6 +250,7 @@ const SOR_SIRA: Record<SorunTonu, number> = { hata: 0, uyari: 1, bilgi: 2 };
 function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapat, veriAc }: SagOzellikleri) {
   const l = [...sor].sort((a, b) => SOR_SIRA[a.ton] - SOR_SIRA[b.ton]);
   const kay = useMemo(() => gecikmeKaynaklari(c, p, cx).liste.slice(0, 5), [c, p, cx]); const enb = kay[0]?.v || 1;
+  const iyi = hamleYapisi(useHamleci(), (x) => { x.iyilestir(); }); const olayAc = useOlayAc();
   return (
     <section className="tc-pym-panel tc-pym-kpanel" aria-label="Karar paneli">
       <div className="tc-pym-panel-ust">
@@ -285,9 +292,10 @@ function KararPaneli({ c, p, cx, sor, komut, planYaz: yaz, isAc, mercekSec, kapa
         <div className="tc-pym-bolum">
           <h3>Ne yapabilirsiniz</h3>
           <div className="tc-pym-hizli">
-            {([['play', 'Plan iyileştirme ara', 'Motor ve HiGHS birlikte çözer; sonucu önizlersiniz.', null], ['alert', 'Olay ekle', 'Arıza, acil sipariş, malzeme ya da personel; etkisi önce gösterilir.', null],
-              ['sort', 'Sırayı elle değiştir', 'Kuyrukta kartı sürükleyin; motor bedelini ölçer.', () => mercekSec('kuyruk')]] as [SimgeAdi, string, string, (() => void) | null][]).map(([sm, b, m, yap]) => (
-              <button key={b} type="button" className="tc-pym-hizli-d" aria-disabled={yap ? undefined : 'true'} title={yap ? undefined : `${b}: ${MOTOR_NOTU}`} onClick={yap ?? undefined}>
+            {([['play', 'Plan iyileştirme ara', 'Motor ve HiGHS birlikte çözer; sonucu önizlersiniz.', iyi.yap, iyi.not],
+              ['alert', 'Olay ekle', 'Arıza, acil sipariş, malzeme ya da personel; etkisi önce gösterilir.', olayAc ? () => { olayAc('ariza'); } : null, OLAY_YOK],
+              ['sort', 'Sırayı elle değiştir', 'Kuyrukta kartı sürükleyin; motor bedelini ölçer.', () => mercekSec('kuyruk'), MOTOR_NOTU]] as [SimgeAdi, string, string, (() => void) | null, string][]).map(([sm, b, m, yap, not]) => (
+              <button key={b} type="button" className="tc-pym-hizli-d" aria-disabled={yap ? undefined : 'true'} title={yap ? undefined : `${b}: ${not}`} onClick={yap ?? undefined}>
                 <Simge ad={sm} boyut="k" /><span><b>{b}</b><small>{m}</small></span>
               </button>
             ))}

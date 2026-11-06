@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DurumKutusu, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
-import { DONEM_OLCEKLERI, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { DONEM_OLCEKLERI, OlayAcBaglami, type PlanlamaEkranOzellikleri, type StudyoOlayTuru } from '../gorunumler.ts';
 import { otomatikOdak, tezgahGrubu, type OdakYeri } from '../ic/odak/kurallar.ts';
 import { gecmisBolumuOku } from '../ic/gecmis/kurallar.ts';
 import { bolumOku } from '../ic/veri/kurallar.ts';
@@ -123,6 +123,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const sekSec = (x: PanelSekmesi) => setSekD({ k: psAnahtar, x });
 
   const studyo = useCallback(() => o.git('studio'), [o]);
+  const { studyoAc } = o;
+  const olayAc = useMemo(() => (yetki.planYaz && studyoAc ? (t: StudyoOlayTuru) => { studyoAc({ tur: 'olay', v: t }); } : null), [yetki.planYaz, studyoAc]);
   const veriAc = veriAcici(o); const sayfaAc = sayfaAcici(o); const gecmisAc = gecmisAcici(o);
   const nabizAc = useCallback((x: boolean) => setNbAcik(x), []);
   const menuAc = useCallback((x: boolean) => setMenuAcik(x), []);
@@ -253,6 +255,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   return (
     <HamleBaglami.Provider value={hamle}>
+    <OlayAcBaglami.Provider value={olayAc}>
     <div className="tc-pym" data-gorunum={gorunum} data-odak={odak ? '' : undefined}>
       <Cubuk etkin="plan" planaGit={null} veri={veriAc && (() => veriAc())} gecmis={gecmisAc && (() => gecmisAc())} plan={!!p} guncel={guncel} planYaz={yetki.planYaz} nabiz={nabiz} nabizAcik={nbAcik} nabizAc={nabizAc} studyo={studyo}
         ozeteGit={() => gorunumSec('genel')} refSec={refSec} sabitle={sabitle} sabitAd={sabitAd} planKur={planKur} bekleyenUygula={bekleyenUygula} hamle={hamle} />
@@ -311,6 +314,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} veriAc={veriAc} />
       )}
     </div>
+    </OlayAcBaglami.Provider>
     </HamleBaglami.Provider>
   );
 }
