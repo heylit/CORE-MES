@@ -194,6 +194,8 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'portal.finans': 'Portalda finans',
   'portal.kalite': 'Portalda kalite',
   'profil.geri-bildirim-oku': 'Şikayet, istek ve önerileri okuma',
+  'profil.geri-bildirim-yanitla': 'Şikayet, istek ve önerileri yanıtlama ve takip etme',
+  'profil.geri-bildirim-kategori-yaz': 'Şikayet, istek ve öneri kategorilerini yönetme',
   'markalama.tanim-yaz': 'Markalama tanımını düzenleme',
   'markalama.seri-ver': 'Seri no verme ve markayı doğrulama',
   'markalama.durum-yaz': 'Markalı birime red, rework, kabul ve hurda girme',
@@ -256,6 +258,7 @@ const SAYFA_GRUBU: Readonly<Record<string, string>> = {
   'sayfa.mesai': 'vardiya',
   'sayfa.personel': 'kisiler',
   'sayfa.ik-islemlerim': 'ik',
+  'sayfa.geri-bildirim': 'profil',
 };
 
 const SAYFA_ADLARI = new Map<string, string>(TUM_SAYFALAR.map((s) => [s.islem, s.baslik]));

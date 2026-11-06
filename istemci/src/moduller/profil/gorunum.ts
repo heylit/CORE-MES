@@ -1,4 +1,5 @@
-import type { GeriBildirimKonusu, GeriBildirimTuru } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimDurumu, GeriBildirimKonusu, GeriBildirimTuru } from '#paylasilan/sozlesme/profil.ts';
+import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 // Ekran metinleri: tarih ve zaman Türkiye biçiminde; değer yoksa tire.
 export const BOS = '—';
@@ -44,3 +45,14 @@ export const TURLER = Object.keys(TUR_ADI) as GeriBildirimTuru[];
 // Sunucu şemasıyla aynı sınırlar (paylasilan/sozlesme/profil.ts); aşan metni sunucu da reddeder.
 export const METIN_EN_AZ = 3;
 export const METIN_EN_COK = 2000;
+
+// Geri Bildirim Merkezi (kart 2192): durum adları ve rozet tonları; sözleşmedeki sırayla.
+export const DURUM_ADI = {
+  yeni: 'Yeni', inceleniyor: 'İnceleniyor', yanitlandi: 'Yanıtlandı', cozuldu: 'Çözüldü', kapandi: 'Kapandı',
+} as const satisfies Record<GeriBildirimDurumu, string>;
+export const DURUM_TONU = {
+  yeni: 'uyari', inceleniyor: 'bilgi', yanitlandi: 'bilgi', cozuldu: 'tamam', kapandi: 'pasif',
+} as const satisfies Record<GeriBildirimDurumu, RozetTonu>;
+export const DURUMLAR = Object.keys(DURUM_ADI) as GeriBildirimDurumu[];
+export const TUR_TONU = { sikayet: 'hata', istek: 'bilgi', oneri: 'tamam' } as const satisfies Record<GeriBildirimTuru, RozetTonu>;
+export const YANIT_EN_AZ = 2;

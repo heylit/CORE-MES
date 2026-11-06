@@ -1,6 +1,6 @@
 # Kural -> test (profil)
 
-Testler: `kurallar.test.ts` (saf), `profil.test.ts` (gerçek PostgreSQL, gerçek giriş), `istemci/src/moduller/profil/profil.test.tsx`.
+Testler: `kurallar.test.ts` (saf), `profil.test.ts` ve `geri-bildirim-merkezi.test.ts` (gerçek PostgreSQL, gerçek giriş), `istemci/src/moduller/profil/profil.test.tsx`.
 
 | Kural | Test |
 |---|---|
@@ -15,3 +15,12 @@ Testler: `kurallar.test.ts` (saf), `profil.test.ts` (gerçek PostgreSQL, gerçek
 | Başkasının yazdığını yalnız okuma işlemi olan görür | `başkalarının yazdıklarını yalnız profil.geri-bildirim-oku okur ...` |
 | İK kartından ücret, kimlik, banka alanı dönmez | `İK kartına bağlı kişi kendi kartını ... ücret ve kimlik alanı dönmez` |
 | PRF-5 Tema kişinindir: dört değer (light, dark, kontrast, gun); kayıt yoksa null ve sürüm 0; sürümle yazılır | `PRF-5: kaydı olmayan kişide tema null ve sürüm 0`; `PRF-5: tema oturum ister ...`; `PRF-5: tema seçimi sürümle yazılır ...`; `PRF-5: tema gövdesi başka kişiyi seçemez ...`; `profil_tema_tercihi_tema_gecerli` kısıtı |
+| GBM-1 Takip satırı olmayan kayıt yenidir | `GBM-1 ...`; `hareketler yalnız eklenir; takip kayıtsız açılmaz` |
+| GBM-2 Yanıt açık kaydı yanıtlandıya taşır; çözülmüş ve kapanmış değişmez | `GBM-2 ...`; `GBM-2/3: yanıt rol adıyla imzalanır ...` |
+| GBM-3 İmza: yönetici olmayan rollerden sıraca ilkinin adı, yoksa "Yönetim" (karar 2192-2 b) | `GBM-3 ...`; `GBM-2/3 ...` |
+| GBM-4 Toplama tek kademe | `GBM-4 ...` (saf ve uç) |
+| GBM-5 Pasif kategori yeni seçilmez, kayıttaki kalır | `GBM-5 ...`; `GBM-5 ve sorumlu ...` |
+| GBM-6 İlk yanıt süresi ortanca, veri yoksa null | `GBM-6 ...` |
+| GBM-7 Özet son altı ay | `GBM-7 ...`; `özet: durum sayıları ...` |
+| Takip ve kategori sürümle yazılır | `sürüm: ilk yazım 0 ile ...`; `kategori: aynı ad ...` |
+| Hareket yalnız eklenir | `profil_geri_bildirim_hareket_degismez` tetikleyicisi; `hareketler yalnız eklenir ...` |

@@ -1,9 +1,20 @@
+import { Navigate } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
-import { Gelenler } from './Gelenler.tsx';
+import { GeriBildirimKategorileri } from './GeriBildirimKategorileri.tsx';
+import { GeriBildirimMerkezi } from './GeriBildirimMerkezi.tsx';
+import { GeriBildirimOzeti } from './GeriBildirimOzeti.tsx';
 import { Profil } from './Profil.tsx';
 
-// Menü sayfası değildir: hiçbir sayfaya ait olmayan yol oturumu olan herkese açıktır; veri yetkisi uçlardadır.
+function EskiGelenler() {
+  return <Navigate to="/geri-bildirim" replace />;
+}
+
+// Profilim menü sayfası değildir: hiçbir sayfaya ait olmayan yol oturumu olan herkese açıktır; veri yetkisi uçlardadır.
+// Geri Bildirim Merkezi menü sayfasıdır (kart 2192); ikinci menüdeki her maddenin rotası vardır. Eski "gelenler" adresi oraya gider.
 export const rotalar: ModulRotasi[] = [
   { yol: '/profil', ekran: Profil },
-  { yol: '/profil/gelenler', ekran: Gelenler },
+  { yol: '/profil/gelenler', ekran: EskiGelenler },
+  { yol: '/geri-bildirim', ekran: GeriBildirimMerkezi },
+  { yol: '/geri-bildirim/ozet', ekran: GeriBildirimOzeti },
+  { yol: '/geri-bildirim/kategoriler', ekran: GeriBildirimKategorileri },
 ];

@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { SaatCihazlariCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { GeriBildirim, GeriBildirimListeCevabi, ProfilCevabi, TemaCevabi } from '#paylasilan/sozlesme/profil.ts';
+import type {
+  GeriBildirimAyrintiCevabi, GeriBildirimListeCevabi, GeriBildirimOzetiCevabi, GeriBildirimSecenekleriCevabi, KendiGeriBildirimi, ProfilCevabi,
+  TemaCevabi,
+} from '#paylasilan/sozlesme/profil.ts';
 import { temayiSifirla } from '../../ortak/veri/tema.ts';
 import { TemaEsitleyici } from './tema-tercihi.ts';
 import { gorunenUstEylemler } from '../../ortak/rota/ust-eylemler.ts';
@@ -41,7 +44,10 @@ function ac(adres: string, ek?: React.ReactNode) {
   );
 }
 
-const GB: GeriBildirim = { id: 3, konu: 'uygulama', tur: 'oneri', metin: 'Terminalde yazı büyük olsun.', gonderildi: '2026-10-14T09:30:00+03:00' };
+const GB: KendiGeriBildirimi = {
+  id: 3, konu: 'uygulama', tur: 'oneri', metin: 'Terminalde yazı büyük olsun.', gonderildi: '2026-10-14T09:30:00+03:00',
+  durum: 'yanitlandi', yanitlar: [{ metin: 'Bir sonraki sürümde büyüyor.', imza: 'Müdür', zaman: '2026-10-15T10:00:00+03:00' }],
+};
 const PROFIL: ProfilCevabi = {
   kisi: { id: 9, ad: 'Deneme Operatör', gorev: null },
   personel: {
@@ -55,6 +61,36 @@ const PROFIL: ProfilCevabi = {
   geriBildirimOkur: false,
 };
 
+const SATIR: GeriBildirimListeCevabi['satirlar'][number] = {
+  id: 3, konu: 'uygulama', tur: 'oneri', metin: 'Terminalde yazı büyük olsun.', gonderildi: '2026-10-14T09:30:00+03:00', kisiAdi: 'Deneme Operatör',
+  durum: 'yeni', kategoriId: null, kategoriAdi: null, anaKayitId: null, hareketSayisi: 1,
+};
+const AYRINTI: GeriBildirimAyrintiCevabi = {
+  kayit: SATIR, sorumluKisiId: null, sorumluAdi: null, surum: 0, baglilar: [],
+  hareketler: [{ id: 1, tur: 'not', metin: 'Terminal ekibine sorulacak.', durum: null, imza: null, kisiAdi: 'Deneme Müdür', zaman: '2026-10-14T10:00:00+03:00' }],
+};
+const SECENEKLER: GeriBildirimSecenekleriCevabi = {
+  kategoriler: [
+    { id: 5, ad: 'Uygulama isteği', konu: 'uygulama', etkin: true, surum: 1, kayitSayisi: 0 },
+    { id: 6, ad: 'Eski kategori', konu: null, etkin: false, surum: 2, kayitSayisi: 4 },
+  ],
+  sorumlular: [{ id: 7, ad: 'Deneme Müdür' }],
+};
+const OZET: GeriBildirimOzetiCevabi = {
+  durumlar: { yeni: 4, inceleniyor: 1, yanitlandi: 2, cozuldu: 3, kapandi: 0 },
+  kategoriler: [{ kategoriId: null, ad: null, sikayet: 1, istek: 2, oneri: 3, acik: 4 }],
+  aylar: [{ ay: '2026-10', gelen: 6, cozulen: 2, ilkYanitOrtancaSaat: 36 }, { ay: '2026-11', gelen: 0, cozulen: 0, ilkYanitOrtancaSaat: null }],
+};
+const MERKEZ_SUNUCUSU = {
+  'GET /profil/geri-bildirimler': () => json(200, { satirlar: [SATIR], toplam: 1, sayfa: 1, sayfaBoyu: 50 }),
+  'GET /profil/geri-bildirimler/3': () => json(200, AYRINTI),
+  'GET /profil/geri-bildirim-secenekleri': () => json(200, SECENEKLER),
+  'GET /profil/geri-bildirim-ozeti': () => json(200, OZET),
+};
+const oturumIle = (islemler: string[]) => () => json(200, {
+  kullanici: { id: 7, kullaniciAdi: 'mudur', adSoyad: 'Deneme Müdür', roller: ['mudur'], islemler },
+});
+
 describe('Profil sayfası', () => {
   it('İK kartını, izin bakiyesini, ek mesaiyi ve kendi geçmişini gösterir', async () => {
     sunucuKur({ 'GET /profil': () => json(200, PROFIL) });
@@ -63,8 +99,12 @@ describe('Profil sayfası', () => {
     expect(screen.getByText(/CNC operatörü · Üretim · Yönetici: Deneme Şef/)).toBeTruthy();
     expect(screen.getByText('11')).toBeTruthy();
     expect(screen.getByText('Terminalde yazı büyük olsun.')).toBeTruthy();
+    // Kendi kaydının durumu ve yanıtı rol imzasıyla görünür (2192-2 b).
+    expect(screen.getByText('Yanıtlandı')).toBeTruthy();
+    expect(screen.getByText('Bir sonraki sürümde büyüyor.')).toBeTruthy();
+    expect(screen.getByText(/Müdür ·/)).toBeTruthy();
     expect(screen.getByRole('link', { name: /İzin talep et/ }).getAttribute('href')).toBe('/ik-islemlerim/izinlerim');
-    expect(screen.queryByRole('link', { name: /Gelen şikayet/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /Geri Bildirim Merkezi/ })).toBeNull();
   });
 
   it('herkese Bildirimlerim bağlantısı görünür', async () => {
@@ -95,14 +135,13 @@ describe('Profil sayfası', () => {
     expect(screen.queryByText('0')).toBeNull();
   });
 
-  it('okuma yetkisi olana gelenler bağlantısı görünür; liste yazanın adıyla gelir', async () => {
-    const liste: GeriBildirimListeCevabi = { satirlar: [{ ...GB, kisiAdi: 'Deneme Operatör' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 };
-    sunucuKur({ 'GET /profil': () => json(200, { ...PROFIL, geriBildirimOkur: true }), 'GET /profil/geri-bildirimler': () => json(200, liste) });
+  it('okuma yetkisi olana merkez bağlantısı görünür; eski gelenler adresi merkeze gider', async () => {
+    sunucuKur({ 'GET /profil': () => json(200, { ...PROFIL, geriBildirimOkur: true }), ...MERKEZ_SUNUCUSU });
     ac('/profil');
-    expect((await screen.findByRole('link', { name: /Gelen şikayet/ })).getAttribute('href')).toBe('/profil/gelenler');
+    expect((await screen.findByRole('link', { name: /Geri Bildirim Merkezi/ })).getAttribute('href')).toBe('/geri-bildirim');
     cleanup();
     ac('/profil/gelenler');
-    expect(await screen.findByText('Deneme Operatör')).toBeTruthy();
+    expect(await screen.findByText('Deneme Operatör · Uygulama · 1 hareket')).toBeTruthy();
   });
 
   it('PIN\'imi değiştir penceresi kendi ucuna gider', async () => {
@@ -117,9 +156,9 @@ describe('Profil sayfası', () => {
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ eski: '730514', yeniPin: '615203' });
   });
 
-  it('gelenler yetkisizde sunucunun 403 cevabıyla kapalı kalır', async () => {
+  it('merkez yetkisizde sunucunun 403 cevabıyla kapalı kalır', async () => {
     sunucuKur({ 'GET /profil/geri-bildirimler': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Yetkiniz yok.' }) });
-    ac('/profil/gelenler');
+    ac('/geri-bildirim');
     expect(await screen.findByText('Bu listeyi görme yetkiniz yok.')).toBeTruthy();
   });
 });
@@ -257,4 +296,67 @@ describe('Profilde tema (2072 a)', () => {
     await waitFor(() => expect(yazilan).toEqual([{ tema: 'gun', surum: 0 }, { tema: 'gun', surum: 4 }]));
   });
 });
+});
+
+describe('Geri Bildirim Merkezi', () => {
+  const YANITLAYAN = ['profil.geri-bildirim-oku', 'profil.geri-bildirim-yanitla', 'profil.geri-bildirim-kategori-yaz'];
+
+  it('durum sayılarını, listeyi ve ilk kaydın ayrıntısını gösterir; durum kutusu listeyi süzer', async () => {
+    const istekler = sunucuKur({ ...MERKEZ_SUNUCUSU, 'GET /oturum': oturumIle(YANITLAYAN) });
+    ac('/geri-bildirim');
+    expect(await screen.findByText('Terminal ekibine sorulacak.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Yeni 4/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Çözüldü 3/ }));
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/profil/geri-bildirimler?') && i.yol.includes('durum=cozuldu'))).toBe(true));
+  });
+
+  it('yanıt sürümle ve istek kimliğiyle gider; pasif kategori seçilemez', async () => {
+    const istekler = sunucuKur({
+      ...MERKEZ_SUNUCUSU, 'GET /oturum': oturumIle(YANITLAYAN), 'POST /profil/geri-bildirimler/3/yanitla': () => json(200, AYRINTI),
+    });
+    ac('/geri-bildirim');
+    await screen.findByText('Terminal ekibine sorulacak.');
+    await screen.findByRole('button', { name: /Yanıtı gönder/ });
+    const kategori = screen.getAllByLabelText('Kategori')[1] as HTMLSelectElement; // ilki liste süzgeci
+    expect([...kategori.options].map((o) => o.text)).toEqual(['Kategorisiz', 'Uygulama isteği']);
+    fireEvent.change(screen.getByLabelText('Çalışana yanıt'), { target: { value: '  Bir sonraki sürümde.  ' } });
+    fireEvent.click(screen.getByRole('button', { name: /Yanıtı gönder/ }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    const post = istekler.find((i) => i.yontem === 'POST');
+    expect(post?.govde).toEqual({ metin: 'Bir sonraki sürümde.', surum: 0 });
+    expect(Object.keys(post?.basliklar ?? {}).some((b) => b.toLowerCase().includes('istek'))).toBe(true);
+  });
+
+  it('yalnız okuyan yazma düğmelerini görmez', async () => {
+    sunucuKur({ ...MERKEZ_SUNUCUSU, 'GET /oturum': oturumIle(['profil.geri-bildirim-oku']) });
+    ac('/geri-bildirim');
+    await screen.findByText('Terminal ekibine sorulacak.');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByRole('button', { name: /Yanıtı gönder/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Takibi kaydet/ })).toBeNull();
+  });
+
+  it('özet kategori ve ay tablolarını verir; yanıt süresi yoksa tire', async () => {
+    sunucuKur({ ...MERKEZ_SUNUCUSU });
+    ac('/geri-bildirim/ozet');
+    expect(await screen.findByText('Ekim 2026')).toBeTruthy();
+    expect(screen.getByText('1,5 gün')).toBeTruthy();
+    expect(screen.getAllByText('Kategorisiz').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('kategori yazabilen ekler ve pasife alır; pasife alma sürümle gider', async () => {
+    const istekler = sunucuKur({
+      ...MERKEZ_SUNUCUSU, 'GET /oturum': oturumIle(YANITLAYAN),
+      'POST /profil/geri-bildirim-kategorileri': () => json(200, SECENEKLER),
+      'POST /profil/geri-bildirim-kategorileri/5/guncelle': () => json(200, SECENEKLER),
+    });
+    ac('/geri-bildirim/kategoriler');
+    fireEvent.click(await screen.findByRole('button', { name: /Pasife al/ }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/profil/geri-bildirim-kategorileri/5/guncelle')).toBe(true));
+    expect(istekler.find((i) => i.yol.endsWith('/5/guncelle'))?.govde).toEqual({ ad: 'Uygulama isteği', konu: 'uygulama', etkin: false, surum: 1 });
+    fireEvent.change(screen.getByLabelText('Yeni kategori'), { target: { value: 'Servis' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kategori ekle/ }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/profil/geri-bildirim-kategorileri')?.govde).toEqual({ ad: 'Servis', konu: null }));
+  });
 });

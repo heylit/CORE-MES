@@ -10,7 +10,7 @@ import { tabanTema, useTemaTercihi, type TemaTercihi } from '../../ortak/veri/te
 import { anahtarlar } from './anahtarlar.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
 import { SaatPenceresi } from './SaatPenceresi.tsx';
-import { BOS, KONU_ADI, TUR_ADI, basHarfler, kidemMetni, sayiMetni, tarihMetni, zamanMetni } from './gorunum.ts';
+import { BOS, DURUM_ADI, DURUM_TONU, KONU_ADI, TUR_ADI, TUR_TONU, basHarfler, kidemMetni, sayiMetni, tarihMetni, zamanMetni } from './gorunum.ts';
 import './profil.css';
 
 // İK İşlemlerim'deki ekranlar: izin talebi, mesai ayrıntısı ve iletişim güncellemesi orada yapılır (İK'nın kuralları ve onayıyla).
@@ -21,7 +21,6 @@ const IK_MESAILERIM = '/ik-islemlerim/mesailerim';
 const URETIM_TERMINALI = '/uretim-terminali';
 
 const IZIN_TONU: Record<string, RozetTonu> = { Beklemede: 'uyari', Onaylandı: 'tamam', Reddedildi: 'hata', İptal: 'pasif' };
-const TUR_TONU: Record<string, RozetTonu> = { sikayet: 'hata', istek: 'bilgi', oneri: 'tamam' };
 
 function Satirlar({ satirlar }: { satirlar: readonly [string, ReactNode][] }) {
   return (
@@ -234,16 +233,23 @@ function GeriBildirimKarti({ veri }: { veri: ProfilCevabi }) {
           {veri.geriBildirimler.map((g) => (
             <li key={g.id} className="tc-profil-liste-oge tc-profil-gb">
               <div className="tc-profil-gb-ust">
-                <Rozet ton={TUR_TONU[g.tur] ?? 'bilgi'}>{TUR_ADI[g.tur]}</Rozet>
+                <Rozet ton={TUR_TONU[g.tur]}>{TUR_ADI[g.tur]}</Rozet>
+                <Rozet ton={DURUM_TONU[g.durum]} gorunum="cizgi">{DURUM_ADI[g.durum]}</Rozet>
                 <span className="tc-profil-soluk">{KONU_ADI[g.konu]} · {zamanMetni(g.gonderildi)}</span>
               </div>
               <p className="tc-profil-gb-metin">{g.metin}</p>
+              {g.yanitlar.map((y, i) => (
+                <div key={i} className="tc-profil-gb-yanit">
+                  <span className="tc-profil-soluk"><Simge ad="chev-right" boyut="k" /> {y.imza} · {zamanMetni(y.zaman)}</span>
+                  <p className="tc-profil-gb-metin">{y.metin}</p>
+                </div>
+              ))}
             </li>
           ))}
         </ul>
       )}
       {veri.geriBildirimOkur && (
-        <div className="tc-profil-eylemler"><Bag to="/profil/gelenler" simge="eye">Gelen şikayet, istek ve öneriler</Bag></div>
+        <div className="tc-profil-eylemler"><Bag to="/geri-bildirim" simge="eye">Geri Bildirim Merkezi</Bag></div>
       )}
       {acik && <GeriBildirimPenceresi kapat={() => acikYaz(false)} />}
     </Kart>
