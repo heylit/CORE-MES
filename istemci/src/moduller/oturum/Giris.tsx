@@ -30,8 +30,12 @@ export const MODULLER: readonly string[] = [
   'Kalibrasyon', 'Denetim', 'Çizim', '3B model', 'CNC kurulum', 'Etiket', 'Vardiya', 'İK', 'Maliyet', 'Bildirim',
 ];
 
-// Slogan firma adı taşımaz (2170): ad sistem ayarındadır ve formun üstünde ayrıca görünür.
-export const SLOGAN = 'Talaşı tezgâh kaldırır, tartışmayı CORE. Sıfır tahmin.';
+// Slogan firma adı taşımaz (2170): ad sistem ayarındadır ve formun üstünde ayrıca görünür. İki satırlık levhadır (2184):
+// ilk cümle sakin, ikinci satır büyük ve "CORE" altın.
+export const SLOGAN_UST = 'Tahmin yok. Bahane yok.';
+export const SLOGAN = `${SLOGAN_UST} CORE var.`;
+// CORE altındaki yazı ölçek sınırı koymaz: atölyeden dev tesise (2184).
+export const ALT_YAZI = 'Sanayinin işletim sistemi';
 
 type SahneDurumu = 'yukleniyor' | 'acik' | 'yok';
 // Kurum ayarı sahne başladıktan bu kadar sonra gelirse o açılışta ses çalmaz (sahne geri sarılmaz).
@@ -106,7 +110,7 @@ function GirisSahnesi() {
             {HARFLER.map((h) => <path key={h.ad} className={h.ad === 'O' ? 'tc-giris-sahne-o' : undefined} d={svgYolu(h)} fillRule="evenodd" />)}
           </svg>
         )}
-        <p ref={alti} className="tc-giris-sahne-alti">Atölyenin işletim sistemi</p>
+        <p ref={alti} className="tc-giris-sahne-alti">{ALT_YAZI}</p>
       </div>
       <button type="button" className="tc-giris-ses" aria-pressed={sesAcik} onClick={sesDegistir} title="Açılış sesi: bu cihazda kurum ayarını değiştirir">
         <Simge ad={sesAcik ? 'ses' : 'ses-kapali'} boyut="k" />
@@ -301,20 +305,26 @@ export function Giris() {
     <main className="tc-giris">
       {/* Sahne (ya da yedek çizimi) CORE yazar; firma adı formun üstünde küçük etiket olarak durur. */}
       <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark">
-        <GirisSahnesi />
-        <div className="tc-giris-tanitim-ic">
-          <p className="tc-giris-baslik-buyuk">{SLOGAN}</p>
-          <div className="tc-giris-serit">
-            <ul className="tc-giris-serit-ic" aria-label="Modüller">
-              {[...MODULLER, ...MODULLER].map((m, i) => <li key={i} aria-hidden={i >= MODULLER.length ? true : undefined}>{m}</li>)}
-            </ul>
+        {/* Gövde kalan yükseklikte ortalanır; alt satır panelin dibinde durur (2184). */}
+        <div className="tc-giris-govde">
+          <GirisSahnesi />
+          <div className="tc-giris-tanitim-ic">
+            <p className="tc-giris-baslik-buyuk">
+              <span className="tc-giris-slogan-ust">{SLOGAN_UST}</span>{' '}
+              <span className="tc-giris-slogan-ana"><b>CORE</b> var.</span>
+            </p>
+            <div className="tc-giris-serit">
+              <ul className="tc-giris-serit-ic" aria-label="Modüller">
+                {[...MODULLER, ...MODULLER].map((m, i) => <li key={i} aria-hidden={i >= MODULLER.length ? true : undefined}>{m}</li>)}
+              </ul>
+            </div>
           </div>
-          <p className="tc-giris-not">
-            <span className="tc-giris-not-grup"><Simge ad="lock" boyut="k" /><span>Kurum içi sistem · yalnız iç ağda</span></span>
-            <Saat />
-            <span className="tc-giris-surum mono">{/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}</span>
-          </p>
         </div>
+        <p className="tc-giris-not">
+          <span className="tc-giris-not-grup"><Simge ad="lock" boyut="k" /><span>Kurum içi sistem · yalnız iç ağda</span></span>
+          <Saat />
+          <span className="tc-giris-surum mono">{/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}</span>
+        </p>
       </section>
 
       <form className="tc-giris-kart" onSubmit={gonder} aria-labelledby="tc-giris-baslik" noValidate>

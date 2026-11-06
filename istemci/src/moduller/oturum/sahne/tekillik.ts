@@ -69,7 +69,7 @@ export interface TekillikAyari {
   readonly hareketsiz: boolean;
   // Patlama anındaki yatay ışık şeridi (giriş ekranının öğesi); sahne yalnız saydamlığını ve genişliğini sürer.
   readonly parlama: HTMLElement | null;
-  // Kelimenin altındaki yazı ("Atölyenin işletim sistemi"): sahne onu harflerin alt kenarının ekrandaki yerine taşır ve
+  // Kelimenin altındaki yazı ("Sanayinin işletim sistemi"): sahne onu harflerin alt kenarının ekrandaki yerine taşır ve
   // harfler geldikten sonra gösterir; kadraj her boyutta değiştiği için yeri CSS ile sabitlenemez.
   readonly alti?: HTMLElement | null;
 }
@@ -84,15 +84,16 @@ const ALTI_Y = -74;
 export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): Tekillik | null {
   if (typeof WebGL2RenderingContext === 'undefined' || sinama() === 'kapat') return null;
   let renderer: WebGLRenderer;
-  try { renderer = new WebGLRenderer({ antialias: true }); } catch { return null; }
+  try { renderer = new WebGLRenderer({ antialias: true, alpha: true }); } catch { return null; }
   if (sinama() !== 'zorla' && yazilimCizicisi(renderer)) { renderer.dispose(); renderer.forceContextLoss(); return null; }
 
   const PIKSEL = Math.min(window.devicePixelRatio || 1, 1.5);
   renderer.setPixelRatio(PIKSEL);
   renderer.toneMapping = ACESFilmicToneMapping; renderer.outputColorSpace = SRGBColorSpace;
   kap.prepend(renderer.domElement);
-  const sahne = new Scene(), arka = renk('arka');
-  sahne.background = arka; sahne.fog = new Fog(arka, 500, 1600);
+  // Sahne saydamdır, zemini giriş ekranı çizer (gece mavisi, kart 2184); uzaktaki parçalar zeminin orta tonuna kararır.
+  const sahne = new Scene();
+  sahne.background = null; sahne.fog = new Fog(renk('zemin-orta'), 500, 1600);
   const pm = new PMREMGenerator(renderer), cevre = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose();
   sahne.environment = cevre;
   const kamera = new PerspectiveCamera(30, 1.8, 1, 5000);
