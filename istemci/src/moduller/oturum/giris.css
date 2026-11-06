@@ -1,5 +1,5 @@
-/* Giriş iki yüzdür: solda CORE sahnesi (her temada koyu, data-theme), sağda form. Telefonda sahne üstte kısa bir şerittir,
-   altında yalnız slogan durur: form ilk ekranda kalır. */
+/* Giriş iki yüzdür: solda CORE sahnesi (her temada koyu, data-theme), sağda form. Telefonda sahne üstte kısa bir şerittir:
+   form ilk ekranda kalır. Masaüstünde sahnenin altında ortalı tek sütun: slogan, modül şeridi, alt satır (2170). */
 .tc-giris {
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; justify-items: center; gap: var(--b-5);
   min-height: 100%; padding: 0 0 var(--b-5); background: var(--bg);
@@ -20,19 +20,8 @@
 .tc-giris-tanitim-ic > :nth-child(4) { animation-delay: .24s; }
 .tc-giris-tanitim-ic > :nth-child(5) { animation-delay: .32s; }
 
-.tc-giris-marka { display: flex; align-items: center; gap: var(--b-3); }
-.tc-giris-isaret {
-  display: grid; place-items: center; min-width: var(--dokunma); height: var(--dokunma); padding: 0 var(--b-2);
-  border-radius: var(--yari-2); background: var(--hazard); color: var(--on-hazard); font-weight: 800;
-  box-shadow: 0 0 var(--isik-genis) color-mix(in srgb, var(--hazard) 35%, transparent);
-}
-.tc-giris-ad { font-size: var(--yazi-xl); font-weight: 800; letter-spacing: .14em; }
-.tc-giris-slogan { color: var(--bp); font-size: var(--yazi-xs); font-weight: 600; letter-spacing: .3em; text-transform: uppercase; }
-/* Sahne ya da yedek çizimi CORE yazar: firma adı yoksa marka satırı aynı kelimeyi tekrarlar. */
-.tc-giris-tanitim:not([data-kurum]) .tc-giris-marka { display: none; }
-.tc-giris-marka { justify-content: center; }
-/* Telefonda tanıtım sahne ve slogandır. */
-.tc-giris-baslik-buyuk, .tc-giris-ozellikler, .tc-giris-not { display: none; }
+/* Telefonda tanıtım yalnız sahnedir. */
+.tc-giris-baslik-buyuk, .tc-giris-serit, .tc-giris-not { display: none; }
 
 /* Sahne: tuval kabı doldurur; kenarlar kararır, patlamada yatay ışık şeridi geçer (saydamlığı sahne sürer). */
 .tc-giris-sahne { position: relative; width: 100%; aspect-ratio: 3 / 2; max-height: calc(var(--b-6) * 7.5); pointer-events: none; }
@@ -41,7 +30,28 @@
 .tc-giris-sahne::after {
   content: ''; position: absolute; inset: 0; z-index: 1;
   background: radial-gradient(ellipse at center, transparent 55%, var(--giris3d-golge));
+  /* Kenar karartması alt kenarda panele kayarak biter: sahne ile tanıtım arasında çizgi görünmez. */
+  -webkit-mask-image: linear-gradient(var(--ink) 55%, transparent); mask-image: linear-gradient(var(--ink) 55%, transparent);
 }
+/* Kelimenin altındaki yazı: yerini ve saydamlığını sahne sürer (harflerin alt kenarının izdüşümü). */
+.tc-giris-sahne-alti {
+  position: absolute; left: 0; right: 0; top: 80%; z-index: 2; margin: 0; padding-left: .3em; opacity: 0;
+  transform: translateY(var(--b-2)); text-align: center; color: var(--bp);
+  font: 600 var(--yazi-xs)/1 var(--font-mono); letter-spacing: .3em; text-transform: uppercase;
+}
+/* Yedek çizimde yazı harflerin altına oturur: SVG genişliğin %72'si, harf yarı yüksekliği bunun 58/364'ü. */
+.tc-giris-sahne[data-durum='yok'] { container-type: size; }
+.tc-giris-sahne[data-durum='yok'] .tc-giris-sahne-alti { opacity: 1; top: calc(50% + min(50cqh, 11.5cqw)); }
+
+/* Açılış sesi düğmesi: sahnenin sol üstünde; seçim yalnız bu cihazda saklanır. */
+.tc-giris-ses {
+  position: absolute; left: var(--b-4); top: var(--b-4); z-index: 3;
+  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-3); background: color-mix(in srgb, var(--giris3d-arka) 60%, transparent);
+  color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; cursor: pointer;
+}
+.tc-giris-ses:hover { color: var(--ink); border-color: var(--hazard); }
+.tc-giris-ses[aria-pressed='true'] { color: var(--hazard-ink); border-color: color-mix(in srgb, var(--hazard) 60%, transparent); }
 .tc-giris-sahne-parlama {
   position: absolute; left: -10%; right: -10%; top: 50%; z-index: 1; height: calc(var(--b-1) * .75); opacity: 0; mix-blend-mode: screen;
   background: linear-gradient(90deg, transparent 10%, color-mix(in srgb, var(--giris3d-parlama) 90%, transparent) 45%, var(--giris3d-tarama) 50%,
@@ -63,6 +73,7 @@
   box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
 }
 .tc-giris-ust { display: grid; gap: var(--b-1); }
+.tc-giris-firma { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
 .tc-giris-baslik { font-size: var(--yazi-l); font-weight: 800; }
 .tc-giris-aciklama { font-size: var(--yazi-s); color: var(--muted); }
 .tc-giris-kisi {
@@ -110,23 +121,35 @@
   }
   .tc-giris-tanitim { align-self: stretch; grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; min-height: 100%; }
   .tc-giris-sahne { aspect-ratio: auto; max-height: none; min-height: 0; }
-  .tc-giris-tanitim-ic { justify-self: start; max-width: var(--pencere-genis); gap: var(--b-4); padding: 0 calc(var(--b-6) * 2) var(--b-6); text-align: left; }
-  .tc-giris-marka { justify-content: flex-start; }
-  .tc-giris-kart { justify-self: center; width: 100%; }
-  .tc-giris-ad { font-size: var(--yazi-baslik); }
-  .tc-giris-baslik-buyuk { display: block; font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.1; text-wrap: balance; }
-  .tc-giris-ozellikler { display: grid; gap: var(--b-3); margin: 0; padding: 0; list-style: none; }
-  .tc-giris-ozellikler li { display: flex; align-items: center; gap: var(--b-3); color: var(--muted); }
-  .tc-giris-ozellik-simge {
-    display: grid; place-items: center; flex: none; width: var(--dokunma); height: var(--dokunma);
-    border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--hazard-ink);
+  .tc-giris-tanitim-ic {
+    justify-self: center; justify-items: center; width: min(100% - var(--b-6) * 2, var(--pencere-genis) * 1.4); max-width: none;
+    gap: var(--b-4); padding: 0 0 var(--b-6); text-align: center;
   }
-  .tc-giris-not { display: flex; align-items: center; gap: var(--b-2); padding-top: var(--b-3); border-top: 1px solid var(--edge); font-size: var(--yazi-xs); color: var(--faint); }
-  .tc-giris-surum { margin-left: auto; }
+  .tc-giris-kart { justify-self: center; width: 100%; }
+  .tc-giris-baslik-buyuk { display: block; max-width: 24ch; font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.1; text-wrap: balance; }
+  .tc-giris-serit {
+    display: block; width: 100%; overflow: hidden; padding: var(--b-3) 0; border-block: 1px solid var(--edge);
+    -webkit-mask-image: linear-gradient(90deg, transparent, var(--ink) 12%, var(--ink) 88%, transparent);
+    mask-image: linear-gradient(90deg, transparent, var(--ink) 12%, var(--ink) 88%, transparent);
+  }
+  .tc-giris-serit-ic { display: flex; width: max-content; margin: 0; padding: 0; list-style: none; animation: tc-giris-serit 48s linear infinite; }
+  .tc-giris-serit-ic li {
+    display: inline-flex; align-items: center; gap: var(--b-5); padding-right: var(--b-5); white-space: nowrap;
+    font: 600 var(--yazi-xs)/1 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  }
+  .tc-giris-serit-ic li::after { content: ''; width: var(--b-1); height: var(--b-1); border-radius: 50%; background: var(--hazard); }
+  .tc-giris-not {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--b-5); width: 100%;
+    padding-top: var(--b-3); border-top: 1px solid var(--edge); font-size: var(--yazi-xs); color: var(--faint);
+  }
+  .tc-giris-not-grup { display: inline-flex; align-items: center; gap: var(--b-2); }
+  .tc-giris-saat { color: var(--muted); }
 }
+
+@keyframes tc-giris-serit { to { transform: translateX(-50%); } }
 
 @keyframes tc-giris-yuksel { from { opacity: 0; transform: translateY(var(--b-3)); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .tc-giris-tanitim-ic > *, .tc-giris-kart { animation: none; }
+  .tc-giris-tanitim-ic > *, .tc-giris-kart, .tc-giris-serit-ic { animation: none; }
 }
