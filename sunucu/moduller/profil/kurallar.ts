@@ -1,4 +1,4 @@
-import type { TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimDurumu, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
 
 // PRF-1: kişinin profilinde son 50 geri bildirimi görünür; daha eskisi okuyanın listesindedir.
 export const PROFIL_GERI_BILDIRIM_SINIRI = 50;
@@ -25,4 +25,62 @@ export function mesaiToplami(satirlar: readonly { saat: number | null }[]): numb
 // PRF-5: kaydı olmayan kişinin teması null, sürümü 0 (ilk seçim bu sürümle yazılır); tema uydurulmaz.
 export function temaCevabiYap(satir: { tema: TemaTercihi; surum: number } | null): TemaCevabi {
   return satir === null ? { tema: null, surum: 0 } : { tema: satir.tema, surum: satir.surum };
+}
+
+// Geri Bildirim Merkezi (kart 2192).
+
+// GBM-1: takip satırı olmayan kayıt "yeni"dir; durum uydurulmaz, satır ilk yazımda açılır.
+export function kayitDurumu(takip: { durum: GeriBildirimDurumu } | null): GeriBildirimDurumu {
+  return takip === null ? 'yeni' : takip.durum;
+}
+
+// GBM-2: yanıt açık kaydı "yanıtlandı"ya taşır; çözülmüş ya da kapanmış kayda yazılan ek yanıt durumu değiştirmez.
+export function yanitSonrasiDurum(durum: GeriBildirimDurumu): GeriBildirimDurumu {
+  return durum === 'yeni' || durum === 'inceleniyor' ? 'yanitlandi' : durum;
+}
+
+// GBM-3: yanıt çalışana rol adıyla görünür (2192-2 b). Yanıtlayanın yönetici bayrağı olmayan rollerinden adı sıraca ilki;
+// yalnız bayraklı rolü varsa "Yönetim". Kişi adı imzaya girmez.
+export const YONETIM_IMZASI = 'Yönetim';
+export function yanitImzasi(roller: readonly { ad: string; yonetici: boolean }[]): string {
+  const adlar = roller.filter((r) => !r.yonetici).map((r) => r.ad).sort((a, b) => a.localeCompare(b, 'tr'));
+  return adlar[0] ?? YONETIM_IMZASI;
+}
+
+// GBM-4: toplama tek kademedir. Kayıt kendine bağlanmaz; başka kayda bağlı olana bağlanılmaz; kendisine bağlı kayıt olan
+// kayıt başkasına bağlanmaz. Hata metni döner, geçerse null.
+export function anaKayitHatasi(a: { id: number; anaKayitId: number | null; ananinAnasi: number | null; bagliSayisi: number }): string | null {
+  if (a.anaKayitId === null) return null;
+  if (a.anaKayitId === a.id) return 'Kayıt kendisine bağlanamaz.';
+  if (a.ananinAnasi !== null) return `#${a.anaKayitId} başka bir kayda bağlı; ana kayda bağlayın (#${a.ananinAnasi}).`;
+  if (a.bagliSayisi > 0) return 'Bu kayda bağlı kayıtlar var; önce onları ayırın ya da bu kaydı ana kayıt olarak bırakın.';
+  return null;
+}
+
+// GBM-5: pasif kategori yeni kayda seçilmez; kayıtta zaten seçili olan pasif kategori kalabilir.
+export function kategoriSecilebilir(k: { id: number; etkin: boolean } | null, mevcutId: number | null): boolean {
+  return k !== null && (k.etkin || k.id === mevcutId);
+}
+
+// GBM-6: ilk yanıt süresinin ortancası (saat, iki ondalık); yanıtlanmış kayıt yoksa null (sıfır uydurulmaz).
+export function ortanca(degerler: readonly number[]): number | null {
+  if (degerler.length === 0) return null;
+  const s = [...degerler].sort((a, b) => a - b);
+  const o = Math.floor(s.length / 2);
+  const orta = s[o] ?? 0;
+  const deger = s.length % 2 === 1 ? orta : ((s[o - 1] ?? orta) + orta) / 2;
+  return Math.round(deger * 100) / 100;
+}
+
+// GBM-7: eğilim son altı ayı gösterir (bu ay dahil); başlangıç altı ay önceki ayın ilk günüdür. Gelmeyen ay sıfır satırla
+// listelenir (o ay kayıt yoktur, sayı gerçektir); süre yoksa null kalır.
+export const OZET_AY_SAYISI = 6;
+export function ozetAylari(bugun: string): string[] {
+  const [y, a] = bugun.split('-').map(Number) as [number, number];
+  const aylar: string[] = [];
+  for (let i = OZET_AY_SAYISI - 1; i >= 0; i -= 1) {
+    const toplam = y * 12 + (a - 1) - i;
+    aylar.push(`${String(Math.floor(toplam / 12)).padStart(4, '0')}-${String((toplam % 12) + 1).padStart(2, '0')}`);
+  }
+  return aylar;
 }

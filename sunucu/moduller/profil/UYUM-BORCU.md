@@ -6,6 +6,6 @@
 3. Arkon Operatör Özetim bağlantısı: Özetim'in kendi adresi yok; Üretim Terminali'nin (`/uretim-terminali`, `sayfa.uretim-terminali`) içinde bir görünümdür ve Arkon rolü operatör ya da amir olan kişide açılışta seçilidir (DOĞRULANDI: `arkon/web/src/app/operator.ts:45` `ozetimGorunur() ? 'ozet'`, `ozetim.ts:15`). KAPANDI (karar 161 a): Profilim'de "Ek mesailerim" kartına `sayfa.uretim-terminali` olan kişiye "Özetim" bağlantısı eklendi (`/uretim-terminali`).
 
 ## Sonra
-4. Gelen kutusunda durum (okundu, çözüldü) ve yanıt yok; kayıt yalnız eklenir. Gerekirse ayrı tabloyla gelir.
+4. KAPANDI (kart 2192): durum, yanıt, iç not, kategori, sorumlu ve toplama Geri Bildirim Merkezi'nde (`/geri-bildirim`) ayrı tablolarla geldi; çalışanın yazdığı satır değişmez. Bildirimler (yeni kayıt, yanıt, kapanış) ayrı yamada gelir; o gelene kadar bildirim yoktur.
 5. KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kişi iletişim bilgisinin sahibi İK/kisiler, iş gerektirmez. İletişim bilgisi profilde değil İK İşlemlerim'de güncellenir (İK'nın ucu ve sürümüyle); profil bağlantı verir.
 6. Kullanım rehberi (rehber.ts) yalnız menü sayfalarını toplar; Profilim menü sayfası olmadığı için rehbere girmedi. Rehber menü dışı sayfayı alınca eklenir.

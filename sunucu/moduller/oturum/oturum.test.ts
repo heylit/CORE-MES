@@ -188,7 +188,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
     // Kullanıcı kararı 195 a.
     'uretim-terminali',
     // Karar 2067-3 b.
-    'ortak-dosyalar');
+    'ortak-dosyalar',
+    // Geri Bildirim Merkezi (2192-1 a).
+    'geri-bildirim');
   // Onaylayan rol yazmayı da taşır: onay, kartı kaydeden uçtan geçer.
   const MALZEME_ONAYI = ['malzemeler.yaz', 'malzemeler.onayla'];
   // Arkon rolü tek TMI işlemiyle verilir (kullanıcı kararı 07.10.2026); Arkon sayfası yalnız Arkon rolü olan rollerdedir.
@@ -286,6 +288,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
       'nizamiye.oku', 'nizamiye.kart-yonet',
       // Şikayet, istek ve öneri kayıtları (kullanıcı kararı 14.10.2026).
       'profil.geri-bildirim-oku',
+      // Geri Bildirim Merkezi: yanıtlar, takip eder, kategori yönetir (2192-1 a); sayfası MUDUR_SAYFALARI'nda.
+      'profil.geri-bildirim-yanitla', 'profil.geri-bildirim-kategori-yaz',
       // Etiket Merkezi'nde basar, şablon ve yazıcı düzenler (kullanıcı kararı 99, 18.10.2026).
       'etiket-merkezi.oku', 'etiket-merkezi.bas', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz',
       // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
@@ -360,7 +364,9 @@ describe('oturum (gerçek PostgreSQL)', () => {
       // Markalama istasyonunda seriyi sunucudan alır ve doğrular; durum ve tanım yazmaz (2030 a + teyit). Terminal panelinin
       // okumaları için Markalama sayfası (2048 b + teyit).
       'markalama.seri-ver', ...SAYFA('markalama')],
-    insan_kaynaklari: [...MESAJ, ...STOK_ISTEK, ...IK_UZMANI, 'kisiler.oku', 'kisiler.yaz', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU, 'profil.geri-bildirim-oku'],
+    insan_kaynaklari: [...MESAJ, ...STOK_ISTEK, ...IK_UZMANI, 'kisiler.oku', 'kisiler.yaz', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU, 'profil.geri-bildirim-oku',
+      // Geri Bildirim Merkezi: yanıtlar, takip eder, kategori yönetir (2192-1 a).
+      'sayfa.geri-bildirim', 'profil.geri-bildirim-yanitla', 'profil.geri-bildirim-kategori-yaz'],
     satin_alma: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA, 'satin-alma.oku', TALEP, TALEP_SAYFASI, 'satin-alma.yaz', 'satin-alma.ayar', 'finans.kur-yaz', 'uretim-emirleri.fason', ...SAYFA('stok', 'malzemeler', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.satinalma',
       // Fatura-sipariş bağı (2077-3 a).
       'satin-alma.fatura-bagla',
