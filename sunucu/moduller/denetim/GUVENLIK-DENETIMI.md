@@ -22,6 +22,9 @@ Yazma tarafı (önceki tur, değişmedi):
 | yol parametresi de maskelenir; gövdesiz uçta özet maskeli gövdeden | `servis.ts` | `denetim.test.ts` |
 | kayıt değiştirilemez, silinemez, boşaltılamaz | `20261005120200_denetim.sql` tetikleyiciler | oturum testi |
 | değişiklik defteri tetikle yazılır; kişi oturum değişkeninden, sayı değilse boş; defter değiştirilemez, silinemez, boşaltılamaz | `20261023194500_denetim_degisiklik_defteri.sql` | `degisiklik.test.ts` |
+| sınırlı hesabın (2158) her okuması (oturum modülü dışı) cevap gitmeden `okuma_kaydi`na yazılır; yazılamazsa 500, veri gitmez (2158-8 a); iç hesap okuması yazılmaz | `cekirdek/uc.ts`, `servis.ts` `okumaYaz` | `cekirdek/uc-okuma-kaydi.test.ts`, `okuma-kaydi.test.ts` |
+| okuma kaydında yalnız kimlik adlı tam sayı kalır; arama metni, kişisel veri, sır `[gizli]` olur; sözleşmede gizli işaretli sorgu alanı çekirdekte de maskelenir | `kurallar.ts` `okumaIzi` | `kurallar.test.ts`, `uc-okuma-kaydi.test.ts`, `okuma-kaydi.test.ts` |
+| okuma kaydı değiştirilemez, boşaltılamaz, 730 günden yeni satır silinemez (tetik); günlük iş süresi dolanı siler; liste `denetim.oku` | `20261106098000_denetim_okuma_kaydi.sql`, `isler.ts`, `uclar.ts` | `okuma-kaydi.test.ts` |
 
 ## Yalnız ekranda kalan kurallar
 

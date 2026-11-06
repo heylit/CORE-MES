@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { degisiklikAlanlari, gizle, gizliAnahtarMi, icerenKalibi, kimlikParametreleri } from './kurallar.ts';
+import { OKUMA_SAKLAMA_GUN, degisiklikAlanlari, gizle, gizliAnahtarMi, icerenKalibi, kimlikParametreleri, okumaIzi } from './kurallar.ts';
 
 test('parola alanları iç içe yapıda da gizlenir; diğer alanlar aynen kalır', () => {
   const girdi = { kullaniciAdi: 'ali', parola: 'gizli1', kisiler: [{ ad: 'A', yeniParola: 'gizli2', adet: 0 }], not: null };
@@ -103,4 +103,26 @@ test('sır özeti sütunu (pin_ozeti, kart_ozeti) değişiklik defterinde maskel
 test('yol arama kalıbı: parçayı % ile sarar; %, _ ve \\ harf olarak kaçışlanır', () => {
   assert.equal(icerenKalibi('/kisiler'), '%/kisiler%');
   assert.equal(icerenKalibi('a%b_c\\d'), '%a\\%b\\_c\\\\d%');
+});
+
+test('2158-4 a: okuma izinde yalnız kimlik adlı tam sayı kalır; arama metni, kişisel veri ve sır değeriyle girmez', () => {
+  const iz = okumaIzi({
+    id: 7, kisiId: 3, kayitlarId: [1, 2], q: 'Deneme Kisi 12345678901', tckn: '12345678901', parola: 'gizli-1', token: 't-1',
+    durum: 'acik', sayfa: 2, baslangic: '2026-01-01', pinId: 5, yeniPin: 1234, ustId: '9', icId: { id: 1 }, buyukId: Array.from({ length: 101 }, (_, i) => i),
+  });
+  assert.deepEqual(iz, {
+    id: 7, kisiId: 3, kayitlarId: [1, 2], q: '[gizli]', tckn: '[gizli]', parola: '[gizli]', token: '[gizli]', durum: '[gizli]', sayfa: '[gizli]',
+    baslangic: '[gizli]', pinId: 5, yeniPin: '[gizli]', ustId: '[gizli]', icId: '[gizli]', buyukId: '[gizli]',
+  });
+  const metin = JSON.stringify(iz);
+  for (const sir of ['Deneme', '12345678901', 'gizli-1', 't-1', 'acik', '2026', '1234']) assert.equal(metin.includes(sir), false, sir);
+});
+
+test('2158-4 a: okuma izi boşsa null, düz nesne değilse bütünüyle gizli; saklama 2 yıl', () => {
+  assert.equal(okumaIzi(undefined), null);
+  assert.equal(okumaIzi(null), null);
+  assert.equal(okumaIzi({}), null);
+  assert.equal(okumaIzi('metin'), '[gizli]');
+  assert.equal(okumaIzi([1, 2]), '[gizli]');
+  assert.equal(OKUMA_SAKLAMA_GUN, 730);
 });

@@ -7,17 +7,19 @@ import { kararliJson } from '#cekirdek/tekrar.ts';
 import type { DenetimGirdisi, Denetle } from '#cekirdek/uc.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  DegisiklikSatiri, DegisiklikSecenekleriCevabi, KayitSatiri, SuzgecSecenekleriCevabi, degisiklikListesiSorgusu,
-  kayitListesiSorgusu,
+  DegisiklikSatiri, DegisiklikSecenekleriCevabi, KayitSatiri, OkumaSatiri, SuzgecSecenekleriCevabi, degisiklikListesiSorgusu,
+  kayitListesiSorgusu, okumaListesiSorgusu,
 } from '#paylasilan/sozlesme/denetim.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import {
-  type DegisiklikAlani, akisAlanlari, akisIstegiHatasi, degisiklikAlanlari, gizle, icerenKalibi, kimlikParametreleri,
+  type DegisiklikAlani, OKUMA_SAKLAMA_GUN, akisAlanlari, akisIstegiHatasi, degisiklikAlanlari, gizle, icerenKalibi, kimlikParametreleri,
+  okumaIzi,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 type KayitListesiSorgusuCikti = z.output<typeof kayitListesiSorgusu>;
 type DegisiklikListesiSorgusuCikti = z.output<typeof degisiklikListesiSorgusu>;
+type OkumaListesiSorgusuCikti = z.output<typeof okumaListesiSorgusu>;
 
 export interface GovdeOzeti {
   _ozet: { boyut: number; sha256: string };
@@ -49,6 +51,7 @@ function ekli(govde: unknown, ek: DenetimGirdisi['ek']): unknown {
 
 // Parametre de maskelenir: gövdesiz uçta satırın tek içerik sütunudur ve yol parametresi gizli değer taşıyabilir.
 export const denetimYaz: Denetle = (db, girdi) => {
+  if (girdi.kip === 'okuma') return okumaYaz(db, girdi);
   const maskeli = gizle(girdi.govde);
   return sorgular.denetimEkle(db, {
     ...girdi,
@@ -56,6 +59,35 @@ export const denetimYaz: Denetle = (db, girdi) => {
     govde: ekli(girdi.kip === 'govdesiz' ? govdesizKayit(maskeli, girdi.secilen) : maskeli, girdi.ek),
   });
 };
+
+// 2158-4 a: sınırlı hesabın okuması okuma kaydına girer, denetim kaydına değil. Kişisiz okuma kaydı olmaz: uç katmanı yalnız
+// oturumlu sınırlı hesapta çağırır; başka yoldan gelirse yazılmadan reddedilir (çağıran 500 alır, cevap gitmez: 2158-8 a).
+async function okumaYaz(db: Db, girdi: DenetimGirdisi): Promise<void> {
+  if (girdi.kisiId === null) throw new Error(`Okuma kaydı kişisiz yazılamaz: ${girdi.yontem} ${girdi.yol}`);
+  await sorgular.okumaEkle(db, {
+    kisiId: girdi.kisiId, modul: girdi.modul ?? null, yol: girdi.yol, parametre: okumaIzi(girdi.parametre), sorgu: okumaIzi(girdi.sorgu),
+  });
+}
+
+export async function okumaListesi(db: Db, sorgu: OkumaListesiSorgusuCikti): Promise<SayfaliListe<OkumaSatiri>> {
+  const s: sorgular.OkumaSuzgeci = {
+    kisi: sorgu.kisi ?? null, baslangic: sorgu.baslangic ?? null, bitis: sorgu.bitis ?? null, modul: sorgu.modul ?? null,
+  };
+  return sayfaliListe(sorgu, {
+    say: () => sorgular.okumaSay(db, s),
+    satirlar: async (dilim) => {
+      const ham = await sorgular.okumalar(db, s, dilim);
+      const adlar = await kisiAdlari(db, ham.map((o) => o.kisi_id));
+      // Kayıt yazılırken süzülmüştür; okurken yeniden süzülür: kural sonradan daralırsa eski satırdaki değer de çıkmaz.
+      return ham.map((o) => ({
+        id: o.id, zaman: o.zaman, kisiId: o.kisi_id, kisiAd: adlar.get(o.kisi_id) ?? null, modul: o.modul, yol: o.yol,
+        kimlikler: kimlikParametreleri(o.parametre), sorguKimlikleri: kimlikParametreleri(o.sorgu),
+      }));
+    },
+  });
+}
+
+export const eskiOkumalariSil = (db: Db): Promise<number> => sorgular.eskiOkumalariSil(db, OKUMA_SAKLAMA_GUN);
 
 const suzgec = (s: KayitListesiSorgusuCikti): sorgular.KayitSuzgeci => ({
   kisi: s.kisi ?? null, baslangic: s.baslangic ?? null, bitis: s.bitis ?? null, yontem: s.yontem ?? null, modul: s.modul ?? null,

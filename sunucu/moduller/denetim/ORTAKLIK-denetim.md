@@ -7,6 +7,7 @@ Sütunlar `npm run harita -- --modul denetim` çıktısından (DOĞRULANDI, `9b6
 | Tablo | Sütunlar | Sahibi |
 |---|---|---|
 | `denetim_kaydi` | id, zaman, kisi_id? -> kisi, yontem, yol, parametre? jsonb, govde? jsonb | denetim |
+| `okuma_kaydi` | id, zaman, kisi_id -> kisi, modul?, yol, parametre? jsonb, sorgu? jsonb | denetim |
 
 ## Kavramlar
 
@@ -14,6 +15,7 @@ Sütunlar `npm run harita -- --modul denetim` çıktısından (DOĞRULANDI, `9b6
 |---|---|---|---|
 | denetim kaydı (kim, ne zaman, ne yaptı) | `denetim_kaydi` | modüllerin kendi olay ve değişiklik tabloları (ör. üretim olayı, Arkon kayıtları) | bu tablo komut defteridir; iş olayı değildir. Yalnız ekleme (`denetim_kaydi_degismez`, `denetim_kaydi_bosaltilmaz`) |
 | kişi | `denetim_kaydi.kisi_id` | sahibi kisiler | boşsa komut oturumsuzdur (giriş) |
+| sınırlı hesabın okuması (2158-4 a) | `okuma_kaydi` | yok | yalnız sınırlı hesap; kişi `okuma_kaydi.kisi_id` (sahibi kisiler). 730 gün saklanır, sonra silinir |
 | ayar değişikliği | `denetim_kaydi` | ayarlar | ayarlar eski ve yeni değeri `denetimYaz` ile buraya yazar |
 
 ## Başka modüle bağlar
