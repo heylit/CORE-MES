@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { KapasiteKaynagi, SurumluIsMerkezi, SurumluIstasyon } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { IstasyonTipi, KapasiteKaynagi, SurumluIsMerkezi, SurumluIstasyon, TesisSablonuSonucu } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
+import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { CokluEklePenceresi } from './CokluEklePenceresi.tsx';
@@ -59,8 +61,37 @@ const degistir = <T,>(kume: ReadonlySet<T>, deger: T, var_: boolean): Set<T> => 
 // İş merkezleri ve istasyonlar tek ekranda (Reçete ve Rota düzeni): her merkez kendi katlanır panelinde, istasyonları satır satır.
 // Satır okuma kipindedir; "Düzenle" ile değer hücrede yazılır (kart #1109, #1296). Tip, üretim alanı ve kişi atamaları "Ayrıntı" penceresindedir.
 // Seçilen istasyonlar tek komutla başka iş merkezine taşınır ya da pasife alınır: hepsi ya da hiçbiri (kart #1296).
-export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: TesisYaz; yazabilir: boolean }) {
+// 2166-4 a: istasyonun bağlı sayfası tipe göre sabittir; bağlantıyı yalnız o sayfayı açabilen görür (sayfa yetkisi rolden).
+export const ISTASYON_TIPI_SAYFASI: Readonly<Record<IstasyonTipi, { yol: string; ad: string; islem: Islem; simge: SimgeAdi } | null>> = {
+  talasli: { yol: '/cnc-kurulum', ad: 'CNC Kurulum', islem: 'sayfa.cnc-kurulum', simge: 'cpu' },
+  kalite: { yol: '/kalite-merkezi', ad: 'Kalite Merkezi', islem: 'sayfa.kalite-merkezi', simge: 'clipboard-check' },
+  markalama: { yol: '/markalama', ad: 'Markalama', islem: 'sayfa.markalama', simge: 'tag' },
+  depo: { yol: '/stok', ad: 'Stok', islem: 'sayfa.stok', simge: 'pallet' },
+  boya: null,
+  montaj: null,
+  tesviye: null,
+};
+function BagliSayfaBaglantisi({ s, islemler }: { s: SurumluIstasyon; islemler: readonly string[] }) {
+  const sayfa = ISTASYON_TIPI_SAYFASI[s.tip];
+  if (sayfa === null || !islemler.includes(sayfa.islem)) return null;
+  return (
+    <Link to={sayfa.yol} className="tc-ist-bag" aria-label={`${s.kod} bağlı sayfa: ${sayfa.ad}`} title={sayfa.ad}>
+      <Simge ad={sayfa.simge} boyut="k" /> {sayfa.ad}
+    </Link>
+  );
+}
+
+// 2166-1 a: sonuç iletisi açılan ve atlananı sayar; atlanan kayıt değişmemiştir.
+const sablonIletisi = (c: TesisSablonuSonucu): string => {
+  const acilan = c.acilanMerkezler.length + c.acilanIstasyonlar.length;
+  if (acilan === 0) return 'Şablondaki bütün kayıtlar zaten var; değişiklik yapılmadı.';
+  const atlanan = c.atlananlar.length === 0 ? '' : ` ${c.atlananlar.length} kayıt zaten vardı ya da pasif merkezdeydi, dokunulmadı.`;
+  return `${c.acilanMerkezler.length} iş merkezi ve ${c.acilanIstasyonlar.length} istasyon açıldı.${atlanan}`;
+};
+
+export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: TesisVerisi; y: TesisYaz; yazabilir: boolean; islemler?: readonly string[] }) {
   const [ara, araYaz] = useState('');
+  const [sablonSonucu, sablonSonucuYaz] = useState<string | null>(null);
   const [pasifler, pasiflerYaz] = useState(false);
   const [merkezAyrinti, merkezAyrintiYaz] = useState<SurumluIsMerkezi | null>(null);
   const [istasyonAyrinti, istasyonAyrintiYaz] = useState<SurumluIstasyon | null>(null);
@@ -193,7 +224,10 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
           ) : (
             <>
               <Hucre baslik="Kod"><span className="tc-ist-mono">{s.kod}</span></Hucre>
-              <Hucre baslik="İstasyon adı"><span>{s.ad}{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</span></Hucre>
+              <Hucre baslik="İstasyon adı">
+                <span>{s.ad}{!s.aktif && <> <Rozet ton="pasif">Pasif</Rozet></>}</span>
+                <BagliSayfaBaglantisi s={s} islemler={islemler} />
+              </Hucre>
               <Hucre baslik="Sorumlu"><span className={s.sorumluAd ? '' : 'tc-ist-ipucu'}>{s.sorumluAd ?? 'Yok'}</span></Hucre>
               <Hucre baslik="Kapasite">{s.kapasiteKaynagi ? <span>{KAPASITE_KAYNAGI_ADLARI[s.kapasiteKaynagi]}</span> : <span className="tc-ist-hata">Seçilmemiş</span>}</Hucre>
               <Hucre baslik="Verim %">{v.ayarlar === null ? planOkunamadi : <span className="tc-ist-calc" aria-label={`${s.kod} verim`}>{yuzdeMetni(String(verim))}</span>}</Hucre>
@@ -230,6 +264,12 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
           </Dugme>
           <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
           {yazabilir && (
+            <Dugme simge="layers" disabled={y.mesgul} title="Hazır iş merkezi ve istasyon listesini açar (Kalite dahil); var olan kayda dokunmaz."
+              onClick={() => { sablonSonucuYaz(null); y.gonder({ yol: '/tesis-sablonu/uygula', satir: 'sablon' }, { onSuccess: (c) => sablonSonucuYaz(sablonIletisi(c as TesisSablonuSonucu)) }); }}>
+              Şablonu uygula
+            </Dugme>
+          )}
+          {yazabilir && (
             <Dugme tur="birincil" simge="plus" disabled={y.mesgul}
               onClick={() => y.gonder(
                 { yol: '/is-merkezleri', govde: { kod: yeniKod('IM', v.merkezler.map((m) => m.kod)), ad: 'Yeni iş merkezi', aciklama: null }, satir: 'yeni-im' },
@@ -254,6 +294,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
         </div>
       )}
       <SatirHatasi ileti={y.hatalar['yeni-im']} />
+      <SatirHatasi ileti={y.hatalar['sablon']} />
+      {sablonSonucu !== null && <p className="tc-ist-ipucu" role="status">{sablonSonucu}</p>}
       <TopluCubuk sayi={seciliKayitlar.length} temizle={() => { seciliYaz(new Set()); t.temizle(); }} ret={t.ret?.ileti ?? null}>
         <AranabilirSecim etiket="Seçilenleri iş merkezine taşı" tur="merkez" deger="" yerTutucu="İş merkezine taşı" secenekler={merkezSecenekleri} disabled={t.mesgul}
           sec={(d) => { if (d !== '') toplu('/istasyonlar/toplu-tasi', { isMerkeziId: Number(d) }); }} />
@@ -269,7 +311,7 @@ export function MerkezIstasyonlari({ v, y, yazabilir }: { v: TesisVerisi; y: Tes
         </p>
       </details>
       {merkezler.length === 0 && (
-        <DurumKutusu durum="bos" mesaj={v.merkezler.length === 0 ? 'İş merkezi yok. Bölüm ya da hatlarınızı ekleyin.' : 'Aramaya uyan kayıt yok.'} />
+        <DurumKutusu durum="bos" mesaj={v.merkezler.length === 0 ? `İş merkezi yok. Bölüm ya da hatlarınızı ekleyin${yazabilir ? ' ya da "Şablonu uygula" ile hazır listeyi açın' : ''}.` : 'Aramaya uyan kayıt yok.'} />
       )}
       {merkezler.map((m) => {
         const satirlar = satirlari(m);

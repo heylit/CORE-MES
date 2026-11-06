@@ -1,5 +1,5 @@
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { Istasyon, KapasiteKaynagi, SecimGrubu } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { Istasyon, KapasiteKaynagi, SablonIstasyonu, SablonMerkezi, SecimGrubu } from '#paylasilan/sozlesme/istasyonlar.ts';
 
 // Makine durumunu bakımcı, vardiya sorumlusu ve müdür de değiştirir; tanımlar yöneticide kalır (karar 263 a). Uç ve dışa açık komut aynı kümeyi arar.
 export const MAKINE_DURUMU_ISLEMLERI = ['istasyonlar.yaz', 'istasyonlar.makine-durumu'] as const satisfies readonly Islem[];
@@ -215,3 +215,30 @@ export function ayarYetkinligiReddi(makine: { aktif: boolean } | undefined): str
 // IS32 (1303 a): istasyon seçilirse istasyonun bütün aktif makineleri listeye girer; tekrar edenler bir kez.
 export const ayarListesi = (makineIdleri: readonly number[], istasyonMakineleri: readonly number[]): number[] =>
   [...new Set([...makineIdleri, ...istasyonMakineleri])];
+
+// Tesis şablonunun planı (2166-1 a): kod büyük harfle karşılaştırılır (kod şeması da büyütür). Var olan iş merkezi ya da istasyon
+// atlanır, hiçbir alanı değişmez. Pasif merkezin altına istasyon açılmaz (IST-1): o merkezin eksik istasyonları da atlanır.
+export interface SablonPlani {
+  merkezler: readonly { sablon: SablonMerkezi; mevcutId: number | null; istasyonlar: readonly SablonIstasyonu[] }[];
+  atlananlar: readonly { kod: string; neden: 'var' | 'merkez-pasif' }[];
+}
+export function sablonPlani(
+  sablon: readonly SablonMerkezi[],
+  merkezler: readonly { id: number; kod: string; aktif: boolean }[],
+  istasyonKodlari: readonly string[],
+): SablonPlani {
+  const merkezBul = new Map(merkezler.map((m) => [m.kod.toUpperCase(), m]));
+  const istasyonVar = new Set(istasyonKodlari.map((k) => k.toUpperCase()));
+  const atlananlar: { kod: string; neden: 'var' | 'merkez-pasif' }[] = [];
+  const plan = sablon.map((s) => {
+    const mevcut = merkezBul.get(s.kod) ?? null;
+    if (mevcut !== null) atlananlar.push({ kod: s.kod, neden: 'var' });
+    const istasyonlar = s.istasyonlar.filter((i) => {
+      if (istasyonVar.has(i.kod)) { atlananlar.push({ kod: i.kod, neden: 'var' }); return false; }
+      if (mevcut !== null && !mevcut.aktif) { atlananlar.push({ kod: i.kod, neden: 'merkez-pasif' }); return false; }
+      return true;
+    });
+    return { sablon: s, mevcutId: mevcut?.id ?? null, istasyonlar };
+  });
+  return { merkezler: plan, atlananlar };
+}

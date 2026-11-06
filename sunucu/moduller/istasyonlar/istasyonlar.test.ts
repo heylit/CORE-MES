@@ -320,6 +320,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
         uc: '/istasyonlar/coklu-ekle', yol: '/istasyonlar/coklu-ekle',
         govde: { kayitlar: [{ kod: yeniKod('YT'), ad: 'Yetki' }], isMerkeziId: digerMerkez.id, kapasiteKaynagi: 'makine' }, basari: 200,
       },
+      { uc: '/tesis-sablonu/uygula', yol: '/tesis-sablonu/uygula', basari: 200 },
       { uc: '/makineler/:id/sil', yol: `/makineler/${mk.id}/sil`, basari: 204 },
       { uc: '/istasyonlar/:id/sil', yol: `/istasyonlar/${ist.id}/sil`, basari: 204 },
       { uc: '/is-merkezleri/:id/sil', yol: `/is-merkezleri/${im.id}/sil`, basari: 204 },

@@ -8,7 +8,7 @@ import {
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
   yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
   ayarYetkinligiBelirleGovdesi, ayarYetkinligiParametresi, makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
-  aparatKapasiteleriCevabi, aparatKapasitesi, aparatKapasitesiGovdesi, aparatKapasitesiGuncellemeGovdesi, aparatKapasitesiSilmeGovdesi,
+  aparatKapasiteleriCevabi, aparatKapasitesi, tesisSablonuSonucu, aparatKapasitesiGovdesi, aparatKapasitesiGuncellemeGovdesi, aparatKapasitesiSilmeGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
@@ -167,6 +167,14 @@ export const uclar = [
       await servis.isMerkeziSil(db, parametre.id);
       return undefined;
     },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/tesis-sablonu/uygula',
+    // 2166-1 a: eksik iş merkezi ve istasyonları açar; var olan kayda dokunmaz, ikinci çağrı bir şey açmaz.
+    yetki: 'istasyonlar.yaz',
+    cevap: tesisSablonuSonucu,
+    isle: ({ db }) => servis.tesisSablonunuUygula(db),
   }),
 
   uc({

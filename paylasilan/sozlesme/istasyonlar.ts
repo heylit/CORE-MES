@@ -540,3 +540,36 @@ export type AparatKapasitesiGuncellemeGovdesi = z.input<typeof aparatKapasitesiG
 export type AparatKapasitesiSilmeGovdesi = z.input<typeof aparatKapasitesiSilmeGovdesi>;
 export type AparatKapasitesi = z.output<typeof aparatKapasitesi>;
 export type AparatKapasiteleriCevabi = z.output<typeof aparatKapasiteleriCevabi>;
+
+// Tesis şablonu (2166-1 a): atölyenin hazır iş merkezi ve istasyon listesi. "Şablonu uygula" eksik olanı kodla açar, var olan koda
+// dokunmaz; sonra liste serbestçe büyür ya da pasife alınır. Talaşlı merkezde istasyon yoktur: tezgâh parkı tesise özgüdür.
+// Kalite bir iş merkezidir (kullanıcı isteği, kart 2166); istasyonları KAL grubundaki operasyonların yapıldığı yerlerdir.
+export interface SablonIstasyonu { kod: string; ad: string; tip: IstasyonTipi; kapasiteKaynagi: KapasiteKaynagi }
+export interface SablonMerkezi { kod: string; ad: string; aciklama: string; istasyonlar: readonly SablonIstasyonu[] }
+const insanli = (kod: string, ad: string, tip: IstasyonTipi): SablonIstasyonu => ({ kod, ad, tip, kapasiteKaynagi: 'insan' });
+export const TESIS_SABLONU: readonly SablonMerkezi[] = [
+  { kod: 'TALASLI', ad: 'Talaşlı imalat', aciklama: 'Torna, freze, işleme merkezi', istasyonlar: [] },
+  {
+    kod: 'KALITE', ad: 'Kalite', aciklama: 'Giriş, ara ve son kontrol, ölçüm', istasyonlar: [
+      insanli('KAL-GKK', 'Giriş kalite kontrol', 'kalite'),
+      insanli('KAL-ARA', 'Ara kontrol', 'kalite'),
+      insanli('KAL-SON', 'Son kontrol', 'kalite'),
+      insanli('KAL-CMM', 'Koordinat ölçüm (CMM)', 'kalite'),
+    ],
+  },
+  { kod: 'MARKALAMA', ad: 'Markalama', aciklama: 'Seri no, lazer, damga', istasyonlar: [insanli('MRK-01', 'Markalama', 'markalama')] },
+  { kod: 'TESVIYE', ad: 'Tesviye', aciklama: 'Çapak, kenar, el işi', istasyonlar: [insanli('TSV-01', 'Tesviye', 'tesviye')] },
+  { kod: 'MONTAJ', ad: 'Montaj', aciklama: 'Montaj ve fonksiyon testi', istasyonlar: [insanli('MON-01', 'Montaj', 'montaj')] },
+  { kod: 'BOYA', ad: 'Boya ve kaplama', aciklama: 'Boya, kaplama, kürleme', istasyonlar: [insanli('BOY-01', 'Boya', 'boya')] },
+  { kod: 'DEPO', ad: 'Depo', aciklama: 'Mal kabul, toplama, sevk hazırlığı', istasyonlar: [insanli('DEPO-01', 'Depo', 'depo')] },
+];
+
+// Şablon uygulamasının sonucu: açılanlar ve atlananlar koduyla; atlanan kayıt değişmemiştir.
+export const SABLON_ATLAMA_NEDENLERI = ['var', 'merkez-pasif'] as const;
+export const tesisSablonuSonucu = z.object({
+  acilanMerkezler: z.array(z.string()),
+  acilanIstasyonlar: z.array(z.string()),
+  atlananlar: z.array(z.object({ kod: z.string(), neden: z.enum(SABLON_ATLAMA_NEDENLERI) })),
+});
+export type TesisSablonuSonucu = z.output<typeof tesisSablonuSonucu>;
+

@@ -6,15 +6,16 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
   EkipGuncellemesi, EkipKaydi, SurumluEkip, IsMerkeziGuncellemesi, IsMerkeziKaydi, IstasyonGuncellemesi, IstasyonKaydi, MakineGuncellemesi, MakineKaydi, OperasyonTipiGuncellemesi,
   AparatKapasitesi, AparatKapasitesiGovdesi, AparatKapasitesiGuncellemeGovdesi, IstasyonCokluEkleGovdesi, IstasyonPlanAyari, IstasyonTopluTasiGovdesi, MakineCokluEkleGovdesi, MakineDurumu, MakineDurumuGovdesi, MakineTopluDurumGovdesi, MakineTopluTasiGovdesi, TopluAktiflikGovdesi, OperasyonTipiKaydi, PanoOzetiCevabi, PlanAyariGovdesi, SecimGrubu, SurumluIsMerkezi as IsMerkezi, SurumluOperasyonTipi, SurumluIstasyon, SurumluMakine as Makine,
-  AyarYetkinligiAyrintisi, AyarYetkinligiBelirleGovdesi, YetkinlikAyrintiGovdesi, YetkinlikAyrintisi, YetkinlikGecmisiCevabi,
+  AyarYetkinligiAyrintisi, AyarYetkinligiBelirleGovdesi, TesisSablonuSonucu, YetkinlikAyrintiGovdesi, YetkinlikAyrintisi, YetkinlikGecmisiCevabi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
+import { TESIS_SABLONU } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisiler/disari.ts';
 import type { AtamaTuru } from './kurallar.ts';
 import {
   AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
-  ayarListesi, ayarYetkinligiReddi, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
+  ayarListesi, ayarYetkinligiReddi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AyarYetkinligiSatiri, YetkinlikAyrintiSatiri } from './sorgular.ts';
@@ -73,6 +74,29 @@ export async function isMerkeziGuncelle(db: Db, id: number, kayit: IsMerkeziGunc
     varMi: () => sorgular.isMerkeziVarMi(db, id),
     bulunamadiIletisi: 'İş merkezi bulunamadı.',
   }));
+}
+
+// Tesis şablonu (2166-1 a): eksik iş merkezi ve istasyonları açar, var olana dokunmaz. Uç tek transaction'dır: bir kayıt
+// reddedilirse hiçbiri açılmaz. Kod çakışması planda ayıklanır; arada başkası aynı kodu açarsa kısıt 409 döner.
+export async function tesisSablonunuUygula(db: Db): Promise<TesisSablonuSonucu> {
+  const plan = sablonPlani(TESIS_SABLONU, await sorgular.isMerkezleriListele(db, true),
+    (await sorgular.istasyonlariListele(db, true)).map((i) => i.kod));
+  const acilanMerkezler: string[] = [];
+  const acilanIstasyonlar: string[] = [];
+  for (const m of plan.merkezler) {
+    let merkezId = m.mevcutId;
+    if (merkezId === null) {
+      merkezId = (await kayittaReddet(m.sablon.kod, null, () => isMerkeziEkle(db, { kod: m.sablon.kod, ad: m.sablon.ad, aciklama: m.sablon.aciklama, aktif: true }))).id;
+      acilanMerkezler.push(m.sablon.kod);
+    }
+    for (const i of m.istasyonlar) {
+      await kayittaReddet(i.kod, null, () => istasyonEkle(db, {
+        kod: i.kod, ad: i.ad, isMerkeziId: merkezId, tip: i.tip, sorumluKisiId: null, kapasiteKaynagi: i.kapasiteKaynagi, uretimAlani: false, aktif: true,
+      }));
+      acilanIstasyonlar.push(i.kod);
+    }
+  }
+  return { acilanMerkezler, acilanIstasyonlar, atlananlar: [...plan.atlananlar] };
 }
 
 export const isMerkeziSil = (db: Db, id: number): Promise<void> =>
