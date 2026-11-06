@@ -459,6 +459,23 @@ describe('oturum (gerçek PostgreSQL)', () => {
   MATRIS.planlama_proje?.push('uretim-emirleri.kapanis-oku');
   // GKK kalite istasyonunun operasyonudur, terminalden girilir (1209 b, 29.10.2026): kalite terminalde sayar.
   MATRIS.kalite?.push('terminal.uret');
+  // Müdür rolleri (2177-1): genel müdür ve yardımcısı Müdür'ün yetkileriyle; alan müdürleri ekip rolü, alan onayları ve ekip onaylarıyla.
+  const EKIP_ONAYI = ['ik.izin-onay', 'ik.devam-onay', 'ik.pozisyon-onay', 'kisiler.oku', 'sayfa.personel'];
+  const birlesim = (...kumeler: readonly (readonly string[] | undefined)[]): string[] => [...new Set(kumeler.flatMap((k) => k ?? []))];
+  MATRIS.genel_mudur = birlesim(MATRIS.mudur);
+  MATRIS.genel_mudur_yardimcisi = birlesim(MATRIS.mudur);
+  MATRIS.planlama_muduru = birlesim(MATRIS.planlama_proje, EKIP_ONAYI, [
+    'rota.onayla', 'plan.bedel-ayari', 'siparisler.termin-dene', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-onay',
+  ]);
+  MATRIS.satin_alma_muduru = birlesim(MATRIS.satin_alma, EKIP_ONAYI, ['satin-alma.onayla']);
+  MATRIS.uretim_muduru = birlesim(MATRIS.vardiya_sorumlusu, EKIP_ONAYI, [
+    'sayfa.uretim-emirleri', 'sayfa.akis', 'sayfa.cizelge', 'sayfa.matris', 'sayfa.mesai', 'sayfa.stok', 'sayfa.oee', 'sayfa.kalite-merkezi',
+    'sayfa.durus-nedenleri', 'sayfa.plan', 'sayfa.recete-rota', 'sayfa.smartes', 'sayfa.atolye', 'sayfa.taleplerim', 'sayfa.malzemeler',
+    'sayfa.rota', 'sayfa.emirler', 'sayfa.kalibrasyon', 'vardiya.gecmis-yaz', 'vardiya.durus-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason',
+    'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay', 'istasyonlar.yaz', 'oee.oku',
+    'kalite-merkezi.oku', 'durus-nedenleri.yaz', 'cnc-kurulum.yaz', 'recete-rota.oku', 'satin-alma.talep-ac', 'rota.emre-kopyala',
+    'plan.planlama-oku', 'arkon.yansima-oku', 'arkon.yansima-yeniden',
+  ]);
   const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
     'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
 
@@ -475,6 +492,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
         { kod: 'bakim', ad: 'Bakım', yonetici: false },
         { kod: 'cam', ad: 'CAM', yonetici: false },
         { kod: 'depo', ad: 'Depo', yonetici: false },
+        { kod: 'genel_mudur', ad: 'Genel Müdür', yonetici: false },
+        { kod: 'genel_mudur_yardimcisi', ad: 'Genel Müdür Yardımcısı', yonetici: false },
         { kod: 'guvenlik_gorevlisi', ad: 'Güvenlik Görevlisi', yonetici: false },
         { kod: 'idari_isler', ad: 'İdari İşler', yonetici: false },
         { kod: 'insan_kaynaklari', ad: 'İnsan Kaynakları', yonetici: false },
@@ -482,10 +501,13 @@ describe('oturum (gerçek PostgreSQL)', () => {
         { kod: 'mudur', ad: 'Müdür', yonetici: false },
         { kod: 'muhasebe_finans', ad: 'Muhasebe ve Finans', yonetici: false },
         { kod: 'operator', ad: 'Operatör', yonetici: false },
+        { kod: 'planlama_muduru', ad: 'Planlama Müdürü', yonetici: false },
         { kod: 'planlama_proje', ad: 'Planlama ve Proje', yonetici: false },
         { kod: 'satin_alma', ad: 'Satın Alma', yonetici: false },
+        { kod: 'satin_alma_muduru', ad: 'Satın Alma Müdürü', yonetici: false },
         { kod: 'satis', ad: 'Satış', yonetici: false },
         { kod: 'sevkiyat', ad: 'Sevkiyat', yonetici: false },
+        { kod: 'uretim_muduru', ad: 'Üretim Müdürü', yonetici: false },
         { kod: 'vardiya_sorumlusu', ad: 'Vardiya Sorumlusu', yonetici: false },
         { kod: 'yonetici', ad: 'Yönetici', yonetici: true },
       ],

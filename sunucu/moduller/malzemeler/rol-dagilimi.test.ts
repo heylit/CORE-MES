@@ -172,6 +172,11 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     sevkiyat: HIC,
     vardiya_sorumlusu: HIC,
     guvenlik_gorevlisi: HIC,
+    genel_mudur: { ...ONAYCI, ayar: 200 },
+    genel_mudur_yardimcisi: { ...ONAYCI, ayar: 200 },
+    planlama_muduru: { ...YAZAR, ayar: 200 },
+    satin_alma_muduru: YAZAR,
+    uretim_muduru: { ...HIC, sayfa: true },
   };
 
   test('her rol: sayfa, kart açma, onaylama ve ayar onaylı dağılımdaki gibidir; okuma yalnız sayfası olan role açık', async () => {
@@ -195,7 +200,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     }
   });
 
-  test('rol satırları: malzeme işlemleri onaylı listedir; tanım ve ayar işlemi yalnız müdür ve planlamada', async () => {
+  test('rol satırları: malzeme işlemleri onaylı listedir; tanım ve ayar işlemi yalnız müdür rolleri ve planlamada', async () => {
     const satirlar = (await vt().sorgu<{ kod: string; islem: string }>(
       "SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem LIKE '%malzemeler%'",
     )).map((s) => `${s.kod}:${s.islem}`).sort();
@@ -203,10 +208,16 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     assert.deepEqual(satirlar, [
       'cam:malzemeler.yaz', 'cam:sayfa.malzemeler',
       'depo:malzemeler.yaz', 'depo:sayfa.malzemeler',
+      'genel_mudur:malzemeler.onayla', 'genel_mudur:malzemeler.tanim-yaz', 'genel_mudur:malzemeler.yaz', 'genel_mudur:sayfa.malzemeler',
+      'genel_mudur_yardimcisi:malzemeler.onayla', 'genel_mudur_yardimcisi:malzemeler.tanim-yaz', 'genel_mudur_yardimcisi:malzemeler.yaz',
+      'genel_mudur_yardimcisi:sayfa.malzemeler',
       'kalite:malzemeler.onayla', 'kalite:malzemeler.yaz', 'kalite:sayfa.malzemeler',
       'mudur:malzemeler.onayla', 'mudur:malzemeler.tanim-yaz', 'mudur:malzemeler.yaz', 'mudur:sayfa.malzemeler',
+      'planlama_muduru:malzemeler.tanim-yaz', 'planlama_muduru:malzemeler.yaz', 'planlama_muduru:sayfa.malzemeler',
       'planlama_proje:malzemeler.tanim-yaz', 'planlama_proje:malzemeler.yaz', 'planlama_proje:sayfa.malzemeler',
       'satin_alma:malzemeler.yaz', 'satin_alma:sayfa.malzemeler',
+      'satin_alma_muduru:malzemeler.yaz', 'satin_alma_muduru:sayfa.malzemeler',
+      'uretim_muduru:sayfa.malzemeler',
     ]);
   });
 });
