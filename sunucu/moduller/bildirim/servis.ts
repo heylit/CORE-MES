@@ -8,11 +8,13 @@ import type { CagriEkibi } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import {
   ALICI_AYARLI_TURLER, BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, CAGRI_EKIP_ADLARI, type Bildirim, type BildirimAliciDegistirGovdesi, type BildirimAlicilariCevabi, type BildirimGosterimDegistirGovdesi, type BildirimGosterimleriCevabi, type CagriEkiplerimCevabi, type CagriYonlendirmeCevabi, type CagriYonlendirmeDegistirGovdesi, type BildirimListeDurumu, type BildirimSayacCevabi,
   type BildirimTercihDegistirGovdesi, type BildirimTercihleriCevabi, type BildirimTuru, type TumunuOkunduCevabi, type YayinSimgesi, type YayinTuru, turSinifi,
+  type BildirimPushAbonelikGovdesi, type BildirimPushDurumuCevabi, type BildirimPushTurDegistirGovdesi, type BildirimPushTurleriCevabi, turPushVarsayilani,
 } from '#paylasilan/sozlesme/bildirim.ts';
 import { kisiAdlari, kisiSecenekleri, kisilerinIslemleri, rolSecenekleri, rollerdekiKisiler } from '../kisiler/disari.ts';
 import {
   ACIK_KANALLAR, ONAY_ILETILERI, alicilariSec, epostaSecilebilir, kaynakModulu, metniHazirla, olmayanKimlikler, otomatikGosterim, tekilAnahtar, varsayilanGosterim, varsayilanMi, tercihHatasi, yolTureUyar,
 } from './kurallar.ts';
+import { izinliUcNoktaMi, ortamPushAyari } from './push.ts';
 import * as s from './sorgular.ts';
 
 const BULUNAMADI = 'Bildirim bulunamadı.';
@@ -55,6 +57,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
       ortada: gosterim.ortada, onayIstenir: gosterim.onayIstenir, sinif: turSinifi(olay.tur),
     });
   }
+  if (alicilar.length > 0 && await pushTuruAcik(db, olay.tur)) await s.pushKuyrugaIsaretle(db, alicilar);
   return alicilar.length;
 }
 
@@ -269,4 +272,48 @@ export async function ekipCagrisiBildir(db: Db, c: EkipCagrisi): Promise<number>
     tur: 'arkon.ekip-cagrisi', baslik: `${CAGRI_EKIP_ADLARI[c.ekip]} çağrısı: ${c.yer}`, metin: c.not ?? null, yol: null,
     kaynakKimlik: c.cagriKimligi, kisiler, haric: c.haric ?? null,
   });
+}
+
+// Web Push (ADR 0031): kuyruğa işaret çağıranın transaction'ındadır; istek zamanlanmış işte, transaction dışında atılır.
+async function pushTuruAcik(db: Db, tur: BildirimTuru): Promise<boolean> {
+  if (ortamPushAyari() === null) return false;
+  return (await s.pushTurAcikMi(db, tur)) ?? turPushVarsayilani(tur);
+}
+
+export async function pushDurumu(db: Db, kullanici: Kullanici): Promise<BildirimPushDurumuCevabi> {
+  const ayar = ortamPushAyari();
+  return { acik: ayar !== null, acikAnahtar: ayar?.acikAnahtar ?? null, cihazSayisi: await s.pushCihazSayisi(db, kullanici.id) };
+}
+
+const PUSH_KAPALI = 'Uygulama kapalıyken bildirim bu sunucuda açık değil.';
+
+// Kişi yalnız kendi cihazını açar. Uç noktayı bilen cihazın kendisidir (push servisinin verdiği tahmin edilemez adres): aynı cihazda
+// başka kişi oturum açıp abone olursa abonelik ona geçer, önceki kişi o cihazdan sinyal almaz. Adres izin listesindeki push servislerinden biri değilse reddedilir.
+export async function pushAboneOl(db: Db, kullanici: Kullanici, govde: BildirimPushAbonelikGovdesi): Promise<BildirimPushDurumuCevabi> {
+  if (ortamPushAyari() === null) throw dogrulama(PUSH_KAPALI);
+  if (!izinliUcNoktaMi(govde.ucNokta)) throw dogrulama('Bu tarayıcının bildirim servisi desteklenmiyor.');
+  await s.pushAboneligiYaz(db, kullanici.id, govde.ucNokta);
+  return pushDurumu(db, kullanici);
+}
+
+export async function pushAbonelikSil(db: Db, kullanici: Kullanici, govde: BildirimPushAbonelikGovdesi): Promise<BildirimPushDurumuCevabi> {
+  if (!await s.pushAboneligiSil(db, kullanici.id, govde.ucNokta)) throw bulunamadi('Bu cihazın aboneliği bulunamadı.');
+  return pushDurumu(db, kullanici);
+}
+
+export async function pushTurleri(db: Db): Promise<BildirimPushTurleriCevabi> {
+  const ayarli = new Map((await s.pushTurAyarlari(db)).map((a) => [a.tur, a.acik]));
+  return {
+    satirlar: BILDIRIM_TUR_ANAHTARLARI.map((tur) => {
+      const t = BILDIRIM_TURLERI[tur];
+      const varsayilan = turPushVarsayilani(tur);
+      const acik = ayarli.get(tur) ?? varsayilan;
+      return { tur, baslik: t.baslik, onem: t.onem, kaynakModul: kaynakModulu(tur), acik, varsayilan: acik === varsayilan };
+    }),
+  };
+}
+
+export async function pushTuruYaz(db: Db, kullanici: Kullanici, tur: BildirimTuru, govde: BildirimPushTurDegistirGovdesi): Promise<BildirimPushTurleriCevabi> {
+  await s.pushTurYaz(db, tur, govde.acik, turPushVarsayilani(tur), kullanici.id);
+  return pushTurleri(db);
 }

@@ -6,7 +6,9 @@ import { renderHook } from '@testing-library/react';
 import type { Bildirim, BildirimListeCevabi, BildirimSayacCevabi, BildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { gorunenUstEylemler } from '../../ortak/rota/ust-eylemler.ts';
-import type { CihazIzni, CihazOrtami } from './cihaz.ts';
+import type { CihazIzni, CihazOrtami, PushOrtami } from './cihaz.ts';
+import { anahtarBaytlari } from './cihaz.ts';
+import { Tercihler } from './Bildirimler.tsx';
 import { rotalar } from './rotalar.tsx';
 import { ZilDugmesi, useCihazBildirimi, ustEylemler } from './ust-eylem.tsx';
 
@@ -263,5 +265,72 @@ describe('Cihaz bildirimi (342 a)', () => {
       expect(screen.queryByRole('button', { name: 'Cihaz bildirimini aç' })).toBeNull();
       cleanup();
     }
+  });
+});
+
+// ADR 0031: kişi bu cihazı kendisi açar ve kapatır; sunucuda kapalıysa ya da tarayıcı desteklemiyorsa kart görünmez.
+describe('uygulama kapalıyken cihaz bildirimi (Web Push)', () => {
+  const UC = 'https://fcm.googleapis.com/fcm/send/deneme';
+  function pushSahte(destek = true, baslangic: string | null = null) {
+    let mevcut = baslangic;
+    const ortam: PushOrtami = {
+      destek,
+      mevcut: vi.fn(() => Promise.resolve(mevcut)),
+      aboneOl: vi.fn(() => { mevcut = UC; return Promise.resolve(UC); }),
+      birak: vi.fn(() => { const m = mevcut; mevcut = null; return Promise.resolve(m); }),
+    };
+    return ortam;
+  }
+  function tercihAc(push: PushOrtami) {
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={istemci}>
+        <BildirimSaglayici>
+          <MemoryRouter initialEntries={['/profil/bildirimler/tercihler']}><Tercihler push={push} /></MemoryRouter>
+        </BildirimSaglayici>
+      </QueryClientProvider>,
+    );
+  }
+  const DURUM = { acik: true, acikAnahtar: 'BAAA', cihazSayisi: 0 };
+
+  it('açınca izin ister, abone olur ve adresi sunucuya yazar; kapatınca bırakır ve siler', async () => {
+    const istekler = sunucuKur({
+      'GET /bildirimler/tercihler': () => json(200, TERCIH),
+      'GET /bildirimler/push': () => json(200, DURUM),
+      'POST /bildirimler/push/abone-ol': () => json(200, { ...DURUM, cihazSayisi: 1 }),
+      'POST /bildirimler/push/abonelik-sil': () => json(200, DURUM),
+    });
+    const push = pushSahte();
+    tercihAc(push);
+    const anahtar = await screen.findByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' });
+    expect((anahtar as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText(/içeriği şirket dışına çıkmaz/)).toBeTruthy();
+    fireEvent.click(anahtar);
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/bildirimler/push/abone-ol')?.govde).toEqual({ ucNokta: UC }));
+    expect(push.aboneOl).toHaveBeenCalledWith('BAAA');
+    await waitFor(() => expect((screen.getByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' }) as HTMLInputElement).checked).toBe(true));
+    fireEvent.click(screen.getByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' }));
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/bildirimler/push/abonelik-sil')?.govde).toEqual({ ucNokta: UC }));
+  });
+
+  it('sunucuda kapalıysa ya da tarayıcı desteklemiyorsa kart görünmez', async () => {
+    const istekler = sunucuKur({
+      'GET /bildirimler/tercihler': () => json(200, TERCIH),
+      'GET /bildirimler/push': () => json(200, { acik: false, acikAnahtar: null, cihazSayisi: 0 }),
+    });
+    tercihAc(pushSahte());
+    await screen.findByRole('switch', { name: 'Makine durdu: mesaj' });
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/bildirimler/push')).toBe(true));
+    expect(screen.queryByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' })).toBeNull();
+    cleanup();
+    const ikinci = sunucuKur({ 'GET /bildirimler/tercihler': () => json(200, TERCIH), 'GET /bildirimler/push': () => json(200, DURUM) });
+    tercihAc(pushSahte(false));
+    await screen.findByRole('switch', { name: 'Makine durdu: mesaj' });
+    expect(ikinci.some((i) => i.yol === '/bildirimler/push')).toBe(false);
+    expect(screen.queryByRole('switch', { name: 'Uygulama kapalıyken bu cihaza bildir' })).toBeNull();
+  });
+
+  it('açık anahtar base64url çözülür', () => {
+    expect([...anahtarBaytlari('AQID_-8')]).toEqual([1, 2, 3, 255, 239]);
   });
 });

@@ -570,6 +570,39 @@ test('ihlaller kural türünden bağımsız satır sırasıyla döner', () => {
   assert.deepEqual(satirlar('sunucu/moduller/stok/servis.test.ts', icerik), [['a', 2], ['h', 3]]);
 });
 
+test('kural i (ADR 0031): bildirim modülünde dış istek ve ağ ithali yalnız push.ts\'de', () => {
+  for (const satir of [
+    "const c = await fetch('https://ornek.invalid/x');",
+    "import { request } from 'node:https';",
+    "import http from 'node:http';",
+    "import { connect } from 'node:net';",
+    "const tls = await import('node:tls');",
+    "import { request } from 'undici';",
+  ]) {
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/servis.ts', satir), ['i'], satir);
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.ts', satir), [], satir);
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.test.ts', satir), [], satir);
+  }
+  // Başka modülün kurum içi istisnaları kendi ADR'leriyle sınanır; bu kural onlara dokunmaz.
+  assert.deepEqual(kurallar('sunucu/moduller/smartes/istemci.ts', "const c = await fetch(adres);"), []);
+  assert.deepEqual(kurallar('sunucu/moduller/bildirim/servis.ts', "import { createHash } from 'node:crypto';"), []);
+});
+
+test('kural i (ADR 0031): push servisi adı uygulama kodunda yalnız push.ts\'de', () => {
+  for (const satir of [
+    "const a = 'https://fcm.googleapis.com/fcm/send/x';",
+    "// updates.push.services.mozilla.com",
+    "const b = 'web.push.apple.com';",
+    "const c = '.notify.windows.com';",
+  ]) {
+    for (const dosya of ['sunucu/moduller/stok/servis.ts', 'istemci/src/ortak/pwa/calisan.ts', 'paylasilan/sozlesme/bildirim.ts', 'sunucu/cekirdek/ayar.ts']) {
+      assert.deepEqual(kurallar(dosya, satir), ['i'], `${dosya}: ${satir}`);
+    }
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.ts', satir), [], satir);
+    assert.deepEqual(kurallar('sunucu/moduller/bildirim/push.test.ts', satir), [], satir);
+  }
+});
+
 test('kural h: test dosyası kaynak dosyasını metin olarak okumaz', () => {
   const okumalar = [
     "const metin = readFileSync('istemci/src/App.tsx', 'utf8');",

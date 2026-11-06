@@ -61,7 +61,7 @@ describe('service worker kaydı', () => {
   });
 });
 
-function calisaniKurSahte(surum = 'yeni') {
+function calisaniKurSahte(surum = 'yeni', veri: () => Promise<unknown> = () => Promise.resolve({ satirlar: [] })) {
   const dinleyiciler = new Map<string, (olay: never) => void>();
   const onbellekler = new Map<string, Map<string, CalisanCevabi>>();
   const acilan: string[] = [];
@@ -89,6 +89,8 @@ function calisaniKurSahte(surum = 'yeni') {
       },
     },
     getir,
+    veriGetir: vi.fn(() => veri()),
+    bildirimGoster: vi.fn(() => Promise.resolve()),
     pencereler: {
       tumu: () => Promise.resolve(acikPencereler),
       ac: vi.fn(() => Promise.resolve()),
@@ -116,7 +118,12 @@ function calisaniKurSahte(surum = 'yeni') {
     await bekle;
     return kapat;
   }
-  return { iste, etkinlestir, bildirimeBas, onbellekler, acilan, getir, ortam, pencere };
+  async function sinyal() {
+    let bekle: Promise<unknown> = Promise.resolve();
+    dinleyiciler.get('push')?.({ waitUntil: (s: Promise<unknown>) => { bekle = s; } } as never);
+    await bekle;
+  }
+  return { iste, etkinlestir, bildirimeBas, sinyal, onbellekler, acilan, getir, ortam, pencere };
 }
 
 describe('service worker önbelleği', () => {
@@ -176,5 +183,34 @@ describe('service worker cihaz bildirimi (342 a)', () => {
       await c.bildirimeBas(data);
       expect(c.pencere.navigate).toHaveBeenCalledWith('https://tmi.yerel/profil/bildirimler');
     }
+  });
+});
+
+describe('Web Push sinyali (ADR 0031)', () => {
+  it('ayrıntıyı aynı kökenden çeker, okunmamışları cihaz bildirimiyle aynı etiketle gösterir', async () => {
+    const c = calisaniKurSahte('yeni', () => Promise.resolve({
+      satirlar: [{ id: 7, baslik: 'Makine durdu', metin: 'Arıza', yol: '/istasyonlar' }, { id: 8, baslik: 'Onay bekliyor', metin: null, yol: null }],
+    }));
+    await c.sinyal();
+    expect(c.ortam.veriGetir).toHaveBeenCalledWith('https://tmi.yerel/api/bildirimler?durum=okunmamis&sayfaBoyu=3');
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('Makine durdu', { body: 'Arıza', tag: 'tmi-bildirim-7', data: { yol: '/istasyonlar' } });
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('Onay bekliyor', { body: '', tag: 'tmi-bildirim-8', data: { yol: '/profil/bildirimler' } });
+  });
+
+  it('iç sunucuya ulaşamazsa ya da okunmamış yoksa yalnız genel metin gösterir', async () => {
+    for (const veri of [() => Promise.reject(new Error('ağ yok')), () => Promise.resolve({ satirlar: [] }), () => Promise.resolve('bozuk')]) {
+      const c = calisaniKurSahte('yeni', veri);
+      await c.sinyal();
+      expect(c.ortam.bildirimGoster).toHaveBeenCalledTimes(1);
+      expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('CORE: yeni bildirim', { body: '', tag: 'core-push-genel', data: { yol: '/profil/bildirimler' } });
+    }
+  });
+
+  it('en çok üç bildirim gösterir; uygulama dışı yol Bildirimler sayfasına düşer', async () => {
+    const satirlar = [1, 2, 3, 4, 5].map((id) => ({ id, baslik: `B${String(id)}`, metin: null, yol: 'https://baska.yerel/x' }));
+    const c = calisaniKurSahte('yeni', () => Promise.resolve({ satirlar }));
+    await c.sinyal();
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledTimes(3);
+    expect(c.ortam.bildirimGoster).toHaveBeenCalledWith('B1', { body: '', tag: 'tmi-bildirim-1', data: { yol: '/profil/bildirimler' } });
   });
 });

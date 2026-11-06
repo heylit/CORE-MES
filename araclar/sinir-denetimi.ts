@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export interface Ihlal {
   dosya: string;
   satir: number;
-  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'h';
+  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'h' | 'i';
   mesaj: string;
 }
 
@@ -27,6 +27,13 @@ const SQL_CAGRISI = /\.(sorgu|tek)\s*[<(]/;
 // Sezgisel: fs okuma adları ve Vite'ın dosyayı metin olarak veren ithal biçimleri. '?url' metin vermez.
 const KAYNAK_OKUMA =
   /\b(?:readFile(?:Sync)?|createReadStream)\b|\?(?:raw|inline)['"`&]|\bas:\s*['"`]raw['"`]|\bquery:\s*\{\s*raw\b/;
+
+// ADR 0031 madde 1: bildirim modülünde dışarıya yalnız push.ts istek atar; push servisi adları yalnız orada geçer.
+const PUSH_DOSYASI = 'sunucu/moduller/bildirim/push.ts';
+const BILDIRIM_SUNUCU = 'sunucu/moduller/bildirim/';
+const DIS_ISTEK_CAGRISI = /\bfetch\s*\(/;
+const AG_ITHALI = /^(?:node:)?(?:https?|http2|net|tls|dgram|undici)$/;
+const PUSH_SERVIS_ADI = /googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com/;
 
 const TAKMA_ADLAR: ReadonlyArray<readonly [string, string]> = [
   ['#paylasilan/', 'paylasilan/'],
@@ -134,6 +141,9 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
   const ihlaller: Ihlal[] = [];
   const sqlDenetlenir = modulAdi(dosya) !== null && !sqlSerbestMi(dosya);
   const okumaDenetlenir = testDosyasiMi(dosya) && TARANAN_KLASORLER.some((klasor) => altinda(dosya, klasor));
+  const pushDisi = dosya !== PUSH_DOSYASI && !testKenariMi(dosya);
+  const disIstekDenetlenir = pushDisi && dosya.startsWith(BILDIRIM_SUNUCU);
+  const pushAdiDenetlenir = pushDisi && TARANAN_KLASORLER.some((klasor) => altinda(dosya, klasor));
 
   icerik.split(/\r?\n/).forEach((satir, sira) => {
     const satirNo = sira + 1;
@@ -143,11 +153,23 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
       ihlaller.push({ dosya, satir: satirNo, kural: 'h', mesaj: 'test kaynak dosyasını metin olarak okumaz; davranışı ölçer' });
     }
 
+    if (pushAdiDenetlenir && PUSH_SERVIS_ADI.test(satir)) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `push servisi adı yalnız ${PUSH_DOSYASI} içinde geçer (ADR 0031)` });
+    }
+
     if (yorumSatiriMi(satir)) return;
 
     for (const hedef of satirdakiHedefler(dosya, satir)) {
       const sonuc = ithalKurali(dosya, hedef);
       if (sonuc) ihlaller.push({ dosya, satir: satirNo, ...sonuc });
+    }
+
+    if (disIstekDenetlenir && ITHAL_DESENLERI.some((desen) => [...satir.matchAll(desen)].some((e) => AG_ITHALI.test(e[1] ?? '')))) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `bildirim modülünde ağ ithali yalnız ${PUSH_DOSYASI} içinde olur (ADR 0031)` });
+    }
+
+    if (disIstekDenetlenir && DIS_ISTEK_CAGRISI.test(satir)) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `bildirim modülünde dış istek yalnız ${PUSH_DOSYASI} içinde olur (ADR 0031)` });
     }
 
     if (sqlDenetlenir && SQL_CAGRISI.test(satir)) {

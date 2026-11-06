@@ -1,5 +1,5 @@
 import { calisaniKur } from './calisan.ts';
-import type { CalisanOrtami, CalisanPenceresi } from './calisan.ts';
+import type { CalisanOrtami, CalisanPenceresi, GosterilenBildirim } from './calisan.ts';
 
 // Derlemede /sw.js olarak tek dosya çıkar (vite-eklentisi.ts); çalışan ithal edemez, bu yüzden istemciyle paylaşılan modül (surum.ts) ithal edilmez.
 // Sürüm, derleme anında vite.config.ts'nin yazdığı değerdir; her derleme yeni önbellek adı getirir.
@@ -10,6 +10,7 @@ interface Kapsam {
   location: { href: string };
   addEventListener(ad: string, fn: (olay: never) => void): void;
   skipWaiting(): Promise<void>;
+  registration: { showNotification(baslik: string, secenek: GosterilenBildirim): Promise<void> };
   clients: {
     claim(): Promise<void>;
     matchAll(ayar: { type: 'window'; includeUncontrolled: boolean }): Promise<CalisanPenceresi[]>;
@@ -25,6 +26,12 @@ const ortam: CalisanOrtami = {
   sahiplen: () => kapsam.clients.claim(),
   onbellekler: caches as unknown as CalisanOrtami['onbellekler'],
   getir: (istek) => fetch(istek as unknown as Request) as unknown as ReturnType<CalisanOrtami['getir']>,
+  veriGetir: async (adres) => {
+    const cevap = await fetch(adres, { credentials: 'same-origin', headers: { accept: 'application/json' } });
+    if (!cevap.ok) throw new Error(`HTTP ${String(cevap.status)}`);
+    return cevap.json() as Promise<unknown>;
+  },
+  bildirimGoster: (baslik, secenek) => kapsam.registration.showNotification(baslik, secenek),
   pencereler: {
     tumu: () => kapsam.clients.matchAll({ type: 'window', includeUncontrolled: true }),
     ac: (adres) => kapsam.clients.openWindow(adres),

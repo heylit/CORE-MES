@@ -28,7 +28,7 @@ export const SEKME_SIMGESI = '/simgeler/simge-32.png';
 export const WEB_BILDIRIMI = {
   name: 'CORE',
   short_name: 'CORE',
-  description: 'Atölyenin işletim sistemi',
+  description: 'Sanayinin işletim sistemi',
   lang: 'tr',
   id: '/',
   start_url: '/',
