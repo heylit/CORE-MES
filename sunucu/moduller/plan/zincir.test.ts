@@ -82,7 +82,9 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, emirden canlıya ve atöl
     const { calisma: c2, surum: s2 } = await calismaOku();
     assert.ok(s2 !== null);
     const ilkIs = Object.entries(c2.plan!.ops).filter(([, r]) => r.m === String(makineA)).sort((a, b) => a[1].S - b[1].S)[0]!;
-    const baslangic = Math.round((ilkIs[1].S + 1) * 4) / 4;
+    // Atölye komutu çalışmada şimdi yoksa 07:00'ı şimdi sayar (atolye-komutlari-kurallar.ts BASLANGIC_SAATI); motor gece gerçek saati kullanır
+    // (741 a). Hedef saat ikisinin de ilerisinde seçilir, test günün her saatinde aynı sonucu verir; tutarsızlık kart 2187'dedir.
+    const baslangic = Math.max(Math.round((ilkIs[1].S + 1) * 4) / 4, 7);
     const t = await tamam<AtolyeKomutuCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/is-tasi', { isId: ilkIs[0], tezgah: String(makineA), baslangic, calismaSurumu: s2 });
     assert.equal(t.oncekiSurum, s2);
     assert.ok(t.calismaSurumu > s2);
