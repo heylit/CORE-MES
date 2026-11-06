@@ -10,10 +10,10 @@ import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
-import { siraAdimi, useHamleci } from '../hamle/hamle.ts';
+import { hamleYapisi, siraAdimi, useHamleci } from '../hamle/hamle.ts';
 
 // Ayrıntı sekmesinin seçim panelleri: iş (c-masa.betik opDenetci), sipariş (isDenetci), tezgâh (o-tahta.betik tbTezPaneli).
-// Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak, sıra ve öne almak motorla gelir (357 b).
+// Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak ve sıra motorla gelir (357 b); öne al motorun önizlemeli hamlesidir (2129-1 b).
 export interface DenetciOzellikleri {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; komut: CalismaKomutu | null; planYaz: boolean; planKilitle: boolean;
   opSec: (id: string) => void; secimTemizle: () => void; tezKapat: () => void; mercekSec: (m: CizelgeMercegi) => void; kuyrukAc: (m: string) => void;
@@ -106,7 +106,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
       <div className="tc-pym-dugmeler tc-pym-hamleler">
         {kilit ? <Dg ad="Kilidi aç" simge="lock" yap={kilitAc} not="Kilitleme yetkiniz yok." />
           : <Dg ad="Kilitle" simge="lock" yap={kilitle} not="Kilitleme yetkiniz yok." ipucu="Bu tezgâhta, bu saatten erken başlamasın" />}
-        <Dg ad="Siparişi öne al" simge="up" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
+        <Dg ad="Siparişi öne al" simge="up" {...(yaz ? hamleYapisi(h, (x) => { x.oneAl(r.job); }) : { not: 'Plan yazma yetkiniz yok.' })} ipucu="Öne almanın yollarını dener, en iyisini önizler" />
       </div>
       {!r.fas && (
         <div className="tc-pym-bolum">
@@ -155,6 +155,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
 const ONCELIK_TON: Record<number, 'hata' | 'pasif' | 'bilgi'> = { 1: 'hata', 3: 'pasif' };
 export function IsDenetci({ jid, ...o }: DenetciOzellikleri & { jid: string }) {
   const { c, p, cx, planYaz: yaz } = o; const D = c.D;
+  const h = useHamleci();
   const s = D.siparisler.find((z) => z.id === jid); if (!s) return null;
   const j = p.J[jid]; const a = ayristir(p, cx, jid); const onc = Number(s.oncelik); const lb = kapasitesizEnErken(c, jid);
   return (
@@ -178,7 +179,7 @@ export function IsDenetci({ jid, ...o }: DenetciOzellikleri & { jid: string }) {
         {s.serbest && <><dt>Serbest</dt><dd className="tc-pym-mono">{s.serbest}</dd></>}
       </dl>
       <div className="tc-pym-dugmeler tc-pym-hamleler">
-        <Dg ad="Siparişi öne al" simge="up" not={yaz ? MOTOR_NOTU : 'Plan yazma yetkiniz yok.'} />
+        <Dg ad="Siparişi öne al" simge="up" {...(yaz ? hamleYapisi(h, (x) => { x.oneAl(jid); }) : { not: 'Plan yazma yetkiniz yok.' })} ipucu="Öne almanın yollarını dener, en iyisini önizler" />
         <Dg ad="Düzenle" simge="edit" not={YOK_NOTU} />
       </div>
       {a && a !== 'eksik' && (

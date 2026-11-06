@@ -20,7 +20,7 @@ import { bilgiAl, type Ortam } from './Pano.tsx';
 // yanında açılır, telefonda alttan; dışına dokunmak ve Esc kapatır. Panonun kabı konum kabı olduğundan kart sayfanın gövdesine çizilir.
 export type AcikKart =
   | { tur: 'op'; id: string } | { tur: 'suz' } | { tur: 'geri' } | { tur: 'gonder' } | { tur: 'menu' } | { tur: 'dondurma' } | { tur: 'gun' }
-  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string } | { tur: 'olay'; m?: string } | { tur: 'mesai'; m: string };
+  | { tur: 'termin'; j: string } | { tur: 'gunluk'; m: string } | { tur: 'olay'; m?: string; on?: OlayTuru } | { tur: 'mesai'; m: string };
 export interface Ankraj { x: number; y: number }
 type Bildir = ReturnType<typeof useBildirim>['bildir'];
 
@@ -208,7 +208,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         ),
       };
     case 'gun': return gunOzeti(ort);
-    case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} m={kart.m} /> } : null;
+    case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} m={kart.m} on={kart.on} /> } : null;
     case 'mesai': return ort.ekMesai ? { ad: `${kart.m} ek mesai`, simge: 'clock', ic: <EkMesai ort={ort} m={kart.m} ekle={ort.ekMesai} /> } : null;
     case 'termin': {
       const s = bilgiAl(ort, kart.j); if (!s) return null; const metin = terminMetni(c, s);
@@ -321,12 +321,12 @@ function EkMesai({ ort, m, ekle }: { ort: Ortam; m: string; ekle: (m: string, gu
   );
 }
 
-function OlayFormu({ ort, ekle, m }: { ort: Ortam; ekle: (o: AtolyeOlayi) => Promise<boolean>; m?: string | undefined }) {
+function OlayFormu({ ort, ekle, m, on }: { ort: Ortam; ekle: (o: AtolyeOlayi) => Promise<boolean>; m?: string | undefined; on?: OlayTuru | undefined }) {
   const D = ort.c.D;
   const tezgahlar = D.tezgahlar; const urunler = D.urunler; const malzemeler = D.malzemeler ?? []; const fasoncular = D.fasoncular ?? [];
   const vardiyalar = (D.vardiyalar ?? []).flatMap((v) => (typeof v.id === 'string' ? [{ id: v.id, ad: typeof v.ad === 'string' ? v.ad : v.id }] : []));
   const gruplar = [...new Set(tezgahlar.map((t) => (typeof t.grup === 'string' ? t.grup : '')).filter(Boolean))];
-  const [tur, setTur] = useState<OlayTuru>('ariza');
+  const [tur, setTur] = useState<OlayTuru>(on ?? 'ariza');
   const [f, setF] = useState<Record<OlayAlani, string>>({ m: m ?? tezgahlar[0]?.id ?? '', ofs: '0', saat: '8', urun: urunler[0]?.id ?? '', adet: '1', termin: '',
     kod: malzemeler[0]?.kod ?? '', gun: '1', vardiya: vardiyalar[0]?.id ?? '', grup: gruplar[0] ?? 'ayar', n: '1', f: fasoncular[0]?.id ?? '', tarih: '' });
   const [gidiyor, setGidiyor] = useState(false);

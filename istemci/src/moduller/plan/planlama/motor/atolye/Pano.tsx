@@ -102,7 +102,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     });
   }, [p, sec]);
   useEffect(() => { if (!parla) return undefined; const z = setTimeout(() => setParla(null), 1600); return () => clearTimeout(z); }, [parla]);
-  // Başka ekrandan gelen istek (zz36 istekIsle): tezgâhta süzgeç ve tezgâh günlüğü, siparişte ray ve sipariş; işlenince adresten silinir.
+  // Başka ekrandan gelen istek (zz36 istekIsle): tezgâhta süzgeç ve tezgâh günlüğü, siparişte ray ve sipariş, olayda olay formu (yazamayana
+  // kart açılmaz); işlenince adresten silinir.
   const istek = useRef({ i: o.istek ?? null, c, cx, sipGoster, studyoAc: o.studyoAc });
   istek.current = { i: o.istek ?? null, c, cx, sipGoster, studyoAc: o.studyoAc };
   const istekAnahtari = o.istek ? `${o.istek.tur}|${o.istek.v}` : null;
@@ -110,6 +111,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     const x = istek.current; const i = x.i; if (!i) return;
     if (i.tur === 'tez' && x.cx.M[i.v]) { suzSec(suzKoy(x.c.D, null, 'm', i.v)); setKart({ k: { tur: 'gunluk', m: i.v }, a: null }); }
     else if (i.tur === 'sip' && x.cx.jobs[i.v]) x.sipGoster(i.v);
+    else if (i.tur === 'olay') setKart({ k: { tur: 'olay', on: i.v }, a: null });
     x.studyoAc?.(null);
   }, [istekAnahtari]);
   const brifKapat = useCallback(() => setBrif(false), []);

@@ -249,12 +249,17 @@ describe('P2 Termin ve kâr', () => {
     expect(govdeler).toEqual([]);
   }, 20000);
 
-  it('kâr sütunu ve uzatma araçları yerinde pasif; termin uzatma formu Üretim emirlerine yönlendirir', async () => {
+  it('kâr sütunu yerinde; Motorla ölç uzatma önerisi kartını açar (2171); termin uzatma formu Üretim emirlerine yönlendirir', async () => {
     sunucuKur(YONETICI, KAYIT);
     ac('/plan/denge');
     await parca('denge');
     expect(screen.getByText('Kâr')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: 'Uzatma etkisini motorla ölç' })[0]!.hasAttribute('disabled')).toBe(true);
+    const olc = screen.getAllByRole('button', { name: 'Uzatma etkisini motorla ölç' })[0]!;
+    expect(olc.hasAttribute('disabled')).toBe(false);
+    const kart = document.querySelector('[data-parca="uzatma"]')!;
+    expect(kart.closest('details')!.open).toBe(false);
+    fireEvent.click(olc);
+    expect(kart.closest('details')!.open).toBe(true);
     fireEvent.click(screen.getAllByRole('button', { name: /^S1, / })[1]!);
     expect(dugme(/Termini 1 gün uzat/).disabled).toBe(true);
     expect(screen.getByText(/Termin Üretim emirlerinde değiştirilir; plan yeniden/)).toBeTruthy();

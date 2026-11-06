@@ -63,7 +63,7 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
   const { r } = b;
   if (alt) return tasiKomutlari(o, r);
   const n = tasiKomutlari(o, r).length; const sabit = !!o.c.locks[r.id]; const { komut } = o;
-  const l: KbKomut[] = [motor(`${r.job} siparişini öne al`, 'flag', 'öne almanın yollarını dener, en iyisini uygular')];
+  const l: KbKomut[] = [{ ad: `${r.job} siparişini öne al`, simge: 'flag', ipucu: 'öne almanın yollarını dener, en iyisini önizler', ...hamleYapisi(o.hamle, (h) => { h.oneAl(r.job); }) }];
   if (n) l.push({ ad: 'Başka tezgâha taşı', simge: 'next', ipucu: `yapabilen ${n} tezgâh`, yap: o.altAc, not: '', alt: true });
   l.push(motor('1 saat sonraya', 'chev-right', '→, Shift ile çeyrek saat'), motor('1 saat önceye', 'chev-left', '←'),
     siraKomutu(o, r, 'Kuyrukta bir öne', 'up', '[', -1), siraKomutu(o, r, 'Kuyrukta bir arkaya', 'down', ']', 1));

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Dugme, Kart, Simge } from '../../../../ortak/arayuz/index.ts';
 import { planGuncel } from '../durum.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
@@ -12,8 +12,8 @@ import {
 } from './kurallar.ts';
 
 // Termin ve kâr (denge): sipariş × termin uzatması (zz30-isi ISI.denge), "Tüm satırlar"da plan dengesi çubuğu ve motorla hesaplanan kartlar
-// (zw-denge sDenge). Plan seçenekleri, teklif ve uzatma önerisi motoru birkaç kez koşturur; kartlar eski gövdeleriyle, düğmeleri motor
-// bağlanana dek pasif (357 b). Termin uzatması siparişin terminini yazar; termin Üretim emirlerinden gelir, form yerinde pasif (222 a,
+// (zw-denge sDenge). Plan seçenekleri, teklif ve uzatma önerisi motoru birkaç kez koşturur; hesap sunucunun değerlendirme ucundadır.
+// "Motorla ölç" ayrı hesap açmaz: Tüm satırlardaki uzatma önerisi kartını açıp oraya götürür, ölçüm orada istenir (2171). Termin uzatması siparişin terminini yazar; termin Üretim emirlerinden gelir, form yerinde pasif (222 a,
 // Soru 466/1 a). Görünüm maliyet okumasıyla açılır (gorunumAcik).
 
 const UZAT_SAHIBI = 'Termin Üretim emirlerinde değiştirilir; plan yeniden çözülünce yeni terminle yerleşir.';
@@ -62,13 +62,21 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
   // Dengeyi eski sayfada müdür ve yönetici değiştirirdi (fiyat görür ve plan.kilitle); 223 a: fiyat görme maliyet okuma, sayfa içi kilit plan.yaz.
   const yazabilir = yetki.maliyetOku && yetki.planYaz;
   const degerlendir = gorunumDegerlendiricisi(depo);
+  const uzatma = useRef<HTMLDivElement>(null);
+  const olc = () => {
+    const el = uzatma.current; if (!el) return;
+    const d = el.closest('details'); if (d) d.open = true;
+    const az = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView?.({ behavior: az ? 'auto' : 'smooth', block: 'start' });
+    el.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
+  };
 
   const tum = calisma && (
     <TumSatirlar>
       <DengeCubugu c={calisma} komut={komut} yazabilir={yazabilir} />
       <PlanSecenekleriKarti degerlendir={degerlendir} yenile={yenile} komut={komut} alabilir={yazabilir} kim={depo.ben.kisi.ad} simdikiDenge={planDengesi(calisma)} />
       <TeklifKarti siparisler={calisma.D.siparisler} degerlendir={degerlendir} yenile={yenile} />
-      <TerminUzatmaKarti planVar={p !== null} degerlendir={degerlendir} yenile={yenile} />
+      <div ref={uzatma} data-parca="uzatma"><TerminUzatmaKarti planVar={p !== null} degerlendir={degerlendir} yenile={yenile} /></div>
     </TumSatirlar>
   );
 
@@ -92,7 +100,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
         key={`${r.k}|${ck}`} baslik={A.baslik} simge="gauge" ton={A.ton} neden={A.neden} kapat={() => { secimYaz(null); }}
         formlar={[{ ad: `Termini ${String(A.gun)} gün uzat`, etki: 'Müşterinin kabul ettiği uzatma termine yazılır.', simge: 'flag', tanim: null, deg: { sip: r.ad, gun: String(A.gun) }, kapali: UZAT_SAHIBI }]}
         secenekler={[
-          { ad: MOTORLA_OLC, etki: 'Her siparişe uzatmayı tek tek dener, diğerlerinin yeniden yerleşmesiyle ölçer.', simge: 'play', pasif: true },
+          { ad: MOTORLA_OLC, etki: 'Her siparişe uzatmayı tek tek dener, diğerlerinin yeniden yerleşmesiyle ölçer.', simge: 'play', yap: () => { secimYaz(null); olc(); } },
           { ad: `${r.ad} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } },
         ]}
       />
@@ -103,7 +111,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
     <div className="tc-pys" data-parca="denge">
       <GorunumBasligi
         simge="gauge" baslik="Termin ve kâr dengesi" alt="Sipariş × termin uzatması, kalan gecikme" ust={V.ust}
-        eylem={V.yalnizGec ? <Dugme simge="play" disabled title="Plan motoru bu ekrana bağlanınca açılır.">{MOTORLA_OLC}</Dugme> : undefined}
+        eylem={V.yalnizGec ? <Dugme simge="play" onClick={olc} title="Uzatma önerisi kartını açar; ölçüm sunucudaki motorla yapılır.">{MOTORLA_OLC}</Dugme> : undefined}
       />
       <section className="tc-pys-ana" aria-label="Isı haritası">
         <Lejant ogeler={[{ tur: 'kd', kd: 1, ad: '8 saatten az' }, { tur: 'kd', kd: 2, ad: 'Bir güne kadar' }, { tur: 'kd', kd: 3, ad: 'Üç güne kadar' }, { tur: 'kd', kd: 4, ad: 'Üç günden çok' }, { tur: 'iyi', ad: 'Zamanında' }]} />

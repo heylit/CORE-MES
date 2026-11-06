@@ -18,8 +18,8 @@ test.describe('P4 malzeme planı', () => {
       const kirilim = page.getByRole('group', { name: 'Kırılım' });
       await kirilim.getByRole('button', { name: 'Hafta' }).click();
       await expect(kirilim.getByRole('button', { name: 'Hafta' })).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByText('Plan motoru bağlanınca açılır.')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Hesapla' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Hesapla' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Hesapla' })).toBeEnabled();
     }
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     // Stok uçlarının yetkisi olmayan hesapta 403 beklenir (ekran planın kopyasına döner); onun dışında hata yok.

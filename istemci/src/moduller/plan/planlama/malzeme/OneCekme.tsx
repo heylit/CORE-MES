@@ -4,9 +4,10 @@ import { ApiHatasi, api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { gunYaz, sayiYaz, tabanMs, tlYaz } from './kurallar.ts';
 
 // Malzeme öne çekme (eski zz7-malzeme-one; düzen ve metin eski kartındır): her açık satın alma 1, 3 ve 5 gün öne alınır, plan aynı sırayla
-// yeniden çözülür. Tarayıcıda plan motoru yoktur; düğme görünür ama pasiftir (357 b). Hesap sunucunun değerlendirme ucundadır (357 a,
-// SOZLESME-TASLAGI.md `malzeme-one-cekme`); uç main'e girince bayrakla açılır.
-export const ONE_CEKME_ACIK = false;
+// yeniden çözülür. Hesap sunucunun değerlendirme ucundadır (357 a, `malzeme-one-cekme`) ve kayıtlı çalışmanın sürümünü ister; sürüm yoksa
+// (kayıtsız çalışma, Satın Alma'nın daraltılmış görünümü) düğme yerinde pasiftir.
+export const ONE_CEKME_ACIK = true;
+export const SURUM_YOK = 'Öne çekme Planlama sayfasında, kayıtlı planlama çalışmasıyla hesaplanır.';
 
 const GURULTU_TL = 500;
 
@@ -44,14 +45,14 @@ export function OneCekme({ surum, acik = ONE_CEKME_ACIK, malzemeAdi, dar = false
     );
   };
   const dugme = (
-    <Dugme simge="rotate" onClick={hesapla} disabled={!calisir} yukleniyor={durum.tur === 'hesap'} title={calisir ? undefined : 'Plan motoru bağlanınca açılır.'}>
+    <Dugme simge="rotate" onClick={hesapla} disabled={!calisir} yukleniyor={durum.tur === 'hesap'} title={calisir ? undefined : SURUM_YOK}>
       {durum.tur === 'bitti' ? 'Yeniden hesapla' : 'Hesapla'}
     </Dugme>
   );
   const acikla = <p className="tc-pyz-kucuk">{ACIKLAMA}</p>;
 
   if (!calisir) {
-    return <Kart baslikEki={<Baslik />} sag={dugme}><p className="tc-pyz-kucuk">Plan motoru bağlanınca açılır.</p>{acikla}</Kart>;
+    return <Kart baslikEki={<Baslik />} sag={dugme}><p className="tc-pyz-kucuk">{SURUM_YOK}</p>{acikla}</Kart>;
   }
   if (durum.tur === 'hesap') return <Kart baslikEki={<Baslik />} sag={dugme}><p className="tc-pyz-kucuk">Hesaplanıyor: her sipariş için üç deneme.</p></Kart>;
   if (durum.tur === 'hata') {
