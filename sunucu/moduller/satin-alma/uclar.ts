@@ -6,7 +6,9 @@ import {
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
 } from '#paylasilan/sozlesme/satin-alma.ts';
+import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
+import { satinAlmaAnalizi } from './analiz.ts';
 import * as servis from './servis.ts';
 
 const katalogParametresi = z.object({ id: z.string().uuid() });
@@ -28,6 +30,11 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-dis-operasyonlar', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: disOperasyonlarCevabi,
     isle: ({ db }) => servis.disOperasyonlar(db),
+  }),
+  // 2151 (2151-1 b): Analiz sayfası; yalnız okur, dış operasyonlarla aynı yetki.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-analiz', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: satinAlmaAnaliziCevabi,
+    isle: ({ db }) => satinAlmaAnalizi(db),
   }),
   // Fason süre ve termin grafikleri: dış operasyonlar sayfasıyla aynı yetki.
   uc({

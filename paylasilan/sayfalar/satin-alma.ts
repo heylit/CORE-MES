@@ -33,6 +33,8 @@ export const SATIN_ALMA_IKINCI_MENU = {
         { anahtar: 'kg-fiyatlari', baslik: 'Kg fiyatları', yol: '/satin-alma/kg-fiyatlari', simge: 'lira', islem: 'satin-alma.oku' },
         { anahtar: 'tedarikciler', baslik: 'Tedarikçiler', yol: '/satin-alma/tedarikciler', simge: 'truck', islem: 'satin-alma.oku' },
         { anahtar: 'raporlar', baslik: 'Raporlar', yol: '/satin-alma/raporlar', simge: 'chart', islem: 'satin-alma.oku' },
+        // 2151-1 b: tedarikçi başarımı, harcama, fiyat ve tüketim tahmini (sunucuda hesaplanır).
+        { anahtar: 'analiz', baslik: 'Analiz', yol: '/satin-alma/analiz', simge: 'chart', islem: 'satin-alma.oku' },
       ],
     },
   ],
