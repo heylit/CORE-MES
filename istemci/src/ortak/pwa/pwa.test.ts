@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import '../tasarim/tokens.css';
-import { APPLE_SIMGESI, SIMGELER, TEMA_RENGI, WEB_BILDIRIMI, basEtiketleri } from './bildirim.ts';
+import { ACILIS_RENGI, APPLE_SIMGESI, SEKME_SIMGESI, SIMGELER, TEMA_RENGI, WEB_BILDIRIMI, basEtiketleri } from './bildirim.ts';
 import { calisaniKur } from './calisan.ts';
 import type { CalisanCevabi, CalisanOrtami, Onbellek } from './calisan.ts';
 import { servisCalisaniKaydet } from './kayit.ts';
@@ -12,7 +12,7 @@ describe('web uygulaması bildirimi', () => {
     const bildirim = JSON.parse(JSON.stringify(WEB_BILDIRIMI)) as Record<string, unknown>;
     expect(bildirim).toMatchObject({
       name: 'CORE', short_name: 'CORE', start_url: '/', scope: '/', display: 'standalone', orientation: 'any',
-      theme_color: TEMA_RENGI, background_color: TEMA_RENGI,
+      theme_color: TEMA_RENGI, background_color: ACILIS_RENGI,
     });
   });
 
@@ -27,7 +27,7 @@ describe('web uygulaması bildirimi', () => {
       expect(SIMGELER.filter((s) => s.purpose === amac).map((s) => s.sizes).sort()).toEqual(['192x192', '512x512']);
     }
     const ortak = join(import.meta.dirname, '../../../public');
-    for (const yol of [...SIMGELER.map((s) => s.src), APPLE_SIMGESI]) expect(existsSync(join(ortak, yol))).toBe(true);
+    for (const yol of [...SIMGELER.map((s) => s.src), APPLE_SIMGESI, SEKME_SIMGESI]) expect(existsSync(join(ortak, yol))).toBe(true);
   });
 
   it('index.html etiketleri bildirimi, theme-color, apple-touch-icon ve iOS etiketlerini taşır; dış adres yok', () => {
@@ -36,6 +36,7 @@ describe('web uygulaması bildirimi', () => {
     expect(etiketler.find((e) => e.attrs['rel'] === 'manifest')?.attrs['href']).toBe('/manifest.webmanifest');
     expect(etiketler.find((e) => e.attrs['rel'] === 'apple-touch-icon')?.attrs['href']).toBe(APPLE_SIMGESI);
     expect(ad('theme-color')).toBe(TEMA_RENGI);
+    expect(etiketler.filter((e) => e.attrs['rel'] === 'icon').map((e) => e.attrs['href'])).toContain(SEKME_SIMGESI);
     expect(ad('apple-mobile-web-app-capable')).toBe('yes');
     expect(ad('apple-mobile-web-app-status-bar-style')).toBe('default');
     expect(ad('apple-mobile-web-app-title')).toBe('CORE');
