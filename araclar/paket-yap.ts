@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +9,7 @@ import { gzipSync } from 'node:zlib';
 import { paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
   BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, SUNUCUDA_KURULMAYAN, SURUM_DOSYASI, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
-  paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu, type Kilit, type PaketJson, type Platform,
+  paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu, type Kilit, type PaketJson, type Platform,
 } from './paket.ts';
 import { tarAc, tarOku, type TarGirdisi } from './tar-oku.ts';
 import { tarYaz } from './tar-yaz.ts';
@@ -115,6 +115,13 @@ function yukKur(
   }
 }
 
+// Açık taraması HEAD'in lock dosyasıyla bu makinede koşar (sunucu internete çıkmaz). npm, açık bulunca sıfırdan farklı çıkış
+// kodu verir; sonuç çıkış koduna değil çıktıya göre okunur. Çıktı okunamazsa tarama "yapılamadı" olur, paket durmaz (2163-1 a).
+function auditCiktisi(ekler: readonly string[]): string | null {
+  const s = spawnSync(process.execPath, [npmCli(), 'audit', '--json', ...ekler], { cwd: KOK, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return s.error === undefined && typeof s.stdout === 'string' && s.stdout.trim() !== '' ? s.stdout : null;
+}
+
 function anahtarUret(yol: string): void {
   const hedef = depoDisi(yol);
   if (existsSync(hedef)) dur(`Anahtar dosyası zaten var: ${hedef}`);
@@ -159,7 +166,8 @@ function paketYap(s: PaketSecenekleri): void {
   const not = s.not === undefined || s.not.trim() === '' ? null : s.not.trim();
 
   const oncekiYayin = onceki === null ? null : onceki.slice(YAYIN_ETIKETI.length);
-  const paket = paketKur({ surum, commit, tarih, gocler, not, degisiklikler, oncekiYayin }, yuk, gizli);
+  const tarama = paketTaramasi(new Date().toISOString(), auditCiktisi(['--omit=dev']), auditCiktisi([]));
+  const paket = paketKur({ surum, commit, tarih, gocler, not, degisiklikler, oncekiYayin, tarama }, yuk, gizli);
   // Sunucunun okuyacağı gibi geri okunur: üretici ile doğrulayıcı ayrışırsa paket yazılmaz.
   const cozum = paketBasliginiCoz(paket, createPublicKey(gizli));
   if ('red' in cozum) dur(`Üretilen paket doğrulanmadı (${cozum.red}); paket yazılmadı.`);
@@ -179,6 +187,11 @@ function paketYap(s: PaketSecenekleri): void {
   if (s.klasor !== undefined) {
     console.log(`Yük açıldı: ${resolve(s.klasor)} (${String(tarAc(yuk, resolve(s.klasor)))} dosya)`);
   }
+  const sayilar = (x: { kritik: number; yuksek: number; orta: number; dusuk: number }): string =>
+    `${String(x.kritik)} kritik, ${String(x.yuksek)} yüksek, ${String(x.orta)} orta, ${String(x.dusuk)} düşük`;
+  console.log(tarama.durum === 'tamam'
+    ? `Açık taraması: canlı ${sayilar(tarama.canli)}; bütün ağaç ${sayilar(tarama.tum)}`
+    : 'Açık taraması YAPILAMADI: paket yazıldı, Güncelleme sekmesinde "Yapılamadı" görünür.');
   console.log(`Sürüm notu: ${notDosyasi} (${String(yeniGocler.length)} yeni göç)`);
   console.log(`Ortak anahtar: ${ortakAnahtarMetni(createPublicKey(gizli))}`);
   console.log(`Yayın etiketi yerelde atıldı: ${YAYIN_ETIKETI}${surum}. Paket kuruma verilince gönderilir:`);

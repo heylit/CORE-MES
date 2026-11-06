@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Ayrinti, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
 import type {
   GuncellemeGecmisKaydi, GuncellemeKanali, GuncellemeKuruluSurum, GuncellemeListePaketi, GuncellemePaketi, GuncellemePaketleriCevabi,
-  GuncellemeParcasiCevabi, GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu,
+  GuncellemeParcasiCevabi, GuncellemeParcasiGovdesi, GuncellemeUygulamaIstegi, GuncellemeUygulamaSonucu, PaketTaramaSayilari, PaketTaramasi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -122,6 +122,39 @@ function silDugmesi(silinemez: string | null, ad: string, sec: () => void) {
   );
 }
 
+// Paket taraması (2163): rozet bütün ağacın en yüksek seviyesini söyler (2160-1 b). Kritik ve yüksek hata, orta ve düşük bilgi tonundadır:
+// geliştirme araçlarındaki orta seviyeli açık her pakette bulunabilir, uyarı rengini sürekli yakmasın.
+export function taramaRozeti(tarama: PaketTaramasi | null): { ton: RozetTonu; metin: string } {
+  if (tarama === null) return { ton: 'pasif', metin: 'Tarama yok' };
+  if (tarama.durum === 'yapilamadi') return { ton: 'uyari', metin: 'Yapılamadı' };
+  const { kritik, yuksek, orta, dusuk } = tarama.tum;
+  if (kritik > 0) return { ton: 'hata', metin: `${kritik} kritik` };
+  if (yuksek > 0) return { ton: 'hata', metin: `${yuksek} yüksek` };
+  if (orta > 0) return { ton: 'bilgi', metin: `${orta} orta` };
+  if (dusuk > 0) return { ton: 'bilgi', metin: `${dusuk} düşük` };
+  return { ton: 'tamam', metin: 'Açık yok' };
+}
+
+const sayilarMetni = (s: PaketTaramaSayilari): string => `${s.kritik} kritik, ${s.yuksek} yüksek, ${s.orta} orta, ${s.dusuk} düşük`;
+
+function TaramaAyrintisi({ tarama }: { tarama: PaketTaramasi | null }) {
+  if (tarama === null) return <p className="tc-ayar-aciklama">Paket taraması yok: paket bu özellikten önce hazırlanmış.</p>;
+  if (tarama.durum === 'yapilamadi') {
+    return (
+      <p className="tc-ayar-aciklama" role="note">
+        <Simge ad="alert" boyut="k" /> Paket taraması yapılamadı ({derlemeTarihi(tarama.zaman, true)}): paket imzalı ve geçerli, açık durumu bilinmiyor.
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="tc-ayar-aciklama"><Simge ad="scan" boyut="k" /> Paket taraması, {derlemeTarihi(tarama.zaman, true)}</p>
+      <p className="tc-ayar-aciklama">Sunucuda çalışan paketler: {sayilarMetni(tarama.canli)}</p>
+      <p className="tc-ayar-aciklama">Bütün paketler (geliştirme araçları dahil): {sayilarMetni(tarama.tum)}</p>
+    </>
+  );
+}
+
 function sutunlar(
   sonGoc: string | null | undefined, calisan: string | null, sil: (p: GuncellemeListePaketi) => void,
 ): readonly Sutun<GuncellemeListePaketi>[] {
@@ -131,6 +164,10 @@ function sutunlar(
     { anahtar: 'tarih', baslik: 'Derleme', kirilmaz: true, hucre: (p) => derlemeTarihi(p.tarih, true) },
     { anahtar: 'degisiklik', baslik: 'Değişiklik', hizala: 'sag', hucre: (p) => p.degisiklikler.length },
     { anahtar: 'goc', baslik: 'Yeni göç', hizala: 'sag', hucre: (p) => yeniGocSayisi(p.gocler, sonGoc) ?? '?' },
+    {
+      anahtar: 'tarama', baslik: 'Paket taraması',
+      hucre: (p) => { const r = taramaRozeti(p.tarama); return <Rozet ton={r.ton}>{r.metin}</Rozet>; },
+    },
     { anahtar: 'yuklenme', baslik: 'Yüklendi', kirilmaz: true, hucre: (p) => derlemeTarihi(p.yuklenme, true) },
     {
       anahtar: 'durum', baslik: 'Durum',
@@ -180,6 +217,7 @@ function PaketAyrintisi({ paket, yeniGoc }: { paket: GuncellemeListePaketi; yeni
       </p>
       {paket.not !== null && <p className="tc-ayar-aciklama">{paket.not}</p>}
       {paket.atlama !== null && <p className="tc-ayar-aciklama" role="note"><Simge ad="alert" boyut="k" /> {paket.atlama}</p>}
+      <TaramaAyrintisi tarama={paket.tarama} />
       {paket.degisiklikler.length === 0
         ? <p className="tc-ayar-aciklama">Pakette değişiklik listesi yok.</p>
         : <ul className="tc-guncelleme-liste">{paket.degisiklikler.map((d, i) => <li key={i}>{d}</li>)}</ul>}

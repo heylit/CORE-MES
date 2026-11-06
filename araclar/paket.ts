@@ -1,4 +1,5 @@
 import { createHash, sign, type KeyObject } from 'node:crypto';
+import type { PaketTaramaSayilari, PaketTaramasi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, PAKET_IMLECI } from '../sunucu/moduller/ayarlar/disari.ts';
 
@@ -54,6 +55,37 @@ export interface PaketGirdisi {
   degisiklikler: readonly string[];
   // degisiklikler'in başladığı yayın (YAYIN_ETIKETI öneksiz); ilk yayında null. Sunucu çalışan sürümle karşılaştırıp atlanan yayını söyler.
   oncekiYayin: string | null;
+  // Paket hazırlanırken alınan açık taraması; null yalnız 2163'ten önceki paketlerde olur.
+  tarama: PaketTaramasi | null;
+}
+
+// `npm audit --json` çıktısından seviye sayıları. Okunamayan çıktı null'dur: sayı uydurulmaz, tarama "yapılamadı" olur.
+// Yalnız sayılar alınır; paket ve açık adı bildirime girmez (depo açık, 2160).
+export function taramaSayilari(cikti: string | null): PaketTaramaSayilari | null {
+  if (cikti === null) return null;
+  let veri: unknown;
+  try {
+    veri = JSON.parse(cikti);
+  } catch {
+    return null;
+  }
+  const s = (veri as { metadata?: { vulnerabilities?: Record<string, unknown> } } | null)?.metadata?.vulnerabilities;
+  if (s === undefined || s === null) return null;
+  const al = (ad: string): number | null => {
+    const d = s[ad];
+    return typeof d === 'number' && Number.isInteger(d) && d >= 0 ? d : null;
+  };
+  const [kritik, yuksek, orta, dusuk] = [al('critical'), al('high'), al('moderate'), al('low')];
+  if (kritik === null || yuksek === null || orta === null || dusuk === null) return null;
+  return { kritik, yuksek, orta, dusuk };
+}
+
+// Taramalardan biri okunamazsa paket yine yazılır, tarama "yapılamadı" olarak görünür (2163-1 a): kayıt sunucusundaki geçici bir
+// kesinti acil düzeltme paketini durdurmasın.
+export function paketTaramasi(zaman: string, canli: string | null, tum: string | null): PaketTaramasi {
+  const c = taramaSayilari(canli);
+  const t = taramaSayilari(tum);
+  return c === null || t === null ? { durum: 'yapilamadi', zaman } : { durum: 'tamam', zaman, canli: c, tum: t };
 }
 
 // PR başlığının sonundaki parantezde kart numarası beklenir (1565 b): sürüm notundaki satır karta böyle bağlanır.

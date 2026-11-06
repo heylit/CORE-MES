@@ -195,7 +195,7 @@ export function yuklemeyiBitir(o: GuncellemeOrtami, kisiId: number, kimlik: stri
     }
     const paket: GuncellemePaketi = {
       surum: bildirim.surum, commit: bildirim.commit, tarih: bildirim.tarih, gocler: bildirim.gocler, not: bildirim.not,
-      degisiklikler: bildirim.degisiklikler, oncekiYayin: bildirim.oncekiYayin,
+      degisiklikler: bildirim.degisiklikler, oncekiYayin: bildirim.oncekiYayin, tarama: bildirim.tarama,
       boyut: durum.boyut, yukleyenId: kisiId, yuklenme: simdi.toISOString(),
     };
     await rename(yol, hedef);

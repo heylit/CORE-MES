@@ -11,14 +11,14 @@ import type {
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { PARCA_BAYT, yeniGocSayisi } from './Guncelleme.tsx';
+import { PARCA_BAYT, taramaRozeti, yeniGocSayisi } from './Guncelleme.tsx';
 import { GuncellemeIlerlemesi, adimSatirlari } from './GuncellemeIlerlemesi.tsx';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
 const PAKET: GuncellemePaketi = {
   surum: '0.1.0', commit: 'b'.repeat(40), tarih: '2026-10-12T10:00:00.000Z', gocler: ['20261012100000_ornek.sql'], not: 'Deneme notu',
-  degisiklikler: ['#12: Deneme degisikligi'], oncekiYayin: null,
+  degisiklikler: ['#12: Deneme degisikligi'], oncekiYayin: null, tarama: null,
   boyut: PARCA_BAYT + 10, yukleyenId: 1, yuklenme: '2026-10-12T11:00:00.000Z',
 };
 const LISTEDE: GuncellemeListePaketi = { ...PAKET, uygulanamaz: null, silinemez: null, atlama: null };
@@ -155,6 +155,41 @@ describe('Sistem Ayarları, güncelleme', () => {
     fireEvent.click(screen.getByText('ccccccc'));
     expect(await screen.findByText('2026.10.11-1 ile gelenler')).toBeTruthy();
     expect(screen.getByText('Pakette değişiklik listesi yok.')).toBeTruthy();
+  });
+
+  it('paket taraması listede rozetle, ayrıntıda tarih ve seviye sayılarıyla görünür; yapılamadı ve taramasız paket açıkça yazar', async () => {
+    const sayilar = (kritik: number, yuksek: number, orta: number, dusuk: number) => ({ kritik, yuksek, orta, dusuk });
+    const taranan: GuncellemeListePaketi = {
+      ...LISTEDE, tarama: { durum: 'tamam', zaman: '2026-10-12T09:58:00.000Z', canli: sayilar(0, 1, 0, 0), tum: sayilar(0, 1, 11, 0) },
+    };
+    const yapilamadi: GuncellemeListePaketi = {
+      ...LISTEDE, surum: '2026.10.11-1', commit: 'c'.repeat(40), tarama: { durum: 'yapilamadi', zaman: '2026-10-11T09:58:00.000Z' },
+    };
+    const eski: GuncellemeListePaketi = { ...LISTEDE, surum: '2026.10.10-1', commit: 'd'.repeat(40) };
+    sunucuKur(cevap('acik', [taranan, yapilamadi, eski]));
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Güncelleme' }));
+    expect(await screen.findByText('Paket taraması')).toBeTruthy();
+    expect(screen.getByText('1 yüksek')).toBeTruthy();
+    expect(screen.getByText('Yapılamadı')).toBeTruthy();
+    expect(screen.getByText('Tarama yok')).toBeTruthy();
+    expect(screen.getByText('Sunucuda çalışan paketler: 0 kritik, 1 yüksek, 0 orta, 0 düşük')).toBeTruthy();
+    expect(screen.getByText('Bütün paketler (geliştirme araçları dahil): 0 kritik, 1 yüksek, 11 orta, 0 düşük')).toBeTruthy();
+    fireEvent.click(screen.getByText('ccccccc'));
+    expect(await screen.findByText(/Paket taraması yapılamadı .*açık durumu bilinmiyor\./)).toBeTruthy();
+    fireEvent.click(screen.getByText('ddddddd'));
+    expect(await screen.findByText('Paket taraması yok: paket bu özellikten önce hazırlanmış.')).toBeTruthy();
+  });
+
+  it('tarama rozeti en yüksek seviyeyi söyler; orta ve düşük uyarı rengi yakmaz', () => {
+    const t = (kritik: number, yuksek: number, orta: number, dusuk: number) =>
+      taramaRozeti({ durum: 'tamam', zaman: '2026-10-12T09:58:00.000Z', canli: { kritik: 0, yuksek: 0, orta: 0, dusuk: 0 }, tum: { kritik, yuksek, orta, dusuk } });
+    expect(t(2, 1, 5, 0)).toEqual({ ton: 'hata', metin: '2 kritik' });
+    expect(t(0, 0, 11, 3)).toEqual({ ton: 'bilgi', metin: '11 orta' });
+    expect(t(0, 0, 0, 3)).toEqual({ ton: 'bilgi', metin: '3 düşük' });
+    expect(t(0, 0, 0, 0)).toEqual({ ton: 'tamam', metin: 'Açık yok' });
+    expect(taramaRozeti(null)).toEqual({ ton: 'pasif', metin: 'Tarama yok' });
+    expect(taramaRozeti({ durum: 'yapilamadi', zaman: '2026-10-12T09:58:00.000Z' })).toEqual({ ton: 'uyari', metin: 'Yapılamadı' });
   });
 
   it('otomatik açılış durumu salt okunur gösterilir; kurulu değilse uyarı yazar, alanı taşımayan sunucuda kart yoktur', async () => {
