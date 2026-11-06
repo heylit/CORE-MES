@@ -10,7 +10,7 @@ import {
   type Page, type ViewState,
 } from "./store.ts";
 import {
-  awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfScore, priceHistory, quoteCalc,
+  awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfDesc, perfScore, priceHistory, supRating, quoteCalc,
   supName, supplierStats, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI,
 } from "./calc.ts";
 import {
@@ -229,7 +229,7 @@ function rfqSuggestions(r: PurchaseRequest): Suggestion[] {
     const match = sc.filter(c => cats.has(c));
     if (match.length) { const o = out[s.id] || (out[s.id] = { id: s.id, why: [], score: 0, p: 0 }); o.why.push("kategori: " + match.join(", ")); o.score += 1; }
   });
-  return Object.values(out).filter(o => S.suppliers[o.id] && S.suppliers[o.id]!.status !== "suspended").map(o => Object.assign(o, { p: perfScore(o.id) })).sort((a, b) => b.score - a.score || b.p - a.p);
+  return Object.values(out).filter(o => S.suppliers[o.id] && S.suppliers[o.id]!.status !== "suspended").map(o => Object.assign(o, { p: perfScore(o.id) })).sort((a, b) => b.score - a.score || perfDesc(a.p, b.p));
 }
 function rfqModal(r: PurchaseRequest): void {
   const sugg = rfqSuggestions(r); const sids = new Set(sugg.map(s => s.id));
@@ -712,7 +712,8 @@ function calcModal(r: PurchaseRequest, qid: string | undefined): void {
   const ld = parseNum(q.leadDays);
   const leadHow = ld === null ? "termin belirtilmemiş, 0 puan" : r.needDate ? (x.late ? `ihtiyaç tarihini ${x.late} gün kaçırıyor: 100 − ${x.late} × ${nf1.format(100 / 15)}` : "ihtiyaç tarihine yetişiyor: 100") : `en kısa termine göre ${ld - Math.min(...ev.elig.map(y => parseNum(y.q.leadDays)).filter((v): v is number => v !== null))} gün fazla: her gün ${nf1.format(100 / 30)} puan düşer`;
   const sup = S.suppliers[q.supplierId], sst = supplierStats()[q.supplierId];
-  const supHow = `puanınız ${parseNum(sup && sup.rating) || 3}/5${sst && sst.deliveries ? `, zamanında teslim ${pct(sst.onTimeRate)}` : ""}${sst && sst.qualityN ? `, kalite ${pct(sst.qualityRate)}` : ""}`;
+  const supR = supRating(sup);
+  const supHow = `${supR === null ? "puan verilmemiş" : `puanınız ${supR}/5`}${sst && sst.deliveries ? `, zamanında teslim ${pct(sst.onTimeRate)}` : ""}${sst && sst.qualityN ? `, kalite ${pct(sst.qualityRate)}` : ""}`;
   const sel = `<select id="calc-q" aria-label="Teklif">${ev.all.map(y => `<option value="${y.q.id}" ${y.q.id === q.id ? "selected" : ""}>${esc(supName(y.q))}</option>`).join("")}</select>`;
   openModal(`<div class="mh"><h2>Hesap dökümü</h2><span class="spacer"></span><div data-sa-y="33">${sel}</div></div>
   <div class="mb">
@@ -732,10 +733,10 @@ function calcModal(r: PurchaseRequest, qid: string | undefined): void {
       ${line("Net bugünkü maliyet", money(c.pvTRY), c.vadeGain > 0.5 ? `vade avantajı ${money(c.vadeGain)}` : "", "tot")}
       ${elig && x.fill > 0 ? line("Eksik kalemler için ekleme", "+ " + money(x.fill), "eksik kalemler diğer tekliflerin en yüksek fiyatıyla tamamlanır (yalnızca puanlamada)") : ""}
       ${elig ? `<tr class="sec"><td colspan="2"><b>3. Puan</b></td></tr>
-      ${line(`Net maliyet (ağırlık %${nf0.format((+ev.w.cost || 0) / tw * 100)})`, nf1.format(x.s.cost), `en düşük ${money(minPV, "TRY", 0)} ÷ bu teklif ${money(x.scorePV, "TRY", 0)} × 100`)}
-      ${line(`Termin (ağırlık %${nf0.format((+ev.w.lead || 0) / tw * 100)})`, nf1.format(x.s.lead), leadHow)}
-      ${line(`Tedarikçi performansı (ağırlık %${nf0.format((+ev.w.supplier || 0) / tw * 100)})`, nf1.format(x.s.supplier), supHow)}
-      ${line(`Garanti (ağırlık %${nf0.format((+ev.w.warranty || 0) / tw * 100)})`, nf1.format(x.s.warranty), maxW ? `en çok 12 ay sayılır: ${Math.min(parseNum(q.warrantyMonths) || 0, 12)} ay ÷ ${Math.min(maxW, 12)} ay × 100` : "hiçbir teklif garanti belirtmemiş: herkese 100")}
+      ${line(`Net maliyet (ağırlık %${nf0.format((+ev.w.cost || 0) / tw * 100)})`, nf1.format(x.s.cost ?? 0), `en düşük ${money(minPV, "TRY", 0)} ÷ bu teklif ${money(x.scorePV, "TRY", 0)} × 100`)}
+      ${line(`Termin (ağırlık %${nf0.format((+ev.w.lead || 0) / tw * 100)})`, nf1.format(x.s.lead ?? 0), leadHow)}
+      ${line(`Tedarikçi performansı (ağırlık %${nf0.format((+ev.w.supplier || 0) / tw * 100)})`, x.s.supplier === null ? "–" : nf1.format(x.s.supplier), x.s.supplier === null ? `${supHow}; veri yok, bu ölçütün ağırlığı diğer ölçütlere dağıtıldı` : supHow)}
+      ${line(`Garanti (ağırlık %${nf0.format((+ev.w.warranty || 0) / tw * 100)})`, nf1.format(x.s.warranty ?? 0), maxW ? `en çok 12 ay sayılır: ${Math.min(parseNum(q.warrantyMonths) || 0, 12)} ay ÷ ${Math.min(maxW, 12)} ay × 100` : "hiçbir teklif garanti belirtmemiş: herkese 100")}
       ${line("Toplam puan", nf1.format(x.score), "her ölçüt puanı × ağırlık payı, toplamı", "tot")}` : `<tr><td colspan="2" class="muted">Bu teklif ${q.compliant === false ? "teknik olarak uygun değil" : "fiyat içermiyor"}; puanlamaya girmez.</td></tr>`}
     </tbody></table></div>
   </div>

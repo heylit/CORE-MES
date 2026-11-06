@@ -55,7 +55,7 @@ export function renderNav(): void { /* kabukta */ }
 export const stChip = (k: RequestStatus): string => `<span class="st ${k}">${esc(stLabel(k))}</span>`;
 export const reqChip = (r: PurchaseRequest): string => `<span class="st ${r.status}">${esc(durumEtiketi(r))}</span>`;
 export const prioDot = (p?: Priority): string => `<span class="prio ${p || "normal"}" title="${PRIO[p || "normal"]} öncelik"></span>`;
-export const stars = (v: unknown): string => { const n = clamp(Math.round(parseNum(v) || 3), 1, 5); return `<span class="stars" aria-label="${n} / 5">${"★".repeat(n)}<span class="off">${"★".repeat(5 - n)}</span></span>`; };
+export const stars = (v: unknown): string => { const r = parseNum(v); if (r === null || r < 1 || r > 5) return '<span class="muted">puan yok</span>'; const n = clamp(Math.round(r), 1, 5); return `<span class="stars" aria-label="${n} / 5">${"★".repeat(n)}<span class="off">${"★".repeat(5 - n)}</span></span>`; };
 export const supLink = (id: string | null | undefined, name?: string): string => id && S.suppliers[id] ? `<button class="btn ghost sm" data-sa-y="35" data-act="open-sup" data-id="${id}">${esc(name || S.suppliers[id].name)}</button>` : esc(name || "–");
 export const matLink = (id: string | null | undefined, name?: string): string => id && S.materials[id] ? `<button class="btn ghost sm" data-sa-y="36" data-act="open-mat" data-id="${id}">${esc(name || S.materials[id].name)}</button>` : esc(name || "–");
 export function empty(title: string, text: string, actions = ""): string { return `<div class="empty"><h3>${title}</h3><p>${text}</p>${actions ? `<div class="row">${actions}</div>` : ""}</div>`; }
@@ -627,7 +627,7 @@ export function rankHTML(r: PurchaseRequest, ev: Evaluation): string {
     if (awardQ === x.q.id) fl.push('<span class="flag good">seçildi</span>');
     return `<li class="${i === 0 ? "top" : ""}"><span class="pos">${i + 1}</span>
       <div class="who"><b>${esc(supName(x.q))}</b><div class="facts"><span>${money(x.c.pvTRY, "TRY", 0)} net</span><span>${isNum(parseNum(x.q.leadDays)) ? parseNum(x.q.leadDays) + " gün termin" : "termin yok"}</span><span>${payText(x.q)}</span></div></div>
-      <div class="barwrap"><div class="bar" role="img" aria-label="Puan dağılımı">${CRIT.map(c => `<span class="${c.c}" style="width:${x.parts[c.k].toFixed(2)}%" title="${c.l}: ${nf0.format(x.s[c.k])} / 100"></span>`).join("")}</div>${fl.length ? `<div class="flags">${fl.join("")}</div>` : ""}</div>
+      <div class="barwrap"><div class="bar" role="img" aria-label="Puan dağılımı">${CRIT.map(c => `<span class="${c.c}" style="width:${x.parts[c.k].toFixed(2)}%" title="${c.l}: ${x.s[c.k] === null ? "veri yok" : nf0.format(x.s[c.k]!) + " / 100"}"></span>`).join("")}</div>${fl.length ? `<div class="flags">${fl.join("")}</div>` : ""}</div>
       <div class="row" data-sa-y="10"><span class="score">${nf0.format(x.score)}</span><button class="btn sm ghost" data-act="calc" data-qid="${x.q.id}">Hesabı göster</button>${OPEN.includes(r.status) ? `<button class="btn sm ${i === 0 ? "primary" : ""}" data-act="pick" data-qid="${x.q.id}">Seç</button>` : ""}</div></li>`;
   }).join("")}</ol>` : `<div class="empty">Değerlendirmeye uygun teklif yok. Fiyatları ve teknik uygunluk işaretini kontrol edin.</div>`}
   ${off.length ? `<div class="panel-f small muted">Sıralama dışı: ${off.map(x => esc(supName(x.q)) + (x.q.compliant === false ? " (teknik uygun değil)" : " (fiyat girilmemiş)")).join(", ")}</div>` : ""}`;
