@@ -436,7 +436,9 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const lotKutusu = rc.onizleme.find((o) => o.tur === 'metin' && o.satirlar[0]?.startsWith(`Lot LT-ETK-${e.id}`));
     assert.equal(lotKutusu?.tur === 'metin' && lotKutusu.satirlar.join(' '), `Lot LT-ETK-${e.id} · Parti P-9 · Döküm D-01 · Sertifika S-01`);
     assert.match(rc.komut, new RegExp(`Lot LT-ETK-${e.id} · Parti P-9`));
-    assert.match(rc.komut, /10 Torna/);
+    // EM-27: işlem satırı no kutusu ve adıyla ayrı basılır.
+    assert.match(rc.komut, /\^FD10\^FS/);
+    assert.match(rc.komut, /Torna/);
     assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=refakat-partisi&id=${acik}`)).statusCode, 400, 'lot şablonu refakat partisi basmaz');
 
     const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
@@ -553,16 +555,19 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.deepEqual(t.kayitlar, [{ id: kalem, baslik: `Deneme Koli Müşteri ${e.emirNo}` }]);
     assert.deepEqual(t.eksikler, [2147483004]);
     assert.equal((t.onizleme.find((o) => o.tur === 'qr') as { veri: string } | undefined)?.veri, `UE:${e.id}`);
-    assert.deepEqual(metinler(t).filter((m) => m.startsWith('Deneme Koli') || m.endsWith('adet') || m.startsWith('Koli ') || m.includes('DNM-K1')),
-      ['Deneme Koli Müşteri', '200 adet', 'Koli 1/1', '02.05.2031 · Belge DNM-K1']);
+    // EM-28: adet ve koli sırası büyük sayı; tek kolide başlık koli içidir.
+    assert.deepEqual(metinler(t).filter((m) => ['Deneme Koli Müşteri', 'KOLİ İÇİ', 'KALEM TOPLAMI', '200', '1/1', '02.05.2031 · Belge DNM-K1'].includes(m)),
+      ['Deneme Koli Müşteri', 'KOLİ İÇİ', '200', '1/1', '02.05.2031 · Belge DNM-K1']);
 
     const koli = await al(yonetici, adres('&koliSayisi=4&koliIci=50'));
     assert.equal(koli.statusCode, 200, koli.body);
     const k = koli.json() as KayitCiktiCevabi;
     assert.equal(k.kayitlar.length, 4, 'koli başına bir etiket');
-    assert.ok(metinler(k).includes('Koli içi 50 adet'), metinler(k).join(' | '));
-    assert.ok(metinler(k).includes('Koli 1/4'));
-    assert.match(k.komut, /Koli 4\/4/);
+    assert.ok(metinler(k).includes('KOLİ İÇİ') && metinler(k).includes('50'), metinler(k).join(' | '));
+    assert.ok(metinler(k).includes('1/4'));
+    assert.match(k.komut, /\^FD4\/4\^FS/);
+    const toplam = (await al(yonetici, adres('&koliSayisi=2'))).json() as KayitCiktiCevabi;
+    assert.ok(metinler(toplam).includes('KALEM TOPLAMI') && !metinler(toplam).includes('KOLİ İÇİ'), 'koli içi girilmeden çok kolide sayı toplamdır');
     assert.equal((await al(yonetici, adres('&koliSayisi=501'))).statusCode, 400, 'koli sınırı');
     assert.equal((await al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/kayit-cikti?dil=zpl&dpi=203&tur=lot&id=${kalem}&koliSayisi=2`)).statusCode, 400, 'koli yalnız sevk kolisinde');
     assert.equal((await al(yetkisiz, adres(''))).statusCode, 403);
@@ -571,7 +576,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.ok(dosya);
     const c = await yaz(yonetici, '/etiket-merkezi/sablonlar/sevk-koli-100x75/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'sevk-koli', idler: [kalem], koli: { sayi: 3, ici: null } } });
     assert.equal(c.statusCode, 200, c.body);
-    assert.match((c.json() as IndirCevabi).komut, /Koli 3\/3/);
+    assert.match((c.json() as IndirCevabi).komut, /"3\/3"/);
     const kayitlar = await ortam!.vt.sorgu<{ kaynak_tur: string; kaynak_id: number }>(
       'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
     );

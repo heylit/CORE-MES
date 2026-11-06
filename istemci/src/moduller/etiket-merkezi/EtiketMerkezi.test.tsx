@@ -42,6 +42,9 @@ const cikti = (anahtar: string, sorgu: URLSearchParams): CiktiCevabi => {
     onizleme: [
       { tur: 'metin', x: 1, y: 1, genislik: 40, yaziMm: 4, kalin: true, satirlar: ['LT-000123'] },
       { tur: 'qr', x: 50, y: 1, boyut: 20, veri: 'LOT:LT-000123', kareler: [[true, false], [false, true]] },
+      { tur: 'kutu', x: 0, y: 30, genislik: 60, yukseklik: 8, kalinlik: 8 },
+      { tur: 'metin', x: 2, y: 31, genislik: 56, yaziMm: 5, kalin: true, satirlar: ['ÖRNEK BAŞLIK'], ters: true },
+      { tur: 'simge', x: 80, y: 1, boyut: 12, ad: 'lot', karo: 'cizgili' },
     ],
   };
 };
@@ -149,6 +152,11 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText('LT-000123')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Lot 100x50 önizleme' })).toBeTruthy();
     expect(screen.getByLabelText('QR: LOT:LT-000123')).toBeTruthy();
+    // EM-25, EM-26: ters yazı kâğıt rengiyle, piktogram sunucunun verdiği yer ve boyutta, çizgili karo kırpılmış şeritle çizilir.
+    expect(screen.getByText('ÖRNEK BAŞLIK').getAttribute('class')).toContain('tc-etk-ters');
+    const simge = document.querySelector('.tc-etk-onizleme g[transform="translate(80 1) scale(0.25)"]');
+    expect(simge?.querySelector('clipPath')).toBeTruthy();
+    expect(simge?.querySelectorAll('polygon').length).toBeGreaterThan(3);
     expect(screen.queryByText('Yazıcı denemesi 50x25')).toBeNull();
     expect(screen.getByRole('button', { name: 'Önizleme için indir (lot-100x50-203.zpl, deftere yazılmaz)' })).toBeTruthy();
   });
@@ -284,6 +292,8 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('İlk tur')).toBeTruthy();
     expect(screen.getByText('Lot 100x50')).toBeTruthy();
     expect(screen.getByText('Stok Merkezi · Lot etiketi penceresi')).toBeTruthy();
+    // Her satırda türün piktogramı görünür; ekran okuyucuya yalnız ad gider.
+    expect(document.querySelectorAll('svg.tc-etk-tur-simge[aria-hidden="true"]')).toHaveLength(2);
   });
 
   it('stoktan gelen adres seçili konumları açar: yalnız konum şablonları, kayıtlardan çıktı, bulunamayan uyarısı', async () => {

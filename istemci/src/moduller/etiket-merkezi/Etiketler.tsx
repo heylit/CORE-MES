@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
+import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
 import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type { EtiketDurumu, EtiketlerCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { DurumKutusu, Kart, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { Simge } from './Onizleme.tsx';
 import './etiket-merkezi.css';
 
 type Etiket = EtiketlerCevabi['etiketler'][number];
@@ -13,8 +15,22 @@ const DURUM_TONU: Record<EtiketDurumu, RozetTonu> = { hazir: 'tamam', 'ilk-tur':
 // Sahip modül anahtarla gelir; kullanıcı modülü ana menüdeki adıyla tanır.
 const modulAdi = (modul: string): string => TUM_SAYFALAR.find((s) => s.yol === `/${modul}`)?.baslik ?? modul;
 
+// Basılı etiketin sağ üst karosundaki piktogramın aynısı; listede tür ilk bakışta tanınır. Yeni tür eklenene kadar yazıcı simgesi görünür.
+const TUR_SIMGESI: Readonly<Record<string, PiktogramAdi>> = {
+  konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'refakat', istasyon: 'tezgah', 'kalite-durum': 'kalite',
+  'hatali-parca': 'hatali', 'sevk-koli': 'koli', kalibrasyon: 'kumpas', 'seri-no': 'seri', 'fason-gidis': 'fason', deneme: 'yazici',
+};
+
 const SUTUNLAR: readonly Sutun<Etiket>[] = [
-  { anahtar: 'ad', baslik: 'Etiket', hucre: (e) => e.ad },
+  {
+    anahtar: 'ad', baslik: 'Etiket', csv: (e) => e.ad,
+    hucre: (e) => (
+      <span className="tc-etk-tur">
+        <svg className="tc-etk-tur-simge" viewBox="0 0 48 48" aria-hidden="true"><Simge ad={TUR_SIMGESI[e.kod] ?? 'yazici'} karo="siyah" /></svg>
+        {e.ad}
+      </span>
+    ),
+  },
   { anahtar: 'sahip', baslik: 'Sahip modül', hucre: (e) => modulAdi(e.sahipModul) },
   { anahtar: 'tetik', baslik: 'Ne zaman basılır', hucre: (e) => e.tetik },
   { anahtar: 'alanlar', baslik: 'İçerik', hucre: (e) => e.alanlar },

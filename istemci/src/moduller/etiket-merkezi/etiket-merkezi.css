@@ -12,6 +12,10 @@
 .tc-etk-cizgi { fill: none; stroke: var(--ink); }
 .tc-etk-yazi { fill: var(--ink); font-family: var(--font-ana); }
 .tc-etk-kalin { font-weight: 700; }
+.tc-etk-ters { fill: var(--panel-solid); }
+.tc-etk-oyuk-cizgi { fill: none; stroke: var(--panel-solid); }
+.tc-etk-tur { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-etk-tur-simge { flex: none; inline-size: var(--b-6); block-size: var(--b-6); }
 .tc-etk-not { margin: 0; color: var(--muted); }
 .tc-etk-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 .tc-etk-komut pre { max-block-size: 40vh; overflow: auto; margin: 0; padding: var(--b-2); font-family: var(--font-mono); white-space: pre; }

@@ -46,3 +46,8 @@
 | Kalite durumu stoktan (`disari.ts kaliteEtiketleri`); olmayan, lotsuz, boş satır eksikte; lot şablonu basmaz; deftere `kalite-durum` olarak bakiye satırı; `oku` olmayan 403 | `EM-U19` |
 | EM-23: sevk koli etiketi Sevkiyat kaleminden; koli başına bir etiket (n/N); koli içi adet elle, yoksa kalemin adedi; QR kalemin emri (`UE:`), emirsizde yok | `kurallar.test.ts` EM-7, `EM-U20`, `EtiketMerkezi.test.tsx` |
 | EM-24: koli sayısı yalnız sevk kolisinde (başka türde 400); kayıt x koli x adet sınırı; deftere kalem bir kez | `EM-U20` |
+| EM-25: piktogram yazıcıda kutu komutuyla basılır (ZPL `^GB`, PPLB `LO`; bit eşlem yok); ters yazı ZPL `^FR`, PPLB `R`; önizleme aynı biçimleri çizer | `kurallar.test.ts` EM-25, `piktogram.test.ts`, `etiket-piktogramlari.test.ts`, `EtiketMerkezi.test.tsx` |
+| EM-26: koşullu öğe (`kosul`) alanı boşsa basılmaz; tanınmayan piktogram değeri basılmaz | `kurallar.test.ts` EM-26 |
+| EM-27: refakat kartında 7 işlem satırı (no, piktogram, ad, yer, imza); fazlası son satırda "+N işlem daha"; fason işlem fason piktogramıyla | `kurallar.test.ts` EM-17, EM-27, `EM-U16` |
+| EM-28: kalite ve hatalı parça kararı karoyla (bekliyor çizgili, kabul beyaz, şartlı/rework/hurda/red siyah); redde kalın çerçeve; sevk kolisinde koli içi girilmeden çok kolide başlık "KALEM TOPLAMI" | `kurallar.test.ts` EM-28, `EM-U18`, `EM-U20` |
+| Her şablonun sağ üstünde türün piktogramı; etiket listesinde her türün piktogramı | `kurallar.test.ts`, `EtiketMerkezi.test.tsx` |
