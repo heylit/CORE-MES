@@ -1,0 +1,13 @@
+/* Planlama analizi (2151): istasyon x hafta doluluk tablosu. Renk tasarım değişkenlerinden; hücrede yüzde her zaman yazar. */
+.pa-isi-kap { overflow-x: auto; }
+.pa-isi { border-collapse: collapse; font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; width: 100%; }
+.pa-isi th, .pa-isi td { padding: var(--b-1) var(--b-2); text-align: right; white-space: nowrap; border-bottom: 1px solid var(--edge); }
+.pa-isi th[scope='row'] { text-align: left; position: sticky; left: 0; background: var(--panel); }
+.pa-isi thead th { color: var(--ink); font-weight: 600; }
+.pa-isi .pa-ileri { border-left: 1px solid var(--edge); }
+.pa-isi td { --c: var(--idle); color: var(--ink); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.pa-isi td[data-doluluk='rahat'] { --c: var(--run); }
+.pa-isi td[data-doluluk='dar'] { --c: var(--hold); }
+.pa-isi td[data-doluluk='tasmis'] { --c: var(--stop); font-weight: 700; }
+.pa-isi td[data-doluluk='bos'] { background: none; }
+.pa-aciklama { margin: var(--b-2) 0 0; font-size: var(--yazi-xs); }

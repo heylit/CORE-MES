@@ -12,6 +12,7 @@ import {
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
+import { planAnaliziCevabi } from '#paylasilan/sozlesme/plan-analiz.ts';
 import { atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ekMesaiyiEkle, isiTasi, olayiEkle } from './atolye-komutlari.ts';
@@ -20,6 +21,7 @@ import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import { mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
+import { planAnalizi } from './analiz.ts';
 import { planSagligi } from './plan-sagligi.ts';
 import { projePlani } from './proje-plani.ts';
 import * as servis from './servis.ts';
@@ -58,6 +60,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),
   // 1478: plan sağlığı; yalnız okur. Planlama sayfalarını gören (yönetici, müdür, planlama) okur.
   uc({ yontem: 'GET', yol: '/plan/plan-sagligi', yetki: PLANLAMA_OKUR, cevap: planSagligiCevabi, isle: ({ db, kullanici }) => planSagligi(db, kullanici) }),
+  // 2151: planlama analizi; plan sağlığıyla aynı okuyucu (yeni işlem açılmaz).
+  uc({ yontem: 'GET', yol: '/plan/analiz', yetki: PLANLAMA_OKUR, cevap: planAnaliziCevabi, isle: ({ db }) => planAnalizi(db) }),
   // 1472 M1 (1522 a): açık emirlerin brüt ve net malzeme ihtiyacı; yalnız okur, yeni işlem açılmaz. Planlama sayfalarını gören okur;
   // stok ve satın alma miktarı okuyanın kendi yetkisiyle (1545 a).
   uc({ yontem: 'GET', yol: '/plan/mrp-ihtiyaci', yetki: PLANLAMA_OKUR, cevap: mrpIhtiyaciCevabi, isle: ({ db, kullanici }) => mrpIhtiyaci(db, kullanici) }),
