@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
-import { S, V } from './store.ts';
+import { S, V, persistUndoable, UNDO } from './store.ts';
+import { openModal, toast } from './ui.ts';
 import { YENILEME_MS, acilisOku, merkezAc, merkeziBagla } from './bagla.ts';
 
 const talep = (id: string, no: string): Talep => ({
@@ -85,7 +86,7 @@ describe('Merkez bağlama', () => {
     expect(f).toHaveBeenCalledTimes(once);
     ara.blur();
     // Pencere açık: yenileme beklenir.
-    const pencere = kok.querySelector('#modal-root')!;
+    const pencere = document.querySelector('#modal-root')!;
     pencere.append(document.createElement('div'));
     vi.advanceTimersByTime(YENILEME_MS);
     expect(f).toHaveBeenCalledTimes(once);
@@ -111,7 +112,70 @@ describe('Merkez bağlama', () => {
     expect([V.page, V.id, V.tab]).toEqual(['request', ILK, 'order']);
     await vi.waitFor(() => expect(kok.querySelector('#main')?.textContent).toContain('ST-2026-001'));
     merkezAc(acilisOku(new URLSearchParams('yeni=talep'))!);
-    await vi.waitFor(() => expect(kok.querySelector('#modal-root')?.textContent).toContain('Yeni satın alma talebi'));
+    await vi.waitFor(() => expect(document.querySelector('#modal-root')?.textContent).toContain('Yeni satın alma talebi'));
     kapat();
+  });
+
+  // 2165: pencere ortak pencerenin yapısıyla, bildirim ve geri al kabuğun ortak bildirimiyle çizilir.
+  it('pencere ortak pencere bölmeleriyle açılır; kapat düğmesi ve perde kapatır, yapışkan perde kapatmaz', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    // Kök ortak pencere gibi gövdededir: kabuğun üst çubuğu perdenin altında kalır.
+    expect(document.querySelector('#modal-root')!.parentElement).toBe(document.body);
+    expect(kok.querySelector('#modal-root')).toBeNull();
+    openModal('<div class="mh"><h2>Deneme</h2></div><div class="mb"><input id="ilk"></div><div class="mf"><button data-act="close">Vazgeç</button></div>', true);
+    const pencere = document.querySelector<HTMLElement>('#modal-root > .tc-perde > .tc-pencere.tc-pencere-orta.sa-pencere-dar')!;
+    expect(pencere.getAttribute('role')).toBe('dialog');
+    expect(pencere.querySelector('.mh')!.classList.contains('tc-pencere-ust')).toBe(true);
+    expect(pencere.querySelector('.mb')!.classList.contains('tc-pencere-govde')).toBe(true);
+    expect(pencere.querySelector('.mf')!.classList.contains('tc-pencere-alt')).toBe(true);
+    const baslik = pencere.querySelector('h2')!;
+    expect(baslik.classList.contains('tc-pencere-baslik')).toBe(true);
+    expect(pencere.getAttribute('aria-labelledby')).toBe(baslik.id);
+    expect(document.activeElement?.id).toBe('ilk');
+    pencere.querySelector<HTMLElement>('.tc-pencere-kapat')!.click();
+    expect(document.querySelector('#modal-root')!.innerHTML).toBe('');
+    openModal('<div class="mh"><h2>Yapışkan</h2></div><div class="mb"></div>', false, true);
+    document.querySelector<HTMLElement>('.tc-perde')!.click();
+    expect(document.querySelector('.tc-pencere')).not.toBeNull();
+    openModal('<div class="mh"><h2>Serbest</h2></div><div class="mb"></div>', 'wide');
+    expect(document.querySelector('.tc-pencere.sa-pencere-genis')).not.toBeNull();
+    document.querySelector<HTMLElement>('.tc-perde')!.click();
+    expect(document.querySelector('#modal-root')!.innerHTML).toBe('');
+    kapat();
+    expect(document.querySelector('#modal-root')).toBeNull();
+  });
+
+  it('bildirim ve geri al ortak bildirime gider; Geri al eylemi işlemi geri alır, eski iskelet alanları yok', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const bildirimler: { ton: string; mesaj: string; eylem?: { etiket: string; yap: () => void } }[] = [];
+    const kaldirilan: number[] = [];
+    const bildirim = {
+      bildir: (ton: 'tamam' | 'bilgi' | 'hata', mesaj: string, secenek?: { eylem?: { etiket: string; yap: () => void } }) => { bildirimler.push({ ton, mesaj, eylem: secenek?.eylem }); return bildirimler.length; },
+      kaldir: (no: number) => { kaldirilan.push(no); },
+    };
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, bildirim });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    expect(kok.querySelector('#toast')).toBeNull();
+    expect(kok.querySelector('#undo')).toBeNull();
+    persistUndoable('requests', ILK, null, 'Talep silindi');
+    expect(S.requests[ILK]).toBeUndefined();
+    const geriAl = bildirimler.at(-1)!;
+    expect([geriAl.ton, geriAl.mesaj, geriAl.eylem?.etiket]).toEqual(['tamam', 'Talep silindi', 'Geri al']);
+    geriAl.eylem!.yap();
+    expect(UNDO.pending).toBeNull();
+    expect(S.requests[ILK]).toBeDefined();
+    expect(kaldirilan).toEqual([bildirimler.indexOf(geriAl) + 1]);
+    expect(bildirimler.at(-1)).toMatchObject({ ton: 'tamam', mesaj: 'Geri alındı' });
+    toast('Tedarikçi seçin.');
+    expect(bildirimler.at(-1)).toMatchObject({ ton: 'bilgi', mesaj: 'Tedarikçi seçin.' });
+    kapat();
+    toast('Bağlı değilken');
+    expect(bildirimler.at(-1)!.mesaj).toBe('Tedarikçi seçin.');
   });
 });

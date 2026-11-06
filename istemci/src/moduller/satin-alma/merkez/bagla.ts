@@ -6,12 +6,13 @@
 import "./styles.css";
 import "./yerlesim.css";
 import { setOnaylayabilir, setRole, type Role } from "./roles.ts";
-import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, UNDO_MS, type Page } from "./store.ts";
-import { go, registerUIHooks, requestModal, toast } from "./ui.ts";
-import { esc } from "./util.ts";
+import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
+import { bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, requestModal, toast, type BildirimYolu } from "./ui.ts";
 import { onAfterRender, render } from "./views.ts";
 
-// Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; pencere, bildirim ve geri al alanları da kökün içinde.
+// Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
+// Pencere kökü ortak pencere gibi sayfanın gövdesine konur: kabuğun üst çubuğu ve şeritleri perdenin altında kalır. Kök
+// prototipin stil kökünü (sa-kok) ve merkez işaretini taşır; içerideki tıklama ve tuşlar merkezin olay yollarından geçer.
 const ISKELET = `<div class="app">
   <div class="mainwrap">
     <div class="topbar">
@@ -27,13 +28,10 @@ const ISKELET = `<div class="app">
     </div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
-</div>
-<div id="modal-root"></div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="undo" id="undo" role="status" aria-live="polite" hidden></div>`;
+</div>`;
 
 export type MerkezSayfasi = Page;
-export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string) => void; onaylayabilir?: boolean }
+export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string) => void; onaylayabilir?: boolean; bildirim?: BildirimYolu }
 
 // Prototip sayfası → ikinci menü yolu. Ayrıntı sayfası ait olduğu listenin yolundadır; talep ayrıntısı geldiği yolda kalır.
 const YOLLAR: Partial<Record<Page, string>> = {
@@ -49,7 +47,7 @@ export const sayfaYolu = (sayfa: Page, rol: Role): string | null => (sayfa === "
 export const YENILEME_MS = 30_000;
 export function yenilenebilirMi(kok: HTMLElement): boolean {
   if (document.visibilityState === "hidden" || UNDO.pending) return false;
-  if (kok.querySelector("#modal-root")?.childElementCount) return false;
+  if (document.getElementById("modal-root")?.childElementCount) return false;
   const odak = document.activeElement;
   return !(odak instanceof HTMLElement && kok.contains(odak) && odak.matches("input, textarea, select, [contenteditable]"));
 }
@@ -71,16 +69,17 @@ function kancalariKur(): void {
   // Yalnız modül sayfada bağlıyken çizilir: açılış verisi başka bir TMI sayfasındayken gelirse çizim atlanır.
   setRenderer(() => { if (document.querySelector("[data-sa-merkez]")) render(); });
   setToaster(toast);
+  // Geri al, "Geri al" düğmeli ortak bildirimdir; bildirimin süresi bekletme süresiyle (UNDO_MS) aynıdır.
+  let geriAlBildirimi: number | null = null;
   setUndoUI({
     show(label) {
-      const el = document.getElementById("undo");
-      if (!el) return;
-      el.innerHTML = `<span>${esc(label)}</span><button class="undo-btn" data-act="undo">Geri al</button><i class="ubar" style="animation-duration:${UNDO_MS}ms"></i>`;
-      el.hidden = false;
+      const yol = bildirimYoluOku();
+      if (geriAlBildirimi !== null) yol?.kaldir(geriAlBildirimi);
+      geriAlBildirimi = yol ? yol.bildir("tamam", label, { eylem: { etiket: "Geri al", yap: undoLast } }) : null;
     },
     hide() {
-      const el = document.getElementById("undo");
-      if (el) { el.hidden = true; el.innerHTML = ""; }
+      if (geriAlBildirimi !== null) bildirimYoluOku()?.kaldir(geriAlBildirimi);
+      geriAlBildirimi = null;
     },
   });
 }
@@ -88,11 +87,18 @@ function kancalariKur(): void {
 export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => void {
   kok.innerHTML = ISKELET;
   kok.dataset.saMerkez = "1";
+  document.getElementById("modal-root")?.remove();
+  const pencereKoku = document.createElement("div");
+  pencereKoku.id = "modal-root";
+  pencereKoku.className = "sa-kok sa-pencere-kok";
+  pencereKoku.dataset.saMerkez = "1";
+  document.body.append(pencereKoku);
   // İçeriden gelinen ayrıntı sayfası (aynı madde yolunda) korunur; değilse maddenin ekranı açılır.
   if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
   setRole(secenek.rol);
   setOnaylayabilir(secenek.onaylayabilir ?? false);
   etkin = secenek;
+  bildirimYoluKur(secenek.bildirim ?? null);
   kancalariKur();
   if (!ilkYukleme) ilkYukleme = init(); else { render(); void yenile(); }
   const tazele = () => { if (yenilenebilirMi(kok)) void yenile(); };
@@ -102,7 +108,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   return () => {
     clearInterval(zamanlayici);
     document.removeEventListener("visibilitychange", gorunce);
-    if (etkin === secenek) etkin = null; kok.innerHTML = ""; delete kok.dataset.saMerkez;
+    if (etkin === secenek) { etkin = null; bildirimYoluKur(null); } kok.innerHTML = ""; delete kok.dataset.saMerkez; pencereKoku.remove();
   };
 }
 

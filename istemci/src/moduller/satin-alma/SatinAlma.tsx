@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useBildirim } from '../../ortak/arayuz/Bildirim.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { StokYokKarti } from './StokYokKarti.tsx';
 import { acilisOku, merkezAc, merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
@@ -12,7 +13,12 @@ function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: str
   const [adres, adresYaz] = useSearchParams();
   const { data: kullanici } = useOturum();
   const onaylayabilir = kullanici?.islemler.includes('satin-alma.onayla') ?? false;
-  useEffect(() => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, onaylayabilir, git: (y) => { void git(y); } }) : undefined), [rol, sayfa, yol, onaylayabilir, git]);
+  // Merkezin bildirimi ve geri al'ı kabuğun ortak bildirimidir.
+  const { bildir, kaldir } = useBildirim();
+  useEffect(
+    () => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, onaylayabilir, git: (y) => { void git(y); }, bildirim: { bildir, kaldir } }) : undefined),
+    [rol, sayfa, yol, onaylayabilir, git, bildir, kaldir],
+  );
   // Ctrl K'nın açtığı talep ya da pencere (1237); adres temizlenir ki geri gelince pencere yeniden açılmasın.
   useEffect(() => {
     const acilis = acilisOku(adres);

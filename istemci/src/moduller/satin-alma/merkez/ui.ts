@@ -25,16 +25,45 @@ import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
+import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
+import "../../../ortak/arayuz/pencere.css";
+import "../../../ortak/arayuz/simge.css";
 /* ================= modal altyapısı ================= */
+// Pencere ortak pencerenin (ortak/arayuz/Pencere.tsx) yapısını ve sınıflarını kullanır: perde, başlık satırı ve kapat düğmesi,
+// kayan gövde, alt satır. İçerik prototipin dizgisi olarak kalır; .mh, .mb, .mf ortak bölmelere eşlenir.
+const KAPAT_SIMGESI = `<svg class="tc-simge tc-simge-o" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${SIMGELER.x}"/></svg>`;
+let pencereSayaci = 0;
 export function openModal(html: string, narrow: boolean | "wide" = false, sticky = false): void {
   // narrow: dar pencere, "wide": geniş tablo penceresi; sticky: dışarı tıklayınca kapanmaz (veri girişi kaybolmasın)
-  $("#modal-root").innerHTML = `<div class="ovl" data-act="ovl" ${sticky ? 'data-sticky="1"' : ""}><div class="modal ${narrow === "wide" ? "wide" : narrow ? "narrow" : ""}" role="dialog" aria-modal="true">${html}</div></div>`;
-  labelTables($("#modal-root"));
+  const boy = narrow === "wide" ? " sa-pencere-genis" : narrow ? " sa-pencere-dar" : "";
+  const kok = $("#modal-root");
+  kok.innerHTML = `<div class="tc-perde" data-act="ovl" ${sticky ? 'data-sticky="1"' : ""}><div class="tc-pencere tc-pencere-orta sa-pencere${boy}" role="dialog" aria-modal="true">${html}</div></div>`;
+  const pencere = kok.querySelector<HTMLElement>(".tc-pencere")!;
+  const ust = pencere.querySelector<HTMLElement>(":scope > .mh");
+  if (ust) {
+    ust.classList.add("tc-pencere-ust");
+    const baslik = ust.querySelector<HTMLElement>("h2");
+    if (baslik) { baslik.classList.add("tc-pencere-baslik"); baslik.id = `sa-pencere-${++pencereSayaci}`; pencere.setAttribute("aria-labelledby", baslik.id); }
+    ust.insertAdjacentHTML("beforeend", `<button type="button" class="tc-pencere-kapat" data-act="close" aria-label="Kapat">${KAPAT_SIMGESI}</button>`);
+  }
+  pencere.querySelector(":scope > .mb")?.classList.add("tc-pencere-govde");
+  pencere.querySelector(":scope > .mf")?.classList.add("tc-pencere-alt");
+  labelTables(kok);
   const f = $("#modal-root input:not([type=hidden]):not([disabled]), #modal-root select, #modal-root textarea"); if (f) f.focus();
 }
 export function closeModal(): void { $("#modal-root").innerHTML = ""; if (BULK && !BULK.inline) BULK = null; }
-let tt: ReturnType<typeof setTimeout> | undefined;
-export function toast(m: string): void { const t = $("#toast"); t.textContent = m; t.classList.toggle("lift", !$("#undo").hidden); t.classList.add("on"); clearTimeout(tt); tt = setTimeout(() => t.classList.remove("on"), 3400); }
+
+// Bildirim ve geri al ortak bildirimden çizilir (ortak/arayuz/Bildirim.tsx); merkez React dışında olduğu için yol bağlanırken verilir.
+export interface BildirimYolu {
+  bildir: (ton: "tamam" | "bilgi" | "hata", mesaj: string, secenek?: { eylem?: { etiket: string; yap: () => void } }) => number;
+  kaldir: (no: number) => void;
+}
+let bildirimYolu: BildirimYolu | null = null;
+export function bildirimYoluKur(yol: BildirimYolu | null): void { bildirimYolu = yol; }
+export function bildirimYoluOku(): BildirimYolu | null { return bildirimYolu; }
+// Prototipte yönlendiren uyarılar noktayla biter ("Tedarikçi seçin."), sonuç bildirenler noktasızdır ("Teklif kaydedildi").
+export const bildirimTonu = (m: string): "tamam" | "bilgi" => (m.trimEnd().endsWith(".") ? "bilgi" : "tamam");
+export function toast(m: string): void { bildirimYolu?.bildir(bildirimTonu(m), m); }
 async function copyText(text: string): Promise<void> {
   try { await navigator.clipboard.writeText(text); toast("Kopyalandı"); return; } catch { /* panoya erişim yok */ }
   try {
