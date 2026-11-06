@@ -42,6 +42,23 @@ export function kimlikParametreleri(parametre: unknown): Record<string, number> 
   ) as Record<string, number>;
 }
 
+// 2158-4 a: sınırlı hesabın okuma kaydı yalnız hangi kaydın okunduğunu tutar. Kimlik adlı tam sayı (ya da tam sayı dizisi) kalır;
+// öteki her değer (arama metni, tarih, durum, gizli adlı alan) adıyla "[gizli]" olur: arama kutusuna yazılan kişisel veri ya da
+// sır kayda girmez. Düz nesne değilse bütünü gizlenir; boşsa (parametresiz uç) null.
+const okunurKimlik = (ad: string, deger: unknown): boolean => KIMLIK_ADI.test(ad) && !gizliAnahtarMi(ad)
+  && (Number.isSafeInteger(deger) || (Array.isArray(deger) && deger.length <= 100 && deger.every((d) => Number.isSafeInteger(d))));
+
+export function okumaIzi(deger: unknown): Record<string, unknown> | string | null {
+  if (deger === undefined || deger === null) return null;
+  if (typeof deger !== 'object' || Array.isArray(deger)) return '[gizli]';
+  const girdiler = Object.entries(deger);
+  if (girdiler.length === 0) return null;
+  return Object.fromEntries(girdiler.map(([ad, ic]) => [ad, okunurKimlik(ad, ic) ? ic : '[gizli]']));
+}
+
+// 2158-4 a: okuma kaydı 2 yıl saklanır; veritabanı tetiği de aynı süreyi uygular (göç 20261106098000).
+export const OKUMA_SAKLAMA_GUN = 730;
+
 export interface DegisiklikAlani { alan: string; eski: unknown; yeni: unknown }
 
 // Defter alanı "sutun" ya da jsonb sütununda "sutun.anahtar"dır; gizli adlı alanın iki değeri de çıkmaz. Alan adı kalır ki

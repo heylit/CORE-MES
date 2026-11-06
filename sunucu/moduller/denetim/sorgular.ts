@@ -197,3 +197,58 @@ export function akisSatirlari(
     [[...s.tablolar], s.baslangic, s.onceId, s.sinir],
   );
 }
+
+// 2158-4 a: sınırlı hesabın okuma kaydı. Parametre ve sorgu yazılmadan önce `kurallar.okumaIzi` ile süzülmüştür.
+export async function okumaEkle(
+  db: Db, satir: { kisiId: number; modul: string | null; yol: string; parametre: unknown; sorgu: unknown },
+): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO okuma_kaydi (kisi_id, modul, yol, parametre, sorgu) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)',
+    [satir.kisiId, satir.modul, satir.yol, json(satir.parametre ?? undefined), json(satir.sorgu ?? undefined)],
+  );
+}
+
+export interface OkumaSuzgeci {
+  kisi: number | null;
+  baslangic: string | null;
+  bitis: string | null;
+  modul: string | null;
+}
+
+const OKUMA_SUZGECI = `FROM okuma_kaydi o
+  WHERE ($1::int IS NULL OR o.kisi_id = $1)
+    AND ($2::date IS NULL OR o.zaman >= $2::date)
+    AND ($3::date IS NULL OR o.zaman < $3::date + 1)
+    AND ($4::text IS NULL OR o.modul = $4)`;
+
+const okumaDegerleri = (s: OkumaSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.modul];
+
+export async function okumaSay(db: Db, s: OkumaSuzgeci): Promise<number> {
+  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${OKUMA_SUZGECI}`, okumaDegerleri(s)))?.toplam ?? 0;
+}
+
+export interface OkumaSatiriHam {
+  id: number;
+  zaman: string;
+  kisi_id: number;
+  modul: string | null;
+  yol: string;
+  parametre: unknown;
+  sorgu: unknown;
+}
+
+export function okumalar(db: Db, s: OkumaSuzgeci, dilim: Dilim): Promise<OkumaSatiriHam[]> {
+  return db.sorgu<OkumaSatiriHam>(
+    `SELECT o.id, ${zamanMetni('o.zaman')} AS zaman, o.kisi_id, o.modul, o.yol, o.parametre, o.sorgu ${OKUMA_SUZGECI}
+      ORDER BY o.zaman DESC, o.id DESC LIMIT $5 OFFSET $6`,
+    [...okumaDegerleri(s), dilim.sinir, dilim.atla],
+  );
+}
+
+// Saklama süresi dolan satırlar; tetik süresi dolmamış satırın silinmesini ayrıca reddeder.
+export async function eskiOkumalariSil(db: Db, gun: number): Promise<number> {
+  const satirlar = await db.sorgu<{ id: number }>(
+    'DELETE FROM okuma_kaydi WHERE zaman < now() - make_interval(days => $1) RETURNING id', [gun],
+  );
+  return satirlar.length;
+}

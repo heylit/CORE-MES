@@ -1,7 +1,8 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   degisiklikIcerigiCevabi, degisiklikListesiCevabi, degisiklikListesiSorgusu, degisiklikSecenekleriCevabi,
-  kayitIcerigiCevabi, kayitIdParametresi, kayitListesiCevabi, kayitListesiSorgusu, suzgecSecenekleriCevabi,
+  kayitIcerigiCevabi, kayitIdParametresi, kayitListesiCevabi, kayitListesiSorgusu, okumaListesiCevabi, okumaListesiSorgusu,
+  suzgecSecenekleriCevabi,
 } from '#paylasilan/sozlesme/denetim.ts';
 import * as servis from './servis.ts';
 
@@ -31,5 +32,10 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/denetim-degisiklikleri/:id/icerik', yetki: 'denetim.govde-oku', parametre: kayitIdParametresi, cevap: degisiklikIcerigiCevabi,
     isle: ({ db, parametre }) => servis.degisiklikIcerigi(db, parametre.id),
+  }),
+  // 2158-4 a: sınırlı hesabın okuma kaydı; kayıt listesiyle aynı yetki, yeni işlem yok. Satır yalnız tam sayı kimlik taşır.
+  uc({
+    yontem: 'GET', yol: '/denetim-okumalari', yetki: 'denetim.oku', sorgu: okumaListesiSorgusu, cevap: okumaListesiCevabi,
+    isle: ({ db, sorgu }) => servis.okumaListesi(db, sorgu),
   }),
 ];

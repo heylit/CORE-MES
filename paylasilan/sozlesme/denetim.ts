@@ -136,3 +136,33 @@ export interface DenetimUclari {
   'GET /denetim-degisiklikleri/suzgecler': { cevap: DegisiklikSecenekleriCevabi };
   'GET /denetim-degisiklikleri/:id/icerik': { cevap: DegisiklikIcerigiCevabi };
 }
+
+// 2158-4 a: sınırlı hesabın (denetçi, misafir) okuma kaydı. Satır yalnız hangi kaydın okunduğunu söyleyen tam sayı kimlikleri
+// taşır (yol ve sorgu parametresi); öteki değerler kayda hiç yazılmaz. Saklama 2 yıl.
+export const okumaListesiSorgusu = z.object({
+  ...sayfaSorguAlanlari,
+  kisi: z.coerce.number().int().positive().max(2147483647).optional(),
+  baslangic: tarihSemasi.optional(),
+  bitis: tarihSemasi.optional(),
+  modul: z.string().trim().regex(/^[a-z][a-z0-9-]{0,62}$/).optional(),
+}).strict().superRefine((s, ctx) => {
+  if (s.baslangic !== undefined && s.bitis !== undefined && s.baslangic > s.bitis) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bitis'], message: 'Bitiş tarihi başlangıçtan önce olamaz.' });
+  }
+});
+
+export const okumaSatiri = z.object({
+  id: z.number().int(),
+  zaman: zamanSemasi,
+  kisiId: z.number().int(),
+  kisiAd: z.string().nullable(),
+  modul: z.string().nullable(),
+  yol: z.string(),
+  kimlikler: z.record(z.string(), z.number().int()),
+  sorguKimlikleri: z.record(z.string(), z.number().int()),
+});
+
+export const okumaListesiCevabi = listeCevapSemasi(okumaSatiri);
+export type OkumaListesiSorgusu = z.input<typeof okumaListesiSorgusu>;
+export type OkumaSatiri = z.output<typeof okumaSatiri>;
+export type OkumaListesiCevabi = z.output<typeof okumaListesiCevabi>;

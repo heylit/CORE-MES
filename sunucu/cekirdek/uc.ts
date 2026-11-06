@@ -300,8 +300,11 @@ export interface DenetimGirdisi {
   yol: string;
   parametre: unknown;
   govde: unknown;
-  // Yalnız gövdesiz uçta vardır: gövdenin yerine ne yazılacağını denetimi yazan belirler.
-  kip?: 'govdesiz';
+  // 'govdesiz': gövdenin yerine ne yazılacağını denetimi yazan belirler. 'okuma': sınırlı hesabın okuması (2158-4 a);
+  // denetim kaydına değil okuma kaydına girer, gövdesi yoktur.
+  kip?: 'govdesiz' | 'okuma';
+  // Yalnız okuma kipinde vardır: GET ucunun sorgu parametreleri, sözleşmede gizli işaretli alanı maskelenmiş.
+  sorgu?: unknown;
   // Yalnız seçicisi olan gövdesiz uçta vardır; sınırları çekirdek denetlemiştir, gizli adlı alanı denetimi yazan maskeler.
   secilen?: DenetimSecimi;
   // Uç katmanı doldurur: ucun modülü (keşifte) ve istediği yetki. Uç dışından yazılan kayıtta yoktur.
@@ -636,6 +639,16 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
         if (cerezler.length > 0) void yanit.header('set-cookie', cerezler);
         if ('ret' in bitti) throw bitti.ret;
         const sonuc = bitti.cevap;
+
+        // 2158-4 a, 2158-8 a: sınırlı hesabın okuması cevap gitmeden kendi transaction'ında yazılır; yazılamazsa cevap verilmez
+        // (500), kayıtsız okuma olmaz. Oturum modülü (kabuk, kendi hesabı) yazılmaz. Dosya sınırlı hesaba zaten kapalıdır.
+        if (!yazma && kullanici?.sinirli !== undefined && modul !== 'oturum' && denetle !== undefined) {
+          await vt.tx((db) => denetle(db, {
+            kisiId: kullanici.id, yontem: tanim.yontem, yol: tanim.yol, kip: 'okuma',
+            parametre: semayaGoreGizle(tanim.parametre, parametre), sorgu: semayaGoreGizle(tanim.sorgu, sorgu), govde: undefined,
+            yetki: yetkiMetni(tanim.yetki), ...(modul === undefined ? {} : { modul }),
+          }));
+        }
 
         if (tanim.ikili) {
           if (durumKodu !== null) throw new Error(`İkili cevapta durum kodu yazılamaz: ${anahtar}`);
