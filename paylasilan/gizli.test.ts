@@ -49,3 +49,41 @@ test('tanınmayan şema türünde değer gizlenir; yaprak türler aynen kalır',
   assert.deepEqual(taninmayanTurler(sema), ['YeniSarmalayici', 'ZodMap']);
   assert.deepEqual(taninmayanTurler(z.object({ ad: z.string(), satir: z.array(z.tuple([z.number()])) })), []);
 });
+
+// Geçiş kapısı (2162): her şema türünde işaretli alanın değeri kayda girmez, işaretsiz komşusu aynen kalır. Zod sürümü
+// değişince bu liste aynı kalmalı ve yeşil olmalıdır; tür eklenirse buraya da eklenir.
+test('her şema türünde gizli alan maskelenir, komşusu aynen kalır', () => {
+  const ic = z.object({ pin: gizli(z.string()), not: z.string() });
+  const deger = { pin: '1234', not: 'a' };
+  const maskeli = { pin: GIZLI_DEGER, not: 'a' };
+  const durumlar: [string, z.ZodTypeAny, unknown, unknown][] = [
+    ['optional', ic.optional(), deger, maskeli],
+    ['nullable', ic.nullable(), deger, maskeli],
+    ['default', ic.default({ pin: '0', not: 'b' }), deger, maskeli],
+    ['catch', ic.catch({ pin: '0', not: 'b' }), deger, maskeli],
+    ['readonly', ic.readonly(), deger, maskeli],
+    ['brand', ic.brand<'Kayit'>(), deger, maskeli],
+    ['refine', ic.refine(() => true), deger, maskeli],
+    ['superRefine', ic.superRefine(() => undefined), deger, maskeli],
+    ['transform', ic.transform((d) => d), deger, maskeli],
+    ['pipe', z.unknown().pipe(ic), deger, maskeli],
+    ['preprocess', z.preprocess((d) => d, ic), deger, maskeli],
+    ['union', z.union([ic, z.number()]), deger, maskeli],
+    ['discriminatedUnion', z.discriminatedUnion('tur', [ic.extend({ tur: z.literal('a') }), z.object({ tur: z.literal('b') })]),
+      { ...deger, tur: 'a' }, { ...maskeli, tur: 'a' }],
+    ['intersection', z.intersection(z.object({ not: z.string() }), z.object({ pin: gizli(z.string()) })), deger, maskeli],
+    ['tuple', z.tuple([z.string(), gizli(z.string())]), ['a', '1234'], ['a', GIZLI_DEGER]],
+    ['array', z.array(ic), [deger], [maskeli]],
+    ['record', z.record(z.string(), ic), { x: deger }, { x: maskeli }],
+    ['lazy', z.lazy(() => ic), deger, maskeli],
+    ['strict', ic.strict(), deger, maskeli],
+    ['passthrough', ic.passthrough(), { ...deger, ek: 'e' }, { ...maskeli, ek: 'e' }],
+    ['gizli optional', z.object({ pin: gizli(z.string().optional()), not: z.string() }), deger, maskeli],
+    ['gizli nullable null', z.object({ pin: gizli(z.string()).nullable(), not: z.string() }), { pin: null, not: 'a' }, maskeli],
+    ['gizli default', z.object({ pin: gizli(z.string()).default('0'), not: z.string() }), deger, maskeli],
+  ];
+  for (const [ad, sema, girdi, beklenen] of durumlar) {
+    assert.deepEqual(semayaGoreGizle(sema, girdi), beklenen, ad);
+    assert.deepEqual(taninmayanTurler(sema), [], ad);
+  }
+});
