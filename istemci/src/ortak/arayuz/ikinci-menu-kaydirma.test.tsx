@@ -87,42 +87,45 @@ describe('Şerit kaydırma işareti', () => {
   });
 });
 
-describe('Diğer düğmesi (karar 2155-7)', () => {
-  it('sağda gizli madde varken görünür, klavyeyle erişilir; sığan şeritte çıkmaz', () => {
+describe('Diğer listesi (karar 2155-7, 2155-12)', () => {
+  // jsdom yerleşim yapmaz: şerit 0-300 arası, ilk madde içeride, ikincisi sağda dışarıdadır.
+  function yerlesim() {
+    const kutu = { left: 0, right: 300, top: 0, bottom: 40, width: 300, height: 40, x: 0, y: 0, toJSON: () => ({}) };
+    ikinci().getBoundingClientRect = () => kutu as DOMRect;
+    const [ilk, ikincisi] = [...ikinci().querySelectorAll<HTMLElement>('a')];
+    if (ilk) ilk.getBoundingClientRect = () => ({ ...kutu, left: 10, right: 120 }) as DOMRect;
+    if (ikincisi) ikincisi.getBoundingClientRect = () => ({ ...kutu, left: 280, right: 420 }) as DOMRect;
+  }
+
+  it('sağda gizli madde varken "Diğer N" çıkar; sığan şeritte çıkmaz', () => {
     ciz();
     olcu(ikinci(), { kap: 700, icerik: 700, kaydirma: 0 });
     expect(diger()).toBeNull();
+    yerlesim();
     olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
-    const d = diger();
-    expect(d?.tagName).toBe('BUTTON');
-    expect(d?.getAttribute('aria-expanded')).toBe('false');
-    expect(d?.getAttribute('aria-controls')).toBe(ikinci().id);
-    expect(d?.textContent).toContain('Diğer');
+    const d = screen.getByRole('button', { name: 'Diğer sekmeler: 1' });
+    expect(d.textContent).toContain('Diğer 1');
+    expect(d.getAttribute('aria-haspopup')).toBe('menu');
   });
 
-  it('tıklanınca şerit açılır, kalan sekmeler satırlara iner; yeniden tıklanınca kapanır', () => {
+  it('tıklanınca yalnız görünmeyen sekmeler liste olarak açılır; şerit satırlara açılmaz', () => {
     ciz();
+    yerlesim();
     olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
-    fireEvent.click(diger()!);
-    expect(kap().hasAttribute('data-acik')).toBe(true);
-    expect(diger()?.getAttribute('aria-expanded')).toBe('true');
-    expect(diger()?.textContent).toContain('Daralt');
-    fireEvent.click(diger()!);
+    fireEvent.click(screen.getByRole('button', { name: 'Diğer sekmeler: 1' }));
+    const liste = screen.getByRole('menu', { name: 'Diğer sekmeler: 1' });
+    expect([...liste.querySelectorAll('[role="menuitem"]')].map((o) => o.textContent)).toEqual(['İş kutusu']);
     expect(kap().hasAttribute('data-acik')).toBe(false);
   });
 
-  it('açık şerit Escape ile ve sekme seçilince kapanır', () => {
+  it('listeden seçilen sekmeye gidilir ve liste kapanır', () => {
     ciz();
+    yerlesim();
     olcu(ikinci(), { kap: 300, icerik: 700, kaydirma: 0 });
-    fireEvent.click(diger()!);
-    const bag = screen.getByRole('link', { name: /İş kutusu/ });
-    bag.focus();
-    fireEvent.keyDown(bag, { key: 'Escape' });
-    expect(kap().hasAttribute('data-acik')).toBe(false);
-    fireEvent.click(diger()!);
-    expect(kap().hasAttribute('data-acik')).toBe(true);
-    fireEvent.click(bag);
-    expect(kap().hasAttribute('data-acik')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Diğer sekmeler: 1' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'İş kutusu' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.getByRole('link', { name: /İş kutusu/ }).getAttribute('aria-current')).toBe('page');
   });
 });
 

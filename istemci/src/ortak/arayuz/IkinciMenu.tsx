@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { etkinMadde, menuMaddeleri, type IkinciMenu as Tanim } from '../rota/ikinci-menu.ts';
+import { Menu, type MenuOgesi } from './Menu.tsx';
 import { Simge } from './Simge.tsx';
 import './ikinci-menu.css';
 
@@ -31,21 +32,20 @@ function kaydir(el: HTMLElement, hedef: number) {
 }
 
 // Modülün kendi sayfaları. Kabuk çizer; modül yalnız tanımı verir. Her genişlikte başlığın altında yatay sekme şerididir;
-// sığmayan madde yana kayar (kart #172). Sağda gizli madde varsa belirgin "Diğer N" düğmesi çıkar; tıklanınca şerit satırlara
-// açılır ve kalan sekmelerin hepsi görünür, sayfa değişince kapanır (kullanıcı kararı 2155-7). Solda okta beklemek sürekli
-// kaydırır, oka tıklamak bir sayfa atlatır; tekerlek yana çevrilir.
+// sığmayan madde yana kayar (kart #172). Sağda gizli madde varsa belirgin "Diğer N" düğmesi çıkar; tıklanınca görünmeyen
+// sekmeler açılır liste olarak gelir, şerit ve içerik yerinden oynamaz (kullanıcı kararları 2155-7, 2155-12). Solda okta
+// beklemek sürekli kaydırır, oka tıklamak bir sayfa atlatır; tekerlek yana çevrilir.
 export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
   const kutu = useRef<HTMLElement>(null);
   const etkin = etkinMadde(menuMaddeleri(menu), adres);
   const etkinAnahtar = etkin?.anahtar ?? null;
   // Şeritte gizli madde olan kenar: işaret orada görünür (dokunulmaz, yalnız gösterir).
   const [kenar, kenarYaz] = useState({ sol: false, sag: false });
-  // Sağda tamamı görünmeyen madde sayısı; düğmenin yazısıdır.
-  const [gizli, gizliYaz] = useState(0);
-  const [acik, acikYaz] = useState(false);
-  const dugme = useRef<HTMLButtonElement>(null);
+  // Tamamı görünmeyen maddeler (iki kenarda da); "Diğer" listesi bunlardır.
+  const [gizliler, gizlilerYaz] = useState<readonly string[]>([]);
+  const dugme = useRef<HTMLSpanElement>(null);
   const olcRef = useRef<() => void>(() => undefined);
-  const serit = useId();
+  const git = useNavigate();
   const kayma = useRef<number | null>(null);
   // Kullanıcı şeridi kendisi kaydırdıysa sonradan gelen sayı ya da yazı tipi şeridi etkin maddeye geri çekmez.
   const elle = useRef(false);
@@ -90,11 +90,8 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
 
   useEffect(() => dur, []);
 
-  // Düğme çıkınca kendi genişliği kadar madde daha örter: sayı yeniden ölçülür.
-  useEffect(() => { olcRef.current(); }, [kenar.sag, acik]);
-
-  // Açık şerit sayfa değişince kapanır; seçilen sekme kapalı şeritte görünür kalır.
-  useEffect(() => { acikYaz(false); }, [adres]);
+  // Düğme çıkınca kendi genişliği kadar madde daha örter: liste yeniden ölçülür.
+  useEffect(() => { olcRef.current(); }, [kenar.sag]);
 
   // Tekerlek dikey döner; şerit kayabiliyorsa yana çevrilir, uca gelince sayfa kayar. React tekerlek olayı
   // pasif olduğundan dinleyici elle eklenir.
@@ -120,9 +117,13 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       const sag = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
       kenarYaz((o) => (o.sol === sol && o.sag === sag ? o : { sol, sag }));
       // Düğmenin altında kalan madde de gizli sayılır.
-      const sinir = el.getBoundingClientRect().right - (dugme.current?.offsetWidth ?? 0);
-      const sayi = sag ? [...el.querySelectorAll('a')].filter((a) => a.getBoundingClientRect().right > sinir + 1).length : 0;
-      gizliYaz(sayi);
+      const kenarlar = el.getBoundingClientRect();
+      const sagSinir = kenarlar.right - (dugme.current?.offsetWidth ?? 0);
+      const yeni = sag ? [...el.querySelectorAll<HTMLElement>('a[data-anahtar]')].filter((a) => {
+        const k = a.getBoundingClientRect();
+        return k.right > sagSinir + 1 || k.left < kenarlar.left - 1;
+      }).map((a) => a.dataset['anahtar'] ?? '') : [];
+      gizlilerYaz((o) => (o.length === yeni.length && o.every((x, i) => x === yeni[i]) ? o : yeni));
     };
     olcRef.current = olc;
     olc();
@@ -158,11 +159,6 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
   }, [etkinAnahtar, sayaclar]);
 
   const tus = (o: KeyboardEvent<HTMLElement>) => {
-    if (o.key === 'Escape' && acik) {
-      acikYaz(false);
-      dugme.current?.focus();
-      return;
-    }
     const baglar = [...(kutu.current?.querySelectorAll<HTMLAnchorElement>('a') ?? [])];
     const simdi = baglar.findIndex((b) => b === document.activeElement);
     if (simdi === -1) return;
@@ -176,18 +172,25 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
     baglar[hedef]?.focus();
   };
 
+  const maddeler = menuMaddeleri(menu);
+  const digerOgeleri: MenuOgesi[] = gizliler.flatMap((a) => {
+    const m = maddeler.find((x) => x.anahtar === a);
+    if (!m) return [];
+    const sayi = sayaclar?.[m.anahtar];
+    return [{ anahtar: m.anahtar, baslik: typeof sayi === 'number' && sayi > 0 ? `${m.baslik} (${String(sayi)})` : m.baslik, simge: m.simge, sec: () => { void git(m.yol); } }];
+  });
+
   return (
     <div
       className="tc-ikinci-kap"
       data-sol={kenar.sol ? '' : undefined}
       data-sag={kenar.sag ? '' : undefined}
-      data-acik={acik ? '' : undefined}
       onPointerDown={elleKaydirdi}
       onTouchStart={elleKaydirdi}
       onWheel={elleKaydirdi}
       onKeyDown={elleKaydirdi}
     >
-      <nav ref={kutu} id={serit} className="tc-ikinci" aria-label={`${menu.baslik} menüsü`} onKeyDown={tus}>
+      <nav ref={kutu} className="tc-ikinci" aria-label={`${menu.baslik} menüsü`} onKeyDown={tus}>
         {menu.gruplar.map((g) => (
           <div
             className="tc-ikinci-grup"
@@ -201,6 +204,7 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
                 <Link
                   key={m.anahtar}
                   to={m.yol}
+                  data-anahtar={m.anahtar}
                   className={`tc-ikinci-madde${m.anahtar === etkinAnahtar ? ' tc-ikinci-madde-etkin' : ''}`}
                   aria-current={m.anahtar === etkinAnahtar ? 'page' : undefined}
                 >
@@ -223,21 +227,10 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       >
         <Simge ad="chev-left" boyut="k" />
       </span>
-      {(kenar.sag || acik) && (
-        <button
-          ref={dugme}
-          type="button"
-          className="tc-ikinci-diger"
-          aria-expanded={acik}
-          aria-controls={serit}
-          aria-label={acik ? 'Sekmeleri daralt' : gizli > 0 ? `Diğer sekmeler: ${gizli}` : 'Diğer sekmeler'}
-          onClick={() => { dur(); acikYaz((o) => !o); }}
-        >
-          <span className="tc-ikinci-diger-ad">
-            {acik ? 'Daralt' : gizli > 0 ? `Diğer ${gizli}` : 'Diğer'}
-            <Simge ad={acik ? 'up' : 'down'} boyut="k" />
-          </span>
-        </button>
+      {kenar.sag && digerOgeleri.length > 0 && (
+        <span ref={dugme} className="tc-ikinci-diger">
+          <Menu etiket={`Diğer sekmeler: ${String(digerOgeleri.length)}`} metin={`Diğer ${String(digerOgeleri.length)}`} simge="down" ogeler={digerOgeleri} />
+        </span>
       )}
     </div>
   );

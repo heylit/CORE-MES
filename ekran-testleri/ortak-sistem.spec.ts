@@ -1,10 +1,10 @@
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Ortak arayüz sistemi (kart 2155): ikinci menüde sığmayan sekmeler "Diğer" düğmesiyle satırlara açılır (karar 2155-7), pano sayısı
-// büyük ve kalın, veri yokken sayı boyunda yazı çıkmaz (karar 2, 9). Ölçüt her genişlikte aynıdır: açık şerit yatay taşmaz.
+// Ortak arayüz sistemi (kart 2155): ikinci menü yana kayar; sığmayan sekmeler "Diğer N" düğmesinin açılır listesindedir, şerit ve
+// içerik yerinden oynamaz (karar 2155-7, 2155-12). Pano sayısı büyük ve kalın, veri yokken sayı boyunda yazı çıkmaz (karar 2, 9).
 test.use({ hesap: 'ornek.yonetici' });
 
-test('ikinci menü: Diğer düğmesi kalan sekmeleri açar, sekme seçilince şerit kapanır', async ({ page, ag, ac }) => {
+test('ikinci menü: Diğer listesi görünmeyen sekmeleri verir, şerit yerinde kalır, seçilen sekmeye gider', async ({ page, ag, ac }) => {
   await ac('/stok');
   const kap = page.locator('.tc-ikinci-kap');
   const nav = page.getByRole('navigation', { name: /menüsü$/ });
@@ -12,26 +12,22 @@ test('ikinci menü: Diğer düğmesi kalan sekmeleri açar, sekme seçilince şe
   const tasiyor = await nav.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
   test.skip(!tasiyor, 'bu genişlikte şerit sığıyor');
 
-  const diger = kap.getByRole('button', { name: /^Diğer sekmeler/ });
+  const diger = kap.getByRole('button', { name: /^Diğer sekmeler: \d+$/ });
   await expect(diger).toBeVisible();
-  expect((await diger.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(28);
+  const once = await kap.boundingBox();
   await diger.click();
-  await expect(kap).toHaveAttribute('data-acik', '');
-  await expect(kap.getByRole('button', { name: 'Sekmeleri daralt' })).toHaveAttribute('aria-expanded', 'true');
-
-  // Açık şeritte her sekme görünür alandadır ve sayfa yatay taşmaz.
-  const sekmeler = nav.getByRole('link');
-  const kutu = await nav.boundingBox();
-  if (kutu === null) throw new Error('şerit görünmüyor');
-  for (const s of await sekmeler.all()) {
-    const k = await s.boundingBox();
-    expect(k, await s.innerText()).not.toBeNull();
-    expect((k?.x ?? 0) + (k?.width ?? 0)).toBeLessThanOrEqual(kutu.x + kutu.width + 1);
-  }
+  const liste = page.getByRole('menu', { name: /^Diğer sekmeler/ });
+  await expect(liste).toBeVisible();
+  const ogeler = liste.getByRole('menuitem');
+  expect(await ogeler.count()).toBeGreaterThan(0);
+  // Şerit boyu değişmez; liste ekrandan taşmaz.
+  expect((await kap.boundingBox())?.height).toBe(once?.height);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-  await sekmeler.last().click();
-  await expect(kap).not.toHaveAttribute('data-acik', '');
+  const ad = (await ogeler.last().innerText()).replace(/\s*\(\d+\)$/, '').trim();
+  await ogeler.last().click();
+  await expect(liste).toBeHidden();
+  await expect(nav.getByRole('link', { name: new RegExp(ad) })).toHaveAttribute('aria-current', 'page');
   expect(ag.hatalar).toEqual([]);
 });
 
