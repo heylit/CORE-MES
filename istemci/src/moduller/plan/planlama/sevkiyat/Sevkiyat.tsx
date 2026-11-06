@@ -75,7 +75,7 @@ function SevkTablosu<S>({ etiket, sutunlar, satirlar, anahtar, ton, sinif }: {
   );
 }
 
-export function Sevkiyat({ calisma }: PlanlamaEkranOzellikleri) {
+export function Sevkiyat({ calisma, sec, git }: PlanlamaEkranOzellikleri) {
   const [donem, donemYaz] = useState<Donem>('gun');
   const [olcu, olcuYaz] = useState<Olcu>('siparis');
   const [gor, gorYaz] = useState<Gorunum>('ikisi');
@@ -105,7 +105,7 @@ export function Sevkiyat({ calisma }: PlanlamaEkranOzellikleri) {
               <IsiIzgarasi
                 etiket="Sipariş × gün, termine kalan süre" satirAd="Sipariş" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar}
                 secim={secim} sec={secimYaz} gizliAd="termine üç günden çok pay"
-                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} kapat={kapat} />}
+                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('plan'); }} />}
               />
             </>
           )
@@ -116,13 +116,13 @@ export function Sevkiyat({ calisma }: PlanlamaEkranOzellikleri) {
 }
 
 // Satırın açılımı. "Sevk edildi olarak işaretle" formu sevkiyat modülünündür (455/1 a): yerinde eski sayfanın yetkisiz hali durur.
-// "çizelgede" seçeneği yerinde ve pasif: Planlama motoru görünümünde siparişi seçmek iskelet desteği ister.
-function SevkAcilimKarti({ r, taban, kapat }: { r: SevkIsiSatiri; taban: number; kapat: () => void }) {
+// "çizelgede": sipariş seçilir, Planlama motoru tahtası açılır.
+function SevkAcilimKarti({ r, taban, kapat, goster }: { r: SevkIsiSatiri; taban: number; kapat: () => void; goster: () => void }) {
   const a = sevkAcilimi(r, taban);
   return (
     <Acilim
       baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat} form={<IzinYok />}
-      secenekler={[{ ad: `${r.x.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', pasif: true }]}
+      secenekler={[{ ad: `${r.x.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: goster }]}
     />
   );
 }

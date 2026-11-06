@@ -36,6 +36,17 @@ export const kbBaglam = (l: KbHedef[], hedef: KbHedef['k'] | null): KbHedef | nu
 interface Baglam {
   c: PlanlamaCalismasi; cx: Derleme; komut: CalismaKomutu | null; altAc: () => void; siraAc?: ((m: string) => void) | null;
   p?: OkunanPlan | null; hamle?: Hamleci | null;
+  // Aynı tezgâhta saat kaydırma atölyenin iş taşıma komutudur (sunucu, plan yeniden dizilir); yazamayana null.
+  tasi?: ((id: string, m: string, S: number) => void) | null;
+}
+export const KAYDIRMA_SABIT = 'Sabit, başlamış ya da fason iş kaydırılmaz.';
+export const KAYDIRMA_YETKISIZ = 'Plan yazma yetkiniz yok.';
+// Seçili işi aynı tezgâhta saat kadar kaydırır (← → 1 saat, Shift ile çeyrek). Saat çeyreğe yuvarlanır, şimdiden önceye gitmez (atolye/gonder.ts tasimaSaati).
+export function kaydirmaAdimi(o: Pick<Baglam, 'c' | 'tasi'>, r: PlanIslemi, saat: number): { yap: (() => void) | null; not: string } {
+  if (!o.tasi) return { yap: null, not: KAYDIRMA_YETKISIZ };
+  if (o.c.locks[r.id] || r.act || r.fas) return { yap: null, not: KAYDIRMA_SABIT };
+  const tasi = o.tasi;
+  return { yap: () => { tasi(r.id, r.m, r.S + saat); }, not: '' };
 }
 const motor = (ad: string, simge: SimgeAdi, ipucu: string): KbKomut => ({ ad, simge, ipucu, yap: null, not: MOTOR_NOTU });
 // Yapabilen tezgâhlar, süresi kısadan uzuna, en çok dokuz.
@@ -65,7 +76,8 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
   const n = tasiKomutlari(o, r).length; const sabit = !!o.c.locks[r.id]; const { komut } = o;
   const l: KbKomut[] = [{ ad: `${r.job} siparişini öne al`, simge: 'flag', ipucu: 'öne almanın yollarını dener, en iyisini önizler', ...hamleYapisi(o.hamle, (h) => { h.oneAl(r.job); }) }];
   if (n) l.push({ ad: 'Başka tezgâha taşı', simge: 'next', ipucu: `yapabilen ${n} tezgâh`, yap: o.altAc, not: '', alt: true });
-  l.push(motor('1 saat sonraya', 'chev-right', '→, Shift ile çeyrek saat'), motor('1 saat önceye', 'chev-left', '←'),
+  l.push({ ad: '1 saat sonraya', simge: 'chev-right', ipucu: '→, Shift ile çeyrek saat', ...kaydirmaAdimi(o, r, 1) },
+    { ad: '1 saat önceye', simge: 'chev-left', ipucu: '←', ...kaydirmaAdimi(o, r, -1) },
     siraKomutu(o, r, 'Kuyrukta bir öne', 'up', '[', -1), siraKomutu(o, r, 'Kuyrukta bir arkaya', 'down', ']', 1));
   l.push({
     ad: sabit ? 'Sabitliği kaldır' : 'Bu saate sabitle', simge: 'lock', ipucu: 'motor sabit işe dokunmaz', not: 'Kilitleme yetkiniz yok.',
