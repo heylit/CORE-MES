@@ -1,4 +1,6 @@
-import type { GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
+import type {
+  GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
+} from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const DURUM_ADI: Readonly<Record<GeometriDurumu, string>> = {
@@ -118,20 +120,6 @@ export const YUZ_TURU_ADI: Readonly<Record<GeometriYuzeyCevabi['yuzler'][number]
   ekstruzyon: 'Süpürme', ofset: 'Ofset', diger: 'Diğer',
 };
 
-// Seçim kuralları (prototip v2): delik içi ters (malzemeye bakan) silindir, dış silindir ters olmayan silindirdir.
-export type YuzKurali = 'delik' | 'dis' | 'duzlem' | 'bos';
-export function kuralYuzleri(kural: YuzKurali, yuzler: GeometriYuzeyCevabi['yuzler'], isaretler: ReadonlyMap<number, TaslakIsaret>): number[] {
-  const uyar = (y: GeometriYuzeyCevabi['yuzler'][number]): boolean => {
-    switch (kural) {
-      case 'delik': return y.tur === 'silindir' && y.ters;
-      case 'dis': return y.tur === 'silindir' && !y.ters;
-      case 'duzlem': return y.tur === 'duzlem';
-      case 'bos': return !isaretler.has(y.sira);
-    }
-  };
-  return yuzler.filter(uyar).map((y) => y.sira);
-}
-
 // Taslağın alanları: işlem başına yüz sayısı ve alan, işaretsiz ve toplam (sunucudaki yuzeyAlanlari ile aynı hesap; kaydetmeden görünür).
 export function taslakAlanlari(yuzler: GeometriYuzeyCevabi['yuzler'], isaretler: ReadonlyMap<number, TaslakIsaret>):
 { islemler: Map<string, { yuzSayisi: number; alanMm2: number }>; isaretsizMm2: number; toplamMm2: number } {
@@ -182,3 +170,131 @@ export function ucgeninYuzu(araliklar: ArrayLike<number>, ucgen: number): number
   }
   return null;
 }
+
+// Yüzün yönü (prototip v3 grupları): görüntü ağındaki üçgenlerin alanla ağırlıklı normali, model koordinatında. Düzlemde tek
+// normaldir; eğri yüzde anlamsızdır ve yalnız düzlemde kullanılır. Üçgeni olmayan yüz null.
+export type Yon3 = readonly [number, number, number];
+export function agYuzNormalleri(konum: ArrayLike<number>, dizin: ArrayLike<number>, araliklar: ArrayLike<number>): (Yon3 | null)[] {
+  const n = (i: number): number => konum[i] ?? 0;
+  const sonuc: (Yon3 | null)[] = [];
+  for (let k = 0; k + 1 < araliklar.length; k += 2) {
+    let x = 0, y = 0, z = 0;
+    for (let t = araliklar[k] ?? 0; t <= (araliklar[k + 1] ?? -1); t++) {
+      const a = 3 * (dizin[3 * t] ?? 0), b = 3 * (dizin[3 * t + 1] ?? 0), c = 3 * (dizin[3 * t + 2] ?? 0);
+      const ux = n(b) - n(a), uy = n(b + 1) - n(a + 1), uz = n(b + 2) - n(a + 2);
+      const vx = n(c) - n(a), vy = n(c + 1) - n(a + 1), vz = n(c + 2) - n(a + 2);
+      x += uy * vz - uz * vy; y += uz * vx - ux * vz; z += ux * vy - uy * vx;
+    }
+    const u = Math.hypot(x, y, z);
+    sonuc.push(u === 0 ? null : [x / u + 0, y / u + 0, z / u + 0]);
+  }
+  return sonuc;
+}
+
+// Yüz grupları (prototip v3): kullanıcı tek tek yüz aramaz, gruba dokunur. Delikler Özellikler'den çapa göre (delikle birlikte ona bağlı
+// kademe ve havşa yüzleri; tapa sayısı delik sayısıdır), pah ve radyüs Özellikler'den, kalan yüzler tür ve yönden. Model Z ekseni
+// yukarı kabul edilir: normali +Z üst, -Z alt (oturma, bant), yatay yan yüzdür. Yön bilinmiyorsa (modelde yüz gösterilemiyor)
+// düzlemler tek gruptur. Boş grup yazılmaz.
+export interface YuzGrubu {
+  anahtar: string;
+  ad: string;
+  simge: 'target' | 'cube' | 'layers' | 'list' | 'ruler';
+  yuzler: number[];
+  // Maskelenince takılacak tapa sayısı (delik grubunda delik sayısı).
+  tapa: number;
+  // Maskelenince bantlanan oturma yüzü grubu.
+  bant: boolean;
+}
+type YuzSatiri = GeometriYuzeyCevabi['yuzler'][number];
+const DUSEY = 0.9;
+const sayili = (ad: string, n: number): string => (n > 1 ? `${ad} × ${String(n)}` : ad);
+export function yuzGruplari(yuzler: readonly YuzSatiri[], ozellikler: readonly GeometriOzellik[] | null, normaller: readonly (Yon3 | null)[] | null): YuzGrubu[] {
+  const mevcut = new Set(yuzler.map((y) => y.sira));
+  const kullanilan = new Set<number>();
+  const al = (liste: readonly number[]): number[] => {
+    const s = [...new Set(liste)].filter((x) => mevcut.has(x) && !kullanilan.has(x)).sort((a, b) => a - b);
+    for (const x of s) kullanilan.add(x);
+    return s;
+  };
+  const gruplar: YuzGrubu[] = [];
+  const ekle = (g: YuzGrubu) => { if (g.yuzler.length > 0) gruplar.push(g); };
+  const oz = ozellikler ?? [];
+  const delikler = oz.filter((o) => o.tur === 'delik' && o.ust === null);
+  const capa = new Map<string, { cap: number | null; delikler: GeometriOzellik[] }>();
+  for (const d of delikler) {
+    const k = d.capMm === null ? 'yok' : d.capMm.toFixed(1);
+    capa.set(k, { cap: d.capMm, delikler: [...(capa.get(k)?.delikler ?? []), d] });
+  }
+  for (const [k, g] of [...capa].sort(([, a], [, b]) => (b.cap ?? -1) - (a.cap ?? -1))) {
+    const yz = g.delikler.flatMap((d) => [...d.yuzler, ...oz.filter((o) => o.ust === d.sira).flatMap((o) => o.yuzler)]);
+    ekle({ anahtar: `delik:${k}`, ad: sayili(g.cap === null ? 'Delik' : `Delik Ø${uzunluk(g.cap)}`, g.delikler.length), simge: 'target', yuzler: al(yz), tapa: g.delikler.length, bant: false });
+  }
+  const kalan = (f: (y: YuzSatiri) => boolean): number[] => yuzler.filter((y) => !kullanilan.has(y.sira) && f(y)).map((y) => y.sira);
+  const turle = (anahtar: string, ad: string, simge: YuzGrubu['simge'], liste: number[], bant = false) => {
+    const yz = al(liste);
+    ekle({ anahtar, ad: sayili(ad, yz.length), simge, yuzler: yz, tapa: 0, bant });
+  };
+  const yon = (y: YuzSatiri): Yon3 | null => normaller?.[y.sira - 1] ?? null;
+  const pahlar = al(oz.filter((o) => o.tur === 'pah').flatMap((o) => o.yuzler));
+  const radyuslar = al(oz.filter((o) => o.tur === 'radyus').flatMap((o) => o.yuzler));
+  turle('dis', 'Dış silindir', 'cube', kalan((y) => y.tur === 'silindir' && !y.ters));
+  if (normaller !== null) {
+    turle('ust', 'Üst yüz', 'layers', kalan((y) => y.tur === 'duzlem' && (yon(y)?.[2] ?? 0) > DUSEY));
+    turle('alt', 'Alt yüz (oturma)', 'layers', kalan((y) => y.tur === 'duzlem' && (yon(y)?.[2] ?? 0) < -DUSEY), true);
+    turle('yan', 'Yan yüz', 'layers', kalan((y) => y.tur === 'duzlem' && Math.abs(yon(y)?.[2] ?? 1) < 1 - DUSEY));
+    turle('egik', 'Eğik düzlem', 'layers', kalan((y) => y.tur === 'duzlem'));
+  } else {
+    turle('duzlem', 'Düzlem', 'layers', kalan((y) => y.tur === 'duzlem'));
+  }
+  // Pah ve radyüs yüzleri yukarıda alındı; burada yalnız gruba yazılır (sıra prototipteki gibi silindir ve düzlemlerden sonra).
+  ekle({ anahtar: 'pah', ad: sayili('Pah', pahlar.length), simge: 'ruler', yuzler: pahlar, tapa: 0, bant: false });
+  ekle({ anahtar: 'radyus', ad: sayili('Radyüs', radyuslar.length), simge: 'ruler', yuzler: radyuslar, tapa: 0, bant: false });
+  turle('ic', 'İç silindir', 'target', kalan((y) => y.tur === 'silindir' && y.ters));
+  turle('diger', 'Diğer yüz', 'list', kalan(() => true));
+  return gruplar;
+}
+
+// Şartname değerinden hesap girdisi (2144-3 b). Alan adı şartnameye göre değişir; birim ve anahtarla tanınır: kalınlık µm (mm ise
+// bine çarpılır) ya da anahtarı "kalinlik", yoğunluk g/cm³ ya da anahtarı "yogunluk", verim anahtarı "verim". Değer sayı, aralık
+// (ortası), metin (ilk sayı, örn. "12 µm (Fe/Zn12)") ya da çoklu seçim (ilk seçenek) olabilir; okunamayan alan yok sayılır.
+export type HesapAlani = 'kalinlik' | 'yogunluk' | 'verim';
+type SartnameDegeri = GeometriYuzeyAdimi['parametreler'][number];
+const ilkSayi = (m: string): number | null => {
+  const e = /\d+(?:[.,]\d+)?/.exec(m);
+  return e === null ? null : Number(e[0].replace(',', '.'));
+};
+const degerSayisi = (d: SartnameDegeri['deger']): number | null => {
+  if (typeof d === 'number') return d;
+  if (Array.isArray(d)) {
+    const [a, b] = d;
+    if (typeof a === 'number' && typeof b === 'number') return (a + b) / 2;
+    return typeof a === 'string' ? ilkSayi(a) : null;
+  }
+  return typeof d === 'string' ? ilkSayi(d) : null;
+};
+const sade = (m: string | null): string => (m ?? '').toLocaleLowerCase('tr-TR').replace(/\s/g, '');
+export function sartnameSayisi(parametreler: readonly SartnameDegeri[], alan: HesapAlani): number | null {
+  for (const p of parametreler) {
+    const b = sade(p.birim), a = sade(p.anahtar);
+    let kat: number | null = null;
+    if (alan === 'kalinlik') kat = b === 'µm' || b === 'μm' || b === 'um' || b === 'mikron' ? 1 : a.includes('kalinlik') ? (b === 'mm' ? 1000 : 1) : null;
+    if (alan === 'yogunluk') kat = b === 'g/cm³' || b === 'g/cm3' || a.includes('yogunluk') ? 1 : null;
+    if (alan === 'verim') kat = a.includes('verim') ? 1 : null;
+    if (kat === null) continue;
+    const x = degerSayisi(p.deger);
+    if (x !== null && Number.isFinite(x) && x > 0) return x * kat;
+  }
+  return null;
+}
+// Kullanıcının yazdığı pozitif sayı; boş ya da geçersizse null.
+export const pozitifSayi = (m: string): number | null => {
+  const x = Number(m.trim().replace(',', '.'));
+  return m.trim() === '' || !Number.isFinite(x) || x <= 0 ? null : x;
+};
+// Toz miktarı (prototip v3): kg = m² x µm x g/cm³ / 1000 / (verim / 100) x adet. Yalnız hesaptır, kaydedilmez. Eksik girdi null.
+export function tozKg(alanMm2: number, kalinlikUm: number | null, yogunluk: number | null, verimYuzde: number | null, adet: number): number | null {
+  if (kalinlikUm === null || yogunluk === null || verimYuzde === null) return null;
+  return ((alanMm2 / 1e6) * kalinlikUm * yogunluk) / 1000 / (verimYuzde / 100) * adet;
+}
+export const tozMetni = (kg: number): string => `${bicim(2).format(kg)} kg`;
+export const m2Kisa = (mm2: number): string => `${bicim(3).format(mm2 / 1e6)} m²`;

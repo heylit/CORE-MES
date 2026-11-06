@@ -12,7 +12,7 @@ import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   agirlikKg, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
-  uzunluk, yogunlukBicimi, yogunlukOku,
+  uzunluk, yogunlukBicimi, yogunlukOku, type Yon3,
 } from './gorunum.ts';
 import type { ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
 import { MontajKarti } from './MontajKarti.tsx';
@@ -339,6 +339,8 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
   // Yüzey kartı (2144) görüntüye renk ve seçim verir; görüntü yüz sırası denetiminin sonucunu ve resim alma işlevini geri verir.
   const [yuzeySahnesi, yuzeySahnesiYaz] = useState<YuzeySahnesi | null>(null);
   const [yuzDurumu, yuzDurumuYaz] = useState<YuzDurumu>('bekliyor');
+  const [yuzNormalleri, yuzNormalleriYaz] = useState<readonly (Yon3 | null)[] | null>(null);
+  const yuzBilgisiYaz = useCallback((d: YuzDurumu, n: readonly (Yon3 | null)[] | null) => { yuzDurumuYaz(d); yuzNormalleriYaz(n); }, []);
   const [resimAl, resimAlYaz] = useState<ResimAl | null>(null);
   const resimAlici = useCallback((al: ResimAl | null) => resimAlYaz(() => al), []);
   const yeniden = useYenidenHesapla(revizyonId, analiz.data?.is?.surum ?? null);
@@ -359,16 +361,16 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
               <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} kutular={kutular}
-                yuzBoyasi={yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzDurumuYaz }} arac={yuzeySahnesi?.arac ?? null} bilgi={yuzeySahnesi?.bilgi ?? null} resimAlici={resimAlici} />
+                yuzBoyasi={yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzBilgisiYaz }} arac={yuzeySahnesi?.arac ?? null} bilgi={yuzeySahnesi?.bilgi ?? null} resimAlici={resimAlici} />
             </Suspense>
           )}
       <div className="tc-g3b-kartlar">
+        <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
+          sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
         <AnalizKarti cevap={analiz.data} yeniden={yeniden} />
         <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
         <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />
         <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />
-        <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu}
-          sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
       </div>
     </div>
   );

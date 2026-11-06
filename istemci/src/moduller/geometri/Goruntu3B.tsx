@@ -7,7 +7,8 @@ import type { Material, Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Dugme, DurumKutusu, Simge } from '../../ortak/arayuz/index.ts';
 import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
-import { agYuzAlanlari, MASKE_RENGI, patlatmaKaymasi, ucgeninYuzu, yuzSirasiUyar } from './gorunum.ts';
+import { agYuzAlanlari, agYuzNormalleri, MASKE_RENGI, patlatmaKaymasi, ucgeninYuzu, yuzSirasiUyar } from './gorunum.ts';
+import type { Yon3 } from './gorunum.ts';
 
 // Sahne renkleri tasarım değişkenlerinden okunur; değişken yoksa (test ortamı) nötr gri.
 function renk(ad: string): Color {
@@ -112,7 +113,8 @@ export interface YuzBoyasi {
   secili: ReadonlySet<number>;
   // Verilince tıklanan yüz bu işleve gider (seçim açık).
   sec: ((sira: number) => void) | null;
-  durumYaz: (d: YuzDurumu) => void;
+  // Denetimin sonucu; hazırsa yüzlerin normalleri de (yüz grupları üst, alt, yan yüzü bundan ayırır), değilse null.
+  durumYaz: (d: YuzDurumu, normaller: readonly (Yon3 | null)[] | null) => void;
 }
 interface YuzAgi { ag: Mesh; araliklar: Uint32Array; ilkSira: number }
 
@@ -128,6 +130,14 @@ function yuzAglari(ic: Object3D): YuzAgi[] | null {
     sira += a.length / 2;
   });
   return eksik || aglar.length === 0 ? null : aglar;
+}
+
+function yuzNormalleri(aglar: readonly YuzAgi[]): (Yon3 | null)[] {
+  return aglar.flatMap(({ ag, araliklar }) => {
+    const g = ag.geometry as BufferGeometry;
+    const dizin = g.getIndex();
+    return dizin === null ? [] : agYuzNormalleri(g.getAttribute('position').array, dizin.array, araliklar);
+  });
 }
 
 function yuzAlanlari(aglar: readonly YuzAgi[]): number[] {
@@ -161,7 +171,7 @@ export type ResimAl = () => Promise<Blob | null>;
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
 export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, yuzBoyasi = null, arac = null, bilgi = null, resimAlici }: {
   veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null;
-  // Görüntünün üstünde (sağ üst) araç düğmeleri ve altında bilgi satırı (2144 prototip v2).
+  // Görüntünün üstünde araç çubuğu (solda fırça, sağda görünüm) ve altında bilgi satırı (2144 prototip v3).
   yuzBoyasi?: YuzBoyasi | null; arac?: ReactNode; bilgi?: string | null; resimAlici?: (al: ResimAl | null) => void;
 }) {
   const kap = useRef<HTMLDivElement>(null);
@@ -348,7 +358,10 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
     yuzDurumuYaz(aglar === null ? 'yok' : yuzSirasiUyar(yuzAlanlari(aglar), alanAnahtari.split(',').map(Number)) ? 'hazir' : 'uyusmuyor');
   }, [yuklendi, alanAnahtari]);
   const durumYaz = yuzBoyasi?.durumYaz;
-  useEffect(() => { durumYaz?.(yuzDurumu); }, [yuzDurumu, durumYaz]);
+  useEffect(() => {
+    const aglar = yuzAglariRef.current;
+    durumYaz?.(yuzDurumu, yuzDurumu === 'hazir' && aglar !== null ? yuzNormalleri(aglar) : null);
+  }, [yuzDurumu, durumYaz, yuklendi]);
 
   // Boyama: her ağın yüzleri çizim grubu olur; grup malzemesi yüzün rengidir (seçili yüz vurgu rengi). Kalkınca özgün malzeme döner.
   const renkAnahtari = yuzBoyasi === null ? '' : JSON.stringify([...yuzBoyasi.renkler]);
