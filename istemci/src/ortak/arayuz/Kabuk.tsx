@@ -46,7 +46,7 @@ import { useKatman } from './katman.ts';
 import './kabuk.css';
 import './hareket.css';
 
-// Kişinin kendi sayfası (profil modülü): menü sayfası değildir, oturumu olan herkese açıktır; üst çubuktaki ad oraya götürür.
+// Kişinin kendi sayfası (profil modülü): her rolün menü sayfasıdır (2192-4 b); üst çubuktaki ad ve Hesap menüsü de oraya götürür.
 const PROFIL_YOLU = '/profil';
 
 function basHarfler(ad: string): string {
@@ -127,8 +127,6 @@ function kapaliMaddeleriSuz(menuler: readonly IkinciMenuTanimi[], kapali: readon
 // Logo da ana sayfaya gider ama düğme olduğu anlaşılmıyor; ana sayfa her menüde ilk maddedir.
 interface BaglantiSayfasi { yol: string; baslik: string; simge: SimgeAdi }
 const ANA_SAYFA_BASLIGI = 'Ana sayfa';
-// Profil menü sayfası değildir (yetki istemez); her kullanıcının menüsünde ana sayfanın altında durur.
-const PROFIL_BAGLANTISI: BaglantiSayfasi = { yol: PROFIL_YOLU, baslik: 'Profilim', simge: 'user' };
 
 // Ana sayfa bağlantısı yalnız kendi yolunda seçili görünür: rolün panosu bir modül sayfasıysa alt yollarda modülün maddesi seçilidir.
 // Yeni ekran adresinde (`/ik-islemlerim/yeni`) yalnız o ekranın satırı seçili görünür; adresin önekindeki başka sayfa
@@ -450,7 +448,6 @@ export function Kabuk({
             <span className="tc-kabuk-bag-metin">Menüyü daralt</span>
           </button>
           <Baglanti sayfa={anaBaglanti} tam />
-          <Baglanti sayfa={PROFIL_BAGLANTISI} />
           {rolMenusu !== null && (
             <div className="tc-kabuk-grup">
               {rolMenusu.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
@@ -607,7 +604,6 @@ export function Kabuk({
             </div>
             <p className="tc-kabuk-tum-kisi"><Simge ad="user" boyut="k" />{kullaniciAdi}</p>
             <Baglanti sayfa={anaBaglanti} tam kapat={() => tumuYaz(false)} />
-            <Baglanti sayfa={PROFIL_BAGLANTISI} kapat={() => tumuYaz(false)} />
             {gruplar.map((g) => (
               <div className="tc-kabuk-grup" key={g.grup}>
                 <p className="tc-kabuk-grup-ad">{g.grup}</p>

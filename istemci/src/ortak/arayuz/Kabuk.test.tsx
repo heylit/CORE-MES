@@ -134,10 +134,10 @@ describe('Kabuk', () => {
     // Yalnız bekletilen ve bir görünür sayfa verilir: alt gezinmenin ilk dört yeri bekletileni dışarıda bırakamaz.
     ciz(SAYFALAR.filter((s) => s.yol === '/terminal' || s.yol === '/kuyruk'), undefined, '/terminal');
     const adresler = (kutu: HTMLElement) => within(kutu).getAllByRole('link').map((b) => b.getAttribute('href'));
-    expect(adresler(screen.getByRole('navigation', { name: 'Ana menü' }))).toEqual(['/', '/profil', '/kuyruk']);
+    expect(adresler(screen.getByRole('navigation', { name: 'Ana menü' }))).toEqual(['/', '/kuyruk']);
     expect(adresler(screen.getByRole('navigation', { name: 'Alt gezinme' }))).toEqual(['/', '/kuyruk']);
     fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
-    expect(adresler(screen.getByRole('dialog', { name: 'Tüm sayfalar' }))).toEqual(['/', '/profil', '/kuyruk']);
+    expect(adresler(screen.getByRole('dialog', { name: 'Tüm sayfalar' }))).toEqual(['/', '/kuyruk']);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Terminal');
   });
 
@@ -153,7 +153,7 @@ describe('Kabuk', () => {
     expect(altindakiler('Kalite')).toEqual(['/kalibrasyon']);
     expect(altindakiler('Üretim')).toEqual(['/arkon']);
     expect(within(menu).getAllByRole('link').map((b) => b.getAttribute('href')))
-      .toEqual(['/', '/profil', '/recete-rota', '/durus-nedenleri', '/kalibrasyon', '/arkon']);
+      .toEqual(['/', '/recete-rota', '/durus-nedenleri', '/kalibrasyon', '/arkon']);
   });
 
   it('Sistem Ayarlari kendi Yonetim grubundadir ve menude en sonda durur', () => {
@@ -278,7 +278,7 @@ describe('Kabuk', () => {
     const gorunen = SAYFALAR.filter((s) => s.yol === '/arkon' || s.yol === '/kuyruk');
     ciz(gorunen, cikis);
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
-    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/profil', '/arkon', '/kuyruk']);
+    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/arkon', '/kuyruk']);
     expect(screen.getByText('Deneme Kişi')).toBeTruthy();
     // Seyrek kullanılanlar üst çubukta ayrı simge değildir, Hesap menüsündedir.
     const ust = within(screen.getByRole('banner'));
@@ -297,7 +297,7 @@ describe('Kabuk', () => {
     );
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
     const baglantilar = () => menu.getAllByRole('link').map((b) => b.getAttribute('href'));
-    expect(baglantilar()).toEqual(['/', '/profil', '/stok', '/kuyruk']);
+    expect(baglantilar()).toEqual(['/', '/stok', '/kuyruk']);
     const alt = within(screen.getByRole('navigation', { name: 'Alt gezinme' }));
     expect(alt.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
     const tum = menu.getByRole('button', { name: 'Tüm sayfalar' });
@@ -322,7 +322,7 @@ describe('Kabuk', () => {
     );
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
     expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
-    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/profil', '/stok', '/kuyruk']);
+    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
     expect(screen.getByRole('button', { name: 'Tümü' })).toBeTruthy();
   });
 

@@ -24,3 +24,5 @@ Testler: `kurallar.test.ts` (saf), `profil.test.ts` ve `geri-bildirim-merkezi.te
 | GBM-7 Özet son altı ay | `GBM-7 ...`; `özet: durum sayıları ...` |
 | Takip ve kategori sürümle yazılır | `sürüm: ilk yazım 0 ile ...`; `kategori: aynı ad ...` |
 | Hareket yalnız eklenir | `profil_geri_bildirim_hareket_degismez` tetikleyicisi; `hareketler yalnız eklenir ...` |
+| GBM-8 Yeni kayıt okuyanlara; uygulama konulu ayrı türle | `GBM-8 ...`; `GBM-8/9: yeni kayıt okuyanlara ...` |
+| GBM-9 Yanıt ve sonuç yalnız yazana; sonuç bir kez; yapan kendisi almaz | `GBM-9 ...`; `GBM-8/9: ...` |
