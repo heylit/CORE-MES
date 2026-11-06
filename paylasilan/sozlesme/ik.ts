@@ -7,14 +7,15 @@ import { tarihSemasi, zamanSemasi } from '../zaman.ts';
    denetlenen alanları ayrı sütunlarda tutar ve kuralları uygular. Kayıt biçimi: docs/VERI-MODELI.md (ik-modulu). */
 
 // Kaydın türü uygulamanın `kind` alanıdır. Bordro (`pay`) yalnız kesinleştirme ucuyla yazılır.
-export const IK_TURLERI = ['emp', 'dept', 'leave', 'att', 'pay', 'perf', 'train', 'job', 'cand', 'intv'] as const;
+// `title`: departmana bağlı pozisyon tanımı (unvan listesi, 2177-3 a); işe alımdaki pozisyon (`job`) açık kadro ilanıdır.
+export const IK_TURLERI = ['emp', 'dept', 'title', 'leave', 'att', 'pay', 'perf', 'train', 'job', 'cand', 'intv'] as const;
 export type IkTuru = (typeof IK_TURLERI)[number];
 
 // Yazma uçlarının adres parçası -> tür. Her alanın kendi yazma işlemi vardır (sunucu/moduller/ik/kurallar.ts IK_ALANLARI).
-export const IK_ALAN_ADLARI = ['personel', 'departmanlar', 'izinler', 'devam', 'performans', 'egitimler', 'pozisyonlar', 'adaylar', 'gorusmeler'] as const;
+export const IK_ALAN_ADLARI = ['personel', 'departmanlar', 'pozisyon-tanimlari', 'izinler', 'devam', 'performans', 'egitimler', 'pozisyonlar', 'adaylar', 'gorusmeler'] as const;
 export type IkAlani = (typeof IK_ALAN_ADLARI)[number];
 export const IK_ALAN_TURU = {
-  personel: 'emp', departmanlar: 'dept', izinler: 'leave', devam: 'att', performans: 'perf', egitimler: 'train',
+  personel: 'emp', departmanlar: 'dept', 'pozisyon-tanimlari': 'title', izinler: 'leave', devam: 'att', performans: 'perf', egitimler: 'train',
   pozisyonlar: 'job', adaylar: 'cand', gorusmeler: 'intv',
 } as const satisfies Record<IkAlani, Exclude<IkTuru, 'pay'>>;
 

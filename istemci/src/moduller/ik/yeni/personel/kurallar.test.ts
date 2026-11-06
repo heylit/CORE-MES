@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Izin, Personel } from '../tipler.ts';
+import type { Izin, Personel, PozisyonTanimi } from '../tipler.ts';
 import {
   aktifMi, ayEkle, BOS_SUZGEC, cikisAdimi, cikisIlerlemesi, cikistanSonrakiIzinler, denemeBitisi, hareketleriIzle, ibanBicimi, ibanGecerli,
-  kidemMetni, notEkle, notSil, orgAgaci, personelDogrula, personelDurumu, personelKayitOncesi, personelSirala, personelSuz,
+  kidemMetni, notEkle, notSil, orgAgaci, personelDogrula, pozisyondakiCalisan, pozisyonTanimOnerileri, siraliPozisyonTanimi, personelDurumu, personelKayitOncesi, personelSirala, personelSuz,
   siraliPersonel, sonrakiSicil, sureMetni, tcknGecerli, ucretDegisimi, ucretGecmisi, ucretSil, ucretTarihte, ucretUygula, yillikFazlaMesai,
   zamanCizelgesi, type KayitBaglami,
 } from './kurallar.ts';
@@ -181,5 +181,26 @@ describe('özet ve zaman çizelgesi', () => {
     expect(ev.map((x) => [x.tarih, x.tur])).toEqual([['2026-12-31', 'cikis'], ['2026-06-01', 'perf'], ['2026-01-01', 'ucret'], ['2020-01-01', 'giris']]);
     expect(ev[0]?.alt).toBe('Belirsiz süreli');
     expect(ev[2]?.alt).toBe('Yıllık zam (+10%)');
+  });
+});
+
+// 2177-3 a: pozisyon tanımları.
+describe('pozisyon tanımları', () => {
+  const t = (id: string, ad: string, departmanId?: string): PozisyonTanimi => ({ id, kind: 'title', ad, ...(departmanId ? { departmanId } : {}) });
+  const liste = [t('1', 'Torna operatörü', 'u'), t('2', 'Planlamacı', 'p'), t('3', 'Stajyer'), t('4', 'Ayarcı', 'u'), t('5', 'Ayarcı', 'p')];
+  it('öneriler seçili departmanın ve departmansızların adlarıdır; departman yoksa hepsi, tekrarsız ve sıralı', () => {
+    expect(pozisyonTanimOnerileri(liste, 'u')).toEqual(['Ayarcı', 'Stajyer', 'Torna operatörü']);
+    expect(pozisyonTanimOnerileri(liste, '')).toEqual(['Ayarcı', 'Planlamacı', 'Stajyer', 'Torna operatörü']);
+    expect(pozisyonTanimOnerileri([t('6', '  ')], '')).toEqual([]);
+  });
+  it('sıralama departman adına, sonra pozisyon adına; departmansız en sonda', () => {
+    const ad = (id: string | undefined) => ({ u: 'Üretim', p: 'Planlama' } as Record<string, string>)[id ?? ''] ?? '';
+    expect(siraliPozisyonTanimi(liste, ad).map((x) => x.id)).toEqual(['5', '2', '4', '1', '3']);
+  });
+  it('çalışan sayısı ad eşitliğiyle (büyük-küçük harf ve boşluk sayılmaz) ve tanımın departmanıyla; adsız tanım sıfır', () => {
+    const aktifler = [p('a', { pozisyon: ' ayarcı ', departmanId: 'u' }), p('b', { pozisyon: 'Ayarcı', departmanId: 'p' }), p('c', { pozisyon: 'Stajyer' })];
+    expect(pozisyondakiCalisan(liste[3]!, aktifler)).toBe(1);
+    expect(pozisyondakiCalisan(liste[2]!, aktifler)).toBe(1);
+    expect(pozisyondakiCalisan(t('7', ''), aktifler)).toBe(0);
   });
 });

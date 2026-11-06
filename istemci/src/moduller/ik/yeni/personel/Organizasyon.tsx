@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Tablo, type Sutun } from '../../../../ortak/arayuz/Tablo.tsx';
 import { useSayfaKomutlari, type SayfaKomutu } from '../../../../ortak/rota/sayfa-komutlari.ts';
@@ -6,19 +7,23 @@ import { paraKisa, YOK } from '../bicim.ts';
 import type { IkEkranOzellikleri } from '../gorunumler.ts';
 import { ikSabitleri } from '../motor.ts';
 import { KisiHucresi } from '../ortak/KisiHucresi.tsx';
-import type { Departman, Personel } from '../tipler.ts';
+import type { Departman, Personel, PozisyonTanimi } from '../tipler.ts';
 import { DepartmanFormu } from './DepartmanFormu.tsx';
-import { adSoyadMetni, aktifMi, bugun, orgAgaci, siraliDepartman, siraliPersonel, ucretTarihte } from './kurallar.ts';
+import {
+  adSoyadMetni, aktifMi, bugun, orgAgaci, pozisyondakiCalisan, siraliDepartman, siraliPersonel, siraliPozisyonTanimi, ucretTarihte,
+} from './kurallar.ts';
 import { Bolum } from './parcalar.tsx';
+import { PozisyonFormu } from './PozisyonFormu.tsx';
 import './personel.css';
 
 interface DepartmanSatiri { d: Departman; calisanlar: Personel[]; beyaz: number | null; mavi: number | null; brut: number }
 
-// Departmanlar ve raporlama ilişkileri; şema personel kartlarındaki "bağlı olduğu yönetici" alanından oluşur.
+// Departmanlar, pozisyon tanımları (2177-3 a) ve raporlama ilişkileri; şema personel kartlarındaki "bağlı olduğu yönetici" alanından oluşur.
 export function Organizasyon(o: IkEkranOzellikleri) {
   const { depo, yetki, motor, git } = o;
   const gun = bugun();
   const [form, formYaz] = useState<{ kayit: Departman | null } | null>(null);
+  const [pozisyonFormu, pozisyonFormuYaz] = useState<{ kayit: PozisyonTanimi | null } | null>(null);
   const sabit = ikSabitleri();
   const aktifler = siraliPersonel(depo.tur('emp').filter((p) => aktifMi(p, gun)), gun);
   const departmanAdi = (id: string | undefined) => (id ? depo.tur('dept').find((d) => d.id === id)?.ad ?? '' : '');
@@ -52,6 +57,15 @@ export function Organizasyon(o: IkEkranOzellikleri) {
     { anahtar: 'butce', baslik: 'Yıllık bütçe', hizala: 'sag', hucre: (r) => (r.d.butce ? paraKisa(r.d.butce) : YOK), csv: (r) => r.d.butce ?? null },
   ];
 
+  const pozisyonlar = siraliPozisyonTanimi(depo.tur('title'), departmanAdi);
+  const pozisyonSutunlari: Sutun<PozisyonTanimi>[] = [
+    { anahtar: 'ad', baslik: 'Pozisyon', hucre: (t) => <b>{t.ad ?? ''}</b>, csv: (t) => t.ad ?? '' },
+    { anahtar: 'dept', baslik: 'Departman', hucre: (t) => departmanAdi(t.departmanId) || YOK, csv: (t) => departmanAdi(t.departmanId) || null },
+    { anahtar: 'yaka', baslik: 'Yaka tipi', hucre: (t) => t.yakaTipi || YOK, csv: (t) => t.yakaTipi ?? null },
+    { anahtar: 'kademe', baslik: 'Rol kademesi', hucre: (t) => t.kademe || YOK, csv: (t) => t.kademe ?? null },
+    { anahtar: 'calisan', baslik: 'Çalışan', hizala: 'sag', hucre: (t) => pozisyondakiCalisan(t, aktifler), csv: (t) => pozisyondakiCalisan(t, aktifler) },
+  ];
+
   const { kokler, altlar } = orgAgaci(aktifler);
   const gorulen = new Set<string>();
   const dugum = (p: Personel) => {
@@ -75,6 +89,7 @@ export function Organizasyon(o: IkEkranOzellikleri) {
       anahtar: `dept-${r.d.id}`, baslik: r.d.ad ?? '', simge: 'building' as const, aciklama: `${r.calisanlar.length} çalışan`, sozcukler: [r.d.kod ?? ''].filter(Boolean),
       calistir: () => { if (yetki.personelYaz) formYaz({ kayit: r.d }); },
     })),
+    ...(yetki.personelYaz ? [{ anahtar: 'yeni-pozisyon', baslik: 'Pozisyon ekle', simge: 'user' as const, aciklama: null, sozcukler: ['yeni', 'pozisyon', 'unvan', 'ekle'], calistir: () => { pozisyonFormuYaz({ kayit: null }); } }] : []),
   ];
   useSayfaKomutlari('ik-org', komutlar);
 
@@ -91,11 +106,26 @@ export function Organizasyon(o: IkEkranOzellikleri) {
           bosMesaj="Departman yok. Personeli gruplamak için departman ekleyin."
         />
       </Bolum>
+      <Bolum
+        baslik="Pozisyonlar"
+        eylem={yetki.personelYaz ? <Dugme simge="plus" onClick={() => { pozisyonFormuYaz({ kayit: null }); }}>Pozisyon ekle</Dugme> : undefined}
+      >
+        <Tablo
+          etiket="Pozisyonlar" sutunlar={pozisyonSutunlari} satirlar={pozisyonlar} satirAnahtari={(t) => t.id}
+          satirSec={yetki.personelYaz ? (t) => { pozisyonFormuYaz({ kayit: t }); } : undefined}
+          bosMesaj="Pozisyon tanımı yok. Personel kartında listeden seçilecek unvanları buraya ekleyin."
+        />
+      </Bolum>
       <Bolum baslik="Organizasyon şeması">
         {kokler.length ? <ul className="tc-ikp-agac">{kokler.map(dugum)}</ul> : <p className="tc-ikp-ipucu">Aktif personel yok.</p>}
       </Bolum>
       {yetki.personelYaz && (
         <DepartmanFormu acik={form !== null} kayit={form?.kayit ?? null} depo={depo} motor={motor} kapat={() => { formYaz(null); }} />
+      )}
+      {yetki.personelYaz && (
+        <PozisyonFormu
+          acik={pozisyonFormu !== null} kayit={pozisyonFormu?.kayit ?? null} depo={depo} motor={motor} kapat={() => { pozisyonFormuYaz(null); }}
+        />
       )}
     </div>
   );

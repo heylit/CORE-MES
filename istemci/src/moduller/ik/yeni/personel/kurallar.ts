@@ -1,7 +1,7 @@
 import type { AlanHatalari } from '../../../../ortak/veri/form.ts';
 import { tarih } from '../bicim.ts';
 import { ikBicimi } from '../motor.ts';
-import type { Departman, Devam, Egitim, Izin, Performans, Personel } from '../tipler.ts';
+import type { Departman, Devam, Egitim, Izin, Performans, Personel, PozisyonTanimi } from '../tipler.ts';
 
 export type UcretSatiri = NonNullable<Personel['ucretGecmisi']>[number];
 export type Hareket = NonNullable<Personel['hareketler']>[number];
@@ -111,6 +111,30 @@ export function siraliPersonel(liste: readonly Personel[], gun: string): Persone
 }
 
 export const siraliDepartman = (liste: readonly Departman[]) => [...liste].sort((a, b) => (a.ad ?? '').localeCompare(b.ad ?? '', 'tr'));
+
+// Pozisyon tanımları departman adı, sonra pozisyon adıyla sıralanır; departmansız tanım en sonda.
+export function siraliPozisyonTanimi(liste: readonly PozisyonTanimi[], departmanAdi: (id: string | undefined) => string): PozisyonTanimi[] {
+  const anahtar = (t: PozisyonTanimi) => [t.departmanId ? 0 : 1, departmanAdi(t.departmanId), t.ad ?? ''] as const;
+  return [...liste].sort((a, b) => {
+    const x = anahtar(a); const y = anahtar(b);
+    return x[0] - y[0] || x[1].localeCompare(y[1], 'tr') || x[2].localeCompare(y[2], 'tr');
+  });
+}
+
+// Personel formundaki pozisyon önerileri: seçili departmanın ve departmansız tanımların adları, tekrarsız ve sıralı.
+// Departman seçilmemişse bütün tanımlar önerilir.
+export function pozisyonTanimOnerileri(liste: readonly PozisyonTanimi[], departmanId: string): string[] {
+  const uygun = liste.filter((t) => !departmanId || !t.departmanId || t.departmanId === departmanId);
+  return [...new Set(uygun.map((t) => (t.ad ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+// Pozisyondaki aktif çalışan sayısı: personelin pozisyon metni tanım adıyla aynıysa (boşluk ve büyük-küçük harf farkı sayılmaz).
+export function pozisyondakiCalisan(tanim: PozisyonTanimi, aktifler: readonly Personel[]): number {
+  const ad = (tanim.ad ?? '').trim().toLocaleLowerCase('tr');
+  if (!ad) return 0;
+  return aktifler.filter((p) => (p.pozisyon ?? '').trim().toLocaleLowerCase('tr') === ad
+    && (!tanim.departmanId || p.departmanId === tanim.departmanId)).length;
+}
 
 export type DurumSuzgeci = 'aktif' | 'pasif' | 'tum';
 export interface PersonelSuzgeci {
