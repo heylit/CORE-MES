@@ -190,6 +190,34 @@ test('denetim kapsamı: gövdesiz ya da denetimsiz uçlar kullanıcı kararıyla
   );
 });
 
+// Kimlik istemeyen ('acik') uçlar. Her satır güvenlik sınırını genişletir (2150-1 a): yeni oturumsuz uç onaysız girmesin diye
+// liste sabittir; uç eklemek ya da kaldırmak kullanıcı kararıdır.
+const GIRISSIZ_UCLAR = [
+  'GET /saglik',
+  'GET /oturum',
+  'POST /oturum/giris',
+  'POST /oturum/kart-giris',
+  'POST /oturum/cikis',
+  'POST /oturum/pin-belirle',
+  'POST /oturum/saat-istegi',
+  'POST /oturum/saat-istegi/sor',
+  'GET /giris-logosu',
+  'GET /giris-kurum-adi',
+  // Kart okuyucu: varsayılan kapalı, yalnız tanımlı ağ aralığı, cihaz anahtarı (ADR 0016).
+  'POST /nizamiye/pdks/cihaz-hareketi',
+];
+
+test('girişsiz uçlar: kimlik istemeyen uçlar kullanıcı kararıyla onaylanmış sabit listeyle aynıdır (2150-1 a)', async () => {
+  const uclar = ucEnvanteri(await modulUclariniKesfet());
+  // Keşif yetkiyi gerçekten okuyor: boş listede karşılaştırma kendiliğinden geçerdi.
+  assert.equal(uclar.some((u) => u.yol === '/saglik' && u.yetki === 'acik'), true);
+  assert.equal(uclar.some((u) => u.yol === '/oturum/nabiz' && u.yetki !== 'acik'), true);
+  const girissiz = uclar.filter((u) => u.yetki === 'acik').map((u) => `${u.yontem} ${u.yol}`).sort();
+  assert.deepEqual(girissiz, [...GIRISSIZ_UCLAR].sort(),
+    'Girişsiz uç listesi değişti: bir uç kimlik istemeden açılıyor ya da kapandı. Bu kullanıcı kararıdır (2150-1 a); '
+      + 'karar alınmadan GIRISSIZ_UCLAR listesi güncellenmez.');
+});
+
 // Adı sır taşıdığını söyleyen gövde alanı sözleşmede gizli işaretlidir (kart #1584): ad listesi yalnız ikinci katmandır;
 // işaretsiz yeni alan (ör. "eski") deftere düz girerdi ve defter silinemez.
 const SIR_ADI = /^eski$|pin$|parola|sifre|password/i;
