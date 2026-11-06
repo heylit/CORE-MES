@@ -291,6 +291,16 @@ describe('Giris', () => {
 describe('giriş ekranı marka adı (karar 2002)', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+  it('WebGL2 olmayan tarayicida sahne yuklenmez; CORE harfleri duz cizim olarak gorunur', () => {
+    sunucuKur();
+    kur();
+    const sahne = document.querySelector('.tc-giris-sahne');
+    expect(sahne?.getAttribute('data-durum')).toBe('yok');
+    expect(sahne?.getAttribute('aria-hidden')).toBe('true');
+    expect(sahne?.querySelectorAll('svg path')).toHaveLength(4);
+    expect(sahne?.querySelector('canvas')).toBeNull();
+  });
+
   it('firma adı girilmişse "<Firma> CORE", okunamazsa yalnız CORE yazar', async () => {
     vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
       ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
