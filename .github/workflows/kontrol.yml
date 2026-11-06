@@ -157,6 +157,19 @@ jobs:
       # yüksek seviyeli açık zod 4 geçişiyle kapanınca eşik yükseğe iner.
       - name: Canlı paketlerde bilinen açık
         run: npm audit --omit=dev --audit-level=critical
+      # Geliştirme olarak kayıtlı paketlerin bir kısmı (exceljs, jsqr, tesseract, three-147) derlenmiş ekrana girer; yukarıdaki
+      # adım onları görmez. Tam ağaç uyarı olarak bakılır, iş kırılmaz (2160-1 b). Depo herkese açık: özete yalnız seviye sayıları
+      # yazılır, paket ve açık ayrıntısı yerelde `npm audit` ile okunur.
+      - name: Bütün paketlerde bilinen açık (uyarı)
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit.json" || true
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            const s = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/audit.json`, "utf8")).metadata?.vulnerabilities;
+            if (!s) { console.log("::warning::npm audit sonucu okunamadı"); process.exit(0); }
+            const satir = `Bütün paketler: ${s.critical} kritik, ${s.high} yüksek, ${s.moderate} orta, ${s.low} düşük`;
+            if (s.total > 0) console.log(`::warning::${satir}`); else console.log(satir);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${satir}\n`);'
       # Sürüm notundaki satır karta başlıktaki parantezle bağlanır (1565 b; kural araclar/paket.ts kartNoVarMi). Başlık olay
       # yükünden değil API'den okunur: başlık düzeltilince işi yeniden koşturmak yeter, yeni gönderim gerekmez.
       - name: Çekme isteği başlığında kart numarası

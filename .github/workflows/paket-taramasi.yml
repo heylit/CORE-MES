@@ -1,0 +1,51 @@
+name: paket-taramasi
+
+# Haftalık paket bakımı taraması (2160-3 a): bilinen açık sayıları ve geride kalan sürümler koşu özetine yazılır. İş hiçbir
+# zaman kırmızı bitmez; bildirim yalnız koşu sonucudur, dış servis yoktur. Depo herkese açık: açık için yalnız seviye
+# sayıları yazılır, paket ve açık ayrıntısı yerelde `npm audit` ile okunur. Sürüm listesi açık bilgisi taşımaz.
+on:
+  schedule:
+    # Pazartesi 05:00 UTC: haftanın ilk iş gününde aylık bakım kartına girdi olur.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # Kurulum betiği koşturulmaz: yalnız sürüm okunur, derlenmez.
+      - run: npm ci --ignore-scripts
+      - name: Bilinen açık sayıları
+        run: |
+          npm audit --json > "$RUNNER_TEMP/audit-tam.json" || true
+          npm audit --omit=dev --json > "$RUNNER_TEMP/audit-canli.json" || true
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            const oku = (d) => JSON.parse(readFileSync(d, "utf8")).metadata?.vulnerabilities ?? null;
+            const yaz = (ad, s) => s === null ? `${ad}: okunamadı` : `${ad}: ${s.critical} kritik, ${s.high} yüksek, ${s.moderate} orta, ${s.low} düşük`;
+            const satirlar = [yaz("Canlı paketler", oku(`${process.env.RUNNER_TEMP}/audit-canli.json`)), yaz("Bütün paketler", oku(`${process.env.RUNNER_TEMP}/audit-tam.json`))];
+            for (const s of satirlar) console.log(s);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Bilinen açık\n\n${satirlar.map((s) => `- ${s}`).join("\n")}\n\n`);'
+      - name: Geride kalan sürümler
+        run: |
+          npm outdated --json > "$RUNNER_TEMP/eski.json" || true
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            const metin = readFileSync(`${process.env.RUNNER_TEMP}/eski.json`, "utf8").trim();
+            const eski = metin === "" ? {} : JSON.parse(metin);
+            const major = (s) => Number(String(s ?? "").split(".")[0]);
+            const satirlar = Object.entries(eski).sort(([a], [b]) => a.localeCompare(b)).map(([ad, s]) =>
+              `| ${ad} | ${s.current ?? "-"} | ${s.wanted ?? "-"} | ${s.latest ?? "-"} | ${major(s.latest) > major(s.current) ? "majör" : ""} |`);
+            const tablo = satirlar.length === 0 ? "Geride kalan paket yok.\n"
+              : `| Paket | Kurulu | Aralıkta en yeni | En yeni | |\n|---|---|---|---|---|\n${satirlar.join("\n")}\n`;
+            console.log(`${satirlar.length} paket geride`);
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Geride kalan sürümler\n\n${tablo}`);'
