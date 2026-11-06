@@ -12,6 +12,7 @@ import { useGirisKurumAdi } from '../../ortak/veri/kurum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
+import { HARFLER, SVG_KUTUSU, svgYolu } from './sahne/harfler.ts';
 import './giris.css';
 
 const PIN_HANE = 6;
@@ -31,34 +32,40 @@ const TANITIM: readonly { simge: ComponentProps<typeof Simge>['ad']; metin: stri
 // Firma adı Türkçede eksiz durur ("Çeliği X keser"), bu yüzden hangi ad gelirse gelsin cümle bozulmaz; ad yoksa genel "atölye" kullanılır.
 export const slogan = (kurumAdi: string | null): string => `Çeliği ${kurumAdi ?? 'atölye'} keser, tartışmayı CORE. Sıfır tahmin.`;
 
-const KONTUR = 'M60 60 H300 A40 40 0 0 1 340 100 V220 H100 A40 40 0 0 1 60 180 Z';
+type SahneDurumu = 'yukleniyor' | 'acik' | 'yok';
 
-// Yerel çizim: takım yolunu çizen freze, parçanın dış konturu ve cebi. Süs çizimidir, ekran okuyucudan gizlidir;
-// hareket azaltma tercihinde çizim durur ve tam görünür.
-function TakimYolu() {
+// Giriş sahnesi (kart 2148, karar 2148-1): CORE kelimesi tek noktadan doğar, O harfi yıldızlardan döner. three ve sahne kodu
+// form çizildikten sonra ayrı parça olarak yüklenir; form sahneyi beklemez. WebGL2 yoksa ya da grafik birimi yoksa aynı harf
+// hatları düz çizim olarak görünür. Süs çizimidir, ekran okuyucudan gizlidir; hareket azaltma tercihinde yalnız son kare çizilir.
+function GirisSahnesi() {
+  const kap = useRef<HTMLDivElement>(null);
+  const parlama = useRef<HTMLDivElement>(null);
+  const [durum, durumYaz] = useState<SahneDurumu>(() => (typeof WebGL2RenderingContext === 'undefined' ? 'yok' : 'yukleniyor'));
+  useEffect(() => {
+    const el = kap.current;
+    if (el === null || typeof WebGL2RenderingContext === 'undefined') return undefined;
+    let bitti = false;
+    let kapat: (() => void) | null = null;
+    const hareketsiz = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    import('./sahne/tekillik.ts')
+      .then(({ tekillikKur }) => {
+        if (bitti) return;
+        kapat = tekillikKur(el, { hareketsiz, parlama: parlama.current });
+        durumYaz(kapat === null ? 'yok' : 'acik');
+      })
+      .catch(() => { if (!bitti) durumYaz('yok'); });
+    return () => { bitti = true; kapat?.(); };
+  }, []);
   return (
-    <svg className="tc-giris-cizim" viewBox="0 0 400 300" aria-hidden="true" focusable="false">
-      <g className="tc-giris-cizim-olcu mono">
-        <line x1="40" y1="270" x2="360" y2="270" />
-        <line x1="40" y1="262" x2="40" y2="278" />
-        <line x1="360" y1="262" x2="360" y2="278" />
-        <text x="200" y="290">320.00</text>
-      </g>
-      <rect className="tc-giris-cizim-ham" x="40" y="40" width="320" height="200" rx="6" />
-      <path className="tc-giris-cizim-yol" pathLength={100} d={KONTUR} />
-      <path className="tc-giris-cizim-cep" pathLength={100} d="M140 110 H260 V170 H140 Z" />
-      <g className="tc-giris-cizim-delik">
-        <circle cx="100" cy="100" r="10" />
-        <circle cx="300" cy="180" r="10" />
-      </g>
-      <g className="tc-giris-cizim-takim">
-        <circle r="7" />
-        <line x1="-14" y1="0" x2="14" y2="0" />
-        <line x1="0" y1="-14" x2="0" y2="14" />
-        {/* Takım çizginin ucunda gider: çizim süresi ve tutma payı stil dosyasındaki animasyonla aynıdır. */}
-        <animateMotion path={KONTUR} dur="9s" repeatCount="indefinite" calcMode="linear" keyPoints="0;1;1" keyTimes="0;0.7;1" />
-      </g>
-    </svg>
+    <div className="tc-giris-sahne" data-durum={durum} aria-hidden="true">
+      <div ref={kap} className="tc-giris-sahne-tuval" />
+      <div ref={parlama} className="tc-giris-sahne-parlama" />
+      {durum === 'yok' && (
+        <svg className="tc-giris-sahne-yedek" viewBox={SVG_KUTUSU} focusable="false">
+          {HARFLER.map((h) => <path key={h.ad} className={h.ad === 'O' ? 'tc-giris-sahne-o' : undefined} d={svgYolu(h)} fillRule="evenodd" />)}
+        </svg>
+      )}
+    </div>
   );
 }
 
@@ -234,8 +241,9 @@ export function Giris() {
 
   return (
     <main className="tc-giris">
-      <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark">
-        <TakimYolu />
+      {/* Sahne (ya da yedek çizimi) CORE yazar: firma adı yoksa marka satırı aynı kelimeyi tekrarlar, yalnız firma adı varken görünür. */}
+      <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark" data-kurum={kurumAdi ? '' : undefined}>
+        <GirisSahnesi />
         <div className="tc-giris-tanitim-ic">
           <div className="tc-giris-marka">
             <span className="tc-giris-ad">{markaAdi}</span>

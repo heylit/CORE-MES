@@ -260,3 +260,11 @@
   --cnc3d-m-isik-yesil: #2aff6a; --cnc3d-m-isik-yesil-yanar: #20d050; --cnc3d-m-isik-sari: #ffb020; --cnc3d-m-isik-sari-yanar: #402800;
   --cnc3d-m-isik-kirmizi: #ff3030; --cnc3d-m-isik-kirmizi-yanar: #300000; --cnc3d-m-gk-cam: #9cc4d8;
 }
+/* Giris sahnesi (kart 2148): WebGL CSS okuyamadigi icin sahne rengi addan cozulur (--giris3d-<ad>); temaya gore degismez.
+   parca-soguk ve parca-sicak parcacik renginin iki ucudur; sahne aradaki rengi bu ikisinden hesaplar. */
+:root {
+  --giris3d-arka: #020306; --giris3d-harf-yuz: #262a31; --giris3d-harf-yan: #dfe3e9; --giris3d-kenar: #ffc94a;
+  --giris3d-isik-soguk: #bcd4ff; --giris3d-isik-sicak: #ffe2b0; --giris3d-isik-nokta: #ffd27a; --giris3d-tarama: #ffffff;
+  --giris3d-hale: #ffd68c; --giris3d-parca-soguk: #99a6ff; --giris3d-parca-sicak: #fff273;
+  --giris3d-parlama: #ffdc8c; --giris3d-golge: rgba(0,0,0,.55);
+}
