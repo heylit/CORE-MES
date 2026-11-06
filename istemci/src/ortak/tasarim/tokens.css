@@ -124,6 +124,11 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+/* Ortak sayı ölçüsü (kart 2155): pano sayısı dar kartta da sığan en büyük boydadır. */
+:root {
+  --sayi-boy: 28px; --sayi-birim: var(--yazi-s);
+}
+
 /* Yoğun ölçü (kullanıcı kararı 25.10.2026): fareyle kullanılan ekranda denetimler eski yoğunluğuna iner; dokunmatikte 44 px kalır.
    --dokunma bilerek değişmez: dokunma için konmuş kalıplar (x14 ... x24, ana düğme, menü) ona bağlıdır. */
 :root {
