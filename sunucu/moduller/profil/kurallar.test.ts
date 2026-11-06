@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  anaKayitHatasi, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
+  anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
   yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 
@@ -74,5 +74,16 @@ describe('profil kuralları', () => {
   test('GBM-7: eğilim bu ay dahil son altı ay; yıl dönümü geçilir', () => {
     assert.deepEqual(ozetAylari('2026-11-06'), ['2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11']);
     assert.deepEqual(ozetAylari('2027-02-28'), ['2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02']);
+  });
+  test('GBM-8: uygulama konulu kayıt ayrı türle duyurulur', () => {
+    assert.equal(gelenBildirimTuru('sirket'), 'profil.geri-bildirim-geldi');
+    assert.equal(gelenBildirimTuru('uygulama'), 'profil.uygulama-geri-bildirimi-geldi');
+  });
+
+  test('GBM-9: kapanış yalnız açık kayıt sonuçlanınca bildirilir', () => {
+    assert.equal(kapanisBildirilir('yanitlandi', 'cozuldu'), true);
+    assert.equal(kapanisBildirilir('yeni', 'kapandi'), true);
+    assert.equal(kapanisBildirilir('cozuldu', 'kapandi'), false);
+    assert.equal(kapanisBildirilir('kapandi', 'inceleniyor'), false);
   });
 });

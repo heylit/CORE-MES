@@ -11,10 +11,11 @@ import type {
   ProfilCevabi, TemaCevabi, TemaSecGovdesi,
 } from '#paylasilan/sozlesme/profil.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, kisininPersonelKarti } from '../ik/disari.ts';
 import { kisiAdlari, kisiGorevi, kisilerinIslemleri, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
 import {
-  anaKayitHatasi, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari,
+  anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari,
   temaCevabiYap, yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -47,8 +48,14 @@ export async function profilOku(db: Db, kullanici: Kullanici, simdi: Date): Prom
 }
 
 // Kişi ve zaman sunucudan; gövde yalnız konu, tür ve metni taşır.
+// Bildirim aynı transaction'da yazılır: kayıt geri alınırsa bildirim de kalmaz (GBM-8).
 export async function geriBildirimGonder(db: Db, kullanici: Kullanici, govde: GeriBildirimGonderGovdesi): Promise<GeriBildirim> {
-  return disaGeriBildirim(await s.geriBildirimEkle(db, kullanici.id, { konu: govde.konu, tur: govde.tur, metin: govde.metin.trim() }));
+  const kayit = await s.geriBildirimEkle(db, kullanici.id, { konu: govde.konu, tur: govde.tur, metin: govde.metin.trim() });
+  await bildirimGonder(db, {
+    tur: gelenBildirimTuru(kayit.konu), baslik: `#${kayit.id} yeni kayıt`, metin: kayit.metin,
+    yol: '/geri-bildirim', kaynakKimlik: String(kayit.id), haric: kullanici.id,
+  });
+  return disaGeriBildirim(kayit);
 }
 
 // Çalışanın kendi kayıtları: durum ve yalnız yanıtlar (imzasıyla); iç not, sorumlu ve yanıtlayanın adı girmez.
@@ -119,7 +126,21 @@ async function takipAl(db: Db, id: number, surum: number): Promise<s.TakipSatiri
 async function takipYaz(db: Db, id: number, onceki: s.TakipSatiri | null, yeni: s.TakipYazimi, kisiId: number): Promise<void> {
   const yazilan = onceki === null ? await s.takipEkle(db, id, yeni) : await s.takipGuncelle(db, id, yeni, onceki.surum);
   if (yazilan === null) throw eskiSurum();
-  if (kayitDurumu(onceki) !== yeni.durum) await s.hareketEkle(db, id, { tur: 'durum', metin: null, durum: yeni.durum, imza: null, kisiId });
+  if (kayitDurumu(onceki) === yeni.durum) return;
+  await s.hareketEkle(db, id, { tur: 'durum', metin: null, durum: yeni.durum, imza: null, kisiId });
+  // GBM-9: sonuçlanınca yazana haber gider; durum adı çalışanın gördüğü adla.
+  if (kapanisBildirilir(kayitDurumu(onceki), yeni.durum)) {
+    await yazanaBildir(db, id, kisiId, 'profil.geri-bildirim-kapandi', yeni.durum === 'cozuldu' ? 'Çözüldü' : 'Kapandı', null);
+  }
+}
+
+// Yanıt ve kapanış yalnız yazana gider; yanıtlayan kendisi yazmışsa almaz (bildirimin `haric` kuralı).
+async function yazanaBildir(
+  db: Db, id: number, yapan: number, tur: 'profil.geri-bildirime-yanit' | 'profil.geri-bildirim-kapandi', baslikEki: string, metin: string | null,
+): Promise<void> {
+  const yazan = await s.kayitYazani(db, id);
+  if (yazan === null) return;
+  await bildirimGonder(db, { tur, baslik: `#${id} ${baslikEki}`, metin, yol: '/profil', kisiler: [yazan], haric: yapan });
 }
 
 const mevcutYazim = (t: s.TakipSatiri | null): s.TakipYazimi => ({
@@ -132,6 +153,7 @@ export async function geriBildirimYanitla(db: Db, kullanici: Kullanici, id: numb
   const roller = new Set((await kisininRolleri(db, kullanici.id)).map((r) => r.id));
   const imza = yanitImzasi((await rollerVeBayraklari(db)).filter((r) => roller.has(r.id)));
   await s.hareketEkle(db, id, { tur: 'yanit', metin: govde.metin.trim(), durum: null, imza, kisiId: kullanici.id });
+  await yazanaBildir(db, id, kullanici.id, 'profil.geri-bildirime-yanit', `yanıt: ${imza}`, govde.metin.trim());
   const yazim = mevcutYazim(takip);
   await takipYaz(db, id, takip, { ...yazim, durum: yanitSonrasiDurum(yazim.durum) }, kullanici.id);
   return geriBildirimAyrinti(db, id);

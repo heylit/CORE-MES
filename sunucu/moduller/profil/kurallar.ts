@@ -1,4 +1,4 @@
-import type { GeriBildirimDurumu, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimDurumu, GeriBildirimKonusu, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
 
 // PRF-1: kişinin profilinde son 50 geri bildirimi görünür; daha eskisi okuyanın listesindedir.
 export const PROFIL_GERI_BILDIRIM_SINIRI = 50;
@@ -84,3 +84,13 @@ export function ozetAylari(bugun: string): string[] {
   }
   return aylar;
 }
+
+// GBM-8: konu "uygulama" olan kayıt ayrı türle duyurulur; alıcısı Bildirim yönetiminden ayrı seçilebilir.
+export const gelenBildirimTuru = (konu: GeriBildirimKonusu): 'profil.geri-bildirim-geldi' | 'profil.uygulama-geri-bildirimi-geldi' =>
+  (konu === 'uygulama' ? 'profil.uygulama-geri-bildirimi-geldi' : 'profil.geri-bildirim-geldi');
+
+// GBM-9: yazana kapanış bildirimi yalnız kayıt açıkken "çözüldü" ya da "kapandı"ya geçince gider; sonuçlanmış kayıt
+// iki sonuç arasında değişirse ikinci kez gitmez.
+const SONUCLANMIS: readonly GeriBildirimDurumu[] = ['cozuldu', 'kapandi'];
+export const kapanisBildirilir = (onceki: GeriBildirimDurumu, yeni: GeriBildirimDurumu): boolean =>
+  SONUCLANMIS.includes(yeni) && !SONUCLANMIS.includes(onceki);
