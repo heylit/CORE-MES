@@ -88,7 +88,7 @@ export function simdiSaati(c: PlanlamaCalismasi): number { const s = sayiOku(c.s
 
 // ---------- ayarlar (motor/durum.betik) ----------
 export interface MaliyetAyari { amac: string; risk: number; karHedef: number; mesaiCarpan: number; operatorUcret: number | null; genelGider: number | null }
-const YM0: MaliyetAyari = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: 120 };
+const YM0: MaliyetAyari = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: null };
 export function ymAyar(D: PlanVerisi): MaliyetAyari {
   const p = nesneMi(D.planTL) ? D.planTL : {};
   return { ...YM0, ...p } as MaliyetAyari;
@@ -495,7 +495,8 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
 // Sipariş maliyetinde tezgâh saatine düşen genel gider: kalem kipinde tezgâhın kendi oranı, tek oranda plan ayarı (msGgOran). Kalem kipinde
 // tezgâhın amortismanı bilinmiyorsa oran da bilinmez (null); ortalamaya ya da tek orana düşülmez.
 export function genelGiderOrani(D: PlanVerisi, G: GenelGiderHesabi | null, m: string): number | null {
-  const tek = ymAyar(D).genelGider ?? 0;
+  // Tek oran girilmemişse genel gider bilinmez (2173-1 a): sıfır ya da varsayılan uydurulmaz.
+  const tek = ymAyar(D).genelGider;
   if (maliyetSistemi(D).kip !== 'kalem') return tek;
   const z = G?.tez.find((x) => x.tezgah.id === m);
   if (z && z.amort === null) return null;
