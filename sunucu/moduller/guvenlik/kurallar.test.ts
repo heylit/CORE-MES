@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
+import type { PaketTaramasi } from '#paylasilan/sozlesme/ayarlar.ts';
 import {
   COK_OTURUM, DURMA_ESIGI_DK, HATALI_SERI, alarmGuncellemesi, cokOturumBulgulari, hataliSeriBulgulari, hedefliHesapBulgulari,
   hesapKilidiBulgulari, kapatilabilirMi, onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari,
   SERTIFIKA_UYARI_GUN, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
   sunucuSertifikaMaddesi, yedekMaddesi, ADRES_TARAMASI, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni,
   duyurulurMu, yetkiReddiBulgulari, yeniOlayliBulgular,
+  calisanSurumDenetimi, disBaglantiDenetimi, geceYedegiDenetimi, geriYuklemeDenetimi, guncellemeAnahtariDenetimi, ortamDenetimi,
+  yedekAnahtariDenetimi, yedekDiskiDenetimi,
 } from './kurallar.ts';
+import { denemeUyarisi, diskDurumu } from '../saglik/disari.ts';
 import type { Bulgu, DenemeOzeti } from './kurallar.ts';
 
 const T0 = '2026-10-14T10:00:00+00:00';
@@ -231,4 +235,76 @@ test('adres taraması kritiktir; yalnız kritik alarm duyurulur (1362 a, 1365 a)
   assert.equal(duyurulurMu({ onem: 'kritik' }), true);
   assert.equal(duyurulurMu({ onem: 'yuksek' }), false);
   assert.equal(alarmDuyuruMetni({ sinyal: 'adres-taramasi', kullaniciAdi: null, ip: '10.0.0.1', sayi: 5 }, null), 'Adres taraması: 10.0.0.1 (5)');
+});
+
+describe('ayar denetimi (2164)', () => {
+  const simdi = new Date('2026-11-06T09:00:00.000Z');
+  const once = (gun: number): string => new Date(simdi.getTime() - gun * 86_400_000).toISOString();
+  const durum = (r: { durum: string }): string => r.durum;
+
+  test('gece yedeği: uyarı sağlıktan gelir; kapalı hata, okunamayan bilinmiyor', () => {
+    assert.equal(durum(geceYedegiDenetimi({ durum: 'acik', sonYedek: new Date(once(0.5)) }, null, simdi)), 'uygun');
+    const eski = geceYedegiDenetimi({ durum: 'acik', sonYedek: new Date(once(3)) }, 'Son yedek eski.', simdi);
+    assert.deepEqual(eski, { durum: 'uyari', aciklama: 'Son yedek eski. (son yedek 3 gün önce)' });
+    assert.equal(durum(geceYedegiDenetimi({ durum: 'anahtar-yok', sonYedek: null }, null, simdi)), 'hata');
+    assert.equal(durum(geceYedegiDenetimi(null, null, simdi)), 'bilinmiyor');
+  });
+
+  test('yedek anahtarı: açık uygun, yok hata, klasör yoksa ve okunamazsa bilinmiyor', () => {
+    assert.deepEqual(['acik', 'anahtar-yok', 'dizin-yok', null].map((d) => durum(yedekAnahtariDenetimi(d as never))),
+      ['uygun', 'hata', 'bilinmiyor', 'bilinmiyor']);
+  });
+
+  test('yedek diski: eşik Sistem durumu kartındakiyle aynı (diskDurumu, 2164-2)', () => {
+    const gb = 1024 ** 3;
+    assert.equal(durum(yedekDiskiDenetimi(diskDurumu(50 * gb, 100 * gb))), 'uygun');
+    assert.equal(durum(yedekDiskiDenetimi(diskDurumu(4 * gb, 20 * gb))), 'uyari');
+    assert.equal(durum(yedekDiskiDenetimi(diskDurumu(8 * gb, 100 * gb))), 'uyari');
+    assert.equal(durum(yedekDiskiDenetimi(null)), 'bilinmiyor');
+  });
+
+  test('geri yükleme: eşik ve metin sağlığın deneme uyarısından; başarısız hata, okunmamış kayıt bilinmiyor', () => {
+    const deneme = (gun: number, sonuc: 'basarili' | 'basarisiz') =>
+      ({ zaman: once(gun), yedek: 'y.dump', sonuc, sureSn: 1, kisiSayisi: null, gocSayisi: null, hata: null });
+    const sinifla = (d: Parameters<typeof denemeUyarisi>[0] | undefined) =>
+      geriYuklemeDenetimi(d, d === undefined ? null : denemeUyarisi(d, simdi), simdi);
+    assert.equal(durum(sinifla(deneme(10, 'basarili'))), 'uygun');
+    const eski = sinifla(deneme(40, 'basarili'));
+    assert.deepEqual(eski, { durum: 'uyari', aciklama: denemeUyarisi(deneme(40, 'basarili'), simdi) });
+    assert.equal(durum(sinifla(deneme(1, 'basarisiz'))), 'hata');
+    assert.equal(durum(sinifla(null)), 'uyari');
+    assert.equal(durum(sinifla(undefined)), 'bilinmiyor');
+  });
+
+  test('dış bağlantılar: yalnız açık/kapalı bilgi; adres taşımaz; hepsi okunamazsa bilinmiyor', () => {
+    const b = disBaglantiDenetimi({ logo: true, smartes: false, etiketYazicisi: null });
+    assert.deepEqual(b, { durum: 'bilgi', aciklama: 'Logo açık · SmartES kapalı · Etiket yazıcısı bilinmiyor' });
+    assert.equal(durum(disBaglantiDenetimi({ logo: null, smartes: null, etiketYazicisi: null })), 'bilinmiyor');
+  });
+
+  test('ortam: canlıda test robotu anahtarı hata (ADR 0019); canlı olmayan bilgi', () => {
+    assert.equal(durum(ortamDenetimi('canli', true)), 'hata');
+    assert.equal(durum(ortamDenetimi('canli', false)), 'uygun');
+    assert.equal(durum(ortamDenetimi('test', true)), 'bilgi');
+    assert.equal(durum(ortamDenetimi(null, false)), 'bilinmiyor');
+  });
+
+  test('çalışan sürüm: bütün ağaçta kritik ya da yüksek uyarı; yapılamadı uyarı; taramasız paket bilgi', () => {
+    const sayi = (k: number, y: number) => ({ kritik: k, yuksek: y, orta: 3, dusuk: 1 });
+    const tamam = (tum: ReturnType<typeof sayi>) => ({ durum: 'tamam' as const, zaman: once(1), canli: sayi(0, 0), tum });
+    const bilgi = (tarama: PaketTaramasi | null) =>
+      ({ surum: '1.2.3', tarih: once(2), tarama });
+    assert.equal(durum(calisanSurumDenetimi(bilgi(tamam(sayi(0, 0))), simdi)), 'uygun');
+    assert.equal(durum(calisanSurumDenetimi(bilgi(tamam(sayi(0, 1))), simdi)), 'uyari');
+    assert.equal(durum(calisanSurumDenetimi(bilgi(tamam(sayi(1, 0))), simdi)), 'uyari');
+    assert.equal(durum(calisanSurumDenetimi(bilgi({ durum: 'yapilamadi', zaman: once(1) }), simdi)), 'uyari');
+    assert.equal(durum(calisanSurumDenetimi(bilgi(null), simdi)), 'bilgi');
+    assert.equal(durum(calisanSurumDenetimi({ surum: null, tarih: null, tarama: null }, simdi)), 'bilgi');
+    assert.equal(durum(calisanSurumDenetimi(null, simdi)), 'bilinmiyor');
+  });
+
+  test('güncelleme anahtarı: açık uygun, geçersiz hata, yok uyarı, okunamayan bilinmiyor', () => {
+    assert.deepEqual(['acik', 'anahtar-gecersiz', 'anahtar-yok', 'dizin-yok', null].map((k) => durum(guncellemeAnahtariDenetimi(k as never))),
+      ['uygun', 'hata', 'uyari', 'uyari', 'bilinmiyor']);
+  });
 });

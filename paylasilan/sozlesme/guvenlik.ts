@@ -161,6 +161,14 @@ export const sunucuHatasiSemasi = z.object({
   // Ekrandaki "Hata kodu" (5xx cevabının x-hata-kodu başlığı).
   kod: metinVeyaYok,
 });
+// Ayar denetimi (2164, Güvenlik > Durum): yalnız okur ve hiçbir ayarı düzeltmez. Madde metni adres, kullanıcı adı, kimlik ya da anahtar
+// değeri taşımaz; yalnız var/yok, açık/kapalı, yaş ve sayı. Okunamayan kaynak "bilinmiyor"dur, uygun sayılmaz.
+export const AYAR_DENETIMI_DURUMLARI = ['uygun', 'uyari', 'hata', 'bilgi', 'bilinmiyor'] as const;
+export type AyarDenetimiDurumu = (typeof AYAR_DENETIMI_DURUMLARI)[number];
+export const ayarDenetimiCevabi = z.object({
+  zaman: zamanSemasi,
+  maddeler: z.array(z.object({ anahtar: z.string(), baslik: z.string(), aciklama: z.string(), durum: z.enum(AYAR_DENETIMI_DURUMLARI) })),
+});
 export const sunucuDurumuCevabi = z.object({ maddeler: z.array(korumaMaddesi), sonHatalar: z.array(sunucuHatasiSemasi) });
 
 export const kurallarCevabi = z.object({
@@ -196,6 +204,7 @@ export type OturumKapatGovdesi = z.input<typeof oturumKapatGovdesi>;
 export type KilitAcCevabi = z.output<typeof kilitAcCevabi>;
 export type KorumaCevabi = z.output<typeof korumaCevabi>;
 export type SunucuDurumuCevabi = z.output<typeof sunucuDurumuCevabi>;
+export type AyarDenetimiCevabi = z.output<typeof ayarDenetimiCevabi>;
 export type KurallarCevabi = z.output<typeof kurallarCevabi>;
 export type RetListeSorgusu = z.input<typeof retListeSorgusu>;
 export type RetListeCevabi = z.output<typeof retListeCevabi>;

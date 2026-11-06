@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  alarmKapatGovdesi, alarmListeCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
+  alarmKapatGovdesi, alarmListeCevabi, ayarDenetimiCevabi, alarmListeSorgusu, alarmOnaylaGovdesi, alarmSemasi, girisListeCevabi, girisListeSorgusu,
   guvenlikKimligi, kilitAcCevabi, kilitAcGovdesi, kilitListeCevabi, kilitListeSorgusu, korumaCevabi, kurallarCevabi, oturumKapatCevabi, oturumKapatGovdesi, oturumListeSorgusu, oturumlarCevabi,
   ozetCevabi, retListeCevabi, retListeSorgusu, sunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
@@ -64,5 +64,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/guvenlik/koruma', yetki: 'guvenlik.oku', cevap: korumaCevabi, isle: ({ db }) => servis.koruma(db) }),
   // Sunucu günlüğü, olay günlüğü, yedek, disk ve sertifika; son hatalar günlük dosyasından (1061 a).
   uc({ yontem: 'GET', yol: '/guvenlik/sunucu-durumu', yetki: 'guvenlik.oku', cevap: sunucuDurumuCevabi, isle: ({ db }) => servis.sunucuDurumu(db) }),
+  // Ayar denetimi (2164): yalnız okur; okuma guvenlik.oku, Durum sayfasıyla aynı.
+  uc({ yontem: 'GET', yol: '/guvenlik/ayar-denetimi', yetki: 'guvenlik.oku', cevap: ayarDenetimiCevabi, isle: ({ db }) => servis.ayarDenetimi(db) }),
   uc({ yontem: 'GET', yol: '/guvenlik/kurallar', yetki: 'guvenlik.oku', cevap: kurallarCevabi, isle: ({ db }) => servis.kurallar(db) }),
 ];

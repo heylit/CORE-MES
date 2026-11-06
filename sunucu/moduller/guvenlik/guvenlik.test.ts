@@ -6,7 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts';
 import {
-  SINYALLER, alarmListeCevabi, alarmSemasi, kilitListeCevabi, korumaCevabi, kurallarCevabi, oturumlarCevabi, ozetCevabi, sunucuDurumuCevabi,
+  SINYALLER, alarmListeCevabi, alarmSemasi, kilitListeCevabi, korumaCevabi, kurallarCevabi, oturumlarCevabi, ozetCevabi, sunucuDurumuCevabi, ayarDenetimiCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import type { Alarm, KorumaCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -14,7 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { HATALI_SERI, SAKLAMA_GUN } from './kurallar.ts';
-import { SON_HATA_SAYISI, koruma, sunucuDurumu, taramaYap, type SunucuDurumuKaynagi } from './servis.ts';
+import { SON_HATA_SAYISI, ayarDenetimi, koruma, sunucuDurumu, taramaYap, type AyarDenetimiKaynagi, type SunucuDurumuKaynagi } from './servis.ts';
 import { taramaKilidiAl } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -102,7 +102,7 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
   });
 
   test('G-19: her uç oturumsuz 401, yönetici olmayan (müdür) 403; yönetici okur; sayaç yetkisize sayı vermez', async () => {
-    const okumalar = ['/guvenlik/ozet', '/guvenlik-alarmlari', '/guvenlik-alarmlari/1', '/guvenlik/girisler', '/guvenlik/oturumlar', '/guvenlik/kilitler', '/guvenlik/koruma', '/guvenlik/kurallar', '/guvenlik/sunucu-durumu'];
+    const okumalar = ['/guvenlik/ozet', '/guvenlik-alarmlari', '/guvenlik-alarmlari/1', '/guvenlik/girisler', '/guvenlik/oturumlar', '/guvenlik/kilitler', '/guvenlik/koruma', '/guvenlik/kurallar', '/guvenlik/sunucu-durumu', '/guvenlik/ayar-denetimi'];
     const yazmalar = ['/guvenlik-alarmlari/1/onayla', '/guvenlik-alarmlari/1/kapat', '/guvenlik/oturumlar/1/kapat', '/guvenlik/kilitler/1/ac'];
     for (const yol of okumalar) {
       assert.equal((await istek(null, 'GET', yol)).durum, 401, yol);
@@ -438,6 +438,41 @@ describe('guvenlik: alarm defteri, tarama ve uçlar (gerçek PostgreSQL, gerçek
     }));
     assert.deepEqual(okunamayan.maddeler.map((m) => m.durum), ['bilinmiyor', 'bilinmiyor', 'bilinmiyor', 'bilinmiyor', 'bilinmiyor']);
     assert.deepEqual(okunamayan.sonHatalar, []);
+  });
+
+  test('ayar denetimi (2164): sekiz madde sırasıyla, cevap şemaya uyar; bağlantılar yalnız açık/kapalı taşır', async () => {
+    const c = ayarDenetimiCevabi.parse((await istek('yonetici', 'GET', '/guvenlik/ayar-denetimi')).govde);
+    assert.deepEqual(c.maddeler.map((m) => m.anahtar),
+      ['gece-yedegi', 'yedek-anahtari', 'yedek-diski', 'geri-yukleme', 'dis-baglantilar', 'ortam', 'calisan-surum', 'guncelleme-anahtari']);
+    assert.match(c.maddeler.find((m) => m.anahtar === 'dis-baglantilar')?.aciklama ?? '', /^Logo (açık|kapalı) · SmartES (açık|kapalı) · Etiket yazıcısı (açık|kapalı)$/);
+  });
+
+  test('ayar denetimi: okunan kaynak maddeye taşınır; okunamayan kaynak kartı düşürmez, madde bilinmiyor olur', async () => {
+    const simdi = new Date();
+    const gb = 1024 ** 3;
+    const kaynak: AyarDenetimiKaynagi = {
+      yedek: async () => ({ durum: 'acik', sonYedek: simdi, sonDeneme: { zaman: simdi.toISOString(), yedek: 'y.dump', sonuc: 'basarili', sureSn: 1, kisiSayisi: 1, gocSayisi: 1, hata: null } }),
+      yedekDizini: async () => '/yedek',
+      diskOku: async () => ({ bos: 50 * gb, toplam: 100 * gb }),
+      kanal: async () => 'acik',
+      calisan: async () => ({ surum: '1.0.0', tarih: simdi.toISOString(), tarama: { durum: 'tamam', zaman: simdi.toISOString(),
+        canli: { kritik: 0, yuksek: 0, orta: 0, dusuk: 0 }, tum: { kritik: 0, yuksek: 0, orta: 0, dusuk: 0 } } }),
+      logo: () => false,
+      smartes: () => false,
+      etiketYazicisi: () => false,
+      ortam: () => 'canli',
+      robotAnahtariVar: () => false,
+    };
+    const c = await o().vt.tx((db) => ayarDenetimi(db, kaynak));
+    assert.deepEqual(c.maddeler.map((m) => m.durum), ['uygun', 'uygun', 'uygun', 'uygun', 'bilgi', 'uygun', 'uygun', 'uygun']);
+    const robot = await o().vt.tx((db) => ayarDenetimi(db, { ...kaynak, robotAnahtariVar: () => true }));
+    assert.equal(robot.maddeler.find((m) => m.anahtar === 'ortam')?.durum, 'hata');
+
+    const hata = (): never => { throw new Error('okunamadı'); };
+    const okunamayan = await o().vt.tx((db) => ayarDenetimi(db, {
+      ...kaynak, yedek: async () => hata(), yedekDizini: async () => hata(), kanal: async () => hata(), calisan: async () => hata(), logo: hata, smartes: hata, etiketYazicisi: hata, ortam: hata,
+    }));
+    assert.deepEqual(okunamayan.maddeler.map((m) => m.durum), Array(8).fill('bilinmiyor'));
   });
 
   test('zamanlanmış iş: tarama her dakika koşan iş olarak bulunur; tek turu durum satırını yazar', async () => {

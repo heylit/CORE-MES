@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { OzetCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
-import { Dugme, DurumKutusu, IkiSeriKarti, Kart, Rozet, SayiKarti, Simge } from '../../ortak/arayuz/index.ts';
+import type { AyarDenetimiCevabi, AyarDenetimiDurumu, OzetCevabi, SunucuDurumuCevabi } from '#paylasilan/sozlesme/guvenlik.ts';
+import { Dugme, DurumKutusu, IkiSeriKarti, Kart, Rozet, SayiKarti, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ADI, DURUM_TONU, KORUMA_ADI, KORUMA_TONU, ONEM_ADI, SINYAL_ADI, degerMetni, kaynakMetni, saatMetni, zamanMetni } from './gorunum.ts';
@@ -80,6 +80,47 @@ function SunucuDurumuKarti() {
   );
 }
 
+const AYAR_ADI = { uygun: 'Uygun', uyari: 'Uyarı', hata: 'Hata', bilgi: 'Bilgi', bilinmiyor: 'Bilinmiyor' } as const satisfies Record<AyarDenetimiDurumu, string>;
+const AYAR_TONU = { uygun: 'tamam', uyari: 'uyari', hata: 'hata', bilgi: 'bilgi', bilinmiyor: 'pasif' } as const satisfies Record<AyarDenetimiDurumu, RozetTonu>;
+
+// Başlık rozeti bakılması gereken madde sayısıdır; bilgi ve bilinmiyor sayılmaz.
+export function ayarOzeti(maddeler: AyarDenetimiCevabi['maddeler']): { ton: RozetTonu; metin: string } {
+  const hata = maddeler.filter((m) => m.durum === 'hata').length;
+  const uyari = maddeler.filter((m) => m.durum === 'uyari').length;
+  if (hata > 0) return { ton: 'hata', metin: uyari > 0 ? `${String(hata)} hata, ${String(uyari)} uyarı` : `${String(hata)} hata` };
+  if (uyari > 0) return { ton: 'uyari', metin: `${String(uyari)} uyarı` };
+  return { ton: 'tamam', metin: 'Uygun' };
+}
+
+// Yedek, bağlantı, ortam ve sürüm ayarlarının uygunluğu (2164); yalnız okur, ayrıntı Ayarlar ve Sağlık ekranlarındadır.
+function AyarDenetimiKarti() {
+  const sorgu = useQuery({
+    queryKey: [...anahtarlar.kok, 'ayar-denetimi'],
+    queryFn: () => api.get<AyarDenetimiCevabi>('/guvenlik/ayar-denetimi'),
+    refetchInterval: YENILEME_MS,
+  });
+  const ozet = sorgu.data === undefined ? null : ayarOzeti(sorgu.data.maddeler);
+  return (
+    <Kart baslik="Ayar denetimi" baslikEki={ozet === null ? undefined : <Rozet ton={ozet.ton}>{ozet.metin}</Rozet>}>
+      {sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
+        : sorgu.isError ? <DurumKutusu durum="hata" yenile={() => { void sorgu.refetch(); }} />
+          : (
+            <div className="tc-guvenlik-ayrinti">
+              <p className="tc-guvenlik-not">Son denetim <time dateTime={sorgu.data.zaman}>{zamanMetni(sorgu.data.zaman)}</time></p>
+              <ul className="tc-guvenlik-olaylar">
+                {sorgu.data.maddeler.map((m) => (
+                  <li key={m.anahtar}>
+                    <span className="tc-guvenlik-olay-metin"><b>{m.baslik}</b> · {m.aciklama}</span>
+                    <Rozet ton={AYAR_TONU[m.durum]}>{AYAR_ADI[m.durum]}</Rozet>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+    </Kart>
+  );
+}
+
 export function GuvenlikDurum() {
   const git = useNavigate();
   const sorgu = useQuery({
@@ -135,6 +176,7 @@ export function GuvenlikDurum() {
       </div>
 
       <SunucuDurumuKarti />
+      <AyarDenetimiKarti />
     </div>
   );
 }

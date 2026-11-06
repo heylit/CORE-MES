@@ -1,3 +1,4 @@
+import { logoAyariOku } from './ayar.ts';
 // Ters yöndeki bağ (293 a): stok logoyu ithal edemez; fişin Logo durumunu sunucu/kablolama.ts stoğa bu çözücüyle bağlar.
 export { malzemeFisiLogoDurumlari } from './servis.ts';
 // Ters yöndeki bağ (LOG-1 a): malzemeler logoyu ithal edemez; geçerli birim seti kodlarını sunucu/kablolama.ts bağlar.
@@ -12,3 +13,7 @@ export type { LogoCari, LogoMalzemeKarti, LogoStokSatiri } from './kurallar.ts';
 // 2118: müşteri-tedarikçi Logo carisini arar ve tek cariyi okur (yalnız GET); sunucu/kablolama.ts bağlar.
 export { logodaCariAra, logodanCariOku } from './isler.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+// Güvenlik Merkezi ayar denetimi (2164) yalnız bağlantının açık olup olmadığını okur; adres ve anahtar modülden çıkmaz.
+export function logoBaglantisiAcikMi(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return logoAyariOku(env) !== null;
+}
