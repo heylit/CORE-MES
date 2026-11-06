@@ -27,6 +27,7 @@ const PAROLA = 'dogru-parola-1';
 const sessiz = { uyar: () => undefined, hata: () => undefined };
 const ADIM: GeometriYuzeyAdimi = {
   opNo: 40, adimAdi: 'Toz boya', fason: true, talimatVar: false, sartname: { id: 7, kod: 'BYA-TOZ', ad: 'Toz boya', kategoriKodu: 'BYA' },
+  parametreler: [{ anahtar: 'kalinlik', ad: 'Kalınlık', birim: 'µm', deger: 80 }],
 };
 const boya = { tur: 'rota', opNo: 40, sartnameId: 7 } as const;
 const maske = { tur: 'maske' } as const;

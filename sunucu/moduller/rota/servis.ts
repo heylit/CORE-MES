@@ -2053,7 +2053,8 @@ export async function yuzeyIslemiAdimlari(db: Db, malzemeId: number): Promise<Ge
   const baglar = await s.adimSartnameleri(db, [revizyonId]);
   if (baglar.length === 0) return [];
   const icerik = await s.icerikOku(db, revizyonId);
-  const sartnameler = new Map((await s.sartnameleriOku(db, [...new Set(baglar.map((x) => x.sartnameId))])).map((x) => [x.id, x]));
+  const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
+  const sartnameler = b.ozet;
   const kategori = new Map((await s.kategoriler(db)).map((k) => [k.id, k.kod]));
   const sonuc: GeometriYuzeyAdimi[] = [];
   for (const a of [...icerik.adimlar].sort((p, q) => p.sira - q.sira)) {
@@ -2065,7 +2066,14 @@ export async function yuzeyIslemiAdimlari(db: Db, malzemeId: number): Promise<Ge
       const kod = sartname === undefined ? undefined : kategori.get(sartname.kategoriId);
       const kategoriKodu = GEOMETRI_YUZEY_KATEGORILERI.find((k) => k === kod);
       if (sartname === undefined || kategoriKodu === undefined) continue;
-      sonuc.push({ opNo: a.opNo, adimAdi: a.ad, fason: fasonAdimMi(a), talimatVar, sartname: { id: sartname.id, kod: sartname.kod, ad: sartname.ad, kategoriKodu } });
+      // 2144-3 b: kalınlık ve yoğunluk hesabı için yürürlükteki sürümün alanları, adımdaki değer (yoksa varsayılan) ile.
+      const surum = yururlukteSurum(b, x.sartnameId);
+      const degerler = surum === null ? {} : cozulmusDegerler(surum.parametreler, x.degerler);
+      const parametreler = (surum?.parametreler ?? []).map((p) => ({ anahtar: p.anahtar, ad: p.ad, birim: p.birim, deger: degerler[p.anahtar] ?? null }));
+      sonuc.push({
+        opNo: a.opNo, adimAdi: a.ad, fason: fasonAdimMi(a), talimatVar,
+        sartname: { id: sartname.id, kod: sartname.kod, ad: sartname.ad, kategoriKodu }, parametreler,
+      });
     }
   }
   return sonuc;

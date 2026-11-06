@@ -294,6 +294,11 @@ export const geometriYuzeyAdimiSemasi = z.object({
   fason: z.boolean(),
   talimatVar: z.boolean(),
   sartname: z.object({ id: kimlik, kod: z.string(), ad: z.string(), kategoriKodu: z.enum(GEOMETRI_YUZEY_KATEGORILERI) }),
+  // 2144-3 b: şartnamenin yürürlükteki alanları ve adımdaki değeri (yoksa varsayılan); ekran kalınlığı ve yoğunluğu buradan okur.
+  parametreler: z.array(z.object({
+    anahtar: z.string(), ad: z.string(), birim: z.string().nullable(),
+    deger: z.union([z.number(), z.tuple([z.number(), z.number()]), z.string(), z.array(z.string()), z.boolean()]).nullable(),
+  })),
 });
 export type GeometriYuzeyAdimi = z.output<typeof geometriYuzeyAdimiSemasi>;
 
