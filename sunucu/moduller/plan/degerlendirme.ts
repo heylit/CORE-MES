@@ -124,7 +124,6 @@ export async function degerlendirmeBaslat(
   db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
 ): Promise<{ is: string }> {
   const maliyetGorunur = islemVarMi(kullanici, MALIYET_ISLEMI);
-  if (g.istek.tur === 'siparis-kari' && !maliyetGorunur) throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');
   temizle(simdi);
   if ([...isler.values()].some((i) => i.durum === 'suruyor' && i.kisi === kullanici.id)) throw cokIstek('Önceki planlama değerlendirmeniz sürüyor; bitince yeniden deneyin.');
   // İş, girdi okunmadan yer tutar: aynı kişinin eşzamanlı ikinci başlatması okuma sürerken de reddedilir.
@@ -186,7 +185,5 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'one-al':
     case 'sira-degistir':
       return s;
-    case 'siparis-kari':
-      throw yetkiYok('Sipariş maliyeti ve kârı yalnız maliyeti görene açıktır.');
   }
 }

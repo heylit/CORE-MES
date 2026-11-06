@@ -352,19 +352,6 @@ function partiBol(jid, dagitim, adetler) {
     siparisler: yeni, plan: { ...kayit, dataVer: S.dataVer } } };
 }
 
-/* ---------- sipariş maliyeti ve kârı (zu sSiparisKar) ---------- */
-function siparisKari() {
-  const p = S.plan; const cx = cxAl();
-  const W = wipHesap(p, stOf(), cx); const MP = ymMesaiPay(p, cx);
-  const bek = b => b ? { tl: b.tl, ilk: b.ilk, ara: b.ara, son: b.son } : null;
-  return { satirlar: S.D.siparisler.filter(s => !s.havuz && !s.iptal).map(s => { const x = ymSipMaliyet(s, p, cx, W, MP);
-    if (!x) return { siparisId: s.id, planda: false, malzeme: null, talas: null, talasKg: null, isleme: null, ayar: null, genelGider: null, ekMesai: null, fason: null, finansman: null, bekleme: null,
-      toplam: null, tutar: s.gelir == null ? null : +s.gelir, kar: null, net: null, gecikmeBedeli: null, gecikmeSaat: null, erkenSaat: null, eksik: [] };
-    return { siparisId: s.id, planda: true, malzeme: x.mal, talas: x.talas, talasKg: x.talasKg, isleme: x.isl, ayar: x.ayar, genelGider: x.gg, ekMesai: x.mes, fason: x.fas, finansman: x.fin,
-      bekleme: bek(x.bek), toplam: x.eksik.length ? null : x.top, tutar: x.tutar, kar: x.kar, net: x.net, gecikmeBedeli: x.gec, gecikmeSaat: x.T == null ? null : x.T, erkenSaat: x.erken, eksik: x.eksik }; }),
-    bekleme: { tl: W.tl, fin: W.fin, saat: W.saat } };
-}
-
 /* ---------- planı kur (e-coz coz 'sifir', ISCI_KODU) ----------
    Kural tabanlı ilk plan, kalan bütçede LNS. Dondurma bölgesi plan dengesine göre kilitlenir (dengeKilit). Bütçe çalışmanın çözüm süresidir
    (S.w.sure sn, sabit adımlı saatle). Kayıtlı planı iyileştirme burada yok (579 b: HiGHS gelene kadar). Canlı plana göre değişim (ozet.chg)
@@ -549,7 +536,7 @@ function siraDegistir(m, sira) {
 /* ---------- giriş ----------
    calisma, kayit ve kaynak planlama çalışması ucunun birleştirdiği girdidir (288 a); an: sunucunun şimdisi (ms); istek: sözleşmedeki tur ve alanları.
    Hata { hata: 'plan-yok' | 'siparis-yok' | 'adet' | 'basladi' }: çağıran uygun koda çevirir. */
-const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'siparis-kari', 'plan-iyilestir', 'one-al', 'sira-degistir']);
+const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri', 'malzeme-one-cekme', 'parti-bolme', 'plan-iyilestir', 'one-al', 'sira-degistir']);
 /* Hamle kayıtlı planı taban alır: plan veriden eskiyse önce bekleyen değişiklik uygulanır. */
 const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al', 'sira-degistir']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
@@ -575,7 +562,6 @@ function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
   if (istek.tur === 'malzeme-terminleri') return zarf(tmMalzeme());
   if (istek.tur === 'malzeme-one-cekme') return zarf(moHesapla());
   if (istek.tur === 'parti-bolme') return zarf(partiBol(istek.siparisId, istek.dagitim, istek.adetler));
-  if (istek.tur === 'siparis-kari') return zarf(siparisKari());
   if (istek.tur === 'plan-iyilestir') return zarf(planIyilestir());
   if (istek.tur === 'one-al') return zarf(oneAl(istek.siparisId));
   if (istek.tur === 'sira-degistir') return zarf(siraDegistir(istek.tezgah, istek.sira));
