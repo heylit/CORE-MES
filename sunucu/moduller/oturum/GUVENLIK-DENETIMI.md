@@ -4,6 +4,10 @@ Zaman veritabanı saatinden (testte uç fabrikasına verilen saat). Kişi çerez
 Çerez HttpOnly. Giriş komutu denetim kaydına parolasız düşer. Veri kapsamı, sürüm ve istek kimliği bu modülde uygulanmaz
 (oturum açma her seferinde yeni kayıttır; tekrar zararsızdır).
 Dış izleyici (1224 a): portalda firmaya atanmış kişinin kimliği her istekte işaretlenir (portal/disari.ts, işaret kopyalanmaz); çekirdek ona portal ve oturum dışındaki bütün uçları 403 ile kapatır. Atama açık oturumda da bir sonraki istekte geçerlidir (`dis-izleyici.test.ts`).
+Sınırlı hesap (kart 2158, 2158-5 a): oturumu 30 dk boşta ya da 8 saat açık kalınca geçersizdir, çerez ömrü 8 saattir; kayıtlı ortak
+cihazda giriş 403 ve oturum yazılmaz, açık oturum o cihazdan geçmez; bitiş günü geçince giriş 401, açık oturum düşer. Geçerlilik denetimi
+"görüldü" yazısından önce koşar: süresi dolmuş oturum boşta süresini sıfırlayamaz. Gizlilik taahhüdü onaylanmadan çekirdek yalnız bu modülün
+uçlarını açar (`sinirli-oturum.test.ts`).
 İstemci (1877 a): giriş, kart girişi ve PIN belirleme yalnız eşzamanlı deneme cevabını (429 `COK_ISTEK`) 1-2 sn rastgele bekleyip en çok 3 kez yeniden dener (`istemci/src/ortak/veri/oturum.ts`); sunucu kuralı ve sayaçlar değişmez.
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
@@ -30,3 +34,7 @@ UPDATE ve TRUNCATE reddedilir, DELETE yalnız 30 günden eski satırda kabul edi
 ## Yalnız ekranda kalan kurallar
 
 Yok. Giriş ekranı bekleme süresini sunucunun cevabından gösterir; bekleme sunucuda tutulur.
+
+| Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| POST /hesabim/gizlilik-taahhudu (kart 2158) | `oturum` | yalnız `kabul: true`; yalnız geçerli sınırlı hesap; ilk onay zamanı kalır, kişi sürümü artar; cevap yeniden yüklenen kullanıcı | `sinirli-oturum.test.ts` "girişte çerez 8 saatliktir; taahhüt ..." | aynı dosya "taahhüt yalnız açık onayla ..." (400, iç hesap 422) |

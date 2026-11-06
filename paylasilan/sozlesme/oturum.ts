@@ -54,6 +54,8 @@ export const nabizCevabi = z.object({ yazildi: z.boolean() });
 
 // Oturum yoksa kullanici null döner; açılış sorgusu 401 üretmez.
 export const oturumCevabi = z.object({ kullanici: kullaniciSemasi.nullable() });
+// Sınırlı hesabın gizlilik taahhüdü (kart 2158, 2158-5 a): kişinin kendi açık onayı.
+export const gizlilikTaahhuduGovdesi = z.object({ kabul: z.literal(true) });
 export const girisCevabi = oturumCevabi.extend({ pinBelirlenecek: z.literal(true).optional() });
 
 // Çıkış gövdesiz cevap verir (204).

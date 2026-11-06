@@ -5,20 +5,21 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISLEMLER, islemMi } from '#paylasilan/islemler.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { aramaSade, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
 import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
-  cikisliAktiflikReddi, cikisPasifiReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
+  cikisliAktiflikReddi, cikisPasifiReddi, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
 } from './kurallar.ts';
 import type { KisiAlanlari, Ret } from './kurallar.ts';
 import { parolaDogrula, parolaOzetle } from './parola.ts';
 import {
   aktifYaz, bayrakliKalanSayisi, bayrakliRolleriKilitle, bayrakliSayisiHaric, girisKaydiBul, hesapYaz, kisiBayrakliMi,
   kisiEkIslemSatirlari, kisiGuncelle, kisiIslemiEkle, kisiIslemiSil, kisiKullaniciMi, kisiSatirlari, kisiVarMi, kisiYaz, girisBilgisiBul, oturumlariGecersizKil, parolaYaz, pinBilgisiBul, pinYaz, rolBul, rolEkle, rolIslemiEkle, rolIslemiSil, rolKuraliniHemenDenetle,
-  eksikBilgiSayilari, cikisiGelenKisiler, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
+  eksikBilgiSayilari, cikisiGelenKisiler, gizlilikTaahhuduYaz, icHesapYaz, sinirliSorumluUygunMu, sinirliYaz, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
 import type { KisiSatiri, RolSatiri } from './sorgular.ts';
 import { ikRolSatirlari, kisiSecimAra as kisiSecimSatirlari, kokluKullaniciAdlari } from './sorgular.ts';
@@ -69,6 +70,7 @@ export async function kullaniciYukle(db: Db, kisiId: number, oturumAcildi: strin
   return {
     id: kayit.id, ad: kayit.ad, islemler: islemleriBirlestir(kayit.butun_islemler, kayit.islemler), acilisSayfasi: kayit.acilis_sayfasi,
     roller: kayit.roller,
+    ...(kayit.sinirli_bitis === null ? {} : { sinirli: { bitis: kayit.sinirli_bitis, taahhut: kayit.taahhut } }),
   };
 }
 
@@ -93,6 +95,9 @@ function kisiOzeti(satir: KisiSatiri, bayrakGorur = true, aktorBayrakli = true):
     ozlukIk: satir.ozluk_ik,
     ozlukCikisTarihi: satir.ozluk_cikis_tarihi,
     korumali: korumaliMi({ hedefBayrakli: satir.roller.some((r) => r.yonetici), aktorBayrakli }),
+    sinirli: satir.sinirli_bitis === null || satir.sinirli_sorumlu_id === null
+      ? null
+      : { bitis: satir.sinirli_bitis, sorumluId: satir.sinirli_sorumlu_id, taahhut: satir.taahhut },
   };
 }
 
@@ -184,7 +189,8 @@ async function kisiVeRol(db: Db, kisiId: number, rolId: number): Promise<RolSati
 export async function rolAta(db: Db, aktorId: number, kisiId: number, rolId: number, beklenen: number | null = null): Promise<KisiOzeti> {
   await surumDenetle(db, kisiId, beklenen);
   const rol = await kisiVeRol(db, kisiId, rolId);
-  const ret = atamaReddi({ rolBayrakli: rol.yonetici, aktorBayrakli: await kisiBayrakliMi(db, aktorId), kendiKendine: aktorId === kisiId });
+  const ret = atamaReddi({ rolBayrakli: rol.yonetici, aktorBayrakli: await kisiBayrakliMi(db, aktorId), kendiKendine: aktorId === kisiId })
+    ?? sinirliRolReddi({ rolBayrakli: rol.yonetici, hedefSinirli: await hedefSinirliMi(db, kisiId) });
   if (ret !== null) reddet(ret);
   if (!(await rolEkle(db, kisiId, rolId))) throw cakisma(ILETILER.zatenVar);
   return kisiyiGetir(db, kisiId);
@@ -212,6 +218,48 @@ export async function rolAl(db: Db, aktorId: number, kisiId: number, rolId: numb
     throw hata;
   }
   return kisiyiGetir(db, kisiId);
+}
+
+async function hedefSinirliMi(db: Db, kisiId: number): Promise<boolean> {
+  const [satir] = await kisiSatirlari(db, kisiId);
+  return satir?.sinirli_bitis != null;
+}
+
+// Sınırlı hesap (kart 2158, 2158-1 a, 2158-5 a): kişi yalnız okur, bitişten sonra giremez. Aynı komut bitişi uzatır ve sorumluyu
+// değiştirir. Yetki rol yönetimidir (kisiler.rol-yonet): hesabın türü yetki kararıdır.
+export async function sinirliHesapYap(
+  db: Db, aktorId: number, kisiId: number, girdi: { bitis: string; sorumluId: number }, beklenen: number | null,
+): Promise<KisiOzeti> {
+  await surumDenetle(db, kisiId, beklenen);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  const ret = sinirliHesapReddi({
+    kendiKendine: aktorId === kisiId,
+    hedefBayrakli: hedef.roller.some((r) => r.yonetici),
+    sorumluKendisi: girdi.sorumluId === kisiId,
+    sorumluUygun: await sinirliSorumluUygunMu(db, girdi.sorumluId),
+    bitis: girdi.bitis,
+    bugun: tesisGunu(new Date()),
+  });
+  if (ret !== null) reddet(ret);
+  await sinirliYaz(db, kisiId, girdi.bitis, girdi.sorumluId);
+  return kisiyiGetir(db, kisiId);
+}
+
+export async function icHesapYap(db: Db, aktorId: number, kisiId: number, beklenen: number | null): Promise<KisiOzeti> {
+  await surumDenetle(db, kisiId, beklenen);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  const ret = icHesapReddi({ kendiKendine: aktorId === kisiId, hedefSinirli: hedef.sinirli_bitis !== null });
+  if (ret !== null) reddet(ret);
+  await icHesapYaz(db, kisiId);
+  return kisiyiGetir(db, kisiId);
+}
+
+// Kişinin kendi onayı (2158-5 a): yalnız geçerli sınırlı hesapta; ilk onay zamanı kalır. Sürüm artar: açık Personel formu eskir.
+export async function gizlilikTaahhuduVer(db: Db, kisiId: number): Promise<void> {
+  await surumDenetle(db, kisiId, null);
+  if (!(await gizlilikTaahhuduYaz(db, kisiId))) throw gecersiz(ILETILER.taahhutSinirliDegil);
 }
 
 // Yazma komutunun döndürdüğü satır: bayraklı kişide komut yalnız bayraklı aktörle geçer, satır okuyana korumalı değildir.
@@ -411,7 +459,7 @@ export async function hesapAc(
     rolBayrakli: rol.yonetici,
     hedefBayrakli: hedef?.roller.some((r) => r.yonetici) === true,
     aktorBayrakli: await kisiBayrakliMi(db, aktorId),
-  });
+  }) ?? sinirliRolReddi({ rolBayrakli: rol.yonetici, hedefSinirli: hedef?.sinirli_bitis != null });
   if (ret !== null) reddet(ret);
   const kullaniciAdi = kullaniciAdiniDuzelt(girdi.kullaniciAdi);
   const adHatasi = kullaniciAdiHatasi(kullaniciAdi);

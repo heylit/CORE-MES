@@ -55,6 +55,20 @@ function disIzleyiciGirerMi(kullanici: Kullanici, modul: string | undefined): bo
   return kullanici.disIzleyici !== true || (modul !== undefined && DIS_IZLEYICI_MODULLERI.includes(modul));
 }
 
+// Sınırlı hesap (kart 2158; 2158-1 a, 2158-5 a, 2158-6 c) yalnız okur: rolüne yazma işlemi verilmiş olsa da yazma komutu yalnız bu
+// modüllerde geçer (kendi parolası, gizlilik taahhüdü, çıkış). Dosya (ikili cevap) hiç verilmez; önizleme de indirmedir. Taahhüt
+// onaylanmadan oturum modülü dışında okuma da kapalıdır. Rol ve ek işlem dağıtımındaki bir hata bu kapıyı aşamaz.
+export const SINIRLI_YAZMA_MODULLERI: readonly string[] = ['oturum'];
+
+function sinirliGirerMi(kullanici: Kullanici, modul: string | undefined, yazma: boolean, ikili: boolean): boolean {
+  const { sinirli } = kullanici;
+  if (sinirli === undefined) return true;
+  if (ikili) return false;
+  const modulIzinli = modul !== undefined && SINIRLI_YAZMA_MODULLERI.includes(modul);
+  if (!sinirli.taahhut) return modulIzinli;
+  return !yazma || modulIzinli;
+}
+
 // Telefon profilinin (kart #1358, 1347 a) girebildiği modüller: Üretim Terminali, kuyruk ve Stok Merkezi'nin (QR okutma) ekranlarının
 // ve kabuğun çağırdığı uçlar. Rolüne verilmiş olsa da öteki uçlar telefona kapalıdır; modülü bilinmeyen kayıtta da kapalıdır.
 // Profilin sayfa listesi ekrandan genişletilse de bu liste genişlemez: telefona yeni modül açmak kod ve test ister.
@@ -499,6 +513,9 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           if (!yetkisiVarMi(kullanici, tanim.yetki)) reddet('yetki', yetkiYok());
           if (!disIzleyiciGirerMi(kullanici, modul)) reddet('dis-izleyici', yetkiYok());
           if (!cihazGirerMi(kullanici, modul)) reddet('cihaz', yetkiYok('Bu işlem bu cihazda yapılamaz.'));
+          if (!sinirliGirerMi(kullanici, modul, tanim.yontem !== 'GET', tanim.ikili)) {
+            reddet('yetki', yetkiYok('Sınırlı hesap yalnız okur; bu işlem kapalıdır.'));
+          }
           istekKisisiniIsaretle(istek, kullanici.id);
         }
         // Kayıtta durulmaz: uygulama bütün modüllerin uçlarını keşfeder, bayraklı tek uç deposuz kurulan her testi

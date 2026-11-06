@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import {
   GOREV_EN_FAZLA, PAROLA_EN_AZ, SICIL_EN_FAZLA, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, parolaBaskasiReddi,
-  ILETILER, PIN_UZUNLUK, bayrakliKisiReddi, girisYontemi, korumaliMi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
+  ILETILER, PIN_UZUNLUK, SINIRLI_EN_UZUN_GUN, bayrakliKisiReddi, gunEkle, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, girisYontemi, korumaliMi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
 } from './kurallar.ts';
 
 test('rollerden gelen işlemler birleşir; kayıtlı olmayan işlem yetki vermez', () => {
@@ -139,5 +139,41 @@ describe('PIN', () => {
     assert.deepEqual(pinVermeReddi({ kendiKendine: true, hedefBayrakli: false }), { tur: 'gecersiz', ileti: ILETILER.kendiPin });
     assert.deepEqual(pinVermeReddi({ kendiKendine: false, hedefBayrakli: true }), { tur: 'gecersiz', ileti: ILETILER.bayrakliPin });
     assert.equal(pinVermeReddi({ kendiKendine: false, hedefBayrakli: false }), null);
+  });
+});
+
+describe('sınırlı hesap (kart 2158)', () => {
+  const temel = { kendiKendine: false, hedefBayrakli: false, sorumluUygun: true, sorumluKendisi: false, bugun: '2026-12-30' };
+
+  test('gün ekleme ay ve yıl sınırını, artık yılı aşar', () => {
+    assert.equal(gunEkle('2026-12-30', 2), '2027-01-01');
+    assert.equal(gunEkle('2028-02-28', 1), '2028-02-29');
+    assert.equal(gunEkle('2026-03-01', -1), '2026-02-28');
+  });
+
+  test('bitiş bugünden 90 güne kadar geçer; önce ve sonra reddedilir', () => {
+    assert.equal(sinirliHesapReddi({ ...temel, bitis: '2026-12-30' }), null);
+    assert.equal(sinirliHesapReddi({ ...temel, bitis: gunEkle('2026-12-30', SINIRLI_EN_UZUN_GUN) }), null);
+    assert.deepEqual(sinirliHesapReddi({ ...temel, bitis: '2026-12-29' }), { tur: 'gecersiz', ileti: ILETILER.sinirliBitisGecmis });
+    assert.deepEqual(
+      sinirliHesapReddi({ ...temel, bitis: gunEkle('2026-12-30', SINIRLI_EN_UZUN_GUN + 1) }), { tur: 'gecersiz', ileti: ILETILER.sinirliBitisUzun },
+    );
+  });
+
+  test('kendi hesabı, bayraklı kişi ve uygunsuz sorumlu reddedilir; ret sırası yetkiden başlar', () => {
+    const bitis = '2027-01-10';
+    assert.deepEqual(sinirliHesapReddi({ ...temel, bitis, kendiKendine: true, hedefBayrakli: true }), { tur: 'yetki', ileti: ILETILER.sinirliKendi });
+    assert.deepEqual(sinirliHesapReddi({ ...temel, bitis, hedefBayrakli: true }), { tur: 'gecersiz', ileti: ILETILER.sinirliBayrakli });
+    assert.deepEqual(sinirliHesapReddi({ ...temel, bitis, sorumluUygun: false }), { tur: 'gecersiz', ileti: ILETILER.sinirliSorumlu });
+    assert.deepEqual(sinirliHesapReddi({ ...temel, bitis, sorumluKendisi: true }), { tur: 'gecersiz', ileti: ILETILER.sinirliSorumlu });
+  });
+
+  test('iç hesaba alma yalnız sınırlı hesapta ve başkasınca; bayraklı rol sınırlı hesaba verilmez', () => {
+    assert.equal(icHesapReddi({ kendiKendine: false, hedefSinirli: true }), null);
+    assert.deepEqual(icHesapReddi({ kendiKendine: true, hedefSinirli: true }), { tur: 'yetki', ileti: ILETILER.sinirliKendi });
+    assert.deepEqual(icHesapReddi({ kendiKendine: false, hedefSinirli: false }), { tur: 'gecersiz', ileti: ILETILER.sinirliDegil });
+    assert.deepEqual(sinirliRolReddi({ rolBayrakli: true, hedefSinirli: true }), { tur: 'gecersiz', ileti: ILETILER.sinirliBayrakli });
+    assert.equal(sinirliRolReddi({ rolBayrakli: false, hedefSinirli: true }), null);
+    assert.equal(sinirliRolReddi({ rolBayrakli: true, hedefSinirli: false }), null);
   });
 });

@@ -11,7 +11,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
-  girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
+  gizlilikTaahhuduVer, girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
@@ -21,7 +21,7 @@ import {
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   beklemeIletisi, kilitKalanDk,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
-  NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu,
+  NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu, SINIRLI_ORTAK_CIHAZ, sinirliOturumGecerMi,
 } from './kurallar.ts';
 import type { NabizDurumu } from './kurallar.ts';
 import {
@@ -272,10 +272,30 @@ export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirtec
     azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
   });
   if (oturum === null || oturum.bosta_gecen_sn >= bostaSuresiSn(profil.kod)) return null;
-  if (oturum.bayat) await gorulduYaz(db, oturum.id);
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
   const kullanici = await kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
-  return kullanici === null ? null : profilUygula(kullanici, profil);
+  if (kullanici === null) return null;
+  // Görüldü yazısı geçerlilik denetiminden sonradır: süresi dolmuş oturum kendi boşta süresini sıfırlamasın.
+  if (kullanici.sinirli !== undefined && !sinirliOturumGecerMi({
+    bostaGecenSn: oturum.bosta_gecen_sn, acikGecenSn: oturum.acik_gecen_sn, kayitliCihaz: profil.cihazId !== null,
+  })) return null;
+  if (oturum.bayat) await gorulduYaz(db, oturum.id);
+  return profilUygula(kullanici, profil);
+}
+
+// Girişin son adımı (kart 2158): sınırlı hesap kayıtlı ortak cihazda oturum açamaz. Hata transaction'ı geri alır: oturum yazılmaz.
+export async function sinirliGirisiDenetle(db: Db, kullanici: Kullanici, cihazBelirteci: string | null): Promise<void> {
+  if (kullanici.sinirli === undefined) return;
+  const profil = await cihazProfiliCoz(db, cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null);
+  if (profil.cihazId !== null) throw yetkiYok(SINIRLI_ORTAK_CIHAZ);
+}
+
+// Sınırlı hesabın gizlilik taahhüdü (2158-5 a): onaylanınca kişi yeniden yüklenir, menü ve uçlar açılır.
+export async function gizlilikTaahhuduOnayla(db: Db, kullanici: Kullanici, cihazBelirteci: string | null): Promise<Kullanici> {
+  await gizlilikTaahhuduVer(db, kullanici.id);
+  const yeni = await kimlikYukle(db, kullanici.id);
+  if (yeni === null) throw oturumYok();
+  return cihazaGoreKullanici(db, yeni, cihazBelirteci);
 }
 
 // Girişin döndürdüğü kişi menüyü ilk çizer: işlemleri de bu cihazın profiliyle süzülür.

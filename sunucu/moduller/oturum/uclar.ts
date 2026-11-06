@@ -6,14 +6,14 @@ import {
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
   cihazProfiliParametresi, cihazProfilleriCevabi, kayitsizProfilCevabi, kayitsizProfilGovdesi, profilAtaCevabi, profilAtaGovdesi,
-  profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi,
+  profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi, gizlilikTaahhuduGovdesi,
 } from '#paylasilan/sozlesme/oturum.ts';
-import { AZAMI_SN, CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI } from './kurallar.ts';
+import { CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI, oturumCerezSn } from './kurallar.ts';
 import {
   cikisYap, girisYap, kartlaGirisYap, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
-  cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz, nabizKaydet,
+  cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz, nabizKaydet, gizlilikTaahhuduOnayla, sinirliGirisiDenetle,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
 
@@ -40,7 +40,8 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       isle: async ({ db, govde, istek, gunluk }) => {
         const sonuc = await girisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         if (sonuc.anahtar === null) return { kullanici: null, pinBelirlenecek: true as const };
-        istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, AZAMI_SN);
+        await sinirliGirisiDenetle(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI));
+        istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, oturumCerezSn(sonuc.kullanici));
         return { kullanici: await cihazaGoreKullanici(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
@@ -55,8 +56,9 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         if (!(await cihazDurumu(db, istek.cerez(CIHAZ_CEREZI))).ortak) throw yetkiYok('Kartla giriş yalnız istasyon olarak kayıtlı cihazda yapılır.');
         const { anahtar, kullanici } = await kartlaGirisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         // Oturum açıkken okutulan kart kişiyi değiştirir (1898 a): öncekinin oturumu kapanır, istasyonda iki oturum kalmaz.
+        await sinirliGirisiDenetle(db, kullanici, istek.cerez(CIHAZ_CEREZI));
         await cikisYap(db, istek.cerez(CEREZ_ADI));
-        istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
+        istek.cerezYaz(CEREZ_ADI, anahtar, oturumCerezSn(kullanici));
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
@@ -68,9 +70,21 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       cevap: oturumCevabi,
       isle: async ({ db, govde, istek, gunluk }) => {
         const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
-        istek.cerezYaz(CEREZ_ADI, anahtar, AZAMI_SN);
+        await sinirliGirisiDenetle(db, kullanici, istek.cerez(CIHAZ_CEREZI));
+        istek.cerezYaz(CEREZ_ADI, anahtar, oturumCerezSn(kullanici));
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
+    }),
+    // Sınırlı hesabın gizlilik taahhüdü (kart 2158, 2158-5 a). İç hesap 400 alır. Onaydan önce sınırlı hesap yalnız bu modüle girer.
+    uc({
+      yontem: 'POST',
+      yol: '/hesabim/gizlilik-taahhudu',
+      yetki: 'oturum',
+      govde: gizlilikTaahhuduGovdesi,
+      cevap: oturumCevabi,
+      isle: async ({ db, kullanici, istek }) => ({
+        kullanici: await gizlilikTaahhuduOnayla(db, kullanici, istek.cerez(CIHAZ_CEREZI)),
+      }),
     }),
     uc({
       yontem: 'POST',

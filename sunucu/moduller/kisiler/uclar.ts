@@ -2,11 +2,11 @@ import { uc } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
-  pinVerGovdesi, rolIslemiGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
+  pinVerGovdesi, rolIslemiGovdesi, sinirliHesapGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
   baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiSecimAra,
-  kisiPasifeAl, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
+  icHesapYap, kisiPasifeAl, sinirliHesapYap, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
 } from './servis.ts';
 
 // Ortak kişi seçicisini çağıran modüller (karar 1321 b): kişiler, bugün kişi seçen istasyonlar (atama), mesaj ve Arkon.
@@ -143,6 +143,25 @@ export const uclar = [
     govde: rolGovdesi,
     cevap: kisiSemasi,
     isle: ({ db, kullanici, parametre, govde }) => rolAl(db, kullanici.id, parametre.id, govde.rolId, govde.surum),
+  }),
+  // Sınırlı hesap (kart 2158): aç ya da bitişini uzat; iç hesaba geri al.
+  uc({
+    yontem: 'POST',
+    yol: '/kisiler/:id/sinirli-hesap',
+    yetki: 'kisiler.rol-yonet',
+    parametre: kisiParametresi,
+    govde: sinirliHesapGovdesi,
+    cevap: kisiSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => sinirliHesapYap(db, kullanici.id, parametre.id, govde, govde.surum),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kisiler/:id/ic-hesap',
+    yetki: 'kisiler.rol-yonet',
+    parametre: kisiParametresi,
+    govde: surumGovdesi,
+    cevap: kisiSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => icHesapYap(db, kullanici.id, parametre.id, govde.surum),
   }),
   uc({
     yontem: 'POST',
