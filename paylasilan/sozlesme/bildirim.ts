@@ -129,7 +129,7 @@ export const YAYIN_SIMGELERI = [
   'bell', 'alert', 'fire', 'flag', 'wrench', 'helmet', 'calendar', 'cpu', 'users', 'gear', 'bolt', 'clipboard-check', 'truck', 'meal', 'drop', 'thermometer', 'lock',
 ] as const;
 const KIMLIK = z.number().int().positive().max(2147483647);
-export const bildirimParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const bildirimParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 
 export const bildirimSemasi = z.object({
   id: z.number().int(),
@@ -164,7 +164,7 @@ export const BILDIRIM_LISTE_DURUMLARI = ['gelen', 'okunmamis', 'onay-bekleyen', 
 export type BildirimListeDurumu = (typeof BILDIRIM_LISTE_DURUMLARI)[number];
 export const bildirimListeSorgusu = z.object({
   ...sayfaSorguAlanlari,
-  durum: z.enum(BILDIRIM_LISTE_DURUMLARI).default('gelen'),
+  durum: z.enum(BILDIRIM_LISTE_DURUMLARI).prefault('gelen'),
 });
 export const bildirimListeCevabi = listeCevapSemasi(bildirimSemasi);
 
@@ -306,7 +306,7 @@ export const bildirimYayinlaGovdesi = z.object({
   bitis: zamanSemasi.nullable(),
 }).strict();
 
-export const bildirimYayinParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const bildirimYayinParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 export const bildirimYayinListeSorgusu = z.object({ ...sayfaSorguAlanlari });
 
 const kisiKunyesi = z.object({ id: z.number().int(), ad: z.string().nullable() });

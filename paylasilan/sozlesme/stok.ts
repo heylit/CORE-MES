@@ -45,8 +45,8 @@ export type StokDurumuSuzgeci = (typeof STOK_DURUMLARI)[number];
 export type ElleKonumTuru = (typeof ELLE_KONUM_TURLERI)[number];
 
 // ---- Alan şemaları --------------------------------------------------------------------------------------------
-const kimlik = z.coerce.number().int().min(1).max(2147483647);
-const buyukKimlik = z.coerce.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+const kimlik = z.coerce.number<number>().int().min(1).max(2147483647);
+const buyukKimlik = z.coerce.number<number>().int().min(1).max(Number.MAX_SAFE_INTEGER);
 // Miktar metin taşınır (numeric(14,3)); en çok üç ondalık, en çok on bir tam basamak.
 const MIKTAR = /^\d{1,11}(\.\d{1,3})?$/;
 export const miktarSemasi = z.string().trim().regex(MIKTAR, 'Miktar en çok üç ondalıklı bir sayı olmalı (örnek: 12.5).')
@@ -304,7 +304,7 @@ const rafAlanlari = {
   kod: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{1,3}$/, 'Raf kodu 1-3 büyük harf ya da rakam olmalı.'),
   tur: z.enum(RAF_TURLERI),
   numaralama: z.enum(NUMARALAMALAR),
-  ilkBolme: z.number().int().min(1).max(999).default(1),
+  ilkBolme: z.number().int().min(1).max(999).prefault(1),
   bolmeSayisi: z.number().int().min(1).max(80),
   katSayisi: z.number().int().min(1).max(10),
   bolmeGenislikM: olcuM,
@@ -420,7 +420,7 @@ export const malzemeAyarGovdesi = z.object({
   surum: surumSemasi.nullable(),
   kritikSeviye: sifirOlabilirMiktar.nullable(),
   varsayilanAmbalaj: z.object({ tur: z.enum(AMBALAJ_TURLERI), olcu: z.string().trim().regex(/^[a-z0-9]{1,8}$/) }).nullable(),
-  varsayilanKonumId: kimlik.nullable().default(null),
+  varsayilanKonumId: kimlik.nullable().prefault(null),
   ambalajlar: z.array(z.object({ tur: z.enum(AMBALAJ_TURLERI), olcu: z.string().trim().regex(/^[a-z0-9]{1,8}$/), iciMiktar: miktarSemasi })).max(20),
 });
 export type MalzemeAyarGovdesi = z.input<typeof malzemeAyarGovdesi>;
@@ -463,7 +463,7 @@ export type PanelCevabi = z.output<typeof panelCevabi>;
 // talaş kg fiyatıyladır. Varsayılan güncel kg.
 export const DEGERLEME_YONTEMLERI = ['guncel_kg', 'son_alis', 'hareketli_ortalama'] as const;
 export type DegerlemeYontemi = (typeof DEGERLEME_YONTEMLERI)[number];
-export const stokDegeriSorgusu = z.object({ yontem: z.enum(DEGERLEME_YONTEMLERI).default('guncel_kg') });
+export const stokDegeriSorgusu = z.object({ yontem: z.enum(DEGERLEME_YONTEMLERI).prefault('guncel_kg') });
 // 228 a: değer ve fiyatsız sayısı yalnız kullanılabilir stoktandır (raf, kabul, zemin; statüsüz; serbest ya da şartlı). Kalite
 // bekleyen ve red (karantina dahil), hurda, fason, yolda (sevkiyat dahil) ve diğer (üretimde, ara alan) ayrı değerlenir; toplam
 // bütün stoktur. Fiyatı olmayan stoklu kart değere katılmaz, sayılır; fiyatlı kart yoksa değer null (sıfır uydurulmaz).
@@ -484,8 +484,8 @@ export type StokDegeriCevabi = z.output<typeof stokDegeriCevabi>;
 // (kg fiyatı ve kuru o günün, alış fiyatı o güne kadarki mal kabullerin). Seri yalnız finans.oku görene hesaplanır; değilse
 // degerGorunur false, aylar boş.
 export const aylikStokDegeriSorgusu = z.object({
-  ay: z.coerce.number().int().min(1).max(24).default(12),
-  yontem: z.enum(DEGERLEME_YONTEMLERI).default('guncel_kg'),
+  ay: z.coerce.number<number>().int().min(1).max(24).prefault(12),
+  yontem: z.enum(DEGERLEME_YONTEMLERI).prefault('guncel_kg'),
 });
 export const aylikStokDegeriCevabi = z.object({
   degerGorunur: z.boolean(),
@@ -532,7 +532,7 @@ export const partiBelgesi = z.object({ id: z.number().int(), ad: z.string(), tur
 export type PartiBelgesi = z.output<typeof partiBelgesi>;
 export const partiBelgeParametresi = z.object({ id: buyukKimlik, belgeId: kimlik });
 // Kartın son partileri ve bağlı sertifikaları (#960, #1001); satın alma da okur (Malzemeler'de hammadde sertifikası).
-export const sonPartilerSorgusu = z.object({ sinir: z.coerce.number().int().min(1).max(50).default(10) });
+export const sonPartilerSorgusu = z.object({ sinir: z.coerce.number<number>().int().min(1).max(50).prefault(10) });
 export type SonPartilerSorgusu = z.input<typeof sonPartilerSorgusu>;
 export const sonParti = z.object({
   partiId: z.number().int(),
@@ -690,7 +690,7 @@ export type MalKabullerCevabi = z.output<typeof malKabullerCevabi>;
 // mal kabul belgeleri; irsaliye tarihi belgenin kayıt zamanıdır (stokta ayrı irsaliye tarihi yoktur).
 export const siparisIrsaliyeleriSorgusu = z.object({
   siparisSatirlari: z.string().regex(/^\d{1,10}(,\d{1,10}){0,199}$/, 'Virgülle ayrılmış sipariş satırı kimlikleri.')
-    .transform((t) => [...new Set(t.split(',').map(Number))]).pipe(z.array(kimlik)),
+    .transform((t) => [...new Set(t.split(',').map(Number))]).pipe(z.array(z.number().int().min(1).max(2147483647))),
 });
 export const siparisIrsaliyesi = z.object({
   siparisSatirId: z.number().int(), malKabulId: z.number().int(), malKabulNo: z.string(), irsaliyeNo: z.string().nullable(), zaman: zamanSemasi,
@@ -987,7 +987,7 @@ export type LotBekleyenKartlarCevabi = z.output<typeof lotBekleyenKartlarCevabi>
 // Refakat kartları sayfası (kart #708): en yeni kart önce, emrin ürünü, adedi, termini ve adım sayısıyla. İptal kart yalnız "tümü"nde.
 // Arama gelen listede yapılır; liste sınıra dayanırsa `sinirda` söyler.
 export const REFAKAT_KARTLARI_SINIRI = 200;
-export const refakatKartlariSorgusu = z.object({ durum: z.enum(['acik', 'tumu']).default('acik') });
+export const refakatKartlariSorgusu = z.object({ durum: z.enum(['acik', 'tumu']).prefault('acik') });
 export type RefakatKartlariSorgusu = z.input<typeof refakatKartlariSorgusu>;
 export const refakatKartlariCevabi = z.object({
   kartlar: z.array(z.object({
@@ -1073,7 +1073,7 @@ export type ToplamaDurumu = (typeof TOPLAMA_DURUMLARI)[number];
 // toplanan mal oraya taşınır; verilmezse eskisi gibi sevk çıkışı yazılır.
 export const toplamaAcGovdesi = z.object({
   ad: z.string().trim().min(1, 'Listeye ad verin (örn. sipariş no).').max(80),
-  kalemler: z.array(z.object({ malzemeId: kimlik, miktar: miktarSemasi })).max(50).default([]),
+  kalemler: z.array(z.object({ malzemeId: kimlik, miktar: miktarSemasi })).max(50).prefault([]),
   istekIdler: z.array(kimlik).max(50).optional(),
   hedef: z.union([z.object({ konumId: kimlik }), z.object({ istasyonId: kimlik })]).nullable().optional(),
 }).refine((g) => g.kalemler.length > 0 || (g.istekIdler?.length ?? 0) > 0, { message: 'En az bir kalem girin.', path: ['kalemler'] });
@@ -1436,7 +1436,7 @@ export type IsMalzemeleriCevabi = z.output<typeof isMalzemeleriCevabi>;
 export const isMalzemesiIsteGovdesi = z.object({
   istasyonId: kimlik, uretimEmriId: kimlik, opNo: z.number().int(), malzemeId: kimlik, kaynakKonumId: kimlik.nullable(),
   // İstasyondan alırken yalnız bu emrin (true) ya da yalnız emirsiz (false) partisi; null ikisi.
-  buEmrin: z.boolean().nullable().default(null),
+  buEmrin: z.boolean().nullable().prefault(null),
   kaynakKimligi: z.string().trim().min(3).max(100),
   kartOnayi: z.boolean().optional(),
 });
@@ -1666,7 +1666,7 @@ export type SeriListeCevabi = z.output<typeof seriListeCevabi>;
 const seriKodu = z.string().trim().min(1).max(200);
 // `listeId` yoksa yeni liste açılır (telefonun ilk okutması, hafıza aktarımı).
 export const seriEkleGovdesi = z.object({
-  listeId: buyukKimlik.optional(), kaynak: z.enum(SERI_KAYNAKLARI).default('okutma'), kodlar: z.array(seriKodu).min(1).max(SERI_SATIR_SINIRI),
+  listeId: buyukKimlik.optional(), kaynak: z.enum(SERI_KAYNAKLARI).prefault('okutma'), kodlar: z.array(seriKodu).min(1).max(SERI_SATIR_SINIRI),
 });
 export type SeriEkleGovdesi = z.input<typeof seriEkleGovdesi>;
 export type SeriEkleKomutu = z.output<typeof seriEkleGovdesi>;

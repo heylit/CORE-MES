@@ -67,7 +67,7 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     hataYonetiminiKur(app);
     uclariKaydet(app, [uc({
       yontem: 'POST', yol: '/aletler/:id/sil', yetki: 'acik',
-      parametre: z.object({ id: z.coerce.number().int() }), cevap: z.object({ tamam: z.literal(true) }),
+      parametre: z.object({ id: z.coerce.number<number>().int() }), cevap: z.object({ tamam: z.literal(true) }),
       isle: async ({ db, parametre }) => { await db.sorgu('DELETE FROM olcu_aleti WHERE id = $1', [parametre.id]); return { tamam: true as const }; },
     })], { vt: uygulama, kimlik: async () => null });
     const red = await app.inject({ method: 'POST', url: `/api/aletler/${kayitli}/sil` });

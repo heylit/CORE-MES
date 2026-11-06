@@ -20,7 +20,7 @@ const yolMetni = z.string().min(1).max(AZAMI_YOL).refine((y) => parcalar(y).ever
 export const koleksiyonYolu = yolMetni.refine((y) => parcalar(y).length % 2 === 1, 'Koleksiyon yolu tek sayıda parçadır.');
 export const belgeYolu = yolMetni.refine((y) => parcalar(y).length % 2 === 0, 'Belge yolu çift sayıda parçadır.');
 
-const veriSemasi = z.record(z.unknown());
+const veriSemasi = z.record(z.string(), z.unknown());
 
 export const filtreSemasi = z.object({ alan: z.string().min(1).max(200), islec: z.enum(FILTRE_ISLECLERI), deger: z.unknown() });
 export const siraSemasi = z.object({ alan: z.string().min(1).max(200), yon: z.enum(['asc', 'desc']) });
@@ -39,7 +39,7 @@ export const sorguParametresi = z.object({
   koleksiyon: koleksiyonYolu,
   filtreler: jsonMetni(z.array(filtreSemasi).max(10)).optional(),
   sira: jsonMetni(siraSemasi).optional(),
-  sinir: z.coerce.number().int().min(1).max(AZAMI_SINIR).optional(),
+  sinir: z.coerce.number<number>().int().min(1).max(AZAMI_SINIR).optional(),
 });
 export const belgeParametresi = z.object({ yol: belgeYolu });
 
@@ -67,7 +67,7 @@ export const silCevabi = z.object({ silindi: z.boolean(), damga: z.number().int(
 export const kilitGovdesi = z.object({
   yol: belgeYolu,
   sahip: z.string().min(1).max(200),
-  sureMs: z.number().int().min(1).max(600_000).default(30_000),
+  sureMs: z.number().int().min(1).max(600_000).prefault(30_000),
   veri: veriSemasi.optional(),
 });
 export const kilitCevabi = z.object({
@@ -93,16 +93,16 @@ export const kisilerCevabi = z.object({ kisiler: z.array(kisiSemasi) });
 export const kurulumCevabi = z.object({ kurulan: z.number().int() });
 
 // Oda: o an sayfası açık olanlar (kalıcı değildir). Durum küçük düz nesnedir.
-export const odaParametresi = z.object({ durum: jsonMetni(z.record(z.unknown())).optional() });
-export const esSemasi = z.object({ kisiId: z.number().int(), durum: z.record(z.unknown()), guncellendi: z.number().int() });
+export const odaParametresi = z.object({ durum: jsonMetni(z.record(z.string(), z.unknown())).optional() });
+export const esSemasi = z.object({ kisiId: z.number().int(), durum: z.record(z.string(), z.unknown()), guncellendi: z.number().int() });
 export const odaCevabi = z.object({ esler: z.array(esSemasi) });
 
 // Onay kararı (kart #1583): kişi, zaman ve adım rolü sunucudan gelir; gövde yalnız kararı ve notu taşır.
 export const onayParametresi = z.object({ kimlik: z.string().regex(YOL_PARCASI, 'Geçersiz onay kimliği.') });
-export const onayKarariGovdesi = z.object({ onay: z.boolean(), not: z.string().max(2000).default('') });
+export const onayKarariGovdesi = z.object({ onay: z.boolean(), not: z.string().max(2000).prefault('') });
 
 // Firma kişisi (1021 b): TMI kişisine portaldaki müşteri ya da tedarikçi firma kartının kimliği atanır; null firma içine alır.
-export const firmaKisisiParametresi = z.object({ kisiId: z.coerce.number().int().positive() });
+export const firmaKisisiParametresi = z.object({ kisiId: z.coerce.number<number>().int().positive() });
 export const firmaKisisiGovdesi = z.object({ firma: z.string().regex(YOL_PARCASI, 'Geçersiz firma kimliği.').nullable() });
 export const firmaKisisiCevabi = z.object({ kisiId: z.number().int(), firma: z.string().nullable() });
 

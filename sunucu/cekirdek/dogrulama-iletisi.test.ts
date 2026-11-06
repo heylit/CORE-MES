@@ -10,7 +10,7 @@ import { hataYonetiminiKur } from './uygulama.ts';
 interface Sorun { alan: string; mesaj: string }
 
 function sorunlar(sema: z.ZodTypeAny, deger: unknown): Sorun[] {
-  const sonuc = sema.safeParse(deger, { errorMap: turkceIleti });
+  const sonuc = sema.safeParse(deger, { error: turkceIleti });
   assert.equal(sonuc.success, false, `Ret beklenirdi: ${JSON.stringify(deger)}`);
   return (sonuc.error?.issues ?? []).map((s) => ({ alan: s.path.join('.'), mesaj: s.message }));
 }
@@ -79,12 +79,12 @@ test('şemada elle yazılmış ileti kazanır: denetimde, özel denetimde ve tü
   assert.equal(ileti(z.string().regex(/^\d+$/, 'Yalnız rakam.'), 'a'), 'Yalnız rakam.');
   assert.equal(ileti(z.string().refine(() => false, 'Kural tutmadı.'), 'a'), 'Kural tutmadı.');
   assert.equal(ileti(z.number().int('Adet tam sayı olmalı.'), 1.5), 'Adet tam sayı olmalı.');
-  assert.equal(ileti(z.object({ ad: z.string({ required_error: 'Ad gerekli.' }) }), {}), 'Ad gerekli.');
-  assert.equal(ileti(z.number({ invalid_type_error: 'Adet sayı olmalı.' }), 'x'), 'Adet sayı olmalı.');
+  assert.equal(ileti(z.object({ ad: z.string({ error: (s) => (s.input === undefined ? 'Ad gerekli.' : undefined) }) }), {}), 'Ad gerekli.');
+  assert.equal(ileti(z.number({ error: (s) => (s.input === undefined ? undefined : 'Adet sayı olmalı.') }), 'x'), 'Adet sayı olmalı.');
   assert.equal(ileti(z.enum(['a', 'b'], { message: 'Tür seçin.' }), 'c'), 'Tür seçin.');
   // Elle yazılmış ileti olan şemada öbür denetimler çevrilmeye devam eder.
   assert.equal(ileti(z.string().min(1, 'Ad boş olamaz.').max(3), 'abcd'), 'En çok 3 karakter olabilir.');
-  assert.equal(ileti(z.object({ ad: z.string({ required_error: 'Ad gerekli.' }) }), { ad: 5 }), 'Metin bekleniyor.');
+  assert.equal(ileti(z.object({ ad: z.string({ error: (s) => (s.input === undefined ? 'Ad gerekli.' : undefined) }) }), { ad: 5 }), 'Metin bekleniyor.');
 });
 
 test('iç içe alanlarda her sorun kendi yoluyla ve Türkçe iletiyle gelir', () => {
@@ -95,6 +95,52 @@ test('iç içe alanlarda her sorun kendi yoluyla ve Türkçe iletiyle gelir', ()
   ]);
 });
 
+// Geçiş kapısı (2162): zod 3'teki çıktı dondurulmuştur. Zod sürümü değişince iletiler birebir aynı kalmalıdır; şema yazımı
+// yeni sürüme uyarlanabilir, beklenen ileti değişmez.
+test('dondurulmuş iletiler: biçim, tarih, küme, sınır, kat, birleşim, kesişim ve elle yazılmış iletiler', () => {
+  const durumlar: [string, z.ZodTypeAny, unknown, string[]][] = [
+    ['url', z.string().url(), 'x', ['Geçerli bir adres girin.']],
+    ['datetime', z.string().datetime(), 'x', ['Geçerli bir tarih ya da saat girin.']],
+    ['datetime offset', z.string().datetime({ offset: true }), '2026-01-01', ['Geçerli bir tarih ya da saat girin.']],
+    ['date', z.string().date(), '2026-13-01', ['Geçerli bir tarih ya da saat girin.']],
+    ['time', z.string().time(), 'x', ['Geçerli bir tarih ya da saat girin.']],
+    ['uuid', z.string().uuid(), 'x', ['Biçim geçersiz.']],
+    ['endsWith', z.string().endsWith('.pdf'), 'a', ['".pdf" ile bitmeli.']],
+    ['includes', z.string().includes('@'), 'a', ['"@" içermeli.']],
+    ['trim min', z.string().trim().min(1), '   ', ['Bu alan boş bırakılamaz.']],
+    ['date min', z.date().min(new Date('2026-01-01')), new Date('2025-01-01'), ['Tarih izin verilenden erken.']],
+    ['date max', z.date().max(new Date('2026-01-01')), new Date('2027-01-01'), ['Tarih izin verilenden geç.']],
+    ['set min', z.set(z.number()).min(1), new Set(), ['En az bir öğe olmalı.']],
+    ['set max', z.set(z.number()).max(1), new Set([1, 2]), ['En çok 1 öğe olabilir.']],
+    ['gt', z.number().gt(0), 0, ['0 değerinden büyük olmalı.']],
+    ['gte', z.number().gte(1), 0, ['En az 1 olmalı.']],
+    ['nonnegative', z.number().nonnegative(), -1, ['En az 0 olmalı.']],
+    ['nan', z.number(), Number.NaN, ['Sayı bekleniyor.']],
+    ['bigint', z.bigint(), 1, ['Tam sayı bekleniyor.']],
+    ['date type', z.date(), 'x', ['Tarih bekleniyor.']],
+    ['array exact', z.array(z.number()).length(2), [1], ['Tam 2 öğe olmalı.']],
+    ['number exact', z.literal(5), 4, ['Geçersiz değer.']],
+    ['nativeEnum', z.nativeEnum({ A: 'a', B: 'b' }), 'c', ['Geçersiz seçenek. Geçerli değerler: a, b.']],
+    ['enum number', z.enum(['a', 'b']), 5, ['Değerin türü geçersiz.']],
+    ['record key', z.partialRecord(z.enum(['a']), z.number()), { b: 1 }, ['Geçersiz seçenek. Geçerli değerler: a.']],
+    ['tuple', z.tuple([z.string()]), ['a', 'b'], ['En çok 1 öğe olabilir.']],
+    ['intersection', z.intersection(z.object({ a: z.string() }), z.object({ a: z.number() })), { a: 'x' }, ['Sayı bekleniyor.']],
+    ['superRefine custom', z.string().superRefine((_, c) => { c.addIssue({ code: 'custom' }); }), 'a', ['Geçersiz değer.']],
+    ['superRefine msg', z.string().superRefine((_, c) => { c.addIssue({ code: 'custom', message: 'Elle.' }); }), 'a', ['Elle.']],
+    ['coerce date', z.coerce.date(), 'yok', ['Geçerli bir tarih girin.']],
+    ['int null', z.number().int(), null, ['Bu alan boş bırakılamaz.']],
+    ['object null', z.object({}), null, ['Bu alan boş bırakılamaz.']],
+    ['array undefined', z.array(z.string()), undefined, ['Bu alan zorunlu.']],
+    ['min 0 array', z.array(z.string()).nonempty(), [], ['En az bir öğe olmalı.']],
+    ['string min 2 exact', z.string().min(2).max(2), 'abc', ['En çok 2 karakter olabilir.']],
+    ['pipe enum', z.string().trim().toUpperCase().pipe(z.enum(['TRY', 'USD'], { error: () => 'Liste.' })), 'eur', ['Liste.']],
+    ['multipleOf decimal', z.number().multipleOf(0.01), 0.001, ['Değer 0.01 sayısının katı olmalı.']],
+    ['strict nested', z.object({ a: z.object({ b: z.string() }).strict() }), { a: { b: 'x', c: 1 } }, ['Tanınmayan alan: c.']],
+    ['default then min', z.string().prefault('').pipe(z.string().min(1)), undefined, ['Bu alan boş bırakılamaz.']],
+  ];
+  for (const [ad, sema, deger, beklenen] of durumlar) assert.deepEqual(sorunlar(sema, deger).map((s) => s.mesaj), beklenen, ad);
+});
+
 test('uç: doğrulama hatası 400 ile Türkçe ileti, ilk hatalı alan ve bütün sorunları döner', async () => {
   const vt = { tx: async () => { throw new Error('İşleyici koşmamalıydı'); } } as unknown as Veritabani;
   const app = Fastify();
@@ -102,7 +148,7 @@ test('uç: doğrulama hatası 400 ile Türkçe ileti, ilk hatalı alan ve bütü
   uclariKaydet(app, [
     uc({
       yontem: 'POST', yol: '/emir', yetki: 'acik',
-      sorgu: z.object({ sayfa: z.coerce.number().int().min(1).default(1) }),
+      sorgu: z.object({ sayfa: z.coerce.number().int().min(1).prefault(1) }),
       govde: z.object({ adimlar: z.array(z.object({ aciklama: z.string().max(300), ad: z.string().min(1, 'Adım adı boş olamaz.') })) }),
       cevap: z.object({}),
       isle: () => ({}),

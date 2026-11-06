@@ -10,7 +10,7 @@ const TAM_SAYI_UST = 2147483647;
 const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
 const dakika = z.number().nonnegative();
 
-export const emirParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const emirParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 
 // Şeritteki bölümler: bekleme (girdisi hazır, adım başlamadı; ya da statülü stokta), hazırlık, işleme, duraklama,
 // duruş (nedenli), fasonda, sevk bekleme (sevke hazır, sevk edilmedi).
@@ -120,7 +120,7 @@ export const emirAkisiCevabi = z.object({
 // Refakat kartının akışı (kart #708): emir yolculuğuyla aynı hesap, kartın kapsamıyla (kartın lotu ve kartla sayılan partilerin
 // hareketleri, kartla sayılanlar). Anlar kartın her kaydıdır: hammadde kabulü, kartın açılışı, teslimler, adım olayları, kartla
 // sayımlar, fason gidiş/dönüş, sevke hazır ve sevk; zamana göre.
-export const kartParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const kartParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 export const KART_ANI_TURLERI = [
   'mal_kabul', 'kart_acildi', 'teslim_gonderildi', 'teslim_alindi', 'teslim_reddedildi',
   'ayar', 'baslat', 'duraklat', 'durdur', 'devam', 'bitir', 'saglam', 'hurda', 'fason_gidis', 'fason_donus', 'sevke_hazir', 'sevk',

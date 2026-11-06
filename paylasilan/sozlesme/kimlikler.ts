@@ -14,7 +14,7 @@ export type MalzemeKimligi = z.output<typeof MALZEME_KIMLIGI>;
 
 // Kimliği kendi tablosundan okuyan çağıran sayıyı buradan geçirir: geçersiz değer (sıfır, eksi, kesirli, 32 bit dışı) açık hatadır,
 // sessizce markalanmaz.
-function donustur<T>(sema: z.ZodType<T, z.ZodTypeDef, number>, ad: string): (n: number) => T {
+function donustur<S extends z.ZodType<unknown, number>>(sema: S, ad: string): (n: number) => z.output<S> {
   return (n) => {
     const r = sema.safeParse(n);
     if (!r.success) throw new RangeError(`Geçersiz ${ad}: ${String(n)}`);

@@ -71,7 +71,7 @@ export const hesapKilidiSemasi = z.object({
 });
 export const hesapKilitleriSorgusu = z.object({ ...sayfaSorguAlanlari });
 export const hesapKilitleriCevabi = listeCevapSemasi(hesapKilidiSemasi);
-export const hesapKilidiParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const hesapKilidiParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const hesapKilidiAcCevabi = z.object({ acilan: z.number().int().min(1) });
 
 // Akıllı saat (kart #1632). Saat eşleşme isteği açar ve 6 rakamlı kodu gösterir; kişi kodu Profil'de onaylar; saat isteğin
@@ -89,7 +89,7 @@ export const saatIstegiSorCevabi = z.discriminatedUnion('durum', [
 export const saatOnaylaGovdesi = z.object({ kod: gizli(SAAT_KODU) }).strict();
 export const saatCihaziSemasi = z.object({ id: z.number().int(), kisiId: z.number().int(), acildi: zamanSemasi, son: zamanSemasi });
 export const saatCihazlariCevabi = z.object({ cihazlar: z.array(saatCihaziSemasi) });
-export const saatCihaziParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const saatCihaziParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const saatCihaziKapatCevabi = z.object({ tamam: z.literal(true) });
 
 // Ortak cihaz (kart #739, karar 738 a). Cihaz belirteci HttpOnly çerezdedir, cevaba girmez. `GET /oturum/cihaz` oturumdaki cihazın
@@ -111,7 +111,7 @@ export const ortakCihazlarCevabi = z.object({ cihazlar: z.array(ortakCihazSemasi
 // Profil verilmezse istasyon (739 a). Profil yalnız Tam profilli cihazdan atanır; başka cihazdan kayıt profilsiz yapılır.
 export const ortakCihazKaydetGovdesi = z.object({ ad: ORTAK_CIHAZ_ADI, profil: cihazProfiliSemasi.optional() }).strict();
 export const ortakCihazKaydetCevabi = z.object({ cihaz: ortakCihazSemasi });
-export const ortakCihazParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const ortakCihazParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const ortakCihazKapatCevabi = z.object({ tamam: z.literal(true) });
 // Atama: ilk atamada surum null, değiştirmede okunan profilSurum.
 export const profilAtaGovdesi = z.object({ profil: cihazProfiliSemasi, surum: surumSemasi.nullable() }).strict();

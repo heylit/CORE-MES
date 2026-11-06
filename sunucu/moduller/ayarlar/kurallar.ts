@@ -67,11 +67,11 @@ const paketBildirimi = z.object({
   gocler: z.array(z.string().regex(/^[0-9]{14}_[a-z0-9_]+\.sql$/)).max(1000),
   not: z.string().max(2000).nullable(),
   // Önceki yayından bu yana birleşenler; ilk paketlerde yoktu (kart #886).
-  degisiklikler: z.array(z.string().max(AZAMI_DEGISIKLIK_METNI)).max(AZAMI_DEGISIKLIK).default([]),
+  degisiklikler: z.array(z.string().max(AZAMI_DEGISIKLIK_METNI)).max(AZAMI_DEGISIKLIK).prefault([]),
   // Değişikliklerin başladığı yayın (yayin/ öneksiz); 1065'ten önceki paketlerde yoktu.
-  oncekiYayin: z.string().min(1).max(50).nullable().default(null),
+  oncekiYayin: z.string().min(1).max(50).nullable().prefault(null),
   // Paket hazırlanırken alınan açık taraması; 2163'ten önceki paketlerde yoktu.
-  tarama: paketTaramasiSemasi.nullable().default(null),
+  tarama: paketTaramasiSemasi.nullable().prefault(null),
   yukBoyut: z.number().int().nonnegative(),
   yukSha256: z.string().regex(/^[0-9a-f]{64}$/),
 });

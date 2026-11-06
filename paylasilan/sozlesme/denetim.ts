@@ -8,7 +8,7 @@ export const DENETIM_YONTEMLERI = ['POST', 'PUT', 'DELETE', 'GET'] as const;
 // kalıbıyla (`yolTam=true`) gelir (ör. POST /kisiler/:id/duzenle). Tanınmayan parametre 400 olur, sessizce atılmaz.
 export const kayitListesiSorgusu = z.object({
   ...sayfaSorguAlanlari,
-  kisi: z.coerce.number().int().positive().max(2147483647).optional(),
+  kisi: z.coerce.number<number>().int().positive().max(2147483647).optional(),
   baslangic: tarihSemasi.optional(),
   bitis: tarihSemasi.optional(),
   yontem: z.enum(DENETIM_YONTEMLERI).optional(),
@@ -45,7 +45,7 @@ export const suzgecSecenekleriCevabi = z.object({
   komutlar: z.array(z.object({ yontem: z.string(), yol: z.string() })),
 });
 
-export const kayitIdParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const kayitIdParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 
 // Maskelenmiş içerik; kayıtta yoksa null.
 export const kayitIcerigiCevabi = z.object({
@@ -68,7 +68,7 @@ export const kayitSecimi = z.object({
 
 export const degisiklikListesiSorgusu = z.object({
   ...sayfaSorguAlanlari,
-  kisi: z.coerce.number().int().positive().max(2147483647).optional(),
+  kisi: z.coerce.number<number>().int().positive().max(2147483647).optional(),
   baslangic: tarihSemasi.optional(),
   bitis: tarihSemasi.optional(),
   tablo: z.string().trim().regex(TABLO_ADI).optional(),
@@ -141,7 +141,7 @@ export interface DenetimUclari {
 // taşır (yol ve sorgu parametresi); öteki değerler kayda hiç yazılmaz. Saklama 2 yıl.
 export const okumaListesiSorgusu = z.object({
   ...sayfaSorguAlanlari,
-  kisi: z.coerce.number().int().positive().max(2147483647).optional(),
+  kisi: z.coerce.number<number>().int().positive().max(2147483647).optional(),
   baslangic: tarihSemasi.optional(),
   bitis: tarihSemasi.optional(),
   modul: z.string().trim().regex(/^[a-z][a-z0-9-]{0,62}$/).optional(),

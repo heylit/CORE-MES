@@ -25,7 +25,7 @@ export const kmDosyaParametresi = z.object({ kimlik });
 
 // Değişiklik akışı: `sonra` sürümünden sonra değişen kayıtlar, sürüm sırasıyla. Silinen kaydın gövdesi null'dır. Kaydın
 // sürümü, yazarken beklenen sürüm olarak geri gönderilir.
-export const kmDegisiklikSorgusu = z.object({ sonra: z.coerce.number().int().nonnegative().default(0) });
+export const kmDegisiklikSorgusu = z.object({ sonra: z.coerce.number<number>().int().nonnegative().prefault(0) });
 const kayitSurumu = z.number().int().positive();
 const degisiklik = z.object({ koleksiyon: z.string(), kimlik: z.string(), govde: govde.nullable(), surum: kayitSurumu });
 export const kmDegisiklikCevabi = z.object({ surum: z.number().int().nonnegative(), degisiklikler: z.array(degisiklik) });
@@ -91,7 +91,7 @@ export const kmTedarikciFirmalariCevabi = z.object({
 });
 
 // İlk parça (FAI) kararı (229 a): emrin karar bekleyen sayımı onayda sağlama, retde redde geçer; `adet` geçen parça sayısıdır.
-export const kmIlkParcaParametresi = z.object({ uretimEmriId: z.coerce.number().int().positive() });
+export const kmIlkParcaParametresi = z.object({ uretimEmriId: z.coerce.number<number>().int().positive() });
 // isEmriId (744 a): kararın ait olduğu adım; iş emirsiz emirde verilmez.
 export const kmIlkParcaGovdesi = z.object({ karar: z.enum(KALITE_KARARLARI), isEmriId: z.number().int().positive().max(2147483647).nullish() });
 export const kmIlkParcaCevabi = z.object({ adet: z.number().int().nonnegative() });
@@ -179,7 +179,7 @@ export type KmKarantinaKonumlariCevabi = z.output<typeof kmKarantinaKonumlariCev
 // Hatalı parça kararı (1034, 1038 a): terminalde ayrılan parçaya kalite rework, hurda ya da red der; karar aynı işlemde uygunsuzluk
 // (NCR) kaydı açar. NCR kimliği ve numarası uygulamanın biçimindedir (NCR formuyla aynı, istemci verir); ciddiyet uygulamanın listesidir.
 export const KM_CIDDIYETLER = ['Kritik', 'Majör', 'Minör'] as const;
-export const kmHataliParametresi = z.object({ kayitId: z.coerce.number().int().positive().max(2147483647) });
+export const kmHataliParametresi = z.object({ kayitId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const kmHataliKararGovdesi = z.object({
   karar: z.enum(HATALI_KARARLARI),
   ncrKimlik: kimlik,
@@ -224,7 +224,7 @@ export const kmGirisKaydi = z.object({
 });
 export type KmGirisKaydi = z.output<typeof kmGirisKaydi>;
 export const kmGirisBekleyenCevabi = z.object({ kayitlar: z.array(kmGirisKaydi) });
-export const kmGirisParametresi = z.object({ malKabulSatirId: z.coerce.number().int().positive().max(2147483647) });
+export const kmGirisParametresi = z.object({ malKabulSatirId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const kmGirisGkkGovdesi = z.object({
   kabul: sifirOlabilirMiktar,
   hatali: sifirOlabilirMiktar,

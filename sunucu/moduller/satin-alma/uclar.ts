@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { satinAlmaAnalizi } from './analiz.ts';
 import * as servis from './servis.ts';
 
-const katalogParametresi = z.object({ id: z.string().uuid() });
+const katalogParametresi = z.object({ id: z.guid() });
 
 // 215 a: maliyet okuyan (müdür, muhasebe/finans) kg fiyatını görür, değiştiremez.
 const KG_FIYATI_OKUR = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;

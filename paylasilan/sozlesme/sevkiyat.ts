@@ -6,7 +6,7 @@ import { zamanSemasi } from '../zaman.ts';
 const saat = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/, 'Saat SS:DD biçiminde girilir.');
 const tarih = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih YYYY-AA-GG biçiminde girilir.')
   .refine((t) => !Number.isNaN(Date.parse(`${t}T00:00:00Z`)) && new Date(`${t}T00:00:00Z`).toISOString().startsWith(t), 'Geçersiz tarih.');
-const kimlik = z.coerce.number().int().positive();
+const kimlik = z.coerce.number<number>().int().positive();
 const metinAlani = (azami: number) => z.string().trim().min(1).max(azami);
 const bosOlabilir = (azami: number) => z.string().trim().max(azami).nullable().transform((x) => (x === null || x === '' ? null : x));
 // Gün başından dakika; uzun elle rotada gece yarısını aşabilir (uyarı olarak gösterilir).
@@ -45,14 +45,14 @@ export const noktaGovdesi = z.object({
   enlem: z.number().min(-90).max(90), boylam: z.number().min(-180).max(180),
   adres: bosOlabilir(400), durakSuresiDakika: z.number().int().min(0).max(240),
   // Yalnız müşteri, tedarikçi ve fason noktası firmaya bağlanır.
-  firmaId: kimlik.nullable().default(null),
+  firmaId: kimlik.nullable().prefault(null),
   // Firmanın adresi; null merkez adresidir. Yalnız firmaya bağlı noktada verilir.
-  adresId: kimlik.nullable().default(null),
+  adresId: kimlik.nullable().prefault(null),
 });
 export const noktaGuncelleGovdesi = noktaGovdesi.extend({ surum: surumAlani });
 // Noktaya bağlanacak firma (finansın müşteri ve tedarikçileri); nokta türü önerisi firmanın türünden.
 export const FIRMA_TURU = z.enum(['musteri', 'tedarikci', 'ikisi']);
-export const firmaAramaSorgusu = z.object({ metin: z.string().trim().max(80).default('') });
+export const firmaAramaSorgusu = z.object({ metin: z.string().trim().max(80).prefault('') });
 export const firmaSecenegi = z.object({
   id: z.number().int(), ad: z.string(), kod: z.string().nullable(), tur: FIRMA_TURU, fason: z.boolean(),
   adres: z.string().nullable(), ilce: z.string().nullable(), il: z.string().nullable(),
@@ -193,7 +193,7 @@ export const tumIslerCevabi = z.object({ satirlar: z.array(tumIsSatiri) });
 // sevkiyat.onayla ve gerekçe ister. firma taşımasında iş açılmaz, bırakma tetik sayılır.
 export const serbestBirakGovdesi = z.object({
   anahtarlar: z.array(anahtar).min(1).max(200), tasima: TASIMA,
-  erkenGerekce: z.string().trim().min(10, 'Erken çıkış gerekçesi en az 10 karakterdir.').max(400).nullable().default(null),
+  erkenGerekce: z.string().trim().min(10, 'Erken çıkış gerekçesi en az 10 karakterdir.').max(400).nullable().prefault(null),
 });
 export const serbestBirakCevabi = z.object({ kalemIdleri: z.array(z.number().int()) });
 // Elle iş (958 a): numune, tamir, kalibrasyon gibi gidişler dönüşlü açılabilir; dönüş bağlı geliş kalemidir. İade dönüşsüzdür.
@@ -281,7 +281,7 @@ export const haritaSemasi = z.object({
 export const haritaCevabi = z.object({ harita: haritaSemasi.nullable() });
 // Ana sayfa kartı: bugüne kadar araca verilmemiş iş ve istenen günü geçmiş açık iş sayısı.
 export const ozetCevabi = z.object({ bekleyen: z.number().int(), gecikmis: z.number().int() });
-export const trafikSorgusu = z.object({ tarih, dakika: z.coerce.number().int().min(0).max(1440) });
+export const trafikSorgusu = z.object({ tarih, dakika: z.coerce.number<number>().int().min(0).max(1440) });
 // Kenar başına 0 akıcı, 1 yoğun, 2 yavaş, 3 tıkalı; yol ağı yoksa null.
 export const trafikCevabi = z.object({ gunTipi: GUN_TIPI, dakika: z.number().int(), seviyeler: z.array(z.number().int().min(0).max(3)).nullable() });
 
@@ -294,7 +294,7 @@ export const aramaSonucuSemasi = z.object({
 // kisaBaglanti: kısa harita bağlantısı ağa çıkmadan çözülemez; açık adres ya da koordinat istenir.
 export const aramaCevabi = z.object({ sonuclar: z.array(aramaSonucuSemasi), kisaBaglanti: z.boolean(), dizinVar: z.boolean() });
 // 2133-3 a: konumsuz firmanın adresinden çevrimdışı dizin önerisi. aramaMetni sonuç veren (yoksa ilk denenen) arama; yazmaz.
-export const konumOnerisiSorgusu = z.object({ firmaId: z.coerce.number().int().positive() });
+export const konumOnerisiSorgusu = z.object({ firmaId: z.coerce.number<number>().int().positive() });
 export const konumOnerisiCevabi = z.object({ aramaMetni: z.string().nullable(), sonuclar: z.array(aramaSonucuSemasi), dizinVar: z.boolean() });
 
 // ---------- tek rota ----------

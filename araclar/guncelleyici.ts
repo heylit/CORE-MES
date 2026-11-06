@@ -112,7 +112,7 @@ export const uygulamaDurumuSemasi = z.object({
   yedek: z.string().nullable(),
   baslangic: z.string(),
   // Yarım kalan uygulama geri yüklenemediyse: sunucu elle geri yükleme yapılıp bu dosya silinene kadar açılmaz.
-  elle: z.boolean().default(false),
+  elle: z.boolean().prefault(false),
 });
 export type UygulamaDurumu = z.output<typeof uygulamaDurumuSemasi>;
 

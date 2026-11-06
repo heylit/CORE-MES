@@ -28,7 +28,7 @@ export const RAF_KOD_DESENI = /^[A-Z][A-Z0-9]{0,4}$/;
 
 const TAM_SAYI_UST = 2147483647;
 const kimlik = z.number().int().positive().max(TAM_SAYI_UST);
-const yolKimligi = z.coerce.number().pipe(kimlik);
+const yolKimligi = z.coerce.number<number>().pipe(kimlik);
 const zaman = z.string();
 const ad = z.string().trim().min(1, 'Ad zorunlu.').max(120);
 const kodSemasi = (desen: RegExp, ileti: string) =>
@@ -38,7 +38,7 @@ const rafKodu = kodSemasi(RAF_KOD_DESENI, 'Raf kodu harfle başlar; en çok 5 ka
 
 // Ölçüler gövdede sayıdır; sunucu yuvarlayıp numeric olarak saklar, cevapta metin döner.
 const olcu = (enaz: number, encok: number, adi: string) =>
-  z.number({ invalid_type_error: `${adi} sayı olmalı.` }).finite().min(enaz, `${adi} en az ${enaz}.`).max(encok, `${adi} en çok ${encok}.`);
+  z.number({ error: (s) => (s.input === undefined ? undefined : `${adi} sayı olmalı.`) }).finite().min(enaz, `${adi} en az ${enaz}.`).max(encok, `${adi} en çok ${encok}.`);
 const konum = z.number().finite().min(-1000).max(1000);
 const donus = z.number().finite().min(-3600).max(3600);
 const sayi = (enaz: number, encok: number, adi: string) =>
@@ -53,9 +53,9 @@ export const aramaTuru = z.enum(ARAMA_TURLERI);
 export const salonParametresi = z.object({ id: yolKimligi });
 export const istasyonParametresi = z.object({ id: yolKimligi });
 export const modelParametresi = z.object({ id: yolKimligi });
-export const modelParcaParametresi = z.object({ id: yolKimligi, sira: z.coerce.number().int().min(0).max(100000) });
+export const modelParcaParametresi = z.object({ id: yolKimligi, sira: z.coerce.number<number>().int().min(0).max(100000) });
 export const krokiParcaParametresi = modelParcaParametresi;
-export const krokiSiraParametresi = z.object({ sira: z.coerce.number().int().min(0).max(100000) });
+export const krokiSiraParametresi = z.object({ sira: z.coerce.number<number>().int().min(0).max(100000) });
 export const rafParametresi = z.object({ id: yolKimligi });
 
 export const salonGovdesi = z.object({
@@ -76,7 +76,7 @@ export const istasyonYeriGovdesi = z.object({
   genislik: olcu(0.2, 50, 'Ayak izi genişliği'),
   derinlik: olcu(0.2, 50, 'Ayak izi derinliği'),
   // Gösterilen 3B model; verilmezse ya da null ise istasyon tipinden çizilir.
-  modelId: kimlik.nullable().default(null),
+  modelId: kimlik.nullable().prefault(null),
 });
 
 // Makinenin yeri (kart #1120): haritadaki 3B nesne makinedir; makine kaydı istasyonlar modülündedir.
@@ -88,7 +88,7 @@ export const makineYeriGovdesi = z.object({
   genislik: olcu(0.2, 50, 'Makine genişliği'),
   derinlik: olcu(0.2, 50, 'Makine derinliği'),
   // Gösterilen 3B model; null ise istasyonun tipinden çizilir.
-  modelId: kimlik.nullable().default(null),
+  modelId: kimlik.nullable().prefault(null),
 });
 
 export const rafGovdesi = z.object({
@@ -109,9 +109,9 @@ export const rafGovdesi = z.object({
   aktif: z.boolean(),
   // Net ölçüler (metre, isteğe bağlı): her katın net yüksekliği alttan üste (kat sayısı kadar), göz net eni ve
   // derinliği. Verilmezse raf türünden hesaplanır; verilince rafta sığma gerçek ölçüyle denetlenir (ATL-33).
-  katYukseklikleri: z.array(olcu(0.05, 15, 'Kat net yüksekliği')).min(1).max(10).nullable().default(null),
-  gozGenisligi: olcu(0.05, 10, 'Göz net genişliği').nullable().default(null),
-  gozDerinligi: olcu(0.05, 10, 'Göz net derinliği').nullable().default(null),
+  katYukseklikleri: z.array(olcu(0.05, 15, 'Kat net yüksekliği')).min(1).max(10).nullable().prefault(null),
+  gozGenisligi: olcu(0.05, 10, 'Göz net genişliği').nullable().prefault(null),
+  gozDerinligi: olcu(0.05, 10, 'Göz net derinliği').nullable().prefault(null),
 });
 
 export const kapiSemasi = z.object({
@@ -132,7 +132,7 @@ export const gecisGovdesi = z.object({
 
 export const alanGovdesi = z.object({
   // Var olan alan kimliğiyle gelir; yeni alan null. Kimlik korunur: stok konumu alana bağlıdır.
-  id: kimlik.nullable().default(null),
+  id: kimlik.nullable().prefault(null),
   tur: alanTuru,
   ad,
   x: konum,
@@ -263,9 +263,9 @@ export const aramaSorgusu = z.object({
 });
 
 // Bölme verilirse yalnız o bölmenin gözleri (raf görünümü bir bölmeyle çalışır).
-export const gozSorgusu = z.object({ sayfa: z.coerce.number().int().min(1).max(100000).default(1), bolme: z.coerce.number().int().min(1).max(99).optional() });
+export const gozSorgusu = z.object({ sayfa: z.coerce.number<number>().int().min(1).max(100000).prefault(1), bolme: z.coerce.number<number>().int().min(1).max(99).optional() });
 
-const noktaSorgusu = z.coerce.number().finite().min(-1000).max(1000);
+const noktaSorgusu = z.coerce.number<number>().finite().min(-1000).max(1000);
 // Başlangıç verilmezse salonun girişidir.
 export const rotaSorgusu = z.object({
   basX: noktaSorgusu.optional(),

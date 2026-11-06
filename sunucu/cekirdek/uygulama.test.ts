@@ -227,7 +227,8 @@ test('denetim: sır adlı her gövde alanı sözleşmede gizli işaretlidir (kar
   const isaretsiz: string[] = [];
   for (const u of yazmalar) {
     let sema = u.govde as z.ZodTypeAny;
-    while (sema instanceof z.ZodEffects) sema = sema.innerType() as z.ZodTypeAny;
+    // zod 4'te özel denetim şemayı sarmaz; dönüştürme ve ön işleme borudur, girdi şeması `in`dedir.
+    while (sema instanceof z.ZodPipe) sema = sema.in as z.ZodTypeAny;
     if (!(sema instanceof z.ZodObject)) continue;
     for (const [ad, alan] of Object.entries(sema.shape as Record<string, z.ZodTypeAny>)) {
       if (!SIR_ADI.test(ad)) continue;

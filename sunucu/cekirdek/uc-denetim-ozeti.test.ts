@@ -37,7 +37,7 @@ function kur(uclar: readonly Uc[]): { app: FastifyInstance; kayitlar: DenetimGir
   return { app, kayitlar, gunluk, satirlar };
 }
 
-const govde = z.object({ durum: z.string(), adet: z.coerce.number(), icerik: z.unknown().optional() });
+const govde = z.object({ durum: z.string(), adet: z.coerce.number<number>(), icerik: z.unknown().optional() });
 const ortak = { yontem: 'POST', yetki: 'kisiler.yaz', govde, cevap: z.object({ tamam: z.boolean() }), isle: () => ({ tamam: true }) } as const;
 const gonder = (app: FastifyInstance, yol: string, yuk: unknown) => app.inject({ method: 'POST', url: `/api${yol}`, payload: yuk as object });
 

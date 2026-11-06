@@ -5,7 +5,7 @@ import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 const mantiksal = z.enum(['true', 'false']).optional().transform((d) => (d === undefined ? undefined : d === 'true'));
 
-export const kimlikParametresi = z.object({ id: z.coerce.number().int().positive() });
+export const kimlikParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 
 
 // =====================================================================
@@ -61,14 +61,14 @@ export { iptalGovdesi };
 const tevkifat = { tevkifatPay: z.number().int().min(1).max(100).nullish().transform((v) => v ?? null), tevkifatPayda: z.number().int().min(1).max(100).nullish().transform((v) => v ?? null) };
 export const belgeAlanlari = z.object({
   yon: z.enum(YONLER),
-  tur: z.enum(BELGE_TURLERI).default('fatura'),
+  tur: z.enum(BELGE_TURLERI).prefault('fatura'),
   kategori: z.enum(KATEGORILER),
   firmaId: kimlikSayisi.nullish().transform((v) => v ?? null),
   belgeNo: metin(16),
   aciklama: metin(500),
   belgeTarihi: tarihSemasi,
   vade: tarihSemasi,
-  paraBirimi: paraBirimiSemasi.default('TRY'),
+  paraBirimi: paraBirimiSemasi.prefault('TRY'),
   kur: kurBos,
   tutar: tutarSemasi,
   kdvOrani: oranSemasi,
@@ -105,10 +105,10 @@ export type BelgeCevabi = z.output<typeof belgeCevabi>;
 
 // ---- Ödeme ve dağıtım ----
 export const dagitimSatiri = z.object({ belgeId: kimlikSayisi, belgeTutari: tutarSemasi, caprazKur: caprazKurSemasi.nullish().transform((v) => v ?? null) });
-export const dagitimlarSemasi = z.array(dagitimSatiri).max(200, 'Tek seferde en çok 200 belgeye dağıtılır.').default([]);
+export const dagitimlarSemasi = z.array(dagitimSatiri).max(200, 'Tek seferde en çok 200 belgeye dağıtılır.').prefault([]);
 export const odemeEkleGovdesi = z.object({
   yon: z.enum(YONLER), firmaId: kimlikSayisi.nullish().transform((v) => v ?? null), tarih: tarihSemasi,
-  yontem: z.enum(NAKIT_YONTEMLERI), hesapId: kimlikSayisi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos,
+  yontem: z.enum(NAKIT_YONTEMLERI), hesapId: kimlikSayisi, paraBirimi: paraBirimiSemasi.prefault('TRY'), kur: kurBos,
   tutar: tutarSemasi, aciklama: metin(500), dagitimlar: dagitimlarSemasi,
 });
 export type OdemeEkleGovdesi = z.input<typeof odemeEkleGovdesi>;
@@ -140,7 +140,7 @@ export const mahsupCevabi = z.object({ mahsup: mahsupSemasi });
 // ---- Çek ve senet ----
 export const cekEkleGovdesi = z.object({
   yon: z.enum(CEK_YONLERI), tur: z.enum(CEK_TURLERI), firmaId: kimlikSayisi, banka: metin(100), seriNo: metin(40),
-  duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos, tutar: tutarSemasi,
+  duzenlemeTarihi: tarihSemasi, vade: tarihSemasi, paraBirimi: paraBirimiSemasi.prefault('TRY'), kur: kurBos, tutar: tutarSemasi,
   dagitimlar: dagitimlarSemasi,
 });
 export type CekEkleGovdesi = z.input<typeof cekEkleGovdesi>;
@@ -159,8 +159,8 @@ export const cekCevabi = z.object({ cek: cekSemasi });
 
 // ---- Hesap, virman, eşitleme ----
 export const hesapEkleGovdesi = z.object({
-  ad: z.string().trim().min(1, 'Hesap adı boş olamaz.').max(100), tur: z.enum(HESAP_TURLERI), paraBirimi: paraBirimiSemasi.default('TRY'),
-  acilisBakiyesi: isaretliTutarSemasi.default(0), acilisTarihi: tarihSemasi, bankaAdi: metin(100), logoKodu: metin(40),
+  ad: z.string().trim().min(1, 'Hesap adı boş olamaz.').max(100), tur: z.enum(HESAP_TURLERI), paraBirimi: paraBirimiSemasi.prefault('TRY'),
+  acilisBakiyesi: isaretliTutarSemasi.prefault(0), acilisTarihi: tarihSemasi, bankaAdi: metin(100), logoKodu: metin(40),
 });
 export const hesapGuncelleGovdesi = hesapEkleGovdesi.extend(beklenenSurum);
 export const hesapSemasi = z.object({
@@ -206,9 +206,9 @@ const sabitKiymetAlanlari = {
   ad: z.string().trim().min(1, 'Ad boş olamaz.').max(200, 'En çok 200 karakter.'),
   makineKodu: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9._-]{0,23}$/, 'Makine kodu harf, rakam, nokta, alt çizgi ve tireden oluşur (en çok 24).')
     .nullish().or(z.literal('')).transform((v) => (v === undefined || v === null || v === '' ? null : v)),
-  paraBirimi: paraBirimiSemasi.default('TRY'), bedel: tutarSemasi, kur: kurSemasi.nullish().transform((v) => v ?? null),
+  paraBirimi: paraBirimiSemasi.prefault('TRY'), bedel: tutarSemasi, kur: kurSemasi.nullish().transform((v) => v ?? null),
   alisTarihi: tarihSemasi, omurAy: z.number().int().min(1, 'Faydalı ömür 1 ile 600 ay arasındadır.').max(600, 'Faydalı ömür 1 ile 600 ay arasındadır.'),
-  yontem: z.enum(AMORTISMAN_YONTEMLERI).default('normal'), kalintiDegeri: negatifOlmayanTutar.default(0),
+  yontem: z.enum(AMORTISMAN_YONTEMLERI).prefault('normal'), kalintiDegeri: negatifOlmayanTutar.prefault(0),
   devirTarihi: tarihSemasi.nullish().transform((v) => v ?? null), devirBirikmisTl: negatifOlmayanTutar.nullish().transform((v) => v ?? null),
   aciklama: metin(500),
   // Makineye kimlikle bağlanır (Malzemeler demirbaş kartı, 1596); verilirse makine kodu makinenin kodundan alınır.
@@ -220,7 +220,7 @@ export const sabitKiymetEkleGovdesi = z.object(sabitKiymetAlanlari)
 // Düzeltme bütün alanları sürümle taşır; para yazdığı için bilinmeyen alan reddedilir (ADR 0025 kural 10).
 export const sabitKiymetGuncelleGovdesi = z.object({ ...sabitKiymetAlanlari, ...beklenenSurum }).strict()
   .refine((g) => (g.devirTarihi === null) === (g.devirBirikmisTl === null), devirBirlikte);
-export const makineIdParametresi = z.object({ makineId: z.coerce.number().int().positive() });
+export const makineIdParametresi = z.object({ makineId: z.coerce.number<number>().int().positive() });
 export const sabitKiymetPasifGovdesi = z.object({ pasifTarihi: tarihSemasi, ...beklenenSurum });
 // Hesaplanan alanlar (TL) bugünün ayına göredir: buAyTl bu ayın amortismanı, birikmisTl ay sonu dahil birikmiş, netTl bedel eksi birikmiş.
 export const sabitKiymetSatiri = z.object({
@@ -304,7 +304,7 @@ export const kdvOraniSatiri = z.object({ oran: numerik, gecerlilikBaslangic: tar
 export const duzenliOdemeGovdesi = z.object({
   ad: z.string().trim().min(1, 'Ad boş olamaz.').max(100), kategori: z.enum(GIDER_KATEGORILERI).refine((k) => k !== 'kur_farki_gideri', 'Bu kategori düzenli ödeme olamaz.'),
   firmaId: kimlikSayisi.nullish().transform((v) => v ?? null), hesapId: kimlikSayisi.nullish().transform((v) => v ?? null),
-  paraBirimi: paraBirimiSemasi.default('TRY'), tutar: tutarSemasi, kdvOrani: oranSemasi.default(0), ayinGunu: z.number().int().min(1).max(31), aktif: z.boolean().default(true),
+  paraBirimi: paraBirimiSemasi.prefault('TRY'), tutar: tutarSemasi, kdvOrani: oranSemasi.prefault(0), ayinGunu: z.number().int().min(1).max(31), aktif: z.boolean().prefault(true),
 });
 export const duzenliOdemeGuncelleGovdesi = duzenliOdemeGovdesi.extend(beklenenSurum);
 export const duzenliOdemeSemasi = z.object({
@@ -360,7 +360,7 @@ export const skorSatiri = z.object({ gun: tarihSemasi, skor: z.number().int(), n
 export const topluSatir = z.object({
   belgeTarihi: tarihSemasi, yon: z.enum(YONLER), kategori: z.enum(KATEGORILER), firma: z.string().trim().min(1, 'Firma boş olamaz.').max(200),
   belgeNo: metin(16), aciklama: metin(500), tutar: tutarSemasi, kdvOrani: oranSemasi, vade: tarihSemasi,
-  paraBirimi: paraBirimiSemasi.default('TRY'), kur: kurBos,
+  paraBirimi: paraBirimiSemasi.prefault('TRY'), kur: kurBos,
 });
 export const topluAktarGovdesi = z.object({ satirlar: z.array(topluSatir).min(1).max(TOPLU_AKTARIM_SINIRI, `Tek seferde en çok ${TOPLU_AKTARIM_SINIRI} satır.`) });
 export const topluAktarCevabi = z.object({ eklenen: z.number().int() });
@@ -393,7 +393,7 @@ export const finansOzetiCevabi = z.object({
 });
 export type FinansOzetiCevabi = z.output<typeof finansOzetiCevabi>;
 // Yönetici paneli grafiği: son 6-12 ay (içinde bulunulan ay dahil), eskiden yeniye; KDV hariç TL. İlk belgeden önceki ay null.
-export const aylikSeriSorgusu = z.object({ ay: z.coerce.number().int().min(6).max(12).default(12) });
+export const aylikSeriSorgusu = z.object({ ay: z.coerce.number<number>().int().min(6).max(12).prefault(12) });
 export const aylikSeriCevabi = z.object({
   aylar: z.array(z.object({ ay: z.string().regex(/^\d{4}-\d{2}$/), gelirTl: numerik.nullable(), giderTl: numerik.nullable() })),
 });
@@ -449,7 +449,7 @@ export const maliyetTutariSemasi = z.number().min(0, 'Maliyet sıfırdan küçü
 export const maliyetTuruParametresi = z.object({ tur: z.enum(MALIYET_TURLERI) });
 // surum: kayıt ilk kez giriliyorsa null, düzeltmede okunan sürüm.
 export const maliyetYazGovdesi = z.object({
-  anahtar: kimlikSayisi, birimMaliyet: maliyetTutariSemasi, paraBirimi: paraBirimiSemasi.default('TRY'), surum: surumSemasi.nullable(),
+  anahtar: kimlikSayisi, birimMaliyet: maliyetTutariSemasi, paraBirimi: paraBirimiSemasi.prefault('TRY'), surum: surumSemasi.nullable(),
 });
 export const maliyetSatiri = z.object({
   anahtar: z.number().int(), birimMaliyet: numerik, paraBirimi: z.string(), guncelleme: zamanSemasi, guncelleyenId: z.number().int(), surum: surumSemasi,
@@ -459,13 +459,13 @@ export const maliyetCevabi = z.object({ maliyet: maliyetSatiri });
 export const maliyetListesiCevabi = listeCevapSemasi(maliyetSatiri);
 
 // 260 a: satış faturasına bağlanabilecek siparişler (firmanın onaylı ve kapanmış siparişleri, yeniden eskiye).
-export const satisSiparisleriSorgusu = z.object({ firmaId: z.coerce.number().int().positive().max(2147483647) });
+export const satisSiparisleriSorgusu = z.object({ firmaId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const satisSiparisiSemasi = z.object({ id: z.number().int(), no: z.string(), durum: z.enum(['onayli', 'kapandi']), siparisTarihi: tarihSemasi, musteriSiparisNo: z.string().nullable() });
 export const satisSiparisleriCevabi = z.object({ siparisler: z.array(satisSiparisiSemasi) });
 export type SatisSiparisi = z.output<typeof satisSiparisiSemasi>;
 export type SatisSiparisleriCevabi = z.output<typeof satisSiparisleriCevabi>;
 // 302 a: satış faturasına bağlanabilecek sevkler (siparişin iptal edilmemiş teslimat işleri; durum Sevkiyat'ın iş durumudur).
-export const satisSevkleriSorgusu = z.object({ siparisId: z.coerce.number().int().positive().max(2147483647) });
+export const satisSevkleriSorgusu = z.object({ siparisId: z.coerce.number<number>().int().positive().max(2147483647) });
 export const satisSevkiSemasi = z.object({ id: z.number().int(), tarih: tarihSemasi, belgeNo: z.string().nullable(), durum: z.string() });
 export const satisSevkleriCevabi = z.object({ sevkler: z.array(satisSevkiSemasi) });
 export type SatisSevki = z.output<typeof satisSevkiSemasi>;

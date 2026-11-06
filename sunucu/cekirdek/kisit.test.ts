@@ -114,7 +114,7 @@ describe('kısıt ihlalleri (gerçek PostgreSQL)', () => {
         }),
         // GET salt okunur koşar, yazamaz: kısıt ihlali yazmadan, alan tipine çevirmeyle doğar.
         uc({
-          yontem: 'GET', yetki: 'acik', yol: '/okuma/:adet', parametre: z.object({ adet: z.coerce.number() }), cevap: kimlikli,
+          yontem: 'GET', yetki: 'acik', yol: '/okuma/:adet', parametre: z.object({ adet: z.coerce.number<number>() }), cevap: kimlikli,
           isle: async ({ db, parametre }) =>
             (await db.tek<{ id: number }>('SELECT $1::int::kisit_arti_sayi AS id', [parametre.adet]))!,
         }),
@@ -142,7 +142,7 @@ describe('kısıt ihlalleri (gerçek PostgreSQL)', () => {
           },
         }),
         uc({
-          ...ortak, yol: '/ana/:id/sil', parametre: z.object({ id: z.coerce.number() }), cevap: z.object({ silinen: z.number() }),
+          ...ortak, yol: '/ana/:id/sil', parametre: z.object({ id: z.coerce.number<number>() }), cevap: z.object({ silinen: z.number() }),
           isle: async ({ db, parametre }) =>
             ({ silinen: (await db.sorgu('DELETE FROM kisit_ana WHERE id = $1 RETURNING id', [parametre.id])).length }),
         }),

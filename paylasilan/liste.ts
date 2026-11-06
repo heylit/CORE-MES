@@ -15,10 +15,14 @@ export const AZAMI_SAYFA = 100_000;
 const TAM_SAYI_UST = 2147483647;
 
 // Sorgu dizgesinden metin gelir: sayı zorlanır. Boş metin 0'a döner ve alt sınıra takılır.
+// zod 4'te `.int()` güvenli tam sayı aralığı da ister ve aşan sayfayı reddederdi; burada yalnız tam sayılık denetlenir, aşan sayfa çekilir.
+const tamSayi = (n: number, c: z.RefinementCtx): void => {
+  if (!Number.isInteger(n)) c.addIssue({ code: 'invalid_type', expected: 'int', input: n });
+};
 export const sayfaSorguAlanlari = {
-  sayfa: z.coerce.number().int().min(1).transform((sayfa) => Math.min(sayfa, AZAMI_SAYFA)).default(1),
+  sayfa: z.coerce.number<number>().superRefine(tamSayi).min(1).transform((sayfa) => Math.min(sayfa, AZAMI_SAYFA)).prefault(1),
   // Verilmezse sunucunun varsayılanı uygulanır.
-  sayfaBoyu: z.coerce.number().int().min(1).max(TAM_SAYI_UST).optional(),
+  sayfaBoyu: z.coerce.number<number>().int().min(1).max(TAM_SAYI_UST).optional(),
 };
 
 // Sıralama alanı serbest metin değildir: yalnız modülün saydığı anahtarlar geçer, başkası 400 olur.
@@ -26,7 +30,7 @@ export const sayfaSorguAlanlari = {
 export function siralamaSorguAlanlari<const A extends readonly [string, ...string[]]>(alanlar: A) {
   return {
     sirala: z.enum(alanlar).optional(),
-    yon: z.enum(SIRALAMA_YONLERI).default('artan'),
+    yon: z.enum(SIRALAMA_YONLERI).prefault('artan'),
   };
 }
 

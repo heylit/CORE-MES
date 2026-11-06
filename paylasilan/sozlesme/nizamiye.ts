@@ -8,24 +8,24 @@ import { KART_DURUMLARI, KART_TURLERI, KIMLIK_TURLERI, NEDENLER, ZIYARET_DURUMLA
 export * from './nizamiye-sabitleri.ts';
 
 const bosIseNull = (d: unknown) => (typeof d === 'string' && d.trim() === '' ? null : d);
-const metin = (en: number, ileti: string) => z.preprocess(bosIseNull, z.string().trim().max(en, ileti).nullable().default(null));
+const metin = (en: number, ileti: string) => z.preprocess(bosIseNull, z.string().trim().max(en, ileti).nullable().prefault(null));
 const ad = z.string().trim().min(1, 'Ad zorunlu.').max(120, 'Ad en çok 120 karakter olur.');
 const telefon = z.preprocess(
   bosIseNull,
-  z.string().trim().regex(/^[0-9 +()-]{4,20}$/, 'Telefon yalnız rakam, boşluk, + ( ) - içerir (4-20 karakter).').nullable().default(null),
+  z.string().trim().regex(/^[0-9 +()-]{4,20}$/, 'Telefon yalnız rakam, boşluk, + ( ) - içerir (4-20 karakter).').nullable().prefault(null),
 );
 const plaka = z.preprocess(
   (d) => (typeof d === 'string' ? (d.trim() === '' ? null : d.trim().toLocaleUpperCase('tr')) : d),
-  z.string().regex(/^[0-9A-Z ]{2,12}$/, 'Plaka harf, rakam ve boşluktan oluşur.').nullable().default(null),
+  z.string().regex(/^[0-9A-Z ]{2,12}$/, 'Plaka harf, rakam ve boşluktan oluşur.').nullable().prefault(null),
 );
 // Tam kimlik numarası hiç alınmaz (166 a): yalnız son dört hane.
 const kimlikSon4 = z.preprocess(
   (d) => (typeof d === 'string' ? (d.trim() === '' ? null : d.trim().toUpperCase()) : d),
-  z.string().regex(/^[0-9A-Z]{4}$/, 'Kimlikten yalnız son dört hane yazılır.').nullable().default(null),
+  z.string().regex(/^[0-9A-Z]{4}$/, 'Kimlikten yalnız son dört hane yazılır.').nullable().prefault(null),
 );
 const kimlik = z.number().int().positive().max(2147483647);
 
-export const idParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 export const surumGovdesi = z.object({ ...beklenenSurum });
 
 const kisiAlanlari = {
@@ -39,19 +39,19 @@ const kisiAlanlari = {
 const girisAlanlari = {
   kartId: kimlik,
   kimlikGoruldu: z.boolean(),
-  kimlikTuru: z.enum(KIMLIK_TURLERI).nullable().default(null),
+  kimlikTuru: z.enum(KIMLIK_TURLERI).nullable().prefault(null),
   kimlikSon4,
-  atolye: z.boolean().default(false),
-  dizustu: z.boolean().default(false),
-  kvkkOnayi: z.boolean().default(false),
-  ogleYemegi: z.boolean().default(false),
+  atolye: z.boolean().prefault(false),
+  dizustu: z.boolean().prefault(false),
+  kvkkOnayi: z.boolean().prefault(false),
+  ogleYemegi: z.boolean().prefault(false),
 };
 
 // Ev sahibi kendi adına açar (217 a); ev sahibi gövdede yoktur, oturumdan alınır.
 export const onKayitGovdesi = z.object({
   ...kisiAlanlari,
   beklenenZaman: zamanSemasi,
-  ogleYemegi: z.boolean().default(false),
+  ogleYemegi: z.boolean().prefault(false),
 });
 
 export const girisGovdesi = z.object({ ...beklenenSurum, ...girisAlanlari });
@@ -68,7 +68,7 @@ export const cikisGovdesi = z.object({
   ...beklenenSurum,
   // Kart geri alınmadıysa kart kayıp sayılır.
   kartTeslim: z.boolean(),
-  ekipmanKontrol: z.boolean().nullable().default(null),
+  ekipmanKontrol: z.boolean().nullable().prefault(null),
 });
 
 export const kartEkleGovdesi = z.object({

@@ -51,8 +51,8 @@ const enlem = z.number().min(-90, 'Enlem -90 ile 90 arasındadır.').max(90, 'En
 const boylam = z.number().min(-180, 'Boylam -180 ile 180 arasındadır.').max(180, 'Boylam -180 ile 180 arasındadır.').nullish()
   .transform((v) => v ?? null);
 
-export const kimlikParametresi = z.object({ id: z.coerce.number().int().positive() });
-export const adresParametresi = z.object({ id: z.coerce.number().int().positive(), adresId: z.coerce.number().int().positive() });
+export const kimlikParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+export const adresParametresi = z.object({ id: z.coerce.number<number>().int().positive(), adresId: z.coerce.number<number>().int().positive() });
 
 // Firma kartının kimlik alanları. Bakiye, risk ve tutar burada yoktur (finans rakamı, FNS-48); Logo kayıt numarası ve gönderim
 // durumunu ekrandan kimse yazamaz, yalnız Logo köprüsü yazar (şemada yok, gelirse atılır).
@@ -60,11 +60,11 @@ export const firmaKimligi = z.object({
   kod: istegeBagli(40),
   ad: z.string().trim().min(1, 'Firma adı boş olamaz.').max(200, 'En çok 200 karakter.'),
   tur: firmaTuru,
-  fason: z.boolean().default(false),
-  ulkeKodu: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Ülke kodu iki harftir (TR gibi).').default('TR'),
+  fason: z.boolean().prefault(false),
+  ulkeKodu: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Ülke kodu iki harftir (TR gibi).').prefault('TR'),
   vergiNo: istegeBagli(30),
   vergiDairesi: istegeBagli(100),
-  paraBirimi: z.string().trim().toUpperCase().refine(paraBirimiGecerliMi, PARA_BIRIMI_ILETISI).default('TRY'),
+  paraBirimi: z.string().trim().toUpperCase().refine(paraBirimiGecerliMi, PARA_BIRIMI_ILETISI).prefault('TRY'),
   vadeGunu: z.number().int().min(0, 'Vade günü 0 ile 365 arasındadır.').max(365, 'Vade günü 0 ile 365 arasındadır.').nullish()
     .transform((v) => v ?? null),
   adres: istegeBagli(500),
@@ -183,7 +183,7 @@ export type FirmaListesiCevabi = z.output<typeof firmaListesiCevabi>;
 
 // Kayıt akışlarındaki seçim kutusu: yalnız aktif firmalar; varsayılan para birimi ve vade yeni belgeye öneridir (FNS-52).
 export const firmaSecimSorgusu = z.object({
-  ara: z.string().trim().max(100).default(''),
+  ara: z.string().trim().max(100).prefault(''),
   tur: firmaTuru.optional(),
 });
 export const firmaSecimSatiri = firmaSemasi.pick({ id: true, kod: true, ad: true, tur: true, paraBirimi: true, vadeGunu: true });

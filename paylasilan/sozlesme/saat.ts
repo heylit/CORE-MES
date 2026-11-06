@@ -12,7 +12,7 @@ const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
 const adet = z.number().int().nonnegative();
 const saniye = z.number().int().nonnegative();
 
-export const emirParametresi = z.object({ id: z.coerce.number().pipe(KIMLIK) });
+export const emirParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 
 // Makine arızası ve bakımı emrin çalışma durumundan önce gelir: arızalı tezgâhta emir "çalışıyor" görünse de iş durmuştur.
 export const ISTASYON_DURUMLARI = ['ariza', 'bakim', 'durdu', 'durakli', 'calisiyor', 'bekliyor', 'bos'] as const;
@@ -92,8 +92,8 @@ export const saatOnizlemesiCevabi = z.object({
   onizleme: z.object({ revizyonId: KIMLIK, kareler: z.array(z.number().int().nonnegative()) }).nullable(),
 });
 export const onizlemeKaresiParametresi = z.object({
-  id: z.coerce.number().pipe(KIMLIK),
-  kare: z.coerce.number().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
+  id: z.coerce.number<number>().pipe(KIMLIK),
+  kare: z.coerce.number<number>().int().min(0).max(ONIZLEME_SINIRLARI.azamiKare - 1),
 });
 
 export const UYARI_TURLERI = ['ariza', 'bakim', 'bitti', 'durus', 'kalibrasyon', 'kalite', 'malzeme'] as const;

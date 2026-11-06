@@ -31,8 +31,8 @@ const KIMLIK = z.number().int().positive().max(TAM_SAYI_UST);
 const DUGUM_YOLU = z.string().regex(/^0(\.[1-9][0-9]*)*$/, 'Düğüm yolu 0, 0.1, 0.1.2 biçiminde olmalı.').max(40);
 // Malzeme kimliği bigint'tir; JavaScript sayısı 2^53'e kadar tamdır.
 const MALZEME_KIMLIGI = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const yolKimligi = z.coerce.number().pipe(KIMLIK);
-const yolMalzemeKimligi = z.coerce.number().pipe(MALZEME_KIMLIGI);
+const yolKimligi = z.coerce.number<number>().pipe(KIMLIK);
+const yolMalzemeKimligi = z.coerce.number<number>().pipe(MALZEME_KIMLIGI);
 const zaman = z.string();
 const metin = (azami: number, bosIleti: string) => z.string().trim().min(1, bosIleti).max(azami);
 // Ölçüler sayı olarak gelir; sütunun hassasiyetinden fazlası sunucuda yuvarlanır.
@@ -54,8 +54,8 @@ export const revizyonKomutu = z.enum(REVIZYON_KOMUTLARI);
 
 export const urunParametresi = z.object({ urunId: yolMalzemeKimligi });
 export const revizyonParametresi = z.object({ id: yolKimligi });
-export const talimatParametresi = z.object({ urunId: yolMalzemeKimligi, opNo: z.coerce.number().pipe(KIMLIK) });
-export const agacSorgusu = z.object({ miktar: z.coerce.number().positive().max(1_000_000).default(1) });
+export const talimatParametresi = z.object({ urunId: yolMalzemeKimligi, opNo: z.coerce.number<number>().pipe(KIMLIK) });
+export const agacSorgusu = z.object({ miktar: z.coerce.number<number>().positive().max(1_000_000).prefault(1) });
 // Ayrıntıda adım miktarları ve süreler bu ürün miktarı için hesaplanır (baz miktar 1).
 export const ayrintiSorgusu = agacSorgusu;
 
@@ -374,9 +374,9 @@ export const talimatAdimiGirdisi = z.object({
   metin: kisaMetin(AZAMI_ADIM_METNI).nullable().transform((x) => (x === '' ? null : x)),
   kontrol: kontrolSemasi,
   zorunlu: z.boolean(),
-  medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).default([]),
-  asama: z.enum(TALIMAT_ASAMALARI).default(VARSAYILAN_TALIMAT_ASAMASI),
-  hedefSureDk: hedefSuresi.nullable().default(null),
+  medya: z.array(medyaGirdisi).max(AZAMI_ADIM_MEDYASI).prefault([]),
+  asama: z.enum(TALIMAT_ASAMALARI).prefault(VARSAYILAN_TALIMAT_ASAMASI),
+  hedefSureDk: hedefSuresi.nullable().prefault(null),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
@@ -415,7 +415,7 @@ export const GERCEKLESEN_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
 export const GERCEKLESEN_KAYNAKLARI = ['elle', 'terminal', 'kabul'] as const;
 export const gerceklesenTuru = z.enum(GERCEKLESEN_TURLERI);
 export const adimParametresi = z.object({ id: yolKimligi });
-export const surelerSorgusu = z.object({ makineId: z.coerce.number().pipe(KIMLIK).optional() });
+export const surelerSorgusu = z.object({ makineId: z.coerce.number<number>().pipe(KIMLIK).optional() });
 
 // Elle ölçüm: süre boşsa o türün bekleyen ölçümü boşaltılır. okunanId, yazarın gördüğü son satırdır (tür ve makine için; hiç yoksa null):
 // arada başkası yazdıysa reddedilir. Makine boşsa ölçüm operasyonun her kaynağı içindir.
@@ -614,7 +614,7 @@ export const malzemeAraSorgusu = z.object({
   metin: z.string().trim().max(60).optional().transform((m) => (m ? m : null)),
   tur: z.string().regex(/^[a-z,]*$/).optional().transform((t) => (t ? t.split(',').filter(Boolean) : [])),
   hepsi: z.enum(['true', 'false']).optional().transform((h) => h === 'true'),
-  sayfa: z.coerce.number().int().min(1).max(10_000).default(1),
+  sayfa: z.coerce.number<number>().int().min(1).max(10_000).prefault(1),
 });
 export const malzemeAraCevabi = z.object({ satirlar: z.array(urunOzeti), toplam: z.number().int(), sayfaBoyu: z.number().int() });
 export type MalzemeAraCevabi = z.output<typeof malzemeAraCevabi>;

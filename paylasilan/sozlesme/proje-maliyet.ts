@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
-export const projeMaliyetParametresi = z.object({ projeId: z.coerce.number().int().positive() });
+export const projeMaliyetParametresi = z.object({ projeId: z.coerce.number<number>().int().positive() });
 
 // Maliyet kalemleri ekranın kırılım sırasıyla.
 export const MALIYET_KALEMLERI = ['malzeme', 'isleme', 'ayar', 'fason', 'iscilik', 'genel_gider', 'finansman'] as const;
@@ -143,8 +143,8 @@ export const masrafBaglaGovdesi = z.object({
   belgeId: z.number().int().positive().max(2147483647),
   gorevId: z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null),
 });
-export const masrafParametresi = z.object({ bagId: z.coerce.number().int().positive().max(2147483647) });
-export const masrafSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).default('') });
+export const masrafParametresi = z.object({ bagId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const masrafSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).prefault('') });
 export const masrafSecenegiSemasi = z.object({
   id: z.number().int().positive(),
   belgeNo: z.string().nullable(),

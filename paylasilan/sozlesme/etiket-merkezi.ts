@@ -68,13 +68,13 @@ export type Sablon = z.infer<typeof sablonSemasi>;
 export const sablonlarCevabi = z.object({
   sablonlar: z.array(sablonSemasi),
   // Tür başına etikete basılabilen alanlar ve adları (tasarım ve önizleme aynı listeyi kullanır).
-  alanlar: z.record(z.enum(SABLON_TURLERI), z.array(z.object({ anahtar: z.string(), ad: z.string() }))),
+  alanlar: z.partialRecord(z.enum(SABLON_TURLERI), z.array(z.object({ anahtar: z.string(), ad: z.string() }))),
   // Seçim listeleri sunucudan gelir: istemci sözleşmeden yalnız tip alır.
   secenekler: z.object({
     diller: z.array(z.object({ deger: z.enum(YAZICI_DILLERI), ad: z.string() })),
     cozunurlukler: z.array(z.number().int()),
     enCokAdet: z.number().int(),
-    turAdlari: z.record(z.enum(SABLON_TURLERI), z.string()),
+    turAdlari: z.partialRecord(z.enum(SABLON_TURLERI), z.string()),
   }),
 });
 export type SablonlarCevabi = z.infer<typeof sablonlarCevabi>;
@@ -83,8 +83,8 @@ export const sablonParametresi = z.object({ anahtar: z.string().regex(/^[a-z0-9-
 
 export const ciktiSorgusu = z.object({
   dil: z.enum(YAZICI_DILLERI),
-  dpi: z.coerce.number().pipe(z.union([z.literal(203), z.literal(300)])),
-  adet: z.coerce.number().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`).default(1),
+  dpi: z.coerce.number<number>().pipe(z.union([z.literal(203), z.literal(300)])),
+  adet: z.coerce.number<number>().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`).prefault(1),
   sade: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
 });
 export type CiktiSecenekleri = z.output<typeof ciktiSorgusu>;
@@ -102,8 +102,8 @@ export const kayitCiktiSorgusu = ciktiSorgusu.extend({
     }
     return sonuc.data;
   }),
-  koliSayisi: z.coerce.number().int().min(1, 'Koli sayısı en az 1 olur.').max(EN_COK_ADET, `Koli sayısı en çok ${EN_COK_ADET} olur.`).optional(),
-  koliIci: z.coerce.number().positive('Koli içi adet sıfırdan büyük olur.').max(1e9).optional(),
+  koliSayisi: z.coerce.number<number>().int().min(1, 'Koli sayısı en az 1 olur.').max(EN_COK_ADET, `Koli sayısı en çok ${EN_COK_ADET} olur.`).optional(),
+  koliIci: z.coerce.number<number>().positive('Koli içi adet sıfırdan büyük olur.').max(1e9).optional(),
 });
 export type KayitCiktiSecenekleri = z.output<typeof kayitCiktiSorgusu>;
 
@@ -169,14 +169,14 @@ const yaziciAlanlari = z.object({
   dil: z.enum(YAZICI_DILLERI),
   dpi: z.union([z.literal(203), z.literal(300)]),
   baglanti: z.enum(BAGLANTI_TURLERI),
-  adres: z.string().trim().max(45).nullable().default(null),
-  sade: z.boolean().default(false),
+  adres: z.string().trim().max(45).nullable().prefault(null),
+  sade: z.boolean().prefault(false),
 });
 export const yaziciAcGovdesi = yaziciAlanlari;
 export type YaziciAcGovdesi = z.output<typeof yaziciAcGovdesi>;
 export const yaziciGuncelleGovdesi = yaziciAlanlari.extend({ aktif: z.boolean(), surum: z.number().int().min(1).max(2147483647) });
 export type YaziciGuncelleGovdesi = z.output<typeof yaziciGuncelleGovdesi>;
-export const yaziciParametresi = z.object({ id: z.coerce.number().int().positive().max(2147483647) });
+export const yaziciParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
 
 export const basGovdesi = z.object({
   yaziciId: z.number().int().positive().max(2147483647),
