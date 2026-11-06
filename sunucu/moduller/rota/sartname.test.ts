@@ -385,7 +385,14 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await yururlugeAl(id, b2.json<KomutCevabi>().surum);
     const kategori = kutuphane.kategoriler.find((k) => k.id === x.kategoriId)!.kod;
     const adimlar = await vt().tx((db) => yuzeyIslemiAdimlari(db, urun));
-    assert.deepEqual(adimlar, [
+    // 2144-3 b: kalınlık ve yoğunluk şartnameden gelir; adım değeri varsayılanı ezer, girilmeyen alan varsayılanıyla gelir.
+    assert.deepEqual(adimlar?.[0]?.parametreler, [
+      { anahtar: 'renk', ad: 'renk', birim: null, deger: 'RAL 9005' },
+      { anahtar: 'kalinlik', ad: 'kalinlik', birim: 'µm', deger: 60 },
+      { anahtar: 'sinif', ad: 'sinif', birim: null, deger: 'C3' },
+    ]);
+    assert.equal(adimlar?.[1]?.parametreler.find((p) => p.anahtar === 'kalinlik')?.deger, '12 µm (Fe/Zn12)');
+    assert.deepEqual(adimlar?.map(({ parametreler: _, ...a }) => a), [
       { opNo: 10, adimAdi: 'Tornalama', fason: false, talimatVar: false, sartname: { id: x.id, kod: x.kod, ad: x.ad, kategoriKodu: kategori } },
       { opNo: 20, adimAdi: 'Kaplama', fason: true, talimatVar: false, sartname: { id: zn.id, kod: 'KPL-ZN', ad: zn.ad, kategoriKodu: 'KPL' } },
     ]);

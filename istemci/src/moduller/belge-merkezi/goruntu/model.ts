@@ -26,7 +26,10 @@ function occtOku(veri: ArrayBuffer, bicim: 'step' | 'iges', varsayilan: Color): 
         if (a.normal) g.setAttribute('normal', new BufferAttribute(a.normal, 3));
         g.setIndex(new BufferAttribute(a.dizin, 1));
         if (!a.normal) g.computeVertexNormals();
-        kok.add(new Mesh(g, malzeme(a.renk ? new Color(a.renk[0], a.renk[1], a.renk[2]) : varsayilan)));
+        const ag = new Mesh(g, malzeme(a.renk ? new Color(a.renk[0], a.renk[1], a.renk[2]) : varsayilan));
+        // Yüz aralıkları yalnız taşınır; ağın çizimini değiştirmez (3D Atölyesi yüz seçimi okur).
+        if (a.yuzler) ag.userData['yuzler'] = a.yuzler;
+        kok.add(ag);
       }
       coz(kok);
     };
