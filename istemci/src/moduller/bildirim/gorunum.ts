@@ -1,4 +1,4 @@
-import type { Bildirim, BildirimOnemi, YayinSimgesi, YayinTuru } from '#paylasilan/sozlesme/bildirim.ts';
+import type { Bildirim, BildirimOnemi, BildirimSinifi, YayinSimgesi, YayinTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 
 // Zil 30 sn'de bir ve sekme öne gelince yoklar (kurgu §10); anlık itme yok. Cihaz bildirimi bu yoklamadan doğar (cihaz.ts).
@@ -15,6 +15,13 @@ export const modulAdi = (modul: string): string => MODUL[modul]?.ad ?? modul;
 export const modulSimgesi = (modul: string): SimgeAdi => MODUL[modul]?.simge ?? 'bell';
 
 export const ONEM_ADI = { bilgi: 'Bilgi', uyari: 'Uyarı', acil: 'Acil' } as const satisfies Record<BildirimOnemi, string>;
+
+// 2174-2 a: satırın sınıf etiketi. Bilgi etiketsizdir (bugünkü satır görünümü); görev ve hatırlatma yapılınca "Yapıldı" olur.
+export const SINIF_ADI = { gorev: 'Görev', hatirlatma: 'Hatırlatma', bilgi: 'Bilgi' } as const satisfies Record<BildirimSinifi, string>;
+export function sinifEtiketi(b: Pick<Bildirim, 'sinif' | 'yapildi'>): { ad: string; durum: BildirimSinifi | 'yapildi' } | null {
+  if (b.sinif === 'bilgi') return null;
+  return b.yapildi !== null ? { ad: 'Yapıldı', durum: 'yapildi' } : { ad: SINIF_ADI[b.sinif], durum: b.sinif };
+}
 
 // Elle yayının türü (2147): ad, varsayılan simge ve renk tonu (önemle aynı üç ton; duyuru bilgi tonundadır).
 export const YAYIN_TURU = {

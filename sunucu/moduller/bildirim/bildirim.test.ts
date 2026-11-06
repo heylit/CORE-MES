@@ -194,6 +194,39 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     await assert.rejects(o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '' })));
   });
 
+  test('2174-2 a: görev türü görev sınıfıyla yazılır, okununca Görevlerim\'de kalır, kaynak kapanınca bütün alıcılarda yapıldı olur', async () => {
+    await bosalt();
+    await gonder({ tur: 'malzemeler.kart-onay-bekliyor', baslik: 'Kart onay bekliyor', kaynakKimlik: 'K1' });
+    await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu 5', kaynakKimlik: '5' });
+    const gorevler = (await liste('yonetici', 'gorev')).satirlar;
+    assert.deepEqual(gorevler.map((b) => [b.baslik, b.sinif, b.yapildi]), [['Kart onay bekliyor', 'gorev', null]]);
+    assert.equal((await liste('yonetici', 'gelen')).satirlar.find((b) => b.baslik === 'Durdu 5')?.sinif, 'bilgi');
+    assert.equal((await liste('yonetici', 'hatirlatma')).satirlar.length, 0);
+    await istek('yonetici', 'POST', `/bildirimler/${gorevler[0]?.id ?? 0}/okundu`);
+    assert.equal((await liste('yonetici', 'gorev')).satirlar.length, 1, 'okunan görev yapılana dek Görevlerim\'de kalır');
+
+    assert.ok(await o().vt.tx((db) => bildirimKapat(db, { tur: 'malzemeler.kart-onay-bekliyor', kaynakKimlik: 'K1' })) >= 1);
+    assert.equal((await liste('yonetici', 'gorev')).satirlar.length, 0);
+    const yapilan = (await liste('yonetici', 'yapildi')).satirlar;
+    assert.deepEqual(yapilan.map((b) => b.baslik), ['Kart onay bekliyor']);
+    assert.notEqual(yapilan[0]?.yapildi, null);
+    assert.equal(await o().vt.tx((db) => bildirimKapat(db, { tur: 'malzemeler.kart-onay-bekliyor', kaynakKimlik: 'K1' })), 0, 'ikinci kapanış bir şey değiştirmez');
+
+    await o().vt.tx((db) => bildirimKapat(db, { tur: 'istasyonlar.makine-durdu', kaynakKimlik: '5' }));
+    const bilgi = (await liste('yonetici', 'gelen')).satirlar.find((b) => b.baslik === 'Durdu 5');
+    assert.equal(bilgi?.yapildi, null, 'bilgi kapanınca yalnız okunur, yapıldı olmaz');
+    assert.notEqual(bilgi?.okundu, null);
+    await assert.rejects(o().vt.tx((db) => db.sorgu("UPDATE bildirim_kaydi SET yapildi = now() WHERE sinif = 'bilgi'")));
+    await assert.rejects(o().vt.tx((db) => db.sorgu("UPDATE bildirim_kaydi SET sinif = 'gorevv'")));
+  });
+
+  test('2174-2 a: yeni süzgeçler yalnız kendi satırını döner (başkasının görevi görünmez)', async () => {
+    await bosalt();
+    await gonder({ tur: 'malzemeler.kart-onay-bekliyor', baslik: 'Kart onay bekliyor', kaynakKimlik: 'K2' });
+    for (const durum of ['gorev', 'hatirlatma', 'yapildi']) assert.equal((await liste('operator', durum)).satirlar.length, 0, durum);
+    assert.equal((await istek('yonetici', 'GET', '/bildirimler?durum=gorevler')).durum, 400);
+  });
+
   test('geçersiz yol ve boş başlık olayı yazmaz', async () => {
     await assert.rejects(gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'x', yol: '//dis-site' as `/${string}` }));
     await assert.rejects(gonder({ tur: 'istasyonlar.makine-durdu', baslik: '   ' }));

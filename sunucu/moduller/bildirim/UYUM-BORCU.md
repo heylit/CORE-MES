@@ -32,3 +32,7 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 16. Y3'e kadar ortadaki pencere terminal yollarında (`/uretim-terminali`, `/arkon/operator`, `/terminal`) çıkmaz ve sorulmaz (`istemci/src/moduller/bildirim/gorunum.ts` `ortadaBekletilirMi`); bildirim zilde ve merkezde durur. Y3'te Arkon hazırlık uyarısıyla sıra kurulunca bu bekletme kalkar.
 17. Ortadaki pencere başka kipli pencere (karşılama, açılış gösterisi, açık form) açıkken bekler; bekleme DOM'daki `aria-modal` pencereyi gözler. Kabukta katman sırası ortak parçası olursa ona geçer (çekirdek isteği 2147-a).
 15. `bildirim-yayin-dagit` işinin okunur adı `istemci/src/moduller/sistem/is-adlari.ts`'de yok (kod adıyla görünür); Y2'de eklenir.
+
+## Sınıf (2174-2 a)
+18. Görev sınıfı bugün yalnız `malzemeler.kart-onay-bekliyor`'da: kapanışı (`bildirimKapat`) yalnız malzemeler çağırıyor. Satın alma talebi, sipariş, teklif iskonto/termin ve izin onayı kendi modüllerinin kartlarında kapanış çağrısı girince sözleşmede `sinif: 'gorev'` alır (kapanışsız görev Görevlerim'de hiç kapanmadan kalırdı).
+19. Hatırlatma sınıfını yazan tür yok; kademe işi (2174-4 a, aşama 2) ile gelir.

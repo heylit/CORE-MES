@@ -41,6 +41,11 @@
 .tc-bildirim-tekrar { color: var(--faint); font-size: var(--yazi-s); font-weight: 400; }
 .tc-bildirim-metin { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-bildirim-kaynak { color: var(--faint); font-size: var(--yazi-xs); }
+/* 2174-2 a: görev ve hatırlatma etiketi; bilgi etiketsiz. */
+.tc-bildirim-sinif { display: inline-block; margin-inline-start: var(--b-1); padding: 0 var(--b-1); border: 1px solid currentColor; border-radius: var(--yari-1); font-size: var(--yazi-xs); font-weight: 600; vertical-align: middle; }
+.tc-bildirim-sinif[data-sinif="gorev"] { color: var(--hazard-ink); }
+.tc-bildirim-sinif[data-sinif="hatirlatma"] { color: var(--done); }
+.tc-bildirim-sinif[data-sinif="yapildi"] { color: var(--run); }
 .tc-bildirim-zaman { color: var(--faint); font-size: var(--yazi-xs); white-space: nowrap; }
 .tc-bildirim-arsivle {
   flex: none; display: grid; place-items: center; inline-size: var(--dokunma); border: 0; border-inline-start: 1px solid var(--edge);

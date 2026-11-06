@@ -11,6 +11,10 @@ import { CAGRI_EKIPLERI } from './durus-nedenleri.ts';
 
 export const BILDIRIM_ONEMLERI = ['bilgi', 'uyari', 'acil'] as const;
 export type BildirimOnemi = (typeof BILDIRIM_ONEMLERI)[number];
+// 2174-2 a: sınıf, önemden ayrı eksendir. Görev ve hatırlatma, kaynağın işi yapılınca bütün alıcılarda yapıldı olur
+// (`bildirimKapat`); bilgi okununca biter.
+export const BILDIRIM_SINIFLARI = ['gorev', 'hatirlatma', 'bilgi'] as const;
+export type BildirimSinifi = (typeof BILDIRIM_SINIFLARI)[number];
 export const BILDIRIM_KANALLARI = ['mesaj', 'eposta'] as const;
 export type BildirimKanali = (typeof BILDIRIM_KANALLARI)[number];
 
@@ -18,6 +22,9 @@ export interface BildirimTuruTanimi {
   // Tercih ekranında görünen ad.
   baslik: string;
   onem: BildirimOnemi;
+  // Verilmezse bilgi. Görev yalnız kaynak modül işi yapılınca `bildirimKapat` çağırıyorsa verilir; çağırmayan türde görev
+  // Görevlerim'de hiç kapanmadan kalırdı.
+  sinif?: BildirimSinifi;
   // Kim alır: bu işlemlerden birini taşıyan etkin her kişi. Kayda bağlı kişi (talebi açan gibi) çağıran modülce ayrıca verilir.
   alanIslemler: readonly Islem[];
   // Bildirimin açtığı ekran: gönderilen yol bu yol ya da altıdır. Alıcı rollerin bu ekranı açabildiğini
@@ -39,7 +46,7 @@ export const BILDIRIM_TURLERI = {
   'satin-alma.talep-reddedildi': {
     baslik: 'Satın alma talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/taleplerim', varsayilan: { mesaj: false, eposta: false },
   },
-  'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
+  'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-reddedildi': { baslik: 'Malzeme kartın reddedildi', onem: 'uyari', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {
     baslik: 'Sipariş onay bekliyor', onem: 'uyari', alanIslemler: ['siparisler.onayla'], yol: '/siparisler', varsayilan: { mesaj: false, eposta: true },
@@ -114,6 +121,7 @@ export const BILDIRIM_TURLERI = {
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;
 export const BILDIRIM_TUR_ANAHTARLARI = Object.keys(BILDIRIM_TURLERI) as [BildirimTuru, ...BildirimTuru[]];
 export const bildirimTuruMu = (deger: string): deger is BildirimTuru => Object.hasOwn(BILDIRIM_TURLERI, deger);
+export const turSinifi = (tur: BildirimTuru): BildirimSinifi => (BILDIRIM_TURLERI[tur] as BildirimTuruTanimi).sinif ?? 'bilgi';
 
 export const BILDIRIM_BASLIK_EN_COK = 200;
 export const BILDIRIM_METIN_EN_COK = 1000;
@@ -147,6 +155,9 @@ export const bildirimSemasi = z.object({
   // Onay isteyen satır "Okudum, anladım" denene dek arşive kaldırılamaz (2147).
   onayIstenir: z.boolean(),
   onaylandi: zamanSemasi.nullable(),
+  sinif: z.enum(BILDIRIM_SINIFLARI),
+  // Görev ve hatırlatmanın işi yapıldığı an; bilgide hep null.
+  yapildi: zamanSemasi.nullable(),
   // Elle yayının künyesi; otomatik bildirimde null. Geri çekilen yayın merkezde üstü çizili kalır.
   yayin: z.object({
     id: z.number().int(),
@@ -159,8 +170,9 @@ export const bildirimSemasi = z.object({
 });
 
 // gelen: arşivlenmemiş hepsi; okunmamis; onay-bekleyen: onay isteyip onaylanmamış; onemli: uyarı ve acil; duyuru: duyuru türündeki
-// elle yayın; bilgi: bilgi önemi (hepsi arşivlenmemiş); arsiv: kişinin kaldırdıkları.
-export const BILDIRIM_LISTE_DURUMLARI = ['gelen', 'okunmamis', 'onay-bekleyen', 'onemli', 'duyuru', 'bilgi', 'arsiv'] as const;
+// elle yayın; bilgi: bilgi önemi; gorev ve hatirlatma: o sınıftan yapılmamışlar; yapildi: yapılmış görev ve hatırlatma (hepsi
+// arşivlenmemiş); arsiv: kişinin kaldırdıkları.
+export const BILDIRIM_LISTE_DURUMLARI = ['gelen', 'okunmamis', 'onay-bekleyen', 'onemli', 'duyuru', 'bilgi', 'gorev', 'hatirlatma', 'yapildi', 'arsiv'] as const;
 export type BildirimListeDurumu = (typeof BILDIRIM_LISTE_DURUMLARI)[number];
 export const bildirimListeSorgusu = z.object({
   ...sayfaSorguAlanlari,

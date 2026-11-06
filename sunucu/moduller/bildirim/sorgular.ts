@@ -1,11 +1,12 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { Bildirim, BildirimListeDurumu, BildirimOnemi } from '#paylasilan/sozlesme/bildirim.ts';
+import type { Bildirim, BildirimListeDurumu, BildirimOnemi, BildirimSinifi } from '#paylasilan/sozlesme/bildirim.ts';
 
 const SECIM = `id, tur, onem, baslik, metin, yol, kaynak_modul AS "kaynakModul", tekrar_sayisi AS "tekrarSayisi",
   ${zamanMetni('olusturuldu')} AS olusturuldu, ${zamanMetni('okundu')} AS okundu, ${zamanMetni('arsivlendi')} AS arsivlendi,
-  onay_istenir AS "onayIstenir", ${zamanMetni('onaylandi')} AS onaylandi, yayin_id AS "yayinId"`;
+  onay_istenir AS "onayIstenir", ${zamanMetni('onaylandi')} AS onaylandi, yayin_id AS "yayinId",
+  sinif, ${zamanMetni('yapildi')} AS yapildi`;
 
 // Kişinin satırı; yayın künyesi servis katmanında eklenir (yazanın adı kisiler modülündedir).
 export type BildirimSatiri = Omit<Bildirim, 'yayin'> & { yayinId: number | null };
@@ -22,17 +23,19 @@ export interface YeniBildirim {
   // Ekran ortasında çıkar ve onay ister (2147-3 a, Y4); otomatikte türün gösterimi.
   ortada?: boolean;
   onayIstenir?: boolean;
+  // Verilmezse bilgi (tablo varsayılanı).
+  sinif?: BildirimSinifi;
 }
 
 // Okunmamış aynı tekil anahtar varsa yeni satır açılmaz: sayaç artar, metin ve zaman tazelenir (zilde yeniden üste çıkar).
 export async function bildirimYaz(db: Db, b: YeniBildirim): Promise<void> {
   await db.sorgu(
-    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, ortada, onay_istenir)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO bildirim_kaydi (kisi_id, tur, onem, baslik, metin, yol, kaynak_modul, tekil_anahtar, ortada, onay_istenir, sinif)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (kisi_id, tekil_anahtar) WHERE tekil_anahtar IS NOT NULL AND okundu IS NULL AND arsivlendi IS NULL
      DO UPDATE SET tekrar_sayisi = bildirim_kaydi.tekrar_sayisi + 1, baslik = EXCLUDED.baslik, metin = EXCLUDED.metin,
-       yol = EXCLUDED.yol, onem = EXCLUDED.onem, ortada = EXCLUDED.ortada, onay_istenir = EXCLUDED.onay_istenir, olusturuldu = now()`,
-    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar, b.ortada ?? false, b.onayIstenir ?? false],
+       yol = EXCLUDED.yol, onem = EXCLUDED.onem, ortada = EXCLUDED.ortada, onay_istenir = EXCLUDED.onay_istenir, sinif = EXCLUDED.sinif, olusturuldu = now()`,
+    [b.kisiId, b.tur, b.onem, b.baslik, b.metin, b.yol, b.kaynakModul, b.tekilAnahtar, b.ortada ?? false, b.onayIstenir ?? false, b.sinif ?? 'bilgi'],
   );
 }
 
@@ -43,6 +46,9 @@ const DURUM_KOSULU: Record<BildirimListeDurumu, string> = {
   onemli: "arsivlendi IS NULL AND onem <> 'bilgi'",
   duyuru: "arsivlendi IS NULL AND yayin_id IN (SELECT id FROM bildirim_yayini WHERE tur = 'duyuru')",
   bilgi: "arsivlendi IS NULL AND onem = 'bilgi'",
+  gorev: "arsivlendi IS NULL AND sinif = 'gorev' AND yapildi IS NULL",
+  hatirlatma: "arsivlendi IS NULL AND sinif = 'hatirlatma' AND yapildi IS NULL",
+  yapildi: 'arsivlendi IS NULL AND yapildi IS NOT NULL',
   arsiv: 'arsivlendi IS NOT NULL',
 };
 
@@ -79,11 +85,13 @@ export function okunduIsaretle(db: Db, kisiId: number, id: number): Promise<Bild
   );
 }
 
-// Kaynak kaydın kararı verilince o kayda bağlı açık bildirim bütün alıcılarda okunur; okunmuş ve arşivdeki satıra dokunulmaz.
+// Kaynak kaydın kararı verilince o kayda bağlı açık bildirim bütün alıcılarda okunur; görev ve hatırlatma ayrıca yapıldı olur
+// (okunmuş ama yapılmamış görev de). Bitmiş ve arşivdeki satıra dokunulmaz.
 export async function kaynaktanOkunduIsaretle(db: Db, tekilAnahtar: string): Promise<number> {
   const r = await db.sorgu<{ id: number }>(
-    `UPDATE bildirim_kaydi SET okundu = now()
-     WHERE tekil_anahtar = $1 AND okundu IS NULL AND arsivlendi IS NULL RETURNING id`,
+    `UPDATE bildirim_kaydi SET okundu = coalesce(okundu, now()),
+            yapildi = CASE WHEN sinif = 'bilgi' THEN NULL ELSE coalesce(yapildi, now()) END
+     WHERE tekil_anahtar = $1 AND arsivlendi IS NULL AND (okundu IS NULL OR (sinif <> 'bilgi' AND yapildi IS NULL)) RETURNING id`,
     [tekilAnahtar],
   );
   return r.length;

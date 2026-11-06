@@ -53,7 +53,7 @@ function ac(adres: string, ek?: React.ReactNode) {
 const B = (ek: Partial<Bildirim>): Bildirim => ({
   id: 1, tur: 'istasyonlar.makine-durdu', onem: 'acil', baslik: 'Makine durdu: Tezgah 4', metin: 'Arıza', yol: '/istasyonlar',
   kaynakModul: 'istasyonlar', tekrarSayisi: 1, olusturuldu: '2026-10-19T09:00:00+03:00', okundu: null, arsivlendi: null,
-  onayIstenir: false, onaylandi: null, yayin: null, ...ek,
+  onayIstenir: false, onaylandi: null, sinif: 'bilgi', yapildi: null, yayin: null, ...ek,
 });
 const liste = (satirlar: Bildirim[]): BildirimListeCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });
 const TERCIH: BildirimTercihleriCevabi = {
@@ -125,6 +125,27 @@ describe('Bildirimler sayfası (Profilim altında)', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=onemli'))).toBe(true));
     fireEvent.click(await screen.findByRole('button', { name: 'Arşive kaldır: Okunmuş haber' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/bildirimler/2/arsivle')).toBe(true));
+  });
+
+  it('2174-2 a: görev ve hatırlatma etiketlidir, yapılan "Yapıldı" görünür, bilgi etiketsizdir; Görevlerim süzgeci sunucuya gider', async () => {
+    const istekler = sunucuKur({
+      'GET /bildirimler': () => json(200, liste([
+        B({ id: 1, baslik: 'Kart onay bekliyor', sinif: 'gorev' }),
+        B({ id: 2, baslik: 'Termin yaklaşıyor', sinif: 'hatirlatma' }),
+        B({ id: 3, baslik: 'Kart onaylandı', sinif: 'gorev', yapildi: '2026-10-19T09:30:00+03:00', okundu: '2026-10-19T09:30:00+03:00' }),
+        B({ id: 4, baslik: 'Makine durdu', sinif: 'bilgi' }),
+      ])),
+    });
+    ac('/profil/bildirimler');
+    const satir = async (baslik: string) => (await screen.findByText(baslik)).closest('li') as HTMLElement;
+    expect(within(await satir('Kart onay bekliyor')).getByText('Görev')).toBeTruthy();
+    expect(within(await satir('Termin yaklaşıyor')).getByText('Hatırlatma')).toBeTruthy();
+    expect(within(await satir('Kart onaylandı')).getByText('Yapıldı')).toBeTruthy();
+    expect(within(await satir('Makine durdu')).queryByText(/Görev|Hatırlatma|Yapıldı/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Görevlerim' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=gorev'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Yapıldı' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/bildirimler?durum=yapildi'))).toBe(true));
   });
 
   it('arşivde kaldırma düğmesi yok; boş arşiv söylenir', async () => {
