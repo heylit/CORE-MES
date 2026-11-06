@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AYAR_TANIMLARI, varsayilanDeger } from '#paylasilan/ayarlar.ts';
 import type { AyarAnahtari, AyarDegeri } from '#paylasilan/ayarlar.ts';
 import {
-  YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, type DosyaDeposuDurumu,
+  YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, paketTaramasiSemasi, type DosyaDeposuDurumu,
   type YedekAlani, type YedekTuru,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
@@ -70,6 +70,8 @@ const paketBildirimi = z.object({
   degisiklikler: z.array(z.string().max(AZAMI_DEGISIKLIK_METNI)).max(AZAMI_DEGISIKLIK).default([]),
   // Değişikliklerin başladığı yayın (yayin/ öneksiz); 1065'ten önceki paketlerde yoktu.
   oncekiYayin: z.string().min(1).max(50).nullable().default(null),
+  // Paket hazırlanırken alınan açık taraması; 2163'ten önceki paketlerde yoktu.
+  tarama: paketTaramasiSemasi.nullable().default(null),
   yukBoyut: z.number().int().nonnegative(),
   yukSha256: z.string().regex(/^[0-9a-f]{64}$/),
 });

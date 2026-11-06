@@ -186,6 +186,25 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     assert.deepEqual(((await liste()).json() as GuncellemePaketleriCevabi).paketler.map((p) => p.degisiklikler), [degisiklikler]);
   });
 
+  // 2163: tarama yalnız seviye sayılarını taşır; 2163'ten önceki pakette alan yoktur ve "Tarama yok" (null) okunur.
+  test('paketin açık taraması saklanır ve listede döner; taramasız eski paket null okunur', async () => {
+    const tarama = { durum: 'tamam', zaman: '2026-10-12T09:59:00.000Z', canli: { kritik: 0, yuksek: 1, orta: 0, dusuk: 0 }, tum: { kritik: 0, yuksek: 1, orta: 11, dusuk: 0 } };
+    const cevap = await bitir(await hepsiniGonder(paketKur(anahtar, YUK, { tarama })));
+    assert.equal(cevap.statusCode, 200, cevap.body);
+    assert.deepEqual((cevap.json() as GuncellemePaketi).tarama, tarama);
+    assert.deepEqual(((await liste()).json() as GuncellemePaketleriCevabi).paketler.map((p) => p.tarama), [tarama]);
+  });
+
+  test('taramasız eski paket "tarama yok" okunur; yapılamadı taraması olduğu gibi döner', async () => {
+    const eski = await bitir(await hepsiniGonder(paketKur(anahtar, YUK)));
+    assert.equal(eski.statusCode, 200, eski.body);
+    assert.equal((eski.json() as GuncellemePaketi).tarama, null);
+    const yapilamadi = { durum: 'yapilamadi', zaman: '2026-10-12T09:59:00.000Z' };
+    const ikinci = await bitir(await hepsiniGonder(paketKur(anahtar, YUK, { commit: 'd'.repeat(40), tarama: yapilamadi })));
+    assert.equal(ikinci.statusCode, 200, ikinci.body);
+    assert.deepEqual((ikinci.json() as GuncellemePaketi).tarama, yapilamadi);
+  });
+
   test('başka anahtarla imzalı, değiştirilmiş ya da paket olmayan dosya reddedilir ve saklanmaz', async () => {
     const bozukYuk = paketKur(anahtar, YUK);
     bozukYuk[bozukYuk.length - 1] = (bozukYuk[bozukYuk.length - 1] ?? 0) ^ 1;
@@ -193,6 +212,7 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
       ['yabancı imza', paketKur(yabanciAnahtar, YUK), /imzası doğrulanamadı/],
       ['değişmiş yük', bozukYuk, /bildirimle uyuşmuyor/],
       ['eksik bildirim alanı', paketKur(anahtar, YUK, { commit: 'kisa' }), /bildirimi okunamıyor/],
+      ['bilinmeyen tarama durumu', paketKur(anahtar, YUK, { tarama: { durum: 'belki', zaman: '2026-10-12T09:59:00.000Z' } }), /bildirimi okunamıyor/],
       ['sınırı aşan değişiklik listesi', paketKur(anahtar, YUK, { degisiklikler: Array.from({ length: AZAMI_DEGISIKLIK + 1 }, () => 'x') }), /bildirimi okunamıyor/],
       ['paket olmayan dosya', Buffer.from('%PDF-1.7 deneme'), /güncelleme paketi değil/],
     ];

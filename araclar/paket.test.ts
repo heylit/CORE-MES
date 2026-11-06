@@ -3,7 +3,8 @@ import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu,
+  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi,
+  surumNotu, taramaSayilari,
 } from './paket.ts';
 
 const kayit = (konu: string, govde: string): string => `${konu}\x1f${govde}\n\x1e\n`;
@@ -72,6 +73,7 @@ test('üretilen paket sunucunun çözücüsünden geçer; başka anahtarla geçm
   const girdi = {
     surum: '2026.10.12-1', commit: 'a'.repeat(40), tarih: '2026-10-12T10:00:00.000Z',
     gocler: ['20261012100000_ornek.sql'], not: null, degisiklikler: ['#1: deneme'], oncekiYayin: '2026.10.11-1',
+    tarama: { durum: 'tamam' as const, zaman: '2026-10-12T09:59:00.000Z', canli: { kritik: 0, yuksek: 1, orta: 0, dusuk: 0 }, tum: { kritik: 0, yuksek: 1, orta: 11, dusuk: 0 } },
   };
   const paket = paketKur(girdi, yuk, privateKey);
   const anahtar = ortakAnahtar(ortakAnahtarMetni(createPublicKey(privateKey)));
@@ -94,12 +96,13 @@ test('bildirimde bilinmeyen alan atılır; oncekiYayin taşımayan eski paket nu
   const anahtar = ortakAnahtar(ortakAnahtarMetni(createPublicKey(privateKey)));
   assert.ok(anahtar);
   const temel = { surum: '2026.10.12-1', commit: 'a'.repeat(40), tarih: '2026-10-12T10:00:00.000Z', gocler: [], not: null, degisiklikler: [] };
-  const yeni = paketBasliginiCoz(paketKur({ ...temel, oncekiYayin: null, gelecekAlan: 1 } as Parameters<typeof paketKur>[0], Buffer.from('y'), privateKey), anahtar);
+  const yeni = paketBasliginiCoz(paketKur({ ...temel, oncekiYayin: null, tarama: null, gelecekAlan: 1 } as Parameters<typeof paketKur>[0], Buffer.from('y'), privateKey), anahtar);
   assert.ok(!('red' in yeni));
   assert.equal('gelecekAlan' in yeni.bildirim, false);
   const eski = paketBasliginiCoz(paketKur(temel as unknown as Parameters<typeof paketKur>[0], Buffer.from('y'), privateKey), anahtar);
   assert.ok(!('red' in eski));
   assert.equal(eski.bildirim.oncekiYayin, null);
+  assert.equal(eski.bildirim.tarama, null);
 });
 
 // Ekran testi paketi ve yalnız onun getirdikleri düşer; başkasının da kullandığı kalır (ortak), iç içe kopya da düşer.
@@ -168,4 +171,37 @@ test('platform adı biçimi denetlenir', () => {
 test('sürüm dosyası güncelleyicinin çalışan sürüm biçimindedir (1876)', () => {
   const kimlik = { commit: 'c'.repeat(40), surum: '2026.11.02-1', tarih: '2026-11-02T08:00:00.000Z' };
   assert.deepEqual(calisanSurumSemasi.parse(JSON.parse(surumDosyasi(kimlik).toString('utf8'))), kimlik);
+});
+
+// 2163: npm audit çıktısından yalnız seviye sayıları alınır; okunamayan çıktıda sayı uydurulmaz.
+test('tarama sayıları npm audit özetinden okunur; paket ve açık adı alınmaz', () => {
+  const cikti = JSON.stringify({
+    vulnerabilities: { ornek: { severity: 'high', via: ['x'] } },
+    metadata: { vulnerabilities: { info: 0, low: 2, moderate: 11, high: 1, critical: 0, total: 14 } },
+  });
+  assert.deepEqual(taramaSayilari(cikti), { kritik: 0, yuksek: 1, orta: 11, dusuk: 2 });
+  const tarama = paketTaramasi('2026-11-06T10:00:00.000Z', cikti, cikti);
+  assert.equal(JSON.stringify(tarama).includes('ornek'), false);
+});
+
+test('tarama çıktısı yoksa, bozuksa ya da sayı eksikse "yapılamadı" olur; paket durmaz', () => {
+  const tamam = JSON.stringify({ metadata: { vulnerabilities: { low: 0, moderate: 0, high: 0, critical: 0 } } });
+  assert.equal(taramaSayilari(null), null);
+  assert.equal(taramaSayilari('kayıt sunucusuna ulaşılamadı'), null);
+  assert.equal(taramaSayilari(JSON.stringify({ error: { code: 'ENOTFOUND' } })), null);
+  assert.equal(taramaSayilari(JSON.stringify({ metadata: { vulnerabilities: { low: 0, moderate: 0, high: -1, critical: 0 } } })), null);
+  assert.deepEqual(paketTaramasi('2026-11-06T10:00:00.000Z', tamam, null), { durum: 'yapilamadi', zaman: '2026-11-06T10:00:00.000Z' });
+  assert.deepEqual(paketTaramasi('2026-11-06T10:00:00.000Z', null, tamam), { durum: 'yapilamadi', zaman: '2026-11-06T10:00:00.000Z' });
+});
+
+test('yapılamadı taraması bildirimden geçer; bilinmeyen durum bildirimi bozar', () => {
+  const { privateKey } = generateKeyPairSync('ed25519');
+  const anahtar = ortakAnahtar(ortakAnahtarMetni(createPublicKey(privateKey)));
+  assert.ok(anahtar);
+  const temel = { surum: '2026.11.06-1', commit: 'a'.repeat(40), tarih: '2026-11-06T10:00:00.000Z', gocler: [], not: null, degisiklikler: [], oncekiYayin: null };
+  const yapilamadi = paketBasliginiCoz(paketKur({ ...temel, tarama: { durum: 'yapilamadi', zaman: '2026-11-06T09:59:00.000Z' } }, Buffer.from('y'), privateKey), anahtar);
+  assert.ok(!('red' in yapilamadi));
+  assert.deepEqual(yapilamadi.bildirim.tarama, { durum: 'yapilamadi', zaman: '2026-11-06T09:59:00.000Z' });
+  const bozuk = { ...temel, tarama: { durum: 'belki', zaman: '2026-11-06T09:59:00.000Z' } } as unknown as Parameters<typeof paketKur>[0];
+  assert.deepEqual(paketBasliginiCoz(paketKur(bozuk, Buffer.from('y'), privateKey), anahtar), { red: 'bildirimBozuk' });
 });

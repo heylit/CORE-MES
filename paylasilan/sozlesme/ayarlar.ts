@@ -179,6 +179,17 @@ export const guncellemeParcasiGovdesi = z.object({
 });
 export const guncellemeParcasiCevabi = z.object({ alinan: z.number().int().nonnegative(), toplam: z.number().int().positive() });
 
+// Paket hazırlanırken alınan bilinen açık taraması (2163, 2160-5 b): yalnız seviye sayıları. Paket ve açık adı taşınmaz; depo açık.
+// canli: sunucuda çalışan üretim paketleri; tum: geliştirme araçları dahil bütün ağaç. Tarama çalışmazsa paket yine yazılır (2163-1 a).
+const taramaSayisi = z.number().int().nonnegative();
+export const paketTaramaSayilari = z.object({ kritik: taramaSayisi, yuksek: taramaSayisi, orta: taramaSayisi, dusuk: taramaSayisi });
+export const paketTaramasiSemasi = z.discriminatedUnion('durum', [
+  z.object({ durum: z.literal('tamam'), zaman: zamanSemasi, canli: paketTaramaSayilari, tum: paketTaramaSayilari }),
+  z.object({ durum: z.literal('yapilamadi'), zaman: zamanSemasi }),
+]);
+export type PaketTaramaSayilari = z.output<typeof paketTaramaSayilari>;
+export type PaketTaramasi = z.output<typeof paketTaramasiSemasi>;
+
 // Paketin imzalı bildirimi: sürüm, commit, derleme zamanı, içindeki göçler. Doğrulanmamış paket listeye girmez.
 export const guncellemePaketiSemasi = z.object({
   surum: z.string(),
@@ -190,6 +201,8 @@ export const guncellemePaketiSemasi = z.object({
   degisiklikler: z.array(z.string()).default([]),
   // degisiklikler'in başladığı yayın; ilk yayında ve 1065'ten önceki paketlerde null.
   oncekiYayin: z.string().nullable().default(null),
+  // 2163'ten önceki paketlerde yoktur: ekranda "Tarama yok".
+  tarama: paketTaramasiSemasi.nullable().default(null),
   boyut: z.number().int().positive(),
   yukleyenId: z.number().int(),
   yuklenme: zamanSemasi,
