@@ -63,6 +63,13 @@ async function sunucu(page: Page): Promise<void> {
     if (yol.startsWith('/geometri/ham-onerisi/8')) return json(200, HAM);
     if (yol === '/geometri/ozellikler/8') return json(200, OZELLIK);
     if (yol === '/geometri/montaj/8') return json(200, MONTAJ);
+    // Boya ve maske kartı (2144) bu testlerin konusu değil; analiz yok cevabıyla boş durur.
+    if (yol === '/geometri/yuzey/8') {
+      return json(200, {
+        revizyonId: 8, oneri: true, neden: 'analiz-yok', yuzler: [], rota: { durum: 'bagli', adimlar: [] }, isaretler: [], alanlar: [],
+        isaretsizMm2: 0, toplamMm2: 0, surum: null, guncelleyen: null, guncelleme: null, tasima: null,
+      });
+    }
     if (yol === '/geometri/modeller/8/dosya') return r.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.alloc(0) });
     if (yol === '/geometri/modeller/1/guncel') return json(200, { revizyonId: 8 });
     if (yol === '/geometri/modeller/2/guncel') return json(200, { revizyonId: null });
