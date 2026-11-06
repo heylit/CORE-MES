@@ -96,6 +96,11 @@ export function takipOku(db: Db, id: number): Promise<TakipSatiri | null> {
   return db.tek<TakipSatiri>(`SELECT ${TAKIP_SECIM} FROM profil_geri_bildirim_takip WHERE geri_bildirim_id = $1`, [id]);
 }
 
+// Kaydı yazan kişi; kayıt yoksa null. Yanıt ve kapanış bildirimi yalnız ona gider.
+export async function kayitYazani(db: Db, id: number): Promise<number | null> {
+  return (await db.tek<{ kisiId: number }>('SELECT kisi_id AS "kisiId" FROM profil_geri_bildirim WHERE id = $1', [id]))?.kisiId ?? null;
+}
+
 export async function kayitVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek<{ id: number }>('SELECT id FROM profil_geri_bildirim WHERE id = $1', [id])) !== null;
 }

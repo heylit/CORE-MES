@@ -1,8 +1,10 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
-// Geri Bildirim Merkezi (kart 2192): çalışanların şikayet, istek ve önerileri. Gönderme üst çubuktaki Hesap menüsündedir ve
-// her çalışanındır; bu sayfa okuyan ve yanıtlayanındır. Profilim menü sayfası değildir, burada yoktur.
+// Profilim (karar 2192-4 b): her rolün menü sayfasıdır; her hesap yalnız kendi profilini görür (uçlar kişiyi oturumdan alır).
+// Geri Bildirim Merkezi (kart 2192): çalışanların şikayet, istek ve önerileri; gönderme her çalışanındır, bu sayfa okuyan ve
+// yanıtlayanındır.
 export const PROFIL_SAYFALARI = [
+  { yol: '/profil', islem: 'sayfa.profil', baslik: 'Profilim', simge: 'id-card', grup: 'Yönetim', sira: 1 },
   { yol: '/geri-bildirim', islem: 'sayfa.geri-bildirim', baslik: 'Geri Bildirim Merkezi', simge: 'clipboard-check', grup: 'Yönetim', sira: 8 },
 ] as const satisfies readonly SayfaTanimi[];
 

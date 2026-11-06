@@ -259,6 +259,7 @@ const SAYFA_GRUBU: Readonly<Record<string, string>> = {
   'sayfa.personel': 'kisiler',
   'sayfa.ik-islemlerim': 'ik',
   'sayfa.geri-bildirim': 'profil',
+  'sayfa.profil': 'profil',
 };
 
 const SAYFA_ADLARI = new Map<string, string>(TUM_SAYFALAR.map((s) => [s.islem, s.baslik]));

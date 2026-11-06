@@ -9,7 +9,7 @@ function EskiGelenler() {
   return <Navigate to="/geri-bildirim" replace />;
 }
 
-// Profilim menü sayfası değildir: hiçbir sayfaya ait olmayan yol oturumu olan herkese açıktır; veri yetkisi uçlardadır.
+// Profilim her rolün menü sayfasıdır (sayfa.profil, 2192-4 b); veri yetkisi uçlardadır, her hesap yalnız kendi profilini görür.
 // Geri Bildirim Merkezi menü sayfasıdır (kart 2192); ikinci menüdeki her maddenin rotası vardır. Eski "gelenler" adresi oraya gider.
 export const rotalar: ModulRotasi[] = [
   { yol: '/profil', ekran: Profil },

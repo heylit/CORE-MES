@@ -246,4 +246,26 @@ describe('Geri Bildirim Merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     await assert.rejects(o().sahip.sorgu('DELETE FROM profil_geri_bildirim_hareket WHERE geri_bildirim_id = $1', [id]), /yalnız ekleme/);
     await assert.rejects(o().sahip.sorgu("INSERT INTO profil_geri_bildirim_takip (geri_bildirim_id, durum) VALUES (999999, 'yeni')"), /profil_geri_bildirim_takip_kayit/);
   });
+  test('GBM-8/9: yeni kayıt okuyanlara konusuna göre, yanıt ve sonuç yalnız yazana bildirilir; yapan kendisi almaz', async () => {
+    const bildirimler = async (ad: string, tur: string): Promise<{ baslik: string; yol: string | null }[]> => o().sahip.sorgu(
+      'SELECT baslik, yol FROM bildirim_kaydi WHERE kisi_id = $1 AND tur = $2 ORDER BY id', [ad === 'yonetici' ? yoneticiId : kisiler.get(ad), tur],
+    );
+    const id = await gonder('operator', { konu: 'sirket', tur: 'sikayet', metin: 'Bildirim denemesi kaydı.' });
+    for (const ad of ['insan', 'mudur', 'genmudur', 'yonetici']) {
+      assert.ok((await bildirimler(ad, 'profil.geri-bildirim-geldi')).some((b) => b.baslik === `#${id} yeni kayıt` && b.yol === '/geri-bildirim'), ad);
+    }
+    for (const ad of ['operator', 'cam']) assert.equal((await bildirimler(ad, 'profil.geri-bildirim-geldi')).length, 0, ad);
+    const uyg = await gonder('operator', { konu: 'uygulama', tur: 'istek', metin: 'Uygulama bildirim denemesi.' });
+    assert.ok((await bildirimler('mudur', 'profil.uygulama-geri-bildirimi-geldi')).some((b) => b.baslik === `#${uyg} yeni kayıt`));
+    assert.equal((await bildirimler('mudur', 'profil.geri-bildirim-geldi')).some((b) => b.baslik === `#${uyg} yeni kayıt`), false);
+
+    assert.equal((await istek('insan', 'POST', `/profil/geri-bildirimler/${id}/yanitla`, { metin: 'İnceleniyor, dönüş yapılacak.', surum: 0 })).durum, 200);
+    assert.deepEqual((await bildirimler('operator', 'profil.geri-bildirime-yanit')).filter((b) => b.baslik.startsWith(`#${id} `)), [{ baslik: `#${id} yanıt: İnsan Kaynakları`, yol: '/profil' }]);
+    assert.equal((await bildirimler('insan', 'profil.geri-bildirime-yanit')).length, 0);
+
+    assert.equal((await takip('mudur', id, { ...bos, durum: 'cozuldu', surum: 1 })).durum, 200);
+    assert.equal((await takip('mudur', id, { ...bos, durum: 'kapandi', surum: 2 })).durum, 200);
+    assert.deepEqual((await bildirimler('operator', 'profil.geri-bildirim-kapandi')).filter((b) => b.baslik.startsWith(`#${id} `)), [{ baslik: `#${id} Çözüldü`, yol: '/profil' }]);
+    assert.equal((await bildirimler('mudur', 'profil.geri-bildirim-kapandi')).length, 0);
+  });
 });

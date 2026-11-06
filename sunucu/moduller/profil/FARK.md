@@ -29,3 +29,5 @@ Yeni modül. Kart numarası görevde verilmedi (koordinatör kararı "Hemen yaz"
 - Yeni işlemler: `profil.geri-bildirim-yanitla`, `profil.geri-bildirim-kategori-yaz`.
 - Profilim'de çalışan kaydının durumunu ve yanıtları (rol imzasıyla) görür.
 - Öneriyle ilerleyenler: imza ilk yönetici olmayan rolün adı, yoksa "Yönetim"; kategori ve sorumlu değişikliği harekete yazılmaz, yalnız durum değişikliği yazılır.
+- Bildirim türleri (yama 2): `profil.geri-bildirim-geldi`, `profil.uygulama-geri-bildirimi-geldi`, `profil.geri-bildirime-yanit`, `profil.geri-bildirim-kapandi`; bildirim modülünün koduna dokunulmadı.
+- Profilim her rolün menü sayfası (2192-4 b): göç `20261106099600_profil_sayfasi.sql`, ana menü simgesi `id-card`; kabuktaki sabit Profilim bağlantısı kaldırıldı.

@@ -130,7 +130,7 @@ describe('App oturum akisi', () => {
     girisYap('dogru');
 
     const menu = within(await screen.findByRole('navigation', { name: 'Ana menü' }));
-    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/profil', '/kuyruk']);
+    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/kuyruk']);
     expect(cagrilar.find((c) => c.yol === '/oturum/giris')?.govde).toEqual({ kullaniciAdi: 'operator1', parola: 'dogru' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
@@ -266,7 +266,7 @@ describe('App modul rotalari', () => {
     expect(screen.queryByText(/yapım aşamasında/)).toBeNull();
     // Bekletilen sayfa: adresi açılır, menüde bağlantısı yoktur.
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
-    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/profil', '/kuyruk']);
+    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/kuyruk']);
   });
 
   it('rota verilmeyen gorunur sayfa yer tutucuda kalir', async () => {
@@ -305,15 +305,20 @@ describe('App modul rotalari', () => {
     const menu = () => within(screen.getByRole('navigation', { name: 'Ana menü' }));
     const adresler = () => menu().getAllByRole('link').map((b) => b.getAttribute('href'));
     // Veri işlemleri yeni ekran kapısını da (kisiler.rol-yonet) taşır; Kuyruk'un deneme satırı yoktur, ana menüdeki satırı yeni ekranı açar (541).
-    expect(adresler()).toEqual(['/', '/profil', '/kuyruk']);
+    expect(adresler()).toEqual(['/', '/kuyruk']);
     cleanup();
 
     await ac({ ...YALNIZ_VERI, islemler: [...VERI_ISLEMLERI] }, '/');
-    expect(adresler()).toEqual(['/', '/profil']);
+    expect(adresler()).toEqual(['/']);
     cleanup();
 
     await ac({ ...YALNIZ_VERI, islemler: ['sayfa.personel'] }, '/');
-    expect(adresler()).toEqual(['/', '/profil', '/personel']);
+    expect(adresler()).toEqual(['/', '/personel']);
+    cleanup();
+
+    // Profilim her rolün menü sayfasıdır (2192-4 b): sayfa işlemiyle menüye gelir.
+    await ac({ ...YALNIZ_VERI, islemler: ['sayfa.profil'] }, '/');
+    expect(adresler()).toEqual(['/', '/profil']);
   });
 
   it('rolun acilis sayfasi ana sayfadan bir kez acilir ve Ana sayfa baglantisi oraya gider; ekrani kurulmamis hedefte ana sayfa kalir', async () => {

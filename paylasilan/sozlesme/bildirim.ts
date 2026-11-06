@@ -116,6 +116,20 @@ export const BILDIRIM_TURLERI = {
   'saglik.esik-uyarisi': {
     baslik: 'Sistem ölçüsü eşiği aştı', onem: 'uyari', alanIslemler: ['saglik.ayrinti-oku'], yol: '/ayarlar', varsayilan: { mesaj: false, eposta: false },
   },
+  // 2192: yeni şikayet, istek ve öneri merkezi okuyanlara gider; uygulama konulu kayıt ayrı türdür ki alıcısı Bildirim
+  // yönetiminden ayrı seçilebilsin. Yanıt ve kapanış yalnız yazana gider (kayda bağlı kişi).
+  'profil.geri-bildirim-geldi': {
+    baslik: 'Yeni şikayet, istek ya da öneri', onem: 'bilgi', alanIslemler: ['profil.geri-bildirim-oku'], yol: '/geri-bildirim', varsayilan: { mesaj: false, eposta: false },
+  },
+  'profil.uygulama-geri-bildirimi-geldi': {
+    baslik: 'Uygulama için yeni geri bildirim', onem: 'bilgi', alanIslemler: ['profil.geri-bildirim-oku'], yol: '/geri-bildirim', varsayilan: { mesaj: false, eposta: false },
+  },
+  'profil.geri-bildirime-yanit': {
+    baslik: 'Geri bildirimine yanıt geldi', onem: 'bilgi', alanIslemler: [], yol: '/profil', varsayilan: { mesaj: false, eposta: false },
+  },
+  'profil.geri-bildirim-kapandi': {
+    baslik: 'Geri bildirimin sonuçlandı', onem: 'bilgi', alanIslemler: [], yol: '/profil', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;
