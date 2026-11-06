@@ -1,5 +1,5 @@
 import { birlesikAd } from '#paylasilan/uygulama.ts';
-import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { GirisCevabi, GirisGovdesi, KartGirisGovdesi, OturumCevabi, PinBelirleGovdesi } from '#paylasilan/sozlesme/oturum.ts';
@@ -13,6 +13,8 @@ import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
 import { HARFLER, SVG_KUTUSU, svgYolu } from './sahne/harfler.ts';
+import { bekleme, sesAcikMi, sesCal, sesHazirMi, sesSustur, sesTercihiYaz } from './sahne/ses.ts';
+import type { Tekillik } from './sahne/tekillik.ts';
 import './giris.css';
 
 const PIN_HANE = 6;
@@ -22,51 +24,92 @@ type Kip = 'pin' | 'parola' | 'kart' | 'belirle';
 type SakliKip = 'pin' | 'parola' | 'kart';
 type PinAlani = 'pin' | 'yeni' | 'tekrar';
 
-const TANITIM: readonly { simge: ComponentProps<typeof Simge>['ad']; metin: string }[] = [
-  { simge: 'gantt', metin: 'Plan, iş emri ve rota tek yerde' },
-  { simge: 'scan', metin: 'Her adımın izlenebilir üretim kaydı' },
-  { simge: 'gauge', metin: 'İstasyon ve makine durumu anlık' },
-  { simge: 'box', metin: 'Malzeme ve stok hareketi izli' },
+// Modül şeridi (2170): giriş ekranı uygulamanın kapsadığı işleri akan bir şerit olarak gösterir.
+export const MODULLER: readonly string[] = [
+  'Plan', 'İş emri', 'Rota', 'Terminal', 'OEE', 'Duruş', 'Stok', 'Satın alma', 'Sevkiyat', 'Kalite',
+  'Kalibrasyon', 'Denetim', 'Çizim', '3B model', 'CNC kurulum', 'Etiket', 'Vardiya', 'İK', 'Maliyet', 'Bildirim',
 ];
 
-// Firma adı Türkçede eksiz durur ("Çeliği X keser"), bu yüzden hangi ad gelirse gelsin cümle bozulmaz; ad yoksa genel "atölye" kullanılır.
-export const slogan = (kurumAdi: string | null): string => `Çeliği ${kurumAdi ?? 'atölye'} keser, tartışmayı CORE. Sıfır tahmin.`;
+// Slogan firma adı taşımaz (2170): ad sistem ayarındadır ve formun üstünde ayrıca görünür.
+export const SLOGAN = 'Talaşı tezgâh kaldırır, tartışmayı CORE. Sıfır tahmin.';
 
 type SahneDurumu = 'yukleniyor' | 'acik' | 'yok';
 
 // Giriş sahnesi (kart 2148, karar 2148-1): CORE kelimesi tek noktadan doğar, O harfi yıldızlardan döner. three ve sahne kodu
 // form çizildikten sonra ayrı parça olarak yüklenir; form sahneyi beklemez. WebGL2 yoksa ya da grafik birimi yoksa aynı harf
 // hatları düz çizim olarak görünür. Süs çizimidir, ekran okuyucudan gizlidir; hareket azaltma tercihinde yalnız son kare çizilir.
+// Açılış sesi (2170) bu cihazda açıksa sahneyle birlikte başlar; ikisi de yarım saniyelik ortak saat ızgarasına oturur.
 function GirisSahnesi() {
   const kap = useRef<HTMLDivElement>(null);
   const parlama = useRef<HTMLDivElement>(null);
+  const alti = useRef<HTMLParagraphElement>(null);
+  const sahne = useRef<Tekillik | null>(null);
+  const zamanlayici = useRef(0);
   const [durum, durumYaz] = useState<SahneDurumu>(() => (typeof WebGL2RenderingContext === 'undefined' ? 'yok' : 'yukleniyor'));
+  const [sesAcik, sesAcikYaz] = useState(sesAcikMi);
+
+  // Sahne ve ses bir sonraki ızgara anında birlikte baştan başlar (aynı anda açan terminaller aynı vuruşta çalar).
+  const sesleBaslat = () => {
+    window.clearTimeout(zamanlayici.current);
+    zamanlayici.current = window.setTimeout(() => { sahne.current?.bastan(); void sesCal(); }, bekleme(Date.now()));
+  };
+
   useEffect(() => {
     const el = kap.current;
     if (el === null || typeof WebGL2RenderingContext === 'undefined') return undefined;
     let bitti = false;
-    let kapat: (() => void) | null = null;
     const hareketsiz = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     import('./sahne/tekillik.ts')
       .then(({ tekillikKur }) => {
         if (bitti) return;
-        kapat = tekillikKur(el, { hareketsiz, parlama: parlama.current });
-        durumYaz(kapat === null ? 'yok' : 'acik');
+        sahne.current = tekillikKur(el, { hareketsiz, parlama: parlama.current, alti: alti.current });
+        durumYaz(sahne.current === null ? 'yok' : 'acik');
+        // Tarayıcı dokunulmamış sayfada sesi başlatmaz; terminalde buna izin verilmişse ses açılışta da çalar, verilmemişse susar.
+        if (sesAcikMi() && sesHazirMi()) sesleBaslat();
       })
       .catch(() => { if (!bitti) durumYaz('yok'); });
-    return () => { bitti = true; kapat?.(); };
+    return () => { bitti = true; window.clearTimeout(zamanlayici.current); sahne.current?.kapat(); sahne.current = null; sesSustur(); };
   }, []);
+
+  const sesDegistir = () => {
+    const yeni = !sesAcik;
+    sesAcikYaz(yeni);
+    sesTercihiYaz(yeni);
+    if (yeni) sesleBaslat(); else { window.clearTimeout(zamanlayici.current); sesSustur(); }
+  };
+
   return (
-    <div className="tc-giris-sahne" data-durum={durum} aria-hidden="true">
-      <div ref={kap} className="tc-giris-sahne-tuval" />
-      <div ref={parlama} className="tc-giris-sahne-parlama" />
-      {durum === 'yok' && (
-        <svg className="tc-giris-sahne-yedek" viewBox={SVG_KUTUSU} focusable="false">
-          {HARFLER.map((h) => <path key={h.ad} className={h.ad === 'O' ? 'tc-giris-sahne-o' : undefined} d={svgYolu(h)} fillRule="evenodd" />)}
+    <>
+      <div className="tc-giris-sahne" data-durum={durum} aria-hidden="true">
+        <div ref={kap} className="tc-giris-sahne-tuval" />
+        <div ref={parlama} className="tc-giris-sahne-parlama" />
+        {durum === 'yok' && (
+          <svg className="tc-giris-sahne-yedek" viewBox={SVG_KUTUSU} focusable="false">
+            {HARFLER.map((h) => <path key={h.ad} className={h.ad === 'O' ? 'tc-giris-sahne-o' : undefined} d={svgYolu(h)} fillRule="evenodd" />)}
+          </svg>
+        )}
+        <p ref={alti} className="tc-giris-sahne-alti">Atölyenin işletim sistemi</p>
+      </div>
+      <button type="button" className="tc-giris-ses" aria-pressed={sesAcik} onClick={sesDegistir} title="Açılış sesi (yalnız bu cihazda)">
+        <svg className="tc-simge tc-simge-k" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 9h4l5-4v14l-5-4H4z" />
+          <path d={sesAcik ? 'M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11' : 'M16.5 9.5l5 5M21.5 9.5l-5 5'} />
         </svg>
-      )}
-    </div>
+        <span>{sesAcik ? 'Ses açık' : 'Ses kapalı'}</span>
+      </button>
+    </>
   );
+}
+
+// Canlı saat: tanıtım alt satırında, saniyede bir yenilenir.
+function Saat() {
+  const [simdi, simdiYaz] = useState(() => new Date());
+  useEffect(() => {
+    const z = window.setInterval(() => { simdiYaz(new Date()); }, 1000);
+    return () => { window.clearInterval(z); };
+  }, []);
+  const iki = (n: number) => String(n).padStart(2, '0');
+  return <time className="tc-giris-saat mono" dateTime={simdi.toISOString()}>{iki(simdi.getHours())}:{iki(simdi.getMinutes())}:{iki(simdi.getSeconds())}</time>;
 }
 
 // Asıl giriş PIN'dir (1832): ekran her açılışta PIN ile karşılar, parola o açılış için seçilir ve saklanmaz. İstasyon kartla
@@ -241,22 +284,19 @@ export function Giris() {
 
   return (
     <main className="tc-giris">
-      {/* Sahne (ya da yedek çizimi) CORE yazar: firma adı yoksa marka satırı aynı kelimeyi tekrarlar, yalnız firma adı varken görünür. */}
-      <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark" data-kurum={kurumAdi ? '' : undefined}>
+      {/* Sahne (ya da yedek çizimi) CORE yazar; firma adı formun üstünde küçük etiket olarak durur. */}
+      <section className="tc-giris-tanitim" aria-label={markaAdi} data-theme="dark">
         <GirisSahnesi />
         <div className="tc-giris-tanitim-ic">
-          <div className="tc-giris-marka">
-            <span className="tc-giris-ad">{markaAdi}</span>
+          <p className="tc-giris-baslik-buyuk">{SLOGAN}</p>
+          <div className="tc-giris-serit">
+            <ul className="tc-giris-serit-ic" aria-label="Modüller">
+              {[...MODULLER, ...MODULLER].map((m, i) => <li key={i} aria-hidden={i >= MODULLER.length ? true : undefined}>{m}</li>)}
+            </ul>
           </div>
-          <p className="tc-giris-baslik-buyuk">{slogan(kurumAdi)}</p>
-          <p className="tc-giris-slogan">Atölyenin işletim sistemi</p>
-          <ul className="tc-giris-ozellikler">
-            {TANITIM.map((o) => (
-              <li key={o.simge}><span className="tc-giris-ozellik-simge"><Simge ad={o.simge} /></span><span>{o.metin}</span></li>
-            ))}
-          </ul>
           <p className="tc-giris-not">
-            <Simge ad="lock" boyut="k" /><span>Kurum içi sistem · yalnız iç ağda</span>
+            <span className="tc-giris-not-grup"><Simge ad="lock" boyut="k" /><span>Kurum içi sistem · yalnız iç ağda</span></span>
+            <Saat />
             <span className="tc-giris-surum mono">{/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}</span>
           </p>
         </div>
@@ -272,6 +312,7 @@ export function Giris() {
           onError={() => { logoVarYaz(false); }}
         />
         <header className="tc-giris-ust">
+          {kurumAdi && <span className="tc-giris-firma">{kurumAdi}</span>}
           <h1 id="tc-giris-baslik" className="tc-giris-baslik">
             {kip === 'belirle' ? 'PIN belirleyin' : 'Giriş'}
           </h1>

@@ -69,10 +69,19 @@ export interface TekillikAyari {
   readonly hareketsiz: boolean;
   // Patlama anındaki yatay ışık şeridi (giriş ekranının öğesi); sahne yalnız saydamlığını ve genişliğini sürer.
   readonly parlama: HTMLElement | null;
+  // Kelimenin altındaki yazı ("Atölyenin işletim sistemi"): sahne onu harflerin alt kenarının ekrandaki yerine taşır ve
+  // harfler geldikten sonra gösterir; kadraj her boyutta değiştiği için yeri CSS ile sabitlenemez.
+  readonly alti?: HTMLElement | null;
 }
 
-// Sahneyi kabın içine kurar ve kapatma işlevini döner; WebGL2 yoksa ya da yazılım çizicisiyse null döner (giriş sahnesiz açılır).
-export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): (() => void) | null {
+// Sahneyi yönetme: kapatma ve baştan oynatma (açılış sesi açıldığında sahne sesle birlikte baştan başlar).
+export interface Tekillik { readonly kapat: () => void; readonly bastan: () => void }
+
+// Yazının dayandığı nokta: kelimenin ortası, harflerin alt kenarının (y = -50) biraz altı.
+const ALTI_Y = -74;
+
+// Sahneyi kabın içine kurar; WebGL2 yoksa ya da yazılım çizicisiyse null döner (giriş sahnesiz açılır).
+export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): Tekillik | null {
   if (typeof WebGL2RenderingContext === 'undefined' || sinama() === 'kapat') return null;
   let renderer: WebGLRenderer;
   try { renderer = new WebGLRenderer({ antialias: true }); } catch { return null; }
@@ -162,6 +171,7 @@ export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): (() => void)
   };
   const atla = (i: number): boolean => yari && i % 2 === 1;
 
+  const altiNokta = new Vector3();
   const ciz = (t: number): void => {
     const gir = sinir(t / 0.7), hiz = 1 + 4 * giris(sinir((t - 1.2) / (B - 1.2)));
     const don = t * 0.6 + 2.2 * giris(sinir((t - 1.2) / (B - 1.2)));
@@ -223,6 +233,12 @@ export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): (() => void)
       pl.style.opacity = String(a > 0 ? Math.exp(-a * 3.2) : 0);
       pl.style.transform = `translateY(-50%) scaleX(${a > 0 ? 0.3 + 1.2 * cikis(sinir(a / 0.6)) : 0.3})`;
     }
+    const al = ayar.alti;
+    if (al) {
+      altiNokta.set(0, ALTI_Y, 0).project(kamera);
+      al.style.top = `${((1 - altiNokta.y) / 2) * 100}%`;
+      al.style.opacity = String(icDis(sinir((t - B - 1.2) / 0.8)));
+    }
     renderer.render(sahne, kamera);
   };
 
@@ -261,11 +277,16 @@ export function tekillikKur(kap: HTMLElement, ayar: TekillikAyari): (() => void)
   if (ayar.hareketsiz) ciz(t);
   else { OLAYLAR.forEach((o) => window.addEventListener(o, uyan, { passive: true })); oynat(); }
 
-  return () => {
+  const bastan = (): void => {
+    if (ayar.hareketsiz) return;
+    t = 0; durma = ILK_DURMA; onceki = null; oynat();
+  };
+  const kapat = (): void => {
     cancelAnimationFrame(kare); kare = 0; olcum = [];
     OLAYLAR.forEach((o) => window.removeEventListener(o, uyan));
     gozcu?.disconnect();
     atilacak.forEach((a) => a.dispose());
     renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
   };
+  return { kapat, bastan };
 }

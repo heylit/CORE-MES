@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { GirisCevabi, OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { Giris, slogan } from './Giris.tsx';
+import { Giris, MODULLER, SLOGAN } from './Giris.tsx';
 
 const OPERATOR: Kullanici = { id: 7, ad: 'Deneme Operatör', islemler: ['sayfa.kuyruk'] };
 
@@ -301,37 +301,44 @@ describe('giriş ekranı marka adı (karar 2002)', () => {
     expect(sahne?.querySelector('canvas')).toBeNull();
   });
 
-  it('firma adı girilmişse "<Firma> CORE", okunamazsa yalnız CORE yazar', async () => {
+  it('firma adi formun ustunde kucuk etiket olur, bolum adi "<Firma> CORE"; ad okunamazsa etiket yok, bolum adi CORE (2170)', async () => {
     vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
       ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
       : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
     kur();
-    expect(await screen.findByText('Deneme Atolye CORE')).toBeTruthy();
+    expect((await screen.findByText('Deneme Atolye')).className).toBe('tc-giris-firma');
+    expect(screen.getByRole('region', { name: 'Deneme Atolye CORE' })).toBeTruthy();
     cleanup();
     sunucuKur();
     kur();
-    expect(await screen.findByText('CORE')).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'CORE' })).toBeTruthy();
+    expect(document.querySelector('.tc-giris-firma')).toBeNull();
   });
 });
 
-describe('giriş ekranı sloganı (2041)', () => {
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+describe('giriş ekranı tanıtımı (2170)', () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
 
-  it('firma adı eksiz girer; ad yoksa "atölye" yazar', () => {
-    expect(slogan('Deneme Atolye')).toBe('Çeliği Deneme Atolye keser, tartışmayı CORE. Sıfır tahmin.');
-    expect(slogan(null)).toBe('Çeliği atölye keser, tartışmayı CORE. Sıfır tahmin.');
-  });
-
-  it('ekranda firma ayarındaki adla, okunamazsa "atölye" ile görünür', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
-      ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
-      : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
-    kur();
-    expect(await screen.findByText('Çeliği Deneme Atolye keser, tartışmayı CORE. Sıfır tahmin.')).toBeTruthy();
-    cleanup();
+  it('slogan firma adi tasimaz; CORE altinda "Atölyenin işletim sistemi"; modul seridi her modulu bir kez okutur', () => {
     sunucuKur();
     kur();
-    expect(await screen.findByText('Çeliği atölye keser, tartışmayı CORE. Sıfır tahmin.')).toBeTruthy();
-    expect(screen.getByText('Atölyenin işletim sistemi')).toBeTruthy();
+    expect(screen.getByText(SLOGAN)).toBeTruthy();
+    expect(SLOGAN).toBe('Talaşı tezgâh kaldırır, tartışmayı CORE. Sıfır tahmin.');
+    expect(document.querySelector('.tc-giris-sahne .tc-giris-sahne-alti')?.textContent).toBe('Atölyenin işletim sistemi');
+    const serit = screen.getByRole('list', { name: 'Modüller' });
+    const okunan = [...serit.querySelectorAll('li')].filter((li) => li.getAttribute('aria-hidden') !== 'true').map((li) => li.textContent);
+    expect(okunan).toEqual([...MODULLER]);
+  });
+
+  it('acilis sesi varsayilan kapali; dugme yalniz bu cihazda acar ve kapatir', () => {
+    sunucuKur();
+    kur();
+    const dugme = screen.getByRole('button', { name: 'Ses kapalı' });
+    expect(dugme.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(dugme);
+    expect(screen.getByRole('button', { name: 'Ses açık' }).getAttribute('aria-pressed')).toBe('true');
+    expect(window.localStorage.getItem('core.giris.ses')).toBe('acik');
+    fireEvent.click(screen.getByRole('button', { name: 'Ses açık' }));
+    expect(window.localStorage.getItem('core.giris.ses')).toBe('kapali');
   });
 });
