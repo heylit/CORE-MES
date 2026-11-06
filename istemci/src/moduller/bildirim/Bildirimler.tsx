@@ -33,12 +33,19 @@ const sekmeAcikMi = (s: { islemler?: readonly string[] }, islemler: readonly str
 type Suzgec = Exclude<BildirimListeDurumu, 'arsiv'>;
 const SUZGECLER: readonly { anahtar: Suzgec; baslik: string }[] = [
   { anahtar: 'gelen', baslik: 'Hepsi' },
+  { anahtar: 'gorev', baslik: 'Görevlerim' },
+  { anahtar: 'hatirlatma', baslik: 'Hatırlatmalar' },
   { anahtar: 'okunmamis', baslik: 'Okunmamış' },
   { anahtar: 'onay-bekleyen', baslik: 'Onay bekleyen' },
   { anahtar: 'onemli', baslik: 'Uyarı ve acil' },
   { anahtar: 'duyuru', baslik: 'Duyuru' },
   { anahtar: 'bilgi', baslik: 'Bilgi' },
+  { anahtar: 'yapildi', baslik: 'Yapıldı' },
 ];
+const BOS_METIN: Partial<Record<BildirimListeDurumu, string>> = {
+  okunmamis: 'Okunmamış bildirim yok.', 'onay-bekleyen': 'Onay bekleyen bildirim yok.', gorev: 'Bekleyen görev yok.',
+  hatirlatma: 'Bekleyen hatırlatma yok.', yapildi: 'Yapılmış görev yok.',
+};
 
 function Cerceve({ gorunum, children }: { gorunum: Gorunum; children: React.ReactNode }) {
   const git = useNavigate();
@@ -63,7 +70,7 @@ function Liste({ durum, arsivde }: { durum: BildirimListeDurumu; arsivde: boolea
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   const v = liste.data;
   if (v.satirlar.length === 0) {
-    return <BosListe metin={arsivde ? 'Arşiv boş.' : durum === 'okunmamis' ? 'Okunmamış bildirim yok.' : durum === 'onay-bekleyen' ? 'Onay bekleyen bildirim yok.' : 'Bildirim yok.'} />;
+    return <BosListe metin={arsivde ? 'Arşiv boş.' : BOS_METIN[durum] ?? 'Bildirim yok.'} />;
   }
   return (
     <>

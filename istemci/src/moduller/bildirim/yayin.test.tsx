@@ -56,7 +56,7 @@ const ortada = (satirlar: OrtadakiBildirim[]): OrtadakiBildirimlerCevabi => ({ s
 
 const B = (ek: Partial<Bildirim>): Bildirim => ({
   id: 21, tur: 'bildirim.yayin', onem: 'uyari', baslik: 'Kompresör bakımı', metin: null, yol: null, kaynakModul: 'bildirim', tekrarSayisi: 1,
-  olusturuldu: '2026-11-05T09:00:00+03:00', okundu: null, arsivlendi: null, onayIstenir: true, onaylandi: null,
+  olusturuldu: '2026-11-05T09:00:00+03:00', okundu: null, arsivlendi: null, onayIstenir: true, onaylandi: null, sinif: 'bilgi', yapildi: null,
   yayin: { id: 3, tur: 'uyari', simge: 'wrench', gonderen: 'Deneme Yönetici', gorselVar: false, geriCekildi: null }, ...ek,
 });
 const liste = (satirlar: Bildirim[]): BildirimListeCevabi => ({ satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });

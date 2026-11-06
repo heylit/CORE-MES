@@ -4,7 +4,7 @@ import type { Bildirim, BildirimOnayCevabi, TumunuOkunduCevabi } from '#paylasil
 import { Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { gecenZaman, ONEM_ADI, satirKaynagi, satirSimgesi } from './gorunum.ts';
+import { gecenZaman, ONEM_ADI, satirKaynagi, satirSimgesi, sinifEtiketi } from './gorunum.ts';
 
 // Okundu, arşiv ve tümünü okundu; hepsi yalnız kendi satırına dokunur (sunucu oturumdaki kişiyi alır).
 export function useBildirimKomutlari() {
@@ -28,6 +28,7 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle }: {
   const yeni = b.okundu === null;
   const onayBekliyor = b.onayIstenir && b.onaylandi === null;
   const geri = b.yayin?.geriCekildi != null;
+  const etiket = sinifEtiketi(b);
   const ac = () => {
     if (yeni) okundu.mutate(b.id);
     if (b.yol !== null) void git(b.yol);
@@ -42,6 +43,7 @@ export function BildirimSatiri({ b, kisa = false, acildi, arsivle }: {
           <span className={`tc-bildirim-baslik${geri ? ' tc-bildirim-geri' : ''}`}>
             {b.baslik}
             {b.tekrarSayisi > 1 && <span className="tc-bildirim-tekrar mono"> ×{b.tekrarSayisi}</span>}
+            {etiket !== null && <span className="tc-bildirim-sinif" data-sinif={etiket.durum}>{etiket.ad}</span>}
           </span>
           {b.metin !== null && <span className="tc-bildirim-metin">{b.metin}</span>}
           {!kisa && <span className="tc-bildirim-kaynak">{satirKaynagi(b)}{geri ? ' · geri çekildi' : ''}{onayBekliyor ? ' · onay bekliyor' : b.onaylandi !== null ? ' · onaylandı' : ''}</span>}
