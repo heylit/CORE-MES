@@ -319,12 +319,15 @@ describe('giriş ekranı marka adı (karar 2002)', () => {
 describe('giriş ekranı tanıtımı (2170)', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
 
-  it('slogan firma adi tasimaz; CORE altinda "Atölyenin işletim sistemi"; modul seridi her modulu bir kez okutur', () => {
+  it('slogan firma adi tasimaz ve tek cumle okunur; CORE altinda "Sanayinin işletim sistemi" (2184); modul seridi her modulu bir kez okutur', () => {
     sunucuKur();
     kur();
-    expect(screen.getByText(SLOGAN)).toBeTruthy();
-    expect(SLOGAN).toBe('Talaşı tezgâh kaldırır, tartışmayı CORE. Sıfır tahmin.');
-    expect(document.querySelector('.tc-giris-sahne .tc-giris-sahne-alti')?.textContent).toBe('Atölyenin işletim sistemi');
+    expect(SLOGAN).toBe('Tahmin yok. Bahane yok. CORE var.');
+    expect(document.querySelector('.tc-giris-baslik-buyuk')?.textContent).toBe(SLOGAN);
+    expect(document.querySelector('.tc-giris-sahne .tc-giris-sahne-alti')?.textContent).toBe('Sanayinin işletim sistemi');
+    // Alt satır gövdenin dışında, panelin dibindedir; slogan ve şerit gövdenin içindedir.
+    expect(document.querySelector('.tc-giris-tanitim > .tc-giris-not')).not.toBeNull();
+    expect(document.querySelector('.tc-giris-govde .tc-giris-baslik-buyuk')).not.toBeNull();
     const serit = screen.getByRole('list', { name: 'Modüller' });
     const okunan = [...serit.querySelectorAll('li')].filter((li) => li.getAttribute('aria-hidden') !== 'true').map((li) => li.textContent);
     expect(okunan).toEqual([...MODULLER]);

@@ -272,4 +272,8 @@
   --giris3d-isik-soguk: #bcd4ff; --giris3d-isik-sicak: #ffe2b0; --giris3d-isik-nokta: #ffd27a; --giris3d-tarama: #ffffff;
   --giris3d-hale: #ffd68c; --giris3d-parca-soguk: #99a6ff; --giris3d-parca-sicak: #fff273;
   --giris3d-parlama: #ffdc8c; --giris3d-golge: rgba(0,0,0,.55);
+  /* Gece mavisi zemin (kart 2184): sahne saydam cizilir, arkasi bu uc tondur; ic ortada, dis kenarda. */
+  --giris3d-zemin-ic: #22355a; --giris3d-zemin-orta: #121d33; --giris3d-zemin-dis: #080c16;
+  /* Slogan levhasi: gumus yuz ve altin "CORE" (sahnedeki harf malzemesi). */
+  --giris3d-levha-ust: #ffffff; --giris3d-levha-alt: #8d949f; --giris3d-altin-ust: #fff3cf; --giris3d-altin-alt: #b8862a;
 }

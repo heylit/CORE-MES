@@ -1,5 +1,6 @@
 /* Giriş iki yüzdür: solda CORE sahnesi (her temada koyu, data-theme), sağda form. Telefonda sahne üstte kısa bir şerittir:
-   form ilk ekranda kalır. Masaüstünde sahnenin altında ortalı tek sütun: slogan, modül şeridi, alt satır (2170). */
+   form ilk ekranda kalır. Masaüstünde sahne, slogan ve modül şeridi kalan yükseklikte ortalı tek sütundur; alt satır panelin
+   dibindedir (2170, 2184). Zemin gece mavisidir; sahne saydam çizilir. */
 .tc-giris {
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; justify-items: center; gap: var(--b-5);
   min-height: 100%; padding: 0 0 var(--b-5); background: var(--bg);
@@ -8,8 +9,11 @@
 .tc-giris-tanitim {
   position: relative; isolation: isolate; overflow: hidden;
   display: grid; align-content: end; width: 100%;
-  color: var(--ink); background-color: var(--giris3d-arka);
+  color: var(--ink); background-color: var(--giris3d-zemin-orta);
+  background-image: radial-gradient(ellipse 80% 65% at 50% 36%, var(--giris3d-zemin-ic), var(--giris3d-zemin-orta) 50%, var(--giris3d-zemin-dis));
 }
+/* Telefonda gövde ayrı kutu değildir: sahne ve tanıtım doğrudan panelin içinde dizilir. */
+.tc-giris-govde { display: contents; }
 .tc-giris-tanitim-ic {
   display: grid; gap: var(--b-2); width: 100%; max-width: var(--bildirim-genis); justify-self: center;
   padding: 0 var(--b-4) var(--b-5); text-align: center;
@@ -28,10 +32,11 @@
 .tc-giris-sahne-tuval { position: absolute; inset: 0; }
 .tc-giris-sahne-tuval canvas { display: block; width: 100%; height: 100%; }
 .tc-giris-sahne::after {
-  content: ''; position: absolute; inset: 0; z-index: 1;
+  content: ''; position: absolute; inset: 0; z-index: 1; opacity: .45;
   background: radial-gradient(ellipse at center, transparent 55%, var(--giris3d-golge));
-  /* Kenar karartması alt kenarda panele kayarak biter: sahne ile tanıtım arasında çizgi görünmez. */
-  -webkit-mask-image: linear-gradient(var(--ink) 55%, transparent); mask-image: linear-gradient(var(--ink) 55%, transparent);
+  /* Kenar karartması üst ve alt kenarda zemine kayarak biter: sahne kutusunun sınırı çizgi olarak görünmez. */
+  -webkit-mask-image: linear-gradient(transparent, var(--ink) 18%, var(--ink) 55%, transparent);
+  mask-image: linear-gradient(transparent, var(--ink) 18%, var(--ink) 55%, transparent);
 }
 /* Kelimenin altındaki yazı: yerini ve saydamlığını sahne sürer (harflerin alt kenarının izdüşümü). */
 .tc-giris-sahne-alti {
@@ -119,27 +124,49 @@
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: center;
     gap: var(--b-6); padding: 0 var(--b-6) 0 0;
   }
-  .tc-giris-tanitim { align-self: stretch; grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; min-height: 100%; }
-  .tc-giris-sahne { aspect-ratio: auto; max-height: none; min-height: 0; }
+  .tc-giris-tanitim {
+    display: flex; flex-direction: column; align-items: center; gap: var(--b-5); align-self: stretch; min-height: 100vh;
+    padding: calc(var(--b-6) * 1.75) 0 var(--b-4);
+  }
+  .tc-giris-govde { display: flex; flex: 1; flex-direction: column; justify-content: center; align-items: center; width: 100%; min-height: 0; }
+  /* Sahne kısa ekranda kısalır: slogan, şerit ve alt satır her yükseklikte sığar. */
+  .tc-giris-sahne {
+    flex: none; aspect-ratio: auto; max-height: none; min-height: 0;
+    height: clamp(var(--b-6) * 7.5, 100vh - var(--b-6) * 13, 44vw);
+  }
   .tc-giris-tanitim-ic {
     justify-self: center; justify-items: center; width: min(100% - var(--b-6) * 2, var(--pencere-genis) * 1.4); max-width: none;
-    gap: var(--b-4); padding: 0 0 var(--b-6); text-align: center;
+    gap: var(--b-5); padding: 0; text-align: center;
   }
   .tc-giris-kart { justify-self: center; width: 100%; }
-  .tc-giris-baslik-buyuk { display: block; max-width: 24ch; font-size: var(--yazi-2xl); font-weight: 800; line-height: 1.1; text-wrap: balance; }
+  /* Slogan levhası: sahnedeki harflerin malzemesi; gümüş yüz, altın "CORE". */
+  .tc-giris-baslik-buyuk { display: grid; justify-items: center; gap: var(--b-1); margin: 0; text-align: center; }
+  .tc-giris-slogan-ust, .tc-giris-slogan-ana {
+    background-image: linear-gradient(180deg, var(--giris3d-levha-ust), var(--giris3d-harf-yan) 45%, var(--giris3d-levha-alt));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tc-giris-slogan-ust { font-size: clamp(var(--yazi-xl), 1.8vw, var(--yazi-baslik)); font-weight: 600; line-height: 1.15; }
+  .tc-giris-slogan-ana { font-size: clamp(var(--yazi-2xl), 3.6vw, var(--yazi-3xl)); font-weight: 800; line-height: 1; letter-spacing: -.03em; text-transform: uppercase; }
+  .tc-giris-slogan-ana b {
+    font-weight: inherit;
+    background-image: linear-gradient(180deg, var(--giris3d-altin-ust), var(--giris3d-kenar) 55%, var(--giris3d-altin-alt));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
   .tc-giris-serit {
-    display: block; width: 100%; overflow: hidden; padding: var(--b-3) 0; border-block: 1px solid var(--edge);
+    display: block; width: 100%; overflow: hidden; padding: var(--b-4) 0; border-block: 1px solid var(--edge);
     -webkit-mask-image: linear-gradient(90deg, transparent, var(--ink) 12%, var(--ink) 88%, transparent);
     mask-image: linear-gradient(90deg, transparent, var(--ink) 12%, var(--ink) 88%, transparent);
   }
   .tc-giris-serit-ic { display: flex; width: max-content; margin: 0; padding: 0; list-style: none; animation: tc-giris-serit 48s linear infinite; }
   .tc-giris-serit-ic li {
     display: inline-flex; align-items: center; gap: var(--b-5); padding-right: var(--b-5); white-space: nowrap;
-    font: 600 var(--yazi-xs)/1 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font: 600 var(--yazi-m)/1 var(--font-mono); letter-spacing: .14em; text-transform: uppercase;
+    color: color-mix(in srgb, var(--ink) 80%, transparent);
   }
-  .tc-giris-serit-ic li::after { content: ''; width: var(--b-1); height: var(--b-1); border-radius: 50%; background: var(--hazard); }
+  .tc-giris-serit-ic li::after { content: ''; width: calc(var(--b-1) * 1.5); height: calc(var(--b-1) * 1.5); border-radius: 50%; background: var(--hazard); }
   .tc-giris-not {
-    display: flex; align-items: center; justify-content: space-between; gap: var(--b-5); width: 100%;
+    display: flex; flex: none; align-items: center; justify-content: space-between; gap: var(--b-5); margin: 0;
+    width: min(100% - var(--b-6) * 2, var(--pencere-genis) * 1.4);
     padding-top: var(--b-3); border-top: 1px solid var(--edge); font-size: var(--yazi-xs); color: var(--faint);
   }
   .tc-giris-not-grup { display: inline-flex; align-items: center; gap: var(--b-2); }
