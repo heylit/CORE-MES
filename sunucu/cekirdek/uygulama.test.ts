@@ -203,6 +203,8 @@ const GIRISSIZ_UCLAR = [
   'POST /oturum/saat-istegi/sor',
   'GET /giris-logosu',
   'GET /giris-kurum-adi',
+  // Giriş ekranı açılış sesi: yalnız açık/kapalı döner (kart 2175, kullanıcı kararı 06.11 21:28).
+  'GET /giris-sesi',
   // Kart okuyucu: varsayılan kapalı, yalnız tanımlı ağ aralığı, cihaz anahtarı (ADR 0016).
   'POST /nizamiye/pdks/cihaz-hareketi',
 ];

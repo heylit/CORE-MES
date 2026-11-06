@@ -630,6 +630,22 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       }
       assert.equal((await istek(null, 'POST', '/giris-kurum-adi')).statusCode, 404);
     });
+
+    test('2175: giriş sesi varsayılan kapalı; giriş ekranı oturumsuz okur, cevapta yalnız açık/kapalı; yalnız ayar yazan değiştirir', async () => {
+      const ANAHTAR_SES = 'kabuk.giris-sesi';
+      const sesOku = (cerez: string | null) => istek(cerez, 'GET', '/giris-sesi');
+      assert.equal(varsayilanDeger(ANAHTAR_SES), false);
+      assert.deepEqual((await sesOku(null)).json(), { acik: false });
+      for (const { rol, cerez } of bayraksizlar) assert.equal((await degistir(true, cerez, ANAHTAR_SES)).statusCode, 403, rol.ad);
+      assert.equal((await degistir('evet', yonetici, ANAHTAR_SES)).statusCode, 400);
+      assert.equal((await degistir(true, yonetici, ANAHTAR_SES)).statusCode, 200);
+      for (const cerez of [null, yonetici]) {
+        const cevap = await sesOku(cerez);
+        assert.equal(cevap.statusCode, 200, cevap.body);
+        assert.deepEqual(cevap.json(), { acik: true });
+      }
+      assert.equal((await istek(null, 'POST', '/giris-sesi')).statusCode, 404);
+    });
   });
 
   describe('hareket dili ve açılış', () => {

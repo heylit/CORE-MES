@@ -2,12 +2,12 @@ import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
   ayarDegistirGovdesi, ayarParametresi, ayarSemasi, ayarlarCevabi, guncellemeIlerlemesiCevabi, guncellemePaketiSemasi, guncellemePaketleriCevabi,
   guncellemeParcasiCevabi, guncellemeParcasiGovdesi, guncellemeSilCevabi, guncellemeUygulamaIstegi, guncellemeUygulaParametresi, guncellemeYuklemeParametresi,
-  gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
+  girisSesiCevabi, gorunumCevabi, kapaliSayfalarCevabi, kapaliSayfalarGovdesi, karsilamaCevabi, kurumCevabi, kurumLogosuCevabi, kurumLogosuGovdesi, yedekAlCevabi,
   yedekDiziniCevabi, yedekDiziniGovdesi, yedekIndirSorgusu, yedekIndirmeIzniCevabi, yedekParametresi, yedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { ilerlemeOku, ortamdanOku, paketiSil, paketleriListele, parcaYaz, surumuSil, uygulamaIste, yuklemeyiBitir } from './guncelleme.ts';
 import {
-  ayarDegistir, ayarlariListele, girisLogosuOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
+  ayarDegistir, ayarlariListele, girisLogosuOku, girisSesiOku, gorunumOku, kapaliSayfalariDegistir, kapaliSayfalariOku, karsilamaOku, kurumLogosuDegistir, kurumOku, kurumLogosuOku,
 } from './servis.ts';
 import { yedekDiziniDegistir, yedekOrtaminiKur } from './yedek-dizini.ts';
 import { elleYedekBaslat, indirmeIzniVer, yedekEkrani, yedekIndir } from './yedek.ts';
@@ -84,6 +84,14 @@ export const uclar = [
     yetki: 'acik',
     cevap: kurumCevabi,
     isle: ({ db }) => kurumOku(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/giris-sesi',
+    // Giriş ekranı açılış sesini kurum ayarından oturumsuz okur (kart 2175). Yalnız açık/kapalı döner; kimlik istemez (ADR 0003 madde 2).
+    yetki: 'acik',
+    cevap: girisSesiCevabi,
+    isle: ({ db }) => girisSesiOku(db),
   }),
   uc({
     yontem: 'GET',

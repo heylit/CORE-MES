@@ -6,5 +6,6 @@ export const anahtarlar = {
   karsilama: ['karsilama'] as const,
   kurum: ['kurum'] as const,
   girisKurumu: ['giris-kurum-adi'] as const,
+  girisSesi: ['giris-sesi'] as const,
   gorunum: ['gorunum'] as const,
 };
