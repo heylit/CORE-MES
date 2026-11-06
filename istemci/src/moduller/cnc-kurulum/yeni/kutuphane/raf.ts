@@ -6,6 +6,7 @@ import { allCons, allGauges, allLathe, allMachines, allMill, byId, cust, dirtyUs
 import { fmt, lc } from '../bicim.ts';
 import type { KalemStogu } from '../durum.ts';
 import type { Kalem } from '../veri/tipler.ts';
+import { formulKoru } from '../../../../ortak/veri/csv.ts';
 
 export type StokDurumu = 'none' | 'ok' | 'low' | 'short';
 
@@ -208,7 +209,8 @@ export function stokCsvMetni(): string {
     L2.push([s.title, it.name, it.code ?? '', iv?.qty ?? '', iv?.min || '', st.used || '', st.avail ?? '', iv?.loc ?? '', ms.join(', ')]);
   }));
   const q = (v: string | number | null | undefined): string => {
-    const t = String(v ?? '');
+    // Konum ve özel kalem adı elle yazılır: Excel'de formül olarak çalışmasın.
+    const t = formulKoru(String(v ?? ''), { sayiSerbest: true });
     return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
   };
   return '﻿' + L2.map((r) => r.map(q).join(';')).join('\r\n');
