@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { KurumCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { GirisSesiCevabi, KurumCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { api } from './api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
@@ -27,4 +27,15 @@ export function useGirisKurumAdi(): string | null {
   });
   const ad = sorgu.data?.ad?.trim() ?? '';
   return ad === '' ? null : ad;
+}
+
+// Giriş ekranının açılış sesi kurum ayarı (kart 2175); okunamazsa kapalı sayılır.
+export function useGirisSesi(): boolean {
+  const sorgu = useQuery({
+    queryKey: anahtarlar.girisSesi,
+    queryFn: () => api.get<GirisSesiCevabi>('/giris-sesi'),
+    staleTime: TAZE_SURE,
+    retry: false,
+  });
+  return sorgu.data?.acik === true;
 }

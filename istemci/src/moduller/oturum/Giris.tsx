@@ -8,12 +8,12 @@ import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
 import { kartTusu, OKUYUCU_BASI } from '../../ortak/veri/kart-degistir.ts';
-import { useGirisKurumAdi } from '../../ortak/veri/kurum.ts';
+import { useGirisKurumAdi, useGirisSesi } from '../../ortak/veri/kurum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
 import { HARFLER, SVG_KUTUSU, svgYolu } from './sahne/harfler.ts';
-import { bekleme, sesAcikMi, sesCal, sesHazirMi, sesSustur, sesTercihiYaz } from './sahne/ses.ts';
+import { bekleme, cihazTercihi, sesCal, sesHazirMi, sesSustur, sesTercihiYaz } from './sahne/ses.ts';
 import type { Tekillik } from './sahne/tekillik.ts';
 import './giris.css';
 
@@ -34,11 +34,14 @@ export const MODULLER: readonly string[] = [
 export const SLOGAN = 'Talaşı tezgâh kaldırır, tartışmayı CORE. Sıfır tahmin.';
 
 type SahneDurumu = 'yukleniyor' | 'acik' | 'yok';
+// Kurum ayarı sahne başladıktan bu kadar sonra gelirse o açılışta ses çalmaz (sahne geri sarılmaz).
+const GEC_SES_MS = 1500;
 
 // Giriş sahnesi (kart 2148, karar 2148-1): CORE kelimesi tek noktadan doğar, O harfi yıldızlardan döner. three ve sahne kodu
 // form çizildikten sonra ayrı parça olarak yüklenir; form sahneyi beklemez. WebGL2 yoksa ya da grafik birimi yoksa aynı harf
 // hatları düz çizim olarak görünür. Süs çizimidir, ekran okuyucudan gizlidir; hareket azaltma tercihinde yalnız son kare çizilir.
-// Açılış sesi (2170) bu cihazda açıksa sahneyle birlikte başlar; ikisi de yarım saniyelik ortak saat ızgarasına oturur.
+// Açılış sesi (2170) açıksa sahneyle birlikte başlar; ikisi de yarım saniyelik ortak saat ızgarasına oturur. Açık olup olmadığını
+// kurum ayarı belirler, giriş ekranındaki düğme yalnız bu cihazda değiştirir (kart 2175).
 function GirisSahnesi() {
   const kap = useRef<HTMLDivElement>(null);
   const parlama = useRef<HTMLDivElement>(null);
@@ -46,7 +49,12 @@ function GirisSahnesi() {
   const sahne = useRef<Tekillik | null>(null);
   const zamanlayici = useRef(0);
   const [durum, durumYaz] = useState<SahneDurumu>(() => (typeof WebGL2RenderingContext === 'undefined' ? 'yok' : 'yukleniyor'));
-  const [sesAcik, sesAcikYaz] = useState(sesAcikMi);
+  const kurumSesi = useGirisSesi();
+  const [cihazSesi, cihazSesiYaz] = useState(cihazTercihi);
+  const sesAcik = cihazSesi ?? kurumSesi;
+  // Açılışta ses yalnız bir kez ve sahnenin başında başlar: kurum ayarı geç gelirse sahne baştan alınmaz, o açılış sessiz geçer.
+  const sahneBasi = useRef<number | null>(null);
+  const calindi = useRef(false);
 
   // Sahne ve ses bir sonraki ızgara anında birlikte baştan başlar (aynı anda açan terminaller aynı vuruşta çalar).
   const sesleBaslat = () => {
@@ -63,17 +71,27 @@ function GirisSahnesi() {
       .then(({ tekillikKur }) => {
         if (bitti) return;
         sahne.current = tekillikKur(el, { hareketsiz, parlama: parlama.current, alti: alti.current });
+        sahneBasi.current = performance.now();
         durumYaz(sahne.current === null ? 'yok' : 'acik');
-        // Tarayıcı dokunulmamış sayfada sesi başlatmaz; terminalde buna izin verilmişse ses açılışta da çalar, verilmemişse susar.
-        if (sesAcikMi() && sesHazirMi()) sesleBaslat();
       })
       .catch(() => { if (!bitti) durumYaz('yok'); });
     return () => { bitti = true; window.clearTimeout(zamanlayici.current); sahne.current?.kapat(); sahne.current = null; sesSustur(); };
   }, []);
 
+  // Tarayıcı dokunulmamış sayfada sesi başlatmaz; terminalde buna izin verilmişse ses açılışta da çalar, verilmemişse susar.
+  const hazir = durum !== 'yukleniyor';
+  useEffect(() => {
+    if (!sesAcik || !hazir || calindi.current) return;
+    if (sahneBasi.current !== null && performance.now() - sahneBasi.current > GEC_SES_MS) return;
+    if (!sesHazirMi()) return;
+    calindi.current = true;
+    sesleBaslat();
+  }, [sesAcik, hazir]);
+
   const sesDegistir = () => {
     const yeni = !sesAcik;
-    sesAcikYaz(yeni);
+    calindi.current = true;
+    cihazSesiYaz(yeni);
     sesTercihiYaz(yeni);
     if (yeni) sesleBaslat(); else { window.clearTimeout(zamanlayici.current); sesSustur(); }
   };
@@ -90,11 +108,8 @@ function GirisSahnesi() {
         )}
         <p ref={alti} className="tc-giris-sahne-alti">Atölyenin işletim sistemi</p>
       </div>
-      <button type="button" className="tc-giris-ses" aria-pressed={sesAcik} onClick={sesDegistir} title="Açılış sesi (yalnız bu cihazda)">
-        <svg className="tc-simge tc-simge-k" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 9h4l5-4v14l-5-4H4z" />
-          <path d={sesAcik ? 'M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11' : 'M16.5 9.5l5 5M21.5 9.5l-5 5'} />
-        </svg>
+      <button type="button" className="tc-giris-ses" aria-pressed={sesAcik} onClick={sesDegistir} title="Açılış sesi: bu cihazda kurum ayarını değiştirir">
+        <Simge ad={sesAcik ? 'ses' : 'ses-kapali'} boyut="k" />
         <span>{sesAcik ? 'Ses açık' : 'Ses kapalı'}</span>
       </button>
     </>

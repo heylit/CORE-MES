@@ -144,6 +144,9 @@ export type GecisHizi = (typeof GECIS_HIZLARI)[number];
 // Kurumun adı: her oturum okur; modül başlıkları ve belgeler bununla yazılır.
 export const kurumCevabi = z.object({ ad: z.string() });
 export type KurumCevabi = z.output<typeof kurumCevabi>;
+// Giriş ekranının açılış sesi (kart 2175): oturumsuz okunur, cevapta yalnız bu tek değer vardır.
+export const girisSesiCevabi = z.object({ acik: z.boolean() });
+export type GirisSesiCevabi = z.output<typeof girisSesiCevabi>;
 export type AyarlarCevabi = z.output<typeof ayarlarCevabi>;
 export type AyarDegistirGovdesi = z.input<typeof ayarDegistirGovdesi>;
 

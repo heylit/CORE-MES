@@ -57,6 +57,15 @@ export const KABUK_AYARLARI = {
     baslik: 'Firma adı',
     aciklama: 'Modül başlıklarında ve belgelerde görünen kurum adı.',
   },
+  // Kullanıcı kararı (kart 2175, 06.11): giriş ekranının açılış sesi kurum genelinde yöneticiden açılır; giriş ekranındaki düğme
+  // yalnız o cihazda bunu değiştirir. Giriş ekranı oturumsuz okur (kimin gireceği belli değil), bu yüzden profil ayarı değildir.
+  'kabuk.giris-sesi': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Giriş ekranı açılış sesi',
+    aciklama: 'Açıkken bütün cihazlarda giriş ekranı açılış sesini çalar; kapalıyken susar. Giriş ekranındaki ses düğmesi yalnız o cihazda bunu değiştirir. Tarayıcı dokunulmamış sayfada ses çalmaz: terminal tarayıcısı otomatik oynatmaya izin vermiyorsa ses ilk dokunuşta değil, düğmeyle başlar.',
+  },
   // Kullanıcı kararı (2026-10-14): bütün hareket seviyeleri ve açılışlar ayardan seçilir; performansa göre kalıcısı sonra seçilir.
   'kabuk.hareket': {
     modul: 'kabuk',

@@ -86,6 +86,8 @@ export const SIMGELER = {
   "laptop": "M5 5h14v10H5zM2 19h20",
   "calendar": "M4 6h16v14H4zM4 10h16M8 3v5M16 3v5",
   "kanban": "M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z",
+  "ses": "M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11",
+  "ses-kapali": "M4 9h4l5-4v14l-5-4H4zM16.5 9.5l5 5M21.5 9.5l-5 5",
 } as const;
 
 export type SimgeAdi = keyof typeof SIMGELER;
