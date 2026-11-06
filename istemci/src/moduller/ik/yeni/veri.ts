@@ -16,7 +16,7 @@ export type Istemci = Pick<typeof api, 'get' | 'post'>;
 
 // Sözleşmedeki alan -> tür eşlemesinin tersi (istemci zod'lu sözleşmeyi değer olarak almaz).
 export const TUR_ALANI = {
-  emp: 'personel', dept: 'departmanlar', leave: 'izinler', att: 'devam', perf: 'performans', train: 'egitimler',
+  emp: 'personel', dept: 'departmanlar', title: 'pozisyon-tanimlari', leave: 'izinler', att: 'devam', perf: 'performans', train: 'egitimler',
   job: 'pozisyonlar', cand: 'adaylar', intv: 'gorusmeler',
 } as const satisfies Record<Exclude<IkTuru, 'pay'>, IkAlani>;
 type YazilanTur = keyof typeof TUR_ALANI;

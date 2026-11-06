@@ -300,6 +300,61 @@ describe('P1 organizasyon', () => {
   });
 });
 
+// 2177-3 a: pozisyon tanımları Organizasyon'da listelenir; personel formu onları önerir, serbest yazı kalır.
+describe('pozisyon tanımları', () => {
+  const tanimli = () => {
+    const v = ornekVeri();
+    return {
+      ...v,
+      kayitlar: [
+        ...v.kayitlar,
+        { kimlik: 'title_1', tur: 'title' as const, surum: 1, govde: { id: 'title_1', kind: 'title', ad: 'Ayarcı', departmanId: 'dept_u', yakaTipi: 'Mavi yaka', kademe: 'Uzman' } },
+        { kimlik: 'title_2', tur: 'title' as const, surum: 1, govde: { id: 'title_2', kind: 'title', ad: 'Kalite mühendisi', departmanId: 'dept_yok' } },
+      ],
+    };
+  };
+
+  it('izinli: tablo departman ve kademeyle listeler; pozisyon ekler, satır düzenleme formunu açar', async () => {
+    const { yazmalar } = ikAc('/ik/organizasyon', { veri: tanimli() });
+    const tablo = await screen.findByRole('table', { name: 'Pozisyonlar' });
+    const satir = within(tablo).getByText('Ayarcı').closest('tr') as HTMLElement;
+    expect(within(satir).getByText('Üretim')).toBeTruthy();
+    expect(within(satir).getByText('Uzman')).toBeTruthy();
+    fireEvent.click(within(tablo).getByText('Ayarcı'));
+    expect(await screen.findByRole('dialog', { name: 'Pozisyon düzenle' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Pozisyon düzenle' })).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pozisyon ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni pozisyon' });
+    expect((within(pencere).getByLabelText(/^Pozisyon adı/) as HTMLInputElement).required).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText(/^Pozisyon adı/), { target: { value: 'Planlamacı' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazmalar).toHaveLength(1); });
+    expect(yazmalar[0]?.yol).toMatch(/^\/ik\/pozisyon-tanimlari\/title_[a-z0-9]+\/kaydet$/);
+    expect(govdesi(yazmalar[0]?.govde)).toMatchObject({ kind: 'title', ad: 'Planlamacı' });
+  });
+
+  it('reddedilen: salt okuyan pozisyon ekleyemez ve satır formu açmaz', async () => {
+    ikAc('/ik/organizasyon', { kullanici: IK_OKUYAN, veri: tanimli() });
+    fireEvent.click(within(await screen.findByRole('table', { name: 'Pozisyonlar' })).getByText('Ayarcı'));
+    expect(dugme('Pozisyon ekle')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('personel formu tanımları önerir; seçilen tanım boş yaka ve kademeyi doldurur, listede olmayan ad da yazılır', async () => {
+    ikAc('/ik/personel', { veri: tanimli() });
+    fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni personel' });
+    const alan = within(pencere).getByLabelText(/^Pozisyon/) as HTMLInputElement;
+    const liste = document.getElementById(alan.getAttribute('list') ?? '');
+    expect([...(liste?.querySelectorAll('option') ?? [])].map((o) => o.value)).toEqual(['Ayarcı', 'Kalite mühendisi']);
+    fireEvent.change(alan, { target: { value: 'Ayarcı' } });
+    expect((within(pencere).getByLabelText(/^Yaka tipi/) as HTMLSelectElement).value).toBe('Mavi yaka');
+    expect((within(pencere).getByLabelText(/^Rol kademesi/) as HTMLSelectElement).value).toBe('Uzman');
+    fireEvent.change(alan, { target: { value: 'Listede olmayan unvan' } });
+    expect(alan.value).toBe('Listede olmayan unvan');
+  });
+});
+
 describe('P1 içe aktarma', () => {
   it('izinli: yapıştırılan tablo eşlenir ve önizlenir; reddedilende menü maddesi yok', async () => {
     ikAc('/ik/personel', { veri: ornekVeri({ secenekler: { kisiler: [], isMerkezleri: [{ id: 1, kod: 'M1', ad: 'Merkez' }] } }) });

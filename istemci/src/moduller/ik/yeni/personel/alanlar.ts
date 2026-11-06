@@ -1,5 +1,5 @@
 import type { IkSabitleri } from '../motor.ts';
-import type { Departman, Personel } from '../tipler.ts';
+import type { Departman, Personel, PozisyonTanimi } from '../tipler.ts';
 
 // Personel ve departman formlarının alanları (bugünkü uygulamanın SCHEMA.emp ve SCHEMA.dept'i): sıra, bölüm, etiket ve ipucu aynıdır.
 // Sabit listeler (yaka, kademe, çıkış kodu, yemek ve yol yöntemi) motorun sabitlerindedir.
@@ -101,6 +101,15 @@ export const DEPARTMAN_ALANLARI: readonly FormAlani<keyof Departman & string>[] 
   { k: 'giderHesabi', l: 'Muhasebe gider hesabı', ipucu: 'Boşsa Ayarlar’daki genel gider hesabı (ör. 720 direkt işçilik, 760 pazarlama, 770 genel yönetim) kullanılır.' },
   { k: 'yoneticiId', l: 'Departman yöneticisi', tur: 'personel' },
   { k: 'butce', l: 'Yıllık personel bütçesi (₺)', tur: 'para' },
+  { k: 'aciklama', l: 'Açıklama', tur: 'cok' },
+];
+
+// Pozisyon tanımı (2177-3 a): yaka tipi ve kademe personel formundaki listelerle aynıdır; personelde boşsa tanımdan dolar.
+export const POZISYON_TANIMI_ALANLARI: readonly FormAlani<keyof PozisyonTanimi & string>[] = [
+  { k: 'ad', l: 'Pozisyon adı', zorunlu: true },
+  { k: 'departmanId', l: 'Departman', tur: 'departman', ipucu: 'Boş bırakılırsa bütün departmanlarda önerilir.' },
+  { k: 'yakaTipi', l: 'Yaka tipi', tur: 'secim', secenekler: (s) => s.COLLARS },
+  { k: 'kademe', l: 'Rol kademesi', tur: 'secim', secenekler: (s) => s.LEVELS },
   { k: 'aciklama', l: 'Açıklama', tur: 'cok' },
 ];
 

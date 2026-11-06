@@ -508,6 +508,33 @@ describe('İnsan Kaynakları (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(kisitlar, [{ conname: 'ik_departman_butce_eksi_degil', convalidated: true }, { conname: 'ik_devam_saat_eksi_degil', convalidated: true }]);
   });
 
+  test('2177-3: pozisyon tanımını personel yazan kaydeder ve iptal eder; adsız ve bilinmeyen departmanlı tanım reddedilir; İK dışı yalnız adı ve departmanı görür', async () => {
+    await kaydet(c.uzm, 'departmanlar', { id: 'dept_pt', kind: 'dept', ad: 'Planlama' });
+    await ret(403, 'YETKI_YOK', c.opr, 'POST', '/ik/pozisyon-tanimlari/title_x/kaydet', { govde: { id: 'title_x', kind: 'title', ad: 'X' }, surum: null });
+    await ret(403, 'YETKI_YOK', c.mud, 'POST', '/ik/pozisyon-tanimlari/title_x/kaydet', { govde: { id: 'title_x', kind: 'title', ad: 'X' }, surum: null });
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/pozisyon-tanimlari/title_b/kaydet', { govde: { id: 'title_b', kind: 'title', ad: ' ' }, surum: null });
+    const bilinmeyen = await istek(c.uzm, 'POST', '/ik/pozisyon-tanimlari/title_c/kaydet', { govde: { id: 'title_c', kind: 'title', ad: 'X', departmanId: 'dept_yok' }, surum: null });
+    assert.notEqual(bilinmeyen.statusCode, 200, bilinmeyen.body);
+    const r = await kaydet(c.uzm, 'pozisyon-tanimlari', {
+      id: 'title_1', kind: 'title', ad: 'Planlama uzmanı', departmanId: 'dept_pt', yakaTipi: 'Beyaz yaka', kademe: 'Uzman', aciklama: 'Not',
+    });
+    assert.equal(r.kayit.tur, 'title');
+    assert.deepEqual(
+      { ad: r.kayit.govde['ad'], dept: r.kayit.govde['departmanId'], yaka: r.kayit.govde['yakaTipi'], kademe: r.kayit.govde['kademe'] },
+      { ad: 'Planlama uzmanı', dept: 'dept_pt', yaka: 'Beyaz yaka', kademe: 'Uzman' },
+    );
+    await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/pozisyon-tanimlari/title_1/kaydet', kaydetGovdesi({ ...r.kayit.govde, kind: 'dept' }));
+    const opr = (await tamam<IkVeriCevabi>(c.opr, 'GET', '/ik/veri')).kayitlar.find((k) => k.kimlik === 'title_1');
+    assert.deepEqual(opr?.govde, { id: 'title_1', kind: 'title', ad: 'Planlama uzmanı', departmanId: 'dept_pt' });
+    const ik = (await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri'));
+    assert.equal(ik.kayitlar.find((k) => k.kimlik === 'title_1')?.govde['aciklama'], 'Not');
+    assert.ok(ik.gecmis.some((g) => g.rid === 'title_1' && g.label === 'Planlama uzmanı'), 'geçmişe adıyla yazılır');
+    await tamam<IkYazCevabi>(c.uzm, 'POST', '/ik/pozisyon-tanimlari/title_1/iptal', { surum: surumler.get('title_1') });
+    assert.equal((await tamam<IkVeriCevabi>(c.uzm, 'GET', '/ik/veri')).kayitlar.some((k) => k.kimlik === 'title_1'), false);
+    await assert.rejects(vt().sorgu("UPDATE ik_pozisyon_tanimi SET kademe = 'Bilinmez', surum = surum + 1 WHERE kimlik = 'title_1'"), /ik_pozisyon_tanimi_kademe_secenek/);
+    await assert.rejects(vt().sorgu("DELETE FROM ik_pozisyon_tanimi WHERE kimlik = 'title_1'"), /silinmez/);
+  });
+
   test('1806 IK-3, IK-4: günden uzun devam kaydı ve sınırı aşan metin sunucuda reddedilir', async () => {
     const devam = (id: string, saat: number, aciklama?: string) => ({ id, kind: 'att', empId: 'emp_a', tarih: '2026-10-07', tur: 'Fazla mesai', saat, ...(aciklama === undefined ? {} : { aciklama }) });
     await ret(400, 'DOGRULAMA', c.uzm, 'POST', '/ik/devam/att_g1/kaydet', { govde: devam('att_g1', 30), surum: null });

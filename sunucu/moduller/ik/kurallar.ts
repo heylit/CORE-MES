@@ -20,6 +20,7 @@ const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 export const IK_ALANLARI = {
   personel: { tur: 'emp', islem: 'ik.personel-yaz' },
   departmanlar: { tur: 'dept', islem: 'ik.personel-yaz' },
+  'pozisyon-tanimlari': { tur: 'title', islem: 'ik.personel-yaz' },
   izinler: { tur: 'leave', islem: 'ik.izin-yaz' },
   devam: { tur: 'att', islem: 'ik.devam-yaz' },
   performans: { tur: 'perf', islem: 'ik.performans-yaz' },
@@ -74,6 +75,9 @@ export function turDenetle(tur: IkTuru, g: Govde): KuralHatasi | null {
       // IK-79: eksi bütçe gider raporunu ters çevirir (Soru 112 b; veritabanında da kısıt).
       if (eksiMi(g['butce'])) return dogrulama('Bütçe eksi olamaz.', 'govde.butce');
       break;
+    case 'title':
+      if (!dolu(g['ad'])) return dogrulama('Pozisyon adı boş olamaz.', 'govde.ad');
+      break;
     case 'leave': {
       if (!dolu(g['empId'])) return dogrulama('İzin bir personele bağlı olmalı.', 'govde.empId');
       if (!dolu(g['tur'])) return dogrulama('İzin türü boş olamaz.', 'govde.tur');
@@ -122,7 +126,7 @@ export function kayitIsMerkezi(tur: IkTuru, g: Govde, bul: (kimlik: string) => G
     case 'leave': case 'att': case 'perf': case 'pay': { const e = al(g['empId']); return e && sayiMi(e['isMerkeziId']) ? e['isMerkeziId'] : null; }
     case 'cand': { const j = al(g['jobId']); return j && sayiMi(j['isMerkeziId']) ? j['isMerkeziId'] : null; }
     case 'intv': { const c = al(g['candId']); return c ? kayitIsMerkezi('cand', c, bul) : null; }
-    case 'dept': case 'train':
+    case 'dept': case 'title': case 'train':
     default: return null;
   }
 }
@@ -622,7 +626,7 @@ export function etiket(tur: string, g: Govde | null, adlar: ReadonlyMap<string, 
   const ad = (k: unknown): string => adlar.get(metin(k)) ?? '';
   switch (tur) {
     case 'emp': return `${metin(g['ad'])} ${metin(g['soyad'])}`.trim();
-    case 'dept': case 'train': return metin(g['ad']);
+    case 'dept': case 'title': case 'train': return metin(g['ad']);
     case 'job': return metin(g['ilanBaslik']) || metin(g['baslik']);
     case 'cand': return `${metin(g['ad'])} ${metin(g['soyad'])}`.trim();
     case 'leave': return `${ad(g['empId'])}: ${metin(g['tur'])} ${metin(g['baslangic'])}–${metin(g['bitis'])}`;

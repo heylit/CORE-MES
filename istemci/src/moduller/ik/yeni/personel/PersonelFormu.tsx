@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IkHesapRolleriCevabi, IkIseAlCevabi, IkIseAlGovdesi } from '#paylasilan/sozlesme/ik.ts';
 import { useNavigate } from 'react-router-dom';
@@ -13,7 +13,8 @@ import type { Personel } from '../tipler.ts';
 import { ikAnahtarlari, useIkDeposu, useIkKomutu, yeniKimlik, type IkDeposu } from '../veri.ts';
 import { bolumAlanlari, YENI_PERSONEL_BOLUMLERI, type PersonelBolumu } from './alanlar.ts';
 import {
-  adSoyadMetni, aktifMi, bugun, cikistanSonrakiIzinler, personelDogrula, personelKayitOncesi, sayi, siraliDepartman, siraliPersonel,
+  adSoyadMetni, aktifMi, bugun, cikistanSonrakiIzinler, personelDogrula, personelKayitOncesi, pozisyonTanimOnerileri, sayi, siraliDepartman,
+  siraliPersonel,
 } from './kurallar.ts';
 import { ayar } from './motor-yuzu.ts';
 import { AlanGirdisi, Not, Tanimlar, type AlanBaglami } from './parcalar.tsx';
@@ -139,12 +140,19 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
     aktifMi: (p) => aktifMi(p, gun),
   };
 
-  // Pozisyon girilince boş yaka ve kademe tahmin edilir; işe giriş girilince boş deneme bitişi önerilir (bugünkü form).
+  // Pozisyon tanımları (2177-3 a): seçilen departmanınkiler ve departmansızlar önerilir; listede olmayan ad da yazılır.
+  const formDepartmani = typeof form.degerler['departmanId'] === 'string' ? form.degerler['departmanId'] : '';
+  const pozisyonOnerileri = pozisyonTanimOnerileri(depo.tur('title'), formDepartmani);
+
+  // Pozisyon girilince boş yaka ve kademe tanımdan, tanım yoksa addan tahmin edilir; işe giriş girilince boş deneme bitişi önerilir.
   const degistir = (k: string, v: unknown) => {
     const yama: Degerler = { [k]: v };
-    if (k === 'pozisyon' && sabitler && typeof v === 'string') {
-      if ('yakaTipi' in form.degerler && !form.degerler.yakaTipi) yama.yakaTipi = sabitler.inferCollar(v);
-      if ('kademe' in form.degerler && !form.degerler.kademe) yama.kademe = sabitler.inferLevel(v);
+    if (k === 'pozisyon' && typeof v === 'string') {
+      const tanim = depo.tur('title').find((t) => t.ad === v);
+      const yaka = tanim?.yakaTipi ?? (sabitler ? sabitler.inferCollar(v) : undefined);
+      const kademe = tanim?.kademe ?? (sabitler ? sabitler.inferLevel(v) : undefined);
+      if ('yakaTipi' in form.degerler && !form.degerler.yakaTipi && yaka) yama.yakaTipi = yaka;
+      if ('kademe' in form.degerler && !form.degerler.kademe && kademe) yama.kademe = kademe;
     }
     form.degistir(yama);
   };
@@ -164,9 +172,14 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
         <fieldset key={g.b} className="tc-ikp-form-bolum">
           {gruplar.length > 1 && <legend>{g.b}</legend>}
           <div className="tc-ikp-form-alanlar">
-            {g.alanlar.map((f) => (
+            {g.alanlar.map((f) => (f.k === 'pozisyon' ? (
+              <PozisyonGirdisi
+                key={f.k} etiket={f.l} zorunlu={f.zorunlu} deger={form.degerler[f.k]} oneriler={pozisyonOnerileri} hata={form.hata(f.k)}
+                degistir={(v) => { degistir(f.k, v); }}
+              />
+            ) : (
               <AlanGirdisi key={f.k} f={f} deger={form.degerler[f.k]} degistir={(v) => { degistir(f.k, v); }} hata={form.hata(f.k)} b={baglam} />
-            ))}
+            )))}
           </div>
         </fieldset>
       ))}
@@ -210,6 +223,23 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
         <Not>PIN yalnız şimdi gösterilir; çalışana iletin. Çalışan ilk girişte kendi PIN'ini belirler.</Not>
       </Pencere>
     )}
+    </>
+  );
+}
+
+// Pozisyon alanı: tanım listesinden önerir (tarayıcı öneri listesi), serbest yazıyı da kabul eder; eski kayıtlar bozulmaz.
+function PozisyonGirdisi({ etiket, zorunlu, deger, oneriler, hata, degistir }: {
+  etiket: string; zorunlu: boolean | undefined; deger: unknown; oneriler: readonly string[]; hata: string | undefined; degistir: (v: string) => void;
+}) {
+  const liste = useId();
+  return (
+    <>
+      <Girdi
+        etiket={etiket} required={zorunlu} name="pozisyon" hata={hata} list={liste} autoComplete="off" value={typeof deger === 'string' ? deger : ''}
+        ipucu={oneriler.length ? 'Listeden seçin ya da yazın; liste Organizasyon’daki pozisyon tanımlarından gelir.' : undefined}
+        onChange={(o) => { degistir(o.target.value); }}
+      />
+      <datalist id={liste}>{oneriler.map((ad) => <option key={ad} value={ad} />)}</datalist>
     </>
   );
 }
