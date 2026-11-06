@@ -153,6 +153,10 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
       - if: steps.paketler.outputs.cache-hit != 'true'
         run: npm ci
+      # Canlı pakete giren bağımlılıklarda bilinen açık yeni girmesin (2150-1 a). Eşik geçici olarak kritiktir: zod 3'teki
+      # yüksek seviyeli açık zod 4 geçişiyle kapanınca eşik yükseğe iner.
+      - name: Canlı paketlerde bilinen açık
+        run: npm audit --omit=dev --audit-level=critical
       # Sürüm notundaki satır karta başlıktaki parantezle bağlanır (1565 b; kural araclar/paket.ts kartNoVarMi). Başlık olay
       # yükünden değil API'den okunur: başlık düzeltilince işi yeniden koşturmak yeter, yeni gönderim gerekmez.
       - name: Çekme isteği başlığında kart numarası
