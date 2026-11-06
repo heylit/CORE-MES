@@ -4,6 +4,7 @@ import type { Dilim, SiralamaIstegi } from '#cekirdek/liste.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
+import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { aramaSade, basDeseni, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type { KaliteDurumu, KonumTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { AYRILMIS_KONUM_TURLERI, KULLANILABILIR_KALITE, SAYIM_DISI_KONUMLAR, KULLANILABILIR_KONUM_TURLERI, hareketFisiTuru, hareketinFisBagi, type DegerGrubu, type SevkBakiyesi } from './kurallar.ts';
@@ -2123,3 +2124,22 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar)],
   );
 }
+
+// 2151 (analiz): tüketim, kartın stoktan kullanıma çıkan net miktarıdır. Tedarikçiye iade tüketim değildir (alım geri döner); geri alma,
+// geri aldığı çıkışın ayına ve nedenine düşülür. Ay tesis saatine göredir. Sıfır olan ay dönmez; çağıran ayları kendisi doldurur.
+const TUKETIM_NEDENLERI = "('uretime_sarf', 'fire', 'sevk', 'numune', 'diger')";
+const AY_SQL = `to_char(a.zaman AT TIME ZONE '${TESIS_SAAT_DILIMI}', 'YYYY-MM')`;
+export const aylikTuketim = (db: Db, basAy: string, bitAy: string, malzemeIdler: readonly number[] | null): Promise<{ malzemeId: number; ay: string; miktar: string }[]> => db.sorgu(
+  `SELECT h.malzeme_id AS "malzemeId", ${AY_SQL} AS ay, sum(CASE WHEN h.tur = 'cikis' THEN h.miktar ELSE -h.miktar END)::text AS miktar
+   FROM stok_hareketi h JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
+   WHERE a.tur = 'cikis' AND a.cikis_nedeni IN ${TUKETIM_NEDENLERI}
+     AND ${AY_SQL} BETWEEN $1 AND $2 AND ($3::int[] IS NULL OR h.malzeme_id = ANY($3::int[]))
+   GROUP BY 1, 2 HAVING sum(CASE WHEN h.tur = 'cikis' THEN h.miktar ELSE -h.miktar END) <> 0 ORDER BY 1, 2`,
+  [basAy, bitAy, malzemeIdler === null ? null : [...malzemeIdler]]);
+// Kartın ilk hareketi (geçmişin ne kadar geriye gittiği) ve geri alınmamış son tüketim çıkışı; hareketi olmayan kart dönmez.
+export const tuketimTarihleri = (db: Db, malzemeIdler: readonly number[] | null): Promise<{ malzemeId: number; ilkHareket: string; sonTuketim: string | null }[]> => db.sorgu(
+  `SELECT h.malzeme_id AS "malzemeId", ${zamanMetni('min(h.zaman)')} AS "ilkHareket",
+     ${zamanMetni(`max(h.zaman) FILTER (WHERE h.tur = 'cikis' AND h.cikis_nedeni IN ${TUKETIM_NEDENLERI}
+       AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id))`)} AS "sonTuketim"
+   FROM stok_hareketi h WHERE ($1::int[] IS NULL OR h.malzeme_id = ANY($1::int[])) GROUP BY 1 ORDER BY 1`,
+  [malzemeIdler === null ? null : [...malzemeIdler]]);

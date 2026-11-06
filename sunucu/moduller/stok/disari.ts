@@ -159,6 +159,22 @@ export const malzemeIstekleri = async (db: Db, kaynakKimlikleri: string[]): Prom
 // Birim kartın birimidir (kart yoksa null); miktar numeric metin. Okuma yetkisini çağıran korur.
 export const stokYokIstekleri = (db: Db, sinir = 100) => servis.stokYokIstekleri(db, sinir);
 
+// 2151 (Satın alma analizi): kart ve ay başına net tüketim (numeric metin, 'GGGG-AA'), sıfır ay dönmez; aralık en çok 60 aydır. tarihler:
+// kartın ilk hareketi ve son tüketimi; hareketi olmayan kart yoktur (geçmiş bilinmez, sıfır uydurulmaz). Okuma yetkisini çağıran korur.
+const AY_BICIMI = /^\d{4}-(0[1-9]|1[0-2])$/;
+export async function tuketimSerisi(db: Db, a: { basAy: string; bitAy: string; malzemeIdler?: readonly number[] | null }): Promise<{
+  aylar: { malzemeId: number; ay: string; miktar: string }[];
+  tarihler: { malzemeId: number; ilkHareket: string; sonTuketim: string | null }[];
+}> {
+  if (!AY_BICIMI.test(a.basAy) || !AY_BICIMI.test(a.bitAy) || a.basAy > a.bitAy) throw new RangeError('Ay aralığı GGGG-AA biçiminde ve sıralı olmalı.');
+  const [by, ba] = a.basAy.split('-').map(Number) as [number, number];
+  const [sy, sa] = a.bitAy.split('-').map(Number) as [number, number];
+  if ((sy - by) * 12 + (sa - ba) >= 60) throw new RangeError('Ay aralığı en çok 60 ay olabilir.');
+  const idler = a.malzemeIdler == null ? null : [...new Set(a.malzemeIdler)];
+  if (idler !== null && idler.length === 0) return { aylar: [], tarihler: [] };
+  return { aylar: await sorgular.aylikTuketim(db, a.basAy, a.bitAy, idler), tarihler: await sorgular.tuketimTarihleri(db, idler) };
+}
+
 // En yeni stok hareketleri (en çok 200), yeniden eskiye; Reçete ve Rota bağlı durumu için (kart #1186). Okuma yetkisini çağıran korur.
 export async function sonHareketler(db: Db, sinir = 100): Promise<Hareket[]> {
   const sayfaBoyu = Math.min(Math.max(1, Math.trunc(sinir)), 200);
