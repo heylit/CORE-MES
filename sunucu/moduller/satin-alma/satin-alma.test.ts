@@ -1641,7 +1641,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam(await kaydet(c.sa, { ...govde(t), durum: 'teklif_isteniyor', teklifler: [q] }));
     const sonra = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis'));
     const ted = sonra.tedarikciler.find((x) => x.firmaId === f)!;
-    assert.deepEqual([ted.ad, ted.kaliteDurumu, ted.puan, ted.notlar, ted.kategoriler, ted.degerlendirmeler], [ad, null, 3, '', [], []]);
+    assert.deepEqual([ted.ad, ted.kaliteDurumu, ted.puan, ted.notlar, ted.kategoriler, ted.degerlendirmeler], [ad, null, null, '', [], []]);
     assert.equal(sonra.firmaKartlari.some((x) => x.id === f), false);
   });
 
@@ -1663,6 +1663,17 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Kategoriler girildiği sırayla döner (alfabetik değil).
     const ters = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { firmaId: firmaA, puan: 5, notlar: '', kategoriler: ['Rulman', 'Bakım'], degerlendirmeler: [], surum: d.surum }));
     assert.deepEqual(ters.kategoriler, ['Rulman', 'Bakım']);
+  });
+
+  test('2157-1 a: tedarikçi puanı boş kaydedilebilir ve boş döner; 1-5 dışı puan reddedilir', async () => {
+    const once = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((x) => x.firmaId === firmaA)!;
+    const govde = { firmaId: firmaA, notlar: once.notlar, kategoriler: once.kategoriler, degerlendirmeler: [], surum: once.surum };
+    assert.equal((await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { ...govde, puan: 0 })).statusCode, 400);
+    assert.equal((await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { ...govde, puan: 6 })).statusCode, 400);
+    const bos = tamam<Tedarikci>(await istek(c.sa, 'POST', '/satin-alma-tedarikcileri/kaydet', { ...govde, puan: null }));
+    assert.equal(bos.puan, null);
+    const sonra = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).tedarikciler.find((x) => x.firmaId === firmaA)!;
+    assert.equal(sonra.puan, null);
   });
 
   test('SAT-41: firma finanstan adla aranıp seçilir; yalnız aktif tedarikçi firmalar gelir, tedarikçi olanlar işaretli; arama yaz işlemi ister', async () => {

@@ -500,7 +500,7 @@ export async function hareketEkle(db: Db, talepId: string, id: string, metin: st
 }
 
 // ---- Tedarikçi
-export interface TedarikciSatiri { firmaId: number; durum: 'onayli' | 'deneme' | 'askida'; puan: number; notlar: string; surum: number; olusturma: string }
+export interface TedarikciSatiri { firmaId: number; durum: 'onayli' | 'deneme' | 'askida'; puan: number | null; notlar: string; surum: number; olusturma: string }
 // firmaId null ise bütün tedarikçiler; verilirse yalnız o firma.
 export function tedarikcileriOku(db: Db, firmaId: number | null = null): Promise<TedarikciSatiri[]> {
   return db.sorgu<TedarikciSatiri>(`SELECT firma_id AS "firmaId", durum, puan, notlar, surum, ${ISO('olusturma')} AS olusturma FROM satin_alma_tedarikci

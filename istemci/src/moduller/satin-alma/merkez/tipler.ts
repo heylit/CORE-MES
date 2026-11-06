@@ -92,7 +92,8 @@ export interface Supplier {
   kaliteDurumu?: string | null;
   /** Finans firma kartının aktifliği; sunucudan gelir, yazılmaz. Boşsa bilinmiyor (pasif sayılmaz). */
   active?: boolean;
-  rating: number;
+  /** Elle verilen 1-5 puan; verilmemişse null (2157-1 a). */
+  rating: number | null;
   notes: string;
   evals: SupplierEval[];
   sample?: boolean;

@@ -10,7 +10,7 @@ import {
   type Page, type ViewState,
 } from "./store.ts";
 import {
-  awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfDesc, perfScore, priceHistory, supRating, quoteCalc,
+  awardOrders, awardTotals, birimReddi, siparisEtiketi, kataloglaEslesenleriBagla, evaluate, matIndex, orderDue, planCost, matOf, matStats, nextNo, payText, perfDesc, perfScore, priceHistory, puanDegeri, supRating, quoteCalc,
   supName, supplierStats, vsLast, fiyatUyarisi, EMPTY_STATS, fixedRates, pasifEki, birimUyarisi, miktarIn, miktarSayisi, yapistirilanKalemler, kaydedilecekKur, kurIstenir, otomatikKur, KUR_ILETISI,
 } from "./calc.ts";
 import {
@@ -324,7 +324,7 @@ function firmaAra(metin: string): void {
 }
 function supplierModal(s: Supplier | null | undefined): void {
   const set = settings();
-  draftS = s ? clone(s) : { id: uid(), name: "", categories: [], contact: "", phone: "", email: "", city: "", taxNo: "", status: "approved", rating: 3, notes: "", evals: [], createdAt: Date.now() };
+  draftS = s ? clone(s) : { id: uid(), name: "", categories: [], contact: "", phone: "", email: "", city: "", taxNo: "", status: "approved", rating: null, notes: "", evals: [], createdAt: Date.now() };
   if (!draftS.categories) draftS.categories = [];
   const cats = [...new Set([...(set.categories || []), ...draftS.categories])];
   firmaSecildi = !!s;
@@ -346,7 +346,7 @@ function supplierModal(s: Supplier | null | undefined): void {
       <label class="f"><span>Kalite onayı <small>— Kalite Merkezi'nde değişir</small></span><input type="text" id="s-kalite" value="${esc(draftS.kaliteDurumu ?? "Kalite Merkezi kaydı yok")}" disabled></label>
     </div>
     <div class="f"><span>Kategoriler <small>— teklif isteğinde öneri için</small></span><div class="chips" id="s-cats">${cats.map(c => `<button class="chip" data-act="tog-cat" aria-pressed="${draftS.categories.includes(c)}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>
-    <div class="f"><span>Puanınız <small>— kalite, iletişim, sorun çözme</small></span><div class="rating" role="radiogroup" aria-label="Puan">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="s-rating" value="${n}" ${(parseNum(draftS.rating) || 3) === n ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
+    <div class="f"><span>Puanınız <small>— kalite, iletişim, sorun çözme</small></span><div class="rating" role="radiogroup" aria-label="Puan">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="s-rating" value="${n}" ${supRating(draftS) === n ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
     <label class="f"><span>Not</span><textarea id="s-notes">${esc(draftS.notes || "")}</textarea></label>
   </div>
   <div class="mf"><button class="btn primary" data-act="save-supplier">${s ? "Değişiklikleri kaydet" : "Tedarikçiyi kaydet"}</button><button class="btn ghost" data-act="close">Vazgeç</button>${s ? '<span class="spacer"></span><button class="btn ghost danger" data-act="del-supplier">Sil</button>' : ""}</div>`, true);
@@ -354,7 +354,7 @@ function supplierModal(s: Supplier | null | undefined): void {
 function evalModal(s: Supplier): void {
   openModal(`<div class="mh"><h2>Değerlendirme: ${esc(s.name)}</h2></div><div class="mb">
     <div class="grid g2"><label class="f"><span>Tarih</span><input type="date" id="e-date" value="${todayStr()}"></label><label class="f"><span>Değerlendiren</span><input type="text" id="e-name" placeholder="Ad Soyad"></label></div>
-    <div class="f"><span>Puan</span><div class="rating">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="e-rating" value="${n}" ${n === (parseNum(s.rating) || 3) ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
+    <div class="f"><span>Puan</span><div class="rating">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="e-rating" value="${n}" ${n === supRating(s) ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
     <label class="f"><span>Not</span><textarea id="e-text" placeholder="Örn. Fabrika ziyareti yapıldı, kalite kontrol süreci yeterli. Fiyat revizyonlarında yavaş."></textarea></label>
     <label class="chk"><input type="checkbox" id="e-apply" checked> Tedarikçinin genel puanını değerlendirmelerin ortalamasıyla güncelle</label>
   </div><div class="mf"><button class="btn primary" data-act="save-eval">Kaydet</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
@@ -1030,7 +1030,7 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-supplier": () => {
     const g = (id: string) => $("#" + id).value.trim();
-    Object.assign(draftS, { notes: g("s-notes"), rating: +((($("input[name=s-rating]:checked") as FormEl | null)?.value) || 3) });
+    Object.assign(draftS, { notes: g("s-notes"), rating: puanDegeri(($("input[name=s-rating]:checked") as FormEl | null)?.value) });
     if (!firmaSecildi) { toast("Firmayı arayıp seçin ya da yeni firma açın."); $("#s-firma-ara")?.focus(); return; }
     saveSupplier(draftS); closeModal(); toast("Tedarikçi kaydedildi");
   },
@@ -1042,7 +1042,8 @@ const ACTIONS: Record<string, Action> = {
   "save-eval": () => {
     const cur = S.suppliers[V.id ?? ""]; if (!cur) return;
     const s = clone(cur); s.evals = s.evals || [];
-    const rating = +((($("input[name=e-rating]:checked") as FormEl | null)?.value) || 3);
+    const rating = puanDegeri(($("input[name=e-rating]:checked") as FormEl | null)?.value);
+    if (rating === null) { toast("Puan seçin."); return; }
     s.evals.push({ id: uid(), date: $("#e-date").value || todayStr(), rating, text: $("#e-text").value.trim(), name: $("#e-name").value.trim(), by: S.me?.id ?? "" });
     if (s.evals.length > 100) s.evals = s.evals.slice(-100);
     if ($("#e-apply").checked) s.rating = Math.round(sum(s.evals.map(e => e.rating)) / s.evals.length);

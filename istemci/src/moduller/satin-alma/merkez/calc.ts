@@ -359,11 +359,13 @@ export function supplierStats(): Record<string, SupplierStat> {
     return st;
   });
 }
-/** Elle verilen 1-5 puan; verilmemişse null (sıfır ya da orta değer uydurulmaz). */
-export function supRating(s: Supplier | undefined): number | null {
-  const n = parseNum(s?.rating);
-  return n !== null && n >= 1 && n <= 5 ? n : null;
+/** 1-5 arası tam puan; boş ya da aralık dışıysa null (sıfır ya da orta değer uydurulmaz). */
+export function puanDegeri(v: unknown): number | null {
+  const n = parseNum(v);
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
 }
+/** Elle verilen tedarikçi puanı; verilmemişse null (2157-1 a). */
+export const supRating = (s: Pick<Supplier, "rating"> | undefined): number | null => puanDegeri(s?.rating);
 /** Tedarikçi performans puanı (0-100): puanınız, zamanında teslim ve kalite; hiçbiri bilinmiyorsa null. */
 export function perfScore(supId: string): number | null {
   const r = supRating(S.suppliers[supId]);
