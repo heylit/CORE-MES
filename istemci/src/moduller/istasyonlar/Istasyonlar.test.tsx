@@ -1481,3 +1481,31 @@ describe('yetkinlik matrisi', () => {
     expect(within(tablo).queryByLabelText('Deneme Yeni T-01 yetkin')).toBeNull();
   });
 });
+
+describe('2166: tesis şablonu ve bağlı sayfa', () => {
+  it('yazabilen "Şablonu uygula" ile komutu gönderir ve sonucu yazar; okuyucu düğmeyi görmez', async () => {
+    const cagrilar = sunucuKur(YONETICI, {
+      '/tesis-sablonu/uygula': { acilanMerkezler: ['KALITE'], acilanIstasyonlar: ['KAL-GKK', 'KAL-SON'], atlananlar: [{ kod: 'DEPO', neden: 'var' }] },
+    });
+    goster(<Istasyonlar />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Şablonu uygula' }));
+    expect((await screen.findByRole('status')).textContent).toBe('1 iş merkezi ve 2 istasyon açıldı. 1 kayıt zaten vardı ya da pasif merkezdeydi, dokunulmadı.');
+    expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => c.yol)).toEqual(['/tesis-sablonu/uygula']);
+    cleanup();
+    sunucuKur(OKUYUCU);
+    goster(<Istasyonlar />);
+    await screen.findByText('Torna Bir');
+    expect(screen.queryByRole('button', { name: 'Şablonu uygula' })).toBeNull();
+  });
+
+  it('bağlı sayfa bağlantısı istasyon tipinden gelir ve yalnız o sayfayı açabilene görünür', async () => {
+    sunucuKur({ ...YONETICI, islemler: [...YONETICI.islemler, 'sayfa.cnc-kurulum'] });
+    goster(<Istasyonlar />);
+    expect((await screen.findByRole('link', { name: 'T-01 bağlı sayfa: CNC Kurulum' })).getAttribute('href')).toBe('/cnc-kurulum');
+    cleanup();
+    sunucuKur(YONETICI);
+    goster(<Istasyonlar />);
+    await screen.findByText('Torna Bir');
+    expect(screen.queryByRole('link', { name: /bağlı sayfa/ })).toBeNull();
+  });
+});

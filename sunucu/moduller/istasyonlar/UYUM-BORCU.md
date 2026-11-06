@@ -55,3 +55,7 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 - "Bugün" veritabanının `current_date` değeridir (`sorgular.ts` `bugun`); oturumun saat dilimine bağlıdır. Sunucu kurulumunda veritabanı saat dilimi atölyenin saat dilimine ayarlanır
     (VARSAYIM: gece yarısına yakın atamada gün kayabilir; denenmedi).
 - Makine durumu geçmiş tutmaz, bugünkü hâldir (ilk sistemle aynı); kim ve ne zaman değiştirdiği denetim kaydında ve satırda. Arkon arıza bildirimi bağlamada bu uca yazar. Makine arızaya geçince bakım ve amir işlemi olanlara bildirim bu uçtan gider (`istasyonlar.makine-durdu`, #1882); Arkon'un kendi arıza kaydı bu uca bağlanınca aynı bildirimi alır.
+
+## 2166 (bağlamada kapanacak)
+- Kalite Merkezi kalite istasyonlarını (şablondaki KALITE iş merkezi) okumuyor; kalite kayıtları istasyonla bağlanmıyor. Bağlama işi Kalite Merkezi'nin `disari.ts` okumasıyla, ayrı kartla.
+- Terminal paneli bugün istasyon tipinden seçiliyor; operasyona göre seçim (2166-2) ve Terminaller sekmesi (2166-3) parça 2'dedir.
