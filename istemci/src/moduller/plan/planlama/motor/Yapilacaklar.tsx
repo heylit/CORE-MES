@@ -3,7 +3,7 @@ import { Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaSecimi } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
-import { Degisiklikler, DuzenleMenusu, kbBaglam, kbHedefler, kbKomutlari, type KbHedef, type KbPanel } from './Duzenle.tsx';
+import { Degisiklikler, DuzenleMenusu, kaydirmaAdimi, kbBaglam, kbHedefler, kbKomutlari, type KbHedef, type KbPanel } from './Duzenle.tsx';
 import { eylemYapisi } from './eylem.ts';
 import type { Derleme, OkunanPlan, Sorun } from './kurallar.ts';
 import { MOTOR_NOTU } from './ortak.tsx';
@@ -17,6 +17,7 @@ interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; l: Sorun[]; acik: boolean; ac: (v: boolean) => void;
   komut: CalismaKomutu | null; sipSec: (j: string) => void; secim: PlanlamaSecimi;
   pan: KbPanel | null; panAc: (v: KbPanel | null) => void; studyo: () => void; veriAc?: ((bolum: string) => void) | null;
+  tasi?: ((id: string, m: string, S: number) => void) | null;
 }
 const KISAYOLLAR: [string, [string, string][]][] = [
   ['Görünüm', [['G', 'Özet'], ['H', 'Harita'], ['C', 'Çizelge'], ['K', 'Keşfet'], ['F', 'Sığdır'], ['+ -', 'Yakınlaş, uzaklaş'], ['1 - 8', 'Kartlar (Plan, Siparişler...)'], ['O', 'Seçili bölümün çizelgesi'],
@@ -39,11 +40,13 @@ export function Yapilacaklar(o: Ozellikler) {
   if (pan !== sonPan) { setSonPan(pan); setAlt(false); setHedef(null); }
   const hl = kbHedefler(o.p, o.cx, o.secim); const b = kbBaglam(hl, hedef);
   const hamle = useHamleci();
-  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true), siraAc: (m) => { setSiraM(m); panAc('sr'); }, p: o.p, hamle }, b, alt);
+  const tasi = o.tasi ?? null;
+  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true), siraAc: (m) => { setSiraM(m); panAc('sr'); }, p: o.p, hamle, tasi }, b, alt);
+  const kaydir = (saat: number) => (b && b.k !== 'tez' ? kaydirmaAdimi({ c: o.c, tasi }, b.r, saat) : null);
   // Komut çalışınca menü kapanır; alt listeye geçen komut menüyü açık tutar (kbKos).
   const kos = (i: number) => { const k = kl[i]; if (!k?.yap) return; k.yap(); if (!k.alt && !k.pencere) panAc(null); };
-  const tusDurumu = useRef({ pan, alt, hl, b, kos });
-  tusDurumu.current = { pan, alt, hl, b, kos };
+  const tusDurumu = useRef({ pan, alt, hl, b, kos, kaydir });
+  tusDurumu.current = { pan, alt, hl, b, kos, kaydir };
   useEffect(() => {
     if (!acik && !pan) return undefined;
     const kapat = () => { ac(false); panAc(null); };
@@ -58,7 +61,12 @@ export function Yapilacaklar(o: Ozellikler) {
         dur(); const i = x.hl.findIndex((h) => h.k === x.b?.k); setHedef(x.hl[(i + (e.shiftKey ? x.hl.length - 1 : 1)) % x.hl.length]?.k ?? null); setAlt(false); return;
       }
       if (k === 'Backspace' && x.alt) { dur(); setAlt(false); return; }
-      if (x.b && x.b.k !== 'tez' && k.startsWith('Arrow')) { dur(); bildir('bilgi', `İşi kaydırmak: ${MOTOR_NOTU}`); }
+      if (x.b && x.b.k !== 'tez' && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+        dur(); const y = x.kaydir((k === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 0.25 : 1));
+        if (y?.yap) { y.yap(); panAc(null); } else if (y) bildir('bilgi', `İşi kaydırmak: ${y.not}`);
+        return;
+      }
+      if (x.b && x.b.k !== 'tez' && k.startsWith('Arrow')) { dur(); bildir('bilgi', `Tezgâh değiştirmek: ${MOTOR_NOTU}`); }
     };
     const dokun = (e: PointerEvent) => { if (!kap.current?.contains(e.target as Node | null)) kapat(); };
     document.addEventListener('keydown', tus, true); document.addEventListener('pointerdown', dokun, true);

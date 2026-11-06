@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { OneCekme, oneCekmeAdresi, SURUM_YOK } from './OneCekme.tsx';
@@ -87,7 +87,7 @@ describe('Malzeme satın alma planı', () => {
     expect(within(d).getByText('Tedarikçi seçilmedi')).toBeTruthy();
   }, 20000);
 
-  it('ısı haritası katmanı: durum satırı, malzeme x gün ızgarası, hücre açılımı yazmaz (zz30-isi)', async () => {
+  it('ısı haritası katmanı: durum satırı, malzeme x gün ızgarası, hücre açılımı yazmaz, çizelgede motoru açar (zz30-isi, Y5)', async () => {
     const istekler = sunucuKur(YONETICI, kayit());
     stokSun();
     ac('/plan/malzplan');
@@ -102,9 +102,10 @@ describe('Malzeme satın alma planı', () => {
     const acilim = screen.getByRole('region', { name: '11 · Termin bekleniyor' });
     expect(within(acilim).getByText(/11 için sipariş verilmedi; plan .* günü 10 kg istiyor\./)).toBeTruthy();
     expect(within(acilim).getByText(/Bunu değiştirme yetkiniz yok\./)).toBeTruthy();
-    expect((within(acilim).getByRole('button', { name: /E-1 çizelgede/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Tüm satırlar')).toBeTruthy();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
+    fireEvent.click(within(acilim).getByRole('button', { name: /E-1 çizelgede/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
   }, 20000);
 
   it('plan yoksa plan kurulmasını ister', async () => {

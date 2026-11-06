@@ -311,7 +311,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         )}
       </div>
       {p && yetki.planYaz && (
-        <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} veriAc={veriAc} />
+        <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={(j) => sipSec(j, false)} secim={secim} pan={pan} panAc={panAc} studyo={studyo} veriAc={veriAc} tasi={tasi} />
       )}
     </div>
     </OlayAcBaglami.Provider>

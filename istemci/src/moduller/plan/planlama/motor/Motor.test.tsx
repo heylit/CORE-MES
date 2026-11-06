@@ -10,6 +10,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
 import { yetkiKur } from '../yetki.ts';
 import { KAYDEDILEMEDI } from './coz.ts';
+import { KAYDIRMA_SABIT, KAYDIRMA_YETKISIZ, kaydirmaAdimi } from './Duzenle.tsx';
 import { PlanlamaMotoru } from './index.tsx';
 import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
 import { BASLAMIS_SIRA, BAYAT } from './hamle/hamle.ts';
@@ -471,6 +472,47 @@ describe('PlanlamaMotoru', () => {
     expect(geriDon).toHaveBeenCalledWith(2);
   });
 
+  it('kaydirmaAdimi (Y2): yazma yoksa yetki notu; başlamış ya da fason iş sabit; açık işte aynı tezgâhta saat kadar ileri', () => {
+    const c = ornekCalisma();
+    const r = { id: '3.10', m: '1', S: 600 } as unknown as Parameters<typeof kaydirmaAdimi>[1];
+    expect(kaydirmaAdimi({ c, tasi: null }, r, 1)).toEqual({ yap: null, not: KAYDIRMA_YETKISIZ });
+    const tasi = vi.fn();
+    expect(kaydirmaAdimi({ c, tasi }, { ...r, act: true } as typeof r, 1).not).toBe(KAYDIRMA_SABIT);
+    expect(kaydirmaAdimi({ c, tasi }, { ...r, fas: true } as typeof r, 1).not).toBe(KAYDIRMA_SABIT);
+    kaydirmaAdimi({ c, tasi }, r, 0.25).yap?.();
+    expect(tasi).toHaveBeenCalledWith('3.10', '1', 600.25);
+  });
+
+  it('Düzenle, işi kaydır (Y2): → işi aynı tezgâhta 1 saat sonraya taşıma komutu gönderir, menü kapanır; sabit işte ← yalnız neden söyler', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const c = ornekCalisma();
+    const { komut } = komutKur(c);
+    const { yenile } = ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.keyDown(window, { key: 'e' });
+    const dz = screen.getByRole('dialog', { name: 'Düzenle' });
+    expect(within(dz).getByRole('button', { name: /1 saat sonraya/ }).getAttribute('aria-disabled')).toBeNull();
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.queryByRole('dialog', { name: 'Düzenle' })).toBeNull();
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/is-tasi', { isId: '3.10', tezgah: expect.any(String) as unknown, baslangic: expect.any(Number) as unknown, calismaSurumu: 8 }, expect.anything()));
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    post.mockClear();
+    cleanup();
+    const k = ornekCalisma(); k.locks['3.10'] = true;
+    ac({ c: k, komut: komutKur(k).komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Siparişler' }));
+    fireEvent.click(screen.getByRole('button', { name: /^3\.10 · / }));
+    fireEvent.keyDown(window, { key: 'e' });
+    expect(within(screen.getByRole('dialog', { name: 'Düzenle' })).getByRole('button', { name: /1 saat önceye/ }).getAttribute('title')).toContain(KAYDIRMA_SABIT);
+    fireEvent.keyDown(document, { key: 'ArrowLeft' });
+    expect(screen.getByText(`İşi kaydırmak: ${KAYDIRMA_SABIT}`)).toBeTruthy();
+    expect(post).not.toHaveBeenCalled();
+    post.mockRestore();
+  });
+
   it('Düzenle: E seçilene göre menüyü açar, sayı komutu çalıştırır, sabitlemek degistir ile; motor komutları pasif; D değişiklikler, Esc kapatır', () => {
     const c = ornekCalisma();
     const { komut, yazilan } = komutKur(c);
@@ -484,8 +526,8 @@ describe('PlanlamaMotoru', () => {
     expect(within(dz).getByText('İş adımı')).toBeTruthy();
     expect(within(dz).getByRole('button', { name: /3 siparişini öne al/ }).getAttribute('title')).toContain(BAYAT);
     expect(within(dz).getByRole('button', { name: /sırasını düzenle/ }).getAttribute('aria-disabled')).toBeNull();
-    fireEvent.keyDown(document, { key: 'ArrowRight' });
-    expect(screen.getByText(`İşi kaydırmak: ${MOTOR_NOTU}`)).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'ArrowUp' });
+    expect(screen.getByText(`Tezgâh değiştirmek: ${MOTOR_NOTU}`)).toBeTruthy();
     fireEvent.keyDown(document, { key: '6' });
     expect(komut.degistir).toHaveBeenCalledWith('İş sabitlendi', expect.any(Function), expect.objectContaining({ planKoru: true }));
     expect(yazilan.at(-1)?.locks['3.10']).toBeTruthy();

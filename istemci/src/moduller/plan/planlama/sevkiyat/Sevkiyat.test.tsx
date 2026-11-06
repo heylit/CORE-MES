@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MALIYETSIZ, PLANLAMASIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 
@@ -45,7 +45,7 @@ describe('P6 Sevkiyat', () => {
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
-  it('üstte ısı haritası: durum satırı, sipariş × gün ızgarası; hücre açılımı neden, bilgi ve kilit metniyle açılır, Esc kapatır; çizelge seçeneği pasif', async () => {
+  it('üstte ısı haritası: durum satırı, sipariş × gün ızgarası; hücre açılımı neden, bilgi ve kilit metniyle açılır, Esc kapatır; çizelgede seçeneği siparişi seçip motoru açar (Y5)', async () => {
     const istekler = sunucuKur(YONETICI, kayitlar(calisma) as never);
     ac('/plan/sevkiyat');
     const izgara = await screen.findByRole('group', { name: 'Sipariş × gün, termine kalan süre' }, { timeout: 10000 });
@@ -57,11 +57,14 @@ describe('P6 Sevkiyat', () => {
     fireEvent.click(hucre);
     const acilim = screen.getByRole('region', { name: 'S2 · —' });
     expect(within(acilim).getByText('S2 termini 02.03 Pzt, plan 03.03 Sal sevke hazır diyor: 6 sa geç.')).toBeTruthy();
-    expect((within(acilim).getByRole('button', { name: /S2 çizelgede/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(acilim).getByRole('button', { name: /S2 çizelgede/ }) as HTMLButtonElement).disabled).toBe(false);
     // Sevk formu sevkiyat modülünündür: yerinde eski sayfanın kilit metni.
     expect(within(acilim).getByText('Bunu değiştirme yetkiniz yok.')).toBeTruthy();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('region', { name: 'S2 · —' })).toBeNull();
+    fireEvent.click(hucre);
+    fireEvent.click(within(screen.getByRole('region', { name: 'S2 · —' })).getByRole('button', { name: /S2 çizelgede/ }));
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 
