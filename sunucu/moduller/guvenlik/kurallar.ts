@@ -1,8 +1,8 @@
 import { adresAraliktaMi } from '#paylasilan/ag-araligi.ts';
 import type { AgAraligi } from '#paylasilan/ag-araligi.ts';
-import type { GuncellemeKanali, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
-import type { AlarmDurumu, KorumaDurumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
-import type { DiskDurumu } from '#paylasilan/sozlesme/saglik.ts';
+import type { GuncellemeKanali, PaketTaramasi, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { AlarmDurumu, AyarDenetimiDurumu, KorumaDurumu, Onem, RetNedeni, Sinyal } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { DiskDurumu, GeriYuklemeDenemesi } from '#paylasilan/sozlesme/saglik.ts';
 
 // Eşikler ekrandan değişmez (çok oturum eşiği hariç, GUV-6 a): kodda sabittir ve testle bağlıdır (VARSAYIM; ön paket Soru 3 ve 4).
 export const HATALI_SERI = { pencereSn: 15 * 60, esik: 10 } as const;
@@ -334,4 +334,95 @@ export const duyurulurMu = (b: Pick<Bulgu, 'onem'>): boolean => b.onem === 'krit
 export function alarmDuyuruMetni(b: Pick<Bulgu, 'sinyal' | 'kullaniciAdi' | 'ip' | 'sayi'>, kisiAdi: string | null): string {
   const kaynak = b.kullaniciAdi ?? b.ip ?? kisiAdi ?? '-';
   return `${SINYAL_TANIMLARI[b.sinyal].baslik}: ${kaynak} (${String(b.sayi)})`;
+}
+
+// --- Ayar denetimi (2164) ---------------------------------------------------------------------------------------------------------
+// Her madde yalnız okunan kaynaktan karar verir; okunamayan kaynak "bilinmiyor"dur. Metin adres, kimlik ya da anahtar değeri taşımaz.
+export interface AyarSonucu { durum: AyarDenetimiDurumu; aciklama: string }
+
+const BILINMIYOR = (neden: string): AyarSonucu => ({ durum: 'bilinmiyor', aciklama: neden });
+// Geri yükleme denemesi ayda bir önerilir (kurulum/geri-donus-tatbikati.md); birkaç gün pay bırakılır (VARSAYIM).
+function saatGunMetni(once: Date, simdi: Date): string {
+  const saat = Math.max(0, Math.floor((simdi.getTime() - once.getTime()) / 3_600_000));
+  return saat < 48 ? `${String(saat)} saat önce` : `${String(Math.floor(saat / 24))} gün önce`;
+}
+
+// Eşik ve uyarı metni sağlık uyarısıyla aynı kaynaktan gelir (yedekUyarisi); burada yalnız sınıflanır.
+export function geceYedegiDenetimi(yedek: { durum: YedekDurumu; sonYedek: Date | null } | null, uyari: string | null, simdi: Date): AyarSonucu {
+  if (yedek === null) return BILINMIYOR('Yedek durumu okunamadı.');
+  if (yedek.durum !== 'acik') return { durum: 'hata', aciklama: uyari ?? 'Yedek kapalı; gece yedeği alınmıyor.' };
+  const son = yedek.sonYedek === null ? 'henüz yedek yok' : `son yedek ${saatGunMetni(yedek.sonYedek, simdi)}`;
+  if (uyari !== null) return { durum: 'uyari', aciklama: `${uyari} (${son})` };
+  return { durum: 'uygun', aciklama: `Şifreli gece yedeği alınıyor; ${son}.` };
+}
+
+export function yedekAnahtariDenetimi(durum: YedekDurumu | null): AyarSonucu {
+  switch (durum) {
+    case null: return BILINMIYOR('Yedek ayarı okunamadı.');
+    case 'acik': return { durum: 'uygun', aciklama: 'Tanımlı ve biçimi doğru.' };
+    case 'anahtar-yok': return { durum: 'hata', aciklama: 'Tanımlı değil ya da biçimi bozuk; yedek alınmıyor.' };
+    case 'dizin-yok': return BILINMIYOR('Yedek klasörü seçilmediği için anahtar denetlenmedi.');
+  }
+}
+
+// "Az yer" eşiği Sistem durumu kartındakiyle aynıdır (diskDurumu); iki ekran aynı disk için çelişmez (2164-2).
+export function yedekDiskiDenetimi(disk: DiskDurumu | null): AyarSonucu {
+  if (disk === null) return BILINMIYOR('Yedek klasörünün boş yeri okunamadı.');
+  const metin = `${gbMetni(disk.bosBayt)} boş / ${gbMetni(disk.toplamBayt)}`;
+  return disk.az ? { durum: 'uyari', aciklama: `Yer az: ${metin}.` } : { durum: 'uygun', aciklama: `Yer yeterli: ${metin}.` };
+}
+
+// undefined: deneme kaydı okunmadı (yedek okunamadı); null: hiç deneme yapılmadı.
+// Eşik ve metin sağlığın deneme uyarısındandır (denemeUyarisi); burada yalnız sınıflanır.
+export function geriYuklemeDenetimi(deneme: GeriYuklemeDenemesi | null | undefined, uyari: string | null, simdi: Date): AyarSonucu {
+  if (deneme === undefined) return BILINMIYOR('Deneme kaydı okunamadı.');
+  if (deneme !== null && deneme.sonuc === 'basarisiz') return { durum: 'hata', aciklama: uyari ?? 'Son geri yükleme denemesi başarısız oldu.' };
+  if (uyari !== null) return { durum: 'uyari', aciklama: uyari };
+  if (deneme === null) return { durum: 'uyari', aciklama: 'Yedek hiç geri yüklenerek denenmemiş.' };
+  return { durum: 'uygun', aciklama: `Son deneme ${saatGunMetni(new Date(deneme.zaman), simdi)}, başarılı.` };
+}
+
+export interface DisBaglantilar { logo: boolean | null; smartes: boolean | null; etiketYazicisi: boolean | null }
+
+// Açık bağlantı kural ihlali değildir (ADR 0013, 0014, 0017): bilgi olarak gösterilir.
+export function disBaglantiDenetimi(b: DisBaglantilar): AyarSonucu {
+  const metin = (ad: string, acik: boolean | null): string => `${ad} ${acik === null ? 'bilinmiyor' : acik ? 'açık' : 'kapalı'}`;
+  return {
+    durum: b.logo === null && b.smartes === null && b.etiketYazicisi === null ? 'bilinmiyor' : 'bilgi',
+    aciklama: [metin('Logo', b.logo), metin('SmartES', b.smartes), metin('Etiket yazıcısı', b.etiketYazicisi)].join(' · '),
+  };
+}
+
+// Test robotu anahtarı canlı ortamda bulunmaz (ADR 0019); bulunursa hatadır.
+export function ortamDenetimi(ortam: string | null, robotAnahtariVar: boolean): AyarSonucu {
+  if (ortam === null) return BILINMIYOR('Çalışma ortamı okunamadı.');
+  if (ortam !== 'canli') return { durum: 'bilgi', aciklama: `Canlı olmayan ortam (${ortam}).` };
+  if (robotAnahtariVar) return { durum: 'hata', aciklama: 'Canlı ortamda test robotu anahtarı tanımlı; kaldırılmalı.' };
+  return { durum: 'uygun', aciklama: 'Canlı; test robotu anahtarı tanımlı değil.' };
+}
+
+// Rozet Güncelleme sekmesindekiyle aynı ağaca bakar (bütün paketler, 2160-1 b): kritik ya da yüksek açık uyarıdır.
+export function calisanSurumDenetimi(
+  bilgi: { surum: string | null; tarih: string | null; tarama: PaketTaramasi | null } | null, simdi: Date,
+): AyarSonucu {
+  if (bilgi === null) return BILINMIYOR('Çalışan sürüm okunamadı.');
+  if (bilgi.surum === null) return { durum: 'bilgi', aciklama: 'Sürüm güncelleme paketiyle kurulmamış; paket taraması bilinmiyor.' };
+  const bas = bilgi.tarih === null ? bilgi.surum : `${bilgi.surum} · ${saatGunMetni(new Date(bilgi.tarih), simdi)}`;
+  if (bilgi.tarama === null) return { durum: 'bilgi', aciklama: `${bas} · paket taraması yok` };
+  if (bilgi.tarama.durum === 'yapilamadi') return { durum: 'uyari', aciklama: `${bas} · paket taraması yapılamadı` };
+  const { kritik, yuksek } = bilgi.tarama.tum;
+  if (kritik > 0 || yuksek > 0) {
+    return { durum: 'uyari', aciklama: `${bas} · paket taraması: ${String(kritik)} kritik, ${String(yuksek)} yüksek` };
+  }
+  return { durum: 'uygun', aciklama: `${bas} · paket taramasında kritik ya da yüksek açık yok` };
+}
+
+export function guncellemeAnahtariDenetimi(kanal: GuncellemeKanali | null): AyarSonucu {
+  switch (kanal) {
+    case null: return BILINMIYOR('Güncelleme kanalı okunamadı.');
+    case 'acik': return { durum: 'uygun', aciklama: 'Tanımlı; paketler imzayla doğrulanıyor.' };
+    case 'anahtar-gecersiz': return { durum: 'hata', aciklama: 'Anahtar geçerli değil; güncelleme kanalı kapalı.' };
+    case 'anahtar-yok': return { durum: 'uyari', aciklama: 'Anahtar tanımlı değil; güncelleme paketi yüklenemez.' };
+    case 'dizin-yok': return { durum: 'uyari', aciklama: 'Güncelleme klasörü tanımlı değil; güncelleme paketi yüklenemez.' };
+  }
 }

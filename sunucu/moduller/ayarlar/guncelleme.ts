@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { bulunamadi, cakisma, cokIstek, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import {
   GUNCELLEME_ADIMLARI, GUNCELLEME_GECMISI_EN_COK, GUNCELLEME_PARCASI, guncellemePaketiSemasi, type GuncellemeIlerlemesiCevabi, type GuncellemeKanali,
-  type GuncellemePaketi, type GuncellemePaketleriCevabi,
+  type GuncellemePaketi, type PaketTaramasi, type GuncellemePaketleriCevabi,
   type GuncellemeKuruluSurum, type GuncellemeParcasiCevabi, type GuncellemeParcasiGovdesi, type GuncellemeUygulamaIstegi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { zamanSemasi } from '#paylasilan/zaman.ts';
@@ -228,6 +228,19 @@ async function calisanOku(o: GuncellemeOrtami, dizin: string | null): Promise<Ca
 export async function calisanYayinOku(o: GuncellemeOrtami = ortamdanOku()): Promise<string | null> {
   const k = await kanal(o);
   return (await calisanOku(o, k.durum === 'acik' ? k.dizin : null)).surum;
+}
+
+// Güvenlik Merkezi ayar denetimi (2164) çalışan yayını ve onun paket taramasını (2163) okur. Taramanın kaynağı çalışan commit'in
+// sunucuda duran paket bildirimidir; paket silinmişse ya da sürüm güncelleyiciyle kurulmadıysa tarama bilinmez (null).
+export interface CalisanPaketBilgisi { surum: string | null; tarih: string | null; tarama: PaketTaramasi | null }
+
+export async function calisanPaketiOku(o: GuncellemeOrtami = ortamdanOku()): Promise<CalisanPaketBilgisi> {
+  const k = await kanal(o);
+  const dizin = k.durum === 'acik' ? k.dizin : null;
+  const calisan = await calisanOku(o, dizin);
+  const paket = dizin === null || calisan.commit === null
+    ? null : await jsonOku(path.join(paketDizini(dizin), `${calisan.commit}.json`), guncellemePaketiSemasi);
+  return { surum: calisan.surum, tarih: calisan.tarih, tarama: paket?.tarama ?? null };
 }
 
 // Güncelleyici açılınca süreç numarasını dosyaya yazar. Ortam değişkeniyle bildirilemez: .env varken sunucu, dosyada olmayan

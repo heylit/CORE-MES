@@ -7,7 +7,7 @@ import type { AgAraligi } from '#paylasilan/ag-araligi.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  Alarm, AlarmGorunumu, AlarmKapatGovdesi, AlarmOnaylaGovdesi, GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi,
+  Alarm, AlarmGorunumu, AlarmKapatGovdesi, AlarmOnaylaGovdesi, AyarDenetimiCevabi, GirisListeCevabi, KilitAcCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi,
   OturumlarCevabi, OzetCevabi, RetListeCevabi, RetNedeni, SunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
 import { SINYALLER } from '#paylasilan/sozlesme/guvenlik.ts';
@@ -17,7 +17,11 @@ import { httpsDurumuOku, izlenenSertifikaOku } from '#cekirdek/https-durumu.ts';
 import { surecGuvenlikAlarmiYaz, surecOlayDurumu, type OlayDurumu } from '#cekirdek/olay-gunlugu.ts';
 import { retOlaylariniBosalt } from '#cekirdek/red-kaydi.ts';
 import type { GuncellemeKanali } from '#paylasilan/sozlesme/ayarlar.ts';
-import { guncellemeKanaliDurumu, sistemAyariOku, yedekOrtaminiKur } from '../ayarlar/disari.ts';
+import { ayarOku } from '#cekirdek/ayar.ts';
+import { calisanPaketiOku, guncellemeKanaliDurumu, sistemAyariOku, yedekOrtaminiKur, type CalisanPaketBilgisi } from '../ayarlar/disari.ts';
+import { yaziciBaglantisiAcikMi } from '../etiket-merkezi/disari.ts';
+import { logoBaglantisiAcikMi } from '../logo/disari.ts';
+import { smartesBaglantisiAcikMi } from '../smartes/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { denetimDurumu } from '../denetim/disari.ts';
 import { kisiAdlari, kisiSecenekleri } from '../kisiler/disari.ts';
@@ -29,11 +33,13 @@ import {
   ADRES_TARAMASI, KAPANAN_ALARM_PENCERESI_SN, RED_SAKLAMA_GUN, SAYILAN_RET_NEDENLERI, YETKI_REDDI_SERISI, adresTaramasiBulgulari, alarmDuyuruMetni, duyurulurMu,
   yetkiReddiBulgulari, type Bulgu,
   DURMA_ESIGI_DK, HATALI_SERI, denetimMaddesi, diskMaddesi, gunlukMaddesi, httpsMaddesi, imzaMaddesi, olayGunluguMaddesi, sertifikaMaddesi,
-  sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
+  sunucuSertifikaMaddesi, yedekMaddesi, type HttpsBilgisi,
+  calisanSurumDenetimi, disBaglantiDenetimi, geceYedegiDenetimi, geriYuklemeDenetimi, guncellemeAnahtariDenetimi, ortamDenetimi, yedekAnahtariDenetimi,
+  yedekDiskiDenetimi, HESAP_KILIDI, SAKLAMA_GUN, SINYAL_TANIMLARI, TARAMA_ARALIGI_SN, VPN_MUAF_SINYALLER, YAYILAN_DENEME,
   COK_OTURUM, alarmGuncellemesi, cokOturumBulgulari, cokOturumKosulu, hataliSeriBulgulari, hedefliHesapBulgulari, hesapKilidiBulgulari, kapatilabilirMi, kaynakAnahtari,
   onaylanabilirMi, taramaDurduMu, vpnDisindakiler, yayilanDenemeBulgulari, yeniOlayliBulgular,
 } from './kurallar.ts';
-import { diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
+import { denemeUyarisi, diskDurumu, diskOku, surecYedegi, yedekUyarisi, type DiskOlcusu, type YedekBilgisi } from '../saglik/disari.ts';
 import * as s from './sorgular.ts';
 
 // Olay günlüğü yazıcısı testte değiştirilir; süreçte kurulmamışsa (Windows dışı) yazılmaz.
@@ -373,6 +379,60 @@ export async function sunucuDurumu(db: Db, kaynak: SunucuDurumuKaynagi = SUREC_S
         sunucuSertifikaMaddesi(await guvenliOku(kaynak.https), await guvenliOku(kaynak.izlenenSertifika), simdi)),
     ],
     sonHatalar: hatalar.map((h) => ({ zaman: h.zaman.toISOString(), ileti: h.ileti, hata: h.hata, kod: h.istekKimligi })),
+  };
+}
+
+export interface AyarDenetimiKaynagi {
+  yedek: (db: Db) => Promise<YedekBilgisi>;
+  yedekDizini: (db: Db) => Promise<string | null>;
+  diskOku: (dizin: string) => Promise<DiskOlcusu | null>;
+  kanal: () => Promise<GuncellemeKanali>;
+  calisan: () => Promise<CalisanPaketBilgisi>;
+  logo: () => boolean;
+  smartes: () => boolean;
+  etiketYazicisi: () => boolean;
+  ortam: () => string;
+  // Yalnız varlığı okunur; değeri hiçbir yere geçmez.
+  robotAnahtariVar: () => boolean;
+}
+
+const SUREC_AYAR_KAYNAGI: AyarDenetimiKaynagi = {
+  yedek: surecYedegi,
+  yedekDizini: async (db) => (await yedekOrtaminiKur(db)).dizin,
+  diskOku,
+  kanal: () => guncellemeKanaliDurumu(),
+  calisan: () => calisanPaketiOku(),
+  logo: () => logoBaglantisiAcikMi(),
+  smartes: () => smartesBaglantisiAcikMi(),
+  etiketYazicisi: () => yaziciBaglantisiAcikMi(),
+  ortam: () => ayarOku().ortam,
+  robotAnahtariVar: () => (process.env['TMIV2_ROBOT_MODEL_ANAHTARI']?.trim() ?? '') !== '',
+};
+
+// Ayar denetimi (2164) istekte hesaplanır, yalnız okur. Okunamayan kaynak kartı düşürmez: o madde bilinmiyor olur.
+export async function ayarDenetimi(db: Db, kaynak: AyarDenetimiKaynagi = SUREC_AYAR_KAYNAGI): Promise<AyarDenetimiCevabi> {
+  const zaman = await s.veritabaniSaati(db);
+  const simdi = new Date(zaman);
+  const yedek = await guvenliOku(() => kaynak.yedek(db));
+  const dizin = await guvenliOku(() => kaynak.yedekDizini(db));
+  const olcu = dizin === null ? null : await sureliOku(() => kaynak.diskOku(dizin), DISK_SURESI_MS);
+  const deneme = yedek === null ? undefined : yedek.sonDeneme;
+  const madde = (anahtar: string, baslik: string, d: { durum: AyarDenetimiCevabi['maddeler'][number]['durum']; aciklama: string }) =>
+    ({ anahtar, baslik, ...d });
+  return {
+    zaman,
+    maddeler: [
+      madde('gece-yedegi', 'Gece yedeği', geceYedegiDenetimi(yedek, yedek === null ? null : yedekUyarisi(yedek, simdi), simdi)),
+      madde('yedek-anahtari', 'Yedek anahtarı', yedekAnahtariDenetimi(yedek?.durum ?? null)),
+      madde('yedek-diski', 'Yedek klasöründe boş yer', yedekDiskiDenetimi(olcu === null ? null : diskDurumu(olcu.bos, olcu.toplam))),
+      madde('geri-yukleme', 'Geri yükleme denemesi', geriYuklemeDenetimi(deneme, deneme === undefined ? null : denemeUyarisi(deneme, simdi), simdi)),
+      madde('dis-baglantilar', 'Dış bağlantılar', disBaglantiDenetimi({
+        logo: await guvenliOku(kaynak.logo), smartes: await guvenliOku(kaynak.smartes), etiketYazicisi: await guvenliOku(kaynak.etiketYazicisi),
+      })),
+      madde('ortam', 'Çalışma ortamı', ortamDenetimi(await guvenliOku(kaynak.ortam), kaynak.robotAnahtariVar())),
+      madde('calisan-surum', 'Çalışan sürüm', calisanSurumDenetimi(await guvenliOku(kaynak.calisan), simdi)),
+      madde('guncelleme-anahtari', 'Güncelleme anahtarı', guncellemeAnahtariDenetimi(await guvenliOku(kaynak.kanal))),
+    ],
   };
 }
 

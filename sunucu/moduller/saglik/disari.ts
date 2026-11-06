@@ -6,3 +6,5 @@ export { diskDurumu } from './kurallar.ts';
 export { diskOku, type DiskOlcusu } from './servis.ts';
 // Geri yükleme denemesinin kayıt dosyası ve satır biçimi (1670): araç yazar, sağlık okur.
 export { DENEME_KAYDI_DOSYASI, denemeSatiri } from './kurallar.ts';
+// Güvenlik Merkezi ayar denetimi geri yükleme denemesini aynı eşik ve metinle sınıflar (2164).
+export { denemeUyarisi } from './kurallar.ts';

@@ -18,7 +18,7 @@ import {
   AZAMI_DEGISIKLIK, CALISAN_SURUM_DOSYASI, GUNCELLEYICI_DOSYASI, PAKET_IMLECI, SILME_REDDI_ILETISI, SURUMLER_KLASORU, UYGULAMA_GECMISI_DOSYASI,
   UYGULAMA_ISTEGI_DOSYASI, UYGULAMA_REDDI_ILETISI, UYGULAMA_SONUCU_DOSYASI, UYGULANIYOR_DOSYASI,
 } from './kurallar.ts';
-import { UYGULAMA_DURUMU_DOSYASI } from './guncelleme.ts';
+import { UYGULAMA_DURUMU_DOSYASI, calisanPaketiOku } from './guncelleme.ts';
 import { YEDEK_DIZINI_DOSYASI } from './yedek-dizini.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -203,6 +203,18 @@ describe('ayarlar güncelleme kanalı (gerçek PostgreSQL, geçici dizin)', () =
     const ikinci = await bitir(await hepsiniGonder(paketKur(anahtar, YUK, { commit: 'd'.repeat(40), tarama: yapilamadi })));
     assert.equal(ikinci.statusCode, 200, ikinci.body);
     assert.deepEqual((ikinci.json() as GuncellemePaketi).tarama, yapilamadi);
+  });
+
+  // 2164: ayar denetimi çalışan yayının taramasını sunucudaki paket bildiriminden okur; paket yoksa tarama bilinmez.
+  test('çalışan sürümün paket taraması çalışan commitin paketinden okunur; paketi olmayan sürümde null', async () => {
+    const tarama = { durum: 'tamam', zaman: '2026-10-12T09:59:00.000Z', canli: { kritik: 0, yuksek: 1, orta: 0, dusuk: 0 }, tum: { kritik: 0, yuksek: 1, orta: 2, dusuk: 0 } };
+    assert.equal((await bitir(await hepsiniGonder(paketKur(anahtar, YUK, { tarama })))).statusCode, 200);
+    await writeFile(path.join(dizin, CALISAN_SURUM_DOSYASI), JSON.stringify({ commit: COMMIT, surum: '0.1.0', tarih: '2026-10-12T10:00:00.000Z' }));
+    assert.deepEqual(await calisanPaketiOku(), { surum: '0.1.0', tarih: '2026-10-12T10:00:00.000Z', tarama });
+    await writeFile(path.join(dizin, CALISAN_SURUM_DOSYASI), JSON.stringify({ commit: 'e'.repeat(40), surum: '0.0.9', tarih: '2026-10-01T10:00:00.000Z' }));
+    assert.deepEqual(await calisanPaketiOku(), { surum: '0.0.9', tarih: '2026-10-01T10:00:00.000Z', tarama: null });
+    delete process.env['TMIV2_GUNCELLEME_DIZINI'];
+    assert.deepEqual(await calisanPaketiOku(), { surum: null, tarih: null, tarama: null });
   });
 
   test('başka anahtarla imzalı, değiştirilmiş ya da paket olmayan dosya reddedilir ve saklanmaz', async () => {
