@@ -112,7 +112,9 @@ describe('oee (gerçek PostgreSQL)', () => {
     const satirlar = await vt().sorgu<{ kod: string; islem: string }>(
       "SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem IN ('sayfa.oee', 'oee.oku') ORDER BY r.kod, ri.islem");
     assert.deepEqual(satirlar.map((s) => `${s.kod} ${s.islem}`), [
-      'mudur oee.oku', 'mudur sayfa.oee', 'planlama_proje oee.oku', 'planlama_proje sayfa.oee',
+      'genel_mudur oee.oku', 'genel_mudur sayfa.oee', 'genel_mudur_yardimcisi oee.oku', 'genel_mudur_yardimcisi sayfa.oee',
+      'mudur oee.oku', 'mudur sayfa.oee', 'planlama_muduru oee.oku', 'planlama_muduru sayfa.oee', 'planlama_proje oee.oku', 'planlama_proje sayfa.oee',
+      'uretim_muduru oee.oku', 'uretim_muduru sayfa.oee',
     ]);
   });
 

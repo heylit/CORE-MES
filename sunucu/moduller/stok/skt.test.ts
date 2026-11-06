@@ -110,7 +110,7 @@ describe('stok SKT ve tür listeleri (gerçek PostgreSQL)', () => {
 
   test('göç: stok.skt-onayla yalnız müdür rolündedir', async () => {
     const r = await o().vt.sorgu<{ kod: string }>("SELECT r.kod FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE ri.islem = 'stok.skt-onayla' ORDER BY r.kod");
-    assert.deepEqual(r.map((x) => x.kod), ['mudur']);
+    assert.deepEqual(r.map((x) => x.kod), ['genel_mudur', 'genel_mudur_yardimcisi', 'mudur']);
   });
 
   test('mal kabul: takipli kart tarihsiz girmez; tarihle lot açılır ve tarih lota yazılır; takipsiz kart tarihsiz girer', async () => {
