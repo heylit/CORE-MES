@@ -98,3 +98,9 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 - Çevirici sunucuda (DOĞRULANDI 23.10.2026: `plan-cozucusu.ts` `sunucuPlanCozucusu`, `motor/emirler.betik` `sunucuCozumGirdisi`, `disari.ts`ten verilir). Girdi planlama
   sayfasının çalışması, kayıt ve kaynak okumasıdır; çalışma kaydı yoksa çözücü 409 verir. Bağ `sunucu/kablolama.ts`'te yok: plan bugünkü `oner` yolundadır.
   Çalışan adımlar çerçeveye bağlandı (DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/recete-rota`: birincil 2: "Onaya gönder", "Yeni üretim emri" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
+- `/recete-rota/schema`: birincil 2: "Onaya gönder", "Üretim emri oluştur" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).

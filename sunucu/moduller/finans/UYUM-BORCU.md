@@ -67,3 +67,9 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Bağlamada kapanacak (Aşama 1 oturtması, 08.10.2026, dal 246-finans)
 
 - Sabit kıymet (kullanıcı isteği 12.10.2026; yabancı anahtar 312 b ile geldi): `finans_sabit_kiymet.makine_id` istasyonlar `makine (id)`'ye bağlı, boş olabilir; yeni kayıtta kodun karşılığından yazılır, karşılığı olmayan kodda ve eski satırlarda boş. `makine_kodu`'nun kaldırılması ayrı soru. Kalan: ekranda makine seçimi istasyonlar `disari.ts`'inden gelir. Makine saat maliyeti için amortisman okunmaz (211 a: makine saati yalnız doğrudan gider, amortisman ve kira genel gider oranında); `makineAmortismani` bugün hiçbir modülde çağrılmıyor (19.10.2026, DOĞRULANDI: `grep makineAmortismani` yalnız finans).
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/finans`: sayfa başlığında "Kayıt gir" birinciline ek olarak yapılacaklar listesinin her satırında bir birincil var ("Tahsilat gir", "Ödeme gir", "Tahsil edildi", "Ödendi"); sayısı günün verisine bağlı (yönetici, 06.11.2026 yüklemeden sonra 3, DOĞRULANDI). Test bu satırları `HARIC` ile ayırır.
+- `/finans/firmalar`: birincil 2: "Kayıt gir", "Yeni firma" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
