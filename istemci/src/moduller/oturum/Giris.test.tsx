@@ -341,4 +341,17 @@ describe('giriş ekranı tanıtımı (2170)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ses açık' }));
     expect(window.localStorage.getItem('core.giris.ses')).toBe('kapali');
   });
+
+  it('kurum ayari aciksa dugme acik gelir; cihazda kapatilinca kurum ayarina ragmen kapali kalir (2175)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-sesi')
+      ? new Response(JSON.stringify({ acik: true }), { status: 200 })
+      : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
+    kur();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ses açık' }));
+    expect(window.localStorage.getItem('core.giris.ses')).toBe('kapali');
+    cleanup();
+    kur();
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(screen.getByRole('button', { name: 'Ses kapalı' })).toBeTruthy();
+  });
 });
