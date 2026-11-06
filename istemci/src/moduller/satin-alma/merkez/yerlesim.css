@@ -7,6 +7,6 @@
 }
 
 /* Paylaştırma, "Karşılaştır ve karar ver" içinde açık durur (kullanıcı kararı); başlığı bölüm içi alt başlıktır. */
-.sa-kok .sa-paylastir { margin-top: 18px; scroll-margin-top: 12px; }
-.sa-kok .sa-paylastir-h { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
-.sa-kok .sa-paylastir-h h3 { margin: 0; font-size: 17px; }
+.sa-kok .sa-paylastir { margin-top: var(--b-4); scroll-margin-top: var(--b-3); }
+.sa-kok .sa-paylastir-h { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); align-items: baseline; }
+.sa-kok .sa-paylastir-h h3 { margin: 0; font-size: var(--yazi-l); }
