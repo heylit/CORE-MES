@@ -58,13 +58,16 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
   <span className="tc-pyz-baslik"><Simge ad={simge} boyut="k" />{ad}{ek && <span className="tc-pyz-kucuk">{ek}</span>}</span>
 );
 
-export function MalzemePlani({ depo, calisma, yetki, yenile }: PlanlamaEkranOzellikleri) {
-  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile} />;
+export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: PlanlamaEkranOzellikleri) {
+  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
+    goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('plan'); }} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
-export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile }: {
+// goster yoksa (Satın Alma) "çizelgede" pasif kalır: orada Planlama motoru tahtası yoktur.
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster }: {
   calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
+  goster?: (siparis: string) => void;
 }) {
   const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
@@ -72,6 +75,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
   const [dag, dagYaz] = useState<DagilimTuru>('malzeme');
   const [secim, secYaz] = useState<IsiSecimi | null>(null);
   const dar = useDar();
+  const cizelge = (j: string): { yap: () => void } | { pasif: true } => (goster ? { yap: () => { goster(j); } } : { pasif: true });
   useEffect(() => {
     let bitti = false;
     void stokOku().then((s) => { if (!bitti) stokYaz(s); });
@@ -183,8 +187,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
                 bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.join(', ')]]}
                 // Sipariş ve geliş tarihi formu satın almanındır (222 a): eski sayfanın yetkisiz hali.
                 form={<IzinYok />}
-                // Çizelgede siparişi seçmek planlama motoru görünümünün işidir; o gelene kadar seçenek görünür, basılmaz.
-                secenekler={r.isler[0] ? [{ ad: `${r.isler[0]} çizelgede`, etki: 'Bu malzemeyi bekleyen siparişin adımlarını gösterir.', simge: 'gantt', pasif: true }] : []} />
+                secenekler={r.isler[0] ? [{ ad: `${r.isler[0]} çizelgede`, etki: 'Bu malzemeyi bekleyen siparişin adımlarını gösterir.', simge: 'gantt', ...cizelge(r.isler[0]) }] : []} />
             );
           }} />
       </IsiSayfasi>

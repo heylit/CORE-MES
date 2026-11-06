@@ -18,7 +18,6 @@ export type TerminUzatmaSatiri = DegerlendirmeCevabi<'termin-uzatma'>['sonuc']['
 export type MalzemeTerminiSatiri = DegerlendirmeCevabi<'malzeme-terminleri'>['sonuc']['satirlar'][number];
 export type MalzemeDurumu = MalzemeTerminiSatiri['durum'];
 export type PartiBolmeSonucu = DegerlendirmeCevabi<'parti-bolme'>['sonuc'];
-export type SiparisKariSatiri = DegerlendirmeCevabi<'siparis-kari'>['sonuc']['satirlar'][number];
 
 export type Degerlendirici = <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => Promise<DegerlendirmeCevabi<K>>;
 
