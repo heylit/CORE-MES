@@ -247,8 +247,8 @@ async function teklifFirmalariniDenetle(db: Db, gelen: TalepYazimi['teklifler'],
   if (yeniler.length === 0) return;
   const firmalar = await firmaOzetleri(db, yeniler);
   if (yeniler.some((id) => !tedarikciOlabilir(firmalar.get(id) ?? null))) throw gecersiz(ILETILER.firmaPasif);
-  // Kayıtsız firma teklif alınca Tedarikçiler'e nötr başlangıçla eklenir; var olan kayıt değişmez.
-  for (const firmaId of new Set(yeniler)) await s.tedarikciEkle(db, { firmaId, puan: 3, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null });
+  // Kayıtsız firma teklif alınca Tedarikçiler'e puansız eklenir (2157-1 a: orta puan uydurulmaz); var olan kayıt değişmez.
+  for (const firmaId of new Set(yeniler)) await s.tedarikciEkle(db, { firmaId, puan: null, notlar: '', kategoriler: [], degerlendirmeler: [], surum: null });
 }
 
 // B-001, B-010: kararı veren ve karar tarihi, senaryonun kişisi ve zamanı sunucunundur. Karar özü değişmediyse önceki kişi ve tarih
@@ -802,7 +802,7 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
       puan: Math.round(x.puan * 10) / 10,
       kriterPuani: {
         maliyet: Math.round(x.kriterPuani.maliyet * 10) / 10, termin: Math.round(x.kriterPuani.termin * 10) / 10,
-        tedarikci: Math.round(x.kriterPuani.tedarikci * 10) / 10, garanti: Math.round(x.kriterPuani.garanti * 10) / 10,
+        tedarikci: x.kriterPuani.tedarikci === null ? null : Math.round(x.kriterPuani.tedarikci * 10) / 10, garanti: Math.round(x.kriterPuani.garanti * 10) / 10,
       },
       satirlar: x.hesap.satirlar.map((r) => ({ kalemId: r.kalemId, alinanMiktar: ondalik(r.alinanMiktar), tutar: para(r.tutar)!, bugunkuDegerTl: para(r.bugunkuDegerTl), termin: r.termin })),
     })),

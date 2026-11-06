@@ -117,8 +117,19 @@ test('1095 b: onay basamağı yalnız bilgidir; tutarın düştüğü ilk basama
   assert.equal(gerekenBasamak(1, []), null);
 });
 
-test('1094 b: tedarikçi başarımı ekranla aynı ağırlıkla: puan 1, zamanında teslim 1,5, kalite 1; puansız tedarikçi 3 sayılır', () => {
-  assert.equal(tedarikciBasarimi(null, null, null), 60);
+test('1094 b: tedarikçi başarımı ekranla aynı ağırlıkla: puan 1, zamanında teslim 1,5, kalite 1; puansız tedarikçinin başarımı bilinmiyor (2157: 3 uydurulmaz)', () => {
+  assert.equal(tedarikciBasarimi(null, null, null), null);
+  assert.equal(tedarikciBasarimi(null, 80, null), 80);
   assert.equal(tedarikciBasarimi(5, null, null), 100);
   yakin(tedarikciBasarimi(4, 90, 100), (80 + 90 * 1.5 + 100) / 3.5, 1e-9);
+});
+
+test('2157: başarımı bilinmeyen tedarikçinin teklifinde ölçüt hesaba katılmaz, ağırlığı bilinen ölçütlere dağılır', () => {
+  const bilinen = degerlendir(KALEMLER, [C], ORTAM).satirlar[0]!;
+  const bos = degerlendir(KALEMLER, [C], { ...ORTAM, tedarikciPuani: () => null }).satirlar[0]!;
+  assert.equal(bos.kriterPuani.tedarikci, null);
+  assert.equal(bos.pay.tedarikci, 0);
+  const k = bilinen.kriterPuani;
+  yakin(bilinen.puan, (k.maliyet! * 50 + k.termin! * 20 + 60 * 20 + k.garanti! * 10) / 100, 1e-9);
+  yakin(bos.puan, (k.maliyet! * 50 + k.termin! * 20 + k.garanti! * 10) / 80, 1e-9);
 });

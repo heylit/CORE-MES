@@ -359,20 +359,30 @@ export function supplierStats(): Record<string, SupplierStat> {
     return st;
   });
 }
-/** Tedarikçi performans puanı (0-100): puanınız, zamanında teslim ve kalite */
-export function perfScore(supId: string): number {
-  const s = S.suppliers[supId];
+/** 1-5 arası tam puan; boş ya da aralık dışıysa null (sıfır ya da orta değer uydurulmaz). */
+export function puanDegeri(v: unknown): number | null {
+  const n = parseNum(v);
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
+}
+/** Elle verilen tedarikçi puanı; verilmemişse null (2157-1 a). */
+export const supRating = (s: Pick<Supplier, "rating"> | undefined): number | null => puanDegeri(s?.rating);
+/** Tedarikçi performans puanı (0-100): puanınız, zamanında teslim ve kalite; hiçbiri bilinmiyorsa null. */
+export function perfScore(supId: string): number | null {
+  const r = supRating(S.suppliers[supId]);
   const st = supplierStats()[supId] ?? EMPTY_STATS;
-  const parts: [number, number][] = [[((parseNum(s?.rating) || 3) / 5) * 100, 1]];
+  const parts: [number, number][] = [];
+  if (r !== null) parts.push([(r / 5) * 100, 1]);
   if (st.onTimeRate !== null) parts.push([st.onTimeRate, 1.5]);
   if (st.qualityRate !== null) parts.push([st.qualityRate, 1]);
-  return sum(parts.map((p) => p[0] * p[1])) / sum(parts.map((p) => p[1]));
+  return parts.length ? sum(parts.map((p) => p[0] * p[1])) / sum(parts.map((p) => p[1])) : null;
 }
+/** Bilinmeyen puan sıralamada sona; ikisi de bilinmiyorsa eşit. */
+export const perfDesc = (a: number | null, b: number | null): number => a === null ? (b === null ? 0 : 1) : b === null ? -1 : b - a;
 
 /* ---------------- değerlendirme ---------------- */
 export interface EvalRow {
   q: Quote; c: QuoteCalc; sup: Supplier | undefined;
-  fill: number; scorePV: number; s: Record<CritKey, number>; parts: Record<CritKey, number>; score: number;
+  fill: number; scorePV: number; s: Record<CritKey, number | null>; parts: Record<CritKey, number>; score: number;
   late: number | null; suspended: boolean;
 }
 export interface PlanGroup { x: EvalRow; items: RequestItem[]; goods: number; extras: number; late: number | null }
@@ -510,7 +520,6 @@ export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Eval
     const leads = elig.map((x) => parseNum(x.q.leadDays)).filter((v): v is number => v !== null);
     const minLead = leads.length ? Math.min(...leads) : 0;
     const maxW = Math.max(0, ...elig.map((x) => parseNum(x.q.warrantyMonths) || 0));
-    const tw = (+w.cost || 0) + (+w.lead || 0) + (+w.supplier || 0) + (+w.warranty || 0) || 1;
     for (const x of elig) {
       x.s = {
         cost: x.scorePV > 0 ? (minPV / x.scorePV) * 100 : 100,
@@ -520,7 +529,9 @@ export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Eval
         warranty: maxW > 0 ? (Math.min(parseNum(x.q.warrantyMonths) || 0, WARRANTY_CAP) / Math.min(maxW, WARRANTY_CAP)) * 100 : 100,
       };
       x.score = 0;
-      for (const cr of CRIT) { const p = (x.s[cr.k] * (+w[cr.k] || 0)) / tw; x.parts[cr.k] = p; x.score += p; }
+      // bilinmeyen ölçüt (puanı olmayan tedarikçi) hesaba katılmaz; ağırlığı bu teklifte bilinen ölçütlere dağılır
+      const twx = sum(CRIT.map((cr) => (x.s[cr.k] === null ? 0 : +w[cr.k] || 0))) || 1;
+      for (const cr of CRIT) { const v = x.s[cr.k]; const p = v === null ? 0 : (v * (+w[cr.k] || 0)) / twx; x.parts[cr.k] = p; x.score += p; }
       x.late = lateBy(req, x.q);
       x.suspended = x.sup?.status === "suspended";
     }

@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
 import {
-  approvalState, awardTotals, birimReddi, durumEtiketi, evaluate, kurIstenir, lateBy, leadScore, payText, quoteCalc, requiredApprover,
+  approvalState, awardTotals, birimReddi, durumEtiketi, evaluate, kurIstenir, lateBy, leadScore, payText, perfDesc, perfScore, quoteCalc, requiredApprover,
 } from './calc.ts';
 
 // Bugünkü davranışı sabitler (kayıt: hesaplar.md H1-H4); beklenen değerler bugünkü çıktıdır; vade değerleri 1383 a ile basit faiz, 365 gündür. Girdiler kayıt betiğindeki gibi eksik
@@ -101,14 +101,39 @@ describe('SA-HESAP H2: puanlama ve öneri', () => {
     const ev = evaluate(talep(TALEP));
     const ozet = ev.all.map((x) => ({
       id: x.q.id, uygun: ev.elig.includes(x), fill: +x.fill.toFixed(2), scorePV: +x.scorePV.toFixed(2),
-      s: Object.fromEntries(Object.entries(x.s).map(([a, b]) => [a, +(+b).toFixed(2)])), score: +x.score.toFixed(2), late: x.late,
+      s: Object.fromEntries(Object.entries(x.s).map(([a, b]) => [a, b === null ? null : +b.toFixed(2)])), score: +x.score.toFixed(2), late: x.late,
     }));
     expect(ozet).toEqual([
-      { id: 'q1', uygun: true, fill: 0, scorePV: 2050, s: { cost: 81.65, lead: 100, supplier: 60, warranty: 100 }, score: 82.82, late: null },
-      { id: 'q2', uygun: true, fill: 0, scorePV: 1673.78, s: { cost: 100, lead: 73.33, supplier: 60, warranty: 50 }, score: 81.67, late: 4 },
+      { id: 'q1', uygun: true, fill: 0, scorePV: 2050, s: { cost: 81.65, lead: 100, supplier: null, warranty: 100 }, score: 88.53, late: null },
+      { id: 'q2', uygun: true, fill: 0, scorePV: 1673.78, s: { cost: 100, lead: 73.33, supplier: null, warranty: 50 }, score: 87.08, late: 4 },
       // Kısmi teklif uygun sayılır; eksik kalem en pahalı birim fiyatla doldurulur.
-      { id: 'q3', uygun: true, fill: 1000, scorePV: 1874.14, s: { cost: 89.31, lead: 100, supplier: 60, warranty: 100 }, score: 86.65, late: null },
+      { id: 'q3', uygun: true, fill: 1000, scorePV: 1874.14, s: { cost: 89.31, lead: 100, supplier: null, warranty: 100 }, score: 93.32, late: null },
     ]);
+  });
+
+  // 2157: puanı verilmemiş tedarikçiye orta puan (3/5) uydurulmaz; ölçüt bilinmiyor sayılır ve ağırlığı bilinen ölçütlere dağılır.
+  it('SA-HESAP H2: puanı olmayan tedarikçinin başarımı null; puanı olan kendi puanını alır', () => {
+    expect(perfScore('s1')).toBeNull();
+    expect(perfScore('yok')).toBeNull();
+    (S.suppliers.s1 as Supplier).rating = 4;
+    bump();
+    expect(perfScore('s1')).toBe(80);
+    const x = evaluate(talep({ ...TALEP, updatedAt: 2 })).all.find((y) => y.q.id === 'q1')!;
+    expect(x.s.supplier).toBe(80);
+    // dört ölçüt de bilindiği için bütün ağırlık (50/20/20/10) kullanılır: 81,65 maliyet, 100 termin, 80 tedarikçi, 100 garanti
+    expect(+x.score.toFixed(2)).toBe(86.82);
+  });
+
+  it('SA-HESAP H2: aralık dışı puan (0, 6) bilinmiyor sayılır', () => {
+    (S.suppliers.s1 as Supplier).rating = 0;
+    (S.suppliers.s2 as Supplier).rating = 6;
+    bump();
+    expect(perfScore('s1')).toBeNull();
+    expect(perfScore('s2')).toBeNull();
+  });
+
+  it('SA-HESAP H2: bilinmeyen başarım sıralamada sona gider', () => {
+    expect([null, 40, null, 90].sort(perfDesc)).toEqual([90, 40, null, null]);
   });
 
   it('SA-HESAP H2: sıralamada bütün kalemleri kapsayanlar önce; q3 en yüksek puanlı olsa da sonda', () => {

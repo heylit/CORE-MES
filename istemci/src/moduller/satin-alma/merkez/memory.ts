@@ -3,7 +3,7 @@ import type { PurchaseRequest, Quote, RequestItem, Settings } from "./tipler.ts"
 import { CRIT, KART_SAYFASI, OPEN, SUP_STATUS } from "./constants.ts";
 import { S, V, nameOf, settings } from "./store.ts";
 import {
-  budgetUse, isCommitted, matOf, matStats, payText, perfScore, quoteCalc, savingsOf, spendLines,
+  budgetUse, isCommitted, matOf, matStats, payText, perfDesc, perfScore, quoteCalc, supRating, savingsOf, spendLines,
   supplierStats, EMPTY_STATS, type QuoteCalc,
 } from "./calc.ts";
 import {
@@ -84,7 +84,7 @@ export function viewSuppliers(): string {
   <div class="row" data-sa-y="2"><div data-sa-y="8"><input id="sup-search" type="search" placeholder="Firma, kategori, şehir" value="${esc(V.sq)}" data-in="sup-search" aria-label="Tedarikçi ara"></div></div>
   <div class="panel">${Object.keys(S.suppliers).length ? `<div class="tw"><table class="rt"><thead><tr><th>Tedarikçi</th><th>Performans</th><th class="r">Teklif / seçildi</th><th class="r">Cevap oranı</th><th class="r">En iyiye uzaklık</th><th class="r">Zamanında</th><th class="r">Kalite</th><th class="r">Harcama</th></tr></thead><tbody>
   ${list.map(({ s, st, p }) => `<tr class="click" data-act="open-sup" data-id="${s.id}"><td class="lead"><b>${esc(s.name)}</b> ${s.status && s.status !== "approved" ? `<span class="flag ${s.status === "suspended" ? "bad" : "info"}">${esc(s.kaliteDurumu ?? SUP_STATUS[s.status])}</span>` : ""}<span class="sub">${esc([(s.categories || []).join(", "), s.city].filter(Boolean).join(", ") || "–")}</span></td>
-    <td data-sa-y="9"><div class="row" data-sa-y="10"><div class="bar" data-sa-y="11"><span class="k1" style="width:${p.toFixed(0)}%"></span></div><span class="num small">${nf0.format(p)}</span></div><span class="sub">${stars(s.rating)}</span></td>
+    <td data-sa-y="9"><div class="row" data-sa-y="10"><div class="bar" data-sa-y="11"><span class="k1" style="width:${(p ?? 0).toFixed(0)}%"></span></div><span class="num small">${p === null ? "–" : nf0.format(p)}</span></div><span class="sub">${stars(s.rating)}</span></td>
     <td class="r num">${st.quotes} / ${st.wins}</td><td class="r num">${st.asked ? pct(st.responseRate) : "–"}${isNum(st.avgResp) ? `<span class="sub">ort. ${nf1.format(st.avgResp)} gün</span>` : ""}</td>
     <td class="r num">${isNum(st.avgGap) ? (st.avgGap < 0.5 ? '<span class="flag good">genelde en iyi</span>' : "+" + pct(st.avgGap, 1)) : "–"}</td>
     <td class="r num">${st.deliveries ? pct(st.onTimeRate) + `<span class="sub">${st.onTime}/${st.deliveries}</span>` : "–"}</td><td class="r num">${st.qualityN ? pct(st.qualityRate) : "–"}</td><td class="r num">${st.spendTRY ? short(st.spendTRY) : "–"}</td></tr>`).join("")}
@@ -110,7 +110,7 @@ export function viewSupplier(): string {
     <p class="small muted" data-sa-y="13">${[(s.categories || []).join(", "), s.city, s.contact, s.phone, s.email, s.taxNo && "VKN " + s.taxNo].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("")}</p></div>
     <div class="row"><button class="btn" data-act="edit-supplier" data-sid="${s.id}">Düzenle</button><button class="btn primary" data-act="add-eval">Değerlendirme ekle</button></div></div>
   <div class="kv" data-sa-y="6">
-    <div><div class="k">Performans puanı</div><div class="v">${nf0.format(p)}</div><div class="d">puanınız ${parseNum(s.rating) || 3}/5 + teslim + kalite</div></div>
+    <div><div class="k">Performans puanı</div><div class="v">${p === null ? "–" : nf0.format(p)}</div><div class="d">${supRating(s) === null ? "puan verilmemiş" : `puanınız ${supRating(s)}/5`} + teslim + kalite</div></div>
     <div><div class="k">Cevap oranı</div><div class="v">${st.asked ? pct(st.responseRate) : "–"}</div><div class="d">${st.asked ? `${st.answered}/${st.asked} istek${isNum(st.avgResp) ? ", ort. " + nf1.format(st.avgResp) + " gün" : ""}` : "teklif isteği kaydı yok"}</div></div>
     <div><div class="k">Seçilme oranı</div><div class="v">${st.quotes ? pct(st.winRate) : "–"}</div><div class="d">${st.wins} / ${st.quotes} teklif</div></div>
     <div><div class="k">En iyi teklife uzaklık</div><div class="v">${isNum(st.avgGap) ? "+" + pct(st.avgGap, 1) : "–"}</div><div class="d">${st.evaluated ? st.evaluated + " karşılaştırmada ortalama" : "karşılaştırma yok"}</div></div>
@@ -159,7 +159,7 @@ export function viewReports(): string {
   const depts = (settings().departments || []).map(d => ({ d, u: budgetUse(d.name, year) })).filter(x => x.u.budget || x.u.used);
   const priceRows = Object.values(S.materials).map(m => ({ m, st: matStats(m.id) })).filter(x => x.st.count >= 2 && isNum(x.st.change)).sort((a, b) => (b.st.change ?? 0) - (a.st.change ?? 0));
   const single = Object.values(S.materials).map(m => ({ m, st: matStats(m.id) })).filter(x => x.st.count >= 1 && x.st.suppliers.length <= 1);
-  const supRank = Object.values(S.suppliers).map(s => ({ s, st: sst[s.id] || EMPTY_STATS, p: perfScore(s.id) })).filter(x => x.st.quotes).sort((a, b) => b.p - a.p);
+  const supRank = Object.values(S.suppliers).map(s => ({ s, st: sst[s.id] || EMPTY_STATS, p: perfScore(s.id) })).filter((x): x is typeof x & { p: number } => x.st.quotes > 0 && x.p !== null).sort((a, b) => perfDesc(a.p, b.p));
   const pl = { ytd: "bu yıl", "12m": "son 12 ay", all: "tüm zamanlar" }[V.period];
   return `<div class="phead"><div><h1>Raporlar</h1><p class="lead">Siparişe dönmüş alımlardan hesaplanır (KDV hariç, sipariş günündeki kurla). Veri biriktikçe harcama dağılımı, fiyat değişimi ve tedarik riskleri netleşir.</p></div><span class="spacer"></span>
     <div class="seg" role="group" aria-label="Dönem">${[["ytd", "Bu yıl"], ["12m", "Son 12 ay"], ["all", "Tümü"]].map(([k, l]) => `<button data-act="period" data-v="${k}" aria-pressed="${V.period === k}">${l}</button>`).join("")}</div>

@@ -19,8 +19,8 @@ export interface HesapOrtami {
   ihtiyacTarihi: string | null;
   // Gecikmenin sayıldığı gün: sipariş verildiyse sipariş günü, değilse bugün.
   bazTarih: string;
-  // Tedarikçi başarımı 0-100; bilinmeyen tedarikçi nötr puan alır.
-  tedarikciPuani: (firmaId: number | null) => number;
+  // Tedarikçi başarımı 0-100; bilinmiyorsa null (orta puan uydurulmaz, 2157).
+  tedarikciPuani: (firmaId: number | null) => number | null;
 }
 
 // Ekranla aynı eşikler: ihtiyaç tarihinden her gecikme günü 100/15 puan, ihtiyaç tarihi yoksa en kısa termine göre her fazla gün
@@ -116,7 +116,8 @@ export interface DegerlendirmeSatiri {
   // Eksik kalemler en pahalı teklifin bedeliyle doldurulur: eksik teklif ucuz görünmesin.
   dolgu: number;
   puanDegeri: number;
-  kriterPuani: Record<Kriter, number>;
+  // Tedarikçi başarımı bilinmeyebilir; diğer ölçütler her zaman hesaplanır.
+  kriterPuani: Record<Exclude<Kriter, 'tedarikci'>, number> & { tedarikci: number | null };
   pay: Record<Kriter, number>;
   puan: number;
   gecikme: number | null;
@@ -215,7 +216,6 @@ export function degerlendir(kalemler: readonly HesapKalemi[], teklifler: readonl
   const garantiler = new Map(teklifler.map((q) => [q.id, q.garantiAy ?? 0]));
   const enUzunGaranti = Math.max(0, ...uygun.map((x) => garantiler.get(x.hesap.teklifId) ?? 0));
   const w = o.agirliklar;
-  const toplamAgirlik = (w.maliyet + w.termin + w.tedarikci + w.garanti) || 1;
   for (const x of uygun) {
     const garanti = garantiler.get(x.hesap.teklifId) ?? 0;
     x.kriterPuani = {
@@ -224,7 +224,10 @@ export function degerlendir(kalemler: readonly HesapKalemi[], teklifler: readonl
       tedarikci: o.tedarikciPuani(x.firmaId),
       garanti: enUzunGaranti > 0 ? (Math.min(garanti, GARANTI_TAVANI_AY) / Math.min(enUzunGaranti, GARANTI_TAVANI_AY)) * 100 : 100,
     };
-    for (const k of ['maliyet', 'termin', 'tedarikci', 'garanti'] as const) x.pay[k] = (x.kriterPuani[k] * w[k]) / toplamAgirlik;
+    // Bilinmeyen ölçüt hesaba katılmaz; ağırlığı bu teklifte bilinen ölçütlere dağılır (ekranla aynı).
+    const kriterler = ['maliyet', 'termin', 'tedarikci', 'garanti'] as const;
+    const toplamAgirlik = kriterler.reduce((t, k) => t + (x.kriterPuani[k] === null ? 0 : w[k]), 0) || 1;
+    for (const k of kriterler) { const v = x.kriterPuani[k]; x.pay[k] = v === null ? 0 : (v * w[k]) / toplamAgirlik; }
     x.puan = x.pay.maliyet + x.pay.termin + x.pay.tedarikci + x.pay.garanti;
     x.gecikme = gecikmeGunuHesabi(x.hesap.termin, o.ihtiyacTarihi, o.bazTarih);
   }
@@ -274,9 +277,10 @@ export function gerekenBasamak(tutar: number, limitler: readonly { azamiTutar: s
 }
 
 // Tedarikçi başarımı: satın almanın 1-5 puanı (prototipteki "puanınız"); teslim ve kalite oranı bilindiğinde onlarla ağırlıklanır.
-export function tedarikciBasarimi(puan: number | null, zamanindaOrani: number | null, kaliteOrani: number | null): number {
-  const parca: [number, number][] = [[((puan ?? 3) / 5) * 100, 1]];
+// Hiçbiri bilinmiyorsa null: puanlanmamış tedarikçiye orta puan uydurulmaz (2157).
+export function tedarikciBasarimi(puan: number | null, zamanindaOrani: number | null, kaliteOrani: number | null): number | null {
+  const parca: [number, number][] = puan === null ? [] : [[(puan / 5) * 100, 1]];
   if (zamanindaOrani !== null) parca.push([zamanindaOrani, 1.5]);
   if (kaliteOrani !== null) parca.push([kaliteOrani, 1]);
-  return parca.reduce((t, [d, a]) => t + d * a, 0) / parca.reduce((t, [, a]) => t + a, 0);
+  return parca.length === 0 ? null : parca.reduce((t, [d, a]) => t + d * a, 0) / parca.reduce((t, [, a]) => t + a, 0);
 }

@@ -296,7 +296,8 @@ export const tedarikciSemasi = z.object({
   durum: z.enum(TEDARIKCI_DURUMLARI),
   // 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; kaydı yoksa null. "Aday" ve "Askıda" tedarikçiye sipariş verilmez.
   kaliteDurumu: z.enum(KM_TEDARIKCI_DURUMLARI).nullable(),
-  puan: z.number().int().min(1).max(5),
+  // 2157-1 a: elle verilen 1-5 puan; verilmemişse null (orta puan uydurulmaz).
+  puan: z.number().int().min(1).max(5).nullable(),
   notlar: z.string(),
   kategoriler: z.array(z.string()),
   degerlendirmeler: z.array(z.object({
@@ -308,7 +309,7 @@ export const tedarikciSemasi = z.object({
 });
 export const tedarikciKaydetGovdesi = z.object({
   firmaId: firmaKimligi,
-  puan: z.number().int().min(1).max(5),
+  puan: z.number().int().min(1).max(5).nullable(),
   notlar: metin(2000),
   kategoriler: z.array(z.string().trim().min(1).max(60)).max(50),
   // Yeni değerlendirmeler eklenir; var olanlar değişmez.
@@ -601,7 +602,8 @@ export interface SatinAlmaUclari {
 
 // 1094 b: teklif karşılaştırmasının sunucudaki hesabı. Tutarlar TL ve ondalık metindir (2 basamak); puanlar 0-100.
 // Karar onaydaysa ya da sipariş verildiyse sabit kur ve faizle, değilse finansın bugünkü kuru ve faiziyle hesaplanır (1096 a).
-const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number(), tedarikci: z.number(), garanti: z.number() });
+// Tedarikçi başarımı bilinmiyorsa (puan, teslim ve kalite verisi yok) null; o teklifte ağırlığı bilinen ölçütlere dağılır (2157).
+const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number(), tedarikci: z.number().nullable(), garanti: z.number() });
 export const degerlendirmeCevabi = z.object({
   kurKaynagi: z.enum(['sabit', 'guncel']),
   kurKilidi: z.string().nullable(),
