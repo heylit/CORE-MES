@@ -91,3 +91,9 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Bağlamada kapanacak (Aşama 1 oturtması, kart #206)
 
 - [bağlama] Kart #133 (karar 102 a) ve kart 1234 (1230 a, 1231 a): parti/lot ve depo konumu (raf dahil) ortak Ctrl K paletine `disari.ts` `kayitAramaKaynaklari` ile kayıt kaynağı olarak geçti (çekirdek `/arama`, kart 1233); sadeleşmiş sütunlarda trigram dizini (göç 20261029126000). Dört genel komut (`istemci/src/moduller/stok/komutlar.ts`) mevcut ekranı açar, yazma o ekrandadır. Kalan: stokun kendi arama penceresi ("/" ve Ara düğmesi) yerinde; kalkması prototip değişikliğidir, kullanıcıya sorulur (finans 17, kalite-merkezi, denetim-hazırlık ile aynı). `/stok/ara` ucu seçiciler için her durumda kalır.
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/stok/mal-kabul`: birincil 2: "Okut", "Teslim al" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
+- `/stok/malzemeler`: birincil 2: "Mal kabul", "Okut" (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).

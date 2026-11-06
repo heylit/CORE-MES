@@ -46,3 +46,8 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Güncelleme kanalı (kart #870), sonra
 
 - Disk işi veritabanı işleminin dışında kalır: denetim kaydı yazılamazsa parça diskte kalır (zararsız; yükleme yeniden denenir).
+
+## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
+Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar
+`ekran-testleri/tek-birincil.spec.ts` BORC listesindedir ve yalnız düşebilir. Hangi düğmenin birincil kalacağı bağlamada kullanıcıya sorulur.
+- `/ayarlar`: birincil 15: "Logo yükle" ve bölüm başına bir "Kaydet" (14 bölüm) (yönetici, 1280 ve 360, DOĞRULANDI 06.11.2026 ölçümü).
