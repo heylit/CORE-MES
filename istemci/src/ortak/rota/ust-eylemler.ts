@@ -19,6 +19,9 @@ export interface UstEylem {
   // Verilirse düğme 768-1279 arasında çubukta yer tutmaz (başlık sığsın), Hesap menüsünde bu adla durur; seçilince
   // düğmenin acmaIstegi artar, düğme kendi penceresini açar. 'hesap' yerindeki eylemde zorunludur.
   hesapMaddesi?: { baslik: string; simge: SimgeAdi };
+  // Sayfa şeridi üst çubuğa konduğunda (Üretim Terminali, 2052-1 a) öteki eylemler gizlenir; bu eylem görünür kalır
+  // (2137-1 a: Okut ve Bildirimler). Yalnız sağdaki, Hesap menüsüne inmeyen eylemde verilir.
+  seritte?: boolean;
   dugme: ComponentType<UstEylemOzellikleri>;
   // Hesap düğmesinin köşesinde çizilir: dikkat isteyen durum varsa işaret, yoksa hiçbir şey (null). Menüye taşınan
   // eylemin uyarısı kaybolmasın diye (sistem uyarısı).
@@ -47,6 +50,9 @@ export function ustEylemleriTopla(dosyalar: Record<string, unknown>): UstEylem[]
       if (e.yer === 'hesap' && e.hesapMaddesi === undefined) throw new Error(`Hesap menüsündeki üst eylemin maddesi yok: ${e.anahtar} (${dosya})`);
       if (e.hesapMaddesi !== undefined && (e.hesapMaddesi.baslik.trim() === '' || !(e.hesapMaddesi.simge in SIMGELER))) {
         throw new Error(`Üst eylemin Hesap menüsü maddesi eksik ya da simgesi bilinmiyor: ${e.anahtar} (${dosya})`);
+      }
+      if (e.seritte === true && (e.yer !== undefined || e.hesapMaddesi !== undefined)) {
+        throw new Error(`Şeritte görünen üst eylem sağda ve Hesap menüsü maddesiz olmalı: ${e.anahtar} (${dosya})`);
       }
       if (typeof e.dugme !== 'function' && (typeof e.dugme !== 'object' || e.dugme === null)) {
         throw new Error(`Üst eylemin bileşeni yok: ${e.anahtar} (${dosya})`);

@@ -15,6 +15,9 @@ interface Sayfa {
   baslik: string | RegExp;
   // Kendi başlığı olmayan yeni ekran (Üretim Terminali): başlık kabuktadır, dar ekranda bölüm adıyla bulunur.
   bolum?: string;
+  // Kabuk başlığı 1440 altında yalnız ekran okuyucudadır (2137-2 c): şerit üst çubuktayken istasyon adına yer kalır.
+  // 1280'de görünürlük ve kesilme denetimi bu başlığı saymaz; başlık 1440'ta görünür ve kesilmez diye ayrıca sınanır (2137-3 a).
+  kabukBasligiGizli?: true;
   tasma?: Partial<Record<'g360' | 'g768' | 'g1280', number>>;
 }
 
@@ -54,8 +57,8 @@ const SAYFALAR: Sayfa[] = [
       : { varis: RECETE_ROTA, hesap: 'ornek.planlama', ...yeniBolum(b) }),
   })),
   // Üretim Terminali yeni ekrandadır (541; eski çerçeve 1392 a ile kalktı).
-  { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
-  { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali' },
+  { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.operator1', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali', kabukBasligiGizli: true },
+  { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali', kabukBasligiGizli: true },
   { modul: 'stok', yol: '/stok', hesap: 'ornek.depo', baslik: 'Stok Merkezi' },
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
@@ -71,7 +74,10 @@ for (const s of SAYFALAR) {
       const hedef = new URL(ADRES + s.yol).pathname;
       await expect(page).toHaveURL((u) => (s.varis === undefined ? u.pathname === hedef : s.varis.test(u.pathname)));
       if (s.bolum !== undefined) {
-        if (bilgi.project.name === 'g1280') await expect(page.getByRole('heading', { name: s.baslik, exact: true })).toBeVisible();
+        if (bilgi.project.name === 'g1280') {
+          const baslik = page.getByRole('heading', { name: s.baslik, exact: true });
+          await (s.kabukBasligiGizli ? expect(baslik).toBeAttached() : expect(baslik).toBeVisible());
+        }
         await expect(page.getByRole('region', { name: s.bolum, exact: true })).toBeVisible();
       } else {
         await expect(page.getByRole('heading', { name: s.baslik, exact: true }).filter({ visible: true }).first()).toBeVisible();
@@ -82,7 +88,26 @@ for (const s of SAYFALAR) {
       expect(tasma.belge, `sayfa yatay taşması (en çok ${String(sinir)} px)`).toBeLessThanOrEqual(sinir);
       if (tasma.cerceve !== null) expect(tasma.cerceve, 'çerçeve yatay taşması').toBe(0);
       expect(await ustCubukCakisanlar(page), 'üst çubukta üst üste binen düğmeler').toEqual([]);
-      if (bilgi.project.name === 'g1280') expect(await kesilenBasliklar(page), 'kesilen başlıklar').toEqual([]);
+      if (bilgi.project.name === 'g1280') {
+        const kesilen = await kesilenBasliklar(page);
+        expect(s.kabukBasligiGizli ? kesilen.filter((b) => b !== s.baslik) : kesilen, 'kesilen başlıklar').toEqual([]);
+      }
     });
+
+    if (s.kabukBasligiGizli) {
+      test('1440 genişlikte kabuk başlığı görünür ve kesilmez (2137-3 a)', async ({ page, ac }, bilgi) => {
+        test.skip(bilgi.project.name !== 'g1280', 'genişliği test kurar');
+        await page.setViewportSize({ width: 1440, height: 800 });
+        await ac(s.yol);
+        await expect(page.locator('h1.tc-kabuk-baslik')).toHaveText(s.baslik);
+        await expect(async () => {
+          const olcu = await page.locator('h1.tc-kabuk-baslik').evaluate((e) => ({ en: e.clientWidth, yatay: e.scrollWidth - e.clientWidth }));
+          expect(olcu.en, 'başlığın genişliği').toBeGreaterThan(1);
+          expect(olcu.yatay, 'başlık kesiliyor').toBeLessThanOrEqual(0);
+          expect(await kesilenBasliklar(page), 'kesilen başlıklar').toEqual([]);
+          expect(await ustCubukCakisanlar(page), 'üst çubukta üst üste binen düğmeler').toEqual([]);
+        }).toPass({ timeout: 10_000 });
+      });
+    }
   });
 }

@@ -116,4 +116,4 @@ export function ZilDugmesi({ cihaz }: UstEylemOzellikleri & { cihaz?: CihazOrtam
 }
 
 // Herkesin üst çubuğunda (222 a): okuma ve işaretleme yalnız oturum ister, sunucu yalnız kişinin kendi satırlarını verir.
-export const ustEylemler: readonly UstEylem[] = [{ anahtar: 'bildirimler', sira: 80, islem: 'oturum', dugme: ZilDugmesi }];
+export const ustEylemler: readonly UstEylem[] = [{ anahtar: 'bildirimler', sira: 80, islem: 'oturum', seritte: true, dugme: ZilDugmesi }];
