@@ -1,21 +1,22 @@
 import type { IkinciMenuTanimi, SayfaTanimi } from '../sayfa-tanimi.ts';
 
 // Denetim Kaydı ile Mesaj arasında durur; yalnız bayraklı yönetici görür (kullanıcı kararı 14.10.2026).
+// Sistem sağlığı da bu sayfadadır: yönetici sağlığa ve güvenliğe tek yerden bakıp karar verir (2231).
 export const GUVENLIK_SAYFALARI = [
-  { yol: '/guvenlik', islem: 'sayfa.guvenlik', baslik: 'Güvenlik Merkezi', simge: 'lock', grup: 'Yönetim', sira: 6 },
+  { yol: '/guvenlik', islem: 'sayfa.guvenlik', baslik: 'Sistem ve Güvenlik', simge: 'lock', grup: 'Yönetim', sira: 6 },
 ] as const satisfies readonly SayfaTanimi[];
 
 // Bütün bölümler aynı okumadır (guvenlik.oku); yazma düğmeleri ayrıca guvenlik.yonet ister. Sayaç açık alarm sayısıdır.
 export const GUVENLIK_IKINCI_MENU = {
   kok: '/guvenlik',
-  baslik: 'Güvenlik Merkezi',
+  baslik: 'Sistem ve Güvenlik',
   simge: 'lock',
   sayacUcu: '/guvenlik/menu-sayaclari',
   // 1365 a: açık alarm sayısı ana menüde de görünür; yönetici sayfaya girmeden görür.
   anaMenuSayaci: 'alarmlar',
   gruplar: [
     { baslik: 'İzleme', maddeler: [
-      { anahtar: 'durum', baslik: 'Durum', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
+      { anahtar: 'durum', baslik: 'Genel bakış', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
       { anahtar: 'alarmlar', baslik: 'Alarmlar', yol: '/guvenlik/alarmlar', simge: 'bell', islem: 'guvenlik.oku' },
     ] },
     { baslik: 'Takip', maddeler: [
