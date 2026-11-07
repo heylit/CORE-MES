@@ -1,0 +1,125 @@
+/* 2196: kalite istasyonu terminali. Eldivenle kullanılır: her hedef en az var(--dokunma); karar ve yanıt düğmeleri iki-üç katı.
+   Ölçü ve renk tasarım değişkenindendir; 360 genişlikte tek sütun. */
+.tc-kt { display: grid; gap: var(--b-3); min-width: 0; container-type: inline-size; }
+.tc-kt-bosluk { flex: 1 1 auto; }
+.tc-kt-baslik-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-kt-alan { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-kt-soru { margin: 0; font-size: var(--yazi-l); font-weight: 700; overflow-wrap: anywhere; }
+
+/* Sekme şeridi: ilk parça, hatalı, giriş, form. */
+.tc-kt-serit { display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); overflow-x: auto; min-width: 0; }
+.tc-kt-serit-tus {
+  flex: 1 0 auto; min-block-size: var(--dokunma); padding: 0 var(--b-3); border: 0; border-radius: var(--yari-1);
+  background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tc-kt-serit-tus[aria-selected="true"] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); }
+.tc-kt-serit-tus:disabled { cursor: default; opacity: var(--saydam-45); }
+
+/* Kayıt çarkı: önceki / kart / sonraki. */
+.tc-kt-cark { display: grid; grid-template-columns: var(--dokunma-x14) minmax(0, 1fr) var(--dokunma-x14); gap: var(--b-2); align-items: stretch; }
+.tc-kt-ok {
+  display: grid; place-items: center; min-block-size: var(--dokunma-x14); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel); color: var(--ink); cursor: pointer;
+}
+.tc-kt-ok:disabled { opacity: var(--saydam-45); cursor: default; }
+.tc-kt-cark-kart {
+  display: grid; align-content: center; gap: var(--b-1); padding: var(--b-3); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel-solid); box-shadow: var(--shadow);
+}
+.tc-kt-cark-kart > b { font-size: var(--yazi-l); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-kt-cark-kart > small { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+
+.tc-kt-karar, .tc-kt-form, .tc-kt-gerekce { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-kt-ozet, .tc-kt-degerler { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: var(--b-2); }
+.tc-kt-ozet > div { display: grid; gap: var(--b-1); padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-kt-ozet > div > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-kt-ozet > div > b { overflow-wrap: anywhere; }
+.tc-kt-ozet > div[data-ton="iyi"] > b { color: var(--run); }
+.tc-kt-ozet > div[data-ton="kotu"] > b { color: var(--stop); }
+.tc-kt-ozet > div[data-ton="uyari"] > b { color: var(--hold); }
+
+/* Karar ve yanıt düğmeleri: büyük, renkli kenar; seçili olan dolu. */
+.tc-kt-kararlar, .tc-kt-cevaplar { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--b-2); }
+.tc-kt-karar-tus, .tc-kt-cevap {
+  --ton: var(--edge);
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma-x20); padding: var(--b-3);
+  border: var(--cizgi) solid var(--ton); border-radius: var(--yari-3); background: var(--panel); color: var(--ink);
+  font: inherit; text-align: start; cursor: pointer; min-width: 0;
+}
+.tc-kt-cevap { flex-direction: column; justify-content: center; text-align: center; font-size: var(--yazi-xl); min-block-size: var(--dokunma-x24); }
+.tc-kt-karar-tus > span { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-kt-karar-tus small, .tc-kt-cevap small { color: var(--muted); font-size: var(--yazi-s); }
+:is(.tc-kt-karar-tus, .tc-kt-cevap)[data-ton="iyi"] { --ton: var(--run); }
+:is(.tc-kt-karar-tus, .tc-kt-cevap)[data-ton="kotu"] { --ton: var(--stop); }
+.tc-kt-karar-tus[data-ton="sart"] { --ton: var(--hold); }
+.tc-kt-karar-tus[data-ton="mavi"] { --ton: var(--done); }
+:is(.tc-kt-karar-tus, .tc-kt-cevap)[aria-checked="true"] { background: var(--ton); color: var(--on-sig); }
+:is(.tc-kt-karar-tus, .tc-kt-cevap)[aria-checked="true"] small { color: inherit; }
+:is(.tc-kt-karar-tus, .tc-kt-cevap, .tc-kt-secme, .tc-kt-tus, .tc-kt-ok, .tc-kt-serit-tus, .tc-kt-form-tus, .tc-kt-segment-tus):focus-visible {
+  outline: var(--cizgi) solid var(--hazard-ink); outline-offset: var(--cizgi-ince);
+}
+
+/* Seçim cipleri (kusur, hazır şart, "Hayır" notu, seçim alanı). */
+.tc-kt-secmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-kt-secme {
+  min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam);
+  background: var(--panel); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-kt-secmeler-buyuk .tc-kt-secme { min-block-size: var(--dokunma-x14); padding: 0 var(--b-4); font-size: var(--yazi-l); border-radius: var(--yari-2); }
+.tc-kt-secme[aria-pressed="true"] { border-color: var(--sig); background: var(--sig); color: var(--on-sig); }
+.tc-kt-secme[data-ton="kotu"][aria-pressed="true"] { border-color: var(--stop); background: var(--stop); }
+
+.tc-kt-segment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-kt-segment-tus { min-block-size: var(--dokunma); border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.tc-kt-segment-tus[aria-checked="true"] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); }
+
+/* Değer kutusu ve ondalık tuş takımı. */
+.tc-kt-deger {
+  display: grid; gap: var(--b-1); padding: var(--b-2) var(--b-3); min-block-size: var(--dokunma-x14); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); color: var(--ink); font: inherit; text-align: start;
+}
+.tc-kt-deger[aria-pressed="true"] { border: var(--cizgi) solid var(--sig); }
+.tc-kt-deger > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-kt-deger > b { font-size: var(--yazi-2xl); }
+.tc-kt-tuslar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); max-inline-size: 28rem; }
+.tc-kt-tus {
+  min-block-size: var(--dokunma-tus); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel-solid); color: var(--ink); font: inherit; font-size: var(--yazi-2xl); font-weight: 600; cursor: pointer;
+}
+.tc-kt-tus[data-tur="sil"] { font-size: var(--yazi-l); color: var(--stop); }
+
+/* Form adımları: ilerleme çubukları. */
+.tc-kt-adimlar { display: flex; gap: var(--b-1); }
+.tc-kt-adimlar > i { flex: 1 1 0; block-size: var(--b-1); border-radius: var(--yari-tam); background: var(--edge); }
+.tc-kt-adimlar > i[data-durum="ok"] { background: var(--run); }
+.tc-kt-adimlar > i[data-durum="nok"] { background: var(--stop); }
+.tc-kt-adimlar > i[data-durum="su"] { background: var(--sig); }
+.tc-kt-girdi {
+  min-block-size: var(--dokunma-x14); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel-solid); color: var(--ink); font: inherit; font-size: var(--yazi-l); min-width: 0;
+}
+.tc-kt-tablo-satir { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--b-2); }
+.tc-kt-satir-tuslar { display: inline-flex; flex-wrap: wrap; gap: var(--b-2); }
+
+/* Form listesi. */
+.tc-kt-form-listesi { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: var(--b-2); }
+.tc-kt-form-tus {
+  display: flex; align-items: center; gap: var(--b-3); min-block-size: var(--dokunma-x16); padding: var(--b-3); min-width: 0;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+.tc-kt-form-tus[data-taslak] { border-color: var(--hold); }
+.tc-kt-form-tus > span { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-kt-form-tus small { color: var(--muted); font-size: var(--yazi-s); }
+
+/* Onay satırı: geri solda, ana eylem sağda; dar ekranda alta sarar. */
+.tc-kt-onay { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* Panel sekmeleri (numune ve lot, karar kuyruğu, formlar). */
+.tc-kt-sekmeler { display: flex; gap: var(--b-1); padding: var(--b-1); border-radius: var(--yari-2); background: var(--panel2); overflow-x: auto; }
+.tc-kt-sekmeler > button {
+  display: inline-flex; align-items: center; gap: var(--b-1); flex: 1 0 auto; min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: 0; border-radius: var(--yari-1); background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.tc-kt-sekmeler > button[aria-selected="true"] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); }
+.tc-kt-sekmeler > button:focus-visible { outline: var(--cizgi) solid var(--hazard-ink); outline-offset: var(--cizgi-ince); }
+.tc-kt-bag { min-block-size: var(--dokunma); padding: 0 var(--b-1); border: 0; background: none; color: var(--sig); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
