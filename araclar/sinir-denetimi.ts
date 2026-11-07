@@ -529,15 +529,17 @@ export function degisenleriTopla(kok: string, taban: string): Degisiklik[] {
   return [...sonuc].map(([yol, yeni]) => ({ yol, yeni }));
 }
 
+// Damga UTC'dir (2197-7 a): CI ve bulut oturumları UTC'de, yazar makineleri yerel saatte koşar; yerel saat
+// karışırsa bir makinenin damgası öbürünün birkaç saat önüne düşer ve yeni göç gereksiz yere "eski" sayılır.
 export function gocDamgasi(an: Date): string {
   const iki = (sayi: number): string => String(sayi).padStart(2, '0');
-  return `${an.getFullYear()}${iki(an.getMonth() + 1)}${iki(an.getDate())}` +
-    `${iki(an.getHours())}${iki(an.getMinutes())}${iki(an.getSeconds())}`;
+  return `${an.getUTCFullYear()}${iki(an.getUTCMonth() + 1)}${iki(an.getUTCDate())}` +
+    `${iki(an.getUTCHours())}${iki(an.getUTCMinutes())}${iki(an.getUTCSeconds())}`;
 }
 
 function damgaAni(ad: string): Date | null {
   const p = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(ad)?.slice(1).map(Number);
-  return p ? new Date(p[0] ?? 0, (p[1] ?? 1) - 1, p[2] ?? 1, p[3] ?? 0, p[4] ?? 0, p[5] ?? 0) : null;
+  return p ? new Date(Date.UTC(p[0] ?? 0, (p[1] ?? 1) - 1, p[2] ?? 1, p[3] ?? 0, p[4] ?? 0, p[5] ?? 0)) : null;
 }
 
 export interface DamgaIhlali {

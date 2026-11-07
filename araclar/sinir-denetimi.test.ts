@@ -62,7 +62,7 @@ test('ASCII dışı adlı dosya denetimden düşmez: taban göçü son göç ola
     const tabandaki = tabandakiGocleriTopla(depo, 'main');
     assert.deepEqual([...tabandaki].sort(), ['20200101000000_ilk.sql', '20200120000000_ü.sql']);
     const degisenler = degisenleriTopla(depo, 'main');
-    assert.deepEqual(eskiDamgaliGocler(degisenler, tabandaki, new Date(2027, 0, 2, 3, 4, 5)).map((i) => [i.dosya, i.sonGoc]), [
+    assert.deepEqual(eskiDamgaliGocler(degisenler, tabandaki, new Date(Date.UTC(2027, 0, 2, 3, 4, 5))).map((i) => [i.dosya, i.sonGoc]), [
       ['20200110000000_b_tablo.sql', '20200120000000_ü.sql'],
     ]);
     assert.deepEqual(yolIhlalleri('b', degisenler), ['paylasilan/ölçü.ts']);
@@ -387,11 +387,12 @@ test('taraf uçtan uca: gerçek depoda sunucu dalının istemci ve sözleşme do
 
 const TABANDAKI = ['20261005120100_oturum.sql', '20261005120000_kisiler.sql'];
 const yeniGoc = (ad: string) => ({ yol: `sunucu/gocler/${ad}`, yeni: true });
-const SABIT_AN = new Date(2027, 0, 2, 3, 4, 5);
+const SABIT_AN = new Date(Date.UTC(2027, 0, 2, 3, 4, 5));
 
-test('göç damgası: yerel saatten on dört hane, tek haneler sıfırla dolar', () => {
+test('göç damgası: UTC saatten on dört hane, tek haneler sıfırla dolar', () => {
   assert.equal(gocDamgasi(SABIT_AN), '20270102030405');
-  assert.equal(gocDamgasi(new Date(2026, 11, 31, 23, 59, 59)), '20261231235959');
+  assert.equal(gocDamgasi(new Date(Date.UTC(2026, 11, 31, 23, 59, 59))), '20261231235959');
+  assert.equal(gocDamgasi(new Date('2026-11-07T01:30:00+03:00')), '20261106223000');
 });
 
 test('göç damgası denetimi: tabandaki son göçten önce sıralanan yeni göç ihlal, öneri şimdiki damga ve eski adın kalanı', () => {
@@ -441,12 +442,12 @@ test('göç damgası denetimi: dalın birden çok yeni göçü birlikte, sıras�
   assert.deepEqual(eskiDamgaliGocler(yenilenmis, TABANDAKI, SABIT_AN), []);
 
   // Dakika sınırında saniye taşar, damga geçerli kalır.
-  const sinirda = eskiDamgaliGocler(dal, TABANDAKI, new Date(2027, 0, 2, 3, 4, 59));
+  const sinirda = eskiDamgaliGocler(dal, TABANDAKI, new Date(Date.UTC(2027, 0, 2, 3, 4, 59)));
   assert.deepEqual(sinirda.map((i) => i.onerilen.slice(0, 14)), ['20270102030459', '20270102030500', '20270102030501']);
 });
 
 test('göç damgası denetimi: saat tabandaki son göçün gerisindeyse öneri o göçün hemen sonrasından başlar', () => {
-  const [ihlal] = eskiDamgaliGocler([yeniGoc('20261005120050_stok.sql')], TABANDAKI, new Date(2020, 0, 1));
+  const [ihlal] = eskiDamgaliGocler([yeniGoc('20261005120050_stok.sql')], TABANDAKI, new Date(Date.UTC(2020, 0, 1)));
   assert.equal(ihlal?.onerilen, '20261005120101_stok.sql');
 });
 
