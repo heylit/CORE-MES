@@ -13,7 +13,7 @@ import type { Departman, Personel, PozisyonTanimi } from '../tipler.ts';
 import { useIkKomutu, yeniKimlik } from '../veri.ts';
 import { DepartmanFormu } from './DepartmanFormu.tsx';
 import {
-  adSoyadMetni, aktifMi, bugun, eksikHazirPozisyonlar, orgAgaci, pozisyondakiCalisan, siraliDepartman, siraliPersonel, siraliPozisyonTanimi, ucretTarihte,
+  adSoyadMetni, aktifMi, bugun, eksikHazirDepartmanlar, eksikHazirPozisyonlar, orgAgaci, pozisyondakiCalisan, siraliDepartman, siraliPersonel, siraliPozisyonTanimi, ucretTarihte,
 } from './kurallar.ts';
 import { Bolum } from './parcalar.tsx';
 import { PozisyonFormu } from './PozisyonFormu.tsx';
@@ -27,7 +27,7 @@ export function Organizasyon(o: IkEkranOzellikleri) {
   const gun = bugun();
   const [form, formYaz] = useState<{ kayit: Departman | null } | null>(null);
   const [pozisyonFormu, pozisyonFormuYaz] = useState<{ kayit: PozisyonTanimi | null } | null>(null);
-  const [hazirOnay, hazirOnayYaz] = useState(false);
+  const [hazirOnay, hazirOnayYaz] = useState<'departman' | 'pozisyon' | null>(null);
   const komut = useIkKomutu();
   const { bildir } = useBildirim();
   const sabit = ikSabitleri();
@@ -65,16 +65,20 @@ export function Organizasyon(o: IkEkranOzellikleri) {
 
   const pozisyonlar = siraliPozisyonTanimi(depo.tur('title'), departmanAdi);
   const eksikHazir = eksikHazirPozisyonlar(depo.tur('title'));
-  // Hazır liste (2177c): listede adı olmayan genel unvanlar tek toplu kayıtla, departmansız eklenir.
+  const eksikDepartman = eksikHazirDepartmanlar(depo.tur('dept'));
+  // Hazır listeler: listede adı olmayan genel adlar tek toplu kayıtla eklenir; bağlantılı alanlar boş kalır.
   const hazirEkle = async () => {
-    const kayitlar: PozisyonTanimi[] = eksikHazir.map((h) => ({ id: yeniKimlik('title'), kind: 'title', ...h }));
+    const departman = hazirOnay === 'departman';
+    const kayitlar: (Departman | PozisyonTanimi)[] = departman
+      ? eksikDepartman.map((ad) => ({ id: yeniKimlik('dept'), kind: 'dept', ad }))
+      : eksikHazir.map((h) => ({ id: yeniKimlik('title'), kind: 'title', ...h }));
     try {
       await komut.topluKaydet(kayitlar);
-      bildir('tamam', `${String(kayitlar.length)} pozisyon eklendi.`);
+      bildir('tamam', `${String(kayitlar.length)} ${departman ? 'departman' : 'pozisyon'} eklendi.`);
     } catch {
-      bildir('hata', 'Hazır pozisyonlar eklenemedi.');
+      bildir('hata', departman ? 'Hazır departmanlar eklenemedi.' : 'Hazır pozisyonlar eklenemedi.');
     } finally {
-      hazirOnayYaz(false);
+      hazirOnayYaz(null);
     }
   };
   const pozisyonSutunlari: Sutun<PozisyonTanimi>[] = [
@@ -108,7 +112,8 @@ export function Organizasyon(o: IkEkranOzellikleri) {
       anahtar: `dept-${r.d.id}`, baslik: r.d.ad ?? '', simge: 'building' as const, aciklama: `${r.calisanlar.length} çalışan`, sozcukler: [r.d.kod ?? ''].filter(Boolean),
       calistir: () => { if (yetki.personelYaz) formYaz({ kayit: r.d }); },
     })),
-    ...(yetki.personelYaz && eksikHazir.length ? [{ anahtar: 'hazir-pozisyon', baslik: 'Hazır pozisyon listesini ekle', simge: 'list' as const, aciklama: `${String(eksikHazir.length)} genel unvan`, sozcukler: ['hazır', 'pozisyon', 'unvan', 'liste'], calistir: () => { hazirOnayYaz(true); } }] : []),
+    ...(yetki.personelYaz && eksikDepartman.length ? [{ anahtar: 'hazir-departman', baslik: 'Hazır departman listesini ekle', simge: 'list' as const, aciklama: `${String(eksikDepartman.length)} genel departman`, sozcukler: ['hazır', 'departman', 'bölüm', 'liste'], calistir: () => { hazirOnayYaz('departman'); } }] : []),
+    ...(yetki.personelYaz && eksikHazir.length ? [{ anahtar: 'hazir-pozisyon', baslik: 'Hazır pozisyon listesini ekle', simge: 'list' as const, aciklama: `${String(eksikHazir.length)} genel unvan`, sozcukler: ['hazır', 'pozisyon', 'unvan', 'liste'], calistir: () => { hazirOnayYaz('pozisyon'); } }] : []),
     ...(yetki.personelYaz ? [{ anahtar: 'yeni-pozisyon', baslik: 'Pozisyon ekle', simge: 'user' as const, aciklama: null, sozcukler: ['yeni', 'pozisyon', 'unvan', 'ekle'], calistir: () => { pozisyonFormuYaz({ kayit: null }); } }] : []),
   ];
   useSayfaKomutlari('ik-org', komutlar);
@@ -119,18 +124,23 @@ export function Organizasyon(o: IkEkranOzellikleri) {
         baslik="Organizasyon" simge="building" alt="Departmanlar ve raporlama ilişkileri. Şema, personel kartlarındaki “bağlı olduğu yönetici” alanından oluşur."
         birincil={yetki.personelYaz ? { etiket: 'Departman ekle', simge: 'plus', yap: () => { formYaz({ kayit: null }); } } : undefined}
       />
-      <Bolum baslik="Departmanlar">
+      <Bolum
+        baslik="Departmanlar"
+        eylem={yetki.personelYaz && eksikDepartman.length > 0
+          ? <Dugme simge="list" onClick={() => { hazirOnayYaz('departman'); }}>Hazır listeyi ekle</Dugme>
+          : undefined}
+      >
         <Tablo
           etiket="Departmanlar" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(r) => r.d.id}
           satirSec={yetki.personelYaz ? (r) => { formYaz({ kayit: r.d }); } : undefined}
-          bosMesaj="Departman yok. Personeli gruplamak için departman ekleyin."
+          bosMesaj="Departman yok. Hazır listeyi ekleyin ya da personeli gruplamak için departman girin."
         />
       </Bolum>
       <Bolum
         baslik="Pozisyonlar"
         eylem={yetki.personelYaz ? (
           <>
-            {eksikHazir.length > 0 && <Dugme simge="list" onClick={() => { hazirOnayYaz(true); }}>Hazır listeyi ekle</Dugme>}
+            {eksikHazir.length > 0 && <Dugme simge="list" onClick={() => { hazirOnayYaz('pozisyon'); }}>Hazır listeyi ekle</Dugme>}
             <Dugme simge="plus" onClick={() => { pozisyonFormuYaz({ kayit: null }); }}>Pozisyon ekle</Dugme>
           </>
         ) : undefined}
@@ -154,11 +164,20 @@ export function Organizasyon(o: IkEkranOzellikleri) {
       )}
       {yetki.personelYaz && (
         <OnayPenceresi
-          acik={hazirOnay} baslik="Hazır pozisyon listesi" onayMetni="Ekle" yukleniyor={komut.calisiyor}
-          onayla={() => { void hazirEkle(); }} vazgec={() => { hazirOnayYaz(false); }}
+          acik={hazirOnay !== null} baslik={hazirOnay === 'departman' ? 'Hazır departman listesi' : 'Hazır pozisyon listesi'} onayMetni="Ekle"
+          yukleniyor={komut.calisiyor} onayla={() => { void hazirEkle(); }} vazgec={() => { hazirOnayYaz(null); }}
         >
-          <p>{`${String(eksikHazir.length)} genel unvan departmansız eklenecek: ${eksikHazir.map((h) => h.ad).join(', ')}.`}</p>
-          <p>Listede adı olan pozisyon yeniden eklenmez. Eklenenleri sonra düzenleyebilir ya da silebilirsiniz.</p>
+          {hazirOnay === 'departman' ? (
+            <>
+              <p>{`${String(eksikDepartman.length)} genel departman eklenecek: ${eksikDepartman.join(', ')}.`}</p>
+              <p>Listede adı olan departman yeniden eklenmez. Kod, yönetici ve bütçe boş kalır; sonra düzenleyebilir ya da silebilirsiniz.</p>
+            </>
+          ) : (
+            <>
+              <p>{`${String(eksikHazir.length)} genel unvan departmansız eklenecek: ${eksikHazir.map((h) => h.ad).join(', ')}.`}</p>
+              <p>Listede adı olan pozisyon yeniden eklenmez. Eklenenleri sonra düzenleyebilir ya da silebilirsiniz.</p>
+            </>
+          )}
         </OnayPenceresi>
       )}
     </div>

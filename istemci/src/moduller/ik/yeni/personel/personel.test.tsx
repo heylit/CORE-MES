@@ -352,7 +352,8 @@ describe('pozisyon tanımları', () => {
       return new Response(JSON.stringify({ kayitlar: kayitlar.map((k) => ({ kimlik: k.kimlik, tur: 'title', surum: 1, govde: k.govde })), gecmis: [] }));
     }));
     await screen.findByRole('table', { name: 'Pozisyonlar' });
-    fireEvent.click(screen.getByRole('button', { name: 'Hazır listeyi ekle' }));
+    const bolum = screen.getByRole('region', { name: 'Pozisyonlar' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Hazır listeyi ekle' }));
     const pencere = await screen.findByRole('dialog', { name: 'Hazır pozisyon listesi' });
     expect(within(pencere).getByText(/^26 genel unvan departmansız eklenecek/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
@@ -363,7 +364,30 @@ describe('pozisyon tanımları', () => {
     expect(gonderilen.every((g) => g.kind === 'title' && g.departmanId === undefined)).toBe(true);
     expect(gonderilen.map((g) => g.ad)).toContain('CNC Programcısı');
     expect(gonderilen.map((g) => g.ad)).not.toContain('Kalite Mühendisi');
-    await waitFor(() => { expect(dugme('Hazır listeyi ekle')).toBeNull(); });
+    await waitFor(() => { expect(within(bolum).queryByRole('button', { name: 'Hazır listeyi ekle' })).toBeNull(); });
+  });
+
+  it('izinli: hazır departman listesini onayla ekler; tanımlı Üretim gönderilmez, kod ve yönetici boş', async () => {
+    const { yazmalar } = ikAc('/ik/organizasyon', { veri: tanimli() });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      const yanit = await asil(adres, istek);
+      if (!adres.includes('/toplu-kaydet')) return yanit;
+      const { kayitlar } = JSON.parse(String(istek?.body ?? '{}')) as { kayitlar: { kimlik: string; govde: unknown }[] };
+      return new Response(JSON.stringify({ kayitlar: kayitlar.map((k) => ({ kimlik: k.kimlik, tur: 'dept', surum: 1, govde: k.govde })), gecmis: [] }));
+    }));
+    const bolum = await screen.findByRole('region', { name: 'Departmanlar' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Hazır listeyi ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Hazır departman listesi' });
+    expect(within(pencere).getByText(/^10 genel departman eklenecek/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+    await waitFor(() => { expect(yazmalar).toHaveLength(1); });
+    expect(yazmalar[0]?.yol).toBe('/ik/departmanlar/toplu-kaydet');
+    const gonderilen = (yazmalar[0]?.govde as { kayitlar: { govde: Record<string, unknown> }[] }).kayitlar.map((k) => k.govde);
+    expect(gonderilen).toHaveLength(10);
+    expect(gonderilen.every((g) => g.kind === 'dept' && g.kod === undefined && g.yoneticiId === undefined)).toBe(true);
+    expect(gonderilen.map((g) => g.ad)).not.toContain('Üretim');
+    await waitFor(() => { expect(within(bolum).queryByRole('button', { name: 'Hazır listeyi ekle' })).toBeNull(); });
   });
 
   it('reddedilen: salt okuyan hazır listeyi göremez', async () => {
