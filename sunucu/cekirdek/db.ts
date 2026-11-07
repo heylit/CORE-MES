@@ -459,6 +459,9 @@ function ac(pgAyari: PgAyari, kimlik: PgGocKimligi, secenek: VeritabaniSecenegi,
     // `current_date`, tarih ile zaman arası çevirme ve zaman çıktısının saat farkı tesisin gününü izler; sunucu kurulumunun
     // saat dilimine bırakılırsa gün sınırı kayar.
     `TimeZone=${TESIS_SAAT_DILIMI}`,
+    // JIT derlemesi, maliyet tahmini şişen kısa sorguya yüzlerce ms ekler (2202 ölçümü: 15 ms'lik sorguya 370 ms); uygulamanın
+    // sorguları derlemeden kazanacak kadar uzun değildir. Göç de aynı kalıpla koşar.
+    'jit=off',
   ];
   const sira = siraKur(havuzBoyutu, baglantiSureMs, secenek.mesgulBildir ?? (() => undefined));
   const havuz = new pg.Pool({
