@@ -2243,7 +2243,7 @@ export async function merkezBelgeleri(db: Db, kullanici: Kullanici, ara: string 
     belgeler: belgeler.flatMap((b) => {
       const tip = merkezDosyaTipi(b.dosyaTuru);
       if (tip === null || !merkezTuruMu(b.dosyaTuru)) return [];
-      return [{ id: b.id, ad: b.ad, tur: b.tur, harf: b.harf, tip, dosyaAdi: merkezDosyaAdi(b.ad, b.dosyaTuru), ozet: b.ozet, ...(bagli === null ? {} : { malzemeninMi: bagli.has(b.id) }) }];
+      return [{ id: b.id, ad: b.ad, tur: b.tur, harf: b.harf, revKodu: b.revKodu, tip, dosyaAdi: merkezDosyaAdi(b.ad, b.dosyaTuru), ozet: b.ozet, ...(bagli === null ? {} : { malzemeninMi: bagli.has(b.id) }) }];
     }),
   };
 }

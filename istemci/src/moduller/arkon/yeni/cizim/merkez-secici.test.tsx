@@ -7,8 +7,8 @@ import { MerkezSecici } from './Merkez.tsx';
 // Çizim Merkezi seçicisi: paketin malzemesine bağlı olmayan resim sorulmadan eklenmez. Belge adları uydurmadır.
 afterEach(cleanup);
 
-const belge = (id: number, ad: string, malzemeninMi?: boolean): MerkezBelgesi =>
-  ({ id, ad, tur: 'teknik-resim', harf: 'A', tip: 'pdf', dosyaAdi: `${ad}.pdf`, ozet: 'a'.repeat(64), ...(malzemeninMi === undefined ? {} : { malzemeninMi }) });
+const belge = (id: number, ad: string, malzemeninMi?: boolean, revKodu: string | null = '00'): MerkezBelgesi =>
+  ({ id, ad, tur: 'teknik-resim', harf: 'A', revKodu, tip: 'pdf', dosyaAdi: `${ad}.pdf`, ozet: 'a'.repeat(64), ...(malzemeninMi === undefined ? {} : { malzemeninMi }) });
 
 function kur(malzeme: number | null) {
   const merkezBelgeleri = vi.fn(() => Promise.resolve([belge(1, 'Deneme kendi', true), belge(2, 'Deneme baska', false)]));
@@ -37,5 +37,18 @@ describe('Çizim Merkezi seçicisi ve parçanın malzemesi', () => {
     fireEvent.click(screen.getByRole('button', { name: /Deneme baska/ }));
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Bu resim bu parçanın değil' })).getByRole('button', { name: 'Yine de ekle' }));
     expect(sec).toHaveBeenCalledTimes(2);
+  });
+
+  it('2138-2: satırda merkezin harfi değil revizyon kodu görünür; kodsuz belge harf almaz', async () => {
+    const merkezBelgeleri = vi.fn(() => Promise.resolve([belge(1, 'Deneme kodlu', true, '01'), belge(2, 'Deneme kodsuz', true, null)]));
+    render(
+      <ArkonBaglamiKaynagi.Provider value={{ depo: { Server: { merkezBelgeleri } } } as unknown as ArkonBaglami}>
+        <MerkezSecici sec={vi.fn(() => Promise.resolve())} kapat={() => {}} malzeme={null} />
+      </ArkonBaglamiKaynagi.Provider>,
+    );
+    expect((await screen.findByRole('button', { name: /Deneme kodlu/ }, { timeout: 2000 })).textContent).toContain('Rev 01');
+    const kodsuz = screen.getByRole('button', { name: /Deneme kodsuz/ });
+    expect(kodsuz.textContent).toContain('Kodsuz revizyon');
+    expect(kodsuz.textContent).not.toContain('Rev A');
   });
 });

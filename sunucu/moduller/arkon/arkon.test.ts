@@ -715,7 +715,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       const ids = gorunen.map((b) => b.id);
       assert.ok(ids.includes(pdfId) && ids.includes(modelId), 'yayındaki PDF ve model listede');
       for (const yok of [taslakId, resimId, arsivId]) assert.equal(ids.includes(yok), false, `listede olmamalı: ${yok}`);
-      assert.deepEqual(gorunen.find((b) => b.id === pdfId), { id: pdfId, ad: 'Merkez Flans', tur: 'teknik-resim', harf: 'A', tip: 'pdf', dosyaAdi: 'Merkez Flans.pdf', ozet: sha(yayinda) });
+      assert.deepEqual(gorunen.find((b) => b.id === pdfId), { id: pdfId, ad: 'Merkez Flans', tur: 'teknik-resim', harf: 'A', revKodu: null, tip: 'pdf', dosyaAdi: 'Merkez Flans.pdf', ozet: sha(yayinda) });
       assert.deepEqual([gorunen.find((b) => b.id === modelId)?.tip, gorunen.find((b) => b.id === modelId)?.dosyaAdi], ['model', 'Merkez Mil.step']);
 
       const once = (await istek(yonetici, 'GET', '/cizimler')).govde;

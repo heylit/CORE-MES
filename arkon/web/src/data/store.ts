@@ -30,7 +30,7 @@ type Bytes = Uint8Array;
 export type CihazKipi = 'ortak' | 'kisisel';
 /** gelen anlık ileti: bilinen alanlar + sayfaya özgü alanlar */
 export type BusIn = BusMsg & Record<string, any>;
-export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
+export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; revKodu?: string | null; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
 export interface ApiOpts { timeout?: number; noAuth?: boolean; raw?: boolean }
 export interface LogQuery { machine?: string | null; wc?: string | null; from?: number | null; to?: number | null; order?: string | null; pkg?: string | null; item?: number | string | null; limit?: number | null }
 type OutboxItem = { at?: number; uid?: string } & ({ op: 'put'; store: string; id: string } | { op: 'del'; store: string; id: string; base?: number } | { op: 'log'; kind: string; row: Record<string, unknown> });

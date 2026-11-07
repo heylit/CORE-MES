@@ -55,7 +55,7 @@ export function MerkezSecici({ onPick, onClose }: { onPick: (b: MerkezBelgesi) =
     <div className="ov-h"><div><span className="over">Çizim Merkezi</span><h2>Yayındaki çizimler</h2><p>Yalnız yayındaki PDF ve 3B modeller listelenir. Seçilen dosya pakete kopyalanır.</p></div><button className="iconbtn x" onClick=${onClose} aria-label="Kapat"><${I} n="x" /></button></div>
     <input value=${q} onChange=${(e: { target: HTMLInputElement }) => setQ(e.target.value)} placeholder="Belge adı ile ara" aria-label="Belge ara" />
     <div className="lglist" style=${{ marginTop: 12 }}>${(rows || []).map(b => html`<button key=${b.id} className="lgrow" disabled=${busy !== 0} onClick=${() => sec(b)}>
-      <div><b>${b.ad}</b><small>Rev ${b.harf} · ${b.dosyaAdi}</small></div><span className=${'dk ' + (b.tip === 'pdf' ? 'pdf' : 'step')}>${b.tip === 'pdf' ? 'PDF' : '3B'}</span><${I} n=${busy === b.id ? 'rotate' : 'plus'} s=${18} /></button>`)}
+      <div><b>${b.ad}</b><small>${b.revKodu ? 'Rev ' + b.revKodu : 'Kodsuz revizyon'} · ${b.dosyaAdi}</small></div><span className=${'dk ' + (b.tip === 'pdf' ? 'pdf' : 'step')}>${b.tip === 'pdf' ? 'PDF' : '3B'}</span><${I} n=${busy === b.id ? 'rotate' : 'plus'} s=${18} /></button>`)}
     ${err ? html`<small className="muted">${err}</small>` : rows === null ? html`<small className="muted">Yükleniyor…</small>` : !rows.length ? html`<small className="muted">Yayında uygun belge yok.</small>` : null}</div>
   </div></div>`;
 }
