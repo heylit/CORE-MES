@@ -15,6 +15,7 @@ import { gunlukKur } from './gunluk.ts';
 import type { Gunluk } from './gunluk.ts';
 import { kilitlenmedeYinele } from './kilitlenme.ts';
 import { UygulamaHatasi, dogrulama, gecersiz, mesgul, oturumYok, veritabaniYok, yetkiYok } from './hata.ts';
+import { govdeTuruReddedilirMi, GOVDE_TURU_REDDI, KAYNAK_REDDI, kaynakReddedilirMi } from './istek-kaynagi.ts';
 import { baslikKimligi, istekOzeti } from './tekrar.ts';
 import type { SakliCevap, TekrarDeposu, TekrarIstegi } from './tekrar.ts';
 import { istekKisisiniIsaretle, istekReddiniKaydet, type RetNedeni } from './red-kaydi.ts';
@@ -495,6 +496,18 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
       method: tanim.yontem,
       url: `/api${tanim.yol}`,
       handler: async (istek, yanit) => {
+        // Yazma isteği önce kaynağına bakılarak süzülür (2226): çerezi taşıyan başka sayfa kimlik çözülmeden reddedilir.
+        if (tanim.yontem !== 'GET') {
+          const tekBaslik = (ad: string): string | undefined => {
+            const deger = istek.headers[ad];
+            return Array.isArray(deger) ? deger[0] : deger;
+          };
+          if (kaynakReddedilirMi({ secFetchSite: tekBaslik('sec-fetch-site'), origin: tekBaslik('origin'), host: istek.host })) {
+            throw yetkiYok(KAYNAK_REDDI);
+          }
+          const govdeVar = Number(tekBaslik('content-length') ?? '0') > 0 || tekBaslik('transfer-encoding') !== undefined;
+          if (govdeTuruReddedilirMi(tekBaslik('content-type'), govdeVar)) throw gecersiz(GOVDE_TURU_REDDI);
+        }
         // Veritabanına ulaşılamadığı için kimlik çözülemeyince 401 de 500 de yanıltır: oturum bitmemiştir,
         // istek de sunucu da kusurlu değildir. Çözücünün başka her hatası beklenmeyen hata yoluna gider.
         const kullanici = await kimlik(istek).catch((hata: unknown) => {
@@ -695,7 +708,9 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           void yanit.header('etag', etiket).header('cache-control', 'private, no-cache');
           if (etiketTutar(istek.headers['if-none-match'], etiket)) return yanit.code(304).send();
         }
-        void yanit.code(durumKodu ?? 200).type('application/json; charset=utf-8');
+        // Önbellekli uç kendi no-cache başlığını yukarıda koyar; öteki veri cevabı paylaşılan bilgisayarda tarayıcıda kalmasın (2226).
+        if (!tanim.onbellek) void yanit.header('cache-control', 'private, no-store');
+        void yanit.code(durumKodu ?? 200).type('application/json; charset=utf-8').header('x-content-type-options', 'nosniff');
         if (Buffer.byteLength(metin) < SIKISTIRMA_ESIGI) return yanit.send(metin);
         void yanit.header('vary', 'accept-encoding');
         if (!gzipKabul(istek.headers['accept-encoding'])) return yanit.send(metin);
