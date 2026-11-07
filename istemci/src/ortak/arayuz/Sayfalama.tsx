@@ -7,6 +7,8 @@ export interface SayfalamaOzellikleri {
   sayfaBoyu: number;
   // null: sunucu toplamı saymıyor; yalnız önceki ve sonraki gösterilir.
   toplam: number | null;
+  // true: sunucu sayımı `toplam`da kesti, gerçek toplam daha büyük. Son sayfa bilinmez; gezinme toplam bilinmiyormuş gibidir.
+  toplamSinirli?: boolean;
   degistir: (sayfa: number) => void;
   // Bu sayfada gelen satır sayısı. Toplam bilinmiyorken son sayfayı (eksik dolu sayfa) ve özeti bu belirler.
   satirSayisi?: number;
@@ -17,16 +19,20 @@ const sayi = (n: number) => n.toLocaleString('tr-TR');
 // Sınır dışı girdi (sıfır, eksi, sayı olmayan) özeti ve sayfa sayısını bozmasın diye en küçük geçerli değere çekilir.
 const enAzBir = (n: number) => (Number.isFinite(n) && n >= 1 ? Math.trunc(n) : 1);
 
-export function Sayfalama({ sayfa: hamSayfa, sayfaBoyu: hamBoy, toplam, degistir, satirSayisi, etiket = 'Sayfalar' }: SayfalamaOzellikleri) {
+export function Sayfalama({ sayfa: hamSayfa, sayfaBoyu: hamBoy, toplam: hamToplam, toplamSinirli = false, degistir, satirSayisi, etiket = 'Sayfalar' }: SayfalamaOzellikleri) {
   const sayfa = enAzBir(hamSayfa);
   const sayfaBoyu = enAzBir(hamBoy);
+  const altSinir = toplamSinirli && hamToplam !== null ? hamToplam : null;
+  const toplam = altSinir === null ? hamToplam : null;
   const sonSayfa = toplam === null ? null : Math.max(1, Math.ceil(toplam / sayfaBoyu));
   const ilkKayit = (sayfa - 1) * sayfaBoyu + 1;
   // İlk sayfada kayıt yoksa söylenecek şey listenin boş durumudur; sayfalama yer tutmaz.
   if (sayfa <= 1 && (toplam === 0 || (toplam === null && satirSayisi === 0))) return null;
 
   let ozet: string;
-  if (toplam !== null) {
+  if (altSinir !== null && satirSayisi !== 0) {
+    ozet = `${sayi(altSinir)}+ kayıttan ${sayi(ilkKayit)}–${sayi(satirSayisi === undefined ? sayfa * sayfaBoyu : ilkKayit - 1 + satirSayisi)}`;
+  } else if (toplam !== null) {
     ozet = ilkKayit > toplam ? `${sayi(toplam)} kayıt` : `${sayi(toplam)} kayıttan ${sayi(ilkKayit)}–${sayi(Math.min(sayfa * sayfaBoyu, toplam))}`;
   } else if (satirSayisi === 0) {
     ozet = 'Bu sayfada kayıt yok';

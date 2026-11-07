@@ -120,7 +120,7 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
 
   test('şema: liste cevabında gövde ve parametre alanı yoktur; gövde ucunun şemasında vardır', () => {
     assert.deepEqual(Object.keys(kayitSatiri.shape).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'modul', 'yetki', 'yol', 'yontem', 'zaman']);
-    assert.deepEqual(Object.keys(kayitListesiCevabi.shape).sort(), ['satirlar', 'sayfa', 'sayfaBoyu', 'toplam']);
+    assert.deepEqual(Object.keys(kayitListesiCevabi.shape).sort(), ['satirlar', 'sayfa', 'sayfaBoyu', 'toplam', 'toplamSinirli']);
     // Şema fazla alanı atar: işleyici yanlışlıkla gövde koysa da istemciye gitmez.
     const satir = { id: 1, zaman: '2020-03-01T10:00:00+00:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/x', modul: null, yetki: null, kimlikler: {}, govde: { a: 1 }, parametre: { b: 2 } };
     assert.deepEqual(Object.keys(kayitSatiri.parse(satir)).sort(), ['id', 'kimlikler', 'kisiAd', 'kisiId', 'modul', 'yetki', 'yol', 'yontem', 'zaman']);

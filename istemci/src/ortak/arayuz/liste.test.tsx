@@ -65,6 +65,23 @@ describe('Sayfalama', () => {
     expect(pasifMi('Önceki sayfa')).toBe(false);
   });
 
+  it('sinirli toplamda ozet "10.000+" yazar; son sayfa bilinmez, gezinme satir sayisina gore', () => {
+    const degistir = vi.fn();
+    const { rerender } = render(<Sayfalama sayfa={3} sayfaBoyu={50} toplam={10000} toplamSinirli satirSayisi={50} degistir={degistir} />);
+    expect(ozet()).toBe('10.000+ kayıttan 101–150');
+    expect(screen.getAllByRole('button').map((d) => d.getAttribute('aria-label'))).toEqual(['Önceki sayfa', 'Sonraki sayfa']);
+    expect(screen.getByText('Sayfa 3')).toBeTruthy();
+    fireEvent.click(dugme('Sonraki sayfa'));
+    expect(degistir.mock.calls).toEqual([[4]]);
+
+    rerender(<Sayfalama sayfa={300} sayfaBoyu={50} toplam={10000} toplamSinirli satirSayisi={7} degistir={degistir} />);
+    expect(ozet()).toBe('10.000+ kayıttan 14.951–14.957');
+    expect(pasifMi('Sonraki sayfa')).toBe(true);
+
+    rerender(<Sayfalama sayfa={400} sayfaBoyu={50} toplam={10000} toplamSinirli satirSayisi={0} degistir={degistir} />);
+    expect(ozet()).toBe('Bu sayfada kayıt yok');
+  });
+
   it('tek sayfada yalniz ozet yazar; kayit yoksa hic cizilmez', () => {
     const { rerender } = render(<Sayfalama sayfa={1} sayfaBoyu={50} toplam={7} degistir={() => {}} />);
     expect(ozet()).toBe('7 kayıttan 1–7');

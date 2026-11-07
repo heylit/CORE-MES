@@ -125,6 +125,30 @@ test('sayfalı liste: sınırı aşan sayfa boyu üst sınıra çekilir ve sorgu
   }
 });
 
+test('sayfalı liste: sayım sınırı verilince sayım sınırın bir fazlasıyla istenir; aşan toplam sınır olarak ve işaretli döner', async () => {
+  const sinirli = (toplam: number) => {
+    const k = sahteKaynak(toplam);
+    const ustler: (number | undefined)[] = [];
+    return { ...k, ustler, sayimSiniri: 100, say: async (ust?: number) => { ustler.push(ust); return Math.min(toplam, ust ?? toplam); } };
+  };
+  const buyuk = sinirli(1000);
+  assert.deepEqual(await sayfaliListe({ sayfa: 2, sayfaBoyu: 10 }, buyuk), {
+    satirlar: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20], toplam: 100, sayfa: 2, sayfaBoyu: 10, toplamSinirli: true,
+  });
+  // Son sayfa bilinmediği için sınırın ötesindeki sayfa çekilmez.
+  assert.deepEqual((await sayfaliListe({ sayfa: 15, sayfaBoyu: 10 }, buyuk)).satirlar[0], 141);
+  assert.deepEqual(buyuk.ustler, [101, 101]);
+
+  const tam = sinirli(100);
+  assert.deepEqual(await sayfaliListe({ sayfa: 99, sayfaBoyu: 10 }, tam), {
+    satirlar: [91, 92, 93, 94, 95, 96, 97, 98, 99, 100], toplam: 100, sayfa: 10, sayfaBoyu: 10,
+  });
+
+  for (const sayimSiniri of [0, 1.5, -3]) {
+    await assert.rejects(sayfaliListe({ sayfa: 1 }, { ...sahteKaynak(5), sayimSiniri }), /Geçersiz sayım sınırı/, String(sayimSiniri));
+  }
+});
+
 // Bir modülün sözleşmesinde duracak şemalar.
 const KALEM_SIRALAMA_ALANLARI = ['ad', 'grup'] as const;
 const kalemSemasi = z.object({ id: z.number().int(), ad: z.string(), grup: z.string().nullable() });
