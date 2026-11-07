@@ -1,7 +1,5 @@
-// @ts-nocheck
 // İK hesap motorunun tek kaynağıdır (211 a): bordro, izin, tazminat ve parametre dönemi hesaplarını ekran (tahmin) ve sunucu
-// (kesinleştirme) aynı koddan yapar (kaynak: ik-modulu src/core). Tipli yüz arayuz.ts'tedir; bu dosyada tip denetimi
-// tipleme bitene kadar kapalıdır (sunucu/moduller/ik/UYUM-BORCU.md).
+// (kesinleştirme) aynı koddan yapar (kaynak: ik-modulu src/core). Ekranın kullandığı tipli yüz arayuz.ts'tedir.
 /**
  * İK Modülü – sabitler, varsayılan ayarlar, soru setleri ve yaka/kademe çıkarımı.
  */
@@ -65,8 +63,8 @@ const TESVIK_TUR = [['yok','Teşvik yok'],['puan','İşveren payından puan indi
 const COLLARS = ['Beyaz yaka','Mavi yaka'];
 const LEVELS = ['Üst yönetim','Yönetici','Takım lideri / şef','Uzman','Asistan / yardımcı','Operasyon / teknik personel','Stajyer'];
 const BLUE_KW = ['operatör','operator','teknisyen','tekniker','usta','şoför','sofor','depo','forklift','montaj','kaynak','paketleme','işçi','bakım','temizlik','güvenlik görevlisi','vardiya','elektrikçi','tornacı','boyacı','kalıp','sevkiyat','kurye','aşçı','garson','mekanik','istifçi','hamal','bekçi','bahçıvan'];
-function inferCollar(poz){ const p = String(poz || '').toLocaleLowerCase('tr'); if(!p) return 'Beyaz yaka'; if(/müdür|mühendis|uzman|şef|planlama|yönetici|direktör/.test(p)) return 'Beyaz yaka'; return BLUE_KW.some(k => p.includes(k)) ? 'Mavi yaka' : 'Beyaz yaka'; }
-function inferLevel(poz){
+function inferCollar(poz: unknown): string { const p = String(poz || '').toLocaleLowerCase('tr'); if(!p) return 'Beyaz yaka'; if(/müdür|mühendis|uzman|şef|planlama|yönetici|direktör/.test(p)) return 'Beyaz yaka'; return BLUE_KW.some(k => p.includes(k)) ? 'Mavi yaka' : 'Beyaz yaka'; }
+function inferLevel(poz: unknown): string {
   const p = String(poz || '').toLocaleLowerCase('tr');
   if(/genel müdür|ceo|cfo|cto|coo|direktör|direktor|başkan|ortak/.test(p)) return 'Üst yönetim';
   if(/asistan|sekreter/.test(p)) return 'Asistan / yardımcı';
@@ -77,8 +75,10 @@ function inferLevel(poz){
   if(/asistan|yardımcı|eleman|sekreter/.test(p)) return 'Asistan / yardımcı';
   return 'Uzman';
 }
-const collarOf = e => COLLARS.includes(e?.yakaTipi) ? e.yakaTipi : inferCollar(e?.pozisyon);
-const levelOf = e => LEVELS.includes(e?.kademe) ? e.kademe : inferLevel(e?.pozisyon);
+// Kayıtta seçilmiş yaka ya da kademe yoksa pozisyon adından çıkarılır.
+interface YakaKaydi { yakaTipi?: unknown; kademe?: unknown; pozisyon?: unknown }
+const collarOf = (e: YakaKaydi | null | undefined): string => (COLLARS as readonly unknown[]).includes(e?.yakaTipi) ? e!.yakaTipi as string : inferCollar(e?.pozisyon);
+const levelOf = (e: YakaKaydi | null | undefined): string => (LEVELS as readonly unknown[]).includes(e?.kademe) ? e!.kademe as string : inferLevel(e?.pozisyon);
 const ASSET_TYPES = ['Dizüstü bilgisayar','Masaüstü bilgisayar','Monitör','Cep telefonu','Hat / SIM','Araç','Giriş kartı','Anahtar','İş kıyafeti / KKD','Diğer'];
 const PERIOD_KEYS = ['asgariBrut','sgkTavan','sgkIsciOran','issizlikIsciOran','sgkIsverenOran','issizlikIsverenOran','damgaOran','dilimler','kidemTavan','mesaiCarpan','aylikSaat','yillikMesaiLimit','fazlaSurelerCarpan','haftaTatiliCarpan','ubgtCarpan','haftalikSaat','besOran','raporKesinti','engelliInd1','engelliInd2','engelliInd3','yemekYontem','yemekHesap','yemekDeger','yemekGvKart','yemekGvNakit','yemekSgkKart','yemekSgkLimit','yemekSgkNakit','yolYontem','yolHesap','yolDeger','yolGvKart','yolSgkKart','primler','tesvikler','varsayilanTesvik','ihbar1','ihbar2','ihbar3','ihbar4','izin1','izin2','izin3','izinYasMin'];
 
