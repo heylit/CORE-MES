@@ -1,15 +1,20 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { FaizTuru, KurCifti } from '#paylasilan/sozlesme/finans.ts';
+import { FAIZ_TURLERI } from '#paylasilan/sozlesme/finansman.ts';
 import { Dugme, FormPenceresi, Girdi, Kart, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
 import { yeniIstekKimligi } from '../../../../ortak/veri/istek-kimligi.ts';
 import { paraMetni, sayiMetni, tarih, tl } from '../bicim.ts';
-import { HESAP_TURU_ADI, sayi, type Faiz, type Hesap, type KdvOrani, type KurKaydi, type SabitKiymetSatiri } from '../donustur.ts';
+import { HESAP_TURU_ADI, sayi, type Hesap, type KdvOrani, type SabitKiymetSatiri } from '../donustur.ts';
 import type { Komut } from '../akislar.ts';
-import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
+import { tumu, useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
 import { KurFaizYukleme } from '../../KurFaizYukleme.tsx';
+import { FAIZ_ADI } from '../../KurFaizSeridi.tsx';
+import { KullanimKarti, OranMatrisiKarti } from './oran-matrisi.tsx';
 import { useAyarGonder } from './gonder.ts';
 import {
-  ayarKomutu, faizKomutu, hesapDurumKomutu, hesapKomutu, kdvKomutu, kiymetEkleKomutu, kiymetPasifKomutu, kurKomutu, type HesapDegerleri, type KiymetDegerleri,
+  ayarKomutu, hesapDurumKomutu, hesapKomutu, kdvKomutu, kiymetEkleKomutu, kiymetPasifKomutu, kurCiftiKomutu, oranKomutu, type HesapDegerleri, type KiymetDegerleri,
 } from './komutlar.ts';
 
 // Ayarlar'ın tablo sekmeleri (prototip tam kip: Hesaplar, KDV oranları, Kurlar ve faiz, Sabit kıymetler).
@@ -109,41 +114,51 @@ export function KdvSekmesi({ finans, yetki }: Ozellik) {
 }
 
 /* ---------- Kurlar ve faiz ---------- */
+// 2238: matris görünümü, kullanım yerleri, toplu yükleme, alış/satış kur çifti ve tür başına yıllık faiz girişi; altta son girişler.
+interface OranSatiri { id: number; tur: FaizTuru; paraBirimi: string; gecerlilikBaslangic: string; yillikYuzde: string; not: string | null; olusturma: string }
+const FAIZ_TURU_SECENEKLERI = FAIZ_TURLERI.map((t) => ({ deger: t, baslik: `${FAIZ_ADI[t]} faizi` }));
 export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
   const { V, motor } = finans;
   const { gonder, mesgul } = useAyarGonder();
-  const kur = useSatirFormu({ pb: 'EUR', tarih: motor.bugun, kur: '' });
-  const faiz = useSatirFormu({ pb: 'TRY', baslangic: motor.bugun, yuzde: '' });
+  const kur = useSatirFormu({ pb: 'EUR', tarih: motor.bugun, alis: '', satis: '' });
+  const faiz = useSatirFormu({ tur: 'kredi', pb: 'TRY', baslangic: motor.bugun, yuzde: '', not: '' });
   const [pay, payYaz] = useState(String(sayi(V.ayar.caprazKurPayi)));
-  const [birim, birimYaz] = useState<FaizBirimi>(V.ayar.faizBirimi);
-  const kurlar = [...V.kurlar_listesi].reverse().slice(0, 60);
-  const kurSutunlari: Sutun<KurKaydi>[] = [
+  const ciftler = useQuery({ queryKey: ['finans', 'kur-ciftleri'], queryFn: async () => (await tumu('/finans/kur-ciftleri')) as KurCifti[] });
+  const oranlar = useQuery({ queryKey: ['finans', 'oranlar'], queryFn: async () => (await tumu('/finans/oranlar')) as OranSatiri[] });
+  const kurSutunlari: Sutun<KurCifti>[] = [
     { anahtar: 'pb', baslik: 'Para birimi', hucre: (k) => k.paraBirimi },
     { anahtar: 'tarih', baslik: 'Tarih', kirilmaz: true, hucre: (k) => tarih(k.tarih) },
-    { anahtar: 'kur', baslik: 'Kur (TRY)', hizala: 'sag', mono: true, hucre: (k) => sayiMetni(sayi(k.kur), 4) },
+    { anahtar: 'alis', baslik: 'Alış (TL)', hizala: 'sag', mono: true, hucre: (k) => sayiMetni(sayi(k.alis), 4) },
+    { anahtar: 'satis', baslik: 'Satış (TL)', hizala: 'sag', mono: true, hucre: (k) => sayiMetni(sayi(k.satis), 4) },
   ];
-  const faizSutunlari: Sutun<Faiz>[] = [
+  const faizSutunlari: Sutun<OranSatiri>[] = [
+    { anahtar: 'tur', baslik: 'Tür', hucre: (x) => FAIZ_ADI[x.tur] },
     { anahtar: 'pb', baslik: 'Para birimi', hucre: (x) => x.paraBirimi },
     { anahtar: 'bas', baslik: 'Geçerlilik başlangıcı', kirilmaz: true, hucre: (x) => tarih(x.gecerlilikBaslangic) },
-    { anahtar: 'yuzde', baslik: 'Aylık faiz', hizala: 'sag', mono: true, hucre: (x) => `%${sayiMetni(sayi(x.aylikYuzde), 4)}` },
+    { anahtar: 'yuzde', baslik: 'Yıllık %', hizala: 'sag', mono: true, hucre: (x) => `%${sayiMetni(sayi(x.yillikYuzde), 4)}` },
+    { anahtar: 'not', baslik: 'Not', hucre: (x) => x.not ?? '' },
     { anahtar: 'giris', baslik: 'Girildi', kirilmaz: true, hucre: (x) => tarih(x.olusturma.slice(0, 10)) },
   ];
+  const mevcutCift = (ciftler.data ?? []).find((k) => k.paraBirimi === kur.d.pb.trim().toUpperCase() && k.tarih === kur.d.tarih);
   return (
     <>
+      <OranMatrisiKarti bugun={motor.bugun} />
+      <KullanimKarti />
       {yetki.kurYaz && (
-        <Kart baslik="Toplu yükleme" baslikEki={<span className="tc-fa-soluk">Şablonu dışarıda doldurun, dosyayı seçin, önizlemeyi onaylayın</span>}>
+        <Kart baslik="Toplu yükleme" simge="upload" baslikEki={<span className="tc-fa-soluk">Şablonu indirin, matrisi doldurun, dosyayı seçin, önizlemeyi onaylayın</span>}>
           <KurFaizYukleme bugun={motor.bugun} />
         </Kart>
       )}
-      <Kart baslik="Kurlar" baslikEki={<span className="tc-fa-soluk">Elle girilen günlük kur; o gün kur yoksa kaydın kendi kuru kullanılır</span>}>
-        <Tablo etiket="Kurlar" sutunlar={kurSutunlari} satirlar={kurlar} satirAnahtari={(k) => `${k.paraBirimi}-${k.tarih}`} bosMesaj="Kur girilmemiş." />
+      <Kart baslik="Kurlar" baslikEki={<span className="tc-fa-soluk">Alış muhasebede, satış satın alma maliyetinde kullanılır</span>}>
+        <Tablo etiket="Kurlar" sutunlar={kurSutunlari} satirlar={(ciftler.data ?? []).slice(0, 60)} satirAnahtari={(k) => `${k.paraBirimi}-${k.tarih}`} bosMesaj="Kur girilmemiş." />
         {yetki.kurYaz && (
           <form className="tc-fa-ayar-satir" aria-label="Kur ekle"
-            onSubmit={(e) => { e.preventDefault(); void gonder([kurKomutu(V, kur.d.pb, kur.d.tarih, kur.d.kur)]).then((ok) => { if (ok) kur.dg({ kur: '' }); }); }}>
+            onSubmit={(e) => { e.preventDefault(); void gonder([kurCiftiKomutu(mevcutCift, kur.d.pb, kur.d.tarih, kur.d.alis, kur.d.satis)]).then((ok) => { if (ok) kur.dg({ alis: '', satis: '' }); }); }}>
             <Girdi etiket="Para birimi" maxLength={3} required value={kur.d.pb} onChange={(e) => kur.dg({ pb: e.target.value })} />
-            <Girdi etiket="Tarih" type="date" required value={kur.d.tarih} onChange={(e) => kur.dg({ tarih: e.target.value })} />
-            <Girdi etiket="Kur" type="number" min="0" step="0.000001" required value={kur.d.kur} onChange={(e) => kur.dg({ kur: e.target.value })} />
-            <Dugme type="submit" simge="plus" yukleniyor={mesgul}>Kur ekle</Dugme>
+            <Girdi etiket="Tarih" type="date" max={motor.bugun} required value={kur.d.tarih} onChange={(e) => kur.dg({ tarih: e.target.value })} />
+            <Girdi etiket="Alış" type="number" min="0" step="0.000001" required value={kur.d.alis} onChange={(e) => kur.dg({ alis: e.target.value })} />
+            <Girdi etiket="Satış" type="number" min={kur.d.alis || '0'} step="0.000001" required value={kur.d.satis} onChange={(e) => kur.dg({ satis: e.target.value })} />
+            <Dugme type="submit" simge="plus" yukleniyor={mesgul}>{mevcutCift ? 'Kuru düzelt' : 'Kur ekle'}</Dugme>
           </form>
         )}
         {yetki.yonet && (
@@ -153,39 +168,26 @@ export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
             <Dugme type="submit" simge="check" yukleniyor={mesgul}>Payı kaydet</Dugme>
           </form>
         )}
-        <p className="tc-fa-not">Farklı para birimli ödeme ya da mahsupta girilen kur, günün kurundan en çok %{sayiMetni(sayi(V.ayar.caprazKurPayi), 2)} sapabilir.</p>
+        <p className="tc-fa-not">Farklı para birimli ödeme ya da mahsupta girilen kur, günün alış kurundan en çok %{sayiMetni(sayi(V.ayar.caprazKurPayi), 2)} sapabilir.</p>
       </Kart>
-      <Kart baslik="Faiz oranları" baslikEki={<span className="tc-fa-soluk">Para birimi başına aylık faiz; yeni oran başlangıç gününden sonrasını etkiler</span>}>
-        <Tablo etiket="Faiz oranları" sutunlar={faizSutunlari} satirlar={V.faizler_listesi.slice(0, 60)} satirAnahtari={(x) => x.id} bosMesaj="Faiz girilmemiş." />
+      <Kart baslik="Faiz oranları" baslikEki={<span className="tc-fa-soluk">Tür ve para birimi başına yıllık %; yeni oran başlangıç gününden sonrasını etkiler</span>}>
+        <Tablo etiket="Faiz oranları" sutunlar={faizSutunlari} satirlar={(oranlar.data ?? []).slice(0, 60)} satirAnahtari={(x) => x.id} bosMesaj="Faiz girilmemiş." />
         {yetki.kurYaz && (
           <form className="tc-fa-ayar-satir" aria-label="Faiz ekle"
-            onSubmit={(e) => { e.preventDefault(); void gonder([faizKomutu(faiz.d.pb, faiz.d.baslangic, faiz.d.yuzde)]).then((ok) => { if (ok) faiz.dg({ yuzde: '' }); }); }}>
+            onSubmit={(e) => { e.preventDefault(); void gonder([oranKomutu(faiz.d.tur as FaizTuru, faiz.d.pb, faiz.d.baslangic, faiz.d.yuzde, faiz.d.not)]).then((ok) => { if (ok) faiz.dg({ yuzde: '', not: '' }); }); }}>
+            <Secim etiket="Tür" value={faiz.d.tur} secenekler={FAIZ_TURU_SECENEKLERI} onChange={(e) => faiz.dg({ tur: e.target.value })} />
             <Girdi etiket="Para birimi" maxLength={3} required value={faiz.d.pb} onChange={(e) => faiz.dg({ pb: e.target.value })} />
             <Girdi etiket="Geçerlilik başlangıcı" type="date" required value={faiz.d.baslangic} onChange={(e) => faiz.dg({ baslangic: e.target.value })} />
-            <Girdi etiket="Aylık faiz (%)" type="number" min="0" max="100" step="0.0001" required value={faiz.d.yuzde} onChange={(e) => faiz.dg({ yuzde: e.target.value })} />
+            <Girdi etiket="Yıllık faiz (%)" type="number" min="0" max="1000" step="0.0001" required value={faiz.d.yuzde} onChange={(e) => faiz.dg({ yuzde: e.target.value })} />
+            <Girdi etiket="Not" maxLength={200} value={faiz.d.not} onChange={(e) => faiz.dg({ not: e.target.value })} />
             <Dugme type="submit" simge="plus" yukleniyor={mesgul}>Faiz ekle</Dugme>
           </form>
         )}
-        <p className="tc-fa-not">Aynı para birimine aynı gün ikinci oran girilirse sonraki geçerlidir; ikisi de listede kalır.</p>
-        {yetki.yonet && (
-          <form className="tc-fa-ayar-satir" aria-label="Hesaplarda kullanılan faiz"
-            onSubmit={(e) => { e.preventDefault(); void gonder([ayarBirimKomutu(finans, birim)]); }}>
-            <Secim etiket="Hesaplarda kullanılan faiz" value={birim} secenekler={FAIZ_BIRIMI_SECENEKLERI} onChange={(e) => birimYaz(e.target.value as FaizBirimi)} />
-            <Dugme type="submit" simge="check" yukleniyor={mesgul}>Birimi kaydet</Dugme>
-          </form>
-        )}
-        <p className="tc-fa-not">
-          Plan, proje maliyeti ve satın alma {V.ayar.faizBirimi === 'gunluk' ? 'günlük' : 'aylık'} faizi kullanır; o birimde oran yoksa öbürü çevrilir.
-          Günlük faiz toplu yüklemeyle girilir.
-        </p>
+        <p className="tc-fa-not">Mevduat faizi stopaj sonrası girilir. Aynı tür ve para birimine aynı gün ikinci oran girilirse sonraki geçerlidir; ikisi de listede kalır.</p>
       </Kart>
     </>
   );
 }
-// 1725 a: hesapların faiz birimi finans ayarındadır.
-type FaizBirimi = FinansVerisi['V']['ayar']['faizBirimi'];
-const FAIZ_BIRIMI_SECENEKLERI = [{ deger: 'aylik', baslik: 'Aylık faiz' }, { deger: 'gunluk', baslik: 'Günlük faiz' }];
-const ayarBirimKomutu = (f: FinansVerisi, birim: FaizBirimi): Komut => ayarKomutu(f.V.ayar, f.V.sirketAdi, { faizBirimi: birim }, 'Faiz birimi kaydedildi.');
 const ayarPayKomutu = (f: FinansVerisi, pay: string): Komut => ayarKomutu(f.V.ayar, f.V.sirketAdi, { caprazKurPayi: sayi(pay) }, 'Çapraz kur payı kaydedildi.');
 
 /* ---------- Sabit kıymetler ---------- */
