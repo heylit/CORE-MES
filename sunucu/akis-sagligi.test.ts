@@ -619,4 +619,30 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const iptal = tamam(await yaz<{ durum: string }>('mudur', `/siparisler/${s.id}/iptal`, { surum: sip.surum, neden: 'müşteri vazgeçti' }));
     assert.equal(iptal.durum, 'iptal');
   });
+
+  test('16 sipariş iptali (2103-2 b): siparişten açılan projenin satıra bağlı olmayan açık emri de iptali durdurur', async () => {
+    const f = tamam(await yaz<{ firma: { id: number } }>('planlama', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Proje Iptal AS', tur: 'musteri' }));
+    const govde = (fiyat: string | null) => ({
+      firmaId: f.firma.id, musteriSiparisNo: 'MS-DENEME-4', siparisTarihi: S.bugun, termin: S.ileri, kdvOrani: '20', odemeKosulu: null, aciklama: null,
+      satirlar: [{ malzemeNo: S.mm, miktar: String(MAMUL_ADET), birimFiyat: fiyat, termin: null, aciklama: null }],
+    });
+    const s = tamam(await yaz<{ id: number; surum: number }>('planlama', '/siparisler/ekle', govde(null)));
+    const gu = tamam(await yaz<{ surum: number }>('mudur', `/siparisler/${s.id}/guncelle`, { ...govde('250'), surum: s.surum }));
+    tamam(await yaz('mudur', `/siparisler/${s.id}/onayla`, { surum: gu.surum }));
+    const sip = tamam(await oku<{ surum: number }>('mudur', `/siparisler/${s.id}`));
+    const p = tamam(await yaz<{ id: number }>('planlama', `/projeler/siparisten/${s.id}/ac`, { kod: 'E2E.P4', ad: 'Deneme proje emri', baslangic: S.bugun, bitis: S.ileri, aciklama: null }));
+    const e = tamam(await yaz<{ uretimEmriId: number }>('planlama', `/rota/revizyonlar/${S.rev}/emre-kopyala`,
+      { adet: MAMUL_ADET, teslim: S.ileri, projeId: p.id, siparisSatiriId: null, stoktanRezerve: false }));
+    // Projede siparişte olmayan bir parçanın emri: satır bağı yalnız test için kaldırılır, emir projede kalır.
+    await vt().sorgu('UPDATE uretim_emri SET siparis_satiri_id = NULL WHERE id = $1', [e.uretimEmriId]);
+    const em = tamam(await oku<AdimliEmir & { emir: { surum: number } }>('planlama', `/adimli-emirler/${e.uretimEmriId}`)).emir;
+    assert.deepEqual([em.projeId, em.siparisSatiriId], [p.id, null]);
+
+    const red = await yaz('mudur', `/siparisler/${s.id}/iptal`, { surum: sip.surum, neden: 'müşteri vazgeçti' });
+    assert.equal(red.durum, 409, JSON.stringify(red.govde));
+    assert.ok(red.govde.mesaj?.includes(em.emirNo), red.govde.mesaj);
+
+    tamam(await yaz('planlama', `/adimli-emirler/${e.uretimEmriId}/iptal`, { surum: em.surum }));
+    assert.equal(tamam(await yaz<{ durum: string }>('mudur', `/siparisler/${s.id}/iptal`, { surum: sip.surum, neden: 'müşteri vazgeçti' })).durum, 'iptal');
+  });
 });

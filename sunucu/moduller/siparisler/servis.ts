@@ -178,7 +178,7 @@ export async function durumDegistir(
     if (eksik !== null) throw cakisma(eksik);
   }
   if (komut === 'iptal') {
-    const bagli = bagliEmirReddi(komut, await bagliEmirler(db, (await sorgular.kalemler(db, id)).map((k) => k.id)));
+    const bagli = bagliEmirReddi(komut, await bagliEmirler(db, { siparisId: id, satirIdleri: (await sorgular.kalemler(db, id)).map((k) => k.id) }));
     if (bagli !== null) throw cakisma(bagli);
   }
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
