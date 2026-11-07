@@ -626,3 +626,8 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
+
+// İstek içi okuma belleği yalnız okuma transaction'ında açılır (servis.ts okumaBellegiyle).
+export async function okumaTransactioniMi(db: Db): Promise<boolean> {
+  return (await db.tek<{ salt: boolean }>("SELECT current_setting('transaction_read_only') = 'on' AS salt"))?.salt === true;
+}

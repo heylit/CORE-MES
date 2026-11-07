@@ -426,6 +426,27 @@ function emirSatiri(b: Pick<Baglam, 'siparisSatirlari' | 'kurlar'>, i: Pick<Is, 
 // müşteri sınıfı girmez.
 const emirCarpani = (b: Pick<Baglam, 'bedelAyari'>, i: Pick<Is, 'oncelik'> | null): number => oncelikCarpani(i?.oncelik ?? null, b.bedelAyari);
 
+// Planlanacak iş emirleri bir okuma isteğinde birden çok yoldan istenir (motor yerleşimi bağlamı, çalışan adımları, canlı özeti ve
+// planlama girdisini tek istekte kurar; liste her seferinde bütün açık adımları okur). Okuma transaction'ı tek görüntüdür: aynı seçenekle
+// ikinci okuma aynı sonucu verir, bu yüzden istek boyunca bir kez okunur. Yazma transaction'ında bellek açılmaz: araya giren yazma
+// listeyi değiştirebilir. Sonuç paylaşılır; okuyan değiştirmez.
+const okumaBellekleri = new WeakMap<Db, Map<string, Promise<PlanIsEmri[]>>>();
+export async function okumaBellegiyle<T>(db: Db, is: () => Promise<T>): Promise<T> {
+  if (okumaBellekleri.has(db)) return is();
+  if (!await s.okumaTransactioniMi(db)) return is();
+  okumaBellekleri.set(db, new Map());
+  try { return await is(); } finally { okumaBellekleri.delete(db); }
+}
+export function planlanacakIsler(db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: boolean } = {}): Promise<PlanIsEmri[]> {
+  const taslakDahil = secenek.taslakDahil ?? false;
+  const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q) } : {}) });
+  const bellek = okumaBellekleri.get(db);
+  if (bellek === undefined) return oku();
+  const anahtar = `${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}`;
+  if (!bellek.has(anahtar)) bellek.set(anahtar, oku());
+  return bellek.get(anahtar)!;
+}
+
 // Aynı istekte birden çok bağlam kurulurken (senaryo listesi: canlı ve her açık senaryo) hedefe bağlı olmayan okumalar bir kez yapılır
 // ve bağlamlar aynı anı paylaşır. Hedefe bağlı olanlar (değişiklik defteri, plan ve bedel ayarı, bölmeler, ek mesai) her bağlamda okunur.
 // Paylaşılan okumayı değiştiren bağlam kendi kopyasını alır (senaryodaki makine arızası kaynak haritasını değiştirir).
@@ -457,7 +478,7 @@ async function baglamKur(db: Db, kullanici: Kullanici | null, hedef: Hedef, orta
   // Açık işler ve onlardan türeyen okumalar yalnız "taslak emirleri de planla" ayarına bağlıdır.
   const t = String(ayar.taslakEmirler);
   // Termini girilmemiş fason adım: satın almanın geçmiş teslim tahmini, yoksa FASON_VARSAYILAN_GUN (CA-2).
-  const acik = await bir(`acik:${t}`, () => planlanacakIsEmirleri(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: (q) => fasonSuresiTahminleri(db, q) }));
+  const acik = await bir(`acik:${t}`, () => planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler, fasonTahmini: true }));
   const eksikRevizyon = await bir(`eksik:${t}`, () => girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId)));
   const siparisSatirlari = await bir(`siparis:${t}`, () => siparisSatiriOzetleri(db, acik.flatMap((i) => (i.siparisSatiriId == null ? [] : [i.siparisSatiriId]))));
   // Kaynaklar ve ürün adları işlerden önce tek turda okunur: iş başına okuma olmasın.
@@ -557,7 +578,7 @@ export interface CalisanAdim {
 }
 export async function calisanAdimlar(db: Db): Promise<CalisanAdim[]> {
   const iso = (t: string | null | undefined) => (t ? new Date(t).toISOString() : null);
-  const acik = await planlanacakIsEmirleri(db);
+  const acik = await planlanacakIsler(db);
   if (!acik.some((i) => calisanKalani(i) !== null)) return [];
   const kaynaklar = await kaynaklariOku(db, new Map());
   return acik.flatMap((i) => {
@@ -1207,13 +1228,13 @@ export async function canliYerlesim(db: Db, isEmriIdleri: readonly number[]): Pr
 // Reçete ve Rota'nın plan şeridi: canlı plandaki makine kuyrukları (başlangıç sırasıyla) ve son canlıya alma. Yetki denetlemez; plan
 // okuması oturumla açıktır, çağıran korur.
 export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
-  const planlanacakIsler = await planlanacakIsEmirleri(db, { taslakDahil: true });
-  const anahtar = new Map(planlanacakIsler.map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
+  const acikIsler = await planlanacakIsler(db, { taslakDahil: true });
+  const anahtar = new Map(acikIsler.map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
   const kuyruklar = new Map<number, PlanCanliOzeti['kuyruklar'][number]['isler']>();
   const satirlar = anahtar.size ? await s.canliYerlesimleri(db, [...anahtar.keys()]) : [];
   // Elle sıranın düşüp düşmediği rota istasyonuna bakar; bağlam pahalı, yalnız istasyonu kayıtlı elle sıra varsa kurulur.
   const b = satirlar.some((y) => y.elleSira !== null && (y.elleIstasyonId ?? null) !== null) ? await baglamKur(db, null, null) : null;
-  const fiili = fiiliKaynaklar(planlanacakIsler);
+  const fiili = fiiliKaynaklar(acikIsler);
   // Bölünmüş işin her parçası kendi makinesinin kuyruğunda ayrı iştir; elle sıra ve elle kaynak parçanındır. Çalışan iş, plan ekranındaki
   // gibi (kaynakOf), terminalin çalıştırdığı makinededir.
   type KuyrukParcasi = { y: YerlesimSatiri; p: ParcaSatiri | null; kaynak: Kaynak; baslangic: Date; bitis: Date; elleSira: number | null; elleKaynak: boolean };
@@ -1237,7 +1258,7 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
     kuyruklar: [...kuyruklar].map(([makineId, isler]) => ({ makineId, isler })),
     planlanacak: [...new Set(anahtar.values())],
     // Elle bölmede parça adetlerinin toplamı adımın adedidir (önceki adımın hurdası düşülmüş); ekran parçaları bununla böler.
-    adetler: Object.fromEntries(planlanacakIsler.map((i) => [`${i.emirNo}|${i.opNo}`, i.adimAdedi ?? i.adet])),
+    adetler: Object.fromEntries(acikIsler.map((i) => [`${i.emirNo}|${i.opNo}`, i.adimAdedi ?? i.adet])),
     yersizBolmeler: [...await s.yersizBolmeler(db, null)].filter(([id]) => anahtar.has(id)).map(([id, parcalar]) => ({ anahtar: anahtar.get(id)!, parcalar })),
   };
 }
@@ -2117,7 +2138,10 @@ async function emirBolluklari(db: Db, b: Baglam, adimlar: readonly { isEmriId: n
 }
 
 // 220 a: motorun yerleşimi yazılmadan döner; ekran (Reçete ve Rota > Plan) kendi hesabı yerine bunu çizer. Sabitler yerinde kalır.
-export async function motorYerlesimi(db: Db, k: Kullanici, taslak?: number): Promise<MotorYerlesimiCevabi> {
+export function motorYerlesimi(db: Db, k: Kullanici, taslak?: number): Promise<MotorYerlesimiCevabi> {
+  return okumaBellegiyle(db, () => motorYerlesimiKur(db, k, taslak));
+}
+async function motorYerlesimiKur(db: Db, k: Kullanici, taslak?: number): Promise<MotorYerlesimiCevabi> {
   const hedef = taslak ?? null;
   await hedefDenetle(db, hedef);
   const b = await baglamKur(db, k, hedef);
@@ -2699,7 +2723,7 @@ export async function vazgec(db: Db, k: Kullanici, id: number, surum: number) {
 async function canliGecikenSayisi(db: Db): Promise<number> {
   const b = { simdi: Date.now() };
   const ayar = await s.ayarOku(db, null);
-  const acik = await planlanacakIsEmirleri(db, { taslakDahil: ayar.taslakEmirler });
+  const acik = await planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler });
   const eksikRevizyon = await girdisiEksikRevizyonlar(db, acik.map((i) => i.kaynakRotaRevizyonId));
   const isler = new Map(acik.filter((i) => !eksikRevizyon.get(i.kaynakRotaRevizyonId)).map((i) => [i.id, i]));
   const emirler = new Map<number, { id: number; teslimDk: number | null; isSayisi: number }>();
