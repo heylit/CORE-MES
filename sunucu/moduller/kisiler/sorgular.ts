@@ -567,3 +567,17 @@ export async function gizlilikTaahhuduYaz(db: Db, kisiId: number): Promise<boole
   );
   return satir !== null;
 }
+
+// 2226-4 a: girişte eski maliyetli özet yenilenir. Yalnız özet sütunu değişir: oturumlar düşmez, değişiklik defterine satır girmez
+// (_ozeti sütunu dışarıda). Satır başka bir girişçe kilitliyse beklenmez, atlanır (iki eşzamanlı giriş birbirini kilitlemesin);
+// özet arada değişmişse yazılmaz.
+export async function sirOzetiniYenile(db: Db, kisiId: number, alan: 'parola' | 'pin', eski: string, yeni: string): Promise<boolean> {
+  const sutun = alan === 'pin' ? 'pin_ozeti' : 'parola_ozeti';
+  const satirlar = await db.sorgu(
+    `UPDATE kisi SET ${sutun} = $3
+      WHERE id IN (SELECT id FROM kisi WHERE id = $1 AND ${sutun} = $2 FOR UPDATE SKIP LOCKED)
+      RETURNING id`,
+    [kisiId, eski, yeni],
+  );
+  return satirlar.length === 1;
+}
