@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ucEnvanteri, yetkiMetni } from '#cekirdek/uc.ts';
 import type { UcOzeti } from '#cekirdek/uc.ts';
@@ -352,8 +352,14 @@ export async function haritaTopla(kok: string = KOK): Promise<Harita> {
 
   const sorgular = new Map<string, string>();
   for (const ad of sunucuAdlari) {
-    const dosya = join(sunucuKlasoru, ad, 'sorgular.ts');
-    if (existsSync(dosya)) sorgular.set(ad, sorguSqli(await readFile(dosya, 'utf8')));
+    // Büyük modülün sorguları alt klasörlerdeki sorgular.ts dosyalarına bölünebilir (sınır kuralı e yalnız dosya adına bakar);
+    // tablo sahipliği bunların hepsinden okunur, yoksa bölünen modülün tabloları sahipsiz görünür.
+    const dosyalar = (await readdir(join(sunucuKlasoru, ad), { recursive: true }))
+      .filter((yol) => basename(yol) === 'sorgular.ts').sort();
+    if (dosyalar.length > 0) {
+      const sqller = await Promise.all(dosyalar.map(async (yol) => sorguSqli(await readFile(join(sunucuKlasoru, ad, yol), 'utf8'))));
+      sorgular.set(ad, sqller.join('\n'));
+    }
   }
   const { sahip, belirsiz, canli } = sahipligiCoz(gocler, sorgular, sunucuAdlari);
   const tabloModulu = (tablo: string): string | null => sahip.get(tablo)?.modul ?? null;
