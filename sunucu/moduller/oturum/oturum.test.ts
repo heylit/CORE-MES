@@ -4,6 +4,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
 import { SAYFA_ISLEMLERI } from '#paylasilan/sayfalar.ts';
 import { ayarOku } from '#cekirdek/ayar.ts';
 import { izinYok, testSemasiAc, testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -17,6 +18,8 @@ import { kimlikCozucu } from './disari.ts';
 import { CEREZ_ADI, beklemeIletisi } from './kurallar.ts';
 import { denemeKilidiAl } from './sorgular.ts';
 import { oturumUclari } from './uclar.ts';
+import { ROL_KODLARI, ROL_MATRISI, YALNIZ_YONETICIDE, YONETICI_ROLU, rolunIslemleri, rollerinIslemleri } from '../../../araclar/yetki-beklentisi.ts';
+import type { RolKodu } from '../../../araclar/yetki-beklentisi.ts';
 
 // Testin bağlandığı havuzun boyutu ortamdan gelir (TMIV2_PG_HAVUZ).
 const HAVUZ_BOYUTU = ayarOku().pg.havuzBoyutu;
@@ -175,319 +178,8 @@ describe('oturum (gerçek PostgreSQL)', () => {
     }
   });
 
-  // Onaylı matris (kart 69). Bayraklı rol kayıtlı bütün işlemleri alır.
-  const SAYFA = (...adlar: string[]): string[] => adlar.map((ad) => `sayfa.${ad}`);
-  // Üretim Emirleri sayfası Rota'yı gören her rolde (kullanıcı kararı 12.10.2026, kart #651).
-  const MUDUR_SAYFALARI = SAYFA('uretim-emirleri', 'terminal', 'kuyruk', 'cizelge', 'matris', 'vardiya', 'mesai', 'stok', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'personel', 'arkon', 'kalibrasyon', 'denetim', 'finans', 'satin-alma', 'sevkiyat', 'atolye', 'taleplerim', 'portal', 'ik-islemlerim', 'projeler', 'denetim-hazirlik', 'cnc-kurulum', 'mesaj', 'recete-rota', 'plan', 'musteri-tedarikci', 'akis', 'oee', 'etiket-merkezi', 'profil',
-    // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
-    'kalite-merkezi', 'durus-nedenleri', 'cizimler', 'smartes', 'siparisler',
-    // Kullanıcı kararları 174 a ve 182 a.
-    'nizamiye',
-    // Kullanıcı kararı 216 a.
-    'idari-isler',
-    // Kullanıcı kararı 195 a.
-    'uretim-terminali',
-    // Karar 2067-3 b.
-    'ortak-dosyalar',
-    // Geri Bildirim Merkezi (2192-1 a).
-    'geri-bildirim');
-  // Onaylayan rol yazmayı da taşır: onay, kartı kaydeden uçtan geçer.
-  const MALZEME_ONAYI = ['malzemeler.yaz', 'malzemeler.onayla'];
-  // Arkon rolü tek TMI işlemiyle verilir (kullanıcı kararı 07.10.2026); Arkon sayfası yalnız Arkon rolü olan rollerdedir.
-  const ARKON = (rol: string): string[] => [`arkon.${rol}`, 'sayfa.arkon'];
-  // Firma kartı finans rakamlarından ayrı açılır (kart #223, kullanıcı kararı RC1 R8-R12); kart musteri-tedarikci'dedir,
-  // aynı roller aynı haklarla taşınır ve sayfayı görür (kart #1164, karar S6).
-  const FIRMA_OKU = ['musteri-tedarikci.oku', 'sayfa.musteri-tedarikci'];
-  const FIRMA = [...FIRMA_OKU, 'musteri-tedarikci.yaz'];
-  // Stok (kart #223, kullanıcı kararı RC1 R4-R6, R13; kart #1225): müdür ve depo bütün stok işlemlerini taşır.
-  const DEPO_STOK = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.toplama', 'stok.tanim'];
-  // Hareket geri alma ve elle eksiye düşüm onayı yalnız müdürde (1387 a); depo kendi hareketini geri alamaz. SKT'si geçmiş lotun
-  // çıkış onayı ve SKT düzeltmesi de yalnız müdürde (2099-5 a, teyit).
-  const MUDUR_STOK = ['stok.geri-al', 'stok.eksi-onayla', 'stok.skt-onayla'];
-  // Sayım farkı onayı yalnız müdürde (1279 a, 1691 teyit).
-  const MUDUR_SAYIM_ONAYI = ['stok.sayim-onayla'];
-  // Malzeme fişini Logo'ya elle gönderme yalnız depoda (295 a, 299 a; kart #495); müdür depo stok işlemlerini alsa da bunu almaz.
-  const FIS_GONDER = ['stok.malzeme-fisi-gonder'];
-  // Satın alma (kart #223, kullanıcı kararı RC1 R1-R3; ana sayfadan talep, kart #375): talep açmayı üretimdeki roller de alır, operatör almaz.
-  const TALEP = 'satin-alma.talep-ac';
-  // Talep açan her rol Planlama'daki Taleplerim sayfasını da görür (kullanıcı kararı 12.10.2026).
-  const TALEP_SAYFASI = 'sayfa.taleplerim';
-  // Sevkiyat (kart #598, kullanıcı onayı 11 Ekim): her rol sayfayı açar ve okur; planlama iş ve plan yazar; depo ve Sevkiyat rolü
-  // ayrıca onaylar ve nokta/araç tanımlar.
-  const SEVKIYAT_OKU = ['sayfa.sevkiyat', 'sevkiyat.oku'];
-  const SEVKIYAT_TAM = [...SEVKIYAT_OKU, 'sevkiyat.is-yaz', 'sevkiyat.plan-yaz', 'sevkiyat.onayla', 'sevkiyat.tanim-yaz'];
-  // Etiket Merkezi'ni görür ve basar (kullanıcı kararları 99 ve 123 a).
-  const ETIKET_BASAN = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
-  // Projeler (kart #852, kullanıcı onayı 12.10.2026): müdür ve planlama yazar; satın alma, kalite, depo ve CAM görür.
-  const PROJE_OKU = ['sayfa.projeler', 'projeler.oku'];
-  const PROJE = [...PROJE_OKU, 'projeler.yaz'];
-  // İK (göç kisiler_ik_islemleri, kullanıcı kararı 12.10.2026): her rol İK İşlemlerim'den izin talep eder; müdür onaylar; İK uzmanı
-  // İnsan Kaynakları sayfasını ve bütün İK işlemlerini alır. Bordro onayı (v3, göç kisiler_ik_bordro_gordum) İK İşlemlerim'i alan her rolde.
-  const IK_TALEP = ['ik.izin-talep', 'sayfa.ik-islemlerim', 'ik.bordro-gordum'];
-  // Bütün personel kendi tesis talebini açar (kullanıcı kararı 216 a, 19.10.2026).
-  const TESIS_TALEBI = ['sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac'];
-  // Ortak Dosyalar sayfası bütün rollerdedir; içerik klasör düzeyiyle süzülür (karar 2067-3 b).
-  const ORTAK_DOSYALAR = ['sayfa.ortak-dosyalar'];
-  const IK_UZMANI = [...IK_TALEP, 'sayfa.ik', 'ik.oku', 'ik.personel-yaz', 'ik.ucret-yaz', 'ik.izin-yaz', 'ik.izin-onay', 'ik.devam-yaz', 'ik.devam-onay', 'ik.bordro-kesinlestir',
-    'ik.bordro-kilit-ac', 'ik.performans-yaz', 'ik.egitim-yaz', 'ik.ise-alim-yaz', 'ik.pozisyon-onay', 'ik.ayar-yaz',
-    // Yeni personele giriş hesabı açar; yetki dağıtan rolleri veremez (kullanıcı kararı 1925 a).
-    'ik.hesap-ac',
-    // Kan grubu ve engel durumu (KVKK özel nitelikli veri) yalnız İK'da (kullanıcı kararı 88 a).
-    'ik.ozel-veri-oku'];
-  // Portal (kart #760, kullanıcı kararı 12.10.2026): satış, alış, kalite, sevkiyat ve finans okur ve yazar; planlama yalnız okur.
-  const PORTAL_OKU = ['sayfa.portal', 'portal.oku'];
-  const PORTAL = [...PORTAL_OKU, 'portal.yaz'];
-  // CNC Kurulum Motoru (kullanıcı kararı, 12.10.2026): müdür, planlama ve CAM yazar; kalite ve bakım görür.
-  const CNC_OKU = ['sayfa.cnc-kurulum', 'cnc-kurulum.oku'];
-  const CNC_YAZ = [...CNC_OKU, 'cnc-kurulum.yaz'];
-  // Reçete ve Rota Motoru (paket varsayımı, 13.10.2026): Rota'yı gören roller; müdür ve planlama yazar, kalite ve CAM görür.
-  const RECETE_ROTA_OKU = ['sayfa.recete-rota', 'recete-rota.oku'];
-  const RECETE_ROTA_YAZ = [...RECETE_ROTA_OKU, 'recete-rota.yaz'];
-  // Denetim Hazırlığı (kart #742, kullanıcı kararı 12.10.2026): müdür ve kalite yazar, planlama okur; kurulum yalnız yöneticide.
-  const DENETIM_HAZIRLIK_OKU = ['sayfa.denetim-hazirlik', 'denetim-hazirlik.oku'];
-  const DENETIM_HAZIRLIK_YAZ = [...DENETIM_HAZIRLIK_OKU, 'denetim-hazirlik.yaz'];
-  // Mesaj (kart #766 ve #904, kullanıcı kararları 12-13.10.2026): yerleşik her rol görür, okur ve yazar; kurulum yalnız yöneticide.
-  const MESAJ = ['sayfa.mesaj', 'mesaj.oku', 'mesaj.yaz'];
-  // Malzeme isteği ve teslim yönetici dışı her roldedir (kullanıcı kararı, kart #1208).
-  const STOK_ISTEK = ['stok.istek'];
-  // Siparişler (kullanıcı kararları 139 a ve 160 a): sayfası henüz yok; onay, kapatma ve iptal yalnız müdürde.
-  // Sayfa okuma yetkisiyle aynı rollerde görünür (kullanıcı kararı 193 a).
-  const SIPARIS_OKU = ['siparisler.oku', 'sayfa.siparisler'];
-  const SIPARIS_YAZ = [...SIPARIS_OKU, 'siparisler.yaz'];
-  const MATRIS: Record<string, string[]> = {
-    yonetici: [...ISLEMLER],
-    mudur: [
-      'ik.izin-talep', 'ik.bordro-gordum', 'ik.izin-onay', 'ik.pozisyon-onay', 'ik.devam-onay',
-      'kisiler.oku', 'denetim.oku', 'vardiya.yaz', 'vardiya.gecmis-yaz', 'vardiya.durus-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'terminal.uret',
-      ...MALZEME_ONAYI, 'malzemeler.tanim-yaz', 'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'istasyonlar.yaz',
-      'finans.oku', 'finans.maliyet-oku', 'musteri-tedarikci.oku',
-      ...DEPO_STOK, ...MUDUR_STOK,
-      ...MUDUR_SAYIM_ONAYI,
-      'satin-alma.oku', TALEP, 'satin-alma.onayla',
-      'sevkiyat.oku', 'portal.oku', 'portal.yaz', 'portal.satinalma', 'portal.satis', 'portal.finans', 'portal.kalite', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz',
-      'cnc-kurulum.oku', 'cnc-kurulum.yaz',
-      'recete-rota.oku', 'recete-rota.yaz', 'stok.statu-degistir',
-      // Rota revizyonunu onaylar, dört göz kuralıyla (kullanıcı kararı 16.10.2026).
-      'rota.onayla',
-      ...MUDUR_SAYFALARI,
-      'projeler.oku', 'projeler.yaz',
-      'mesaj.oku', 'mesaj.yaz', ...STOK_ISTEK,
-      // OEE (kullanıcı kararı 14.10.2026, kart #1330).
-      'oee.oku',
-      // Sipariş ve teklif fiyatını, tutarı ve kârı yönetici, müdür ve satış görür (kullanıcı kararı 180, 19.10.2026; 65 a ile değişti, 21.10.2026).
-      'siparisler.fiyat-oku',
-      // Teklifi plana dener, maliyet dökümünü görür (kullanıcı kararı 65 a, 21.10.2026).
-      'siparisler.termin-dene', 'siparisler.maliyet-oku',
-      // İskonto sınırını aşan teklif sürümünü yalnız yönetici ve müdür onaylar (kullanıcı kararı 291 a, 20.10.2026).
-      'siparisler.iskonto-onayla',
-      // Plan öncelik ayarlarını (taban bedel, oranlar, eşikler) yalnız yönetici ve müdür değiştirir (kullanıcı kararı 210, 19.10.2026).
-      'plan.bedel-ayari',
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      // Nizamiye kayıtlarını görür, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).
-      'nizamiye.oku', 'nizamiye.kart-yonet',
-      // Şikayet, istek ve öneri kayıtları (kullanıcı kararı 14.10.2026).
-      'profil.geri-bildirim-oku',
-      // Geri Bildirim Merkezi: yanıtlar, takip eder, kategori yönetir (2192-1 a); sayfası MUDUR_SAYFALARI'nda.
-      'profil.geri-bildirim-yanitla', 'profil.geri-bildirim-kategori-yaz',
-      // Etiket Merkezi'nde basar, şablon ve yazıcı düzenler (kullanıcı kararı 99, 18.10.2026).
-      'etiket-merkezi.oku', 'etiket-merkezi.bas', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz',
-      // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
-      'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'durus-nedenleri.yaz', 'belge-merkezi.oku', 'plan.kilitle', 'plan.studyo', 'plan.canliya-al',
-      'siparisler.oku', 'siparisler.yaz', 'siparisler.onayla',
-      // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
-      'cnc-kurulum.takim-degistir',
-      // Planlama çalışmasını da değiştirir (kullanıcı kararı 524/3 b, 25.10.2026).
-      'plan.yaz',
-    ],
-    kalite: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, ...MALZEME_ONAYI, 'kalibrasyon.yaz', TALEP, TALEP_SAYFASI, ...ARKON('kalite'), ...SAYFA('uretim-emirleri', 'terminal', 'stok', 'malzemeler', 'rota', 'emirler', 'kalibrasyon', 'atolye'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.kalite', ...DENETIM_HAZIRLIK_YAZ, ...CNC_OKU, ...RECETE_ROTA_OKU,
-      // Kalite Merkezi'ni görür, yazmaz (kullanıcı kararı 15.10.2026).
-      'sayfa.kalite-merkezi', 'kalite-merkezi.oku', ...ETIKET_BASAN,
-      // Kalite Merkezi'nde yazar ve onaylar, çizimi yayınlar (kullanıcı kararları 139 a ve 160 a).
-      'kalite-merkezi.yaz', 'kalite-merkezi.onayla', 'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yayinla', ...SIPARIS_OKU,
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      // Terminalden üretim girer (modul-test K6 a, 1209 b); karne için Müşteriler ve Tedarikçiler (K10 a); 3D Atölyesi okuma (1706 a).
-      ...SAYFA('uretim-terminali', 'musteri-tedarikci', 'geometri'), 'geometri.oku',
-    ],
-    planlama_proje: [
-      // Birim maliyeti görmez (kullanıcı kararı 200 a, 19.10.2026).
-      ...MESAJ, ...STOK_ISTEK, 'sayfa.akis',
-      ...IK_TALEP,
-      'kisiler.oku',
-      'vardiya.yaz',
-      'vardiya.durus-yaz',
-      'uretim-emirleri.yaz',
-      'uretim-emirleri.fason',
-      // Emir formundan rotalı emir açar (kullanıcı kararı, 13.10.2026).
-      'rota.emre-kopyala',
-      'plan.yaz',
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      'malzemeler.yaz',
-      'malzemeler.tanim-yaz',
-      ...ARKON('planlama'),
-      'arkon.yansima-oku',
-      'arkon.yansima-yeniden',
-      // Üretim Hazırlık kuyruk sırası (kart 527, 522 2 a).
-      'arkon.kuyruk-sirala',
-      'stok.toplama',
-      'satin-alma.oku',
-      TALEP, TALEP_SAYFASI,
-      ...FIRMA,
-      ...SEVKIYAT_OKU,
-      'sevkiyat.is-yaz',
-      'sevkiyat.plan-yaz',
-      'atolye.yaz',
-      ...PORTAL_OKU,
-      ...CNC_YAZ,
-      ...RECETE_ROTA_YAZ,
-      ...DENETIM_HAZIRLIK_OKU,
-      ...SAYFA('uretim-emirleri', 'terminal', 'kuyruk', 'cizelge', 'matris', 'vardiya', 'mesai', 'stok', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'finans', 'satin-alma', 'atolye'),
-      ...PROJE,
-      // OEE (kullanıcı kararı 14.10.2026, kart #1330).
-      'sayfa.oee', 'oee.oku',
-      // Rotayı kurar ve planı canlıya alır (kullanıcı kararı 15.10.2026); rota onayı değişmez.
-      'rota.yaz', 'plan.canliya-al',
-      // Çizim Merkezi'nde belge okur, yazar ve yayınlar (kullanıcı kararı 18.10.2026, 109 a).
-      'belge-merkezi.oku', 'belge-merkezi.yaz', 'belge-merkezi.yayinla', 'sayfa.cizimler',
-      ...ETIKET_BASAN,
-      // Rol x işlem tablosu (kullanıcı kararları 139 a ve 160 a).
-      'sayfa.durus-nedenleri', 'durus-nedenleri.yaz', 'sayfa.smartes', 'plan.kilitle', 'plan.studyo', 'rota.talimat-yaz', ...SIPARIS_YAZ,
-      // 3D Atölyesi okuma (1706 a).
-      ...SAYFA('geometri'), 'geometri.oku',
-    ],
-    operator: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'terminal.uret', 'arkon.operator', ...SAYFA('terminal', 'kuyruk', 'uretim-terminali'),
-      // CNC Kurulum'u görmez, okumaz, takım değişimi yazmaz (1393 c+, 1458 a, kart #1454).
-      // Ctrl K'de yalnız kendi istasyonunun emirlerini arar (kullanıcı kararı 16.10.2026).
-      'uretim-emirleri.ara-istasyon',
-      // Markalama istasyonunda seriyi sunucudan alır ve doğrular; durum ve tanım yazmaz (2030 a + teyit). Terminal panelinin
-      // okumaları için Markalama sayfası (2048 b + teyit).
-      'markalama.seri-ver', ...SAYFA('markalama')],
-    insan_kaynaklari: [...MESAJ, ...STOK_ISTEK, ...IK_UZMANI, 'kisiler.oku', 'kisiler.yaz', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU, 'profil.geri-bildirim-oku',
-      // Geri Bildirim Merkezi: yanıtlar, takip eder, kategori yönetir (2192-1 a).
-      'sayfa.geri-bildirim', 'profil.geri-bildirim-yanitla', 'profil.geri-bildirim-kategori-yaz'],
-    satin_alma: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA, 'satin-alma.oku', TALEP, TALEP_SAYFASI, 'satin-alma.yaz', 'satin-alma.ayar', 'finans.kur-yaz', 'uretim-emirleri.fason', ...SAYFA('stok', 'malzemeler', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.satinalma',
-      // Fatura-sipariş bağı (2077-3 a).
-      'satin-alma.fatura-bagla',
-    ],
-    muhasebe_finans: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'finans.oku', 'finans.maliyet-oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...FIRMA, 'satin-alma.oku', ...SAYFA('uretim-emirleri', 'emirler', 'stok', 'finans', 'satin-alma'), ...SEVKIYAT_OKU, ...PORTAL, 'portal.finans', ...SIPARIS_YAZ, 'projeler.oku',
-      // Fatura-sipariş bağını dar işlemle kurar, satın alma kaydı yazmaz (modul-test K8 a, 2077-3 a).
-      'satin-alma.fatura-bagla',
-      // Vergi beyanını "verildi" işaretler (1846, TKV-2 a).
-      'finans.beyan-yaz',
-    ],
-    idari_isler: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'kisiler.oku', TALEP, TALEP_SAYFASI, ...SAYFA('vardiya', 'mesai', 'personel'), ...SEVKIYAT_OKU,
-      // Kapı kaydını yazar, ziyaretçi kartlarını yönetir (kullanıcı kararları 174 a ve 182 a, 19.10.2026).
-      'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz', 'nizamiye.kart-yonet'],
-    cam: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', TALEP, TALEP_SAYFASI, ...ARKON('hazirlik'), 'arkon.kuyruk-sirala', ...SAYFA('uretim-emirleri', 'malzemeler', 'rota', 'emirler', 'istasyonlar', 'atolye'), ...SEVKIYAT_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU,
-      'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz',
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
-      'cnc-kurulum.takim-degistir',
-      // 3D Atölyesi okuma (1706 a).
-      ...SAYFA('geometri'), 'geometri.oku',
-    ],
-    depo: [...MESAJ, ...STOK_ISTEK, ...PROJE_OKU, ...IK_TALEP, 'malzemeler.yaz', ...FIRMA_OKU, ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SAYFA('stok', 'malzemeler', 'atolye'), ...SEVKIYAT_TAM, ...ETIKET_BASAN, ...SIPARIS_OKU,
-      // Depo istasyonunun terminalinden mal kabul; Arkon rolü yok (2034 a + teyit, 2039 a).
-      ...SAYFA('uretim-terminali')],
-    bakim: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...ARKON('bakim'), TALEP, TALEP_SAYFASI, ...SAYFA('stok'), ...CNC_OKU,
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
-      'cnc-kurulum.takim-degistir'],
-    // Sevkiyat rolü bugün sevkiyatta depo ile eş yetkidedir ve stok sayfasını açar (kullanıcı onayı, kart #598).
-    sevkiyat: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...SAYFA('stok'), ...SEVKIYAT_TAM, ...PORTAL, 'portal.satis', ...SIPARIS_OKU,
-      // Siparişe bağlı projeleri görür, menüde Projeler yok (kullanıcı kararı 186 a).
-      'projeler.oku'],
-    // Operatörün yetkileri, Arkon'da vardiya amiri ve Etiket Merkezi'nde basma (kullanıcı kararları 112 b, 126 a, 99).
-    vardiya_sorumlusu: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'terminal.uret', 'arkon.amir', ...SAYFA('terminal', 'kuyruk', 'uretim-terminali'),
-      ...CNC_OKU, 'cnc-kurulum.hazirlik-onayla', 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN,
-      // Vardiyanın bütününü Arkon MES panosundan izler (kullanıcı kararı 128 a).
-      'sayfa.arkon',
-      // Planı ve senaryoları görür; öteki rollerde plan kapalıdır (kullanıcı kararı 280 a, 20.10.2026).
-      'plan.oku',
-      // Takım değişimi ve kullanım düzeltmesi (kullanıcı kararı 300 a, 20.10.2026).
-      'cnc-kurulum.takim-degistir'],
-    // Kapı görevlisi yalnız her çalışanın ortak işlemlerini alır, stok isteği almaz (kullanıcı kararları 165 a, 182 a).
-    guvenlik_gorevlisi: [...MESAJ, ...IK_TALEP, 'sayfa.nizamiye', 'nizamiye.oku', 'nizamiye.yaz'],
-    // Teklifi plana dener, termini ve maliyet toplamını görür, fiyatı verir; firmayı görür (kullanıcı kararı 65 a, 21.10.2026).
-    satis: [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, ...SIPARIS_YAZ, 'siparisler.fiyat-oku', 'siparisler.termin-dene', ...FIRMA_OKU,
-      // Yeni müşteriyi kendisi açar (modul-test K9 b).
-      'musteri-tedarikci.yaz',
-    ],
-  };
-  // Bütün personel kendi tesis talebini açar (kullanıcı kararı 216 a, 19.10.2026).
-  for (const [rol, islemler] of Object.entries(MATRIS)) {
-    if (rol === 'yonetici') continue;
-    islemler.push('idari-isler.talep-ac', 'idari-isler.arac-talebi-ac');
-    if (rol !== 'mudur') islemler.push('sayfa.idari-isler');
-    if (rol !== 'mudur') islemler.push(...ORTAK_DOSYALAR);
-  }
-  MATRIS.idari_isler?.push('idari-isler.oku', 'idari-isler.talep-yonet', 'idari-isler.kontrol-yaz', 'idari-isler.yemek-yaz', 'idari-isler.filo-yaz');
-  MATRIS.mudur?.push('idari-isler.oku');
-  // 253 a, 256 a, 259 a, 263 a, 264 a (19.10.2026): zimmeti idari işler yazar (İK'nın eski zimmet yazması kalktı), PDKS'yi İK aktarır,
-  // makine durumunu bakım, vardiya sorumlusu ve müdür değiştirir, hazırlık muafiyetini müdür verir.
-  MATRIS.idari_isler?.push('idari-isler.zimmet-yaz');
-  MATRIS.insan_kaynaklari?.push('nizamiye.pdks-aktar');
-  MATRIS.bakim?.push('sayfa.istasyonlar', 'istasyonlar.makine-durumu');
-  MATRIS.vardiya_sorumlusu?.push('sayfa.istasyonlar', 'istasyonlar.makine-durumu');
-  MATRIS.mudur?.push('istasyonlar.makine-durumu', 'uretim-emirleri.hazirlik-muaf');
-  // 73 b (22.10.2026): ana sayfanın şirket özeti bölümü yalnız yönetici ve müdürdedir.
-  MATRIS.mudur?.push('pano.sirket-ozeti');
-  // Soru 111 b (22.10.2026): saatten uyarı üstlenme; vardiya sorumlusu ve bakım saat okumasını ayrı işlemle alır.
-  for (const rol of ['mudur', 'planlama_proje', 'kalite', 'vardiya_sorumlusu', 'bakim']) MATRIS[rol]?.push('saat.uyari-ustlen');
-  MATRIS.vardiya_sorumlusu?.push('saat.oku');
-  MATRIS.bakim?.push('saat.oku');
-  // Ortak yetki matrisi (195 a, 23.10.2026; 353 a ve 65 a ile çelişme onaylı). Sayım düzeltmesi müdüre verilmez (185 a).
-  MATRIS.mudur?.push('plan.planlama-oku');
-  MATRIS.planlama_proje?.push('plan.planlama-oku', 'sayfa.plan');
-  MATRIS.kalite?.push('musteri-tedarikci.oku');
-  // Sipariş listesindeki firma seçicisi (201 a, 23.10.2026).
-  MATRIS.sevkiyat?.push('musteri-tedarikci.oku');
-  MATRIS.muhasebe_finans?.push('siparisler.fiyat-oku', 'sayfa.projeler');
-  MATRIS.vardiya_sorumlusu?.push('sayfa.vardiya', 'vardiya.yaz', 'uretim-emirleri.sayim-duzelt');
-  // Rol düzeltmeleri (237, 267 a ve 272 1a, 23.10.2026): Portal'ın satış onayı sevkiyattan satışa geçer; satış sevk ve projeyi okur,
-  // müdür rotadan emir açar, termin onayı plan.yaz'dan ayrılır.
-  MATRIS.sevkiyat?.splice(MATRIS.sevkiyat.indexOf('portal.satis'), 1);
-  MATRIS.satis?.push(...PORTAL, 'portal.satis', 'projeler.oku', 'sevkiyat.oku', 'siparisler.termin-onayla');
-  MATRIS.mudur?.push('rota.emre-kopyala', 'siparisler.termin-onayla');
-  MATRIS.planlama_proje?.push('siparisler.termin-onayla');
-  // Plan motoru ayarları (775 b, 27.10.2026).
-  for (const rol of ['mudur', 'planlama_proje']) MATRIS[rol]?.push('plan.motor-ayari');
-  // Proje yönetimi (910 a, 27.10.2026).
-  for (const rol of ['mudur', 'planlama_proje']) MATRIS[rol]?.push('projeler.gorev-yaz', 'projeler.statu-yaz');
-  MATRIS.mudur?.push('projeler.statu-ayar');
-  // Emir kapanışı (1078 a, 28.10.2026): kalite onayı kalitede, müdür onayı müdürde, Kapanış onayları sayfası ikisinde ve planlamada.
-  MATRIS.kalite?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-kalite');
-  // Profilim her rolün menü sayfasıdır (2192-4 b).
-  for (const islemler of Object.values(MATRIS)) if (!islemler.includes('sayfa.profil')) islemler.push('sayfa.profil');
-  MATRIS.mudur?.push('uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay');
-  MATRIS.planlama_proje?.push('uretim-emirleri.kapanis-oku');
-  // GKK kalite istasyonunun operasyonudur, terminalden girilir (1209 b, 29.10.2026): kalite terminalde sayar.
-  MATRIS.kalite?.push('terminal.uret');
-  // Müdür rolleri (2177-1): genel müdür ve yardımcısı Müdür'ün yetkileriyle; alan müdürleri ekip rolü, alan onayları ve ekip onaylarıyla.
-  const EKIP_ONAYI = ['ik.izin-onay', 'ik.devam-onay', 'ik.pozisyon-onay', 'kisiler.oku', 'sayfa.personel'];
-  const birlesim = (...kumeler: readonly (readonly string[] | undefined)[]): string[] => [...new Set(kumeler.flatMap((k) => k ?? []))];
-  // Duruş ve hurda nedeni yazma yalnız Müdür ve Planlama ve Proje'de kalır (139 a, 160 a; 2177-4 a).
-  const nedenYazmaz = (k: readonly string[]): string[] => k.filter((i) => i !== 'durus-nedenleri.yaz');
-  MATRIS.genel_mudur = nedenYazmaz(birlesim(MATRIS.mudur));
-  MATRIS.genel_mudur_yardimcisi = nedenYazmaz(birlesim(MATRIS.mudur));
-  MATRIS.planlama_muduru = nedenYazmaz(birlesim(MATRIS.planlama_proje, EKIP_ONAYI, [
-    'rota.onayla', 'plan.bedel-ayari', 'siparisler.termin-dene', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-onay',
-  ]));
-  MATRIS.satin_alma_muduru = birlesim(MATRIS.satin_alma, EKIP_ONAYI, ['satin-alma.onayla']);
-  MATRIS.uretim_muduru = birlesim(MATRIS.vardiya_sorumlusu, EKIP_ONAYI, [
-    'sayfa.uretim-emirleri', 'sayfa.akis', 'sayfa.cizelge', 'sayfa.matris', 'sayfa.mesai', 'sayfa.stok', 'sayfa.oee', 'sayfa.kalite-merkezi',
-    'sayfa.durus-nedenleri', 'sayfa.plan', 'sayfa.recete-rota', 'sayfa.smartes', 'sayfa.atolye', 'sayfa.taleplerim', 'sayfa.malzemeler',
-    'sayfa.rota', 'sayfa.emirler', 'sayfa.kalibrasyon', 'vardiya.gecmis-yaz', 'vardiya.durus-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason',
-    'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay', 'istasyonlar.yaz', 'oee.oku',
-    'kalite-merkezi.oku', 'cnc-kurulum.yaz', 'recete-rota.oku', 'satin-alma.talep-ac', 'rota.emre-kopyala',
-    'plan.planlama-oku', 'arkon.yansima-oku', 'arkon.yansima-yeniden',
-  ]);
-  const YALNIZ_YONETICIDE = ['saglik.ayrinti-oku', 'kisiler.rol-yonet', 'kisiler.parola-degistir', 'arkon.yonetici', 'denetim.govde-oku', 'mesaj.yonet',
-    'sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
+  // Onaylı matris tek dosyadadır (araclar/yetki-beklentisi.ts); bayraklı rol kayıtlı bütün işlemleri alır.
+  const MUDUR_SAYFALARI = rolunIslemleri('mudur').filter((i) => i.startsWith('sayfa.'));
 
   const girisIslemleri = async (kullaniciAdi: string): Promise<string[]> => {
     const cevap = await giris(kullaniciAdi, PAROLA);
@@ -498,44 +190,23 @@ describe('oturum (gerçek PostgreSQL)', () => {
   test('onaylı matris: her rol girişte tam olarak kendi işlemlerini alır; roller ve adları onaylı listedir', async () => {
     assert.deepEqual(
       await vt().sorgu('SELECT kod, ad, yonetici FROM rol ORDER BY kod'),
-      [
-        { kod: 'bakim', ad: 'Bakım', yonetici: false },
-        { kod: 'cam', ad: 'CAM', yonetici: false },
-        { kod: 'depo', ad: 'Depo', yonetici: false },
-        { kod: 'genel_mudur', ad: 'Genel Müdür', yonetici: false },
-        { kod: 'genel_mudur_yardimcisi', ad: 'Genel Müdür Yardımcısı', yonetici: false },
-        { kod: 'guvenlik_gorevlisi', ad: 'Güvenlik Görevlisi', yonetici: false },
-        { kod: 'idari_isler', ad: 'İdari İşler', yonetici: false },
-        { kod: 'insan_kaynaklari', ad: 'İnsan Kaynakları', yonetici: false },
-        { kod: 'kalite', ad: 'Kalite', yonetici: false },
-        { kod: 'mudur', ad: 'Müdür', yonetici: false },
-        { kod: 'muhasebe_finans', ad: 'Muhasebe ve Finans', yonetici: false },
-        { kod: 'operator', ad: 'Operatör', yonetici: false },
-        { kod: 'planlama_muduru', ad: 'Planlama Müdürü', yonetici: false },
-        { kod: 'planlama_proje', ad: 'Planlama ve Proje', yonetici: false },
-        { kod: 'satin_alma', ad: 'Satın Alma', yonetici: false },
-        { kod: 'satin_alma_muduru', ad: 'Satın Alma Müdürü', yonetici: false },
-        { kod: 'satis', ad: 'Satış', yonetici: false },
-        { kod: 'sevkiyat', ad: 'Sevkiyat', yonetici: false },
-        { kod: 'uretim_muduru', ad: 'Üretim Müdürü', yonetici: false },
-        { kod: 'vardiya_sorumlusu', ad: 'Vardiya Sorumlusu', yonetici: false },
-        { kod: 'yonetici', ad: 'Yönetici', yonetici: true },
-      ],
+      [{ kod: YONETICI_ROLU.kod, ad: YONETICI_ROLU.ad, yonetici: true }, ...Object.entries(ROL_MATRISI).map(([kod, r]) => ({ kod, ad: r.ad, yonetici: false }))]
+        .sort((a, b) => a.kod.localeCompare(b.kod)),
     );
     // Giriş kayıtsız işlemi süzer; fazla ya da kayıtsız satır yalnız tabloda görünür. Bayraklı role satır yazılmaz.
     const satirlar = (await vt().sorgu<{ kod: string; islem: string }>('SELECT r.kod, ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id'))
       .map((s) => `${s.kod}:${s.islem}`).sort();
-    const onayli = Object.entries(MATRIS).filter(([kod]) => kod !== 'yonetici')
-      .flatMap(([kod, islemler]) => islemler.map((islem) => `${kod}:${islem}`)).sort();
+    const onayli = ROL_KODLARI.filter((kod) => kod !== YONETICI_ROLU.kod)
+      .flatMap((kod) => rolunIslemleri(kod).map((islem) => `${kod}:${islem}`)).sort();
     assert.deepEqual(satirlar, onayli);
-    for (const islemler of Object.values(MATRIS)) {
-      for (const islem of islemler) assert.equal((ISLEMLER as readonly string[]).includes(islem), true, islem);
+    for (const kod of ROL_KODLARI) {
+      for (const islem of rolunIslemleri(kod)) assert.equal((ISLEMLER as readonly string[]).includes(islem), true, islem);
     }
-    for (const [kod, beklenen] of Object.entries(MATRIS)) {
+    for (const kod of ROL_KODLARI) {
       const kullaniciAdi = `matris-${kod.replaceAll('_', '-')}`;
       await kisiEkle(kullaniciAdi, kod);
       const alinan = await girisIslemleri(kullaniciAdi);
-      assert.deepEqual(alinan, [...beklenen].sort(), kod);
+      assert.deepEqual(alinan, rolunIslemleri(kod), kod);
       for (const islem of alinan) assert.equal((ISLEMLER as readonly string[]).includes(islem), true, `${kod}: ${islem}`);
       if (kod !== 'yonetici') {
         for (const islem of YALNIZ_YONETICIDE) assert.equal(alinan.includes(islem), false, `${kod}: ${islem}`);
@@ -583,14 +254,11 @@ describe('oturum (gerçek PostgreSQL)', () => {
       uc({ yontem: 'POST', yol: '/deneme/uret', yetki: 'terminal.uret', cevap: tamam, isle: async () => ({ tamam: true }) }),
       uc({ yontem: 'POST', yol: '/deneme/emre-kopyala', yetki: 'rota.emre-kopyala', cevap: tamam, isle: async () => ({ tamam: true }) }),
     ], { vt: vt(), kimlik: kimlikCozucu(vt()), denetle: denetimYaz });
-    const BEKLENEN: Record<string, { yaz: number; uret: number; kopya: number }> = {
-      yonetici: { yaz: 200, uret: 200, kopya: 200 },
-      mudur: { yaz: 200, uret: 200, kopya: 200 },
-      planlama_proje: { yaz: 200, uret: 403, kopya: 200 },
-      operator: { yaz: 403, uret: 200, kopya: 403 },
-      kalite: { yaz: 403, uret: 200, kopya: 403 },
-      cam: { yaz: 403, uret: 403, kopya: 403 },
-    };
+    const durum = (kod: RolKodu, islem: Islem): number => (rolunIslemleri(kod).includes(islem) ? 200 : 403);
+    const BEKLENEN = Object.fromEntries((['yonetici', 'mudur', 'planlama_proje', 'operator', 'kalite', 'cam'] as const).map((kod) =>
+      [kod, { yaz: durum(kod, 'uretim-emirleri.yaz'), uret: durum(kod, 'terminal.uret'), kopya: durum(kod, 'rota.emre-kopyala') }]));
+    // Altı rol üç işlemin ikisini de, yokluğunu da taşır: dağılım bozulursa ölçüm tek yönlü kalmasın.
+    assert.deepEqual(new Set(Object.values(BEKLENEN).flatMap((b) => [b.yaz, b.uret, b.kopya])), new Set([200, 403]));
     try {
       for (const [kod, beklenen] of Object.entries(BEKLENEN)) {
         const kullaniciAdi = `uretim-${kod.replaceAll('_', '-')}`;
@@ -607,21 +275,22 @@ describe('oturum (gerçek PostgreSQL)', () => {
 
   test('depo rolü stok, malzeme ve sevkiyat sayfalarını açar, malzeme kartı yazar; ek rol olarak alan kişi rollerinin birleşimini alır', async () => {
     await kisiEkle('depocu', 'depo');
-    assert.deepEqual(await girisIslemleri('depocu'), [...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.uretim-terminali', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI, ...ORTAK_DOSYALAR, 'sayfa.profil'].sort());
+    const depo = rolunIslemleri('depo');
+    for (const islem of ['sayfa.stok', 'sayfa.malzemeler', 'sayfa.sevkiyat', 'malzemeler.yaz']) assert.equal(depo.includes(islem as Islem), true, islem);
+    assert.deepEqual(await girisIslemleri('depocu'), depo);
 
     const operator = await kisiEkle('operator-depocu', 'operator');
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2)', [operator, await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('operator-depocu'),
-      ['arkon.operator', ...FIRMA_OKU, 'malzemeler.yaz', 'sayfa.atolye', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...IK_TALEP, ...PROJE_OKU, ...MESAJ, ...STOK_ISTEK, 'uretim-emirleri.ara-istasyon', ...ETIKET_BASAN, ...SIPARIS_OKU, ...TESIS_TALEBI, ...ORTAK_DOSYALAR, 'sayfa.profil'].sort(),
+      rollerinIslemleri('operator', 'depo'),
     );
 
     const cam = await kisiEkle('cam-satinalmaci', 'cam');
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2), ($1, $3)', [cam, await rolId('satin_alma'), await rolId('depo')]);
     assert.deepEqual(
       await girisIslemleri('cam-satinalmaci'),
-      ['arkon.hazirlik', 'arkon.kuyruk-sirala', ...FIRMA, 'finans.kur-yaz', 'malzemeler.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.finans', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.rota', 'sayfa.emirler', 'sayfa.satin-alma', 'sayfa.stok', 'sayfa.uretim-terminali', 'sayfa.uretim-emirleri', 'satin-alma.ayar', 'satin-alma.oku', 'satin-alma.yaz', ...DEPO_STOK, ...FIS_GONDER, 'akis.kart-oku', 'uretim-emirleri.fason', TALEP, TALEP_SAYFASI, ...SEVKIYAT_TAM, ...PORTAL, 'portal.satinalma', ...IK_TALEP, ...PROJE_OKU, ...CNC_YAZ, ...RECETE_ROTA_OKU, ...MESAJ, ...STOK_ISTEK, ...ETIKET_BASAN, ...SIPARIS_OKU,
-        'sayfa.cizimler', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'rota.talimat-yaz', 'plan.oku', 'cnc-kurulum.takim-degistir', 'sayfa.geometri', 'geometri.oku', 'satin-alma.fatura-bagla', ...TESIS_TALEBI, ...ORTAK_DOSYALAR, 'sayfa.profil'].sort(),
+      rollerinIslemleri('cam', 'satin_alma', 'depo'),
     );
   });
 
@@ -632,7 +301,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'denetim.oku'), ($1, 'sayfa.terminal'), ($1, 'eski.islem')", [ek]);
     const al = async (): Promise<string[]> => ((await giris('cokrollu', PAROLA)).json().kullanici.islemler as string[]).sort();
 
-    const OPERATOR = [...MESAJ, ...STOK_ISTEK, ...IK_TALEP, 'uretim-emirleri.ara-istasyon', 'arkon.operator', 'sayfa.kuyruk', 'sayfa.terminal', 'sayfa.uretim-terminali', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama', ...TESIS_TALEBI, ...ORTAK_DOSYALAR, 'sayfa.profil'].sort();
+    const OPERATOR = rolunIslemleri('operator');
     assert.deepEqual(await al(), OPERATOR);
     await vt().sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) VALUES ($1, $2)', [id, ek]);
     assert.deepEqual(await al(), ['denetim.oku', ...OPERATOR].sort());
