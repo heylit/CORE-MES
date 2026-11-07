@@ -177,7 +177,7 @@ export function KrokiPaneli(o: Ozellikler) {
         : (
           <Secim
             etiket="Çizim"
-            secenekler={[{ deger: '', baslik: 'Seçin' }, ...merkezBelgeleri.map((b) => ({ deger: String(b.id), baslik: `${b.ad} · Rev ${b.harf}` }))]}
+            secenekler={[{ deger: '', baslik: 'Seçin' }, ...merkezBelgeleri.map((b) => ({ deger: String(b.id), baslik: `${b.ad} · ${b.revKodu ? `Rev ${b.revKodu}` : 'kodsuz revizyon'}` }))]}
             value={merkezBelge}
             onChange={(e) => merkezBelgeYaz(e.target.value)}
           />
@@ -275,7 +275,7 @@ export function KrokiPaneli(o: Ozellikler) {
               <br />{tamam.kaydeden.ad ?? 'Bilinmeyen kişi'} · {saatMetni(tamam.kaydedildi) ?? ''}
             </p>
             {tamam.merkez && (
-              <p className="tc-atolye-ipucu">Çizim Merkezi · {tamam.merkez.ad} · Rev {tamam.merkez.harf}</p>
+              <p className="tc-atolye-ipucu">Çizim Merkezi · {tamam.merkez.ad} · {tamam.merkez.revKodu ? `Rev ${tamam.merkez.revKodu}` : 'kodsuz revizyon'}</p>
             )}
             {tamam.merkez && tamam.merkez.ozet !== tamam.ozet && (
               <div className="tc-atolye-kart-eylem">

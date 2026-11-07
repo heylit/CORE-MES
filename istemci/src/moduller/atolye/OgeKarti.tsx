@@ -105,7 +105,7 @@ function Gozler({ rafId, rafAktif, vurguAdres, ozetler, yazabilir }: {
 // Modelin kaynağı yazılır: Çizim Merkezi'ndeki malzeme eşleşmesi önce gelir, yoksa harita kütüphanesi (kart #1258).
 function parcaModeliMetni(p: ParcaModeli | undefined): string {
   if (!p) return 'Yok (Çizim Merkezi\'nde malzemeye 3B model bağlayın)';
-  return p.kaynak === 'merkez' ? `${p.ad} (Çizim Merkezi, Rev ${p.model.harf})` : `${p.ad} (harita kütüphanesi)`;
+  return p.kaynak === 'merkez' ? `${p.ad} (Çizim Merkezi, ${p.model.revKodu ? `Rev ${p.model.revKodu}` : 'kodsuz revizyon'})` : `${p.ad} (harita kütüphanesi)`;
 }
 
 // Sıradaki planlı iş soluk yazılır; makinede başlamış emir yoksa sahnedeki parça önizlemesi de onundur.
@@ -218,7 +218,7 @@ export function OgeKarti({
               )}
               {yer.aktif && <SiradakiIs emir={siradakiler.get(yer.istasyonId)} parca={emir ? undefined : parcalar.get(yer.istasyonId)} />}
               <dt>Ayak izi</dt><dd>{olcuMetni(sayi(yer.genislik))} × {olcuMetni(sayi(yer.derinlik))}</dd>
-              <dt>3B model</dt><dd>{yer.merkezModeli ? `${yer.merkezModeli.ad} (Çizim Merkezi, Rev ${yer.merkezModeli.harf})` : yer.model ? yer.model.ad : 'Yok (tipten çizilir)'}</dd>
+              <dt>3B model</dt><dd>{yer.merkezModeli ? `${yer.merkezModeli.ad} (Çizim Merkezi, ${yer.merkezModeli.revKodu ? `Rev ${yer.merkezModeli.revKodu}` : 'kodsuz revizyon'})` : yer.model ? yer.model.ad : 'Yok (tipten çizilir)'}</dd>
             </dl>
             {yolDugmesi(yer.x, yer.z)}
             <UretilenParcalar istasyonId={yer.istasyonId} emirler={tumEmirler} />

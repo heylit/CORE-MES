@@ -1226,7 +1226,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.equal(k.govde.ozet, ozet(a));
     assert.equal(k.govde.parcaSayisi, 2);
     assert.equal(k.govde.tamam, true);
-    assert.deepEqual(k.govde.merkez, { belgeId: belge, ad: 'Salon A planı', harf: 'A', ozet: ozet(a) });
+    assert.deepEqual(k.govde.merkez, { belgeId: belge, ad: 'Salon A planı', harf: 'A', revKodu: null, ozet: ozet(a) });
     const geri = await Promise.all([0, 1].map(async (i) => Buffer.from((await oku<ModelParcaCevabi>(`${yol}/parcalar/${i}`)).govde.veri, 'base64')));
     assert.ok(Buffer.concat(geri).equals(a), 'parçalar merkezdeki dosyanın aynısı');
     const merkezde = (await oku<{ baglar: { hedefModul: string; hedefId: number }[] }>(`/cizimler/${belge}`)).govde.baglar;
@@ -1310,7 +1310,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
 
     const ilk = await bagla(ist.id, model, null);
     assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
-    const beklenenModel = { belgeId: model, ad: 'Deneme tezgah.stl', harf: 'A', ozet: ozet(stl), dosyaTuru: 'stl' };
+    const beklenenModel = { belgeId: model, ad: 'Deneme tezgah.stl', harf: 'A', revKodu: null, ozet: ozet(stl), dosyaTuru: 'stl' };
     assert.deepEqual(ilk.govde.merkezModeli, beklenenModel);
     assert.deepEqual(await merkezModeli(), beklenenModel);
     for (const cerez of [yonetici, gorur, planlamaci]) {
@@ -1404,7 +1404,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
 
     const modeller = await oku<MalzemeModelleriCevabi>('/atolye/malzeme-modelleri');
     assert.equal(modeller.durum, 200, JSON.stringify(modeller.govde));
-    assert.deepEqual(modeller.govde.malzemeler.find((m) => m.malzemeNo === acikKart)?.merkezModeli, { belgeId: parca, ad: 'Deneme p1258.stl', harf: 'A', ozet: ozet(stl), dosyaTuru: 'stl' });
+    assert.deepEqual(modeller.govde.malzemeler.find((m) => m.malzemeNo === acikKart)?.merkezModeli, { belgeId: parca, ad: 'Deneme p1258.stl', harf: 'A', revKodu: null, ozet: ozet(stl), dosyaTuru: 'stl' });
     assert.equal(modeller.govde.malzemeler.some((m) => m.malzemeNo === kapaliKart), false);
     const dosya = await app.inject({ method: 'GET', url: `/api/atolye/malzemeler/${acikKart}/merkez-modeli`, headers: { cookie: gorur } });
     assert.equal(dosya.statusCode, 200);

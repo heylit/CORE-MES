@@ -21,8 +21,8 @@ export function MerkezModeliSecimi({ istasyonId, mevcut, degisti }: {
   // Bağlı model seçicide yoksa (yayından kalktı) yine adıyla görünür.
   const secenekler = [
     { deger: '', baslik: 'Yok' },
-    ...(mevcut && !belgeler.some((b) => b.id === mevcut.belgeId) ? [{ deger: String(mevcut.belgeId), baslik: `${mevcut.ad} · Rev ${mevcut.harf}` }] : []),
-    ...belgeler.map((b) => ({ deger: String(b.id), baslik: `${b.ad} · Rev ${b.harf}` })),
+    ...(mevcut && !belgeler.some((b) => b.id === mevcut.belgeId) ? [{ deger: String(mevcut.belgeId), baslik: `${mevcut.ad} · ${mevcut.revKodu ? `Rev ${mevcut.revKodu}` : 'kodsuz revizyon'}` }] : []),
+    ...belgeler.map((b) => ({ deger: String(b.id), baslik: `${b.ad} · ${b.revKodu ? `Rev ${b.revKodu}` : 'kodsuz revizyon'}` })),
   ];
 
   const sec = async (deger: string) => {
