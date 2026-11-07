@@ -10,7 +10,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
+import type { AcikOturumlarCevabi, CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
   gizlilikTaahhuduVer, girisDogrula, ilkPiniYaz, kartGirisDurumu, kisiNoKullaniciAdindan, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
@@ -22,7 +22,7 @@ import {
   AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   beklemeIletisi, kilitKalanDk, BUYUYEN_KILIT_PENCERESI_SAAT, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu, SURESIZ_KILIT_DK,
-  saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
+  saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni, tarayiciOzeti,
   istasyonOturumSonuMs, vtZamaniMs,
   NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu, SINIRLI_ORTAK_CIHAZ, sinirliOturumGecerMi,
 } from './kurallar.ts';
@@ -33,7 +33,7 @@ import {
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
   cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz, defterKisisiniYaz,
-  cihazNabizlari, eskiNabizlariSil, nabizYaz, cihazBagiBul, cihazBagiEkle, cihazBagiYenile, oturumKimligiBul,
+  cihazNabizlari, eskiNabizlariSil, nabizYaz, acikOturumlar, cihazBagiBul, cihazBagiEkle, cihazBagiYenile, oturumKimligiBul,
 } from './sorgular.ts';
 import {
   BAG_CEREZ_SN, BAG_CEREZI, bagBelirteciUret, bagTalimati, cihazBagiAcikMi, kanitCoz, kayitBasligi, kayitKanitiniDogrula, meydanBasligi,
@@ -615,4 +615,19 @@ export async function cihazBaginiYenile(
   const belirtec = bagBelirteciUret();
   if (!(await cihazBagiYenile(db, bag.oturum_id, anahtarOzeti(belirtec), BAG_CEREZ_SN, jti))) return meydan();
   return { tur: 'tamam', belirtec, talimat: bagTalimati(bag.oturum_kimligi) };
+}
+
+/* ---------------- açık oturumlarım (2226-7 a) ---------------- */
+
+export async function acikOturumlarim(db: Db, kisiId: number, buOzet: string | null): Promise<AcikOturumlarCevabi['oturumlar']> {
+  const satirlar = await acikOturumlar(db, kisiId, buOzet, { azamiSn: AZAMI_SN, bostaSn: BOSTA_SN });
+  return satirlar.map((s) => ({
+    id: s.id, tarayici: tarayiciOzeti(s.tarayici), acildi: s.acildi, sonGorulme: s.son_gorulme, buCihaz: s.bu_cihaz, cihazaBagli: s.cihaza_bagli,
+  }));
+}
+
+// Bu oturum dışındaki bütün oturumlar kapanır; bağlı oturumların bağı da 401 ile biter. Saat eşleşmeleri ayrı yönetilir.
+export async function digerOturumlarimiKapat(db: Db, kisiId: number, buOzet: string | null): Promise<number> {
+  if (buOzet === null) throw oturumYok();
+  return kisiOturumlariniKapat(db, kisiId, buOzet);
 }

@@ -7,6 +7,7 @@ import {
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
   cihazProfiliParametresi, cihazProfilleriCevabi, kayitsizProfilCevabi, kayitsizProfilGovdesi, profilAtaCevabi, profilAtaGovdesi,
   profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi, gizlilikTaahhuduGovdesi, cihazBagiCevabi,
+  acikOturumlarCevabi, digerOturumlariKapatCevabi,
 } from '#paylasilan/sozlesme/oturum.ts';
 import type { IstekBilgisi } from '#cekirdek/uc.ts';
 import { BAG_CEREZ_SN, BAG_CEREZI, sfMetniCoz } from './cihaz-bagi.ts';
@@ -16,7 +17,7 @@ import {
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
   cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz, nabizKaydet, gizlilikTaahhuduOnayla, sinirliGirisiDenetle,
-  cihazBagiDaveti, cihazBaginiKaydet, cihazBaginiYenile,
+  cihazBagiDaveti, cihazBaginiKaydet, cihazBaginiYenile, acikOturumlarim, digerOturumlarimiKapat,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
 
@@ -179,6 +180,21 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         await saatIsteginiOnayla(db, kullanici.id, { kod: govde.kod, ip: istek.ip, gunluk }, simdi());
         return { tamam: true as const };
       },
+    }),
+    // Açık oturumlarım (2226-7 a): kişi yalnız kendi oturumlarını görür ve bu cihaz dışındakileri kapatır.
+    uc({
+      yontem: 'GET',
+      yol: '/hesabim/oturumlar',
+      yetki: 'oturum',
+      cevap: acikOturumlarCevabi,
+      isle: async ({ db, kullanici, istek }) => ({ oturumlar: await acikOturumlarim(db, kullanici.id, istektekiOturumOzeti(istek)) }),
+    }),
+    uc({
+      yontem: 'POST',
+      yol: '/hesabim/oturumlar/digerlerini-kapat',
+      yetki: 'oturum',
+      cevap: digerOturumlariKapatCevabi,
+      isle: async ({ db, kullanici, istek }) => ({ kapanan: await digerOturumlarimiKapat(db, kullanici.id, istektekiOturumOzeti(istek)) }),
     }),
     uc({
       yontem: 'GET',

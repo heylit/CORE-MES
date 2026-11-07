@@ -97,6 +97,19 @@ export const saatIstegiSorCevabi = z.discriminatedUnion('durum', [
 export const saatOnaylaGovdesi = z.object({ kod: gizli(SAAT_KODU) }).strict();
 export const saatCihaziSemasi = z.object({ id: z.number().int(), kisiId: z.number().int(), acildi: zamanSemasi, son: zamanSemasi });
 export const saatCihazlariCevabi = z.object({ cihazlar: z.array(saatCihaziSemasi) });
+
+// Açık oturumlarım (2226-7 a): kişi kendi açık oturumlarını görür ve bu cihaz dışındakileri kapatır. Adres gösterilmez; tarayıcı
+// yalnız özetiyle ("Chrome · Windows").
+export const acikOturumSemasi = z.object({
+  id: z.number().int(),
+  tarayici: z.string().nullable(),
+  acildi: zamanSemasi,
+  sonGorulme: zamanSemasi,
+  buCihaz: z.boolean(),
+  cihazaBagli: z.boolean(),
+});
+export const acikOturumlarCevabi = z.object({ oturumlar: z.array(acikOturumSemasi) });
+export const digerOturumlariKapatCevabi = z.object({ kapanan: z.number().int().nonnegative() });
 export const saatCihaziParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 export const saatCihaziKapatCevabi = z.object({ tamam: z.literal(true) });
 
@@ -175,3 +188,5 @@ export type SaatIstegiSorCevabi = z.output<typeof saatIstegiSorCevabi>;
 export type SaatOnaylaGovdesi = z.input<typeof saatOnaylaGovdesi>;
 export type SaatCihazi = z.output<typeof saatCihaziSemasi>;
 export type SaatCihazlariCevabi = z.output<typeof saatCihazlariCevabi>;
+export type AcikOturumlarCevabi = z.output<typeof acikOturumlarCevabi>;
+export type DigerOturumlariKapatCevabi = z.output<typeof digerOturumlariKapatCevabi>;

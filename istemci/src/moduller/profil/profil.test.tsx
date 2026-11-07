@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import type { SaatCihazlariCevabi } from '#paylasilan/sozlesme/oturum.ts';
+import type { AcikOturumlarCevabi, SaatCihazlariCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
   GeriBildirimAyrintiCevabi, GeriBildirimListeCevabi, GeriBildirimOzetiCevabi, GeriBildirimSecenekleriCevabi, KendiGeriBildirimi, ProfilCevabi,
   TemaCevabi,
@@ -358,5 +358,44 @@ describe('Geri Bildirim Merkezi', () => {
     fireEvent.change(screen.getByLabelText('Yeni kategori'), { target: { value: 'Servis' } });
     fireEvent.click(screen.getByRole('button', { name: /Kategori ekle/ }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/profil/geri-bildirim-kategorileri')?.govde).toEqual({ ad: 'Servis', konu: null }));
+  });
+});
+
+describe('Açık oturumlarım (2226-7 a)', () => {
+  it('açık oturumları gösterir; bu cihaz dışındakileri kapatır', async () => {
+    let oturumlar: AcikOturumlarCevabi = { oturumlar: [
+      { id: 1, tarayici: 'Chrome · Windows', acildi: '2026-11-07T08:00:00+03:00', sonGorulme: '2026-11-07T10:00:00+03:00', buCihaz: true, cihazaBagli: true },
+      { id: 2, tarayici: 'Chrome · Android', acildi: '2026-11-06T08:00:00+03:00', sonGorulme: '2026-11-07T09:00:00+03:00', buCihaz: false, cihazaBagli: false },
+    ] };
+    const istekler = sunucuKur({
+      'GET /profil': () => json(200, PROFIL),
+      'GET /hesabim/oturumlar': () => json(200, oturumlar),
+      'POST /hesabim/oturumlar/digerlerini-kapat': () => {
+        oturumlar = { oturumlar: oturumlar.oturumlar.filter((o) => o.buCihaz) };
+        return json(200, { kapanan: 1 });
+      },
+    });
+    ac('/profil');
+    fireEvent.click(await screen.findByRole('button', { name: /Açık oturumlarım/ }));
+    expect(await screen.findByText('Chrome · Android')).toBeTruthy();
+    expect(screen.getByText('Bu cihaz')).toBeTruthy();
+    expect(screen.getByText('Cihaza bağlı')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Diğer oturumlarımı kapat/ }));
+    expect(await screen.findByText('1 oturum kapatıldı.')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Chrome · Android')).toBeNull());
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual(['/hesabim/oturumlar/digerlerini-kapat']);
+  });
+
+  it('başka oturum yoksa kapatma düğmesi pasiftir', async () => {
+    sunucuKur({
+      'GET /profil': () => json(200, PROFIL),
+      'GET /hesabim/oturumlar': () => json(200, { oturumlar: [
+        { id: 1, tarayici: null, acildi: '2026-11-07T08:00:00+03:00', sonGorulme: '2026-11-07T10:00:00+03:00', buCihaz: true, cihazaBagli: false },
+      ] }),
+    });
+    ac('/profil');
+    fireEvent.click(await screen.findByRole('button', { name: /Açık oturumlarım/ }));
+    expect(await screen.findByText('Bilinmeyen tarayıcı')).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Diğer oturumlarımı kapat/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -799,3 +799,31 @@ export async function cihazBagiYenile(db: Db, oturumId: number, bagOzeti: string
   );
   return satirlar.length === 1;
 }
+
+/* ---------------- açık oturumlarım (2226-7 a) ---------------- */
+
+export interface AcikOturumSatiri {
+  id: number;
+  tarayici: string | null;
+  acildi: string;
+  son_gorulme: string;
+  bu_cihaz: boolean;
+  cihaza_bagli: boolean;
+}
+
+// Kapanmamış, azami ve boşta süresi dolmamış oturumlar; en son kullanılan önce. Boşta sınırı kişisel cihazınkidir: istasyon
+// oturumu sınırı aşmışsa zaten geçmez, listede kalması yalnız kapatma düğmesini gösterir.
+export async function acikOturumlar(
+  db: Db, kisiId: number, buOzet: string | null, sure: { azamiSn: number; bostaSn: number },
+): Promise<AcikOturumSatiri[]> {
+  return db.sorgu<AcikOturumSatiri>(
+    `SELECT o.id::int AS id, o.tarayici, ${zamanMetni('o.acildi')} AS acildi, ${zamanMetni('o.son_gorulme')} AS son_gorulme,
+            o.anahtar_ozeti = COALESCE($2, '') AS bu_cihaz, b.oturum_id IS NOT NULL AS cihaza_bagli
+       FROM oturum o LEFT JOIN oturum_cihaz_bagi b ON b.oturum_id = o.id
+      WHERE o.kisi_id = $1 AND o.kapandi IS NULL
+        AND o.acildi > now() - make_interval(secs => $3) AND o.son_gorulme > now() - make_interval(secs => $4)
+      ORDER BY o.son_gorulme DESC, o.id DESC
+      LIMIT 100`,
+    [kisiId, buOzet, sure.azamiSn, sure.bostaSn],
+  );
+}

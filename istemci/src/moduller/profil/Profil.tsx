@@ -9,6 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { tabanTema, useTemaTercihi, type TemaTercihi } from '../../ortak/veri/tema.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
+import { OturumlarPenceresi } from './OturumlarPenceresi.tsx';
 import { SaatPenceresi } from './SaatPenceresi.tsx';
 import { BOS, DURUM_ADI, DURUM_TONU, KONU_ADI, TUR_ADI, TUR_TONU, basHarfler, kidemMetni, sayiMetni, tarihMetni, zamanMetni } from './gorunum.ts';
 import './profil.css';
@@ -164,7 +165,7 @@ function IletisimKarti({ veri }: { veri: ProfilCevabi }) {
 }
 
 function HesapKarti() {
-  const [pencere, pencereYaz] = useState<'parola' | 'pin' | 'saat' | null>(null);
+  const [pencere, pencereYaz] = useState<'parola' | 'pin' | 'saat' | 'oturumlar' | null>(null);
   return (
     <Kart baslik="Hesap ve güvenlik">
       <Satirlar satirlar={[['Parola', '••••••••'], ['PIN', 'Terminal girişi için; ilk PIN\'i yöneticiniz verir, sonra kendiniz değiştirirsiniz']]} />
@@ -172,11 +173,13 @@ function HesapKarti() {
         <Dugme simge="lock" onClick={() => pencereYaz('parola')}>Parolamı değiştir</Dugme>
         <Dugme simge="lock" onClick={() => pencereYaz('pin')}>PIN'imi değiştir</Dugme>
         <Dugme simge="clock" onClick={() => pencereYaz('saat')}>Akıllı saatimi eşleştir</Dugme>
+        <Dugme simge="laptop" onClick={() => pencereYaz('oturumlar')}>Açık oturumlarım</Dugme>
         <Bag to="/profil/bildirimler" simge="bell">Bildirimlerim</Bag>
       </div>
       {pencere === 'parola' && <ParolaPenceresi kapat={() => pencereYaz(null)} />}
       {pencere === 'pin' && <PinPenceresi kapat={() => pencereYaz(null)} />}
       {pencere === 'saat' && <SaatPenceresi kapat={() => pencereYaz(null)} />}
+      {pencere === 'oturumlar' && <OturumlarPenceresi kapat={() => pencereYaz(null)} />}
     </Kart>
   );
 }
