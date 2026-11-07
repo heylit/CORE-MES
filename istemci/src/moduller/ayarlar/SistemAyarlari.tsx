@@ -1,9 +1,12 @@
-import { useId, useState, type FormEvent } from 'react';
+import { Fragment, useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { agAraligiHatasi } from '#paylasilan/ag-araligi.ts';
 import { kalipHatasi, numaraKur } from '#paylasilan/numara.ts';
+import { tarihAraligiHatasi } from '#paylasilan/tarih-araligi.ts';
+import { tesisGunBasi, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Ayar, AyarDegistirGovdesi, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { AcKapa, Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Simge, useBildirim, type Sekme } from '../../ortak/arayuz/index.ts';
+import { KarsilamaOnizleme } from '../../ortak/arayuz/Karsilama.tsx';
 import { ayarEkranlari, gorunenAyarEkranlari, type AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -128,7 +131,8 @@ function MetinSatiri({ ayar, mesgul, degistir }: { ayar: MetinAyari; mesgul: boo
   const temiz = metin.trim();
   // Boş olabilen metinde boş değer "girilmemiş" demektir; biçimli metin sunucuyla aynı kuralla denetlenir.
   const hata = temiz === '' ? (ayar.bosOlabilir === true ? undefined : 'Metin boş olamaz.')
-    : (ayar.bicim === 'ag-araligi' ? agAraligiHatasi(temiz) ?? undefined : undefined);
+    : (ayar.bicim === 'ag-araligi' ? agAraligiHatasi(temiz) ?? undefined
+      : ayar.bicim === 'tarih-araligi' ? tarihAraligiHatasi(temiz) ?? undefined : undefined);
   const degisti = hata === undefined && (temiz !== ayar.deger || ayar.gecersiz === true);
   const gonder = (olay: FormEvent) => {
     olay.preventDefault();
@@ -147,13 +151,63 @@ function MetinSatiri({ ayar, mesgul, degistir }: { ayar: MetinAyari; mesgul: boo
           value={metin}
           maxLength={ayar.enUzun}
           onChange={(olay) => setMetin(olay.target.value)}
-          ipucu={ayar.bicim === 'ag-araligi' ? 'Virgülle ayırın, örnek: 10.30.0.0/16. Boş bırakılabilir.' : `En çok ${String(ayar.enUzun)} karakter.`}
+          ipucu={ayar.bicim === 'ag-araligi' ? 'Virgülle ayırın, örnek: 10.30.0.0/16. Boş bırakılabilir.'
+            : ayar.bicim === 'tarih-araligi' ? 'gg.aa.yyyy - gg.aa.yyyy ya da tek gün. Boş bırakılabilir.' : `En çok ${String(ayar.enUzun)} karakter.`}
           hata={hata}
           disabled={mesgul}
         />
         {/* Sayfada en çok bir birincil düğme kuralı (2155-9): metin satırlarının Kaydet'i çizgilidir. */}
         <Dugme type="submit" tur="ikincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
       </form>
+    </li>
+  );
+}
+
+// Kart 2232c: "gg.aa.yyyy ss:dd" tesis saatidir; an milisaniyeye çevrilir. Türkiye'de yaz saati yoktur, gün başına saat eklenir.
+export function onizlemeAniCoz(metin: string): { ms: number } | { hata: string } {
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2})[:.](\d{2})$/.exec(metin.trim());
+  const hata = 'Gün ve saat "gg.aa.yyyy ss:dd" biçiminde olmalı, örneğin 29.10.2026 09:00.';
+  if (m === null) return { hata };
+  const [gun, ay, yil, saat, dakika] = m.slice(1).map(Number) as [number, number, number, number, number];
+  const t = new Date(Date.UTC(yil, ay - 1, gun));
+  if (t.getUTCDate() !== gun || t.getUTCMonth() !== ay - 1 || saat > 23 || dakika > 59) return { hata };
+  return { ms: tesisGunBasi(t.toISOString().slice(0, 10)) + (saat * 60 + dakika) * 60_000 };
+}
+
+const simdikiAnYazisi = (): string => {
+  const [tarih = '', saat = ''] = tesisSaati(Date.now()).split(' ');
+  const [yil, ay, gun] = tarih.split('-');
+  return `${gun ?? ''}.${ay ?? ''}.${yil ?? ''} ${saat}`;
+};
+
+// Karşılama ayarlarının altında: seçilen gün ve saatte karşılamanın nasıl görüneceğini yalnız açana gösterir; hiçbir şey yazılmaz.
+function KarsilamaOnizleSatiri() {
+  const ad = useOturum().data?.ad ?? '';
+  const [metin, setMetin] = useState(simdikiAnYazisi);
+  const [acik, setAcik] = useState<number | null>(null);
+  const sonuc = onizlemeAniCoz(metin);
+  const gonder = (olay: FormEvent) => {
+    olay.preventDefault();
+    if ('ms' in sonuc) setAcik(sonuc.ms);
+  };
+  return (
+    <li className="tc-ayar">
+      <div className="tc-ayar-metin">
+        <p className="tc-ayar-baslik">Karşılamayı önizle</p>
+        <p className="tc-ayar-aciklama">Seçilen gün ve saatte karşılamanın nasıl görüneceğini yalnız size açar; kimseye gösterilmez, hiçbir şey kaydedilmez. Kaydedilmiş ayarlarla çizilir.</p>
+      </div>
+      <form className="tc-ayar-sayi" onSubmit={gonder}>
+        <Girdi
+          etiket="Gün ve saat"
+          value={metin}
+          maxLength={20}
+          onChange={(olay) => setMetin(olay.target.value)}
+          ipucu="gg.aa.yyyy ss:dd, tesis saati."
+          hata={'hata' in sonuc ? sonuc.hata : undefined}
+        />
+        <Dugme type="submit" tur="ikincil" simge="eye" disabled={'hata' in sonuc}>Önizle</Dugme>
+      </form>
+      {acik !== null && <KarsilamaOnizleme key={acik} ms={acik} ad={ad} kapat={() => setAcik(null)} />}
     </li>
   );
 }
@@ -225,6 +279,9 @@ export function ayarKategorisi({ anahtar, tur }: { anahtar: string; tur: Ayar['t
   return 'genel';
 }
 
+// Önizleme satırı karşılama ayarlarının sonuncusunun altına girer.
+const KARSILAMA_SON_AYARI = 'kabuk.karsilama-kurban';
+
 function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string; kategori: AyarKategorisi; bossaGizle?: boolean }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -259,12 +316,14 @@ function AyarListesi({ baslik, kategori, bossaGizle = false }: { baslik: string;
       {ayarlar && (
         <ul className="tc-ayarlar" aria-label={baslik}>
           {ayarlar.map((ayar) => (
-            <AyarSatiri
-              key={ayar.anahtar}
-              ayar={ayar}
-              mesgul={degistir.isPending}
-              degistir={(deger) => degistir.mutate({ anahtar: ayar.anahtar, deger })}
-            />
+            <Fragment key={ayar.anahtar}>
+              <AyarSatiri
+                ayar={ayar}
+                mesgul={degistir.isPending}
+                degistir={(deger) => degistir.mutate({ anahtar: ayar.anahtar, deger })}
+              />
+              {ayar.anahtar === KARSILAMA_SON_AYARI && <KarsilamaOnizleSatiri />}
+            </Fragment>
           ))}
         </ul>
       )}
