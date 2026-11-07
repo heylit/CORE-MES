@@ -990,6 +990,33 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual(cevap.oneriler, []);
     });
 
+    test('2138-2: gösterilen revizyon kodu antet, yoksa bağlı kartların ortak revizyonu; harf gösterilmez', async () => {
+      const kart = await kartAc({ resim: 'TR-88', rev: '00' });
+      const ilk = (await malzemeBelgesiEkle(malzemeci, kart, 'teknik-resim', pdf(), { resimNo: 'TR-88' })).json<MalzemeBelgeleriCevabi>().belgeler[0];
+      assert.ok(ilk);
+      assert.deepEqual(ilk.revizyonlar.map((r) => [r.harf, r.antetRev, r.revKodu]), [['A', null, '00']]);
+      const ikinci = (await gonder(malzemeci, `/cizimler/malzemeler/${kart}/belgeler/${ilk.id}/revizyon-ekle`, { ozet: await yukle(malzemeci, pdf()), dosyaAdi: 'b.pdf', antetRev: ' 01 ', surum: ilk.surum }));
+      assert.equal(ikinci.statusCode, 200, ikinci.body);
+      let ayrinti = (await oku(yonetici, `/cizimler/${ilk.id}`)).json<BelgeAyrintisi>();
+      assert.deepEqual(ayrinti.revizyonlar.map((r) => [r.harf, r.revKodu]), [['B', '01'], ['A', '00']]);
+
+      const satir = (await oku(yonetici, `/cizimler?tur=teknik-resim&ara=${encodeURIComponent(ilk.ad)}`)).json<{ satirlar: { id: number; yayindakiRevKodu: string | null; sonRevKodu: string | null }[] }>().satirlar.find((x) => x.id === ilk.id);
+      assert.deepEqual([satir?.yayindakiRevKodu, satir?.sonRevKodu], ['01', '01']);
+      const bagli = await vt().tx((db) => kaydaBagliBelgeler(db, 'malzemeler', kart));
+      assert.deepEqual(bagli.map((b) => [b.id, b.harf, b.revKodu]), [[ilk.id, 'B', '01']]);
+      assert.equal((await vt().tx((db) => yayindakiBelgeler(db, { ara: ilk.ad }))).find((b) => b.id === ilk.id)?.revKodu, '01');
+
+      // Belge revizyonu farklı ikinci karta da bağlanınca hangi kartın geçerli olduğu bilinmez: anteti boş revizyonun kodu boş kalır.
+      const ikinciKart = await kartAc({ resim: 'TR-88', rev: '05' });
+      const bag = await gonder(yonetici, `/cizimler/${ilk.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: ikinciKart, surum: ayrinti.surum });
+      assert.equal(bag.statusCode, 200, bag.body);
+      ayrinti = bag.json<BelgeAyrintisi>();
+      assert.deepEqual(ayrinti.revizyonlar.map((r) => [r.harf, r.revKodu]), [['B', '01'], ['A', null]]);
+
+      const kartsiz = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Kartsız resim');
+      assert.equal(kartsiz.revizyonlar[0]?.revKodu, null, 'antetsiz ve kartsız belgede kod yok, harf yerine geçmez');
+    });
+
     test('küçük resim: oturum açan herkes toplu okur; revizyon uyumu kartla karşılaştırılır; kare yalnız bağlı ve yayına girmiş revizyondan', async () => {
       const uyumlu = await kartAc({ resim: 'TR-77', rev: 'B' });
       const uyumsuz = await kartAc({ resim: 'TR-77', rev: 'C' });
@@ -1021,6 +1048,7 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual([resimler.get(uyumsuz)?.revUyumu, resimler.get(uyumsuz)?.antetRev], [false, 'B']);
       assert.equal(resimler.get(revsiz)?.revUyumu, null);
       assert.deepEqual([resimler.get(antetsiz)?.harf, resimler.get(antetsiz)?.antetRev, resimler.get(antetsiz)?.revUyumu], ['A', null, null]);
+      assert.deepEqual([resimler.get(antetsiz)?.revKodu, resimler.get(uyumsuz)?.revKodu, resimler.get(revsiz)?.revKodu], ['C', 'B', 'B'], '2138-2: kod antet, yoksa kartın revizyonu');
       assert.equal(resimler.has(resimsiz), false);
 
       const kare = await oku(operator, `/cizimler/kucuk-resim/${revB.id}/1`);

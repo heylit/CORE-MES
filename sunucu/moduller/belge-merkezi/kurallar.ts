@@ -121,6 +121,21 @@ export const anahtarMetni = (m: string | null | undefined): string | null => {
   return k ? k : null;
 };
 
+// 2138-2: ekranda gösterilen revizyon kodu. Merkezin harfi yükleme sırasıdır, gösterilmez; kod antet revizyonudur, yoksa bağlı
+// malzeme kartlarının revizyonu. Kartlar farklı revizyon taşıyorsa hangisinin geçerli olduğu bilinmez, kod null kalır.
+export function kartRevizyonu(revizyonlar: readonly (string | null)[]): string | null {
+  const farkli = new Map<string, string>();
+  for (const r of revizyonlar) {
+    const k = anahtarMetni(r);
+    if (k !== null && r !== null && !farkli.has(k)) farkli.set(k, r.trim());
+  }
+  return farkli.size === 1 ? [...farkli.values()][0] ?? null : null;
+}
+
+export function revizyonKodu(antetRev: string | null | undefined, kartRev: string | null | undefined): string | null {
+  return antetRev?.trim() || kartRev?.trim() || null;
+}
+
 export interface AdayRevizyon {
   id: number;
   durum: RevizyonDurumu;
