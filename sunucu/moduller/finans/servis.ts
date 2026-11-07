@@ -198,6 +198,11 @@ async function kasaEksiyeDusmez(db: Db, hesapId: number | null): Promise<void> {
   const hata = h ? kasaBakiyesiHatasi(h.tur, h.bakiye) : null;
   if (hata) throw gecersiz(hata);
 }
+// Bakiyeyi azaltan yazımdan önce çağrılır (bkz. sorgular.hesaplariKilitle).
+async function hesaplariKilitle(db: Db, ...idler: Array<number | null>): Promise<void> {
+  const liste = idler.filter((id): id is number => id !== null);
+  if (liste.length > 0) await sorgular.hesaplariKilitle(db, liste);
+}
 function ileriTarihDenetle(tarih: string, tur: 'hareket' | 'belge', alan: string): void {
   const bugun = tesisGunu(new Date());
   const hata = ileriTarihHatasi(tarih, bugun, gunEkle(bugun, ILERI_BELGE_GUNU), tur);
@@ -350,6 +355,7 @@ export function belgeEkle(db: Db, k: Kullanici, g: G<typeof belgeEkleGovdesi>): 
       throw dogrulama('İadelerin toplamı asıl faturanın toplamını geçemez.', 'tutar');
     }
     if (g.pesin) {
+      if (g.yon === 'gider') await hesaplariKilitle(db, g.pesin.hesapId);
       const oid = await sorgular.odemeEkle(db, { yon: g.yon, firmaId: g.firmaId, tarih: g.pesin.tarih, yontem: g.pesin.yontem, hesapId: g.pesin.hesapId, cekId: null,
         paraBirimi: b.paraBirimi, kur: b.kur, tutar: b.toplam, aciklama: null }, k.id);
       await dagit(db, oid, b.paraBirimi, [{ belgeId: id, belgeTutari: b.toplam, caprazKur: null }], g.pesin.tarih, k.id);
@@ -419,6 +425,7 @@ export function odemeEkle(db: Db, k: Kullanici, g: G<typeof odemeEkleGovdesi>): 
     ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
     await firmaDenetle(db, g.firmaId, g.yon);
     const kur = await kayitKuru(db, g.paraBirimi, g.kur, g.tarih);
+    if (g.yon === 'gider') await hesaplariKilitle(db, g.hesapId);
     const id = await sorgular.odemeEkle(db, { ...g, kur, cekId: null }, k.id);
     await dagit(db, id, g.paraBirimi, g.dagitimlar, g.tarih, k.id);
     if (g.yon === 'gider') await kasaEksiyeDusmez(db, g.hesapId);
@@ -616,6 +623,7 @@ export function hesapEsitle(db: Db, k: Kullanici, id: number, g: G<typeof esitle
 export function virmanEkle(db: Db, k: Kullanici, g: G<typeof virmanEkleGovdesi>) {
   return korumali(async () => {
     ileriTarihDenetle(g.tarih, 'hareket', 'tarih');
+    await hesaplariKilitle(db, g.kaynakHesapId, g.hedefHesapId);
     const id = await sorgular.virmanEkle(db, g, k.id);
     await kasaEksiyeDusmez(db, g.kaynakHesapId);
     return sorgular.virmanGetir(db, id);
