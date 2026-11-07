@@ -726,11 +726,20 @@ export const hazirlikCevabi = z.object({
     maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi })),
   })),
 });
+// Üretim Hazırlık listesi (2227) birçok emrin hazırlığını tek okumada alır. Bulunamayan ya da malzemesiz emir cevapta yoktur.
+export const AZAMI_HAZIRLIK_EMRI = 100;
+export const hazirlikOzetiSorgusu = z.object({
+  emirler: z.string().regex(new RegExp(`^[1-9]\\d{0,9}(,[1-9]\\d{0,9}){0,${String(AZAMI_HAZIRLIK_EMRI - 1)}}$`), `Emirler virgülle ayrılmış kimlikler olmalı (en çok ${String(AZAMI_HAZIRLIK_EMRI)}).`)
+    .transform((m) => [...new Set(m.split(',').map(Number))])
+    .refine((l) => l.every((id) => id <= TAM_SAYI_UST), 'Emir kimliği geçersiz.'),
+});
+export const hazirlikOzetiCevabi = z.object({ emirler: z.array(z.object({ emirId: KIMLIK, hazirlik: hazirlikCevabi })) });
 
 export type RefakatKartiCevabi = z.output<typeof refakatKartiCevabi>;
 export type HazirlikMaddesi = (typeof HAZIRLIK_MADDELERI)[number];
 export type HazirlikMuafiyetiGovdesi = z.output<typeof hazirlikMuafiyetiGovdesi>;
 export type HazirlikCevabi = z.output<typeof hazirlikCevabi>;
+export type HazirlikOzetiCevabi = z.output<typeof hazirlikOzetiCevabi>;
 export type SureOzetiCevabi = z.output<typeof sureOzetiCevabi>;
 export type AcikAdim = z.output<typeof acikAdimSemasi>;
 export type Asim = z.output<typeof asimSemasi>;

@@ -33,6 +33,8 @@ import {
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
   planDisiEki,
 } from './kurallar.ts';
+import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
+import { HazirlikPaketCipi, paketHazirligi, useHazirlikOzeti } from './HazirlikTakibi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
@@ -133,6 +135,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
 
   const [paketler, paketlerYaz] = useState<Pkg[]>([]);
   const [hazir, hazirYaz] = useState(false);
+  const hz = useHazirlikOzeti(paketler);
   const [secili, seciliYaz] = useState<Pkg | null>(null);
   const [sekme, sekmeYaz] = useState<Sekme>('info');
   const [duzenAcik, duzenAcikYaz] = useState(false);
@@ -230,7 +233,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
   const bekleyeniYaz = async () => {
     if (kayitZamani.current && seciliRef.current) { clearTimeout(kayitZamani.current); kayitZamani.current = null; await depo.DB.put('pkgs', seciliRef.current); }
   };
-  const sec = async (x: Pkg) => { await bekleyeniYaz(); seciliYaz(x); sekmeYaz('info'); duzenAcikYaz(true); void yenile(); };
+  const sec = async (x: Pkg) => { await bekleyeniYaz(); seciliYaz(x); sekmeYaz('info'); duzenAcikYaz(true); void yenile(); hz.yenile(); };
   const onizle = async () => { if (p) { await bekleyeniYaz(); yerel.yaz('pvStation', p.machine); onizlemeAc(p.id); } };
 
   // Silinen ölçü numune kurallarından da düşer (data/kontrol-plani.ts); geri al, silmeden önceki planı ve numune planını yazar.
@@ -425,6 +428,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         <div className="tc-ay2-paket-cipler">
           <Cip ton={d.ton}>{d.l}</Cip>
           <PlanCipi paket={x} sira />
+          <HazirlikPaketCipi satirlar={paketHazirligi(hz.harita, x)} />
           {x.dirty && x.status !== 'draft' ? <Cip ton="hold">Değişiklik var</Cip> : null}
           {acikNot ? <Cip ton="hazard">{acikNot} not</Cip> : null}
           {nm ? <span className="tc-ay2-mini">{nm}/{(x.plan || []).length} ölçüldü{nb ? <> · <b className="tc-ay2-kirmizi">{nb} red</b></> : null}</span> : null}
@@ -443,6 +447,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
     { id: 'steps', l: 'Adımlar' }, { id: 'rules', l: 'Kurallar' }, { id: 'pub', l: 'Yayınla' },
   ] as const).filter((x): x is { id: Sekme; l: string } => x !== null);
   const res = p ? sonuclar[p.id] : undefined;
+  const hzSecili = p ? paketHazirligi(hz.harita, p) : null;
   // Paket listesi dosyasız gelir (kart #731): seçili paketin dosyaları burada baytlanır; dosya eklenip çıkınca yeniden.
   const dosyaAnahtari = p ? p.id + ':' + p.files.map((f) => f.name + '#' + dosyaBoyu(f)).join(',') + ':' + Object.keys(p.derived ?? {}).join(',') : '';
   const acikDosyalar = useCozulmus(depo, p ? { files: p.files, derived: p.derived } : null, dosyaAnahtari);
@@ -798,6 +803,11 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
               {sekme === 'samp' ? <NumuneSekmesi paket={p} yama={yama} /> : null}
               {sekme === 'pub' ? (
                 <div className="tc-ay2-yayin">
+                  {hzSecili ? (
+                    <div className="tc-ay2-kart">
+                      <HazirlikListesi satirlar={hzSecili} baslik={p.no} zaman={hz.zaman} yenile={hz.yenile} cagir={null} />
+                    </div>
+                  ) : null}
                   <section className="tc-ay2-kart" aria-label="Yayın öncesi kontrol">
                     <span className="tc-ay2-ust-yazi">Yayın öncesi kontrol</span>
                     {v.map((x, i) => (
