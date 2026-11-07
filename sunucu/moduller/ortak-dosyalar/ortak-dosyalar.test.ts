@@ -12,6 +12,7 @@ import type {
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { ROL_MATRISI } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { ILETILER } from './kurallar.ts';
 
@@ -167,7 +168,15 @@ describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
           AND NOT EXISTS (SELECT 1 FROM rol_islemi ri WHERE ri.rol_id = r.id AND ri.islem = 'sayfa.ortak-dosyalar')`,
     );
     assert.deepEqual(eksik, []);
-    assert.ok(((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM rol WHERE NOT yonetici AND kod NOT LIKE 'deneme\\_%'"))?.n ?? 0) > 0);
+    // Göçün kurduğu roller onaylı matristeki rollerdir; matris de her role sayfayı verir, yetki-ver'i hiçbirine vermez.
+    const roller = await vt().sorgu<{ kod: string }>("SELECT kod FROM rol WHERE NOT yonetici AND kod NOT LIKE 'deneme\\_%' ORDER BY kod");
+    assert.ok(roller.length > 0);
+    assert.deepEqual(roller.map((r) => r.kod), Object.keys(ROL_MATRISI).sort());
+    for (const [kod, rol] of Object.entries(ROL_MATRISI)) {
+      const islemler: readonly string[] = rol.islemler;
+      assert.equal(islemler.includes('sayfa.ortak-dosyalar'), true, kod);
+      assert.equal(islemler.includes('ortak-dosyalar.yetki-ver'), false, kod);
+    }
     const yetkiVeren = await vt().sorgu("SELECT 1 FROM rol_islemi WHERE islem = 'ortak-dosyalar.yetki-ver'");
     assert.deepEqual(yetkiVeren, []);
   });

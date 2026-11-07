@@ -131,6 +131,18 @@ test('harita: tablo sahibi yazan modüldür, yazan yoksa göç adı; ikisi de yo
   assert.deepEqual(harita.sahipsizGocler.map((g) => g.ad), ['20270101000300_cekirdek_islev.sql']);
 });
 
+test('harita: alt klasördeki sorgular.ts de modülün yazması sayılır, başka adlı dosya sayılmaz', async (t) => {
+  const harita = await haritaTopla(agacKur(t, {
+    'sunucu/moduller/bir/sorgular.ts': "export { s } from './sorgular/kayit/sorgular.ts';\n",
+    'sunucu/moduller/bir/sorgular/kayit/sorgular.ts': "export const s = 'INSERT INTO alt_kayit (id) VALUES (1)';\n",
+    'sunucu/moduller/iki/servis.ts': "export const s = 'DELETE FROM alt_kayit';\n",
+    'sunucu/gocler/20270101000000_konu_basligi.sql': 'CREATE TABLE alt_kayit (id int);\n',
+  }));
+  assert.deepEqual(modul(harita, 'bir').tablolar, [{ ad: 'alt_kayit', kaynak: 'sorgu' }]);
+  assert.deepEqual(modul(harita, 'iki').tablolar, []);
+  assert.deepEqual(harita.belirsizTablolar, []);
+});
+
 test('harita: iki modülün yazdığı tablo kimseye verilmez', async (t) => {
   const harita = await haritaTopla(agacKur(t, {
     'sunucu/moduller/bir/sorgular.ts': "export const s = 'INSERT INTO ortak (id) VALUES (1)';\n",
