@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { kayitYazmalari, kmAc, kmAdresi, MUAYENECI, MUHENDIS, OKUYAN, YONETICI } from '../test-ortak.tsx';
+import { formListesi, terminalFormlari } from './sablonlar.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); });
 
@@ -169,5 +170,20 @@ describe('Ürün durum etiketi Etiket Merkezi\'nden (1288, 1548)', () => {
     cleanup(); vi.unstubAllGlobals();
     kmAc('formlar', ETIKETCI, { frm: [{ ...ETIKET, veri: { '0_0': 'RET' } }] });
     expect((await satir()).queryByRole('button', { name: /Etiket Merkezi'nde bas/ })).toBeNull();
+  });
+
+  it('2196: "Terminalde doldurulur" işareti şablonla kaydedilir; işaretsiz eski şablon terminale düşmez', async () => {
+    const { yazmalar } = kmAc('formlar', MUHENDIS, { tpl: [DEGISMIS] });
+    fireEvent.click((await kart('KF-08')).getByRole('button', { name: /Düzenle/ }));
+    const kutu = await screen.findByLabelText('Terminalde doldurulur');
+    expect((kutu as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(kutu);
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(kayitYazmalari(yazmalar, 'tpl')).toHaveLength(1));
+    expect(govde(kayitYazmalari(yazmalar, 'tpl')[0]!)).toContain('"terminal":true');
+    const eski = formListesi([DEGISMIS], undefined);
+    expect(eski.find((f) => f.kod === 'KF-08')?.terminal).toBe(false);
+    expect(terminalFormlari(eski)).toEqual([]);
+    expect(terminalFormlari(formListesi([{ ...DEGISMIS, terminal: true }], undefined)).map((f) => f.kod)).toEqual(['KF-08']);
   });
 });

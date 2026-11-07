@@ -37,6 +37,8 @@ export interface SablonKaydi {
   kat?: string;
   ne?: string;
   etiket?: boolean;
+  // 2196: Üretim Terminali'nde (kalite istasyonu) doldurulabilir. Alanı olmayan eski şablon terminalde görünmez.
+  terminal?: boolean;
   dsl?: string;
   arsiv?: boolean;
 }
@@ -58,6 +60,7 @@ export interface ListedekiForm {
   // Standart formun kullanıcıca değiştirilmişi ya da kullanıcının kendi formu.
   ozel?: 'degistirildi' | 'kullanici';
   etiket: boolean;
+  terminal: boolean;
   dsl: string;
   bagli?: BagliForm;
   kayit?: SablonKaydi;
@@ -77,6 +80,7 @@ function kayittan(t: SablonKaydi, ozel: 'degistirildi' | 'kullanici', taban?: (t
     tip: 'dsl',
     ozel,
     etiket: t.etiket ?? taban?.etiket ?? false,
+    terminal: t.terminal === true,
     dsl: metin(t.dsl) || metin(taban?.dsl),
     kayit: t,
   };
@@ -87,11 +91,11 @@ export function formListesi(sablonlar: readonly SablonKaydi[], ayar: SablonAyari
   const rev = metin(ayar?.rev) || '00';
   const yurur = metin(ayar?.yururluk);
   const liste: ListedekiForm[] = BAGLI_FORMLAR.map((b) => ({
-    kod: b.kod, ad: b.ad, std: b.std, kat: b.kat, ne: b.ne, rev, yurur, tip: 'bagli', etiket: false, dsl: '', bagli: b,
+    kod: b.kod, ad: b.ad, std: b.std, kat: b.kat, ne: b.ne, rev, yurur, tip: 'bagli', etiket: false, terminal: false, dsl: '', bagli: b,
   }));
   for (const y of YERLESIK_SABLONLAR) {
     const kayit = sablonlar.find((t) => t.kod === y.kod);
-    liste.push(kayit ? kayittan(kayit, 'degistirildi', y) : { ...y, rev: '00', yurur, tip: 'dsl', etiket: y.etiket ?? false });
+    liste.push(kayit ? kayittan(kayit, 'degistirildi', y) : { ...y, rev: '00', yurur, tip: 'dsl', etiket: y.etiket ?? false, terminal: false });
   }
   for (const t of sablonlar) {
     if (YERLESIK_SABLONLAR.some((y) => y.kod === t.kod) || BAGLI_FORMLAR.some((b) => b.kod === t.kod)) continue;
@@ -99,6 +103,9 @@ export function formListesi(sablonlar: readonly SablonKaydi[], ayar: SablonAyari
   }
   return liste.sort((a, b) => a.kod.localeCompare(b.kod, 'tr', { numeric: true }));
 }
+
+// Terminalde açılabilen formlar: yalnız tasarım dilindeki ve "terminalde doldurulur" işaretli şablonlar (bağlı modül formları değil).
+export const terminalFormlari = (liste: readonly ListedekiForm[]): ListedekiForm[] => liste.filter((f) => f.tip === 'dsl' && f.terminal && f.kayit?.arsiv !== true);
 
 export const formBul = (liste: readonly ListedekiForm[], kod: string) => liste.find((f) => f.kod === kod);
 
@@ -111,6 +118,7 @@ export interface SablonTaslagi {
   kat: string;
   ne: string;
   etiket: boolean;
+  terminal: boolean;
   dsl: string;
 }
 
@@ -121,10 +129,10 @@ const YENI_FORM_DSL = '# Genel bilgiler\nParça no *\nLot / seri no\n# Kontrol m
 export function tasarimBaslangici(form: ListedekiForm | undefined, sablonlar: readonly SablonKaydi[], bugun: string): SablonTaslagi {
   if (form) {
     const rev = form.kayit ? form.rev : String(Number(form.rev || 0) + 1).padStart(2, '0');
-    return { kod: form.kod, ad: form.ad, rev, yurur: bugun, std: form.std, kat: form.kat, ne: form.ne, etiket: form.etiket, dsl: form.dsl };
+    return { kod: form.kod, ad: form.ad, rev, yurur: bugun, std: form.std, kat: form.kat, ne: form.ne, etiket: form.etiket, terminal: form.terminal, dsl: form.dsl };
   }
   const ozelSayisi = sablonlar.filter((t) => !YERLESIK_SABLONLAR.some((y) => y.kod === t.kod)).length;
-  return { kod: `KF-${String(30 + ozelSayisi).padStart(2, '0')}`, ad: '', rev: '00', yurur: bugun, std: '', kat: '', ne: '', etiket: false, dsl: YENI_FORM_DSL };
+  return { kod: `KF-${String(30 + ozelSayisi).padStart(2, '0')}`, ad: '', rev: '00', yurur: bugun, std: '', kat: '', ne: '', etiket: false, terminal: false, dsl: YENI_FORM_DSL };
 }
 
 // Tasarım kaydının kuralları (uygulamadaki sırayla; ilk ihlal döner).
