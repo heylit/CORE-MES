@@ -437,9 +437,15 @@ export function topluKurFaizKarari(deger: string, kayitli: string | undefined): 
   return Number(kayitli) === Number(deger) ? 'ayni' : 'farkli';
 }
 // 1086 a: kur bugün ya da geçmiş günündür, faiz ileri tarihten başlayabilir. İlk ileri tarihli kur satırının sırası (0'dan), yoksa null.
-export function ileriTarihliKurSirasi(satirlar: readonly { tur: 'kur' | 'faiz' | 'gunluk_faiz'; tarih: string }[], bugun: string): number | null {
+export function ileriTarihliKurSirasi(satirlar: readonly { tur: string; tarih: string }[], bugun: string): number | null {
   const i = satirlar.findIndex((s) => s.tur === 'kur' && s.tarih > bugun);
   return i < 0 ? null : i;
+}
+
+// 2238-1 c: kur çifti alış ve satışıyla birlikte karşılaştırılır; ikisi de aynıysa aynı, biri farklıysa farklı (1085 a: atlanır).
+export function topluKurCiftiKarari(yeni: { alis: string; satis: string }, kayitli: { alis: string; satis: string } | undefined): TopluKurFaizKarari {
+  if (kayitli === undefined) return 'ekle';
+  return Number(kayitli.alis) === Number(yeni.alis) && Number(kayitli.satis) === Number(yeni.satis) ? 'ayni' : 'farkli';
 }
 
 // Vergi takvimi (891, 1162 b): Finans ekranının vergi takvimiyle aynı genel kural (istemci finans motoru `taxDay` ve

@@ -543,9 +543,12 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
 
     // Dövizli bedel: kur verilmezse alış gününe kadar girilmiş son kur alınır ve kayıtta kalır; sonra girilen kur değiştirmez.
     assert.equal(alan(await ekle({ paraBirimi: 'CHF', bedel: 1000, alisTarihi: '2026-03-10', omurAy: 10 })), 'kur');
+    // 2238-1 c: eski tek kur yetmez; alış kuru alınır.
     tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'CHF', tarih: '2026-03-01', kur: 40 }));
+    assert.equal(alan(await ekle({ paraBirimi: 'CHF', bedel: 1000, alisTarihi: '2026-03-10', omurAy: 10 })), 'kur');
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'CHF', tarih: '2026-03-01', alis: 40, satis: 40.5 }));
     const dovizli = tamam(await ekle({ paraBirimi: 'CHF', bedel: 1000, alisTarihi: '2026-03-10', omurAy: 10 })).sabitKiymet;
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'CHF', tarih: '2026-03-05', kur: 45 }));
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'CHF', tarih: '2026-03-05', alis: 45, satis: 45.5 }));
     assert.deepEqual([dovizli.kur, dovizli.bedelTl], ['40.000000', '40000.00']);
 
     assert.equal((await ekle({ bedel: 1000, alisTarihi: TARIH, omurAy: 10 }, 'yazan')).durum, 403);
@@ -765,7 +768,8 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const dene = (caprazKur: number, tutar: number) => yaz('/finans/odemeler/ekle', { yon: 'gelir', firmaId: f, tarih: TARIH, yontem: 'banka', hesapId: h, tutar, dagitimlar: [{ belgeId: b.id, belgeTutari: 1000, caprazKur }] });
     const kucuk = await dene(0.00001, 0.01);
     assert.deepEqual([kucuk.durum, alan(kucuk)], [400, 'dagitimlar']);
-    // TARIH için girilmiş günün kuru 36,30 (FNS-57 testi); ileti girilen kuru, referansı ve aralığı söyler.
+    // 2238-1 c: günün kuru o günün alış kurudur (36,30); ileti girilen kuru, referansı ve aralığı söyler.
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'EUR', tarih: TARIH, alis: 36.3, satis: 36.4 }));
     const buyuk = await dene(50, 50000);
     assert.equal(buyuk.durum, 400);
     const ileti = String((buyuk.govde as { mesaj?: unknown }).mesaj);
@@ -774,7 +778,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     // O gün için kur girilmemişse referans belgenin kendi kurudur (35): 2026-10-03'te 44 reddedilir.
     assert.equal((await yaz('/finans/odemeler/ekle', { yon: 'gelir', firmaId: f, tarih: '2026-10-03', yontem: 'banka', hesapId: h, tutar: 44000, dagitimlar: [{ belgeId: b.id, belgeTutari: 1000, caprazKur: 44 }] })).durum, 400);
     // Ödeme günü için kur girilince referans odur: 2026-10-02 için 45 girilince 44 kabul edilir.
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-10-02', kur: 45 }));
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'EUR', tarih: '2026-10-02', alis: 45, satis: 45.2 }));
     tamam(await yaz('/finans/odemeler/ekle', { yon: 'gelir', firmaId: f, tarih: '2026-10-02', yontem: 'banka', hesapId: h, tutar: 44000, dagitimlar: [{ belgeId: b.id, belgeTutari: 1000, caprazKur: 44 }] }));
     assert.equal((await belgeOku(b.id)).durum, 'kapandi');
     const b2 = await belge(f, { tutar: 1000, kdvOrani: 0, paraBirimi: 'EUR', kur: 35 });
@@ -975,7 +979,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const ozet = async (): Promise<FinansOzetiCevabi> => tamam(await istek<FinansOzetiCevabi>('okuyan', 'GET', '/finans/ozet'));
     // Önceki testlerin dövizli hesaplarına kur verilir ki nakit toplamı hesaplanabilsin; kur zaten varsa çakışma yok sayılır.
     const dovizler = await vt().sorgu<{ pb: string }>("SELECT DISTINCT rtrim(para_birimi) AS pb FROM finans_hesap WHERE aktif AND para_birimi <> 'TRY'");
-    for (const { pb } of dovizler) await yaz('/finans/kurlar/ekle', { paraBirimi: pb, tarih: gun(-30), kur: 10 });
+    for (const { pb } of dovizler) await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: pb, tarih: gun(-30), alis: 10, satis: 10 });
     const once = await ozet();
     assert.notEqual(once.nakitTl, null);
 
@@ -1010,7 +1014,10 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
 
     await hesap('banka', 'NOK', 200);
     assert.equal((await ozet()).nakitTl, null);
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'NOK', tarih: gun(-1), kur: 2.5 }));
+    // 2238-1 c: eski tek kur değerlemeye girmez; hesap alış kuruyla değerlenir.
+    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'NOK', tarih: gun(-1), kur: 9 }));
+    assert.equal((await ozet()).nakitTl, null);
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'NOK', tarih: gun(-1), alis: 2.5, satis: 2.6 }));
     assert.equal(fark(sonra.nakitTl ?? '', (await ozet()).nakitTl ?? ''), 500);
   });
 

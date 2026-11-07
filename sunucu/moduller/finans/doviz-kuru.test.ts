@@ -40,11 +40,13 @@ describe('dövizli kayıtta kur (gerçek PostgreSQL)', () => {
     cerez = String(g.headers['set-cookie']).split(';')[0] ?? '';
     firma = (await ortam.vt.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Tedarikci', 'ikisi', $1) RETURNING id", [kisi]))?.id ?? 0;
     usdHesap = tamam(await yaz<{ hesap: { id: number } }>('/finans/hesaplar/ekle', { ad: 'Deneme USD', tur: 'banka', paraBirimi: 'USD', acilisTarihi: '2026-01-01' })).hesap.id;
-    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'USD', tarih: '2026-10-01', kur: 34.25 }));
+    // 2238-1 c: muhasebe kaydı alış kurunu alır; eski tek kur (EUR) okunmaz.
+    tamam(await yaz('/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2026-10-01', alis: 34.25, satis: 34.4 }));
+    tamam(await yaz('/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-10-01', kur: 37 }));
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  test('kursuz USD belge o güne kadar girilmiş son kuru alır', async () => {
+  test('kursuz USD belge o güne kadar girilmiş son alış kurunu alır', async () => {
     const b = tamam(await belge({ paraBirimi: 'USD' })).belge;
     assert.equal(Number(b.kur), 34.25);
     assert.equal(b.toplamTl, '4110.00');
@@ -53,7 +55,7 @@ describe('dövizli kayıtta kur (gerçek PostgreSQL)', () => {
     assert.equal(Number(tamam(await belge({ paraBirimi: 'USD', kur: 35 })).belge.kur), 35);
     assert.equal(Number(tamam(await belge({})).belge.kur), 1);
   });
-  test('kuru hiç girilmemiş dövizde ya da kurdan önceki tarihte belge reddedilir', async () => {
+  test('alış kuru girilmemiş dövizde (eski tek kuru olsa da) ya da kurdan önceki tarihte belge reddedilir', async () => {
     const eur = await belge({ paraBirimi: 'EUR' });
     assert.equal(eur.durum, 400, JSON.stringify(eur.govde));
     assert.equal((eur.govde as { alan?: string }).alan, 'kur');
