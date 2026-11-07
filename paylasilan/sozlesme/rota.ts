@@ -934,7 +934,8 @@ export type EkAdimSartnameleriGovdesi = z.input<typeof ekAdimSartnameleriGovdesi
 // talaş önce, en çok ONERI_SAYISI). Model yoksa model null ve neden 'model-yok'; öneri yoksa nedeni geometri'nin nedenidir.
 export const HAM_ONERI_SAYISI = 3;
 export const hamOnerisiCevabi = z.object({
-  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  // 2138-2: revKodu gösterilen revizyon kodu (modelin kodu, yoksa kartın revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+  model: z.object({ belgeAdi: z.string(), harf: z.string(), revKodu: z.string().nullable().optional() }).nullable(),
   payMm: z.number().nullable(),
   oneriler: z.array(hamStokOnerisi).max(HAM_ONERI_SAYISI),
   neden: z.enum(['model-yok', ...HAM_STOK_NEDENLERI]).nullable(),
