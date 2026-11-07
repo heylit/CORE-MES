@@ -433,6 +433,8 @@ export type { AcikIsEmri } from './sorgular.ts';
 // Hazırlık durdurucuları (120-122 a, denetim #14): maddenin sahibi durumunu verir, bağı kablolama.ts kurar (sahipler bu modülü okur).
 export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cnc', c); };
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
+// Paket yayını (2227): iş emri başına; başlatma kancası sormaz, reddi Arkon verir (2189-1 a).
+export const yayinHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('yayin', c); };
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
 export const malzemeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('malzeme', c); };

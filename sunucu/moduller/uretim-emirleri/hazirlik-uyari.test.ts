@@ -17,8 +17,8 @@ import { MUAF_MADDE_YOK, MUAF_TUTULUR, hazirlikEngeli, makineHazirligi } from '.
 // 2146-1 a: matrise rota, malzeme, takım ömrü ve makine durumu girer, hepsi yalnız uyarır; özel proses çıkar. Başlatma
 // davranışı değişmez: uyaran madde eksikken de iş emri başlar.
 describe('uretim-emirleri hazırlık kuralları, uyaran maddeler (2146-1 a)', () => {
-  test('madde listesi: durduran CNC ve çizim, uyaran rota, malzeme, takım ömrü, makine; özel proses yok', () => {
-    assert.deepEqual([...HAZIRLIK_MADDELERI], ['cnc', 'cizim', 'rota', 'malzeme', 'takim-omru', 'makine']);
+  test('madde listesi: durduran CNC, çizim ve paket yayını (2227), uyaran rota, malzeme, takım ömrü, makine; özel proses yok', () => {
+    assert.deepEqual([...HAZIRLIK_MADDELERI], ['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'makine']);
     assert.deepEqual(HAZIRLIK_MADDELERI.filter(hazirlikUyarirMi), ['rota', 'malzeme', 'takim-omru', 'makine']);
     assert.deepEqual([...MUAF_TUTULUR], ['cnc'], 'muafiyet yalnız matristeki durduran maddeye');
   });
@@ -116,7 +116,7 @@ describe('uretim-emirleri hazırlık, uyaran maddeler (2146-1 a, gerçek Postgre
       assert.deepEqual(v.maddeler.filter((m) => hazirlikUyarirMi(m.madde)).map((m) => [m.madde, m.durum, m.muafTutulur]), [
         ['rota', 'eksik', false], ['malzeme', 'eksik', false], ['takim-omru', 'eksik', false], ['makine', 'eksik', false],
       ]);
-      assert.deepEqual(v.isEmirleri[0]?.maddeler.map((m) => m.madde), ['cnc', 'malzeme', 'takim-omru', 'makine'], 'iş emri düzeyindeki maddeler satırda');
+      assert.deepEqual(v.isEmirleri[0]?.maddeler.map((m) => m.madde), ['cnc', 'yayin', 'malzeme', 'takim-omru', 'makine'], 'iş emri düzeyindeki maddeler satırda');
 
       hazirlikCozucusuKaydet('cnc', async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'suruyor', secildi: true } as const])));
       assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)),

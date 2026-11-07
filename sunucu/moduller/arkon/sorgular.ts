@@ -28,6 +28,17 @@ export function emirPaketleri(db: Db, emirIdler: readonly number[]): Promise<{ e
   );
 }
 
+// İş emri paketlerinin Hazırlık durumu (2227): bütün paket (`tmi-ie-<id>`) ve elle bölünmüş işin parça paketleri (`tmi-ie-<id>-p<no>`),
+// kayıtlı paketin `status` alanıyla; kaydı olmayan paket listede yoktur.
+export function isEmriPaketDurumlari(db: Db, isEmriIdler: readonly number[]): Promise<{ is_emri_id: number; parca: boolean; durum: string | null }[]> {
+  return db.sorgu(
+    `SELECT substring(kimlik from '^tmi-ie-([0-9]+)')::int AS is_emri_id, kimlik ~ '-p[0-9]+$' AS parca, govde->>'status' AS durum
+       FROM arkon_belge
+      WHERE depo = 'pkgs' AND kimlik ~ '^tmi-ie-[0-9]+(-p[0-9]+)?$' AND substring(kimlik from '^tmi-ie-([0-9]+)') = ANY($1::text[])`,
+    [isEmriIdler.map(String)],
+  );
+}
+
 export function belge(db: Db, depo: ArkonDeposu, kimlik: string): Promise<BelgeSatiri | null> {
   return db.tek<BelgeSatiri>(`SELECT ${BELGE} FROM arkon_belge WHERE depo = $1 AND kimlik = $2`, [depo, kimlik]);
 }

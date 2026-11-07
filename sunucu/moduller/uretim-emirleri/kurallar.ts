@@ -1033,7 +1033,7 @@ export function fasonBeklemesi(
 // Hazırlık durdurucuları (120-122 a, denetim #14). Madde emirde seçiliyse (sahibi modül söyler) ve tamam değilse, muafiyeti yoksa iş emri
 // başlamaz. Çizim muaf tutulamaz (121 a).
 export const HAZIRLIK_ADI: Readonly<Record<HazirlikMaddesi, string>> = {
-  cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu',
+  cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu', yayin: 'Paket yayını',
 };
 // Muafiyet yalnız matristeki durduran maddeye verilir; özel proses matristen çıktı (2146-1 a), uyaran madde zaten durdurmaz.
 export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(

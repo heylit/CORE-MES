@@ -346,6 +346,40 @@ describe('A2 Hazırlık ekranı', () => {
     fireEvent.click(within(d).getByRole('button', { name: /Emin misin/ }));
     await waitFor(() => { expect(ileti(istekler, 'pkg-removed')).toBe(true); }, { timeout: 10000 });
   }, 40000);
+  // 2227: hazırlık matrisi Üretim Hazırlık listesinde. Kaynak emir ayrıntısındaki uçtur, tek okumada bütün emirler; yazma yoktur.
+  it('2227: paket kartında hazırlık çipi, Yayınla sekmesinde iş emrinin hazırlık satırları', async () => {
+    const isPaketi = { ...PAKET, id: 'tmi-ie-730', no: 'IE-DENEME-73', tmi: { emirId: 73, isEmriId: 730, opNo: 20 } };
+    const biten = { ...PAKET, id: 'tmi-ie-740', no: 'IE-DENEME-74', tmi: { emirId: 74, isEmriId: 740, opNo: 10, bitti: true } };
+    const istekler = sunucuKur(YONETICI, {
+      belgeler: { pkgs: [isPaketi, biten].map((g) => ({ kimlik: g.id, surum: 1, govde: g })), kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] },
+    });
+    const asil = globalThis.fetch;
+    const sorulan: string[] = [];
+    const madde = (m: string, durum: string, isEmriDuzeyi: boolean) => ({ madde: m, durum, muafTutulur: m === 'cnc', isEmriDuzeyi });
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
+      const url = new URL(adres, 'http://tmi.yerel');
+      if (url.pathname.replace(/^\/api/, '') !== '/adimli-emirler/hazirlik-ozeti') return asil(adres, ayar);
+      sorulan.push(url.searchParams.get('emirler') ?? '');
+      return jsonCevap({ emirler: [{ emirId: 73, hazirlik: {
+        maddeler: [madde('cnc', 'tamam', true), madde('cizim', 'eksik', false), madde('rota', 'eksik', false), madde('malzeme', 'tamam', true), madde('takim-omru', 'gerekmez', true), madde('makine', 'tamam', true)],
+        muafiyetler: [],
+        isEmirleri: [{ isEmriId: 730, opNo: 20, ad: 'Tornalama', bitti: false, maddeler: [
+          { madde: 'cnc', durum: 'tamam' }, { madde: 'malzeme', durum: 'tamam' }, { madde: 'takim-omru', durum: 'gerekmez' }, { madde: 'makine', durum: 'tamam' }] }],
+      } }] });
+    }));
+    arkonAc('/arkon/hazirlik');
+    const liste = await screen.findByRole('complementary', { name: 'İş paketleri' }, { timeout: 10000 });
+    expect(await within(liste).findByText('Hazırlık · 1 eksik', {}, { timeout: 10000 })).toBeTruthy();
+    expect(sorulan).toEqual(['73']);
+    const d = await ekran();
+    const kart = within(liste).getAllByRole('button', { name: /IE-DENEME-73/ }).find((b) => b.hasAttribute('aria-pressed'));
+    fireEvent.click(kart!);
+    fireEvent.click(within(d).getByRole('button', { name: /Yayınla/ }));
+    const hz = await within(d).findByRole('region', { name: 'Hazırlık' }, { timeout: 10000 });
+    expect(within(hz).getByText('Çizim revizyonu')).toBeTruthy();
+    expect(within(hz).getAllByText('emir geneli').length).toBe(2);
+    expect(yazmalar(istekler).filter((i) => i.yol.startsWith('/adimli-emirler'))).toEqual([]);
+  }, 40000);
 });
 
 const sahteApi = (paket: Partial<Pkg>, is: Partial<Order> = {}) => {
