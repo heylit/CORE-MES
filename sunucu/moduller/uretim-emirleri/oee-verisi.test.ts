@@ -100,9 +100,16 @@ describe('uretim-emirleri OEE okumaları (gerçek PostgreSQL)', () => {
     assert.equal(toplam, (await makineSureleri(o().vt, [m1], bas, bit)).get(m1));
 
     const yarin = new Date(Date.now() + 86_400_000).toISOString();
+    // Açık kullanımın bitişi veritabanının saatidir: okuma, Node saatiyle değil veritabanının okumadan önceki ve sonraki saatiyle
+    // kıyaslanır. Windows'ta Date.now() sistem saatinin kaba (~15,6 ms) örneğinden yürür, PostgreSQL ince saati okur; iki saat
+    // kıyaslanınca bitiş Date.now()'dan ileride görünebiliyordu.
+    const vtSaati = async () => ms((await o().sahip.tek<{ t: string }>("SELECT to_json(clock_timestamp()) #>> '{}' AS t"))!.t);
+    const once = await vtSaati();
     const acik = (await makineKullanimAraliklari(o().vt, [m2], acikBas, yarin)).get(m2)!;
+    const sonra = await vtSaati();
     assert.equal(acik.length, 1);
-    assert.ok(ms(acik[0]!.bitis) <= Date.now() && ms(acik[0]!.bitis) > Date.now() - 60_000, 'açık kullanım okuma anında biter');
+    const bitis = ms(acik[0]!.bitis);
+    assert.ok(once <= bitis && bitis <= sonra, `açık kullanım okuma anında biter: ${String(once)} <= ${String(bitis)} <= ${String(sonra)}`);
     assert.equal((await makineKullanimAraliklari(o().vt, [], bas, bit)).size, 0);
   });
 
