@@ -12,7 +12,7 @@ import { KARSILAMA_SURESI_MS, Karsilama } from './Karsilama.tsx';
 
 const KISI: Kullanici = { id: 7, ad: 'Deneme Operatör', islemler: [] };
 // Sunucunun gerçek cevap biçimi; metin deneme metnidir. Saatler eşit: gece hiç yoktur, sonuç saate bağlı değildir.
-const ACIK = { acik: true, metin: 'Deneme karşılama', geceMetni: 'Deneme gece', gunduzBaslangic: 6, geceBaslangic: 6 } satisfies KarsilamaCevabi;
+const ACIK = { acik: true, metin: 'Deneme karşılama', geceMetni: 'Deneme gece', gunduzBaslangic: 6, geceBaslangic: 6, sozAcik: false, gunNotuAcik: false, ramazanBayrami: null, kurbanBayrami: null } satisfies KarsilamaCevabi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 

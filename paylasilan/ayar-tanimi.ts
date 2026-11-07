@@ -13,7 +13,7 @@ export interface TurDegerleri {
 
 export type AyarTuru = keyof TurDegerleri;
 
-export const METIN_BICIMLERI = ['ag-araligi'] as const;
+export const METIN_BICIMLERI = ['ag-araligi', 'tarih-araligi'] as const;
 export type MetinBicimi = (typeof METIN_BICIMLERI)[number];
 
 export interface AyarSecenegi {
@@ -43,7 +43,7 @@ export type AyarTanimi =
     varsayilan: string;
     enUzun: number;
     bosOlabilir?: true;
-    // Biçimli metin sunucuda ve ekranda aynı kuralla doğrulanır (ag-araligi: paylasilan/ag-araligi.ts).
+    // Biçimli metin sunucuda ve ekranda aynı kuralla doğrulanır (ag-araligi: paylasilan/ag-araligi.ts, tarih-araligi: paylasilan/tarih-araligi.ts).
     bicim?: MetinBicimi;
   })
   // Sabit listeden tek seçim; listede olmayan değer yazılamaz. Etiket ekranda görünür, değer saklanır.
