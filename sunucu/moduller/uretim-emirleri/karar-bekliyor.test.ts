@@ -278,7 +278,8 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     await yaz(5, T(2, '09:00'));
     await yaz(3, T(2, '10:00'));
     await yaz(-2, T(2, '11:00'));
-    const once = new Date().toISOString();
+    // Karar anı veritabanı saatinden (clock_timestamp) yazılır; sınır aynı saatten okunur, Node saatiyle kıyaslanırsa iki saat arasındaki kayma testi bozar.
+    const once = (await ortam!.sahip.tek<{ an: Date }>('SELECT clock_timestamp() AS an'))!.an.toISOString();
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     await yaz(4, T(3, '09:00'));
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
