@@ -70,6 +70,7 @@ ADR: önce `belgeler/adr/README.md` (dizin ve kural), yalnız işin dokunduğu A
 ## Ajanlar
 Şef ve ajan düzeni (ajan dağıtma, kart, birleştirme, test yükü) `kurulum/sef-duzeni.md`'dedir; yalnız ana oturum (şef) uygular.
 Dış yazar konuları `kurulum/proje-talimati.md`'yi izler.
+Proje konuları `kurulum/proje-talimati.md` OKUMA SIRASI'ndaki kendi rol bölümlerini okur; teslim kapısı `npm run teslim-denetle`'dir (2213).
 
 ## Komutlar
-`npm run kontrol` · `tip` · `sinir` · `test:modul -- <ad>` · `harita` · `durum` · `goc` · `yonetici` · `gelistir:sunucu` (4100) · `gelistir:istemci` (4101)
+`npm run kontrol` · `teslim-denetle -- <klasör>` · `tip` · `sinir` · `test:modul -- <ad>` · `harita` · `durum` · `goc` · `yonetici` · `gelistir:sunucu` (4100) · `gelistir:istemci` (4101)
