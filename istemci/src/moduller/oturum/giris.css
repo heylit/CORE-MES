@@ -48,15 +48,6 @@
 .tc-giris-sahne[data-durum='yok'] { container-type: size; }
 .tc-giris-sahne[data-durum='yok'] .tc-giris-sahne-alti { opacity: 1; top: calc(50% + min(50cqh, 11.5cqw)); }
 
-/* Açılış sesi düğmesi: sahnenin sol üstünde; seçim yalnız bu cihazda saklanır. */
-.tc-giris-ses {
-  position: absolute; left: var(--b-4); top: var(--b-4); z-index: 3;
-  display: inline-flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma); padding: 0 var(--b-3);
-  border: 1px solid var(--edge2); border-radius: var(--yari-3); background: color-mix(in srgb, var(--giris3d-arka) 60%, transparent);
-  color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; cursor: pointer;
-}
-.tc-giris-ses:hover { color: var(--ink); border-color: var(--hazard); }
-.tc-giris-ses[aria-pressed='true'] { color: var(--hazard-ink); border-color: color-mix(in srgb, var(--hazard) 60%, transparent); }
 .tc-giris-sahne-parlama {
   position: absolute; left: -10%; right: -10%; top: 50%; z-index: 1; height: calc(var(--b-1) * .75); opacity: 0; mix-blend-mode: screen;
   background: linear-gradient(90deg, transparent 10%, color-mix(in srgb, var(--giris3d-parlama) 90%, transparent) 45%, var(--giris3d-tarama) 50%,

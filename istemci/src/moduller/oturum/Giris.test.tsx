@@ -333,28 +333,15 @@ describe('giriş ekranı tanıtımı (2170)', () => {
     expect(okunan).toEqual([...MODULLER]);
   });
 
-  it('acilis sesi varsayilan kapali; dugme yalniz bu cihazda acar ve kapatir', () => {
-    sunucuKur();
-    kur();
-    const dugme = screen.getByRole('button', { name: 'Ses kapalı' });
-    expect(dugme.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(dugme);
-    expect(screen.getByRole('button', { name: 'Ses açık' }).getAttribute('aria-pressed')).toBe('true');
-    expect(window.localStorage.getItem('core.giris.ses')).toBe('acik');
-    fireEvent.click(screen.getByRole('button', { name: 'Ses açık' }));
-    expect(window.localStorage.getItem('core.giris.ses')).toBe('kapali');
-  });
-
-  it('kurum ayari aciksa dugme acik gelir; cihazda kapatilinca kurum ayarina ragmen kapali kalir (2175)', async () => {
+  it('giris ekraninda ses dugmesi yok; ses yalniz kurum ayarindan gelir; eski cihaz secimi silinir (2230c)', async () => {
+    window.localStorage.setItem('core.giris.ses', 'acik');
     vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-sesi')
       ? new Response(JSON.stringify({ acik: true, duzey: 40 }), { status: 200 })
       : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
     kur();
-    fireEvent.click(await screen.findByRole('button', { name: 'Ses açık' }));
-    expect(window.localStorage.getItem('core.giris.ses')).toBe('kapali');
-    cleanup();
-    kur();
     await new Promise((r) => { setTimeout(r, 20); });
-    expect(screen.getByRole('button', { name: 'Ses kapalı' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Ses / })).toBeNull();
+    expect(document.querySelector('.tc-giris-ses')).toBeNull();
+    expect(window.localStorage.getItem('core.giris.ses')).toBeNull();
   });
 });
