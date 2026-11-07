@@ -56,7 +56,9 @@ const sayac = (yollar: string[], yol: string) => yollar.filter((y) => y === yol)
 const durumMetni = () => screen.getByRole('status').textContent;
 const durumBekle = (beklenen: string) => waitFor(() => expect(durumMetni()).toBe(beklenen));
 const yenile = () => { fireEvent.click(screen.getByRole('button', { name: 'Yenile' })); };
-const komsu = (etiket: string) => screen.getByText(etiket).nextElementSibling?.textContent;
+// Altı kutu da "Veritabanı" der; satırlar teknik ayrıntılardadır.
+const teknik = () => within(screen.getByRole('region', { name: 'Teknik ayrıntılar' }));
+const komsu = (etiket: string) => teknik().getByText(etiket).nextElementSibling?.textContent;
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -132,7 +134,7 @@ describe('SistemDurumu ayrinti', () => {
     ac();
     await durumBekle('Sistem çalışıyor');
     await screen.findByText('abcdef1');
-    expect(screen.getByText(/12 ms/)).toBeTruthy();
+    expect(teknik().getByText(/12 ms/)).toBeTruthy();
     expect(screen.getByText('20260101000000_ornek')).toBeTruthy();
     expect(screen.getByText('2 sa 5 dk')).toBeTruthy();
     expect(screen.getByText('Test')).toBeTruthy();
@@ -144,7 +146,7 @@ describe('SistemDurumu ayrinti', () => {
       ayrinti: ayrintiVer({ ...AYRINTI, veritabaniGecikmeMs: null, sonGoc: null, commit: null }),
     });
     ac();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     expect(komsu('Son göç')).toBe('yok');
     expect(komsu('Commit')).toBe('yok');
     expect(komsu('Veritabanı')).toContain('yok');
@@ -166,7 +168,7 @@ describe('SistemDurumu ayrinti', () => {
   it('veritabani durumu saglik cevabindan gelir: ok "Calisiyor"; saglik hata iken ayrinti gelse de "Sorun var"', async () => {
     sunucuKur({ kullanici: YONETICI });
     ac();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     expect(komsu('Veritabanı')).toContain('Çalışıyor');
     expect(komsu('Veritabanı')).toContain('12 ms');
     expect(komsu('Veritabanı')).not.toContain('Sorun var');
@@ -174,7 +176,7 @@ describe('SistemDurumu ayrinti', () => {
 
     sunucuKur({ kullanici: YONETICI, saglik: HATA });
     ac();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     expect(komsu('Veritabanı')).toContain('Sorun var');
     expect(komsu('Veritabanı')).not.toContain('Çalışıyor');
     expect(komsu('Veritabanı')).not.toContain('ms');
@@ -190,7 +192,7 @@ describe('SistemDurumu ayrinti', () => {
     expect(screen.queryByText('Sorun var')).toBeNull();
 
     birak();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     expect(komsu('Veritabanı')).toContain('Çalışıyor');
   });
 
@@ -226,7 +228,7 @@ describe('SistemDurumu ayrinti', () => {
 
     const yoneticiYollari = sunucuKur({ kullanici: YONETICI });
     ac();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     expect(yoneticiYollari).toContain('/saglik/ayrinti');
   });
 
@@ -256,7 +258,7 @@ describe('SistemDurumu ayrinti', () => {
 
     const yoneticiYollari = sunucuKur({ kullanici: YONETICI });
     ac();
-    await screen.findByText('Veritabanı');
+    await screen.findByRole('region', { name: 'Teknik ayrıntılar' });
     await waitFor(() => expect((screen.getByRole('button', { name: 'Yenile' }) as HTMLButtonElement).disabled).toBe(false));
     yenile();
     await waitFor(() => expect(sayac(yoneticiYollari, '/saglik/ayrinti')).toBe(2));

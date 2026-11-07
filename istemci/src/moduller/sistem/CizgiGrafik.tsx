@@ -1,4 +1,6 @@
-import { useState, type PointerEvent } from 'react';
+import { useState, type PointerEvent, type ReactNode } from 'react';
+import { Simge } from '../../ortak/arayuz/index.ts';
+import type { Yorum } from './gidisat-yorum.ts';
 import { sayiMetni, yuvarlakTavan, type Nokta } from './performans.ts';
 
 // Tek eksenli çizgi grafiği (paket yok, SVG). Ölçülmemiş nokta çizgide boşluk bırakır, sıfır uydurulmaz.
@@ -13,6 +15,33 @@ interface Ozellikler {
   esik?: number;
   // Yüzde gibi üst sınırı belli ölçüde eksen bu değerde biter.
   tavan?: number;
+  // Ölçünün sade anlatımı ve veriden çıkan tek cümle yorum (2231); grafik yorumsuz kalmasın diye.
+  aciklama?: string;
+  yorum?: Yorum;
+  // Son ölçü, büyük yazılır: "şu an" sorusunun cevabı.
+  simdi?: string;
+}
+
+function YorumSatiri({ yorum }: { yorum: Yorum }) {
+  return (
+    <p className="tc-sistem-yorum" data-ton={yorum.ton}>
+      <Simge ad={yorum.ton === 'tamam' ? 'check' : yorum.ton === 'uyari' ? 'alert' : 'help'} boyut="k" />
+      <span><b>{yorum.ozet}</b> {yorum.aciklama}</span>
+    </p>
+  );
+}
+
+function Baslik({ baslik, aciklama, simdi, children }: { baslik: string; aciklama?: string; simdi?: string; children?: ReactNode }) {
+  return (
+    <figcaption className="tc-sistem-grafik-baslik">
+      <span className="tc-sistem-grafik-ad">
+        <b>{baslik}</b>
+        {aciklama !== undefined && <span className="tc-sistem-soluk">{aciklama}</span>}
+      </span>
+      {simdi !== undefined && <span className="tc-sistem-simdi mono">{simdi}</span>}
+      {children}
+    </figcaption>
+  );
 }
 
 const EN = 400;
@@ -24,14 +53,14 @@ const ALT = 18;
 
 const birimli = (n: number | null, birim: string): string => (n === null ? 'ölçülmedi' : `${sayiMetni(n)}${birim}`);
 
-export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan }: Ozellikler) {
+export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan, aciklama, yorum, simdi }: Ozellikler) {
   const [imlec, imlecYaz] = useState<number | null>(null);
   const uzunluk = Math.max(0, ...seriler.map((s) => s.noktalar.length));
   const degerler = seriler.flatMap((s) => s.noktalar.map((n) => n.deger)).filter((d): d is number => d !== null);
   if (uzunluk === 0 || degerler.length === 0) {
     return (
       <figure className="tc-sistem-grafik">
-        <figcaption className="tc-sistem-grafik-baslik"><b>{baslik}</b></figcaption>
+        <Baslik baslik={baslik} aciklama={aciklama} />
         <p className="tc-sistem-soluk">Bu aralıkta ölçü yok.</p>
       </figure>
     );
@@ -61,13 +90,12 @@ export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan }: Oze
 
   return (
     <figure className="tc-sistem-grafik">
-      <figcaption className="tc-sistem-grafik-baslik">
-        <b>{baslik}</b>
+      <Baslik baslik={baslik} aciklama={aciklama} simdi={simdi}>
         <span className="tc-sistem-lejant">
           {seriler.length > 1 && seriler.map((s) => <span key={s.ad}><i className="tc-sistem-lejant-cizgi" data-ton={s.ton} />{s.ad}</span>)}
-          {esik !== undefined && <span><i className="tc-sistem-lejant-esik" />Eşik</span>}
+          {esik !== undefined && <span><i className="tc-sistem-lejant-esik" />Sınır</span>}
         </span>
-      </figcaption>
+      </Baslik>
       <div className="tc-sistem-cizim">
         <svg viewBox={`0 0 ${EN} ${BOY}`} aria-hidden="true" focusable="false" onPointerMove={sec} onPointerLeave={() => imlecYaz(null)}>
           {[0, 0.5, 1].map((k) => (
@@ -92,6 +120,7 @@ export function CizgiGrafik({ baslik, seriler, birim, etiket, esik, tavan }: Oze
           ? `${etiket(secili.an)} · ${seriler.map((s) => `${s.ad} ${birimli(s.noktalar[imlec]?.deger ?? null, birim)}`).join(' · ')}`
           : 'Değeri görmek için grafiğin üzerine gelin.'}
       </p>
+      {yorum !== undefined && <YorumSatiri yorum={yorum} />}
       <table className="tc-gizli-etiket">
         <caption>{baslik}</caption>
         <thead><tr><th scope="col">Zaman</th>{seriler.map((s) => <th key={s.ad} scope="col">{s.ad}</th>)}</tr></thead>

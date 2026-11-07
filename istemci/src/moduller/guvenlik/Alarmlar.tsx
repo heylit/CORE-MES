@@ -57,7 +57,8 @@ export function GuvenlikAlarmlar() {
   );
 }
 
-function AlarmAyrintisi({ alarm, degisti, kapat }: { alarm: Alarm; degisti: (a: Alarm) => void; kapat: () => void }) {
+// Sistem ve Güvenlik sayfasındaki karar kartı da aynı pencereyi açar (2231): onay ve kapatma tek yerde yazılır.
+export function AlarmAyrintisi({ alarm, degisti, kapat }: { alarm: Alarm; degisti: (a: Alarm) => void; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const oturum = useOturum();

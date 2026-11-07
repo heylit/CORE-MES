@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link, useInRouterContext } from 'react-router-dom';
 import type { Ayrinti } from '#paylasilan/sozlesme/saglik.ts';
 import { Pencere, Simge } from '../../ortak/arayuz/index.ts';
 import type { UstEylem, UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SistemDurumu } from './SistemDurumu.tsx';
 import './sistem-durumu.css';
@@ -29,6 +31,18 @@ function SistemIsareti() {
   return <span className="tc-kabuk-kisi-isaret" role="img" aria-label={`Sistem durumu, ${sayi} uyarı`} title={`Sistem durumu, ${sayi} uyarı`} />;
 }
 
+// Kararlar, korumalar ve yorumlu grafikler Sistem ve Güvenlik sayfasındadır (2231); pencere kısa özettir ve oraya götürür.
+// Sayfayı görme yetkisi olmayana bağlantı verilmez. Yönlendirici dışında (tek başına çizim) düz bağlantıdır.
+function SayfaBaglantisi({ kapat }: { kapat: () => void }) {
+  const oturum = useOturum();
+  const yonlendirici = useInRouterContext();
+  if (oturum.data?.islemler.includes('sayfa.guvenlik') !== true) return null;
+  const icerik = <><Simge ad="lock" boyut="k" />Sistem ve Güvenlik'e git<Simge ad="chev-right" boyut="k" /></>;
+  return yonlendirici
+    ? <Link className="tc-sistem-git" to="/guvenlik" onClick={kapat}>{icerik}</Link>
+    : <a className="tc-sistem-git" href="/guvenlik">{icerik}</a>;
+}
+
 function SistemDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
   const [acik, acikYaz] = useState(false);
   useEffect(() => { if (acmaIstegi > 0) acikYaz(true); }, [acmaIstegi]);
@@ -42,7 +56,7 @@ function SistemDugmesi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
       </button>
       {acik && (
         <Pencere acik kapat={() => acikYaz(false)} baslik="Sistem durumu" tur="yan">
-          <SistemDurumu />
+          <SistemDurumu sayfaBaglantisi={<SayfaBaglantisi kapat={() => acikYaz(false)} />} />
         </Pencere>
       )}
     </>

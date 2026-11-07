@@ -45,3 +45,55 @@
 .tc-sistem-seri[data-ton="ikinci"] { stroke: var(--grafik-2); }
 .tc-sistem-imlec { stroke: var(--edge2); stroke-width: 1; }
 .tc-sistem-okuma { color: var(--muted); font-size: var(--yazi-xs); margin: var(--b-1) 0 0; min-block-size: var(--b-4); overflow-wrap: anywhere; }
+
+/* Sağlık kutuları (2231): hüküm büyük, renkli şerit tona göre; renk tek başına anlam taşımaz, hüküm yazıyla da söyler. */
+.tc-sistem-saglik { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 4)), 1fr)); gap: var(--b-2); margin: 0; }
+.tc-sistem-saglik-kutu {
+  --ton: var(--done);
+  display: flex; flex-direction: column; gap: var(--b-1); min-inline-size: 0;
+  padding: var(--b-3); border: 1px solid var(--edge); border-inline-start: 4px solid var(--ton); border-radius: var(--yari-2);
+  background: var(--panel);
+}
+.tc-sistem-saglik-kutu[data-ton='tamam'] { --ton: var(--run); }
+.tc-sistem-saglik-kutu[data-ton='uyari'] { --ton: var(--hold); }
+.tc-sistem-saglik-kutu[data-ton='hata'] { --ton: var(--stop); }
+.tc-sistem-saglik-kutu[data-ton='pasif'] { --ton: var(--idle); }
+.tc-sistem-saglik-kutu dt { display: flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-sistem-saglik-kutu dd { margin: 0; overflow-wrap: anywhere; }
+.tc-sistem-saglik-hukum { font-size: var(--yazi-l); font-weight: 800; line-height: 1.15; }
+.tc-sistem-saglik-yorum { font-size: var(--yazi-s); }
+
+/* Gidişat: grafikler iki sütun, dar ekranda tek; her grafiğin altında yorum. */
+.tc-sistem-gidisat { display: flex; flex-direction: column; gap: var(--b-2); min-inline-size: 0; }
+.tc-sistem-gidisat-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
+.tc-sistem-gidisat-bas .tc-sistem-aralik { margin: 0; }
+.tc-sistem-bolum-baslik { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-xl); }
+.tc-sistem-bolum-baslik .tc-simge { color: var(--muted); }
+.tc-sistem-grafikler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--b-6) * 12)), 1fr)); gap: var(--b-3); }
+.tc-sistem-grafikler .tc-sistem-grafik {
+  margin: 0; min-inline-size: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel);
+}
+.tc-sistem-grafik-ad { display: flex; flex-direction: column; min-inline-size: 0; flex: 1 1 calc(var(--b-6) * 5); }
+.tc-sistem-simdi { font-size: var(--yazi-l); font-weight: 700; font-variant-numeric: tabular-nums; }
+.tc-sistem-yorum {
+  --ton: var(--idle);
+  display: flex; align-items: flex-start; gap: var(--b-2); margin: var(--b-2) 0 0; padding: var(--b-2) var(--b-3);
+  border-radius: var(--yari-1); font-size: var(--yazi-s); overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--ton) 10%, var(--panel));
+}
+.tc-sistem-yorum[data-ton='tamam'] { --ton: var(--run); }
+.tc-sistem-yorum[data-ton='uyari'] { --ton: var(--hold); }
+.tc-sistem-yorum .tc-simge { flex: none; color: var(--ton); margin-block-start: 2px; }
+
+/* Pencereden sayfaya geçiş ve katlanan teknik ayrıntılar. */
+.tc-sistem-git {
+  display: flex; align-items: center; gap: var(--b-2); margin-block-start: var(--b-3); padding: var(--b-2) var(--b-3);
+  min-block-size: var(--b-6); border: 1px solid var(--edge2); border-radius: var(--yari-2); color: var(--ink); font-weight: 700; text-decoration: none;
+}
+.tc-sistem-git .tc-simge:last-child { margin-inline-start: auto; color: var(--muted); }
+.tc-sistem-git:hover { background: var(--panel2); }
+.tc-sistem-git:focus-visible { outline: 2px solid var(--grafik); outline-offset: 2px; }
+.tc-sistem-katli { margin-block-start: var(--b-4); border-block-start: 1px solid var(--edge); padding-block-start: var(--b-2); }
+.tc-sistem-katli > summary { cursor: pointer; min-block-size: var(--b-6); display: flex; align-items: center; font-weight: 700; color: var(--muted); }
+.tc-sistem-katli > summary:focus-visible { outline: 2px solid var(--grafik); outline-offset: 2px; }
+.tc-sistem-teknik { min-inline-size: 0; }

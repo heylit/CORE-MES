@@ -21,3 +21,4 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 ### Bağlamada kapanacak
 
 - Sertifika bitişi yalnız arayüz kapısının kendi sertifikasından okunur; ters vekil kurulursa (askıda) madde onun sertifikasını göstermez.
+- Sistem ve Güvenlik sayfasının korumalar listesine "Oturumun cihaza bağlanması" ve "Parola kuralı" maddeleri 2226 birleştikten sonra eklenecek (2231).
