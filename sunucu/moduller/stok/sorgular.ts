@@ -6,12 +6,13 @@ export {
   depoAktifligi, depoDoluMu, depoKonumlariniKapat, haritaDeposuAc, haritaKonumlari, zeminKonumlari, haritaBagSayilari, haritasizKonumlar, gozStoklari,
   tumKonumKodlari, haritaKonumuAc, haritaKonumuGuncelle, haritaKonumuTuru, haritaKonumlariniKapat, type KonumKodu, kodDurumlari, konumVarMi, rafBul,
   type RafSuzgeci, RAF_SIRALAMASI, rafSay, raflar, type RafAlanlari, rafAc, rafGuncelle, rafPasifYap, rafVarMi, gozKodlariniYenile, gozleriYaz,
-  fazlaGozleriKapat, rafGozleriniKapat, type GozHam, rafinGozleri,
+  fazlaGozleriKapat, rafGozleriniKapat, type GozHam, rafinGozleri, type KonumMalzemesiHam, type KonumMalzemesiSuzgeci,
+  KONUM_MALZEMESI_SIRALAMASI, konumMalzemesiSay, konumMalzemeleri,
 } from './sorgular/depo/sorgular.ts';
 export {
   bakiyeKilitle, partileriBul, partininBakiyeleri, partininKarantinaBakiyeleri, partilerinRedBakiyeleri, karantinaOncesiKonumu, karantinaDisiKonumlar,
   partilerinRedGirisleri, hareketPartileri, type BakiyeAnahtari, bakiyeleriKilitle, bakiyeOku, konumBakiyeleri, malzemeBakiyeleri, serbestBakiyeler,
-  gozdekiPartiler, type BakiyeYeni, bakiyeEkle, bakiyeGuncelle, bakiyeSil, partiBul, lotNoylaParti, lotBakiyeleri, type LotEtiketiHam, malKabulLotEtiketleri,
+  gozdekiPartiler, type BakiyeYeni, bakiyeEkle, bakiyeGuncelle, bakiyeSil, konumaGelisYenile, partiBul, lotNoylaParti, lotBakiyeleri, type LotEtiketiHam, malKabulLotEtiketleri,
   partiLotEtiketi, type PartiAnahtari, emirPartisiBul, partiAc, refakatCiktiPartisiBul, refakatCiktiPartisiAc, refakatStokPartileri, partiKaynagi,
   refakatUretimiVar, lotNoVarMi, type PartiSuzgeci, PARTI_SIRALAMASI, partiSay, partiler, type HareketYeni, hareketYaz, akisAyarla, hareketBul,
   type HareketSuzgeci, suzgecVarMi, HAREKET_SIRALAMASI, hareketSay, hareketler, partiSonKullanma, partiSonKullanmaKilitle, partiSonKullanmaYaz,

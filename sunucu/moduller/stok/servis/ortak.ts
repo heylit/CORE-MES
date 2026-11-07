@@ -85,7 +85,7 @@ export function bakiyeSatiri(b: BakiyeHam, ad: Map<number, string>, nolar: EmirN
     partiEtiketi: b.partiId === null ? null : partiEtiketi({ lotNo: b.lotNo, tedarikciPartiNo: b.tedarikciPartiNo, dokumNo: b.dokumNo, uretimEmriId: b.uretimEmriId }, emirNoDe(nolar, b.uretimEmriId)),
     miktar: b.miktar, ilkGiris: b.ilkGiris,
     ambalaj: b.ambalajTur === null ? null : { tur: b.ambalajTur, olcu: b.ambalajOlcu ?? '', adet: b.ambalajAdet }, statuId: b.statuId, kaliteDurumu: b.kaliteDurumu,
-    sonKullanma: b.sonKullanma,
+    sonKullanma: b.sonKullanma, konumaGelis: b.konumaGelis,
   };
 }
 export async function hareketleriCevir(db: Db, satirlar: HareketHam[]): Promise<Hareket[]> {
@@ -131,7 +131,8 @@ export async function bakiyeDegistir(db: Db, d: BakiyeDegisimi): Promise<BakiyeH
       malzemeId: d.malzemeId, konumId: d.konumId, partiId: d.partiId, statuId: d.statuId ?? null, kaliteDurumu: d.kaliteDurumu ?? 'serbest', miktar: bindenMetin(d.fark), ilkGiris: d.ilkGiris ?? null,
       ambalajTur: a?.tur ?? null, ambalajOlcu: a?.olcu ?? null, uzunluk: a?.uzunluk ?? null, genislik: a?.genislik ?? null, yukseklik: a?.yukseklik ?? null, ambalajAdet: a?.adet ?? null,
     });
-    if (acilan.length > 0) return null;
+    const yeniSatir = (acilan as { id: number }[])[0];
+    if (yeniSatir) { await sorgular.konumaGelisYenile(db, yeniSatir.id); return null; }
     // Aynı satırı eşzamanlı başka komut açtı (ON CONFLICT bekleyip boş döndü): onun satırı kilitlenip üstüne yazılır.
     b = await sorgular.bakiyeKilitle(db, d.malzemeId, d.konumId, d.partiId, d.statuId ?? null, d.kaliteDurumu ?? 'serbest');
     if (!b) throw cakisma('Stok bu sırada değişti; yeniden deneyin.');
@@ -142,6 +143,8 @@ export async function bakiyeDegistir(db: Db, d: BakiyeDegisimi): Promise<BakiyeH
   const adet = d.fark < 0n ? kalanAmbalajAdedi(b.ambalajAdet, b.miktar, bindenMetin(yeni))
     : b.ambalajAdet !== null && d.ambalaj?.adet ? b.ambalajAdet + d.ambalaj.adet : b.ambalajAdet;
   await sorgular.bakiyeGuncelle(db, b.id, bindenMetin(yeni), ilk, adet);
+  // 2224-2 b: miktar değişince eldeki miktarın konuma gelişi de değişir (eklenen yeni geliş, düşülen en eski geliş).
+  await sorgular.konumaGelisYenile(db, b.id);
   return b;
 }
 export const siraliKilitle = async (db: Db, ...a: { malzemeId: number; konumId: number | null; partiId: number | null; statuId?: number | null; kaliteDurumu?: KaliteDurumu }[]): Promise<void> => {

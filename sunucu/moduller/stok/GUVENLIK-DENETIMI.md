@@ -19,6 +19,7 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 | `GET /stok/panel/aylik-deger?ay=&yontem=` | ay 1-24, yöntem yukarıdaki gibi; değer yalnız `finans.oku` olana | "#1079, 1382 d aylık" | aynı test: depo `degerGorunur: false`, `ay=25` 400 |
 | `GET /stok/depolar` | — | YOK | YOK |
 | `GET /stok/konumlar`, `/:id` | sayfalı liste | DEP-09/13 | YOK |
+| `GET /stok/konum-malzemeleri` | 2224: yalnız aktif konumdaki artı bakiye; geliş hareketten, yoksa null | `konum-malzemeleri.test.ts` (depo 200) | `konum-malzemeleri.test.ts` (girişsiz 401, operatör 403) |
 | `GET /stok/raflar`, `/:id` | sayfalı liste; matris | DEP-14/12/13 | YOK |
 | `GET /stok/malzemeler`, `/:id`, `/:id/ozet` | ad malzemeler `disari.ts`'ten; stoksuz malzeme uydurulmaz; liste stok okumasına ek `sayfa.rota` ile de açılır (Rota > Stok, 746, 3 a), `/:id` ve `/:id/ozet` açılmaz | DEP-28, "yetki (746, 3 a)" | "yetki (746, 3 a)": yalnız `sayfa.rota` olan `/:id` 403, mal kabul 403 |
 | `GET /stok/malzemeler/:id/cikis-onerisi` | en eski giriş; bakiye yoksa veri yetersiz (DEP-05, DEP-08) | DEP-05/08 | DEP-05/08 (bakiyesiz: veri yetersiz) |

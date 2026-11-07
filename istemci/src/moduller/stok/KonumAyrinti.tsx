@@ -5,7 +5,7 @@ import type { BakiyeSatiri, ElleKonumTuru, Konum, KonumAyrintiCevabi, KonumDuzen
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
+import { beklemeMetni, ELLE_KONUM, ELLE_KONUM_TURLERI, KONUM_ETIKETI, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { RafaYerlestirPenceresi } from './RafaYerlestir.tsx';
@@ -65,7 +65,9 @@ export function KonumAyrinti() {
   const sutunlar: Sutun<BakiyeSatiri>[] = [
     { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (b) => <Link to={`/stok/malzemeler/${b.malzemeId}`}>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</Link> },
     { anahtar: 'parti', baslik: 'Parti', hucre: (b) => b.partiEtiketi ?? 'Parti bilinmiyor' },
-    { anahtar: 'giris', baslik: 'İlk giriş', kirilmaz: true, hucre: (b) => zamanMetni(b.ilkGiris) },
+    // 2224: "Bu konumda" konuma gelişten sayılır; "Depoya ilk giriş" transferde taşınan FIFO zamanıdır, konuma geliş değildir.
+    { anahtar: 'bekleme', baslik: 'Bu konumda', kirilmaz: true, hucre: (b) => <span title={zamanMetni(b.konumaGelis ?? null)}>{beklemeMetni(b.konumaGelis)}</span> },
+    { anahtar: 'giris', baslik: 'Depoya ilk giriş', kirilmaz: true, hucre: (b) => zamanMetni(b.ilkGiris) },
     ...(sayiyor ? [] : [{ anahtar: 'miktar', baslik: 'Sistemde', hizala: 'sag' as const, hucre: (b: BakiyeSatiri) => <strong>{miktarMetni(b.miktar)}</strong> }]),
     ...(tasiyabilir && konum.tur === 'kabul' ? [{ anahtar: 'yerlestir', baslik: '', hucre: (b: BakiyeSatiri) => (b.miktar.startsWith('-') ? <span /> : <Dugme onClick={() => setYerlestir(b)}>Rafa yerleştir</Dugme>) }] : []),
     ...(sayabilir && sayiyor ? [{ anahtar: 'sayilan', baslik: 'Sayılan', hucre: (b: BakiyeSatiri) => (

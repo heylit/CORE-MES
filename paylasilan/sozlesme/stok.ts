@@ -96,6 +96,9 @@ export const bakiyeSatiri = z.object({
   zemin: z.string().nullable().optional(),
   // 2099-2 c: lotun son kullanma tarihi (YYYY-AA-GG); tarihi olmayan lotta null.
   sonKullanma: z.string().nullable().optional(),
+  // 2224-2 b: bu konuma geliş (`stok_bakiye.konuma_gelis`, hareketten yenilenir); ilkGiris depoya ilk giriştir, transferde taşınır.
+  // Giriş hareketi bulunmayan eski satırda null. İsteğe bağlı: bu şemayı kuran öteki modüllerin örnek verisi bozulmasın.
+  konumaGelis: zamanSemasi.nullable().optional(),
 });
 export type BakiyeSatiri = z.output<typeof bakiyeSatiri>;
 
@@ -223,6 +226,19 @@ export type GozOlcusu = z.output<typeof gozOlcusu>;
 // haritaYeri: bağlı gözün adresi (A12-03-2-1) ya da alanın adı; bağ yoksa null.
 export const konumAyrintiCevabi = z.object({ konum, raf: gozOlcusu.nullable(), bakiyeler: z.array(bakiyeSatiri), haritaYeri: z.string().nullable(), zemin: z.string().nullable() });
 export type KonumAyrintiCevabi = z.output<typeof konumAyrintiCevabi>;
+// Konumdaki malzemeler (2224): bütün aktif konumlardaki artı bakiye, varsayılan sıra en uzun bekleyen önce.
+export const konumMalzemeleriSorgusu = z.object({
+  ...listeSorguAlanlari(['gelis', 'konum']),
+  tur: z.enum(KONUM_TURLERI).optional(),
+  malzemeId: kimlik.optional(),
+  metin: z.string().trim().max(40).optional(),
+});
+export type KonumMalzemeleriSorgusu = z.input<typeof konumMalzemeleriSorgusu>;
+export type KonumMalzemeleriListesi = z.output<typeof konumMalzemeleriSorgusu>;
+export const konumMalzemesi = bakiyeSatiri.extend({ konumTur: z.enum(KONUM_TURLERI), konumAd: z.string().nullable() });
+export type KonumMalzemesi = z.output<typeof konumMalzemesi>;
+export const konumMalzemeleriCevabi = listeCevapSemasi(konumMalzemesi);
+export type KonumMalzemeleriCevabi = z.output<typeof konumMalzemeleriCevabi>;
 export const konumCevabi = z.object({ konum });
 // Kodu değişen açık konum (94 a): eski etiketin QR'ı artık okunmaz; ekran yeniden basmayı önerir.
 export const koduDegisenKonum = z.object({
