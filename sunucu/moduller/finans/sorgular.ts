@@ -117,6 +117,10 @@ export const belgeGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`S
 export const odemeGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${ODEME} FROM finans_odeme o WHERE o.id = $1${kilit ? ' FOR UPDATE OF o' : ''}`, [id]);
 export const cekGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${CEK} FROM finans_cek c WHERE c.id = $1${kilit ? ' FOR UPDATE OF c' : ''}`, [id]);
 export const hesapGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${HESAP} FROM finans_hesap WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
+// Hareket satırının yabancı anahtarı hesaba FOR KEY SHARE alır; bakiye denetiminin FOR UPDATE'i yazımdan sonra gelirse iki eşzamanlı
+// yazım birbirini bekler (kilitlenme). Kilit yazımdan önce ve id sırasıyla alınır ki iki hesaplı yazım da çaprazlanmasın.
+export const hesaplariKilitle = (db: Db, idler: readonly number[]) =>
+  db.sorgu<{ id: number }>('SELECT id FROM finans_hesap WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE', [idler]);
 export const mahsupGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${MAHSUP} FROM finans_mahsup WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 export const virmanGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${VIRMAN} FROM finans_virman WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 export const duzenliGetir = <T>(db: Db, id: number, kilit = false) => db.tek<T>(`SELECT ${DUZENLI} FROM finans_duzenli_odeme WHERE id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);

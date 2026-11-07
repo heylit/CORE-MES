@@ -105,6 +105,30 @@ describe('kasa, çek vadesi ve ay sonu maddesi (gerçek PostgreSQL)', () => {
     assert.deepEqual([a.durum, b.durum].sort(), [200, 422]);
     assert.equal((await hesap(kasa)).bakiye, '0.00');
   });
+  // Yukarıdaki test yarışı yalnız zamanlama tutarsa üretir. Burada hesap satırı dışarıdan tutulur ve iki istek de kilitte
+  // bekleyene kadar bırakılmaz: ikisi yazım adımına aynı anda girer. Kilitlenme olursa kaybeden 503 alırdı.
+  test('eşzamanlı iki kasa çıkışı aynı anda yazıma girse de kilitlenmez: biri geçer, öteki 422', async () => {
+    const vt = ortam!.vt;
+    const yeni = tamam(await yaz<{ hesap: { id: number } }>('/finans/hesaplar/ekle', { ad: 'Deneme Kasa Yaris', tur: 'kasa', acilisBakiyesi: 1000, acilisTarihi: '2026-01-01' })).hesap.id;
+    let istekler: Promise<Cevap[]> | undefined;
+    await vt.tx(async (db) => {
+      await db.sorgu('SELECT id FROM finans_hesap WHERE id = $1 FOR UPDATE', [yeni]);
+      istekler = Promise.all([odeme(yeni, 'nakit', 1000), odeme(yeni, 'nakit', 1000)]);
+      const son = Date.now() + 5000;
+      for (;;) {
+        // pg_stat_activity transaction boyunca ilk okumadaki anlık görüntüyü verir; her turda bırakılır.
+        await db.sorgu('SELECT pg_stat_clear_snapshot()');
+        const s = await db.tek<{ n: number }>(`WITH RECURSIVE b(pid) AS (SELECT pg_backend_pid() UNION SELECT a.pid FROM pg_stat_activity a JOIN b ON b.pid = ANY(pg_blocking_pids(a.pid)))
+          SELECT count(*)::int - 1 AS n FROM b`);
+        if ((s?.n ?? 0) >= 2) break;
+        assert.ok(Date.now() < son, 'iki istek 5 sn içinde hesap kilidinde beklemeye geçmedi');
+        await new Promise((coz) => { setTimeout(coz, 20); });
+      }
+    });
+    const [a, b] = await istekler!;
+    assert.deepEqual([a!.durum, b!.durum].sort(), [200, 422], JSON.stringify([a!.govde, b!.govde]));
+    assert.equal((await hesap(yeni)).bakiye, '0.00');
+  });
   test('çekte vade düzenlemeden önce reddedilir; düzeltmede de', async () => {
     const cek = (vade: string) => yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'cek', firmaId: firma, duzenlemeTarihi: '2026-10-20', vade, tutar: 5 });
     const red = await cek('2026-01-01');
