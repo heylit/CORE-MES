@@ -41,6 +41,7 @@
     "dizin": "node araclar/harita.ts",
     "durum": "node araclar/durum.ts",
     "teslim": "node araclar/teslim.ts",
+    "teslim-denetle": "node araclar/teslim-denetle.ts",
     "paket": "node araclar/paket-yap.ts",
     "test:sunucu": "node --import ./araclar/ortam-yukle-goc.ts araclar/test-sunucu.ts",
     "test:istemci": "vitest run --config istemci/vite.config.ts",
