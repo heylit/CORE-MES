@@ -1,6 +1,6 @@
 # ADR 0030 — Ortak dosyalar CORE içinde, klasör başına rol düzeyiyle yetkilendirilir
 
-Durum: öneri (2067 c, 2067-1 a, 04.11.2026). Numara 0030 koordinatörce 2067 için ayrıldı (04.11 03:10). ADR 0003'ü ve ADR 0009'u tamamlar.
+Durum: kabul (2067 c, 2067-1 a, 04.11.2026; kabul 2067-2 a, dizin düzeltmesi 2197-10 a, 07.11.2026). Numara 0030 koordinatörce 2067 için ayrıldı (04.11 03:10). ADR 0003'ü ve ADR 0009'u tamamlar.
 
 ## Bağlam
 
