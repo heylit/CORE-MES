@@ -24,7 +24,7 @@
   display: grid; place-items: center; min-width: var(--dokunma); height: var(--dokunma);
   border-radius: var(--yari-2); background: var(--hazard); color: var(--on-hazard); font-weight: 800;
 }
-.tc-kabuk-marka-metin { flex: none; font-size: var(--yazi-l); letter-spacing: .12em; white-space: nowrap; }
+.tc-kabuk-marka-metin { flex: none; font-size: var(--yazi-l); font-weight: 900; font-stretch: var(--genislik-genis); letter-spacing: .05em; white-space: nowrap; }
 /* Yüklenen logo kendi oranında, boşluk bırakmadan çizilir; yazı logonun alt kenarına oturur, çünkü logolarda yazı işareti
    genellikle alttadır (üstte tescil işareti ya da simge olur) ve ortalanınca CORE yukarıda kalıyordu. */
 .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: baseline; }
@@ -44,7 +44,7 @@
   border: 0; border-radius: var(--yari-2); background: transparent;
   color: var(--ink); font-weight: 600; cursor: pointer; min-width: 0;
 }
-.tc-kabuk-bag-acik { background: var(--hazard); color: var(--on-hazard); }
+.tc-kabuk-bag-acik { background: var(--secili-zemin); color: var(--secili-yazi); }
 /* Sabit ana menü sıkıdır: yirmiye yakın sayfa kaydırmadan sığsın diye satır ve yazı bir boy küçük. */
 .tc-kabuk-menu .tc-kabuk-bag { gap: var(--b-2); min-height: var(--menu-satir); padding: var(--pay-ince) var(--b-2); font-size: var(--yazi-s); }
 /* Uzun sayfa adı kesilmez, ikinci satıra iner; üçüncü satır gerektiren ad üç noktayla biter. */
@@ -55,9 +55,17 @@
 
 .tc-kabuk-ust {
   grid-area: ust; position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--b-3);
-  padding: 0 var(--b-5); border-bottom: 1px solid var(--edge); background: var(--bg2);
+  padding: 0 var(--b-5); border-bottom: 0; background: var(--kusak); box-shadow: var(--kusak-golge); color: var(--on-kusak);
 }
-.tc-kabuk-baslik { flex: 1 1 auto; font-size: var(--yazi-xl); font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Cubugun ustundeki dugme ve arama kutusu kusaga gore cizilir; sari eylem dugmesi kusakta koyu olur. Acilan arama paleti
+   cubuktan cikip sayfanin ustune yayildigi icin temanin kendi degiskenleriyle kalir. */
+.tc-kabuk-ust > :not(.tc-arama), .tc-kabuk-ust > .tc-arama:not([data-acik]) {
+  --ink: var(--on-kusak); --muted: var(--on-kusak-soluk); --faint: var(--on-kusak-soluk);
+  --edge: var(--kusak-cizgi); --edge2: var(--kusak-cizgi-2); --panel: var(--kusak-yuzey); --panel2: var(--kusak-yuzey-2);
+  --hazard: var(--on-kusak); --on-hazard: var(--kusak);
+}
+.tc-kabuk-ust > .tc-arama[data-acik] { color: var(--ink); }
+.tc-kabuk-baslik { flex: 1 1 auto; font-size: var(--yazi-xl); font-weight: 900; font-stretch: var(--genislik-genis); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-kabuk-hesap { display: contents; }
 .tc-kabuk-yuva { display: flex; flex: 1 1 auto; align-items: center; min-width: 0; }
 .tc-kabuk:not([data-ust-yuva]) .tc-kabuk-yuva { display: none; }
@@ -212,7 +220,7 @@
   /* Ad kendi satırında; sığmazsa üç noktayla kesilmez, alt satıra iner (borç #322). */
   .tc-kabuk-baslik {
     order: 1; flex: 1 0 100%; padding-bottom: var(--b-2);
-    font-size: var(--yazi-l); line-height: 1.2;
+    font-size: var(--yazi-l); font-stretch: 100%; line-height: 1.2;
     white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
   }
   /* Telefonda yalnız Geri kalır: ileri başlığın yerini almasın; telefonun geri hareketi aynı sıradadır. */

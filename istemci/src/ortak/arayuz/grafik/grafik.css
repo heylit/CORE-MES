@@ -79,8 +79,11 @@ a.tc-gp-yatay-etiket { color: var(--ink); }
 @media (min-width: 1180px) { .tc-gostergeler { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
 .tc-gosterge { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3) var(--b-4); min-width: 0; }
 .tc-gosterge-ad { font-size: var(--yazi-xs); font-weight: 700; color: var(--muted); }
-.tc-gosterge-deger { font-size: var(--yazi-xl); font-weight: 700; color: var(--ink); line-height: 1.15; }
-.tc-gosterge-deger[data-bos] { font-size: var(--yazi-s); font-weight: 400; color: var(--muted); }
+.tc-gosterge-deger, .tc-gosterge-deger.mono {
+  font-family: var(--font-ana); font-size: var(--sayi-dev); font-weight: 800; font-stretch: var(--genislik-dar);
+  line-height: .95; letter-spacing: -.01em; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap;
+}
+.tc-gosterge-deger[data-bos] { font-size: var(--yazi-s); font-weight: 400; font-stretch: 100%; color: var(--muted); white-space: normal; }
 .tc-gosterge-kiyas { display: inline-flex; align-items: center; gap: 2px; font-size: var(--yazi-xs); font-weight: 700; color: var(--muted); }
 .tc-gosterge-kiyas[data-yon="iyi"] { color: var(--run); }
 .tc-gosterge-kiyas[data-yon="kotu"] { color: var(--stop); }
