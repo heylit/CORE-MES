@@ -46,6 +46,7 @@ export function listeCevapSemasi<S extends z.ZodTypeAny>(satir: S) {
     toplam: z.number().int().min(0).nullable(),
     sayfa: z.number().int().min(1),
     sayfaBoyu: z.number().int().min(1),
+    toplamSinirli: z.boolean().optional(),
   });
 }
 
@@ -54,4 +55,7 @@ export interface SayfaliListe<T> {
   toplam: number | null;
   sayfa: number;
   sayfaBoyu: number;
+  // true ise sayım sınırda kesilmiştir: gerçek toplam `toplam`dan büyüktür. Büyük kayıt tablosunda tam sayım
+  // tabloyu baştan sona okur; sınırın üstündeki kesin sayının işte karşılığı yoktur.
+  toplamSinirli?: boolean;
 }

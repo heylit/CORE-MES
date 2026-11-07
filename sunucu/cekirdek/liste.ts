@@ -71,9 +71,13 @@ export function siralamaSql<A extends string>(tanim: SiralamaTanimi<A>, istek: S
 export interface ListeKaynagi<T> {
   // Süzgecin tamamına uyan satır sayısı (`SELECT count(*) AS toplam <aynı FROM ve WHERE>`). Verilmezse sayılmaz:
   // cevapta toplam null olur ve taşan sayfa çekilemez, boş döner.
-  say?: () => Promise<number>;
+  // `sayimSiniri` verilmişse `say` en çok `ust` satır sayar (`SELECT count(*) FROM (SELECT 1 ... LIMIT ust)`).
+  say?: (ust?: number) => Promise<number>;
   satirlar: (dilim: Dilim) => Promise<T[]>;
   sayfaBoyu?: SayfaBoyuSiniri;
+  // Sınırı aşan toplam sınır olarak döner ve cevap `toplamSinirli` taşır; sayfa son sayfaya çekilmez, çünkü son
+  // sayfa bilinmez.
+  sayimSiniri?: number;
 }
 
 // Toplam satırlardan önce sayılır: taşan sayfa (son satırı silinen son sayfa, daralan süzgeç) boş dönmek yerine
@@ -87,8 +91,15 @@ export async function sayfaliListe<T>(
   if (kaynak.say === undefined) {
     return { satirlar: await kaynak.satirlar(sayfaDilimi(istek.sayfa, sayfaBoyu)), toplam: null, sayfa: istek.sayfa, sayfaBoyu };
   }
-  const toplam = await kaynak.say();
-  if (!Number.isSafeInteger(toplam) || toplam < 0) throw new Error(`Geçersiz toplam: ${String(toplam)}`);
+  const sinir = kaynak.sayimSiniri;
+  if (sinir !== undefined && (!Number.isSafeInteger(sinir) || sinir < 1)) throw new Error(`Geçersiz sayım sınırı: ${String(sinir)}`);
+  const sayilan = sinir === undefined ? await kaynak.say() : await kaynak.say(sinir + 1);
+  if (!Number.isSafeInteger(sayilan) || sayilan < 0) throw new Error(`Geçersiz toplam: ${String(sayilan)}`);
+  if (sinir !== undefined && sayilan > sinir) {
+    const dilim = sayfaDilimi(istek.sayfa, sayfaBoyu);
+    return { satirlar: await kaynak.satirlar(dilim), toplam: sinir, sayfa: istek.sayfa, sayfaBoyu, toplamSinirli: true };
+  }
+  const toplam = sayilan;
   const sayfa = Math.min(istek.sayfa, Math.max(1, Math.ceil(toplam / sayfaBoyu)));
   const dilim = sayfaDilimi(sayfa, sayfaBoyu);
   return { satirlar: toplam === 0 ? [] : await kaynak.satirlar(dilim), toplam, sayfa, sayfaBoyu };
