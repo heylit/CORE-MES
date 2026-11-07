@@ -424,6 +424,10 @@ jobs:
     if: needs.kapsam.outputs.sunucu == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
+    # Windows çalıştırıcısında sekiz paralel test dosyasının yükü altında yeni bağlantının kurulması 5 sn'yi aşabiliyor.
+    # Yalnız bu iş uzatılır: Linux işleri ve uygulama ayarı aynı kalır; testler süreyi sabit yazmaz, ayardan okur.
+    env:
+      TMIV2_PG_BAGLANTI_SURE_MS: 15000
     defaults:
       run:
         shell: bash
