@@ -11,6 +11,7 @@ import { malzemeAra } from './servis.ts';
 // sıralı taramayı ya da başka indeksi seçer; bu yüzden katalog sentetik satırlarla doldurulur. VACUUM, GIN'in bekleyen listesini
 // indekse yazar: liste doluyken planlayıcı indeksi pahalı sayar ve sıralı taramayı seçer.
 const SATIR = 20_000;
+const PARCA = 2_000;
 const INDEKSLER = ['stok_kodu', 'ad', 'eski_kod', 'tkod', 'onceki_kod'].map((s) => `malzemeler_malzeme_katalog_karti_${s}_trgm`);
 describe('malzemeler arama indeksi (kart #1244, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -23,11 +24,14 @@ describe('malzemeler arama indeksi (kart #1244, gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('malzemeindeks');
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme İndeks', kullaniciAdi: 'ix-yonetici', parola: 'dogru-parola-1' }));
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('HM-IX-', $1)", [SATIR]);
-    await vt().sorgu(
-      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
-       SELECT 'ix' || i, 'hammadde', 'HM-IX-', i, 'aktif',
-              jsonb_build_object('com', jsonb_build_object('ad', 'Deneme çubuk ' || i, 'eskiKod', 'E-' || i, 'tkod', 'T-' || i)), $1, $1
-         FROM generate_series(1, $2::int) AS i`, [kisi, SATIR]);
+    // Her satır beş trigram indeksine yazılır; tek komutta 20 bin satır yükte sorgu süre sınırını aşıyordu. Parçalar sınırın çok altında kalır.
+    for (let ilk = 1; ilk <= SATIR; ilk += PARCA) {
+      await vt().sorgu(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+         SELECT 'ix' || i, 'hammadde', 'HM-IX-', i, 'aktif',
+                jsonb_build_object('com', jsonb_build_object('ad', 'Deneme çubuk ' || i, 'eskiKod', 'E-' || i, 'tkod', 'T-' || i)), $1, $1
+           FROM generate_series($2::int, $3::int) AS i`, [kisi, ilk, Math.min(ilk + PARCA - 1, SATIR)]);
+    }
     await ortam.sahip.sorgu('VACUUM ANALYZE malzeme_katalog_karti');
   });
   after(async () => { await ortam?.kaldir(); });
