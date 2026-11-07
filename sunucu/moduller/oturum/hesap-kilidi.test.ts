@@ -9,7 +9,7 @@ import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from './disari.ts';
-import { HESAP_KILIDI_DK, HESAP_KILIDI_ESIGI } from './kurallar.ts';
+import { HESAP_KILIDI_DK, HESAP_KILIDI_ESIGI, SURESIZ_KILIT_ILETISI } from './kurallar.ts';
 import { oturumUclari } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -200,6 +200,41 @@ describe('hesap kilidi (gerçek PostgreSQL, gerçek giriş)', () => {
     // Kilit biter; kilidin öncesindeki 10 hatalı deneme yeniden kilitlemez.
     assert.equal((await giris(ad, { parola: 'yanlis-parola' }, yeniIp(), saatliApp)).json().mesaj, HATALI_ILETI);
     assert.equal((await giris(ad, { parola: PAROLA }, yeniIp(), saatliApp)).statusCode, 200);
+  });
+
+  test('2226-2 a: PIN hesabında kilit büyür (15 dk, 60 dk, yönetici açana kadar); yönetici açınca doğru PIN girer', async () => {
+    const kisi = await pinliOperator();
+    await hataliSeri(kisi.ad, 10, saatliApp);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).json().mesaj, kilitIletisi(15));
+    ilerle(15 * 60);
+    await hataliSeri(kisi.ad, 10, saatliApp);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).json().mesaj, kilitIletisi(60));
+    ilerle(60 * 60);
+    await hataliSeri(kisi.ad, 10, saatliApp);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).json().mesaj, SURESIZ_KILIT_ILETISI);
+    ilerle(3 * 24 * 60 * 60);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).json().mesaj, SURESIZ_KILIT_ILETISI, 'süre geçse de kilit kalır');
+    assert.equal((await kilitAc(yoneticiCerezi, await kilitKimligi(kisi.ad))).statusCode, 200);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).statusCode, 200);
+  });
+
+  test('2226-2 a: 24 saatten eski kilit basamak saymaz', async () => {
+    const kisi = await pinliOperator();
+    await hataliSeri(kisi.ad, 10, saatliApp);
+    ilerle(25 * 60 * 60);
+    await hataliSeri(kisi.ad, 10, saatliApp);
+    assert.equal((await giris(kisi.ad, { pin: KENDI }, yeniIp(), saatliApp)).json().mesaj, kilitIletisi(15));
+    ilerle(15 * 60);
+  });
+
+  test('2226-2 a: parolayla giren hesapta kilit büyümez (tek yönetici kilitlenip sistem yöneticisiz kalmasın)', async () => {
+    const kisi = await operatorEkle();
+    for (let tur = 0; tur < 3; tur += 1) {
+      for (let i = 0; i < 10; i += 1) assert.equal((await giris(kisi.ad, { parola: 'yanlis-parola' }, yeniIp(), saatliApp)).json().mesaj, HATALI_ILETI);
+      assert.equal((await giris(kisi.ad, { parola: PAROLA }, yeniIp(), saatliApp)).json().mesaj, kilitIletisi(15), `tur ${tur + 1}`);
+      ilerle(15 * 60);
+    }
+    assert.equal((await giris(kisi.ad, { parola: PAROLA }, yeniIp(), saatliApp)).statusCode, 200);
   });
 
   test('kilitler listesi ve açma yalnız Güvenlik Merkezi kapısından (guvenlik.yonet): operatöre 403 ve kilit kalır; yönetici açar, açan ve an sunucudan yazılır, ikinci açma 404; oturum kapısı yoktur', async () => {

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   BEKLEME_AZAMI_SN, KUYRUK_BIRIKME_ESIGI, NABIZ_ESITLEME_AZAMI_SN, SESSIZ_ESIK_SN, TARAYICI_AZAMI, beklemeSn, denemeKilitAnahtari, esitlemeSuresi,
   hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk, nabizDurumu, tarayiciMetni,
+  SURESIZ_KILIT_DK, SURESIZ_KILIT_ILETISI, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu,
 } from './kurallar.ts';
 
 test('bekleme her hatalı denemede ikiye katlanır: 1, 2, 4, 8... sn; üst sınır 60 sn', () => {
@@ -76,4 +77,14 @@ test('cihaz nabzı: saklama süresinden (30 gün) eski eşitleme bilinmez sayıl
   assert.equal(esitlemeSuresi(0), 0);
   assert.equal(esitlemeSuresi(NABIZ_ESITLEME_AZAMI_SN), NABIZ_ESITLEME_AZAMI_SN);
   assert.equal(esitlemeSuresi(NABIZ_ESITLEME_AZAMI_SN + 1), null);
+});
+
+test('2226-2 a: büyüyen kilit basamakları 15, 60, süresiz; büyümeyen ad hep 15; süresiz kilitte ileti yöneticiye yönlendirir', () => {
+  assert.deepEqual([0, 1, 2, 5].map((n) => hesapKilidiSuresiDk(true, n)), [15, 60, SURESIZ_KILIT_DK, SURESIZ_KILIT_DK]);
+  assert.deepEqual([0, 1, 2].map((n) => hesapKilidiSuresiDk(false, n)), [15, 15, 15]);
+  assert.equal(kilitBuyurMu('ahmet', false), true);
+  assert.equal(kilitBuyurMu('yonetici', true), false);
+  assert.equal(kilitBuyurMu('#kart-10.0.0.1', false), false);
+  assert.equal(hesapKilidiIletisi(SURESIZ_KILIT_DK * 60), SURESIZ_KILIT_ILETISI);
+  assert.match(hesapKilidiIletisi(3600), /60 dk/);
 });
