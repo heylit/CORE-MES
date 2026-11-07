@@ -41,6 +41,8 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         const sonuc = await girisYap(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         if (sonuc.anahtar === null) return { kullanici: null, pinBelirlenecek: true as const };
         await sinirliGirisiDenetle(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI));
+        // Bu tarayıcının eski anahtarı kapanır (2226-5 a): kopyalanmış çerez sahibi yeniden girince ölür; öbür cihazlar açık kalır.
+        await cikisYap(db, istek.cerez(CEREZ_ADI));
         istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, oturumCerezSn(sonuc.kullanici));
         return { kullanici: await cihazaGoreKullanici(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
@@ -71,6 +73,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       isle: async ({ db, govde, istek, gunluk }) => {
         const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         await sinirliGirisiDenetle(db, kullanici, istek.cerez(CIHAZ_CEREZI));
+        await cikisYap(db, istek.cerez(CEREZ_ADI));
         istek.cerezYaz(CEREZ_ADI, anahtar, oturumCerezSn(kullanici));
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
