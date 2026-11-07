@@ -347,7 +347,7 @@ describe('giriş ekranı tanıtımı (2170)', () => {
 
   it('kurum ayari aciksa dugme acik gelir; cihazda kapatilinca kurum ayarina ragmen kapali kalir (2175)', async () => {
     vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-sesi')
-      ? new Response(JSON.stringify({ acik: true }), { status: 200 })
+      ? new Response(JSON.stringify({ acik: true, duzey: 40 }), { status: 200 })
       : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
     kur();
     fireEvent.click(await screen.findByRole('button', { name: 'Ses açık' }));

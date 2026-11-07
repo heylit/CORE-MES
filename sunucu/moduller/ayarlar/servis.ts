@@ -110,8 +110,9 @@ export async function kurumOku(db: Db): Promise<KurumCevabi> {
   return { ad: await sistemAyariOku(db, 'kabuk.kurum-adi') };
 }
 
+// Düzey boşsa tanımdaki varsayılan geçer: ses açıkken sessizliği yalnız açıkça girilen 0 verir.
 export async function girisSesiOku(db: Db): Promise<GirisSesiCevabi> {
-  return { acik: await sistemAyariOku(db, 'kabuk.giris-sesi') };
+  return { acik: await sistemAyariOku(db, 'kabuk.giris-sesi'), duzey: (await sistemAyariOku(db, 'kabuk.giris-sesi-duzeyi')) ?? AYAR_TANIMLARI['kabuk.giris-sesi-duzeyi'].varsayilan };
 }
 
 const KAPALI_SAYFALAR_ANAHTARI = 'kabuk.kapali-sayfalar';

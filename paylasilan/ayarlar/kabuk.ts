@@ -66,6 +66,17 @@ export const KABUK_AYARLARI = {
     baslik: 'Giriş ekranı açılış sesi',
     aciklama: 'Açıkken bütün cihazlarda giriş ekranı açılış sesini çalar; kapalıyken susar. Giriş ekranındaki ses düğmesi yalnız o cihazda bunu değiştirir. Tarayıcı dokunulmamış sayfada ses çalmaz: terminal tarayıcısı otomatik oynatmaya izin vermiyorsa ses ilk dokunuşta değil, düğmeyle başlar.',
   },
+  // Kullanıcı isteği (kart 2230b): sesin yüksekliği de kurum genelinde ayarlanır; 70 bugüne kadar çalan yüksekliktir.
+  'kabuk.giris-sesi-duzeyi': {
+    modul: 'kabuk',
+    tur: 'sayi',
+    varsayilan: 70,
+    enAz: 0,
+    enCok: 100,
+    ondalik: 0,
+    baslik: 'Giriş ekranı ses düzeyi (%)',
+    aciklama: 'Açılış sesinin bütün cihazlardaki yüksekliği (0-100). 0 sessizdir; 70 varsayılandır. Cihazın kendi ses düzeyi bunun üstüne uygulanır.',
+  },
   // Kullanıcı kararı (2026-10-14): bütün hareket seviyeleri ve açılışlar ayardan seçilir; performansa göre kalıcısı sonra seçilir.
   'kabuk.hareket': {
     modul: 'kabuk',

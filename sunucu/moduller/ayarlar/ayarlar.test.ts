@@ -635,16 +635,25 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       const ANAHTAR_SES = 'kabuk.giris-sesi';
       const sesOku = (cerez: string | null) => istek(cerez, 'GET', '/giris-sesi');
       assert.equal(varsayilanDeger(ANAHTAR_SES), false);
-      assert.deepEqual((await sesOku(null)).json(), { acik: false });
+      assert.deepEqual((await sesOku(null)).json(), { acik: false, duzey: 70 });
       for (const { rol, cerez } of bayraksizlar) assert.equal((await degistir(true, cerez, ANAHTAR_SES)).statusCode, 403, rol.ad);
       assert.equal((await degistir('evet', yonetici, ANAHTAR_SES)).statusCode, 400);
       assert.equal((await degistir(true, yonetici, ANAHTAR_SES)).statusCode, 200);
       for (const cerez of [null, yonetici]) {
         const cevap = await sesOku(cerez);
         assert.equal(cevap.statusCode, 200, cevap.body);
-        assert.deepEqual(cevap.json(), { acik: true });
+        assert.deepEqual(cevap.json(), { acik: true, duzey: 70 });
       }
       assert.equal((await istek(null, 'POST', '/giris-sesi')).statusCode, 404);
+    });
+
+    test('2230b: giriş sesi düzeyi 0-100; aralık dışı reddedilir; yalnız ayar yazan değiştirir; giriş ekranı yeni düzeyi okur', async () => {
+      const ANAHTAR_DUZEY = 'kabuk.giris-sesi-duzeyi';
+      assert.equal(varsayilanDeger(ANAHTAR_DUZEY), 70);
+      for (const { rol, cerez } of bayraksizlar) assert.equal((await degistir(30, cerez, ANAHTAR_DUZEY)).statusCode, 403, rol.ad);
+      for (const yanlis of [-1, 101, 'yuksek']) assert.equal((await degistir(yanlis, yonetici, ANAHTAR_DUZEY)).statusCode, 400, String(yanlis));
+      assert.equal((await degistir(30, yonetici, ANAHTAR_DUZEY)).statusCode, 200);
+      assert.equal((await istek(null, 'GET', '/giris-sesi')).json().duzey, 30);
     });
   });
 

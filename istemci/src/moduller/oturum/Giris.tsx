@@ -55,7 +55,10 @@ function GirisSahnesi() {
   const [durum, durumYaz] = useState<SahneDurumu>(() => (typeof WebGL2RenderingContext === 'undefined' ? 'yok' : 'yukleniyor'));
   const kurumSesi = useGirisSesi();
   const [cihazSesi, cihazSesiYaz] = useState(cihazTercihi);
-  const sesAcik = cihazSesi ?? kurumSesi;
+  const sesAcik = cihazSesi ?? kurumSesi.acik;
+  // Zamanlayıcı ızgara anında en son gelen düzeyi okur.
+  const sesDuzeyi = useRef(kurumSesi.duzey);
+  sesDuzeyi.current = kurumSesi.duzey;
   // Açılışta ses yalnız bir kez ve sahnenin başında başlar: kurum ayarı geç gelirse sahne baştan alınmaz, o açılış sessiz geçer.
   const sahneBasi = useRef<number | null>(null);
   const calindi = useRef(false);
@@ -63,7 +66,7 @@ function GirisSahnesi() {
   // Sahne ve ses bir sonraki ızgara anında birlikte baştan başlar (aynı anda açan terminaller aynı vuruşta çalar).
   const sesleBaslat = () => {
     window.clearTimeout(zamanlayici.current);
-    zamanlayici.current = window.setTimeout(() => { sahne.current?.bastan(); void sesCal(); }, bekleme(Date.now()));
+    zamanlayici.current = window.setTimeout(() => { sahne.current?.bastan(); void sesCal(0, Date.now(), sesDuzeyi.current ?? undefined); }, bekleme(Date.now()));
   };
 
   useEffect(() => {
