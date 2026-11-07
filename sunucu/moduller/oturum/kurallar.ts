@@ -8,8 +8,9 @@ export const CEREZ_ADI = 'tmiv2_oturum';
 export const CIHAZ_CEREZI = 'tmiv2_cihaz';
 export const CIHAZ_CEREZ_SN = 365 * 24 * 60 * 60;
 
-export const BOSTA_SN = 12 * 60 * 60;
-export const AZAMI_SN = 30 * 24 * 60 * 60;
+// 2226-3 (kullanıcı 07.11): boşta 8 saat bir vardiyayı kesmez; en çok 7 gün, paylaşılan bilgisayarda açık kalan oturum haftayı geçmesin.
+export const BOSTA_SN = 8 * 60 * 60;
+export const AZAMI_SN = 7 * 24 * 60 * 60;
 // Her istekte yazmamak için son görülme en sık bu aralıkla güncellenir.
 export const GORULME_ARALIGI_SN = 60;
 
@@ -165,9 +166,25 @@ export function belirtecOku(baslik: string | undefined): string | null {
 
 /* ---------------- cihaz profili (kart #1358) ---------------- */
 
-// 1356 a: istasyonda boşta kalan oturum 15 dk sonra geçersizdir; sıradaki kişi öncekinin oturumunu devralmasın. Terminal sürekli
-// sorduğu için ekran açıkken bu sayaç dolmaz; istemci kendi boşta çıkışını yapar, burası ekran kapanınca kalan yedektir.
-export const ISTASYON_BOSTA_SN = 15 * 60;
+// 2226-3 (kullanıcı 07.11 17:21Z; 1356 a'nın 15 dk'sının yerine): istasyondaki oturum kişinin vardiyası bitince devir payıyla düşer;
+// operatör vardiya içinde yeniden girmez. Sıradaki kişi kart okutunca oturum ona geçer (1898 a). Vardiyası bulunamayan kişide kişisel
+// cihazın boşta süresi geçer. Vardiyadan bir saat önce açılan oturum o vardiyanındır (erken gelen operatör).
+export const ISTASYON_BOSTA_SN = BOSTA_SN;
+export const VARDIYA_DEVIR_PAYI_SN = 30 * 60;
+export const VARDIYA_ONCESI_GIRIS_SN = 60 * 60;
+
+export interface VardiyaAraligi { baslangicMs: number; bitisMs: number }
+
+// Oturumun açıldığı vardiyanın sonu + devir payı; açılış hiçbir vardiyaya düşmüyorsa null (vardiya sınırı yok).
+export function istasyonOturumSonuMs(acilisMs: number, vardiyalar: readonly VardiyaAraligi[]): number | null {
+  const v = vardiyalar.find((a) => a.baslangicMs - VARDIYA_ONCESI_GIRIS_SN * 1000 <= acilisMs && acilisMs < a.bitisMs);
+  return v === undefined ? null : v.bitisMs + VARDIYA_DEVIR_PAYI_SN * 1000;
+}
+
+// Veritabanının timestamptz metni ("2026-11-07 17:22:32.123+00" ya da "+03:30") ISO'ya çevrilip okunur; okunamazsa NaN.
+export function vtZamaniMs(metin: string): number {
+  return Date.parse(metin.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'));
+}
 
 export interface ProfilSiniri {
   kod: CihazProfili;

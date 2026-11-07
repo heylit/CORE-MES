@@ -9,6 +9,7 @@ import type { Kimlik } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
   gizlilikTaahhuduVer, girisDogrula, ilkPiniYaz, kartGirisDurumu, kisiNoKullaniciAdindan, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
@@ -16,14 +17,16 @@ import {
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
+import { basladigiGunTakvimleri } from '../vardiya/disari.ts';
 import {
   AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
   beklemeIletisi, kilitKalanDk, BUYUYEN_KILIT_PENCERESI_SAAT, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu, SURESIZ_KILIT_DK,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
+  istasyonOturumSonuMs, vtZamaniMs,
   NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu, SINIRLI_ORTAK_CIHAZ, sinirliOturumGecerMi,
 } from './kurallar.ts';
-import type { NabizDurumu } from './kurallar.ts';
+import type { NabizDurumu, VardiyaAraligi } from './kurallar.ts';
 import {
   cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, oturumVeProfilBul, gorulduYaz, hataliSeriBul,
   hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, yakinKilitSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
@@ -281,6 +284,7 @@ export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirtec
     azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
   });
   if (oturum === null || oturum.bosta_gecen_sn >= bostaSuresiSn(profil.kod)) return null;
+  if (profil.kod === 'istasyon' && !(await istasyonVardiyasiSuruyor(db, oturum))) return null;
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
   const kullanici = await kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
   if (kullanici === null) return null;
@@ -290,6 +294,41 @@ export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirtec
   })) return null;
   if (oturum.bayat) await gorulduYaz(db, oturum.id);
   return profilUygula(kullanici, profil);
+}
+
+// 2226-3: istasyon oturumunun sonu açılışta bir kez hesaplanır; terminal sık sorar, takvim her istekte okunmaz. Süreç başına tutulur,
+// yeniden açılışta yeniden hesaplanır. Şimdiki an veritabanının saatidir (açılış + açık geçen süre).
+const istasyonSonlari = new Map<number, number | null>();
+const ISTASYON_SONU_AZAMI_KAYIT = 10_000;
+const GUN_MS = 24 * 60 * 60 * 1000;
+
+export type VardiyaOkuyucu = (db: Db, kisiId: number, acilisMs: number) => Promise<VardiyaAraligi[]>;
+
+export async function istasyonVardiyasiSuruyor(
+  db: Db, oturum: { id: number; kisi_id: number; acildi_metin: string; acik_gecen_sn: number }, vardiyaOku: VardiyaOkuyucu = kisininVardiyalari,
+): Promise<boolean> {
+  const acilis = vtZamaniMs(oturum.acildi_metin);
+  if (Number.isNaN(acilis)) return true;
+  let son = istasyonSonlari.get(oturum.id);
+  if (son === undefined) {
+    son = istasyonOturumSonuMs(acilis, await vardiyaOku(db, oturum.kisi_id, acilis));
+    if (istasyonSonlari.size >= ISTASYON_SONU_AZAMI_KAYIT) istasyonSonlari.clear();
+    istasyonSonlari.set(oturum.id, son);
+  }
+  return son === null || acilis + oturum.acik_gecen_sn * 1000 < son;
+}
+
+// Açılış günü ve önceki gün başlayan vardiyalar (gece vardiyası önceki gün başlar). Takvimi olmayan kişi ya da okunamayan takvim:
+// vardiya sınırı yok, boşta süre geçer.
+export async function kisininVardiyalari(db: Db, kisiId: number, acilisMs: number): Promise<VardiyaAraligi[]> {
+  const gunler = await basladigiGunTakvimleri(db, [{ tur: 'kisi', id: kisiId }], { baslangic: tesisGunu(acilisMs - GUN_MS), bitis: tesisGunu(acilisMs) })
+    .then((m) => m.get(`kisi:${kisiId}`) ?? null)
+    .catch((hata: unknown) => { if (hata instanceof UygulamaHatasi) return null; throw hata; });
+  if (gunler === null) return [];
+  return [...gunler.values()].flatMap((g) => {
+    if (g.bitis === null || g.araliklar.length === 0) return [];
+    return [{ baslangicMs: Math.min(...g.araliklar.map((a) => Date.parse(a.baslangic))), bitisMs: Date.parse(g.bitis) }];
+  });
 }
 
 // Girişin son adımı (kart 2158): sınırlı hesap kayıtlı ortak cihazda oturum açamaz. Hata transaction'ı geri alır: oturum yazılmaz.

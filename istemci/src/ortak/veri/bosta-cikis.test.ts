@@ -51,3 +51,9 @@ describe('istasyonda boşta çıkış (1356 a)', () => {
     expect(son).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('istasyon boşta süresi (2226-3)', () => {
+  it('ekran sekiz saat dokunulmazsa çıkar; vardiya sonunu sunucu kapatır', () => {
+    expect(ISTASYON_BOSTA_MS).toBe(8 * 60 * 60 * 1000);
+  });
+});
