@@ -16,7 +16,7 @@ vi.mock('../sahne/glb-yukle.ts', async (asil) => ({
 const { ModellerSekmesi } = await import('./ModellerSekmesi.tsx');
 
 const makine = (makineId: number, kod: string, aktif = true): SunucuTezgahi => ({ makineId, kod, ad: `Deneme ${kod}`, istasyonId: null, aktif, ayar: null, surum: 0 });
-const BELGE = { belgeId: 11, ad: 'Deneme tezgah', harf: 'B', ozet: 'o1', dosyaTuru: 'step' as const };
+const BELGE = { belgeId: 11, ad: 'Deneme tezgah', harf: 'B', revKodu: '04', ozet: 'o1', dosyaTuru: 'step' as const };
 const BAGLI: CncModel = { id: 1, hedef: { tur: 'makine', makineId: 4 }, belge: BELGE, surum: 2 };
 
 function sunucu(modeller: CncModel[], belgeler = [BELGE]): void {
@@ -56,7 +56,8 @@ describe('3B modeller sekmesi (1212 a)', () => {
     ag.get.mockClear();
     render(<ModellerSekmesi yazabilir={false} />);
     const satir = (await screen.findByText('Y-01 · Deneme Y-01')).closest('tr') as HTMLElement;
-    expect(within(satir).getByText('Deneme tezgah · Rev. B · STEP')).toBeTruthy();
+    // 2138-2: merkezin harfi değil revizyon kodu.
+    expect(within(satir).getByText('Deneme tezgah · Rev. 04 · STEP')).toBeTruthy();
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(ag.get).not.toHaveBeenCalledWith('/cnc-kurulum/model-secenekleri');
     cleanup();

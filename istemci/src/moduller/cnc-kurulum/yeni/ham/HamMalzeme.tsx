@@ -96,7 +96,7 @@ export function HamMalzeme() {
     try {
       const c = await hamAnalizi();
       if (c.olcu === null || c.model === null) { S.msg = ANALIZ_NEDENI[c.neden ?? 'analiz-yok']; parcaDegisti(); return; }
-      const b = { olcu: c.olcu, kaynak: `${c.model.belgeAdi} (${c.model.harf})` };
+      const b = { olcu: c.olcu, kaynak: c.model.revKodu ? `${c.model.belgeAdi} (Rev ${c.model.revKodu})` : c.model.belgeAdi };
       if (S.P) setBekleyen(b); else analizUygula(b);
     } catch {
       S.msg = '⚠ Analiz okunamadı. Bağlantıyı denetleyip yeniden deneyin.'; parcaDegisti();

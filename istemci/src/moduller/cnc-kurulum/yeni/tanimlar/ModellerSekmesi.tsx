@@ -15,7 +15,7 @@ import { D } from '../veri/cncdata.ts';
 
 interface Satir { anahtar: string; hedef: ModelHedefi; tur: 'Tezgâh' | 'Aparat'; ad: string }
 
-const belgeAdi = (b: ModelBelgesi): string => `${b.ad} · Rev. ${b.harf} · ${b.dosyaTuru.toUpperCase()}`;
+const belgeAdi = (b: ModelBelgesi): string => `${b.ad} · ${b.revKodu ? `Rev. ${b.revKodu}` : 'Kodsuz revizyon'} · ${b.dosyaTuru.toUpperCase()}`;
 
 function satirlar(): Satir[] {
   const tezgahlar: Satir[] = (sunucuTezgahSatirlari() ?? []).filter((x) => x.sunucu.aktif).map((x) => ({

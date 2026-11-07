@@ -120,7 +120,7 @@ describe('cnc-kurulum 3B model bağı (gerçek PostgreSQL)', () => {
     const c = await bagla(yazar, { hedef: { tur: 'makine', makineId: freze }, belgeId: glbBelge, beklenenSurum: 0 });
     assert.equal(c.statusCode, 200, c.body);
     const m = (c.json() as { model: CncModel }).model;
-    assert.deepEqual({ ...m, id: 0 }, { id: 0, hedef: { tur: 'makine', makineId: freze }, belge: { belgeId: glbBelge, ad: 'Deneme tezgah.glb', harf: 'A', ozet: createHash('sha256').update(GLB).digest('hex'), dosyaTuru: 'glb' }, surum: 1 });
+    assert.deepEqual({ ...m, id: 0 }, { id: 0, hedef: { tur: 'makine', makineId: freze }, belge: { belgeId: glbBelge, ad: 'Deneme tezgah.glb', harf: 'A', revKodu: null, ozet: createHash('sha256').update(GLB).digest('hex'), dosyaTuru: 'glb' }, surum: 1 });
     assert.deepEqual(await liste(okur), [m]);
     const d = await istek(okur, 'GET', `/cnc-kurulum/modeller/${m.id}/dosya`);
     assert.equal(d.statusCode, 200);

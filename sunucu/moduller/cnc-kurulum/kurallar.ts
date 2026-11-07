@@ -373,12 +373,12 @@ export const modelDosyasiMi = (t: string | null): t is ModelBelgesi['dosyaTuru']
 
 // Hedefe bağlı, yayındaki ve ekranın açabildiği türde 3B model belgesi. Bağ komutu tek model bırakır; başka yoldan birden çok kurulmuşsa
 // en eski belge (atölyenin istasyon modeli seçimiyle aynı). Parça çizimi ve başka belge türü sayılmaz.
-export interface ModelAdayi { id: number; ad: string; tur: string; harf: string | null; ozet: string | null; dosyaTuru: string | null }
+export interface ModelAdayi { id: number; ad: string; tur: string; harf: string | null; revKodu?: string | null; ozet: string | null; dosyaTuru: string | null }
 export function modelBelgesiSec(bagli: readonly ModelAdayi[]): ModelBelgesi | null {
   let secilen: ModelBelgesi | null = null;
   for (const b of bagli) {
     if (b.tur !== '3b-model' || b.harf === null || b.ozet === null || !modelDosyasiMi(b.dosyaTuru)) continue;
-    if (secilen === null || b.id < secilen.belgeId) secilen = { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
+    if (secilen === null || b.id < secilen.belgeId) secilen = { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu ?? null, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
   }
   return secilen;
 }

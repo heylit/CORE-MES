@@ -30,7 +30,7 @@ function analizKopru(cevap: HamAnaliziCevabi): string[] {
   baglantiKur({ yetki: YETKI, yazici: {} as KayitYazici, isle: (tip) => { istekler.push(tip); return Promise.resolve(cevap); } });
   return istekler;
 }
-const OLCU: HamAnaliziCevabi = { neden: null, model: { belgeAdi: 'Model kup.step', harf: 'A' }, olcu: { a: 120, b: 40, c: 30, hacimMm3: 90000 } };
+const OLCU: HamAnaliziCevabi = { neden: null, model: { belgeAdi: 'Model kup.step', harf: 'A', revKodu: '02' }, olcu: { a: 120, b: 40, c: 30, hacimMm3: 90000 } };
 
 describe('Ham Malzeme gorunumu', () => {
   it('model yokken bilgi ve not gorunur', () => {
@@ -63,7 +63,7 @@ describe('Ham Malzeme gorunumu', () => {
     expect(istekler).toEqual(['ham-analizi']);
     expect([state.stock.mx, state.stock.my, state.stock.mvol]).toEqual([40, 30, 90]);
     expect(S.res).not.toBeNull();
-    expect(screen.getByText(/Ölçü analizden alındı: Model kup.step \(A\)/)).toBeTruthy();
+    expect(screen.getByText(/Ölçü analizden alındı: Model kup.step \(Rev 02\)/)).toBeTruthy();
   });
 
   it('analizden al: yuklu model onaysiz kaldirilmaz; vazgecince model kalir, onaylaninca olcu gelir', async () => {

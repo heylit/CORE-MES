@@ -363,7 +363,7 @@ export async function modeller(db: Db): Promise<ModellerCevabi> {
 
 export async function modelSecenekleri(db: Db, ara: string | undefined): Promise<ModelSecenekleriCevabi> {
   const belgeler = await yayindakiBelgeler(db, { tur: '3b-model', ...(ara === undefined ? {} : { ara }) });
-  return { belgeler: belgeler.flatMap((b) => (modelDosyasiMi(b.dosyaTuru) ? [{ belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru }] : [])) };
+  return { belgeler: belgeler.flatMap((b) => (modelDosyasiMi(b.dosyaTuru) ? [{ belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru }] : [])) };
 }
 
 // Hedefe tek model: seçilen belge bağlanır, öbür 3B model bağları kaldırılır; null bağı kaldırır (ekran çizilen gövdeye döner).
@@ -407,7 +407,7 @@ export async function hamAnalizi(db: Db): Promise<HamAnaliziCevabi> {
   if (malzemeNo === null) return bos('malzeme-yok');
   const g = await malzemeGeometrisi(db, malzemeNo);
   if (g === null) return bos('model-yok');
-  const model = { belgeAdi: g.belgeAdi, harf: g.harf };
+  const model = { belgeAdi: g.belgeAdi, harf: g.harf, revKodu: g.revKodu };
   const a = g.analiz.analiz;
   if (a === null) return bos('analiz-yok', model);
   return { neden: null, model, olcu: { a: a.obb.a, b: a.obb.b, c: a.obb.c, hacimMm3: a.hacimMm3 } };
