@@ -485,7 +485,10 @@ export const siparisBelgesiGovdesi = z.object({
   ozet: dosyaOzeti,
   dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120),
 }).strict();
-export const siparisBelgesiSemasi = z.object({ id: z.number().int(), ad: z.string(), tur: z.string(), harf: z.string().nullable() });
+// 2138-2: revKodu gösterilen revizyon kodu (belgenin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+export const siparisBelgesiSemasi = z.object({
+  id: z.number().int(), ad: z.string(), tur: z.string(), harf: z.string().nullable(), revKodu: z.string().nullable().optional(),
+});
 export const siparisBelgeleriCevabi = z.object({ belgeler: z.array(siparisBelgesiSemasi) });
 export type SiparisBelgesi = z.output<typeof siparisBelgesiSemasi>;
 export type SiparisBelgesiYazimi = z.output<typeof siparisBelgesiGovdesi>;
