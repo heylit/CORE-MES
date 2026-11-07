@@ -5,7 +5,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { EmirAkisiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { Emir, EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
-import { kisaZaman } from './iplik.ts';
+import { kisaZaman, konumDuraklari, sureKisa } from './iplik.ts';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 const EMIR: Emir = {
@@ -138,5 +138,68 @@ describe('İzlenebilirlik ipliği', () => {
     } finally {
       delete document.documentElement.dataset.hareket;
     }
+  });
+});
+
+// 2224-1 b: Parçayı izle konumdan konuma yolu çizer, istasyonda adım bilgisiyle; hareket yoksa adım ipliği kalır.
+const konum = (id: number, kod: string, tur: string, istasyon: string | null = null, ad: string | null = null) => ({ id, kod, ad, tur, istasyon });
+const H = (id: number, zaman: string, tur: 'giris' | 'cikis' | 'transfer' | 'geri_alma', malzemeId: number, kaynak: ReturnType<typeof konum> | null, hedef: ReturnType<typeof konum> | null,
+  ek: { cikisNedeni?: string; geriAlinanId?: number } = {}) => ({
+  id, zaman, tur, malzemeId, partiId: null, miktar: '6', cikisNedeni: ek.cikisNedeni ?? null, geriAlinanId: ek.geriAlinanId ?? null, kaynak, hedef,
+});
+const RAF = konum(1, 'A-01', 'raf_gozu');
+const KABUL = konum(2, 'KABUL', 'kabul', null, 'Mal kabul alanı');
+const TORNA = konum(3, 'IST-1', 'istasyon', 'Deneme Torna');
+const FREZE = konum(4, 'IST-2', 'istasyon', 'Deneme Freze');
+const KONUMLU = {
+  ...AKIS,
+  konumHareketleri: [
+    H(1, '2026-10-05T07:42:00.000Z', 'giris', 99, null, KABUL),
+    H(2, '2026-10-05T09:42:00.000Z', 'transfer', 99, KABUL, RAF),
+    H(3, '2026-10-06T08:00:00.000Z', 'cikis', 99, RAF, null, { cikisNedeni: 'uretime_sarf' }),
+    H(4, '2026-10-06T09:30:00.000Z', 'giris', 40, null, TORNA),
+    H(5, '2026-10-06T09:40:00.000Z', 'transfer', 40, TORNA, KABUL),
+    H(6, '2026-10-06T09:41:00.000Z', 'geri_alma', 40, KABUL, TORNA, { geriAlinanId: 5 }),
+    H(7, '2026-10-06T10:00:00.000Z', 'transfer', 40, TORNA, FREZE),
+    H(8, '2026-10-06T10:30:00.000Z', 'transfer', 40, FREZE, FREZE),
+    H(9, '2026-10-06T13:00:00.000Z', 'cikis', 40, FREZE, null, { cikisNedeni: 'sevk' }),
+  ],
+} satisfies EmirAkisiCevabi;
+
+describe('Parçanın konum akışı (2224)', () => {
+  it('hammadde konumları, sonra ürünün konumları; istasyonda OP ve adet, durakta kalış süresi; geri alınan ve yerinde değişim yol sayılmaz', () => {
+    const d = konumDuraklari(AYRINTI, KONUMLU);
+    expect(d.map((x) => x.ad)).toEqual(['Mal kabul alanı', 'A-01', 'Deneme Torna', 'Deneme Freze', 'Sevk']);
+    expect(d[0]!.satirlar).toEqual(['KABUL', kisaZaman('2026-10-05T07:42:00.000Z'), '2 sa kaldı']);
+    expect(d[1]!.satirlar).toEqual([kisaZaman('2026-10-05T09:42:00.000Z'), '22 sa kaldı']);
+    expect(d[2]!.satirlar).toEqual(['OP10 · 6 adet', kisaZaman('2026-10-06T09:30:00.000Z'), '30 dk kaldı']);
+    expect(d[3]!.satirlar).toEqual(['OP30 · 6 adet', kisaZaman('2026-10-06T10:00:00.000Z'), '3 sa kaldı']);
+    expect(d[4]!.tur).toBe('sevk');
+  });
+
+  it('sevk edilmemiş parçada son durak "burada" süresini akışın şimdisinden sayar', () => {
+    const d = konumDuraklari(AYRINTI, { ...KONUMLU, konumHareketleri: KONUMLU.konumHareketleri.slice(3, 4) });
+    expect(d.map((x) => x.satirlar.at(-1))).toEqual(['burada 1 gün']);
+  });
+
+  it('Parçayı izle konum akışını açar; konum hareketi yoksa adım ipliği ve not', async () => {
+    sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, KONUMLU) });
+    ac(ekran, '/uretim-emirleri/5');
+    await screen.findByText('UE-000005');
+    fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
+    const img = await screen.findByRole('img', { name: 'UE-000005 konum akışı' });
+    expect(within(img).getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.getByRole('heading', { name: 'Parçanın konum akışı' })).toBeTruthy();
+    cleanup();
+    sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, { ...AKIS, konumHareketleri: [] }) });
+    ac(ekran, '/uretim-emirleri/5');
+    await screen.findByText('UE-000005');
+    fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
+    await screen.findByRole('img', { name: 'UE-000005 izlenebilirlik ipliği' });
+    expect(screen.getByText('Bu emrin konum hareketi yok; rota adımları gösteriliyor.')).toBeTruthy();
+  });
+
+  it('süre metni gün, saat, dakika', () => {
+    expect([sureKisa(3 * 86_400_000 + 5), sureKisa(4 * 3_600_000), sureKisa(59_999 * 10)]).toEqual(['3 gün', '4 sa', '9 dk']);
   });
 });

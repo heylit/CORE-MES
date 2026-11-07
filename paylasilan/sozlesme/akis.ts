@@ -81,6 +81,23 @@ export const hammaddePartisiSemasi = z.object({
 
 export const olcuSemasi = z.object({ dk: dakika.nullable(), acik: z.boolean() });
 
+// Parçayı izle (2224): emrin stok hareketleri konumlarıyla, zaman sırasıyla. Konumdan konuma yolu istemci çizer; aynı konumda kalan
+// statü ve kalite değişimi de listededir (kaynak ve hedef aynı). İstasyon konumunda `istasyon` istasyonun adıdır.
+export const konumUcuSemasi = z.object({
+  id: KIMLIK, kod: z.string(), ad: z.string().nullable(), tur: z.string(), istasyon: z.string().nullable(),
+});
+export const konumHareketiSemasi = z.object({
+  id: KIMLIK,
+  zaman: zamanSemasi,
+  tur: z.enum(['giris', 'cikis', 'transfer', 'sayim_fazla', 'sayim_eksik', 'geri_alma']),
+  malzemeId: KIMLIK,
+  partiId: KIMLIK.nullable(),
+  miktar: z.string(),
+  cikisNedeni: z.string().nullable(),
+  geriAlinanId: KIMLIK.nullable(),
+  kaynak: konumUcuSemasi.nullable(),
+  hedef: konumUcuSemasi.nullable(),
+});
 export const emirAkisiCevabi = z.object({
   emir: z.object({
     id: KIMLIK,
@@ -115,6 +132,8 @@ export const emirAkisiCevabi = z.object({
   adimlar: z.array(adimOlcusuSemasi),
   statuler: z.array(statuKalisiSemasi),
   hammadde: z.array(hammaddePartisiSemasi),
+  // 2224: isteğe bağlı; bu sözleşmeyi kuran öteki modüllerin örnek verisi bozulmasın diye. Sunucu her zaman yazar.
+  konumHareketleri: z.array(konumHareketiSemasi).optional(),
 });
 
 // Refakat kartının akışı (kart #708): emir yolculuğuyla aynı hesap, kartın kapsamıyla (kartın lotu ve kartla sayılan partilerin
@@ -237,6 +256,7 @@ export type Serit = z.output<typeof seritSemasi>;
 export type AdimOlcusu = z.output<typeof adimOlcusuSemasi>;
 export type StatuKalisi = z.output<typeof statuKalisiSemasi>;
 export type HammaddePartisi = z.output<typeof hammaddePartisiSemasi>;
+export type KonumHareketi = z.output<typeof konumHareketiSemasi>;
 export type Olcu = z.output<typeof olcuSemasi>;
 export type EmirAkisiCevabi = z.output<typeof emirAkisiCevabi>;
 export type EmirListesiCevabi = z.output<typeof emirListesiCevabi>;
