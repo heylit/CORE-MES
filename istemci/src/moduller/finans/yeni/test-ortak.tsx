@@ -30,6 +30,17 @@ export function komutToplayici(): { yaz: SayfaKomutYazici; liste: (kaynak?: stri
   };
 }
 
+export const ORNEK_KUR_CIFTLERI = [{ paraBirimi: 'EUR', tarih: '2026-10-01', alis: '36.000000', satis: '36.200000', surum: 1 }];
+export const ORNEK_ORANLAR = [
+  { id: 2, tur: 'kredi', paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', yillikYuzde: '42.0000', not: null, olusturma: '2026-10-01T07:00:00.000Z' },
+  { id: 1, tur: 'mevduat', paraBirimi: 'TRY', gecerlilikBaslangic: '2026-08-01', yillikYuzde: '35.0000', not: 'stopaj sonrası', olusturma: '2026-08-01T07:00:00.000Z' },
+];
+const ornekOranOzeti = () => ({
+  bugun: '2026-10-20',
+  kurlar: ORNEK_KUR_CIFTLERI.map((k) => ({ ...k, oncekiAlis: null, oncekiSatis: null, girenAd: 'Deneme', giris: '2026-10-01T07:00:00.000Z' })),
+  faizler: ORNEK_ORANLAR.map(({ id: _id, olusturma, ...f }) => ({ ...f, oncekiYillikYuzde: null, girenAd: 'Deneme', giris: olusturma })),
+  sonGiris: null, gecmis: [],
+});
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 export interface Istek { yontem: string; yol: string; govde: unknown }
 
@@ -50,6 +61,10 @@ export function sunucuKur(kullanici: Kullanici, yazmalar: Record<string, (govde:
       if (yol === '/finans/ayar') return json(200, { ayar: ham.ayar });
       if (yol === '/finans/amortisman') return json(200, { aylar: ham.amortisman });
       if (yol === '/finans/kur-ozeti') return json(200, ham.kurOzeti);
+      // 2238: kur çifti ve oran matrisi (değerler uydurmadır).
+      if (yol === '/finans/kur-ciftleri') return json(200, { satirlar: ORNEK_KUR_CIFTLERI, toplam: ORNEK_KUR_CIFTLERI.length, sayfaBoyu: 200 });
+      if (yol === '/finans/oranlar') return json(200, { satirlar: ORNEK_ORANLAR, toplam: ORNEK_ORANLAR.length, sayfaBoyu: 200 });
+      if (yol === '/finans/oran-ozeti') return json(200, ornekOranOzeti());
       if (yol === '/finans/beklenen-odemeler') return json(200, { odemeler: ham.beklenenOdemeler });
       if (yol === '/kurum') return json(200, { ad: ham.sirketAdi ?? '' });
     }

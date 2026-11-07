@@ -37,20 +37,25 @@
 .tc-kfs-gecmis li:last-child { border-bottom: 0; }
 .tc-kfs-ne { min-width: 0; overflow-wrap: anywhere; }
 .tc-kfs-tur { align-self: start; padding-inline: var(--b-1); border: 1px solid currentColor; border-radius: var(--yari-1); font-size: var(--yazi-xs); color: var(--done); }
-.tc-kfs-tur[data-tur="faiz"] { color: var(--run); }
+.tc-kfs-tur:not([data-tur="kur"]) { color: var(--run); }
+/* 2238: kur alış ve satış yan yana; faiz türü başına üç para birimi. */
+.tc-kfs-cift { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-kfs-faiz { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.tc-kfs-faiz legend { grid-column: 1 / -1; padding: 0; }
 
-/* Tablet: GBP kuru ve EUR faizi şeritten iner (panelde durur); panel iki sütun, geçmiş altta. */
+/* Tablet: GBP kuru ve politika faizi şeritten iner (panelde durur); panel iki sütun, geçmiş altta. */
 @media (max-width: 1279px) {
-  .tc-kfs [data-kfs="kur-GBP"], .tc-kfs [data-kfs="faiz-EUR"] { display: none; }
+  .tc-kfs [data-kfs="kur-GBP"], .tc-kfs [data-kfs="faiz-politika"] { display: none; }
   .tc-kfs-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tc-kfs-gecmis-blok { grid-column: 1 / -1; }
 }
-/* Telefon: USD ve EUR kuru ile TL faizi kalır; ayrıntı panelde. */
+/* Telefon: USD ve EUR kuru ile TL kredi faizi kalır; ayrıntı panelde. */
 @media (max-width: 767px) {
-  .tc-kfs [data-kfs="faiz-USD"], .tc-kfs-son, .tc-kfs-ayrac { display: none; }
+  .tc-kfs [data-kfs="faiz-mevduat"], .tc-kfs-son, .tc-kfs-ayrac { display: none; }
   .tc-kfs-ozet { gap: var(--b-2); }
   .tc-kfs-guncelle-ad { display: none; }
   .tc-kfs-panel { grid-template-columns: minmax(0, 1fr); }
+  .tc-kfs-faiz { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Grafik ve toplu yükleme (1083, 1089 a): panelin bütün genişliğinde. Yükleme Finans Ayarlar'da da aynı parçadır. */
@@ -60,7 +65,7 @@
 .tc-kfg-ozet { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); }
 .tc-kfg-cizim { display: block; width: 100%; height: calc(var(--dokunma-yogun) * 3); border-bottom: 1px solid var(--edge2); }
 .tc-kfg-cizgi { fill: none; stroke: var(--done); stroke-width: 2px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.tc-kfg-cizgi[data-tur="faiz"] { stroke: var(--run); }
+.tc-kfg-cizgi:not([data-tur="kur"]) { stroke: var(--run); }
 .tc-kfg-eksen { display: flex; justify-content: space-between; }
 .tc-kfg-tablo { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-kfy { display: grid; gap: var(--b-2); min-width: 0; }

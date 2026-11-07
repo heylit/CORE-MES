@@ -1,3 +1,4 @@
+import type { FaizTuru } from '#paylasilan/sozlesme/finans.ts';
 import type { Komut } from '../akislar.ts';
 import { sayi, yuvarla, type DuzenliKayit, type FinansAyari, type Hesap, type HazirVeri } from '../donustur.ts';
 import { ayarGovdesi, type AyarDegisikligi } from './ayar-govdesi.ts';
@@ -51,15 +52,16 @@ export const hesapDurumKomutu = (h: Hesap): Komut =>
 export const kdvKomutu = (oran: string, baslangic: string): Komut =>
   komut('POST /finans/kdv-oranlari/ekle', { oran: sayi(oran), gecerlilikBaslangic: baslangic }, 'KDV oranı eklendi.');
 
-// Aynı güne ikinci giriş düzeltmedir: önceki değer denetim kaydına geçer, başka günün kuru değişmez.
-export function kurKomutu(V: HazirVeri, pbHam: string, tarih: string, kur: string): Komut {
-  const pb = pbHam.trim().toUpperCase();
-  const onceki = V.kurlar_listesi.find((k) => k.paraBirimi === pb && k.tarih === tarih);
-  if (onceki) return komut('POST /finans/kurlar/guncelle', { paraBirimi: pb, tarih, kur: sayi(kur), surum: onceki.surum }, 'O günün kuru düzeltildi.');
-  return komut('POST /finans/kurlar/ekle', { paraBirimi: pb, tarih, kur: sayi(kur) }, 'Kur kaydedildi.');
+// 2238: kur alış ve satış birlikte girilir. Aynı güne ikinci giriş düzeltmedir (sürümüyle): önceki değer denetim kaydına geçer.
+export function kurCiftiKomutu(mevcut: { surum: number } | undefined, pbHam: string, tarih: string, alis: string, satis: string): Komut {
+  const govde = { paraBirimi: pbHam.trim().toUpperCase(), tarih, alis: sayi(alis), satis: sayi(satis) };
+  if (mevcut) return komut('POST /finans/kur-ciftleri/guncelle', { ...govde, surum: mevcut.surum }, 'O günün kuru düzeltildi.');
+  return komut('POST /finans/kur-ciftleri/ekle', govde, 'Kur kaydedildi.');
 }
-export const faizKomutu = (pb: string, baslangic: string, yuzde: string): Komut =>
-  komut('POST /finans/faizler/ekle', { paraBirimi: pb, gecerlilikBaslangic: baslangic, aylikYuzde: sayi(yuzde) }, 'Faiz kaydedildi.', undefined, true);
+// Faiz tür ve para birimi başına yıllık yüzdedir (2238-2 a); yeni oran başlangıç gününden geçerli yeni satırdır.
+export const oranKomutu = (tur: FaizTuru, pbHam: string, baslangic: string, yuzde: string, not: string): Komut =>
+  komut('POST /finans/oranlar/ekle', { tur, paraBirimi: pbHam.trim().toUpperCase(), gecerlilikBaslangic: baslangic, yillikYuzde: sayi(yuzde), not: not.trim() || null },
+    'Faiz kaydedildi.', undefined, true);
 
 /* ---------- Sabit kıymetler ---------- */
 export interface KiymetDegerleri {

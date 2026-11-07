@@ -31,7 +31,7 @@ export const LISTELER = {
 } as const;
 type ListeAdi = keyof typeof LISTELER;
 
-async function tumu(yol: string): Promise<unknown[]> {
+export async function tumu(yol: string): Promise<unknown[]> {
   const satirlar: unknown[] = [];
   for (let sayfa = 1; sayfa <= 500; sayfa += 1) {
     const c = await api.get<{ satirlar: unknown[]; toplam: number | null; sayfaBoyu: number }>(yolKur(yol, {}, { sayfa, sayfaBoyu: 200 }));

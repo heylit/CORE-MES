@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { KurFaizAraligi } from '#paylasilan/sozlesme/finans.ts';
+import type { FaizTuru, KurTuru, OranAraligi } from '#paylasilan/sozlesme/finans.ts';
 import { Secim, Simge } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 
 // Şeridin kur ve faiz grafiği (1089 a). Ortak GrafikKarti sıfırdan çizer; kurun günlük oynaması orada düz çizgi kalır. Burada
 // eksen seçilen aralığın en küçüğü ile en büyüğü arasındadır, yatay eksen takvim günüdür; çizgi yalnız girilen günlerden geçer.
-export const SERILER = [
-  { anahtar: 'kur-USD', ad: 'USD kuru', tur: 'kur', paraBirimi: 'USD' },
-  { anahtar: 'kur-EUR', ad: 'EUR kuru', tur: 'kur', paraBirimi: 'EUR' },
-  { anahtar: 'kur-GBP', ad: 'GBP kuru', tur: 'kur', paraBirimi: 'GBP' },
-  { anahtar: 'faiz-TRY', ad: 'TRY aylık faiz', tur: 'faiz', paraBirimi: 'TRY' },
-  { anahtar: 'faiz-USD', ad: 'USD aylık faiz', tur: 'faiz', paraBirimi: 'USD' },
-  { anahtar: 'faiz-EUR', ad: 'EUR aylık faiz', tur: 'faiz', paraBirimi: 'EUR' },
-] as const;
-type Seri = (typeof SERILER)[number];
+// Kart 2238: kur alış ya da satış, faiz türüyle yıllık %.
+type SeriTanimi = { anahtar: string; ad: string; tur: 'kur'; kur: KurTuru; paraBirimi: string } | { anahtar: string; ad: string; tur: 'faiz'; faiz: FaizTuru; paraBirimi: string };
+export const SERILER: readonly SeriTanimi[] = [
+  ...(['USD', 'EUR', 'GBP'] as const).flatMap((pb) => [
+    { anahtar: `alis-${pb}`, ad: `${pb} alış kuru`, tur: 'kur', kur: 'alis', paraBirimi: pb } as const,
+    { anahtar: `satis-${pb}`, ad: `${pb} satış kuru`, tur: 'kur', kur: 'satis', paraBirimi: pb } as const,
+  ]),
+  ...(['kredi', 'mevduat', 'politika'] as const).flatMap((f) => (['TRY', 'USD', 'EUR'] as const).map((pb) => (
+    { anahtar: `${f}-${pb}`, ad: `${pb} ${f === 'kredi' ? 'kredi' : f === 'mevduat' ? 'mevduat' : 'politika'} faizi (yıllık)`, tur: 'faiz', faiz: f, paraBirimi: pb } as const))),
+];
+type Seri = SeriTanimi;
 export const SURELER = [30, 90, 365] as const;
 
 const EN = 320;
@@ -27,10 +29,13 @@ const sayiMetni = (n: number, basamak: number) => n.toLocaleString('tr-TR', { ma
 
 export interface Nokta { tarih: string; deger: number }
 // Kur: girilen günler. Faiz: aralığın başında geçerli oran (aralıktan önce başlamışsa başa çekilir) ve aralıktaki değişimler.
-export function seriNoktalari(veri: KurFaizAraligi, seri: Seri, baslangic: string): Nokta[] {
-  if (seri.tur === 'kur') return veri.kurlar.filter((k) => k.paraBirimi === seri.paraBirimi).map((k) => ({ tarih: k.tarih, deger: Number(k.kur) }));
-  return veri.faizler.filter((f) => f.paraBirimi === seri.paraBirimi)
-    .map((f) => ({ tarih: f.gecerlilikBaslangic < baslangic ? baslangic : f.gecerlilikBaslangic, deger: Number(f.aylikYuzde) }));
+export function seriNoktalari(veri: OranAraligi, seri: Seri, baslangic: string): Nokta[] {
+  if (seri.tur === 'kur') {
+    const tur = seri.kur;
+    return veri.kurlar.filter((k) => k.paraBirimi === seri.paraBirimi).map((k) => ({ tarih: k.tarih, deger: Number(k[tur]) }));
+  }
+  return veri.faizler.filter((f) => f.tur === seri.faiz && f.paraBirimi === seri.paraBirimi)
+    .map((f) => ({ tarih: f.gecerlilikBaslangic < baslangic ? baslangic : f.gecerlilikBaslangic, deger: Number(f.yillikYuzde) }));
 }
 
 // Kur noktadan noktaya, faiz basamakla çizilir (yeni oran başlangıcına kadar eski oran geçerlidir); faiz bitiş gününe uzar.
@@ -56,13 +61,13 @@ export function cizgiYolu(noktalar: readonly Nokta[], baslangic: string, bitis: 
 }
 
 export function KurGrafigi({ bugun }: { bugun: string }) {
-  const [seriAnahtari, seriYaz] = useState<Seri['anahtar']>('kur-USD');
+  const [seriAnahtari, seriYaz] = useState<string>('alis-USD');
   const [sure, sureYaz] = useState<(typeof SURELER)[number]>(90);
-  const seri = SERILER.find((s) => s.anahtar === seriAnahtari) ?? SERILER[0];
+  const seri = SERILER.find((s) => s.anahtar === seriAnahtari) ?? SERILER[0]!;
   const baslangic = gunOncesi(bugun, sure);
   const veri = useQuery({
-    queryKey: ['finans', 'kur-faiz-araligi', baslangic, bugun],
-    queryFn: () => api.get<KurFaizAraligi>(`/finans/kur-faiz-araligi?baslangic=${baslangic}&bitis=${bugun}`),
+    queryKey: ['finans', 'oran-araligi', baslangic, bugun],
+    queryFn: () => api.get<OranAraligi>(`/finans/oran-araligi?baslangic=${baslangic}&bitis=${bugun}`),
   });
   const noktalar = veri.data ? seriNoktalari(veri.data, seri, baslangic) : [];
   const basamak = seri.tur === 'kur' ? 4 : 2;
@@ -73,7 +78,7 @@ export function KurGrafigi({ bugun }: { bugun: string }) {
   return (
     <div className="tc-kfg">
       <div className="tc-kfg-secim">
-        <Secim etiket="Seri" value={seriAnahtari} onChange={(e) => seriYaz(e.target.value as Seri['anahtar'])}
+        <Secim etiket="Seri" value={seriAnahtari} onChange={(e) => seriYaz(e.target.value)}
           secenekler={SERILER.map((s) => ({ deger: s.anahtar, baslik: s.ad }))} />
         <Secim etiket="Süre" value={String(sure)} onChange={(e) => sureYaz(Number(e.target.value) as (typeof SURELER)[number])}
           secenekler={SURELER.map((g) => ({ deger: String(g), baslik: `Son ${g} gün` }))} />
