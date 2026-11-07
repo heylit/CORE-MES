@@ -7,12 +7,13 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { KAYIT_TURLERI, SABLON_TURLERI } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import type { BasCevabi, BaskilarCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { partiKaliteDurumuYap } from '../stok/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -624,6 +625,54 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(mz.statusCode, 200, mz.body);
     assert.equal((await al(yonetici, adres('lot-100x50', 'mal-kabul', String(mkId)) + '&adet=300')).statusCode, 400, 'iki lot x 300 sınırı aşar');
   });
+  test('EM-U21 (2223-1 a): bekleyen etiketler mal kabulden ve kalite durumu değişiminden türetilir; basılınca düşer, durum yeniden değişince geri gelir; oku ister', async () => {
+    const parti = await partiAc('P-ETK-BK');
+    const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
+    const bekleyen = async () => {
+      const r = await al(yonetici, '/etiket-merkezi/bekleyenler');
+      assert.equal(r.statusCode, 200, r.body);
+      return r.json() as BekleyenlerCevabi;
+    };
+    const kabul = await yaz(yonetici, '/stok/mal-kabul', {
+      tur: 'diger', irsaliyeNo: 'IRS-BK-1', satirlar: [{ malzemeId: kart, miktar: '4', parti: { tedarikciPartiNo: 'BK-A' } }, { malzemeId: kart, miktar: '6', parti: { tedarikciPartiNo: 'BK-B' } }],
+    });
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    const mkId = (kabul.json() as { belge: { id: number } }).belge.id;
+    const ilk = await bekleyen();
+    assert.equal(ilk.gun, 30);
+    const mk = ilk.bekleyenler.find((b) => b.tur === 'mal-kabul' && b.id === mkId);
+    assert.ok(mk, JSON.stringify(ilk.bekleyenler));
+    assert.equal(mk.etiketSayisi, 2);
+    assert.match(mk.ayrinti, /^2\/2 lot etiketi basılmadı · İrsaliye IRS-BK-1$/);
+    // 897 b: kabulde kalite durumu basılmaz; giriş hareketi kalite bekleyeni açmaz.
+    const lotlar = (await ortam!.vt.sorgu<{ parti_id: number }>('SELECT parti_id::int FROM stok_mal_kabul_satiri WHERE mal_kabul_id = $1 ORDER BY sira', [mkId])).map((x) => x.parti_id);
+    assert.equal(lotlar.length, 2);
+
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const basildi = await yaz(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'lot', idler: [lotlar[0]] } });
+    assert.equal(basildi.statusCode, 200, basildi.body);
+    const yarim = (await bekleyen()).bekleyenler.find((b) => b.tur === 'mal-kabul' && b.id === mkId);
+    assert.equal(yarim?.etiketSayisi, 1, 'basılan lot düşer, kalan lot bekler');
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'mal-kabul', idler: [mkId] } })).statusCode, 200);
+    assert.equal((await bekleyen()).bekleyenler.some((b) => b.tur === 'mal-kabul' && b.id === mkId), false, 'bütün lotlar basılınca kabul düşer');
+
+    await ortam!.vt.tx((db) => partiKaliteDurumuYap(db, yoneticiId, { partiId: lotlar[1]!, hedef: 'red', aciklama: 'Deneme red' }));
+    const red = (await bekleyen()).bekleyenler.filter((b) => b.tur === 'kalite-durum');
+    const redSatiri = red.find((b) => b.baslik.startsWith('LT-') && b.ayrinti.startsWith('RED'));
+    assert.ok(redSatiri, JSON.stringify(red));
+    assert.match(redSatiri.ayrinti, /^RED · Deneme mil$/);
+    const kd = await yaz(yonetici, '/etiket-merkezi/sablonlar/kalite-durum-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'kalite-durum', idler: [redSatiri.id] } });
+    assert.equal(kd.statusCode, 200, kd.body);
+    assert.equal((await bekleyen()).bekleyenler.some((b) => b.tur === 'kalite-durum' && b.id === redSatiri.id), false, 'basılan durum düşer');
+
+    // Serbest bırakma yeni satıra varır: o satırın etiketi basılmadığından bekler.
+    await ortam!.vt.tx((db) => partiKaliteDurumuYap(db, yoneticiId, { partiId: lotlar[1]!, hedef: 'serbest', aciklama: 'Deneme serbest' }));
+    const serbest = (await bekleyen()).bekleyenler.find((b) => b.tur === 'kalite-durum' && b.ayrinti.startsWith('SERBEST'));
+    assert.ok(serbest);
+    assert.equal((await al(yetkisiz, '/etiket-merkezi/bekleyenler')).statusCode, 403);
+  });
+
   test('EM-U15: raf etiketi Fabrika Haritası rafından RAF önekiyle çıkar; bölüm ve bölme/kat gözlerden gelir; pasif ve olmayan raf eksikte kalır; deftere raf olarak bağlanır (#116)', async () => {
     const sahip = ortam!.sahip;
     const salon = (await sahip.tek<{ id: number }>(

@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
+  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
@@ -13,17 +13,17 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
-import { istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
+import { etiketKaliteDegisimleri, etiketMalKabulleri, istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
 import { koliKalemleri } from '../sevkiyat/disari.ts';
 import { hataliKaydi, refakatKarti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  baskiEngeli, dogrudanBaskiDurumu, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, kaliteBekleyenleri, malKabulBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  baskiEkle, etiketTurleriOku, sonBaskilar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  baskiEkle, etiketTurleriOku, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI } from './yazici-dili.ts';
 
@@ -291,5 +291,23 @@ export async function etiketler(db: Db): Promise<EtiketlerCevabi> {
       ...s,
       sablonlar: HAZIR_SABLONLAR.filter((h) => s.sablonTuru !== null && h.tur === s.sablonTuru).map((h) => ({ anahtar: h.anahtar, ad: h.ad })),
     })) as EtiketlerCevabi['etiketler'],
+  };
+}
+
+// 2223-1 a: görevden doğan etiketler kaynak kayıtlardan türetilir. Mal kabulün lotları lot olarak, kalite durumu bakiye satırı
+// olarak deftere yazılır (basilanKayitlar); bekleyen, o kayıt açıldıktan ya da durumu değiştikten sonra basılmamış olandır.
+export async function bekleyenler(db: Db, simdi: Date = new Date()): Promise<BekleyenlerCevabi> {
+  const baslangic = bekleyenBaslangici(simdi);
+  const kabuller = await etiketMalKabulleri(db, baslangic);
+  const lotBasimlari = await sonBasimlar(db, 'lot', [...new Set(kabuller.flatMap((k) => k.partiIdler))]);
+  const degisimler = await etiketKaliteDegisimleri(db, baslangic);
+  const kaliteBasimlari = await sonBasimlar(db, 'kalite-durum', degisimler.map((d) => d.bakiyeId));
+  const adlar = await malzemeOzetleri(db, [...new Set(degisimler.map((d) => d.malzemeId))]);
+  return {
+    gun: BEKLEYEN_GUN,
+    bekleyenler: [
+      ...malKabulBekleyenleri(kabuller, lotBasimlari),
+      ...kaliteBekleyenleri(degisimler.map((d) => ({ ...d, malzemeAd: adlar.get(d.malzemeId)?.ad ?? null })), kaliteBasimlari),
+    ].sort(bekleyenSirasi),
   };
 }

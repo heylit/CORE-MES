@@ -51,3 +51,4 @@
 | EM-27: refakat kartında 7 işlem satırı (no, piktogram, ad, yer, imza); fazlası son satırda "+N işlem daha"; fason işlem fason piktogramıyla | `kurallar.test.ts` EM-17, EM-27, `EM-U16` |
 | EM-28: kalite ve hatalı parça kararı karoyla (bekliyor çizgili, kabul beyaz, şartlı/rework/hurda/red siyah); redde kalın çerçeve; sevk kolisinde koli içi girilmeden çok kolide başlık "KALEM TOPLAMI" | `kurallar.test.ts` EM-28, `EM-U18`, `EM-U20` |
 | Her şablonun sağ üstünde türün piktogramı; etiket listesinde her türün piktogramı | `kurallar.test.ts`, `EtiketMerkezi.test.tsx` |
+| EM-30 (2223-1 a): bekleyen etiketler kaynak kayıttan türetilir (tablo yok); 30 gün geriye; mal kabulde kabulden sonra basılmamış lotlar, kalite durumunda durumu değiştiren yer içi hareketten sonra basılmamış bakiye satırı; kabul girişi kalite bekleyeni açmaz (897 b); `oku` ister | `kurallar.test.ts` EM-30, `EM-U21` |

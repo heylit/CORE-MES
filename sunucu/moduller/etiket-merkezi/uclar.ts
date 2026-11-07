@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  basCevabi, basGovdesi, baskilarCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
+  basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
   yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { bas, baskilar, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
+import { bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -74,5 +74,7 @@ export const uclar = [
     cevap: indirCevabi,
     isle: ({ db, kullanici, parametre, govde }) => indir(db, kullanici, parametre.anahtar, govde),
   }),
+  // Bekleyen etiketler gerçek kayıt okumasıdır (lot, durum, malzeme): kayıt çıktısıyla aynı işlem.
+  uc({ yontem: 'GET', yol: '/etiket-merkezi/bekleyenler', yetki: 'etiket-merkezi.oku', cevap: bekleyenlerCevabi, isle: ({ db }) => bekleyenler(db) }),
   uc({ yontem: 'GET', yol: '/etiket-merkezi/baskilar', yetki: 'etiket-merkezi.oku', cevap: baskilarCevabi, isle: ({ db }) => baskilar(db) }),
 ];

@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi.ts';
-import type { BaskilarCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
 import { Etiketler } from './Etiketler.tsx';
@@ -78,6 +78,15 @@ const ETIKETLER: EtiketlerCevabi = {
   ],
 };
 
+const BEKLEYENLER: BekleyenlerCevabi = {
+  gun: 30,
+  bekleyenler: [
+    { tur: 'kalite-durum', id: 41, baslik: 'LT-000041 KAR', ayrinti: 'RED · Örnek mil', zaman: '2026-11-07T09:00:00.000Z', etiketSayisi: 1 },
+    { tur: 'mal-kabul', id: 12, baslik: 'MK-000012', ayrinti: '2/2 lot etiketi basılmadı', zaman: '2026-11-07T08:00:00.000Z', etiketSayisi: 2 },
+    { tur: 'kalite-durum', id: 40, baslik: 'LT-000040 KAR', ayrinti: 'ŞARTLI KABUL', zaman: '2026-11-06T08:00:00.000Z', etiketSayisi: 1 },
+  ],
+};
+
 const KONUMLAR: Record<number, string> = { 11: 'R1-01-1-1', 12: 'R1-01-1-2' };
 
 interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
@@ -101,6 +110,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
     if (yol === '/etiket-merkezi/etiketler') return json(200, ETIKETLER);
+    if (yol === '/etiket-merkezi/bekleyenler') return json(200, BEKLEYENLER);
     if (yol === '/etiket-merkezi/raflar') {
       return json(200, { raflar: [{ id: 21, kod: 'A1', ad: 'Palet rafı', salonKodu: 'DEPO' }, { id: 22, kod: 'A2', ad: 'A2', salonKodu: 'DEPO' }, { id: 23, kod: 'B1', ad: 'Konsol', salonKodu: 'URETIM' }] });
     }
@@ -306,18 +316,33 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('İndirildi')).toBeTruthy();
   });
 
-  it('etiket listesi türleri sahip modülün menü adı, durumu ve başka yerdeki baskı yeriyle gösterir', async () => {
+  it('oku yetkisi olmayan etiket listesinde yalnız türleri görür: sahip modülün menü adı, durum ve ölçüler', async () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi'] });
     ac(<Etiketler />);
     expect(await screen.findByText('Lot etiketi')).toBeTruthy();
     expect(screen.getByText('Stok Merkezi')).toBeTruthy();
     expect(screen.getByText('Sevkiyat')).toBeTruthy();
     expect(screen.getByText('Basılıyor')).toBeTruthy();
-    expect(screen.getByText('İlk tur')).toBeTruthy();
+    expect(screen.getByText('Yapılacak')).toBeTruthy();
     expect(screen.getByText('Lot 100x50')).toBeTruthy();
-    expect(screen.getByText('Stok Merkezi · Lot etiketi penceresi')).toBeTruthy();
+    expect(screen.queryByText('Stok Merkezi · Lot etiketi penceresi')).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Basılacaklar' })).toBeNull();
     // Her satırda türün piktogramı görünür; ekran okuyucuya yalnız ad gider.
     expect(document.querySelectorAll('svg.tc-etk-tur-simge[aria-hidden="true"]')).toHaveLength(2);
+  });
+
+  it('2223: basılacaklar sekmesi bekleyen etiketleri listeler; Bas ve hepsini bas seçili kayıtlarla etiket sayfasına gider; türler sekmesi adreste', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    expect(await screen.findByText('MK-000012')).toBeTruthy();
+    expect(istekler.some((i) => i.startsWith('/etiket-merkezi/bekleyenler'))).toBe(true);
+    expect(screen.getByText('2/2 lot etiketi basılmadı')).toBeTruthy();
+    expect(screen.getByText('RED · Örnek mil')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'MK-000012 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=mal-kabul&id=12');
+    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+    fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
+    expect(await screen.findByText('Lot etiketi')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');
   });
 
   it('stoktan gelen adres seçili konumları açar: yalnız konum şablonları, kayıtlardan çıktı, bulunamayan uyarısı', async () => {

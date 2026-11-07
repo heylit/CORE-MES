@@ -40,7 +40,11 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
   // Kimlik başarıya ya da seçim değişene kadar korunur: elle yeniden gönderilen baskı ikinci kez basılmaz.
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [sonuc, setSonuc] = useState<{ ton: 'tamam' | 'hata'; metin: string } | null>(null);
-  const bitti = () => { setKimlik(yeniIstekKimligi()); void istemci.invalidateQueries({ queryKey: anahtarlar.baskilar }); };
+  const bitti = () => {
+    setKimlik(yeniIstekKimligi());
+    void istemci.invalidateQueries({ queryKey: anahtarlar.baskilar });
+    void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
+  };
   const hataGoster = (h: unknown) => setSonuc({ ton: 'hata', metin: hataIletisi(h, 'Baskı gönderilemedi; yeniden deneyin.') });
   const gonder = useMutation({
     mutationFn: (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) =>
