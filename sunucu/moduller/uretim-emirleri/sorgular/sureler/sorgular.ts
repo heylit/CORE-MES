@@ -188,8 +188,9 @@ export interface SonOlaySatiri {
   zaman: string;
 }
 
-// Üç defter bütün emirlerde tek akış; kimlik kaynak harfi ve satır kimliğidir; karar satırı karar anıyla süzülür ve sıralanır. Süzgeç her kolda ayrıdır ki zaman dizini
-// kullanılabilsin. Aynı anda başlatma en eski, bitirme en yeni sayılır (emir defteriyle aynı sıra).
+// Üç defter bütün emirlerde tek akış; kimlik kaynak harfi ve satır kimliğidir; karar satırı karar anıyla süzülür ve sıralanır. Süzgeç ve sınır her kolda ayrıdır:
+// genelin ilk N satırı kolların ilk N satırları içindedir, birleşim bütün tarihçeyi sıralamaz ve zaman dizini kullanılır. Aynı anda başlatma en eski, bitirme en yeni sayılır (emir defteriyle aynı sıra);
+// ayrı defterlerde an, sıra ve satır no eşitse kimlik ayırır, sayfa sınırında sıra oynamaz.
 export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Promise<SonOlaySatiri[]> {
   return db.sorgu<SonOlaySatiri>(
     `SELECT b.id, b.olay, e.id AS "emirId", e.emir_no AS "emirNo", e.parca_no AS "parcaNo",
@@ -197,24 +198,27 @@ export function sonOlaylarGetir(db: Db, sonra: string | null, sayi: number): Pro
             b.istasyon_id AS "istasyonId", b.kisi_id AS "kisiId", b.adet, b.durus_nedeni_id AS "durusNedeniId",
             b.karar_veren_kisi_id AS "kararVerenId", ${ISO('b.an')} AS zaman
        FROM (
-         SELECT 'k' || k.id AS id, k.emir_id, k.is_emri_id, k.istasyon_id, k.kisi_id, k.olay, k.saglam_adet AS adet,
+         (SELECT 'k' || k.id AS id, k.emir_id, k.is_emri_id, k.istasyon_id, k.kisi_id, k.olay, k.saglam_adet AS adet,
                 NULL::int AS durus_nedeni_id, NULL::int AS karar_veren_kisi_id, k.zaman AS an, CASE k.olay WHEN 'baslat' THEN 0 ELSE 2 END AS sira,
                 k.id AS satir
            FROM uretim_kaydi k WHERE $1::timestamptz IS NULL OR k.zaman > $1::timestamptz
+          ORDER BY k.zaman DESC, sira DESC, k.id DESC LIMIT $2)
          UNION ALL
-         SELECT 'o' || o.id, o.emir_id, o.is_emri_id, o.istasyon_id, o.kisi_id, o.olay, NULL, o.durus_nedeni_id, NULL, o.zaman, 1, o.id
+         (SELECT 'o' || o.id, o.emir_id, o.is_emri_id, o.istasyon_id, o.kisi_id, o.olay, NULL, o.durus_nedeni_id, NULL, o.zaman, 1, o.id
            FROM uretim_olayi o WHERE $1::timestamptz IS NULL OR o.zaman > $1::timestamptz
+          ORDER BY o.zaman DESC, o.id DESC LIMIT $2)
          UNION ALL
-         SELECT 's' || s.id, s.emir_id, s.is_emri_id, s.istasyon_id, s.kisi_id,
+         (SELECT 's' || s.id, s.emir_id, s.is_emri_id, s.istasyon_id, s.kisi_id,
                 CASE WHEN s.tur = 'hurda' THEN 'hurda' WHEN s.tur = 'red' THEN 'kalite_red' WHEN ${KARAR_SATIRI} THEN 'kalite_onay'
                      WHEN s.duzeltme THEN 'duzeltme' ELSE 'saglam' END,
                 s.adet, NULL, s.karar_veren_kisi_id, COALESCE(s.karar_zamani, s.zaman), 1, s.id
            FROM uretim_sayimi s WHERE s.tur IN ('saglam', 'hurda', 'red')
             AND ($1::timestamptz IS NULL OR s.zaman > $1::timestamptz OR s.karar_zamani > $1::timestamptz)
+          ORDER BY COALESCE(s.karar_zamani, s.zaman) DESC, s.id DESC LIMIT $2)
        ) b
        JOIN uretim_emri e ON e.id = b.emir_id
        LEFT JOIN uretim_emirleri_is_emri i ON i.id = b.is_emri_id
-      ORDER BY b.an DESC, b.sira DESC, b.satir DESC
+      ORDER BY b.an DESC, b.sira DESC, b.satir DESC, b.id DESC
       LIMIT $2`,
     [sonra, sayi],
   );
