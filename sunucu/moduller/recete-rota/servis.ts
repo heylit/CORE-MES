@@ -20,7 +20,8 @@ import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
-import { malzemeAra, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
+import type { malzemeAra } from '../malzemeler/disari.ts';
+import { aktifMalzemelerSinirli, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
 import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
 import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
@@ -148,13 +149,7 @@ export interface MalzemeSiniri { sayfaBoyu: number; azamiSayfa: number }
 type MalzemeOzeti = Awaited<ReturnType<typeof malzemeAra>>['satirlar'][number];
 
 async function aktifMalzemeler(db: Db, sinir: MalzemeSiniri): Promise<{ kartlar: MalzemeOzeti[]; kesildi: boolean }> {
-  const kartlar: MalzemeOzeti[] = [];
-  for (let sayfa = 1; sayfa <= sinir.azamiSayfa; sayfa += 1) {
-    const s = await malzemeAra(db, { metin: null, yalnizAktif: true, sayfa, sayfaBoyu: sinir.sayfaBoyu });
-    kartlar.push(...s.satirlar);
-    if (s.satirlar.length < sinir.sayfaBoyu || (s.toplam !== null && kartlar.length >= s.toplam)) return { kartlar, kesildi: false };
-  }
-  return { kartlar, kesildi: true };
+  return aktifMalzemelerSinirli(db, sinir.sayfaBoyu * sinir.azamiSayfa);
 }
 
 // Her dilim sahibinin kendi okuma ucundaki yetkiyi ister; yetkisi olmayana o dilim null gelir (kart #1104, VARSAYIM: kullanıcı kararı bekliyor).

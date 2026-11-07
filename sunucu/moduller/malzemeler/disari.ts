@@ -9,7 +9,7 @@ import { cncKimligiYaz, cncKimlikliKartlar, katalogMalzemeOzeti } from './sorgul
 export { malzemeAdlari, malzemeOzeti, malzemeKullanilabilirMi } from './servis.ts';
 // Bağlama tur 1 (kart #163): toplu özet (olmayan kimlik haritada yok), metinle sayfalı arama (stok ve rota için tek imza),
 // ölçü birimi listesi (SH4 a; pasif birim eski kartta durur, yeni kayıtta seçilemez).
-export { malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';
+export { aktifMalzemelerSinirli, malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';
 // Genel arama (Ctrl K, 1233): çekirdek bu listeyi ad kuralıyla bulur; yetkiyi çekirdek denetler.
 export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [malzemeAramaKaynagi];
 // 1247 d: satın alma kabulünde giriş kalite kontrolü isteyen kartlar.

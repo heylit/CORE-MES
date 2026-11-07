@@ -1083,3 +1083,10 @@ export async function logoFarkiniAl(db: Db, kullanici: Kullanici, ref: number, s
   if (!r) throw eskiSurum();
   return { id: tmi.kimlik, surum: r.surum };
 }
+
+// Aktif kartların sayfasız, sınırlı okuması (Reçete-Rota ve planlama bağlı durumu): stok kodu ve no sırasıyla en çok `sinir` kart;
+// sınırdan fazlası varsa `kesildi`. Sayfa sayfa okumak her sayfada kataloğu baştan sayardı; burada tek okuma ve tek sayım vardır.
+export async function aktifMalzemelerSinirli(db: Db, sinir: number): Promise<{ kartlar: KatalogMalzemeOzeti[]; kesildi: boolean }> {
+  const r = await s.katalogMalzemeAra(db, { metin: null, turler: [], yalnizAktif: true, hizmetYonu: null, sinir: sinir + 1, atla: 0 });
+  return { kartlar: r.satirlar.slice(0, sinir), kesildi: r.satirlar.length > sinir };
+}
