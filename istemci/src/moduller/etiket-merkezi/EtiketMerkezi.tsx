@@ -1,24 +1,37 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
+import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type {
-  BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
+  BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz } from './kayit-secimi.ts';
+import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, KAYIT_TURLERI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz } from './kayit-secimi.ts';
 import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boyut.ts';
 import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
-import { Onizleme } from './Onizleme.tsx';
+import { Onizleme, Simge } from './Onizleme.tsx';
 import './etiket-merkezi.css';
 
-// Bölümü kabuğun ikinci menüsü seçer: hazır şablonlar ya da yazıcı denemesi. Adreste kayıt seçimi varsa (stoktan gelen
-// /etiket-merkezi?tur=konum&id=1,2,3; lot ve istasyon da aynı biçimde) çıktı o kayıtlardan, yoksa örnek değerlerle üretilir.
-type Bolum = 'sablonlar' | 'deneme';
+// Basılı etiketin sağ üst karosundaki piktogram; tür kartında ilk bakışta tanınır.
+const KAYIT_SIMGESI: Record<KayitTuru, PiktogramAdi> = {
+  konum: 'konum', raf: 'raf', lot: 'lot', istasyon: 'tezgah', 'refakat-partisi': 'refakat', malzeme: 'malzeme', 'mal-kabul': 'lot',
+  'kalite-durum': 'kalite', 'hatali-parca': 'hatali', 'sevk-koli': 'koli',
+};
+// Kaydı seçen sahip ekran (adresle Etiket bas'a gelir). Kullanıcı ekranı ana menüdeki adıyla tanır.
+const KAYIT_KAYNAKLARI: Record<KayitTuru, string> = {
+  konum: '/stok', raf: '/atolye', lot: '/stok', istasyon: '/istasyonlar', 'refakat-partisi': '/uretim-emirleri', malzeme: '/malzemeler',
+  'mal-kabul': '/stok', 'kalite-durum': '/kalite-merkezi', 'hatali-parca': '/uretim-emirleri', 'sevk-koli': '/sevkiyat',
+};
+function sayfaBaglantisi(yol: string) {
+  const s = TUM_SAYFALAR.find((x) => x.yol === yol);
+  return s ? <Link className="tc-etk-baglanti" to={yol}>{s.baslik}</Link> : yol;
+}
 
 function komutuIndir(c: Pick<CiktiCevabi, 'komut' | 'dosyaAdi'>) {
   const a = document.createElement('a');
@@ -145,10 +158,6 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   return (
     <div className="tc-etk-cikti">
       <div className="tc-etk-secimler">
-        <Secim etiket="Yazıcı dili" value={dil} onChange={(e) => setDil(e.target.value as YaziciDili)}
-          secenekler={secenekler.diller.map((d) => ({ deger: d.deger, baslik: d.ad }))} />
-        <Secim etiket="Çözünürlük" value={dpi} onChange={(e) => setDpi(e.target.value)}
-          secenekler={secenekler.cozunurlukler.map((d) => ({ deger: String(d), baslik: `${d} dpi` }))} />
         {koliMi && (
           <>
             <Girdi etiket="Koli sayısı" inputMode="numeric" value={koliSayisi} onChange={(e) => setKoliSayisi(e.target.value)}
@@ -158,7 +167,6 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
           </>
         )}
         <Girdi etiket={kayit ? 'Kayıt başına adet' : 'Adet'} inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} hata={adetHatasi} />
-        <IsaretKutusu etiket="Türkçe harfleri sadeleştir (ş -> s)" checked={sade} onChange={(e) => setSade(e.target.checked)} />
       </div>
       {c.isPending && <DurumKutusu durum="yukleniyor" />}
       {c.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(c.error, 'Önizleme alınamadı.')} yenile={kaliciHata ? undefined : () => { void c.refetch(); }} />}
@@ -194,55 +202,141 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
             <Onizleme cikti={c.data} gercek={gercek ? { olcek } : undefined} />
           </div>
           <p className="tc-etk-not">
-            {c.data.sablon.genislik}x{c.data.sablon.yukseklik} mm · {kayitlar ? `${kayitlar.kayitlar.length} etiket, önizleme ilk kayıt` : 'örnek değerlerle'}. Dosyayı yazıcının kendi aracıyla gönderin.
+            {c.data.sablon.genislik}x{c.data.sablon.yukseklik} mm · {kayitlar ? `${kayitlar.kayitlar.length} etiket, önizleme ilk kayıt` : 'örnek değerlerle'}.
           </p>
-          <div className="tc-etk-dugmeler">
-            {/* Elle seçilen dil ve çözünürlükle iner, deftere yazılmaz; deftere yazılan indirme aşağıda dosya yazıcısı seçilerek yapılır. */}
-            <Dugme simge="download" disabled={!adetGecerli || !koliGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
-          </div>
-          <details className="tc-etk-komut">
-            <summary>Komutu göster</summary>
-            <pre>{c.data.komut}</pre>
-          </details>
         </>
       )}
       {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. */}
       {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
+      {/* 2223-3 a: yazıcı seçilince dil ve çözünürlük yazıcıdan gelir; elle seçim yalnız önizleme komutu ve deftere yazılmayan indirme içindir. */}
+      <details className="tc-etk-gelismis">
+        <summary>Gelişmiş</summary>
+        <div className="tc-etk-secimler">
+          <Secim etiket="Yazıcı dili" value={dil} onChange={(e) => setDil(e.target.value as YaziciDili)}
+            secenekler={secenekler.diller.map((d) => ({ deger: d.deger, baslik: d.ad }))} />
+          <Secim etiket="Çözünürlük" value={dpi} onChange={(e) => setDpi(e.target.value)}
+            secenekler={secenekler.cozunurlukler.map((d) => ({ deger: String(d), baslik: `${d} dpi` }))} />
+          <IsaretKutusu etiket="Türkçe harfleri sadeleştir (ş -> s)" checked={sade} onChange={(e) => setSade(e.target.checked)} />
+        </div>
+        {c.data && (
+          <>
+            <p className="tc-etk-not">Yazıcıya gönderilen etiket yazıcının kendi dili ve çözünürlüğüyle üretilir; buradaki seçim yalnız aşağıdaki dosya ve komut içindir.</p>
+            <div className="tc-etk-dugmeler">
+              <Dugme simge="download" disabled={!adetGecerli || !koliGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
+            </div>
+            <details className="tc-etk-komut">
+              <summary>Komutu göster</summary>
+              <pre>{c.data.komut}</pre>
+            </details>
+          </>
+        )}
+      </details>
     </div>
   );
 }
 
-function EtiketMerkezi({ bolum }: { bolum: Bolum }) {
+// 2223-3 a: Etiket bas dört adımdır: ne basılacak, hangi kayıtlar, ölçü, yazıcı. Tür adreste `tur` olarak durur (kayıt seçimiyle
+// aynı parametre); kimlik gelince kayıt seçilmiş sayılır. Konum ve raf burada seçilir; diğer türlerin kaydı sahibinin ekranından
+// ya da Basılacaklar listesinden gelir. Kayıt yokken ölçü örnek değerle görünür, basılmaz.
+function EtiketBas() {
   const oturum = useOturum();
   const [adres, adresYaz] = useSearchParams();
-  const kayit = bolum === 'sablonlar' ? kayitSecimiOku(adres) : null;
-  const basabilir = (bolum === 'deneme' || kayit !== null) && (oturum.data?.islemler.includes('etiket-merkezi.bas') ?? false);
+  const kayit = kayitSecimiOku(adres);
+  const tur: KayitTuru | null = kayit?.tur ?? KAYIT_TURLERI.find((t) => t === adres.get('tur')) ?? null;
+  const islemler = oturum.data?.islemler ?? [];
+  const okur = islemler.includes('etiket-merkezi.oku');
+  const basabilir = kayit !== null && islemler.includes('etiket-merkezi.bas');
   const liste = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonlarCevabi>('/etiket-merkezi/sablonlar') });
   const [secili, setSecili] = useState<string | null>(null);
-  const baslik = bolum === 'deneme' ? 'Yazıcı denemesi' : kayit ? KAYIT_BASLIKLARI[kayit.tur] : 'Hazır şablonlar';
+  const turSec = (t: KayitTuru | null) => {
+    const yeni = kayitSecimiYaz(adres, null);
+    if (t !== null) yeni.set('tur', t);
+    setSecili(null);
+    adresYaz(yeni, { replace: true });
+  };
   const kayitCikar = (id: number) => {
     if (!kayit) return;
     adresYaz(kayitSecimiYaz(adres, { ...kayit, idler: kayit.idler.filter((x) => x !== id) }), { replace: true });
   };
+  if (liste.isPending) return <Kart baslik="Etiket bas"><DurumKutusu durum="yukleniyor" /></Kart>;
+  if (liste.isError) return <Kart baslik="Etiket bas"><DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} /></Kart>;
+  const sablonlar = tur === null ? [] : liste.data.sablonlar.filter((s) => s.tur === kayitSablonTuru(tur));
+  const sablon = sablonlar.find((s) => s.anahtar === secili) ?? sablonlar[0];
+  const kaynak = tur === null ? null : KAYIT_KAYNAKLARI[tur];
+  return (
+    <Kart baslik="Etiket bas">
+      <section className="tc-etk-adim" aria-labelledby="tc-etk-adim-1">
+        <h3 id="tc-etk-adim-1" className="tc-etk-adim-baslik">1. Ne basılacak</h3>
+        <ul className="tc-etk-turler" aria-label="Etiket türü">
+          {KAYIT_TURLERI.map((t) => (
+            <li key={t}>
+              <button type="button" className="tc-etk-tur-karti" aria-pressed={t === tur} onClick={() => turSec(t === tur ? null : t)}>
+                <svg className="tc-etk-tur-simge" viewBox="0 0 48 48" aria-hidden="true"><Simge ad={KAYIT_SIMGESI[t]} karo="siyah" /></svg>
+                <span>{KAYIT_BASLIKLARI[t]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {tur !== null && (
+        <section className="tc-etk-adim" aria-labelledby="tc-etk-adim-2">
+          <h3 id="tc-etk-adim-2" className="tc-etk-adim-baslik">2. Hangi kayıtlar</h3>
+          {kayit ? (
+            <p className="tc-etk-not">
+              {kayit.idler.length} kayıt seçili. {KAYIT_NOTLARI[kayit.tur]}{' '}
+              <button type="button" className="tc-etk-baglanti" onClick={() => turSec(tur)}>Seçimi kaldır</button>
+            </p>
+          ) : (tur === 'konum' || tur === 'raf') && okur ? (
+            <KayitSecici ilk={tur} sec={(s) => adresYaz(kayitSecimiYaz(adres, s))} />
+          ) : (
+            <p className="tc-etk-not">
+              {kaynak && <>Kayıt {sayfaBaglantisi(kaynak)} ekranından seçilir ya da </>}
+              <Link className="tc-etk-baglanti" to="/etiket-merkezi/etiketler">Basılacaklar</Link> listesinden açılır. Seçilene kadar ölçü örnek değerle görünür.
+            </p>
+          )}
+        </section>
+      )}
+      {tur !== null && (
+        <section className="tc-etk-adim" aria-labelledby="tc-etk-adim-3">
+          <h3 id="tc-etk-adim-3" className="tc-etk-adim-baslik">{basabilir ? '3. Ölçü ve yazıcı' : '3. Ölçü'}</h3>
+          <div className="tc-etk-duzen">
+            <ul className="tc-etk-liste" aria-label="Ölçüler">
+              {sablonlar.map((s) => (
+                <li key={s.anahtar}>
+                  <button type="button" className="tc-etk-satir" aria-pressed={s.anahtar === sablon?.anahtar} onClick={() => setSecili(s.anahtar)}>
+                    <strong>{s.genislik}x{s.yukseklik} mm</strong>
+                    <span className="tc-etk-satir-alt">{s.ad}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {sablon ? <Cikti key={sablon.anahtar} sablon={sablon} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={kayit} kayitCikar={kayitCikar} />
+              : <DurumKutusu durum="bos" mesaj="Bu tür için şablon yok." />}
+          </div>
+        </section>
+      )}
+    </Kart>
+  );
+}
+
+// Şablon kataloğu ve yazıcı denemesi: kayıtsız, örnek değerli önizleme. Denemede yazıcıya gönderme açıktır (yazıcının dilini sınar).
+function Katalog({ deneme }: { deneme: boolean }) {
+  const oturum = useOturum();
+  const basabilir = deneme && (oturum.data?.islemler.includes('etiket-merkezi.bas') ?? false);
+  const liste = useQuery({ queryKey: anahtarlar.sablonlar, queryFn: () => api.get<SablonlarCevabi>('/etiket-merkezi/sablonlar') });
+  const [secili, setSecili] = useState<string | null>(null);
+  const baslik = deneme ? 'Yazıcı denemesi' : 'Şablonlar';
   if (liste.isPending) return <Kart baslik={baslik}><DurumKutusu durum="yukleniyor" /></Kart>;
   if (liste.isError) return <Kart baslik={baslik}><DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} /></Kart>;
-  const sablonlar = liste.data.sablonlar.filter((s) => (kayit ? s.tur === kayitSablonTuru(kayit.tur) : (bolum === 'deneme') === (s.tur === 'deneme')));
+  const sablonlar = liste.data.sablonlar.filter((s) => deneme === (s.tur === 'deneme'));
   const sablon = sablonlar.find((s) => s.anahtar === secili) ?? sablonlar[0];
   return (
-    <>
-    {bolum === 'sablonlar' && !kayit && oturum.data?.islemler.includes('etiket-merkezi.oku') === true && (
-      <KayitSecici sec={(s) => adresYaz(kayitSecimiYaz(adres, s))} />
-    )}
     <Kart baslik={baslik}>
-      {kayit && (
-        <p className="tc-etk-not">
-          {kayit.idler.length} kayıt seçili. {KAYIT_NOTLARI[kayit.tur]}{' '}
-          <button type="button" className="tc-etk-baglanti" onClick={() => adresYaz(kayitSecimiYaz(adres, null), { replace: true })}>Seçimi kaldır</button>
-        </p>
-      )}
-      {bolum === 'deneme' && (
-        <p className="tc-etk-not">Deneme etiketi Türkçe harfleri, iki yazı boyunu, çerçeveyi ve QR'ı basar. Harfler eksik çıkarsa "sadeleştir"i açın; QR'ı telefonla okutun.</p>
-      )}
+      <p className="tc-etk-not">
+        {deneme
+          ? 'Deneme etiketi Türkçe harfleri, iki yazı boyunu, çerçeveyi ve QR\'ı basar. Harfler eksik çıkarsa yazıcı ayarında "sadeleştir"i açın; QR\'ı telefonla okutun.'
+          : 'Bütün etiket ölçüleri örnek değerlerle. Basmak için Etiket bas sayfasını kullanın.'}
+      </p>
       <div className="tc-etk-duzen">
         <ul className="tc-etk-liste" aria-label="Şablonlar">
           {sablonlar.map((s) => (
@@ -254,12 +348,13 @@ function EtiketMerkezi({ bolum }: { bolum: Bolum }) {
             </li>
           ))}
         </ul>
-        {sablon ? <Cikti key={sablon.anahtar} sablon={sablon} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={kayit} kayitCikar={kayitCikar} /> : <DurumKutusu durum="bos" mesaj="Şablon yok." />}
+        {sablon ? <Cikti key={sablon.anahtar} sablon={sablon} secenekler={liste.data.secenekler} basabilir={basabilir} kayit={null} kayitCikar={() => undefined} />
+          : <DurumKutusu durum="bos" mesaj="Şablon yok." />}
       </div>
     </Kart>
-    </>
   );
 }
 
-export const HazirSablonlar = () => <EtiketMerkezi bolum="sablonlar" />;
-export const YaziciDenemesi = () => <EtiketMerkezi bolum="deneme" />;
+export const HazirSablonlar = EtiketBas;
+export const SablonKatalogu = () => <Katalog deneme={false} />;
+export const YaziciDenemesi = () => <Katalog deneme />;

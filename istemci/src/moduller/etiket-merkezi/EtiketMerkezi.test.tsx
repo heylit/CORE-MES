@@ -9,7 +9,7 @@ import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, K
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
 import { Etiketler } from './Etiketler.tsx';
-import { HazirSablonlar, YaziciDenemesi } from './EtiketMerkezi.tsx';
+import { HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -159,7 +159,7 @@ describe('EtiketMerkezi', () => {
   it('2223: gerçek boyut açılınca etiket mm ölçüsüyle çizilir; ekran ayarı ölçeği çarpar ve tarayıcıda kalır', async () => {
     localStorage.clear();
     sunucuKur();
-    ac(<HazirSablonlar />);
+    ac(<SablonKatalogu />);
     const svg = await screen.findByRole('img', { name: 'Lot 100x50 önizleme' });
     expect(svg.getAttribute('width')).toBeNull();
     fireEvent.click(screen.getByLabelText('Gerçek boyut (1:1)'));
@@ -175,14 +175,14 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('Ekran ayarlı (%113)')).toBeTruthy();
     cleanup();
     sunucuKur();
-    ac(<HazirSablonlar />);
+    ac(<SablonKatalogu />);
     expect((await screen.findByRole('img', { name: 'Lot 100x50 önizleme' })).getAttribute('height')).toBe('56.25mm');
     localStorage.clear();
   });
 
-  it('hazır şablonlarda deneme etiketi yoktur; ilk şablonun önizlemesi ve QR içeriği görünür', async () => {
+  it('şablon kataloğunda deneme etiketi yoktur; ilk şablonun önizlemesi ve QR içeriği görünür', async () => {
     sunucuKur();
-    ac(<HazirSablonlar />);
+    ac(<SablonKatalogu />);
     expect(await screen.findByText('LT-000123')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Lot 100x50 önizleme' })).toBeTruthy();
     expect(screen.getByLabelText('QR: LOT:LT-000123')).toBeTruthy();
@@ -197,7 +197,7 @@ describe('EtiketMerkezi', () => {
 
   it('dil, çözünürlük, adet ve sadeleştirme çıktı isteğine gider', async () => {
     const istekler = sunucuKur();
-    ac(<HazirSablonlar />);
+    ac(<SablonKatalogu />);
     await screen.findByText('LT-000123');
     fireEvent.click(screen.getByRole('button', { name: /Konum 50x25/ }));
     fireEvent.change(screen.getByLabelText('Yazıcı dili'), { target: { value: 'pplb' } });
@@ -210,7 +210,7 @@ describe('EtiketMerkezi', () => {
 
   it('sınır dışı adette uyarı görünür ve indirme kapanır', async () => {
     sunucuKur();
-    ac(<HazirSablonlar />);
+    ac(<SablonKatalogu />);
     await screen.findByText('LT-000123');
     fireEvent.change(screen.getByLabelText('Adet'), { target: { value: '501' } });
     expect(screen.getByText('Adet 1 ile 500 arasında olur.')).toBeTruthy();
@@ -358,7 +358,7 @@ describe('EtiketMerkezi', () => {
     expect(screen.queryByLabelText('Yazıcı')).toBeNull();
   });
 
-  it('seçimden çıkarılan konum adresten de düşer; seçim kaldırılınca örnek değerli sayfaya dönülür', async () => {
+  it('seçimden çıkarılan konum adresten de düşer; seçim kaldırılınca tür kalır ve kayıt seçimi açılır', async () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     fireEvent.click(await screen.findByRole('button', { name: 'R1-01-1-1 çıkar' }));
@@ -367,8 +367,9 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText('R1-01-1-2')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /çıkar$/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Seçimi kaldır' }));
-    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe(''));
-    expect(await screen.findByText('Hazır şablonlar')).toBeTruthy();
+    // 2223-3 a: tür seçili kalır, kayıt seçimi yeniden açılır.
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('?tur=konum'));
+    expect(await screen.findByText('Konum ve raf etiketleri')).toBeTruthy();
   });
 
   it('kayıt sayısı x adet sınırı aşınca uyarı çıkar ve indirme kapanır', async () => {
@@ -448,16 +449,17 @@ describe('EtiketMerkezi', () => {
     expect((screen.getByRole('button', { name: 'Yazıcıya gönder' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('bozuk adres seçim sayılmaz: hazır şablonlar örnek değerlerle açılır', async () => {
+  it('bozuk adres seçim sayılmaz: tür seçili, ölçü örnek değerlerle açılır', async () => {
     const istekler = sunucuKur();
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,abc');
-    expect(await screen.findByText('Hazır şablonlar')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: '3. Ölçü' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Konum etiketleri' }).getAttribute('aria-pressed')).toBe('true');
     await screen.findByText('LT-000123');
     expect(istekler.some((i) => i.includes('kayit-cikti'))).toBe(false);
   });
   it('konum ve raf seçimi (#116): bölümün rafları toplu seçilir, seçim adrese raf türüyle yazılır', async () => {
     const istekler = sunucuKur({ islemler: ['etiket-merkezi.oku'] });
-    ac(<HazirSablonlar />);
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=raf');
     expect(await screen.findByLabelText('A1 · Palet rafı · DEPO')).toBeTruthy();
     expect(screen.getByLabelText('A2 · DEPO')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: 'DEPO' } });
@@ -471,20 +473,20 @@ describe('EtiketMerkezi', () => {
 
   it('konum listesi stok okuması ister; okuyan tek konumu seçip hazırlar, okumayan stoğa istek atmaz', async () => {
     const istekler = sunucuKur({ islemler: ['etiket-merkezi.oku'] });
-    ac(<HazirSablonlar />);
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=raf');
     fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
     expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
     expect(istekler.some((i) => i.startsWith('/stok/'))).toBe(false);
     cleanup();
     // EM-1: stok.istek (malzeme isteme) stok okuması açmaz; vardiya sorumlusu hata kutusu değil açıklamayı görür.
     const istekci = sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.istek'] });
-    ac(<HazirSablonlar />);
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=raf');
     fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
     expect(await screen.findByText(/Konum listesi stok okuması ister/)).toBeTruthy();
     expect(istekci.some((i) => i.startsWith('/stok/'))).toBe(false);
     cleanup();
     sunucuKur({ islemler: ['etiket-merkezi.oku', 'stok.giris'] });
-    ac(<HazirSablonlar />);
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=raf');
     fireEvent.click(await screen.findByRole('tab', { name: 'Konumlar' }));
     fireEvent.click(await screen.findByLabelText('KABUL · Mal kabul · ANA'));
     fireEvent.click(screen.getByRole('button', { name: 'Etiketleri hazırla (1)' }));
@@ -493,8 +495,35 @@ describe('EtiketMerkezi', () => {
 
   it('kayıt okuması olmayan seçim kartını görmez', async () => {
     sunucuKur({ islemler: [] });
-    ac(<HazirSablonlar />);
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum');
     await screen.findByText('LT-000123');
     expect(screen.queryByText('Konum ve raf etiketleri')).toBeNull();
+  });
+
+  it('2223-3 a: Etiket bas dört adımlıdır; tür seçilmeden ölçü yoktur; tür seçimi adrese yazılır; kaydı başka ekrandan gelen türde sahip ekran ve Basılacaklar bağlantısı; dil ve dpi Gelişmiş altında', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<HazirSablonlar />);
+    expect(await screen.findByRole('heading', { name: '1. Ne basılacak' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '3. Ölçü' })).toBeNull();
+    expect(screen.getAllByRole('button', { pressed: false }).length).toBeGreaterThanOrEqual(10);
+    fireEvent.click(screen.getByRole('button', { name: 'Lot etiketleri' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('?tur=lot'));
+    expect(await screen.findByText('LT-000123')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Stok Merkezi' }).getAttribute('href')).toBe('/stok');
+    expect(screen.getByRole('link', { name: 'Basılacaklar' }).getAttribute('href')).toBe('/etiket-merkezi/etiketler');
+    expect(screen.getByRole('button', { name: /100x50 mm/ })).toBeTruthy();
+    expect(screen.getByText('Gelişmiş').closest('details')?.contains(screen.getByLabelText('Yazıcı dili'))).toBe(true);
+    // Kayıt seçilmeden basılmaz.
+    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Lot etiketleri' }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe(''));
+  });
+
+  it('şablon kataloğu bütün ölçüleri örnek değerle gösterir, basma bölümü yoktur', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<SablonKatalogu />);
+    expect(await screen.findByText('Konum 50x25')).toBeTruthy();
+    expect(screen.getByText('Sevk kolisi 100x75')).toBeTruthy();
+    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
   });
 });

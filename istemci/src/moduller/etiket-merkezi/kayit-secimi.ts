@@ -3,7 +3,7 @@ import type { KayitSecimi, KayitTuru, SablonTuru } from '#paylasilan/sozlesme/et
 // Sahip ekranlar seçili kayıtları adresle gönderir: ?tur=konum&id=1,2,3 (raf: Fabrika Haritası raf kimliği, lot: parti kimliği, istasyon: istasyon kimliği, refakat-partisi: stoktaki refakat kartı kimliği, malzeme: kart no,
 // mal-kabul: mal kabul belgesi kimliği, kalite-durum: stokun bakiye satırı, hatali-parca: Üretim Emirleri'nin hatalı parça kaydı, sevk-koli: Sevkiyat'ın giden kalemi). Sınırlar sunucudakiyle aynıdır (sözleşme
 // değer olarak ithal edilemez; sunucu ayrıca reddeder). Geçersiz adres seçim değildir: örnek değerli sayfa açılır.
-const TURLER: readonly KayitTuru[] = ['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'mal-kabul', 'kalite-durum', 'hatali-parca', 'sevk-koli'];
+export const KAYIT_TURLERI: readonly KayitTuru[] = ['konum', 'raf', 'lot', 'istasyon', 'refakat-partisi', 'malzeme', 'mal-kabul', 'kalite-durum', 'hatali-parca', 'sevk-koli'];
 const EN_COK_KAYIT = 200;
 export const secimSiniri = EN_COK_KAYIT;
 export const KAYIT_BASLIKLARI: Record<KayitTuru, string> = {
@@ -27,7 +27,7 @@ export const KAYIT_NOTLARI: Record<KayitTuru, string> = {
 };
 
 export function kayitSecimiOku(adres: URLSearchParams): KayitSecimi | null {
-  const tur = TURLER.find((t) => t === adres.get('tur'));
+  const tur = KAYIT_TURLERI.find((t) => t === adres.get('tur'));
   const parcalar = (adres.get('id') ?? '').split(',').map((p) => p.trim()).filter((p) => p !== '');
   if (!tur || parcalar.length === 0 || parcalar.some((p) => !/^[1-9][0-9]{0,9}$/.test(p))) return null;
   // Yinelenen kimlik bir kez basılır (sunucuyla aynı).

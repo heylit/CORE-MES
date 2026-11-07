@@ -40,10 +40,10 @@ function useSatirlar(tur: Tur, stokOkur: boolean) {
     : { durum: konum, satirlar: konum.data?.satirlar ?? [], eksik: konum.data?.eksik ?? false };
 }
 
-export function KayitSecici({ sec }: { sec: (s: KayitSecimi) => void }) {
+export function KayitSecici({ sec, ilk = 'raf' }: { sec: (s: KayitSecimi) => void; ilk?: Tur }) {
   const oturum = useOturum();
   const stokOkur = oturum.data?.islemler.some(stokOkurMu) === true;
-  const [tur, setTur] = useState<Tur>('raf');
+  const [tur, setTur] = useState<Tur>(ilk);
   const [grup, setGrup] = useState('');
   const [metin, setMetin] = useState('');
   const [secili, setSecili] = useState<ReadonlySet<number>>(new Set());
