@@ -61,7 +61,7 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
     cagrilar.push({ yol, yontem, govde: typeof secenek?.body === 'string' ? JSON.parse(secenek.body) : undefined, kimlik: basliklar.get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/istasyonlar/secim') return json(200, istasyonlar);
-    if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM, { ...TANIM, id: 8, opNo: 50, seriSablonu: '{PARCA}-{SEQ:6}', aktif: false }] } satisfies TanimlarCevabi);
+    if (yol === '/markalama/tanimlar') return json(200, { tanimlar: [TANIM, { ...TANIM, id: 8, opNo: 50, seriSablonu: '{PARCA}-{SEQ:6}', aktif: false, model: { belgeId: 5, revizyon: 'A' } }] } satisfies TanimlarCevabi);
     if (yol === '/markalama/tanimlar/7/aktiflik') return json(200, { ...TANIM, aktif: false, surum: 4 });
     if (yol.startsWith('/markalama/tanimlar/7/onizleme')) return json(200, { numaralar: ['ORN-A-00005', 'ORN-A-00006'] } satisfies OnizlemeCevabi);
     if (yol === '/markalama/tanimlar/7/emirler') return json(200, { emirler: [{ id: 5, emirNo: 'UE-DNM-1', adet: 10, durum: 'acik' }] } satisfies TanimEmirleriCevabi);
@@ -125,6 +125,9 @@ describe('Markalama tanımları', () => {
     const cagrilar = sunucuKur(YONETICI);
     ac(<Tanimlar />);
     expect(await screen.findByText('Pasif')).toBeTruthy();
+    // 2138-2: tanımdaki harf (merkezin iç sırası) listede görünmez.
+    expect(screen.getByText('Model var')).toBeTruthy();
+    expect(screen.queryByText('Rev A')).toBeNull();
     fireEvent.click(await screen.findByText('{PARCA}-{SEQ:5}'));
     fireEvent.click(await screen.findByRole('button', { name: /Pasif yap/ }));
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/markalama/tanimlar/7/aktiflik')).toBe(true));

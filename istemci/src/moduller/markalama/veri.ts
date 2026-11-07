@@ -20,7 +20,10 @@ export interface ModelSecenegi {
   belgeId: number;
   belgeAdi: string;
   revizyonId: number;
+  // Tanımdaki kimlik (merkezin iç sırası); ekranda gösterilmez (2138-2).
   harf: string;
+  // Gösterilen revizyon kodu; yoksa null.
+  revKodu: string | null;
   durum: string;
   bicim: ModelBicimi;
 }
@@ -35,7 +38,7 @@ export function modelSecenekleri(c: MalzemeBelgeleriCevabi): ModelSecenegi[] {
   for (const b of sirali) {
     for (const r of [...b.revizyonlar].sort((x, y) => y.sira - x.sira)) {
       if (r.durum === 'eski' || !bicimMi(r.dosyaTuru)) continue;
-      sonuc.push({ belgeId: b.id, belgeAdi: b.ad, revizyonId: r.id, harf: r.harf, durum: r.durum, bicim: r.dosyaTuru });
+      sonuc.push({ belgeId: b.id, belgeAdi: b.ad, revizyonId: r.id, harf: r.harf, revKodu: r.revKodu ?? null, durum: r.durum, bicim: r.dosyaTuru });
     }
   }
   return sonuc;

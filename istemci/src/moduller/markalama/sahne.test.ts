@@ -19,7 +19,7 @@ describe('markalama sahnesi', () => {
   });
 
   it('yalnız okunabilen ve eskimemiş model revizyonları seçenek olur, kapak belgesi önce', () => {
-    const rev = (id: number, sira: number, dosyaTuru: string, durum: string) => ({ id, sira, harf: String.fromCharCode(64 + sira), dosyaTuru, durum }) as never;
+    const rev = (id: number, sira: number, dosyaTuru: string, durum: string) => ({ id, sira, harf: String.fromCharCode(64 + sira), revKodu: sira === 2 ? '01' : null, dosyaTuru, durum }) as never;
     const c = {
       belgeler: [
         { id: 1, ad: 'Resim', tur: 'teknik-resim', resimNo: null, surum: 1, kapak: false, revizyonlar: [rev(1, 1, 'pdf', 'yayinda')] },
@@ -27,6 +27,7 @@ describe('markalama sahnesi', () => {
       ],
       oneriler: [], kucukResim: null,
     } as MalzemeBelgeleriCevabi;
-    expect(modelSecenekleri(c).map((s) => [s.belgeId, s.harf, s.bicim])).toEqual([[2, 'B', 'step']]);
+    // 2138-2: harf tanımdaki kimliktir; gösterilen revizyon kodu ayrıca taşınır.
+    expect(modelSecenekleri(c).map((s) => [s.belgeId, s.harf, s.revKodu, s.bicim])).toEqual([[2, 'B', '01', 'step']]);
   });
 });
