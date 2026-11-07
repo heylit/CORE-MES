@@ -184,6 +184,16 @@ export async function hesapSerisiSay(db: Db, kullaniciAdi: string): Promise<numb
   return satir?.sayi ?? 0;
 }
 
+// Adın son `saat` içinde kurulmuş kilitleri (açılmış olanlar dahil): büyüyen kilidin basamağı (2226-2 a).
+export async function yakinKilitSay(db: Db, kullaniciAdi: string, saat: number, simdi: Simdi): Promise<number> {
+  const satir = await db.tek<{ sayi: number }>(
+    `SELECT count(*)::int AS sayi FROM oturum_hesap_kilidi
+      WHERE kullanici_adi = $1 AND kilitlendi > COALESCE($3::timestamptz, now()) - make_interval(hours => $2)`,
+    [kullaniciAdi, saat, simdi],
+  );
+  return satir?.sayi ?? 0;
+}
+
 // Etkin kilit yoksa yazılır; eşzamanlı iki hatalı deneme aynı adı iki kez kilitleyebilir, açma ikisini birden açar.
 export async function hesapKilidiEkle(db: Db, kullaniciAdi: string, dakika: number, simdi: Simdi): Promise<boolean> {
   const satirlar = await db.sorgu(

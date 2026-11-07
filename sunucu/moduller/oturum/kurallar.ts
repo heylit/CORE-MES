@@ -52,6 +52,31 @@ export function hesapKilitlenirMi(ardArdaHatali: number): boolean {
   return ardArdaHatali >= HESAP_KILIDI_ESIGI;
 }
 
+// 2226-2 a: kilit büyür. Son 24 saatte aynı ada kurulmuş önceki kilit yoksa 15 dk, biri varsa 60 dk, iki ve fazlası varsa yönetici
+// açana kadar. Parolayla giren hesapta büyümez: tek tam yetkili hesap kilitlenip sistem yöneticisiz kalmasın. Var olmayan ad PIN'li
+// gibi büyür: büyüme hesabın varlığını ele vermesin. '#' ile başlayan makine adları (kart, saat) büyümez.
+export const BUYUYEN_KILIT_PENCERESI_SAAT = 24;
+export const IKINCI_KILIT_DK = 60;
+// Tablo bitiş ister; on yıl "yönetici açana kadar" demektir (kalan saniye int sığmalı: yüz yıl taşar).
+export const SURESIZ_KILIT_DK = 10 * 365 * 24 * 60;
+const SURESIZ_SAYILAN_SN = 7 * 24 * 60 * 60;
+
+export function kilitBuyurMu(ad: string, parolaHesabi: boolean): boolean {
+  return !parolaHesabi && !ad.startsWith('#');
+}
+
+export function hesapKilidiSuresiDk(buyur: boolean, oncekiKilit: number): number {
+  if (!buyur || oncekiKilit <= 0) return HESAP_KILIDI_DK;
+  return oncekiKilit === 1 ? IKINCI_KILIT_DK : SURESIZ_KILIT_DK;
+}
+
+export const SURESIZ_KILIT_ILETISI = 'Çok sayıda hatalı deneme. Hesap kilitlendi; açılması için yöneticinize başvurun.';
+
+export function hesapKilidiIletisi(kalanSn: number): string {
+  if (kalanSn > SURESIZ_SAYILAN_SN) return SURESIZ_KILIT_ILETISI;
+  return `Çok sayıda hatalı deneme. Giriş ${kilitKalanDk(kalanSn)} dk sonra yeniden denenebilir.`;
+}
+
 // Bir cihazdan bütün adlara pencere içinde gelen hatalı deneme sınıra varınca o cihaz, pencerenin en eski denemesi
 // düşene kadar giriş yapamaz (kullanıcı kararı, soru 66; sayılar varsayım). Hesap kilidi adı korur; bu, ortak tabletten
 // adları sırayla deneyeni durdurur. Başarılı giriş sayacı sıfırlamaz: kendi hesabıyla giren sayacı temizleyemez.

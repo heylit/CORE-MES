@@ -11,22 +11,22 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { CihazProfili } from '#paylasilan/kullanici.ts';
 import type { CihazDurumu, CihazProfilleriCevabi, HesapKilidi, OrtakCihaz } from '#paylasilan/sozlesme/oturum.ts';
 import {
-  gizlilikTaahhuduVer, girisDogrula, ilkPiniYaz, kartGirisDurumu, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
+  gizlilikTaahhuduVer, girisDogrula, ilkPiniYaz, kartGirisDurumu, kisiNoKullaniciAdindan, kendiParolasiniDegistir as parolayiDegistir, kendiPininiDegistir as piniDegistir, kisiKullaniciAdi, kullaniciAdiniDuzelt, kullaniciYukle,
   yeniPinHatasi,
 } from '../kisiler/disari.ts';
 import type { GirisSirri } from '../kisiler/disari.ts';
 import { personelKartSahibi } from '../nizamiye/disari.ts';
 import {
-  AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN, HESAP_KILIDI_DK,
+  AYNI_PAROLA, ayniParolaMi, AZAMI_SN, BOSTA_SN, CEREZ_ADI, CIHAZ_CEREZI, bostaSuresiSn, profilSayfalariHatasi, profilUygula, profilYonetebilirMi, CIHAZ_PENCERESI_DK, CIHAZ_SAKLAMA_GUN, CIHAZ_SINIRI, DENEME_SAKLAMA_GUN, GORULME_ARALIGI_SN,
   SAAT_BELIRTECI_SN, SAAT_ISTEGI_GENEL_SINIR, SAAT_ISTEGI_IP_SINIRI, SAAT_ISTEGI_SN, SAAT_SORU_ARALIGI_SN, anahtarOzeti, belirtecOku, hesapKilitlenirMi, kalanBeklemeSn, kartGirisAdi,
-  beklemeIletisi, kilitKalanDk,
+  beklemeIletisi, kilitKalanDk, BUYUYEN_KILIT_PENCERESI_SAAT, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu, SURESIZ_KILIT_DK,
   saatBelirteciGecerMi, saatKoduUret, saatOnayAdi, saatSoruAdi, tarayiciMetni,
   NABIZ_EN_SIK_SN, NABIZ_SAKLAMA_GUN, esitlemeSuresi, nabizDurumu, SINIRLI_ORTAK_CIHAZ, sinirliOturumGecerMi,
 } from './kurallar.ts';
 import type { NabizDurumu } from './kurallar.ts';
 import {
   cihazHataliBul, denemeEkle, denemeKilidiAl, eskiDenemeleriSil, eskiOturumCihaziniBosalt, etkinKilitSay, etkinKilitler, oturumVeProfilBul, gorulduYaz, hataliSeriBul,
-  hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
+  hesapKilidiAc, hesapKilidiEkle, hesapKilidiKalanSn, hesapSerisiSay, yakinKilitSay, kisiOturumlariniKapat, oturumEkle, oturumKapat,
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
   cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz, defterKisisiniYaz,
@@ -135,7 +135,7 @@ export async function girisDenemesiniDenetle(db: Db, ad: string, ip: string, sim
   // cevap hesabın varlığını ele vermez.
   const kilitKalanSn = await hesapKilidiKalanSn(db, ad, simdi);
   if (kilitKalanSn !== null) {
-    throw oturumYok(`Çok sayıda hatalı deneme. Giriş ${kilitKalanDk(kilitKalanSn)} dk sonra yeniden denenebilir.`);
+    throw oturumYok(hesapKilidiIletisi(kilitKalanSn));
   }
   const cihaz = await cihazHataliBul(db, ip, CIHAZ_PENCERESI_DK, CIHAZ_SINIRI, simdi);
   if (cihaz.sayi >= CIHAZ_SINIRI && cihaz.kalanSn !== null && cihaz.kalanSn > 0) {
@@ -180,9 +180,18 @@ export async function eskiNabizlariTemizle(db: Db, simdi: Simdi = null): Promise
 export async function basarisizDenemeKaydet(db: Db, ad: string, ip: string, simdi: Simdi = null, gunluk?: Gunluk): Promise<void> {
   await denemeEkle(db, ad, 'hatali', ip, simdi);
   if (!hesapKilitlenirMi(await hesapSerisiSay(db, ad))) return;
-  if (await hesapKilidiEkle(db, ad, HESAP_KILIDI_DK, simdi)) {
-    gunluk?.uyar(`Hesap kilitlendi: ${JSON.stringify(ad)} art arda hatalı denemeden sonra ${HESAP_KILIDI_DK} dk kilitli.`);
+  const buyur = kilitBuyurMu(ad, await parolaHesabiMi(db, ad));
+  const dakika = hesapKilidiSuresiDk(buyur, buyur ? await yakinKilitSay(db, ad, BUYUYEN_KILIT_PENCERESI_SAAT, simdi) : 0);
+  if (await hesapKilidiEkle(db, ad, dakika, simdi)) {
+    const sure = dakika === SURESIZ_KILIT_DK ? 'yönetici açana kadar' : `${dakika} dk`;
+    gunluk?.uyar(`Hesap kilitlendi: ${JSON.stringify(ad)} art arda hatalı denemeden sonra ${sure} kilitli.`);
   }
+}
+
+// Var olan ve PIN'siz giren (parolalı) hesap. Var olmayan ad parolalı sayılmaz (kilitBuyurMu).
+async function parolaHesabiMi(db: Db, ad: string): Promise<boolean> {
+  if ((await kisiNoKullaniciAdindan(db, ad)) === null) return false;
+  return (await kartGirisDurumu(db, ad)) === null;
 }
 
 // Başarılı deneme hatalı seriyi sıfırlar (seri son başarılı denemeden sonrasını sayar).
