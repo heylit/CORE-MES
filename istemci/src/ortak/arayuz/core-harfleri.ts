@@ -1,4 +1,5 @@
-// CORE harflerinin dış hatları: sahne (tekillik.ts) bunlardan katı harf, altın kenar ve parçacık hedefi kurar; WebGL olmayan
+// CORE harflerinin dış hatları: kabuğun sol üstü (CoreYazisi) ve giriş sahnesi aynı hatları kullanır (kart 2230a). Sahne (oturum,
+// tekillik.ts) bunlardan katı harf, altın kenar ve parçacık hedefi kurar; WebGL olmayan
 // tarayıcıda giriş ekranı aynı hatları SVG olarak çizer. three gerektirmez: giriş ekranı bu dosyayı kütüphanesiz ithal eder.
 // Koordinat: y yukarı, kelimenin ortası 0; O harfinin merkezi (O_X, 0), yıldız halkası O_R yarıçapındadır.
 

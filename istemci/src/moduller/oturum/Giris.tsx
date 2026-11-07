@@ -12,7 +12,7 @@ import { useGirisKurumAdi, useGirisSesi } from '../../ortak/veri/kurum.ts';
 import { GIRIS_LOGOSU_ADRESI } from '../../ortak/veri/kurum-logosu.ts';
 import { GIRIS_YONTEMI_ANAHTARI as YONTEM_ANAHTARI, girisiYenidenDene, girisYonteminiHatirla } from '../../ortak/veri/oturum.ts';
 import { DERLEME, derlemeTarihi } from '../../ortak/veri/surum.ts';
-import { HARFLER, SVG_KUTUSU, svgYolu } from './sahne/harfler.ts';
+import { HARFLER, SVG_KUTUSU, svgYolu } from '../../ortak/arayuz/core-harfleri.ts';
 import { bekleme, cihazTercihi, sesCal, sesHazirMi, sesSustur, sesTercihiYaz } from './sahne/ses.ts';
 import type { Tekillik } from './sahne/tekillik.ts';
 import './giris.css';

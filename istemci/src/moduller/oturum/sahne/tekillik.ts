@@ -4,7 +4,7 @@ import {
   PointsMaterial, Scene, Shape, Sprite, SpriteMaterial, SRGBColorSpace, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { HARFLER, icindekiHarf, O_R as OR, O_X as OX, type Nokta } from './harfler.ts';
+import { HARFLER, icindekiHarf, O_R as OR, O_X as OX, type Nokta } from '../../../ortak/arayuz/core-harfleri.ts';
 import {
   BITIS, cizilmeli, durmayiUzat, ILK_DURMA, kaliteDusmeli, OLCUM_ATLA, OLCUM_KARE, PATLAMA as B, SABIT_KARE, tamponSirasi,
 } from './zamanlama.ts';

@@ -1,0 +1,5 @@
+/* Yükseklik yazı boyuna bağlıdır: yazının yerine geçtiği yerde aynı satır yüksekliğini tutar. Harfler yazı rengini alır (açık
+   temada koyu, koyu temada açık); O harfi giriş sahnesindeki altın halkadır, kenarı koyu altınla iki zeminde de seçilir. */
+.tc-core-yazisi { flex: none; display: block; height: 1.15em; width: auto; overflow: visible; }
+.tc-core-yazisi path { fill: currentcolor; }
+.tc-core-yazisi .tc-core-yazisi-o { fill: var(--giris3d-kenar); stroke: var(--giris3d-altin-alt); stroke-width: 3; paint-order: stroke; }

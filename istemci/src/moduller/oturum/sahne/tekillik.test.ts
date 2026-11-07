@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HARFLER, icindekiHarf, O_R, O_X, svgYolu } from './harfler.ts';
+import { HARFLER, icindekiHarf, O_R, O_X, svgYolu } from '../../../ortak/arayuz/core-harfleri.ts';
 import { tekillikKur } from './tekillik.ts';
 import {
   BITIS, cizilmeli, durmayiUzat, ILK_DURMA, kaliteDusmeli, OLCUM_KARE, PATLAMA, tamponSirasi, YAVAS_BASI,
