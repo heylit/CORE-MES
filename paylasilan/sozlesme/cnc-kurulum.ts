@@ -166,8 +166,9 @@ export const modelHedefiSemasi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('makine'), makineId: z.number().int().positive().max(2147483647) }),
   z.object({ tur: z.literal('aparat'), anahtar: z.string().regex(APARAT_ANAHTARI, 'Geçersiz aparat.') }),
 ]);
+// 2138-2: revKodu gösterilen revizyon kodu (modelin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
 export const modelBelgesiSemasi = z.object({
-  belgeId: z.number().int(), ad: z.string(), harf: z.string(), ozet: z.string(), dosyaTuru: z.enum(MODEL_DOSYA_TURLERI),
+  belgeId: z.number().int(), ad: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), ozet: z.string(), dosyaTuru: z.enum(MODEL_DOSYA_TURLERI),
 });
 // surum: bağ satırının sürümü; hiç bağlanmamış hedefte 0 (ilk bağlama 0 ile gelir).
 export const cncModelSemasi = z.object({
@@ -185,7 +186,7 @@ export const modelBaglaCevabi = z.object({ model: cncModelSemasi });
 export const HAM_ANALIZI_NEDENLERI = ['emir-yok', 'malzeme-yok', 'model-yok', 'analiz-yok'] as const;
 export const hamAnaliziCevabi = z.object({
   neden: z.enum(HAM_ANALIZI_NEDENLERI).nullable(),
-  model: z.object({ belgeAdi: z.string(), harf: z.string() }).nullable(),
+  model: z.object({ belgeAdi: z.string(), harf: z.string(), revKodu: z.string().nullable().optional() }).nullable(),
   olcu: z.object({ a: z.number().nonnegative(), b: z.number().nonnegative(), c: z.number().nonnegative(), hacimMm3: z.number().positive().nullable() }).nullable(),
 });
 export const modelSecenekleriSorgusu = z.object({ ara: z.string().trim().max(100).optional() });
