@@ -10,7 +10,9 @@ describe('havuz durumu (gerçek PostgreSQL)', () => {
 
   before(() => {
     const ayar = testAyari(ayarOku());
-    vt = veritabaniAc({ pg: { ...ayar.pg, baglantiSureMs: 300 } }, { havuzBoyutu: 2 });
+    // Süre hem bağlantı kurmayı hem sırada beklemeyi sınırlar. Sabit 300 ms, Windows'ta sekiz paralel test dosyası altında ilk bağlantıyı
+    // düşürüyordu (kart 2219); ortamın bağlantı süresi kullanılır, test yalnız reddi o kadar bekler.
+    vt = veritabaniAc({ pg: ayar.pg }, { havuzBoyutu: 2 });
   });
 
   after(async () => {
@@ -24,7 +26,9 @@ describe('havuz durumu (gerçek PostgreSQL)', () => {
 
   test('kullanımda ve bekleyen sayılır; dolu havuzda reddedilen istek artan sayaçtadır', async () => {
     assert.deepEqual(havuzDurumu(vt), { boyut: 2, kullanimda: 0, bekleyen: 0, mesgulToplam: 0 });
-    await vt.sorgu('SELECT 1');
+    // Havuz önce ısınır: iki bağlantı da kurulmuş olur, tutucular sıradan hemen alır; ölçüm bağlantı kurma süresine bağlı kalmaz.
+    await Promise.all([vt.oturumda!((db) => db.sorgu('SELECT 1')), vt.oturumda!((db) => db.sorgu('SELECT 1'))]);
+    assert.deepEqual(havuzDurumu(vt), { boyut: 2, kullanimda: 0, bekleyen: 0, mesgulToplam: 0 });
     let birak: () => void = () => undefined;
     const tut = new Promise<void>((coz) => { birak = coz; });
     // Tutulan bağlantılar bekleme sırasında sunucudan cevap alır: sıra, cevap veren sunucuda dolu havuzu "meşgul" sayar.
