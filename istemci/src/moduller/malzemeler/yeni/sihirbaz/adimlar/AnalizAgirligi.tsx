@@ -31,7 +31,8 @@ export function AnalizAgirligi() {
   const onDeger = k?.yogunluk ?? yerlesik.data ?? null;
   const yogunluk = yazilan ?? onDeger;
   const kg = v.hacimMm3 === null || yogunluk === null ? null : yuvarla((v.hacimMm3 * yogunluk) / 1e6);
-  const kaynak = `${v.model.belgeAdi} (${v.model.harf})`;
+  // 2138-2: merkezin harfi değil revizyon kodu; kodsuz modelde ek yazılmaz.
+  const kaynak = v.model.revKodu ? `${v.model.belgeAdi} (Rev ${v.model.revKodu})` : v.model.belgeAdi;
   // GEO-2 a: karta birden çok 3B model bağlıysa hangisinin alındığı söylenir; kapak seçilmemişse en son yayınlanan alınmıştır.
   const uyari = v.modelSayisi < 2 ? null : v.model.kapak
     ? `Karta bağlı ${String(v.modelSayisi)} 3B model var; ağırlık kapak modelinden alındı: ${kaynak}.`
