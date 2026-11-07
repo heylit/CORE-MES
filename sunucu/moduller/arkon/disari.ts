@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
 import { yayindakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
-import { emirCizimDurumu, paketMerkezDosyalari } from './kurallar.ts';
+import { emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari } from './kurallar.ts';
 import type { EmirCizimDurumu } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -41,6 +41,16 @@ export async function istasyonHazirlikSirasi(db: Db, istasyonId: number): Promis
     .filter((k) => k.istasyonId === istasyonId)
     .sort((a, b) => a.sira - b.sira)
     .map(({ isEmriId, parcaNo, sira }) => ({ isEmriId, parcaNo, sira }));
+}
+
+// 2227: iş emri paketinin yayını, hazırlık maddesi olarak (toplu); kural kayıt kapısıyla aynı (2189-1 a, kurallar.ts `isEmriYayinda`).
+// İstenen her iş emri haritada olur. Yetki çağıran ucun işidir.
+export async function isEmriYayinDurumlari(db: Db, isEmriIdler: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: true }>> {
+  const tekil = [...new Set(isEmriIdler)];
+  const satirlar = tekil.length === 0 ? [] : await sorgular.isEmriPaketDurumlari(db, tekil);
+  return new Map(tekil.map((id) => {
+    return [id, { durum: isEmriYayinda(satirlar.filter((r) => r.is_emri_id === id)) ? 'tamam' : 'yok', secildi: true }];
+  }));
 }
 
 // Denetim #34: emrin hazırlık paketlerindeki merkez çizimlerinin durumu (toplu). İstenen her emir haritada olur; paketi ya da merkez çizimi

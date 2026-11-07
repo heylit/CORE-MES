@@ -15,7 +15,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
-import { hazirlik, hazirlikCozucusuKaydet, hazirliklar, muafiyetVer } from './hazirlik.ts';
+import { hazirlik, hazirlikCozucusuKaydet, hazirlikDenetimi, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import type { HazirlikBilgisi } from './kurallar.ts';
 
@@ -124,6 +124,27 @@ describe('uretim-emirleri toplu hazırlık (2227, gerçek PostgreSQL)', () => {
       assert.equal(tekA.maddeler.find((m) => m.madde === 'cizim')?.durum, 'tamam', 'öteki emrin eksiği bu emre geçmez');
     } finally {
       for (const [m, c] of onceki) hazirlikCozucusuKaydet(m, c);
+    }
+  });
+
+  // 2227b: paket yayını durduran maddedir (matriste "Durur"), ama başlatma kancası sormaz: reddi Arkon'un kayıt kapısı verir (2189-1 a).
+  test('yayın maddesi iş emri başına görünür, başlatma denetimi onu sormaz', async () => {
+    const e = await emirAc(1);
+    const [ie] = e.isEmriIdleri;
+    const yok: HazirlikCozucusu = async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'yok', secildi: true } as const]));
+    const onceki = hazirlikCozucusuKaydet('yayin', yok);
+    const cncOnceki = hazirlikCozucusuKaydet('cnc', null);
+    const cizimOnceki = hazirlikCozucusuKaydet('cizim', null);
+    try {
+      const v = await o().vt.okumaTx((db) => hazirlik(db, e.uretimEmriId));
+      assert.deepEqual(v.maddeler.find((m) => m.madde === 'yayin'), { madde: 'yayin', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true });
+      assert.equal(v.isEmirleri[0]?.maddeler.find((m) => m.madde === 'yayin')?.durum, 'eksik');
+      const olay = { uretimEmriId: e.uretimEmriId, isEmriId: ie!, istasyonId: 1, kisiId: yoneticiId };
+      assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)), null, 'yayın başlatma kancasında sorulmaz');
+    } finally {
+      hazirlikCozucusuKaydet('yayin', onceki);
+      hazirlikCozucusuKaydet('cnc', cncOnceki);
+      hazirlikCozucusuKaydet('cizim', cizimOnceki);
     }
   });
 

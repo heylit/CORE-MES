@@ -497,6 +497,13 @@ export function planBaslatmaReddi(
 export const yayinDenetlenir = (tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>, isEmriDurumu: string | null): boolean =>
   tur === 'events' && satir['state'] === 'running' && paketIsEmri(satir['pkgId']) !== null && isEmriDurumu === 'bekliyor';
 export const yayinlanmamis = (paketDurumu: unknown): boolean => paketDurumu === 'draft';
+// Hazırlık matrisinde iş emrinin yayını (2227): bütün paketin kaydı varsa o, yoksa bölünmüş işin kayıtlı parçaları; hiç kayıt yoksa
+// TMI taslağıdır, yayınlanmamış.
+export function isEmriYayinda(paketler: readonly { parca: boolean; durum: unknown }[]): boolean {
+  const butun = paketler.filter((p) => !p.parca);
+  const bakilan = butun.length > 0 ? butun : paketler;
+  return bakilan.length > 0 && bakilan.every((p) => !yayinlanmamis(p.durum));
+}
 
 // İş emri paketinde çalışmaya geçen olay adımı başlatır, biten olay bitirir; parti kuralı bu iki komut için kayıttan önce sorulur.
 export function partiKomutu(tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>): 'baslat' | 'bitir' | null {

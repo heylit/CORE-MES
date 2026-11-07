@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { HAZIRLIK_MADDELERI, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { HAZIRLIK_MADDELERI, YALNIZ_GORUNUM_MADDELERI, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -14,7 +14,8 @@ import * as s from './sorgular.ts';
 // bu modülü okuduğu için çözücüler kablolama.ts'te kaydedilir; kayıtsız madde emirde aranmaz. CNC kurulumu iş emri başınadır (266 a),
 // çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği. Uyaran maddeler (2146-1 a) başlatmada sorulmaz, yalnız görünümde.
 export type HazirlikCozucusu = (db: Db, idler: readonly number[]) => Promise<ReadonlyMap<number, HazirlikBilgisi>>;
-const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine']);
+const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine', 'yayin']);
+const BASLATMADA_SORULMAZ: ReadonlySet<string> = new Set(YALNIZ_GORUNUM_MADDELERI);
 const cozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu>();
 // Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
 export function hazirlikCozucusuKaydet(madde: HazirlikMaddesi, cozucu: HazirlikCozucusu | null): HazirlikCozucusu | null {
@@ -35,7 +36,7 @@ async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, m
   const sonuc = new Map<HazirlikMaddesi, HazirlikHali>();
   let isEmirleri: number[] | null = isEmriId === null ? null : [isEmriId];
   for (const m of HAZIRLIK_MADDELERI) {
-    if (isEmriId !== null && hazirlikUyarirMi(m)) continue;
+    if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m))) continue;
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {
       sonuc.set(m, hazirlikHali(c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined, muafMi(muaf, m, isEmriId)));

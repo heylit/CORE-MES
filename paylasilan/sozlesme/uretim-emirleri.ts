@@ -697,10 +697,13 @@ export const refakatKartiCevabi = z.object({
 // CNC kurulumu ve özel proses müdürün gerekçesiyle geçilir (264 a). Maddenin durumunu sahibi modül verir; vermeyen madde emirde aranmaz.
 // Kalibrasyon başlatmada sorulmaz, yalnız ölçüm anında denetlenir (2131-1 c). Özel prosesin sahibi yok; matristen çıktı (2146-1 a).
 // Uyaran maddeler (2146-1 a) eksikken de iş emri başlar; matris ve terminal yalnız uyarır.
-export const DURDURAN_HAZIRLIK_MADDELERI = ['cnc', 'cizim'] as const;
+// Paket yayını (2227, 2189-1 a): iş emri Üretim Hazırlık'ta yayınlanmadan terminalde başlamaz; reddi Arkon verir, matris yalnız gösterir.
+export const DURDURAN_HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'yayin'] as const;
 export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine'] as const;
 export const HAZIRLIK_MADDELERI = [...DURDURAN_HAZIRLIK_MADDELERI, ...UYARAN_HAZIRLIK_MADDELERI] as const;
 export const hazirlikUyarirMi = (m: string): boolean => (UYARAN_HAZIRLIK_MADDELERI as readonly string[]).includes(m);
+// Başlatma kancasında sorulmayan durduran madde: kuralı sahibi kendi uygular (yayın: Arkon kayıt kapısı); emirden başka yoldan başlatma değişmez.
+export const YALNIZ_GORUNUM_MADDELERI = ['yayin'] as const;
 // Özel proses muafiyeti eski kayıtlarda kalabilir; değer listeden çıkarılmaz ki okunabilsin.
 export const MUAF_TUTULABILEN_MADDELER = ['cnc', 'ozel-proses'] as const;
 export const hazirlikMaddesi = z.enum(HAZIRLIK_MADDELERI);
