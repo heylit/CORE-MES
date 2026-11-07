@@ -131,7 +131,7 @@ function Ayrinti({ def, opt }: { def: CarkAdimi; opt: Kalem }) {
 // Kurulum kartı (prototip sheetHTML 17720-17746) ve "seçildi" işaretleri (cerceve-kopru.ts 428-439).
 function KurulumKarti({ meta }: { meta: boolean }) {
   const m = machine(), mat = material(), arr = tools(), a = isaretler(), secili = (k: string) => (a[k] === true ? ' tc-ck-secildi' : '');
-  const takip = useRef(true), aktif = useRef<HTMLDivElement | null>(null);
+  const takip = useRef(true), aktif = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { if (takip.current) aktif.current?.scrollIntoView?.({ block: 'nearest' }); });
   const git = (i: number) => { takip.current = false; goRow(i); setTimeout(() => { takip.current = true; }, 400); };
   const loaded = arr.filter((id) => id !== 'empty').length, gi = GENEL_ADIM + arr.length;
@@ -149,9 +149,9 @@ function KurulumKarti({ meta }: { meta: boolean }) {
       {K.defs.slice(0, GENEL_ADIM).map((d, i) => {
         const o = d.type === 'single' ? byId(d.options, d.get()) : null, on = i === K.active;
         return (
-          <div key={d.key} ref={on ? aktif : undefined} className={`tc-ck-srow${on ? ' tc-ck-on' : ''}${secili(d.key)}`} onClick={() => { git(i); }}>
+          <button type="button" key={d.key} ref={on ? aktif : undefined} className={`tc-ck-srow${on ? ' tc-ck-on' : ''}${secili(d.key)}`} aria-current={on ? 'step' : undefined} onClick={() => { git(i); }}>
             <span>{d.title}</span><b>{o ? o.name : '—'}</b>
-          </div>
+          </button>
         );
       })}
       <div className="tc-ck-sh">Takımlar <em>{loaded} / {m.pockets} dolu</em></div>
@@ -164,11 +164,11 @@ function KurulumKarti({ meta }: { meta: boolean }) {
           const sub = t.kind === 'empty' ? 'boş' : holderOf(t, m);
           const cdt = cd && !cd.warn ? `${cd.n ? `${fint(cd.n)} dev · ` : `Vc ${String(cd.vc)} · `}${cd.F ? `F${fint(cd.F)}` : `f${fmt(cd.f)}`}` : '';
           return (
-            <div key={p} ref={on ? aktif : undefined} className={`tc-ck-trow${on ? ' tc-ck-on' : ''}${secili(`T${String(p + 1)}`)}`} onClick={() => { git(ri); }}>
+            <button type="button" key={p} ref={on ? aktif : undefined} className={`tc-ck-trow${on ? ' tc-ck-on' : ''}${secili(`T${String(p + 1)}`)}`} aria-current={on ? 'step' : undefined} onClick={() => { git(ri); }}>
               <span className="tc-ck-tn">T{pad2(p + 1)}</span>
               <span className="tc-ck-tt">{t.name}<small>{eksik && <><Simge ad="alert" boyut="k" /> stok yetersiz · </>}{sub}</small></span>
               <span className="tc-ck-tc">{cd?.warn ? <Simge ad="alert" boyut="k" /> : cdt}</span>
-            </div>
+            </button>
           );
         })}
         {!loaded && <div className="tc-ck-not">Henüz takım seçilmedi.</div>}
@@ -179,10 +179,10 @@ function KurulumKarti({ meta }: { meta: boolean }) {
         return (
           <div key={d.key}>
             <div className={`tc-ck-sh${secili(d.key)}`}>{d.title} <em>{list.length}</em></div>
-            <div className="tc-ck-chips" onClick={() => { git(gi + j); }}>
+            <button type="button" className="tc-ck-chips" onClick={() => { git(gi + j); }}>
               {list.map((id) => { const o = byId(d.options, id); return o ? <span key={id}>{o.name}</span> : null; })}
               {!list.length && <span className="tc-ck-mut">—</span>}
-            </div>
+            </button>
           </div>
         );
       })}

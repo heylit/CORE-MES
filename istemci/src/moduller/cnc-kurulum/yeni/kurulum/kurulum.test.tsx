@@ -43,7 +43,7 @@ describe('Kurulum düğmeleri (izinli ve reddedilen)', () => {
   it('yazan kişide Sıfırla ve emir seçiliyken Kurulum tamam görünür', async () => {
     v.yetki = yetki({ yazabilir: true }); v.emir = EMIR;
     ac();
-    expect(await screen.findByRole('button', { name: /Sıfırla/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Sıfırla' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Bütün adımları sırayla seçin|Seçimleri onaylayıp/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Yazdır/ })).toBeTruthy();
   });
@@ -51,14 +51,14 @@ describe('Kurulum düğmeleri (izinli ve reddedilen)', () => {
     v.yetki = yetki({}); v.emir = EMIR;
     ac();
     expect(await screen.findByRole('button', { name: /Yazdır/ })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Sıfırla/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sıfırla' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Bütün adımları sırayla seçin|Seçimleri onaylayıp/ })).toBeNull();
     expect((screen.getByRole('combobox', { name: /Üretim emri/ }) as HTMLInputElement).readOnly).toBe(true);
   });
   it('emir seçilmeden Kurulum tamam çıkmaz', async () => {
     v.yetki = yetki({ yazabilir: true });
     ac();
-    expect(await screen.findByRole('button', { name: /Sıfırla/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Sıfırla' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Önce üretim emrini seçin/ })).toBeNull();
   });
 });
