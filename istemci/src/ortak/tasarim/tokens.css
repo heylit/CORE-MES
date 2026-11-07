@@ -22,6 +22,14 @@
   --bp: #cfe3ff; --bp-dim: rgba(207,227,255,.38); --bp-dim2: rgba(207,227,255,.14); --bp-bg: #070c14;
   --shadow: 0 30px 60px -30px rgba(0,0,0,.8);
   --aura-strength: 26%;
+  /* Sari kusak (kart 2193): ust cubuk marka sarisiyla dolu; ustundeki yazi, cizgi ve yuzey kusaga gore. */
+  --kusak: #f7c600; --on-kusak: #161100; --on-kusak-soluk: #4d3f00;
+  --kusak-cizgi: rgba(22,17,0,.18); --kusak-cizgi-2: rgba(22,17,0,.35);
+  --kusak-yuzey: rgba(255,255,255,.55); --kusak-yuzey-2: rgba(255,255,255,.35);
+  --kusak-golge: 0 10px 30px -18px rgba(150,110,0,.8);
+  --secili-zemin: var(--hazard); --secili-yazi: var(--on-hazard);
+  /* Zemine iki koseden vuran yumusak isik: cam kartlar duz duvarda degil, isik alan masada durur. */
+  --isik-1: rgba(255,210,63,.10); --isik-2: rgba(255,150,80,.06);
   color-scheme: dark;
 }
 [data-theme="light"] {
@@ -41,6 +49,13 @@
   --bp: #12305e; --bp-dim: rgba(18,48,94,.42); --bp-dim2: rgba(18,48,94,.12); --bp-bg: #f4f1ea;
   --shadow: 0 30px 60px -34px rgba(40,30,10,.35);
   --aura-strength: 30%;
+  --kusak: #f7c600; --on-kusak: #161100; --on-kusak-soluk: #4d3f00;
+  --kusak-cizgi: rgba(22,17,0,.18); --kusak-cizgi-2: rgba(22,17,0,.35);
+  --kusak-yuzey: rgba(255,255,255,.55); --kusak-yuzey-2: rgba(255,255,255,.35);
+  --kusak-golge: 0 10px 30px -18px rgba(150,110,0,.8);
+  /* Acik temada secili menu sari zeminde kaybolmasin diye koyu ustune sari. */
+  --secili-zemin: #161100; --secili-yazi: #f7c600;
+  --isik-1: rgba(247,198,0,.30); --isik-2: rgba(255,170,90,.18);
   color-scheme: light;
 }
 /* Yüksek kontrastlı iki tema (karar 2072 a, kişi profilinde seçer): taban data-theme üstüne data-kontrast. Saydamlık, gölge ve
@@ -57,6 +72,8 @@
   --on-sig: #000000;
   --shadow: none; --aura-strength: 0%;
   --bulanik-cam: none; --bulanik-kart: none; --bulanik-perde: none; --bulanik-ozet: none;
+  --kusak: #ffe600; --on-kusak: #000000; --on-kusak-soluk: #000000; --kusak-cizgi: #000000; --kusak-cizgi-2: #000000;
+  --kusak-yuzey: #ffffff; --kusak-yuzey-2: #ffffff; --kusak-golge: none; --isik-1: transparent; --isik-2: transparent;
 }
 [data-theme="light"][data-kontrast] {
   --bg: #f4f4f2; --bg2: #ffffff;
@@ -69,6 +86,9 @@
   --on-sig: #ffffff;
   --shadow: none; --aura-strength: 0%;
   --bulanik-cam: none; --bulanik-kart: none; --bulanik-perde: none; --bulanik-ozet: none;
+  --kusak: #ffd000; --on-kusak: #000000; --on-kusak-soluk: #000000; --kusak-cizgi: #000000; --kusak-cizgi-2: #000000;
+  --kusak-yuzey: #ffffff; --kusak-yuzey-2: #ffffff; --kusak-golge: none; --isik-1: transparent; --isik-2: transparent;
+  --secili-zemin: #000000; --secili-yazi: #ffd000;
 }
 :root { transition: --sig .9s ease; }
 
@@ -124,9 +144,14 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Ortak sayı ölçüsü (kart 2155): pano sayısı dar kartta da sığan en büyük boydadır. */
+/* Ortak sayı ölçüsü: dev dar rakam ve geniş selam (kart 2193). Archivo genişlik ekseniyle dar kartta da sığar;
+   telefonda bir boy küçüktür. */
 :root {
-  --sayi-boy: 28px; --sayi-birim: var(--yazi-s);
+  --sayi-birim: var(--yazi-s);
+  --sayi-dev: 54px; --yazi-selam: 44px; --genislik-dar: 62%; --genislik-genis: 125%;
+}
+@media (max-width: 767px) {
+  :root { --sayi-dev: 34px; --yazi-selam: 30px; }
 }
 
 /* Yoğun ölçü (kullanıcı kararı 25.10.2026): fareyle kullanılan ekranda denetimler eski yoğunluğuna iner; dokunmatikte 44 px kalır.

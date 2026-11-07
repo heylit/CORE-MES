@@ -20,8 +20,8 @@ a.tc-sayi-karti:focus-visible { outline: 2px solid var(--c); outline-offset: 2px
    hizalı okunsun (kart 2155, karar 2). Boy sabittir: kart genişliğine bağlanırsa dar ızgarada başlık harf harf kırılır. */
 .tc-sayi-deger { font-size: var(--yazi-l); font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; }
 .tc-sayi-deger[data-sayisal] {
-  font-size: var(--sayi-boy); font-weight: 800; line-height: 1;
-  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  font-family: var(--font-ana); font-size: var(--sayi-dev); font-weight: 800; font-stretch: var(--genislik-dar); line-height: .95;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
 }
 .tc-sayi-okunan { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .tc-sayi-birim { font-size: var(--sayi-birim); font-weight: 600; letter-spacing: 0; color: var(--muted); }
