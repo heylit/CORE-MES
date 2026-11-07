@@ -33,10 +33,16 @@ const SUZGEC = `FROM denetim_kaydi d
     AND ($6::text IS NULL OR d.modul = $6)
     AND ($7::text IS NULL OR d.yol ILIKE $7 ESCAPE '\\')`;
 
+// `ust` verilirse sayım o kadar satırda kesilir: büyük tabloda tam sayım bütün tabloyu okur.
+function saymaSorgusu(suzgec: string, degerler: unknown[], ust: number | undefined): [string, unknown[]] {
+  if (ust === undefined) return [`SELECT count(*)::int AS toplam ${suzgec}`, degerler];
+  return [`SELECT count(*)::int AS toplam FROM (SELECT 1 ${suzgec} LIMIT $${String(degerler.length + 1)}) x`, [...degerler, ust]];
+}
+
 const suzgecDegerleri = (s: KayitSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.yontem, s.yol, s.modul, s.yolKalibi];
 
-export async function kayitSay(db: Db, s: KayitSuzgeci): Promise<number> {
-  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${SUZGEC}`, suzgecDegerleri(s)))?.toplam ?? 0;
+export async function kayitSay(db: Db, s: KayitSuzgeci, ust?: number): Promise<number> {
+  return (await db.tek<{ toplam: number }>(...saymaSorgusu(SUZGEC, suzgecDegerleri(s), ust)))?.toplam ?? 0;
 }
 
 export interface KayitSatiriHam {
@@ -130,8 +136,8 @@ const DEGISIKLIK_SUZGECI = `FROM denetim_degisiklik d
 
 const degisiklikSuzgecDegerleri = (s: DegisiklikSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.tablo, s.kayitlar === null ? null : JSON.stringify(s.kayitlar)];
 
-export async function degisiklikSay(db: Db, s: DegisiklikSuzgeci): Promise<number> {
-  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${DEGISIKLIK_SUZGECI}`, degisiklikSuzgecDegerleri(s)))?.toplam ?? 0;
+export async function degisiklikSay(db: Db, s: DegisiklikSuzgeci, ust?: number): Promise<number> {
+  return (await db.tek<{ toplam: number }>(...saymaSorgusu(DEGISIKLIK_SUZGECI, degisiklikSuzgecDegerleri(s), ust)))?.toplam ?? 0;
 }
 
 export interface DegisiklikSatiriHam {
@@ -223,8 +229,8 @@ const OKUMA_SUZGECI = `FROM okuma_kaydi o
 
 const okumaDegerleri = (s: OkumaSuzgeci) => [s.kisi, s.baslangic, s.bitis, s.modul];
 
-export async function okumaSay(db: Db, s: OkumaSuzgeci): Promise<number> {
-  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${OKUMA_SUZGECI}`, okumaDegerleri(s)))?.toplam ?? 0;
+export async function okumaSay(db: Db, s: OkumaSuzgeci, ust?: number): Promise<number> {
+  return (await db.tek<{ toplam: number }>(...saymaSorgusu(OKUMA_SUZGECI, okumaDegerleri(s), ust)))?.toplam ?? 0;
 }
 
 export interface OkumaSatiriHam {

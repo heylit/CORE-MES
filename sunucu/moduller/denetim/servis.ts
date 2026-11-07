@@ -17,6 +17,9 @@ import {
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
+// Kayıt tabloları yalnız büyür; 10.000 üstünde kesin sayının işte karşılığı yok, liste "10.000+" yazar (2216-8 a).
+const SAYIM_SINIRI = 10_000;
+
 type KayitListesiSorgusuCikti = z.output<typeof kayitListesiSorgusu>;
 type DegisiklikListesiSorgusuCikti = z.output<typeof degisiklikListesiSorgusu>;
 type OkumaListesiSorgusuCikti = z.output<typeof okumaListesiSorgusu>;
@@ -74,7 +77,8 @@ export async function okumaListesi(db: Db, sorgu: OkumaListesiSorgusuCikti): Pro
     kisi: sorgu.kisi ?? null, baslangic: sorgu.baslangic ?? null, bitis: sorgu.bitis ?? null, modul: sorgu.modul ?? null,
   };
   return sayfaliListe(sorgu, {
-    say: () => sorgular.okumaSay(db, s),
+    say: (ust) => sorgular.okumaSay(db, s, ust),
+    sayimSiniri: SAYIM_SINIRI,
     satirlar: async (dilim) => {
       const ham = await sorgular.okumalar(db, s, dilim);
       const adlar = await kisiAdlari(db, ham.map((o) => o.kisi_id));
@@ -98,7 +102,8 @@ const suzgec = (s: KayitListesiSorgusuCikti): sorgular.KayitSuzgeci => ({
 export async function kayitListesi(db: Db, sorgu: KayitListesiSorgusuCikti): Promise<SayfaliListe<KayitSatiri>> {
   const s = suzgec(sorgu);
   return sayfaliListe(sorgu, {
-    say: () => sorgular.kayitSay(db, s),
+    say: (ust) => sorgular.kayitSay(db, s, ust),
+    sayimSiniri: SAYIM_SINIRI,
     satirlar: async (dilim) => {
       const ham = await sorgular.kayitlar(db, s, dilim);
       const adlar = await kisiAdlari(db, ham.flatMap((k) => (k.kisi_id === null ? [] : [k.kisi_id])));
@@ -129,7 +134,8 @@ export async function degisiklikListesi(db: Db, sorgu: DegisiklikListesiSorgusuC
     kayitlar: sorgu.kayitlar ?? null,
   };
   return sayfaliListe(sorgu, {
-    say: () => sorgular.degisiklikSay(db, s),
+    say: (ust) => sorgular.degisiklikSay(db, s, ust),
+    sayimSiniri: SAYIM_SINIRI,
     satirlar: async (dilim) => {
       const ham = await sorgular.degisiklikler(db, s, dilim);
       const adlar = await kisiAdlari(db, ham.flatMap((d) => (d.kisi_id === null ? [] : [d.kisi_id])));

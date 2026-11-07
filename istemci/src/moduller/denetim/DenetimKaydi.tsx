@@ -244,7 +244,7 @@ export function DenetimKaydi() {
                 satirSec={seciliYaz}
                 bosMesaj="Bu süzgece uyan kayıt yok"
                 mesgul={liste.isPlaceholderData}
-                sayfalama={{ sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, degistir: sayfaYaz }}
+                sayfalama={{ sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, toplamSinirli: liste.data.toplamSinirli, degistir: sayfaYaz }}
               />
             )}
           </>
@@ -261,7 +261,7 @@ export function DenetimKaydi() {
                 satirSec={seciliDegisiklikYaz}
                 bosMesaj="Bu süzgece uyan değişiklik yok"
                 mesgul={dListe.isPlaceholderData}
-                sayfalama={{ sayfa: dListe.data.sayfa, sayfaBoyu: dListe.data.sayfaBoyu, toplam: dListe.data.toplam, degistir: sayfaYaz }}
+                sayfalama={{ sayfa: dListe.data.sayfa, sayfaBoyu: dListe.data.sayfaBoyu, toplam: dListe.data.toplam, toplamSinirli: dListe.data.toplamSinirli, degistir: sayfaYaz }}
               />
             )}
           </>

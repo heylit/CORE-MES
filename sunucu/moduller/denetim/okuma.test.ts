@@ -10,6 +10,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { denetimYaz } from './disari.ts';
+import * as sorgular from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 const GIZLI_DEGER = 'cok-gizli-deger-7';
@@ -187,6 +188,21 @@ describe('denetim okuma (gerçek PostgreSQL)', () => {
     const s2 = await oku<KayitListesiCevabi>(mudur, '/denetim-kayitlari?baslangic=2020-01-01&bitis=2020-12-31&sayfaBoyu=3&sayfa=2');
     assert.deepEqual([s1.govde.satirlar.length, s1.govde.toplam, s2.govde.satirlar.length, s2.govde.sayfa], [3, 4, 1, 2]);
     assert.equal(s2.govde.satirlar[0]?.yol, '/uretim-emirleri/:id/adimlar/:adimId/tamamla');
+  });
+
+  test('sayım sınırı: üst verilince sayım orada kesilir, verilmezse tamdır; sınırın altındaki liste işaret taşımaz', async () => {
+    const s = { kisi: null, baslangic: '2020-01-01', bitis: '2020-12-31', yontem: null, yol: null, yolKalibi: null, modul: null };
+    const d = { kisi: null, baslangic: null, bitis: null, tablo: null, kayitlar: null };
+    const o = { kisi: null, baslangic: null, bitis: null, modul: null };
+    await vt().okumaTx(async (db) => {
+      assert.deepEqual([await sorgular.kayitSay(db, s), await sorgular.kayitSay(db, s, 2), await sorgular.kayitSay(db, s, 10)], [4, 2, 4]);
+      const tamD = await sorgular.degisiklikSay(db, d);
+      assert.equal(await sorgular.degisiklikSay(db, d, 1), Math.min(1, tamD));
+      const tamO = await sorgular.okumaSay(db, o);
+      assert.equal(await sorgular.okumaSay(db, o, 1), Math.min(1, tamO));
+    });
+    const liste = await oku<KayitListesiCevabi>(mudur, '/denetim-kayitlari?baslangic=2020-01-01&bitis=2020-12-31');
+    assert.equal(liste.govde.toplamSinirli, undefined);
   });
 
   test('süzgeç seçenekleri: deftere düşmüş kişiler adıyla ve komutlar; okuma ucu deftere satır yazmaz', async () => {
