@@ -197,6 +197,11 @@ export interface IstekBilgisi {
   // Çerezler yalnız komut kalıcı olduysa cevaba eklenir.
   cerezYaz(ad: string, deger: string, azamiSn: number): void;
   cerezSil(ad: string): void;
+  // İsteğin başlığı (ad küçük harfe çevrilir); yoksa ya da birden çok kez geldiyse null.
+  baslik(ad: string): string | null;
+  // Cevap başlığı hemen yazılır ve hata cevabında da kalır: tarayıcı protokolleri (DBSC meydan okuması) başlığı 403 ile
+  // ister. Kapının kendi yazdığı başlıklar ve çerez bu yoldan yazılamaz.
+  baslikYaz(ad: string, deger: string): void;
   // Başarılı cevabın durum kodu (200-599); yalnız okuma (GET) ucunda. Yazma komutu başarısızlığı hata fırlatarak
   // bildirir; aksi halde transaction'ın kalıp kalmayacağı belirsizleşir.
   durumKoduYaz(kod: number): void;
@@ -336,6 +341,18 @@ export const SIKISTIRMA_ESIGI = 64 * 1024;
 const gzipla = promisify(gzip);
 
 // `gzip;q=0` açıkça reddetmektir; yalnız adın geçmesi yetmez.
+const BASLIK_ADI = /^[A-Za-z0-9-]+$/;
+// Kapının güvenlik, önbellek ve gövde başlıkları işleyicinin elinde değildir.
+const KAPI_BASLIKLARI = new Set([
+  'set-cookie', 'cache-control', 'etag', 'vary', 'x-content-type-options', 'content-security-policy',
+  'strict-transport-security', 'access-control-allow-origin', 'location',
+]);
+
+export function cevapBasligiYazilirMi(ad: string): boolean {
+  const kucuk = ad.toLowerCase();
+  return BASLIK_ADI.test(ad) && !KAPI_BASLIKLARI.has(kucuk) && !kucuk.startsWith('content-');
+}
+
 function gzipKabul(baslik: string | undefined): boolean {
   return (baslik ?? '').split(',').some((parca) => {
     const [ad, ...ayar] = parca.trim().toLowerCase().split(';').map((p) => p.trim());
@@ -569,6 +586,16 @@ export function uclariKaydet(app: FastifyInstance, uclar: readonly Uc[], secenek
           cerez: (ad) => cerezOku(istek.headers.cookie, ad),
           cerezYaz: (ad, deger, azamiSn) => { cerezEkle(cerezBasligi(ad, deger, azamiSn, guvenliCerez || istek.protocol === 'https')); },
           cerezSil: (ad) => { cerezEkle(cerezBasligi(ad, '', 0, guvenliCerez || istek.protocol === 'https')); },
+          baslik: (ad) => {
+            const deger = istek.headers[ad.toLowerCase()];
+            return typeof deger === 'string' ? deger : null;
+          },
+          baslikYaz: (ad, deger) => {
+            if (tanim.tekrarKorumali) throw new Error(`Tekrar korumalı uç başlık yazamaz (yinelenen istekte başlık dönmez): ${anahtar}`);
+            if (!cevapBasligiYazilirMi(ad)) throw new Error(`Bu cevap başlığı işleyiciden yazılamaz: ${ad}`);
+            if (/[\r\n]/.test(deger)) throw new Error(`Cevap başlığı satır sonu içeremez: ${ad}`);
+            void yanit.header(ad, deger);
+          },
           durumKoduYaz: (kod) => {
             if (yazma) throw new Error(`Durum kodu yalnız GET ucunda yazılabilir: ${anahtar}`);
             // 1xx ara cevaptır: gerçek bağlantıda istemci asıl cevabı beklerken kopar.
