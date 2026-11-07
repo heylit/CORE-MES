@@ -411,8 +411,14 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     // bağımsızdır (ret nedeni, yazılan kayıtlar, emir ve adım durumları, adetler, hareketler); vardiya ya da saat dilimi aranmaz.
     const ekle = (tur: string, satir: Record<string, unknown>) =>
       yaz<{ eklenen: number; reddedilen: { cid: string; ileti: string }[] }>('operator', `/arkon/kayitlar/${tur}/ekle`, { satirlar: [satir], kaynak: 'y1' });
-    const pk = tamam(await oku<{ belgeler: { kimlik: string }[] }>('operator', '/arkon/belgeler/pkgs'));
+    // Üretim Hazırlık paketleri yayınlar (2189-1 a: yayınlanmamış iş başlatılmaz); terminal yalnız yayınlanmışı gösterir.
+    const hz = tamam(await oku<{ belgeler: { kimlik: string; govde: Record<string, unknown> }[] }>('planlama', '/arkon/belgeler/pkgs'));
+    for (const b of hz.belgeler) {
+      tamam(await yaz('planlama', `/arkon/belgeler/pkgs/${b.kimlik}/yaz`, { taban: null, govde: { ...b.govde, status: 'published', steps: [{ id: 's1' }] }, kaynak: 'y1' }));
+    }
+    const pk = tamam(await oku<{ belgeler: { kimlik: string; govde: { status?: string } }[] }>('operator', '/arkon/belgeler/pkgs'));
     assert.deepEqual(pk.belgeler.map((b) => b.kimlik).sort(), S.ie.map((id) => `tmi-ie-${id}`).sort());
+    assert.deepEqual(pk.belgeler.map((b) => b.govde.status), S.ie.map(() => 'published'));
     // Göçten gelen operatör rolü yetkinlik kaydı olmadan iş başlatamaz; kurulum adımı olarak müdür istasyon yetkinliğini verir.
     tamam(await ekle('events', { cid: 'deneme-0', pkgId: `tmi-ie-${S.ie[0]}`, state: 'running', machine: S.ist[0]?.kod }));
     // Yansıma listesi yalnız yazılamayanları (reddedilen, eşlenemeyen, bekleyen, hatalı) gösterir; gizlenen türler dahil okunur.

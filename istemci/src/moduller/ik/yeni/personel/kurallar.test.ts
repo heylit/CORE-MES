@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { IK_SABITLERI } from '#paylasilan/ik-motor/arayuz.ts';
-import type { Izin, Personel, PozisyonTanimi } from '../tipler.ts';
+import type { Departman, Izin, Personel, PozisyonTanimi } from '../tipler.ts';
 import {
-  aktifMi, ayEkle, BOS_SUZGEC, eksikHazirPozisyonlar, HAZIR_POZISYONLAR, cikisAdimi, cikisIlerlemesi, cikistanSonrakiIzinler, denemeBitisi, hareketleriIzle, ibanBicimi, ibanGecerli,
+  aktifMi, ayEkle, BOS_SUZGEC, eksikHazirDepartmanlar, eksikHazirPozisyonlar, HAZIR_DEPARTMANLAR, HAZIR_POZISYONLAR, cikisAdimi, cikisIlerlemesi, cikistanSonrakiIzinler, denemeBitisi, hareketleriIzle, ibanBicimi, ibanGecerli,
   kidemMetni, notEkle, notSil, orgAgaci, personelDogrula, pozisyondakiCalisan, pozisyonTanimOnerileri, siraliPozisyonTanimi, personelDurumu, personelKayitOncesi, personelSirala, personelSuz,
   siraliPersonel, sonrakiSicil, sureMetni, tcknGecerli, ucretDegisimi, ucretGecmisi, ucretSil, ucretTarihte, ucretUygula, yillikFazlaMesai,
   zamanCizelgesi, type KayitBaglami,
@@ -227,5 +227,18 @@ describe('hazır pozisyonlar', () => {
     expect(eksik).not.toContain('CNC Programcısı');
     expect(eksik).not.toContain('Stajyer');
     expect(eksikHazirPozisyonlar([])).toHaveLength(27);
+  });
+});
+
+// 2177e: hazır departman listesi.
+describe('hazır departmanlar', () => {
+  it('11 genel departman, adlar tekrarsız; tanımı olan ad (boşluk ve büyük-küçük harf farkı sayılmaz) eksiklere girmez', () => {
+    expect(HAZIR_DEPARTMANLAR).toHaveLength(11);
+    expect(new Set(HAZIR_DEPARTMANLAR.map((a) => a.toLocaleLowerCase('tr'))).size).toBe(11);
+    const liste: Departman[] = [{ id: 'd1', kind: 'dept', ad: ' üretim ' }, { id: 'd2', kind: 'dept', ad: 'Ar-Ge' }];
+    const eksik = eksikHazirDepartmanlar(liste);
+    expect(eksik).toHaveLength(10);
+    expect(eksik).not.toContain('Üretim');
+    expect(eksikHazirDepartmanlar([])).toEqual([...HAZIR_DEPARTMANLAR]);
   });
 });

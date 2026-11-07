@@ -53,6 +53,7 @@ export const ILETILER = {
   yerelPaket: 'Yeni paket CORE\'da emir açılınca oluşur (Rota > Üretim emirleri); emir dışı paket açılmaz.',
   isEmriNo: 'Kaydın emir numarası paketin iş emrininki değil.',
   planCanliDegil: 'Plan canlıya alınmadı: bu iş canlı planda bu istasyona yerleşmeden başlatılamaz.',
+  paketYayinlanmadi: 'Paket yayınlanmadı: iş Üretim Hazırlık\'ta yayınlanmadan başlatılamaz.',
   planSiraYetki: 'İş sırasını değiştirme yetkiniz yok.',
   planSiraEski: 'Plan değişti: ekranı yenileyip yeniden sıralayın.',
   planSiraGecersiz: 'Yeni sıra aynı işlerden oluşmalı.',
@@ -489,6 +490,13 @@ export function planBaslatmaReddi(
 ): boolean {
   return zorunlu && tur === 'events' && satir['state'] === 'running' && paketIsEmri(satir['pkgId']) !== null && isEmriDurumu === 'bekliyor' && !planAcik(plan);
 }
+
+// 2189-1 a: Hazırlık'ta yayınlanmamış (taslak) iş emri paketi başlatılmaz; terminal ekranı taslağı göstermez (tmi-plan.ts `operatoreAcik`),
+// sunucu da aynı kuralla reddeder ki ekranı atlayan istek taslak işi üretime sokmasın. Ayardan bağımsızdır; başlamış işin devamı bakmaz.
+// Paketin durumu yalnız `yayinDenetlenir` doğruysa okunur (istek başına paket okuması pahalıdır).
+export const yayinDenetlenir = (tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>, isEmriDurumu: string | null): boolean =>
+  tur === 'events' && satir['state'] === 'running' && paketIsEmri(satir['pkgId']) !== null && isEmriDurumu === 'bekliyor';
+export const yayinlanmamis = (paketDurumu: unknown): boolean => paketDurumu === 'draft';
 
 // İş emri paketinde çalışmaya geçen olay adımı başlatır, biten olay bitirir; parti kuralı bu iki komut için kayıttan önce sorulur.
 export function partiKomutu(tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>): 'baslat' | 'bitir' | null {

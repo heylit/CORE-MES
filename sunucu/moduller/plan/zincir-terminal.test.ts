@@ -31,9 +31,10 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     return assert.fail('plan kurma sonucu gelmedi');
   };
 
-  // 2186 (2169-5 a): ayar (arkon.yalniz-canli-plan) açılmadan önce zincirin terminal ucu. Planlamadan canlıya alınan iş Üretim Terminali
-  // paketinde canlı ve eşleşen görünür, operatör başlatınca emir başlar; ayar açıkken canlıya alınmamış iş başlatılamaz. Ayar yalnız bu testte açıktır.
-  test('ZT-02: canlıya alınan iş terminalde canlı görünür ve başlar; ayar açıkken plansız iş reddedilir', async (t) => {
+  // 2186 (2169-5 a): ayar (arkon.yalniz-canli-plan) açılmadan önce zincirin terminal ucu. Planlamadan canlıya alınan iş Hazırlık paketinde
+  // canlı ve eşleşen görünür; Hazırlık yayınlayınca operatör başlatır, emir başlar (2189-1 a: yayınlanmamış iş başlatılamaz); ayar açıkken
+  // canlıya alınmamış iş başlatılamaz. Ayar yalnız bu testte açıktır.
+  test('ZT-02: canlıya alınan iş Hazırlık yayınlayınca terminalde başlar; yayınlanmamış ve ayar açıkken plansız iş reddedilir', async (t) => {
     const { ortam } = durum();
     const ayar = async (acik: boolean) => {
       await ortam!.sahip.sorgu("DELETE FROM ayar WHERE anahtar = 'arkon.yalniz-canli-plan'");
@@ -48,12 +49,21 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     // Operatör istasyonda yetkin olmalı (Arkon başlatma kuralı); yetkinlik İstasyonlar modülünün kaydıdır, test kurulumu doğrudan yazar.
     await vt().sorgu("INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) SELECT id, $1 FROM kisi WHERE kullanici_adi = 'zincirop'", [durum().istasyonA]);
     const istasyonKodu = 'RT-A';
-    const paketPlani = async (isEmriId: number) => {
+    const paket = async (isEmriId: number) => {
       const b = await tamam<{ belgeler: { kimlik: string; govde: Record<string, unknown> }[] }>(c.yonetici, 'GET', '/arkon/belgeler/pkgs');
       const p = b.belgeler.find((x) => x.kimlik === `tmi-ie-${String(isEmriId)}`);
-      assert.ok(p, `iş emri ${String(isEmriId)} terminal paketinde`);
-      return (p.govde['tmi'] as Record<string, unknown> | undefined)?.['plan'] as Record<string, unknown> | undefined;
+      assert.ok(p, `iş emri ${String(isEmriId)} Hazırlık paketinde`);
+      return p.govde;
     };
+    const paketPlani = async (isEmriId: number) => ((await paket(isEmriId))['tmi'] as Record<string, unknown> | undefined)?.['plan'] as Record<string, unknown> | undefined;
+    // Üretim Hazırlık'ın yayını (Hazirlik.tsx: taslak paket 'published' olur, adımı olmalı); terminal yalnız yayınlanmış paketi gösterir.
+    const yayinla = async (isEmriId: number) => {
+      const govde = { ...(await paket(isEmriId)), status: 'published', steps: [{ id: 's1' }] };
+      const y = await istek(c.yonetici, 'POST', `/arkon/belgeler/pkgs/tmi-ie-${String(isEmriId)}/yaz`, { taban: null, govde, kaynak: 'zt' });
+      assert.equal(y.statusCode, 200, y.body);
+      assert.equal((await paket(isEmriId))['status'], 'published', 'yayınlanan paket listede yayında');
+    };
+    const kayitYok = async (cid: string) => assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_kayit WHERE cid = $1', [cid]))?.n, 0);
     let cidNo = 0;
     const baslat = (isEmriId: number) => {
       const satir = { cid: `zt-${String((cidNo += 1))}`, pkgId: `tmi-ie-${String(isEmriId)}`, state: 'running', machine: istasyonKodu };
@@ -80,10 +90,21 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     const yer = (await tamam<PlanCevabi>(c.planlama, 'GET', '/plan')).yerlesimler.find((x) => x.isEmriId === ie);
     assert.ok(yer, 'iş canlıda yerleşti');
 
-    // Terminal: paket canlı ve eşleşen, ayar zorunlu; operatör başlatır, emir başlar.
+    // Hazırlık: paket canlı ve eşleşen, ayar zorunlu, ama taslak; yayınlanmadan başlatma reddedilir (2189-1 a), kayıt girmez.
     const plan = await paketPlani(ie);
     assert.deepEqual([plan?.['canli'], plan?.['eslesiyor'], plan?.['zorunlu']], [true, true, true], JSON.stringify(plan));
     assert.deepEqual(plan?.['kaynak'], yer.kaynak);
+    assert.equal((await paket(ie))['status'], 'draft');
+    const taslak = baslat(ie);
+    const taslakRed = await taslak.cevap;
+    assert.equal(taslakRed.statusCode, 400, taslakRed.body);
+    assert.match(taslakRed.body, /Paket yayınlanmadı/);
+    await kayitYok(taslak.satir.cid);
+    assert.equal(await emirDurumu(ie), 'planli');
+
+    // Hazırlık yayınlar; terminal: operatör başlatır, emir başlar.
+    await yayinla(ie);
+    assert.deepEqual(await paketPlani(ie), plan, 'yayın plan durumunu değiştirmez');
     const b = baslat(ie);
     const cevap = await b.cevap;
     assert.equal(cevap.statusCode, 200, cevap.body);
@@ -91,14 +112,15 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, canlıdan Üretim Termina
     assert.equal(yansima?.sonuc, 'yazildi');
     assert.equal(await emirDurumu(ie), 'basladi');
 
-    // Canlıya alınmamış iş: paket plansız ve zorunlu; başlatma reddedilir, kayıt girmez, emir planlı kalır.
+    // Canlıya alınmamış iş: paket plansız ve zorunlu; yayınlansa da başlatma reddedilir, kayıt girmez, emir planlı kalır.
     const [plansiz] = await isEmirleriAc([yeniAdim()], 5) as [number];
     assert.deepEqual(await paketPlani(plansiz), { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: true });
+    await yayinla(plansiz);
     const r = baslat(plansiz);
     const red = await r.cevap;
     assert.equal(red.statusCode, 400, red.body);
     assert.match(red.body, /Plan canlıya alınmadı/);
-    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_kayit WHERE cid = $1', [r.satir.cid]))?.n, 0);
+    await kayitYok(r.satir.cid);
     assert.equal(await emirDurumu(plansiz), 'planli');
   });
 });

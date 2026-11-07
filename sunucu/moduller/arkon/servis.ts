@@ -54,7 +54,7 @@ import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
   adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
-  ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
+  ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
@@ -1964,15 +1964,20 @@ function konumKimlikCozucu(db: Db, sutunlar: readonly (KayitSutunlari | null)[])
 }
 
 // Parça paketinin adedi ve parça sayısı plandaki parçadandır (istek başına paket başına bir okuma); parça plandan kalktıysa null.
+// Başlatmada paketin yayın durumu da buradan okunur.
 function parcaOkuyucu(db: Db) {
-  const onbellek = new Map<string, { no: number; adet: number; toplam: number } | null>();
+  const paketler = new Map<string, Record<string, unknown> | null>();
+  const paket = async (kimlik: string) => {
+    if (!paketler.has(kimlik)) paketler.set(kimlik, await isEmriTaslagi(db, kimlik));
+    return paketler.get(kimlik) ?? null;
+  };
   return {
-    bilgi: async (kimlik: string) => {
-      if (!onbellek.has(kimlik)) {
-        const p = (await isEmriTaslagi(db, kimlik))?.['tmi'] as { parca?: { no: number; adet: number; toplam: number } } | undefined;
-        onbellek.set(kimlik, p?.parca ?? null);
-      }
-      return onbellek.get(kimlik) ?? null;
+    bilgi: async (kimlik: string) => ((await paket(kimlik))?.['tmi'] as { parca?: { no: number; adet: number; toplam: number } } | undefined)?.parca ?? null,
+    // Paketin Hazırlık durumu (draft, review, published…): kayıtlı paketinki; kaydı yoksa TMI taslağınınki (bölünmüş işin parçası
+    // bütünün yayınıyla açılır, `parcaYayini`).
+    durum: async (kimlik: string): Promise<unknown> => {
+      const kayitli = await sorgular.belge(db, 'pkgs', kimlik);
+      return kayitli !== null ? alanOku(kayitli.govde, 'status') : (await paket(kimlik))?.['status'];
     },
   };
 }
@@ -2018,6 +2023,9 @@ export async function kayitEkle(
     const parca = paketParcasi(satir['pkgId']);
     const plan = parca?.no == null ? planlar.get(isEmriId ?? -1) : parcaPlanlari.get(String(satir['pkgId'])) ?? planlar.get(parca.isEmriId);
     if (isEmriId !== null && planBaslatmaReddi(tur, satir, bag?.durum ?? null, plan, planZorunlu)) throw dogrulama(ILETILER.planCanliDegil, `satirlar.${sira}.state`);
+    if (isEmriId !== null && yayinDenetlenir(tur, satir, bag?.durum ?? null) && yayinlanmamis(await parcalar.durum(String(satir['pkgId'])))) {
+      throw dogrulama(ILETILER.paketYayinlanmadi, `satirlar.${sira}.state`);
+    }
     const parcaBilgisi = parca?.no == null ? null : await parcalar.bilgi(String(satir['pkgId']));
     if (tur === 'counts' && parca?.no != null) {
       const cid = typeof satir['cid'] === 'string' ? satir['cid'] : null;

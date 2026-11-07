@@ -128,7 +128,7 @@ export function pozisyonTanimOnerileri(liste: readonly PozisyonTanimi[], departm
   return [...new Set(uygun.map((t) => (t.ad ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
 }
 
-// Hazır pozisyon listesi (2177c, kullanıcı onayı 07.11): yalnız genel sektör unvanları; departman, kadro ya da şirkete özgü
+// Hazır pozisyon listesi: yalnız genel sektör unvanları; departman, kadro ya da şirkete özgü
 // ad içermez (depo açıktır). İK "Hazır listeyi ekle" ile ekler; eklenen tanım sıradan kayıttır, düzenlenir ve silinir.
 export interface HazirPozisyon { ad: string; yakaTipi: 'Beyaz yaka' | 'Mavi yaka'; kademe: string }
 const hazir = (yakaTipi: HazirPozisyon['yakaTipi'], kademe: string, adlar: readonly string[]): HazirPozisyon[] => adlar.map((ad) => ({ ad, yakaTipi, kademe }));
@@ -151,6 +151,18 @@ export const HAZIR_POZISYONLAR: readonly HazirPozisyon[] = [
 export function eksikHazirPozisyonlar(liste: readonly PozisyonTanimi[]): HazirPozisyon[] {
   const mevcut = new Set(liste.map((t) => (t.ad ?? '').trim().toLocaleLowerCase('tr')));
   return HAZIR_POZISYONLAR.filter((h) => !mevcut.has(h.ad.toLocaleLowerCase('tr')));
+}
+
+// Hazır departman listesi: yalnız genel bölüm adları; kod, yönetici ve bütçe boş kalır, İK doldurur.
+export const HAZIR_DEPARTMANLAR: readonly string[] = [
+  'Yönetim', 'Üretim', 'Üretim Planlama', 'Mühendislik', 'Kalite', 'Bakım', 'Satın Alma', 'Depo ve Sevkiyat', 'Satış', 'Muhasebe ve Finans',
+  'İnsan Kaynakları ve İdari İşler',
+];
+
+// Henüz tanımı olmayan hazır departmanlar; ad karşılaştırması boşluk ve büyük-küçük harf farkını saymaz.
+export function eksikHazirDepartmanlar(liste: readonly Departman[]): string[] {
+  const mevcut = new Set(liste.map((d) => (d.ad ?? '').trim().toLocaleLowerCase('tr')));
+  return HAZIR_DEPARTMANLAR.filter((ad) => !mevcut.has(ad.toLocaleLowerCase('tr')));
 }
 
 // Pozisyondaki aktif çalışan sayısı: personelin pozisyon metni tanım adıyla aynıysa (boşluk ve büyük-küçük harf farkı sayılmaz).

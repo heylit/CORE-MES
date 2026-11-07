@@ -348,3 +348,15 @@ export function malzemelerinAcikEmirleriGetir(db: Db, malzemeNolari: readonly nu
     [[...malzemeNolari]],
   );
 }
+
+// Planlama kaynağının emir dilimi (2216-1 a): açık emirler, son `gun` günde kapananlar ve çağıranın verdiği kimlikler. Kapanış anı biten
+// emirde bitiş, iptalde iptal anıdır. Bütün kapalı tarihçe her okumada gitmesin diye süzgeç sorgudadır.
+export function dilimUstEmirleri(db: Db, gun: number, dahil: readonly number[]): Promise<UstEmirSatiri[]> {
+  return db.sorgu<UstEmirSatiri>(
+    `SELECT ${UST} FROM uretim_emri e
+      WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL
+        AND (NOT ${KAPALI} OR COALESCE(e.bitis, e.iptal) >= now() - make_interval(days => $1) OR e.id = ANY($2::int[]))
+      ORDER BY e.id DESC`,
+    [gun, [...dahil]],
+  );
+}

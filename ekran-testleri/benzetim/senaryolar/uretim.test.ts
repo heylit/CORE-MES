@@ -54,6 +54,8 @@ function sahteSunucu(boz: (c: Cagri) => Cevap | undefined = () => undefined): { 
     if (y === 'POST /api/plan/kuyruklari-yaz') return { taslak: 1, canli: false, yazilan: 2, atlanan: 0 };
     if (y === 'GET /api/plan') return { taslak: { surum: 1 }, yerlesimler: [...emirler.keys()].flatMap((e) => [{ uretimEmriId: e }, { uretimEmriId: e }]) };
     if (/^POST \/api\/arkon\/kayitlar\//.test(y)) return { eklenen: 1, reddedilen: [] };
+    if (y === 'GET /api/arkon/belgeler/pkgs') return { belgeler: [11, 12].map((ie) => ({ kimlik: `tmi-ie-${String(ie)}`, surum: 1, govde: { id: `tmi-ie-${String(ie)}`, status: 'draft' } })) };
+    if (/^POST \/api\/arkon\/belgeler\/pkgs\/.+\/yaz$/.test(y)) return { sonuc: 'yazildi', surum: yeni() };
     if (y === 'GET /api/sevkiyat/bekleyenler') return { bekleyenler: [...emirler.keys()].map((e) => ({ id: 2, uretimEmriId: e })) };
     if (y === 'POST /api/sevkiyat/noktalar/ekle') return { nokta: { id: 1 } };
     if (/ise-cevir$/.test(y)) return { is: { id: 3 } };
@@ -126,7 +128,13 @@ describe('üretim senaryosu: akış', () => {
     const rolu = (kalip: RegExp): Hesap[] => [...new Set(s.cagrilar.filter((c) => kalip.test(`${c.yontem} ${c.yol}`)).map((c) => c.rol))];
     assert.deepEqual(rolu(/^POST \/api\/siparisler\/7\/onayla$/), ['ornek.mudur']);
     assert.deepEqual(rolu(/^POST \/api\/rota\/revizyonlar\/5\/onayla$/), ['ornek.mudur']);
-    assert.deepEqual(rolu(/^POST \/api\/arkon\//), ['ornek.operator1']);
+    assert.deepEqual(rolu(/^POST \/api\/arkon\/kayitlar\//), ['ornek.operator1']);
+    // 2189-1 a: Hazırlık paketi başlatmadan önce yayınlar; operatör paket yazmaz.
+    assert.deepEqual(rolu(/^POST \/api\/arkon\/belgeler\//), ['ornek.planlama']);
+    const yayinlar = s.cagrilar.filter((c) => /^\/api\/arkon\/belgeler\/pkgs\/.+\/yaz$/.test(c.yol)).map((c) => (c.govde as { govde: { status: string } }).govde.status);
+    const baslatmalar = s.cagrilar.filter((c) => c.yol === '/api/arkon/kayitlar/events/ekle' && (c.govde as { satirlar: { state: string }[] }).satirlar[0]?.state === 'running').length;
+    assert.ok(baslatmalar > 0);
+    assert.deepEqual(yayinlar, Array.from({ length: baslatmalar }, () => 'published'), 'her başlatılan iş önce yayınlanır');
     assert.deepEqual(rolu(/ilk-parca/), ['ornek.kalite']);
     assert.deepEqual(rolu(/^POST \/api\/(stok|sevkiyat)\//), ['ornek.depo']);
     // Sunucu motoru için koşu başına bir vardiya, iş merkezinin yedi günü ve bir planlama çalışması kaydı.
@@ -155,7 +163,7 @@ describe('üretim senaryosu: akış', () => {
   it('iş emirleri cevap sırasıyla değil adım sırasıyla yürür', async () => {
     const s = sahteSunucu();
     await kos('u3', s);
-    const kopya = s.cagrilar.filter((c) => /arkon|ilk-parca/.test(c.yol)).slice(0, 4)
+    const kopya = s.cagrilar.filter((c) => /arkon\/kayitlar|ilk-parca/.test(c.yol)).slice(0, 4)
       .map((c) => `${c.yol.includes('ilk-parca') ? 'ilk-parca' : String((c.govde as { satirlar: { pkgId: string }[] }).satirlar[0]?.pkgId)}`);
     assert.equal(kopya[0], 'tmi-ie-11');
   });

@@ -1890,6 +1890,16 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   const paketOku = async (kimlik: string) => (await istek<{ belge: { surum: number; govde: Paket } | null }>(yonetici, 'GET', `/arkon/belgeler/pkgs/${kimlik}`)).govde.belge;
   const paketYaz = (kimlik: string, taban: number | null, govde: Paket, cerez = yonetici) =>
     istek<{ sonuc: string; surum?: number }>(cerez, 'POST', `/arkon/belgeler/pkgs/${kimlik}/yaz`, { taban, govde, kaynak: 'y1' });
+  // 2189-1 a: terminalde başlatmadan önce Hazırlık yayını; taslak paket başlatılmaz.
+  const yayinla = async (...kimlikler: string[]) => {
+    const liste = await paketler();
+    for (const k of kimlikler) {
+      const p = liste.get(k);
+      assert.ok(p, `${k} Hazırlık'ta`);
+      const y = await paketYaz(k, null, { ...p.govde, status: 'published', steps: [{ id: 's1' }] });
+      assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    }
+  };
   const makinesi = async (isEmriId: number) => ({ tur: 'makine', id: (await ortam!.sahip.tek<{ m: number }>(
     'SELECT makine_id AS m FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.m });
   const tmiPlani = (p: Paket | undefined): unknown => (p?.['tmi'] as Record<string, unknown> | undefined)?.['plan'];
@@ -2037,6 +2047,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal((await ekle(operator, 'counts', sayim(p2k, 'good', 8))).durum, 200);
 
     // Olaylar: öteki parça çalışırken başlatma ve bitirme iş emrini değiştirmez.
+    await yayinla(p1k, p2k);
     const olayi = (k: string, state: string) => ({ cid: cid(), pkgId: k, state, machine: k === p1k ? r.ilk : r.ikinci });
     const b1 = olayi(p1k, 'running');
     assert.equal((await ekle(operator, 'events', b1)).durum, 200);
@@ -2061,6 +2072,14 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const r = await rotaliEmirKur({ plansiz: true });
     const [ie1] = await isEmriIdleri(r.emirId);
     assert.deepEqual(tmiPlani((await paketler()).get(ieKimligi(ie1!))?.govde), { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: false });
+    // 2189-1 a: ayar kapalıyken de Hazırlık'ta yayınlanmamış paket başlatılmaz; kayıt girmez, emir planlı kalır.
+    const taslakta = ieOlay(ie1!, 'running', { machine: r.ilk });
+    const ret = await ekle(operator, 'events', taslakta);
+    assert.equal(ret.durum, 400, JSON.stringify(ret.govde));
+    assert.match(JSON.stringify(ret.govde), /Paket yayınlanmadı/);
+    assert.equal(await kayitSayisi(taslakta.cid), 0);
+    assert.equal((await emirOku(r.emirId)).durum, 'planli');
+    await yayinla(ieKimligi(ie1!));
     const satir = ieOlay(ie1!, 'running', { machine: r.ilk });
     assert.equal((await ekle(operator, 'events', satir)).durum, 200);
     assert.equal((await yansima(satir.cid))?.sonuc, 'yazildi');
@@ -2125,6 +2144,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     // Yöneticinin açık taslağı kalmasın: plan yazımı kişinin açık taslağını sürdürür, öteki testleri etkiler.
     await ortam!.sahip.sorgu('DELETE FROM plan_senaryosu WHERE id = $1', [senaryo]);
     assert.deepEqual(await planOku(ie1!), { canli: false, sira: null, eslesiyor: false, kaynak: null, zorunlu: true });
+    await yayinla(ieKimligi(ie1!));
     const reddedilir = async () => {
       const satir = ieOlay(ie1!, 'running', { machine: r.ilk });
       const c = await ekle(operator, 'events', satir);
@@ -2250,6 +2270,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const kaynak = await makinesi(ie1!);
     await canliyaYerlestir(ie3!, { makine: kaynak.id }, 60);
     await canliyaYerlestir(ie2!, { makine: kaynak.id }, 100);
+    await yayinla(ieKimligi(ie1!));
     const basla = ieOlay(ie1!, 'running', { machine: r.ilk });
     assert.equal((await ekle(operator, 'events', basla)).durum, 200);
     assert.equal((await yansima(basla.cid))?.sonuc, 'yazildi', JSON.stringify(await yansima(basla.cid)));
@@ -2346,6 +2367,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const [, , b3] = await isEmriIdleri(b.emirId);
     await canliyaYerlestir(a3!, { makine: kaynak.id }, 60);
     await canliyaYerlestir(b3!, { makine: kaynak.id }, 120);
+    await yayinla(ieKimligi(a1!));
     const basla = ieOlay(a1!, 'running', { machine: a.ilk });
     assert.equal((await ekle(operator, 'events', basla)).durum, 200);
     assert.equal((await yansima(basla.cid))?.sonuc, 'yazildi');
@@ -2401,6 +2423,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const uyarisi = (c: { govde: unknown }, cid: string): string =>
       ((c.govde as { uyarilar?: { cid: string; ileti: string }[] }).uyarilar ?? []).find((u) => u.cid === cid)?.ileti ?? '';
+    await yayinla(ieKimligi(ie1!), ieKimligi(ie2!));
     // 626 a: ikinci adımın paketiyle erken başlatma reddedilmez; TMI'de adım başlar, operatör uyarıyı görür.
     const erkenBasla = ieOlay(ie2!, 'running', { machine: r.ikinci });
     const basla = await ekle(operator, 'events', erkenBasla);
@@ -2468,7 +2491,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
     const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
     const k1 = ieKimligi(ie1!);
-    assert.equal((await paketYaz(k1, null, (await paketOku(k1))!.govde)).durum, 200);
+    assert.equal((await paketYaz(k1, null, { ...(await paketOku(k1))!.govde, status: 'published', steps: [{ id: 's1' }] })).durum, 200);
     // Sentetik kayıt: kalite adımı bağı için emrin üçüncü adımı kullanılır; toplama yalnız adet ve adım girer.
     await ortam!.sahip.sorgu(
       `INSERT INTO uretim_emirleri_hatali_kaydi (uretim_emri_id, is_emri_id, hedef_emir_id, kalite_is_emri_id, hurda_nedeni_id, adet, kisi_id)
@@ -2693,13 +2716,14 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     await canliyaYerlestir(rework!, { makine: ilkMakine });
     const kayitVar = async (cid: string): Promise<boolean> =>
       (await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM arkon_kayit WHERE cid = $1', [cid]))!.n > 0;
+    const [ie1, , ie3] = await isEmriIdleri(r.emirId);
+    await yayinla(ieKimligi(rework!), ieKimligi(ie1!));
     const red = ieOlay(rework!, 'running', { machine: r.ilk });
     const c = await ekle(operator, 'events', red);
     assert.equal(c.durum, 409, JSON.stringify(c.govde));
     assert.match(JSON.stringify(c.govde), new RegExp(KOL_ONCEKI_BITMEDI.replace(/[.,]/g, '.')));
     assert.equal(await kayitVar(red.cid), false);
     assert.equal((await yansima(red.cid)) ?? null, null);
-    const [ie1, , ie3] = await isEmriIdleri(r.emirId);
     const birlesmeBitir = ieOlay(ie3!, 'done', { machine: r.ilk });
     const b = await ekle(operator, 'events', birlesmeBitir);
     assert.equal(b.durum, 409, JSON.stringify(b.govde));
