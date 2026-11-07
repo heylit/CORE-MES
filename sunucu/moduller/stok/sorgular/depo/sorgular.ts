@@ -25,6 +25,8 @@ export interface BakiyeHam {
   statuId: number | null; kaliteDurumu: KaliteDurumu;
   // 2099-2 c: lotun son kullanma tarihi (YYYY-AA-GG); tarihi olmayan lotta ve partisiz satırda null.
   sonKullanma: string | null;
+  // 2224-2 b: bu konuma geliş (stok_bakiye.konuma_gelis); giriş hareketi bulunmayan eski satırda null.
+  konumaGelis: string | null;
 }
 export interface HareketHam {
   id: number; zaman: string; tur: 'giris' | 'cikis' | 'transfer' | 'sayim_fazla' | 'sayim_eksik' | 'geri_alma'; malzemeId: number; partiId: number | null;
@@ -207,3 +209,33 @@ export const rafinGozleri = (db: Db, rafId: number): Promise<GozHam[]> => db.sor
    WHERE k.raf_id = $1 AND k.aktif ORDER BY k.kat_no DESC, k.bolme_no`,
   [rafId],
 );
+// ---- Konumdaki malzeme ve bekleme süresi (2224) -----------------------------------------------------------------------------
+export type KonumMalzemesiHam = BakiyeHam & { konumAd: string | null };
+export interface KonumMalzemesiSuzgeci { tur?: KonumTuru | undefined; metin?: string | undefined; malzemeId?: number | undefined }
+const konumMalzemesiSuzgeci = (s: KonumMalzemesiSuzgeci): { sql: string; p: unknown[] } => ({
+  sql: `WHERE k.aktif AND b.miktar > 0 AND ($1::text IS NULL OR k.tur = $1) AND ($2::int IS NULL OR b.malzeme_id = $2)
+          AND ($3::text IS NULL OR ${S('k.kod')} LIKE $3 OR ${S('k.ad')} LIKE $3)`,
+  p: [s.tur ?? null, s.malzemeId ?? null, icinde(s.metin)],
+});
+// Varsayılan sıra en eski geliş (en uzun bekleyen) önce; gelişi bilinmeyen satır sonda.
+export const KONUM_MALZEMESI_SIRALAMASI: SiralamaTanimi<'gelis' | 'konum'> = {
+  sutunlar: { gelis: 'b.konuma_gelis', konum: 'k.kod' }, ikincil: 'b.id', varsayilan: { sutun: 'b.konuma_gelis', yon: 'artan' },
+};
+export async function konumMalzemesiSay(db: Db, s: KonumMalzemesiSuzgeci): Promise<number> {
+  const f = konumMalzemesiSuzgeci(s);
+  return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id ${f.sql}`, f.p))?.toplam ?? 0;
+}
+export function konumMalzemeleri(db: Db, s: KonumMalzemesiSuzgeci, sira: SiralamaIstegi<'gelis' | 'konum'>, d: Dilim): Promise<KonumMalzemesiHam[]> {
+  const f = konumMalzemesiSuzgeci(s);
+  return db.sorgu(
+    `SELECT b.id, b.malzeme_id AS "malzemeId", b.konum_id AS "konumId", k.kod AS "konumKod", k.tur AS "konumTur", k.ad AS "konumAd", b.parti_id AS "partiId",
+       p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "uretimEmriId", b.miktar,
+       ${zamanMetni('b.ilk_giris')} AS "ilkGiris", b.ambalaj_tur AS "ambalajTur", b.ambalaj_olcu AS "ambalajOlcu", b.ambalaj_adet AS "ambalajAdet",
+       b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu", sk.son_kullanma AS "sonKullanma", ${zamanMetni('b.konuma_gelis')} AS "konumaGelis"
+     FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+     LEFT JOIN stok_parti p ON p.id = b.parti_id LEFT JOIN stok_parti_son_kullanma sk ON sk.parti_id = b.parti_id
+     ${f.sql}
+     ORDER BY ${siralamaSql(KONUM_MALZEMESI_SIRALAMASI, sira)} LIMIT $4 OFFSET $5`,
+    [...f.p, d.sinir, d.atla],
+  );
+}

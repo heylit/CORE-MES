@@ -11,6 +11,7 @@ import { HaritaEsleDugmesi } from './HaritaBagi.tsx';
 import { SayfaBasi, hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { ZeminIzgarasi } from './ZeminIzgarasi.tsx';
+import { KonumMalzemeleri } from './KonumMalzemeleri.tsx';
 import './stok.css';
 
 // Fason kutuları (K-080 c): fasona giden yarı mamul burada durur; hizmet siparişinin mal kabulü gideni buradan düşer.
@@ -59,7 +60,7 @@ export function Konumlar() {
   const yonlendir = useNavigate();
   const tanimlar = useIslem('stok.tanim');
   const [ac, setAc] = useState<false | (typeof ELLE_KONUM_TURLERI)[number]>(false);
-  const [gorunum, setGorunum] = useState<'zemin' | 'fason' | 'liste'>('zemin');
+  const [gorunum, setGorunum] = useState<'zemin' | 'malzemeler' | 'fason' | 'liste'>('zemin');
   const liste = useListeDurumu({ suzgecler: { tur: '' as '' | (typeof KONUM_TURLERI)[number] }, suzgecDegerleri: { tur: KONUM_TURLERI }, siralamaAlanlari: ['kod', 'tur'], adres: true });
   const l = useQuery({ queryKey: anahtarlar.liste('konumlar', liste.sorgu), queryFn: () => api.get<KonumlarCevabi>(`/stok/konumlar${sorguMetni(liste.sorgu)}`) });
   const sutunlar: Sutun<Konum>[] = [...SUTUNLAR, {
@@ -69,8 +70,9 @@ export function Konumlar() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Konumlar" alt="Fabrika zemini (harita kareleri), raf gözleri, mal kabul alanı, üretim çıkışı ve fason kutuları." sag={tanimlar && <><HaritaEsleDugmesi /><Dugme tur="birincil" simge="plus" onClick={() => setAc('depo_zemini')}>Konum aç</Dugme></>} />
-      <Sekmeler etiket="Konum görünümü" secili={gorunum} sec={setGorunum} sekmeler={[{ anahtar: 'zemin', baslik: 'Fabrika zemini' }, { anahtar: 'fason', baslik: 'Fason kutuları' }, { anahtar: 'liste', baslik: 'Bütün konumlar' }]} />
+      <Sekmeler etiket="Konum görünümü" secili={gorunum} sec={setGorunum} sekmeler={[{ anahtar: 'zemin', baslik: 'Fabrika zemini' }, { anahtar: 'malzemeler', baslik: 'Konumdaki malzemeler' }, { anahtar: 'fason', baslik: 'Fason kutuları' }, { anahtar: 'liste', baslik: 'Bütün konumlar' }]} />
       {gorunum === 'zemin' && <ZeminIzgarasi />}
+      {gorunum === 'malzemeler' && <KonumMalzemeleri />}
       {gorunum === 'fason' && <FasonKutulari ac={tanimlar ? () => setAc('fason') : null} />}
       {gorunum === 'liste' && <>
       <Kart sag={<><EtiketMerkeziDugmesi tur="konum" simge="scan" idler={(l.data?.satirlar ?? []).map((k) => k.id)}>Sayfanın etiketleri</EtiketMerkeziDugmesi><Secim etiket="Tür" value={liste.suzgecler.tur} onChange={(e) => liste.suzgecDegistir({ tur: e.target.value as '' })} secenekler={KONUM_TURLERI.map((t) => ({ deger: t, baslik: KONUM_ETIKETI[t] }))} bosSecenek="Hepsi" /></>}>

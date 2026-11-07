@@ -5,7 +5,7 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
-  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi,
+  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -63,6 +63,18 @@ export async function konumAyrintisi(db: Db, id: number): Promise<KonumAyrintiCe
     haritaYeri: konum.haritaGozId !== null ? (await haritaGozAdresi(db, konum.haritaGozId))?.adres ?? null
       : konum.haritaAlanId !== null ? (await haritaAlanlari(db)).find((a) => a.id === konum.haritaAlanId)?.ad ?? null : null,
   };
+}
+export async function konumMalzemeleri(db: Db, s: KonumMalzemeleriListesi): Promise<SayfaliListe<KonumMalzemesi>> {
+  const suzgec = { tur: s.tur, metin: s.metin, malzemeId: s.malzemeId };
+  return sayfaliListe(s, {
+    say: () => sorgular.konumMalzemesiSay(db, suzgec),
+    satirlar: async (d) => {
+      const b = await sorgular.konumMalzemeleri(db, suzgec, s, d);
+      const ad = await adlar(db, b.map((x) => x.malzemeId));
+      const nolar = await emirNoHaritasi(db, b.map((x) => x.uretimEmriId));
+      return b.map((x) => ({ ...bakiyeSatiri(x, ad, nolar), konumTur: x.konumTur as KonumMalzemesi['konumTur'], konumAd: x.konumAd }));
+    },
+  });
 }
 export async function konumAc(db: Db, g: { tur: ElleKonumTuru; kod: string; ad?: string | null | undefined; depoId?: number | undefined }): Promise<{ konum: Konum }> {
   const depoId = g.depoId ?? (await sorgular.depoKimligi(db, 'ANA'));

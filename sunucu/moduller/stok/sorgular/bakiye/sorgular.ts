@@ -13,7 +13,7 @@ import type { BakiyeHam, HareketHam, PartiHam } from '../depo/sorgular.ts';
 const BAKIYE_SECIMI = `SELECT b.id, b.malzeme_id AS "malzemeId", b.konum_id AS "konumId", k.kod AS "konumKod", k.tur AS "konumTur", b.parti_id AS "partiId",
   p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.uretim_emri_id AS "uretimEmriId", b.miktar,
   ${zamanMetni('b.ilk_giris')} AS "ilkGiris", b.ambalaj_tur AS "ambalajTur", b.ambalaj_olcu AS "ambalajOlcu", b.ambalaj_adet AS "ambalajAdet", b.statu_id AS "statuId",
-  b.kalite_durumu AS "kaliteDurumu", sk.son_kullanma AS "sonKullanma"
+  b.kalite_durumu AS "kaliteDurumu", sk.son_kullanma AS "sonKullanma", ${zamanMetni('b.konuma_gelis')} AS "konumaGelis"
   FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id LEFT JOIN stok_parti p ON p.id = b.parti_id
   LEFT JOIN stok_parti_son_kullanma sk ON sk.parti_id = b.parti_id`;
 // Statü verilmezse serbest (statüsüz) satır: düşüm, sayım ve taşıma yalnız serbest stoğa dokunur (STK-S3); statülü stok statü
@@ -113,6 +113,21 @@ export const bakiyeEkle = (db: Db, b: BakiyeYeni): Promise<unknown[]> => db.sorg
 );
 export const bakiyeGuncelle = (db: Db, id: number, miktar: string, ilkGiris: string, ambalajAdet: number | null): Promise<unknown[]> =>
   db.sorgu('UPDATE stok_bakiye SET miktar = $2, ilk_giris = $3, ambalaj_adet = $4 WHERE id = $1 RETURNING id', [id, miktar, ilkGiris, ambalajAdet]);
+// 2224-2 b: satırın bu konuma gelişi hareketlerden yenilenir (göç 20261107171006 ile aynı kural): konuma giren hareketler yeniden
+// eskiye toplanır, eldeki miktarı karşılayan giriş anı alınır; aynı konumdaki statü ve kalite değişimi ve geri alınan giriş
+// sayılmaz. Hareket bulunmazsa (hareketi bakiyeden sonra yazan akış) var olan değer kalır.
+export const konumaGelisYenile = (db: Db, id: number): Promise<unknown[]> => db.sorgu(
+  `UPDATE stok_bakiye b SET konuma_gelis = COALESCE((
+     SELECT z.zaman FROM (
+       SELECT h.zaman, sum(h.miktar) OVER (ORDER BY h.zaman DESC, h.id DESC) AS toplam
+       FROM stok_hareketi h
+       WHERE h.hedef_konum_id = b.konum_id AND h.malzeme_id = b.malzeme_id AND h.parti_id IS NOT DISTINCT FROM b.parti_id
+         AND h.tur IN ('giris', 'transfer', 'sayim_fazla') AND h.kaynak_konum_id IS DISTINCT FROM h.hedef_konum_id
+         AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)
+     ) z
+     ORDER BY (z.toplam < b.miktar), CASE WHEN z.toplam >= b.miktar THEN z.toplam ELSE -z.toplam END
+     LIMIT 1), b.konuma_gelis)
+   WHERE b.id = $1 RETURNING b.id`, [id]);
 export const bakiyeSil = (db: Db, id: number): Promise<unknown[]> => db.sorgu('DELETE FROM stok_bakiye WHERE id = $1 RETURNING id', [id]);
 
 // ---- Parti ----------------------------------------------------------------------------------------------------------------

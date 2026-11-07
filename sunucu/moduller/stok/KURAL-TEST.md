@@ -187,3 +187,4 @@ Karar: kullanıcı, 26.10.2026 (614 1a, 3a; okuma teyitli).
 | STK-2099c geçmiş SKT'li lot yalnız `stok.skt-onayla` onayıyla çıkar; not harekette kalır | V `skt.test.ts` "geçmiş SKT" | Tekrar korumalı komut |
 | STK-2099d SKT düzeltmesi yalnız müdür; sürümlü; eski ve yeni değer defterde | V `skt.test.ts` "SKT düzeltmesi"; K `stok_parti_son_kullanma_degisiklik` tetiği | Sürümlü (`surum`) |
 | STK-2099e tür listeleri kategoriyle süzülür; alanlar karttan, miktar stoktan | V `skt.test.ts` "tür listesi"; E `tur-listeleri.test.tsx` | Sürümsüz (okuma) |
+| STK-2224 `stok_bakiye.konuma_gelis` (2224-2 b): her bakiye yazımında hareketten yenilenir; eldeki miktarı karşılayan en eski giriş, çıkışta ilerler; aynı konumdaki statü ya da kalite değişimi ve geri alınan giriş sayılmaz; hareketi olmayan eski satır boş. Göç aynı kuralla doldurur. Depoya ilk giriş ayrı kalır | V `konum-malzemeleri.test.ts`; E `konum-malzemeleri.test.tsx` | Sürümsüz (servis yazımı) |

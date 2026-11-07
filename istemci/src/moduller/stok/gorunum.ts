@@ -26,6 +26,14 @@ export { BELIRSIZ_MIKTAR, BelirsizMiktarHatasi, belirsizMiktarVar, miktarGirdisi
 
 const ZAMAN = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 export const zamanMetni = (iso: string | null): string => (iso === null ? '—' : ZAMAN.format(new Date(iso)));
+// 2224: konumda geçen süre; gün varsa tam gün, yoksa saat, yoksa dakika. Geliş bilinmiyorsa "—" (sıfır uydurulmaz).
+export function beklemeMetni(gelis: string | null | undefined, simdi = Date.now()): string {
+  if (gelis == null) return '—';
+  const dk = Math.max(0, Math.floor((simdi - Date.parse(gelis)) / 60_000));
+  if (dk >= 1440) return `${String(Math.floor(dk / 1440))} gün`;
+  if (dk >= 60) return `${String(Math.floor(dk / 60))} sa`;
+  return `${String(dk)} dk`;
+}
 export const bugunMetni = (): string => new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' }).format(new Date());
 
 export const HAREKET_ETIKETI: Record<HareketTuru, string> = {
