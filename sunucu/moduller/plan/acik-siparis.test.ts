@@ -28,7 +28,7 @@ const D0 = { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], cal
 const kaynak = (acikSiparisler: unknown) => ({ durum: { stations: [{ id: '10', code: 'TOR', name: 'Torna', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }] }, ek: { acikSiparisler } });
 const satinalma = (r: ReturnType<typeof planGirdisi>): unknown => (r?.S['D'] as { satinalma?: unknown }).satinalma;
 
-// Katı kipte malzemenin işe hazır olduğu saat (engine.betik matAlloc): plan başlangıç günü 00:00'dan saat.
+// Katı kipte malzemenin işe hazır olduğu saat (engine.js matAlloc): plan başlangıç günü 00:00'dan saat.
 function hazir(st: MotorDurumu): number {
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
   vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });

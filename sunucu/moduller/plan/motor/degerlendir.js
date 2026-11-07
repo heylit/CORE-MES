@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Planlama değerlendirmesi (Soru 357 a) ----------
    Planlama sayfasının tarayıcıda motoru koşturan kartları sunucuda aynı kodla hesaplanır: plan seçenekleri, teklif termin seçenekleri,
    termin uzatma önerisi (zw-denge), malzeme ve fason terminleri listesi (zv-termin), malzeme öne çekme (zz7), partiyi böl (zz4, zz10) ve
@@ -23,6 +24,7 @@ const ymAnahtar = e => `${e.m}|${e.gun}|${e.vardiya}`;
 
 /* plan dengesine göre dondurma bölgesi (t-tekyer): bölgedeki işler bugünkü yerinde geçici kilitlenir */
 const DENGE_UFUK = { elle: 72, dengeli: 24, otomatik: 0 };
+/** @param {MotorDurumu} [st] */
 function dengeKilit(st) {
   const u = DENGE_UFUK[S.w.denge] != null ? DENGE_UFUK[S.w.denge] : DENGE_UFUK.dengeli; if (!u || !S.plan) return st;
   const a = st.now, b = a + u; const var_ = new Set(st.D.siparisler.map(s => s.id));
@@ -32,6 +34,7 @@ function dengeKilit(st) {
 
 /* planın kaydı (c-masa): ekranın sakladığı biçim */
 function opKaydi(r) { return { id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0 }; }
+/** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const ef = evaluate(p, st, ref, false);
   const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
@@ -40,6 +43,7 @@ function planKaydi(p, st, ref) {
   return { ops, fail: p.fail || [], ozet: { wT: ef.wT, onT: ef.onT, late: ef.late, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
+/** @param {MotorDurumu} [st] @param {any} [ms] */
 function dgPlanKur(st, ms = 0) {
   stHazirla(st); const cx = compile(st); let cur = schedule(st, 'dagit', null, { cx }); slack(cur, cx); let E = evaluate(cur, st, null, true);
   const t0 = Date.now(); let seed = 17, durgun = 0;
@@ -47,6 +51,7 @@ function dgPlanKur(st, ms = 0) {
   return planKaydi(cur, st, null);
 }
 /* sayfanın kısa araması (t-tekyer kisaArama) */
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [p0] @param {any} [ms] */
 function kisaArama(st, cx, p0, ms) {
   const L = lns(st, p0, null, { ms, seed: 7, free: true });
   let p = p0; if (cmpEv(L.e, evaluate(p0, st, null, true)) > 0 && (L.plan.fail || []).length <= (p0.fail || []).length) p = L.plan;
@@ -68,7 +73,9 @@ function agGecTL(x, T) {
   const h = x.tavanTL / x.ceza; return T <= h ? T * x.b : h * x.b + (T - h) * x.sonra;
 }
 const ymMesaiUcret = D => { const u = (D.ayarlar || {}).mesaiUcret; return u == null || u === '' || !isFinite(+u) ? null : +u; };
+/** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
 function ymMesaiTLYalin(D, cx, e) { const u = ymMesaiUcret(D); if (u == null) return null; const Y = ymAyar(); const g = cx.days[e.gun]; const tat = !g || !g.vard.length; return ymVH(D, e.vardiya) * u * (tat ? +Y.mesaiCarpan || 1 : 1); }
+/** @param {Derleme} [cx] @param {any} [r] */
 function ymFasonTL(cx, r) {
   const f = cx.FS[r.m.slice(1)]; const o = cx.byId[r.id]; if (!f || !o) return null; const cl = o.cTum || o.c; const c = cl.find(x => x.m === r.m) || {};
   if (c.opt) { const h = Math.min(...cl.filter(x => !x.fas).map(x => x.run), Infinity); return isFinite(h) && f.saatFiyat != null ? h * f.saatFiyat + (+f.tasima || 0) * o.adet : null; }
@@ -126,6 +133,7 @@ const ggTek = () => { const g = ymAyar().genelGider; return g == null || g === '
 function msGgOran(m) { const v = msHesap(); const z = v && v.byM[m]; if (z && z.amort == null && z.kap > 0) return null; if (z && z.oran != null) return z.oran; return v && v.ort ? v.ort : ggTek(); }
 const msKalemli = () => { const M = msSis(); return !!(M && M.kip === 'kalem' && mesSis() && Array.isArray(M.kalemler) && M.tez); };
 function msGunTur(D, gun) { const iso = isoT(D, gun * 24).slice(0, 10); if ((D.tatiller || []).includes(iso)) return 'tatil'; const g = fmtDT(D, gun * 24).slice(6, 9); return g === 'Cmt' ? 'cmt' : g === 'Paz' ? 'paz' : 'hi'; }
+/** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
 function ymMesaiTL(D, cx, e) {
   const m = mesSis(D); if (!m || !m.kisiBazli) return ymMesaiTLYalin(D, cx, e);
   const t = D.tezgahlar.find(x => x.id === e.m); const h = ymVH(D, e.vardiya); const op = t && t.opOran != null ? +t.opOran : 1;
@@ -133,6 +141,7 @@ function ymMesaiTL(D, cx, e) {
   return h * op * s * (+(m.carp || {})[msGunTur(D, e.gun)] || 1.5) + op * (+m.kisiEk || 0);
 }
 /* ek mesai bedeli, mesai vardiyasında o tezgâhta çalışan işlere çalıştıkları saat oranında dağıtılır; bedeli bilinmeyen vardiyadaki işin payı null */
+/** @param {any} [p] @param {Derleme} [cx] */
 function ymMesaiPay(p, cx) {
   const out = {}; if (!p || !cx) return out; const D = S.D;
   for (const e of S.ekMesai || []) { const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!v) continue; const a = e.gun * 24 + hm(v.bas), b = a + ymVH(D, e.vardiya);
@@ -142,6 +151,7 @@ function ymMesaiPay(p, cx) {
   return out;
 }
 /* sipariş maliyeti son plandan: tezgâh seçimi, ayar ve fason planın kendisidir; malzeme fire payıyla */
+/** @param {any} [s] @param {any} [p] @param {Derleme} [cx] @param {any} [W] @param {any} [MP] */
 function ymSipMaliyetYalin(s, p, cx, W, MP) {
   if (!p || !cx) return null; const A = cx.A; const ops = Object.values(p.ops).filter(r => r.job === s.id); if (!ops.length) return null;
   let isl = 0, ayar = 0, fas = 0, gg = 0; const eksik = []; const tek = ggTek();
@@ -163,6 +173,7 @@ function ymSipMaliyetYalin(s, p, cx, W, MP) {
   return { mal, talas, talasKg: tal ? tal.kg : null, isl, ayar, gg, mes, fas, fin, bek, top, eksik: [...new Set(eksik)], tutar, gec, T: J.T, erken, kar: tutar == null || eksik.length ? null : tutar - top, net: tutar == null || eksik.length ? null : tutar - top - gec - (fin || 0) - (bek ? bek.tl : 0) };
 }
 /* genel gider tezgâhın kendi oranıyla (zz6); geri kalan hesap yalın hesabın aynısıdır */
+/** @param {any} [s] @param {any} [p] @param {Derleme} [cx] @param {any} [W] @param {any} [MP] */
 function ymSipMaliyet(s, p, cx, W, MP) {
   const x = ymSipMaliyetYalin(s, p, cx, W, MP); if (!x || !msKalemli()) return x;
   const ops = Object.values(p.ops).filter(r => r.job === s.id && !r.fas);
@@ -173,6 +184,7 @@ function ymSipMaliyet(s, p, cx, W, MP) {
 }
 
 /* ---------- plan dengesi (zw-denge) ---------- */
+/** @param {any} [k] @param {MotorDurumu} [st] */
 function pdOzet(k, st) {
   const cx = compile(st); const W = wipHesap(k, st, cx); const MP = ymMesaiPay(k, cx);
   const o = { net: 0, eksik: 0, gec: 0, gecSa: 0, late: 0, sip: {} };
@@ -190,6 +202,7 @@ function pdSt(id, termin) {
 function pdCalistir(liste, ms = 0) { return liste.map(x => ({ ...x, k: dgPlanKur(x.st, ms) })); }
 
 /* ek mesai adayları (zu ymMesaiOner): darboğaz tezgâhların geciken işlerinin günlerinde ek vardiya; ölçüm sıra korunarak çözüm ve 300 ms arama */
+/** @param {MotorDurumu} [st] */
 function ymOlc(st) {
   stHazirla(st); const cx = compile(st);
   const p0 = lnsDecode(st, { ops: S.plan.ops, fail: S.plan.fail || [] }, [], cx, true); p0.cx = p0.cx || cx;
@@ -197,6 +210,7 @@ function ymOlc(st) {
   const p = cmpEv(L.e, e0) > 0 ? L.plan : p0; p.cx = p.cx || cx; slack(p, cx); const e = evaluate(p, st, null, true);
   return { p, e, cx, gec: ymGecTL(e), diger: e.tl - (e.mesaiTL || 0), fail: (p.fail || []).length };
 }
+/** @param {any} [p] @param {Derleme} [cx] @param {any} [ev] */
 function ymDarbogaz(p, cx, ev) {
   const val = {}, days = {}, isler = {};
   for (const r of Object.values(p.ops)) { if (r.fas || r.pin || r.done) continue; const J = ev.J[r.job]; if (!J || !(J.T > 0.05) || !(r.sl < 0)) continue;
@@ -244,7 +258,7 @@ function pdTeklif(id) {
   const taban = s.havuz ? 'siparissiz' : 'girilen-termin';
   if (C == null) return { siparisId: id, havuz: !!s.havuz, taban, yerlesti: false, satirlar: [] };
   const C0 = Math.ceil(C); const mev = parseT(S.D, s.termin);
-  const adaylar = [['en-erken', C0], ['3-gun', C0 + 72], ['7-gun', C0 + 168], ['14-gun', C0 + 336]];
+  const adaylar = /** @type {[string, number][]} */ ([['en-erken', C0], ['3-gun', C0 + 72], ['7-gun', C0 + 168], ['14-gun', C0 + 336]]);
   if (mev != null && !adaylar.some(a => Math.abs(a[1] - mev) < 12)) adaylar.push(['girilen', mev]);
   adaylar.sort((a, b) => a[1] - b[1]);
   const l = adaylar.map(([ad, t], i) => ({ id: 't' + i, ad, t, st: pdSt(id, tmYaz(t)) }));

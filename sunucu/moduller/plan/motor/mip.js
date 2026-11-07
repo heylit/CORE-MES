@@ -1,7 +1,9 @@
+// @ts-check
 /* ---- HiGHS kıyası: saat dilimli karışık tamsayılı gevşetme ----
    Personel, ayarcı, aparat ve fason kapasitesi yok sayılır; ayar en kısa hâliyle ve gece de yapılabilir sayılır;
    süreler tam saate aşağı yuvarlanır. Bu yüzden çözümün değeri motorun her planından küçük ya da eşittir: alt sınırdır.
    Ufuk dışına taşan işlem ufkun sonunda başlamış sayılır ve tezgâh tutmaz; bu da yalnız gevşetir. */
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [plan] @param {any} [size] */
 function mipGroups(st,cx,plan,size){
   // aynı tezgâhı en çok paylaşan siparişler aynı gruba girer; gruplar ayrık olduğu için alt sınırları toplanabilir
   const jobs=Object.keys(cx.jobs),mj={};
@@ -18,8 +20,9 @@ function mipGroups(st,cx,plan,size){
     out.push(g);}
   return out;
 }
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [jobIds] @param {any} [opt] */
 function mipModel(st,cx,jobIds,opt={}){
-  const A=cx.A,g=st.gercek||{},w=st.w,mx=cx.D.ayarMatrisi||[];
+  const A=cx.A,g=st.gercek||{};
   const H=Math.min(HDAYS*24,Math.ceil(opt.ufuk||(st.now+21*24)));
   const tas=Math.floor(+A.tasimaSaat||0),BIG=HDAYS*24*2;
   const ht=lbHeadsTails(st,cx);
@@ -98,6 +101,7 @@ function mipRead(mod,sol){
    Yük işlem başına en hızlı tezgâhın grubuna yazılır; işlem en erken başlayabileceği haftadan önce yük almaz.
    Gecikme yaklaşık: işlemin bittiği dilimin sonu + kuyruk süresi − termin. Fazla mesai sıralı amaçta gecikmeden sonra gelir. */
 function vardiyaSaat(D,id){const v=D.vardiyalar.find(x=>x.id===id);if(!v)return 0;let h=hm(v.bit)-hm(v.bas);if(h<=0)h+=24;return h;}
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] */
 function ekAdaylar(st,cx){
   // tezgâhın o gün çalışmadığı vardiyalar; tezgâhın kendi vardiya listesi varsa yalnız onlar
   const D=cx.D,out=[];
@@ -110,6 +114,7 @@ function ekAdaylar(st,cx){
         out.push({m,g:M.grup,gun:d,vardiya:v.id,a,h:b-a});}}}
   return out;
 }
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [plan] @param {any} [opt] */
 function cerceveModel(st,cx,plan,opt={}){
   // dilim vardiya boyu, ilk vardiya başına hizalı: gün dilimi akşam gelen işin sabaha kalmasını görmüyordu; haftalık bütçe dilimlerin toplamına konur
   const O=hm(cx.D.vardiyalar[0].bas)%8,L=vardiyaSaat(cx.D,cx.D.vardiyalar[0].id)||8,b0=Math.floor((st.now-O)/L),NB=Math.round((opt.gun||21)*24/L),ht=lbHeadsTails(st,cx),butH=+st.w.mesaiHafta||0;
@@ -163,6 +168,7 @@ function cerceveModel(st,cx,plan,opt={}){
   return {lp,cols,nv,grp,NB,b0,L,O,bOf,cap,ot,vh,ad,nOps:Object.keys(Y).length,nVar:n,nRow:R.length};
 }
 // HiGHS'in grup × dilim ek vardiya sayısı somut vardiyaya çevrilir: o haftada geciken işlerin en çok yüklendiği tezgâh, en erken gün
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] @param {any} [plan] @param {any} [mod] @param {any} [vals] */
 function cerceveUygula(st,cx,plan,mod,vals){
   const ev=plan?evaluate(plan,st,null,true):null,yuk={};
   if(plan)for(const r of Object.values(plan.ops)){if(r.fas||r.pin)continue;const x=ev.J[r.job];if(!x||!(x.T>0))continue;const k=mod.bOf(r.S);yuk[r.m+'|'+k]=(yuk[r.m+'|'+k]||0)+(r.C-r.S)*isAgirligi(cx.jobs[r.job]);}

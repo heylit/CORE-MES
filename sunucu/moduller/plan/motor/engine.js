@@ -1,3 +1,4 @@
+// @ts-check
 /* ================= Plan motoru v2: çekirdek ================= */
 /* 1477 a: ufuk (gün) ve dilim (saat) sistem ayarındandır (plan.motor-ufuk-gun, plan.motor-dilim-dk); sunucu çalışmanın w.ufukGun ve w.dilimDk alanlarıyla verir.
    Verilmezse ya da sınır dışındaysa 120 gün (1681 b) ve 15 dk. Derleme her girdide yeniden kurar; bağlam tek girdiyle çalışır. */
@@ -11,7 +12,7 @@ const PW={1:4,2:2,3:1};
 /* 35 b: bölünen siparişin parçası siparişin adet payını taşır (pay); gecikmesi ve cezası o payla sayılır, parçalar siparişi birden çok saymaz */
 function isPayi(j){return j.pay>0&&j.pay<1?+j.pay:1;}
 /* 1461 a: siparişin gecikme cezası tutarın günlük yüzdesi (parçanın geliri zaten payıyla oranlıdır), tavan tutarın yüzdesi.
-   1500 a: tavan girilmemişse tek varsayılan %10'dur; sayfanın bedel ayarı (durum.betik AG0.tavan) da bunu okur, iki taraf aynı cezayı verir. */
+   1500 a: tavan girilmemişse tek varsayılan %10'dur; sayfanın bedel ayarı (durum.js AG0.tavan) da bunu okur, iki taraf aynı cezayı verir. */
 const CEZA_TAVANI_VARSAYILAN=10;
 function siparisCezasi(j,T){const p=T/24*j.gelir*j.cezaOran/100,t=j.cezaTavan!=null?+j.cezaTavan:CEZA_TAVANI_VARSAYILAN;return Math.min(p,j.gelir*t/100);}
 function isAgirligi(j){return (PW[j.oncelik]||1)*isPayi(j);}
@@ -23,7 +24,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 function baseMs(D){const [y,m,d]=D.meta.baslangic.split('-').map(Number);return Date.UTC(y,m-1,d);}
 function parseT(D,s){if(s==null||s==='')return null;if(typeof s==='number')return s;
   const m=String(s).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/);if(!m)return null;
-  return (Date.UTC(+m[1],m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0)-baseMs(D))/3600000;}
+  return (Date.UTC(+m[1],+m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0)-baseMs(D))/3600000;}
 function fmtDT(D,t){if(t==null||!isFinite(t))return '—';const dt=new Date(baseMs(D)+t*3600000);
   const p=n=>String(n).padStart(2,'0');return `${p(dt.getUTCDate())}.${p(dt.getUTCMonth()+1)} ${GUN_AD[GUN[(dt.getUTCDay()+6)%7]]} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
 function isoT(D,t){const dt=new Date(baseMs(D)+t*3600000);const p=n=>String(n).padStart(2,'0');return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth()+1)}-${p(dt.getUTCDate())} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}`;}
@@ -40,6 +41,65 @@ function workIn(W,a,b){let s=0;for(let i=wi(W,a);i<W.length&&W[i][0]<b;i++)s+=Ma
 function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.max(0,Math.ceil(a/SL-1e-9)),k1=Math.min(NS,Math.floor(b/SL+1e-9));for(let k=k0;k<k1;k++)m[k]=1;}return m;}
 
 /* ---- derleme: takvim, havuz, işlemler ---- */
+/** Motorun durumu (st): girdi (D), ayarlar (w), şimdi, plan ve sayfanın eklediği alanlar. Alan adları denetlenir; içerikleri henüz tipsizdir.
+    @typedef {object} MotorDurumu
+    @property {any} [D]
+    @property {any} [w]
+    @property {any} [now]
+    @property {any} [locks]
+    @property {any} [down]
+    @property {any} [plan]
+    @property {any} [gercek]
+    @property {any} [ekMesai]
+    @property {any} [cal]
+    @property {any} [pref]
+    @property {any} [sapma]
+    @property {any} [bitti]
+    @property {any} [wipP]
+    @property {any} [sabitYer]
+    @property {any} [saGecik]
+    @property {any} [ggP]
+    @property {any} [ayarsiz]
+    @property {any} [PWek]
+    @property {any} [seq]
+    @property {any} [montaj]
+    @property {any} [ekOncul]
+    @property {any} [yHedef]
+    @property {any} [tmUyari]
+    @property {any} [tmP]
+    @property {any} [tmEk]
+    @property {any} [eksik]
+    @property {any} [ayariOneAl]
+    @property {any} [ayarciYok]
+    @property {any} [tedSapma]
+    @property {any} [ogren]
+    @property {any} [boost]
+    @property {any} [tlAmac]
+    @property {any} [merkezHaftalari]
+    @property {any} [insanliIstasyonlar]
+    @property {any} [ekipUyeleri]
+*/
+/** Derlenmiş girdi (compile): takvim, tezgâh havuzu, işlemler. Alan adları denetlenir; içerikleri henüz tipsizdir.
+    @typedef {object} Derleme
+    @property {any} st
+    @property {any} D
+    @property {any} A
+    @property {Record<string, any>} M
+    @property {any[]} days
+    @property {any[]} gen
+    @property {Float32Array} capTot
+    @property {Float32Array} capAyar
+    @property {Record<string, any>} capG
+    @property {any[]} PK
+    @property {Record<string, any>} FS
+    @property {Record<string, any>} AP
+    @property {any[]} ops
+    @property {any} byId
+    @property {Record<string, any>} jobs
+    @property {Record<string, any>} succ
+    @property {{ res: Record<string, any>, summ: Record<string, any>, po: any[] }} mat
+    @property {any} progRel */
+/** @param {MotorDurumu} st @returns {Derleme} */
 function compile(st){olcekKur(st.w);
   const D=st.D,A=D.ayarlar;
   const vs=Object.fromEntries(D.vardiyalar.map(v=>[v.id,{bas:hm(v.bas),bit:hm(v.bit),mol:(v.molalar||[]).map(x=>[hm(x.bas),hm(x.bit)])}]));
@@ -149,6 +209,7 @@ function compile(st){olcekKur(st.w);
   const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
   return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,ops,byId,jobs,succ,mat,progRel};
 }
+/** @param {MotorDurumu} [st] @param {any} [jobs] */
 function matAlloc(st,jobs){
   // etkin geliş = söz tarihi + tedarikçinin ortalama gecikmesi + giriş muayenesi (+ olay gecikmesi, risk sapması)
   // 554 a: termini beklenen satır (tb) olması gereken tarihte gelmiş sayılır, işi bekletmez; söz tarihi yalnız gösterim içindir
@@ -180,6 +241,7 @@ function matAlloc(st,jobs){
   return {res,summ,po};
 }
 /* plandan satın almaya: gerekli tarih, hızlandır, ertele; siparişi olmayan eksik için en geç sipariş tarihi */
+/** @param {any} [plan] @param {MotorDurumu} [st] */
 function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries((D.malzemeler||[]).map(m=>[m.kod,m]));
   // plan: ilk işlemin planlanan başlangıcı; enGec: siparişi geciktirmeden en geç başlangıç (başlangıç + bolluk)
   // enGec yaklaşık: siparişin kendi bolluğu (termin − plan bitişi) kadar geç gelebilir; tezgâh sırası yok sayılır
@@ -195,28 +257,34 @@ function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries
     const tg=m.tedarikGun==null?null:+m.tedarikGun;out.push({tur:'eksik',kod:d.kod,miktar:d.eksikQ,plan:isFinite(f.s)?f.s-mu:null,enGec:lt,siparisEnGec:lt!=null&&tg!=null?lt-tg*24:null,durum:'sipariş yok',jobs:[jid]});}
   return out;}
 /* ---- kaynak kullanımı ---- */
+/** @param {Derleme} [cx] */
 function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{},pl:(cx.PK||[]).map(()=>new Float32Array(NS)),pn:(cx.PK||[]).map(()=>new Uint8Array(NS)),pa:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
 /* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
    Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
 function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
 /* Kilitli iş (kilit a): saati şimdiden ileriyse tezgâhında tam kilit saatinde sabittir; öncülünü beklemez (dondurulmuş gibi), öteki işler
    etrafına dizilir. Saatte arıza ya da bakım varsa iş arıza süresince durur, uyarı çıkar. Saati geçmiş kilit yalnız tezgâhı bağlar. */
+/** @param {any} [o] @param {any} [lk] @param {Derleme} [cx] */
 function kilitYeri(o,lk,cx){if(!lk||lk.S==null||!isFinite(+lk.S)||+lk.S<cx.st.now-1e-9)return null;const c=o.c.find(x=>x.m===lk.m&&!x.fas),M=c&&cx.M[c.m];if(!M)return null;
   const S=+lk.S,su=c.su+(o.fai?c.cyc+(+cx.A.faiSaat||0):0),run=o.fai?Math.max(0,c.run-c.cyc):c.run;const Su=adv(M.sw,S,su),C=adv(M.rw,Su,run);if(!isFinite(C))return null;
   const downHit=(cx.st.down||[]).some(d=>d.m===c.m&&d.from<C-1e-9&&d.to>S+1e-9);
   return {id:o.id,job:o.job,m:c.m,S,Su,C,lot1:adv(M.rw,Su,Math.min(run,c.tbRun)),su,run,pin:1,kilit:1,why:{t:'kilit'},downHit};}
 /* Kilitli iş tezgâhın boş anını ilerletmez: önüne sığan iş kilitten önce yapılır, sığmayan kilitten sonra başlar (tMach). */
+/** @param {Derleme} [cx] @param {any} [ctx] @param {any} [r] */
 function kilitKoy(cx,ctx,r){ctx.P[r.id]=r;(ctx.kilit[r.m]=ctx.kilit[r.m]||[]).push([r.S,r.C,r.id]);addUse(cx,ctx.u,cx.M[r.m],r,cx.byId[r.id].aparat);}
 function k0(t){return Math.max(0,Math.floor(t/SL+1e-9));}
 function k1(t){return Math.min(NS,Math.ceil(t/SL-1e-9));}
 /* Kayıtlı tezgâhın oranı dilimde açgözlü dağıtılır: en az yüklü kişi önce; kişinin oran toplamı 1'i, tezgâh sayısı enCok'u geçmez.
    Sığmazsa null. Aynı kullanımda aynı sonucu verir: checkUse ile addUse aynı dağıtımı bulur. */
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [k] */
 function kisiDagit(cx,u,M,k){let kalan=M.opOran;const sec=[];
   const ad=M.kisiler.filter(i=>{const p=cx.PK[i];return p.av[k]>0&&u.pl[i][k]<1-1e-6&&u.pn[i][k]<p.enCok;}).sort((a,b)=>u.pl[a][k]-u.pl[b][k]||a-b);
   for(const i of ad){const al=Math.min(kalan,1-u.pl[i][k]);sec.push([i,al]);kalan-=al;if(kalan<=1e-6)return sec;}
   return null;}
 /* 1310 a: ayarcı yalnız rotada ayarı işaretli adımın hazırlığında aranır; ayarsız adımın hazırlık süresi sayılır, ayarcı kullanmaz */
+/** @param {Derleme} [cx] @param {any} [r] */
 function ayarciIster(cx,r){const o=cx.byId[r.id];return r.su>0&&!(o&&o.ayarsiz);}
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [apId] */
 function checkUse(cx,u,M,r,apId){
   // dönüş: -1 uygun; yoksa sorunlu slot ve tür
   if(ayarciIster(cx,r)){for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
@@ -231,6 +299,7 @@ function checkUse(cx,u,M,r,apId){
   if(apId&&u.ap[apId]){const cap=+cx.AP[apId].adet||1;for(let k=k0(r.S);k<k1(r.C);k++)if(u.ap[apId][k]+1>cap+1e-6)return {k,t:'aparat',kalici:false};}
   return null;
 }
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [apId] @param {any} [sign] */
 function addUse(cx,u,M,r,apId,sign=1){
   if(ayarciIster(cx,r))for(let k=k0(r.S);k<k1(r.Su);k++)if(M.smask[k])u.ayar[k]+=sign;
   const d=M.opOran;if(d>0){const G=u.g[M.grup];const pa=M.kisiler&&sign>0?(u.pa[r.id]=[]):null;
@@ -241,6 +310,7 @@ function addUse(cx,u,M,r,apId,sign=1){
 }
 
 /* ---- tek işlem zamanlaması ---- */
+/** @param {any} [o] @param {Derleme} [cx] @param {any} [ctx] */
 function predBound(o,cx,ctx){
   const st=cx.st,A=cx.A,P=ctx.P,j=cx.jobs[o.job];
   let s=st.now,why={t:'simdi'},fin=-Infinity,finRef=null;
@@ -254,6 +324,7 @@ function predBound(o,cx,ctx){
   const lk=st.locks[o.id];if(lk&&lk.S>s){s=lk.S;why={t:'kilit'};}
   return {s,why,fin,finRef};
 }
+/** @param {any} [o] @param {any} [c] @param {Derleme} [cx] @param {any} [ctx] @param {any} [b] */
 function tFason(o,c,cx,ctx,b){
   const f=cx.FS[c.m.slice(1)];if(!f)return null;let r=b.s,why=b.why;
   /* hemen çıkan fason (sunucu, CA-2): öncülün bitişinde çıkar, süresi kadar sonra döner */
@@ -269,6 +340,7 @@ function tFason(o,c,cx,ctx,b){
     return {id:o.id,job:o.job,m:c.m,fas:1,S:ex,Su:ex,C:ret,lot1:ret,su:0,run:ret-ex,cost,why};}
   return null;
 }
+/** @param {any} [o] @param {any} [c] @param {Derleme} [cx] @param {any} [ctx] @param {any} [b] @param {any} [fast] */
 function tMach(o,c,cx,ctx,b,fast){
   const st=cx.st,w=st.w,M=cx.M[c.m];if(!M)return null;
   let s=b.s,why=b.why;
@@ -306,20 +378,25 @@ function tMach(o,c,cx,ctx,b,fast){
   }
   return null;
 }
+/** @param {any} [o] @param {any} [c] @param {Derleme} [cx] @param {any} [ctx] @param {any} [fast] */
 function timing(o,c,cx,ctx,fast){const b=predBound(o,cx,ctx);if(!b)return null;return c.fas?tFason(o,c,cx,ctx,b):tMach(o,c,cx,ctx,b,fast);}
+/** @param {Derleme} [cx] @param {any} [ctx] @param {any} [r] */
 function commit(cx,ctx,r){
   ctx.P[r.id]=r;
   if(r.fas){(ctx.fas[r.m.slice(1)]=ctx.fas[r.m.slice(1)]||[]).push([r.S,r.C]);return;}
   const M=cx.M[r.m];ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;ctx.av[r.m]=Math.max(ctx.av[r.m]||0,r.C);ctx.lastFam[r.m]=cx.byId[r.id].aile;ctx.lastId[r.m]=r.id;
   addUse(cx,ctx.u,M,r,cx.byId[r.id].aparat);
 }
+/** @param {any} [o] @param {MotorDurumu} [st] @param {any} [opt] @param {any} [base] */
 function candM(o,st,opt,base){
   if(st.locks[o.id])return o.c.filter(c=>c.m===st.locks[o.id].m);
   if(st.pref[o.id])return o.c.filter(c=>c.m===st.pref[o.id]);
   const b=base&&base.ops[o.id];
   return o.c.filter(c=>!c.opt||(b&&(b.m===c.m||(opt.fasonM&&b.m===opt.fasonM))));
 }
+/** @param {Derleme} [cx] @param {any} [ctx] @param {any} [j] */
 function remH(cx,ctx,j){let h=0;for(const o of j.ops)if(!ctx.P[o.id]){const m=o.c.filter(c=>!c.fas).map(c=>c.su+c.run);h+=m.length?Math.min(...m):24;}return h;}
+/** @param {any} [r] @param {Derleme} [cx] @param {any} [ctx] @param {any} [opt] */
 function prio(r,cx,ctx,opt){
   const st=cx.st,w=st.w,j=cx.jobs[r.job],p=Math.max(.25,r.su+r.run),pw=isAgirligi(j);let v;
   const due=j.dueB==null?j.due:j.dueB;
@@ -343,6 +420,7 @@ function prio(r,cx,ctx,opt){
 function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
   return {u,n:()=>{let x=0;for(let i=0;i<6;i++)x+=u();return (x-3)/Math.SQRT2;}};}
 
+/** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){
   const cx=opt.cx||compile(st);
   const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},kilit:{},rnd:rng(opt.seed||7),fail:[]};
@@ -435,6 +513,7 @@ function schedule(st,mode,base,opt={}){
 }
 function machNext(plan){const n={},p={},by={};for(const r of Object.values(plan.ops))if(!r.fas)(by[r.m]=by[r.m]||[]).push(r);
   for(const m in by){const a=by[m].sort((x,y)=>x.S-y.S);for(let i=0;i<a.length-1;i++){n[a[i].id]=a[i+1].id;p[a[i+1].id]=a[i].id;}}return {n,p};}
+/** @param {any} [plan] @param {Derleme} [cx] */
 function slack(plan,cx){
   const {n}=machNext(plan),LS={},A=cx.A,tas=+A.tasimaSaat||0;
   const arr=Object.values(plan.ops).sort((a,b)=>b.S-a.S);
@@ -464,6 +543,7 @@ function bitenAdimMaliyeti(D, bitti, j) {
   return y;
 }
 /* ---- değerlendirme ---- */
+/** @param {any} [plan] @param {MotorDurumu} [st] @param {any} [ref] @param {any} [fast] */
 function evaluate(plan,st,ref,fast){
   const cx=plan.cx||compile(st),w=st.w,J={},A=cx.A;
   let Z=0,rev=0,cost=0,pen=0,hold=0,onT=0,late=0,sumT=0,wT=0,suH=0,suN=0,famN=0,Cmax=st.now,chg=0,fas=0,unk=0,warn=[],score=0,wB=0,bufN=0;
@@ -527,7 +607,9 @@ function cmpEv(a,b){for(const i of LEX_SIRA){if(a.lex[i]==null||b.lex[i]==null)c
 function lexWhy(a,b){for(const i of LEX_SIRA){if(a.lex[i]==null||b.lex[i]==null)continue;const d=b.lex[i]-a.lex[i];if(Math.abs(d)>LEX_EPS[i])return i;}return -1;}
 /* ---- alt sınır: kapasite yokken en erken bitiş (takvim, taşıma, fason çıkış günleri ve süresiyle) ---- */
 // alt sınırda ayar en kısa hâliyle sayılır: aile eşleşmesi ya da ayar matrisi ayarı kısaltabilir
+/** @param {any} [o] @param {any} [c] @param {Derleme} [cx] */
 function suMin(o,c,cx){let su=c.su;if(o.aile){su=Math.min(su,c.su*cx.st.w.famK);for(const e of cx.D.ayarMatrisi||[])if(e.ye===o.aile)su=Math.min(su,(+e.dk)/60);}return su;}
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] */
 function lowerBound(st,cx){
   cx=cx||compile(st);const LB={},tas=+cx.A.tasimaSaat||0;const done={};
   const order=[];const vis={};const visit=o=>{if(vis[o.id])return;vis[o.id]=1;for(const [p] of o.pr)visit(cx.byId[p]);order.push(o);};cx.ops.forEach(visit);
@@ -549,6 +631,7 @@ function lowerBound(st,cx){
 }
 
 /* ---- Monte Carlo: sıra sabit, süreler ve arızalar rastgele ---- */
+/** @param {MotorDurumu} [st] @param {any} [plan] @param {any} [N] @param {any} [sigma] @param {any} [ariza] @param {any} [seed] */
 function monteCarlo(st,plan,N,sigma,ariza,seed=11){
   const R=rng(seed),res={},jobs=Object.keys(plan.cx.jobs);jobs.forEach(j=>res[j]={on:0,C:[],mal:0});
   const t0=Date.now();
@@ -569,7 +652,9 @@ function monteCarlo(st,plan,N,sigma,ariza,seed=11){
 }
 
 /* ---- yerel arama: öncül çekmeli boşluk doldurma ve gürültülü yeniden kurma ---- */
+/** @param {Derleme} [cx] @param {any} [plan] @param {any} [id] @param {any} [acc] */
 function ancestors(cx,plan,id,acc){for(const [p] of cx.byId[id].pr){const r=plan.ops[p];if(r&&!r.pin&&!acc[p]){acc[p]=1;ancestors(cx,plan,p,acc);}}return acc;}
+/** @param {MotorDurumu} [st] @param {any} [base] @param {any} [opt] @param {any} [budgetMs] @param {any} [alts] */
 function fill(st,base,opt,budgetMs,alts){
   const t0=Date.now();const cx=compile(st);
   let bo={},plan=null,E=null;const log=[];let tries=0;
@@ -588,6 +673,7 @@ function fill(st,base,opt,budgetMs,alts){
     if(!best)break;log.push({m:best.g.m,g0:best.g.g0,q:best.q,pre:best.pre,by:lexWhy(best.e,E),dW:E.wT-best.e.wT,dSu:E.suH-best.e.suH,dTL:E.tl-best.e.tl});bo=best.bo;plan=best.plan;E=best.e;}
   return {plan,log,tries,ms:Date.now()-t0};
 }
+/** @param {MotorDurumu} [st] @param {any} [base] @param {any} [opt] @param {any} [budgetMs] */
 function improve(st,base,opt,budgetMs){
   const t0=Date.now();const cx=compile(st);let best=schedule(st,'dagit',base,{...opt,cx}),be=evaluate(best,st,base);const e0=be,curve=[be.wT];let it=0,seed=101;
   while(Date.now()-t0<budgetMs){it++;const p=schedule(st,'dagit',base,{...opt,cx,noise:.35,seed:seed++});const e=evaluate(p,st,base);if(cmpEv(e,be)>0){be=e;best=p;}curve.push(be.wT);}
@@ -604,6 +690,7 @@ function degree(plan,id,memo={}){if(id in memo)return memo[id];memo[id]=null;con
 function urunMalzeme(D,urun){const j=D.siparisler.find(x=>x.urun===urun&&(x.malzeme||[]).length);return j?clone(j.malzeme):[];}
 /* siparişin n adetlik parçası: gelir ve adet payı oranlı; termin, öncelik ve ceza siparişindir */
 function siparisParcasi(s,id,n){return {...clone(s),id,adet:n,gelir:s.gelir==null?null:Math.round(s.gelir*n/s.adet),pay:isPayi(s)*n/s.adet,malzeme:(s.malzeme||[]).map(x=>({...x}))};}
+/** @param {MotorDurumu} [st] @param {any} [ev] */
 function applyEvent(st,ev){
   const D=st.D;st.seq=(st.seq||0)+1;
   if(ev.tip==='ariza'){const from=ev.bas!=null?(typeof ev.bas==='number'?ev.bas:parseT(D,ev.bas)):st.now;const to=from+(+ev.saat||8);
@@ -622,6 +709,7 @@ function applyEvent(st,ev){
   return {label:'?'};
 }
 function jobOf(id){return id.slice(0,id.lastIndexOf('.'));}
+/** @param {any} [base] @param {any} [info] @param {MotorDurumu} [st] */
 function hitJobs(base,info,st){const h=new Set(info.jobs||[]);
   if(info.kind==='ariza')for(const r of Object.values(base.ops))if(r.m===info.m&&r.S<info.to&&r.C>info.from)h.add(r.job);
   if(info.kind==='malzeme')for(const j of st.D.siparisler)if((j.malzeme||[]).some(x=>x.kod===info.kod))h.add(j.id);
@@ -632,16 +720,18 @@ function hitJobs(base,info,st){const h=new Set(info.jobs||[]);
     const ayarsiz=new Set();for(const j of D.siparisler){const u=D.urunler.find(x=>x.id===j.urun);for(const o of (u&&u.rota)||[])if(o.ayarci===false)ayarsiz.add(j.id+'.'+o.k);}
     for(const r of Object.values(base.ops))if(!r.fas&&g.has(r.m)&&(info.grup==='ayar'?r.su>0&&!ayarsiz.has(r.id)&&r.S<b&&r.Su>a:r.S<b&&r.C>a))h.add(r.job);}}
   return h;}
+/** @param {MotorDurumu} [st] @param {any} [plan] */
 function autoK(st,plan){const cx=plan.cx||compile(st);const ds=Object.values(cx.jobs).map(j=>j.due).filter(x=>x!=null);if(!ds.length)return null;
   let C=st.now;for(const r of Object.values(plan.ops))C=Math.max(C,r.C);const Ch=Math.max(1,C-st.now);
   let ps=0,ss=0,n=0;for(const o of cx.ops){const c=o.c.find(x=>!x.fas);if(c){ps+=c.run+c.su;ss+=c.su;n++;}}
   const dbar=ds.reduce((a,b)=>a+b,0)/ds.length-st.now;const tau=Math.max(0,Math.min(1,1-dbar/Ch));const R=Math.max(0,(Math.max(...ds)-Math.min(...ds))/Ch);const eta=n?ss/Math.max(1e-6,ps-ss):.1;
   const k1=R<=.5?4.5+R:6-2*R;const k2=Math.max(.1,tau/(2*Math.sqrt(Math.max(1e-6,eta))));return {tau,R,eta,k1,k2};}
+/** @param {MotorDurumu} [st] @param {any} [base] @param {any} [ev] @param {any} [opts] */
 function propose(st,base,ev,opts={}){
   const t0=Date.now();
   const mk=()=>{const c={...clone({...st,plan:undefined}),plan:base};return c;};
   const cand=mk();const info=Array.isArray(ev)?ev.map(e=>applyEvent(cand,e)):[applyEvent(cand,ev)];
-  const inf=info[info.length-1];const hitAll=new Set();for(const x of info)for(const j of hitJobs(base,x,cand))hitAll.add(j);const label=info.map(x=>x.label).join('; ');
+  const hitAll=new Set();for(const x of info)for(const j of hitJobs(base,x,cand))hitAll.add(j);const label=info.map(x=>x.label).join('; ');
   const fasonM=info.find(x=>x.fasonM)?info.find(x=>x.fasonM).fasonM:null;
   const cx=compile(cand);const list=[];
   list.push({id:'bekle',ad:'Bekle (sağa kaydır)',ac:'Tezgâh ve sıra korunur, saatler kayar. Saf yayılım.',plan:schedule(cand,'sabit',base,{cx})});
@@ -674,7 +764,7 @@ function propose(st,base,ev,opts={}){
     const Li=lns(S0,top.plan,base,{ms:ms*.2,seed:7});let prev={plan:Li.plan,e:Li.e,from:top};
     const mk=(k,plan,from,extra)=>{const nm=k===Infinity?'Sınırsız değişiklik':`En çok ${k} değişiklik`;
       list.push({id:'b'+k,ad:nm,butce:k,from:from.ad,ac:`"${from.ad}" seçeneğinden başlanır; ${extra}`,plan,st:from.st,mesai:from.mesai});const x=list[list.length-1];x.ev=evaluate(x.plan,x.st,base);butce.push(x);return x;};
-    const inf=mk(Infinity,Li.plan,top,'gecikmiş siparişler ve tezgâh sıraları parça parça yeniden kurulur.');
+    mk(Infinity,Li.plan,top,'gecikmiş siparişler ve tezgâh sıraları parça parça yeniden kurulur.');
     // sıkı bütçeler geniş bütçenin sonucundan başlar, kazancı en az olan siparişlerin değişiklikleri geri alınır
     for(const k of [15,5]){let cand=null;
       const fit=pool.filter(x=>x.ev.chg<=k);const fb=fit.length?fit.reduce((a,b)=>cmpEv(b.ev,a.ev)>0?b:a):null;
@@ -697,6 +787,7 @@ function propose(st,base,ev,opts={}){
 }
 
 /* ---- işlem başına kapasitesiz en erken başlama (parça parça yeniden kurmada hedef) ---- */
+/** @param {MotorDurumu} [st] @param {Derleme} [cx] */
 function lbHeadsTails(st,cx){
   const tas=+cx.A.tasimaSaat||0,g=st.gercek||{};
   const order=[];const vis={};const visit=o=>{if(vis[o.id])return;vis[o.id]=1;for(const [p] of o.pr)visit(cx.byId[p]);order.push(o);};cx.ops.forEach(visit);
@@ -726,10 +817,12 @@ function lbHeadsTails(st,cx){
   return {head,tail,pmin,fin};
 }
 // fason kapasitesi yok sayılır, çıkış günü ve saati sayılır: gerçek dönüş bundan erken olamaz
+/** @param {Derleme} [cx] @param {any} [f] @param {any} [r] */
 function fasonEarliest(cx,f,r){if(!isFinite(r))return Infinity;if(f.hemen)return r+(+f.sureGun||0)*24;for(let d=Math.floor(r/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
   const ex=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(ex<r-1e-9)continue;return ex+(+f.sureGun||1)*24;}return Infinity;}
 
 /* ---- değişiklik bütçesine indirme: sipariş sipariş başvuru planına geri dönülür ---- */
+/** @param {MotorDurumu} [st] @param {any} [plan] @param {any} [ref] @param {any} [k] @param {any} [budget] */
 function revertTo(st,plan,ref,k,budget){
   const t0=Date.now(),cx=plan.cx||compile(st),frz=st.now+(st.w.dondurma||0);let cur=plan,E=evaluate(cur,st,ref,true);const failN=(plan.fail||[]).length;
   const changed=pl=>{const by={};for(const id in pl.ops){const r=pl.ops[id],b=ref.ops[id];if(!b||r.pin||r.fas||r.act||r.done||r.S<frz-1e-9)continue;if(b.m!==r.m||Math.abs(b.S-r.S)>.5)(by[r.job]=by[r.job]||[]).push(id);}return by;};
@@ -746,6 +839,7 @@ function revertTo(st,plan,ref,k,budget){
 
 /* ---- değişiklik bütçesine çıkma: en az değişen plandan başlanır, en iyi planın sipariş başına yerleşimleri
    değişiklik başına kazanca göre tek tek eklenir ---- */
+/** @param {MotorDurumu} [st] @param {any} [startPlan] @param {any} [topPlan] @param {any} [ref] @param {any} [k] @param {any} [budget] */
 function forwardTo(st,startPlan,topPlan,ref,k,budget){
   const t0=Date.now(),cx=startPlan.cx||compile(st),frz=st.now+(st.w.dondurma||0);let cur=startPlan,E=evaluate(cur,st,ref,true);const failN=(startPlan.fail||[]).length;
   const jobs=new Set();for(const id in topPlan.ops){const r=topPlan.ops[id],q=cur.ops[id];if(r.fas||r.pin||r.act||r.done||r.S<frz-1e-9)continue;if(!q||q.m!==r.m||Math.abs(q.S-r.S)>.5)jobs.add(r.job);}
@@ -762,6 +856,7 @@ function forwardTo(st,startPlan,topPlan,ref,k,budget){
    Plan tezgâh başına sıra olarak tutulur; sabit kipteki çözücü sırayı takvim ve kaynaklarla gerçek plana çevirir.
    Her turda bir parça sökülür (gecikmiş bir işin kritik işlemi ya da bir tezgâhta ardışık üç-dört işlem),
    o parçanın bütün yerleşimleri denenir, en iyisi kabul edilir. Dondurulmuş ve başlamış işler sökülmez. */
+/** @param {MotorDurumu} [st] @param {any} [cur] @param {any} [mods] @param {Derleme} [cx] @param {any} [free] @param {any} [bekletme] */
 function lnsDecode(st,cur,mods,cx,free,bekletme){
   const ops={...cur.ops};for(const [id,m,key] of mods)ops[id]={...ops[id],m,S:key};
   // sıra anahtarları dondurma sınırının ötesine sıralı yayılır: anahtar yalnız tezgâhtaki sırayı taşır
@@ -774,6 +869,7 @@ function lnsDecode(st,cur,mods,cx,free,bekletme){
   const b=schedule(st,'sabit',fake,{...o,bekletme:true});
   return (b.fail||[]).length<=(a.fail||[]).length&&cmpEv(evaluate(b,st,null,true),evaluate(a,st,null,true))>0?b:a;
 }
+/** @param {MotorDurumu} [st] @param {any} [start] @param {any} [ref] @param {any} [opt] */
 function lns(st,start,ref,opt={}){
   const t0=Date.now(),cx=start.cx||compile(st),budget=opt.ms||1500,maxChg=opt.maxChg==null?Infinity:opt.maxChg;
   const R=rng(opt.seed||17),free=opt.free!=null?!!opt.free:!ref,frz=free?st.now:st.now+(st.w.dondurma||0);

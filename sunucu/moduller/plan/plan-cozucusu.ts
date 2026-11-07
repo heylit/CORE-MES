@@ -102,7 +102,7 @@ export async function coz(
 }
 
 type ParcaliYerlesim = NonNullable<Awaited<ReturnType<PlanMotoruCozucusu>>['parcaliYerlesimler']>[number];
-// Motorun paylarının kimliği: ilk pay adımın kimliği, ötekiler "~2", "~3" ekiyle (engine.betik compile). Tek kimlik bölünmemiş adımdır.
+// Motorun paylarının kimliği: ilk pay adımın kimliği, ötekiler "~2", "~3" ekiyle (engine.js compile). Tek kimlik bölünmemiş adımdır.
 function payKimlikleri(ops: Record<string, unknown>, id: string): string[] {
   const l = [id];
   while (ops[`${id}~${String(l.length + 1)}`] !== undefined) l.push(`${id}~${String(l.length + 1)}`);
@@ -133,7 +133,7 @@ export function sanalAdimAdetleriyle<K extends { durum: unknown; ek: unknown } |
   return { ...kaynak, durum: { ...durum, adimAdetleri: { ...(durum.adimAdetleri ?? {}), ...ek } } };
 }
 
-// 1888 b: kişinin el tezgâhı motorda bu önekle durur (motor/emirler.betik kisiTezgahi).
+// 1888 b: kişinin el tezgâhı motorda bu önekle durur (motor/emirler.js kisiTezgahi).
 const KISI_TEZGAHI = 'kisi-';
 type KisiYerlesimi = NonNullable<Awaited<ReturnType<PlanMotoruCozucusu>>['kisiYerlesimleri']>[number];
 // Motorda karşılığı olmayan kuyruk işi: adım ürünün yürürlükteki rotasında yok (983 b), emir ya da ürünü okunamadı.
@@ -148,7 +148,7 @@ function yerlesmemeNedeni(g: { oncul: Record<string, string[]>; kimlik: Record<s
 
 // 525 4 a: katı malzeme kipinde (w.mat 'sert', K3) malzemesi stok ve satın almayla ufuk içinde karşılanmayan siparişin işleri motorda
 // yerleşmez. Bu bir çözüm hatası değildir: vardiyasız iş gibi (168 b) ayrı listede döner, plan komutu durmaz. Motor sipariş başına hazır
-// olma anını derlemede kurar (engine.betik matAlloc); aynı derleme burada tekrarlanır, yalnız yerleşmeyen iş varken.
+// olma anını derlemede kurar (engine.js matAlloc); aynı derleme burada tekrarlanır, yalnız yerleşmeyen iş varken.
 function malzemesiGelmeyenler(durum: MotorDurumu): Set<string> {
   if ((durum['w'] as { mat?: unknown } | undefined)?.mat !== 'sert') return new Set();
   const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;

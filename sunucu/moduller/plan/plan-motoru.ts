@@ -8,19 +8,19 @@ import { motorGirdisiDenetle, motorPlaniDenetle, type MotorPlani } from './motor
 
 // Ortak plan motoru (ADR 0018): planlama çerçevesine gömülen dosyaların aynısı sunucuda koşar. Motor tarayıcı nesnesi kullanmaz; boş
 // `vm` bağlamında yüklenir, sunucunun hiçbir nesnesini görmez. Uzun çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında koşar.
-// Sayfanın motor kancaları (motor/kancalar.betik: TL amacı, fason kararı, termin, malzeme, hedef, montaj, ayar, örtüşme) de yüklenir (458 a):
-// sunucunun planı sayfanın ve değerlendirme ucunun modeliyle kurulur. Kancalar girdinin ayarlarını (durum.betik) okur.
+// Sayfanın motor kancaları (motor/kancalar.js: TL amacı, fason kararı, termin, malzeme, hedef, montaj, ayar, örtüşme) de yüklenir (458 a):
+// sunucunun planı sayfanın ve değerlendirme ucunun modeliyle kurulur. Kancalar girdinin ayarlarını (durum.js) okur.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const MOTOR_DOSYALARI = ['engine', 'kisitlar', 'mip', 'girdi', 'durum', 'kancalar'] as const;
 const DISA = ['schedule', 'compile', 'evaluate', 'lowerBound', 'lbHeadsTails', 'W0', 'stHazirla'] as const;
 
 let kod: string | null = null;
 export function motorKodu(): string {
-  kod ??= `${MOTOR_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ ${DISA.join(', ')} });`;
+  kod ??= `${MOTOR_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ ${DISA.join(', ')} });`;
   return kod;
 }
 
-// Motorun girdisi ve çıktısı çerçevedeki biçimdir (saat ekseni, işlem kimliği 'sipariş.adım'); alanları `motor/kisitlar.betik` sayar.
+// Motorun girdisi ve çıktısı çerçevedeki biçimdir (saat ekseni, işlem kimliği 'sipariş.adım'); alanları `motor/kisitlar.js` sayar.
 export type MotorDurumu = Record<string, unknown>;
 export type { MotorPlani, MotorYerlesimi } from './motor-sinir.ts';
 export interface Motor {

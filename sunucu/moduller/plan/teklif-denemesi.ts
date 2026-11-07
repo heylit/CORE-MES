@@ -9,14 +9,14 @@ import type { KaynakOkumasi } from './plan-girdisi.ts';
 import { COZUM_SURESI_MS } from './plan-motoru.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
 
-// Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.betik), kalemler motorun acil sipariş olayıyla eklenir
-// (motor/teklif.betik). Sayfanın motor kancaları (motor/kancalar.betik) yüklenir (458 a). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
+// Satış teklifi denemesi (Y4): planın girdisi çerçevenin koduyla kurulur (motor/girdi.js), kalemler motorun acil sipariş olayıyla eklenir
+// (motor/teklif.js). Sayfanın motor kancaları (motor/kancalar.js) yüklenir (458 a). Aramasız kip: aynı girdi aynı sonuç. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum', 'kancalar', 'teklif'] as const;
 
 let kod: string | null = null;
 function denemeKodu(): string {
-  kod ??= DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n');
+  kod ??= DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n');
   return kod;
 }
 

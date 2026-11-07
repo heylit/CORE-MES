@@ -4,7 +4,7 @@ import { planGirdisi } from './plan-girdisi.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 1248 a: emir içi öncül listesi (çok dallı rota). Liste verilince "bir önceki sıra" varsayılmaz. Veriler uydurmadır.
-// Ortak motorun girdisi (girdi.betik): Reçete ve Rota adımının çözülmüş öncül listesi adımın bağı olur.
+// Ortak motorun girdisi (girdi.js): Reçete ve Rota adımının çözülmüş öncül listesi adımın bağı olur.
 type Bag = [string, string][];
 const rotaBaglari = (adimlar: readonly Record<string, unknown>[]): [string, Bag][] => {
   const steps = adimlar.map((a) => ({ id: `50-o${String(a['seq'])}`, opNo: a['seq'], opId: '13', stationId: '10', setup: 0, cycle: 1, alts: [], altTimes: {}, ins: [], ...a }));

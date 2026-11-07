@@ -4,7 +4,7 @@ import { planGirdisi } from './plan-girdisi.ts';
 import { TERMIN_SAATI } from './kurallar.ts';
 import { motorYukle } from './plan-motoru.ts';
 
-// Sunucu planın girdisini çerçevenin koduyla (motor/girdi.betik) kurar; çerçeveyle eşitliği istemcideki planlama-girdisi.test.ts sınar.
+// Sunucu planın girdisini çerçevenin koduyla (motor/girdi.js) kurar; çerçeveyle eşitliği istemcideki planlama-girdisi.test.ts sınar.
 // Burada sunucuya özgü olanlar: duvar saati tesisin saat dilimindedir, başlangıçsız çalışma tesisin bugününden başlar, girdi değişmez. Veriler uydurmadır.
 
 const KAYIT = {

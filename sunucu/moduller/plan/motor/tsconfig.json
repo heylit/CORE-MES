@@ -1,0 +1,12 @@
+{
+  // Motor tek bağlamda birleştirilip koşan betiklerdir (vm.runInContext): dosyalar modül değil, ortak genel kapsamdır.
+  // Kod değişmeden denetlensin diye örtük any ve null denetimi kapalıdır; geri kalan sıkı ayarlar sunucuyla aynıdır.
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "types": []
+  },
+  "include": ["./*.js", "./*.d.ts"]
+}
