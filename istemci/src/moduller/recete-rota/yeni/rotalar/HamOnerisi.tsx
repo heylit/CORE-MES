@@ -47,7 +47,7 @@ export function HamOnerisi({ urunId, adimlar, malzeme, ekle }: Ozellikler) {
   }
   return (
     <div className="tc-rr1-qt" role="group" aria-label="Önerilen hammadde">
-      <p className="tc-rr1-ipucu">Önerilen hammadde: {data.model.belgeAdi} ({data.model.harf}) 3B analizinden, en az talaş önce.</p>
+      <p className="tc-rr1-ipucu">Önerilen hammadde: {data.model.belgeAdi}{data.model.revKodu ? ` (Rev ${data.model.revKodu})` : ''} 3B analizinden, en az talaş önce.</p>
       {kartlar.map(({ oneri, kart }) => {
         const yogunluk = oneri.yogunluk ?? yerlesik?.get(`${oneri.aile ?? ''}|${oneri.kaliteKodu ?? ''}`) ?? null;
         const n = hamOneriMiktari({ ...oneri, yogunluk }, kart.unit);

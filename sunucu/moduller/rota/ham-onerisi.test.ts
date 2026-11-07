@@ -75,7 +75,8 @@ describe('rota hammadde önerisi 3B analizden (1709)', () => {
     assert.deepEqual(await oneri(mil), { model: null, payMm: null, oneriler: [], neden: 'model-yok' });
     const m = await modelEkle(mil, 'kup.step');
     const r = await oneri(mil);
-    assert.deepEqual([r.model?.belgeAdi, r.oneriler, r.neden], ['Model kup.step', [], 'analiz-yok']);
+    // 2138-2: kodsuz modelde gösterilen revizyon boştur (merkezin harfi değil).
+    assert.deepEqual([r.model?.belgeAdi, r.model?.revKodu, r.oneriler, r.neden], ['Model kup.step', null, [], 'analiz-yok']);
     await analizYaz(m);
   });
 
