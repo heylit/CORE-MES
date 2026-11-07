@@ -604,7 +604,7 @@ export const makineAyrimlari = (db: Db, emirId: number, makineIdleri: readonly n
 // adımı planlamayı bekler; hurda ve red parçayı ayırır (kol katılır ya da sağlamsız biter). İşlem (kalite-merkezi.onayla) burada da
 // aranır; çağıranın transaction'ında yazar. Kayıt yoksa BULUNAMADI, karar verilmişse ya da kalite adımı kalkmışsa CAKISMA.
 export type { HataliKarari, HataliKaydiOzeti } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-export { hataliKarariVer, hataliKaydi, hataliKayitlari } from './hatali-parca.ts';
+export { hataliAdimToplamlari, hataliKarariVer, hataliKaydi, hataliKayitlari } from './hatali-parca.ts';
 
 // Takvim (891): planlı başlangıcı ya da teslimi aralıktaki emirler; yetkiyi çağıran denetler (sayfa.uretim-emirleri).
 export const takvimKayitlari = isEmri.takvimKayitlari;

@@ -146,6 +146,30 @@ function ac(ekran: JSX.Element, adres = '/etiket-merkezi') {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('EtiketMerkezi', () => {
+  it('2223: gerçek boyut açılınca etiket mm ölçüsüyle çizilir; ekran ayarı ölçeği çarpar ve tarayıcıda kalır', async () => {
+    localStorage.clear();
+    sunucuKur();
+    ac(<HazirSablonlar />);
+    const svg = await screen.findByRole('img', { name: 'Lot 100x50 önizleme' });
+    expect(svg.getAttribute('width')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Gerçek boyut (1:1)'));
+    const gercek = screen.getByRole('img', { name: 'Lot 100x50 önizleme' });
+    expect(gercek.getAttribute('width')).toBe('100mm');
+    expect(gercek.getAttribute('height')).toBe('50mm');
+    expect(screen.getByText('Ekran ayarlanmadı; ölçü yaklaşık')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ekranı ayarla' }));
+    fireEvent.change(screen.getByLabelText(/Ölçek/), { target: { value: '112.5' } });
+    expect(screen.getByRole('img', { name: 'Kart ölçüsü' }).getAttribute('width')).toBe('96.3mm');
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    expect(screen.getByRole('img', { name: 'Lot 100x50 önizleme' }).getAttribute('width')).toBe('112.5mm');
+    expect(screen.getByText('Ekran ayarlı (%113)')).toBeTruthy();
+    cleanup();
+    sunucuKur();
+    ac(<HazirSablonlar />);
+    expect((await screen.findByRole('img', { name: 'Lot 100x50 önizleme' })).getAttribute('height')).toBe('56.25mm');
+    localStorage.clear();
+  });
+
   it('hazır şablonlarda deneme etiketi yoktur; ilk şablonun önizlemesi ve QR içeriği görünür', async () => {
     sunucuKur();
     ac(<HazirSablonlar />);

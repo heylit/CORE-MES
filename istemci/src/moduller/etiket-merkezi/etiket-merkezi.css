@@ -7,6 +7,13 @@
 .tc-etk-secimler { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: var(--b-3); align-items: end; }
 .tc-etk-kagit-alani { display: flex; justify-content: center; padding: var(--b-3); border: thin dashed var(--edge2); border-radius: var(--yari-1); }
 .tc-etk-onizleme { inline-size: 100%; max-inline-size: 32rem; block-size: auto; }
+.tc-etk-kagit-alani-gercek { justify-content: flex-start; overflow: auto; }
+.tc-etk-onizleme-gercek { flex: none; margin-inline: auto; }
+.tc-etk-kart { fill: none; stroke: var(--ink); }
+.tc-etk-olcu-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-etk-kalibrasyon { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; padding: var(--b-3); border: thin solid var(--edge); border-radius: var(--yari-1); }
+.tc-etk-kaydirici { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-etk-kaydirici input { inline-size: 100%; min-block-size: var(--dokunma); }
 .tc-etk-kagit { fill: var(--panel-solid); }
 .tc-etk-dolu { fill: var(--ink); }
 .tc-etk-cizgi { fill: none; stroke: var(--ink); }

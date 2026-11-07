@@ -9,7 +9,7 @@ export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGeti
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';
 export {
   type RotaAdimi, type RotaRevizyonu, girdisiEksikRevizyonlar, revizyonGetir, revizyonlar, type DurumRotaAdimi, type DurumRotaRevizyonu, durumRevizyonlari,
-  adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
+  adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
   malzemeAra,
 } from './servis/okuma.ts';
 export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil } from './servis/sablon.ts';

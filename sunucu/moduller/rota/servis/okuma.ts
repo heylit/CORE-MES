@@ -321,3 +321,11 @@ export async function malzemeAra(db: Db, g: { metin: string | null; tur: string[
   // Malzemelerin araması sayımı hep verir; vermezse ekran en az görünen satır sayısını gösterir.
   return { satirlar: r.satirlar.map(urunOzetine), toplam: r.toplam ?? r.satirlar.length, sayfaBoyu: r.sayfaBoyu };
 }
+
+// gecerliTalimat'ın toplu hâli: anahtar `${malzemeId}:${opNo}`; talimatı olmayan anahtar haritada yoktur. Paket listesi adım başına
+// ayrı sorgu atmasın diye.
+export async function gecerliTalimatlarToplu(db: Db, anahtarlar: readonly { malzemeId: number; opNo: number }[]): Promise<Map<string, { surum: number; metin: string }>> {
+  if (anahtarlar.length === 0) return new Map();
+  const satirlar = await s.gecerliTalimatlarToplu(db, anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.opNo));
+  return new Map(satirlar.map((t) => [`${String(t.malzemeId)}:${String(t.opNo)}`, { surum: t.surum, metin: t.metin }]));
+}

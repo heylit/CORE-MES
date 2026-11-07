@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { KUTU, simgeCizimi, type KaroTuru, type PiktogramAdi, type Sekil } from '#paylasilan/etiket-piktogramlari.ts';
 import type { CiktiCevabi, OnizlemeOgesi, QR_KENAR_MODUL as QrKenar, SATIR_ARALIGI as SatirAraligi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { mmOzniteligi } from './gercek-boyut.ts';
 
 // Sözleşmeden değer ithal edilmez; değer değişirse tip uyuşmaz ve derleme durur.
 const SATIR_ARALIGI: typeof SatirAraligi = 1.2;
@@ -70,10 +71,12 @@ function Oge({ o }: { o: OnizlemeOgesi }) {
   );
 }
 
-export function Onizleme({ cikti }: { cikti: CiktiCevabi }) {
+// gercek verilince etiket ekranda mm ölçüsüyle (1:1) çizilir; olcek ekranın kalibrasyonudur. Verilmezse alana sığdırılır.
+export function Onizleme({ cikti, gercek }: { cikti: CiktiCevabi; gercek?: { olcek: number | null } }) {
   const { genislik, yukseklik, ad } = cikti.sablon;
+  const boyut = gercek ? { width: mmOzniteligi(genislik, gercek.olcek), height: mmOzniteligi(yukseklik, gercek.olcek) } : {};
   return (
-    <svg className="tc-etk-onizleme" viewBox={`0 0 ${genislik} ${yukseklik}`} role="img" aria-label={`${ad} önizleme`}>
+    <svg className={gercek ? 'tc-etk-onizleme-gercek' : 'tc-etk-onizleme'} {...boyut} viewBox={`0 0 ${genislik} ${yukseklik}`} role="img" aria-label={`${ad} önizleme`}>
       <rect className="tc-etk-kagit" width={genislik} height={yukseklik} />
       {cikti.onizleme.map((o, i) => <Oge key={i} o={o} />)}
     </svg>

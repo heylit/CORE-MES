@@ -10,6 +10,8 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz } from './kayit-secimi.ts';
+import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boyut.ts';
+import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme } from './Onizleme.tsx';
 import './etiket-merkezi.css';
@@ -103,6 +105,9 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const [dpi, setDpi] = useState<string>('203');
   const [adet, setAdet] = useState('1');
   const [sade, setSade] = useState(false);
+  const [gercek, setGercek] = useState(gercekBoyutOku);
+  const [olcek, setOlcek] = useState(olcekOku);
+  const [ayar, setAyar] = useState(false);
   // 1287 a: giden ambalaj kaydı yok; sevk kolisinde koli sayısı ve koli içi adet burada girilir, her koli ayrı etikettir (n/N).
   const koliMi = kayit?.tur === 'sevk-koli';
   const [koliSayisi, setKoliSayisi] = useState('1');
@@ -173,7 +178,17 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
       )}
       {c.data && (
         <>
-          <div className="tc-etk-kagit-alani"><Onizleme cikti={c.data} /></div>
+          <div className="tc-etk-olcu-satiri">
+            <IsaretKutusu etiket="Gerçek boyut (1:1)" checked={gercek} onChange={(e) => { setGercek(e.target.checked); gercekBoyutYaz(e.target.checked); }} />
+            {gercek && (olcek === null
+              ? <Rozet ton="uyari">Ekran ayarlanmadı; ölçü yaklaşık</Rozet>
+              : <Rozet ton="tamam">Ekran ayarlı (%{Math.round(olcek * 100)})</Rozet>)}
+            {gercek && !ayar && <Dugme simge="ruler" onClick={() => setAyar(true)}>Ekranı ayarla</Dugme>}
+          </div>
+          {ayar && <Kalibrasyon olcek={olcek} kaydet={(o) => { olcekYaz(o); setOlcek(o); }} kapat={() => setAyar(false)} />}
+          <div className={gercek ? 'tc-etk-kagit-alani tc-etk-kagit-alani-gercek' : 'tc-etk-kagit-alani'}>
+            <Onizleme cikti={c.data} gercek={gercek ? { olcek } : undefined} />
+          </div>
           <p className="tc-etk-not">
             {c.data.sablon.genislik}x{c.data.sablon.yukseklik} mm · {kayitlar ? `${kayitlar.kayitlar.length} etiket, önizleme ilk kayıt` : 'örnek değerlerle'}. Dosyayı yazıcının kendi aracıyla gönderin.
           </p>

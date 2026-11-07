@@ -33,7 +33,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisile
 import { malzemeAra, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { malzemeIstegiAc, malzemeIstekleri, numuneKarariYansit, numuneTeslimi, emrinRefakatKartlari, istasyonLotKarari, uretimGirdiUyarisi } from '../stok/disari.ts';
 import { bekleyenSiralar, canliSira, kuyruguSirala, taslaktakiler } from '../plan/disari.ts';
-import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimat, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir } from '../rota/disari.ts';
+import { adimEtkinSureleriToplu, adimIlkParcaSecimleri, gecerliTalimatlarToplu, girdisiEksikRevizyonlar, patlatmaDugumleri, revizyonGetir } from '../rota/disari.ts';
 import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTakvimleri, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
@@ -44,7 +44,7 @@ import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
-  calismaDevral, hataliKayitlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
+  calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir,
 } from '../uretim-emirleri/disari.ts';
@@ -304,7 +304,11 @@ async function isEmriTaslaklari(
   const anahtar = (ie: { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null }) => anahtarlar.get(ie.id) ?? rotaAnahtari(ie, undefined, new Map());
   const rotaEksik = await girdisiEksikRevizyonlar(db, [...anahtarlar.values()].flatMap((a) => (a.revizyonId === null ? [] : [a.revizyonId])));
   const revizyonlar = new Map<number, string | null>();
-  const talimatlar = new Map<string, string | null>();
+  // Talimat adım başına ayrı okunmasın: listedeki bütün (malzeme, adım) anahtarlarının geçerli talimatı tek okumadır. Talimat yine yalnız
+  // kayıtsız ve şablonsuz pakette o anahtar için açılır; açılan anahtar sonraki paketlerde de kullanılır.
+  const talimatlar = new Map([...await gecerliTalimatlarToplu(db, isEmirleri.map((ie) => { const r = anahtar(ie); return { malzemeId: r.malzemeNo, opNo: r.opNo }; }))]
+    .map(([k, t]) => [k, t.metin] as const));
+  const acilanTalimatlar = new Set<string>();
   const govdeler = kayitli.map((b) => b.govde);
   const kayitliGovde = new Map(kayitli.map((b) => [b.kimlik, b.govde]));
   const girdiler: IsEmriPaketGirdisi[] = [];
@@ -321,9 +325,9 @@ async function isEmriTaslaklari(
     const kayitsiz = !kayitliKimlik.has(isEmriPaketKimligi(ie.id));
     const sablon = kayitsiz ? sablonPaket(govdeler, rota.malzemeNo, rota.opNo, revizyon) : null;
     const talimatAnahtari = `${rota.malzemeNo}:${rota.opNo}`;
-    if (kayitsiz && sablon === null && !talimatlar.has(talimatAnahtari)) talimatlar.set(talimatAnahtari, (await gecerliTalimat(db, rota.malzemeNo, rota.opNo))?.metin ?? null);
+    if (kayitsiz && sablon === null) acilanTalimatlar.add(talimatAnahtari);
     const girdi: IsEmriPaketGirdisi = {
-      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: talimatlar.get(talimatAnahtari) ?? null, sablon,
+      isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: acilanTalimatlar.has(talimatAnahtari) ? talimatlar.get(talimatAnahtari) ?? null : null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
       opTipi: ie.operasyonTipiId === undefined ? null : tipKodlari.get(ie.operasyonTipiId) ?? null,
@@ -416,22 +420,11 @@ async function paketEmriBitti(db: Db, paketId: string): Promise<boolean> {
 }
 
 // 1853: adımın hatalı toplamı (1188) çalışan adımda acikAdimlar'dan gelir; bekleyen ve bitmiş adımda Arkon onu uretim-emirleri'nin hatalı
-// kayıt listesinden toplar (emir başına tek okuma). Liste sınırına dayanan emirde toplam eksik olabilir: bilinmez sayılır, alan yazılmaz.
-// Sınır uretim-emirleri'nin HATALI_LISTE_SINIRI'dır; disari.ts vermediği için aynı sayı burada tutulur.
-const HATALI_LISTE_SINIRI = 500;
+// kayıtlarından toplar (bütün emirler için tek okuma). Kaydı liste sınırına ulaşan emirde toplam bilinmez sayılır, alan yazılmaz.
 type HataliToplami = (emirId: number | null, isEmriId: number) => number | undefined;
 async function hataliToplamlari(db: Db, emirIdleri: Iterable<number | null>): Promise<HataliToplami> {
-  const okunan = new Set<number>();
-  const toplam = new Map<number, number>();
-  for (const emirId of new Set(emirIdleri)) {
-    if (emirId === null) continue;
-    const kayitlar = await hataliKayitlari(db, { acik: false, emirId });
-    if (kayitlar.length >= HATALI_LISTE_SINIRI) continue;
-    okunan.add(emirId);
-    // Liste hedef emri bu olan (kola ayrılmış) başka emrin kayıtlarını da verir; adım kendi emrinin kaydıyla sayılır.
-    for (const k of kayitlar) if (k.uretimEmri.id === emirId) toplam.set(k.isEmri.id, (toplam.get(k.isEmri.id) ?? 0) + k.adet);
-  }
-  return (emirId, isEmriId) => (emirId !== null && okunan.has(emirId) ? (toplam.get(isEmriId) ?? 0) : undefined);
+  const toplamlar = await hataliAdimToplamlari(db, [...emirIdleri].filter((id): id is number => id !== null));
+  return (emirId, isEmriId) => { const t = emirId === null ? undefined : toplamlar.get(emirId); return t === undefined ? undefined : (t.get(isEmriId) ?? 0); };
 }
 
 // Taslağı olmayan (bitmiş adımın) kayıtlı iş emri paketlerinin hatalı toplamı; yalnız açık (planlı ya da başlamış) emirde okunur, kapanmış
