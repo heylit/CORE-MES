@@ -40,6 +40,18 @@ export function adimlariGetir(db: Db, emirId: number): Promise<AdimSatiri[]> {
   );
 }
 
+// Hazırlık matrisinin "Talimat" maddesi (2227-1): iş emrine kopyalanmış ön hazırlık ve hazırlık adımları ile son olayı tamamla olanlar.
+export interface TalimatSayisi { isEmriId: number; toplam: number; tamam: number }
+export function talimatHazirlikSayilari(db: Db, isEmriIdleri: readonly number[]): Promise<TalimatSayisi[]> {
+  return db.sorgu<TalimatSayisi>(
+    `SELECT a.is_emri_id AS "isEmriId", count(*)::int AS toplam, count(*) FILTER (WHERE o.olay = 'tamamla')::int AS tamam
+       FROM emir_adimi a
+       LEFT JOIN LATERAL (SELECT olay FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik') GROUP BY a.is_emri_id`,
+    [[...isEmriIdleri]],
+  );
+}
+
 export async function adimEmirdeVarMi(db: Db, emirId: number, adimId: number): Promise<boolean> {
   return (await db.tek(
     `SELECT 1 AS var FROM emir_adimi WHERE id = $1 AND emir_id = $2 AND is_emri_id IS NOT DISTINCT FROM ${TERMINAL_IS_EMRI('$2')}`, [adimId, emirId],

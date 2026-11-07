@@ -68,8 +68,9 @@ describe('uretim-emirleri toplu hazırlık (2227, gerçek PostgreSQL)', () => {
     sira, opNo: sira * 10, ad: `Adım ${sira}`, operasyonTipiId: tipId, kaynak: { tur: 'makine', id: makineId },
     ayarSuresiDk: '10', birimSureDk: '1.5', terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
   });
-  const emirAc = async (adimSayisi: number) => o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
-    malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: revId, projeId, isEmirleri: Array.from({ length: adimSayisi }, (_, i) => adim(i + 1)),
+  const emirAc = async (adimSayisi: number, kontrolListesi: IsEmriGirdisi['kontrolListesi'] = []) => o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
+    malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: revId, projeId,
+    isEmirleri: Array.from({ length: adimSayisi }, (_, i) => ({ ...adim(i + 1), kontrolListesi })),
   }));
 
   before(async () => {
@@ -146,6 +147,40 @@ describe('uretim-emirleri toplu hazırlık (2227, gerçek PostgreSQL)', () => {
       hazirlikCozucusuKaydet('cnc', cncOnceki);
       hazirlikCozucusuKaydet('cizim', cizimOnceki);
     }
+  });
+
+  // 2227-1: rota talimatının ön hazırlık ve hazırlık adımları "Talimat" maddesidir; yalnız uyarır. Üretim adımı sayılmaz,
+  // geri alınan adım tamam sayılmaz, adımı olmayan iş emrinde madde gerekmez.
+  test('talimat maddesi hazırlık adımlarından çıkar, yalnız uyarır', async () => {
+    const e = await emirAc(1, [
+      { ad: 'Malzemeyi hazırla', aciklama: null, asama: 'on_hazirlik' },
+      { ad: 'Bağlamayı kur', aciklama: null, asama: 'hazirlik' },
+      { ad: 'Ölçü al', aciklama: null, asama: 'uretim' },
+    ]);
+    const bos = await emirAc(1);
+    const [ie] = e.isEmriIdleri;
+    const talimat = async (id: number) => (await o().vt.okumaTx((db) => hazirlik(db, id))).maddeler.find((m) => m.madde === 'talimat');
+    const isaretle = (ad: string, olay: 'tamamla' | 'geri-al') => o().sahip.sorgu(
+      'INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay) SELECT id, $3, $2 FROM emir_adimi WHERE is_emri_id = $1 AND ad = $4', [ie, olay, yoneticiId, ad]);
+    assert.deepEqual(await talimat(e.uretimEmriId), { madde: 'talimat', durum: 'eksik', muafTutulur: false, isEmriDuzeyi: true });
+    assert.equal((await talimat(bos.uretimEmriId))?.durum, 'gerekmez', 'adımı olmayan iş emrinde gerekmez');
+    await isaretle('Malzemeyi hazırla', 'tamamla');
+    assert.equal((await talimat(e.uretimEmriId))?.durum, 'eksik', 'bir adım kaldı');
+    const olay = { uretimEmriId: e.uretimEmriId, isEmriId: ie!, istasyonId: 1, kisiId: yoneticiId };
+    const cnc = hazirlikCozucusuKaydet('cnc', null);
+    const cizim = hazirlikCozucusuKaydet('cizim', null);
+    const yayin = hazirlikCozucusuKaydet('yayin', null);
+    try {
+      assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)), null, 'talimat başlatmayı durdurmaz');
+    } finally {
+      hazirlikCozucusuKaydet('cnc', cnc);
+      hazirlikCozucusuKaydet('cizim', cizim);
+      hazirlikCozucusuKaydet('yayin', yayin);
+    }
+    await isaretle('Bağlamayı kur', 'tamamla');
+    assert.equal((await talimat(e.uretimEmriId))?.durum, 'tamam', 'üretim adımı beklenmez');
+    await isaretle('Bağlamayı kur', 'geri-al');
+    assert.equal((await talimat(e.uretimEmriId))?.durum, 'eksik', 'son olay geri alma');
   });
 
   test('emri gören (CAM) okur, görmeyen (operatör) okuyamaz; yetki tek emir okumasıyla aynı; sorgu sınırı', async () => {

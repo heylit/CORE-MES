@@ -1034,6 +1034,7 @@ export function fasonBeklemesi(
 // başlamaz. Çizim muaf tutulamaz (121 a).
 export const HAZIRLIK_ADI: Readonly<Record<HazirlikMaddesi, string>> = {
   cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu', yayin: 'Paket yayını',
+  talimat: 'Hazırlık talimatı',
 };
 // Muafiyet yalnız matristeki durduran maddeye verilir; özel proses matristen çıktı (2146-1 a), uyaran madde zaten durdurmaz.
 export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(
@@ -1046,6 +1047,11 @@ export function makineHazirligi(a: { secili: 'calisir' | 'ariza' | 'bakim' | nul
   if (a.secili !== null) return { durum: a.secili === 'calisir' ? 'tamam' : 'yok', secildi: true };
   if (a.istasyondaMakine === 0) return { durum: 'yok', secildi: false };
   return { durum: a.calisir > 0 ? 'tamam' : 'yok', secildi: true };
+}
+// 2227-1: rota talimatının ön hazırlık ve hazırlık adımları (2098-1 a) yalnız uyarır. Adımı olmayan iş emrinde madde gerekmez.
+export function talimatHazirligi(a: { toplam: number; tamam: number } | undefined): HazirlikBilgisi {
+  if (a === undefined || a.toplam === 0) return { durum: 'yok', secildi: false };
+  return { durum: a.tamam >= a.toplam ? 'tamam' : a.tamam > 0 ? 'suruyor' : 'yok', secildi: true };
 }
 export interface HazirlikBilgisi { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean }
 export type HazirlikHali = 'tamam' | 'eksik' | 'muaf' | 'gerekmez' | 'bilinmiyor';
