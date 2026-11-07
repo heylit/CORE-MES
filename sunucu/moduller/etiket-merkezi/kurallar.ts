@@ -4,7 +4,7 @@ import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
-import type { Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { Bekleyen, Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
@@ -390,3 +390,36 @@ export function sevkKoliDegerleri(k: {
     sevk: birlestir([k.tarih && gunAyYil(k.tarih), k.belgeNo && `Belge ${k.belgeNo}`]),
   };
 }
+
+// EM-30 (2223-1 a): bekleyen etiket kaynak kayıttan türetilir. Liste BEKLEYEN_GUN geriye bakar; kayıt, açıldığı ya da durumu
+// değiştiği andan sonra basılmadıysa bekler. Zaman metinleri ISO'dur; karşılaştırma ana çevrilerek yapılır.
+export const BEKLEYEN_GUN = 30;
+export function bekleyenBaslangici(simdi: Date): string {
+  return new Date(simdi.getTime() - BEKLEYEN_GUN * 86_400_000).toISOString();
+}
+const sonra = (basim: string | undefined, olay: string): boolean => basim !== undefined && Date.parse(basim) >= Date.parse(olay);
+
+export function malKabulBekleyenleri(
+  kabuller: readonly { malKabulId: number; no: string; irsaliyeNo: string | null; zaman: string; partiIdler: readonly number[] }[],
+  lotBasimlari: ReadonlyMap<number, string>,
+): Bekleyen[] {
+  return kabuller.flatMap((k) => {
+    const lotlar = [...new Set(k.partiIdler)];
+    const basilmamis = lotlar.filter((p) => !sonra(lotBasimlari.get(p), k.zaman)).length;
+    if (basilmamis === 0) return [];
+    const ayrinti = [`${String(basilmamis)}/${String(lotlar.length)} lot etiketi basılmadı`, k.irsaliyeNo === null ? null : `İrsaliye ${k.irsaliyeNo}`].filter(Boolean).join(' · ');
+    return [{ tur: 'mal-kabul' as const, id: k.malKabulId, baslik: k.no, ayrinti, zaman: k.zaman, etiketSayisi: basilmamis }];
+  });
+}
+
+export function kaliteBekleyenleri(
+  degisimler: readonly { bakiyeId: number; lotNo: string; malzemeAd: string | null; konumKod: string; kaliteDurumu: KaliteDurumu; degisim: string }[],
+  basimlar: ReadonlyMap<number, string>,
+): Bekleyen[] {
+  return degisimler.flatMap((d) => (sonra(basimlar.get(d.bakiyeId), d.degisim) ? [] : [{
+    tur: 'kalite-durum' as const, id: d.bakiyeId, baslik: `${d.lotNo} ${d.konumKod}`,
+    ayrinti: [KALITE_DURUM_ADLARI[d.kaliteDurumu], d.malzemeAd].filter(Boolean).join(' · '), zaman: d.degisim, etiketSayisi: 1,
+  }]));
+}
+
+export const bekleyenSirasi = (a: Bekleyen, b: Bekleyen): number => Date.parse(b.zaman) - Date.parse(a.zaman) || a.tur.localeCompare(b.tur) || b.id - a.id;

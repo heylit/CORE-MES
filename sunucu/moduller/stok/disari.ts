@@ -10,6 +10,7 @@ import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import * as malzemeFisi from './malzeme-fisi.ts';
 import * as kapanis from './kapanis.ts';
+import * as etiket from './sorgular/etiket/sorgular.ts';
 
 // Akışın yazdığı hareket (1388 a) fişinde akış adını taşır; Stok Merkezi'nden elle geri alınmaz. Ayar işlem yereldir ve yazıcı
 // bitince boşaltılır: aynı işlemde sonradan yazılan elle hareket akışa sayılmaz.
@@ -67,6 +68,10 @@ export const lotEtiketleri = (db: Db, a: { partiId: number } | { malKabulId: num
 // Kalite durum etiketi (kart 1525, Etiket Merkezi okur): kimlik bakiye satırıdır; durum satırdan okunur, elle seçilmez (1286 a).
 export type { KaliteEtiketi } from './servis.ts';
 export const kaliteEtiketleri = (db: Db, bakiyeIdler: readonly number[]) => servis.kaliteEtiketleri(db, bakiyeIdler);
+// Etiket Merkezi'nin bekleyen listesi (2223-1 a): aralıktaki mal kabuller ve kalite durumunu değiştiren hareketler.
+export type { EtiketKaliteDegisimi, EtiketMalKabulu } from './sorgular/etiket/sorgular.ts';
+export const etiketMalKabulleri = (db: Db, baslangic: string) => etiket.etiketMalKabulleri(db, baslangic);
+export const etiketKaliteDegisimleri = (db: Db, baslangic: string) => etiket.etiketKaliteDegisimleri(db, baslangic);
 // İstasyonun stok konumu (kimlik ve basılı kod); konumu açılmamış istasyon haritada yoktur. Boş dizide sorgu atılmaz.
 export async function istasyonKonumlari(db: Db, istasyonIdler: readonly number[]): Promise<Map<number, { konumId: number; kod: string }>> {
   if (istasyonIdler.length === 0) return new Map();

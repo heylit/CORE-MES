@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, kaliteDurumDegerleri } from './kurallar.ts';
+import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, malKabulBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
@@ -333,5 +333,38 @@ describe('etiket-merkezi kuralları', () => {
       const sag = ogeler.filter((o) => o.tur === 'simge' && o.x + o.boyut >= s.genislik - 3 && o.y <= 3 && o.karo !== 'yok');
       assert.equal(sag.length, 1, s.anahtar);
     }
+  });
+});
+
+describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
+  test('aralık başlangıcı BEKLEYEN_GUN geriye', () => {
+    assert.equal(BEKLEYEN_GUN, 30);
+    assert.equal(bekleyenBaslangici(new Date('2026-11-07T12:00:00.000Z')), '2026-10-08T12:00:00.000Z');
+  });
+
+  test('mal kabul: kabulden sonra basılmamış lot sayılır; önceki basım saymaz; hepsi basılınca liste dışı; yinelenen lot bir kez', () => {
+    const kabul = { malKabulId: 7, no: 'MK-000007', irsaliyeNo: null, zaman: '2026-11-07T10:00:00.000Z', partiIdler: [1, 2, 2, 3] };
+    const basim = new Map([[1, '2026-11-07T10:05:00.000Z'], [2, '2026-11-06T09:00:00.000Z']]);
+    assert.deepEqual(malKabulBekleyenleri([kabul], basim), [
+      { tur: 'mal-kabul', id: 7, baslik: 'MK-000007', ayrinti: '2/3 lot etiketi basılmadı', zaman: kabul.zaman, etiketSayisi: 2 },
+    ]);
+    const hepsi = new Map([1, 2, 3].map((p) => [p, '2026-11-07T10:00:00.000Z']));
+    assert.deepEqual(malKabulBekleyenleri([kabul], hepsi), [], 'aynı anda basım basılmış sayılır');
+    assert.equal(malKabulBekleyenleri([{ ...kabul, irsaliyeNo: 'IRS-1' }], new Map())[0]?.ayrinti, '3/3 lot etiketi basılmadı · İrsaliye IRS-1');
+  });
+
+  test('kalite: durum değiştikten sonra basılmayan satır bekler; başlık lot ve konum, ayrıntı durum adı ve malzeme', () => {
+    const d = { bakiyeId: 9, lotNo: 'LT-1', malzemeAd: 'Örnek mil', konumKod: 'KAR', kaliteDurumu: 'sartli' as const, degisim: '2026-11-07T10:00:00.000Z' };
+    assert.deepEqual(kaliteBekleyenleri([d], new Map([[9, '2026-11-07T09:59:59.000Z']])), [
+      { tur: 'kalite-durum', id: 9, baslik: 'LT-1 KAR', ayrinti: 'ŞARTLI KABUL · Örnek mil', zaman: d.degisim, etiketSayisi: 1 },
+    ]);
+    assert.deepEqual(kaliteBekleyenleri([d], new Map([[9, '2026-11-07T10:00:01.000Z']])), []);
+    assert.equal(kaliteBekleyenleri([{ ...d, malzemeAd: null, kaliteDurumu: 'red' }], new Map())[0]?.ayrinti, 'RED');
+  });
+
+  test('sıra yeniden eskiye; aynı anda tür ve kimlik', () => {
+    const b = (tur: 'mal-kabul' | 'kalite-durum', id: number, zaman: string) => ({ tur, id, baslik: '', ayrinti: '', zaman, etiketSayisi: 1 });
+    const liste = [b('mal-kabul', 1, '2026-11-01T00:00:00Z'), b('mal-kabul', 2, '2026-11-02T00:00:00Z'), b('kalite-durum', 3, '2026-11-02T00:00:00Z')];
+    assert.deepEqual(liste.sort(bekleyenSirasi).map((x) => x.id), [3, 2, 1]);
   });
 });

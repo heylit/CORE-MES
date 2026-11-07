@@ -12,6 +12,7 @@ Testler `etiket-merkezi.test.ts` (gerçek PostgreSQL, gerçek giriş). Oturumsuz
 | `GET /etiket-merkezi/yazicilar` | `biri: oku, yazici-yaz` | doğrudan baskı nedeni adres ya da değer taşımaz (EM-9) | EM-U5 | EM-U5 (403) |
 | `POST /etiket-merkezi/yazicilar/ac`, `/:id/guncelle` | `etiket-merkezi.yazici-yaz` | EM-8 tek IP, aralık içi, ad çözülmez; sürüm; ad tekil (409) | EM-U5, EM-U6 | EM-U5 (403), EM-U6 (aralık yok, dışı, ad) |
 | `POST /etiket-merkezi/sablonlar/:anahtar/bas` | `etiket-merkezi.bas`, tekrar korumalı | EM-9, EM-10 her gönderimde yeniden; yalnız 9100; hata iletisi adres taşımaz | EM-U7, EM-U10 | EM-U7 (kapalı ayar, dosya yazıcısı, deneme dışı, adet, 403), EM-U8, EM-U10 (kayıtsız konum şablonu, türü uymayan kayıt) |
+| `GET /etiket-merkezi/bekleyenler` | `etiket-merkezi.oku` | salt okuma; stok `disari.ts` okumaları, 30 gün ve en çok 500 satır | EM-U21 | EM-U21 (403) |
 | `GET /etiket-merkezi/baskilar` | `etiket-merkezi.oku` | defter yalnız eklenir (tetikleyici) | EM-U8 | EM-U8 (403, DELETE reddi) |
 
 Denetim kaydı: yazıcı tanımı `degistiren_kisi_id` ve sürümle, her baskı defterde (kişi, zaman, sonuç) tutulur.

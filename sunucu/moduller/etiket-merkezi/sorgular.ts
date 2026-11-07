@@ -80,3 +80,16 @@ export const etiketTurleriOku = (db: Db): Promise<EtiketTuruSatiri[]> =>
             durum, disaridaki_yol AS "disaridakiYol"
        FROM etiket_merkezi_etiket_turu ORDER BY sira, kod`,
   );
+
+// Kaydın son başarılı basımı (gönderildi ya da deftere yazılan indirme); hiç basılmamış kayıt haritada yoktur.
+export async function sonBasimlar(db: Db, kaynakTur: string, idler: readonly number[]): Promise<Map<number, string>> {
+  if (idler.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ id: number; zaman: string }>(
+    `SELECT k.kaynak_id AS id, ${zamanMetni('max(b.zaman)')} AS zaman
+       FROM etiket_merkezi_baski_kaydi k JOIN etiket_merkezi_baski b ON b.id = k.baski_id
+      WHERE k.kaynak_tur = $1 AND k.kaynak_id = ANY($2::int[]) AND b.sonuc IN ('gonderildi', 'indirildi')
+      GROUP BY k.kaynak_id`,
+    [kaynakTur, idler],
+  );
+  return new Map(satirlar.map((s) => [s.id, s.zaman]));
+}
