@@ -13,13 +13,13 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { gozler, raflar } from '../atolye/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
-import { etiketKaliteDegisimleri, etiketMalKabulleri, istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
+import { etiketKaliteDegisimleri, etiketMalKabulleri, etiketRefakatVerilisleri, istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
 import { koliKalemleri } from '../sevkiyat/disari.ts';
-import { hataliKaydi, refakatKarti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, kaliteBekleyenleri, malKabulBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -296,20 +296,34 @@ export async function etiketler(db: Db): Promise<EtiketlerCevabi> {
 
 // 2223-1 a: görevden doğan etiketler kaynak kayıtlardan türetilir. Mal kabulün lotları lot olarak, kalite durumu bakiye satırı
 // olarak deftere yazılır (basilanKayitlar); bekleyen, o kayıt açıldıktan ya da durumu değiştikten sonra basılmamış olandır.
+// Kaynaklar sırayla okunur (aynı istemciye eşzamanlı sorgu verilmez). Hatalı parça Üretim Emirleri'nin son kayıt listesinden
+// (en yeni HATALI_LISTE_SINIRI kayıt) süzülür; aralıktan eski kaydın yeni kararı o listede olduğu sürece görünür.
 export async function bekleyenler(db: Db, simdi: Date = new Date()): Promise<BekleyenlerCevabi> {
   const baslangic = bekleyenBaslangici(simdi);
   const kabuller = await etiketMalKabulleri(db, baslangic);
   const lotBasimlari = await sonBasimlar(db, 'lot', [...new Set(kabuller.flatMap((k) => k.partiIdler))]);
   const degisimler = await etiketKaliteDegisimleri(db, baslangic);
   const kaliteBasimlari = await sonBasimlar(db, 'kalite-durum', degisimler.map((d) => d.bakiyeId));
-  const adlar = await malzemeOzetleri(db, [...new Set(degisimler.map((d) => d.malzemeId))]);
+  const verilisler = await etiketRefakatVerilisleri(db, baslangic);
+  const emirIdler = [...new Set(verilisler.map((v) => v.uretimEmriId))];
+  const refakatBasimlari = await sonBasimlar(db, 'refakat', emirIdler);
+  const nolar = await emirNolari(db, emirIdler);
+  const adlar = await malzemeOzetleri(db, [...new Set([...degisimler.map((d) => d.malzemeId), ...verilisler.map((v) => v.malzemeId)])]);
+  const hatalilar = await hataliKayitlari(db, { acik: false, emirId: null });
+  const hataliBasimlari = await sonBasimlar(db, 'hatali-parca', hatalilar.map((h) => h.id));
   const kabulAtlamalari = await sonAtlamalar(db, 'mal-kabul', kabuller.map((k) => k.malKabulId));
   const kaliteAtlamalari = await sonAtlamalar(db, 'kalite-durum', degisimler.map((d) => d.bakiyeId));
+  const refakatAtlamalari = await sonAtlamalar(db, 'refakat-partisi', verilisler.map((v) => v.refakatPartisiId));
+  const hataliAtlamalari = await sonAtlamalar(db, 'hatali-parca', hatalilar.map((h) => h.id));
   return {
     gun: BEKLEYEN_GUN,
     bekleyenler: [
       ...malKabulBekleyenleri(kabuller, lotBasimlari, kabulAtlamalari),
       ...kaliteBekleyenleri(degisimler.map((d) => ({ ...d, malzemeAd: adlar.get(d.malzemeId)?.ad ?? null })), kaliteBasimlari, kaliteAtlamalari),
+      ...refakatBekleyenleri(
+        verilisler.map((v) => ({ ...v, malzemeAd: adlar.get(v.malzemeId)?.ad ?? null, emirNo: nolar.get(v.uretimEmriId) ?? null })), refakatBasimlari, refakatAtlamalari,
+      ),
+      ...hataliBekleyenleri(hatalilar, baslangic, hataliBasimlari, hataliAtlamalari),
     ].sort(bekleyenSirasi),
   };
 }

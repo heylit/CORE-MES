@@ -240,7 +240,7 @@ export type EtiketlerCevabi = z.infer<typeof etiketlerCevabi>;
 
 // Bekleyen etiketler (2223-1 a): görevden doğan ve henüz basılmamış etiketler kaynak kayıtlardan türetilir; tablo yoktur.
 // Kayıt seçimi Etiket Merkezi adresidir: /etiket-merkezi?tur=<tur>&id=<id>. Son basımdan sonra değişen kayıt yeniden bekler.
-export const BEKLEYEN_TURLERI = ['mal-kabul', 'kalite-durum'] as const satisfies readonly (typeof KAYIT_TURLERI)[number][];
+export const BEKLEYEN_TURLERI = ['mal-kabul', 'kalite-durum', 'refakat-partisi', 'hatali-parca'] as const satisfies readonly (typeof KAYIT_TURLERI)[number][];
 export const bekleyenSemasi = z.object({
   tur: z.enum(BEKLEYEN_TURLERI),
   id: z.number().int(),
@@ -248,7 +248,7 @@ export const bekleyenSemasi = z.object({
   ayrinti: z.string(),
   // Kaydın açıldığı ya da durumunun değiştiği an; liste bu zamana göre yeniden eskiye sıralanır.
   zaman: z.string(),
-  // Basılacak etiket sayısı (mal kabulde basılmamış lot sayısı, kalite durumunda 1).
+  // Basılacak etiket sayısı (mal kabulde basılmamış lot sayısı, öteki türlerde 1).
   etiketSayisi: z.number().int(),
 });
 export const bekleyenlerCevabi = z.object({ gun: z.number().int(), bekleyenler: z.array(bekleyenSemasi) });

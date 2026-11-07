@@ -426,4 +426,37 @@ export function kaliteBekleyenleri(
   }]));
 }
 
+// EM-32 (2223-2 a): depodan emre verilen lotun refakat kartı. Basım deftere emrin refakat kartı olarak yazılır (kaynak 'refakat',
+// kimlik emir); emrin kartı verilişten sonra basıldıysa kart basılmış sayılır.
+export function refakatBekleyenleri(
+  verilisler: readonly { refakatPartisiId: number; uretimEmriId: number; sira: number; lotNo: string; malzemeAd: string | null; emirNo: string | null; verilis: string }[],
+  emirBasimlari: ReadonlyMap<number, string>,
+  atlamalar: ReadonlyMap<number, string> = new Map(),
+): Bekleyen[] {
+  return verilisler.flatMap((v) => (sonra(emirBasimlari.get(v.uretimEmriId), v.verilis) || sonra(atlamalar.get(v.refakatPartisiId), v.verilis) ? [] : [{
+    tur: 'refakat-partisi' as const, id: v.refakatPartisiId, baslik: `${v.emirNo ?? `Emir #${String(v.uretimEmriId)}`}-P${String(v.sira)}`,
+    ayrinti: [`Lot ${v.lotNo}`, v.malzemeAd].filter(Boolean).join(' · '), zaman: v.verilis, etiketSayisi: 1,
+  }]));
+}
+
+// EM-33 (2223-2 a): hatalı parça etiketi terminalde ayrılınca ve kalite rework, hurda ya da red deyince basılır. Kabul ve şartlı kabul
+// parçayı hattına döndürür; etiket beklemez. Olay zamanı karar varsa karar anı, yoksa ayrılma anıdır.
+const HATALI_ETIKETLI_KARAR: ReadonlySet<string> = new Set(['rework', 'hurda', 'red']);
+export function hataliBekleyenleri(
+  kayitlar: readonly Pick<HataliKaydiOzeti, 'id' | 'uretimEmri' | 'isEmri' | 'hurdaNedeni' | 'adet' | 'zaman' | 'karar' | 'kararZamani'>[],
+  baslangic: string,
+  basimlar: ReadonlyMap<number, string>,
+  atlamalar: ReadonlyMap<number, string> = new Map(),
+): Bekleyen[] {
+  return kayitlar.flatMap((h) => {
+    if (h.karar !== null && !HATALI_ETIKETLI_KARAR.has(h.karar)) return [];
+    const olay = h.kararZamani ?? h.zaman;
+    if (Date.parse(olay) < Date.parse(baslangic) || sonra(basimlar.get(h.id), olay) || sonra(atlamalar.get(h.id), olay)) return [];
+    return [{
+      tur: 'hatali-parca' as const, id: h.id, baslik: `${h.uretimEmri.emirNo} OP ${String(h.isEmri.opNo)}`,
+      ayrinti: [h.karar === null ? 'KARAR BEKLİYOR' : HATALI_DURUM_ADLARI[h.karar], `${String(h.adet)} adet`, h.hurdaNedeni.ad].join(' · '), zaman: olay, etiketSayisi: 1,
+    }];
+  });
+}
+
 export const bekleyenSirasi = (a: Bekleyen, b: Bekleyen): number => Date.parse(b.zaman) - Date.parse(a.zaman) || a.tur.localeCompare(b.tur) || b.id - a.id;

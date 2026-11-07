@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, malKabulBekleyenleri } from './kurallar.ts';
+import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
@@ -371,6 +371,35 @@ describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
     assert.deepEqual(kaliteBekleyenleri([d], new Map(), new Map([[9, '2026-11-07T10:00:00.000Z']])), []);
     assert.equal(kaliteBekleyenleri([{ ...d, degisim: '2026-11-07T11:00:00.000Z' }], new Map(), new Map([[9, '2026-11-07T10:00:00.000Z']])).length, 1,
       'durum işaretten sonra yeniden değişince geri gelir');
+  });
+
+  test('EM-32 (2223-2 a): refakat kartı verilişten sonra emrin kartı basılmadıysa bekler; başlık emir no-P sıra', () => {
+    const v = { refakatPartisiId: 5, uretimEmriId: 120, sira: 2, lotNo: 'LT-9', malzemeAd: 'Örnek çubuk', emirNo: 'UE-000120', verilis: '2026-11-07T10:00:00.000Z' };
+    assert.deepEqual(refakatBekleyenleri([v], new Map()), [
+      { tur: 'refakat-partisi', id: 5, baslik: 'UE-000120-P2', ayrinti: 'Lot LT-9 · Örnek çubuk', zaman: v.verilis, etiketSayisi: 1 },
+    ]);
+    assert.deepEqual(refakatBekleyenleri([v], new Map([[120, '2026-11-07T10:00:01.000Z']])), []);
+    assert.equal(refakatBekleyenleri([v], new Map([[5, '2026-11-07T10:00:01.000Z']])).length, 1, 'basım emir kimliğiyle aranır');
+    assert.deepEqual(refakatBekleyenleri([v], new Map(), new Map([[5, '2026-11-07T10:00:01.000Z']])), []);
+    assert.equal(refakatBekleyenleri([{ ...v, emirNo: null, malzemeAd: null }], new Map())[0]?.baslik, 'Emir #120-P2');
+  });
+
+  test('EM-33 (2223-2 a): hatalı parça ayrılınca ve rework/hurda/red kararıyla bekler; kabul beklemez; aralık dışı olay sayılmaz', () => {
+    const h = {
+      id: 3, uretimEmri: { id: 1, emirNo: 'UE-000001', parcaNo: 'X', parcaAd: 'Y' }, isEmri: { id: 2, opNo: 20, ad: 'Freze' },
+      hurdaNedeni: { id: 1, kod: 'H', ad: 'Çapak' }, adet: 2, zaman: '2026-11-07T08:00:00.000Z', karar: null, kararZamani: null,
+    };
+    const bas = '2026-10-08T12:00:00.000Z';
+    assert.deepEqual(hataliBekleyenleri([h], bas, new Map()), [
+      { tur: 'hatali-parca', id: 3, baslik: 'UE-000001 OP 20', ayrinti: 'KARAR BEKLİYOR · 2 adet · Çapak', zaman: h.zaman, etiketSayisi: 1 },
+    ]);
+    const red = { ...h, karar: 'red' as const, kararZamani: '2026-11-07T09:00:00.000Z' };
+    assert.equal(hataliBekleyenleri([red], bas, new Map([[3, '2026-11-07T08:30:00.000Z']]))[0]?.zaman, red.kararZamani, 'karar ayrılmadaki basımdan sonra');
+    assert.deepEqual(hataliBekleyenleri([red], bas, new Map([[3, '2026-11-07T09:30:00.000Z']])), []);
+    assert.deepEqual(hataliBekleyenleri([{ ...red, karar: 'kabul' }], bas, new Map()), []);
+    assert.deepEqual(hataliBekleyenleri([{ ...red, karar: 'sartli_kabul' }], bas, new Map()), []);
+    assert.deepEqual(hataliBekleyenleri([{ ...h, zaman: '2026-10-01T00:00:00.000Z' }], bas, new Map()), [], 'aralık dışı');
+    assert.deepEqual(hataliBekleyenleri([h], bas, new Map(), new Map([[3, '2026-11-07T08:00:00.000Z']])), []);
   });
 
   test('sıra yeniden eskiye; aynı anda tür ve kimlik', () => {
