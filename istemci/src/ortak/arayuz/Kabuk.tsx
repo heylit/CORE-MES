@@ -30,6 +30,7 @@ import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
 import { useTema } from '../veri/tema.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { BaglantiSeridi } from './BaglantiSeridi.tsx';
+import { CoreYazisi } from './CoreYazisi.tsx';
 import { KisayolYardimi } from './KisayolYardimi.tsx';
 import { YuklemeCizgisi } from './YuklemeCizgisi.tsx';
 import { DurumKutusu } from './DurumKutusu.tsx';
@@ -431,7 +432,7 @@ export function Kabuk({
             {logo !== null
               ? <img className="tc-kabuk-marka-logo" src={logo} alt="" />
               : kurumAdi !== null && <span className="tc-kabuk-marka-isaret mono">{kurumAdi}</span>}
-            <span className="tc-kabuk-marka-metin">{UYGULAMA_ADI}</span>
+            <CoreYazisi className="tc-kabuk-marka-metin" />
           </NavLink>
           <p className="tc-kabuk-surum mono" title={`Sürüm ${DERLEME.surum}, derleme ${derlemeTarihi(DERLEME.tarih, true)}`}>
             {/^0\.0\.0/.test(DERLEME.surum) ? 'geliştirme' : DERLEME.surum} · {derlemeTarihi(DERLEME.tarih)}
