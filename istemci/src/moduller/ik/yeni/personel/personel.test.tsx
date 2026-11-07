@@ -340,6 +340,38 @@ describe('pozisyon tanımları', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  // 2177c: hazır liste listede adı olmayan genel unvanları tek toplu kayıtla ekler.
+  it('izinli: hazır listeyi onayla ekler; listede olan ad (Kalite mühendisi) gönderilmez', async () => {
+    const { yazmalar } = ikAc('/ik/organizasyon', { veri: tanimli() });
+    // Ortak sahte sunucu toplu ucun cevabını kurmaz; burada gönderileni geri döndürür.
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      const yanit = await asil(adres, istek);
+      if (!adres.includes('/toplu-kaydet')) return yanit;
+      const { kayitlar } = JSON.parse(String(istek?.body ?? '{}')) as { kayitlar: { kimlik: string; govde: unknown }[] };
+      return new Response(JSON.stringify({ kayitlar: kayitlar.map((k) => ({ kimlik: k.kimlik, tur: 'title', surum: 1, govde: k.govde })), gecmis: [] }));
+    }));
+    await screen.findByRole('table', { name: 'Pozisyonlar' });
+    fireEvent.click(screen.getByRole('button', { name: 'Hazır listeyi ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Hazır pozisyon listesi' });
+    expect(within(pencere).getByText(/^26 genel unvan departmansız eklenecek/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+    await waitFor(() => { expect(yazmalar).toHaveLength(1); });
+    expect(yazmalar[0]?.yol).toBe('/ik/pozisyon-tanimlari/toplu-kaydet');
+    const gonderilen = (yazmalar[0]?.govde as { kayitlar: { govde: { kind: string; ad: string; departmanId?: string } }[] }).kayitlar.map((k) => k.govde);
+    expect(gonderilen).toHaveLength(26);
+    expect(gonderilen.every((g) => g.kind === 'title' && g.departmanId === undefined)).toBe(true);
+    expect(gonderilen.map((g) => g.ad)).toContain('CNC Programcısı');
+    expect(gonderilen.map((g) => g.ad)).not.toContain('Kalite Mühendisi');
+    await waitFor(() => { expect(dugme('Hazır listeyi ekle')).toBeNull(); });
+  });
+
+  it('reddedilen: salt okuyan hazır listeyi göremez', async () => {
+    ikAc('/ik/organizasyon', { kullanici: IK_OKUYAN, veri: tanimli() });
+    await screen.findByRole('table', { name: 'Pozisyonlar' });
+    expect(dugme('Hazır listeyi ekle')).toBeNull();
+  });
+
   it('personel formu tanımları önerir; seçilen tanım boş yaka ve kademeyi doldurur, listede olmayan ad da yazılır', async () => {
     ikAc('/ik/personel', { veri: tanimli() });
     fireEvent.click(await screen.findByRole('button', { name: 'Personel ekle' }));

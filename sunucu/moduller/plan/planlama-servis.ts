@@ -20,7 +20,7 @@ import {
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
-import { planlanacakIsEmirleri, rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
+import { rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
@@ -34,7 +34,7 @@ import {
 } from './planlama-kurallar.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
-import { calisanAdimlar, canliOzeti, planFinansmanOrani } from './servis.ts';
+import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -106,7 +106,10 @@ export async function planlamaSil(db: Db, kullanici: Kullanici, g: PlanlamaSilGo
 
 // Planlama sayfasının ve Reçete ve Rota ekranının okuduğu birleşik durum: Reçete ve Rota'nın bağlı durumu ve planın alanları (canlı plan
 // ayarı, canlı özeti, başlamış adımlar). Yetkiyi uç verir; dilimlerin kapsamı Reçete ve Rota'nınkidir.
-export async function planlamaKaynagi(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
+export function planlamaKaynagi(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
+  return okumaBellegiyle(db, () => planlamaKaynagiKur(db, kullanici));
+}
+async function planlamaKaynagiKur(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
   const { durum, emirKayitlari } = await durumVeEmirler(db, kullanici);
   return {
     ...durum,
@@ -182,7 +185,10 @@ export async function kapasite(db: Db, kullanici: Kullanici, simdi = Date.now())
 // yetkisiyle kaynak okuması. kaynakOku takvim eki taşımaz; ekleyen çağırandır (planlamaGirdisi, teklifDene: 1769 a).
 const PLANLAMA_SURUMU = 2;
 
-export async function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi> {
+export function kaynakOku(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi> {
+  return okumaBellegiyle(db, () => kaynakOkuKur(db, kullanici));
+}
+async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi> {
   const d = await planlamaKaynagi(db, kullanici);
   const makineNotu = yetkiliMi(kullanici, ISTASYON_OKUMA)
     ? Object.fromEntries((await makineDurumlari(db)).map((x) => [String(x.makineId), x.aciklama ?? null])) : null;
@@ -223,7 +229,7 @@ const BEDELSIZ: SiparisBedeli = { gelir: null, cezaOran: null, cezaTavan: null }
 async function siparisBedelleri(db: Db, kullanici: Kullanici): Promise<Record<string, SiparisBedeli> | null> {
   if (!yetkiliMi(kullanici, KAYNAK_OKUMA.emir)) return null;
   const emirler = new Map<number, { siparisSatiriId: number | null; adet: number }>();
-  for (const i of await planlanacakIsEmirleri(db, { taslakDahil: true })) {
+  for (const i of await planlanacakIsler(db, { taslakDahil: true })) {
     if (!emirler.has(i.uretimEmriId)) emirler.set(i.uretimEmriId, { siparisSatiriId: i.siparisSatiriId ?? null, adet: i.adet });
   }
   if (!yetkiliMi(kullanici, SIPARIS_FIYATI_OKUMA)) return Object.fromEntries([...emirler.keys()].map((id) => [String(id), BEDELSIZ]));

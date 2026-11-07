@@ -14,6 +14,7 @@ import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
+import * as projeler from './moduller/projeler/disari.ts';
 import { acilSiparisOnaylandi, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
@@ -113,11 +114,20 @@ export function sunucununBaglari(): Bag[] {
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, teklifDene),
-    bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && (async (db: Db, satirIdleri: readonly number[]) => {
-      const idler = [...(await uretimEmirleri.siparisSatirlarininEmirleri(db, satirIdleri)).values()].flat();
+    // 2103-2 b: satıra bağlı emirlere siparişten açılan projelerin emirleri eklenir (iş emri olmayan emir proje okumasında yoktur).
+    bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && projeler.siparisinProjeleri && (async (
+      db: Db, g: { siparisId: number; satirIdleri: readonly number[] },
+    ) => {
+      const idler = [...(await uretimEmirleri.siparisSatirlarininEmirleri(db, g.satirIdleri)).values()].flat();
       const durumlar = await uretimEmirleri.emirDurumlari(db, idler);
       const nolar = await uretimEmirleri.emirNolari(db, idler);
-      return idler.flatMap((id) => { const durum = durumlar.get(id); return durum === undefined ? [] : [{ emirNo: nolar.get(id) ?? String(id), durum }]; });
+      const emirler = new Map(idler.flatMap((id) => { const durum = durumlar.get(id); return durum === undefined ? [] : [[id, { emirNo: nolar.get(id) ?? String(id), durum }] as const]; }));
+      for (const p of await projeler.siparisinProjeleri(db, g.siparisId)) {
+        for (const ie of await uretimEmirleri.projeninIsEmirleri(db, p.id)) {
+          if (!emirler.has(ie.uretimEmriId)) emirler.set(ie.uretimEmriId, { emirNo: ie.emirNo, durum: ie.emirDurumu });
+        }
+      }
+      return [...emirler.values()];
     })),
     // ADR 0018, 627 a: canlıya almada asıl planın son sözü ortak motordadır. Çözücü de plan modülündedir (ADR 0020); kayıt bağı kalkınca
     // plan servisi onu doğrudan çağırır (UYUM-BORCU P-B35).

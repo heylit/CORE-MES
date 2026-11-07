@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { IK_SABITLERI } from '#paylasilan/ik-motor/arayuz.ts';
 import type { Izin, Personel, PozisyonTanimi } from '../tipler.ts';
 import {
-  aktifMi, ayEkle, BOS_SUZGEC, cikisAdimi, cikisIlerlemesi, cikistanSonrakiIzinler, denemeBitisi, hareketleriIzle, ibanBicimi, ibanGecerli,
+  aktifMi, ayEkle, BOS_SUZGEC, eksikHazirPozisyonlar, HAZIR_POZISYONLAR, cikisAdimi, cikisIlerlemesi, cikistanSonrakiIzinler, denemeBitisi, hareketleriIzle, ibanBicimi, ibanGecerli,
   kidemMetni, notEkle, notSil, orgAgaci, personelDogrula, pozisyondakiCalisan, pozisyonTanimOnerileri, siraliPozisyonTanimi, personelDurumu, personelKayitOncesi, personelSirala, personelSuz,
   siraliPersonel, sonrakiSicil, sureMetni, tcknGecerli, ucretDegisimi, ucretGecmisi, ucretSil, ucretTarihte, ucretUygula, yillikFazlaMesai,
   zamanCizelgesi, type KayitBaglami,
@@ -202,5 +203,29 @@ describe('pozisyon tanımları', () => {
     expect(pozisyondakiCalisan(liste[3]!, aktifler)).toBe(1);
     expect(pozisyondakiCalisan(liste[2]!, aktifler)).toBe(1);
     expect(pozisyondakiCalisan(t('7', ''), aktifler)).toBe(0);
+  });
+});
+
+// 2177c: hazır pozisyon listesi.
+describe('hazır pozisyonlar', () => {
+  it('27 genel unvan; adlar tekrarsız, yaka ve kademe motorun seçeneklerinden (sunucu CHECK ile aynı liste)', () => {
+    expect(HAZIR_POZISYONLAR).toHaveLength(27);
+    expect(new Set(HAZIR_POZISYONLAR.map((h) => h.ad.toLocaleLowerCase('tr'))).size).toBe(27);
+    for (const h of HAZIR_POZISYONLAR) {
+      expect(IK_SABITLERI.COLLARS).toContain(h.yakaTipi);
+      expect(IK_SABITLERI.LEVELS).toContain(h.kademe);
+    }
+  });
+  it('tanımı olan ad (boşluk ve büyük-küçük harf farkı sayılmaz, departmana bakılmaz) eksikler listesine girmez', () => {
+    const liste: PozisyonTanimi[] = [
+      { id: 't1', kind: 'title', ad: '  cnc programcısı ' },
+      { id: 't2', kind: 'title', ad: 'Stajyer', departmanId: 'd1' },
+      { id: 't3', kind: 'title', ad: 'Ayarcı' },
+    ];
+    const eksik = eksikHazirPozisyonlar(liste).map((h) => h.ad);
+    expect(eksik).toHaveLength(25);
+    expect(eksik).not.toContain('CNC Programcısı');
+    expect(eksik).not.toContain('Stajyer');
+    expect(eksikHazirPozisyonlar([])).toHaveLength(27);
   });
 });

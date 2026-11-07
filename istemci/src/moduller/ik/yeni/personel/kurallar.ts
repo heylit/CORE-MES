@@ -128,6 +128,31 @@ export function pozisyonTanimOnerileri(liste: readonly PozisyonTanimi[], departm
   return [...new Set(uygun.map((t) => (t.ad ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
 }
 
+// Hazır pozisyon listesi (2177c, kullanıcı onayı 07.11): yalnız genel sektör unvanları; departman, kadro ya da şirkete özgü
+// ad içermez (depo açıktır). İK "Hazır listeyi ekle" ile ekler; eklenen tanım sıradan kayıttır, düzenlenir ve silinir.
+export interface HazirPozisyon { ad: string; yakaTipi: 'Beyaz yaka' | 'Mavi yaka'; kademe: string }
+const hazir = (yakaTipi: HazirPozisyon['yakaTipi'], kademe: string, adlar: readonly string[]): HazirPozisyon[] => adlar.map((ad) => ({ ad, yakaTipi, kademe }));
+export const HAZIR_POZISYONLAR: readonly HazirPozisyon[] = [
+  ...hazir('Beyaz yaka', 'Üst yönetim', ['Genel Müdür', 'Genel Müdür Yardımcısı']),
+  ...hazir('Beyaz yaka', 'Yönetici', ['Üretim Müdürü', 'Planlama Müdürü', 'Satın Alma Müdürü', 'Kalite Müdürü']),
+  ...hazir('Beyaz yaka', 'Uzman', [
+    'CNC Programcısı', 'Üretim Planlama Uzmanı', 'Proses Mühendisi', 'Kalite Mühendisi', 'Satın Alma Uzmanı', 'İK Uzmanı', 'Muhasebe Uzmanı',
+    'Satış Temsilcisi',
+  ]),
+  ...hazir('Mavi yaka', 'Takım lideri / şef', ['Vardiya Şefi', 'Usta Başı']),
+  ...hazir('Mavi yaka', 'Operasyon / teknik personel', [
+    'CNC Torna Operatörü', 'CNC Freze Operatörü', 'CNC İşleme Merkezi Operatörü', 'Konvansiyonel Torna Operatörü', 'Taşlama Operatörü',
+    'Takım Hazırlayıcı', 'Bakım Teknisyeni', 'Kalite Kontrol Teknisyeni', 'Depo Elemanı', 'Sevkiyat Elemanı',
+  ]),
+  ...hazir('Mavi yaka', 'Stajyer', ['Stajyer']),
+];
+
+// Listede henüz tanımı olmayan hazır pozisyonlar; ad karşılaştırması boşluk ve büyük-küçük harf farkını saymaz, departman bakılmaz.
+export function eksikHazirPozisyonlar(liste: readonly PozisyonTanimi[]): HazirPozisyon[] {
+  const mevcut = new Set(liste.map((t) => (t.ad ?? '').trim().toLocaleLowerCase('tr')));
+  return HAZIR_POZISYONLAR.filter((h) => !mevcut.has(h.ad.toLocaleLowerCase('tr')));
+}
+
 // Pozisyondaki aktif çalışan sayısı: personelin pozisyon metni tanım adıyla aynıysa (boşluk ve büyük-küçük harf farkı sayılmaz).
 export function pozisyondakiCalisan(tanim: PozisyonTanimi, aktifler: readonly Personel[]): number {
   const ad = (tanim.ad ?? '').trim().toLocaleLowerCase('tr');

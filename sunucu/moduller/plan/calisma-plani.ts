@@ -3,11 +3,12 @@ import { cakisma, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, CanliFarkiCevabi, TabanVeCanliCevabi, TaslaktanCalismayaCevabi, TaslaktanCalismayaGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { emirDilimi, isEmriPlanBilgileri, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
 import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
+import { planlanacakIsler } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import type { YerlesimSatiri } from './sorgular.ts';
 
@@ -29,7 +30,7 @@ export async function canliFarki(db: Db, kullanici: Kullanici, simdi: number = D
   if (!planOkurMu(kullanici)) throw yetkiYok('Canlı planla farkı görmek plan okuma yetkisi de ister.');
   const { plan } = await calismaOku(db, kullanici, simdi);
   if (plan === null || plan.ops === null) return null;
-  const anahtarlar = new Map((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
+  const anahtarlar = new Map((await planlanacakIsler(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
   const { planSurumu, yerlesimler } = await canliSira(db, [...anahtarlar.keys()]);
   const canli = new Map<string, { makineId: number | null; baslangic: string }[]>();
   for (const y of yerlesimler) {
@@ -50,7 +51,7 @@ export async function tabanVeCanli(db: Db, kullanici: Kullanici, simdi: number =
   const emirler = await emirDilimi(db);
   const emirNo = new Map(emirler.map((e) => [e.id, e.emirNo]));
   const taban = await tabanPlani(db, { uretimEmriIdleri: emirler.map((e) => e.id) });
-  const acik = await planlanacakIsEmirleri(db, { taslakDahil: true });
+  const acik = await planlanacakIsler(db, { taslakDahil: true });
   for (const i of acik) emirNo.set(i.uretimEmriId, i.emirNo);
   const idler = [...new Set([...taban.map((t) => t.isEmriId), ...acik.map((i) => i.id)])];
   const bilgi = await isEmriPlanBilgileri(db, idler);
@@ -87,7 +88,7 @@ export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTas
   const { surum, plan } = await calismaOku(db, kullanici, simdi);
   if (surum !== g.calismaSurumu) throw eskiSurum();
   if (plan === null || plan.ops === null) throw cakisma('Çalışmada plan yok; önce planı kurup kaydedin.');
-  const anahtarlar = new Set((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => `${i.emirNo}|${i.opNo}`));
+  const anahtarlar = new Set((await planlanacakIsler(db, { taslakDahil: true })).map((i) => `${i.emirNo}|${i.opNo}`));
   const { yazilacak, yazilamaz } = calismaIsleri(plan.ops, plan.kimlik, anahtarlar);
   if (yazilacak.length === 0) throw cakisma('Plana yazılacak iş yok: sunucuda iş emri ve makinesi olan, bitmemiş iş gerekir.');
   const ek = calismaEkMesaisi(plan.baslangic, plan.ekMesai);
@@ -106,7 +107,7 @@ export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: Taslak
   const kayit = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   if (kayit === null || kayit.surum !== g.calismaSurumu) throw eskiSurum();
   const { plan } = await calismaOku(db, kullanici, simdi);
-  const anahtarlar = new Map((await planlanacakIsEmirleri(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
+  const anahtarlar = new Map((await planlanacakIsler(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
   const ters = tersKimlik(plan);
   const yerler: TaslakYeri[] = [];
   const atlanan: string[] = [];
