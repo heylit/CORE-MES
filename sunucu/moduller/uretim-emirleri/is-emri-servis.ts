@@ -34,6 +34,7 @@ import {
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
+import { dilimUstEmirleri } from './sorgular/ust-emir/sorgular.ts';
 import type { AdimDugumu, AdimUretimBilgisi } from './disari.ts';
 import type { AltPartiSatiri, FasonHareketiSatiri, IsEmriSatiri, IsEmriYazisi, UstEmirSatiri } from './sorgular.ts';
 
@@ -560,8 +561,27 @@ export interface EmirDilimiSatiri {
   }[];
 }
 
-export async function emirDilimi(db: Db): Promise<EmirDilimiSatiri[]> {
-  const emirler = await s.ustEmirler(db, false);
+// Seçim verilirse kapalı emirlerden yalnız son `kapaliGun` günde kapananlar ve `dahil` kimlikleri gelir (2216-1 a: planlama kaynağı).
+// Gelen emrin üst emri ve birleştiği emir de gelir: ekran emir ağacını ve birleşmeyi bunlarla kurar.
+export interface EmirDilimiSecimi { kapaliGun: number; dahil: readonly number[] }
+async function dilimEmirleri(db: Db, secim: EmirDilimiSecimi | undefined): Promise<UstEmirSatiri[]> {
+  if (secim === undefined) return s.ustEmirler(db, false);
+  const emirler = await dilimUstEmirleri(db, secim.kapaliGun, secim.dahil);
+  const olan = new Set(emirler.map((e) => e.id));
+  for (let eksik = baglilar(emirler, olan); eksik.length > 0; eksik = baglilar(emirler, olan)) {
+    for (const e of await s.ustEmirlerBul(db, eksik)) {
+      olan.add(e.id);
+      if (!e.arsiv && e.malzemeNo !== null) emirler.push(e);
+    }
+    for (const id of eksik) olan.add(id);
+  }
+  return emirler.sort((a, b) => b.id - a.id);
+}
+const baglilar = (emirler: readonly UstEmirSatiri[], olan: ReadonlySet<number>): number[] =>
+  [...new Set(emirler.flatMap((e) => [e.ustEmirId, e.birlestigiEmirId]).filter((id): id is number => id !== null && !olan.has(id)))];
+
+export async function emirDilimi(db: Db, secim?: EmirDilimiSecimi): Promise<EmirDilimiSatiri[]> {
+  const emirler = await dilimEmirleri(db, secim);
   const isEmirleri = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
   const emreGore = new Map<number, IsEmriSatiri[]>();
   for (const i of isEmirleri) emreGore.set(i.uretimEmriId, [...(emreGore.get(i.uretimEmriId) ?? []), i]);

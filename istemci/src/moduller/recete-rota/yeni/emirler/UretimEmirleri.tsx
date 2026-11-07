@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih } from '../bicim.ts';
@@ -84,6 +84,11 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
           </Dugme>
         )}
       </div>
+      {(durumSuzgeci === 'tamam' || durumSuzgeci === 'tum') && (
+        <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
+          <Simge ad="clock" boyut="k" />Kapanan emirlerden son 30 gündekiler ve plandakiler görünür; daha eskiler <Link to="/uretim-emirleri">Üretim Emirleri</Link> sayfasının biten listesindedir.
+        </p>
+      )}
       {acabilir && yeniAcik && (
         <YeniEmirFormu
           durum={d} yetki={yetki} komut={komut} git={git} ilkUrun={yeniUrun}

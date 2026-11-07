@@ -104,13 +104,27 @@ export async function planlamaSil(db: Db, kullanici: Kullanici, g: PlanlamaSilGo
   return { silindi: await sorgular.planlamaKaydiSil(db, g.anahtar) };
 }
 
+// 2216-1 a: kaynak her okumada bütün olarak gider; kapalı emirlerden yalnız son KAPALI_EMIR_GUNU günde kapananlar ve kayıtlı planlama
+// çalışmasının andıkları gelir (çalışmanın siparişleri kaynaktaki emirlerden kurulur; andığı emir kaynakta kalır). Daha eskileri Üretim
+// Emirleri sayfasının sayfalı biten listesindedir.
+export const KAPALI_EMIR_GUNU = 30;
+async function planinAndigiEmirler(db: Db): Promise<number[]> {
+  const c = kayitDegeri(await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)) as { D?: { siparisler?: unknown } } | null;
+  const siparisler: unknown[] = Array.isArray(c?.D?.siparisler) ? c.D.siparisler : [];
+  // Sipariş kimliği emir kimliğidir; çok katmanlı emrin düğümü "<emir>-Y<n>" biçimindedir, sayfada eklenen acil iş ("SP-") emir değildir.
+  return [...new Set(siparisler.flatMap((x) => {
+    const m = /^(\d+)(?:-|$)/.exec(String((x as { id?: unknown } | null)?.id ?? ''));
+    return m ? [Number(m[1])] : [];
+  }))];
+}
+
 // Planlama sayfasının ve Reçete ve Rota ekranının okuduğu birleşik durum: Reçete ve Rota'nın bağlı durumu ve planın alanları (canlı plan
 // ayarı, canlı özeti, başlamış adımlar). Yetkiyi uç verir; dilimlerin kapsamı Reçete ve Rota'nınkidir.
 export function planlamaKaynagi(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
   return okumaBellegiyle(db, () => planlamaKaynagiKur(db, kullanici));
 }
 async function planlamaKaynagiKur(db: Db, kullanici: Kullanici): Promise<DurumCevabi> {
-  const { durum, emirKayitlari } = await durumVeEmirler(db, kullanici);
+  const { durum, emirKayitlari } = await durumVeEmirler(db, kullanici, undefined, { kapaliGun: KAPALI_EMIR_GUNU, dahil: await planinAndigiEmirler(db) });
   return {
     ...durum,
     calisanAdimlar: emirKayitlari === null ? null : calisanAdimlariCevir(await calisanAdimlar(db), emirKayitlari, durum.adimAdetleri ?? {}),

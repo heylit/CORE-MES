@@ -181,8 +181,10 @@ export async function durum(
 
 // Plan modülü bağlı durumu kendi alanlarıyla birleştirir (658 b). Başlamış adımların çevirisi emir kayıtlarını ister; ikinci kez okunmasın
 // diye durumla birlikte döner. Emir okuma yetkisi yoksa null.
+// emirSecimi verilirse kapalı emirlerin yalnız bir kısmı gelir (plan modülünün planlama kaynağı, 2216-1 a); verilmezse hepsi.
 export async function durumVeEmirler(
   db: Db, kullanici: Kullanici, sinir: MalzemeSiniri = { sayfaBoyu: MALZEME_SAYFA_BOYU, azamiSayfa: MALZEME_AZAMI_SAYFA },
+  emirSecimi?: { kapaliGun: number; dahil: readonly number[] },
 ): Promise<{ durum: ReceteRotaDurumCevabi; emirKayitlari: EmirKaydi[] | null }> {
   const malzemeOkur = yetkiliMi(kullanici, MALZEME_OKUMA);
   const istasyonOkur = yetkiliMi(kullanici, ISTASYON_OKUMA);
@@ -217,7 +219,7 @@ export async function durumVeEmirler(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
-  const emirDilimleri = emirOkur ? await emirDilimi(db) : null;
+  const emirDilimleri = emirOkur ? await emirDilimi(db, emirSecimi) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 
