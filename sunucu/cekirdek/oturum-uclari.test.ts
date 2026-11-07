@@ -23,6 +23,8 @@ const OTURUM_UCLARI: readonly string[] = [
   'GET /finans/menu-sayaclari',
   'GET /gorunum',
   'GET /guvenlik/menu-sayaclari',
+  // Kişinin kendi oturumları: listeler ve o anki dışındakileri kapatır (2226-7 a).
+  'GET /hesabim/oturumlar',
   'GET /hesabim/saat-cihazlari',
   'GET /idari-isler/menu-sayaclari',
   'GET /ik/ben',
@@ -85,6 +87,7 @@ const OTURUM_UCLARI: readonly string[] = [
   'POST /dosyalar/:ozet/parca',
   'POST /dosyalar/eksikler',
   'POST /hesabim/gizlilik-taahhudu',
+  'POST /hesabim/oturumlar/digerlerini-kapat',
   'POST /hesabim/parola-degistir',
   'POST /hesabim/pin-degistir',
   'POST /hesabim/saat-cihazlari/:id/kapat',
