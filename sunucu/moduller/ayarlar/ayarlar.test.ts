@@ -547,6 +547,7 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
     test('her oturum varsayılanla okur; oturumsuz 401; yalnız ayar yazan değiştirir ve değişiklik okunana yansır', async () => {
       const varsayilan = {
         acik: true, metin: 'Hoş geldin, iyi mesailer', geceMetni: 'İyi akşamlar, iyi mesailer', gunduzBaslangic: 6, geceBaslangic: 18,
+        sozAcik: true, gunNotuAcik: true, ramazanBayrami: null, kurbanBayrami: null,
       };
       assert.deepEqual({
         acik: varsayilanDeger('kabuk.karsilama'),
@@ -554,7 +555,13 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
         geceMetni: varsayilanDeger('kabuk.karsilama-gece-metni'),
         gunduzBaslangic: varsayilanDeger('kabuk.gunduz-baslangic'),
         geceBaslangic: varsayilanDeger('kabuk.gece-baslangic'),
+        sozAcik: varsayilanDeger('kabuk.karsilama-soz'),
+        gunNotuAcik: varsayilanDeger('kabuk.karsilama-gun-notu'),
+        ramazanBayrami: null,
+        kurbanBayrami: null,
       }, varsayilan);
+      // Bayram günleri boş başlar: yönetici girmeden karşılama bayram notu çıkarmaz.
+      assert.deepEqual([varsayilanDeger('kabuk.karsilama-ramazan'), varsayilanDeger('kabuk.karsilama-kurban')], ['', '']);
       assert.equal((await oku(null)).statusCode, 401);
       for (const { rol, cerez } of bayraksizlar) {
         const cevap = await oku(cerez);
@@ -585,6 +592,25 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
       assert.deepEqual([okunan.gunduzBaslangic, okunan.geceBaslangic, okunan.geceMetni], [7, 20, 'Gece de kolay gelsin']);
       assert.equal((await degistir(null, yonetici, 'kabuk.gunduz-baslangic')).statusCode, 200);
       assert.equal(((await oku()).json() as Record<string, unknown>).gunduzBaslangic, 6);
+    });
+
+    test('2232: bayram günleri gg.aa.yyyy aralığıyla yazılır ve ISO gün olarak okunur; hatalı biçim 400; boşaltılan bayram null okunur', async () => {
+      for (const { rol, cerez } of bayraksizlar) {
+        assert.equal((await degistir('20.03.2026 - 22.03.2026', cerez, 'kabuk.karsilama-ramazan')).statusCode, 403, rol.ad);
+      }
+      for (const kotu of ['2026-03-20', '31.02.2026', '22.03.2026 - 20.03.2026', '01.03.2026 - 30.03.2026', 5]) {
+        const cevap = await degistir(kotu, yonetici, 'kabuk.karsilama-kurban');
+        assert.equal(cevap.statusCode, 400, `${JSON.stringify(kotu)}: ${cevap.body}`);
+      }
+      assert.deepEqual(await satirlar(), []);
+      assert.equal((await degistir(' 20.03.2026 - 22.03.2026 ', yonetici, 'kabuk.karsilama-ramazan')).statusCode, 200);
+      assert.equal((await degistir('27.05.2026', yonetici, 'kabuk.karsilama-kurban')).statusCode, 200);
+      assert.equal((await degistir(false, yonetici, 'kabuk.karsilama-soz')).statusCode, 200);
+      const okunan = (await oku(bayraksizlar[0]?.cerez ?? yonetici)).json() as Record<string, unknown>;
+      assert.deepEqual([okunan.ramazanBayrami, okunan.kurbanBayrami, okunan.sozAcik, okunan.gunNotuAcik],
+        [{ bas: '2026-03-20', bit: '2026-03-22' }, { bas: '2026-05-27', bit: '2026-05-27' }, false, true]);
+      assert.equal((await degistir('', yonetici, 'kabuk.karsilama-ramazan')).statusCode, 200);
+      assert.equal(((await oku()).json() as Record<string, unknown>).ramazanBayrami, null);
     });
 
     test('boş, sınırı aşan ve metin olmayan karşılama metni 400 ile reddedilir ve değeri değiştirmez', async () => {

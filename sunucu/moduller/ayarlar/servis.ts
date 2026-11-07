@@ -6,6 +6,7 @@ import { AYAR_ANAHTARLARI, AYAR_TANIMLARI, ayarAnahtariMi, ayarTanimi } from '#p
 import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
 import { KAPATILABILIR_YOLLAR } from '#paylasilan/sayfalar.ts';
+import { tarihAraliginiCoz } from '#paylasilan/tarih-araligi.ts';
 import { ETKILER, gorunumCevabi, kurumLogosuSemasi, type Etki } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayar, AyarlarCevabi, GirisSesiCevabi, GorunumCevabi, KapaliSayfalarCevabi, KarsilamaCevabi, KurumCevabi, KurumLogosuCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -85,6 +86,10 @@ export async function karsilamaOku(db: Db): Promise<KarsilamaCevabi> {
     geceMetni: await sistemAyariOku(db, 'kabuk.karsilama-gece-metni'),
     gunduzBaslangic: gunduz ?? AYAR_TANIMLARI['kabuk.gunduz-baslangic'].varsayilan,
     geceBaslangic: gece ?? AYAR_TANIMLARI['kabuk.gece-baslangic'].varsayilan,
+    sozAcik: await sistemAyariOku(db, 'kabuk.karsilama-soz'),
+    gunNotuAcik: await sistemAyariOku(db, 'kabuk.karsilama-gun-notu'),
+    ramazanBayrami: tarihAraliginiCoz(await sistemAyariOku(db, 'kabuk.karsilama-ramazan')).aralik,
+    kurbanBayrami: tarihAraliginiCoz(await sistemAyariOku(db, 'kabuk.karsilama-kurban')).aralik,
   };
 }
 
