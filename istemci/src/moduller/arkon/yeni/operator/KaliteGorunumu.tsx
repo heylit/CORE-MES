@@ -5,18 +5,54 @@ import { numuneReddiEksigi } from '../../../../../../arkon/web/src/data/numune.t
 import { Link } from 'react-router-dom';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
+import { useKaliteKuyrugu, useTerminalFormlari } from '../../../kalite-merkezi/disari.ts';
 import { sayi, iki } from '../cekirdek/bicim.ts';
 import { useArkon } from '../veri/baglam.ts';
 import { NumuneOlcumu, kmNumunesi } from './NumuneOlcumu.tsx';
+import { FormSec } from './kalite-terminali/FormSec.tsx';
+import { KararKuyrugu } from './kalite-terminali/KararKuyrugu.tsx';
+import { kuyrukToplami } from './kalite-terminali/kurallar.ts';
+import './kalite-terminali/kalite-terminali.css';
 import { LOT_SINIFLARI, kaliteIstasyonuNumuneleri, lotKarariEksigi, lotKarariOku, lotSayisi } from './kurallar.ts';
 import type { Is, KaliteNumunesi, LotKarari, LotSinifi, Result } from './tipler.ts';
 
 // 564 1 b, 6 a, 600 a: kalite istasyonu terminalinin orta sütunu. Sayaç yerine iki iş: "Teslim al" ile gelen numunelerin Kabul/Red'i ve
 // aktif işin lotunun Kabul/Red'i. Kararın kendisi Kalite Merkezi'nindir: numune kararı ilk parça kararı olarak, lot kararı lot kaydı olarak
 // sunucuda Kalite Merkezi'ne yazılır; Arkon ayrı karar tutmaz. Red ölçü ve gerekçe ister; ölçüm kalite formundadır ("Ölç", 798).
-// İlk parça numunesinin kararı yalnız Kalite Merkezi'ndedir (789-2a): sunucu numuneyi açarken `ilkParca` damgalar, burada karar düğmesi yoktur.
-export function KaliteGorunumu({ istasyon, is: o, izinli, olcebilir, soyle }: {
+// İlk parça numunesinin kararı Kalite Merkezi'nin uçlarıyla verilir: Kalite Merkezi'nde ya da bu terminalin karar kuyruğunda (2196-1 a).
+// 2196, 2196-2 a: kuyruk "kalite-merkezi.onayla" işlemi olana, formlar "kalite-merkezi.yaz" işlemi olana görünür; yetki kart okutan kişinindir.
+type Sekme = 'numune' | 'karar' | 'form';
+
+export function KaliteGorunumu(p: {
   istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void;
+}) {
+  const kuyruk = useKaliteKuyrugu();
+  const formlar = useTerminalFormlari();
+  const [sekme, sekmeYaz] = useState<Sekme>('numune');
+  const sekmeler: { s: Sekme; ad: string; simge: 'target' | 'check' | 'clipboard-check' }[] = [
+    { s: 'numune', ad: 'Numune ve lot', simge: 'target' },
+    ...(kuyruk.onaylayabilir ? [{ s: 'karar' as const, ad: `Karar kuyruğu · ${String(kuyrukToplami(kuyruk))}`, simge: 'check' as const }] : []),
+    ...(formlar.yazabilir ? [{ s: 'form' as const, ad: 'Formlar', simge: 'clipboard-check' as const }] : []),
+  ];
+  const acik = sekmeler.some((x) => x.s === sekme) ? sekme : 'numune';
+  return (
+    <div className="tc-kt">
+      {sekmeler.length > 1 ? (
+        <div className="tc-kt-sekmeler" role="tablist" aria-label="Kalite istasyonu">
+          {sekmeler.map((x) => (
+            <button key={x.s} type="button" role="tab" aria-selected={acik === x.s} onClick={() => sekmeYaz(x.s)}><Simge ad={x.simge} boyut="k" />{x.ad}</button>
+          ))}
+        </div>
+      ) : null}
+      {acik === 'karar' ? <KararKuyrugu kuyruk={kuyruk} soyle={p.soyle} />
+        : acik === 'form' ? <FormSec bolum={`${p.istasyon} · ${p.is.no}${p.is.op ? ` ${p.is.op}` : ''}`} soyle={p.soyle} />
+          : <NumuneVeLot {...p} kuyrugaGec={kuyruk.onaylayabilir ? () => sekmeYaz('karar') : null} />}
+    </div>
+  );
+}
+
+function NumuneVeLot({ istasyon, is: o, izinli, olcebilir, soyle, kuyrugaGec }: {
+  istasyon: string; is: Is; izinli: boolean; olcebilir: boolean; soyle: (metin: string, ton: 'ok' | 'stop') => void; kuyrugaGec: (() => void) | null;
 }) {
   const { depo, kisi } = useArkon();
   const [numuneler, numunelerYaz] = useState<KaliteNumunesi[]>([]);
@@ -69,7 +105,7 @@ export function KaliteGorunumu({ istasyon, is: o, izinli, olcebilir, soyle }: {
           <Simge ad="target" boyut="k" /><span className="tc-ay1-ust-yazi">Gelen numuneler</span>
           <small className="tc-ay1-soluk">{numuneler.length ? `${sayi(numuneler.length)} numune bekliyor` : 'Bekleyen numune yok'}</small>
         </div>
-        {numuneler.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} olc={() => olculenYaz(r)} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
+        {numuneler.map((r) => <NumuneSatiri key={r.id} r={r} izinli={izinli} kuyrugaGec={kuyrugaGec} olc={() => olculenYaz(r)} karar={(s, n) => { void numuneKarari(r, s, n); }} />)}
       </section>
       {olculen ? <NumuneOlcumu r={olculen} yazabilir={olcebilir} kapat={() => { olculenYaz(null); void yenile(); }} /> : null}
       {o.pkg && !o.empty ? <LotKarti is={o} sonuc={sonuc} izinli={izinli} ver={(lk) => { void lotKarariVer(lk); }} /> : null}
@@ -81,15 +117,20 @@ export function KaliteGorunumu({ istasyon, is: o, izinli, olcebilir, soyle }: {
 const olculenSayisi = (r: KaliteNumunesi): number => { const n = (r as { kmOlculen?: unknown }).kmOlculen; return typeof n === 'number' ? n : Object.keys(r.results || {}).length; };
 const ilkParcaNumunesi = (r: KaliteNumunesi): boolean => (r as { ilkParca?: unknown }).ilkParca === true;
 
-function IlkParcaNotu() {
+function IlkParcaNotu({ kuyrugaGec }: { kuyrugaGec: (() => void) | null }) {
   const kaliteMerkezi = useYetki().var('sayfa.kalite-merkezi');
+  if (kuyrugaGec) {
+    return (
+      <small role="note"><Simge ad="check" boyut="k" /> İlk parça kararı karar kuyruğunda · <button type="button" className="tc-kt-bag" onClick={kuyrugaGec}>Kuyruğu aç</button></small>
+    );
+  }
   return (
     <small role="note"><Simge ad="check" boyut="k" /> İlk parça kararı Kalite Merkezi'nde{kaliteMerkezi ? <> · <Link to="/kalite-merkezi">Kalite Merkezi'ni aç</Link></> : null}</small>
   );
 }
 
-function NumuneSatiri({ r, izinli, olc, karar }: {
-  r: KaliteNumunesi; izinli: boolean; olc: () => void; karar: (s: 'approved' | 'rejected', not: string) => void;
+function NumuneSatiri({ r, izinli, kuyrugaGec, olc, karar }: {
+  r: KaliteNumunesi; izinli: boolean; kuyrugaGec: (() => void) | null; olc: () => void; karar: (s: 'approved' | 'rejected', not: string) => void;
 }) {
   const [red, redYaz] = useState(false);
   const [not, notYaz] = useState('');
@@ -102,7 +143,7 @@ function NumuneSatiri({ r, izinli, olc, karar }: {
       <span className="tc-ay1-kart-govde">
         <b>{r.no} · {r.part}</b>
         <small>{r.machine} · {iki(t.getHours())}:{iki(t.getMinutes())} · {r.status === 'measuring' ? 'ölçülüyor' : 'bekliyor'} · {sayi(olculen)} ölçü{r.reason ? ` · ${r.reason}` : ''}</small>
-        {ilk ? <IlkParcaNotu /> : null}
+        {ilk ? <IlkParcaNotu kuyrugaGec={kuyrugaGec} /> : null}
         {red ? (
           <>
             <textarea className="tc-ay1-kalite-not" rows={2} value={not} placeholder="Red gerekçesi" aria-label="Red gerekçesi" onChange={(e) => notYaz(e.target.value)} />

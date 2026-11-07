@@ -51,7 +51,8 @@ describe('600 a: kalite istasyonu görünümü', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'sample-result', reqId: 'n1', status: 'approved' }));
   });
 
-  // 789-2a, 798: ilk parça numunesinin kararı yalnız Kalite Merkezi'nde; ölçü sayısı Kalite Merkezi kaydından (sunucu yazar).
+  // 798, 2196-1 a: ilk parça numunesinde satırda karar düğmesi yok; onay işlemi olmayan kişiye kararın Kalite Merkezi'nde olduğu yazar
+  // (onaylayana karar kuyruğu: kalite-terminali/ekran.test). Ölçü sayısı Kalite Merkezi kaydından (sunucu yazar).
   it('ilk parça numunesinde Kabul/Red yok, kararın Kalite Merkezi\'nde olduğu yazar; Ölç yerinde (reddedilen)', async () => {
     const { put } = kur({ istekler: [numune('n1', { ilkParca: true, kmOlculen: 2, kmNumune: 5 })] });
     expect(await screen.findByText(/2 ölçü/)).toBeTruthy();
