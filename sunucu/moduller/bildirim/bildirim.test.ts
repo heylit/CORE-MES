@@ -4,16 +4,24 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { bildirimListeCevabi, bildirimSayacCevabi, bildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
-import type { Bildirim, BildirimListeCevabi, BildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import { BILDIRIM_TUR_ANAHTARLARI, BILDIRIM_TURLERI, bildirimListeCevabi, bildirimSayacCevabi, bildirimTercihleriCevabi } from '#paylasilan/sozlesme/bildirim.ts';
+import type { Bildirim, BildirimListeCevabi, BildirimTercihleriCevabi, BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { rolunIslemleri } from '../../../araclar/yetki-beklentisi.ts';
+import type { RolKodu } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { bildirimGonder, bildirimKapat, type BildirimOlayi } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
+
+// Tür ayarı yokken kişi, türün alan işlemlerinden birini taşıyorsa alır; beklenti rolün onaylı işlemlerinden çıkar.
+const alabilecegi = (kod: RolKodu): BildirimTuru[] => {
+  const islemler: readonly string[] = rolunIslemleri(kod);
+  return BILDIRIM_TUR_ANAHTARLARI.filter((tur) => (BILDIRIM_TURLERI[tur].alanIslemler as readonly string[]).some((i) => islemler.includes(i)));
+};
 
 describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
   let ortam: TestVeritabani | undefined;
@@ -236,17 +244,25 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     const t = await tercihler('bakim');
     assert.deepEqual(t.kanallar, { mesaj: false, eposta: false });
     assert.equal(t.epostaSecilebilir, true);
-    assert.deepEqual(t.satirlar.map((s) => s.tur), ['istasyonlar.makine-durdu', 'cnc-kurulum.takim-omru']);
+    assert.deepEqual(t.satirlar.map((s) => s.tur), alabilecegi('bakim'));
+    assert.equal(t.satirlar[0]?.tur, 'istasyonlar.makine-durdu');
     assert.equal(t.satirlar[0]?.varsayilan, true);
     // CAM rolü Arkon hazırlığını taşır: zaman anomalisinin hazırlık türleri (kart 764) de gelir.
-    assert.deepEqual((await tercihler('cam')).satirlar.map((s) => s.tur), ['cnc-kurulum.takim-omru', 'arkon.gec-giris', 'arkon.gec-teslim', 'arkon.toplu-tutarsiz']);
-    assert.equal((await tercihler('yonetici')).satirlar.length, 18);
+    const cam = (await tercihler('cam')).satirlar.map((s) => s.tur);
+    assert.deepEqual(cam, alabilecegi('cam'));
+    for (const tur of ['arkon.gec-giris', 'arkon.gec-teslim', 'arkon.toplu-tutarsiz'] as const) assert.equal(cam.includes(tur), true, tur);
+    // Bayraklı rol kayıtlı her işlemi taşır: alan işlemi olan her türü alır, alan işlemsiz tür (kayda bağlı kişi) listede yoktur.
+    const yonetici = (await tercihler('yonetici')).satirlar.map((s) => s.tur);
+    assert.deepEqual(yonetici, alabilecegi('yonetici'));
+    assert.equal(yonetici.length > 0 && yonetici.length < BILDIRIM_TUR_ANAHTARLARI.length, true);
 
     const d = await istek<BildirimTercihleriCevabi>('bakim', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: true, eposta: true });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     assert.deepEqual(
       d.govde.satirlar.map((s) => [s.mesaj, s.eposta, s.varsayilan]),
-      [[true, true, false], [false, false, true]],
+      alabilecegi('bakim').map((tur) => (tur === 'istasyonlar.makine-durdu'
+        ? [true, true, false]
+        : [BILDIRIM_TURLERI[tur].varsayilan.mesaj, BILDIRIM_TURLERI[tur].varsayilan.eposta, true])),
     );
     assert.equal((await tercihler('yonetici')).satirlar.find((s) => s.tur === 'istasyonlar.makine-durdu')?.varsayilan, true);
   });
@@ -254,6 +270,7 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
   test('operatör e-posta seçemez ve tercih listesi boştur: alan null; listede olmayan türe tercih 400, satır açılmaz', async () => {
     const t = await tercihler('operator');
     assert.equal(t.epostaSecilebilir, false);
+    assert.deepEqual(alabilecegi('operator'), []);
     assert.deepEqual(t.satirlar, []);
     for (const eposta of [true, false]) {
       const d = await istek('operator', 'POST', '/bildirimler/tercihler/degistir', { tur: 'istasyonlar.makine-durdu', mesaj: false, eposta });
