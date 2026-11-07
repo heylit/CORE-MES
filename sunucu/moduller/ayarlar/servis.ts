@@ -110,8 +110,10 @@ export async function kurumOku(db: Db): Promise<KurumCevabi> {
   return { ad: await sistemAyariOku(db, 'kabuk.kurum-adi') };
 }
 
+// Düzey listeden seçilen yüzdedir (metin); cevapta sayıdır. Okunamazsa tanımdaki varsayılan geçer.
 export async function girisSesiOku(db: Db): Promise<GirisSesiCevabi> {
-  return { acik: await sistemAyariOku(db, 'kabuk.giris-sesi') };
+  const duzey = Number(await sistemAyariOku(db, 'kabuk.giris-sesi-duzeyi') ?? AYAR_TANIMLARI['kabuk.giris-sesi-duzeyi'].varsayilan);
+  return { acik: await sistemAyariOku(db, 'kabuk.giris-sesi'), duzey: Number.isFinite(duzey) ? duzey : Number(AYAR_TANIMLARI['kabuk.giris-sesi-duzeyi'].varsayilan) };
 }
 
 const KAPALI_SAYFALAR_ANAHTARI = 'kabuk.kapali-sayfalar';

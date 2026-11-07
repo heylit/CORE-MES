@@ -29,13 +29,17 @@ export function useGirisKurumAdi(): string | null {
   return ad === '' ? null : ad;
 }
 
-// Giriş ekranının açılış sesi kurum ayarı (kart 2175); okunamazsa kapalı sayılır.
-export function useGirisSesi(): boolean {
+// Düzey okunamazsa null: çalan taraf sesin kendi varsayılanını kullanır (cihaz düğmesiyle açılan ses sessiz kalmasın).
+export interface GirisSesi { readonly acik: boolean; readonly duzey: number | null }
+const OKUNAMAZSA: GirisSesi = { acik: false, duzey: null };
+
+// Giriş ekranının açılış sesi kurum ayarı (kartlar 2175, 2230b); okunamazsa kapalı sayılır.
+export function useGirisSesi(): GirisSesi {
   const sorgu = useQuery({
     queryKey: anahtarlar.girisSesi,
     queryFn: () => api.get<GirisSesiCevabi>('/giris-sesi'),
     staleTime: TAZE_SURE,
     retry: false,
   });
-  return sorgu.data?.acik === true;
+  return sorgu.data === undefined ? OKUNAMAZSA : { acik: sorgu.data.acik === true, duzey: sorgu.data.duzey };
 }
