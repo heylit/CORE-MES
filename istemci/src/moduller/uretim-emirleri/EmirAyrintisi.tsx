@@ -15,7 +15,7 @@ import { UretimYerleri } from './UretimYerleri.tsx';
 import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
-import { iplikDuraklari } from './iplik.ts';
+import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
 
@@ -64,6 +64,8 @@ export function EmirAyrintisi() {
     enabled: iplikAcik && akisGorur,
   });
   const akisBekleniyor = akisGorur && akis.isPending;
+  // 2224-1 b: Parçayı izle konumdan konuma yolu çizer, istasyonda adım bilgisiyle; konum hareketi yoksa adım ipliği kalır.
+  const konumlu = ayrinti.data && akis.data ? konumDuraklari(ayrinti.data, akis.data) : [];
   const izle = () => {
     if (!iplikAcik) setIplikAcik(true);
     setOynatma((n) => n + 1);
@@ -114,17 +116,24 @@ export function EmirAyrintisi() {
           <Ilerleme emir={emir} ilerleme={ayrinti.data.ilerleme ?? null} />
           <HazirlikListesi emir={emir} />
           {iplikAcik && (
-            <section className="tc-emir-bolum-iplik" aria-label="İzlenebilirlik ipliği">
+            <section className="tc-emir-bolum-iplik" aria-label="Parçanın konum akışı">
               <div className="tc-emir-iplik-bas">
-                <h3 className="tc-emir-bolum">İzlenebilirlik ipliği</h3>
+                <h3 className="tc-emir-bolum">Parçanın konum akışı</h3>
                 <Dugme simge="x" onClick={() => setIplikAcik(false)}>Kapat</Dugme>
               </div>
               {akisBekleniyor ? <DurumKutusu durum="yukleniyor" /> : (
                 <>
                   {!akisGorur && <p className="tc-emir-not">Parti, rota saatleri ve sevk Akış Süresi yetkisiyle görünür.</p>}
                   {akisGorur && akis.isError && <p className="tc-emir-not">{hataIletisi(akis.error, 'Akış kaydı alınamadı.')}</p>}
-                  <Iplik key={oynatma} baslik={`${emir.emirNo} izlenebilirlik ipliği`}
-                    duraklar={iplikDuraklari(ayrinti.data, akis.data ?? null)} />
+                  {konumlu.length > 0
+                    ? <Iplik key={oynatma} baslik={`${emir.emirNo} konum akışı`} duraklar={konumlu} />
+                    : (
+                      <>
+                        {akisGorur && akis.data && <p className="tc-emir-not">Bu emrin konum hareketi yok; rota adımları gösteriliyor.</p>}
+                        <Iplik key={oynatma} baslik={`${emir.emirNo} izlenebilirlik ipliği`}
+                          duraklar={iplikDuraklari(ayrinti.data, akis.data ?? null)} />
+                      </>
+                    )}
                 </>
               )}
             </section>

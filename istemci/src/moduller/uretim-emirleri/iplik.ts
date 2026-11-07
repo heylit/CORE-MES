@@ -2,7 +2,7 @@ import type { EmirAkisiCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { EmirAyrintiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { saglamSayisi } from './gorunum.ts';
 
-export type DurakTuru = 'malkabul' | 'adim' | 'kalite' | 'sevk';
+export type DurakTuru = 'malkabul' | 'adim' | 'kalite' | 'sevk' | 'konum';
 
 export interface Durak {
   anahtar: string;
@@ -81,4 +81,68 @@ function sevkDuragi(akis: EmirAkisiCevabi | null): Durak {
 
 export function iplikDuraklari(ayrinti: EmirAyrintiCevabi, akis: EmirAkisiCevabi | null): Durak[] {
   return [malKabulDuragi(akis), ...adimDuraklari(ayrinti, akis), KALITE_DURAGI, sevkDuragi(akis)];
+}
+
+// ---- Konum akışı (2224-1 b) -------------------------------------------------------------------------------------------------
+// Parçayı izle konumdan konuma yolu çizer: önce hammaddenin geçtiği konumlar (sarfa kadar), sonra emrin ürününün konumları (sevke
+// kadar). Aynı konumda kalan statü ve kalite değişimi, geri alma ve geri alınan hareket yol sayılmaz. İstasyon konumunda o
+// istasyonun rota adımları (OP no ve sağlam adet) yazılır. Konum hareketi yoksa boş döner; ekran adım ipliğine düşer.
+type KonumHareketi = NonNullable<EmirAkisiCevabi['konumHareketleri']>[number];
+type KonumUcu = NonNullable<KonumHareketi['kaynak']>;
+interface Ziyaret { konum: KonumUcu | null; gelis: string | null; cikis: string | null; sevk: boolean }
+
+export function sureKisa(ms: number): string {
+  const dk = Math.max(0, Math.floor(ms / 60_000));
+  if (dk >= 1440) return `${String(Math.floor(dk / 1440))} gün`;
+  if (dk >= 60) return `${String(Math.floor(dk / 60))} sa`;
+  return `${String(dk)} dk`;
+}
+
+function ziyaretler(hareketler: readonly KonumHareketi[]): Ziyaret[] {
+  const z: Ziyaret[] = [];
+  for (const h of hareketler) {
+    const son = z.at(-1);
+    if (h.kaynak && son?.konum?.id !== h.kaynak.id) z.push({ konum: h.kaynak, gelis: null, cikis: null, sevk: false });
+    const once = z.at(-1);
+    if (h.hedef) {
+      if (once?.konum?.id === h.hedef.id) continue;
+      if (once) once.cikis = h.zaman;
+      z.push({ konum: h.hedef, gelis: h.zaman, cikis: null, sevk: false });
+    } else if (once) {
+      once.cikis = h.zaman;
+      if (h.cikisNedeni === 'sevk') z.push({ konum: null, gelis: h.zaman, cikis: null, sevk: true });
+    }
+  }
+  return z;
+}
+
+export function konumDuraklari(ayrinti: EmirAyrintiCevabi, akis: EmirAkisiCevabi | null): Durak[] {
+  const tum = akis?.konumHareketleri ?? [];
+  const geriAlinan = new Set(tum.flatMap((h) => (h.geriAlinanId === null ? [] : [h.geriAlinanId])));
+  const gecerli = tum.filter((h) => h.tur !== 'geri_alma' && !geriAlinan.has(h.id) && !(h.kaynak && h.hedef && h.kaynak.id === h.hedef.id));
+  if (gecerli.length === 0) return [];
+  const urun = ayrinti.emir.malzemeNo ?? null;
+  const yol = urun === null ? ziyaretler(gecerli)
+    : [...ziyaretler(gecerli.filter((h) => h.malzemeId !== urun)), ...ziyaretler(gecerli.filter((h) => h.malzemeId === urun))];
+  const simdi = Date.parse(akis?.simdi ?? new Date().toISOString());
+  return yol.map((v, i): Durak => {
+    if (v.sevk || v.konum === null) {
+      return { anahtar: `konum-${String(i)}`, tur: 'sevk', ad: 'Sevk', kayitli: true, satirlar: v.gelis === null ? [] : [kisaZaman(v.gelis)] };
+    }
+    const k = v.konum;
+    const adimlar = k.istasyon === null ? [] : (akis?.adimlar ?? []).filter((a) => a.istasyon === k.istasyon);
+    const fason = k.tur === 'fason' || k.tur === 'yolda' ? (akis?.adimlar ?? []).filter((a) => a.fason) : [];
+    const op = [...adimlar, ...fason].map((a) => `OP${String(a.opNo)} · ${String(a.saglamAdet)} adet`);
+    const sure = v.gelis === null ? null
+      : v.cikis !== null ? `${sureKisa(Date.parse(v.cikis) - Date.parse(v.gelis))} kaldı`
+        : `burada ${sureKisa(simdi - Date.parse(v.gelis))}`;
+    return {
+      anahtar: `konum-${String(i)}`, tur: 'konum', ad: k.istasyon ?? k.ad ?? k.kod, kayitli: true,
+      satirlar: [
+        ...(op.length > 0 ? [op.join(', ')] : k.istasyon !== null || k.ad !== null ? [k.kod] : []),
+        ...(v.gelis === null ? [] : [kisaZaman(v.gelis)]),
+        ...(sure === null ? [] : [sure]),
+      ],
+    };
+  });
 }

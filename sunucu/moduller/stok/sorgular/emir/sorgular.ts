@@ -56,6 +56,9 @@ export interface AkisHareketi {
   id: number; zaman: string; tur: 'giris' | 'cikis' | 'transfer' | 'sayim_fazla' | 'sayim_eksik' | 'geri_alma';
   malzemeId: number; partiId: number | null; miktar: string; kaynakStatuId: number | null; hedefStatuId: number | null;
   girisKaynagi: string | null; cikisNedeni: string | null; kaynakKonumTur: string | null; hedefKonumTur: string | null; geriAlinanId: number | null;
+  // 2224: Parçayı izle konumdan konuma yolu çizer; konumun kimliği, kodu, adı ve bağlı istasyonu.
+  kaynakKonumId: number | null; kaynakKonumKod: string | null; kaynakKonumAd: string | null; kaynakIstasyonId: number | null;
+  hedefKonumId: number | null; hedefKonumKod: string | null; hedefKonumAd: string | null; hedefIstasyonId: number | null;
 }
 // Statü çevirme ve sevk çıkışı emri taşımaz; emrin partisi ve emrin teslimleri üzerinden bulunur. UNION tekrarı atar.
 export const emrinAkisHareketleri = (db: Db, emirId: number): Promise<AkisHareketi[]> => db.sorgu(
@@ -65,7 +68,9 @@ export const emrinAkisHareketleri = (db: Db, emirId: number): Promise<AkisHareke
      UNION SELECT t.hareket_id FROM stok_teslim t WHERE t.uretim_emri_id = $1 AND t.hareket_id IS NOT NULL)
    SELECT h.id::int, ${zamanMetni('h.zaman')} AS zaman, h.tur, h.malzeme_id AS "malzemeId", h.parti_id::int AS "partiId", h.miktar::text AS miktar,
      h.kaynak_statu_id AS "kaynakStatuId", h.hedef_statu_id AS "hedefStatuId", h.giris_kaynagi AS "girisKaynagi", h.cikis_nedeni AS "cikisNedeni",
-     kk.tur AS "kaynakKonumTur", hk.tur AS "hedefKonumTur", h.geri_alinan_id::int AS "geriAlinanId"
+     kk.tur AS "kaynakKonumTur", hk.tur AS "hedefKonumTur", h.geri_alinan_id::int AS "geriAlinanId",
+     kk.id AS "kaynakKonumId", kk.kod AS "kaynakKonumKod", kk.ad AS "kaynakKonumAd", kk.istasyon_id AS "kaynakIstasyonId",
+     hk.id AS "hedefKonumId", hk.kod AS "hedefKonumKod", hk.ad AS "hedefKonumAd", hk.istasyon_id AS "hedefIstasyonId"
    FROM kimlikler i JOIN stok_hareketi h ON h.id = i.id
    LEFT JOIN stok_konum kk ON kk.id = h.kaynak_konum_id LEFT JOIN stok_konum hk ON hk.id = h.hedef_konum_id
    ORDER BY h.zaman, h.id`, [emirId]);

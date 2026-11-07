@@ -3,14 +3,14 @@ import { AZAMI_TAKVIM_GUNU } from '#paylasilan/sozlesme/vardiya.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
-import type { EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, SureOzeti } from '#paylasilan/sozlesme/akis.ts';
+import type { EmirAkisiCevabi, EmirListesiCevabi, KartAkisiCevabi, KartOzetleriCevabi, KonumHareketi, SureOzeti } from '#paylasilan/sozlesme/akis.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
 import { canliPlan, tabanPlani } from '../plan/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { receteRotaStatuleri } from '../recete-rota/disari.ts';
 import { emirlerinSevkDurumu } from '../sevkiyat/disari.ts';
-import { emrinAkisHareketleri, partiGirisZamanlari, refakatKartiKapsami } from '../stok/disari.ts';
+import { emrinAkisHareketleri, partiGirisZamanlari, refakatKartiKapsami, type AkisHareketi } from '../stok/disari.ts';
 import { adimliEmirListesi, emirAkisKaydi, sureOzetiHesapla } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import { aralikBirlesimi, aramaMetni, emirAkisi, kartAnlari, kartKonumu, kartPenceresi, kartSarfi, sevkAni, type AkisGirdisi } from './kurallar.ts';
@@ -92,7 +92,7 @@ async function akisGirdisi(db: Db, id: number, kart: { id: number; partiIdler: r
     ...[...partiler.values()].map((p) => p.malKabulZamani), emir.baslama, ...kayit.olaylar.map((o) => o.zaman), girdi.sevk?.hazir ?? null,
   ].flatMap((z) => (z === null ? [] : [Date.parse(z)]));
   girdi.calisma = await calismaAraliklari(db, kayit.isEmirleri, anlar.length === 0 ? null : Math.min(...anlar), Date.parse(simdi));
-  return { girdi, kayit, emir: { id: emir.id, emirNo: emir.emirNo, adet: emir.adet, durum: emir.durum, teslim: emir.teslim } };
+  return { girdi, kayit, hareketler, emir: { id: emir.id, emirNo: emir.emirNo, adet: emir.adet, durum: emir.durum, teslim: emir.teslim } };
 }
 
 type Kayit = NonNullable<Awaited<ReturnType<typeof emirAkisKaydi>>>;
@@ -111,8 +111,20 @@ function adimSureOzeti(
 }
 
 export async function emirAkisiOku(db: Db, id: number): Promise<EmirAkisiCevabi> {
-  const { girdi, emir } = await akisGirdisi(db, id, null);
-  return { emir, ...emirAkisi(girdi) };
+  const { girdi, emir, hareketler } = await akisGirdisi(db, id, null);
+  return { emir, ...emirAkisi(girdi), konumHareketleri: await konumHareketleri(db, hareketler) };
+}
+
+// Parçayı izle (2224): hareketler konumlarıyla aynen geçer; istasyon konumunun adı istasyonlardan okunur.
+async function konumHareketleri(db: Db, hareketler: readonly AkisHareketi[]): Promise<KonumHareketi[]> {
+  const istasyon = await istasyonAdlari(db, tekil(hareketler.flatMap((h) => [h.kaynakIstasyonId, h.hedefIstasyonId])));
+  const uc = (id: number | null, kod: string | null, ad: string | null, tur: string | null, ist: number | null) =>
+    (id === null || kod === null || tur === null ? null : { id, kod, ad, tur, istasyon: ist === null ? null : istasyon.get(ist) ?? null });
+  return hareketler.map((h) => ({
+    id: h.id, zaman: h.zaman, tur: h.tur, malzemeId: h.malzemeId, partiId: h.partiId, miktar: h.miktar, cikisNedeni: h.cikisNedeni, geriAlinanId: h.geriAlinanId,
+    kaynak: uc(h.kaynakKonumId, h.kaynakKonumKod, h.kaynakKonumAd, h.kaynakKonumTur, h.kaynakIstasyonId),
+    hedef: uc(h.hedefKonumId, h.hedefKonumKod, h.hedefKonumAd, h.hedefKonumTur, h.hedefIstasyonId),
+  }));
 }
 
 const adHaritasi = (d: readonly { id: number; ad: string }[]): Map<number, string> => new Map(d.map((x) => [x.id, x.ad]));

@@ -212,6 +212,28 @@ describe('akis emir yolculuğu (gerçek PostgreSQL)', () => {
     assert.equal(Date.parse(a.damgalar.uretimBasladi), Date.parse(emir.govde.emir.baslama));
   });
 
+  test('2224-1 b: emir akışı emrin stok hareketlerini konumlarıyla, zaman sırasıyla taşır (Parçayı izle)', async () => {
+    const { id } = await fasonluEmir();
+    const konum = async (kod: string): Promise<number> => (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO stok_konum (depo_id, kod, tur) VALUES ((SELECT depo_id FROM stok_konum WHERE kod = 'KABUL'), $1, 'depo_zemini') RETURNING id`, [kod]))!.id;
+    const kabul = (await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
+    const zemin = await konum('AK-Z1');
+    const yaz = (zaman: string, tur: 'giris' | 'transfer', kaynak: number | null, hedef: number) => o().sahip.sorgu(
+      `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ($2, pg_current_xact_id(), $6) RETURNING id),
+         h AS (INSERT INTO stok_hareketi (zaman, tur, malzeme_id, kaynak_konum_id, hedef_konum_id, miktar, kisi_id, uretim_emri_id, giris_kaynagi)
+               VALUES ($1, $2, $3, $4, $5, 10, $6, $7, CASE WHEN $2 = 'giris' THEN 'uretim' END) RETURNING id)
+       INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f`,
+      [zaman, tur, urunNo, kaynak, hedef, yoneticiId, id]);
+    await yaz('2026-10-06T12:00:00Z', 'giris', null, kabul);
+    await yaz('2026-10-06T13:00:00Z', 'transfer', kabul, zemin);
+    const c = await istek('yonetici', 'GET', `/akis/emirler/${id}`);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const h = emirAkisiCevabi.parse(c.govde).konumHareketleri ?? [];
+    assert.deepEqual(h.map((x) => [x.tur, x.kaynak?.kod ?? null, x.hedef?.kod ?? null, x.hedef?.tur ?? null]),
+      [['giris', null, 'KABUL', 'kabul'], ['transfer', 'KABUL', 'AK-Z1', 'depo_zemini']]);
+    assert.ok(h.every((x) => x.malzemeId === urunNo && x.miktar !== ''));
+  });
+
   test('AKS-U3 (kart #708): kartın akışı kartın lotu ve kartla sayılanla ölçülür; anlar kabulden sayıma sırayla; yetki ve 404', async () => {
     for (const [rol, islemler] of [['depo', ['stok.giris', 'stok.transfer', 'stok.istek']], ['operator', ['stok.istek']]] as const) {
       const r = (await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rol]))!;
