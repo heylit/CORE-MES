@@ -5,3 +5,12 @@ export { cizimBalonu, cizimOlcumleri, sonOlcumler } from './studyo/kurallar.ts';
 export { useEmirNumuneleri, useEmirOlcumleri, useResimDosyasi, useStudyoParcasi } from './studyo/veri.ts';
 // Kalite formu (798): Arkon terminali "Ölç" ile aynı formu açar; ölçüm tek kayıttır, yazımı açan verir.
 export { KaliteFormu, type OlcumYazici, type OlcumYazimi } from './studyo/KaliteFormu.tsx';
+// 2196: kalite istasyonu terminali Bugün kararlarını ve "terminalde doldurulur" işaretli formları buradan alır; uç ve yetki aynıdır.
+export {
+  adimEksigi, bosIcerik, formAdimlari, kararEksigi, KM_CIDDIYETLER, terminalFormEksikleri, terminalFormKaydi, terminalFormSonucu,
+  useKaliteKarari, useKaliteKuyrugu, useTerminalFormlari,
+  type Ciddiyet, type FormAdimi, type FormBaglami, type GerekceliKarar, type GirisBekleyeni, type HataliBekleyeni, type HataliKarari,
+  type IlkParcaBekleyeni, type KaliteKarari, type KaliteKuyrugu, type TerminalFormlari, type TerminalFormu,
+} from './terminal.ts';
+export { LISTE_YANITLARI, type FormIcerigi, type ListeYaniti } from './yeni/formlar/dsl.ts';
+export type { FormKaydi } from './yeni/tipler.ts';

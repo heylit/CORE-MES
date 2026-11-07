@@ -72,6 +72,7 @@ export function FormTasarla({ veri, yetki, form, kapat }: { veri: KmVerisi; yetk
             </div>
             <div className="tc-km-alan tc-km-alan-tam"><Girdi etiket="Ne zaman kullanılır" value={t.ne} onChange={(o) => yaz('ne', o.target.value)} /></div>
             <div className="tc-km-alan"><IsaretKutusu etiket="Etiket olarak yazdır" checked={t.etiket} onChange={(o) => yaz('etiket', o.target.checked)} /></div>
+            <div className="tc-km-alan"><IsaretKutusu etiket="Terminalde doldurulur" checked={t.terminal} onChange={(o) => yaz('terminal', o.target.checked)} /></div>
           </div>
           <div className="tc-km3-tasarim">
             <div className="tc-km3-dsl"><CokSatir etiket="Form içeriği" rows={18} spellCheck={false} value={t.dsl} onChange={(o) => yaz('dsl', o.target.value)} /></div>
