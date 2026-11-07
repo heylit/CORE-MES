@@ -30,6 +30,8 @@
       "Read(./istemci/dist/**)",
       "Read(./package-lock.json)",
       "Read(./istemci/src/ortak/tasarim/fonts/*.woff2)",
+      "Read(./istemci/src/moduller/cnc-kurulum/cerceve/cnc-kurulum-motoru.html)",
+      "Read(./istemci/src/moduller/cnc-kurulum/yeni/hesap/clipper.js)",
       "Bash(gh issue delete *)",
       "Bash(gh repo edit *)",
       "Bash(gh repo delete *)",
