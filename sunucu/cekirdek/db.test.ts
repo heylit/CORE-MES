@@ -134,6 +134,11 @@ describe('db (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('JIT derlemesi uygulama bağlantısında kapalıdır', async () => {
+    const satir = await acik().tek<{ jit: string }>("SELECT current_setting('jit') AS jit");
+    assert.equal(satir?.jit, 'off');
+  });
+
   test('okuma transaction\'ı kendi süre sınırıyla açılır; yazma transaction\'ı ve tek sorgu genel sınırda kalır', async () => {
     const ozel = veritabaniAc({ pg: { ...ayar.pg, sorguSureMs: 54_321, okumaSureMs: 4321 } }, { sema });
     const sure = "SELECT current_setting('statement_timeout') AS sure";
