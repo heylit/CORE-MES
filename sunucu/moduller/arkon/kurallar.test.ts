@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, hurdaNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   planYokDamgala, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, periyodikNumuneler, periyodikRetAcik, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -700,6 +700,18 @@ test('başlatma reddi: yalnız bekleyen iş emrinin running olayında, plan canl
   assert.equal(planBaslatmaReddi('events', { ...run, pkgId: 'tmi-ue-4' }, 'bekliyor', undefined), false);
   assert.equal(planBaslatmaReddi('counts', run, 'bekliyor', undefined), false);
   assert.deepEqual((isEmrindenTaslakPaket(girdi({ plan: acik }))['tmi'] as Record<string, unknown>)['plan'], acik);
+});
+
+test('2189-1 a: yayın kapısı yalnız bekleyen iş emrinin running olayında; yalnız taslak paket reddedilir', () => {
+  const run = { state: 'running', pkgId: 'tmi-ie-4' };
+  assert.equal(yayinDenetlenir('events', run, 'bekliyor'), true);
+  assert.equal(yayinDenetlenir('events', { ...run, pkgId: 'tmi-ie-4-p2' }, 'bekliyor'), true, 'parça paketi de');
+  assert.equal(yayinDenetlenir('events', run, 'calisiyor'), false, 'başlamış işin devamı');
+  assert.equal(yayinDenetlenir('events', { ...run, state: 'done' }, 'bekliyor'), false);
+  assert.equal(yayinDenetlenir('events', { ...run, pkgId: 'tmi-ue-4' }, 'bekliyor'), false);
+  assert.equal(yayinDenetlenir('counts', run, 'bekliyor'), false);
+  assert.equal(yayinlanmamis('draft'), true);
+  for (const d of ['published', 'review', 'production', 'done', undefined]) assert.equal(yayinlanmamis(d), false, String(d));
 });
 
 test('canlı plan ayarı (kart #1257): kapalıyken başlatma plana bakılmaz, plan durumu yalnız bilgidir', () => {

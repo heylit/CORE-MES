@@ -316,6 +316,18 @@ export async function uretimAkisi(b: SenaryoBaglami, bugun: string): Promise<voi
 
   if (!(await plandaYerlestir(b, emirId))) return;
 
+  // Üretim Hazırlık paketi yayınlar (2189-1 a): yayınlanmamış iş terminalden başlatılmaz.
+  const paketler = await b.bekle(PLANLAMA, 'Hazırlık paketlerini oku', 'GET', '/api/arkon/belgeler/pkgs', 200);
+  if (paketler === null) return;
+  for (const ie of isEmirleri) {
+    const pkgId = `tmi-ie-${String(ie)}`;
+    const govde = alan(liste(paketler, 'belgeler').find((x) => alan(x, 'kimlik') === pkgId), 'govde');
+    if (typeof govde !== 'object' || govde === null) throw new Error(`${pkgId} Hazırlık'ta yok`);
+    if (await b.bekle(PLANLAMA, `${pkgId}: Hazırlık'ta yayınla`, 'POST', `/api/arkon/belgeler/pkgs/${pkgId}/yaz`, 200, {
+      taban: null, govde: { ...govde, status: 'published', steps: [{ id: 's1' }] }, kaynak: 'y1',
+    }) === null) return;
+  }
+
   for (const [i, ie] of isEmirleri.entries()) {
     const machine = tezgah[i]?.istasyonKod;
     const pkgId = `tmi-ie-${String(ie)}`;
