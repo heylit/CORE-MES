@@ -34,7 +34,7 @@ const D_ICERIK = { id: 7, alanlar: [{ alan: 'adet', eski: 5, yeni: 7 }, { alan: 
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
-function sunucuKur(kullanici: Kullanici): string[] {
+function sunucuKur(kullanici: Kullanici, sinirli = false): string[] {
   const yollar: string[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
     const yol = adres.replace('/api', '');
@@ -56,7 +56,8 @@ function sunucuKur(kullanici: Kullanici): string[] {
     if (yol.startsWith('/denetim-kayitlari?')) {
       const kisi = new URL(yol, 'http://x').searchParams.get('kisi');
       const satirlar = kisi === null ? SATIRLAR : SATIRLAR.filter((s) => String(s.kisiId) === kisi);
-      return json(200, { satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 } satisfies KayitListesiCevabi);
+      const sayim = sinirli ? { toplam: 10000, toplamSinirli: true } : { toplam: satirlar.length };
+      return json(200, { satirlar, ...sayim, sayfa: 1, sayfaBoyu: 50 } satisfies KayitListesiCevabi);
     }
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -74,6 +75,12 @@ function ac(adres = '/denetim') {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('DenetimKaydi', () => {
+  it('sunucu sayımı sınırda kestiyse sayfalama "10.000+" yazar', async () => {
+    sunucuKur(MUDUR, true);
+    ac();
+    expect(await screen.findByText(/^10\.000\+ kayıttan 1–/)).toBeTruthy();
+  });
+
   it('listede modül, işlem ve kayıt Türkçe adıyla görünür; yetkisi boş eski satır komutuyla yazılır; yazma düğmesi yok', async () => {
     sunucuKur(MUDUR);
     ac();
