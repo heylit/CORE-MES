@@ -46,7 +46,7 @@ describe('sipariş satırına sertifika ve rapor', () => {
       if (yol === '/dosyalar/eksikler') return json({ eksikler: [] });
       if (yol === '/satin-alma-siparis-satirlari/41/belgeler') return json(belgeler);
       if (yol === '/satin-alma-siparis-satirlari/41/belge-ekle') {
-        belgeler = { belgeler: [{ id: 77, ad: 'Deneme sertifika', tur: 'sertifika', harf: 'A' }] };
+        belgeler = { belgeler: [{ id: 77, ad: 'Deneme sertifika', tur: 'sertifika', harf: 'A', revKodu: null }] };
         return json(belgeler);
       }
       if (yol === '/satin-alma-siparis-satirlari/41/belgeler/77/kaldir') { belgeler = { belgeler: [] }; return json(belgeler); }
@@ -71,6 +71,8 @@ describe('sipariş satırına sertifika ve rapor', () => {
     document.querySelector<HTMLInputElement>('#ce-ad')!.value = 'Deneme sertifika';
     document.querySelector<HTMLElement>('[data-act="cert-upload"]')!.click();
     await vi.waitFor(() => expect(document.querySelector('[data-cert-line="41"] a')?.getAttribute('href')).toBe('/api/satin-alma-siparis-satirlari/41/belgeler/77/dosya'));
+    // 2138-2: kodsuz belgede merkezin harfi yazılmaz.
+    expect(document.querySelector('[data-cert-line="41"] a')?.textContent).toBe('Deneme sertifika');
     const ekle = istekler.find((x) => x.yol.endsWith('/belge-ekle'))!;
     expect(ekle.govde).toMatchObject({ tur: 'sertifika', ad: 'Deneme sertifika', dosyaAdi: 'sertifika.pdf' });
     expect((ekle.govde as { ozet: string }).ozet).toMatch(/^[0-9a-f]{64}$/);

@@ -9,7 +9,7 @@ export function partileriUnut(): void { durum.clear(); }
 
 const zaman = (z: string): string => new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeZone: "Europe/Istanbul" }).format(new Date(z));
 const belgeBaglantisi = (b: SonParti["belgeler"][number]): string =>
-  `<a href="/cizimler/belge/${b.id}" target="_blank" rel="noopener">${esc(b.ad)}${b.harf ? ` (${esc(b.harf)})` : ""}</a>`;
+  `<a href="/cizimler/belge/${b.id}" target="_blank" rel="noopener">${esc(b.ad)}${b.revKodu ? ` (Rev ${esc(b.revKodu)})` : ""}</a>`;
 
 function tablo(liste: SonParti[]): string {
   if (!liste.length) return '<div class="panel-b small muted">Bu malzemenin stokta tedarikçi partisi yok. Sertifika mal kabulde partiye girilir.</div>';

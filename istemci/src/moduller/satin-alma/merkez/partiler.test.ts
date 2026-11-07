@@ -20,7 +20,7 @@ const acilis: AcilisCevabi = {
 };
 const partiler: SonPartilerCevabi = {
   partiler: [
-    { partiId: 5, lotNo: 'L-2026-0005', tedarikciPartiNo: 'TP-1', dokumNo: 'D-9', sertifikaNo: 'S-77', kayitZamani: '2026-10-10T07:00:00.000Z', belgeler: [{ id: 31, ad: 'Deneme sertifika', tur: 'sertifika', harf: 'A' }] },
+    { partiId: 5, lotNo: 'L-2026-0005', tedarikciPartiNo: 'TP-1', dokumNo: 'D-9', sertifikaNo: 'S-77', kayitZamani: '2026-10-10T07:00:00.000Z', belgeler: [{ id: 31, ad: 'Deneme sertifika', tur: 'sertifika', harf: 'A', revKodu: '01' }] },
     { partiId: 4, lotNo: 'L-2026-0004', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, kayitZamani: '2026-10-01T07:00:00.000Z', belgeler: [] },
   ],
 };
@@ -52,7 +52,8 @@ describe('Malzemelerde son partiler ve sertifikalar (hammadde sertifikası)', ()
     expect([...satirlar].map((s) => s.querySelectorAll('td')[1]!.textContent)).toEqual(['L-2026-0005', 'L-2026-0004']);
     const a = satirlar[0]!.querySelector('a')!;
     expect(a.getAttribute('href')).toBe('/cizimler/belge/31');
-    expect(a.textContent).toBe('Deneme sertifika (A)');
+    // 2138-2: merkezin harfi değil revizyon kodu görünür.
+    expect(a.textContent).toBe('Deneme sertifika (Rev 01)');
     expect(satirlar[1]!.querySelector('.flag.warn')?.textContent).toBe('yok');
     expect(satirlar[1]!.textContent).toContain('eklenmedi');
     expect(istekler.filter((y) => y.startsWith('/stok/')).length).toBe(1);

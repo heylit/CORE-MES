@@ -3166,7 +3166,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const govde = { tur: 'sertifika', ad, ozet, dosyaAdi: 'sertifika.pdf' };
     const kimlik = randomUUID();
     const ilk = tamam<SiparisBelgeleriCevabi>(await istek(c.sa, 'POST', `/satin-alma-siparis-satirlari/${satirA}/belge-ekle`, govde, kimlik));
-    assert.deepEqual(ilk.belgeler.map((x) => [x.ad, x.tur]), [[ad, 'sertifika']]);
+    // 2138-2: kodu olmayan sertifikada gösterilen revizyon boştur (merkezin harfi değil).
+    assert.deepEqual(ilk.belgeler.map((x) => [x.ad, x.tur, x.revKodu]), [[ad, 'sertifika', null]]);
     const tekrar = tamam<SiparisBelgeleriCevabi>(await istek(c.sa, 'POST', `/satin-alma-siparis-satirlari/${satirA}/belge-ekle`, govde, kimlik));
     assert.deepEqual(tekrar, ilk);
     const acilan = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM belge_merkezi_belge WHERE ad = $1', [ad]));
