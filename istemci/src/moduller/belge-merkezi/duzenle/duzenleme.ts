@@ -137,3 +137,13 @@ export function duzenlemeNotu(kaynakAd: string, kaynakHarf: string, gerekce: str
   const metin = bas + gerekce.trim();
   return metin.length <= NOT_EN_UZUN ? metin : `${metin.slice(0, NOT_EN_UZUN - 1)}…`;
 }
+
+// Yakınlık sütun genişliğine göredir (1 = sütuna sığar). A1/A0 paftada 7 nokta ölçü yazısının okunması için %800'e çıkar.
+export const EN_AZ_YAKINLIK = 0.25;
+export const EN_COK_YAKINLIK = 8;
+export const YAKINLIKLAR = [EN_AZ_YAKINLIK, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, EN_COK_YAKINLIK] as const;
+export const yakinlikSinirla = (y: number): number => Math.min(EN_COK_YAKINLIK, Math.max(EN_AZ_YAKINLIK, y));
+export const sonrakiYakinlik = (y: number, yon: 1 | -1): number => {
+  const adim = yon > 0 ? YAKINLIKLAR.find((a) => a > y + 1e-6) : [...YAKINLIKLAR].reverse().find((a) => a < y - 1e-6);
+  return adim ?? y;
+};

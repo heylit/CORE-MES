@@ -17,7 +17,8 @@ import { kaydir, katmanCiz, logoPng, ogeIcindeMi, resimYukle, yaziPng } from './
 import type { Gecmis, Oge, SayfaKutusu } from './duzenleme.ts';
 import {
   CIZGI_KALINLIKLARI, VARSAYILAN_CIZGI, VARSAYILAN_DOLGU, YAZI_BOYLARI, YAZI_EN_UZUN, degisiklikVarMi, degistir,
-  duzenlemeNotu, gecmisBaslat, geriAl, gorunumOlcusu, ileriAl, kutuNormalle, ogeReddi, renkGecerliMi, silinenOzeti,
+  EN_AZ_YAKINLIK, EN_COK_YAKINLIK, duzenlemeNotu, gecmisBaslat, geriAl, gorunumOlcusu, ileriAl, kutuNormalle, ogeReddi, renkGecerliMi,
+  silinenOzeti, sonrakiYakinlik, yakinlikSinirla,
 } from './duzenleme.ts';
 import type { DuzenlemeSonucu, ResimliOge, Silinen } from './pdf-yaz.ts';
 
@@ -34,7 +35,11 @@ const ARACLAR: { arac: Arac; ad: string; simge: SimgeAdi; tus: string; ipucu: st
 ];
 const OGE_ADI: Record<Oge['tur'], string> = { dolgu: 'Dolgu alanı', logo: 'Kurum logosu', yazi: 'Yazı', cizgi: 'Çizgi' };
 const OGE_SIMGESI: Record<Oge['tur'], SimgeAdi> = { dolgu: 'edit', logo: 'building', yazi: 'file', cizgi: 'ruler' };
-const YAKINLIKLAR = [0.5, 0.75, 1, 1.5, 2, 3] as const;
+const TEKER_ADIMI = 1.2;
+// Art arda yakınlaştırmada sayfa her adımda değil, durunca yeniden çizilir; arada eski çizim büyütülerek gösterilir.
+const CIZIM_BEKLEMESI = 150;
+// Yakınlaşırken sabit kalan nokta: istemci koordinatı ve sayfadaki oranı.
+interface Capa { cx: number; cy: number; fx: number; fy: number }
 
 interface Surukleme { tur: 'yeni'; x0: number; y0: number; x1: number; y1: number }
 interface Tasima { tur: 'tasi'; px: number; py: number; ilk: Oge; simdi: Oge }
@@ -197,7 +202,10 @@ export function PdfDuzenleyici() {
   const [arac, aracYaz] = useState<Arac>('dolgu');
   const [renk, renkYaz] = useState(VARSAYILAN_DOLGU);
   const [secili, seciliYaz] = useState<number | null>(null);
-  const [yakinlik, yakinlikYaz] = useState(2);
+  const [yakinlik, yakinlikHamYaz] = useState(1);
+  const [kapEn, kapEnYaz] = useState(0);
+  const [tamEkran, tamEkranYaz] = useState(false);
+  const [panelAcik, panelAcikYaz] = useState(true);
   const [logo, logoYaz] = useState<HTMLImageElement | null>(null);
   const [surukleme, suruklemeYaz] = useState<Surukleme | null>(null);
   const [tasima, tasimaYaz] = useState<Tasima | null>(null);
@@ -206,6 +214,9 @@ export function PdfDuzenleyici() {
   const kap = useRef<HTMLDivElement>(null);
   const tuval = useRef<HTMLCanvasElement>(null);
   const katman = useRef<HTMLCanvasElement>(null);
+  const sayfaKutusu = useRef<HTMLDivElement>(null);
+  const capa = useRef<Capa | null>(null);
+  const cizilenSayfa = useRef<number | null>(null);
 
   useEffect(() => {
     if (!dosya.data) return undefined;
@@ -255,18 +266,92 @@ export function PdfDuzenleyici() {
   // Sayfa yeniden çizilince katman da en güncel öğelerle çizilir; öğe değişimi sayfayı yeniden çizdirmez.
   const katmanCizici = useRef(katmaniCiz);
   katmanCizici.current = katmaniCiz;
+  // Sütun genişliği izlenir: tam ekrana geçiş, pencere boyu ve tarayıcı yakınlaştırması sayfayı yeniden ve keskin çizdirir.
+  useEffect(() => {
+    const k = kap.current;
+    if (!k) return undefined;
+    const olc = () => { kapEnYaz(k.clientWidth); };
+    olc();
+    window.addEventListener('resize', olc);
+    const izleyici = typeof ResizeObserver === 'function' ? new ResizeObserver(olc) : null;
+    izleyici?.observe(k);
+    return () => { window.removeEventListener('resize', olc); izleyici?.disconnect(); };
+  }, [pdf]);
+
+  const genislik = Math.max(240, kapEn - 2);
   useEffect(() => {
     const t = tuval.current;
     const k = kap.current;
-    if (!pdf || !t || !k) return;
-    sayfaCiz(pdf, sayfa + 1, t, Math.max(240, k.clientWidth - 2), YAKINLIKLAR[yakinlik] ?? 1).then(() => {
-      const l = katman.current;
-      if (!l) return;
-      l.width = t.width;
-      l.height = t.height;
-      katmanCizici.current();
-    }).catch(() => { acmaHatasiYaz('Sayfa çizilemedi.'); });
-  }, [pdf, sayfa, yakinlik]);
+    if (!pdf || !t || !k || !kutu) return undefined;
+    // Yeni çizim gelene kadar eski çizim yeni ölçüde gösterilir ve imlecin altındaki nokta yerinde tutulur.
+    if (cizilenSayfa.current === sayfa) t.style.setProperty('--tuval-en', `${String(Math.ceil(genislik * yakinlik))}px`);
+    const c = capa.current;
+    const d = sayfaKutusu.current;
+    capa.current = null;
+    if (c && d) {
+      const r = d.getBoundingClientRect();
+      k.scrollLeft += r.left + c.fx * r.width - c.cx;
+      k.scrollTop += r.top + c.fy * r.height - c.cy;
+    }
+    const zamanlayici = setTimeout(() => {
+      sayfaCiz(pdf, sayfa + 1, t, genislik, yakinlik).then((cizildi) => {
+        const l = katman.current;
+        if (!cizildi || !l) return;
+        cizilenSayfa.current = sayfa;
+        l.width = t.width;
+        l.height = t.height;
+        katmanCizici.current();
+      }).catch(() => { acmaHatasiYaz('Sayfa çizilemedi.'); });
+    }, cizilenSayfa.current === sayfa ? CIZIM_BEKLEMESI : 0);
+    return () => { clearTimeout(zamanlayici); };
+  }, [pdf, kutu, sayfa, yakinlik, genislik]);
+
+  const yakinlikYaz = useCallback((yeni: number, cx?: number, cy?: number) => {
+    const d = sayfaKutusu.current;
+    const k = kap.current;
+    if (d && k) {
+      const r = d.getBoundingClientRect();
+      const g = k.getBoundingClientRect();
+      const x = cx ?? g.left + g.width / 2;
+      const y = cy ?? g.top + g.height / 2;
+      capa.current = { cx: x, cy: y, fx: (x - r.left) / Math.max(1, r.width), fy: (y - r.top) / Math.max(1, r.height) };
+    }
+    yakinlikHamYaz(yakinlikSinirla(yeni));
+  }, []);
+
+  // Ctrl + tekerlek (dokunmatik yüzeyde sıkıştırma da böyle gelir) tarayıcıyı değil sayfayı büyütür; React tekerlek dinleyicisi
+  // pasif olduğundan varsayılan davranış yalnız yerel dinleyicide engellenebilir.
+  useEffect(() => {
+    const k = kap.current;
+    if (!k) return undefined;
+    const teker = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      if (e.deltaY === 0) return;
+      yakinlikHamYaz((y) => {
+        const yeni = yakinlikSinirla(e.deltaY < 0 ? y * TEKER_ADIMI : y / TEKER_ADIMI);
+        const d = sayfaKutusu.current;
+        if (d && yeni !== y) {
+          const r = d.getBoundingClientRect();
+          capa.current = { cx: e.clientX, cy: e.clientY, fx: (e.clientX - r.left) / Math.max(1, r.width), fy: (e.clientY - r.top) / Math.max(1, r.height) };
+        }
+        return yeni;
+      });
+    };
+    k.addEventListener('wheel', teker, { passive: false });
+    return () => { k.removeEventListener('wheel', teker); };
+  }, [pdf]);
+
+  // Bütün sayfa kutuya sığar: genişliğe sığan ölçü yüksekliğe de sığacak kadar küçültülür.
+  const sigdir = () => {
+    const k = kap.current;
+    const d = sayfaKutusu.current;
+    if (!k || !olcu) return;
+    const pay = d ? 2 * (Number.parseFloat(getComputedStyle(d).marginTop) || 0) : 0;
+    const boy = (genislik / olcu.en) * olcu.boy;
+    capa.current = null;
+    yakinlikHamYaz(yakinlikSinirla(Math.min(1, (k.clientHeight - pay) / Math.max(1, boy))));
+  };
 
   useEffect(() => { katmaniCiz(); }, [katmaniCiz]);
 
@@ -342,6 +427,11 @@ export function PdfDuzenleyici() {
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); ileri(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); ogeSil(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (k === 'f') { e.preventDefault(); tamEkranYaz((t) => !t); return; }
+    if (e.key === 'Escape' && tamEkran && !kaydetAcik && !vazgecAcik) { e.preventDefault(); tamEkranYaz(false); return; }
+    if (k === '0') { e.preventDefault(); sigdir(); return; }
+    if (k === '+' || k === '=') { e.preventDefault(); yakinlikYaz(sonrakiYakinlik(yakinlik, 1)); return; }
+    if (k === '-') { e.preventDefault(); yakinlikYaz(sonrakiYakinlik(yakinlik, -1)); return; }
     const a = ARACLAR.find((x) => x.tus === k);
     if (a && (a.arac !== 'logo' || logo)) aracSec(a.arac);
   };
@@ -378,7 +468,7 @@ export function PdfDuzenleyici() {
   const cik = () => { void yonlendir(`/cizimler/belge/${String(belge.id)}`); };
 
   return (
-    <section className="tc-cz" onKeyDown={tus}>
+    <section className={tamEkran ? 'tc-cz tc-cz-dz-tam' : 'tc-cz'} data-panel={panelAcik ? undefined : 'kapali'} onKeyDown={tus}>
       <header className="tc-cz-bas">
         <Dugme simge="back" onClick={() => { if (degisti) vazgecAcikYaz(true); else cik(); }}>Geri</Dugme>
         <h1 className="tc-cz-baslik"><Simge ad="file" />PDF düzenle</h1>
@@ -412,12 +502,21 @@ export function PdfDuzenleyici() {
             <Dugme simge="rotate" aria-label="İleri al" title="İleri al (Ctrl+Y)" disabled={gecmis.ileri.length === 0} onClick={ileri} />
             <Dugme tur="tehlike" simge="trash" aria-label="Seçili öğeyi kaldır" title="Seçili öğeyi kaldır (Delete)" disabled={secili === null} onClick={ogeSil} />
             <span className="tc-cz-dz-ayrac" />
-            <Dugme simge="zout" aria-label="Uzaklaştır" disabled={yakinlik === 0} onClick={() => { yakinlikYaz((y) => y - 1); }} />
-            <span className="mono">%{Math.round((YAKINLIKLAR[yakinlik] ?? 1) * 100)}</span>
-            <Dugme simge="zin" aria-label="Yakınlaştır" disabled={yakinlik === YAKINLIKLAR.length - 1} onClick={() => { yakinlikYaz((y) => y + 1); }} />
+            <Dugme simge="zout" aria-label="Uzaklaştır" title="Uzaklaştır (-)" disabled={yakinlik <= EN_AZ_YAKINLIK} onClick={() => { yakinlikYaz(sonrakiYakinlik(yakinlik, -1)); }} />
+            <span className="mono">%{Math.round(yakinlik * 100)}</span>
+            <Dugme simge="zin" aria-label="Yakınlaştır" title="Yakınlaştır (+, Ctrl + tekerlek)" disabled={yakinlik >= EN_COK_YAKINLIK} onClick={() => { yakinlikYaz(sonrakiYakinlik(yakinlik, 1)); }} />
+            <Dugme simge="fit" aria-label="Sığdır" title="Bütün sayfayı göster (0)" disabled={!pdf} onClick={sigdir}><span className="tc-cz-dz-etiket">Sığdır</span></Dugme>
+            <Dugme simge="expand" aria-label={tamEkran ? 'Tam ekrandan çık' : 'Tam ekran'} title="Tam ekran (F, çıkış Esc)" aria-pressed={tamEkran} onClick={() => { tamEkranYaz((t) => !t); }}>
+              <span className="tc-cz-dz-etiket">{tamEkran ? 'Tam ekrandan çık' : 'Tam ekran'}</span>
+            </Dugme>
+            {tamEkran && (
+              <Dugme simge="list" aria-label="Panel" title="Yan paneli aç ya da kapat" aria-pressed={panelAcik} onClick={() => { panelAcikYaz((p) => !p); }}>
+                <span className="tc-cz-dz-etiket">Panel</span>
+              </Dugme>
+            )}
           </div>
           <div ref={kap} className="tc-cz-pdf-kap tc-cz-dz-kap">
-            <div className="tc-cz-dz-sayfa">
+            <div ref={sayfaKutusu} className="tc-cz-dz-sayfa">
               <canvas ref={tuval} className="tc-cz-pdf-tuval" aria-hidden="true" />
               <canvas
                 ref={katman} className="tc-cz-pdf-tuval tc-cz-dz-katman" data-arac={arac} tabIndex={0}

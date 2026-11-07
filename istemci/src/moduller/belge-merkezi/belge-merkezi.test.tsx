@@ -742,6 +742,28 @@ describe('cizimler PDF düzenleme (2123)', () => {
     expect(cagrilar.some((c) => c.yontem === 'POST')).toBe(false);
   });
 
+  it('tam ekran düğmesi ve F tuşu düzenleyiciyi bütün pencereye açar, Esc kapatır; yan panel gizlenebilir; yakınlık %800e çıkar (2221)', async () => {
+    await pdfSunucusu(YAZAR);
+    ac('/cizimler/belge/7/duzenle/11');
+    const arac = await screen.findByRole('toolbar', { name: 'Düzenleme araçları' });
+    await screen.findByRole('button', { name: 'Sonraki' });
+    const bolum = arac.closest('section.tc-cz');
+    if (!bolum) throw new Error('düzenleyici bölümü yok');
+    expect(within(arac).queryByRole('button', { name: 'Panel' })).toBeNull();
+    fireEvent.click(within(arac).getByRole('button', { name: 'Tam ekran' }));
+    expect(bolum.classList.contains('tc-cz-dz-tam')).toBe(true);
+    fireEvent.click(within(arac).getByRole('button', { name: 'Panel' }));
+    expect(bolum.getAttribute('data-panel')).toBe('kapali');
+    fireEvent.keyDown(bolum, { key: 'Escape' });
+    expect(bolum.classList.contains('tc-cz-dz-tam')).toBe(false);
+    fireEvent.keyDown(bolum, { key: 'f' });
+    expect(bolum.classList.contains('tc-cz-dz-tam')).toBe(true);
+    const buyut = within(arac).getByRole('button', { name: 'Yakınlaştır' }) as HTMLButtonElement;
+    for (let i = 0; i < 6; i++) fireEvent.click(buyut);
+    expect(within(arac).getByText('%800')).toBeTruthy();
+    expect(buyut.disabled).toBe(true);
+  });
+
   it('kurum logosu yoksa Logo aracı kapalıdır; değişiklik yokken kaydedilemez', async () => {
     await pdfSunucusu(YAZAR);
     ac('/cizimler/belge/7/duzenle/11');

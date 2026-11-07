@@ -2,8 +2,9 @@ import { describe, expect, test } from 'vitest';
 import type { Oge, SayfaKutusu } from './duzenleme.ts';
 import {
   degistir, degisiklikVarMi, duzenlemeNotu, silinenOzeti, gecmisBaslat, geriAl, gorunumNoktasi, gorunumOlcusu, ileriAl, NOT_EN_UZUN, ogeReddi,
-  pdfKutusu, pdfNoktasi, renkBilesenleri, resimYerlesimi,
+  pdfKutusu, pdfNoktasi, renkBilesenleri, resimYerlesimi, EN_AZ_YAKINLIK, EN_COK_YAKINLIK, sonrakiYakinlik, yakinlikSinirla,
 } from './duzenleme.ts';
+import { EN_COK_ALAN, EN_COK_KENAR, tuvalYogunlugu } from '../goruntu/tuval-siniri.ts';
 
 const A4: SayfaKutusu = { kutu: [0, 0, 595, 842], donme: 0 };
 const KAYIK: SayfaKutusu = { kutu: [10, 20, 605, 862], donme: 0 };
@@ -93,5 +94,31 @@ describe('PDF düzenleme koordinatları (2123)', () => {
     expect(silinenOzeti({ ...sifir, yazi: 2, resim: 1, ortulenResim: 1 }))
       .toBe("PDF'ten silinen: 2 yazı, 1 resim. Alanın dışına taşan 1 resim yalnız örtüldü.");
     expect(duzenlemeNotu('x', 'A', 'g', { ...sifir, cizim: 3 })).toBe("Düzenlendi: x Rev A. PDF'ten silinen: 3 çizim. Gerekçe: g");
+  });
+});
+
+describe('PDF düzenleyici yakınlığı ve tuval sınırı (2221)', () => {
+  test('YK-01: adımlar %25 ile %800 arasında ilerler; aradaki değerden en yakın adıma geçilir', () => {
+    expect(sonrakiYakinlik(1, 1)).toBe(1.5);
+    expect(sonrakiYakinlik(1, -1)).toBe(0.75);
+    expect(sonrakiYakinlik(1.2, 1)).toBe(1.5);
+    expect(sonrakiYakinlik(1.2, -1)).toBe(1);
+    expect(sonrakiYakinlik(EN_COK_YAKINLIK, 1)).toBe(EN_COK_YAKINLIK);
+    expect(sonrakiYakinlik(EN_AZ_YAKINLIK, -1)).toBe(EN_AZ_YAKINLIK);
+    expect(yakinlikSinirla(20)).toBe(EN_COK_YAKINLIK);
+    expect(yakinlikSinirla(0.01)).toBe(EN_AZ_YAKINLIK);
+  });
+
+  test('YK-02: A1 paftada 7 nokta yazı en büyük yakınlıkta okunur boya (en az 12 piksel) çıkar', () => {
+    const sutun = 700, a1En = 2384;
+    expect(7 * (sutun / a1En) * EN_COK_YAKINLIK).toBeGreaterThanOrEqual(12);
+  });
+
+  test('YK-03: tuval yoğunluğu alan ve kenar sınırını aşmaz; küçük sayfada istenen yoğunluk korunur', () => {
+    expect(tuvalYogunlugu(595, 842, 2)).toBe(2);
+    const a1 = tuvalYogunlugu(2384, 1684, 9.4);
+    expect(2384 * a1 * 1684 * a1).toBeLessThanOrEqual(EN_COK_ALAN + 1);
+    const serit = tuvalYogunlugu(20000, 100, 2);
+    expect(20000 * serit).toBeLessThanOrEqual(EN_COK_KENAR + 1e-6);
   });
 });

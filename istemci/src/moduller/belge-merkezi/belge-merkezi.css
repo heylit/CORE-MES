@@ -96,6 +96,19 @@
   .tc-cz-dz-duzen { grid-template-columns: minmax(0, var(--sutun-genis)) minmax(0, var(--sutun-dar)); align-items: start; }
 }
 .tc-cz-dz-kap { max-height: 70vh; touch-action: none; }
+/* Tam ekran (2221): düzenleyici kabuğun üstünde bütün pencereyi kaplar; pencereler (kaydet, vazgeç) yine üstte açılır.
+   Dar ekranda sayfa kutusu ekranın çoğunu alır ve bütün alan kayar; geniş ekranda sayfa kutusu kalan yüksekliği doldurur. */
+.tc-cz-dz-tam { position: fixed; inset: 0; z-index: var(--z-katman); padding: var(--b-3); gap: var(--b-3); background: var(--bg); overflow: auto; }
+.tc-cz-dz-tam .tc-cz-dz-kap { max-height: none; height: var(--ekran-boy-70); }
+.tc-cz-dz-tam[data-panel='kapali'] .tc-cz-yan { display: none; }
+@media (min-width: 1024px) {
+  .tc-cz-dz-tam { overflow: hidden; }
+  .tc-cz-dz-tam .tc-cz-dz-duzen { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .tc-cz-dz-tam .tc-cz-dz-duzen > .tc-kart:first-child { display: flex; flex-direction: column; min-height: 0; padding: var(--b-3); }
+  .tc-cz-dz-tam .tc-cz-dz-kap { flex: 1 1 auto; min-height: 0; height: auto; }
+  .tc-cz-dz-tam .tc-cz-yan { min-height: 0; overflow: auto; }
+  .tc-cz-dz-tam[data-panel='kapali'] .tc-cz-dz-duzen { grid-template-columns: minmax(0, 1fr); }
+}
 .tc-cz-dz-sayfa { position: relative; width: max-content; margin: var(--b-3) auto; }
 .tc-cz-dz-katman { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; outline: none; }
 .tc-cz-dz-katman[data-arac='sec'] { cursor: default; }
