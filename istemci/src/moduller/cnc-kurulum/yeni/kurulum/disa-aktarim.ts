@@ -68,7 +68,7 @@ export function yazdir(html: string): void {
 }
 
 export function kurulumKartiHtml(r: KurulumAktarimi, tarih: string): string {
-  let h = `<h1>CNC Kurulum Kartı</h1><table class="pm"><tr><td>Parça No</td><td>${esc(state.meta.part)}</td><td>Program No</td><td>${esc(state.meta.prog)}</td><td>Operatör</td><td>${esc(state.meta.op)}</td><td>Tarih</td><td>${tarih}</td></tr>${state.meta.stock ? `<tr><td>Hammadde</td><td colspan="7">${esc(state.meta.stock)}</td></tr>` : ''}</table>`;
+  let h = `<h1>CNC Kurulum Kartı</h1><table class="pm"><tr><td>Parça No</td><td>${esc(state.meta.part)}</td><td>Program No</td><td>${esc(state.meta.prog)}</td><td>Operatör</td><td>${esc(state.meta.op)}</td><td>Tarih</td><td>${esc(tarih)}</td></tr>${state.meta.stock ? `<tr><td>Hammadde</td><td colspan="7">${esc(state.meta.stock)}</td></tr>` : ''}</table>`;
   h += `<h2>Genel</h2><table>${r.gen.map((x) => `<tr><th>${esc(x[0])}</th><td>${esc(x[1])}</td><td>${esc(x[2])}</td></tr>`).join('')}</table>`;
   h += `<h2>Takım Listesi</h2><table><tr><th>Cep</th><th>Takım</th><th>Kod</th><th>Tutucu</th><th>Ø</th><th>Z</th><th>Vc</th><th>n</th><th>fz/f</th><th>F</th><th>✓</th></tr>${r.tl.map((x) => `<tr>${x.slice(0, 10).map((v) => `<td>${esc(v)}</td>`).join('')}<td class="ck"></td></tr>`).join('')}</table>`;
   h += `<h2>Ölçüm Aletleri</h2><p>${esc(r.g.join(' · '))}</p><h2>Sarf Malzemeleri</h2><p>${esc(r.c.join(' · '))}</p><p class="pf">Kesme verileri başlangıç değeridir; takım üreticisi kataloğunu esas alın.</p>`;

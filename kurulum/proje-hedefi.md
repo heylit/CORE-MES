@@ -61,7 +61,7 @@ KOORDINATOR KURALLARI
 - Yazar sorusunu kendi konusunda sorar; numarayi koordinatorden alir; koordinator ayni turda soruyu numarasi ve konu baglantisiyla sohbete tasir; karar devir belgesine yazilir.
 - Her degisiklik cekme istegiyle girer ve `kontrol` testi (Windows dahil) yesil olmadan birlesemez.
 - Toplayici dosyalara (paylasilan/sayfalar.ts, paylasilan/islemler.ts ve benzerleri) ve rol x islem satirlarina cekirdek konusu yazar; modul konusu istek verir. Dar istisna proje talimatindadir; birlestirici bunun yalniz o modulun kaydi oldugunu denetler.
-- Birlesme sirasi bir karara bagliysa koordinator sirayi birlestirici konuya acikca yazar; birlestirici sirayi bozmaz. Goc damgasini koordinator verir.
+- Birlesme sirasi bir karara bagliysa koordinator sirayi birlestirici konuya acikca yazar; birlestirici sirayi bozmaz. Goc damgasini koordinator vermez; yazar gercek UTC zamanini kendisi alir (2197-7 a, ayrinti proje-talimati.md).
 - Cekirdek ya da ortak arayuz degisince etkilenen konulara haber ver; onlar guncel ana dali alir.
 - Bir parcanin baska parcadan istegi o parcanin sahibi konuya iletilir; isteyen konu kendisi yazmaz.
 - Karar gereken yerde (dolu tabloyu degistiren sema, yetki modeli, yeni paket, sahiplik, onayli kararla celisme; ayrica proje talimatindaki ONAY listesi) konu durur ve bana sorulur: soru, neden, secenekler, oneri, kopya satiri. Karara bagli olmayan kisim surer. Eski sistem kurallari uygulanmaz, sorulur.

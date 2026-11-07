@@ -10,7 +10,7 @@ Baglantilar: depo https://github.com/heylit/CORE-MES, fork https://github.com/he
 2. Claude ile calisilacaksa Claude GitHub uygulamasini fork'a kur ve oturumu fork'ta ac.
 
 ## Her is icin
-1. Koordinatorden al: kart no, dosya listesi icin kilit, goc varsa goc damgasi. Biri eksikse yazmaya baslanmaz.
+1. Koordinatorden al: kart no, dosya listesi icin kilit. Biri eksikse yazmaya baslanmaz. Goc varsa damgayi kendin al: yazdigin anin UTC zamani, 14 hane (`date -u +%Y%m%d%H%M%S`); birlesmeden once main'deki en buyuk damgadan kucukse yeniden damgala.
 2. Fork'u guncelle (Sync fork ya da `git fetch upstream main && git rebase upstream/main`).
 3. Fork'ta `<kart no>-<kisa-ad>` dali ac; yalniz kilitli dosyalara ve kendi modulunun klasorlerine yaz.
 4. `npm run kontrol`; `npm run harita -- --modul <ad>` ciktisindaki "Ona bagimli" moduller icin `npm run test:modul -- <ad>`.
