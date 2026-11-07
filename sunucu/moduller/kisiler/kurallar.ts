@@ -1,7 +1,9 @@
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
+import { sikParolaMi } from './sik-parolalar.ts';
 
-export const PAROLA_EN_AZ = 8;
+// 2226-9 a: en az 10 karakter ve sık parola kökü yok. Kural yalnız yeni parola konurken uygulanır; var olan parolalar geçerli kalır.
+export const PAROLA_EN_AZ = 10;
 export const PIN_UZUNLUK = 6;
 export const KULLANICI_ADI_DESENI = /^[a-z0-9._-]{3,40}$/;
 export const SICIL_EN_FAZLA = 30;
@@ -94,11 +96,13 @@ export function almaReddi(girdi: {
 // ilk denenenlerdendir; PIN kuralıyla aynı ölçü. Harfin büyüklüğü diziyi bozmaz.
 export function parolaHatasi(parola: string): string | null {
   if (parola.length < PAROLA_EN_AZ) return `Parola en az ${PAROLA_EN_AZ} karakter olmalı.`;
-  const kodlar = [...parola.toLocaleLowerCase('tr')].map((h) => h.codePointAt(0) as number);
+  // Dil bağımsız küçültme: Türkçe küçültme "I"yı "ı" yapar ve ABCDEFGHIJ dizisini bozardı.
+  const kodlar = [...parola.toLowerCase()].map((h) => h.codePointAt(0) as number);
   const farklar = new Set(kodlar.slice(1).map((k, i) => k - (kodlar[i] as number)));
   if (farklar.size === 1 && [0, 1, -1].includes([...farklar][0] as number)) {
     return 'Parola tek karakterin tekrarı ya da sıralı karakterler (12345678, abcdefgh gibi) olamaz.';
   }
+  if (sikParolaMi(parola)) return 'Bu parola çok sık kullanılan bir sözcük ya da diziden oluşuyor; başına ve sonuna rakam eklemek yetmez. Birkaç sözcükten oluşan bir cümle seçin.';
   return null;
 }
 

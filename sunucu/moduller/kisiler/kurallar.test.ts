@@ -75,12 +75,33 @@ describe('başkasının parolası', () => {
 
 describe('giriş bilgisi', () => {
   test('kullanıcı adı ve parola kuralı sınırda sınanır', () => {
-    assert.equal(parolaHatasi('pq'.repeat(PAROLA_EN_AZ / 2)), null);
-    for (const zayif of ['p'.repeat(PAROLA_EN_AZ), '11111111', '12345678', '987654321', 'abcdefgh', 'ABCDEFGH', 'hgfedcba']) {
+    assert.equal(PAROLA_EN_AZ, 10);
+    assert.equal(parolaHatasi('pqrs-tuvw-1'), null);
+    assert.notEqual(parolaHatasi('pq'.repeat(PAROLA_EN_AZ / 2)), null);
+    for (const zayif of ['p'.repeat(PAROLA_EN_AZ), '1111111111', '9876543210', 'abcdefghij', 'ABCDEFGHIJ', 'jihgfedcba']) {
       assert.match(parolaHatasi(zayif) ?? '', /tekrarı ya da sıralı/, zayif);
     }
-    for (const yeterli of ['12345679', 'abcdefgi', 'dogru-parola-1', '11111112']) assert.equal(parolaHatasi(yeterli), null, yeterli);
+    for (const zayif of ['1234567890', '0987654321', '1234567890!', '1212121212', '123123123123', 'abcabcabca', '1qaz2wsx3edc']) {
+      assert.notEqual(parolaHatasi(zayif), null, zayif);
+    }
+    for (const yeterli of ['1234567891', 'abcdefghik', 'dogru-parola-1', '1111111112', 'mavi kapi yedi elma']) assert.equal(parolaHatasi(yeterli), null, yeterli);
     assert.notEqual(parolaHatasi('p'.repeat(PAROLA_EN_AZ - 1)), null);
+    assert.match(parolaHatasi('dogru-par') ?? '', /en az 10/);
+  });
+
+  test('sık parola kökü başına ve sonuna rakam, işaret eklense de reddedilir; Türkçe harf ve sık yer değiştirme açılır', () => {
+    for (const sik of [
+      'Galatasaray1905!', 'parola2024!', 'Qwerty123456', 'P@ssw0rd2024', 'Şifre12345678', 'fenerbahçe1907', 'Besiktas.1903',
+      '2024istanbul', 'mustafa12345', 'qwertyqwerty', 'askimaskim1', 'Seni_Seviyorum1', 'Admin!2024!!',
+    ]) {
+      assert.match(parolaHatasi(sik) ?? '', /çok sık kullanılan/, sik);
+    }
+    for (const yeterli of ['dogru-parola-1', 'galatasaray-sahil-yolu', 'istanbul7ankara3', 'tezgah-sogutma-suyu', 'Kedi ile Kopek 3']) {
+      assert.equal(parolaHatasi(yeterli), null, yeterli);
+    }
+  });
+
+  test('kullanıcı adı kuralı sınırda sınanır', () => {
     assert.equal(kullaniciAdiHatasi('abc'), null);
     assert.notEqual(kullaniciAdiHatasi('ab'), null);
     assert.notEqual(kullaniciAdiHatasi('Büyük Harf'), null);
