@@ -415,14 +415,15 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Uygulama kurumda Windows'ta çalışır: bekçi, yedek ve güncelleyici orada da denenir. Yalnız işletme betiklerinin ve test
-  # robotunun testleri koşar; atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce atlanırsa iş yine yeşil görünür.
-  # PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
+  # Uygulama kurumda Windows'ta çalışır: bekçi, yedek ve güncelleyici orada da denenir; hedef platformda uygulama kodu da
+  # denensin diye sunucu testlerinden bir parça (çekirdek ve en riskli üç modül) koşar. Bütün sunucu testleri koşmaz: süre
+  # Linux işlerinin toplamını aşar. Atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce
+  # atlanırsa iş yine yeşil görünür. PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
   windows:
     needs: kapsam
     if: needs.kapsam.outputs.sunucu == 'true'
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     defaults:
       run:
         shell: bash
@@ -460,6 +461,11 @@ jobs:
         env:
           PGPASSWORD: root
         run: |
+          # Linux sunucu test işindeki gibi: atılacak test sunucusu diske yazmayı beklemez, testlerin gördüğü davranış değişmez.
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
+            -c "ALTER SYSTEM SET fsync = off" -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" -c "ALTER SYSTEM SET max_wal_size = '4GB'" \
+            -c "SELECT pg_reload_conf()"
           "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
             -c "CREATE DATABASE $TMIV2_PG_TEST_DATABASE"
           "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_TEST_DATABASE" \
@@ -470,6 +476,24 @@ jobs:
             araclar/bekci.test.ts araclar/guncelleyici.test.ts araclar/yedek.test.ts 'ekran-testleri/benzetim/**/*.test.ts' 2>&1 | tee test-cikti.txt
           test "${PIPESTATUS[0]}" -eq 0
           grep -qx '# skipped 0' test-cikti.txt && grep -qx '# todo 0' test-cikti.txt \
+            || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
+      # Node hiçbir dosyayla eşleşmeyen deseni hata saymaz: her desenin dosya bulduğu önceden denetlenir ki yol farkı sessiz
+      # yeşil vermesin. Desenler node'a tırnaklı gider, node'un kendi glob'u açar.
+      - name: Sunucu testleri (çekirdek, stok, üretim emirleri, plan)
+        run: |
+          desenler=('sunucu/cekirdek/**/*.test.ts' 'sunucu/moduller/stok/**/*.test.ts'
+            'sunucu/moduller/uretim-emirleri/**/*.test.ts' 'sunucu/moduller/plan/**/*.test.ts')
+          shopt -s globstar nullglob
+          for desen in "${desenler[@]}"; do
+            dosyalar=($desen)
+            [ "${#dosyalar[@]}" -gt 0 ] || { echo "Desen hiçbir test dosyası bulmadı: $desen"; exit 1; }
+            echo "$desen: ${#dosyalar[@]} dosya"
+          done
+          shopt -u globstar nullglob
+          node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test \
+            --test-concurrency="$TMIV2_TEST_ESZAMANLI" --test-reporter=tap "${desenler[@]}" 2>&1 | tee sunucu-test-cikti.txt
+          test "${PIPESTATUS[0]}" -eq 0
+          grep -qx '# skipped 0' sunucu-test-cikti.txt && grep -qx '# todo 0' sunucu-test-cikti.txt \
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
 
   kontrol:
