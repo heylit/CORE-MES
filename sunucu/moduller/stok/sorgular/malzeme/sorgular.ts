@@ -195,6 +195,8 @@ export const degerGrubuMalzemeToplamlari = (db: Db, malzemeIdler: readonly numbe
 // ay sonundan sonraki hareketlerin net etkisi düşülür. Hareket hedef konumuna ekler, kaynak konumundan düşer; hurdaya ya da hurdadan
 // taşıma iki ayrı satırı değiştirir. `son` ayın bittiği an (içinde bulunulan ayda null), `gun` ayın son günü (içinde bulunulan ayda
 // bugün). Her ay en az bir satırla döner; toplamı sıfırın üstünde kart yoksa kart ve toplam null'dır.
+// Hareketler önce ay kovasında toplanır (ay sonu ay başında olduğundan "son'dan sonra" ile "kovası son'dan sonra" aynıdır); yalnız
+// istenen aylardaki hareket okunur, süre tarihçeyle büyümez.
 export interface AySonuToplami { ay: string; son: string | null; gun: string; malzemeId: number | null; hurda: boolean | null; toplam: string | null }
 export const aySonuMalzemeToplamlari = (db: Db, ay: number): Promise<AySonuToplami[]> => db.sorgu(
   `WITH aylar AS (
@@ -205,7 +207,10 @@ export const aySonuMalzemeToplamlari = (db: Db, ay: number): Promise<AySonuTopla
      SELECT h.zaman, h.malzeme_id, k.tur = 'hurda' AS hurda, h.miktar AS d FROM stok_hareketi h JOIN stok_konum k ON k.id = h.hedef_konum_id
      UNION ALL
      SELECT h.zaman, h.malzeme_id, k.tur = 'hurda', -h.miktar FROM stok_hareketi h JOIN stok_konum k ON k.id = h.kaynak_konum_id),
-   net AS (SELECT a.ay, e.malzeme_id, e.hurda, sum(e.d) AS n FROM aylar a JOIN etki e ON e.zaman >= a.son GROUP BY 1, 2, 3),
+   aylik AS (
+     SELECT date_trunc('month', e.zaman) AS kova, e.malzeme_id, e.hurda, sum(e.d) AS n FROM etki e
+     WHERE e.zaman >= (SELECT min(son) FROM aylar) GROUP BY 1, 2, 3),
+   net AS (SELECT a.ay, m.malzeme_id, m.hurda, sum(m.n) AS n FROM aylar a JOIN aylik m ON m.kova >= a.son GROUP BY 1, 2, 3),
    kartlar AS (SELECT malzeme_id, hurda FROM simdi UNION SELECT malzeme_id, hurda FROM net)
    SELECT to_char(a.ay, 'YYYY-MM') AS ay, ${zamanMetni('a.son')} AS son,
      (CASE WHEN a.son IS NULL THEN current_date ELSE (a.ay + interval '1 month' - interval '1 day')::date END)::text AS gun,
