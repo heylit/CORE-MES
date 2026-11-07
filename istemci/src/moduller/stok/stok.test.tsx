@@ -229,11 +229,12 @@ describe('Partiler ve sertifikalar', () => {
     sunucuKur(DEPOCU, {
       'GET /stok/malzemeler/901': () => json(200, AYRINTI),
       'GET /stok/malzemeler/901/son-partiler': () => json(200, { partiler: [
-        { partiId: 12, lotNo: 'LT-000012', tedarikciPartiNo: 'TP-1', dokumNo: 'D-77', sertifikaNo: 'S-1', kayitZamani: '2026-10-13T09:00:00+03:00', belgeler: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A' }] },
+        { partiId: 12, lotNo: 'LT-000012', tedarikciPartiNo: 'TP-1', dokumNo: 'D-77', sertifikaNo: 'S-1', kayitZamani: '2026-10-13T09:00:00+03:00', belgeler: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A', revKodu: '02' }] },
       ] } satisfies SonPartilerCevabi),
     });
     ac('/stok/malzemeler/901');
-    const baglanti = await screen.findByRole('link', { name: /Sertifika S-1 \(HM-001\) \(A\)/ });
+    // 2138-2: merkezin harfi değil revizyon kodu görünür.
+    const baglanti = await screen.findByRole('link', { name: 'Sertifika S-1 (HM-001) (Rev 02)' });
     expect(baglanti.getAttribute('href')).toBe('/api/stok/partiler/12/belgeler/70');
     expect(screen.getByText('D-77')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'LT-000012' }).getAttribute('href')).toBe('/stok/hareketler?partiId=12');
@@ -676,7 +677,7 @@ describe('Mal kabul', () => {
   it('fason dönüşü belgesi giden malzemeyi ve fason kutusunu gösterir; düzeltme satırı hizmet bağı, giden kart ve kutuyla yeniden kurar', async () => {
     const belge = { id: 4, no: 'MK-000004', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 2, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     const ayrinti = { belge, satirlar: [
-      { sira: 1, malzemeId: 904, malzemeAd: 'Deneme mil kaplamalı', sayilanMiktar: '18.000', partiId: 12, partiEtiketi: 'KP-1', partiBelgeleri: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A' }], konumKod: 'KABUL', hareketId: 31, siparisSatirId: 51,
+      { sira: 1, malzemeId: 904, malzemeAd: 'Deneme mil kaplamalı', sayilanMiktar: '18.000', partiId: 12, partiEtiketi: 'KP-1', partiBelgeleri: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A', revKodu: '02' }], konumKod: 'KABUL', hareketId: 31, siparisSatirId: 51,
         fason: { malzemeId: 905, malzemeAd: 'Deneme mil ham', miktar: '20.000', konumId: 77, konumKod: 'FSN-01', hareketId: 32, hizmetMalzemeId: 903 }, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false },
       { sira: 2, malzemeId: 906, malzemeAd: 'Deneme kalibrasyon', sayilanMiktar: '1.000', partiId: null, partiEtiketi: null, partiBelgeleri: [], konumKod: null, hareketId: null, siparisSatirId: 52,
         fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false },
@@ -690,7 +691,7 @@ describe('Mal kabul', () => {
     expect(await screen.findByText('Giden Deneme mil ham × 20 (FSN-01)')).toBeTruthy();
     expect(screen.getByRole('columnheader', { name: 'Fasondan dönüş' })).toBeTruthy();
     expect(screen.getByText('Hizmet: stoğa girmez')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Sertifika S-1 \(HM-001\) \(A\)/ }).getAttribute('href')).toBe('/api/stok/partiler/12/belgeler/70');
+    expect(screen.getByRole('link', { name: 'Sertifika S-1 (HM-001) (Rev 02)' }).getAttribute('href')).toBe('/api/stok/partiler/12/belgeler/70');
     fireEvent.click(screen.getByRole('button', { name: 'Düzelt' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Düzeltme belgesi aç' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));

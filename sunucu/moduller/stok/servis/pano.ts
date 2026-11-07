@@ -293,7 +293,7 @@ export async function sayimBekleyenler(db: Db): Promise<{ gun: number; gozler: {
 export async function partiBelgeleri(db: Db, partiIdler: number[]): Promise<Map<number, PartiBelgesi[]>> {
   if (partiIdler.length === 0) return new Map();
   const bagli = await kayitlaraBagliBelgeler(db, 'stok', [...new Set(partiIdler)]);
-  return new Map([...bagli].map(([id, l]) => [id, l.map(({ id: belgeId, ad, tur, harf }) => ({ id: belgeId, ad, tur, harf }))]));
+  return new Map([...bagli].map(([id, l]) => [id, l.map(({ id: belgeId, ad, tur, harf, revKodu }) => ({ id: belgeId, ad, tur, harf, revKodu }))]));
 }
 export async function sonPartiler(db: Db, malzemeId: number, sinir: number): Promise<SonParti[]> {
   const partiler = await sorgular.sonPartiler(db, malzemeId, sinir);

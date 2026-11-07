@@ -631,7 +631,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     const r = await malKabul(h, '4', { parti: { tedarikciPartiNo: 'TP-S', sertifikaNo: 'S-9' }, sertifika: { ozet, dosyaAdi: 'sertifika.pdf' } });
     assert.equal(r.durum, 200, JSON.stringify(r.govde));
     const [p] = await o().vt.tx((db) => sonPartiler(db, h));
-    assert.deepEqual(p?.belgeler.map((b) => [b.tur, b.harf]), [['sertifika', 'A']]);
+    // 2138-2: kodu olmayan sertifikada gösterilen revizyon boştur; harf yalnız merkezin iç sırasıdır.
+    assert.deepEqual(p?.belgeler.map((b) => [b.tur, b.harf, b.revKodu]), [['sertifika', 'A', null]]);
     assert.match(p?.belgeler[0]?.ad ?? '', /S-9/);
     // #1013: mal kabul ayrıntısı partinin sertifikasını taşır; dosya stok'un ucundan, yalnız o partiye bağlıysa verilir.
     const ayrinti = await depo<MalKabulAyrintiCevabi>('GET', `/stok/mal-kabuller/${r.govde.belge.id}`);
