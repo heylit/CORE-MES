@@ -1,7 +1,7 @@
-import { DOSYA_TURLERI } from '#paylasilan/sozlesme/dosya.ts';
 import { createHash } from 'node:crypto';
 import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { HataliKarari, HataliKaydiOzeti, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -11,8 +11,10 @@ import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
 export const KM_MODULU = 'kalite-merkezi';
 
-// Uygulamanın dosya sınırı (resim, model, fotoğraf, sertifika): 50 MB; tür ortak deponun tanıdıklarıdır.
-export const KM_DOSYA_SINIRI = { turler: DOSYA_TURLERI, azamiBayt: 50 * 1024 * 1024 } as const;
+// Uygulamanın dosya sınırı (resim, model, fotoğraf, sertifika): 50 MB. Liste açık yazılır: ortak depoya eklenen tür (ofis belgesi,
+// ADR 0030, 9) buraya kendiliğinden girmez.
+const KM_DOSYA_TURLERI = ['pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf', 'dxf', 'mp4'] as const satisfies readonly DosyaTuru[];
+export const KM_DOSYA_SINIRI = { turler: KM_DOSYA_TURLERI, azamiBayt: 50 * 1024 * 1024 } as const;
 
 export const IZ_KOLEKSIYONU: KaliteMerkeziKoleksiyonu = 'iz';
 

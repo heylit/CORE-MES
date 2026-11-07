@@ -22,6 +22,34 @@ interface Oturum { cerez: string; id: number }
 // Sentetik içerik: imza türü belirler (dosya modülü türü içerikten bulur), gerisi rastgele.
 const pdf = (): Buffer => Buffer.concat([Buffer.from('%PDF-1.7\n'), randomBytes(1200)]);
 const step = (): Buffer => Buffer.concat([Buffer.from('ISO-10303-21;\nHEADER;\n'), randomBytes(800)]);
+// Sentetik ofis belgesi: tek girdili zip (içerik türleri), sıkıştırmasız; sonda merkez dizini. Gerçek belge içeriği yoktur.
+const ofis = (anaTur: string, ekGirdi?: string): Buffer => {
+  const girdiler: [string, Buffer][] = [
+    ['[Content_Types].xml', Buffer.from(`<Types><Override PartName="/a.xml" ContentType="application/vnd.${anaTur}.main+xml"/></Types>`)],
+    ...(ekGirdi === undefined ? [] : [[ekGirdi, randomBytes(64)] as [string, Buffer]]),
+  ];
+  const yereller: Buffer[] = [];
+  const merkez: Buffer[] = [];
+  let konum = 0;
+  for (const [ad, veri] of girdiler) {
+    const adB = Buffer.from(ad);
+    const y = Buffer.alloc(30);
+    y.writeUInt32LE(0x04034b50, 0); y.writeUInt32LE(veri.length, 18); y.writeUInt32LE(veri.length, 22); y.writeUInt16LE(adB.length, 26);
+    const m = Buffer.alloc(46);
+    m.writeUInt32LE(0x02014b50, 0); m.writeUInt32LE(veri.length, 20); m.writeUInt32LE(veri.length, 24); m.writeUInt16LE(adB.length, 28);
+    m.writeUInt32LE(konum, 42);
+    yereller.push(y, adB, veri);
+    merkez.push(m, adB);
+    konum += 30 + adB.length + veri.length;
+  }
+  const dizin = Buffer.concat(merkez);
+  const son = Buffer.alloc(22);
+  son.writeUInt32LE(0x06054b50, 0); son.writeUInt16LE(girdiler.length, 10); son.writeUInt32LE(dizin.length, 12); son.writeUInt32LE(konum, 16);
+  return Buffer.concat([...yereller, dizin, son]);
+};
+const WORD = 'openxmlformats-officedocument.wordprocessingml.document';
+const EXCEL = 'openxmlformats-officedocument.spreadsheetml.sheet';
+const metin = (s: string): Buffer => Buffer.from(`${s}\n${randomUUID()}\n`, 'utf8');
 const ozetOf = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
@@ -207,6 +235,38 @@ describe('ortak dosyalar (gerçek PostgreSQL, gerçek giriş)', () => {
     const ozet = await icerikGonder(mudur, baskasi);
     const red = await gonder(kalite, `/ortak-dosyalar/klasorler/${duyurular.id}/yukle`, { ad: 'Kopya.pdf', ozet });
     assert.equal(red.statusCode, 400, red.body);
+  });
+
+  test('OD-7 ofis belgesi, düz metin ve csv yüklenir; makrolu belge reddedilir', async () => {
+    const durumlar: [string, Buffer][] = [
+      ['Talimat.docx', ofis(WORD)], ['Liste.xlsx', ofis(EXCEL)], ['Not.txt', metin('Vardiya notu')], ['Sayim.csv', metin('kod;adet\nA1;4\nA2;6')],
+    ];
+    for (const [ad, icerik] of durumlar) {
+      const c = await yukle(kalite, duyurular.id, ad, icerik);
+      assert.equal(c.statusCode, 200, `${ad} ${c.body}`);
+      const inen = await oku(kalite, `/ortak-dosyalar/klasorler/${duyurular.id}/dosyalar/${c.json<OrtakDosya>().id}/surumler/1/dosya`);
+      assert.equal(inen.statusCode, 200, `${ad} ${inen.body}`);
+      assert.ok(inen.rawPayload.equals(icerik), ad);
+      assert.match(String(inen.headers['content-disposition']), /^attachment;/);
+    }
+    // Makrolu belge dosya modülünce tanınmaz: içerik daha depoya girerken reddedilir.
+    const makro = ofis(WORD, 'word/vbaProject.bin');
+    const red = await app.inject({
+      method: 'POST', url: `/api/dosyalar/${ozetOf(makro)}/parca`, payload: { sira: 0, toplam: 1, veri: makro.toString('base64') }, headers: { cookie: kalite.cerez },
+    });
+    assert.equal(red.statusCode, 400, red.body);
+  });
+
+  test('OD-18 dosya adının uzantısı içerikle uyuşmalı: .bat adlı metin, .exe adlı PDF, uzantısız ad 400; hiçbir kayıt kalmaz', async () => {
+    const once = (await oku(kalite, `/ortak-dosyalar/klasorler/${duyurular.id}/dosyalar`)).json<DosyalarCevabi>().dosyalar.length;
+    for (const [ad, icerik] of [['Calistir.bat', metin('@echo off')], ['Rapor.exe', pdf()], ['Rapor', pdf()], ['Liste.docx', ofis(EXCEL)]] as const) {
+      const c = await yukle(kalite, duyurular.id, ad, icerik);
+      assert.equal(c.statusCode, 400, `${ad} ${c.body}`);
+      assert.match(c.body, new RegExp(ILETILER.uzantiUyusmuyor.slice(0, 20)));
+    }
+    const sonra = (await oku(kalite, `/ortak-dosyalar/klasorler/${duyurular.id}/dosyalar`)).json<DosyalarCevabi>().dosyalar.length;
+    assert.equal(sonra, once);
+    assert.equal((await yukle(kalite, duyurular.id, 'Buyuk Harf.PDF')).statusCode, 200);
   });
 
   test('OD-12 arşiv yonetir ister; arşivdeki dosya listelenmez, indirilmez; geri alınır; aynı adlı etkin dosya varken geri alma 409', async () => {

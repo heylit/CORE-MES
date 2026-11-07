@@ -10,7 +10,7 @@ import type { BagliDosya, DosyaParcasiGovdesi, DosyaTuru } from '#paylasilan/soz
 import { diskDizini, diskeYaz, diskeYazilabilir, disktenOku, disktenSil } from './disk-deposu.ts';
 import {
   BAYAT_SERIT_GUN, DISK_BEKLEME_GUN, DOSYA_MIME, IKILI, DOSYA_SINIRI, ILETILER, SAHIPSIZ_GUN, TEMIZLIK_SINIRI, TEMIZLIK_TUR_SORGUSU, bagReddi, kotaHatasi,
-  modulAdiBicimli, turBul,
+  modulAdiBicimli, seritTuru, turBul,
 } from './kurallar.ts';
 import type { BagSiniri, DosyaSiniri, SaklananTur } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -104,14 +104,19 @@ async function yuklemeyiTamamla(db: Db, kisiId: number, ozet: string, toplam: nu
   // Özet parça parça hesaplanır: dosya bütün halde belleğe alınmaz.
   const ozetci = createHash('sha256');
   let ilk: Buffer | null = null;
+  // Zip'in (ofis belgesi) merkez dizini sondadır: son iki parça da tutulur, yeter ki dizin parça sınırına denk gelsin.
+  let onceki: Buffer | null = null;
+  let son: Buffer | null = null;
   for (let sira = 0; sira < toplam; sira += 1) {
     const parca = await sorgular.seritParcasi(db, ozet, kisiId, sira);
     if (parca === null) throw new Error(`Yükleme şeridinde parça eksik: ${ozet} ${sira}`);
     ilk ??= parca;
+    if (sira > 0) [onceki, son] = [son, parca];
     ozetci.update(parca);
   }
   if (ozetci.digest('hex') !== ozet) return yuklemeyiReddet(db, ozet, kisiId, dogrulama(ILETILER.ozetTutmuyor, 'ozet'));
-  const tur = ilk === null ? null : turBul(ilk, boyut);
+  const kuyruk = son === null ? undefined : onceki === null ? son : Buffer.concat([onceki, son]);
+  const tur = ilk === null ? null : turBul(ilk, boyut, kuyruk);
   if (tur === null) return yuklemeyiReddet(db, ozet, kisiId, dogrulama(ILETILER.turYok, 'veri'));
   // Aynı özeti iki kişi birden tamamlarsa özet kilidi sıraya koyar; ikincisi dosyayı hazır bulur ve yalnız yükleyen olarak eklenir.
   await sorgular.ozetKilitle(db, ozet);
@@ -215,7 +220,7 @@ async function icerikYaz(db: Db, kisiId: number, ozet: string, icerik: Buffer): 
     return var_.tur;
   }
   if (icerik.length === 0) throw dogrulama('Parça boş olamaz.', 'veri');
-  const tur = turBul(icerik, icerik.length) ?? IKILI;
+  const tur = seritTuru(icerik);
   const parcalar: Buffer[] = [];
   for (let bas = 0; bas < icerik.length; bas += DOSYA_PARCASI) parcalar.push(icerik.subarray(bas, bas + DOSYA_PARCASI));
   await sorgular.icerikliDosyaEkle(db, ozet, kisiId, tur, parcalar);

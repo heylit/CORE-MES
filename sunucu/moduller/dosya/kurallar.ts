@@ -1,10 +1,11 @@
+import { inflateRawSync } from 'node:zlib';
 import { AZAMI_DOSYA } from '#paylasilan/sozlesme/dosya.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 
 export const ILETILER = {
   ozetTutmuyor: 'Dosya içeriği özetle uyuşmuyor; yükleme baştan yapılmalı.',
   parcaUyusmuyor: 'Parça sayısı önceki parçalarla uyuşmuyor.',
-  turYok: 'Dosya türü desteklenmiyor (PDF, PNG, JPEG, WEBP, STEP, STL, IGES, GLB, GLTF, DXF, MP4).',
+  turYok: 'Dosya türü desteklenmiyor (PDF, PNG, JPEG, WEBP, STEP, STL, IGES, GLB, GLTF, DXF, MP4, DOCX, XLSX, PPTX, TXT, CSV; makrolu belge kabul edilmez).',
   dosyaBuyuk: 'Dosya boyut sınırını aşıyor.',
   kotaYukleme: 'Açık yükleme sayısı sınırına ulaşıldı; önce başlattığınız yüklemeleri tamamlayın.',
   kotaBayt: 'Açık yüklemelerinizin toplam boyutu sınırı aştı.',
@@ -49,6 +50,11 @@ export const DOSYA_MIME: Readonly<Record<SaklananTur, string>> = {
   gltf: 'model/gltf+json',
   dxf: 'image/vnd.dxf',
   mp4: 'video/mp4',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
   ikili: 'application/octet-stream',
 };
 
@@ -60,7 +66,8 @@ const basliyorMu = (b: Buffer, imza: readonly number[] | string, konum = 0): boo
 // Tür içerikten bulunur: yükleyenin bildirdiği ad ya da MIME tarayıcıda çalışan içerik kaçırabilir.
 // İkili STL'nin imzası yoktur; boyutu üçgen sayısıyla tutarsa STL sayılır. ASCII STL "solid" ile başlar; ikili başlık da bu
 // sözcükle başlayabildiği için önce boyut kuralına bakılır.
-export function turBul(ilk: Buffer, boyut: number): DosyaTuru | null {
+// `kuyruk`: ilk parçada bitmeyen dosyanın son baytları (yükleme şeridi son iki parçayı verir); yalnız zip'in merkez dizini için okunur.
+export function turBul(ilk: Buffer, boyut: number, kuyruk?: Buffer): DosyaTuru | null {
   if (basliyorMu(ilk, '%PDF-')) return 'pdf';
   if (basliyorMu(ilk, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'png';
   if (basliyorMu(ilk, [0xff, 0xd8, 0xff])) return 'jpeg';
@@ -79,13 +86,148 @@ export function turBul(ilk: Buffer, boyut: number): DosyaTuru | null {
   if (/^(?:[ \t]*999\r?\n[^\n]*\n)*[ \t]*0\r?\n[ \t]*SECTION\r?\n/.test(bas)) return 'dxf';
   // glTF JSON'da `asset` zorunlu üst alandır; yalnız JSON olmak yetmez.
   if (/^\uFEFF?\s*\{/.test(ilk.subarray(0, 1024).toString('utf8')) && /"asset"\s*:\s*\{/.test(ilk.toString('utf8'))) return 'gltf';
+  if (basliyorMu(ilk, [0x50, 0x4b, 0x03, 0x04])) return ofisTuru(ilk, boyut, kuyruk);
+  return metinTuru(ilk, boyut);
+}
+
+// Ofis belgeleri (ADR 0030, 9) yalnız Ortak Dosyalar'ın sınırındadır. Modülün kendi şeridi (Arkon) ve ek uçları bu türleri eskisi gibi
+// ikili sayar: öteki modüllerin bağ sınırı ve ek davranışı değişmez.
+export const YALNIZ_ORTAK_TURLER: ReadonlySet<DosyaTuru> = new Set<DosyaTuru>(['docx', 'xlsx', 'pptx', 'txt', 'csv']);
+const eskiTur = (tur: DosyaTuru | null): DosyaTuru | null => (tur === null || YALNIZ_ORTAK_TURLER.has(tur) ? null : tur);
+export const seritTuru = (icerik: Buffer): SaklananTur => eskiTur(turBul(icerik, icerik.length)) ?? IKILI;
+
+// OOXML bir zip'tir; tür, zip'teki `[Content_Types].xml` içindeki ana parçanın türünden bulunur. Girdiler zip'in sonundaki merkez
+// dizininden okunur: LibreOffice bu dosyayı sona yazar ve boyutu yerel başlıkta vermez (bayrak 3; denendi). Dizin ya da içerik türleri
+// eldeki baytlarda (ilk parça, kuyruk) değilse, makro (vbaProject, macroEnabled) bulunursa ya da tür belirsizse dosya tanınmaz.
+const ZIP_YEREL = 0x04034b50;
+const ZIP_MERKEZ = 0x02014b50;
+const ZIP_SON = 0x06054b50;
+const ICERIK_TURLERI = '[Content_Types].xml';
+const ICERIK_TURLERI_AZAMI = 1024 * 1024;
+const MAKRO_PARCASI = /(?:^|\/)vba(?:Project\.bin|Data\.xml)$/i;
+const OFIS_ANA_PARCASI: readonly [RegExp, DosyaTuru][] = [
+  [/application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document\.main\+xml/, 'docx'],
+  [/application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet\.main\+xml/, 'xlsx'],
+  [/application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation\.main\+xml/, 'pptx'],
+];
+
+// Dosyadaki [konum, konum + uzunluk) aralığı ilk parçada ya da kuyrukta bütünse döner.
+function aralik(ilk: Buffer, boyut: number, kuyruk: Buffer, konum: number, uzunluk: number): Buffer | null {
+  if (konum < 0 || uzunluk < 0 || konum + uzunluk > boyut) return null;
+  if (konum + uzunluk <= ilk.length) return ilk.subarray(konum, konum + uzunluk);
+  const kuyrukBasi = boyut - kuyruk.length;
+  if (konum >= kuyrukBasi) return kuyruk.subarray(konum - kuyrukBasi, konum - kuyrukBasi + uzunluk);
   return null;
+}
+
+interface ZipGirdisi { ad: string; yontem: number; sikisik: number; yerel: number }
+
+function merkezDizini(ilk: Buffer, boyut: number, kuyruk: Buffer): ZipGirdisi[] | null {
+  const kuyrukBasi = boyut - kuyruk.length;
+  const enErken = Math.max(0, kuyruk.length - 22 - 0xffff);
+  let sonKayit = -1;
+  for (let i = kuyruk.length - 22; i >= enErken; i -= 1) {
+    if (kuyruk.readUInt32LE(i) === ZIP_SON) { sonKayit = i; break; }
+  }
+  if (sonKayit < 0) return null;
+  const adet = kuyruk.readUInt16LE(sonKayit + 10);
+  const dizinBoyu = kuyruk.readUInt32LE(sonKayit + 12);
+  const dizinBasi = kuyruk.readUInt32LE(sonKayit + 16);
+  // ZIP64 (4 GB üstü) bu sınırda (200 MB) olmaz; işaretli değer tanınmaz.
+  if (dizinBasi === 0xffffffff || dizinBasi + dizinBoyu > kuyrukBasi + sonKayit) return null;
+  const dizin = aralik(ilk, boyut, kuyruk, dizinBasi, dizinBoyu);
+  if (dizin === null) return null;
+  const girdiler: ZipGirdisi[] = [];
+  let k = 0;
+  while (girdiler.length < adet) {
+    if (k + 46 > dizin.length || dizin.readUInt32LE(k) !== ZIP_MERKEZ) return null;
+    const adUzunlugu = dizin.readUInt16LE(k + 28);
+    const sonrakine = 46 + adUzunlugu + dizin.readUInt16LE(k + 30) + dizin.readUInt16LE(k + 32);
+    if (k + sonrakine > dizin.length) return null;
+    girdiler.push({
+      ad: dizin.subarray(k + 46, k + 46 + adUzunlugu).toString('utf8'),
+      yontem: dizin.readUInt16LE(k + 10), sikisik: dizin.readUInt32LE(k + 20), yerel: dizin.readUInt32LE(k + 42),
+    });
+    k += sonrakine;
+  }
+  return girdiler;
+}
+
+function ofisTuru(ilk: Buffer, boyut: number, kuyruk: Buffer = ilk.subarray(0, boyut)): DosyaTuru | null {
+  const girdiler = merkezDizini(ilk, boyut, kuyruk);
+  if (girdiler === null || girdiler.some((g) => MAKRO_PARCASI.test(g.ad))) return null;
+  const girdi = girdiler.find((g) => g.ad === ICERIK_TURLERI);
+  if (girdi === undefined) return null;
+  const baslik = aralik(ilk, boyut, kuyruk, girdi.yerel, 30);
+  if (baslik === null || baslik.readUInt32LE(0) !== ZIP_YEREL) return null;
+  const veriBasi = girdi.yerel + 30 + baslik.readUInt16LE(26) + baslik.readUInt16LE(28);
+  const veri = aralik(ilk, boyut, kuyruk, veriBasi, girdi.sikisik);
+  const turler = veri === null ? null : icerikTurleriniAc(veri, girdi.yontem);
+  if (turler === null || /macroEnabled|vbaProject/i.test(turler)) return null;
+  const bulunan = OFIS_ANA_PARCASI.filter(([desen]) => desen.test(turler)).map(([, tur]) => tur);
+  return bulunan.length === 1 ? bulunan[0] ?? null : null;
+}
+
+function icerikTurleriniAc(veri: Buffer, yontem: number): string | null {
+  try {
+    if (yontem === 0) return veri.subarray(0, ICERIK_TURLERI_AZAMI).toString('utf8');
+    if (yontem === 8) return inflateRawSync(veri, { maxOutputLength: ICERIK_TURLERI_AZAMI }).toString('utf8');
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// Düz metin ve csv: imza yoktur. Denetim karakteri (sekme, satır sonu dışında) bulunmayan içerik metindir; UTF-8 ya da Türkçe
+// Windows kod sayfası olabilir (Excel'in csv'si; VARSAYIM). İşaretleme (`<` ile başlayan: HTML, SVG, XML) ve betik (`#!`) metin sayılmaz.
+// Uzantının içerikle uyuşması bağlayan modülün işidir (Ortak Dosyalar: `.bat` adlı metin reddedilir).
+const METIN_ORNEGI = 64 * 1024;
+const METIN_YUKSEK_ORANI = 0.2;
+const AYIRICILAR = [';', ',', '\t'] as const;
+
+// Örnek dosyanın ortasında kesilebilir: sondaki yarım karakter hata sayılmaz (stream).
+const utf8Mi = (b: Buffer): boolean => {
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(b, { stream: true });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+function metinTuru(ilk: Buffer, boyut: number): 'txt' | 'csv' | null {
+  if (boyut === 0 || ilk.length === 0) return null;
+  const ornek = ilk.subarray(0, METIN_ORNEGI);
+  let yuksek = 0;
+  for (const b of ornek) {
+    if ((b < 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) || b === 0x7f) return null;
+    if (b >= 0x80) yuksek += 1;
+  }
+  // Geçerli UTF-8 metindir. Değilse (Türkçe Windows kod sayfası) ASCII dışı bayt az olmalıdır; ikili içerikte yarıya yakındır. Sınır VARSAYIM.
+  if (!utf8Mi(ornek) && yuksek > ornek.length * METIN_YUKSEK_ORANI) return null;
+  const yazi = ornek.toString('latin1').replace(/^\xEF\xBB\xBF/, '');
+  const bas = yazi.trimStart();
+  if (bas.startsWith('<') || bas.startsWith('#!')) return null;
+  return csvMi(yazi, ornek.length < boyut) ? 'csv' : 'txt';
+}
+
+// En az iki dolu satırda aynı ayırıcı, her satırda aynı sayıda (en az bir) geçiyorsa csv'dir. Örnek dosyanın tamamı değilse son satır
+// yarım olabilir, sayılmaz. Tırnak içindeki ayırıcı ayrılmaz (VARSAYIM: sezgi; yanlış ayrım yalnız türü txt yapar, dosya yine kabul edilir).
+function csvMi(yazi: string, yarim: boolean): boolean {
+  const satirlar = yazi.split(/\r?\n/);
+  if (yarim) satirlar.pop();
+  const dolu = satirlar.filter((s) => s.trim() !== '').slice(0, 10);
+  if (dolu.length < 2) return false;
+  return AYIRICILAR.some((a) => {
+    const sayilar = dolu.map((s) => s.split(a).length - 1);
+    return sayilar[0] !== undefined && sayilar[0] > 0 && sayilar.every((n) => n === sayilar[0]);
+  });
 }
 
 // İçeriği base64 JSON ile taşıyan ek uçları (Denetim Hazırlığı; Mesaj ve Portal da aynı kalıptadır) için tür. Yükleyenin bildirdiği
 // tür HTML ya da SVG olabilir ve tarayıcıda Blob olarak açılınca betik çalıştırır; tür içerikten bulunur, tanınmayan içerik indirilir.
 export function ekMime(icerik: Buffer): string {
-  return DOSYA_MIME[turBul(icerik, icerik.length) ?? IKILI];
+  return DOSYA_MIME[seritTuru(icerik)];
 }
 
 export type KotaReddi = 'kotaYukleme' | 'kotaBayt' | 'kotaBagsiz' | 'kotaDepo';

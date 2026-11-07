@@ -17,6 +17,7 @@ export const ILETILER = {
   rolYok: 'Rol bulunamadı.',
   zatenArsivde: 'Dosya zaten arşivde.',
   arsivdeDegil: 'Dosya arşivde değil.',
+  uzantiUyusmuyor: 'Dosya adının uzantısı içeriğiyle uyuşmuyor; dosyayı kendi uzantısıyla yükleyin.',
 } as const;
 
 // OD-1: düzeyler sıralıdır, üstteki alttakini içerir.
@@ -85,6 +86,23 @@ export function gorunurMu(id: number, klasorler: ReadonlyMap<number, KlasorDugum
 // OD-6: ad tekilliği tr-TR, büyük-küçük harf duyarsız; Unicode biçimi birleştirilir (aynı görünen iki ad aynı anahtarı alır).
 export const adAnahtari = (ad: string): string => ad.trim().normalize('NFC').toLocaleLowerCase('tr-TR');
 
-// OD-7 (ADR 0030, 9): ortak klasörün kabul ettiği türler. Ofis belgeleri (docx, xlsx, pptx), düz metin ve csv kart 2076 ile
-// sözleşmeye girince buraya eklenir (UYUM-BORCU). Makrolu tür ve çalıştırılabilir dosya `dosya` modülünce tanınmaz, reddedilir.
-export const ORTAK_DOSYA_TURLERI = ['pdf', 'png', 'jpeg', 'webp'] as const satisfies readonly DosyaTuru[];
+// OD-7 (ADR 0030, 9): ortak klasörün kabul ettiği türler. Makrolu tür ve çalıştırılabilir dosya `dosya` modülünce tanınmaz, reddedilir.
+export const ORTAK_DOSYA_TURLERI = [
+  'pdf', 'png', 'jpeg', 'webp', 'docx', 'xlsx', 'pptx', 'txt', 'csv',
+] as const satisfies readonly DosyaTuru[];
+export type OrtakDosyaTuru = (typeof ORTAK_DOSYA_TURLERI)[number];
+
+// OD-18: indirilen dosya yükleyenin verdiği adla kaydedilir; içerikle uyuşmayan uzantı (ör. `.bat` adlı düz metin) açılınca çalışabilir.
+// Ad, içerikten bulunan türün uzantılarından biriyle bitmelidir (büyük-küçük harf duyarsız).
+const UZANTILAR: Readonly<Record<OrtakDosyaTuru, readonly string[]>> = {
+  pdf: ['pdf'], png: ['png'], jpeg: ['jpg', 'jpeg', 'jpe', 'jfif'], webp: ['webp'],
+  docx: ['docx'], xlsx: ['xlsx'], pptx: ['pptx'], txt: ['txt', 'csv'], csv: ['csv', 'txt'],
+};
+const ortakTurMu = (tur: string): tur is OrtakDosyaTuru => (ORTAK_DOSYA_TURLERI as readonly string[]).includes(tur);
+
+export function uzantiUyarMi(ad: string, tur: string): boolean {
+  if (!ortakTurMu(tur)) return false;
+  const nokta = ad.lastIndexOf('.');
+  if (nokta <= 0 || nokta === ad.length - 1) return false;
+  return UZANTILAR[tur].includes(ad.slice(nokta + 1).toLowerCase());
+}

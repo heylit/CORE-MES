@@ -11,7 +11,7 @@ import type {
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { DOSYA_SINIRI, denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
-import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, duzeyCoz, enAzMi, gorunurMu, yetkiKaynagi } from './kurallar.ts';
+import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, duzeyCoz, enAzMi, gorunurMu, uzantiUyarMi, yetkiKaynagi } from './kurallar.ts';
 import type { KlasorDugumu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -201,6 +201,8 @@ export async function yukle(
   const dosyaId = var_?.id ?? await kisitKorumali(DOSYA_KISITLARI, () => s.dosyaEkle(db, { klasorId, ad, adAnahtari: anahtar }));
   const sira = await s.surumEkle(db, { dosyaId, ozet: girdi.ozet, boyut: 0, kisiId: kullanici.id });
   const bag = await tutamak.dosyaBagla(db, kullanici, { ozet: girdi.ozet, kayit: String(sira.id), ad, belgeTuru: null }, BAG_SINIRI);
+  // Uç transaction içindedir: ret açılan dosyayı, sürümü ve bağı geri alır.
+  if (!uzantiUyarMi(ad, bag.tur)) throw dogrulama(ILETILER.uzantiUyusmuyor, 'ad');
   await s.surumBoyutuYaz(db, sira.id, bag.boyut);
   if (var_ !== null) await s.dosyaSurumunuArtir(db, dosyaId);
   denetimEki([{ ...denetimSatiri('bagla', { ...bag }), dosyaId, surumSirasi: sira.sira }]);
