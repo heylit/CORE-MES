@@ -20,6 +20,7 @@ import {
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { emirBitir } from './servis.ts';
 import * as s from './sorgular.ts';
+import { HATALI_LISTE_SINIRI, hataliAdimAdetleri, hataliKayitSayilari } from './sorgular/kapanis/sorgular.ts';
 import type { HataliKaydiSatiri, IsEmriSatiri } from './sorgular.ts';
 
 const KALITE_ADIMI = 'Kalite kararı';
@@ -225,4 +226,16 @@ export async function hataliKayitlari(db: Db, secim: { acik: boolean; emirId: nu
 export async function hataliKaydi(db: Db, id: number): Promise<HataliKaydiOzeti | null> {
   const satir = await s.hataliKaydiBul(db, id);
   return satir === null ? null : (await ozetle(db, [satir]))[0] ?? null;
+}
+
+// Emir başına adımların hatalı adet toplamı (emirId -> isEmriId -> adet), hataliKayitlari'nın emir listesiyle aynı sonuç: kaydı liste
+// sınırına (HATALI_LISTE_SINIRI) ulaşan emirde liste eksik kalırdı, toplam bilinmez sayılır ve emir haritada yoktur. Toplu okumadır.
+export async function hataliAdimToplamlari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, Map<number, number>>> {
+  const idler = [...new Set(emirIdleri)];
+  const sonuc = new Map<number, Map<number, number>>();
+  if (idler.length === 0) return sonuc;
+  const sayilar = new Map((await hataliKayitSayilari(db, idler)).map((x) => [x.emirId, x.sayi]));
+  for (const id of idler) if ((sayilar.get(id) ?? 0) < HATALI_LISTE_SINIRI) sonuc.set(id, new Map());
+  for (const x of await hataliAdimAdetleri(db, idler)) sonuc.get(x.emirId)?.set(x.isEmriId, x.adet);
+  return sonuc;
 }

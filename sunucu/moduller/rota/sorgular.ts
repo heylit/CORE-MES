@@ -1179,3 +1179,13 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
+
+// Birden çok (malzeme, adım) için geçerli talimat tek sorguda: her anahtarın en yüksek sürümü (talimatlar() ilk satırıyla aynı).
+export function gecerliTalimatlarToplu(db: Db, malzemeIdleri: readonly number[], opNolari: readonly number[]): Promise<{ malzemeId: number; opNo: number; surum: number; metin: string }[]> {
+  return db.sorgu(
+    `SELECT DISTINCT ON (t.malzeme_id, t.op_no) t.malzeme_id AS "malzemeId", t.op_no AS "opNo", t.surum, t.metin
+       FROM rota_talimati t JOIN unnest($1::int[], $2::int[]) AS k(malzeme_id, op_no) ON t.malzeme_id = k.malzeme_id AND t.op_no = k.op_no
+      ORDER BY t.malzeme_id, t.op_no, t.surum DESC`,
+    [[...malzemeIdleri], [...opNolari]],
+  );
+}

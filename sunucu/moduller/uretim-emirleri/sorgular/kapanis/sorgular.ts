@@ -248,3 +248,22 @@ export function kapanisDurumlari(db: Db, idler: readonly number[]): Promise<Kapa
        FROM uretim_emirleri_kapanis k JOIN uretim_emri e ON e.id = k.uretim_emri_id WHERE k.uretim_emri_id = ANY($1::int[])`, [idler],
   );
 }
+
+// Emir başına hatalı kayıt sayısı (hataliKayitlariGetir'in emir süzgeciyle aynı: kendi emri ya da hedef emri) ve kendi emrinin kayıtlarının
+// adım başına adet toplamı; çok emirli listede emir başına sorgu atılmasın diye.
+export function hataliKayitSayilari(db: Db, emirIdleri: readonly number[]): Promise<{ emirId: number; sayi: number }[]> {
+  return db.sorgu(
+    `SELECT x.emir_id AS "emirId", count(*)::int AS sayi
+       FROM ${HATALI_KAYNAK} JOIN unnest($1::int[]) AS x(emir_id) ON h.uretim_emri_id = x.emir_id OR h.hedef_emir_id = x.emir_id
+      GROUP BY 1`,
+    [[...emirIdleri]],
+  );
+}
+
+export function hataliAdimAdetleri(db: Db, emirIdleri: readonly number[]): Promise<{ emirId: number; isEmriId: number; adet: number }[]> {
+  return db.sorgu(
+    `SELECT h.uretim_emri_id AS "emirId", h.is_emri_id AS "isEmriId", sum(h.adet)::int AS adet
+       FROM ${HATALI_KAYNAK} WHERE h.uretim_emri_id = ANY($1::int[]) GROUP BY 1, 2`,
+    [[...emirIdleri]],
+  );
+}
