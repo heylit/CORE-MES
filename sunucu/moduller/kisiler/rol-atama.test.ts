@@ -8,6 +8,7 @@ import { sifirlamaHazirla, testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { rolunIslemleri, rollerinIslemleri } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kisiBayrakliMi, kisileriListele, kisiVarMi, rolAl as disariRolAl, rolAta as disariRolAta, yoneticiOlustur } from './disari.ts';
 import { rolAl, rolAta } from './servis.ts';
@@ -266,16 +267,12 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
       return (cevap.json().kullanici.islemler as string[]).sort();
     };
 
-    const OPERATOR = [
-      'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama',
-      'uretim-emirleri.ara-istasyon',
-      'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
-      'sayfa.ortak-dosyalar', 'sayfa.profil',
-    ].sort();
+    const OPERATOR = rolunIslemleri('operator');
     assert.deepEqual(await islemler(), OPERATOR);
     assert.equal((await o.istek(hedefCerezi, 'GET', '/kisiler')).statusCode, 403);
 
     await o.istek(yoneticiCerezi, 'POST', `/kisiler/${hedef}/rol-ata`, { rolId: await o.rolId('planlama_proje') });
+    assert.deepEqual(await islemler(), rollerinIslemleri('operator', 'planlama_proje'));
     assert.ok((await islemler()).includes('kisiler.oku'));
     assert.equal((await o.istek(hedefCerezi, 'GET', '/kisiler')).statusCode, 200);
     // Rol kodları oturumda görünüm içindir (1390 a); kod sırasıyla gelir.

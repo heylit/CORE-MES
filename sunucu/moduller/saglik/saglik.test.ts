@@ -16,6 +16,7 @@ import { uclariKaydet } from '#cekirdek/uc.ts';
 import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
+import { rolunIslemleri } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, oluOraniYuzde, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
@@ -345,10 +346,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     const izleyen = await girisYap('izleyen');
     // Reddin nedeni işlemin olmamasıdır: başka veri işlemi de sayfa işlemi de bu ucu açmaz.
     // Kabulün nedeni işlemin olmasıdır: yönetici olmayan rol de aynı işlemle girer.
-    assert.deepEqual([...operator.kullanici.islemler].sort(), [
-      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'kisiler.oku', 'markalama.seri-ver', 'mesaj.oku', 'mesaj.yaz',
-      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
-    ]);
+    assert.deepEqual([...operator.kullanici.islemler].sort(), [...rolunIslemleri('operator'), 'kisiler.oku'].sort());
     assert.deepEqual(izleyen.kullanici.islemler, ['saglik.ayrinti-oku']);
     operatorCerezi = operator.cerez;
     izleyenCerezi = izleyen.cerez;

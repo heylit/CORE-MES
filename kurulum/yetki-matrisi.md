@@ -1,8 +1,8 @@
 # Yetki matrisi
 
-Bütün roller ve yetkiler için ortak matris. Tek kaynak rol göçleri (`sunucu/gocler/*_kisiler_*`) ve onaylı matris testidir
-(`sunucu/moduller/oturum/oturum.test.ts`, `MATRIS`); bu belge onun okunur hâlidir. Belgedeki tablonun göçlerle birebir aynı olduğunu
-`araclar/yetki-matrisi.test.ts` ölçer: belge eskirse test kırmızıya döner. Matris yalnız kullanıcı kararıyla ve yeni bir göçle değişir; göç, test ve bu belge aynı işte güncellenir.
+Bütün roller ve yetkiler için ortak matris. Tek kaynak rol göçleri (`sunucu/gocler/*_kisiler_*`) ve testlerin tek beklentisi olan
+beklenen matristir (`araclar/yetki-beklentisi.ts`); bu belge onun okunur hâlidir. Göçlerin, beklenen matrisin ve bu belgenin birebir aynı olduğunu
+`araclar/yetki-matrisi.test.ts` ölçer: biri eskirse test kırmızıya döner. Matris yalnız kullanıcı kararıyla ve yeni bir göçle değişir; göç, beklenen matris ve bu belge aynı işte güncellenir.
 Dışarıda yazılan modül kendi rol ve işlem isteklerini bu matrise eklenecek satırlar olarak `CEKIRDEK-ISTEKLERI.md` içinde bildirir;
 satırlar teslimle girmez, kullanıcı onayıyla ayrı göçte girer.
 
@@ -57,6 +57,7 @@ Hiçbir role verilmez; yalnız bayraklı yönetici yapar:
 - Logo birim seti listesini yazma: `logo.birim-seti-yaz`
 - SmartES kod eşlemelerini düzenleme: `smartes.esleme-yaz`
 - denetim kaydının gövdesi ve bütün parametreleri: `denetim.govde-oku`
+- Mesaj kurulumu: `mesaj.yonet`
 - Güvenlik Merkezi sayfası, okuma ve yönetme: `sayfa.guvenlik` `guvenlik.oku` `guvenlik.yonet` (kullanıcı onayı 2026-10-14)
 - ortak cihaz kaydı ve iptali: `oturum.ortak-cihaz` (kart #739, karar 738 a)
 - malzeme onay akışını açıp kapatma (işlem değildir; müdür ve planlama öteki tanım ve ayarları `malzemeler.tanim-yaz` ile yazar)

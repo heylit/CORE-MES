@@ -63,7 +63,15 @@ describe('bildirim kuralları', () => {
   });
 
   test('her olay türünün kaynak modülü anahtarın başıdır', () => {
-    assert.deepEqual(BILDIRIM_TUR_ANAHTARLARI.map(kaynakModulu), ['satin-alma', 'satin-alma', 'satin-alma', 'malzemeler', 'malzemeler', 'siparisler', 'siparisler', 'siparisler', 'ik', 'istasyonlar', 'cnc-kurulum', 'arkon', 'stok', 'stok', 'stok', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'arkon', 'guvenlik', 'saglik', 'profil', 'profil', 'profil', 'profil']);
+    // Tür sayısı sabitlenmez: yeni tür eklenince bu test değişmez, kural her türde ölçülür.
+    assert.equal(BILDIRIM_TUR_ANAHTARLARI.length > 0, true);
+    for (const tur of BILDIRIM_TUR_ANAHTARLARI) {
+      const [bas] = tur.split('.');
+      assert.equal(kaynakModulu(tur), bas, tur);
+      assert.match(kaynakModulu(tur), /^[a-z][a-z0-9-]*$/, tur);
+    }
+    assert.equal(kaynakModulu('satin-alma.talep-onay-bekliyor'), 'satin-alma');
+    assert.equal(kaynakModulu('cnc-kurulum.takim-omru'), 'cnc-kurulum');
   });
 
   test('BIL-6: gönderilen yol türün yolu ya da altıdır; yolsuz bildirim geçer', () => {

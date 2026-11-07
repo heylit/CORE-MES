@@ -8,6 +8,7 @@ import { gocleriUygula } from '#cekirdek/goc.ts';
 import { testSemasiAc } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
+import { ROL_MATRISI, YONETICI_ROLU, rolunIslemleri } from '../../../araclar/yetki-beklentisi.ts';
 import { kullaniciYukle } from './servis.ts';
 
 const GERCEK_KLASOR = fileURLToPath(new URL('../../gocler/', import.meta.url));
@@ -107,66 +108,6 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     'kisiler.oku', 'sayfa.cizelge', 'sayfa.istasyonlar', 'sayfa.kuyruk', 'sayfa.matris', 'sayfa.mesai',
     'sayfa.rota', 'sayfa.stok', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.vardiya',
   ];
-  // Roller göçünden sonraki göçlerin verdiği işlemlerle birlikte.
-  const PLANLAMA_SONUNDA = [
-    ...PLANLAMA, 'mesaj.oku', 'mesaj.yaz', 'sayfa.mesaj', 'projeler.oku', 'projeler.yaz', 'sayfa.projeler', 'ik.izin-talep', 'sayfa.ik-islemlerim', 'ik.bordro-gordum', 'portal.oku', 'sayfa.portal', 'sayfa.denetim-hazirlik', 'denetim-hazirlik.oku', 'arkon.kuyruk-sirala', 'arkon.planlama', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz', 'sayfa.musteri-tedarikci', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'plan.yaz', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.emirler', 'atolye.yaz', 'sayfa.taleplerim', 'sayfa.finans', 'sayfa.malzemeler', 'sayfa.satin-alma', 'satin-alma.oku', 'satin-alma.talep-ac', 'sayfa.sevkiyat', 'sevkiyat.is-yaz', 'sevkiyat.oku', 'sevkiyat.plan-yaz', 'stok.toplama', 'uretim-emirleri.fason', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.yaz',
-    // CNC Kurulum Motoru göçü (kullanıcı kararı, 12.10.2026).
-    'sayfa.cnc-kurulum', 'cnc-kurulum.oku', 'cnc-kurulum.yaz',
-    'rota.emre-kopyala',
-    // Reçete ve Rota Motoru göçü (paket varsayımı, 13.10.2026).
-    'sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz',
-    // Malzeme · Teslim göçü (kullanıcı kararı, 14.10.2026).
-    'stok.istek',
-    // Akış Süresi göçü (kullanıcı kararı, 14.10.2026).
-    'sayfa.akis',
-    // OEE göçü (kullanıcı kararı, 14.10.2026).
-    'sayfa.oee', 'oee.oku',
-    // Rota yazma ve canlıya alma göçü (kullanıcı kararı, 15.10.2026).
-    'rota.yaz', 'plan.canliya-al',
-    // Çizim Merkezi göçü (kullanıcı kararı, 18.10.2026).
-    'belge-merkezi.oku', 'belge-merkezi.yaz', 'belge-merkezi.yayinla', 'sayfa.cizimler',
-    // Etiket Merkezi göçü (kullanıcı kararı 99, 18.10.2026).
-    'etiket-merkezi.oku', 'etiket-merkezi.bas', 'sayfa.etiket-merkezi',
-    // Rol x işlem tablosu göçü (kullanıcı kararları 139 a ve 160 a, 19.10.2026).
-    'sayfa.durus-nedenleri', 'durus-nedenleri.yaz', 'sayfa.smartes', 'plan.kilitle', 'plan.studyo', 'rota.talimat-yaz', 'siparisler.oku', 'siparisler.yaz',
-    // Siparişler sayfası göçü (kullanıcı kararı 193 a, 19.10.2026).
-    'sayfa.siparisler',
-    // İdari İşler göçü (kullanıcı kararı 216 a, 19.10.2026).
-    'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
-    // Plan okuma göçü (kullanıcı kararı 280 a, 20.10.2026).
-    'plan.oku',
-    // Saat üstlenme göçü (Soru 111 b, 22.10.2026).
-    'saat.uyari-ustlen',
-    // Rol düzeltmeleri göçü (kullanıcı kararı 237, 23.10.2026).
-    'siparisler.termin-onayla',
-    // Ortak yetki matrisinin planlama işlemi, planlama plan modülüne geçince yeni adıyla (658 b, 663 a) ve plan sayfası.
-    'plan.planlama-oku', 'sayfa.plan',
-    // Plan motoru ayarları göçü (kullanıcı kararı 775 b, 27.10.2026).
-    'plan.motor-ayari',
-    // Proje yönetimi göçü (kullanıcı kararı 910 a, 27.10.2026).
-    'projeler.gorev-yaz', 'projeler.statu-yaz',
-    // Emir kapanışı göçü (kullanıcı kararı 1078 a, 28.10.2026).
-    'uretim-emirleri.kapanis-oku',
-    // 5.6 rol göçü (1706 a, 2068-2 teyit).
-    'sayfa.geometri', 'geometri.oku',
-    // Ortak Dosyalar sayfası bütün rollere (2067-3 b).
-    'sayfa.ortak-dosyalar',
-    // Profilim bütün rollere (2192-4 b).
-    'sayfa.profil',
-  ].sort();
-  const OPERATOR_SONUNDA = [
-    'arkon.operator', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'markalama.seri-ver', 'sayfa.markalama',
-    // CNC Kurulum okuma, hazırlık onayı ve takım değişimi 1393 c+ ve 1458 a ile operatörden kalktı (kart #1454).
-    // Ctrl K istasyon araması göçü (kullanıcı kararı, 16.10.2026).
-    'uretim-emirleri.ara-istasyon',
-    // İdari İşler göçü (kullanıcı kararı 216 a, 19.10.2026).
-    'sayfa.idari-isler', 'idari-isler.talep-ac', 'idari-isler.arac-talebi-ac',
-    // Ortak Dosyalar sayfası bütün rollere (2067-3 b).
-    'sayfa.ortak-dosyalar',
-    // Profilim bütün rollere (2192-4 b).
-    'sayfa.profil',
-  ].sort();
-
   // Her biri elle yapılmış bir değişikliktir; göç hangisini görürse görsün üstüne yazmadan durmalıdır.
   const ELLE_DEGISIKLIKLER = [
     {
@@ -267,32 +208,13 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
     );
     assert.deepEqual(
       await vt.sorgu('SELECT kod, ad, yerlesik, yonetici FROM rol ORDER BY kod'),
-      [
-        { kod: 'bakim', ad: 'Bakım', yerlesik: true, yonetici: false },
-        { kod: 'cam', ad: 'CAM', yerlesik: true, yonetici: false },
-        { kod: 'depo', ad: 'Depo', yerlesik: true, yonetici: false },
-        { kod: 'genel_mudur', ad: 'Genel Müdür', yerlesik: true, yonetici: false },
-        { kod: 'genel_mudur_yardimcisi', ad: 'Genel Müdür Yardımcısı', yerlesik: true, yonetici: false },
-        { kod: 'guvenlik_gorevlisi', ad: 'Güvenlik Görevlisi', yerlesik: true, yonetici: false },
-        { kod: 'idari_isler', ad: 'İdari İşler', yerlesik: true, yonetici: false },
-        { kod: 'insan_kaynaklari', ad: 'İnsan Kaynakları', yerlesik: true, yonetici: false },
-        { kod: 'kalite', ad: 'Kalite', yerlesik: true, yonetici: false },
-        { kod: 'mudur', ad: 'Müdür', yerlesik: true, yonetici: false },
-        { kod: 'muhasebe_finans', ad: 'Muhasebe ve Finans', yerlesik: true, yonetici: false },
-        { kod: 'operator', ad: 'Operatör', yerlesik: true, yonetici: false },
-        { kod: 'planlama_muduru', ad: 'Planlama Müdürü', yerlesik: true, yonetici: false },
-        { kod: 'planlama_proje', ad: 'Planlama ve Proje', yerlesik: true, yonetici: false },
-        { kod: 'satin_alma', ad: 'Satın Alma', yerlesik: true, yonetici: false },
-        { kod: 'satin_alma_muduru', ad: 'Satın Alma Müdürü', yerlesik: true, yonetici: false },
-        { kod: 'satis', ad: 'Satış', yerlesik: true, yonetici: false },
-        { kod: 'sevkiyat', ad: 'Sevkiyat', yerlesik: true, yonetici: false },
-        { kod: 'uretim_muduru', ad: 'Üretim Müdürü', yerlesik: true, yonetici: false },
-        { kod: 'vardiya_sorumlusu', ad: 'Vardiya Sorumlusu', yerlesik: true, yonetici: false },
-        { kod: 'yonetici', ad: 'Yönetici', yerlesik: true, yonetici: true },
-      ],
+      [{ kod: YONETICI_ROLU.kod, ad: YONETICI_ROLU.ad, yerlesik: true, yonetici: true },
+        ...Object.entries(ROL_MATRISI).map(([kod, r]) => ({ kod, ad: r.ad, yerlesik: true, yonetici: false }))]
+        .sort((a, b) => a.kod.localeCompare(b.kod)),
     );
-    assert.deepEqual(await islemleri('eski-planlamaci'), PLANLAMA_SONUNDA);
-    assert.deepEqual(await islemleri('eski-operator'), OPERATOR_SONUNDA);
+    // Sonraki göçler de koşmuştur: atanan kişi bugünkü onaylı matrisi alır.
+    assert.deepEqual(await islemleri('eski-planlamaci'), rolunIslemleri('planlama_proje'));
+    assert.deepEqual(await islemleri('eski-operator'), rolunIslemleri('operator'));
     assert.deepEqual(await islemleri('eski-yonetici'), [...ISLEMLER].sort());
   });
 
