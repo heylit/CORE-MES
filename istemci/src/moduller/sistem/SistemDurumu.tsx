@@ -1,12 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
-import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, SaglikCevabi, TabloBuyuklugu, Uyari, VeritabaniBuyumesi } from '#paylasilan/sozlesme/saglik.ts';
+import type { ReactNode } from 'react';
+import type { Ayrinti, GeriYuklemeDenemesi, IsDurumuOzeti, TabloBuyuklugu, Uyari, VeritabaniBuyumesi } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Kart, Rozet, Simge, Tablo } from '../../ortak/arayuz/index.ts';
 import type { RozetTonu, Sutun } from '../../ortak/arayuz/index.ts';
-import { api, hataIletisi } from '../../ortak/veri/api.ts';
-import { useOturum } from '../../ortak/veri/oturum.ts';
-import { anahtarlar } from './anahtarlar.ts';
+import { hataIletisi } from '../../ortak/veri/api.ts';
 import { isAdi, ortamAdi } from './is-adlari.ts';
-import { Performans } from './Performans.tsx';
+import { baytMetni } from './saglik-ozeti.ts';
+import { useSistemSagligi } from './saglik-sorgusu.ts';
+import { SaglikKutulari } from './SaglikKutulari.tsx';
 import { sureMetni } from './sure.ts';
 import './sistem-durumu.css';
 
@@ -70,6 +70,11 @@ const IS_SUTUNLARI: readonly Sutun<IsDurumuOzeti>[] = [
   { anahtar: 'sonHata', baslik: 'Açıklama', hucre: (i) => i.sonHata ?? i.sonNeden ?? YOK },
 ];
 
+// Bakılması gereken üstte: hata, bekleyen, atlanan, hiç koşmamış, tamam; aynı sonuçta ada göre.
+const SONUC_SIRASI: Record<NonNullable<IsDurumuOzeti['sonSonuc']> | 'yok', number> = { hata: 0, bekliyor: 1, atlandi: 2, yok: 3, tamam: 4 };
+export const isSirasi = (isler: readonly IsDurumuOzeti[]): IsDurumuOzeti[] =>
+  [...isler].sort((a, b) => SONUC_SIRASI[a.sonSonuc ?? 'yok'] - SONUC_SIRASI[b.sonSonuc ?? 'yok'] || isAdi(a.ad).localeCompare(isAdi(b.ad), 'tr'));
+
 function IsTablosu({ isler }: { isler: readonly IsDurumuOzeti[] }) {
   return (
     <section aria-label="Zamanlanmış işler">
@@ -77,24 +82,12 @@ function IsTablosu({ isler }: { isler: readonly IsDurumuOzeti[] }) {
       {/* Tablonun boş durumu ikinci bir durum bölgesi açar; kartın durumu tek kalsın diye boş liste düz metindir. */}
       {isler.length === 0
         ? <p>İş yok</p>
-        : <Tablo etiket="Zamanlanmış işler" sutunlar={IS_SUTUNLARI} satirlar={isler} satirAnahtari={(i) => i.ad} />}
+        : <Tablo etiket="Zamanlanmış işler" sutunlar={IS_SUTUNLARI} satirlar={isSirasi(isler)} satirAnahtari={(i) => i.ad} />}
     </section>
   );
 }
 
-// Uyarıyı sunucu hesaplar (yedek alınmadı, iş asıldı ya da hata verdi, disk az); ekran yalnız listeler.
 const SAYI = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
-
-function baytMetni(bayt: number): string {
-  const birimler = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
-  let deger = bayt;
-  let i = 0;
-  while (deger >= 1024 && i < birimler.length - 1) {
-    deger /= 1024;
-    i += 1;
-  }
-  return `${SAYI.format(deger)} ${birimler[i]}`;
-}
 
 const TABLO_SUTUNLARI: readonly Sutun<TabloBuyuklugu>[] = [
   { anahtar: 'ad', baslik: 'Tablo', hucre: (t) => t.ad, mono: true },
@@ -130,6 +123,7 @@ function VeritabaniBuyumesiBolumu({ buyume }: { buyume: VeritabaniBuyumesi | nul
   );
 }
 
+// Uyarıyı sunucu hesaplar (yedek alınmadı, iş asıldı ya da hata verdi, disk az); ekran yalnız listeler.
 function UyariListesi({ uyarilar }: { uyarilar: readonly Uyari[] }) {
   if (uyarilar.length === 0) return null;
   return (
@@ -142,38 +136,46 @@ function UyariListesi({ uyarilar }: { uyarilar: readonly Uyari[] }) {
   );
 }
 
-export function SistemDurumu() {
-  const oturum = useOturum();
-  const ayrintiGorur = oturum.data?.islemler.includes('saglik.ayrinti-oku') === true;
-  const saglik = useQuery({ queryKey: anahtarlar.saglik, queryFn: () => api.get<SaglikCevabi>('/saglik') });
-  const ayrinti = useQuery({
-    queryKey: anahtarlar.sistemAyrinti,
-    queryFn: () => api.get<Ayrinti>('/saglik/ayrinti'),
-    enabled: ayrintiGorur,
-  });
-  const yenile = () => {
-    void saglik.refetch();
-    if (ayrintiGorur) void ayrinti.refetch();
-  };
-  // Yenilemede hata gelirse react-query eski veriyi tutar; sağlıklı saymak için son istek de başarılı olmalı.
-  const saglikli = saglik.isSuccess && saglik.data.durum === 'ok';
+// Destek ve inceleme için ölçüler: sürüm, göç, veritabanı büyümesi, zamanlanmış işler. Yorum eklenmez; değerler sunucudandır.
+export function TeknikAyrintilar({ ayrinti, saglikli }: { ayrinti: Ayrinti; saglikli: boolean }) {
+  return (
+    <section aria-label="Teknik ayrıntılar" className="tc-sistem-teknik">
+      <AyrintiListesi ayrinti={ayrinti} saglikli={saglikli} />
+      <VeritabaniBuyumesiBolumu buyume={ayrinti.veritabaniBuyumesi ?? null} />
+      <IsTablosu isler={ayrinti.isler} />
+    </section>
+  );
+}
+
+// Hesap menüsündeki kısa özet (2231): durum, uyarılar ve altı kutu; grafikler ve kararlar Sistem ve Güvenlik sayfasındadır.
+// `sayfaBaglantisi` o sayfaya götüren bağlantıdır; sayfayı görme yetkisi olmayana verilmez.
+export function SistemDurumu({ sayfaBaglantisi }: { sayfaBaglantisi?: ReactNode }) {
+  const s = useSistemSagligi();
+  const ayrinti = s.ayrinti;
+  const hazir = s.saglikli !== null && ayrinti?.data !== undefined;
 
   return (
-    <Kart baslik="Sistem durumu" sag={<Dugme simge="rotate" onClick={yenile} aria-label="Yenile" yukleniyor={saglik.isFetching} />}>
-      {saglik.isPending && <DurumKutusu durum="yukleniyor" />}
-      {!saglik.isPending && (
+    <Kart sag={<Dugme simge="rotate" onClick={s.yenile} aria-label="Yenile" yukleniyor={s.saglik.isFetching} />}>
+      {s.saglikli === null && <DurumKutusu durum="yukleniyor" />}
+      {s.saglikli !== null && (
         <p role="status">
-          {saglikli
+          {s.saglikli
             ? <Rozet ton="tamam">Sistem çalışıyor</Rozet>
             : <Rozet ton="hata">Sistemde sorun var</Rozet>}
         </p>
       )}
-      {ayrintiGorur && !saglik.isPending && ayrinti.data && <UyariListesi uyarilar={ayrinti.data.uyarilar} />}
-      {ayrintiGorur && !saglik.isPending && ayrinti.data && <Performans />}
-      {ayrintiGorur && !saglik.isPending && ayrinti.data && <AyrintiListesi ayrinti={ayrinti.data} saglikli={saglikli} />}
-      {ayrintiGorur && !saglik.isPending && ayrinti.data && <VeritabaniBuyumesiBolumu buyume={ayrinti.data.veritabaniBuyumesi ?? null} />}
-      {ayrintiGorur && !saglik.isPending && ayrinti.data && <IsTablosu isler={ayrinti.data.isler} />}
-      {ayrintiGorur && ayrinti.isError && <p role="alert">{hataIletisi(ayrinti.error, 'Ayrıntı alınamadı')}</p>}
+      {hazir && ayrinti.data && (
+        <>
+          <UyariListesi uyarilar={ayrinti.data.uyarilar} />
+          <SaglikKutulari saglikli={s.saglikli} ayrinti={ayrinti.data} sonDakika={s.sonDakika} />
+          {sayfaBaglantisi}
+          <details className="tc-sistem-katli">
+            <summary>Teknik ayrıntılar</summary>
+            <TeknikAyrintilar ayrinti={ayrinti.data} saglikli={s.saglikli === true} />
+          </details>
+        </>
+      )}
+      {ayrinti?.isError && <p role="alert">{hataIletisi(ayrinti.error, 'Ayrıntı alınamadı')}</p>}
     </Kart>
   );
 }

@@ -7,12 +7,13 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type {
   Alarm, AlarmListeCevabi, AyarDenetimiCevabi, KilitListeCevabi, KorumaCevabi, KurallarCevabi, OturumlarCevabi, OzetCevabi, RetListeCevabi, SunucuDurumuCevabi,
 } from '#paylasilan/sozlesme/guvenlik.ts';
+import type { Ayrinti, MetriklerCevabi, SaglikCevabi } from '#paylasilan/sozlesme/saglik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import type { Kullanici } from '../../ortak/veri/oturum.ts';
 import { GuvenlikAlarmlar } from './Alarmlar.tsx';
-import { GuvenlikDurum, ayarOzeti, genelDurum } from './Durum.tsx';
-import { GuvenlikKoruma, GuvenlikKurallar } from './Koruma.tsx';
+import { GuvenlikDurum, genelDurum } from './Durum.tsx';
+import { GuvenlikKoruma, GuvenlikKurallar, ayarOzeti } from './Koruma.tsx';
 import { GuvenlikOturumlar, GuvenlikReddedilenler } from './Takip.tsx';
 import { tarayiciOzeti } from './gorunum.ts';
 
@@ -64,7 +65,15 @@ function cizdir(ekran: React.ReactNode, islemler: Islem[] = ['sayfa.guvenlik', '
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('Güvenlik Merkezi durum ekranı', () => {
+describe('Sistem ve Güvenlik genel bakış (2231)', () => {
+  const YONETICI_ISLEMLERI: Islem[] = ['sayfa.guvenlik', 'guvenlik.oku', 'guvenlik.yonet'];
+  const korumaCevabi = (https: 'acik' | 'kapali'): KorumaCevabi => ({
+    maddeler: [
+      { anahtar: 'denetim', baslik: 'Denetim kaydı', aciklama: 'Her yazma kaydedilir.', durum: 'acik', deger: T },
+      { anahtar: 'https', baslik: 'Şifreli bağlantı (HTTPS)', aciklama: 'Arayüz kapısı düz HTTP ile sunuluyor.', durum: https, deger: null },
+    ],
+  });
+
   it('genel durum: yüksek ya da kritik alarm "alarm", orta alarm ya da duran tarama "dikkat", gerisi "iyi"', () => {
     expect(genelDurum(ozet({ acikAlarm: { kritik: 0, yuksek: 1, orta: 0 } }))).toBe('alarm');
     expect(genelDurum(ozet({ acikAlarm: { kritik: 0, yuksek: 0, orta: 1 } }))).toBe('dikkat');
@@ -73,25 +82,89 @@ describe('Güvenlik Merkezi durum ekranı', () => {
     expect(genelDurum(ozet())).toBe('iyi');
   });
 
-  it('açık alarmda bant alarm der; kilitli hesap sayısı karta ve bant metnine yazılır', async () => {
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet({ acikAlarm: { kritik: 0, yuksek: 2, orta: 1 }, kilitliHesap: 2, sonAlarmlar: [alarm()] })) });
-    const ekran = cizdir(<GuvenlikDurum />);
-    expect(await screen.findByText('3 alarm bakılmayı bekliyor')).toBeTruthy();
-    expect(ekran.container.querySelector('.tc-guvenlik-bant')?.getAttribute('data-durum')).toBe('alarm');
-    const kilit = screen.getByText('Kilitli hesap').closest('.tc-sayi-karti')!;
-    expect(within(kilit as HTMLElement).getByText('2')).toBeTruthy();
-    expect(screen.getByText(/2 hesap kilitli\./)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Alarmlara git' })).toBeTruthy();
+  it('kararlar önce en önemlisi sıralanır; her biri ne oldu, ne demek, ne yapmalı yazar; düğme alarm ayrıntısını açar', async () => {
+    const tarama = alarm({ id: 7, sinyal: 'adres-taramasi', onem: 'kritik', kullaniciAdi: null, ip: '127.0.0.1', gozlenenSayi: 40 });
+    sunucuKur({
+      'GET /guvenlik/ozet': () => json(200, ozet({ acikAlarm: { kritik: 1, yuksek: 0, orta: 1 } })),
+      'GET /guvenlik-alarmlari': () => json(200, liste([alarm(), tarama])),
+      'GET /guvenlik/koruma': () => json(200, korumaCevabi('kapali')),
+    });
+    cizdir(<GuvenlikDurum />, YONETICI_ISLEMLERI);
+    const guvenlik = await screen.findByRole('region', { name: 'Güvenlik özeti' });
+    expect(within(guvenlik).getByRole('heading', { name: '2 alarm bakılmalı' })).toBeTruthy();
+    const kararlar = await screen.findAllByRole('article');
+    expect(kararlar.map((k) => within(k).getByRole('heading').textContent)).toEqual([
+      'Biri sistemde olmayan sayfaları yokluyor', 'Bağlantı şifrelenmiyor (HTTPS kapalı)', 'deneme art arda yanlış parola girdi',
+    ]);
+    const ilk = kararlar[0]!;
+    expect(within(ilk).getByText('Ne demek').nextElementSibling?.textContent).toContain('sunucunun kendisinden');
+    expect(within(ilk).getByText('Ne oldu').nextElementSibling?.textContent).toContain('40 kez');
+    expect(within(kararlar[1]!).queryByRole('button')).toBeNull();
+    fireEvent.click(within(ilk).getByRole('button', { name: 'İncele ve kapat' }));
+    expect(await screen.findByRole('dialog', { name: 'Adres taraması' })).toBeTruthy();
+    expect(within(screen.getByRole('region', { name: 'Sistem sağlığı özeti' })).getByText('Sağlık ayrıntısını görme yetkiniz yok.')).toBeTruthy();
   });
 
-  it('alarm yoksa "Her şey yolunda" der ve alarmlara git düğmesi çıkmaz', async () => {
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()) });
-    cizdir(<GuvenlikDurum />);
-    expect(await screen.findByText('Her şey yolunda')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Alarmlara git' })).toBeNull();
-    expect(screen.getByText('Henüz alarm yok')).toBeTruthy();
+  it('karar yoksa "Karar bekleyen konu yok" der; yalnız okuyan "İncele" görür', async () => {
+    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik-alarmlari': () => json(200, liste([])), 'GET /guvenlik/koruma': () => json(200, korumaCevabi('acik')) });
+    cizdir(<GuvenlikDurum />, YONETICI_ISLEMLERI);
+    expect(await screen.findByText(/Karar bekleyen konu yok/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Sorun yok' })).toBeTruthy();
+    cleanup();
+    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet({ acikAlarm: { kritik: 0, yuksek: 0, orta: 1 } })), 'GET /guvenlik-alarmlari': () => json(200, liste([alarm()])) });
+    cizdir(<GuvenlikDurum />, ['sayfa.guvenlik', 'guvenlik.oku']);
+    expect(await screen.findByRole('button', { name: 'İncele' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İncele ve kapat' })).toBeNull();
   });
 
+  it('sağlık uyarısı karar olur: iş kod adı okunur adla, yedek kararı Sistem Ayarları\'na götürür; kutular ve teknik ayrıntılar görünür', async () => {
+    const ayrinti: Ayrinti = {
+      veritabaniGecikmeMs: 4, sonGoc: null, commit: null, calismaSuresiSn: 600, ortam: 'test',
+      isler: [{ ad: 'logo-stok-okumasi', sonBaslama: T, sonBitis: T, sonSonuc: 'hata', sonHata: 'Bağlantı yok', sonNeden: null }],
+      uyarilar: [
+        { tur: 'yedek', ileti: 'Yedek kapalı: yedek klasörü seçilmemiş ya da erişilemiyor.' },
+        { tur: 'is', ileti: 'logo-stok-okumasi işi son turda hata verdi (Bağlantı yok).' },
+      ],
+    };
+    sunucuKur({
+      'GET /guvenlik/ozet': () => json(200, ozet()),
+      'GET /guvenlik-alarmlari': () => json(200, liste([])),
+      'GET /saglik': () => json(200, { durum: 'ok' } satisfies SaglikCevabi),
+      'GET /saglik/ayrinti': () => json(200, ayrinti),
+      'GET /saglik/metrikler': () => json(200, { dakikalar: [] } satisfies MetriklerCevabi),
+    });
+    cizdir(<GuvenlikDurum />, [...YONETICI_ISLEMLERI, 'saglik.ayrinti-oku']);
+    const saglik = await screen.findByRole('region', { name: 'Sistem sağlığı özeti' });
+    expect(await within(saglik).findByRole('heading', { name: 'Çalışıyor, yedekte sorun var' })).toBeTruthy();
+    const yedek = (await screen.findByRole('heading', { name: 'Verilerin yedeği alınmıyor' })).closest('article')!;
+    expect(within(yedek).getByText('Kritik')).toBeTruthy();
+    expect(within(yedek).getByRole('button', { name: 'Sistem Ayarları' })).toBeTruthy();
+    const is = screen.getByRole('heading', { name: 'Otomatik bir iş aksıyor' }).closest('article')!;
+    expect(within(is).getByText('Ne oldu').nextElementSibling?.textContent).toBe('"Logo: stok okuması" işi son turda hata verdi (Bağlantı yok).');
+    expect(screen.getByText('Alınmıyor')).toBeTruthy();
+    expect(screen.getByText('1 iş hata verdi')).toBeTruthy();
+    expect(screen.getByText('Teknik ayrıntılar')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Gidişat/ })).toBeTruthy();
+  });
+
+  it('korumalar kapalısı üstte listelenir; geri yükleme denemesi ayar denetiminden gelir; sayaç açık olanı sayar', async () => {
+    const ayar: AyarDenetimiCevabi = {
+      zaman: T, maddeler: [{ anahtar: 'geri-yukleme', baslik: 'Geri yükleme denemesi', aciklama: 'Yedek hiç geri yüklenerek denenmemiş.', durum: 'uyari' }],
+    };
+    sunucuKur({
+      'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik-alarmlari': () => json(200, liste([])),
+      'GET /guvenlik/koruma': () => json(200, korumaCevabi('kapali')), 'GET /guvenlik/ayar-denetimi': () => json(200, ayar),
+    });
+    cizdir(<GuvenlikDurum />, YONETICI_ISLEMLERI);
+    const bolum = await screen.findByRole('region', { name: /Korumalar/ });
+    await waitFor(() => expect(within(bolum).getAllByRole('listitem')).toHaveLength(3));
+    expect(within(bolum).getAllByRole('listitem').map((l) => l.querySelector('b')?.textContent)).toEqual(['Şifreli bağlantı', 'Yedekten geri dönme denemesi', 'Değişiklik kaydı']);
+    expect(within(bolum).getByText('Bakılmalı')).toBeTruthy();
+    expect(within(bolum).getByText(/koruma açık/).textContent).toBe('1 / 3 koruma açık · 1 kapalı');
+  });
+});
+
+describe('Koruma durumu sayfası', () => {
   it('sunucu durumu kartı maddeleri durum rozetiyle, son hataları hata koduyla gösterir', async () => {
     const durum: SunucuDurumuCevabi = {
       maddeler: [
@@ -100,8 +173,8 @@ describe('Güvenlik Merkezi durum ekranı', () => {
       ],
       sonHatalar: [{ zaman: T, ileti: 'Beklenmeyen hata', hata: 'Error: deneme', kod: 'ab12cd34' }],
     };
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/sunucu-durumu': () => json(200, durum) });
-    cizdir(<GuvenlikDurum />);
+    sunucuKur({ 'GET /guvenlik/koruma': () => json(200, { maddeler: [] }), 'GET /guvenlik/sunucu-durumu': () => json(200, durum) });
+    cizdir(<GuvenlikKoruma />);
     expect(await screen.findByText('Sunucu günlüğü')).toBeTruthy();
     expect(screen.getByText('Yedek: 1 GB boş / 100 GB')).toBeTruthy();
     expect(screen.getByText('Uyarı')).toBeTruthy();
@@ -109,13 +182,13 @@ describe('Güvenlik Merkezi durum ekranı', () => {
   });
 
   it('sunucu durumu okunamazsa yalnız kart hata gösterir; hata yoksa boş metin', async () => {
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/ayar-denetimi': () => json(200, { zaman: T, maddeler: [] }) });
-    cizdir(<GuvenlikDurum />);
-    expect(await screen.findByText('Her şey yolunda')).toBeTruthy();
-    expect(await screen.findByText('Veri alınamadı')).toBeTruthy();
+    sunucuKur({ 'GET /guvenlik/koruma': () => json(200, { maddeler: [] }), 'GET /guvenlik/ayar-denetimi': () => json(200, { zaman: T, maddeler: [] }) });
+    cizdir(<GuvenlikKoruma />);
+    const kart = (await screen.findByRole('heading', { name: 'Sunucu durumu' })).closest('.tc-kart') as HTMLElement;
+    expect(await within(kart).findByText('Veri alınamadı')).toBeTruthy();
     cleanup();
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }) });
-    cizdir(<GuvenlikDurum />);
+    sunucuKur({ 'GET /guvenlik/koruma': () => json(200, { maddeler: [] }), 'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }) });
+    cizdir(<GuvenlikKoruma />);
     expect(await screen.findByText('Son iki günün günlüğünde sunucu hatası yok')).toBeTruthy();
   });
 });
@@ -141,11 +214,11 @@ describe('Ayar denetimi kartı (2164)', () => {
       ],
     };
     sunucuKur({
-      'GET /guvenlik/ozet': () => json(200, ozet()),
+      'GET /guvenlik/koruma': () => json(200, { maddeler: [] }),
       'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }),
       'GET /guvenlik/ayar-denetimi': () => json(200, cevap),
     });
-    cizdir(<GuvenlikDurum />);
+    cizdir(<GuvenlikKoruma />);
     const kart = (await screen.findByRole('heading', { name: 'Ayar denetimi' })).closest('.tc-kart') as HTMLElement;
     expect(await within(kart).findByText('Gece yedeği')).toBeTruthy();
     expect(within(kart).getByText('1 uyarı')).toBeTruthy();
@@ -154,11 +227,10 @@ describe('Ayar denetimi kartı (2164)', () => {
     expect(within(kart).getByText('Bilgi')).toBeTruthy();
     expect(within(kart).getByText('Uyarı')).toBeTruthy();
     cleanup();
-    sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }) });
-    cizdir(<GuvenlikDurum />);
+    sunucuKur({ 'GET /guvenlik/koruma': () => json(200, { maddeler: [] }), 'GET /guvenlik/sunucu-durumu': () => json(200, { maddeler: [], sonHatalar: [] }) });
+    cizdir(<GuvenlikKoruma />);
     const hataliKart = (await screen.findByRole('heading', { name: 'Ayar denetimi' })).closest('.tc-kart') as HTMLElement;
     expect(await within(hataliKart).findByText('Veri alınamadı')).toBeTruthy();
-    expect(screen.getByText('Her şey yolunda')).toBeTruthy();
   });
 });
 

@@ -37,6 +37,12 @@ const IS_ADLARI: Readonly<Record<string, string>> = {
   'smartes-is-emri-gonderimi': 'SmartES: iş emri gönderimi',
   'smartes-tanim-gonderimi': 'SmartES: tanım gönderimi',
   'stok-yolda-suresi': 'Stok: süresi dolan yoldaki teslimler',
+  'bildirim-yayin-dagit': 'Bildirim: ileri tarihli bildirimleri dağıtma',
+  'bildirim-push-gonder': 'Bildirim: anlık bildirim gönderimi',
+  'denetim-okuma-saklama': 'Denetim: süresi dolan okuma kayıtlarını silme',
+  'logo-malzeme-kodu-okumasi': 'Logo: malzeme kodu okuması',
+  'oturum-nabiz-temizligi': 'Eski cihaz nabzı temizliği',
+  'stok-defter-karsilastirma': 'Stok: gece defter karşılaştırması',
 };
 
 export const isAdi = (kod: string): string => IS_ADLARI[kod] ?? kod;
