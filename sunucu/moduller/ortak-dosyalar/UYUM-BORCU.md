@@ -3,8 +3,9 @@
 Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULANDI (kod ya da komut), VARSAYIM, BİLMİYORUM.
 
 ## Bağlamada kapanacak
-1. Ofis türleri (ADR 0030, 9): docx, xlsx, pptx, txt, csv kart 2076 ile `paylasilan/sozlesme/dosya.ts` ve `dosya/kurallar.ts`'e girince
-   `kurallar.ts` `ORTAK_DOSYA_TURLERI`'ne eklenir. Şimdilik pdf, png, jpeg, webp (koordinatör, 05.11). DOĞRULANDI: `OD-7` STEP'i reddeder.
+1. KAPANDI (kart 2195): ofis türleri (docx, xlsx, pptx), düz metin ve csv `ORTAK_DOSYA_TURLERI`'nde. Tür zip'in merkez dizininden ve
+   `[Content_Types].xml`'den bulunur; makrolu belge reddedilir. Dosya adının uzantısı içerikle uyuşmalı (OD-18). DOĞRULANDI: `OD-7`, `OD-18`.
+   VARSAYIM: içerik türleri girdisi yükleme şeridinin ilk ya da son iki parçasında durur (Office başa, LibreOffice sona yazar; denendi).
 2. Sayfanın rollere dağıtımı (karar 2067-3 b): `sayfa.ortak-dosyalar` bütün rollere `kisiler` göçüyle verildi
    (`20261105090000_kisiler_ortak_dosyalar_sayfasi.sql`); `ortak-dosyalar.yetki-ver` yalnız yönetici rolünde kalır. Sonradan açılan rol sayfayı
    kendiliğinden almaz; rol açan göç satırı ekler (idari-isler ile aynı). Bağlamada ortak yetki matrisine taşınır.

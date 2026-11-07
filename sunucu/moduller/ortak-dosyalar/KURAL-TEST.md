@@ -22,3 +22,4 @@ Test adları başlığın başıdır.
 | OD-15 Son eklenenler yalnız görünenler | `OD-15 ...` | aynı test: gizli klasörün dosyası yok |
 | OD-16 Geçmiş ve denetim izi | `OD-16 ...` | - |
 | OD-17 Sayfa bütün rollere (karar 2067-3 b), yetki-ver yalnız yönetici | `OD-17 ...` | göç satırı silinirse kırmızı |
+| OD-18 Dosya adının uzantısı içerikten bulunan türle uyuşur (`.bat` adlı metin, `.exe` adlı PDF reddedilir) | `OD-18 ...` | aynı test: uzantısız ad 400, ret sonrası kayıt kalmaz |
