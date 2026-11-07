@@ -33,8 +33,13 @@ import {
   gecerliSaatBelirteciBul, kisiSaatBelirtecleriniKapat, saatBelirteciEkle, saatBelirteciKapat, saatBelirtecleri, saatIstegiAl, saatIstegiEkle,
   saatIstegiOnayla, saatIstekleriniTemizleSay, acikOrtakCihazAdiVar, acikOrtakCihazBul, acikOrtakCihazBulId, acikOrtakCihazlar, ortakCihazEkle, ortakCihazKapat,
   cihazAyari, cihazAyariYaz, cihazProfilleri, cihazProfiliCoz, profilAtamasiYaz, profilSayfalariYaz, defterKisisiniYaz,
-  cihazNabizlari, eskiNabizlariSil, nabizYaz,
+  cihazNabizlari, eskiNabizlariSil, nabizYaz, cihazBagiBul, cihazBagiEkle, cihazBagiYenile, oturumKimligiBul,
 } from './sorgular.ts';
+import {
+  BAG_CEREZ_SN, BAG_CEREZI, bagBelirteciUret, bagTalimati, cihazBagiAcikMi, kanitCoz, kayitBasligi, kayitKanitiniDogrula, meydanBasligi,
+  meydanGecerliMi, meydanUret, oturumKimligiUret, yenilemeKanitiniDogrula,
+} from './cihaz-bagi.ts';
+import type { BagTalimati } from './cihaz-bagi.ts';
 import type { CihazNabziSatiri, CihazProfiliSatiri, NabizGirdisi, OrtakCihazSatiri, SaatBelirteciSatiri, Simdi } from './sorgular.ts';
 
 const HATALI_GIRIS = 'Kullanıcı adı, PIN ya da parola hatalı.';
@@ -279,11 +284,17 @@ async function kimlikYukle(db: Db, kisiId: number, oturumAcildi: string | null =
 
 // Cihazın profili oturumdan değil her istekte cihaz çerezinden okunur (kart #1358): cihazın profili değişince ya da kişi aynı oturum
 // çereziyle başka cihaza geçince bir sonraki istekte geçerlidir. İstasyonda boşta süre kısadır (1356 a).
-export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirteci: string | null): Promise<Kullanici | null> {
+// Cihaza bağlı oturumda (2226-6 a) bağ çerezi de gerekir: çalınan oturum çerezi tek başına yetmez. Bağ yenileme ucu
+// yalnız bağ denetimini atlar ve görüldü yazmaz: tarayıcının arka plandaki yenilemesi kişinin etkinliği değildir.
+export async function anahtardanKullanici(
+  db: Db, anahtar: string, cihazBelirteci: string | null, bagBelirteci: string | null = null,
+  secenek: { bagYenileme?: true } = {},
+): Promise<Kullanici | null> {
   const { profil, oturum } = await oturumVeProfilBul(db, anahtarOzeti(anahtar), cihazBelirteci ? anahtarOzeti(cihazBelirteci) : null, {
     azamiSn: AZAMI_SN, gorulmeAraligiSn: GORULME_ARALIGI_SN,
-  });
+  }, bagBelirteci ? anahtarOzeti(bagBelirteci) : null);
   if (oturum === null || oturum.bosta_gecen_sn >= bostaSuresiSn(profil.kod)) return null;
+  if (oturum.bag === 'gecersiz' && secenek.bagYenileme === undefined) return null;
   if (profil.kod === 'istasyon' && !(await istasyonVardiyasiSuruyor(db, oturum))) return null;
   // Kişi bu oturumdan sonra pasife alınmış ya da parolası başkasınca değişmişse oturum geçersizdir.
   const kullanici = await kimlikYukle(db, oturum.kisi_id, oturum.acildi_metin);
@@ -292,7 +303,7 @@ export async function anahtardanKullanici(db: Db, anahtar: string, cihazBelirtec
   if (kullanici.sinirli !== undefined && !sinirliOturumGecerMi({
     bostaGecenSn: oturum.bosta_gecen_sn, acikGecenSn: oturum.acik_gecen_sn, kayitliCihaz: profil.cihazId !== null,
   })) return null;
-  if (oturum.bayat) await gorulduYaz(db, oturum.id);
+  if (oturum.bayat && secenek.bagYenileme === undefined) await gorulduYaz(db, oturum.id);
   return profilUygula(kullanici, profil);
 }
 
@@ -356,7 +367,9 @@ export async function cihazaGoreKullanici(db: Db, kullanici: Kullanici, cihazBel
 export function kimlikCozucu(vt: Veritabani): Kimlik {
   return async (istek) => {
     const anahtar = cerezOku(istek.headers.cookie, CEREZ_ADI);
-    if (anahtar) return anahtardanKullanici(vt, anahtar, cerezOku(istek.headers.cookie, CIHAZ_CEREZI));
+    if (anahtar) {
+      return anahtardanKullanici(vt, anahtar, cerezOku(istek.headers.cookie, CIHAZ_CEREZI), cerezOku(istek.headers.cookie, BAG_CEREZI));
+    }
     const belirtec = belirtecOku(istek.headers.authorization);
     if (belirtec === null || !saatBelirteciGecerMi(istek.method, istek.routeOptions.url)) return null;
     return saatBelirtecindenKullanici(vt, belirtec);
@@ -455,10 +468,11 @@ export async function oturumKullanicisi(
   cerez: string | null,
   cozulen: Kullanici | null,
   cihazBelirteci: string | null,
+  bagBelirteci: string | null = null,
 ): Promise<Kullanici | null> {
   if (cozulen !== null || !cerez) return cozulen;
   try {
-    return await anahtardanKullanici(db, cerez, cihazBelirteci);
+    return await anahtardanKullanici(db, cerez, cihazBelirteci, bagBelirteci);
   } catch (hata) {
     if (vtUlasilamadi(hata)) throw veritabaniYok();
     throw hata;
@@ -551,4 +565,54 @@ export async function kayitsizProfiliYaz(
   const satir = await cihazAyariYaz(db, girdi.kayitsizProfil, girdi.surum, kullanici.id);
   if (satir === null) throw cakisma('Ayar bu arada değişmiş. Sayfayı yenileyip yeniden deneyin.');
   return satir;
+}
+
+/* ---------------- cihaza bağlı oturum (2226-6 a, W3C DBSC) ---------------- */
+
+// Girişte tarayıcıya kayıt daveti; ayar kapalıysa ya da oturum yoksa başlık gitmez.
+export function cihazBagiDaveti(anahtar: string, acik = cihazBagiAcikMi()): string | null {
+  return acik ? kayitBasligi(meydanUret('kayit', anahtarOzeti(anahtar))) : null;
+}
+
+const BAG_REDDI = 'Cihaz bağı kurulamadı.';
+
+export async function cihazBaginiKaydet(
+  db: Db, girdi: { anahtar: string | null; cihazBelirteci: string | null; kanit: string | null },
+): Promise<{ belirtec: string; talimat: BagTalimati }> {
+  if (!girdi.anahtar || (await anahtardanKullanici(db, girdi.anahtar, girdi.cihazBelirteci)) === null) throw oturumYok();
+  const ozet = anahtarOzeti(girdi.anahtar);
+  const dogru = kayitKanitiniDogrula(kanitCoz(girdi.kanit));
+  if (dogru === null || !meydanGecerliMi(dogru.jti, 'kayit', ozet)) throw gecersiz(BAG_REDDI);
+  const oturumId = await oturumKimligiBul(db, ozet);
+  if (oturumId === null) throw oturumYok();
+  const belirtec = bagBelirteciUret();
+  const oturumKimligi = oturumKimligiUret();
+  const eklendi = await cihazBagiEkle(db, {
+    oturumId, oturumKimligi, alg: dogru.alg, acikAnahtar: dogru.jwk, bagOzeti: anahtarOzeti(belirtec), bagSn: BAG_CEREZ_SN, meydan: dogru.jti,
+  });
+  // Oturum bir kez bağlanır: ikinci kayıt ilk anahtarı değiştiremez (çalınan çerezle bağ ele geçirilemez).
+  if (!eklendi) throw cakisma('Bu oturum zaten bir cihaza bağlı.');
+  return { belirtec, talimat: bagTalimati(oturumKimligi) };
+}
+
+export type BagYenilemeSonucu =
+  | { tur: 'meydan'; baslik: string }
+  | { tur: 'tamam'; belirtec: string; talimat: BagTalimati };
+
+export async function cihazBaginiYenile(
+  db: Db, girdi: { anahtar: string | null; cihazBelirteci: string | null; oturumKimligi: string | null; kanit: string | null },
+): Promise<BagYenilemeSonucu> {
+  if (!girdi.anahtar || girdi.oturumKimligi === null) throw oturumYok();
+  const bag = await cihazBagiBul(db, girdi.oturumKimligi, anahtarOzeti(girdi.anahtar));
+  // Oturum düşmüşse (boşta, vardiya sonu, pasif kişi) bağ da biter: 401 tarayıcıda bağlı oturumu kapatır.
+  if (bag === null || (await anahtardanKullanici(db, girdi.anahtar, girdi.cihazBelirteci, null, { bagYenileme: true })) === null) {
+    throw oturumYok();
+  }
+  const meydan = (): BagYenilemeSonucu => ({ tur: 'meydan', baslik: meydanBasligi(meydanUret('yenile', bag.oturum_kimligi), bag.oturum_kimligi) });
+  if (girdi.kanit === null) return meydan();
+  const jti = yenilemeKanitiniDogrula(kanitCoz(girdi.kanit), bag.alg, bag.acik_anahtar);
+  if (jti === null || jti === bag.son_meydan || !meydanGecerliMi(jti, 'yenile', bag.oturum_kimligi)) return meydan();
+  const belirtec = bagBelirteciUret();
+  if (!(await cihazBagiYenile(db, bag.oturum_id, anahtarOzeti(belirtec), BAG_CEREZ_SN, jti))) return meydan();
+  return { tur: 'tamam', belirtec, talimat: bagTalimati(bag.oturum_kimligi) };
 }

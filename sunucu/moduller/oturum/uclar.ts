@@ -6,16 +6,27 @@ import {
   saatCihazlariCevabi, saatIstegiCevabi, saatIstegiSorCevabi, saatIstegiSorGovdesi, saatOnaylaGovdesi,
   cihazDurumuCevabi, ortakCihazKapatCevabi, ortakCihazKaydetCevabi, ortakCihazKaydetGovdesi, ortakCihazParametresi, ortakCihazlarCevabi,
   cihazProfiliParametresi, cihazProfilleriCevabi, kayitsizProfilCevabi, kayitsizProfilGovdesi, profilAtaCevabi, profilAtaGovdesi,
-  profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi, gizlilikTaahhuduGovdesi,
+  profilSayfalariCevabi, profilSayfalariGovdesi, nabizCevabi, nabizGovdesi, gizlilikTaahhuduGovdesi, cihazBagiCevabi,
 } from '#paylasilan/sozlesme/oturum.ts';
+import type { IstekBilgisi } from '#cekirdek/uc.ts';
+import { BAG_CEREZ_SN, BAG_CEREZI, sfMetniCoz } from './cihaz-bagi.ts';
 import { CEREZ_ADI, CIHAZ_CEREZ_SN, CIHAZ_CEREZI, oturumCerezSn } from './kurallar.ts';
 import {
   cikisYap, girisYap, kartlaGirisYap, ilkPiniBelirle, istektekiOturumOzeti, kendiParolasiniDegistir, kendiPininiDegistir,
   oturumKullanicisi, saatCihaziniKapat, saatCihazlari, saatIstegiAc, saatIstegiSor, saatIsteginiOnayla,
   cihazDurumu, ortakCihazKaydet, ortakCihazlar, ortakCihaziKapat,
   cihazaGoreKullanici, kayitsizProfiliYaz, profilAta, profilListesi, profilSayfalariniYaz, nabizKaydet, gizlilikTaahhuduOnayla, sinirliGirisiDenetle,
+  cihazBagiDaveti, cihazBaginiKaydet, cihazBaginiYenile,
 } from './servis.ts';
 import type { Simdi } from './sorgular.ts';
+
+// Yeni oturum çerezi ve tarayıcıya cihaz bağı daveti (2226-6 a); önceki oturumun bağ çerezi artık geçmez, silinir.
+function oturumCereziYaz(istek: IstekBilgisi, anahtar: string, azamiSn: number): void {
+  istek.cerezYaz(CEREZ_ADI, anahtar, azamiSn);
+  if (istek.cerez(BAG_CEREZI) !== null) istek.cerezSil(BAG_CEREZI);
+  const davet = cihazBagiDaveti(anahtar);
+  if (davet !== null) istek.baslikYaz('Secure-Session-Registration', davet);
+}
 
 // Saat parametredir ki test giriş beklemesini saat beklemeden sınayabilsin; üretimde null: veritabanı saati.
 export function oturumUclari(simdi: () => Simdi = () => null) {
@@ -28,7 +39,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       txDisi: true,
       cevap: oturumCevabi,
       isle: async ({ db, kullanici, istek }) => ({
-        kullanici: await oturumKullanicisi(db, istek.cerez(CEREZ_ADI), kullanici, istek.cerez(CIHAZ_CEREZI)),
+        kullanici: await oturumKullanicisi(db, istek.cerez(CEREZ_ADI), kullanici, istek.cerez(CIHAZ_CEREZI), istek.cerez(BAG_CEREZI)),
       }),
     }),
     uc({
@@ -43,7 +54,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         await sinirliGirisiDenetle(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI));
         // Bu tarayıcının eski anahtarı kapanır (2226-5 a): kopyalanmış çerez sahibi yeniden girince ölür; öbür cihazlar açık kalır.
         await cikisYap(db, istek.cerez(CEREZ_ADI));
-        istek.cerezYaz(CEREZ_ADI, sonuc.anahtar, oturumCerezSn(sonuc.kullanici));
+        oturumCereziYaz(istek, sonuc.anahtar, oturumCerezSn(sonuc.kullanici));
         return { kullanici: await cihazaGoreKullanici(db, sonuc.kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
@@ -60,7 +71,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         // Oturum açıkken okutulan kart kişiyi değiştirir (1898 a): öncekinin oturumu kapanır, istasyonda iki oturum kalmaz.
         await sinirliGirisiDenetle(db, kullanici, istek.cerez(CIHAZ_CEREZI));
         await cikisYap(db, istek.cerez(CEREZ_ADI));
-        istek.cerezYaz(CEREZ_ADI, anahtar, oturumCerezSn(kullanici));
+        oturumCereziYaz(istek, anahtar, oturumCerezSn(kullanici));
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
@@ -74,7 +85,7 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
         const { anahtar, kullanici } = await ilkPiniBelirle(db, { ...govde, ip: istek.ip, tarayici: istek.tarayici, gunluk }, simdi());
         await sinirliGirisiDenetle(db, kullanici, istek.cerez(CIHAZ_CEREZI));
         await cikisYap(db, istek.cerez(CEREZ_ADI));
-        istek.cerezYaz(CEREZ_ADI, anahtar, oturumCerezSn(kullanici));
+        oturumCereziYaz(istek, anahtar, oturumCerezSn(kullanici));
         return { kullanici: await cihazaGoreKullanici(db, kullanici, istek.cerez(CIHAZ_CEREZI)) };
       },
     }),
@@ -297,7 +308,44 @@ export function oturumUclari(simdi: () => Simdi = () => null) {
       isle: async ({ db, istek }) => {
         await cikisYap(db, istek.cerez(CEREZ_ADI));
         istek.cerezSil(CEREZ_ADI);
+        if (istek.cerez(BAG_CEREZI) !== null) istek.cerezSil(BAG_CEREZI);
         return undefined;
+      },
+    }),
+    // Cihaza bağlı oturum (2226-6 a, W3C DBSC): bu iki ucu tarayıcı kendisi çağırır; ekran kullanmaz. Kimlik oturum çereziyle
+    // servis içinde denetlenir: bağ çerezinin süresi dolmuşken kapı kimliği çözemez, yenileme yine de geçebilmelidir.
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/cihaz-bagi/kayit',
+      yetki: 'acik',
+      cevap: cihazBagiCevabi,
+      isle: async ({ db, istek }) => {
+        const { belirtec, talimat } = await cihazBaginiKaydet(db, {
+          anahtar: istek.cerez(CEREZ_ADI), cihazBelirteci: istek.cerez(CIHAZ_CEREZI), kanit: istek.baslik('Secure-Session-Response'),
+        });
+        istek.cerezYaz(BAG_CEREZI, belirtec, BAG_CEREZ_SN);
+        return talimat;
+      },
+    }),
+    uc({
+      yontem: 'POST',
+      yol: '/oturum/cihaz-bagi/yenile',
+      yetki: 'acik',
+      cevap: cihazBagiCevabi,
+      isle: async ({ db, istek }) => {
+        const sonuc = await cihazBaginiYenile(db, {
+          anahtar: istek.cerez(CEREZ_ADI),
+          cihazBelirteci: istek.cerez(CIHAZ_CEREZI),
+          oturumKimligi: sfMetniCoz(istek.baslik('Sec-Secure-Session-Id')),
+          kanit: istek.baslik('Secure-Session-Response'),
+        });
+        if (sonuc.tur === 'meydan') {
+          // 403 tarayıcıya "bu meydanı imzala ve yeniden dene" der (W3C DBSC 8.8); başlık hata cevabında da kalır.
+          istek.baslikYaz('Secure-Session-Challenge', sonuc.baslik);
+          throw yetkiYok('Cihaz bağı kanıtı gerekli.');
+        }
+        istek.cerezYaz(BAG_CEREZI, sonuc.belirtec, BAG_CEREZ_SN);
+        return sonuc.talimat;
       },
     }),
   ];

@@ -61,6 +61,14 @@ export const girisCevabi = oturumCevabi.extend({ pinBelirlenecek: z.literal(true
 // Çıkış gövdesiz cevap verir (204).
 export const cikisCevabi = z.undefined();
 
+// Cihaza bağlı oturum (2226-6 a): W3C DBSC oturum talimatı; alan adları belirtimin kendisidir. Tarayıcı okur, ekran kullanmaz.
+export const cihazBagiCevabi = z.object({
+  session_identifier: z.string(),
+  refresh_url: z.string(),
+  scope: z.object({ include_site: z.boolean() }),
+  credentials: z.array(z.object({ type: z.literal('cookie'), name: z.string(), attributes: z.string() })),
+});
+
 // Hesap kilidi: ad, bütün cihazlardan art arda hatalı denemeden sonra bir süre kilitlenir. Liste yalnız etkin kilitleri verir;
 // açma kilidin kimliğiyle yapılır (ad bir kişiye bağlı olmayabilir). Açan kişi ve an sunucudan gelir.
 export const hesapKilidiSemasi = z.object({
@@ -157,6 +165,7 @@ export type NabizGovdesi = z.input<typeof nabizGovdesi>;
 export type NabizCevabi = z.output<typeof nabizCevabi>;
 export type OturumCevabi = z.output<typeof oturumCevabi>;
 export type CikisCevabi = z.output<typeof cikisCevabi>;
+export type CihazBagiCevabi = z.output<typeof cihazBagiCevabi>;
 export type HesapKilidi = z.output<typeof hesapKilidiSemasi>;
 export type HesapKilitleriSorgusu = z.input<typeof hesapKilitleriSorgusu>;
 export type HesapKilitleriCevabi = z.output<typeof hesapKilitleriCevabi>;
