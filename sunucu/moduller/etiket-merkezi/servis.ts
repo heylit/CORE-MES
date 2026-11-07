@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
+  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
@@ -23,7 +23,7 @@ import {
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
-  baskiEkle, etiketTurleriOku, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
+  atlamaEkle, baskiEkle, etiketTurleriOku, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
 import { KOMUT_URETICILERI } from './yazici-dili.ts';
 
@@ -303,11 +303,19 @@ export async function bekleyenler(db: Db, simdi: Date = new Date()): Promise<Bek
   const degisimler = await etiketKaliteDegisimleri(db, baslangic);
   const kaliteBasimlari = await sonBasimlar(db, 'kalite-durum', degisimler.map((d) => d.bakiyeId));
   const adlar = await malzemeOzetleri(db, [...new Set(degisimler.map((d) => d.malzemeId))]);
+  const kabulAtlamalari = await sonAtlamalar(db, 'mal-kabul', kabuller.map((k) => k.malKabulId));
+  const kaliteAtlamalari = await sonAtlamalar(db, 'kalite-durum', degisimler.map((d) => d.bakiyeId));
   return {
     gun: BEKLEYEN_GUN,
     bekleyenler: [
-      ...malKabulBekleyenleri(kabuller, lotBasimlari),
-      ...kaliteBekleyenleri(degisimler.map((d) => ({ ...d, malzemeAd: adlar.get(d.malzemeId)?.ad ?? null })), kaliteBasimlari),
+      ...malKabulBekleyenleri(kabuller, lotBasimlari, kabulAtlamalari),
+      ...kaliteBekleyenleri(degisimler.map((d) => ({ ...d, malzemeAd: adlar.get(d.malzemeId)?.ad ?? null })), kaliteBasimlari, kaliteAtlamalari),
     ].sort(bekleyenSirasi),
   };
 }
+
+// 2223-4 a: işaret yalnız eklenir, kim ve ne zaman tutulur. Olmayan kimlik zarar vermez (listede olmayan kayıt düşmez); yinelenen bir kez.
+export async function atla(db: Db, kullanici: Kullanici, g: AtlaGovdesi): Promise<AtlaCevabi> {
+  return { atlanan: await atlamaEkle(db, g.tur, [...new Set(g.idler)], kullanici.id) };
+}
+

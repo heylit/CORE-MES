@@ -362,6 +362,17 @@ describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
     assert.equal(kaliteBekleyenleri([{ ...d, malzemeAd: null, kaliteDurumu: 'red' }], new Map())[0]?.ayrinti, 'RED');
   });
 
+  test('EM-31 (2223-4 a): basılmayacak işareti olaydan sonraysa kayıt düşer; olay işaretten sonraysa yeniden bekler', () => {
+    const kabul = { malKabulId: 7, no: 'MK-000007', irsaliyeNo: null, zaman: '2026-11-07T10:00:00.000Z', partiIdler: [1] };
+    assert.deepEqual(malKabulBekleyenleri([kabul], new Map(), new Map([[7, '2026-11-07T10:01:00.000Z']])), []);
+    assert.equal(malKabulBekleyenleri([kabul], new Map(), new Map([[7, '2026-11-07T09:59:00.000Z']])).length, 1, 'eski işaret yeni kabulü düşürmez');
+    assert.equal(malKabulBekleyenleri([kabul], new Map(), new Map([[8, '2026-11-07T10:01:00.000Z']])).length, 1, 'başka kabulün işareti saymaz');
+    const d = { bakiyeId: 9, lotNo: 'LT-1', malzemeAd: null, konumKod: 'KAR', kaliteDurumu: 'red' as const, degisim: '2026-11-07T10:00:00.000Z' };
+    assert.deepEqual(kaliteBekleyenleri([d], new Map(), new Map([[9, '2026-11-07T10:00:00.000Z']])), []);
+    assert.equal(kaliteBekleyenleri([{ ...d, degisim: '2026-11-07T11:00:00.000Z' }], new Map(), new Map([[9, '2026-11-07T10:00:00.000Z']])).length, 1,
+      'durum işaretten sonra yeniden değişince geri gelir');
+  });
+
   test('sıra yeniden eskiye; aynı anda tür ve kimlik', () => {
     const b = (tur: 'mal-kabul' | 'kalite-durum', id: number, zaman: string) => ({ tur, id, baslik: '', ayrinti: '', zaman, etiketSayisi: 1 });
     const liste = [b('mal-kabul', 1, '2026-11-01T00:00:00Z'), b('mal-kabul', 2, '2026-11-02T00:00:00Z'), b('kalite-durum', 3, '2026-11-02T00:00:00Z')];

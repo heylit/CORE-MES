@@ -399,11 +399,14 @@ export function bekleyenBaslangici(simdi: Date): string {
 }
 const sonra = (basim: string | undefined, olay: string): boolean => basim !== undefined && Date.parse(basim) >= Date.parse(olay);
 
+// EM-31 (2223-4 a): basılmayacak işareti olaydan sonra verildiyse kayıt düşer; olay işaretten sonraysa yeniden bekler.
 export function malKabulBekleyenleri(
   kabuller: readonly { malKabulId: number; no: string; irsaliyeNo: string | null; zaman: string; partiIdler: readonly number[] }[],
   lotBasimlari: ReadonlyMap<number, string>,
+  atlamalar: ReadonlyMap<number, string> = new Map(),
 ): Bekleyen[] {
   return kabuller.flatMap((k) => {
+    if (sonra(atlamalar.get(k.malKabulId), k.zaman)) return [];
     const lotlar = [...new Set(k.partiIdler)];
     const basilmamis = lotlar.filter((p) => !sonra(lotBasimlari.get(p), k.zaman)).length;
     if (basilmamis === 0) return [];
@@ -415,8 +418,9 @@ export function malKabulBekleyenleri(
 export function kaliteBekleyenleri(
   degisimler: readonly { bakiyeId: number; lotNo: string; malzemeAd: string | null; konumKod: string; kaliteDurumu: KaliteDurumu; degisim: string }[],
   basimlar: ReadonlyMap<number, string>,
+  atlamalar: ReadonlyMap<number, string> = new Map(),
 ): Bekleyen[] {
-  return degisimler.flatMap((d) => (sonra(basimlar.get(d.bakiyeId), d.degisim) ? [] : [{
+  return degisimler.flatMap((d) => (sonra(basimlar.get(d.bakiyeId), d.degisim) || sonra(atlamalar.get(d.bakiyeId), d.degisim) ? [] : [{
     tur: 'kalite-durum' as const, id: d.bakiyeId, baslik: `${d.lotNo} ${d.konumKod}`,
     ayrinti: [KALITE_DURUM_ADLARI[d.kaliteDurumu], d.malzemeAd].filter(Boolean).join(' · '), zaman: d.degisim, etiketSayisi: 1,
   }]));

@@ -1,11 +1,12 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
 import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
-import type { Bekleyen, BekleyenlerCevabi, EtiketDurumu, EtiketlerCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { AtlaCevabi, AtlaGovdesi, Bekleyen, BekleyenlerCevabi, EtiketDurumu, EtiketlerCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
-import { api } from '../../ortak/veri/api.ts';
+import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KAYIT_BASLIKLARI, kayitSecimiYaz, secimSiniri } from './kayit-secimi.ts';
@@ -45,11 +46,6 @@ const BEKLEYEN_SUTUNLARI: readonly Sutun<Bekleyen>[] = [
   { anahtar: 'ayrinti', baslik: 'Ayrıntı', hucre: (b) => b.ayrinti },
   { anahtar: 'zaman', baslik: 'Ne zaman', kirilmaz: true, hucre: (b) => tesisSaati(new Date(b.zaman)) },
   { anahtar: 'sayi', baslik: 'Etiket', hizala: 'sag', hucre: (b) => b.etiketSayisi },
-  {
-    anahtar: 'bas', baslik: '',
-    hucre: (b) => <Link to={basmaAdresi(b.tur, [b.id])} aria-label={`${b.baslik} bas`}><Dugme simge="printer">Bas</Dugme></Link>,
-    csv: () => '',
-  },
 ];
 
 const TUR_SUTUNLARI: readonly Sutun<Etiket>[] = [
@@ -67,8 +63,36 @@ const TUR_SUTUNLARI: readonly Sutun<Etiket>[] = [
 
 // 2223-1 a: görevden doğan ve henüz basılmamış etiketler sunucuda kaynak kayıtlardan bulunur. Bas, kaydı seçili olarak Etiket bas
 // sayfasını açar; basılınca satır listeden düşer. Türün hepsi bir seferde (en çok seçim sınırı kadar kayıt) basılabilir.
+// 2223-4 a: basılmayacak işareti satırı kişi ve zamanla defterden düşürür; kayıt sonra yeniden değişirse satır geri gelir.
 function BekleyenListesi() {
+  const oturum = useOturum();
+  const basar = oturum.data?.islemler.includes('etiket-merkezi.bas') ?? false;
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.bekleyenler, queryFn: () => api.get<BekleyenlerCevabi>('/etiket-merkezi/bekleyenler') });
+  const atla = useMutation({
+    mutationFn: (g: AtlaGovdesi) => api.post<AtlaCevabi>('/etiket-merkezi/bekleyenler/atla', g, { istekKimligi: yeniIstekKimligi() }),
+    onSuccess: () => {
+      bildir('tamam', 'Etiket basılmayacak olarak işaretlendi.');
+      void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
+    },
+    onError: (h) => bildir('hata', hataIletisi(h, 'İşaretlenemedi; yeniden deneyin.')),
+  });
+  const sutunlar: readonly Sutun<Bekleyen>[] = [
+    ...BEKLEYEN_SUTUNLARI,
+    {
+      anahtar: 'islem', baslik: '', csv: () => '',
+      hucre: (b) => (
+        <div className="tc-etk-dugmeler">
+          <Link to={basmaAdresi(b.tur, [b.id])} aria-label={`${b.baslik} bas`}><Dugme simge="printer">Bas</Dugme></Link>
+          {basar && (
+            <Dugme simge="x" disabled={atla.isPending} aria-label={`${b.baslik} basılmayacak`}
+              onClick={() => { atla.mutate({ tur: b.tur, idler: [b.id] }); }}>Basılmayacak</Dugme>
+          )}
+        </div>
+      ),
+    },
+  ];
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" yenile={() => { void liste.refetch(); }} />;
   const { bekleyenler, gun } = liste.data;
@@ -76,7 +100,7 @@ function BekleyenListesi() {
   return (
     <>
       <p className="tc-etk-not">
-        Son {gun} günde açılan ya da durumu değişen ve etiketi henüz basılmamış kayıtlar: mal kabul lotları ve kalite durumu değişen stok satırları. Basılan kayıt listeden düşer.
+        Son {gun} günde açılan ya da durumu değişen ve etiketi henüz basılmamış kayıtlar: mal kabul lotları ve kalite durumu değişen stok satırları. Basılan ya da basılmayacak işaretlenen kayıt listeden düşer.
       </p>
       {turler.length > 0 && (
         <div className="tc-etk-dugmeler">
@@ -90,7 +114,7 @@ function BekleyenListesi() {
           })}
         </div>
       )}
-      <Tablo etiket="Bekleyen etiketler" sutunlar={BEKLEYEN_SUTUNLARI} satirlar={bekleyenler} satirAnahtari={(b) => `${b.tur}-${String(b.id)}`}
+      <Tablo etiket="Bekleyen etiketler" sutunlar={sutunlar} satirlar={bekleyenler} satirAnahtari={(b) => `${b.tur}-${String(b.id)}`}
         bosMesaj="Basılmayı bekleyen etiket yok." />
     </>
   );

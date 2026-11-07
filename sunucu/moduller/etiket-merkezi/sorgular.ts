@@ -93,3 +93,22 @@ export async function sonBasimlar(db: Db, kaynakTur: string, idler: readonly num
   );
   return new Map(satirlar.map((s) => [s.id, s.zaman]));
 }
+
+// Basılmayacak işareti (2223-4 a): yalnız eklenir; en son işaret geçerlidir.
+export async function atlamaEkle(db: Db, tur: string, idler: readonly number[], kisiId: number): Promise<number> {
+  const satirlar = await db.sorgu<{ id: number }>(
+    'INSERT INTO etiket_merkezi_atlanan (tur, kaynak_id, kisi_id) SELECT $1, x, $3 FROM unnest($2::int[]) AS x RETURNING id',
+    [tur, idler, kisiId],
+  );
+  return satirlar.length;
+}
+
+export async function sonAtlamalar(db: Db, tur: string, idler: readonly number[]): Promise<Map<number, string>> {
+  if (idler.length === 0) return new Map();
+  const satirlar = await db.sorgu<{ id: number; zaman: string }>(
+    `SELECT kaynak_id AS id, ${zamanMetni('max(zaman)')} AS zaman FROM etiket_merkezi_atlanan
+      WHERE tur = $1 AND kaynak_id = ANY($2::int[]) GROUP BY kaynak_id`,
+    [tur, idler],
+  );
+  return new Map(satirlar.map((s) => [s.id, s.zaman]));
+}
