@@ -4,15 +4,17 @@ import { api } from './api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
 // Sekme kapanınca silinen depo: yenilemede karşılama yeniden çıkmaz, yeni sekmede bir kez çıkar.
+// Kullanıcı kararı (kart 2232): kişiyle birlikte tesis günü de saklanır; gün açık kalan sekmede de ilk açılışta yeniden karşılar.
 const DEPO_ANAHTARI = 'tmi.karsilama';
+const depoDegeri = (kisiId: number, gun: string): string => `${String(kisiId)}|${gun}`;
 
 // Depo kapalıysa (gizli pencere, engelli site verisi) "görülmedi" sayılır: karşılama yenilemede tekrar çıkabilir, hiç kaybolmaz.
-export function karsilamaGorulduMu(kisiId: number): boolean {
-  try { return window.sessionStorage.getItem(DEPO_ANAHTARI) === String(kisiId); } catch { return false; }
+export function karsilamaGorulduMu(kisiId: number, gun: string): boolean {
+  try { return window.sessionStorage.getItem(DEPO_ANAHTARI) === depoDegeri(kisiId, gun); } catch { return false; }
 }
 
-export function karsilamaGoruldu(kisiId: number): void {
-  try { window.sessionStorage.setItem(DEPO_ANAHTARI, String(kisiId)); } catch { /* depo kapalı; bileşen kendi durumunda kapalı kalır */ }
+export function karsilamaGoruldu(kisiId: number, gun: string): void {
+  try { window.sessionStorage.setItem(DEPO_ANAHTARI, depoDegeri(kisiId, gun)); } catch { /* depo kapalı; bileşen kendi durumunda kapalı kalır */ }
 }
 
 // Oturum kalkınca (çıkış ya da oturumsuz cevap) çağrılır, girişte değil: giriş ekranı oturumu kendi yazar, ortak `useGiris` uygulamada
