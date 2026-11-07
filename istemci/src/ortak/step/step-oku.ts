@@ -1,5 +1,7 @@
 import type { StepAgi, StepCevabi, StepIstegi } from './step-isci.ts';
-import StepIsci from './step-isci.ts?worker&inline';
+// Çalışan ayrı dosyadır (satır içi blob değil): çevirici Function yapıcısı ister, izni yalnız o dosyanın kendi ilkesi verir
+// (pwa/icerik-ilkesi.ts ilkeSec); blob çalışan sayfanın ilkesini devralırdı.
+import StepIsci from './step-isci.ts?worker';
 import wasmAdresi from 'occt-import-js/dist/occt-import-js.wasm?url';
 
 export type { StepAgi } from './step-isci.ts';

@@ -125,7 +125,7 @@ describe('3D Atölyesi boya ve maske kartı (2144, prototip v3)', () => {
     }));
     ac();
     const k = await kart();
-    expect(within(k).getByText('Son kayıt: 05.11.2026 14:10, Deneme Kişi')).toBeTruthy();
+    expect(await within(k).findByText('Son kayıt: 05.11.2026 14:10, Deneme Kişi')).toBeTruthy();
     expect(await screen.findByText('renk 1=--grafik')).toBeTruthy();
     expect(await screen.findByText(/Fırça: Adım 40 · Toz boya\. Modelde yüze tıklayın/)).toBeTruthy();
     expect(kaydetDugmesi(k).hasAttribute('disabled')).toBe(true);

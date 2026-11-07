@@ -120,6 +120,8 @@ export function AtolyeHaritasi() {
   const [salonPenceresi, salonPenceresiYaz] = useState(false);
   const [arama, aramaYaz] = useState('');
   const [aramaAcik, aramaAcikYaz] = useState(false);
+  // aria-controls yalnız liste çizilince verilir: olmayan kimliği gösteren ilişki ekran okuyucuda kırık sayılır (axe kritik).
+  const sonuclarAcik = aramaAcik && arama.trim() !== '';
   // Her tuşta istek gitmez: yazma durunca aranır.
   const [gecikmeliArama, gecikmeliAramaYaz] = useState('');
   useEffect(() => {
@@ -424,9 +426,9 @@ export function AtolyeHaritasi() {
                 onChange={(o) => { aramaYaz(o.target.value); aramaAcikYaz(true); }}
                 onFocus={() => aramaAcikYaz(true)}
                 onKeyDown={(o) => { if (o.key === 'Escape') aramaAcikYaz(false); if (o.key === 'Enter' && aramaSorgusu.data?.sonuclar[0]) aramaSec(aramaSorgusu.data.sonuclar[0]); }}
-                aria-controls="tc-atolye-sonuclar"
+                aria-controls={sonuclarAcik ? 'tc-atolye-sonuclar' : undefined}
               />
-              {aramaAcik && arama.trim() !== '' && (
+              {sonuclarAcik && (
                 <div id="tc-atolye-sonuclar" className="tc-atolye-sonuclar" role="listbox" aria-label="Arama sonuçları">
                   {aramaSorgusu.isError && <p className="tc-atolye-hata">{hataIletisi(aramaSorgusu.error, 'Arama yapılamadı')}</p>}
                   {aramaSorgusu.data?.sonuclar.length === 0 && <p className="tc-atolye-ipucu">Sonuç yok.</p>}

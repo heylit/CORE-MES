@@ -3,7 +3,9 @@ import type { Material, Object3D } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import type { ModelCevabi, ModelIstegi } from './model-isci.ts';
-import ModelIsci from './model-isci.ts?worker&inline';
+// Çalışan ayrı dosyadır (satır içi blob değil): çevirici Function yapıcısı ister, izni yalnız o dosyanın kendi ilkesi verir
+// (pwa/icerik-ilkesi.ts ilkeSec); blob çalışan sayfanın ilkesini devralırdı.
+import ModelIsci from './model-isci.ts?worker';
 import wasmAdresi from 'occt-import-js/dist/occt-import-js.wasm?url';
 
 export type ModelBicimi = 'step' | 'iges' | 'stl' | 'glb' | 'gltf';

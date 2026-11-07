@@ -1,10 +1,10 @@
-import type { UserConfig } from 'vite';
+import type { Plugin, UserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { arkonuSun } from '../arkon/sun.ts';
-import { CERCEVE_ILKESI, EK_GUVENLIK_BASLIKLARI, ICERIK_ILKESI, ILKE_BASLIGI } from './src/ortak/pwa/icerik-ilkesi.ts';
+import { CERCEVE_ILKESI, EK_GUVENLIK_BASLIKLARI, EVAL_ISTEYEN_CALISANLAR, ICERIK_ILKESI, ILKE_BASLIGI, ilkeSec } from './src/ortak/pwa/icerik-ilkesi.ts';
 import { webUygulamasi } from './src/ortak/pwa/vite-eklentisi.ts';
 import { tembelRotalar } from './src/ortak/rota/tembel-rotalar.ts';
 
@@ -30,10 +30,33 @@ function derlemeBilgisi(): { surum: string; tarih: string; commit: string | null
 const GELISTIRME_BASLIKLARI = { [ILKE_BASLIGI]: CERCEVE_ILKESI, ...EK_GUVENLIK_BASLIKLARI };
 const ONIZLEME_BASLIKLARI = { [ILKE_BASLIGI]: ICERIK_ILKESI, ...EK_GUVENLIK_BASLIKLARI };
 
+// STEP çeviricisinin çalışan dosyaları kendi ilkesiyle gider (icerik-ilkesi.ts ilkeSec). Önizleme başlıkları dosya sunulurken sabit
+// yazılır; bu dosyalarda ilke başlığı yolun ilkesiyle değiştirilir. Çalışanın adı değişip ilke eşleşmesi kaçarsa STEP sessizce
+// açılmazdı: derleme durur.
+function calisanIlkesi(): Plugin {
+  return {
+    name: 'tmi-calisan-ilkesi',
+    configurePreviewServer(sunucu) {
+      sunucu.middlewares.use((istek, yanit, sonraki) => {
+        const ilke = ilkeSec((istek.url ?? '').split('?')[0] ?? '');
+        const yaz = yanit.setHeader.bind(yanit);
+        yanit.setHeader = (ad, deger) => yaz(ad, ad.toLowerCase() === ILKE_BASLIGI.toLowerCase() ? ilke : deger);
+        sonraki();
+      });
+    },
+    generateBundle(_ayar, paket) {
+      for (const ad of EVAL_ISTEYEN_CALISANLAR) {
+        const dosya = Object.keys(paket).find((d) => d.startsWith(`assets/${ad}-`));
+        if (dosya === undefined || ilkeSec(dosya) === ICERIK_ILKESI) this.error(`${ad} çalışan dosyası bulunamadı ya da adı ilke eşleşmesine uymuyor (${dosya ?? 'yok'})`);
+      }
+    },
+  };
+}
+
 // vitest kendi vite kopyasını getirdiği için tipler çakışır; yapılandırma düz nesne olarak verilir.
 export default {
   root: kok,
-  plugins: [tembelRotalar(), react(), arkonuSun(), webUygulamasi()],
+  plugins: [tembelRotalar(), react(), arkonuSun(), webUygulamasi(), calisanIlkesi()],
   resolve: { alias: { '#paylasilan': paylasilan } },
   define: { __TMI_DERLEME__: JSON.stringify(derlemeBilgisi()) },
   server: {

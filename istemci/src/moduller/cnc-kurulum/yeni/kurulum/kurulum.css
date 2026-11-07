@@ -110,6 +110,8 @@
 .tc-ck-meta { display: flex; gap: var(--b-1); margin-bottom: var(--b-1); }
 .tc-ck-sh { font-size: var(--yazi-xs); letter-spacing: var(--harf-aralik-14); font-weight: 700; color: var(--muted); text-transform: uppercase; margin: var(--b-4) 0 var(--b-1); display: flex; justify-content: space-between; }
 .tc-ck-sh em { font-style: normal; color: var(--sig); letter-spacing: 0; }
+/* Satır ve çipler klavyeyle seçilsin diye düğmedir; tarayıcının düğme görünümü sıfırlanır, görünüm eski div ile aynı kalır. */
+:where(button).tc-ck-srow, :where(button).tc-ck-trow, :where(button).tc-ck-chips { box-sizing: border-box; width: 100%; margin: 0; padding: 0; border: 0; background: none; text-align: inherit; align-items: normal; }
 .tc-ck-srow, .tc-ck-trow { display: flex; justify-content: space-between; align-items: center; gap: var(--b-3); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); font-size: var(--yazi-s); cursor: pointer; }
 .tc-ck-srow span { color: var(--muted); } .tc-ck-srow b { font-weight: 600; text-align: right; }
 .tc-ck-srow:hover, .tc-ck-trow:hover { background: var(--hi); }
