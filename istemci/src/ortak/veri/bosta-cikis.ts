@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 
-// 1356 a (kart #1358): istasyonda 15 dk dokunulmayan ekranda oturum kapanır; sıradaki kişi öncekinin oturumunu devralmasın. Sunucu da
-// aynı süreyi tutar ama terminal sürekli sorduğu için ekran açıkken onun sayacı dolmaz; boşta olmayı yalnız ekran bilir.
-export const ISTASYON_BOSTA_MS = 15 * 60 * 1000;
+// 2226-3 (kullanıcı 07.11; 1356 a'nın 15 dk'sının yerine): istasyondaki oturumu kişinin vardiya sonu sunucuda kapatır; ekran yalnız
+// sekiz saat hiç dokunulmazsa çıkar (vardiyası tanımsız kişinin yedeği). Terminal sürekli sorduğu için sunucunun boşta sayacı ekran
+// açıkken dolmaz; dokunulmamayı yalnız ekran bilir.
+export const ISTASYON_BOSTA_MS = 8 * 60 * 60 * 1000;
 
 // Kişinin ekrana dokunduğunu gösteren olaylar. Fare kıpırtısı sayılmaz: tezgâhın yanındaki titreşim ya da kayan fare oturumu açık tutmasın.
 export const ETKINLIK_OLAYLARI = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;

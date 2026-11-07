@@ -191,14 +191,17 @@ describe('cihaz profili (gerçek PostgreSQL)', () => {
     assert.deepEqual(kisi?.islemler.filter((i) => i.startsWith('sayfa.')).sort(), ['sayfa.cizimler', 'sayfa.uretim-terminali']);
   });
 
-  test('istasyonda 15 dk boşta kalan oturum geçersizdir; aynı oturum Tam cihazda 12 saat kuralına tabidir', async () => {
+  // 2226-3: istasyonun boşta sınırı 15 dk'dan 8 saate çıktı (vardiya sonu ayrıca: vardiya-oturumu.test.ts); 15 dk boşta oturum artık geçerli.
+  test('istasyonda 15 dk boşta kalan oturum geçerlidir; boşta sınırını aşan istasyon oturumu geçersizdir', async () => {
     const ist = await kaydet('Deneme bosta istasyon', null, 'istasyon');
     await giris('operator', ist.cihazCerezi);
     const anahtar = oturumlar.get('operator') ?? '';
-    // Son açılan oturum operatörün bu girişidir (testler sırayla koşar).
-    await o().sahip.sorgu('UPDATE oturum SET son_gorulme = now() - make_interval(secs => $1) WHERE id = (SELECT max(id) FROM oturum)', [ISTASYON_BOSTA_SN + 60]);
     assert.ok(anahtar.length > 0);
+    // Son açılan oturum operatörün bu girişidir (testler sırayla koşar).
+    const bosta = (sn: number) => o().sahip.sorgu('UPDATE oturum SET son_gorulme = now() - make_interval(secs => $1) WHERE id = (SELECT max(id) FROM oturum)', [sn]);
+    await bosta(15 * 60 + 60);
+    assert.equal((await ben(ist.cihazCerezi, 'operator'))?.cihazProfili, 'istasyon');
+    await bosta(ISTASYON_BOSTA_SN + 60);
     assert.equal(await ben(ist.cihazCerezi, 'operator'), null);
-    assert.equal((await ben(null, 'operator'))?.cihazProfili, 'tam');
   });
 });

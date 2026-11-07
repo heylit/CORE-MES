@@ -148,7 +148,7 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.equal(cevap.json().kullanici.ad, 'Deneme Yönetici');
 
     const baslik = String(cevap.headers['set-cookie']);
-    assert.match(baslik, new RegExp(`^${CEREZ_ADI}=[A-Za-z0-9_-]{43}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict$`));
+    assert.match(baslik, new RegExp(`^${CEREZ_ADI}=[A-Za-z0-9_-]{43}; Path=/; Max-Age=604800; HttpOnly; SameSite=Strict$`));
     const anahtar = cerez(cevap).split('=')[1] ?? '';
     const sakli = await vt().sorgu<{ anahtar_ozeti: string }>('SELECT anahtar_ozeti FROM oturum');
     assert.equal(sakli.some((s) => s.anahtar_ozeti === anahtar), false);
@@ -648,21 +648,21 @@ describe('oturum (gerçek PostgreSQL)', () => {
     assert.notEqual(await ben(acik), null);
   });
 
-  test('12 saat hareketsiz kalan ve 30 günü dolan oturum geçersizdir', async () => {
+  test('8 saat hareketsiz kalan ve 7 günü dolan oturum geçersizdir (2226-3)', async () => {
     const bosta = cerez(await giris('yonetici', PAROLA));
     const eski = cerez(await giris('yonetici', PAROLA));
     const sonIki = await vt().sorgu<{ id: number }>('SELECT id FROM oturum ORDER BY id DESC LIMIT 2');
     const [eskiId, bostaId] = sonIki.map((s) => s.id);
 
-    await vt().sorgu("UPDATE oturum SET son_gorulme = now() - interval '11 hours 59 minutes' WHERE id = $1", [bostaId]);
+    await vt().sorgu("UPDATE oturum SET son_gorulme = now() - interval '7 hours 59 minutes' WHERE id = $1", [bostaId]);
     assert.notEqual(await ben(bosta), null);
     const tazelendi = await vt().tek<{ taze: boolean }>("SELECT son_gorulme > now() - interval '1 minute' AS taze FROM oturum WHERE id = $1", [bostaId]);
     assert.equal(tazelendi?.taze, true);
 
-    await vt().sorgu("UPDATE oturum SET son_gorulme = now() - interval '12 hours 1 minute' WHERE id = $1", [bostaId]);
+    await vt().sorgu("UPDATE oturum SET son_gorulme = now() - interval '8 hours 1 minute' WHERE id = $1", [bostaId]);
     assert.equal(await ben(bosta), null);
 
-    await vt().sorgu("UPDATE oturum SET acildi = now() - interval '30 days 1 minute' WHERE id = $1", [eskiId]);
+    await vt().sorgu("UPDATE oturum SET acildi = now() - interval '7 days 1 minute' WHERE id = $1", [eskiId]);
     assert.equal(await ben(eski), null);
   });
 

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   BEKLEME_AZAMI_SN, KUYRUK_BIRIKME_ESIGI, NABIZ_ESITLEME_AZAMI_SN, SESSIZ_ESIK_SN, TARAYICI_AZAMI, beklemeSn, denemeKilitAnahtari, esitlemeSuresi,
   hesapKilitlenirMi, kalanBeklemeSn, kilitKalanDk, nabizDurumu, tarayiciMetni,
-  SURESIZ_KILIT_DK, SURESIZ_KILIT_ILETISI, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu,
+  AZAMI_SN, BOSTA_SN, ISTASYON_BOSTA_SN, istasyonOturumSonuMs, vtZamaniMs, SURESIZ_KILIT_DK, SURESIZ_KILIT_ILETISI, hesapKilidiIletisi, hesapKilidiSuresiDk, kilitBuyurMu,
 } from './kurallar.ts';
 
 test('bekleme her hatalı denemede ikiye katlanır: 1, 2, 4, 8... sn; üst sınır 60 sn', () => {
@@ -87,4 +87,26 @@ test('2226-2 a: büyüyen kilit basamakları 15, 60, süresiz; büyümeyen ad he
   assert.equal(kilitBuyurMu('#kart-10.0.0.1', false), false);
   assert.equal(hesapKilidiIletisi(SURESIZ_KILIT_DK * 60), SURESIZ_KILIT_ILETISI);
   assert.match(hesapKilidiIletisi(3600), /60 dk/);
+});
+
+test('2226-3: kişisel cihazda boşta 8 saat, en çok 7 gün; istasyonun boşta yedeği de 8 saat', () => {
+  assert.equal(BOSTA_SN, 8 * 60 * 60);
+  assert.equal(AZAMI_SN, 7 * 24 * 60 * 60);
+  assert.equal(ISTASYON_BOSTA_SN, BOSTA_SN);
+});
+
+test('2226-3: istasyon oturumunun sonu açılışın vardiyasının bitişi + 30 dk; vardiyaya düşmeyen açılışta sınır yok', () => {
+  const s = 3_600_000;
+  const vardiyalar = [{ baslangicMs: 10 * s, bitisMs: 18 * s }, { baslangicMs: 22 * s, bitisMs: 30 * s }];
+  assert.equal(istasyonOturumSonuMs(12 * s, vardiyalar), 18 * s + 30 * 60_000);
+  assert.equal(istasyonOturumSonuMs(21.5 * s, vardiyalar), 30 * s + 30 * 60_000, 'bir saat önce açılan sonraki vardiyanındır');
+  assert.equal(istasyonOturumSonuMs(19 * s, vardiyalar), null);
+  assert.equal(istasyonOturumSonuMs(5 * s, []), null);
+});
+
+test('veritabanı zaman metni okunur', () => {
+  assert.equal(vtZamaniMs('2026-11-07 17:22:32.5+00'), Date.parse('2026-11-07T17:22:32.5Z'));
+  assert.equal(vtZamaniMs('2026-11-07 20:22:32+03'), Date.parse('2026-11-07T17:22:32Z'));
+  assert.equal(vtZamaniMs('2026-11-07 20:52:32+03:30'), Date.parse('2026-11-07T17:22:32Z'));
+  assert.ok(Number.isNaN(vtZamaniMs('bozuk')));
 });
