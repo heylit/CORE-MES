@@ -10,20 +10,20 @@ import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { taslakEkMesaisi } from './planlama-kurallar.ts';
 import type { MotorDurumu, MotorPlani } from './plan-motoru.ts';
 
-// Planın girdisi (st) planlama çerçevesindeki kodla kurulur: motor/girdi.betik çerçeveye de gömülür (planlama-derle.ts), aynı kayıt,
+// Planın girdisi (st) planlama çerçevesindeki kodla kurulur: motor/girdi.js çerçeveye de gömülür (planlama-derle.ts), aynı kayıt,
 // çalışma ve kaynak okuması iki yerde aynı st'yi verir. Motor gibi boş `vm` bağlamında yüklenir; duvar saati tesisin saat dilimindedir.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 const DOSYALAR = ['engine', 'kisitlar', 'girdi', 'durum'] as const;
 
 let kod: string | null = null;
 function girdiKodu(): string {
-  kod ??= `${DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ girdiKur, yeniCalismaKur });`;
+  kod ??= `${DOSYALAR.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ girdiKur, yeniCalismaKur });`;
   return kod;
 }
-// Sunucu çözücüsünün çevirisi (motor/emirler.betik) aynı dosyalarla aynı bağlamda yüklenir; çerçeveye de gömülür (planlamaMotoru).
+// Sunucu çözücüsünün çevirisi (motor/emirler.js) aynı dosyalarla aynı bağlamda yüklenir; çerçeveye de gömülür (planlamaMotoru).
 let cozumKod: string | null = null;
 function cozumKodu(): string {
-  cozumKod ??= `${[...DOSYALAR, 'emirler'].map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ sunucuCozumGirdisi });`;
+  cozumKod ??= `${[...DOSYALAR, 'emirler'].map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ sunucuCozumGirdisi });`;
   return cozumKod;
 }
 
@@ -170,10 +170,10 @@ export interface CozumGirdisi {
   oncul: Record<string, string[]>;
 }
 
-// Çalışma planının çevirisi (motor/calisma.betik) de çerçeveye gömülmez.
+// Çalışma planının çevirisi (motor/calisma.js) de çerçeveye gömülmez.
 let calismaKod: string | null = null;
 function calismaKodu(): string {
-  calismaKod ??= `${[...DOSYALAR, 'calisma'].map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ sunucuCalismaPlani });`;
+  calismaKod ??= `${[...DOSYALAR, 'calisma'].map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ sunucuCalismaPlani });`;
   return calismaKod;
 }
 export interface CalismaIslemi { id: string; m: string; S: number; C: number; bitti: boolean }

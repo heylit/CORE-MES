@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Planın tam girdisi: çerçevenin st ayarları tek yerde (66 a, Y1b) ----------
    Planlama sayfasının stOf'u ve sunucu (plan-girdisi.ts) aynı st'yi bu dosyadaki stTamKur ile kurar: gecikme bedeli ve ağırlıklar,
    plan TL ayarları, malzeme terminleri, plan dengesi, olay uyumu, 1650 kararları, erken sevk, yıllık hedef, montaj, ayar önde ve
@@ -9,7 +10,7 @@ const cerceveD = () => { const s = cerceveS(); return s ? s.D : null; };
 
 /* ---- gecikmenin bedeli (zr-agirlik) ----
    815 (699/3 a): plana yalnız emrin önceliği girer. Kip her zaman 'oncelik'tir (kayıttaki eski 'bedel' de): sıra ve ağırlık siparişin
-   önceliğinden (girdi.betik oncSinifi), tutar, ceza, müşteri sınıfı ve elle çarpan sıraya girmez; bedel hesabı yalnız gösterimdedir. */
+   önceliğinden (girdi.js oncSinifi), tutar, ceza, müşteri sınıfı ve elle çarpan sıraya girmez; bedel hesabı yalnız gösterimdedir. */
 const AG0 = { kip: 'oncelik', taban: 10, fin: 0.13, tavan: CEZA_TAVANI_VARSAYILAN, kar: 0.3, sinif: { A: 1.5, B: 1, C: 0.7 }, bil: { ceza: 1, fin: 1, kar: 1, sinif: 1, elle: 1 }, esik: { y: 1.5, d: 0.6 } };
 const ELLE_ONC = { 1: 2, 2: 1, 3: 0.5 };
 const AG_MUSTERI0 = [
@@ -45,7 +46,7 @@ function agHazirla(D) {
 function agAyar(D = cerceveD()) { const a = (D && D.planAgirlik) || {}; return { ...AG0, ...a, kip: AG0.kip, sinif: { ...AG0.sinif, ...(a.sinif || {}) }, bil: { ...AG0.bil, ...(a.bil || {}) }, esik: { ...AG0.esik, ...(a.esik || {}) } }; }
 function agElle(s) { return s.elle != null ? +s.elle : 1; }
 /* katkı payı = tutar − malzeme − işleme − ayar − fason, siparişin bütün adımlarıyla (1379 a). Kalan adımın işleme ve ayarı son plandaki
-   tezgâh seçimiyle, saat ücretinden hesaplanır (operatör payı yok sayılır); biten adım plana girmez, maliyeti engine.betik
+   tezgâh seçimiyle, saat ücretinden hesaplanır (operatör payı yok sayılır); biten adım plana girmez, maliyeti engine.js
    bitenAdimMaliyeti'nden. Fiyatı bilinmeyen bir kalem varsa katkı bilinmez. Motor dosyasındaki kâr hesabının aynısı, veriden okunur.
    S0: çalışma (son planı ve biten adımları oradan) */
 function agKatki(s, D = cerceveD(), S0 = cerceveS()) {
@@ -90,6 +91,7 @@ function agOncYaz(D) { const A = agAyar(D); if (A.kip !== 'bedel') return; const
    motorun kendi ceza raporu da aynı bedeli kullansın diye cezaGun bedel × 24 yazılır */
 const AG_BIRIM = 5;
 /* kiyasEski: eski öncelik sınıflarıyla karşılaştırma (sayfanın ağırlık kıyası) */
+/** @param {MotorDurumu} [st] @param {any} [S] @param {any} [kiyasEski] */
 function agUygula(st, S, kiyasEski) {
   const A = agAyar(st.D);
   if (A.kip !== 'bedel') { if (kiyasEski) for (const s of st.D.siparisler) if (s.onc0 != null) s.oncelik = s.onc0; return st; }
@@ -113,6 +115,7 @@ const YM0 = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUc
 const WIP0 = { ac: true, vadeBas: 'termin', alanAc: false, ellAc: false, alfaAc: false, alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };
 function wipAyar(D = cerceveD()) { return { ...WIP0, ...((D && D.planTL && D.planTL.wip) || {}), alanAc: false, ellAc: false, alfaAc: false }; }
 function ymAyar(D = cerceveD()) { return { ...YM0, ...((D && D.planTL) || {}) }; }
+/** @param {MotorDurumu} [st] @param {any} [S] */
 function ymUygula(st, S) {
   const D = st.D; const Y = ymAyar(S.D);
   if (Y.operatorUcret != null) for (const m of D.tezgahlar) if (m.ucret != null) m.ucret = +m.ucret + +Y.operatorUcret * (m.opMaliyet != null ? m.opMaliyet : m.opOran == null ? 1 : +m.opOran);
@@ -164,6 +167,7 @@ function tmTaban(D) {
 function tmGereken(D, kod, ih, bas) { const h = ih[kod]; if (h == null) return bas; const m = (D.malzemeler || []).find(x => x.kod === kod); return h - (m ? +m.muayeneGun || 0 : 0) * 24; }
 /* plana giden veri: tarihsiz satın alma Satın Alma termininden ya da olması gereken tarihten (tb), siparişi verilmemiş eksik aynı kuralla bir satırla girer.
    Fasonda dönüş katsayıyla tahmin edilir; eşik kadar gün içinde çıkan terminsiz fason uyarılır. */
+/** @param {MotorDurumu} [st] @param {any} [S] */
 function tmUygula(st, S) {
   const D = st.D, A = tmAyar(S.D), now = st.now, sinir = now + A.esik * 24, bas = tmTaban(S.D); const ih = tmIhtiyac(D, S.plan); const uy = [];
   D.satinalma = (D.satinalma || []).map((p, i) => ({ ...p, src: i }));
@@ -179,6 +183,7 @@ function tmUygula(st, S) {
 }
 /* siparişi verilmemiş eksik: planın siparişlerinin ihtiyacı eksi stok ve satın alma. Biten sipariş girdiden sonra düşer (bitenUygula), o zaman
    satırlar yeniden yazılır (483/1): tahmini miktar biten siparişi saymaz. */
+/** @param {MotorDurumu} [st] */
 function tmEksikYaz(st) {
   const D = st.D, E = st.tmEk; if (!E) return st;
   D.satinalma = (D.satinalma || []).filter(p => p.tm !== 'siparis-yok');
@@ -203,6 +208,7 @@ function ylAyar(D = cerceveD()) {
 
 /* ---- montaj (zz12-montaj) ---- */
 const mtKok = id => String(id).split('/')[0];
+/** @param {MotorDurumu} [st] */
 function mtStUygula(st) {
   const B = {};
   for (const s of st.D.siparisler) if (s.ust) { const k = mtKok(s.id); B[k] = { ust: s.ust, adim: s.ustAdim, birim: +s.birim || 1, derin: (k.match(/-Y\d+/g) || []).length }; s.termin = null; }

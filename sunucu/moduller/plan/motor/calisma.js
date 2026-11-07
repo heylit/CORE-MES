@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Çalışma planı, plan modülünün diliyle (499 a, 503 a, 505 a, 506 a) ----------
    Planlama sayfasının çalışma planı (S.plan.ops) motorun işlem kimlikleriyle (sipariş.k) tutulur; plan modülü işi "emir no|OP no" ile bilir.
    Çeviri sayfanınkidir (zz40 soKuyruklari): kayıt sunucunun emir, ürün ve rotasıyla tamamlanır (sunucuKaydi), kimlik tmiIslemler'den.

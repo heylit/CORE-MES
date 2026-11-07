@@ -8,7 +8,7 @@ import {
   TEZGAH_ALANLARI, UST_ALAN_KAYNAKLARI, type MotorVerisi,
 } from './tipler.ts';
 
-// 1715: eşdeğerlik düzeni. Eski yol (planGirdisi -> motor/girdi.betik) sentetik bir senaryoda koşar; tip ve kaynak tabloları eski yolun
+// 1715: eşdeğerlik düzeni. Eski yol (planGirdisi -> motor/girdi.js) sentetik bir senaryoda koşar; tip ve kaynak tabloları eski yolun
 // kurduğu alanları eksiksiz kapsamalı (yeni yol hiçbir alanı gözden kaçırmasın), fark aracı ayrılığı alan alan yazmalı. Dilim kartları
 // (1716-1718) kendi kur'larını aynı senaryoda dilimFarki ile sınar. Veriler uydurmadır.
 
@@ -177,7 +177,7 @@ describe('motor girdisi eşdeğerliği (1715)', () => {
     // ad sahibinden, kapasite ve çıkış ayarı elle (999 varsayılanı yalnız kaydı olmayan firmada).
     assert.deepEqual([f?.ad, f?.kapasite, f?.cikisGunleri, f?.sureGun], ['Ornek fasoncu', 2, ['pzt', 'per'], 4]);
     const m = D.malzemeler.find((x) => x.kod === '60');
-    // Bulgu (TASARIM.md 5.1): ham malzemenin motor ayarı açık çalışmadan değil Reçete ve Rota kaydından alınır (girdi.betik sunucuKaydi
+    // Bulgu (TASARIM.md 5.1): ham malzemenin motor ayarı açık çalışmadan değil Reçete ve Rota kaydından alınır (girdi.js sunucuKaydi
     // urun0 yalnız ürünlere bakar); çalışmadaki tedarik ve muayene günü kaynak okundukça 0'a döner. Yeni yol 1719 kararına kadar bunu korur.
     assert.deepEqual([m?.stok, m?.birimFiyat, m?.tedarikGun, m?.muayeneGun, m?.saTermin], [null, 80, 0, 0, '2026-10-22']);
     assert.deepEqual(D.satinalma?.map((s) => [s.kod, s.miktar, s.sunucu ?? false]), [['60', 10, false], ['60', 40, true]]);

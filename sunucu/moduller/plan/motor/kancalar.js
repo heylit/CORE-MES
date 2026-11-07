@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Planlama sayfasının motor kancaları (Soru 357 a) ----------
    Planlama sayfası motoru yalın koşturmaz: plan TL amacı, fason kararı, bekleme maliyeti, malzeme ve fason terminleri, belli olmayan
    malzeme (1650 4 c), yıllık hedef, montaj bağı, partide ayar sıfırlama, ayarı parça gelmeden yapma ve örtüşme motorun işlevlerini sarar;
@@ -7,6 +8,7 @@
 
 function tlToplam(e) { const k = TL_AMAC.kT || 1; return (e.lex[0] * TL_AMAC.birim + e.lex[1] * TL_AMAC.birim * TL_AMAC.risk) * k + e.lex[4] + (e.lex[2] || 0) * (TL_AMAC.chgTL || 0); }
 /* müdürün fason kararı: kabul edilen iş yalnız talaş fasonunda, reddedilen yalnız tezgâhta yapılabilir */
+/** @param {Derleme} [cx] @param {MotorDurumu} [st] */
 function fasonKararUygula(cx, st) {
   const k = st && st.D && st.D.fasonKarar; if (!k) return;
   for (const o of cx.ops) { const x = k[o.id]; if (!x || !o.c.some(c => c.opt)) continue;
@@ -26,6 +28,7 @@ function fasonZorla(o, disari) {
    son adımdan termine (mamul). Bekleyen değer = malzeme + o ana kadar biten adımların maliyeti (dağıtılmış bekleme gideri faizlenmez).
    Finansman ve bozulma bu değer üstünden, alan ve elleçleme palet sayısından. Elleçleme yalnız bekleme eşiği aşınca (ara stoka inip geri alınınca).
    Palet sayısı yukarı yuvarlanır: yarım palet de bütün palet yeri kaplar. */
+/** @param {any} [plan] @param {MotorDurumu} [st] @param {Derleme} [cx] */
 function wipHesap(plan, st, cx) {
   const P = st.wipP; const out = { tl: 0, fin: 0, alan: 0, ell: 0, risk: 0, tah: 0, saat: 0, J: {} }; if (!P) return out;
   const by = {}; for (const id in plan.ops) { const r = plan.ops[id]; (by[r.job] = by[r.job] || []).push(r); }
@@ -58,26 +61,31 @@ function wipHesap(plan, st, cx) {
 function tlAmacUygula() {
   if (self.__tlAmac) return; self.__tlAmac = 1;
   const c0 = cmpEv, w0 = lexWhy, k0 = compile, e0 = evaluate; const CX = new WeakMap();
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   evaluate = function (plan, st, ref, fast) {
     const e = e0(plan, st, ref, fast);
     if (st && st.wipP && st.wipP.ac) { const cx = plan.cx || CX.get(st) || compile(st); const w = wipHesap(plan, st, cx); e.wip = w; e.tl += w.tl; e.lex[4] += w.tl; }
     return e;
   };
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   cmpEv = function (a, b) {
     if (!TL_AMAC.ac) return c0(a, b);
     const d = tlToplam(b) - tlToplam(a); if (Math.abs(d) > 1) return d > 0 ? 1 : -1;
     for (const i of [2, 3]) { const x = b.lex[i] - a.lex[i]; if (Math.abs(x) > LEX_EPS[i]) return x > 0 ? 1 : -1; }
     return 0;
   };
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   lexWhy = function (a, b) {
     if (!TL_AMAC.ac) return w0(a, b);
     if (Math.abs(tlToplam(b) - tlToplam(a)) > 1) return 0;
     for (const i of [2, 3]) if (Math.abs(b.lex[i] - a.lex[i]) > LEX_EPS[i]) return i;
     return -1;
   };
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   compile = function (st) { const cx = k0(st); fasonKararUygula(cx, st); if (st && typeof st === 'object') CX.set(st, cx); return cx; };
   /* talaşlı fason fiyatı işin tezgâh süresinden çıkar; fasona zorlanan işte tezgâh seçenekleri kaldırıldığı için süre tam listeden alınır */
   const f0 = tFason;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tFason = function (o, c, cx, ctx, b) { const r = f0(o, c, cx, ctx, b); if (r && r.cost == null && o.cTum && o.cTum.some(x => x.opt && x.m === c.m)) { const f = cx.FS[c.m.slice(1)]; const h = Math.min(...o.cTum.filter(x => !x.fas).map(x => x.run), Infinity); if (f && isFinite(h) && f.saatFiyat != null) r.cost = h * f.saatFiyat; } return r; };
 }
 tlAmacUygula();
@@ -86,6 +94,7 @@ const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat 
 function terminUygula() {
   if (self.__tmU) return; self.__tmU = 1;
   const e0 = evaluate;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   evaluate = function (plan, st, ref, fast) {
     const e = e0(plan, st, ref, fast); if (!st) return e;
     if (st.ggP > 0) { let h = 0; for (const id in plan.ops) { const r = plan.ops[id]; if (!r.fas) h += (+r.run || 0) + (+r.su || 0); } const g = h * st.ggP; e.gg = g; e.tl += g; e.lex[4] += g; }
@@ -98,6 +107,7 @@ function terminUygula() {
     return e;
   };
   const f0 = tFason;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tFason = function (o, c, cx, ctx, b) {
     const r = f0(o, c, cx, ctx, b); const A = cx.st.tmP; if (!r || !A || cx.FS[c.m.slice(1)].hemen) return r;
     const k = cx.st.D.fasonTermin && cx.st.D.fasonTermin[o.id]; const T = k ? parseT(cx.st.D, k) : null;
@@ -108,7 +118,9 @@ function terminUygula() {
 terminUygula();
 /* ana iş parçacığı ve işçi: belli olmayan gelişte malzeme hazır sayılır (iş başlar), uyarı motorun malzeme uyarısıyla aynı metinle verilir */
 function matKarmaUygula() {
+  /** @type {(...a: any[]) => any} */
   const c0 = compile;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   compile = function (st, ...a) {
     const cx = c0(st, ...a);
     /* 533 a: Satın Alma termini belli gelişdir (1650 4 c, sert); termini beklenen satır (tb) motorda zaten bekletmez */
@@ -128,6 +140,7 @@ function matKarmaUygula() {
     return cx;
   };
   const e0 = evaluate;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   evaluate = function (plan, st, ref, fast) {
     const e = e0(plan, st, ref, fast);
     if (fast || !st || !st.w || !st.w.matKarma || !e.warn) return e;
@@ -143,9 +156,12 @@ function matKarmaUygula() {
 matKarmaUygula();
 function hedefUygula() {
   if (self.__yHedef) return; self.__yHedef = 1;
+  /** @type {(...a: any[]) => any} */
   const c0 = compile;
+  /** @this {unknown} */
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   compile = function (st) {
-    const cx = c0.apply(this, arguments); const H = st && st.yHedef; if (!H || !cx || !cx.jobs) return cx;
+    const cx = c0.apply(this, /** @type {any} */ (arguments)); const H = st && st.yHedef; if (!H || !cx || !cx.jobs) return cx;
     const aileler = {}; for (const [aile, t, k] of H.hedef) (aileler[aile] = aileler[aile] || []).push([t, k]);
     for (const aile in aileler) { const l = aileler[aile].sort((a, b) => a[0] - b[0]);
       const isler = Object.keys(H.isler).filter(j => H.isler[j][0] === aile && cx.jobs[j]).sort((a, b) => (cx.jobs[a].due ?? 1e9) - (cx.jobs[b].due ?? 1e9));
@@ -158,9 +174,12 @@ function hedefUygula() {
 hedefUygula();
 function montajUygula() {
   if (self.__mtBag) return; self.__mtBag = 1;
+  /** @type {(...a: any[]) => any} */
   const c0 = compile;
+  /** @this {unknown} */
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   compile = function (st) {
-    const cx = c0.apply(this, arguments); const B = st && st.montaj; if (!B || !cx || !cx.jobs) return cx;
+    const cx = c0.apply(this, /** @type {any} */ (arguments)); const B = st && st.montaj; if (!B || !cx || !cx.jobs) return cx;
     const kok = id => String(id).split('/')[0]; const no = id => { const i = id.indexOf('/'); return i < 0 ? 0 : +id.slice(i + 1); };
     const gr = {}; for (const jid in cx.jobs) (gr[kok(jid)] = gr[kok(jid)] || []).push(jid);
     for (const g in gr) gr[g].sort((a, b) => no(a) - no(b));
@@ -193,6 +212,7 @@ montajUygula();
 function ayarSifirKur() {
   if (self.__aySif) return; self.__aySif = 1;
   const eski = tMach;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tMach = function (o, c, cx, ctx, b, fast) {
     const L = !self.__aySifKapali && c.su > 0 && ctx.lastId && ctx.lastId[c.m];
     if (L) { const i = L.lastIndexOf('.'), lj = L.slice(0, i);
@@ -211,7 +231,9 @@ function ayarOneKur() {
   if (self.__ayOne) return; self.__ayOne = 1;
   const eskiPB = predBound, eskiTM = tMach, eskiTF = tFason;
   /* fasonda ayar yok: gönderim parçanın gelişinden önce olamaz */
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tFason = function (o, c, cx, ctx, b) { return eskiTF(o, c, cx, ctx, b && b.gel != null ? { ...b, s: Math.max(b.s, b.gel) } : b); };
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   predBound = function (o, cx, ctx) {
     const b = eskiPB(o, cx, ctx); if (!b || !cx.st.ayariOneAl || !o.pr.length) return b;
     const st = cx.st, A = cx.A, P = ctx.P, j = cx.jobs[o.job], tas = +A.tasimaSaat || 0;
@@ -222,6 +244,7 @@ function ayarOneKur() {
     if (gel <= s + 1e-9) return b;
     return { ...b, s, gel };
   };
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   tMach = function (o, c, cx, ctx, b, fast) {
     if (!b || b.gel == null) return eskiTM(o, c, cx, ctx, b, fast);
     let bb = { ...b, s: Math.max(b.s, b.gel - (c.su || 0) - (o.fai ? c.cyc || 0 : 0)) }, r = null;
@@ -240,6 +263,7 @@ ayarOneKur();
 function ortusUygula() {
   if (self.__orBag) return; self.__orBag = 1;
   const c0 = compile;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   compile = function (st) {
     const cx = c0(st); const A = st && st.D && st.D.ortusAcik;
     let deg = false;
@@ -259,6 +283,7 @@ ortusUygula();
 function montajAramaKur() {
   if (self.__mtAra) return; self.__mtAra = 1;
   const l0 = lns;
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   lns = function (st, start, ref, opt = {}) {
     const L = l0(st, start, ref, opt); const B = st && st.montaj; if (!B || !L || !L.plan) return L;
     const t0 = Date.now(), ms = opt.ms || 1500;
@@ -312,6 +337,7 @@ function kayanPencereKur() {
   if (self.__kayanP) return; self.__kayanP = 1;
   const ESIK = KP_ESIK, PENCERE = 160, GRUP = 8, DOGRULA = 2;
   const l0 = lns; const KONUM = new WeakMap(), BAS = new WeakMap();
+  // @ts-expect-error kanca motorun işlevini bilerek değiştirir (458 a)
   lns = function (st, start, ref, opt = {}) {
     const cx = (start && start.cx) || compile(st);
     if (!cx || !cx.ops || cx.ops.length < ESIK) return l0(st, start, ref, opt);
@@ -406,4 +432,5 @@ function kayanPencereKur() {
 }
 kayanPencereKur();
 /* sayfanın işçisi her girdide ağırlıkları ve TL amacını girdiden alır (zu TL_ISCI, zw PD_ISCI); sunucunun çözücüsü ve değerlendirmesi de */
+/** @param {MotorDurumu} [st] */
 function stHazirla(st) { olcekKur(st && st.w); if (st.PWek) Object.assign(PW, st.PWek); if (st.tlAmac) { TL_AMAC.kT = 1; Object.assign(TL_AMAC, st.tlAmac); } return st; }

@@ -1,6 +1,7 @@
+// @ts-check
 /* ---------- Sunucu çözücüsünün girdisi (ADR 0018 karar 3 ve 5) ----------
    Asıl plana yazan komutta plan modülü işleri kendi kimlikleriyle verir (anahtar "emir no|OP no", makine kimliği, gerçek an). Bu dosya
-   onları motorun diline çevirir; girdi.betik ve durum.betik ile aynı bağlamda yüklenir (plan-girdisi.ts), sayfa nesnesi kullanmaz.
+   onları motorun diline çevirir; girdi.js ve durum.js ile aynı bağlamda yüklenir (plan-girdisi.ts), sayfa nesnesi kullanmaz.
    Reçete ve Rota çerçevesi sunucunun emir, malzeme ve rotasını kayda yazmaz (kayıtta bağlanmadan önceki yerel emirler kalır, kart #1185);
    sunucu bu yüzden kaynak okumasındaki güncel dilimleri kaydın üstüne koyar (çerçevenin baglaUygula'sının ekransız karşılığı). */
 
@@ -116,7 +117,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   /* istekte geçmeyen adım: şimdi bitmiş; motor onu yalnız ardılının öncülü olarak görür. Fason adım ise (CA-2) öncülünden sonra döner:
      kuyruktaki ardılı onu bekler. */
   for (const o of cx.ops) {
-    /* 1952 iş 2b: kuyruktaki adımın motorca açılan payları (engine.betik compile, o.asil) kuyruktadır; bitmiş sayılmaz */
+    /* 1952 iş 2b: kuyruktaki adımın motorca açılan payları (engine.js compile, o.asil) kuyruktadır; bitmiş sayılmaz */
     if (sira.has(o.id) || (o.asil && sira.has(o.asil)) || st.gercek[o.id] || sabitYer[o.id] || !o.c.length) continue;
     if (o.c.every(x => x.fas) && (cx.FS[o.c[0].m.slice(1)] || {}).hemen) {
       const S = Math.max(frz + 1, ...o.pr.map(([p]) => (ops[p] ? ops[p].S : -Infinity))) + 1e-9;
@@ -304,7 +305,7 @@ function kisiTezgahlariniEkle(k, D, istek, opOf, emirler) {
     if (cevrim === null) continue;
     const kimler = (adaylar.get(a) || [q.kisiId]).map(String);
     let secilen = [...new Set([String(q.kisiId), ...kimler])];
-    /* 1952 (1955 a): paralel bölünen adımın rotadaki kişileri girdi.betik'te ekipten kurulmuştur (ekipte iki kişi yoksa istasyonun bütün
+    /* 1952 (1955 a): paralel bölünen adımın rotadaki kişileri girdi.js'te ekipten kurulmuştur (ekipte iki kişi yoksa istasyonun bütün
        kişileri); adaylar onlarla daraltılır, en az iki kişi kalmazsa plan modülünün adayları geçerlidir. */
     if (u.rota[i].bol) {
       const rotada = new Set((u.rota[i].tezgahlar || []).map(t => String(t.id)));

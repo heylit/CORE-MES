@@ -1,3 +1,4 @@
+// @ts-check
 /* ---- Tek kısıt hattı: her kısıt bir kez tanımlanır, veri yeri ve her çözücünün onu nasıl kullandığı burada yazılıdır.
    Hakem (motorun değerlendirmesi) hepsini tam uygular; öneri hangi çözücüden gelirse gelsin plana hakemden geçerek girer.
    tam: aynen; yaklasik: değiştirilmiş hâliyle (fark not'ta); gevsek: alt sınır geçerli kalsın diye bilerek küçültülmüş; yok: modelde yok. */
@@ -28,6 +29,7 @@ const KISITLAR=[
 const KDURUM={tam:'tam',yaklasik:'yaklaşık',gevsek:'gevşek (sınır geçerli kalsın)',yok:'yok',karar:'karara bağlı'};
 
 /* Veri denetimi: kısıtlar birbirinden kopmasın diye veri birlikte sınanır. Çözücüye gitmeden önce koşar. */
+/** @param {any} [st] @param {Derleme} [cx] */
 function veriDenetimi(st,cx){
   cx=cx||compile(st);const D=cx.D,out=[];const bul=(k,t)=>out.push({k,t});
   const kim={};for(const p of D.personel)for(const g of p.gruplar||[])(kim[g]=kim[g]||new Set()).add(p.vardiya);

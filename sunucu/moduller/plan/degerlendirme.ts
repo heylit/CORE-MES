@@ -17,7 +17,7 @@ import { planlamaGirdisi } from './planlama-servis.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
-// (motor/kancalar.betik) ve kart hesaplarıyla (motor/degerlendir.betik) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
+// (motor/kancalar.js) ve kart hesaplarıyla (motor/degerlendir.js) koşar. Girdi planlama çalışması ucunun birleştirdiğidir (288 a);
 // bağlam her çağrıda yenidir ve hiçbir şey yazılmaz. Çözüm olay döngüsünü tutmasın diye ayrı iş parçacığında, süre sınırıyla koşar.
 // Arama sayfanınkidir (457 1-3 b); bütçesi betikte sabit adımlı saatle sayılır, gerçek süreyi buradaki sınır keser.
 const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
@@ -25,7 +25,7 @@ export const DEGERLENDIRME_DOSYALARI = ['engine', 'kisitlar', 'girdi', 'durum', 
 
 let kod: string | null = null;
 function degerlendirmeKodu(): string {
-  kod ??= `${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.betik`), 'utf8')).join('\n')}\n;({ degerlendir });`;
+  kod ??= `${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ degerlendir });`;
   return kod;
 }
 

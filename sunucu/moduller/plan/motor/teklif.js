@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Satış teklifi denemesi (Y4) ----------
    Teklifin kalemleri motorun "acil sipariş" olayıyla plana eklenir; aramasız kip (aynı girdi aynı sonuç). İstenen termin yoksa bütün plan
    dondurulur ve kalemler arkaya eklenir ('sabit', hiçbir sipariş kaymaz); varsa atölye yeniden dağıtır ('dagit') ve bitişi değişen siparişler
@@ -103,6 +104,7 @@ function teklifDene(st0, taban0, istek) {
 /* Plan şeridi: pencere planın "şimdi"sinden, istenen termin (yoksa kalemlerin en geç plan termini) ile geçerliliğin büyüğü + 2 günün sonuna
    kadar; pencereyle kesişmeyen blok verilmez. Kapalı gün takvimin çalışma günü olmayan ya da tatil olan günüdür. Fason hattı yalnız bloğu
    varsa çizilir. Gecikme yalnız siparişin kendi termininedir. Pencere kurulamazsa null. */
+/** @param {any} [s] @param {Derleme} [cx] @param {any} [p] @param {any} [e] @param {any} [istek] @param {any} [kalemler] */
 function teklifPlani(s, cx, p, e, istek, kalemler) {
   if (!teklifGunAdi(s.D, 0) || !isFinite(s.now)) return null;
   const gunu = t => { const h = parseT(s.D, t); return h == null ? null : Math.floor(h / 24); };

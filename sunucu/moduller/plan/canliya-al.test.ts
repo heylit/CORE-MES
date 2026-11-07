@@ -466,7 +466,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     await canliyaYaz((await tamam<PlanCevabi>(c.mudur, 'POST', r.yol, { ...onceki, taslak: null })).taslak!.id, c.mudur);
   });
   // 499 a, 503 a, 505 a, 506 a: çalışma planı sunucuda plan modülünün diliyle okunur ve yazılır. Çalışmanın işlem kimlikleri sayfanın
-  // çevirisinden (calisma.betik); saatler planın ekseninde, bugünün 00:00'ından.
+  // çevirisinden (calisma.js); saatler planın ekseninde, bugünün 00:00'ından.
   test('CA-10: çalışma planı yeni taslağa yazılır (yetki, sürüm), canlıyla farkı ve taban/canlı plan sayfanın anahtarlarıyla okunur', async () => {
     const e = await emirAc([yeniAdim(), yeniAdim()]);
     const [i1, i2] = e.isEmriIdleri as [number, number];

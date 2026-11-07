@@ -1,3 +1,4 @@
+// @ts-check
 /* ---------- Plan girdisi: Reçete ve Rota kaydından motorun durumuna (st) ----------
    Planlama çerçevesi ve sunucu (plan-girdisi.ts) aynı kodla kurar: aynı kayıt, aynı çalışma ve aynı kaynak okuması aynı st'yi verir.
    Bu dosya sayfa nesnesi (pencere, depo, ekran) kullanmaz; çalışmayı (S) parametre alır. Duvar saati çerçevede tarayıcının saatidir,
@@ -20,10 +21,10 @@ const rrSaat = s => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.t
 const TERMIN_SAATI = '23:59';
 const rrSayi = x => x == null || x === '' || !isFinite(+x) ? null : +x;
 const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
-/* 1476-D: çok katmanlı emrin alt düğümü motorda ayrı siparişdir ve tüketen üst adıma montaj bağıyla bağlanır (durum.betik mtStUygula,
-   kancalar.betik montajUygula). Kimlik kök emrin kimliği ve düğüm yoludur ("0.1.2" -> "<emir>-Y1-Y2"; "-Y" sayısı derinliktir). */
+/* 1476-D: çok katmanlı emrin alt düğümü motorda ayrı siparişdir ve tüketen üst adıma montaj bağıyla bağlanır (durum.js mtStUygula,
+   kancalar.js montajUygula). Kimlik kök emrin kimliği ve düğüm yoludur ("0.1.2" -> "<emir>-Y1-Y2"; "-Y" sayısı derinliktir). */
 const dugumSipId = (o, yol) => String(o.id) + String(yol).split('.').slice(1).map(n => '-Y' + n).join('');
-/* 1952: kişinin el tezgâhının kimliği; sunucu motoru (emirler.betik kisiTezgahi) ve çözücü (plan-cozucusu.ts) aynı öneki okur */
+/* 1952: kişinin el tezgâhının kimliği; sunucu motoru (emirler.js kisiTezgahi) ve çözücü (plan-cozucusu.ts) aynı öneki okur */
 const KISI_TEZGAH_ONEKI = 'kisi-';
 const kisiTezgahKimligi = id => KISI_TEZGAH_ONEKI + id;
 const rotaOpNo = a => a.opNo > 0 ? a.opNo : a.seq;
@@ -87,7 +88,7 @@ function rrCevir(st) {
   });
   /* 1952 (1953 a, 1954 a, 1957 a, 1959 a): insanlı istasyonun (kapasite kaynağı "insan", 1891 A b) tezgâhları kişilerdir; makineleri adıma
      aday olmaz (sunucu motorunun kuralı, plan/servis.ts kaynaklariOku). O istasyonda bugün yetkin ve vardiyası olan her aktif kişiye bir el
-     tezgâhı kurulur; kimlik motorun öneki (emirler.betik kisiTezgahi, plan-cozucusu.ts) ile aynıdır. Kişi birden çok insanlı istasyonda
+     tezgâhı kurulur; kimlik motorun öneki (emirler.js kisiTezgahi, plan-cozucusu.ts) ile aynıdır. Kişi birden çok insanlı istasyonda
      yetkinse tek tezgâhı vardır, grubu en küçük kimlikli olanıdır. Tezgâh kişinin vardiyasıyla çalışır (iş merkezinin haftası değil); atama
      yüzdesi kapasiteyi kesmez. Tezgâhın tek operatörü kişinin kendisidir: personel kısıtı açıkken kişi aynı saatte makinede olamaz. */
   const insanli = new Set((st.insanliIstasyonlar || []).filter(id => (st.stations || []).some(x => x.id === id)));
@@ -598,7 +599,7 @@ function tmiTerminler(malzemeler, l, eski) {
   }
 }
 /* 525 1 a: satın almanın açık siparişi (kalan miktar, beklenen teslim) motorda satın alma satırıdır. Sunucudan gelen satır işaretlidir ve
-   her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.betik tmUygula
+   her okumada yeniden kurulur; planlamacının sayfada verdiği sipariş satırı kalır. Teslim günü yoksa geliş boştur: durum.js tmUygula
    termini olmayan satır gibi tahmin eder. Sunucu satırı hiç yoksa ve gelmediyse alan değişmez (null). */
 function tmiSatinalma(eski, l) {
   const elle = (eski || []).filter(p => !p.sunucu);
@@ -621,7 +622,7 @@ const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunl
 /* Kaynaklar açık çalışmaya (D0) yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Dönen: değişen alanlar. */
 function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   const D = tmiCevir(kayit && kayit.items ? kayit : TMI_BOS_KAYIT, kaynak, D0, bugun);
-  /* sipariş önceliği sayfada ağırlıktan hesaplanır (durum.betik agHazirla, her st kurulumunda S.D'ye yazar): iki taraf aynı hesaptan
+  /* sipariş önceliği sayfada ağırlıktan hesaplanır (durum.js agHazirla, her st kurulumunda S.D'ye yazar): iki taraf aynı hesaptan
      geçmeden karşılaştırılırsa sunucunun önceliği her açılışta değişmiş görünür, sayfa ortak kayda yazar (aynı anda açana çakışma) */
   let D0k = D0;
   if (typeof agHazirla === 'function' && Array.isArray(D.siparisler)) {
@@ -644,6 +645,7 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
 /* Sayım yalnız o adımın çubuğunu günceller, başka iş yerinden oynamaz (prototip zz34); plan eskimez. Planlamacının elle girdiği gerçekleşen
    sunucunun başlamış dediği adımda sunucununkiyle değişir; sunucunun artık başlamış demediği adımın sunucu kaydı silinir. y: tmiCalisanlar,
    cx: çalışmanın derlenmiş hâli (tezgâh pencereleri). S.gercek ve S.plan yerinde güncellenir. */
+/** @param {any} [S] @param {any} [y] @param {Derleme} [cx] */
 function calisanBirlestir(S, y, cx) {
   const g = clone(S.gercek || {}); let degisti = false; const yeniSapma = [];
   for (const id of Object.keys(g)) if (g[id] && g[id].sunucu && !y[id]) { delete g[id]; degisti = true; }
@@ -671,7 +673,7 @@ const GEVSEK = {
   tatil: st => { st.D.tatiller = []; },
   ariza: st => { st.down = []; },
   tampon: st => { st.w.tampon = false; },
-  /* oran yalnız kapasiteden düşer; operatör ücreti (durum.betik ymUygula) asıl oranla sayılır */
+  /* oran yalnız kapasiteden düşer; operatör ücreti (durum.js ymUygula) asıl oranla sayılır */
   personel: st => { for (const m of st.D.tezgahlar) { m.opMaliyet = m.opOran == null ? 1 : +m.opOran; m.opOran = 0; } },
   yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) { p.gruplar = g.slice(); delete p.makineler; delete p.enCok; } },
   devam: st => { st.D.devamsizlik = []; },
@@ -785,6 +787,7 @@ function baslangicTazele(S, an) {
    S.arizaOto o duruş için satırın açıldığını tutar: silinen satır makine yeniden çalışana kadar geri gelmez. Makine çalışır olunca
    açık oto satırı şimdide kapanır (henüz başlamamışsa düşer). makineler: durum.machines, cx: çalışmanın derlenmiş hâli. Dönen: değişti mi. */
 const ARIZA_OTO_NEDEN = { ariza: 'arıza', bakim: 'bakım' };
+/** @param {Derleme} [cx] @param {any} [m] @param {any} [now] */
 function otoVardiyaSonu(cx, m, now) {
   const M = cx.M[m]; if (!M) return null;
   let en = null;
@@ -798,6 +801,7 @@ function otoVardiyaSonu(cx, m, now) {
 }
 /* derleme yalnız arızadaki makine ya da açık oto duruş varken yapılır (stTamKur çalışmaya ilk kurulum ayarlarını yazar) */
 const otoArizaGerekli = (S, makineler) => Array.isArray(makineler) && (makineler.some(x => ARIZA_OTO_NEDEN[x.status]) || Object.keys(S.arizaOto || {}).length > 0);
+/** @param {any} [S] @param {any} [makineler] @param {Derleme} [cx] */
 function otoArizaUygula(S, makineler, cx) {
   if (!Array.isArray(makineler) || !cx) return false;
   const now = cx.st.now; let degisti = false;
@@ -819,7 +823,7 @@ function otoArizaUygula(S, makineler, cx) {
 }
 /* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek,
    ilk çizimde), eski kayıtta 1650 kararlarının taşınması (zz-karar-1650, çizimden sonra), kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula);
-   st sayfanın stOf'uyla aynı yoldan (durum.betik stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
+   st sayfanın stOf'uyla aynı yoldan (durum.js stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
    kaydı, kaynak: { durum, ek } (çerçevenin kaynakOku cevabı) ya da null. Girdiler değişmez. Dönen: { S, st }; çalışma yoksa null. */
 function girdiKur(calisma, kayit, kaynak, bugun) {
   if (!calisma || !calisma.D) return null;
@@ -847,7 +851,7 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
   return { S, st: stBitenle() };
 }
 
-/* 657 a: kayıt yoksa yeni Planlama sayfası boş çalışmayı sunucuya kurdurur. Değerler çerçevenin yeniCalisma'sıyla aynıdır (a-durum.betik ve
+/* 657 a: kayıt yoksa yeni Planlama sayfası boş çalışmayı sunucuya kurdurur. Değerler çerçevenin yeniCalisma'sıyla aynıdır (a-durum.js ve
    zz31-tmi.betik): veri Reçete ve Rota kaydından (kayıt yoksa boş kayıttan), kayıt okunmuş sayılır, 1650 kararının varsayılanı konur. */
 const BOS_KAYIT = { items: [], routes: {}, machines: [], stations: [], opdefs: [], orders: [], people: [] };
 function yeniCalismaKur(kayit, kaynak, bugun) {

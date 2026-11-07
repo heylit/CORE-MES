@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { motorKodu } from './plan-motoru.ts';
 
-// 1379 a: B motorunun katkı payı (durum.betik agKatki) ve kâr hesabı (engine.betik evaluate) siparişin bütün adımlarını düşer; biten
+// 1379 a: B motorunun katkı payı (durum.js agKatki) ve kâr hesabı (engine.js evaluate) siparişin bütün adımlarını düşer; biten
 // adım plana girmediği için maliyeti bitenAdimMaliyeti'nden gelir. Motor dosyaları sunucudaki gibi boş bağlamda yüklenir. Veriler uydurmadır.
 type Nesne = Record<string, unknown>;
 interface Bilesen { mc: number; sc: number; fc: number; miss: string[] }

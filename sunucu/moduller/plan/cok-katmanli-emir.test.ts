@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { cozumGirdisi, planGirdisi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
 
-// 1476-D: çok katmanlı emrin alt düğümleri motorda montaj bağıyla ayrı iştir (durum.betik mtStUygula, kancalar.betik montajUygula).
+// 1476-D: çok katmanlı emrin alt düğümleri motorda montaj bağıyla ayrı iştir (durum.js mtStUygula, kancalar.js montajUygula).
 // Kök ürün 50 (OP10, OP20), alt düğüm 0.1 ürün 60 (OP10 -> emirde 1010, OP20 -> 1020; kök başına 2), onun altı 0.1.1 ürün 70
 // (OP10 -> 1030 bitti, OP20 -> 1040; kök başına 6). 0.1 kökün OP20'sinde, 0.1.1 düğüm 0.1'in OP10'unda tüketilir. Veriler uydurmadır.
 

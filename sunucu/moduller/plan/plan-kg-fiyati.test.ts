@@ -86,7 +86,7 @@ describe('Planlama satın alma eki: malzeme fiyatları (gerçek PostgreSQL)', ()
   });
 });
 
-// Birleşme (girdi.betik tmiFiyatlar): fiyat her okumada ekten kurulur. Örnek degerlendirme.test.ts'inkinin en azıdır.
+// Birleşme (girdi.js tmiFiyatlar): fiyat her okumada ekten kurulur. Örnek degerlendirme.test.ts'inkinin en azıdır.
 describe('Plan girdisi: malzeme fiyatı Satın Alma ekinden (1329)', () => {
   const KAYIT = {
     version: 7, savedAt: 9,
