@@ -252,9 +252,11 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     ]);
     const [ilk, ikinci] = l.map((x) => x.isEmriId) as [number, number];
     // Ayar 100 sn önce kullanımdan; kullanım 540 sn kapalı + 60 sn açık; iki kişi katılır (biri iki aralıkla).
-    await o().sahip.sorgu(`INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, zaman, is_emri_id) VALUES ($1, $2, $3, 'ayar', now() - interval '700 seconds', $4)`, [id, yoneticiId, ist, ilk]);
+    // Ayar ve kullanım ayrı sorgularla yazılır; her biri kendi now()'ını alırsa aradaki gecikme ayar süresine eklenir. İkisi tek anı paylaşır.
+    const an = (await o().sahip.tek<{ an: string }>('SELECT now()::text AS an'))!.an;
+    await o().sahip.sorgu(`INSERT INTO uretim_olayi (emir_id, kisi_id, istasyon_id, olay, zaman, is_emri_id) VALUES ($1, $2, $3, 'ayar', $5::timestamptz - interval '700 seconds', $4)`, [id, yoneticiId, ist, ilk, an]);
     await o().sahip.sorgu(`INSERT INTO uretim_emirleri_makine_kullanimi (emir_id, is_emri_id, istasyon_id, makine_id, kisi_id, baslama, bitis, kapatan_id)
-      VALUES ($1, $2, $3, $4, $5, now() - interval '600 seconds', now() - interval '60 seconds', $5), ($1, $2, $3, $4, $5, now() - interval '60 seconds', NULL, NULL)`, [id, ilk, ist, makine, yoneticiId]);
+      VALUES ($1, $2, $3, $4, $5, $6::timestamptz - interval '600 seconds', $6::timestamptz - interval '60 seconds', $5), ($1, $2, $3, $4, $5, $6::timestamptz - interval '60 seconds', NULL, NULL)`, [id, ilk, ist, makine, yoneticiId, an]);
     const kisi2 = await tek("INSERT INTO kisi (ad) VALUES ('Deneme Operatör PM') RETURNING id");
     await o().sahip.sorgu(`INSERT INTO uretim_emirleri_katilim (emir_id, is_emri_id, kisi_id, istasyon_id, giris, cikis, kapanis) VALUES
       ($1, $2, $3, $5, now() - interval '600 seconds', now() - interval '400 seconds', 'duraklat'), ($1, $2, $3, $5, now() - interval '300 seconds', now() - interval '200 seconds', 'ayril'),
