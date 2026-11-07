@@ -1,12 +1,16 @@
-// Derlenmiş uygulamanın (4101, `vite preview`; canlıda ters vekilin arkası) içerik güvenliği ilkesi (kart #175, kullanıcı kararı
-// "Şimdilik izin"). Yalnız kendi kökeninden yükler; dış adres, CDN ve başka siteye form gönderimi kapalıdır.
-// Gevşek kalanların nedeni gömülü ekranlardır: srcdoc çerçevesi bu ilkeyi devralır ve kendi ilkesiyle birlikte uygular, o yüzden
-// burada izinli olmayan çerçevede de çalışmaz.
-// - 'unsafe-inline' betik: on modülün ekranı satır içi betiktir; modüller ayrı dosyaya taşındıkça kalkar (ayrı kart).
-// - 'unsafe-eval' ve 'wasm-unsafe-eval': STEP okuyucusunun (occt-import-js) bağlama kodu Function yapıcısı kullanır ve wasm'ı
-//   bellekten derler; CNC Kurulum ve Kalite Merkezi bunu kendi çerçevesinde ya da blob çalışanında koşar.
-// - blob: çalışan ve resim: Kalite Merkezi yazı tanıma ve STEP çalışanını, çizim önizlemeleri resmi blob adresinden açar.
+// Derlenmiş uygulamanın (4101; canlıda ters vekilin arkası) içerik güvenliği ilkesi (kart #175; sıkılaştırma 2197-5 a).
+// Yalnız kendi kökeninden yükler; dış adres, CDN ve başka siteye form gönderimi kapalıdır.
+// Betik yalnız kendi kökenindeki dosyadan gelir: satır içi betik ve dizgiden kod (`eval`, Function yapıcısı) kapalıdır, XSS'te
+// sayfaya yazılan betik çalışmaz. Kalan gevşeklikler ve nedenleri:
+// - 'wasm-unsafe-eval': Tesseract ve OCCT ikilisi bellekten derlenir; JavaScript dizgisi değildir.
+// - blob: çalışan, resim ve çerçeve: pdf.js çalışanı, yazı tanıma ve çizim önizlemeleri blob adresinden açılır. Blob ve srcdoc
+//   belgeleri bu ilkeyi devralır; içlerinde de satır içi betik ve eval kapalıdır.
 // - 'unsafe-inline' stil: ekranların style özniteliği ve <style> öğeleri.
+// Function yapıcısı isteyen tek kod STEP çeviricisidir (occt-import-js bağlama kodu). Çevirici ayrı dosyadan yüklenen çalışanda
+// koşar; URL ile yüklenen çalışan yaratanın ilkesini değil kendi cevabının ilkesini kullanır (Chrome 97 ve sonrası). O dosyalar
+// `STEP_CALISANI_ILKESI` ile sunulur (`ilkeSec`); başka hiçbir dosya bu izni almaz.
+// Satır içi betikli yalıtılmış çerçeveler (YalitilmisCerceve, srcdoc) bu ilkede çalışmaz; onları kullanan modüller kapalıdır
+// (mesaj, portal). Açılmadan önce çerçeve kendi ilkesiyle sunulan ayrı belgeye taşınır.
 // Geliştirme sunucusuna (npm run gelistir:istemci) konmaz: anlık yenileme satır içi betik ve ws bağlantısı ister, yalnız
 // frame-ancestors orada kalır.
 export const ILKE_BASLIGI = 'Content-Security-Policy';
@@ -22,7 +26,7 @@ export const EK_GUVENLIK_BASLIKLARI: Readonly<Record<string, string>> = {
 
 export const ICERIK_ILKESI = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
@@ -36,3 +40,15 @@ export const ICERIK_ILKESI = [
   "form-action 'self'",
   "frame-ancestors 'self'",
 ].join('; ');
+
+// STEP çeviricisinin çalışanı: kod ve wasm yalnız kendi kökeninden; Function yapıcısı yalnız burada. Başka hiçbir şey yüklemez.
+export const STEP_CALISANI_ILKESI = "default-src 'none'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; connect-src 'self'";
+
+// Çalışan girişlerinin adı (`?worker` ithali, Vite çıktısı `assets/<ad>-<özet>.js`). Ad değişirse derleme durur (vite.config.ts).
+export const EVAL_ISTEYEN_CALISANLAR: readonly string[] = ['step-isci', 'model-isci'];
+const CALISAN_DOSYASI = new RegExp(`^/?assets/(?:${EVAL_ISTEYEN_CALISANLAR.join('|')})-[A-Za-z0-9_-]{8}\\.js$`);
+
+// Derleme klasörüne göre dosya yoluna (`assets/step-isci-AbCd1234.js`, baştaki / olsa da olmasa da) verilecek ilke.
+export function ilkeSec(yol: string): string {
+  return CALISAN_DOSYASI.test(yol) ? STEP_CALISANI_ILKESI : ICERIK_ILKESI;
+}

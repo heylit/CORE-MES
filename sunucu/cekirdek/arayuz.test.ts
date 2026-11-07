@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { after, before, describe, test } from 'node:test';
-import { ICERIK_ILKESI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
+import { ICERIK_ILKESI, STEP_CALISANI_ILKESI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
 import { CALISAN_ILKESI, icerikIlkesi } from '../../arkon/sun.ts';
 import { arayuzIsleyicisi, arayuzPortuOku } from './arayuz.ts';
 
@@ -25,6 +25,9 @@ describe('arayüz kapısı', () => {
     await mkdir(join(kok, 'arkon-mes', 'vendor', 'occt'), { recursive: true });
     await writeFile(join(kok, 'index.html'), SAYFA);
     await writeFile(join(kok, 'assets', 'index-AbCd1234.js'), BUYUK_BETIK);
+    await writeFile(join(kok, 'assets', 'step-isci-AbCd1234.js'), '// step');
+    await writeFile(join(kok, 'assets', 'model-isci-AbCd1234.js'), '// model');
+    await writeFile(join(kok, 'assets', 'pdf.worker.min-AbCd1234.js'), '// pdf');
     await writeFile(join(kok, 'sw.js'), 'self.addEventListener("fetch", () => {});');
     await writeFile(join(kok, 'manifest.webmanifest'), '{}');
     await writeFile(join(kok, 'arkon-mes', 'index.html'), ARKON_SAYFASI);
@@ -108,6 +111,15 @@ describe('arayüz kapısı', () => {
     const calisan = await fetch(`${adres}/sw.js`);
     assert.equal(calisan.headers.get('content-type'), 'text/javascript; charset=utf-8');
     assert.equal(calisan.headers.get('cache-control'), 'no-cache');
+  });
+
+  test('STEP çeviricisinin çalışanları kendi ilkesiyle, öteki betikler uygulamanın ilkesiyle gider (2197-5 a)', async () => {
+    for (const yol of ['/assets/step-isci-AbCd1234.js', '/assets/model-isci-AbCd1234.js']) {
+      assert.equal((await fetch(`${adres}${yol}`)).headers.get('content-security-policy'), STEP_CALISANI_ILKESI, yol);
+    }
+    for (const yol of ['/assets/index-AbCd1234.js', '/assets/pdf.worker.min-AbCd1234.js']) {
+      assert.equal((await fetch(`${adres}${yol}`)).headers.get('content-security-policy'), ICERIK_ILKESI, yol);
+    }
   });
 
   test('Arkon sayfası kendi ilkesiyle, STEP çalışanı çalışan ilkesiyle gider; Arkon dışı yolda ilke değişmez', async () => {

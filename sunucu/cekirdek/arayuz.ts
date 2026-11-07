@@ -5,7 +5,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
 import { ARKON_YOLU, CALISAN_ILKESI, CALISAN_YOLU, KALICI_ONBELLEK, SORARAK_ONBELLEK, icerikIlkesi } from '../../arkon/sun.ts';
-import { EK_GUVENLIK_BASLIKLARI, ICERIK_ILKESI, ILKE_BASLIGI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
+import { EK_GUVENLIK_BASLIKLARI, ILKE_BASLIGI, ilkeSec } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
 import type { HttpsAyari } from '../../istemci/src/ortak/pwa/https.ts';
 
 // Derlenmiş istemci (istemci/dist) telefonların ve ters vekilin bağlandığı kapıdan (4101) sunucu sürecinin kendisince verilir;
@@ -147,7 +147,7 @@ export function arayuzIsleyicisi({ kok, api }: { kok: string; api: ApiIsleyicisi
     for (const [ad, deger] of Object.entries(EK_GUVENLIK_BASLIKLARI)) yanit.setHeader(ad, deger);
     if (SIKISAN.has(uzanti)) yanit.setHeader('Vary', 'Accept-Encoding');
     const sayfa = uzanti === '.html' ? await readFile(dosya) : null;
-    let ilke = ICERIK_ILKESI;
+    let ilke = ilkeSec(kokGoreli);
     if (arkon && sayfa !== null) ilke = icerikIlkesi(sayfa.toString('utf8'));
     if (arkon && dosya === join(arkonKoku, CALISAN_YOLU)) ilke = CALISAN_ILKESI;
     yanit.setHeader(ILKE_BASLIGI, ilke);
