@@ -10,7 +10,7 @@ import {
 import type { CmmHamSatir, CmmIletisi } from './cmm-kurallar.ts';
 import { STUDYO_ILETILER } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
-import { olcumYaz } from './studyo.ts';
+import { gosterilenRevizyonlar, olcumYaz } from './studyo.ts';
 
 // CMM sonuç dönüşü (1439 a) ve ölçüm planı raporu. Ölçüm yazımı stüdyonun `olcumYaz`'ıdır (kaynak `cmm`): balon, numune ve uygunluk
 // denetimi tektir. Dosya saklanmaz; yazma dosyayı yeniden okur.
@@ -81,7 +81,7 @@ export async function cmmPlani(db: Db, resimId: number): Promise<KmCmmPlaniCevab
   const cmm = balonlar.filter((b) => b.yontem === 'cmm');
   const secilen = cmm.length ? cmm : balonlar;
   return {
-    resim: { id: resim.id, ad: resim.ad, revizyon: resim.revizyon, malzemeNo: resim.malzemeNo },
+    resim: { id: resim.id, ad: resim.ad, revizyon: (await gosterilenRevizyonlar(db, [resim])).get(resim.id) ?? null, malzemeNo: resim.malzemeNo },
     kapsam: cmm.length ? 'cmm' : 'hepsi',
     satirlar: secilen.map(planSatiri),
   };

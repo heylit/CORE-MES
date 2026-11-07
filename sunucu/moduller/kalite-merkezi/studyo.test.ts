@@ -140,8 +140,8 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     return ozet;
   }
   interface MerkezBelgesi { id: number; surum: number; revizyonlar: { id: number; harf: string }[] }
-  async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla = true, tur = 'teknik-resim'): Promise<number> {
-    const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur, ozet: await merkezDosyasi(icerik), dosyaAdi });
+  async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla = true, tur = 'teknik-resim', antetRev?: string): Promise<number> {
+    const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur, ozet: await merkezDosyasi(icerik), dosyaAdi, ...(antetRev ? { antetRev } : {}) });
     if (yayinla) await merkez(`/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/yayinla`, { surum: b.surum });
     return b.id;
   }
@@ -181,7 +181,7 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
       mil = (await ornekMalzemeNo(db, 'mil'))!;
       flansEmri = (await db.tek<{ id: number }>('SELECT id FROM uretim_emri WHERE malzeme_no = $1', [flans]))!.id;
     });
-    const belge = await belgeAc('Flanş resmi', pdf('flans'), 'flans.pdf');
+    const belge = await belgeAc('Flanş resmi', pdf('flans'), 'flans.pdf', true, 'teknik-resim', '03');
     resimId = (await o().vt.tx((db) => resimMerkezdenEkle(db, yonId, { malzemeNo: flans, merkezBelgeId: belge, revizyon: 'C' }))).id;
     balon.olcu = await balonEkle(resimId, 1, ['9.95', '10.05'], true);
     balon.mastar = await balonEkle(resimId, 2, null);
@@ -195,7 +195,7 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(r.statusCode, 200, r.body);
     const cevap = r.json() as KmStudyoParcaCevabi;
     assert.deepEqual(cevap.resimler.map((x) => ({ id: x.id, tur: x.tur, ad: x.ad, revizyon: x.revizyon, balonlar: x.balonlar.map((b) => [b.no, b.alt, b.ust, b.kritik]) })), [
-      { id: resimId, tur: 'resim', ad: 'Flanş resmi', revizyon: 'C', balonlar: [[1, '9.95', '10.05', true], [2, null, null, false]] },
+      { id: resimId, tur: 'resim', ad: 'Flanş resmi', revizyon: '03', balonlar: [[1, '9.95', '10.05', true], [2, null, null, false]] },
     ]);
     assert.deepEqual(cevap.numunePlanlari, []);
     assert.equal((await oku(operator, `/kalite-merkezi/studyo/parcalar/${flans}`)).statusCode, 403);
@@ -259,7 +259,7 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
   test('KM-S27 (1993 a) kartına bağlı yayındaki resim eşitlemeyle parçaya kendiliğinden alınır; kaldırılan geri gelmez; yeni revizyon ayrı satırdır', async () => {
     const cubuk = (await o().vt.tx((db) => ornekMalzemeNo(db, 'cubuk')))!;
     const kisi = { id: yonId, ad: 'Deneme Yönetici', islemler: [] };
-    const birinci = await belgeAc('Çubuk resmi', pdf('cubuk'), 'cubuk.pdf');
+    const birinci = await belgeAc('Çubuk resmi', pdf('cubuk'), 'cubuk.pdf', true, 'teknik-resim', '00');
     const ikinci = await belgeAc('Çubuk ek resmi', pdf('cubuk-ek'), 'cubuk-ek.pdf');
     const taslak = await belgeAc('Çubuk taslak', pdf('cubuk-taslak'), 'cubuk-taslak.pdf', false);
     await o().vt.tx(async (db) => { for (const b of [birinci, ikinci, taslak]) await kaydaBagla(db, kisi, b, 'malzemeler', cubuk); });
@@ -275,10 +275,14 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(ilk.statusCode, 200, ilk.body);
     assert.deepEqual(ilk.json(), { eklenen: 2 });
     const sonra = await parca();
-    assert.deepEqual(sonra.resimler.map((r) => [r.merkezBelgeId, r.revizyon]).sort(), [[birinci, 'A'], [ikinci, 'A']].sort());
+    // 2138-2: gösterilen ve yazılan revizyon merkezin kodudur; kodu olmayan belgede merkezin harfi yerine boş gelir.
+    assert.deepEqual(sonra.resimler.map((r) => [r.merkezBelgeId, r.revizyon]).sort(), [[birinci, '00'], [ikinci, null]].sort());
     assert.equal(sonra.alinmamis, 0);
-    const satir = await o().sahip.tek<{ ekleyen: number }>('SELECT ekleyen_id AS ekleyen FROM kalite_merkezi_resim WHERE merkez_belge_id = $1', [birinci]);
-    assert.equal(satir?.ekleyen, kaliteId, 'alan kişi eşitleyen');
+    const satir = await o().sahip.tek<{ ekleyen: number; revizyon: string | null }>('SELECT ekleyen_id AS ekleyen, revizyon FROM kalite_merkezi_resim WHERE merkez_belge_id = $1', [birinci]);
+    assert.deepEqual([satir?.ekleyen, satir?.revizyon], [kaliteId, '00'], 'alan kişi eşitleyen; yazılan revizyon kodu');
+    // Eski satır tabloda merkezin harfini taşıyabilir; ekranda harf değil güncel kod görünür.
+    await o().sahip.sorgu("UPDATE kalite_merkezi_resim SET revizyon = 'A' WHERE merkez_belge_id = ANY($1)", [[birinci, ikinci]]);
+    assert.deepEqual((await parca()).resimler.map((r) => [r.merkezBelgeId, r.revizyon]).sort(), [[birinci, '00'], [ikinci, null]].sort());
     assert.deepEqual((await esitle(kalite)).json(), { eklenen: 0 }, 'ikinci eşitleme yinelenen satır açmaz');
 
     // Kaldırılan resim eşitlemeyle geri gelmez; elle alma geri getirir (603 a).
@@ -289,11 +293,11 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
 
     // Yeni revizyon yayınlanınca ayrı satır olarak alınır; eskinin balon planına bu iş dokunmaz (1995 ayrı karar).
     const b = (await oku(yonetici, `/cizimler/${birinci}`)).json() as MerkezBelgesi;
-    const r = await merkez<MerkezBelgesi>(`/cizimler/${birinci}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('cubuk-b')), dosyaAdi: 'cubuk.pdf', surum: b.surum });
+    const r = await merkez<MerkezBelgesi>(`/cizimler/${birinci}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('cubuk-b')), dosyaAdi: 'cubuk.pdf', antetRev: '01', surum: b.surum });
     await merkez(`/cizimler/${birinci}/revizyonlar/${r.revizyonlar.find((x) => x.harf === 'B')?.id}/yayinla`, { surum: r.surum });
     assert.equal((await parca()).alinmamis, 1);
     assert.deepEqual((await esitle(kalite)).json(), { eklenen: 1 });
-    assert.deepEqual((await parca()).resimler.map((x) => x.revizyon).sort(), ['A', 'B']);
+    assert.deepEqual((await parca()).resimler.map((x) => x.revizyon).sort(), ['00', '01']);
   });
 
   test('KM-S28 (1995 a) yeni revizyon boş başlar; eski revizyon salt okunur görünür; plan tek komutla yeniye kopyalanır, yeri olan balon kontrol bekler', async () => {
@@ -310,13 +314,13 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     await balonEkle(eskiId, 2, null);
 
     const b = (await oku(yonetici, `/cizimler/${belge}`)).json() as MerkezBelgesi;
-    const r = await merkez<MerkezBelgesi>(`/cizimler/${belge}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('levha-b')), dosyaAdi: 'levha.pdf', surum: b.surum });
+    const r = await merkez<MerkezBelgesi>(`/cizimler/${belge}/revizyon-ekle`, { ozet: await merkezDosyasi(pdf('levha-b')), dosyaAdi: 'levha.pdf', antetRev: '01', surum: b.surum });
     await merkez(`/cizimler/${belge}/revizyonlar/${r.revizyonlar.find((x) => x.harf === 'B')?.id}/yayinla`, { surum: r.surum });
     assert.deepEqual((await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${levha}/esitle`, {})).json(), { eklenen: 1 });
     const iki = await parca();
     const eski = iki.resimler.find((x) => x.id === eskiId)!;
     const yeni = iki.resimler.find((x) => x.id !== eskiId)!;
-    assert.deepEqual([eski.eski, eski.balonlar.length, yeni.eski, yeni.revizyon, yeni.balonlar.length], [true, 2, false, 'B', 0], 'yeni revizyon boş başlar');
+    assert.deepEqual([eski.eski, eski.balonlar.length, yeni.eski, yeni.revizyon, yeni.balonlar.length], [true, 2, false, '01', 0], 'yeni revizyon boş başlar');
 
     // Eski resim alınan revizyonun dosyasıyla görünür; planı ve balon yeri değiştirilmez.
     const dosya = await oku(kalite, `/kalite-merkezi/studyo/resimler/${eskiId}/dosya`);
@@ -475,7 +479,8 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     const r = await yaz(kalite, '/kalite-merkezi/studyo/resimler/al', govde);
     assert.equal(r.statusCode, 200, r.body);
     const resim = (r.json() as { resim: KmResim }).resim;
-    assert.deepEqual([resim.ad, resim.revizyon, resim.aktif, resim.tur], ['Alınacak resim', 'A', true, 'resim']);
+    // İstemcinin gönderdiği revizyon gösterilmez; gösterilen merkezin kodudur, bu belgede kod yok.
+    assert.deepEqual([resim.ad, resim.revizyon, resim.aktif, resim.tur], ['Alınacak resim', null, true, 'resim']);
     const b = await balonEkle(resim.id, 1, ['1', '2']);
 
     const kaldirYolu = `/kalite-merkezi/studyo/resimler/${resim.id}/kaldir`;

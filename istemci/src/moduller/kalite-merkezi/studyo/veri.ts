@@ -176,12 +176,12 @@ export function usePlanKopyala() {
   });
 }
 
-// Belge merkezindeki yayındaki revizyon parçaya alınır (603 a); revizyon harfi belgenin yayındaki harfidir.
+// Belge merkezindeki yayındaki revizyon parçaya alınır (603 a); yazılan revizyon belgenin gösterilen kodudur (2138-2), harf değil.
 export function useResimAl() {
   const istemci = useQueryClient();
   return useMutation({
     mutationFn: ({ malzemeNo, belge }: { malzemeNo: number; belge: KmMerkezBelgesi }) => tekrarKorumaliGonder((d) => api.post<{ resim: KmResim }>(
-      '/kalite-merkezi/studyo/resimler/al', { malzemeNo, merkezBelgeId: belge.id, revizyon: belge.harf || null } satisfies KmResimEkleGovdesi,
+      '/kalite-merkezi/studyo/resimler/al', { malzemeNo, merkezBelgeId: belge.id, revizyon: belge.revKodu ?? null } satisfies KmResimEkleGovdesi,
       { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) },
     )),
     onSuccess: ({ resim }) => { parcayaKoy(istemci, resim); },

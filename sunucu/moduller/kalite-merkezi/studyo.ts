@@ -6,7 +6,9 @@ import { KM_MERKEZ_BICIMLERI, kmNumuneKurali } from '#paylasilan/sozlesme/kalite
 import type {
   KmBalon, KmBalonGirdisi, KmBalonYerKipi, KmMerkezBelgesi, KmNumune, KmNumunePlani, KmNumuneIstegi, KmNumuneKarari, KmOlcum, KmOlcumKaynagi, KmOlcumVerisi, KmResim, KmStudyoOzeti, KmStudyoParcaCevabi,
 } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { alinanRevizyonDosyasi, kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
+import {
+  alinanRevizyonDosyasi, kaydaBagliBelgeler, kayitlaraBagliYayindakiBelgeler, revizyonKodlari, yayindakiBelgeDosyasi, yayindakiBelgeler,
+} from '../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { kapanisSonuclari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
@@ -37,11 +39,21 @@ async function parcaninEskiResimleri(db: Db, malzemeNo: number): Promise<Set<num
   return eskiRevizyonlar(await sorgular.parcaResimleri(db, malzemeNo));
 }
 
+// 2138-2: gösterilen revizyon, alınan revizyonun Çizim Merkezi'ndeki güncel kodudur (resmin kodu, yoksa bağlı malzeme kartının revizyonu).
+// Tablodaki revizyon alanı eski satırlarda merkezin iç harfini taşıyabilir; ekrana o çıkmaz, kod yoksa null döner.
+export async function gosterilenRevizyonlar(db: Db, satirlar: readonly Pick<sorgular.ResimSatiri, 'id' | 'merkezBelgeId' | 'ozet'>[]): Promise<Map<number, string | null>> {
+  const kodlar = await revizyonKodlari(db, satirlar.map((r) => ({ belgeId: r.merkezBelgeId, ozet: r.ozet })));
+  return new Map(satirlar.map((r) => [r.id, kodlar.get(resimAnahtari(r.merkezBelgeId, r.ozet)) ?? null]));
+}
+
 async function resimlerCevabi(db: Db, satirlar: readonly sorgular.ResimSatiri[]): Promise<KmResim[]> {
   const balonlar = await sorgular.resimBalonlari(db, satirlar.map((r) => r.id));
   const eski = new Set<number>();
   for (const no of new Set(satirlar.map((r) => r.malzemeNo))) for (const id of await parcaninEskiResimleri(db, no)) eski.add(id);
-  return satirlar.map((r) => ({ ...r, eski: eski.has(r.id), balonlar: balonlar.filter((b) => b.resimId === r.id).map(balonCevabi) }));
+  const revizyonlar = await gosterilenRevizyonlar(db, satirlar);
+  return satirlar.map((r) => ({
+    ...r, revizyon: revizyonlar.get(r.id) ?? null, eski: eski.has(r.id), balonlar: balonlar.filter((b) => b.resimId === r.id).map(balonCevabi),
+  }));
 }
 
 // Malzeme kartına Çizim Merkezi'nde bağlı, yayındaki revizyonu olan PDF ve 3B modeller (alma süzgeciyle aynı).
@@ -49,7 +61,7 @@ async function kartinYayindakiBelgeleri(db: Db, malzemeNo: number) {
   return (await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)).flatMap((b) => {
     const tur = b.dosyaTuru === null ? null : studyoResimTuru(b.dosyaTuru);
     if (tur === null || b.revizyonId === null || b.harf === null || b.ozet === null) return [];
-    return [{ id: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, tur }];
+    return [{ id: b.id, ad: b.ad, revKodu: b.revKodu, ozet: b.ozet, tur }];
   });
 }
 
@@ -72,7 +84,7 @@ export async function merkezdenEsitle(db: Db, kisiId: number, malzemeNo: number)
   let eklenen = 0;
   for (const b of await kartinYayindakiBelgeleri(db, malzemeNo)) {
     if (alinan.has(resimAnahtari(b.id, b.ozet))) continue;
-    await sorgular.resimEkle(db, { malzemeNo, tur: b.tur, merkezBelgeId: b.id, ozet: b.ozet, ad: b.ad, revizyon: b.harf, kisiId });
+    await sorgular.resimEkle(db, { malzemeNo, tur: b.tur, merkezBelgeId: b.id, ozet: b.ozet, ad: b.ad, revizyon: b.revKodu, kisiId });
     eklenen += 1;
   }
   return { eklenen };
@@ -97,13 +109,13 @@ export async function merkezBelgeleri(db: Db, ara: string | null, malzemeNo: num
   const bagli: KmMerkezBelgesi[] = malzemeNo === null ? [] : (await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)).flatMap((b) => {
     const tur = b.dosyaTuru === null ? null : studyoResimTuru(b.dosyaTuru);
     if (tur === null || b.revizyonId === null || b.harf === null || b.ozet === null || !uyar(b.ad)) return [];
-    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: true }];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: true }];
   });
   const bagliIdler = new Set(bagli.map((b) => b.id));
   const diger = (await yayindakiBelgeler(db, ara === null ? {} : { ara })).flatMap((b) => {
     const tur = studyoResimTuru(b.dosyaTuru);
     if (tur === null || bagliIdler.has(b.id)) return [];
-    return [{ id: b.id, ad: b.ad, harf: b.harf, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: false }];
+    return [{ id: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, tur, bicim: b.dosyaTuru as KmMerkezBelgesi['bicim'], ozet: b.ozet, bagli: false }];
   });
   return [...bagli, ...diger];
 }

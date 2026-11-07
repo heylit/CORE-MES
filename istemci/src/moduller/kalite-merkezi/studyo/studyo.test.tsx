@@ -121,7 +121,7 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
   });
 
   // Resim alma seçicisi ve resim alma/kaldırma cevapları ortak deneme sunucusunun üstüne konur (ötekiler ona gider).
-  const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64), bagli: true };
+  const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', revKodu: '02', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64), bagli: true };
   function merkezliAc(k = MUHENDIS) {
     const acilan = kmAc('resimler?parca=7', k, {}, SECENEK);
     const asil = acilan.fetch.getMockImplementation()!;
@@ -135,16 +135,19 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     return acilan;
   }
 
-  it('onaylayan belge merkezinden resim alır: seçici yayındakileri listeler, seçilen belge yayındaki harfle alınır ve listeye girer', async () => {
+  it('onaylayan belge merkezinden resim alır: seçici yayındakileri listeler, seçilen belge revizyon koduyla alınır (2138-2, harf değil) ve listeye girer', async () => {
     const { yazmalar, fetch } = merkezliAc();
     fireEvent.click(await screen.findByRole('button', { name: 'Belge merkezinden al' }));
     const pencere = await screen.findByRole('dialog', { name: 'Belge merkezinden resim al' });
     // 1306: seçici stüdyodaki parçayı sorar; kartına bağlı belge işaretli gelir.
     expect(await within(pencere).findByText('Parçaya bağlı')).toBeTruthy();
     expect(fetch.mock.calls.some(([a]) => String(a).startsWith('/api/kalite-merkezi/studyo/merkez-belgeleri') && String(a).includes('malzemeNo=7'))).toBe(true);
-    fireEvent.click(await within(pencere).findByRole('button', { name: /^Merkez flanş/ }));
+    const satir = await within(pencere).findByRole('button', { name: /^Merkez flanş/ });
+    expect(satir.textContent).toContain('Rev 02');
+    expect(satir.textContent).not.toContain('Rev C');
+    fireEvent.click(satir);
     await waitFor(() => { expect(yazmalar.some((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')).toBe(true); });
-    expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: 'C' });
+    expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: '02' });
     const sol = screen.getByRole('complementary', { name: 'Parça ve resimler' });
     expect(await within(sol).findByRole('button', { name: 'Merkez flanş resmini kaldır' })).toBeTruthy();
   });
