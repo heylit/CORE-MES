@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { GirisCevabi, GirisGovdesi, KartGirisGovdesi, OturumCevabi, PinBelirleGovdesi } from '#paylasilan/sozlesme/oturum.ts';
 import { Dugme, Girdi, Simge } from '../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { girisGosterisiBaslat } from '../../ortak/veri/gorunum.ts';
@@ -22,6 +23,13 @@ const AG_YOK = 'Sunucuya ulaşılamadı';
 
 type Kip = 'pin' | 'parola' | 'kart' | 'belirle';
 type SakliKip = 'pin' | 'parola' | 'kart';
+// Giriş yolu seçicisi (kart 2230d): üç yol hep görünür, seçili olan basılı durur. Ekranda kısa ad, ekran okuyucuda eylem
+// okunur ("PIN ile gir"); ek görünmez metindir, etiket olmadığı için form alanlarının adıyla karışmaz.
+const YOLLAR: readonly { kip: SakliKip; etiket: string; ek: string; simge: SimgeAdi }[] = [
+  { kip: 'pin', etiket: 'PIN', ek: ' ile gir', simge: 'grid' },
+  { kip: 'parola', etiket: 'Parola', ek: ' ile gir', simge: 'user' },
+  { kip: 'kart', etiket: 'Kart', ek: ' ile gir', simge: 'scan' },
+];
 type PinAlani = 'pin' | 'yeni' | 'tekrar';
 
 // Modül şeridi (2170): giriş ekranı uygulamanın kapsadığı işleri akan bir şerit olarak gösterir.
@@ -330,7 +338,7 @@ export function Giris() {
           onError={() => { logoVarYaz(false); }}
         />
         <header className="tc-giris-ust">
-          {kurumAdi && <span className="tc-giris-firma">{kurumAdi}</span>}
+          {kurumAdi && !logoVar && <span className="tc-giris-firma">{kurumAdi}</span>}
           <h1 id="tc-giris-baslik" className="tc-giris-baslik">
             {kip === 'belirle' ? 'PIN belirleyin' : 'Giriş'}
           </h1>
@@ -342,6 +350,21 @@ export function Giris() {
           </p>
         </header>
 
+        {kip !== 'belirle' && (
+          <div className="tc-giris-yollar" role="group" aria-label="Giriş yolu">
+            {YOLLAR.map((y) => (
+              <button
+                key={y.kip}
+                type="button"
+                className="tc-giris-yol"
+                aria-pressed={kip === y.kip}
+                onClick={() => { if (kip !== y.kip) yontemDegistir(y.kip); }}
+              >
+                <Simge ad={y.simge} boyut="k" /><span>{y.etiket}<span className="tc-giris-gizli">{y.ek}</span></span>
+              </button>
+            ))}
+          </div>
+        )}
         {kip === 'belirle' && <p className="tc-giris-kisi"><Simge ad="user" boyut="k" /><span>{kullaniciAdi}</span></p>}
         {kip === 'kart' && (
           <div className={`tc-giris-okut${kartHatasi ? ' tc-giris-okut-hata' : ''}`} role="status" aria-live="polite">
@@ -411,31 +434,6 @@ export function Giris() {
         )}
 
         <div className="tc-giris-alt">
-          {kip === 'pin' && (
-            <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('parola')}>
-              <Simge ad="user" boyut="k" />Parola ile gir
-            </button>
-          )}
-          {kip === 'parola' && (
-            <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('pin')}>
-              <Simge ad="grid" boyut="k" />PIN ile gir
-            </button>
-          )}
-          {kip === 'kart' && (
-            <>
-              <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('pin')}>
-                <Simge ad="grid" boyut="k" />Kullanıcı adıyla gir
-              </button>
-              <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('parola')}>
-                <Simge ad="user" boyut="k" />Parola ile gir
-              </button>
-            </>
-          )}
-          {kip === 'pin' && (
-            <button type="button" className="tc-giris-baglanti" onClick={() => yontemDegistir('kart')}>
-              <Simge ad="scan" boyut="k" />Kartla gir
-            </button>
-          )}
           {kip === 'belirle' && (
             <button type="button" className="tc-giris-baglanti" onClick={ilkAdimaDon}>
               <Simge ad="chev-left" boyut="k" />Geri

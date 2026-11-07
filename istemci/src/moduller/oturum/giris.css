@@ -68,7 +68,8 @@
   background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-3);
   box-shadow: inset 0 1px 0 var(--hi), var(--shadow);
 }
-.tc-giris-ust { display: grid; gap: var(--b-1); }
+.tc-giris-ust { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--b-3); row-gap: var(--b-1); }
+.tc-giris-ust .tc-giris-firma { flex-basis: 100%; }
 .tc-giris-firma { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--faint); }
 .tc-giris-baslik { font-size: var(--yazi-l); font-weight: 800; }
 .tc-giris-aciklama { font-size: var(--yazi-s); color: var(--muted); }
@@ -90,6 +91,23 @@
   text-align: center; font-family: var(--font-mono); font-size: var(--yazi-xl); letter-spacing: .5em;
 }
 .tc-giris-pin[data-etkin] { border-color: var(--hazard); }
+/* Kullanıcı adı yazılırken sarı çerçeve yalnız ondadır; tuş takımının hedefi (PIN) çerçevesini alan bırakılınca geri alır. */
+.tc-giris-kart:has(input[name='kullaniciAdi']:focus) .tc-giris-pin[data-etkin] { border-color: var(--edge2); }
+
+/* Giriş yolu seçicisi: üç parça, seçili olan kabarık durur. */
+.tc-giris-yollar {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-1); padding: var(--b-1);
+  border: 1px solid var(--edge); border-radius: var(--yari-3); background: var(--panel2);
+}
+.tc-giris-yol {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--b-2); min-height: var(--dokunma);
+  border: 0; border-radius: var(--yari-2); background: none; color: var(--muted); font-weight: 700; cursor: pointer;
+}
+.tc-giris-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tc-giris-yol:hover { color: var(--ink); }
+.tc-giris-yol[aria-pressed='true'] { background: var(--panel-solid); color: var(--ink); box-shadow: var(--shadow); cursor: default; }
+/* Pasif giriş düğmesi soluk sarı değil gridir: sarı yalnız basılabilir eylemdir. */
+.tc-giris-kart .tc-dugme-birincil:disabled { background: var(--panel2); color: var(--muted); border-color: var(--edge2); opacity: 1; }
 
 .tc-giris-tuslar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--b-2); }
 .tc-giris-tus {
@@ -111,9 +129,10 @@
 .tc-giris-kart { align-self: center; width: calc(100% - var(--b-4) * 2); animation: tc-giris-yuksel .6s .12s cubic-bezier(.2, .8, .2, 1) both; }
 
 @media (min-width: 1024px) {
+  /* Form sağ kenara yaslanan tam boy paneldir (kart 2230d, Ray); solundaki altın çizgi sahnenin altınıdır. */
   .tc-giris {
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: center;
-    gap: var(--b-6); padding: 0 var(--b-6) 0 0;
+    grid-template-columns: minmax(0, 1fr) clamp(var(--pencere-genis) * .8, 32vw, var(--pencere-genis)); grid-template-rows: minmax(0, 1fr);
+    align-items: stretch; gap: 0; padding: 0;
   }
   .tc-giris-tanitim {
     display: flex; flex-direction: column; align-items: center; gap: var(--b-5); align-self: stretch; min-height: 100vh;
@@ -129,7 +148,21 @@
     justify-self: center; justify-items: center; width: min(100% - var(--b-6) * 2, var(--pencere-genis) * 1.4); max-width: none;
     gap: var(--b-5); padding: 0; text-align: center;
   }
-  .tc-giris-kart { justify-self: center; width: 100%; }
+  .tc-giris-kart {
+    position: relative; justify-self: stretch; align-self: stretch; justify-content: center; width: 100%; max-width: none; min-height: 100vh;
+    padding: var(--b-6) calc(var(--b-6) * 1.25); border: 0; border-radius: 0; background: var(--panel-solid); box-shadow: var(--shadow);
+  }
+  .tc-giris-kart::before {
+    content: ''; position: absolute; inset-block: 0; left: 0; width: var(--b-1);
+    background: linear-gradient(var(--giris3d-altin-ust), var(--giris3d-kenar), var(--giris3d-altin-alt));
+  }
+  .tc-giris-kurum-logo { align-self: flex-start; }
+  .tc-giris-alt { margin-top: var(--b-4); }
+  /* Kısa ekranda panel sıkışır; giriş düğmesi kaydırmadan görünür kalsın. */
+  @media (max-height: 760px) {
+    .tc-giris-kart { gap: var(--b-3); padding-block: var(--b-4); }
+    .tc-giris-alt { margin-top: 0; }
+  }
   /* Slogan levhası: sahnedeki harflerin malzemesi; gümüş yüz, altın "CORE". */
   .tc-giris-baslik-buyuk { display: grid; justify-items: center; gap: var(--b-1); margin: 0; text-align: center; }
   .tc-giris-slogan-ust, .tc-giris-slogan-ana {
