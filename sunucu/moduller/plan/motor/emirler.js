@@ -75,6 +75,7 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   kisiTezgahlariniEkle(k, st.D, istek, opOf, durum.emirler);
   ekAdimlariEkle(k, st.D, istek, opOf);
   kuyrukMakineleriniEkle(k, st.D, istek, opOf);
+  kuyruktanKisiTezgahiniCikar(st.D, istek, opOf);
   fasonBeklemeleriniEkle(st.D, istek, opOf);
   /* 690 b: emirler arası öncül (parti kolu, Motor A'nın B7 kuralı); motor öncülü yalnız rotadan, emrin içinde kurar */
   st.ekOncul = (istek.baglar || []).map(x => [opOf[x.anahtar], opOf[x.oncul]]).filter(([a, p]) => a && p && a !== p);
@@ -327,6 +328,30 @@ function kuyrukMakineleriniEkle(k, D, istek, opOf) {
     if (!r || r.fason || !(r.tezgahlar || []).length) continue;
     const m = String(q.makineId);
     if (!r.tezgahlar.some(t => String(t.id) === m)) r.tezgahlar = [...r.tezgahlar, Object.assign({}, r.tezgahlar[0], { id: m })];
+  }
+}
+/* 2215: makine kuyruğundaki işin adayı plan modülünde makinedir (rotada makineye bağlı adım, makinesi insanlı istasyonda olsa da); motor
+   o işi kişinin el tezgâhına koyarsa sunucu yeri reddeder. Girdi ise insanlı istasyonun kişilerini adaya ekler: bu iş için kişi tezgâhları
+   çıkar, kuyruğun makinesi aday kalır. Ürünün rotası öteki emirlerle ortaktır (aynı adım başka emirde kişi kuyruğunda olabilir), değişiklik
+   emre özel kopyadadır. */
+function kuyruktanKisiTezgahiniCikar(D, istek, opOf) {
+  const urun = new Map((D.urunler || []).map(u => [u.id, u]));
+  const sip = new Map((D.siparisler || []).map(s => [String(s.id), s]));
+  for (const q of istek.kuyruklar) for (const a of q.anahtarlar) {
+    const id = opOf[a]; if (!id) continue;
+    const n = id.lastIndexOf('.'), sid = id.slice(0, n), key = id.slice(n + 1), s = sip.get(sid);
+    let u = s && urun.get(s.urun);
+    const i = u ? (u.rota || []).findIndex(r => String(r.k) === key) : -1;
+    if (i < 0 || u.rota[i].fason) continue;
+    const tz = u.rota[i].tezgahlar || [], kisi = t => String(t.id).startsWith('kisi-');
+    if (!tz.some(kisi)) continue;
+    const m = String(q.makineId), kalan = tz.filter(t => !kisi(t));
+    if (!kalan.some(t => String(t.id) === m)) kalan.push(Object.assign({}, kalan[0] || tz[0], { id: m }));
+    if (!u.emreOzel) {
+      u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
+      D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+    }
+    u.rota[i] = Object.assign({}, u.rota[i], { tezgahlar: kalan });
   }
 }
 /* Motorun saat ekseni dakikadır, plan modülünün anları saniyelidir. Sabit işin bitişi ve çalışan adımın sayım anı dakikanın sonuna
