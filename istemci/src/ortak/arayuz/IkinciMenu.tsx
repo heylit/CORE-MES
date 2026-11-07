@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { etkinMadde, menuMaddeleri, type IkinciMenu as Tanim } from '../rota/ikinci-menu.ts';
-import { Menu, type MenuOgesi } from './Menu.tsx';
 import { Simge } from './Simge.tsx';
 import './ikinci-menu.css';
 
@@ -15,8 +14,9 @@ interface Ozellikler {
 
 const ILERI = ['ArrowDown', 'ArrowRight'];
 const GERI = ['ArrowUp', 'ArrowLeft'];
-// Fare kenarda beklerken şeridin hızı (piksel / milisaniye) ve okun bir tıkta atlattığı görünür genişlik oranı.
+// Fare okta beklerken şeridin hızı (piksel / milisaniye).
 const KAYMA_HIZI = 0.6;
+// Yerleşim ölçülemezse (sayfa henüz çizilmediyse) okun bir tıkta atlattığı görünür genişlik oranı.
 const SAYFA_ORANI = 0.75;
 // Satır ve sayfa kipindeki tekerlek adımı piksele çevrilir (Firefox satır kipinde yollar).
 const SATIR_PIKSELI = 40;
@@ -27,29 +27,51 @@ function kaydirmaSiniri(el: HTMLElement) {
   return Math.max(0, el.scrollWidth - el.clientWidth);
 }
 
+function sinirla(el: HTMLElement, hedef: number) {
+  return Math.min(kaydirmaSiniri(el), Math.max(0, hedef));
+}
+
 function kaydir(el: HTMLElement, hedef: number) {
-  el.scrollLeft = Math.min(kaydirmaSiniri(el), Math.max(0, hedef));
+  el.scrollLeft = sinirla(el, hedef);
+}
+
+// Bir sayfa ilerisi ya da gerisi, sekme sınırına hizalı: ileride okun altında yarım kalan ilk sekme sola, geride solda
+// yarım kalan son sekme sağa yaslanır; yarım sekmeyle başlayan ya da biten sayfa olmaz. Yerleşim yoksa orana düşer.
+function sayfaHedefi(el: HTMLElement, yon: Yon, pay: number) {
+  const kutu = el.getBoundingClientRect();
+  const maddeler = [...el.querySelectorAll<HTMLElement>('a[data-anahtar]')].map((a) => a.getBoundingClientRect());
+  const sol = kutu.left + pay;
+  const sag = kutu.right - pay;
+  if (kutu.width > 0 && sag > sol) {
+    if (yon > 0) {
+      const ilk = maddeler.find((k) => k.right > sag + 1);
+      if (ilk) return el.scrollLeft + Math.min(ilk.left - sol, sag - sol);
+    } else {
+      const son = maddeler.filter((k) => k.left < sol - 1).at(-1);
+      if (son) return el.scrollLeft - Math.min(sag - son.right, sag - sol);
+    }
+  }
+  const kalan = yon > 0 ? kaydirmaSiniri(el) - el.scrollLeft : el.scrollLeft;
+  // Gizli kalan kısım bir ekrandan kısaysa uca gidilir: yoksa uçta okun altında birkaç piksel kalır, ikinci tık gerekir.
+  return el.scrollLeft + yon * (kalan < el.clientWidth ? kalan : el.clientWidth * SAYFA_ORANI);
 }
 
 // Modülün kendi sayfaları. Kabuk çizer; modül yalnız tanımı verir. Her genişlikte başlığın altında yatay sekme şerididir;
-// sığmayan madde yana kayar (kart #172). Sağda gizli madde varsa belirgin "Diğer N" düğmesi çıkar; tıklanınca görünmeyen
-// sekmeler açılır liste olarak gelir, şerit ve içerik yerinden oynamaz (kullanıcı kararları 2155-7, 2155-12). Solda okta
-// beklemek sürekli kaydırır, oka tıklamak bir sayfa atlatır; tekerlek yana çevrilir.
+// sığmayan madde yana kayar (kart #172). Gizli madde olan kenarda ok çıkar; oka tıklamak şeridi sekme sınırına hizalı bir
+// sayfa kaydırır, fareyle okta beklemek şeridi sürekli kaydırır (karar 2225-1 b). Tekerlek yana çevrilir, dokunmada şerit
+// parmakla kayar.
 export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
   const kutu = useRef<HTMLElement>(null);
   const etkin = etkinMadde(menuMaddeleri(menu), adres);
   const etkinAnahtar = etkin?.anahtar ?? null;
-  // Şeritte gizli madde olan kenar: işaret orada görünür (dokunulmaz, yalnız gösterir).
+  // Şeritte gizli madde olan kenar: ok orada görünür.
   const [kenar, kenarYaz] = useState({ sol: false, sag: false });
-  // Tamamı görünmeyen maddeler (iki kenarda da); "Diğer" listesi bunlardır.
-  const [gizliler, gizlilerYaz] = useState<readonly string[]>([]);
-  const dugme = useRef<HTMLSpanElement>(null);
-  const olcRef = useRef<() => void>(() => undefined);
-  const git = useNavigate();
-  const kayma = useRef<number | null>(null);
+  const solOk = useRef<HTMLSpanElement>(null);
+  const sagOk = useRef<HTMLSpanElement>(null);
   // Kullanıcı şeridi kendisi kaydırdıysa sonradan gelen sayı ya da yazı tipi şeridi etkin maddeye geri çekmez.
   const elle = useRef(false);
   const elleKaydirdi = () => { elle.current = true; };
+  const kayma = useRef<number | null>(null);
 
   const dur = () => {
     if (kayma.current !== null) cancelAnimationFrame(kayma.current);
@@ -78,20 +100,22 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
     if (o.pointerType === 'mouse') kenardaKay(yon);
   };
 
+  useEffect(() => dur, []);
+
   const sayfaAtla = (yon: Yon) => () => {
     const el = kutu.current;
     if (!el) return;
+    elleKaydirdi();
     dur();
-    const adim = el.clientWidth * SAYFA_ORANI;
-    const kalan = yon > 0 ? kaydirmaSiniri(el) - el.scrollLeft : el.scrollLeft;
-    // Gizli kalan kısım bir ekrandan kısaysa uca gidilir: yoksa uçta okun altında birkaç piksel kalır, ikinci tık gerekir.
-    kaydir(el, el.scrollLeft + yon * (kalan < el.clientWidth ? kalan : adim));
+    const pay = (yon > 0 ? sagOk.current : solOk.current)?.offsetWidth ?? 0;
+    const hedef = sinirla(el, sayfaHedefi(el, yon, pay));
+    const yumusak = typeof el.scrollTo === 'function'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: no-preference)').matches
+      && !document.documentElement.dataset['etkiKapali']?.split(' ').includes('menu-gecis');
+    if (yumusak) el.scrollTo({ left: hedef, behavior: 'smooth' });
+    else kaydir(el, hedef);
   };
-
-  useEffect(() => dur, []);
-
-  // Düğme çıkınca kendi genişliği kadar madde daha örter: liste yeniden ölçülür.
-  useEffect(() => { olcRef.current(); }, [kenar.sag]);
 
   // Tekerlek dikey döner; şerit kayabiliyorsa yana çevrilir, uca gelince sayfa kayar. React tekerlek olayı
   // pasif olduğundan dinleyici elle eklenir.
@@ -116,16 +140,7 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       const sol = el.scrollLeft > 1;
       const sag = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
       kenarYaz((o) => (o.sol === sol && o.sag === sag ? o : { sol, sag }));
-      // Düğmenin altında kalan madde de gizli sayılır.
-      const kenarlar = el.getBoundingClientRect();
-      const sagSinir = kenarlar.right - (dugme.current?.offsetWidth ?? 0);
-      const yeni = sag ? [...el.querySelectorAll<HTMLElement>('a[data-anahtar]')].filter((a) => {
-        const k = a.getBoundingClientRect();
-        return k.right > sagSinir + 1 || k.left < kenarlar.left - 1;
-      }).map((a) => a.dataset['anahtar'] ?? '') : [];
-      gizlilerYaz((o) => (o.length === yeni.length && o.every((x, i) => x === yeni[i]) ? o : yeni));
     };
-    olcRef.current = olc;
     olc();
     void document.fonts?.ready.then(olc);
     el.addEventListener('scroll', olc, { passive: true });
@@ -172,14 +187,6 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
     baglar[hedef]?.focus();
   };
 
-  const maddeler = menuMaddeleri(menu);
-  const digerOgeleri: MenuOgesi[] = gizliler.flatMap((a) => {
-    const m = maddeler.find((x) => x.anahtar === a);
-    if (!m) return [];
-    const sayi = sayaclar?.[m.anahtar];
-    return [{ anahtar: m.anahtar, baslik: typeof sayi === 'number' && sayi > 0 ? `${m.baslik} (${String(sayi)})` : m.baslik, simge: m.simge, sec: () => { void git(m.yol); } }];
-  });
-
   return (
     <div
       className="tc-ikinci-kap"
@@ -217,8 +224,9 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
           </div>
         ))}
       </nav>
-      {/* Klavye maddeler arasında okla gezer; sol işaret yalnız fare ve dokunma içindir. */}
+      {/* Klavye maddeler arasında okla gezer; oklar yalnız fare ve dokunma içindir. */}
       <span
+        ref={solOk}
         className="tc-ikinci-ok tc-ikinci-ok-sol"
         aria-hidden="true"
         onPointerEnter={okaGir(-1)}
@@ -227,11 +235,16 @@ export function IkinciMenu({ menu, adres, sayaclar }: Ozellikler) {
       >
         <Simge ad="chev-left" boyut="k" />
       </span>
-      {kenar.sag && digerOgeleri.length > 0 && (
-        <span ref={dugme} className="tc-ikinci-diger">
-          <Menu etiket={`Diğer sekmeler: ${String(digerOgeleri.length)}`} metin={`Diğer ${String(digerOgeleri.length)}`} simge="down" ogeler={digerOgeleri} />
-        </span>
-      )}
+      <span
+        ref={sagOk}
+        className="tc-ikinci-ok tc-ikinci-ok-sag"
+        aria-hidden="true"
+        onPointerEnter={okaGir(1)}
+        onPointerLeave={dur}
+        onClick={sayfaAtla(1)}
+      >
+        <Simge ad="chev-right" boyut="k" />
+      </span>
     </div>
   );
 }

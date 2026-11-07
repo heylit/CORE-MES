@@ -1,10 +1,11 @@
 import { expect, tasmaOlc, test } from './ortak.ts';
 
-// Ortak arayüz sistemi (kart 2155): ikinci menü yana kayar; sığmayan sekmeler "Diğer N" düğmesinin açılır listesindedir, şerit ve
-// içerik yerinden oynamaz (karar 2155-7, 2155-12). Pano sayısı büyük ve kalın, veri yokken sayı boyunda yazı çıkmaz (karar 2, 9).
+// Ortak arayüz sistemi (kart 2155): ikinci menü yana kayar; gizli sekme olan kenarda ok çıkar, tıklanınca şerit sekme sınırına
+// hizalı bir sayfa kayar, yarım sekmeyle başlamaz; fareyle okta beklemek sürekli kaydırır (karar 2225-1 b). Pano sayısı büyük
+// ve kalın, veri yokken sayı boyunda yazı çıkmaz (karar 2, 9).
 test.use({ hesap: 'ornek.yonetici' });
 
-test('ikinci menü: Diğer listesi görünmeyen sekmeleri verir, şerit yerinde kalır, seçilen sekmeye gider', async ({ page, ag, ac }) => {
+test('ikinci menü: sağ ok sekme sınırına hizalı bir sayfa kaydırır, sol ok geri getirir', async ({ page, ag, ac }) => {
   await ac('/stok');
   const kap = page.locator('.tc-ikinci-kap');
   const nav = page.getByRole('navigation', { name: /menüsü$/ });
@@ -12,22 +13,30 @@ test('ikinci menü: Diğer listesi görünmeyen sekmeleri verir, şerit yerinde 
   const tasiyor = await nav.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
   test.skip(!tasiyor, 'bu genişlikte şerit sığıyor');
 
-  const diger = kap.getByRole('button', { name: /^Diğer sekmeler: \d+$/ });
-  await expect(diger).toBeVisible();
+  await expect(kap.getByRole('button', { name: /Diğer/ })).toHaveCount(0);
+  const sag = kap.locator('.tc-ikinci-ok-sag');
+  const sol = kap.locator('.tc-ikinci-ok-sol');
+  await expect(sag).toBeVisible();
+  await expect(sol).toBeHidden();
   const once = await kap.boundingBox();
-  await diger.click();
-  const liste = page.getByRole('menu', { name: /^Diğer sekmeler/ });
-  await expect(liste).toBeVisible();
-  const ogeler = liste.getByRole('menuitem');
-  expect(await ogeler.count()).toBeGreaterThan(0);
-  // Şerit boyu değişmez; liste ekrandan taşmaz.
+  await sag.click();
+  await expect.poll(() => nav.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  await expect(sol).toBeVisible();
+  // Kayma bitince sol okun hemen sağındaki ilk sekme tam görünür: yarım sekmeyle başlayan sayfa olmaz.
+  await expect.poll(() => nav.evaluate((el) => {
+    const pay = el.parentElement?.querySelector<HTMLElement>('.tc-ikinci-ok-sol')?.offsetWidth ?? 0;
+    const sinir = el.getBoundingClientRect().left + pay;
+    const ilk = [...el.querySelectorAll<HTMLElement>('a[data-anahtar]')].map((a) => a.getBoundingClientRect()).find((k) => k.right > sinir + 1);
+    return ilk ? Math.round(ilk.left - sinir) : null;
+  })).toBeGreaterThanOrEqual(-1);
   expect((await kap.boundingBox())?.height).toBe(once?.height);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
-  const ad = (await ogeler.last().innerText()).replace(/\s*\(\d+\)$/, '').trim();
-  await ogeler.last().click();
-  await expect(liste).toBeHidden();
-  await expect(nav.getByRole('link', { name: new RegExp(ad) })).toHaveAttribute('aria-current', 'page');
+  for (let i = 0; i < 20 && await sol.isVisible(); i += 1) {
+    await sol.click();
+    await page.waitForTimeout(400);
+  }
+  await expect.poll(() => nav.evaluate((el) => el.scrollLeft)).toBeLessThanOrEqual(1);
   expect(ag.hatalar).toEqual([]);
 });
 
