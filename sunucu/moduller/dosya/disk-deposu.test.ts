@@ -23,7 +23,9 @@ describe('MP4 türü', () => {
   test('ftyp kutusu ve MP4 markası tanınır; MOV (qt) ve imzasız içerik tanınmaz', () => {
     assert.equal(turBul(mp4(), 2012), 'mp4');
     assert.equal(turBul(Buffer.concat([Buffer.from([0, 0, 0, 0x14]), Buffer.from('ftypqt  ')]), 12), null);
-    assert.equal(turBul(Buffer.from('ftypisom'), 8), null);
+    // Kutu başlığı olmayan düz ASCII MP4 sayılmaz; denetim karakteri olmadığından düz metindir (kart 2195).
+    assert.equal(turBul(Buffer.from('ftypisom'), 8), 'txt');
+    assert.equal(turBul(Buffer.from([0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x01]), 10), null);
   });
   test('disk deposu klasör mutlak yol ise her ortamda açık', () => {
     assert.equal(diskeYazilabilir({ TMIV2_MEDYA_DIZINI: '/var/medya', TMIV2_ORTAM: 'gelistirme' }), '/var/medya');

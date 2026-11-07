@@ -6,8 +6,11 @@ export const DOSYA_PARCASI = 512 * 1024;
 export const AZAMI_DOSYA = 200 * 1024 * 1024;
 const AZAMI_PARCA_SAYISI = Math.ceil(AZAMI_DOSYA / DOSYA_PARCASI);
 
-// Tür ilk baytlardan bulunur; yükleyenin bildirdiği MIME'a güvenilmez.
-export const DOSYA_TURLERI = ['pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf', 'dxf', 'mp4'] as const;
+// Tür ilk baytlardan bulunur; yükleyenin bildirdiği MIME'a güvenilmez. Ofis belgesi, düz metin ve csv yalnız Ortak Dosyalar'ın bağ
+// sınırındadır (ADR 0030, 9); öteki modüller kendi `BagSiniri.turler` listesiyle sınırlı kalır.
+export const DOSYA_TURLERI = [
+  'pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf', 'dxf', 'mp4', 'docx', 'xlsx', 'pptx', 'txt', 'csv',
+] as const;
 export type DosyaTuru = (typeof DOSYA_TURLERI)[number];
 
 export const dosyaOzeti = z.string().regex(/^[0-9a-f]{64}$/, 'Özet 64 haneli onaltılık olmalı.');
