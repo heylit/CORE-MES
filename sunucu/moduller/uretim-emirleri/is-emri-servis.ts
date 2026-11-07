@@ -21,7 +21,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
-import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
@@ -305,8 +305,11 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   if (projeId === null && projeZorunluMu(emirTuru)) throw dogrulama(PROJE_ZORUNLU, 'projeId');
   if (projeId !== null && proje?.durum !== 'aktif') throw dogrulama(PROJE_GECERSIZ, 'projeId');
   let siparisSatiriId = g.siparisSatiriId ?? null;
-  if (siparisSatiriId === null && proje?.siparisId != null) {
-    const secim = kendiligindenSatir(await siparisAyrintisi(db, proje.siparisId), g.malzemeNo);
+  // 2217 (2103-3 a): projenin siparişi emir eklenene dek kilitli okunur; eşzamanlı sipariş iptali bekler, sonra bu emri görüp 409 alır.
+  // Kilit olmasaydı iptal henüz yazılmamış emri görmez, emir de iptalden önceki onaylı durumu okurdu; ikisi birden geçerdi.
+  const siparis = proje?.siparisId == null ? null : await siparisKilitliAyrinti(db, proje.siparisId);
+  if (siparisSatiriId === null && siparis !== null) {
+    const secim = kendiligindenSatir(siparis, g.malzemeNo);
     if ('ihlal' in secim) throw dogrulama(secim.ihlal, 'siparisSatiriId');
     siparisSatiriId = secim.satirId;
   } else if (siparisSatiriId !== null) {

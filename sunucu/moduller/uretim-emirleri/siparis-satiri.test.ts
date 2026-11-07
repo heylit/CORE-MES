@@ -269,6 +269,32 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     assert.deepEqual(await isEmriSureleri(o().vt, []), new Map());
   });
 
+  test('2217 (2103-3 a): emir açma projenin siparişini kilitler; iptal eden işlem bitene dek bekler, sonra iptal edilmiş siparişin satırına bağlanamaz (409)', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    let kilitAlindi!: () => void;
+    let birak!: () => void;
+    const alindi = new Promise<void>((r) => { kilitAlindi = r; });
+    const bekle = new Promise<void>((r) => { birak = r; });
+    // Sipariş iptalinin işlemi: satır kilitli, durum henüz yazılmadı.
+    const iptal = o().sahip.tx(async (db) => {
+      await db.sorgu('SELECT id FROM siparisler_siparis WHERE id = $1 FOR UPDATE', [s.siparisId]);
+      kilitAlindi();
+      await bekle;
+      await db.sorgu("UPDATE siparisler_siparis SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [s.siparisId]);
+    });
+    await alindi;
+    let dondu = false;
+    const acilis = ac(m, p, s.satirId).finally(() => { dondu = true; });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(dondu, false, 'emir açma sipariş kilidini beklemedi');
+    birak();
+    await iptal;
+    const c = await acilis;
+    assert.deepEqual([c.durum, c.govde.mesaj], [409, SIPARIS_SATIRI_ONAYSIZ]);
+  });
+
   test('Sevkiyat okuması: sipariş satırlarının emirleri tek sorguda, iptal dahil; emirsiz ve olmayan satır haritada yok', async () => {
     const m = await malzeme();
     const s = await siparis('onayli', m);
