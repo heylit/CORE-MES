@@ -373,8 +373,10 @@ describe('çalışma (gerçek PostgreSQL)', { timeout: 40_000 }, () => {
     if (!ayar) throw new Error('Test veritabanı açılamadı.');
     const adet = 3;
     // Her tur kilit oturumunu tutarken öteki turların da girmesini bekler, sonra ikinci bağlantıdan sorgu ister.
-    const kos = async (havuzBoyutu: number): Promise<Array<PromiseSettledResult<string>>> => {
-      const havuz = veritabaniAc({ pg: { ...ayar!.pg, baglantiSureMs: 300 } }, { sema, havuzBoyutu });
+    // Bağlantı süresi hem havuzda yer beklemeyi hem yeni bağlantının kurulmasını sınırlar. Kısa süre yalnız tıkanmanın çabuk
+    // görünmesi içindir; yeterlik koşusunda ayardaki süre kullanılır, yoksa yükte yavaş kurulan bağlantı tıkanma sanılır.
+    const kos = async (havuzBoyutu: number, baglantiSureMs: number): Promise<Array<PromiseSettledResult<string>>> => {
+      const havuz = veritabaniAc({ pg: { ...ayar!.pg, baglantiSureMs } }, { sema, havuzBoyutu });
       let giren = 0;
       try {
         const isler = Array.from({ length: adet }, (_, i) => isTanimi({
@@ -387,10 +389,11 @@ describe('çalışma (gerçek PostgreSQL)', { timeout: 40_000 }, () => {
         await havuz.kapat();
       }
     };
-    const tikali = await kos(adet);
+    const tikali = await kos(adet, 300);
     // Boş bağlantı yokken turlar birbirini bekler; süresi dolan tur hata alıp oturumunu bırakınca ötekiler sürebilir.
     assert.ok(tikali.some((s) => s.status === 'rejected'), 'iş sayısı kadar havuzda en az bir tur süre dolup hata alır');
-    const yeter = await kos(adet + 1);
+    // Tıkanan havuzda tur ayardaki süre dolunca hata alır; iş sayısı + 1 yetmeseydi bu koşu da hata verirdi.
+    const yeter = await kos(adet + 1, ayar.pg.baglantiSureMs);
     assert.deepEqual(yeter.map((s) => (s.status === 'fulfilled' ? s.value : String(s.reason))), ['tamam', 'tamam', 'tamam']);
   });
 
