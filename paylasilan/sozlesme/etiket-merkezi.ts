@@ -254,3 +254,12 @@ export const bekleyenSemasi = z.object({
 export const bekleyenlerCevabi = z.object({ gun: z.number().int(), bekleyenler: z.array(bekleyenSemasi) });
 export type Bekleyen = z.infer<typeof bekleyenSemasi>;
 export type BekleyenlerCevabi = z.infer<typeof bekleyenlerCevabi>;
+
+// Basılmayacak işareti (2223-4 a): seçili bekleyenler listeden düşer; kayıt yeniden değişirse yeniden bekler.
+export const atlaGovdesi = z.object({
+  tur: z.enum(BEKLEYEN_TURLERI),
+  idler: z.array(z.number().int().min(1).max(2147483647)).min(1).max(EN_COK_KAYIT),
+}).strict();
+export const atlaCevabi = z.object({ atlanan: z.number().int() });
+export type AtlaGovdesi = z.infer<typeof atlaGovdesi>;
+export type AtlaCevabi = z.infer<typeof atlaCevabi>;

@@ -101,6 +101,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
     if (init?.method === 'POST') {
       const basliklar = (init.headers ?? {}) as Record<string, string>;
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)), kimlik: basliklar[ISTEK_KIMLIGI_BASLIGI] ?? null });
+      if (yol.endsWith('/atla')) return json(200, { atlanan: 1 });
       if (yol.endsWith('/bas')) return json(200, { baskiId: 9, sonuc: 'gonderildi', ileti: null });
       if (yol.endsWith('/indir')) return json(200, { baskiId: 10, dosyaAdi: 'deneme-50x25-203.prn', komut: '\nN\nP1\n' });
       return json(200, { ...YAZICILAR.yazicilar[0], id: 3, ad: 'Yeni', surum: 1 });
@@ -343,6 +344,25 @@ describe('EtiketMerkezi', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
     expect(await screen.findByText('Lot etiketi')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');
+  });
+
+  it('2223-4: basılmayacak düğmesi yalnız basma yetkisinde çıkar; satırın türü ve kimliği istek kimliğiyle gider, liste yenilenir', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: 'MK-000012 basılmayacak' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    const g = istekler.gonderilenler[0]!;
+    expect(g.yol).toBe('/etiket-merkezi/bekleyenler/atla');
+    expect(g.govde).toEqual({ tur: 'mal-kabul', idler: [12] });
+    expect(g.kimlik).toBeTruthy();
+    await waitFor(() => expect(istekler.filter((i) => i.startsWith('/etiket-merkezi/bekleyenler?')).length).toBeGreaterThan(1));
+  });
+
+  it('2223-4: yalnız okuyan basılmayacak düğmesini görmez', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    expect(await screen.findByText('MK-000012')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /basılmayacak$/ })).toBeNull();
   });
 
   it('stoktan gelen adres seçili konumları açar: yalnız konum şablonları, kayıtlardan çıktı, bulunamayan uyarısı', async () => {

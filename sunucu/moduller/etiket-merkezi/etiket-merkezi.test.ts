@@ -673,6 +673,30 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal((await al(yetkisiz, '/etiket-merkezi/bekleyenler')).statusCode, 403);
   });
 
+  test('EM-U22 (2223-4 a): basılmayacak işareti satırı kişiyle deftere yazar ve listeden düşürür; bas ister; tür ve kimlik denetlenir', async () => {
+    const parti = await partiAc('P-ETK-AT');
+    const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
+    const kabul = await yaz(yonetici, '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: kart, miktar: '2', parti: { tedarikciPartiNo: 'AT-A' } }] });
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    const mkId = (kabul.json() as { belge: { id: number } }).belge.id;
+    const var_ = async () => ((await al(yonetici, '/etiket-merkezi/bekleyenler')).json() as BekleyenlerCevabi).bekleyenler.some((b) => b.tur === 'mal-kabul' && b.id === mkId);
+    assert.equal(await var_(), true);
+
+    const okuyan = await tekIslemliKisi('atlaokur', ['etiket-merkezi.oku']);
+    assert.equal((await yaz(okuyan, '/etiket-merkezi/bekleyenler/atla', { tur: 'mal-kabul', idler: [mkId] })).statusCode, 403, 'oku yetmez');
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/bekleyenler/atla', { tur: 'lot', idler: [mkId] })).statusCode, 400, 'yalnız bekleyen türleri');
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/bekleyenler/atla', { tur: 'mal-kabul', idler: [] })).statusCode, 400, 'boş liste');
+    assert.equal(await var_(), true);
+
+    const r = await yaz(yonetici, '/etiket-merkezi/bekleyenler/atla', { tur: 'mal-kabul', idler: [mkId, mkId] });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.deepEqual(r.json(), { atlanan: 1 }, 'yinelenen kimlik bir kez yazılır');
+    assert.equal(await var_(), false);
+    const defter = await ortam!.vt.sorgu<{ tur: string; kisi_id: number }>('SELECT tur, kisi_id FROM etiket_merkezi_atlanan WHERE kaynak_id = $1', [mkId]);
+    assert.deepEqual(defter, [{ tur: 'mal-kabul', kisi_id: yoneticiId }]);
+    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM etiket_merkezi_atlanan WHERE kaynak_id = $1', [mkId]), 'defter yalnız ekleme');
+  });
+
   test('EM-U15: raf etiketi Fabrika Haritası rafından RAF önekiyle çıkar; bölüm ve bölme/kat gözlerden gelir; pasif ve olmayan raf eksikte kalır; deftere raf olarak bağlanır (#116)', async () => {
     const sahip = ortam!.sahip;
     const salon = (await sahip.tek<{ id: number }>(
