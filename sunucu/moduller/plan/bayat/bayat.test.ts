@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { bayatEmirBittiYansit, planBayatligi } from '../disari.ts';
 import { kullaniciYukle } from '../../kisiler/disari.ts';
 import { emirBaslat, emirBitir } from '../../uretim-emirleri/disari.ts';
@@ -21,6 +21,8 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     const b = await bayatlik();
     assert.equal(b.bayat, false);
     assert.equal(b.sonCanliyaAlma, null);
+    // Açık ekranların sürüm sorusu işareti taşır (oturumlu, operatör de okur).
+    assert.equal((await tamam<PlanSurumCevabi>(c.operator, 'GET', '/plan/surum')).bayat?.bayat, false);
   });
 
   test('BY-02..05: erken biten emir ve makine duruşu işaretler; tekrar yazılmaz; geçmiş satırlı emir yazmaz; canlıya alma sıfırlar', async () => {
@@ -39,6 +41,7 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     assert.equal(b.bayat, true);
     assert.equal(b.sayilar['emir-bitti'], 1);
     assert.ok(b.olaylar[0]?.emirNo);
+    assert.equal((await tamam<PlanSurumCevabi>(c.operator, 'GET', '/plan/surum')).bayat?.sayilar['emir-bitti'], 1);
     // BY-03: aynı olay ikinci kez yazılmaz.
     await vt().tx((db) => bayatEmirBittiYansit(db, { uretimEmriId: e1 }));
     // BY-04: canlı satırları geçmişte biten emir işaretlemez.

@@ -35,6 +35,7 @@ import {
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelMerkezi, YetkinlikVerisi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
+import { planBayatligi } from './bayat/servis.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
 import { taslagiGuncelSurumeBagla, taslakKuraliYaz } from './motor-ayari.ts';
@@ -1322,7 +1323,8 @@ export async function siparisCarpani(db: Db, siparisId: number): Promise<Siparis
 export async function canliSurum(db: Db): Promise<PlanSurumCevabi> {
   const son = await s.sonCanliyaAlma(db);
   const ad = son ? (await kisiAdlari(db, [son.kisiId])).get(son.kisiId) ?? null : null;
-  return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null };
+  // 2319 (2311 S7): canlı plan son canlıya almadan sonra eskidiyse işaret; yalnız işarettir, plan değişmez.
+  return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null, bayat: await planBayatligi(db) };
 }
 
 // 510 a: "Plan değişikliği" kutusu; kişi başına sayı çoktan aza, eşitte ada göre.
