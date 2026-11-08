@@ -673,6 +673,52 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal((await al(yetkisiz, '/etiket-merkezi/bekleyenler')).statusCode, 403);
   });
 
+  test('EM-U23 (2223-2 a): depodan emre verilen lotun refakat kartı ve kararı rework/hurda/red olan hatalı parça bekler; basılınca ya da işaretlenince düşer; kabul kararı beklemez', async () => {
+    const e = await emirAc(2);
+    const sahip = ortam!.sahip;
+    const bekleyen = async () => ((await al(yonetici, '/etiket-merkezi/bekleyenler')).json() as BekleyenlerCevabi).bekleyenler;
+    const lot = (await sahip.tek<{ id: number }>(
+      "INSERT INTO stok_parti (malzeme_id, tedarikci_parti_no, acan_kisi_id, lot_no) VALUES ($1, 'P-BK', $2, $3) RETURNING id",
+      [e.malzemeNo, yoneticiId, `LT-BK-${e.id}`]))!.id;
+    const kart = (await sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id',
+      [e.id, e.malzemeNo, lot, yoneticiId]))!.id;
+    const rk = (await bekleyen()).find((b) => b.tur === 'refakat-partisi' && b.id === kart);
+    assert.ok(rk);
+    assert.equal(rk.baslik, `${e.emirNo}-P1`);
+    assert.match(rk.ayrinti, new RegExp(`^Lot LT-BK-${e.id}`));
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'refakat-partisi', idler: [kart] } })).statusCode, 200);
+    assert.equal((await bekleyen()).some((b) => b.tur === 'refakat-partisi' && b.id === kart), false, 'emrin kartı basılınca düşer');
+
+    const neden = (await sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('ETK-BK', 'Çapak', 952) RETURNING id"))!.id;
+    // Kaydın kalite adımı tektir: her kayıt kendi emrinde açılır.
+    const emirler = new Map<number, string>();
+    const hatali = async (karar: string | null) => {
+      const h = await emirAc(2);
+      const adimlar = await sahip.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [h.id]);
+      const id = (await sahip.tek<{ id: number }>(
+        `INSERT INTO uretim_emirleri_hatali_kaydi (uretim_emri_id, is_emri_id, hedef_emir_id, kalite_is_emri_id, hurda_nedeni_id, adet, kisi_id, karar, karar_kisi_id, karar_zamani)
+         VALUES ($1, $2, $1, $3, $4, 1, $5, $6, CASE WHEN $6::text IS NOT NULL THEN $5::int END, CASE WHEN $6::text IS NOT NULL THEN now() END) RETURNING id`,
+        [h.id, adimlar[0]!.id, adimlar[1]!.id, neden, yoneticiId, karar]))!.id;
+      emirler.set(id, h.emirNo);
+      return id;
+    };
+    const [bekliyor, red, kabul] = [await hatali(null), await hatali('red'), await hatali('kabul')];
+    const liste = (await bekleyen()).filter((b) => b.tur === 'hatali-parca');
+    assert.equal(liste.find((b) => b.id === bekliyor)?.ayrinti, 'KARAR BEKLİYOR · 1 adet · Çapak');
+    assert.equal(liste.find((b) => b.id === red)?.baslik, `${emirler.get(red)!} OP 10`);
+    assert.equal(liste.some((b) => b.id === kabul), false, 'kabul kararı etiket beklemez');
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/bekleyenler/atla', { tur: 'hatali-parca', idler: [red] })).statusCode, 200);
+    assert.equal((await yaz(yonetici, '/etiket-merkezi/sablonlar/hatali-parca-100x50/indir', { yaziciId: dosya.id, adet: 1, kayit: { tur: 'hatali-parca', idler: [bekliyor] } })).statusCode, 200);
+    const sonra = (await bekleyen()).filter((b) => b.tur === 'hatali-parca').map((b) => b.id);
+    assert.equal(sonra.includes(red) || sonra.includes(bekliyor), false, 'işaretlenen ve basılan düşer');
+    // Karar basımdan sonra gelirse etiket yeniden bekler.
+    await sahip.sorgu("UPDATE uretim_emirleri_hatali_kaydi SET karar = 'hurda', karar_kisi_id = $2, karar_zamani = now() + interval '1 second' WHERE id = $1", [bekliyor, yoneticiId]);
+    assert.equal((await bekleyen()).find((b) => b.tur === 'hatali-parca' && b.id === bekliyor)?.ayrinti.startsWith('HURDA'), true);
+  });
+
   test('EM-U22 (2223-4 a): basılmayacak işareti satırı kişiyle deftere yazar ve listeden düşürür; bas ister; tür ve kimlik denetlenir', async () => {
     const parti = await partiAc('P-ETK-AT');
     const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
@@ -692,9 +738,9 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(r.statusCode, 200, r.body);
     assert.deepEqual(r.json(), { atlanan: 1 }, 'yinelenen kimlik bir kez yazılır');
     assert.equal(await var_(), false);
-    const defter = await ortam!.vt.sorgu<{ tur: string; kisi_id: number }>('SELECT tur, kisi_id FROM etiket_merkezi_atlanan WHERE kaynak_id = $1', [mkId]);
+    const defter = await ortam!.vt.sorgu<{ tur: string; kisi_id: number }>("SELECT tur, kisi_id FROM etiket_merkezi_atlanan WHERE tur = 'mal-kabul' AND kaynak_id = $1", [mkId]);
     assert.deepEqual(defter, [{ tur: 'mal-kabul', kisi_id: yoneticiId }]);
-    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM etiket_merkezi_atlanan WHERE kaynak_id = $1', [mkId]), 'defter yalnız ekleme');
+    await assert.rejects(ortam!.sahip.sorgu("DELETE FROM etiket_merkezi_atlanan WHERE tur = 'mal-kabul' AND kaynak_id = $1", [mkId]), 'defter yalnız ekleme');
   });
 
   test('EM-U15: raf etiketi Fabrika Haritası rafından RAF önekiyle çıkar; bölüm ve bölme/kat gözlerden gelir; pasif ve olmayan raf eksikte kalır; deftere raf olarak bağlanır (#116)', async () => {

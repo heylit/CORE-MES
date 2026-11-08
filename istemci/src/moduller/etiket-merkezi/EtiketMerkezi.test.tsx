@@ -84,6 +84,8 @@ const BEKLEYENLER: BekleyenlerCevabi = {
     { tur: 'kalite-durum', id: 41, baslik: 'LT-000041 KAR', ayrinti: 'RED · Örnek mil', zaman: '2026-11-07T09:00:00.000Z', etiketSayisi: 1 },
     { tur: 'mal-kabul', id: 12, baslik: 'MK-000012', ayrinti: '2/2 lot etiketi basılmadı', zaman: '2026-11-07T08:00:00.000Z', etiketSayisi: 2 },
     { tur: 'kalite-durum', id: 40, baslik: 'LT-000040 KAR', ayrinti: 'ŞARTLI KABUL', zaman: '2026-11-06T08:00:00.000Z', etiketSayisi: 1 },
+    { tur: 'refakat-partisi', id: 7, baslik: 'UE-000120-P1', ayrinti: 'Lot LT-000009', zaman: '2026-11-05T08:00:00.000Z', etiketSayisi: 1 },
+    { tur: 'hatali-parca', id: 3, baslik: 'UE-000121 OP 20', ayrinti: 'RED · 1 adet · Çapak', zaman: '2026-11-04T08:00:00.000Z', etiketSayisi: 1 },
   ],
 };
 
@@ -341,6 +343,9 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('RED · Örnek mil')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'MK-000012 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=mal-kabul&id=12');
     expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+    // 2223-2 a: depodan emre veriliş refakat kartıyla, hatalı parça kendi etiketiyle basılır.
+    expect(screen.getByRole('link', { name: 'UE-000120-P1 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=refakat-partisi&id=7');
+    expect(screen.getByRole('link', { name: 'UE-000121 OP 20 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=hatali-parca&id=3');
     fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
     expect(await screen.findByText('Lot etiketi')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');

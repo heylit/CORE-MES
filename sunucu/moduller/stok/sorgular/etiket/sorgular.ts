@@ -36,3 +36,17 @@ export const etiketKaliteDegisimleri = (db: Db, baslangic: string): Promise<Etik
      JOIN stok_parti p ON p.id = b.parti_id JOIN stok_konum k ON k.id = b.konum_id
     WHERE b.miktar > 0
     ORDER BY d.z DESC, b.id DESC LIMIT ${String(EN_COK)}`, [baslangic]);
+
+export interface EtiketRefakatVerilisi {
+  refakatPartisiId: number; uretimEmriId: number; sira: number; lotNo: string; malzemeId: number; verilis: string;
+}
+
+// Depodan emre lot verilişi (2223-2 a): depo lotu emre ayırınca refakat partisi doğar ve kartı basılır. Lotsuz açılan kart lota
+// bağlanınca basılabilir olur; olay zamanı bağlanma anıdır. İptal ve başka karta birleşen kart sayılmaz.
+export const etiketRefakatVerilisleri = (db: Db, baslangic: string): Promise<EtiketRefakatVerilisi[]> => db.sorgu(
+  `SELECT r.id AS "refakatPartisiId", r.uretim_emri_id AS "uretimEmriId", r.sira, p.lot_no AS "lotNo", r.malzeme_id AS "malzemeId",
+          ${zamanMetni('coalesce(r.lota_baglanma_zamani, r.kayit_zamani)')} AS verilis
+     FROM stok_refakat_partisi r JOIN stok_parti p ON p.id = r.parti_id
+    WHERE r.durum = 'acik' AND r.birlestigi_refakat_partisi_id IS NULL
+      AND coalesce(r.lota_baglanma_zamani, r.kayit_zamani) >= $1::timestamptz
+    ORDER BY coalesce(r.lota_baglanma_zamani, r.kayit_zamani) DESC, r.id DESC LIMIT ${String(EN_COK)}`, [baslangic]);

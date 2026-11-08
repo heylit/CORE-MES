@@ -72,6 +72,7 @@ export const kaliteEtiketleri = (db: Db, bakiyeIdler: readonly number[]) => serv
 export type { EtiketKaliteDegisimi, EtiketMalKabulu } from './sorgular/etiket/sorgular.ts';
 export const etiketMalKabulleri = (db: Db, baslangic: string) => etiket.etiketMalKabulleri(db, baslangic);
 export const etiketKaliteDegisimleri = (db: Db, baslangic: string) => etiket.etiketKaliteDegisimleri(db, baslangic);
+export const etiketRefakatVerilisleri = (db: Db, baslangic: string) => etiket.etiketRefakatVerilisleri(db, baslangic);
 // İstasyonun stok konumu (kimlik ve basılı kod); konumu açılmamış istasyon haritada yoktur. Boş dizide sorgu atılmaz.
 export async function istasyonKonumlari(db: Db, istasyonIdler: readonly number[]): Promise<Map<number, { konumId: number; kod: string }>> {
   if (istasyonIdler.length === 0) return new Map();

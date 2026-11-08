@@ -25,7 +25,7 @@ const modulAdi = (modul: string): string => TUM_SAYFALAR.find((s) => s.yol === `
 const TUR_SIMGESI: Readonly<Record<string, PiktogramAdi>> = {
   konum: 'konum', raf: 'raf', malzeme: 'malzeme', lot: 'lot', refakat: 'refakat', istasyon: 'tezgah', 'kalite-durum': 'kalite',
   'hatali-parca': 'hatali', 'sevk-koli': 'koli', kalibrasyon: 'kumpas', 'seri-no': 'seri', 'fason-gidis': 'fason', deneme: 'yazici',
-  'mal-kabul': 'lot',
+  'mal-kabul': 'lot', 'refakat-partisi': 'refakat',
 };
 
 function TurAdi({ kod, ad }: { kod: string; ad: string }) {
@@ -100,7 +100,7 @@ function BekleyenListesi() {
   return (
     <>
       <p className="tc-etk-not">
-        Son {gun} günde açılan ya da durumu değişen ve etiketi henüz basılmamış kayıtlar: mal kabul lotları ve kalite durumu değişen stok satırları. Basılan ya da basılmayacak işaretlenen kayıt listeden düşer.
+        Son {gun} günde açılan ya da durumu değişen ve etiketi henüz basılmamış kayıtlar: mal kabul lotları, kalite durumu değişen stok satırları, depodan emre verilen lotların refakat kartları ve hatalı parçalar. Basılan ya da basılmayacak işaretlenen kayıt listeden düşer.
       </p>
       {turler.length > 0 && (
         <div className="tc-etk-dugmeler">
