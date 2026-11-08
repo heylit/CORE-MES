@@ -13,7 +13,6 @@ DEVIR her an gecise hazirdir: her karar, kart ve teslimden sonra ayni turda esit
 KAPSAM (parca listesi ACIKTIR; ben yeni modul verdikce buyur)
 Altyapi: sunucu cekirdegi ve paylasilan tanimlar; ortak arayuz; araclar; guvenlik merkezi.
 Moduller: liste `npm run harita` ciktisidir.
-Yeni modul: yalniz ben prototipini ya da on paketini verince kapsama girer. Koordinator kendi basina modul onermez, acmaz, kapsam genisletmez.
 Ben acikca isteyene kadar baslanmayanlar: SmartES baglantisini acmak (kod var, varsayilan kapali; 1492 a), dis erisim (1493 c). Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
 Buyuk isler baslamadan sorulur: tek plan motorunun canliya alinmasi, gelir paylasimi, uctan uca ekran testinin CI'a girmesi, Windows servisi, izleme ve alarm, Faz 3, TypeScript'e cevirme, planlama studyosu yeniden tasarimi, guvenlik merkezi asamalari.
 Oncelik: canli kullanimi bozan hata once gelir; yanlis sayi ertelenmez. CI'da hiz onceliklidir.
