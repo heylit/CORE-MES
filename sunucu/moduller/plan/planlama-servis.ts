@@ -3,7 +3,7 @@ import { cakisma, cokBuyuk, dogrulama, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type {
-  DegisiklikDefteriCevabi, DurumCevabi, KapasiteCevabi, PlanlamaCalismasiCevabi, PlanlamaSilGovdesi, PlanlamaYazGovdesi, SatinAlmaEkiCevabi,
+  DegisiklikDefteriCevabi, DurumCevabi, DuzenleyenCevabi, KapasiteCevabi, PlanlamaCalismasiCevabi, PlanlamaSilGovdesi, PlanlamaYazGovdesi, SatinAlmaEkiCevabi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { DEFTER_SAYFASI, KAPASITE_GUNU } from '#paylasilan/sozlesme/planlama.ts';
 import type { KayitlarCevabi, SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -94,6 +94,14 @@ export async function degisiklikDefteri(db: Db, once: number | null): Promise<De
     satirlar: sayfa.map(({ kisiId, zaman, ...x }) => ({ ...x, kisi: adlar.get(kisiId) ?? null, zaman: zaman.toISOString() })),
     dahaVar: l.length > DEFTER_SAYFASI,
   };
+}
+
+// 2311 S1: "şu an X düzenliyor" şeridi. Yalnız planlama çalışmasının kaydı; içerik dönmez, yalnız son yazan, zaman ve sürüm.
+export async function planlamaDuzenleyen(db: Db): Promise<DuzenleyenCevabi> {
+  const r = await sorgular.planlamaDuzenleyen(db, PLANLAMA_ANAHTARI);
+  if (r === null) return { kisiId: null, kisi: null, zaman: null, surum: null };
+  const adlar = await kisiAdlari(db, [r.kisiId]);
+  return { kisiId: r.kisiId, kisi: adlar.get(r.kisiId) ?? null, zaman: r.zaman, surum: r.surum };
 }
 
 export async function planlamaSil(db: Db, kullanici: Kullanici, g: PlanlamaSilGovdesi): Promise<SilCevabi> {

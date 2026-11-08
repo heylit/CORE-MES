@@ -544,6 +544,13 @@ export async function planlamaKaydiGuncelle(db: Db, g: { anahtar: string; bicim:
   );
 }
 
+// "Şu an X düzenliyor" şeridi: kaydı en son yazan ve zamanı. Sütunlar yazmada (planlamaKaydiEkle, planlamaKaydiGuncelle) dolar; ilk yazmada
+// guncellendi tablonun varsayılanıdır.
+export async function planlamaDuzenleyen(db: Db, anahtar: string): Promise<{ kisiId: number; zaman: string; surum: number } | null> {
+  return db.tek(
+    `SELECT guncelleyen_kisi_id AS "kisiId", to_json(guncellendi) #>> '{}' AS zaman, surum FROM plan_planlama_kaydi WHERE anahtar = $1`, [anahtar]);
+}
+
 export async function planlamaKaydiSil(db: Db, anahtar: string): Promise<boolean> {
   return (await db.sorgu<{ anahtar: string }>('DELETE FROM plan_planlama_kaydi WHERE anahtar = $1 RETURNING anahtar', [anahtar])).length > 0;
 }

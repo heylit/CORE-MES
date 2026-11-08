@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, GonderHatasi, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, canliDegistiIletisi, GonderHatasi, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -56,7 +56,7 @@ describe('calismayiGonder', () => {
     const post = sunucu();
     const g = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' });
     expect(post.mock.calls[2]?.[0]).toBe('/plan/senaryolar/12/canliya-al');
-    expect(post.mock.calls[2]?.[1]).toEqual({ surum: 2, cakismalariKabul: true });
+    expect(post.mock.calls[2]?.[1]).toEqual({ surum: 2, cakismalariKabul: false });
     expect(g.senaryolar?.senaryolar[0]?.durum).toBe('canliya_alindi');
   });
 
@@ -65,6 +65,36 @@ describe('calismayiGonder', () => {
     const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
     expect(gonderHataIletisi(h)).toBe('Plan canlıya alınamadı, onayda bekliyor: Kendi gönderdiğiniz planı canlıya alamazsınız.');
     expect(yollar(post)).not.toContain('/plan/senaryolar/12/vazgec');
+  });
+
+  it('2311 S1: canlıya alma "canlı değişti" ile reddedilirse plan onayda kalır, hata soruyu ve taslağı taşır; onaylanınca bayrakla gider', async () => {
+    const post = sunucu({ '/plan/senaryolar/12/canliya-al': new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Canlı plan değişti.', ayrinti: { neden: 'canli-degisti', tabanSurumu: 3, canliSurumu: 4 } }) });
+    const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli' }).catch((e: unknown) => e);
+    expect((h as GonderHatasi).canliDegisti).toBe(12);
+    expect((h as GonderHatasi).gerekceTaslagi).toBeNull();
+    expect(yollar(post)).not.toContain('/plan/senaryolar/12/vazgec');
+    vi.restoreAllMocks();
+    const kabul = sunucu();
+    await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'canli', canliKabul: true });
+    expect(kabul.mock.calls[2]?.[1]).toEqual({ surum: 2, cakismalariKabul: true });
+  });
+
+  it('2311 S1: taslak yazma eski sürüm döner ve canlı ilerlemişse soru sorulur; canlı aynıysa düz hata kalır', async () => {
+    const eski = new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Bu kayıt siz açtıktan sonra değiştirildi.', ayrinti: { neden: 'eski-surum' } });
+    sunucu({ '/plan/planlama-calismasi/taslak-yaz': eski });
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ planSurumu: 4, sonCanliyaAlma: { zaman: '2026-11-08T09:00:00Z', kisi: 'Deneme B' } } as never);
+    const h = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
+    expect(get).toHaveBeenCalledWith('/plan/surum');
+    expect((h as GonderHatasi).canliDegisti).toBe('taslak-yaz');
+    get.mockResolvedValue({ planSurumu: 3, sonCanliyaAlma: null } as never);
+    const d = await calismayiGonder({ komut: komut(8), ad: 'x', not: null, planSurumu: 3, hedef: 'onay' }).catch((e: unknown) => e);
+    expect((d as GonderHatasi).canliDegisti).toBeNull();
+    expect(gonderHataIletisi(d)).toBe('Plan onaya gönderilemedi: Bu kayıt siz açtıktan sonra değiştirildi.');
+  });
+
+  it('2311 S1: soru metni canlıya alanı söyler; bilinmiyorsa yalnız değiştiğini', () => {
+    expect(canliDegistiIletisi({ zaman: '2026-11-08T09:00:00Z', kisi: 'Deneme B' })).toMatch(/^Bu plan hazırlandıktan sonra canlı plan değişti\. Deneme B .+ canlıya aldı\./);
+    expect(canliDegistiIletisi(null)).toBe('Bu plan hazırlandıktan sonra canlı plan değişti. Canlıya alırsanız o değişiklikler bu planla değişir; önce canlıya alan kişiyle konuşun.');
   });
 
   it('990 a: canlıya alma 4 saat kuralına takılırsa hata gerekçe isteyen onaydaki taslağı taşır; öteki retlerde taşımaz', async () => {

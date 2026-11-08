@@ -15,6 +15,7 @@ import {
 import { CalismaYazici } from './kayit.ts';
 import { DegisiklikSeridi } from './ortak/degisiklik-seridi/DegisiklikSeridi.tsx';
 import { kaynakSatiri } from './ortak/degisiklik-seridi/kurallar.ts';
+import { DuzenleyenSeridi, useDuzenleyen } from './ortak/duzenleyen-seridi/DuzenleyenSeridi.tsx';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
 import './planlama-yeni.css';
@@ -77,6 +78,8 @@ function PlanlamaEkrani() {
     if (durum.tur !== 'hazir' || durum.depo.calisma === null || durum.depo.kaynakDegisikligi === null) return null;
     return kaynakSatiri(durum.depo.kaynakDegisikligi, Date.now(), durum.depo.calisma.dataVer);
   }, [durum]);
+  const benimSurum = useCallback(() => yazici?.surum ?? (durum.tur === 'hazir' ? durum.depo.calismaSurumu : null), [yazici, durum]);
+  const duzenleyen = useDuzenleyen(durum.tur === 'hazir' && kullanici ? kullanici.id : null, benimSurum);
   useEffect(() => {
     if (yazici !== null && disSatir !== null) yazici.kaynakDegisikliginiYaz(disSatir);
   }, [yazici, disSatir]);
@@ -110,14 +113,21 @@ function PlanlamaEkrani() {
 
   const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
   const serit = calisma !== null && calisma.plan !== null;
+  // Üst alan tek satırdır (2320 S1 d): düzenleyen, değişiklik ve çalışma açma şeritleri aynı kapta alt alta.
+  const ust = serit || calismaYok || duzenleyen !== null;
 
   return (
-    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={serit ? '' : undefined}>
-      {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} />}
-      {calismaYok && (
-        <div className="tc-py-calisma-yok" role="status">
-          <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
-          <Dugme tur="birincil" simge="plus" yukleniyor={kuruluyor} disabled={kuruluyor} onClick={calismaAc}>Planlama çalışmasını aç</Dugme>
+    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={ust ? '' : undefined}>
+      {ust && (
+        <div className="tc-py-ust">
+          {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={tazele} />}
+          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} />}
+          {calismaYok && (
+            <div className="tc-py-calisma-yok" role="status">
+              <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
+              <Dugme tur="birincil" simge="plus" yukleniyor={kuruluyor} disabled={kuruluyor} onClick={calismaAc}>Planlama çalışmasını aç</Dugme>
+            </div>
+          )}
         </div>
       )}
       <div className="tc-py-gorunum">

@@ -15,7 +15,7 @@ import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '.
 import { bitenler, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { MotorKurali } from './MotorKurali.tsx';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
   agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
   paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
@@ -101,6 +101,10 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const [baslayanSor, setBaslayanSor] = useState<{ s: SunucuSenaryosu; ileti: string } | null>(null);
   const [gerekceSor, setGerekceSor] = useState<{ s: SunucuSenaryosu; ileti: string } | null>(null);
   const [gerekce, setGerekce] = useState('');
+  // 2311 S1: canlı plan bu plan hazırlandıktan sonra değiştiyse sorulur; s onaydaki taslak, hedef baştan gönderilecek çalışma.
+  const [canliSor, setCanliSor] = useState<{ s?: SunucuSenaryosu; hedef?: GonderHedefi; ileti: string } | null>(null);
+  // Soruyu onaylanan taslak: aynı canlıya almanın sonraki denemeleri (sabitleme, gerekçe) yeniden sormaz.
+  const canliKabul = useRef(new Set<number>());
   const [gidiyor, setGidiyor] = useState(false);
   const l = useMemo(() => sen?.senaryolar ?? [], [sen]);
   const canli = sen?.canli ?? null;
@@ -142,7 +146,8 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
       setNotlar((n) => ({ ...n, [String(s.id)]: '' }));
       return cevap;
     } catch (e) {
-      if (k === 'canliya-al' && sonradanBaslayanMi(e)) setBaslayanSor({ s, ileti: e.govde.mesaj });
+      if (k === 'canliya-al' && canliDegistiMi(e)) void canliDegistiOku().then((ileti) => { if (acik.current) setCanliSor({ s, ileti }); });
+      else if (k === 'canliya-al' && sonradanBaslayanMi(e)) setBaslayanSor({ s, ileti: e.govde.mesaj });
       else if (k === 'canliya-al' && dortSaatMi(e)) setGerekceSor({ s, ileti: e.govde.mesaj });
       else if (e instanceof ApiHatasi && e.durum === 409) {
         api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined);
@@ -161,8 +166,10 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
     },
     vazgec: async (s: SunucuSenaryosu) => { if (await gec('vazgec', s)) bildir('tamam', `"${s.ad}" planından vazgeçildi.`); },
     canli: async (s: SunucuSenaryosu, ek: Record<string, unknown> = {}) => {
-      const r = await gec('canliya-al', s, { cakismalariKabul: true, ...ek });
+      const r = await gec('canliya-al', s, { ...(canliKabul.current.has(s.id) ? { cakismalariKabul: true } : {}), ...ek });
       setSor(null);
+      setCanliSor(null);
+      if (r) canliKabul.current.delete(s.id);
       if (ek['baslayanlar']) setBaslayanSor(null);
       if (r && ek['dortSaatGerekcesi']) { setGerekceSor(null); setGerekce(''); }
       if (r) { bildir('tamam', `Sürüm ${r.canliSurum} canlıda. Tezgâh kuyrukları ve operatör ekranı bu planı gösterir.`); setSecim(null); o.yenile(); }
@@ -171,17 +178,30 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
 
   // Çalışmanın gönderilmesi: başarıda sunucunun listesi gösterilir; ret ya da yarıda kalmada sunucunun iletisi gösterilir ve liste yeniden okunur
   // (canlıya alma reddedilirse plan onayda kalır).
-  const calGonder = async (hedef: GonderHedefi) => {
+  const calGonder = async (hedef: GonderHedefi, canliOnay = false) => {
     if (!c) return;
     setGidiyor(true);
+    setCanliSor(null);
     try {
-      const g = await calismayiYolla({ o, c, sen, hedef, not: (notlar.calisma ?? '').trim() || null });
+      const g = await calismayiYolla({ o, c, sen, hedef, not: (notlar.calisma ?? '').trim() || null, canliKabul: canliOnay });
       if (g.senaryolar) senYaz(g.senaryolar);
       setNotlar((n) => ({ ...n, calisma: '' }));
       bildir('tamam', gonderIletisi(hedef, g));
       if (hedef === 'canli') { setSecim(null); o.yenile(); } else setSecim(g.taslak);
     } catch (e) {
       const bekleyen = e instanceof GonderHatasi ? e.gerekceTaslagi : null;
+      const degisti = e instanceof GonderHatasi ? e.canliDegisti : null;
+      if (degisti !== null) {
+        const ileti = await canliDegistiOku();
+        if (degisti === 'taslak-yaz') setCanliSor({ hedef, ileti });
+        else {
+          const l = await api.get<SenaryolarCevabi>('/plan/senaryolar').catch(() => null);
+          if (l) senYaz(l);
+          const s = l?.senaryolar.find((x) => x.id === degisti);
+          if (s) setCanliSor({ s, ileti }); else bildir('hata', gonderHataIletisi(e));
+        }
+        return;
+      }
       if (bekleyen === null) bildir('hata', gonderHataIletisi(e));
       api.get<SenaryolarCevabi>('/plan/senaryolar').then((l) => {
         senYaz(l);
@@ -310,6 +330,16 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         yukleniyor={gidiyor} vazgec={() => { setSor(null); setCalSor(false); }} onayla={() => { if (calSor) void calGonder('canli'); else if (sor) void eylem.canli(sor); }}
       >
         <p>{calSor ? (uyari.length ? `Çalışma planı: ${uyari.join('; ')}.` : 'Çalışma planı onaya gönderilip canlı plan olacak; tezgâh kuyrukları bu plana göre görünür.') : sor ? (uyari.length ? `${sor.ad}: ${uyari.join('; ')}.` : `"${sor.ad}" canlı plan olacak (sürüm ${(canliSurum ?? 0) + 1}); tezgâh kuyrukları bu plana göre görünür.`) : ''}</p>
+      </OnayPenceresi>
+      <OnayPenceresi
+        acik={canliSor !== null} baslik="Canlı plan değişti" onayMetni={canliSor?.hedef === 'onay' || canliSor?.hedef === 'deneme' ? 'Yine de gönder' : 'Yine de canlıya al'}
+        yukleniyor={gidiyor} vazgec={() => setCanliSor(null)}
+        onayla={() => {
+          if (canliSor?.s) { canliKabul.current.add(canliSor.s.id); void eylem.canli(canliSor.s, { cakismalariKabul: true }); }
+          else if (canliSor?.hedef) void calGonder(canliSor.hedef, true);
+        }}
+      >
+        <p>{canliSor ? `${canliSor.ileti}${canliSor.s ? ' Plan onayda bekliyor.' : ''}` : ''}</p>
       </OnayPenceresi>
       <OnayPenceresi
         acik={baslayanSor !== null} baslik="Taslaktan sonra başlayan iş var" onayMetni="Sabitle ve canlıya al"

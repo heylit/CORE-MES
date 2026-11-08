@@ -8,7 +8,7 @@ import {
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
-  calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
+  calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
@@ -175,6 +175,9 @@ export const uclar = [
   // 2129-2 b: planı etkileyen değişikliklerin defteri (eklendi, uygulandı, reddedildi ve gerekçesi); satırı çalışma yazması girer, uç yalnız okur.
   uc({ yontem: 'GET', yol: '/plan/degisiklik-defteri', yetki: PLANLAMA_OKUR, sorgu: degisiklikDefteriSorgusu, cevap: degisiklikDefteriCevabi,
     isle: ({ db, sorgu }) => planlama.degisiklikDefteri(db, sorgu.once ?? null) }),
+  // 2311 S1: açık planlama sayfalarının kısa aralıkla sorduğu son yazan okuması ("şu an X düzenliyor").
+  uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/duzenleyen', yetki: PLANLAMA_OKUR, cevap: duzenleyenCevabi,
+    isle: ({ db }) => planlama.planlamaDuzenleyen(db) }),
   // Planlama sayfasının birleşmiş çalışması (288 a); planlama sayfalarını görme işlemi ister (menüdeki gibi).
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi', yetki: PLANLAMA_OKUR, cevap: planlamaCalismasiCevabi,
     isle: ({ db, kullanici }) => planlama.planlamaCalismasi(db, kullanici) }),

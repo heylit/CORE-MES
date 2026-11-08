@@ -210,6 +210,31 @@ describe('PlanlamaAtolyesi', () => {
     await waitFor(() => expect(screen.getByText('Taslaktan sonra başlayan iş var')).toBeTruthy());
     expect(screen.getByText(new RegExp(ileti.replace(/[()]/g, '.')))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Sabitle ve canlıya al' }));
+    await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, baslayanlar: 'sabitle' }, expect.anything()));
+    post.mockRestore();
+    get.mockRestore();
+  });
+
+  it('Onay sekmesi, senaryo (2311 S1): ilk deneme bayraksız gider; canlı değiştiyse canlıya alan sorulur, onaylanınca sonraki denemeler de bayrakla gider', async () => {
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol === '/plan/surum'
+      ? Promise.resolve({ planSurumu: 4, sonCanliyaAlma: { zaman: '2026-11-08T09:00:00Z', kisi: 'Deneme B' } })
+      : Promise.reject(new Error('yok')))) as never);
+    const post = vi.spyOn(api, 'post')
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Canlı plan değişti.', ayrinti: { neden: 'canli-degisti', tabanSurumu: 3, canliSurumu: 4 } }))
+      .mockRejectedValueOnce(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlayan iş var.', ayrinti: { neden: 'sonradan-baslayan', isler: [{ emirNo: 'E-1', opNo: 10 }] } }))
+      .mockResolvedValue({ ...DEPO.senaryolar, canliSurum: 5 });
+    ac({ mudur: true });
+    fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
+    const dugmeler = screen.getAllByRole('button', { name: 'Onayla ve canlıya al' });
+    fireEvent.click(dugmeler[dugmeler.length - 1]!);
+    fireEvent.click(within(kart()).getByRole('button', { name: /canlıya al$/ }));
+    await waitFor(() => expect(screen.getByText('Canlı plan değişti')).toBeTruthy());
+    expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4 }, expect.anything());
+    expect(screen.getByText(/Deneme B .+ canlıya aldı\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Yine de canlıya al' }));
+    await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, cakismalariKabul: true }, expect.anything()));
+    await waitFor(() => expect(screen.getByText('Taslaktan sonra başlayan iş var')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Sabitle ve canlıya al' }));
     await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, cakismalariKabul: true, baslayanlar: 'sabitle' }, expect.anything()));
     post.mockRestore();
     get.mockRestore();
@@ -231,7 +256,7 @@ describe('PlanlamaAtolyesi', () => {
     expect(post).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByPlaceholderText('Neden şimdi değişmesi gerekiyor'), { target: { value: '  takım tezgâhta yok ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Gerekçeyle canlıya al' }));
-    await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, cakismalariKabul: true, dortSaatGerekcesi: 'takım tezgâhta yok' }, expect.anything()));
+    await waitFor(() => expect(post).toHaveBeenLastCalledWith('/plan/senaryolar/1/canliya-al', { surum: 4, dortSaatGerekcesi: 'takım tezgâhta yok' }, expect.anything()));
     await waitFor(() => expect(screen.queryByText('4 saat kuralı')).toBeNull());
     post.mockRestore();
     get.mockRestore();
