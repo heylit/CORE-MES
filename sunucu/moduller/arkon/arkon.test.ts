@@ -267,7 +267,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
     const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali'));
-    assert.equal(okuma.length, 17);
+    assert.equal(okuma.length, 18);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -280,7 +280,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'arkon.operator')", [rol?.id]);
     await girisliKisiEkle('sayfasiz1', 'gecici_sayfasiz');
     const sayfasiz = await girisCerezi('sayfasiz1');
-    const ornekYol = (yol: string) => yol.replace(':depo', 'pkgs').replace(':kimlik', 'x').replace(':tur', 'events').replace(':ozet', 'c'.repeat(64)).replace(':belgeId', '1');
+    const ornekYol = (yol: string) => yol.replace(':depo', 'pkgs').replace(':kimlik', 'x').replace(':tur', 'events').replace(':ozet', 'c'.repeat(64)).replace(':belgeId', '1').replace(/\/goruntu$/, '/goruntu?imza=r1.a.net.b1.hi.14171c');
     for (const u of okuma) assert.equal((await istek(sayfasiz, 'GET', ornekYol(u.yol))).durum, 403, u.yol);
     for (const u of yazma) assert.equal((await istek(sayfasiz, 'POST', ornekYol(u.yol), {})).durum, 403, u.yol);
     // Karşı örnek: Arkon MES sayfası olmayan ama Üretim Terminali sayfası olan operatör okur.
@@ -887,6 +887,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'POST', yol: `/arkon/dosyalar/${OZET}/parca`, govde: { sira: 0, toplam: 2, veri: 'QQ==' } },
     { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}` },
     { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}/arka-plan` },
+    { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}/goruntu?sayfa=1&imza=r1.a.net.b1.hi.14171c` },
     { yontem: 'GET', yol: '/arkon/iletiler' },
     { yontem: 'POST', yol: '/arkon/iletiler', govde: { ileti: { type: 'call' }, kaynak: 'c9' } },
     { yontem: 'GET', yol: '/arkon/plan-sira/surum' },
