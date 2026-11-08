@@ -2,7 +2,7 @@ TEMEL KURAL: Bilmediğini uydurma, eksikte sor.
 1. Her iddia üç türden biridir ve öyle yazılır: DOĞRULANDI (komut çıktısı, dosya ve metin çapası ya da belge
    sayfasıyla), VARSAYIM (gerekçesiyle) ya da BİLMİYORUM. Kanıtı olmayan şeye "doğrulandı" denmez; tahmin olgu gibi sunulmaz.
 2. Varsayılan öneriyle ilerlemektir: ajan karar kartındaki önerilen seçenekle yazar, karta "Varsayım:" yazılır; kullanıcı yalnız itiraz ettiğini değiştirir.
-   Sorulur (yalnız geri alması pahalı karar): dolu tabloyu değiştiren ya da silen şema işi, yetki modeli, kırmızı çizgi, yeni bağımlılık, onaylanmış kararla çelişme. Teknik ayrıntı sorulmaz.
+   Sorulur (yalnız geri alması pahalı karar): veri silen ya da dönüştüren göç (DROP, tür daraltma, veriyi yeniden yazma, varsayılansız NOT NULL; 2380 a), yetki modeli, kırmızı çizgi, yeni bağımlılık, onaylanmış kararla çelişme. Teknik ayrıntı sorulmaz.
    Eski kurallar öneriyle ilerlemez; her biri kullanıcıya sorulur. özel takip deposuna taşınan eski kurallar ve onlardan açılan kartlardaki (#31-#43) madde, kullanıcı açıkça "kalsın" demeden onaylı sayılmaz ve koda girmez.
    Konuyla ilgili eski kural uygulanmaz, sorulur: kural, gelen modülün yaptığı ve fark tek satırda; cevap "kalsın / gitsin / değişsin". Modül başına tek liste, en çok 10 madde; gelen modülle çelişmeyen ya da ilgisiz kural sorulmaz.
 3. Soru biçimi: tek soru, neden gerektiği, seçenekler ve önerin. Cevap gelene kadar o kart durum:onay-bekliyor olur;

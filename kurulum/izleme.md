@@ -28,6 +28,7 @@ Bilgi işlemin izleme aracı olay günlüğündeki 100, 200 ve 300'e bağlanır.
 5. Saat eşliği denetlenir.
 6. Performans sayacı toplayıcısı kurulur.
 7. Sertifika bitişi Sunucu durumu kartında görünür (`TMIV2_HTTPS_SERTIFIKA`, `kurulum/canli.md` "Sertifika"); ayrı ayar gerekmez.
+8. Bu yedi adımın Windows'ta denendiği kurulum tutanağına yazılır (İşletim; 2385 a).
 
 ## PostgreSQL günlük ayarları
 
