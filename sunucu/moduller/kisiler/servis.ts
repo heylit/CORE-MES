@@ -15,9 +15,9 @@ import {
   cikisliAktiflikReddi, cikisPasifiReddi, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
 } from './kurallar.ts';
 import type { KisiAlanlari, Ret } from './kurallar.ts';
-import { parolaDogrula, parolaOzetle } from './parola.ts';
+import { parolaDogrula, parolaOzetle, yenidenOzetlenmeli } from './parola.ts';
 import {
-  aktifYaz, bayrakliKalanSayisi, bayrakliRolleriKilitle, bayrakliSayisiHaric, girisKaydiBul, hesapYaz, kisiBayrakliMi,
+  aktifYaz, bayrakliKalanSayisi, bayrakliRolleriKilitle, bayrakliSayisiHaric, girisKaydiBul, hesapYaz, kisiBayrakliMi, sirOzetiniYenile,
   kisiEkIslemSatirlari, kisiGuncelle, kisiIslemiEkle, kisiIslemiSil, kisiKullaniciMi, kisiSatirlari, kisiVarMi, kisiYaz, girisBilgisiBul, oturumlariGecersizKil, parolaYaz, pinBilgisiBul, pinYaz, rolBul, rolEkle, rolIslemiEkle, rolIslemiSil, rolKuraliniHemenDenetle,
   eksikBilgiSayilari, cikisiGelenKisiler, gizlilikTaahhuduYaz, icHesapYaz, sinirliSorumluUygunMu, sinirliYaz, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
@@ -51,6 +51,7 @@ export async function girisDogrula(db: Db, kullaniciAdi: string, sir: GirisSirri
   }
   const ozet = yontem === 'pin' ? kayit.pin_ozeti : kayit.parola_ozeti;
   if (ozet === null || !(await parolaDogrula(deger, ozet))) return null;
+  if (yenidenOzetlenmeli(ozet)) await sirOzetiniYenile(db, kayit.id, yontem, ozet, await parolaOzetle(deger));
   return { kisiId: kayit.id, pinBelirlenecek: yontem === 'pin' && kayit.pin_belirlenecek };
 }
 
