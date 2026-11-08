@@ -12,15 +12,23 @@ import { uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlik, hazirlikCozucusuKaydet, hazirlikDenetimi, muafiyetVer } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
-import { MUAF_MADDE_YOK, MUAF_TUTULUR, hazirlikEngeli, makineHazirligi } from './kurallar.ts';
+import { MUAF_MADDE_YOK, MUAF_TUTULUR, hazirlikEngeli, makineHazirligi, talimatHazirligi } from './kurallar.ts';
 
 // 2146-1 a: matrise rota, malzeme, takım ömrü ve makine durumu girer, hepsi yalnız uyarır; özel proses çıkar. Başlatma
 // davranışı değişmez: uyaran madde eksikken de iş emri başlar.
 describe('uretim-emirleri hazırlık kuralları, uyaran maddeler (2146-1 a)', () => {
-  test('madde listesi: durduran CNC, çizim ve paket yayını (2227), uyaran rota, malzeme, takım ömrü, makine; özel proses yok', () => {
-    assert.deepEqual([...HAZIRLIK_MADDELERI], ['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'makine']);
-    assert.deepEqual(HAZIRLIK_MADDELERI.filter(hazirlikUyarirMi), ['rota', 'malzeme', 'takim-omru', 'makine']);
+  test('madde listesi: durduran CNC, çizim ve paket yayını (2227), uyaran rota, malzeme, takım ömrü, makine, talimat; özel proses yok', () => {
+    assert.deepEqual([...HAZIRLIK_MADDELERI], ['cnc', 'cizim', 'yayin', 'rota', 'malzeme', 'takim-omru', 'makine', 'talimat']);
+    assert.deepEqual(HAZIRLIK_MADDELERI.filter(hazirlikUyarirMi), ['rota', 'malzeme', 'takim-omru', 'makine', 'talimat']);
     assert.deepEqual([...MUAF_TUTULUR], ['cnc'], 'muafiyet yalnız matristeki durduran maddeye');
+  });
+
+  test('talimat: hazırlık adımı yoksa gerekmez, hepsi tamamsa tamam, biri bile kalırsa eksik (2227-1)', () => {
+    assert.deepEqual(talimatHazirligi(undefined), { durum: 'yok', secildi: false });
+    assert.deepEqual(talimatHazirligi({ toplam: 0, tamam: 0 }), { durum: 'yok', secildi: false });
+    assert.deepEqual(talimatHazirligi({ toplam: 2, tamam: 0 }), { durum: 'yok', secildi: true });
+    assert.deepEqual(talimatHazirligi({ toplam: 2, tamam: 1 }), { durum: 'suruyor', secildi: true });
+    assert.deepEqual(talimatHazirligi({ toplam: 2, tamam: 2 }), { durum: 'tamam', secildi: true });
   });
 
   test('engel yalnız durduran maddeden çıkar; uyaran madde engel değildir', () => {
@@ -114,9 +122,9 @@ describe('uretim-emirleri hazırlık, uyaran maddeler (2146-1 a, gerçek Postgre
       assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)), null, 'uyaran madde başlatmayı durdurmaz');
       const v = hazirlikCevabi.parse(await o().vt.okumaTx((db) => hazirlik(db, id)));
       assert.deepEqual(v.maddeler.filter((m) => hazirlikUyarirMi(m.madde)).map((m) => [m.madde, m.durum, m.muafTutulur]), [
-        ['rota', 'eksik', false], ['malzeme', 'eksik', false], ['takim-omru', 'eksik', false], ['makine', 'eksik', false],
+        ['rota', 'eksik', false], ['malzeme', 'eksik', false], ['takim-omru', 'eksik', false], ['makine', 'eksik', false], ['talimat', 'gerekmez', false],
       ]);
-      assert.deepEqual(v.isEmirleri[0]?.maddeler.map((m) => m.madde), ['cnc', 'yayin', 'malzeme', 'takim-omru', 'makine'], 'iş emri düzeyindeki maddeler satırda');
+      assert.deepEqual(v.isEmirleri[0]?.maddeler.map((m) => m.madde), ['cnc', 'yayin', 'malzeme', 'takim-omru', 'makine', 'talimat'], 'iş emri düzeyindeki maddeler satırda');
 
       hazirlikCozucusuKaydet('cnc', async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'suruyor', secildi: true } as const])));
       assert.equal(await o().vt.okumaTx((db) => hazirlikDenetimi(db, olay)),

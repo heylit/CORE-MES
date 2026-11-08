@@ -43,6 +43,8 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   'takim-omru': { ad: 'Takım ömrü', kisa: 'Takım', sahip: 'CNC Kurulum', git: { yol: '/cnc-kurulum', islem: 'sayfa.cnc-kurulum', ad: "CNC Kurulum'da aç" }, uyarir: true },
   makine: { ad: 'Makine durumu', kisa: 'Makine', sahip: 'İstasyonlar', git: { yol: '/istasyonlar', islem: 'sayfa.istasyonlar', ad: "İstasyonlar'da aç" }, uyarir: true },
   yayin: { ad: 'Paket yayını', kisa: 'Yayın', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: false },
+  // 2227-1: ön hazırlık ve hazırlık adımları terminalde işaretlenir; matris yalnız uyarır.
+  talimat: { ad: 'Hazırlık talimatı', kisa: 'Talimat', sahip: 'Terminal', git: null, uyarir: true },
 };
 
 // Hücre kimliği: emir geneli madde yalnız madde, iş emri düzeyindeki madde madde ve iş emri.

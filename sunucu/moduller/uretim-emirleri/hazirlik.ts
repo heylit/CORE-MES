@@ -6,15 +6,16 @@ import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BaslatmaOlayi } from './baslatma-denetimi.ts';
-import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, makineHazirligi } from './kurallar.ts';
+import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, makineHazirligi, talimatHazirligi } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
+import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
 
 // Hazırlık durdurucuları (120-122 a, denetim #14): maddenin durumunu sahibi modül verir. Sahipler (cnc-kurulum, Arkon, Kalite Merkezi)
 // bu modülü okuduğu için çözücüler kablolama.ts'te kaydedilir; kayıtsız madde emirde aranmaz. CNC kurulumu iş emri başınadır (266 a),
 // çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği. Uyaran maddeler (2146-1 a) başlatmada sorulmaz, yalnız görünümde.
 export type HazirlikCozucusu = (db: Db, idler: readonly number[]) => Promise<ReadonlyMap<number, HazirlikBilgisi>>;
-const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine', 'yayin']);
+const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine', 'yayin', 'talimat']);
 const BASLATMADA_SORULMAZ: ReadonlySet<string> = new Set(YALNIZ_GORUNUM_MADDELERI);
 const cozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu>();
 // Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.
@@ -138,3 +139,12 @@ export async function makineHazirlikDurumlari(db: Db, isEmriIdleri: readonly num
   return sonuc;
 }
 hazirlikCozucusuKaydet('makine', makineHazirlikDurumlari);
+
+// Talimat maddesi (2227-1): adımlar bu modülün tablosundadır, çözücü burada kayıtlıdır.
+export async function talimatHazirlikDurumlari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, HazirlikBilgisi>> {
+  const idler = [...new Set(isEmriIdleri)];
+  if (idler.length === 0) return new Map();
+  const sayilar = new Map((await talimatHazirlikSayilari(db, idler)).map((x) => [x.isEmriId, x]));
+  return new Map(idler.map((i) => [i, talimatHazirligi(sayilar.get(i))]));
+}
+hazirlikCozucusuKaydet('talimat', talimatHazirlikDurumlari);
