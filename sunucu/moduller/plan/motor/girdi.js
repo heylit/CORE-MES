@@ -821,6 +821,32 @@ function otoArizaUygula(S, makineler, cx) {
   if (degisti) S.arizaOto = oto;
   return degisti;
 }
+/* 2319 (S10): Arkon'un periyodik bakımı (kaynak okumasının ek.bakimlar; aralığı bakim/kurallar.ts tesis duvar saatiyle kurar) tezgâhın
+   duruş satırı olur. Satır S.down'dadır, oto ve bakım anahtarı taşır; planlamacı silebilir ya da değiştirebilir. S.bakimOto açılan anahtarları
+   tutar: silinen satır geri gelmez. Listede artık olmayan anahtarın (bakım yapıldı ya da Arkon planı değişti) başlamamış satırı düşer,
+   başlamışsa şimdide kapanır. bakimlar null ya da dizi değilse okunmamıştır, dokunulmaz. Dönen: değişti mi. */
+/** @param {any} [S] @param {any} [bakimlar] @param {number} [now] */
+function otoBakimUygula(S, bakimlar, now) {
+  if (!Array.isArray(bakimlar) || !S || !S.D || now == null) return false;
+  const oto = Object.assign({}, S.bakimOto || {}); const gecerli = new Set(); let down = (S.down || []).slice(); let degisti = false;
+  for (const b of bakimlar) {
+    if (!b || typeof b.anahtar !== 'string') continue;
+    const from = parseT(S.D, b.bas), to = parseT(S.D, b.bit);
+    if (from == null || to == null || !(to > from)) continue;
+    gecerli.add(b.anahtar);
+    if (oto[b.anahtar]) continue;
+    down.push({ m: String(b.m), from, to, neden: 'bakım', oto: 1, bakim: b.anahtar });
+    oto[b.anahtar] = 1; degisti = true;
+  }
+  for (const a of Object.keys(oto)) {
+    if (gecerli.has(a)) continue;
+    delete oto[a]; degisti = true;
+    down = down.filter(d => !(d.bakim === a && d.from >= now)).map(d => (d.bakim === a && d.to > now ? { ...d, to: now } : d));
+  }
+  if (!degisti) return false;
+  S.down = down.sort((a, b) => a.from - b.from); S.bakimOto = oto;
+  return true;
+}
 /* Çalışmanın açılışı, çerçevenin sırasıyla: kayıttan yükleme (zz31 yukle), kayıt çalışmadan sonra değiştiyse yeniden çeviri (zz27 rrCek,
    ilk çizimde), eski kayıtta 1650 kararlarının taşınması (zz-karar-1650, çizimden sonra), kaynak okuması (zz31 kaynakUygula) ve başlamış adımlar (zz31 calisanUygula);
    st sayfanın stOf'uyla aynı yoldan (durum.js stTamKur). calisma: ortak çalışma kaydı (S), kayit: Reçete ve Rota
@@ -842,6 +868,7 @@ function girdiKur(calisma, kayit, kaynak, bugun) {
   if (kn) {
     if (kaynakBirlestir(S.D, k, kn, bugun).length) S.dataVer = (+S.dataVer || 0) + 1;
     if (otoArizaGerekli(S, kn.durum.machines) && otoArizaUygula(S, kn.durum.machines, compile(stBitenle()))) S.dataVer = (+S.dataVer || 0) + 1;
+    if (kn.ek && otoBakimUygula(S, kn.ek.bakimlar, parseT(S.D, duvarSaati(Date.now())))) S.dataVer = (+S.dataVer || 0) + 1;
     if (Array.isArray(kn.durum.calisanAdimlar)) {
       const cx = compile(stBitenle());
       /* çerçevede tmiCalisanlar sunucunun emirleriyle sarılıdır (zz40 sunucuyla); burada aynı kayıt doğrudan verilir */

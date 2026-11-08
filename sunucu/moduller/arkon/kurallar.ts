@@ -3076,3 +3076,20 @@ export function hataliAlaniniEkle(govde: Record<string, unknown>, hataliAdet: nu
   const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
   return { ...govde, tmi: { ...tmi, hatali: hataliAdet } };
 }
+
+// 2319 (S10): Bakım ekranının periyodik bakım planları (maint `type: 'plan'`; bakim-raporlar.ts:65), plan girdisi için. mc makine kodudur
+// (arıza yansımasıyla aynı eşleşme). Gün sayısı 1'den küçük ya da makinesi boş plan atlanır; süre ya da son yapılış yoksa null (uydurulmaz).
+export interface PeriyodikBakimPlani { kimlik: string; makineKod: string; baslik: string; herGun: number; sureDk: number | null; sonYapilma: Date | null }
+export function periyodikBakimPlanlari(belgeler: readonly { kimlik: string; govde: unknown }[]): PeriyodikBakimPlani[] {
+  const sayi = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  return belgeler.flatMap((b) => {
+    if (alanOku(b.govde, 'type') !== 'plan') return [];
+    const mc = alanOku(b.govde, 'mc'), gun = sayi(alanOku(b.govde, 'everyDays')), sure = sayi(alanOku(b.govde, 'durMin')), son = sayi(alanOku(b.govde, 'lastAt'));
+    if (typeof mc !== 'string' || mc.trim() === '' || gun === null || gun < 1) return [];
+    const baslik = alanOku(b.govde, 'title');
+    return [{
+      kimlik: b.kimlik, makineKod: mc.trim(), baslik: typeof baslik === 'string' ? baslik : '', herGun: Math.trunc(gun),
+      sureDk: sure !== null && sure > 0 ? Math.round(sure) : null, sonYapilma: son !== null && son > 0 ? new Date(son) : null,
+    }];
+  });
+}

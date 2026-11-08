@@ -110,3 +110,7 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 export { emirBittiYansit as bayatEmirBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, planBayatligi } from './bayat/servis.ts';
 export type { BayatNedeni, BayatOlayi, PlanBayatligi } from './bayat/kurallar.ts';
 
+// 2319 (2311 S10): Arkon periyodik bakımı plan girdisine duruş olarak girer; plan Arkon'u okumaz (ADR 0006), sağlayıcıyı kablolama.ts bağlar.
+export { bakimCozucusuKaydet as bakimCozucusu, bakimAraliklariOku } from './bakim/servis.ts';
+export type { BakimAraligi, BakimPlani } from './bakim/kurallar.ts';
+export type { BakimCozucusu } from './bakim/servis.ts';

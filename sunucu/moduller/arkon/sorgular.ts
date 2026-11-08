@@ -17,6 +17,11 @@ export function belgeler(db: Db, depo: ArkonDeposu): Promise<BelgeSatiri[]> {
   return db.sorgu<BelgeSatiri>(`SELECT ${BELGE} FROM arkon_belge WHERE depo = $1 ORDER BY kimlik`, [depo]);
 }
 
+// 2319 (2311 S10): Bakım deposunun periyodik bakım planları (maint `type: 'plan'`); plan girdisi okur (disari.ts periyodikBakimlar).
+export function periyodikBakimBelgeleri(db: Db): Promise<BelgeSatiri[]> {
+  return db.sorgu<BelgeSatiri>(`SELECT ${BELGE} FROM arkon_belge WHERE depo = 'maint' AND govde->>'type' = 'plan' ORDER BY kimlik`);
+}
+
 // Emrin paketleri: emir paketi (`tmi-ue-<id>`) ve iş emri ya da parça paketleri (gövdedeki `tmi.emirId`).
 export function emirPaketleri(db: Db, emirIdler: readonly number[]): Promise<{ emir_id: number; govde: unknown; degisti: string }[]> {
   return db.sorgu(
