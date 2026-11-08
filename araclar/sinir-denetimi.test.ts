@@ -7,10 +7,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   argumanlariDogrula, damgaIhlaliMesaji, degisenleriTopla, depoyuDenetle, donguIhlali, donguleriBul, eskiDamgaliGocler, gocDamgasi,
-  ihlalleriBul, ihlalSatiri, modulKenarlari, modulSec, modulunDonguleri,
+  ihlalleriBul, ihlalSatiri, katIhlalleri, KATMANLAR, modulKenarlari, modulSec, modulunDonguleri,
   tabandakiGocleriTopla, tabanSec, tarafSec, yolDenetimiBasligi, yolIhlaliMesaji, yolIhlalleri,
 } from './sinir-denetimi.ts';
-import type { KaynakDosya } from './sinir-denetimi.ts';
+import type { Katmanlar, KaynakDosya } from './sinir-denetimi.ts';
 
 // Geçici depodaki git, arka planda gc ya da bakım başlatıp silme sırasında klasöre yazabiliyor (ENOTEMPTY).
 // Ortamdan verilen ayar, testin ve denetimin açtığı her git sürecine geçer.
@@ -285,25 +285,25 @@ test('araç alt süreç olarak: taraf yol denetimine ulaşır, çıkış kodu ih
     writeFileSync(join(depo, 'package.json'), '{ "type": "module" }\n');
     mkdirSync(join(depo, 'araclar'));
     copyFileSync(fileURLToPath(new URL('./sinir-denetimi.ts', import.meta.url)), join(depo, 'araclar/sinir-denetimi.ts'));
-    isle('istemci/src/moduller/b/Eski.tsx');
+    isle('istemci/src/moduller/mesaj/Eski.tsx');
     git('switch', '-q', '-c', 'b-sunucu');
-    isle('sunucu/moduller/b/uclar.ts');
+    isle('sunucu/moduller/mesaj/uclar.ts');
 
-    const temiz = kos('--modul', 'b', '--taraf', 'sunucu');
-    assert.match(temiz.cikti, /Yol denetimi \(b, sunucu, taban main\): 0 ihlal\./);
+    const temiz = kos('--modul', 'mesaj', '--taraf', 'sunucu');
+    assert.match(temiz.cikti, /Yol denetimi \(mesaj, sunucu, taban main\): 0 ihlal\./);
     assert.equal(temiz.kod, 0, temiz.hata);
 
-    yaz('istemci/src/moduller/b/Ekran.tsx');
-    const kirli = kos('--modul', 'b', '--taraf', 'sunucu');
+    yaz('istemci/src/moduller/mesaj/Ekran.tsx');
+    const kirli = kos('--modul', 'mesaj', '--taraf', 'sunucu');
     assert.equal(kirli.kod, 1);
-    assert.match(kirli.hata, /istemci\/src\/moduller\/b\/Ekran\.tsx \[yol\] b modülünün sunucu tarafı dışında/);
-    assert.match(kirli.cikti, /Yol denetimi \(b, sunucu, taban main\): 1 ihlal\./);
-    assert.equal(kos('--modul', 'b', '--taraf', 'istemci').kod, 1);
-    assert.equal(kos('--modul', 'b').kod, 0);
+    assert.match(kirli.hata, /istemci\/src\/moduller\/mesaj\/Ekran\.tsx \[yol\] mesaj modülünün sunucu tarafı dışında/);
+    assert.match(kirli.cikti, /Yol denetimi \(mesaj, sunucu, taban main\): 1 ihlal\./);
+    assert.equal(kos('--modul', 'mesaj', '--taraf', 'istemci').kod, 1);
+    assert.equal(kos('--modul', 'mesaj').kod, 0);
 
-    for (const gecersiz of [['--modul', 'b', '--taraf', 'yan'], ['--modul', 'b', '--taraf=sunucu'], ['--taraf', 'sunucu'],
-      ['--modul', 'b', '--taraf', 'sunucu', '--taraf', 'istemci'], ['--modul=b'], ['--modul', 'b', '--tarf', 'sunucu'],
-      ['--modul', 'b', '-taraf', 'sunucu'], ['--taban', 'main'],['--modul', 'b', '--modul', 'b'], ['--modul', 'b', '--taban', 'main', '--taban', 'main']]) {
+    for (const gecersiz of [['--modul', 'mesaj', '--taraf', 'yan'], ['--modul', 'mesaj', '--taraf=sunucu'], ['--taraf', 'sunucu'],
+      ['--modul', 'mesaj', '--taraf', 'sunucu', '--taraf', 'istemci'], ['--modul=mesaj'], ['--modul', 'mesaj', '--tarf', 'sunucu'],
+      ['--modul', 'mesaj', '-taraf', 'sunucu'], ['--taban', 'main'],['--modul', 'mesaj', '--modul', 'mesaj'], ['--modul', 'mesaj', '--taban', 'main', '--taban', 'main']]) {
       const s = kos(...gecersiz);
       assert.equal(s.kod, 1, gecersiz.join(' '));
       assert.match(s.hata, /Kullanım/, gecersiz.join(' '));
@@ -875,10 +875,14 @@ test('araç alt süreç olarak: döngü kural f ile çıkış kodunu bozar; mod�
     git('add', '-A');
     git('commit', '-q', '-m', 'ilk');
 
+    // Döngünün bir kenarı katman tablosunda yukarı gider: kural g aynı kenarı ayrıca söyler.
     const tam = kos();
     assert.equal(tam.kod, 1);
-    assert.equal(tam.hata.trim(), 'sunucu/moduller/rota/servis.ts:1 [kural f] döngü: rota -> stok -> rota (bileşen: rota, stok)');
-    assert.match(tam.cikti, /Sınır denetimi: 3 dosya, 1 ihlal\./);
+    assert.deepEqual(tam.hata.trim().split('\n'), [
+      'sunucu/moduller/rota/servis.ts:1 [kural f] döngü: rota -> stok -> rota (bileşen: rota, stok)',
+      'sunucu/moduller/rota/servis.ts:1 [kural g] kat: rota (8) -> stok (10); modül yalnız alt kattakini ithal eder (ADR 0006)',
+    ]);
+    assert.match(tam.cikti, /Sınır denetimi: 3 dosya, 2 ihlal\./);
     assert.doesNotMatch(tam.cikti, /Döngü denetimi/);
 
     // Tabana göre değişen dosya yok: döngü dalın farkından değil deponun bugünkü halinden okunur.
@@ -912,4 +916,50 @@ test('modülün üst düzey ek klasörü yalnız o modüle ve iki tarafa açıkt
   assert.deepEqual(yolIhlalleri('stok', ek), ek.map((d) => d.yol).sort());
   // Nesnenin kendi alanı olmayan ad (miras alınan) ek klasör vermez.
   assert.deepEqual(yolIhlalleri('constructor', [{ yol: 'constructor/x.ts', yeni: true }]), ['constructor/x.ts']);
+});
+
+const KATLAR: Katmanlar = { sunucu: [['kisiler'], ['stok', 'rota'], ['plan']], istemci: [['kisiler'], ['stok']] };
+const katKurallari = (dosyalar: KaynakDosya[]): string[] =>
+  katIhlalleri(dosyalar, modulKenarlari(dosyalar), KATLAR).map((i) => `${i.dosya}:${i.satir} ${i.mesaj}`);
+
+test('kural g: alt kattaki modülü ithal etmek serbest; aynı ya da üst kattakini ithal etmek ihlal, dosya sırasıyla', () => {
+  assert.deepEqual(katKurallari([
+    { dosya: 'sunucu/moduller/plan/servis.ts', icerik: ithal('../stok/disari.ts') + ithal('../kisiler/disari.ts') },
+    { dosya: 'sunucu/moduller/stok/servis.ts', icerik: ithal('../kisiler/disari.ts') },
+  ]), []);
+  assert.deepEqual(katKurallari([
+    { dosya: 'sunucu/moduller/stok/servis.ts', icerik: ithal('../rota/disari.ts') },
+    { dosya: 'sunucu/moduller/kisiler/servis.ts', icerik: '\n' + ithal('../plan/disari.ts') },
+  ]), [
+    'sunucu/moduller/kisiler/servis.ts:2 kat: kisiler (0) -> plan (2); modül yalnız alt kattakini ithal eder (ADR 0006)',
+    'sunucu/moduller/stok/servis.ts:1 kat: stok (1) -> rota (1); modül yalnız alt kattakini ithal eder (ADR 0006)',
+  ]);
+});
+
+test('kural g: tabloda olmayan modül ihlal, ilk dosyasıyla; taraf kendi tablosuna bakar', () => {
+  assert.deepEqual(katKurallari([
+    { dosya: 'sunucu/moduller/yeni/uclar.ts', icerik: '' },
+    { dosya: 'sunucu/moduller/yeni/servis.ts', icerik: '' },
+    { dosya: 'istemci/src/moduller/plan/Ekran.tsx', icerik: '' },
+    { dosya: 'istemci/src/moduller/stok/Ekran.tsx', icerik: '' },
+  ]), [
+    "sunucu/moduller/yeni/servis.ts:1 sunucu modülü yeni katman tablosunda yok; KATMANLAR'a katıyla eklenir (ADR 0006)",
+    "istemci/src/moduller/plan/Ekran.tsx:1 istemci modülü plan katman tablosunda yok; KATMANLAR'a katıyla eklenir (ADR 0006)",
+  ]);
+});
+
+test('kural g: test kenarı ve taraflar arası ithal kat denetimine girmez', () => {
+  assert.deepEqual(katKurallari([
+    { dosya: 'sunucu/moduller/kisiler/servis.test.ts', icerik: ithal('../plan/disari.ts') },
+    { dosya: 'istemci/src/moduller/stok/Ekran.tsx', icerik: ithal('../../../../sunucu/moduller/plan/disari.ts') },
+  ]), []);
+});
+
+test('katman tablosu: her modül tarafında bir kez geçer; gerçek depoda kat ihlali yok', async () => {
+  for (const taraf of ['sunucu', 'istemci'] as const) {
+    const adlar = KATMANLAR[taraf].flat();
+    assert.deepEqual(adlar.filter((ad, sira) => adlar.indexOf(ad) !== sira), [], taraf);
+  }
+  const { ihlaller } = await depoyuDenetle(fileURLToPath(new URL('../', import.meta.url)));
+  assert.deepEqual(ihlaller.filter((i) => i.kural === 'g').map(ihlalSatiri), []);
 });

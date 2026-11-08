@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import type { TestContext } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { disariImzalari } from './harita-ayrinti.ts';
-import { haritaKos, haritaMetni, haritaTopla, modulAyrintisi } from './harita.ts';
+import { haritaKos, haritaMetni, haritaTopla, modulAyrintisi, ozetMetni } from './harita.ts';
 import type { Harita, ModulHaritasi } from './harita.ts';
 
 // Geçici ağaçta `#cekirdek` takma adı çözülmez; uç dosyası `uc()` çağırmadan uç özetini düz nesne olarak verir.
@@ -215,7 +215,7 @@ test('harita --ozet: modül başına tek satır, son göç ve ayrıntının nere
   assert.equal(kod, 0);
   const satirlar = cikti.split('\n');
   assert.equal(satirlar[0], 'Modüller (4)');
-  assert.match(satirlar.find((s) => s.trim().startsWith('alfa')) ?? '', /^ {2}alfa\s+uç 2, işlem 2, tablo \d+, göç \d+\s+bağımlı: beta; ona bağımlı: yok$/);
+  assert.match(satirlar.find((s) => s.trim().startsWith('alfa')) ?? '', /^ {2}alfa\s+kat -\/-\s+uç 2, işlem 2, tablo \d+, göç \d+\s+bağımlı: beta; ona bağımlı: yok$/);
   assert.match(cikti, /\nSon göç: 20270101000300_cekirdek_islev\.sql \(toplam 4\)\n/);
   assert.match(cikti, /npm run harita -- --modul <modul_adi>/);
   assert.equal(cikti.includes('Uçlar ('), false);
@@ -223,6 +223,13 @@ test('harita --ozet: modül başına tek satır, son göç ve ayrıntının nere
   const fazla = await haritaKos(['--ozet', 'alfa'], kok);
   assert.equal(fazla.kod, 1);
   assert.match(fazla.cikti, /Kullanım: npm run harita/);
+});
+
+test('harita --ozet: kat sütunu sunucu/istemci katmanından okunur, tabloda olmayan taraf -', async (t) => {
+  const harita = await haritaTopla(agacKur(t));
+  const satirlar = ozetMetni(harita, { sunucu: [['beta'], ['alfa']], istemci: [['alfa']] }).split('\n');
+  assert.match(satirlar.find((s) => s.trim().startsWith('alfa')) ?? '', /^ {2}alfa\s+kat 1\/0\s+uç /);
+  assert.match(satirlar.find((s) => s.trim().startsWith('beta')) ?? '', /^ {2}beta\s+kat 0\/-\s+uç /);
 });
 
 test('harita metni: uç tek satırda, işaret hizalı; boş bölüm yok diye, belirsiz tablo ve göç sırası ortak bölümde yazılır', async (t) => {

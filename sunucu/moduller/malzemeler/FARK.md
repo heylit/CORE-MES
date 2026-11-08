@@ -257,7 +257,7 @@ Tekrar eden sayfaların temizlik planı (`bagla/tekrar-temizlik-plani.md`, malze
 ## Değişen
 - Uç `GET /malzeme-firma-secenekleri?ara=` (işlem `malzemeler.yaz`): finansın aktif tedarikçi firmaları adla aranır (`../finans/disari.ts` `firmaAra`, satın almanın firma seçimiyle aynı süzgeç).
   Okuma genişlemesi (kullanıcı kararı 11.10.2026): uç `finans.firma-oku` istemez; `malzemeler.yaz` olan kalite ve cam rolleri tedarikçi firma ad ve kodunu görür.
-- Kart kaydı: `kayit.com.tedId` doluysa pozitif sayı olmalı (değilse 400). Yeni ya da değişen bağ finansta aktif tedarikçi (ya da ikisi) türünde firma olmalı (değilse 422); bağ değişmeden kalan kart, firma sonradan pasif olsa da yeniden kaydolur. Bekleyen değişiklik talebinin önerdiği kartın bağı da aynı denetimden geçer. Tür kuralı finansın `tedarikciOlabilirMi` fonksiyonundan (kopya yok).
+- Kart kaydı: `kayit.com.tedId` doluysa pozitif sayı olmalı (değilse 400). Yeni ya da değişen bağ Müşteriler ve Tedarikçiler'de aktif tedarikçi (ya da ikisi) türünde firma olmalı (değilse 422); bağ değişmeden kalan kart, firma sonradan pasif olsa da yeniden kaydolur. Bekleyen değişiklik talebinin önerdiği kartın bağı da aynı denetimden geçer. Tür kuralı müşteri-tedarikçinin `tedarikciOlabilirMi` fonksiyonundan (2269) (kopya yok).
 - Ekran (`katalog.html`): sunucuya bağlıyken tedarikçi alanı firma arar; seçilen firmanın kimliği ve adı karta yazılır, "Değiştir" bağı kaldırır.
   Seçilmemiş eski metin kartta kalır ve "Kayıtlı metin" diye gösterilir. Şablon ve yeni kart başlangıcı firma bağını da taşır; Excel'de tedarikçi adı değişince bağ düşer.
 - Köprü: `firma-ara` isteği yalnız arama metnini sabit uca taşır. Sözleşme: `firmaSecenekleriSorgusu`, `firmaSecenekleriCevabi`.
