@@ -500,7 +500,7 @@ export type {
 
 // Emir bitti ve fason hareketi olayları (kart #1310): sevkiyat bekleme listesine ve sevkiyat işine, stok fason konumlarına yazar.
 // Dinleyiciler kendini kaydeder; çağrı sayım olayıyla aynı yönde kurulur (modül döngüsü olmaz).
-export { emirAcildiDinle, emirBirlestiDinle, emirBittiDinle, emirIptalDinle, fasonHareketiDinle, hazirlikTamamlandiDinle, isEmriKopyalandiDinle } from './emir-olaylari.ts';
+export { emirAcildiDinle, emirBirlestiDinle, emirBittiDinle, emirIptalDinle, fasonHareketiDinle, hazirlikTamamlandiDinle, isEmirleriDegistiDinle, isEmriKopyalandiDinle } from './emir-olaylari.ts';
 export type {
   EmirBittiDinleyicisi, EmirBittiOlayi, EmirIptalDinleyicisi, EmirIptalOlayi, FasonHareketiDinleyicisi, FasonHareketiOlayi, HazirlikTamamlandiDinleyicisi, HazirlikTamamlandiOlayi,
   IsEmriKopyalandiDinleyicisi, IsEmriKopyalandiOlayi,

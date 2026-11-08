@@ -3,7 +3,7 @@
 import { kayitNoktasi, type Db } from '#cekirdek/db.ts';
 import { makineDurumlari, makineler } from '../../istasyonlar/disari.ts';
 import { emirlerinIsEmriIdleri, emirNolari, fasonHareketiOzeti } from '../../uretim-emirleri/disari.ts';
-import { sonCanliyaAlma } from '../sorgular.ts';
+import { planSurumu, sonCanliyaAlma } from '../sorgular.ts';
 import { bayatDuruslar, bayatOzeti, type BayatOlayi, type PlanBayatligi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -33,6 +33,14 @@ export async function fasonHareketiYansit(db: Db, olay: { hareketId: number }): 
     const h = await fasonHareketiOzeti(db, olay.hareketId);
     if (h === null || h.yon !== 'donus') return;
     if (await s.canlidaVar(db, await isEmirleri(db, h.uretimEmriId))) await s.olayYaz(db, 'fason-donusu', h.uretimEmriId, h.id);
+  });
+}
+
+// 2327-1 a: emrin adımı değişti ve emir canlıdaysa işaret. kaynak_id canlı plan sürümüdür: aynı canlı planda emir başına bir satır,
+// yeni canlıya almadan sonraki değişiklik yeniden yazılır (tekil dizin ON CONFLICT ile önceki canlının satırına takılmaz).
+export async function isEmirleriDegistiYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (await s.canlidaVar(db, await isEmirleri(db, olay.uretimEmriId))) await s.olayYaz(db, 'rota-degisti', olay.uretimEmriId, await planSurumu(db));
   });
 }
 

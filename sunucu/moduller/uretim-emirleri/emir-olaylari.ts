@@ -56,6 +56,13 @@ export interface IsEmriKopyalandiOlayi {
   isEmirleri: { kaynakIsEmriId: number; yeniIsEmriId: number; kaynakOpNo: number; rotaAdimi: boolean }[];
 }
 
+// İş emirleri değişti (2327-1 a): açık emrin kendi adımı eklendi, çıkarıldı ya da değişti (rota uygulandı, ek ya da rework adımı,
+// rotasız adım, üretim yeri). Plan canlı planı eskimiş işaretler. Kaynak ataması (planın kendi çıktısı), bölme ve birleşme bu olay değildir.
+export interface IsEmirleriDegistiOlayi {
+  uretimEmriId: number;
+  kisiId: number;
+}
+
 type Dinleyici<T> = (db: Db, olay: T) => Promise<void>;
 export type EmirBittiDinleyicisi = Dinleyici<EmirBittiOlayi>;
 export type FasonHareketiDinleyicisi = Dinleyici<FasonHareketiOlayi>;
@@ -64,6 +71,7 @@ export type EmirAcildiDinleyicisi = Dinleyici<EmirAcildiOlayi>;
 export type EmirBirlestiDinleyicisi = Dinleyici<EmirBirlestiOlayi>;
 export type HazirlikTamamlandiDinleyicisi = Dinleyici<HazirlikTamamlandiOlayi>;
 export type IsEmriKopyalandiDinleyicisi = Dinleyici<IsEmriKopyalandiOlayi>;
+export type IsEmirleriDegistiDinleyicisi = Dinleyici<IsEmirleriDegistiOlayi>;
 
 function kayit<T>() {
   const dinleyiciler: Dinleyici<T>[] = [];
@@ -88,6 +96,7 @@ const acildi = kayit<EmirAcildiOlayi>();
 const birlesti = kayit<EmirBirlestiOlayi>();
 const hazirlik = kayit<HazirlikTamamlandiOlayi>();
 const kopyalandi = kayit<IsEmriKopyalandiOlayi>();
+const degisti = kayit<IsEmirleriDegistiOlayi>();
 
 export const emirBittiDinle = bitti.dinle;
 export const emirBittiBildir = bitti.bildir;
@@ -103,3 +112,5 @@ export const hazirlikTamamlandiDinle = hazirlik.dinle;
 export const hazirlikTamamlandiBildir = hazirlik.bildir;
 export const isEmriKopyalandiDinle = kopyalandi.dinle;
 export const isEmriKopyalandiBildir = kopyalandi.bildir;
+export const isEmirleriDegistiDinle = degisti.dinle;
+export const isEmirleriDegistiBildir = degisti.bildir;
