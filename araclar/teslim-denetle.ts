@@ -3,14 +3,18 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sonucuKaydet, sonucuYukle, vtDenemesi, vtDenetle } from './teslim-vt.ts';
+import type { VtSonuc } from './teslim-vt.ts';
 
 // Yazarın bıraktığı yama klasörünü (format-patch + DEVIR.md) kapının beş maddesine göre tek seferde denetler.
 // Aynı denetim yazar, koordinatör ve Birleştirici'de elle üç kez yapılıyordu ve maddeler yine kaçıyordu;
 // tek araç, tek çıktı. `--grup` birden çok klasörde hangi teslimlerin aynı birleştirme turuna girebileceğini basar.
-// Ağ çağrısı yok, yama uygulanmaz, kod çalıştırılmaz: yalnız metin okunur ve yerel git'e sorulur.
+// Ağ çağrısı yok, yama uygulanmaz, kod çalıştırılmaz: yalnız metin okunur ve yerel git'e sorulur. Tek istisna `--vt`:
+// yazar yamayı temiz bir PostgreSQL kümesinde dener ve sonucu klasöre yazar (teslim-vt.ts); düz denetim o sonucu okur.
 
 export const KULLANIM = [
   'Kullanım: npm run teslim-denetle -- <yama klasörü> [--taban-dal origin/main]',
+  '          npm run teslim-denetle -- --vt <yama klasörü> [--taban-dal origin/main]',
   '          npm run teslim-denetle -- --grup <klasör> <klasör> ... [--taban-dal origin/main]',
 ].join('\n');
 
@@ -127,6 +131,8 @@ export interface TeslimGirdisi {
   tabanGeride: number | null;
   enBuyukGoc: string | null;
   anaDaldakiGocler: string[];
+  // Klasördeki VT-SONUC.md; yoksa null.
+  vtSonuc: VtSonuc | null;
 }
 
 export function denetle(g: TeslimGirdisi): Bulgu[] {
@@ -175,6 +181,7 @@ export function denetle(g: TeslimGirdisi): Bulgu[] {
 
   if (!d.taramaSatiri) k('tarama', 'açık depo taraması satırı yok');
   if (!d.testSatiri) k('test', 'koşulan komutların son satırı yok');
+  for (const x of vtDenetle(g.vtSonuc, g.yamalar.map((y) => y.sha256))) b.push(x);
   if (d.tamTest) u('tam-test', 'yerelde tam sunucu testi ya da kontrol koşulmuş görünüyor; talimat: yerelde modül ve bağımlıları, tam test CI\'da');
   return b;
 }
@@ -249,21 +256,25 @@ export function klasorOku(kok: string, klasor: string, dal: string): TeslimGirdi
     return { ad, sha256: createHash('sha256').update(icerik).digest('hex'), dosyalar: yamaDosyalari(icerik.toString('utf8')) };
   });
   const gocler = anaDalGocleri(kok, dal);
-  return { klasor, devir, yamalar, tabanGeride: tabanGeride(kok, devir?.taban ?? null, dal), enBuyukGoc: enBuyukGoc(gocler), anaDaldakiGocler: gocler };
+  return {
+    klasor, devir, yamalar, tabanGeride: tabanGeride(kok, devir?.taban ?? null, dal), enBuyukGoc: enBuyukGoc(gocler), anaDaldakiGocler: gocler,
+    vtSonuc: sonucuYukle(klasor),
+  };
 }
 
-export function argumanOku(a: readonly string[]): { grup: boolean; klasorler: string[]; dal: string } {
+export function argumanOku(a: readonly string[]): { grup: boolean; vt: boolean; klasorler: string[]; dal: string } {
   const dalYeri = a.indexOf('--taban-dal');
   const dal = dalYeri >= 0 ? a[dalYeri + 1] : 'origin/main';
   if (!dal || dal.startsWith('--')) throw new Error(KULLANIM);
-  const kalan = a.filter((x, i) => x !== '--grup' && (dalYeri < 0 || (i !== dalYeri && i !== dalYeri + 1)));
+  const kalan = a.filter((x, i) => x !== '--grup' && x !== '--vt' && (dalYeri < 0 || (i !== dalYeri && i !== dalYeri + 1)));
   if (kalan.length === 0 || kalan.some((x) => x.startsWith('--'))) throw new Error(KULLANIM);
   const grup = a.includes('--grup');
-  if (!grup && kalan.length > 1) throw new Error(KULLANIM);
-  return { grup, klasorler: kalan, dal };
+  const vt = a.includes('--vt');
+  if ((grup && vt) || (!grup && kalan.length > 1)) throw new Error(KULLANIM);
+  return { grup, vt, klasorler: kalan, dal };
 }
 
-function calistir(): number {
+async function calistir(): Promise<number> {
   let secenek: ReturnType<typeof argumanOku>;
   try {
     secenek = argumanOku(process.argv.slice(2));
@@ -272,6 +283,18 @@ function calistir(): number {
     return 2;
   }
   const kok = resolve(fileURLToPath(new URL('..', import.meta.url)));
+  if (secenek.vt) {
+    const klasor = resolve(secenek.klasorler[0] ?? '');
+    const g = klasorOku(kok, klasor, secenek.dal);
+    if (g.yamalar.length === 0) {
+      console.error('klasörde .patch dosyası yok');
+      return 1;
+    }
+    const { sonuc, satirlar } = await vtDenemesi({ kok, klasor, dal: secenek.dal, yamalar: g.yamalar });
+    sonucuKaydet(klasor, sonuc, satirlar);
+    console.log(`teslim-denetle --vt ${basename(klasor)}: ${sonuc.gecti ? 'GEÇTİ' : 'KIRMIZI'} (PostgreSQL ${sonuc.pg === null ? '?' : String(sonuc.pg)}), sonuç ${join(basename(klasor), 'VT-SONUC.md')}`);
+    return sonuc.gecti ? 0 : 1;
+  }
   let kirmiziVar = false;
   const ozetler: GrupOzeti[] = [];
   for (const klasor of secenek.klasorler) {
@@ -292,4 +315,4 @@ function calistir(): number {
   return kirmiziVar ? 1 : 0;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = calistir();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await calistir();
