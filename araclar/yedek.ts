@@ -13,6 +13,10 @@ import {
 } from '../sunucu/moduller/ayarlar/disari.ts';
 // Dış kopya her dosyayı gece yedeğiyle aynı yazıcıyla şifreler; biçim tek yerde kalsın diye.
 import { sifreliYaz } from '../sunucu/moduller/ayarlar/yedek.ts';
+// İş tabanının adı ve doğrulama işareti taban yedek işiyle (2284a) aynı kuraldan.
+import { TABAN_DOGRULANDI_DOSYASI, tabanKopyalanabilirMi } from '../sunucu/moduller/ayarlar/kurallar.ts';
+// Kayıt dosyasının adı ve satırı sağlıkla tek yerde (2282b okur).
+import { DIS_KOPYA_KAYDI_DOSYASI, disKopyaSatiri, type DisKopyaKaydi } from '../sunucu/moduller/saglik/disari.ts';
 import { denemeKaydiYaz, denemeSayilari, denemeVeritabani, denemeYap } from './geri-yukleme-denemesi.ts';
 import { geriYuklemeKilidiniDenetle, yedegiGeriYukle } from './guncelleyici.ts';
 
@@ -236,10 +240,13 @@ export function gerekenWallar(adlar: readonly string[], baslangic: string): stri
 interface TabanYedek { ad: string; yol: string; baslangic: string }
 
 // En yeni tamamlanmış taban yedek: backup_manifest pg_basebackup'ın en son yazdığı dosyadır, yoksa yedek sürüyor ya da yarım.
+// İş tabanı (taban-<UTC>) doğrulanmadan ve `.yarim` adını taşırken alınmaz: manifest doğrulamadan önce yazılır. İş tabanı adı
+// rakamla başlayan elle alınmış adlardan sonra sıralanır, iş açıldıktan sonra en yeni o seçilir.
 export async function sonTabanYedek(tabanDizini: string): Promise<TabanYedek> {
   const adlar = (await readdir(tabanDizini, { withFileTypes: true })).filter((g) => g.isDirectory()).map((g) => g.name).sort().reverse();
   for (const ad of adlar) {
     const yol = path.join(tabanDizini, ad);
+    if (!tabanKopyalanabilirMi(ad, existsSync(path.join(yol, TABAN_DOGRULANDI_DOSYASI)))) continue;
     if (!existsSync(path.join(yol, 'backup_manifest'))) continue;
     const etiket = await readFile(path.join(yol, 'backup_label'), 'utf8').catch(() => '');
     const baslangic = tabanBaslangicWal(etiket);
@@ -355,17 +362,6 @@ export async function disKopyaAc(anahtar: Buffer, kaynak: string, hedef: string)
 
 // Sunucunun okuyabildiği kayıt (2290, 2282b): dış disk sökülünce oradaki kayıt görünmez. Yedek klasörüne her çalıştırmada bir
 // JSON satırı; içerik adı ya da veri taşımaz, yalnız ne zaman, hangi taban ve ne kadar.
-export const DIS_KOPYA_KAYDI_DOSYASI = 'dis-kopya.jsonl';
-
-export interface DisKopyaKaydi {
-  zaman: string; sonuc: 'basarili' | 'basarisiz'; hedef: string; taban: string | null; tabanBayt: number | null; walAdet: number | null;
-  walBayt: number | null; hata: string | null;
-}
-
-export function disKopyaSatiri(k: DisKopyaKaydi): string {
-  return `${JSON.stringify(k)}\n`;
-}
-
 export async function disKopyaKaydiEkle(yedekDizini: string, k: DisKopyaKaydi): Promise<string> {
   await mkdir(yedekDizini, { recursive: true });
   const dosya = path.join(yedekDizini, DIS_KOPYA_KAYDI_DOSYASI);

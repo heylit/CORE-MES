@@ -65,7 +65,7 @@ export const disKopyaKaydiSemasi = z.object({
   sonuc: z.enum(DIS_KOPYA_SONUCLARI),
   // Hedef diskin yolu (örnek `F:\`).
   hedef: z.string(),
-  // Kopyalanan taban yedeğin klasör adı (kurulum/yedek.md: yyyyMMdd).
+  // Kopyalanan taban yedeğin klasör adı (taban yedek işi: taban-<UTC zaman>; elle alınmışsa onun adı).
   taban: z.string().nullable(),
   tabanBayt: z.number().int().nonnegative().nullable(),
   walAdet: z.number().int().nonnegative().nullable(),

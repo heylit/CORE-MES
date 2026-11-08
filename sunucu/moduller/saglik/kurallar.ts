@@ -70,6 +70,8 @@ export interface UyariGirdisi {
   esikler?: readonly string[];
   // Veritabanından okunamadıysa ya da verilmediyse null: arşiv uyarısı yok.
   walArsivi?: WalArsivi | null;
+  // Canlıda WAL arşivi şarttır (2294-1 b): kapalıysa da uyarı çıkar.
+  canli?: boolean;
 }
 
 const dakika = (ms: number): number => Math.floor(ms / 60_000);
@@ -111,7 +113,7 @@ export function uyarilar(g: UyariGirdisi): Uyari[] {
   // Kayıt okunmadıysa (undefined) bilinmez, uyarı yok; okunup yoksa (null) hiç denenmemiştir.
   const deneme = g.yedek === null || g.yedek.durum !== 'acik' || g.yedek.sonDeneme === undefined ? null : denemeUyarisi(g.yedek.sonDeneme, g.simdi);
   if (deneme !== null) sonuc.push({ tur: 'yedek', ileti: deneme });
-  for (const ileti of gunIciUyarilari(g.walArsivi ?? null, g.yedek?.disKopya, g.simdi)) sonuc.push({ tur: 'yedek', ileti });
+  for (const ileti of gunIciUyarilari(g.walArsivi ?? null, g.yedek?.disKopya, g.simdi, g.canli ?? false)) sonuc.push({ tur: 'yedek', ileti });
   for (const ileti of g.esikler ?? []) sonuc.push({ tur: 'esik', ileti });
   return sonuc;
 }
@@ -518,9 +520,11 @@ export function disKopyaDurumu(metinler: readonly string[], gecerli: (deger: unk
 const gunFarki = (simdi: Date, zaman: string): number => Math.floor((simdi.getTime() - new Date(zaman).getTime()) / 86_400_000);
 
 // Arşiv takıldı: son hata son başarılı arşivden yeni (PostgreSQL başarısız komutu birkaç saniyede bir yeniden dener, hata zamanı
-// tazelenir) ya da son arşiv bir saatten eski. Arşiv kapalıysa (kurulmamış) uyarı yok; ekran durumu ayrıca gösterir.
-export function walArsivUyarisi(w: WalArsivi | null, simdi: Date): string | null {
-  if (w === null || !w.acik) return null;
+// tazelenir) ya da son arşiv bir saatten eski. Arşiv kapalıysa (kurulmamış) canlı dışında uyarı yok; ekran durumu ayrıca gösterir.
+// Canlıda kapalı arşiv uyarıdır (2294-1 b, K3): gün içi kayıp gece yedeğine, 24 saate çıkar.
+export function walArsivUyarisi(w: WalArsivi | null, simdi: Date, canli = false): string | null {
+  if (w === null) return null;
+  if (!w.acik) return canli ? 'WAL arşivi kapalı (archive_mode=off): canlıda gün içi kayıp 24 saate çıkar (kurulum/yedek.md A4-A5).' : null;
   const sonArsiv = w.sonArsivZamani === null ? null : new Date(w.sonArsivZamani).getTime();
   if (w.sonHataZamani !== null && (sonArsiv === null || new Date(w.sonHataZamani).getTime() > sonArsiv)) {
     return `WAL arşivi takıldı: ${w.sonHataWal ?? 'WAL'} arşivlenemiyor; PostgreSQL günlüğüne bakın (kurulum/yedek.md, Arşiv sağlığı).`;
@@ -540,14 +544,14 @@ export function disKopyaUyarisi(walAcik: boolean, d: DisKopyaDurumu | undefined,
   return gun > DIS_KOPYA_EN_ESKI_GUN ? `Son şifreli dış kopya ${String(gun)} gün önce alındı; diski değiştirip yeni kopya alın.` : null;
 }
 
-export function gunIciUyarilari(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date): string[] {
-  return [walArsivUyarisi(w, simdi), disKopyaUyarisi(w?.acik === true, d, simdi)].filter((u): u is string => u !== null);
+export function gunIciUyarilari(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date, canli = false): string[] {
+  return [walArsivUyarisi(w, simdi, canli), disKopyaUyarisi(w?.acik === true, d, simdi)].filter((u): u is string => u !== null);
 }
 
-export function gunIciKoruma(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date): GunIciKoruma {
+export function gunIciKoruma(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date, canli = false): GunIciKoruma {
   return {
     walArsivi: w, sonDisKopya: d?.son ?? null, sonBasariliDisKopya: d?.sonBasarili ?? null,
-    walUyarisi: walArsivUyarisi(w, simdi), disKopyaUyarisi: disKopyaUyarisi(w?.acik === true, d, simdi),
+    walUyarisi: walArsivUyarisi(w, simdi, canli), disKopyaUyarisi: disKopyaUyarisi(w?.acik === true, d, simdi),
   };
 }
 
