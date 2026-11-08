@@ -31,7 +31,7 @@ import {
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
   GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
-import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
+import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { dilimUstEmirleri } from './sorgular/ust-emir/sorgular.ts';
@@ -393,10 +393,12 @@ export async function isEmirleriniYenile(
   const kimlik = new Map(mevcut.map((i) => [i.opNo, i.id]));
   const eskiHali = new Map(mevcut.map((i) => [i.opNo, i]));
   const degisenler: string[] = [];
+  let degisti = false;
   for (const op of plan.sil) {
     const id = kimlik.get(op);
     if (id !== undefined) await bekleyeniSil(db, id);
     degisenler.push(`OP ${op} çıkarıldı`);
+    degisti = true;
   }
   for (const [i, op] of plan.sira.entries()) {
     const ie = rotada.get(op);
@@ -409,11 +411,12 @@ export async function isEmirleriniYenile(
       await eklerYaz(db, uretimEmriId, id, ie);
       const eski = eskiHali.get(op);
       const fark = eski === undefined ? null : isEmriFarki(eski, yazi);
-      if (fark !== null) degisenler.push(fark);
+      if (fark !== null) { degisenler.push(fark); degisti = true; }
     } else if (plan.ekle.includes(op) && ie !== undefined) {
       const yeni = await s.isEmriEkle(db, uretimEmriId, await yaziyaCevir(db, ie, i + 1, tipler));
       await eklerYaz(db, uretimEmriId, yeni, ie);
       degisenler.push(`OP ${op} eklendi`);
+      degisti = true;
     }
   }
   if (plan.koru.some((op) => !rotada.has(op))) degisenler.push('Başlamış ya da bitmiş iş emirleri korundu');
@@ -421,6 +424,7 @@ export async function isEmirleriniYenile(
   await s.emirKaynakRevizyonuYaz(db, uretimEmriId, g.kaynakRotaRevizyonId);
   await otomatikGkkKoy(db, kisiId, uretimEmriId);
   await siradakiIstasyonuYaz(db, uretimEmriId);
+  if (degisti) await isEmirleriDegistiBildir(db, { uretimEmriId, kisiId });
   return { degisenler };
 }
 
@@ -849,6 +853,7 @@ export async function uretimYeriDegistir(
   if ((await s.surumArtir(db, id, e.surum)) === null) throw eskiSurum();
   if (g.yer === 'fason') await otomatikGkkKoy(db, kisiId, id);
   await siradakiIstasyonuYaz(db, id);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId });
 }
 
 /* ---------------- fason (UE3; kullanıcı kararı c: her gidiş ve dönüş ayrı satır) ---------------- */
@@ -1274,7 +1279,7 @@ export async function gkkHesabi(db: Db, hepsi: readonly IsEmriSatiri[], adim: Is
 
 // Kalite "rework" dedikten sonra planlama ikinci adımı doldurur (1034): ad, tip, kaynak ve süre ya da termin (7 a). Adım bekliyor olmalı.
 export async function reworkAdimiYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ReworkAdimiGovdesi): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, emirId);
   surumDenetle(e, g.surum);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
@@ -1293,10 +1298,11 @@ export async function reworkAdimiYaz(db: Db, kullanici: Kullanici, emirId: numbe
   await bekleyeniGuncelle(db, adim.id, { ...(await yaziyaCevir(db, girdi, adim.sira, await tipKimlikleri(db))), tur: 'rework', ekAciklama: r.aciklama ?? adim.ekAciklama });
   if ((await s.surumArtir(db, emirId, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, emirId);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: emirId, kisiId });
 }
 
 export async function ekAdimEkle(db: Db, kullanici: Kullanici, id: number, g: EkAdim & { surum: number }): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   const ortak = ekAdimIhlali(kolDurumu(e, await s.isEmirleriGetir(db, [id]), await acikAltPartiVar(db, id)), g);
@@ -1305,10 +1311,11 @@ export async function ekAdimEkle(db: Db, kullanici: Kullanici, id: number, g: Ek
   await ekAdimKoy(db, e, g, await tipKimlikleri(db));
   if ((await s.surumArtir(db, id, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, id);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId });
 }
 
 export async function ekAdimKaldir(db: Db, kullanici: Kullanici, id: number, g: { opNo: number; surum: number }): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   const kendi = await s.isEmirleriGetir(db, [id]);
@@ -1321,6 +1328,7 @@ export async function ekAdimKaldir(db: Db, kullanici: Kullanici, id: number, g: 
   for (const [n, i] of kalan.entries()) if (i.sira !== n + 1) await s.isEmriSirasiYaz(db, i.id, n + 1);
   if ((await s.surumArtir(db, id, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, id);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId });
 }
 
 /* ---------------- rotasız emrin adımları (B13; Reçete ve Rota ekler, düzenler, siler) ---------------- */
@@ -1368,14 +1376,15 @@ async function rotasizAdimYazisi(db: Db, a: RotasizAdim, sira: number, aciklama:
   return { ...(await yaziyaCevir(db, rotasizGirdi(a), sira, await tipKimlikleri(db))), tur: 'ek', ekAciklama: aciklama };
 }
 
-async function rotasizBitir(db: Db, e: UstEmirSatiri): Promise<void> {
+async function rotasizBitir(db: Db, e: UstEmirSatiri, kisiId: number): Promise<void> {
   if ((await s.surumArtir(db, e.id, e.surum)) === null) throw eskiSurum();
   await siradakiIstasyonuYaz(db, e.id);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: e.id, kisiId });
 }
 
 // UE-RA-1: adım rotasız emrin başlamamış bölgesine girer; yer ve op numarası kola konan ek adımınkiyle aynı kuralla denetlenir.
 export async function rotasizAdimEkle(db: Db, kullanici: Kullanici, id: number, g: RotasizAdimEkle): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   const kendi = await s.isEmirleriGetir(db, [id]);
@@ -1384,12 +1393,12 @@ export async function rotasizAdimEkle(db: Db, kullanici: Kullanici, id: number, 
   await bilesenleriDenetle(db, g.bilesenler ?? []);
   const isEmriId = await adimiYerineKoy(db, id, kendi, g.oncekiOpNo, (sira) => rotasizAdimYazisi(db, g, sira, g.aciklama));
   await bilesenleriYaz(db, isEmriId, g.bilesenler ?? []);
-  await rotasizBitir(db, e);
+  await rotasizBitir(db, e, kisiId);
 }
 
 // UE-RA-2: yalnız bekleyen adım düzenlenir; verilmeyen alan kalır, bilesenler verilirse listenin tamamının yerine geçer.
 export async function rotasizAdimDuzenle(db: Db, kullanici: Kullanici, id: number, g: RotasizAdimDuzenle): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   const kendi = await s.isEmirleriGetir(db, [id]);
@@ -1412,12 +1421,12 @@ export async function rotasizAdimDuzenle(db: Db, kullanici: Kullanici, id: numbe
   if (i.tur === 'ek') await s.isEmriEkAciklamasiYaz(db, i.id, aciklama);
   if (g.bilesenler !== undefined) await bilesenleriYaz(db, i.id, g.bilesenler);
   else for (const b of eskiBilesenler) await s.bilesenEkle(db, i.id, b);
-  await rotasizBitir(db, e);
+  await rotasizBitir(db, e, kisiId);
 }
 
 // UE-RA-3: yalnız bekleyen adım silinir; rotasız emir son adımı da silinip adımsız kalabilir.
 export async function rotasizAdimSil(db: Db, kullanici: Kullanici, id: number, g: { opNo: number; surum: number }): Promise<void> {
-  islemDenetle(kullanici, ['uretim-emirleri.yaz']);
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   const kendi = await s.isEmirleriGetir(db, [id]);
@@ -1426,7 +1435,7 @@ export async function rotasizAdimSil(db: Db, kullanici: Kullanici, id: number, g
   if (silinen !== undefined) await bekleyeniSil(db, silinen.id);
   const kalan = [...kendi].sort((a, b) => a.sira - b.sira).filter((i) => i.opNo !== g.opNo);
   for (const [n, i] of kalan.entries()) if (i.sira !== n + 1) await s.isEmriSirasiYaz(db, i.id, n + 1);
-  await rotasizBitir(db, e);
+  await rotasizBitir(db, e, kisiId);
 }
 
 // UE-PB8: plan konunca kol birleşme adımı ve sonrasını bırakır (o adımlar üstte yapılır); plan kalkınca üstün o adımdan sonraki

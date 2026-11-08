@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { bayatEmirBittiYansit, planBayatligi } from '../disari.ts';
+import { bayatEmirBittiYansit, bayatIsEmirleriDegistiYansit, planBayatligi } from '../disari.ts';
 import { kullaniciYukle } from '../../kisiler/disari.ts';
 import { emirBaslat, emirBitir } from '../../uretim-emirleri/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
@@ -143,5 +143,34 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     assert.equal((await say(e5))?.n, 0, 'düşen yazım işaret bırakmaz');
     await bitir(e6, false);
     assert.equal((await say(e6))?.n, 1, 'dinleyici bitir komutunda koşar');
+  });
+  // 2327-1 a: emrin adımı değişti. Canlıdaki emir işaretlenir; aynı canlı planda emir başına bir satır; yeni canlıya almadan sonraki değişiklik
+  // yeniden yazılır; canlıda olmayan emir işaretlenmez.
+  test('BY-09 (2327-1 a): adım değişen canlı emir rota-degisti işaretler; canlı sürüm başına bir satır', async () => {
+    const [i7] = await isEmirleriAc([yeniAdim()]);
+    const canliyaAl = async () => {
+      const p = await taslaktaOner();
+      const o = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
+        .senaryolar.find((x) => x.id === p.taslak!.id)!;
+      await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true });
+    };
+    await canliyaAl();
+    const e7 = await emriOf(i7!);
+    const [i8] = await isEmirleriAc([yeniAdim()]);
+    const e8 = await emriOf(i8!);
+    const yansit = (id: number) => vt().tx((db) => bayatIsEmirleriDegistiYansit(db, { uretimEmriId: id }));
+    const say = (id: number) => vt().tx((db) => db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE neden = 'rota-degisti' AND uretim_emri_id = $1", [id]));
+    await yansit(e7);
+    await yansit(e7);
+    await yansit(e8);
+    assert.equal((await say(e7))?.n, 1, 'aynı canlı planda bir satır');
+    assert.equal((await say(e8))?.n, 0, 'canlıda olmayan emir');
+    const b = await bayatlik();
+    assert.equal(b.sayilar['rota-degisti'], 1);
+    assert.ok(b.olaylar.some((o) => o.neden === 'rota-degisti' && o.emirNo !== null));
+    await canliyaAl();
+    assert.equal((await bayatlik()).sayilar['rota-degisti'], 0, 'canlıya alma sıfırlar');
+    await yansit(e7);
+    assert.equal((await say(e7))?.n, 2, 'yeni canlı sürümde yeniden yazılır');
   });
 });
