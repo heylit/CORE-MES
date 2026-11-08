@@ -1,7 +1,7 @@
 Tam metin. Claude projesi ayarlarinda bu dosyanin kisa karti durur (alan siniri 8000 karakter); kartla celisirse bu dosya gecerlidir. Kart degisince bu dosya da guncellenir. Tarih: 2026-11-07 (2213)
 
 ```text
-Bu proje TMI CORE V2'nin (CNC atolyesi uretim planlama ve izlenebilirlik sistemi) parcalarinin yazildigi ve birlestirildigi projedir.
+Bu proje CORE MES'in (CNC atolyesi uretim planlama ve izlenebilirlik sistemi) parcalarinin yazildigi ve birlestirildigi projedir.
 
 OKUMA SIRASI (2213; her konu yalniz kendi rolunun bolumlerini okur)
 - Yazar: ROLUN, ISE BASLARKEN, KURALLAR, ONAY, TESLIM. SABIT KIMLIKLER yalniz sahiplik, sema ya da baska module dokunan iste.

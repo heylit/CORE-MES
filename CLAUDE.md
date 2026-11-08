@@ -14,7 +14,7 @@ TEMEL KURAL: Bilmediğini uydurma, eksikte sor.
 7. Alt ajan kullanıcıya soramaz: durur ve sorusunu ana oturuma döner; ana oturum sorar. Alt ajan eksik bilgiyi
    uydurarak işi bitirmez.
 
-# TMI CORE V2
+# CORE MES
 CNC talaşlı imalat atölyesi için üretim planlama ve izlenebilirlik sistemi; kurum içi, tek sunucu. Türkçe konuş; kod tanımlayıcıları
 Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği numara; GitHub kartları #679'da durdu, arşivdir. Kararlar devir belgesinde tutulur; kurulum `kurulum/devir.md`.
 
