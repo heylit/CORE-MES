@@ -12,6 +12,13 @@
   color: var(--ink); background-color: var(--giris3d-zemin-orta);
   background-image: radial-gradient(ellipse 80% 65% at 50% 36%, var(--giris3d-zemin-ic), var(--giris3d-zemin-orta) 50%, var(--giris3d-zemin-dis));
 }
+/* Yenilemede oturum okunurken (son açılış girişse, Giris.tsx): bekleme anı giriş zemini gibi çizilir; telefonda üstte koyu şerit. */
+:root[data-acilis='giris'] body:has(> #kok:empty, .tc-acilis .tc-durum-yukleniyor) {
+  background:
+    radial-gradient(ellipse 80% 65% at 50% 36%, var(--giris3d-zemin-ic), var(--giris3d-zemin-orta) 50%, var(--giris3d-zemin-dis))
+      top / 100% calc(min(100vw * 2 / 3, var(--b-6) * 7.5) + var(--b-5)) no-repeat,
+    var(--bg);
+}
 /* Telefonda gövde ayrı kutu değildir: sahne ve tanıtım doğrudan panelin içinde dizilir. */
 .tc-giris-govde { display: contents; }
 .tc-giris-tanitim-ic {
@@ -129,6 +136,14 @@
 .tc-giris-kart { align-self: center; width: calc(100% - var(--b-4) * 2); animation: tc-giris-yuksel .6s .12s cubic-bezier(.2, .8, .2, 1) both; }
 
 @media (min-width: 1024px) {
+  /* Bekleme anı: solda gece mavisi sahne zemini, sağda form sütununun zemini (kart bunun üstünde belirir; genişlik aşağıdaki sütunla aynı). */
+  :root[data-acilis='giris'] body:has(> #kok:empty, .tc-acilis .tc-durum-yukleniyor) {
+    background:
+      linear-gradient(var(--bg), var(--bg)) right / clamp(var(--pencere-genis) * .8, 32vw, var(--pencere-genis)) 100% no-repeat,
+      radial-gradient(ellipse 80% 65% at 50% 36%, var(--giris3d-zemin-ic), var(--giris3d-zemin-orta) 50%, var(--giris3d-zemin-dis))
+        left / calc(100% - clamp(var(--pencere-genis) * .8, 32vw, var(--pencere-genis))) 100% no-repeat,
+      var(--giris3d-zemin-orta);
+  }
   /* Form sağ kenara yaslanan tam boy paneldir (kart 2230d, Ray); solundaki altın çizgi sahnenin altınıdır. */
   .tc-giris {
     grid-template-columns: minmax(0, 1fr) clamp(var(--pencere-genis) * .8, 32vw, var(--pencere-genis)); grid-template-rows: minmax(0, 1fr);

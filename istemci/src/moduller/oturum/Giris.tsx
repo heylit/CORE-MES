@@ -18,6 +18,13 @@ import { bekleme, eskiCihazTercihiniSil, sesCal, sesHazirMi, sesSustur } from '.
 import type { Tekillik } from './sahne/tekillik.ts';
 import './giris.css';
 
+// Yenilemede oturum okunurken sayfa açık temanın zemininde kalır, ardından koyu sahne gelir: beyaz parlama. Son açılış giriş
+// ekranıysa kök işaretlenir ve giris.css bekleme anını aynı iki yüzle çizer. Uygulama başlarken bu modül ilk çizimden önce yüklenir.
+const ACILIS_ANAHTARI = 'core.giris.acilis';
+try {
+  if (localStorage.getItem(ACILIS_ANAHTARI) !== null) document.documentElement.dataset['acilis'] = 'giris';
+} catch { /* depolama kapalı olabilir */ }
+
 const PIN_HANE = 6;
 const AG_YOK = 'Sunucuya ulaşılamadı';
 
@@ -164,6 +171,14 @@ export function Giris() {
   const [etkin, etkinYaz] = useState<PinAlani>('pin');
   const [geciciPin, geciciPinYaz] = useState('');
   const [uyusmazlik, uyusmazlikYaz] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem(ACILIS_ANAHTARI, '1'); } catch { /* depolama kapalı olabilir */ }
+    return () => {
+      try { localStorage.removeItem(ACILIS_ANAHTARI); } catch { /* depolama kapalı olabilir */ }
+      delete document.documentElement.dataset['acilis'];
+    };
+  }, []);
 
   // Açılış gösterisi oturum yazılmadan hemen önce kurulur: giriş anında oynar, kabuk arkasında hazırlanır.
   const oturumuYaz = (kullanici: Kullanici | null) => {
