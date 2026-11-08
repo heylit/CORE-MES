@@ -1,7 +1,8 @@
 # Veritabanı yedeği (kart #1205)
 
 Sunucu her gece veritabanının tam kopyasını `pg_dump` ile bir dosyaya alır. Bir güncelleme ya da göç ters giderse, ya da disk
-bozulursa son yedek geri yüklenir; kayıp en çok bir günle sınırlı kalır.
+bozulursa son yedek geri yüklenir; yalnız gece yedeğiyle kayıp en çok bir gündür. Gün içi kaybı dakikalara indirmek için
+PostgreSQL'in WAL arşivi ve haftalık taban yedek ikinci diske alınır (aşağıda "Gün içi kayıp: WAL arşivi ve taban yedek").
 
 ## Nasıl çalışır
 
@@ -79,6 +80,128 @@ bozulursa son yedek geri yüklenir; kayıp en çok bir günle sınırlı kalır.
 
 pg_dump uygulama kullanıcısıyla (`TMIV2_PG_USER`) bağlanır; parola komut satırına girmez, alt sürecin ortamından verilir. Alt sürece
 `TMIV2_` değişkenleri geçmez.
+
+## Gün içi kayıp: WAL arşivi ve taban yedek (2276-1 a)
+
+Gece yedeği günde bir alınır; disk sabah 11'de bozulursa o sabahki kayıtlar gider. PostgreSQL her değişikliği önce WAL dosyasına
+yazar. Bu dosyalar dolunca (ya da en geç `archive_timeout` süresinde) ikinci diske kopyalanırsa, haftalık bir taban yedekle
+birlikte veritabanı istenen dakikaya geri getirilir (zaman noktasına dönüş). Kayıp en çok `archive_timeout` kadardır (aşağıda 5 dakika).
+
+Bu yol uygulamaya eklenmiş bir özellik değildir, PostgreSQL'in kendi ayarıdır: uygulama kodu, yeni paket ya da yeni servis yoktur.
+Gece yedeği aynen sürer; iki yol birbirinin yerine geçmez. Gece yedeği şifreli, taşınabilir ve tek dosyadır; WAL arşivi aynı
+makinede, aynı PostgreSQL sürümünde, dakika hassasiyetiyle geri dönmek içindir.
+
+Şifreleme (2283-1 a+e): WAL arşivi ve taban yedek PostgreSQL'in kendi biçimindedir; sunucunun ikinci diskinde şifresiz durur.
+Korunması diskin BitLocker ile şifrelenmesi ve klasör izniyle sağlanır (Kurulum A1, A3). Sunucu dışına çıkan her kopya (haftalık dış
+kopya) şifreli olmalıdır. Bu, gece yedeği için verilen 145 a kararını ("düz yedek diske hiç düşmez") WAL arşivi ve taban yedek için
+daraltır: düz kopya yalnız sunucunun BitLocker'lı diskinde durabilir. Şifreli dış kopya aracı ayrı karttadır; araç gelene kadar
+WAL arşivi ve taban yedek sunucudan dışarı kopyalanmaz (dış kopya için şifreli gece yedeği "İndir" ile alınır, Kurulum 6).
+
+Açık kararlar (kullanıcıda; cevaba kadar aşağıdaki elle yol geçerlidir, her seçenekte de geçerli kalır):
+- 2284-1, haftalık taban yedeği kim alır (uygulamanın zamanlanmış işi, Windows Görev Zamanlayıcı ya da yönetici elle). Cevaba kadar
+  yönetici haftada bir elle alır (Haftalık taban yedek).
+- Sağlık ekranındaki "son arşivlenen WAL zamanı" satırı ayrı karttadır (2282b); gelene kadar durum psql ile okunur (Arşiv sağlığı).
+
+### Kurulum (sunucuda bir kez)
+
+A1. İkinci diskte iki klasör açın: `E:\TMIV2-WAL` (WAL arşivi) ve `E:\TMIV2-TABAN` (taban yedekler). Veritabanı diskinde OLMASIN:
+    amaç o disk bozulunca veriyi kurtarmaktır. Gece yedeği klasörüyle aynı diskte olabilir, aynı klasörde olmasın.
+    Bu disk BitLocker ile şifreli olmalıdır (2283-1 a+e); şifreli değilse WAL arşivi açılmaz.
+A2. Yer: WAL arşivi en kötü durumda günde yaklaşık 5 GB tutar (5 dakikada bir 16 MB'lık dosya; boşta dosya üretilmez). Gerçek
+    büyüklük atölyenin yüküne bağlıdır, BİLMİYORUM; ilk hafta klasör boyutuna bakın. Taban yedek veritabanı boyutu kadardır, iki tane
+    tutulur. Toplam için en az: 2 x veritabanı boyutu + 15 x günlük WAL.
+A3. İzin: iki klasörü yalnız PostgreSQL servis hesabı (servisler listesinde "Oturum Aç" sütunu) ve yöneticiler okuyup yazsın.
+    Uygulamanın servis hesabının bu klasörlere işi yoktur. Klasörler bütün veriyi şifresiz taşır; koruma BitLocker ve bu izindir (2283-1 a+e).
+A4. `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.conf`) şu satırları yazın:
+    ```
+    wal_level = replica
+    archive_mode = on
+    archive_command = 'copy "%p" "E:\\TMIV2-WAL\\%f"'
+    archive_timeout = 300
+    ```
+    `wal_level = replica` varsayılandır; satır yalnız açık dursun diye yazılır. Ters bölüler ikilenir (PostgreSQL ayar dosyası
+    kuralı). `archive_timeout` saniyedir: kayıp penceresini ve arşiv boyutunu birlikte belirler; 300 (5 dakika) Veri uzmanı
+    önerisidir, küçültmek arşivi büyütür.
+A5. PostgreSQL servisini yeniden başlatın (`archive_mode` yalnız yeniden başlatmayla açılır). Sonra Arşiv sağlığı'ndaki sorguyla
+    ilk dosyanın arşive düştüğünü görün; birkaç dakika içinde `E:\TMIV2-WAL`'da 24 haneli adlı dosyalar belirmelidir.
+A6. Hemen ilk taban yedeği alın (Haftalık taban yedek). Taban yedek olmadan WAL arşivi tek başına işe yaramaz.
+
+Arşivleme durursa (disk dolu, klasör izni, ikinci disk takılı değil) PostgreSQL WAL dosyalarını silmez, veritabanı diskinde
+biriktirir; uzun sürerse veritabanı diski dolar ve kayıt durur. Bu yüzden arşiv sağlığına haftada bir bakılır (aşağıda).
+
+### Arşiv sağlığı
+
+Uygulama kullanıcısıyla da okunur, süper kullanıcı gerekmez:
+```
+psql -U tmiv2_goc -d tmiv2 -c "SELECT last_archived_wal, last_archived_time, failed_count, last_failed_wal, last_failed_time FROM pg_stat_archiver"
+```
+- `last_archived_time` son 10 dakika içinde olmalı (iş saatinde). Daha eskiyse ya da `last_failed_time` ondan yeniyse arşivleme
+  takılmıştır: PostgreSQL günlüğünde (`data\log`) `archive command failed` satırı nedeni söyler.
+- Sağlık ekranındaki satır (2282b) gelince bu sorgu oradan okunur.
+
+### Haftalık taban yedek
+
+2284-1 açık: cevaba kadar yönetici haftada bir elle alır. Şimdilik süper kullanıcıyla bağlanılır, çünkü taban yedek REPLICATION
+yetkisi ister ve uygulamanın kullanıcılarında bu yetki yoktur. Sunucu açıkken alınır, kesinti yoktur. PowerShell'de:
+```
+$bin = "C:\Program Files\PostgreSQL\18\bin"
+$hedef = "E:\TMIV2-TABAN\$(Get-Date -Format yyyyMMdd)"
+& "$bin\pg_basebackup.exe" -U postgres -D $hedef -Fp -Xs --checkpoint=fast -P
+& "$bin\pg_verifybackup.exe" $hedef
+```
+- `-Fp` düz klasör yazar: geri yüklemede açma adımı gerekmez ve `pg_verifybackup` bütün sürümlerde denetler. `-Xs` yedeğin
+  kendi WAL'ını da yanına koyar; yedek tek başına da açılır.
+- `pg_verifybackup` "backup successfully verified" demeden yedek sayılmaz; demezse klasörü silip yeniden alın.
+- `pg_hba.conf`'ta yerel `replication` satırı gerekir. PostgreSQL'in Windows kurulumunda varsayılan olarak bulunduğu doğrulanmadı;
+  komut "no pg_hba.conf entry for replication connection" derse şu satırı ekleyip PostgreSQL ayarlarını yeniden yükleyin:
+  `host replication postgres 127.0.0.1/32 scram-sha-256`
+
+### Eskitme (her taban yedekten sonra)
+
+İki taban yedek tutulur: geri dönüş penceresi en az bir haftadır, son yedek bozuksa bir öncekine dönülür.
+1. `E:\TMIV2-TABAN`'da en yeni iki klasör kalır, daha eskiler silinir.
+2. Kalan iki klasörden eskisinin `backup_label` dosyasındaki `START WAL LOCATION` satırının sonundaki dosya adını alın
+   (ör. `000000010000000000000002`). Bu dosyadan önceki WAL'lar artık hiçbir yedeğe gerekmez:
+   ```
+   & "$bin\pg_archivecleanup.exe" -n E:\TMIV2-WAL 000000010000000000000002
+   & "$bin\pg_archivecleanup.exe" E:\TMIV2-WAL 000000010000000000000002
+   ```
+   `-n` yalnız silinecekleri listeler; listeye bakıp sonra `-n`'siz koşun. `.history` dosyaları silinmez, küçüktür.
+WAL arşivinden elle başka dosya silinmez: aradaki tek eksik dosya o noktadan sonraki bütün dakikaları kaybettirir.
+
+### Zaman noktasına dönüş (süper kullanıcıyla, elle)
+
+Ne zaman: veritabanı diski bozuldu (arşivin sonuna kadar), ya da yanlış bir toplu silme/güncelleme oldu (o andan hemen önceye).
+Yanlış tek kayıt için kullanılmaz: bütün küme o dakikaya döner, o dakikadan sonraki her kayıt (başka ekranlardaki doğru işler de)
+gider. Kümedeki bütün veritabanları (`tmiv2`, varsa `tmiv2_deneme`) birlikte döner. Aynı PostgreSQL ana sürümü gerekir.
+
+1. Uygulama sunucusunu, sonra PostgreSQL servisini durdurun.
+2. Bozuk veri klasörünü silmeyin, adını değiştirin: `data` -> `data_bozuk_20261108`. Disk sağlamsa (yanlış silme durumu) onun
+   `pg_wal` klasöründeki henüz arşivlenmemiş son dosyalar da işe yarar; aşağıda 4. adım.
+3. Hedef tarihten ÖNCE alınmış en yeni taban yedeği (`E:\TMIV2-TABAN\<tarih>`) eski `data` yoluna kopyalayın. Klasör izinlerini
+   PostgreSQL servis hesabına verin (bozuk klasördekiyle aynı); izin yoksa servis açılmaz.
+4. Yalnız disk sağlamsa: `data_bozuk_...\pg_wal` içindeki 24 haneli adlı dosyalardan `E:\TMIV2-WAL`'da olmayanları yeni
+   `data\pg_wal`'a kopyalayın (son birkaç dakika). Disk bozuksa bu adım atlanır; kayıp en çok `archive_timeout` kadardır.
+5. Yeni `data\postgresql.conf`'un sonuna ekleyin:
+   ```
+   restore_command = 'copy "E:\\TMIV2-WAL\\%f" "%p"'
+   recovery_target_time = '2026-11-08 14:29:00+03'
+   recovery_target_action = 'promote'
+   ```
+   Arşivin sonuna kadar dönmek için (disk bozuldu) `recovery_target_time` satırı yazılmaz. Saat dilimi (`+03`) yazılmalıdır.
+   Sonra `data` içinde boş bir `recovery.signal` dosyası açın (PowerShell: `New-Item data\recovery.signal`).
+6. PostgreSQL servisini başlatın. Günlükte (`data\log`) "recovery stopping before ..." ve "archive recovery complete" satırları
+   görülmeli; `recovery.signal` kendiliğinden silinir. Günlükte "recovery ended before configured recovery target was reached"
+   varsa hedef zaman arşivdeki son kayıttan sonradır: servis açılmaz, hedefi geri çekip 3. adımdan yeniden başlayın.
+7. 5. adımda eklenen üç satırı silin. Hemen yeni bir taban yedek alın: geri dönüşten sonra PostgreSQL yeni bir zaman çizgisi
+   (`00000002.history`) açar, eski taban yedek bu çizginin devamını taşımaz.
+8. Uygulama sunucusunu başlatın, birkaç ekranı açıp verinin o dakikaya döndüğünü görün. Kod değişmediği için `npm run goc` gerekmez.
+   Her şey yerindeyse `data_bozuk_...` klasörü sonra elle silinir.
+
+Bu yol Linux'ta PostgreSQL 16 ile denendi (2026-11-08, boş deneme kümesi, `cp` ile): arşiv açıldı, taban yedek alındı, hedef
+zamana dönüldü; hedeften önceki kayıt geldi, sonraki gelmedi. Uygulama kullanıcısı `pg_stat_archiver`'ı okudu. `pg_archivecleanup -n`
+doğru dosyayı listeledi. Windows'ta ve PostgreSQL 18'de denenmedi; `copy` komutu, `pg_hba.conf` satırı ve klasör izinleri canlıdan
+önceki Windows tatbikatında doğrulanır (ayrı adım).
 
 ## Komut satırından yedek (sunucu ve yönetici ekranı gerekmez)
 
@@ -217,7 +340,7 @@ npm.cmd run geri-yukle-medya -- --kaynak E:\TMIV2-DIS-KOPYA
 
 ## Sınırlar
 
-- Yedek veritabanının o anki tutarlı kopyasıdır. Yüklenen dosyalar (çizim, belge, sertifika) veritabanında durduğu için yedeğe
+- Gece yedeği veritabanının o anki tutarlı kopyasıdır; gün içi değişiklikler yalnız WAL arşivindedir (yukarıda). Yüklenen dosyalar (çizim, belge, sertifika) veritabanında durduğu için yedeğe
   girer (ADR 0009). Talimat medyası girmez; ayrı aynalanır (yukarıda). Diskteki güncelleme paketleri (`TMIV2_GUNCELLEME_DIZINI`), harita paketi ve `.env` girmez.
 - Bir gece yedeği iki saati aşarsa pg_dump durdurulur ve hata olarak görünür.
 - Sunucu kapanırken süren yedek yarım kalır; `.yarim` dosyası bir gün sonra silinir, yedek sonraki turda yeniden alınır.
