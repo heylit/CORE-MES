@@ -35,8 +35,8 @@ Madde 1-3 karşılandı (#414). Kalanlar:
   revizyon başına üç sorgu.
 
 ## Onay adımı (H1, H5; 2026-10-23)
-- recete-rota (istemci): `plan-canliya-al` ve `plan-senaryo-canliya-al` önce `onaya-gonder` çağırmalı ya da onaya gönderme komutuna dönmeli (H2/H3); `plan-bedel-ayari` gövdesine `taslak` (yoksa null) eklenir, cevap `PlanCevabi`.
-- recete-rota (sunucu testleri): `plan-senaryo-komut.test.ts`, `canliya-al.test.ts` canlıya almadan önce taslağı onaya gönderir.
+- recete-rota (istemci): KAPANDI (2317). Köprüde plan yazma komutu kalmadı (`plan-canliya-al`, `plan-senaryo-canliya-al`, `plan-bedel-ayari` dahil); plan yalnız Planlama sayfasından yazılır (2303-2 a).
+- recete-rota (sunucu testleri): `canliya-al.test.ts` canlıya almadan önce taslağı onaya gönderir. Köprü tablosunu sınayan `plan-senaryo-komut.test.ts` 2317'de tabloyla birlikte kalktı.
 - siparisler (istemci): `SiparisCarpani.tsx` çarpanı taslağa yazar (`taslak: null`), cevap `PlanCevabi`; ekran çarpanın onayla geçeceğini söyler.
 - arkon: `yansima.test.ts` canlıya almadan önce onaya gönderir; operatöre bekleyen sıra `bekleyenSiralar` ile (H6).
 - çekirdek: `sunucu/akis-sagligi.test.ts` canlıya almadan önce onaya gönderir; bedel ve çarpan taslaktan.
