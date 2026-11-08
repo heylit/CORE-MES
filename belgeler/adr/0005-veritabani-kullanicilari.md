@@ -62,12 +62,13 @@ NOREPLICATION'dır ve öyle kalır: REPLICATION hakkı bütün kümenin fiziksel
 alır.
 
 1. **Üçüncü rol `tmiv2_yedek`.** `LOGIN REPLICATION NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`; hiçbir veritabanında, şemada
-   ya da tabloda hakkı verilmez. Yalnız replikasyon bağlantısı içindir.
+   ya da tabloda hakkı verilmez, hiçbir rolün üyesi olmaz. Yalnız replikasyon bağlantısı içindir. Rolü `araclar/vt/kurulum.sql`
+   öteki iki rolle birlikte açar ve her koşuda bu kalıba çeker (karar 2300-1).
 2. **Yalnız yerelden.** `pg_hba.conf`'ta tek satır: `host replication tmiv2_yedek 127.0.0.1/32 scram-sha-256`. Başka adres ve başka
    rol için replikasyon satırı yazılmaz.
 3. **Parola ayrı değişkende, havuza girmez.** `TMIV2_PG_YEDEK_USER` ve `TMIV2_PG_YEDEK_PASSWORD` uygulama ayarının (havuzun)
    parçası değildir; yalnız taban yedek işi okur ve parolayı `pg_basebackup` alt sürecine `PGPASSWORD` ile verir. Alt sürece öteki
-   `TMIV2_` değişkenleri geçmez. Değişkenler boşsa iş bekler (varsayılan kapalı).
+   `TMIV2_` değişkenleri geçmez. Değişkenler boşsa iş bekler (varsayılan kapalı); canlıda hata verir (2294-1 b).
 4. **İş uygulamanın zamanlanmış işidir** (ADR 0010, `ayarlar-taban-yedegi`, transaction dışı): işletim sistemi görev zamanlayıcısı
    kullanılmaz. Elle yol da bu rolle koşar; süper kullanıcı (`postgres`) taban yedek için kullanılmaz.
 

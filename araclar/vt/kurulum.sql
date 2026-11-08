@@ -1,9 +1,10 @@
--- Veritabanı kullanıcıları: göç kullanıcısı (tabloların sahibi) ve uygulama kullanıcısı (okur, yazar).
+-- Veritabanı kullanıcıları: göç kullanıcısı (tabloların sahibi), uygulama kullanıcısı (okur, yazar) ve taban yedek
+-- kullanıcısı (yalnız replikasyon bağlantısı; ADR 0005 eki, 2284-1 c).
 -- Süper kullanıcıyla, HER veritabanı için bir kez koşulur (asıl ve test); yeniden koşulabilir.
 --   psql -1 -U postgres -d tmiv2 -f araclar/vt/kurulum.sql
 -- -1 betiği tek transaction yapar: son satır "Kurulum tamam" değilse hiçbir şey değişmemiştir.
--- Parola depoya girmez. Etkileşimli kurulumda betikten sonra `\password tmiv2_goc` ve
--- `\password tmiv2_uygulama`; otomatik kurulumda `-v goc_parola=... -v uygulama_parola=...`
+-- Parola depoya girmez. Etkileşimli kurulumda betikten sonra `\password tmiv2_goc`, `\password tmiv2_uygulama` ve
+-- `\password tmiv2_yedek`; otomatik kurulumda `-v goc_parola=... -v uygulama_parola=... -v yedek_parola=...`
 -- (bu yol parolayı sunucu günlüğüne düşürebilir; yalnız atılacak ortamlar içindir).
 -- Parolası hiç verilmemiş rol parola doğrulamasıyla giriş yapamaz.
 -- Betik herkese açık bağlanma hakkını yalnız bağlı veritabanında alır; öteki veritabanlarında bu hak
@@ -28,20 +29,31 @@ END $$;
 
 SELECT 'CREATE ROLE tmiv2_goc LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tmiv2_goc') \gexec
 SELECT 'CREATE ROLE tmiv2_uygulama LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tmiv2_uygulama') \gexec
+SELECT 'CREATE ROLE tmiv2_yedek LOGIN REPLICATION' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tmiv2_yedek') \gexec
 -- Var olan rol de aynı kalıba çekilir: ikisi de süper kullanıcı değildir, veritabanı ve rol açamaz.
 ALTER ROLE tmiv2_goc LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 ALTER ROLE tmiv2_uygulama LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- Taban yedek rolü yalnız replikasyon bağlantısıyla pg_basebackup alır: tablo hakkı ve veritabanına bağlanma hakkı almaz.
+-- Giriş yalnız pg_hba.conf'taki "host replication tmiv2_yedek 127.0.0.1/32 scram-sha-256" satırıyla açılır (kurulum/yedek.md A6).
+ALTER ROLE tmiv2_yedek LOGIN REPLICATION NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
 \if :{?goc_parola}
 ALTER ROLE tmiv2_goc PASSWORD :'goc_parola';
 \endif
 \if :{?uygulama_parola}
 ALTER ROLE tmiv2_uygulama PASSWORD :'uygulama_parola';
 \endif
+\if :{?yedek_parola}
+ALTER ROLE tmiv2_yedek PASSWORD :'yedek_parola';
+\endif
 
 DO $$
 BEGIN
   IF pg_has_role('tmiv2_uygulama', 'tmiv2_goc', 'MEMBER') OR pg_has_role('tmiv2_goc', 'tmiv2_uygulama', 'MEMBER') THEN
     RAISE EXCEPTION 'tmiv2_goc ile tmiv2_uygulama birbirinin üyesi olamaz: üyelik sahipliği uygulamaya taşır';
+  END IF;
+  IF EXISTS (SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'tmiv2_yedek')
+     OR EXISTS (SELECT FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid WHERE r.rolname = 'tmiv2_yedek') THEN
+    RAISE EXCEPTION 'tmiv2_yedek hiçbir rolün üyesi olamaz ve üye almaz: rol yalnız replikasyon bağlantısı içindir';
   END IF;
 END $$;
 

@@ -133,11 +133,10 @@ A4. `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.co
     seçimidir (kayıp penceresi ile arşiv boyutu arasında), küçültmek arşivi büyütür.
 A5. PostgreSQL servisini yeniden başlatın (`archive_mode` yalnız yeniden başlatmayla açılır). Sonra Arşiv sağlığı'ndaki sorguyla
     ilk dosyanın arşive düştüğünü görün; birkaç dakika içinde `E:\TMIV2-WAL`'da 24 haneli adlı dosyalar belirmelidir.
-A6. Taban yedek rolü (bir kez, süper kullanıcıyla). Rolün tablolarda hakkı yoktur, yalnız replikasyon bağlantısı kurar:
-    ```
-    psql -U postgres -d postgres -c "CREATE ROLE tmiv2_yedek LOGIN REPLICATION NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
-    ```
-    Parolayı vermek için `psql -U postgres -d postgres` ile açın ve `\password tmiv2_yedek` yazın (iki kez sorar, ekranda görünmez).
+A6. Taban yedek rolü `tmiv2_yedek`: veritabanı kurulum betiği açar (Kurulum, `araclar/vt/kurulum.sql`; eski kurulumda betiği bir
+    kez daha koşun, yeniden koşulabilir). Rolün tablolarda ve veritabanına bağlanmada hakkı yoktur, yalnız replikasyon bağlantısı
+    kurar. Parolayı vermek için `psql -U postgres -d postgres` ile açın ve `\password tmiv2_yedek` yazın (iki kez sorar, ekranda
+    görünmez).
     `pg_hba.conf`'a (veri klasöründe) yalnız şu replikasyon satırını ekleyin, başka `replication` satırı varsa kaldırın, sonra
     PostgreSQL ayarlarını yeniden yükleyin (`psql -U postgres -c "SELECT pg_reload_conf()"`):
     ```
