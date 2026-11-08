@@ -6,7 +6,7 @@ import type {
   CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
   EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
 } from '#paylasilan/sozlesme/plan.ts';
-import { DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
+import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
@@ -2451,7 +2451,10 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     throw gecersiz(`Bu taslakta sahibi modül bağlanınca canlıya alınabilecek ${bekleyen.length} deneme var (${bekleyen.map((d) => d.ozet).join('; ')}); önce onları kaldır.`);
   }
   const surum = await s.planSurumu(db, true);
-  if (surum !== x.tabanPlanSurumu && !g.cakismalariKabul) throw cakisma('Senaryo açıldıktan sonra canlı plan değişti; onaylayarak canlıya al.');
+  if (surum !== x.tabanPlanSurumu && !g.cakismalariKabul) {
+    throw cakisma('Senaryo açıldıktan sonra canlı plan değişti; onaylayarak canlıya al.',
+      { neden: CANLI_DEGISTI, tabanSurumu: x.tabanPlanSurumu, canliSurumu: surum } satisfies CanliDegistiAyrintisi);
+  }
   const b = await baglamKur(db, k, id);
   const canli = await s.yerlesimler(db, null);
   let taslak = await s.yerlesimler(db, id);
