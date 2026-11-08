@@ -147,7 +147,7 @@ describe('Giris', () => {
     expect(window.localStorage.getItem('tmi.giris.yontem')).not.toBe('parola');
   });
 
-  it('eski tarayicida saklanmis parola secimi yok sayilir: ekran PIN ile acilir, Parola ile gir baglantisi gorunur', () => {
+  it('eski tarayicida saklanmis parola secimi yok sayilir: ekran PIN ile acilir, Parola ile gir secenegi gorunur', () => {
     sunucuKur();
     window.localStorage.setItem('tmi.giris.yontem', 'parola');
     kur();
@@ -166,7 +166,7 @@ describe('Giris', () => {
     expect(screen.queryByLabelText(/^Kart/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Giriş yap' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Rakam tuşları' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'PIN ile gir' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Parola ile gir' })).toBeTruthy();
     okut(document.body, '0004123456');
     await waitFor(() => expect(istemci.getQueryData(anahtarlar.oturum)).toEqual(OPERATOR));
@@ -190,7 +190,7 @@ describe('Giris', () => {
     okut(document.body, '99999999');
     expect(await screen.findByText('Kart tanınmadı ya da bu kartla giriş kapalı.')).toBeTruthy();
     expect(okutGorseli().textContent).toMatch(/Kartınızı okutun/);
-    fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PIN ile gir' }));
     expect(screen.getByLabelText(/Kullanıcı adı/)).toBeTruthy();
     expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
   });
@@ -208,7 +208,7 @@ describe('Giris', () => {
     cleanup();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kullanici: { ...OPERATOR, cihazProfili: 'tam' } }), { status: 200 })));
     const ikinci = kur();
-    fireEvent.click(screen.getByRole('button', { name: 'Kullanıcı adıyla gir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PIN ile gir' }));
     kullaniciAdiYaz();
     tuslaraBas('730514');
     fireEvent.click(girisDugmesi());
@@ -216,10 +216,10 @@ describe('Giris', () => {
     expect(window.localStorage.getItem('tmi.giris.yontem')).toBeNull();
   });
 
-  it('PIN ekranindan Kartla gir secilebilir ve hatirlanir', () => {
+  it('PIN ekranindan Kart ile gir secilebilir ve hatirlanir', () => {
     sunucuKur();
     kur();
-    fireEvent.click(screen.getByRole('button', { name: 'Kartla gir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kart ile gir' }));
     expect(okutGorseli()).toBeTruthy();
     expect(window.localStorage.getItem('tmi.giris.yontem')).toBe('kart');
   });
@@ -313,6 +313,31 @@ describe('giriş ekranı marka adı (karar 2002)', () => {
     kur();
     expect(await screen.findByRole('region', { name: 'CORE' })).toBeTruthy();
     expect(document.querySelector('.tc-giris-firma')).toBeNull();
+  });
+
+  it('kurum logosu yuklenince firma etiketi tekrar etmez; logo yuklenemezse etiket kalir (2230d)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => (adres.endsWith('/giris-kurum-adi')
+      ? new Response(JSON.stringify({ ad: 'Deneme Atolye' }), { status: 200 })
+      : new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'yok' }), { status: 404 }))));
+    kur();
+    expect(await screen.findByText('Deneme Atolye')).toBeTruthy();
+    fireEvent.load(screen.getByAltText('Kurum logosu'));
+    expect(screen.queryByText('Deneme Atolye')).toBeNull();
+    fireEvent.error(screen.getByAltText('Kurum logosu'));
+    expect(screen.getByText('Deneme Atolye')).toBeTruthy();
+  });
+
+  it('giris yolu secicisi uc yolu hep gosterir; secili yol basili, PIN belirlemede secici yok (2230d)', () => {
+    sunucuKur();
+    kur();
+    const grup = screen.getByRole('group', { name: 'Giriş yolu' });
+    const basili = () => [...grup.querySelectorAll('button')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent);
+    expect([...grup.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['PIN ile gir', 'Parola ile gir', 'Kart ile gir']);
+    expect(basili()).toEqual(['PIN ile gir']);
+    fireEvent.click(screen.getByRole('button', { name: 'Parola ile gir' }));
+    expect(basili()).toEqual(['Parola ile gir']);
+    fireEvent.click(screen.getByRole('button', { name: 'Kart ile gir' }));
+    expect(basili()).toEqual(['Kart ile gir']);
   });
 });
 
