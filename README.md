@@ -1,4 +1,4 @@
-# TMI CORE V2
+# CORE MES
 
 CNC atölyesi için üretim planlama ve izlenebilirlik sistemi. Kurum içi çalışır.
 
