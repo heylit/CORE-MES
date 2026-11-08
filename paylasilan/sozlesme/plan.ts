@@ -317,6 +317,10 @@ export const ekMesaiGovdesi = senaryoSurumGovdesi.extend({ satirlar: ekMesaiSati
 // 990 a: 4 saat kuralına takılan canlıya alma zorunlu durumda gerekçeyle geçer (gerekçe ve kişi onay kaydına yazılır).
 export const SONRADAN_BASLAYAN = 'sonradan-baslayan';
 export interface SonradanBaslayanAyrintisi { neden: typeof SONRADAN_BASLAYAN; isler: { emirNo: string; opNo: number }[] }
+// 2311 S1: taslak açıldıktan sonra canlı plan değiştiyse ve cakismalariKabul false ise canlıya alma 409 döner (ayrıntı neden CANLI_DEGISTI,
+// taslağın taban sürümü ve canlı sürüm). Ekran kişiye sorar, onaylarsa cakismalariKabul true ile yeniden gönderir.
+export const CANLI_DEGISTI = 'canli-degisti';
+export interface CanliDegistiAyrintisi { neden: typeof CANLI_DEGISTI; tabanSurumu: number; canliSurumu: number }
 export const canliyaAlGovdesi = z.object({
   surum: KIMLIK, cakismalariKabul: z.boolean().prefault(false),
   acilMusteriler: z.array(z.object({ degisiklikId: KIMLIK, firmaId: KIMLIK })).max(50).prefault([]),
