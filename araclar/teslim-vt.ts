@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, chownSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, chownSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,6 +132,30 @@ export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => b
   return adimlar;
 }
 
+const ISTEMCI_YAPILANDIRMASI = 'istemci/vite.config.ts';
+// Klona yazılır, depoya girmez: içindeki yollar denemenin kendi makinesinden gelir.
+export const VT_ISTEMCI_YAPILANDIRMASI = 'istemci/vite.vt-deneme.config.ts';
+
+// Klonun node_modules'u ana ağaca bağlantıdır; Vite gerçek yola bakar ve kök dışındaki dosyayı (wasm ve çalışan `?url`
+// ithalleri) "Denied ID" ile reddeder, testler yalancı kırmızı verir (2358). Sarmalayıcı depodaki yapılandırmayı olduğu gibi alır,
+// izinli klasörlere yalnız klonu ve ana ağacın node_modules'unu ekler. Kendi listesini vermek Vite'ın varsayılanını
+// (çalışma alanı kökü) kaldırdığından klon da listededir.
+export function istemciSarmalayicisi(izinli: readonly string[]): string {
+  return [
+    "import taban from './vite.config.ts';",
+    '',
+    `const IZINLI: string[] = ${JSON.stringify(izinli)};`,
+    'const sunucu = taban.server ?? {};',
+    'export default { ...taban, server: { ...sunucu, fs: { ...sunucu.fs, allow: [...(sunucu.fs?.allow ?? []), ...IZINLI] } } };',
+    '',
+  ].join('\n');
+}
+
+// İstemci testinin argv'sinde depodaki yapılandırma klondaki sarmalayıcıyla değişir; öteki argv olduğu gibi kalır.
+export function sarmalayiciyaYonelt(argv: readonly string[]): string[] {
+  return argv.map((a, i) => (a === ISTEMCI_YAPILANDIRMASI && argv[i - 1] === '--config' ? VT_ISTEMCI_YAPILANDIRMASI : a));
+}
+
 // Deneme süreçleri yalnız bu değerleri görür: CI'daki test ortamıyla aynı (kontrol.yml env). Yazarın TMIV2_ ve PG
 // değişkenleri geçmez; klon .env taşımadığı için ortam yükleyicisi de yalnız bunları okur.
 export function denemeOrtami(port: number, temel: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -225,6 +249,7 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     const dosyalar = [...new Set(g.yamalar.flatMap((y) => y.dosyalar))];
     if (dosyalar.some((f) => /^package(-lock)?\.json$/.test(f))) yaz('UYARI paket dosyası değişti; deneme ana ağacın node_modules klasörüyle koştu.');
     symlinkSync(join(g.kok, 'node_modules'), join(agac, 'node_modules'), 'junction');
+    writeFileSync(join(agac, VT_ISTEMCI_YAPILANDIRMASI), istemciSarmalayicisi([agac, realpathSync(join(g.kok, 'node_modules'))]));
 
     if (kullanici) chmodSync(gecici, 0o755);
     mkdirSync(kume);
@@ -250,7 +275,7 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     yaz(`Temiz küme açıldı (port ${String(port)}, yalnız tmiv2_test).`);
 
     const kos = (ad: string, argv: string[]): void => {
-      const [komut = '', ...a] = kabuksuzArgv(argv, agac);
+      const [komut = '', ...a] = kabuksuzArgv(sarmalayiciyaYonelt(argv), agac);
       const r = spawnSync(komut, a, { cwd: agac, env: ortam, encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 });
       const cikti = `${r.stdout ?? ''}${r.stderr ?? ''}${r.error ? String(r.error) : ''}`;
       // Node eşleşmeyen deseni hata saymaz, sıfır testle yeşil biter (test-modul.ts ile aynı gerekçe).

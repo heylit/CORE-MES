@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { denemeOrtami, pgBinBul, sonucMetni, sonucOku, testPlani, vtDenetle } from './teslim-vt.ts';
+import {
+  denemeOrtami, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle,
+} from './teslim-vt.ts';
 
 const SHA = 'a'.repeat(64);
 
@@ -53,4 +55,16 @@ test('denemeOrtami: yazarın TMIV2_ ve PG değişkenleri geçmez; port denemenin
   assert.equal(o['TMIV2_YEDEK_ANAHTARI'], undefined);
   assert.equal(o['PGPASSWORD'], undefined);
   assert.equal(o['tmiv2_port'], undefined);
+});
+
+test('istemci testi klondaki sarmalayıcı yapılandırmayla koşar; izinli yollar kaçışlı yazılır', () => {
+  const plan = testPlani(['istemci/src/moduller/stok/Sayfa.tsx'], () => true).find((a) => a.ad.endsWith('(istemci)'));
+  assert.ok(plan);
+  const argv = sarmalayiciyaYonelt(plan.argv);
+  assert.equal(argv[argv.indexOf('--config') + 1], VT_ISTEMCI_YAPILANDIRMASI);
+  assert.equal(argv.length, plan.argv.length);
+  assert.deepEqual(sarmalayiciyaYonelt(['node', 'istemci/vite.config.ts']), ['node', 'istemci/vite.config.ts']);
+  const metin = istemciSarmalayicisi(['/k/agac', 'C:\\a\\node_modules']);
+  assert.match(metin, /^import taban from '\.\/vite\.config\.ts';$/m);
+  assert.ok(metin.includes(JSON.stringify(['/k/agac', 'C:\\a\\node_modules'])));
 });
