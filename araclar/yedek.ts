@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { appendFile, mkdir, stat } from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,8 @@ import { diskKunyeOzetleri } from '../sunucu/moduller/dosya/disari.ts';
 import {
   MEDYA_AYNA_KLASORU, dosyasiOlmayanlar, medyaAynala, medyaDiziniOku, medyaGeriYukle, yedekAl, yedekOrtamiOku, yedekSifresiniCoz, type YedekOrtami,
 } from '../sunucu/moduller/ayarlar/disari.ts';
+// Dış kopya her dosyayı gece yedeğiyle aynı yazıcıyla şifreler; biçim tek yerde kalsın diye.
+import { sifreliYaz } from '../sunucu/moduller/ayarlar/yedek.ts';
 import { denemeKaydiYaz, denemeSayilari, denemeVeritabani, denemeYap } from './geri-yukleme-denemesi.ts';
 import { geriYuklemeKilidiniDenetle, yedegiGeriYukle } from './guncelleyici.ts';
 
@@ -18,7 +20,8 @@ import { geriYuklemeKilidiniDenetle, yedegiGeriYukle } from './guncelleyici.ts';
 // `npm run yedek-anahtari` (yalnız ekrana yazar, hiçbir yere kaydetmez: anahtarı bilgi işlem saklar). Elle pg_restore için şifreli
 // yedek düz dosyaya açılır: `npm run yedek-coz -- <yedek> <hedef>`. Talimat medyası (1004 a, 1008 a): `npm run yedek -- medya
 // [--hedef <klasör>]` aynayı elle ya da ikinci diske (haftalık dış kopya) yazar, `npm run geri-yukle-medya [-- --kaynak <klasör>]`
-// aynadan eksik dosyaları geri yazar; veritabanı geri yüklemesi de ardından medyayı geri yazar. Sunucu ve yönetici
+// aynadan eksik dosyaları geri yazar; veritabanı geri yüklemesi de ardından medyayı geri yazar. WAL arşivi ve taban yedeğin şifreli
+// dış kopyası (2290): `npm run yedek -- dis-kopya ...`, açması `npm run yedek-coz -- dis-kopya ...`. Sunucu ve yönetici
 // ekranı gerekmez; göç taşıyan bir `git pull` öncesi tek komutla yedek alınsın diye. Yönetici (Windows) yetkisi ve PostgreSQL
 // süper kullanıcısı istemez: yedeği uygulama kullanıcısı, geri yüklemeyi şemanın sahibi göç kullanıcısı yapar.
 const kok = fileURLToPath(new URL('../', import.meta.url));
@@ -207,6 +210,218 @@ async function coz(ortam: YedekOrtami, argumanlar: string[]): Promise<void> {
   console.log(`Açıldı: ${path.resolve(hedef)}. Düz dosya bütün veriyi şifresiz taşır; işiniz bitince silin.`);
 }
 
+// Şifreli dış kopya (2283-1 a+e, 2283-2 a, kart 2290): WAL arşivi ve taban yedek sunucuda BitLocker'lı ikinci diskte düz durur;
+// döner çevrimdışı diske yalnız şifreli gider. Diskte bir takım durur: en yeni tamamlanmış taban yedek ve onun başlangıcından
+// bugüne WAL. Her dosya ayrı şifrelenir (gece yedeğiyle aynı anahtar ve biçim), klasör düzeni aynen korunur; WAL dosyaları
+// değişmediği için diskte zaten olan atlanır. Yeni takım tamamlanmadan eskisi silinmez: yarıda sökülen disk son tam takımı taşır.
+export const DIS_KOPYA_KLASORU = 'TMIV2-DIS-KOPYA';
+const TAMAM_DOSYASI = '.tamam';
+const YARIM_EKI = '.yarim';
+const WAL_ADI = /^[0-9A-F]{24}$/;
+const WAL_EKI_ADI = /^[0-9A-F]{24}\.[0-9A-F]{8}\.backup$/;
+const ZAMAN_CIZGISI_ADI = /^[0-9A-F]{8}\.history$/;
+
+// pg_basebackup'ın yazdığı backup_label: "START WAL LOCATION: 0/2000028 (file 000000010000000000000002)".
+export function tabanBaslangicWal(backupLabel: string): string | null {
+  return /^START WAL LOCATION: \S+ \(file ([0-9A-F]{24})\)\s*$/m.exec(backupLabel)?.[1] ?? null;
+}
+
+// Taban yedeğin başlangıç dosyası ve sonrası; zaman çizgisi dosyaları her zaman (küçüktür, geri dönüşte gerekir). Ad sırası WAL
+// sırasıdır: zaman çizgisi önektedir, sonraki çizginin dosyaları sonra gelir. Yarım (.partial) ve tanınmayan dosya alınmaz.
+export function gerekenWallar(adlar: readonly string[], baslangic: string): string[] {
+  return adlar.filter((ad) => ZAMAN_CIZGISI_ADI.test(ad)
+    || ((WAL_ADI.test(ad) || WAL_EKI_ADI.test(ad)) && ad.slice(0, 24) >= baslangic)).sort();
+}
+
+interface TabanYedek { ad: string; yol: string; baslangic: string }
+
+// En yeni tamamlanmış taban yedek: backup_manifest pg_basebackup'ın en son yazdığı dosyadır, yoksa yedek sürüyor ya da yarım.
+export async function sonTabanYedek(tabanDizini: string): Promise<TabanYedek> {
+  const adlar = (await readdir(tabanDizini, { withFileTypes: true })).filter((g) => g.isDirectory()).map((g) => g.name).sort().reverse();
+  for (const ad of adlar) {
+    const yol = path.join(tabanDizini, ad);
+    if (!existsSync(path.join(yol, 'backup_manifest'))) continue;
+    const etiket = await readFile(path.join(yol, 'backup_label'), 'utf8').catch(() => '');
+    const baslangic = tabanBaslangicWal(etiket);
+    if (baslangic !== null) return { ad, yol, baslangic };
+  }
+  throw new Error(`Tamamlanmış taban yedek yok: ${tabanDizini} (backup_manifest ve backup_label taşıyan klasör). Önce taban yedek alın.`);
+}
+
+// Taban yedeğin ağacı: boş klasörler de (PostgreSQL veri klasörü boş klasör ister). Bağlantı (tablespace) desteklenmez.
+async function agac(kok: string, alt = ''): Promise<{ klasorler: string[]; dosyalar: string[] }> {
+  const sonuc = { klasorler: [] as string[], dosyalar: [] as string[] };
+  for (const g of await readdir(path.join(kok, alt), { withFileTypes: true })) {
+    const goreli = alt === '' ? g.name : path.join(alt, g.name);
+    if (g.isDirectory()) {
+      sonuc.klasorler.push(goreli);
+      const ic = await agac(kok, goreli);
+      sonuc.klasorler.push(...ic.klasorler);
+      sonuc.dosyalar.push(...ic.dosyalar);
+    } else if (g.isFile()) sonuc.dosyalar.push(goreli);
+    else throw new Error(`Taban yedekte dosya ya da klasör olmayan öğe var (${goreli}); ek tablespace desteklenmez.`);
+  }
+  return sonuc;
+}
+
+async function sifreliKopyala(anahtar: Buffer, kaynak: string, hedef: string): Promise<void> {
+  await mkdir(path.dirname(hedef), { recursive: true });
+  const yarim = hedef + YARIM_EKI;
+  try {
+    await sifreliYaz(anahtar, createReadStream(kaynak), yarim);
+    await rename(yarim, hedef);
+  } catch (hata) {
+    await rm(yarim, { force: true });
+    throw hata;
+  }
+}
+
+export interface DisKopyaSonucu {
+  taban: string; tabanDosyasi: number; tabanBayt: number; tabanZatenVar: boolean; walAdet: number; walBayt: number; walYazilan: number;
+  walZatenVar: number; silinen: number;
+}
+
+export async function disKopyaAl(anahtar: Buffer, kaynak: { wal: string; taban: string }, hedef: string): Promise<DisKopyaSonucu> {
+  const taban = await sonTabanYedek(kaynak.taban);
+  const kok = path.join(hedef, DIS_KOPYA_KLASORU);
+  const tabanHedef = path.join(kok, 'taban', taban.ad);
+  const sonuc: DisKopyaSonucu = {
+    taban: taban.ad, tabanDosyasi: 0, tabanBayt: 0, tabanZatenVar: existsSync(path.join(tabanHedef, TAMAM_DOSYASI)), walAdet: 0, walBayt: 0,
+    walYazilan: 0, walZatenVar: 0, silinen: 0,
+  };
+  const { klasorler, dosyalar } = await agac(taban.yol);
+  for (const d of dosyalar) sonuc.tabanBayt += (await stat(path.join(taban.yol, d))).size;
+  if (!sonuc.tabanZatenVar) {
+    for (const k of klasorler) await mkdir(path.join(tabanHedef, k), { recursive: true });
+    for (const d of dosyalar) await sifreliKopyala(anahtar, path.join(taban.yol, d), path.join(tabanHedef, d));
+    sonuc.tabanDosyasi = dosyalar.length;
+  }
+  const gereken = gerekenWallar(await readdir(kaynak.wal), taban.baslangic);
+  if (!gereken.some((ad) => ad.startsWith(taban.baslangic))) {
+    throw new Error(`WAL arşivinde taban yedeğin başlangıç dosyası yok (${taban.baslangic}): ${kaynak.wal}. Arşiv ayarını denetleyin.`);
+  }
+  const walHedef = path.join(kok, 'wal');
+  sonuc.walAdet = gereken.length;
+  for (const ad of gereken) {
+    sonuc.walBayt += (await stat(path.join(kaynak.wal, ad))).size;
+    if (existsSync(path.join(walHedef, ad))) { sonuc.walZatenVar += 1; continue; }
+    await sifreliKopyala(anahtar, path.join(kaynak.wal, ad), path.join(walHedef, ad));
+    sonuc.walYazilan += 1;
+  }
+  // Taban tamam işareti WAL'dan sonra yazılır: işaretli takım geri dönüşe yeter.
+  if (!sonuc.tabanZatenVar) await writeFile(path.join(tabanHedef, TAMAM_DOSYASI), `${new Date().toISOString()}\t${String(sonuc.tabanDosyasi)}\n`);
+  for (const ad of await readdir(path.join(kok, 'taban'))) {
+    if (ad === taban.ad) continue;
+    await rm(path.join(kok, 'taban', ad), { recursive: true, force: true });
+    sonuc.silinen += 1;
+  }
+  const kalan = new Set(gereken);
+  for (const ad of await readdir(walHedef)) {
+    if (kalan.has(ad)) continue;
+    await rm(path.join(walHedef, ad), { force: true });
+    sonuc.silinen += 1;
+  }
+  return sonuc;
+}
+
+export interface DisKopyaAcmaSonucu { taban: string; veriKlasoru: string; walKlasoru: string; dosya: number }
+
+// Diskteki tam takımı düz hale açar: veri klasörü taban yedeğin aynısı, WAL klasörü restore_command'ın okuyacağı yer.
+// Hedef boş olmalı; açılamayan ilk dosyada durur (yanlış anahtar ya da bozuk disk), yarım düz dosya bırakmaz.
+export async function disKopyaAc(anahtar: Buffer, kaynak: string, hedef: string): Promise<DisKopyaAcmaSonucu> {
+  const kok = path.basename(kaynak) === DIS_KOPYA_KLASORU ? kaynak : path.join(kaynak, DIS_KOPYA_KLASORU);
+  const tabanlar = existsSync(path.join(kok, 'taban')) ? (await readdir(path.join(kok, 'taban'))).sort().reverse() : [];
+  const ad = tabanlar.find((t) => existsSync(path.join(kok, 'taban', t, TAMAM_DOSYASI)));
+  if (ad === undefined) throw new Error(`Dış kopyada tamamlanmış taban yedek yok: ${kok}.`);
+  if (existsSync(hedef) && (await readdir(hedef)).length > 0) throw new Error(`Hedef klasör boş değil: ${hedef}. Boş ya da olmayan bir klasör verin.`);
+  const veriKlasoru = path.join(hedef, 'veri');
+  const walKlasoru = path.join(hedef, 'wal');
+  const { klasorler, dosyalar } = await agac(path.join(kok, 'taban', ad));
+  await mkdir(veriKlasoru, { recursive: true, mode: 0o700 });
+  await mkdir(walKlasoru, { recursive: true, mode: 0o700 });
+  for (const k of klasorler) await mkdir(path.join(veriKlasoru, k), { recursive: true, mode: 0o700 });
+  let dosya = 0;
+  const ac = async (k: string, h: string): Promise<void> => {
+    try { await yedekSifresiniCoz(anahtar, k, h); } catch (hata) {
+      throw new Error(`${k}: ${hata instanceof Error ? hata.message : String(hata)} Açılan düz dosyaları (${hedef}) silin.`);
+    }
+    dosya += 1;
+  };
+  for (const d of dosyalar) if (d !== TAMAM_DOSYASI && !d.endsWith(YARIM_EKI)) await ac(path.join(kok, 'taban', ad, d), path.join(veriKlasoru, d));
+  const wallar = existsSync(path.join(kok, 'wal')) ? (await readdir(path.join(kok, 'wal'))).filter((w) => !w.endsWith(YARIM_EKI)) : [];
+  for (const w of wallar) await ac(path.join(kok, 'wal', w), path.join(walKlasoru, w));
+  return { taban: ad, veriKlasoru, walKlasoru, dosya };
+}
+
+// Sunucunun okuyabildiği kayıt (2290, 2282b): dış disk sökülünce oradaki kayıt görünmez. Yedek klasörüne her çalıştırmada bir
+// JSON satırı; içerik adı ya da veri taşımaz, yalnız ne zaman, hangi taban ve ne kadar.
+export const DIS_KOPYA_KAYDI_DOSYASI = 'dis-kopya.jsonl';
+
+export interface DisKopyaKaydi {
+  zaman: string; sonuc: 'basarili' | 'basarisiz'; hedef: string; taban: string | null; tabanBayt: number | null; walAdet: number | null;
+  walBayt: number | null; hata: string | null;
+}
+
+export function disKopyaSatiri(k: DisKopyaKaydi): string {
+  return `${JSON.stringify(k)}\n`;
+}
+
+export async function disKopyaKaydiEkle(yedekDizini: string, k: DisKopyaKaydi): Promise<string> {
+  await mkdir(yedekDizini, { recursive: true });
+  const dosya = path.join(yedekDizini, DIS_KOPYA_KAYDI_DOSYASI);
+  await appendFile(dosya, disKopyaSatiri(k));
+  return dosya;
+}
+
+function zorunluSecenek(argumanlar: readonly string[], ad: string, ornek: string): string {
+  const deger = secenek(argumanlar, ad);
+  if (deger === null) throw new Error(`${ad} verin. Örnek: ${ornek}`);
+  return deger;
+}
+
+const DIS_KOPYA_ORNEGI = 'npm run yedek -- dis-kopya --wal E:\\TMIV2-WAL --taban E:\\TMIV2-TABAN --hedef F:\\';
+
+async function disKopyaKaydiYaz(kok: string, komut: string, sonuc: string): Promise<void> {
+  const kullanici = process.env['USERNAME'] ?? process.env['USER'] ?? '?';
+  await mkdir(kok, { recursive: true });
+  await appendFile(path.join(kok, 'islem-kaydi.txt'), `${new Date().toISOString()}\t${kullanici}\t${komut}\t${sonuc}\n`);
+}
+
+async function disKopyaKomutu(ortam: YedekOrtami, argumanlar: string[]): Promise<void> {
+  if (ortam.anahtar.durum !== 'tamam') throw new Error(ortam.anahtar.ileti);
+  const wal = zorunluSecenek(argumanlar, '--wal', DIS_KOPYA_ORNEGI);
+  const taban = zorunluSecenek(argumanlar, '--taban', DIS_KOPYA_ORNEGI);
+  const hedef = zorunluSecenek(argumanlar, '--hedef', DIS_KOPYA_ORNEGI);
+  if (!existsSync(hedef)) throw new Error(`Hedef yok: ${hedef}. Dış diski takın ya da var olan bir klasör verin.`);
+  const yedekDizini = yedekKlasoru(process.env, kok);
+  const zaman = new Date().toISOString();
+  let s: DisKopyaSonucu;
+  try {
+    s = await disKopyaAl(ortam.anahtar.anahtar, { wal, taban }, hedef);
+  } catch (hata) {
+    const ileti = (hata instanceof Error ? hata.message : String(hata)).replace(/[\r\n]+/g, ' ').slice(0, 300);
+    await disKopyaKaydiEkle(yedekDizini, { zaman, sonuc: 'basarisiz', hedef, taban: null, tabanBayt: null, walAdet: null, walBayt: null, hata: ileti });
+    throw hata;
+  }
+  await disKopyaKaydiEkle(yedekDizini, {
+    zaman, sonuc: 'basarili', hedef, taban: s.taban, tabanBayt: s.tabanBayt, walAdet: s.walAdet, walBayt: s.walBayt, hata: null,
+  });
+  const ozet = `taban ${s.taban} (${s.tabanZatenVar ? 'zaten vardı' : `${String(s.tabanDosyasi)} dosya`}), WAL yazılan ${String(s.walYazilan)}, `
+    + `zaten var ${String(s.walZatenVar)}, eski takımdan silinen ${String(s.silinen)}`;
+  await disKopyaKaydiYaz(path.join(hedef, DIS_KOPYA_KLASORU), 'dis-kopya', ozet);
+  console.log(`Şifreli dış kopya yazıldı: ${path.join(hedef, DIS_KOPYA_KLASORU)}; ${ozet}. Diski çıkarıp sunucudan uzakta saklayın.`);
+}
+
+async function disKopyaAcKomutu(ortam: YedekOrtami, argumanlar: string[]): Promise<void> {
+  if (ortam.anahtar.durum !== 'tamam') throw new Error(ortam.anahtar.ileti);
+  const ornek = 'npm run yedek-coz -- dis-kopya --kaynak F:\\ --hedef D:\\GERI-DONUS';
+  const kaynak = zorunluSecenek(argumanlar, '--kaynak', ornek);
+  const hedef = zorunluSecenek(argumanlar, '--hedef', ornek);
+  const s = await disKopyaAc(ortam.anahtar.anahtar, kaynak, hedef);
+  console.log(`Açıldı (taban ${s.taban}, ${String(s.dosya)} dosya): veri klasörü ${s.veriKlasoru}, WAL ${s.walKlasoru}. `
+    + 'Bu klasörler bütün veriyi şifresiz taşır. Zaman noktasına dönüş kurulum/yedek.md\'dedir; iş bitince silin.');
+}
+
 const dogrudanKosuyor = process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (dogrudanKosuyor) {
   const [komut, ...argumanlar] = process.argv.slice(2);
@@ -217,7 +432,9 @@ if (dogrudanKosuyor) {
       process.exit(0);
     }
     const ortam = yedekOrtamiOku();
-    if (komut === 'al' && argumanlar[0] === 'medya') await medyaAl(ortam, argumanlar.slice(1));
+    if (komut === 'al' && argumanlar[0] === 'dis-kopya') await disKopyaKomutu(ortam, argumanlar.slice(1));
+    else if (komut === 'coz' && argumanlar[0] === 'dis-kopya') await disKopyaAcKomutu(ortam, argumanlar.slice(1));
+    else if (komut === 'al' && argumanlar[0] === 'medya') await medyaAl(ortam, argumanlar.slice(1));
     else if (komut === 'al') await al(ortam);
     else if (komut === 'medya-geri-yukle') await medyaGeriYaz(ortam, secenek(argumanlar, '--kaynak') ?? yedekKlasoru(process.env, kok));
     else if (komut === 'geri-yukle') await geriYukle(ortam, argumanlar);
@@ -226,7 +443,8 @@ if (dogrudanKosuyor) {
     else {
       throw new Error('Kullanım: npm run yedek | npm run yedek -- medya [--hedef <klasör>] | npm run geri-yukle -- <dosya> | '
         + 'npm run geri-yukle-medya [-- --kaynak <klasör>] | npm run geri-yukle-deneme -- <dosya> | npm run yedek-anahtari | '
-        + 'npm run yedek-coz -- <yedek> <hedef>');
+        + 'npm run yedek-coz -- <yedek> <hedef> | npm run yedek -- dis-kopya --wal <k> --taban <k> --hedef <k> | '
+        + 'npm run yedek-coz -- dis-kopya --kaynak <k> --hedef <k>');
     }
   } catch (hata) {
     console.error(hata instanceof Error ? hata.message : String(hata));
