@@ -22,6 +22,7 @@ import { kurlar } from '../finans/disari.ts';
 import { siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
+import { bakimAraliklariOku } from './bakim/servis.ts';
 import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
@@ -235,10 +236,13 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   }
   // 13.4: onaylı izin ve atama payı çerçevedeki gibi kapasite okumasından; motor izinli günü devamsızlık sayar
   const sa = await satinAlmaEkiKur(db, kullanici, d.items);
+  // 2319 (2311 S10): bayrak (plan.bakim-girdisi) açık ve kişi makineleri okuyabiliyorsa Arkon'un periyodik bakımı girdi.betik'te duruş olur.
+  // Kapalıyken null: girdi.betik bakım satırına dokunmaz.
+  const bakimlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && (await sistemAyariOku(db, 'plan.bakim-girdisi')) ? await bakimAraliklariOku(db) : null;
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
     durum: d,
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici) },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar },
   };
 }
 
