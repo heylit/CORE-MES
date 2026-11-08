@@ -45,4 +45,18 @@ describe('S3 yetkinlik hükmü (2311 S5)', () => {
       assert.equal(yetkinlikUyarisi(KISI(1), 10, v, kural) === null, baslatmaYetkinlikIhlali(yetkin, false) === null);
     }
   });
+
+  // 2320 S5 (c): aynı girdiyle eşitlik tablosu. Tek kişili istasyonda plan "başlatılır" der ancak ve ancak terminal o kişiye başlatma izni
+  // veriyorsa (istasyon kuralı ve makine kuralı birlikte; yönetici muafiyeti iki tarafta da yok).
+  test('eşitlik tablosu: istasyon yetkinliği x makine kaydı x kişinin kaydı', () => {
+    for (const istasyonYetkin of [true, false]) for (const makineKayitli of [true, false]) for (const kisiKayitli of [true, false]) {
+      if (kisiKayitli && !makineKayitli) continue;
+      const kayit = makineKayitli ? [{ kisiId: kisiKayitli ? 1 : 2, makineId: 5 }] : [];
+      const v = veri(istasyonYetkin ? [[1, [10]]] : [], kayit);
+      const terminal = baslatmaYetkinlikIhlali(istasyonYetkin, false) === null && makineYetkinlikIhlali(1, [5], kayit, false) === null;
+      const durum = `istasyon ${String(istasyonYetkin)}, makine kayıtlı ${String(makineKayitli)}, kişi kayıtlı ${String(kisiKayitli)}`;
+      assert.equal(yetkinlikUyarisi(MAKINE(5), 10, v, kural) === null, terminal, `makine: ${durum}`);
+      assert.equal(yetkinlikUyarisi(KISI(1), 10, v, kural) === null, baslatmaYetkinlikIhlali(istasyonYetkin, false) === null, `kişi: ${durum}`);
+    }
+  });
 });

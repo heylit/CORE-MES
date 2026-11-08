@@ -7,6 +7,7 @@ import { kullaniciYukle } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { acilSiparisOnaylandi, menuSayaclari, plan as planServisi } from './servis.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
+import { KISI_YETKINLIGI_YOK } from './kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', () => {
@@ -58,13 +59,14 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     p = (await isEmriKomutu(p, v1!, 'tasi', { kaynak: { tur: 'makine', id: makineA }, baslangic: uzak })).json<PlanCevabi>();
     assert.equal(sure(yer(p, v1!)), 50);
     p = await taslaktaOner(c.planlama, p);
-    // S3: kişi rotadaki makinenin istasyonunda yetkin değilse uyarı; yetkinliği tanımlanmamış kişide uyarı yok.
+    // S3 (2311 S5): terminal yetkinliği tanımlanmamış kişiye de iş başlatmaz; plan da uyarır. Başka istasyonda yetkin kişi uyarı alır,
+    // adımın istasyonunda yetkin kişi almaz.
     const [k1] = await isEmirleriAc([yeniAdim({ adaylar: [{ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 30, birimSureDk: 2 }] })]);
     p = await taslaktaOner(c.planlama, p);
     const ileri = new Date(Date.parse(yer(p, k1!).baslangic) + 60 * 24 * 3600_000).toISOString();
     p = (await isEmriKomutu(p, k1!, 'tasi', { kaynak: { tur: 'kisi', id: operatorId }, baslangic: ileri })).json<PlanCevabi>();
-    const yetkinlikUyarisi = (pp: PlanCevabi) => yer(pp, k1!).uyarilar.includes('Kişinin bu istasyonda yetkinliği yok.');
-    assert.equal(yetkinlikUyarisi(p), false);
+    const yetkinlikUyarisi = (pp: PlanCevabi) => yer(pp, k1!).uyarilar.includes(KISI_YETKINLIGI_YOK);
+    assert.equal(yetkinlikUyarisi(p), true, 'yetkinliği tanımlanmamış kişi');
     await tamam(c.yonetici, 'POST', `/kisi-yetkinlikleri/${operatorId}/belirle`, { istasyonIdleri: [istasyonB] });
     try {
       assert.equal(yetkinlikUyarisi(await planOku(p.taslak!.id)), true);
