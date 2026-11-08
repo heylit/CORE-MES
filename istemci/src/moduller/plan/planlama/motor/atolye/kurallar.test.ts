@@ -5,7 +5,7 @@ import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslem
 import { ornekCalisma } from '../ornek.ts';
 import {
   akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
-  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, type SunucuSenaryosu,
+  siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
@@ -261,5 +261,25 @@ describe('donuk bölge seçenekleri (248 a)', () => {
   it('4 saatten kısa donuk bölge seçilemez', () => {
     expect(DONUK_SECENEKLERI).toEqual([4, 8, 16, 24]);
     expect(Math.min(...DONUK_SECENEKLERI)).toBe(4);
+  });
+});
+
+describe('2311 S9: kuru bilinmeyen emir varken Plan TL uyarısı', () => {
+  const g = (maliyetTl: number | null, bedeliBilinmeyenEmir?: number) =>
+    ({ maliyetTl, ...(bedeliBilinmeyenEmir === undefined ? {} : { bedeliBilinmeyenEmir }) }) as unknown as Gostergeler;
+  it('bilinmeyen sıfırsa ya da fiyatı görmeyende (TL null) uyarı yok', () => {
+    expect(tlEksikUyarisi(g(1000, 0))).toBeNull();
+    expect(tlEksikUyarisi(g(null))).toBeNull();
+    expect(tlEksikUyarisi(null)).toBeNull();
+  });
+  it('bilinmeyen varken toplamın eksik olduğu yazılır', () => {
+    expect(tlEksikUyarisi(g(1000, 2))).toBe('2 emrin kuru bilinmiyor; Plan TL bu emirler olmadan hesaplandı.');
+  });
+  it('iki taraf da tam ise karşılaştırılır; biri eksikse ya da TL yoksa karşılaştırılmaz', () => {
+    expect(tlKarsilastirilir(g(1000, 0), g(900, 0))).toBe(true);
+    expect(tlKarsilastirilir(g(1000, 1), g(900, 0))).toBe(false);
+    expect(tlKarsilastirilir(g(1000, 0), g(900, 3))).toBe(false);
+    expect(tlKarsilastirilir(g(1000, 0), g(null))).toBe(false);
+    expect(tlKarsilastirilir(g(1000, 0), null)).toBe(false);
   });
 });

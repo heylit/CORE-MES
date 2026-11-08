@@ -384,6 +384,24 @@ export function uyarilar(y: Aralik & { kaynak: Kaynak }, b: {
   return u;
 }
 
+// S3 (2311 S5): plan işin başlatılabilirliğini terminalin kuralıyla (uretim-emirleri UE20 istasyon, 2046 a makine yetkinliği) ölçer; kural
+// işlevleri çağırandan gelir, böylece iki yer ayrı hüküm veremez. Kişiye yerleşen işte kişi adımın istasyonunda yetkin olmalı (yetkinliği hiç
+// tanımlanmamış kişi de yetkinsizdir); makineye yerleşen işte o makinede başlatabilecek en az bir kişi olmalı. Yönetici muaflığı planda
+// sayılmaz: operatör yerine yöneticinin başlatacağı varsayılmaz. İstasyonu bilinmeyen adımda denetim yok.
+export const KISI_YETKINLIGI_YOK = 'Kişinin bu istasyonda yetkinliği yok; terminal işi başlatmaz.';
+export const YETKIN_KISI_YOK = 'Bu makinede işi başlatabilecek yetkin kişi yok; terminal işi başlatmaz.';
+export interface YetkinlikKurali {
+  istasyon: (yetkin: boolean, muaf: boolean) => string | null;
+  makine: (kisiId: number, makineler: readonly number[], kayitlar: readonly { kisiId: number; makineId: number }[], muaf: boolean) => string | null;
+}
+export interface YetkinlikVerisi { istasyon: ReadonlyMap<number, ReadonlySet<number>>; makine: readonly { kisiId: number; makineId: number }[] }
+export function yetkinlikUyarisi(kaynak: Kaynak, istasyonId: number | null, v: YetkinlikVerisi, kural: YetkinlikKurali): string | null {
+  if (istasyonId === null) return null;
+  if (kaynak.tur === 'kisi') return kural.istasyon(v.istasyon.get(kaynak.id)?.has(istasyonId) ?? false, false) === null ? null : KISI_YETKINLIGI_YOK;
+  const baslatabilir = [...v.istasyon].some(([kisiId, l]) => l.has(istasyonId) && kural.makine(kisiId, [kaynak.id], v.makine, false) === null);
+  return baslatabilir ? null : YETKIN_KISI_YOK;
+}
+
 // Sıralama ve elle yerleştirme (PL-04): verilen sırayla, başlangıçtan sonraki ilk çalışma anından arka arkaya dizilir; süre çalışma
 // dakikasıdır, vardiya arası beklenir. Biri ufukta sığmazsa null (sürüm denetimi serviste).
 export function arkaArkaya(sureler: readonly number[], baslangic: number, takvim: Takvim = null): Aralik[] | null {
