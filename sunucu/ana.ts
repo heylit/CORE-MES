@@ -89,7 +89,9 @@ try {
   await app.listen({ host: dinlemeAdresi(ayar.ortam), port: ayar.port });
   if (arayuzKodu !== null && arayuzSecenegi !== null) {
     const kok = fileURLToPath(new URL('../istemci/dist/', import.meta.url));
-    arayuz = await arayuzKodu.arayuzKapisiAc({ ...arayuzSecenegi, kok, api: (istek, yanit) => { app.routing(istek, yanit); } });
+    arayuz = await arayuzKodu.arayuzKapisiAc({
+      ...arayuzSecenegi, kok, canli: ayar.ortam === 'canli', api: (istek, yanit) => { app.routing(istek, yanit); },
+    });
   }
   zamanlayici.baslat();
   const arayuzMetni = arayuzSecenegi === null ? '' : ` | arayüz: ${arayuzSecenegi.https === null ? 'http' : 'https'}://${arayuzSecenegi.host}:${String(arayuzSecenegi.port)}`;

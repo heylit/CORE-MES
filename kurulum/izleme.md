@@ -27,7 +27,7 @@ Bilgi işlemin izleme aracı olay günlüğündeki 100, 200 ve 300'e bağlanır.
 4. Aşağıdaki PostgreSQL günlük ayarları yazılır.
 5. Saat eşliği denetlenir.
 6. Performans sayacı toplayıcısı kurulur.
-7. IIS sertifikasının açık kısmı `TMIV2_IZLENEN_SERTIFIKA` ile verilir (`kurulum/gunluk.md` "Vekil sertifikası").
+7. Sertifika bitişi Sunucu durumu kartında görünür (`TMIV2_HTTPS_SERTIFIKA`, `kurulum/canli.md` "Sertifika"); ayrı ayar gerekmez.
 
 ## PostgreSQL günlük ayarları
 

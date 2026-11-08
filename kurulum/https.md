@@ -3,7 +3,7 @@
 Telefonun bağlandığı kapı (4101, sunucunun arayüz kapısı; `TMIV2_ARAYUZ_PORT` ile değişir) HTTPS ile sunulunca Android Chrome TMI'yi uygulama olarak kurar ve service worker çalışır (kart #1269).
 Şirket dışından iç uygulamaya erişim VPN ile olur (2026-10-14 kullanıcı kararı): telefon VPN'e bağlanınca iç ağdaki gibi aynı adres ve aynı
 sertifikayla girer. İç uygulama internete açılmaz. Portal ve Mesaj'ın dış kullanımı ayrı dış sunucudan olur (ADR 0021); Let's Encrypt yalnız o sunucudadır.
-VPN'in kurulumu bilgi işlemindir.
+VPN'in kurulumu bilgi işlemindir. Canlıda bu yol varsayılandır (2275-1 a); canlıya özgü kural ve ayarlar `kurulum/canli.md`'de.
 
 ## Nasıl çalışır
 
