@@ -9,6 +9,7 @@ import {
   argumanOku, ayriTurNedeni, denetle, devirOku, grupla, kilitIcinde, klasorOku, suslu, yamaDosyalari,
 } from './teslim-denetle.ts';
 import type { Devir, TeslimGirdisi } from './teslim-denetle.ts';
+import { sonucMetni } from './teslim-vt.ts';
 
 Object.assign(process.env, {
   GIT_CONFIG_COUNT: '2',
@@ -29,7 +30,7 @@ function devir(ek: Partial<Devir> = {}): Devir {
 function girdi(ek: Partial<TeslimGirdisi> = {}, dosyalar = ['sunucu/moduller/stok/servis.ts']): TeslimGirdisi {
   return {
     klasor: '/x/2300', devir: devir(), yamalar: [{ ad: '0001.patch', sha256: SHA, dosyalar }], tabanGeride: 0,
-    enBuyukGoc: '20261106099600', anaDaldakiGocler: [], ...ek,
+    enBuyukGoc: '20261106099600', anaDaldakiGocler: [], vtSonuc: { pg: 18, yamalar: [SHA], gecti: true }, ...ek,
   };
 }
 
@@ -156,8 +157,11 @@ test('grupla: üstüne kurulan teslim dayandığı grupta ya da sonrasında; day
 });
 
 test('argumanOku: tek klasör, grup ve taban dalı; yanlış kullanım reddedilir', () => {
-  assert.deepEqual(argumanOku(['d']), { grup: false, klasorler: ['d'], dal: 'origin/main' });
-  assert.deepEqual(argumanOku(['--grup', 'a', 'b', '--taban-dal', 'main']), { grup: true, klasorler: ['a', 'b'], dal: 'main' });
+  assert.deepEqual(argumanOku(['d']), { grup: false, vt: false, klasorler: ['d'], dal: 'origin/main' });
+  assert.deepEqual(argumanOku(['--grup', 'a', 'b', '--taban-dal', 'main']), { grup: true, vt: false, klasorler: ['a', 'b'], dal: 'main' });
+  assert.deepEqual(argumanOku(['--vt', 'd']), { grup: false, vt: true, klasorler: ['d'], dal: 'origin/main' });
+  assert.throws(() => argumanOku(['--vt', 'a', 'b']));
+  assert.throws(() => argumanOku(['--vt', '--grup', 'a']));
   assert.throws(() => argumanOku([]));
   assert.throws(() => argumanOku(['a', 'b']));
   assert.throws(() => argumanOku(['--bilinmeyen', 'a']));
@@ -182,11 +186,20 @@ test('klasorOku: gerçek git deposunda taban gerisi, sha ve göç listesi okunur
     writeFileSync(join(klasor, '0001.patch'), icerik);
     const sha = createHash('sha256').update(icerik).digest('hex');
     writeFileSync(join(klasor, 'DEVIR.md'), `<!-- teslim\ntaban: ${taban}\nkilit: stok/\nsade: evet\n-->\n${sha}\ntarama temiz\n# pass 3\n`);
+    writeFileSync(join(klasor, 'VT-SONUC.md'), sonucMetni({ pg: 18, yamalar: [sha], gecti: true }, []));
     const g = klasorOku(kok, klasor, 'main');
     assert.equal(g.tabanGeride, 1);
+    assert.deepEqual(g.vtSonuc, { pg: 18, yamalar: [sha], gecti: true });
     assert.equal(g.enBuyukGoc, '20261106099600');
     assert.deepEqual(etiketler(g), ['uyari:taban-geride']);
   } finally {
     rmSync(kok, { recursive: true, force: true });
   }
+});
+
+test('veritabanlı deneme: sonuç yoksa, sha tutmuyorsa ya da kırmızıysa kırmızı; PG18 dışı sürüm uyarı', () => {
+  assert.deepEqual(etiketler(girdi({ vtSonuc: null })), ['kirmizi:vt']);
+  assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 18, yamalar: ['b'.repeat(64)], gecti: true } })), ['kirmizi:vt']);
+  assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 18, yamalar: [SHA], gecti: false } })), ['kirmizi:vt']);
+  assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 16, yamalar: [SHA], gecti: true } })), ['uyari:vt-pg']);
 });

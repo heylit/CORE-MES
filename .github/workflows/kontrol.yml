@@ -340,6 +340,22 @@ jobs:
           VT_SUPER_USER: postgres
           VT_SUPER_PASSWORD: postgres
         run: bash araclar/vt/tasima-denemesi.sh
+      # Canlı sunucu PostgreSQL 18'dir (2329-1 b): sürüm imajın etiketinden gelir, burada sayıyla doğrulanır. Asıl veritabanı
+      # hiç yokken açılıp bütün göçler boş veritabanına uygulanır; ekran işi kapsam dışında kaldığında da koşar.
+      - name: PostgreSQL 18 ve boş veritabanına bütün göçler
+        if: matrix.parca == 1
+        env:
+          PGPASSWORD: postgres
+        run: |
+          ana=$(psql -X -At -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres -c "SHOW server_version_num")
+          echo "PostgreSQL server_version_num: $ana"
+          [ "$((ana / 10000))" -eq 18 ] || { echo "PostgreSQL 18 bekleniyordu, sunucu $ana"; exit 1; }
+          psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres -c "CREATE DATABASE $TMIV2_PG_DATABASE"
+          psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_DATABASE" \
+            -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+          npm run goc
+          # Testler CI'da asıl veritabanı yokken koşar; olsaydı ona dayanan test burada yeşil kalırdı (2306).
+          psql -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres -c "DROP DATABASE $TMIV2_PG_DATABASE WITH (FORCE)"
       - run: npm run test:sunucu
 
   # Ekran ve davranış testleri (ekran-testleri/): öncelikli modüllerin sayfaları 360, 768 ve 1280 genişlikte, örnek veriyle.
@@ -474,6 +490,20 @@ jobs:
             -c "CREATE DATABASE $TMIV2_PG_TEST_DATABASE"
           "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_TEST_DATABASE" \
             -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+      # Çalıştırıcıdaki PostgreSQL 17'dir (2340); sürüm burada zorunlu tutulmaz, PG18 denetimi Linux sunucu test işindedir.
+      # Hedef platformda boş veritabanına bütün göçler uygulanır; testler asıl veritabanı yokken koşsun diye sonra silinir.
+      - name: Boş veritabanına bütün göçler (PostgreSQL sürümü yazdırılır)
+        env:
+          PGPASSWORD: root
+        run: |
+          "$PGBIN/psql" -X -At -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres -c "SELECT version()"
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
+            -c "CREATE DATABASE $TMIV2_PG_DATABASE"
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d "$TMIV2_PG_DATABASE" \
+            -v goc_parola="$TMIV2_PG_GOC_PASSWORD" -v uygulama_parola="$TMIV2_PG_PASSWORD" -f araclar/vt/kurulum.sql
+          npm run goc
+          "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
+            -c "DROP DATABASE $TMIV2_PG_DATABASE WITH (FORCE)"
       - name: İşletme betiklerinin ve test robotunun testleri
         run: |
           node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test --test-reporter=tap \
