@@ -178,6 +178,15 @@ describe('düzenleme ekranı', () => {
   });
 });
 
+describe('resmi kaydırma', () => {
+  it('sahnede tarayıcının sürükle-bırakı başlamaz: başlarsa işaretçi iptal olur, tut-kaydır ilk adımda durur', () => {
+    kur();
+    const sahne = document.querySelector('.tc-ay5-sahne') as HTMLElement;
+    expect(fireEvent.dragStart(sahne)).toBe(false);
+    expect(fireEvent.dragStart(sahne.querySelector('svg') as Element)).toBe(false);
+  });
+});
+
 describe('salt okunur resim başlığı', () => {
   it('onay rozeti göstermez: resmi kalite onaylamaz; eskimiş çizim rozeti kalır', () => {
     const k = (eskiCizim?: 'yeni-revizyon'): TeknikResimKontrolu => ({
