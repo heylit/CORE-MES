@@ -5,7 +5,7 @@
   display: flex; flex: 1 1 auto; align-items: center; gap: var(--b-3); min-width: 0; min-height: var(--dokunma-yogun);
   padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; overflow: hidden; text-align: start;
 }
-.tc-kfs-ozet:focus-visible, .tc-kfs-guncelle:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.tc-kfs-ozet:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
 .tc-kfs-kalem { display: inline-flex; align-items: baseline; gap: var(--b-1); white-space: nowrap; }
 .tc-kfs-kalem b { font-weight: 600; }
 .tc-kfs-ad { color: var(--muted); font-size: var(--yazi-xs); letter-spacing: .04em; text-transform: uppercase; }
@@ -18,11 +18,6 @@
 .tc-kfs-ayrac { flex: none; align-self: stretch; width: 1px; margin-block: var(--b-2); background: var(--edge2); }
 .tc-kfs-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; }
 .tc-kfs-isaret { width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--hazard); }
-.tc-kfs-son { margin-inline-start: auto; color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.tc-kfs-guncelle {
-  display: inline-flex; flex: none; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); padding-inline: var(--b-3);
-  border: 0; border-radius: var(--yari-1); background: var(--hazard); color: var(--on-hazard); font: inherit; font-weight: 600; cursor: pointer;
-}
 .tc-kfs-panel {
   display: grid; gap: var(--b-4); grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: var(--b-4) var(--b-3); border-top: 1px solid var(--edge);
@@ -51,9 +46,8 @@
 }
 /* Telefon: USD ve EUR kuru ile TL kredi faizi kalır; ayrıntı panelde. */
 @media (max-width: 767px) {
-  .tc-kfs [data-kfs="faiz-mevduat"], .tc-kfs-son, .tc-kfs-ayrac { display: none; }
+  .tc-kfs [data-kfs="faiz-mevduat"], .tc-kfs-ayrac { display: none; }
   .tc-kfs-ozet { gap: var(--b-2); }
-  .tc-kfs-guncelle-ad { display: none; }
   .tc-kfs-panel { grid-template-columns: minmax(0, 1fr); }
   .tc-kfs-faiz { grid-template-columns: minmax(0, 1fr); }
 }

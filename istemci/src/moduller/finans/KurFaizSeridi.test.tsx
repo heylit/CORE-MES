@@ -59,7 +59,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
   it('1089 a: panelde herkes grafiği görür, son 90 gün okunur; toplu yükleme yalnız finans.kur-yaz olana', async () => {
     const istekler = sunucuKur(['musteri-tedarikci.oku']);
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: /Son kur girişi/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^USD/ }));
     expect(screen.getByText('Kur ve faiz grafiği')).toBeTruthy();
     await waitFor(() => expect(document.querySelector('.tc-kfg-ozet')?.textContent).toBe('41,5 13.10.2026en düşük 41,2 · en yüksek 41,5'));
     expect(istekler.some((i) => i.yol === '/finans/oran-araligi?baslangic=2026-07-15&bitis=2026-10-13')).toBe(true);
@@ -67,7 +67,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     cleanup();
     sunucuKur(['finans.kur-yaz']);
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^USD/ }));
     expect(screen.getByText('Toplu yükleme')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Şablonu indir' })).toBeTruthy();
   });
@@ -75,7 +75,8 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
   it('herkes alış / satış kurunu ve TRY yıllık faizlerini görür; eski kurun ve 30 günden eski oranın günü yazılır; finans işlemi yoksa form yok', async () => {
     const istekler = sunucuKur(['musteri-tedarikci.oku']);
     ac();
-    expect((await screen.findByText(/Son kur girişi:/)).textContent).toBe('Son kur girişi: bugün 09:44, Deneme Satinalma');
+    expect((await screen.findByRole('button', { name: /^USD/ })).getAttribute('title')).toBe('Son kur girişi: bugün 09:44, Deneme Satinalma');
+    expect(screen.queryByText(/Son kur girişi/)).toBeNull();
     expect(document.querySelector('[data-kfs="kur-USD"]')?.textContent).toBe('USD41,5 / 41,6arttı, önceki 41,2');
     expect(document.querySelector('[data-kfs="kur-EUR"]')?.textContent).toBe('EUR45,1 / 45,2azaldı, önceki 45,310.10');
     expect(document.querySelector('[data-kfs="kur-GBP"]')?.textContent).toBe('GBPyok');
@@ -83,8 +84,8 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     expect(document.querySelector('[data-kfs="faiz-mevduat"]')?.textContent).toBe('Mevduat%3501.08');
     expect(document.querySelector('[data-kfs="faiz-politika"]')?.textContent).toBe('Politikayok');
     expect(screen.queryByText('Bugün girilmedi')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Kur ve faizi güncelle' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Son kur girişi/ }));
+    expect(screen.queryByText('Güncelle')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^USD/ }));
     expect(screen.getByText('Kur ve faiz girişi finans ve satın almadadır.')).toBeTruthy();
     expect(screen.getByText('Kredi: TRY %42 · USD yok · EUR yok')).toBeTruthy();
     expect(screen.getByText('USD 41,5 / 41,6')).toBeTruthy();
@@ -103,7 +104,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     const istekler = sunucuKur(['finans.kur-yaz']);
     ac();
     expect(await screen.findByText('Bugün girilmedi')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Kur ve faizi güncelle' }));
+    fireEvent.click(screen.getByRole('button', { name: /^USD/ }));
     expect((screen.getByLabelText('USD alış') as HTMLInputElement).value).toBe('41,5');
     expect((screen.getByLabelText('USD satış') as HTMLInputElement).value).toBe('41,6');
     fireEvent.change(screen.getByLabelText('USD satış'), { target: { value: '41,75' } });
@@ -124,7 +125,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
   it('eksik ya da ters kur çifti gönderilmez ve neden söylenir', async () => {
     const istekler = sunucuKur(['finans.kur-yaz']);
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^USD/ }));
     fireEvent.change(screen.getByLabelText('GBP alış'), { target: { value: '55' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kurları kaydet' }));
     expect(screen.getByRole('alert').textContent).toBe('GBP için alış ve satış ikisi de sıfırdan büyük olmalı.');
@@ -137,7 +138,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
   it('yıllık faiz tür ve para birimi başına bugünden geçerli yazılır; yalnız değişen gider', async () => {
     const istekler = sunucuKur(['finans.kur-yaz']);
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^USD/ }));
     expect((screen.getByLabelText('TRY kredi %') as HTMLInputElement).value).toBe('42');
     fireEvent.change(screen.getByLabelText('USD politika %'), { target: { value: '4,25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Faizi kaydet' }));
@@ -149,7 +150,7 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     let kopar = true;
     const istekler = sunucuKur(['finans.kur-yaz'], () => { if (kopar) { kopar = false; throw new TypeError('ağ koptu'); } return json(200, { id: 1 }); });
     ac();
-    fireEvent.click(await screen.findByRole('button', { name: 'Kur ve faizi güncelle' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^USD/ }));
     fireEvent.change(screen.getByLabelText('TRY mevduat %'), { target: { value: '36' } });
     fireEvent.click(screen.getByRole('button', { name: 'Faizi kaydet' }));
     await vi.waitFor(() => expect(yazmalar(istekler)).toHaveLength(2), { timeout: 4000 });

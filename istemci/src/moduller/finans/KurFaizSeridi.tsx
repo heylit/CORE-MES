@@ -70,10 +70,15 @@ export function KurFaizSeridi() {
   const kur = (p: string) => o.kurlar.find((k) => k.paraBirimi === p);
   const faiz = (t: FaizTuru) => o.faizler.find((f) => f.tur === t && f.paraBirimi === 'TRY');
   const bugunEksik = KUR_BIRIMLERI.some((p) => kur(p)?.tarih !== o.bugun);
+  const sonGiris = o.sonGiris
+    ? `Son ${TUR_ADI[o.sonGiris.tur]} girişi: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}`
+    : 'Kur ve faiz ayrıntısı';
   return (
     <section className="tc-kfs" aria-label="Kur ve faiz">
       <div className="tc-kfs-satir">
-        <button type="button" className="tc-kfs-ozet" aria-expanded={acik} onClick={() => acikYaz((a) => !a)} title="Kur ve faiz ayrıntısı">
+        {/* Şeridin tek eylemi kendisidir: yazabilene panel formla açılır, ayrı düğme renk ve yer kalabalığı yapar (2344).
+            Son giriş ipucunda ve paneldeki "Son girişler"dedir. */}
+        <button type="button" className="tc-kfs-ozet" aria-expanded={acik} onClick={() => acikYaz((a) => !a)} title={sonGiris}>
           <Simge ad="rotate" boyut="k" />
           {KUR_BIRIMLERI.map((p) => {
             const k = kur(p);
@@ -99,15 +104,7 @@ export function KurFaizSeridi() {
             );
           })}
           {yazabilir && bugunEksik && <span className="tc-kfs-uyari"><span className="tc-kfs-isaret" aria-hidden="true" />Bugün girilmedi</span>}
-          <span className="tc-kfs-son">
-            {o.sonGiris ? `Son ${TUR_ADI[o.sonGiris.tur]} girişi: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}` : 'Henüz kur ya da faiz girilmedi'}
-          </span>
         </button>
-        {yazabilir && (
-          <button type="button" className="tc-kfs-guncelle" onClick={() => acikYaz(true)} aria-label="Kur ve faizi güncelle">
-            <Simge ad="edit" boyut="k" /><span className="tc-kfs-guncelle-ad">Güncelle</span>
-          </button>
-        )}
       </div>
       {acik && <Panel o={o} yazabilir={yazabilir} kapat={() => acikYaz(false)} />}
     </section>
