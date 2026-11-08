@@ -51,8 +51,10 @@ test('sayı kartı: sayı ortak boyda, veri yokken tire ve küçük açıklama',
     boy: parseFloat(getComputedStyle(d).fontSize),
     bosBoy: parseFloat(getComputedStyle(d.querySelector('.tc-sayi-bos') ?? d).fontSize),
   })));
+  // Dev dar rakam (kart 2193): telefonda 34, 768 ve üstünde 54 piksel.
+  const sayiBoy = (page.viewportSize()?.width ?? 0) < 768 ? 34 : 54;
   for (const o of olcu) {
-    if (o.sayisal) expect(o.boy).toBe(28);
+    if (o.sayisal) expect(o.boy).toBe(sayiBoy);
     if (o.bos) expect(o.bosBoy).toBeLessThanOrEqual(14);
   }
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);

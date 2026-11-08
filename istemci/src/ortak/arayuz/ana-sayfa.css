@@ -18,7 +18,7 @@
 /* Gizlenen sıfır kartı çizili kalır; ızgaranın "display: grid" kuralı hidden'ı ezmesin. */
 .tc-pano [hidden] { display: none; }
 .tc-pano-karsilama { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
-.tc-pano-selam { font-size: var(--yazi-xl); font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+.tc-pano-selam { font-size: var(--yazi-selam); font-weight: 900; font-stretch: var(--genislik-genis); line-height: 1.05; letter-spacing: -.015em; color: var(--ink); overflow-wrap: anywhere; }
 .tc-pano-tarih { font-size: var(--yazi-s); color: var(--muted); }
 .tc-pano-bos { display: flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
 .tc-pano-bos svg { color: var(--run); }
