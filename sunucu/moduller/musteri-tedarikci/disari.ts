@@ -18,6 +18,7 @@ export { karneOlayiKaldir, teslimGecikmeleri } from './servis.ts';
 export type { TeslimGecikmesi } from './servis.ts';
 export type { GecikmeOzeti } from './kurallar.ts';
 export type { FirmaDurumu } from './kurallar.ts';
+export { tedarikciOlabilirMi } from './kurallar.ts';
 export { ORNEK_FIRMA_ANAHTARLARI, ornekFirmaNo } from './ornek-veri.ts';
 export type { OrnekFirmaAnahtari } from './ornek-veri.ts';
 
