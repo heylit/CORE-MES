@@ -47,6 +47,10 @@ function enDarDisk(a: Ayrinti): { ad: string; disk: DiskDurumu } | null {
 function yedekOzeti(ileti: string): string {
   const saat = /Son yedek (\d+) saat/.exec(ileti)?.[1];
   if (saat !== undefined) return `Son yedek ${saat} saat önce`;
+  // Sürüm denetimi (2306) "okunamadı" da yazabilir; genel "okunamadı"dan önce ayrılır.
+  if (/pg_dump bulunamadı/.test(ileti)) return 'pg_dump bulunamadı';
+  if (/uyuşmuyor/.test(ileti)) return 'PostgreSQL sürümü uyuşmuyor';
+  if (/sürümü okunamadı/.test(ileti)) return 'PostgreSQL sürümü okunamadı';
   if (/geri yükle/i.test(ileti)) return 'Geri dönme denemesi gerekli';
   if (/Hiç yedek/.test(ileti)) return 'Henüz yedek yok';
   if (/okunamadı/.test(ileti)) return 'Yedek durumu okunamadı';
@@ -155,6 +159,14 @@ function yedekKarari(ileti: string): Omit<SaglikKarari, 'anahtar' | 'ne'> {
       anlam: 'Yedek alınıyor ama gerçekten açılıp açılmadığı bilinmiyor; bozuk yedek ancak ihtiyaç anında fark edilir.',
       oneri: 'Bilgi işlemden sunucuda geri yükleme denemesini çalıştırmasını isteyin; sonuç bu sayfada görünür.',
       git: null,
+    };
+  }
+  if (/pg_dump bulunamadı|uyuşmuyor|sürümü okunamadı/.test(ileti)) {
+    return {
+      ton: 'hata', onem: 'Kritik', baslik: 'Yedek aracı veritabanıyla uyuşmuyor',
+      anlam: 'Yedek, veritabanı sunucusuyla aynı PostgreSQL sürümünün aracıyla alınmadıkça durdurulur; bu sürede yeni yedek yoktur.',
+      oneri: 'Bilgi işlemden sunucudaki PostgreSQL sürümünün pg_dump tam yolunu TMIV2_PG_DUMP ile vermesini isteyin; sürümler Sistem Ayarları > Yedekler bölümünde görünür.',
+      git: { yol: '/ayarlar', metin: 'Sistem Ayarları', simge: 'gear' },
     };
   }
   return {

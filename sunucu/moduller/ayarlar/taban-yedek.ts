@@ -8,7 +8,8 @@ import {
   TABAN_ADI, TABAN_DOGRULANDI_DOSYASI, TABAN_YARIM_EKI, arsivDiskiUyarisi, budamaPlani, silinecekWallar, tabanAdi, tabanBaslangicDosyasi, tabanGerekliMi, tabanUyarisi, tabanZamani,
   type TabanKaydi,
 } from './kurallar.ts';
-import { yedekOrtamiOku } from './yedek.ts';
+import type { PgSurumu } from '#paylasilan/sozlesme/ayarlar.ts';
+import { baglanarakOku, pgSurumunuDenetle, yedekOrtamiOku } from './yedek.ts';
 
 // Haftalık taban yedek (2284-1 c, kart 2284a; ADR 0005 eki, ADR 0010). pg_basebackup kümenin fiziksel kopyasını alır ve REPLICATION
 // ister; uygulama rolü bunu almaz. Bağlantı yalnız bu işe ayrılmış tmiv2_yedek rolüyle kurulur: parolası ayrı TMIV2_ değişkenindedir,
@@ -19,6 +20,8 @@ export interface TabanOrtami {
   pg: { host: string; port: number; kullanici: string; parola: string };
   basebackup: string;
   verifybackup: string;
+  // Windows'ta PostgreSQL bin klasörü bulunamadı (PATH'e düşülmez, 2305-1 b); taban alınmaz.
+  aracHatasi?: string;
 }
 
 const KAPALI = 'Taban yedek kapalı: TMIV2_TABAN_DIZINI, TMIV2_WAL_ARSIV_DIZINI, TMIV2_PG_YEDEK_USER ya da TMIV2_PG_YEDEK_PASSWORD boş.';
@@ -33,11 +36,15 @@ export function tabanOrtamiOku(env: NodeJS.ProcessEnv = process.env): TabanOrtam
   if (dizin === '' || wal === '' || kullanici === '' || parola === '') return null;
   const { host, port } = ayarOku(env).pg;
   // pg_basebackup ve pg_verifybackup pg_dump'ın bulunduğu PostgreSQL kurulumundan alınır (TMIV2_PG_DUMP ya da Program Files araması).
-  const pgDump = yedekOrtamiOku(env).pgDump.dosya;
+  const yedek = yedekOrtamiOku(env);
+  const pgDump = yedek.pgDump.dosya;
   const bin = /[\\/]/.test(pgDump) ? path.dirname(pgDump) : null;
   const ek = /\.exe$/i.test(pgDump) ? '.exe' : '';
   const arac = (ad: string): string => (bin === null ? ad : path.join(bin, `${ad}${ek}`));
-  return { dizin, wal, pg: { host, port, kullanici, parola }, basebackup: arac('pg_basebackup'), verifybackup: arac('pg_verifybackup') };
+  return {
+    dizin, wal, pg: { host, port, kullanici, parola }, basebackup: arac('pg_basebackup'), verifybackup: arac('pg_verifybackup'),
+    ...(yedek.pgDump.hata === undefined ? {} : { aracHatasi: yedek.pgDump.hata }),
+  };
 }
 
 export type AltSurec = (dosya: string, argumanlar: string[], parola: string | null) => Promise<void>;
@@ -84,7 +91,19 @@ async function klasorMu(yol: string): Promise<boolean> {
   return path.isAbsolute(yol) && ((await stat(yol).catch(() => null))?.isDirectory() ?? false);
 }
 
-export interface TabanTuruSecenekleri { canli?: boolean; calistir?: AltSurec; bosYer?: (dizin: string) => Promise<{ bos: number; toplam: number } | null> }
+export interface TabanTuruSecenekleri {
+  canli?: boolean;
+  calistir?: AltSurec;
+  bosYer?: (dizin: string) => Promise<{ bos: number; toplam: number } | null>;
+  surumDenetle?: (ortam: TabanOrtami) => Promise<PgSurumu>;
+}
+
+// pg_basebackup da sunucuyla aynı ana sürümden olmalı (2306); sunucu sürümü uygulama kullanıcısıyla okunur, yedek rolü yalnız
+// çoğaltma bağlantısı açabilir.
+const tabanSurumDenetimi = (ortam: TabanOrtami): Promise<PgSurumu> => {
+  const { host, port, kullanici, parola, veritabani } = ayarOku(process.env).pg;
+  return pgSurumunuDenetle('pg_basebackup', ortam.basebackup, ortam.aracHatasi, baglanarakOku({ host, port, kullanici, parola, veritabani }));
+};
 
 const diskOku = async (dizin: string): Promise<{ bos: number; toplam: number } | null> => {
   const s = await statfs(dizin).catch(() => null);
@@ -111,6 +130,8 @@ export async function tabanTuru(ortam: TabanOrtami | null, simdi: Date, s: Taban
     const ad = tabanAdi(simdi);
     const yarim = path.join(ortam.dizin, ad + TABAN_YARIM_EKI);
     try {
+      const surum = await (s.surumDenetle ?? tabanSurumDenetimi)(ortam);
+      if (!surum.uyumlu) throw new Error(surum.ileti ?? 'PostgreSQL sürümü denetlenemedi.');
       await calistir(ortam.basebackup, [
         '-D', yarim, '-Fp', '-Xs', '--checkpoint=fast', '--no-password', '-h', ortam.pg.host, '-p', String(ortam.pg.port), '-U', ortam.pg.kullanici,
       ], ortam.pg.parola);

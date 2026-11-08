@@ -8,7 +8,7 @@ import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { PgSurumu, YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -16,11 +16,11 @@ import { DOSYA_SINIRI } from '../dosya/disari.ts';
 import {
   DOSYA_DEPOSU_UYARI_ORANI, YEDEK_EN_AZ_BOS_BAYT, YEDEK_EN_AZ_KALAN, YEDEK_SAKLAMA_GUN, YEDEK_SAKLANAN_ADET, dosyaDeposuHesapla, yedekAlaniHesapla,
   geceYedegiGerekliMi, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
-  yedekYeriEksigi, type YedekDosyasi,
+  yedekYeriEksigi, aracAnaSurumu, pgSurumuDenetle, sunucuAnaSurumu, type YedekDosyasi,
 } from './kurallar.ts';
 import {
-  geceYedegiTuru, surenYedek, windowsPgDump, yedekAl, yedekEkrani, yedekleriListele, yedekOrtamiOku, yedekSifreliMi, yedekSifresiniCoz,
-  type PgDumpArama, type YedekOrtami,
+  PG_DUMP_YOK, baglanarakOku, geceYedegiTuru, pgSurumunuDenetle, surenYedek, windowsPgDump, yedekAl, yedekEkrani, yedekleriListele, yedekOrtamiOku,
+  yedekSifreliMi, yedekSifresiniCoz, type PgDumpArama, type YedekOrtami, type YedekSurumDenetimi,
 } from './yedek.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -28,6 +28,9 @@ const PAROLA = 'dogru-parola-1';
 const ANAHTAR = Buffer.alloc(32, 7);
 const ANAHTAR_METNI = ANAHTAR.toString('base64');
 const GUN = 24 * 60 * 60 * 1000;
+// Sahte pg_dump'lı testlerde sürüm denetimi geçer; denetimin kendisi aşağıda ayrı sınanır.
+const UYUMLU: PgSurumu = { sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 18, pgDumpYolu: 'pg_dump', uyumlu: true, ileti: null };
+const uyumlu: YedekSurumDenetimi = async () => UYUMLU;
 const VT = 'tmiv2';
 
 // Sahte pg_dump'ın yazdığı çıktı ya da şifreli yedek (kaynak dosya değil).
@@ -167,10 +170,25 @@ describe('ayarlar pg_dump yolu (Windows kurulumu, PATH dışı)', () => {
     assert.equal(yedekOrtamiOku(ortam({ ProgramW6432: 'C:\\Program Files' }), windows).pgDump.dosya, pg17, '32 bit süreçte 64 bit klasör');
   });
 
-  test('verilen TMIV2_PG_DUMP aramadan önce gelir; kurulum bulunamazsa ya da Windows değilse PATH\'teki pg_dump denenir', () => {
-    assert.equal(yedekOrtamiOku(ortam({ ProgramFiles: 'C:\\Program Files', TMIV2_PG_DUMP: ' D:\\pg\\pg_dump.exe ' }), windows).pgDump.dosya, 'D:\\pg\\pg_dump.exe');
-    assert.equal(yedekOrtamiOku(ortam({ ProgramFiles: 'D:\\Yok' }), windows).pgDump.dosya, 'pg_dump');
-    assert.equal(yedekOrtamiOku(ortam({ ProgramFiles: 'C:\\Program Files' }), { ...windows, platform: 'linux' }).pgDump.dosya, 'pg_dump');
+  test('verilen TMIV2_PG_DUMP aramadan önce gelir; Windows\'ta kurulum bulunamazsa PATH\'e düşülmez, Linux\'ta PATH\'teki pg_dump denenir', () => {
+    assert.deepEqual(yedekOrtamiOku(ortam({ ProgramFiles: 'C:\\Program Files', TMIV2_PG_DUMP: ' D:\\pg\\pg_dump.exe ' }), windows).pgDump, { dosya: 'D:\\pg\\pg_dump.exe', onEk: [] });
+    assert.equal(yedekOrtamiOku(ortam({ ProgramFiles: 'D:\\Yok' }), windows).pgDump.hata, PG_DUMP_YOK);
+    assert.equal(yedekOrtamiOku(ortam({ ProgramFiles: 'C:\\Program Files' }), windows).pgDump.hata, undefined);
+    assert.deepEqual(yedekOrtamiOku(ortam({ ProgramFiles: 'C:\\Program Files' }), { ...windows, platform: 'linux' }).pgDump, { dosya: 'pg_dump', onEk: [] });
+  });
+
+  test('Windows\'ta pg_dump bulunamadıysa yedek PATH\'teki pg_dump\'ı denemeden ve sunucuya bağlanmadan durur, nedeni yazar', async () => {
+    const dizin = await mkdtemp(path.join(tmpdir(), 'tmiv2-pgdump-'));
+    try {
+      const yedekOrtami: YedekOrtami = {
+        dizin, kaynak: 'ortam', pgDump: { dosya: 'pg_dump', onEk: [], hata: PG_DUMP_YOK }, anahtar: { durum: 'tamam', anahtar: ANAHTAR },
+        pg: { host: '127.0.0.1', port: 1, kullanici: 'tmiv2_uygulama', parola: 'gizli-parola', veritabani: VT },
+      };
+      await assert.rejects(yedekAl(yedekOrtami, dizin, 'elle', new Date('2026-10-14T06:00:02Z')), (hata: Error) => hata.message === PG_DUMP_YOK);
+      assert.deepEqual(await readdir(dizin), []);
+    } finally {
+      await rm(dizin, { recursive: true, force: true });
+    }
   });
 
   test('pg_dump hiçbir yerde yoksa yedek açık hatayla düşer: aranan yerler ve TMIV2_PG_DUMP söylenir, yarım dosya kalmaz', async () => {
@@ -189,6 +207,47 @@ describe('ayarlar pg_dump yolu (Windows kurulumu, PATH dışı)', () => {
     } finally {
       await rm(dizin, { recursive: true, force: true });
     }
+  });
+});
+
+describe('ayarlar PostgreSQL sürüm denetimi (2306)', () => {
+  test('araç çıktısından ana sürüm okunur; dağıtım eki ve küçük sürüm etkilemez, tanınmayan çıktı null', () => {
+    assert.equal(aracAnaSurumu('pg_dump (PostgreSQL) 18.1\n'), 18);
+    assert.equal(aracAnaSurumu('pg_dump (PostgreSQL) 16.4 (Ubuntu 16.4-1.pgdg24.04+1)\n'), 16);
+    assert.equal(aracAnaSurumu('pg_basebackup (PostgreSQL) 17beta2'), 17);
+    assert.equal(aracAnaSurumu('pg_dump (PostgreSQL) 9.6.24'), null);
+    assert.equal(aracAnaSurumu('v24.22.2'), null);
+  });
+
+  test('server_version_num ana sürüme çevrilir; 10 öncesi ve okunamayan null', () => {
+    assert.equal(sunucuAnaSurumu(180001), 18);
+    assert.equal(sunucuAnaSurumu(160004), 16);
+    assert.equal(sunucuAnaSurumu(90624), null);
+    assert.equal(sunucuAnaSurumu(null), null);
+  });
+
+  test('ana sürümler eşitse uyumlu; farklıysa, biri okunamadıysa ya da araç yoksa uyumsuz ve nedeni yazılır', () => {
+    const temel = { sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', sunucuHatasi: null, arac: 'pg_dump' as const, aracSurumu: 18, aracYolu: 'pg_dump', aracHatasi: null };
+    assert.deepEqual(pgSurumuDenetle(temel), { sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 18, pgDumpYolu: 'pg_dump', uyumlu: true, ileti: null });
+    const farkli = pgSurumuDenetle({ ...temel, aracSurumu: 16 });
+    assert.equal(farkli.uyumlu, false);
+    assert.match(farkli.ileti ?? '', /^pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı\. .*TMIV2_PG_DUMP/);
+    assert.match(pgSurumuDenetle({ ...temel, aracSurumu: null }).ileti ?? '', /pg_dump sürümü okunamadı \(pg_dump\)/);
+    assert.match(pgSurumuDenetle({ ...temel, sunucu: null, sunucuHatasi: 'bağlanılamadı' }).ileti ?? '', /sunucusunun sürümü okunamadı \(bağlanılamadı\)/);
+    assert.equal(pgSurumuDenetle({ ...temel, aracHatasi: PG_DUMP_YOK, aracSurumu: null, aracYolu: null }).ileti, PG_DUMP_YOK);
+  });
+
+  test('araç bulunamazsa sunucuya hiç gidilmez; sunucu okunamazsa uyumsuz sayılır, araç yolu gösterilir', async () => {
+    let soruldu = 0;
+    const sunucu = async () => { soruldu += 1; return { surumNo: 180001, metin: 'PostgreSQL 18.1' }; };
+    const yok = await pgSurumunuDenetle('pg_dump', 'C:\\pg\\pg_dump.exe', undefined, sunucu, async () => ({ hata: 'pg_dump bulunamadı (C:\\pg\\pg_dump.exe)' }));
+    assert.equal(yok.uyumlu, false);
+    assert.equal(soruldu, 0);
+    const esit = await pgSurumunuDenetle('pg_dump', 'C:\\pg\\pg_dump.exe', undefined, sunucu, async () => ({ cikti: 'pg_dump (PostgreSQL) 18.0' }));
+    assert.deepEqual(esit, { sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 18, pgDumpYolu: 'C:\\pg\\pg_dump.exe', uyumlu: true, ileti: null });
+    const dusen = await pgSurumunuDenetle('pg_dump', 'pg_dump', undefined, async () => { throw new Error('ECONNREFUSED'); }, async () => ({ cikti: 'pg_dump (PostgreSQL) 18.0' }));
+    assert.equal(dusen.uyumlu, false);
+    assert.match(dusen.ileti ?? '', /ECONNREFUSED/);
   });
 });
 
@@ -424,7 +483,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
       assert.deepEqual(liste.yedekler, [], ad);
       assert.equal((await istek(yonetici, 'POST', '/yedekler/al')).statusCode, 422, ad);
       assert.equal((await istek(yonetici, 'POST', `/yedekler/${yedekAdi(sunucuVt(), 'gece', new Date())}/indirme-izni`)).statusCode, 422, ad);
-      const sonuc = await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(deger ?? null), new Date('2026-10-14T09:00:00Z')));
+      const sonuc = await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(deger ?? null), new Date('2026-10-14T09:00:00Z'), uyumlu));
       assert.equal(sonuc?.durum, 'bekliyor', ad);
     }
   });
@@ -443,7 +502,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
 
   test('pg_dump parolayı komut satırında değil ortamda alır, sunucunun TMIV2_ değişkenlerini almaz; yedek bitince adına taşınır', async () => {
     const simdi = new Date('2026-10-14T06:15:30Z');
-    const yedek = await yedekAl(yedekOrtami(), dizin, 'elle', simdi);
+    const yedek = await yedekAl(yedekOrtami(), dizin, 'elle', simdi, undefined, uyumlu);
     assert.equal(yedek.ad, 'tmiv2-20261014T061530Z-elle.dump');
     assert.deepEqual(await yedekDosyalari(), [yedek.ad]);
     const acik = path.join(dizin, 'acik.json');
@@ -465,26 +524,57 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     const eski = 'tmiv2-20261013T230000Z-gece.dump';
     await writeFile(path.join(dizin, eski), '');
     await truncate(path.join(dizin, eski), 600 * 1024 ** 2);
-    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'), () => Promise.resolve(1024 ** 3)),
+    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'), () => Promise.resolve(1024 ** 3), uyumlu),
       (hata: Error) => hata.message.startsWith('Yedek klasöründe yer yetmiyor: boş 1,0 GB, gereken en az 1,2 GB'));
     assert.deepEqual(await yedekDosyalari(), [eski]);
     assert.match((await yedekleriListele(yedekOrtami())).sonHata?.ileti ?? '', /yer yetmiyor/);
-    const yedek = await yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:01Z'), () => Promise.resolve(2 * 1024 ** 3));
+    const yedek = await yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:01Z'), () => Promise.resolve(2 * 1024 ** 3), uyumlu);
     assert.deepEqual(await yedekDosyalari(), [eski, yedek.ad]);
   });
 
   test('pg_dump hata verirse yarım dosya silinir, ilk hata satırı listede görünür; sonraki başarılı yedek hatayı kaldırır', async () => {
     process.env['YEDEK_SAHTE_KIP'] = 'hata';
-    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date()), /çıkış 1\): pg_dump: error: connection to server failed$/);
+    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date(), undefined, uyumlu), /çıkış 1\): pg_dump: error: connection to server failed$/);
     assert.deepEqual(await yedekDosyalari(), []);
     assert.match((await yedekleriListele(yedekOrtami())).sonHata?.ileti ?? '', /connection to server failed$/);
     delete process.env['YEDEK_SAHTE_KIP'];
-    await yedekAl(yedekOrtami(), dizin, 'elle', new Date());
+    await yedekAl(yedekOrtami(), dizin, 'elle', new Date(), undefined, uyumlu);
     assert.equal((await yedekleriListele(yedekOrtami())).sonHata, null);
   });
 
+  test('reddedilen: pg_dump ana sürümü sunucununkinden farklıysa yedek alınmaz, pg_dump koşmaz, neden listede görünür', async () => {
+    const uyusmaz: YedekSurumDenetimi = async () => ({
+      ...UYUMLU, pgDump: 16, uyumlu: false, ileti: 'pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.',
+    });
+    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'), undefined, uyusmaz), /uyuşmuyor, yedek alınmadı/);
+    assert.deepEqual(await yedekDosyalari(), []);
+    assert.match((await yedekleriListele(yedekOrtami())).sonHata?.ileti ?? '', /pg_dump ana sürümü 16, veritabanı sunucusu 18/);
+    await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(), new Date('2026-10-14T23:30:00Z'), uyusmaz)).then(
+      () => assert.fail('gece yedeği sürüm uyuşmazlığında hata vermeli'),
+      (hata: Error) => { assert.match(hata.message, /uyuşmuyor/); },
+    );
+    assert.deepEqual(await yedekDosyalari(), []);
+  });
+
+  test('sunucu sürümü uygulama kullanıcısıyla okunur; ekran ana sürümü ve version() metnini verir, sürümü okunamayan araçla uyumsuz der', async () => {
+    const beklenen = Math.floor(Number((await vt().tek<{ v: string }>("SELECT current_setting('server_version_num') AS v"))?.v) / 10000);
+    const cevap = await vt().tx((db) => yedekEkrani(db, yedekOrtami()));
+    const surum = cevap.pgSurumu;
+    assert.ok(surum);
+    assert.equal(surum.sunucu, beklenen);
+    assert.match(surum.sunucuMetni ?? '', /^PostgreSQL \d+/);
+    // Sahte pg_dump node'dur: `--version` PostgreSQL sürümü yazmaz.
+    assert.equal(surum.pgDump, null);
+    assert.equal(surum.uyumlu, false);
+    assert.equal((await yedekleriListele(yedekOrtami())).pgSurumu, null, 'bağlantısız liste denetlemez');
+    // Ayrı bağlantı da test veritabanına gider; ortamın TMIV2_PG_DATABASE'i CI'da yoktur.
+    if (!ortam) throw new Error('Test veritabanı açılamadı.');
+    const ayri = await baglanarakOku(ortam.ayar.pg)();
+    assert.equal(sunucuAnaSurumu(ayri.surumNo), beklenen);
+  });
+
   test('yedek AES-256-GCM ile şifreli yazılır: düz içerik dosyada yok; yanlış anahtar ya da bozulmuş dosya açılmaz, yarım çıktı kalmaz', async () => {
-    const yedek = await yedekAl(yedekOrtami(), dizin, 'gece', new Date('2026-10-14T23:00:00Z'));
+    const yedek = await yedekAl(yedekOrtami(), dizin, 'gece', new Date('2026-10-14T23:00:00Z'), undefined, uyumlu);
     const yol = path.join(dizin, yedek.ad);
     const ham = await ciktiOku(yol);
     assert.equal(ham.includes('gizli-parola'), false);
@@ -513,8 +603,8 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
       assert.equal(liste.durum, 'anahtar-yok', String(deger));
       assert.equal((await istek(yonetici, 'POST', '/yedekler/al')).statusCode, 422, String(deger));
       const anahtarsiz: YedekOrtami = { ...yedekOrtami(), anahtar: yedekAnahtariCoz(deger) };
-      await assert.rejects(yedekAl(anahtarsiz, dizin, 'elle', new Date()), /TMIV2_YEDEK_ANAHTARI/);
-      const sonuc = await vt().tx((db) => geceYedegiTuru(db, sessiz, anahtarsiz, new Date('2026-10-14T09:00:00Z')));
+      await assert.rejects(yedekAl(anahtarsiz, dizin, 'elle', new Date(), undefined, uyumlu), /TMIV2_YEDEK_ANAHTARI/);
+      const sonuc = await vt().tx((db) => geceYedegiTuru(db, sessiz, anahtarsiz, new Date('2026-10-14T09:00:00Z'), uyumlu));
       assert.equal(sonuc?.durum, 'bekliyor', String(deger));
       assert.deepEqual(await yedekDosyalari(), [], String(deger));
     }
@@ -522,8 +612,8 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
 
   test('aynı anda ikinci yedek başlamaz (409); süren yedek listede görünür', async () => {
     process.env['YEDEK_SAHTE_BEKLE_MS'] = '500';
-    const ilk = yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'));
-    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:01Z')), { kod: 'CAKISMA' });
+    const ilk = yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'), undefined, uyumlu);
+    await assert.rejects(yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:01Z'), undefined, uyumlu), { kod: 'CAKISMA' });
     const sirada = await yedekleriListele(yedekOrtami());
     assert.deepEqual(sirada.suruyor, { tur: 'elle', baslangic: '2026-10-14T06:00:00.000Z' });
     await ilk;
@@ -532,7 +622,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
 
   test('yedek sürerken elle yedek komutu 409 döner; başladı demez', async () => {
     process.env['YEDEK_SAHTE_BEKLE_MS'] = '500';
-    const ilk = yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'));
+    const ilk = yedekAl(yedekOrtami(), dizin, 'elle', new Date('2026-10-14T06:00:00Z'), undefined, uyumlu);
     const ikinci = await istek(yonetici, 'POST', '/yedekler/al');
     assert.equal(ikinci.statusCode, 409, ikinci.body);
     assert.match(ikinci.body, /zaten alınıyor/);
@@ -551,13 +641,13 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     await writeFile(gencYarim, 'yarim');
     await utimes(gencYarim, new Date(simdi.getTime() - 60_000), new Date(simdi.getTime() - 60_000));
     await writeFile(path.join(dizin, 'notlar.txt'), 'ilgisiz');
-    await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(), simdi));
+    await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(), simdi, uyumlu));
     const bugunku = yedekAdi(VT, 'gece', simdi);
     // Bugünkü ve en yeni iki eski yedek kalır (en az üç); 42 ve 43 günlükler ile eski yarım dosya silinir.
     assert.deepEqual(await yedekDosyalari(), [
       eskiler[1]?.ad, eskiler[0]?.ad, bugunku, path.basename(gencYarim), 'notlar.txt',
     ].sort());
-    await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(), new Date(simdi.getTime() + 3 * 60 * 60 * 1000)));
+    await vt().tx((db) => geceYedegiTuru(db, sessiz, yedekOrtami(), new Date(simdi.getTime() + 3 * 60 * 60 * 1000), uyumlu));
     assert.deepEqual((await yedekDosyalari()).filter((a) => a.endsWith('-gece.dump') && a.includes('-20261030T')), [bugunku], 'ikinci yedek alınmadı');
   });
 
@@ -569,7 +659,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     for (const a of [...artiklar, `${baska}.cozulmus`, 'notlar.geri.sql']) await writeFile(path.join(dizin, a), 'duz');
     const uyarilar: string[] = [];
     const gunluk: Gunluk = { uyar: (m) => { uyarilar.push(m); }, hata: () => undefined };
-    await vt().tx((db) => geceYedegiTuru(db, gunluk, yedekOrtami(), simdi));
+    await vt().tx((db) => geceYedegiTuru(db, gunluk, yedekOrtami(), simdi, uyumlu));
     const kalan = await yedekDosyalari();
     for (const a of artiklar) assert.ok(!kalan.includes(a), `${a} silinmedi`);
     assert.ok(kalan.includes(`${baska}.cozulmus`) && kalan.includes('notlar.geri.sql'));
@@ -581,7 +671,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     const simdi = new Date('2026-10-14T09:00:00Z');
     await vt().tx(async (db) => {
       await db.sorgu("SET LOCAL idle_in_transaction_session_timeout = '1500ms'");
-      await geceYedegiTuru(db, sessiz, yedekOrtami(), simdi);
+      await geceYedegiTuru(db, sessiz, yedekOrtami(), simdi, uyumlu);
       // Nabız gitmeseydi oturum kesilir, bu sorgu ve commit hata verirdi.
       await db.tek('SELECT 1');
     });

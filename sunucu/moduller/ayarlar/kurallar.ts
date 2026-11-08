@@ -4,7 +4,7 @@ import { AYAR_TANIMLARI, varsayilanDeger } from '#paylasilan/ayarlar.ts';
 import type { AyarAnahtari, AyarDegeri } from '#paylasilan/ayarlar.ts';
 import {
   YEDEK_ADI, ayarDegerSemasi, guncellemeGecmisKaydi, guncellemeUygulamaIstegi, guncellemeUygulamaSonucu, paketTaramasiSemasi, type DosyaDeposuDurumu,
-  type YedekAlani, type YedekTuru,
+  type PgSurumu, type YedekAlani, type YedekTuru,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { zamanSemasi } from '#paylasilan/zaman.ts';
@@ -463,4 +463,49 @@ export function arsivDiskiUyarisi(bos: number, toplam: number): string | null {
   if (toplam <= 0) return null;
   const dolu = 1 - bos / toplam;
   return dolu >= ARSIV_DISKI_UYARI_ORANI ? `WAL arşivi diski yüzde ${String(Math.round(dolu * 100))} dolu.` : null;
+}
+
+// PostgreSQL sürüm denetimi (2305-1 b, kart 2306). Başka ana sürümün aracı ya sunucuya bağlanmaz ya da sunucudan farklı biçimde
+// döker; fark ancak geri yüklemede görülür. Bu yüzden ana sürümler eşit değilse ya da biri okunamadıysa yedek alınmaz.
+// Araç "pg_dump (PostgreSQL) 18.1" ya da dağıtım ekiyle "pg_dump (PostgreSQL) 16.4 (Ubuntu 16.4-1.pgdg24.04+1)" yazar;
+// PostgreSQL 10'dan beri ana sürüm ilk sayıdır.
+export function aracAnaSurumu(cikti: string): number | null {
+  const sayi = /\(PostgreSQL\)\s+(\d+)/.exec(cikti)?.[1];
+  if (sayi === undefined) return null;
+  const ana = Number(sayi);
+  return Number.isSafeInteger(ana) && ana >= 10 ? ana : null;
+}
+
+// server_version_num: 180001 -> 18. 10'dan eski (90624 gibi) desteklenmez, okunamamış sayılır.
+export function sunucuAnaSurumu(surumNo: number | null): number | null {
+  if (surumNo === null || !Number.isSafeInteger(surumNo) || surumNo < 100000) return null;
+  return Math.floor(surumNo / 10000);
+}
+
+export interface PgSurumGirdisi {
+  sunucu: number | null;
+  sunucuMetni: string | null;
+  // Sunucuya bağlanılamadıysa ya da sorgu düştüyse nedeni.
+  sunucuHatasi: string | null;
+  arac: 'pg_dump' | 'pg_basebackup';
+  aracSurumu: number | null;
+  aracYolu: string | null;
+  // Araç bulunamadı ya da çalışmadı; verilirse karşılaştırma yapılmaz.
+  aracHatasi: string | null;
+}
+
+const KURULUM_IPUCU = 'Sunucuyla aynı ana sürümün aracını TMIV2_PG_DUMP ile tam yoluyla verin (kurulum/yedek.md).';
+
+export function pgSurumuDenetle(g: PgSurumGirdisi): PgSurumu {
+  const ortak = { sunucu: g.sunucu, sunucuMetni: g.sunucuMetni, pgDump: g.aracSurumu, pgDumpYolu: g.aracYolu };
+  const ileti = g.aracHatasi !== null
+    ? g.aracHatasi
+    : g.sunucu === null
+      ? `Veritabanı sunucusunun sürümü okunamadı${g.sunucuHatasi === null ? '' : ` (${g.sunucuHatasi})`}; sürüm denetlenemediği için yedek alınmadı.`
+      : g.aracSurumu === null
+        ? `${g.arac} sürümü okunamadı (${g.aracYolu ?? g.arac}); sürüm denetlenemediği için yedek alınmadı. ${KURULUM_IPUCU}`
+        : g.aracSurumu !== g.sunucu
+          ? `${g.arac} ana sürümü ${String(g.aracSurumu)}, veritabanı sunucusu ${String(g.sunucu)}: uyuşmuyor, yedek alınmadı. ${KURULUM_IPUCU}`
+          : null;
+  return { ...ortak, uyumlu: ileti === null, ileti };
 }

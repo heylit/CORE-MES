@@ -56,3 +56,16 @@ export async function sayacArtir(db: Db, anahtar: string, donem: string): Promis
 export async function nabiz(db: Db): Promise<void> {
   await db.tek('SELECT 1');
 }
+
+export interface SunucuSurumu {
+  surumNo: number | null;
+  metin: string | null;
+}
+
+// Yedek aracının ana sürümü bununla karşılaştırılır (2306). current_setting süper kullanıcı istemez.
+export async function sunucuSurumu(db: Db): Promise<SunucuSurumu> {
+  const satir = await db.tek<{ surum_no: number | null; metin: string | null }>(
+    `SELECT current_setting('server_version_num')::int AS surum_no, version() AS metin`,
+  );
+  return { surumNo: satir?.surum_no ?? null, metin: satir?.metin ?? null };
+}

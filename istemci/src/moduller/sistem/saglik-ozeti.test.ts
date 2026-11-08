@@ -41,6 +41,15 @@ describe('sağlık kutuları (2231)', () => {
     expect(kutu(k, 'isler')).toMatchObject({ ton: 'hata', hukum: '1 iş hata verdi', yorum: '1 iş, bağlantısı kapalı olduğu için bekliyor' });
   });
 
+  it('yedek PostgreSQL sürümü uyuşmadığı için duruyorsa kırmızı, "Alınmıyor" ve nedeni sürümdür; karar sürümü söyler', () => {
+    const ileti = 'Yedek kapalı: pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.';
+    const a = ayrinti({ uyarilar: [{ tur: 'yedek', ileti }] });
+    expect(kutu(saglikKutulari(true, a, dakika(100)), 'yedek')).toMatchObject({ ton: 'hata', hukum: 'Alınmıyor', yorum: 'PostgreSQL sürümü uyuşmuyor' });
+    const okunamadi = ayrinti({ uyarilar: [{ tur: 'yedek', ileti: 'Yedek kapalı: Veritabanı sunucusunun sürümü okunamadı; sürüm denetlenemediği için yedek alınmadı.' }] });
+    expect(kutu(saglikKutulari(true, okunamadi, dakika(100)), 'yedek')?.yorum).toBe('PostgreSQL sürümü okunamadı');
+    expect(saglikKararlari(a)[0]).toMatchObject({ ton: 'hata', baslik: 'Yedek aracı veritabanıyla uyuşmuyor', ne: ileti });
+  });
+
   it('genel hüküm: yedek sorunu kırmızıdır; uyarı yoksa sorunsuz', () => {
     expect(saglikGeneli(false, null).ton).toBe('hata');
     expect(saglikGeneli(true, ayrinti()).baslik).toBe('Sorunsuz');

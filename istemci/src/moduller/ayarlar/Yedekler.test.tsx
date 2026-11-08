@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import type { Yedek, YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { PgSurumu, Yedek, YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Ayrinti, GunIciKoruma } from '#paylasilan/sozlesme/saglik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
@@ -13,10 +13,14 @@ import { alanMetni, boyutMetni, tabanMetni } from './Yedekler.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
 const YEDEK: Yedek = { ad: 'tmiv2-20261013T230000Z-gece.dump', tur: 'gece', zaman: '2026-10-13T23:00:00.000Z', boyut: 5 * 1024 * 1024 };
+const PG_SURUMU: PgSurumu = {
+  sunucu: 18, sunucuMetni: 'PostgreSQL 18.1, compiled by Visual C++', pgDump: 18, pgDumpYolu: 'C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe', uyumlu: true, ileti: null,
+};
 const ACIK: YedeklerCevabi = {
   durum: 'acik', dizin: 'D:\\TMIV2-YEDEK', kaynak: 'ortam', saat: 2, saklamaGun: 14, enAzKalan: 3, suruyor: null, sonHata: null, yedekler: [YEDEK],
   alan: { sonBoyut: YEDEK.boyut, adet: 15, gereken: 15 * YEDEK.boyut, mevcut: YEDEK.boyut, bosYer: 10 * 1024 ** 3, yetmiyor: false },
   dosyaDeposu: { bayt: 2 * 1024 ** 3, sinir: 50 * 1024 ** 3, uyari: false },
+  pgSurumu: PG_SURUMU,
 };
 // Ayrıntı cevabının bölümün okumadığı alanları; değerler denemedir.
 const AYRINTI: Ayrinti = {
@@ -103,6 +107,32 @@ describe('Sistem Ayarları, yedekler', () => {
     fireEvent.click(screen.getByRole('button', { name: `${YEDEK.ad} indir` }));
     await waitFor(() => { expect(tiklanan).toEqual([{ href: `/api/yedekler/${YEDEK.ad}/indir?izin=deneme-izni`, download: YEDEK.ad }]); });
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => i.yol)).toEqual([`/yedekler/${YEDEK.ad}/indirme-izni`]);
+  });
+
+  it('PostgreSQL sürümü yalnız okunur gösterilir: sunucu ve pg_dump ana sürümü, sürüm metni ve araç yolu; seçim kutusu yoktur', async () => {
+    sunucuKur(ACIK);
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('Uyumlu')).toBeTruthy();
+    expect(screen.getByText(/Veritabanı sunucusu 18, yedek aracı \(pg_dump\) 18\./)).toBeTruthy();
+    expect(screen.getByText('PostgreSQL 18.1, compiled by Visual C++')).toBeTruthy();
+    expect(screen.getByText('pg_dump: C:\\Program Files\\PostgreSQL\\18\\bin\\pg_dump.exe')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('PostgreSQL sürümü uyuşmazsa ya da okunamazsa kırmızı rozet ve sunucunun nedeni görünür', async () => {
+    const ileti = 'pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.';
+    sunucuKur({ ...ACIK, pgSurumu: { ...PG_SURUMU, pgDump: 16, uyumlu: false, ileti } });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('Uyuşmuyor')).toBeTruthy();
+    expect(screen.getByText(ileti)).toBeTruthy();
+    cleanup();
+    sunucuKur({ ...ACIK, pgSurumu: { ...PG_SURUMU, sunucu: null, sunucuMetni: null, uyumlu: false, ileti: 'Veritabanı sunucusunun sürümü okunamadı.' } });
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('Denetlenemedi')).toBeTruthy();
+    expect(screen.getByText(/Veritabanı sunucusu okunamadı/)).toBeTruthy();
   });
 
   it('şimdi yedek al komutu gönderir; sunucunun reddi bildirilir', async () => {
