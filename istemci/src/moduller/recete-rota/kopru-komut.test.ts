@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
-import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
-import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
+import { STOK_KOMUTLARI } from './stok-komutlari.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, kopruKur, planMotoruOzeti } from './kopru.ts';
 import { ROTA_KOMUTLARI } from './rota-komutlari.ts';
@@ -98,16 +97,6 @@ describe('köprü komutları', () => {
     expect(istekler.map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /plan/bedel-ayari', 'GET /plan/bedel-ayari']);
   });
 
-  it('KOM-02d (195 a, 148 a, 955 b): öncelik çarpanları öncelik ayarlarıyla plan modülüne, yeni taslağa gider; bilinmeyen alan gitmez', async () => {
-    const istekler = sunucuKur((_y, _yol, govde) => json(200, govde));
-    const ayar = {
-      tabanBedelSaat: 250, finansmanOraniGun: null, karRiskiOraniGun: 0.3, yuksekEsigi: 1.5, dusukEsigi: 0.6,
-      yuksekCarpani: 2, normalCarpani: 1, dusukCarpani: 0.5,
-    };
-    await kopruKur()('komut', { ad: 'plan-bedel-ayari', govde: { ...ayar, sinifACarpani: 1.5, fazla: 1, taslak: { id: 3, surum: 1 } } });
-    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/plan/bedel-ayari', { ...ayar, taslak: null }]]);
-  });
-
   it('KOM-02b: fason termin tahmini dörtlüleri tek GET sorgusunda gider; bozuk sorgu istek atmadan 400 ile döner', async () => {
     const istekler = sunucuKur(() => json(200, { gunler: [4, null] }));
     const isle = kopruKur();
@@ -166,7 +155,7 @@ describe('köprü komutları', () => {
   });
 
   it('KOM-05: komut tablosu yalnız bilinen komutları ve sahibinin yollarını gösterir', () => {
-    expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['statu-degistir', 'maliyet-yaz', 'tedarik-termini-kaydet', ...Object.keys(PLAN_STOK_KOMUTLARI), ...Object.keys(planSenaryoKomutlari(() => Promise.resolve({ taslak: null }))), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
+    expect(Object.keys(IZINLI_KOMUTLAR).sort()).toEqual(['statu-degistir', 'maliyet-yaz', 'tedarik-termini-kaydet', ...Object.keys(STOK_KOMUTLARI), ...Object.keys(ROTA_KOMUTLARI), ...Object.keys(EMIR_KOMUTLARI), ...Object.keys(STATU_KOMUTLARI)].sort());
     expect(Object.keys(STATU_KOMUTLARI).sort()).toEqual(['statu-tanimi-kaydet', 'statu-tanimi-sil']);
     expect(STATU_KOMUTLARI['statu-tanimi-kaydet']!.hazirla({ id: 'S3', code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null, fazla: 1 }))
       .toEqual({ yol: '/recete-rota/statu-tanimlari/S3/kaydet', govde: { code: 'S3', name: 'Ad', kind: 'uretim', color: '#1F9E6A', beklenenSurum: null } });
@@ -215,63 +204,30 @@ describe('köprü komutları', () => {
     expect(istekler).toEqual([]);
   });
 
-  it('KOM-21: stüdyo komutları taslağın sürümünü yazmadan hemen önce plan modülünden okur; gövde yalnız izinli alanlarla kurulur', async () => {
-    let surum = 4;
-    const istekler = sunucuKur((yontem, yol) => {
-      if (yontem === 'GET' && yol.startsWith('/plan?taslak=')) return json(200, { taslak: { id: 9, surum } });
-      if (yontem === 'GET' && yol === '/plan/planlama-kaynagi') return json(200, DURUM);
-      if (yontem === 'POST') { if (yol !== '/plan/senaryolar') surum += 1; return json(200, { taslak: 9, canli: false }); }
-      return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
-    });
+  it('KOM-21 (2303-2 a): plan yalnız Planlama sayfasından yazılır; köprüde plan yazma komutu yoktur, hiçbir istek atmadan 400 alır', async () => {
+    const istekler = sunucuKur(() => json(200, {}));
     const isle = kopruKur();
-    const kuyruklar = [{ kaynak: { tur: 'makine', id: 4 }, baslangic: '2030-01-01T05:00:00.000Z', isler: [{ emirNo: 'E-1', opNo: 10, dondurulmus: false }] }];
-    await isle('komut', { ad: 'plan-senaryo-ac', govde: { ad: 'Senaryo 1', sinsi: 'gecmemeli' } });
-    const ayar = { kural: 'fifo', yon: 'ileri', tamponGun: 2, dondurmaGun: 2, personelKisiti: false, taslakEmirler: false };
-    // Kuyruk yazımı yalnız sırayı taşır: ekran ayar ya da canlıya alma gönderse de gövdeye girmez (ayar /plan/ayar'dan yazılır).
-    await isle('komut', { ad: 'plan-senaryo-yaz', govde: { taslak: 9, ayar, kuyruklar, canliyaAl: true, sinsi: 'gecmemeli' } });
-    await isle('komut', { ad: 'plan-senaryo-ayar', govde: { taslak: 9, ayar, sinsi: 'gecmemeli' } });
-    // Onay akışı (H0): onaya gönder notla, geri gönder gerekçeyle, canlıya alma onaydaki taslaktan; ekran sürüm ya da başka alan taşıyamaz.
-    await isle('komut', { ad: 'plan-senaryo-onaya-gonder', govde: { taslak: 9, not: ' Acil iş öne ', surum: 1 } });
-    await isle('komut', { ad: 'plan-senaryo-geri-gonder', govde: { taslak: 9, neden: 'Teslim kayıyor', sinsi: 'gecmemeli' } });
-    await isle('komut', { ad: 'plan-senaryo-onaydan-cek', govde: { taslak: 9 } });
-    await isle('komut', { ad: 'plan-senaryo-canliya-al', govde: { taslak: 9, cakismalariKabul: false } });
-    await isle('komut', { ad: 'plan-senaryo-vazgec', govde: { taslak: 9 } });
-    expect(yazmalar(istekler).map((i) => [i.yol, i.govde])).toEqual([
-      ['/plan/senaryolar', { ad: 'Senaryo 1' }],
-      ['/plan/kuyruklari-yaz', { kuyruklar, taslak: { id: 9, surum: 4 } }],
-      ['/plan/ayar', { ayar, taslak: { id: 9, surum: 5 } }],
-      ['/plan/senaryolar/9/onaya-gonder', { surum: 6, not: 'Acil iş öne' }],
-      ['/plan/senaryolar/9/geri-gonder', { surum: 7, neden: 'Teslim kayıyor' }],
-      ['/plan/senaryolar/9/onaydan-cek', { surum: 8 }],
-      ['/plan/senaryolar/9/canliya-al', { surum: 9, cakismalariKabul: true }],
-      ['/plan/senaryolar/9/vazgec', { surum: 10 }],
-    ]);
-    // Gerekçesiz geri gönderme kurulmaz; onaysız canlıya alma komutu yoktur (canlıya tek kapı).
-    const yazilan = yazmalar(istekler).length;
-    expect(await isle('komut', { ad: 'plan-senaryo-geri-gonder', govde: { taslak: 9, neden: '  ' } }).then(() => null, sorun)).toEqual({ hata: 'Geçersiz neden: geri gönderme nedenini yaz.', durum: 400 });
-    expect(await isle('komut', { ad: 'plan-canliya-al', govde: { taslak: 9 } }).then(() => null, sorun)).toEqual({ hata: 'Bilinmeyen komut: plan-canliya-al', durum: 400 });
-    expect(yazmalar(istekler)).toHaveLength(yazilan);
-    // Okunan taslak istenen değilse hiçbir şey yazılmaz.
-    const once = yazmalar(istekler).length;
-    expect(await isle('komut', { ad: 'plan-senaryo-yaz', govde: { taslak: 8, ayar: null, kuyruklar } }).then(() => null, sorun)).toEqual({ hata: 'Geçersiz taslak.', durum: 400 });
-    expect(yazmalar(istekler)).toHaveLength(once);
+    const PLAN_YAZMA = [
+      'plan-yaz', 'plan-ayar', 'plan-bedel-ayari', 'plan-canliya-al', 'plan-senaryo-ac', 'plan-senaryo-yaz', 'plan-senaryo-ayar',
+      'plan-senaryo-onaya-gonder', 'plan-senaryo-onaydan-cek', 'plan-senaryo-geri-gonder', 'plan-senaryo-canliya-al', 'plan-senaryo-vazgec',
+      'plan-dondur', 'plan-dondurmayi-kaldir', 'plan-is-dondurmayi-kaldir',
+    ];
+    for (const ad of PLAN_YAZMA) {
+      expect(Object.hasOwn(IZINLI_KOMUTLAR, ad), ad).toBe(false);
+      expect(await isle('komut', { ad, govde: { taslak: 9 } }).then(() => null, sorun)).toEqual({ hata: `Bilinmeyen komut: ${ad}`, durum: 400 });
+    }
+    expect(Object.keys(IZINLI_KOMUTLAR).filter((ad) => ad.startsWith('plan-'))).toEqual([]);
+    expect(istekler).toEqual([]);
   });
 
-  it('KOM-20: plan ve stok komutları sahibinin var olan ucuna yalnız izinli alanlarla, istek kimliğiyle gider; yol parametresi doğrulanır', async () => {
+  it('KOM-20: stok komutları sahibinin var olan ucuna yalnız izinli alanlarla, istek kimliğiyle gider; yol parametresi doğrulanır', async () => {
     const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(200, { ok: true }) : yol === '/plan/planlama-kaynagi' ? json(200, DURUM) : json(403, { kod: 'YETKI_YOK', mesaj: 'yok' })));
     const isle = kopruKur();
-    const ayar = { kural: 'fifo', yon: 'ileri', tamponGun: 2, dondurmaGun: 2, personelKisiti: false, taslakEmirler: false };
-    const kuyruklar = [{ kaynak: { tur: 'makine', id: 4 }, baslangic: '2026-10-14T05:00:00.000Z', isler: [{ emirNo: 'E-1', opNo: 10, dondurulmus: false }] }];
-    await isle('komut', { ad: 'plan-yaz', govde: { ayar, kuyruklar, canliyaAl: true, planSurumu: 3, taslak: { id: 5, surum: 2 }, sinsi: 'gecmemeli' } });
-    await isle('komut', { ad: 'plan-ayar', govde: { ayar, taslak: { id: 5, surum: 2 }, sinsi: 'gecmemeli' } });
     await isle('komut', { ad: 'stok-emir-tamamla', govde: { id: 12, miktar: '3', aciklama: 'x', sinsi: 'gecmemeli' } });
     await isle('komut', { ad: 'stok-uretim-girisi', govde: { uretimEmriId: 12, malzemeId: 7, miktar: '2', konumId: 3, sinsi: 'gecmemeli' } });
     await isle('komut', { ad: 'stok-sayim', govde: { konumId: 3, satirlar: [{ malzemeId: 7, partiId: null, beklenenMiktar: '5', sayilanMiktar: '4' }], sinsi: 'gecmemeli' } });
     const yaz = yazmalar(istekler);
     expect(yaz.map((i) => [i.yol, i.govde])).toEqual([
-      // Kuyruk yazımı yalnız sırayı taşır; ayar /plan/ayar'dan yazılır ve orada taslak hep yeni açılır (ekranın taslağı yoktur).
-      ['/plan/kuyruklari-yaz', { kuyruklar, planSurumu: 3, taslak: { id: 5, surum: 2 } }],
-      ['/plan/ayar', { ayar, taslak: null }],
       ['/stok/uretim-emirleri/12/tamamla', { miktar: '3', aciklama: 'x' }],
       ['/stok/uretim-girisi', { uretimEmriId: 12, malzemeId: 7, miktar: '2', konumId: 3 }],
       ['/stok/sayim', { konumId: 3, satirlar: [{ malzemeId: 7, partiId: null, beklenenMiktar: '5', sayilanMiktar: '4' }] }],
