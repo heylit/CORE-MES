@@ -38,3 +38,10 @@ export function useSistemSagligi(tazeleme?: number) {
     ayrinti: ayrintiGorur ? ayrinti : null,
   };
 }
+
+// Yalnız ayrıntı (Sistem Ayarları > Yedekler, 2282b): Sistem durumuyla aynı önbellek anahtarı; işlemi olmayana null.
+export function useSaglikAyrintisi() {
+  const ayrintiGorur = useOturum().data?.islemler.includes('saglik.ayrinti-oku') === true;
+  const ayrinti = useQuery({ queryKey: anahtarlar.sistemAyrinti, queryFn: () => api.get<Ayrinti>('/saglik/ayrinti'), enabled: ayrintiGorur });
+  return ayrintiGorur ? ayrinti : null;
+}

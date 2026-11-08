@@ -11,17 +11,17 @@ import { istekSayaclari } from '#cekirdek/istek-olcumu.ts';
 import { surecEsikOlayiYaz } from '#cekirdek/olay-gunlugu.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import { geriYuklemeDenemesiSemasi } from '#paylasilan/sozlesme/saglik.ts';
-import type { Ayrinti, GeriYuklemeDenemesi, MetrikDakikasi, OtomatikAcilis } from '#paylasilan/sozlesme/saglik.ts';
+import { disKopyaKaydiSemasi, geriYuklemeDenemesiSemasi } from '#paylasilan/sozlesme/saglik.ts';
+import type { Ayrinti, DisKopyaKaydi, GeriYuklemeDenemesi, MetrikDakikasi, OtomatikAcilis, WalArsivi } from '#paylasilan/sozlesme/saglik.ts';
 import {
-  BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, DENEME_KAYDI_DOSYASI, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
+  BEKCI_GOREV_ADI, DAKIKA_SAKLAMA_GUN, DENEME_KAYDI_DOSYASI, DIS_KOPYA_KAYDI_DOSYASI, disKopyaDurumu, gunIciKoruma, METRIK_PENCERESI, SAAT_SAKLAMA_AY, YOKLAMA_SURE_SINIRI_MS, commitSec, diskDurumu, isDurumuOzeti, makineIslemciYuzdesi, metrikDakikasi,
   ESIK_KURALLARI, anaIsParcacigiYuzdesi, esikGecisleri, otomatikAcilisCoz, ozetlenecekSaatler, saatOzeti, sayacFarki, sonDeneme, surecIslemciYuzdesi, uyarilar, veritabaniBuyumesi,
 } from './kurallar.ts';
-import type { EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
+import type { DisKopyaDurumu, EsikKurali, GorevSorgusu, IslemciZamani, YedekBilgisi } from './kurallar.ts';
 import {
-  enBuyukTablolariOku, metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay, vtIstatistigiOku,
+  enBuyukTablolariOku, metrikDakikalariOku, metrikDakikasiYaz, metrikSaatiYaz, ozetlenmemisIlkDakika, sonGocAdi, suresiGecenMetrikleriSil, veritabaniYokla, vtBaglantiSay, vtIstatistigiOku, walArsiviOku,
 } from './sorgular.ts';
-import type { VtIstatistigi } from './sorgular.ts';
+import type { VtIstatistigi, WalArsivSatiri } from './sorgular.ts';
 import { yedekOrtaminiKur, yedekleriListele } from '../ayarlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 
@@ -82,7 +82,25 @@ export async function surecYedegi(db: Db): Promise<YedekBilgisi> {
   const ortam = await yedekOrtaminiKur(db);
   const { durum, yedekler } = await yedekleriListele(ortam);
   const en = yedekler[0];
-  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman), sonDeneme: await denemeKaydiOku(ortam.dizin) };
+  // Araç kaydı TMIV2_YEDEK_DIZINI'ne yazar; ekrandan başka klasör seçildiyse ikisi de okunur.
+  const disKopya = await disKopyaKaydiOku([ortam.dizin, process.env['TMIV2_YEDEK_DIZINI']?.trim() || null]);
+  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman), sonDeneme: await denemeKaydiOku(ortam.dizin), disKopya };
+}
+
+const disKopyaMi = (d: unknown): d is DisKopyaKaydi => disKopyaKaydiSemasi.safeParse(d).success;
+
+// Klasör bilinmiyorsa ya da dosya yoksa o klasörde kayıt yok sayılır (hiç kopya alınmamış).
+export async function disKopyaKaydiOku(dizinler: readonly (string | null)[]): Promise<DisKopyaDurumu> {
+  const tekil = [...new Set(dizinler.filter((d): d is string => d !== null))];
+  const metinler = await Promise.all(tekil.map((d) => readFile(path.join(d, DIS_KOPYA_KAYDI_DOSYASI), 'utf8').catch(() => '')));
+  return disKopyaDurumu(metinler, disKopyaMi);
+}
+
+const zamanMetni = (an: Date | null): string | null => (an === null ? null : an.toISOString());
+
+export function walArsiviOzeti(s: WalArsivSatiri | null): WalArsivi | null {
+  if (s === null) return null;
+  return { ...s, sonArsivZamani: zamanMetni(s.sonArsivZamani), sonHataZamani: zamanMetni(s.sonHataZamani) };
 }
 
 const denemeMi = (d: unknown): d is GeriYuklemeDenemesi => geriYuklemeDenemesiSemasi.safeParse(d).success;
@@ -216,6 +234,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
   let sonGoc: string | null = null;
   let vtBaglantiSayisi: number | null = null;
   let veritabaniBuyumesiOlcu: Ayrinti['veritabaniBuyumesi'] = null;
+  let walArsivi: WalArsivi | null = null;
   if (await saglikliMi(db, sureSiniri)) {
     veritabaniGecikmeMs = Math.round(performance.now() - baslangic);
     sonGoc = await sureliGuvenli(() => sonGocAdi(db), sureSiniri);
@@ -224,6 +243,7 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
       await sureliGuvenli(() => vtIstatistigiOku(db), sureSiniri),
       await sureliGuvenli(() => enBuyukTablolariOku(db), sureSiniri),
     );
+    walArsivi = walArsiviOzeti(await sureliGuvenli(() => walArsiviOku(db), sureSiniri));
   }
   const bellek = girdi.bellekOku?.() ?? process.memoryUsage();
   const isler = girdi.isDurumlari();
@@ -246,8 +266,9 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     otomatikAcilis,
     geriYuklemeDenemesi: yedek?.sonDeneme ?? null,
     veritabaniBuyumesi: veritabaniBuyumesiOlcu,
+    gunIciKoruma: gunIciKoruma(walArsivi, yedek?.disKopya, simdi),
     uyarilar: uyarilar({
-      simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler,
+      simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler, walArsivi,
       esikler: (girdi.esikler ?? surecEsikleri).iletiler(),
     }),
   };

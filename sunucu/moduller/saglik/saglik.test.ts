@@ -18,13 +18,13 @@ import { isTanimi, zamanlayiciKur } from '#cekirdek/zamanlayici.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { rolunIslemleri } from '../../../araclar/yetki-beklentisi.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, YOKLAMA_SURE_SINIRI_MS, oluOraniYuzde, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
+import { BEKCI_GOREV_ADI, DENEME_KAYDI_DOSYASI, DIS_KOPYA_KAYDI_DOSYASI, disKopyaSatiri, YOKLAMA_SURE_SINIRI_MS, oluOraniYuzde, otomatikAcilisCoz, saatOzeti } from './kurallar.ts';
 import type { GorevSorgusu } from './kurallar.ts';
 import {
-  MetrikToplayici, ayrintiTopla, denemeKaydiOku, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
+  MetrikToplayici, ayrintiTopla, denemeKaydiOku, disKopyaKaydiOku, esikleriIsle, metrikleriSakla, surecEsikleri, gitCommitOku, olayDongusuOlceri, onbellekliOkuyucu, onbellekliOtomatikAcilis, zamanlayiciGoreviSorgula,
 } from './servis.ts';
 import type { AyrintiGirdisi, MetrikKaynagi } from './servis.ts';
-import { vtIstatistigiOku } from './sorgular.ts';
+import { vtIstatistigiOku, walArsiviOku } from './sorgular.ts';
 import { saglikUclari } from './uclar.ts';
 import type { SaglikKaynagi } from './uclar.ts';
 
@@ -137,6 +137,7 @@ test('asılı veritabanı: süre sınırı dolunca /saglik 503 hata; ayrıntıda
       veritabaniGecikmeMs: null, sonGoc: null, commit: 'a'.repeat(40), yayin: null, calismaSuresiSn: 1, ortam: 'test', isler: [], yedekDiski: null, veritabaniDiski: null,
       uyarilar: [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }], olayDongusuGecikmeMs: null, vtBaglantiSayisi: null, otomatikAcilis: null,
       geriYuklemeDenemesi: null, veritabaniBuyumesi: null,
+      gunIciKoruma: { walArsivi: null, sonDisKopya: null, sonBasariliDisKopya: null, walUyarisi: null, disKopyaUyarisi: null },
     });
     assert.equal(Number.isInteger(bellek?.rssBayt), true);
   }
@@ -373,7 +374,7 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     assert.equal(kabul.statusCode, 200);
     const govde = kabul.json();
     assert.deepEqual(Object.keys(govde).sort(), [
-      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniBuyumesi', 'veritabaniDiski', 'veritabaniGecikmeMs',
+      'bellek', 'calismaSuresiSn', 'commit', 'geriYuklemeDenemesi', 'gunIciKoruma', 'isler', 'olayDongusuGecikmeMs', 'ortam', 'otomatikAcilis', 'sonGoc', 'uyarilar', 'veritabaniBuyumesi', 'veritabaniDiski', 'veritabaniGecikmeMs',
       'vtBaglantiSayisi', 'yayin', 'yedekDiski',
     ]);
     assert.equal(Number.isInteger(govde.veritabaniGecikmeMs) && govde.veritabaniGecikmeMs >= 0, true);
@@ -746,6 +747,42 @@ describe('sağlık (gerçek PostgreSQL)', () => {
     } finally {
       await rm(dizin, { recursive: true, force: true });
     }
+  });
+
+  test('dış kopya kaydı: iki klasörün satırları birlikte okunur; aynı klasör bir kez; dosya ya da klasör yoksa kayıt yok', async () => {
+    const a = await mkdtemp(join(tmpdir(), 'tmiv2-diskopya-'));
+    const b = await mkdtemp(join(tmpdir(), 'tmiv2-diskopya-'));
+    try {
+      assert.deepEqual(await disKopyaKaydiOku([null, a, join(a, 'yok')]), { son: null, sonBasarili: null });
+      const kayit = {
+        zaman: '2026-11-01T05:30:00.000Z', sonuc: 'basarili' as const, hedef: 'F:\\', taban: '20261101', tabanBayt: 10, walAdet: 3, walBayt: 48, hata: null,
+      };
+      await writeFile(join(a, DIS_KOPYA_KAYDI_DOSYASI), `${disKopyaSatiri(kayit)}{"zaman":`);
+      const kotu = { ...kayit, zaman: '2026-11-08T05:30:00.000Z', sonuc: 'basarisiz' as const, taban: null, tabanBayt: null, walAdet: null, walBayt: null, hata: 'disk yok' };
+      await writeFile(join(b, DIS_KOPYA_KAYDI_DOSYASI), disKopyaSatiri(kotu));
+      assert.deepEqual(await disKopyaKaydiOku([a, a, b]), { son: kotu, sonBasarili: kayit });
+    } finally {
+      await rm(a, { recursive: true, force: true });
+      await rm(b, { recursive: true, force: true });
+    }
+  });
+
+  test('WAL arşivi uygulama kullanıcısıyla okunur: süper kullanıcı istemez; test sunucusunda arşiv kapalı', async () => {
+    const w = await acik().vt.tx((db) => walArsiviOku(db));
+    assert.notEqual(w, null);
+    assert.equal(w?.acik, false);
+    assert.equal(Number.isInteger(w?.hataSayisi), true);
+    const hedef = kaynakliUygulama({
+      ayarOku: () => ({ commit: null, ortam: 'test' }), gitOku: async () => null, isDurumlari: () => [],
+      yedekOku: async () => ({ durum: 'acik', sonYedek: new Date(), sonDeneme: null, disKopya: { son: null, sonBasarili: null } }),
+    });
+    const c = await ayrintiIste(hedef, izleyenCerezi);
+    assert.equal(c.statusCode, 200, c.body);
+    const g = c.json().gunIciKoruma;
+    assert.equal(g.walArsivi.acik, false);
+    // Arşiv kapalıyken dış kopya beklenmez.
+    assert.equal(g.disKopyaUyarisi, null);
+    assert.equal(g.walUyarisi, null);
   });
 
   test('/saglik/ayrinti git başarısızken de onu bir kez dener; commit ortam değerinden gelir', async () => {

@@ -3,9 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   DosyaDeposuDurumu, Yedek, YedekAlani, YedekAlCevabi, YedekDiziniCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { DisKopyaKaydi, GunIciKoruma as GunIciKorumaVerisi, WalArsivi } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { derlemeTarihi } from '../../ortak/veri/surum.ts';
+import { useSaglikAyrintisi } from '../sistem/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 
 const KAPALI_METNI: Readonly<Record<Exclude<YedekDurumu, 'acik'>, string>> = {
@@ -56,6 +58,70 @@ function YedekAlaniSatiri({ alan, depo }: { alan: YedekAlani | null; depo: Dosya
       </div>
     </div>
   );
+}
+
+// Taban yedeğin klasör adı kurulum/yedek.md'de yyyyMMdd'dir; başka adsa olduğu gibi yazılır.
+export function tabanMetni(ad: string): string {
+  const e = /^(\d{4})(\d{2})(\d{2})$/.exec(ad);
+  return e === null ? ad : `${e[3] ?? ''}.${e[2] ?? ''}.${e[1] ?? ''}`;
+}
+
+function walMetni(w: WalArsivi | null): string {
+  if (w === null) return 'WAL arşivinin durumu okunamadı.';
+  if (!w.acik) return 'WAL arşivi kapalı: gün içi kayıt yalnız gece yedeğiyle korunur. Kurulum: kurulum/yedek.md, Gün içi kayıp.';
+  const son = w.sonArsivZamani === null ? 'Henüz arşivlenmiş WAL yok.' : `Son arşiv ${derlemeTarihi(w.sonArsivZamani, true)}.`;
+  const hata = w.hataSayisi === 0 ? 'Arşiv hatası yok.'
+    : `Arşiv hatası ${String(w.hataSayisi)}${w.sonHataZamani === null ? '' : `, sonuncusu ${derlemeTarihi(w.sonHataZamani, true)}`}.`;
+  return `${son} ${hata}`;
+}
+
+function disKopyaMetni(son: DisKopyaKaydi | null, basarili: DisKopyaKaydi | null): string {
+  if (basarili === null) return son === null ? 'Şifreli dış kopya hiç alınmamış.' : 'Başarılı şifreli dış kopya yok.';
+  const parcalar = [`Son dış kopya ${derlemeTarihi(basarili.zaman, true)}.`];
+  if (basarili.walAdet !== null) {
+    parcalar.push(`${String(basarili.walAdet)} WAL dosyası${basarili.walBayt === null ? '' : ` (${alanMetni(basarili.walBayt)})`}.`);
+  }
+  if (son !== null && son.sonuc === 'basarisiz') parcalar.push(`Son deneme ${derlemeTarihi(son.zaman, true)} başarısız: ${son.hata ?? 'ayrıntı yok'}.`);
+  return parcalar.join(' ');
+}
+
+// Taban yedeğin klasörünü uygulama okuyamaz (2283-1 a+e: yalnız PostgreSQL hesabı ve yönetici); son taban dış kopya kaydından gelir.
+function tabanSatiri(basarili: DisKopyaKaydi | null): string {
+  if (basarili === null || basarili.taban === null) return 'Son taban yedek dış kopya kaydından okunur; henüz kayıt yok.';
+  return `Son taban yedek ${tabanMetni(basarili.taban)}${basarili.tabanBayt === null ? '' : `, ${alanMetni(basarili.tabanBayt)}`} (son dış kopyadaki).`;
+}
+
+// Kart 2282b: gece yedeğinin arasındaki kaybı WAL arşivi ve şifreli dış kopya kapatır (2276-1 a, 2283-2 a). Veri sağlık ayrıntısındandır;
+// işlemi (saglik.ayrinti-oku) olmayana bölüm çıkmaz.
+export function GunIciKorumaBolumu({ veri }: { veri: GunIciKorumaVerisi }) {
+  const { walArsivi: w, sonDisKopya: son, sonBasariliDisKopya: basarili } = veri;
+  const walRozeti = w === null ? <Rozet ton="pasif">Bilinmiyor</Rozet>
+    : !w.acik ? <Rozet ton="pasif">WAL arşivi kapalı</Rozet>
+      : veri.walUyarisi !== null ? <Rozet ton="uyari">WAL arşivi takıldı</Rozet>
+        : <Rozet ton="tamam">WAL arşivi açık</Rozet>;
+  const uyarilar = [veri.walUyarisi, veri.disKopyaUyarisi].filter((u): u is string => u !== null);
+  return (
+    <div className="tc-ayar">
+      <div className="tc-ayar-metin">
+        <p className="tc-ayar-baslik">
+          Gün içi koruma {walRozeti}
+          {veri.disKopyaUyarisi !== null && <>{' '}<Rozet ton="uyari">Dış kopya eski ya da eksik</Rozet></>}
+        </p>
+        <p className="tc-ayar-aciklama">{walMetni(w)}</p>
+        <p className="tc-ayar-aciklama">{tabanSatiri(basarili)}</p>
+        <p className="tc-ayar-aciklama">{disKopyaMetni(son, basarili)}</p>
+        {uyarilar.map((u) => <p key={u} className="tc-ayar-aciklama" role="alert"><Rozet ton="uyari">Uyarı</Rozet> {u}</p>)}
+      </div>
+    </div>
+  );
+}
+
+function GunIciKoruma() {
+  const ayrinti = useSaglikAyrintisi();
+  const veri = ayrinti?.data?.gunIciKoruma;
+  if (ayrinti === null || ayrinti.isPending) return null;
+  if (ayrinti.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Gün içi koruma okunamadı.')} yenile={() => { void ayrinti.refetch(); }} />;
+  return veri === undefined ? null : <GunIciKorumaBolumu veri={veri} />;
 }
 
 // İndirme iki adımdır (145 a): önce izin komutu (denetim kaydına kişi ve yedek adıyla düşer), sonra tarayıcı dosyayı o izinle bir
@@ -182,6 +248,7 @@ export function Yedekler() {
               </Dugme>
             </div>
           </div>
+          <GunIciKoruma />
           <YedekAlaniSatiri alan={veri.alan} depo={veri.dosyaDeposu} />
           <KlasorSecimi dizin={veri.dizin} kaynak={veri.kaynak} />
           <Tablo etiket="Veritabanı yedekleri" sutunlar={SUTUNLAR} satirlar={veri.yedekler} satirAnahtari={(y) => y.ad} bosMesaj="Yedek yok." />
