@@ -7,8 +7,11 @@ import { after, beforeEach, describe, test } from 'node:test';
 import {
   arsivDiskiUyarisi, budamaPlani, silinecekWallar, tabanAdi, tabanBaslangicDosyasi, tabanGerekliMi, tabanKopyalanabilirMi, tabanUyarisi, tabanZamani, type TabanKaydi,
 } from './kurallar.ts';
+import type { PgSurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import { tabanOrtamiOku, tabanTuru, type AltSurec, type TabanOrtami } from './taban-yedek.ts';
 
+// Sürüm denetimi ayrı sınanır (yedek.test.ts); burada araç ve sunucu aynı sürümdür.
+const uyumlu = async (): Promise<PgSurumu> => ({ sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 18, pgDumpYolu: 'pg_basebackup', uyumlu: true, ileti: null });
 const W = (n: number): string => `00000001000000000000${n.toString(16).toUpperCase().padStart(4, '0')}`;
 const GUN = 24 * 60 * 60 * 1000;
 const t0 = new Date('2026-11-08T03:00:00Z');
@@ -112,7 +115,7 @@ describe('taban yedek işi (sahte pg_basebackup, PostgreSQL gerekmez)', () => {
   };
 
   test('ayar boşsa iş bekler, canlıda hata verir; hiçbir şey çalıştırmaz', async () => {
-    const sonuc = await tabanTuru(null, t0, { calistir: sahte(W(1)), bosYer: disk });
+    const sonuc = await tabanTuru(null, t0, { surumDenetle: uyumlu, calistir: sahte(W(1)), bosYer: disk });
     assert.equal((sonuc as { durum: string }).durum, 'bekliyor');
     assert.equal(cagrilar.length, 0);
     await assert.rejects(tabanTuru(null, t0, { canli: true, calistir: sahte(W(1)), bosYer: disk }), /Canlı ortamda taban yedek kurulmamış/);
@@ -121,7 +124,7 @@ describe('taban yedek işi (sahte pg_basebackup, PostgreSQL gerekmez)', () => {
   });
 
   test('taban yedek rolüyle alınır, doğrulanır, adına taşınır; parola yalnız pg_basebackup alt sürecine gider', async () => {
-    await tabanTuru(ortam, t0, { calistir: sahte(W(5)), bosYer: disk });
+    await tabanTuru(ortam, t0, { surumDenetle: uyumlu, calistir: sahte(W(5)), bosYer: disk });
     const adlar = await readdir(ortam.dizin);
     assert.deepEqual(adlar, [tabanAdi(t0)]);
     assert.ok(existsSync(path.join(ortam.dizin, tabanAdi(t0), '.dogrulandi')));
@@ -138,11 +141,11 @@ describe('taban yedek işi (sahte pg_basebackup, PostgreSQL gerekmez)', () => {
     await mkdir(path.join(ortam.dizin, '20261101'));
     for (const n of [1, 2, 3, 4, 5, 6]) await writeFile(path.join(ortam.wal, W(n)), '');
     await writeFile(path.join(ortam.wal, '00000002.history'), '');
-    await tabanTuru(ortam, t0, { calistir: sahte(W(5)), bosYer: disk });
+    await tabanTuru(ortam, t0, { surumDenetle: uyumlu, calistir: sahte(W(5)), bosYer: disk });
     assert.deepEqual((await readdir(ortam.dizin)).sort(), ['20261101', orta, tabanAdi(t0)].sort());
     assert.deepEqual((await readdir(ortam.wal)).sort(), ['00000002.history', W(3), W(4), W(5), W(6)].sort());
     cagrilar.length = 0;
-    await tabanTuru(ortam, new Date(t0.getTime() + GUN), { calistir: sahte(W(6)), bosYer: disk });
+    await tabanTuru(ortam, new Date(t0.getTime() + GUN), { surumDenetle: uyumlu, calistir: sahte(W(6)), bosYer: disk });
     assert.equal(cagrilar.length, 0);
   });
 
@@ -150,7 +153,7 @@ describe('taban yedek işi (sahte pg_basebackup, PostgreSQL gerekmez)', () => {
     await elleTaban(new Date(t0.getTime() - 16 * GUN), W(1));
     await elleTaban(new Date(t0.getTime() - 9 * GUN), W(3));
     for (const n of [1, 2, 3, 4]) await writeFile(path.join(ortam.wal, W(n)), '');
-    await assert.rejects(tabanTuru(ortam, t0, { calistir: sahte(W(4), true), bosYer: disk }), /Taban yedek alınamadı: .*checksum mismatch.*9 gün önce/);
+    await assert.rejects(tabanTuru(ortam, t0, { surumDenetle: uyumlu, calistir: sahte(W(4), true), bosYer: disk }), /Taban yedek alınamadı: .*checksum mismatch.*9 gün önce/);
     assert.equal((await readdir(ortam.dizin)).length, 2);
     assert.ok(!(await readdir(ortam.dizin)).some((a) => a.endsWith('.yarim')));
     assert.deepEqual((await readdir(ortam.wal)).sort(), [W(1), W(2), W(3), W(4)].sort());
@@ -158,8 +161,19 @@ describe('taban yedek işi (sahte pg_basebackup, PostgreSQL gerekmez)', () => {
 
   test('reddedilen: arşiv diski yüzde 80 doluysa ve klasör yoksa iş hata verir; yarım taban sonraki turda silinir', async () => {
     await mkdir(path.join(ortam.dizin, `${tabanAdi(new Date(t0.getTime() - GUN))}.yarim`));
-    await assert.rejects(tabanTuru(ortam, t0, { calistir: sahte(W(2)), bosYer: async () => ({ bos: 10, toplam: 100 }) }), /yüzde 90 dolu/);
+    await assert.rejects(tabanTuru(ortam, t0, { surumDenetle: uyumlu, calistir: sahte(W(2)), bosYer: async () => ({ bos: 10, toplam: 100 }) }), /yüzde 90 dolu/);
     assert.deepEqual(await readdir(ortam.dizin), [tabanAdi(t0)]);
-    await assert.rejects(tabanTuru({ ...ortam, wal: path.join(kok, 'yok') }, t0, { calistir: sahte(W(2)), bosYer: disk }), /WAL arşivi klasörü yok/);
+    await assert.rejects(tabanTuru({ ...ortam, wal: path.join(kok, 'yok') }, t0, { surumDenetle: uyumlu, calistir: sahte(W(2)), bosYer: disk }), /WAL arşivi klasörü yok/);
+  });
+
+  test('reddedilen: pg_basebackup sunucuyla aynı ana sürümden değilse taban alınmaz, iş nedeniyle hata verir', async () => {
+    const uyusmaz = async (): Promise<PgSurumu> => ({
+      sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 16, pgDumpYolu: 'pg_basebackup', uyumlu: false,
+      ileti: 'pg_basebackup ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.',
+    });
+    await assert.rejects(tabanTuru(ortam, t0, { surumDenetle: uyusmaz, calistir: sahte(W(2)), bosYer: disk }),
+      /Taban yedek alınamadı: pg_basebackup ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor/);
+    assert.equal(cagrilar.length, 0, 'pg_basebackup çalıştırılmadı');
+    assert.deepEqual(await readdir(ortam.dizin), []);
   });
 });
