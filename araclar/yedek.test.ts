@@ -11,8 +11,9 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yedekAnahtariCoz } from '../sunucu/moduller/ayarlar/kurallar.ts';
 import { yedekAl, yedekOrtamiOku, yedekSifresiniCoz } from '../sunucu/moduller/ayarlar/yedek.ts';
 import type { YedekOrtami } from '../sunucu/moduller/ayarlar/yedek.ts';
+import { DIS_KOPYA_KAYDI_DOSYASI } from '../sunucu/moduller/saglik/disari.ts';
 import {
-  DIS_KOPYA_KAYDI_DOSYASI, DIS_KOPYA_KLASORU, disKopyaAc, disKopyaKaydiEkle, disKopyaAl, gerekenWallar, geriYuklemeEngeli, sonTabanYedek, tabanBaslangicWal, uygulamaOturumuSay, yedekKlasoru,
+  DIS_KOPYA_KLASORU, disKopyaAc, disKopyaKaydiEkle, disKopyaAl, gerekenWallar, geriYuklemeEngeli, sonTabanYedek, tabanBaslangicWal, uygulamaOturumuSay, yedekKlasoru,
 } from './yedek.ts';
 
 test('yedek klasörü seçilmediyse deponun yanına düşer, içine değil; seçildiyse o kullanılır', () => {
@@ -155,6 +156,25 @@ describe('WAL arşivi ve taban yedeğin şifreli dış kopyası', () => {
     const t = await sonTabanYedek(path.join(kok, 'taban'));
     assert.equal(t.ad, '20261101');
     assert.equal(t.baslangic, W(2));
+  });
+
+  test('iş tabanı doğrulanmadan ya da yarımken seçilmez; doğrulanmış iş tabanı elle alınmışın önüne geçer', async () => {
+    const d = await mkdtemp(path.join(tmpdir(), 'tmiv2-taban-sec-'));
+    try {
+      const yaz = async (ad: string, baslangic: string, dogrulandi: boolean): Promise<void> => {
+        await mkdir(path.join(d, ad), { recursive: true });
+        await writeFile(path.join(d, ad, 'backup_label'), etiket(baslangic));
+        await writeFile(path.join(d, ad, 'backup_manifest'), '{}');
+        if (dogrulandi) await writeFile(path.join(d, ad, '.dogrulandi'), '');
+      };
+      await yaz('20261101', W(2), false);
+      await yaz('taban-20261102T030000Z', W(3), true);
+      await yaz('taban-20261109T030000Z', W(5), false);
+      await yaz('taban-20261109T040000Z.yarim', W(6), false);
+      assert.equal((await sonTabanYedek(d)).ad, 'taban-20261102T030000Z');
+    } finally {
+      await rm(d, { recursive: true, force: true });
+    }
   });
 
   test('dış kopya her dosyayı şifreli yazar, boş klasörü korur, gerekmeyen WAL ve yarım dosyayı almaz', async () => {
