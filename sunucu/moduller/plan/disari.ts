@@ -104,3 +104,9 @@ export { sunucuPlanCozucusu } from './plan-cozucusu.ts';
 export { teklifDene } from './planlama-servis.ts';
 export type { SatisTaslagiGirdisi, TeklifDenemeGirdisi, TeklifDenemeSonucu, TeklifIslemi, TeklifKalemiGirdisi, TeklifKalemiSonucu } from './planlama-servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// 2319 (2311 S7): emir bitti ve fason dönüşü canlı planı "bayat" işaretler (yalnız işaret); bağ kablolama.ts'te. Okuma: son canlıya almadan
+// sonraki olaylar ve makine duruşları.
+export { emirBittiYansit as bayatEmirBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, planBayatligi } from './bayat/servis.ts';
+export type { BayatNedeni, BayatOlayi, PlanBayatligi } from './bayat/kurallar.ts';
+

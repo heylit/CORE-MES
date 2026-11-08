@@ -5,7 +5,7 @@ import type { KaynakDegisikligi } from '#paylasilan/sozlesme/planlama.ts';
 import { CalismaYazici, bekleyenler, reddedilemez } from '../../kayit.ts';
 import { calismaKur } from '../../siparis/test-veri.ts';
 import { DegisiklikSeridi } from './DegisiklikSeridi.tsx';
-import { AYRINTI_FARK, kaynakSatiri, seritListesi, seritMetni } from './kurallar.ts';
+import { AYRINTI_FARK, canliBayatMetni, kaynakSatiri, seritListesi, seritMetni, type CanliBayatlik } from './kurallar.ts';
 
 afterEach(() => { cleanup(); });
 
@@ -94,5 +94,37 @@ describe('DegisiklikSeridi', () => {
   it('plan yoksa çizilmez', () => {
     const { container } = render(<DegisiklikSeridi calisma={calismaKur((c) => { (c as { plan: unknown }).plan = null; })} dis={null} />);
     expect(container.innerHTML).toBe('');
+  });
+});
+
+// 2319 (S7): canlı plan bayat işareti. Veriler uydurmadır.
+const CANLI: CanliBayatlik = {
+  bayat: true,
+  sayilar: { 'emir-bitti': 2, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0 },
+  olaylar: [
+    { neden: 'durus', zaman: '2026-11-08T08:00:00.000Z', emirNo: null, makineKod: 'T1' },
+    { neden: 'emir-bitti', zaman: '2026-11-08T07:00:00.000Z', emirNo: 'E-1', makineKod: null },
+  ],
+};
+
+describe('canlı plan bayat işareti (2319)', () => {
+  it('metin yalnız sıfırdan büyük nedenleri sayar; bayat değilse yok', () => {
+    expect(canliBayatMetni(CANLI)).toBe('Canlı plan son canlıya almadan sonra eskidi: 2 emir erken bitti, 1 makine duruşu; planı gözden geçirin');
+    expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
+  });
+
+  it('bayatsa ikinci satır çizilir, olaylar düğmeyle açılır; şerit eski görünür', () => {
+    const { container } = render(<DegisiklikSeridi calisma={calismaKur()} dis={null} canli={CANLI} />);
+    expect(container.querySelector('[data-canli="eski"]')?.textContent).toContain('2 emir erken bitti');
+    expect(container.querySelector('section')?.getAttribute('data-durum')).toBe('eski');
+    fireEvent.click(screen.getByRole('button', { name: 'Olaylar' }));
+    expect(screen.getByText('makine duruşu: T1')).toBeTruthy();
+    expect(screen.getByText('emir erken bitti: E-1')).toBeTruthy();
+  });
+
+  it('canlı verilmezse ya da bayat değilse eski davranış', () => {
+    const { container } = render(<DegisiklikSeridi calisma={calismaKur()} dis={null} canli={{ ...CANLI, bayat: false }} />);
+    expect(container.querySelector('[data-canli]')).toBeNull();
+    expect(container.querySelector('section')?.getAttribute('data-durum')).toBe('guncel');
   });
 });

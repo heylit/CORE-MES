@@ -1,18 +1,21 @@
 import { useState } from 'react';
 import { Dugme, Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
-import { seritListesi, seritMetni, seritOzeti } from './kurallar.ts';
+import { canliBayatMetni, canliBayatSatiri, seritListesi, seritMetni, seritOzeti, type CanliBayatlik } from './kurallar.ts';
 
 const saat = (t: number): string => (t > 0 ? new Date(t).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 // 1965 a: sayfanın en üstünde tek satır; liste düğmeyle altında açılır. Uygulama ve ret Onay ve canlı sekmesindedir (755 a), burada yalnız görünür.
-export function DegisiklikSeridi({ calisma, dis }: { calisma: PlanlamaCalismasi | null; dis: BekleyenDegisiklik | null }) {
+// 2319: canli verilirse ve bayatsa canlı planın eskidiği ikinci satırda söylenir (yalnız işaret).
+export function DegisiklikSeridi({ calisma, dis, canli = null }: { calisma: PlanlamaCalismasi | null; dis: BekleyenDegisiklik | null; canli?: CanliBayatlik | null }) {
   const [acik, setAcik] = useState(false);
+  const [canliAcik, setCanliAcik] = useState(false);
   if (calisma === null || calisma.plan === null) return null;
+  const canliMetin = canli === null ? null : canliBayatMetni(canli);
   const liste = seritListesi(calisma, dis);
   const ozet = seritOzeti(liste);
   return (
-    <section className="tc-py-ds" data-durum={ozet.toplam > 0 ? 'eski' : 'guncel'} aria-label="Değişiklik akışı">
+    <section className="tc-py-ds" data-durum={ozet.toplam > 0 || canliMetin !== null ? 'eski' : 'guncel'} aria-label="Değişiklik akışı">
       <div className="tc-py-ds-satir" role="status">
         <Simge ad="clock" boyut="k" />
         <span className="tc-py-ds-metin">{seritMetni(ozet)}</span>
@@ -22,6 +25,26 @@ export function DegisiklikSeridi({ calisma, dis }: { calisma: PlanlamaCalismasi 
           </Dugme>
         )}
       </div>
+      {canli !== null && canliMetin !== null && (
+        <div className="tc-py-ds-satir" role="status" data-canli="eski">
+          <Simge ad="alert" boyut="k" />
+          <span className="tc-py-ds-metin">{canliMetin}</span>
+          <Dugme simge={canliAcik ? 'up' : 'down'} aria-expanded={canliAcik} onClick={() => { setCanliAcik((x) => !x); }}>
+            {canliAcik ? 'Gizle' : 'Olaylar'}
+          </Dugme>
+        </div>
+      )}
+      {canli !== null && canliMetin !== null && canliAcik && (
+        <ul className="tc-py-ds-liste" aria-label="Canlı planı eskiten olaylar">
+          {canli.olaylar.map((o, i) => (
+            <li key={`${o.neden}-${o.zaman}-${String(i)}`}>
+              <span className="tc-py-ds-ne"><Rozet ton="uyari">Saha</Rozet><b>{canliBayatSatiri(o)}</b></span>
+              <span className="tc-py-ds-kim">{saat(Date.parse(o.zaman))}</span>
+            </li>
+          ))}
+          <li className="tc-py-ds-not">Plan kendiliğinden değişmez; yeniden planlayıp canlıya alınca işaret kalkar.</li>
+        </ul>
+      )}
       {acik && ozet.toplam > 0 && (
         <ul className="tc-py-ds-liste">
           {liste.map((b) => (
