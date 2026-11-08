@@ -57,14 +57,14 @@ export const KABUK_AYARLARI = {
     baslik: 'Firma adı',
     aciklama: 'Modül başlıklarında ve belgelerde görünen kurum adı.',
   },
-  // Kullanıcı kararı (kart 2175, 06.11): giriş ekranının açılış sesi kurum genelinde yöneticiden açılır; giriş ekranındaki düğme
-  // yalnız o cihazda bunu değiştirir. Giriş ekranı oturumsuz okur (kimin gireceği belli değil), bu yüzden profil ayarı değildir.
+  // Kullanıcı kararı (kartlar 2175, 2230c): giriş ekranının açılış sesi yalnız burada, kurum genelinde açılır; giriş ekranında düğme
+  // yoktur. Giriş ekranı oturumsuz okur (kimin gireceği belli değil), bu yüzden profil ayarı değildir.
   'kabuk.giris-sesi': {
     modul: 'kabuk',
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Giriş ekranı açılış sesi',
-    aciklama: 'Açıkken bütün cihazlarda giriş ekranı açılış sesini çalar; kapalıyken susar. Giriş ekranındaki ses düğmesi yalnız o cihazda bunu değiştirir. Tarayıcı dokunulmamış sayfada ses çalmaz: terminal tarayıcısı otomatik oynatmaya izin vermiyorsa ses ilk dokunuşta değil, düğmeyle başlar.',
+    aciklama: 'Açıkken bütün cihazlarda giriş ekranı açılış sesini çalar; kapalıyken susar. Tarayıcı dokunulmamış sayfada ses çalmaz: ses yalnız tarayıcısında bu adres için otomatik ses oynatmaya izin verilmiş cihazda çalar.',
   },
   // Kullanıcı isteği (kart 2230b): sesin yüksekliği de kurum genelinde ayarlanır; %70 bugüne kadar çalan yüksekliktir. Listeden
   // seçilir ve seçilince kaydedilir: sayı kutusu ayrı bir Kaydet (birincil) düğmesi getirirdi, sayfanın birincil sınırını aşardı.

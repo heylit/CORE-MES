@@ -51,17 +51,9 @@ export function cihazPartisi(): number {
   }
 }
 
-// Cihazın kendi seçimi (giriş ekranındaki düğme); seçim yoksa null ve kurum ayarı geçerlidir (kart 2175).
-export function cihazTercihi(): boolean | null {
-  try {
-    const d = window.localStorage.getItem(TERCIH_ANAHTARI);
-    return d === 'acik' ? true : d === 'kapali' ? false : null;
-  } catch { return null; }
-}
-// Cihaz seçimi kurum ayarını geçersiz kılar; ikisi de yoksa kapalıdır.
-export const sesAcikMi = (kurumAcik = false): boolean => cihazTercihi() ?? kurumAcik;
-export function sesTercihiYaz(acik: boolean): void {
-  try { window.localStorage.setItem(TERCIH_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* saklanamazsa yalnız bu açılış için geçerlidir */ }
+// Giriş ekranındaki ses düğmesi kalktı (kart 2230c); o düğmenin bu cihazda bıraktığı seçim silinir, yoksa kurum ayarını sessizce ezerdi.
+export function eskiCihazTercihiniSil(): void {
+  try { window.localStorage.removeItem(TERCIH_ANAHTARI); } catch { /* depolama kapalıysa silinecek bir şey de yoktur */ }
 }
 
 // Kurum ses düzeyi (0-100, kabuk.giris-sesi-duzeyi) ana kazanca çevrilir; 70 sesin tasarlandığı yüksekliktir (kazanç 0,47).
