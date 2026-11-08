@@ -4,6 +4,7 @@ import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import { SIMGELER } from '../tasarim/simgeler.ts';
 import { useGosteriSuruyor } from '../veri/gorunum.ts';
 import { karsilamaDonemi, karsilamaGoruldu, karsilamaGorulduMu, useKarsilama } from '../veri/karsilama.ts';
+import type { KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { useKurumAdi } from '../veri/kurum.ts';
 import { useKurumLogosu } from '../veri/kurum-logosu.ts';
 import { Dugme } from './Dugme.tsx';
@@ -77,14 +78,16 @@ function Gece({ bayrak }: { bayrak: boolean }) {
   );
 }
 
-const bugun = (): string =>
-  new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
+const tarihYazisi = (ms: number): string =>
+  new Date(ms).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 // Kurumun hareket dili "kapalı" ya da cihaz performans modundaysa bayrak durgun dalgalı tek kare çizilir.
 const hareketKapali = (): boolean => document.documentElement.getAttribute('data-hareket') === 'kapali';
 
 // Açılış anının tesis günü ve saati (tarayıcının saat dilimi değil).
-const simdi = (): { gun: string; saat: number } => ({ gun: tesisGunu(Date.now()), saat: Number(tesisSaati(Date.now()).slice(11, 13)) });
+interface KarsilamaAni { ms: number; gun: string; saat: number }
+const anCoz = (ms: number): KarsilamaAni => ({ ms, gun: tesisGunu(ms), saat: Number(tesisSaati(ms).slice(11, 13)) });
+const simdi = (): KarsilamaAni => anCoz(Date.now());
 
 // Girişten sonraki ilk açılışta bir kez çıkar; ayar kapalıyken, okunamazken ya da aynı sekmede o gün görülmüşken çıkmaz.
 // Kullanıcı kararı (kart 2232): açık kalan sekmede gün değişince ilk dönüşte ya da ilk dokunuşta bir kez daha çıkar.
@@ -95,10 +98,6 @@ export function Karsilama({ kisiId, ad }: { kisiId: number; ad: string }) {
   // Açılış gösterisi oynarken karşılama bekler, ardından gelir; ikisi üst üste binmez.
   const gosteriSuruyor = useGosteriSuruyor();
   const acik = bekliyor && veri?.acik === true && !gosteriSuruyor;
-  const kapat = () => { bekliyorYaz(false); };
-  const kutu = useKatman<HTMLDivElement>(acik, kapat);
-  const logo = useKurumLogosu(acik).data?.logo ?? null;
-  const kurumAdi = useKurumAdi();
 
   useEffect(() => {
     const yokla = () => {
@@ -112,8 +111,6 @@ export function Karsilama({ kisiId, ad }: { kisiId: number; ad: string }) {
     window.addEventListener('pointerdown', yokla, { capture: true });
     return () => { document.removeEventListener('visibilitychange', yokla); window.removeEventListener('pointerdown', yokla, { capture: true }); };
   }, [an.gun, kisiId]);
-  const baslikKimlik = useId();
-  const adKimlik = useId();
 
   // Göründüğü an işaretlenir: kapatılmadan yenilenen sayfada da ikinci kez çıkmaz.
   useEffect(() => {
@@ -124,6 +121,24 @@ export function Karsilama({ kisiId, ad }: { kisiId: number; ad: string }) {
   }, [acik, kisiId, an.gun]);
 
   if (!acik || veri === undefined) return null;
+  return <KarsilamaPenceresi veri={veri} an={an} ad={ad} kapat={() => { bekliyorYaz(false); }} />;
+}
+
+// Kart 2232c: Sistem Ayarları'ndaki önizleme seçilen gün ve saatle aynı kartı yalnız açana çizer; işaret yazılmaz, kendiliğinden
+// kapanmaz, ayar kapalı olsa da çizilir (yönetici açmadan önce görmek isteyebilir).
+export function KarsilamaOnizleme({ ms, ad, kapat }: { ms: number; ad: string; kapat: () => void }) {
+  const veri = useKarsilama(true).data;
+  const [an] = useState(() => anCoz(ms));
+  if (veri === undefined) return null;
+  return <KarsilamaPenceresi veri={veri} an={an} ad={ad} kapat={kapat} />;
+}
+
+function KarsilamaPenceresi({ veri, an, ad, kapat }: { veri: KarsilamaCevabi; an: KarsilamaAni; ad: string; kapat: () => void }) {
+  const kutu = useKatman<HTMLDivElement>(true, kapat);
+  const logo = useKurumLogosu(true).data?.logo ?? null;
+  const kurumAdi = useKurumAdi();
+  const baslikKimlik = useId();
+  const adKimlik = useId();
   // Karşılama kısa sürer: açıkken dönem ve gün değişmez.
   const gece = karsilamaDonemi(an.saat, veri.gunduzBaslangic, veri.geceBaslangic) === 'gece';
   const gunun = karsilamaGunu(an.gun, veri);
@@ -147,7 +162,7 @@ export function Karsilama({ kisiId, ad }: { kisiId: number; ad: string }) {
           ? <div className="tc-karsilama-logo"><img src={logo} alt="" /></div>
           : kurumAdi !== null && <p className="tc-karsilama-kurum">{kurumAdi}</p>}
         {!gunun.sade && (gece ? <Gece bayrak={gunun.bayrak} /> : <Gunes bayrak={gunun.bayrak} />)}
-        <p className="tc-karsilama-tarih">{bugun()}</p>
+        <p className="tc-karsilama-tarih">{tarihYazisi(an.ms)}</p>
         <h2 className="tc-karsilama-metin" id={baslikKimlik}>{metin}</h2>
         <p className="tc-karsilama-ad" id={adKimlik}><Simge ad="user" />{ad}</p>
         {gunun.soz !== null && <p className="tc-karsilama-soz">“{gunun.soz}”</p>}

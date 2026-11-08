@@ -3,18 +3,21 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
-import type { Ayar, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { Ayar, AyarlarCevabi, KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import type { AyarEkrani } from '../../ortak/rota/ayar-ekranlari.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
-import { SistemAyarlari, ayarKategorisi, numaraOnizlemesi, sayiCoz } from './SistemAyarlari.tsx';
+import { SistemAyarlari, ayarKategorisi, numaraOnizlemesi, onizlemeAniCoz, sayiCoz } from './SistemAyarlari.tsx';
 
 // Sunucunun gerçek cevap biçimi; başlık ve açıklama deneme metnidir.
 const DORT_GOZ: Ayar = { anahtar: 'malzemeler.dort-goz', baslik: 'Deneme dört göz', aciklama: 'Dört göz açıklaması', tur: 'boolean', deger: true };
 const OTEKI: Ayar = { anahtar: 'deneme.dort-goz', baslik: 'Deneme öteki', aciklama: 'Öteki açıklaması', tur: 'boolean', deger: false };
 // Sunucunun gerçek cevabı: işlemi olmayan kullanıcının isteği.
 const YETKI_YOK = { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' } satisfies HataGovdesi;
+
+// Karşılama kapalı ve gün notu yok: önizleme yine de kaydedilmiş metinle çizilmelidir.
+const KARSILAMA_KAPALI = { acik: false, metin: 'Deneme karşılama', geceMetni: 'Deneme gece', gunduzBaslangic: 6, geceBaslangic: 6, sozAcik: false, gunNotuAcik: false, ramazanBayrami: null, kurbanBayrami: null } satisfies KarsilamaCevabi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -32,6 +35,7 @@ function sunucuKur({ liste, yazma }: Kurulum = {}) {
     if (yol === '/ayarlar') return liste ? liste() : json(200, { ayarlar: [DORT_GOZ, OTEKI] } satisfies AyarlarCevabi);
     if (yol === '/kapali-sayfalar') return json(200, { kapali: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
+    if (yol === '/karsilama') return json(200, KARSILAMA_KAPALI);
     if (yazma && secenek.method === 'POST') return yazma(yol, govde);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -495,5 +499,45 @@ describe('Sistem Ayarları: metin ayarı', () => {
     ]);
     expect((await kutu() as HTMLInputElement).value).toBe('İyi mesailer');
     expect((kaydet() as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('Sistem Ayarları: karşılama önizlemesi (kart 2232c)', () => {
+  const RAMAZAN: Ayar = { anahtar: 'kabuk.karsilama-ramazan', baslik: 'Deneme ramazan', aciklama: 'R', tur: 'metin', deger: '', enUzun: 40, bosOlabilir: true, bicim: 'tarih-araligi' };
+  const KURBAN: Ayar = { ...RAMAZAN, anahtar: 'kabuk.karsilama-kurban', baslik: 'Deneme kurban' };
+
+  it('an çözümü: gg.aa.yyyy ss:dd tesis saatidir; bozuk gün, saat ve biçim hata döner', () => {
+    expect(onizlemeAniCoz('29.10.2026 09:00')).toEqual({ ms: Date.UTC(2026, 9, 29, 6, 0) });
+    expect(onizlemeAniCoz(' 1.1.2027 23.59 ')).toEqual({ ms: Date.UTC(2027, 0, 1, 20, 59) });
+    for (const bozuk of ['31.02.2026 09:00', '29.10.2026 24:00', '29.10.2026 09:60', '29.10.2026', '2026-10-29 09:00', '']) {
+      expect('hata' in onizlemeAniCoz(bozuk)).toBe(true);
+    }
+  });
+
+  it('tarih aralığı ayarı istemcide sunucuyla aynı kuralla denetlenir; ters sıra gönderilmez', async () => {
+    sunucuKur({ liste: () => json(200, { ayarlar: [RAMAZAN] } satisfies AyarlarCevabi) });
+    ac(undefined, undefined, null);
+    const girdi = await screen.findByRole('textbox', { name: RAMAZAN.baslik });
+    const kaydet = () => within(girdi.closest('form') as HTMLElement).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement;
+    fireEvent.change(girdi, { target: { value: '22.03.2026 - 20.03.2026' } });
+    expect(kaydet().disabled).toBe(true);
+    fireEvent.change(girdi, { target: { value: '20.03.2026 - 22.03.2026' } });
+    expect(kaydet().disabled).toBe(false);
+  });
+
+  it('önizleme satırı son karşılama ayarının altında çıkar; seçilen anda karşılama kapalı olsa da açılır ve kapanır, hiçbir şey yazılmaz', async () => {
+    const istekler = sunucuKur({ liste: () => json(200, { ayarlar: [RAMAZAN, KURBAN, DORT_GOZ] } satisfies AyarlarCevabi) });
+    ac(undefined, undefined, null);
+    const kutu = await screen.findByRole('textbox', { name: 'Gün ve saat' });
+    const satirlar = within(screen.getByRole('list', { name: 'Genel ayarlar' })).getAllByRole('listitem');
+    expect(satirlar.findIndex((s) => within(s).queryByText('Karşılamayı önizle') !== null)).toBe(2);
+    fireEvent.change(kutu, { target: { value: '31.02.2026 09:00' } });
+    expect((screen.getByRole('button', { name: 'Önizle' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(kutu, { target: { value: '04.11.2026 09:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Önizle' }));
+    const pencere = await screen.findByRole('dialog', { name: KARSILAMA_KAPALI.metin });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Başlayalım' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
   });
 });
