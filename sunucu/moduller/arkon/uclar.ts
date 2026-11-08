@@ -1,4 +1,4 @@
-import { ikiliCevap, uc } from '#cekirdek/uc.ts';
+import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
   anomaliCevabi, anomaliIstatistikCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
@@ -9,6 +9,8 @@ import {
 } from '#paylasilan/sozlesme/arkon.ts';
 import { anomaliOlaylari } from './anomali-zaman.ts';
 import * as servis from './servis.ts';
+import { goruntuSorgusu } from './pdf-goruntu/kurallar.ts';
+import { pdfGoruntusu } from './pdf-goruntu/servis.ts';
 
 // Okuma ve yazma uçları Arkon'u açan üç sayfadan birini ister (Arkon rolü olan her TMI rolünde var; rol dağılımı testi). Yazma için
 // kullanıcının yazılı onayı (17.10.2026, ADR 0007 madde 2): oturumu olan ama bu sayfaları görmeyen kişi yazamasın.
@@ -188,6 +190,17 @@ export const uclar = [
     parametre: dosyaParametresi,
     cevap: ikiliCevap,
     isle: ({ db, kullanici, parametre }) => servis.dosya(db, kullanici, parametre.ozet),
+  }),
+  // ADR 0032: PDF sayfasının sunucuda hazırlanmış renkli görüntüsü. Okuma kuralı dosyanınkiyle aynıdır; görüntü henüz yoksa boş döner,
+  // tablet kendisi çizer.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/dosyalar/:ozet/goruntu',
+    yetki: ARKON_SAYFASI,
+    parametre: dosyaParametresi,
+    sorgu: goruntuSorgusu,
+    cevap: ikiliCevapYaDaBos,
+    isle: ({ db, kullanici, parametre, sorgu }) => pdfGoruntusu(db, kullanici, parametre.ozet, sorgu.sayfa, sorgu.imza),
   }),
   // Terminal paketin dosyalarını açılmadan önce arka planda cihaza indirir (726 a); kişinin açmadığı dosya indirme denetimine
   // yazılmaz (730 a). Okuma kuralı yukarıdaki uçla aynıdır; kişinin açtığı dosya o uçtan gelir ve deftere yazılır.

@@ -20,7 +20,8 @@ import { Model3B } from './Model3B.tsx';
 import { ocrGoruntu, ocrPdfSayfasi } from './ocr.ts';
 import { olcuBirlestir, olcuOnerileri, onayIster, tabloBul, type MetinOgesi, type OkumaIstatistigi, type OlcuListesi } from './okuma.ts';
 import { useCizimOrtami } from './ortam.tsx';
-import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renklendir, type PdfBelgesi } from './pdf.ts';
+import { pdfAc, pdfBolge, pdfCiz, pdfGoruntu, renkAyari, renklendir, type PdfBelgesi } from './pdf.ts';
+import { renkImzasi } from '#paylasilan/pdf-renk.ts';
 import { pdfKaydiAnahtari, saklananiAc, sayfaKaydi } from './pdf-hazir.ts';
 import './cizim.css';
 
@@ -74,6 +75,8 @@ export interface TeknikResimKontrolu {
   balonAyariYaz?: (a: BalonAyari) => void;
   // Balonun elle konan yeri ve istenen yerleşimi. Verilmezse balon listesine yazılır (balonlarYaz).
   balonYeriYaz?: (id: number, yer: Balon['yer'], yerKipi: Balon['yerKipi']) => void;
+  // ADR 0032: sunucunun aynı renk imzasıyla hazırladığı sayfa görüntüsü. Verilmezse ya da boş dönerse görüntü bu cihazda çizilir.
+  hazirGoruntu?: (pdf: Uint8Array, sayfa: number, imza: string) => Promise<Blob | null>;
 }
 export interface BalonAyari { carpan: number; kip: BalonKipi }
 
@@ -212,13 +215,20 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       ckSeen.current = ck;
       setImgUrl((o) => { if (o) URL.revokeObjectURL(o); return null; }); setLoUrl((o) => { if (o) URL.revokeObjectURL(o); return null; });
     }
+    // Sunucunun hazır görüntüsü (ADR 0032): imza tutarsa bu cihaz sayfayı çizmez ve renklendirmez; tutmazsa ya da yoksa null.
+    const hazir = async (sayfa: number, lo: boolean): Promise<Blob | null> => {
+      const kaynak = pdfSrc.current, al = ctl.hazirGoruntu;
+      if (!kaynak || !al) return null;
+      try { return await al(kaynak.bytes, sayfa, renkImzasi(renkAyari(koyu, cfgOf(), lo))); } catch { return null; }
+    };
     (async () => {
       const C = PDF_BELLEGI.get(ck); if (!C) return;
       const cf = cfgOf(), pkey = tema + '~v4' + ayarImzasi(cf, GORUNUS_ANAHTARLARI);
       const dpr = window.devicePixelRatio || 1, L = Math.round(Math.min(C.w, Math.max(1200, window.innerWidth * dpr * 0.85)));
       if (L < C.w * 0.8) {
         const lk = pkey + '@' + L;
-        let lb = C.pngLo?.[lk];
+        let lb = C.pngLo?.[lk] ?? await hazir(doc.page || 1, true); if (!ok) return;
+        if (lb && !C.pngLo?.[lk]) C.pngLo = { ...C.pngLo, [lk]: lb };
         if (!lb) {
           const pdf = await ensurePdf(); if (!ok || !pdf) return;
           const img = await pdfGoruntu(pdf, doc.page || 1, L / C.w * C.scale); if (!ok) return;
@@ -229,7 +239,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       } else if (ok) setLoUrl((o) => { if (o) URL.revokeObjectURL(o); return null; });
       // Yüksek çözünürlük hemen değil, ekran boşalınca hazırlanır.
       await bekle(L < C.w * 0.8 ? 400 : 0); if (!ok) return;
-      let blob = C.png[pkey];
+      let blob = C.png[pkey] ?? await hazir(doc.page || 1, false); if (!ok) return;
+      if (blob && !C.png[pkey]) C.png = { ...C.png, [pkey]: blob };
       if (!blob) {
         const img = await ensureImg(); if (!ok || !img) return;
         blob = await renklendir(img, koyu, cf); C.png = { ...C.png, [pkey]: blob }; if (!C.enc) kaydiSakla(ck, C);

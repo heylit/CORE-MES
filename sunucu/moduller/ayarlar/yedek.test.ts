@@ -512,6 +512,7 @@ describe('ayarlar veritabanı yedeği (gerçek PostgreSQL, geçici dizin, sahte 
     // Çıktı dosyaya değil standart çıktıya: düz yedek diske hiç yazılmaz.
     assert.deepEqual(yazilan.argv, [
       '--format=custom', '--no-password', '--host=127.0.0.1', '--port=5432', '--username=tmiv2_uygulama', '--dbname=tmiv2',
+      '--exclude-table-data=public.arkon_pdf_goruntu',
     ]);
     assert.equal(yazilan.argv.some((a) => a.includes('gizli-parola')), false);
     assert.equal(yazilan.pgpassword, 'gizli-parola');

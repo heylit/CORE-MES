@@ -13,6 +13,7 @@ import { isBekliyor, type IsBekliyor } from '#cekirdek/zamanlayici.ts';
 import type {
   PgSurumu, Yedek, YedekAlCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedekListesi, YedekTuru, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
+import { YEDEKTE_VERISI_ALINMAYAN_TABLOLAR } from '#cekirdek/yedek-disi.ts';
 import { DOSYA_SINIRI, depoDolulugu } from '../dosya/disari.ts';
 import {
   YEDEK_EN_AZ_KALAN, YEDEK_SAATI, aracAnaSurumu, pgSurumuDenetle, sunucuAnaSurumu, YEDEK_SAKLAMA_GUN, dosyaDeposuHesapla, geceYedegiGerekliMi, yedekAlaniHesapla, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
@@ -270,11 +271,14 @@ export function sifreliYaz(anahtar: Buffer, kaynak: AsyncIterable<Buffer>, hedef
   }, createWriteStream(hedef));
 }
 
+// Türetilmiş verinin satırları yedeğe girmez (tablo yapısı girer): yedek ve WAL büyümez. Ad şemayla tam yazılır, joker yoktur.
+export const veriAlinmayanArgumanlari = (sema = 'public'): string[] => YEDEKTE_VERISI_ALINMAYAN_TABLOLAR.map((t) => `--exclude-table-data=${sema}.${t}`);
+
 // pg_dump standart çıktıya yazar ve çıktı şifrelenerek dosyaya akar: düz yedek diske hiç düşmez.
 function pgDumpCalistir(komut: PgDumpKomutu, pg: PgBaglantisi, anahtar: Buffer, hedef: string): Promise<void> {
   const argumanlar = [
     ...komut.onEk, '--format=custom', '--no-password', `--host=${pg.host}`, `--port=${String(pg.port)}`,
-    `--username=${pg.kullanici}`, `--dbname=${pg.veritabani}`,
+    `--username=${pg.kullanici}`, `--dbname=${pg.veritabani}`, ...veriAlinmayanArgumanlari(),
   ];
   const surec = spawn(komut.dosya, argumanlar, {
     env: altSurecOrtami(pg.parola), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,

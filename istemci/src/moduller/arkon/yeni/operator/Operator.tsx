@@ -92,7 +92,8 @@ import { lotEslesmesi } from './lot-eslesmesi.ts';
 import { okutulanKoduCoz, useIsGirdileri } from '../../../stok/disari.ts';
 import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
-import { baytiVar, useCozulmus } from '../veri/dosyalar.ts';
+import { baytiVar, hazirPdfGoruntusu, useCozulmus } from '../veri/dosyalar.ts';
+import { ikiliOku } from '../../baglanti.ts';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
 
@@ -715,6 +716,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // Paket listesi dosyasız gelir (kart #731): açık işin dosyaları ve hazır verisi burada baytlanır; gelene kadar resim boş açılır.
   const pkgAnahtari = o.pkg ? o.pkg.id + ':' + o.pkg.version : '';
   const acikDosyalar = useCozulmus(depo, o.pkg && !telefon ? { files: o.pkg.files, derived: o.pkg.derived } : null, pkgAnahtari);
+  // ADR 0032: terminal sayfa görüntüsünü sunucudan hazır alır; yoksa kendisi çizer.
+  const hazirGoruntu = useCallback((pdf: Uint8Array, sayfa: number, imza: string) => hazirPdfGoruntusu(depo, ikiliOku, pdf, sayfa, imza), [depo]);
   const resimKontrolu = useMemo((): TeknikResimKontrolu => (o.pkg ? {
     anahtar: pkgAnahtari + (acikDosyalar ? '' : ':bekliyor'), dosyalar: acikDosyalar ? baytli(acikDosyalar.files) : [], anaResim: o.pkg.primary,
     hazirVeri: acikDosyalar?.derived ?? null, ayar: o.pkg.readCfg,
@@ -722,7 +725,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     aletZorunlu: !pv, aletSecimi: (tool) => <Suspense fallback={null}><AletSecici aletler={aletler} tool={tool} /></Suspense>,
     operatorOlcer: opIds, odakKipi: odakKipiYaz, olcumler: (o.meas || {}) as unknown as TeknikResimKontrolu['olcumler'],
     retGerekcesi: retGerekcesiMetni(o.lastDecision), odak, siradaki: D.due.map((b) => b.id), notlar: (o.pins || []) as unknown as ResimNotu[],
-    olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), olcumBildir, notBirak: pv ? undefined : notBirak,
+    olcumlerYaz: (m) => olcumYaz(m as unknown as Record<number, Meas>), olcumBildir, notBirak: pv ? undefined : notBirak, hazirGoruntu,
   } : {
     anahtar: 'bos:' + o.no, dosyalar: [], anaResim: null, balonlar: [], balonlarYaz: () => undefined, olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: true,
   }), [o.pkg?.id, o.pkg?.version, acikDosyalar, o.meas, o.lastDecision, o.pins, o.no, odak, dueKey, RL, opIds.join(','), cizimEski, aletler]);

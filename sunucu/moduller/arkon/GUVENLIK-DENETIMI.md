@@ -67,3 +67,9 @@ okuyabilen). Çizim Merkezi'nden alma (`POST /arkon/cizim-merkezi/belgeler/:id/e
 başka modülde bağlı içeriği kabul eder (DSb istisnası, ADR 0009 ek). Taslağın `malzemeCizimleri` önerisi okuma ucunda yazma yapmaz. İzinli:
 yansima.test.ts "732 a"; Hazirlik.test.tsx "bir kez pakete gelir". Ret: guvenlik "dosya yalnız onu anan belgeyi okuyabilene" (bağsız ve kapsam dışı 404),
 Hazirlik.test.tsx "yetkisi olmayan kişide ... alınmaz", arkon.test.ts merkez testleri (operatör 403, taslak ve arşiv 404, resim 422).
+
+Sunucunun PDF görüntüsü (kart 2339-S, ADR 0032): `GET /arkon/dosyalar/:ozet/goruntu`, yetki `sayfa.arkon` (ARKON_SAYFASI), okuma kuralı kaynak dosyanınkiyle aynı
+(`servis.ts` `dosya`: yükleyen ya da anan belgeyi okuyabilen); telefon profili çizim almaz. Görüntü yoksa gövdesiz 204, tablet kendisi çizer. PDF yalnız ağsız,
+veritabanısız, ortam değişkensiz ayrı süreçte çizilir (`pdf-goruntu/surec.ts`, süre, bellek ve boy sınırı); hata metnine dosya içeriği girmez. Görüntü kaynak
+özeti ve renk imzasıyla anahtarlanır; revizyon değişince eski görüntü verilmez, yayında anılmayan özetin görüntüsü silinir. İzinli: pdf-goruntu.test.ts P-V1
+(yönetici 200). Ret: P-V1 (rolsüz 403, bozuk imza 400), P-V4 (telefon YETKI_YOK), P-S1 ve P-S2 (ortam ve hata içeriği), P-V2 (eski revizyon).

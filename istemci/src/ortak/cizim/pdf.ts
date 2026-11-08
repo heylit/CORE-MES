@@ -2,6 +2,7 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { pdfjs, pdfWasmAdresi, type PdfKitapligi } from './kitaplik.ts';
 import type { OkumaAyari } from './kurallar.ts';
 import type { MetinOgesi } from './okuma.ts';
+import { gorunus, renklendirPiksel, type RenkAyari } from '#paylasilan/pdf-renk.ts';
 
 // PDF: sayfayı vektörden çiz, metin katmanını oku, görüntüyü temaya göre renklendir (pdf.ts). Tarayıcı tuvali gerekir.
 // Tuvali pdf.js değil biz açarız (beyaz zemin önce çizilir): canvas null, canvasContext verilir (eskisi gibi).
@@ -111,36 +112,13 @@ const pngYap = (img: ImageData): Promise<Blob> => {
 };
 
 // Görüntü temaya göre renklendirilir. net: koyu temada beyaza, açık temada siyaha yakın çizgi · blue: mavi teknik resim · orig: PDF'in renkleri.
-// lo: ekran çözünürlüğünde pdf.js çizgileri zaten 1 px, kalınlaştırma bir kademe az.
+// Piksel işlemi sunucunun hazır görüntüsüyle ortaktır (paylasilan/pdf-renk.ts, ADR 0032).
+export function renkAyari(koyu: boolean, cfg: Pick<OkumaAyari, 'look' | 'bold'> | null, lo = false): RenkAyari {
+  const look = gorunus(cfg?.look);
+  return { koyu, look, bold: cfg && cfg.bold != null ? +cfg.bold : 1, lo, renk: degiskenRengi(look === 'blue' ? '--bp' : '--ink') };
+}
 export function renklendir(img: ImageData, koyu: boolean, cfg: Pick<OkumaAyari, 'look' | 'bold'> | null, lo = false): Promise<Blob> {
-  const look = cfg?.look || 'net', bold = Math.max(0, (cfg && cfg.bold != null ? +cfg.bold : 1) - (lo ? 1 : 0));
-  const bp = degiskenRengi(look === 'blue' ? '--bp' : '--ink'), net = look !== 'blue';
-  const out = new ImageData(img.width, img.height), s = img.data, d = out.data;
-  if (look === 'orig') { d.set(s); return pngYap(out); }
-  for (let i = 0; i < s.length; i += 4) {
-    const r = s[i]!, g = s[i + 1]!, b = s[i + 2]!, mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255, sat = (mx - mn) / 255, ink = 1 - lum;
-    if (ink < 0.05 && sat < 0.1) { d[i + 3] = 0; continue; }
-    // Yarı saydam kenar pikselleri güçlendirilir (gama): ince yazı silik görünmesin.
-    const a = net ? Math.pow(ink, lo ? 0.8 : 0.6) * (lo ? 1.3 : 1.5) : ink * 1.3;
-    // net: yalnız kırmızı (eksen çizgisi) renkli kalır, öteki renkli yazı ve çizgi mürekkep rengine döner.
-    if (sat > 0.22 && (!net || (r > 150 && g < 110 && b < 110))) {
-      const k = koyu ? 0.35 : 0; d[i] = r + (255 - r) * k; d[i + 1] = g + (255 - g) * k; d[i + 2] = b + (255 - b) * k; d[i + 3] = Math.min(255, (a * 1.08 + sat) * 255);
-    } else { d[i] = bp[0]; d[i + 1] = bp[1]; d[i + 2] = bp[2]; d[i + 3] = Math.min(255, a * 255); }
-  }
-  // İnce CAD çizgileri ekrana sığınca kaybolmasın: alfa kanalında 3×3 genişletme (kalınlaştırma ayarı kadar tekrar).
-  const W = img.width, H = img.height, a0 = new Uint8ClampedArray(W * H);
-  for (let pass = 0; pass < bold; pass++) {
-    for (let i = 0, j = 3; i < a0.length; i++, j += 4) a0[i] = d[j]!;
-    for (let y = 1; y < H - 1; y++) {
-      for (let x = 1; x < W - 1; x++) {
-        const i = y * W + x; if (a0[i]! > 200) continue;
-        let m = a0[i]!, mi = i;
-        const n = [i - 1, i + 1, i - W, i + W, i - W - 1, i - W + 1, i + W - 1, i + W + 1];
-        for (let q = 0; q < 8; q++) { const v = a0[n[q]!]! * (q < 4 ? 0.9 : 0.7); if (v > m) { m = v; mi = n[q]!; } }
-        if (mi !== i) { const o = 4 * i, p = 4 * mi; d[o] = d[p]!; d[o + 1] = d[p + 1]!; d[o + 2] = d[p + 2]!; d[o + 3] = m; }
-      }
-    }
-  }
+  const out = new ImageData(img.width, img.height);
+  renklendirPiksel(img.data, img.width, img.height, out.data, renkAyari(koyu, cfg, lo));
   return pngYap(out);
 }

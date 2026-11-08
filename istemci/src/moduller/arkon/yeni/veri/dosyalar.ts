@@ -32,3 +32,21 @@ export function useCozulmus<T>(depo: Pick<ArkonDeposu, 'coz'>, deger: T | null |
   }, [depo, anahtar]);
   return cozulen && cozulen.anahtar === anahtar && deger !== null && deger !== undefined ? cozulen.deger : null;
 }
+
+// ADR 0032: sunucunun hazırladığı PDF sayfa görüntüsü. Dosyanın blob özeti baytlardan bir kez hesaplanır; görüntü yoksa (henüz
+// hazırlanmadı, imza tutmadı, yetki ya da ağ yok) null döner ve görüntüleyici sayfayı bu cihazda çizer.
+const BLOB_OZETLERI = new WeakMap<Uint8Array, Promise<string>>();
+export async function hazirPdfGoruntusu(
+  depo: Pick<ArkonDeposu, 'sha256' | 'status'>, oku: (yol: string) => Promise<Uint8Array>, pdf: Uint8Array, sayfa: number, imza: string,
+): Promise<Blob | null> {
+  if (depo.status().mode !== 'server') return null;
+  let ozet = BLOB_OZETLERI.get(pdf);
+  if (ozet === undefined) { ozet = depo.sha256(pdf); BLOB_OZETLERI.set(pdf, ozet); }
+  try {
+    const sorgu = new URLSearchParams({ sayfa: String(sayfa), imza });
+    const u = await oku(`/arkon/dosyalar/${await ozet}/goruntu?${sorgu.toString()}`);
+    return u.length > 0 ? new Blob([u as Uint8Array<ArrayBuffer>], { type: 'image/png' }) : null;
+  } catch {
+    return null;
+  }
+}
