@@ -50,6 +50,16 @@ beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Giris', () => {
+  it('acik giris ekrani yenilemede bekleme zeminini isaretler; giris yapilinca isaret kalkar (beyaz parlama yok)', () => {
+    sunucuKur();
+    const { unmount } = render(<QueryClientProvider client={new QueryClient()}><Giris /></QueryClientProvider>);
+    expect(window.localStorage.getItem('core.giris.acilis')).not.toBeNull();
+    document.documentElement.dataset['acilis'] = 'giris';
+    unmount();
+    expect(window.localStorage.getItem('core.giris.acilis')).toBeNull();
+    expect(document.documentElement.dataset['acilis']).toBeUndefined();
+  });
+
   it('giris logosu oturumsuz adresten okunur; yuklenince gorunur, yoksa (hata) gizli kalir', () => {
     sunucuKur();
     kur();

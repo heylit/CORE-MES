@@ -17,7 +17,7 @@ import {
 import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
-import { PLAN_STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/plan-stok-komutlari.ts';
+import { STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/stok-komutlari.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { Statu } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
@@ -2052,7 +2052,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     const kabul = await konumId('KABUL');
     // Köprü ve bu test aynı tabloyu ve istek kurucusunu kullanır.
     const komut = (ad: string, girdi: Record<string, unknown>, kim = 'depo') => {
-      const istegi = komutIstegi(PLAN_STOK_KOMUTLARI[ad]!, girdi);
+      const istegi = komutIstegi(STOK_KOMUTLARI[ad]!, girdi);
       assert.equal(istegi.tekrarKorumali, true);
       return istek<Hata & { hareketIdler?: number[] }>(kim, 'POST', istegi.yol, istegi.govde);
     };

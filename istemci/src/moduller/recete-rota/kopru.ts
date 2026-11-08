@@ -3,9 +3,7 @@ import { ROTA_KOMUTLARI } from './rota-komutlari.ts';
 import type { RotaKomutu } from './rota-komutlari.ts';
 import { EMIR_KOMUTLARI } from './emir-komutlari.ts';
 import { BOS_ANLIK, KAYNAK_OKUMALARI, koleksiyonKur, komutIstegi, takvimEki } from './kaynak-komutlari.ts';
-import { planSenaryoKomutlari } from './plan-senaryo-komutlari.ts';
-import type { PlanSenaryoKomutu } from './plan-senaryo-komutlari.ts';
-import { PLAN_STOK_KOMUTLARI } from './plan-stok-komutlari.ts';
+import { STOK_KOMUTLARI } from './stok-komutlari.ts';
 import { STATU_KOMUTLARI } from './statu-komutlari.ts';
 import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './kaynak-komutlari.ts';
 import type { SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -103,7 +101,7 @@ export function maliyetIstegi(girdi: Nesne, baglam: KomutBaglami): HazirKomut {
   return { yol: `/finans/maliyetler/${tur}/yaz`, govde: { anahtar, birimMaliyet: tutar, paraBirimi: 'TRY', surum: mevcut?.surum ?? null } };
 }
 
-export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | RotaKomutu | PlanSenaryoKomutu>> = {
+export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | RotaKomutu>> = {
   // Stok: statü atlatma (kart #1169, POST /stok/statu-degistir, `stok.statu-degistir`). Statü kimlikleri `recete_rota_statu.id`, null serbest
   // stoktur; konum ve parti çerçevenin seçtiği bakiye satırından gelir. Kural (yeterli bakiye, statü malzemenin mi) stoktadır.
   'statu-degistir': {
@@ -111,11 +109,9 @@ export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | 
   },
   // Finans: birim maliyetler (kart #1187, POST /finans/maliyetler/:tur/yaz, `finans.yonet`).
   'maliyet-yaz': { hazirla: (girdi: Nesne, baglam: KomutBaglami) => maliyetIstegi(girdi, baglam) },
-  ...PLAN_STOK_KOMUTLARI,
+  ...STOK_KOMUTLARI,
   // 533 a: malzemenin tedarik termini Satın Alma'nın ucuna yazılır (yetki satin-alma.yaz ya da plan.yaz; sürüm tutmazsa 409).
   'tedarik-termini-kaydet': { yol: '/satin-alma-tedarik-terminleri/kaydet', alanlar: ['malzemeNo', 'termin', 'aciklama', 'surum'], tekrarKorumali: true },
-  // Plan stüdyosu: senaryo plan modülünün taslağıdır (`plan-senaryo-komutlari.ts`).
-  ...planSenaryoKomutlari((yol) => api.get(yol)),
   // Rota (kart #1184): revizyon açma, kaydetme ve onay akışı rota modülünün uçlarına gider.
   ...ROTA_KOMUTLARI,
   // Emirler (kart #1185): emir aç, serbest bırak, iptal, parti bölme ve birleştirme (`emir-komutlari.ts`).
@@ -123,7 +119,7 @@ export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | 
   // Elle tanımlanan statü: Reçete ve Rota'nın kendi tablosu (`statu-komutlari.ts`).
   ...STATU_KOMUTLARI,
 };
-const komutTanimi = (ad: string): KomutTanimi | OzelKomut | RotaKomutu | PlanSenaryoKomutu => {
+const komutTanimi = (ad: string): KomutTanimi | OzelKomut | RotaKomutu => {
   const tanim = Object.hasOwn(IZINLI_KOMUTLAR, ad) ? IZINLI_KOMUTLAR[ad] : undefined;
   if (tanim === undefined) throw new Error(`Bilinmeyen komut: ${ad}`);
   return tanim;
@@ -279,29 +275,8 @@ async function emirAcilisi(girdi: Nesne, sor: EmirSecimiSor | undefined): Promis
   return { ...girdi, projeId: secim.projeId, ...(secim.siparisSatiriId === null ? {} : { siparisSatiriId: secim.siparisSatiriId }) };
 }
 
-// Acil sipariş denemesi canlıda taslak sipariş olur (286 b): her deneme için müşteri seçilir. Prototip müşteri sormaz; köprü canlıya
-// alma komutundan önce taslağın denemelerini okur, acil deneme varsa seçimi pencereye sorar ve gövdeye ekler.
-export interface AcilDeneme { degisiklikId: number; ozet: string }
-export interface AcilMusteri { degisiklikId: number; firmaId: number }
-export type AcilMusteriSor = (denemeler: AcilDeneme[]) => Promise<AcilMusteri[] | null>;
-const CANLIYA_ALMA_KOMUTLARI: ReadonlySet<string> = new Set(['plan-senaryo-canliya-al', 'plan-canliya-al']);
-
-async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Promise<AcilMusteri[]> {
-  const taslak = girdi['taslak'];
-  if (!tamSayi(taslak)) return [];
-  // Denemeler okunamazsa sorulmaz: acil deneme varsa plan modülü müşterisiz canlıya almayı kendisi reddeder.
-  const c = await api.get<{ senaryolar: { id: number; degisiklikler: { id: number; tur: string; ozet: string }[] }[] }>('/plan/senaryolar').catch(() => null);
-  const denemeler = (c?.senaryolar.find((x) => x.id === taslak)?.degisiklikler ?? [])
-    .filter((d) => d.tur === 'acil_emir').map((d) => ({ degisiklikId: d.id, ozet: d.ozet }));
-  if (denemeler.length === 0) return [];
-  const secim = sor === undefined ? null : await sor(denemeler);
-  if (secim === null) throw new ApiHatasi(400, { kod: 'DOGRULAMA', mesaj: 'Acil sipariş için müşteri seçilmedi; taslak canlıya alınmadı.' });
-  return secim;
-}
-
 // bedelAyariYazabilir: oturumda `plan.bedel-ayari` var; çerçeve öncelik ayarlarını yalnız o zaman düzenlenebilir çizer (yetkiyi sunucu verir).
 // emirSecimi: emir açılışında proje (ve gerekirse sipariş satırı) seçimi; verilmezse proje gereken emir açılmaz.
-// acilMusteriSecimi: acil sipariş denemesi olan taslağın canlıya alınmasında müşteri seçimi; verilmezse böyle taslak canlıya alınmaz.
 // planVerisi: her durum okumasında istasyon, makine ya da iş merkezi listesi okunamadıysa (sahibinin okuma yetkisi yok) true; kabuk
 // plan sekmelerinde eksik veriyle çizilen planı göstermez (304 a).
 // motorDurumu: motor yerleşimi okunamaz olunca true, yeniden okununca false (yalnız değişince). Okunamazken ekran kendi sırasıyla
@@ -312,7 +287,7 @@ async function acilMusteriler(girdi: Nesne, sor: AcilMusteriSor | undefined): Pr
 export function kopruKur(
   cihazAnahtarlari: readonly string[] = [],
   secenek: {
-    bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; acilMusteriSecimi?: AcilMusteriSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
+    bedelAyariYazabilir?: boolean; emirSecimi?: EmirSecimiSor; planVerisi?: (okunamadi: boolean) => void; motorDurumu?: (okunamadi: boolean) => void;
     motorUyarilari?: (uyarilar: readonly string[]) => void; yerlesimCizilmez?: () => boolean;
     islemler?: readonly string[];
   } = {},
@@ -432,10 +407,8 @@ export function kopruKur(
         const tanim = komutTanimi(ad);
         // Seçim penceresi sıranın dışında beklenir: kullanıcı düşünürken öteki komutlar ve okumalar durmaz.
         const girdi = ad === 'emir-ac' ? await emirAcilisi(nesne(v['govde']), secenek.emirSecimi) : nesne(v['govde']);
-        const musteriler = CANLIYA_ALMA_KOMUTLARI.has(ad) ? await acilMusteriler(girdi, secenek.acilMusteriSecimi) : [];
         return sirala(async () => {
-          const hazir = 'hazirla' in tanim ? { tekrarKorumali: false, ...(await tanim.hazirla(girdi, { maliyet: maliyetAnlik })) } : komutIstegi(tanim, girdi);
-          const istek = musteriler.length === 0 ? hazir : { ...hazir, govde: { ...hazir.govde, acilMusteriler: musteriler } };
+          const istek = 'hazirla' in tanim ? { tekrarKorumali: false, ...(await tanim.hazirla(girdi, { maliyet: maliyetAnlik })) } : komutIstegi(tanim, girdi);
           const sonuc = istek.tekrarKorumali
             ? await tekrarKorumaliGonder((d) => api.post<unknown>(istek.yol, istek.govde, d))
             : await api.post<unknown>(istek.yol, istek.govde);
