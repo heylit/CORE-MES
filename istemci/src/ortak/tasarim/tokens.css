@@ -267,6 +267,8 @@
   --cnc3d-kart-aciklama: #93a1b2; --cnc3d-numara-zemin: rgba(20,28,38,.9); --cnc3d-numara-yazi: #c9d3de; --cnc3d-numara-secili-yazi: #111111;
   --cnc3d-etiket-zemin: rgba(12,17,24,.85); --cnc3d-disli: #2c343f;
   --cnc3d-platform-ic: rgba(56,182,255,.35); --cnc3d-platform-orta: rgba(56,182,255,.08); --cnc3d-platform-dis: rgba(56,182,255,0);
+  /* Kart 2232: Türk bayrağı (Türk Bayrağı Kanunu kırmızısı) ve karşılamadaki logo levhası; temadan bağımsızdır. */
+  --bayrak-kirmizi: #e30a17; --bayrak-beyaz: #ffffff; --bayrak-golge: #3a0004; --logo-levha: #ffffff;
   --cnc3d-platform-halka: rgba(120,180,230,.35);
   --cnc3d-grafik-baslik: #c9d3de; --cnc3d-grafik-izgara: #223041; --cnc3d-grafik-yazi: #7f8c9b;
   --cnc3d-zemin: #10161d; --cnc3d-izgara-1: #1f2a36; --cnc3d-izgara-2: #16202a; --cnc3d-govde: #3a434e; --cnc3d-govde-acik: #dfe4e9;
