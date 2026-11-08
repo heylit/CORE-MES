@@ -38,7 +38,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
 ## Dış modüller ve kabul (kart #158)
 1. Tek sahip, tek yer: bir modül aynı anda ya depoda ya dışarıda yazılır. Dışarıda yazılanın kartı `durum: disarida` taşır; o sürede depoda o modülün dosyalarına dokunulmaz.
    Dışarıdaki yazım depodaki güncel modülden başlar; onaylı kararlar korunur, değişenler teslimdeki `FARK.md` ile gelir.
-2. Başvuru zorunlu: başvuru ekranı olan modülde ekran başvurudaki düzen ve akışla kurulur; görevde başvuru yolu ve kart numarası yoksa görev verilmez.
+2. Başvuru zorunlu: başvuru ekranı olan modülde ekran başvurudaki düzen ve akışla kurulur; görevde kart numarası yoksa görev verilmez; başvuru varsa yolu verilir.
 3. İki aşama: önce bütün dış modüller toplanır (Aşama 1), sonra birbirine bağlanır (Aşama 2; kullanıcı "bağla" deyince). Kabul Aşama 2'dedir: akış, kullanıcı deneyip "tamam" demeden bitmiş sayılmaz.
 4. Aşama 1, topla: teslim olduğu gibi oturur: derleme, sınır, lint ve kendi testleri yeşil; menüde ve ikinci menüde görünür; işlemleri yalnız yöneticide kalır. Oturtmayı yalnız kırmızı çizgiler
    durdurur (gerçek veri, dış çağrı, onaysız paket, eski sistem). Yetki, sürüm, kural ve görünüm bulguları düzeltilmez; modülün `UYUM-BORCU.md` dosyasına "bağlamada kapanacak" başlığıyla yazılır.
