@@ -100,8 +100,9 @@ günlüğüne yazar ve kapanır. Paket gerekmez. Bilgi işlemin izleme aracı bu
 
 Ne yoklar:
 - Sunucu: `http://127.0.0.1:<TMIV2_PORT>/api/saglik`, her zaman.
-- Vekil üzerinden sunucu: `.env`'de `TMIV2_DIS_BEKCI_VEKIL` doluysa (`https://<sunucu adı>`, yalnız şema, ad ve kapı; kurum içi ad
-  ya da özel IP). Boşsa yalnız sunucu yoklanır. Vekilin kurum CA sertifikasına Node'un güvenmesi için görev `--use-system-ca`
+- HTTPS kapısı üzerinden sunucu: `.env`'de `TMIV2_DIS_BEKCI_VEKIL` doluysa (`https://<sunucu adı>:4101`, yalnız şema, ad ve kapı; kurum içi ad
+  ya da özel IP). Canlıda HTTPS'i uygulama bitirdiği için adres arayüz kapısıdır; vekil seçeneğinde vekilin adresidir (`kurulum/canli.md`).
+  Değişkenin adı vekil yolundan kalmadır. Boşsa yalnız sunucu yoklanır. Kurum CA sertifikasına Node'un güvenmesi için görev `--use-system-ca`
   ile açılır (Windows sertifika deposu; doğrulanmadı, ilk kurulumda "Deneme" ile sınanır).
 
 Olaylar (Uygulama günlüğü, kaynak `TMIV2`; kaynağın açılması `kurulum/gunluk.md`):

@@ -85,12 +85,22 @@ function kokteYol(kok: string, yol: string): string | null {
   return tam === kok.slice(0, -1) || tam.startsWith(kok) ? tam : null;
 }
 
-export function arayuzIsleyicisi({ kok, api }: { kok: string; api: ApiIsleyicisi }): ApiIsleyicisi {
+// Canlıda HTTPS'i kapının kendisi sunuyorsa (2275-1 a) tarayıcı bu adı bir daha düz HTTP ile açmaz. Alt alan adları kapsanmaz: aynı kurum
+// alanındaki başka iç siteler düz HTTP olabilir. Tarayıcı IP adresiyle girişte başlığı yok sayar; telefonlar sertifikadaki adla girer.
+export const HSTS_BASLIGI = 'Strict-Transport-Security';
+export const HSTS_DEGERI = 'max-age=15552000';
+// Node'un varsayılanı da 1.2'dir; varsayılan değişse ya da --tls-min-v1.0 ile açılsa bile kapı eski sürümü kabul etmesin.
+export const EN_AZ_TLS = 'TLSv1.2';
+// Geliştirmede deneme sertifikası ve localhost adı kullanılır; HSTS orada tarayıcıya kalıcı iz bırakırdı.
+export const hstsVerilirMi = (s: { canli: boolean; https: HttpsAyari | null }): boolean => s.canli && s.https !== null;
+
+export function arayuzIsleyicisi({ kok, api, hsts = false }: { kok: string; api: ApiIsleyicisi; hsts?: boolean }): ApiIsleyicisi {
   const istemciKoku = `${resolve(kok)}${sep}`;
   const arkonKoku = `${join(istemciKoku, ARKON_KLASORU)}${sep}`;
   const sikisik = new Map<string, { etiket: string; govde: Promise<Buffer> }>();
 
   const sun = async (istek: IncomingMessage, yanit: ServerResponse): Promise<void> => {
+    if (hsts) yanit.setHeader(HSTS_BASLIGI, HSTS_DEGERI);
     const hamYol = (istek.url ?? '/').split('?')[0] ?? '/';
     if (hamYol === '/api' || hamYol.startsWith('/api/')) {
       api(istek, yanit);
@@ -187,9 +197,11 @@ export function arayuzIsleyicisi({ kok, api }: { kok: string; api: ApiIsleyicisi
 export interface ArayuzKapisi { kapat(): Promise<void> }
 
 // Uygulama hazır olmalı (listen ya da ready sonrası): /api istekleri onun yönlendiricisine verilir.
-export async function arayuzKapisiAc(s: { kok: string; api: ApiIsleyicisi; port: number; host: string; https: HttpsAyari | null }): Promise<ArayuzKapisi> {
-  const isle = arayuzIsleyicisi({ kok: s.kok, api: s.api });
-  const sunucu: Server = s.https === null ? httpSunucusu(isle) : httpsSunucusu(s.https, isle);
+export async function arayuzKapisiAc(s: {
+  kok: string; api: ApiIsleyicisi; port: number; host: string; https: HttpsAyari | null; canli: boolean;
+}): Promise<ArayuzKapisi> {
+  const isle = arayuzIsleyicisi({ kok: s.kok, api: s.api, hsts: hstsVerilirMi(s) });
+  const sunucu: Server = s.https === null ? httpSunucusu(isle) : httpsSunucusu({ ...s.https, minVersion: EN_AZ_TLS }, isle);
   await new Promise<void>((coz, red) => {
     sunucu.once('error', red);
     sunucu.listen(s.port, s.host, () => { sunucu.off('error', red); coz(); });

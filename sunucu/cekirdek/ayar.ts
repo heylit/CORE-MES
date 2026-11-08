@@ -115,7 +115,7 @@ function vekilAdresiOku(env: Ortamlar): { vekilAdresi?: string } {
   return { vekilAdresi: deger };
 }
 
-// Canlıda sunucu yalnız bu makinede dinler: HTTPS'i önündeki kurum ters vekili bitirir (kart #175, kullanıcı kararı 16.10.2026).
+// Canlıda API kapısı yalnız bu makinede dinler: ağdan gelen istek arayüz kapısına (4101) HTTPS ile gelir ve /api oradan iletilir (2275-1 a).
 // Geliştirmede bugünkü gibi bütün arayüzlerde dinler; telefonlar yine 4101 üzerinden gelir.
 export const dinlemeAdresi = (ortam: Ortam): string => (ortam === 'canli' ? '127.0.0.1' : '0.0.0.0');
 

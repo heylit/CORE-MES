@@ -1,40 +1,57 @@
-# Canlı kurulum: HTTPS ve ters vekil (kart #175)
+# Canlı kurulum: HTTPS (2275-1 a; kart #175'in yerine)
 
-Kullanıcı kararı (16.10.2026, "Zorunlu HTTPS"): canlıda bağlantı her zaman HTTPS'tir ve kurum sertifika otoritesinin (CA) sertifikasıyla
-kurum ters vekili sunar. Uygulama yalnız bu makinede dinler. Geliştirme makinesindeki `npm run baslat` bugünkü gibi kalır.
+Kullanıcı kararı (16.10.2026, "Zorunlu HTTPS"): canlıda bağlantı her zaman HTTPS'tir. 08.11.2026 kararı (2275-1 a): HTTPS'i uygulamanın kendisi
+bitirir; ters vekil gerekmez. Sertifika kurum sertifika otoritesinin (AD CS) ad ve IP kısıtlı ara CA'sından verilir (2280-1).
+Geliştirme makinesindeki `npm run baslat` bugünkü gibi kalır.
 
 ## Yerleşim
 
 ```
-telefon / bilgisayar --HTTPS (kurum CA)--> kurum ters vekili (aynı makine, 443)
-                                            --HTTP--> 127.0.0.1:4101 sunucunun arayüz kapısı (ekran dosyaları ve /api)
+telefon / bilgisayar --HTTPS (kurum CA)--> sunucunun arayüz kapısı (4101; ekran dosyaları ve /api)
+                                            --aynı süreç--> API (127.0.0.1:4100)
 ```
 
-- Varsayılan: ters vekil uygulamayla aynı makinededir. Başka bilgisayardaysa aşağıdaki "Vekil başka bilgisayardaysa" bölümü uygulanır.
 - `.env`'de `TMIV2_ORTAM=canli`. Bu kipte:
-  - sunucunun API kapısı (4100) yalnız `127.0.0.1`'i dinler (`sunucu/cekirdek/ayar.ts` `dinlemeAdresi`);
-  - arayüz kapısı (4101, `TMIV2_ARAYUZ_PORT` ile değişir; aynı sunucu süreci, `sunucu/cekirdek/arayuz.ts`) yalnız `127.0.0.1`'i dinler; `TMIV2_ONIZLEME_ADRESI` boş kalır ya da `127.0.0.1` olur, ağa açan değer açılışı durdurur
-    (`istemci/src/ortak/pwa/dinleme.ts`);
-  - oturum çerezi her zaman `Secure` taşır: tarayıcı HTTPS'tedir, vekilin arkasındaki istek düz HTTP görünse de çerez şifresiz kapıya gitmez.
-- `TMIV2_HTTPS_SERTIFIKA` ve `TMIV2_HTTPS_ANAHTAR` canlıda verilmez: şifrelemeyi vekil bitirir. Sertifika isteği ve telefona kök sertifika
-  yükleme `kurulum/https.md` ile aynıdır; yalnız sertifika vekile kurulur.
-- Windows güvenlik duvarında yalnız vekilin kapısı (443) açılır; 4100 ve 4101 açılmaz.
+  - sunucunun API kapısı (4100) yalnız `127.0.0.1`'i dinler (`sunucu/cekirdek/ayar.ts` `dinlemeAdresi`); ağdan gelen `/api` isteği 4101 üzerinden gelir;
+  - arayüz kapısı (4101, `TMIV2_ARAYUZ_PORT` ile değişir; `sunucu/cekirdek/arayuz.ts`) `TMIV2_ONIZLEME_ADRESI`'ndeki adreste dinler
+    (sunucunun IP'si ya da `0.0.0.0`);
+  - açılış kuralı (`istemci/src/ortak/pwa/dinleme.ts`): ağa açılan 4101 ya HTTPS değişkenleriyle (`TMIV2_HTTPS_SERTIFIKA` ve
+    `TMIV2_HTTPS_ANAHTAR`) ya ters vekilin adresiyle (`TMIV2_VEKIL_ADRESI`) açılır; ikisi de yoksa uygulama başlamaz. Ağa açılan kapı düz HTTP konuşmaz;
+  - HTTPS açıkken 4101 yalnız HTTPS konuşur, en az TLS 1.2 kabul eder ve her cevaba HSTS başlığı (`Strict-Transport-Security`, 180 gün) koyar;
+  - oturum çerezi her zaman `Secure` taşır.
+- Düz HTTP için ayrı kapı (80) açılmaz; `http://` adresinden yönlendirme yoktur. Cihazlar uygulamayı kısayoldan `https://` adresiyle açar.
+- Windows güvenlik duvarında yalnız 4101 (ya da `TMIV2_ARAYUZ_PORT`) açılır; 4100 açılmaz.
 
-## Vekil başka bilgisayardaysa
+## Sertifika
 
-- `.env`'e iki satır yazılır: `TMIV2_ONIZLEME_ADRESI` uygulama bilgisayarının vekile bakan IP'si, `TMIV2_VEKIL_ADRESI` vekilin IP'si.
-  Biri olmadan öbürü verilirse sunucu açılmaz. Sunucu (4100) yine yalnız 127.0.0.1'i dinler; vekil yalnız 4101'e bağlanır.
-- Sunucu `X-Forwarded-For` başlığına yalnız bu makineden ve `TMIV2_VEKIL_ADRESI`'nden geldiğinde güvenir: giriş bekleme sayacı gerçek cihaza göre sayılır.
-- Windows güvenlik duvarında 4101 yalnız vekilin IP'sine açılır (kuralı bilgi işlem ekler). Vekil ile uygulama arasındaki bağlantı düz HTTP'dir;
-  iki bilgisayar aynı kapalı ağ bölümünde durmalıdır.
+1. Bilgi işlem kurum CA'sının ad ve IP kısıtlı ara CA'sından sunucu sertifikası verir (2280-1). Sertifikada telefonların yazacağı ad
+   "Subject Alternative Name" olarak bulunur (ör. `DNS:tmi.kurum.local`); süre en çok 825 gündür. Adımlar ve telefona kök yükleme `kurulum/https.md`.
+2. Sertifika (ara sertifika aynı dosyada, altta) ve parolasız anahtar PEM olarak sunucuda bir klasöre konur; klasörü yalnız servis hesabı okur.
+3. `.env`'e yazılır:
+   ```
+   TMIV2_ORTAM=canli
+   TMIV2_ONIZLEME_ADRESI=<sunucunun IP'si>
+   TMIV2_HTTPS_SERTIFIKA=D:\TMIV2-SERTIFIKA\tmi.crt
+   TMIV2_HTTPS_ANAHTAR=D:\TMIV2-SERTIFIKA\tmi.key
+   ```
+   Biri eksikse, dosya okunamıyorsa ya da sertifika ile anahtar birbirine ait değilse sunucu Türkçe iletiyle açılmaz.
+4. Telefonlar ve bilgisayarlar IP ile değil sertifikadaki adla girer (`https://tmi.kurum.local:4101`): HSTS yalnız adla çalışır, tarayıcı IP'de yok sayar.
+   Ad kurum DNS'inde sunucunun IP'sine çözülmelidir (bilgi işlem).
+5. Bitiş Güvenlik Merkezi > Durum > Sunucu durumu kartında görünür; son 30 günde uyarı verir. Yenileme: yeni sertifika aynı yollara konur,
+   uygulama mesai dışında yeniden başlatılır; telefonlara dokunulmaz (kök aynı kaldıkça).
 
-## Vekilin yapması gerekenler
+## Seçenek: ters vekil
 
-- Bütün yolları (`/`, `/api/`, `/arkon-mes/`) `http://127.0.0.1:4101`'e iletir; adresi değiştirmez.
-- `X-Forwarded-For` başlığına istemcinin adresini, `X-Forwarded-Proto` başlığına `https` ekler. Sunucu yalnız 127.0.0.1'den gelen bu
-  başlıklara güvenir; giriş bekleme sayacı gerçek cihazın adresine göre sayılır.
-- `http://` ile gelen isteği `https://`'e yönlendirir; HSTS başlığını (`Strict-Transport-Security`) vekil koyar.
-- Uygulamanın verdiği güvenlik başlıklarını (`Content-Security-Policy` dahil) silmez, değiştirmez.
+Varsayılan yol yukarıdakidir. Bilgi işlem ileride HTTPS'i bir ters vekille bitirmek isterse:
+
+- Vekil aynı makinedeyse `TMIV2_ONIZLEME_ADRESI` boş kalır (4101 yalnız `127.0.0.1`), HTTPS değişkenleri verilmez; vekil bütün yolları
+  (`/`, `/api/`, `/arkon-mes/`) adresi değiştirmeden `http://127.0.0.1:4101`'e iletir.
+- Vekil başka bilgisayardaysa `TMIV2_ONIZLEME_ADRESI` uygulama bilgisayarının vekile bakan IP'si, `TMIV2_VEKIL_ADRESI` vekilin IP'sidir;
+  4101 güvenlik duvarında yalnız vekilin IP'sine açılır. Vekil ile uygulama arasındaki bağlantı düz HTTP'dir; iki bilgisayar aynı kapalı ağ bölümünde durur.
+- Vekil `X-Forwarded-For` başlığına istemcinin adresini, `X-Forwarded-Proto` başlığına `https` ekler; sunucu bu başlıklara yalnız bu makineden
+  ve `TMIV2_VEKIL_ADRESI`'nden geldiğinde güvenir (giriş bekleme sayacı gerçek cihaza göre sayılır). `http://` isteğini `https://`'e yönlendirir,
+  HSTS'i vekil koyar; uygulamanın güvenlik başlıklarını (`Content-Security-Policy` dahil) silmez, değiştirmez.
+- Vekilin sertifikası uygulamadan görünmez; bitişi `TMIV2_IZLENEN_SERTIFIKA` ile izlenir (`kurulum/gunluk.md` "Vekil sertifikası").
 
 ## İçerik güvenlik politikası (CSP)
 
@@ -50,7 +67,8 @@ vardır. Denetim: tarayıcı konsolunda "Refused to" ya da "Content Security Pol
 ## Canlıya geçmeden
 
 - `kurulum/devir.md` "Canlı kurulumdan önce": boş veritabanı, herkese yeni geçici PIN.
-- Vekilin yeri denetlenir: başka bilgisayardaysa `.env`'de `TMIV2_VEKIL_ADRESI` vekilin IP'sidir. Adres eksikse sunucu ilk vekil isteğinde
+- Açılış satırında arayüz adresi `https://` ile yazılır (`CORE dinliyor: ... | arayüz: https://...`).
+- Yalnız vekil seçeneğinde: başka bilgisayardaysa `.env`'de `TMIV2_VEKIL_ADRESI` vekilin IP'sidir. Adres eksikse sunucu ilk vekil isteğinde
   günlüğe "X-Forwarded-For güvenilmeyen eşten geldi" uyarısını bir kez yazar; kabulde bir giriş yapılıp günlükte bu satırın olmadığı
   görülür (yoksa bütün cihazlar vekilin IP'siyle sayılır, cihaz başına giriş sınırı herkese ortak olur).
 - PostgreSQL yalnız bu bilgisayardan bağlantı kabul eder: `postgresql.conf`'ta `listen_addresses = 'localhost'`; `pg_hba.conf`'ta
@@ -59,4 +77,5 @@ vardır. Denetim: tarayıcı konsolunda "Refused to" ya da "Content Security Pol
   `npm run goc` ve uygulama çalışır. Uzaktan yönetim gerekiyorsa VPN ve uzak masaüstüyle sunucuya girilir, veritabanı ağa açılmaz.
 - Yedek ve anahtar ayrı yerde durur (`kurulum/yedek.md`): yedek klasörü veritabanından başka bir diskte, haftalık indirilen kopya
   sunucunun dışında; yedek anahtarı bunların hiçbirinde değil, bilgi işlemin ayrı sakladığı yerdedir.
-- Kabul: telefondan `https://<ad>` açılır, giriş yapılır; `http://<ad>:4100/api/oturum` ve `http://<ad>:4101/` ağdan açılmaz.
+- Kabul: telefondan `https://<ad>:4101` açılır, adres çubuğunda uyarı yoktur, giriş yapılır; `http://<ad>:4100/api/oturum` ve `http://<ad>:4101/`
+  ağdan açılmaz; Güvenlik Merkezi'nde HTTPS ve sertifika maddeleri yeşildir.

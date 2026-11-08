@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +7,7 @@ import { gunzipSync } from 'node:zlib';
 import { after, before, describe, test } from 'node:test';
 import { ICERIK_ILKESI, STEP_CALISANI_ILKESI } from '../../istemci/src/ortak/pwa/icerik-ilkesi.ts';
 import { CALISAN_ILKESI, icerikIlkesi } from '../../arkon/sun.ts';
-import { arayuzIsleyicisi, arayuzPortuOku } from './arayuz.ts';
+import { HSTS_BASLIGI, HSTS_DEGERI, arayuzIsleyicisi, arayuzPortuOku, hstsVerilirMi } from './arayuz.ts';
 
 const SAYFA = '<!doctype html><html><head></head><body><div id="kok"></div></body></html>';
 const ARKON_SAYFASI = '<!doctype html><html><body><script>window.x=1</script></body></html>';
@@ -164,6 +164,49 @@ describe('arayüz kapısı', () => {
       await new Promise<void>((coz) => { s.close(() => { coz(); }); });
       await rm(bos, { recursive: true, force: true });
     }
+  });
+});
+
+describe('HSTS (2275-1 a)', () => {
+  const kapiAc = async (isle: ReturnType<typeof arayuzIsleyicisi>): Promise<{ adres: string; kapat: () => Promise<void> }> => {
+    const s = createServer(isle);
+    await new Promise<void>((coz) => { s.listen(0, '127.0.0.1', coz); });
+    const a = s.address();
+    assert.ok(a !== null && typeof a === 'object');
+    return { adres: `http://127.0.0.1:${String(a.port)}`, kapat: () => new Promise<void>((coz) => { s.close(() => { coz(); }); }) };
+  };
+  // Uygulama cevabı başlıklarını writeHead ile yazar; önceden konan başlık onlarla birleşir.
+  const api = (_i: unknown, y: ServerResponse): void => { y.writeHead(200, { 'Content-Type': 'application/json' }); y.end('{}'); };
+
+  test('istenince dosya, eksik dosya ve /api cevabı HSTS taşır', async () => {
+    const bos = await mkdtemp(join(tmpdir(), 'tmi-arayuz-hsts-'));
+    const k = await kapiAc(arayuzIsleyicisi({ kok: bos, api, hsts: true }));
+    try {
+      for (const yol of ['/', '/yok.js', '/api/saglik']) {
+        assert.equal((await fetch(`${k.adres}${yol}`)).headers.get(HSTS_BASLIGI), HSTS_DEGERI, yol);
+      }
+    } finally {
+      await k.kapat();
+      await rm(bos, { recursive: true, force: true });
+    }
+  });
+
+  test('istenmezse HSTS yok', async () => {
+    const bos = await mkdtemp(join(tmpdir(), 'tmi-arayuz-hsts-'));
+    const k = await kapiAc(arayuzIsleyicisi({ kok: bos, api }));
+    try {
+      assert.equal((await fetch(`${k.adres}/api/saglik`)).headers.get(HSTS_BASLIGI), null);
+    } finally {
+      await k.kapat();
+      await rm(bos, { recursive: true, force: true });
+    }
+  });
+
+  test('HSTS yalnız canlıda ve kapı HTTPS iken verilir', () => {
+    const https = { cert: Buffer.from('s'), key: Buffer.from('a') };
+    assert.equal(hstsVerilirMi({ canli: true, https }), true);
+    assert.equal(hstsVerilirMi({ canli: true, https: null }), false);
+    assert.equal(hstsVerilirMi({ canli: false, https }), false);
   });
 });
 

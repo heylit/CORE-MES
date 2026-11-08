@@ -25,7 +25,8 @@
 - İzleme aracı bu olaya bağlanabilir (Olay Görüntüleyici'de "Bu olaya görev ekle" ya da kurumun izleme aracı). E-posta uyarısı yoktur (1061 a).
 
 ## Vekil sertifikası
-- HTTPS'i IIS bitirdiğinde sertifika uygulamadan görünmez. Süresinin Sunucu durumu kartında izlenmesi için IIS sertifikasının açık kısmı
+- Canlıda HTTPS'i uygulama bitirir (`kurulum/canli.md`); sertifikanın bitişi `TMIV2_HTTPS_SERTIFIKA`'dan okunur, bu bölüm gerekmez.
+- Yalnız ters vekil seçeneğinde: HTTPS'i vekil bitirdiğinde sertifika uygulamadan görünmez. Süresinin Sunucu durumu kartında izlenmesi için vekil sertifikasının açık kısmı
   anahtarsız `.cer` olarak dışa verilir (Sertifikalar > Dışa aktar > "Özel anahtarı dışa aktarma", Base-64) ve yolu `.env`'e yazılır:
   `TMIV2_IZLENEN_SERTIFIKA=D:\TMIV2-SERTIFIKA\vekil.cer`. Sertifika yenilenince dosya da yenilenir.
 

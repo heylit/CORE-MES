@@ -28,7 +28,7 @@ function bitisOku(dosya: string, oku: DosyaOkuyucu): Date | null {
   }
 }
 
-// Canlıda HTTPS'i ters vekil bitirir (IIS, kurulum/canli.md) ve sertifikası bu süreçten görünmez. Bilgi işlem vekilin sertifikasının
+// Önde HTTPS'i bitiren bir ters vekil varsa (kurulum/canli.md, seçenek) sertifikası bu süreçten görünmez. Bilgi işlem vekilin sertifikasının
 // açık kısmını (.cer, anahtarsız) bir dosyaya verir ve yolunu bu değişkene yazar; bitiş yalnız izlenir, kapı bu dosyayı kullanmaz.
 export const IZLENEN_SERTIFIKA_DEGISKENI = 'TMIV2_IZLENEN_SERTIFIKA';
 
