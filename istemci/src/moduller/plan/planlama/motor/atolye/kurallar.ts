@@ -435,6 +435,16 @@ export function paSecim(l: SunucuSenaryosu[], sec: number | 'calisma' | null, ca
 
 export const yerlesmeyen = (g: Gostergeler | null): number | null => (g ? Math.max(0, g.isEmriSayisi - g.yerlesen) : null);
 
+// 2311 S9: kuru bilinmeyen dövizli emir Plan TL toplamına girmez (sunucu 1397 a, sıfır sayılmaz); toplamın eksik olduğu yanında yazılır.
+// Eksik toplam başka planınkiyle karşılaştırılmaz: fark kurdan doğar, plandan değil.
+const tlEksigi = (g: Gostergeler | null | undefined): number => (g?.maliyetTl == null ? 0 : (g.bedeliBilinmeyenEmir ?? 0));
+export const tlEksikUyarisi = (g: Gostergeler | null | undefined): string | null => {
+  const n = tlEksigi(g);
+  return n > 0 ? `${String(n)} emrin kuru bilinmiyor; Plan TL bu emirler olmadan hesaplandı.` : null;
+};
+export const tlKarsilastirilir = (a: Gostergeler | null | undefined, b: Gostergeler | null | undefined): boolean =>
+  a?.maliyetTl != null && b?.maliyetTl != null && tlEksigi(a) === 0 && tlEksigi(b) === 0;
+
 // Kontrol (paKontrol): sunucu senaryosunun bildikleriyle. ok yeşil, uyari sarı; kırmızı maddeleri (başlamış ya da sabit iş oynadı, ek mesai
 // bütçesi) sunucu canlıya almada kendisi denetler.
 export type KontrolMaddesi = ['ok' | 'uyari' | 'red', string];

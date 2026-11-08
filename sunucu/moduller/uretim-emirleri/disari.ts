@@ -574,6 +574,8 @@ export const { adimUretimBilgileri, emirlerinDugumleri, emirlerinAdimIstasyonlar
 export { FASON_VARSAYILAN_GUN } from './kurallar.ts';
 // 1527: emri açılmamış rotanın adım adetleri (planın deneme emri, satış teklifi); plan dal çarpanını kendisi uygulamaz.
 export { rotadanAdimAdetleri } from './kurallar.ts';
+// 2311 S5: plan işi başlatılabilirliği terminalin yetkinlik kurallarıyla (UE20, 2046 a) ölçer; iki yer ayrı hüküm vermesin.
+export { baslatmaYetkinlikIhlali, makineYetkinlikIhlali } from './kurallar.ts';
 
 // Kalite Merkezi emir numarasıyla gelen kaydı emre bağlar: numaradan kimlik; bulunamayan numara haritada yok.
 export { emirIdleri } from './sorgular.ts';
