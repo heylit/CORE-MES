@@ -21,6 +21,8 @@ const OTURUM_UCLARI: readonly string[] = [
   'GET /finans/kur-faiz-araligi',
   'GET /finans/kur-ozeti',
   'GET /finans/menu-sayaclari',
+  'GET /finans/oran-araligi',
+  'GET /finans/oran-ozeti',
   'GET /gorunum',
   'GET /guvenlik/menu-sayaclari',
   // Kişinin kendi oturumları: listeler ve o anki dışındakileri kapatır (2226-7 a).

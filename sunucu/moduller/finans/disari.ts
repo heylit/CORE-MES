@@ -13,6 +13,10 @@ export type { BeklenenTahsilatYazimi } from './servis.ts';
 // 911 b, 940 c: projeye bağlanan gider belgeleri ve seçicisi (tutar KDV hariç TL; FNS-48 yetkisi çağıranın ucundadır).
 export { giderBelgeleri, giderBelgesiSecenekleri } from './servis.ts';
 export type { GecerliGunlukFaiz } from './servis.ts';
+// Kart 2238: kur alış/satış çifti ve türlü yıllık oran (kredi, mevduat, politika). Hangi kullanımın hangisini okuyacağı
+// #paylasilan/sozlesme/finans.ts ORAN_KULLANIMLARI'ndadır; çift ya da oran yoksa null.
+export { kurCiftiGetir, kurCiftleri, oranGetir, oranlar } from './servis.ts';
+export type { FaizTuru, GecerliOran, KurTuru } from './servis.ts';
 export type { SatisSevkleriCozucusu, SatisSiparisleriCozucusu, SevkIsiOzetiCozucusu, SiparisFaturasi, SiparisOzetiCozucusu } from './servis.ts';
 // Siparişin durumu ve müşterisi kablolamadan gelir (siparişler -> malzemeler -> finans döngüsü).
 export const siparisOzetiCozucusu = (cozucu: SiparisOzetiCozucusu | null): void => siparisOzetiCozucusuKaydet(cozucu);

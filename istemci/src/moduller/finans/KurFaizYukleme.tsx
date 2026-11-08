@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { KurFaizAraligi } from '#paylasilan/sozlesme/finans.ts';
-import { Dugme, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import type { OranAraligi } from '#paylasilan/sozlesme/finans.ts';
+import { Dugme, Girdi, Rozet, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { csvIndir } from '../../ortak/veri/csv.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import {
-  GUNLUK_FAIZ, SABLON_BASLIKLARI, SABLON_SATIRLARI, gonderilecekler, kayitliylaKarsilastir, okumaAraligi, sablonuOku, type OkunanDosya, type OnizlemeSatiri, type SatirDurumu,
+  ORAN_ADI, SABLON_BASLIKLARI, SABLON_SATIRLARI, gonderilecekler, kayitliylaKarsilastir, okumaAraligi, sablonuOku, type OkunanDosya, type OnizlemeSatiri, type SatirDurumu,
 } from './kur-faiz-csv.ts';
 
 // FileReader: Blob.text() her tarayıcıda (ve test ortamında) yok.
@@ -24,13 +24,12 @@ const DURUM: Record<SatirDurumu, { ton: RozetTonu; ad: string }> = {
 const gunMetni = (t: string | null) => (t ? t.split('-').reverse().join('.') : '-');
 const oranMetni = (n: number) => n.toLocaleString('tr-TR', { maximumFractionDigits: 6 });
 const degerMetni = (s: OnizlemeSatiri) => {
-  if (s.deger === null) return '-';
-  if (s.tur === GUNLUK_FAIZ) return `%${oranMetni(s.deger)}/gün${s.aylik === null ? '' : ` (aylık %${oranMetni(s.aylik)})`}`;
-  return `${s.tur === 'faiz' ? '%' : ''}${oranMetni(s.deger)}`;
+  if (s.tur === 'kur') return s.alis === null || s.satis === null ? '-' : `${oranMetni(s.alis)} / ${oranMetni(s.satis)}`;
+  return s.yuzde === null ? '-' : `%${oranMetni(s.yuzde)} yıllık`;
 };
 const SUTUNLAR: Sutun<OnizlemeSatiri>[] = [
-  { anahtar: 'no', baslik: 'Satır', hizala: 'sag', mono: true, hucre: (s) => s.no },
-  { anahtar: 'tur', baslik: 'Tür', hucre: (s) => s.tur || '-' },
+  { anahtar: 'no', baslik: 'Dosya satırı', hizala: 'sag', mono: true, hucre: (s) => s.no },
+  { anahtar: 'tur', baslik: 'Oran', hucre: (s) => ORAN_ADI[s.tur] },
   { anahtar: 'pb', baslik: 'Para birimi', mono: true, hucre: (s) => s.paraBirimi || '-' },
   { anahtar: 'tarih', baslik: 'Tarih', kirilmaz: true, mono: true, hucre: (s) => gunMetni(s.tarih) },
   { anahtar: 'deger', baslik: 'Değer', hizala: 'sag', mono: true, hucre: degerMetni },
@@ -40,19 +39,21 @@ const SUTUNLAR: Sutun<OnizlemeSatiri>[] = [
   },
 ];
 
-// Kur ve faiz toplu yükleme (1083 a): Finans Ayarlar'ın Kurlar ve faiz sekmesinde ve şeridin panelinde aynı parçadır. Önizleme
-// kayıtlı değerleri okur; kaydetmede atlama kararını sunucu yeniden verir, satırlar birlikte yazılır ya da hiçbiri.
+// Kur ve faiz matrisi toplu yükleme (1083 a, kart 2238): Finans Ayarlar'ın Kurlar ve faiz sekmesinde ve şeridin panelinde aynı
+// parçadır. Önizleme kayıtlı değerleri okur; kaydetmede atlama kararını sunucu yeniden verir, satırlar birlikte yazılır ya da hiçbiri.
+// Dosyada Tarih sütunu yoksa (kullanıcının kendi matrisi gibi) bütün değerler seçilen güne yazılır.
 export function KurFaizYukleme({ bugun }: { bugun: string }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const dosya = useRef<HTMLInputElement>(null);
-  const [okunan, okunanYaz] = useState<(OkunanDosya & { ad: string }) | null>(null);
+  const [okunan, okunanYaz] = useState<(OkunanDosya & { ad: string; metin: string }) | null>(null);
+  const [gun, gunYaz] = useState(bugun);
   const [istekKimligi, istekYaz] = useState(yeniIstekKimligi);
   const [mesgul, mesgulYaz] = useState(false);
   const aralik = okunan ? okumaAraligi(okunan.satirlar) : null;
   const kayitli = useQuery({
-    queryKey: ['finans', 'kur-faiz-araligi', aralik?.baslangic, aralik?.bitis],
-    queryFn: () => api.get<KurFaizAraligi>(`/finans/kur-faiz-araligi?baslangic=${aralik!.baslangic}&bitis=${aralik!.bitis}`),
+    queryKey: ['finans', 'oran-araligi', aralik?.baslangic, aralik?.bitis],
+    queryFn: () => api.get<OranAraligi>(`/finans/oran-araligi?baslangic=${aralik!.baslangic}&bitis=${aralik!.bitis}`),
     enabled: aralik !== null,
   });
   const satirlar = okunan && kayitli.data ? kayitliylaKarsilastir(okunan.satirlar, kayitli.data) : okunan?.satirlar ?? [];
@@ -65,8 +66,14 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
   const sec = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    okunanYaz({ ...sablonuOku(await dosyaMetni(f), bugun), ad: f.name });
+    const metin = await dosyaMetni(f);
+    okunanYaz({ ...sablonuOku(metin, bugun, gun), ad: f.name, metin });
     istekYaz(yeniIstekKimligi());
+  };
+  // Tarih sütunsuz dosyada gün değişince dosya yeniden okunur.
+  const gunSec = (yeni: string) => {
+    gunYaz(yeni);
+    if (okunan && !okunan.tarihSutunuVar && yeni) { okunanYaz({ ...sablonuOku(okunan.metin, bugun, yeni), ad: okunan.ad, metin: okunan.metin }); istekYaz(yeniIstekKimligi()); }
   };
   const kaydet = async () => {
     if (!hazir) return;
@@ -74,11 +81,11 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
     try {
       const govde = { satirlar: gonderilecekler(satirlar) };
       const c = await tekrarKorumaliGonder(
-        (d) => api.post<{ eklenen: number; ayni: number; farkli: number }>('/finans/kur-faiz/toplu-yukle', govde,
+        (d) => api.post<{ eklenen: number; ayni: number; farkli: number }>('/finans/oranlar/toplu-yukle', govde,
           { istekKimligi: d.istekKimligi, zamanAsimiMs: d.zamanAsimiMs, ...(d.sinyal ? { sinyal: d.sinyal } : {}) }),
         { istekKimligi },
       );
-      bildir('tamam', `${c.eklenen} satır kaydedildi${c.ayni + c.farkli > 0 ? `, ${c.ayni + c.farkli} satır atlandı` : ''}.`);
+      bildir('tamam', `${c.eklenen} değer kaydedildi${c.ayni + c.farkli > 0 ? `, ${c.ayni + c.farkli} değer atlandı` : ''}.`);
       temizle();
       await istemci.invalidateQueries();
     } catch (h) {
@@ -92,9 +99,10 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
   return (
     <div className="tc-kfy">
       <p className="tc-kfs-not">
-        Sütunlar: Tür (kur, faiz ya da günlük faiz), Para birimi, Tarih (kurun günü ya da faizin başlangıcı), Değer (kur: 1 birim kaç TL;
-        faiz: aylık %; günlük faiz: günlük %, ayrı kaydedilir). Plan, proje maliyeti ve satın alma finans ayarındaki faiz birimini kullanır.
-        Noktalı virgül ve ondalık virgül; tarih GG.AA.YYYY. Kayıtlı güne gelen satır atlanır, o gün elle düzeltilir.
+        Matris biçimi: satırlar Kur alış, Kur satış, Kredi, Mevduat (stopaj sonrası) ve Politika faizi; sütunlar para birimi (TRY, USD...),
+        Tarih (kurun günü ya da faizin başlangıcı) ve isteğe bağlı Not. Kur 1 birim kaç TL, faiz yıllık %. Alış ve satış birlikte girilir.
+        Boş ya da "—" hücre atlanır; kullanım sütunları yok sayılır. Noktalı virgül ve ondalık virgül; tarih GG.AA.YYYY. Kayıtlı güne gelen
+        değer atlanır, o gün elle düzeltilir.
       </p>
       <div className="tc-kfy-eylem">
         <Dugme simge="download" onClick={() => csvIndir('kur-faiz-sablon', SABLON_BASLIKLARI, SABLON_SATIRLARI)}>Şablonu indir</Dugme>
@@ -104,6 +112,11 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
         </label>
         {okunan && <span className="tc-kfs-not">{okunan.ad}</span>}
       </div>
+      {okunan && !okunan.dosyaHatasi && !okunan.tarihSutunuVar && (
+        <div className="tc-kfy-eylem">
+          <Girdi etiket="Dosyada tarih yok; değerlerin günü" type="date" max={bugun} value={gun} onChange={(e) => gunSec(e.target.value)} />
+        </div>
+      )}
       {okunan?.dosyaHatasi && <p className="tc-kfs-hata" role="alert">{okunan.dosyaHatasi}</p>}
       {okunan && !okunan.dosyaHatasi && (
         <>
@@ -115,12 +128,12 @@ export function KurFaizYukleme({ bugun }: { bugun: string }) {
           </div>
           {kayitli.isError && <p className="tc-kfs-hata" role="alert">{hataIletisi(kayitli.error, 'Kayıtlı kurlar okunamadı; önizleme tamamlanmadı.')}</p>}
           {genisAralik && <p className="tc-kfs-hata" role="alert">Dosyadaki tarihler beş yıldan geniş; dosyayı bölüp yükleyin.</p>}
-          <Tablo etiket="Yükleme önizlemesi" sutunlar={SUTUNLAR} satirlar={satirlar} satirAnahtari={(s) => s.no} bosMesaj="Dosyada satır yok." />
+          <Tablo etiket="Yükleme önizlemesi" sutunlar={SUTUNLAR} satirlar={satirlar} satirAnahtari={(s) => s.sira} bosMesaj="Dosyada satır yok." />
           <div className="tc-kfy-eylem">
-            <Dugme tur="birincil" simge="check" disabled={!hazir} yukleniyor={mesgul} onClick={() => { void kaydet(); }}>{say('yeni')} satırı kaydet</Dugme>
+            <Dugme tur="birincil" simge="check" disabled={!hazir} yukleniyor={mesgul} onClick={() => { void kaydet(); }}>{say('yeni')} değeri kaydet</Dugme>
             <Dugme simge="x" onClick={temizle}>Vazgeç</Dugme>
             <span className="tc-kfs-not">
-              {hatali > 0 ? 'Hatalı satır varken hiçbir satır kaydedilmez; dosyayı düzeltip yeniden seçin.' : 'Satırlar birlikte kaydedilir ya da hiçbiri; her satır sizin adınızla ve saatle yazılır.'}
+              {hatali > 0 ? 'Hatalı değer varken hiçbiri kaydedilmez; dosyayı düzeltip yeniden seçin.' : 'Değerler birlikte kaydedilir ya da hiçbiri; her biri sizin adınızla ve saatle yazılır.'}
             </span>
           </div>
         </>

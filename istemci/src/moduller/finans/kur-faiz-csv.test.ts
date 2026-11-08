@@ -4,112 +4,113 @@ import { SABLON_BASLIKLARI, SABLON_SATIRLARI, gonderilecekler, kayitliylaKarsila
 import { cizgiYolu, seriNoktalari, SERILER } from './KurGrafigi.tsx';
 
 // Kurlar ve oranlar uydurmadır.
-const BUGUN = '2026-10-28';
-const dosya = (...satirlar: string[]) => ['Tür;Para birimi;Tarih;Değer', ...satirlar].join('\r\n');
+const BUGUN = '2026-11-07';
+const BASLIK = 'Oran;Tarih;TRY;USD;EUR;GBP;Not';
+const dosya = (...satirlar: string[]) => [BASLIK, ...satirlar].join('\r\n');
+const ozet = (o: ReturnType<typeof sablonuOku>) => o.satirlar.map((s) => [s.no, s.tur, s.paraBirimi, s.tarih, s.alis ?? s.yuzde, s.satis, s.durum]);
 
-describe('kur ve faiz şablonu (1083-1087)', () => {
-  it('indirilen şablon her kur ve faiz birimini ve günlük faizi taşır, aynen okunur ve yedi satır da gönderilir', () => {
+describe('kur ve faiz matris şablonu (2238; 1083-1087)', () => {
+  it('indirilen şablon aynen okunur: kur alış ve satış para birimi başına tek değer, faiz tür ve para birimi başına; "—" atlanır', () => {
     const o = sablonuOku(csvMetni(SABLON_BASLIKLARI, SABLON_SATIRLARI), BUGUN);
     expect(o.dosyaHatasi).toBeNull();
-    expect(o.satirlar.map((s) => [s.no, s.tur, s.paraBirimi, s.tarih, s.deger, s.durum])).toEqual([
-      [2, 'kur', 'USD', '2026-10-27', 41.852, 'yeni'], [3, 'kur', 'EUR', '2026-10-27', 48.613, 'yeni'], [4, 'kur', 'GBP', '2026-10-27', 55.904, 'yeni'],
-      [5, 'faiz', 'TRY', '2026-11-01', 3.25, 'yeni'], [6, 'faiz', 'USD', '2026-11-01', 0.6, 'yeni'], [7, 'faiz', 'EUR', '2026-11-01', 0.5, 'yeni'],
-      [8, 'günlük faiz', 'TRY', '2026-12-01', 0.105, 'yeni'],
+    expect(o.tarihSutunuVar).toBe(true);
+    expect(ozet(o)).toEqual([
+      [2, 'kur', 'USD', '2026-11-06', 41.1, 41.2, 'yeni'], [2, 'kur', 'EUR', '2026-11-06', 47.2, 47.3, 'yeni'], [2, 'kur', 'GBP', '2026-11-06', 54.3, 54.5, 'yeni'],
+      [4, 'kredi', 'TRY', '2026-11-01', 30, null, 'yeni'], [4, 'kredi', 'USD', '2026-11-01', 6, null, 'yeni'], [4, 'kredi', 'EUR', '2026-11-01', 5, null, 'yeni'],
+      [5, 'mevduat', 'TRY', '2026-11-01', 25, null, 'yeni'], [5, 'mevduat', 'USD', '2026-11-01', 1.5, null, 'yeni'], [5, 'mevduat', 'EUR', '2026-11-01', 1, null, 'yeni'],
+      [6, 'politika', 'TRY', '2026-10-23', 30, null, 'yeni'], [6, 'politika', 'USD', '2026-10-23', 4, null, 'yeni'], [6, 'politika', 'EUR', '2026-10-23', 2, null, 'yeni'],
     ]);
-    expect(gonderilecekler(o.satirlar)).toHaveLength(7);
-    expect(gonderilecekler(o.satirlar).at(-1)).toEqual({ tur: 'gunluk_faiz', paraBirimi: 'TRY', tarih: '2026-12-01', deger: 0.105 });
+    const g = gonderilecekler(o.satirlar);
+    expect(g).toHaveLength(12);
+    expect(g[0]).toEqual({ tur: 'kur', paraBirimi: 'USD', tarih: '2026-11-06', alis: 41.1, satis: 41.2 });
+    expect(g[7]).toEqual({ tur: 'mevduat', paraBirimi: 'USD', tarih: '2026-11-01', yillikYuzde: 1.5, not: 'stopaj sonrası' });
   });
 
-  it('GG.AA.YYYY ve YYYY-AA-GG, binlik nokta ve küçük harf kabul; her hata satırında nedeni yazar', () => {
+  it('kullanıcının kendi dosyası: Tarih sütunu yoksa seçilen gün kullanılır, kullanım sütunları yok sayılır', () => {
+    const metin = [
+      'Oran;TRY;USD;EUR;Muhasebe kaydı;Satın alma maliyeti;Not',
+      'Kur alış (TL);—;41,10;47,20;✓;;', 'Kur satış (TL);—;41,20;47,30;;✓;', 'Kredi faizi yıllık %;30;6;5;;;', 'Mevduat faizi yıllık %;25;;;;;stopaj sonrası',
+    ].join('\r\n');
+    const o = sablonuOku(metin, BUGUN, '2026-11-05');
+    expect(o.tarihSutunuVar).toBe(false);
+    expect(ozet(o)).toEqual([
+      [2, 'kur', 'USD', '2026-11-05', 41.1, 41.2, 'yeni'], [2, 'kur', 'EUR', '2026-11-05', 47.2, 47.3, 'yeni'],
+      [4, 'kredi', 'TRY', '2026-11-05', 30, null, 'yeni'], [4, 'kredi', 'USD', '2026-11-05', 6, null, 'yeni'], [4, 'kredi', 'EUR', '2026-11-05', 5, null, 'yeni'],
+      [5, 'mevduat', 'TRY', '2026-11-05', 25, null, 'yeni'],
+    ]);
+  });
+
+  it('her hata satırında nedeni yazar; aynı oran ve gün ikinci kez hatadır', () => {
     const o = sablonuOku(dosya(
-      'KUR;usd;2026-10-01;1.041,5', 'kur;TRY;01.10.2026;1', 'kur;USD;29.10.2026;42', 'faiz;TRY;01.12.2026;3,1', 'oran;USD;01.10.2026;1',
-      'kur;US;01.10.2026;1', 'kur;EUR;31.02.2026;45', 'kur;EUR;01.10.2026;abc', 'kur;EUR;01.10.2026;0', 'faiz;USD;01.10.2026;101',
-      'kur;USD;01.10.2026;41', 'kur;GBP;01.10.2026', 'kur;GBP;01.10.2026;55;fazla', 'kur;GBP;01.10.2026;55,1234567',
+      'Kur alış;06.11.2026;5;41;;;', 'Kur satış;06.11.2026;;40;;;',
+      'Kur alış;06.11.2026;;;47;;', 'Kur alış;08.11.2026;;;;54;', 'Kur satış;08.11.2026;;;;55;',
+      'Faiz;01.11.2026;30;;;;', 'Kredi;31.02.2026;30;;;;', 'Kredi;01.11.2026;abc;;;;', 'Mevduat;01.11.2026;1001;;;;',
+      'Politika;01.11.2026;30;;;;', 'Politika;01.11.2026;31;;;;',
     ), BUGUN);
-    expect(o.satirlar.map((s) => [s.no, s.durum, s.neden])).toEqual([
-      [2, 'yeni', null],
-      [3, 'hata', 'TRY için kur girilmez.'],
-      [4, 'hata', 'İleri tarihli kur girilmez.'],
-      [5, 'yeni', null],
-      [6, 'hata', 'Tür "kur", "faiz" ya da "günlük faiz" olmalı.'],
-      [7, 'hata', 'Para birimi üç harfli koddur (USD gibi).'],
-      [8, 'hata', 'Tarih GG.AA.YYYY olmalı.'],
-      [9, 'hata', 'Değer sayı olmalı.'],
-      [10, 'hata', 'Kur sıfırdan büyük, en çok altı ondalık olmalı.'],
-      [11, 'hata', 'Aylık faiz 0 ile 100 arasında, en çok dört ondalık olmalı.'],
-      [12, 'hata', 'Bu tür, para birimi ve tarih dosyada ikinci kez var.'],
-      [13, 'hata', 'Dört sütun olmalı: Tür, Para birimi, Tarih, Değer.'],
-      [14, 'hata', 'Dört sütun olmalı: Tür, Para birimi, Tarih, Değer.'],
-      [15, 'hata', 'Kur sıfırdan büyük, en çok altı ondalık olmalı.'],
+    expect(o.satirlar.map((s) => [s.no, s.tur, s.paraBirimi, s.durum, s.neden])).toEqual([
+      [2, 'kur', 'TRY', 'hata', 'TRY için kur girilmez.'],
+      [2, 'kur', 'USD', 'hata', 'Satış kuru alış kurundan küçük olamaz.'],
+      [4, 'kur', 'EUR', 'hata', 'Satış kuru yok; alış ve satış birlikte girilir.'],
+      [5, 'kur', 'GBP', 'hata', 'İleri tarihli kur girilmez.'],
+      [7, 'kur', '-', 'hata', '"Faiz" tanınmadı; satır adı Kur alış, Kur satış, Kredi, Mevduat ya da Politika ile başlamalı.'],
+      [8, 'kredi', 'TRY', 'hata', 'Tarih GG.AA.YYYY olmalı.'],
+      [9, 'kredi', 'TRY', 'hata', 'Oran sayı olmalı.'],
+      [10, 'mevduat', 'TRY', 'hata', 'Yıllık faiz 0 ile 1000 arasında, en çok dört ondalık olmalı.'],
+      [11, 'politika', 'TRY', 'yeni', null],
+      [12, 'politika', 'TRY', 'hata', 'Bu oran, para birimi ve tarih dosyada ikinci kez var.'],
     ]);
-    expect(o.satirlar[0]?.deger).toBe(1041.5);
-    expect(gonderilecekler(o.satirlar)).toEqual([
-      { tur: 'kur', paraBirimi: 'USD', tarih: '2026-10-01', deger: 1041.5 }, { tur: 'faiz', paraBirimi: 'TRY', tarih: '2026-12-01', deger: 3.1 },
-    ]);
+    expect(gonderilecekler(o.satirlar)).toEqual([{ tur: 'politika', paraBirimi: 'TRY', tarih: '2026-11-01', yillikYuzde: 30, not: null }]);
   });
 
-  it('boş ve sınırı aşan dosya satır okumadan reddedilir', () => {
-    expect(sablonuOku('Tür;Para birimi;Tarih;Değer\r\n', BUGUN).dosyaHatasi).toBe('Dosyada başlık dışında satır yok.');
-    const cok = dosya(...Array.from({ length: 401 }, (_, i) => `kur;USD;${new Date(Date.UTC(2024, 0, 1 + i)).toISOString().slice(0, 10)};40`));
-    expect(sablonuOku(cok, BUGUN).dosyaHatasi).toBe('Tek seferde en çok 400 satır yüklenir.');
+  it('para birimi sütunu olmayan, boş ve sınırı aşan dosya değer okumadan reddedilir', () => {
+    expect(sablonuOku('Oran;Tarih;Not\r\nKredi;01.11.2026;x', BUGUN).dosyaHatasi).toBe('Başlıkta para birimi sütunu yok (TRY, USD gibi üç harfli kod).');
+    expect(sablonuOku(`${BASLIK}\r\n`, BUGUN).dosyaHatasi).toBe('Dosyada başlık dışında satır yok.');
+    const cok = dosya(...Array.from({ length: 401 }, (_, i) => `Kredi;${new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10)};30;;;;`));
+    expect(sablonuOku(cok, BUGUN).dosyaHatasi).toBe('Tek seferde en çok 400 değer yüklenir.');
   });
 
   it('1085 a: kayıtlı güne aynı değer "aynı", farklı değer kayıtlı değeriyle "farklı"; ikisi de gönderilir, kararı sunucu yeniden verir', () => {
-    const o = sablonuOku(dosya('kur;USD;27.10.2026;41,85', 'kur;EUR;27.10.2026;48,7', 'kur;GBP;27.10.2026;55', 'faiz;TRY;01.10.2026;3,5'), BUGUN);
-    expect(okumaAraligi(o.satirlar)).toEqual({ baslangic: '2026-10-01', bitis: '2026-10-27' });
-    const k = kayitliylaKarsilastir(o.satirlar, {
-      kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-27', kur: '41.850000' }, { paraBirimi: 'EUR', tarih: '2026-10-27', kur: '48.600000' }],
-      faizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', aylikYuzde: '3.5000' }], gunlukFaizler: [],
-    });
-    expect(k.map((s) => [s.paraBirimi, s.durum, s.neden])).toEqual([
-      ['USD', 'ayni', 'Kayıtlı değerle aynı; atlanır.'], ['EUR', 'farkli', 'Kayıtlı: 48,6. Atlanır; o gün elle düzeltilir.'], ['GBP', 'yeni', null], ['TRY', 'ayni', 'Kayıtlı değerle aynı; atlanır.'],
-    ]);
-    expect(gonderilecekler(k)).toHaveLength(4);
-  });
-
-  it('1700 b: günlük faiz ayrı kayıttır; aynı günün aylık satırıyla çakışmaz, günlük kayıtla günlük değeri karşılaştırılır', () => {
     const o = sablonuOku(dosya(
-      'Günlük Faiz;TRY;01.10.2026;0,1', 'gunluk_faiz;USD;01.10.2026;0,02', 'faiz;USD;01.10.2026;0,6', 'günlük faiz;EUR;01.10.2026;3,3', 'günlük faiz;EUR;02.10.2026;-0,1',
-      'günlük faiz;USD;01.10.2026;0,03',
+      'Kur alış;06.11.2026;;41,1;47,2;54,3;', 'Kur satış;06.11.2026;;41,2;47,4;54,5;', 'Kredi;01.11.2026;30;;;;', 'Mevduat;01.11.2026;24;;;;',
     ), BUGUN);
-    expect(o.satirlar.map((s) => [s.tur, s.paraBirimi, s.aylik, s.durum, s.neden])).toEqual([
-      ['günlük faiz', 'TRY', 3.0417, 'yeni', null],
-      ['günlük faiz', 'USD', 0.6083, 'yeni', null],
-      ['faiz', 'USD', null, 'yeni', null],
-      ['günlük faiz', 'EUR', null, 'hata', 'Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'],
-      ['günlük faiz', 'EUR', null, 'hata', 'Günlük faiz sıfır ya da büyük, aylık %100\'ü aşmayan, en çok altı ondalık olmalı.'],
-      ['günlük faiz', 'USD', null, 'hata', 'Bu tür, para birimi ve tarih dosyada ikinci kez var.'],
-    ]);
+    expect(okumaAraligi(o.satirlar)).toEqual({ baslangic: '2026-11-01', bitis: '2026-11-06' });
     const k = kayitliylaKarsilastir(o.satirlar, {
-      kurlar: [], faizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', aylikYuzde: '3.0417' }],
-      gunlukFaizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', gunlukYuzde: '0.100000' }, { paraBirimi: 'USD', gecerlilikBaslangic: '2026-10-01', gunlukYuzde: '0.010000' }],
+      kurlar: [{ paraBirimi: 'USD', tarih: '2026-11-06', alis: '41.100000', satis: '41.200000' }, { paraBirimi: 'EUR', tarih: '2026-11-06', alis: '47.200000', satis: '47.300000' }],
+      faizler: [{ tur: 'kredi', paraBirimi: 'TRY', gecerlilikBaslangic: '2026-11-01', yillikYuzde: '30.0000' }, { tur: 'kredi', paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-01', yillikYuzde: '25.0000' },
+        { tur: 'mevduat', paraBirimi: 'TRY', gecerlilikBaslangic: '2026-11-01', yillikYuzde: '25.0000' }],
     });
-    expect(k.map((s) => s.durum)).toEqual(['ayni', 'farkli', 'yeni', 'hata', 'hata', 'hata']);
+    expect(k.map((s) => [s.tur, s.paraBirimi, s.durum, s.neden])).toEqual([
+      ['kur', 'USD', 'ayni', 'Kayıtlı değerle aynı; atlanır.'], ['kur', 'EUR', 'farkli', 'Kayıtlı: 47,2 / 47,3. Atlanır; o gün elle düzeltilir.'], ['kur', 'GBP', 'yeni', null],
+      ['kredi', 'TRY', 'ayni', 'Kayıtlı değerle aynı; atlanır.'], ['mevduat', 'TRY', 'farkli', 'Kayıtlı: %25. Atlanır; aynı güne yeni oran elle girilir.'],
+    ]);
+    expect(gonderilecekler(k)).toHaveLength(5);
   });
 
   it('beş yıldan geniş dosyanın önizleme aralığı yoktur', () => {
-    expect(okumaAraligi(sablonuOku(dosya('kur;USD;01.01.2020;5', 'kur;USD;01.10.2026;41'), BUGUN).satirlar)).toBeNull();
+    expect(okumaAraligi(sablonuOku(dosya('Kredi;01.01.2020;30;;;;', 'Kredi;01.10.2026;30;;;;'), BUGUN).satirlar)).toBeNull();
   });
 });
 
-describe('kur ve faiz grafiği (1089 a)', () => {
+describe('kur ve faiz grafiği (1089 a; 2238)', () => {
   const veri = {
-    kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-01', kur: '41' }, { paraBirimi: 'USD', tarih: '2026-10-31', kur: '43' }, { paraBirimi: 'EUR', tarih: '2026-10-01', kur: '48' }],
-    faizler: [{ paraBirimi: 'TRY', gecerlilikBaslangic: '2026-09-01', aylikYuzde: '3.5000' }, { paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-16', aylikYuzde: '3.2500' }],
-    gunlukFaizler: [],
+    kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-01', alis: '41', satis: '41.2' }, { paraBirimi: 'USD', tarih: '2026-10-31', alis: '43', satis: '43.3' }],
+    faizler: [{ tur: 'kredi' as const, paraBirimi: 'TRY', gecerlilikBaslangic: '2026-09-01', yillikYuzde: '42' }, { tur: 'kredi' as const, paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-16', yillikYuzde: '39' },
+      { tur: 'mevduat' as const, paraBirimi: 'TRY', gecerlilikBaslangic: '2026-10-05', yillikYuzde: '30' }],
   };
   const seri = (a: string) => SERILER.find((s) => s.anahtar === a)!;
-  it('kur girilen günlerden, faiz aralık başında geçerli orandan başlar', () => {
-    expect(seriNoktalari(veri, seri('kur-USD'), '2026-10-01')).toEqual([{ tarih: '2026-10-01', deger: 41 }, { tarih: '2026-10-31', deger: 43 }]);
-    expect(seriNoktalari(veri, seri('faiz-TRY'), '2026-10-01')).toEqual([{ tarih: '2026-10-01', deger: 3.5 }, { tarih: '2026-10-16', deger: 3.25 }]);
-    expect(seriNoktalari(veri, seri('kur-GBP'), '2026-10-01')).toEqual([]);
+  it('kur alış ve satış ayrı seridir; faiz türüne göre ayrılır ve aralık başında geçerli orandan başlar', () => {
+    expect(seriNoktalari(veri, seri('alis-USD'), '2026-10-01')).toEqual([{ tarih: '2026-10-01', deger: 41 }, { tarih: '2026-10-31', deger: 43 }]);
+    expect(seriNoktalari(veri, seri('satis-USD'), '2026-10-01')).toEqual([{ tarih: '2026-10-01', deger: 41.2 }, { tarih: '2026-10-31', deger: 43.3 }]);
+    expect(seriNoktalari(veri, seri('kredi-TRY'), '2026-10-01')).toEqual([{ tarih: '2026-10-01', deger: 42 }, { tarih: '2026-10-16', deger: 39 }]);
+    expect(seriNoktalari(veri, seri('mevduat-TRY'), '2026-10-01')).toEqual([{ tarih: '2026-10-05', deger: 30 }]);
+    expect(seriNoktalari(veri, seri('alis-GBP'), '2026-10-01')).toEqual([]);
   });
   it('eksen en küçük ile en büyük arasındadır (sıfırdan değil); faiz basamakla bitişe uzar', () => {
     const kur = cizgiYolu([{ tarih: '2026-10-01', deger: 41 }, { tarih: '2026-10-31', deger: 43 }], '2026-10-01', '2026-10-31', false);
     const [bas, son] = kur.split(' ');
     expect(bas).toMatch(/^M0\.00,1[01]\d\.\d\d$/);
     expect(son).toMatch(/^L320\.00,\d\.\d\d$/);
-    expect(cizgiYolu([{ tarih: '2026-10-01', deger: 3.5 }, { tarih: '2026-10-16', deger: 3.25 }], '2026-10-01', '2026-10-31', true).split(' ')).toEqual(
+    expect(cizgiYolu([{ tarih: '2026-10-01', deger: 42 }, { tarih: '2026-10-16', deger: 39 }], '2026-10-01', '2026-10-31', true).split(' ')).toEqual(
       expect.arrayContaining(['H160.00', 'H320']),
     );
     expect(cizgiYolu([], '2026-10-01', '2026-10-31', false)).toBe('');

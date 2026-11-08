@@ -218,8 +218,9 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
     const plan = async (sira: number, vade: string, paraBirimi: string, tutar: string) => vt().sorgu(
       `INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id)
        VALUES ($1, $2, 'SA-DENEME', $3, 'vade', $4, 'banka', $5, $6, $7, $8)`, [talepId, teklifId, sira, vade, firma, paraBirimi, tutar, yoneticiId]);
-    tamam(await yaz('muhasebe', '/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: gun(-3), kur: 40 }));
-    tamam(await yaz('muhasebe', '/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: gun(5), kur: 99 }));
+    // 2238-1 c: satın alma siparişinin ödenecek TL karşılığı satış kuruyla (alış 39, satış 40).
+    tamam(await yaz('muhasebe', '/finans/kur-ciftleri/ekle', { paraBirimi: 'GBP', tarih: gun(-3), alis: 39, satis: 40 }));
+    tamam(await yaz('muhasebe', '/finans/kur-ciftleri/ekle', { paraBirimi: 'GBP', tarih: gun(5), alis: 98, satis: 99 }));
     const ozet = async (): Promise<FinansOzetiCevabi> => tamam(await oku<FinansOzetiCevabi>('mudur', '/finans/ozet'));
     const once = await ozet();
     assert.deepEqual(once.yaklasanSiparis, { sayi: 0, tutarTl: '0.00' });

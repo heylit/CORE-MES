@@ -10,7 +10,7 @@ import {
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
   aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
-  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi,
+  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, kurCiftiListesiCevabi, oranAraligiCevabi, oranEkleGovdesi, oranListesiCevabi, oranOzetiCevabi, oranTopluCevabi, oranTopluGovdesi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
   maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
   skorListesiCevabi, vergiBeyaniGovdesi, vergiBeyaniSorgusu, vergiBeyanlariCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
@@ -67,6 +67,8 @@ export const paraUclari = [
   oku('/finans/kurlar', 'kur', kurListesiCevabi),
   oku('/finans/kdv-oranlari', 'kdv', kdvOraniListesiCevabi),
   oku('/finans/faizler', 'faiz', faizListesiCevabi),
+  oku('/finans/kur-ciftleri', 'kurCifti', kurCiftiListesiCevabi),
+  oku('/finans/oranlar', 'oran', oranListesiCevabi),
   oku('/finans/duzenli-odemeler', 'duzenli', duzenliOdemeListesiCevabi),
   oku('/finans/butce', 'butce', butceListesiCevabi),
   oku('/finans/bakiye-esitlemeleri', 'esitleme', esitlemeListesiCevabi),
@@ -84,6 +86,10 @@ export const paraUclari = [
   // 1089 a: şeridin kur grafiği ve toplu yükleme önizlemesi; şerit gibi giriş yapan herkes okur (yalnız kur ve faiz).
   uc({ yontem: 'GET', yol: '/finans/kur-faiz-araligi', yetki: 'oturum', sorgu: kurFaizAraligiSorgusu, cevap: kurFaizAraligiCevabi,
     isle: ({ db, sorgu }) => servis.kurFaizAraligi(db, sorgu.baslangic, sorgu.bitis) }),
+  // Kart 2238: kur ve faiz matrisi; şerit gibi giriş yapan herkes okur (952 a).
+  uc({ yontem: 'GET', yol: '/finans/oran-ozeti', yetki: 'oturum', cevap: oranOzetiCevabi, isle: ({ db }) => servis.oranOzeti(db, tesisGunu(new Date())) }),
+  uc({ yontem: 'GET', yol: '/finans/oran-araligi', yetki: 'oturum', sorgu: kurFaizAraligiSorgusu, cevap: oranAraligiCevabi,
+    isle: ({ db, sorgu }) => servis.oranAraligi(db, sorgu.baslangic, sorgu.bitis) }),
   uc({ yontem: 'GET', yol: '/finans/ayar', yetki: 'finans.oku', cevap: ayarCevabi, isle: async ({ db }) => ({ ayar: await servis.ayarOku(db) as zod.output<typeof ayarCevabi>['ayar'] }) }),
   uc({ yontem: 'GET', yol: '/finans/aylik-seri', yetki: 'finans.oku', sorgu: aylikSeriSorgusu, cevap: aylikSeriCevabi,
     isle: ({ db, sorgu }) => servis.aylikSeri(db, tesisGunu(new Date()), sorgu.ay) }),
@@ -164,6 +170,12 @@ export const paraUclari = [
   uc({ yontem: 'POST', yol: '/finans/kurlar/guncelle', yetki: 'finans.kur-yaz', govde: kurGuncelleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde, denetimEki }) => servis.kurGuncelle(db, kullanici, govde, denetimEki) }),
   uc({ yontem: 'POST', yol: '/finans/faizler/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: faizEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.faizEkle(db, kullanici, govde) }),
   // 1087 a: toplu yükleme tek tek girişle aynı işlemdir (muhasebe ve satın alma).
+  uc({ yontem: 'POST', yol: '/finans/kur-ciftleri/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: kurCiftiGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kurCiftiEkle(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/finans/kur-ciftleri/guncelle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: kurCiftiGuncelleGovdesi, cevap: anahtarCevap,
+    isle: ({ db, kullanici, govde, denetimEki }) => servis.kurCiftiGuncelle(db, kullanici, govde, denetimEki) }),
+  uc({ yontem: 'POST', yol: '/finans/oranlar/ekle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: oranEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.oranEkle(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/finans/oranlar/toplu-yukle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: oranTopluGovdesi, cevap: oranTopluCevabi,
+    isle: ({ db, kullanici, govde }) => servis.oranTopluYukle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kur-faiz/toplu-yukle', yetki: 'finans.kur-yaz', tekrarKorumali: true, govde: kurFaizTopluGovdesi, cevap: kurFaizTopluCevabi,
     isle: ({ db, kullanici, govde }) => servis.kurFaizTopluYukle(db, kullanici, govde) }),
   // 260 a: satış formundaki sipariş seçimi; fatura yazanın yetkisiyle (sipariş no ve durumu, tutar yok).

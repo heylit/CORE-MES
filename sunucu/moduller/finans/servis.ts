@@ -9,7 +9,7 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
-import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
+import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurCiftiKarari, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
   amortismanCevabi, ayarCevabi, beklenenOdemelerCevabi, belgeListesiCevabi, butceListesiCevabi, cekListesiCevabi, dagilimListesiCevabi, duzenliOdemeListesiCevabi,
@@ -19,14 +19,14 @@ import {
 import { firmaAdlari, firmaDurumuDegistir as firmaDurumuYaz, firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import type { FirmaDurumu } from '../musteri-tedarikci/disari.ts';
 import * as sorgular from './sorgular.ts';
-import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU } from '#paylasilan/sozlesme/finans.ts';
-import type { vergiBeyaniGovdesi, VergiBeyaniSatiri, MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, BeklenenTahsilatlarCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
+import { FATURASIZ_KATEGORILER, GELIR_KATEGORILERI, IADE_KATEGORILERI, KUR_FAIZ_GECMISI_BOYU, yillikFaizdenGunluk } from '#paylasilan/sozlesme/finans.ts';
+import type { vergiBeyaniGovdesi, VergiBeyaniSatiri, MaliyetSatiri, AylikSeriCevabi, Belge, SatisSiparisi, SatisSevki, BeklenenOdemelerCevabi, BeklenenTahsilatlarCevabi, Cek, FinansOzetiCevabi, SiparisOdemeYontemi, KurFaizAraligi, KurFaizOzeti, OranAraligi, OranOzeti, Odeme, SabitKiymetSatiri } from '#paylasilan/sozlesme/finans.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { makineGetir, makineler } from '../istasyonlar/disari.ts';
 import type {
   belgeDuzeltGovdesi, belgeEkleGovdesi, butceGovdesi, cekDuzeltGovdesi, cekEkleGovdesi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdendiGovdesi, esitleGovdesi, hesapEkleGovdesi, kapanisGovdesi, faizEkleGovdesi, genelGiderOraniEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kurFaizTopluGovdesi, kurGovdesi,
-  kurGuncelleGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
+  kurGuncelleGovdesi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, oranEkleGovdesi, oranTopluGovdesi, maliyetYazGovdesi, mahsupEkleGovdesi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetPasifGovdesi, odemeEkleGovdesi, oneriDurumuGovdesi, topluAktarGovdesi, virmanEkleGovdesi,
 } from '#paylasilan/sozlesme/finans.ts';
 import { cakisma } from '#cekirdek/hata.ts';
 import {
@@ -68,13 +68,39 @@ export async function kurlar(db: Db, tarih: string): Promise<Map<string, Gecerli
   return sonuc;
 }
 
+// Kart 2238 (2238-1 c): kur alış ve satış çiftinden okunur; o güne kadar girilmiş çift yoksa null (eski tek kura düşülmez, sıfır uydurulmaz).
+// Hangi kullanımın hangi kuru okuyacağı ORAN_KULLANIMLARI'ndadır (muhasebe alış, satın alma maliyeti satış).
+export type KurTuru = 'alis' | 'satis';
+export async function kurCiftiGetir(db: Db, paraBirimi: string, tarih: string, tur: KurTuru): Promise<GecerliKur | null> {
+  if (paraBirimi === 'TRY') return TL_KURU(tarih);
+  const [s] = await sorgular.sonKurCiftleri(db, paraBirimi, tarih);
+  return s ? { kur: s[tur], tarih: s.tarih } : null;
+}
+export async function kurCiftleri(db: Db, tarih: string, tur: KurTuru): Promise<Map<string, GecerliKur>> {
+  const sonuc = new Map<string, GecerliKur>([['TRY', TL_KURU(tarih)]]);
+  for (const s of await sorgular.sonKurCiftleri(db, null, tarih)) sonuc.set(s.paraBirimi, { kur: s[tur], tarih: s.tarih });
+  return sonuc;
+}
+// 2238-2 a: oran yıllık yüzdedir; günlük karşılığı basit faizle yıllık / 365 (1383 a). O gün geçerli oran yoksa null.
+export type FaizTuru = sorgular.FaizTuruSql;
+export interface GecerliOran { yillikYuzde: string; gunlukYuzde: number; gecerlilikBaslangic: string }
+const oranCevabi = (s: sorgular.OranSatiri): GecerliOran => ({ yillikYuzde: s.yillikYuzde, gunlukYuzde: yillikFaizdenGunluk(Number(s.yillikYuzde)), gecerlilikBaslangic: s.gecerlilikBaslangic });
+export async function oranGetir(db: Db, tur: FaizTuru, paraBirimi: string, tarih: string): Promise<GecerliOran | null> {
+  const [s] = await sorgular.sonOranlar(db, tur, paraBirimi, tarih);
+  return s ? oranCevabi(s) : null;
+}
+export async function oranlar(db: Db, tur: FaizTuru, tarih: string): Promise<Map<string, GecerliOran>> {
+  return new Map((await sorgular.sonOranlar(db, tur, null, tarih)).map((s) => [s.paraBirimi, oranCevabi(s)]));
+}
+
 // 1700 b, 1725 a: başka modüllere giden faiz ayardaki birimdendir (faizSec); aylık ve günlük karşılığı birlikte verilir.
-// Kur boşsa kayıt gününe kadar girilmiş son kur alınır; TRY'de kur 1'dir; dövizde kur yoksa reddedilir (1 sayılmaz).
+// Kur boşsa kayıt gününe kadar girilmiş son alış kuru alınır; TRY'de kur 1'dir; dövizde kur yoksa reddedilir (1 sayılmaz).
 async function kayitKuru(db: Db, paraBirimi: string, kur: string | null, tarih: string): Promise<string> {
   if (kur !== null) return kur;
   if (paraBirimi === 'TRY') return '1.000000';
-  const gecerli = await kurGetir(db, paraBirimi, tarih);
-  if (!gecerli) throw dogrulama(`${paraBirimi} için ${tarih} gününe kadar girilmiş kur yok; kuru elle girin ya da önce kuru kaydedin.`, 'kur');
+  // 2238-1 c: muhasebe kaydının kuru alış kurudur.
+  const gecerli = await kurCiftiGetir(db, paraBirimi, tarih, 'alis');
+  if (!gecerli) throw dogrulama(`${paraBirimi} için ${tarih} gününe kadar girilmiş alış kuru yok; kuru elle girin ya da önce alış ve satış kurunu kaydedin.`, 'kur');
   return gecerli.kur;
 }
 
@@ -710,6 +736,67 @@ export async function kurFaizAraligi(db: Db, baslangic: string, bitis: string): 
     gunlukFaizler: await sorgular.aralikGunlukFaizleri(db, baslangic, bitis),
   };
 }
+// ---- Kur ve faiz matrisi (kart 2238) ----
+export function kurCiftiEkle(db: Db, k: Kullanici, g: G<typeof kurCiftiGovdesi>) {
+  return korumali(async () => {
+    if (await sorgular.kurCiftiVarMi(db, g.paraBirimi, g.tarih)) throw cakisma('Bu para birimi için o güne kur zaten girilmiş; düzeltin.');
+    await sorgular.kurCiftiEkle(db, g, k.id);
+    return { paraBirimi: g.paraBirimi, tarih: g.tarih };
+  });
+}
+export function kurCiftiGuncelle(db: Db, k: Kullanici, g: G<typeof kurCiftiGuncelleGovdesi>, ek: DefterEki) {
+  return korumali(async () => {
+    const eski = await sorgular.kurCiftiGetir(db, g.paraBirimi, g.tarih);
+    if (!eski) throw bulunamadi('Kur bulunamadı.');
+    await kosulluYaz(() => sorgular.kurCiftiGuncelle(db, g, k.id));
+    farkYaz(ek, [`kur-cifti:${g.paraBirimi}:${g.tarih}`, eski, (await sorgular.kurCiftiGetir(db, g.paraBirimi, g.tarih)) ?? {}]);
+    return { paraBirimi: g.paraBirimi, tarih: g.tarih };
+  });
+}
+export function oranEkle(db: Db, k: Kullanici, g: G<typeof oranEkleGovdesi>) {
+  return korumali(async () => ({ id: (await sorgular.oranEkle(db, g, k.id))!.id }));
+}
+export async function oranOzeti(db: Db, bugun: string): Promise<OranOzeti> {
+  const kurlar = await sorgular.kurCiftiOzeti(db, bugun);
+  const faizler = await sorgular.oranOzeti(db, bugun);
+  const son = await sorgular.sonOranGirisi(db);
+  const gecmis = await sorgular.oranGecmisi(db, KUR_FAIZ_GECMISI_BOYU);
+  const adlar = await kisiAdlari(db, [...kurlar, ...faizler, ...gecmis, ...(son ? [son] : [])].map((s) => s.girenId));
+  const ad = (id: number): string | null => adlar.get(id) ?? null;
+  return {
+    bugun,
+    kurlar: kurlar.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
+    faizler: faizler.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
+    sonGiris: son ? { tur: son.tur, giris: son.giris, girenAd: ad(son.girenId) } : null,
+    gecmis: gecmis.map(({ girenId, ...s }) => ({ ...s, girenAd: ad(girenId) })),
+  };
+}
+// Matris şablonu (1083-1087 kuralları): tek transaction, hepsi ya da hiçbiri; kayıtlı anahtar atlanır (1085 a), kur ileri tarihli olamaz.
+export function oranTopluYukle(db: Db, k: Kullanici, g: G<typeof oranTopluGovdesi>) {
+  return korumali(async () => {
+    const ileri = ileriTarihliKurSirasi(g.satirlar, tesisGunu(new Date()));
+    if (ileri !== null) throw gecersiz(`${ileri + 1}. satır: ileri tarihli kur girilmez.`);
+    const kurSatirlari = g.satirlar.filter((s) => s.tur === 'kur');
+    const oranSatirlari = g.satirlar.filter((s) => s.tur !== 'kur');
+    const kayitliKur = new Map((await sorgular.kayitliKurCiftleri(db, kurSatirlari)).map((s) => [`${s.paraBirimi}|${s.tarih}`, s]));
+    const kayitliOran = new Map((await sorgular.kayitliOranlar(db, oranSatirlari)).map((s) => [`${s.tur}|${s.paraBirimi}|${s.tarih}`, s.yillikYuzde]));
+    const sayi = { eklenen: 0, ayni: 0, farkli: 0 };
+    for (const s of g.satirlar) {
+      const karar = s.tur === 'kur'
+        ? topluKurCiftiKarari(s, kayitliKur.get(`${s.paraBirimi}|${s.tarih}`))
+        : topluKurFaizKarari(s.yillikYuzde, kayitliOran.get(`${s.tur}|${s.paraBirimi}|${s.tarih}`));
+      if (karar === 'ayni') { sayi.ayni += 1; continue; }
+      if (karar === 'farkli') { sayi.farkli += 1; continue; }
+      if (s.tur === 'kur') await sorgular.kurCiftiEkle(db, s, k.id);
+      else await sorgular.oranEkle(db, { tur: s.tur, paraBirimi: s.paraBirimi, gecerlilikBaslangic: s.tarih, yillikYuzde: s.yillikYuzde, not: s.not }, k.id);
+      sayi.eklenen += 1;
+    }
+    return sayi;
+  });
+}
+export async function oranAraligi(db: Db, baslangic: string, bitis: string): Promise<OranAraligi> {
+  return { kurlar: await sorgular.aralikKurCiftleri(db, baslangic, bitis), faizler: await sorgular.aralikOranlari(db, baslangic, bitis) };
+}
 export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {
   return korumali(async () => ({ id: (await sorgular.faizEkle(db, g, k.id))!.id }));
 }
@@ -847,8 +934,8 @@ export function topluAktar(db: Db, k: Kullanici, g: G<typeof topluAktarGovdesi>)
     });
     const kurlar: (string | null)[] = [];
     for (const [i, s] of g.satirlar.entries()) {
-      const kur = s.kur ?? (s.paraBirimi === 'TRY' ? '1.000000' : (await kurGetir(db, s.paraBirimi, s.belgeTarihi))?.kur ?? null);
-      if (kur === null) hatalar.push({ satir: i + 1, ileti: `${s.paraBirimi} için belge tarihine kadar girilmiş kur yok.` });
+      const kur = s.kur ?? (s.paraBirimi === 'TRY' ? '1.000000' : (await kurCiftiGetir(db, s.paraBirimi, s.belgeTarihi, 'alis'))?.kur ?? null);
+      if (kur === null) hatalar.push({ satir: i + 1, ileti: `${s.paraBirimi} için belge tarihine kadar girilmiş alış kuru yok.` });
       kurlar.push(kur);
     }
     const bugun = tesisGunu(new Date()), sinir = gunEkle(bugun, ILERI_BELGE_GUNU);
@@ -1064,12 +1151,12 @@ const sabitKiymetOku = async (db: Db, id: number): Promise<SabitKiymetSatiri> =>
   return sabitKiymetHesapla(k, buAy());
 };
 
-// Kur boşsa alış gününün kuru alınır; TRY'de kur 1'dir.
+// Kur boşsa alış gününün alış kuru alınır; TRY'de kur 1'dir.
 async function sabitKiymetKuru(db: Db, paraBirimi: string, kur: string | null, alisTarihi: string): Promise<string> {
   if (paraBirimi === 'TRY') return '1';
   if (kur !== null) return kur;
-  const gecerli = await kurGetir(db, paraBirimi, alisTarihi);
-  if (!gecerli) throw dogrulama(`${paraBirimi} için alış gününe kadar girilmiş kur yok; kuru elle girin ya da önce kuru kaydedin.`, 'kur');
+  const gecerli = await kurCiftiGetir(db, paraBirimi, alisTarihi, 'alis');
+  if (!gecerli) throw dogrulama(`${paraBirimi} için alış gününe kadar girilmiş alış kuru yok; kuru elle girin ya da önce alış ve satış kurunu kaydedin.`, 'kur');
   return gecerli.kur;
 }
 

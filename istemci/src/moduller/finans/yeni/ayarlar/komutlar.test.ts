@@ -3,8 +3,8 @@ import { finansiKur } from '../veri.ts';
 import { ornekHamVeri } from '../ornek-ham-veri.ts';
 import type { Komut } from '../akislar.ts';
 import {
-  ayarKomutu, duzenliEkleKomutu, duzenliGuncelleKomutu, duzenliKaldirKomutu, faizKomutu, hesapDurumKomutu, hesapKomutu, kdvKomutu, kiymetEkleKomutu,
-  kiymetPasifKomutu, kurKomutu, kurulumKomutlari, topluAktarKomutu,
+  ayarKomutu, duzenliEkleKomutu, duzenliGuncelleKomutu, duzenliKaldirKomutu, hesapDurumKomutu, hesapKomutu, kdvKomutu, kiymetEkleKomutu,
+  kiymetPasifKomutu, kurCiftiKomutu, kurulumKomutlari, oranKomutu, topluAktarKomutu,
 } from './komutlar.ts';
 
 // Ayarlar'ın her komutu sunucuda tanımlı bir yazma ucuna gider; değer, sunucudaki tekrar koruması işaretidir (finans uclar.ts).
@@ -17,9 +17,9 @@ const SUNUCU = new Map<string, boolean>([
   ['POST /finans/hesaplar/:id/pasif', false],
   ['POST /finans/hesaplar/:id/aktif', false],
   ['POST /finans/kdv-oranlari/ekle', false],
-  ['POST /finans/kurlar/ekle', false],
-  ['POST /finans/kurlar/guncelle', false],
-  ['POST /finans/faizler/ekle', true],
+  ['POST /finans/kur-ciftleri/ekle', true],
+  ['POST /finans/kur-ciftleri/guncelle', true],
+  ['POST /finans/oranlar/ekle', true],
   ['POST /finans/sabit-kiymetler/ekle', true],
   ['POST /finans/sabit-kiymetler/:id/pasif', false],
   ['POST /finans/toplu-ice-aktar', true],
@@ -38,9 +38,9 @@ const KOMUTLAR: [string, Komut][] = [
   ['hesap pasif', hesapDurumKomutu(hesap)],
   ['hesap aktif', hesapDurumKomutu({ ...hesap, aktif: false })],
   ['kdv', kdvKomutu('10', '2026-11-01')],
-  ['kur ekle', kurKomutu(V, 'usd', '2026-10-20', '33')],
-  ['kur düzelt', kurKomutu(V, 'EUR', '2026-10-01', '36')],
-  ['faiz', faizKomutu('TRY', '2026-11-01', '3.1')],
+  ['kur ekle', kurCiftiKomutu(undefined, 'usd', '2026-10-20', '33', '33.1')],
+  ['kur düzelt', kurCiftiKomutu({ surum: 1 }, 'EUR', '2026-10-01', '36', '36.2')],
+  ['faiz', oranKomutu('kredi', 'try', '2026-11-01', '42', '')],
   ['sabit kıymet ekle', kiymetEkleKomutu({ ad: 'Torna', makineKodu: '', alisTarihi: '2026-10-01', bedel: '1000', pb: 'try', kur: '', omurAy: '120', yontem: 'normal', kalinti: '0', devirTarihi: '', devirBirikmis: '', aciklama: '' })],
   ['sabit kıymet pasif', kiymetPasifKomutu(kiymet, '2026-10-31')],
   ['toplu aktar', topluAktarKomutu([{ belgeTarihi: '2026-10-01', yon: 'gelir', kategori: 'urun_satisi', firma: 'A', aciklama: 'S', tutar: 10.005, kdvOrani: 20, vade: '2026-10-01' }])],
@@ -59,8 +59,9 @@ describe('F4 ayar komutları', () => {
     expect(b['hesap güncelle']!).toMatchObject({ uc: 'POST /finans/hesaplar/:id/guncelle', parametre: { id: 1 }, govde: { bankaAdi: 'B', logoKodu: null, surum: 1 } });
     expect(b['hesap pasif']!.uc).toBe('POST /finans/hesaplar/:id/pasif');
     expect(b['hesap aktif']!.uc).toBe('POST /finans/hesaplar/:id/aktif');
-    expect(b['kur ekle']!).toMatchObject({ uc: 'POST /finans/kurlar/ekle', govde: { paraBirimi: 'USD', kur: 33 } });
-    expect(b['kur düzelt']!).toMatchObject({ uc: 'POST /finans/kurlar/guncelle', govde: { paraBirimi: 'EUR', surum: 1 } });
+    expect(b['kur ekle']!).toMatchObject({ uc: 'POST /finans/kur-ciftleri/ekle', govde: { paraBirimi: 'USD', alis: 33, satis: 33.1 } });
+    expect(b['faiz']!).toMatchObject({ uc: 'POST /finans/oranlar/ekle', govde: { tur: 'kredi', paraBirimi: 'TRY', yillikYuzde: 42, not: null } });
+    expect(b['kur düzelt']!).toMatchObject({ uc: 'POST /finans/kur-ciftleri/guncelle', govde: { paraBirimi: 'EUR', alis: 36, satis: 36.2, surum: 1 } });
     expect(b['sabit kıymet ekle']!.govde).toEqual({
       ad: 'Torna', makineKodu: null, paraBirimi: 'TRY', bedel: 1000, alisTarihi: '2026-10-01', omurAy: 120, yontem: 'normal', kalintiDegeri: 0,
       devirTarihi: null, devirBirikmisTl: null, aciklama: null,
