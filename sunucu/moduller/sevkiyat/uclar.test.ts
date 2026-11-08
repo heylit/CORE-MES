@@ -6,7 +6,9 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { ucEnvanteri, uclariKaydet } from '#cekirdek/uc.ts';
+import { rolluGiris, uclarinYetkisiniDene } from '#cekirdek/test-yetki.ts';
+import type { BeklenenYetkiler } from '#cekirdek/test-yetki.ts';
+import { uclariKaydet } from '#cekirdek/uc.ts';
 import { hataYonetiminiKur, uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { SEVKIYAT_ISLEMLERI } from '#paylasilan/islemler/sevkiyat.ts';
@@ -19,10 +21,9 @@ import { DEPODAKI_PAKET, sevkiyatUclari } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
 const TARIH = '2026-10-08';
-type Islem = (typeof SEVKIYAT_ISLEMLERI)[number];
 
 // Uç başına istenen işlem; ON-PAKET 3. bölümdeki tablo bununla aynıdır.
-const BEKLENEN: Record<string, Islem | { biri: readonly string[] }> = {
+const BEKLENEN: BeklenenYetkiler = {
   'GET /sevkiyat/noktalar': 'sevkiyat.oku',
   'GET /sevkiyat/firmalar': 'sevkiyat.tanim-yaz',
   'GET /sevkiyat/noktalar/konum-onerisi': 'sevkiyat.tanim-yaz',
@@ -67,8 +68,6 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
   let app: FastifyInstance;
   let hedef: FastifyInstance;
   let yonetici = '';
-  let yalnizSayfa = '';
-  const islemCerezi = new Map<Islem, string>();
 
   const girisYap = async (kullaniciAdi: string): Promise<string> => {
     const cevap = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi, parola: PAROLA } });
@@ -103,9 +102,6 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
     uclariKaydet(hedef, sevkiyatUclari(izgaraKaynagi()), { vt: ortam.vt, kimlik, tekrar: tekrarDeposu });
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     yonetici = await girisYap('yonetici');
-    // Sayfa işlemi menü görünürlüğüdür; hiçbir veri ucunu açmamalı.
-    yalnizSayfa = await rolluKisi('sayfaci', ['sayfa.sevkiyat']);
-    for (const [sira, islem] of SEVKIYAT_ISLEMLERI.entries()) islemCerezi.set(islem, await rolluKisi(`islemci${sira}`, [islem]));
   });
 
   after(async () => {
@@ -121,21 +117,12 @@ describe('sevkiyat uçları (gerçek giriş, gerçek PostgreSQL)', () => {
   });
 
   test('her uç beklenen işlemi ister; kimliksiz 401, sayfa işlemi ya da başka işlem 403, doğru işlem geçer', async () => {
-    const envanter = ucEnvanteri(sevkiyatUclari(izgaraKaynagi()));
-    assert.deepEqual(Object.fromEntries(envanter.map((u) => [`${u.yontem} ${u.yol}`, u.yetki])), BEKLENEN);
-    for (const u of envanter) {
-      const yol = u.yol.replace(':id', '999999').replace(':tarih', TARIH);
-      const ad = `${u.yontem} ${u.yol}`;
-      const yontem = u.yontem === 'GET' ? 'GET' : 'POST';
-      assert.equal((await iste(hedef, yontem, yol)).statusCode, 401, ad);
-      assert.equal((await iste(hedef, yontem, yol, yalnizSayfa)).statusCode, 403, ad);
-      for (const [islem, cerez] of islemCerezi) {
-        const durum = (await iste(hedef, yontem, yol, cerez)).statusCode;
-        // Kabul: yetki geçer; gövdesiz ya da var olmayan kayıtlı istek doğrulama ya da bulunamadı ile döner.
-        if (typeof u.yetki === 'string' ? islem === u.yetki : (u.yetki as { biri: readonly string[] }).biri.includes(islem)) assert.equal([401, 403].includes(durum), false, `${ad} ${islem} -> ${durum}`);
-        else assert.equal(durum, 403, `${ad} ${islem}`);
-      }
-    }
+    // Sayfa işlemi menü görünürlüğüdür; tabloda hiçbir uca yazılmadığı için her veri ucunda 403 beklenir.
+    const sapmalar = await uclarinYetkisiniDene({
+      uygulama: hedef, uclar: sevkiyatUclari(izgaraKaynagi()), beklenen: BEKLENEN, parametre: { tarih: TARIH },
+      cerezAl: rolluGiris({ giris: app, vt: ortam.vt, kisiOlustur: yoneticiOlustur }), islemler: ['sayfa.sevkiyat', ...SEVKIYAT_ISLEMLERI],
+    });
+    assert.deepEqual(sapmalar, []);
   });
 
   test('uçtan uca: tanım, iş, dağıtma, onay, onaylı planda kayıt reddi ve tek rota; cevaplar sözleşmeden geçer', async () => {
