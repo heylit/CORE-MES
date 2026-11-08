@@ -397,7 +397,24 @@ export const planCanliOzeti = z.object({
   })).optional(),
 });
 // Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
-export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true });
+// 2319 (2311 S7, 2327-1 a): canlı plan son canlıya almadan sonra eskidiyse (emir erken bitti, makine durdu, fason döndü, emrin adımı değişti) işaret. Yalnız işarettir,
+// plan değişmez. İsteğe bağlı: alanı göndermeyen sunucuyla ekran eskisi gibi çalışır.
+const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti']);
+export const planBayatligi = z.object({
+  bayat: z.boolean(),
+  sonCanliyaAlma: zaman.nullable(),
+  sayilar: z.record(bayatNedeni, z.number().int().nonnegative()),
+  // Yeniden eskiye, en çok 20.
+  olaylar: z.array(z.object({
+    neden: bayatNedeni,
+    zaman,
+    uretimEmriId: z.number().int().positive().nullable(),
+    emirNo: z.string().nullable(),
+    makineId: z.number().int().positive().nullable(),
+    makineKod: z.string().nullable(),
+  })),
+});
+export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true }).extend({ bayat: planBayatligi.optional() });
 // 510 a: eski "Plan değişikliği" kutusu. Taban planın ilk yazılışından (ilk canlıya alma) sonraki canlıya almalar: toplam, kişi başına sayı
 // (kutunun alt satırı) ve en son 20'si (yeniden eskiye). Taban yoksa tabanZamani null, sayılar boş. Kişi adı okunamazsa null.
 export const canliyaAlmaGecmisiCevabi = z.object({
