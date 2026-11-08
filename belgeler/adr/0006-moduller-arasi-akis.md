@@ -50,7 +50,7 @@ birlikte ne ayrı yazılabilir ne ayrı teslim alınabilir.
 Karar 2270-1 a ve 2270-2 a (08.11.2026). Madde 1'deki "üstteki" ve "alttaki" bu tabloyla tanımlanır.
 
 1. **Tablo kodda, tek yerdedir:** `araclar/sinir-denetimi.ts` içindeki `KATMANLAR`. Sıra kattır, 0 en alttır.
-   ADR tabloyu kopyalamaz; güncel hali o dosyadadır.
+   ADR tabloyu kopyalamaz; güncel hali o dosyadadır, modülün katı `npm run harita -- --ozet` çıktısında görünür.
 2. **Sunucu ve istemci ayrı tablodur.** İki grafik ayrıdır (madde 1); ekran başka modülün bileşenini gömer
    ve sunucu sırasını izlemez.
 3. **Modül yalnız kendinden alt kattaki modülü ithal eder** (kural g). Aynı kattakini de ithal etmez: iki

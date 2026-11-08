@@ -9,8 +9,8 @@ import { KABLOLAMA, etkiKos, kablolamaOku } from './etki.ts';
 import type { KablolamaBagi } from './etki.ts';
 import { dinamikSqlGocleri, disariImzalari, ekranCagrilari, sutunMetni, tabloSutunlari } from './harita-ayrinti.ts';
 import type { EkranCagrilari, Imzalar, TabloSutunlari } from './harita-ayrinti.ts';
-import { dosyalariTopla, modulIthalleri, modulKenarlari, testDosyasiMi } from './sinir-denetimi.ts';
-import type { KaynakDosya } from './sinir-denetimi.ts';
+import { KATMANLAR, dosyalariTopla, modulIthalleri, modulKenarlari, testDosyasiMi } from './sinir-denetimi.ts';
+import type { Katmanlar, KaynakDosya } from './sinir-denetimi.ts';
 
 export interface GocOzeti {
   ad: string;
@@ -563,10 +563,20 @@ export function haritaMetni(harita: Harita, modul: string | null = null, ayrinti
   return bolumler.map((b) => b.join('\n')).join('\n\n');
 }
 
+// Kat sütunu sunucu/istemci katıdır (ADR 0006, KATMANLAR); o tarafta tabloda olmayan modül '-' alır.
+function katSutunu(ad: string, katmanlar: Katmanlar): string {
+  const kat = (taraf: keyof Katmanlar): string => {
+    const sira = katmanlar[taraf].findIndex((liste) => liste.includes(ad));
+    return sira < 0 ? '-' : String(sira);
+  };
+  return `kat ${kat('sunucu')}/${kat('istemci')}`;
+}
+
 // Konu açılışında okunur: tam harita çok büyük. Modül başına bir satır, sonunda son göç; ayrıntı --modul ile alınır.
-export function ozetMetni(harita: Harita): string {
+export function ozetMetni(harita: Harita, katmanlar: Katmanlar = KATMANLAR): string {
   const satirlar = sutunlar(harita.moduller.map((m) => [
     m.ad,
+    katSutunu(m.ad, katmanlar),
     `uç ${m.uclar.length}, işlem ${m.islemler.length}, tablo ${m.tablolar.length}, göç ${m.gocler.length}`,
     `bağımlı: ${m.bagimli.length > 0 ? m.bagimli.join(', ') : 'yok'}; ona bağımlı: ${m.bagimlilar.length > 0 ? m.bagimlilar.join(', ') : 'yok'}`,
   ]));
