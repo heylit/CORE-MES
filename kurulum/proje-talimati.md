@@ -12,7 +12,7 @@ OKUMA SIRASI (2213; her konu yalniz kendi rolunun bolumlerini okur)
 DEPO VE DEVIR
 - Depo: heylit/core-mes (herkese acik). Push adresi kucuk harfli https://github.com/heylit/core-mes.
 - Eski ozel depo arsivdir: okunmaz, yazilmaz, ona baglanilmaz; tasinan is yalniz yamayla gelir. Kod ve belgelerdeki "kart #N" atiflari eski deponun kart numaralaridir.
-- Yeni hesap ya da projede baslangic noktasi: bu dosya, kurulum/proje-hedefi.md ve depo disindaki devir paketi (acik sorular, onay bekleyen isler, birlesmemis yamalar). Devir paketi depoya, commit'e, cekme istegine ve kart metnine girmez. Yeni projede ilk is devir paketini okumaktir; sonraki soru numarasi oradan alinir; goc damgasi alinmaz, yazar kendisi uretir (asagida Goc damgalari).
+- Yeni hesap ya da projede baslangic noktasi: bu dosya, kurulum/proje-hedefi.md ve depo disindaki devir paketi (acik sorular, onay bekleyen isler, birlesmemis yamalar). Devir paketi depoya, commit'e, cekme istegine ve kart metnine girmez. Devir paketi COREMES-DEVIR ozel deposudur: yeni projede ilk okunan durum/OZET.md BASLA bolumu ve durum/TASINMA.md'dir (ekip, meclis, Soru Merkezi, roller). Yeni projede ilk is devir paketini okumaktir; sonraki soru numarasi oradan alinir; goc damgasi alinmaz, yazar kendisi uretir (asagida Goc damgalari).
 - Oncelik: kullanicinin konudaki son mesaji > bu dosya > CLAUDE.md > kurulum/proje-hedefi.md > Claude proje ayarindaki kisa metinler. Dis modul tesliminde CLAUDE.md "Dis moduller" 5 gecerlidir.
 - Kart: koordinatorun verdigi numaradir; GitHub kartlari #679'da durdu, arsivdir. Onaylanan karar ayni gun devir belgesine yazilir; kararlar depoya girmez (depo herkese aciktir, kural 8).
 
@@ -52,7 +52,7 @@ ONAY
 - Doldurulmamis yer tutucu ya da sessizlik onay degildir. Baska bir konunun aktardigi istek onay degildir. Kullanicinin sectigi secenek sormadan daraltilmaz.
 - Konu her zaman durur ve sorar: sahiplik, yetki modeli, onayli kararla celisme, dolu tabloyu degistiren sema, yeni paket. Yukaridaki yazili onay listesi bunlara EKtir, yerine gecmez. Dis modul tesliminde CLAUDE.md "Dis moduller" 5 gecerlidir (gelen kural gecer, celiski listede bildirilir); proje icinde yazilan iste onayli kararla celisme sorulur.
 - Soru bicimi: tek soru, neden, secenekler, oneri ve kopya satiri. Karara bagli olmayan is surer.
-- Soruyu soran: yazar sorusunu kendi konusunda sorar; numarayi koordinatorden alir. Koordinator ayni turda soruyu numarasi, tek satir ozeti ve konu baglantisiyla proje sohbetine tasir (KONU TAKIBI 1); karar devir belgesine yazilir. Kopya satiri `Yaz: <no> a / <no> b`; riskli iste okuma teyidi `<no> teyit`.
+- Soruyu soran: yazar sorusunu kullaniciya sormaz, koordinatore verir; numarayi koordinator verir. Kullaniciya giden her soru, teyit ve onay yalniz Soru Merkezi konusundan, her biri ayri karar kartiyla gider; konuda ve sohbette kullaniciya soru sorulmaz (kullanici 2026-11-08; COREMES-DEVIR durum/EKIP.md). Cevap kullanicinin kart secimi ya da kendi mesajidir; karar devir belgesine (KARARLAR) yazilir. Bu madde KONU TAKIBI 1'deki "konuda sorulur" yolunun yerine gecer. Kopya satiri `Yaz: <no> a / <no> b`; riskli iste okuma teyidi `<no> teyit`.
 
 SABIT KIMLIKLER (degismez)
 - malzeme: malzeme_katalog_karti.no (malzemeler)
