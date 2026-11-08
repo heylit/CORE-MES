@@ -39,7 +39,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
 1. Tek sahip, tek yer: bir modül aynı anda ya depoda ya dışarıda yazılır. Dışarıda yazılanın kartı `durum: disarida` taşır; o sürede depoda o modülün dosyalarına dokunulmaz.
    Dışarıdaki yazım depodaki güncel modülden başlar; onaylı kararlar korunur, değişenler teslimdeki `FARK.md` ile gelir.
 2. Başvuru düzeni: başvuru ekranı olan modülde ekran başvurudaki düzen ve akışla kurulur; görevde kart numarası yoksa görev verilmez; başvuru varsa yolu verilir.
-3. İki aşama: önce bütün dış modüller toplanır (Aşama 1), sonra birbirine bağlanır (Aşama 2; kullanıcı "bağla" deyince). Kabul Aşama 2'dedir: akış, kullanıcı deneyip "tamam" demeden bitmiş sayılmaz.
+3. İki aşama: önce bütün dış modüller toplanır (Aşama 1), sonra birbirine bağlanır (Aşama 2; kullanıcı "bağla" deyince). Kabul Aşama 2'dedir: Test kabul kaydını yazar; para, yetki ya da stok değiştiren akışta kullanıcı dener (2377 a).
 4. Aşama 1, topla: teslim olduğu gibi oturur: derleme, sınır, lint ve kendi testleri yeşil; menüde ve ikinci menüde görünür; işlemleri yalnız yöneticide kalır. Oturtmayı yalnız kırmızı çizgiler
    durdurur (gerçek veri, dış çağrı, onaysız paket, eski sistem). Yetki, sürüm, kural ve görünüm bulguları düzeltilmez; modülün `UYUM-BORCU.md` dosyasına "bağlamada kapanacak" başlığıyla yazılır.
    `denetci` tek tur, yalnız kırmızı çizgi ve modül sınırına bakar. Kabul kapısı ve bağımlılık sırası bu aşamada geçersizdir: başka modüle bağlantı gereken yer boş bırakılır (boş olabilen sütun,
@@ -51,7 +51,7 @@ Türkçe (ASCII), commit mesajı İngilizce. Kart = koordinatörün verdiği num
    istasyon, depo, birim, para birimi, belge no, durum listeleri), tablo ve sütun adıyla.
    Aşama 2, bağla: `ORTAKLIK` dosyalarından tek tablo çıkar (kavram başına hangi modül ne tutuyor); sahiplik kullanıcıya tek listede sorulur. Belli olanlar: malzeme malzemeler, firma musteri-tedarikci,
    kişi kisiler, istasyon istasyonlar, üretim kaydı uretim-emirleri. Bağlama akış akış yapılır; her akışta yetki, sürüm ve sunucu kuralları kapanır, roller ortak yetki matrisinden verilir,
-   kullanıcı deneyip kabul eder. Birleşmek kullanıma açmak değildir; düzeltmeler sunucuda yapılır.
+   Test kabul kaydını yazar; para, yetki ya da stok değiştiren akışta kullanıcı dener (2377 a). Birleşmek kullanıma açmak değildir; düzeltmeler sunucuda yapılır.
 6. Dal ve kart temizliği: kartı kapalı dal kullanıcı onayıyla silinir. Açık dal sınırı yok; çakışmayı birleşme sırası yönetir.
 7. Ana oturumun (şef) dağıtma ve birleştirme kuralları `kurulum/sef-duzeni.md`'dedir.
 8. Öneriyle ilerlenen kurallar görünür olur: her modül tesliminde en çok on satırlık "bu modül şunları varsaydı" özeti kullanıcıya gösterilir.

@@ -37,7 +37,7 @@ URUN KARARLARI
 Alinmis urun kararlarinin tek kaynagi COREMES-DEVIR durum/KARARLAR.md ve arsividir (2371 a); degisiklik Soru Merkezi'nden sorulur.
 
 ASAMALAR
-Simdi Asama 2 (BAGLA; 09.10.2026 basladi, K-038 BG1 a). Canli 09.11 tam gecistir; kalan bagla ve kabul canli sonrasi akis akis surer (2370 a). Her akista yetki, surum ve sunucu kurallari kapanir; UYUM-BORCU kullanimi etkileyenlerden baslayarak kapatilir. KABUL: her akisi ben deneyip "tamam" derim. Rol dagilimi benim onayimla girer. Yeni modul once hizalanir, sonra o asamaya katilir.
+Simdi Asama 2 (BAGLA; 09.10.2026 basladi, K-038 BG1 a). Canli 09.11 tam gecistir; kalan bagla ve kabul canli sonrasi akis akis surer (2370 a). Her akista yetki, surum ve sunucu kurallari kapanir; UYUM-BORCU kullanimi etkileyenlerden baslayarak kapatilir. KABUL: Test rolu her akisi test eder ve kabul kaydini yazar; para, yetki ya da stok degistiren akislari (Finans, Tedarik, rol dagilimi) ben kendim deneyip 'tamam' derim (2377 a). Rol dagilimi benim onayimla girer. Yeni modul once hizalanir, sonra o asamaya katilir.
 
 KOORDINATOR KURALLARI
 - Dosya kilidi: yazar once dosya listesini verir; kilit verilince baslar (proje talimati).
