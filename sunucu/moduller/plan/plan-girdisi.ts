@@ -41,7 +41,7 @@ export interface GirdiIstegi {
 // kaynakDegisikligi: birleşme planı eskittiyse neyin değiştiği (1962); eskitmediyse null.
 export interface PlanGirdisi { S: Record<string, unknown>; st: MotorDurumu; kaynakDegisikligi?: KaynakDegisikligi | null }
 
-// 1962: birleşmenin bulduğu değişiklik atılmasın. Betik değişmez: kaynakBirlestir ve otoArizaUygula bağlamın genel nesnesindedir, girdiKur
+// 1962: birleşmenin bulduğu değişiklik atılmasın. Betik değişmez: kaynakBirlestir, otoArizaUygula ve otoBakimUygula bağlamın genel nesnesindedir, girdiKur
 // onları adıyla çağırır (tipli dilim de aynı yolla sarılır). Sarmalayan çağrıdan önceki değeri alır, değişen alanın farkını toplar.
 interface Izci { alanlar: Set<KaynakDegisiklikAlani>; farklar: GirdiFarki[]; kesik: boolean; artis: number }
 const KAYNAK_ALANI = new Set<string>(KAYNAK_DEGISIKLIK_ALANLARI);
@@ -56,7 +56,11 @@ function farkEkle(izci: Izci, eski: unknown, yeni: unknown, yol: KaynakDegisikli
 }
 
 function izle(baglam: object, izci: Izci): void {
-  const g = baglam as { kaynakBirlestir: KaynakBirlestir; otoArizaUygula: (S: Record<string, unknown>, ...x: unknown[]) => boolean };
+  const g = baglam as {
+    kaynakBirlestir: KaynakBirlestir;
+    otoArizaUygula: (S: Record<string, unknown>, ...x: unknown[]) => boolean;
+    otoBakimUygula: (S: Record<string, unknown>, ...x: unknown[]) => boolean;
+  };
   const birlestir = g.kaynakBirlestir;
   g.kaynakBirlestir = (D0, kayit, kaynak, bugun) => {
     const once = jsonKopya(D0);
@@ -74,6 +78,14 @@ function izle(baglam: object, izci: Izci): void {
   g.otoArizaUygula = (S, ...x) => {
     const once = jsonKopya(S.down);
     const oldu = ariza(S, ...x);
+    if (oldu) { izci.artis += 1; izci.alanlar.add('ariza'); farkEkle(izci, once, jsonKopya(S.down), 'ariza'); }
+    return oldu;
+  };
+  // 2319 (S10): Arkon periyodik bakımı da tezgâh duruşudur; şeritte motorun kısıt adıyla aynı alanda (arıza ve planlı bakım) görünür.
+  const bakim = g.otoBakimUygula;
+  g.otoBakimUygula = (S, ...x) => {
+    const once = jsonKopya(S.down);
+    const oldu = bakim(S, ...x);
     if (oldu) { izci.artis += 1; izci.alanlar.add('ariza'); farkEkle(izci, once, jsonKopya(S.down), 'ariza'); }
     return oldu;
   };

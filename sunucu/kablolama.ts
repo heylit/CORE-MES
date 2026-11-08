@@ -15,7 +15,7 @@ import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
-import { acilSiparisOnaylandi, bayatEmirBittiYansit, bayatFasonHareketiYansit, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
+import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatEmirBittiYansit, bayatFasonHareketiYansit, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
 import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
@@ -113,9 +113,10 @@ export function sunucununBaglari(): Bag[] {
     bag('plan payları -> üretim emirleri terminali', uretimEmirleri.planPaylariCozucusu, canliPaylar),
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
-    // 2319 (2311 S7): saha olayı canlı planı bayat işaretler (plan değişmez).
+    // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
     bag('emir bitti -> plan bayat işareti', uretimEmirleri.emirBittiDinle, bayatEmirBittiYansit),
     bag('fason hareketi -> plan bayat işareti', uretimEmirleri.fasonHareketiDinle, bayatFasonHareketiYansit),
+    bag('periyodik bakım -> plan girdisi', planBakimCozucusu, arkon.periyodikBakimlar),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, teklifDene),
     // 2103-2 b: satıra bağlı emirlere siparişten açılan projelerin emirleri eklenir (iş emri olmayan emir proje okumasında yoktur).
     bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && projeler.siparisinProjeleri && (async (

@@ -1,11 +1,11 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { ArkonKayitTuru } from '#paylasilan/sozlesme/arkon.ts';
 import { yayindakiBelgeDosyasi } from '../belge-merkezi/disari.ts';
-import { emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari } from './kurallar.ts';
-import type { EmirCizimDurumu } from './kurallar.ts';
+import { emirCizimDurumu, isEmriYayinda, paketMerkezDosyalari, periyodikBakimPlanlari } from './kurallar.ts';
+import type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
-export type { EmirCizimDurumu } from './kurallar.ts';
+export type { EmirCizimDurumu, PeriyodikBakimPlani } from './kurallar.ts';
 
 // Arkon terminal olayı: `istasyonKodu` Arkon'un `machine` alanıdır ve TMI istasyon kodudur (makine kodu değil); kod çözülemediyse
 // `istasyonId` boştur. Yetki ve veri kapsamı çağıran ucun işidir: bu okuma kişiye göre süzmez.
@@ -66,4 +66,9 @@ export async function emirCizimDurumlari(db: Db, emirIdler: readonly number[]): 
     if (!yayinda.has(belgeId)) yayinda.set(belgeId, (await yayindakiBelgeDosyasi(db, belgeId))?.ozet ?? null);
   }
   return new Map(tekil.map((id) => [id, emirCizimDurumu(paketler.get(id) ?? [], yayinda)]));
+}
+
+// 2319 (S10): periyodik bakım planları plan girdisine (plan ADR 0006 gereği Arkon'u okumaz; bağ sunucu/kablolama.ts'te). Yetki çağıranın işidir.
+export async function periyodikBakimlar(db: Db): Promise<PeriyodikBakimPlani[]> {
+  return periyodikBakimPlanlari(await sorgular.periyodikBakimBelgeleri(db));
 }
