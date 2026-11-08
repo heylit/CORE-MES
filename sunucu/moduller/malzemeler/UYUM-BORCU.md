@@ -156,7 +156,7 @@ Açık:
 - ~~Onay akışında birimi boş aktif kart "Kartta değişiklik yok" der~~ kapandı (dal 466, aynı PR): boş birimin dolması talep olarak gider; Excel'de de fark sayılır. Tarayıcıda sınandı (`/mnt/project-files/bagla/malzemeler-aktif-birim/`).
 
 ## Tedarikçi firması (kart #466, Refs #163, 10.10.2026)
-Firma kartı 13.10.2026'dan beri Müşteriler ve Tedarikçiler modülünde (`musteri_tedarikci_firma.id`, kart #1164); sunucu firmayı `musteri-tedarikci/disari.ts` `firmaOzeti` ile okur, tedarikçi olabilme kuralı `finans/disari.ts` `tedarikciOlabilirMi`'dendir. Ekran ve sunucu iletilerinde "finans" sözcüğü hâlâ geçer (prototip metni ve `servis.ts` ret iletisi); ileti metni değişmedi.
+Firma kartı 13.10.2026'dan beri Müşteriler ve Tedarikçiler modülünde (`musteri_tedarikci_firma.id`, kart #1164); sunucu firmayı `musteri-tedarikci/disari.ts` `firmaOzeti` ile okur, tedarikçi olabilme kuralı `musteri-tedarikci/disari.ts` `tedarikciOlabilirMi`'dendir (2269). Ekran ve sunucu iletilerinde "finans" sözcüğü hâlâ geçer (prototip metni ve `servis.ts` ret iletisi); ileti metni değişmedi.
 Kapandı:
 Açık:
 - Eski kartlardaki tedarikçi metni firmaya eşlenmedi (eşleme kullanıcı onaylı ayrı iş; ad benzerliğiyle otomatik eşleme yapılmadı).
