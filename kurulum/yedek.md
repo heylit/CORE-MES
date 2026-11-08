@@ -94,8 +94,8 @@ makinede, aynı PostgreSQL sürümünde, dakika hassasiyetiyle geri dönmek içi
 Şifreleme (2283-1 a+e): WAL arşivi ve taban yedek PostgreSQL'in kendi biçimindedir; sunucunun ikinci diskinde şifresiz durur.
 Korunması diskin BitLocker ile şifrelenmesi ve klasör izniyle sağlanır (Kurulum A1, A3). Sunucu dışına çıkan her kopya (haftalık dış
 kopya) şifreli olmalıdır. Bu, gece yedeği için verilen 145 a kararını ("düz yedek diske hiç düşmez") WAL arşivi ve taban yedek için
-daraltır: düz kopya yalnız sunucunun BitLocker'lı diskinde durabilir. Şifreli dış kopya aracı ayrı karttadır; araç gelene kadar
-WAL arşivi ve taban yedek sunucudan dışarı kopyalanmaz (dış kopya için şifreli gece yedeği "İndir" ile alınır, Kurulum 6).
+daraltır: düz kopya yalnız sunucunun BitLocker'lı diskinde durabilir. Dışarı kopya yalnız aşağıdaki
+"Şifreli dış kopya" komutuyla alınır; WAL arşivi ve taban yedek elle (Gezgin ile) dışarı kopyalanmaz.
 
 Açık kararlar (kullanıcıda; cevaba kadar aşağıdaki elle yol geçerlidir, her seçenekte de geçerli kalır):
 - 2284-1, haftalık taban yedeği kim alır (uygulamanın zamanlanmış işi, Windows Görev Zamanlayıcı ya da yönetici elle). Cevaba kadar
@@ -120,8 +120,8 @@ A4. `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.co
     archive_timeout = 300
     ```
     `wal_level = replica` varsayılandır; satır yalnız açık dursun diye yazılır. Ters bölüler ikilenir (PostgreSQL ayar dosyası
-    kuralı). `archive_timeout` saniyedir: kayıp penceresini ve arşiv boyutunu birlikte belirler; 300 (5 dakika) Veri uzmanı
-    önerisidir, küçültmek arşivi büyütür.
+    kuralı). `archive_timeout` saniyedir: kayıp penceresini ve arşiv boyutunu birlikte belirler; 300 (5 dakika) bu belgenin
+    seçimidir (kayıp penceresi ile arşiv boyutu arasında), küçültmek arşivi büyütür.
 A5. PostgreSQL servisini yeniden başlatın (`archive_mode` yalnız yeniden başlatmayla açılır). Sonra Arşiv sağlığı'ndaki sorguyla
     ilk dosyanın arşive düştüğünü görün; birkaç dakika içinde `E:\TMIV2-WAL`'da 24 haneli adlı dosyalar belirmelidir.
 A6. Hemen ilk taban yedeği alın (Haftalık taban yedek). Taban yedek olmadan WAL arşivi tek başına işe yaramaz.
@@ -169,6 +169,41 @@ $hedef = "E:\TMIV2-TABAN\$(Get-Date -Format yyyyMMdd)"
    `-n` yalnız silinecekleri listeler; listeye bakıp sonra `-n`'siz koşun. `.history` dosyaları silinmez, küçüktür.
 WAL arşivinden elle başka dosya silinmez: aradaki tek eksik dosya o noktadan sonraki bütün dakikaları kaybettirir.
 
+### Şifreli dış kopya (döner çevrimdışı diskler; 2283-2 a)
+
+Haftada bir, taban yedekten (ve eskitmeden) sonra: en yeni taban yedek, onun başlangıcından bugüne WAL ve talimat medyası şifreli
+olarak dış diske yazılır; disk çıkarılıp sunucudan uzakta saklanır. En az iki disk dönüşümlü kullanılır: biri takılıyken öteki
+dışarıdadır. Dosyalar gece yedeğiyle aynı anahtarla (`TMIV2_YEDEK_ANAHTARI`) ve aynı biçimde şifrelenir; anahtar diske yazılmaz.
+Depo klasöründe, `.env`'de anahtar varken:
+```
+npm.cmd run yedek -- dis-kopya --wal E:\TMIV2-WAL --taban E:\TMIV2-TABAN --hedef F:\
+npm.cmd run yedek -- medya --hedef F:\TMIV2-DIS-KOPYA
+```
+- Komutu WAL ve taban klasörlerini okuyabilen bir hesap çalıştırır (Kurulum A3: yönetici); uygulama servisi bu klasörleri okumaz.
+- Diskte `F:\TMIV2-DIS-KOPYA\taban\<tarih>` (veri klasörünün her dosyası ayrı şifreli, klasör düzeni aynı) ve `...\wal` durur.
+  Diskte zaten olan WAL yeniden yazılmaz. Yeni taban yedek tamamlanmadan diskteki eski takım silinmez; tamamlanınca eski taban ve
+  artık gerekmeyen WAL silinir. Yarıda kalan çalıştırma (disk söküldü) bir sonraki çalıştırmada tamamlanır.
+- Yalnız tamamlanmış taban yedek alınır (`backup_manifest` olan); süren `pg_basebackup` atlanır. WAL arşivinde taban yedeğin
+  başlangıç dosyası yoksa komut yazmadan durur: arşiv ayarı bozuktur.
+- Her çalıştırma iki kayıt bırakır: diskte `TMIV2-DIS-KOPYA\islem-kaydi.txt` ve sunucunun yedek klasöründe `dis-kopya.jsonl`
+  (zaman, sonuç, taban adı, boyutlar; disk sökülünce sunucunun "son dış kopya" bilgisi buradan okunur).
+- Disk dışarıdayken şifreli olduğu için ayrıca BitLocker gerekmez; diskin kendisi de BitLocker'lıysa zararı yoktur.
+
+Dış diskten geri dönüş (sunucu diski de yedek diski de gittiyse): diski yeni makineye takın, aynı PostgreSQL ana sürümü kurulu ve
+`.env`'de aynı anahtar varken
+```
+npm.cmd run yedek-coz -- dis-kopya --kaynak F:\ --hedef D:\GERI-DONUS
+npm.cmd run geri-yukle-medya -- --kaynak F:\TMIV2-DIS-KOPYA
+```
+Komut `D:\GERI-DONUS\veri` (taban yedek, düz) ve `D:\GERI-DONUS\wal` klasörlerini yazar; hedef boş olmalıdır. Anahtar uymazsa ya
+da bir dosya bozuksa hangi dosya olduğunu söyleyip durur. Sonra "Zaman noktasına dönüş" adımları uygulanır; farkları: 3. adımda
+taban yedek yerine `D:\GERI-DONUS\veri` kopyalanır, 5. adımda `restore_command` içinde `E:\\TMIV2-WAL` yerine
+`D:\\GERI-DONUS\\wal` yazılır. Düz klasörler bütün veriyi şifresiz taşır; iş bitince silin.
+
+Linux'ta PostgreSQL 16 ile denendi (2026-11-08, boş deneme kümesi): `pg_basebackup -Fp -Xs` ve `pg_verifybackup`, dış kopya
+(969 dosya, hepsi şifreli; düz içerik diske düşmedi), açma, açılan klasörden hedef zamana dönüş; hedeften önceki kayıt geldi, sonraki
+gelmedi. Windows'ta denenmedi.
+
 ### Zaman noktasına dönüş (süper kullanıcıyla, elle)
 
 Ne zaman: veritabanı diski bozuldu (arşivin sonuna kadar), ya da yanlış bir toplu silme/güncelleme oldu (o andan hemen önceye).
@@ -201,7 +236,9 @@ gider. Kümedeki bütün veritabanları (`tmiv2`, varsa `tmiv2_deneme`) birlikte
 Bu yol Linux'ta PostgreSQL 16 ile denendi (2026-11-08, boş deneme kümesi, `cp` ile): arşiv açıldı, taban yedek alındı, hedef
 zamana dönüldü; hedeften önceki kayıt geldi, sonraki gelmedi. Uygulama kullanıcısı `pg_stat_archiver`'ı okudu. `pg_archivecleanup -n`
 doğru dosyayı listeledi. Windows'ta ve PostgreSQL 18'de denenmedi; `copy` komutu, `pg_hba.conf` satırı ve klasör izinleri canlıdan
-önceki Windows tatbikatında doğrulanır (ayrı adım).
+önceki Windows tatbikatında doğrulanır (ayrı adım). Tatbikatta `archive_command` (`copy`) iki durumda bilerek denenir: arşivde aynı
+adlı dosya varken (komut sorup beklememeli, sonucu PostgreSQL günlüğünde görülmeli) ve kopya yarıda kesilince (disk çıkarıldı;
+sonraki deneme dosyayı tam yazmalı). Sonuca göre komut ya da bu belge değişir.
 
 ## Komut satırından yedek (sunucu ve yönetici ekranı gerekmez)
 
