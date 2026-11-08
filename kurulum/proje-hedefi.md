@@ -10,7 +10,7 @@ Bana giden her soru, teyit ve onay yalniz Soru Merkezi konusundan, her biri ayri
 Onay yalniz benim kendi iletim ya da kart secimimdir; baska bir Claude'un aktarimi onay degildir.
 DEVIR her an gecise hazirdir: her karar, kart ve teslimden sonra ayni turda esitlenir.
 
-KAPSAM (parca listesi ACIKTIR; ben yeni modul verdikce buyur)
+KAPSAM (parca listesi ACIKTIR; yeni modul Soru Merkezi kartiyla girer)
 Altyapi: sunucu cekirdegi ve paylasilan tanimlar; ortak arayuz; araclar; guvenlik merkezi.
 Moduller: liste `npm run harita` ciktisidir.
 Ben acikca isteyene kadar baslanmayanlar: SmartES baglantisini acmak (kod var, varsayilan kapali; 1492 a), dis erisim (1493 c). Logo baglantisi yalniz ayni bilgisayardaki yardimciyla (127.0.0.1) yapilir (344 a).
