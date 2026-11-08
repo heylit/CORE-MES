@@ -21,7 +21,8 @@ export const sevkIsiOzetiCozucusu = (cozucu: SevkIsiOzetiCozucusu | null): void 
 export const satisSevkleriCozucusu = (cozucu: SatisSevkleriCozucusu | null): void => satisSevkleriCozucusuKaydet(cozucu);
 export type { BirimMaliyeti, GenelGiderOrani, AlisBelgesi, GiderBelgesi, GecerliFaiz, GecerliKur, SiparisAnahtari, SiparisOdemesi, SiparisPlani } from './servis.ts';
 export type { MaliyetTuru } from './kurallar.ts';
-export { tedarikciOlabilirMi } from './kurallar.ts';
+// Tedarikçi olabilme kuralı firmanın sahibi musteri-tedarikci'dedir; finansın eski çağıranları için yeniden verilir.
+export { tedarikciOlabilirMi } from '../musteri-tedarikci/disari.ts';
 // Takvim (891): aralıktaki vergi beyan ve ödeme son günleri (genel kural, tutarsız). Yetki denetlemez; çağıran finans.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
 // 1840 (karar 1839 a): satın almanın üç yollu eşleşme uyarısı için alış faturasının KDV hariç tutarı ve para birimi. Yalnız bu

@@ -16,8 +16,8 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
-import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kdvSecenekleri, kurGetir, kurlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari, tedarikciOlabilirMi } from '../finans/disari.ts';
-import { firmaAra, firmaOzeti, firmaOzetleri, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
+import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kdvSecenekleri, kurGetir, kurlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
+import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
@@ -125,7 +125,7 @@ async function talepOku(db: Db, id: string): Promise<Talep | null> {
   return (await talepleriKur(db, await s.talepSatirlariOku(db, null, id)))[0] ?? null;
 }
 
-// SAT-41: tedarikçi, aktif ve türü finansın kuralına göre tedarikçi olabilen firmadır (kural finansta, #471).
+// SAT-41: tedarikçi, aktif ve türü musteri-tedarikci kuralına göre tedarikçi olabilen firmadır.
 const tedarikciOlabilir = (f: FirmaOzeti | null): boolean => f !== null && f.aktif && tedarikciOlabilirMi(f.tur);
 
 // Firma kartı finanstadır (SA1); finansta yetkili alanı yok, boş döner (sıfır uydurulmaz).

@@ -73,9 +73,6 @@ export function firmaYonaUygunMu(tur: FirmaTuru, yon: Yon): boolean {
   return tur === 'ikisi' || (yon === 'gelir' ? tur === 'musteri' : tur === 'tedarikci');
 }
 
-// FNS-51'in alış yanı başka modüllere: malzemeler ve satın alma tedarikçi seçerken kuralı kopyalamaz, buradan sorar.
-export const tedarikciOlabilirMi = (tur: FirmaTuru): boolean => firmaYonaUygunMu(tur, 'gider');
-
 // FNS-62 (karar D6 b): satın alma siparişine yalnız iptal edilmemiş alış faturası, siparişin tedarikçisinin faturası bağlanır.
 export function siparisBagiHatasi(belge: { yon: Yon; durum: string; firmaId: number | null }, siparisFirmaId: number): string | null {
   if (belge.yon !== 'gider') return 'Siparişe yalnız alış faturası bağlanır.';

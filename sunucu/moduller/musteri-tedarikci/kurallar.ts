@@ -34,6 +34,10 @@ export function fasonTuruHatasi(k: { tur: FirmaTuru; fason: boolean }): AlanHata
   return k.fason && k.tur === 'musteri' ? { alan: 'fason', ileti: FASON_TUR_ILETISI } : null;
 }
 
+// FNS-51'in alış yanı: tedarikçi seçicileri (malzemeler, satın alma) yalnız tedarikçi ya da "ikisi" türündeki firmayı alır.
+// Firmanın sahibi bu modüldür; kural burada tek yerdedir, çağıranlar kopyalamaz.
+export const tedarikciOlabilirMi = (tur: FirmaTuru): boolean => tur === 'tedarikci' || tur === 'ikisi';
+
 // MT-21: müşteri sınıfı plan bedelinin çarpanıdır; tedarikçide anlamı yoktur, boş tutulur (tür değişince de silinir).
 export function musteriSinifiTuru<T>(tur: FirmaTuru, sinif: T | null): T | null {
   return tur === 'tedarikci' ? null : sinif;
