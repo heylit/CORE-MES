@@ -25,6 +25,8 @@ export interface GecerliOturum {
   bosta_gecen_sn: number;
   // Açılıştan bu yana geçen süre: sınırlı hesabın azami oturumu (kart 2158) kurallardadır.
   acik_gecen_sn: number;
+  // Cihaza bağlı oturum (2226-6 a): bağ yoksa 'yok'; varsa istekteki bağ çerezi geçerli ve süresi dolmamış mı.
+  bag: 'yok' | 'gecerli' | 'gecersiz';
 }
 
 export interface OturumVeProfil {
@@ -40,6 +42,7 @@ interface OturumVeProfilSatiri extends CihazProfiliCozumu {
   bayat: boolean | null;
   bosta_gecen_sn: number | null;
   acik_gecen_sn: number | null;
+  bag: 'yok' | 'gecerli' | 'gecersiz' | null;
 }
 
 // Kimlik her istekte koşar: cihaz profili ve oturum tek gidiş-dönüşte okunur (1874 a).
@@ -48,27 +51,31 @@ export async function oturumVeProfilBul(
   oturumOzeti: string,
   cihazOzeti: string | null,
   sure: { azamiSn: number; gorulmeAraligiSn: number },
+  bagOzeti: string | null = null,
 ): Promise<OturumVeProfil> {
   const satir = await db.tek<OturumVeProfilSatiri>(
     `WITH ${CIHAZ_CTE},
      o AS (
        SELECT id, kisi_id, acildi::text AS acildi_metin, son_gorulme < now() - make_interval(secs => $4) AS bayat,
               extract(epoch FROM now() - son_gorulme)::float8 AS bosta_gecen_sn,
-              extract(epoch FROM now() - acildi)::float8 AS acik_gecen_sn
-         FROM oturum
+              extract(epoch FROM now() - acildi)::float8 AS acik_gecen_sn,
+              CASE WHEN b.oturum_id IS NULL THEN 'yok'
+                   WHEN b.bag_ozeti = $5 AND b.bag_son > now() THEN 'gecerli'
+                   ELSE 'gecersiz' END AS bag
+         FROM oturum LEFT JOIN oturum_cihaz_bagi b ON b.oturum_id = oturum.id
         WHERE anahtar_ozeti = $2 AND kapandi IS NULL AND acildi > now() - make_interval(secs => $3)
      )
-     SELECT ${PROFIL_ALANLARI_COZUM}, o.id AS oturum_id, o.kisi_id, o.acildi_metin, o.bayat, o.bosta_gecen_sn, o.acik_gecen_sn
+     SELECT ${PROFIL_ALANLARI_COZUM}, o.id AS oturum_id, o.kisi_id, o.acildi_metin, o.bayat, o.bosta_gecen_sn, o.acik_gecen_sn, o.bag
        ${PROFIL_KAYNAGI}
        LEFT JOIN o ON true`,
-    [cihazOzeti, oturumOzeti, sure.azamiSn, sure.gorulmeAraligiSn],
+    [cihazOzeti, oturumOzeti, sure.azamiSn, sure.gorulmeAraligiSn, bagOzeti],
   );
   if (satir === null) throw new Error('Cihaz profili ayarı yok (oturum_cihaz_ayari boş).');
-  const { oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn, ...profil } = satir;
+  const { oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn, bag, ...profil } = satir;
   const oturum = oturum_id === null || kisi_id === null || acildi_metin === null || bayat === null || bosta_gecen_sn === null
-    || acik_gecen_sn === null
+    || acik_gecen_sn === null || bag === null
     ? null
-    : { id: oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn };
+    : { id: oturum_id, kisi_id, acildi_metin, bayat, bosta_gecen_sn, acik_gecen_sn, bag };
   return { profil, oturum };
 }
 
@@ -743,5 +750,80 @@ export async function eskiNabizlariSil(db: Db, gun: number, simdi: Simdi): Promi
   await db.sorgu(
     'DELETE FROM oturum_cihaz_nabzi WHERE son < COALESCE($2::timestamptz, now()) - make_interval(days => $1)',
     [gun, simdi],
+  );
+}
+
+/* ---------------- cihaza bağlı oturum (2226-6 a) ---------------- */
+
+export async function oturumKimligiBul(db: Db, ozet: string): Promise<number | null> {
+  const satir = await db.tek<{ id: number }>('SELECT id FROM oturum WHERE anahtar_ozeti = $1 AND kapandi IS NULL', [ozet]);
+  return satir?.id ?? null;
+}
+
+export async function cihazBagiEkle(
+  db: Db, bag: { oturumId: number; oturumKimligi: string; alg: string; acikAnahtar: object; bagOzeti: string; bagSn: number; meydan: string },
+): Promise<boolean> {
+  const satirlar = await db.sorgu(
+    `INSERT INTO oturum_cihaz_bagi (oturum_id, oturum_kimligi, alg, acik_anahtar, bag_ozeti, bag_son, son_meydan, baglandi)
+     VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6), $7, now())
+     ON CONFLICT (oturum_id) DO NOTHING RETURNING 1`,
+    [bag.oturumId, bag.oturumKimligi, bag.alg, JSON.stringify(bag.acikAnahtar), bag.bagOzeti, bag.bagSn, bag.meydan],
+  );
+  return satirlar.length === 1;
+}
+
+export interface CihazBagiSatiri {
+  oturum_id: number;
+  oturum_kimligi: string;
+  alg: string;
+  acik_anahtar: Record<string, unknown>;
+  son_meydan: string | null;
+}
+
+// Bağ, yalnız aynı isteğin taşıdığı açık oturum anahtarıyla bulunur: oturum kimliği tek başına yetmez.
+export async function cihazBagiBul(db: Db, oturumKimligi: string, oturumOzeti: string): Promise<CihazBagiSatiri | null> {
+  return db.tek<CihazBagiSatiri>(
+    `SELECT b.oturum_id, b.oturum_kimligi, b.alg, b.acik_anahtar, b.son_meydan
+       FROM oturum_cihaz_bagi b JOIN oturum o ON o.id = b.oturum_id
+      WHERE b.oturum_kimligi = $1 AND o.anahtar_ozeti = $2 AND o.kapandi IS NULL
+      FOR UPDATE OF b`,
+    [oturumKimligi, oturumOzeti],
+  );
+}
+
+export async function cihazBagiYenile(db: Db, oturumId: number, bagOzeti: string, bagSn: number, meydan: string): Promise<boolean> {
+  const satirlar = await db.sorgu(
+    `UPDATE oturum_cihaz_bagi SET bag_ozeti = $2, bag_son = now() + make_interval(secs => $3), son_meydan = $4
+      WHERE oturum_id = $1 AND son_meydan IS DISTINCT FROM $4 RETURNING 1`,
+    [oturumId, bagOzeti, bagSn, meydan],
+  );
+  return satirlar.length === 1;
+}
+
+/* ---------------- açık oturumlarım (2226-7 a) ---------------- */
+
+export interface AcikOturumSatiri {
+  id: number;
+  tarayici: string | null;
+  acildi: string;
+  son_gorulme: string;
+  bu_cihaz: boolean;
+  cihaza_bagli: boolean;
+}
+
+// Kapanmamış, azami ve boşta süresi dolmamış oturumlar; en son kullanılan önce. Boşta sınırı kişisel cihazınkidir: istasyon
+// oturumu sınırı aşmışsa zaten geçmez, listede kalması yalnız kapatma düğmesini gösterir.
+export async function acikOturumlar(
+  db: Db, kisiId: number, buOzet: string | null, sure: { azamiSn: number; bostaSn: number },
+): Promise<AcikOturumSatiri[]> {
+  return db.sorgu<AcikOturumSatiri>(
+    `SELECT o.id::int AS id, o.tarayici, ${zamanMetni('o.acildi')} AS acildi, ${zamanMetni('o.son_gorulme')} AS son_gorulme,
+            o.anahtar_ozeti = COALESCE($2, '') AS bu_cihaz, b.oturum_id IS NOT NULL AS cihaza_bagli
+       FROM oturum o LEFT JOIN oturum_cihaz_bagi b ON b.oturum_id = o.id
+      WHERE o.kisi_id = $1 AND o.kapandi IS NULL
+        AND o.acildi > now() - make_interval(secs => $3) AND o.son_gorulme > now() - make_interval(secs => $4)
+      ORDER BY o.son_gorulme DESC, o.id DESC
+      LIMIT 100`,
+    [kisiId, buOzet, sure.azamiSn, sure.bostaSn],
   );
 }

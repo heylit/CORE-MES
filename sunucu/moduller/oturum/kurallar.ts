@@ -104,6 +104,25 @@ export function tarayiciMetni(baslik: string | null): string | null {
   return metin === '' ? null : metin;
 }
 
+// Hesabım'daki açık oturum satırı için kısa ad: tam tarayıcı metni gösterilmez. Sıra önemlidir (Edge ve Opera "Chrome" da yazar,
+// Android "Linux" da yazar).
+export function tarayiciOzeti(baslik: string | null): string | null {
+  if (baslik === null || baslik.trim() === '') return null;
+  const tarayici = /Edg\//.test(baslik) ? 'Edge'
+    : /OPR\//.test(baslik) ? 'Opera'
+      : /Firefox\//.test(baslik) ? 'Firefox'
+        : /Chrome\//.test(baslik) ? 'Chrome'
+          : /Safari\//.test(baslik) ? 'Safari'
+            : 'Diğer tarayıcı';
+  const sistem = /Windows/.test(baslik) ? 'Windows'
+    : /Android/.test(baslik) ? 'Android'
+      : /iPhone|iPad/.test(baslik) ? 'iOS'
+        : /Mac OS X|Macintosh/.test(baslik) ? 'macOS'
+          : /Linux/.test(baslik) ? 'Linux'
+            : null;
+  return sistem === null ? tarayici : `${tarayici} · ${sistem}`;
+}
+
 // Veritabanını okuyan biri oturum çalamasın diye anahtarın yalnız özeti saklanır.
 export function anahtarOzeti(anahtar: string): string {
   return createHash('sha256').update(anahtar).digest('hex');

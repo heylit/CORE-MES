@@ -207,6 +207,10 @@ const GIRISSIZ_UCLAR = [
   'GET /giris-sesi',
   // Kart okuyucu: varsayılan kapalı, yalnız tanımlı ağ aralığı, cihaz anahtarı (ADR 0016).
   'POST /nizamiye/pdks/cihaz-hareketi',
+  // Cihaza bağlı oturum (DBSC): oturum çerezi ve cihaz imzası uçta denetlenir; kısa ömürlü bağ çerezi bitince tarayıcı
+  // buraya gelir, bu yüzden genel oturum kapısından geçemez (2226-6 a, kullanıcı kararı 07.11 21:45).
+  'POST /oturum/cihaz-bagi/kayit',
+  'POST /oturum/cihaz-bagi/yenile',
 ];
 
 test('girişsiz uçlar: kimlik istemeyen uçlar kullanıcı kararıyla onaylanmış sabit listeyle aynıdır (2150-1 a)', async () => {
