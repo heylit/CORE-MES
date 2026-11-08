@@ -164,7 +164,7 @@ describe('stok SKT ve tür listeleri (gerçek PostgreSQL)', () => {
     assert.equal(await o().vt.tek<{ surum: number }>('SELECT surum FROM stok_parti_son_kullanma WHERE parti_id = $1', [parti]).then((r) => r?.surum), 3);
     assert.equal((await gonder(null)).statusCode, 400);
     const defter = await o().sahip.sorgu<{ alanlar: Record<string, { eski: unknown; yeni: unknown }>; kisi_id: number | null }>(
-      "SELECT alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'stok_parti_son_kullanma' AND anahtar = $1::jsonb", [JSON.stringify({ parti_id: parti })]);
+      "SELECT alanlar, kisi_id FROM denetim_degisiklik WHERE tablo = 'stok_parti_son_kullanma' AND anahtar = $1::jsonb ORDER BY id", [JSON.stringify({ parti_id: parti })]);
     assert.equal(defter.length, 2, 'iki düzeltme, yinelenen yazılmaz');
     assert.deepEqual(defter[0]?.alanlar.son_kullanma, { eski: '2027-05-01', yeni: '2027-06-01' });
     const takipsiz = await kart({ kat: 'kimyasal' }, false);
