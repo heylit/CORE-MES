@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { akorNo, AKORLAR, bekleme, cihazPartisi, cihazTercihi, DIZI, IZGARA_MS, notalar, PARTI_SAYISI, PENCERE_MS, sesAcikMi, sesCal, sesTercihiYaz } from './ses.ts';
+import { akorNo, AKORLAR, anaKazanc, bekleme, cihazPartisi, cihazTercihi, DIZI, IZGARA_MS, notalar, PARTI_SAYISI, PENCERE_MS, sesAcikMi, sesCal, sesTercihiYaz, TASARIM_DUZEYI } from './ses.ts';
 
 describe('acilis sesi: kalabalikta uyum (2170)', () => {
   it('butun akorlar ve butun partilerin butun notalari Re majör pentatonikte: ust uste binen terminaller catismaz', () => {
@@ -52,5 +52,15 @@ describe('acilis sesi: cihaz tercihi', () => {
   });
   it('Web Audio olmayan ortamda ses calmaz, hata atmaz', async () => {
     expect(await sesCal()).toBe(false);
+  });
+});
+
+describe('acilis sesi: kurum ses duzeyi (2230b)', () => {
+  it('varsayilan duzey bugunku yukseklik; 0 sessiz; duzey arttikca kazanc dogrusal artar; aralik disi kirpilir', () => {
+    expect(anaKazanc(TASARIM_DUZEYI)).toBeCloseTo(0.47);
+    expect(anaKazanc(0)).toBe(0);
+    expect(anaKazanc(35)).toBeCloseTo(0.235);
+    expect(anaKazanc(140)).toBe(anaKazanc(100));
+    expect(anaKazanc(-5)).toBe(0);
   });
 });

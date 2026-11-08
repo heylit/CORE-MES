@@ -64,6 +64,11 @@ export function sesTercihiYaz(acik: boolean): void {
   try { window.localStorage.setItem(TERCIH_ANAHTARI, acik ? 'acik' : 'kapali'); } catch { /* saklanamazsa yalnız bu açılış için geçerlidir */ }
 }
 
+// Kurum ses düzeyi (0-100, kabuk.giris-sesi-duzeyi) ana kazanca çevrilir; 70 sesin tasarlandığı yüksekliktir (kazanç 0,47).
+export const TASARIM_DUZEYI = 70;
+const TASARIM_KAZANCI = 0.47;
+export const anaKazanc = (duzey: number): number => (TASARIM_KAZANCI * Math.min(100, Math.max(0, duzey))) / TASARIM_DUZEYI;
+
 const frekans = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
 type SesBaglami = AudioContext;
@@ -83,7 +88,7 @@ export function sesHazirMi(): boolean {
 }
 
 // Sesi baştan çalar; bağlam kurulamazsa false döner. Kullanıcı düğmeye bastığında çağrılırsa tarayıcı bağlamı açar.
-export async function sesCal(gecikmeSn = 0, simdiMs = Date.now()): Promise<boolean> {
+export async function sesCal(gecikmeSn = 0, simdiMs = Date.now(), duzey = TASARIM_DUZEYI): Promise<boolean> {
   baglam ??= baglamYap();
   const ac = baglam;
   if (ac === null) return false;
@@ -97,7 +102,7 @@ export async function sesCal(gecikmeSn = 0, simdiMs = Date.now()): Promise<boole
   const uz = Math.floor(sr * 3.2), ir = ac.createBuffer(2, uz, sr);
   for (let k = 0; k < 2; k++) { const d = ir.getChannelData(k); for (let i = 0; i < uz; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / uz, 3.2); }
   const sk = ac.createDynamicsCompressor(); sk.threshold.value = -16; sk.knee.value = 8; sk.ratio.value = 3.5; sk.attack.value = 0.004; sk.release.value = 0.25;
-  const bu = ac.createGain(); bu.gain.value = 0.47; bu.connect(sk).connect(ac.destination); ana = bu;
+  const bu = ac.createGain(); bu.gain.value = anaKazanc(duzey); bu.connect(sk).connect(ac.destination); ana = bu;
   const cv = ac.createConvolver(); cv.buffer = ir; const yg = ac.createGain(); yg.gain.value = 0.32; cv.connect(yg).connect(sk);
   const yanki = ac.createGain(); yanki.connect(cv);
   const cik = (n: AudioNode, kuru: number, islak: number): void => {
