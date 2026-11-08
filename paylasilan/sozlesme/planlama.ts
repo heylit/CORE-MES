@@ -37,6 +37,14 @@ export const defterSatiri = z.object({
   zaman: zamanSemasi,
 });
 export const degisiklikDefteriCevabi = z.object({ satirlar: z.array(defterSatiri), dahaVar: z.boolean() });
+// 2311 S1: planlama çalışmasını en son kimin ne zaman yazdığı ("şu an X düzenliyor" şeridi). Hafif okuma; sayfa kısa aralıkla sorar.
+// Kayıt yoksa hepsi null; kişi adı okunamazsa kisi null.
+export const duzenleyenCevabi = z.object({
+  kisiId: z.number().int().nullable(),
+  kisi: z.string().nullable(),
+  zaman: zamanSemasi.nullable(),
+  surum: z.number().int().nullable(),
+});
 export const planlamaSilGovdesi = z.object({ anahtar: planlamaAnahtari, beklenenSurum: z.number().int() });
 
 // Planlama sayfasının açılış verisi (288 a): çalışma kaydı (`:planlama`) Reçete ve Rota kaydı ve kaynak okumasıyla sunucuda birleşmiş olarak
@@ -371,6 +379,7 @@ export type BekleyenKarari = z.output<typeof bekleyenKarari>;
 export type DefterOlayi = (typeof DEFTER_OLAYLARI)[number];
 export type DefterSatiri = z.output<typeof defterSatiri>;
 export type DegisiklikDefteriCevabi = z.output<typeof degisiklikDefteriCevabi>;
+export type DuzenleyenCevabi = z.output<typeof duzenleyenCevabi>;
 export type PlanlamaSilGovdesi = z.output<typeof planlamaSilGovdesi>;
 export type PlanlamaCalismasiCevabi = z.output<typeof planlamaCalismasiCevabi>;
 export type KaynakDegisikligi = z.output<typeof kaynakDegisikligi>;
