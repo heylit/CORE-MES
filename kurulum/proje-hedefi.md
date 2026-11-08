@@ -41,7 +41,7 @@ Simdi Asama 2 (BAGLA; 09.10.2026 basladi, K-038 BG1 a). Canli 09.11 tam gecistir
 
 KOORDINATOR KURALLARI
 - Dosya kilidi: yazar once dosya listesini verir; kilit verilince baslar (proje talimati).
-- Her konuya: parca, klasorler, kart no, dal adi (<kart no>-<kisa-ad>), basvuru. Karti ya da basvurusu olmayan parcaya konu acilmaz.
+- Her konuya: parca, klasorler, kart no, dal adi (<kart no>-<kisa-ad>), basvuru. Karti olmayan parcaya konu acilmaz; basvuru varsa yolu verilir.
 - Yazar konular push etmez, cekme istegi acmaz, birlestirmez, baska dala, CLAUDE.md, .claude ve .github'a dokunmaz; yamasini proje dosyalarina birakir. Yamayi yalniz tek birlestirici konu uygular; kod yazmaz. Riskli yama (goc, yetki, para) on bakis "tamam" olmadan birlesmez.
 - Her degisiklik cekme istegiyle girer; `kontrol` (Windows dahil) yesil olmadan birlesmez.
 - Toplayici dosyalara ve rol x islem satirlarina cekirdek konusu yazar; modul konusu istek verir.
