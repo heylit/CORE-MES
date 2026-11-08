@@ -349,6 +349,8 @@ test('WAL arşivi uyarısı: hata son arşivden yeniyse takıldı, son arşiv bi
   assert.equal(walArsivUyarisi(wal(), simdi), null);
   assert.equal(walArsivUyarisi(null, simdi), null);
   assert.equal(walArsivUyarisi(wal({ acik: false, sonArsivZamani: null, hataSayisi: 4, sonHataZamani: '2026-11-08T09:59:00.000Z' }), simdi), null);
+  assert.match(walArsivUyarisi(wal({ acik: false, sonArsivZamani: null }), simdi, true) ?? '', /WAL arşivi kapalı.*24 saat/);
+  assert.equal(walArsivUyarisi(null, simdi, true), null);
   assert.match(walArsivUyarisi(wal({ hataSayisi: 7, sonHataZamani: '2026-11-08T09:59:00.000Z', sonHataWal: '00000001000000000000000A' }), simdi) ?? '',
     /^WAL arşivi takıldı: 00000001000000000000000A arşivlenemiyor/);
   assert.match(walArsivUyarisi(wal({ sonArsivZamani: null, hataSayisi: 1, sonHataZamani: '2026-11-08T09:59:00.000Z' }), simdi) ?? '', /takıldı/);
@@ -385,5 +387,10 @@ test('gün içi koruma: ekran özeti ve genel uyarı listesi aynı metni taşır
   });
   assert.deepEqual(genel.map((u) => u.ileti), [o.walUyarisi, o.disKopyaUyarisi]);
   assert.deepEqual(genel.map((u) => u.tur), ['yedek', 'yedek']);
+  const kapali = wal({ acik: false, sonArsivZamani: null });
+  const canli = uyarilar({
+    simdi, surecBaslangici: simdi, isler: [], yedek: { durum: 'acik', sonYedek: simdi }, yedekDiski: null, veritabaniDiski: null, walArsivi: kapali, canli: true,
+  });
+  assert.deepEqual(canli.map((u) => u.ileti), [gunIciKoruma(kapali, undefined, simdi, true).walUyarisi]);
   assert.deepEqual(gunIciKoruma(null, undefined, simdi), { walArsivi: null, sonDisKopya: null, sonBasariliDisKopya: null, walUyarisi: null, disKopyaUyarisi: null });
 });

@@ -54,3 +54,22 @@ Durum: kabul edildi (06.10.2026). Kullanıcının kart #71 ve #114'te onayladı�
   hakları devralmayan üyenin reddi yalnız elle ölçüldü (kart #116).
 - `.env` tek dosyadır; ayrıştırılırken göç parolası sunucu sürecinin belleğinden kısa süre geçer.
 - Geri almadan sonra yeni kod tek kullanıcılı düzende açılmaz; kod sürümü de geri alınır.
+
+## Ek: taban yedek rolü (08.11.2026, kart 2284a; karar 2284-1 c)
+
+Bağlam: WAL arşivi (2276-1 a) haftalık taban yedek ister; `pg_basebackup` REPLICATION hakkı ister. Uygulama ve göç rolü
+NOREPLICATION'dır ve öyle kalır: REPLICATION hakkı bütün kümenin fiziksel kopyasını (öteki veritabanları ve rol parola özetleri dahil)
+alır.
+
+1. **Üçüncü rol `tmiv2_yedek`.** `LOGIN REPLICATION NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`; hiçbir veritabanında, şemada
+   ya da tabloda hakkı verilmez. Yalnız replikasyon bağlantısı içindir.
+2. **Yalnız yerelden.** `pg_hba.conf`'ta tek satır: `host replication tmiv2_yedek 127.0.0.1/32 scram-sha-256`. Başka adres ve başka
+   rol için replikasyon satırı yazılmaz.
+3. **Parola ayrı değişkende, havuza girmez.** `TMIV2_PG_YEDEK_USER` ve `TMIV2_PG_YEDEK_PASSWORD` uygulama ayarının (havuzun)
+   parçası değildir; yalnız taban yedek işi okur ve parolayı `pg_basebackup` alt sürecine `PGPASSWORD` ile verir. Alt sürece öteki
+   `TMIV2_` değişkenleri geçmez. Değişkenler boşsa iş bekler (varsayılan kapalı).
+4. **İş uygulamanın zamanlanmış işidir** (ADR 0010, `ayarlar-taban-yedegi`, transaction dışı): işletim sistemi görev zamanlayıcısı
+   kullanılmaz. Elle yol da bu rolle koşar; süper kullanıcı (`postgres`) taban yedek için kullanılmaz.
+
+Vazgeçilenler: uygulama rolüne REPLICATION (rol ayrımını bozar; uygulama parolası sızarsa küme sızar); süper kullanıcıyla elle
+haftalık yedek (parola elle kullanılır, iz bırakmaz, unutulur); Windows Görev Zamanlayıcı (ADR 0010).

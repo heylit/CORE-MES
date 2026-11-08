@@ -266,9 +266,9 @@ export async function ayrintiTopla(db: Db, girdi: AyrintiGirdisi): Promise<Ayrin
     otomatikAcilis,
     geriYuklemeDenemesi: yedek?.sonDeneme ?? null,
     veritabaniBuyumesi: veritabaniBuyumesiOlcu,
-    gunIciKoruma: gunIciKoruma(walArsivi, yedek?.disKopya, simdi),
+    gunIciKoruma: gunIciKoruma(walArsivi, yedek?.disKopya, simdi, girdi.ortam === 'canli'),
     uyarilar: uyarilar({
-      simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler, walArsivi,
+      simdi, surecBaslangici: new Date(simdi.getTime() - girdi.calismaSuresiSn * 1000), isler, yedek, ...diskler, walArsivi, canli: girdi.ortam === 'canli',
       esikler: (girdi.esikler ?? surecEsikleri).iletiler(),
     }),
   };

@@ -386,3 +386,81 @@ export function medyaYeriEksigi(bos: number | null, gereken: number): string | n
   return `Yedek klasöründe medya için yer yetmiyor: boş ${gb(bos)} GB, gereken en az ${gb(toplam)} GB (yeni medya artı 1 GB). `
     + 'Yer açın; medya aynası bu tur kopyalamadı.';
 }
+
+// Haftalık taban yedek (2284-1 c, kart 2284a). WAL arşivi ancak bir taban yedekle işe yarar: geri dönüş = taban + sonrasındaki
+// bütün WAL. Taban haftada bir alınır; 8 gün (haftalık + bir gün pay) geçerse uyarılır. Yalnız pg_verifybackup'tan geçmiş tabanlar
+// sayılır; budama doğrulanmış son ikiye göre yapılır: son taban bozuk çıkarsa bir öncekiyle dönülebilsin.
+export const TABAN_ARALIK_GUN = 7;
+export const TABAN_EN_ESKI_GUN = 8;
+export const TABAN_SAKLANAN = 2;
+export const ARSIV_DISKI_UYARI_ORANI = 0.8;
+// Klasör adı uygulamanın kendi yazdığı tabanları ayırır: elle alınmış (başka adlı) klasörlere dokunulmaz.
+export const TABAN_ADI = /^taban-(\d{8}T\d{6}Z)$/;
+// İş tabanı önce `.yarim` ekiyle yazar, doğrulanınca işaret dosyasını koyup adına taşır.
+export const TABAN_DOGRULANDI_DOSYASI = '.dogrulandi';
+export const TABAN_YARIM_EKI = '.yarim';
+
+// Dış kopya (araclar/yedek.ts) yarım ya da doğrulanmamış iş tabanını almaz; elle alınmış başka adlı taban doğrulama işareti taşımaz.
+export function tabanKopyalanabilirMi(ad: string, dogrulandi: boolean): boolean {
+  if (ad.endsWith(TABAN_YARIM_EKI)) return false;
+  return !TABAN_ADI.test(ad) || dogrulandi;
+}
+const WAL_DOSYASI = /^[0-9A-F]{24}(\.[0-9A-F]{8}\.backup)?$/;
+
+export interface TabanKaydi { ad: string; zaman: Date; dogrulandi: boolean; baslangic: string | null }
+
+export function tabanAdi(simdi: Date): string {
+  return `taban-${simdi.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`;
+}
+
+export function tabanZamani(ad: string): Date | null {
+  const m = TABAN_ADI.exec(ad)?.[1];
+  if (m === undefined) return null;
+  const zaman = new Date(`${m.slice(0, 4)}-${m.slice(4, 6)}-${m.slice(6, 8)}T${m.slice(9, 11)}:${m.slice(11, 13)}:${m.slice(13, 15)}Z`);
+  return Number.isNaN(zaman.getTime()) ? null : zaman;
+}
+
+// pg_basebackup'ın backup_label satırı: "START WAL LOCATION: 0/2000028 (file 000000010000000000000002)".
+export function tabanBaslangicDosyasi(backupLabel: string): string | null {
+  return /^START WAL LOCATION: \S+ \(file ([0-9A-F]{24})\)\s*$/m.exec(backupLabel)?.[1] ?? null;
+}
+
+const dogrulanmislar = (tabanlar: readonly TabanKaydi[]): TabanKaydi[] =>
+  tabanlar.filter((t) => t.dogrulandi && t.baslangic !== null).sort((a, b) => b.zaman.getTime() - a.zaman.getTime());
+
+export function tabanGerekliMi(tabanlar: readonly TabanKaydi[], simdi: Date): boolean {
+  const son = dogrulanmislar(tabanlar)[0];
+  return son === undefined || simdi.getTime() - son.zaman.getTime() >= TABAN_ARALIK_GUN * GUN_MS;
+}
+
+export interface BudamaPlani { silinecekTabanlar: string[]; walSiniri: string | null }
+
+// Doğrulanmamış taban (doğrulama düştü) hemen silinir: geri dönüşte kullanılamaz, yer kaplar. Doğrulanmış tabanlardan en yeni iki
+// kalır; WAL sınırı kalanların eskisinin başlangıç dosyasıdır. İkiden az doğrulanmış taban varken WAL budanmaz.
+export function budamaPlani(tabanlar: readonly TabanKaydi[]): BudamaPlani {
+  const dogru = dogrulanmislar(tabanlar);
+  const kalan = dogru.slice(0, TABAN_SAKLANAN);
+  const kalanAdlar = new Set(kalan.map((t) => t.ad));
+  const silinecekTabanlar = tabanlar.filter((t) => !kalanAdlar.has(t.ad) && (!t.dogrulandi || t.baslangic === null || kalan.length === TABAN_SAKLANAN))
+    .map((t) => t.ad).sort();
+  const enEski = kalan.length === TABAN_SAKLANAN ? kalan[kalan.length - 1] : undefined;
+  return { silinecekTabanlar, walSiniri: enEski?.baslangic ?? null };
+}
+
+// Sınırdan önceki WAL ve .backup dosyaları; zaman çizgisi (.history) ve tanınmayan dosyalar kalır.
+export function silinecekWallar(adlar: readonly string[], sinir: string): string[] {
+  return adlar.filter((ad) => WAL_DOSYASI.test(ad) && ad.slice(0, 24) < sinir).sort();
+}
+
+export function tabanUyarisi(tabanlar: readonly TabanKaydi[], simdi: Date): string | null {
+  const son = dogrulanmislar(tabanlar)[0];
+  if (son === undefined) return 'Doğrulanmış taban yedek yok: WAL arşiviyle geri dönülemez.';
+  const gun = Math.floor((simdi.getTime() - son.zaman.getTime()) / GUN_MS);
+  return simdi.getTime() - son.zaman.getTime() > TABAN_EN_ESKI_GUN * GUN_MS ? `Son doğrulanmış taban yedek ${String(gun)} gün önce alındı.` : null;
+}
+
+export function arsivDiskiUyarisi(bos: number, toplam: number): string | null {
+  if (toplam <= 0) return null;
+  const dolu = 1 - bos / toplam;
+  return dolu >= ARSIV_DISKI_UYARI_ORANI ? `WAL arşivi diski yüzde ${String(Math.round(dolu * 100))} dolu.` : null;
+}
