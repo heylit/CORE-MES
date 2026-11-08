@@ -192,7 +192,9 @@ export function playwrightSurucusu(tarayici: Browser, baseURL: string): KesifSur
         try {
           localStorage.setItem('tmi-performans', 'acik');
           localStorage.setItem(`tmi:tanitim:${String(id)}`, '1');
-          sessionStorage.setItem('tmi.karsilama', String(id));
+          // Karşılama kişiyle birlikte tesis gününü saklar (istemci/src/ortak/veri/karsilama.ts); gün bu sayfanın saatiyle hesaplanır.
+          const gun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(Date.now());
+          sessionStorage.setItem('tmi.karsilama', `${String(id)}|${gun}`);
         } catch { /* depo kapalıysa örten pencere hata olarak görünür */ }
       }, kisiId);
       const sayfa = await baglam.newPage();

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { KarsilamaCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
@@ -47,13 +47,13 @@ describe('Karşılama', () => {
     expect(screen.getByRole('heading', { name: ACIK.metin })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Başlayalım' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(yollar).toEqual(['/karsilama']);
+    expect(yollar.filter((y) => y === '/karsilama')).toEqual(['/karsilama']);
 
     cleanup();
     const istemci = ac();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(istemci.getQueryState(anahtarlar.karsilama)?.status).toBe('pending');
-    expect(yollar).toEqual(['/karsilama']);
+    expect(yollar.filter((y) => y === '/karsilama')).toEqual(['/karsilama']);
   });
 
   it('açılış gösterisi oynarken beklenir, gösteri bitince gelir', async () => {
@@ -65,7 +65,7 @@ describe('Karşılama', () => {
     expect(window.sessionStorage.getItem('tmi.karsilama')).toBeNull();
     act(() => { gosteriBitir(); });
     expect(await pencere()).toBeTruthy();
-    expect(yollar).toEqual(['/karsilama']);
+    expect(yollar.filter((y) => y === '/karsilama')).toEqual(['/karsilama']);
   });
 
   it('Esc ile kapanır', async () => {
@@ -137,6 +137,72 @@ describe('Karşılama', () => {
     ac();
     const gunduz = await pencere();
     expect(gunduz.getAttribute('data-theme')).toBeNull();
+  });
+
+  // Kart 2232 (R3): logo, günün sözü, günün notu, milli bayramda bayrak, 10 Kasım sade, gün değişince yeniden karşılama.
+  function sunucuKurLogolu(karsilama: KarsilamaCevabi) {
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/karsilama') return json(200, karsilama);
+      if (yol === '/kurum-logosu') return json(200, { logo: 'data:image/png;base64,iVBORw0KGgo=' });
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+  }
+  const R3 = { ...ACIK, sozAcik: true, gunNotuAcik: true } satisfies KarsilamaCevabi;
+  // Tesis saati İstanbul'dur (UTC+3): 07:00Z sabah 10:00.
+  const gunAyarla = (ay: number, gun: number) => { vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] }); vi.setSystemTime(new Date(Date.UTC(2026, ay - 1, gun, 7, 0))); };
+
+  it('2232: kurum logosu, günün sözü çıkar; sıradan günde ayardaki metin kalır, bayrak yoktur', async () => {
+    gunAyarla(11, 17);
+    sunucuKurLogolu(R3);
+    ac();
+    const kutu = await pencere();
+    await waitFor(() => expect(kutu.querySelector('.tc-karsilama-logo img')).not.toBeNull());
+    expect(kutu.querySelector('.tc-karsilama-soz')?.textContent).toMatch(/^“.+”$/);
+    expect(kutu.querySelector('.tc-karsilama-bayrak')).toBeNull();
+    expect(kutu.querySelector('.tc-karsilama-gunes')).not.toBeNull();
+  });
+
+  it('2232: 29 Ekim\'de bayram notu büyük metnin yerine geçer, güneşin yerinde bayrak; söz kapalıysa çıkmaz', async () => {
+    gunAyarla(10, 29);
+    sunucuKur({ ...R3, sozAcik: false });
+    ac();
+    const kutu = await screen.findByRole('dialog', { name: 'Cumhuriyet Bayramımız kutlu olsun.' });
+    expect(kutu.querySelector('.tc-karsilama-bayrak')).not.toBeNull();
+    expect(kutu.querySelector('.tc-karsilama-gunes')).toBeNull();
+    expect(kutu.querySelector('.tc-karsilama-soz')).toBeNull();
+  });
+
+  it('2232: 10 Kasım\'da kart sade: anma notu, görsel ve söz yok', async () => {
+    gunAyarla(11, 10);
+    sunucuKur(R3);
+    ac();
+    const kutu = await screen.findByRole('dialog', { name: 'Saygıyla anıyoruz.' });
+    expect(kutu.hasAttribute('data-sade')).toBe(true);
+    expect(kutu.querySelector('.tc-karsilama-gorsel')).toBeNull();
+    expect(kutu.querySelector('.tc-karsilama-soz')).toBeNull();
+  });
+
+  it('2232: gün notu kapalıysa bayramda da ayardaki metin çıkar', async () => {
+    gunAyarla(10, 29);
+    sunucuKur({ ...R3, gunNotuAcik: false });
+    ac();
+    const kutu = await pencere();
+    expect(kutu.querySelector('.tc-karsilama-bayrak')).toBeNull();
+  });
+
+  it('2232: aynı sekmede o gün görülen karşılama çıkmaz; gün değişince ilk dokunuşta bir kez daha çıkar', async () => {
+    gunAyarla(11, 17);
+    sunucuKur();
+    ac();
+    fireEvent.click(within(await pencere()).getByRole('button', { name: 'Başlayalım' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    vi.setSystemTime(new Date(Date.UTC(2026, 10, 18, 7, 0)));
+    fireEvent.pointerDown(document.body);
+    expect(await pencere()).toBeTruthy();
+    expect(window.sessionStorage.getItem('tmi.karsilama')).toBe(`${String(KISI.id)}|2026-11-18`);
   });
 });
 
