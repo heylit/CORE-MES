@@ -6,8 +6,8 @@ Bu proje TMI CORE V2'nin (CNC atolyesi uretim planlama ve izlenebilirlik sistemi
 OKUMA SIRASI (2213; her konu yalniz kendi rolunun bolumlerini okur)
 - Yazar: ROLUN, ISE BASLARKEN, KURALLAR, ONAY, TESLIM. SABIT KIMLIKLER yalniz sahiplik, sema ya da baska module dokunan iste.
 - Birlestirici: ROLUN, ONAY, BIRLESTIRME.
-- Koordinator: bu dosyanin tamami ve COREMES-DEVIR durum/SISTEM.md.
-- COREMES-DEVIR'de her baslangicta tam okunan yalniz durum/OZET.md, durum/DURUM.md ve durum/SISTEM.md'dir. KARARLAR, ACIK-ISLER ve GUNLUK tam okunmaz: `grep -n '<kart>' durum/*.md arsiv/*.md`.
+- Koordinator: bu dosyanin tamami, COREMES-DEVIR durum/SISTEM.md ve durum/EKIP.md.
+- COREMES-DEVIR'de her baslangicta tam okunan yalniz durum/OZET.md, durum/DURUM.md ve durum/SISTEM.md'dir; koordinator, Soru Merkezi, uzman ve yonetim konulari durum/EKIP.md'yi de tam okur (2287), yazar gerekince. KARARLAR, ACIK-ISLER ve GUNLUK tam okunmaz: `grep -n '<kart>' durum/*.md arsiv/*.md`.
 
 DEPO VE DEVIR
 - Depo: heylit/core-mes (herkese acik). Push adresi kucuk harfli https://github.com/heylit/core-mes.
