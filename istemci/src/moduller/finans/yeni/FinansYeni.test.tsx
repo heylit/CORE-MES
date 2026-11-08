@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
@@ -14,6 +14,15 @@ import { BOLUMSUZ, FIRMACI, finansAc, json, komutToplayici, OKUYAN, sunucuKur, Y
 import { finansiKur } from './veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+// Bölümler tembel yüklenir ve açılan bölümden sonra ötekiler arka planda istenir (sekmeler.ts hepsiniYukle). Önceki testin başlattığı
+// yükleme sürerken aynı modül yeniden istenirse vitest modül yükleyicisi yarım modül döndürür (dışa aktarımlar undefined); tarayıcıda
+// olmaz. Bölümler bir kez baştan yüklenir: sonuç dosya sırasına ve dönüştürme önbelleğine bağlı kalmaz.
+beforeAll(async () => {
+  await Promise.all([
+    import('./ana/index.tsx'), import('./ayarlar/index.tsx'), import('./cekler/index.tsx'), import('./firmalar/index.tsx'),
+    import('./kayitlar/index.tsx'), import('./plan/index.tsx'), import('./raporlar/index.tsx'), import('./genel-gider.tsx'),
+  ]);
+});
 
 // Firma 1'in listede görünen etiketi (aynı adlı iki firma kodla ayrılır).
 const MUSTERI = firmaEtiketleri(finansiKur(ornekHamVeri()).V, 'gelir').find((e) => e.includes('M1'))!;
