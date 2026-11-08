@@ -131,6 +131,10 @@ describe('veritabanı kullanıcıları: uygulama okur ve yazar, şemayı yalnız
     const geriAl = new Error('geri al');
     await assert.rejects(sahip.tx(async (db) => {
       await db.sorgu('ALTER TABLE denetim_kaydi DISABLE TRIGGER denetim_kaydi_bosaltilmaz');
+      // Defter aylık bölümlüdür (1765): her bölümün kendi boşaltma tetiği vardır, ana tablodaki kapatma bölüme inmez.
+      for (const { bolum } of await db.sorgu<{ bolum: string }>(
+        "SELECT inhrelid::regclass::text AS bolum FROM pg_inherits WHERE inhparent = 'denetim_kaydi'::regclass",
+      )) await db.sorgu(`ALTER TABLE ${bolum} DISABLE TRIGGER denetim_kaydi_bosaltilmaz`);
       await db.sorgu('TRUNCATE denetim_kaydi');
       assert.deepEqual(await db.sorgu('SELECT 1 FROM denetim_kaydi'), []);
       await db.sorgu('DROP TRIGGER denetim_kaydi_degismez ON denetim_kaydi');
