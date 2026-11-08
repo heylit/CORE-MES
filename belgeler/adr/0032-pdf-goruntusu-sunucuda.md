@@ -36,7 +36,7 @@ Yavaş tablette bu iş ana iş parçacığını saniyelerce tutar; ekran donar v
 ## Sonuçlar
 
 - Yeni doğrudan bağımlılık `@napi-rs/canvas` (pdfjs-dist'in isteğe bağlı bağımlılığıydı; hazır derlenmiş, yerel derleme yok).
-- Görüntüler veritabanında `bytea` olarak durur: yedek ve WAL büyür. Boyut sayfa çözünürlüğüne bağlıdır; ölçüm kart 2339-S'de.
+- Görüntüler veritabanında `bytea` olarak durur; satırları yedeğe girmez, tablo yapısı girer (`sunucu/cekirdek/yedek-disi.ts`, 2339-S CEO kararı a). Geri yüklemeden sonra boş tablo zamanlayıcı turlarında yeniden dolar; WAL yine büyür.
 - Sunucu kendi teması dışında bir mürekkep rengi üretmez; imza tutmayan tablet kendisi üretir.
 - Ağ yalıtımı işletim sistemi düzeyinde değildir; kod (dinleyici ve istek yok) ve inceleme ile tutulur (ADR 0024 ile aynı).
 

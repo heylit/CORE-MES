@@ -12,6 +12,9 @@ export const LO_GENISLIK = 1600;
 // Okuma ayarındaki çözünürlük (istemci/src/ortak/cizim/kurallar.ts OKUMA_VARSAYILANI.res) ve sayfa ölçeği üst sınırı (pdf.ts pdfCiz).
 export const VARSAYILAN_RES = 4200;
 export const AZAMI_OLCEK = 8;
+// Paket ayarındaki çözünürlük güvenilmeyen girdidir: çok büyük değer sürecin tuvalini ve belleğini şişirmesin. Görüntü tablette sayfa
+// kutusuna ölçeklenir; daha büyük ayarda yalnız yakınlaşma netliği bu sınırda kalır.
+export const AZAMI_RES = 8000;
 
 // Tablet mürekkep rengini o anki tasarım değişkeninden okur (pdf.ts degiskenRengi). Burada iki tema için aynı değerler durur
 // (istemci/src/ortak/tasarim/tokens.css [data-theme="light"] ve :root/[data-theme="dark"]; tasarım değişkeni değişirse burası da değişir). Değer tutmazsa
@@ -35,7 +38,7 @@ export const ILETILER = {
 export interface GoruntuAyari { res: number; look: RenkAyari['look']; bold: number }
 export function goruntuAyari(readCfg: unknown): GoruntuAyari {
   const c = readCfg !== null && typeof readCfg === 'object' ? readCfg as Record<string, unknown> : {};
-  const res = typeof c['res'] === 'number' && Number.isFinite(c['res']) && c['res'] > 0 ? c['res'] : VARSAYILAN_RES;
+  const res = typeof c['res'] === 'number' && Number.isFinite(c['res']) && c['res'] > 0 ? Math.min(AZAMI_RES, c['res']) : VARSAYILAN_RES;
   const bold = c['bold'] != null && Number.isFinite(+(c['bold'] as number)) ? +(c['bold'] as number) : 1;
   return { res, look: gorunus(c['look']), bold };
 }

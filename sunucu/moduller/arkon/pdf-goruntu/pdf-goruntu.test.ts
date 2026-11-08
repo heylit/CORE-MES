@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
@@ -13,7 +16,7 @@ import { tekrarDeposu } from '../../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../../kisiler/disari.ts';
 import { kimlikCozucu } from '../../oturum/disari.ts';
 import { goruntuTuru, pdfGoruntusu } from './servis.ts';
-import { goruntuAyari, goruntuIsleri, IMZA_DESENI, pdfBasligiVar, VARSAYILAN_RES } from './kurallar.ts';
+import { AZAMI_RES, goruntuAyari, goruntuIsleri, IMZA_DESENI, pdfBasligiVar, VARSAYILAN_RES } from './kurallar.ts';
 import { goruntuOrtami, goruntuSureciKur } from './surec.ts';
 
 // ADR 0032. PDF'ler test içinde üretilen sentetik sayfalardır.
@@ -48,6 +51,14 @@ describe('arkon PDF görüntüsü: kurallar', () => {
     assert.deepEqual(goruntuAyari(null), { res: VARSAYILAN_RES, look: 'net', bold: 1 });
     assert.deepEqual(goruntuAyari({ res: -5, look: 'x', bold: 'y' }), { res: VARSAYILAN_RES, look: 'net', bold: 1 });
     assert.deepEqual(goruntuAyari({ res: 2000, look: 'orig', bold: 0 }), { res: 2000, look: 'orig', bold: 0 });
+  });
+
+  test('P-K6 çözünürlük 8000 ile sınırlıdır (güvenilmeyen paket ayarı süreci şişirmez)', () => {
+    assert.equal(AZAMI_RES, 8000);
+    assert.equal(goruntuAyari({ res: 8000 }).res, 8000);
+    assert.equal(goruntuAyari({ res: 8001 }).res, 8000);
+    assert.equal(goruntuAyari({ res: 1e9 }).res, 8000);
+    assert.equal(goruntuAyari({ res: Number.POSITIVE_INFINITY }).res, VARSAYILAN_RES);
   });
 
   test('P-K4 PDF başlığı ilk 1024 baytta aranır', () => {
@@ -196,6 +207,37 @@ describe('arkon PDF görüntüsü: iş ve okuma ucu (gerçek PostgreSQL)', () =>
     assert.equal(satirlar.length, 4);
     assert.ok(satirlar.every((r) => r.hata !== null));
     assert.equal((await goruntuAl(yonetici, c, acikHi)).durum, 204);
+  });
+
+  test('P-V6 alt süreç çöker ya da tuval kitaplığı yüklenemezse sunucu ayakta kalır, uç 204 döner, iş bir kez yazıp geçer', async () => {
+    const klasor = mkdtempSync(join(tmpdir(), 'pdf-goruntu-bozuk-'));
+    try {
+      const yuklenemez = join(klasor, 'yuklenemez.mjs'), coker = join(klasor, 'coker.mjs');
+      // Yerel ikili yüklenemeyince süreç açılışta düşer (Windows'ta eksik @napi-rs/canvas ikilisi gibi).
+      writeFileSync(yuklenemez, "throw new Error('ikili yuklenemedi');\n");
+      // İş ortasında çökme (yerel kitaplıkta bellek hatası gibi).
+      writeFileSync(coker, "process.on('message', () => process.exit(70));\n");
+      for (const [i, giris] of [yuklenemez, coker].entries()) {
+        const bozuk = goruntuSureciKur({ giris, sureMs: 20_000 });
+        try {
+          const dosya = await yukle(deneme(`0 0 0 RG ${String(i + 1)} w 30 30 m 270 170 l S`));
+          await paketYaz(dosya);
+          uyarilar.length = 0;
+          assert.equal(await goruntuTuru(o().vt, gunluk, bozuk), 1);
+          assert.equal(uyarilar.length, 1);
+          assert.match(uyarilar[0]!, /kapandı/);
+          assert.doesNotMatch(uyarilar[0]!, /yuklenemedi/, 'çocuğun hata metni günlüğe taşınmaz');
+          assert.equal((await goruntuAl(yonetici, dosya, acikHi)).durum, 204);
+          // Aynı dosya her turda süreci yeniden düşürmez.
+          assert.equal(await goruntuTuru(o().vt, gunluk, bozuk), 0);
+        } finally { bozuk.kapat(); }
+      }
+      // Ana süreç ve sağlam görüntü süreci çalışmayı sürdürür.
+      await paketYaz(await yukle(deneme('0 0 0 RG 3 w 50 50 m 250 150 l S')));
+      assert.equal(await goruntuTuru(o().vt, gunluk, surec), 1);
+      const saglam = ozet(deneme('0 0 0 RG 3 w 50 50 m 250 150 l S'));
+      assert.equal((await goruntuAl(yonetici, saglam, acikHi)).durum, 200);
+    } finally { rmSync(klasor, { recursive: true, force: true }); }
   });
 
   test('P-V4 telefon profili çizim görüntüsü alamaz', async () => {
