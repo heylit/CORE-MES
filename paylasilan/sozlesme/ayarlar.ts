@@ -303,6 +303,17 @@ export const yedekDiziniGovdesi = z.object({
 export const yedekDiziniCevabi = z.object({ dizin: z.string().nullable(), kaynak: z.enum(YEDEK_DIZINI_KAYNAKLARI).nullable() });
 // durum: acik ya da neden kapalı olduğu. Kapalı durumda liste boştur; yedek alınmaz.
 export const YEDEK_DURUMLARI = ['acik', 'dizin-yok', 'anahtar-yok'] as const;
+// PostgreSQL sürüm denetimi (2305-1 b): sunucunun ana sürümü uygulamanın kendi bağlantısıyla (SELECT version()), pg_dump'ınki
+// `--version` ile okunur. Ekrandan seçilmez, yalnız gösterilir. Okunamayan değer null'dır; uyumlu yalnız ikisi okunup ana sürümleri
+// eşitse true'dur, değilse yedek alınmaz ve neden ileti'de yazar.
+export const pgSurumuSemasi = z.object({
+  sunucu: z.number().int().positive().nullable(),
+  sunucuMetni: z.string().nullable(),
+  pgDump: z.number().int().positive().nullable(),
+  pgDumpYolu: z.string().nullable(),
+  uyumlu: z.boolean(),
+  ileti: z.string().nullable(),
+});
 export const yedekListesi = z.object({
   durum: z.enum(YEDEK_DURUMLARI),
   // Gece yedeğinin tesis saati ve saklama kuralı; ekran bunları açıklamada yazar.
@@ -317,6 +328,8 @@ export const yedekListesi = z.object({
   // Geçerli klasör ve nereden geldiği: ekranda seçilen (ayar) ya da sunucu ortamı (TMIV2_YEDEK_DIZINI); ikisi de yoksa null.
   dizin: z.string().nullable(),
   kaynak: z.enum(YEDEK_DIZINI_KAYNAKLARI).nullable(),
+  // Denetlenmediyse (veritabanı bağlantısı verilmeden listelendi) null; alanı göndermeyen sunucuda yok.
+  pgSurumu: pgSurumuSemasi.nullable().optional(),
 });
 // Yedeğin büyüyen veritabanıyla isteyeceği yer (kart 1763). Gereken: son yedeğin boyu çarpı saklamada aynı anda duran yedek sayısı;
 // mevcut yedekler döndükçe yerini bıraktığı için karşılaştırma boş yer artı mevcut toplamla yapılır. Bilinmeyen değer null'dır.
@@ -340,6 +353,7 @@ export const yedekAlCevabi = z.object({ baslangic: zamanSemasi });
 export type YedekTuru = (typeof YEDEK_TURLERI)[number];
 export type YedekDurumu = (typeof YEDEK_DURUMLARI)[number];
 export type Yedek = z.output<typeof yedekSemasi>;
+export type PgSurumu = z.output<typeof pgSurumuSemasi>;
 export type YedekListesi = z.output<typeof yedekListesi>;
 export type YedekAlani = z.output<typeof yedekAlani>;
 export type DosyaDeposuDurumu = z.output<typeof dosyaDeposuDurumu>;
