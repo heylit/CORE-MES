@@ -1,7 +1,7 @@
 # ADR 0006 — Modüller arası akış
 
 Durum: kabul (yön ve döngü); ters yöndeki haber 16.10.2026'da güncellendi (madde 6, kullanıcı kararı "Güncellensin");
-katman tablosu ve açık madde bekliyor (07.10.2026, kart #167)
+katman tablosu 08.11.2026'da araçla girdi (karar 2270-1 a, 2270-2 a); açık madde bekliyor (07.10.2026, kart #167)
 
 ## Bağlam
 
@@ -47,9 +47,21 @@ birlikte ne ayrı yazılabilir ne ayrı teslim alınabilir.
 
 ## Katman tablosu
 
-Henüz yok. Hangi modülün hangisinin üstünde olduğunu söyleyen tablo onaylanmadı; bugün bilinen sıra
-kartlarda dağınık ve eksik. Onaylanınca ayrı kartla yazılır ve araca katman sırası denetimi o
-kartta girer. O güne kadar araç yalnız döngüye bakar: yön, döngü kurmadığı sürece serbesttir.
+Karar 2270-1 a ve 2270-2 a (08.11.2026). Madde 1'deki "üstteki" ve "alttaki" bu tabloyla tanımlanır.
+
+1. **Tablo kodda, tek yerdedir:** `araclar/sinir-denetimi.ts` içindeki `KATMANLAR`. Sıra kattır, 0 en alttır.
+   ADR tabloyu kopyalamaz; güncel hali o dosyadadır.
+2. **Sunucu ve istemci ayrı tablodur.** İki grafik ayrıdır (madde 1); ekran başka modülün bileşenini gömer
+   ve sunucu sırasını izlemez.
+3. **Modül yalnız kendinden alt kattaki modülü ithal eder** (kural g). Aynı kattakini de ithal etmez: iki
+   modül arasındaki yön tabloda yazılı değilse yön yoktur. Yalnız test dosyasından geçen ithal sayılmaz
+   (madde 4'teki gibi); tip ithali sayılır.
+4. **Tabloda olmayan modül kırmızıdır.** Yeni modül, dış teslim dahil, tabloya kendi katıyla girer.
+5. **Tablo değişikliği:** ilk tablo kabul anındaki ithal grafiğinden çıkarıldı (her modül, bağımlı olduğu
+   modüllerin en yükseğinin bir üstünde). Yeni modülü eklemek ya da aynı kattaki bir modüle bağ için
+   ithal edeni yukarı taşımak teknik iştir, kartla girer. Üst kattaki modüle bağ ters bağdır: önce
+   "Döngü çıkarsa" sırası denenir (madde 6 kalıbı dahil); tabloda iki modülün sırası çevrilecekse
+   kullanıcıya sorulur.
 
 ## Vazgeçilenler
 

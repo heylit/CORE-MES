@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export interface Ihlal {
   dosya: string;
   satir: number;
-  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'h' | 'i';
+  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i';
   mesaj: string;
 }
 
@@ -364,6 +364,74 @@ export function donguIhlali(dongu: Dongu): Ihlal {
 export const modulunDonguleri = (donguler: readonly Dongu[], modul: string): Dongu[] =>
   donguler.filter((d) => d.bilesen.includes(modul));
 
+// ADR 0006 katman tablosu. Dizideki sıra kattır, 0 en alttır. Modül yalnız kendinden alt kattaki modülü ithal eder;
+// aynı kattakini de ithal etmez: ikisi arasındaki yön tabloda yazılı değildir. Sunucu ve istemci ayrı grafiktir,
+// ayrı tablodur: ekran başka modülün bileşenini gömer, sunucu sırasını izlemez. Tabloda olmayan modül ihlaldir;
+// yeni modül tabloya kendi katıyla girer.
+export type Katmanlar = Readonly<Record<Taraf, ReadonlyArray<readonly string[]>>>;
+
+export const KATMANLAR: Katmanlar = {
+  sunucu: [
+    /* 0 */ ['dosya', 'durus-nedenleri', 'istek-kimligi', 'kisiler'],
+    /* 1 */ ['bildirim', 'denetim', 'kalibrasyon', 'mesaj', 'ortak-dosyalar'],
+    /* 2 */ ['ayarlar', 'denetim-hazirlik', 'istasyonlar'],
+    /* 3 */ ['musteri-tedarikci', 'nizamiye', 'saglik'],
+    /* 4 */ ['finans', 'ik', 'malzemeler'],
+    /* 5 */ ['belge-merkezi', 'profil', 'siparisler', 'vardiya'],
+    /* 6 */ ['geometri', 'idari-isler', 'oturum', 'projeler'],
+    /* 7 */ ['uretim-emirleri'],
+    /* 8 */ ['atolye', 'markalama', 'oee', 'rota', 'satin-alma', 'smartes'],
+    /* 9 */ ['kaynak-izi', 'portal', 'sevkiyat'],
+    /* 10 */ ['stok', 'takvim'],
+    /* 11 */ ['cnc-kurulum', 'degisiklik-yonetimi', 'etiket-merkezi', 'kalite-merkezi', 'logo', 'recete-rota'],
+    /* 12 */ ['guvenlik', 'malzeme-izi', 'plan'],
+    /* 13 */ ['akis', 'arkon', 'proje-maliyet'],
+    /* 14 */ ['saat'],
+  ],
+  istemci: [
+    /* 0 */ [
+      'akis', 'atolye', 'bildirim', 'degisiklik-yonetimi', 'denetim', 'denetim-hazirlik', 'durus-nedenleri', 'etiket-merkezi',
+      'finans', 'idari-isler', 'kalibrasyon', 'kalite-merkezi', 'kaynak-izi', 'malzeme-izi', 'mesaj', 'nizamiye', 'oee',
+      'oturum', 'plan', 'portal', 'profil', 'proje-maliyet', 'rota', 'sevkiyat', 'sistem', 'smartes', 'takvim', 'terminal',
+    ],
+    /* 1 */ ['ayarlar', 'guvenlik', 'ik', 'istasyonlar', 'kisiler', 'musteri-tedarikci', 'projeler', 'siparisler'],
+    /* 2 */ ['belge-merkezi', 'vardiya'],
+    /* 3 */ ['cizimler', 'cnc-kurulum', 'markalama', 'ortak-dosyalar', 'satin-alma', 'uretim-emirleri'],
+    /* 4 */ ['malzemeler', 'stok'],
+    /* 5 */ ['arkon', 'geometri', 'recete-rota'],
+  ],
+};
+
+// Yalnız üretim kenarı denetlenir (döngüdeki gibi). Var olmayan modüle giden ithal burada değil, derlemede düşer.
+export function katIhlalleri(dosyalar: readonly KaynakDosya[], kenarlar: readonly ModulKenari[], katmanlar: Katmanlar = KATMANLAR): Ihlal[] {
+  const ihlaller: Ihlal[] = [];
+  for (const taraf of TARAFLAR) {
+    const kat = new Map<string, number>();
+    (katmanlar[taraf]).forEach((liste, sira) => { for (const ad of liste) kat.set(ad, sira); });
+    const ilkDosya = new Map<string, string>();
+    for (const { dosya } of [...dosyalar].sort((a, b) => adSirasi(a.dosya, b.dosya))) {
+      const yer = modulYeri(dosya);
+      if (yer !== null && yer.taraf === taraf && !ilkDosya.has(yer.ad)) ilkDosya.set(yer.ad, dosya);
+    }
+    for (const [ad, dosya] of ilkDosya) {
+      if (!kat.has(ad)) {
+        ihlaller.push({ dosya, satir: 1, kural: 'g', mesaj: `${taraf} modülü ${ad} katman tablosunda yok; KATMANLAR'a katıyla eklenir (ADR 0006)` });
+      }
+    }
+    for (const kenar of kenarlar) {
+      if (kenar.taraf !== taraf || kenar.test) continue;
+      const kaynakKati = kat.get(kenar.kaynak);
+      const hedefKati = kat.get(kenar.hedef);
+      if (kaynakKati === undefined || hedefKati === undefined || kaynakKati > hedefKati) continue;
+      ihlaller.push({
+        dosya: kenar.dosya, satir: kenar.satir, kural: 'g',
+        mesaj: `kat: ${kenar.kaynak} (${kaynakKati}) -> ${kenar.hedef} (${hedefKati}); modül yalnız alt kattakini ithal eder (ADR 0006)`,
+      });
+    }
+  }
+  return ihlaller;
+}
+
 export const ihlalSatiri = (i: Ihlal): string => `${i.dosya}:${i.satir} [kural ${i.kural}] ${i.mesaj}`;
 
 export async function dosyalariTopla(kok: string, goreli: string): Promise<string[]> {
@@ -381,7 +449,7 @@ export async function dosyalariTopla(kok: string, goreli: string): Promise<strin
   return dosyalar;
 }
 
-// Döngü dosyaya değil depoya bakar: ihlalleri dosya ihlallerinden sonra gelir.
+// Döngü ve kat dosyaya değil depoya bakar: ihlalleri dosya ihlallerinden sonra gelir.
 export async function depoyuDenetle(kok: string): Promise<{ dosyaSayisi: number; ihlaller: Ihlal[]; donguler: Dongu[] }> {
   const ihlaller: Ihlal[] = [];
   const dosyalar: KaynakDosya[] = [];
@@ -393,8 +461,13 @@ export async function depoyuDenetle(kok: string): Promise<{ dosyaSayisi: number;
       ihlaller.push(...ihlalleriBul(dosya, icerik));
     }
   }
-  const donguler = donguleriBul(modulKenarlari(dosyalar));
-  return { dosyaSayisi: dosyalar.length, ihlaller: [...ihlaller, ...donguler.map(donguIhlali)], donguler };
+  const kenarlar = modulKenarlari(dosyalar);
+  const donguler = donguleriBul(kenarlar);
+  return {
+    dosyaSayisi: dosyalar.length,
+    ihlaller: [...ihlaller, ...donguler.map(donguIhlali), ...katIhlalleri(dosyalar, kenarlar)],
+    donguler,
+  };
 }
 
 export interface Degisiklik {
