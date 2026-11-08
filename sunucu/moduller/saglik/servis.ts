@@ -80,11 +80,11 @@ export async function saglikliMi(db: Db, sureSiniriMs: number = YOKLAMA_SURE_SIN
 // Yedek klasöründeki en yeni yedek dosyası: Sistem Ayarları'ndaki yedek listesiyle aynı kaynak.
 export async function surecYedegi(db: Db): Promise<YedekBilgisi> {
   const ortam = await yedekOrtaminiKur(db);
-  const { durum, yedekler } = await yedekleriListele(ortam);
+  const { durum, yedekler, pgSurumu } = await yedekleriListele(ortam, db);
   const en = yedekler[0];
   // Araç kaydı TMIV2_YEDEK_DIZINI'ne yazar; ekrandan başka klasör seçildiyse ikisi de okunur.
   const disKopya = await disKopyaKaydiOku([ortam.dizin, process.env['TMIV2_YEDEK_DIZINI']?.trim() || null]);
-  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman), sonDeneme: await denemeKaydiOku(ortam.dizin), disKopya };
+  return { durum, sonYedek: en === undefined ? null : new Date(en.zaman), sonDeneme: await denemeKaydiOku(ortam.dizin), disKopya, pgSurumu: pgSurumu ?? null };
 }
 
 const disKopyaMi = (d: unknown): d is DisKopyaKaydi => disKopyaKaydiSemasi.safeParse(d).success;

@@ -1,24 +1,24 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync, readdirSync } from 'node:fs';
 import { open, readdir, rename, rm, stat, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { ayarOku } from '#cekirdek/ayar.ts';
-import type { Db } from '#cekirdek/db.ts';
+import { veritabaniAc, type Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { bulunamadi, cakisma, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import { isBekliyor, type IsBekliyor } from '#cekirdek/zamanlayici.ts';
 import type {
-  Yedek, YedekAlCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedekListesi, YedekTuru, YedeklerCevabi,
+  PgSurumu, Yedek, YedekAlCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedekListesi, YedekTuru, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import { DOSYA_SINIRI, depoDolulugu } from '../dosya/disari.ts';
 import {
-  YEDEK_EN_AZ_KALAN, YEDEK_SAATI, YEDEK_SAKLAMA_GUN, dosyaDeposuHesapla, geceYedegiGerekliMi, yedekAlaniHesapla, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
+  YEDEK_EN_AZ_KALAN, YEDEK_SAATI, aracAnaSurumu, pgSurumuDenetle, sunucuAnaSurumu, YEDEK_SAKLAMA_GUN, dosyaDeposuHesapla, geceYedegiGerekliMi, yedekAlaniHesapla, silinecekYedekler, yedekAdi, yedekAdiniCoz, yedekAnahtariCoz,
   yedekYeriEksigi, type YedekAnahtari, type YedekDosyasi,
 } from './kurallar.ts';
-import { nabiz } from './sorgular.ts';
+import { nabiz, sunucuSurumu, type SunucuSurumu } from './sorgular.ts';
 
 // Veritabanı yedeği (kart #1205) diske yazılır, veritabanına değil. Klasör ekranda seçilir (`yedek-dizini.ts`), seçilmediyse
 // ortamdan gelir; ikisi de yoksa yedek kapalıdır, sunucu yine açılır. pg_dump uygulama kullanıcısıyla bağlanır: her tabloyu okuyabilir, yeni yetki istemez. Parola komut satırına
@@ -34,6 +34,8 @@ export interface PgBaglantisi {
 export interface PgDumpKomutu {
   dosya: string;
   onEk: readonly string[];
+  // Windows'ta pg_dump kurulum klasöründe bulunamadıysa neden; yedek bu durumda PATH'e düşmez, alınmaz.
+  hata?: string;
 }
 
 export interface YedekOrtami {
@@ -70,12 +72,18 @@ export function windowsPgDump(programFiles: readonly string[], klasorOku: (yol: 
   return null;
 }
 
-function pgDumpBul(env: NodeJS.ProcessEnv, arama: PgDumpArama): string {
+// Windows'ta PATH'e düşülmez (2305-1 b): PATH'teki pg_dump başka bir PostgreSQL kurulumundan (ya da başka bir programın
+// getirdiği istemciden) olabilir. Linux'ta (geliştirme ve CI) PATH kalır; sürüm denetimi orada da yapılır.
+export const PG_DUMP_YOK = 'pg_dump bulunamadı: TMIV2_PG_DUMP boş ve Program Files\\PostgreSQL altında kurulu sürüm yok. '
+  + 'Yedek PATH\'teki pg_dump\'a düşmez; tam yolu TMIV2_PG_DUMP ile verin.';
+
+function pgDumpBul(env: NodeJS.ProcessEnv, arama: PgDumpArama): PgDumpKomutu {
   const verilen = env['TMIV2_PG_DUMP']?.trim() ?? '';
-  if (verilen !== '') return verilen;
-  if (arama.platform !== 'win32') return 'pg_dump';
+  if (verilen !== '') return { dosya: verilen, onEk: [] };
+  if (arama.platform !== 'win32') return { dosya: 'pg_dump', onEk: [] };
   const kokler = [env['ProgramFiles'], env['ProgramW6432'], env['ProgramFiles(x86)']].filter((d): d is string => d !== undefined && d !== '');
-  return windowsPgDump(kokler, arama.klasorOku, arama.varMi) ?? 'pg_dump';
+  const bulunan = windowsPgDump(kokler, arama.klasorOku, arama.varMi);
+  return bulunan === null ? { dosya: 'pg_dump', onEk: [], hata: PG_DUMP_YOK } : { dosya: bulunan, onEk: [] };
 }
 
 export function yedekOrtamiOku(env: NodeJS.ProcessEnv = process.env, arama: PgDumpArama = sistemdeAra): YedekOrtami {
@@ -85,9 +93,80 @@ export function yedekOrtamiOku(env: NodeJS.ProcessEnv = process.env, arama: PgDu
     dizin: dizin === '' ? null : dizin,
     kaynak: dizin === '' ? null : 'ortam',
     pg: { host, port, kullanici, parola, veritabani },
-    pgDump: { dosya: pgDumpBul(env, arama), onEk: [] },
+    pgDump: pgDumpBul(env, arama),
     anahtar: yedekAnahtariCoz(env['TMIV2_YEDEK_ANAHTARI']),
   };
+}
+
+// Sürüm denetimi (2305-1 b, kart 2306): araç ana sürümü sunucununkiyle eşit değilse yedek alınmaz. Sunucu sürümü uygulamanın
+// kendi bağlantısıyla okunur (SELECT version()); ekranda yalnız gösterilir, elle seçilmez.
+const SURUM_SURE_MS = 10_000;
+
+// Aracın `--version` çıktısı. Ön ek (testteki sahte betik, şema süzgeci) verilmez: yalnız aracın kendisi sorulur.
+export function aracSurumuOku(dosya: string, ad: 'pg_dump' | 'pg_basebackup'): Promise<{ cikti: string } | { hata: string }> {
+  return new Promise((coz) => {
+    execFile(dosya, ['--version'], { env: altSurecOrtami(null), timeout: SURUM_SURE_MS, windowsHide: true, encoding: 'utf8' }, (hata, cikti) => {
+      if (hata === null) { coz({ cikti }); return; }
+      const kod = (hata as NodeJS.ErrnoException).code;
+      coz({
+        hata: kod !== 'ENOENT'
+          ? `${ad} sürümü okunamadı: ${hata.message.slice(0, HATA_METNI_EN_UZUN)}`
+          : /[\\/]/.test(dosya)
+            ? `${ad} bulunamadı (${dosya}); TMIV2_PG_DUMP'taki tam yolu denetleyin.`
+            : `${ad} bulunamadı (${dosya}): PATH'te yok, Windows'ta PostgreSQL kurulum klasöründe de yok; tam yolu TMIV2_PG_DUMP ile verin.`,
+      });
+    });
+  });
+}
+
+export type SunucuSurumuOkuyucu = () => Promise<SunucuSurumu>;
+
+// Yedek komut satırından (npm run yedek) ve güncelleyiciden de alınır; orada uygulama havuzu yoktur. Tek bağlantılık, hemen
+// kapanan havuz yedeğin kendi bağlantı bilgisiyle açılır.
+export function baglanarakOku(pg: PgBaglantisi): SunucuSurumuOkuyucu {
+  return async () => {
+    const vt = veritabaniAc({ pg: { ...ayarOku(process.env).pg, ...pg, havuzBoyutu: 1 } }, { havuzBoyutu: 1 });
+    try {
+      return await sunucuSurumu(vt);
+    } finally {
+      await vt.kapat();
+    }
+  };
+}
+
+export async function pgSurumunuDenetle(
+  arac: 'pg_dump' | 'pg_basebackup', dosya: string, onHata: string | undefined, sunucuyuOku: SunucuSurumuOkuyucu,
+  aracOku: (dosya: string, ad: 'pg_dump' | 'pg_basebackup') => Promise<{ cikti: string } | { hata: string }> = aracSurumuOku,
+): Promise<PgSurumu> {
+  const yol = onHata === undefined ? dosya : null;
+  const okunan = onHata === undefined ? await aracOku(dosya, arac) : { hata: onHata };
+  let sunucu: SunucuSurumu = { surumNo: null, metin: null };
+  let sunucuHatasi: string | null = null;
+  // Araç yoksa sunucuya hiç gidilmez: neden araçtır.
+  if (!('hata' in okunan)) {
+    try { sunucu = await sunucuyuOku(); } catch (hata) { sunucuHatasi = hata instanceof Error ? hata.message : String(hata); }
+  }
+  return pgSurumuDenetle({
+    sunucu: sunucuAnaSurumu(sunucu.surumNo), sunucuMetni: sunucu.metin, sunucuHatasi, arac,
+    aracSurumu: 'hata' in okunan ? null : aracAnaSurumu(okunan.cikti), aracYolu: yol, aracHatasi: 'hata' in okunan ? okunan.hata : null,
+  });
+}
+
+export type YedekSurumDenetimi = (ortam: YedekOrtami) => Promise<PgSurumu>;
+
+const surumDenetimi: YedekSurumDenetimi = (ortam) => pgSurumunuDenetle('pg_dump', ortam.pgDump.dosya, ortam.pgDump.hata, baglanarakOku(ortam.pg));
+
+// Ekran ve sağlık sık sorar: aracın sürümü (alt süreç) aynı yol için bir süre saklanır; sunucunun sürümü her seferinde okunur.
+const ARAC_SURUMU_SAKLAMA_MS = 10 * 60_000;
+const aracSurumleri = new Map<string, { son: number; sonuc: { cikti: string } | { hata: string } }>();
+
+async function saklananAracSurumu(dosya: string, ad: 'pg_dump' | 'pg_basebackup'): Promise<{ cikti: string } | { hata: string }> {
+  const simdi = Date.now();
+  const kayit = aracSurumleri.get(dosya);
+  if (kayit !== undefined && kayit.son > simdi) return kayit.sonuc;
+  const sonuc = await aracSurumuOku(dosya, ad);
+  aracSurumleri.set(dosya, { son: simdi + ARAC_SURUMU_SAKLAMA_MS, sonuc });
+  return sonuc;
 }
 
 // Büyük veritabanında bile bir gece yedeği bu süreyi aşmaz; aşan pg_dump takılmıştır, durdurulur.
@@ -175,9 +254,9 @@ export function surenYedek(): Promise<unknown> | null {
 }
 
 // Alt sürece sunucunun TMIV2_ değişkenleri (parolalar, anahtarlar) geçmez; yalnız işletim sisteminin ve PostgreSQL'in ortamı.
-function altSurecOrtami(parola: string): NodeJS.ProcessEnv {
+function altSurecOrtami(parola: string | null): NodeJS.ProcessEnv {
   const ortam = Object.fromEntries(Object.entries(process.env).filter(([ad]) => !ad.toUpperCase().startsWith('TMIV2_')));
-  return { ...ortam, PGPASSWORD: parola };
+  return parola === null ? ortam : { ...ortam, PGPASSWORD: parola };
 }
 
 // Veritabanı yedeği ve medya aynası aynı biçimi yazar: ikisi de aynı anahtar ve aynı çözücüyle açılır.
@@ -255,7 +334,9 @@ export async function yedekYeriniDenetle(dizin: string, veritabani: string, bosY
 
 // Yarım dosya `.yarim` ekiyle yazılır, bitince adına taşınır: listede ve indirmede yalnız tamamlanmış yedek görünür.
 // Durum denetimi ve kaydı ilk beklemeden önce, eşzamanlı yapılır; iki çağrı arasında ikinci yedek başlayamaz.
-export function yedekAl(ortam: YedekOrtami, dizin: string, tur: YedekTuru, simdi: Date, bosYer: BosYerOkuyucu = bosYerOku): Promise<YedekDosyasi> {
+export function yedekAl(
+  ortam: YedekOrtami, dizin: string, tur: YedekTuru, simdi: Date, bosYer: BosYerOkuyucu = bosYerOku, surumDenetle: YedekSurumDenetimi = surumDenetimi,
+): Promise<YedekDosyasi> {
   if (suren !== null) return Promise.reject(cakisma('Bir yedek zaten alınıyor; bitince yeniden deneyin.'));
   let anahtar: Buffer;
   try { anahtar = anahtarIste(ortam); } catch (hata) { return Promise.reject(hata as Error); }
@@ -264,6 +345,8 @@ export function yedekAl(ortam: YedekOrtami, dizin: string, tur: YedekTuru, simdi
   const is = (async () => {
     try {
       await yedekYeriniDenetle(dizin, ortam.pg.veritabani, bosYer);
+      const surum = await surumDenetle(ortam);
+      if (!surum.uyumlu) throw gecersiz(surum.ileti ?? 'PostgreSQL sürümü denetlenemedi; yedek alınmadı.');
       await pgDumpCalistir(ortam.pgDump, ortam.pg, anahtar, hedef + YARIM_EKI);
       await rename(hedef + YARIM_EKI, hedef);
       sonHata = null;
@@ -324,7 +407,9 @@ export async function yedekleriTemizle(dizin: string, veritabani: string, simdi:
 }
 
 // Gece işi: bugünün yedeği yoksa ve saat geldiyse alır, sonra eskileri siler. Klasör yoksa bekler, hata vermez.
-export async function geceYedegiTuru(db: Db, gunluk: Gunluk, ortam: YedekOrtami, simdi: Date): Promise<void | IsBekliyor> {
+export async function geceYedegiTuru(
+  db: Db, gunluk: Gunluk, ortam: YedekOrtami, simdi: Date, surumDenetle: YedekSurumDenetimi = surumDenetimi,
+): Promise<void | IsBekliyor> {
   const dizin = await acikDizin(ortam.dizin);
   if (dizin === null) return isBekliyor(KAPALI_ILETISI);
   if (ortam.anahtar.durum !== 'tamam') return isBekliyor(ortam.anahtar.ileti);
@@ -335,7 +420,7 @@ export async function geceYedegiTuru(db: Db, gunluk: Gunluk, ortam: YedekOrtami,
       nabiz(db).catch((hata: unknown) => { gunluk.uyar('Yedek sürerken veritabanı nabzı gitmedi', hata); });
     }, NABIZ_MS);
     try {
-      await yedekAl(ortam, dizin, 'gece', simdi);
+      await yedekAl(ortam, dizin, 'gece', simdi, bosYerOku, surumDenetle);
     } finally {
       clearInterval(sayac);
     }
@@ -343,7 +428,8 @@ export async function geceYedegiTuru(db: Db, gunluk: Gunluk, ortam: YedekOrtami,
   await yedekleriTemizle(dizin, ortam.pg.veritabani, simdi, gunluk);
 }
 
-export async function yedekleriListele(ortam: YedekOrtami): Promise<YedekListesi> {
+// Veritabanı bağlantısı verilirse sürüm denetimi de listeye girer (Sistem Ayarları ve sağlık); verilmezse pgSurumu null.
+export async function yedekleriListele(ortam: YedekOrtami, db?: Db): Promise<YedekListesi> {
   const dizin = await acikDizin(ortam.dizin);
   const durum: YedekDurumu = dizin === null ? 'dizin-yok' : ortam.anahtar.durum !== 'tamam' ? 'anahtar-yok' : 'acik';
   const yedekler: Yedek[] = [];
@@ -362,12 +448,13 @@ export async function yedekleriListele(ortam: YedekOrtami): Promise<YedekListesi
     yedekler,
     dizin: ortam.dizin,
     kaynak: ortam.kaynak,
+    pgSurumu: db === undefined ? null : await pgSurumunuDenetle('pg_dump', ortam.pgDump.dosya, ortam.pgDump.hata, () => sunucuSurumu(db), saklananAracSurumu),
   };
 }
 
 // Yedek ekranı listeye yer tahminini ve dosya deposunun doluluğunu ekler (kart 1763). Yedek kapalıysa yer tahmini yoktur.
 export async function yedekEkrani(db: Db, ortam: YedekOrtami, bosYer: BosYerOkuyucu = bosYerOku): Promise<YedeklerCevabi> {
-  const liste = await yedekleriListele(ortam);
+  const liste = await yedekleriListele(ortam, db);
   const dizin = await acikDizin(ortam.dizin);
   const alan = dizin === null ? null : yedekAlaniHesapla({
     sonBoyut: liste.yedekler[0]?.boyut ?? null,

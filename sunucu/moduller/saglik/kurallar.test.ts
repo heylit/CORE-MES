@@ -57,6 +57,15 @@ test('uyarı (yedek): 26 saatten eski, hiç yok, kapalı ya da okunamadı; tam 2
   assert.deepEqual(yedek(null), [{ tur: 'yedek', ileti: 'Yedek durumu okunamadı.' }]);
 });
 
+test('uyarı (yedek, 2306): PostgreSQL sürümü uyuşmazsa yedek kapalı sayılır ve neden yazılır; son yedeğin yaşından önce gelir', () => {
+  const yedek = (y: UyariGirdisi['yedek']) => uyarilar({ ...temiz, yedek: y });
+  const surum = { sunucu: 18, sunucuMetni: 'PostgreSQL 18.1', pgDump: 16, pgDumpYolu: 'pg_dump', uyumlu: false, ileti: 'pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.' };
+  assert.deepEqual(yedek({ durum: 'acik', sonYedek: once(50 * 60), pgSurumu: surum }),
+    [{ tur: 'yedek', ileti: 'Yedek kapalı: pg_dump ana sürümü 16, veritabanı sunucusu 18: uyuşmuyor, yedek alınmadı.' }]);
+  assert.deepEqual(yedek({ durum: 'acik', sonYedek: once(60), pgSurumu: { ...surum, pgDump: 18, uyumlu: true, ileti: null } }), []);
+  assert.deepEqual(yedek({ durum: 'acik', sonYedek: once(60), pgSurumu: null }), []);
+});
+
 test('uyarı (iş): son tur hata, 30 dakikadan uzun süren tur, aralığın 3 katından (en az 30 dk) eski sağlıklı bitiş; iş başına tek uyarı', () => {
   const isle = (...isler: IsDurumu[]) => uyarilar({ ...temiz, isler });
   assert.deepEqual(isle(is('a', { sonSonuc: 'hata', sonHata: 'Uygulama hatası X', sonSaglikliBitis: once(500) })),

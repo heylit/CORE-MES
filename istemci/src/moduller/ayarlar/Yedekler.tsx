@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  DosyaDeposuDurumu, Yedek, YedekAlani, YedekAlCevabi, YedekDiziniCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedeklerCevabi,
+  DosyaDeposuDurumu, PgSurumu, Yedek, YedekAlani, YedekAlCevabi, YedekDiziniCevabi, YedekDiziniKaynagi, YedekDurumu, YedekIndirmeIzniCevabi, YedeklerCevabi,
 } from '#paylasilan/sozlesme/ayarlar.ts';
 import type { DisKopyaKaydi, GunIciKoruma as GunIciKorumaVerisi, WalArsivi } from '#paylasilan/sozlesme/saglik.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -55,6 +55,30 @@ function YedekAlaniSatiri({ alan, depo }: { alan: YedekAlani | null; depo: Dosya
         <p className="tc-ayar-aciklama">
           {`Dosya deposu ${alanMetni(depo.bayt)} / ${alanMetni(depo.sinir)}. Dosyalar veritabanında durur ve her yedeğe girer; depo büyüdükçe yedek de büyür.`}
         </p>
+      </div>
+    </div>
+  );
+}
+
+// Kart 2306 (2305-1 b): sürüm sunucudan otomatik okunur, burada yalnız gösterilir; elle seçilmez. Uyuşmazsa yedek alınmaz.
+function PgSurumuSatiri({ surum }: { surum: PgSurumu | null }) {
+  if (surum === null) return null;
+  const okunan = (n: number | null): string => (n === null ? 'okunamadı' : String(n));
+  const rozet = surum.uyumlu ? <Rozet ton="tamam">Uyumlu</Rozet>
+    : surum.sunucu !== null && surum.pgDump !== null ? <Rozet ton="hata">Uyuşmuyor</Rozet>
+      : <Rozet ton="hata">Denetlenemedi</Rozet>;
+  return (
+    <div className="tc-ayar">
+      <div className="tc-ayar-metin">
+        <p className="tc-ayar-baslik">PostgreSQL sürümü {rozet}</p>
+        <p className="tc-ayar-aciklama">
+          {`Veritabanı sunucusu ${okunan(surum.sunucu)}, yedek aracı (pg_dump) ${okunan(surum.pgDump)}. Sürüm sunucudan kendiliğinden okunur; yedek yalnız ikisi aynıysa alınır.`}
+        </p>
+        {surum.sunucuMetni !== null && <p className="tc-ayar-aciklama">{surum.sunucuMetni}</p>}
+        {surum.pgDumpYolu !== null && <p className="tc-ayar-aciklama">{`pg_dump: ${surum.pgDumpYolu}`}</p>}
+        {surum.ileti !== null && (
+          <p className="tc-ayar-aciklama" role="alert"><Rozet ton="hata">Yedek alınmıyor</Rozet> {surum.ileti}</p>
+        )}
       </div>
     </div>
   );
@@ -248,6 +272,7 @@ export function Yedekler() {
               </Dugme>
             </div>
           </div>
+          <PgSurumuSatiri surum={veri.pgSurumu ?? null} />
           <GunIciKoruma />
           <YedekAlaniSatiri alan={veri.alan} depo={veri.dosyaDeposu} />
           <KlasorSecimi dizin={veri.dizin} kaynak={veri.kaynak} />

@@ -3,7 +3,7 @@ import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import type { HavuzDurumu } from '#cekirdek/db.ts';
 import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
-import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { PgSurumu, YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
   DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
@@ -56,6 +56,8 @@ export interface YedekBilgisi {
   sonDeneme?: GeriYuklemeDenemesi | null;
   // Şifreli dış kopya kaydı (2282b): kayıt yoksa iki alan null, okunmadıysa verilmez.
   disKopya?: DisKopyaDurumu;
+  // PostgreSQL sürüm denetimi (2306): denetlenmediyse null ya da verilmez.
+  pgSurumu?: PgSurumu | null;
 }
 
 export interface UyariGirdisi {
@@ -81,6 +83,8 @@ export function yedekUyarisi(yedek: YedekBilgisi | null, simdi: Date): string | 
   if (yedek === null) return 'Yedek durumu okunamadı.';
   if (yedek.durum === 'dizin-yok') return 'Yedek kapalı: yedek klasörü seçilmemiş ya da erişilemiyor.';
   if (yedek.durum === 'anahtar-yok') return 'Yedek kapalı: yedek şifreleme anahtarı yok.';
+  // Sürüm uyuşmazlığında her yedek reddedilir: son yedeğin yaşından önce gelir.
+  if (yedek.pgSurumu?.uyumlu === false) return `Yedek kapalı: ${yedek.pgSurumu.ileti ?? 'PostgreSQL sürümü denetlenemedi.'}`;
   if (yedek.sonYedek === null) return 'Hiç yedek alınmamış.';
   const saat = Math.floor((simdi.getTime() - yedek.sonYedek.getTime()) / 3_600_000);
   return simdi.getTime() - yedek.sonYedek.getTime() > YEDEK_EN_ESKI_SAAT * 3_600_000 ? `Son yedek ${saat} saat önce alındı.` : null;
