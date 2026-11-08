@@ -5,7 +5,7 @@ import type { TabloOlcusu, VtIstatistigi } from './sorgular.ts';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { YedekDurumu } from '#paylasilan/sozlesme/ayarlar.ts';
 import type {
-  DiskDurumu, GeriYuklemeDenemesi, VeritabaniBuyumesi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
+  DisKopyaKaydi, DiskDurumu, GeriYuklemeDenemesi, GunIciKoruma, VeritabaniBuyumesi, WalArsivi, IsDurumuOzeti, IstekOzeti, MetrikDakikasi, OtomatikAcilis, SaatlikAralik, SaatOzeti, UcOzeti, Uyari,
 } from '#paylasilan/sozlesme/saglik.ts';
 
 const COMMIT_BICIMI = /^[0-9a-f]{40}$/;
@@ -54,6 +54,8 @@ export interface YedekBilgisi {
   sonYedek: Date | null;
   // Yedek klasöründeki deneme kaydının son satırı (1670): kayıt yoksa null, okunmadıysa verilmez.
   sonDeneme?: GeriYuklemeDenemesi | null;
+  // Şifreli dış kopya kaydı (2282b): kayıt yoksa iki alan null, okunmadıysa verilmez.
+  disKopya?: DisKopyaDurumu;
 }
 
 export interface UyariGirdisi {
@@ -66,6 +68,8 @@ export interface UyariGirdisi {
   veritabaniDiski: DiskDurumu | null | undefined;
   // Açık eşik uyarılarının iletileri (1663).
   esikler?: readonly string[];
+  // Veritabanından okunamadıysa ya da verilmediyse null: arşiv uyarısı yok.
+  walArsivi?: WalArsivi | null;
 }
 
 const dakika = (ms: number): number => Math.floor(ms / 60_000);
@@ -107,6 +111,7 @@ export function uyarilar(g: UyariGirdisi): Uyari[] {
   // Kayıt okunmadıysa (undefined) bilinmez, uyarı yok; okunup yoksa (null) hiç denenmemiştir.
   const deneme = g.yedek === null || g.yedek.durum !== 'acik' || g.yedek.sonDeneme === undefined ? null : denemeUyarisi(g.yedek.sonDeneme, g.simdi);
   if (deneme !== null) sonuc.push({ tur: 'yedek', ileti: deneme });
+  for (const ileti of gunIciUyarilari(g.walArsivi ?? null, g.yedek?.disKopya, g.simdi)) sonuc.push({ tur: 'yedek', ileti });
   for (const ileti of g.esikler ?? []) sonuc.push({ tur: 'esik', ileti });
   return sonuc;
 }
@@ -471,6 +476,79 @@ export function denemeUyarisi(d: GeriYuklemeDenemesi | null, simdi: Date): strin
   if (d.sonuc === 'basarisiz') return `Son geri yükleme denemesi başarısız oldu (${d.hata ?? 'ayrıntı yok'}).`;
   const gun = Math.floor((simdi.getTime() - new Date(d.zaman).getTime()) / 86_400_000);
   return gun > DENEME_EN_ESKI_GUN ? `Son geri yükleme denemesi ${gun} gün önce yapıldı.` : null;
+}
+
+// Şifreli dış kopya kaydı (2290, 2282b). Kaydı araç yazar (araclar/yedek.ts dis-kopya), sunucu okur: dosya adı ve satır burada tektir.
+export const DIS_KOPYA_KAYDI_DOSYASI = 'dis-kopya.jsonl';
+// Diskler haftalık döner (2283-2 a); bir haftanın üstüne bir gün pay.
+export const DIS_KOPYA_EN_ESKI_GUN = 8;
+// Arşiv açıkken WAL en geç archive_timeout (kurulum/yedek.md: 5 dakika) dolunca arşivlenir; dakikalık ölçü işi her dakika yazdığı
+// için segment boş kalmaz. Bir saat, yeniden açılış ve yoğun saatlerin payıyla (VARSAYIM).
+export const ARSIV_EN_ESKI_DAKIKA = 60;
+
+export const disKopyaSatiri = (k: DisKopyaKaydi): string => `${JSON.stringify(k)}\n`;
+
+export interface DisKopyaDurumu { son: DisKopyaKaydi | null; sonBasarili: DisKopyaKaydi | null }
+
+// Bozuk ya da yarım satır atlanır. Birden çok kayıt dosyası (ekrandan seçilen klasör ve TMIV2_YEDEK_DIZINI) birlikte verilebilir:
+// sıra dosya sırası değil, zamandır.
+export function disKopyaDurumu(metinler: readonly string[], gecerli: (deger: unknown) => deger is DisKopyaKaydi): DisKopyaDurumu {
+  const kayitlar: DisKopyaKaydi[] = [];
+  for (const metin of metinler) {
+    for (const satir of metin.split(/\r?\n/)) {
+      if (satir.trim() === '') continue;
+      try {
+        const deger: unknown = JSON.parse(satir);
+        if (gecerli(deger)) kayitlar.push(deger);
+      } catch {
+        continue;
+      }
+    }
+  }
+  const an = (k: DisKopyaKaydi): number => new Date(k.zaman).getTime();
+  let son: DisKopyaKaydi | null = null;
+  let sonBasarili: DisKopyaKaydi | null = null;
+  for (const k of kayitlar) {
+    if (son === null || an(k) >= an(son)) son = k;
+    if (k.sonuc === 'basarili' && (sonBasarili === null || an(k) >= an(sonBasarili))) sonBasarili = k;
+  }
+  return { son, sonBasarili };
+}
+
+const gunFarki = (simdi: Date, zaman: string): number => Math.floor((simdi.getTime() - new Date(zaman).getTime()) / 86_400_000);
+
+// Arşiv takıldı: son hata son başarılı arşivden yeni (PostgreSQL başarısız komutu birkaç saniyede bir yeniden dener, hata zamanı
+// tazelenir) ya da son arşiv bir saatten eski. Arşiv kapalıysa (kurulmamış) uyarı yok; ekran durumu ayrıca gösterir.
+export function walArsivUyarisi(w: WalArsivi | null, simdi: Date): string | null {
+  if (w === null || !w.acik) return null;
+  const sonArsiv = w.sonArsivZamani === null ? null : new Date(w.sonArsivZamani).getTime();
+  if (w.sonHataZamani !== null && (sonArsiv === null || new Date(w.sonHataZamani).getTime() > sonArsiv)) {
+    return `WAL arşivi takıldı: ${w.sonHataWal ?? 'WAL'} arşivlenemiyor; PostgreSQL günlüğüne bakın (kurulum/yedek.md, Arşiv sağlığı).`;
+  }
+  if (sonArsiv !== null && simdi.getTime() - sonArsiv > ARSIV_EN_ESKI_DAKIKA * 60_000) {
+    return `WAL arşivi ${dakika(simdi.getTime() - sonArsiv)} dakikadır yazılmadı.`;
+  }
+  return null;
+}
+
+// Dış kopya yalnız WAL arşivi açıkken beklenir (kopyalanacak şey arşivdir). Kayıt okunmadıysa (undefined) bilinmez, uyarı yok.
+export function disKopyaUyarisi(walAcik: boolean, d: DisKopyaDurumu | undefined, simdi: Date): string | null {
+  if (!walAcik || d === undefined) return null;
+  if (d.son !== null && d.son.sonuc === 'basarisiz') return `Son şifreli dış kopya başarısız oldu (${d.son.hata ?? 'ayrıntı yok'}).`;
+  if (d.sonBasarili === null) return 'WAL arşivinin şifreli dış kopyası hiç alınmamış (npm run yedek -- dis-kopya).';
+  const gun = gunFarki(simdi, d.sonBasarili.zaman);
+  return gun > DIS_KOPYA_EN_ESKI_GUN ? `Son şifreli dış kopya ${String(gun)} gün önce alındı; diski değiştirip yeni kopya alın.` : null;
+}
+
+export function gunIciUyarilari(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date): string[] {
+  return [walArsivUyarisi(w, simdi), disKopyaUyarisi(w?.acik === true, d, simdi)].filter((u): u is string => u !== null);
+}
+
+export function gunIciKoruma(w: WalArsivi | null, d: DisKopyaDurumu | undefined, simdi: Date): GunIciKoruma {
+  return {
+    walArsivi: w, sonDisKopya: d?.son ?? null, sonBasariliDisKopya: d?.sonBasarili ?? null,
+    walUyarisi: walArsivUyarisi(w, simdi), disKopyaUyarisi: disKopyaUyarisi(w?.acik === true, d, simdi),
+  };
 }
 
 // Veritabanı büyümesi (1761). Ölü satır oranı tablodaki ölü satırın payıdır; tablo boşsa (ikisi de sıfır) ölçü yok, null.

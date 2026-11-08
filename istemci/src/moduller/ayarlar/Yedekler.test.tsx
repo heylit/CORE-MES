@@ -5,10 +5,11 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { Yedek, YedeklerCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
+import type { Ayrinti, GunIciKoruma } from '#paylasilan/sozlesme/saglik.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { SistemAyarlari } from './SistemAyarlari.tsx';
-import { alanMetni, boyutMetni } from './Yedekler.tsx';
+import { alanMetni, boyutMetni, tabanMetni } from './Yedekler.tsx';
 
 // Sunucunun gerçek cevap biçimi; değerler denemedir.
 const YEDEK: Yedek = { ad: 'tmiv2-20261013T230000Z-gece.dump', tur: 'gece', zaman: '2026-10-13T23:00:00.000Z', boyut: 5 * 1024 * 1024 };
@@ -16,6 +17,22 @@ const ACIK: YedeklerCevabi = {
   durum: 'acik', dizin: 'D:\\TMIV2-YEDEK', kaynak: 'ortam', saat: 2, saklamaGun: 14, enAzKalan: 3, suruyor: null, sonHata: null, yedekler: [YEDEK],
   alan: { sonBoyut: YEDEK.boyut, adet: 15, gereken: 15 * YEDEK.boyut, mevcut: YEDEK.boyut, bosYer: 10 * 1024 ** 3, yetmiyor: false },
   dosyaDeposu: { bayt: 2 * 1024 ** 3, sinir: 50 * 1024 ** 3, uyari: false },
+};
+// Ayrıntı cevabının bölümün okumadığı alanları; değerler denemedir.
+const AYRINTI: Ayrinti = {
+  veritabaniGecikmeMs: 1, sonGoc: null, commit: null, calismaSuresiSn: 1, ortam: 'test', isler: [], uyarilar: [],
+};
+const KOPYA = {
+  zaman: '2026-10-30T09:00:00.000Z', sonuc: 'basarili' as const, hedef: 'F:\\', taban: '20261101', tabanBayt: 3 * 1024 ** 3, walAdet: 120, walBayt: 2 * 1024 ** 3, hata: null,
+};
+const TAKILDI: GunIciKoruma = {
+  walArsivi: {
+    acik: true, sonArsivZamani: '2026-11-08T07:00:00.000Z', sonArsivWal: '000000010000000000000009', hataSayisi: 4,
+    sonHataZamani: '2026-11-08T07:05:00.000Z', sonHataWal: '00000001000000000000000A',
+  },
+  sonDisKopya: KOPYA, sonBasariliDisKopya: KOPYA,
+  walUyarisi: 'WAL arşivi takıldı: 00000001000000000000000A arşivlenemiyor; PostgreSQL günlüğüne bakın (kurulum/yedek.md, Arşiv sağlığı).',
+  disKopyaUyarisi: 'Son şifreli dış kopya 9 gün önce alındı; diski değiştirip yeni kopya alın.',
 };
 const CAKISMA = { kod: 'CAKISMA', mesaj: 'Bir yedek zaten alınıyor; bitince yeniden deneyin.' } satisfies HataGovdesi;
 
@@ -25,6 +42,7 @@ function sunucuKur(
   liste: YedeklerCevabi,
   al: () => Response = () => json(200, { baslangic: '2026-10-14T06:00:00.000Z' }),
   dizin: (govde: unknown) => Response = () => json(404, {}),
+  gunIci?: GunIciKoruma,
 ) {
   const istekler: { yontem: string; yol: string; govde?: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek: { method?: string; body?: string } = {}) => {
@@ -35,6 +53,7 @@ function sunucuKur(
     if (yol === '/ayarlar') return json(200, { ayarlar: [] });
     if (yol === '/kurum-logosu') return json(200, { logo: null });
     if (yol === '/yedekler') return json(200, liste);
+    if (yol === '/saglik/ayrinti') return json(200, { ...AYRINTI, ...(gunIci === undefined ? {} : { gunIciKoruma: gunIci }) });
     if (yol === '/yedekler/al') return al();
     if (yol === `/yedekler/${YEDEK.ad}/indirme-izni`) return json(200, { izin: 'deneme-izni' });
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -176,6 +195,45 @@ describe('Sistem Ayarları, yedekler', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
     expect(await screen.findByText(/Dosya deposu 2 GB/)).toBeTruthy();
     expect(screen.queryByText(/Tahmini yedek alanı/)).toBeNull();
+  });
+
+  it('gün içi koruma: son arşiv, hata, son taban ve dış kopya tesis saatiyle yazılır; takılan arşiv ve eski dış kopya uyarılır', async () => {
+    sunucuKur(ACIK, undefined, undefined, TAKILDI);
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('WAL arşivi takıldı')).toBeTruthy();
+    expect(screen.getByText('Dış kopya eski ya da eksik')).toBeTruthy();
+    expect(screen.getByText('Son arşiv 08.11.2026 10:00. Arşiv hatası 4, sonuncusu 08.11.2026 10:05.')).toBeTruthy();
+    expect(screen.getByText('Son taban yedek 01.11.2026, 3 GB (son dış kopyadaki).')).toBeTruthy();
+    expect(screen.getByText('Son dış kopya 30.10.2026 12:00. 120 WAL dosyası (2 GB).')).toBeTruthy();
+    expect(screen.getAllByRole('alert').map((a) => a.textContent)).toEqual([
+      `Uyarı ${TAKILDI.walUyarisi ?? ''}`, `Uyarı ${TAKILDI.disKopyaUyarisi ?? ''}`,
+    ]);
+  });
+
+  it('gün içi koruma: arşiv kapalıysa kapalı yazılır, uyarı yok; ayrıntı işlemi olmayana bölüm çıkmaz ve ayrıntı istenmez', async () => {
+    sunucuKur(ACIK, undefined, undefined, {
+      walArsivi: { acik: false, sonArsivZamani: null, sonArsivWal: null, hataSayisi: 0, sonHataZamani: null, sonHataWal: null },
+      sonDisKopya: null, sonBasariliDisKopya: null, walUyarisi: null, disKopyaUyarisi: null,
+    });
+    ac([...YONETICI, 'saglik.ayrinti-oku']);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('WAL arşivi kapalı')).toBeTruthy();
+    expect(screen.getByText(/gün içi kayıt yalnız gece yedeğiyle korunur/)).toBeTruthy();
+    expect(screen.getByText('Şifreli dış kopya hiç alınmamış.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    cleanup();
+    const istekler = sunucuKur(ACIK, undefined, undefined, TAKILDI);
+    ac(YONETICI);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Yedekler' }));
+    expect(await screen.findByText('Yedek açık')).toBeTruthy();
+    expect(screen.queryByText(/Gün içi koruma/)).toBeNull();
+    expect(istekler.some((i) => i.yol === '/saglik/ayrinti')).toBe(false);
+  });
+
+  it('taban yedek adı yyyyMMdd ise tarih, değilse olduğu gibi yazılır', () => {
+    expect(tabanMetni('20261108')).toBe('08.11.2026');
+    expect(tabanMetni('elle-1')).toBe('elle-1');
   });
 
   it('alan 1 GB altında boyut gibi, üstünde GB olarak yazılır', () => {

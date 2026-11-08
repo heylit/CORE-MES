@@ -57,6 +57,44 @@ export const geriYuklemeDenemesiSemasi = z.object({
   hata: z.string().nullable(),
 });
 
+// Şifreli dış kopya (2283-2 a, kart 2290): `npm run yedek -- dis-kopya` her çalıştırmada yedek klasöründeki kayda bir satır ekler;
+// disk çıkarılınca sunucu son kopyayı yalnız bu kayıttan bilir. Başarısız satırda taban ve sayılar null, hata dolu.
+export const DIS_KOPYA_SONUCLARI = ['basarili', 'basarisiz'] as const;
+export const disKopyaKaydiSemasi = z.object({
+  zaman: zamanSemasi,
+  sonuc: z.enum(DIS_KOPYA_SONUCLARI),
+  // Hedef diskin yolu (örnek `F:\`).
+  hedef: z.string(),
+  // Kopyalanan taban yedeğin klasör adı (kurulum/yedek.md: yyyyMMdd).
+  taban: z.string().nullable(),
+  tabanBayt: z.number().int().nonnegative().nullable(),
+  walAdet: z.number().int().nonnegative().nullable(),
+  walBayt: z.number().int().nonnegative().nullable(),
+  hata: z.string().nullable(),
+});
+
+// PostgreSQL WAL arşivi (2276-1 a): pg_stat_archiver ve archive_mode. Hiç arşivlenmemiş ya da hiç hata olmamışsa ilgili alanlar null.
+export const walArsiviSemasi = z.object({
+  acik: z.boolean(),
+  sonArsivZamani: zamanSemasi.nullable(),
+  sonArsivWal: z.string().nullable(),
+  hataSayisi: z.number().int().nonnegative(),
+  sonHataZamani: zamanSemasi.nullable(),
+  sonHataWal: z.string().nullable(),
+});
+
+// Yedekler sekmesindeki "Gün içi koruma" (2282b). Uyarılar sunucu kuralıdır; aynı metinler genel uyarı listesinde de vardır.
+export const gunIciKorumaSemasi = z.object({
+  // Veritabanı okunamadıysa null.
+  walArsivi: walArsiviSemasi.nullable(),
+  // Kayıt dosyası okunamadıysa ya da hiç satır yoksa null. Son kayıt başarısız olabilir; son başarılı ayrıca verilir.
+  sonDisKopya: disKopyaKaydiSemasi.nullable(),
+  sonBasariliDisKopya: disKopyaKaydiSemasi.nullable(),
+  // Arşiv takıldı ya da dış kopya eski, başarısız, hiç yok; yoksa null.
+  walUyarisi: z.string().nullable(),
+  disKopyaUyarisi: z.string().nullable(),
+});
+
 // Veritabanı büyümesi (1761): saklama kararı (1764 a) üç ay bu ölçüyle verilecek. Satır sayıları PostgreSQL istatistik
 // tahminidir; ölü satır oranı canlı ve ölü toplamı sıfırsa null. Hiç autovacuum ya da autoanalyze koşmamışsa zaman null.
 export const tabloBuyukluguSemasi = z.object({
@@ -106,6 +144,8 @@ export const ayrintiCevabi = z.object({
   geriYuklemeDenemesi: geriYuklemeDenemesiSemasi.nullable().optional(),
   // Veritabanı okunamadıysa null. Eski istemci kırılmasın diye isteğe bağlı.
   veritabaniBuyumesi: veritabaniBuyumesiSemasi.nullable().optional(),
+  // Gün içi koruma (2282b): WAL arşivi ve şifreli dış kopya. Eski istemci kırılmasın diye isteğe bağlı.
+  gunIciKoruma: gunIciKorumaSemasi.optional(),
 });
 
 const sayi = z.number().int().nonnegative();
@@ -206,6 +246,9 @@ export type SaatOzeti = z.output<typeof saatOzetiSemasi>;
 export type TabloBuyuklugu = z.output<typeof tabloBuyukluguSemasi>;
 export type VeritabaniBuyumesi = z.output<typeof veritabaniBuyumesiSemasi>;
 export type GeriYuklemeDenemesi = z.output<typeof geriYuklemeDenemesiSemasi>;
+export type DisKopyaKaydi = z.output<typeof disKopyaKaydiSemasi>;
+export type WalArsivi = z.output<typeof walArsiviSemasi>;
+export type GunIciKoruma = z.output<typeof gunIciKorumaSemasi>;
 export type SaatlikAralik = (typeof SAATLIK_ARALIKLAR)[number];
 export type SaatlikCevabi = z.output<typeof saatlikCevabi>;
 export type MetrikDakikasi = z.output<typeof metrikDakikasiSemasi>;

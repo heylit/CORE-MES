@@ -3,11 +3,11 @@ import { test } from 'node:test';
 import type { IsDurumu } from '#cekirdek/zamanlayici.ts';
 import type { UcSayaci } from '#cekirdek/istek-olcumu.ts';
 import {
-  commitSec, diskDurumu, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, anaIsParcacigiYuzdesi, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, oluOraniYuzde, veritabaniBuyumesi, vtOzeti,
+  commitSec, disKopyaDurumu, disKopyaUyarisi, diskDurumu, gunIciKoruma, walArsivUyarisi, kovaYuzdeligi, makineIslemciYuzdesi, ESIK_KURALLARI, anaIsParcacigiYuzdesi, denemeUyarisi, esikGecisleri, metrikDakikasi, ozetlenecekSaatler, saatOzeti, sayacFarki, surecIslemciYuzdesi, ucOzetleri, uyarilar, oluOraniYuzde, veritabaniBuyumesi, vtOzeti,
 } from './kurallar.ts';
 import type { VtIstatistigi } from './sorgular.ts';
 import type { UyariGirdisi } from './kurallar.ts';
-import type { MetrikDakikasi } from '#paylasilan/sozlesme/saglik.ts';
+import type { DisKopyaKaydi, MetrikDakikasi, WalArsivi } from '#paylasilan/sozlesme/saglik.ts';
 
 const GIT = 'a'.repeat(40);
 
@@ -323,4 +323,67 @@ test('veritabanı büyümesi: ölü satır oranı yüzde, boş tablo null; ölç
   assert.equal(veritabaniBuyumesi(null, [tablo]), null);
   assert.equal(veritabaniBuyumesi(vt, null), null);
   assert.deepEqual(veritabaniBuyumesi({ ...vt, enUzunTxSn: null, xidYasi: null }, [])?.tablolar, []);
+});
+
+const kopya = (zaman: string, sonuc: DisKopyaKaydi['sonuc'] = 'basarili'): DisKopyaKaydi => (sonuc === 'basarili'
+  ? { zaman, sonuc, hedef: 'F:\\', taban: '20261101', tabanBayt: 10, walAdet: 3, walBayt: 48, hata: null }
+  : { zaman, sonuc, hedef: 'F:\\', taban: null, tabanBayt: null, walAdet: null, walBayt: null, hata: 'disk yok' });
+const kopyaMi = (d: unknown): d is DisKopyaKaydi => typeof d === 'object' && d !== null && 'zaman' in d && 'sonuc' in d;
+
+test('dış kopya kaydı: bozuk ve yarım satır atlanır; birden çok dosyada sıra zamandır; son başarılı ayrıca bulunur', () => {
+  const a = `${JSON.stringify(kopya('2026-11-01T10:00:00.000Z'))}\n{"zaman":"2026-11-0\n`;
+  const b = `${JSON.stringify(kopya('2026-11-08T10:00:00.000Z', 'basarisiz'))}\r\nbozuk\n${JSON.stringify(kopya('2026-10-25T10:00:00.000Z'))}\n`;
+  const d = disKopyaDurumu([a, b], kopyaMi);
+  assert.equal(d.son?.zaman, '2026-11-08T10:00:00.000Z');
+  assert.equal(d.sonBasarili?.zaman, '2026-11-01T10:00:00.000Z');
+  assert.deepEqual(disKopyaDurumu([], kopyaMi), { son: null, sonBasarili: null });
+  assert.deepEqual(disKopyaDurumu(['', 'x\n'], kopyaMi), { son: null, sonBasarili: null });
+});
+
+const wal = (w: Partial<WalArsivi> = {}): WalArsivi => ({
+  acik: true, sonArsivZamani: '2026-11-08T09:55:00.000Z', sonArsivWal: '000000010000000000000009', hataSayisi: 0, sonHataZamani: null, sonHataWal: null, ...w,
+});
+
+test('WAL arşivi uyarısı: hata son arşivden yeniyse takıldı, son arşiv bir saatten eskiyse yazılmadı; kapalı ya da okunamadıysa yok', () => {
+  const simdi = new Date('2026-11-08T10:00:00Z');
+  assert.equal(walArsivUyarisi(wal(), simdi), null);
+  assert.equal(walArsivUyarisi(null, simdi), null);
+  assert.equal(walArsivUyarisi(wal({ acik: false, sonArsivZamani: null, hataSayisi: 4, sonHataZamani: '2026-11-08T09:59:00.000Z' }), simdi), null);
+  assert.match(walArsivUyarisi(wal({ hataSayisi: 7, sonHataZamani: '2026-11-08T09:59:00.000Z', sonHataWal: '00000001000000000000000A' }), simdi) ?? '',
+    /^WAL arşivi takıldı: 00000001000000000000000A arşivlenemiyor/);
+  assert.match(walArsivUyarisi(wal({ sonArsivZamani: null, hataSayisi: 1, sonHataZamani: '2026-11-08T09:59:00.000Z' }), simdi) ?? '', /takıldı/);
+  // Eski hata yeni bir arşivle geçmişse uyarı yok.
+  assert.equal(walArsivUyarisi(wal({ hataSayisi: 2, sonHataZamani: '2026-11-08T09:00:00.000Z' }), simdi), null);
+  assert.equal(walArsivUyarisi(wal({ sonArsivZamani: '2026-11-08T09:00:00.000Z' }), simdi), null);
+  assert.equal(walArsivUyarisi(wal({ sonArsivZamani: '2026-11-08T08:45:00.000Z' }), simdi), 'WAL arşivi 75 dakikadır yazılmadı.');
+  assert.equal(walArsivUyarisi(wal({ sonArsivZamani: null }), simdi), null);
+});
+
+test('dış kopya uyarısı: 8 günden eski, hiç yok ya da son deneme başarısızsa; WAL arşivi kapalıyken ya da kayıt okunmadıysa yok', () => {
+  const simdi = new Date('2026-11-08T10:00:00Z');
+  const yedi = kopya('2026-11-01T09:00:00.000Z');
+  assert.equal(disKopyaUyarisi(true, { son: yedi, sonBasarili: yedi }, simdi), null);
+  const dokuz = kopya('2026-10-30T09:00:00.000Z');
+  assert.equal(disKopyaUyarisi(true, { son: dokuz, sonBasarili: dokuz }, simdi), 'Son şifreli dış kopya 9 gün önce alındı; diski değiştirip yeni kopya alın.');
+  assert.equal(disKopyaUyarisi(true, { son: null, sonBasarili: null }, simdi), 'WAL arşivinin şifreli dış kopyası hiç alınmamış (npm run yedek -- dis-kopya).');
+  const kotu = kopya('2026-11-08T09:00:00.000Z', 'basarisiz');
+  assert.equal(disKopyaUyarisi(true, { son: kotu, sonBasarili: yedi }, simdi), 'Son şifreli dış kopya başarısız oldu (disk yok).');
+  assert.equal(disKopyaUyarisi(false, { son: null, sonBasarili: null }, simdi), null);
+  assert.equal(disKopyaUyarisi(true, undefined, simdi), null);
+});
+
+test('gün içi koruma: ekran özeti ve genel uyarı listesi aynı metni taşır', () => {
+  const simdi = new Date('2026-11-08T10:00:00Z');
+  const w = wal({ hataSayisi: 1, sonHataZamani: '2026-11-08T09:59:00.000Z' });
+  const d = { son: null, sonBasarili: null };
+  const o = gunIciKoruma(w, d, simdi);
+  assert.equal(o.walArsivi, w);
+  assert.match(o.walUyarisi ?? '', /takıldı/);
+  assert.match(o.disKopyaUyarisi ?? '', /hiç alınmamış/);
+  const genel = uyarilar({
+    simdi, surecBaslangici: simdi, isler: [], yedek: { durum: 'acik', sonYedek: simdi, disKopya: d }, yedekDiski: null, veritabaniDiski: null, walArsivi: w,
+  });
+  assert.deepEqual(genel.map((u) => u.ileti), [o.walUyarisi, o.disKopyaUyarisi]);
+  assert.deepEqual(genel.map((u) => u.tur), ['yedek', 'yedek']);
+  assert.deepEqual(gunIciKoruma(null, undefined, simdi), { walArsivi: null, sonDisKopya: null, sonBasariliDisKopya: null, walUyarisi: null, disKopyaUyarisi: null });
 });

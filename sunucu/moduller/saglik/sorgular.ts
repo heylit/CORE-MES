@@ -18,6 +18,31 @@ export async function vtBaglantiSay(db: Db): Promise<number | null> {
   return satir?.sayi ?? null;
 }
 
+// WAL arşivi (2282b). pg_stat_archiver ve archive_mode süper kullanıcı istemez (kurulum/yedek.md: uygulama kullanıcısıyla denendi).
+// archive_mode 'on' ya da 'always' ise açık; 'off' ise kurulmamış.
+export interface WalArsivSatiri {
+  acik: boolean;
+  sonArsivZamani: Date | null;
+  sonArsivWal: string | null;
+  hataSayisi: number;
+  sonHataZamani: Date | null;
+  sonHataWal: string | null;
+}
+
+export async function walArsiviOku(db: Db): Promise<WalArsivSatiri | null> {
+  const s = await db.tek<{
+    mod: string; son_arsiv: Date | null; son_wal: string | null; hata: number; son_hata: Date | null; hata_wal: string | null;
+  }>(
+    `SELECT current_setting('archive_mode') AS mod, last_archived_time AS son_arsiv, last_archived_wal AS son_wal,
+            failed_count::int AS hata, last_failed_time AS son_hata, last_failed_wal AS hata_wal
+       FROM pg_stat_archiver`,
+  );
+  if (s === null) return null;
+  return {
+    acik: s.mod !== 'off', sonArsivZamani: s.son_arsiv, sonArsivWal: s.son_wal, hataSayisi: s.hata, sonHataZamani: s.son_hata, sonHataWal: s.hata_wal,
+  };
+}
+
 // Dakikalık veritabanı ölçüsü (kart 1661). Yalnız süper kullanıcı istemeyen kaynaklar: pg_stat_database ve pg_stat_activity
 // görünümleri, pg_database_size ve pg_database.datfrozenxid. Sayaçlar açılıştan beri artar; fark kurallar.ts'tedir.
 // Başka rolün bağlantısında durum ve zaman pg_read_all_stats olmadan boş gelir: o satırlar "görünmeyen" sayılır, uydurulmaz.
