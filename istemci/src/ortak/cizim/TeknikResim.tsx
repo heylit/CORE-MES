@@ -772,6 +772,8 @@ function TeknikResimGovdesi({ kontrol }: { kontrol: TeknikResimKontrolu }) {
       ) : (
         <div
           ref={st} tabIndex={-1} className={`tc-ay5-sahne${drag ? ' tc-ay5-surukle' : ''}`} onPointerDown={pd} onPointerMove={pm} onPointerUp={pu} onPointerCancel={pu}
+          // Tarayıcı resmi sürükle-bırak için tutarsa işaretçiyi iptal eder (pointercancel) ve kaydırma ilk adımda durur (2339).
+          onDragStart={(e) => e.preventDefault()}
           onDoubleClick={(e) => { if (adding || (e.target as Element).closest('.tc-ay5-balon')) return; const r = st.current?.getBoundingClientRect(); if (r) zoomAt(1.6, e.clientX - r.left, e.clientY - r.top); }}
         >
           <div ref={tuvalRef} className="tc-ay5-tuval">
