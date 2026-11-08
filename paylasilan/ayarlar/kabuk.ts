@@ -47,6 +47,42 @@ export const KABUK_AYARLARI = {
     baslik: 'Gece karşılamasının başladığı saat',
     aciklama: 'Bu saatten gündüz başlangıcına kadar açanlar ay ve yıldızlı karşılamayı görür (0-23, tesis saati). Boşsa 18 sayılır.',
   },
+  // Kullanıcı kararı (kart 2232, R3): karşılamada her gün değişen atölye sözü ve bayram, anma, hafta ve ay başı notu; ikisi de varsayılan açık.
+  'kabuk.karsilama-soz': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Günün sözü',
+    aciklama: 'Açıkken karşılamada adın altında her gün değişen bir atölye sözü çıkar; aynı söz yılda bir kez gelir. Kapalıyken söz çıkmaz.',
+  },
+  'kabuk.karsilama-gun-notu': {
+    modul: 'kabuk',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Bayram ve anma günü notları',
+    aciklama: "Açıkken resmi ve milli bayramlarda, dini bayramlarda, Pazartesi, Cuma, hafta sonu ve ay başında karşılama metninin yerine günün notu çıkar; milli bayramlarda Türk bayrağı dalgalanır. 10 Kasım'da karşılama sade ve hareketsizdir.",
+  },
+  // Dini bayramların günü her yıl değiştiği için yönetici girer; boşsa o bayramın notu çıkmaz.
+  'kabuk.karsilama-ramazan': {
+    modul: 'kabuk',
+    tur: 'metin',
+    varsayilan: '',
+    enUzun: 40,
+    bosOlabilir: true,
+    bicim: 'tarih-araligi',
+    baslik: 'Ramazan Bayramı (bu yıl)',
+    aciklama: 'Bayramın ilk ve son günü, örneğin 20.03.2026 - 22.03.2026. Bayram günlerinde, önceki son iş gününde ve sonraki ilk iş gününde karşılamada bayram notu çıkar. Boşsa çıkmaz.',
+  },
+  'kabuk.karsilama-kurban': {
+    modul: 'kabuk',
+    tur: 'metin',
+    varsayilan: '',
+    enUzun: 40,
+    bosOlabilir: true,
+    bicim: 'tarih-araligi',
+    baslik: 'Kurban Bayramı (bu yıl)',
+    aciklama: 'Bayramın ilk ve son günü, örneğin 27.05.2026 - 30.05.2026. Bayram günlerinde, önceki son iş gününde ve sonraki ilk iş gününde karşılamada bayram notu çıkar. Boşsa çıkmaz.',
+  },
   // Kullanıcı onayı (kart #880, karar 1942 a): firma adının tek kaynağı; boş başlar, çünkü uygulama adı (CORE) firma adı değildir.
   'kabuk.kurum-adi': {
     modul: 'kabuk',

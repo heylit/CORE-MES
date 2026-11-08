@@ -4,6 +4,7 @@ import { METIN_BICIMLERI } from '../ayar-tanimi.ts';
 import type { AyarTanimi } from '../ayar-tanimi.ts';
 import { istekKimligiMi } from '../istek-kimligi.ts';
 import { kalipHatasi } from '../numara.ts';
+import { tarihAraligiHatasi } from '../tarih-araligi.ts';
 import { zamanSemasi } from '../zaman.ts';
 
 export const SAYI_ONDALIK_EN_COK = 6;
@@ -43,7 +44,7 @@ export function ayarDegerSemasi(tanim: AyarTanimi): z.ZodType<boolean | number |
       .min(bosOlabilir === true ? 0 : 1, 'Metin boş olamaz.')
       .max(tanim.enUzun, `En çok ${String(tanim.enUzun)} karakter olabilir.`)
       .superRefine((metin, ctx) => {
-        const hata = bicim === 'ag-araligi' ? agAraligiHatasi(metin) : null;
+        const hata = bicim === 'ag-araligi' ? agAraligiHatasi(metin) : bicim === 'tarih-araligi' ? tarihAraligiHatasi(metin) : null;
         if (hata !== null) ctx.addIssue({ code: z.ZodIssueCode.custom, message: hata });
       });
   }
@@ -104,12 +105,20 @@ export type Ayar = z.output<typeof ayarSemasi>;
 
 // Girişten sonraki karşılama: her oturum okur, kabuk çizer. Kapalıyken metin yine gelir; çizilmez.
 const saat = z.number().int().min(0).max(23);
+const isoGun = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const tarihAraligi = z.object({ bas: isoGun, bit: isoGun });
 export const karsilamaCevabi = z.object({
   acik: z.boolean(),
   metin: z.string(),
   geceMetni: z.string(),
   gunduzBaslangic: saat,
   geceBaslangic: saat,
+  // Kart 2232 (kullanıcı kararı R3): günün sözü ve özel gün notu kurum genelinde açılıp kapanır.
+  sozAcik: z.boolean(),
+  gunNotuAcik: z.boolean(),
+  // Dini bayramların bu yılki günleri (ISO); yönetici her yıl girer, girilmemiş ya da okunamayan aralık null'dur.
+  ramazanBayrami: tarihAraligi.nullable(),
+  kurbanBayrami: tarihAraligi.nullable(),
 });
 export type KarsilamaCevabi = z.output<typeof karsilamaCevabi>;
 

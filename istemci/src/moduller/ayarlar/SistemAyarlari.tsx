@@ -151,7 +151,8 @@ function MetinSatiri({ ayar, mesgul, degistir }: { ayar: MetinAyari; mesgul: boo
           hata={hata}
           disabled={mesgul}
         />
-        <Dugme type="submit" tur="birincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
+        {/* Sayfada en çok bir birincil düğme kuralı (2155-9): metin satırlarının Kaydet'i çizgilidir. */}
+        <Dugme type="submit" tur="ikincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
       </form>
     </li>
   );

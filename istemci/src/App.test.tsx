@@ -142,7 +142,7 @@ describe('App oturum akisi', () => {
   it('giristen sonra karsilama adiyla bir kez cikar; cikip yeniden giren yeniden karsilanir', async () => {
     window.sessionStorage.clear();
     const metin = 'Deneme karşılama';
-    sunucuKur(null, { karsilama: () => new Response(JSON.stringify({ acik: true, metin, geceMetni: metin, gunduzBaslangic: 6, geceBaslangic: 18 } satisfies KarsilamaCevabi), { status: 200 }) });
+    sunucuKur(null, { karsilama: () => new Response(JSON.stringify({ acik: true, metin, geceMetni: metin, gunduzBaslangic: 6, geceBaslangic: 18, sozAcik: false, gunNotuAcik: false, ramazanBayrami: null, kurbanBayrami: null } satisfies KarsilamaCevabi), { status: 200 }) });
     render(<App />);
     await screen.findByRole('button', { name: 'Giriş yap' });
     girisYap('dogru');
