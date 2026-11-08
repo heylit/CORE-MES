@@ -97,9 +97,10 @@ kopya) şifreli olmalıdır. Bu, gece yedeği için verilen 145 a kararını ("d
 daraltır: düz kopya yalnız sunucunun BitLocker'lı diskinde durabilir. Dışarı kopya yalnız aşağıdaki
 "Şifreli dış kopya" komutuyla alınır; WAL arşivi ve taban yedek elle (Gezgin ile) dışarı kopyalanmaz.
 
-Açık kararlar (kullanıcıda; cevaba kadar aşağıdaki elle yol geçerlidir, her seçenekte de geçerli kalır):
-- 2284-1, haftalık taban yedeği kim alır (uygulamanın zamanlanmış işi, Windows Görev Zamanlayıcı ya da yönetici elle). Cevaba kadar
-  yönetici haftada bir elle alır (Haftalık taban yedek).
+Taban yedeği uygulamanın kendi zamanlanmış işi alır (2284-1 c, ADR 0005 eki, ADR 0010); bağlantı yalnız REPLICATION hakkı olan ayrı
+`tmiv2_yedek` rolüyledir. Elle yol da bu rolle koşar; süper kullanıcı (`postgres`) taban yedek için kullanılmaz.
+
+Açık:
 - Sağlık ekranındaki "son arşivlenen WAL zamanı" satırı ayrı karttadır (2282b); gelene kadar durum psql ile okunur (Arşiv sağlığı).
 
 ### Kurulum (sunucuda bir kez)
@@ -107,11 +108,19 @@ Açık kararlar (kullanıcıda; cevaba kadar aşağıdaki elle yol geçerlidir, 
 A1. İkinci diskte iki klasör açın: `E:\TMIV2-WAL` (WAL arşivi) ve `E:\TMIV2-TABAN` (taban yedekler). Veritabanı diskinde OLMASIN:
     amaç o disk bozulunca veriyi kurtarmaktır. Gece yedeği klasörüyle aynı diskte olabilir, aynı klasörde olmasın.
     Bu disk BitLocker ile şifreli olmalıdır (2283-1 a+e); şifreli değilse WAL arşivi açılmaz.
-A2. Yer: WAL arşivi en kötü durumda günde yaklaşık 5 GB tutar (5 dakikada bir 16 MB'lık dosya; boşta dosya üretilmez). Gerçek
-    büyüklük atölyenin yüküne bağlıdır, BİLMİYORUM; ilk hafta klasör boyutuna bakın. Taban yedek veritabanı boyutu kadardır, iki tane
-    tutulur. Toplam için en az: 2 x veritabanı boyutu + 15 x günlük WAL.
-A3. İzin: iki klasörü yalnız PostgreSQL servis hesabı (servisler listesinde "Oturum Aç" sütunu) ve yöneticiler okuyup yazsın.
-    Uygulamanın servis hesabının bu klasörlere işi yoktur. Klasörler bütün veriyi şifresiz taşır; koruma BitLocker ve bu izindir (2283-1 a+e).
+A2. Yer: `archive_timeout = 300` ile PostgreSQL en geç 5 dakikada bir 16 MB'lık dosya arşivler. Uygulama boşta da her dakika ölçü
+    yazdığı için (sağlık işi) dosyalar boş kalmaz: boşta bile günde yaklaşık 288 x 16 MB = 4,6 GB WAL çıkar (VARSAYIM: hesap;
+    canlıda doğrulanır, aşağıda). Yük arttıkça dosyalar daha sık dolar. WAL, tutulan iki tabanın eskisinden başlar: taban 7 günde
+    bir alındığı için en çok yaklaşık 15 günlük WAL durur (boşta 15 x 4,6 = yaklaşık 70 GB). Taban yedek veritabanı boyutu kadardır;
+    iki tane tutulur, yenisi alınırken kısa süre üç tane olur. Gereken yer: 15 x günlük WAL + 3 x veritabanı boyutu; iş yüzde 80'de
+    uyardığı için disk bunun en az 1,25 katı olmalı. Örnek: 10 GB'lık veritabanı ve boşta yük için (70 + 30) x 1,25 = 125 GB;
+    ikinci disk en az 150 GB seçilsin (VARSAYIM: atölye yükü BİLMİYORUM).
+    Doğrulama (canlının ilk günü): Arşiv sağlığı'ndaki sorguda `archived_count` değerini 24 saat arayla iki kez okuyun; fark x 16 MB
+    günlük WAL'dır. Bu sayı 4,6 GB'tan çok büyükse yukarıdaki hesabı onunla yeniden yapın.
+A3. İzin (klasörler bütün veriyi şifresiz taşır; koruma BitLocker ve bu izindir, 2283-1 a+e). Başka hesap okumaz:
+    - `E:\TMIV2-WAL`: PostgreSQL servis hesabı (servisler listesinde "Oturum Aç" sütunu) yazar; uygulamanın servis hesabı okur ve
+      siler (eski WAL'ı taban yedek işi budar); yöneticiler.
+    - `E:\TMIV2-TABAN`: uygulamanın servis hesabı yazar ve siler (taban yedek işi); yöneticiler.
 A4. `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.conf`) şu satırları yazın:
     ```
     wal_level = replica
@@ -124,7 +133,26 @@ A4. `postgresql.conf`'a (ör. `C:\Program Files\PostgreSQL\18\data\postgresql.co
     seçimidir (kayıp penceresi ile arşiv boyutu arasında), küçültmek arşivi büyütür.
 A5. PostgreSQL servisini yeniden başlatın (`archive_mode` yalnız yeniden başlatmayla açılır). Sonra Arşiv sağlığı'ndaki sorguyla
     ilk dosyanın arşive düştüğünü görün; birkaç dakika içinde `E:\TMIV2-WAL`'da 24 haneli adlı dosyalar belirmelidir.
-A6. Hemen ilk taban yedeği alın (Haftalık taban yedek). Taban yedek olmadan WAL arşivi tek başına işe yaramaz.
+A6. Taban yedek rolü (bir kez, süper kullanıcıyla). Rolün tablolarda hakkı yoktur, yalnız replikasyon bağlantısı kurar:
+    ```
+    psql -U postgres -d postgres -c "CREATE ROLE tmiv2_yedek LOGIN REPLICATION NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS"
+    ```
+    Parolayı vermek için `psql -U postgres -d postgres` ile açın ve `\password tmiv2_yedek` yazın (iki kez sorar, ekranda görünmez).
+    `pg_hba.conf`'a (veri klasöründe) yalnız şu replikasyon satırını ekleyin, başka `replication` satırı varsa kaldırın, sonra
+    PostgreSQL ayarlarını yeniden yükleyin (`psql -U postgres -c "SELECT pg_reload_conf()"`):
+    ```
+    host replication tmiv2_yedek 127.0.0.1/32 scram-sha-256
+    ```
+A7. Sunucunun `.env`'ine ekleyin ve sunucuyu yeniden başlatın:
+    ```
+    TMIV2_TABAN_DIZINI=E:\TMIV2-TABAN
+    TMIV2_WAL_ARSIV_DIZINI=E:\TMIV2-WAL
+    TMIV2_PG_YEDEK_USER=tmiv2_yedek
+    TMIV2_PG_YEDEK_PASSWORD=<A6'daki parola>
+    ```
+    Dördü de doluysa iş ilk turda (en geç bir saat içinde) ilk taban yedeği alır; biri boşsa iş bekler ve sağlık ayrıntısında
+    "Taban yedek kapalı" görünür; canlıda (`TMIV2_ORTAM=canli`) beklemez, hata verir ve uyarı olarak görünür (2294-1 b). `pg_basebackup` ve `pg_verifybackup` pg_dump'ın bulunduğu PostgreSQL `bin` klasöründen alınır
+    (Kurulum 3). Taban yedek olmadan WAL arşivi tek başına işe yaramaz: ilk tabanın alındığını sağlık ayrıntısında görün.
 
 Arşivleme durursa (disk dolu, klasör izni, ikinci disk takılı değil) PostgreSQL WAL dosyalarını silmez, veritabanı diskinde
 biriktirir; uzun sürerse veritabanı diski dolar ve kayıt durur. Bu yüzden arşiv sağlığına haftada bir bakılır (aşağıda).
@@ -133,41 +161,36 @@ biriktirir; uzun sürerse veritabanı diski dolar ve kayıt durur. Bu yüzden ar
 
 Uygulama kullanıcısıyla da okunur, süper kullanıcı gerekmez:
 ```
-psql -U tmiv2_goc -d tmiv2 -c "SELECT last_archived_wal, last_archived_time, failed_count, last_failed_wal, last_failed_time FROM pg_stat_archiver"
+psql -U tmiv2_goc -d tmiv2 -c "SELECT archived_count, last_archived_wal, last_archived_time, failed_count, last_failed_wal, last_failed_time FROM pg_stat_archiver"
 ```
 - `last_archived_time` son 10 dakika içinde olmalı (iş saatinde). Daha eskiyse ya da `last_failed_time` ondan yeniyse arşivleme
   takılmıştır: PostgreSQL günlüğünde (`data\log`) `archive command failed` satırı nedeni söyler.
-- Sağlık ekranındaki satır (2282b) gelince bu sorgu oradan okunur.
+- Aynı bilgi Ayarlar > Yedekler'de "Gün içi koruma" bölümündedir (2282b); arşiv takılırsa, canlıda (`TMIV2_ORTAM=canli`) arşiv
+  kapalıysa da sağlık uyarısı çıkar.
 
-### Haftalık taban yedek
+### Haftalık taban yedek (uygulama işi)
 
-2284-1 açık: cevaba kadar yönetici haftada bir elle alır. Şimdilik süper kullanıcıyla bağlanılır, çünkü taban yedek REPLICATION
-yetkisi ister ve uygulamanın kullanıcılarında bu yetki yoktur. Sunucu açıkken alınır, kesinti yoktur. PowerShell'de:
+İş `ayarlar-taban-yedegi` (ADR 0010, transaction dışı) saatte bir bakar; doğrulanmış son taban 7 günlük olunca yenisini alır.
+Sunucu açıkken alınır, kesinti yoktur; sunucu o sırada kapalıysa açıldıktan sonraki ilk turda alır.
+- `pg_basebackup -Fp -Xs --checkpoint=fast` `tmiv2_yedek` rolüyle `E:\TMIV2-TABAN\taban-<UTC zaman>.yarim` klasörüne yazar,
+  `pg_verifybackup` denetler; geçerse klasör `taban-<UTC zaman>` adını ve `.dogrulandi` işaretini alır. Geçmezse klasör silinir.
+  `-Fp` düz klasördür, geri yüklemede açma adımı gerekmez; `-Xs` yedeğin kendi WAL'ını da yanına koyar.
+- Eskitme kendiliğindendir: doğrulanmış en yeni iki taban kalır; daha eskiler ve doğrulanmamışlar silinir, WAL arşivinden kalan iki
+  tabanın eskisinden önceki dosyalar silinir (`.history` kalır). İkiden az doğrulanmış taban varken WAL silinmez.
+- Yalnız `taban-<UTC zaman>` adlı klasörlere dokunulur; elle alınmış başka adlı klasörler kalır, onları yönetici siler.
+- Uyarı: iş şu durumlarda hata verir; sağlık ayrıntısında iş hatası olarak görünür ve Windows olay günlüğüne (kaynak `TMIV2`,
+  olay 100) yazılır: taban alınamadı ya da doğrulanamadı; doğrulanmış son taban 8 günden eski; WAL arşivi diski yüzde 80 ya da daha
+  dolu. Nedeni sunucu günlüğündedir.
+
+Elle taban yedek (iş açılmadan önce ya da tatbikatta; yine `tmiv2_yedek` ile, PowerShell'de):
 ```
 $bin = "C:\Program Files\PostgreSQL\18\bin"
 $hedef = "E:\TMIV2-TABAN\$(Get-Date -Format yyyyMMdd)"
-& "$bin\pg_basebackup.exe" -U postgres -D $hedef -Fp -Xs --checkpoint=fast -P
+& "$bin\pg_basebackup.exe" -h 127.0.0.1 -U tmiv2_yedek -D $hedef -Fp -Xs --checkpoint=fast -P
 & "$bin\pg_verifybackup.exe" $hedef
 ```
-- `-Fp` düz klasör yazar: geri yüklemede açma adımı gerekmez ve `pg_verifybackup` bütün sürümlerde denetler. `-Xs` yedeğin
-  kendi WAL'ını da yanına koyar; yedek tek başına da açılır.
-- `pg_verifybackup` "backup successfully verified" demeden yedek sayılmaz; demezse klasörü silip yeniden alın.
-- `pg_hba.conf`'ta yerel `replication` satırı gerekir. PostgreSQL'in Windows kurulumunda varsayılan olarak bulunduğu doğrulanmadı;
-  komut "no pg_hba.conf entry for replication connection" derse şu satırı ekleyip PostgreSQL ayarlarını yeniden yükleyin:
-  `host replication postgres 127.0.0.1/32 scram-sha-256`
-
-### Eskitme (her taban yedekten sonra)
-
-İki taban yedek tutulur: geri dönüş penceresi en az bir haftadır, son yedek bozuksa bir öncekine dönülür.
-1. `E:\TMIV2-TABAN`'da en yeni iki klasör kalır, daha eskiler silinir.
-2. Kalan iki klasörden eskisinin `backup_label` dosyasındaki `START WAL LOCATION` satırının sonundaki dosya adını alın
-   (ör. `000000010000000000000002`). Bu dosyadan önceki WAL'lar artık hiçbir yedeğe gerekmez:
-   ```
-   & "$bin\pg_archivecleanup.exe" -n E:\TMIV2-WAL 000000010000000000000002
-   & "$bin\pg_archivecleanup.exe" E:\TMIV2-WAL 000000010000000000000002
-   ```
-   `-n` yalnız silinecekleri listeler; listeye bakıp sonra `-n`'siz koşun. `.history` dosyaları silinmez, küçüktür.
-WAL arşivinden elle başka dosya silinmez: aradaki tek eksik dosya o noktadan sonraki bütün dakikaları kaybettirir.
+`pg_verifybackup` "backup successfully verified" demeden yedek sayılmaz. Elle alınan klasör iş tarafından budanmaz; eskiyince elle
+silinir. WAL arşivinden elle dosya silinmez: aradaki tek eksik dosya o noktadan sonraki bütün dakikaları kaybettirir.
 
 ### Şifreli dış kopya (döner çevrimdışı diskler; 2283-2 a)
 
