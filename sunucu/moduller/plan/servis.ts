@@ -9,7 +9,7 @@ import type {
 import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
 import {
-  aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, operasyonTipleri, planAyarlari,
+  aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { gunlukFaizGetir, kurlar } from '../finans/disari.ts';
@@ -23,16 +23,17 @@ import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import {
-  FASON_VARSAYILAN_GUN, adimOnculleri, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, planlanacakIsEmirleri, rotadanAdimAdetleri,
+  FASON_VARSAYILAN_GUN, adimOnculleri, baslatmaYetkinlikIhlali, emirDugumleri, emirlerinIsEmriIdleri, emirOnceligiYaz, isEmriKaynagiYaz, isEmriVarliklari, makineYetkinlikIhlali,
+  planlanacakIsEmirleri, rotadanAdimAdetleri,
 } from '../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri, calismaTakvimleri, gunYaz, isMerkeziKisiPaylari, kisiVardiyalari, takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import type { BasladigiGun } from '../vardiya/disari.ts';
 import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
-  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yukYuzdesi,
+  adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yetkinlikUyarisi, yukYuzdesi,
 } from './kurallar.ts';
-import type { OnayBaglami, PersonelMerkezi } from './kurallar.ts';
+import type { OnayBaglami, PersonelMerkezi, YetkinlikVerisi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
 import { eksikStokDenetle } from './eksik-stok.ts';
 import { planIhtiyaclariniBildir } from './plan-ihtiyaci.ts';
@@ -99,8 +100,8 @@ interface Baglam {
   // istasyonun operatör ihtiyacı (satırı yoksa 1).
   merkezler: Map<number, { kod: string; ad: string; kisiler: { kisiId: number; pay: number }[] }>;
   operator: Map<number, number>;
-  // S3: kişinin yetkin olduğu istasyonlar; yetkinliği tanımlanmamış kişi haritada yoktur.
-  yetkinlik: Map<number, Set<number>>;
+  // S3: bugün geçerli istasyon yetkinlikleri (kişi -> istasyonlar; yetkinliği tanımlanmamış kişi haritada yoktur) ve makine yetkinlikleri.
+  yetkinlik: YetkinlikVerisi;
   // Motorun yerleştiremediği bölünmüş işlerin parçaları (no, adet): bölme kalır, iş yerleşmemiş görünür.
   yersiz: Map<number, BolmeParcasi[]>;
   // İstasyonun aktif makineleri (kod sırasıyla): rota adımının istasyonu bunlara açılır; okunmamış istasyon sorulunca okunur.
@@ -215,11 +216,12 @@ async function merkezPersoneli(db: Db, kaynaklar: Map<string, KaynakBilgisi>): P
   return sonuc;
 }
 
-async function yetkinlikOku(db: Db): Promise<Map<number, Set<number>>> {
+async function yetkinlikOku(db: Db): Promise<YetkinlikVerisi> {
   const h = new Map<number, Set<number>>();
   for (const y of await istasyonYetkinlikleri(db)) h.set(y.kisiId, (h.get(y.kisiId) ?? new Set()).add(y.istasyonId));
-  return h;
+  return { istasyon: h, makine: await makineYetkinlikleri(db) };
 }
+const TERMINAL_YETKINLIGI = { istasyon: baslatmaYetkinlikIhlali, makine: makineYetkinlikIhlali };
 
 const verimi = (b: Baglam) => (k: Kaynak): number => b.kaynaklar.get(kaynakAnahtari(k))?.verim ?? 1;
 
@@ -965,10 +967,11 @@ function uyariListesi(b: Baglam, y: Yer, yerler: readonly Yer[]): string[] {
   const u = uyarilar(y, { teslimDk: teslimDk(b, is.teslim), ...onculSinirlari(b, y.isEmriId, yerler, y.kaynak), rotaKaynaklari: is.rotaKaynaklari });
   const k = b.kaynaklar.get(kaynakAnahtari(y.kaynak));
   if (k && !k.aktif) u.push(`${k.kod ?? k.ad} kullanımda değil (arıza ya da pasif).`);
-  // S3: adımın istasyonu rotadaki makinenin istasyonudur; makinesiz adımda denetim yok.
-  const yetkin = y.kaynak.tur === 'kisi' ? b.yetkinlik.get(y.kaynak.id) : undefined;
-  const adimIstasyonu = is.rotaKaynaklari.map((x) => b.kaynaklar.get(kaynakAnahtari(x))).find((x) => x?.tur === 'makine')?.istasyon ?? null;
-  if (yetkin && adimIstasyonu && !yetkin.has(adimIstasyonu.id)) u.push('Kişinin bu istasyonda yetkinliği yok.');
+  // S3: makinede iş makinenin istasyonunda, kişide iş emrinin istasyonunda (yoksa rotadaki makinenin istasyonunda) başlar; terminalle aynı.
+  const rotaIst = is.istasyonId ?? is.rotaKaynaklari.map((x) => b.kaynaklar.get(kaynakAnahtari(x))).find((x) => x?.tur === 'makine')?.istasyon?.id ?? null;
+  const yetkinlik = new Set([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].map((x) => yetkinlikUyarisi(
+    x, x.tur === 'makine' ? b.kaynaklar.get(kaynakAnahtari(x))?.istasyon?.id ?? null : rotaIst, b.yetkinlik, TERMINAL_YETKINLIGI)));
+  for (const m of yetkinlik) if (m !== null) u.push(m);
   if (is.taslakEmir) u.push('Taslak emir: plana alınınca kesinleşir.');
   return u;
 }

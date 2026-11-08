@@ -18,7 +18,7 @@ import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
   agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
-  paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
+  paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, tlEksikUyarisi, tlKarsilastirilir, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
 // Onay ve canlı (zz22 sPlanAtolye): durum şeridi, akış, incelenecek planlar, seçili planın farkı, kontrolü ve kararı, karşılaştırma; yanda canlıdan
@@ -48,6 +48,11 @@ function Fark({ a, b, k = 1, kucukIyi = true }: { a: number | null | undefined; 
   const f = farkKur(a, b, k, kucukIyi);
   return f ? <span className={f.iyi ? 'tc-pym-pa-iyi' : 'tc-pym-pa-kotu'}>{f.metin}</span> : null;
 }
+// 2311 S9: kuru bilinmeyen emir varken Plan TL eksik toplamdır; yanında uyarı simgesi, ekran okuyucuya metni.
+function TlUyarisi({ g }: { g: Gostergeler | null | undefined }) {
+  const m = tlEksikUyarisi(g);
+  return m ? <span className="tc-pym-pa-kotu" title={m}> <Simge ad="alert" boyut="k" /><span className="tc-gizli-etiket">{m}</span></span> : null;
+}
 const AGIRLIKLI_IPUCU = 'Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.';
 // Sunucu öncelik ağırlıklı gecikmeyi verir (öncelik 1 dört kat sayılır); Özet'teki toplam gecikmeyle karışmasın diye adı ayrı yazılır.
 function Sayilar({ g, gecikme, kiyas: r }: { g: Gostergeler | null; gecikme: { saat: number; agirlikli: boolean } | null; kiyas?: Gostergeler | null }) {
@@ -57,7 +62,7 @@ function Sayilar({ g, gecikme, kiyas: r }: { g: Gostergeler | null; gecikme: { s
     <dl className="tc-pym-pa-sayilar">
       {s('Geciken · tüm plan', `${g.geciken}/${g.emirSayisi}`, r && <Fark a={g.geciken} b={r.geciken} k={0} />)}
       {s(gecikme?.agirlikli ? 'Ağırlıklı gecikme' : 'Gecikme', gecikme == null ? '—' : `${sayi(gecikme.saat, 1)} sa`)}
-      {s('Plan TL', tl(g.maliyetTl), r && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl / 1000} b={r.maliyetTl / 1000} k={0} />)}
+      {s('Plan TL', tl(g.maliyetTl), <><TlUyarisi g={g} />{r && tlKarsilastirilir(g, r) && <Fark a={g.maliyetTl! / 1000} b={r.maliyetTl! / 1000} k={0} />}</>)}
     </dl>
   );
 }
@@ -556,7 +561,7 @@ function Secili({ s, canli, pa, pc, f, K, o, not, notYaz, gidiyor, eylem, motorD
           <li><small>Yeri değişen iş</small><b className="mono">{r && f ? sayi(f.tasinan + f.yeni) : '—'}</b><span className="tc-pym-pa-kucuk">{!r ? 'canlı yok' : f ? `${f.tezgah} tezgâh, ${f.saat} saat, ${f.yeni} yeni` : `${s.degisiklikler.length} değişiklik`}</span></li>
           <li><small>Geciken sipariş</small><b className="mono">{r ? `${r.geciken} → ` : ''}{g ? g.geciken : '—'}</b></li>
           <li><small>{ga && !ga.agirlikli ? 'Gecikme' : 'Ağırlıklı gecikme'}</small><b className="mono">{gc && ga ? `${sayi(gc.saat, 1)} → ` : ''}{ga ? `${sayi(ga.saat, 1)} sa` : '—'}</b>{gc && ga && <Fark a={ga.saat} b={gc.saat} />}</li>
-          <li><small>Plan TL</small><b className="mono">{g?.maliyetTl != null ? sayi(g.maliyetTl) : '—'}</b>{r && g && g.maliyetTl != null && r.maliyetTl != null && <Fark a={g.maliyetTl} b={r.maliyetTl} k={0} />}</li>
+          <li><small>Plan TL</small><b className="mono">{g?.maliyetTl != null ? sayi(g.maliyetTl) : '—'}</b><TlUyarisi g={g} />{r && g && tlKarsilastirilir(g, r) && <Fark a={g.maliyetTl!} b={r.maliyetTl!} k={0} />}</li>
           <li><small>Ayar</small><b className="mono">{ayarSaat(pa) == null ? '—' : `${sayi(ayarSaat(pa) ?? 0, 1)} sa`}</b>{pc && <Fark a={ayarSaat(pa)} b={ayarSaat(pc)} />}</li>
           <li><small>Ek mesai</small><b className="mono">{em ? `${sayi(em.saat, 1)} sa` : '—'}</b>{em && emc && <Fark a={em.saat} b={emc.saat} />}</li>
         </ul>
@@ -653,18 +658,20 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle, planlar, farkAl }: {
   const yardim = <p className="tc-pym-pa-kucuk">Listeden en çok üç plan işaretleyin; canlı plan her zaman ilk sütundur.</p>;
   const sag = kars.length ? <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" onClick={temizle}><Simge ad="x" boyut="k" />Temizle</button> : undefined;
   if (sutun.length < 2) return <Kart baslik="Karşılaştırma" simge="chart" sag={sag}>{yardim}</Kart>;
-  const satir = (ad: string, f: (x: (typeof sutun)[number]) => number | null | undefined, fmt: (x: number) => string, kucukIyi = true) => {
+  // ek: hücre yanına not; kiyas false ise en iyi ve fark gösterilmez (eksik toplam, S9).
+  const satir = (ad: string, f: (x: (typeof sutun)[number]) => number | null | undefined, fmt: (x: number) => string, kucukIyi = true,
+    ek?: (x: (typeof sutun)[number]) => ReactNode, kiyas = true) => {
     const v = sutun.map(f);
     const g = v.filter((x): x is number => x != null && Number.isFinite(x));
-    const en = g.length ? (kucukIyi ? Math.min(...g) : Math.max(...g)) : null;
+    const en = kiyas && g.length ? (kucukIyi ? Math.min(...g) : Math.max(...g)) : null;
     const tek = v.filter((x) => x === en).length < v.length;
     return (
       <tr key={ad}>
         <th scope="row">{ad}</th>
         {v.map((x, i) => (
           <td key={i} className={`tc-pym-pa-num mono${tek && x === en ? ' tc-pym-pa-en-iyi' : ''}`}>
-            {x == null || !Number.isFinite(x) ? '—' : fmt(x)}
-            {i > 0 && x != null && v[0] != null && farkKur(x, v[0], 1, kucukIyi) && <><br /><Fark a={x} b={v[0]} kucukIyi={kucukIyi} /></>}
+            {x == null || !Number.isFinite(x) ? '—' : fmt(x)}{ek?.(sutun[i]!)}
+            {kiyas && i > 0 && x != null && v[0] != null && farkKur(x, v[0], 1, kucukIyi) && <><br /><Fark a={x} b={v[0]} kucukIyi={kucukIyi} /></>}
           </td>
         ))}
       </tr>
@@ -680,7 +687,8 @@ function Karsilastir({ l, canli, canliSurum, kars, temizle, planlar, farkAl }: {
           <tbody>
             {satir('Geciken sipariş', (s) => s.g?.geciken, (x) => sayi(x))}
             {satir(sutun.every((s) => !s.p || agirlikliGecikme(s.p).agirlikli) ? 'Ağırlıklı gecikme (sa)' : 'Gecikme (sa)', (s) => (s.p ? agirlikliGecikme(s.p).saat : null), (x) => sayi(x, 1))}
-            {satir('Plan TL (bin)', (s) => (s.g?.maliyetTl != null ? s.g.maliyetTl / 1000 : null), (x) => sayi(x))}
+            {satir('Plan TL (bin)', (s) => (s.g?.maliyetTl != null ? s.g.maliyetTl / 1000 : null), (x) => sayi(x), true, (s) => <TlUyarisi g={s.g} />,
+              sutun.every((s) => tlKarsilastirilir(s.g, sutun[0]!.g)))}
             {satir('Ayar (sa)', (s) => ayarSaat(s.p), (x) => sayi(x, 1))}
             {satir('Ek mesai (sa)', (s) => s.p?.ekMesai?.toplamSaat, (x) => sayi(x, 1))}
             {satir('Son bitiş', (s) => { const b = s.p ? sonBitis(s.p) : null; return b ? Date.parse(b) / 3_600_000 : null; }, (x) => zamanYaz(new Date(x * 3_600_000).toISOString()))}
