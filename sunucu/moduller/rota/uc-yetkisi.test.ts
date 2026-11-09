@@ -28,6 +28,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /rota/revizyon-ozeti': ROTA_OKUR,
   'GET /rota/urunler/:urunId': ROTA_OKUR,
   'GET /rota/urunler/:urunId/ham-onerisi': ROTA_OKUR,
+  'GET /rota/urunler/:urunId/op-numaralari': ROTA_OKUR,
   'GET /rota/urunler/:urunId/talimatlar/:opNo': ROTA_OKUR,
   'GET /rota/talimat-medyasi/:ozet': ROTA_OKUR,
   'GET /rota/talimat-sablonlari': ROTA_OKUR,

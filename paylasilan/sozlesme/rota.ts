@@ -297,6 +297,13 @@ export const urunRevizyonlariCevabi = z.object({
   kartOperasyonlari: z.object({ sayi: z.number().int().positive(), eslesmeyen: z.array(z.string()) }).nullable(),
 });
 
+// B-2482-R4: ürüne verilmiş OP numaraları (RT-31: hiçbiri yeniden verilmez) ve ilk verildiği revizyon; sıradaki numara sunucunun
+// vereceği numaradır (en büyük + 10). Ekran yeni adımın numarasını önceden gösterir, numarayı yine kaydet komutu verir.
+export const opNumaralariCevabi = z.object({
+  kullanilmis: z.array(z.object({ opNo: KIMLIK, ilkRevizyonId: KIMLIK, ilkRevizyonHarfi: z.string() })),
+  siradaki: KIMLIK,
+});
+
 export const sablonSemasi = z.object({
   id: KIMLIK, ad: z.string(), varsayilan: z.boolean(), surum: KIMLIK,
   adimlar: z.array(z.object({ sira: KIMLIK, operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), aktif: z.boolean() }), ad: z.string() })),
@@ -500,6 +507,7 @@ export type RevizyonAyrintisi = z.output<typeof revizyonAyrintisi>;
 export type RotaListesiCevabi = z.output<typeof rotaListesiCevabi>;
 export type RevizyonOzetiCevabi = z.output<typeof revizyonOzetiCevabi>;
 export type UrunRevizyonlariCevabi = z.output<typeof urunRevizyonlariCevabi>;
+export type OpNumaralariCevabi = z.output<typeof opNumaralariCevabi>;
 export type FarkCevabi = z.output<typeof farkCevabi>;
 export type AgacCevabi = z.output<typeof agacCevabi>;
 export type SeceneklerCevabi = z.output<typeof seceneklerCevabi>;

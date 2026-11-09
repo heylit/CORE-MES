@@ -1,12 +1,12 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { AdimKaynakOzeti, RevizyonAyrintisi, RevizyonOzetiCevabi, RotaListesiCevabi, SeceneklerCevabi, UrunRevizyonlariCevabi, HamOnerisiCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { AdimKaynakOzeti, RevizyonAyrintisi, OpNumaralariCevabi, RevizyonOzetiCevabi, RotaListesiCevabi, SeceneklerCevabi, UrunRevizyonlariCevabi, HamOnerisiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { HAM_ONERI_SAYISI } from '#paylasilan/sozlesme/rota.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { malzemeGeometrisi } from '../../geometri/disari.ts';
 import { firmaAra, firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { YAZ, fasonTerminToplami, izinliKomutlar, ondalikMetin, rotaOzeti, sayiyaCevir } from '../kurallar.ts';
+import { YAZ, fasonTerminToplami, yeniOpNo, izinliKomutlar, ondalikMetin, rotaOzeti, sayiyaCevir } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import {
   adimlariKur, dortGozAcikMi, gorunumBaglami, kartAdimlari, kaynakBaglami, operasyonTipleri, revizyonuAl, rotaliTurMu, urunOzetiAl, urunOzetleri,
@@ -135,4 +135,11 @@ export async function hamOnerisi(db: Db, urunId: number): Promise<HamOnerisiCeva
     oneriler: g.ham.oneriler.slice(0, HAM_ONERI_SAYISI),
     neden: g.ham.neden,
   };
+}
+
+// B-2482-R4: ürün yoksa 404; sıradaki numara kaydetmenin vereceğiyle aynı kuraldır (RT-31, yeniOpNo).
+export async function opNumaralari(db: Db, urunId: number): Promise<OpNumaralariCevabi> {
+  await urunOzetiAl(db, urunId);
+  const kullanilmis = await s.opNumaralari(db, urunId);
+  return { kullanilmis, siradaki: yeniOpNo(kullanilmis.map((k) => k.opNo)) };
 }

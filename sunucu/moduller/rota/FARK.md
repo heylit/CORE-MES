@@ -427,3 +427,7 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
 - VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
 - VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.
+## 2486-4: OP numaraları okuma ucu (B-2482-R4)
+- `GET /rota/urunler/:urunId/op-numaralari` (ROTA_OKUR): ürüne verilmiş OP numaraları, her birinin ilk verildiği revizyon (kimlik ve harf)
+  ve sıradaki numara (`yeniOpNo`, RT-31 değişmedi). Ekran yeni adımın numarasını önceden gösterir; numarayı yine kaydet komutu verir.
+  Ürün yoksa 404. Yalnız okuma; tablo ve göç yok.
