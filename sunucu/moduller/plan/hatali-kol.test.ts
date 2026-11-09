@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { planTestOrtami } from './plan-ortak.test.ts';
-import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { MotorYerlesimiCevabi, PlanCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
 
 // 1034, 1036 a: hatalı parça kolu kalite kararı ve rework adımıyla açılır, sonraki adımda ana partiye katılır. Kalite adımı ve doldurulmamış
 // rework adımı süresiz ve kaynaksızdır, plana girmez; kol yerleşmedikçe ana partinin birleşme adımı da yerleşmez (bekler). Planlama rework
@@ -38,7 +38,7 @@ describe('plan (gerçek PostgreSQL): hatalı parça kolu (1034, 1036 a)', () => 
     assert.equal(yerli(p, e.ana.op30), false, 'birleşme adımı kolu bekler (1036 a)');
     assert.equal(neden(p, e.ana.op30), 'Bağlı parti yerleşmedi.');
     assert.match(neden(p, e.kol.kalite) ?? '', /kalite kararı/);
-    assert.equal(neden(p, e.kol.rework), 'Rework adımı: planlama kaynak ve süre seçmedi.');
+    assert.equal(neden(p, e.kol.rework), 'Ek adımın operasyonuna bağlı tezgâh yok ya da süresi yok; kaynak seçin.');
     assert.equal(yerli(p, e.kol.tekrar), false, 'tekrar adımı rework adımını bekler');
     assert.equal(neden(p, e.kol.tekrar), 'Önceki adım (OP 14) yerleşmedi.');
   });
@@ -53,6 +53,28 @@ describe('plan (gerçek PostgreSQL): hatalı parça kolu (1034, 1036 a)', () => 
     for (const id of [e.kol.rework, e.kol.tekrar, e.ana.op30]) assert.equal(yerli(p, id), true, `iş ${String(id)} yerleşir`);
     assert.ok(Date.parse(o.yer(p, e.kol.tekrar).baslangic) >= Date.parse(o.yer(p, e.kol.rework).bitis), 'tekrar rework adımından sonra');
     assert.ok(Date.parse(o.yer(p, e.ana.op30).baslangic) >= Date.parse(o.yer(p, e.kol.tekrar).bitis), 'birleşme kolun son adımından sonra');
+  });
+
+  // B-2482-11: kaynaksız ama süreli rework, istasyonunun aktif makinelerinden birine motor önerisinde yerleşir; ardılı onu bekler; Planı
+  // kur motorun yerleşimiyle yazar ve canlıya alınınca adım canlı planda yerini taşır.
+  test('kaynaksız süreli rework istasyonunun makinesine motorla yerleşir, ardılı açılır, canlıya yazılır (B-2482-11)', async () => {
+    const { makineA, istasyonA } = o.durum();
+    const e = await kolluEmir({ kaynak: null, sure: true });
+    await kaliteKapandi(e.kol.kalite);
+    await o.vt().tx((db) => db.sorgu('UPDATE uretim_emirleri_is_emri SET istasyon_id = $2 WHERE id = $1', [e.kol.rework, istasyonA]));
+    const motor = await o.tamam<MotorYerlesimiCevabi>(o.c.planlama, 'GET', '/plan/motor-yerlesimi');
+    const m = motor.yerlesimler.find((y) => y.isEmriId === e.kol.rework);
+    assert.deepEqual(m?.kaynak, { tur: 'makine', id: makineA }, 'aday istasyonun makinesi');
+    const p = await o.taslaktaOner(o.c.planlama, undefined, motor);
+    for (const id of [e.kol.rework, e.kol.tekrar]) assert.equal(yerli(p, id), true, `iş ${String(id)} yerleşir`);
+    const r = o.yer(p, e.kol.rework);
+    assert.equal((Date.parse(r.bitis) - Date.parse(r.baslangic)) / 60_000, 9, 'adımın kendi süresi: ayar 5 + 2 adet x 2');
+    assert.ok(Date.parse(o.yer(p, e.kol.tekrar).baslangic) >= Date.parse(o.yer(p, e.kol.rework).bitis), 'tekrar rework adımından sonra');
+    const t = p.taslak!;
+    const s = (await o.tamam<SenaryolarCevabi>(o.c.planlama, 'POST', `/plan/senaryolar/${String(t.id)}/onaya-gonder`, { surum: t.surum })).senaryolar.find((x) => x.id === t.id)!;
+    await o.tamam(o.c.mudur, 'POST', `/plan/senaryolar/${String(t.id)}/canliya-al`, { surum: s.surum, cakismalariKabul: true });
+    const canli = await o.vt().tx((db) => db.tek<{ makine: number | null }>('SELECT makine_id AS makine FROM plan_yerlesimi WHERE is_emri_id = $1', [e.kol.rework]));
+    assert.equal(canli?.makine, makineA, 'canlı planda rework satırı');
   });
 
 });
