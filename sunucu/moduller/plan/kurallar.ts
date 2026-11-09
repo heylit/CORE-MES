@@ -577,3 +577,20 @@ export const onayGecisleri = (b: OnayBaglami): SenaryoYapabilir => ({
   onayaGonder: onayGecisiReddi('onaya-gonder', b) === null, onaydanCek: onayGecisiReddi('onaydan-cek', b) === null,
   geriGonder: onayGecisiReddi('geri-gonder', b) === null, canliyaAl: onayGecisiReddi('canliya-al', b) === null,
 });
+
+// 2618, 2626 1/2 b: maliyet ayı her zaman son tam aydır. Gün tesis günüdür.
+export function varsayilanMaliyetAyi(tesisGunu: string): string {
+  const yil = Number(tesisGunu.slice(0, 4));
+  const ay = Number(tesisGunu.slice(5, 7));
+  const [y, a] = ay === 1 ? [yil - 1, 12] : [yil, ay - 1];
+  return `${String(y)}-${String(a).padStart(2, '0')}`;
+}
+
+// 2603 a: küçük grubun değeri ekrana gitmez. İK'nın ekran işlevi zaten gizler; uç da gizler ki işlev değişirse sızmasın. Kişi sayısı
+// cevaba girmez: sayı ile ortalama ay ay karşılaştırılınca tek kişinin değişimi görünür.
+export interface GrupSaatDegeri { departmanNo: number; departmanAd: string; saatMaliyeti: number | null; kucuk: boolean }
+export function grupSaatEkrani(gruplar: Iterable<GrupSaatDegeri>): GrupSaatDegeri[] {
+  return [...gruplar]
+    .map((g) => ({ departmanNo: g.departmanNo, departmanAd: g.departmanAd, saatMaliyeti: g.kucuk ? null : g.saatMaliyeti, kucuk: g.kucuk }))
+    .sort((a, b) => a.departmanAd.localeCompare(b.departmanAd, 'tr') || a.departmanNo - b.departmanNo);
+}

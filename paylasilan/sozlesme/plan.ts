@@ -582,3 +582,12 @@ export const mrpIhtiyaciCevabi = z.object({
   })),
 });
 export type MrpIhtiyaciCevabi = z.output<typeof mrpIhtiyaciCevabi>;
+
+// 2618 (2602-a, 2603 a, 2626 1/2 b): son tam ayın departman grup saat maliyeti (TRY/saat). Kişi alanı yoktur; küçük grupta değer null.
+export const grupSaatMaliyetleriCevabi = z.object({
+  ay: z.string(),
+  gruplar: z.array(z.object({
+    departmanNo: z.number().int(), departmanAd: z.string(), saatMaliyeti: z.number().nullable(), kucuk: z.boolean(),
+  }).strict()),
+}).strict();
+export type GrupSaatMaliyetleriCevabi = z.output<typeof grupSaatMaliyetleriCevabi>;
