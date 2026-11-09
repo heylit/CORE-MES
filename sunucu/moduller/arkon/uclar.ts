@@ -1,6 +1,6 @@
 import { ikiliCevap, ikiliCevapYaDaBos, uc } from '#cekirdek/uc.ts';
 import {
-  anomaliCevabi, anomaliIstatistikCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
+  anomaliCevabi, anomaliIstatistikCevabi, eksikIslerCevabi, eksikIslerimCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi, calismaDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
@@ -8,6 +8,7 @@ import {
   numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { anomaliOlaylari } from './anomali-zaman.ts';
+import { eksikIsler, eksikIslerim } from './eksik-is/servis.ts';
 import * as servis from './servis.ts';
 import { goruntuSorgusu } from './pdf-goruntu/kurallar.ts';
 import { pdfGoruntusu } from './pdf-goruntu/servis.ts';
@@ -281,6 +282,22 @@ export const uclar = [
     yetki: ANOMALI_OKUMA,
     cevap: anomaliOlaylariCevabi,
     isle: ({ db, kullanici }) => anomaliOlaylari(db, kullanici),
+  }),
+  // Eksik iş (kart 2421 c): plandan bağımsız eksik, geride ya da geciken iş; 15 dakikalık işin yazdığı kayıtlardan, kapsamla süzülü.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/eksik-isler',
+    yetki: ANOMALI_OKUMA,
+    cevap: eksikIslerCevabi,
+    isle: ({ db, kullanici }) => eksikIsler(db, kullanici),
+  }),
+  // Terminalde "Girilmemiş işlerim" (2421 c): kişi yalnız kendi tezgahlarının ve işlerinin açık eksiklerini görür.
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/eksik-islerim',
+    yetki: ARKON_SAYFASI,
+    cevap: eksikIslerimCevabi,
+    isle: ({ db, kullanici }) => eksikIslerim(db, kullanici),
   }),
   // Gün, hafta, ay istatistiği (kart #1306): kaydedilmiş günlerden; kişi kırılımı yalnız arkon.anomali-kisi ile.
   uc({

@@ -107,6 +107,25 @@ export const BILDIRIM_TURLERI = {
   'arkon.toplu-tutarsiz': {
     baslik: 'Toplu giriş süreye sığmıyor', onem: 'uyari', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
+  // 2421 c: eksik iş olayları; olay ve konu başına bir kez. Hatırlatmadır: iş giderilip olay kapanınca bildirim de kapanır.
+  'arkon.plan-gerisi': {
+    baslik: 'İş plan gerisinde kaldı', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.kayitsiz-gun': {
+    baslik: 'İstasyonda gün boyu kayıt girilmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.yarim-is': {
+    baslik: 'Başlamış iş yarım kaldı', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.plansiz-is': {
+    baslik: 'Açık iş plana girmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.geciken-emir': {
+    baslik: 'Emir teslim tarihini kaçırıyor', onem: 'acil', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  'arkon.bayat-plan': {
+    baslik: 'Plan bayat: canlıya alınmadı', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
   // 1365 a: Güvenlik Merkezi'nin kritik alarmı yöneticilere uygulama içinde duyurulur; dışarı (e-posta) gitmez.
   'guvenlik.kritik-alarm': {
     baslik: 'Kritik güvenlik alarmı', onem: 'acil', alanIslemler: ['guvenlik.oku'], yol: '/guvenlik', varsayilan: { mesaj: false, eposta: false },

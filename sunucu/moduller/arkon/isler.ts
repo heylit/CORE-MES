@@ -1,5 +1,6 @@
 import { isTanimi } from '#cekirdek/zamanlayici.ts';
 import { zamanOlaylariniYenile } from './anomali-zaman.ts';
+import { eksikIsleriYenile } from './eksik-is/servis.ts';
 import { anomaliGunuKaydet, bekleyenleriYinele, kmKararlariniAynala } from './servis.ts';
 import { eskiIletileriSil } from './sorgular.ts';
 import { goruntuTuru } from './pdf-goruntu/servis.ts';
@@ -14,6 +15,8 @@ export const isler = [
   // Zaman olayları (kart 764): geç giriş, geç teslim, sonraki işe etki ve teslim riski aynı aralıkla yenilenir; iz arkon_anomali_olayi'ndadır
   // (açılış, güncelleme, kapanış).
   isTanimi({ ad: 'arkon-anomali-olaylari', aralikMs: 15 * 60_000, calis: (db) => zamanOlaylariniYenile(db) }),
+  // Eksik iş olayları (kart 2421 c): plan gerisi, kayıtsız gün, yarım iş, plansız iş, geciken emir, bayat plan; iz arkon_eksik_is_olayi'ndadır.
+  isTanimi({ ad: 'arkon-eksik-is', aralikMs: 15 * 60_000, calis: (db) => eksikIsleriYenile(db) }),
   // 15 dakikadan eski cihaz iletileri dakikada bir silinir; kaçıran cihaz imleçten anlar ve yeniden yükler (servis.ts iletiler).
   isTanimi({ ad: 'arkon-ileti-budama', aralikMs: 60_000, calis: eskiIletileriSil }),
   // 798: Kalite Merkezi'nde verilen numune ve ilk parça kararı açık Arkon numune isteğine aynalanır; iz isteğin belgesindedir (degisti).

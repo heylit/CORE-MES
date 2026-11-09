@@ -86,3 +86,6 @@ imzayı ya da davranışı değiştirirse bu test kırmızı olur ve kırılan m
 17. **Zaman olayları için bildirim türleri (kart 764, 769 a), paylasilan/sozlesme/bildirim.ts'ten:** `arkon.gec-giris`, `arkon.gec-teslim`,
     `arkon.ardil-etkisi`, `arkon.teslim-riski`; olay başına bir kez (`kaynakKimlik` = tür + iş emri). KARŞILANDI (bu yama): ek olarak `arkon.plan-sapmasi` ve `arkon.toplu-tutarsiz`; gidiş anı `bildirim` sütununa yazılır.
 
+18. **Eksik iş işinin adı (kart 2421 c), sistem modülünden (`istemci/src/moduller/sistem/is-adlari.ts`):** `'arkon-eksik-is': 'Arkon: eksik iş olayları'`.
+    Eklenene kadar Sistem durumu ekranı işi kod adıyla gösterir (ad uydurulmaz). Bildirim türleri (`arkon.plan-gerisi`, `arkon.kayitsiz-gun`,
+    `arkon.yarim-is`, `arkon.plansiz-is`, `arkon.geciken-emir`, `arkon.bayat-plan`) ve ayarlar (`arkon.eksik-*`) kilitle bu yamada girdi. KARŞILANDI (yalnız bildirim ve ayar).

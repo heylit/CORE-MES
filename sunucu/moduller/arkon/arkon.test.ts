@@ -266,8 +266,8 @@ describe('arkon (gerçek PostgreSQL)', () => {
   });
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
-    const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali'));
-    assert.equal(okuma.length, 18);
+    const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali') && u.yol !== '/arkon/eksik-isler');
+    assert.equal(okuma.length, 19);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -875,6 +875,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'GET', yol: '/arkon/tmi-yansimalari' },
     { yontem: 'POST', yol: '/arkon/tmi-yansimalari/999999999/yeniden-dene' },
     { yontem: 'GET', yol: '/arkon/ben' },
+    { yontem: 'GET', yol: '/arkon/eksik-islerim' },
     { yontem: 'GET', yol: '/arkon/kisiler' },
     { yontem: 'GET', yol: '/arkon/malzemeler' },
     { yontem: 'GET', yol: '/arkon/belgeler/results' },
@@ -943,8 +944,8 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('her uç: oturumsuz 401, Arkon rolü olmayan oturumlu kişi 403 ve hiçbir şey yazılmaz; rolü olan geçer', async () => {
     // Anomali uçları (/arkon/anomaliler, /arkon/anomali-istatistik) Arkon rolüne değil hazırlık, planlama ya da yönetici işlemine bağlıdır
-    // (operatör rolü okuyamaz): ayrı sınanır (anomali-akis.test.ts).
-    assert.equal(UCLAR.length, uclar.filter((u) => !u.yol.startsWith('/arkon/anomali')).length, 'tablo modülün bütün uçlarını kapsamalı');
+    // (operatör rolü okuyamaz): ayrı sınanır (anomali-akis.test.ts). Eksik işler (/arkon/eksik-isler, 2421 c) de öyledir (eksik-is-akis.test.ts).
+    assert.equal(UCLAR.length, uclar.filter((u) => !u.yol.startsWith('/arkon/anomali') && u.yol !== '/arkon/eksik-isler').length, 'tablo modülün bütün uçlarını kapsamalı');
     const say = async (): Promise<number[]> => {
       const s = await vt().tek<{ b: number; k: number; p: number; i: number }>(
         `SELECT (SELECT count(*)::int FROM arkon_belge) AS b, (SELECT count(*)::int FROM arkon_kayit) AS k,
