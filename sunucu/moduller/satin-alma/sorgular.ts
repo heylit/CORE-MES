@@ -44,6 +44,17 @@ export function talepSatirlariIdlerle(db: Db, idler: readonly string[]): Promise
   return db.sorgu<TalepSatiri>(`SELECT ${TALEP} FROM satin_alma_talep WHERE id = ANY($1::uuid[]) ORDER BY array_position($1::uuid[], id)`, [idler]);
 }
 
+// 2454: yılın bütçe kullanımına girebilecek talepler (kararlı, siparişi verilmiş; iptal değil). Yıl siparişin ya da kararın tarihinden;
+// süzgeç geniştir, kesin yıl kuralda.
+export async function butceTalepIdleri(db: Db, yil: number): Promise<string[]> {
+  return (await db.sorgu<{ id: string }>(
+    `SELECT t.id FROM satin_alma_talep t JOIN satin_alma_karar k ON k.talep_id = t.id
+      WHERE t.durum = 'siparis_verildi' AND t.birlesen_talep_id IS NULL
+        AND (extract(year FROM k.karar_tarihi) = $1
+             OR EXISTS (SELECT 1 FROM satin_alma_siparis p WHERE p.talep_id = t.id AND extract(year FROM p.siparis_tarihi) = $1))
+      ORDER BY t.yil, t.sira`, [yil])).map((r) => r.id);
+}
+
 export interface AltKayitlar {
   kalemler: (Talep['kalemler'][number] & { talepId: string })[];
   istekler: (Talep['teklifIstekleri'][number] & { talepId: string })[];

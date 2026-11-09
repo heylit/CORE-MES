@@ -8,7 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { ButceKullanimiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { BeklenenOdemelerCevabi } from '#paylasilan/sozlesme/finans.ts';
 import type { BildirimListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -3031,6 +3031,39 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(sonra.tedarikciye.find((x) => x.ad === 'Tolerans')?.deger, 'h9');
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_siparis_kart_kopyasi SET kart_surumu = 0")), /yalnız ekleme/);
     for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', `/satin-alma-talepleri/${t.id}/kart-ayrintilari`)).statusCode, 403);
+  });
+
+  test('2454: bütçe kullanımı sunucuda: kalem tutarı birime ve sipariş yılına, kur teklifin sabit kurundan (T1); kalanı kapatılan siparişte gerçekleşen teslim (2462 a); onay kırılımı', async () => {
+    const kurEkle = async (tarih: string, kur: number) => tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih, alis: kur - 0.5, satis: kur }));
+    await kurEkle('2025-06-02', 30);
+    const kullanim = async (cerez = c.sa) => tamam<ButceKullanimiCevabi>(await istek(cerez, 'GET', '/satin-alma-butce-kullanimi?yil=2026')).birimler;
+    const bos = async () => Number((await kullanim()).find((b) => b.birim === null)?.kullanilan ?? '0');
+    const once = await bos();
+    // k1 B'den 10 x 9 TRY; k2 A'dan 4 x 8 USD, teklifin günü kuru 30.
+    const { s, a, k2 } = await bolunmusSiparis('8', { paraBirimi: 'USD', teklifTarihi: '2025-06-03' });
+    assert.equal(s.teklifler.find((q) => q.id === a)?.kur, '30');
+    // Onayda kur kilitlendiyse kararın sabit kuru, yoksa teklifin kuru.
+    const kur = Number(s.karar!.sabitKurlar.find((x) => x.paraBirimi === 'USD')?.kur ?? '30');
+    const usd = 4 * 8 * kur;
+    const ara = await bos();
+    assert.equal(Math.round((ara - once) * 100) / 100, 90 + usd);
+    // T1: finansın kuru sonradan değişir, kullanım değişmez.
+    await kurEkle('2025-06-20', 33);
+    assert.equal(await bos(), ara);
+    // Onay kırılımı: birim, bu talep hariç kullanım ve bu alım.
+    const d = tamam<{ butce: { birim: string | null; butce: string | null; yil: number; kullanilan: string; buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
+    assert.deepEqual(d.map((x) => [x.birim, x.butce, x.yil, x.buAlim]), [[null, null, 2026, (90 + usd).toFixed(2)]]);
+    assert.equal(Math.round(Number(d[0]!.kullanilan) * 100) / 100, Math.round((ara - 90 - usd) * 100) / 100);
+    // 2462 a: A siparişine 1 / 4 teslim gelir ve kalanı kapatılır: kullanım gerçekleşen teslim değerine iner (çeyreği kalır; teklifte masraf yok).
+    await teslimEt(siparisi(s, a).satirlar.find((x) => x.kalemId === k2)!.id, '1', 9901);
+    assert.equal(await bos(), ara, 'açık siparişte kullanım sipariş tutarıdır');
+    await ortam!.sahip.sorgu("UPDATE satin_alma_siparis SET logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now(), logo_kayit_no = 'DENEME-2454', logo_kapatma_durumu = 'bekliyor' WHERE talep_id = $1 AND teklif_id = $2", [s.id, a]);
+    assert.equal(Math.round((await bos()) * 100) / 100, Math.round((ara - usd * 0.75) * 100) / 100);
+    // V3: iptal edilen talep kullanımdan düşer. V4: talep eden ve işlemsiz göremez.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme iptal' WHERE id = $1", [s.id]);
+    assert.equal(Math.round((await bos()) * 100) / 100, Math.round(once * 100) / 100);
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', '/satin-alma-butce-kullanimi?yil=2026')).statusCode, 403);
+    assert.equal((await istek(c.mudur, 'GET', '/satin-alma-butce-kullanimi?yil=26')).statusCode, 400);
   });
 });
 

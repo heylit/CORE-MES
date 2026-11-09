@@ -7,7 +7,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
-  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
+  AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   IptaliGeriAlCevabi, IptaliGeriAlYazimi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -38,7 +38,7 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesikTalep, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
-import { degerlendir, esitVadeOrtami, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
+import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
@@ -921,10 +921,9 @@ async function kararTlToplami(db: Db, talepId: string): Promise<number | null> {
   const k = (await degerlendirme(db, talepId)).karar;
   return k === null ? null : Number(k.tlToplam);
 }
-export async function degerlendirme(db: Db, talepId: string): Promise<DegerlendirmeCevabi> {
-  const t = await talepOku(db, talepId);
-  if (t === null) throw bulunamadi(ILETILER.talepYok);
-  const ayar = await ayarlariKur(db);
+// Kararın kuru: kilitli durumda (sipariş verilmiş) kararın sabit kuru (1096 a, 2454 T1), değilse finansın güncel kuru; ikisi de yoksa teklifin kuru.
+function kararKurlari(t: Talep, ayar: Ayarlar): { sabit: NonNullable<Talep['karar']>['sabitKurlar'] | null;
+  kur: (q: { paraBirimi: string; kur: string | null }) => number | null; aylikFaizi: (pb: string) => number | null } {
   const sabit = t.karar !== null && kilitliDurum(t.durum) && t.karar.sabitKurlar.length > 0 ? t.karar.sabitKurlar : null;
   const guncel = new Map<string, Ayarlar['kurlar'][number]>(ayar.kurlar.map((k) => [k.paraBirimi, k]));
   const kur = (q: { paraBirimi: string; kur: string | null }): number | null => {
@@ -936,6 +935,47 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
     const d = sabit !== null ? sabit.find((x) => x.paraBirimi === pb)?.aylikFaizYuzdesi ?? null : guncel.get(pb)?.aylikFaizYuzdesi ?? null;
     return d === null ? null : Number(d);
   };
+  return { sabit, kur, aylikFaizi };
+}
+
+// 2454: talebin bütçe satırları (kalem başına birim, yıl, TL). Kararsız talepte boş.
+function talepButceSatirlari(t: Talep, ayar: Ayarlar, bugun: string): ButceSatiri[] {
+  if (t.karar === null) return [];
+  // T1: sipariş verilmiş talepte kur sabittir: kararın sabit kuru, yoksa teklifin kendi gününün kuru (SA3 a); finansın bugünkü kuru
+  // yalnız ikisi de yoksa. Kullanım bugünkü kurla oynamaz.
+  const { sabit, kur: guncelKur, aylikFaizi } = kararKurlari(t, ayar);
+  const kur = (q: { paraBirimi: string; kur: string | null }): number | null => {
+    if (q.paraBirimi === 'TRY') return 1;
+    const d = sabit?.find((x) => x.paraBirimi === q.paraBirimi)?.kur ?? q.kur;
+    return d !== null && Number(d) > 0 ? Number(d) : guncelKur(q);
+  };
+  const hesaplar = t.teklifler.map((q) => teklifHesabi(q, t.kalemler, { kur, aylikFaiz: aylikFaizi }));
+  const kaynakBirimi = new Map((t.kaynaklar ?? []).flatMap((k) => k.kalemIdleri.map((id) => [id, k.birim] as const)));
+  return butceSatirlari({
+    harcamalar: kalemHarcamalari(t.karar, t.kalemler, hesaplar),
+    kalemBirimi: (id) => kaynakBirimi.get(id) ?? t.birim,
+    kararTarihi: t.karar.kararTarihi,
+    siparisler: t.karar.siparisler.map((p) => ({ teklifId: p.teklifId, siparisTarihi: p.siparisTarihi, kapali: p.logo?.kapatmaDurumu != null, satirlar: p.satirlar })),
+    bugun,
+  });
+}
+async function yilinButceSatirlari(db: Db, yil: number, ayar: Ayarlar, haric: string | null): Promise<ButceSatiri[]> {
+  const bugun = await s.bugun(db);
+  const idler = (await s.butceTalepIdleri(db, yil)).filter((id) => id !== haric);
+  const talepler = await talepleriKur(db, await s.talepSatirlariIdlerle(db, idler));
+  return talepler.flatMap((t) => talepButceSatirlari(t, ayar, bugun));
+}
+// 2454: birim başına yılın bütçe kullanımı (siparişi verilmiş talepler; tam görenler).
+export async function butceKullanimiOku(db: Db, yil: number): Promise<ButceKullanimiCevabi> {
+  const ayar = await ayarlariKur(db);
+  return { yil, birimler: butceKullanimi(await yilinButceSatirlari(db, yil, ayar, null), yil, ayar.birimler) };
+}
+
+export async function degerlendirme(db: Db, talepId: string): Promise<DegerlendirmeCevabi> {
+  const t = await talepOku(db, talepId);
+  if (t === null) throw bulunamadi(ILETILER.talepYok);
+  const ayar = await ayarlariKur(db);
+  const { sabit, kur, aylikFaizi } = kararKurlari(t, ayar);
   const puanlar = new Map((await s.tedarikcileriOku(db, null)).map((x) => [x.firmaId, x.puan] as const));
   const siparisGunleri = (t.karar?.siparisler ?? []).flatMap((x) => (x.siparisTarihi === null ? [] : [x.siparisTarihi])).sort();
   const agirliklar = t.agirliklar ?? ayar.agirliklar;
@@ -966,7 +1006,24 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
       atama: d.bolme.plan.atama, bugunkuDeger: para(d.bolme.plan.toplam)!, tekTedarikci: para(d.bolme.tekToplam), kazanc: para(d.bolme.kazanc), onerilir: d.bolme.onerilir,
     },
     karar: tutar === null ? null : { tlToplam: para(tutar.tlToplam)!, bugunkuDeger: para(tutar.bugunkuDeger)!, basamak: gerekenBasamak(tutar.tlToplam, ayar.onayLimitleri) },
+    butce: await talepButcesi(db, t, ayar),
   };
+}
+// 2454 onay kırılımı: talebin kalemlerinin birimleri; kullanılan, bu talep hariç kararın yılındaki kullanım; buAlim bu talebin o birime
+// düşen tutarı (hesaplanamayan kalem girmez). VARSAYIM: yıl kararın tarihinden (yoksa bugün); bölünmüş siparişler de o yıla gösterilir.
+async function talepButcesi(db: Db, t: Talep, ayar: Ayarlar): Promise<DegerlendirmeCevabi['butce']> {
+  const bugun = await s.bugun(db);
+  const satirlar = talepButceSatirlari(t, ayar, bugun);
+  if (satirlar.length === 0) return [];
+  const yil = Number((t.karar?.kararTarihi ?? bugun).slice(0, 4));
+  const kullanim = new Map(butceKullanimi(await yilinButceSatirlari(db, yil, ayar, t.id), yil, ayar.birimler).map((b) => [b.birim, b]));
+  const birimler = [...new Set(satirlar.map((x) => x.birim))];
+  return birimler.map((birim) => {
+    const b = kullanim.get(birim);
+    const buAlim = satirlar.filter((x) => x.birim === birim && x.tl !== null).reduce((top, x) => top + x.tl!, 0);
+    return { birim, butce: b?.butce ?? (birim === null ? null : ayar.birimler.find((x) => x.ad === birim)?.yillikButce ?? null),
+      kullanilan: b?.kullanilan ?? '0.00', yil, buAlim: (Math.round(buAlim * 100) / 100).toFixed(2) };
+  }).sort((a, b) => (a.birim === null ? 1 : b.birim === null ? -1 : a.birim.localeCompare(b.birim, 'tr')));
 }
 // 1105 a: yeni sipariş satırının kalemi kartlıysa kartın o anki ayrıntısı kopyalanır; kopya bir kez alınır, değişmez.
 async function kartKopyalariniAl(db: Db, talepId: string): Promise<void> {

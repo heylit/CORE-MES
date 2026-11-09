@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani, esitVadeOrtami,
+  butceKullanimi, butceSatirlari, kalemHarcamalari,
 } from './hesap-kurallar.ts';
 
 // Prototipteki örnek (Teklif matrisi): üç kalem, üç teklif. Kimlikler ve adlar deneme verisidir.
@@ -155,4 +156,68 @@ test('faizi bilinmeyen para biriminde vadeli teklif varsa hiçbir teklif indirge
   // Faizi eksik para biriminde vadeli teklif yoksa ortam değişmez.
   assert.equal(esitVadeOrtami([tlVadeli], faizYok), faizYok);
   assert.equal(esitVadeOrtami([{ ...C, vadeGun: 0 }, tlVadeli], faizYok), faizYok);
+});
+
+test('2454 T2: kalem harcamaları kuruşa yuvarlanır, toplamları yuvarlanmış karar tutarına eşittir (tek, bölünmüş, en az miktar, dövizli)', () => {
+  const hesaplar = [C, B, F].map((q) => teklifHesabi(q, KALEMLER, ORTAM));
+  const kararlar = [
+    { mod: 'tek' as const, teklifId: 'c', bolunme: [] },
+    { mod: 'tek' as const, teklifId: 'b', bolunme: [] },
+    { mod: 'bolunmus' as const, teklifId: null, bolunme: [{ kalemId: K1, teklifId: 'f' }, { kalemId: K2, teklifId: 'c' }, { kalemId: K3, teklifId: 'b' }] },
+  ];
+  for (const k of kararlar) {
+    const l = kalemHarcamalari(k, KALEMLER, hesaplar);
+    const top = Math.round(l.reduce((t, x) => t + x.tl!, 0) * 100) / 100;
+    assert.equal(top, Math.round(kararTutari(k, KALEMLER, hesaplar)!.tlToplam * 100) / 100, JSON.stringify(k));
+    assert.ok(l.every((x) => x.tl !== null && Math.round(x.tl * 100) / 100 === x.tl));
+  }
+  // En az miktar: F'de K1 için en az 10, kalem 20; nakliye hariç (25 €) tek kaleme düşer.
+  const f = kalemHarcamalari(kararlar[2]!, KALEMLER, hesaplar).find((x) => x.kalemId === K1)!;
+  yakin(f.tl, (20 * 36 + 25) * 37.2);
+});
+
+test('2454: nakliye dahil teklifte nakliye eklenmez, hariçte tutarla dağılır; mal tutarı sıfırsa masraf eşit dağılır (V5); kur yoksa kalemler null, fiyatsız kalem listede yok', () => {
+  const D = teklif('d', { nakliyeDahil: true, nakliye: '500', digerMasraf: '100', fiyatlar: [{ kalemId: K1, birimFiyat: '10' }, { kalemId: K2, birimFiyat: '30' }] });
+  const H = teklif('h', { nakliyeDahil: false, nakliye: '500', digerMasraf: '100', fiyatlar: [{ kalemId: K1, birimFiyat: '10' }, { kalemId: K2, birimFiyat: '30' }] });
+  const kalemler = [{ id: K1, miktar: '10' }, { id: K2, miktar: '10' }, { id: K3, miktar: '1' }];
+  const kalem = (q: HesapTeklifi) => kalemHarcamalari({ mod: 'tek', teklifId: q.id, bolunme: [] }, kalemler, [teklifHesabi(q, kalemler, ORTAM)]);
+  assert.deepEqual(kalem(D).map((x) => [x.kalemId, x.tl]), [[K1, 125], [K2, 375]]);
+  assert.deepEqual(kalem(H).map((x) => [x.kalemId, x.tl]), [[K1, 250], [K2, 750]]);
+  const S = teklif('s', { nakliyeDahil: false, nakliye: '90', fiyatlar: [{ kalemId: K1, birimFiyat: '0' }, { kalemId: K2, birimFiyat: '0' }] });
+  assert.deepEqual(kalem(S).map((x) => x.tl), [45, 45]);
+  const U = teklif('u', { paraBirimi: 'USD', kur: null, fiyatlar: [{ kalemId: K1, birimFiyat: '1' }] });
+  assert.deepEqual(kalem(U), [{ kalemId: K1, teklifId: 'u', tl: null, masraf: null }]);
+  assert.deepEqual(kalem(H).map((x) => x.masraf), [150, 450]);
+  // Kuruş farkı son kaleme: 100 / 3.
+  const Y = teklif('y', { nakliyeDahil: false, nakliye: '100', fiyatlar: [{ kalemId: K1, birimFiyat: '0' }, { kalemId: K2, birimFiyat: '0' }, { kalemId: K3, birimFiyat: '0' }] });
+  assert.deepEqual(kalem(Y).map((x) => x.tl), [33.33, 33.33, 33.34]);
+});
+
+test('2454 T3, V4 a, 2462 a: yıl siparişin tarihinden (yoksa karar); kalanı kapatılmış siparişte gerçekleşen teslim değeri; birim başına toplam, hesaplanamayan sayılır', () => {
+  const harcamalar = [
+    { kalemId: K1, teklifId: 'a', tl: 1000, masraf: 0 }, { kalemId: K2, teklifId: 'b', tl: 600, masraf: 0 }, { kalemId: K3, teklifId: 'c', tl: null, masraf: null },
+  ];
+  const satirlar = butceSatirlari({
+    harcamalar, kalemBirimi: (id) => (id === K1 ? 'Bakım' : id === K2 ? null : 'Kalite'), kararTarihi: '2026-12-20', bugun: '2027-01-05',
+    siparisler: [
+      { teklifId: 'a', siparisTarihi: '2026-12-28', kapali: true, satirlar: [{ kalemId: K1, miktar: '10', teslimAlinan: '4' }] },
+      { teklifId: 'b', siparisTarihi: '2027-01-03', kapali: false, satirlar: [{ kalemId: K2, miktar: '10', teslimAlinan: '1' }] },
+    ],
+  });
+  assert.deepEqual(satirlar, [{ birim: 'Bakım', yil: 2026, tl: 400 }, { birim: null, yil: 2027, tl: 600 }, { birim: 'Kalite', yil: 2026, tl: null }]);
+  // Kapalı siparişte teslim yoksa kullanım sıfırdır; fazla teslim de sayılır.
+  const kapali = (teslimAlinan: string | null) => butceSatirlari({ harcamalar: [harcamalar[0]!], kalemBirimi: () => 'Bakım', kararTarihi: '2026-01-01', bugun: '2026-01-01',
+    siparisler: [{ teklifId: 'a', siparisTarihi: null, kapali: true, satirlar: [{ kalemId: K1, miktar: '10', teslimAlinan }] }] })[0]!.tl;
+  assert.deepEqual([kapali(null), kapali('12')], [0, 1200]);
+  // 2472-1 a: masraf payı tam kalır, yalnız mal oranla iner; siparişe hiç teslim gelmediyse masraf da sıfır (Maliyet M1).
+  const masrafli = (teslimAlinan: string | null) => butceSatirlari({ harcamalar: [{ kalemId: K1, teklifId: 'a', tl: 1100, masraf: 100 }], kalemBirimi: () => 'Bakım',
+    kararTarihi: '2026-01-01', bugun: '2026-01-01', siparisler: [{ teklifId: 'a', siparisTarihi: null, kapali: true, satirlar: [{ kalemId: K1, miktar: '10', teslimAlinan }] }] })[0]!.tl;
+  assert.deepEqual([masrafli('4'), masrafli(null), masrafli('0')], [500, 0, 0]);
+  const k = butceKullanimi(satirlar, 2026, [{ ad: 'Bakım', yillikButce: '5000' }, { ad: 'Ambalaj', yillikButce: '100' }]);
+  assert.deepEqual(k, [
+    { birim: 'Ambalaj', butce: '100', kullanilan: '0.00', hesaplanamayanKalem: 0 },
+    { birim: 'Bakım', butce: '5000', kullanilan: '400.00', hesaplanamayanKalem: 0 },
+    { birim: 'Kalite', butce: null, kullanilan: '0.00', hesaplanamayanKalem: 1 },
+  ]);
+  assert.deepEqual(butceKullanimi(satirlar, 2027, []), [{ birim: null, butce: null, kullanilan: '600.00', hesaplanamayanKalem: 0 }]);
 });
