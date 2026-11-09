@@ -164,10 +164,11 @@ describe('dış operasyonlar süzgeci ve sırası (2424)', () => {
 
 describe('2424-a c ve 2426: iki gecikme ölçüsü, mal kabul adresi', () => {
   it('gecikme son dönüşe göredir, altında adet ağırlıklı; ilk dönüş gecikmesi süzgeci ve sırayı belirlemez', async () => {
-    ac(liste(satir({ gecikmeGun: 0, gecikmeSonDonus: 6, gecikmeAgirlikli: 2.5 }), satir({ isEmriId: 2, emirNo: 'UE-2026-002', gecikmeGun: 4, gecikmeSonDonus: 0, gecikmeAgirlikli: 0 })));
+    ac(liste(satir({ gecikmeGun: 0, gecikmeSonDonus: 6, gecikmeAgirlikli: 2.5 }), satir({ isEmriId: 3, emirNo: 'UE-2026-003', gecikmeSonDonus: 4, gecikmeAgirlikli: 4 }), satir({ isEmriId: 2, emirNo: 'UE-2026-002', gecikmeGun: 4, gecikmeSonDonus: 0, gecikmeAgirlikli: 0 })));
     const tablo = await screen.findByRole('table');
     expect(within(tablo).getByText('6 gün')).toBeTruthy();
     expect(within(tablo).getByText('adet ağırlıklı 2,5 gün')).toBeTruthy();
+    expect(within(tablo).queryAllByText(/adet ağırlıklı/)).toHaveLength(1);
     expect(disOperasyonSuz([satir({ gecikmeGun: 4, gecikmeSonDonus: 0 })], '', 'geciken', null)).toEqual([]);
   });
   it('mal kabul adresi bilinen sipariş satırı ve fason kutusunu taşır, bilinmeyeni göndermez', () => {

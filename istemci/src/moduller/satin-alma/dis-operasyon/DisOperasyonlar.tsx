@@ -21,7 +21,7 @@ const gunMetni = (n: number) => `${n.toLocaleString('tr-TR', { maximumFractionDi
 function gecikmeHucresi(x: DisOperasyon) {
   if (x.gecikmeSonDonus === null) return '—';
   const ana = x.gecikmeSonDonus > 0 ? <Rozet ton="hata">{gunMetni(x.gecikmeSonDonus)}</Rozet> : <Rozet ton="tamam">Zamanında</Rozet>;
-  const agirlikli = x.gecikmeAgirlikli !== null && x.gecikmeAgirlikli > 0 ? <small>adet ağırlıklı {gunMetni(x.gecikmeAgirlikli)}</small> : null;
+  const agirlikli = x.gecikmeAgirlikli !== null && x.gecikmeAgirlikli > 0 && x.gecikmeAgirlikli !== x.gecikmeSonDonus ? <small>adet ağırlıklı {gunMetni(x.gecikmeAgirlikli)}</small> : null;
   return agirlikli ? <span className="sa-gecikme">{ana}{agirlikli}</span> : ana;
 }
 
@@ -46,7 +46,7 @@ const SUTUNLAR: Sutun<DisOperasyon>[] = [
   { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, sirala: true, hucre: (x) => gun(x.termin) },
   { anahtar: 'donus', baslik: 'İlk dönüş', kirilmaz: true, hucre: (x) => zaman(x.ilkDonus) },
   { anahtar: 'adet', baslik: 'Giden / dönen / hurda', hizala: 'sag', hucre: (x) => `${adet(x.gonderilen)} / ${adet(x.donen)} / ${adet(x.hurda)}` },
-  // 2424-a c: iki ölçü yan yana; ana sayı son dönüşe göre (karneyle aynı), altında adet ağırlıklı.
+  // 2424-a c: iki ölçü yan yana; ana sayı son dönüşe göre (karneyle aynı), altında adet ağırlıklı (farklıysa).
   { anahtar: 'gecikme', baslik: 'Gecikme', sirala: true, hucre: (x) => gecikmeHucresi(x) },
 ];
 

@@ -31,6 +31,8 @@ interface Satir {
   gidenParti: string;
   // Kutunun firmasındaki açık emrin fason işi: seçilince dönen kart rotadan gelir, giden iş parçasıdır ('' seçilmedi).
   fasonIsEmriId: string; fasonIsEtiketi: string;
+  // Dış operasyonlardan gelişte (2426) kutunun işleri yüklenince seçilecek iş ('' yok).
+  bekleyenFasonIsi: string;
   // Parti sertifikası (#960): dosya seçilince yüklenir; mal kabul özetiyle belgeyi açıp partiye bağlar.
   sertifikaOzet: string; sertifikaAdi: string; sertifikaYukleniyor: boolean;
   // Sevkiyatın geliş kalemi (944, 957 a): kabul kalemi kapatır; kısmi kabulde kalem açık kalır ('' bağsız).
@@ -40,7 +42,7 @@ interface Satir {
 }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
-  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '',
+  hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', bekleyenFasonIsi: '',
   sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '', sonKullanma: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
 const bosMu = (s: Satir): boolean => s.kart === '' && s.miktar === '' && s.siparisSatirId === '' && s.hizmetKarti === '' && s.sevkKalemiId === '';
@@ -130,6 +132,12 @@ function FasonDonusu({ s, degistir }: { s: Satir; degistir: (d: Partial<Satir>) 
       fasonIsEtiketi: `${kart}${x.statulu ? ` (OP ${x.opNo} statüsünde)` : ''}`,
     });
   };
+  useEffect(() => {
+    if (!s.bekleyenFasonIsi || !isler.data) return;
+    const v = s.bekleyenFasonIsi;
+    degistir({ bekleyenFasonIsi: '' });
+    if (isler.data.isler.some((i) => String(i.isEmriId) === v)) isSec(v);
+  }, [isler.data, s.bekleyenFasonIsi]);
   return (
     <>
       <div className="tc-stok-tam tc-stok-secenekler" role="group" aria-label="Hizmet dönüşü">
@@ -379,6 +387,26 @@ function SevkKalemi({ kalemId, doldur }: { kalemId: number; doldur: (s: Satir, a
   return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Sevkiyat kalemi kabul beklemiyor: kabul edilmiş ya da tetiği geri alınmış olabilir.</p>;
 }
 
+// Dış operasyonlardan "Mal kabulde gir" (2426): `?fasonIsEmri=&siparisSatiri=&konum=`. Hizmet sipariş satırı, firmanın fason kutusu ve
+// fason işi bir kez doldurulur; satır açık siparişlerde yoksa (kapanmış ya da başka depoda) depocu elle seçer.
+export const fasonSiparisSatiri = (x: AcikSiparisSatiri, konumId: number | null, isEmriId: number): Satir => ({
+  ...siparistenSatir(bosSatir(), x), miktar: '', elleMiktar: false,
+  ...(konumId === null ? {} : { fasonKonumId: String(konumId) }), bekleyenFasonIsi: String(isEmriId),
+});
+function FasonSiparisi({ siparisSatirId, konumId, isEmriId, doldur }: { siparisSatirId: number; konumId: number | null; isEmriId: number; doldur: (s: Satir) => void }) {
+  const a = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
+  const [dolduruldu, setDolduruldu] = useState(false);
+  const x = a.data?.satirlar.find((r) => r.id === siparisSatirId);
+  useEffect(() => {
+    if (!x || dolduruldu) return;
+    setDolduruldu(true);
+    doldur(fasonSiparisSatiri(x, konumId, isEmriId));
+  }, [x]);
+  if (a.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(a.error)} yenile={() => void a.refetch()} />;
+  if (!a.data || x || dolduruldu) return null;
+  return <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Hizmet siparişi açık siparişlerde yok: kapanmış olabilir. Siparişi aşağıdan seçin.</p>;
+}
+
 function EmirEksikleri({ emirId, doldur }: { emirId: number; doldur: (l: Satir[]) => void }) {
   const t = useQuery({ queryKey: anahtarlar.ayrinti('emir-tamamlama', emirId), queryFn: () => api.get<EmirTamamlamaCevabi>(`/stok/uretim-emirleri/${emirId}/tamamlama`) });
   const [dolduruldu, setDolduruldu] = useState(false);
@@ -410,6 +438,9 @@ export function MalKabul() {
   const [adres] = useSearchParams();
   const emirId = Number(adres.get('emir'));
   const sevkKalemi = Number(adres.get('sevkKalemi'));
+  const fasonIsEmri = Number(adres.get('fasonIsEmri'));
+  const fasonSiparis = Number(adres.get('siparisSatiri'));
+  const fasonKonum = Number(adres.get('konum'));
   // Teslim alınınca lot etiketleri Etiket Merkezi'nde önerilir (1288).
   const [etiket, setEtiket] = useState<{ id: number; no: string } | null>(null);
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => {
@@ -433,6 +464,10 @@ export function MalKabul() {
             </div>
             <AyniIrsaliye irsaliye={arananIrsaliye} />
             {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
+            {Number.isInteger(fasonIsEmri) && fasonIsEmri > 0 && Number.isInteger(fasonSiparis) && fasonSiparis > 0 && (
+              <FasonSiparisi siparisSatirId={fasonSiparis} konumId={Number.isInteger(fasonKonum) && fasonKonum > 0 ? fasonKonum : null} isEmriId={fasonIsEmri}
+                doldur={(s) => { setTur('satin_alma'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />
+            )}
             {Number.isInteger(emirId) && emirId > 0 && <EmirEksikleri emirId={emirId} doldur={(l) => setSatirlar((m) => [...m.filter((x) => !bosMu(x)), ...l])} />}
             {tur === 'satin_alma' && <AcikSiparisler sec={(x) => setSatirlar((l) => {
               const bos = l.findIndex((s) => s.kart === '' && !s.siparisSatirId);
