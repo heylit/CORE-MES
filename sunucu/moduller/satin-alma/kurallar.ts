@@ -1467,6 +1467,7 @@ export function projeReddi(t: Pick<TalepYazimi, 'projeId' | 'uretimEmriId'>, esk
   return null;
 }
 export const projeHareketi = (eski: string | null, yeni: string | null): string => `Proje: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+export const emirHareketi = (eski: string | null, yeni: string | null): string => `Üretim emri: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
 
 // 2611 a, Maliyet C1: projeye giden alım değeri, bir sipariş için. Yalnız stoğa girmeyen satırlar sayılır (stok kartlı satır sarfla emre,
 // oradan projeye ulaşır; fason bağlı satır iş emrinden gider). Hizmet kartlı satır teslim değeriyle (gerceklesenPay), kartsız satır
@@ -1484,8 +1485,9 @@ export function projeAlimDegeri(satirlar: readonly { tur: ProjeAlimSatirTuru; ma
 
 // 2620 a (Finans kararı): siparişin maliyeti başka yoldan üretime ya da projeye girer mi. Talepte proje ya da emir, kalemde fason bağı ya da
 // stoğa giren kart (türü hizmet olmayan) varsa evet; kalemlerden biri yeterlidir. Kartsız ve hizmet kartlı kalem tek başına hayırdır.
+// 2624 b, Mimar N1: kalemin emri mal kabulle aynı sırayla beslenir (kaynağın emri, yoksa talebin); emirli kalem tek başına yeter.
 export function siparisUretimeGiderMi(t: { projeId: number | null; uretimEmriId: number | null },
-  kalemler: readonly { fasonBagli: boolean; kartTuru: string | null }[]): boolean {
+  kalemler: readonly { fasonBagli: boolean; kartTuru: string | null; emirli?: boolean }[]): boolean {
   if (t.projeId !== null || t.uretimEmriId !== null) return true;
-  return kalemler.some((k) => k.fasonBagli || (k.kartTuru !== null && k.kartTuru !== 'hizmet'));
+  return kalemler.some((k) => k.fasonBagli || k.emirli === true || (k.kartTuru !== null && k.kartTuru !== 'hizmet'));
 }

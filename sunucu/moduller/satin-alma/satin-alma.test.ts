@@ -3179,8 +3179,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.ok(kalkti.hareketler.some((h) => h.metin === 'Proje: P2611A Deneme proje P2611A -> yok'), JSON.stringify(kalkti.hareketler));
     // Proje pasifleşince yeniden seçilemez; emirli talebe proje veritabanında da girmez.
     assert.equal((await kaydet(c.talep, { ...govde(kalkti), projeId: pasif })).statusCode, 400);
-    const kisit = await ortam!.sahip.tek<{ tanim: string }>("SELECT pg_get_constraintdef(oid) AS tanim FROM pg_constraint WHERE conname = 'satin_alma_talep_proje_emirsiz'");
-    assert.match(kisit?.tanim ?? '', /proje_id IS NULL\) OR \(uretim_emri_id IS NULL/);
+    await assert.rejects(ortam!.sahip.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = $2, proje_id = $3 WHERE id = $1', [t.id, await emirAc(), aktif]),
+      kisitla('satin_alma_talep_proje_emirsiz'));
   });
 
   test('2611 a, Maliyet C1, Veri 2 ve 4: projeye yalnız stoğa girmeyen satır gider (hizmet teslim değeriyle, masraf payıyla); farklı projeli talepler birleşmez; birleşmiş kaynak sayılmaz', async () => {
@@ -3237,6 +3237,40 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Güncelleme yolu bağı değiştirmez.
     tamam<Talep>(await kaydet(c.sa, { ...govde(t), baslik: 'Deneme raf alımı 2', idariTalepId: null }));
     assert.equal((await vt().tx((db) => servis.idariTalepSatinAlmalari(db, [idari]))).get(idari)?.talepId, acilan.id);
+  });
+
+  test('2624 b: farklı emirli talepler birleşir, kaynaktan gelen kalem kendi emrine bağlı kalır (mal kabul); talep emri yalnız kaynaksız kaleme; emir değişikliği harekete; emirli kaynaklı birleşik talebe proje yok; talep eden başka kaynağın emrini görmez', async () => {
+    const [e1, e2, e3] = [await emirAc(), await emirAc(), await emirAc()];
+    const a = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ uretimEmriId: e1, kalemler: [kalem('Deneme A kalemi')] })));
+    const b = tamam<Talep>(await istek(c.talep2, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ uretimEmriId: e2, kalemler: [kalem('Deneme B kalemi')] })));
+    const birlesik = tamam<Talep>(await birlestir(c.sa, [a.id, b.id]));
+    assert.equal(birlesik.uretimEmriId, null);
+    const emirNo = (t: Talep, kaynakId: string) => t.kaynaklar?.find((x) => x.talepId === kaynakId)?.uretimEmriNo;
+    assert.deepEqual([emirNo(birlesik, a.id), emirNo(birlesik, b.id)], [a.uretimEmriNo, b.uretimEmriNo]);
+    // Veri 4: emirli kaynaktan kalemi olan birleşik talep projeye bağlanmaz.
+    const p = await projeEkle('P2624');
+    assert.equal((await kaydet(c.sa, { ...govde(birlesik), projeId: p })).statusCode, 400);
+    // Talep düzeyinde emir seçilir; hareket yazılır, kaynaktan gelen kalem kaynağın emrinde kalır.
+    const yeniKalem = kalem('Deneme sonradan eklenen');
+    const emirli = tamam<Talep>(await kaydet(c.sa, { ...govde(birlesik), uretimEmriId: e3, kalemler: [...birlesik.kalemler, yeniKalem] }));
+    assert.ok(emirli.hareketler.some((h) => h.metin === `Üretim emri: yok -> ${emirli.uretimEmriNo}`), JSON.stringify(emirli.hareketler));
+    const [ka, kb] = [emirli.kaynaklar!.find((x) => x.talepId === a.id)!.kalemIdleri[0]!, emirli.kaynaklar!.find((x) => x.talepId === b.id)!.kalemIdleri[0]!];
+    const q = teklif(firmaA, [[ka, '10'], [kb, '10'], [yeniKalem.id, '10']]);
+    const degerlendirmede = tamam<Talep>(await kaydet(c.sa, { ...govde(emirli), durum: 'degerlendirme' }));
+    const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(degerlendirmede), durum: 'onayda', teklifler: [q],
+      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+    const sp = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'SA-2624', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    const satir = (kalemId: string) => siparisi(sp, q.id).satirlar.find((r) => r.kalemId === kalemId)!.id;
+    const emirler = await vt().tx((db) => siparisSatirlarininEmri(db, [satir(ka), satir(kb), satir(yeniKalem.id)]));
+    assert.deepEqual([emirler.get(satir(ka)), emirler.get(satir(kb)), emirler.get(satir(yeniKalem.id))], [e1, e2, e3]);
+    // Güvenlik K1: talep eden kendi kaynağını görür; birleşik talebin kaynak listesi ve başka kaynağın emri görünmez.
+    const gorunen = talepEdenGorunumu(sp, kisi.talep!);
+    assert.equal((gorunen.kaynaklar ?? []).length, 0);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim')).talepler;
+    assert.equal(JSON.stringify(benim).includes(b.uretimEmriNo!), false);
+    assert.ok(benim.some((t) => t.id === a.id));
   });
 
   // 2540 yardımcıları: finansın alacak listesi ve değişiklik defteri.

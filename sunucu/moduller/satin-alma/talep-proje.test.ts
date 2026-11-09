@@ -50,5 +50,8 @@ describe('2611 a, 2614 1/2 a, 2620 a: talebin projesi (saf kurallar)', () => {
     assert.equal(siparisUretimeGiderMi(bos, [kartsiz, { fasonBagli: false, kartTuru: 'hammadde' }]), true);
     assert.equal(siparisUretimeGiderMi(bos, [kartsiz, hizmet]), false);
     assert.equal(siparisUretimeGiderMi(bos, []), false);
+    // 2624 b, Mimar N1: kaynağı emirli kalem (birleşik talep emirsiz olsa da) siparişi üretime götürür.
+    assert.equal(siparisUretimeGiderMi(bos, [{ ...kartsiz, emirli: true }]), true);
+    assert.equal(siparisUretimeGiderMi(bos, [{ ...hizmet, emirli: false }]), false);
   });
 });
