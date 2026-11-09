@@ -492,7 +492,7 @@
 .tc-rr1-od {
   display: grid; align-items: center; gap: var(--b-2); padding: var(--b-1) var(--b-3); border-top: 1px solid var(--edge);
   grid-template-columns: calc(var(--b-6) * 2.75) calc(var(--b-6) * 3.25) minmax(calc(var(--b-6) * 4.5), 1fr) minmax(calc(var(--b-6) * 5), calc(var(--b-6) * 7))
-    repeat(3, calc(var(--b-6) * 2.75)) calc(var(--b-6) * 2.25) calc(var(--b-6) * 3.5);
+    repeat(2, calc(var(--b-6) * 2.75)) calc(var(--b-6) * 3.5);
 }
 .tc-rr1-od:first-child { border-top: 0; }
 .tc-rr1-od-bas { font-size: var(--yazi-xs); color: var(--muted); font-weight: 600; background: var(--panel2); padding-block: var(--b-2) var(--b-1); }
@@ -623,3 +623,6 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-pr-toplam { display: flex; flex-direction: column; gap: var(--b-2); background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-2); padding: var(--b-3); }
 .tc-rr1-pr-toplam h4 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; font-size: var(--yazi-s); }
 .tc-rr1-pr-toplam h4 small { color: var(--muted); font-weight: 400; font-size: var(--yazi-xs); }
+
+/* 2559: Operasyonlar araç satırındaki "Pasifleri gizle" */
+.tc-rr1-onay { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--ink); white-space: nowrap; cursor: pointer; }
