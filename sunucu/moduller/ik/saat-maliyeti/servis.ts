@@ -1,0 +1,56 @@
+import type { Db } from '#cekirdek/db.ts';
+import { ayAraligi, grupDegerleri, type GrupDegeri, type Parametreler } from './kurallar.ts';
+import { ayinParametreleri, personelGirdileri } from './sorgular.ts';
+
+const sayi = (v: string | null): number | null => (v === null ? null : Number(v));
+
+async function hesapla(db: Db, ay: string): Promise<{ gruplar: GrupDegeri[]; kisiGrubu: Map<number, number> }> {
+  const aralik = ayAraligi(ay);
+  if (aralik === null) throw new Error(`Geçersiz ay: ${ay}`);
+  const p = await ayinParametreleri(db, aralik.ayBasi);
+  const parametreler: Parametreler = {
+    sgkIsverenOrani: sayi(p?.sgkIsverenOrani ?? null), issizlikIsverenOrani: sayi(p?.issizlikIsverenOrani ?? null), sgkTavani: sayi(p?.sgkTavani ?? null), aylikSaat: sayi(p?.aylikSaat ?? null),
+  };
+  const satirlar = await personelGirdileri(db, aralik.ayBasi, aralik.aySonu);
+  const girdiler = satirlar.map((r) => ({
+    personelNo: r.personelNo, departmanNo: r.departmanNo, departmanAd: r.departmanAd, brut: sayi(r.brut), saat: Number(r.saat),
+    bordro: r.bordroMaliyeti === null ? null : { maliyet: Number(r.bordroMaliyeti), mesaiSaati: sayi(r.bordroMesaiSaati), tatilSaati: sayi(r.bordroTatilSaati), gun: sayi(r.bordroGun) },
+  }));
+  const kisiGrubu = new Map(satirlar.flatMap((r) => (r.kisiId === null ? [] : [[r.kisiId, r.departmanNo] as const])));
+  return { gruplar: grupDegerleri(girdiler, parametreler), kisiGrubu };
+}
+
+export type { GrupDegeri } from './kurallar.ts';
+export interface KisiGrupDegeri { departmanNo: number; saatMaliyeti: number | null; kucuk: boolean }
+
+// Küçük grupta değer gizlenir (2603 a, Güvenlik K1): tek ya da iki kişilik grubun ortalaması kişinin kendi değerini verir.
+const gizli = <T extends { saatMaliyeti: number | null; kucuk: boolean }>(g: T): T => (g.kucuk ? { ...g, saatMaliyeti: null } : g);
+
+async function kisiDegerleri(db: Db, kisiIdler: readonly number[], ay: string): Promise<Map<number, KisiGrupDegeri>> {
+  const tekil = [...new Set(kisiIdler)];
+  if (tekil.length === 0) return new Map();
+  const { gruplar, kisiGrubu } = await hesapla(db, ay);
+  const grup = new Map(gruplar.map((g) => [g.departmanNo, g]));
+  return new Map(tekil.flatMap((id) => {
+    const no = kisiGrubu.get(id);
+    const g = no === undefined ? undefined : grup.get(no);
+    return g === undefined ? [] : [[id, { departmanNo: g.departmanNo, saatMaliyeti: g.saatMaliyeti, kucuk: g.kucuk }] as const];
+  }));
+}
+
+// Departman başına grup saat maliyeti (TRY); ekrana gidebilir. Küçük grupta saatMaliyeti null, kucuk true. Kişi değeri dönmez.
+// Yetki denetlemez; çağıran uç korur.
+export async function grupSaatMaliyetleri(db: Db, ay: string): Promise<Map<number, GrupDegeri>> {
+  return new Map((await hesapla(db, ay)).gruplar.map((g) => [g.departmanNo, gizli(g)]));
+}
+
+// Kişinin (kisi.id) grubunun değeri; ekrana gidebilir, küçük grupta null. Personel bağı ya da departmanı olmayan kişi haritada yoktur.
+export async function kisilerinGrupSaatMaliyeti(db: Db, kisiIdler: readonly number[], ay: string): Promise<Map<number, KisiGrupDegeri>> {
+  return new Map([...(await kisiDegerleri(db, kisiIdler, ay))].map(([id, d]) => [id, gizli(d)]));
+}
+
+// YALNIZ SUNUCU İÇİ TOPLAM HESABI (2603 a: küçük grubun değeri hesapta kullanılır). Küçük grupta da gerçek değer döner; bu değer hiçbir
+// cevaba, günlüğe ya da dışa aktarıma konmaz, yalnız toplanmış tutarın (iş emri, proje, OEE kaybı) içinde kullanılır.
+export async function kisilerinGrupSaatMaliyetiYalnizHesapIcin(db: Db, kisiIdler: readonly number[], ay: string): Promise<Map<number, KisiGrupDegeri>> {
+  return kisiDegerleri(db, kisiIdler, ay);
+}
