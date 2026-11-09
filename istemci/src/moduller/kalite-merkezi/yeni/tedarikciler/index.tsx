@@ -20,6 +20,7 @@ import type { KmYetkisi } from '../yetki.ts';
 import { Grafik, VeriYok } from '../gostergeler/Grafik.tsx';
 import { Panel } from '../gostergeler/index.tsx';
 import { GenelBelge } from './GenelBelge.tsx';
+import { KategoriOnaylari } from './KategoriOnaylari.tsx';
 import '../gostergeler/k4.css';
 
 // Uygulamanın SUP_F'i. Kod önerisi kayıt sayısından (TED-001).
@@ -84,6 +85,12 @@ function TedarikciFormu({ veri, yetki, kayit, kapat }: { veri: KmVerisi; yetki: 
         ? <Ekler veri={veri} yetki={yetki} kol="sup" kimlik={kayit._id} no={kayit.kod || kayit.ad} tur="Tedarikçi sistem sertifikası" />
         : <p className="tc-km-soluk">Sertifika belgelerini tedarikçiyi kaydettikten sonra ekleyebilirsiniz.</p>),
     },
+    // 2466 (2461-2 a): kategori başına Kalite kararı onay yetkisinindir; adım yalnız ona görünür ve kayıtlı firma bağıyla çalışır.
+    ...(yetki.onayla ? [{
+      baslik: 'Kategori onayları',
+      ipucu: 'Her kategori kararı hemen kaydedilir; Satın Alma bu kararları salt okur.',
+      icerik: () => <KategoriOnaylari firmaId={typeof kayit?.firmaId === 'number' ? kayit.firmaId : null} />,
+    } satisfies KmAdim] : []),
     { baslik: 'Performans', alanlar: ['kaliteSkor', 'teslimatSkor', 'not'] },
   ];
   return (

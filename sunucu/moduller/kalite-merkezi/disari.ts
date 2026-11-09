@@ -14,6 +14,11 @@ export { kaliteAskisindakiTedarikciler } from './servis.ts';
 // yoktur. Firma kimliği olmayan eski kayıt kod ya da adla bağlanır (kurallar.ts). Yetkiyi çağıranın ucu denetler.
 export { tedarikciOnayDurumlari } from './servis.ts';
 export type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+// Kategori başına Kalite kararı (2461-2 a, 2466-2 a): satın alma firma kimlikleriyle okur. İstenen her firma haritadadır; kararı olmayan
+// kategori listede yoktur ("Kalite kararı yok"). Firma geneli kayıt Askıda ise firmaAskida doludur ve her karar onaysız, kaynağı
+// 'firma_askida' döner. Yetkiyi çağıranın ucu denetler.
+export { kategoriOnaylari } from './kategori-onayi/servis.ts';
+export type { KmKategoriDurumu, KmKategoriKaynagi, KmKategoriOnayi, KmKategoriTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 // DÖF (155 a): DÖF'ün tek sahibi Kalite Merkezi'dir. Denetim hazırlığı bulgusundan DÖF'ü buradan açar (aynı kaynak anahtarı ikinci DÖF
 // açmaz, var olanı döner) ve kaynak anahtarı başına durumunu buradan okur. Yetkiyi çağıranın ucu denetler; açan kişi kayıtta yazan olur.
 export { dofAc, dofDurumlari } from './servis.ts';

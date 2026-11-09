@@ -1,3 +1,11 @@
+# FARK: tedarikçinin kategori başına Kalite kararı (2466; 2461-2 a, 2466-1 a, 2466-2 a)
+
+- Göç `20261109122421_kalite_merkezi_kategori_onayi.sql`: yeni `kalite_merkezi_kategori_onayi` (anahtar firma, kategori türü ve kodu; durum onayli, sartli, onaysiz; şart; kişi, zaman, sürüm) ve yalnız eklenen `kalite_merkezi_kategori_onayi_gecmisi`. Var olan veri değişmez.
+- Sözleşme `paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts`. Uçlar `GET /kalite-merkezi/kategori-onaylari`, `POST /kalite-merkezi/kategori-onaylari/karar` (`kalite-merkezi.onayla`; yeni işlem ya da rol yok).
+- `disari.ts` `kategoriOnaylari(db, firmaIdleri)`: satın alma için; firma askıdaysa her karar onaysız, kaynağı 'firma_askida' (2466-2 a). Kategori ağacı Malzemeler `disari.ts` `kategoriAgaci` (2465) ile okunur.
+- Ekran: tedarikçi formunda "Onay ve sertifikalar" ile "Performans" arasına "Kategori onayları" adımı (yalnız onay yetkisinde); karar penceresi hemen yazar. Tedarikçi listesi değişmedi.
+- Testler: `kategori-onayi/kategori-onayi.test.ts` (KMK-1..3, uçlar, ihraç), `istemci/.../tedarikciler/kategori-onaylari.test.tsx`.
+
 # FARK: balon yeri kalıcı (894 a, 913 a)
 
 - Göç `20261027082000_kalite_merkezi_balon_yeri.sql`: `kalite_merkezi_balon`a boş olabilen `yer_x`, `yer_y`, `yer_kipi` ve kısıtları. Dolu satırlar değişmez; yeri olmayan balon ekranda kendiliğinden dizilir.

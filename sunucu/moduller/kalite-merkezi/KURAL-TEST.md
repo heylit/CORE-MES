@@ -93,3 +93,7 @@
 | KM-C (1439 a): yalnız tek balona eşleşen, değeri olan, sınırlı balon satırı yazılır; yinelenen, belirsiz, nitel balon yazılmaz; nominal farkı satır satır onayla; en çok 500 | "KM-C4 satır kararları ...", "KM-C11 yazma ..." |
 | KM-C (1439 a): QIF 3.0 Results ölçümü karakteristik öğesine (tasarımcı numarası ya da ad) ve nominaline bağlanır | "KM-C5 QIF 3.0 Results ...", "KM-C12 QIF ..." |
 | KM-C (1439 a): ölçüm planı satırı özelliği simge ve türden önerir; dar toleransta (0,02 ve altı) nokta iki katı; diş mastarla | "KM-C7 ölçüm planı satırı ...", "KM-C13 ..." |
+| KMK-1 (2466): yeni kategori kararı yalnız Malzemeler ağacındaki aktif kategoriye; var olan karar her durumda değiştirilir | "KMK-1: ...", "red: ... ağaçta olmayan ya da pasif kategori 400" |
+| KMK-2 (2466-2 a): askı tarihi firmayı askıya bağlayan kayıtların en sonu; en kısıtlayıcı durum Askıda değilse askı yok | "KMK-2: ..." |
+| KMK-3 (2466-2 a): firma geneli kayıt Askıda ise her kategori kararı onaysız, kaynağı firma askısı okunur; askı kalkınca karar aynen | "KMK-3: ...", "ihraç (2466-2 a): ..." |
+| 2466: kategori kararında kişi ve zaman sunucudan; şartlıda şart zorunlu; yeni karar var olanın üstüne yazmaz; değiştirme okunan sürümle; geçmiş yalnız eklenir | "gövde: ...", "yeni karar: ...", "değiştirme: ..." |
