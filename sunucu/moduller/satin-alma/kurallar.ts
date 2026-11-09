@@ -4,7 +4,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
-import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
 
 export const ISLEM = {
@@ -989,4 +989,93 @@ export function karneTeslimOlayi(b: { firmaId: number | null; termin: string | n
   { firmaId: number; termin: string; zaman: string; tam: boolean } | null {
   if (b.firmaId === null || b.termin === null || b.sonZaman === null || ondalikKiyas(b.net, '0') <= 0) return null;
   return { firmaId: b.firmaId, termin: b.termin, zaman: b.sonZaman, tam: ondalikKiyas(b.net, b.miktar) >= 0 };
+}
+
+// 2433: termin takibi. Satır ihtiyaç kalemidir; durum tek kuralla burada verilir (ekran ve plan hesaplamaz).
+export interface TerminKalemi {
+  kaynak: 'talep' | 'siparis';
+  talepId: string; talepNo: string; talepDurumu: TalepDurumu; ihtiyacTarihi: string | null;
+  kalemId: string; ad: string; birim: string; miktar: string | null; malzemeNo: number | null; isEmriId: number | null;
+  teklifId: string | null; siparisNo: string | null; beklenenTeslim: string | null;
+}
+export interface TerminTakipGirdisi {
+  bugun: string;
+  planlar: readonly { malzemeNo: number; miktar: string; gerekenTarih: string; emirler: readonly string[] }[];
+  elleTerminler: readonly TedarikTermini[];
+  kalemler: readonly TerminKalemi[];
+  kartlar: ReadonlyMap<number, { kod: string; ad: string | null; birim: string | null; tur: string }>;
+  isEmirleri: ReadonlyMap<number, string>;
+}
+
+// Sıra önemlidir: önce tarih sorunları, sonra miktar, sonra bilgi.
+export function terminDurumu(g: {
+  bugun: string; gerekenTarih: string | null; ihtiyacVar: boolean; eksik: string | null;
+  siparisTarihleri: readonly (string | null)[]; talepVar: boolean; elleTermin: string | null; karsilayanTarih: string | null;
+}): TerminDurumu {
+  const siparisVar = g.siparisTarihleri.length > 0;
+  if (g.gerekenTarih !== null && g.gerekenTarih < g.bugun) return 'gecikti';
+  if (g.siparisTarihleri.some((t) => t !== null && t < g.bugun)) return 'gecikti';
+  if (g.siparisTarihleri.some((t) => t === null)) return 'teslim_tarihi_yok';
+  if (g.gerekenTarih !== null && g.karsilayanTarih !== null && g.karsilayanTarih > g.gerekenTarih) return 'gec_kaliyor';
+  if (g.ihtiyacVar && !siparisVar && !g.talepVar && g.elleTermin === null) return 'termin_bekleniyor';
+  if (g.eksik !== null && ondalikKiyas(g.eksik, '0') > 0) return 'eksik';
+  if (!siparisVar && g.talepVar) return 'talep_yolda';
+  if (!g.ihtiyacVar) return 'plan_istemiyor';
+  return 'zamaninda';
+}
+
+export function terminTakibi(g: TerminTakipGirdisi): TerminTakipSatiri[] {
+  const planlar = new Map(g.planlar.map((p) => [p.malzemeNo, p]));
+  const elleler = new Map(g.elleTerminler.filter((t) => t.termin !== null).map((t) => [t.malzemeNo, t]));
+  const turu = (k: TerminKalemi): TerminTakipSatiri['tur'] =>
+    k.isEmriId !== null ? 'fason' : k.malzemeNo !== null && g.kartlar.get(k.malzemeNo)?.tur === 'hizmet' ? 'hizmet' : 'malzeme';
+  const gruplar = new Map<string, { tur: TerminTakipSatiri['tur']; malzemeNo: number | null; kalemler: TerminKalemi[] }>();
+  const grup = (anahtar: string, tur: TerminTakipSatiri['tur'], malzemeNo: number | null) => {
+    if (!gruplar.has(anahtar)) gruplar.set(anahtar, { tur, malzemeNo, kalemler: [] });
+    return gruplar.get(anahtar)!;
+  };
+  for (const k of g.kalemler) {
+    const tur = turu(k);
+    const malzemeSatiri = tur === 'malzeme' && k.malzemeNo !== null;
+    grup(malzemeSatiri ? `malzeme:${k.malzemeNo}` : `kalem:${k.talepId}:${k.kalemId}`, tur, k.malzemeNo).kalemler.push(k);
+  }
+  for (const no of [...planlar.keys(), ...elleler.keys()]) grup(`malzeme:${no}`, 'malzeme', no);
+
+  const satirlar = [...gruplar.entries()].map(([anahtar, x]): TerminTakipSatiri => {
+    const kart = x.malzemeNo === null ? undefined : g.kartlar.get(x.malzemeNo);
+    const plan = x.tur === 'malzeme' && x.malzemeNo !== null ? planlar.get(x.malzemeNo) : undefined;
+    const ilk = x.kalemler[0];
+    const birim = kart?.birim ?? ilk?.birim ?? null;
+    const talepTarihleri = x.kalemler.flatMap((k) => (k.ihtiyacTarihi === null ? [] : [k.ihtiyacTarihi])).sort();
+    const tekKalem = x.tur !== 'malzeme' || x.malzemeNo === null;
+    const ihtiyacMiktari = plan ? plan.miktar : tekKalem ? (ilk?.miktar ?? null) : null;
+    const gerekenTarih = plan ? plan.gerekenTarih : (talepTarihleri[0] ?? null);
+    const siparisler = x.kalemler.filter((k) => k.kaynak === 'siparis');
+    const talepler = x.kalemler.filter((k) => k.kaynak === 'talep');
+    const elle = x.tur === 'malzeme' && x.malzemeNo !== null && siparisler.length === 0 ? (elleler.get(x.malzemeNo) ?? null) : null;
+    const karsilanan = ihtiyacMiktari === null ? null
+      : ondalikTopla(x.kalemler.filter((k) => k.miktar !== null && k.birim === (birim ?? k.birim)).map((k) => k.miktar!));
+    const eksikFark = ihtiyacMiktari === null || karsilanan === null ? null : ondalikTopla([ihtiyacMiktari, `-${karsilanan}`]);
+    const eksik = eksikFark === null ? null : ondalikKiyas(eksikFark, '0') > 0 ? eksikFark : '0';
+    const siparisTarihleri = siparisler.map((k) => k.beklenenTeslim);
+    const tarihli = siparisTarihleri.filter((t): t is string => t !== null).sort();
+    const karsilayanTarih = siparisler.length > 0 ? (tarihli.at(-1) ?? null) : (elle?.termin ?? null);
+    const emirler = plan ? [...plan.emirler]
+      : [...new Set(x.kalemler.flatMap((k) => (k.isEmriId === null ? [] : [g.isEmirleri.get(k.isEmriId) ?? `#${k.isEmriId}`])))];
+    return {
+      anahtar, tur: x.tur, malzemeNo: x.malzemeNo, kod: kart?.kod ?? null, ad: kart?.ad ?? ilk?.ad ?? '', birim,
+      ihtiyacMiktari, gerekenTarih, emirler,
+      karsilayanlar: x.kalemler.map((k) => ({
+        tur: k.kaynak, talepId: k.talepId, talepNo: k.talepNo, talepDurumu: k.talepDurumu, teklifId: k.teklifId, siparisNo: k.siparisNo,
+        tarih: k.kaynak === 'siparis' ? k.beklenenTeslim : k.ihtiyacTarihi, miktar: k.miktar, birim: k.birim,
+      })),
+      karsilanan, eksik, karsilayanTarih, elleTermin: elle,
+      durum: terminDurumu({
+        bugun: g.bugun, gerekenTarih, ihtiyacVar: plan !== undefined || gerekenTarih !== null, eksik, siparisTarihleri,
+        talepVar: talepler.length > 0, elleTermin: elle?.termin ?? null, karsilayanTarih,
+      }),
+    };
+  });
+  return satirlar.sort((a, b) => Number(b.durum === 'gecikti') - Number(a.durum === 'gecikti')
+    || (a.gerekenTarih ?? '9999-12-31').localeCompare(b.gerekenTarih ?? '9999-12-31') || a.ad.localeCompare(b.ad, 'tr') || a.anahtar.localeCompare(b.anahtar));
 }

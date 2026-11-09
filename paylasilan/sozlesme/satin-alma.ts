@@ -874,12 +874,43 @@ export const tedarikTerminiSemasi = z.object({
 });
 // Açık sipariş satırı: plan bunu ayrıca okur (525 1 a); ekran yalnız gösterir, termin tablosuna yazılmaz.
 export const terminSiparisiSemasi = z.object({ siparisNo: z.string(), tarih: tarihSemasi.nullable(), miktar: z.string(), birim: z.string() });
+// 2433: termin takibi. Satır ihtiyaç kalemidir: malzemede malzeme başına (canlı plan ihtiyacı, açık talep, açık sipariş ve elle termin
+// birleşir; 2433-2 a), hizmet ve fasonda talep kalemi başına. Durumu sunucu verir; ekran kodu rozete eşler.
+export const TERMIN_TAKIP_TURLERI = ['malzeme', 'hizmet', 'fason'] as const;
+export const TERMIN_DURUMLARI = ['gecikti', 'gec_kaliyor', 'teslim_tarihi_yok', 'eksik', 'termin_bekleniyor', 'talep_yolda', 'zamaninda', 'plan_istemiyor'] as const;
+export type TerminDurumu = (typeof TERMIN_DURUMLARI)[number];
+// Karşılayan: açık siparişin kalanı (tarih beklenen teslim; eski tarihsiz siparişte boş) ya da siparişi verilmemiş açık talep (tarih ihtiyaç tarihi).
+export const terminKarsilayaniSemasi = z.object({
+  tur: z.enum(['siparis', 'talep']),
+  talepId: uuid, talepNo: z.string(), talepDurumu: z.enum(TALEP_DURUMLARI), teklifId: uuid.nullable(), siparisNo: z.string().nullable(),
+  tarih: tarihSemasi.nullable(), miktar: z.string().nullable(), birim: z.string(),
+});
+export const terminTakipSatiri = z.object({
+  anahtar: z.string(),
+  tur: z.enum(TERMIN_TAKIP_TURLERI),
+  malzemeNo: z.number().int().nullable(), kod: z.string().nullable(), ad: z.string(), birim: z.string().nullable(),
+  // Malzemede canlı plan ihtiyacı; plan istemiyorsa ya da hizmet/fasonda miktar talep kaleminden, tarih talebin ihtiyaç tarihinden.
+  ihtiyacMiktari: z.string().nullable(), gerekenTarih: tarihSemasi.nullable(),
+  emirler: z.array(z.string()),
+  karsilayanlar: z.array(terminKarsilayaniSemasi),
+  // İhtiyaçla aynı birimdeki sipariş kalanı ve talep miktarı; ihtiyaç miktarı yoksa ikisi de boş.
+  karsilanan: z.string().nullable(), eksik: z.string().nullable(),
+  // Karşılayanlardan en geç gelecek olanın tarihi; sipariş yoksa elle termin.
+  karsilayanTarih: tarihSemasi.nullable(),
+  // Elle termin (2433-3 a): yalnız malzemede ve sipariş yokken; sipariş gelince boş döner (kayıt silinmez).
+  elleTermin: tedarikTerminiSemasi.nullable(),
+  durum: z.enum(TERMIN_DURUMLARI),
+});
 export const tedarikTerminleriCevabi = z.object({
   terminler: z.array(tedarikTerminiSemasi.extend({
     malzemeKodu: z.string(), malzemeAdi: z.string(), kisiAdi: z.string().nullable(), siparisler: z.array(terminSiparisiSemasi),
   })),
+  // Sunucu her zaman yazar; eski ekran fikstürleri için isteğe bağlı.
+  takip: z.array(terminTakipSatiri).optional(),
   bugun: tarihSemasi,
 });
+export type TerminTakipSatiri = z.output<typeof terminTakipSatiri>;
+export type TerminKarsilayani = z.output<typeof terminKarsilayaniSemasi>;
 // surum null: malzemenin ilk termini (satır varsa 409). termin null: termin kaldırılır, malzeme yeniden termin bekler.
 export const tedarikTerminiKaydetGovdesi = z.object({
   malzemeNo: z.number().int().positive().max(2147483647),

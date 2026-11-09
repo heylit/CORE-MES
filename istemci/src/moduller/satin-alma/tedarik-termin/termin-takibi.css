@@ -1,0 +1,11 @@
+.sa-tt { display: grid; gap: var(--b-4); min-width: 0; }
+.sa-tt-sayilar { display: grid; gap: var(--b-3); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sa-tt-iki { display: inline-flex; flex-direction: column; gap: var(--b-1); }
+.sa-tt-iki small { color: var(--muted); font-size: var(--yazi-xs); }
+.sa-tt-islem { display: inline-flex; align-items: center; gap: var(--b-1); }
+.sa-tt-emirler { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+/* Dar ekranda sayılar sekme rozetlerinde de var; kartlar listeyi ilk ekrandan itmesin. */
+@media (max-width: 767px) {
+  .sa-tt-sayilar { display: none; }
+  .sa-tt .tc-sbaslik-alt { white-space: normal; }
+}
