@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Simge } from '../../ortak/arayuz/index.ts';
 import type { UstEylem, UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
-import { MiniPanoEylemi } from './mini-pano-tercihi.tsx';
+import { MINI_PANO_EYLEMI, MiniPanoEylemi } from './mini-pano-tercihi.tsx';
 import { TemaEsitleyici } from './tema-tercihi.ts';
 import './profil.css';
 
@@ -28,6 +28,7 @@ export const ustEylemler: readonly UstEylem[] = [{
   // Görünür düğmesi yoktur: giren kişinin temasını profilinden uygular, seçimini profiline yazar (2072 a).
   anahtar: 'tema-tercihi', sira: 91, islem: 'oturum', dugme: TemaEsitleyici,
 }, {
-  // Mini pano (2425): kişinin yetkisinin açtığı ve profilinde kapatmadığı pano yoksa düğme çizilmez.
-  anahtar: 'mini-pano', sira: 80, islem: 'oturum', dugme: MiniPanoEylemi,
+  // Mini pano (2425): Hesap menüsünde durur; kişinin yetkisinin açtığı ve profilinde kapatmadığı pano yoksa madde çizilmez.
+  anahtar: MINI_PANO_EYLEMI, sira: 80, islem: 'oturum', yer: 'hesap', hesapMaddesi: { baslik: 'Mini pano', simge: 'grid' },
+  dugme: MiniPanoEylemi,
 }];

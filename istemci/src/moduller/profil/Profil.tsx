@@ -245,7 +245,7 @@ function MiniPanoKarti() {
     <Kart baslik="Mini panolarım" simge="grid" baslikEki={<span className="tc-profil-soluk">Bu hesapla girdiğiniz her ekranda</span>}>
       <p className="tc-profil-soluk tc-profil-mp-not">
         {miniPanoDestekli()
-          ? 'Açık olanlar masaüstünde üst çubuktaki mini pano düğmesiyle küçük pencerede açılır; pencere öteki programların üstünde durur.'
+          ? 'Açık olanlar masaüstünde Hesap menüsündeki Mini pano maddesiyle küçük pencerede açılır; pencere öteki programların üstünde durur.'
           : 'Mini pano Chrome ya da Edge tarayıcısında açılır.'}
       </p>
       <ul className="tc-profil-mp-liste">

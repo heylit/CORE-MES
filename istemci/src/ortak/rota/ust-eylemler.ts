@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import { createContext, useContext, useEffect, type ComponentType } from 'react';
 import { islemMi, type Islem } from '#paylasilan/islemler.ts';
 import { acikModulDosyalari, maddeGorunurMu } from '#paylasilan/sayfalar.ts';
 import { SIMGELER, type SimgeAdi } from '../tasarim/simgeler.ts';
@@ -31,6 +31,25 @@ export interface UstEylem {
 export interface UstEylemOzellikleri {
   // Hesap menüsünden her seçilişte bir artar; verilmezse ya da 0 ise istek yok.
   acmaIstegi?: number;
+}
+
+// Hesap maddesinin o anki hâli düğmeden gelir: açamayacağı şeyin maddesi menüde durmasın (tarayıcı desteklemiyor, gösterecek
+// bir şey yok), açık olan şey menüde belli olsun. Bildirilmeyen madde bildirildiği gibi çizilir.
+export interface HesapMaddesiDurumu {
+  gizli: boolean;
+  baslik?: string;
+}
+export type HesapMaddesiYazici = (anahtar: string, durum: HesapMaddesiDurumu | null) => void;
+export const HesapMaddesiBaglami = createContext<HesapMaddesiYazici | null>(null);
+
+// Düğme çizildikçe durumunu yazar, kalkınca siler.
+export function useHesapMaddesiDurumu(anahtar: string, gizli: boolean, baslik?: string): void {
+  const yaz = useContext(HesapMaddesiBaglami);
+  useEffect(() => {
+    if (yaz === null) return undefined;
+    yaz(anahtar, baslik === undefined ? { gizli } : { gizli, baslik });
+    return () => { yaz(anahtar, null); };
+  }, [yaz, anahtar, gizli, baslik]);
 }
 
 const ANAHTAR_BICIMI = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

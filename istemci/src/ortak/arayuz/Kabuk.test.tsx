@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom';
@@ -10,6 +11,7 @@ import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-te
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 import { KaliciEkranlar } from '../rota/kalici.tsx';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
+import { useHesapMaddesiDurumu } from '../rota/ust-eylemler.ts';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
   return render(
@@ -90,6 +92,31 @@ describe('Kabuk', () => {
     expect(screen.getAllByRole('menuitem').map((m) => m.textContent).slice(0, 4)).toEqual(['Profilim', 'Ziyaretçilerim', 'Yardım ve rehber', 'Koyu temaya geç']);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Ziyaretçilerim' }));
     expect(screen.getByRole('button', { name: 'Ziyaret 1' })).toBeTruthy();
+  });
+
+  it('dugmenin bildirdigi duruma gore Hesap menusu maddesi gizlenir ya da basligi degisir', () => {
+    function Durumlu() {
+      const [hal, halYaz] = useState<'gizli' | 'acik' | 'kapali'>('gizli');
+      useHesapMaddesiDurumu('pano', hal === 'gizli', hal === 'acik' ? 'Pano (açık)' : undefined);
+      return <button type="button" onClick={() => halYaz((h) => (h === 'gizli' ? 'kapali' : 'acik'))}>ilerlet</button>;
+    }
+    const eylem = { anahtar: 'pano', sira: 1, islem: 'oturum' as const, yer: 'hesap' as const, hesapMaddesi: { baslik: 'Pano', simge: 'grid' as const }, dugme: Durumlu };
+    render(
+      <MemoryRouter>
+        <Kabuk sayfalar={SAYFALAR} kullaniciAdi="Deneme Kişi" cikis={() => undefined} islemler={[]} ustEylemler={[eylem]}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const maddeler = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
+      const adlar = screen.getAllByRole('menuitem').map((m) => m.textContent).slice(0, 2);
+      fireEvent.click(screen.getByRole('button', { name: 'Hesap' }));
+      return adlar;
+    };
+    expect(maddeler()).toEqual(['Profilim', 'Yardım ve rehber']);
+    fireEvent.click(screen.getByRole('button', { name: 'ilerlet', hidden: true }));
+    expect(maddeler()).toEqual(['Profilim', 'Pano']);
+    fireEvent.click(screen.getByRole('button', { name: 'ilerlet', hidden: true }));
+    expect(maddeler()).toEqual(['Profilim', 'Pano (açık)']);
   });
 
   it('Yardim ust cubukta ayri dugme degildir; F1 ve Hesap menusu acar (516 a)', () => {

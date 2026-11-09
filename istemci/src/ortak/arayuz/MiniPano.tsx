@@ -40,7 +40,7 @@ function oznitelikleriIzle(pencere: Window): () => void {
 
 export interface MiniPanoPenceresi {
   acik: boolean;
-  // Yalnız tıklama içinde çağrılır: tarayıcı pencereyi kullanıcı eylemi olmadan açmaz.
+  // Yalnız tıklamanın hemen ardından çağrılır: tarayıcı pencereyi kullanıcı eylemi olmadan açmaz.
   ac: () => void;
   // Pencerenin içeriği; açanın ağacında çizilir ki sorgu, yönlendirme ve oturum bağlamı aynı kalsın.
   cizim: ReactNode;
@@ -71,26 +71,6 @@ export function useMiniPanoPenceresi(panolar: readonly MiniPano[]): MiniPanoPenc
     ac,
     cizim: pencere === null ? null : createPortal(<MiniPanoIcerigi panolar={panolar} />, pencere.document.body),
   };
-}
-
-export function MiniPanoDugmesi({ penceresi }: { penceresi: MiniPanoPenceresi }) {
-  const destekli = miniPanoDestekli();
-  return (
-    <>
-      <button
-        type="button"
-        className="tc-kabuk-tema tc-mp-dugme"
-        onClick={penceresi.ac}
-        aria-pressed={penceresi.acik}
-        aria-disabled={!destekli}
-        aria-label="Mini pano"
-        title={destekli ? 'Mini pano: öteki programların üstünde duran küçük pencere' : 'Mini pano Chrome ya da Edge tarayıcısında açılır'}
-      >
-        <Simge ad="grid" />
-      </button>
-      {penceresi.cizim}
-    </>
-  );
 }
 
 function MiniPanoIcerigi({ panolar }: { panolar: readonly MiniPano[] }) {
