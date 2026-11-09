@@ -11,6 +11,8 @@ import type { IsEmriGirdisi } from './disari.ts';
 import { adimlariKoy, bekleyeniSil } from './is-emri-servis.ts';
 import { ONCUL_GECERSIZ } from './kurallar.ts';
 
+const surumu = async (db: Db, id: number): Promise<number> => (await db.tek<{ surum: number }>('SELECT surum FROM uretim_emri WHERE id = $1', [id]))!.surum;
+
 // 1248 a: rota adımının dalı ve öncül listesi iş emrine kopyalanır; plan, terminal ve ek adımlar aynı listeden okur.
 describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -170,7 +172,7 @@ describe('uretim-emirleri öncül listesi (1248 a, gerçek PostgreSQL)', () => {
     assert.deepEqual(p.get(ie3)?.onculler?.map((x) => x.isEmriId), [ie1, ie2], '982 a: bağımsızdan sonraki adım ikisini de bekler');
     assert.deepEqual(p.get(ie2)?.onculler, []);
 
-    await tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { kaynakRotaRevizyonId: rev, isEmirleri: [
+    await tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { surum: await surumu(db, id), kaynakRotaRevizyonId: rev, isEmirleri: [
       adim(1, m[0]!, { onculler: [] }), adim(2, m[1]!, { onculler: [], bagimlilik: 'bagimsiz', dal: 'B' }), adim(3, m[2]!, { onculler: [bekle(20)] }),
     ] }));
     assert.deepEqual((await baglar(id)).map((x) => [x.is_emri_id, x.oncul_is_emri_id]), [[ie3, ie2]]);

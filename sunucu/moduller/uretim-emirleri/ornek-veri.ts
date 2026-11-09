@@ -34,7 +34,8 @@ async function urunAl(db: Db, anahtar: OrnekMalzemeAnahtari): Promise<number> {
   return id;
 }
 
-// Rotadaki "emre kopya" ile aynı girdi: her rota adımı bir iş emri; örnek rotada talimat yok, kontrol listesi boş.
+// Rotadaki "emre kopya" ile aynı girdi: her rota adımı bir iş emri; örnek rotada talimat yok, kontrol listesi boş. Adımın girenleri
+// emre kopyalanır (rota/servis/ortak.ts isEmriGirdileri gibi): yoksa emir Malzeme ihtiyacı'nda görünmez, sayım sarf ve depo isteği açmaz.
 async function rotadanIsEmirleri(db: Db, urunId: number, anahtar: OrnekMalzemeAnahtari): Promise<{ revizyonId: number; isEmirleri: IsEmriGirdisi[] }> {
   const rota = await yururluktekiRevizyon(db, urunId);
   if (rota === null) throw new Error(`Üretim emirleri örnek verisi yürürlükte rota bulamadı: ${anahtar} (rota örnek verisi önce yüklenir).`);
@@ -44,6 +45,7 @@ async function rotadanIsEmirleri(db: Db, urunId: number, anahtar: OrnekMalzemeAn
       sira: a.sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId,
       ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk,
       terminGun: a.fason?.terminGun ?? null, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, talimatSurumu: a.talimatSurumu, kontrolListesi: [],
+      bilesenler: a.bilesenler.map((b) => ({ malzemeNo: b.malzemeId, miktar: String(b.miktar), fireYuzde: String(b.fireYuzde) })),
     })),
   };
 }

@@ -67,6 +67,7 @@ export const makineDevral = (db: Db, kullanici: Kullanici, id: number, kullanimI
   servis.kayitAniyla(db, an, () => servis.makineDevral(db, uretenKisi(kullanici), id, kullanimId, isEmriId));
 // Adet verilirse sayım ona eşitlenir: başkasının sayımını düşürmesin diye kişi işe katılmış ya da düzeltme işlemli olmalı (185 a).
 // Akışlı ya da bekleyen adım önceki adım bitmeden bitmez (CAKISMA, 649 a); eksi bakiyeyle bitiş uyarı döner (654 a).
+// İlk parça kararı bekleyen parça varken adım bitmez (CAKISMA, 2521 b).
 export const emirBitir = (
   db: Db, kullanici: Kullanici, id: number, saglamAdet?: number, an?: string, isEmriId?: number,
 ): Promise<{ emir: Emir; uyari: string | null }> =>
@@ -389,6 +390,7 @@ export { DAL_AZAMI, ONCUL_TURLERI, adimOnculleri } from './kurallar.ts';
 export type { AdimOnculu, OnculTuru, OnculluAdim } from './kurallar.ts';
 
 // Rota (UE1): emir, yürürlükteki rotanın kopyasıyla açılır; "emirlere uygula" güvenli kipte yeniler. Liste ve ayrıntı rota ekranı içindir.
+// "Emirlere uygula" çağıranı okuduğu emrin sürümünü verir (surum, zorunlu): kilit altında denetlenir, arada değişen emir ESKI_SURUM ile reddedilir.
 export const uretimEmriAc = isEmri.uretimEmriAc;
 export const isEmirleriniYenile = isEmri.isEmirleriniYenile;
 export const adimliEmirListesi = isEmri.adimliListe;
@@ -503,6 +505,9 @@ export type {
 // Emir bitti ve fason hareketi olayları (kart #1310): sevkiyat bekleme listesine ve sevkiyat işine, stok fason konumlarına yazar.
 // Dinleyiciler kendini kaydeder; çağrı sayım olayıyla aynı yönde kurulur (modül döngüsü olmaz).
 export { emirAcildiDinle, emirBirlestiDinle, emirBittiDinle, emirIptalDinle, fasonHareketiDinle, hazirlikTamamlandiDinle, isEmirleriDegistiDinle, isEmriKopyalandiDinle } from './emir-olaylari.ts';
+// Adım bitti (2497): terminalde çalışan iş emri bitince aynı işlemde; dinleyicinin reddi bitirmeyi geri alır.
+export { adimBittiDinle } from './emir-olaylari.ts';
+export type { AdimBittiDinleyicisi, AdimBittiOlayi } from './emir-olaylari.ts';
 export type {
   EmirBittiDinleyicisi, EmirBittiOlayi, EmirIptalDinleyicisi, EmirIptalOlayi, FasonHareketiDinleyicisi, FasonHareketiOlayi, HazirlikTamamlandiDinleyicisi, HazirlikTamamlandiOlayi,
   IsEmriKopyalandiDinleyicisi, IsEmriKopyalandiOlayi,

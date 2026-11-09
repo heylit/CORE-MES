@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
+import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -32,6 +33,8 @@ import {
 } from './kurallar.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
+
+const surumu = async (db: Db, id: number): Promise<number> => (await db.tek<{ surum: number }>('SELECT surum FROM uretim_emri WHERE id = $1', [id]))!.surum;
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -776,6 +779,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ie2 = (await ayrinti(id2)).isEmirleri[0]?.id ?? 0;
     const ikinci = await terminal(`/${id2}/baslat`, undefined, 'kisi_op');
     assert.equal(ikinci.durum, 409, 'istasyonun makinesiz yeri dolu');
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 1 }, 'kisi_op')).durum, 200);
     await o().vt.tx((db) => emirBaslat(db, kim('kisi_op'), id2, undefined, undefined, ie2));
     assert.equal((await ayrinti(id2)).isEmirleri[0]?.istasyon?.id, ist);
@@ -917,7 +921,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const makine = await makineKur(ist);
     const { uretimEmriId: id } = await ac([adim(1, { tur: 'makine', id: makine }), adim(2, null), adim(3, null)]);
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
-    const sonuc = await o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, {
+    const sonuc = await o().vt.tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { surum: await surumu(db, id),
       kaynakRotaRevizyonId: rev2,
       isEmirleri: [adim(1, { tur: 'makine', id: makine }, { ad: 'Değişti' }), adim(2, null, { ad: 'Yeni ad' }), adim(4, null)],
     }));
@@ -927,11 +931,30 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal(e.kaynakRotaRevizyonId, 2);
   });
 
+  test('2520-2 emirlere uygula: çağıranın okuduğu sürüm satır kilidi altında denetlenir; arada değişen emir yenilenmez', async () => {
+    const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
+    const okunan = (await ayrinti(id)).surum;
+    await o().sahip.sorgu('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1', [id]);
+    const yenile = (surum: number) => o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, null)], surum }));
+    await assert.rejects(yenile(okunan), (h: unknown) => h instanceof UygulamaHatasi && h.message === ESKI_SURUM_ILETISI);
+    assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.opNo), [10, 20], 'eski sürümle adım çıkarılmaz');
+    await yenile((await ayrinti(id)).surum);
+    assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.opNo), [10], 'güncel sürümle yenilenir');
+  });
+
+  test('2520-8 emirlere uygula: sürümsüz çağrı reddedilir, adımlar değişmez', async () => {
+    const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
+    const girdi = { kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, null)] };
+    // @ts-expect-error sürüm zorunludur; tipsiz çağıran da sunucuda reddedilir
+    await assert.rejects(o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, girdi)), (h: unknown) => h instanceof UygulamaHatasi && /sürümü olmadan/.test(h.message));
+    assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.opNo), [10, 20]);
+  });
+
   test('ROT-2 emirlere uygula: güncellenen iş emrinin süre ve kaynak değişikliği yazılır; değişmeyen iş emri listeye girmez', async () => {
     const ist = await istasyonKur();
     const makine = await makineKur(ist);
     const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
-    const sonuc = await o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, {
+    const sonuc = await o().vt.tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { surum: await surumu(db, id),
       kaynakRotaRevizyonId: rev2,
       isEmirleri: [adim(1, null), adim(2, { tur: 'makine', id: makine }, { ayarSuresiDk: '25', birimSureDk: '2.25' })],
     }));
@@ -947,7 +970,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
       await o().sahip.sorgu("INSERT INTO plan_yerlesimi (is_emri_id, kisi_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, now(), now() + interval '1 hour', $2)", [ie, kisi]);
       await o().sahip.sorgu('INSERT INTO plan_yerlesim_parcasi (is_emri_id, parca_no, adet) VALUES ($1, 1, 5), ($1, 2, 5)', [ie]);
     }
-    await o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, mk)] }));
+    await o().vt.tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { surum: await surumu(db, id), kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, mk)] }));
     const say = async (tablo: string, ie: number) => Number((await o().sahip.tek<{ n: string }>(`SELECT count(*) AS n FROM ${tablo} WHERE is_emri_id = $1`, [ie]))!.n);
     assert.deepEqual([await say('plan_yerlesimi', ie2), await say('plan_yerlesim_parcasi', ie2)], [0, 0], 'çıkan adımın plan satırı artık kalmaz');
     assert.deepEqual([await say('plan_yerlesimi', ie1), await say('plan_yerlesim_parcasi', ie1)], [1, 2]);
@@ -964,7 +987,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const listeler = async () => (await o().sahip.sorgu<{ isEmriId: number; ad: string }>(
       'SELECT is_emri_id AS "isEmriId", ad FROM emir_adimi WHERE emir_id = $1 ORDER BY is_emri_id, sira', [id],
     )).map((m) => [m.isEmriId, m.ad]);
-    const uygula = (isEmirleri: IsEmriGirdisi[]) => o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { kaynakRotaRevizyonId: rev2, isEmirleri }));
+    const uygula = (isEmirleri: IsEmriGirdisi[]) => o().vt.tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { surum: await surumu(db, id), kaynakRotaRevizyonId: rev2, isEmirleri }));
 
     assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
     const kisi = (await o().sahip.tek<{ id: number }>('SELECT id FROM kisi ORDER BY id LIMIT 1'))!.id;
@@ -995,7 +1018,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const b = await istek<PartiBolCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/bol`, { adimSira: 2, adet: 4, surum: (await ayrinti(id)).surum, birlesmeOpNo: 30 }, randomUUID());
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     const kol = b.govde.altEmirId;
-    const uygula = (emirId: number) => o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), emirId, { kaynakRotaRevizyonId: rev2, isEmirleri: [...rota, adim(4, mk)] }));
+    const uygula = (emirId: number) => o().vt.tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), emirId, { surum: await surumu(db, emirId), kaynakRotaRevizyonId: rev2, isEmirleri: [...rota, adim(4, mk)] }));
 
     assert.deepEqual((await uygula(kol)).degisenler, ['Bölünmüş parti değiştirilmedi']);
     assert.deepEqual((await ayrinti(kol)).isEmirleri.map((i) => i.opNo), [20], 'kola bölünmeden önceki ve birleşmeden sonraki adım girmez');

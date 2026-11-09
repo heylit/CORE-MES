@@ -11,7 +11,7 @@ import {
   KAYIT_ANI_ESKI, KAYIT_ANI_GECERSIZ, KAYIT_ANI_ILERI, kayitAniIhlali, ADIM_GIRDI_ASIMI, adimGirdiAsimiIhlali, kartAdimi, kartSiniri,
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
-import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, malzemeIhtiyaci } from './kurallar.ts';
+import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
@@ -337,4 +337,10 @@ describe('1713 (1682 b): kaynak adaysa süre adaydan gelir, eski ana kaynak aday
   test('kaynaksız ana satırın süresi adaya geçmez', () => {
     assert.equal(kaynakSuresi({ ...ana, makineId: null }, { makineId: 2, kisiId: null }, [aday])?.girenAday, null);
   });
+});
+
+test('2521 b: karar bekleyen parça varken bitirme ihlali adedi ve adımı söyler; bekleyen yoksa null', () => {
+  assert.equal(kararBekleyenBitisIhlali(3, 10), '3 parça ilk parça kararı bekliyor (OP 10). Kalite Merkezi kararı gelmeden iş bitirilemez.');
+  assert.equal(kararBekleyenBitisIhlali(2, null), '2 parça ilk parça kararı bekliyor. Kalite Merkezi kararı gelmeden iş bitirilemez.');
+  assert.equal(kararBekleyenBitisIhlali(0, 10), null);
 });

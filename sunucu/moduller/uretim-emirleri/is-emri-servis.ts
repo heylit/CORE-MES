@@ -43,6 +43,7 @@ const ADET_GECERSIZ = 'Adet 1 ile 1.000.000 arasında tam sayı olmalı.';
 const ONCELIK_GECERSIZ = 'Öncelik 1 (acil) ile 4 (düşük) arasında olmalı.';
 const ACIKLAMA_UZUN = 'Açıklama en çok 300 karakter olur.';
 const EMIR_TURU_GECERSIZ = 'Emir türü listede yok.';
+const SURUM_GEREKLI = 'Emirlere uygulama, emrin okunan sürümü olmadan yapılmaz; emri yenileyip yeniden deneyin.';
 const TIP_YOK = 'Operasyon tipi bulunamadı.';
 const FASON_FIRMA_YOK = 'Fason firma bulunamadı, pasif ya da fason işaretli değil.';
 const KONTROL_LISTESI = `Kontrol listesi en çok ${AZAMI_ADIM} maddedir; madde adı boş olamaz, en çok 120 karakterdir.`;
@@ -346,6 +347,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
   for (const id of new Set(projeler.flatMap((p) => (p.siparisId === null ? [] : [p.siparisId])))) siparisler.set(id, await siparisAyrintisi(db, id));
   return {
     projeZorunlu: projeZorunluMu(emirTuru),
+    rotasizAcik: await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'),
     projeler: projeler.map((p) => {
       const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
       return {
@@ -365,11 +367,15 @@ export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi
 }
 
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
+// surum: çağıranın kararını verdiği emrin sürümü, zorunlu; satır kilidi alındıktan sonra denetlenir, arada değişen emir yenilenmez.
+// Sürümsüz çağrı, okunmamış bir emrin adımlarını değiştirebileceği için reddedilir.
 export async function isEmirleriniYenile(
-  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[] },
+  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum: number },
 ): Promise<{ degisenler: string[] }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
+  if (!Number.isInteger(g.surum)) throw dogrulama(SURUM_GEREKLI, 'surum');
   const e = await kilitliUstEmir(db, uretimEmriId);
+  surumDenetle(e, g.surum);
   await cokKatmanliDegil(db, uretimEmriId, COK_KATMANLI_DEGISMEZ);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);
