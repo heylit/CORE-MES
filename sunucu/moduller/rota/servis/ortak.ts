@@ -2,13 +2,13 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { AdimKaynakOzeti, Bagimlilik, GerceklesenTuru, KomutCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu, KaynakOzeti, RevizyonKomutu, UrunOzeti, ParametreDegerleri, SartnameSurumu, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
+import type { AdimKaynagiCevabi, AdimKaynakOzeti, Bagimlilik, GerceklesenTuru, KomutCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu, KaynakOzeti, RevizyonKomutu, UrunOzeti, ParametreDegerleri, SartnameSurumu, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
 import { sistemAyariOku } from '../../ayarlar/disari.ts';
 import { firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri } from '../../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../../kisiler/disari.ts';
 import { malzemeOperasyonlari, malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
+import { FIRMASIZ_FASON_ILETISI, firmasizFasonAdimi, PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
 import type { AdimSureleri, GerceklesenSatiri, PatlamisSatir, PatlatmaRotasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
@@ -100,7 +100,10 @@ export async function kaynakBaglami(db: Db): Promise<KaynakBaglami> {
 }
 
 // Fason firma finansın kartıdır: kullanımda sayılması için aktif ve fason işaretli olmalıdır (F2).
-export async function kaynakOzetiAl(db: Db, b: KaynakBaglami, k: AdimKaynagi): Promise<AdimKaynakOzeti> {
+// Firmasız fason (id null) özeti yoktur; çağıran onu ayrı ele alır (Mimar K1: ad uydurulmaz).
+export type SecilmisKaynak = Extract<AdimKaynagi, { id: number }>;
+export const secilmisMi = (k: AdimKaynagi): k is SecilmisKaynak => k.id !== null;
+export async function kaynakOzetiAl(db: Db, b: KaynakBaglami, k: SecilmisKaynak): Promise<AdimKaynakOzeti> {
   if (k.tur === 'fason') {
     const f = (await firmaOzetleri(db, [k.id])).get(k.id);
     return f
@@ -146,8 +149,9 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
   const akis = akisiCikar(icerik.adimlar);
   const onculler = oncullerCikar(icerik.adimlar);
   const miktarlar = adimMiktarlari(icerik.adimlar.map((a) => ({ opNo: a.opNo, firePayiYuzde: sayi(a.firePayiYuzde), bagimlilik: a.bagimlilik, dal: a.dal, birlesen: a.birlesen })), urunMiktari);
-  const kaynak = (k: AdimKaynagi): AdimKaynakOzeti => b.kaynaklar.get(`${k.tur}:${k.id}`) ?? { tur: k.tur, id: k.id, kod: null, ad: 'Bilinmeyen kaynak', aktif: false, istasyon: null };
-  const adayKaynagi = (k: Kaynak): KaynakOzeti => ({ ...kaynak(k), tur: k.tur });
+  const secilmis = (k: SecilmisKaynak): AdimKaynakOzeti => b.kaynaklar.get(`${k.tur}:${k.id}`) ?? { tur: k.tur, id: k.id, kod: null, ad: 'Bilinmeyen kaynak', aktif: false, istasyon: null };
+  const kaynak = (k: AdimKaynagi): AdimKaynagiCevabi => (secilmisMi(k) ? secilmis(k) : { tur: 'fason', id: null });
+  const adayKaynagi = (k: Kaynak): KaynakOzeti => ({ ...secilmis(k), tur: k.tur });
   const urun = (id: number): UrunOzeti => b.urunler.get(id) ?? { id, stokKodu: null, ad: 'Bilinmeyen kart', tur: '?', stokBirimi: null, onayDurumu: '?' };
   return icerik.adimlar.map((a, i) => {
     // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); bileşen miktarı ise mamul başınadır, çarpanla büyümez (1333 a).
@@ -187,7 +191,7 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
 export async function gorunumBaglami(db: Db, malzemeId: number, icerik: Icerik): Promise<AdimGorunumuBaglami> {
   const kb = await kaynakBaglami(db);
   const kaynaklar = new Map<string, AdimKaynakOzeti>();
-  for (const k of [...icerik.adimlar.flatMap((a) => (a.kaynak ? [a.kaynak] : [])), ...icerik.adaylar.map((x) => x.kaynak)]) {
+  for (const k of [...icerik.adimlar.flatMap((a) => (a.kaynak && secilmisMi(a.kaynak) ? [a.kaynak] : [])), ...icerik.adaylar.map((x) => x.kaynak)]) {
     kaynaklar.set(`${k.tur}:${k.id}`, await kaynakOzetiAl(db, kb, k));
   }
   return {
@@ -429,6 +433,12 @@ export async function olcumleriBosalt(db: Db, kisiId: number, malzemeId: number,
       }
     }
   }
+}
+
+// 2681 (Mimar K3): emir açan ve emre uygulayan her yol önce bunu çağırır; firması seçilmemiş fason adımlı rota emre gitmez.
+export function firmasizFasonuReddet(rota: { adimlar: readonly { opNo: number; fason: { firmaId: number | null } | null }[] }): void {
+  const f = firmasizFasonAdimi(rota.adimlar);
+  if (f !== null) throw dogrulama(FIRMASIZ_FASON_ILETISI(f.opNo), `adimlar.${String(f.sira)}.kaynak`, { opNo: f.opNo });
 }
 
 // Emre kopya ve emirlere uygula aynı girdiyi kurar: her rota adımı bir iş emri, talimatın o anki metni kontrol listesi.

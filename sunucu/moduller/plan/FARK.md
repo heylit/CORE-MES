@@ -265,3 +265,6 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Test: `plan-kg-fiyati.test.ts` (PKG-01..03), istemci `maliyet/kurallar.test.ts`.
 - VARSAYIM: ortalama bütün teslimlerindir (1291 a'nın 12 aylık ortalaması Satın Alma'dan okunur olunca geçer, P-B36); sunucu motoru fiyatı
   null alır (yalnız tutarı etkiler). Geri alma: `malzemeFiyatlari` alanı okunmaz, eski davranış döner.
+
+## Firmasız fason adım veri sağlığında (2681, 2682 a; 2026-11-09)
+- `veri-sagligi-kurallar.ts`: durum adımında `fason: true` ve `fasonId: null` olan adım (firma seçilmemiş fason) süre eksiği sayılmaz. Test `veri-sagligi.test.ts` "2681".

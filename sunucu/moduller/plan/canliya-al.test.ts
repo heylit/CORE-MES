@@ -171,7 +171,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
   after(async () => { await ortam?.kaldir(); });
 
   const govdeye = (a: RevizyonAyrintisi['adimlar'][number]): AdimGirdisi => ({
-    opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak ? { tur: a.kaynak.tur, id: a.kaynak.id } : null,
+    opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? { tur: 'fason', id: null } : { tur: a.kaynak.tur, id: a.kaynak.id },
     ayarSuresiDk: a.ayarSuresiDk === null ? null : Number(a.ayarSuresiDk), birimSureDk: a.birimSureDk === null ? null : Number(a.birimSureDk),
     terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: Number(a.firePayiYuzde), makineKullanimi: a.makineKullanimi,
     enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, adaylar: [],

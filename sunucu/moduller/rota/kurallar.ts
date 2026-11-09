@@ -129,15 +129,25 @@ export function kisiIstasyonlari(atamalar: readonly { kisiId: number; istasyonId
 }
 
 // Adımın kaynağı fason firma da olabilir; aday kaynak makine, kişi ya da istasyondur (FS2 a, #1184).
-export interface KaynakRef { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number }
-export const kaynakAnahtari = (k: KaynakRef): string => `${k.tur}:${k.id}`;
+// 2681 (2682 a): firması seçilmemiş fason adımda id null'dır.
+export type KaynakRef = { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number } | { tur: 'fason'; id: null };
+export const kaynakAnahtari = (k: KaynakRef): string => `${k.tur}:${String(k.id)}`;
 
 // Emre kopyada istasyona bağlı adımın iş emri kaynağı atanmamıştır; istasyon iş emrinin istasyonu olur (makineyi plan seçer, #1184).
-export function isEmriKaynagi(a: { kaynak: KaynakRef | null; fason: { firmaId: number } | null }):
+// Firmasız fason adım emre gelmez (firmasizFasonAdimi emre kopyada reddeder); gelse de iş emri kaynaksız açılır, firma uydurulmaz.
+export function isEmriKaynagi(a: { kaynak: KaynakRef | null; fason: { firmaId: number | null } | null }):
   { kaynak: { tur: 'makine' | 'kisi' | 'fason'; id: number } | null; istasyonId: number | null } {
-  if (a.fason) return { kaynak: { tur: 'fason', id: a.fason.firmaId }, istasyonId: null };
+  if (a.fason) return { kaynak: a.fason.firmaId === null ? null : { tur: 'fason', id: a.fason.firmaId }, istasyonId: null };
   if (a.kaynak?.tur === 'istasyon') return { kaynak: null, istasyonId: a.kaynak.id };
   return { kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : { tur: a.kaynak.tur, id: a.kaynak.id }, istasyonId: null };
+}
+
+// 2681 (2682 a, Mimar K3): firması seçilmemiş fason adım taslakta ve onayda durur, emre gitmez. İş emri tarafı fasonu yalnız
+// fason_firma_id dolu mu diye ayırır; firmasız adım emre gitse orada istasyonsuz bir iç üretim adımına dönerdi.
+export const FIRMASIZ_FASON_ILETISI = (opNo: number) => `OP ${String(opNo)}: fason firma seçilmedi; emir açılmadan önce rotada firma seçin.`;
+export function firmasizFasonAdimi(adimlar: readonly { opNo: number; fason: { firmaId: number | null } | null }[]): { sira: number; opNo: number } | null {
+  const i = adimlar.findIndex((a) => a.fason !== null && a.fason.firmaId === null);
+  return i < 0 ? null : { sira: i, opNo: adimlar[i]!.opNo };
 }
 
 export interface TaslakAdimi {
