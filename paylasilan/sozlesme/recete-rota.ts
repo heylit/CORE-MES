@@ -363,7 +363,27 @@ export const fasonTahminSorgusu = z.object({
 });
 export const fasonTahminCevabi = z.object({ gunler: z.array(z.number().nonnegative().nullable()) });
 
+// Emir malzeme ihtiyacı (2486-8, 461 b): emir verilirse yalnız o emir, verilmezse plandaki bütün emirler; stok her durumda bütün plan
+// sırasıyla paylaştırılır. emirId emrin kayıt numarasıdır (durumdaki kayitNo; kol emirleri dahil). malzemeNo kartın kayıt numarasıdır;
+// kod, ad ve birim karttan, kart bulunamazsa null. Sayılar ondalık metin. stokGorunur false: stok okuma yetkisi yok; serbest stok durumdaki
+// kuralla (yetkisize 0) sayılır, ara adım stoğu düşülmez.
+export const malzemeIhtiyaciSorgusu = z.object({ emir: z.coerce.number<number>().int().positive().optional() });
+const ihtiyacKarti = { malzemeNo: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() };
+export const malzemeIhtiyaciSatiri = z.object({ ...ihtiyacKarti, brut: z.string(), verilen: z.string(), stoktan: z.string(), alinacak: z.string() });
+export const malzemeIhtiyaciCevabi = z.object({
+  stokGorunur: z.boolean(),
+  emirler: z.array(z.object({
+    emirId: z.number().int(),
+    hammadde: z.array(malzemeIhtiyaciSatiri),
+    yanUrun: z.array(z.object({ ...ihtiyacKarti, miktar: z.string() })),
+    eksikler: z.array(malzemeIhtiyaciSatiri),
+    uyarilar: z.array(z.string()),
+  })),
+});
+
 export type FasonTahminCevabi = z.output<typeof fasonTahminCevabi>;
+export type MalzemeIhtiyaciCevabi = z.output<typeof malzemeIhtiyaciCevabi>;
+export type MalzemeIhtiyaciSatiri = z.output<typeof malzemeIhtiyaciSatiri>;
 export type Statu = z.output<typeof statuSemasi>;
 export type StatulerCevabi = z.output<typeof statulerCevabi>;
 export type StatuTanimi = z.output<typeof statuTanimiSemasi>;
