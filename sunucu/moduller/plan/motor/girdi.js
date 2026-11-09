@@ -746,7 +746,7 @@ function stKur(S, ek = [], gevset = true) {
   D.siparisler = D.siparisler.filter(s => !s.havuz && !s.iptal);
   const st = {
     D, now: 7, down: S.down.map((d, i) => ({ ...d, id: 'd' + i })), ekMesai: clone(S.ekMesai), eksik: [],
-    locks: clone(S.locks), pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: clone(S.ogren || {}),
+    locks: clone(S.locks), elleBol: S.elleBol && typeof S.elleBol === 'object' ? clone(S.elleBol) : {}, pref: {}, boost: {}, gercek: clone(S.gercek || {}), sapma: {}, saGecik: {}, ogren: clone(S.ogren || {}),
     w: { ...clone(W0), rule: MOTOR_KURALI.has(S.w.rule) ? S.w.rule : W0.rule, famK: +S.w.famK, mat: S.w.mat, dondurma: +S.w.dondurma, tampon: !!S.param.tampon, tamponZ: +S.param.tamponZ, acilPay: +S.param.acilPay, mesaiHafta: +(S.param.mesaiHafta ?? W0.mesaiHafta),
       /* 1477 a: motor ölçeği (sistem ayarı); yoksa motor varsayılanı (engine olcekKur) */
       ufukGun: S.w.ufukGun ?? null, dilimDk: S.w.dilimDk ?? null,
