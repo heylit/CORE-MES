@@ -86,6 +86,9 @@ export const emrinPartileri = (db: Db, uretimEmriId: number) => sorgular.emrinPa
 export type { EmirFisSatiri } from './servis.ts';
 export const emirMalzemeFisleri = (db: Db, emirIdler: readonly number[]) => servis.emirMalzemeFisleri(db, emirIdler);
 export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinNetSarfi(db, emirIdler);
+// B-2482-8: emrin statü zincirinde duran hammaddesi (ilk adımın çevirmesi, statüden sarf düşülmüş). Malzeme ihtiyacında verilene eklenir:
+// verilen = emirlerinNetSarfi + bu. Okuma yetkisini çağıran korur.
+export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinZincirdekiMiktari(db, emirIdler);
 
 // Akış süresi için emrin stok hareketleri (kart #1338): emrin kendi hareketleri, emrin partisinin hareketleri (statü çevirme,
 // sevk çıkışı) ve emrin teslimlerinin hareketleri; zamana göre, tekrarsız. Okuma yetkisini çağıran korur.
