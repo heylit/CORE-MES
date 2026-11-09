@@ -3222,6 +3222,46 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(await tutar(), [{ tutar: '12.00', paraBirimi: 'TRY' }]);
   });
 
+  test('2638, 2637 a, Maliyet C1, Mimar N2: emirli talepte hizmet satırı projeli emre yazılır, projeye değil; projesiz emirde genel gidere gider; oran sipariş anahtarıyla toplu çekilir', async () => {
+    const p = await projeEkle('P2638');
+    const e = await emirAc();
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET proje_id = $2 WHERE id = $1', [e, p]);
+    tamam(await istek(c.yonetici, 'POST', '/malzeme-katalogu-kartlari/sa-hizmet-2638/kaydet', {
+      kayit: { id: 'sa-hizmet-2638', tur: 'hizmet', com: { kod: 'HZ-SAT-02638', ad: 'Deneme hizmet 2638', birim: 'saat' }, g: { kat: 'fason', yon: 'Alınan', cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
+      ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
+    }));
+    const hizmetNo = (await ortam!.sahip.tx((db) => db.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'sa-hizmet-2638'")))!.no;
+    const hizmetKatalog = tamam<KatalogKaydi>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', { id: randomUUID(), malzemeNo: hizmetNo, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id;
+    // Stok kartlı 10 x 10 = 100, hizmet 4 x 5 = 20; nakliye 12 hariç.
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme', uretimEmriId: e,
+      kalemler: [kalem('Deneme stoklu'), { ...kalem('Deneme hizmet', '4', hizmetKatalog), birim: 'saat' }] })));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const q = teklif(firmaA, [[k1, '10'], [k2, '5']], { nakliye: '12', nakliyeDahil: false });
+    const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'onayda', teklifler: [q],
+      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'SA-2638', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    await teslimEt(siparisi(s, q.id).satirlar.find((r) => r.kalemId === k2)!.id, '2', 263801);
+    const emirTutari = async () => (await vt().tx((db) => servis.emirHizmetTutarlari(db, [e]))).get(e) ?? [];
+    const anahtar = `${t.id}:${q.id}`;
+    const oranlar = () => vt().tx((db) => servis.siparisGenelGiderOranlari(db, [{ talepId: t.id, teklifId: q.id }, { talepId: t.id, teklifId: randomUUID() }]));
+    // Hizmetin yarısı: 10 + 12 x 20 / 120 = 12; emrin projesine proje maliyeti kendisi bağlar, projeye ikinci kez sayılmaz.
+    assert.deepEqual(await emirTutari(), [{ tutar: '12.00', paraBirimi: 'TRY' }]);
+    assert.deepEqual((await vt().tx((db) => servis.projeSatinAlmaTutarlari(db, [p]))).get(p), undefined);
+    assert.deepEqual([...(await oranlar())], [[anahtar, 0]], 'bilinmeyen sipariş haritada yok');
+    // C1: emrin projesi kalkınca hizmet satırı genel gidere gider: oran 20 / 120.
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET proje_id = NULL WHERE id = $1', [e]);
+    assert.deepEqual(await emirTutari(), []);
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+    // Mimar N2: pasif hizmet kartı yine hizmettir; satır genel giderde kalır, stoğa sayılmaz.
+    await ortam!.sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'pasif' WHERE kimlik = 'sa-hizmet-2638'");
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+    // Fatura gerçektir: talep iptal olsa da oran çekilir.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [t.id]);
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+  });
+
   test('2614 1/2 a: idari talep kalemsiz taslak satın alma talebine çevrilir; açan çeviren, talep eden idari talebi açan (K3); yetkisiz 403 (K2); ikinci çevirme 409', async () => {
     const idari = (await ortam!.sahip.tx((db) => db.tek<{ id: number }>(
       "INSERT INTO idari_isler_talep (no, kategori, yer, aciklama, acan_kisi_id) VALUES ('IT-2611', 'bina', 'Deneme yer', 'Deneme açıklama', $1) RETURNING id", [kisi.talep])))!.id;

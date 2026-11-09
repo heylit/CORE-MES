@@ -24,7 +24,7 @@ import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, 
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
-  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
+  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
@@ -37,7 +37,7 @@ import {
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeAlimDegeri, projeHareketi, projeReddi, type ProjeAlimSatirTuru, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
@@ -2048,34 +2048,65 @@ export async function talepAyir(db: Db, k: Kullanici, id: string, g: TalepAyirYa
   return (await talepOku(db, id))!;
 }
 
-// 2611 a, Maliyet C1: proje başına, para birimi başına projeye giden alım değeri (KDV hariç, sipariş para biriminde; N1: proje maliyeti
-// bugünün kuruyla çevirir). Yalnız stoğa girmeyen satırlar sayılır (projeAlimDegeri). Değeri sıfır olan sipariş listeye girmez.
-export async function projeSatinAlmaTutarlari(db: Db, projeIdler: readonly number[]): Promise<Map<number, { tutar: string; paraBirimi: string }[]>> {
-  const tekil = [...new Set(projeIdler)];
-  const sonuc = new Map<number, { tutar: string; paraBirimi: string }[]>();
-  if (tekil.length === 0) return sonuc;
-  const satirlar = await s.projeAlimSatirlari(db, tekil);
+// 2611 a, 2637 a, 2638 (Veri 2): emir ve proje tutarı ile genel gider oranı aynı dağılımdan (satirYolu) okunur. Kart türü malzeme
+// kartından (malzemeOzetleri pasif ve iptal kartı da döner; bulunamayan kartın yolu bilinmiyor), emrin projesi üretim emrinden gelir.
+interface DagitilmisSiparis { talepId: string; teklifId: string; paraBirimi: string; dagilim: SiparisDagilimi }
+async function dagitilmisSiparisler(db: Db, f: s.YolFiltresi): Promise<DagitilmisSiparis[]> {
+  const satirlar = await s.siparisYolSatirlari(db, f);
+  if (satirlar.length === 0) return [];
   const kartlar = await malzemeOzetleri(db, [...new Set(satirlar.flatMap((r) => (r.malzemeNo === null ? [] : [r.malzemeNo])))]);
-  const tur = (r: s.ProjeAlimSatiri): ProjeAlimSatirTuru => (r.baskaYoldan ? 'fason' : r.malzemeNo === null ? 'kartsiz'
-    : kartlar.get(r.malzemeNo)?.tur === 'hizmet' ? 'hizmet' : 'stok');
-  const siparisler = new Map<string, s.ProjeAlimSatiri[]>();
+  const projeliEmirler = await emirlerinProjeleri(db, [...new Set(satirlar.flatMap((r) => (r.emirId === null ? [] : [r.emirId])))]);
+  const siparisler = new Map<string, s.YolSatiri[]>();
   for (const r of satirlar) {
     const a = `${r.talepId}/${r.teklifId}`;
     siparisler.set(a, [...(siparisler.get(a) ?? []), r]);
   }
-  const toplam = new Map<number, Map<string, number>>();
-  for (const l of siparisler.values()) {
+  return [...siparisler.values()].map((l) => {
     const ilk = l[0]!;
-    const deger = projeAlimDegeri(l.map((r) => ({ tur: tur(r), mal: Number(r.mal), miktar: Number(r.miktar), teslim: Number(r.teslim) })), Number(ilk.masraf));
-    if (deger === 0) continue;
-    const m = toplam.get(ilk.projeId) ?? new Map<string, number>();
-    m.set(ilk.paraBirimi, (m.get(ilk.paraBirimi) ?? 0) + deger);
-    toplam.set(ilk.projeId, m);
+    const dagilim = siparisDagilimi(l.map((r) => ({
+      fason: r.fason, kartTuru: r.malzemeNo === null ? null : (kartlar.get(r.malzemeNo)?.tur ?? null),
+      kartBulunamadi: r.malzemeNo !== null && !kartlar.has(r.malzemeNo),
+      emirId: r.emirId, emirProjeli: r.emirId !== null && projeliEmirler.has(r.emirId), projeId: r.projeId,
+      mal: Number(r.mal), miktar: Number(r.miktar), teslim: Number(r.teslim),
+    })), Number(ilk.masraf));
+    return { talepId: ilk.talepId, teklifId: ilk.teklifId, paraBirimi: ilk.paraBirimi, dagilim };
+  });
+}
+function hedefTutarlari(siparisler: readonly DagitilmisSiparis[], yol: 'emir' | 'proje', istenen: ReadonlySet<number>): Map<number, { tutar: string; paraBirimi: string }[]> {
+  const toplam = new Map<number, Map<string, number>>();
+  for (const p of siparisler) {
+    for (const h of p.dagilim.hedefler.filter((x) => x.yol === yol && istenen.has(x.hedefId))) {
+      const m = toplam.get(h.hedefId) ?? new Map<string, number>();
+      m.set(p.paraBirimi, (m.get(p.paraBirimi) ?? 0) + h.deger);
+      toplam.set(h.hedefId, m);
+    }
   }
-  for (const [projeId, m] of toplam) {
-    sonuc.set(projeId, [...m].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([paraBirimi, t]) => ({ tutar: (Math.round(t * 100) / 100).toFixed(2), paraBirimi })));
-  }
-  return sonuc;
+  return new Map([...toplam].map(([id, m]) => [id, [...m].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([paraBirimi, t]) => ({ tutar: (Math.round(t * 100) / 100).toFixed(2), paraBirimi }))]));
+}
+
+// 2611 a, Maliyet C1: proje başına, para birimi başına projeye giden alım değeri (KDV hariç, sipariş para biriminde; N1: proje maliyeti
+// bugünün kuruyla çevirir). Yalnız proje yolundaki satırlar ve masraf payları. Değeri olmayan proje haritada yoktur.
+export async function projeSatinAlmaTutarlari(db: Db, projeIdler: readonly number[]): Promise<Map<number, { tutar: string; paraBirimi: string }[]>> {
+  const tekil = [...new Set(projeIdler)];
+  if (tekil.length === 0) return new Map();
+  return hedefTutarlari(await dagitilmisSiparisler(db, { projeIdler: tekil }), 'proje', new Set(tekil));
+}
+
+// 2638 (Maliyet K1): üretim emri başına, para birimi başına emre yazılan hizmet alımı (emir yolu: emirli talepte fason olmayan hizmet ya da
+// kartsız satır, emrin projesi varsa). KDV hariç, sipariş para biriminde. Değeri olmayan emir haritada yoktur.
+export async function emirHizmetTutarlari(db: Db, emirIdler: readonly number[]): Promise<Map<number, { tutar: string; paraBirimi: string }[]>> {
+  const tekil = [...new Set(emirIdler)];
+  if (tekil.length === 0) return new Map();
+  return hedefTutarlari(await dagitilmisSiparisler(db, { emirIdler: tekil }), 'emir', new Set(tekil));
+}
+
+// 2637 a, Mimar K1: Finans genel gider önerisinde siparişli belgenin oranını buradan çeker (kablolama, genelGiderOraniCozucusu). Anahtar
+// 'talepId:teklifId'; değer 0-1 (altı ondalık), malı olmayan siparişte null; satırı olmayan sipariş haritada yoktur (bilinmiyor).
+export async function siparisGenelGiderOranlari(db: Db, siparisler: readonly { talepId: string; teklifId: string }[]): Promise<Map<string, number | null>> {
+  const tekil = [...new Map(siparisler.map((x) => [`${x.talepId}:${x.teklifId}`, x])).values()];
+  if (tekil.length === 0) return new Map();
+  return new Map((await dagitilmisSiparisler(db, { siparisler: tekil })).map((p) => [`${p.talepId}:${p.teklifId}`, p.dagilim.genelGiderOrani]));
 }
 
 // 2614 1/2 a: idari talepten kalemsiz taslak satın alma talebi. Açan çevirendir (K3); talep eden idari talebi açandır ve harekete yazılır.
