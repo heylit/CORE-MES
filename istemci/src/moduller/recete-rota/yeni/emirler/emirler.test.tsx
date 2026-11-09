@@ -326,6 +326,35 @@ describe('R3 Üretim emirleri: komutlar', () => {
     expect(istekler.filter((i) => i.yontem === 'POST' && i.yol.startsWith('/adimli-emirler'))).toEqual([]);
   });
 
+  it('rotasız emir ayarı kapalıyken rotasız ürün seçilince form baştan söyler, Emri oluştur kapalıdır, Rotasını kur ürüne götürür (B-2500-6)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], rotasizAcik: false }) },
+    });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    expect(await within(form).findByText(/rotasız üretim emri ayarlardan kapalı/)).toBeTruthy();
+    const dugme = within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.click(dugme);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yontem === 'POST' && i.yol.startsWith('/adimli-emirler'))).toEqual([]);
+    fireEvent.click(within(form).getByRole('button', { name: 'Rotasını kur' }));
+    expect(await screen.findByRole('region', { name: 'Ürün ve rotalar' })).toBeTruthy();
+  });
+
+  it('rotasız emir ayarı açıkken uyarı çıkmaz (B-2500-6)', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], rotasizAcik: true }) } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(within(form).queryByText(/ayarlardan kapalı/)).toBeNull();
+    expect((within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('proje gerekmeyen türde şart iletisi çıkmaz, Emri oluştur açıktır (B-2502-3, izinli)', async () => {
     sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }) } });
     rrAc();

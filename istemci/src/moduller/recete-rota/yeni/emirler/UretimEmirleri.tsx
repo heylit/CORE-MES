@@ -187,7 +187,8 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   // (uretim-emirleri.yaz). İşlemi olmayan yolun ürünü listede yoktur.
   const urunler = useMemo(() => (d.items ?? [])
     .filter((i) => uretilirMi(d, i.id) ? yetki.rotaEmreKopyala : (i.type === 'mamul' || i.type === 'yari') && yetki.emirYaz)
-    .sort((a, b) => Number(b.type === 'mamul') - Number(a.type === 'mamul')), [d, yetki]);
+    // Rotalı ürün önce gelir: formun ilk seçimi emri açılabilen üründür (B-2500-6).
+    .sort((a, b) => Number(uretilirMi(d, b.id)) - Number(uretilirMi(d, a.id)) || Number(b.type === 'mamul') - Number(a.type === 'mamul')), [d, yetki]);
   const tatiller = d.cal.holidays;
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
@@ -209,9 +210,12 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const acilis = useQuery({
     queryKey: [...RR_ANAHTARI, 'acilis-secenekleri', malzemeNo, f.tur] as const,
     enabled: Number.isInteger(malzemeNo) && malzemeNo > 0,
-    queryFn: () => api.get<AcilisSecenekleri>(`/adimli-emirler/acilis-secenekleri?malzemeNo=${String(malzemeNo)}&emirTuru=${encodeURIComponent(f.tur)}`),
+    queryFn: () => api.get<AcilisSecenekleri & { rotasizAcik?: boolean }>(`/adimli-emirler/acilis-secenekleri?malzemeNo=${String(malzemeNo)}&emirTuru=${encodeURIComponent(f.tur)}`),
   });
   const projeYok = acilis.data?.projeZorunlu === true && acilis.data.projeler.length === 0;
+  // B-2500-6: rotasız emir ayarı kapalıyken rotasız ürün seçilse de emir açılamaz (sahibi 409 verir); form bunu baştan söyler ve rota
+  // kurulacak yere götürür. Ayarı açılış seçenekleri taşır; alan yoksa (eski sunucu) karar yine sahibindedir.
+  const rotasizKapali = acilis.data?.rotasizAcik === false && !uretilirMi(d, f.urun);
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
@@ -301,6 +305,12 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
           yeni girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
         />
       )}
+      {rotasizKapali && (
+        <p className="tc-rr3-uyari" role="status">
+          <Simge ad="alert" boyut="k" />Bu ürünün rotası yok; rotasız üretim emri ayarlardan kapalı. Önce rotasını kurun.{' '}
+          <Dugme tur="ikincil" simge="route" onClick={() => { git('schema', f.urun); }}>Rotasını kur</Dugme>
+        </p>
+      )}
       {projeYok && (
         <p className="tc-rr3-uyari" role="status">
           <Simge ad="alert" boyut="k" />Bu ürün için açık proje yok; bu türde üretim emri bir projeyle açılır. <Link to={PROJELER_YOLU}>Projeler</Link>
@@ -308,7 +318,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
       )}
       {hata && <p className="tc-rr3-uyari" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
       <div className="tc-rr3-arac">
-        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} disabled={projeYok} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
+        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} disabled={projeYok || rotasizKapali} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
       </div>
       {gecmisSorusu && (
         <Pencere acik kapat={() => { setGecmisSorusu(false); }} baslik="Teslim tarihi geçmişte" alt={(
