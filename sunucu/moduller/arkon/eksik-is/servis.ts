@@ -58,6 +58,11 @@ const BIRIM: Record<EksikIsTuru, string> = {
   'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati',
 };
 
+// Terminaldeki "Girilmemiş işlerim" sırası; saha görünümüne yalnız bu üç tür girer.
+const SAHA_SIRASI: Record<EksikIsTuru, number> = {
+  'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'plansiz-is': 3, 'geciken-emir': 4, 'bayat-plan': 5,
+};
+
 const iso = (t: number): string => new Date(t).toISOString();
 const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
 const olayAnahtari = (tur: EksikIsTuru, konuTur: EksikIsKonusu, konuId: number | null): string => `${tur}:${konuTur}:${konuId ?? ''}`;
@@ -305,6 +310,7 @@ export async function eksikIslerim(db: Db, kullanici: Kullanici, simdi: number =
     if (o.tur !== 'plan-gerisi' && o.tur !== 'yarim-is') return false;
     return (o.kaynakTur === 'kisi' && o.kaynakId === kullanici.id) || (o.kaynakTur === 'makine' && o.kaynakId !== null && makineIdleri.has(o.kaynakId));
   };
-  const olaylar = (await s.acikEksikIsler(db)).filter(benim).sort((a, b) => b.deger - a.deger);
+  // Önce tür (saha önce girilmemiş günü, sonra yarım işi kapatır), tür içinde değer: birim türden türe değiştiği için değerler karşılaştırılamaz.
+  const olaylar = (await s.acikEksikIsler(db)).filter(benim).sort((a, b) => SAHA_SIRASI[a.tur] - SAHA_SIRASI[b.tur] || b.deger - a.deger);
   return { hesaplama: iso(simdi), olaylar: await satirlar(db, kullanici, olaylar) };
 }

@@ -191,7 +191,8 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const cevap = await istek<EksikIslerimCevabi>(operator, 'GET', '/arkon/eksik-islerim');
     assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
     assert.equal(eksikIslerimCevabi.safeParse(cevap.govde).success, true);
-    assert.deepEqual(cevap.govde.olaylar.map((x) => x.tur).sort(), ['kayitsiz-gun', 'plan-gerisi', 'yarim-is']);
+    // Önce türe göre (kayıtsız gün, yarım iş, plan gerisi), tür içinde değere göre: değerin birimi türden türe değişir.
+    assert.deepEqual(cevap.govde.olaylar.map((x) => x.tur), ['kayitsiz-gun', 'yarim-is', 'plan-gerisi']);
     assert.deepEqual((await istek<EksikIslerimCevabi>(baskaOperator, 'GET', '/arkon/eksik-islerim')).govde.olaylar, []);
     assert.equal((await istek(hazirlik, 'GET', '/arkon/eksik-islerim')).durum, 403);
     assert.equal((await istek(null, 'GET', '/arkon/eksik-islerim')).durum, 401);
