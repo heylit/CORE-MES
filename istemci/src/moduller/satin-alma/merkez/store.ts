@@ -4,7 +4,7 @@
  *   - transport.ts: PostgreSQL arkasındaki REST API (sunucu sürümü)
  *   - transport.artifact.ts: claude.ai önizlemesinin kendi veritabanı (önizleme derlemesinde bu dosya seçilir)
  */
-import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, Settings, Supplier } from "./tipler.ts";
+import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
 import type { SiparisBelgesi, SiparisBelgesiYazimi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
 import type { OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
@@ -183,6 +183,9 @@ export interface Backend {
   siparisKalemiDegistir(talepId: string, kalemId: string, miktar: number, birim: string, gerekce: string): Promise<boolean>;
   /** #205 S2 b: Logo'daki siparişin kalanı gerekçeyle kapatılır; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */
   siparisKapat(talepId: string, teklifId: string, gerekce: string): Promise<boolean>;
+  /** 2413 a: iptal edilen talep gerekçeyle iptal öncesi durumuna döner; elle durum değiştirmenin tek yolu budur. Sunucu dönüşü
+   * genel kayıt kurallarından geçirir ve hareket yazar. turetildi: önceki durum kayıtlı değildi, veriden bulundu. Başarısızsa ileti gösterilir, null döner. */
+  iptaliGeriAl(talepId: string, gerekce: string): Promise<{ durum: RequestStatus; turetildi: boolean } | null>;
   /** Kart #1310: teslim yöntemi; "biz alacağız" siparişi sevkiyatta alım olarak bekletir. Başarısızsa ileti gösterilir, false döner. */
   teslimYontemi(talepId: string, teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null): Promise<boolean>;
   /** D6 b: siparişin tedarikçisinin alış faturaları (fatura finansta girilir). Başarısızsa ileti gösterilir, null döner. */

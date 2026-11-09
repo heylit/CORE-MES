@@ -111,6 +111,27 @@ describe('TMI taşıyıcısı', () => {
     }
   });
 
+  it('2413 a: iptali geri al gerekçe ve son sürümle ayrı komutla gider; dönen durum ekrana yazılır, türetildiyse söylenir; 422 null döner', async () => {
+    const iptal: Talep = { ...TALEP, durum: 'iptal', iptalNedeni: 'Deneme ihtiyaç kalktı', surum: 6 };
+    const donen: Talep = { ...TALEP, durum: 'degerlendirme', iptalNedeni: '', surum: 7 };
+    const json = (d: number, g: unknown) => new Response(JSON.stringify(g), { status: d, headers: { 'content-type': 'application/json' } });
+    const fetchSahte = vi.fn(async () => json(200, { talep: donen, durum: 'degerlendirme', turetildi: true }));
+    vi.stubGlobal('fetch', fetchSahte);
+    try {
+      talepEkrana(iptal);
+      expect(await backend.iptaliGeriAl(TALEP.id, 'İhtiyaç yeniden doğdu')).toEqual({ durum: 'eval', turetildi: true });
+      const [url, istek] = fetchSahte.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe(`/api/satin-alma-talepleri/${TALEP.id}/iptali-geri-al`);
+      expect(JSON.parse(String(istek.body))).toEqual({ gerekce: 'İhtiyaç yeniden doğdu', surum: 6 });
+      expect(S.requests[TALEP.id]?.status).toBe('eval');
+      fetchSahte.mockImplementation(async () => json(422, { hata: { kod: 'GECERSIZ', ileti: 'Talep iptal edilmemiş.' } }));
+      expect(await backend.iptaliGeriAl(TALEP.id, 'x')).toBeNull();
+      expect(await backend.iptaliGeriAl('00000000-0000-4000-8000-000000000999', 'x')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('D6 b: sipariş faturaları siparişin anahtarıyla okunur; bağ istek kimliğiyle gider, ağ kopunca aynı kimlikle yinelenir; sunucu reddederse null döner', async () => {
     const LISTE = { faturalar: [{ id: 7, belgeNo: 'DN-1', belgeTarihi: '2026-10-09', aciklama: null, bagli: true, baskaSipariste: false }], uyarilar: [] };
     const cevap = (govde: unknown, durum = 200) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });

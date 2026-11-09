@@ -420,8 +420,7 @@ export function talepIslemleri(r: PurchaseRequest): [act: string, baslik: string
     ["req-edit", "Talebi düzenle"],
     ...(open && (r.items || []).length ? [["rfq", "Teklif iste"] as [string, string]] : []),
     ...(r.award ? [["approval-form", "Onay formunu göster"] as [string, string]] : []),
-    // Teslim alınan talebin durumu elle değişmez, yalnız taslak silinir (SAT-07, SAT-66); sunucunun reddedeceği işlem menüde durmaz.
-    ...(r.status !== "received" ? [["req-status", "Durumu elle değiştir"] as [string, string]] : []),
+    // 2413 a: durum elle seçilmez; iptal edilen talebin tek işi "İptali geri al"dır, sıradaki iş olarak başlıkta durur (nextStep).
     ...(r.status !== "cancelled" && r.status !== "received" ? [["req-cancel", "Talebi iptal et", true] as [string, string, true]] : []),
     ...(r.status === "draft" ? [["req-delete", "Talebi sil", true] as [string, string, true]] : []),
   ];
@@ -432,7 +431,7 @@ export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: strin
   const set = settings(), items = (r.items || []).length, q = (r.quotes || []).length, rfqs = r.rfqs || [];
   const pending = rfqs.filter(x => !(r.quotes || []).some(qq => qq.supplierId === x.supplierId));
   const a = r.award, ap = a && (a.approvals || []).slice(-1)[0];
-  if (r.status === "cancelled") return { cls: "done", t: "Talep iptal edildi", s: r.cancelReason || "Kayıt ve teklifler hafızada kalır.", b: [] };
+  if (r.status === "cancelled") return { cls: "done", t: "Talep iptal edildi", s: r.cancelReason || "Kayıt ve teklifler hafızada kalır.", b: [["req-uncancel", "İptali geri al", 1]] };
   if (!items) return { cls: "warn", t: "Kalemleri ekleyin", s: "Ne alınacağını miktar ve birimiyle girin.", b: [["edit-request", "Kalem ekle", 1]] };
   if (r.status === "received") return a && !a.lessons ? { cls: "done", t: "Alım tamamlandı", s: "Bir sonraki alıma not bırakın: neler iyi gitti, neye dikkat edilmeli?", b: [["tab", "Not ekle", 0, "decision"]] } : { cls: "done", t: "Alım tamamlandı", s: a && a.deliveredDate ? `Teslim ${fmtDate(a.deliveredDate)}${a.quality ? ", kalite: " + QUALITY[a.quality as Quality] : ""}` : "", b: [] };
   if (r.status === "ordered") {

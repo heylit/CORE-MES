@@ -16,7 +16,7 @@ const ADIM_SIMGESI: Record<string, SimgeAdi> = {
   items: 'list', quotes: 'tag', compare: 'chart', approval: 'clipboard-check', order: 'cart', delivery: 'truck', log: 'clock',
 };
 const ISLEM_SIMGESI: Record<string, SimgeAdi> = {
-  'req-edit': 'edit', rfq: 'tag', 'approval-form': 'file', 'req-status': 'route', 'req-cancel': 'x', 'req-delete': 'trash',
+  'req-edit': 'edit', rfq: 'tag', 'approval-form': 'file', 'req-uncancel': 'rotate', 'req-cancel': 'x', 'req-delete': 'trash',
 };
 const DONUS: Record<string, string> = { dash: 'İş kutusuna dön', requests: 'Taleplere dön' };
 
