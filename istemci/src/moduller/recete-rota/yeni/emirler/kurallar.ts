@@ -591,3 +591,13 @@ export function sahipsizEkle(satirlar: readonly StokSurecSatiri[], sahipsiz: rea
   }
   return sonuc;
 }
+
+// 2571: iş emrinin süre özeti adımın satırında. Ölçülemeyen süre "–" ile ve nedeniyle yazılır (sıfır uydurulmaz); nedenler arkon'un
+// "Süre ölçülmedi" metinleriyle aynı dildedir (2567).
+export interface AdimSureOzeti { saglam: number; hurda: number; hazirlikDk: number | null; brutBirimDk: number | null; netBirimDk: number | null }
+export function sureOzetiNedenleri(o: AdimSureOzeti): { hazirlik: string | null; islem: string | null } {
+  const islem = o.netBirimDk !== null ? null
+    : o.saglam === 0 && o.hurda === 0 ? 'Sayım yok: işlem süresi ölçülmedi'
+      : o.saglam === 0 ? 'Sağlam sayım yok: işlem süresi ölçülmedi' : 'İşlem süresi ölçülmedi';
+  return { hazirlik: o.hazirlikDk === null ? 'Ayar basılmadı: hazırlık ölçülmedi' : null, islem };
+}

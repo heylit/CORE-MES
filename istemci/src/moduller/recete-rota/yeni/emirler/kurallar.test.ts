@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
+  miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -379,5 +379,16 @@ describe('2547 eki v2: stok tablosu sıralaması (Atölye notu)', () => {
     expect(stokSurecSirala(l, { alan: 'sonHareket', yon: 'artan' }).map((x) => x.anahtar)).toEqual(['a', 'c', 'b']);
     expect(stokSurecSirala(l, { alan: 'sahipsiz', yon: 'azalan' }).map((x) => x.anahtar)).toEqual(['c', 'a', 'b']);
     expect(stokSurecSirala(l, null).map((x) => x.anahtar)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('2571 süre özeti nedenleri', () => {
+  const o = { saglam: 4, hurda: 1, hazirlikDk: 12, brutBirimDk: 2.4, netBirimDk: 2.1 };
+  it('ölçülen sürede neden yok', () => { expect(sureOzetiNedenleri(o)).toEqual({ hazirlik: null, islem: null }); });
+  it('ayar yoksa hazırlık; sayım yoksa, sağlam yoksa ya da başka nedenle işlem ölçülmedi', () => {
+    expect(sureOzetiNedenleri({ ...o, hazirlikDk: null }).hazirlik).toBe('Ayar basılmadı: hazırlık ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0, hurda: 0 }).islem).toBe('Sayım yok: işlem süresi ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0 }).islem).toBe('Sağlam sayım yok: işlem süresi ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null }).islem).toBe('İşlem süresi ölçülmedi');
   });
 });

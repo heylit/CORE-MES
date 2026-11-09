@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type MenuOgesi, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { RR_ANAHTARI, type RrDurumu } from '../veri.ts';
+import { RR_ANAHTARI, useRrBaglami, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
@@ -12,7 +12,7 @@ import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni,
+  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
 import type { MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -400,6 +400,32 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
   );
 }
 
+// 2571: başlamış iş emirlerinin süre özeti (opNo ile); okunamazsa (yetki ya da ağ) satır hiç yazılmaz, adım listesi aynı kalır.
+function useEmirSureOzetleri(emirId: number, etkin: boolean) {
+  const { kopru } = useRrBaglami();
+  return useQuery({
+    queryKey: [...RR_ANAHTARI, 'emir-sure-ozeti', emirId],
+    enabled: etkin,
+    queryFn: async () => {
+      const c = await kopru('emir-sure-ozetleri', { emirId }) as { ozetler: { opNo: number; ozet: AdimSureOzeti }[] };
+      return new Map(c.ozetler.map((x) => [x.opNo, x.ozet]));
+    },
+  });
+}
+
+function SureOzetiSatiri({ o }: { o: AdimSureOzeti }) {
+  const n = sureOzetiNedenleri(o);
+  const dk = (v: number | null, neden: string | null) => (v === null ? <span title={neden ?? undefined}>{YOK}</span> : sayi(v));
+  return (
+    <small className="tc-rr3-adim-sure">
+      <span>Hazırlık {dk(o.hazirlikDk, n.hazirlik)} dk</span>
+      <span>Net {dk(o.netBirimDk, n.islem)} · brüt {dk(o.brutBirimDk, n.islem)} dk/adet</span>
+      <span>{sayi(o.saglam)} sağlam / {sayi(o.hurda)} hurda</span>
+      {(n.hazirlik ?? n.islem) && <span className="tc-rr3-adim-sure-neden">{[n.hazirlik, n.islem].filter(Boolean).join(' · ')}</span>}
+    </small>
+  );
+}
+
 interface OpSatiri {
   adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null; oneri: boolean;
   // 2530 a: rotada olmayan, emre konmuş adımın türü.
@@ -426,6 +452,8 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut }: {
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
   const opSaglam = d.emirler?.opSaglam ?? {};
+  const basladi = adimlar.some((a) => (a.durum ?? 'bekliyor') !== 'bekliyor') || Object.keys(opStatus).some((k) => k.startsWith(`${o.id}|`));
+  const sureler = useEmirSureOzetleri(o.kayitNo, basladi && o.kayitNo > 0).data ?? null;
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
   // B-2499-7: saat canlı plandan okunur; canlıda olmayan adımda motorun yerleşimi "öneri" diye gösterilir. Canlı özet yoksa (plan okuması
   // gelmedi) ayrım yapılamaz, eskisi gibi motor saati yazılır.
@@ -541,6 +569,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut }: {
                 />
               )}
             </span>
+            {s.durum !== 'bekliyor' && sureler?.get(s.adim.opNo) && <SureOzetiSatiri o={sureler.get(s.adim.opNo)!} />}
           </li>
           );
         })}

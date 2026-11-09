@@ -736,3 +736,37 @@ describe('R3 kolun devamı: ana kola katılır ya da ayrı ilerler (1827; 1825 a
     expect(plan(istekler)).toEqual([]);
   });
 });
+
+describe('R3 Üretim emirleri: adımın süre özeti (2571)', () => {
+  it('başlamış adımın altında hazırlık, net ve brüt birim, sağlam ve hurda; ölçülemeyen süre "–" ve nedeniyle; bekleyen adımda yok', async () => {
+    const d = ornekDurum();
+    const adim = (id: string, seq: number, opNo: number) => ({
+      id, seq, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { '11': { base: null, steps: [adim('s1', 1, 10), adim('s2', 2, 20), adim('s3', 3, 30)] } } as unknown as typeof d.routes;
+    const o = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const })),
+      opStatus: { [`${o.id}|root|1`]: 'tamam', [`${o.id}|root|2`]: 'calisiyor' } };
+    const ie = (id: number, opNo: number, baslama: string | null) => ({ id, opNo, baslama, kaynak: { tur: 'makine' }, fason: null });
+    const ozet = (isEmriId: number, ek: Record<string, unknown>) => ({
+      isEmriId, baslama: null, bitis: null, saglam: 8, hurda: 1, hazirlikDk: 12.5, brutBirimDk: 2.4, netBirimDk: 2.1, tekliAraliklarDk: [], tekliOrtalamaDk: null, ...ek,
+    });
+    sunucuKur(OKUYAN, { durum: d, yazmalar: {
+      [`GET /adimli-emirler/${String(o.kayitNo)}`]: () => json(200, { emir: { isEmirleri: [ie(101, 10, '2026-11-02T06:00:00.000Z'), ie(102, 20, '2026-11-03T06:00:00.000Z'), ie(103, 30, null)] } }),
+      [`GET /adimli-emirler/${String(o.kayitNo)}/is-emirleri/101/sure-ozeti`]: () => json(200, ozet(101, {})),
+      [`GET /adimli-emirler/${String(o.kayitNo)}/is-emirleri/102/sure-ozeti`]: () => json(200, ozet(102, { saglam: 0, hurda: 0, hazirlikDk: null, brutBirimDk: null, netBirimDk: null })),
+    } });
+    rrAc();
+    const b = await emirAc();
+    const liste = within(within(b).getByLabelText('UE-0001 ayrıntısı')).getByRole('list', { name: 'UE-0001 operasyonları' });
+    const op = (n: number) => within(liste).getAllByRole('listitem').find((li) => li.querySelector('.tc-rr3-op')?.textContent === String(n))!;
+    await waitFor(() => { expect(op(10).textContent).toContain('Hazırlık 12,5 dk'); });
+    expect(op(10).textContent).toContain('Net 2,1 · brüt 2,4 dk/adet');
+    expect(op(10).textContent).toContain('8 sağlam / 1 hurda');
+    expect(op(20).textContent).toContain('Hazırlık — dk');
+    expect(op(20).textContent).toContain('Ayar basılmadı: hazırlık ölçülmedi · Sayım yok: işlem süresi ölçülmedi');
+    expect(op(30).textContent).not.toContain('Hazırlık');
+  });
+});
