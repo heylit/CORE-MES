@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom';
 import type { DisOperasyon, DisOperasyonlarCevabi, FasonSureleriCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
-import { DisOperasyonlar } from './DisOperasyonlar.tsx';
+import { DisOperasyonlar, disOperasyonSuz, malKabulAdresi } from './DisOperasyonlar.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 const satir = (ek: Partial<DisOperasyon>): DisOperasyon => ({
@@ -13,6 +13,11 @@ const satir = (ek: Partial<DisOperasyon>): DisOperasyon => ({
   gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, gecikmeSonDonus: 2,
   gecikmeAgirlikli: 2, siparisSatirId: null, fasonKonumId: null, sirada: true, ...ek,
 });
+
+function MalKabulSahte() {
+  const [adres] = useSearchParams();
+  return <p>{`Mal kabul sayfası, fason iş emri ${adres.get('fasonIsEmri') ?? 'yok'}`}</p>;
+}
 
 interface Istek { yontem: string; yol: string; govde: unknown; kimlik: string | null }
 // Kişi ve emirler uydurmadır.
@@ -32,7 +37,7 @@ function ac(liste: () => Response, islemler: string[] = ['satin-alma.yaz'], komu
       <MemoryRouter initialEntries={['/satin-alma/dis-operasyonlar']}>
         <BildirimSaglayici><Routes>
           <Route path="/satin-alma/dis-operasyonlar" element={<DisOperasyonlar />} />
-          <Route path="/stok/mal-kabul" element={<p>Mal kabul sayfası</p>} />
+          <Route path="/stok/mal-kabul" element={<MalKabulSahte />} />
         </Routes></BildirimSaglayici>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -50,7 +55,7 @@ describe('Dış operasyonlar (#542)', () => {
   });
 
   it('satırda emir, firma, termin ve gecikme görünür; firması olmayan "Seçilmedi", zamanında olan rozet taşır', async () => {
-    ac(liste(satir({}), satir({ isEmriId: 2, emirNo: 'UE-2026-002', firmaId: null, firmaAdi: null, gecikmeGun: 0 })));
+    ac(liste(satir({}), satir({ isEmriId: 2, emirNo: 'UE-2026-002', firmaId: null, firmaAdi: null, gecikmeGun: 0, gecikmeSonDonus: 0 })));
     expect(await screen.findByText('UE-2026-001')).toBeTruthy();
     expect(screen.getByText('Deneme Kaplama')).toBeTruthy();
     expect(screen.getAllByText('09.10.2026').length).toBe(2);
@@ -125,7 +130,49 @@ describe('Dış operasyonlarda gidiş ve tamamla (#995); dönüş mal kabulde', 
     fireEvent.click(within(pencere).getByRole('button', { name: /Kaydet/ }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(within(satirOf('UE-2026-001')).getByRole('button', { name: /Mal kabulde gir/ }));
-    expect(await screen.findByText('Mal kabul sayfası')).toBeTruthy();
+    // 2424: mal kabul fason iş emriyle açılır.
+    expect(await screen.findByText('Mal kabul sayfası, fason iş emri 1')).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([['/adimli-emirler/11/is-emirleri/2/fason-tamamla', undefined]]);
+  });
+});
+
+// 2424: arama, durum süzgeci ve sıra; varsayılan sırada geciken önde, sonra termini yakın olan.
+describe('dış operasyonlar süzgeci ve sırası (2424)', () => {
+  const l = [
+    satir({ isEmriId: 1, emirNo: 'UE-1', gecikmeGun: 0, gecikmeSonDonus: 0, termin: '2026-10-20', firmaAdi: 'Deneme Kaplama' }),
+    satir({ isEmriId: 2, emirNo: 'UE-2', gecikmeGun: 3, gecikmeSonDonus: 3, termin: '2026-10-25', firmaAdi: 'Deneme Taşlama' }),
+    satir({ isEmriId: 3, emirNo: 'UE-3', gecikmeGun: 7, gecikmeSonDonus: 7, termin: '2026-10-30' }),
+    satir({ isEmriId: 4, emirNo: 'UE-4', gecikmeGun: null, gecikmeSonDonus: null, termin: '2026-10-10', gonderilen: null }),
+    satir({ isEmriId: 5, emirNo: 'UE-5', gecikmeGun: 0, gecikmeSonDonus: 0, termin: '2026-10-12', gonderilen: 10, donen: 10 }),
+  ];
+  const no = (x: { emirNo: string }[]) => x.map((y) => y.emirNo);
+  it('varsayılan sıra: çok geciken önce, sonra termini yakın', () => {
+    expect(no(disOperasyonSuz(l, '', 'hepsi', null))).toEqual(['UE-3', 'UE-2', 'UE-4', 'UE-5', 'UE-1']);
+  });
+  it('durum süzgeci ve arama', () => {
+    expect(no(disOperasyonSuz(l, '', 'geciken', null))).toEqual(['UE-3', 'UE-2']);
+    expect(no(disOperasyonSuz(l, '', 'gonderilecek', null))).toEqual(['UE-4']);
+    expect(no(disOperasyonSuz(l, '', 'donen', null))).toEqual(['UE-5']);
+    expect(no(disOperasyonSuz(l, '', 'disarida', null))).toEqual(['UE-3', 'UE-2', 'UE-1']);
+    expect(no(disOperasyonSuz(l, 'TAŞLAMA', 'hepsi', null))).toEqual(['UE-2']);
+  });
+  it('sütun sırası varsayılanı ezer', () => {
+    expect(no(disOperasyonSuz(l, '', 'hepsi', { alan: 'termin', yon: 'artan' }))).toEqual(['UE-4', 'UE-5', 'UE-1', 'UE-2', 'UE-3']);
+    expect(no(disOperasyonSuz(l, '', 'hepsi', { alan: 'emir', yon: 'azalan' }))).toEqual(['UE-5', 'UE-4', 'UE-3', 'UE-2', 'UE-1']);
+  });
+});
+
+describe('2424-a c ve 2426: iki gecikme ölçüsü, mal kabul adresi', () => {
+  it('gecikme son dönüşe göredir, altında adet ağırlıklı; ilk dönüş gecikmesi süzgeci ve sırayı belirlemez', async () => {
+    ac(liste(satir({ gecikmeGun: 0, gecikmeSonDonus: 6, gecikmeAgirlikli: 2.5 }), satir({ isEmriId: 3, emirNo: 'UE-2026-003', gecikmeSonDonus: 4, gecikmeAgirlikli: 4 }), satir({ isEmriId: 2, emirNo: 'UE-2026-002', gecikmeGun: 4, gecikmeSonDonus: 0, gecikmeAgirlikli: 0 })));
+    const tablo = await screen.findByRole('table');
+    expect(within(tablo).getByText('6 gün')).toBeTruthy();
+    expect(within(tablo).getByText('adet ağırlıklı 2,5 gün')).toBeTruthy();
+    expect(within(tablo).queryAllByText(/adet ağırlıklı/)).toHaveLength(1);
+    expect(disOperasyonSuz([satir({ gecikmeGun: 4, gecikmeSonDonus: 0 })], '', 'geciken', null)).toEqual([]);
+  });
+  it('mal kabul adresi bilinen sipariş satırı ve fason kutusunu taşır, bilinmeyeni göndermez', () => {
+    expect(malKabulAdresi(satir({ isEmriId: 7, siparisSatirId: 41, fasonKonumId: 9 }))).toBe('/stok/mal-kabul?fasonIsEmri=7&siparisSatiri=41&konum=9');
+    expect(malKabulAdresi(satir({ isEmriId: 7 }))).toBe('/stok/mal-kabul?fasonIsEmri=7');
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type {
-  AcikSiparisSatirlariCevabi, PartiIziCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, StokDegeriCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
+  AcikSiparisSatirlariCevabi, FasonIsleriCevabi, PartiIziCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, StokDegeriCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, MUDUR, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 import { ApiHatasi, ISTEK_KIMLIGI_BASLIGI } from '../../ortak/veri/api.ts';
@@ -594,6 +594,34 @@ describe('Mal kabul', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
     await waitFor(() => expect(postlar()).toHaveLength(2));
     expect(postlar()[1]).toEqual({ malzemeId: 903, miktar: '20', siparisSatirId: 51 });
+  });
+  it('2426: dış operasyonlardan gelince hizmet siparişi, fason kutusu ve fason işi bir kez dolar; dönen adet firmada kalandır', async () => {
+    const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
+    const acik = { satirlar: [{ id: 51, siparisNo: 'SA-F', talepNo: 'ST-2026-009', tedarikciAdi: 'Deneme Kaplama', malzemeId: 903, malzemeTur: 'hizmet', kalemAdi: 'Kaplama', miktar: '20', kalanMiktar: '20', birim: 'adet', beklenenTeslim: null }] } satisfies AcikSiparisSatirlariCevabi;
+    const fasonKutusu = { id: 77, kod: 'FSN-01', tur: 'fason', ad: 'Deneme fasoncu', depoId: 1, depoKod: 'ANA', rafId: null, bolmeNo: null, katNo: null, sonSayim: null, aktif: true, satirSayisi: 1, haritaGozId: null, haritaAlanId: null, surum: 1 } as const;
+    const isler = { isler: [{ isEmriId: 5, emirNo: 'UE-2026-001', opNo: 30, adim: 'Kaplama', gonderilen: 20, donen: 4, hurda: 1, donenKart: { malzemeId: 904, kod: 'K-904', ad: 'Deneme mil kaplamalı', birim: 'adet' }, statulu: false }] } satisfies FasonIsleriCevabi;
+    const belge = { belge: { id: 3, no: 'MK-000003', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null }, hareketIdler: [] };
+    const istekler = sunucuKur(DEPOCU, {
+      'GET /stok/konumlar': () => json(200, { satirlar: [fasonKutusu], toplam: 1, sayfa: 1, sayfaBoyu: 200 } satisfies KonumlarCevabi),
+      'GET /stok/konumlar/77': () => json(200, { konum: fasonKutusu, raf: null, bakiyeler: [], haritaYeri: null, zemin: null }),
+      'GET /stok/fason-isleri': () => json(200, isler),
+      'GET /stok/mal-kabuller': () => json(200, bosListe satisfies MalKabullerCevabi),
+      'GET /stok/acik-siparis-satirlari': () => json(200, acik),
+      'GET /stok/malzemeler/903/ozet': () => json(200, ozet(903, 'hizmet', 'Deneme kaplama hizmeti')),
+      'GET /stok/malzemeler/904/ozet': () => json(200, ozet(904, 'yarimamul', 'Deneme mil kaplamalı')),
+      'GET /stok/malzemeler/904': () => json(200, AYRINTI),
+      'GET /stok/malzemeler/904/goz-onerisi': () => json(200, { oneri: null }),
+      'POST /stok/mal-kabul': () => json(200, belge),
+    });
+    ac('/stok/mal-kabul?fasonIsEmri=5&siparisSatiri=51&konum=77');
+    expect(await screen.findByText('SA-F · Deneme Kaplama · Kaplama')).toBeTruthy();
+    expect(await screen.findByText(/K-904 · Deneme mil kaplamalı/)).toBeTruthy();
+    expect((screen.getByLabelText('Fason kutusu') as HTMLSelectElement).value).toBe('77');
+    expect((screen.getByLabelText('Fason işi') as HTMLSelectElement).value).toBe('5');
+    expect((screen.getByLabelText(/Dönen adet/) as HTMLInputElement).value).toBe('15');
+    fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, miktar: '15', siparisSatirId: 51, fasonIsi: { isEmriId: 5 } });
   });
   it('fason kutusunda giden kartın birden çok partisi varsa giden parti sorulur ve gövdeye yazılır; tek partide sorulmaz', async () => {
     const ozet = (id: number, tur: 'yarimamul' | 'hizmet', ad: string) => ({ ozet: { id, tur, kod: `K-${id}`, ad, onayDurumu: 'aktif', kullanilabilir: true, birim: 'adet' } } satisfies MalzemeOzetiCevabi);
