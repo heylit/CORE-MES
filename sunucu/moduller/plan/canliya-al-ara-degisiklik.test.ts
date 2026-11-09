@@ -12,6 +12,16 @@ const GEREKCE = 'Deneme: yakındaki iş bilerek taşındı.';
 // işler geçer; arada canlıya giren yer ve iş korunur. Korunan canlıyla taslaktan gelen iş aynı makinede üst üste binerse canlıya alınmaz.
 describe('plan (gerçek PostgreSQL): canlı değiştikten sonra canlıya alma', () => {
   const { c, vt, tamam, istek, yeniAdim, isEmirleriAc, taslaktaOner, planOku, yer, durum } = planTestOrtami();
+  const kuyrukTaslagi = async (isEmriId: number, makineId: number, bas: Date): Promise<{ id: number; surum: number }> => {
+    const canli = await planOku();
+    const y = yer(canli, isEmriId);
+    const k = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
+      kuyruklar: [{ kaynak: { tur: 'makine', id: makineId }, baslangic: bas.toISOString(), isler: [{ emirNo: y.emirNo, opNo: y.opNo, dondurulmus: false, elle: false }] }],
+      planSurumu: canli.surum,
+    });
+    const p = await planOku(k.taslak);
+    return { id: p.taslak!.id, surum: p.taslak!.surum };
+  };
 
   const ileri = (gun: number, saat: number) => new Date(tesisGunBasi(tesisGunu(Date.now())) + gun * GUN + saat * SAAT);
   // Canlı plan başka yoldan değişir (canlıya alınan başka taslak gibi): yer kayar, yeni iş girer, sürüm artar.
@@ -63,6 +73,27 @@ describe('plan (gerçek PostgreSQL): canlı değiştikten sonra canlıya alma', 
     assert.equal(Date.parse(yer(p, y!).baslangic), yYeni.getTime(), 'arada canlıda taşınan iş geri dönmez');
     assert.ok(p.yerlesimler.some((v) => v.isEmriId === z), 'canlıya sonradan giren iş silinmez');
     assert.equal(Date.parse(yer(p, z!).baslangic), zYeri.getTime());
+  });
+
+  test('B-2483-1: Planlama sayfasının kuyruk yazımıyla (sunucu motoru) açılan taslakta da arada canlıya giren değişiklik korunur', async () => {
+    const { makineA } = durum();
+    const [x] = await isEmirleriAc([yeniAdim()]);
+    const [y] = await isEmirleriAc([yeniAdim()]);
+    await canliPlan();
+    const t = await kuyrukTaslagi(x!, makineA, ileri(8, 10));
+    const taslakta = Date.parse(yer(await planOku(t.id), x!).baslangic);
+    const yYeni = ileri(9, 10);
+    await canliTasi(y!, yYeni);
+    const [z] = await isEmirleriAc([yeniAdim()]);
+    await canliyaEkle(z!, makineA, ileri(10, 10));
+    await surumArtir();
+
+    const r = await onaylaVeAl(t);
+    assert.equal(r.statusCode, 200, r.body);
+    const p = await planOku();
+    assert.equal(Date.parse(yer(p, x!).baslangic), taslakta, 'kuyruğu yazılan iş taslaktaki yeriyle canlıya geçer');
+    assert.equal(Date.parse(yer(p, y!).baslangic), yYeni.getTime(), 'arada canlıda taşınan iş geri dönmez');
+    assert.equal(Date.parse(yer(p, z!).baslangic), ileri(10, 10).getTime(), 'canlıya sonradan giren iş silinmez');
   });
 
   test('B-2483-2: korunan canlı iş ile taslaktan gelen iş aynı makinede üst üste binerse 409, canlı değişmez', async () => {

@@ -1757,8 +1757,10 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const m = await sunucuMotoru(db, b, id, [...motorKuyrugu].map(([makineId, l]) => ({
           makineId, isler: l.map(({ i }) => ({ isId: i.is.id, onizleme: i.x.onizleme ?? null })),
         })));
-        // 168 b, 763: vardiyasız tezgâhtaki ya da malzeme bekleyen işin taslaktaki eski yeri kalkar; iş yerleşmemiş görünür.
+        // 168 b, 763: vardiyasız tezgâhtaki ya da malzeme bekleyen işin taslaktaki eski yeri kalkar; iş yerleşmemiş görünür. Kalkan iş de
+        // defterdedir: canlı değişti kabulünde taslağın kaldırdığı iş canlıdan kalkar (B-2483-1).
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
+        idler.push(...m.yerlesmez);
         for (const [makineId, l] of motorKuyrugu) {
           for (const { i } of l) {
             const y = m.yer.get(i.is.id);
@@ -1871,6 +1873,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
       if (planMotoru !== null && motorKuyrugu.length > 0) {
         const m = await sunucuMotoru(db, await baglamKur(db, k, id), id, motorKuyrugu);
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
+        idler.push(...m.yerlesmez);
         const yazili = new Map((await s.yerlesimler(db, id)).map((y) => [y.isEmriId, y]));
         for (const [isId, y] of m.yer) await s.yerlesimYaz(db, id, { ...yazili.get(isId)!, baslangic: y.baslangic, bitis: y.bitis });
         motorFarki = m.fark;
@@ -2667,7 +2670,8 @@ async function baslayanlariSabitle(db: Db, k: Kullanici, b: Baglam, id: number, 
   }));
   const m = await sunucuMotoru(db, b, id, kuyruklar);
   if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
-  const idler: number[] = [];
+  // Sabitlenen çalışan iş ve yeri kalkan iş de defterdedir (B-2483-1: defter taslağın değiştirdiği işlerin tek listesidir).
+  const idler: number[] = [...calisan, ...m.yerlesmez];
   for (const q of kuyruklar) {
     for (const { isId } of q.isler) {
       const y = m.yer.get(isId), eski = taslak.find((x) => x.isEmriId === isId)!;
