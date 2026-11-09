@@ -10,7 +10,7 @@ import {
   BIRLESTIRME_ADIM, BIRLESTIRME_ADIMLAR_FARKLI, BIRLESTIRME_AKRABA_DEGIL, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KENDISI, BIRLESTIRME_KOK,
   BIRLESTIRME_TASLAK, BOLME_ADET, BOLME_ADIM_YOK, BOLME_BASLAMIS, BOLME_URETILMIS, birlestirmeIhlali, bolmeIhlali, eldekiAdet,
   BIRLESME_ADIMI_BASLAMIS, BIRLESME_ADIMI_YOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESME_KOL_ILERLEDI, BIRLESME_PLANI_KOLDA,
-  BIRLESME_PLANI_VAR, BIRLESME_PLANI_YOK, BIRLESTIRME_EK_ADIM, BOLME_BIRLESME_ADIMI, EK_ADIM_BASLAMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA,
+  BIRLESME_PLANI_VAR, BIRLESME_PLANI_YOK, BIRLESTIRME_EK_ADIM, BOLME_BIRLESME_ADIMI, EK_ADIM_BASLAMIS, EK_ADIM_KALDIR_BASLAMIS,
   EK_ADIM_OP, EK_ADIM_ROTA, EK_ADIM_YERI_YOK, KOL_ALT_PARTILI, KOL_ONCEKI_BITMEDI, birlesmeBeklemeIhlali, birlesmePlaniIhlali,
   birlesmePlaniKaldirIhlali, ekAdimIhlali, ekAdimKaldirIhlali, kolBaslamaIhlali,
   IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, adimAdetleri, bilesenOlabilirMi, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali,
@@ -279,10 +279,11 @@ describe('uretim-emirleri iş emri kuralları', () => {
     ...ek,
   });
 
-  test('UE-PB4 ek adım: yalnız kola, başlamamış bölgeye, komşu op numaraları arasına; ek adım çıkarılır, rota adımı çıkmaz', () => {
+  test('UE-PB4 ek adım: bölünmemiş emre ya da kola (2530 a), başlamamış bölgeye, komşu op numaraları arasına; ek adım çıkarılır, rota adımı çıkmaz', () => {
     assert.equal(ekAdimIhlali(kol(), { oncekiOpNo: 20, opNo: 25 }), null, 'bitmiş adımla bekleyen adımın arasına');
     assert.equal(ekAdimIhlali(kol(), { oncekiOpNo: 40, opNo: 45 }), null, 'kolun sonuna');
-    assert.equal(ekAdimIhlali(kol({ ustEmirId: null }), { oncekiOpNo: 20, opNo: 25 }), EK_ADIM_KOLDA);
+    assert.equal(ekAdimIhlali(kol({ ustEmirId: null }), { oncekiOpNo: 20, opNo: 25 }), null, 'bölünmemiş kök emre de girer (2530 a)');
+    assert.equal(ekAdimIhlali(kol({ ustEmirId: null, acikAltPartiVar: true }), { oncekiOpNo: 20, opNo: 25 }), KOL_ALT_PARTILI, 'açık alt partisi olan köke girmez');
     assert.equal(ekAdimIhlali(kol({ acikAltPartiVar: true }), { oncekiOpNo: 20, opNo: 25 }), KOL_ALT_PARTILI);
     assert.equal(ekAdimIhlali(kol({ durum: 'bitti' }), { oncekiOpNo: 20, opNo: 25 }), ACIK_DEGIL);
     assert.equal(ekAdimIhlali(kol(), { oncekiOpNo: 99, opNo: 25 }), EK_ADIM_YERI_YOK);
@@ -301,7 +302,8 @@ describe('uretim-emirleri iş emri kuralları', () => {
     assert.equal(ekAdimKaldirIhlali(ekli, 99), 'İş emri bulunamadı.');
     assert.equal(ekAdimKaldirIhlali({ ...ekli, isEmirleri: [{ sira: 1, opNo: 25, durum: 'calisiyor', tur: 'tamir' }] }, 25), EK_ADIM_KALDIR_BASLAMIS);
     assert.equal(ekAdimKaldirIhlali({ ...ekli, isEmirleri: [{ sira: 1, opNo: 25, durum: 'bekliyor', tur: 'ek' }] }, 25), IS_EMIRSIZ, 'kolda en az bir adım kalır');
-    assert.equal(ekAdimKaldirIhlali({ ...ekli, ustEmirId: null }, 25), EK_ADIM_KOLDA);
+    assert.equal(ekAdimKaldirIhlali({ ...ekli, ustEmirId: null }, 25), null, 'bölünmemiş kök emirden de çıkar (2530 a)');
+    assert.equal(ekAdimKaldirIhlali({ ...ekli, ustEmirId: null, acikAltPartiVar: true }, 25), KOL_ALT_PARTILI);
   });
 
   test('UE-PB8 birleşme planı: kolda, üstte bölünme adımından sonra gelen başlamamış adıma; kolun önünde bitmemiş adım kalır', () => {

@@ -253,3 +253,10 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Davranış: onay sırasız, aynı kişi iki işleme sahipse ikisini verir (1077 b); ret verilmiş onayları düşürür; eksik madde onayı durdurur, yalnız müdür gerekçeyle muaf tutar (1076 a, tura bağlı); iki onay kapanışı tamamlar ve kalite kararını kilitler, müdür gerekçeyle geri açar, yeni turda iki onay yeniden (1080 a). `/kapat` yalnız hatalı parça kararıyla duran emri kapatır: bekleyen adımlar kalkar, emir sağlamsız biter ve kapanışa düşer; sonuç "saglamsiz" (1079 a).
 - Emir okumalarına (izleme, biten, ayrıntı) isteğe bağlı `kapanisSonucu` geldi; `disari.kapanisSonuclari(db, idler)` reçete-rota ve etiket için.
 - İşlem: `uretim-emirleri.kapanis-oku`, `kapanis-kalite`, `kapanis-onay` (1078 a); rol satırları K2'de.
+
+## 2530-s: bölünmemiş emre ek adım (kullanıcı kararı 2530 a)
+- Rework, tamir ve ek adım artık bölünmemiş emre de konur ve çıkarılır (`ekAdimIhlali`, `ekAdimKaldirIhlali`; `kolOrtak` kökü reddetmez).
+  Önce yalnız bölünmüş partiye (kola) konuyordu. `EK_ADIM_KOLDA` iletisi kalktı.
+- VARSAYIM: açık alt partisi olan emir (kök ya da kol) ek adım almaz (KOL_ALT_PARTILI); alt parti kopyaladığı adımları kendisi yapar,
+  üstte değişen adım dizisi bölünme ve birleşme sırasını bozardı. Geri alma: ucuz (kural ve test).
+- Birleşme planı uçları kökü kendileri reddeder (BIRLESME_PLANI_KOLDA); değişmedi. Yetki değişmedi (uretim-emirleri.yaz ya da plan.canliya-al).

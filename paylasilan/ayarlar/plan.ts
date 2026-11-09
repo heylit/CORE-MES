@@ -43,6 +43,6 @@ export const PLAN_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Periyodik bakım plana girsin',
-    aciklama: 'Açıkken Arkon\'daki periyodik bakımlar, makinenin çalışma saatine denk gelen ilk dilimde plan duruşu olarak eklenir; planlamacı silebilir. Kapalıyken (varsayılan) bakım plana girmez.',
+    aciklama: 'Açıkken Üretim Hazırlık\'taki periyodik bakımlar, makinenin çalışma saatine denk gelen ilk dilimde plan duruşu olarak eklenir; planlamacı silebilir. Kapalıyken (varsayılan) bakım plana girmez.',
   },
 } as const satisfies Record<string, AyarTanimi>;

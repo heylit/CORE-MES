@@ -45,12 +45,12 @@ describe('plan şeridi: durum', () => {
   const c = canli([{ makineId: 1, isler: [is('A|10')] }]);
   it('fark yoksa plan canlı, eski metinle', () => {
     expect(seritDurumu(c, { 'A|10': yer(1, '08:00') }, surum(3)))
-      .toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 0, metin: 'Terminal ve Arkon Hazırlık bu ekrandaki sırayı kullanıyor.' });
+      .toMatchObject({ tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 0, metin: 'Terminal ve Üretim Hazırlık bu ekrandaki sırayı kullanıyor.' });
   });
   it('canlı plan varken motor farkı canlıya alınmadı demez: plan canlı, motor farkı ayrı sayı (500 a)', () => {
     expect(seritDurumu(c, { 'A|10': yer(1, '08:00'), 'B|10': yer(1, '09:00') }, null)).toMatchObject({
       tur: 'canli', rozet: 'PLAN CANLI', degisiklik: 0, motorFarki: 1, parca: '1 iş canlı planda yok',
-      metin: 'Terminal ve Arkon Hazırlık canlı planın sırasını kullanıyor.',
+      metin: 'Terminal ve Üretim Hazırlık canlı planın sırasını kullanıyor.',
     });
     const kilitli = canli([], { sonCanliyaAlma: { zaman: '2026-10-24T09:30:00.000Z', kisi: 'Deneme 1' } });
     expect(seritDurumu(kilitli, { 'A|10': yer(1, '08:00') }, null)).toMatchObject({ tur: 'canli', motorFarki: 1 });
