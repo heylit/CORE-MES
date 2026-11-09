@@ -15,6 +15,7 @@ function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: str
   const [adres] = useSearchParams();
   const { data: kullanici } = useOturum();
   const onaylayabilir = kullanici?.islemler.includes('satin-alma.onayla') ?? false;
+  const basamakYazar = kullanici?.islemler.includes('ayarlar.yaz') ?? false;
   // Merkezin bildirimi ve geri al'ı kabuğun ortak bildirimidir.
   const { bildir, kaldir } = useBildirim();
   // Ortak parçalarla çizilen ekranlar (2412-2) merkezin iskeletindeki #sa-ekran'a taşınır; iskelet her bağlamada yeniden kurulur.
@@ -22,10 +23,10 @@ function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: str
   useEffect(() => {
     const k = kok.current;
     if (!k) return undefined;
-    const coz = merkeziBagla(k, { rol, sayfa, yol, onaylayabilir, git: (y, yerine) => { void git(y, { replace: yerine === true }); }, bildirim: { bildir, kaldir } });
+    const coz = merkeziBagla(k, { rol, sayfa, yol, onaylayabilir, basamakYazar, git: (y, yerine) => { void git(y, { replace: yerine === true }); }, bildirim: { bildir, kaldir } });
     ekranYeriYaz(k.querySelector<HTMLElement>('#sa-ekran'));
     return () => { ekranYeriYaz(null); coz(); };
-  }, [rol, sayfa, yol, onaylayabilir, git, bildir, kaldir]);
+  }, [rol, sayfa, yol, onaylayabilir, basamakYazar, git, bildir, kaldir]);
   // Adresteki talep (Ctrl K 1237, geri ve ileri tuşu; 2412) ayrıntıyı açar; adreste talep kalmayınca ayrıntı kapanır.
   useEffect(() => { merkezAdresi(acilisOku(adres)); }, [adres]);
   return <><div ref={kok} className="sa-kok" />{ekranYeri && createPortal(<MerkezEkrani />, ekranYeri)}</>;

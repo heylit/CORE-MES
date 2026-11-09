@@ -18,7 +18,7 @@ import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
 import { labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
-import { reportCSV, unlinkedItems } from "./memory.ts";
+import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
@@ -1128,7 +1128,7 @@ const ACTIONS: Record<string, Action> = {
   },
 
   /* ayarlar */
-  "add-ap": () => { const s = readSettingsForm(); s.approvalLimits.push({ max: null, role: "" }); SET_DRAFT = s; renderSettingsDraft(); },
+  "add-ap": () => { const s = readSettingsForm(); s.approvalLimits.push({ max: null, role: "", rolId: null }); SET_DRAFT = s; renderSettingsDraft(); },
   "rm-ap": el => { const s = readSettingsForm(); s.approvalLimits.splice(+el.dataset.i!, 1); SET_DRAFT = s; renderSettingsDraft(); },
   "add-dep": () => { const s = readSettingsForm(); s.departments.push({ name: "", budget: 0 }); SET_DRAFT = s; renderSettingsDraft(); },
   "rm-dep": el => { const s = readSettingsForm(); s.departments.splice(+el.dataset.i!, 1); SET_DRAFT = s; renderSettingsDraft(); },
@@ -1179,7 +1179,7 @@ const ACTIONS: Record<string, Action> = {
   "export-report": () => offerFile(`satin-alma-harcama-${todayStr()}.csv`, reportCSV())
 };
 let SET_DRAFT: Settings | null = null;
-function readSettingsForm(): Settings {
+export function readSettingsForm(): Settings {
   const s = clone(SET_DRAFT || settings());
   $$("#settings-form [data-set]").forEach(i => {
     const k = i.dataset.set!;
@@ -1187,7 +1187,11 @@ function readSettingsForm(): Settings {
     else if (k === "w") s.weights[i.dataset.k as keyof Weights] = clamp(parseNum(i.value) || 0, 0, 100);
     else if (k === "validityDays" || k === "minQuotes" || k === "priceAlertPct") { const v = parseNum(i.value); if (v !== null && v > 0) s[k] = v; }
   });
-  s.approvalLimits = $$("#ap-rows tr").map(tr => ({ max: parseNum($("[data-apk=max]", tr).value), role: $("[data-apk=role]", tr).value.trim() }));
+  // Yönetici olmayan basamakları yazamaz: geldiği gibi kalır (2397-5 a).
+  if (basamakYazabilir()) s.approvalLimits = $$("#ap-rows tr").map(tr => {
+    const rol = tr.querySelector<HTMLSelectElement>("[data-apk=rolId]")?.value ?? "";
+    return { max: parseNum($("[data-apk=max]", tr).value), role: $("[data-apk=role]", tr).value.trim(), rolId: rol === "" ? null : Number(rol) };
+  });
   s.departments = $$("#dep-rows tr").map(tr => ({ name: $("[data-dk=name]", tr).value.trim(), budget: parseNum($("[data-dk=budget]", tr).value) || 0 }));
   const cats = $("#set-cats"); if (cats) s.categories = cats.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
   return s;

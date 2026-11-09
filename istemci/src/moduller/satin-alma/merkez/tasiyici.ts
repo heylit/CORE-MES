@@ -14,7 +14,7 @@ import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi, type Dene
 import { ucCagrisi } from '../../../ortak/veri/uc-cagrisi.ts';
 import { FIRMA_KARTLARI, S, applyLocal, notify, scheduleRender, type Backend, type Coll, type Entity, type Transport } from './store.ts';
 import type {
-  AppUser, Approval, Award, AwardOrder, Currency, ExcessLine, Material, Priority, PurchaseRequest, Quality, Quote, RequestStatus, Settings, SimScenario,
+  AppUser, ApprovalLimit, Approval, Award, AwardOrder, Currency, ExcessLine, Material, Priority, PurchaseRequest, Quality, Quote, RequestStatus, Settings, SimScenario,
   Supplier, SupplierStatus,
 } from './tipler.ts';
 
@@ -158,6 +158,12 @@ export function katalogSunucuya(m: Material, surum: number | null): KatalogKayde
   return { id: m.id, malzemeNo: m.malzemeNo, ozellik: m.spec ?? '', notlar: m.notes ?? '', takmaAdlari: m.aliases ?? [], surum };
 }
 
+export const onayLimitleriEkrana = (l: Ayarlar['onayLimitleri']): ApprovalLimit[] =>
+  l.map((x) => ({ max: sayi(x.azamiTutar), role: x.seviye, rolId: x.rolId ?? null, rolAdi: x.rolAdi ?? null }));
+// 2397-5 a: basamaklar rolüyle geldiği gibi gider (rolAdi gitmez); yönetici olmayan değiştirmediği sürece sunucu 403 vermez.
+export const onayLimitleriGovdesi = (l: readonly ApprovalLimit[]) =>
+  l.map((x) => ({ azamiTutar: ondN(x.max, 2), seviye: x.role, ...(x.rolId === undefined ? {} : { rolId: x.rolId }) }));
+
 function ayarEkrana(a: Ayarlar): Settings {
   const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: sayi(k.aylikFaizYuzdesi) }])) as Settings['currencies'];
   return {
@@ -165,7 +171,8 @@ function ayarEkrana(a: Ayarlar): Settings {
     weights: { cost: a.agirliklar.maliyet, lead: a.agirliklar.termin, supplier: a.agirliklar.tedarikci, warranty: a.agirliklar.garanti },
     validityDays: a.gecerlilikGun, minQuotes: a.enAzTeklif, priceAlertPct: Number(a.fiyatUyariYuzdesi), ratesDate: a.kurTarihi ?? '',
     categories: a.kategoriler, departments: a.birimler.map((b) => ({ name: b.ad, budget: Number(b.yillikButce) })),
-    approvalLimits: a.onayLimitleri.map((l) => ({ max: sayi(l.azamiTutar), role: l.seviye })), version: a.surum,
+    approvalLimits: onayLimitleriEkrana(a.onayLimitleri),
+    ...(a.onayKademesi === undefined ? {} : { onayKademesi: a.onayKademesi }), version: a.surum,
   };
 }
 
@@ -294,7 +301,7 @@ async function yaz(coll: Coll | 'settings', id: string, d: Veri, kimlik: string)
       // Kur ve faiz finansındır (SA3 a, 937 b): yalnız para birimi listesi gider.
       kurlar: (Object.keys(s.currencies) as Currency[]).map((c) => ({ paraBirimi: c })),
       kategoriler: s.categories, birimler: s.departments.map((b) => ({ ad: b.name, yillikButce: ond(b.budget, 2) })),
-      onayLimitleri: s.approvalLimits.map((l) => ({ azamiTutar: ondN(l.max, 2), seviye: l.role })), surum: s.version ?? 1,
+      onayLimitleri: onayLimitleriGovdesi(s.approvalLimits), surum: s.version ?? 1,
     }, ...sure });
     applyLocal('settings', id, ayarEkrana(a));
     return;
