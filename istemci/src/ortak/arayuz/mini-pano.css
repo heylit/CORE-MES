@@ -27,3 +27,8 @@
 .tc-mp-kutu[data-ton="uyari"] .tc-mp-kutu-sayi { color: var(--hold); }
 .tc-mp-kutu[data-bos] .tc-mp-kutu-sayi { color: var(--faint); }
 .tc-mp-alt { display: flex; justify-content: space-between; gap: var(--b-2); margin: 0; color: var(--faint); font-size: var(--yazi-xs); }
+
+/* Dar ekranda üst çubuk tek satır kalır (2425 Arayüz ön bakışı): pencere masaüstü içindir, düğme 768 altında çizilmez. */
+@media (max-width: 767px) {
+  .tc-kabuk-tema.tc-mp-dugme { display: none; }
+}

@@ -245,7 +245,7 @@ function MiniPanoKarti() {
     <Kart baslik="Mini panolarım" simge="grid" baslikEki={<span className="tc-profil-soluk">Bu hesapla girdiğiniz her ekranda</span>}>
       <p className="tc-profil-soluk tc-profil-mp-not">
         {miniPanoDestekli()
-          ? 'Açık olanlar üst çubuktaki mini pano düğmesiyle küçük pencerede açılır; pencere öteki programların üstünde durur.'
+          ? 'Açık olanlar masaüstünde üst çubuktaki mini pano düğmesiyle küçük pencerede açılır; pencere öteki programların üstünde durur.'
           : 'Mini pano Chrome ya da Edge tarayıcısında açılır.'}
       </p>
       <ul className="tc-profil-mp-liste">
@@ -258,8 +258,8 @@ function MiniPanoKarti() {
         ))}
         <li className="tc-profil-mp-satir">
           <span className="tc-profil-mp-simge" aria-hidden="true"><Simge ad="bell" /></span>
-          <strong className="tc-profil-mp-ad">Oturum açınca mini panoyu öner</strong>
-          <AcKapa etiket="Oturum açınca mini panoyu öner" acik={tercih?.acilistaOner === true} disabled={tercih === undefined || sec.isPending} degistir={(a) => yaz(kapali, a)} />
+          <span className="tc-profil-mp-ad"><strong>Açılışta öner</strong><span className="tc-profil-soluk">Oturum açınca bildirim</span></span>
+          <AcKapa etiket="Açılışta mini panoyu öner" acik={tercih?.acilistaOner === true} disabled={tercih === undefined || sec.isPending} degistir={(a) => yaz(kapali, a)} />
         </li>
       </ul>
       {sec.isError && <p className="tc-profil-hata" role="alert">Seçim kaydedilemedi; sayfayı yenileyip yeniden deneyin.</p>}

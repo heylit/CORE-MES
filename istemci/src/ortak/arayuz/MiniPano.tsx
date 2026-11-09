@@ -79,7 +79,7 @@ export function MiniPanoDugmesi({ penceresi }: { penceresi: MiniPanoPenceresi })
     <>
       <button
         type="button"
-        className="tc-kabuk-tema"
+        className="tc-kabuk-tema tc-mp-dugme"
         onClick={penceresi.ac}
         aria-pressed={penceresi.acik}
         aria-disabled={!destekli}

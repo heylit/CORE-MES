@@ -108,4 +108,5 @@
 .tc-profil-mp-liste { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .tc-profil-mp-satir { display: flex; align-items: center; gap: var(--b-3); min-block-size: var(--dokunma-ana); border-block-start: 1px solid var(--edge); }
 .tc-profil-mp-simge { display: grid; flex: none; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border-radius: var(--yari-1); background: var(--panel2); color: var(--hazard-ink); }
-.tc-profil-mp-ad { flex: 1; min-width: 0; font-weight: 600; }
+.tc-profil-mp-ad { display: flex; flex: 1; flex-direction: column; min-width: 0; font-weight: 600; }
+.tc-profil-mp-ad .tc-profil-soluk { font-weight: 400; }
