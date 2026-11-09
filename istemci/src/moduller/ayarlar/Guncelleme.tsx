@@ -15,7 +15,8 @@ import { GuncellemeIlerlemesi } from './GuncellemeIlerlemesi.tsx';
 
 // Sunucunun parça boyu ve paket sınırı (`paylasilan/sozlesme/ayarlar.ts`); sözleşme zod taşıdığı için burada sayı olarak durur.
 export const PARCA_BAYT = 512 * 1024;
-const AZAMI_BAYT = 200 * 1024 * 1024;
+const AZAMI_BAYT = 300 * 1024 * 1024;
+const AZAMI_MB = AZAMI_BAYT / 1024 / 1024;
 
 const KAPALI_METNI: Readonly<Record<Exclude<GuncellemeKanali, 'acik'>, string>> = {
   'dizin-yok': 'Sunucuda güncelleme klasörü tanımlı değil (TMIV2_GUNCELLEME_DIZINI).',
@@ -247,7 +248,7 @@ export function Guncelleme() {
   const secildi = async (dosya: File | undefined) => {
     if (secici.current) secici.current.value = '';
     if (!dosya) return;
-    if (dosya.size === 0 || dosya.size > AZAMI_BAYT) { bildir('hata', 'Paket boş olamaz; en çok 200 MB olabilir.'); return; }
+    if (dosya.size === 0 || dosya.size > AZAMI_BAYT) { bildir('hata', `Paket boş olamaz; en çok ${String(AZAMI_MB)} MB olabilir.`); return; }
     setIlerleme({ alinan: 0, toplam: Math.ceil(dosya.size / PARCA_BAYT), bayt: dosya.size });
     try {
       const paket = await paketYukle(dosya, (alinan, toplam) => { setIlerleme({ alinan, toplam, bayt: dosya.size }); });
@@ -322,7 +323,7 @@ export function Guncelleme() {
               </p>
               <p className="tc-ayar-aciklama">
                 {kanal === 'acik'
-                  ? 'İmzalı .tmip paketini seçin; en çok 200 MB. Paket saklanır; uygulamak için aşağıdan seçin.'
+                  ? `İmzalı .tmip paketini seçin; en çok ${String(AZAMI_MB)} MB. Paket saklanır; uygulamak için aşağıdan seçin.`
                   : KAPALI_METNI[kanal]}
               </p>
               {ilerleme && <YuklemeIlerlemesi {...ilerleme} />}

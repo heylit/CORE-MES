@@ -177,7 +177,8 @@ export type KurumLogosuGovdesi = z.input<typeof kurumLogosuGovdesi>;
 // Güncelleme paketi (kart #870): internete kapalı sunucuya ayarlardan yüklenir, imzası doğrulanır.
 // Kanal paketi alır ve saklar; uygulamayı güncelleyici yapar (kart #1210). Sınırlar sabittir; değiştirmek kod ve karar ister.
 export const GUNCELLEME_PARCASI = 512 * 1024;
-export const AZAMI_GUNCELLEME = 200 * 1024 * 1024;
+// 300 MB: paket ~174 MB (09.11) ve büyüyor; güncelleyici paketi bütün belleğe okur, sunucu belleği bilinene kadar sınır ölçülü (2419).
+export const AZAMI_GUNCELLEME = 300 * 1024 * 1024;
 export const AZAMI_GUNCELLEME_PARCA_SAYISI = AZAMI_GUNCELLEME / GUNCELLEME_PARCASI;
 
 // Kimliği istemci üretir (UUID); yükleme onu açan kişiye aittir.
@@ -185,7 +186,7 @@ export const guncellemeYuklemeParametresi = z.object({
   kimlik: z.string().refine(istekKimligiMi, 'Yükleme kimliği UUID olmalı.').transform((k) => k.toLowerCase()),
 });
 export const guncellemeParcasiGovdesi = z.object({
-  boyut: z.number().int().positive().max(AZAMI_GUNCELLEME, 'Paket en çok 200 MB olabilir.'),
+  boyut: z.number().int().positive().max(AZAMI_GUNCELLEME, 'Paket en çok 300 MB olabilir.'),
   sira: z.number().int().nonnegative().max(AZAMI_GUNCELLEME_PARCA_SAYISI - 1),
   veri: z.string().min(1).max(Math.ceil(GUNCELLEME_PARCASI / 3) * 4).regex(/^[A-Za-z0-9+/]*={0,2}$/, 'Parça base64 olmalı.'),
 });
