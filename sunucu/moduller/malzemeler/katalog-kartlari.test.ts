@@ -320,7 +320,7 @@ describe('Malzeme Kataloğu kartları (gerçek PostgreSQL, gerçek giriş)', () 
 
   test('MKK-18: ayarlar operasyon listesini istasyonların operasyon tiplerinden verir; pasifler de gelir', async () => {
     const y = await tamam<KatalogAyarlariCevabi>(okuyucu, 'GET', '/malzeme-katalogu-ayarlari');
-    assert.equal(y.operasyonTipleri.length, 96);
+    assert.equal(y.operasyonTipleri.length, 103);
     assert.deepEqual(y.operasyonTipleri.find((t) => t.kod === 'LZR'), { kod: 'LZR', ad: 'Lazer kesim', grup: 'KES', grupAdi: 'Kesim', aktif: true });
     await ortam!.sahip.tx((db) => db.sorgu("UPDATE istasyonlar_operasyon_tipi SET aktif = false, surum = surum + 1 WHERE kod = 'LZR'"));
     assert.equal((await tamam<KatalogAyarlariCevabi>(okuyucu, 'GET', '/malzeme-katalogu-ayarlari')).operasyonTipleri.find((t) => t.kod === 'LZR')?.aktif, false);

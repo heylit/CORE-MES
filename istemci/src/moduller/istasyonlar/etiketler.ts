@@ -1,4 +1,5 @@
-import type { BaglantiTuru, IstasyonTipi, KapasiteKaynagi, MakineDurumu, OperasyonGrubu } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { BaglantiTuru, IstasyonTipi, KapasiteKaynagi, MakineDurumu } from '#paylasilan/sozlesme/istasyonlar.ts';
+import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/operasyon-gruplari.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
@@ -26,11 +27,8 @@ export const BAGLANTI_ADLARI: Record<BaglantiTuru, string> = {
 export const TIP_SECENEKLERI = Object.entries(TIP_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 export const BAGLANTI_SECENEKLERI = Object.entries(BAGLANTI_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
-// Sıra ve adlar sözleşmedeki `OPERASYON_GRUP_ADLARI` ile aynıdır (malzemeler kataloğunun grupları).
-export const OPERASYON_GRUP_ADLARI: Record<OperasyonGrubu, string> = {
-  KES: 'Kesim', SKL: 'Şekillendirme', TAL: 'Talaşlı imalat', KYN: 'Kaynak', ISL: 'Isıl işlem', YZY: 'Yüzey hazırlık', KAP: 'Kaplama',
-  BOY: 'Boya', MRK: 'Markalama', MON: 'Montaj', KAL: 'Kalite kontrol', PAK: 'Paketleme ve sevk', FAS: 'Fason',
-};
+// Sıra ve adlar tek kaynaktan (`operasyon-gruplari.ts`) gelir.
+export { OPERASYON_GRUP_ADLARI };
 export const OPERASYON_GRUP_SECENEKLERI = Object.entries(OPERASYON_GRUP_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 export const KAPASITE_KAYNAGI_ADLARI: Record<KapasiteKaynagi, string> = {
