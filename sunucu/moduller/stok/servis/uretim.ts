@@ -21,7 +21,7 @@ import {
 import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
-  kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi,
+  kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, adetMiktari, type BaslatmaEksigi,
   rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -185,7 +185,12 @@ async function baslatmaGirdiEksikleri(db: Db, uretimEmriId: number, isEmriId: nu
   // Çok katmanlı emirde alt düğümün girdisi alt parça başınadır: emrin bütün adedi kök başına adetle çarpılır (1476-C). Dal çarpanı
   // malzemeyi çarpmaz (1333 a): tek katmanlı emirde ve kökte emir adedi.
   const carpan = Number((await emirDugumleri(db, uretimEmriId)).get(bilgi.opNo)?.birimCarpani ?? 1);
-  return baslatmaEksikleri(girdiler, istasyonda, BigInt(Math.round(adet * carpan * 1000)));
+  // B-2501-3: istek emrin kalan ihtiyacıdır (kopyanın fire payı eklenir, emre verilmiş sarf düşülür); kopyası okunamayan emirde adet x miktar.
+  const ihtiyac = await emirMalzemeIhtiyaci(db, uretimEmriId);
+  const verilen = new Map<number, bigint>();
+  for (const m of new Set(girdiler.map((g) => g.malzemeNo))) verilen.set(m, binde(await sorgular.emrinNetSarfi(db, uretimEmriId, m)));
+  const kalanlar = ihtiyac === null ? undefined : adimKalanIhtiyaci(ihtiyac, bilgi.opNo, verilen);
+  return baslatmaEksikleri(girdiler, istasyonda, BigInt(Math.round(adet * carpan * 1000)), kalanlar);
 }
 
 // Terminal başlatmadan önce sorar: her eksik girdi için istasyona malzeme isteği bir kez açılır (aynı adım ve malzeme ikinci istek açmaz,
