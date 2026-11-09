@@ -9,9 +9,10 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); 
 // Kayıt 800 ms sonra gider: bekleme süresi ondan uzun.
 const BEKLE = { timeout: 4000 };
 const rotaYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && /^\/rota\/(urunler|revizyonlar)\//.test(i.yol));
+// Yüklü makinede bölümün çizilmesi 1 sn'yi aşabilir; varsayılan bekleme yetmez.
 const bolumAc = async () => {
-  const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
-  await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); });
+  const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' }, BEKLE);
+  await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); }, BEKLE);
   return bolge;
 };
 
