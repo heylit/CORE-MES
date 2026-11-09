@@ -69,7 +69,11 @@ const SAHA_SIRASI: Record<EksikIsTuru, number> = {
   'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'olcumsuz-is': 3, 'plansiz-is': 4, 'geciken-emir': 5, 'bayat-plan': 6, 'geride-onceki': 7,
 };
 
-const NEDEN_ADI: Record<OlcumNedeni, string> = { 'ayar-yok': 'ayar basılmadı', 'sayim-yok': 'sayım yok', 'saglam-yok': 'sağlam sayım yok (ilk parça ya da kalite onayı bekliyor)', 'is-emirsiz': 'iş emirsiz emir', 'rotada-yok': 'adım rotada yok' };
+const NEDEN_ADI: Record<OlcumNedeni, string> = {
+  'ayar-yok': 'ayar basılmadı: hazırlık ölçülmedi', 'sayim-yok': 'sayım yok: işlem süresi ölçülmedi',
+  'saglam-yok': 'sağlam sayım yok (sayımlar karar bekliyor ya da reddedildi): işlem süresi ölçülmedi',
+  'is-emirsiz': 'iş emirsiz emir: adım süresi ölçülmedi', 'rotada-yok': 'adım rotada yok: süre rotaya yazılmadı',
+};
 const iso = (t: number): string => new Date(t).toISOString();
 const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
 const olayAnahtari = (tur: EksikIsTuru, konuTur: EksikIsKonusu, konuId: number | null): string => `${tur}:${konuTur}:${konuId ?? ''}`;
@@ -249,8 +253,8 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
   return sonuc;
 }
 
-// AR-EK-9 (2567): son GERI_GUN günde biten emirlerin ölçülmeyen iş emirleri ve iş emirsiz biten emirler. Nedenleri ölçümün sahibi rota
-// verir (emir bitince yazdığı ölçümle aynı ölçüt). Pencereden çıkan iş hesaptan düşer, olayı kapanır. Kural kapalıyken hiç okunmaz; o
+// AR-EK-9 (2567): son GERI_GUN günde biten ölçülmeyen iş emirleri (emir açık olsa da) ve iş emirsiz biten emirler. Nedenleri ölçümün
+// sahibi rota verir (iş emri bitince yazdığı ölçümle aynı ölçüt, 2578 a). Pencereden çıkan iş hesaptan düşer, olayı kapanır. Kural kapalıyken hiç okunmaz; o
 // zaman olaylar konusu düşmüş gibi kapanır.
 async function olcumsuzBulgular(db: Db, esikGun: number, simdi: number, istasyonIdleri: readonly number[]): Promise<Bulgu[]> {
   const bugun = tesisGunu(simdi);
@@ -272,7 +276,8 @@ async function olcumsuzBulgular(db: Db, esikGun: number, simdi: number, istasyon
       });
       continue;
     }
-    for (const a of d.atlananlar) {
+    // Pencere iş emrinin bitişidir: emir açıkken bitmiş iş emri de görünür, pencereden önce biten görünmez.
+    for (const a of d.atlananlar.filter((x) => isEmriIstasyonu.has(x.isEmriId))) {
       const bitis = a.bitis === null ? null : Date.parse(a.bitis);
       const kaynak: Kaynak | null = a.kaynak.tur === 'makine' || a.kaynak.tur === 'kisi' ? { tur: a.kaynak.tur, id: a.kaynak.id } : null;
       sonuc.push({

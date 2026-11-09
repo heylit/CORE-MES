@@ -44,7 +44,7 @@ describe('Özetim: Girilmemiş işlerim (2421 c)', () => {
     expect(kart.textContent).toContain('2 iş günü');
     // 2567: ölçülmeyen süre nedenleriyle görünür.
     expect(kart.textContent).toContain('Süre ölçülmedi');
-    expect(kart.textContent).toContain('Ayar basılmadı, Sayım yok');
+    expect(kart.textContent).toContain('Ayar basılmadı: hazırlık ölçülmedi, Sayım yok: işlem süresi ölçülmedi');
     expect(kart.textContent).toContain('1 gün önce');
     cleanup();
     sunucuKur(OPERATOR, { uclar: { 'GET /arkon/operator-ozeti': OZET, 'GET /arkon/eksik-islerim': { ...EKSIK, olaylar: [] } } });

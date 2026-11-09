@@ -149,7 +149,9 @@ export const EKSIK_IS_ETIKETI: Record<EksikIsTuru, string> = {
 };
 
 export const OLCUM_NEDENI_ETIKETI: Record<OlcumNedeni, string> = {
-  'ayar-yok': 'Ayar basılmadı', 'sayim-yok': 'Sayım yok', 'saglam-yok': 'Sağlam sayım yok (ilk parça ya da kalite onayı bekliyor)', 'is-emirsiz': 'İş emirsiz emir', 'rotada-yok': 'Adım rotada yok',
+  'ayar-yok': 'Ayar basılmadı: hazırlık ölçülmedi', 'sayim-yok': 'Sayım yok: işlem süresi ölçülmedi',
+  'saglam-yok': 'Sağlam sayım yok (sayımlar karar bekliyor ya da reddedildi): işlem süresi ölçülmedi',
+  'is-emirsiz': 'İş emirsiz emir: adım süresi ölçülmedi', 'rotada-yok': 'Adım rotada yok: süre rotaya yazılmadı',
 };
 
 /** Olayın değeri birimiyle: plan gerisi süre, kayıtsız gün "3 iş günü", saatler süre, geciken emir "2 gün", ölçülmeyen süre "bugün" ya da

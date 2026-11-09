@@ -6,7 +6,7 @@ import type { GerceklesenKabulCevabi, GerceklesenTuru, SurelerCevabi } from '#pa
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { adimliEmirAyrintisi, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi, AdimBittiOlayi } from '../../uretim-emirleri/disari.ts';
-import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, teorikAyrim, terminalOlcumleri } from '../kurallar.ts';
+import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, teorikAyrim, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from '../kurallar.ts';
 import type { EtkinAdimSuresi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { Icerik } from '../sorgular.ts';
@@ -188,16 +188,14 @@ async function olcumleriYaz(db: Db, uretimEmriId: number, kisiId: number, yalniz
   const malzemeId = emir.malzemeNo;
   const ayrinti = await adimliEmirAyrintisi(db, emir.id);
   const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
-  const adaylar = ayrinti.isEmirleri.filter((i) => (yalniz === null || i.id === yalniz)
-    && i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.has(i.opNo));
+  const adaylar = terminalOlcumAdaylari(ayrinti.isEmirleri.filter((i) => yalniz === null || i.id === yalniz), opNolari).rotada;
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
   for (const i of adaylar) {
     if (olculmus.has(i.id)) continue;
     const makineId = i.kaynak?.tur === 'makine' ? i.kaynak.id : null;
-    const olcum = terminalOlcumleri(await isEmriSureOzeti(db, i.id));
-    for (const tur of ['hazirlik', 'islem'] as const) {
-      const sureDk = olcum[tur];
-      if (sureDk === null) continue;
+    // Atlama nedeni burada kullanılmaz; sayım bilgisi yalnız nedeni ayırır, yazılacak türü değiştirmez.
+    const { yazilacak } = terminalOlcumKarari(terminalOlcumleri(await isEmriSureOzeti(db, i.id)), false);
+    for (const { tur, sureDk } of yazilacak) {
       await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId, kaynak: 'terminal', isEmriId: i.id });
     }
   }

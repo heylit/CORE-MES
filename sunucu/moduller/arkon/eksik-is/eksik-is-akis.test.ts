@@ -249,11 +249,11 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     assert.equal(await acik('geride-onceki', ikinci), undefined, 'önceki adım yetişti: yeniden açılmaz');
   });
 
-  test('AR-EK-9 (2567): biten emirde ölçülmeyen iş emri nedenleriyle görünür; rotada olmayan adım ayrı nedendir; operatör kendi tezgahında görür', async () => {
-    const bitir = async (e: { emirId: number; adim: number }) => {
+  test('AR-EK-9 (2567): biten iş emrinde (emir açık olsa da) ölçülmeyen süre nedenleriyle görünür; rotada olmayan adım ayrı nedendir; operatör kendi tezgahında görür', async () => {
+    const bitir = async (e: { emirId: number; adim: number }, emirDe = true) => {
       await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
         [e.adim, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
-      await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
+      if (emirDe) await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
         [e.emirId, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
     };
     const ekAdim = await emirKur(30);
@@ -270,7 +270,8 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
       [bekleyen.emirId, bekleyen.adim, yoneticiId, istasyonId, anMetni(simdi - 27 * SAAT)]);
     await bitir(ekAdim);
     await bitir(rotada);
-    await bitir(bekleyen);
+    // 2578 a: ölçüm iş emri bitince yazılır; emir açıkken de atlanan ölçüm görünür.
+    await bitir(bekleyen, false);
     await yenile(simdi + 3 * SAAT);
     const ek = await acik('olcumsuz-is', ekAdim.adim);
     assert.deepEqual([ek?.deger, ek?.nedenler], [1, ['rotada-yok']], 'dün bitti, adım rotada yok');

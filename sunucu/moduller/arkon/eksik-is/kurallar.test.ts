@@ -101,12 +101,12 @@ describe('eksik iş kuralları (2421 c)', () => {
 test('AR-EK-8 (2769): sayımı geride kalan önceki adım; akışlıda devir ya da girdi eksiği, bekleyende öncül bitmedikçe açık', () => {
   const kayit = Date.UTC(2026, 10, 10, 8, 0);
   const akisli = { tur: 'akisli' as const, bitti: false, devirAdedi: 5, gelen: 2 };
-  assert.deepEqual(gerideOnceki({ acik: true, oncul: akisli, girdi: 0, kayit }), { deger: 0, kalanAdet: 3, planaGore: false, dayanak: kayit }, 'devir için eksik sayım eksiği değildir');
-  assert.deepEqual(gerideOnceki({ acik: true, oncul: akisli, girdi: 9, kayit }), { deger: 7, kalanAdet: 3, planaGore: false, dayanak: kayit }, 'bu adım öncülden gelenden 7 fazla saydı');
+  assert.deepEqual(gerideOnceki({ acik: true, oncul: akisli, girdi: 0, kayit }), { deger: 0, kalanAdet: 3, planaGore: false, dayanak: kayit, nedenler: [] }, 'devir için eksik sayım eksiği değildir');
+  assert.deepEqual(gerideOnceki({ acik: true, oncul: akisli, girdi: 9, kayit }), { deger: 7, kalanAdet: 3, planaGore: false, dayanak: kayit, nedenler: [] }, 'bu adım öncülden gelenden 7 fazla saydı');
   assert.equal(gerideOnceki({ acik: true, oncul: { ...akisli, gelen: 5 }, girdi: 5, kayit }), null, 'yetişti');
-  assert.deepEqual(gerideOnceki({ acik: true, oncul: { ...akisli, gelen: 5 }, girdi: 6, kayit }), { deger: 1, kalanAdet: 0, planaGore: false, dayanak: kayit });
+  assert.deepEqual(gerideOnceki({ acik: true, oncul: { ...akisli, gelen: 5 }, girdi: 6, kayit }), { deger: 1, kalanAdet: 0, planaGore: false, dayanak: kayit, nedenler: [] });
   const bekleyen = { tur: 'bekleyen' as const, bitti: false, devirAdedi: null, gelen: 40 };
-  assert.deepEqual(gerideOnceki({ acik: true, oncul: bekleyen, girdi: 10, kayit }), { deger: 0, kalanAdet: null, planaGore: false, dayanak: kayit }, 'öncül bitmedi: fark yok ama açık');
+  assert.deepEqual(gerideOnceki({ acik: true, oncul: bekleyen, girdi: 10, kayit }), { deger: 0, kalanAdet: null, planaGore: false, dayanak: kayit, nedenler: [] }, 'öncül bitmedi: fark yok ama açık');
   assert.equal(gerideOnceki({ acik: true, oncul: { ...bekleyen, bitti: true }, girdi: 10, kayit }), null);
   assert.equal(gerideOnceki({ acik: true, oncul: { ...bekleyen, bitti: true }, girdi: 45, kayit })?.deger, 5, 'bitmiş öncülden fazla sayım');
   assert.equal(gerideOnceki({ acik: false, oncul: akisli, girdi: 0, kayit }), null, 'adım ya da emir kapandı');
