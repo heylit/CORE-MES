@@ -13,8 +13,9 @@ export const OLCEKLER = [[24, 'Gün'], [72, '3 gün'], [168, 'Hafta'], [720, 'Ay
 export type AtolyeOlcegi = (typeof OLCEKLER)[number][0];
 // Telefonda Gün, ötekinde 3 gün açılır.
 export const ilkOlcek = (genislik: number): AtolyeOlcegi => (genislik < 768 ? 24 : 72);
-// 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz; donuk bölge 4 saatten kısa seçilemez.
-export const DONUK_SECENEKLERI = [4, 8, 16, 24] as const;
+// 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz. 2529: donuk bölge başta kapatılabilir (0 sa), sonra yeniden açılır.
+export const DONUK_SECENEKLERI = [0, 4, 8, 16, 24] as const;
+export const donukEtiketi = (x: number): string => (x === 0 ? '0 sa (kapalı)' : `${String(x)} sa`);
 export const ETIKET_GENIS = (genislik: number): number => (genislik < 768 ? 72 : 115);
 
 const GUNK = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];

@@ -123,9 +123,9 @@ describe('Veri ve kısıtlar hesapları', () => {
   });
 });
 
-describe('dondurma ufku (248 a)', () => {
-  it('alt sınır 4 saattir', () => {
+describe('dondurma ufku (248 a, 2529)', () => {
+  it('alt sınır 0 saattir: donuk bölge kapatılabilir', () => {
     const k = KATALOG.flatMap((g) => g.l).find((x) => x.id === 'dondurma');
-    expect(k?.p?.[0]).toMatchObject({ k: 'dondurma', min: 4, birim: 'sa' });
+    expect(k?.p?.[0]).toMatchObject({ k: 'dondurma', min: 0, birim: 'sa' });
   });
 });
