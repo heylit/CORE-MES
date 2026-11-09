@@ -38,7 +38,7 @@ import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTak
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { ekipCagrisiBildir } from '../bildirim/disari.ts';
-import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
+import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler, yayindaOzetMi } from '../belge-merkezi/disari.ts';
 import { depoDolulugu, eksikDosyalar as kisininEksikDosyalari, modulDeposuTutamagi } from '../dosya/disari.ts';
 import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
@@ -2206,16 +2206,18 @@ export async function dosyaParcasi(
 
 // Özeti bilmek okumaya yetmez: kişi dosyayı ya kendisi yüklemiştir ya da onu anan bir belgeyi okuyabilir (rol ve iş merkezi kapsamı
 // belge okumasıyla aynı). Okuyamadığı dosya "yok" döner, varlığı da söylenmez. Yükleyen kuralı, belge yazılmadan önce yüklenen
-// dosyanın yazana geri okunabilmesi içindir.
+// dosyanın yazana geri okunabilmesi içindir. Merkezden alma rolü olan kişi Çizim Merkezi'nde yayındaki dosyayı da okur: seçicide zaten
+// görür ve pakete ekler; eklenen dosya paket kaydedilmeden önce ona geri okunabilmelidir (2520-3; bağ kişisizdir, 732 a).
 export async function dosya(db: Db, kullanici: Kullanici, ozet: string): Promise<IkiliCevap> {
-  await rolGerekli(db, kullanici);
+  const rol = await rolGerekli(db, kullanici);
   const cevap = await DOSYALAR.dosyaAkisi(db, DEPO_KAYDI, ozet);
-  if (cevap === null || !(await dosyayiOkuyabilir(db, kullanici, ozet))) throw bulunamadi(ILETILER.dosyaYok);
+  if (cevap === null || !(await dosyayiOkuyabilir(db, kullanici, rol, ozet))) throw bulunamadi(ILETILER.dosyaYok);
   return cevap;
 }
 
-async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string): Promise<boolean> {
+async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, rol: ArkonRolu, ozet: string): Promise<boolean> {
   if ((await kisininEksikDosyalari(db, kullanici, [ozet])).length === 0) return true;
+  if (merkezdenAlabilirMi(rol) && (await yayindaOzetMi(db, ozet))) return true;
   for (const { depo, kimlik } of await sorgular.dosyayiAnanBelgeler(db, ozet)) {
     try {
       if ((await belge(db, kullanici, depo, kimlik)) !== null) return true;

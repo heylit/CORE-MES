@@ -102,6 +102,16 @@ export function yayindakiRevizyon(db: Db, belgeId: number): Promise<RevizyonKayd
   return db.tek<RevizyonKaydi>(`SELECT ${REVIZYON_SECIMI} FROM belge_merkezi_revizyon r WHERE r.belge_id = $1 AND r.durum = 'yayinda'`, [belgeId]);
 }
 
+// Özet etkin bir belgenin yayındaki revizyonunun dosyası mı (Arkon, Çizim Merkezi'nden eklenen dosyanın okunması, 2520-3).
+export async function yayindaOzetMi(db: Db, ozet: string): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM belge_merkezi_revizyon r JOIN belge_merkezi_belge b ON b.id = r.belge_id
+                     WHERE r.ozet = $1 AND r.durum = 'yayinda' AND b.aktif) AS var`,
+    [ozet],
+  );
+  return satir?.var ?? false;
+}
+
 // Yayına girmiş (yayında ya da eski) revizyon, özetle; aynı dosya iki revizyonda varsa sonuncusu. Taslak dışarıya verilmez.
 export function yayinlanmisRevizyonOzetle(db: Db, belgeId: number, ozet: string): Promise<RevizyonKaydi | null> {
   return db.tek<RevizyonKaydi>(
