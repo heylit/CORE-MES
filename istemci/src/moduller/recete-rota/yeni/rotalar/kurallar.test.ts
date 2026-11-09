@@ -9,7 +9,7 @@ import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz,
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
 import { turKisa, yerelTur } from './kurallar.ts';
-import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kollariBirlestir, serbestDal } from './kurallar.ts';
+import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, kolParcalari, serbestDal } from './kurallar.ts';
 import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
 
@@ -482,5 +482,26 @@ describe('2542 çatallı rota kolaylıkları (veri biçimi aynı)', () => {
     const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30)];
     expect(dalHatasi(l)).toEqual({ adimId: null, ileti: 'A dalı hiçbir adımda birleşmiyor; birleştirme adımında seçilmeli.' });
     expect(dalHatasi([adim('a', 10), adim('b', 20, { birlesen: ['A'] })])?.adimId).toBe('b');
+  });
+});
+
+describe('2542 C: şemada kollar yan yana', () => {
+  it('çatalla birleşme arası tek parça; ana hat ve her dal kendi sütunu, birleştiren adım parçadan sonra', () => {
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('d', 40, { dal: 'A' }), adim('e', 50), adim('f', 60, { birlesen: ['A', 'B'] }), adim('g', 70)];
+    expect(kolParcalari(l)).toEqual([
+      { tur: 'adim', id: 'a' },
+      { tur: 'kollar', seritler: [{ dal: null, idler: ['e'] }, { dal: 'A', idler: ['b', 'd'] }, { dal: 'B', idler: ['c'] }] },
+      { tur: 'adim', id: 'f' }, { tur: 'adim', id: 'g' },
+    ]);
+    expect(kolParcalari([adim('a', 10), adim('b', 20)])).toEqual([{ tur: 'adim', id: 'a' }, { tur: 'adim', id: 'b' }]);
+    expect(kolParcalari([adim('a', 10), adim('b', 20, { dal: 'A' })])).toEqual([{ tur: 'adim', id: 'a' }, { tur: 'kollar', seritler: [{ dal: 'A', idler: ['b'] }] }]);
+  });
+  it('kola bırakılan adım o kola geçer, kolun son adımının ardına taşınır ve çarpanını alır; ana hatta dalı kalkar', () => {
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A', adetCarpani: 2 }), adim('c', 30, { dal: 'B' }), adim('d', 40, { birlesen: ['A', 'B'] })];
+    const t = sirali(kolaTasi(l, 'c', 'A', 'b'));
+    expect(t.map((x) => [x.id, x.dal ?? null, x.adetCarpani ?? null])).toEqual([['a', null, null], ['b', 'A', 2], ['c', 'A', 2], ['d', null, null]]);
+    expect(sirali(kolaTasi(l, 'b', null, 'a')).map((x) => x.dal ?? null)).toEqual([null, null, 'B', null]);
+    expect(sirali(kolaTasi(l, 'c', 'A', 'b')).at(-1)?.birlesen).toEqual(['A']);
+    expect(dalHatasi(kolaTasi(l, 'c', 'A', 'b'))).toBeNull();
   });
 });

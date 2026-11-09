@@ -110,3 +110,38 @@ describe('2542 çatallı rota: okuyan', () => {
     expect(within(panel).queryByRole('button', { name: /Kolları burada birleştir/ })).toBeNull();
   }, 30000);
 });
+
+// jsdom'da DataTransfer yok; sürükle-bırak verisi bu nesneyle taşınır.
+const tasima = () => {
+  const veri: Record<string, string> = {};
+  return { dataTransfer: { effectAllowed: '', dropEffect: '', setData: (k: string, v: string) => { veri[k] = v; }, getData: (k: string) => veri[k] ?? '' } };
+};
+
+describe('2542 C: kollar şemada yan yana', () => {
+  it('çatalla birleşme arası kollar ayrı sütunlarda, başlıkta yer ve çarpan; adım başka kolun başlığına bırakılınca o kola geçer', async () => {
+    const k = kur([
+      adimOrnegi(),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', adetCarpani: 2, ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o40', seq: 40, opNo: 40, birlesen: ['A', 'B'], ins: [] }),
+    ]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const kollar = await within(bolge).findByRole('group', { name: 'Paralel kollar' });
+    const a = within(kollar).getByRole('region', { name: 'Dal A kolu' });
+    const b = within(kollar).getByRole('region', { name: 'Dal B kolu' });
+    expect(within(a).getByRole('button', { name: 'OP 20 Tornalama' })).toBeTruthy();
+    expect(within(b).getByRole('button', { name: 'OP 30 Tornalama' })).toBeTruthy();
+    expect(within(a).getByText('OP 10 ardından başlar, OP 40 adımında birleşir.')).toBeTruthy();
+    expect((within(a).getByLabelText('Dal A: 1 mamul için adet') as HTMLInputElement).value).toBe('2');
+    expect(within(bolge).getByRole('button', { name: 'OP 40 Tornalama' }).closest('[aria-label="Paralel kollar"]')).toBeNull();
+    // 2550 a: kollu rotanın sütunu daralır (giren ve çıkan kartlar adımın üstünde ve altında); genişliğe sığdırma tarayıcıda ölçülür.
+    expect(kollar.parentElement?.classList.contains('tc-rr1-g3-dar')).toBe(true);
+
+    const t = tasima();
+    fireEvent.dragStart(within(b).getByRole('button', { name: 'OP 30 Tornalama' }), t);
+    fireEvent.drop(a.querySelector('.tc-rr1-kolbas')!, t);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(k.govde?.adimlar.map((x) => [x.opNo, x.dal, x.adetCarpani ?? null])).toEqual([[10, null, null], [20, 'A', 2], [30, 'A', 2], [40, null, null]]);
+    expect(k.govde?.adimlar.at(-1)?.birlesen).toEqual(['A']);
+  }, 30000);
+});

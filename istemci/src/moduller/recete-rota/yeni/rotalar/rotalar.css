@@ -266,11 +266,35 @@
 .tc-rr1-dalserit-5 { --serit: 5; --renk-dal: var(--idle); } .tc-rr1-dalserit-6 { --serit: 6; --renk-dal: var(--done); }
 .tc-rr1-dalserit-7 { --serit: 7; --renk-dal: var(--muted); }
 .tc-rr1-dalserit:not(.tc-rr1-dalserit-0) .tc-rr1-opbox { border-inline-start: var(--cizgi-kalin) solid var(--renk-dal); }
-.tc-rr1-daletiket {
+.tc-rr1-daletiket, .tc-rr1-koletiket {
   align-self: flex-start; display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); font-weight: 700;
   color: var(--renk-dal, var(--ink));
 }
 .tc-rr1-daletiket em { font-style: normal; font-weight: 400; color: var(--muted); }
+/* 2542 C: çatalla birleşme arası kollar yan yana sütunlardır; her sütun kendi dal rengini taşır, sütun içinde şerit girintisi yoktur. */
+.tc-rr1-kollar { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: var(--b-5); }
+.tc-rr1-kol {
+  display: flex; flex-direction: column; gap: var(--b-3); padding: var(--b-2) var(--b-3) var(--b-3);
+  border: var(--cizgi-ince) dashed var(--edge); border-inline-start: var(--cizgi-kalin) solid var(--renk-dal, var(--ink)); border-radius: var(--yari-1);
+}
+.tc-rr1-kol.tc-rr1-dalserit { padding-inline-start: var(--b-3); }
+.tc-rr1-kol .tc-rr1-dalserit { padding-inline-start: 0; }
+.tc-rr1-kolbas { display: flex; flex-direction: column; gap: var(--b-1); max-width: var(--menu-genis); }
+.tc-rr1-kolbas small { color: var(--muted); font-size: var(--yazi-xs); }
+/* Kollu rotada sütun daraltılır (2550 a): adımın giren ve çıkan kartları yanında değil üstünde ve altındadır; sütun bir adım kutusu
+   genişliğindedir, kollar ve ana hat açılışta okunur yakınlıkta yan yana sığar. */
+.tc-rr1-g3-dar { grid-template-columns: minmax(var(--menu-genis), max-content); row-gap: var(--b-2); }
+.tc-rr1-kol > .tc-rr1-g3 { grid-template-columns: var(--menu-genis); row-gap: var(--b-2); }
+.tc-rr1-g3-dar > .tc-rr1-cin, .tc-rr1-g3-dar > .tc-rr1-cout, .tc-rr1-kol > .tc-rr1-g3 > .tc-rr1-cin, .tc-rr1-kol > .tc-rr1-g3 > .tc-rr1-cout {
+  align-items: stretch; justify-self: center; width: var(--menu-genis);
+}
+.tc-rr1-g3-dar > .tc-rr1-cop { justify-self: center; }
+.tc-rr1-g3-dar > .tc-rr1-cin:empty, .tc-rr1-g3-dar > .tc-rr1-cout:empty, .tc-rr1-kol > .tc-rr1-g3 > :empty { display: none; }
+.tc-rr1-g3-dar > .tc-rr1-cin .tc-rr1-cip, .tc-rr1-g3-dar > .tc-rr1-cout .tc-rr1-cip, .tc-rr1-kol .tc-rr1-cip { min-width: 0; max-width: none; }
+/* Oklar kolların altından geçer; başlık yazısının üstünden geçmesin diye başlık tuval zeminini taşır. */
+.tc-rr1-kolbas { background: var(--panel-solid); border-radius: var(--yari-1); padding: var(--b-1) var(--b-2); }
+.tc-rr1-kolcarpan { display: flex; align-items: center; gap: var(--b-1); }
+.tc-rr1-kolcarpan .tc-rr1-alan > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .tc-rr1-dalsec { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
 .tc-rr1-dalsec > span { flex: 1 1 100%; font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-cipw { display: inline-flex; align-items: center; gap: var(--b-1); }
