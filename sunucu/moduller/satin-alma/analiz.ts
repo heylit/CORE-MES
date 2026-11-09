@@ -3,8 +3,12 @@ import {
   SATIN_ALMA_ANALIZI_GECMIS_AY, SATIN_ALMA_ANALIZI_HARCAMA_AY, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, type SatinAlmaAnaliziCevabi,
 } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import { firmaAdlari, karneOzetleri, teslimGecikmeleri } from '../musteri-tedarikci/disari.ts';
-import { fiyatDegisimleri, gercekSure, harcamaAbc, tamAylar, tedarikSuresi, tuketimMalzemesi, zamanindaBayes, type AnalizSatiri } from './analiz-kurallar.ts';
+import {
+  asamaKirilimlari, asamaOzeti, enCokSapanlar, fiyatDegisimleri, fiyatFarki, gercekSure, harcamaAbc, hedefSapmalari, kacinilanMaliyet,
+  kuralDisiAlim, oncekiAlislar, tamAylar, tedarikSuresi, tuketimMalzemesi, zamanindaBayes, type AnalizSatiri,
+} from './analiz-kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // 2151: Satın alma analizi. Tedarikçi başarımı firma karnesinden (2151-2 a); tedarik süresi, harcama ve fiyat kendi sipariş
@@ -24,6 +28,7 @@ function birYilOnce(bugun: string): string {
   const [y, a, g] = bugun.split('-').map(Number) as [number, number, number];
   return new Date(Date.UTC(y - SATIN_ALMA_ANALIZI_HARCAMA_AY / 12, a - 1, g + 1)).toISOString().slice(0, 10);
 }
+const birGunOnce = (gun: string): string => new Date(Date.parse(`${gun}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
 export async function satinAlmaAnalizi(db: Db, simdi: number = Date.now()): Promise<SatinAlmaAnaliziCevabi> {
   const bugun = tesisGunu(simdi);
@@ -82,13 +87,52 @@ export async function satinAlmaAnalizi(db: Db, simdi: number = Date.now()): Prom
   })).sort((a, b) => (b.tahminAylik ?? -1) - (a.tahminAylik ?? -1) || a.ad.localeCompare(b.ad, 'tr')).slice(0, TUKETIM_EN_COK);
 
   const harcamaBas = birYilOnce(bugun);
+  const oncekiBit = birGunOnce(harcamaBas);
+  const oncekiBas = birYilOnce(oncekiBit);
+  const harcama = harcamaAbc(satirlar, harcamaBas, bugun);
+
+  // 2471: süreç ve fiyat ölçüleri.
+  const ayar = await sorgular.ayarlariOku(db);
+  const esik = Number(ayar.fiyatUyariYuzdesi);
+  const asamaSatirlari = await sorgular.analizTalepAsamalari(db, oncekiBas, TESIS_SAAT_DILIMI);
+  const buDonem = asamaSatirlari.filter((t) => t.acilis >= harcamaBas && t.acilis <= bugun);
+  const kisiAdi = await kisiAdlari(db, buDonem.map((t) => t.kararVeren).filter((x): x is number => x !== null));
+  const kimlikli = satirlar;
+  const onceki = oncekiAlislar(kimlikli);
+  const baglar = new Map((await sorgular.analizSiparisBaglari(db, `${aylar[0]!}-01`, TESIS_SAAT_DILIMI)).map((b) => [b.id, b]));
+  const teklifler = await sorgular.analizTeklifFiyatlari(db, [...new Set([...baglar.values()].map((b) => b.talepId))]);
+  const oncekiHarcama = harcamaAbc(satirlar, oncekiBas, oncekiBit).toplamTl;
+  const sapmaSimdi = hedefSapmalari(kimlikli, onceki, esik, harcamaBas, bugun);
+  const sapmaOnceki = hedefSapmalari(kimlikli, onceki, esik, oncekiBas, oncekiBit);
   return {
     hesaplanan: new Date(simdi).toISOString(),
     tedarikciler,
     sureGereken: SATIN_ALMA_ANALIZI_SURE_EN_AZ,
     firmasizSatir: firmasiz,
-    harcama: { basTarih: harcamaBas, bitTarih: bugun, ...harcamaAbc(satirlar, harcamaBas, bugun) },
+    harcama: { basTarih: harcamaBas, bitTarih: bugun, ...harcama },
     fiyatDegisimleri: fiyatDegisimleri(satirlar),
     tuketim: { stokBagi: seri !== null, aylar, gereken: SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, malzemeler },
+    donem: { bas: harcamaBas, bit: bugun, oncekiBas, oncekiBit },
+    oncekiHarcamaTl: oncekiHarcama,
+    asamaGereken: SATIN_ALMA_ANALIZI_SURE_EN_AZ,
+    asamaSureleri: {
+      tumu: asamaOzeti(buDonem),
+      oncekiToplam: asamaOzeti(asamaSatirlari.filter((t) => t.acilis < harcamaBas)).toplam,
+      kirilimlar: asamaKirilimlari(buDonem, kisiAdi),
+    },
+    tasarruf: {
+      fiyatFarki: { simdi: fiyatFarki(kimlikli, onceki, harcamaBas, bugun), onceki: fiyatFarki(kimlikli, onceki, oncekiBas, oncekiBit) },
+      kacinilan: {
+        simdi: kacinilanMaliyet(kimlikli, baglar, teklifler, harcamaBas, bugun), onceki: kacinilanMaliyet(kimlikli, baglar, teklifler, oncekiBas, oncekiBit),
+      },
+    },
+    fiyatSapmasi: { esikYuzde: esik, donem: { simdi: sapmaSimdi.donem, onceki: sapmaOnceki.donem }, kalemler: enCokSapanlar(sapmaSimdi.satirlar) },
+    kuralDisi: {
+      enAzTeklif: ayar.enAzTeklif,
+      donem: {
+        simdi: kuralDisiAlim(kimlikli, baglar, ayar.enAzTeklif, harcama.toplamTl, harcamaBas, bugun),
+        onceki: kuralDisiAlim(kimlikli, baglar, ayar.enAzTeklif, oncekiHarcama, oncekiBas, oncekiBit),
+      },
+    },
   };
 }

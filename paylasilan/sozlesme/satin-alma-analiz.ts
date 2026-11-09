@@ -73,6 +73,48 @@ const tuketimMalzemesi = z.object({
   guvenlikStogu: z.number().nonnegative().nullable(),
 });
 
+// 2471: Satın alma süreci ve fiyat ölçüleri. Dönem son 12 ay (harcama penceresi), kıyas önceki 12 ay.
+export const SATIN_ALMA_ASAMALARI = ['teklif-istegi', 'teklif', 'karar', 'onay', 'siparis', 'ilk-teslim', 'tam-teslim'] as const;
+export type SatinAlmaAsamasi = (typeof SATIN_ALMA_ASAMALARI)[number];
+export const SATIN_ALMA_KIRILIMLARI = ['kategori', 'birim', 'alici'] as const;
+// Hedef fiyat sapmasında listelenen en çok kalem.
+export const SATIN_ALMA_SAPMA_ILK = 10;
+
+const asamaOlcusu = z.object({
+  // Önceki uçtan bu aşamanın ucuna geçen gün (tesis günü). Atlanan aşama sayılmaz.
+  asama: z.enum(SATIN_ALMA_ASAMALARI),
+  ornek: SAYI,
+  ortancaGun: z.number().nonnegative().nullable(),
+  yuzde80Gun: z.number().nonnegative().nullable(),
+});
+const sureOzeti = z.object({ ornek: SAYI, ortancaGun: z.number().nonnegative().nullable(), yuzde80Gun: z.number().nonnegative().nullable() });
+const asamaOzeti = z.object({
+  asamalar: z.array(asamaOlcusu),
+  // Talebin açılışından tam teslime; aşamaların toplamı değildir.
+  toplam: sureOzeti,
+  // Ortancası en uzun aşama; eşiği geçen aşama yoksa null.
+  darbogaz: z.enum(SATIN_ALMA_ASAMALARI).nullable(),
+  // Ucu öncekinden önce kalan (eksi süre) aralık: veri hatası, sayılmaz.
+  hataliAralik: SAYI,
+});
+// Son alışa göre fiyat farkında aynı döviz kalemin kur etkisi tutara girmez, ayrı verilir; kaçınılan maliyette null.
+const tutarOlcusu = z.object({ tutarTl: z.number().nullable(), ornek: SAYI, kursuz: SAYI, kurEtkisiTl: z.number().nullable() });
+const sapmaDonemi = z.object({
+  // Hedefi hesaplanan satır; toplam sapma TL ((fiili - hedef) x miktar, sipariş günü kuruyla); bant dışı satır.
+  satir: SAYI,
+  toplamTl: z.number().nullable(),
+  bantDisi: SAYI,
+  // TL kalemde enflasyon endeksi olmadığından hedefi hesaplanamayan satır.
+  endeksYok: SAYI,
+});
+const kuralDisiDonemi = z.object({
+  azTeklif: z.object({ siparis: SAYI, tutarTl: z.number().nonnegative() }),
+  talepOncesi: z.object({ siparis: SAYI, tutarTl: z.number().nonnegative() }),
+  // İki durumdan en az birine giren siparişlerin tutarının dönem harcamasına payı; harcama yoksa null.
+  payYuzde: yuzde.nullable(),
+});
+const donem = <T extends z.ZodType>(t: T) => z.object({ simdi: t, onceki: t });
+
 export const satinAlmaAnaliziCevabi = z.object({
   hesaplanan: z.string(),
   tedarikciler: z.array(tedarikci),
@@ -105,6 +147,29 @@ export const satinAlmaAnaliziCevabi = z.object({
     kurEtkisiTl: z.number(),
     degisimYuzde: z.number().nullable(),
   })),
+  // 2471 ölçüleri.
+  donem: z.object({ bas: tarih, bit: tarih, oncekiBas: tarih, oncekiBit: tarih }),
+  oncekiHarcamaTl: z.number().nonnegative().nullable(),
+  asamaGereken: SAYI,
+  asamaSureleri: z.object({
+    tumu: asamaOzeti,
+    oncekiToplam: sureOzeti,
+    kirilimlar: z.array(z.object({ tur: z.enum(SATIN_ALMA_KIRILIMLARI), anahtar: z.string(), ad: z.string(), ozet: asamaOzeti })),
+  }),
+  // 2468 a: son alışa göre fiyat farkı (eksi = gerçek azalma; döviz kalemde kur hariç) ve en düşük öteki teklife göre kaçınılan maliyet
+  // (artı = kazanç; nakliye ve vade hariç).
+  tasarruf: z.object({ fiyatFarki: donem(tutarOlcusu), kacinilan: donem(tutarOlcusu) }),
+  fiyatSapmasi: z.object({
+    esikYuzde: z.number().nonnegative(),
+    donem: donem(sapmaDonemi),
+    // Dönemde mutlak sapması en büyük satırlar.
+    kalemler: z.array(z.object({
+      katalogId: z.guid(), ad: z.string(), siparisTarihi: tarih, paraBirimi: z.string(), birim: z.string(),
+      hedef: z.number().nonnegative(), fiili: z.number().nonnegative(), farkYuzde: z.number().nullable(),
+      sapmaTl: z.number(), kurEtkisiTl: z.number(), bant: z.enum(['icinde', 'ustunde', 'altinda']),
+    })),
+  }),
+  kuralDisi: z.object({ enAzTeklif: SAYI, donem: donem(kuralDisiDonemi) }),
   tuketim: z.object({
     // Stok tüketim serisinin bağı (kablolama); yoksa malzeme listesi boştur.
     stokBagi: z.boolean(),
@@ -117,3 +182,7 @@ export const satinAlmaAnaliziCevabi = z.object({
 export type SatinAlmaAnaliziCevabi = z.output<typeof satinAlmaAnaliziCevabi>;
 export type SatinAlmaTedarikcisi = z.output<typeof tedarikci>;
 export type SatinAlmaTuketimMalzemesi = z.output<typeof tuketimMalzemesi>;
+export type SatinAlmaAsamaOzeti = z.output<typeof asamaOzeti>;
+export type SatinAlmaTutarOlcusu = z.output<typeof tutarOlcusu>;
+export type SatinAlmaSapmaDonemi = z.output<typeof sapmaDonemi>;
+export type SatinAlmaKuralDisiDonemi = z.output<typeof kuralDisiDonemi>;

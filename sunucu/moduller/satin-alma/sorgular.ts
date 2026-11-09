@@ -1300,6 +1300,66 @@ export function analizSiparisSatirlari(db: Db, basTarih: string, saatDilimi: str
   );
 }
 
+// 2471: talebin aşama uçları (tesis günü). İptal talep gelmez; açılışı verilen günden önce olan gelmez. Onay yalnız 'onay' sonuçlu
+// son kayıttır. Tam teslim: talebin her sipariş satırının net teslimi sipariş miktarına ulaştıysa son artı teslimin günüdür.
+export interface TalepAsamaOkuma {
+  talepId: string; acilis: string; ilkIstek: string | null; sonTeklif: string | null; karar: string | null; kararVeren: number | null;
+  sonOnay: string | null; siparis: string | null; ilkTeslim: string | null; tamTeslim: string | null; birim: string | null; kategoriler: string[];
+}
+export function analizTalepAsamalari(db: Db, basTarih: string, saatDilimi: string): Promise<TalepAsamaOkuma[]> {
+  return db.sorgu<TalepAsamaOkuma>(
+    `SELECT t.id AS "talepId", ((t.olusturma AT TIME ZONE $2)::date)::text AS acilis,
+            (SELECT min(i.gonderim) FROM satin_alma_teklif_istegi i WHERE i.talep_id = t.id)::text AS "ilkIstek",
+            (SELECT max(q.teklif_tarihi) FROM satin_alma_teklif q WHERE q.talep_id = t.id)::text AS "sonTeklif",
+            kr.karar_tarihi::text AS karar, kr.karar_veren_kisi_id AS "kararVeren",
+            (SELECT ((max(o.zaman) AT TIME ZONE $2)::date)::text FROM satin_alma_onay o WHERE o.talep_id = t.id AND o.sonuc = 'onay') AS "sonOnay",
+            (SELECT min(sp.siparis_tarihi) FROM satin_alma_siparis sp WHERE sp.talep_id = t.id)::text AS siparis,
+            (SELECT ((min(e.zaman) AT TIME ZONE $2)::date)::text FROM satin_alma_teslim e JOIN satin_alma_siparis_satiri r ON r.id = e.siparis_satiri_id
+              WHERE r.talep_id = t.id AND e.miktar > 0) AS "ilkTeslim",
+            (SELECT CASE WHEN count(*) > 0 AND bool_and(x.net >= x.miktar) THEN ((max(x.son) AT TIME ZONE $2)::date)::text END
+               FROM (SELECT r.miktar, coalesce(sum(e.miktar), 0) AS net, max(e.zaman) FILTER (WHERE e.miktar > 0) AS son
+                       FROM satin_alma_siparis_satiri r LEFT JOIN satin_alma_teslim e ON e.siparis_satiri_id = r.id
+                      WHERE r.talep_id = t.id GROUP BY r.id, r.miktar) x) AS "tamTeslim",
+            t.birim, ARRAY(SELECT DISTINCT k.kategori FROM satin_alma_talep_kalemi k WHERE k.talep_id = t.id) AS kategoriler
+       FROM satin_alma_talep t LEFT JOIN satin_alma_karar kr ON kr.talep_id = t.id
+      WHERE t.durum <> 'iptal' AND (t.olusturma AT TIME ZONE $2)::date >= $1::date
+      ORDER BY t.olusturma, t.id`,
+    [basTarih, saatDilimi],
+  );
+}
+
+// 2471: sipariş satırının talep, teklif ve kalem bağı; talebin açılış günü ve teklif sayısı (analizSiparisSatirlari ile aynı süzgeç).
+export function analizSiparisBaglari(db: Db, basTarih: string, saatDilimi: string): Promise<{
+  id: number; talepId: string; teklifId: string; kalemId: string; talepAcilis: string; teklifSayisi: number;
+}[]> {
+  return db.sorgu(
+    `SELECT r.id, r.talep_id AS "talepId", r.teklif_id AS "teklifId", r.kalem_id AS "kalemId",
+            ((tl.olusturma AT TIME ZONE $2)::date)::text AS "talepAcilis",
+            (SELECT count(*)::int FROM satin_alma_teklif q WHERE q.talep_id = r.talep_id) AS "teklifSayisi"
+       FROM satin_alma_siparis_satiri r
+       JOIN satin_alma_siparis s ON s.talep_id = r.talep_id AND s.teklif_id = r.teklif_id
+       JOIN satin_alma_talep tl ON tl.id = r.talep_id AND tl.durum <> 'iptal'
+      WHERE s.siparis_tarihi >= $1::date`,
+    [basTarih, saatDilimi],
+  );
+}
+
+// 2471: verilen taleplerin bütün teklif satırları (teklif para biriminde, iskontosuz), kaçınılan maliyet için.
+export function analizTeklifFiyatlari(db: Db, talepIdler: readonly string[]): Promise<{
+  talepId: string; teklifId: string; kalemId: string; paraBirimi: string; kur: string | null; genelIskonto: string; birimFiyat: string;
+  satirIskonto: string | null; teknikUygun: boolean;
+}[]> {
+  if (talepIdler.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT f.talep_id AS "talepId", f.teklif_id AS "teklifId", f.kalem_id AS "kalemId", trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur,
+            q.iskonto_yuzdesi::text AS "genelIskonto", f.birim_fiyat::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto",
+            q.teknik_uygun AS "teknikUygun"
+       FROM satin_alma_teklif_satiri f JOIN satin_alma_teklif q ON q.talep_id = f.talep_id AND q.id = f.teklif_id
+      WHERE f.talep_id = ANY($1::uuid[])`,
+    [talepIdler],
+  );
+}
+
 // 2426: fason iş emrinin hizmet sipariş satırı (iptal olmayan talep). Birden çoksa teslimi tamamlanmamış en yenisi, hepsi tamamsa en yenisi.
 export function fasonSiparisSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; id: number }[]> {
   if (isEmriIdleri.length === 0) return Promise.resolve([]);

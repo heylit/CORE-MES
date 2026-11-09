@@ -146,6 +146,44 @@ describe('satın alma analizi (gerçek PostgreSQL)', () => {
     assert.deepEqual([m.tahminAylik, m.xyz, m.guvenlikStogu], [null, null, null]);
   });
 
+  test('2471: aşama süreleri, tasarruf, hedef sapması ve kural dışı alım (iptal sayılmaz, eşik altında istatistik null)', async () => {
+    const s = o().sahip;
+    await s.sorgu("UPDATE satin_alma_talep SET olusturma = '2026-01-01T09:00:00Z'");
+    // İki teklifli talep: istek 09-02, teklifler 09-04/09-05, karar 09-06, onay 09-08, sipariş 09-09, teslim 09-20 (tam).
+    const talep = randomUUID(), kalem = randomUUID(), a = randomUUID(), b = randomUUID();
+    talepSira += 1;
+    await s.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, olusturma) VALUES ($1, 2026, $2, 'Deneme talep', $3, $3, 'teslim_alindi', '2026-09-01T07:00:00Z')", [talep, talepSira, kisi]);
+    await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, miktar, kategori) VALUES ($1, $2, 1, 'Deneme hizmet', 2, 'Hizmet')", [talep, kalem]);
+    await s.sorgu("INSERT INTO satin_alma_teklif_istegi (talep_id, firma_id, gonderim) VALUES ($1, $2, '2026-09-02')", [talep, firma]);
+    for (const [id, tarih, fiyat] of [[a, '2026-09-04', '100'], [b, '2026-09-05', '120']] as const) {
+      await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, firma_id, tedarikci_adi, teklif_tarihi, para_birimi) VALUES ($1, $2, $3, 'Deneme tedarik', $4, 'TRY')", [talep, id, firma, tarih]);
+      await s.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, $4)', [talep, id, kalem, fiyat]);
+    }
+    await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, karar_tarihi, karar_veren_kisi_id) VALUES ($1, 'tek', $2, '2026-09-06', $3)", [talep, a, kisi]);
+    await s.sorgu("INSERT INTO satin_alma_onay (id, talep_id, zaman, kisi_id, sonuc) VALUES ($1, $2, '2026-09-08T08:00:00Z', $3, 'onay')", [randomUUID(), talep, kisi]);
+    await s.sorgu("INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi) VALUES ($1, $2, 'SA-2471', 'SA-2471', '2026-09-09')", [talep, a]);
+    const satir = (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 2, 'adet') RETURNING id", [talep, a, kalem]))!.id;
+    await s.sorgu("INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, zaman, kisi_id) VALUES ($1, 912345, 2, '2026-09-20T10:00:00Z', $2)", [satir, kisi]);
+
+    const r = satinAlmaAnaliziCevabi.parse(await o().vt.tx((db) => satinAlmaAnalizi(db, simdi)));
+    assert.deepEqual(r.donem, { bas: '2025-11-05', bit: '2026-11-04', oncekiBas: '2024-11-05', oncekiBit: '2025-11-04' });
+    const g = Object.fromEntries(r.asamaSureleri.tumu.asamalar.map((x) => [x.asama, [x.ornek, x.ortancaGun]]));
+    assert.deepEqual(g['teklif-istegi'], [1, null]);
+    assert.deepEqual(g.onay, [1, null]);
+    assert.equal(r.asamaSureleri.tumu.toplam.ornek, 2);
+    assert.equal(r.asamaSureleri.tumu.darbogaz, null);
+    assert.ok(r.asamaSureleri.kirilimlar.some((k) => k.tur === 'kategori' && k.ad === 'Hizmet' && k.ozet.toplam.ornek === 1));
+    assert.ok(r.asamaSureleri.kirilimlar.some((k) => k.tur === 'alici' && k.ad === 'Deneme Yönetici'));
+
+    assert.deepEqual(r.tasarruf.fiyatFarki.simdi, { tutarTl: 0, ornek: 1, kursuz: 0, kurEtkisiTl: 300 });
+    assert.deepEqual(r.tasarruf.kacinilan.simdi, { tutarTl: 40, ornek: 1, kursuz: 0, kurEtkisiTl: null });
+    assert.deepEqual(r.fiyatSapmasi.donem.simdi, { satir: 1, toplamTl: 0, bantDisi: 0, endeksYok: 0 });
+    assert.deepEqual([r.fiyatSapmasi.kalemler[0]!.kurEtkisiTl, r.fiyatSapmasi.kalemler[0]!.bant], [300, 'icinde']);
+    assert.equal(r.fiyatSapmasi.esikYuzde, 10);
+    assert.equal(r.kuralDisi.enAzTeklif, 3);
+    assert.deepEqual([r.kuralDisi.donem.simdi.azTeklif.siparis, r.kuralDisi.donem.simdi.talepOncesi.siparis], [4, 0]);
+  });
+
   test('uç: satın almayı okuyan görür, yetkisiz 403', async () => {
     const yonetici = await app.inject({ method: 'GET', url: '/api/satin-alma-analiz', headers: { cookie: await giris('yonetici') } });
     assert.equal(yonetici.statusCode, 200, yonetici.body);
