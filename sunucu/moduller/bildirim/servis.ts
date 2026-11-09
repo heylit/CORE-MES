@@ -19,7 +19,7 @@ import * as s from './sorgular.ts';
 
 const BULUNAMADI = 'Bildirim bulunamadı.';
 
-export interface BildirimOlayi {
+interface BildirimOlayiTemeli {
   tur: BildirimTuru;
   baslik: string;
   metin?: string | null;
@@ -32,6 +32,10 @@ export interface BildirimOlayi {
   // Olayı tetikleyen kişi: kendi eylemi için bildirim almaz.
   haric?: number | null;
 }
+// 2453: yalnizKisiler true iken alıcı yalnız `kisiler` içinden türü alanlardır (liste yalnız daraltır); kişi listesi zorunludur.
+export type BildirimOlayi =
+  | (BildirimOlayiTemeli & { yalnizKisiler?: false })
+  | (BildirimOlayiTemeli & { yalnizKisiler: true; kisiler: readonly number[] });
 
 // Çağıranın transaction'ında yazar (ADR 0006): olayı doğuran yazma geri alınırsa bildirim de kalmaz. Yazılan alıcı sayısını döner.
 // BIL-10: türde alıcı seçimi varsa seçilen rollerdeki etkin girişli kişiler ve seçilen kişiler; seçim yoksa null (işlem kuralı).
@@ -47,7 +51,7 @@ export async function bildirimGonder(db: Db, olay: BildirimOlayi): Promise<numbe
   if (!yolTureUyar(olay.tur, olay.yol)) throw new Error(`Bildirim yolu türün ekranında değil: ${olay.tur} ${olay.yol}`);
   const { baslik, metin } = metniHazirla(olay.baslik, olay.metin);
   const alicilar = alicilariSec(olay.tur, await kisilerinIslemleri(db), {
-    kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur),
+    kisiler: olay.kisiler, haric: olay.haric, ayarli: await ayarliAlicilar(db, olay.tur), yalnizKisiler: olay.yalnizKisiler,
   });
   const anahtar = tekilAnahtar(olay.tur, olay.kaynakKimlik);
   const gosterim = otomatikGosterim(tanim.onem, alicilar.length === 0 ? null : await s.turGosterimi(db, olay.tur));

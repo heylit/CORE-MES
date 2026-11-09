@@ -1,4 +1,5 @@
 // Olayı üreten modül kendi transaction'ında çağırır; okuma dışarı açılmaz (kişinin bildirimi yalnız kendi oturumundan okunur).
+// `yalnizKisiler: true` alıcıyı verilen kişilerle türü alanların kesişimine daraltır (2453); boş liste sıfır alıcıdır.
 export { bildirimGonder } from './servis.ts';
 export type { BildirimOlayi } from './servis.ts';
 // Kaynak kaydın kararı verilince o kayda bağlı açık bildirimi bütün alıcılarda kapatır; kararı yazanın transaction'ında.

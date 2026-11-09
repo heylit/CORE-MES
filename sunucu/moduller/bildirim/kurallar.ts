@@ -25,12 +25,17 @@ export const epostaSecilebilir = (islemler: readonly string[]): boolean =>
 // kişi (talebi kendisi onaylayacak olan da) kendi eylemi için bildirim almaz. Gönderim anında yeniden sınanır: pasif ya da
 // girişsiz kişi haritada yoktur, düşer.
 // BIL-10 (760 c, 761 b): türde alıcı seçimi varsa (`ayarli` null değil) işlem kuralı yerine seçilen kişiler geçer; yönetici her
-// işlemi taşısa da seçilmediyse almaz. Adıyla verilen kayda bağlı kişi iki durumda da alır.
+// işlemi taşısa da seçilmediyse almaz. Adıyla verilen kayda bağlı kişi iki durumda da alır. 2453: `yalnizKisiler` ile alıcı, adıyla
+// verilenlerle türü alanların kesişimidir (alıcı başına zamanlanan hatırlatma gibi); kişi listesi verilmezse geliştirici hatasıdır.
 export function alicilariSec(
   tur: BildirimTuru,
   kisiIslemleri: ReadonlyMap<number, readonly Islem[]>,
-  ek: { kisiler?: readonly number[] | undefined; haric?: number | null | undefined; ayarli?: readonly number[] | null | undefined },
+  ek: {
+    kisiler?: readonly number[] | undefined; haric?: number | null | undefined; ayarli?: readonly number[] | null | undefined;
+    yalnizKisiler?: boolean | undefined;
+  },
 ): number[] {
+  if (ek.yalnizKisiler === true && ek.kisiler === undefined) throw new Error(`Yalnız kişilere bildirim kişi listesi ister: ${tur}`);
   const islemler: readonly Islem[] = BILDIRIM_TURLERI[tur].alanIslemler;
   const ayarli = ek.ayarli === null || ek.ayarli === undefined ? null : new Set(ek.ayarli);
   const adlilar = new Set(ek.kisiler ?? []);
@@ -38,7 +43,8 @@ export function alicilariSec(
   for (const [kisiId, sahip] of kisiIslemleri) {
     if (kisiId === ek.haric) continue;
     const turAlir = ayarli === null ? sahip.some((i) => islemler.includes(i)) : ayarli.has(kisiId);
-    if (adlilar.has(kisiId) || turAlir) secilen.push(kisiId);
+    // 2453: yalnız kişiler istenince liste yalnız daraltır; türü almayan kişi adıyla verilse de almaz.
+    if (ek.yalnizKisiler === true ? adlilar.has(kisiId) && turAlir : adlilar.has(kisiId) || turAlir) secilen.push(kisiId);
   }
   return secilen.sort((a, b) => a - b);
 }

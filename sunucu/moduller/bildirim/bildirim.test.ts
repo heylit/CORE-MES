@@ -131,6 +131,22 @@ describe('bildirim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await liste('bakim')).satirlar.length, 0);
   });
 
+  test('2453: yalnizKisiler yalnız verilen kişilerden türü alanlara gider; boş liste işlemi bozmaz', async () => {
+    await bosalt();
+    // Operatör türü almaz: adıyla verilse de almaz. Yönetici türü alır ama verilmedi: almaz.
+    assert.equal(await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Durdu', yalnizKisiler: true, kisiler: [kim('bakim'), kim('operator')] }), 1);
+    assert.equal((await liste('bakim')).satirlar.length, 1);
+    assert.equal((await liste('operator')).satirlar.length, 0);
+    assert.equal((await liste('yonetici')).satirlar.length, 0);
+    await bosalt();
+    const sonuc = await o().vt.tx(async (db) => {
+      const n = await bildirimGonder(db, { tur: 'istasyonlar.makine-durdu', baslik: 'Durdu', yalnizKisiler: true, kisiler: [] });
+      return { n, sonra: (await db.tek<{ bir: number }>('SELECT 1 AS bir'))!.bir };
+    });
+    assert.deepEqual(sonuc, { n: 0, sonra: 1 });
+    assert.equal((await liste('bakim')).satirlar.length, 0);
+  });
+
   test('başkasının bildirimi görünmez, okundu ve arşiv işaretlenemez (404)', async () => {
     await bosalt();
     await gonder({ tur: 'istasyonlar.makine-durdu', baslik: 'Yalnız bakıma', kisiler: [], haric: yoneticiId });
