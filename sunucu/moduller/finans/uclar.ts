@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { firmaCevabi, firmaDurumGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { kimlikParametresi } from '#paylasilan/sozlesme/finans.ts';
+import { kimlikParametresi, tedarikciAlacagiCevabi, tedarikciAlacagiDurumGovdesi, tedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
 import * as servis from './servis.ts';
 import { z as zod } from 'zod';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
@@ -96,6 +96,10 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/ozet', yetki: 'finans.oku', cevap: finansOzetiCevabi, isle: ({ db }) => servis.panoOzeti(db) }),
   // Kart #1124: faturası gelmemiş satın alma siparişlerinin ödeme planı, vadeye göre.
   uc({ yontem: 'GET', yol: '/finans/beklenen-odemeler', yetki: 'finans.oku', cevap: beklenenOdemelerCevabi, isle: ({ db }) => servis.beklenenOdemeler(db) }),
+  // 2540: kalanı kapatılmış siparişte aşan avansın tedarikçi alacağı; okuma finans.oku, durum finans.yaz (tekrar korumalı, sürümlü, tam denetim).
+  uc({ yontem: 'GET', yol: '/finans/tedarikci-alacaklari', yetki: 'finans.oku', cevap: tedarikciAlacaklariCevabi, isle: ({ db }) => servis.tedarikciAlacaklari(db) }),
+  uc({ yontem: 'POST', yol: '/finans/tedarikci-alacaklari/:id/durum', yetki: 'finans.yaz', tekrarKorumali: true, parametre: kimlikParametresi, govde: tedarikciAlacagiDurumGovdesi,
+    cevap: tedarikciAlacagiCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.tedarikciAlacagiDurumYaz(db, kullanici, parametre.id, govde) }),
   // 2132c: onaylı satış siparişlerinin faturalanmamış kalanı, vadeye göre.
   uc({ yontem: 'GET', yol: '/finans/beklenen-tahsilatlar', yetki: 'finans.oku', cevap: beklenenTahsilatlarCevabi, isle: ({ db }) => servis.beklenenTahsilatlar(db) }),
   // Sayaç oturumla açılır; finans.oku yoksa sayılar null döner (rakam sızmaz).

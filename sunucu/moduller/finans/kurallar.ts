@@ -521,3 +521,12 @@ export function beyanIsaretHatasi(sonGun: string, kod: string, bugun: string): s
   const ileri = (Date.parse(`${sonGun}T00:00:00Z`) - Date.parse(`${bugun}T00:00:00Z`)) / 86_400_000;
   return ileri > BEYAN_ILERI_GUN ? 'Dönemi bitmemiş beyan işaretlenmez.' : null;
 }
+
+// 2540 (Güvenlik K2): tedarikçi alacağının izinli geçişleri; düşüldü ve kapandı son durumdur, yeniden açılmaz. Düşürme ve kapatma
+// gerekçeyle yapılır. Geçerli geçişte null, değilse ileti.
+const ALACAK_GECISLERI: Readonly<Record<string, readonly string[]>> = { teyit_bekliyor: ['acik', 'dusuldu'], acik: ['kapandi'], dusuldu: [], kapandi: [] };
+export function tedarikciAlacagiGecisHatasi(eski: string, yeni: string, aciklama: string | null): string | null {
+  if (!(ALACAK_GECISLERI[eski] ?? []).includes(yeni)) return `Alacak "${eski}" durumundan "${yeni}" durumuna geçemez.`;
+  if ((yeni === 'dusuldu' || yeni === 'kapandi') && (aciklama === null || aciklama.trim() === '')) return 'Düşürme ve kapatma gerekçe ister.';
+  return null;
+}
