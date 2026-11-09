@@ -1,5 +1,5 @@
 import type { BusMsg, HealthRes, PkgFile, Role, Session, User } from '@shared/model';
-import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler } from './anomali';
+import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler, EksikIsler, EksikIslerim } from './anomali';
 import type { OzetDonemi, OperatorOzeti } from './ozetim';
 import type { MerkezDurumu } from '../../../../istemci/src/ortak/cizim/cekirdek/cizim-merkezi';
 import type { MakineAyrimlari } from './makine-secimi';
@@ -550,6 +550,10 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     async anomaliler(): Promise<Anomaliler> { return api('GET', '/anomaliler'); },
     /** zaman olayları (kart 764): geç giriş, geç teslim, sonraki işe etki, teslim riski */
     async anomaliOlaylari(): Promise<AnomaliOlaylari> { return api('GET', '/anomali-olaylari'); },
+    /** eksik iş (kart 2421 c): plan gerisi, kayıtsız gün, yarım iş, plansız iş, geciken emir, bayat plan */
+    async eksikIsler(): Promise<EksikIsler> { return api('GET', '/eksik-isler'); },
+    /** terminal (2421 c): kişinin kendi tezgahlarının ve işlerinin açık eksikleri */
+    async eksikIslerim(): Promise<EksikIslerim> { return api('GET', '/eksik-islerim'); },
     /** gün, hafta, ay istatistiği (kart #1306): CORE'un kaydettiği günlerden */
     async anomaliIstatistigi(donem: AnomaliDonemi, tarih: string): Promise<AnomaliIstatistigi> {
       return api('GET', '/anomali-istatistik?donem=' + encodeURIComponent(donem) + '&tarih=' + encodeURIComponent(tarih));

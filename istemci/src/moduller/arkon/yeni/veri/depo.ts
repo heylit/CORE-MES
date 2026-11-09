@@ -2,7 +2,7 @@ import type { ArkonKisi } from '#paylasilan/sozlesme/arkon.ts';
 import type { CihazDurumu } from '#paylasilan/sozlesme/oturum.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { tohumla } from '../../baglanti.ts';
-import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler } from '../../../../../../arkon/web/src/data/anomali.ts';
+import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler, EksikIsler, EksikIslerim } from '../../../../../../arkon/web/src/data/anomali.ts';
 import type { CagriEkiplerim } from '../../../../../../arkon/web/src/data/cagri-ekiplerim.ts';
 import type { MerkezDurumu } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import type { MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
@@ -55,6 +55,8 @@ export interface ArkonDeposu {
     merkezKontrol(dosyalar: { belgeId: number; ozet: string }[]): Promise<MerkezDurumu[]>;
     anomaliler(): Promise<Anomaliler>;
     anomaliOlaylari(): Promise<AnomaliOlaylari>;
+    eksikIsler(): Promise<EksikIsler>;
+    eksikIslerim(): Promise<EksikIslerim>;
     anomaliIstatistigi(donem: AnomaliDonemi, tarih: string): Promise<AnomaliIstatistigi>;
     operatorOzeti(donem: OzetDonemi, kisiId?: number | null): Promise<OperatorOzeti>;
     makineAyrimlari(emirId: number): Promise<MakineAyrimlari | undefined>;

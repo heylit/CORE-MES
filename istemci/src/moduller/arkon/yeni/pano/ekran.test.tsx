@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { AnomaliCevabi, EksikIslerCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
 import { arkonAc, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
@@ -269,5 +270,38 @@ describe('A3 sayfaları', () => {
     arkonAc('/arkon/anomali');
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).not.toBe('/arkon/anomali'); }, { timeout: 10000 });
     expect(screen.queryByRole('region', { name: 'Üretim Anomalisi' })).toBeNull();
+  }, 30000);
+
+  it('2421 c: Üretim Anomalisi Eksik işler bölümünü ve özetini gösterir; kapalı eksik kuralı adıyla söylenir', async () => {
+    const anomali = {
+      tarih: '2026-11-09', hesaplama: '2026-11-09T09:00:00.000Z', esikler: { girisYokDk: 60, adetToleransYuzde: 0 },
+      toplam: { beklenen: 0, uretilen: 0, oran: null, hurda: 0, performans: null, planDisi: 0 }, istasyonlar: [], makineler: [], kisiler: [], atlanan: 0,
+    } satisfies AnomaliCevabi;
+    const eksik = {
+      hesaplama: '2026-11-09T09:00:00.000Z',
+      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null },
+      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 1, 'bayat-plan': 0 },
+      olaylar: [
+        {
+          id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
+          deger: 90, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T06:00:00.000Z', acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+        },
+        {
+          id: 2, tur: 'geciken-emir', konu: 'uretim_emri', isEmriId: null, uretimEmriId: 4, emirNo: 'E-1', opNo: null, istasyon: null, kaynak: null,
+          deger: 3, kalanAdet: null, planaGore: false, dayanakAni: null, acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+        },
+      ],
+    } satisfies EksikIslerCevabi;
+    const istekler = sunucuKur(YONETICI, { belgeler, uclar: { 'GET /arkon/anomaliler': anomali, 'GET /arkon/eksik-isler': eksik } });
+    arkonAc('/arkon/anomali');
+    const b = await bolum('Eksik işler');
+    await waitFor(() => { expect(within(b).getByText('E-1 · OP 10')).toBeTruthy(); }, { timeout: 10000 });
+    expect(b.textContent).toContain('Plan gerisi');
+    expect(b.textContent).toContain('1 sa 30 dk');
+    expect(b.textContent).toContain('4 adet kaldı');
+    expect(b.textContent).toContain('3 gün');
+    expect(screen.getByLabelText('Eksik iş özeti').textContent).toContain('geciken emir');
+    expect(screen.getByText(/Kapalı kural: .*Bayat plan/)).toBeTruthy();
+    expect(yazmalar(istekler)).toEqual([]);
   }, 30000);
 });

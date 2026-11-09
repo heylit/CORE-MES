@@ -48,7 +48,7 @@ describe('Yeni ekranın veri katmanı', () => {
     for (const ad of ['get', 'put', 'clear'] as const) expect(typeof d.Cache[ad]).toBe('function');
     for (const ad of ['toFile', 'fromFile', 'fileName'] as const) expect(typeof d.Pkg[ad]).toBe('function');
     for (const ad of [
-      'flush', 'materials', 'merkezBelgeleri', 'merkezdenAl', 'merkezKontrol', 'anomaliler', 'anomaliIstatistigi', 'operatorOzeti',
+      'flush', 'materials', 'merkezBelgeleri', 'merkezdenAl', 'merkezKontrol', 'anomaliler', 'anomaliIstatistigi', 'eksikIsler', 'eksikIslerim', 'operatorOzeti',
       'makineAyrimlari', 'islerim', 'refakatKartlari', 'cagriEkiplerim', 'tmiAdimlari', 'tmiAdimIsaretle', 'uretimHazirligi',
     ] as const) expect(typeof d.Server[ad]).toBe('function');
   });
