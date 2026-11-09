@@ -6,7 +6,8 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { kisiNoKullaniciAdindan, kullaniciYukle } from '../kisiler/disari.ts';
 import { kablola } from '../../kablolama.ts';
-import { kisiVardiyasiGetir, puantajGetir, veriGetir } from './servis.ts';
+import { kisilerinIsGunleri } from '../vardiya/disari.ts';
+import { izinGunuGetir, kisiVardiyasiGetir, puantajGetir, veriGetir } from './servis.ts';
 
 // Puantajın vardiya planı Vardiya modülünden gerçek bağla gelir. Örnek tesiste kişi istasyona, makineye ya da ekibe atanır;
 // üçünde de kişinin planı bulunmalıdır (deneme bulgusu 6: makine ve ekip atamalı kişide plan boş geliyordu).
@@ -52,5 +53,18 @@ describe('İK puantaj: vardiya planı gerçek bağla, istasyon, makine ve ekip a
     const saatler = vardiya.hafta.flatMap((h) => h.vardiyalar);
     assert.ok(saatler.length > 0, 'haftada en az bir vardiya');
     for (const v of saatler) assert.match(`${v.baslangic} ${v.bitis}`, /^\d\d:\d\d \d\d:\d\d$/);
+  });
+  test('2452-4 a: izin günü kişinin vardiya iş günleriyle sayılır (gerçek bağ); kapalı gün düşer', async () => {
+    const ARALIK = { baslangic: '2099-10-05', bitis: '2099-10-18' };
+    const [ik, vardiya] = await ortam!.vt.tx(async (db) => {
+      const yon = (await kullaniciYukle(db, (await kisiNoKullaniciAdindan(db, 'ornek.yonetici'))!))!;
+      const kisiId = (await kisiNoKullaniciAdindan(db, 'ornek.operator2'))!;
+      const k = (await veriGetir(db, yon)).kayitlar.find((x) => x.tur === 'emp' && x.govde['kisiId'] === kisiId)!;
+      await db.sorgu("INSERT INTO vardiya_takvim_gunu (tarih, tur) VALUES ('2099-10-07', 'kapali') ON CONFLICT DO NOTHING");
+      return [(await izinGunuGetir(db, yon, k.kimlik, ARALIK.baslangic, ARALIK.bitis)).isGunu, (await kisilerinIsGunleri(db, [kisiId], ARALIK)).get(kisiId)];
+    });
+    assert.ok(vardiya, 'kişi iş günü haritasında olmalı');
+    assert.equal(vardiya.gunler.includes('2099-10-07'), false);
+    assert.equal(ik, vardiya.gunler.length);
   });
 });

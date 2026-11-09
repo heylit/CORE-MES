@@ -13,7 +13,7 @@ export const ORNEK_DUZEN: readonly VardiyaGovdesi[] = [
 // Yeni kurulumda vardiya yoktur ve kurulum veri yazmaz; yazma yetkisi olan ilkini kendisi ekler, olmayan yöneticisini bekler.
 export function BosVardiya() {
   const oturum = useOturum();
-  const yaz = oturum.data?.islemler.includes('vardiya.yaz') ?? false;
+  const yaz = oturum.data?.islemler.some((i) => i === 'vardiya.yaz' || i === 'vardiya.tanim-yaz') ?? false;
   const y = useVardiyaYaz();
   const { bildir } = useBildirim();
   const [onay, onayYaz] = useState(false);

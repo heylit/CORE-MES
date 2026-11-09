@@ -169,6 +169,10 @@ async function ayarGovdesi(db: Db): Promise<{ govde: Govde | null; surum: number
   return { govde: ayarKur(a), surum: a.surum };
 }
 
+export async function cumartesiIsGunu(db: Db): Promise<boolean> {
+  return (await ayarGovdesi(db)).govde?.['cumartesiIsGunu'] === true;
+}
+
 // IK-21: İK kendi iş merkezi kapsamındaki kayıtları görür (IK-27); öteki kişi kendi kaydını, ekibini (süzülmüş) ve yöneticisinin adını.
 export async function veriGetir(db: Db, kullanici: Kullanici): Promise<IkVeriCevabi> {
   const d = await durumOku(db, kullanici);
@@ -741,9 +745,22 @@ async function acikZimmetler(db: Db, personel: Govde): Promise<readonly { demirb
   return (await zimmetCozucu(db, [kisiId])).get(kisiId) ?? [];
 }
 
+// 2452 (S4 a): izin günü kişinin kendi iş günleriyle sayılır (vardiya, departman, tesis varsayılanı, yoksa İK ayarı; resmî tatil ve kapalı
+// gün düşer). Ters yöndedir: çözücüyü sunucu/kablolama.ts bağlar (ADR 0006). Kişi haritada yoksa (bağ yok, pasif) soru 55 hesabı kalır.
+export type IsGunuCozucusu = (db: Db, kisiIdleri: readonly number[], aralik: { baslangic: string; bitis: string }) =>
+  Promise<ReadonlyMap<number, { gunler: readonly string[] }>>;
+let isGunuCozucu: IsGunuCozucusu | null = null;
+export function isGunuCozucusu(c: IsGunuCozucusu): void { isGunuCozucu = c; }
+
 // Soru 55: tatil ve kapalı günler personelin bağlı olduğu kişinin vardiya takviminden okunur; bağ ya da takvim yoksa yalnız hafta sonu düşer.
 async function izinIsGunuSay(db: Db, d: Durum, empId: string, baslangic: string, bitis: string): Promise<number> {
   const kisiId = d.kayitlar.find((k) => k.tur === 'emp' && k.kimlik === empId)?.govde['kisiId'];
+  // Takvim en çok 366 gün okunur; daha uzun aralık soru 55 hesabıyla sayılır.
+  const gunSayisi = (Date.parse(`${bitis}T00:00:00Z`) - Date.parse(`${baslangic}T00:00:00Z`)) / 86_400_000 + 1;
+  if (typeof kisiId === 'number' && isGunuCozucu !== null && gunSayisi >= 1 && gunSayisi <= 366) {
+    const kisinin = (await isGunuCozucu(db, [kisiId], { baslangic, bitis })).get(kisiId);
+    if (kisinin !== undefined) return kisinin.gunler.length;
+  }
   let tatiller: Set<string> | null = null;
   if (typeof kisiId === 'number' && takvimCozucu !== null) {
     const takvim = (await takvimCozucu(db, [{ tur: 'kisi', id: kisiId }], { baslangic, bitis })).get(`kisi:${kisiId}`) ?? null;

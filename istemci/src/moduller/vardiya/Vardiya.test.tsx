@@ -6,13 +6,14 @@ import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { IstasyonSecimiCevabi, MakinelerCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { CalismaTakvimiCevabi, TakvimCevabi, VardiyaPersoneliCevabi } from '#paylasilan/sozlesme/vardiya.ts';
+import type { CalismaTakvimiCevabi, OfisMesaisiCevabi, TakvimCevabi, VardiyaPersoneliCevabi } from '#paylasilan/sozlesme/vardiya.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { PersonelEkrani, TakvimEkrani, VardiyaEkrani } from './Vardiya.tsx';
 
 const PLANLAMA: Kullanici = { id: 1, ad: 'Deneme Planlama', islemler: ['sayfa.vardiya', 'vardiya.yaz'] };
 const ISTASYON_OKUR: Kullanici = { ...PLANLAMA, islemler: [...PLANLAMA.islemler, 'sayfa.istasyonlar'] };
 const IZLEYEN: Kullanici = { id: 2, ad: 'Deneme İzleyen', islemler: ['sayfa.vardiya'] };
+const IK: Kullanici = { id: 3, ad: 'Deneme İK', islemler: ['sayfa.vardiya', 'ik.oku', 'vardiya.tanim-yaz'] };
 
 const TAKVIM: TakvimCevabi = {
   vardiyalar: [
@@ -36,6 +37,17 @@ const TAKVIM: TakvimCevabi = {
   ],
   kisiVardiyalari: [{ kisiId: 7, vardiyaId: 1 }],
   bugun: '2026-10-10',
+  vardiyaGunleri: [{ vardiyaId: 1, gun: 1 }, { vardiyaId: 1, gun: 2 }],
+  departmanVardiyalari: [{ departmanNo: 5, vardiyaId: 1 }],
+  varsayilanVardiyaId: null,
+};
+const OFIS: OfisMesaisiCevabi = {
+  departmanlar: [{ no: 5, ad: 'Deneme muhasebe' }, { no: 6, ad: 'Deneme satış' }],
+  personel: [
+    { kisiId: 20, ad: 'Deneme Ofis', departmanNo: 5, vardiyaId: null },
+    { kisiId: 21, ad: 'Deneme Satışçı', departmanNo: 6, vardiyaId: null },
+  ],
+  cumartesiIsGunu: false,
 };
 const PERSONEL: VardiyaPersoneliCevabi = {
   personel: [
@@ -60,6 +72,7 @@ function sunucuKur(kullanici: Kullanici, ek: Record<string, () => Response> = {}
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol === '/vardiya-takvimi') return json(200, TAKVIM);
     if (yol === '/vardiya-personeli') return json(200, PERSONEL);
+    if (yol === '/vardiya-ofis') return json(200, OFIS);
     if (yontem === 'POST') return json(200, TAKVIM);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
@@ -317,6 +330,33 @@ describe('Vardiya', () => {
     ac('duzen', '/vardiya');
     await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' });
     expect(screen.queryByRole('link', { name: "İK'da düzenle" })).toBeNull();
+  });
+
+  it('2452: İK adresinde vardiya.tanim-yaz taşıyan kişi tanımı ve ofis mesaisini yazar, matrisi yazamaz; geçerli mesai sırayla gösterilir', async () => {
+    const cagrilar = sunucuKur(IK);
+    ac('duzen', '/ik/vardiya');
+    expect(((await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' })) as HTMLButtonElement).disabled).toBe(true);
+    const bolum = screen.getByRole('region', { name: 'Ofis ve departman mesaisi' });
+    const sali = within(bolum).getByRole('button', { name: 'Gündüz Sal' });
+    expect(sali.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Gündüz Çar' }));
+    await waitFor(() => expect(postlar(cagrilar).at(-1)).toMatchObject({ yol: '/vardiya-gunleri/degistir', govde: { vardiyaId: 1, gunler: [1, 2, 3] } }));
+    expect(await within(bolum).findByText('Gündüz (departman)')).toBeTruthy();
+    expect(within(bolum).getByText('İK ayarı (pazartesi-cuma)')).toBeTruthy();
+    fireEvent.change(within(bolum).getByLabelText('Deneme satış'), { target: { value: '2' } });
+    await waitFor(() => expect(postlar(cagrilar).at(-1)).toMatchObject({ yol: '/departman-vardiyalari/6/belirle', govde: { vardiyaId: 2 } }));
+    fireEvent.change(within(bolum).getByLabelText('Deneme Ofis vardiyası'), { target: { value: '2' } });
+    await waitFor(() => expect(postlar(cagrilar).at(-1)).toMatchObject({ yol: '/kisi-vardiyalari/20/belirle', govde: { vardiyaId: 2 } }));
+    fireEvent.change(within(bolum).getByLabelText('Tesis varsayılanı'), { target: { value: '1' } });
+    await waitFor(() => expect(postlar(cagrilar).at(-1)).toMatchObject({ yol: '/vardiya-varsayilani/belirle', govde: { vardiyaId: 1 } }));
+    expect(postlar(cagrilar).some((c) => c.yol.startsWith('/vardiya-matrisi'))).toBe(false);
+    cleanup();
+    // Ofis bölümü yalnız İK adresindedir; Vardiya adresinde istek de atılmaz.
+    const okuma = sunucuKur(PLANLAMA);
+    ac('duzen', '/vardiya');
+    await screen.findByRole('button', { name: 'IM-A Pzt Gündüz' });
+    expect(screen.queryByRole('region', { name: 'Ofis ve departman mesaisi' })).toBeNull();
+    expect(okuma.some((c) => c.yol === '/vardiya-ofis')).toBe(false);
   });
 
   it('çalışma takvimi seçilen kaynağın günlerini ve aralıklarını gösterir; bağlı olmayan kaynakta takvim yoktur', async () => {

@@ -11,7 +11,7 @@ import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { puantajAralikCozucusu, puantajTakvimCozucusu, vardiyaMatrisCozucusu, vardiyaTanimCozucusu } from './disari.ts';
+import { isGunuCozucusu, puantajAralikCozucusu, puantajTakvimCozucusu, vardiyaMatrisCozucusu, vardiyaTanimCozucusu } from './disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 
 // Puantaj (kart #1571): kişi sayfası ve toplu matris aynı uçtan okur ve yazar. Sınama kendi rol dağılımını kurar: İK uzmanı devam
@@ -217,6 +217,8 @@ describe('İK puantaj (gerçek PostgreSQL, gerçek giriş)', () => {
 
   test('soru 55: yıllık izin günü iş günüyle sınırlıdır; hafta sonu İK ayarından, tatil vardiya takviminden gelir', async () => {
     // Bir önceki testin sabit planı yerindedir: emp_a'nın takviminde 2026-09-15 tatil. 11 cuma, 12 cumartesi (ayar: iş günü değil), 13 pazar.
+    // 2452-4 a iş günü bağı boş döner: burada kişi haritada olmadığında kalan soru 55 hesabı sınanır (gerçek bağı puantaj-vardiya testi sınar).
+    isGunuCozucusu(async () => new Map());
     const izin = (id: string, empId: string, bas: number, bit: number, g: number) => istek(c.yon, 'POST', `/ik/izinler/${id}/kaydet`, {
       govde: { id, kind: 'leave', empId, tur: 'Yıllık izin', baslangic: gun(bas), bitis: gun(bit), gun: g, durum: 'Beklemede' }, surum: null,
     });
@@ -246,6 +248,11 @@ describe('İK puantaj (gerçek PostgreSQL, gerçek giriş)', () => {
     await ret(404, 'BULUNAMADI', c.opr, 'GET', `/ik/izin-gunu?personel=emp_b&baslangic=${gun(11)}&bitis=${gun(15)}`);
     await ret(404, 'BULUNAMADI', c.uzm, 'GET', `/ik/izin-gunu?personel=emp_c&baslangic=${gun(11)}&bitis=${gun(15)}`);
     await ret(400, 'DOGRULAMA', c.uzm, 'GET', `/ik/izin-gunu?personel=emp_a&baslangic=${gun(15)}&bitis=${gun(11)}`);
+    // 2452-4 a: kişi iş günü haritasındaysa sayı oradan gelir (hafta sonu ve takvim tatili ayrıca düşülmez).
+    isGunuCozucusu(async (_db, kisiIdleri) => new Map(kisiIdleri.filter((k) => k === kim.opr).map((k) => [k, { gunler: [gun(11), gun(12), gun(13), gun(14)] }])));
+    assert.deepEqual((await gunu(c.uzm, 'emp_a', 11, 15)).json(), { isGunu: 4 });
+    assert.deepEqual((await gunu(c.uzm, 'emp_b', 11, 15)).json(), { isGunu: 3 }, 'haritada olmayan kişi soru 55 hesabıyla');
+    isGunuCozucusu(async () => new Map());
   });
 
   test('soru 75: kişi sayfası kişinin vardiyasını salt okunur görür; vardiya seçilmediyse iş merkezinin bütün açık vardiyaları', async () => {

@@ -15,3 +15,7 @@
 | Kişinin istasyon ataması (yüzde) | okunur (`istasyonKisiAtamalari`) | istasyonlar | kişinin iş merkezi buradan türer (VR-08) |
 | Vardiya devri | yok | personel-vardiya (sabit kimlik) | bugün Arkon'da; bu turda yazılmadı |
 | Mesai | yok | - | Günlük Mesai sayfa tanımı duruyor; karar 1-a: sonra |
+| Vardiyanin kendi gunleri (ofis mesaisi) | `vardiya_gunu.vardiya_id, gun` | vardiya (2452) | is merkezi olmayan kisinin gunleri |
+| Departmanin varsayilan vardiyasi | `vardiya_departman.departman_no, vardiya_id` | vardiya (2452) | departman ik'nin (`ik_departman.no`, okunur: `ik/disari.ts departmanListesi`, `kisilerinDepartmanlari`); yabanci anahtar baglamada |
+| Tesis varsayilan vardiyasi | `vardiya_varsayilani.vardiya_id` | vardiya (2452) | tek satir |
+| Kisinin is gunu | yok (hesap: `disari.kisilerinIsGunleri`) | vardiya (2452) | satin alma hatirlatmalari ve IK izin sayimi okur; cumartesi ayari ik'den (`ik/disari.ts cumartesiIsGunu`) |

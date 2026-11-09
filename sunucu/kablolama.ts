@@ -147,6 +147,7 @@ export function sunucununBaglari(): Bag[] {
     bag('vardiya aralıkları -> İK puantaj', ik.puantajAralikCozucusu, vardiya.basladigiGunTakvimleri),
     bag('vardiya tanımları -> İK kişi sayfası', ik.vardiyaTanimCozucusu, vardiya.vardiyaTanimlari),
     bag('vardiya matrisi -> İK kişi sayfası', ik.vardiyaMatrisCozucusu, vardiya.vardiyaMatrisi),
+    bag('vardiya iş günleri -> İK izin sayımı', ik.isGunuCozucusu, vardiya.kisilerinIsGunleri),
     // Siparişler bulunmayan siparişte 404 atar; finans bunu "yok" (null) olarak alır.
     bag('sipariş özeti -> finans satış faturası', siparisOzetiCozucusu, siparisAyrintisi && (async (db: Db, id: number) => {
       try {

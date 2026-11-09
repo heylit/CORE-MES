@@ -24,3 +24,9 @@ export type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
 export type { KaynakTakvimi } from '#paylasilan/sozlesme/vardiya.ts';
 // Takvim (891): aralıkta başlayan tek seferlik planlı duruşlar; yetki denetlemez, çağıran denetler.
 export { takvimKayitlari } from './servis.ts';
+// 2452: kişi başına iş günleri (kişi > departman > tesis varsayılanı; iş merkezi olan kişi üretim matrisinden; yoksa İK ayarı). Satın alma
+// hatırlatmaları ve İK izin sayımı okur. `tesisIsGunleri` alıcısız sayım içindir; `isGunuSonrasi` saftır. Yetki denetlemez.
+export { kisilerinIsGunleri, tesisIsGunleri } from './servis.ts';
+export type { KisiIsGunleri } from './servis.ts';
+export { isGunuSonrasi } from './kurallar.ts';
+export type { IsGunuKaynagi } from './kurallar.ts';

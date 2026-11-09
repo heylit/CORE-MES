@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  isGunleriniSec, isGunuBagi,
   aralik, araliklardanCikar, atamaPayi, ayrildiMi, durusAraliklari, fazlaMesaiKisiHatasi, sonCalismaGunu, fazlaMesaiHatasi, fazlaMesaiUyanlar, fazlaMesaiVardiyasi, gunNetDakikasiEk, izinliKisim, onayliIzinGunleri, durusHatasi, durusuDuzenle, gecmisMi, gunFarki, gunNetDakikasi, gununCalismaAraliklari, gununMolaAraliklari, gununSonDakikasi, kaynagaUyanlar, gunlukDakika, gununVardiyalari, haftaGunu, haftaKopyasi, kisininIstasyonu, topluMatris, molaDenetle, netDakika, netSureHatasi, takvimGunleriniBirlestir,
   kisiTakvimiGorunur, takvimAraliklari, tarihEkle, vardiyaKadrosu, vardiyaParcalari, araliklarCakisir, fazlaMesaiDakikaAraligi, vardiyaDakikaAraligi,
 } from './kurallar.ts';
@@ -363,5 +364,39 @@ describe('vardiya kuralları', () => {
       const beklenen = gunNetDakikasi(gun, v, d) + toplam(tanim(birlesik(e.flatMap(kaydir)), [...v.flatMap(kaydir), ...d]));
       assert.equal(gunNetDakikasiEk(gun, v, e, d), beklenen);
     }
+  });
+});
+
+describe('2452: iş günü bağı (saf)', () => {
+  const temel = {
+    isMerkeziId: null, kisiVardiyasi: null, departmanVardiyasi: null, varsayilanVardiya: null, aktifVardiyalar: new Set([1, 2, 3, 9]),
+    matris: [{ isMerkeziId: 5, gun: 1, vardiyaId: 9 }, { isMerkeziId: 5, gun: 2, vardiyaId: 3 }],
+    vardiyaGunleri: [{ vardiyaId: 1, gun: 1 }, { vardiyaId: 2, gun: 6 }, { vardiyaId: 3, gun: 7 }], cumartesiIsGunu: false,
+  };
+  const acikGunler = (b: { acik: (g: number) => boolean }) => [1, 2, 3, 4, 5, 6, 7].filter((g) => b.acik(g));
+
+  test('sıra kişi > departman > tesis varsayılanı; pasif vardiya atlanır; hiçbiri yoksa İK ayarı', () => {
+    assert.deepEqual([isGunuBagi({ ...temel, kisiVardiyasi: 1, departmanVardiyasi: 2, varsayilanVardiya: 3 }).kaynak], ['kisi']);
+    const dep = isGunuBagi({ ...temel, kisiVardiyasi: 4, departmanVardiyasi: 2, varsayilanVardiya: 3 });
+    assert.deepEqual([dep.kaynak, dep.vardiyaId, acikGunler(dep)], ['departman', 2, [6]]);
+    assert.equal(isGunuBagi({ ...temel, varsayilanVardiya: 3 }).kaynak, 'varsayilan-vardiya');
+    const ik = isGunuBagi(temel);
+    assert.deepEqual([ik.kaynak, ik.vardiyaId, acikGunler(ik)], ['ik-ayari', null, [1, 2, 3, 4, 5]]);
+    assert.deepEqual(acikGunler(isGunuBagi({ ...temel, cumartesiIsGunu: true })), [1, 2, 3, 4, 5, 6]);
+  });
+
+  test('iş merkezi olan kişi matristen çalışır: kişi vardiyası varsa yalnız o; departman ve varsayılan sayılmaz', () => {
+    const hepsi = isGunuBagi({ ...temel, isMerkeziId: 5, departmanVardiyasi: 2 });
+    assert.deepEqual([hepsi.kaynak, hepsi.vardiyaId, acikGunler(hepsi)], ['is-merkezi', null, [1, 2]]);
+    assert.deepEqual(acikGunler(isGunuBagi({ ...temel, isMerkeziId: 5, kisiVardiyasi: 3 })), [2]);
+    assert.deepEqual(acikGunler(isGunuBagi({ ...temel, isMerkeziId: 5, aktifVardiyalar: new Set([3]) })), [2]);
+    // Düzeni girilmemiş iş merkezi bilgi taşımaz: kişi ofis sırasına düşer.
+    assert.equal(isGunuBagi({ ...temel, isMerkeziId: 6, departmanVardiyasi: 2 }).kaynak, 'departman');
+  });
+
+  test('isGunleriniSec kapalı günü ve son çalışma gününden sonrasını düşürür', () => {
+    const pztCum = (g: number) => g <= 5;
+    assert.deepEqual(isGunleriniSec('2099-10-05', '2099-10-11', pztCum, new Set(['2099-10-06']), '2099-10-08'), ['2099-10-05', '2099-10-07', '2099-10-08']);
+    assert.deepEqual(isGunleriniSec('2099-10-10', '2099-10-11', pztCum, new Set(), null), []);
   });
 });

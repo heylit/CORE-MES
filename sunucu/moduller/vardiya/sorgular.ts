@@ -297,3 +297,39 @@ export const tekSeferlikDuruslar = (db: Db, baslangic: string, bitis: string): P
       ORDER BY d.baslangic, d.id`,
     [baslangic, bitis],
   );
+
+// 2452: vardiyanın kendi haftalık günleri, departman varsayılanları ve tesis varsayılanı.
+export const vardiyaGunleri = (db: Db): Promise<{ vardiyaId: number; gun: number }[]> =>
+  db.sorgu('SELECT vardiya_id AS "vardiyaId", gun FROM vardiya_gunu ORDER BY vardiya_id, gun');
+
+export async function vardiyaGunleriniYaz(db: Db, vardiyaId: number, gunler: readonly number[]): Promise<void> {
+  await db.sorgu('DELETE FROM vardiya_gunu WHERE vardiya_id = $1 AND NOT (gun = ANY($2::smallint[]))', [vardiyaId, [...gunler]]);
+  if (gunler.length) {
+    await db.sorgu('INSERT INTO vardiya_gunu (vardiya_id, gun) SELECT $1, g FROM unnest($2::smallint[]) AS g ON CONFLICT DO NOTHING', [vardiyaId, [...gunler]]);
+  }
+}
+
+export const departmanVardiyalari = (db: Db): Promise<{ departmanNo: number; vardiyaId: number }[]> =>
+  db.sorgu('SELECT departman_no AS "departmanNo", vardiya_id AS "vardiyaId" FROM vardiya_departman ORDER BY departman_no');
+
+export async function departmanVardiyasiYaz(db: Db, departmanNo: number, vardiyaId: number | null): Promise<void> {
+  if (vardiyaId === null) {
+    await db.sorgu('DELETE FROM vardiya_departman WHERE departman_no = $1', [departmanNo]);
+    return;
+  }
+  await db.sorgu(`INSERT INTO vardiya_departman (departman_no, vardiya_id) VALUES ($1, $2)
+    ON CONFLICT (departman_no) DO UPDATE SET vardiya_id = EXCLUDED.vardiya_id WHERE vardiya_departman.vardiya_id <> EXCLUDED.vardiya_id`, [departmanNo, vardiyaId]);
+}
+
+export async function varsayilanVardiya(db: Db): Promise<number | null> {
+  return (await db.tek<{ vardiyaId: number }>('SELECT vardiya_id AS "vardiyaId" FROM vardiya_varsayilani'))?.vardiyaId ?? null;
+}
+
+export async function varsayilanVardiyaYaz(db: Db, vardiyaId: number | null): Promise<void> {
+  if (vardiyaId === null) {
+    await db.sorgu('DELETE FROM vardiya_varsayilani');
+    return;
+  }
+  await db.sorgu(`INSERT INTO vardiya_varsayilani (tek, vardiya_id) VALUES (true, $1)
+    ON CONFLICT (tek) DO UPDATE SET vardiya_id = EXCLUDED.vardiya_id WHERE vardiya_varsayilani.vardiya_id <> EXCLUDED.vardiya_id`, [vardiyaId]);
+}

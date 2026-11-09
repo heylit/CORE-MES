@@ -11,7 +11,7 @@ import { anMetni, haftaGunuAdi, saat, tarihEkle, tarihMetni, yerelGun } from './
 import { useVardiyaYaz } from './komut.ts';
 import { TarihGirdisi } from './ZamanAlani.tsx';
 import { VardiyaDuzeni } from './VardiyaDuzeni.tsx';
-import { usePersonel, useTakvim, useYazabilir } from './veri.ts';
+import { usePersonel, useTakvim, useTanimYazabilir, useYazabilir } from './veri.ts';
 import './vardiya.css';
 
 export { PersonelEkrani } from './Personel.tsx';
@@ -23,7 +23,8 @@ export { PersonelEkrani } from './Personel.tsx';
 export const IK_VARDIYA_YOLU = '/ik/vardiya';
 export function VardiyaEkrani() {
   const takvim = useTakvim();
-  const yazabilir = useYazabilir();
+  const matrisYazabilir = useYazabilir();
+  const yazabilir = useTanimYazabilir();
   const ikte = useLocation().pathname === IK_VARDIYA_YOLU;
   const y = useVardiyaYaz();
   if (takvim.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -33,7 +34,7 @@ export function VardiyaEkrani() {
       {yazabilir && !ikte && (
         <p className="tc-vr-ipucu">Vardiyalar, haftalık düzen ve kapalı günler İnsan Kaynakları menüsünde yazılır: <Link to={IK_VARDIYA_YOLU}>İK'da düzenle</Link></p>
       )}
-      <VardiyaDuzeni t={takvim.data} yaz={yazabilir && ikte} y={y} />
+      <VardiyaDuzeni t={takvim.data} yaz={yazabilir && ikte} matrisYaz={matrisYazabilir && ikte} ofis={ikte} y={y} />
     </>
   );
 }

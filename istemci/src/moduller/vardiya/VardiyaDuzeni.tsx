@@ -7,6 +7,7 @@ import { BosVardiya } from './BosVardiya.tsx';
 import { SaatGirdisi, TarihGirdisi } from './ZamanAlani.tsx';
 import { GUNLER, baslangicSirali, kisaAdlar, saat, tarihMetni, yeniVardiyaAdi } from './gosterim.ts';
 import { IkiAdimli } from './IkiAdimli.tsx';
+import { OfisMesaisi } from './OfisMesaisi.tsx';
 import type { useVardiyaYaz } from './komut.ts';
 import { aramaUyar, degistir, hepsiniDegistir } from './secim.ts';
 import { TopluMatris } from './TopluMatris.tsx';
@@ -244,8 +245,9 @@ function Tatiller({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
   );
 }
 
-// Rota sayfasının Kaynaklar > Vardiyalar sekmesi de bu düzeni gösterir (bağlamada rota buradan alır).
-export function VardiyaDuzeni({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y: Yaz }) {
+// Rota sayfasının Kaynaklar > Vardiyalar sekmesi de bu düzeni gösterir (bağlamada rota buradan alır). yaz: vardiya tanımı ve kapalı gün
+// (`vardiya.yaz` ya da `vardiya.tanim-yaz`); matrisYaz: iş merkezi matrisi (yalnız `vardiya.yaz`, 2452-1 a). Ofis bölümü İK adresindedir.
+export function VardiyaDuzeni({ t, yaz, y, matrisYaz = yaz, ofis = false }: { t: TakvimCevabi; yaz: boolean; y: Yaz; matrisYaz?: boolean; ofis?: boolean }) {
   if (t.vardiyalar.length === 0) {
     return (
       <div className="tc-vr-sayfa">
@@ -256,8 +258,9 @@ export function VardiyaDuzeni({ t, yaz, y }: { t: TakvimCevabi; yaz: boolean; y:
   }
   return (
     <div className="tc-vr-sayfa">
-      <Matris t={t} yaz={yaz} y={y} />
+      <Matris t={t} yaz={matrisYaz} y={y} />
       <Saatler t={t} yaz={yaz} y={y} />
+      {ofis && <OfisMesaisi t={t} yaz={yaz} y={y} />}
       <Tatiller t={t} yaz={yaz} y={y} />
     </div>
   );

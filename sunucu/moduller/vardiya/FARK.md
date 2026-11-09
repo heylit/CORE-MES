@@ -96,3 +96,11 @@ Taban: main e0b591f. Başvuru: ilk sistem `ilk-sistem-kodu/sunucu/moduller/vardi
   gün `ayrildi: true` taşır (sözleşmede isteğe bağlı alan, mevcut alanlar değişmedi). Pasif kişi null dönmez: geçmiş ayların emek verimi ve OEE'si bozulmasın.
 - `GET /vardiya-personeli` bugün ayrılmış kişiyi, `GET /gunluk-mesai` o gün ayrılmış kişiyi listelemez. Fazla mesai ayrılmış kişiyi içerirse 400.
 - Göç yok, ekran değişmedi (gün işareti ekranda henüz gösterilmiyor).
+
+## 2452 IK'da vardiya ayarlari ve ofis mesaisi (09.11.2026; 2452-1 a .. 2452-4 a)
+- IK ikinci menusune "Vardiyalar ve tatiller" (`/ik/vardiya`, islem `vardiya.tanim-yaz`); 1934 teslimiyle gelecek madde gelmemisti.
+- Yeni islem `vardiya.tanim-yaz`: vardiya tanimi, kapali gun, kisi/departman/tesis vardiyasi, vardiya gunleri. IK rolu ve `vardiya.yaz` tasiyan roller alir. Matris ve fazla mesai yalniz `vardiya.yaz`.
+- Yeni tablolar `vardiya_gunu`, `vardiya_departman`, `vardiya_varsayilani` (goc 20261109104810); uclar `GET /vardiya-ofis`, `POST /vardiya-gunleri/degistir`, `POST /departman-vardiyalari/:departmanNo/belirle`, `POST /vardiya-varsayilani/belirle`.
+- `disari.kisilerinIsGunleri`, `tesisIsGunleri`, `isGunuSonrasi`: is merkezi olan kisi matristen (matrisi bos merkez bilgi tasimaz); olmayan kisi > departman > tesis varsayilani > IK ayari. Kapali gun, resmi tatil ve cikistan sonrasi duser; izin dusmez.
+- IK izin sayimi bu sorguyu ters bagla kullanir (2452-4 a); kisi haritada yoksa soru 55 hesabi kalir. `calismaTakvimi` (plan, kapasite) degismedi.
+- `GET /vardiya-takvimi` cevabina istege bagli `vardiyaGunleri`, `departmanVardiyalari`, `varsayilanVardiyaId` eklendi.

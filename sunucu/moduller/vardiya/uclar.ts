@@ -4,12 +4,15 @@ import {
   fazlaMesaiParametresi, gunlukMesaiCevabi, gunlukMesaiSorgusu, haftaUygulaGovdesi, kisiParametresi, kisiVardiyasiGovdesi, kisiVardiyasiTopluGovdesi, matrisGovdesi, matrisKopyalaGovdesi, matrisTopluGovdesi, planliDurusCevabi,
   planliDurusGovdesi, planliDurusGuncelleGovdesi, planliDurusKaldirCevabi, planliDurusKaldirGovdesi, planliDurusListeCevabi, planliDurusListeSorgusu, planliDurusParametresi,
   takvimCevabi, takvimGunuGovdesi, vardiyaPersoneliCevabi, tarihParametresi, vardiyaGovdesi, vardiyaGuncelleGovdesi,
-  vardiyaParametresi,
+  vardiyaParametresi, departmanParametresi, departmanVardiyasiGovdesi, ofisMesaisiCevabi, vardiyaGunleriGovdesi, varsayilanVardiyaGovdesi,
 } from '#paylasilan/sozlesme/vardiya.ts';
 import * as servis from './servis.ts';
 
 // Okuma oturumla açıktır: takvimi plan, rota Kaynaklar ekranı ve operatör ekranı okur; kişi takvimi izin taşır ve VR-27 ile süzülür. Yazmalar `vardiya.yaz`; geçmiş tarih servis içinde
 // `vardiya.gecmis-yaz` ister (uç tek işlem isteyebilir). Yazma komutları takvimin tamamını döner: ekran tek sorguyla yenilenir.
+// 2452-1 a: vardiya tanımı, kapalı günler ve kişi, departman ve tesis vardiyası İK'nın da işidir; matris ve fazla mesai yalnız `vardiya.yaz`.
+const TANIM = { biri: ['vardiya.yaz', 'vardiya.tanim-yaz'] } as const;
+
 export const uclar = [
   uc({ yontem: 'GET', yol: '/vardiya-takvimi', yetki: 'oturum', cevap: takvimCevabi, isle: ({ db }) => servis.takvim(db) }),
   uc({
@@ -29,11 +32,11 @@ export const uclar = [
     isle: ({ db }) => servis.vardiyaPersoneli(db),
   }),
   uc({
-    yontem: 'POST', yol: '/vardiyalar', yetki: 'vardiya.yaz', tekrarKorumali: true, govde: vardiyaGovdesi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/vardiyalar', yetki: TANIM, tekrarKorumali: true, govde: vardiyaGovdesi, cevap: takvimCevabi,
     isle: ({ db, kullanici, govde }) => servis.vardiyaEkle(db, kullanici, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/vardiyalar/:id/guncelle', yetki: 'vardiya.yaz', parametre: vardiyaParametresi, govde: vardiyaGuncelleGovdesi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/vardiyalar/:id/guncelle', yetki: TANIM, parametre: vardiyaParametresi, govde: vardiyaGuncelleGovdesi, cevap: takvimCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.vardiyaGuncelle(db, kullanici, parametre.id, govde),
   }),
   uc({
@@ -54,24 +57,41 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => servis.matrisKopyala(db, kullanici, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/takvim-gunleri', yetki: 'vardiya.yaz', govde: takvimGunuGovdesi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/takvim-gunleri', yetki: TANIM, govde: takvimGunuGovdesi, cevap: takvimCevabi,
     isle: ({ db, kullanici, govde }) => servis.gunYaz(db, kullanici, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/takvim-gunleri/:tarih/kaldir', yetki: 'vardiya.yaz', parametre: tarihParametresi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/takvim-gunleri/:tarih/kaldir', yetki: TANIM, parametre: tarihParametresi, cevap: takvimCevabi,
     isle: ({ db, kullanici, parametre }) => servis.gunSil(db, kullanici, parametre.tarih),
   }),
   uc({
-    yontem: 'POST', yol: '/takvim-gunleri/temizle', yetki: 'vardiya.yaz', cevap: takvimCevabi,
+    yontem: 'POST', yol: '/takvim-gunleri/temizle', yetki: TANIM, cevap: takvimCevabi,
     isle: ({ db, kullanici }) => servis.tatilleriTemizle(db, kullanici),
   }),
   uc({
-    yontem: 'POST', yol: '/kisi-vardiyalari/:kisiId/belirle', yetki: 'vardiya.yaz', parametre: kisiParametresi, govde: kisiVardiyasiGovdesi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/kisi-vardiyalari/:kisiId/belirle', yetki: TANIM, parametre: kisiParametresi, govde: kisiVardiyasiGovdesi, cevap: takvimCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.kisiVardiyasiBelirle(db, kullanici, parametre.kisiId, govde),
   }),
   uc({
-    yontem: 'POST', yol: '/kisi-vardiyalari/toplu-belirle', yetki: 'vardiya.yaz', govde: kisiVardiyasiTopluGovdesi, cevap: takvimCevabi,
+    yontem: 'POST', yol: '/kisi-vardiyalari/toplu-belirle', yetki: TANIM, govde: kisiVardiyasiTopluGovdesi, cevap: takvimCevabi,
     isle: ({ db, kullanici, govde }) => servis.kisiVardiyasiTopluBelirle(db, kullanici, govde),
+  }),
+  // 2452: ofis mesaisi. Okuma adlı olduğu için yazanlara ve İK okuruna açıktır; yazma tesis geneli (iş merkezi kısıtı olmayan kişi).
+  uc({
+    yontem: 'GET', yol: '/vardiya-ofis', yetki: { biri: ['vardiya.yaz', 'vardiya.tanim-yaz', 'ik.oku'] }, cevap: ofisMesaisiCevabi,
+    isle: ({ db }) => servis.ofisMesaisi(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/vardiya-gunleri/degistir', yetki: TANIM, govde: vardiyaGunleriGovdesi, cevap: takvimCevabi,
+    isle: ({ db, kullanici, govde }) => servis.vardiyaGunleriBelirle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/departman-vardiyalari/:departmanNo/belirle', yetki: TANIM, parametre: departmanParametresi, govde: departmanVardiyasiGovdesi, cevap: takvimCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.departmanVardiyasiBelirle(db, kullanici, parametre.departmanNo, govde.vardiyaId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/vardiya-varsayilani/belirle', yetki: TANIM, govde: varsayilanVardiyaGovdesi, cevap: takvimCevabi,
+    isle: ({ db, kullanici, govde }) => servis.varsayilanVardiyaBelirle(db, kullanici, govde.vardiyaId),
   }),
   // Planlı duruş (kart #519): okuma oturumla açık (takvim gibi); yazma `vardiya.durus-yaz`, kapsam ve kurallar serviste.
   uc({

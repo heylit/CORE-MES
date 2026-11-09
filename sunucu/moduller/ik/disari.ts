@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { FAZLA_MESAI_TURLERI, resmiTatilTarihleri } from './kurallar.ts';
-import { gunDevamKisiNolari, izinliKisiNolari, kisilerinCikisSatirlari, resmiTatilListesi } from './sorgular.ts';
+import { departmanSatirlari, gunDevamKisiNolari, izinliKisiNolari, kisilerinCikisSatirlari, kisilerinDepartmanSatirlari, resmiTatilListesi } from './sorgular.ts';
 
 // IK-54: o gün onaylı izinde ya da raporda olan kişilerin kimlikleri (kisi.id); anomali hesabında bu kişiler beklenene girmez.
 // Eşleme personel kartındaki "TMI kullanıcısı" alanıdır (ik_personel.kisi_id); bu alanı boş personelin izni sayılmaz.
@@ -30,6 +30,17 @@ export async function kisilerinCikisTarihleri(db: Db, kisiIdleri: readonly numbe
   return new Map((await kisilerinCikisSatirlari(db, tekil)).map((r) => [r.kisi_id, r.cikis_tarihi]));
 }
 
+// 2452: Vardiya iş günü sorgusu kişinin departmanını (departman varsayılan vardiyası), vardiya ekranı departman listesini okur. Personel
+// kaydı olmayan kişi haritada yoktur; departmanı boş ya da iptal ise null. Tek sorgu, boş dizide sorgu atılmaz. Yetki denetlemez.
+export async function kisilerinDepartmanlari(db: Db, kisiIdleri: readonly number[]): Promise<Map<number, number | null>> {
+  const tekil = [...new Set(kisiIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await kisilerinDepartmanSatirlari(db, tekil)).map((r) => [r.kisi_id, r.departman_no]));
+}
+export const departmanListesi = (db: Db): Promise<{ no: number; ad: string }[]> => departmanSatirlari(db);
+// 2452 (S3 a): vardiyası bulunamayan kişinin iş günü İK ayarıyla sayılır (pazartesi-cuma, ayar açıksa cumartesi).
+export { cumartesiIsGunu } from './servis.ts';
+
 // Kart #1322 (Arkon Operatör Özetim): kişinin fazla mesaisi, izinleri ve kalan yıllık izni. Kişi `ik_personel.kisi_id` ile eşleşir; bağı yoksa
 // null döner. Yetki ve kapsam çağıranın ucundadır. Tarihler YYYY-AA-GG, aralıklar iki ucu dahil.
 export { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from './servis.ts';
@@ -43,8 +54,8 @@ export { takvimKayitlari } from './servis.ts';
 export { kisininPersonelKarti } from './servis.ts';
 export type { PersonelKarti } from './servis.ts';
 // Puantaj planı (kart #1571) ve kişi sayfasının Vardiya bölümü (soru 75): Vardiya İK'yı okuduğu için ters yöndedir; çözücüleri sunucu/kablolama.ts bağlar (ADR 0006).
-export { puantajAralikCozucusu, puantajTakvimCozucusu, vardiyaMatrisCozucusu, vardiyaTanimCozucusu } from './servis.ts';
-export type { PuantajAralikCozucusu, PuantajTakvimCozucusu, VardiyaMatrisCozucusu, VardiyaTanimCozucusu } from './servis.ts';
+export { isGunuCozucusu, puantajAralikCozucusu, puantajTakvimCozucusu, vardiyaMatrisCozucusu, vardiyaTanimCozucusu } from './servis.ts';
+export type { IsGunuCozucusu, PuantajAralikCozucusu, PuantajTakvimCozucusu, VardiyaMatrisCozucusu, VardiyaTanimCozucusu } from './servis.ts';
 // IK-74 çıkış uyarısı (244 a): açık zimmetler İdari İşler'den, aynı ters bağla.
 export { acikZimmetCozucusu } from './servis.ts';
 export type { AcikZimmetCozucusu } from './servis.ts';

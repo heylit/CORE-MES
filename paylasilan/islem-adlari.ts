@@ -186,6 +186,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'vardiya.yaz': 'Vardiya düzenleme',
   'vardiya.gecmis-yaz': 'Geçmiş vardiyayı düzeltme',
   'vardiya.durus-yaz': 'Planlı duruş girme',
+  'vardiya.tanim-yaz': 'Vardiya tanımı ve mesai ataması',
   'portal.oku': 'Portalı görme',
   'portal.yaz': 'Portalda kayıt girme',
   'portal.yonet': 'Portal kurulumu',
