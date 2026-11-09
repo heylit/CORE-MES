@@ -14,7 +14,7 @@ export const rehber: readonly SayfaRehberi[] = [
     sinirlar: [
       'Başlatma, sayım ve bitirme üretim kaydı yetkisi ister.',
       'İlk parça kalite onayı olmadan seri üretim başlamaz; bitmiş işte sayı değişmez.',
-      'İş, canlı planda bu istasyona yerleşmeden başlatılamaz. Çoğu işlemde kısa süre "Geri al" çıkar.',
+      'Ayarlarda "Operatöre yalnız canlı plandaki iş düşer" açıksa rotalı iş, canlı planda bu istasyona yerleşmeden başlatılamaz; kapalıyken (varsayılan) yayınlanan iş plansız da başlatılır. Çoğu işlemde kısa süre "Geri al" çıkar.',
     ],
     sozcukler: ['operatör', 'sayım', 'hurda', 'duruş', 'andon', 'başlat', 'bitir', 'vardiya devri'],
   },

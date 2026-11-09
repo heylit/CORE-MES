@@ -56,7 +56,7 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 }
 function ac(yaz = true) {
   render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={null} git={vi.fn()} yenile={vi.fn()}
-    yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz })} /></BildirimSaglayici>);
+    yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])} /></BildirimSaglayici>);
 }
 const farkSec = () => {
   fireEvent.click(screen.getByRole('button', { name: /Başka/ }));

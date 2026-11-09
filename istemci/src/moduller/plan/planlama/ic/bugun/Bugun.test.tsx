@@ -7,7 +7,7 @@ import { api } from '../../../../../ortak/veri/api.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { CalismaKomutu, DegisiklikSecenegi } from '../../kayit.ts';
 import { derle, girdiKur, planOku } from '../../motor/kurallar.ts';
-import { MOTOR_NOTU } from '../../motor/ortak.tsx';
+import { CALISMA_ACILINCA, MOTOR_NOTU } from '../../motor/ortak.tsx';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
@@ -65,7 +65,7 @@ describe('Bugünün kararları hesapları', () => {
 interface Degisiklik { ne: string; secenek: DegisiklikSecenegi | undefined; sonra: PlanlamaCalismasi }
 function ac(secenek: { c?: PlanlamaCalismasi | null; islemler?: string[]; depo?: Partial<PlanlamaDeposu>; geri?: { ne: string; t: number }[] } = {}) {
   const degisiklikler: Degisiklik[] = []; const git = vi.fn(); const sec = vi.fn(); const altSec = vi.fn(); const geriDon = vi.fn(() => true);
-  const yetki = yetkiKur(secenek.islemler ?? PLANCI, { yazabilir: true });
+  const yetki = yetkiKur(secenek.islemler ?? PLANCI);
   const c0 = secenek.c === undefined ? calismaKur() : secenek.c;
   function Kap() {
     const [x, setX] = useState(c0);
@@ -157,7 +157,8 @@ describe('Bugünün kararları ekranı', () => {
 
   it('çalışma ya da plan yoksa boş durum', () => {
     ac({ c: null });
-    expect(screen.getByText(/Planlama çalışması yok|çalışma/i)).toBeTruthy();
+    expect(screen.getByText('Planlama çalışması yok.')).toBeTruthy();
+    expect(screen.getByText(CALISMA_ACILINCA)).toBeTruthy();
     cleanup();
     ac({ c: calismaKur((x) => { (x as Record<string, unknown>).plan = null; }) });
     expect(screen.queryByRole('tablist')).toBeNull();

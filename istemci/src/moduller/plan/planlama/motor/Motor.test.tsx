@@ -12,7 +12,7 @@ import { yetkiKur } from '../yetki.ts';
 import { KAYDEDILEMEDI } from './coz.ts';
 import { KAYDIRMA_SABIT, KAYDIRMA_YETKISIZ, kaydirmaAdimi } from './Duzenle.tsx';
 import { PlanlamaMotoru } from './index.tsx';
-import { MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
+import { MOTOR_NOTU, PLANDA_IYILESTIR, VERI_NOTU, YOK_NOTU } from './ortak.tsx';
 import { BASLAMIS_SIRA, BAYAT } from './hamle/hamle.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ufukKur } from '../ufuk-olcegi.ts';
@@ -27,7 +27,7 @@ function ac(o: { c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKom
   const yenile = vi.fn();
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: o.c === undefined ? ornekCalisma() : o.c, komut: o.komut ?? null, git, yenile, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
-    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
+    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])]),
   };
   render(<BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici>);
   return { git, yenile };
@@ -122,10 +122,11 @@ describe('PlanlamaMotoru', () => {
     const ozet = screen.getByRole('region', { name: 'Plan nasıl gidiyor?' });
     expect(ozet.textContent).toContain('Son işin bitişi: 27.10 Sal 17:55.');
     expect(within(screen.getByRole('group', { name: /^Plan nabzı/ })).getByRole('button', { name: /geciken · bu hafta/ })).toBeTruthy();
-    // Motor isteyen düğme yerinde ve pasif (357 b).
+    // Yazıcısız çizimde iyileştirme yok: düğme pasif, nedeni motor değil (motor sunucuda açık, 576; B-2483-36).
     const iyi = screen.getByRole('button', { name: 'Plan iyileştirme ara' });
     expect(iyi.getAttribute('aria-disabled')).toBe('true');
-    expect(iyi.getAttribute('title')).toContain(MOTOR_NOTU);
+    expect(iyi.getAttribute('title')).toContain(PLANDA_IYILESTIR);
+    expect(iyi.getAttribute('title')).not.toContain(MOTOR_NOTU);
   });
 
   it('nasıl okunur açılır, sipariş seçilince yolculuğu ve vurgu gelir', () => {

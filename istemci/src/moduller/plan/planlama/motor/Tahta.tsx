@@ -281,7 +281,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <>
               {p && v && gorunum !== 'cizelge' && cubuk}
               {!p || !v ? (
-                <BosPlan c={c} cx={cx} planKur={planKur} veriAc={veriAc && (() => veriAc())} />
+                <BosPlan c={c} cx={cx} planKur={planKur} planYaz={o.yetki.planYaz} veriAc={veriAc && (() => veriAc())} />
               ) : gorunum === 'genel' ? (
                 <>
                   {kilavuz && <div className="tc-pym-oz-kilavuz"><KilavuzKarti ornek={ornek} kapat={() => kilavuzAc(false)} /></div>}

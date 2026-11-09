@@ -44,6 +44,11 @@ const VARDIYA_BOLUMLERI = [
   ['/vardiya/fazla-mesai', 'Fazla mesai'], ['/vardiya/planli-duruslar', 'Planlı duruşlar'], ['/vardiya/mesai', /^Günlük mesai · /],
 ] as const;
 
+// Planlama'nın Veri grubu (B-2495-4): motor ayarları yalnız yöneticide, öteki dört sayfa planlama rolünde de (maliyetsiz) sınanır.
+const PLAN_VERI_SAYFALARI = [
+  ['/plan/veri-sagligi', 'Veri sağlığı'], ['/plan/plan-sagligi', 'Plan sağlığı'], ['/plan/analiz', 'Planlama analizi'], ['/plan/mrp', 'Malzeme ihtiyacı'],
+] as const;
+
 const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri?gorunum=bitenler', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
@@ -63,6 +68,8 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
   ...VARDIYA_BOLUMLERI.map(([yol, baslik]): Sayfa => ({ modul: 'vardiya', yol, hesap: 'ornek.planlama', baslik })),
+  ...PLAN_VERI_SAYFALARI.flatMap(([yol, baslik]): Sayfa[] => (['ornek.yonetici', 'ornek.planlama'] as const).map((hesap) => ({ modul: 'plan', yol, hesap, baslik }))),
+  { modul: 'plan', yol: '/plan/motor-ayarlari', hesap: 'ornek.yonetici', baslik: 'Motor ayarları' },
 ];
 
 for (const s of SAYFALAR) {
@@ -111,3 +118,20 @@ for (const s of SAYFALAR) {
     }
   });
 }
+
+// Planlama rolü maliyet görmez (200 a; B-2495-4): maliyet görünümleri ikinci menüde yoktur, adresle açılınca yetki iletisi çıkar.
+const MALIYET_GORUNUMLERI = ['/plan/maliyet', '/plan/giderler', '/plan/denge'] as const;
+test.describe('planlama rolünde maliyet görünümleri (ornek.planlama)', () => {
+  test.use({ hesap: 'ornek.planlama' });
+
+  test('menüde yok, adresle açılınca görme yetkisi yok der', async ({ page, ag, ac }) => {
+    await ac('/plan');
+    await expect(page.locator('[data-gorunum]')).toBeVisible();
+    for (const yol of MALIYET_GORUNUMLERI) await expect(page.locator(`a[href="${yol}"]`), `${yol} menüde`).toHaveCount(0);
+    for (const yol of MALIYET_GORUNUMLERI) {
+      await ac(yol);
+      await expect(page.getByText(/görme yetkiniz yok\./).first()).toBeVisible();
+    }
+    expect(ag.hatalar, 'konsol ve API hataları').toEqual([]);
+  });
+});

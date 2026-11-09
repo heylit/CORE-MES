@@ -19,7 +19,7 @@ const KARAR_EN_COK = 400;
 // Ret gerekçesinin en çok uzunluğu (sözleşmenin DEFTER_GEREKCESI_EN_COK'u; istemci paylasilan'dan değer ithal etmez).
 export const GEREKCE_EN_COK = 500;
 
-export const CATISMA = 'Planlama çalışması başka bir kişi tarafından değiştirildi; son değişikliğiniz kaydedilmedi. Sayfayı yenileyin.';
+export const CATISMA = 'Planlama çalışması başka bir kişi tarafından değiştirildi; son kayıttan sonraki değişiklikleriniz kaydedilmedi. Sayfayı yenileyin.';
 export const BUYUK = 'Planlama çalışması 1 MB sınırını aştı ve sunucuya yazılamadı.';
 export const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
 export const PLAN_YETKI = 'Plan yazma yetkiniz yok; son değişikliğiniz kaydedilmedi.';
@@ -112,6 +112,8 @@ export class CalismaYazici implements CalismaKomutu {
   get surum(): number | null { return this.#surum; }
   // Sürüm çatışmasından sonra yazma durur: başkasının yazdığının üstüne yazılmaz, ekran yenilenmelidir.
   get durdu(): boolean { return this.#durdu; }
+  // Sunucuya gitmemiş ya da yolda olan değişiklik var mı (sayfadan çıkarken uyarı için).
+  get bekleyenVar(): boolean { return this.#kirli || this.#yolda !== null; }
 
   abone = (dinleyici: () => void): (() => void) => {
     this.#dinleyiciler.add(dinleyici);
