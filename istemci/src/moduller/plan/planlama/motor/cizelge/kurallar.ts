@@ -4,6 +4,7 @@ import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
 import { acikSaat, AY_AD, hm, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
+import { tezgahKodlari, tezgahKodu, type Adlar } from '../ozet/veri.ts';
 
 // Çizelge hesapları (zq-olcek olYuzey, s-gun sGunYuzey ve gyErken, w-v20 v20KilitSerit, zp-klavye kbTez, c-masa tezgahAd).
 
@@ -19,7 +20,7 @@ export function tezgahSirasi(D: PlanVerisi, p: OkunanPlan, cx: Derleme): string[
   for (const g of haritaGruplari(D, p, cx)) for (const m of g.l) kart[m.id] = true;
   return Object.keys(kart);
 }
-export const tezEtiketi = (m: string): string => (m.startsWith('@') ? `fason ${m.slice(1)}` : m);
+export const tezEtiketi = (m: string, kodlar?: Adlar): string => (m.startsWith('@') ? `fason ${tezgahKodu(m, kodlar)}` : tezgahKodu(m, kodlar));
 export function tezgahAdi(D: PlanVerisi, m: string): string {
   if (m.startsWith('@')) { const f = (D.fasoncular ?? []).find((x) => x.id === m.slice(1)); return `Fason: ${f?.ad ?? m.slice(1)}`; }
   return `${m} · ${D.tezgahlar.find((x) => x.id === m)?.ad ?? ''}`;
@@ -44,6 +45,10 @@ export function gunuDondur(x: PlanlamaCalismasi, p: OkunanPlan, gNo: number): vo
 export function gunDondurmasiniKaldir(x: PlanlamaCalismasi, gNo: number): void {
   for (const id of Object.keys(x.locks)) if (kilitli(x, id)?.gun === gNo) delete x.locks[id];
 }
+// Sabitleri kaldır: elle sabitlenen işlerin kilidi silinir; dondurulmuş günlerin kilitleri (gun numaralı) korunur.
+export function sabitleriKaldir(x: PlanlamaCalismasi): void {
+  for (const [id, l] of Object.entries(x.locks)) if (!l || typeof l !== 'object' || (l as Record<string, unknown>).gun == null) delete x.locks[id];
+}
 
 // --- hafta, ay, yıl: tezgâh satırlarında işler gün ızgarasında; yılda hafta başına doluluk ısısı ---
 export interface OlcekBasligi { t: number; x: number; w: number; ad: string; bugun: boolean; baslik: string }
@@ -61,6 +66,7 @@ export function olcekCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
     const ad = yil ? (Number(g.slice(0, 2)) <= 7 ? AY_AD[Number(g.slice(3, 5)) - 1] ?? '' : '') : olcek === 'ay' ? g.slice(0, 2) : g;
     return { t, x: (t - a) / L, w: kw, ad, bugun: t <= now && now < t + kova * 24, baslik: `${g}${yil ? ' haftası' : ''}: saatlik aç` };
   });
+  const kodlar = tezgahKodlari(D);
   const satirlar = tezgahSirasi(D, p, cx).map((m): OlcekSatiri => {
     const M = cx.M[m]; const l = ops.filter((x) => x.m === m && x.C > a && x.S < b);
     const isi: OlcekIsi[] = [];
@@ -70,14 +76,14 @@ export function olcekCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
         const acik = M ? M.rw.reduce((s, [u, v]) => s + Math.max(0, Math.min(v, y) - Math.max(u, x)), 0) : 0;
         const dolu = l.reduce((s, q) => s + (q.C > x && q.S < y ? (M ? acikSaat(M.rw, Math.max(x, q.S), Math.min(y, q.C)) : Math.min(y, q.C) - Math.max(x, q.S)) : 0), 0);
         const o = acik ? dolu / acik : null;
-        if (o != null && dolu > 0.05) isi.push({ x: (x - a) / L, w: kw, d: o > 0.97 ? 3 : o > 0.75 ? 2 : 1, o: Math.min(1, o), baslik: `${tezEtiketi(m)} · ${gunAdi(D, x)}${yil ? ' haftası' : ''}: %${Math.round(o * 100)} dolu` });
+        if (o != null && dolu > 0.05) isi.push({ x: (x - a) / L, w: kw, d: o > 0.97 ? 3 : o > 0.75 ? 2 : 1, o: Math.min(1, o), baslik: `${tezEtiketi(m, kodlar)} · ${gunAdi(D, x)}${yil ? ' haftası' : ''}: %${Math.round(o * 100)} dolu` });
       }
     }
     const isler = yil ? [] : l.sort((x, y) => x.S - y.S).map((q): OlcekIsi2 => {
       const s = Math.max(a, q.S), e = Math.min(b, q.C); const w = (e - s) / L;
       return { id: q.id, x: (s - a) / L, w, renk: renk(D, q.job), etiket: olcek === 'hafta' && w > 0.035 ? q.job : null, baslik: `${q.id} · ${saatYaz(D, q.S)} → ${saatYaz(D, q.C)}`, sabit: !!kilitli(c, q.id) };
     });
-    return { m, etiket: tezEtiketi(m), isi, isler };
+    return { m, etiket: tezEtiketi(m, kodlar), isi, isler };
   });
   return { basliklar, satirlar, simdi: now > a && now < b ? (now - a) / L : null, ufuk: son > a && son < b ? (son - a) / L : null };
 }
@@ -111,7 +117,7 @@ export function isIpucu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, id: st
   const durum: IsIpucu['durum'] = (J?.T ?? 0) > 0.05 ? { ton: 'hata', metin: `Sipariş ${gecMetin(J?.T ?? null)} geç` }
     : riskte(J) ? { ton: 'uyari', metin: 'Termine yetişiyor ama tampon aşıldı' } : { ton: 'tamam', metin: 'Sipariş termine yetişiyor' };
   return {
-    baslik: `${r.job} · ${cx.byId[id]?.ad || id}`, satir: `${r.m.startsWith('@') ? `${r.m.slice(1)} (fason)` : r.m} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`, neden: nedenMetni(r),
+    baslik: `${r.job} · ${cx.byId[id]?.ad || id}`, satir: `${tezgahKodu(r.m, tezgahKodlari(D))}${r.m.startsWith('@') ? ' (fason)' : ''} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}`, neden: nedenMetni(r),
     kilit: kl ? (kl.gun != null ? 'Gün donduruldu.' : 'Elle sabitlendi.') : null, durum,
   };
 }
@@ -130,6 +136,7 @@ const DONDURMA_SAATI: Record<string, number> = { elle: 72, dengeli: 24, otomatik
 
 export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g: number, secId: string | null, secJob: string | null): GunCizelgesi {
   const D = c.D; const now = cx.now; const d0 = Math.floor(now / 24) * 24; const a = d0 + g * 24, b = a + 24;
+  const kodlar = tezgahKodlari(D);
   const x = (t: number) => (t - a) / 24; const w = (s: number, e: number) => (e - s) / 24;
   const sec = secId ? p.ops[secId] ?? null : null; const secO = sec ? cx.byId[sec.id] : undefined;
   const uygun = new Set(secO ? secO.c : []); const yanan = !!sec;
@@ -158,7 +165,7 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
     const acik = M ? M.rw.reduce((s, [u, v]) => s + Math.max(0, Math.min(v, b) - Math.max(u, a)), 0) : 24;
     const oran = acik ? dolu / acik : null; const uy = yanan ? uygun.has(m) : null;
     const er = uy && erken && erken.t > a ? { x: 0, w: w(a, Math.min(b, erken.t)), ad: erken.ad, t: erken.t, cizgi: erken.t < b ? x(erken.t) : null } : null;
-    return { m, etiket: m.startsWith('@') ? m.slice(1) : m, ad: tezgahAdi(D, m), oran, isi: isiSeviyesi(oran), uygun: uy, kapali, ariza, bloklar, erken: er };
+    return { m, etiket: tezgahKodu(m, kodlar), ad: tezgahAdi(D, m), oran, isi: isiSeviyesi(oran), uygun: uy, kapali, ariza, bloklar, erken: er };
   });
   const L = Object.values(c.locks).map((l) => (l && typeof l === 'object' ? (l as Record<string, unknown>).gun : undefined));
   const gNo = Math.floor(now / 24) + g;
@@ -183,6 +190,7 @@ export interface ZamanCizelgesi { px: number; saat: number; basliklar: ZamanBasl
 
 export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, olcek: DonemOlcegi, secJob: string | null): ZamanCizelgesi {
   const D = c.D; const px = ZAMAN_PX[olcek];
+  const kodlar = tezgahKodlari(D);
   const ops = Object.values(p.ops);
   const Cmax = Math.max(p.ozet.Cmax ?? 24, ...ops.map((r) => r.C).filter(Number.isFinite));
   const gunN = Math.min(ufukGunu(), Math.ceil(Cmax / 24) + 1); const son = gunN * 24;
@@ -209,7 +217,7 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
       if (t < son) kapali.push({ x: t, w: son - t });
     }
     const ariza = alt ? durus.filter((d) => d.m === m).map((d) => ({ x: d.from, w: d.to - d.from, baslik: `Arıza/bakım ${saatYaz(D, d.from)} → ${saatYaz(D, d.to)}` })) : [];
-    return { m, kod: m.startsWith('@') ? m.slice(1) : m, ad, u: u ? u.u : null, kapali, ariza, isler: isler(m) };
+    return { m, kod: tezgahKodu(m, kodlar), ad, u: u ? u.u : null, kapali, ariza, isler: isler(m) };
   };
   // Düz nesne: grup sırası eski sayfadaki gibi anahtar sırasıdır (sayı biçimli grup adları önce, küçükten büyüğe).
   const tg: Record<string, { id: string; ad: string }[]> = {};

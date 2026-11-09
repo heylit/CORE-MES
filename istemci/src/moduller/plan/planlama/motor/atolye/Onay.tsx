@@ -12,12 +12,12 @@ import { bekleyenListesi, GEREKCE_EN_COK } from '../../kayit.ts';
 import { gorunumAcik, type PlanlamaEkranOzellikleri, type PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { BekleyenDegisiklik, PlanlamaCalismasi } from '../../tipler.ts';
 import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '../coz.ts';
-import { bitenler, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
+import { bitenler, derle, girdiKur, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { MotorKurali } from './MotorKurali.tsx';
 import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
 import {
-  agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar,
+  agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar, yerlesmeyenAyrintisi,
   paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, tlEksikUyarisi, tlKarsilastirilir, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
 } from './kurallar.ts';
 
@@ -246,8 +246,9 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
   const ai = adim === 'bitti' ? sira.length : sira.indexOf(adim);
   const bekleyen = c ? bekleyenListesi(c) : [];
   const emirler = o.depo.durum?.emirler ?? null;
-  const planDisi = c && p ? yerlesmeyenSiparisler(c, p, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p)).length : 0;
-  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli, bekleyen.length, planDisi), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
+  const planDisiL = c && p ? yerlesmeyenSiparisler(c, p, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p)) : [];
+  const ayrinti = c && p && (p.fail.length || planDisiL.length) ? yerlesmeyenAyrintisi(derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), Date.now())), p.fail, planDisiL, p.failNeden) : '';
+  const calK = c && p ? [...paCalismaKontrol(planGuncel(c), p.fail.length, farkli, bekleyen.length, planDisiL.length, ayrinti, p.kisiTezgahIsleri?.length ?? 0), ...ekMesaiKontrol(calismaEkMesai(c))] : [];
   const uyari = calSor ? calK.filter((k) => k[0] === 'uyari').map((k) => k[1]) : sor ? paKontrol(sor, canli, canliSurum, planK(sor.id)).filter((k) => k[0] === 'uyari').map((k) => k[1]) : [];
   return (
     <div className="tc-pym-pa">
@@ -255,7 +256,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         <div><p>Yeni plan, değişiklik ve denemeler burada canlıyla karşılaştırılır, kontrol edilir ve onaylanır. Canlı plan yalnız burada onaylanınca değişir; o zamana kadar tezgâh kuyrukları ve operatör ekranı eski planı gösterir.</p></div>
         <div className="tc-pym-pa-dugmeler">
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={planSekmesi}><Simge ad="layers" boyut="k" />Planı düzenle</button>
-          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" disabled title="Motor bağlanınca"><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
+          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" title="Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." onClick={() => { o.git('plan'); }}><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
         </div>
       </header>
       <div className="tc-pym-pa-durum">

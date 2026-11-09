@@ -105,7 +105,7 @@ export function siparisDurumu(J: PlanJ | null, id: string, iptal = false): Sipar
   if (j.T == null) return { ad: 'Planlanmadı', ton: 'hata' };
   return j.T > 0.01 ? { ad: `${j.T.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sa geç`, ton: 'hata' } : { ad: 'Zamanında', ton: 'tamam' };
 }
-export const ONCELIK: Record<number, [string, 'hata' | 'bilgi' | 'pasif']> = { 1: ['Yüksek', 'hata'], 2: ['Normal', 'bilgi'], 3: ['Düşük', 'pasif'] };
+export const ONCELIK: Record<number, [string, 'hata' | 'bilgi' | 'pasif']> = { 1: ['Acil/Yüksek', 'hata'], 2: ['Normal', 'bilgi'], 3: ['Düşük', 'pasif'] };
 
 // --- kısıtlar (d-kisitlar.betik KATALOG; araştırma notu cnc/1-kisitlar.md bölüm 2) ---
 // durum: tam (motor aynen uygular), yaklasik, karar (kullanıcı kararına bağlı), yok (modelde yok). g: kapatılabilir. p: parametreler.
@@ -160,7 +160,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'fasonTalas', ad: 'Talaşlı işi fasona verme', durum: 'karar', not: '"Gerekirse fasona verilebilir" işaretli adımlar için.', p: [{ tur: 'fason', yer: 'ayarlar', k: 'fasonTalas', etiket: 'Talaşlı fasoncu' }] },
     { id: 'bekleme', ad: 'En az ve en çok bekleme (soğuma, kuruma)', durum: 'yok' },
     { id: 'nowait', ad: 'Ara beklemesiz akış', durum: 'yok' },
-    { id: 'bolme', ad: 'Parti bölme', durum: 'yok', not: 'Elle bölme dondurma istisnası; bu denemede yok.' },
+    { id: 'bolme', ad: 'Parti bölme', durum: 'tam', not: 'Rotada Paralel böl seçili adım aday makineler arasında en çok üç paya bölünür; kilitli, başlamış ve sabit iş bölünmez. Elle bölmenin dondurma istisnası yok.' },
     { id: 'wip', ad: 'Alan ve WIP sınırı', durum: 'yok' },
   ] },
   { grup: 'Ayar ve sıralama', simge: 'wrench', l: [

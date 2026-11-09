@@ -11,12 +11,14 @@ import { degisken, HAZIRLANIYOR } from '../ortak.tsx';
 import {
   PG_NEDEN, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSa, pgSatirlar, pgSerit, saatYaz, sapmaEsik, tarihGun, tt, type PgKaynak, type PgSatiri,
 } from './kurallar.ts';
+import { useAn } from '../saat.ts';
 
 // Plan ve gerçekleşen (zz35): taban plan, son canlı plan ve atölyede olan; üç yönlü karşılaştırma. Buradan plan değişmez. Taban ve canlı
 // sunucudan okunur (505 a); okunana kadar sekme hazırlanıyor der, okunamazsa sunucunun iletisini gösterir. Canlı sürüm değişince yeniden okunur.
 export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; canliSurum: number | null }) {
   const emirler = o.depo.durum?.emirler ?? null;
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const [cevap, setCevap] = useState<{ r: TabanVeCanliCevabi } | { hata: string } | null>(null);
   // Canlıya alma geçmişi yalnız "Plan değişikliği" kutusunundur; okunamazsa kutu sürüm farkıyla, adsız kalır.
@@ -45,7 +47,7 @@ export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikler
     <div className="tc-pym-tp-pg">
       {bas}
       <Gostergeler c={c} p={p} K={K} L={L} gecmis={gecmis} />
-      <Serit c={c} p={p} K={K} now={simdiSaati(c)} />
+      <Serit c={c} p={p} K={K} now={simdiSaati(c, an)} />
       <NedenOzeti c={c} L={L} />
       <Tablo c={c} L={L} yalniz={yalniz} degis={() => setYalniz((x) => !x)} />
     </div>

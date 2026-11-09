@@ -5,8 +5,9 @@ import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { planGuncel } from '../../durum.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, type Derleme, type OkunanPlan } from '../kurallar.ts';
-import { MOTOR_NOTU } from '../ortak.tsx';
+import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, sorunlar, type Derleme, type OkunanPlan } from '../kurallar.ts';
+import type { KbPanel } from '../Duzenle.tsx';
+import { Yapilacaklar } from '../Yapilacaklar.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
 import { AtolyeEkrani } from './AtolyeEkrani.tsx';
 import { Brif, Bugun } from './Bugun.tsx';
@@ -14,15 +15,17 @@ import { useAtolyeKomutlari, useOtomatikUygula } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  gecikenIpucu, gecikenSay, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
+  gecikenIpucu, gecikenSay, kilitOzeti, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
-import { hamleYapisi, useHamle } from '../hamle/hamle.ts';
+import { HamleBaglami, hamleYapisi, useHamle } from '../hamle/hamle.ts';
+import { useAn } from '../saat.ts';
 
-// Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor isteyen her
-// eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı, olay ve ek mesai sunucu komutudur (1982 a), ardından plan kendiliğinden uygulanır (2053-1 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
-// `komut.degistir`le yazılır (221 c); seçim iskeletin ortak seçimidir.
+// Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor hamleleri (iyileştir,
+// öne al, kuyruk sırası) sunucuda aranır, önizlenir, kişi uygular (2129-1 b). Düzenle ve Yapılacaklar tahtadakiyle aynıdır (2531 a); taşı, olay
+// ve ek mesai sunucu komutudur (1982 a), ardından plan kendiliğinden uygulanır (2053-1 a). Kilit, donuk bölge, elle sıra ve brifing tercihi
+// çalışmaya yalnız `komut.degistir`le yazılır (221 c); seçim iskeletin ortak seçimidir. Denemeler Geçmiş > Senaryolar'dadır.
 
 export interface Ortam {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; now: number; donuk: number; hazir: Record<string, number>;
@@ -50,11 +53,12 @@ interface Ozellikler {
 export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const liste = useMemo(() => siparisler(c, p, cx, hazir), [c, p, cx, hazir]);
   const bilgi = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
-  const now = simdiSaati(c);
+  const now = simdiSaati(c, an);
   const donuk = Number(c.w.dondurma) || 0;
   const [olcek, setOlcek] = useState<AtolyeOlcegi>(() => ilkOlcek(typeof window === 'undefined' ? 1280 : window.innerWidth));
   const [suz, suzSec] = useState<Suzgec | null>(null);
@@ -68,6 +72,11 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const [kart, setKart] = useState<{ k: AcikKart; a: Ankraj | null } | null>(null);
   const [parla, setParla] = useState<string | null>(null);
   const [atolye, setAtolye] = useState(false);
+  // Düzenle, Böl, tezgâh sırası ve kısayollar ile Yapılacaklar aynı köşede, aynı anda tek pencere (Tahta ile aynı).
+  const [ypAcik, setYpAcik] = useState(false);
+  const [pan, setPan] = useState<KbPanel | null>(null);
+  const ypAc = useCallback((x: boolean) => { setYpAcik(x); if (x) { setPan(null); setKart(null); } }, []);
+  const panAc = useCallback((x: KbPanel | null) => { setPan(x); if (x) { setYpAcik(false); setKart(null); } }, []);
   const kap = useRef<HTMLDivElement | null>(null);
   const pano = useRef<HTMLDivElement | null>(null);
   const yaz = komut !== null && yetki.planYaz;
@@ -79,6 +88,12 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   // 2129-1 b: iyileştirme ara; sonuç önizlenir, kişi uygular.
   const hamle = useHamle(o, uyar);
   const iyiY = hamleYapisi(hamle, (h) => { h.iyilestir(); });
+  const guncel = planGuncel(c);
+  const sor = useMemo(() => sorunlar(c, p, cx, guncel), [c, p, cx, guncel]);
+  const { altSec } = o;
+  const senaryolar = altSec ? () => altSec({ ekran: 'gecmis', bolum: 'senaryolar' }) : null;
+  const veriAc = altSec ? (bolum: string) => altSec({ ekran: 'veri', bolum }) : null;
+  const studyo = useCallback(() => o.git('studio'), [o]);
 
   // Seçili adımın siparişi seçili sipariş sayılır.
   const secOp = secim.adim && p.ops[secim.adim] ? secim.adim : null;
@@ -134,9 +149,19 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     return () => window.removeEventListener('resize', olc);
   }, []);
 
-  // Klavye: Esc kartı ya da seçimi kapatır, 1-5 ölçek, / arama, Ctrl+Z geri al. Yazı alanında çalışmaz.
-  const tuslar = useRef({ kart, secJob, secOp, sec, komut, yaz });
-  tuslar.current = { kart, secJob, secOp, sec, komut, yaz };
+  // Düzenle ve Yapılacaklar köşesi Bugün şeridinin hemen üstünde durur; şerit açılınca köşe de yükselir (şeridin satır düğmelerini örtmez).
+  useLayoutEffect(() => {
+    const k = kap.current; const b = k?.querySelector<HTMLElement>('.tc-pym-tp-bugun');
+    if (!k || !b || typeof ResizeObserver === 'undefined') return undefined;
+    const o = new ResizeObserver(() => { k.style.setProperty('--tc-pym-tp-bugun-yuk', `${b.offsetHeight}px`); });
+    o.observe(b);
+    return () => o.disconnect();
+  }, []);
+
+  // Klavye: Esc kartı ya da seçimi kapatır, 1-5 ölçek, / arama, Ctrl+Z geri al, Ctrl+Shift+Z yinele, E Düzenle, Y Yapılacaklar. Yazı alanında
+  // çalışmaz. Düzenle açıkken rakamlar ve oklar menünündür (Yapilacaklar yakalar).
+  const tuslar = useRef({ kart, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc });
+  tuslar.current = { kart, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -148,11 +173,15 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         return;
       }
       if (yazi || e.altKey) return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase('tr-TR') === 'z' && !e.shiftKey) {
-        if (x.yaz && x.komut?.geriAlinabilir()) { e.preventDefault(); x.komut.geriAl(); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase('tr-TR') === 'z') {
+        if (!e.shiftKey && x.yaz && x.komut?.geriAlinabilir()) { e.preventDefault(); x.komut.geriAl(); }
+        if (e.shiftKey && x.yaz && x.komut?.yinelenebilir?.()) { e.preventDefault(); x.komut.yinele?.(); }
         return;
       }
       if (e.ctrlKey || e.metaKey) return;
+      const h = e.key.toLocaleLowerCase('tr-TR');
+      if (x.yaz && h === 'e') { e.preventDefault(); x.panAc(x.pan === 'dz' ? null : 'dz'); return; }
+      if (x.yaz && h === 'y') { e.preventDefault(); x.ypAc(!x.ypAcik); return; }
       const i = '12345'.indexOf(e.key);
       if (i >= 0 && e.key.length === 1) { e.preventDefault(); setOlcek(OLCEKLER[i]?.[0] ?? 72); return; }
       if (e.key === '/') { const a = kap.current?.querySelector<HTMLInputElement>('input[type="search"]'); if (a) { e.preventDefault(); setRayAcik(true); a.focus(); } }
@@ -194,6 +223,10 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       <div className="tc-pym-tp-grup" role="group" aria-label="Ölçek">
         {OLCEKLER.map(([z, a]) => <button key={z} type="button" aria-pressed={olcek === z} onClick={() => setOlcek(z)}>{a}</button>)}
       </div>
+      <button type="button" className="tc-dugme tc-pym-hayalet" aria-label={`Kilit ve dondurma: ${kilitOzeti(c, donuk)}`} title={`Kilit ve dondurma: ${kilitOzeti(c, donuk)}`}
+        onClick={(e) => kartAc({ tur: 'dondurma' }, ankraj(e))}>
+        <Simge ad="lock" boyut="k" /><span data-ikincil="" data-metin="">{kilitOzeti(c, donuk)}</span>
+      </button>
       <button type="button" className="tc-dugme tc-pym-hayalet" data-suz={ns ? '' : undefined} aria-label="Süz: tezgâh, istasyon, üretim emri" title="Süz"
         onClick={(e) => kartAc({ tur: 'suz' }, ankraj(e))}>
         <Simge ad="eye" boyut="k" />{ns > 0 && <span className="tc-pym-tp-tsay">{ns}</span>}
@@ -202,7 +235,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" aria-disabled={!geriVar} onClick={() => { if (geriVar) komut?.geriAl(); }}><Simge ad="back" boyut="k" /></button>
         <button type="button" aria-label="Karar geçmişi ve taslağı sıfırla" title="Karar geçmişi, taslağı sıfırla" onClick={(e) => kartAc({ tur: 'geri' }, ankraj(e))}><Simge ad="down" boyut="k" /></button>
       </div>
-      <button type="button" className="tc-dugme" aria-disabled="true" aria-label="Şu olursa: denemeler" title={`Çalışma planını bozmadan farklı yollar dene ve karşılaştır. ${MOTOR_NOTU}`}>
+      <button type="button" className="tc-dugme" aria-disabled={senaryolar ? undefined : 'true'} aria-label="Şu olursa: denemeler"
+        title="Şu olursa: çalışma planını bozmadan senaryo kur, karşılaştır (Geçmiş > Senaryolar)" onClick={senaryolar ?? undefined}>
         <Simge ad="lab" boyut="k" /><span data-ikincil="" data-metin="">Dene</span>
       </button>
       <button type="button" className="tc-dugme" aria-disabled={!olayEkle} aria-label="Olay: arıza, acil sipariş, malzeme, personel ya da fason"
@@ -223,6 +257,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   );
 
   return (
+    <HamleBaglami.Provider value={hamle}>
     <div className="tc-pym-tp-kap" ref={kap}>
       {ust}
       <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
@@ -234,7 +269,12 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       </div>
       {kart && <KartKatmani ort={ort} kart={kart.k} ankraj={kart.a} bildir={bildir} />}
       {atolye && <AtolyeEkrani c={c} p={p} cx={cx} now={now} canliSurum={sen?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null} kapat={() => setAtolye(false)} />}
+      {yaz && (
+        <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={sipGoster} secim={secim} pan={pan} panAc={panAc} studyo={studyo}
+          veriAc={veriAc} tasi={tasi} />
+      )}
     </div>
+    </HamleBaglami.Provider>
   );
 }
 

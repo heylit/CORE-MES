@@ -8,7 +8,7 @@ import { alimPlani, bitenler, calismaSimdisi, motorGirdisi, planIslemleri, taban
 import { TedarikTerminiKarti } from '../malzeme/TedarikTermini.tsx';
 import type { Fasoncu, PlanVerisi, PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
-import { MalzemeBekleyenKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
+import { MalzemeBekleyenKarti, useGorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { fasonTanimi } from './formlar.ts';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type AcilimSecenegi, type Secim } from './IsiHaritasi.tsx';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
@@ -164,7 +164,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   const uyar = (ileti: string) => { bildir('hata', ileti); };
   const p = kayitliPlan(calisma);
   const L = calisma && p ? fasonSatirlari(calisma, p) : [];
-  const degerlendir = gorunumDegerlendiricisi(depo);
+  const degerlendir = useGorunumDegerlendiricisi(depo, komut);
   const taban = calisma?.D.meta?.baslangic ? tabanMs(calisma.D.meta.baslangic) : null;
 
   const tum = calisma && (

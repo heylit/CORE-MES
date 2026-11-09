@@ -20,7 +20,7 @@ export function VeriSagligi() {
       <SayfaBasligi baslik="Veri sağlığı" simge="alert" alt="Planın kaynakta bulamadığı veriler ve motorun yerine koyduğu varsayımlar."
         birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
-        : q.isError ? <DurumKutusu durum="hata" yenile={yenile} />
+        : q.isError ? <DurumKutusu durum="hata" mesaj="Veri sağlığı alınamadı" hata={q.error} yenile={yenile} />
           : <Rapor c={q.data} />}
     </div>
   );

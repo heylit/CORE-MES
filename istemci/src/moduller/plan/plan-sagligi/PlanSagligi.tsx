@@ -26,7 +26,7 @@ export function PlanSagligi() {
       <SayfaBasligi baslik="Plan sağlığı" simge="gauge" alt="Plan ne kadar tuttu, ne kadar oynadı: son 8 hafta."
         birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
-        : q.isError ? <DurumKutusu durum="hata" yenile={yenile} />
+        : q.isError ? <DurumKutusu durum="hata" mesaj="Plan sağlığı alınamadı" hata={q.error} yenile={yenile} />
           : <Rapor c={q.data} tablolar={tablolarGorunur(oturum.data?.roller)} />}
     </div>
   );

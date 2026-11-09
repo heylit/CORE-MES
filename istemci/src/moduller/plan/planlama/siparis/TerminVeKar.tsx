@@ -5,7 +5,7 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim } from './AcilimFormu.tsx';
-import { PlanSecenekleriKarti, TeklifKarti, TerminUzatmaKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
+import { PlanSecenekleriKarti, TeklifKarti, TerminUzatmaKarti, useGorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim } from './IsiHaritasi.tsx';
 import {
   dengeAcilimi, dengeAdi, dengeEtkin, dengeIsisi, dengeKatYazi, kayitliPlan, planDengesi, siparisMaliyetleri, type DengeSatiri,
@@ -61,7 +61,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
   const p = kayitliPlan(calisma);
   // Dengeyi eski sayfada müdür ve yönetici değiştirirdi (fiyat görür ve plan.kilitle); 223 a: fiyat görme maliyet okuma, sayfa içi kilit plan.yaz.
   const yazabilir = yetki.maliyetOku && yetki.planYaz;
-  const degerlendir = gorunumDegerlendiricisi(depo);
+  const degerlendir = useGorunumDegerlendiricisi(depo, komut);
   const uzatma = useRef<HTMLDivElement>(null);
   const olc = () => {
     const el = uzatma.current; if (!el) return;

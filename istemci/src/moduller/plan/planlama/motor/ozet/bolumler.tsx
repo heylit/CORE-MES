@@ -137,7 +137,7 @@ function Yolculuk({ c, v, sec, kartAc }: { c: PlanlamaCalismasi; v: OzetVerisi; 
     if (a.S > son + 0.05) par.push(<i key={`b${i}`} className="tc-pym-br-yc-bek" data-gec={s.gec ? '' : undefined} ref={degisken({ '--x': yuzde(x(son)), '--w': yuzde(x(a.S) - x(son)) })} title={`Bekleme ${saKisa(a.S - son)} (${a.m} öncesi)`} />);
     par.push(
       <i key={`i${i}`} className="tc-pym-br-yc-is" ref={degisken({ '--x': yuzde(x(a.S)), '--w': yuzde(Math.max(0.004, x(a.C) - x(a.S))) })}
-        title={`${a.m}: ayar ${saKisa(a.su)}, işleme ${saKisa(a.run)} · ${saatYaz(c.D, a.S)} – ${saatYaz(c.D, a.C)}`}><em>{a.m.startsWith('@') ? a.m.slice(1) : tezgahKodu(a.m, v.tezKod)}</em></i>,
+        title={`${a.m}: ayar ${saKisa(a.su)}, işleme ${saKisa(a.run)} · ${saatYaz(c.D, a.S)} – ${saatYaz(c.D, a.C)}`}><em>{tezgahKodu(a.m, v.tezKod)}</em></i>,
     );
     son = Math.max(son, a.C);
   });

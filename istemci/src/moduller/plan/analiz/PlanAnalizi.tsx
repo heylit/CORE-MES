@@ -20,7 +20,7 @@ export function PlanAnalizi() {
       <SayfaBasligi baslik="Planlama analizi" simge="chart" alt="Tezgâh doluluğu: 8 hafta gerçek, 8 hafta canlı plan; plan güvenilirliğinin eğilimi."
         birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
-        : q.isError ? <DurumKutusu durum="hata" yenile={yenile} />
+        : q.isError ? <DurumKutusu durum="hata" mesaj="Planlama analizi alınamadı" hata={q.error} yenile={yenile} />
           : <Rapor c={q.data} />}
     </div>
   );
