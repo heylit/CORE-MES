@@ -143,7 +143,8 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
       {eksikler.length > 0 && (
         <div className="tc-rr1-warnbox" role="alert">
           Rota eksik: {eksikler.map((x) => x.metin).join('; ')}.{' '}
-          {V && (V.status === 'yururlukte' || V.status === 'onayli') ? 'Bu rotanın emirleri plana alınmaz; düzeltmek için yeni taslak aç.'
+          {V && (V.status === 'yururlukte' || V.status === 'onayli')
+            ? `Bu rotanın emirleri plana alınmaz; ${yetki.rotaYaz ? `düzeltmek için Revizyon menüsünden "Rev ${V.no}'dan yeni taslak aç"ı seçin.` : 'düzeltmeyi rota yazma yetkisi olan biri yapar.'}`
             : 'Taslak kaydedilir ama onaya gönderilemez ve emri plana alınmaz.'}
         </div>
       )}

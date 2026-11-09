@@ -313,7 +313,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         )}
         {/* Tam ekrandan çıkış kaydırmadan görünür kalır (B-2482-R3); girişi ⋯ menüsünde ve F tuşundadır. */}
         {tamEkran && (
-          <Dugme className="tc-rr1-kd" simge="x" aria-pressed title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
+          <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
         )}
         {!liste && kokId && o.yetki.emirYaz && (
           <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>

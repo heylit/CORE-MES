@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, kolaEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
+  adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, kolaEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo, adimAdi,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { dalBilgileri, dalCarpaniYaz, dalEtiketi, islemSuresiBos, kolaTasi, kolParcalari, type SemaParcasi } from './kurallar.ts';
@@ -127,7 +127,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       onDrop={(e) => { e.preventDefault(); setUstunde(false); if (duzen) birak(e.dataTransfer.getData(SURUKLE_TURU)); }}
       onClick={() => { r.sec({ tur: 'adim', urunId: sahip.id, adimId: a.id, seq: a.seq, miktar }); }}
       onDoubleClick={() => { r.odakla({ urunId: sahip.id, adimId: a.id }); }}
-      aria-label={`OP ${String(statuNo(a))} ${op?.name ?? 'Operasyon seç'}`}
+      aria-label={`${adimAdi(a)} ${op?.name ?? 'Operasyon seç'}`}
     >
       <span className="tc-rr1-obar"><span className="tc-rr1-abbr">{op?.abbr ?? op?.code ?? '???'}</span><span className="tc-rr1-oseq" title={a.opNo === null ? 'Yeni adım; numarayı sistem kayıtta verir' : undefined}>{a.opNo ?? 'yeni'}</span></span>
       <b className="tc-rr1-oname">{op?.name ?? 'Operasyon seç'}</b>
@@ -140,7 +140,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
           : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : islemSuresiBos(a) ? 'Süre yok' : 'Süre hesaplanmadı: istasyon yok'}
         {a.rejectPct > 0 && `, ret %${sayi(a.rejectPct)}`}
       </span>
-      <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : <span className="tc-rr1-kb tc-rr1-kb-st">Statülü</span>}</span>
+      <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : <>{' '}<span className="tc-rr1-kb tc-rr1-kb-st">Statülü</span></>}</span>
       {a.alts.length > 0 && (
         <span className="tc-rr1-oalt">Alternatif: {[a.stationId, ...a.alts].map((x) => (x ? h.istasyon.get(x)?.code : undefined)).filter(Boolean).join(' / ')}</span>
       )}
@@ -294,18 +294,18 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
         )}
         {duzen && !r.surukleniyor && (
           <div className="tc-rr1-stepbar">
-            <button type="button" className="tc-rr1-ib" disabled={i === 0} title="Yukarı taşı (Alt+Shift+↑)" aria-label={`OP ${String(statuNo(a))} yukarı taşı`}
+            <button type="button" className="tc-rr1-ib" disabled={i === 0} title="Yukarı taşı (Alt+Shift+↑)" aria-label={`${adimAdi(a)} yukarı taşı`}
               onClick={() => { const p = liste[i - 1]; if (p) r.duzen.tasi(d.id, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
               <Simge ad="up" boyut="k" />
             </button>
-            <button type="button" className="tc-rr1-ib" disabled={son} title="Aşağı taşı (Alt+Shift+↓)" aria-label={`OP ${String(statuNo(a))} aşağı taşı`}
+            <button type="button" className="tc-rr1-ib" disabled={son} title="Aşağı taşı (Alt+Shift+↓)" aria-label={`${adimAdi(a)} aşağı taşı`}
               onClick={() => { const n = liste[i + 1]; if (n) r.duzen.tasi(d.id, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
               <Simge ad="down" boyut="k" />
             </button>
             <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: a.id, seq: a.seq, miktar: sn.miktar }); r.paletAc(); }}>
               <Simge ad="plus" boyut="k" /> {son ? 'Adım ekle' : 'Araya adım'}
             </button>
-            <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" title="Adımı sil" aria-label={`OP ${String(statuNo(a))} sil`}
+            <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" title="Adımı sil" aria-label={`${adimAdi(a)} sil`}
               onClick={() => { r.duzen.degistir(d.id, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`); }}>
               <Simge ad="trash" boyut="k" />
             </button>
