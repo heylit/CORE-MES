@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { gizli } from '../gizli.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi } from '../zaman.ts';
@@ -76,6 +77,26 @@ export const kisiDuzenleGovdesi = z.object({
   gorev: z.string().max(200).nullable(),
 });
 
+// Excel ile toplu giriş (2627): satırlar tek işlemde yazılır, biri reddedilirse hiçbiri kalmaz. Ekleme tek kişi ekleme gövdesidir;
+// güncellemede gönderilmeyen alan değişmez (boş Excel hücresi "dokunma" demektir), bu yüzden alanlar burada boş metin ya da null almaz.
+// Rol, hesap, parola ve PIN toplu girişe girmez (yetki modeli; sayfada tek tek yapılır).
+export const KISI_TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
+const kisiTopluSatirNo = z.number().int().min(1).max(1_048_576);
+const kisiTopluMetin = z.string().trim().min(1).max(200);
+export const kisiTopluSatiri = z.discriminatedUnion('islem', [
+  z.object({ islem: z.literal('ekle'), satir: kisiTopluSatirNo, ...kisiGovdesi.shape }).strict(),
+  z.object({
+    islem: z.literal('guncelle'), satir: kisiTopluSatirNo, id: KIMLIK, ...beklenenSurum,
+    ad: kisiTopluMetin.optional(), sicilNo: kisiTopluMetin.optional(), gorev: kisiTopluMetin.optional(),
+  }).strict(),
+]);
+export const kisiTopluKaydetGovdesi = z.object({
+  satirlar: z.array(kisiTopluSatiri).min(1).max(KISI_TOPLU_EN_COK)
+    .refine((s) => { const id = s.flatMap((x) => (x.islem === 'guncelle' ? [x.id] : [])); return new Set(id).size === id.length; }, 'Aynı kişi dosyada iki kez var.')
+    .refine((s) => new Set(s.map((x) => x.satir)).size === s.length, 'Satır numarası iki kez var.'),
+}).strict();
+export const kisiTopluKaydetCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+
 export const hesapGovdesi = z.object({
   ...beklenenSurum,
   kullaniciAdi: z.string().max(80),
@@ -110,6 +131,9 @@ export type HesapGovdesi = z.input<typeof hesapGovdesi>;
 export type ParolaGovdesi = z.input<typeof parolaGovdesi>;
 export type PinVerGovdesi = z.input<typeof pinVerGovdesi>;
 export type SinirliHesapGovdesi = z.input<typeof sinirliHesapGovdesi>;
+export type KisiTopluSatiri = z.input<typeof kisiTopluSatiri>;
+export type KisiTopluKaydetGirdisi = z.output<typeof kisiTopluKaydetGovdesi>;
+export type KisiTopluKaydetCevabi = z.output<typeof kisiTopluKaydetCevabi>;
 
 // Ortak seçicinin (KisiSecici) arama ucu (kart #1320): adda ya da sicil no'da arar; sayfa başına KISI_SECIM_SAYFA_BOYU kişi.
 // Cevap ortak seçici biçimindedir: `kod` sicil no'dur (yoksa boş), `ust` yok. Varsayılan yalnız aktif kişiler.

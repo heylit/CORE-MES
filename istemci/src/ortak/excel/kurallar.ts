@@ -1,6 +1,7 @@
 // Excel ile toplu giriş (2627): sayfa tanımı, hücre çözümü ve önizleme planı. Saf; dosya okuma ve yazma kitap.ts'tedir.
 // Satır, sayfanın kendi formundaki alanlarla okunur; sunucu aynı kuralları yeniden denetler (tek transaction, 1/2 b).
 import { formulKoru } from '../veri/csv.ts';
+import { TOPLU_EN_COK_SATIR } from '#paylasilan/toplu.ts';
 
 export type Hucre = string | number | boolean | Date | null;
 // Çözülmüş değer: tarih 'YYYY-AA-GG', liste seçeneği kodu.
@@ -35,6 +36,8 @@ export interface ExcelSayfasi<K = unknown> {
   satir: (k: K) => Record<string, Deger | null>;
   // false: sayfa yalnız var olan kaydı değiştirir (yetkinlik matrisi gibi); eşleşmeyen satır hatadır.
   ekleme?: false;
+  // Sayfada düzenlenemeyen kayıt (örnek: özlüğü İK'dan gelen kişi): nedeni döner; o kayda fark getiren satır hatadır.
+  kilitli?: (k: K) => string | null;
 }
 
 // Kayıt türü sayfa tanımında kalır; tanım listesi türü silinmiş sayfaları taşır.
@@ -68,8 +71,8 @@ export interface PlanSatiri {
 // Sayfanın yazma işlevinin kullanıcıya gösterilecek reddi (sunucuya gitmeden önce).
 export class YazimReddi extends Error {}
 
-// Sunucunun toplu sözleşme sınırıyla (paylasilan/toplu.ts TOPLU_EN_COK_SATIR) aynıdır; istemci zod'lu sözleşmeden değer almaz.
-export const TOPLU_EN_COK = 2000;
+// Sunucunun toplu sözleşmeleriyle aynı sınır.
+export const TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
 export const DOSYA_EN_BUYUK_BAYT = 5 * 1024 * 1024;
 export const DAMGA_ONEKI = 'core-mes-excel';
 const AYRAC = ' — ';
@@ -209,6 +212,8 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
           const eski = mevcut[c.anahtar] ?? null;
           if (eski !== yeni) farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
         }
+        const kilit = farklar.length ? s.kilitli?.(eslesen) ?? null : null;
+        if (kilit !== null) hatalar.push(kilit);
       }
       const islem: Islem = hatalar.length ? 'hata' : eslesen === null ? 'ekle' : farklar.length ? 'guncelle' : 'ayni';
       plan.push({ sayfa: s.ad, kayitTuru: s.kayitTuru, satir, kod: typeof anahtar === 'string' ? anahtar : null, islem, degerler, eslesen, farklar, hatalar, ham: yer.map((y) => (y < 0 ? null : r[y] ?? null)) });
