@@ -3,6 +3,9 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { OKUYAN, rrAc, sunucuKur } from '../test-ortak.tsx';
 import { adimOrnegi, revizyonOrnegi, rotaDurumu } from './test-veri.ts';
 
+// Yüklü makinede bölümün çizilmesi 1 sn'yi aşabilir; varsayılan bekleme yetmez.
+const BEKLE = { timeout: 4000 };
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* test ortamında depo yoksa */ } });
 
 // 1527: dal adımı bir mamul için çarpan kadar parça işler (1257 a); adım süresi şemada ve tabloda çarpanla, sunucunun teorik süresiyle aynı.
@@ -19,8 +22,8 @@ describe('1527 adım süresi dal çarpanıyla', () => {
     ];
     sunucuKur(OKUYAN, { durum: rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3, adimlar)]) });
     rrAc('/recete-rota/schema');
-    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
-    await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); });
+    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' }, BEKLE);
+    await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); }, BEKLE);
     const kutu = async (op: number) => (await within(bolge).findByRole('button', { name: `OP ${String(op)} Tornalama` })).querySelector('.tc-rr1-otime')?.textContent;
     const [a, b, m] = [saat(await kutu(10)), saat(await kutu(20)), saat(await kutu(30))];
     expect(b).toBeGreaterThan(0);

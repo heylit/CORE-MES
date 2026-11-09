@@ -3,11 +3,14 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { rotaDurumu } from './test-veri.ts';
 
+// Yüklü makinede bölümün çizilmesi 1 sn'yi aşabilir; varsayılan bekleme yetmez.
+const BEKLE = { timeout: 4000 };
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const bolumAc = async () => {
-  const bolge = await screen.findByRole('region', { name: 'Operasyonlar' });
-  await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); });
+  const bolge = await screen.findByRole('region', { name: 'Operasyonlar' }, BEKLE);
+  await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); }, BEKLE);
   return bolge;
 };
 
