@@ -34,7 +34,7 @@ function SatinAlmaMiniPanosu() {
       <MiniPanoKutucugu baslik="Onay bekleyen" simge="check" sayi={alan(d, 'onayBekleyen')} altMetin="karar onay bekliyor" ton="uyari" yol="/satin-alma/onaylar" />
       <MiniPanoKutucugu baslik="Sipariş verilecek" simge="cart" sayi={alan(d, 'siparisVerilecek')} altMetin="onaylı, sipariş geçilmemiş" ton="uyari" yol="/satin-alma" />
       <MiniPanoKutucugu baslik="Karar verilecek" simge="clipboard-check" sayi={alan(d, 'kararVerilecek')} altMetin="teklif toplandı ya da geri döndü" yol="/satin-alma" />
-      <MiniPanoKutucugu baslik="Bu hafta gelecek" simge="truck" sayi={alan(d, 'yaklasanTeslim')} altMetin="termini bu hafta dolan sipariş" yol="/satin-alma/talepler?durum=ordered" />
+      <MiniPanoKutucugu baslik="Bu hafta gelecek" simge="truck" sayi={alan(d, 'buHaftaGelecekTeslim')} altMetin="termini bu hafta dolan sipariş" yol="/satin-alma/talepler?durum=ordered" />
     </MiniPanoIzgarasi>
   );
 }
