@@ -268,7 +268,9 @@ test.describe('P5 Takım Ömrü', () => {
 test.describe('3B sahne', () => {
   // Sahnenin yazılım çizicisinde zorla çizildiği testler cnc-kurulum-yeni-3b.spec.ts'dedir (ayrı tarayıcıda koşar, 1324).
   // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
-  test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
+  // Takım Ömrü'nün kartlı akışı kayıttaki kipe bağlıdır (analiz kipinde çizilmez) ve kipi P5 yazar; test kayıt sırasına girer ki
+  // P5 analiz kipindeyken kaydı okumasın.
+  kayitYazan('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);

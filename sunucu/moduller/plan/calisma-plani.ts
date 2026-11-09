@@ -5,7 +5,7 @@ import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, CalismaTaslagiGovdesi, 
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
-import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
+import { calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import { planlanacakIsler } from './servis.ts';
@@ -15,9 +15,12 @@ import type { YerlesimSatiri } from './sorgular.ts';
 // Çalışma planı plan modülünün diliyle (499 a, 503 a, 505 a, 506 a). Çeviri sayfanınkidir (motor/calisma.betik); kaynak okuması çağıranın
 // yetkisiyledir (planlama çalışması ucundaki gibi). Okumalar yazmaz.
 
-async function calismaOku(db: Db, kullanici: Kullanici, simdi: number): Promise<{ surum: number | null; plan: CalismaPlani | null }> {
+async function calismaOku(db: Db, kullanici: Kullanici, simdi: number): Promise<{ surum: number | null; plan: CalismaPlani | null; kilitler: Set<string> }> {
   const k = await planlamaGirdisi(db, kullanici);
-  return { surum: k.surum, plan: k.girdi === null ? null : calismaPlani({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi) };
+  return {
+    surum: k.surum, plan: k.girdi === null ? null : calismaPlani({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi),
+    kilitler: calismaKilitleri(k.girdi?.calisma ?? null),
+  };
 }
 
 const tersKimlik = (p: CalismaPlani | null): Map<string, string> => new Map(Object.entries(p?.kimlik ?? {}).map(([k, a]) => [a, k]));
@@ -32,11 +35,11 @@ export async function canliFarki(db: Db, kullanici: Kullanici, simdi: number = D
   if (plan === null || plan.ops === null) return null;
   const anahtarlar = new Map((await planlanacakIsler(db, { taslakDahil: true })).map((i) => [i.id, `${i.emirNo}|${i.opNo}`]));
   const { planSurumu, yerlesimler } = await canliSira(db, [...anahtarlar.keys()]);
-  const canli = new Map<string, { makineId: number | null; baslangic: string }[]>();
+  const canli = new Map<string, { kaynak: YerlesimSatiri['kaynak']; baslangic: string }[]>();
   for (const y of yerlesimler) {
     const a = anahtarlar.get(y.isEmriId);
     if (a === undefined) continue;
-    canli.set(a, [...(canli.get(a) ?? []), ...parcalari(y).map((p) => ({ makineId: p.kaynak.tur === 'makine' ? p.kaynak.id : null, baslangic: p.baslangic.toISOString() }))]);
+    canli.set(a, [...(canli.get(a) ?? []), ...parcalari(y).map((p) => ({ kaynak: p.kaynak, baslangic: p.baslangic.toISOString() }))]);
   }
   const { yazilacak, yazilamaz, dokunulmaz } = calismaIsleri(plan.ops, plan.kimlik, new Set(anahtarlar.values()));
   const ters = tersKimlik(plan);
@@ -85,16 +88,16 @@ export async function tabanVeCanli(db: Db, kullanici: Kullanici, simdi: number =
 // yetkisiz kişinin kaynak okuması kısıtlıdır, "yazılacak iş yok" demek yanıltır.
 export async function calismaTaslagi(db: Db, kullanici: Kullanici, g: CalismaTaslagiGovdesi, simdi: number = Date.now()): Promise<CalismaTaslagiCevabi> {
   if (!islemVarMi(kullanici, 'plan.studyo')) throw yetkiYok('Plan taslağı yazmak plan stüdyosu ve plan yazma yetkisi ister.');
-  const { surum, plan } = await calismaOku(db, kullanici, simdi);
+  const { surum, plan, kilitler } = await calismaOku(db, kullanici, simdi);
   if (surum !== g.calismaSurumu) throw eskiSurum();
   if (plan === null || plan.ops === null) throw cakisma('Çalışmada plan yok; önce planı kurup kaydedin.');
   const anahtarlar = new Set((await planlanacakIsler(db, { taslakDahil: true })).map((i) => `${i.emirNo}|${i.opNo}`));
   const { yazilacak, yazilamaz } = calismaIsleri(plan.ops, plan.kimlik, anahtarlar);
   if (yazilacak.length === 0) throw cakisma('Plana yazılacak iş yok: sunucuda iş emri ve makinesi olan, bitmemiş iş gerekir.');
   const ek = calismaEkMesaisi(plan.baslangic, plan.ekMesai);
+  const { kuyruklar, sabitler } = calismaKuyruklari(plan.baslangic, yazilacak, simdi, kilitler);
   const y = await calismaTaslagiYaz(db, kullanici, {
-    ad: g.ad, kuyruklar: calismaKuyruklari(plan.baslangic, yazilacak, simdi), ...(g.planSurumu === undefined ? {} : { planSurumu: g.planSurumu }),
-    ekMesai: ek.satirlar,
+    ad: g.ad, kuyruklar, ...(g.planSurumu === undefined ? {} : { planSurumu: g.planSurumu }), ekMesai: ek.satirlar, sabitler,
   });
   return { taslak: y.taslak, yazilan: y.yazilan, atlanan: y.atlanan, yazilamaz, ekMesai: { yazilan: y.ekMesai.yazilan, atlanan: y.ekMesai.atlanan + ek.yazilamaz } };
 }
@@ -115,8 +118,8 @@ export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: Taslak
     const anahtar = anahtarlar.get(y.isEmriId);
     if (anahtar === undefined) continue;
     const k = ters.get(anahtar);
-    if (k === undefined || y.kaynak.tur !== 'makine') { atlanan.push(anahtar); continue; }
-    yerler.push({ k, anahtar, makineId: y.kaynak.id, baslangic: y.baslangic, bitis: y.bitis, kilitli: y.kilitli });
+    if (k === undefined) { atlanan.push(anahtar); continue; }
+    yerler.push({ k, anahtar, kaynak: y.kaynak, baslangic: y.baslangic, bitis: y.bitis, kilitli: y.kilitli });
   }
   const r = kuralTaslaktanCalismaya(kayit.deger, yerler);
   if (r === null) throw cakisma('Çalışmada plan ya da başlangıç günü yok; önce planı kurup kaydedin.');

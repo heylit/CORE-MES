@@ -416,3 +416,14 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Adım miktarı ardıl yolu kuralıyla hesaplanır: adım, çıktısını tüketen adımların fire yollarından en büyüğünü taşır; dallı rotada bir dalın
   firesi paralel dalı büyütmez. Kural emrin malzeme ihtiyacıyla (uretim-emirleri `malzemeIhtiyaci`) aynıdır; öncüller `oncullerCikar`dan.
   Rota ayrıntısındaki adım miktarı, teorik süre ve ürün ağacı ihtiyacı dallı rotada artık emirle aynı çıkar. Tek hatlı rota değişmez.
+
+## 2557: patlamış rota önizlemesinde malzemeler (kullanıcı kararı 2557 a/a)
+- `GET /rota/revizyonlar/:id/patlatma-onizleme?miktar=` (parametre yoksa 1; boş metin ?miktar ucuyla (agac) aynı, 400). Cevaba `miktar` ve `hammaddeToplami`; her adıma `adet`, `cikanAdet`,
+  `cikti` (ara-hal ya da ürün), `girenler` (altDugum dolu olan alt düğümün ürünü) ve `yanUrunler` eklendi. Sayılar `{ kokBasina, siparis }`.
+- Sayılar açılacak emrin adımları üzerinde emir malzeme kuralıyla (`emirFireCarpanlari`, uretim-emirleri `malzemeIhtiyaci` ile aynı) çıkar;
+  test açılan emrin malzeme ihtiyacıyla eşitliği denetler. Emir açılamıyorsa (engel) sayılar null.
+- Kural iki yerde (UYUM-BORCU B49).
+- Yetki, tablo ve göç değişmedi.
+- VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
+- VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
+- VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.

@@ -639,6 +639,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };
   'GET /satin-alma-talepleri/:id/siparis-takibi': { cevap: SiparisTakibiCevabi };
   'GET /satin-alma-talepleri/:id/degerlendirme': { cevap: DegerlendirmeCevabi };
+  'GET /satin-alma-butce-kullanimi': { sorgu: z.input<typeof butceKullanimiSorgusu>; cevap: ButceKullanimiCevabi };
   'GET /satin-alma-talepleri/:id/kart-ayrintilari': { cevap: KartAyrintilariCevabi };
   'POST /satin-alma-talepleri/:id/odeme-plani': { govde: z.input<typeof odemePlaniGovdesi>; cevap: SiparisTakibiCevabi };
   'GET /satin-alma-siparis-satirlari/:id/belgeler': { cevap: SiparisBelgeleriCevabi };
@@ -666,7 +667,17 @@ export interface SatinAlmaUclari {
 // Karar onaydaysa ya da sipariş verildiyse sabit kur ve faizle, değilse finansın bugünkü kuru ve faiziyle hesaplanır (1096 a).
 // Tedarikçi başarımı bilinmiyorsa (puan, teslim ve kalite verisi yok) ya da termin girilmemişse null; o teklifte ağırlığı bilinen ölçütlere dağılır (2157).
 const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number().nullable(), tedarikci: z.number().nullable(), garanti: z.number() });
+// 2454: birim başına bütçe kullanımı (TL, nominal). Birim kalemin kaynak birimi, yoksa talebin birimi; boş birim null. butce null: tanımsız.
+// kullanilan: yılın siparişi verilmiş taleplerinin kalem tutarları; kalanı kapatılmış siparişte gerçekleşen teslim değeri (2462 a).
+// hesaplanamayanKalem: kuru olmadığı için toplama girmeyen kalem sayısı.
+const butceBirimSatiri = z.object({ birim: z.string().nullable(), butce: ondalikMetinSemasi.nullable(), kullanilan: ondalikMetinSemasi, hesaplanamayanKalem: z.number().int() });
+export const butceKullanimiSorgusu = z.object({ yil: z.coerce.number<number>().int().min(2000).max(2100) });
+export const butceKullanimiCevabi = z.object({ yil: z.number().int(), birimler: z.array(butceBirimSatiri) });
+export type ButceKullanimiCevabi = z.output<typeof butceKullanimiCevabi>;
+// Onay kırılımı: talebin kalemlerinin düştüğü her birim için bütçe, bu talep hariç yılın kullanımı ve bu alımın tutarı.
+const talepButceSatiri = z.object({ birim: z.string().nullable(), butce: ondalikMetinSemasi.nullable(), yil: z.number().int(), kullanilan: ondalikMetinSemasi, buAlim: ondalikMetinSemasi });
 export const degerlendirmeCevabi = z.object({
+  butce: z.array(talepButceSatiri),
   kurKaynagi: z.enum(['sabit', 'guncel']),
   kurKilidi: z.string().nullable(),
   // Sabit kur 7 günü geçtiyse ya da kur %3'ten fazla saptıysa siparişi durduracak ileti; yoksa boş.

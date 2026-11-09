@@ -847,7 +847,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     const YONET = yollar('finans.yonet');
     const YAZ = yollar('finans.yaz');
     assert.equal(YONET.length, 25);
-    assert.equal(YAZ.length, 15);
+    assert.equal(YAZ.length, 16);
     const sonuc = async (kim: string, yollar: string[]) => Promise.all(yollar.map(async (y) => `${y} ${(await yaz(`/finans/${y}`, {}, kim)).durum}`));
     assert.deepEqual(await sonuc('yazan', YONET), YONET.map((y) => `${y} 403`));
     assert.deepEqual(await sonuc('okuyan', YAZ), YAZ.map((y) => `${y} 403`));

@@ -5,11 +5,12 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI, receteRotaStatuleri } from './disari.ts';
 import { adimCiktisiBul, statuleriTuret } from './kurallar.ts';
-import { adimCiktisi, adimStatusu } from './servis.ts';
+import { adimCiktisi, adimStatusu, yaz } from './servis.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -202,14 +203,7 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     return girisCerezi(kullaniciAdi);
   }
 
-  const kaydet = async (deger: unknown) => {
-    const c = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-      payload: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: surum },
-    });
-    assert.equal(c.statusCode, 200, c.body);
-    surum = (c.json() as { kayit: { surum: number } }).kayit.surum;
-  };
+  const kaydet = async (deger: unknown) => { surum = await anaKayitYaz(vt(), deger, surum); };
   const sayim = async (): Promise<number> => (await vt().sorgu('SELECT 1 FROM recete_rota_statu')).length;
 
   before(async () => {
@@ -279,12 +273,11 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     });
     assert.equal(c.statusCode, 200, c.body);
     assert.equal(await sayim(), once);
-    const metin = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-      payload: { anahtar: DURUM_ANAHTARI, bicim: 'metin', deger: JSON.stringify(belge('ham', [adim('t1', 1), adim('t2', 2)])), beklenenSurum: surum },
+    surum = await vt().tx(async (db) => {
+      const k = await kullaniciYukle(db, yoneticiId);
+      if (k === null) throw new Error('yönetici yok');
+      return (await yaz(db, k, { anahtar: DURUM_ANAHTARI, bicim: 'metin', deger: JSON.stringify(belge('ham', [adim('t1', 1), adim('t2', 2)])), beklenenSurum: surum })).kayit.surum;
     });
-    assert.equal(metin.statusCode, 200, metin.body);
-    surum = (metin.json() as { kayit: { surum: number } }).kayit.surum;
     assert.equal(await sayim(), once);
     assert.equal((await vt().sorgu(`SELECT 1 FROM recete_rota_statu WHERE kaynak_adim = 't1'`)).length, 0);
   });
@@ -296,11 +289,7 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     await ortam.sahip.sorgu(`CREATE FUNCTION recete_rota_statu_deneme_hatasi() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'deneme'; END $$`);
     await ortam.sahip.sorgu('CREATE TRIGGER recete_rota_statu_deneme BEFORE INSERT ON recete_rota_statu FOR EACH ROW EXECUTE FUNCTION recete_rota_statu_deneme_hatasi()');
     try {
-      const c = await app.inject({
-        method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-        payload: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: belge('yari', [adim('r1', 1), adim('r2', 2)]), beklenenSurum: surum },
-      });
-      assert.equal(c.statusCode, 500);
+      await assert.rejects(anaKayitYaz(vt(), belge('yari', [adim('r1', 1), adim('r2', 2)]), surum), /deneme/);
     } finally {
       await ortam.sahip.sorgu('DROP TRIGGER recete_rota_statu_deneme ON recete_rota_statu');
       await ortam.sahip.sorgu('DROP FUNCTION recete_rota_statu_deneme_hatasi()');
@@ -512,5 +501,33 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     // Patlatmada olmayan malzeme (alt düğüm değil) yürürlükteki revizyondan çözülür; emrin kök revizyonu ona uygulanmaz.
     const yabanci = await kartAc(5, 'yarimamul');
     assert.equal(await adimCiktisi(vt(), { malzemeNo: yabanci, opNo: 10, uretimEmriId: emir }), null);
+  });
+
+  // Yeni ekran ana kaydı yazmaz; belgesiz kurulumda da ara adım statü açmalı (B-2484-1). Ana kaydı siler: dosyanın son testidir.
+  test('B-2484-1: ana kayıt yokken yürürlükteki rotanın ara adımı statü açar, son adım açmaz; çıkan kalem yoksa çıktı null', async () => {
+    await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]);
+    surum = null;
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('BLG-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kart = (await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('blg-1', 'mamul', 'BLG-', 1, 'aktif', $1, $2, $2) RETURNING no`, [JSON.stringify({ id: 'blg-1', com: { ad: 'Belgesiz deneme' } }), yoneticiId]))!.no;
+    const tip = (await vt().tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('BLG', 'Torna', 'TAL') RETURNING id"))!.id;
+    const rev = (await vt().tek<{ id: number }>("INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) RETURNING id", [kart, yoneticiId]))!.id;
+    for (const [i, op] of [10, 20].entries()) {
+      await vt().sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3)', [kart, op, rev]);
+      await vt().sorgu('INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, $3, $4, $5, $6)', [rev, kart, op, i + 1, tip, `Adım ${String(op)}`]);
+    }
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [rev, yoneticiId]);
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [rev, yoneticiId]);
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [rev, yoneticiId]);
+    assert.equal(await vt().tek('SELECT 1 FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]), null, 'ana kayıt yok');
+    const op10 = await adimStatusu(vt(), { malzemeNo: kart, opNo: 10 });
+    assert.ok(op10 !== null, 'ara adım statü açar');
+    const satir = await vt().tek<{ kaynak_adim: string; rota_revizyonu_id: number; tur: string }>(
+      'SELECT kaynak_adim, rota_revizyonu_id, tur FROM recete_rota_statu WHERE id = $1', [op10]);
+    assert.deepEqual(satir, { kaynak_adim: `${String(kart)}-o10`, rota_revizyonu_id: rev, tur: 'MM' });
+    assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 10 }), op10, 'ikinci sayım aynı statüyü kullanır');
+    assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20 }), null, 'son adım statü açmaz');
+    assert.equal(await adimCiktisi(vt(), { malzemeNo: kart, opNo: 10 }), null, 'bağ yok');
   });
 });

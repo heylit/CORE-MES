@@ -627,7 +627,6 @@ export const BIRLESTIRME_ADIM = 'İki parti aynı adımda beklemeli ve o adımda
 export const BIRLESTIRME_ADIMLAR_FARKLI = 'İki partinin kalan adımları aynı değil.';
 export const BIRLESTIRME_EK_ADIM = 'Partinin bitmemiş rework, tamir ya da ek adımı var; önce onları bitirin.';
 export const BIRLESTIRME_TASLAK = 'Taslak ile planlı parti birleştirilemez.';
-export const EK_ADIM_KOLDA = 'Rework, tamir ve ek adım yalnız bölünmüş partiye (kola) konur.';
 export const KOL_ALT_PARTILI = 'Alt partisi olan kolun adımları ve birleşme planı değişmez; önce alt partileri birleştirin.';
 export const EK_ADIM_YERI_YOK = 'Ek adımın girdiği yerdeki adım bu kolda yok.';
 export const EK_ADIM_BASLAMIS = 'Ek adım yalnız başlamamış adımların önüne ya da kolun sonuna girer.';
@@ -730,14 +729,15 @@ export interface KolDurumu {
   isEmirleri: readonly PartiAdimi[];
 }
 
+// Bölünmemiş emir de kol da ek adım alır (2530 a). Açık alt partisi olan emir (kök ya da kol) almaz: alt parti kopyaladığı adımları
+// kendisi yapar, üstte değişen adım dizisi alt partinin bölünme ve birleşme sırasını bozardı.
 function kolOrtak(k: KolDurumu): string | null {
   const acik = acikEmirIhlali(k.durum, k.arsiv);
   if (acik !== null) return acik;
-  if (k.ustEmirId === null) return EK_ADIM_KOLDA;
   return k.acikAltPartiVar ? KOL_ALT_PARTILI : null;
 }
 
-// UE-PB4: ek adım yalnız kola, başlamamış bölgeye girer; op numarası tekildir ve komşularının arasındadır (sıra op sırasını izler).
+// UE-PB4: ek adım bölünmemiş emre ya da kola, başlamamış bölgeye girer; op numarası tekildir ve komşularının arasındadır (sıra op sırasını izler).
 export function ekAdimIhlali(k: KolDurumu, ek: { oncekiOpNo: number | null; opNo: number }): string | null {
   return kolOrtak(k) ?? adimYeriIhlali(k.isEmirleri, ek, k.birlesmeOpNo ?? null);
 }

@@ -123,8 +123,9 @@ describe('planlama çalışması kaydının yazma yetkisi (gerçek PostgreSQL)',
     assert.equal(await kayit(PLANLAMA_ANAHTARI), null);
   });
 
-  test('PY-05: öteki anahtarlar plan.yaz istemez (ana kayıt, alt anahtar ve planlama önekli cihaz anahtarı)', async () => {
-    for (const anahtar of [DURUM_ANAHTARI, `${DURUM_ANAHTARI}:studio`, `${PLANLAMA_ANAHTARI}-ui4`]) {
+  test('PY-05: öteki anahtarlar plan.yaz istemez (alt anahtar ve planlama önekli cihaz anahtarı); ana kayıt bu uçtan yazılmaz (2486-7)', async () => {
+    assert.equal((await yaz(yalnizYazar, DURUM_ANAHTARI, { v: 1 }, null)).statusCode, 400);
+    for (const anahtar of [`${DURUM_ANAHTARI}:studio`, `${PLANLAMA_ANAHTARI}-ui4`]) {
       const yazma = await yaz(yalnizYazar, anahtar, { v: 1 }, null);
       assert.equal(yazma.statusCode, 200, `${anahtar}: ${yazma.body}`);
       const surum = (yazma.json() as { kayit: { surum: number } }).kayit.surum;

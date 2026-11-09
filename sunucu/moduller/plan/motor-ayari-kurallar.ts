@@ -49,11 +49,14 @@ export function calismayaMotorAyari(
   const agirlik = finansmanOraniGun === null ? {}
     : { planAgirlik: { ...(D.planAgirlik !== null && typeof D.planAgirlik === 'object' ? D.planAgirlik : {}), fin: finansmanOraniGun } };
   const w = (c as { w?: unknown }).w;
+  // 2509-1 c: acil iş payı sistem ayarındandır; çalışmanın param.acilPay'i (motor girdi.betik stKur ve sayfa hesapları onu okur) ezilir.
+  const param = (c as { param?: unknown }).param;
   const onceki = (c as { ogren?: unknown }).ogren;
   const ogrenilen = ogren !== undefined ? ogren
     : onceki !== null && typeof onceki === 'object' ? onceki as Readonly<Record<string, OgrenilenSure>> : null;
   return {
     ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
+    param: { ...(param !== null && typeof param === 'object' ? param : {}), acilPay: ayar.acilPay },
     w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
     ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},
   };

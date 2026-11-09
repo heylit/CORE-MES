@@ -167,7 +167,7 @@ export function GuvenlikDurum() {
       <Bolum baslik="Karar bekleyenler" ek={kararlar.length === 0 ? undefined : `${kararlar.length} konu · önce en önemlisi`}>
         {alarmlar.isPending ? <DurumKutusu durum="yukleniyor" />
           : kararlar.length === 0 ? <p className="tc-guvenlik-bos"><Simge ad="check" boyut="k" /> Karar bekleyen konu yok.</p>
-            : <div className="tc-guvenlik-kararlar">{kararlar.map((k) => <KararKarti key={k.anahtar} karar={k} yonetir={yonetir} incele={seciliYaz} />)}</div>}
+            : <div className="tc-guvenlik-kararlar">{kararlar.map((k, i) => <KararKarti key={k.anahtar} karar={k} yonetir={yonetir} incele={seciliYaz} oncelikli={i === 0} />)}</div>}
         {gorunmeyen > 0 && (
           <p className="tc-guvenlik-not">
             {gorunmeyen} alarm daha var.{' '}

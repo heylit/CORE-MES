@@ -4,6 +4,7 @@ import { istasyonAdlari, makineler } from '../istasyonlar/disari.ts';
 import { makineKullanimAraliklari } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import { darbogaz, ewmaEgilimi, haftaPenceresi, istasyonHucreleri, pencereSuresi, type MakineGirdisi, type Ms } from './analiz-kurallar.ts';
+import { vardiyasiTanimsiz } from './kurallar.ts';
 import { olcumler, yerlesimler } from './sorgular.ts';
 
 const GUN = 86_400_000;
@@ -37,10 +38,10 @@ export async function planAnalizi(db: Db, simdi = Date.now()): Promise<PlanAnali
 
   const girdiler: MakineGirdisi[] = tezgahlar.map((m) => {
     const t = takvimler.get(`makine:${m.id}`) ?? null;
-    const tanimsiz = t === null || t.gunler.every((g: { dakika: number }) => g.dakika === 0);
+    const tanimsiz = vardiyasiTanimsiz(t);
     return {
       istasyonId: m.istasyonId,
-      takvim: tanimsiz ? null : t.araliklar.map((a: { baslangic: string; bitis: string }) => [ms(a.baslangic), ms(a.bitis)] as const),
+      takvim: tanimsiz || t === null ? null : t.araliklar.map((a: { baslangic: string; bitis: string }) => [ms(a.baslangic), ms(a.bitis)] as const),
       kullanim: (kullanim.get(m.id) ?? []).map((a) => [ms(a.baslangic), ms(a.bitis)] as const),
       plan: plan.get(m.id) ?? [],
     };

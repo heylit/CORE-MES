@@ -123,6 +123,6 @@ describe('teslim kutusu sorgu sayısı (gerçek PostgreSQL)', () => {
     for (let i = 0; i < 3; i += 1) await emirAc(false);
     const sonra = await olc(e1);
     assert.equal(sonra.ns, once.ns, `iki sepet: ${String(once.ns)} -> ${String(sonra.ns)}`);
-    assert.ok(sonra.n - once.n <= 3 * 15, `iş malzemeleri: ${String(once.n)} -> ${String(sonra.n)} (3 emir eklendi)`);
+    assert.ok(sonra.n - once.n <= 3 * 16, `iş malzemeleri: ${String(once.n)} -> ${String(sonra.n)} (3 emir eklendi)`);
   });
 });

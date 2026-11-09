@@ -53,7 +53,7 @@ describe('kalıcı hata: yoklama durur', () => {
     expect(iletim.readyState).toBe(2);
   });
 
-  it('403: köprü "Arkon için yetkiniz yok" bildirir, zaman geçse de yeniden sormaz', async () => {
+  it('403: köprü "Bu ekran için yetkiniz yok" bildirir, zaman geçse de yeniden sormaz', async () => {
     vi.useFakeTimers();
     const { istemci, yollar } = sahteIstemci([hata(403)]);
     const bildirimler: string[] = [];

@@ -90,7 +90,7 @@ const STORE = import.meta.glob<{ AKStore: ArkonDeposu }>('../../../../../../arko
 
 export async function depoModulu(): Promise<ArkonDeposu> {
   const yukle = Object.values(STORE)[0];
-  if (yukle === undefined) throw new Error('Arkon veri katmanı bulunamadı.');
+  if (yukle === undefined) throw new Error('Üretim Hazırlık veri katmanı bulunamadı.');
   return (await yukle()).AKStore;
 }
 
