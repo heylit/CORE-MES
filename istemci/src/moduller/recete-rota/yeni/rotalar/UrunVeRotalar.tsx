@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
@@ -13,7 +13,8 @@ import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
 import { AkisTablosu } from './AkisTablosu.tsx';
 import { PatlamisRota } from './PatlamisRota.tsx';
 import { AdimPaneli } from './AdimPaneli.tsx';
-import { DuzenlemePaneli } from './DuzenlemePaneli.tsx';
+import { DuzenlemePaneli, PanelSeridi } from './DuzenlemePaneli.tsx';
+import { PanelTutamagi } from './PanelTutamagi.tsx';
 import { RevizyonCubugu } from './RevizyonCubugu.tsx';
 import { UrunListesi } from './UrunListesi.tsx';
 
@@ -47,6 +48,17 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     window.addEventListener('keydown', esc);
     return () => { window.removeEventListener('keydown', esc); };
   }, [tamEkran]);
+  // B-2482-R5: geniş ekranda düzen sabittir; panel yalnız kullanıcının düğmesiyle daralır ve açılır, genişliği sürükleyerek değişir. İkisi de hatırlanır.
+  const [panelDar, setPanelDar] = useState(() => tercihOku('duzen-paneli-dar', '') === '1');
+  const [panelGenis, setPanelGenis] = useState<number | null>(() => { const n = Number(tercihOku('duzen-paneli-genis', '')); return n > 0 ? n : null; });
+  const govdeRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const g = govdeRef.current;
+    if (!g) return;
+    if (panelGenis === null) g.style.removeProperty('--tc-rr1-panel'); else g.style.setProperty('--tc-rr1-panel', `${String(panelGenis)}px`);
+  });
+  const panelDarYaz = (v: boolean) => { setPanelDar(v); tercihYaz('duzen-paneli-dar', v ? '1' : ''); };
+  const panelGenisYaz = (px: number | null, bitti: boolean) => { setPanelGenis(px); if (bitti) tercihYaz('duzen-paneli-genis', px === null ? '' : String(px)); };
   const [copUstunde, setCopUstunde] = useState(false);
   const [surukleniyor, setSurukleniyor] = useState(false);
 
@@ -172,6 +184,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           <Dugme className="tc-rr1-kd" tur={adimPaneli ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={adimPaneli}
             onClick={() => { tercih('adim-paneli', adimPaneli ? '' : '1', (v) => { setAdimPaneli(v === '1'); }); }}>Operasyon paleti</Dugme>
         )}
+        {!liste && gorunum !== 'patlamis' && (
+          <Dugme className="tc-rr1-kd tc-rr1-panel-dugme" tur="ikincil" simge={panelDar ? 'chev-left' : 'chev-right'} aria-pressed={!panelDar}
+            title={panelDar ? 'Düzenleme panelini aç' : 'Düzenleme panelini daralt; çalışma alanı genişler'} onClick={() => { panelDarYaz(!panelDar); }}>Düzenleme paneli</Dugme>
+        )}
         {!liste && (
           <>
             <span className="tc-rr1-seg" role="group" aria-label="Görünüm">
@@ -216,7 +232,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           {gorunum === 'patlamis' && kokId ? (
             <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
           ) : (
-          <div className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}`}>
+          <div ref={govdeRef} className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}${panelDar ? ' tc-rr1-dar' : ''}`}>
             {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} urunId={yer?.urunId ?? null} />}
             {dugum ? (
               gorunum === 'tablo'
@@ -229,7 +245,11 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
                 {o.yetki.rotaYaz && <Dugme tur="birincil" simge="plus" onClick={() => { setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
               </div>
             )}
-            <DuzenlemePaneli r={r} />
+            <div className="tc-rr1-insp-kap">
+              {!panelDar && <PanelTutamagi govde={() => govdeRef.current} genislik={panelGenis} yaz={panelGenisYaz} />}
+              <DuzenlemePaneli r={r} />
+              {panelDar && <PanelSeridi r={r} ac={() => { panelDarYaz(false); }} />}
+            </div>
           </div>
           )}
         </>
