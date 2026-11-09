@@ -103,7 +103,14 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     needDate: t.ihtiyacTarihi ?? '', notes: t.notlar, status: DURUM_T[t.durum], ...(t.iptalNedeni ? { cancelReason: t.iptalNedeni } : {}), teslimYontemi: t.teslimYontemi,
     uretimEmriId: t.uretimEmriId, uretimEmriNo: t.uretimEmriNo,
     weights: t.agirliklar === null ? null : { cost: t.agirliklar.maliyet, lead: t.agirliklar.termin, supplier: t.agirliklar.tedarikci, warranty: t.agirliklar.garanti },
-    items: t.kalemler.map((i) => ({ id: i.id, materialId: i.katalogId, name: i.ad, spec: i.ozellik, qty: sayi(i.miktar), unit: i.birim, category: i.kategori })),
+    items: t.kalemler.map((i) => {
+      const bag = t.kalemBaglari?.find((b) => b.kalemId === i.id);
+      return {
+        id: i.id, materialId: i.katalogId, name: i.ad, spec: i.ozellik, qty: sayi(i.miktar), unit: i.birim, category: i.kategori,
+        ...(bag?.uygulanan ? { parca: bag.uygulanan } : {}),
+        ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
+      };
+    }),
     rfqs: t.teklifIstekleri.map((r) => ({ supplierId: String(r.firmaId), sentAt: r.gonderim, dueDate: r.sonTarih ?? '' })),
     quotes: t.teklifler.map((q): Quote => ({
       id: q.id, supplierId: q.firmaId === null ? '' : String(q.firmaId), supplierName: q.tedarikciAdi, date: q.teklifTarihi, validUntil: q.gecerlilik ?? '',

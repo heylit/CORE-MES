@@ -25,6 +25,7 @@ const ISKELET = `<div class="app">
       <span class="spacer"></span>
       <span class="flag warn" id="kayit-uyari" role="status" hidden></span>
     </div>
+    <div id="sa-ekran"></div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
 </div>`;
@@ -76,8 +77,10 @@ function kancalariKur(): void {
     const y = hedefAdres(V.page, V.id, etkin.rol, etkin.yol);
     const simdi = simdikiAdres();
     if (y === null || y === simdi) return;
-    const ayniTalep = V.page === "request" && new URLSearchParams(window.location.search).get("talep") === V.id;
-    if (V.page === "request" && !ayniTalep) icerdenAcilan = V.id;
+    const oncekiTalep = new URLSearchParams(window.location.search).get("talep");
+    const ayniTalep = V.page === "request" && oncekiTalep === V.id;
+    // Talepten talebe geçişte geri tuşu önceki talebe değil listeye dönmeli: "Taleplere dön" yazıyor.
+    if (V.page === "request" && !ayniTalep) icerdenAcilan = oncekiTalep === null ? V.id : null;
     etkin.git(y, ayniTalep);
   });
   // Yalnız modül sayfada bağlıyken çizilir: açılış verisi başka bir TMI sayfasındayken gelirse çizim atlanır.
@@ -127,7 +130,7 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   return () => {
     clearInterval(zamanlayici);
     document.removeEventListener("visibilitychange", gorunce);
-    if (etkin === secenek) { etkin = null; bildirimYoluKur(null); } kok.innerHTML = ""; delete kok.dataset.saMerkez; pencereKoku.remove();
+    if (etkin === secenek) { etkin = null; icerdenAcilan = null; bildirimYoluKur(null); } kok.innerHTML = ""; delete kok.dataset.saMerkez; pencereKoku.remove();
   };
 }
 

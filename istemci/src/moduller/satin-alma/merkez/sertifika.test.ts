@@ -3,7 +3,7 @@ import type { AcilisCevabi, SiparisBelgeleriCevabi, Talep } from '#paylasilan/so
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
 
 const K1 = '00000000-0000-4000-8000-000000000011';
 const QA = '00000000-0000-4000-8000-0000000000a1';
@@ -54,13 +54,13 @@ describe('sipariş satırına sertifika ve rapor', () => {
     }));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector('[data-act="status-chip"][data-v="ordered"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('[data-act="status-chip"][data-v="ordered"]')!.click();
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${TALEP.id}"]`)).not.toBeNull());
-    kok.querySelector<HTMLElement>(`tr[data-id="${TALEP.id}"]`)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.fsec-h[data-tab="order"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('.fsec-h[data-tab="order"]')!.click();
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+    sekme(kok, 'ordered')!.click();
+    await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+    talepSatiri(kok, TALEP.id)!.click();
+    await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+    sekme(kok, 'order')!.click();
     await vi.waitFor(() => expect(kok.querySelector('[data-act="order-certs"]')).not.toBeNull());
     kok.querySelector<HTMLElement>('[data-act="order-certs"]')!.click();
     await vi.waitFor(() => expect(document.querySelector('[data-cert-line="41"]')?.textContent).toContain('belge yok'));

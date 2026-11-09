@@ -26,8 +26,8 @@ export function onaylayabilir(): boolean { return onayIslemi; }
 export function setOnaylayabilir(v: boolean): void { onayIslemi = v; }
 
 /* ================= satın alma: iş kutusu ================= */
-interface Job { r: PurchaseRequest; info: string; flag?: string; act: string; tab: string; ret?: boolean; due?: string }
-function jobs(): Record<string, Job[]> {
+export interface Job { r: PurchaseRequest; info: string; flag?: string; act: string; tab: string; ret?: boolean; due?: string }
+export function jobs(): Record<string, Job[]> {
   const t = todayStr(), set = settings();
   const g: Record<string, Job[]> = { quotes: [], decide: [], approval: [], order: [], delivery: [], draft: [] };
   const list = Object.values(S.requests).sort((a, b) => (a.needDate || "9999").localeCompare(b.needDate || "9999"));
@@ -72,7 +72,7 @@ export function jobCount(): { n: number; hot: boolean } {
 }
 // Sıra satın almacının elindeki işin aciliyetidir (2400): onaylı sipariş ve karar önce; teklif istenmemiş talep tedarik süresinin
 // başladığı yerdir, teklif ve teslim beklemesinin önüne alınır. Onayda olan başkasının adımıdır, en sonda.
-const GROUPS: [string, string, string][] = [
+export const GROUPS: [string, string, string][] = [
   ["order", "Sipariş verilecekler", "Onaylandı, tedarikçiye sipariş geçilecek"],
   ["decide", "Karar verilecekler", "Teklifler toplandı ya da onaylayan geri gönderdi"],
   ["draft", "Satın almada", "Henüz teklif istenmedi"],

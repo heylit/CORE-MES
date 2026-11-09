@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
 
 const K1 = '00000000-0000-4000-8000-0000000000c1';
 const QA = '00000000-0000-4000-8000-0000000000a1';
@@ -32,9 +32,9 @@ async function ac(onaylayabilir: boolean): Promise<{ kok: HTMLElement; kapat: ()
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } })));
   const kok = document.createElement('div');
   document.body.append(kok);
-  const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, onaylayabilir });
-  await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${t.id}"]`)).not.toBeNull());
-  kok.querySelector<HTMLElement>(`tr[data-id="${t.id}"]`)!.click();
+  const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, onaylayabilir });
+  await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
+  talepSatiri(kok, t.id)!.click();
   await vi.waitFor(() => expect(kok.querySelector('[data-act="approval-form"]')).not.toBeNull());
   return { kok, kapat };
 }
@@ -56,14 +56,15 @@ describe('TMI Ç5: Satın Alma ekranında onay düğmeleri yalnız onay işlemi 
 });
 
 describe('TMI Ç3: Talepler süzgecinde onaylanıp siparişi beklenen talep "Onayda" sayılmaz', () => {
-  const sayi = (kok: HTMLElement, v: string) => kok.querySelector(`[data-act="status-chip"][data-v="${v}"] .num`)?.textContent;
+  // Sekme sayısı sıfırken çizilmez.
+  const sayi = (kok: HTMLElement, v: string) => { const s = sekme(kok, v); return s ? (s.querySelector('.tc-gizli-etiket')?.textContent?.match(/\d+/)?.[0] ?? '0') : undefined; };
   async function liste(onaylar: Talep['onaylar']): Promise<{ kok: HTMLElement; kapat: () => void }> {
     const veri: AcilisCevabi = { ...acilis, talepler: [{ ...t, onaylar }] };
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(veri), { status: 200, headers: { 'content-type': 'application/json' } })));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${t.id}"]`)).not.toBeNull());
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
     return { kok, kapat };
   }
   it('onay bekleyen Onayda sayılır', async () => {
@@ -76,8 +77,8 @@ describe('TMI Ç3: Talepler süzgecinde onaylanıp siparişi beklenen talep "Ona
     // Açılış verisi bir kez yüklenir; ikinci bağlamada yenileme gelene kadar beklenir.
     await vi.waitFor(() => expect(sayi(kok, 'approval')).toBe('0'));
     expect(sayi(kok, 'open')).toBe('1');
-    kok.querySelector<HTMLElement>('[data-act="status-chip"][data-v="approval"]')!.click();
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${t.id}"]`)).toBeNull());
+    sekme(kok, 'approval')!.click();
+    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).toBeNull());
     kapat();
   });
 });

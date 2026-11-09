@@ -1,4 +1,5 @@
 import { aylikFaizdenYillik, vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
+import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import type {
   Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus,
   Settings, Supplier, Weights,
@@ -286,7 +287,7 @@ function syncRfqPreview(): void {
   if (cur && !sel.includes(cur)) p.value = "";
   $("#rfq-out").textContent = rfqText(r, p.value, $("#rfq-due").value || addDays(todayStr(), 3));
 }
-function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = false): string {
+export function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = false): string {
   const set = settings(), s = S.suppliers[supId];
   const L: string[] = [];
   L.push(`Konu: ${reminder ? "Hatırlatma: " : ""}Fiyat teklifi talebi, ${r.no} ${r.title}`);
@@ -296,7 +297,10 @@ function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = fals
   if (reminder) { L.push(`${fmtDate(due)} tarihinde ilettiğimiz teklif talebimize henüz cevap alamadık. Aşağıdaki kalemler için teklifinizi en kısa sürede bekliyoruz.`); }
   else L.push(`${set.company ? set.company + " olarak " : ""}aşağıdaki kalemler için fiyat teklifinizi rica ederiz.`);
   L.push("");
-  (r.items || []).forEach((i, n) => L.push(`${n + 1}. ${i.name}, ${numIn(parseNum(i.qty))} ${i.unit}${i.spec ? ` (${i.spec})` : ""}`));
+  (r.items || []).forEach((i, n) => {
+    L.push(`${n + 1}. ${i.name}, ${numIn(parseNum(i.qty))} ${i.unit}${i.spec ? ` (${i.spec})` : ""}`);
+    for (const t of teklifMetniSatirlari(i)) L.push(`   ${t}`);
+  });
   L.push("");
   L.push("Tekliflerin karşılaştırılabilmesi için lütfen şunları belirtin:");
   L.push("- Her kalem için birim fiyat ve para birimi (KDV hariç)");
@@ -804,6 +808,13 @@ export function geriDugmesiHTML(no: string, etiket?: string): string {
   const l = etiket ?? DONUS_ETIKETI[AYRINTI.donus] ?? "Taleplere dön";
   return `<div class="sa-geri-serit"><button class="btn sa-geri" data-act="ayrinti-geri"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>${esc(l)}</span></button><span class="sa-geri-no num">${esc(no)}</span></div>`;
 }
+// Ortak parçalarla çizilen düğme ve menüler (2412-2) merkezin işlemlerini adıyla çağırır; veri, düğmenin data- alanlarıdır.
+export function eylemCalistir(act: string, veri: Record<string, string> = {}): void {
+  const el = document.createElement("button");
+  for (const [k, v] of Object.entries(veri)) el.dataset[k] = v;
+  const r = V.page === "request" && V.id ? S.requests[V.id] ?? null : null;
+  ACTIONS[act]?.(el, r);
+}
 export function go(page: Page, id?: string | null, tab?: string | null): void { partileriUnut(); takibiUnut(); V.page = page; V.id = id || null; V.tab = tab || null; UI.wDraft = null; $("#gres").hidden = true; render(); window.scrollTo(0, 0); }
 document.addEventListener("click", (e) => {
   if (!kokIcinde(e)) return;
@@ -851,6 +862,8 @@ const ACTIONS: Record<string, Action> = {
   "pano-git": el => { const h = el.dataset.v || "open"; if (h === "reports") { go("reports"); return; } V.status = h; V.view = "list"; go("requests"); },
   "sort": el => { const k = el.dataset.k || ""; if (V.sort === k) { if (V.dir > 0) V.dir = -1; else { V.sort = ""; V.dir = 1; } } else { V.sort = k; V.dir = 1; } render(); },
   "view": el => { V.view = el.dataset.v as ViewState["view"]; render(); },
+  // Panoda 40'tan fazla talebi olan sütun: o durumun listesi açılır (2412-2).
+  "pano-sutun": el => { V.view = "list"; V.status = el.dataset.v || "all"; render(); },
   "period": el => { V.period = el.dataset.v as ViewState["period"]; render(); },
   "close": () => closeModal(),
   "toggle": el => { const t = $("#" + el.dataset.t!); if (t) t.hidden = !t.hidden; },

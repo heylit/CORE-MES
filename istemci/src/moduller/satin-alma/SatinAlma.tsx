@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useBildirim } from '../../ortak/arayuz/Bildirim.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { OnTalepKarti } from './OnTalepKarti.tsx';
+import { MerkezEkrani } from './ekran/MerkezEkrani.tsx';
 import { acilisOku, merkezAdresi, merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
 import type { Role } from './merkez/roles.ts';
 
@@ -15,13 +17,18 @@ function Merkez({ rol, sayfa, yol }: { rol: Role; sayfa: MerkezSayfasi; yol: str
   const onaylayabilir = kullanici?.islemler.includes('satin-alma.onayla') ?? false;
   // Merkezin bildirimi ve geri al'ı kabuğun ortak bildirimidir.
   const { bildir, kaldir } = useBildirim();
-  useEffect(
-    () => (kok.current ? merkeziBagla(kok.current, { rol, sayfa, yol, onaylayabilir, git: (y, yerine) => { void git(y, { replace: yerine === true }); }, bildirim: { bildir, kaldir } }) : undefined),
-    [rol, sayfa, yol, onaylayabilir, git, bildir, kaldir],
-  );
+  // Ortak parçalarla çizilen ekranlar (2412-2) merkezin iskeletindeki #sa-ekran'a taşınır; iskelet her bağlamada yeniden kurulur.
+  const [ekranYeri, ekranYeriYaz] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const k = kok.current;
+    if (!k) return undefined;
+    const coz = merkeziBagla(k, { rol, sayfa, yol, onaylayabilir, git: (y, yerine) => { void git(y, { replace: yerine === true }); }, bildirim: { bildir, kaldir } });
+    ekranYeriYaz(k.querySelector<HTMLElement>('#sa-ekran'));
+    return () => { ekranYeriYaz(null); coz(); };
+  }, [rol, sayfa, yol, onaylayabilir, git, bildir, kaldir]);
   // Adresteki talep (Ctrl K 1237, geri ve ileri tuşu; 2412) ayrıntıyı açar; adreste talep kalmayınca ayrıntı kapanır.
   useEffect(() => { merkezAdresi(acilisOku(adres)); }, [adres]);
-  return <div ref={kok} className="sa-kok" />;
+  return <><div ref={kok} className="sa-kok" />{ekranYeri && createPortal(<MerkezEkrani />, ekranYeri)}</>;
 }
 
 // Kök sayfa iş kutusudur (satın alma). İş kutusunu görmeyen kişi kendi maddesine gider: onaylayan onaylara, okuyan taleplere.

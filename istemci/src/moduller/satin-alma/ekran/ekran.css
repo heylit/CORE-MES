@@ -1,0 +1,56 @@
+/* Ortak parçalarla çizilen satın alma ekranları (2412-2): yalnız yerleşim; renk ve ölçü tasarım değişkenlerinden. */
+.sa-kok #sa-ekran:empty { display: none; }
+.sa-kok #sa-ekran { padding: var(--b-5) var(--b-6) var(--b-6); max-width: 1360px; width: 100%; min-width: 0; }
+.sa-kok #sa-ekran:not(:empty) + .sa-icerik { padding-top: 0; }
+.sa-kok #sa-ekran:not(:empty) + .sa-icerik:empty { display: none; }
+.sa-ekran { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+
+.sa-ekran-sayilar { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--b-3); }
+.sa-ekran-govde { display: flex; flex-direction: column; min-width: 0; gap: var(--cizgi-kalin); }
+.sa-ekran-govde > small { color: var(--muted); font-size: var(--yazi-s); }
+.sa-ekran-sag { align-items: flex-end; text-align: right; }
+.sa-ekran-kimde, .sa-ekran-ihtiyac { display: inline-flex; align-items: center; gap: var(--b-1); flex-wrap: wrap; }
+.sa-ekran-soluk { color: var(--muted); font-size: var(--yazi-s); }
+.sa-ekran-not { color: var(--muted); font-size: var(--yazi-s); margin: 0; }
+.sa-ekran-suzgecler { display: inline-flex; gap: var(--b-2); flex-wrap: wrap; }
+
+.sa-ekran-geri { display: flex; align-items: center; gap: var(--b-3); flex-wrap: wrap; }
+.sa-ekran-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.sa-ekran-meta > span { display: inline-flex; align-items: center; gap: var(--b-1); }
+
+.sa-ekran-simdi {
+  display: flex; align-items: flex-start; gap: var(--b-3); padding: var(--b-3) var(--b-4);
+  border: var(--cizgi-ince) solid var(--edge); border-left: var(--cizgi-kalin) solid var(--hazard);
+  border-radius: var(--yari-2); background: var(--panel);
+}
+.sa-ekran-simdi-warn { border-left-color: var(--hold); }
+.sa-ekran-simdi-bad { border-left-color: var(--stop); }
+.sa-ekran-simdi-done { border-left-color: var(--run); }
+.sa-ekran-adim-ozet { margin-top: calc(-1 * var(--b-2)); }
+
+.sa-ekran-teslim { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sa-ekran-teslim li + li { border-top: var(--cizgi-ince) solid var(--edge); }
+.sa-ekran-satir {
+  display: flex; align-items: center; gap: var(--b-3); width: 100%; padding: var(--b-2) 0;
+  background: none; border: 0; text-align: left; cursor: pointer; color: inherit;
+}
+.sa-ekran-satir > .sa-ekran-govde { flex: 1; }
+.sa-ekran-sayi { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* 360'ta talep kartı kısa kalır (Arayüz koşulu): talep, durum, kimde ve ihtiyaç (gecikmeyle; varsayılan sıra geciken önce olduğu
+   için neden üstte olduğu görünür). No, teklif sayısı ve tutar ayrıntıdadır. */
+.sa-ekran-talepler [data-kip="kart"] td[data-baslik="No"],
+.sa-ekran-talepler [data-kip="kart"] td[data-baslik="Teklif"],
+.sa-ekran-talepler [data-kip="kart"] td[data-baslik="Tutar"] { display: none; }
+
+/* Talep ayrıntısında ad ve bilgi satırı kesilmez, sarılır; dar ekranda düğmeler başlığın altına iner. */
+.sa-ekran-ayrinti .tc-sbaslik-metin, .sa-ekran-ayrinti .tc-sbaslik-alt { white-space: normal; overflow: visible; }
+
+@media (max-width: 900px) {
+  .sa-kok #sa-ekran { padding: var(--b-4) var(--b-4) var(--b-6); }
+}
+@media (max-width: 480px) {
+  .sa-ekran-ayrinti .tc-sbaslik { flex-wrap: wrap; align-items: flex-start; }
+  .sa-ekran-sayilar { display: flex; overflow-x: auto; gap: var(--b-2); scroll-snap-type: x mandatory; }
+  .sa-ekran-sayilar > * { flex: 0 0 auto; min-width: 150px; scroll-snap-align: start; }
+}

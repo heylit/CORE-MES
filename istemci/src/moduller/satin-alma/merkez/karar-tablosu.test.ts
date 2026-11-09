@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep, Teklif } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri } from './test-ekrani.ts';
 
 const K1 = '00000000-0000-4000-8000-0000000000c1';
 const K2 = '00000000-0000-4000-8000-0000000000c2';
@@ -39,12 +39,12 @@ describe('karşılaştır ve karar ver tek tabloda (kart #956)', () => {
     }));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${t.id}"]`)).not.toBeNull());
-    kok.querySelector<HTMLElement>(`tr[data-id="${t.id}"]`)!.click();
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
+    talepSatiri(kok, t.id)!.click();
     await vi.waitFor(() => expect(kok.querySelector('.sa-karar')).not.toBeNull());
 
-    expect(kok.querySelector('.fsec.open')?.getAttribute('data-sec')).toBe('compare');
+    expect(kok.querySelector('.sa-adim-govde')?.getAttribute('data-sec')).toBe('compare');
     const satirlar = [...kok.querySelectorAll<HTMLElement>('.sa-karar-t tbody tr[data-qid]')];
     expect(satirlar.map((s) => s.dataset.qid)).toEqual([QA, QB]);
     expect(satirlar[0]!.textContent).toContain('Önerilen');

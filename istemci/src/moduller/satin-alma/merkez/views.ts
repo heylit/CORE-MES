@@ -15,9 +15,17 @@ import {
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
-import { geriDugmesiHTML, inlineBulkHTML } from "./ui.ts";
-import { getRole, onaylayabilir, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
+import { inlineBulkHTML } from "./ui.ts";
+import { kalemBagMetinleri } from "./kalem-bagi.ts";
+import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
+// Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
+let cizimSurumu = 0;
+const DINLEYICILER = new Set<() => void>();
+export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }
+export const merkezSurumu = (): number => cizimSurumu;
+/** Bu sayfanın başlığını, listesini ve adım şeridini ortak parçalar çizer; merkez yalnız gövdeyi (ya da hiçbir şeyi) yazar. */
+export const ortakEkranMi = (): boolean => getRole() === "buyer" && (V.page === "dash" || V.page === "requests" || V.page === "request");
 export function render(): void {
   renderNav();
   const m = $("#main");
@@ -26,8 +34,11 @@ export function render(): void {
   if (!S.ready) { m.innerHTML = '<p class="loading">Veriler yükleniyor…</p>'; return; }
   const P: Record<Page, () => string> = { dash: viewDash, requests: viewRequests, request: viewRequest, materials: viewMaterials, material: viewMaterial, suppliers: viewSuppliers, supplier: viewSupplier, reports: viewReports, settings: viewSettings };
   const role = getRole();
-  if (V.page === "dash") P.dash = role === "approver" ? viewApprovals : role === "requester" ? viewRequesterHome : viewInbox;
+  if (V.page === "dash") P.dash = role === "approver" ? viewApprovals : role === "requester" ? viewRequesterHome : () => "";
+  if (role === "buyer" && V.page === "requests") P.requests = () => (V.view === "board" ? boardHTML() : "");
   m.innerHTML = (P[V.page] ?? viewDash)();
+  cizimSurumu++;
+  for (const f of DINLEYICILER) f();
   if (keep) { const el = document.getElementById(keep.id) as FormEl | null; if (el) { el.focus(); try { if (keep.s != null) el.setSelectionRange(keep.s, keep.e); } catch { /* seçim desteklenmiyor */ } } }
   afterRender();
 }
@@ -202,13 +213,14 @@ function priceChartSvg(h: PriceEntry[], W: number): string {
 }
 
 /* ================= talepler ================= */
-/** Talep tutarı: karar varsa karar tutarı, yoksa en uygun tam teklifin net maliyeti */
-function reqValue(r: PurchaseRequest): { v: number | null; who: string } {
+/** Talep tutarı tek ölçüyle, KDV hariç toplam (2412-2): karar varsa karar tutarı, yoksa en uygun (net maliyeti en düşük) tam teklifin
+ *  toplamı. Vadeyle indirgenmiş net maliyet ayrıntıdaki karşılaştırmada kalır. */
+export function reqValue(r: PurchaseRequest): { v: number | null; who: string } {
   const tt = r.award ? awardTotals(r) : null;
   if (tt) return { v: tt.totalTRY, who: tt.x ? supName(tt.x.q) : "kalem bazlı" };
   const ev = (r.quotes || []).length ? evaluate(r) : null;
   const best = ev ? ev.elig.filter(x => x.c.covered === (r.items || []).length).sort((a, b) => a.c.pvTRY - b.c.pvTRY)[0] : null;
-  return best ? { v: best.c.pvTRY, who: supName(best.q) } : { v: null, who: "" };
+  return best ? { v: best.c.totalTRY, who: supName(best.q) } : { v: null, who: "" };
 }
 /** Panoda kısa liste: tek satırda no, talep, durum, tutar */
 function reqList(list: PurchaseRequest[]): string {
@@ -236,7 +248,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
     return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span></td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
-function filteredRequests(): PurchaseRequest[] {
+export function filteredRequests(): PurchaseRequest[] {
   let list = Object.values(S.requests);
   // Liste ve süzgeç sayısı aynı tanımı kullanır.
   const durumSuzgeci = STATUS_FILTERS.find(([k]) => k === V.status)?.[2];
@@ -249,10 +261,17 @@ function filteredRequests(): PurchaseRequest[] {
   const po: Record<Priority, number> = { urgent: 0, normal: 1, low: 2 };
   const key = SORTS[V.sort];
   if (key) return list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * V.dir; });
-  return list.sort((a, b) => (po[a.priority || "normal"] - po[b.priority || "normal"]) || ((b.createdAt || 0) - (a.createdAt || 0)));
+  // 2423 a: önce geciken (iş kutusunun kuralı: ihtiyacı geçmiş açık talep ya da teslimatı gecikmiş sipariş), sonra öncelik,
+  // sonra ihtiyaç tarihi (tarihsiz sonda); sütun başlığı bu sırayı değiştirir.
+  const gec = (r: PurchaseRequest) => (gecikmisMi(r) ? 0 : 1);
+  return list.sort((a, b) => gec(a) - gec(b) || (po[a.priority || "normal"] - po[b.priority || "normal"]) || (a.needDate || "9999").localeCompare(b.needDate || "9999"));
 }
 // "Onayda" onay bekleyendir; onaylanıp siparişi beklenen talep Açık'ta kalır, Onayda sayılmaz (TMI Ç3, menü sayacıyla aynı tanım).
-const STATUS_FILTERS: [string, string, (r: PurchaseRequest) => boolean][] = [
+export function gecikmisMi(r: PurchaseRequest, bugun = todayStr()): boolean {
+  if (OPEN.includes(r.status) && r.needDate && dayDiff(bugun, r.needDate) < 0) return true;
+  return r.status === "ordered" && gecikenSiparisSayisi(r) > 0;
+}
+export const STATUS_FILTERS: [string, string, (r: PurchaseRequest) => boolean][] = [
   ["open", "Açık", r => OPEN.includes(r.status)], ["approval", "Onayda", r => r.status === "approval" && approvalState(r).state !== "approved"],
   ["ordered", "Siparişte", r => r.status === "ordered"], ["late", "Geciken", r => gecikenSiparisSayisi(r) > 0], ["received", "Tamamlanan", r => r.status === "received"],
   ["cancelled", "İptal", r => r.status === "cancelled"], ["all", "Tümü", () => true],
@@ -275,7 +294,7 @@ function viewRequests(): string {
   ${!all.length ? `<div class="panel">${empty("Henüz talep yok", "Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer.")}</div>`
       : board ? boardHTML() : `<div class="panel">${reqTable(list, false, true)}</div>`}`;
 }
-function boardHTML(): string {
+export function boardHTML(): string {
   const saveStatus = V.status; V.status = "all"; const list = filteredRequests(); V.status = saveStatus;
   const t = todayStr();
   return `<div class="board">${FLOW.map(k => {
@@ -284,14 +303,14 @@ function boardHTML(): string {
       const d = r.needDate ? dayDiff(t, r.needDate) : null;
       const tt = r.award ? awardTotals(r) : null;
       return `<div class="card" data-act="open" data-id="${r.id}" tabindex="0"><span class="xs muted num">${esc(r.no)}${r.department ? ", " + esc(r.department) : ""}</span><span class="t">${prioDot(r.priority)}${esc(r.title)}</span>${ilerlemeNoktalari(r)}<span class="xs muted">${(r.items || []).length} kalem, ${(r.quotes || []).length} teklif${tt ? ", " + short(tt.totalTRY) : ""}</span>${OPEN.includes(k) && d !== null && d <= 7 ? `<span>${d < 0 ? `<span class="flag bad">ihtiyaç ${-d} gün geçti</span>` : `<span class="flag warn">ihtiyaca ${d} gün</span>`}</span>` : ""}</div>`;
-    }).join("") || '<span class="xs faint" data-sa-y="44">Boş</span>'}</div>`;
+    }).join("") || '<span class="xs faint" data-sa-y="44">Boş</span>'}${items.length > 40 ? `<button class="btn ghost sm" data-act="pano-sutun" data-v="${k}">+${nf0.format(items.length - 40)} talep daha</button>` : ""}</div>`;
   }).join("")}</div>`;
 }
 
 /* ================= talep detayı ================= */
 /** Talebin altı adımı; ilerleme çizgisi, bölümler ve listedeki noktalar aynı sırayı kullanır (kart #939). */
 const ADIMLAR = [["items", "Talep"], ["quotes", "Teklif"], ["compare", "Karar"], ["approval", "Onay"], ["order", "Sipariş"], ["delivery", "Teslim"]] as const;
-const KARAR_SONRASI = ["approval", "order", "delivery"];
+export const KARAR_SONRASI = ["approval", "order", "delivery"];
 /** Şimdiki adımın sırası: 6 bütün adımlar bitti, -1 iptal. Reddedilen karar karar adımına döner. */
 export function adimSirasi(r: PurchaseRequest): number {
   switch (r.status) {
@@ -325,48 +344,22 @@ function kimde(r: PurchaseRequest): string | null {
   if (i === 1 && rfqs.length && rfqs.some(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)) && !(r.quotes || []).length) return "Tedarikçi (teklif)";
   return "Satın alma";
 }
-function viewRequest(): string {
-  const r = S.requests[V.id!];
-  if (!r) return `<div class="panel">${empty("Talep bulunamadı", "Silinmiş olabilir.", '<button class="btn" data-act="go" data-page="requests">Taleplere dön</button>')}</div>`;
-  if (getRole() === "approver") return viewApproval(r);
-  if (getRole() === "requester") return viewRequestRequester(r);
-  const nq = (r.quotes || []).length;
+/** Açık adım: adreste ya da sekmede seçilen, yoksa talebin şimdiki adımı. Eski "sim" ve "decision" bağlantıları karşılığına gider. */
+export function talepBolumu(r: PurchaseRequest): string {
   const tab = V.tab || defaultSection(r);
   const curI = adimSirasi(r);
-  // Eski "decision" bağlantıları karar sonrasının şimdiki adımını açar.
-  const sec = tab === "sim" ? "compare" : tab === "decision" ? (curI >= 3 ? ADIMLAR[Math.min(curI, 5)]![0] : "approval") : tab;
-  const t = todayStr(), d = r.needDate ? dayDiff(t, r.needDate) : 0;
-  const meta = [
-    r.department && esc(r.department),
-    r.requester && `Talep eden ${esc(r.requester)}`,
-    r.uretimEmriNo && `Üretim emri ${esc(r.uretimEmriNo)}`,
-    r.needDate && `İhtiyaç ${fmtDate(r.needDate)}${OPEN.includes(r.status) ? (d < 0 ? ` <span class="flag bad">${-d} gün geçti</span>` : ` <span class="faint">(${d} gün)</span>`) : ""}`,
-    `${prioDot(r.priority)}${PRIO[r.priority || "normal"]}`,
-  ].filter(Boolean);
-  const flow = flowHTML(r, sec);
-  const cur = defaultSection(r);
-  const order = ADIMLAR.map(([k]) => k as string);
-  const ev = nq ? evaluate(r) : null;
-  const tt = r.award ? awardTotals(r) : null;
-  const aps = approvalState(r);
-  const rfqs = r.rfqs || [], pending = rfqs.filter(x => !(r.quotes || []).some(q => q.supplierId === x.supplierId)).length;
-  const sums: Record<string, string> = {
-    items: `${(r.items || []).length} kalem${headerFacts(r).find(f => f.startsWith("tahmini")) ? ", " + headerFacts(r).find(f => f.startsWith("tahmini")) : ""}`,
-    quotes: nq ? `${nq} teklif${pending ? `, ${pending} cevap bekleniyor` : ""}` : rfqs.length ? `${rfqs.length} tedarikçiden istendi, cevap bekleniyor` : "henüz teklif istenmedi",
-    compare: tt ? `karar: ${esc(tt.x ? supName(tt.x.q) : "kalem bazlı")}, <b class="num">${money(tt.totalTRY, "TRY", 0)}</b>` : ev && ev.ranking[0] ? `önerilen: ${esc(supName(ev.ranking[0].q))}, <b class="num">${money(ev.ranking[0].c.pvTRY, "TRY", 0)}</b> net` : "teklifler girilince",
-    approval: aps.state === "approved" || COMMITTED.includes(r.status) ? "onaylandı" : aps.state === "rejected" ? '<span class="flag bad">karar reddedildi</span>' : r.award ? "onay bekliyor" : "karardan sonra",
-    order: COMMITTED.includes(r.status) ? "sipariş verildi" : aps.state === "approved" ? "onaylandı, sipariş verilecek" : "onaydan sonra",
-    delivery: r.status === "received" ? "teslim alındı" : r.status === "ordered" ? "teslimat bekleniyor" : "siparişten sonra",
-    log: `${(r.log || []).length} kayıt`,
-  };
-  const sira = (k: string) => order.indexOf(k);
-  const done = (k: string) => sira(k) >= 0 && sira(k) < curI;
-  const titles: Record<string, string> = { items: "Kalemler", quotes: "Teklifler", compare: "Karşılaştır ve karar ver", approval: "Onay", order: "Sipariş", delivery: "Teslim ve değerlendirme", log: "Geçmiş" };
-  const content = (k: string): string => {
-    if (k === "items") return tabItems(r);
-    if (k === "quotes") return tabQuotes(r);
-    if (k === "compare") {
-      if (!nq) return tabCompare(r);
+  return tab === "sim" ? "compare" : tab === "decision" ? (curI >= 3 ? ADIMLAR[Math.min(curI, 5)]![0] : "approval") : tab;
+}
+/** Talep ayrıntısının seçili adımının içeriği; başlık, adım şeridi ve "Şimdi yapılacak" ortak parçalarla çizilir (2412-2, 2420 a). */
+export function talepGovdesi(r: PurchaseRequest): string {
+  const sec = talepBolumu(r);
+  const iptal = r.status === "cancelled" ? `<div class="callout" data-sa-y="1">Bu talep iptal edildi${r.cancelReason ? ": " + esc(r.cancelReason) : "."} Kayıt ve teklifler hafızada kalır.</div>` : "";
+  let govde: string;
+  if (sec === "items") govde = tabItems(r);
+  else if (sec === "quotes") govde = tabQuotes(r);
+  else if (sec === "compare") {
+    if (!(r.quotes || []).length) govde = tabCompare(r);
+    else {
       // TMI (kullanıcı kararı): paylaştırma çubukları karşılaştırmanın içinde açık durur, ayrı ekran yok. Prototipin koşulu: talep
       // açık ve en az iki tedarikçi fiyat vermiş.
       const paylas = OPEN.includes(r.status) && evaluate(r).elig.length >= 2
@@ -374,33 +367,37 @@ function viewRequest(): string {
         : "";
       // Kart #956: önde tek tablo ve tek düğme; ağırlık, kalem kalem tablo, bölme ve paylaştırma kapalı "Ayrıntılar" altında.
       const acik = UI.adv.detay || r.award?.mode === "split";
-      return `<div data-sa-y="46">${tabDecision(r, "select")}</div>
+      govde = `<div data-sa-y="46">${tabDecision(r, "select")}</div>
         <details class="adv sa-detay" data-adv="detay" ${acik ? "open" : ""}><summary>Ayrıntılar ve bölme <span class="muted">(ağırlıklar, kalem kalem tablo, bölme, paylaştırma)</span></summary>
         <div class="stack">${tabCompare(r, true)}${tabDecision(r, "split")}${paylas}</div></details>`;
     }
-    if (k === "approval" || k === "order" || k === "delivery") return tabDecision(r, k);
-    return tabLog(r);
-  };
-  const section = (k: string, i: number) => {
-    const open = sec === k, st = done(k) ? "done" : k === cur ? "cur" : "";
-    return `<section class="fsec ${open ? "open" : ""} ${st}" data-sec="${k}">
-      <button class="fsec-h tab" data-act="tab" data-tab="${k}" aria-expanded="${open}" aria-selected="${open}">
-        <span class="fn">${done(k) ? "✓" : i ? i : ""}</span><span class="ft">${titles[k]}</span><span class="fsum">${sums[k]}</span><span class="chev" aria-hidden="true">${open ? "▴" : "▾"}</span>
-      </button>
-      ${open ? `<div class="fsec-b">${content(k)}</div>` : ""}
-    </section>`;
-  };
-  return `
-  ${geriDugmesiHTML(r.no)}
-  <div class="rhead">
-    <div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
-      <p class="rmeta">${meta.map(m => `<span>${m}</span>`).join("")}${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
-    <div class="ract">${reqMenuHTML(r)}</div>
-  </div>
-  ${ilerlemeCizgisi(r, curI)}
-  ${r.status === "cancelled" ? `<div class="callout" data-sa-y="1">Bu talep iptal edildi${r.cancelReason ? ": " + esc(r.cancelReason) : "."} Kayıt ve teklifler hafızada kalır.</div>` : flow.bar}
-  <div class="flow">${order.map((k, i) => section(k, i + 1)).join("")}${section("log", 0)}</div>`;
+  } else if (sec === "approval" || sec === "order" || sec === "delivery") govde = tabDecision(r, sec);
+  else govde = tabLog(r);
+  return `${iptal}<div class="sa-adim-govde" data-sec="${sec}">${govde}</div>`;
 }
+function viewRequest(): string {
+  const r = S.requests[V.id!];
+  if (!r) return "";
+  if (getRole() === "approver") return viewApproval(r);
+  if (getRole() === "requester") return viewRequestRequester(r);
+  return talepGovdesi(r);
+}
+/** Talebin adım şeridi ve başlığı için: adımın kısa bilgisi (liste ve sekme ipucu). */
+export function adimBilgisi(r: PurchaseRequest): Record<string, string> {
+  const nq = (r.quotes || []).length, nr = (r.rfqs || []).length;
+  const tt = r.award ? awardTotals(r) : null;
+  const aps = approvalState(r);
+  const req = tt ? requiredApprover(tt.totalTRY) : null;
+  return {
+    items: `${(r.items || []).length} kalem`,
+    quotes: nq ? `${nq} teklif${nr > nq ? ` / ${nr}` : ""}` : nr ? `${nr} istendi` : "istenmedi",
+    compare: tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "bekliyor",
+    approval: aps.state === "approved" || COMMITTED.includes(r.status) ? "onaylandı" : aps.state === "rejected" ? "reddedildi" : r.award ? `${req?.role || "onay"} bekliyor` : "",
+    order: COMMITTED.includes(r.status) ? "verildi" : "",
+    delivery: r.status === "received" ? "alındı" : r.status === "ordered" ? "bekleniyor" : "",
+  };
+}
+export { ADIMLAR, kimde };
 /** Başlık satırında kısa sayılar: teklif durumu, tutar, bütçe */
 export function headerFacts(r: PurchaseRequest): string[] {
   const out: string[] = [];
@@ -416,56 +413,21 @@ export function headerFacts(r: PurchaseRequest): string[] {
   if (bu && bu.budget) out.push(`${esc(r.department)} bütçesi ${pct(bu.used / bu.budget * 100)}`);
   return out;
 }
-/** Talep işlemleri menüsü (açılır liste yerine) */
-function reqMenuHTML(r: PurchaseRequest): string {
+/** Talep işlemleri menüsü: işlem adı, başlık, tehlikeli mi. */
+export function talepIslemleri(r: PurchaseRequest): [act: string, baslik: string, tehlike?: true][] {
   const open = OPEN.includes(r.status);
-  const items: [string, string, string?][] = [
+  return [
     ["req-edit", "Talebi düzenle"],
     ...(open && (r.items || []).length ? [["rfq", "Teklif iste"] as [string, string]] : []),
     ...(r.award ? [["approval-form", "Onay formunu göster"] as [string, string]] : []),
     // Teslim alınan talebin durumu elle değişmez, yalnız taslak silinir (SAT-07, SAT-66); sunucunun reddedeceği işlem menüde durmaz.
     ...(r.status !== "received" ? [["req-status", "Durumu elle değiştir"] as [string, string]] : []),
-    ...(r.status !== "cancelled" && r.status !== "received" ? [["req-cancel", "Talebi iptal et"] as [string, string]] : []),
-    ...(r.status === "draft" ? [["req-delete", "Talebi sil", "danger"] as [string, string, string]] : []),
+    ...(r.status !== "cancelled" && r.status !== "received" ? [["req-cancel", "Talebi iptal et", true] as [string, string, true]] : []),
+    ...(r.status === "draft" ? [["req-delete", "Talebi sil", true] as [string, string, true]] : []),
   ];
-  return `<div class="menu"><button class="btn" data-act="menu" aria-haspopup="menu" aria-expanded="false">İşlemler <span aria-hidden="true">▾</span></button>
-    <div class="menu-list" role="menu" hidden>${items.map(([act, l, cls]) => `<button role="menuitem" class="${cls ?? ""}" data-act="${act}">${l}</button>`).join("")}</div></div>`;
 }
-/** Süreç adımları ve sıradaki adım tek bantta; birincil düğme başlığa çıkar */
-/** Altı adım yan yana: biten ✓, şimdiki vurgulu, adımın altında kısa bilgi; adıma basmak bölümünü açar. */
-function ilerlemeCizgisi(r: PurchaseRequest, curI: number): string {
-  const nq = (r.quotes || []).length, nr = (r.rfqs || []).length;
-  const tt = r.award ? awardTotals(r) : null;
-  const aps = approvalState(r);
-  const req = tt ? requiredApprover(tt.totalTRY) : null;
-  const bilgi: Record<string, string> = {
-    items: `${(r.items || []).length} kalem`,
-    quotes: nq ? `${nq} teklif${nr > nq ? ` / ${nr}` : ""}` : nr ? `${nr} istendi` : "istenmedi",
-    compare: tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "bekliyor",
-    approval: aps.state === "approved" || COMMITTED.includes(r.status) ? "onaylandı" : aps.state === "rejected" ? "reddedildi" : r.award ? `${req?.role || "onay"} bekliyor` : "—",
-    order: COMMITTED.includes(r.status) ? "verildi" : "—",
-    delivery: r.status === "received" ? "alındı" : r.status === "ordered" ? "bekleniyor" : "—",
-  };
-  return `<ol class="sa-ilerleme${curI < 0 ? " iptal" : ""}" aria-label="Talebin ilerlemesi">${ADIMLAR.map(([k, l], j) => {
-    const st = curI < 0 ? "" : j < curI ? "done" : j === curI ? "cur" : "";
-    return `<li class="${st}"><button class="tab" data-act="tab" data-tab="${k}"${j === curI ? ' aria-current="step"' : ""}><span class="ai">${st === "done" ? "✓" : j + 1}</span><span class="al">${l}</span><span class="ab">${esc(bilgi[k] ?? "")}</span></button></li>`;
-  }).join("")}</ol>`;
-}
-/** "Şimdi yapılacak" kutusu: ne gerekiyor, kimde bekliyor ve tek birincil düğme. */
-function flowHTML(r: PurchaseRequest, tab: string): { bar: string } {
-  const n = nextStep(r);
-  n.b = n.b.filter(([act, , , t]) => !(act === "tab" && (t === tab || (t === "decision" && KARAR_SONRASI.includes(tab)))));
-  const pi = n.b.findIndex(x => x[2]);
-  const prim = pi >= 0 ? n.b.splice(pi, 1)[0]! : n.b.shift();
-  const btn = (b: NextBtn, cls: string) => `<button class="btn ${cls}" data-act="${b[0]}" ${b[3] ? `data-tab="${b[3]}"` : ""}>${esc(b[1])}</button>`;
-  const kim = kimde(r);
-  return {
-    bar: `<div class="nextline sa-simdi ${n.cls}" role="status"><span class="nd"></span><span class="nt"><span class="sa-simdi-k">${n.cls === "done" ? "Durum" : "Şimdi yapılacak"}${kim ? `, bekleyen: ${esc(kim)}` : ""}</span><b>${esc(n.t)}</b>${n.s ? ` <span>${esc(n.s)}</span>` : ""}</span>${prim ? btn(prim, "primary") : ""}${n.b.map(b => btn(b, "sm")).join("")}</div>`,
-  };
-}
-
 /* talebin bulunduğu aşamaya göre tek, net bir sonraki adım */
-type NextBtn = [act: string, label: string, primary: number, tab?: string];
+export type NextBtn = [act: string, label: string, primary: number, tab?: string];
 export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: string; b: NextBtn[] } {
   const set = settings(), items = (r.items || []).length, q = (r.quotes || []).length, rfqs = r.rfqs || [];
   const pending = rfqs.filter(x => !(r.quotes || []).some(qq => qq.supplierId === x.supplierId));
@@ -508,7 +470,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (last) est += last.unitTRY * (parseNum(it.qty) || 0);
     if (st) st.suppliers.forEach(s => { prevSup[s.supplierId] = prevSup[s.supplierId] || { id: s.supplierId, name: s.name, items: new Set(), wins: 0 }; prevSup[s.supplierId]!.items.add(it.name); prevSup[s.supplierId]!.wins += s.wins; });
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
-    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td>
+    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}</td>
       <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}</td>
       <td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
@@ -761,7 +723,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
       ${bu && tt ? `<div><div class="k">${esc(r.department)} bütçesi</div><div class="v">${bu.budget ? pct((bu.used + (ordered ? 0 : tt!.totalTRY)) / bu.budget * 100) : "–"}</div><div class="d">${bu.budget ? `bu alımla ${short(bu.used + (ordered ? 0 : tt!.totalTRY))} / ${short(bu.budget)}` : "bütçe tanımlı değil"}</div></div>` : ""}
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
-    ${canApprove ? `<div class="grid g2"><label class="f"><span>Onaylayan</span><input type="text" id="ap-name" value="${esc(S.me?.name ?? "")}" readonly></label><label class="f"><span>Not</span><input type="text" id="ap-note" placeholder="İsteğe bağlı"></label></div>
+    ${canApprove ? `<label class="f"><span>Not</span><input type="text" id="ap-note" placeholder="İsteğe bağlı"></label>
     <div class="row"><button class="btn good" data-act="approve">Onayla</button><button class="btn" data-act="approval-form">Onay formu</button><button class="btn bad" data-act="reject">Reddet ve değerlendirmeye geri gönder</button><span class="small muted">Onay özetini e-postayla göndermek için aşağıdaki karar özetini kopyalayın.</span></div>` : ordered ? "" : `<div class="row"><button class="btn" data-act="approval-form">Onay formu</button><span class="small muted">${aps.state === "rejected" ? "Karar reddedildi. Seçimi güncelleyip yeniden onaya gönderin." : approved ? "Karar onaylandı; sipariş verilebilir." : baskasiOnaylar ? "Onay, onay yetkisi olan kişide; Onaylar sayfasından verilir." : "Onay, karar onaya gönderildiğinde açılır."}</span></div>`}`, decided)}`;
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
     ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}

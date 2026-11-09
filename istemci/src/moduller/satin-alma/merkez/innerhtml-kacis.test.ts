@@ -7,6 +7,7 @@ import { setOnaylayabilir, setRole, type Role } from './roles.ts';
 import { render } from './views.ts';
 import { approvalFormHTML } from './docs.ts';
 import { simLive } from './sim.ts';
+import { ekranCiz, ekranKaldir } from './test-ekrani.ts';
 
 // Ekranlar dizgiyle HTML kurar ve innerHTML'e verir (değerlendirme 2197 R08). Kullanıcının ya da sunucunun verdiği her metin
 // alanına kötü niyetli dizgi konur; çizilen ağaçta yeni öğe ya da olay özniteliği çıkmamalı, dizgi metin olarak görünmeli.
@@ -89,7 +90,9 @@ function enjeksiyon(kok: ParentNode): string[] {
 function ciz(page: Page, id: string | null = null, tab: string | null = null): HTMLElement {
   V.page = page; V.id = id; V.tab = tab;
   render();
-  return document.querySelector<HTMLElement>('#main')!;
+  // Satın almacının iş kutusu, Talepler ve talep ayrıntısı ortak parçalarla #main'in üstüne çizilir (2412-2); ikisi birlikte denetlenir.
+  ekranCiz();
+  return document.body;
 }
 
 beforeEach(() => {
@@ -97,7 +100,7 @@ beforeEach(() => {
   setOnaylayabilir(true);
   kur();
 });
-afterEach(() => { S.ready = false; document.body.innerHTML = ''; setRole('buyer'); setOnaylayabilir(false); });
+afterEach(() => { ekranKaldir(); S.ready = false; document.body.innerHTML = ''; setRole('buyer'); setOnaylayabilir(false); });
 
 describe('satın alma ekranları kötü niyetli metni etiket olarak ayrıştırmaz (2201a)', () => {
   const sayfalar: [Page, string | null][] = [

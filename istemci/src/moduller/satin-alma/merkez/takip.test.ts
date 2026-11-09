@@ -3,7 +3,7 @@ import type { AcilisCevabi, SiparisTakibiCevabi, Talep } from '#paylasilan/sozle
 import type { SiparisIrsaliyeleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
 
 const K1 = '00000000-0000-4000-8000-000000000011';
 const QA = '00000000-0000-4000-8000-0000000000a1';
@@ -57,13 +57,13 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     }));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector('[data-act="status-chip"][data-v="ordered"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('[data-act="status-chip"][data-v="ordered"]')!.click();
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${TALEP.id}"]`)).not.toBeNull());
-    kok.querySelector<HTMLElement>(`tr[data-id="${TALEP.id}"]`)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.fsec-h[data-tab="order"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('.fsec-h[data-tab="order"]')!.click();
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+    sekme(kok, 'ordered')!.click();
+    await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+    talepSatiri(kok, TALEP.id)!.click();
+    await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+    sekme(kok, 'order')!.click();
     await vi.waitFor(() => expect(kok.querySelectorAll('[data-sa-takip]')).toHaveLength(2));
     const [irs, fat] = [...kok.querySelectorAll<HTMLElement>('[data-sa-takip]')];
     // Ana sayfa .todo izgarası (nokta, no, metin, düğme) iki sütunlu takip satırını ezmesin diye liste kendi işaretini taşır.
@@ -127,13 +127,13 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
     }));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector('[data-act="status-chip"][data-v="ordered"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('[data-act="status-chip"][data-v="ordered"]')!.click();
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${TALEP.id}"]`)).not.toBeNull());
-    kok.querySelector<HTMLElement>(`tr[data-id="${TALEP.id}"]`)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.fsec-h[data-tab="order"]')).not.toBeNull());
-    kok.querySelector<HTMLElement>('.fsec-h[data-tab="order"]')!.click();
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+    sekme(kok, 'ordered')!.click();
+    await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+    talepSatiri(kok, TALEP.id)!.click();
+    await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+    sekme(kok, 'order')!.click();
     await vi.waitFor(() => expect(kok.querySelectorAll('[data-sa-takip]')).toHaveLength(2));
     const [irs, fat] = [...kok.querySelectorAll<HTMLElement>('[data-sa-takip]')];
     expect(irs!.dataset.saTakip).toBe('bekliyor');

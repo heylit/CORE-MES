@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri } from './test-ekrani.ts';
 import { adimSirasi, ilerlemeNoktalari } from './views.ts';
 import type { PurchaseRequest, RequestStatus } from './tipler.ts';
 
@@ -54,27 +54,26 @@ describe('talebin altı adımı (kart #939)', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(acilis), { status: 200, headers: { 'content-type': 'application/json' } })));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
-    await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${t.id}"]`)).not.toBeNull());
-    expect(kok.querySelector(`tr[data-id="${t.id}"] .sa-noktalar`)?.getAttribute('aria-label')).toBe('Adım 2/6: Teklif');
-    kok.querySelector<HTMLElement>(`tr[data-id="${t.id}"]`)!.click();
-    await vi.waitFor(() => expect(kok.querySelector('.sa-ilerleme')).not.toBeNull());
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(talepSatiri(kok, t.id)).not.toBeNull());
+    talepSatiri(kok, t.id)!.click();
+    const serit = () => kok.querySelector('[role="tablist"][aria-label="Talebin adımları"]');
+    await vi.waitFor(() => expect(serit()).not.toBeNull());
 
-    const adimlar = [...kok.querySelectorAll('.sa-ilerleme li')];
-    expect(adimlar.map((li) => li.querySelector('.al')!.textContent)).toEqual(['Talep', 'Teklif', 'Karar', 'Onay', 'Sipariş', 'Teslim']);
-    expect(adimlar.map((li) => li.className)).toEqual(['done', 'cur', '', '', '', '']);
-    expect(kok.querySelector('.sa-ilerleme [aria-current="step"] .al')?.textContent).toBe('Teklif');
-    expect([...kok.querySelectorAll('.fsec')].map((s) => (s as HTMLElement).dataset.sec)).toEqual(['items', 'quotes', 'compare', 'approval', 'order', 'delivery', 'log']);
-    expect(kok.querySelector('.fsec.open')?.getAttribute('data-sec')).toBe('quotes');
-    expect([...kok.querySelectorAll('.fsec')].map((s) => ['done', 'cur'].find((c) => s.classList.contains(c)) ?? '')).toEqual(['done', 'cur', '', '', '', '', '']);
-    const kutu = kok.querySelector('.sa-simdi')!;
-    expect(kutu.textContent).toContain('Şimdi yapılacak, bekleyen: Satın alma');
-    expect(kutu.querySelectorAll('.btn.primary')).toHaveLength(1);
-    expect(kok.querySelector('.ract .btn.primary')).toBeNull();
+    // 2412-2: altı adım ve geçmiş tek sekme şeridinde; şimdiki adım seçili, gövdede onun bölümü.
+    const sekmeler = [...serit()!.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(sekmeler.map((s) => s.dataset.sekme)).toEqual(['items', 'quotes', 'compare', 'approval', 'order', 'delivery', 'log']);
+    expect(sekmeler.map((s) => s.textContent)).toEqual(['Kalemler', 'Teklifler', 'Karar', 'Onay', 'Sipariş', 'Teslim', 'Geçmiş']);
+    expect(serit()!.querySelector('[aria-selected="true"]')?.getAttribute('data-sekme')).toBe('quotes');
+    expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('quotes');
+    const kutu = kok.querySelector('.sa-ekran-simdi')!;
+    expect(kutu.textContent).toContain('Şimdi yapılacak');
+    expect(kutu.textContent).toContain('Bekleyen: Satın alma.');
+    expect(kok.querySelectorAll('#sa-ekran .tc-dugme-birincil')).toHaveLength(1);
 
     // Adıma basmak bölümünü açar.
-    kok.querySelector<HTMLElement>('.sa-ilerleme li:nth-child(4) button')!.click();
-    expect(kok.querySelector('.fsec.open')?.getAttribute('data-sec')).toBe('approval');
+    sekmeler[3]!.click();
+    await vi.waitFor(() => expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('approval'));
     kapat();
   });
 });

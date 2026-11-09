@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import './store.ts';
-import { merkeziBagla } from './bagla.ts';
+import { ekranliBagla, talepSatiri, sekme } from './test-ekrani.ts';
 
 const talep: Talep = {
   id: '00000000-0000-4000-8000-000000000101', no: 'ST-2026-001', baslik: 'Deneme talep', birim: null, talepEdenKisiId: 5, talepEdenAdi: 'Deneme Kişi', teslimYontemi: null, uretimEmriId: null, uretimEmriNo: null, acanKisiId: 5,
@@ -36,11 +36,11 @@ async function ac(durum: Talep['durum']): Promise<{ kok: HTMLElement; kapat: () 
   window.scrollTo = () => {};
   const kok = document.createElement('div');
   document.body.append(kok);
-  const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, bildirim });
-  await vi.waitFor(() => expect(kok.querySelector(`tr[data-id="${talep.id}"]`)).not.toBeNull());
-  kok.querySelector<HTMLElement>(`tr[data-id="${talep.id}"]`)!.click();
-  await vi.waitFor(() => expect(kok.querySelector('[data-act="tab"][data-tab="quotes"]')).not.toBeNull());
-  kok.querySelector<HTMLElement>('[data-act="tab"][data-tab="quotes"]')!.click();
+  const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {}, bildirim });
+  await vi.waitFor(() => expect(talepSatiri(kok, talep.id)).not.toBeNull());
+  talepSatiri(kok, talep.id)!.click();
+  await vi.waitFor(() => expect(sekme(kok, 'quotes')).not.toBeNull());
+  sekme(kok, 'quotes')!.click();
   return { kok, kapat };
 }
 
