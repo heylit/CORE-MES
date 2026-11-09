@@ -591,3 +591,7 @@ export const grupSaatMaliyetleriCevabi = z.object({
   }).strict()),
 }).strict();
 export type GrupSaatMaliyetleriCevabi = z.output<typeof grupSaatMaliyetleriCevabi>;
+// 2653 (2644 b): taslağın ek mesai tutarı; yalnız toplam. Grup, saat, kişi alanı yok (fark alma ile küçük grubun değeri çıkmasın).
+export const mesaiMaliyetiSorgusu = z.object({ taslak: z.coerce.number<number>().int().positive() }).strict();
+export const mesaiMaliyetiCevabi = z.object({ ay: z.string(), toplam: z.number().nullable(), bilinmeyen: z.boolean() }).strict();
+export type MesaiMaliyetiCevabi = z.output<typeof mesaiMaliyetiCevabi>;

@@ -4,7 +4,7 @@ import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
-  siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
+  siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
   yerlestirGovdesi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
@@ -19,6 +19,7 @@ import { ekMesaiyiEkle, isiTasi, olayiEkle } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
+import { mesaiMaliyeti } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import { mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
@@ -69,6 +70,9 @@ export const uclar = [
   // 2618 (2602-a, 2603 a): mesai ve maliyet görünümünün departman saat maliyeti; maliyet görünümünün işlemiyle (223 a). Kişi değeri çıkmaz.
   uc({ yontem: 'GET', yol: '/plan/grup-saat-maliyetleri', yetki: 'finans.maliyet-oku', cevap: grupSaatMaliyetleriCevabi,
     isle: ({ db }) => grupSaatMaliyetleri(db) }),
+  // 2653 (2644 b): taslağın ek mesai tutarı, yalnız toplam; saat istemciden alınmaz. Yalnız maliyet görünümünün işlemi (Güvenlik K3).
+  uc({ yontem: 'GET', yol: '/plan/mesai-maliyeti', yetki: 'finans.maliyet-oku', sorgu: mesaiMaliyetiSorgusu, cevap: mesaiMaliyetiCevabi,
+    isle: ({ db, sorgu }) => mesaiMaliyeti(db, sorgu.taslak) }),
   uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db, kullanici }) => servis.canliSurum(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),

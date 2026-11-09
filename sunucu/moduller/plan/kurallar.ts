@@ -594,3 +594,96 @@ export function grupSaatEkrani(gruplar: Iterable<GrupSaatDegeri>): GrupSaatDeger
     .map((g) => ({ departmanNo: g.departmanNo, departmanAd: g.departmanAd, saatMaliyeti: g.kucuk ? null : g.saatMaliyeti, kucuk: g.kucuk }))
     .sort((a, b) => a.departmanAd.localeCompare(b.departmanAd, 'tr') || a.departmanNo - b.departmanNo);
 }
+
+// 2653 (2644 b): ek mesai tutarı. İstemcinin `mesaiTutari` kuralının sunucu kopyasıdır (planlama/maliyet/kurallar.ts); ikisi aynı örnek
+// tablosuyla sınanır (mesai-maliyeti.test.ts "ortak örnekler"), biri değişirse öteki de değişir. Kişi bazlıysa saat x operatör oranı x
+// saat değeri x gün çarpanı + operatör oranı x kişi başı ek; değilse ya da saat değeri yoksa saat x mesai ücreti x (vardiyasız günde)
+// mesai çarpanı. Ücret de yoksa null. 0 çarpan "yok" sayılır (istemcideki ||).
+export interface MesaiGirdisi {
+  h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
+  ucret: number | null; vardiyasiz: boolean; mesaiCarpan: number | undefined;
+}
+export function mesaiTutari(g: MesaiGirdisi): number | null {
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.vardiyasiz ? g.mesaiCarpan || 1 : 1);
+  const op = g.op ?? 1;
+  return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
+}
+
+type Nesne = Record<string, unknown>;
+const nesne = (v: unknown): v is Nesne => typeof v === 'object' && v !== null && !Array.isArray(v);
+const sayiOku = (v: unknown): number | null => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+  return null;
+};
+export type GunTuru = 'hi' | 'cmt' | 'paz' | 'tatil';
+// Planlama çalışmasının (birleşmiş D) mesai ayarları; istemcinin mesaiSistemi, ymAyar ve mesaiUcreti okumalarıyla aynı varsayılanlar.
+export interface MesaiAyarlari {
+  kisiBazli: boolean; carp: Record<GunTuru, number>; kisiEk: number | null; ucret: number | null; mesaiCarpan: number | undefined;
+  tatiller: ReadonlySet<string>; calismaGunleri: Nesne; tezgahlar: ReadonlyMap<string, { opOran: number | null | undefined; grup: string }>;
+}
+export function mesaiAyarlari(D: unknown): MesaiAyarlari {
+  const d = nesne(D) ? D : {};
+  const m = nesne(d.mesaiSis) ? d.mesaiSis : null;
+  const c = m !== null && nesne(m.carp) ? m.carp : {};
+  const v = { hi: 1.5, cmt: 1.5, paz: 2, tatil: 2 };
+  const planTL = nesne(d.planTL) ? d.planTL : {};
+  const mc = 'mesaiCarpan' in planTL ? planTL.mesaiCarpan : 1.5;
+  const tezgahlar = new Map((Array.isArray(d.tezgahlar) ? d.tezgahlar.filter(nesne) : []).map((t) => [
+    String(t.id), { opOran: typeof t.opOran === 'number' ? t.opOran : t.opOran === null ? null : undefined, grup: typeof t.grup === 'string' ? t.grup : t.grup == null ? '' : String(t.grup as number) },
+  ] as const));
+  return {
+    kisiBazli: m === null || m.kisiBazli !== false,
+    carp: { hi: sayiOku(c.hi) ?? v.hi, cmt: sayiOku(c.cmt) ?? v.cmt, paz: sayiOku(c.paz) ?? v.paz, tatil: sayiOku(c.tatil) ?? v.tatil },
+    kisiEk: m === null ? null : sayiOku(m.kisiEk), ucret: sayiOku(nesne(d.ayarlar) ? d.ayarlar.mesaiUcret : undefined),
+    mesaiCarpan: typeof mc === 'number' ? mc : undefined,
+    tatiller: new Set(Array.isArray(d.tatiller) ? d.tatiller.filter((x): x is string => typeof x === 'string') : []),
+    calismaGunleri: nesne(d.calismaGunleri) ? d.calismaGunleri : {}, tezgahlar,
+  };
+}
+const HAFTA_GUNU = ['paz', 'pzt', 'sal', 'car', 'per', 'cum', 'cmt'] as const;
+const haftaGunuOf = (gun: string): (typeof HAFTA_GUNU)[number] => HAFTA_GUNU[new Date(`${gun}T00:00:00Z`).getUTCDay()] ?? 'pzt';
+// İstemcinin gunTuru'su: tatil listesindeki gün 'tatil', yoksa cumartesi, pazar ya da hafta içi.
+export function mesaiGunTuru(gun: string, a: Pick<MesaiAyarlari, 'tatiller'>): GunTuru {
+  if (a.tatiller.has(gun)) return 'tatil';
+  const w = haftaGunuOf(gun);
+  return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
+}
+// İstemcinin takvimindeki "vardiyasız gün": tatil ya da o hafta gününde çalışma vardiyası yok. Gün türünden ayrı bir ölçüdür.
+export function vardiyasizGun(gun: string, a: Pick<MesaiAyarlari, 'tatiller' | 'calismaGunleri'>): boolean {
+  if (a.tatiller.has(gun)) return true;
+  const cg = a.calismaGunleri[haftaGunuOf(gun)];
+  return !Array.isArray(cg) || cg.length === 0;
+}
+
+// 2653 S1 (Mimar K1): istasyonun saat değeri, ayın son günü geçerli atamaların yüzdesiyle ağırlıklı ortalamadır. Kişinin değeri
+// departmanınınki; küçük departmanda küçük grup havuzu (2657 a). Atama yoksa ya da bir kişinin değeri bilinmiyorsa değer null (sıfır
+// sayılmaz, başka gruba aktarılmaz). `havuz`: değere havuz girdi.
+export interface AtamaDegeri { yuzde: number; deger: number | null; havuz: boolean }
+export function istasyonSaatDegeri(atamalar: readonly AtamaDegeri[]): { deger: number; havuz: boolean } | null {
+  let pay = 0;
+  let agirlik = 0;
+  for (const a of atamalar) {
+    if (!(a.yuzde > 0)) continue;
+    if (a.deger === null) return null;
+    pay += a.deger * a.yuzde;
+    agirlik += a.yuzde;
+  }
+  return agirlik > 0 ? { deger: pay / agirlik, havuz: atamalar.some((a) => a.havuz && a.yuzde > 0) } : null;
+}
+
+// 2653 (Maliyet koşulu): cevapta yalnız toplam. Bilinmeyen satır toplamda sıfır sayılmaz, `bilinmeyen` olur. Bilinen satırların hepsine
+// havuz değeri girdiyse toplam null: toplam yalnız küçük grupların değerini taşımasın. Satır yoksa toplam 0'dır (ek mesai yok).
+// "YYYY-MM" ayının son günü (YYYY-MM-DD).
+export function aySonuGunu(ay: string): string {
+  const [y, m] = ay.split('-').map(Number);
+  return `${ay}-${String(new Date(Date.UTC(y!, m!, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+
+export function mesaiToplami(satirlar: readonly { tutar: number | null; havuz: boolean }[]): { toplam: number | null; bilinmeyen: boolean } {
+  const bilinen = satirlar.filter((s): s is { tutar: number; havuz: boolean } => s.tutar !== null);
+  const bilinmeyen = bilinen.length < satirlar.length;
+  if (satirlar.length === 0) return { toplam: 0, bilinmeyen: false };
+  if (bilinen.length === 0 || bilinen.every((s) => s.havuz)) return { toplam: null, bilinmeyen };
+  return { toplam: Math.round(bilinen.reduce((t, s) => t + s.tutar, 0) * 100) / 100, bilinmeyen };
+}
