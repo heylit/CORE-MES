@@ -13,10 +13,13 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { IZ_SINIRI, ekMesaiEkle, isTasi, olayEkle } from './atolye-komutlari-kurallar.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
+import { planAni } from './planlama-kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // 1982 a: atölyenin elle düzenleme komutları. Veriler uydurmadır.
-const KISI = { kim: 'Deneme Planlamaci', sayfa: 'Planlama atölyesi', t: 1_000 };
+// 2506 a: komutun şimdisi gerçek saattir (KISI.t); 2026-10-19 eksenine göre 10. saat.
+const KISI = { kim: 'Deneme Planlamaci', sayfa: 'Planlama atölyesi', t: Date.parse(planAni('2026-10-19', 10)) };
 
 const D = {
   meta: { ad: 'Ornek', baslangic: '2026-10-19' },
@@ -24,7 +27,7 @@ const D = {
   urunler: [{ id: 'U1', rota: [] }], malzemeler: [{ kod: 'M1' }], fasoncular: [{ id: 'F1' }], vardiyalar: [{ id: 'V1' }],
 };
 const planli = (o: Record<string, unknown> = {}) => ({
-  D, dataVer: 3, simdi: 10, locks: {}, olaylar: [], iz: [],
+  D, dataVer: 3, simdi: 50, locks: {}, olaylar: [], iz: [],
   plan: { dataVer: 3, ops: {
     'J1.10': { id: 'J1.10', job: 'J1', m: 'T1', S: 12, C: 14, act: 0, done: 0, fas: 0 },
     'J1.20': { id: 'J1.20', job: 'J1', m: 'T1', S: 8, C: 11, act: 1, done: 0, fas: 0 },
@@ -42,8 +45,8 @@ describe('atölye komutlarının kuralı', () => {
     const y = deger(isTasi(c, { isId: 'J1.10', tezgah: 'T2', baslangic: 16 }, KISI));
     assert.deepEqual(y.locks, { 'J1.10': { m: 'T2', S: 16 } });
     assert.equal(y.dataVer, 4);
-    assert.deepEqual(y.bekleyen, [{ id: '1000-3', ne: 'İş başka tezgâha taşındı', ayrinti: 'J1.10 → T2', kim: KISI.kim, t: 1_000, isler: ['J1'], geri: [{ yol: ['locks'], id: 'J1.10' }] }]);
-    assert.deepEqual(y.iz, [{ t: 1_000, kim: KISI.kim, rol: '', sayfa: KISI.sayfa, ne: 'İş başka tezgâha taşındı', ayrinti: 'J1.10 → T2' }]);
+    assert.deepEqual(y.bekleyen, [{ id: `${String(KISI.t)}-3`, ne: 'İş başka tezgâha taşındı', ayrinti: 'J1.10 → T2', kim: KISI.kim, t: KISI.t, isler: ['J1'], geri: [{ yol: ['locks'], id: 'J1.10' }] }]);
+    assert.deepEqual(y.iz, [{ t: KISI.t, kim: KISI.kim, rol: '', sayfa: KISI.sayfa, ne: 'İş başka tezgâha taşındı', ayrinti: 'J1.10 → T2' }]);
     // Girdi değişmez.
     assert.deepEqual(c.locks, {});
   });
@@ -59,7 +62,7 @@ describe('atölye komutlarının kuralı', () => {
 
   test('plan önceden bayatsa bekleyen listesi kaydı olmayan satırla başlar; plan yoksa bekleyen yazılmaz', () => {
     const y = deger(isTasi(planli({ dataVer: 5 }), { isId: 'J1.10', tezgah: 'T2', baslangic: 16 }, KISI));
-    assert.deepEqual((y.bekleyen as { id: string }[]).map((b) => b.id), ['eski', '1000-5']);
+    assert.deepEqual((y.bekleyen as { id: string }[]).map((b) => b.id), ['eski', `${String(KISI.t)}-5`]);
     const o = deger(olayEkle(planli({ plan: null }), { tip: 'malzeme', kod: 'M1', gun: 2 }, KISI));
     assert.equal(o.bekleyen, undefined);
     assert.equal(o.dataVer, 4);
@@ -82,7 +85,7 @@ describe('atölye komutlarının kuralı', () => {
     const y = deger(olayEkle(c, { tip: 'ariza', m: 'T1', bas: 12, saat: 4 }, KISI));
     assert.deepEqual(y.olaylar, [{ tip: 'fason', f: 'F1', gun: 1 }, { tip: 'ariza', m: 'T1', bas: 12, saat: 4 }]);
     assert.deepEqual((y.bekleyen as { isler: unknown; geri: unknown }[])[0], {
-      id: '1000-3', ne: 'Arıza olayı eklendi', ayrinti: 'ariza', kim: KISI.kim, t: 1_000, isler: ['*'], geri: [{ yol: ['olaylar'], once: [{ tip: 'fason', f: 'F1', gun: 1 }] }],
+      id: `${String(KISI.t)}-3`, ne: 'Arıza olayı eklendi', ayrinti: 'ariza', kim: KISI.kim, t: KISI.t, isler: ['*'], geri: [{ yol: ['olaylar'], once: [{ tip: 'fason', f: 'F1', gun: 1 }] }],
     });
     for (const o of [
       { tip: 'acil', urun: 'U1', adet: 5, termin: '2026-10-25 17:00' }, { tip: 'malzeme', kod: 'M1', gun: 3 },
@@ -104,9 +107,9 @@ describe('atölye komutlarının kuralı', () => {
     assert.deepEqual((y.bekleyen as { geri: unknown }[])[0]?.geri, [{ yol: ['ekMesai'], once: [{ m: 'T2', gun: 1, vardiya: 'V1' }] }]);
     const ayni = ekMesaiEkle(c, { tezgah: 'T2', gun: 1, vardiya: 'V1' }, KISI);
     assert.ok('deger' in ayni && !ayni.degisti);
-    // Şimdi 10. saat: 0. gün bugündür, izinlidir; simdi 30 iken 0. gün geçmiştir.
+    // Şimdi 10. saat: 0. gün bugündür, izinlidir; 30. saatte 0. gün geçmiştir. Kayıttaki `simdi` (50) sayılmaz.
     assert.ok('deger' in ekMesaiEkle(c, { tezgah: 'T1', gun: 0, vardiya: 'V1' }, KISI));
-    assert.equal((hata(ekMesaiEkle(planli({ simdi: 30 }), { tezgah: 'T1', gun: 0, vardiya: 'V1' }, KISI)) as { alan: string }).alan, 'gun');
+    assert.equal((hata(ekMesaiEkle(c, { tezgah: 'T1', gun: 0, vardiya: 'V1' }, { ...KISI, t: Date.parse(planAni('2026-10-19', 30)) })) as { alan: string }).alan, 'gun');
     assert.equal((hata(ekMesaiEkle(c, { tezgah: 'T9', gun: 2, vardiya: 'V1' }, KISI)) as { alan: string }).alan, 'tezgah');
     assert.equal((hata(ekMesaiEkle(c, { tezgah: 'T1', gun: 2, vardiya: 'V9' }, KISI)) as { alan: string }).alan, 'vardiya');
   });
@@ -155,7 +158,7 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
   const calisma = () => ({
     surum: 2, rrSavedAt: 9, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null, iz: [],
     w: { famK: 0.3, mat: 'uyari', dondurma: 4 }, param: { tampon: false, tamponZ: 0, acilPay: 0 },
-    D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [],
+    D: { meta: { ad: 'Ornek', baslangic: tesisGunu(Date.now()) }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [],
       personel: [], siparisler: [], ayarlar: {} },
   });
   async function calismaYaz(d: unknown): Promise<number> {

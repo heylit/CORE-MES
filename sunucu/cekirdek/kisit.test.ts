@@ -9,6 +9,8 @@ import { testSemasiAc } from './test-vt.ts';
 import type { TestVeritabani } from './test-vt.ts';
 import { uc, uclariKaydet } from './uc.ts';
 import { hataYonetiminiKur } from './uygulama.ts';
+import { mesgul } from './hata.ts';
+import { satirdaReddet } from './toplu.ts';
 
 const CAKISMA_GOVDESI = { kod: 'CAKISMA', mesaj: 'Aynı bilgilerle bir kayıt zaten var.' };
 const BAGIMLI_GOVDESI = {
@@ -110,6 +112,20 @@ describe('kısıt ihlalleri (gerçek PostgreSQL)', () => {
           isle: async ({ db, govde }) => {
             await engel?.bekle();
             return (await db.tek<{ id: number }>('INSERT INTO kisit_ana (kod, adet) VALUES ($1, $2) RETURNING id', [govde.kod, govde.adet]))!;
+          },
+        }),
+        // Toplu komut (2627): satır reddi kısıt çevirisinden geçer, "Satır N:" alır; 5xx sarılmaz.
+        uc({
+          ...ortak, yol: '/ana-toplu', govde: z.object({ kodlar: z.array(z.string()), mesgul: z.boolean().optional() }), cevap: kimlikli,
+          isle: async ({ db, govde }) => {
+            let id = 0;
+            for (const [sira, kod] of govde.kodlar.entries()) {
+              await satirdaReddet(sira, sira + 2, async () => {
+                if (govde.mesgul) throw mesgul();
+                id = (await db.tek<{ id: number }>('INSERT INTO kisit_ana (kod, adet) VALUES ($1, 1) RETURNING id', [kod]))!.id;
+              });
+            }
+            return { id };
           },
         }),
         // GET salt okunur koşar, yazamaz: kısıt ihlali yazmadan, alan tipine çevirmeyle doğar.
@@ -237,6 +253,20 @@ describe('kısıt ihlalleri (gerçek PostgreSQL)', () => {
       [{ pgKodu: '23505', kisit: 'kisit_ana_kod_tek', tablo: 'kisit_ana' }],
     );
     assert.equal(gunluk.join('').includes('gizli-deger-41'), false);
+  });
+
+  test('toplu komutta kısıt ihlali önce çevrilir, satır numarasıyla döner; günlük kısıt izini yazar; 5xx satıra bağlanmaz', async () => {
+    gunluk.length = 0;
+    const ret = await gonder('/ana-toplu', { kodlar: ['toplu-yeni-1', 'toplu-cift', 'toplu-cift'] });
+    assert.equal(ret.statusCode, 409);
+    assert.deepEqual(ret.json(), { kod: 'CAKISMA', mesaj: `Satır 4: ${CAKISMA_GOVDESI.mesaj}`, alan: 'satirlar.2', ayrinti: { satir: 4 } });
+    adSizmadi(ret.body);
+    assert.equal(await anaSayisi('toplu-yeni-1'), 0);
+    assert.equal(gunlukSatirlari('Beklenmeyen hata').length, 0);
+    assert.deepEqual(gunlukSatirlari('Kısıt ihlali').map((satir) => satir.kisit), [{ pgKodu: '23505', kisit: 'kisit_ana_kod_tek', tablo: 'kisit_ana' }]);
+    const yogun = await gonder('/ana-toplu', { kodlar: ['toplu-mesgul'], mesgul: true });
+    assert.equal(yogun.statusCode, 503);
+    assert.equal((yogun.json() as { mesaj: string }).mesaj.startsWith('Satır'), false);
   });
 
   test('okuma ucunda kısıt ihlali aynı cevabı alır; kısıta uyan değer kabul edilir', async () => {

@@ -8,6 +8,10 @@ import { HamleBaglami, type Hamleci } from '../../motor/hamle/hamle.ts';
 import { TezgahSirasiPaneli } from './index.tsx';
 import { SIRA_SINIRI, siraDegisti, siraKur, siraTasi, siraTezgahlari, siraYon } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(cleanup);
 
 // Örnek planda her tezgâhta bir iş var; sıra için üç iş tezgâh 1'e alınır. 2.20 başlamış iştir, sıraya girmez.

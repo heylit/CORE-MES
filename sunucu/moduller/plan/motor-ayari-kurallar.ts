@@ -37,6 +37,8 @@ export interface MotorOlcegi { ufukGun: number; dilimDk: number }
 // kapalıysa alan boştur, motor varsayılan belirsizlikle (w.mcSigma) kurar. Kayıttan okuyan girdi değeri hep açıkça verir (yoksa null):
 // sayfa kaydederse kayda geçen eski değer sonraki planda kullanılmaz. Verilmezse (undefined) çalışmadaki değer korunur; taslağın kendi
 // ayar sürümüyle ikinci kez uygulanan çözücü girdisi (plan-cozucusu) taze değeri böyle taşır, taslakta öğrenme kapalıysa boşaltır.
+// 2523 a: paralel bölme ayarı kayıttaki param.bolmeKip ve param.bolmeMaks'ın üstüne yazılır (girdi.betik stKur okur); sayfanın eski
+// kaydındaki değer motoru yönetmez. Sabit kip (plan-cozucusu bolmesiz) bundan sonra uygulanır, orada bölme yine kapalıdır.
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
   ogren?: Readonly<Record<string, OgrenilenSure>> | null,
@@ -49,11 +51,14 @@ export function calismayaMotorAyari(
   const agirlik = finansmanOraniGun === null ? {}
     : { planAgirlik: { ...(D.planAgirlik !== null && typeof D.planAgirlik === 'object' ? D.planAgirlik : {}), fin: finansmanOraniGun } };
   const w = (c as { w?: unknown }).w;
+  // 2509-1 c: acil iş payı sistem ayarındandır; çalışmanın param.acilPay'i (motor girdi.betik stKur ve sayfa hesapları onu okur) ezilir.
+  const param = (c as { param?: unknown }).param;
   const onceki = (c as { ogren?: unknown }).ogren;
   const ogrenilen = ogren !== undefined ? ogren
     : onceki !== null && typeof onceki === 'object' ? onceki as Readonly<Record<string, OgrenilenSure>> : null;
   return {
     ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
+    param: { ...(param !== null && typeof param === 'object' ? param : {}), acilPay: ayar.acilPay, bolmeKip: ayar.bolmeKip, bolmeMaks: ayar.bolmeMaks },
     w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
     ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},
   };

@@ -17,6 +17,10 @@ import { ornekCalisma } from '../ornek.ts';
 import { planKurSifirla } from '../coz.ts';
 import { otomatikUygulaIste, otomatikUygulaSifirla } from './gonder.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(() => { cleanup(); otomatikUygulaSifirla(); });
 // jsdom'da PointerEvent yok: fireEvent onsuz olayı konumsuz yollar. Sürükle testleri için fare olayından türetilir.
 if (typeof window.PointerEvent === 'undefined') {
@@ -46,14 +50,14 @@ const DEPO = {
     senaryo(2, 'acik', { yapabilir: { onayaGonder: true, onaydanCek: false, geriGonder: false, canliyaAl: false } }),
   ] },
 } as unknown as PlanlamaDeposu;
-function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc'] } = {}) {
+function ac(o: { depo?: PlanlamaDeposu; c?: PlanlamaCalismasi | null; yaz?: boolean; komut?: CalismaKomutu | null; mudur?: boolean; istek?: PlanlamaEkranOzellikleri['istek']; studyoAc?: PlanlamaEkranOzellikleri['studyoAc']; altSec?: PlanlamaEkranOzellikleri['altSec'] } = {}) {
   const yaz = o.yaz ?? true;
   const git = vi.fn();
   const yenile = vi.fn();
   const c = o.c === undefined ? ornekCalisma() : o.c;
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
-    depo: o.depo ?? DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}),
-    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])], { yazabilir: yaz }),
+    depo: o.depo ?? DEPO, calisma: c, komut: o.komut ?? (yaz && c ? komutKur(c).komut : null), git, yenile, istek: o.istek ?? null, ...(o.studyoAc ? { studyoAc: o.studyoAc } : {}), ...(o.altSec ? { altSec: o.altSec } : {}),
+    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz', 'plan.studyo'] : []), ...(o.mudur ? ['plan.canliya-al'] : [])]),
   };
   render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz} /></BildirimSaglayici></MemoryRouter>);
   return { git, yenile };
@@ -267,7 +271,8 @@ describe('PlanlamaAtolyesi', () => {
     const ust = document.querySelector('.tc-pym-tp-ust') as HTMLElement;
     expect(within(ust).getByTitle('Geciken sipariş').textContent).toBe('1 geciken');
     expect(within(ust).getByRole('group', { name: 'Ölçek' }).textContent).toBe('Gün3 günHaftaAyYıl');
-    expect(within(ust).getByRole('button', { name: 'Şu olursa: denemeler' }).getAttribute('title')).toContain(MOTOR_NOTU);
+    // Sayfa adresi yokken (altSec verilmedi) denemeler açılamaz; 2531 a ile Geçmiş > Senaryolar'a gider (aşağıdaki test).
+    expect(within(ust).getByRole('button', { name: 'Şu olursa: denemeler' }).getAttribute('aria-disabled')).toBe('true');
     // 2129-1 b: güncel planda iyileştirme araması açıktır, sonucu önizlenir.
     expect(within(ust).getByRole('button', { name: 'İyileştirme ara' }).getAttribute('aria-disabled')).toBeNull();
     expect(within(ust).getByRole('button', { name: '1 onayda' })).toBeTruthy();
@@ -301,7 +306,7 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(kart()).getByText('1 → 2')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
-    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi$/)).toBeTruthy();
+    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi: .+ \((adım derlenmedi|uygun tezgâh ya da fasoncu yok|önceki adım yerleşmedi|kaynak ya da ufuk yetmedi)\)/)).toBeTruthy();
     expect(screen.queryByText('Bütün işler yerleşti')).toBeNull();
   });
 
@@ -470,7 +475,7 @@ describe('PlanlamaAtolyesi', () => {
     fireEvent.click(within(ray).getAllByRole('button', { expanded: false })[0] as HTMLElement);
     expect(within(ray).getByText(/Ayrıntı · 50 adet · normal/)).toBeTruthy();
     expect(within(ray).getByText(/fasoncu çıkış günü \(5\)/)).toBeTruthy();
-    expect(within(ray).getByText(/Çözüm yolu: adımı seçip/).textContent).toContain(`Öne al: ${MOTOR_NOTU}`);
+    expect(within(ray).getByText(/Çözüm yolu: öne alın/).textContent).not.toContain(MOTOR_NOTU);
     expect(within(ray).getByRole('button', { name: 'Böl' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(within(ray).getByRole('button', { name: 'Termin konuş' }));
     expect((within(kart()).getByRole('textbox') as HTMLTextAreaElement).value).toContain('2 numaralı siparişiniz');
@@ -650,6 +655,20 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('saat ilerledikten sonra eklenen arıza yeni saatten başlar; şimdi sayfa açıkken donmaz (2506 a)', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
+    const k = screen.getByRole('dialog', { name: 'Olay ekle' });
+    fireEvent.change(within(k).getByLabelText('Kaç saat sonra başlar'), { target: { value: '0' } });
+    fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '6' } });
+    // Form açıkken üç saat geçer; olay gönderme anının saatine yazılır (8 → 11).
+    vi.setSystemTime(Date.now() + 3 * 3_600_000);
+    fireEvent.click(within(k).getByRole('button', { name: 'Olayı ekle' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/olay-ekle', { calismaSurumu: 8, olay: { tip: 'ariza', m: '5', bas: 11, saat: 6 } }, expect.anything()));
+    post.mockRestore();
+  });
+
   it('akış oku çubukların planlı saatinden çizilir: geçiş sürerken ölçülen eski yere kaymaz (1980)', () => {
     ac();
     fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
@@ -753,3 +772,126 @@ describe('PlanlamaAtolyesi', () => {
     expect((screen.getByRole('button', { name: 'Planı kur' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+// 2531 a: Düzenle ve Yapılacaklar atölyede de; motor isteyen pasif düğmeler bağlandı, gerçek başlama ve sayım terminalin göstergesi kaldı.
+describe('PlanlamaAtolyesi 2531 a', () => {
+  it('Şu olursa: denemeler Geçmiş > Senaryolar açar', () => {
+    const altSec = vi.fn();
+    ac({ altSec });
+    const d = screen.getByRole('button', { name: 'Şu olursa: denemeler' });
+    expect(d.getAttribute('aria-disabled')).toBeNull();
+    expect(d.getAttribute('title')).not.toContain(MOTOR_NOTU);
+    fireEvent.click(d);
+    expect(altSec).toHaveBeenCalledWith({ ekran: 'gecmis', bolum: 'senaryolar' });
+  });
+
+  it('raydaki ve Bugün\'deki Öne al motorun öne al hamlesini ister; plan bayatsa nedeniyle pasif', async () => {
+    const post = vi.spyOn(api, 'post').mockImplementation((() => new Promise(() => {})) as never);
+    ac({ c: guncel() });
+    const ray = screen.getByRole('complementary', { name: 'Siparişler' });
+    fireEvent.click(within(ray).getAllByRole('button', { expanded: false })[0] as HTMLElement);
+    const acik = within(ray).getAllByRole('button', { expanded: true })[0] as HTMLElement;
+    const j = acik.closest('.tc-pym-tp-sip')?.querySelector('.tc-pym-tp-sip-ad b')?.textContent ?? '';
+    const one = within(ray).getByRole('button', { name: 'Öne al' });
+    expect(one.getAttribute('aria-disabled')).toBeNull();
+    fireEvent.click(one);
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-degerlendirmesi', { surum: 8, istek: { tur: 'one-al', siparisId: j } }, expect.anything()));
+    post.mockRestore();
+    cleanup();
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: /^Bugün/ }));
+    const b = screen.getByRole('region', { name: 'Bugün' });
+    const l = within(b).getAllByRole('button', { name: /öne al$/ });
+    expect(l.length).toBeGreaterThan(0);
+    expect(l[0]?.getAttribute('aria-disabled')).toBe('true');
+    expect(l[0]?.getAttribute('title')).toContain('Plan verinin gerisinde');
+  });
+
+  it('elle sıra: açık siparişte Listede aşağı ve Alt+↓ rayın sırasını çalışmaya yazar (plan korunur)', () => {
+    const c = ornekCalisma();
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    const ray = screen.getByRole('complementary', { name: 'Siparişler' });
+    const ilk = within(ray).getAllByRole('button', { expanded: false })[0] as HTMLElement;
+    fireEvent.click(ilk);
+    fireEvent.click(within(ray).getByRole('button', { name: 'Listede aşağı' }));
+    const sira = yazilan.at(-1)?.tpSira as string[];
+    expect(sira.length).toBeGreaterThan(1);
+    expect(komut.degistir).toHaveBeenLastCalledWith('Sipariş sırası', expect.any(Function), { planKoru: true });
+    expect(within(ray).getByRole('button', { name: 'Listede yukarı' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(ilk, { key: 'ArrowDown', altKey: true });
+    expect(yazilan.at(-1)?.tpSira).toEqual(sira);
+  });
+
+  it('Yapılacaklar ve Düzenle panoda: seçili işte E Düzenle menüsünü açar, Y Yapılacaklar\'ı; yazamayana yok', () => {
+    ac();
+    const yp = screen.getByRole('button', { name: /^Yapılacaklar: / });
+    fireEvent.click(yp);
+    expect(screen.getByRole('dialog', { name: 'Yapılacaklar' })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Yapılacaklar' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'y' });
+    expect(screen.getByRole('dialog', { name: 'Yapılacaklar' })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'y' });
+    fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
+    expect(screen.getByRole('button', { name: /Düzenle/ })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'e' });
+    const m = screen.getByRole('dialog', { name: 'Düzenle' });
+    expect(within(m).getAllByRole('button').some((x) => /Böl/.test(x.textContent ?? ''))).toBe(true);
+    cleanup();
+    ac({ yaz: false });
+    expect(screen.queryByRole('button', { name: /^Yapılacaklar: / })).toBeNull();
+  });
+
+  it('Geri al kartı: Yinele geri alınanı yeniden uygular; Taslağı sıfırla ikinci basışla bütün kararları geri alır', () => {
+    const c = ornekCalisma();
+    const geriDon = vi.fn(); const yinele = vi.fn();
+    const komut = { degistir: vi.fn(() => true), geriAl: vi.fn(), geriAlinabilir: () => true, geriAdimlari: () => [{ ne: 'Bir', t: 1 }, { ne: 'İki', t: 2 }], geriDon,
+      yinele, yinelenebilir: () => true, kaydet: vi.fn(async () => 8) } as unknown as CalismaKomutu;
+    ac({ c, komut });
+    fireEvent.click(screen.getByRole('button', { name: 'Karar geçmişi ve taslağı sıfırla' }));
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Yinele' }));
+    expect(yinele).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(kart()).getByRole('button', { name: 'Taslağı sıfırla' }));
+    expect(geriDon).not.toHaveBeenCalled();
+    fireEvent.click(within(kart()).getByRole('button', { name: '2 kararı geri al' }));
+    expect(geriDon).toHaveBeenCalledWith(2);
+    fireEvent.keyDown(document.body, { key: 'Z', ctrlKey: true, shiftKey: true });
+    expect(yinele).toHaveBeenCalledTimes(2);
+  });
+
+  it('termin kartında Öne alarak kısalt; gerçek başlama ve sayım çipleri terminalin göstergesi', () => {
+    ac();
+    const ray = screen.getByRole('complementary', { name: 'Siparişler' });
+    fireEvent.click(within(ray).getAllByRole('button', { expanded: false })[0] as HTMLElement);
+    fireEvent.click(within(ray).getByRole('button', { name: 'Termin konuş' }));
+    const k = within(kart()).getByRole('button', { name: 'Öne alarak kısalt' });
+    expect(k.getAttribute('aria-disabled')).toBe('true');
+    expect(within(kart()).queryByText(new RegExp(MOTOR_NOTU))).toBeNull();
+  });
+
+  it('Kilit ve dondurma paneli (2539 a): üst çubuktan açılır; donuk bölge, Sabitleri kaldır (ikinci basışla) ve günü dondur aynı komutlarla yazılır', () => {
+    const c = ornekCalisma(); c.locks = { '2.40': { m: '5', S: 1 } };
+    const { komut, yazilan } = komutKur(c);
+    ac({ c, komut });
+    const d = screen.getByRole('button', { name: /^Kilit ve dondurma: donuk \d+ sa · 1 sabit · 0 gün$/ });
+    fireEvent.click(d);
+    const k = screen.getByRole('dialog', { name: 'Kilit ve dondurma' });
+    fireEvent.click(within(k).getByRole('button', { name: '16 sa' }));
+    expect(yazilan.at(-1)?.w.dondurma).toBe(16);
+    fireEvent.click(within(k).getByRole('button', { name: 'Sabitleri kaldır' }));
+    fireEvent.click(within(k).getByRole('button', { name: '1 sabiti kaldır' }));
+    expect(komut.degistir).toHaveBeenLastCalledWith('Sabitler kaldırıldı', expect.any(Function), { ayrinti: 'dondurulmuş günler korundu', planKoru: true });
+    expect(yazilan.at(-1)?.locks).toEqual({});
+    const gun = within(k).getAllByRole('button', { name: 'Günü dondur' }).find((b) => b.getAttribute('aria-disabled') === null);
+    expect(gun).toBeTruthy();
+    fireEvent.click(gun!);
+    expect(komut.degistir).toHaveBeenLastCalledWith('Gün donduruldu', expect.any(Function), expect.objectContaining({ planKoru: true }));
+    // Deneme komutu her yazmayı açılıştaki çalışmanın kopyasına uygular: elle sabit yerinde, gün kilitleri eklenir.
+    const l = yazilan.at(-1)?.locks ?? {};
+    expect(l['2.40']).toEqual({ m: '5', S: 1 });
+    expect(Object.values(l).some((x) => typeof (x as { gun?: unknown }).gun === 'number')).toBe(true);
+    expect(within(k).getByText(/Başlamış iş bu ayarlardan bağımsızdır/)).toBeTruthy();
+  });
+});
+

@@ -1382,6 +1382,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
     for (const hazirla of [async () => undefined, async (id: number) => { await komut(id, 'duraklat'); }, async (id: number) => { await durdur(id, durusId); }]) {
       const { emir } = await baslatilmis();
       await sayimYap(emir.id, 2);
+      await ilkParcaOnay(emir.id);
       await hazirla(emir.id);
       const son = await bitir(emir.id, 2);
       assert.equal(son.durum, 200);
@@ -1402,6 +1403,7 @@ describe('uretim-emirleri (gerçek PostgreSQL)', () => {
       return c;
     };
     await sayimYap(emir.id, 4);
+    await ilkParcaOnay(emir.id);
     assert.equal((await kontrol())?.calisma, 'calisiyor');
     await komut(emir.id, 'duraklat');
     assert.equal((await kontrol())?.calisma, 'durakli');

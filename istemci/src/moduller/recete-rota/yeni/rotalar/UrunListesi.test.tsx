@@ -10,6 +10,11 @@ const bolumAc = async () => {
   await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); });
   return bolge;
 };
+// 2558 b/4: ürün listesi ⋯ menüsündedir.
+const menuSec = (bolge: HTMLElement, ad: string) => {
+  fireEvent.click(within(bolge).getByRole('button', { name: 'Diğer rota işlemleri' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: ad }));
+};
 const maliyetli = (tutar: string) => ({
   ...rotaDurumu(),
   maliyet: { yazabilir: false, malzeme: { 12: { birimMaliyet: tutar, paraBirimi: 'TRY', surum: 1 } }, istasyon: {}, kisi: {} },
@@ -20,7 +25,7 @@ describe('R1 Ürün listesi (sık tablo)', () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Ürün listesi' }));
+    menuSec(bolge, 'Ürün listesi');
     const tablo = await within(bolge).findByRole('table', { name: 'Ürünler ve rotaları' });
     expect(within(tablo).getByText('MM-0001')).toBeTruthy();
     expect(within(tablo).getByText('Yürürlükte')).toBeTruthy();
@@ -37,7 +42,7 @@ describe('R1 Ürün listesi (sık tablo)', () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Ürün listesi' }));
+    menuSec(bolge, 'Ürün listesi');
     const grup = await within(bolge).findByRole('group', { name: 'Rota durumu' });
     fireEvent.click(within(grup).getByRole('button', { name: 'Rotasız' }));
     expect(within(grup).getByRole('button', { name: 'Rotasız' }).getAttribute('aria-pressed')).toBe('true');
@@ -54,8 +59,9 @@ describe('R1 Özet çubuğu (motorsuz)', () => {
     // 2 kg x 2,5 ₺
     expect(ozet.textContent).toContain('Birim malzeme');
     expect(ozet.textContent).toContain('5 ₺');
-    expect(within(ozet).queryByText(/uyarı$/)).toBeNull();
-    expect(within(ozet).getByRole('button', { name: 'Üretim emri oluştur' })).toBeTruthy();
+    // 2558 b/7: sorun yoksa çip nötr "Sorun yok" yazar.
+    expect(within(ozet).getByText('Sorun yok')).toBeTruthy();
+    expect(within(bolge).getByRole('button', { name: 'Üretim emri oluştur' })).toBeTruthy();
   });
 
   it('maliyeti bilinmeyen girende sıfır uydurmaz, "—" yazar; eksik rota uyarı sayısına girer', async () => {
@@ -65,7 +71,7 @@ describe('R1 Özet çubuğu (motorsuz)', () => {
     const bolge = await bolumAc();
     const ozet = await within(bolge).findByRole('group', { name: 'Rota özeti' });
     expect(ozet.textContent).toContain('Birim malzeme —');
-    expect(within(ozet).getByText(/^\d+ uyarı$/)).toBeTruthy();
+    expect(within(ozet).getByRole('button', { name: /^Sorunlar: \d+$/ })).toBeTruthy();
   });
 
   it('reddedilen: maliyet ve emir yetkisi olmayan maliyeti ve emir düğmesini görmez', async () => {

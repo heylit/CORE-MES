@@ -1,4 +1,4 @@
-import { bitenler, planOku, plandanBitenler } from '../motor/kurallar.ts';
+import { bitenler, planOku, plandanBitenler, simdiSaati as motorSimdiSaati } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi, PlanVerisi, Siparis, Tezgah } from '../tipler.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
 import { planDisi } from '../tipler.ts';
@@ -83,8 +83,8 @@ export function haftaGunu(D: PlanVerisi, g: number): GunAnahtari {
   return GUN[d === null ? 0 : (d.getUTCDay() + 6) % 7] ?? 'pzt';
 }
 const hm = (s: unknown): number => { const [h, m] = metin(s).split(':').map(Number); return (h ?? 0) + (m ?? 0) / 60; };
-// Sayfanın "şimdi"si: yeniden planlamada yazılan gerçek saat, yoksa başlangıç günü 07:00 (girdi.betik simdiUygula, 31 a, 741 a).
-export function simdiSaati(c: PlanlamaCalismasi): number { const s = sayiOku(c.simdi); return s !== null && s >= 0 ? s : 7; }
+// Sayfanın "şimdi"si planlama motorununkiyle aynıdır: gerçek saat (2506 a).
+export function simdiSaati(c: PlanlamaCalismasi, an?: number): number { return motorSimdiSaati(c, an); }
 
 // ---------- ayarlar (motor/durum.betik) ----------
 export interface MaliyetAyari { amac: string; risk: number; karHedef: number; mesaiCarpan: number; operatorUcret: number | null; genelGider: number | null }

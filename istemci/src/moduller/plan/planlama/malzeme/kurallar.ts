@@ -191,7 +191,26 @@ export function tahsisEt(g: Pick<MrpGirdisi, 'siparisler' | 'urunler' | 'malzeme
     }
     isler.set(s.id, det);
   }
+  sunucuEksiginiUygula(g.malzemeler, sira.map((x) => isler.get(x.s.id) ?? []));
   return { isler, alimlar };
+}
+
+// B-2483-67: siparişi verilmemiş eksiğin kuralı sunucudadır (mrp: başlamış emrin sarfı düşülmüş, emrin kopyası, fire). Ekran brüt
+// hesaplar; sunucunun net eksiği (malzemeler[].mrpEksik) geldiyse malzemenin toplam eksiği ona indirilir. Fazla, önceliği yüksek
+// siparişten başlayarak düşülür: brüt hesapta stoğu önce o alır, eksik sıradaki sona kalır. Alan yoksa ya da null ise brüt kalır.
+function sunucuEksiginiUygula(malzemeler: readonly Malzeme[], sirali: readonly (readonly MalzemeTahsisi[])[]): void {
+  for (const m of malzemeler) {
+    const net = sonlu(m['mrpEksik']);
+    if (net === null) continue;
+    const l = sirali.flatMap((det) => det.filter((d) => d.kod === m.kod && d.eksik > 0));
+    let fazla = l.reduce((t, d) => t + d.eksik, 0) - Math.max(0, net);
+    for (const d of l) {
+      if (fazla <= ESIK) break;
+      const q = Math.min(d.eksik, fazla);
+      d.eksik -= q; fazla -= q;
+      if (d.eksik <= ESIK) d.eksik = 0;
+    }
+  }
 }
 
 // ---- Plan satırları (zt mpVeri) ---------------------------------------------------------------------------------

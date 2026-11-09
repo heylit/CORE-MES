@@ -652,14 +652,36 @@ const kapatirMi = (x: GerceklesenSatiri): boolean => x.kaynak === 'elle' && x.su
 
 // RT-73: bekleyen ölçüm tür başına bu görünümdeki son boşaltmadan sonraki son ölçümdür. Makinesiz görünüm her makinenin ölçümünü
 // gösterir, makineye özgü kapatma onu kapatmaz; makine görünümü o makinenin ve makinesiz ölçümü gösterir, makinesiz kapatma da onu kapatır.
-export function bekleyenOlcum(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
-  const sec = (tur: GerceklesenTuru): GerceklesenSatiri | null => {
+// Pencere (2564 a) aynı sınırdan sonraki bütün ölçümlerdir, eskiden yeniye.
+export function olcumPenceresi(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri[]> {
+  const sec = (tur: GerceklesenTuru): GerceklesenSatiri[] => {
     const turun = [...satirlar].filter((x) => x.tur === tur).sort((a, b) => a.id - b.id);
     const sinir = turun.filter((x) => kapatirMi(x) && (x.makineId === null || x.makineId === makineId)).at(-1)?.id ?? 0;
-    return turun.filter((x) => olcumMu(x) && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId)).at(-1) ?? null;
+    return turun.filter((x) => olcumMu(x) && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId));
   };
   return { hazirlik: sec('hazirlik'), islem: sec('islem'), degisim: sec('degisim') };
 }
+
+export function bekleyenOlcum(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
+  const p = olcumPenceresi(satirlar, makineId);
+  return { hazirlik: p.hazirlik.at(-1) ?? null, islem: p.islem.at(-1) ?? null, degisim: p.degisim.at(-1) ?? null };
+}
+
+// 2564 a: penceredeki ölçümlerin sayısı, ortancası ve aralığı; çift sayıda ortanca ortadaki iki değerin ortalamasıdır. Ölçüm yoksa null.
+// Ortanca tek bir aykırı ölçümün (makine arızası, unutulmuş bitir) kabul edilen süreyi bozmasını önler.
+export interface OlcumOzeti { n: number; ortanca: number; enAz: number; enCok: number }
+export function olcumOzeti(sureler: readonly number[]): OlcumOzeti | null {
+  if (sureler.length === 0) return null;
+  const s = [...sureler].sort((a, b) => a - b);
+  const orta = Math.floor(s.length / 2);
+  const ortanca = s.length % 2 === 1 ? s[orta]! : (s[orta - 1]! + s[orta]!) / 2;
+  return { n: s.length, ortanca, enAz: s[0]!, enCok: s.at(-1)! };
+}
+
+// 2564 a: ortanca bundan az ölçümle kabul edilirse uyarılır; kabul yine yapılır.
+export const AZ_OLCUM_SINIRI = 3;
+export const azOlcumUyarisi = (n: number): string | null =>
+  (n >= AZ_OLCUM_SINIRI ? null : `Ortanca ${String(n)} ölçümden; güvenilir süre için en az ${String(AZ_OLCUM_SINIRI)} ölçüm önerilir.`);
 
 export interface KabulSatiri { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi; sureDk: number | null }
 

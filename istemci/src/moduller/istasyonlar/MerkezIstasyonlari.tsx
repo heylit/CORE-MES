@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { IstasyonTipi, KapasiteKaynagi, SurumluIsMerkezi, SurumluIstasyon, TesisSablonuSonucu } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
-import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Sekmeler, Simge, type Sekme } from '../../ortak/arayuz/index.ts';
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { CokluEklePenceresi } from './CokluEklePenceresi.tsx';
 import { csvIndir } from './csv.ts';
+import { ExcelMenusu } from './ExcelGirisi.tsx';
 import { KAPASITE_KAYNAGI_ADLARI, KAPASITE_KAYNAGI_SECENEKLERI, TIP_ADLARI } from './etiketler.ts';
 import { MakineEtiketi } from './GenelBakis.tsx';
 import { Hucre, MetinHucresi, SatirHatasi, SayiHucresi, SecimHucresi } from './Hucreler.tsx';
@@ -58,7 +59,8 @@ const degistir = <T,>(kume: ReadonlySet<T>, deger: T, var_: boolean): Set<T> => 
   return yeni;
 };
 
-// İş merkezleri ve istasyonlar tek ekranda (Reçete ve Rota düzeni): her merkez kendi katlanır panelinde, istasyonları satır satır.
+// İş merkezleri ve istasyonlar iki sekmededir (2686 2/2 a; #1109'daki tek ekranın yerine). İstasyonlar sekmesinde istasyonlar iş merkezine
+// göre katlanır panellerde, satır satır; merkezin kendisi İş merkezleri sekmesinde yazılır. Adres: ?sekme=is-merkezleri.
 // Satır okuma kipindedir; "Düzenle" ile değer hücrede yazılır (kart #1109, #1296). Tip, üretim alanı ve kişi atamaları "Ayrıntı" penceresindedir.
 // Seçilen istasyonlar tek komutla başka iş merkezine taşınır ya da pasife alınır: hepsi ya da hiçbiri (kart #1296).
 // 2166-4 a: istasyonun bağlı sayfası tipe göre sabittir; bağlantıyı yalnız o sayfayı açabilen görür (sayfa yetkisi rolden).
@@ -89,7 +91,17 @@ const sablonIletisi = (c: TesisSablonuSonucu): string => {
   return `${c.acilanMerkezler.length} iş merkezi ve ${c.acilanIstasyonlar.length} istasyon açıldı.${atlanan}`;
 };
 
-export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: TesisVerisi; y: TesisYaz; yazabilir: boolean; islemler?: readonly string[] }) {
+type Gorunum = 'istasyonlar' | 'is-merkezleri';
+// Simgesiz: 360 genişlikte iki sekme de kesilmeden sığsın (bölüm ikinci menüde zaten simgeli).
+const SEKMELER: readonly Sekme<Gorunum>[] = [
+  { anahtar: 'istasyonlar', baslik: 'İstasyonlar' },
+  { anahtar: 'is-merkezleri', baslik: 'İş merkezleri' },
+];
+
+// istasyonAraci: yalnız İstasyonlar sekmesinde, sekmelerin altında gösterilen araç (istasyon etiketleri).
+export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAraci = null }: {
+  v: TesisVerisi; y: TesisYaz; yazabilir: boolean; islemler?: readonly string[]; istasyonAraci?: ReactNode;
+}) {
   const [ara, araYaz] = useState('');
   const [sablonSonucu, sablonSonucuYaz] = useState<string | null>(null);
   const [pasifler, pasiflerYaz] = useState(false);
@@ -104,8 +116,11 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
   const [odak, odakYaz] = useState<string | null>(null);
   // Tek istasyonun adresi (IST-5): /istasyonlar/is-merkezleri?istasyon=<id>. Başka ekran (Kaynak 360) bu adresle istasyonu açar:
   // satır işaretlenir ve görünür kaydırılır; pasif istasyon için pasifler açılır.
-  const [adres] = useSearchParams();
+  const [adres, adresYaz] = useSearchParams();
   const hedefIstasyon = Number(adres.get('istasyon')) || null;
+  const gorunum: Gorunum = adres.get('sekme') === 'is-merkezleri' && hedefIstasyon === null ? 'is-merkezleri' : 'istasyonlar';
+  const merkezSekmesi = gorunum === 'is-merkezleri';
+  const sekmeSec = (g: Gorunum) => { araYaz(''); adresYaz(g === 'istasyonlar' ? {} : { sekme: g }, { replace: true }); };
   const [hedefeGidildi, hedefeGidildiYaz] = useState(false);
   const t = useTopluYaz();
   useEffect(() => {
@@ -144,7 +159,9 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
   const istasyonUyar = (i: SurumluIstasyon) => aramayaUyar(ara, [i.kod, i.ad, i.sorumluAd]);
   const satirlari = (m: SurumluIsMerkezi) => v.istasyonlar.filter((i) => i.isMerkeziId === m.id && gorunur(i) && suzgecte(i)
     && (aramayaUyar(ara, [m.kod, m.ad, m.aciklama]) || istasyonUyar(i)));
-  const merkezler = v.merkezler.filter(gorunur).filter((m) => (suzgec.size === 0 && aramayaUyar(ara, [m.kod, m.ad, m.aciklama])) || satirlari(m).length > 0);
+  const merkezler = v.merkezler.filter(gorunur).filter((m) => (merkezSekmesi
+    ? aramayaUyar(ara, [m.kod, m.ad, m.aciklama])
+    : (suzgec.size === 0 && aramayaUyar(ara, [m.kod, m.ad, m.aciklama])) || satirlari(m).length > 0));
   const merkezSecenekleri = v.merkezler.filter((m) => m.aktif).map((m) => ({ deger: String(m.id), baslik: `${m.kod} ${m.ad}` }));
   const kisiSecenekleri = (secili_: number | null) => (v.kisiler ?? [])
     .filter((k) => k.aktif || k.id === secili_).map((k) => ({ deger: String(k.id), baslik: `${k.ad}${k.aktif ? '' : ' (pasif)'}` }));
@@ -255,21 +272,26 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
 
   return (
     <div className="tc-ist-bolum">
+      <Sekmeler etiket="İş merkezleri ve istasyonlar" sekmeler={SEKMELER} secili={gorunum} sec={sekmeSec} />
+      {!merkezSekmesi && istasyonAraci}
       <div className="tc-ist-arac">
-        <Girdi etiket="Ara" type="search" placeholder="Kod, ad ya da sorumlu" value={ara} onChange={(o) => araYaz(o.target.value)} />
+        <Girdi etiket="Ara" type="search" placeholder={merkezSekmesi ? 'Kod ya da ad' : 'Kod, ad ya da sorumlu'} value={ara} onChange={(o) => araYaz(o.target.value)} />
         <IsaretKutusu etiket="Pasifleri göster" checked={pasifler} onChange={(o) => pasiflerYaz(o.target.checked)} />
         <div className="tc-ist-arac-sag">
-          <Dugme simge={hepsiKapali ? 'down' : 'up'} onClick={() => kapaliMerkezlerYaz(hepsiKapali ? new Set() : new Set(v.merkezler.map((m) => m.id)))}>
-            {hepsiKapali ? 'Hepsini aç' : 'Hepsini kapat'}
-          </Dugme>
-          <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
-          {yazabilir && (
+          {!merkezSekmesi && (
+            <Dugme simge={hepsiKapali ? 'down' : 'up'} onClick={() => kapaliMerkezlerYaz(hepsiKapali ? new Set() : new Set(v.merkezler.map((m) => m.id)))}>
+              {hepsiKapali ? 'Hepsini aç' : 'Hepsini kapat'}
+            </Dugme>
+          )}
+          {!merkezSekmesi && <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>}
+          {yazabilir && <ExcelMenusu tur="tesis" v={v} bolum="İş merkezleri ve istasyonlar" />}
+          {yazabilir && merkezSekmesi && (
             <Dugme simge="layers" disabled={y.mesgul} title="Hazır iş merkezi ve istasyon listesini açar (Kalite dahil); var olan kayda dokunmaz."
               onClick={() => { sablonSonucuYaz(null); y.gonder({ yol: '/tesis-sablonu/uygula', satir: 'sablon' }, { onSuccess: (c) => sablonSonucuYaz(sablonIletisi(c as TesisSablonuSonucu)) }); }}>
               Şablonu uygula
             </Dugme>
           )}
-          {yazabilir && (
+          {yazabilir && merkezSekmesi && (
             <Dugme tur="birincil" simge="plus" disabled={y.mesgul}
               onClick={() => y.gonder(
                 { yol: '/is-merkezleri', govde: { kod: yeniKod('IM', v.merkezler.map((m) => m.kod)), ad: 'Yeni iş merkezi', aciklama: null }, satir: 'yeni-im' },
@@ -284,7 +306,7 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
           )}
         </div>
       </div>
-      {gorunenSuzgecler.length > 0 && (
+      {!merkezSekmesi && gorunenSuzgecler.length > 0 && (
         <div className="tc-ist-cipler" role="group" aria-label="Süzgeçler">
           {gorunenSuzgecler.map((s) => (
             <button key={s.kod} type="button" className="tc-ist-secmeli" aria-pressed={suzgec.has(s.kod)} onClick={() => suzgecYaz((k) => degistir(k, s.kod, !k.has(s.kod)))}>
@@ -296,12 +318,12 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
       <SatirHatasi ileti={y.hatalar['yeni-im']} />
       <SatirHatasi ileti={y.hatalar['sablon']} />
       {sablonSonucu !== null && <p className="tc-ist-ipucu" role="status">{sablonSonucu}</p>}
-      <TopluCubuk sayi={seciliKayitlar.length} temizle={() => { seciliYaz(new Set()); t.temizle(); }} ret={t.ret?.ileti ?? null}>
+      {!merkezSekmesi && <TopluCubuk sayi={seciliKayitlar.length} temizle={() => { seciliYaz(new Set()); t.temizle(); }} ret={t.ret?.ileti ?? null}>
         <AranabilirSecim etiket="Seçilenleri iş merkezine taşı" tur="merkez" deger="" yerTutucu="İş merkezine taşı" secenekler={merkezSecenekleri} disabled={t.mesgul}
           sec={(d) => { if (d !== '') toplu('/istasyonlar/toplu-tasi', { isMerkeziId: Number(d) }); }} />
         <Dugme disabled={t.mesgul} onClick={() => toplu('/istasyonlar/toplu-aktiflik', { aktif: false })}>Pasife al</Dugme>
         <Dugme disabled={t.mesgul} onClick={() => toplu('/istasyonlar/toplu-aktiflik', { aktif: true })}>Aktif yap</Dugme>
-      </TopluCubuk>
+      </TopluCubuk>}
       <details className="tc-ist-nasil">
         <summary><Simge ad="help" boyut="k" /> Nasıl çalışır</summary>
         <p className="tc-ist-ipucu">
@@ -311,22 +333,28 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
         </p>
       </details>
       {merkezler.length === 0 && (
-        <DurumKutusu durum="bos" mesaj={v.merkezler.length === 0 ? `İş merkezi yok. Bölüm ya da hatlarınızı ekleyin${yazabilir ? ' ya da "Şablonu uygula" ile hazır listeyi açın' : ''}.` : 'Aramaya uyan kayıt yok.'} />
+        <DurumKutusu durum="bos" mesaj={v.merkezler.length === 0
+          ? (merkezSekmesi
+            ? `İş merkezi yok. Bölüm ya da hatlarınızı ekleyin${yazabilir ? ' ya da "Şablonu uygula" ile hazır listeyi açın' : ''}.`
+            : 'İş merkezi yok. İstasyon bir iş merkezinde açılır; önce İş merkezleri sekmesinde iş merkezi ekleyin.')
+          : 'Aramaya uyan kayıt yok.'} />
       )}
       {merkezler.map((m) => {
         const satirlar = satirlari(m);
         const hafta = v.takvim?.isMerkezleri.find((x) => x.id === m.id)?.haftalikDakika;
         // Arama ya da süzgeç varken bulunan satırlar görünsün diye panel açılır.
-        const acik = !kapaliMerkezler.has(m.id) || ara.trim() !== '' || suzgec.size > 0;
-        const duzenle = yazabilir && duzenlenen.has(`im:${m.id}`);
+        const acik = !merkezSekmesi && (!kapaliMerkezler.has(m.id) || ara.trim() !== '' || suzgec.size > 0);
+        const duzenle = merkezSekmesi && yazabilir && duzenlenen.has(`im:${m.id}`);
         const hepsi = satirlar.length > 0 && satirlar.every((s) => secili.has(s.id));
         return (
           <section key={m.id} className={`tc-ist-panel ${merkezRengi(m.id)}`} aria-label={`${m.kod} iş merkezi`}>
             <div className="tc-ist-panel-bas">
-              <button type="button" className="tc-ist-dal-ac" aria-expanded={acik} aria-label={`${m.kod} istasyonlarını ${acik ? 'gizle' : 'göster'}`}
-                onClick={() => kapaliMerkezlerYaz((k) => degistir(k, m.id, acik))}>
-                <Simge ad={acik ? 'down' : 'chev-right'} boyut="k" />
-              </button>
+              {!merkezSekmesi && (
+                <button type="button" className="tc-ist-dal-ac" aria-expanded={acik} aria-label={`${m.kod} istasyonlarını ${acik ? 'gizle' : 'göster'}`}
+                  onClick={() => kapaliMerkezlerYaz((k) => degistir(k, m.id, acik))}>
+                  <Simge ad={acik ? 'down' : 'chev-right'} boyut="k" />
+                </button>
+              )}
               {duzenle ? (
                 <>
                   <Hucre baslik="Kod"><MetinHucresi surum={m.surum} etiket={`${m.kod} iş merkezi kodu`} deger={m.kod} mono enCok={24} disabled={kapali} kaydet={(kod) => merkezYaz(m, { kod })} /></Hucre>
@@ -346,8 +374,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
               </Hucre>
               <div className="tc-ist-islemler">
                 {duzenle && <AktifDugmesi aktif={m.aktif} etiket={m.kod} disabled={kapali} degistir={() => merkezYaz(m, { aktif: !m.aktif })} />}
-                {yazabilir && <DuzenleDugmesi kod={`${m.kod} iş merkezi`} acik={duzenle} degistir={(d) => duzenlenenYaz((k) => degistir(k, `im:${m.id}`, d))} />}
-                {yazabilir && <Dugme simge="more" onClick={() => merkezAyrintiYaz(m)} aria-label={`${m.kod} ayrıntı`} title="Ayrıntı" />}
+                {merkezSekmesi && yazabilir && <DuzenleDugmesi kod={`${m.kod} iş merkezi`} acik={duzenle} degistir={(d) => duzenlenenYaz((k) => degistir(k, `im:${m.id}`, d))} />}
+                {merkezSekmesi && yazabilir && <Dugme simge="more" onClick={() => merkezAyrintiYaz(m)} aria-label={`${m.kod} ayrıntı`} title="Ayrıntı" />}
               </div>
             </div>
             <SatirHatasi ileti={y.hatalar[`im:${m.id}`]} />

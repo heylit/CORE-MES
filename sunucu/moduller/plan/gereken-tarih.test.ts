@@ -36,6 +36,21 @@ describe('olması gereken tarih', () => {
     assert.deepEqual(gerekenTarihler({ D: {} }), []);
   });
 
+  test('B-2483-4 (1473 a): adımı belli malzeme o adımın başlangıcından; adım bitmişse ihtiyaç yok; iptal sipariş sayılmaz', () => {
+    const ops = { dataVer: 1, ops: {
+      'E-1.10': { job: 'E-1', S: 1 * 24 + 8, C: 1 * 24 + 10 }, 'E-1.20': { job: 'E-1', S: 5 * 24 + 8, C: 5 * 24 + 10 },
+      'E-1.30': { job: 'E-1', S: 2 * 24 + 8, C: 2 * 24 + 9, done: 1 }, 'E-2.10': { job: 'E-2', S: 0, C: 1 },
+    } };
+    const c = (malzeme: unknown[], iptal = false) => ({ plan: ops, D: { meta: { baslangic: '2026-10-19' }, malzemeler: [{ kod: '61', muayeneGun: 0 }, { kod: '62', muayeneGun: 1 }],
+      siparisler: [{ id: 'E-1', malzeme }, { id: 'E-2', iptal, malzeme: iptal ? [{ kod: '61', miktar: 1 }] : [] }] } });
+    // OP20 24 Ekim 08:00'de başlar: ilk adımın 20 Ekim'i değil.
+    assert.deepEqual(gerekenTarihler(c([{ kod: '61', miktar: 1, adim: 20 }])), [{ kod: '61', gerekenTarih: '2026-10-24' }]);
+    assert.deepEqual(gerekenTarihler(c([{ kod: '62', miktar: 1, adim: 20 }])), [{ kod: '62', gerekenTarih: '2026-10-23' }], 'muayene günü düşülür');
+    assert.deepEqual(gerekenTarihler(c([{ kod: '61', miktar: 1, adim: 30 }])), [], 'bitmiş adımın malzemesi istenmez');
+    assert.deepEqual(gerekenTarihler(c([{ kod: '61', miktar: 1 }])), [{ kod: '61', gerekenTarih: '2026-10-20' }], 'adımsız satır emrin ilk işinden');
+    assert.deepEqual(gerekenTarihler(c([{ kod: '61', miktar: 1, adim: 20 }], true)), [{ kod: '61', gerekenTarih: '2026-10-24' }], 'iptal E-2 sayılmaz');
+  });
+
   describe('kaydedilince Satın Alma\'ya (gerçek PostgreSQL)', () => {
     let ortam: TestVeritabani | undefined;
     let kullanici: Kullanici;

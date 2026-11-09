@@ -9,6 +9,7 @@ import type { Derleme, OkunanPlan, Sorun } from './kurallar.ts';
 import { MOTOR_NOTU } from './ortak.tsx';
 import { TezgahSirasiPaneli } from '../ic/sira/index.tsx';
 import { useHamleci } from './hamle/hamle.ts';
+import { BolPenceresi, type BolKipi } from './bol/BolPenceresi.tsx';
 
 // Yapılacaklar (zo-kontrol.betik ypHtml): sağ altta sayılı düğme, basınca kararlar listesi; her kararın ilk eylemi. "Hazır olmayan emirler"
 // eski sayfada deneme verisiydi (208 a), gelmez. Yanında Düzenle düğmesi; Düzenle, Değişiklikler ve klavye kısayolları aynı köşede açılır,
@@ -37,11 +38,12 @@ export function Yapilacaklar(o: Ozellikler) {
   const [hedef, setHedef] = useState<KbHedef['k'] | null>(null);
   const [sonPan, setSonPan] = useState(pan);
   const [siraM, setSiraM] = useState<string | null>(null);
+  const [bol, setBol] = useState<{ id: string; kip: BolKipi } | null>(null);
   if (pan !== sonPan) { setSonPan(pan); setAlt(false); setHedef(null); }
   const hl = kbHedefler(o.p, o.cx, o.secim); const b = kbBaglam(hl, hedef);
   const hamle = useHamleci();
   const tasi = o.tasi ?? null;
-  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true), siraAc: (m) => { setSiraM(m); panAc('sr'); }, p: o.p, hamle, tasi }, b, alt);
+  const kl = kbKomutlari({ c: o.c, cx: o.cx, komut: o.komut, altAc: () => setAlt(true), siraAc: (m) => { setSiraM(m); panAc('sr'); }, p: o.p, hamle, tasi, bolAc: o.komut ? (id, kip) => { setBol({ id, kip }); panAc('bl'); } : null }, b, alt);
   const kaydir = (saat: number) => (b && b.k !== 'tez' ? kaydirmaAdimi({ c: o.c, tasi }, b.r, saat) : null);
   // Komut çalışınca menü kapanır; alt listeye geçen komut menüyü açık tutar (kbKos).
   const kos = (i: number) => { const k = kl[i]; if (!k?.yap) return; k.yap(); if (!k.alt && !k.pencere) panAc(null); };
@@ -79,6 +81,7 @@ export function Yapilacaklar(o: Ozellikler) {
         <DuzenleMenusu c={o.c} hl={hl} b={b} l={kl} alt={alt} yaz kos={kos} geri={() => setAlt(false)} hedefSec={(k) => { setHedef(k); setAlt(false); }} kapat={() => panAc(null)} />
       )}
       {pan === 'sp' && !acik && <Degisiklikler p={o.p} studyo={o.studyo} kapat={() => panAc(null)} />}
+      {pan === 'bl' && !acik && bol && <BolPenceresi c={o.c} p={o.p} cx={o.cx} id={bol.id} kip={bol.kip} komut={o.komut} kapat={() => panAc(null)} />}
       {pan === 'sr' && !acik && <TezgahSirasiPaneli c={o.c} p={o.p} cx={o.cx} m={siraM} yaz={o.komut !== null} kapat={() => panAc(null)} />}
       {pan === 'kl' && !acik && (
         <section className="tc-pym-yp tc-pym-kb" role="dialog" aria-label="Klavye kısayolları">

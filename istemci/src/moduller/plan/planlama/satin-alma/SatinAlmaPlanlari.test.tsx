@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { SatinAlmaFasonPlani, SatinAlmaMalzemePlani } from '../../disari.ts';
 import { SATIN_ALMA_CALISMASI } from './SatinAlmaPlanlari.tsx';
+import { planAni } from '../test-saati.ts';
 
 // 546 a: sayfalar sunucunun daraltılmış çalışmasıyla (satin-alma-gorunumu.ts beyaz listesi) planlama görünümünü yazmasız çizer. Çalışmalar
 // planlama testlerinin örneklerinin daraltılmış halidir: müşteri, fiyat, tezgâh ve personel yoktur. Veri uydurmadır.
@@ -65,10 +66,12 @@ const ciz = (ekran: React.ReactNode) => render(
 );
 const BEKLE = { timeout: 10000 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
   it('fason planı daraltılmış çalışmayla planlamadaki hesabı verir; termin girişi ve planlamaya geçiş yoktur', async () => {
+    // Ekranın şimdisi gerçek saattir; uydurma çalışmanın başlangıç günü 07:00'ına sabitlenir.
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(planAni(fasonCalismasi as unknown as Parameters<typeof planAni>[0]));
     const istekler = sunucu(fasonCalismasi);
     ciz(<SatinAlmaFasonPlani />);
     expect(await screen.findByRole('group', { name: 'Fasoncu × gün, kapasite ve gecikme' }, BEKLE)).toBeTruthy();

@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
-  benCevabi, fasonTahminCevabi, fasonTahminSorgusu, kayitlarCevabi, receteRotaDurumCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi, statuTanimiKaydetGovdesi,
+  benCevabi, fasonTahminCevabi, malzemeIhtiyaciCevabi, malzemeIhtiyaciSorgusu, fasonTahminSorgusu, kayitlarCevabi, receteRotaDurumCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi, statuTanimiKaydetGovdesi,
   statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
-import { ben, durum, fasonTahminleri, kayitlar, komutlaSil, komutlaYaz, statuler, statuTanimiKaydet, statuTanimiSil } from './servis.ts';
+import { ben, durum, fasonTahminleri, malzemeIhtiyaci, kayitlar, komutlaSil, komutlaYaz, statuler, statuTanimiKaydet, statuTanimiSil } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -47,6 +47,15 @@ export const uclar = [
     sorgu: fasonTahminSorgusu,
     cevap: fasonTahminCevabi,
     isle: ({ db, sorgu }) => fasonTahminleri(db, sorgu.s),
+  }),
+  // Emir malzeme ihtiyacı (2486-8, 461 b): emir okuma yetkisini servis ister.
+  uc({
+    yontem: 'GET',
+    yol: '/recete-rota/malzeme-ihtiyaci',
+    yetki: OKUMA,
+    sorgu: malzemeIhtiyaciSorgusu,
+    cevap: malzemeIhtiyaciCevabi,
+    isle: ({ db, kullanici, sorgu }) => malzemeIhtiyaci(db, kullanici, sorgu.emir),
   }),
   uc({
     yontem: 'POST',

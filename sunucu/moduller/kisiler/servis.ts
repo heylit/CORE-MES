@@ -3,12 +3,13 @@ import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { satirdaReddet } from '#cekirdek/toplu.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISLEMLER, islemMi } from '#paylasilan/islemler.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { aramaSade, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
-import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
+import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiTopluKaydetCevabi, KisiTopluKaydetGirdisi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
@@ -345,6 +346,30 @@ export async function kisiDuzenle(
     return sicilCakismasiniCevir(hata);
   }
   return kisiyiGetir(db, kisiId, bayrakGorur);
+}
+
+// Excel ile toplu giriş (2627, 1/2 b): her satır tek kişi ekleme ve düzenleme işleviyle, aynı kuralla (sicil tekliği, özlük, bayraklı
+// kişi) yazılır. Uç tek transaction'dır; bir satır reddedilirse hiçbiri kalmaz ve ret satır numarasını taşır. Güncellemede gönderilmeyen
+// alan kaydın güncel değerini korur. Eşleştirme istemcide sicil no ile yapılır; buraya kimlik ve okunan sürüm gelir.
+export async function kisiTopluKaydet(db: Db, aktorId: number, g: KisiTopluKaydetGirdisi, bayrakGorur: boolean): Promise<KisiTopluKaydetCevabi> {
+  let eklenen = 0;
+  let guncellenen = 0;
+  for (const [sira, s] of g.satirlar.entries()) {
+    await satirdaReddet(sira, s.satir, async () => {
+      if (s.islem === 'ekle') {
+        await kisiEkle(db, { ad: s.ad, sicilNo: s.sicilNo ?? null, gorev: s.gorev ?? null });
+        eklenen += 1;
+        return;
+      }
+      const [mevcut] = await kisiSatirlari(db, s.id);
+      if (mevcut === undefined) throw bulunamadi(ILETILER.kisiYok);
+      await kisiDuzenle(db, aktorId, s.id, {
+        ad: s.ad ?? mevcut.ad, sicilNo: s.sicilNo ?? mevcut.sicil_no, gorev: s.gorev ?? mevcut.gorev,
+      }, bayrakGorur, s.surum);
+      guncellenen += 1;
+    });
+  }
+  return { eklenen, guncellenen };
 }
 
 export async function kisiPasifeAl(

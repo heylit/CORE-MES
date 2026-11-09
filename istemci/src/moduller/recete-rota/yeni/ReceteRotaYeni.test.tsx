@@ -29,7 +29,7 @@ const parcaCizildi = async (bolge: HTMLElement, parca: string) => {
 };
 
 describe('plan şeridi yalnız planı yazana (RR-9)', () => {
-  it('plan.yaz olmayan rol şeridi ve pasif "Onaya gönder"i görmez; plan.yaz olan görür', async () => {
+  it('plan.yaz olmayan rol şeridi ve Planlama bağını görmez; plan.yaz olan görür', async () => {
     const durum = { ...ornekDurum(), planCanli: { planSurumu: 3, sonCanliyaAlma: null, planlanacak: [], kuyruklar: [] } };
     const istekler = sunucuKur(OKUYAN, { durum });
     rrAc();

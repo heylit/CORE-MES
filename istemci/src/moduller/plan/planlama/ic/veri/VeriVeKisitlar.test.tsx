@@ -3,6 +3,11 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { VERI_NOTU } from '../../motor/ortak.tsx';
 import { OKUYAN, ekranAc } from './test-veri.tsx';
 
+import { saatiSabitle } from '../../test-saati.ts';
+import { calismaKur as saatCalismasi } from './test-veri.tsx';
+
+saatiSabitle(() => saatCalismasi());
+
 // Ekran yer tutucu metnine değil kendi işaretlerine bakar: kap `data-parca="veri"` ve `data-bolum`, tabloların ve formların erişilebilir adı.
 afterEach(() => { cleanup(); });
 

@@ -7,10 +7,12 @@ import { adaylar } from './cizelge/kurallar.ts';
 import { saatYaz, saatYazi, type Derleme, type OkunanPlan, type PlanIslemi } from './kurallar.ts';
 import { MOTOR_NOTU, YOK_NOTU } from './ortak.tsx';
 import { hamleYapisi, siraAdimi, type Hamleci } from './hamle/hamle.ts';
+import type { BolKipi } from './bol/BolPenceresi.tsx';
+import { bolDurumu, bolKaldir, bolunmus } from './bol/kurallar.ts';
 
 // Düzenle menüsü ve Değişiklikler (zp-klavye.betik): seçilene göre numaralı komutlar; sayıya basmak komutu çalıştırır. Plana dokunan
 // komutlar motorun hamlesiyle gelir, görünür ve pasiftir (357 b); sabitlemek çalışmaya yazar (223 a). Tezgâhın "sırasını düzenle"si Tezgâh sırası aracını açar.
-export type KbPanel = 'dz' | 'sp' | 'kl' | 'sr';
+export type KbPanel = 'dz' | 'sp' | 'kl' | 'sr' | 'bl';
 export type KbHedef = { k: 'is' | 'sip'; r: PlanIslemi } | { k: 'tez'; m: string };
 // `alt`: komut menüyü kapatmaz, alt listeye geçer. `pencere`: komut köşede kendi penceresini açar, menü onunla kapanır.
 export interface KbKomut { ad: string; simge: SimgeAdi; ipucu: string; yap: (() => void) | null; not: string; alt?: boolean; pencere?: boolean }
@@ -38,6 +40,8 @@ interface Baglam {
   p?: OkunanPlan | null; hamle?: Hamleci | null;
   // Aynı tezgâhta saat kaydırma atölyenin iş taşıma komutudur (sunucu, plan yeniden dizilir); yazamayana null.
   tasi?: ((id: string, m: string, S: number) => void) | null;
+  // Böl penceresi (2524 b); yazamayana null.
+  bolAc?: ((id: string, kip: BolKipi) => void) | null;
 }
 export const KAYDIRMA_SABIT = 'Sabit, başlamış ya da fason iş kaydırılmaz.';
 export const KAYDIRMA_YETKISIZ = 'Plan yazma yetkiniz yok.';
@@ -63,6 +67,20 @@ function tasiKomutlari(o: Baglam, r: PlanIslemi): KbKomut[] {
 function siraKomutu(o: Baglam, r: PlanIslemi, ad: string, simge: SimgeAdi, ipucu: string, yon: -1 | 1): KbKomut {
   return { ad, simge, ipucu, ...(o.p ? siraAdimi(o.hamle, o.p, r.id, yon) : { yap: null, not: MOTOR_NOTU }) };
 }
+// Elle böl ve payları birleştir (2524 b): sabit, başlamış ya da fason işte pasif ve nedeniyle; elle karar varsa kaldırılabilir.
+function bolKomutlari(o: Baglam, r: PlanIslemi): KbKomut[] {
+  if (!o.p) return [];
+  const d = bolDurumu(o.c, o.cx, o.p, r); const { bolAc, komut } = o;
+  const yetki = (engel: string | null, f: () => void) => (!bolAc || !komut ? { yap: null, not: KAYDIRMA_YETKISIZ } : engel ? { yap: null, not: engel } : { yap: f, not: '' });
+  const l: KbKomut[] = [{ ad: 'Böl…', simge: 'grid', ipucu: `en çok ${String(d.enCok)} pay, adet ve tezgâh seçilir`, pencere: true, ...yetki(d.bolEngeli, () => bolAc?.(r.id, 'bol')) }];
+  if (bolunmus(d)) l.push({ ad: 'Payları birleştir', simge: 'layers', ipucu: 'tek tezgâhta tek iş', pencere: true, ...yetki(d.engel, () => bolAc?.(r.id, 'birlestir')) });
+  if (d.elle) {
+    l.push({ ad: 'Elle bölmeyi kaldır', simge: 'trash', ipucu: 'motor rotadaki bölme ayarına döner', ...yetki(d.engel, () => {
+      komut?.degistir('Elle bölme kaldırıldı', (t) => { bolKaldir(t, d.id); }, { ayrinti: d.id });
+    }) });
+  }
+  return l;
+}
 export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut[] {
   if (!b) return [];
   if (b.k === 'tez') {
@@ -86,6 +104,7 @@ export function kbKomutlari(o: Baglam, b: KbHedef | null, alt: boolean): KbKomut
         { ayrinti: `${r.id} · ${saatYaz(o.c.D, r.S)}`, planKoru: true });
     } : null,
   });
+  l.push(...bolKomutlari(o, r));
   l.push(motor(`${r.job} siparişini havuza geri al`, 'box', 'plandan çıkar, sonra yeniden yerleştirilir'));
   l.push({ ad: `${kbTez(r.m)} sırasını düzenle`, simge: 'sort', ipucu: 'tezgâhın bütün kuyruğu', yap: o.siraAc && !r.m.startsWith('@') ? () => o.siraAc?.(r.m) : null, not: YOK_NOTU, pencere: true });
   return l;

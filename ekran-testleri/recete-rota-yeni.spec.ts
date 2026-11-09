@@ -9,6 +9,8 @@ const BOLUMLER = [
   { sekme: 'Operasyonlar', parca: 'R1' }, { sekme: 'Süreler', parca: 'R2' }, { sekme: 'Malzemeler', parca: 'R2' }, { sekme: 'Kaynaklar', parca: 'R2' },
   // Emrin evi (1416 a): kapanış onayları burada verilir.
   { sekme: 'Kapanış onayları', parca: 'R3' },
+  // 2584 a: elle tanımlanan statüler.
+  { sekme: 'Ayarlar', parca: 'R2' },
 ] as const;
 
 // Şerit maddesinin adı sayı rozeti taşıyabilir (Üretim emirleri 2): ad baştan eşlenir.
@@ -83,17 +85,26 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
       await expect(sema.getByRole('button', { name: 'Yakınlaştır' })).toBeVisible();
     }
     if (await kutu.count() > 0) {
+      // 2558 b/10: tek tık yalnız seçer; panel çekmecedir, üst çubuktaki düğmeyle açılır ve Esc ile kapanır.
       await kutu.click();
+      await sema.getByRole('button', { name: 'Düzenleme paneli', exact: true }).click();
       await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeVisible();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await page.keyboard.press('Escape');
+      await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeHidden();
     }
-    await sema.getByRole('button', { name: 'Ürün listesi' }).click();
+    // 2558 b/4: ürün listesi ⋯ menüsündedir.
+    await sema.getByRole('button', { name: 'Diğer rota işlemleri' }).click();
+    await page.getByRole('menuitem', { name: 'Ürün listesi' }).click();
     await expect(sema.getByRole('table', { name: 'Ürünler ve rotaları' }).or(sema.getByText('Henüz ürün yok', { exact: false }))).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await seritte(page, 'Operasyonlar').click();
     const ops = page.getByRole('region', { name: 'Operasyonlar' });
     await expect(ops.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
-    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toBeVisible();
+    // 2559 a: revizyon listesi bu bölümden kalktı; katalog araması ve varsayılan açık "Pasifleri gizle" kalır.
+    await expect(ops.getByRole('searchbox', { name: 'Operasyon ara' })).toBeVisible();
+    await expect(ops.getByRole('checkbox', { name: 'Pasifleri gizle' })).toBeChecked();
+    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
@@ -155,7 +166,7 @@ test.describe('R2 kaynaklar', () => {
     const malzemeler = page.getByRole('region', { name: 'Malzemeler' });
     await expect(malzemeler.getByRole('searchbox', { name: 'Malzeme ara' })).toBeVisible({ timeout: 15_000 });
     await expect(malzemeler.getByRole('group', { name: 'Tür' })).toBeVisible();
-    await expect(malzemeler.getByRole('region', { name: 'Statüler' })).toBeVisible();
+    await expect(malzemeler.getByRole('region', { name: 'Statüler' })).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
 
     await seritte(page, 'Kaynaklar').click();
@@ -188,6 +199,29 @@ test.describe('R2 kaynaklar', () => {
     await kaynaklar.getByRole('button', { name: 'Bu düzeni diğerlerine kopyala' }).first().click();
     await expect(page).toHaveURL(/\/vardiya$/);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
+// 2584 a: statü tanımları Ayarlar'dadır; "Statü" önce adı sorar, ad yazılmadan Ekle pasiftir. Pencere vazgeçilerek kapanır: yazma gitmez.
+test.describe('R2 ayarlar', () => {
+  test('Ayarlar statüleri gösterir; Malzemeler\'de statü yoktur; Yeni statü önce ad sorar; yatay taşma yok', async ({ page, ag, ac }) => {
+    await ac('/recete-rota/items');
+    const malzeme = page.getByRole('region', { name: 'Malzemeler' });
+    await expect(malzeme.locator('[data-parca="R2"]')).toBeVisible({ timeout: 15_000 });
+    await expect(malzeme.getByRole('region', { name: 'Statüler' })).toHaveCount(0);
+    await seritte(page, 'Ayarlar').click();
+    const ayar = page.getByRole('region', { name: 'Ayarlar' });
+    await expect(ayar.getByRole('region', { name: 'Statüler' })).toBeVisible({ timeout: 15_000 });
+    await ayar.getByRole('button', { name: /^Yeni statü$/ }).click();
+    const pencere = page.getByRole('dialog', { name: 'Yeni statü' });
+    await expect(pencere.getByRole('button', { name: /Ekle/ })).toBeDisabled();
+    await pencere.getByRole('textbox', { name: /Statü adı/ }).fill('Deneme statüsü');
+    await expect(pencere.getByRole('button', { name: /Ekle/ })).toBeEnabled();
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toHaveCount(0);
+    expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+    expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });
 });

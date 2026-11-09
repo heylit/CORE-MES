@@ -40,7 +40,8 @@ function planKaydi(p, st, ref) {
   const ops = {}; for (const id in p.ops) ops[id] = opKaydi(p.ops[id]);
   const J = {}; for (const k in ef.J) { const x = ef.J[k]; J[k] = { C: isFinite(x.C) ? x.C : null, T: x.T }; }
   const util = {}; for (const m in ef.util) util[m] = ef.util[m];
-  return { ops, fail: p.fail || [], ozet: { wT: ef.wT, onT: ef.onT, late: ef.late, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300) };
+  const kisiTezgahIsleri = kisiTezgahIsleriOf(p);
+  return { ops, fail: p.fail || [], failNeden: p.failNeden || {}, ozet: { kisiTezgahIsleri, wT: ef.wT, onT: ef.onT, late: ef.late, yerlesmeyenSip: ef.yerlesmeyenSip, n: ef.n, suH: ef.suH, suN: ef.suN, famN: ef.famN, Cmax: ef.Cmax, tl: ef.tl, wB: ef.wB, chg: ref ? ef.chg : null }, J, util, warn: ef.warn.slice(0, 300) };
 }
 /* aynı veriyle kural tabanlı ilk plan (zw-denge PD_ISCI, ms 0) */
 /** @param {MotorDurumu} [st] @param {any} [ms] */
@@ -64,7 +65,9 @@ function saatSabitle(an, n) { const a = +saatAdimi(n).toFixed(3); let t = an; Da
 const pdMs = () => Math.max(1500, (+S.w.sure || 10) * 1000 / 3);
 
 /* ---------- maliyet (zu-yan-sayfalar, zz6) ---------- */
-const ymVH = (D, id) => { const v = D.vardiyalar.find(x => x.id === id); if (!v) return 0; let h = hm(v.bit) - hm(v.bas); if (h <= 0) h += 24; return h; };
+/* 2510 a: ek mesainin ücretli saati molası düşülmüş süredir (vardiyaNetSaat); dağıtım penceresi brüt vardiyadır (ymVPencere) */
+const ymVH = (D, id) => vardiyaNetSaat(D, id);
+const ymVPencere = (D, id) => { const v = D.vardiyalar.find(x => x.id === id); if (!v) return 0; let h = hm(v.bit) - hm(v.bas); if (h <= 0) h += 24; return h; };
 function ymGecTL(e) { let t = 0; for (const s of S.D.siparisler) { const J = e.J[s.id]; if (J && J.T > 0.05) t += agGecTL(agBedel(S.D, s), J.T); } return t; }
 /* gecikmenin TL karşılığı (zr-agirlik): tavana kadar tam bedel, sonra taban bedel */
 function agGecTL(x, T) {
@@ -74,7 +77,7 @@ function agGecTL(x, T) {
 }
 const ymMesaiUcret = D => { const u = (D.ayarlar || {}).mesaiUcret; return u == null || u === '' || !isFinite(+u) ? null : +u; };
 /** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
-function ymMesaiTLYalin(D, cx, e) { const u = ymMesaiUcret(D); if (u == null) return null; const Y = ymAyar(); const g = cx.days[e.gun]; const tat = !g || !g.vard.length; return ymVH(D, e.vardiya) * u * (tat ? +Y.mesaiCarpan || 1 : 1); }
+function ymMesaiTLYalin(D, cx, e) { const u = ymMesaiUcret(D); if (u == null) return null; return ymVH(D, e.vardiya) * u * mesaiCarpani({ planTL: ymAyar(D) }); }
 /** @param {Derleme} [cx] @param {any} [r] */
 function ymFasonTL(cx, r) {
   const f = cx.FS[r.m.slice(1)]; const o = cx.byId[r.id]; if (!f || !o) return null; const cl = o.cTum || o.c; const c = cl.find(x => x.m === r.m) || {};
@@ -106,7 +109,9 @@ const mesSis = (D = S.D) => D.mesaiSis || null;
 const msSgkKat = (D = S.D) => { const m = mesSis(D); return 1 + ((+m.sgk || 0) + (+m.yanHak || 0)) / 100; };
 const msDolayliAylik = (D = S.D) => msSis(D).dolayli.reduce((t, g) => t + (+g.brut || 0) * msSgkKat(D), 0);
 const msKalemTL = (k, D = S.D) => k.tur === 'personel' && k.aylik == null ? msDolayliAylik(D) : (+k.aylik || 0);
-function msSaat(p, D = S.D) { const m = mesSis(D); const u = (m.ucret || {})[p.id]; return u && u.brut != null ? +u.brut * msSgkKat(D) / (+m.aylikSaat || 225) : null; }
+/* B-2483-16: aylık çalışma saati ya da tezgâh verimi girilmemişse saat maliyeti ve kapasite bilinmez (null); 225 sa ve %85 uydurulmaz */
+const msSayi = x => x == null || x === '' || !isFinite(+x) || +x <= 0 ? null : +x;
+function msSaat(p, D = S.D) { const m = mesSis(D); const u = (m.ucret || {})[p.id]; const ay = msSayi(m.aylikSaat); return u && u.brut != null && ay != null ? +u.brut * msSgkKat(D) / ay : null; }
 function msGrupSaat(grup, D = S.D) { const l = D.personel.filter(p => (p.gruplar || []).includes(grup)).map(p => msSaat(p, D)).filter(x => x != null); const t = l.length ? l : D.personel.map(p => msSaat(p, D)).filter(x => x != null); return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null; }
 let msOn = null;
 function msHesap() {
@@ -114,7 +119,7 @@ function msHesap() {
   if (msOn && msOn.dv === S.dataVer && msOn.p === S.plan) return msOn.v;
   const M = msSis(D); const now = cx.st.now; const son = now + 720;
   const tez = D.tezgahlar.map(t => { const W = cx.M[t.id] && cx.M[t.id].rw; const acik = W ? workIn(W, now, son) : 0; const x = M.tez[t.id] || {};
-    const kap = acik * (+M.verim || 85) / 100; const amort = x.bedel > 0 && x.omur > 0 ? (+x.bedel * (1 - (+x.hurda || 0) / 100)) / (+x.omur * 12) : null;
+    const vr = msSayi(M.verim); const kap = vr == null ? null : acik * vr / 100; const amort = x.bedel > 0 && x.omur > 0 ? (+x.bedel * (1 - (+x.hurda || 0) / 100)) / (+x.omur * 12) : null;
     const op = t.opOran == null ? 1 : +t.opOran;
     let mesgul = 0; if (S.plan) for (const r of Object.values(S.plan.ops)) if (r.m === t.id && isFinite(r.C)) mesgul += Math.max(0, Math.min(son, r.C) - Math.max(now, r.S));
     return { t, acik, kap, amort, op, pay: 0, kalem: {}, mesgul, x }; });
@@ -144,7 +149,7 @@ function ymMesaiTL(D, cx, e) {
 /** @param {any} [p] @param {Derleme} [cx] */
 function ymMesaiPay(p, cx) {
   const out = {}; if (!p || !cx) return out; const D = S.D;
-  for (const e of S.ekMesai || []) { const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!v) continue; const a = e.gun * 24 + hm(v.bas), b = a + ymVH(D, e.vardiya);
+  for (const e of S.ekMesai || []) { const v = D.vardiyalar.find(x => x.id === e.vardiya); if (!v) continue; const a = e.gun * 24 + hm(v.bas), b = a + ymVPencere(D, e.vardiya);
     const pay = {}; let top = 0; for (const r of Object.values(p.ops)) { if (r.m !== e.m) continue; const h = Math.min(b, r.C) - Math.max(a, r.S); if (h > 0) { pay[r.job] = (pay[r.job] || 0) + h; top += h; } }
     const tl = ymMesaiTL(D, cx, e); if (!top) continue; if (tl == null) { for (const j in pay) out[j] = null; continue; }
     for (const j in pay) if (out[j] !== null) out[j] = (out[j] || 0) + tl * pay[j] / top; }

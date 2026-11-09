@@ -5,6 +5,7 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet } from '../../ortak/aray
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { CokluEklePenceresi } from './CokluEklePenceresi.tsx';
 import { csvIndir } from './csv.ts';
+import { ExcelMenusu } from './ExcelGirisi.tsx';
 import { MAKINE_DURUM_ADLARI, MAKINE_DURUM_SECENEKLERI } from './etiketler.ts';
 import { Hucre, MetinHucresi, SatirHatasi, SecimHucresi } from './Hucreler.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
@@ -171,6 +172,7 @@ export function MakineSekmesi({ v, y, yazabilir, durumYazabilir, haritaVar }: { 
           <IsaretKutusu etiket="Pasifleri göster" checked={pasifler} onChange={(o) => pasiflerYaz(o.target.checked)} />
           <div className="tc-ist-arac-sag">
             <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
+            {yazabilir && <ExcelMenusu tur="tesis" v={v} bolum="Makineler" />}
             {haritaVar && (
               // Harita yerleşmemiş makineler listesiyle açılır; istasyon seçiliyse o satır vurgulanır (CNC Kurulum ile adres sözleşmesi, kart #1296).
               <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={`/atolye?suzgec=yerlesmemis${agacIstasyonu ? `&istasyon=${agacIstasyonu.id}` : ''}`}>

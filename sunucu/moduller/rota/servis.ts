@@ -12,6 +12,7 @@ export {
   adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
   malzemeAra,
 } from './servis/okuma.ts';
+export { emreKopyalaToplu } from './servis/emir-toplu.ts';
 export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil } from './servis/sablon.ts';
 export {
   sartnameListesi, sartnameAyrintisi, sartnameEkle, sartnameKopyala, sartnameKunyeKaydet, sartnameSurumAc, sartnameTaslakKaydet, sartnameYayinla,

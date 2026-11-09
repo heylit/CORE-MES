@@ -15,7 +15,104 @@ const bolumAc = async () => {
   return bolge;
 };
 
+// 2558 b/4: ürün listesi, yeni rota ve tam ekran ⋯ menüsündedir.
+const menuSec = (bolge: HTMLElement, ad: string) => {
+  fireEvent.click(within(bolge).getByRole('button', { name: 'Diğer rota işlemleri' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: ad }));
+};
+
+// Görünüm tercihi tarayıcı deposunda kalır; tabloya geçen test şemaya döner ki sonraki test dosyaları şemayla açılsın.
+const tabloyuKapat = (bolge: HTMLElement) => { fireEvent.click(within(bolge).getByRole('button', { name: /Akış şeması/ })); };
+
 describe('R1 Ürün ve rotalar: izinli', () => {
+  it('tam ekran düğmesi şemada ve tabloda durur; "Tam ekrandan çık" ve Esc tam ekrandan çıkarır (B-2482-R3)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const kok = () => bolge.querySelector('[data-parca="R1"]')!;
+    menuSec(bolge, 'Tam ekranda aç (F)');
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Tam ekrandan çık' }));
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    menuSec(bolge, 'Tam ekranda aç (F)');
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    tabloyuKapat(bolge);
+  });
+
+  it('F tam ekranı şemada ve tabloda açıp kapatır; alana yazarken F tam ekranı değiştirmez (B-2482-2)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const kok = () => bolge.querySelector('[data-parca="R1"]')!;
+    fireEvent.keyDown(within(bolge).getByRole('button', { name: 'OP 10 Tornalama' }), { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(within(bolge).getByRole('button', { name: 'OP 10 Tornalama' }), { key: 'F' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    fireEvent.keyDown(alan, { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    fireEvent.keyDown(alan.closest('.tc-rr1-frow')!, { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(kok(), { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    tabloyuKapat(bolge);
+  });
+
+  it('akış tablosunda adım satırının boş yerine tıklayınca düzenleme paneli açılır; satırdaki alan ve düğme adımı seçmez (B-2482-1)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    const satir = alan.closest('.tc-rr1-frow')!;
+    const secili = () => satir.querySelector('.tc-rr1-fstep')?.classList.contains('tc-rr1-secili') ?? false;
+    fireEvent.click(alan);
+    fireEvent.click(within(bolge).getByLabelText('Operasyon'));
+    expect(secili()).toBe(false);
+    fireEvent.click(satir.querySelector('.tc-rr1-fst')!);
+    expect(secili()).toBe(true);
+    const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
+    expect(panel.textContent).toContain('Nerede yapılır');
+    tabloyuKapat(bolge);
+  });
+
+  it('akış tablosunda giren miktarı boşaltılınca "zorunlu" iletisi çıkar, 0 gönderilmez; geçerli miktar kaydedilir (B-2484-6)', async () => {
+    let durum = rotaDurumu();
+    let kaydet: unknown = null;
+    const istekler = sunucuKur(YONETICI, {
+      durum: () => json(200, durum),
+      yazmalar: {
+        'POST /rota/urunler/11/taslak-ac': () => {
+          durum = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 1)]);
+          return json(200, { id: 72, durum: 'taslak', surum: 1 });
+        },
+        'POST /rota/revizyonlar/72/kaydet': (g) => { kaydet = g; return json(200, { id: 72, durum: 'taslak', surum: 2 }); },
+      },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    fireEvent.change(alan, { target: { value: '' } });
+    fireEvent.blur(alan);
+    expect((await within(bolge).findByRole('alert')).textContent).toBe('Miktar zorunlu.');
+    fireEvent.change(alan, { target: { value: '0' } });
+    fireEvent.blur(alan);
+    expect((await within(bolge).findByRole('alert')).textContent).toBe('Sıfırdan büyük olmalı.');
+    await new Promise((r) => { setTimeout(r, 1000); });
+    expect(rotaYazmalari(istekler)).toEqual([]);
+
+    fireEvent.change(alan, { target: { value: '3' } });
+    fireEvent.blur(alan);
+    await waitFor(() => { expect(kaydet).not.toBeNull(); }, BEKLE);
+    expect(JSON.stringify(kaydet)).toContain('"bilesenler":[{"malzemeId":12,"miktar":3,');
+    tabloyuKapat(bolge);
+  });
+
   it('açılışta yazma yok; adımın hazırlık süresi değişince taslak açılır ve rota modülüne kaydedilir', async () => {
     let durum = rotaDurumu();
     let kaydet: unknown = null;
@@ -62,7 +159,10 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     const bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     const etiketler = [...bolge.querySelectorAll('.tc-rr1-daletiket')].map((e) => e.textContent?.trim());
-    expect(etiketler).toEqual(['Dal A 1 mamul için 2 adet', 'Dal B', 'Ana hat birleşir: A, B']);
+    // 2558 b/3: kol sütunundaki adımda dal etiketi tekrar edilmez; dal ve çarpanı kol başlığındadır. Birleşme adımı etiketini taşır.
+    expect(etiketler).toEqual(['Ana hat birleşir: A, B']);
+    const kolA = within(bolge).getByRole('region', { name: 'Dal A kolu' });
+    expect(kolA.querySelector('.tc-rr1-kolbas')?.textContent).toContain('1 mamul için 2 adet');
     // Bir mamul için giren 2 kg; çarpan girenin miktarını büyütmez.
     const giren = within(bolge).getAllByText('HM-0012')[0]?.closest('.tc-rr1-cip');
     expect(giren?.querySelector('.tc-rr1-cq')?.textContent).toMatch(/^2/);
@@ -131,7 +231,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     sunucuKur(YONETICI, { durum: rotaDurumu() });
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    fireEvent.click(within(bolge).getByRole('button', { name: 'Ürün listesi' }));
+    menuSec(bolge, 'Ürün listesi');
     const tablo = await within(bolge).findByRole('table', { name: 'Ürünler ve rotaları' });
     fireEvent.click(within(tablo).getByText('MM-0001'));
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
@@ -171,6 +271,8 @@ describe('R1 Ürün ve rotalar: reddedilen', () => {
     const bolge = await bolumAc();
     fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
     expect(within(bolge).queryByRole('button', { name: 'Yeni rota' })).toBeNull();
+    // 2558 b/5: yazma yetkisi olmayan "Düzenle"yi görmez.
+    expect(within(bolge).queryByRole('button', { name: 'Düzenle' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: /Giren$/ })).toBeNull();
     expect(within(bolge).queryByRole('button', { name: 'Onaya gönder…' })).toBeNull();

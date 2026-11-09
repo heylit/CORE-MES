@@ -482,6 +482,8 @@ export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 export const acilisSecenekleriSorgusu = z.object({ malzemeNo: z.coerce.number<number>().int().positive(), emirTuru: z.enum(EMIR_TURLERI).optional() });
 export const acilisSecenekleriCevabi = z.object({
   projeZorunlu: z.boolean(),
+  // "Rotasız üretim emri" ayarı (B13, B-2500-6): kapalıyken ekran rotasız emir yolunu sunmaz; açma ucu yine kendisi denetler.
+  rotasizAcik: z.boolean(),
   projeler: z.array(z.object({
     id: KIMLIK, kod: z.string(), ad: z.string(),
     satirlar: z.array(z.object({ id: KIMLIK, siparisNo: z.string(), satirNo: z.number().int(), adet: z.string(), termin: z.string().nullable() })),

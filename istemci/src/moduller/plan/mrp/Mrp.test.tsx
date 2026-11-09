@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { api } from '../../../ortak/veri/api.ts';
+import { ApiHatasi, api } from '../../../ortak/veri/api.ts';
 import { Mrp } from './Mrp.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -86,6 +86,11 @@ describe('malzeme ihtiyacı ekranı', () => {
     expect(screen.queryByRole('table')).toBeNull();
     cleanup();
     ciz(new Error('ağ'));
-    expect(await screen.findByText('Veri alınamadı')).toBeTruthy();
+    expect(await screen.findByText('Malzeme ihtiyacı alınamadı')).toBeTruthy();
+    cleanup();
+    // B-2495-5: yetki reddi genel metinle değil sunucunun iletisiyle görünür; yeniden denemek aynı sonucu verir, düğme yok.
+    ciz(new ApiHatasi(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }));
+    expect(await screen.findByText(/Bu işlem için yetkiniz yok\./)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
   });
 });

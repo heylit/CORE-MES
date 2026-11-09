@@ -1,18 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type MenuOgesi, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { useStokOkumasi, type RrDurumu } from '../veri.ts';
-import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
+import { RR_ANAHTARI, useRrBaglami, type RrDurumu } from '../veri.ts';
+import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
+import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
-  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
+  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
+  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
+import type { MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
+import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
@@ -45,10 +49,10 @@ export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetn
 export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, kapat }: Ozellikler) {
   const yonlen = useNavigate();
   const [iptal, setIptal] = useState(false);
-  const [islem, setIslem] = useState<'bol' | 'katil' | null>(null);
+  const [islem, setIslem] = useState<'bol' | 'katil' | 'ek' | null>(null);
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const adimlar = emirAdimlari(d, o);
-  const plan = planOzeti(d, d.planYerlesim, o);
+  const plan = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const pm = planMetni(plan);
   const tampon = tamponRozeti(plan);
   const il = ilerleme(d, o);
@@ -65,6 +69,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
     : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
   const diger: MenuOgesi[] = [
     ...(acik && yetki.emirYaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
+    ...(acik && yetki.emirYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Ek operasyon (rework, tamir, ek)', simge: 'plus' as const, sec: () => { setIslem('ek'); } }] : []),
     ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
     ...(ana && acik && yetki.emirYaz ? [{
       anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
@@ -133,9 +138,12 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
         </div>
       )}
 
-      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem} islemKapat={() => { setIslem(null); }} />
+      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem === 'ek' ? null : islem} islemKapat={() => { setIslem(null); }} />
+      {acik && islem === 'ek' && yetki.emirYaz && !o.rotasiz && (
+        <EkAdimPaneli durum={d} emir={o} yerler={ekYerleri(d, o, adimlar)} komut={komut} kapat={() => { setIslem(null); }} />
+      )}
       {o.rotasiz && <RotasizAdimlar durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />}
-      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} />
+      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />
       {urun && <UretimYerleri emir={{ id: o.kayitNo, malzemeNo: Number(urun.id) }} duzenlenir />}
       {urun && o.status === 'tamam' && <StokTamamlama emir={{ id: o.kayitNo, emirNo: o.no, durum: 'bitti', malzemeNo: Number(urun.id) }} islenir />}
 
@@ -167,6 +175,16 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       </OnayPenceresi>
     </section>
   );
+}
+
+// Ek operasyonun girebileceği yerler: emrin kendi adımları (kolda kendi aralığı) ve ek adımları, op sırasıyla.
+function ekYerleri(d: RrDurumu, o: Emir, adimlar: readonly EmirAdimi[]): EkYeri[] {
+  const { ilk, son } = emirAraligi(o, adimlar.length);
+  const kisa = (opId: string | null, ad: string) => d.opdefs?.find((x) => x.id === opId)?.abbr ?? ad;
+  return [
+    ...adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => ({ opNo: a.opNo, baslik: `OP ${String(a.opNo)} ${kisa(a.opId, a.ad)}` })),
+    ...(o.ekAdimlar ?? []).map((e) => ({ opNo: e.opNo, baslik: `OP ${String(e.opNo)} ${kisa(e.opId, e.ad)}` })),
+  ].sort((a, b) => a.opNo - b.opNo);
 }
 
 // Alt emir bilgisi her zaman; bölme ve katılma panelleri yalnız "Diğer" menüsünden seçilince açılır (1102 a), içerikleri değişmez.
@@ -382,65 +400,123 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
   );
 }
 
-interface OpSatiri { adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null }
+// 2571: başlamış iş emirlerinin süre özeti (opNo ile); okunamazsa (yetki ya da ağ) satır hiç yazılmaz, adım listesi aynı kalır.
+function useEmirSureOzetleri(emirId: number, etkin: boolean) {
+  const { kopru } = useRrBaglami();
+  return useQuery({
+    queryKey: [...RR_ANAHTARI, 'emir-sure-ozeti', emirId],
+    enabled: etkin,
+    queryFn: async () => {
+      const c = await kopru('emir-sure-ozetleri', { emirId }) as { ozetler: { opNo: number; ozet: AdimSureOzeti }[] };
+      return new Map(c.ozetler.map((x) => [x.opNo, x.ozet]));
+    },
+  });
+}
+
+function SureOzetiSatiri({ o }: { o: AdimSureOzeti }) {
+  const n = sureOzetiNedenleri(o);
+  const dk = (v: number | null, neden: string | null) => (v === null ? <span title={neden ?? undefined}>{YOK}</span> : sayi(v));
+  return (
+    <small className="tc-rr3-adim-sure">
+      <span>Hazırlık {dk(o.hazirlikDk, n.hazirlik)} dk</span>
+      <span>Net {dk(o.netBirimDk, n.islem)} · brüt {dk(o.brutBirimDk, n.islem)} dk/adet</span>
+      <span>{sayi(o.saglam)} sağlam / {sayi(o.hurda)} hurda</span>
+      {(n.hazirlik ?? n.islem) && <span className="tc-rr3-adim-sure-neden">{[n.hazirlik, n.islem].filter(Boolean).join(' · ')}</span>}
+    </small>
+  );
+}
+
+interface OpSatiri {
+  adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null; oneri: boolean;
+  // 2530 a: rotada olmayan, emre konmuş adımın türü.
+  ek?: 'rework' | 'tamir' | 'ek';
+}
 
 // Adımlar ve malzeme: her emirde adım tablosu; plandaki (serbest ya da üretimdeki) emirde plan yerleşimi, uyarılar, malzeme ihtiyacı ve yan ürün.
-function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
-  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki'];
+function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut }: {
+  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
 }) {
+  const [kaldir, setKaldir] = useState<number | null>(null);
   const yonlen = useNavigate();
-  // Ara adım stoğu stoktan okunur (Stok bölümüyle aynı okuma); okunamazsa yalnız serbest stokla hesaplanır.
-  const stokIdleri = useMemo(() => stokKartiIdleri(d.items ?? []), [d.items]);
-  const stok = useStokOkumasi(stokIdleri, yetki.stokOku).data ?? null;
-  const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d, stok), [d, stok]);
+  // Malzeme ihtiyacı sunucudan okunur (B-2484-3): emrin kendi iş emri kopyası, verilen sarf, ara adım stoğu ve plan sırasıyla paylaştırma
+  // (461 b) orada tek kuraldır. Anahtarda emrin sürümü vardır: emir komutu sürümü artırınca yeniden okunur.
   const planda = plandaMi(o);
-  const R = planda ? ihtiyaclar.get(o.id) ?? null : null;
-  const plan = planOzeti(d, d.planYerlesim, o);
+  const ihtiyac = useQuery({
+    queryKey: [...RR_ANAHTARI, 'malzeme-ihtiyaci', o.kayitNo, o.surum] as const,
+    enabled: planda,
+    queryFn: () => api.get<MalzemeIhtiyaciCevabi>(`/recete-rota/malzeme-ihtiyaci?emir=${String(o.kayitNo)}`),
+  });
+  const R = ihtiyac.data?.emirler.find((e) => e.emirId === o.kayitNo) ?? null;
+  const plan = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
+  const opSaglam = d.emirler?.opSaglam ?? {};
+  const basladi = adimlar.some((a) => (a.durum ?? 'bekliyor') !== 'bekliyor') || Object.keys(opStatus).some((k) => k.startsWith(`${o.id}|`));
+  const sureler = useEmirSureOzetleri(o.kayitNo, basladi && o.kayitNo > 0).data ?? null;
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
+  // B-2499-7: saat canlı plandan okunur; canlıda olmayan adımda motorun yerleşimi "öneri" diye gösterilir. Canlı özet yoksa (plan okuması
+  // gelmedi) ayrım yapılamaz, eskisi gibi motor saati yazılır.
+  const adimYerlesimi = (opNo: number): { p: AdimPlani | null; oneri: boolean } => {
+    if (!planda) return { p: null, oneri: false };
+    const c = canliAdimPlani(d.planCanli, o.no, opNo);
+    if (c) return { p: c, oneri: false };
+    return { p: adimPlani(d.planYerlesim, o.no, opNo), oneri: d.planCanli !== undefined };
+  };
   const kokOps: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
-    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
+    const { p, oneri } = adimYerlesimi(a.opNo);
     const k = `${o.id}|root|${String(o.kol ? a.sira - o.kol.n : a.sira)}`;
+    const durum = a.durum ?? adimDurumu(o, a.sira, opStatus);
+    // Süren adımın sağlamı canlı sayaçtır (opProg); biten adımınki kayda geçen sağlamdır (opSaglam, B18).
+    const saglam = (durum === 'tamam' ? opSaglam[k] : opProg[k]) ?? null;
     return {
-      adim: a, durum: a.durum ?? adimDurumu(o, a.sira, opStatus), baslangic: p?.baslangic ?? null,
-      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: opProg[k] ?? null,
+      adim: a, durum, baslangic: p?.baslangic ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam, oneri: oneri && p !== null,
     };
   });
   // 1476-F C: alt parça adımları kökten önce (iş sırası); durumları emrin kaydından, sağlam sayacı yalnız kök adımda vardır.
   const altOps: OpSatiri[] = altDugumAdimlari(d, o).map((a) => {
-    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
+    const { p, oneri } = adimYerlesimi(a.opNo);
     return {
       adim: a, durum: a.durum ?? 'bekliyor', baslangic: p?.baslangic ?? null,
-      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null, oneri: oneri && p !== null,
     };
   });
-  const ops = [...altOps, ...kokOps];
-  const birim = (id: string) => d.items?.find((i) => i.id === id)?.unit ?? null;
+  // 2530 a: emre konan adım rotada yoktur; op numarası komşularının arasındadır, kök adımlarla op sırasıyla dizilir.
+  const ekOps: OpSatiri[] = o.rotasiz ? [] : (o.ekAdimlar ?? []).map((e) => {
+    const { p, oneri } = adimYerlesimi(e.opNo);
+    return {
+      adim: { sira: 0, opNo: e.opNo, ad: e.ad, opId: e.opId, stationId: null, durum: e.durum }, durum: e.durum, baslangic: p?.baslangic ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: e.saglam, oneri: oneri && p !== null, ek: e.tur,
+    };
+  });
+  const ops = [...altOps, ...[...kokOps, ...ekOps].sort((a, b) => a.adim.opNo - b.adim.opNo)];
+  const kaldirilir = acikMi(o) && yetki.emirYaz;
   const kart = (id: string) => d.items?.find((i) => i.id === id) ?? null;
-  const tutar = (e: IhtiyacSatiri): string | null => {
-    const k = kart(e.malzemeId);
-    const m = k && d.maliyet ? d.maliyet.malzeme[String(k.kayitNo)] : undefined;
-    return m ? `${sayi(e.alinacak * Number(m.birimMaliyet))} ${m.paraBirimi}` : null;
+  const tutar = (e: MalzemeIhtiyaciSatiri): string | null => {
+    const m = d.maliyet?.malzeme[String(e.malzemeNo)];
+    return m ? `${sayi(Number(e.alinacak) * Number(m.birimMaliyet))} ${m.paraBirimi}` : null;
   };
+  const kod = (e: { kod: string | null; malzemeNo: number }) => e.kod ?? String(e.malzemeNo);
   // Yan panel dardır: tablo sığmayıp karta döner; adım tek satırda (OP, operasyon ve yeri, sağlam, durum) yazılır (tuval 3).
   // Başlamamış adımın plan başlangıcı, makinesi ve sağlam adedi "henüz yok"tur, veri eksikliği değil: çizgi yazılır.
   const adimYeri = (s: OpSatiri): string => [
-    d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `plan ${zaman(s.baslangic)}` : null,
+    d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `${s.oneri ? 'öneri (canlı planda yok)' : 'plan'} ${zaman(s.baslangic)}` : null,
   ].filter((x) => x !== null).join(' · ') || YOK;
-  const hamSutunlar: Sutun<IhtiyacSatiri>[] = [
-    { anahtar: 'kod', baslik: 'Kod', hucre: (e) => kart(e.malzemeId)?.code ?? e.malzemeId, mono: true },
-    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => kart(e.malzemeId)?.name ?? null },
-    { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (e) => miktar(e.brut, birim(e.malzemeId)) },
-    { anahtar: 'stoktan', baslik: 'Stoktan', hizala: 'sag', hucre: (e) => miktar(e.stoktan, birim(e.malzemeId)) },
-    { anahtar: 'alinacak', baslik: 'Alınacak', hizala: 'sag', hucre: (e) => miktar(e.alinacak, birim(e.malzemeId)) },
+  const hamSutunlar: Sutun<MalzemeIhtiyaciSatiri>[] = [
+    { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },
+    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => e.ad },
+    { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (e) => miktar(Number(e.brut), e.birim) },
+    { anahtar: 'verilen', baslik: 'Verilen', hizala: 'sag', hucre: (e) => miktar(Number(e.verilen), e.birim) },
+    { anahtar: 'stoktan', baslik: 'Stoktan', hizala: 'sag', hucre: (e) => miktar(Number(e.stoktan), e.birim) },
+    { anahtar: 'alinacak', baslik: 'Alınacak', hizala: 'sag', hucre: (e) => miktar(Number(e.alinacak), e.birim) },
     ...(yetki.maliyetOku ? [{ anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag' as const, hucre: tutar }] : []),
   ];
-  const yanSutunlar: Sutun<{ malzemeId: string; miktar: number }>[] = [
-    { anahtar: 'kod', baslik: 'Kod', hucre: (e) => kart(e.malzemeId)?.code ?? e.malzemeId, mono: true },
-    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => kart(e.malzemeId)?.name ?? null },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(e.miktar, birim(e.malzemeId)) },
+  type YanSatir = MalzemeIhtiyaciCevabi['emirler'][number]['yanUrun'][number];
+  const yanSutunlar: Sutun<YanSatir>[] = [
+    { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },
+    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => e.ad },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(Number(e.miktar), e.birim) },
   ];
   const ipuclari = [
     ...(o.status === 'taslak' ? ['Taslak emirler plana girmez. Plana alınca yerleşir.'] : []),
@@ -461,7 +537,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
         <div className="tc-rr3-uyari-kutu" role="status">
           <Simge ad="box" />
           <span>
-            {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kart(e.malzemeId)?.code ?? e.malzemeId} ${miktar(e.alinacak, birim(e.malzemeId))}`).join(', ')}.
+            {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kod(e)} ${miktar(Number(e.alinacak), e.birim)}`).join(', ')}.
             Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
           </span>
           <Dugme simge="cart" onClick={() => { void yonlen(TALEP_YOLU); }}>Satın alma talebi aç</Dugme>
@@ -477,22 +553,47 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
             <span className="tc-rr3-op">{s.adim.opNo}</span>
             <span className="tc-rr3-adim-ad">
               <span className="tc-rr3-adim-dal">{g && <DalRozeti dal={g.dal} />}{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
-              <small>{g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}</small>
+              <small>
+                {s.ek ? `${EK_TURLERI.find((t) => t.deger === s.ek)?.baslik ?? ''} · rotada yok · ` : ''}
+                {g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}
+              </small>
             </span>
             <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
-            <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
+            {/* Kaldır rozetle aynı hücrede: satırın ızgarası dört sütundur, dar panelde üçe iner; ayrı öğe yeni satıra düşerdi. */}
+            <span className="tc-rr3-eylemler">
+              <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
+              {s.ek && kaldirilir && s.durum === 'bekliyor' && (
+                <Dugme
+                  simge="trash" aria-label={`OP ${String(s.adim.opNo)} ek adımını kaldır`} title="Başlamamış ek adımı emirden kaldır"
+                  onClick={() => { setKaldir(s.adim.opNo); }}
+                />
+              )}
+            </span>
+            {s.durum !== 'bekliyor' && sureler?.get(s.adim.opNo) && <SureOzetiSatiri o={sureler.get(s.adim.opNo)!} />}
           </li>
           );
         })}
         {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
       </ol>
+      <OnayPenceresi
+        acik={kaldir !== null} baslik={`OP ${String(kaldir ?? '')} kaldırılsın mı?`} onayMetni="Kaldır" tehlikeli yukleniyor={komut.mesgul}
+        vazgec={() => { setKaldir(null); }}
+        onayla={() => { const opNo = kaldir; setKaldir(null); void komut.calistir('emir-ek-adim-kaldir', { id: o.id, surum: o.surum, opNo }, `OP ${String(opNo)} emirden kaldırıldı.`); }}
+      >
+        <p>Başlamamış ek adım emirden çıkar; rota değişmez.</p>
+      </OnayPenceresi>
       {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği aşağıdaki "Operasyon adımları" bölümünde yapılır; rota değişmez.</p>}
       {planda && (
         <>
           <h4>Malzeme</h4>
-          <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => e.malzemeId} bosMesaj="Satın alınacak malzeme yok." />
+          {ihtiyac.isError && <p className="tc-rr3-ipucu" role="alert">{hataIletisi(ihtiyac.error, 'Malzeme ihtiyacı okunamadı.')}</p>}
+          {ihtiyac.isPending && <p className="tc-rr3-ipucu" aria-busy="true">Malzeme ihtiyacı okunuyor…</p>}
+          {ihtiyac.data?.stokGorunur === false && <p className="tc-rr3-ipucu">Stok yetkiniz yok: yalnız serbest stok sayıldı, ara adım stoğu düşülmedi.</p>}
+          {ihtiyac.isSuccess && (
+            <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => String(e.malzemeNo)} bosMesaj="Satın alınacak malzeme yok." />
+          )}
           {yanUrun.length > 0
-            ? <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={yanUrun} satirAnahtari={(e) => e.malzemeId} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
+            ? <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={yanUrun} satirAnahtari={(e) => String(e.malzemeNo)} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
             : <p className="tc-rr3-ipucu">Yan ürün ya da hurda çıkmıyor.</p>}
         </>
       )}

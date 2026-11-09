@@ -340,10 +340,11 @@ export type MusteriSecenekleriCevabi = z.output<typeof musteriSecenekleriCevabi>
 // Göndermeyen eski ekranın bütün işleri eskisi gibi elle sayılır.
 // `elleKaynak`: planlamacı bu işin makinesini elle seçti; toptan hesap işi başka makineye taşımaz, yalnız saatini ayarlar.
 // `parca`: elle bölünen işin parçası (kart #1572); bütün parçaları aynı yazımda, adetleri toplamı adım adedi. Parçasız yazılan iş birleşir.
+// `parca.motorBolmesi`: parça motorun paralel bölmesindendir (B-2482-13); motor sonraki öneride bölmeyi yeniden kurar, elle bölme sayılmaz.
 export const kuyrukYazIsi = z.object({
   emirNo: z.string().trim().min(1).max(60), opNo: z.number().int().positive().max(100_000), dondurulmus: z.boolean(), elle: z.boolean().prefault(true),
   elleKaynak: z.boolean().prefault(false),
-  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000) }).optional(),
+  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000), motorBolmesi: z.boolean().optional() }).optional(),
   // ADR 0018: tarayıcının önizlediği saat; sunucu motoru kayıtlıyken cevabın motorFarki'si bununla karşılaştırır.
   onizleme: z.object({ baslangic: tarihZaman, bitis: tarihZaman }).optional(),
 });
@@ -403,7 +404,8 @@ const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti
 export const planBayatligi = z.object({
   bayat: z.boolean(),
   sonCanliyaAlma: zaman.nullable(),
-  sayilar: z.record(bayatNedeni, z.number().int().nonnegative()),
+  // 2508 b: sayılar ve olay listesi yalnız plan.planlama-oku taşıyana gelir; öteki oturum yalnız bayat mı değil mi görür.
+  sayilar: z.record(bayatNedeni, z.number().int().nonnegative()).optional(),
   // Yeniden eskiye, en çok 20.
   olaylar: z.array(z.object({
     neden: bayatNedeni,
@@ -412,7 +414,7 @@ export const planBayatligi = z.object({
     emirNo: z.string().nullable(),
     makineId: z.number().int().positive().nullable(),
     makineKod: z.string().nullable(),
-  })),
+  })).optional(),
 });
 export const planSurumCevabi = planCanliOzeti.pick({ planSurumu: true, sonCanliyaAlma: true }).extend({ bayat: planBayatligi.optional() });
 // 510 a: eski "Plan değişikliği" kutusu. Taban planın ilk yazılışından (ilk canlıya alma) sonraki canlıya almalar: toplam, kişi başına sayı
@@ -449,10 +451,20 @@ export const EKSIK_STOK_DAVRANISLARI = ['dur', 'varsay'] as const;
 export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
 // 1714 (1684 b): gerçek sürelerden öğrenme motorun tamponuna girer mi; varsayılan kapalı (gölge dönemde yalnız plan sağlığında görünür).
 export const MOTOR_OGRENME = ['kapali', 'acik'] as const;
+// 2509-1 c: acil iş payı (işleme süresine eklenen pay, oran 0-0,3) yalnız buradadır; planlama çalışmasındaki alan bunun kopyasıdır.
+export const ACIL_PAY_SINIRI = 0.3;
+// 2523 a: rotada "paralel böl" işaretli adımı motor boşta duran kardeş tezgâhlara böler mi ve en çok kaç paya; ikinci tezgâh her zaman boş
+// değilse atölye kapatır. Varsayılan bugünkü davranıştır (açık, 3 pay).
+export const MOTOR_BOLME = ['otomatik', 'kapali'] as const;
+export const BOLME_PAY_SINIRI = { en: 2, cok: 5 } as const;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
+  acilPay: z.number().min(0).max(ACIL_PAY_SINIRI),
+  bolmeKip: z.enum(MOTOR_BOLME), bolmeMaks: z.number().int().min(BOLME_PAY_SINIRI.en).max(BOLME_PAY_SINIRI.cok),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = {
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+};
 // Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
 // arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.
 export const motorAyariGovdesi = motorAyarlari.partial().extend({ surumId: KIMLIK.nullable() });
@@ -560,7 +572,7 @@ export const mrpIhtiyaciCevabi = z.object({
   hesaplanan: zaman,
   stokGorunur: z.boolean(),
   satinAlmaGorunur: z.boolean(),
-  // Ürünü olmayan (iş emirsiz) açık emir sayısı: malzeme ihtiyacı hesaplanamaz.
+  // Malzeme ihtiyacı hesaplanamayan açık emir sayısı: ürünü olmayan (iş emirsiz) ya da adımlarında hiç bileşen olmayan emir (B-2499-5).
   urunsuzEmir: z.number().int().nonnegative(),
   satirlar: z.array(z.object({
     malzeme: z.object({ id: KIMLIK, kod: z.string().nullable(), ad: z.string().nullable(), tur: z.string().nullable(), birim: z.string().nullable() }),

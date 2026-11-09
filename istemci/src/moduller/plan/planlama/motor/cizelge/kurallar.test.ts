@@ -1,9 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, sabitleriKaldir, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 import { ufukKur } from '../../ufuk-olcegi.ts';
+
+import { planAni, saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla Çizelge'de çizdiği konumlardır (yüzde, üç basamak).
 function kur() {
@@ -26,7 +30,7 @@ describe('çizelge hesapları', () => {
       ['23.10 Cum', 57.143, false], ['24.10 Cmt', 71.429, false], ['25.10 Paz', 85.714, false],
     ]);
     expect(o.satirlar.map((s) => [s.etiket, s.isler.map((i) => [i.id, yz(i.x), yz(i.w), i.etiket])])).toEqual([
-      ['1', [['3.10', 76.19, 1.188, null]]], ['2', []], ['3', [['2.20', 82.51, 17.49, '2']]], ['4', [['3.20', 77.378, 0.982, null]]], ['5', []], ['fason 5', []],
+      ['1', [['3.10', 76.19, 1.188, null]]], ['2', []], ['3', [['2.20', 82.51, 17.49, '2']]], ['4', [['3.20', 77.378, 0.982, null]]], ['5', []], ['fason Ornek Fason Isil Islem', []],
     ]);
     expect(yz(o.simdi ?? -1)).toBe(4.762); expect(o.ufuk).toBeNull();
   });
@@ -51,6 +55,13 @@ describe('çizelge hesapları', () => {
     expect(y.locks).toEqual({ 'x.1': { m: 'T', S: 1 } });
   });
 
+  it('sabitleri kaldır elle sabitleri siler, dondurulmuş günlerin kilitlerini korur', () => {
+    const { c } = kur();
+    const x = structuredClone(c); x.locks = { a: { m: '1', S: 1 }, b: { m: '1', S: 2, gun: 7 }, c: null };
+    sabitleriKaldir(x);
+    expect(x.locks).toEqual({ b: { m: '1', S: 2, gun: 7 } });
+  });
+
   it('saatlik gün: kapalı saatler, bloklar, doluluk ve en erken başlama eski gün katmanıyla aynı', () => {
     const { c, p, cx } = kur();
     const g = gunCizelgesi(c, p, cx, 5, '3.10', null);
@@ -61,7 +72,7 @@ describe('çizelge hesapları', () => {
     expect(s1?.erken && [yz(s1.erken.w), s1.erken.ad, yz(s1.erken.cizgi ?? -1)]).toEqual([33.333, 'Sipariş serbest bırakılır', 33.333]);
     expect(s3?.bloklar.map((b) => [b.id, yz(b.x), yz(b.w), b.sag, b.gec, b.soluk])).toEqual([['2.20', 77.569, 22.431, true, true, true]]);
     expect([s4?.bloklar[0]?.id, yz(s4?.bloklar[0]?.x ?? 0), yz(s4?.bloklar[0]?.w ?? 0), Math.round((s4?.oran ?? 0) * 100), s4?.uygun]).toEqual(['3.20', 41.648, 6.871, 22, false]);
-    expect(g.satirlar.map((s) => s.etiket)).toEqual(['1', '2', '3', '4', '5', '5']);
+    expect(g.satirlar.map((s) => s.etiket)).toEqual(['1', '2', '3', '4', '5', 'Ornek Fason Isil Islem']);
     expect(g.gunler[5]?.ad).toBe('24.10 Cmt');
     expect(g.kilit).toMatchObject({ donukBu: 0, donukTum: 0, elle: 0 });
   });
@@ -73,7 +84,7 @@ describe('çizelge hesapları', () => {
     expect(z.saat).toBe(240);
     expect(z.basliklar.map((b) => b.ad)).toEqual(['19.10 Pzt', '20.10 Sal', '21.10 Çar', '22.10 Per', '23.10 Cum', '24.10 Cmt', '25.10 Paz', '26.10 Pzt', '27.10 Sal', '28.10 Çar']);
     expect(z.gruplar.map((g) => [g.g, g.n, g.satirlar.map((s) => s.m)])).toEqual([['1', 1, ['1']], ['2', 1, ['2']], ['3', 1, ['3']], ['4', 1, ['4']], ['5', 1, ['5']]]);
-    expect(z.fason.map((s) => [s.m, s.kod])).toEqual([['@5', '5']]);
+    expect(z.fason.map((s) => [s.m, s.kod])).toEqual([['@5', 'Ornek Fason Isil Islem']]);
     const is = Object.fromEntries([...z.gruplar.flatMap((g) => g.satirlar), ...z.fason].flatMap((s) => s.isler).map((i) => [i.id, i]));
     // Eski sayfada 3.10 left 1280px, width 19.956px, --a 20.879%; 2.30 fasonda left 1840px, width 240px.
     expect([is['3.10']?.x, Number(((is['3.10']?.w ?? 0) * 10).toFixed(3)), Number(((is['3.10']?.ayar ?? 0) * 100).toFixed(3))]).toEqual([128, 19.956, 20.879]);
@@ -177,7 +188,7 @@ describe('çizelge hesapları', () => {
     const { c, p, cx } = kur();
     expect(isIpucu(c, p, cx, '3.20')).toEqual({ baslik: '3 · Freze (CNC)', satir: '4 · 24.10 Cmt 09:59 → 24.10 Cmt 11:38',
       neden: 'Önceki adım 3.10 bitince başladı (taşıma payı dahil).', kilit: null, durum: { ton: 'tamam', metin: 'Sipariş termine yetişiyor' } });
-    expect(isIpucu(c, p, cx, '2.30')?.satir).toBe('5 (fason) · 26.10 Pzt 16:00 → 27.10 Sal 16:00');
+    expect(isIpucu(c, p, cx, '2.30')?.satir).toBe('Ornek Fason Isil Islem (fason) · 26.10 Pzt 16:00 → 27.10 Sal 16:00');
     expect(isIpucu(c, p, cx, '2.20')?.durum).toEqual({ ton: 'hata', metin: 'Sipariş 3 gün geç' });
     expect(isIpucu(c, p, cx, 'yok')).toBeNull();
   });
@@ -185,7 +196,7 @@ describe('çizelge hesapları', () => {
   it('gün açılımları: başlamamış adımda erken ya da geç bitme, başlamışta pasif Gerçekleşen (492/3 a)', () => {
     const { c, p, cx } = kur(); const r = p.ops['2.20']; if (!r) throw new Error('2.20 yok');
     expect(gunAcilimlari(c, cx, r).map((x) => x[1])).toEqual(['Erken ya da geç biterse', 'Hedefe yetiştir']);
-    const c2 = { ...c, simdi: r.S + 1 }; const cx2 = derle(girdiKur(c2, plandanBitenler(c2, p)));
+    const c2 = { ...c, simdi: r.S + 1 }; vi.setSystemTime(planAni(c2)); const cx2 = derle(girdiKur(c2, plandanBitenler(c2, p)));
     expect(gunAcilimlari(c2, cx2, r)).toEqual([['clock', 'Gerçekleşen', false], ['target', 'Hedefe yetiştir', false]]);
   });
 });

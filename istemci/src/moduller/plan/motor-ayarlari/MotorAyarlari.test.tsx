@@ -5,13 +5,15 @@ import type { MotorAyarlari as Ayarlar, MotorAyarlariCevabi } from '#paylasilan/
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi } from '../../../ortak/veri/api.ts';
 import * as oturum from '../../../ortak/veri/oturum.ts';
-import { secilebilir, surumMetni } from './kurallar.ts';
+import { degerAdi, secilebilir, secimDegeri, surumMetni } from './kurallar.ts';
 import { MotorAyarlari } from './MotorAyarlari.tsx';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811: uydurma sürümler.
-const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
+const MOTOR_AYARI_VARSAYILAN: Ayarlar = {
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+};
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
 const yetki = (islemler: string[]) => vi.spyOn(oturum, 'useOturum').mockReturnValue({ data: { islemler } } as unknown as ReturnType<typeof oturum.useOturum>);
 const ciz = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><MotorAyarlari /></BildirimSaglayici></QueryClientProvider>);
@@ -59,6 +61,21 @@ describe('motor ayarları', () => {
     await vi.waitFor(() => { expect(get).toHaveBeenCalledTimes(2); });
   });
 
+  it('2509-1 c: acil iş payı yüzde girilir, oran gönderilir; sınır dışı değer kaydedilmez', async () => {
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(BOS);
+    ciz();
+    const alan = await screen.findByLabelText(/Acil iş payı/);
+    expect((alan as HTMLInputElement).value).toBe('5');
+    const kaydet = screen.getByRole('button', { name: /Kaydet/ });
+    fireEvent.change(alan, { target: { value: '45' } });
+    expect((kaydet as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(alan, { target: { value: '2,5' } });
+    fireEvent.click(kaydet);
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.025, surumId: null }); });
+  });
+
   it('1714: süre öğrenmesi varsayılan kapalı; açılınca gönderilir', async () => {
     yetki(['plan.planlama-oku', 'plan.motor-ayari']);
     vi.spyOn(api, 'get').mockResolvedValue(BOS);
@@ -69,5 +86,20 @@ describe('motor ayarları', () => {
     fireEvent.change(secim, { target: { value: 'acik' } });
     fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
     await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, ogrenme: 'acik', surumId: null }); });
+  });
+
+  it('2523 a: paralel bölme kapatılır ve pay sayısı sayı olarak gönderilir', async () => {
+    expect(secilebilir('bolmeMaks', 3).map((s) => s.deger)).toEqual(['2', '3', '4', '5']);
+    expect([secimDegeri('bolmeMaks', '4'), secimDegeri('bolmeMaks', '9'), degerAdi('bolmeKip', 'kapali')]).toEqual([4, null, 'Kapalı']);
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(BOS);
+    ciz();
+    const kip = await screen.findByLabelText('Paralel bölme');
+    expect((kip as HTMLSelectElement).value).toBe('otomatik');
+    fireEvent.change(kip, { target: { value: 'kapali' } });
+    fireEvent.change(screen.getByLabelText('Bölmede en çok pay'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, bolmeKip: 'kapali', bolmeMaks: 2, surumId: null }); });
   });
 });

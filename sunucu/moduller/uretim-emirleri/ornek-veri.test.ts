@@ -57,6 +57,12 @@ describe('uretim-emirleri: örnek veri (gerçek PostgreSQL)', () => {
     const burc = await emri('burc');
     assert.deepEqual([burc.durum, burc.adet, burc.isEmirleri.length], ['planli', 30, 2]);
     assert.ok([mil, flans, burc].every((e) => e.kaynakRotaRevizyonId !== null));
+    // 2520: adımın girenleri rotadan emre kopyalanır (Malzeme ihtiyacı ve sayım sarfı bunları okur).
+    const bilesenli = await db.tek<{ n: number }>(
+      `SELECT count(*)::int AS n FROM uretim_emirleri_is_emri_bileseni b JOIN uretim_emirleri_is_emri i ON i.id = b.is_emri_id WHERE i.uretim_emri_id = $1`, [burc.id]);
+    const rotada = await db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_bileseni b JOIN rota_adimi a ON a.id = b.adim_id WHERE a.revizyon_id = $1', [burc.kaynakRotaRevizyonId]);
+    assert.ok((rotada?.n ?? 0) > 0, 'örnek rotada Burç adımının girdisi var');
+    assert.equal(bilesenli?.n, rotada?.n, 'Burç emri rotadaki girdileri taşır');
 
     const ikinci = await ornekVeriYukle(vt(), liste, secenek);
     assert.equal(ikinci.durum, 'yuklu');

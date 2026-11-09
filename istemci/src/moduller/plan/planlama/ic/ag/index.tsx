@@ -14,6 +14,7 @@ import {
 } from './kurallar.ts';
 import '../../motor/motor.css';
 import './ag.css';
+import { useAn } from '../../motor/saat.ts';
 
 // Akış ağı (3B) (bugünkü sayfa j-ag3b.betik agKart, agBagla, agDetay; k-gorunum.betik atölye akışı): "Nasıl hesaplandı"nın ikinci sekmesi.
 // Sürükle döndürür, tekerlek ve artı eksi yakınlaştırır, ok tuşları döndürür; düğüme basmak bağlarını yan panelde açar. Yalnız okur.
@@ -24,7 +25,8 @@ const tema = () => `${document.documentElement.getAttribute('data-theme') ?? ''}
 export function AkisAgi({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) {
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const son = useMemo(() => ekipSonOku(c), [c]);
   const [kip, setKip] = useState<AgKipi>('karar');
   const [oto, setOto] = useState(() => ilkOto('karar', az()));

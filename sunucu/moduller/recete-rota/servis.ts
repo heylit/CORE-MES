@@ -1,17 +1,17 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
-  BenCevabi, FasonTahminCevabi, KayitlarCevabi, ReceteRotaDurumCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi, YazCevabi, YazGovdesi,
+  BenCevabi, FasonTahminCevabi, MalzemeIhtiyaciCevabi, KayitlarCevabi, ReceteRotaDurumCevabi, SilCevabi, Statu, StatulerCevabi, StatuTanimiCevabi, StatuTanimiKaydetGovdesi, YazCevabi, YazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import { planlamaAnahtariMi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ADIMLI_OKUMA_ISLEMLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { emirDilimi, emrinPatlatmasi, kapanisSonuclari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { emirDilimi, emirlerinMalzemeIhtiyaci, emrinPatlatmasi, kapanisSonuclari, planlanacakIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   aktifMakineler, istasyonKisileri, istasyonYetkinlikleri, istasyonlar, isMerkezleri, kisiTezgahSinirlari, makineDurumlari, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
@@ -22,10 +22,10 @@ import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import type { malzemeAra } from '../malzemeler/disari.ts';
 import { aktifMalzemelerSinirli, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
-import { malzemeStokDurumlari, sonHareketler } from '../stok/disari.ts';
+import { emirlerinNetSarfi, malzemeStokDurumlari, sonHareketler, statuluStoklar } from '../stok/disari.ts';
 import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
-  adimCiktisiBul, adimKimligi, bagFarklari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
+  adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
   istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru,
   bagliDilimleriAyikla, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
 } from './kurallar.ts';
@@ -121,6 +121,18 @@ export async function statuTanimiSil(db: Db, kimlik: string, beklenenSurum: numb
   if (mevcut !== beklenenSurum) throw eskiSurum();
   await sorgular.statuTanimiSil(db, kimlik);
   return { statuses: await sorgular.statuTanimlari(db) };
+}
+
+// B-2483-11: termini girilmemiş bitmemiş fason adıma Satın Alma'nın tahmini (tek okumada); plan motoru termin yoksa onu, o da yoksa 7 günü alır.
+// Adet emrin adedidir (VARSAYIM: adımın kalan adedi değil; tahmin adetle az değişir).
+async function fasonTahminiEkle(db: Db, emirler: EmirKaydi[]): Promise<EmirKaydi[]> {
+  const sorulacak = emirler.flatMap((e) => (e.kaynakRotaRevizyonId === null ? [] : e.isEmirleri
+    .filter((i) => i.durum !== 'tamam' && i.kaynak?.tur === 'fason' && i.terminGun == null)
+    .map((i) => ({ e, i, q: { malzemeNo: e.malzemeNo, operasyonTipiId: i.operasyonTipiId, firmaId: i.kaynak!.id, adet: e.adet } }))));
+  if (sorulacak.length === 0) return emirler;
+  const gunler = await fasonSuresiTahminleri(db, sorulacak.map((x) => x.q));
+  const tahmin = new Map(sorulacak.map((x, n) => [x.i, gunler[n] ?? null]));
+  return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => (tahmin.has(i) ? { ...i, tahminGun: tahmin.get(i)! } : i)) }));
 }
 
 export async function fasonTahminleri(
@@ -232,7 +244,7 @@ export async function durumVeEmirler(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
-  const emirDilimleri = emirOkur ? await emirDilimi(db, emirSecimi) : null;
+  const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 
@@ -280,6 +292,39 @@ export async function aktifMalzemeListesi(db: Db, kullanici: Kullanici): Promise
   if (!yetkiliMi(kullanici, MALZEME_OKUMA)) return null;
   const { kartlar } = await aktifMalzemeler(db, { sayfaBoyu: MALZEME_SAYFA_BOYU, azamiSayfa: MALZEME_AZAMI_SAYFA });
   return kartlar.map((k) => malzemeCevir(k, undefined));
+}
+
+// Emir malzeme ihtiyacı (2486-8, 461 b): kural kurallar.ts emirMalzemeIhtiyaclari'ndadır. Emir okuma yetkisi şarttır (durumun emir dilimi);
+// stok okuma yetkisi yoksa ara adım stoğu okunmaz, serbest stok durumdaki kuralla gelir. Emir verilip planda değilse boş liste döner.
+export async function malzemeIhtiyaci(db: Db, kullanici: Kullanici, emirId?: number): Promise<MalzemeIhtiyaciCevabi> {
+  if (!yetkiliMi(kullanici, EMIR_OKUMA)) throw yetkiYok();
+  const { durum: d } = await durumVeEmirler(db, kullanici);
+  const emirler = d.emirler?.orders ?? [];
+  if (emirId !== undefined && !emirler.some((o) => o.kayitNo === emirId)) throw bulunamadi('Üretim emri bulunamadı.');
+  const kayitlar = emirler.map((o) => o.kayitNo);
+  const stokGorunur = yetkiliMi(kullanici, STOK_OKUMA);
+  const statuler = stokGorunur ? await sorgular.statuler(db) : [];
+  const kartNo = new Map((d.items ?? []).map((i) => [i.code.trim().toLocaleUpperCase('tr-TR'), i.kayitNo]));
+  const statuKartlari = [...new Set(statuler.flatMap((x) => { const no = kartNo.get(x.malzemeNo.trim().toLocaleUpperCase('tr-TR')); return no === undefined ? [] : [no]; }))];
+  const sonuclar = emirMalzemeIhtiyaclari({
+    durum: d,
+    kopyalar: await emirlerinMalzemeIhtiyaci(db, kayitlar),
+    sarflar: await emirlerinNetSarfi(db, kayitlar),
+    araStok: stokGorunur ? araStokHavuzuKur(statuler, await statuluStoklar(db, statuKartlari)) : new Map(),
+  }).filter((x) => emirId === undefined || x.emirId === emirId);
+  const kartlar = await malzemeOzetleri(db, [...new Set(sonuclar.flatMap((x) => [...x.hammadde.map((h) => h.malzemeNo), ...x.yanUrun.map((y) => y.malzemeNo)]))]);
+  const kart = (no: number) => { const k = kartlar.get(no); return { malzemeNo: no, kod: k?.kod ?? null, ad: k?.ad ?? null, birim: k?.birim ?? null }; };
+  const metin = (n: number): string => String(n);
+  return {
+    stokGorunur,
+    emirler: sonuclar.map((x) => {
+      const hammadde = x.hammadde.map((h) => ({ ...kart(h.malzemeNo), brut: metin(h.brut), verilen: metin(h.verilen), stoktan: metin(h.stoktan), alinacak: metin(h.alinacak) }));
+      return {
+        emirId: x.emirId, hammadde, eksikler: hammadde.filter((h) => Number(h.alinacak) > 1e-6),
+        yanUrun: x.yanUrun.map((y) => ({ ...kart(y.malzemeNo), miktar: metin(y.miktar) })), uyarilar: x.uyarilar,
+      };
+    }),
+  };
 }
 
 // Durumun dilimlerini açan okuma işlemleri; plan modülünün sunucu okuyucusu ve kapasite okuması aynı kapsamı kullanır.

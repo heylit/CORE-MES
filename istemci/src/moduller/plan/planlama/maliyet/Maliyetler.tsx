@@ -50,10 +50,12 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
       const pay = top ? (v / top) * 100 : null;
       hucreKoy(h, k, { v: v ? kisaTl(v) : '0', kd: v ? kdOran(pay, [3, 8, 15, 30]) : 0, etiket: `${ad} ${tl(v)}${pay !== null ? `, toplam içindeki payı %${sayi(pay, 0)}` : ''}` });
     }
-    return { k: s.id, ad: s.id, alt: `${tl(m.top)} · ${urunAdi(D, s.urun)}`, simge: 'lira' as const, ton: (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
+    // Bilinmeyen kalem varken toplam kısmidir; tam gibi yazılmaz (kural 5).
+    const tutar = m.eksik.length ? (m.top ? `en az ${tl(m.top)}` : 'tutar eksik') : tl(m.top);
+    return { k: s.id, ad: s.id, alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet · ${tutar}`, simge: 'lira' as const, ton: (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
   }).sort((a, b2) => (a.veri.m.net ?? 1e12) - (b2.veri.m.net ?? 1e12));
   let en: { r: IsiSatiri<Satir>; k: string; c: Hucre } | null = null;
-  for (const r of satirlar) for (const [k] of SUTUN) { const c = r.h[k]; if (c && c.kd !== undefined && k !== 'kar' && (!en || c.kd > (en.c.kd ?? 0))) en = { r, k, c }; }
+  for (const r of satirlar) for (const [k] of SUTUN) { const c = r.h[k]; if (c && c.kd !== undefined && c.kd > 0 && k !== 'kar' && (!en || c.kd > (en.c.kd ?? 0))) en = { r, k, c }; }
   const zarar = satirlar.filter((r) => r.veri.m.net !== null && r.veri.m.net < 0);
   const eks = satirlar.filter((r) => r.veri.m.eksik.length);
   const metin = `${en ? `En sıcak hücre ${en.r.ad} ${kucukHarf(sutunAdi(en.k))}: ${en.c.etiket.replace(/^[^ ]+ /, '')}. ` : ''}${zarar.length ? `${String(zarar.length)} sipariş zarar ediyor` : 'Zarar eden sipariş yok'}${eks.length ? `, ${String(eks.length)} siparişte fiyat eksik` : ''}.`;

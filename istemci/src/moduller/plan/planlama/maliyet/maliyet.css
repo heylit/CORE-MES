@@ -55,7 +55,8 @@
 .tc-pyk-ad[data-ton="uyari"] { --c: var(--hold); }
 .tc-pyk-ad[data-ton="tamam"] { --c: var(--run); }
 .tc-pyk-ad > span { display: grid; min-width: 0; }
-.tc-pyk-ad b, .tc-pyk-ad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ad iki satıra iner; yer varken kırpılmaz, ancak ikinci satırdan sonra kesilir. */
+.tc-pyk-ad b, .tc-pyk-ad small { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .tc-pyk-ad b { font-size: var(--yazi-s); font-family: var(--font-mono); }
 .tc-pyk-ad small { font-size: var(--yazi-xs); color: var(--muted); }
 .tc-pyk-bas .tc-pyk-ad { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; color: var(--muted); }

@@ -197,6 +197,39 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       govde: { opNo: kimlik(girdi['opNo'], 'op numarası'), surum: ekranSurumu(girdi) },
     }),
   },
+  // 2530 a: emre (bölünmüş ya da bölünmemiş) rework, tamir ya da ek adım. Ekran yeri adımın op numarasıyla verir (oncekiOpNo; null: emrin
+  // başı). Op numarası emrin güncel adımlarından, öncekiyle sonrakinin ortasından önerilir; arada yer yoksa ekran OP açmadığı için burada
+  // reddedilir. Yer, başlamışlık ve alt parti kuralları sahibindedir.
+  'emir-ek-adim': {
+    hazirla: async (girdi) => {
+      const id = kimlik(girdi['id'], 'emir');
+      const tur = girdi['tur'];
+      if (typeof tur !== 'string' || !EK_TURLERI.includes(tur)) throw new Error('Geçersiz ek adım türü.');
+      const onceki = girdi['oncekiOpNo'] === null || girdi['oncekiOpNo'] === undefined ? null : kimlik(girdi['oncekiOpNo'], 'önceki adım');
+      const oplar = sirala((await emirOku(id)).isEmirleri).map((a) => a.opNo);
+      if (onceki !== null && !oplar.includes(onceki)) throw hata(422, `OP ${String(onceki)} bu emirde yok; ekranı yenileyin.`);
+      const alt = onceki ?? 0;
+      const sonraki = oplar.filter((x) => x > alt).sort((a, b) => a - b)[0];
+      const opNo = sonraki === undefined ? alt + 10 : Math.floor((alt + sonraki) / 2);
+      if (opNo <= alt) throw hata(422, `OP ${String(alt)} ile OP ${String(sonraki ?? alt)} arasında boş numara yok.`);
+      const aciklama = typeof girdi['aciklama'] === 'string' ? girdi['aciklama'].trim() : '';
+      return {
+        yol: `/adimli-emirler/${String(id)}/ek-adim`,
+        govde: {
+          oncekiOpNo: onceki, opNo, tur, ad: adimAdi(girdi['ad']), operasyonTipiId: kimlik(girdi['operasyonTipiId'], 'operasyon'), kaynak: null,
+          ayarSuresiDk: sure(girdi['ayarSuresiDk'], 'hazırlık süresi'), birimSureDk: sure(girdi['birimSureDk'], 'birim süre'), terminGun: null,
+          aciklama: aciklama === '' ? null : aciklama, surum: ekranSurumu(girdi),
+        },
+        tekrarKorumali: true,
+      };
+    },
+  },
+  'emir-ek-adim-kaldir': {
+    hazirla: async (girdi) => ({
+      yol: `/adimli-emirler/${String(kimlik(girdi['id'], 'emir'))}/ek-adim-kaldir`,
+      govde: { opNo: kimlik(girdi['opNo'], 'op numarası'), surum: ekranSurumu(girdi) },
+    }),
+  },
   // Parti bölme: adet ayrılır; kolN/kolM verilirse kol ayrılma adımından (kolN. adımdan sonra) katılma adımına (kolM. adım) yürür.
   // Verilmezse bölünebilen ilk adımdan bütün rota yeni partiye geçer.
   'emir-bol': {

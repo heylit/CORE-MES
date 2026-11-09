@@ -23,7 +23,7 @@ import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, emirRotaHazirliklari, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
+import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
 import { yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -105,6 +105,7 @@ export function sunucununBaglari(): Bag[] {
     bag('logo cari okuması -> müşteri-tedarikçi', (ara: typeof cariAra) => logoCariCozuculeriKaydet({ ara, oku: cariOku }),
       [logo.logodaCariAra, logo.logodanCariOku].every((f) => typeof f === 'function') ? cariAra : undefined),
     bag('emir bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.emirBittiDinle, rotaEmirBittiYansit),
+    bag('adım bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.adimBittiDinle, rotaAdimBittiYansit),
     bag('iş emri kopyalandı -> rota şartname sabiti', uretimEmirleri.isEmriKopyalandiDinle, isEmriKopyalandiYansit),
     bag('fason hareketi -> sevkiyat', uretimEmirleri.fasonHareketiDinle, sevkiyat.fasonHareketiYansit),
     bag('stok yok istekleri -> satın alma', stokYokCozucusu, stok.stokYokIstekleri),

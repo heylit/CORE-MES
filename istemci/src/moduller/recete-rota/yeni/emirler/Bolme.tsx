@@ -12,7 +12,7 @@ export interface EkAdimSecimi { tur: 'rework' | 'tamir' | 'ek'; sonra: number | 
 export interface BolmeDurumu { tur: BolmeTuru | null; partiler: string[]; n: number | null; m: number | null; kolMiktar: string; ekler: EkAdimSecimi[] }
 export const bosBolme = (yeni: boolean): BolmeDurumu => ({ tur: yeni ? 'tek' : null, partiler: ['', ''], n: null, m: null, kolMiktar: '', ekler: [] });
 
-const EK_TURLERI = [{ deger: 'rework', baslik: 'Rework' }, { deger: 'tamir', baslik: 'Tamir' }, { deger: 'ek', baslik: 'Ek adım' }] as const;
+export const EK_TURLERI = [{ deger: 'rework', baslik: 'Rework' }, { deger: 'tamir', baslik: 'Tamir' }, { deger: 'ek', baslik: 'Ek adım' }] as const;
 
 export const bolmeSecimi = (b: BolmeDurumu): BolmeSecimi | null =>
   (b.tur === 'parti' ? { tur: 'parti', partiler: b.partiler } : b.tur === 'kol' ? { tur: 'kol', n: b.n, m: b.m, miktar: b.kolMiktar } : null);

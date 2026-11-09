@@ -6,6 +6,8 @@ export interface HataEki {
   ayrinti?: unknown;
   // Reddedilen komutun o ana kadarki yazıları geri alınmaz (örnek: hatalı giriş denemesinin kaydı).
   yazilarKalir?: boolean;
+  // Hatanın kaynağı (örnek: veritabanı kısıt hatası). Cevaba girmez; günlük kısıt izini buradan yazar.
+  neden?: unknown;
 }
 
 export class UygulamaHatasi extends Error {
@@ -15,7 +17,7 @@ export class UygulamaHatasi extends Error {
   readonly yazilarKalir: boolean;
 
   constructor(kod: HataKodu, mesaj: string, ek: HataEki = {}) {
-    super(mesaj);
+    super(mesaj, ek.neden === undefined ? undefined : { cause: ek.neden });
     this.name = 'UygulamaHatasi';
     this.kod = kod;
     this.alan = ek.alan;

@@ -110,6 +110,26 @@ describe('köprü komutları', () => {
     expect(istekler).toHaveLength(1);
   });
 
+  it('KOM-02c (2571): emir süre özetleri yalnız başlamış, fason olmayan iş emirleri için okunur; bozuk kimlik istek atmaz', async () => {
+    const ie = (id: number, opNo: number, ek: Record<string, unknown> = {}) => ({ id, opNo, baslama: '2030-01-02T08:00:00.000Z', kaynak: { tur: 'makine' }, fason: null, ...ek });
+    const ozet = (isEmriId: number) => ({ isEmriId, baslama: null, bitis: null, saglam: 4, hurda: 0, hazirlikDk: 12, brutBirimDk: 2.4, netBirimDk: 2.1, tekliAraliklarDk: [], tekliOrtalamaDk: null });
+    const istekler = sunucuKur((_y, yol) => {
+      if (yol === '/adimli-emirler/7') {
+        return json(200, { emir: { isEmirleri: [ie(71, 10), ie(72, 20, { baslama: null }), ie(73, 30, { kaynak: { tur: 'fason' }, fason: { gonderilen: 1 } }), ie(74, 40)] } });
+      }
+      const m = /\/is-emirleri\/(\d+)\/sure-ozeti$/.exec(yol);
+      return m ? json(200, ozet(Number(m[1]))) : json(404, {});
+    });
+    const isle = kopruKur();
+    const sonuc = await isle('emir-sure-ozetleri', { emirId: 7 }) as { ozetler: { opNo: number; ozet: { isEmriId: number } }[] };
+    expect(sonuc.ozetler.map((x) => [x.opNo, x.ozet.isEmriId])).toEqual([[10, 71], [40, 74]]);
+    expect(istekler.map((i) => i.yol)).toEqual(['/adimli-emirler/7', '/adimli-emirler/7/is-emirleri/71/sure-ozeti', '/adimli-emirler/7/is-emirleri/74/sure-ozeti']);
+    for (const emirId of [undefined, 0, '7', 1.5]) {
+      expect(await isle('emir-sure-ozetleri', { emirId }).then(() => null, sorun)).toMatchObject({ durum: 400 });
+    }
+    expect(istekler).toHaveLength(3);
+  });
+
   it('KOM-03: sahibi modül komutu reddederse hata sunucu iletisiyle taşınır ve durum yeniden okunmaz', async () => {
     const istekler = sunucuKur(() => json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }));
     const hata = await kopruKur()('komut', { ad: 'tedarik-termini-kaydet', govde: { malzemeNo: '12' } }).then(() => null, (e: unknown) => e);

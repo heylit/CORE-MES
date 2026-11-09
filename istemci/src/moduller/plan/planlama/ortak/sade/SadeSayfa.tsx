@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
+import { useInRouterContext, useNavigate } from 'react-router-dom';
 import { Dugme, Sekmeler, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
+import { gorunumAdresi } from '../../gorunumler.ts';
 import { Sihirbaz, type SihirbazAcilisi, type SihirbazTanimi } from './Sihirbaz.tsx';
 import './sade.css';
 
@@ -65,20 +67,28 @@ function FormKarti({ f, ac }: { f: SihirbazTanimi; ac: () => void }) {
 }
 
 export const PLAN_ESKI_NOTU = 'Plan bu değişikliği henüz içermiyor. Değişiklik Plan atölyesinde bekler; orada uygulayıp onaya gönderirsiniz ya da reddedersiniz.';
-export const MOTOR_KAPALI_NOTU = 'Plan motoru bu ekrana bağlanınca açılır.';
+// Arama motorlu plan sayfasındadır (çubuktaki "Plan iyileştirme ara"); bu düğme oraya götürür. Sayfa yönlendiricisiz çizilirse (yalnız testler) gidemez.
+export const PLANDA_ARANIR_NOTU = 'İyileştirme Plan sayfasında aranır; bulunan plan önizlenir, siz uygularsınız.';
+export const PLANA_GIDILEMEZ_NOTU = 'Plan iyileştirme Plan sayfasından aranır.';
+
+function PlanaGit() {
+  const git = useNavigate();
+  return <Dugme tur="birincil" simge="play" title={PLANDA_ARANIR_NOTU} onClick={() => { void git(gorunumAdresi('plan')); }}>Plan iyileştirme ara</Dugme>;
+}
 
 // Kayıttan sonraki kart (eski sdSonKart); ısı haritası açılımında da kullanılır. Plan eskiyse eski not ve yetkiliye "Plan iyileştirme ara":
-// motor isteyen düğme yerinde görünür ama pasiftir (357 b).
+// düğme plan sayfasına gider, iyileştirme orada aranır (motor sunucuda açık, 576).
 export function SonKart({ metin, kapat, planEski = false, iyilestirYetkisi = false }: {
   metin: string; kapat: () => void; planEski?: boolean; iyilestirYetkisi?: boolean;
 }) {
   const dugme = planEski && iyilestirYetkisi;
+  const gidebilir = useInRouterContext();
   return (
     <div className="tc-sade-son" role="status">
       <span className="tc-sade-is-sm"><Simge ad="check" boyut="k" /></span>
-      <span className="tc-sade-is-m"><b>{metin}</b><small>{planEski ? PLAN_ESKI_NOTU : 'Kaydedildi.'}</small>{dugme && <small>{MOTOR_KAPALI_NOTU}</small>}</span>
+      <span className="tc-sade-is-m"><b>{metin}</b><small>{planEski ? PLAN_ESKI_NOTU : 'Kaydedildi.'}</small>{dugme && <small>{gidebilir ? PLANDA_ARANIR_NOTU : PLANA_GIDILEMEZ_NOTU}</small>}</span>
       <span className="tc-sade-son-dugmeler">
-        {dugme && <Dugme tur="birincil" simge="play" disabled title={MOTOR_KAPALI_NOTU}>Plan iyileştirme ara</Dugme>}
+        {dugme && (gidebilir ? <PlanaGit /> : <Dugme tur="birincil" simge="play" disabled title={PLANA_GIDILEMEZ_NOTU}>Plan iyileştirme ara</Dugme>)}
         <Dugme simge="x" onClick={kapat} aria-label="Kapat" />
       </span>
     </div>

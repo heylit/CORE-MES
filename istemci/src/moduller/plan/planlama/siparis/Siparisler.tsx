@@ -5,7 +5,7 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim as HucreSecimi } from './IsiHaritasi.tsx';
-import { OrtusmeKarti, PartiBolmeKarti, PartiTaramasiKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
+import { OrtusmeKarti, PartiBolmeKarti, PartiTaramasiKarti, useGorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { KarTablosu } from './KarTablosu.tsx';
 import { kayitliPlan, siparisAcilimi, siparisIsisi, type SiparisSatiri } from './kurallar.ts';
 
@@ -20,7 +20,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
   const [secim, secimYaz] = useState<HucreSecimi | null>(null);
   const p = kayitliPlan(calisma);
   const fg = yetki.maliyetOku;
-  const degerlendir = gorunumDegerlendiricisi(depo);
+  const degerlendir = useGorunumDegerlendiricisi(depo, komut);
 
   const tum = (
     <TumSatirlar>
