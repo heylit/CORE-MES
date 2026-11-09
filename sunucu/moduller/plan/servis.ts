@@ -2523,6 +2523,7 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     throw cakisma('Bu taslak, aynı canlı plandan açılmış başka bir taslak canlıya alındığı için kapandı; canlı planla yeni taslak açın.');
   }
   const { x, dortGozsuz } = await onayGecisi(db, k, id, g.surum, 'canliya-al');
+  await yeniIslerDenetle(db, id, x.acilma, 'taslağı geri gönderin; sahibi Planı kur ile yerleştirsin.');
   const defter = await s.degisiklikler(db, [id]);
   const bekleyen = defter.filter((d) => BENZETIM.has(d.tur) && !CANLIYA_GECEN.has(d.tur));
   const kapanan = defter.filter((d) => d.tur === 'gun_kapat');
@@ -2787,9 +2788,25 @@ async function onayGecisi(db: Db, k: Kullanici, id: number, surum: number, komut
   return { x, dortGozsuz: tanim.kim === 'onaylayan' && !b.dortGozAcik && b.gonderenMi };
 }
 
+// B-2499 (on deneme): taslak açıldıktan sonra açılan emrin işini taslak bilmez; Planı kur'a basılmadan gönderilirse iş canlıya yersiz
+// gider. Taslakta yeri olmayan ve defterde de geçmeyen (taslağın hiç ele almadığı) böyle iş varsa gönderme ve canlıya alma durur.
+// Motorun yerleştiremediği iş defterdedir (yerlesmez), durdurmaz.
+async function yeniIslerDenetle(db: Db, id: number, acilma: string, ne: string): Promise<void> {
+  const ayar = await s.ayarOku(db, id);
+  const yerli = new Set((await s.yerlesimler(db, id)).map((y) => y.isEmriId));
+  const defterde = new Set((await s.degisiklikler(db, [id])).flatMap((d) => d.isEmriIdleri));
+  const an = Date.parse(acilma);
+  const yeni = (await planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler }))
+    .filter((i) => Date.parse(i.acilma) > an && !yerli.has(i.id) && !defterde.has(i.id));
+  if (yeni.length === 0) return;
+  const l = yeni.slice(0, 5).map((i) => `${i.emirNo} OP ${String(i.opNo)}`).join(', ');
+  throw cakisma(`Taslak açıldıktan sonra açılan ${String(yeni.length)} iş taslakta yok (${l}${yeni.length > 5 ? ', …' : ''}); ${ne}`);
+}
+
 // Sahip açık taslağını onaya gönderir; taslak donar (plan yazmaları ona yazılmaz). Not isteğe bağlı.
 export async function onayaGonder(db: Db, k: Kullanici, id: number, g: OnayaGonderGovdesi) {
-  await onayGecisi(db, k, id, g.surum, 'onaya-gonder');
+  const { x } = await onayGecisi(db, k, id, g.surum, 'onaya-gonder');
+  await yeniIslerDenetle(db, id, x.acilma, 'önce Planı kur ile yerleştirin.');
   await s.senaryoDurumYaz(db, id, 'acik', 'onayda');
   await s.onayKaydiEkle(db, id, 'onaya_gonder', k.id, g.not || null);
   return senaryolar(db, k);

@@ -4,6 +4,7 @@ import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { AtolyeKomutuCevabi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { CalismaTaslagiCevabi, CanliFarkiCevabi, DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
+import { planSaati } from './planlama-kurallar.ts';
 import { planTestOrtami } from './plan-ortak.test.ts';
 
 // 2176 (yol haritası adım 3): planlamanın uçtan uca zinciri, ekranın sırasıyla ve yalnız uçlardan. Rota emre kopyalanır (iş emirleri),
@@ -82,9 +83,9 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, emirden canlıya ve atöl
     const { calisma: c2, surum: s2 } = await calismaOku();
     assert.ok(s2 !== null);
     const ilkIs = Object.entries(c2.plan!.ops).filter(([, r]) => r.m === String(makineA)).sort((a, b) => a[1].S - b[1].S)[0]!;
-    // Atölye komutu çalışmada şimdi yoksa 07:00'ı şimdi sayar (atolye-komutlari-kurallar.ts BASLANGIC_SAATI); motor gece gerçek saati kullanır
-    // (741 a). Hedef saat ikisinin de ilerisinde seçilir, test günün her saatinde aynı sonucu verir; tutarsızlık kart 2187'dedir.
-    const baslangic = Math.max(Math.round((ilkIs[1].S + 1) * 4) / 4, 7);
+    // 2506 a: atölye komutunun şimdisi gerçek saattir (planın ekseninde); hedef saat işin bir saat ilerisi ve şimdiden sonra.
+    const simdi = planSaati((c2 as unknown as { D: { meta: { baslangic: string } } }).D.meta.baslangic, Date.now());
+    const baslangic = Math.max(Math.round((ilkIs[1].S + 1) * 4) / 4, Math.ceil(simdi * 4) / 4 + 0.25);
     const t = await tamam<AtolyeKomutuCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/is-tasi', { isId: ilkIs[0], tezgah: String(makineA), baslangic, calismaSurumu: s2 });
     assert.equal(t.oncekiSurum, s2);
     assert.ok(t.calismaSurumu > s2);

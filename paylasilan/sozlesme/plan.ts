@@ -560,7 +560,7 @@ export const mrpIhtiyaciCevabi = z.object({
   hesaplanan: zaman,
   stokGorunur: z.boolean(),
   satinAlmaGorunur: z.boolean(),
-  // Ürünü olmayan (iş emirsiz) açık emir sayısı: malzeme ihtiyacı hesaplanamaz.
+  // Malzeme ihtiyacı hesaplanamayan açık emir sayısı: ürünü olmayan (iş emirsiz) ya da adımlarında hiç bileşen olmayan emir (B-2499-5).
   urunsuzEmir: z.number().int().nonnegative(),
   satirlar: z.array(z.object({
     malzeme: z.object({ id: KIMLIK, kod: z.string().nullable(), ad: z.string().nullable(), tur: z.string().nullable(), birim: z.string().nullable() }),

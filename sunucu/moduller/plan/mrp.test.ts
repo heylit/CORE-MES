@@ -49,4 +49,15 @@ describe('plan (gerçek PostgreSQL): MRP ihtiyaç raporu', () => {
     assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403);
     assert.equal((await istek('', 'GET', yol)).statusCode, 401);
   });
+
+  // B-2499-5: adımlarında hiç bileşen olmayan açık emrin ihtiyacı hesaplanamaz; sayıda görünür, sessiz düşmez.
+  test('bileşensiz açık emir hesaplanamayan emir sayısına girer', async () => {
+    const once = (await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol)).urunsuzEmir;
+    // Rota adımı bileşen ister; bileşensiz emir eski ya da örnek veriden gelir (B-2499-4): emrin bileşenleri VT'de silinir.
+    const ham = await kartAc('hammadde');
+    const rota = await yururlugeAlinmisRota(await kartAc('mamul'), [yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 1, fireYuzde: 0 }] })]);
+    const e = await tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rota}/emre-kopyala`, { projeId: durum().denemeProjeId, adet: 5, teslim: null });
+    await durum().ortam!.sahip.sorgu('DELETE FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = ANY($1::int[])', [e.isEmriIdleri]);
+    assert.equal((await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol)).urunsuzEmir, once + 1);
+  });
 });
