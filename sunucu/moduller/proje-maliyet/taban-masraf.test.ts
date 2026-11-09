@@ -187,6 +187,12 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     c = await maliyet(p.id);
     assert.equal(c.ozet.masraflar.find((m) => m.belgeId === doviz)?.iptal, true);
     assert.equal(c.ozet.masrafToplami, 1000);
+    // PM-49 (2599 a): kural öncesi kurulmuş personel bağı silinmez; listede "sayılmaz" görünür, toplama girmez.
+    const eskiPersonel = await giderAc('personel', 700);
+    await sahip().sorgu('INSERT INTO proje_maliyet_masraf (proje_id, finans_belge_id, kisi_id) VALUES ($1, $2, $3)', [p.id, eskiPersonel, yoneticiId]);
+    c = await maliyet(p.id);
+    assert.deepEqual(c.ozet.masraflar.map((m) => [m.belgeId, m.sayilmaz]), [[lojistik, false], [doviz, false], [eskiPersonel, true]]);
+    assert.equal(c.ozet.masrafToplami, 1000);
     const iptalBelge = await giderAc('lojistik', 10);
     await sahip().sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [iptalBelge, yoneticiId]);
     assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: iptalBelge })).statusCode, 422);

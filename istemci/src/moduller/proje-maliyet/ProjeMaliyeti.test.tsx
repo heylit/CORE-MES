@@ -16,8 +16,8 @@ const TABANLI: MaliyetOzeti = {
   },
   tabanGecmisi: [{ sira: 1, plan: 800, kalemler: [], eksikKalemler: [], isEmriSayisi: 1, gerekce: null, kisiAd: 'Deneme Planlamacı', an: '2026-10-10T09:00:00.000Z' }],
   masraflar: [
-    { id: 4, belgeId: 41, belgeNo: 'GDR-41', belgeTarihi: '2026-10-15', kategori: 'lojistik', aciklama: 'Numune kargo', tutarTl: 150, iptal: false, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
-    { id: 5, belgeId: 42, belgeNo: 'GDR-42', belgeTarihi: '2026-10-15', kategori: 'personel', aciklama: null, tutarTl: 70, iptal: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
+    { id: 4, belgeId: 41, belgeNo: 'GDR-41', belgeTarihi: '2026-10-15', kategori: 'lojistik', aciklama: 'Numune kargo', tutarTl: 150, iptal: false, sayilmaz: false, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
+    { id: 5, belgeId: 42, belgeNo: 'GDR-42', belgeTarihi: '2026-10-15', kategori: 'personel', aciklama: null, tutarTl: 70, iptal: true, sayilmaz: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
   ],
   masrafToplami: 150, sonGerceklesen: 650, tahminiSon: 1250, fark: 350,
 };
@@ -157,8 +157,22 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.getByRole('table', { name: 'Taban ve güncel plan' })).toBeTruthy();
     expect(screen.getByText(/1\. taban 800 TL/)).toBeTruthy();
     expect(screen.getByText('İptal edildi')).toBeTruthy();
+    expect(screen.queryByText('Sayılmıyor')).toBeNull();
     expect(screen.queryByRole('button', { name: /Taban al|Tabanı yenile/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Masraf bağla/ })).toBeNull();
+  });
+
+  it('PM-49 (2599 a): sayılmayan türdeki eski bağ "Sayılmıyor" işaretiyle listelenir, açıklaması görünür', async () => {
+    const eski = { id: 6, belgeId: 43, belgeNo: 'GDR-43', belgeTarihi: '2026-10-15', kategori: 'mal_alimi', aciklama: null, tutarTl: 900, iptal: false, sayilmaz: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' };
+    sunucuKur(() => json(200, cevap(true, { ozet: { ...TABANLI, masraflar: [...TABANLI.masraflar, eski] } })));
+    cizdir();
+    expect(await screen.findByText('Sayılmıyor')).toBeTruthy();
+    const tablo = screen.getByRole('table', { name: 'Projeye bağlı masraf belgeleri' });
+    expect(within(tablo).getByRole('columnheader', { name: 'Sayılıyor' })).toBeTruthy();
+    expect(within(tablo).getAllByText('Hayır')).toHaveLength(2);
+    expect(within(tablo).getAllByText('Evet')).toHaveLength(1);
+    expect(screen.getByText(/artık proje masrafı sayılmayan türdedir/)).toBeTruthy();
+    expect(screen.getByText(/sonradan satın alma siparişine bağlanmıştır/)).toBeTruthy();
   });
 
   it('proje yazan tabanı gerekçeyle yeniler ve masraf belgesini görevine bağlar; komutlar istek kimliğiyle gider', async () => {

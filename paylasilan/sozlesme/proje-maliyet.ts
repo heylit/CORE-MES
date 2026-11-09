@@ -122,6 +122,8 @@ export const masrafSatiriSemasi = z.object({
   // KDV hariç TL. İptal edilen belge toplama girmez.
   tutarTl: z.number(),
   iptal: z.boolean(),
+  // 2599 a öncesi kurulmuş, artık proje masrafı sayılmayan türde bağ (mal alımı, personel, kira, enerji): listede kalır, toplama girmez.
+  sayilmaz: z.boolean(),
   gorevId: z.number().int().nullable(),
   kisiAd: z.string().nullable(),
   an: zamanSemasi,
@@ -130,6 +132,7 @@ export const maliyetOzetiSemasi = z.object({
   taban: tabanSemasi.nullable(),
   tabanGecmisi: z.array(tabanSemasi),
   masraflar: z.array(masrafSatiriSemasi),
+  // İptal edilen ve sayılmayan türdeki bağ hariç.
   masrafToplami: z.number(),
   // Son gerçekleşen: üretim gerçekleşeni + bağlı masraf. Tahmini son: son gerçekleşen + kalan plan. Fark tahmini son - taban; taban yoksa null.
   sonGerceklesen: tutar,
