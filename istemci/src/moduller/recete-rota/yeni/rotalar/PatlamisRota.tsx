@@ -66,7 +66,7 @@ function MalzemeToplami({ c, k, siparisMetni }: { c: PatlatmaOnizlemeCevabi; k: 
   return (
     <section className="tc-rr1-pr-toplam" aria-label="Stoktan gelen malzeme toplamı">
       <h4><Simge ad="box" boyut="k" /> Stoktan gelen malzeme toplamı <small>alt parçalar hariç; bileşen firesi dahil</small></h4>
-      <div className="tc-tablo-kap">
+      <div className="tc-rr1-pr-kaydir">
         <table className="tc-tablo">
           <thead><tr><th>Malzeme</th><th className="tc-tablo-sag">Kök başına</th>{siparisMetni !== null && <th className="tc-tablo-sag">{siparisMetni}</th>}</tr></thead>
           <tbody>
@@ -123,13 +123,13 @@ export function PatlamisRota({ revizyonId, miktar, baz }: { revizyonId: number |
             </span>
           </div>
           {c.hammaddeToplami.length > 0 && <MalzemeToplami c={c} k={k} siparisMetni={siparisMetni} />}
-          <div className="tc-tablo-kap tc-rr1-pr-tablo">
+          <div className="tc-rr1-pr-kaydir tc-rr1-pr-tablo">
             <table className="tc-tablo">
               <thead>
                 <tr>
                   <th>Emir OP</th><th>Dal</th><th className="tc-rr1-pr-genis">Rotadaki</th><th>Operasyon</th><th className="tc-rr1-pr-genis">İstasyon</th>
-                  <th className="tc-tablo-sag" title="Adıma giren parça: dal çarpanı ve sonraki adımların firesi dahil">Giren</th>
-                  <th className="tc-tablo-sag" title="Adımın kendi firesinden sonra kalan sağlam parça">Çıkan</th>
+                  <th className="tc-tablo-sag" title="Emrin bu adımdaki planlı hedef adedi (firesiz). Terminaldeki gerçek hedef önceki adımdan gelen sayıyla değişebilir; altında fire payıyla giren parça.">Planlı hedef</th>
+                  <th className="tc-tablo-sag" title="Adımın kendi firesinden sonra kalan sağlam parça; sonraki adımların fire payı dahil olduğu için planlı hedeften büyük olabilir">Çıkan</th>
                 </tr>
               </thead>
               <tbody>
@@ -165,7 +165,12 @@ export function PatlamisRota({ revizyonId, miktar, baz }: { revizyonId: number |
                               <AdimMalzemeleri a={a} dugumler={c.dugumler} k={k} />
                             </td>
                             <td className="tc-rr1-pr-genis">{a.yer ?? '—'}</td>
-                            <td className="tc-tablo-sag tc-rr1-pr-sayi" title={a.adet === null ? 'Emir açılamadığı için hesaplanmadı' : undefined}>{a.adet === null ? '—' : sayi(Number(a.adet[k]))}</td>
+                            <td className="tc-tablo-sag tc-rr1-pr-sayi" title={a.hedef === null ? 'Emir açılamadığı için hesaplanmadı' : undefined}>
+                              {a.hedef === null ? '—' : sayi(Number(a.hedef[k]))}
+                              {a.hedef !== null && a.adet !== null && Number(a.adet[k]) !== Number(a.hedef[k]) && (
+                                <small className="tc-rr1-pr-fireli">fire payıyla {sayi(Number(a.adet[k]))}</small>
+                              )}
+                            </td>
                             <td className="tc-tablo-sag tc-rr1-pr-sayi" title={a.cikanAdet === null ? 'Emir açılamadığı için hesaplanmadı' : undefined}>{a.cikanAdet === null ? '—' : sayi(Number(a.cikanAdet[k]))}</td>
                           </tr>
                         );

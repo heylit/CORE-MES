@@ -584,6 +584,8 @@
   border-radius: var(--yari-1); background: var(--panel); font-size: var(--yazi-xs); color: var(--muted);
 }
 .tc-rr1-pr-cip b { color: var(--ink); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
+/* Ortak tablo kabı yapışık başlık için yatay taşmayı keser (tablo.css); bu tablolar dar ekranda kendi kutusunda kayar. */
+.tc-rr1-pr-kaydir { overflow-x: auto; min-width: 0; }
 .tc-rr1-pr-tablo { background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-2); }
 .tc-rr1-pr-op { font-family: var(--font-mono); font-size: var(--yazi-s); font-weight: 700; white-space: nowrap; }
 .tc-rr1-pr-kaynak { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; }
@@ -626,3 +628,4 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 
 /* 2559: Operasyonlar araç satırındaki "Pasifleri gizle" */
 .tc-rr1-onay { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--ink); white-space: nowrap; cursor: pointer; }
+.tc-rr1-pr-fireli { display: block; font-size: var(--yazi-xs); color: var(--muted); font-weight: 400; }
