@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
-  adimEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, islemSuresiEksik, malzemeMaliyeti, rotaEksikleri, rotaSahibiOlur,
+  kolaEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, islemSuresiEksik, malzemeMaliyeti, rotaEksikleri, rotaSahibiOlur,
   sirali, statuNo, yeniAdim, yururlukteki, type Operasyon,
 } from './kurallar.ts';
 import { sayi, YOK } from '../bicim.ts';
@@ -105,10 +105,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const tercih = (k: string, v: string, yaz: (v: string) => void) => { yaz(v); tercihYaz(k, v); };
 
   // Paletten ekleme yeri: seçili adımın ardı; "Adım ekle" seçiminde onun yeri (null: başa); yoksa gösterilen rotanın sonu.
-  const ekleYeri = (): { urunId: string; sonraId: string | null } | null => {
+  const ekleYeri = (): { urunId: string; sonraId: string | null; dal?: string } | null => {
     const hedef = secim && 'urunId' in secim && duzen.duzenlenebilir(secim.urunId) ? secim.urunId : revId;
     if (!hedef) return null;
-    if (secim?.tur === 'adimEkle' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.sonraId };
+    if (secim?.tur === 'adimEkle' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.sonraId, ...(secim.dal ? { dal: secim.dal } : {}) };
     if (secim?.tur === 'adim' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.adimId };
     return { urunId: hedef, sonraId: sirali(duzen.adimlar(hedef)).at(-1)?.id ?? null };
   };
@@ -120,6 +120,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     if (l.length === 0) return `${kod}: ilk adım`;
     const a = yer.sonraId === null ? undefined : l.find((x) => x.id === yer.sonraId);
     if (!a) return `${kod}: rotanın başına`;
+    if (yer.dal) return `${kod}: yeni Dal ${yer.dal}, OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} ardından çatallanır`;
     return `${kod}: OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} ardına${a.id === l.at(-1)?.id ? ' (sona)' : ''}`;
   })();
   const panelEkle = (op: Operasyon) => {
@@ -129,7 +130,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const l = sirali(duzen.adimlar(hedef));
     const sonra = y.sonraId;
     const yeni = yeniAdim(op, yeniKimlik());
-    const l2 = adimEkle(l, sonra, yeni);
+    const l2 = kolaEkle(l, sonra, yeni, y.dal);
     if (duzen.degistir(hedef, () => l2, `${op.abbr ?? op.code} adımı eklendi`)) {
       setSecim({ tur: 'adim', urunId: hedef, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar });
     }
@@ -156,7 +157,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const i = l.findIndex((x) => x.id === secim.adimId);
     const komsu = l[i + (e.key === 'ArrowUp' ? -1 : 1)];
     if (!komsu) return;
-    if (e.shiftKey) duzen.degistir(secim.urunId, (x) => adimSurukle(x, secim.adimId, komsu.id), 'Adım taşındı');
+    if (e.shiftKey) duzen.tasi(secim.urunId, (x) => adimSurukle(x, secim.adimId, komsu.id), 'Adım taşındı');
     else setSecim({ ...secim, adimId: komsu.id, seq: komsu.seq });
   };
 
@@ -232,6 +233,13 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           </span>
         )}
       </div>
+      <OnayPenceresi
+        acik={duzen.tasimaOnayi !== null} baslik="Dalın yeri değişsin mi?" onayMetni="Taşı" vazgec={() => { duzen.tasimaKarari(false); }}
+        onayla={() => { duzen.tasimaKarari(true); }}
+      >
+        <p>Bu taşıma dalın çatallandığı ya da birleştiği adımı değiştirir:</p>
+        <ul>{duzen.tasimaOnayi?.farklar.map((f) => <li key={f}>{f}</li>)}</ul>
+      </OnayPenceresi>
       {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); setSecim(null); }} /> : (
         <>
           {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} />}

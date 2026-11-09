@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimCarpani, adimEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
+  adimCarpani, adimDali, dalBilgileri, dalEtiketi, dalHatasi, kolaEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
@@ -80,10 +80,10 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     const c = surukleCoz(v);
     if (!c) return;
     if (c.tur === 'adim' && c.urunId === urunId && c.adimId !== hedef.id) {
-      r.duzen.degistir(urunId, (l) => adimSurukle(l, c.adimId, hedef.id), 'Adım taşındı');
+      r.duzen.tasi(urunId, (l) => adimSurukle(l, c.adimId, hedef.id), 'Adım taşındı');
     } else if (c.tur === 'op') {
       const yeni = yeniAdim(h.op.get(c.opId), yeniKimlik());
-      const l2 = adimEkle(r.duzen.adimlar(urunId), hedef.id, yeni);
+      const l2 = kolaEkle(r.duzen.adimlar(urunId), hedef.id, yeni);
       if (r.duzen.degistir(urunId, () => l2, 'Adım eklendi')) {
         r.sec({ tur: 'adim', urunId, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar: q });
       }
@@ -99,6 +99,9 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     </button>
   );
 
+  // 2542 E, F: dalın çatal ve birleşme yeri ilk adımında yazar; dal kuralı ihlali düzenlerken satırında görünür (onaya göndermeyi beklemez).
+  const dallar = dalBilgileri(liste);
+  const dalHata = dalHatasi(liste);
   const satirlar = liste.map((a, j) => {
     const op = h.op.get(a.opId);
     const ist = a.stationId ? h.istasyon.get(a.stationId) : undefined;
@@ -178,11 +181,11 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             {duzen && (
               <span className="tc-rr1-fsacts">
                 <button type="button" className="tc-rr1-ib" disabled={j === 0} aria-label={`OP ${String(statuNo(a))} yukarı taşı`}
-                  onClick={() => { const p = liste[j - 1]; if (p) r.duzen.degistir(urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
+                  onClick={() => { const p = liste[j - 1]; if (p) r.duzen.tasi(urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
                   <Simge ad="up" boyut="k" />
                 </button>
                 <button type="button" className="tc-rr1-ib" disabled={son} aria-label={`OP ${String(statuNo(a))} aşağı taşı`}
-                  onClick={() => { const n = liste[j + 1]; if (n) r.duzen.degistir(urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
+                  onClick={() => { const n = liste[j + 1]; if (n) r.duzen.tasi(urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
                   <Simge ad="down" boyut="k" />
                 </button>
                 <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" aria-label={`OP ${String(statuNo(a))} sil`}
@@ -193,6 +196,12 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             )}
           </div>
           <div className="tc-rr1-fsbody">
+            {(() => {
+              const b = dallar.find((x) => x.adimlar[0]?.id === a.id);
+              return b && <p className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(b)}</p>;
+            })()}
+            {adimDali(a) !== null && dallar.find((x) => x.adimlar[0]?.id === a.id) === undefined && <p className="tc-rr1-ipucu">Dal {adimDali(a)}</p>}
+            {dalHata && dalHata.adimId === a.id && <p className="tc-rr1-warnbox" role="alert" data-parca="dal-hatasi">{dalHata.ileti}</p>}
             <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
               yaz={(v) => { yaz(a, (x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
             {fason ? (
@@ -291,6 +300,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
         {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}
         <span className="tc-rr1-ipucu">{miktarMetni(q, m.unit)}{tuketen ? `, ${tuketenKod ?? '?'} için alt montaj` : ', ana ürün'}</span>
       </div>
+      {dalHata && dalHata.adimId === null && <p className="tc-rr1-warnbox" role="alert" data-parca="dal-hatasi">{dalHata.ileti}</p>}
       <div className="tc-rr1-frow tc-rr1-fhead" aria-hidden="true"><div>Girenler</div><div>Rota adımları</div><div>Çıkanlar</div></div>
       {liste.length > 0 ? satirlar : (
         <div className={`tc-rr1-frow${ustunde === '' ? ' tc-rr1-birak' : ''}`}

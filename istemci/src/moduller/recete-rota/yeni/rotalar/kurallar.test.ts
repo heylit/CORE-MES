@@ -9,6 +9,7 @@ import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz,
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
 import { turKisa, yerelTur } from './kurallar.ts';
+import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kollariBirlestir, serbestDal } from './kurallar.ts';
 import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
 
@@ -435,5 +436,51 @@ describe('1709 hammadde önerisi (1726 a, 1727 a)', () => {
       malzemeNo, kod: '', ad: null, kalite: null, form: 'cubuk' as const, olcu: { d: 30, l: 3000 }, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm: 44, hamHacimMm3: 1,
     });
     expect(onerilebilirKartlar([1, 2, 3, 9].map(oneri), harita).map((x) => x.kart.id)).toEqual(['1']);
+  });
+});
+
+describe('2542 çatallı rota kolaylıkları (veri biçimi aynı)', () => {
+  // OP 10 ana hat, OP 20 ana hat (çatal), OP 30 ve 40 Dal A, OP 50 ana hat, OP 60 A'yı birleştirir.
+  const rota = (): Adim[] => [
+    adim('a', 10), adim('b', 20), adim('c', 30, { dal: 'A', adetCarpani: 2 }), adim('d', 40, { dal: 'A', adetCarpani: 2 }), adim('e', 50), adim('f', 60, { birlesen: ['A'] }),
+  ];
+  it('E: dalın çatalı kendinden önceki son ana hat adımı, birleşmesi birleştiren adım; çarpan dalda aynıysa tek sayı', () => {
+    const [b] = dalBilgileri(rota());
+    expect(b?.catal?.id).toBe('b');
+    expect(b?.birlesme?.id).toBe('f');
+    expect(b?.carpan).toBe(2);
+    expect(dalEtiketi(b!)).toBe('Dal A: OP 20 ardından başlar, OP 60 adımında birleşir.');
+    const bas = dalBilgileri([adim('a', 10, { dal: 'B' }), adim('b', 20)])[0]!;
+    expect(dalEtiketi(bas)).toBe('Dal B: rotanın başından başlar, birleşmiyor.');
+    expect(dalEtiketi(dalBilgileri([adim('a', 10), adim('b', 20, { dal: 'B' })])[0]!)).toBe('Dal B: OP 10 ardından başlar, rotanın sonuna kadar yürür.');
+    expect(dalBilgileri([adim('a', 10, { dal: 'A', adetCarpani: 2 }), adim('b', 20, { dal: 'A' })])[0]?.carpan).toBeNull();
+  });
+  it('E: taşıma çatal ya da birleşme yerini değiştirirse yeni etiket döner, değiştirmezse boş', () => {
+    const l = rota();
+    expect(catalFarki(l, adimSurukle(l, 'c', 'd'))).toEqual([]);
+    expect(catalFarki(l, adimSurukle(l, 'b', 'a'))).toEqual(['Dal A: OP 10 ardından başlar, OP 60 adımında birleşir.']);
+    expect(catalFarki(l, adimSurukle(l, 'f', 'e'))).toEqual([]);
+  });
+  it('A: rotada kullanılmayan ilk harf; yeni adım verilen kolu açar, ardına eklenen dal adımının dalını ve çarpanını alır', () => {
+    expect(serbestDal(rota())).toBe('B');
+    expect(serbestDal(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((d, i) => adim(d, (i + 1) * 10, { dal: d })))).toBeNull();
+    const acilan = sirali(kolaEkle(rota(), 'e', adim('y', 0), 'B'));
+    expect(acilan.find((x) => x.id === 'y')).toMatchObject({ dal: 'B' });
+    expect(dalBilgileri(acilan).find((x) => x.dal === 'B')?.catal?.id).toBe('e');
+    expect(sirali(kolaEkle(rota(), 'c', adim('z', 0))).find((x) => x.id === 'z')).toMatchObject({ dal: 'A', adetCarpani: 2 });
+    expect(sirali(kolaEkle(rota(), 'b', adim('z', 0))).find((x) => x.id === 'z')?.dal ?? null).toBeNull();
+  });
+  it('B ve D: açık kolların hepsi birleşir; çarpan dalın bütün adımlarına yazılır, başka dala dokunmaz', () => {
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('d', 40)];
+    expect(kollariBirlestir(l, 'd').find((x) => x.id === 'd')?.birlesen).toEqual(['A', 'B']);
+    expect(dalHatasi(kollariBirlestir(l, 'd'))).toBeNull();
+    const c = dalCarpaniYaz(l, 'A', 3);
+    expect(c.map((x) => x.adetCarpani ?? null)).toEqual([null, 3, null, null]);
+  });
+  it('F: dal kuralı düzenlerken hatalı adımla gelir; açık kalan dal rotaya yazılır (adım yok)', () => {
+    expect(dalHatasi(rota())).toBeNull();
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30)];
+    expect(dalHatasi(l)).toEqual({ adimId: null, ileti: 'A dalı hiçbir adımda birleşmiyor; birleştirme adımında seçilmeli.' });
+    expect(dalHatasi([adim('a', 10), adim('b', 20, { birlesen: ['A'] })])?.adimId).toBe('b');
   });
 });
