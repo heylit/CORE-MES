@@ -4,7 +4,7 @@ import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz } from '#cekirdek/h
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { GerceklesenKabulCevabi, GerceklesenTuru, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { adimliEmirAyrintisi, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
+import { adimliEmirAyrintisi, emirDugumleri, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
 import type { EmirBittiOlayi } from '../../uretim-emirleri/disari.ts';
 import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, bekleyenOlcum, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, teorikAyrim, terminalOlcumleri } from '../kurallar.ts';
 import type { EtkinAdimSuresi } from '../kurallar.ts';
@@ -159,22 +159,34 @@ export async function gerceklesenKabulEt(
 // plan kullanmaz, planlamacı kabul eder (169 c). Ölçüm makinedeyse o makineye özgüdür. Rotada olmayan adım (ek adım), fason adım,
 // ölçülmemiş süre ve önceden ölçülmüş iş emri atlanır. Olay komutla aynı işlemdedir: burada ret emri bitirmeyi geri alır, bu yüzden
 // eksik veri reddedilmez, atlanır.
+// B-2485-3: çok katmanlı emirde (1476) alt düğüm adımı emirde yeni numara taşır; ölçüm düğümün malzemesinin rotasına, rotadaki op
+// numarasıyla (kaynakOpNo) yazılır. Tek katmanlı emirde düğüm haritası boştur: emrin ürünü ve adımın kendi numarası.
 export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
   const emir = await uretimEmriOzeti(db, olay.uretimEmriId);
   if (emir === null || emir.malzemeNo === null) return;
-  const malzemeId = emir.malzemeNo;
+  const kok = emir.malzemeNo;
   const ayrinti = await adimliEmirAyrintisi(db, emir.id);
-  const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
-  const adaylar = ayrinti.isEmirleri.filter((i) => i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.has(i.opNo));
+  const dugumler = await emirDugumleri(db, emir.id);
+  const hedef = (opNo: number) => {
+    const d = dugumler.get(opNo);
+    return d === undefined ? { malzemeId: kok, opNo } : { malzemeId: d.malzemeNo, opNo: d.kaynakOpNo };
+  };
+  const opNolari = new Map<number, Set<number>>();
+  for (const m of new Set(ayrinti.isEmirleri.map((i) => hedef(i.opNo).malzemeId))) opNolari.set(m, new Set(await s.kullanilmisOpNolari(db, m)));
+  const adaylar = ayrinti.isEmirleri.filter((i) => {
+    const h = hedef(i.opNo);
+    return i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.get(h.malzemeId)?.has(h.opNo) === true;
+  });
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
   for (const i of adaylar) {
     if (olculmus.has(i.id)) continue;
+    const { malzemeId, opNo } = hedef(i.opNo);
     const makineId = i.kaynak?.tur === 'makine' ? i.kaynak.id : null;
     const olcum = terminalOlcumleri(await isEmriSureOzeti(db, i.id));
     for (const tur of ['hazirlik', 'islem'] as const) {
       const sureDk = olcum[tur];
       if (sureDk === null) continue;
-      await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId: olay.kisiId, kaynak: 'terminal', isEmriId: i.id });
+      await s.gerceklesenEkle(db, { malzemeId, opNo, tur, makineId, sureDk, kisiId: olay.kisiId, kaynak: 'terminal', isEmriId: i.id });
     }
   }
 }
