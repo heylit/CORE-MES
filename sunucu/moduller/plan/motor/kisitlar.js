@@ -12,7 +12,7 @@ const KISITLAR=[
  {id:'ayar',ad:'Sıraya bağlı ayar (aile matrisi, aynı aile kısalması)',veri:'ayarMatrisi, rota[].aile, tezgahlar[].ayar, w.famK',motor:'tam',sinir:'gevsek',cerceve:'gevsek',cpsat:'yaklasik',
   not:'Alt sınır ve çerçeve en kısa ayarı alır. CP-SAT geçişi tezgâh sırasıyla hesaplar; geçişin uzattığı süreyi takvimsiz ekler.'},
  {id:'fai',ad:'İlk parça onayı',veri:'rota[].fai, ayarlar.faiSaat',motor:'tam',sinir:'tam',cerceve:'tam',cpsat:'tam',not:''},
- {id:'ayarci',ad:'Ayarcı sayısı',veri:'personel[].ayar, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',not:'CP-SAT ayarcıyı en kısa ayar süresince sayar.'},
+ {id:'ayarci',ad:'Ayarcı sayısı',veri:'personel[].ayar, rota[].ayarDk (yalnız ayar süresi), devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',not:'CP-SAT ayarcıyı en kısa ayar süresince sayar.'},
  {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar/makineler/enCok, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
   not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz. Kişiye makine ataması (makineler, enCok) yalnız sezgisel motordadır; CP-SAT grup düzeyinde kalır.'},
  {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'tam',not:''},

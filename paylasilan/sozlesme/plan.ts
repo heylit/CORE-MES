@@ -450,10 +450,13 @@ export const EKSIK_STOK_DAVRANISLARI = ['dur', 'varsay'] as const;
 export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
 // 1714 (1684 b): gerçek sürelerden öğrenme motorun tamponuna girer mi; varsayılan kapalı (gölge dönemde yalnız plan sağlığında görünür).
 export const MOTOR_OGRENME = ['kapali', 'acik'] as const;
+// 2509-1 c: acil iş payı (işleme süresine eklenen pay, oran 0-0,3) yalnız buradadır; planlama çalışmasındaki alan bunun kopyasıdır.
+export const ACIL_PAY_SINIRI = 0.3;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
+  acilPay: z.number().min(0).max(ACIL_PAY_SINIRI),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05 };
 // Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
 // arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.
 export const motorAyariGovdesi = motorAyarlari.partial().extend({ surumId: KIMLIK.nullable() });
