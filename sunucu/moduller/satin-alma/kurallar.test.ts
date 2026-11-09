@@ -9,7 +9,7 @@ import {
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikBol, sonAlisKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
-import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
+import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
@@ -422,7 +422,7 @@ test('898 a: fason ön talep bağlı, yoksayılmış ve gönderilmiş adımı al
 });
 
 test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açık, bağsız, tekil ve seçilen emrin olmalı', () => {
-  const k = (uygulananMalzemeNo: number | null, isEmriId: number | null) => ({ malzemeNo: null, ad: 'Isıl işlem', birim: 'adet', miktar: '1', aciklama: '', uygulananMalzemeNo, isEmriId });
+  const k = (uygulananMalzemeNo: number | null, isEmriId: number | null) => ({ malzemeNo: null, ad: 'Isıl işlem', birim: 'adet', miktar: '1', aciklama: '', uygulananMalzemeNo, isEmriId, partiId: null, konumId: null });
   const emir = (i: number) => (i === 7 ? 100 : undefined);
   assert.equal(hizliBagReddi('malzeme', [k(3, null)], null, emir), ILETILER.bagYalnizHizmette);
   assert.equal(hizliBagReddi('malzeme', [k(null, 7)], null, emir), ILETILER.bagYalnizHizmette);
@@ -435,6 +435,28 @@ test('898 a: uygulanan parça ve fason adım yalnız hizmette; fason adım açı
   assert.equal(uygulananKartReddi(undefined), ILETILER.uygulananKartYok);
   assert.equal(uygulananKartReddi({ tur: 'hizmet' }), ILETILER.uygulananHizmet);
   assert.equal(uygulananKartReddi({ tur: 'mamul' }), null);
+});
+
+test('SA-FAS-1 (2428): fason kalemi tek kaynak taşır; partide işlem, parça ve tam sayı adet; parti yalnız fasonda; fasonda bağ serbest', () => {
+  const k = (ek: Partial<Parameters<typeof fasonKalemReddi>[1][number]> = {}) => ({
+    malzemeNo: 9, ad: '', birim: '', miktar: '4', aciklama: '', uygulananMalzemeNo: 3, isEmriId: null, partiId: 50, konumId: null, ...ek,
+  });
+  assert.equal(fasonKalemReddi('fason', [k()]), null);
+  assert.equal(fasonKalemReddi('fason', [k({ partiId: null, isEmriId: 7, malzemeNo: null, uygulananMalzemeNo: null, miktar: '2.5' })]), null);
+  assert.deepEqual(fasonKalemReddi('fason', [k(), k({ partiId: null })]), { ileti: ILETILER.fasonKaynakTek, sira: 1 });
+  assert.deepEqual(fasonKalemReddi('fason', [k({ isEmriId: 7 })]), { ileti: ILETILER.fasonKaynakTek, sira: 0 });
+  assert.deepEqual(fasonKalemReddi('fason', [k({ partiId: null, isEmriId: 7, konumId: 1 })]), { ileti: ILETILER.partiYalnizFasonda, sira: 0 });
+  assert.deepEqual(fasonKalemReddi('fason', [k({ malzemeNo: null })]), { ileti: ILETILER.fasonIslemYok, sira: 0 });
+  assert.deepEqual(fasonKalemReddi('fason', [k({ uygulananMalzemeNo: null })]), { ileti: ILETILER.fasonParcaYok, sira: 0 });
+  for (const miktar of ['2.5', '0', '3000000000']) assert.deepEqual(fasonKalemReddi('fason', [k({ miktar })]), { ileti: ILETILER.fasonAdetTam, sira: 0 }, miktar);
+  assert.equal(fasonKalemReddi('fason', [k({ miktar: '6.0000' })]), null);
+  for (const tur of ['malzeme', 'hizmet'] as const) {
+    assert.deepEqual(fasonKalemReddi(tur, [k()]), { ileti: ILETILER.partiYalnizFasonda, sira: 0 });
+    assert.equal(fasonKalemReddi(tur, [k({ partiId: null })]), null);
+  }
+  const emir = (i: number) => (i === 7 ? 100 : undefined);
+  assert.equal(hizliBagReddi('fason', [k({ partiId: null, isEmriId: 7 })], null, emir), null);
+  assert.equal(hizliBagReddi('fason', [k()], null, emir), null);
 });
 
 test('1096 a: kur kilidi onaya girerken kurulur; onaydan siparişe ve iptale geçiş korur; onay dışı durum kaldırır; kilitsiz eski karar siparişte sabitlenir', () => {

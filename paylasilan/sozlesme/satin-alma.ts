@@ -5,6 +5,7 @@ import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { SIPARIS_ODEME_YONTEMLERI } from './finans.ts';
 import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
+import { DIS_ISLEM_EMRI_DURUMLARI, disIslemEmriSemasi } from './uretim-emirleri.ts';
 
 // Satın alma (sürüm 6): Satın Alma Merkezi'nin veri modelinin Türkçe karşılığı. Talep bütün olarak, sürümle kaydedilir;
 // alt kayıt kimlikleri istemcide üretilen uuid'dir. Tutarlar ondalık metindir (float yok).
@@ -472,8 +473,9 @@ export const siparisBelgeleriCevabi = z.object({ belgeler: z.array(siparisBelges
 export type SiparisBelgesi = z.output<typeof siparisBelgesiSemasi>;
 export type SiparisBelgesiYazimi = z.output<typeof siparisBelgesiGovdesi>;
 export type SiparisBelgeleriCevabi = z.output<typeof siparisBelgeleriCevabi>;
-// Talep türü (#1192): malzeme talebi fiziksel kartları, hizmet talebi yalnız alınan hizmet kartlarını seçer.
-export const TALEP_TURLERI = ['malzeme', 'hizmet'] as const;
+// Talep türü (#1192): malzeme talebi fiziksel kartları, hizmet talebi yalnız alınan hizmet kartlarını seçer. Fason talebi (2428) de
+// alınan hizmet kartını (işlem) seçer; her kalemi emrin fason adımına ya da stoktaki partiye bağlanır ve dış işlem emri açar.
+export const TALEP_TURLERI = ['malzeme', 'hizmet', 'fason'] as const;
 export type TalepTuru = (typeof TALEP_TURLERI)[number];
 // Boş arama açılır listenin ilk sayfasıdır.
 export const malzemeSecenekleriSorgusu = z.object({ ara: z.string().trim().max(80).prefault(''), tur: z.enum(TALEP_TURLERI).prefault('malzeme') });
@@ -494,6 +496,9 @@ export const hizliKalemSemasi = z.object({
   // 898 a: hizmet kalemi hangi parça ya da malzeme üzerinde yapılacak; fason ön talepten gelen kalem iş emrini taşır. İkisi yalnız hizmette.
   uygulananMalzemeNo: z.number().int().positive().max(2147483647).nullable().prefault(null),
   isEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  // 2428: fason kalemi emrin adımına (isEmriId) ya da stoktaki partiye bağlanır; parti uygulanan parçanın partisidir, konum isteğe bağlı.
+  partiId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  konumId: z.number().int().positive().max(2147483647).nullable().prefault(null),
 });
 export const hizliAcGovdesi = z.object({
   id: uuid,
@@ -604,6 +609,8 @@ export type AcilisCevabi = z.output<typeof acilisCevabi>;
 export type FirmaSecenekleriCevabi = z.output<typeof firmaSecenekleriCevabi>;
 export type MalzemeSecenekleriCevabi = z.output<typeof malzemeSecenekleriCevabi>;
 export type HizliAcYazimi = z.output<typeof hizliAcGovdesi>;
+// İstemcinin gönderdiği gövde: varsayılanı olan alan (ör. 2428 parti ve konum) yazılmayabilir.
+export type HizliAcGovdesi = z.input<typeof hizliAcGovdesi>;
 export type HizliKalem = z.output<typeof hizliKalemSemasi>;
 export type Talebim = z.output<typeof talebimSemasi>;
 export type TaleplerimCevabi = z.output<typeof taleplerimCevabi>;
@@ -768,9 +775,32 @@ export const disOperasyonSemasi = z.object({
   fasonKonumId: z.number().int().nullable(),
   // 1849: önceki iş emirleri bitti mi (fasona gönderilebilir mi); gidiş kaydıyla aynı kural.
   sirada: z.boolean(),
+  // 2428: satırın dış işlem emri; canlıya geçiş göçünden önce açılmış ve göçe girmemiş iş için boş olabilir.
+  dieId: z.number().int().nullable(),
+  dieNo: z.string().nullable(),
+  durum: z.enum(DIS_ISLEM_EMRI_DURUMLARI).nullable(),
+});
+// 2428: stoktaki partinin dış işlem emri (emirsiz fason): belge olduğu gibi, firma adı, sipariş satırı (kalem üzerinden) ve termin gecikmesi.
+// Gidiş, dönüş ve tamamlama stoktan girer.
+export const partiOperasyonuSemasi = disIslemEmriSemasi.extend({
+  firmaAdi: z.string().nullable(),
+  siparisSatirId: z.number().int().nullable(),
+  gecikmeGun: z.number().int().nullable(),
 });
 // hazir: üretim emirlerinin fason listesi bağlı mı (bağlanana kadar liste boş, ekran bunu söyler).
-export const disOperasyonlarCevabi = z.object({ hazir: z.boolean(), operasyonlar: z.array(disOperasyonSemasi) });
+export const disOperasyonlarCevabi = z.object({
+  hazir: z.boolean(), operasyonlar: z.array(disOperasyonSemasi), partiOperasyonlari: z.array(partiOperasyonuSemasi),
+});
+// 2428: dış işlem emri ayrıntısı ve satın alma bağı (bağlı talep kalemleri ve sipariş satırları).
+export const disOperasyonParametresi = z.object({ dieId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const disOperasyonAyrintisiCevabi = z.object({
+  disIslemEmri: disIslemEmriSemasi,
+  firmaAdi: z.string().nullable(),
+  talepKalemleri: z.array(z.object({ talepId: uuid, talepNo: z.string(), kalemId: uuid, ad: z.string(), miktar: z.string().nullable(), birim: z.string(), durum: z.enum(TALEP_DURUMLARI) })),
+  siparisSatirlari: z.array(z.object({ id: z.number().int(), talepId: uuid, siparisNo: z.string().nullable(), miktar: z.string(), birim: z.string(), tedarikciAdi: z.string().nullable() })),
+});
+export type PartiOperasyonu = z.output<typeof partiOperasyonuSemasi>;
+export type DisOperasyonAyrintisiCevabi = z.output<typeof disOperasyonAyrintisiCevabi>;
 export type DisOperasyon = z.output<typeof disOperasyonSemasi>;
 export type DisOperasyonlarCevabi = z.output<typeof disOperasyonlarCevabi>;
 

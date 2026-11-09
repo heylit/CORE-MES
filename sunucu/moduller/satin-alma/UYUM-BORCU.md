@@ -182,3 +182,9 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
 ## Kart 2432 (hatırlatmalar)
 50. [2452 ile kapanacak] Bekleme hatırlatmaları (taslak, cevapsız teklif, değerlendirme, onay) iş gününü geçici olarak tesisin hafta içi günlerinden (Pazartesi-Cuma, İK resmî tatilleri hariç) sayar; 2432 V1 alıcının kendi çalışma günlerini ister. 2452 birleşince `vardiya/disari.ts kisilerinIsGunleri` ile alıcı başına sayılır ve gönderim `bildirimGonder({ yalnizKisiler: true, kisiler })` (2453) ile alıcı başına yapılır; bayrağın taşındığı testle denetlenir (Güvenlik 2453 notu).
 51. VARSAYIM: hatırlatma ayarı boşaltılınca açık hatırlatmalar kapanır; ayar yeniden açılınca aynı dönemin kapanmış hatırlatması yeniden açılmaz (tek kayıt tek hatırlatma). Geri alma ucuz.
+## Kart 2428 p2 (fason talebi ve dış işlem emri)
+    - VARSAYIM: parti belgesinin termini talebin ihtiyaç tarihidir; firma boş açılır (teklif ve siparişle seçilir), planlanan gidiş boş. Geri alma ucuz.
+    - VARSAYIM: partinin ve konumun stokta varlığı burada denetlenmez (satın alma kat 8, stok kat 10); gidişte stok denetler (p3). Geri alma ucuz.
+    - Talep iptal edilince ya da fason kalemi talepten çıkarılınca parti belgesi açık kalır; iptali stoktan (p3) ya da ekrandan (p4) gelir. Bağlamada kapanacak.
+    - Sipariş satırına DIE sütunu yok: satırın belgesi `kalem_id` üzerinden kalemden okunur; emre bağlı satırın maliyet yolu (`siparis_satiri.is_emri_id`) aynen.
+    - Dış operasyonlar ekranı (istemci) yeni alanları (dieNo, durum, partiOperasyonlari) p4'te gösterir; Taleplerim'de "Fason" türü düğmesi p4'te.
