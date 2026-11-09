@@ -336,6 +336,17 @@ export function kalemHarcamalari(
 // 2462 a (V2), 2472-1 a: kalanı kapatılmış siparişte kullanım gerçekleşen teslim değeridir: malın payı teslim alınan / sipariş miktarı
 // oranıyla iner (fazla teslim de sayılır), masraf payı tam kalır; siparişe hiç teslim gelmediyse masraf da sıfırdır (Maliyet M1).
 // Açık siparişte sipariş tutarıdır. İptal edilen talep buraya gelmez (V3).
+// 2462 a, 2472-1 a, 2472-2 a: kalanı kapatılmış siparişte bir satırın (ya da kalemin) gerçekleşen değeri; bütçe kullanımı ve ödeme planı
+// (2472) aynı tanımı kullanır. Malın payı teslim oranıyla iner (fazla teslim de sayılır), masraf payı tam kalır; siparişe hiç teslim
+// gelmediyse sıfırdır.
+export function gerceklesenPay(mal: number, masraf: number, teslimOrani: number, siparisteTeslimVar: boolean): number {
+  return siparisteTeslimVar ? mal * teslimOrani + masraf : 0;
+}
+// Siparişin bütün satırları için: satır başına mal payı ve teslim oranı, siparişin masrafı tek seferde.
+export function gerceklesenSiparisDegeri(satirlar: readonly { mal: number; miktar: number; teslim: number }[], masraf: number): number {
+  const teslimVar = satirlar.some((s) => s.teslim > 0);
+  return satirlar.reduce((t, s) => t + gerceklesenPay(s.mal, 0, s.miktar > 0 ? s.teslim / s.miktar : 0, teslimVar), 0) + gerceklesenPay(0, masraf, 0, teslimVar);
+}
 export interface ButceSatiri { birim: string | null; yil: number; tl: number | null }
 export function butceSatirlari(g: {
   harcamalar: readonly KalemHarcamasi[];
@@ -353,7 +364,7 @@ export function butceSatirlari(g: {
       const miktar = r === undefined ? 0 : Number(r.miktar);
       const teslimVar = p.satirlar.some((s) => Number(s.teslimAlinan ?? '0') > 0);
       const masraf = x.masraf ?? 0;
-      if (r !== undefined && miktar > 0) tl = teslimVar ? kurusa((tl - masraf) * (Number(r.teslimAlinan ?? '0') / miktar) + masraf) : 0;
+      if (r !== undefined && miktar > 0) tl = kurusa(gerceklesenPay(tl - masraf, masraf, Number(r.teslimAlinan ?? '0') / miktar, teslimVar));
     }
     return { birim: g.kalemBirimi(x.kalemId), yil: Number(tarih.slice(0, 4)), tl };
   });
