@@ -137,11 +137,13 @@ export async function degerlendirmeBaslat(
     if (k.surum !== g.surum) throw eskiSurum();
   } catch (e) { isler.delete(is); throw e; }
   const surum = k.surum;
+  const karGizli = genelGiderGizliMi(k.girdi.calisma);
   yap({ ...k.girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
     if (r === null) throw cakisma(CALISMA_YOK);
     if ('hata' in r) throw HATALAR[r.hata]();
     const sonuc = r.sonuc as DegerlendirmeSonucu;
-    const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: maliyetGorunur ? sonuc : maliyetsiz(sonuc) };
+    const gorunen = !maliyetGorunur ? maliyetsiz(sonuc) : karGizli ? karsiz(sonuc) : sonuc;
+    const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: gorunen };
     isler.set(is, { kisi, durum: 'bitti', cevap, bitis: Date.now() });
   }).catch((e: unknown) => {
     // Beklenmeyen hata (iş parçacığı çöktü) iç ayrıntı taşımaz.
@@ -163,6 +165,32 @@ export function degerlendirmeDurumu(kisi: number, is: string, simdi: number = Da
 
 // Testler için: bellekteki işleri boşaltır.
 export function degerlendirmeIsleriSifirla(): void { isler.clear(); }
+
+// 2677 b: genel gider oranının gizli olduğu ayda (2668 a) plan genel gideri 0 alır; kâr bu yüzden olduğundan yüksek çıkar ve maliyeti
+// görene de gitmez. Tutar, ek mesai ve gecikme bedelleri genel giderden bağımsızdır, kalır.
+export function genelGiderGizliMi(calisma: unknown): boolean {
+  const planTL = (calisma as { D?: { planTL?: unknown } } | null)?.D?.planTL;
+  return planTL !== null && typeof planTL === 'object' && (planTL as { genelGiderGizli?: unknown }).genelGiderGizli === true;
+}
+export function karsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
+  switch (s.tur) {
+    case 'plan-secenekleri':
+      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, netKar: null })) };
+    case 'termin-secenekleri':
+      return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, netKar: null, digerKarFarki: null, toplamKar: null })) };
+    case 'termin-uzatma':
+      return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, netKarFarki: null })) };
+    case 'malzeme-one-cekme':
+    case 'parti-bolme':
+    case 'malzeme-terminleri':
+    case 'plan-kur':
+    case 'plan-uygula':
+    case 'plan-iyilestir':
+    case 'one-al':
+    case 'sira-degistir':
+      return s;
+  }
+}
 
 // 180 a, 200 a: tutar, maliyet, kâr ve TL farkı yalnız maliyeti görene. Saat, adet ve plan kaydı kalır (plan kaydı çalışmaya geri yazılır,
 // biçimi bozulmaz). Sipariş maliyeti ve kârı bu durumda hiç hesaplanmaz.
