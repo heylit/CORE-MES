@@ -4,6 +4,7 @@ import {
   OZET_DONEM_ADI, OZET_IS_DURUMU, fazlaMesaiDolulugu, ozetAdet, ozetGrafikUstu, ozetGunEtiketi, ozetSaat, ozetSayi, ozetSure, ozetTarih, ozetYuzde,
   type OperatorOzeti, type OzetDonemi, type OzetGunu,
 } from '../../../../../../arkon/web/src/data/ozetim.ts';
+import { EKSIK_IS_ETIKETI, eksikDegerMetni, eksikKonuMetni, type EksikIslerim } from '../../../../../../arkon/web/src/data/anomali.ts';
 import { basHarfler } from '../cekirdek/bicim.ts';
 import type { User } from '../cekirdek/tipler.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
@@ -63,6 +64,15 @@ export function Ozetim() {
   const [kisiId, kisiIdYaz] = useState<number | null>(null);
   const [o, oYaz] = useState<OperatorOzeti | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
+  // Girilmemiş işlerim (kart 2421 c): yalnız kendi tezgahlarının ve işlerinin açık eksikleri; alınamazsa kart gizlenir, özet sürer.
+  const [eksik, eksikYaz] = useState<EksikIslerim | null>(null);
+  useEffect(() => {
+    let canli = true;
+    const sor = () => depo.Server.eksikIslerim().then((d) => { if (canli) eksikYaz(d); }).catch(() => { if (canli) eksikYaz(null); });
+    void sor();
+    const t = setInterval(() => { void sor(); }, OZET_YENILEME_MS);
+    return () => { canli = false; clearInterval(t); };
+  }, [depo]);
   useEffect(() => {
     let canli = true;
     const sor = () => depo.Server.operatorOzeti(donem, kisiId)
@@ -105,6 +115,22 @@ export function Ozetim() {
             <span className="tc-ay1-gosterge-alt">{o.emekVerimi.mesaiSn == null ? 'Vardiya takvimin yok' : `Standart ${ozetSure(o.emekVerimi.standartSn)} / mesai ${ozetSure(o.emekVerimi.mesaiSn)}`}</span>
           </div>
         </div>
+        {kendi && eksik ? (
+          <div className="tc-ay1-oz-kart tc-ay1-oz-genis" aria-label="Girilmemiş işlerim">
+            <span className="tc-ay1-ust-yazi">Girilmemiş işlerim</span>
+            {eksik.olaylar.length ? (
+              <ul className="tc-ay1-oz-isler">
+                {eksik.olaylar.map((e) => (
+                  <li key={e.id}>
+                    <div><b>{eksikKonuMetni(e)}</b><span className="tc-ay1-cip" data-durum={e.tur === 'yarim-is' ? 'durakli' : 'durdu'}><i aria-hidden="true" />{EKSIK_IS_ETIKETI[e.tur]}</span>
+                      <small>{[e.istasyon?.ad, e.kaynak?.ad].filter(Boolean).join(' · ')}</small></div>
+                    <div className="tc-ay1-oz-n">{eksikDegerMetni(e)}<small>{e.kalanAdet != null ? `${ozetAdet(e.kalanAdet)} adet kaldı` : 'kayıt yok'}</small></div>
+                  </li>
+                ))}
+              </ul>
+            ) : <small className="tc-ay1-soluk">Tezgahlarında girilmemiş ya da geride kalan iş yok.</small>}
+          </div>
+        ) : null}
         <div className="tc-ay1-oz-kart tc-ay1-oz-genis">
           <span className="tc-ay1-ust-yazi">Son 7 gün · sağlam ve hurda</span>
           <Grafik gunler={o.gunler} bugun={o.bitis} />
