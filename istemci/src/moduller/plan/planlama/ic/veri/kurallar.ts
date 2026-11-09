@@ -160,7 +160,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'fasonTalas', ad: 'Talaşlı işi fasona verme', durum: 'karar', not: '"Gerekirse fasona verilebilir" işaretli adımlar için.', p: [{ tur: 'fason', yer: 'ayarlar', k: 'fasonTalas', etiket: 'Talaşlı fasoncu' }] },
     { id: 'bekleme', ad: 'En az ve en çok bekleme (soğuma, kuruma)', durum: 'yok' },
     { id: 'nowait', ad: 'Ara beklemesiz akış', durum: 'yok' },
-    { id: 'bolme', ad: 'Parti bölme', durum: 'tam', not: 'Rotada Paralel böl seçili adım aday makineler arasında en çok üç paya bölünür; kilitli, başlamış ve sabit iş bölünmez. Elle bölmenin dondurma istisnası yok.' },
+    { id: 'bolme', ad: 'Parti bölme', durum: 'tam', not: 'Rotada Paralel böl seçili adım aday makineler arasında Motor ayarları\'ndaki en çok pay sayısına (varsayılan 3) bölünür; bölme orada kapatılabilir. Kilitli, başlamış ve sabit iş bölünmez. Elle bölmenin dondurma istisnası yok.' },
     { id: 'wip', ad: 'Alan ve WIP sınırı', durum: 'yok' },
   ] },
   { grup: 'Ayar ve sıralama', simge: 'wrench', l: [
