@@ -43,7 +43,11 @@ const yerlesim = z.object({
 // Taban planda sabit kip yalnız tezgâh ve başlangıç sırasını okur (engine.betik schedule): planlamacının öne aldığı işin bitişi eski kalabilir.
 const tabanPlani = z.object({ ops: z.record(z.string(), yerlesim), fail: z.array(z.unknown()).optional() });
 export const motorYerlesimi = yerlesim.refine((r) => r.C >= r.S - 1e-9, { message: 'bitiş başlangıçtan önce' });
-export const motorPlani = z.object({ ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional() });
+// B-2482-32: motorun yerleştiremediği işin nedeni (engine.js failNeden: aday, oncul, zaman); sunucu çözücüsü iletisini bundan yazar.
+const motorNedeni = z.object({ kod: z.enum(['aday', 'oncul', 'zaman']), oncul: z.string().optional() });
+export const motorPlani = z.object({
+  ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional(), failNeden: z.record(z.string(), motorNedeni).optional(),
+});
 
 export type MotorYerlesimi = z.output<typeof motorYerlesimi>;
 export type MotorPlani = z.output<typeof motorPlani>;

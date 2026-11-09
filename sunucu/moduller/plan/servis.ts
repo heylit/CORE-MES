@@ -2078,6 +2078,15 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
   const vardiyasiOlan = new Set((await kisiVardiyalari(db)).map((k) => k.kisiId));
   const ekAdaylari = await ekAdimAdaylari(db, b, isler.filter((i) => !yerli.has(i.id) && !i.parcalar?.length && i.elleSira == null).map((i) => i.id));
   const ekAdayli = new Map<number, number[]>();
+  // B-2482-33: 2685 öncesi kayıtta insanlı istasyonun makinesi adımda seçili kalabilir; motor o makineye istasyonun vardiyalı yetkin
+  // kişisini ister. Kişi yoksa iş motora gitmez, istasyon adımının iletisiyle yerleşmez.
+  const insanli = new Set([...await kapasiteKaynaklari(db, [...b.istasyonMakineleri.keys()])].filter(([, k]) => k === 'insan').map(([id]) => id));
+  const insanliMakineNedeni = (makineId: number): string | null => {
+    const ist = b.kaynaklar.get(kaynakAnahtari({ tur: 'makine', id: makineId }))?.istasyon?.id;
+    if (ist === undefined || !insanli.has(ist)) return null;
+    const yetkin = (b.istasyonMakineleri.get(ist) ?? []).filter((k) => k.tur === 'kisi').map((k) => k.id);
+    return yetkin.some((id) => vardiyasiOlan.has(id)) ? null : yetkin.length > 0 ? ISTASYON_VARDIYASIZ : ADAYSIZ_IS;
+  };
   for (const i of isler) {
     const y = yerli.get(i.id);
     const makinesi = (k: Kaynak | null | undefined) => (k?.tur === 'makine' && (i.adaylar.length === 0 || i.adaylar.some((a) => ayniKaynak(a, k))) ? k.id : null);
@@ -2109,6 +2118,8 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
       if (adaylar.length > 0) kisiAdaylari.set(i.id, [...new Set([kisiId, ...adaylar])]);
       continue;
     }
+    const insanliNeden = insanliMakineNedeni(makineId!);
+    if (insanliNeden !== null) { yerlesmeyen.push({ isEmriId: i.id, neden: insanliNeden }); continue; }
     kuyruk.set(makineId!, [...(kuyruk.get(makineId!) ?? []), { isId: i.id, onizleme: null }]);
   }
   if (planMotoru === null && (kuyruk.size > 0 || kisiKuyrugu.size > 0)) throw cakisma('Plan motoru kayıtlı değil; plan önerilemez.');
