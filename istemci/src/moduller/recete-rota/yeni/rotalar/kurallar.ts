@@ -308,6 +308,25 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
 export const islemSuresiBos = (s: Adim): boolean => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0);
 export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null => sirali(adimlar).find(islemSuresiBos) ?? null;
 
+// 2558 b/7: üstteki "Sorunlar" çipinin listesi: rota eksikleri (giren, dal, ayar), işlem süresi boş ve istasyonu olmayan iç üretim adımı.
+// Her satır adıma gider; adım sırasıyla.
+export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string) => boolean, opAdi: (opId: string) => string | null): RotaEksigi[] {
+  const ss = sirali(adimlar);
+  const eksik = new Map<string, string[]>();
+  for (const e of rotaEksikleri(ss, malzemeVar, opAdi)) eksik.set(e.adimId, [e.metin]);
+  return ss.flatMap((a) => {
+    const ad = opAdi(a.opId);
+    const bas = `OP ${String(statuNo(a))}${ad ? ` ${ad}` : ''}`;
+    const ek = [
+      ...(islemSuresiBos(a) ? ['işlem süresi yok'] : []),
+      ...(!fasonMu(a) && !a.stationId ? ['istasyon yok'] : []),
+    ];
+    const m = eksik.get(a.id) ?? [];
+    if (ek.length === 0) return m.map((metin) => ({ adimId: a.id, metin }));
+    return [{ adimId: a.id, metin: m.length > 0 ? `${m.join('')}, ${ek.join(', ')}` : `${bas}: ${ek.join(', ')}` }];
+  });
+}
+
 // Fire payı olan adımdan önceki her adım ve girenleri fazladan işlenir.
 export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
   const f = new Array<number>(adimlar.length).fill(1);
@@ -332,15 +351,18 @@ export function malzemeMaliyeti(
   if (m.type === 'ham' || ss.length === 0) return birimMaliyet(id);
   const fs = adimCarpanlari(ss);
   let c = 0;
+  let girdi = false;
   for (let j = 0; j < ss.length; j++) {
     for (const x of ss[j]?.ins ?? []) {
       if (!malzeme(x.itemId)) continue;
       const alt = malzemeMaliyeti(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
       if (alt === null) return null;
+      girdi = true;
       c += (x.qty || 0) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt;
     }
   }
-  return c;
+  // Rotada hiç giren yoksa maliyet sıfır değil, bilinmez (rota eksik): sıfır uydurulmaz.
+  return girdi ? c : null;
 }
 
 // Adımın süresi (prototipte opDays): hazırlık + çevrim * miktar / verim; gün, iş merkezinin ortalama günlük saatiyle.

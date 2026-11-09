@@ -140,7 +140,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
           : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : islemSuresiBos(a) ? 'Süre yok' : 'Süre hesaplanmadı: istasyon yok'}
         {a.rejectPct > 0 && `, ret %${sayi(a.rejectPct)}`}
       </span>
-      <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : ' (statülü)'}</span>
+      <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : <span className="tc-rr1-kb tc-rr1-kb-st">Statülü</span>}</span>
       {a.alts.length > 0 && (
         <span className="tc-rr1-oalt">Alternatif: {[a.stationId, ...a.alts].map((x) => (x ? h.istasyon.get(x)?.code : undefined)).filter(Boolean).join(' / ')}</span>
       )}
@@ -226,7 +226,8 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
       rozet={<span className="tc-rr1-kb tc-rr1-kb-ana">{ust ? 'Çıktı, üst akışa' : 'Ana çıktı'}</span>}
       sec={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }} />
   );
-  const adimHucreleri = (sn: Dugum['adimlar'][number], i: number) => {
+  // kolda: adım kol sütunundadır; dal etiketi sütun başlığında yazılı olduğu için adımda tekrar edilmez (2558 b/3).
+  const adimHucreleri = (sn: Dugum['adimlar'][number], i: number, kolda = false) => {
     const a = sn.a;
     const anahtar = uc(d.nid, a.id);
     const sonraki = d.adimlar[i + 1]?.a;
@@ -238,7 +239,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
     const oncul = onculler[liste.indexOf(a)] ?? null;
     return [
       <div key={`i${a.id}`} className="tc-rr1-cin">
-        {onceki.map((p) => {
+        {r.araKartlar && onceki.map((p) => {
           const k = akisKarti(d.id, liste, liste.indexOf(p), r.duzen.malzemeVar);
           const km = h.malzeme.get(k.itemId);
           return km ? (
@@ -272,7 +273,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
         )}
       </div>,
       <div key={`o${a.id}`} className={`tc-rr1-cop${oncul ? ` tc-rr1-dalserit tc-rr1-dalserit-${String(Math.min(serit(a), 7))}` : ''}`}>
-        {oncul && (
+        {oncul && !kolda && (
           <span className="tc-rr1-daletiket">
             <Simge ad={adimBirlesen(a).length > 0 ? 'layers' : 'route'} boyut="k" />
             {adimDali(a) === null ? 'Ana hat' : `Dal ${adimDali(a) ?? ''}`}
@@ -312,7 +313,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
         )}
       </div>,
       <div key={`c${a.id}`} className="tc-rr1-cout">
-        {son ? anaCip(ust ?? undefined, anahtar) : (() => {
+        {son ? anaCip(ust ?? undefined, anahtar) : r.araKartlar && (() => {
           const km = kart ? h.malzeme.get(kart.itemId) : undefined;
           return km && kart ? (
             <Cip m={km} tur="sonraki" arahal birim={kartBirimi(km, kart.adim)} baslik={kartBasligi(km, kart.adim, r.duzen.opAdi)} alt={`${km.code} ${km.name}`}
@@ -372,7 +373,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
         {parcalar.map((p) => {
           const sira = (id: string) => d.adimlar.findIndex((x) => x.a.id === id);
           if (p.tur === 'adim') { const i = sira(p.id); const sn = d.adimlar[i]; return sn ? adimHucreleri(sn, i) : null; }
-          return <KolSeritleri key={`k${p.seritler[0]?.idler[0] ?? ''}`} r={r} d={d} liste={liste} duzen={duzen} seritler={p.seritler} serit={serit} hucreler={(id) => { const i = sira(id); const sn = d.adimlar[i]; return sn ? adimHucreleri(sn, i) : null; }} />;
+          return <KolSeritleri key={`k${p.seritler[0]?.idler[0] ?? ''}`} r={r} d={d} liste={liste} duzen={duzen} seritler={p.seritler} serit={serit} hucreler={(id) => { const i = sira(id); const sn = d.adimlar[i]; return sn ? adimHucreleri(sn, i, true) : null; }} />;
         })}
         {!d.dongu && d.adimlar.length === 0 && (
           <>
@@ -544,16 +545,21 @@ export function AkisSemasi({ r, kok, cop }: {
   const elle = () => { dokundu.current = kok.id; };
 
   // 2558 b/8: seçilen kutu tuvalin ortasına kayar; yakınlık değişmez. Az hareket tercihinde kayma anlıktır.
+  // Görünüm düğmeleri tuvalin sağına biner; ortalama onların solunda kalan genişliğe yapılır ki seçili kutunun düğmelerini örtmesinler.
+  const kullanilir = useCallback((vr: DOMRect): number => {
+    const arac = vp.current?.parentElement?.querySelector('.tc-rr1-cv-ctrl')?.getBoundingClientRect().width ?? 0;
+    return Math.max(vr.width / 2, vr.width - (arac > 0 ? arac + KENAR : 0));
+  }, []);
   const ortala = useCallback((yumusak: boolean) => {
     const v = vp.current; const el = ic.current?.querySelector<HTMLElement>('.tc-rr1-secili');
     if (!v || !el) return;
     const vr = v.getBoundingClientRect(); const er = el.getBoundingClientRect();
-    const left = v.scrollLeft + er.left - vr.left + er.width / 2 - vr.width / 2;
+    const left = v.scrollLeft + er.left - vr.left + er.width / 2 - kullanilir(vr) / 2;
     const top = v.scrollTop + er.top - vr.top + er.height / 2 - vr.height / 2;
     const azHareket = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (typeof v.scrollTo === 'function') v.scrollTo({ left, top, behavior: yumusak && !azHareket ? 'smooth' : 'auto' });
     else { v.scrollLeft = left; v.scrollTop = top; }
-  }, []);
+  }, [kullanilir]);
   const secimAnahtari = r.secim ? JSON.stringify([r.secim.tur, 'urunId' in r.secim ? r.secim.urunId : null, 'adimId' in r.secim ? r.secim.adimId : null]) : null;
   const odakAnahtari = r.odak ? `${r.odak.urunId}|${r.odak.adimId}` : null;
   // 2558 b/9: odağa girince kutu ortalanarak yakınlaşır (en az %125); çıkınca önceki yakınlığa döner. Odak değişmediyse yalnız ortalanır.
@@ -565,15 +571,19 @@ export function AkisSemasi({ r, kok, cop }: {
     elle();
     // Tuval sayfanın altında kalmışsa odakta bütünüyle görünür olsun.
     if (odakAnahtari && typeof v.scrollIntoView === 'function') v.scrollIntoView({ block: 'nearest' });
+    const vr = v.getBoundingClientRect(); const er = el.getBoundingClientRect();
+    const en = kullanilir(vr);
+    // Odak yakınlığı kutunun kullanılabilir genişliğe sığdığı en büyük basamakla sınırlıdır (dar ekranda kutu düğmelerin altına girmesin).
+    const sigan = er.width > 0 ? z * ((en - KENAR * 2) / er.width) : 200;
+    const istenen = YAKINLIK.find((t) => t >= Math.max(125, z + 25)) ?? 200;
     const hedef: Yakinlik = odakAnahtari
-      ? (YAKINLIK.find((t) => t >= Math.max(125, z + 25)) ?? 200)
+      ? Math.max(z, [...YAKINLIK].reverse().find((t) => t <= Math.min(istenen, sigan)) ?? z) as Yakinlik
       : (oncekiZ.current ?? z);
     if (odakAnahtari) oncekiZ.current ??= z; else oncekiZ.current = null;
     if (hedef === z) { ortala(true); return; }
-    const vr = v.getBoundingClientRect(); const er = el.getBoundingClientRect();
     const olcek = z / 100;
     capa.current = {
-      x: vr.width / 2, y: vr.height / 2,
+      x: en / 2, y: vr.height / 2,
       cx: (v.scrollLeft + er.left - vr.left + er.width / 2) / olcek, cy: (v.scrollTop + er.top - vr.top + er.height / 2) / olcek,
     };
     setZ(hedef);
@@ -711,16 +721,18 @@ export function AkisSemasi({ r, kok, cop }: {
             <li><b>Klavye:</b> oklar kaydırır (Shift ile hızlı), + / − yakınlaştırır, 0 tümünü sığdırır, Home başa döner.</li>
             <li><b>Adım:</b> Alt+↑/↓ önceki/sonraki adım, Alt+Shift+↑/↓ adımı taşır, Ctrl+Z / Ctrl+Y geri al / yinele.</li>
             <li><b>Odak:</b> adıma çift tıkla ya da seçip Enter&apos;a bas; ortalanır, yakınlaşır, ötekiler solar. Esc ya da boş alana dokunmak çıkarır.</li>
+            <li><b>Ara kartlar:</b> statülü kartlar kutuda rozettir; ⋯ menüsündeki &quot;Ara kartları göster&quot; kutu olarak açar.</li>
             <li><b>Taşıma:</b> operasyon kutusunu başka bir adımın üstüne sürükle; aşağı taşırken onun altına, yukarı taşırken üstüne yerleşir.</li>
           </ul>
+          <div className="tc-rr1-cv-legend">
+            <span><i className="tc-rr1-lg tc-rr1-lg-in" />Giren</span>
+            <span><i className="tc-rr1-lg tc-rr1-lg-st" />Statülü kart</span>
+            <span><i className="tc-rr1-lg tc-rr1-lg-flow" />Rota akışı</span>
+            <span><i className="tc-rr1-lg tc-rr1-lg-out" />Çıkan</span>
+          </div>
         </div>
       )}
-      <div className="tc-rr1-cv-legend" aria-hidden="true">
-        <span><i className="tc-rr1-lg tc-rr1-lg-in" />Giren</span>
-        <span><i className="tc-rr1-lg tc-rr1-lg-st" />Statülü kart</span>
-        <span><i className="tc-rr1-lg tc-rr1-lg-flow" />Rota akışı</span>
-        <span><i className="tc-rr1-lg tc-rr1-lg-out" />Çıkan</span>
-      </div>
+
     </div>
   );
 }

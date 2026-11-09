@@ -87,6 +87,8 @@ describe('rota kuralları', () => {
     const rotaOf = (id: string) => rotalar[id] ?? [];
     expect(malzemeMaliyeti('1', rotaOf, (id) => kartlar.get(id), (id) => ({ 2: 5, 3: 1 } as Record<string, number>)[id] ?? null)).toBe(11);
     expect(malzemeMaliyeti('1', rotaOf, (id) => kartlar.get(id), (id) => (id === '2' ? 5 : null))).toBeNull();
+    // 2558-2: girensiz rota "0 ₺" değil, bilinmez.
+    expect(malzemeMaliyeti('1', () => [adim('a', 10, { ins: [] })], (id) => kartlar.get(id), () => 5)).toBeNull();
   });
 
   it('rota mamul ve yarı mamulün olur; ham maddenin olmaz; hizmet ve girdisi kapalı kart girdi olmaz', () => {
