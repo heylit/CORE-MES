@@ -261,6 +261,8 @@
 .tc-rr1-oname { padding: var(--b-1) var(--b-3) 0; font-size: var(--yazi-m); line-height: 1.2; }
 .tc-rr1-ost, .tc-rr1-otime, .tc-rr1-ostat2, .tc-rr1-oalt { padding: 0 var(--b-3); font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-rr1-otime { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* Eksik bilgi (firma seçilmedi) termin satırıyla aynı vurguda. */
+.tc-rr1-ost b { color: var(--ink); }
 .tc-rr1-renk-0 { --renk: var(--done); } .tc-rr1-renk-1 { --renk: var(--run); } .tc-rr1-renk-2 { --renk: var(--hold); }
 .tc-rr1-renk-3 { --renk: var(--stop); } .tc-rr1-renk-4 { --renk: var(--bp); } .tc-rr1-renk-5 { --renk: var(--idle); }
 .tc-rr1-renk-yok { --renk: var(--muted); }
