@@ -2,6 +2,8 @@ import { Navigate, useLocation, useParams } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { denemeAdresindenYeni, ESKI_DENEME_KOKU, SEKMELER } from './yeni/sekmeler.ts';
 import { FinansYeni } from './yeni/FinansYeni.tsx';
+import { FaturaEslemesi } from './fatura-esleme/FaturaEslemesi.tsx';
+import { ESLEME_ROTASI } from './fatura-esleme/acik.ts';
 
 // Deneme adresinde kalan yer imi ve bağlar aynı bölüme gider; sorgu (açık firma kartı, ayar sekmesi) korunur.
 function DenemeAdresi() {
@@ -17,4 +19,6 @@ export const rotalar: ModulRotasi[] = [
   ...SEKMELER.map((s) => ({ yol: s.yol, ekran: FinansYeni })),
   { yol: ESKI_DENEME_KOKU, ekran: DenemeAdresi },
   { yol: `${ESKI_DENEME_KOKU}/:bolum`, ekran: DenemeAdresi },
+  // 2675 (2671 b): menüde madde yok; fatura ayrıntısındaki bağlantıyla açılır, sayfa yetkisi Finans'ınki.
+  { yol: ESLEME_ROTASI, ekran: FaturaEslemesi },
 ];

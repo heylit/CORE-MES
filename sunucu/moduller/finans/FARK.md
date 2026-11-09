@@ -252,3 +252,10 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 
 ## 2676 (2667 b): kur şeridi telefonda yalnız ana sayfa ve Finans sayfalarında
 - 767 px ve altında şerit yalnız `/`, `/finans` ve `/finans/...` adreslerinde çizilir; öteki sayfalarda bileşen null döner ve özet okunmaz (kabuk sarmalamadığından boş satır kalmaz). 768 ve üstünde davranış aynı (952 a). Kabuk değişmedi.
+## 2675 (2671 b): fatura eşleme sayfası Finans'ta
+- Ekran `istemci/src/moduller/finans/fatura-esleme/`, adres `/finans/kayitlar/fatura-eslemesi/:belgeId`; menüde madde yok, sayfa yetkisi `sayfa.finans`. İçerik 2642 b'deki ekranın aynısı (Arayüz K3-K10); yalnız çağrı, sorgu anahtarı (`finans` öneki) ve dönüş değişti.
+- Tablo, göç ve uçlar Satın Alma'da kalır; ekran `GET/POST /satin-alma-fatura-eslemeleri/:belgeId...` uçlarını sözleşmedeki uç haritasıyla (`SatinAlmaUclari`, yol tipte denetlenir) çağırır, Satın Alma modülünü ithal etmez. Sunucu değişmedi.
+- Fatura ayrıntısında (Kaydı düzenle ve salt okur Kayıt penceresi) "Sipariş satırlarına eşle" düğmesi: yalnız siparişli, iptal olmayan gider belgesinde; finans.oku ya da finans.maliyet-oku olana. Düzenleme sayfada finans.yaz ister.
+- Mimar N2: satın alma modülü derlemede kapalıysa ya da Sistem Ayarları'nda `/satin-alma/siparisler` (ya da `/satin-alma`) kapatıldıysa düğme görünmez, sayfa boş durum gösterir ve istek atmaz. Kapalı liste gelmeden açık sayılır (kabukla aynı).
+- "Kayıtlara dön": ayrıntıdan gelindiyse geri, adresle açıldıysa Finans kayıtları. Pencere yeniden açılmaz (VARSAYIM, düşük: pencere adres taşımıyor).
+- Arayüz kod bakışı (2675): adres Kayıtlar altında (`/finans/kayitlar/fatura-eslemesi/:belgeId`, ikinci menüde Kayıtlar etkin; Kayıtlar finans.oku ister). Kap Finans ekranının `tc-fy` kabı (kabuk Finans kökünde dolguyu sıfırlar). Düzenleme penceresinde kaydedilmemiş değişiklik varken düğme pasif.
