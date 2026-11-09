@@ -68,7 +68,7 @@ export interface GProgram {
   fbounds: number[];
   stat: GIstatistik;
   name?: string;
-  // Simülasyon görünümü programa kendi alanlarını ekler (yol sınırları, açıklamalar).
+  // Okuyan görünüm programa kendi alanlarını ekleyebilir (Hazırlık adı yazar).
   [alan: string]: unknown;
 }
 export interface GSecenek { dialect?: string; lathe?: boolean; rapid?: number }
@@ -192,7 +192,7 @@ export function gParse(text: string, opt: GSecenek = {}): GProgram {
       return Number.parseFloat(s);
     };
     while (i < lines.length) {
-      if (++steps > MAXSTEPS) { W('loop', 'Program çok uzun ya da sonsuz döngü — simülasyon kesildi', i); break; }
+      if (++steps > MAXSTEPS) { W('loop', 'Program çok uzun ya da sonsuz döngü — okuma kesildi', i); break; }
       const raw = lines[i] ?? '', u = raw.replace(/;.*/, '').replace(/^\s*\d+\s+/, '').trim().toUpperCase(), ln = i;
       i++;
       if (!u) continue;

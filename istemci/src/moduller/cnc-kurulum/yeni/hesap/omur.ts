@@ -18,7 +18,7 @@ export { LIFE_DEF, type OmurAyari };
 
 // Cepteki takımın aşınma kaydı; `lf` elle düzeltilmiş ömür çarpanıdır.
 export interface AsinmaKaydi { id: string; used: number; parts: number; since: number | null; lf?: number; [alan: string]: unknown }
-// G-Kod simülasyonunun tezgâha bağlı özeti (perTool T numarasıyla: cep + 1).
+// Hazırlık'ta okunan programın tezgâha bağlı özeti (perTool T numarasıyla: cep + 1).
 export interface ProgramTakimi { S: number; F: number; t: number; [alan: string]: unknown }
 export interface GkodOzeti { machine: string; total: number; perTool?: Record<string, ProgramTakimi | undefined>; [alan: string]: unknown }
 interface ElleSure { id: string; tp: number }
