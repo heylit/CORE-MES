@@ -312,12 +312,12 @@ describe('SistemDurumu zamanlanmis isler', () => {
     const tablo = await screen.findByRole('table', { name: 'Zamanlanmış işler' });
     const satirlar = within(tablo).getAllByRole('row').slice(1).map((r) => [...r.querySelectorAll('td')].map((h) => h.textContent));
     expect(satirlar).toEqual([
-      ['Arkon: CORE yansımalarını yeniden deneme', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Hata', 'Veritabanı hatası 23514'],
+      ['Üretim Hazırlık: CORE yansımalarını yeniden deneme', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Hata', 'Veritabanı hatası 23514'],
       ['logo-gonderim', new Date(BASLAMA).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'medium' }), 'Bekliyor', 'Logo bağlantısı kapalı'],
       ['yeni-is', 'yok', 'yok', 'yok'],
     ]);
     // Okunur ad kod adını ipucunda taşır; bilinmeyen iş kod adıyla kalır (ad uydurulmaz).
-    expect(within(tablo).getByText('Arkon: CORE yansımalarını yeniden deneme').getAttribute('title')).toBe('arkon-yansima-yineleyici');
+    expect(within(tablo).getByText('Üretim Hazırlık: CORE yansımalarını yeniden deneme').getAttribute('title')).toBe('arkon-yansima-yineleyici');
   });
 
   it('is listesi bossa "Is yok" yazar; yonetici olmayan is bolumunu gormez', async () => {
