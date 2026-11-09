@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { AZAMI_GUNCELLEME, GUNCELLEME_PARCASI } from '#paylasilan/sozlesme/ayarlar.ts';
 import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
   SUNUCUDA_KURULMAYAN, degisiklikleriAyikla, kartNoVarMi, paketBoyuDurumu, onbellekListesi, ortakAnahtarMetni, paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi,
@@ -221,4 +222,16 @@ test('sunucuya kurulmayanlar depodaki package.json\'da var; derleme ve çalışm
     assert.ok(kilit.packages[`node_modules/${ad}`] !== undefined, `${ad} pakette kalmalı`);
   }
   for (const ad of SUNUCUDA_KURULMAYAN) assert.equal(kilit.packages[`node_modules/${ad}`], undefined, `${ad} pakete girmemeli`);
+});
+
+// Ekran paylaşılandan değer ithal edemez (zod, eslint kuralı); kopyası metinden okunup sözleşmeyle karşılaştırılır (2419).
+test('ekrandaki paket sınırı ve parça boyu sunucunun sözleşmesiyle aynı (2419)', () => {
+  const metin = readFileSync(new URL('../istemci/src/moduller/ayarlar/Guncelleme.tsx', import.meta.url), 'utf8');
+  const sayi = (ad: string): number => {
+    const e = new RegExp(`const ${ad} = (\\d+) \\* 1024(?: \\* 1024)?;`).exec(metin);
+    assert.ok(e !== null, `${ad} Guncelleme.tsx'te bulunamadı`);
+    return Number(e[1]) * (e[0].includes('1024 * 1024') ? 1024 * 1024 : 1024);
+  };
+  assert.equal(sayi('AZAMI_BAYT'), AZAMI_GUNCELLEME);
+  assert.equal(sayi('PARCA_BAYT'), GUNCELLEME_PARCASI);
 });
