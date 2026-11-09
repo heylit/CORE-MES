@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { AnomaliCevabi, AnomaliOlaylariCevabi } from '#paylasilan/sozlesme/arkon.ts';
+import type { AnomaliCevabi, AnomaliOlaylariCevabi, EksikIslerCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import {
-  anomaliAdedi, anomaliOrani, isaretliSayisi, istasyonIsareti, istasyonlariSirala, kapaliKurallar, kapaliZamanKurallari, sureMetni,
+  anomaliAdedi, anomaliOrani, eksikDegerMetni, eksikKonuMetni, isaretliSayisi, istasyonIsareti, istasyonlariSirala, kapaliEksikKurallari, kapaliKurallar, kapaliZamanKurallari, sureMetni,
 } from '../../../../arkon/web/src/data/anomali.ts';
-import type { AnomaliIstasyonu, AnomaliOlaylari, Anomaliler } from '../../../../arkon/web/src/data/anomali.ts';
+import type { AnomaliIstasyonu, AnomaliOlaylari, Anomaliler, EksikIsler } from '../../../../arkon/web/src/data/anomali.ts';
 import { cevapla } from './baglanti.ts';
 import type { Istemci } from './baglanti.ts';
 
@@ -90,5 +90,39 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     expect(yollar).toEqual(['/arkon/anomali-olaylari']);
     expect((c.govde as AnomaliOlaylari).olaylar[0]?.tur).toBe('gec-giris');
     expect((await cevapla(istemci, { yontem: 'POST', yol: '/anomali-olaylari', sorgu: new URLSearchParams(''), govde: '{}' })).durum).toBe(404);
+  });
+
+  it('eksik iş (2421 c): değer birimiyle, konu emir ve adımla ya da istasyonla; kapalı kurallar eşiği boş olanlardır', () => {
+    expect(eksikDegerMetni({ tur: 'plan-gerisi', deger: 150, planaGore: false })).toBe('2 sa 30 dk');
+    expect(eksikDegerMetni({ tur: 'kayitsiz-gun', deger: 3, planaGore: false })).toBe('3 iş günü');
+    expect(eksikDegerMetni({ tur: 'yarim-is', deger: 30, planaGore: false })).toBe('1 g 6 sa');
+    expect(eksikDegerMetni({ tur: 'geciken-emir', deger: 2, planaGore: true })).toBe('2 gün (plana göre)');
+    expect(eksikDegerMetni({ tur: 'bayat-plan', deger: 0, planaGore: false })).toBe('hiç canlıya alınmadı');
+    const konu = { konu: 'is_emri' as const, emirNo: 'E-1', opNo: 10, isEmriId: 5, uretimEmriId: 4, istasyon: { id: 2, ad: 'Torna' } };
+    expect(eksikKonuMetni(konu)).toBe('E-1 · OP 10');
+    expect(eksikKonuMetni({ ...konu, konu: 'istasyon' })).toBe('Torna');
+    expect(eksikKonuMetni({ ...konu, konu: 'uretim_emri', emirNo: null, opNo: null })).toBe('Emir 4');
+    expect(eksikKonuMetni({ ...konu, konu: 'plan' })).toBe('Canlı plan');
+    expect(kapaliEksikKurallari({ planGerisiDk: 60, kayitsizGun: null, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null })).toEqual(['Kayıtsız gün', 'Bayat plan']);
+  });
+
+  it('eksik iş ucu Arkon köprüsünden CORE\'a gider; yazma yoktur', async () => {
+    const cevap = {
+      hesaplama: '2026-11-09T09:00:00.000Z',
+      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: 24 },
+      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 0, 'bayat-plan': 0 },
+      olaylar: [{
+        id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
+        deger: 120, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T07:00:00.000Z', acilis: '2026-11-09T08:00:00.000Z', kapanis: null,
+      }],
+    } satisfies EksikIslerCevabi;
+    const yollar: string[] = [];
+    const istemci = { get: async <T,>(yol: string) => { yollar.push(yol); return cevap as T; }, post: async () => { throw new Error('yazma yok'); } } as unknown as Istemci;
+    const c = await cevapla(istemci, { yontem: 'GET', yol: '/eksik-isler', sorgu: new URLSearchParams(''), govde: undefined });
+    expect(c.durum).toBe(200);
+    expect((c.govde as EksikIsler).olaylar[0]?.kalanAdet).toBe(4);
+    await cevapla(istemci, { yontem: 'GET', yol: '/eksik-islerim', sorgu: new URLSearchParams(''), govde: undefined });
+    expect(yollar).toEqual(['/arkon/eksik-isler', '/arkon/eksik-islerim']);
+    expect((await cevapla(istemci, { yontem: 'POST', yol: '/eksik-isler', sorgu: new URLSearchParams(''), govde: '{}' })).durum).toBe(404);
   });
 });

@@ -367,6 +367,49 @@ export const anomaliOlaylariCevabi = z.object({
 });
 export type AnomaliOlaylariCevabi = z.output<typeof anomaliOlaylariCevabi>;
 
+// Eksik iş (2421 c): plandan bağımsız "yapılması gereken ama yapılmayan, girilmeyen ya da geciken" iş. Olaylar 15 dakikalık işte yazılır;
+// sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi ve yarım iş net dakika, kayıtsız gün
+// iş günü, plansız iş ve bayat plan saat, geciken emir gün.
+export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan'] as const;
+export type EksikIsTuru = (typeof EKSIK_IS_TURLERI)[number];
+export const EKSIK_IS_KONULARI = ['is_emri', 'istasyon', 'uretim_emri', 'plan'] as const;
+export type EksikIsKonusu = (typeof EKSIK_IS_KONULARI)[number];
+export const eksikIsSatiri = z.object({
+  id: olayKimligi,
+  tur: z.enum(EKSIK_IS_TURLERI),
+  konu: z.enum(EKSIK_IS_KONULARI),
+  isEmriId: olayKimligi.nullable(),
+  uretimEmriId: olayKimligi.nullable(),
+  emirNo: z.string().nullable(),
+  opNo: z.number().int().nullable(),
+  istasyon: z.object({ id: olayKimligi, ad: z.string() }).nullable(),
+  kaynak: z.object({ tur: z.enum(['makine', 'kisi']), id: olayKimligi, ad: z.string().nullable() }).nullable(),
+  deger: z.number().nonnegative(),
+  // Geride kalan adet (plan gerisi, yarım iş); bilinmiyorsa boş.
+  kalanAdet: z.number().int().nonnegative().nullable(),
+  // Geciken emirde: teslim günü henüz gelmedi ama plandaki bitiş teslimden sonra.
+  planaGore: z.boolean(),
+  // Olaya bakılan an: plan bitişi, son hareket, son giriş, son canlıya alma ya da teslim günü.
+  dayanakAni: zamanSemasi.nullable(),
+  acilis: zamanSemasi,
+  kapanis: zamanSemasi.nullable(),
+});
+export type EksikIsSatiri = z.output<typeof eksikIsSatiri>;
+const eksikIsEsigi = z.number().nonnegative().nullable();
+export const eksikIslerCevabi = z.object({
+  hesaplama: zamanSemasi,
+  // Boş eşik o kuralı kapatır.
+  esikler: z.object({
+    planGerisiDk: eksikIsEsigi, kayitsizGun: eksikIsEsigi, yarimIsSaat: eksikIsEsigi, plansizIsSaat: eksikIsEsigi, gecikenEmirGun: eksikIsEsigi, bayatPlanSaat: eksikIsEsigi,
+  }),
+  ozet: z.record(z.enum(EKSIK_IS_TURLERI), z.number().int().nonnegative()),
+  olaylar: z.array(eksikIsSatiri),
+});
+export type EksikIslerCevabi = z.output<typeof eksikIslerCevabi>;
+// Terminal (2421 c, saha görünümü): kişinin kendi tezgahlarında ve kendi işlerinde açık eksik işler.
+export const eksikIslerimCevabi = z.object({ hesaplama: zamanSemasi, olaylar: z.array(eksikIsSatiri) });
+export type EksikIslerimCevabi = z.output<typeof eksikIslerimCevabi>;
+
 // Operatör Özetim (kart #1295): kişinin kendi üretimi uretim-emirleri sayımından okunur. Kişi verilmezse oturumdaki kişi; başkasını yalnız
 // amir, yalnız kendi iş merkezi kapsamındaki kişi için ister. Veri yoksa alan boş gelir: sıfır uydurulmaz.
 export const OZET_DONEMLERI = ['gun', 'hafta', 'ay'] as const;

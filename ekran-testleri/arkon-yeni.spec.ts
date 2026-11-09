@@ -445,7 +445,7 @@ async function yeniAcilan(page: Page, adres: string): Promise<string | null> {
 
 const YENIDE_ACILAN: Readonly<Record<Hesap, readonly string[]>> = {
   'ornek.yonetici': [...HAZIRLIK_SAYFALARI, 'operator', 'kuyruk'],
-  'ornek.mudur': ['pano', 'planlama', 'kalite', 'bakim', 'raporlar', 'ayarlar', 'operator', 'kuyruk'],
+  'ornek.mudur': ['pano', 'planlama', 'anomali', 'kalite', 'bakim', 'raporlar', 'ayarlar', 'operator', 'kuyruk'],
   'ornek.planlama': ['pano', 'planlama', 'hazirlik', 'anomali', 'kalite', 'raporlar', 'cizim', 'ayarlar', 'kuyruk'],
   'ornek.operator1': ['operator', 'kuyruk'],
   'ornek.operator2': ['operator', 'kuyruk'],

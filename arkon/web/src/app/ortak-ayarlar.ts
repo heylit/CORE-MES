@@ -70,7 +70,7 @@ export function permsFrom(saved) {
 export let PERMM: PermMatrix = PERMS0;
 /** Giriş yapan kişinin bu işleme yetkisi var mı? (giriş yoksa — yerel mod, kullanıcı tanımsız — her şey açık) */
 export const can = k => { const u = AKStore && AKStore.Auth.current(); if (!u || u.role === 'admin') return true; return (PERMM[u.role] || []).includes(k); };
-export const PAGE_PERM = { '': 'page.op', pano: 'page.board', planlama: 'page.plan', hazirlik: 'page.prep', anomali: 'page.prep', kalite: 'page.quality', bakim: 'page.maint', raporlar: 'page.report', cizim: 'page.draw', onizle: 'page.prep' };
+export const PAGE_PERM = { '': 'page.op', pano: 'page.board', planlama: 'page.plan', hazirlik: 'page.prep', anomali: 'page.board', kalite: 'page.quality', bakim: 'page.maint', raporlar: 'page.report', cizim: 'page.draw', onizle: 'page.prep' };
 export const canSee = h => h === 'ayarlar' || can(PAGE_PERM[h] || 'page.op');
 export const firstPage = () => ['', 'pano', 'planlama', 'hazirlik', 'kalite', 'bakim', 'raporlar', 'cizim'].find(canSee) ?? 'ayarlar';
 /** Kişi bu iş merkezinde çalışabilir mi? (wcs boş = her yerde) */

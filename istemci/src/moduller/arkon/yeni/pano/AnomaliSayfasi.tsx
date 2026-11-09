@@ -3,6 +3,7 @@ import {
   ANOMALI_DONEM_ETIKETI, ANOMALI_DURUM_ETIKETI, ANOMALI_DURUM_RENGI, ANOMALI_OLAY_ETIKETI, anomaliAdedi, anomaliOrani, gunCubugu, isaretliSayisi, istasyonIsareti,
   istasyonlariSirala, kapaliKurallar, kapaliZamanKurallari, kisaTarih, oranRengi, sureMetni, type AnomaliDonemi, type AnomaliDurumu, type AnomaliIstasyonu,
   type AnomaliIstatistigi, type AnomaliOlayi, type AnomaliOlaylari, type Anomaliler,
+  kapaliEksikKurallari, type EksikIsler,
 } from '../../../../../../arkon/web/src/data/anomali.ts';
 import { Dugme, Girdi, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
@@ -10,6 +11,7 @@ import { iki } from '../cekirdek/bicim.ts';
 import { useArkon } from '../veri/baglam.ts';
 import type { Renk } from './kurallar.ts';
 import { Cip, SayfaCercevesi, Secmeli } from './ortak.tsx';
+import { EksikOzeti, EksikSatiri } from './EksikIs.tsx';
 
 // Üretim anomalisi (anomali.ts AnomaliApp): hesap TMI sunucusundadır (GET /arkon/anomaliler, /arkon/anomali-olaylari, /arkon/anomali-istatistik), sayfa yalnız
 // gösterir. Bilinmeyen değer "–" yazılır, sıfır uydurulmaz.
@@ -99,6 +101,8 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
   const [a, aYaz] = useState<Anomaliler | null>(null);
   const [z, zYaz] = useState<AnomaliOlaylari | null>(null);
   const [zHata, zHataYaz] = useState(false);
+  const [e, eYaz] = useState<EksikIsler | null>(null);
+  const [eHata, eHataYaz] = useState(false);
   const [hata, hataYaz] = useState(false);
   const [yasak, yasakYaz] = useState(false);
   const [mesgul, mesgulYaz] = useState(false);
@@ -108,6 +112,9 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
     void depo.Server.anomaliOlaylari()
       .then((d) => { if (canli()) { zYaz(d); zHataYaz(false); } })
       .catch(() => { if (canli()) zHataYaz(true); });
+    void depo.Server.eksikIsler()
+      .then((d) => { if (canli()) { eYaz(d); eHataYaz(false); } })
+      .catch(() => { if (canli()) eHataYaz(true); });
     return depo.Server.anomaliler()
       .then((d) => { if (canli()) { aYaz(d); hataYaz(false); } })
       .catch((e: unknown) => { if (!canli()) return; if (yasakMi(e)) yasakYaz(true); else hataYaz(true); })
@@ -123,7 +130,7 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
 
   const sayi = a ? isaretliSayisi(a.istasyonlar) : null;
   const ek = sayi !== null ? <Cip renk={sayi ? 'stop' : 'run'}>{sayi ? `${sayi} istasyon eksik` : 'Eksik yok'}</Cip> : null;
-  const kapali = [...(a ? kapaliKurallar(a.esikler) : []), ...(z ? kapaliZamanKurallari(z.esikler) : [])];
+  const kapali = [...(a ? kapaliKurallar(a.esikler) : []), ...(z ? kapaliZamanKurallari(z.esikler) : []), ...(e ? kapaliEksikKurallari(e.esikler) : [])];
   return (
     <SayfaCercevesi simge="alert" baslik="Üretim Anomalisi" renk="stop" ek={ek}>
       <div className="tc-ay3-arac">
@@ -166,6 +173,13 @@ function Bugun({ sekme }: { sekme: ReactNode }) {
                   ))}
                 </Bolum>
               )}
+            </div>
+            {e && <EksikOzeti e={e} />}
+            <div className="tc-ay3-anom">
+              <Bolum baslik="Eksik işler" simge="flag" adet={e?.olaylar.filter((o) => o.kapanis === null).length ?? 0}
+                bos={eHata ? 'Eksik işler şu an alınamadı' : !e ? 'Okunuyor…' : 'Plan gerisi, kayıtsız gün, yarım ya da geciken iş yok'}>
+                {(e?.olaylar ?? []).map((o) => <EksikSatiri key={`e${o.id}`} o={o} />)}
+              </Bolum>
             </div>
             {z && <ZamanOzeti z={z} />}
             <div className="tc-ay3-anom">

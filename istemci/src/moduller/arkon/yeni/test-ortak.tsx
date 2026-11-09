@@ -29,6 +29,8 @@ export interface SahteSunucu {
   kayitlar?: Record<string, unknown[]>;
   // Kayıt ekleme cevabı (TMI reddi gibi); verilmezse kayıt sessizce kabul edilir.
   kayitEkle?: (tur: string, satirlar: Record<string, unknown>[]) => unknown;
+  // Başka okuma uçlarının cevabı (anahtar `GET /arkon/...`, sorgusuz yol); verilmeyen uç 404'tür.
+  uclar?: Record<string, unknown>;
 }
 
 export interface Istek { yontem: string; yol: string; govde: unknown }
@@ -69,6 +71,8 @@ export function sunucuKur(d: Deneme, s: SahteSunucu = {}): Istek[] {
       return json(200, s.kayitEkle?.(ekle[1] ?? '', satirlar) ?? { eklenen: 0 });
     }
     if (yontem === 'POST' && yol === '/arkon/iletiler') return json(200, {});
+    const uc = s.uclar?.[`${yontem} ${yol}`];
+    if (uc !== undefined) return json(200, uc);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
   return istekler;
