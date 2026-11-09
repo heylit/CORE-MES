@@ -216,6 +216,8 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const gecmis = gecmisTeslimMi(f.teslim, bugun());
   const olustur = async (gecmisOnayli = false) => {
     if (!adet.tamam || adet.deger === null || !(adet.deger > 0)) { setHata('Miktar sıfırdan büyük olmalı.'); return; }
+    // Emir adedi parça sayısıdır (2565): kesirli adet gönderilmez.
+    if (!Number.isInteger(adet.deger)) { setHata('Miktar tam sayı olmalı.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(f.teslim)) { setHata('Başlangıç ve teslim tarihini girin.'); return; }
     // K19 a: geçmiş teslim engel değildir; emir kullanıcı onaylayınca açılır.
     if (gecmis && !gecmisOnayli) { setGecmisSorusu(true); return; }
@@ -258,7 +260,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
           etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
-        <Girdi etiket="Miktar" inputMode="decimal" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
+        <Girdi etiket="Miktar" inputMode="numeric" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
         <Girdi etiket="Başlangıç" type="date" value={f.baslangic} onChange={(o) => { yaz({ baslangic: o.target.value }); }} />
         <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { yaz({ teslim: o.target.value }); }}
           ipucu={gecmis ? 'Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.' : undefined} />
@@ -280,7 +282,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
         />
       )}
       {cokKatmanVar && (
-        <CokKatmanPaneli onizleme={onizleme} durum={d} miktar={adet.tamam ? adet.deger : null} deger={cok} degistir={(s) => { setCok(s); setHata(null); }} git={git} />
+        <CokKatmanPaneli onizleme={onizleme} durum={d} miktar={adet.tamam && adet.deger !== null && Number.isInteger(adet.deger) ? adet.deger : null} deger={cok} degistir={(s) => { setCok(s); setHata(null); }} git={git} />
       )}
       {rotali && cokAcik && <p className="tc-rr3-uyari" data-bilgi=""><Simge ad="alert" boyut="k" />Çok katmanlı emir açılırken bölünmez; sunucu bölmeyi bu emirde henüz kabul etmiyor.</p>}
       {rotali && !cokAcik && (
