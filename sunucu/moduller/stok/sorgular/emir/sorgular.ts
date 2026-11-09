@@ -32,21 +32,14 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]): Promise
    FROM stok_hareketi h JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
    WHERE a.uretim_emri_id = ANY($1::int[]) AND a.tur = 'cikis' AND a.cikis_nedeni IN ('uretime_sarf', 'fire')
    GROUP BY a.uretim_emri_id, h.malzeme_id`, [[...emirIdler]]);
-// B-2482-8: emrin statü zincirindeki hammaddesi, emir ve malzeme başına. İlk adım statüsüz malzemeyi adımın statüsüne çevirir (sarf değildir);
-// geri çevirme ve statüden sarf ya da fire (geri alınanı düşülerek) zincirden çıkarır. Statüden statüye çevirme ve yer değiştirme sayılmaz.
-// Emre verilenin bir parçasıdır: emirlerinNetSarfi statüden sarfı zaten sayar, ikisinin toplamı çift saymaz.
+// B-2482-8, 2534: emrin statü zincirindeki malzemesi, emir ve malzeme başına: statüde emre ayrılan (stok_rezerve, statülü satır). Çevirme
+// ayrılanı statüye taşır, statüden sarf ve fire düşer; parti birleşince ayrılan hedef emre geçer, müdür kaldırınca emirden çıkar. Hareketten
+// okunsaydı birleşen emrin zinciri kaynakta kalırdı. Emre verilenin bir parçasıdır: emirlerinNetSarfi statüden sarfı sayar, ayrılan sarfla
+// düştüğü için toplam çift saymaz.
 export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string }[]> => db.sorgu(
-  `WITH k AS (
-     SELECT h.uretim_emri_id AS emir_id, h.malzeme_id,
-            CASE WHEN h.kaynak_statu_id IS NULL THEN h.miktar ELSE -h.miktar END AS miktar
-       FROM stok_hareketi h
-      WHERE h.uretim_emri_id = ANY($1::int[]) AND h.tur = 'transfer' AND (h.kaynak_statu_id IS NULL) <> (h.hedef_statu_id IS NULL)
-     UNION ALL
-     SELECT a.uretim_emri_id, h.malzeme_id, CASE WHEN h.tur = 'cikis' THEN -h.miktar ELSE h.miktar END
-       FROM stok_hareketi h JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
-      WHERE a.uretim_emri_id = ANY($1::int[]) AND a.tur = 'cikis' AND a.cikis_nedeni IN ('uretime_sarf', 'fire') AND a.kaynak_statu_id IS NOT NULL
-   )
-   SELECT emir_id AS "emirId", malzeme_id AS "malzemeId", sum(miktar)::text AS miktar FROM k GROUP BY 1, 2 HAVING sum(miktar) <> 0 ORDER BY 1, 2`,
+  `SELECT uretim_emri_id AS "emirId", malzeme_id AS "malzemeId", sum(miktar)::text AS miktar
+     FROM stok_rezerve WHERE uretim_emri_id = ANY($1::int[]) AND statu_id IS NOT NULL
+    GROUP BY 1, 2 HAVING sum(miktar) <> 0 ORDER BY 1, 2`,
   [[...emirIdler]]);
 // 335: emir başına fiş hareketleri, malzeme başına net. Geri alma, geri aldığı hareketin emri ve türüyle sayılır (geri alma geri alınmaz,
 // tek geri alma kısıtı vardır). fis: sarf (üretime sarf ve fire çıkışı) ya da giris (üretim girişi); hurda fire çıkışıdır.

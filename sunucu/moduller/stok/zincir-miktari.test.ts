@@ -13,7 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
 import { emirlerinNetSarfi, emirlerinZincirdekiMiktari } from './disari.ts';
-import { adimStatusuCozucusuKaydet, uretimSayimiYansit } from './servis.ts';
+import { adimStatusuCozucusuKaydet, emirBirlestiYansit, uretimSayimiYansit } from './servis.ts';
 
 // B-2482-8 (2527-1): ilk adımın statüye çevirdiği hammadde emrin zincirinde sayılır; net sarfla toplamı emre verilendir. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -142,5 +142,44 @@ describe('stok: emrin statü zincirindeki miktarı (gerçek PostgreSQL)', () => 
     assert.equal(await miktar(emirlerinZincirdekiMiktari, e, hm), 10);
     await sayim(e, op10!, a.id, '-10');
     assert.equal(await miktar(emirlerinZincirdekiMiktari, e, hm), 0);
+  });
+
+  test('2534: parti birleşince zincir hedef emre geçer (amir bekleyen yarı mamulü acil emre alır); kaynak emirde kalmaz', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const kaynak = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const hedef = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const [op10] = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [kaynak])).map((x) => x.id);
+    const s10 = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('HM', 'OP 10', $1, '#2F6FDE', 'HM') RETURNING id", [`zincir-${randomBytes(4).toString('hex')}`]))!.id;
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
+    await malKabul(hm, '10');
+    await sayim(kaynak, op10!, a.id, '10');
+    assert.deepEqual([await miktar(emirlerinZincirdekiMiktari, kaynak, hm), await miktar(emirlerinZincirdekiMiktari, hedef, hm)], [10, 0]);
+    await o().vt.tx((db) => emirBirlestiYansit(db, { uretimEmriId: kaynak, hedefEmirId: hedef, kisiId: kisiler.get('yonetici')! }));
+    assert.deepEqual([await miktar(emirlerinZincirdekiMiktari, kaynak, hm), await miktar(emirlerinZincirdekiMiktari, hedef, hm)], [0, 10],
+      'birleşmeden sonra statüdeki 10 kg hedef emrin zincirindedir');
+  });
+
+  test('2534: müdür rezerveyi kaldırınca zincir emirden çıkar; aynı ürünün başka emri statüdeki malzemeyi kullanırsa zinciri eksiye inmez, sarf onun net sarfıdır', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const ilk = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const ikinci = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const opler = async (e: number) => (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [e])).map((x) => x.id);
+    const [op10] = await opler(ilk);
+    const [, op20] = await opler(ikinci);
+    const s10 = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('HM', 'OP 10', $1, '#2F6FDE', 'HM') RETURNING id", [`zincir-${randomBytes(4).toString('hex')}`]))!.id;
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
+    await malKabul(hm, '10');
+    await sayim(ilk, op10!, a.id, '10');
+    const k = await istek('yonetici', 'POST', '/stok/rezerve-kaldir', { malzemeId: hm, statuId: s10, uretimEmriId: ilk, neden: 'Deneme: acil emre verilecek' });
+    assert.equal(k.durum, 200, JSON.stringify(k.govde));
+    assert.equal(await miktar(emirlerinZincirdekiMiktari, ilk, hm), 0, 'kaldırılan ayrılan zincirden çıkar');
+    await sayim(ikinci, op20!, a.id, '10');
+    assert.deepEqual([await miktar(emirlerinZincirdekiMiktari, ikinci, hm), await miktar(emirlerinNetSarfi, ikinci, hm)], [0, 10], 'ikinci emrin zinciri eksi olmaz; 10 kg onun sarfı');
+    const verilen = async (e: number) => await miktar(emirlerinZincirdekiMiktari, e, hm) + await miktar(emirlerinNetSarfi, e, hm);
+    assert.equal(await verilen(ilk) + await verilen(ikinci), 10, 'iki emrin verileni toplamı ihtiyaç kadar (10 kg): çift sayım ve kayıp yok');
   });
 });
