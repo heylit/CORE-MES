@@ -28,6 +28,17 @@ describe('planlama motoru hesapları', () => {
     expect(veriDenetimi(c, cx)).toHaveLength(10);
   });
 
+  it('kapasitesi girilmemiş fasoncu veri bulgusudur: motor sınırsız sayar (B-2483-16)', () => {
+    const { c, cx } = kur();
+    expect(veriDenetimi(c, cx).some((b) => b.t.includes('kapasite girilmemiş'))).toBe(false);
+    for (const k of [undefined, null, 'iki']) {
+      const c2 = structuredClone(c); const f = c2.D.fasoncular?.[0];
+      if (f) (f as Record<string, unknown>)['kapasite'] = k;
+      const cx2 = derle(girdiKur(c2, plandanBitenler(c2, planOku(c2))));
+      expect(veriDenetimi(c2, cx2)).toContainEqual({ k: 'fason', t: '5: kapasite girilmemiş; motor sınırsız sayıyor.' });
+    }
+  });
+
   it('741 a: başlangıç gününden önceki gecenin vardiyası gece yarısından sonra da çalışma saatidir', () => {
     const { c, p } = kur();
     const gunler = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'];
