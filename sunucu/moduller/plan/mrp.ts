@@ -6,7 +6,7 @@ import type { MrpIhtiyaciCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { urunAgaci } from '../rota/disari.ts';
 import { malzemeGelisTarihleri } from '../satin-alma/disari.ts';
-import { emirlerinNetSarfi, malzemeStokDurumlari } from '../stok/disari.ts';
+import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, malzemeStokDurumlari } from '../stok/disari.ts';
 import { acikEmirler, emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { acilacakUrunler, mrpSatirlari, type MrpGirdisi } from './mrp-kurallar.ts';
 import { yerlesimler } from './sorgular.ts';
@@ -15,6 +15,12 @@ import { yerlesimler } from './sorgular.ts';
 const STOK_OKUR: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const SATIN_ALMA_OKUR: readonly Islem[] = ['satin-alma.oku', 'satin-alma.yaz'];
 const birini = (k: Kullanici, l: readonly Islem[]) => l.some((i) => islemVarMi(k, i));
+
+// B-2482-8 (2527-2): emre verilen = net sarf + statü zincirindeki (ilk adımı sayılmış, son adımı sayılmamış yarı mamuldeki) hammadde. Zincir
+// statüden sarfı eksi sayar, net sarf artı: toplam çift saymaz (stok 2527-1). Plan iki raporda da (MRP, canlı plan ihtiyacı) bunu düşer.
+export async function emreVerilenler(db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string }[]> {
+  return [...await emirlerinNetSarfi(db, emirIdler), ...await emirlerinZincirdekiMiktari(db, emirIdler)];
+}
 
 // 1472 M1 (1522 a): açık emirlerin malzeme ihtiyacı, brüt ve net; yalnız okur, patlatma kaydı yazmaz (ürün ağacı bellekte açılır).
 // 1545 a: stok (serbest, kritik seviye) ve açık satın alma okuyanın kendi yetkisiyle okunur; göremeyene o alanlar ve net boş gelir.
@@ -37,7 +43,7 @@ export async function mrpIhtiyaci(db: Db, kullanici: Kullanici, simdi = Date.now
   const kartlar = await malzemeOzetleri(db, dogrudan);
   const temel: Omit<MrpGirdisi, 'agaclar' | 'serbest' | 'kritik' | 'gelisler'> = {
     emirler: emirler.map((e) => ({ id: e.id, no: e.emirNo, baslama: e.baslama === null ? null : Date.parse(e.baslama) })),
-    ihtiyaclar, sarflar: await emirlerinNetSarfi(db, emirler.map((e) => e.id)), baslangiclar, kartlar,
+    ihtiyaclar, sarflar: await emreVerilenler(db, emirler.map((e) => e.id)), baslangiclar, kartlar,
   };
   const stokOku = async (nolar: number[]) => (stokGorunur ? malzemeStokDurumlari(db, nolar) : new Map<number, { serbest: string; kritikSeviye: string | null }>());
   const gelisOku = async (nolar: number[]) => new Map([...(await malzemeGelisTarihleri(db, nolar))].map(([no, l]) => [no, l.map((x) => ({ tarih: x.tarih, miktar: x.miktar }))]));
