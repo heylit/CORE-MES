@@ -94,7 +94,7 @@ export function Periyodik() {
           </section>
         )}
         <p className="tc-ii-soluk">
-          Kayıt tarihi ve belge no saklanır, sonraki tarih sıklıktan hesaplanır. Tezgah bakımı Arkon'da, ölçü aleti kalibrasyonu Kalibrasyon'da kalır.
+          Kayıt tarihi ve belge no saklanır, sonraki tarih sıklıktan hesaplanır. Tezgah bakımı Üretim Hazırlık'ta, ölçü aleti kalibrasyonu Kalibrasyon'da kalır.
         </p>
       </Kart>
       <KontrolAyrinti kontrol={secili} kapat={() => seciliYaz(null)} duzenle={(k) => { seciliYaz(null); formYaz({ kontrol: k }); }} />

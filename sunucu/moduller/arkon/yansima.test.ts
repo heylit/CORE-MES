@@ -3186,7 +3186,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const kmNumune = b1.govde['kmNumune'] as number;
     assert.equal(typeof kmNumune, 'number');
     assert.equal(b1.govde['ilkParca'], undefined, 'istemcinin damgası alınmaz; periyodik numune');
-    assert.equal(b1.govde['kmUyari'], '1 ölçünün Kalite Merkezi balonu yok: Arkon\'da kaldı.');
+    assert.equal(b1.govde['kmUyari'], '1 ölçünün Kalite Merkezi balonu yok: Üretim Hazırlık\'ta kaldı.');
     assert.deepEqual((await sahip.tek<{ balonlar: number[]; op_no: number; parca_sayisi: number }>('SELECT balonlar, op_no, parca_sayisi FROM kalite_merkezi_numune WHERE id = $1', [kmNumune])),
       { balonlar: [olcu, mastar], op_no: 10, parca_sayisi: 5 });
 
@@ -3234,7 +3234,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
       { deger: '10.3', uygun: false, kaynak: 'operator', p: 7, n: null });
     const sonucOku = async () => (await istek<{ belge: { surum: number; govde: Record<string, unknown> } }>(yonetici, 'GET', `/arkon/belgeler/results/${pkgId}`)).govde.belge!;
     const r1 = await sonucOku();
-    assert.equal(r1.govde['kmUyari'], '1 ölçünün Kalite Merkezi balonu yok: Arkon\'da kaldı.');
+    assert.equal(r1.govde['kmUyari'], '1 ölçünün Kalite Merkezi balonu yok: Üretim Hazırlık\'ta kaldı.');
     const s2 = await sonuc(r1.surum, { ...(r1.govde['meas'] as object), 5: { v: 1, ok: true } });
     assert.equal(s2.durum, 200, JSON.stringify(s2.govde));
     const r2 = await sonucOku();
