@@ -4,6 +4,7 @@ import type { MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { HamOnerisiCevabi, PatlatmaOnizlemeCevabi, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
 
@@ -27,6 +28,7 @@ export const anahtarlar = {
   sureler: (revizyonId: number, makineId: number | null) => [...RR_ANAHTARI, 'sureler', revizyonId, makineId] as const,
   patlatma: (revizyonId: number, miktar: number | null = null) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId, miktar] as const,
   hamOnerisi: (urunId: string) => [...RR_ANAHTARI, 'ham-onerisi', urunId] as const,
+  sahipsizStatulu: [...RR_ANAHTARI, 'sahipsiz-statulu'] as const,
 };
 
 // Köprü komutunun adı: tablo kopru.ts IZINLI_KOMUTLAR'dır (rota, emir, kaynak, statü, stok, maliyet). Tabloda olmayan ad gönderilmez.
@@ -157,5 +159,16 @@ export function useEskiKayit(etkin = true) {
     queryKey: anahtarlar.eskiKayit,
     enabled: etkin,
     queryFn: async () => anaBelgeyiBul(await api.get<KayitlarCevabi>('/recete-rota/kayitlar')),
+  });
+}
+
+// 2547 eki, 2561 a: açık emre ayrılmamış statülü stok (sahibi stok, GET /stok/sahipsiz-statulu, stok okuma yetkisiyle). Yalnız okunur.
+export function useSahipsizStatulu(etkin: boolean) {
+  return useQuery({
+    queryKey: anahtarlar.sahipsizStatulu,
+    enabled: etkin,
+    queryFn: async () => {
+      try { return await api.get<SahipsizStatuluCevabi>('/stok/sahipsiz-statulu'); } catch (h) { throw new RrHatasi(h); }
+    },
   });
 }

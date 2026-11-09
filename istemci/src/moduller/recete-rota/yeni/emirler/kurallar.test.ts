@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
+  miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -333,5 +333,51 @@ describe('2553 statülü stok ve süreçteki malzeme tek tablo', () => {
       { anahtar: 's7', opNo: null, depoda: 5, emirlere: null, fark: null },
     ]);
     expect(stokVeSurec(e, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o10'))).toMatchObject([{ depoda: 5, emirlere: 0, fark: 5 }]);
+  });
+});
+
+describe('2547 eki, 2561 a: sahipsiz statülü stok tabloya eklenir', () => {
+  const kart = { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk' } as unknown as Malzeme;
+  const satir = (statuIdler: number[], k: Malzeme | null = kart) => ({
+    anahtar: 'a', urunId: '11', opNo: 10, kart: k, statuIdler, statu: 'OP 10', depoda: statuIdler.length ? 5 : null, emirlere: 5, fark: 0, emirler: '',
+  });
+  const ss = (statuId: number, sahipsiz: string, ek: Record<string, unknown> = {}) => ({
+    malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId, kaliteDurumu: 'serbest' as const, miktar: sahipsiz, ayrilan: '0', sahipsiz, konumlar: [], ...ek,
+  });
+  const okuma = { statuler: [{ id: 9, malzemeNo: 'X', urunKodu: null, kaynakAdim: '1-o', ad: 'Eski statü' }], malzemeler: {} } as unknown as StokOkumasi;
+
+  it('liste okunmadıysa alanlar null kalır; statüsüz satırda null, eşleşmeyen statülü satırda 0', () => {
+    expect(sahipsizEkle([satir([7])], null, okuma)[0]).toMatchObject({ sahipsiz: null, kaynakEmir: null, sonHareket: null });
+    expect(sahipsizEkle([satir([])], [], okuma)[0]).toMatchObject({ sahipsiz: null });
+    expect(sahipsizEkle([satir([7])], [], okuma)[0]).toMatchObject({ sahipsiz: 0, kaynakEmir: null, sonHareket: null });
+  });
+
+  it('serbest ve şartlı toplanır, karar bekleyen ayrı; kaynak emir ve son hareket en yeni hareketli satırdandır; başka malzemenin satırı eşleşmez', () => {
+    const r = sahipsizEkle([satir([7])], [
+      ss(7, '2', { kaynakEmirId: 1, kaynakEmirNo: 'UE-1', sonHareket: '2026-11-01T00:00:00.000Z' }),
+      ss(7, '1.5', { kaliteDurumu: 'karar_bekliyor', kaynakEmirId: 2, kaynakEmirNo: 'UE-2', sonHareket: '2026-11-03T00:00:00.000Z' }),
+      ss(7, '4', { malzemeId: 99 }),
+    ], okuma);
+    expect(r[0]).toMatchObject({ sahipsiz: 2, kararBekleyen: 1.5, kaynakEmir: { id: 2, no: 'UE-2' }, sonHareket: '2026-11-03T00:00:00.000Z' });
+    expect(sahipsizEkle([satir([7])], [ss(7, '1', { kaliteDurumu: 'sartli' }), ss(7, '2')], okuma)[0]).toMatchObject({ sahipsiz: 3, kararBekleyen: 0 });
+    expect(r[1]).toMatchObject({ anahtar: 'x99|7', kart: null, sahipsiz: 4, depoda: null });
+  });
+
+  it('tabloda karşılığı olmayan statü adıyla kendi satırı olur', () => {
+    const r = sahipsizEkle([], [ss(9, '3')], okuma);
+    expect(r).toMatchObject([{ anahtar: 'x12|9', statu: 'Eski statü', malzemeMetni: 'HM-0001 Örnek çubuk', sahipsiz: 3, kaynakEmir: null, sonHareket: null }]);
+  });
+});
+
+describe('2547 eki v2: stok tablosu sıralaması (Atölye notu)', () => {
+  const s = (anahtar: string, sonHareket: string | null, sahipsiz: number | null) => ({
+    anahtar, urunId: null, opNo: null, kart: null, statuIdler: [], statu: '', depoda: null, emirlere: null, fark: null, emirler: '', sonHareket, sahipsiz,
+  });
+  const l = [s('a', '2026-11-02T00:00:00.000Z', 1), s('b', null, null), s('c', '2026-11-05T00:00:00.000Z', 4)];
+  it('son harekete göre iki yönde sıralar, boş her yönde sondadır; sıralama yoksa sıra değişmez', () => {
+    expect(stokSurecSirala(l, { alan: 'sonHareket', yon: 'azalan' }).map((x) => x.anahtar)).toEqual(['c', 'a', 'b']);
+    expect(stokSurecSirala(l, { alan: 'sonHareket', yon: 'artan' }).map((x) => x.anahtar)).toEqual(['a', 'c', 'b']);
+    expect(stokSurecSirala(l, { alan: 'sahipsiz', yon: 'azalan' }).map((x) => x.anahtar)).toEqual(['c', 'a', 'b']);
+    expect(stokSurecSirala(l, null).map((x) => x.anahtar)).toEqual(['a', 'b', 'c']);
   });
 });

@@ -7,10 +7,10 @@ import {
 import type { StokBakiyesi } from '../../kopru.ts';
 import { miktar, sayi, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { anahtarlar, useStokOkumasi, type RrDurumu } from '../veri.ts';
+import { anahtarlar, useSahipsizStatulu, useStokOkumasi, type RrDurumu } from '../veri.ts';
 import { useEmirKomutu } from './komut.ts';
 import {
-  AZAMI_STOK_KARTI, miktarOku, statuAdi, statuHedefleri, statuluSatirlar, stokKartiIdleri, stokSatirlari, stokVeSurec, type StokSatiri, type StokSurecSatiri,
+  AZAMI_STOK_KARTI, miktarOku, sahipsizEkle, statuAdi, stokSurecSirala, statuHedefleri, statuluSatirlar, stokKartiIdleri, stokSatirlari, stokVeSurec, type StokSatiri, type StokSurecSatiri,
 } from './kurallar.ts';
 
 const AZAMI_HAREKET = 40;
@@ -110,13 +110,16 @@ function StatuluStok({ durum: d, yetki, idler, okuma, kalemSayisi }: {
       : okuma.isError || stok === null ? <DurumKutusu durum="hata" mesaj={okuma.error?.message || 'Stok okunamadı.'} yenile={() => { void okuma.refetch(); }} />
         : stok.malzemeler === null ? <DurumKutusu durum="bos" mesaj={erisimYok} /> : null;
   const okunan = stokDurumu === null && stok !== null ? stok : null;
-  const birlesik = stokVeSurec(d, okunan ? statuluSatirlar(kalemler, okunan) : null, stok);
+  const sahipsizOkuma = useSahipsizStatulu(yetki.stokOku);
+  const sahipsiz = sahipsizOkuma.data?.satirlar ?? null;
+  const [siralama, setSiralama] = useState<{ alan: string; yon: 'artan' | 'azalan' } | null>(null);
+  const birlesik = sahipsizEkle(stokVeSurec(d, okunan ? statuluSatirlar(kalemler, okunan) : null, stok), okunan ? sahipsiz : null, okunan);
   const kart = (id: string | null) => (id === null ? null : d.items?.find((i) => i.id === id) ?? null);
   const fark = (s: StokSurecSatiri) => (s.fark === null ? YOK : <span className="tc-rr3-plan-t" data-ton={Math.abs(s.fark) > 1e-6 ? 'uyari' : undefined}>{`${s.fark > 0 ? '+' : ''}${sayi(s.fark)}`}</span>);
   const ortak: Sutun<StokSurecSatiri>[] = [
     {
       anahtar: 'malzeme', baslik: 'Malzeme',
-      hucre: (s) => { const m = s.kart ?? kart(s.urunId); return m ? <><b className="mono">{m.code}</b> <small>{m.name}</small></> : YOK; },
+      hucre: (s) => { const m = s.kart ?? kart(s.urunId); return m ? <><b className="mono">{m.code}</b> <small>{m.name}</small></> : (s.malzemeMetni ?? YOK); },
     },
     { anahtar: 'statu', baslik: 'Statü', hucre: (s) => (s.kart && s.urunId ? <>{s.statu} <small>{kart(s.urunId)?.code}</small></> : s.statu) },
     { anahtar: 'depoda', baslik: 'Depoda', hizala: 'sag', hucre: (s) => (s.depoda === null ? YOK : sayi(s.depoda)) },
@@ -124,6 +127,18 @@ function StatuluStok({ durum: d, yetki, idler, okuma, kalemSayisi }: {
     { anahtar: 'fark', baslik: 'Fark', hizala: 'sag', hucre: fark },
     { anahtar: 'birim', baslik: 'Birim', hucre: (s) => (s.kart ?? kart(s.urunId))?.unit ?? YOK },
     { anahtar: 'emirler', baslik: 'Emirler', hucre: (s) => s.emirler || YOK },
+    // 2547 eki, 2561 a: açık hiçbir emre ayrılmamış miktar; statüye son sokan emir ve son hareket (stoktan, yalnız okunur).
+    {
+      anahtar: 'sahipsiz', baslik: 'Sahipsiz', hizala: 'sag', sirala: true,
+      hucre: (s) => ((s.sahipsiz ?? null) === null ? YOK : (
+        <>
+          <span className="tc-rr3-plan-t" data-ton={(s.sahipsiz ?? 0) > 1e-6 ? 'uyari' : undefined}>{sayi(s.sahipsiz ?? null)}</span>
+          {(s.kararBekleyen ?? 0) > 1e-6 && <><br /><small>karar bekleyen {sayi(s.kararBekleyen ?? null)}</small></>}
+        </>
+      )),
+    },
+    { anahtar: 'kaynakEmir', baslik: 'Kaynak emir', hucre: (s) => (s.kaynakEmir ? <span className="mono">{s.kaynakEmir.no ?? `#${String(s.kaynakEmir.id)}`}</span> : YOK) },
+    { anahtar: 'sonHareket', baslik: 'Son hareket', sirala: true, hucre: (s) => (s.sonHareket ? zaman(s.sonHareket) : YOK) },
   ];
   const kesildi = kalemSayisi > AZAMI_STOK_KARTI;
   const ust = (
@@ -134,7 +149,7 @@ function StatuluStok({ durum: d, yetki, idler, okuma, kalemSayisi }: {
         sonrakini bekleyen miktar. Fark sayım ya da bildirim eksiğini gösterir; statüsü olmayan adımın deposu tutulmaz.
       </p>
       {yetki.stokOku && (
-        <p className="tc-rr3-ipucu"><Link to={SAHIPSIZ_STATULU}>Sahipsiz statülü stok</Link>: rotası değişmiş ya da adımı kalmamış statülerdeki miktarlar.</p>
+        <p className="tc-rr3-ipucu">Sahipsiz: statüde durup açık hiçbir emre ayrılmamış miktar; aynı ürün ve OP'nin herhangi bir emri kullanabilir. Tümü <Link to={SAHIPSIZ_STATULU}>Sahipsiz statülü stok</Link> sayfasında.</p>
       )}
       {yetki.stokOku && kesildi && (
         <p className="tc-rr3-uyari-kutu" role="status">
@@ -144,8 +159,12 @@ function StatuluStok({ durum: d, yetki, idler, okuma, kalemSayisi }: {
       )}
       {stokDurumu}
       {d.emirler === null && <DurumKutusu durum="bos" mesaj="Üretim emirlerine erişiminiz yok; Emirlere göre sütunu hesaplanmadı." />}
+      {okunan && sahipsizOkuma.isError && (
+        <p className="tc-rr3-ipucu" role="status">Sahipsiz statülü stok okunamadı; Sahipsiz, Kaynak emir ve Son hareket sütunları boş.</p>
+      )}
       <Tablo
-        etiket="Statülü stok ve süreçteki malzeme" sutunlar={ortak} satirlar={birlesik} satirAnahtari={(s) => s.anahtar}
+        etiket="Statülü stok ve süreçteki malzeme" sutunlar={ortak} satirlar={stokSurecSirala(birlesik, siralama)} satirAnahtari={(s) => s.anahtar}
+        siralama={siralama} siralamaDegistir={setSiralama}
         bosMesaj="Statülü stok ve süreçte bekleyen malzeme yok."
       />
     </>
@@ -160,7 +179,7 @@ function StatuluStok({ durum: d, yetki, idler, okuma, kalemSayisi }: {
   const hedefler = kalem ? [null, ...statuHedefleri(okunan, kalem.code)].filter((x) => x !== fr) : [];
   const to = hedefler.find((x) => kaynakDeger(x) === nereye) ?? hedefler[0] ?? null;
   const b = bakiyeler[Number(bakiye)] ?? bakiyeler[0] ?? null;
-  const yenile = () => istemci.invalidateQueries({ queryKey: anahtarlar.stok(idler) });
+  const yenile = () => Promise.all([istemci.invalidateQueries({ queryKey: anahtarlar.stok(idler) }), istemci.invalidateQueries({ queryKey: anahtarlar.sahipsizStatulu })]);
 
   const atlat = () => {
     const q = miktarOku(atlatMiktar);

@@ -579,8 +579,67 @@ describe('R3 Stok', () => {
     const t = tablo();
     const satir = [...t.querySelectorAll('tbody tr')].find((x) => x.textContent.includes('OP 10 Tornalama'))!;
     // Emir 10 adet; OP 10 bitti, OP 20 3 sağlam bildirdi: 7 bekliyor. Depoda 6: fark -1.
-    expect([...satir.querySelectorAll('td')].map((x) => x.textContent)).toEqual(['HM-0001 Örnek çubuk', 'OP 10 Tornalama MM-0001', '6', '7', '-1', 'adet', 'UE-0001: 7']);
+    // 2547 eki: sahipsiz listesi bu sunucuda yok (404); üç sütun boş kalır, sıfır yazılmaz.
+    expect([...satir.querySelectorAll('td')].map((x) => x.textContent)).toEqual(['HM-0001 Örnek çubuk', 'OP 10 Tornalama MM-0001', '6', '7', '-1', 'adet', 'UE-0001: 7', '—', '—', '—']);
+    expect(within(b).getByText(/Sahipsiz statülü stok okunamadı/)).toBeTruthy();
     expect(within(b).getByRole('link', { name: 'Sahipsiz statülü stok' }).getAttribute('href')).toBe('/stok/sahipsiz-statulu');
+  });
+
+  it('2547 eki ve 2561 a: Sahipsiz, Kaynak emir ve Son hareket stoktan okunur; tabloda olmayan sahipsiz statü kendi satırıdır', async () => {
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    d.routes = { 11: { base: null, steps: [{ id: 'o10', seq: 10, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null,
+      setup: 30, proc: 2, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [] }] } };
+    const istekler = sunucuKur(YONETICI, {
+      durum: d,
+      yazmalar: {
+        'GET /recete-rota/statuler': () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' },
+          { id: 9, malzemeNo: 'YM-0009', urunKodu: 'MM-0009', kaynakAdim: '99-o20', ad: 'OP 20 Eski adım' }] }),
+        'GET /stok/malzemeler/11': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '4' }], bakiyeler: [] }),
+        'GET /stok/malzemeler/12': () => json(200, { statuKirilimi: [{ statuId: 7, miktar: '6' }], bakiyeler: [] }),
+        'GET /stok/sahipsiz-statulu': () => json(200, { satirlar: [
+          { malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId: 7, kaliteDurumu: 'serbest', miktar: '6', ayrilan: '4', sahipsiz: '2', konumlar: ['A1'],
+            kaynakEmirId: 61, kaynakEmirNo: 'UE-0061', sonHareket: '2026-11-08T09:30:00.000Z' },
+          { malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId: 7, kaliteDurumu: 'karar_bekliyor', miktar: '1', ayrilan: '0', sahipsiz: '1', konumlar: ['A1'],
+            kaynakEmirId: 60, kaynakEmirNo: 'UE-0060', sonHareket: '2026-11-07T09:30:00.000Z' },
+          { malzemeId: 19, malzemeKod: 'YM-0009', malzemeAd: 'Örnek eski parça', statuId: 9, kaliteDurumu: 'serbest', miktar: '3', ayrilan: '0', sahipsiz: '3', konumlar: [],
+            kaynakEmirId: null, kaynakEmirNo: null, sonHareket: null },
+        ] }),
+      },
+    });
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    const tablo = () => within(b).getByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo().textContent).toContain('UE-0061'); });
+    const satirlar = [...tablo().querySelectorAll('tbody tr')].map((x) => [...x.querySelectorAll('td')].map((y) => y.textContent));
+    const tor = satirlar.find((x) => x[1]?.startsWith('OP 10 Tornalama'))!;
+    // Veri koşulu: sahipsiz yalnız serbest ve şartlı; karar bekleyen altında ayrı.
+    expect(tor.slice(7, 9)).toEqual(['2karar bekleyen 1', 'UE-0061']);
+    expect(tor[9]).toMatch(/08\.11\.2026/);
+    const eski = satirlar.find((x) => x[0] === 'YM-0009 Örnek eski parça')!;
+    expect(eski.slice(1, 10)).toEqual(['OP 20 Eski adım', '—', '—', '—', '—', '—', '3', '—', '—']);
+    // Atölye notu: Son hareket başlığıyla sıralanır (azalan ilk tıkta ya da ikincide); boş son harekette sonda.
+    const basliklar = () => within(tablo()).getAllByRole('columnheader');
+    const sirala = () => basliklar().find((x) => x.textContent.includes('Son hareket'))!.querySelector('button')!;
+    fireEvent.click(sirala());
+    const ilk = () => [...tablo().querySelectorAll('tbody tr')].map((x) => x.querySelector('td')?.textContent);
+    const a1 = ilk();
+    fireEvent.click(sirala());
+    const a2 = ilk();
+    // Tek son hareketli satır iki yönde de en üstte (boşlar her yönde sonda); başlık yönü değişir.
+    expect([a1[0], a2[0]]).toEqual(['HM-0001 Örnek çubuk', 'HM-0001 Örnek çubuk']);
+    expect(basliklar().find((x) => x.textContent.includes('Son hareket'))!.getAttribute('aria-sort')).toMatch(/ascending|descending/);
+    expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
+  });
+
+  it('2547 eki: stok okuyamayan sahipsiz listesini istemez', async () => {
+    const istekler = sunucuKur(OKUYAN);
+    rrAc('/recete-rota/stock');
+    await bolum('Stok');
+    await within(await bolum('Stok')).findByText(/Stok verisine erişiminiz yok/);
+    expect(istekler.some((i) => i.yol === '/stok/sahipsiz-statulu')).toBe(false);
   });
 
   it('B-2482-16 ve 2553: Stok değeri bilinmeyen maliyeti sıfır saymaz, sayısını yazar; Minimum kartı Malzeme ihtiyacına gider; stok okumayan bağlantıyı görmez', async () => {
