@@ -865,8 +865,9 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
       chg: metindenSayi(x.degisimSuresiDk),
       cycle: metindenSayi(x.birimSureDk),
     })),
-    ins: a.bilesenler.map((b) => ({ itemId: String(b.malzemeId), qty: metindenSayi(b.miktar) ?? 0, scrap: metindenSayi(b.fireYuzde) ?? 0 })),
-    outs: a.yanUrunler.map((y) => ({ itemId: String(y.malzemeId), qty: metindenSayi(y.miktar) ?? 0, kind: 'yan' as const })),
+    // Miktar ve fire rota tablosunda boş olamaz (rota_bileseni_miktar, rota_yan_urunu_miktar): sıfır yedeği yazılmaz (B-2484-6).
+    ins: a.bilesenler.map((b) => ({ itemId: String(b.malzemeId), qty: Number(b.miktar), scrap: Number(b.fireYuzde) })),
+    outs: a.yanUrunler.map((y) => ({ itemId: String(y.malzemeId), qty: Number(y.miktar), kind: 'yan' as const })),
   };
 }
 
