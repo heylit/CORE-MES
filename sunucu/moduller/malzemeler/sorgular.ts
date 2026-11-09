@@ -383,6 +383,13 @@ export function katalogMaliyetSatirlari(db: Db, nolar: number[]): Promise<Katalo
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[])`, [nolar]);
 }
 
+// 2478: kartın kategori ağacındaki yeri; hammaddede aile, sarf, demirbaş ve hizmette `g.kat`. Öteki türlerde ve boşta kod null.
+export function katalogKategoriSatirlari(db: Db, nolar: number[]): Promise<{ no: number; tur: string; kod: string | null }[]> {
+  return db.sorgu(
+    `SELECT k.no, k.tur, CASE WHEN k.tur = 'hammadde' THEN ${KATALOG_METIN('fam')} WHEN k.tur IN ('sarf', 'demirbas', 'hizmet') THEN ${KATALOG_METIN('g,kat')} END AS kod
+       FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[])`, [nolar]);
+}
+
 // 1104 a: satın almanın talep, teklif ve siparişte gösterdiği kart ayrıntısı. Değerler ekranın karta yazdığı metinlerdir; boş metin ve
 // biçimi tutmayan değer null (dizi boş). İptal kart dönmez.
 export interface KatalogSatinAlmaSatiri {

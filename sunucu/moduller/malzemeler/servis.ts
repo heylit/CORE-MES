@@ -33,7 +33,7 @@ import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, Ornek
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
 import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur } from './kurallar.ts';
-import type { KategoriAgaciDugumu } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
+import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
@@ -108,6 +108,14 @@ export async function malzemeMaliyetBilgileri(db: Db, nolar: number[]): Promise<
   return new Map((await s.katalogMaliyetSatirlari(db, benzersiz)).map((r) => [r.no, {
     kaliteKodu: r.kaliteKodu, kaliteAdi: r.kaliteAdi, aile: r.aile, form: r.form, formAdi: r.formAdi, stokBirimi: r.stokBirimi, birimKg: r.birimKg, netKg: r.netKg,
   }]));
+}
+
+// 2478: kart başına kategori (tür, kod); anahtar kategori ağacının düğümüyle aynıdır. Kategorisiz tür ve boş kategori null; olmayan
+// kart haritada yok; iptal ve pasif kart da döner (süzmek çağıranda). Yetki denetlemez.
+export async function malzemeKategorileri(db: Db, malzemeIdler: readonly number[]): Promise<Map<number, { tur: KategoriAgaciTuru; kod: string } | null>> {
+  const benzersiz = [...new Set(malzemeIdler)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogKategoriSatirlari(db, benzersiz)).map((r) => [r.no, r.kod === null ? null : { tur: r.tur as KategoriAgaciTuru, kod: r.kod }]));
 }
 
 // 1104 a: satın almanın kart ayrıntısı. Olmayan ve iptal kart haritada yok. Yetki denetlemez; neyin tedarikçiye gideceğine satın alma karar verir.
