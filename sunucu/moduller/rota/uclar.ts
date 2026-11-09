@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
@@ -7,12 +8,16 @@ import {
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   hamOnerisiCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
+import { surumSemasi } from '#paylasilan/surum.ts';
 import {
   agac, emreKopyala, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
   karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
+
+// B-2485-5: emir sürümü isteğe bağlıdır; gövdesiz ve boş gövdeli istek (bugünkü ekran) geçer, verilen sürüm denetlenir.
+const emreUygulaGovdesi = z.object({ surum: surumSemasi.optional() }).strict().optional();
 
 export const uclar = [
   // Rota şablonları (#698): okuma oturumla (Malzemeler kartı da okur), yazma rota.yaz ile.
@@ -394,8 +399,9 @@ export const uclar = [
     yetki: 'rota.emre-kopyala',
     tekrarKorumali: true,
     parametre: emirParametresi,
+    govde: emreUygulaGovdesi,
     cevap: emreUygulaCevabi,
-    isle: ({ db, kullanici, parametre }) => emreUygula(db, kullanici, parametre.id),
+    isle: ({ db, kullanici, parametre, govde }) => emreUygula(db, kullanici, parametre.id, govde?.surum),
   }),
   uc({
     yontem: 'GET',

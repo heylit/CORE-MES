@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { cakisma, gecersiz } from '#cekirdek/hata.ts';
+import { cakisma, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { OndalikMetin } from '#paylasilan/ondalik.ts';
 import { KATALOG_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -287,8 +287,10 @@ async function cokKatmanliAc(
 
 // Teslimdeki "Emirlere uygula (yürürlükteki rota)": iş emirleri ürünün yürürlükteki revizyonundan yenilenir. Güvenli kip
 // üretim emirlerindedir (başlamış ya da bitmiş iş emri korunur); rota yalnız yürürlükteki adımları verir (ADR 0006).
-export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
+// B-2485-5: ekran emrin sürümünü gönderirse arada değişmiş emre eski görünümle rota uygulanmaz; sürümsüz istek bugünkü gibi yürür.
+export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number, surum?: number) {
   const e = await adimliEmirAyrintisi(db, emirId);
+  if (surum !== undefined && e.surum !== surum) throw eskiSurum();
   if (e.urun.id === null || e.kaynakRotaRevizyonId === null) throw gecersiz('Rotadan açılmamış emre rota uygulanmaz.');
   const yid = await s.yururluktekiRevizyonId(db, e.urun.id);
   if (yid === null) throw gecersiz('Ürünün yürürlükte rotası yok.');

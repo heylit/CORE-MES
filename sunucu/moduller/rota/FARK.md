@@ -416,3 +416,7 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Adım miktarı ardıl yolu kuralıyla hesaplanır: adım, çıktısını tüketen adımların fire yollarından en büyüğünü taşır; dallı rotada bir dalın
   firesi paralel dalı büyütmez. Kural emrin malzeme ihtiyacıyla (uretim-emirleri `malzemeIhtiyaci`) aynıdır; öncüller `oncullerCikar`dan.
   Rota ayrıntısındaki adım miktarı, teorik süre ve ürün ağacı ihtiyacı dallı rotada artık emirle aynı çıkar. Tek hatlı rota değişmez.
+## 2486-3: yürürlükteki rotayı uygula emir sürümünü denetler (B-2485-5)
+- `POST /rota/emirler/:id/yururlukteki-rotayi-uygula` isteğe bağlı `{ surum }` gövdesi alır; verilirse emrin sürümüyle karşılaştırılır,
+  eskiyse 409 (ortak eski sürüm iletisi) ve emir değişmez. Gövdesiz ve boş gövdeli istek bugünkü gibi yürür; bilinmeyen alan 400.
+  Ekran tarafı (sürümü göndermek) 2487'dedir.

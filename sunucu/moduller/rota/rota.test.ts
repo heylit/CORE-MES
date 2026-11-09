@@ -1270,6 +1270,31 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(e.kaynakRotaRevizyonId, b);
     assert.equal(e.isEmirleri.length, 3);
   });
+  test('B-2485-5: yürürlükteki rotayı uygula gövdede emir sürümü alırsa denetler; eski sürüm 409 ve emir değişmez, gövdesiz istek bugünkü gibi', async () => {
+    const urun = await mamulAc();
+    const a = await yururlugeAlinmisRota(urun, [yeniAdim()]);
+    const emirAc = async () => {
+      const k = await istek(c.planlama, 'POST', `/rota/revizyonlar/${await yururluktekiRevizyon(urun)}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: null });
+      assert.equal(k.statusCode, 200, k.body);
+      return k.json<{ uretimEmriId: number }>().uretimEmriId;
+    };
+    const yururluktekiRevizyon = async (u: number) => (await vt().tx((db) => db.tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'yururlukte'", [u])))!.id;
+    assert.equal(await yururluktekiRevizyon(urun), a);
+    const ilk = await emirAc();
+    const ikinci = await emirAc();
+    const ucuncu = await emirAc();
+    await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim()]);
+    const surum = async (id: number) => (await vt().tx((db) => adimliEmirAyrintisi(db, id))).surum;
+    const yol = (id: number) => `/rota/emirler/${id}/yururlukteki-rotayi-uygula`;
+    const eski = await istek(c.planlama, 'POST', yol(ilk), { surum: (await surum(ilk)) + 1 });
+    assert.equal(eski.statusCode, 409, eski.body);
+    assert.equal((await vt().tx((db) => adimliEmirAyrintisi(db, ilk))).kaynakRotaRevizyonId, a);
+    assert.equal((await istek(c.planlama, 'POST', yol(ilk), { surum: await surum(ilk) })).statusCode, 200);
+    assert.equal((await istek(c.planlama, 'POST', yol(ikinci), {})).statusCode, 200);
+    assert.equal((await istek(c.planlama, 'POST', yol(ucuncu))).statusCode, 200);
+    assert.equal((await istek(c.planlama, 'POST', yol(ucuncu), { surum: 1, fazla: true })).statusCode, 400);
+  });
+
   test('#1185: emir yalnız yürürlükteki revizyondan açılır; onaylı ama yürürlükte olmayan revizyon reddedilir, yürürlükteki kabul edilir', async () => {
     const urun = await mamulAc();
     const eski = await yururlugeAlinmisRota(urun, [yeniAdim()]);
