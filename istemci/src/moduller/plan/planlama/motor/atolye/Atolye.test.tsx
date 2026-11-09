@@ -17,6 +17,10 @@ import { ornekCalisma } from '../ornek.ts';
 import { planKurSifirla } from '../coz.ts';
 import { otomatikUygulaIste, otomatikUygulaSifirla } from './gonder.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(() => { cleanup(); otomatikUygulaSifirla(); });
 // jsdom'da PointerEvent yok: fireEvent onsuz olayı konumsuz yollar. Sürükle testleri için fare olayından türetilir.
 if (typeof window.PointerEvent === 'undefined') {
@@ -301,7 +305,7 @@ describe('PlanlamaAtolyesi', () => {
     expect(within(kart()).getByText('1 → 2')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: /Onay ve canlı/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Çalışma planı/ }));
-    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi$/)).toBeTruthy();
+    expect(screen.getByText(/^\d+ iş, 1 sipariş yerleşmedi: .+ \((adım derlenmedi|uygun tezgâh ya da fasoncu yok|önceki adım yerleşmedi|kaynak ya da ufuk yetmedi)\)/)).toBeTruthy();
     expect(screen.queryByText('Bütün işler yerleşti')).toBeNull();
   });
 
@@ -647,6 +651,20 @@ describe('PlanlamaAtolyesi', () => {
     expect(cubuk.dataset['surukle']).toBeUndefined();
     fireEvent.click(cubuk);
     expect(within(kart()).queryByRole('button', { name: '+1 sa' })).toBeNull();
+    post.mockRestore();
+  });
+
+  it('saat ilerledikten sonra eklenen arıza yeni saatten başlar; şimdi sayfa açıkken donmaz (2506 a)', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
+    const k = screen.getByRole('dialog', { name: 'Olay ekle' });
+    fireEvent.change(within(k).getByLabelText('Kaç saat sonra başlar'), { target: { value: '0' } });
+    fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '6' } });
+    // Form açıkken üç saat geçer; olay gönderme anının saatine yazılır (8 → 11).
+    vi.setSystemTime(Date.now() + 3 * 3_600_000);
+    fireEvent.click(within(k).getByRole('button', { name: 'Olayı ekle' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/olay-ekle', { calismaSurumu: 8, olay: { tip: 'ariza', m: '5', bas: 11, saat: 6 } }, expect.anything()));
     post.mockRestore();
   });
 

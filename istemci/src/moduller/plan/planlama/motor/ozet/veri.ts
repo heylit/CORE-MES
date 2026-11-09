@@ -19,8 +19,14 @@ export const grupAdlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar =>
   Object.fromEntries(D.tezgahlar.flatMap((t) => (t.grup != null && t.grupAd ? [[String(t.grup), t.grupAd]] : [])));
 export const grupKodlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar =>
   Object.fromEntries(D.tezgahlar.flatMap((t) => (t.grup != null && t.grupKod ? [[String(t.grup), t.grupKod]] : [])));
-export const tezgahKodlari = (D: Pick<PlanVerisi, 'tezgahlar'>): Adlar => Object.fromEntries(D.tezgahlar.flatMap((t) => (t.kod ? [[t.id, t.kod]] : [])));
-export const tezgahKodu = (m: string, kodlar?: Adlar): string => kodlar?.[m] ?? m;
+// Kaynağın ekrandaki adı: tezgâhın kodu; kişinin el tezgâhında (kimlik 'kisi-<no>') ve fasoncuda (kimlik '@<no>') kimlik kullanıcıya bir şey
+// söylemez, adı yazılır (B-2499-2).
+const KISI_TEZGAHI = 'kisi-';
+export const tezgahKodlari = (D: Pick<PlanVerisi, 'tezgahlar' | 'fasoncular'>): Adlar => Object.fromEntries([
+  ...D.tezgahlar.flatMap((t) => (t.kod ? [[t.id, t.kod]] : t.id.startsWith(KISI_TEZGAHI) && t.ad ? [[t.id, t.ad]] : [])),
+  ...(D.fasoncular ?? []).flatMap((f) => (f.ad ? [[`@${f.id}`, f.ad]] : [])),
+]);
+export const tezgahKodu = (m: string, kodlar?: Adlar): string => kodlar?.[m] ?? (m.startsWith('@') ? m.slice(1) : m);
 
 export interface OzetAdimi { j: string; m: string; g: string; S: number; C: number; su: number; run: number; bek: number }
 export interface OzetSiparisi {
@@ -30,6 +36,8 @@ export interface OzetSiparisi {
 export interface OzetVerisi {
   now: number; T0: number; H1: number; gun: number; kova: number; gunAd: string[]; gruplar: string[];
   sip: OzetSiparisi[]; yok: { id: string; adim: number }[]; yokAdim: number;
+  // Bütün adımları bitmiş sipariş: plana girmez, sayımda bitmiş sayılır (B-2499-3).
+  bitmis: number;
   // Dönemdeki siparişlerden termini olmayanlar: zamanında da geç de sayılmaz (veri yoksa uydurulmaz).
   terminsiz: number;
   yuk: { m: string; grup: string; g: (number | null)[] }[];
@@ -37,6 +45,12 @@ export interface OzetVerisi {
   ops: { m: string; job: string; S: number; C: number; su: number }[];
   oz: { suH: number | null; suN: number; famN: number | null; Cmax: number | null };
   grupAd: Adlar; tezKod: Adlar;
+}
+
+// Rotası olan ama kalan adımı olmayan sipariş bitmiştir (derleme biten adımı düşürür).
+export function bitmisSiparisler(D: PlanVerisi, cx: Pick<Derleme, 'jobs'>): string[] {
+  const rotali = new Set(D.urunler.filter((u) => (u.rota ?? []).length > 0).map((u) => u.id));
+  return D.siparisler.filter((s) => !planDisi(s) && rotali.has(s.urun) && cx.jobs[s.id]?.ops.length === 0).map((s) => s.id);
 }
 
 export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number): OzetVerisi {
@@ -89,7 +103,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
   const sip = sip0.filter((s) => s.S < r.b && Math.max(Number.isFinite(s.C) ? s.C : s.S, s.due ?? 0) > r.a);
   const w = nabizOlc({ J: p.J, ops: p.ops }, new Set(sip.map((s) => s.id)), cx, r);
   return {
-    now, T0: r.a, H1: r.b, gun, kova, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((t, x) => t + x.adim, 0), terminsiz: sip.filter((s) => s.due == null).length, yuk,
+    now, T0: r.a, H1: r.b, gun, kova, gunAd, gruplar, sip, yok, yokAdim: yok.reduce((t, x) => t + x.adim, 0), bitmis: bitmisSiparisler(D, cx).length, terminsiz: sip.filter((s) => s.due == null).length, yuk,
     u: Object.entries(w.util),
     ops: ops.map((o) => ({ m: o.m, job: o.job, S: o.S, C: o.C, su: o.su })),
     oz: { suH: w.suH, suN: ops.filter((o) => o.su > 0 && o.S >= r.a && o.S < r.b).length, famN: null, Cmax: p.ozet.Cmax },
@@ -133,7 +147,7 @@ export function anOzeti(v: OzetVerisi, t: number) {
   const cal = v.ops.filter((r) => r.S <= t && r.C > t);
   return {
     tezgah: new Set(cal.filter((r) => !r.m.startsWith('@')).map((r) => r.m)).size, siparis: new Set(cal.map((r) => r.job)).size,
-    biten: v.sip.filter((s) => s.C <= t).length, toplam: v.sip.length + v.yok.length, yok: v.yok.length,
+    biten: v.sip.filter((s) => s.C <= t).length + v.bitmis, toplam: v.sip.length + v.yok.length + v.bitmis, yok: v.yok.length,
   };
 }
 

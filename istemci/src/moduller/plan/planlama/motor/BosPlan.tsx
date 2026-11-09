@@ -2,6 +2,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { KURULUYOR, type PlanKurucu } from './coz.ts';
 import type { Derleme } from './kurallar.ts';
+import { bitmisSiparisler } from './ozet/veri.ts';
 import { CALISMA_ACILINCA, PLAN_YETKISI_YOK, YOK_NOTU } from './ortak.tsx';
 
 // Çalışma var, plan yok (m-plan bosPlan): kaydın sayıları, üç adım, iki düğme. Planı kur sunucudaki motorla (576); yazamayana pasif. Veri ve
@@ -24,11 +25,12 @@ export function BosPlan({ c, cx, planKur = null, veriAc = null, planYaz = true }
   const neden = planYaz ? CALISMA_ACILINCA : PLAN_YETKISI_YOK;
   const D = c.D; const ad = typeof D.meta?.ad === 'string' ? D.meta.ad : null;
   const sayi = (n: number | undefined) => (n == null ? '—' : String(n));
+  const bitmis = bitmisSiparisler(D, cx).length;
   return (
     <div className="tc-pym-bos tc-pym-bos-genis">
       <Simge ad="gantt" boyut="b" />
       <strong>Plan henüz kurulmadı</strong>
-      <span>{`${ad ? `${ad}: ` : ''}${D.tezgahlar.length} tezgâh, ${D.siparisler.length} sipariş, ${Object.keys(cx.byId).length} işlem, ${sayi(D.personel?.length)} personel.`}</span>
+      <span>{`${ad ? `${ad}: ` : ''}${D.tezgahlar.length} tezgâh, ${D.siparisler.length - bitmis} sipariş${bitmis ? ` ve ${bitmis} bitmiş` : ''}, ${Object.keys(cx.byId).length} işlem, ${sayi(D.personel?.length)} personel.`}</span>
       <ol className="tc-pym-adimlar">
         {ADIMLAR.map(([b, m], i) => <li key={b}><b className="tc-pym-adim-no tc-pym-mono">{i + 1}</b><span><b>{b}</b><br /><small>{m}</small></span></li>)}
       </ol>

@@ -5,6 +5,11 @@ import { MALIYETSIZ, YONETICI, ac, sunucuKur } from '../test-ortak.tsx';
 import { PLANLAMA_ANAHTARI } from '../veri.ts';
 import { ornekDeger } from './test-verisi.ts';
 
+import { saatiSabitle } from '../test-saati.ts';
+import { ornekCalisma as saatCalismasi } from './test-verisi.ts';
+
+saatiSabitle(() => saatCalismasi());
+
 // P3 görünümleri iskeletin içinde açılır: izinli ve reddedilen yollar, para gizleme, salt okuma ve komutla yazma. Veri uydurmadır.
 const kayit = (ek: Parameters<typeof ornekDeger>[0] = {}) => [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: ornekDeger(ek), surum: 4 }];
 const PLANLAMACI = { ...MALIYETSIZ, islemler: [...MALIYETSIZ.islemler, 'plan.yaz' as Islem] };

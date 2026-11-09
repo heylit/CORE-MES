@@ -11,6 +11,7 @@ import { Dg } from './Dugme.tsx';
 import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 import { hamleYapisi, siraAdimi, useHamleci } from '../hamle/hamle.ts';
+import { tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
 
 // Ayrıntı sekmesinin seçim panelleri: iş (c-masa.betik opDenetci), sipariş (isDenetci), tezgâh (o-tahta.betik tbTezPaneli).
 // Tezgâh stüdyosu Planlama atölyesinin panosudur (575 a, zz36 istek). Kilitle ve kilidi aç çalışmaya yazar (plan.kilitle, 223 a ile ortak plan.yaz); taşımak ve sıra motorla gelir (357 b); öne al motorun önizlemeli hamlesidir (2129-1 b).
@@ -195,11 +196,11 @@ export function IsDenetci({ jid, ...o }: DenetciOzellikleri & { jid: string }) {
 
 export function TezgahDenetci({ m, ...o }: DenetciOzellikleri & { m: string }) {
   const { c, p, cx, planYaz: yaz } = o; const D = c.D;
-  const T = D.tezgahlar.find((x) => x.id === m); const u = p.util[m]; const fason = m.startsWith('@');
+  const T = D.tezgahlar.find((x) => x.id === m); const u = p.util[m]; const fason = m.startsWith('@'); const kod = tezgahKodu(m, tezgahKodlari(D));
   const ops = tezgahKuyrugu(p, m).filter((r) => r.C > cx.now);
   return (
     <section className="tc-pym-panel tc-pym-denetci" aria-label={`Tezgâh ${m}`}>
-      <div className="tc-pym-panel-ust"><h2><span className="tc-pym-mono">{fason ? m.slice(1) : m}</span> · {T?.ad ?? ''}</h2><Kapat yap={o.tezKapat} /></div>
+      <div className="tc-pym-panel-ust"><h2><span className="tc-pym-mono">{kod}</span>{T?.ad && T.ad !== kod ? ` · ${T.ad}` : ''}</h2><Kapat yap={o.tezKapat} /></div>
       <dl className="tc-pym-dl">
         <dt>Grup</dt><dd>{cx.M[m] ? cx.M[m].grup : 'fason'}</dd>
         <dt>Doluluk</dt><dd>{u ? yuzdeYaz(u.u) : '—'}</dd>

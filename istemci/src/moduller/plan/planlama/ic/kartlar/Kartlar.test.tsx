@@ -20,6 +20,10 @@ import {
   kuyrukGrubu, planKarti, rotaUrunu, siparisSatirlari, simdikiOlcu, yerlestir, type KartKaydi,
 } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); try { localStorage.clear(); } catch { /* yok */ } });
 
 const BOLGE: Bolge[] = [{ g: 'a', x: 0, y: 0, w: 400, h: 300, n: 2, ms: ['T1', 'T2'] }];

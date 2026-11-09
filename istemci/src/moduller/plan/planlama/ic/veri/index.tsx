@@ -11,6 +11,7 @@ import { ILK_BOLUM, VERI_BOLUMLERI, type VeriBolumu } from './kurallar.ts';
 import { Rotalar } from './Rotalar.tsx';
 import { Takvim } from './Takvim.tsx';
 import './veri.css';
+import { useAn } from '../../motor/saat.ts';
 
 export { VERI_BOLUMLERI, bolumOku, type VeriBolumu } from './kurallar.ts';
 
@@ -32,10 +33,11 @@ export function VeriVeKisitlar(o: VeriEkraniOzellikleri) {
   const uyar = (ileti: string) => { bildir('hata', ileti); };
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => (c ? planOku(c) : null), [c]);
+  const an = useAn();
   const derleme = useMemo(() => {
     if (!c) return null;
-    try { return { cx: derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), hata: null }; } catch (e) { return { cx: null, hata: hataMetni(e) }; }
-  }, [c, p, emirler]);
+    try { return { cx: derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), hata: null }; } catch (e) { return { cx: null, hata: hataMetni(e) }; }
+  }, [c, p, emirler, an]);
   const cx = derleme?.cx ?? null;
   const bulgular = useMemo(() => (!c || !derleme ? [] : derleme.cx ? denetimBulgulari(c, derleme.cx) : [{ k: 'hata', t: `Veri derlenemedi: ${derleme.hata ?? ''}` }]), [c, derleme]);
 

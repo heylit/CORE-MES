@@ -101,11 +101,11 @@ function PlanlamaEkrani() {
   // Yeniden okuma bekleyen yazmayı önce gönderir: yoksa okunan kayıt son değişikliği içermez, sonraki yazma kendi kendine 409 alırdı.
   const yazYenile = useCallback((): void => {
     if (yazici === null) { yenile(); return; }
-    void yazici.hepsiniYaz().then(yenile);
+    void yazici.hepsiniYaz().then(yenile, yenile);
   }, [yazici, yenile]);
   const yazTazele = useCallback((): void => {
     if (yazici === null) { tazele(); return; }
-    void yazici.hepsiniYaz().then(tazele);
+    void yazici.hepsiniYaz().then(tazele, tazele);
   }, [yazici, tazele]);
   // Ölçek ve seçim görünümler arasında taşınır (görünüm değişince bu bileşen kalır, adres parçası değişir).
   const [olcek, olcekKur] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);

@@ -17,6 +17,10 @@ import { BASLAMIS_SIRA, BAYAT } from './hamle/hamle.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ufukKur } from '../ufuk-olcegi.ts';
 
+import { saatiSabitle } from '../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(cleanup);
 
 // İş emri durumu okunamamış depo: biten iş kayıtlı plandan çıkar.
@@ -234,7 +238,7 @@ describe('PlanlamaMotoru', () => {
     expect(within(arac).queryByRole('button', { name: /Başka/ })).toBeNull();
     expect(within(arac).getByRole('tab', { name: 'Tezgâhlar' }).getAttribute('aria-selected')).toBe('true');
     const ol = screen.getByRole('region', { name: 'Çizelge, hafta' });
-    expect(within(ol).getAllByRole('button').map((b) => b.textContent).filter((x) => x === 'fason 5')).toHaveLength(1);
+    expect(within(ol).getAllByRole('button').map((b) => b.textContent).filter((x) => x === 'fason Ornek Fason Isil Islem')).toHaveLength(1);
     const is = within(ol).getByRole('button', { name: '3.10' });
     fireEvent.click(is);
     expect(is.hasAttribute('data-secili')).toBe(true);

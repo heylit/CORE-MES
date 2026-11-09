@@ -16,7 +16,7 @@ interface Satir { t: Tezgah; mx: number; ek: Record<string, number[]> }
 
 // Şimdiki günden başlayan n günlük sütunlar (isGunSut).
 export function gunSutunlari(c: PlanlamaCalismasi, n: number): { g0: number; l: (IsiSutunu & { g: number })[] } {
-  const g0 = Math.floor(simdiSaati(c) / 24);
+  const g0 = Math.floor(simdiSaati(c, Date.now()) / 24);
   const l: (IsiSutunu & { g: number })[] = [];
   for (let g = g0; g < g0 + n; g++) { const s = zamanYaz(c.D, g * 24); l.push({ k: `g${String(g)}`, g, ad: s.slice(0, 5), alt: s.slice(6, 9).trim(), bugun: g === g0 }); }
   return { g0, l };
@@ -25,7 +25,7 @@ export function gunSutunlari(c: PlanlamaCalismasi, n: number): { g0: number; l: 
 // Tezgâh × gün, günün açık saatlerinde dolu yüzde; planlı ek vardiya işaretli (zz30-isi ISI.mesaiplan).
 export function mesaiIsisi(c: PlanlamaCalismasi, T: Takvim): IsiVerisi<Satir> | IsiBos {
   if (!c.plan || baslangicMs(c.D) === null) return { bos: 'Plan kurulunca tezgâhların günlük doluluğu burada görünür.' };
-  const now = simdiSaati(c);
+  const now = simdiSaati(c, Date.now());
   const G = gunSutunlari(c, 14);
   const ops = planIsleri(c).filter((r) => !r.fas && Number.isFinite(r.S) && Number.isFinite(r.C));
   const EK = ekMesailer(c);
@@ -69,7 +69,7 @@ export function EkMesaiPlani(o: PlanlamaEkranOzellikleri) {
   const V = useMemo(() => (c && T ? mesaiIsisi(c, T) : { bos: 'Plan kurulunca tezgâhların günlük doluluğu burada görünür.' }), [c, T]);
   const yaz = yazici(o.komut);
   const yazabilir = o.komut !== null;
-  const g0 = c ? Math.floor(simdiSaati(c) / 24) : 0;
+  const g0 = c ? Math.floor(simdiSaati(c, Date.now()) / 24) : 0;
   const ekleFormu = useMemo(() => (c && yazabilir ? ekMesaiFormu(c, yaz, g0) : null),
   // yaz her çizimde yeniden kurulur; form çalışma ve yetkiyle değişir.
   [c, yazabilir, g0]);

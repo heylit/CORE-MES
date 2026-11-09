@@ -5,6 +5,10 @@ import {
 } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
 
+import { saatiSabitle } from '../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 describe('P3 saf hesaplar', () => {
   it('sipariş maliyeti: malzeme, tezgâh saati ve fason; amortisman girilmemişse genel gider bilinmez (null), kâr tutardan', () => {
     const c = ornekCalisma();

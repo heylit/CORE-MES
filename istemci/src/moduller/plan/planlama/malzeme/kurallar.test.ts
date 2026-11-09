@@ -76,6 +76,15 @@ describe('tahsis (matAlloc)', () => {
     expect(t.alimlar[0]).toMatchObject({ varis: 6 * G, isler: [{ j: 'E2', q: 2 }, { j: 'E1', q: 10 }] });
   });
 
+  it('sunucunun net eksiği geldiyse toplam eksik ona iner; fazla önce önceliği yüksek siparişten düşer (B-2483-67)', () => {
+    const m = (mrpEksik: unknown) => girdi({ malzemeler: [{ kod: 'M1', stok: 8, tedarikGun: 3, muayeneGun: 1, mrpEksik }] });
+    const t = tahsisEt(m(4), taban);
+    expect([t.isler.get('E1')?.[0]?.eksik, t.isler.get('E3')?.[0]?.eksik]).toEqual([3, 1]);
+    expect(tahsisEt(m(0), taban).isler.get('E3')?.[0]?.eksik).toBe(0);
+    // Alan yoksa ya da null ise ekranın brüt hesabı kalır; sunucu daha büyük eksik derse ekran eksiği büyütmez.
+    for (const x of [undefined, null, 50]) expect(tahsisEt(m(x), taban).isler.get('E1')?.[0]?.eksik).toBe(10);
+  });
+
   it('erken gelen tedarikçi (eksi gecikme) sözden önce sayılmaz', () => {
     const t = tahsisEt(girdi({ alimlar: [{ kod: 'M1', miktar: 1, soz: 4 * G, tedarikci: 'T1', gecikme: -2 * G }] }), taban);
     expect(t.alimlar[0]?.varis).toBe(5 * G);

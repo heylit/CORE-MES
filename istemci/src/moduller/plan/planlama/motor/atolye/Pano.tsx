@@ -19,6 +19,7 @@ import {
 import { Ray } from './Ray.tsx';
 import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
 import { hamleYapisi, useHamle } from '../hamle/hamle.ts';
+import { useAn } from '../saat.ts';
 
 // Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor isteyen her
 // eylem (dene, iyileştir, böl, çözüm yolları) görünür ama pasiftir; taşı, olay ve ek mesai sunucu komutudur (1982 a), ardından plan kendiliğinden uygulanır (2053-1 a). Kilit, donuk bölge ve brifing tercihi çalışmaya yalnız
@@ -50,11 +51,12 @@ interface Ozellikler {
 export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const liste = useMemo(() => siparisler(c, p, cx, hazir), [c, p, cx, hazir]);
   const bilgi = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
-  const now = simdiSaati(c);
+  const now = simdiSaati(c, an);
   const donuk = Number(c.w.dondurma) || 0;
   const [olcek, setOlcek] = useState<AtolyeOlcegi>(() => ilkOlcek(typeof window === 'undefined' ? 1280 : window.innerWidth));
   const [suz, suzSec] = useState<Suzgec | null>(null);
