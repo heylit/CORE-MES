@@ -120,17 +120,31 @@ export async function talepEkle(db: Db, t: TalepYazimi, no: string, talepEden: n
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [t.id, no, acan, ...anaDegerler(t, talepEden)],
   );
+  await talepEdenGecmisineEkle(db, t.id, [acan, talepEden]);
+}
+
+// 2398 a: talebi açan ve talep eden olmuş herkes; dört göz bunların onayını reddeder. Yalnız ekleme.
+async function talepEdenGecmisineEkle(db: Db, talepId: string, kisiler: readonly number[]): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_talep_eden_gecmisi (talep_id, kisi_id) SELECT $1, k FROM unnest($2::int[]) AS k ON CONFLICT DO NOTHING`,
+    [talepId, [...new Set(kisiler)]],
+  );
+}
+export async function talepEdenGecmisi(db: Db, talepId: string): Promise<number[]> {
+  return (await db.sorgu<{ kisiId: number }>('SELECT kisi_id AS "kisiId" FROM satin_alma_talep_eden_gecmisi WHERE talep_id = $1', [talepId])).map((r) => r.kisiId);
 }
 
 // Sürüm tutmazsa satır dönmez; çağıran çekirdeğin surumluGuncelle'si ile 404/409 ayırır.
-export function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, surum: number): Promise<{ id: string } | null> {
-  return db.tek<{ id: string }>(
+export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, surum: number): Promise<{ id: string } | null> {
+  const satir = await db.tek<{ id: string }>(
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,
        iptal_nedeni = $10, agirlik_maliyet = $11, agirlik_termin = $12, agirlik_tedarikci = $13, agirlik_garanti = $14, uretim_emri_id = $15,
        surum = surum + 1, guncelleme = now()
      WHERE id = $1 AND surum = $2 RETURNING id`,
     [t.id, surum, ...anaDegerler(t, talepEden)],
   );
+  if (satir !== null) await talepEdenGecmisineEkle(db, t.id, [talepEden]);
+  return satir;
 }
 
 export function talepNolari(db: Db, idler: readonly string[]): Promise<{ id: string; no: string }[]> {

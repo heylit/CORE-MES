@@ -34,8 +34,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yoneticiId = 0;
-  const c: Record<'yonetici' | 'sa' | 'mudur' | 'depo' | 'talep' | 'talep2' | 'operator', string> = {
-    yonetici: '', sa: '', mudur: '', depo: '', talep: '', talep2: '', operator: '',
+  const c: Record<'yonetici' | 'sa' | 'mudur' | 'depo' | 'talep' | 'talep2' | 'operator' | 'samuduru', string> = {
+    yonetici: '', sa: '', mudur: '', depo: '', talep: '', talep2: '', operator: '', samuduru: '',
   };
   const kisi: Record<string, number> = {};
   let firmaA = 0;
@@ -96,8 +96,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     : (await ortam!.sahip.tx((db) => db.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kayit->'com'->>'kod' = $1", [kod])))!.no;
 
   // Satın almanın teklif girip tek tedarikçiye karar verdiği talep.
-  async function kararli(): Promise<Talep> {
-    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+  async function kararli(acan = c.talep, alan: Partial<TalepGovdesi> = {}): Promise<Talep> {
+    const t = tamam<Talep>(await istek(acan, 'POST', '/satin-alma-talepleri/ac', yeniTalep(alan)));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10.00'], [k2, '5']]);
     const b = teklif(firmaB, [[k1, '12'], [k2, '5']]);
@@ -611,6 +611,36 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const red = await kaydet(c.yonetici, { ...govde(k), onaylar: [{ ...onay, id: randomUUID() }] });
     assert.equal(red.statusCode, 403);
     assert.match((red.json() as { mesaj: string }).mesaj, /Kararı veren/);
+  });
+
+  test('2398 a: talebi açan ya da talep eden onaylayamaz (403), reddedebilir; başkasının talebini onaylar', async () => {
+    const onay = (sonuc: 'onay' | 'ret') => ({ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc, dortGozsuz: false, notlar: sonuc === 'ret' ? 'Vade kısa' : '' });
+    const acan = await kararli(c.mudur, { talepEdenKisiId: kisi.talep! });
+    assert.equal(acan.acanKisiId, kisi.mudur);
+    const red = await kaydet(c.mudur, { ...govde(acan), onaylar: [onay('onay')] });
+    assert.equal(red.statusCode, 403);
+    assert.match((red.json() as { mesaj: string }).mesaj, /Talebi açan ya da talep eden/);
+    assert.equal((await kaydet(c.mudur, { ...govde(acan), onaylar: [onay('ret')] })).statusCode, 200);
+    const adina = await kararli(c.sa, { talepEdenKisiId: kisi.mudur! });
+    assert.equal(adina.talepEdenKisiId, kisi.mudur);
+    assert.equal((await kaydet(c.mudur, { ...govde(adina), onaylar: [onay('onay')] })).statusCode, 403);
+    assert.equal((await kaydet(c.mudur, { ...govde(await kararli()), onaylar: [onay('onay')] })).statusCode, 200);
+  });
+
+  test('2398 a (Güvenlik): talep eden kendini çıkarıp onaylayamaz; talep edeni değişen talebi eski de yeni de talep eden onaylayamaz', async () => {
+    const onay = () => ({ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay' as const, dortGozsuz: false, notlar: '' });
+    c.samuduru ||= await rolluKisi('samuduru', 'satin_alma_muduru');
+    const t = await kararli(c.sa, { talepEdenKisiId: kisi.samuduru! });
+    const cikti = tamam<Talep>(await kaydet(c.samuduru, { ...govde(t), talepEdenKisiId: kisi.talep! }));
+    assert.equal(cikti.talepEdenKisiId, kisi.talep);
+    const red = await kaydet(c.samuduru, { ...govde(cikti), onaylar: [onay()] });
+    assert.equal(red.statusCode, 403);
+    assert.match((red.json() as { mesaj: string }).mesaj, /Talebi açan ya da talep eden/);
+    const t2 = await kararli(c.sa, { talepEdenKisiId: kisi.samuduru! });
+    const devir = tamam<Talep>(await kaydet(c.sa, { ...govde(t2), talepEdenKisiId: kisi.mudur! }));
+    assert.equal((await kaydet(c.mudur, { ...govde(devir), onaylar: [onay()] })).statusCode, 403);
+    assert.equal((await kaydet(c.samuduru, { ...govde(devir), onaylar: [onay()] })).statusCode, 403);
+    assert.equal((await kaydet(c.yonetici, { ...govde(devir), onaylar: [onay()] })).statusCode, 200);
   });
 
   const onayKaydi = (sonuc: 'onay' | 'ret' = 'onay', notlar = '') =>

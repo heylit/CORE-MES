@@ -33,6 +33,7 @@ export const ILETILER = {
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
   dortGoz: 'Kararı veren kişi o kararı onaylayamaz.',
+  dortGozTalepEden: 'Talebi açan ya da talep eden kişi o talebi onaylayamaz.',
   kisiYok: 'Talep eden kişi bulunamadı.',
   teslimMiktari: 'Teslim miktarı sıfırdan büyük olmalı.',
   teslimSiparisYok: 'Sipariş satırı bulunamadı.',
@@ -252,9 +253,13 @@ export function degisiklikReddi(d: Degisiklik, islemler: readonly string[], kend
 export const talepEdenDurumu = (d: TalepDurumu): boolean => d === 'taslak' || d === 'teklif_isteniyor';
 
 // SAT-30: ayar açıkken kararı veren onaylayamaz; kapalıyken onay dört gözsüz işaretlenir.
-export function dortGozSonucu(kisiId: number, kararVeren: number | null, acik: boolean): 'red' | 'dortGozsuz' | 'normal' {
+// 2398 a: ayar açıkken talebi açan ya da talep eden de onaylayamaz (görevler ayrılığı). Ret serbesttir: talebi durdurur, harcama açmaz.
+export function dortGozSonucu(
+  kisiId: number, kararVeren: number | null, acik: boolean, talepEdenler: readonly number[], sonuc: 'onay' | 'ret',
+): 'red' | 'talepEdenRed' | 'dortGozsuz' | 'normal' {
   if (!acik) return 'dortGozsuz';
-  return kararVeren !== null && kisiId === kararVeren ? 'red' : 'normal';
+  if (kararVeren !== null && kisiId === kararVeren) return 'red';
+  return sonuc === 'onay' && talepEdenler.includes(kisiId) ? 'talepEdenRed' : 'normal';
 }
 
 // SAT-53: talep eden yalnız kendi talebini görür. Kararda seçilen teklif açıktır; rakip teklifler sayılsın diye kalır ama adsız ve
