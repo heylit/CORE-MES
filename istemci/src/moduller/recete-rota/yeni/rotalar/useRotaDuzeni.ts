@@ -3,7 +3,7 @@ import { useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { RrHatasi, useRrKomutu, type KomutGovdesi, type RrDurumu, type RrVerisi } from '../veri.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import {
-  acikMi, acikRevizyon, islemSuresiEksik, kaydetGovdesi, revizyonlari, rotaEksikleri, rotaHataMetni, sirali, yururlukteki,
+  acikMi, acikRevizyon, catalFarki, islemSuresiEksik, kaydetGovdesi, revizyonlari, rotaEksikleri, rotaHataMetni, sirali, yururlukteki,
   type Adim, type IsMerkezi, type Istasyon, type Makine, type Malzeme, type Operasyon, type Revizyon,
 } from './kurallar.ts';
 
@@ -216,6 +216,22 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     return true;
   };
 
+  // 2542 E: taşıma bir dalın çatal ya da birleşme yerini değiştirecekse önce onay istenir; ekran tasimaOnayi'nı pencereyle gösterir.
+  const [tasimaOnayi, setTasimaOnayi] = useState<{ id: string; yeni: Adim[]; metin: string; farklar: string[] } | null>(null);
+  const tasi = (id: string, f: (a: Adim[]) => Adim[], metin: string): boolean => {
+    if (!duzenlenebilir(id)) return false;
+    const yeni = f(adimlar(id));
+    const farklar = catalFarki(adimlar(id), yeni);
+    if (farklar.length === 0) return degistir(id, () => yeni, metin);
+    setTasimaOnayi({ id, yeni, metin, farklar });
+    return false;
+  };
+  const tasimaKarari = (evet: boolean) => {
+    const t = tasimaOnayi;
+    setTasimaOnayi(null);
+    if (evet && t) degistir(t.id, () => t.yeni, t.metin);
+  };
+
   const geriAl = (id: string, yon: 'geri' | 'ileri') => {
     const g = gecmisler.current.get(id);
     if (!g || !duzenlenebilir(id)) return;
@@ -357,7 +373,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     h, durum: d, mesgul, sonDegisiklik,
     revler: (id: string) => revler(id), gorulen, seciliRev, adimlar, taslakVar, duzenlenebilir,
     kayitHatasi: (id: string) => hatalar.current.get(id) ?? null,
-    degistir, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala,
+    degistir, tasi, tasimaOnayi, tasimaKarari, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala,
     opAdi, malzemeVar,
     // Taslağın notu (onaya gönderirken yazılır).
     taslakNotu: (id: string) => taslaklar.current.get(id)?.not ?? null,

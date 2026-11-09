@@ -21,66 +21,11 @@
 
 | Kişinin saat ücreti İK'dan gelmiyor (test 13.4) | Kişi saat maliyetinin sahibi finanstır (`finans/disari.ts` `birimMaliyetleri('kisi')`); İK'da girilen ücret "Saatlik ücret"e ve plan maliyetine yansımaz. Soru 196 a (23.10.2026): sahip finans kalır, Reçete ve Rota İK'yı okumaz. | Aşama 2: İK ücreti finansın kişi birim maliyetine bağlanır (İK -> finans); Reçete ve Rota değişmez. |
 
-## Bağlamada kapanacak: planlama (teslim 20.10.2026)
-| Kural / konu | İstisna | Nasıl uyumlanır |
-|---|---|---|
-| Rol ve yetki | Planlama çerçevesinde rol her zaman yönetici (`u5`, `zz31-tmi.betik`); denemenin rol seçicisi ve kendi yan menüsü görünür. Planlama sayfaları `recete-rota.planlama-oku` ile görünür ve açılır (353 a; işlem göçle hiçbir role verilmez, yalnız yönetici); eskiden `plan.oku` ile Plan sekmesini gören roller (planlama, müdür, vardiya sorumlusu, CAM, kalite, bakım) Aşama 1'de planı görmez. Denetim yalnız istemcidedir: kayıt okuma ucu (`GET /recete-rota/kayitlar`) `:planlama` anahtarını da `recete-rota.oku` ile verir. | Aşama 2: rol ortak yetki matrisinden; çerçevenin rol seçicisi kalkar; `:planlama` anahtarının okuması ve yazması sunucuda planlama işlemini ister. |
-| Deneme metni | Alt bilgi "Deneme sayfası ... bütün veri uydurmadır" uygulamada da görünür; uygulamada veri kayıttandır. | Görünüm: metin TMI içinde gizlenir ya da değişir. |
-| Canlı plan yalnız kayıtta | Planlama sayfasının "Onaya gönder" ve "Onayla, canlıya al"ı yalnız kayda yazar (`st.senaryolar`, `st.tmiCanli`); sunucu planı, Arkon ve terminal güncellenmez. GÜNCELLENDİ 23.10.2026 (DOĞRULANDI: `planlama-modulu.html`de `plan-canliya-al` yok, `parca/u-bugun.betik` `bg-onaya`, `bg-yayinla`): onay adımı da yalnız kayıttadır. Reçete ve Rota köprüsünde plan yazma komutu yoktur (2317, 2303-2 a): plan yalnız Planlama sayfasından yazılır. | Aşama 2: uretim-emirleri canlı plan uçları (BASKA-MODUL-ISTEKLERI). Canlıya alma 391 cevabı gelmeden yapılmaz: sunucu motoru çalışan adımın kalanını kalan adetten (`plan/servis.ts` `gerceklesenler`), çerçeve motoru geçen süreden (`engine.betik` sabitler) hesaplar; çerçeve planı sunucu planı olursa adet tabanlıdan süre tabanlıya geri düşülür. |
-| İki motor | Reçete ve Rota'nın kendi plan hesabı (`planRun`) ve planlama motoru (`engine`) ayrı; Reçete ve Rota'nın emir tarihleri canlı plandan farklı (t163). Reçete ve Rota'nın Plan, Stüdyo, Kanban sekmelerine menüden gidilmez; 307 a ve 304 a o sekmelerde kaldı. Karar 356 b: eski motor gizli kalır. | Aşama 2: eski motor kalkar, Reçete ve Rota canlı planı okur (356 b). |
-| Çözücüler | HiGHS: 361 b ile girdi (`highs` 1.15.3 paketi; kabuk istek üzerine verir, `wasm-unsafe-eval` yalnız planlama çerçevesinde). CP-SAT yok; seçilirse çalışmaz. Denemenin yerel çözücü servisi yoklaması (`h-cozuculer`) çerçevede bağlantı kapalı olduğundan sonuçsuz. | HiGHS kararı (SORULACAKLAR); sunucu motoru kararıyla birlikte. |
-| Planlama takvimi ve kaynakları | Tezgâh, istasyon, personel, vardiya, çalışma günü ve tatil planlama sayfasına da kaynak okumasıyla gelir (`zz31-tmi.betik` `tmiKaynakIle`, Reçete ve Rota çerçevesiyle aynı okuma); kayda yine yazılmaz. Kalan: (1) sayfanın tek takvimi vardır, çalışma günü aktif iş merkezlerinin haftalarının birleşimidir, tezgâh kendi iş merkezinin haftasıyla değil bütün vardiyalarla çalışır sayılır; (2) plan kapasitesi eki (onaylı izin, planlı fazla mesai, atama payı) ve makine durumu (bakım, arıza) motora geçmez; (3) tezgâhın motor ayarı (verim, ücret) yalnız ilk okumada istasyondan alınır, sonra sayfadaki değer kalır. Kayıtta plan başlangıcı yoksa plan bugünden başlar (`tmiTabanKur`). Örnek veride Reçete ve Rota kaydının rotaları kendi örnek tezgâhlarına bağlıdır, İstasyonlar örneğinin makineleriyle eşleşmez. | Aşama 2: tezgâh takvimi iş merkezinden, kapasite eki ve makine durumu motora; örnek verilerin eşlenmesi. |
-| Çerçeve geçişi | Reçete ve Rota bölümü ile planlama sayfası arasında geçişte bekleme (bekleme süresi + 1,5 sn) ve 2,3 MB sayfanın yeniden kurulması. | Tek çerçeve ya da sunucu motoru ile kalkar. |
-| Kayıt boyutu | Planlama durumu ayrı anahtarda; büyük set ölçülmedi. 1 MB uyarısı yalıtılmış çerçevede görünür mü denenmedi (VARSAYIM: görünmez). | Ölçülür; aşarsa alan başına kayıt. |
-| Tanıtım ve kılavuz anahtarları | Denemenin kılavuz tercihi önek dışı anahtarda (`pm-at-kilavuz-v1`): köprü onları yazmaz, sayfa yenilenince yeniden görünür. | Önekli anahtara alınır. |
-| Kendi renkleri | `modul.stil`'de 30 onaltılık renk (`--is-*` iş renkleri dahil). | Ortak seri renkleri (CEKIRDEK-ISTEKLERI 4). |
-| Satır içi stil | Reçete ve Rota'ya eklenen planlama alanlarında satır içi stil: `margin-top:8px` (2), `min-height:0` (2), prototipin kendi kalıbıyla. | Sınıfa çevrilir. |
-| Gömülü kütüphaneler | KAPANDI (362 a, 20.10.2026): beş gömülü kütüphane çıkarıldı; tur, ipucu konumu, Gantt sürüklemesi ve sıralama kendi kodumuz (`parca/v-arac.betik`). | - |
-| Uzantılar | `.betik`, `.stil` teslim izin listesinde yok. | CEKIRDEK-ISTEKLERI 2. |
-| Fason firma adı | "Fason firma #FS-..." | musteri-tedarikci bağlantısı. |
-| Planlama başlamış adım (391 a, madde 9) | Kalan sunucudan (`calisanAdimlar`), terminalin gerçek saatleriyle (sayım anından, yoksa başlamadan) yürür. Sayfanın "şimdi"si yalnız yeniden planlamada gerçek saate geçer (31 a); ondan önce plan öteki işleri eski şimdiden dizer, başlamış adım sonradaysa tezgâhtaki çakışma sapma uyarısıyla görünür. Sunucu artık başlamış demeyen adımın kaydı silinir; biten adımın gerçek bitişi okunmaz, iş plandaki yerine döner. Sapma rozeti (prototipte stüdyo üst çubuğunda) yok: uyarı gerçekleşen formunda ve bildirimde. Yenileme açılışta ve sayfaya dönülünce. Emirde değişen adım (opYer, rotasız emir) eşlenmez. | Sayfa saati gerçek saate geçerse ve stüdyo (madde 1-6) gelirse kapanır. |
-| Planlamada adımın adedi (24 a, madde 10) | Bitmemiş adımın adedi uretim-emirleri `adimAdedi`'nden (önceki biten adımın hurdası düşülmüş; `planlanacakIsEmirleri`, durum `adimAdetleri`); motor süreyi bu adetle hesaplar. Malzeme ihtiyacı ve fason fiyatı sipariş adediyle kalır; çalışan adımın hurdası (bitmeden) sonraki adıma düşmez. Rotasız ve emirde değişen adım eşlenmez. | Aşama 2: plan modülü aynı adımı sunucuda yerleştirirken (ADR 0018) çerçeveyle aynı adedi kullanır; uretim-emirleri dilimi `adimAdedi` taşırsa ikinci okuma kalkar. |
-| Planlama şimdisi (31 a) | "Şimdi" yalnız yeniden planlamada (Çöz, her kip) gerçek saate, çeyrek saate yuvarlanarak geçer (`S.simdi`, planla yazılır); açılışta ve çizimde değişmez. Planın başlangıç günü ötelenmez: kayıtlı plan, kilit, arıza ve gerçekleşen saatleri ona bağlı. Motor ufku başlangıçtan 63 gün; son 14 günde uyarı verilir, ufuk aşılırsa plan kurulamaz. Öneri ve onarım gibi öteki çözücüler şimdiyi ilerletmez. | Başlangıcı öteleyen (bütün saatleri kaydıran) ayrı iş ya da sunucu planına geçiş (Aşama 2). |
-| Planlama fasoncuları (23 a) | Aktif fason firmalar fasoncu olur; süre firmanın rota adımlarındaki en büyük termin günü (yoksa 1), çıkış günleri takvimin çalışma günleri, aynı anda iş sınırı yok (999). Sayfada değişen ayar aynı kimlikte kalır, sonraki rota süresi değişikliği ona geçmez. Emirde fasona alınan adımın (opYer) süresi okunmaz. | Firma kapasitesi ve çıkış günü sahibinde tutulursa oradan; adım başına süre motor değişikliği ister. |
-| İkinci menü | KAPANDI (20.10.2026): çekirdek yaması menüyü `ONERILEN_IKINCI_MENU` ile aynı yapar (`planlama-derle.test.ts` denetler). | - |
-| KAPANDI (359 a): aynı adlı tezgâhlar ayrı kaynak kalır, teke indirilmez. Tekrar eden tezgâhlar | Deneme verisinde T1 ve T2 aynı adlı ("CNC torna Ø400"). Paket yalnız kanıt tohumunda bu veriyi taşır, uygulama sayfasında veri yok. | Kalır. |
+Planlama çerçevesi, plan motoru, planlama değerlendirmesi, bitiş tarihi akışı, "Veri ve kısıtlar" ve tezgâh takvimi maddeleri plan modülünün borcudur; `sunucu/moduller/plan/UYUM-BORCU.md` sonundaki "Reçete ve Rota'dan taşınanlar" bölümüne olduğu gibi taşındı (B-2484-R1, 09.11.2026).
 
 ## Sunucuda zorunlu olup eksik kalan
 Kayıt deposu kuralları (anahtar, biçim, sürüm, yetki) sunucuda ve veritabanı kısıtlarındadır (KURAL-TEST.md).
 Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
-
-## Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
-- Kıyas yapıldı (plan `plan-kiyas.test.ts`, uydurma veri): vardiyalı senaryoda 8 işin 8'i iki motorda aynı (168 b ile motor vardiya molasını düşer). Kalan farklar:
-  (1) vardiyası tanımsız tezgâhın işi çözücüde `vardiyasiz` listesinde döner; plan bu alanı okumaz, iş eksik sayılır ve komut 409 olur;
-  (2) sunucu iş merkezi haftasını ve kişi vardiyasını okumaz (takvim eki null): çalışma günleri sayfanın tek takviminden; 159 b ile ayarcı sınırı sunucuda uygulanmaz, uyarı plana gelmez.
-- Çözücü varsayımları: eski revizyonla açılmış ya da rotasız emrin farklı adımı yerleşmez; istekte geçmeyen adım "şimdi bitmiş" sayılır (625o'dan beri fason adım hariç: termin günü kadar sonra döner); motorda karşılığı olmayan
-  sabit iş tezgâhı o aralıkta kapatır; açık çalışmanın deneme parçaları (kilit, olay, elle gerçekleşen) asıl plana girmez, kısıt gevşetmeleri girer.
-- Nasıl uyumlanır: plan `vardiyasiz`ı okur (168 b plan yaması), sonra bağ `bag('plan motoru -> plan', ...)` kurulur ve plan testlerinin saat beklentileri güncellenir;
-  takvim eki sunucuda okunur.
-- Sunucu motoru HiGHS kullanmıyor; gerekirse `highs`'ın dependencies'e alınması sorulur.
-
-## Bağlamada kapanacak: planlama değerlendirmesi (Soru 357 a)
-- KAPANDI (458 a, kart #591): sunucunun `planCoz`, `motorYukle` ve teklif denemesi de sayfanın motor kancalarıyla (`kancalar.betik`) koşar.
-- Çalışma kaydı (`:planlama`) sipariş geliri ve fiyatı taşır; `planlama-oku` taşıyan bu alanları çalışma ucundan okur. Değerlendirme ucunun
-  döndürdüğü opak plan ve sipariş kayıtları da çalışmaya geri yazıldığı için tutardan arındırılmaz.
-- Termin uzatma, bölme ve fiyat önerisinin uygulanması kaynak sahibinin alanını değiştirir (222 a ile çelişki); uygulama komutu bağlamada sahibinde.
-- Sayfanın kartları henüz bu uca bağlı değil; yeni Planlama ekranı (motor tarayıcıda yok) bağlanınca eski tarayıcı yolu kalkar.
-- KAPANDI (463 a, kart #614): değerlendirme iki adımlı; hesap uç transaction'ını beklemez, sınır 60 s. 60 emir / 180 adımlık uydurma veride plan
-  seçenekleri 10 s sürdü (ölçüldü); gerçek boyutta ölçülmedi.
-
-## Bağlamada kapanacak: bitiş tarihi akışı (455/2 a)
-- Akış yalnız `yaz` ucundan kaydedilen planda düşer. Plan başka yoldan kaydedilirse (sunucu çözücüsü, P5) o yol da `bitisAkisiEkle`yi çağırmalı.
-- Eski sayfanın `svKaydet`i (zx-sevkiyat) yeni ekran gelince kalkar; o zamana kadar ikisi aynı kuralla yazar.
-
-## Bağlamada kapanacak: yeni Planlama ekranı "Veri ve kısıtlar" (577b)
-- Sahiplik denetimi (575 a, "hepsi gelsin, sahiplerini kontrol ederiz sonra"): bugünkü sayfanın bütün iç görünümleri yeni ekrana aynen geldi. Kaynak alanlar
-  (tezgâh, personel, vardiya, çalışma günü, tatil, ürün ve rota, malzeme, sipariş, fasoncu, devamsızlık, satın alma) 222 a ile sahibinden okunur, ekranda düzenleme
-  düğmesi pasif kalır. Planlamaya özgü kalanlar çalışma komutuyla ve `plan.yaz` ile yazılır: kısıt açma ve parametreleri, `D.ayarlar`, ayar matrisi, arıza ve ek mesai,
-  tedarikçi listesi, aparat listesi. Tedarikçi (musteri-tedarikci) ve aparat (istasyonlar ya da takım) sahibi başka modül olabilecek kavramlardır; planlamada ikinci kopya olarak tutulur.
-- Nasıl uyumlanır: Aşama 2 sahiplik listesinde tedarikçi ve aparat için sahip sorulur; sahip belli olunca liste kaynak alana geçer, ekrandaki düzenleme pasifleşir.
-
-## Bağlamada kapanacak: tezgâh takvimi ve otomatik arıza (650 a, 651 a; kart 625g)
-- Sayfada duruş satırı yalnız silinip yeniden eklenerek değişir (bitiş saati yerinde düzenlenmez). Satırın nedeni ve oto işareti sayfanın tablolarında gösterilmez.
 
 ## Bağlamada kapanacak: Üretim emirleri liste ve yan panel (1100 B, 1101 a, 1106 a)
 - Durdu süzgeci ve rozeti yok: 1101 a'daki "Durdu" bölümü bu sekmeye gelmedi. Durdu bilgisi (hatalı parça yüzünden duran emir) yalnız `uretim-emirleri`
@@ -88,16 +33,6 @@ Prototipin iş kuralları sunucuda değildir; yukarıdaki tablodadır.
   Nasıl uyumlanır: ayrı dalda emir verisine durdu alanı eklenir (sahibi `uretim-emirleri`), sonra `DURUM_SUZGECLERI`ne "Durdu" bölümü ve satıra rozet girer.
 - Üretimi bitmiş emrin stoğa işlenip işlenmediği bu sekmede bilinmez: "Üretimi bitti" ve kapanış sonucu yoksa her zaman Üretim Emirleri uyarısı çıkar
   (stoğa işlenmiş ama kapanmamış emirde de). Nasıl uyumlanır: emir verisine stok tamamlama bilgisi gelince uyarı yalnız işlenmemiş emirde çıkar.
-
-## Bilgi (borç değil)
-
-Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, kart 2049).
-
-### Bağlamada kapanacak: plan motoru sunucuda (ADR 0018)
-
-- Çevirici sunucuda (DOĞRULANDI 23.10.2026: `plan-cozucusu.ts` `sunucuPlanCozucusu`, `motor/emirler.betik` `sunucuCozumGirdisi`, `disari.ts`ten verilir). Girdi planlama
-  sayfasının çalışması, kayıt ve kaynak okumasıdır; çalışma kaydı yoksa çözücü 409 verir. Bağ `sunucu/kablolama.ts`'te yok: plan bugünkü `oner` yolundadır.
-  Çalışan adımlar çerçeveye bağlandı (DOĞRULANDI: `servis.ts` `durum` cevabında `calisanAdimlar`, çerçevede `zz31-tmi.betik` `calisanUygula`).
 
 ## Bağlamada kapanacak: tek birincil düğme (kart 2155, karar 2155-9 a, 06.11.2026)
 Kural: sayfada en çok bir birincil (sarı) düğme; ikincisi çizgili olur, izleme sayfası birincil taşımaz. Ekran teslim olduğu gibi bırakıldı; sayılar

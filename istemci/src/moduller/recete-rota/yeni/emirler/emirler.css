@@ -231,6 +231,9 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-adim-saglam { align-items: flex-end; }
 .tc-rr3-adimlar small { color: var(--muted); }
 .tc-rr3-adim-bos { color: var(--muted); }
+/* 2571: başlamış adımın süre özeti satırın altında, OP sütunundan sonra; nedeni uyarı rengiyle. */
+.tc-rr3-adim-sure { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-variant-numeric: tabular-nums; }
+.tc-rr3-adim-sure-neden { flex-basis: 100%; color: var(--hazard-ink); }
 @container rr3-panel (max-width: 420px) {
   .tc-rr3-adimlar > li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .tc-rr3-adimlar .tc-rr3-adim-saglam { grid-column: 2; flex-direction: row; gap: var(--b-1); justify-self: start; }

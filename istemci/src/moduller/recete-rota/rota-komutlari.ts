@@ -51,6 +51,8 @@ const KULLANIMLAR = ['tek', 'paralel'] as const;
 const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
 const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
 const SURE_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
+// 2564 a: kabul edilen değer seçilen ölçüm ya da penceresinin ortancası; ortancayı sahibi hesaplar, ekran süre göndermez.
+const KABUL_DEGERLERI = ['olcum', 'ortanca'] as const;
 
 const kaynak = <T extends string>(v: unknown, izinli: readonly T[], alan: string): { tur: T; id: number } | null => {
   if (v === null || v === undefined) return null;
@@ -145,7 +147,10 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
   },
   'rota-olcum-kabul': {
     hafif: true,
-    hazirla: (g) => ({ yol: olcumYolu(g, '/kabul'), govde: { ...olcumGovdesi(g), olcumId: tamSayi(g['olcumId'], 'ölçüm') }, tekrarKorumali: true }),
+    hazirla: (g) => ({ yol: olcumYolu(g, '/kabul'), govde: {
+      ...olcumGovdesi(g), olcumId: tamSayi(g['olcumId'], 'ölçüm'),
+      ...(g['deger'] === undefined ? {} : { deger: secenek(g['deger'], KABUL_DEGERLERI, 'kabul değeri') }),
+    }, tekrarKorumali: true }),
   },
   'rota-onayla': {
     hafif: true,

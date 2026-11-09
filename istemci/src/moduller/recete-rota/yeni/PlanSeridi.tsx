@@ -1,15 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { PlanSurumCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, Simge } from '../../../ortak/arayuz/index.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { seritDurumu, sonCanliyaAlmaMetni } from './plan-seridi.ts';
 import { anahtarlar, RR_ANAHTARI, type RrDurumu } from './veri.ts';
 
-// Eski ekranın her sekmenin üstündeki plan şeridi: canlı plan durumu ve son canlıya alma. "Onaya gönder" plan yazar; yeni ekran yazmaz,
-// düğme görünür ama pasiftir (357 b). Canlı plan sürümü eski ekrandaki aralıkla sorulur; değişmişse "plan değişti", kim ve ne zaman, ve
-// Yenile (yalnız okuma).
+// Eski ekranın her sekmenin üstündeki plan şeridi: canlı plan durumu ve son canlıya alma. Bu ekran planı yazmaz: bekleyen değişiklik
+// varken eski "Onaya gönder" yerine planın yazıldığı Planlama'ya bağ verilir (2496 b; bu şerit için 357 b'nin pasif düğmesi kalktı).
+// Canlı plan sürümü eski ekrandaki aralıkla sorulur; değişmişse "plan değişti", kim ve ne zaman, ve Yenile (yalnız okuma).
 const SURUM_ARALIGI_MS = 20_000;
-export const ONAYA_GONDER_PASIF = 'Bu ekran planı yazmaz; onaya gönderme burada kapalıdır.';
+export const PLANLAMA_YOLU = '/plan';
 
 export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerlesimOkunamadi: boolean }) {
   const istemci = useQueryClient();
@@ -39,7 +40,9 @@ export function PlanSeridi({ durum, yerlesimOkunamadi }: { durum: RrDurumu; yerl
         </span>
       )}
       {s.tur === 'degisti' && <Dugme tur="birincil" simge="rotate" onClick={yenile}>Yenile</Dugme>}
-      {s.tur === 'bekliyor' && s.degisiklik > 0 && <Dugme tur="birincil" disabled title={ONAYA_GONDER_PASIF}>Onaya gönder</Dugme>}
+      {s.tur === 'bekliyor' && s.degisiklik > 0 && (
+        <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={PLANLAMA_YOLU}><Simge ad="gantt" />Planlama'da aç</Link>
+      )}
       <span className="tc-rry-plan-bosluk" />
       <small>{sonCanliyaAlmaMetni(canli)}</small>
     </div>

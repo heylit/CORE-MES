@@ -4,6 +4,7 @@ import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
 import type { PatlatmaOnizlemeCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
 import type { EkranYerlesimi } from '../veri.ts';
@@ -437,6 +438,59 @@ export function surectekiMalzeme(d: Pick<DurumCevabi, 'emirler' | 'routes' | 'ro
     .sort((a, b) => a.urun.localeCompare(b.urun) || a.opNo - b.opNo);
 }
 
+// 2553 b/3: statülü stok ile süreçteki malzeme tek tabloda. Statü rotanın bir adımının çıktısıdır (kaynak adım "<ürün>-<adım>"); ürün ve
+// OP numarası üzerinden süreçteki satırla eşlenir. Depoda stoktaki statülü miktar, Emirlere göre açık emirlerin o adımı geçip sonrakini
+// bekleyen miktarıdır, Fark ikisinin ayrımıdır. Statüsü olmayan süreç satırının deposu tutulmaz (null); emir verisi okunmuyorsa ya da
+// statünün adımı rotada bulunmuyorsa emir tarafı bilinmez (null). Bilinmeyen sıfır sayılmaz; fark yalnız iki taraf da biliniyorsa yazılır.
+export interface StokSurecSatiri {
+  anahtar: string; urunId: string | null; opNo: number | null; kart: Malzeme | null; statuIdler: number[]; statu: string;
+  depoda: number | null; emirlere: number | null; fark: number | null; emirler: string;
+  // 2547 eki, 2561 a: açık emre ayrılmamış miktar, statüye son sokan emir ve statüdeki son hareket. Liste okunmadıysa null.
+  // Veri koşulu: sahipsiz yalnız kullanılabilir kalitedir (serbest, şartlı; plan da böyle sayar); karar bekleyen ayrı tutulur.
+  sahipsiz?: number | null; kararBekleyen?: number | null; kaynakEmir?: { id: number; no: string | null } | null; sonHareket?: string | null;
+  // Tabloda karşılığı olmayan sahipsiz satırın malzemesi (kart yok).
+  malzemeMetni?: string;
+}
+export function statuAdimi(d: Pick<DurumCevabi, 'routes' | 'routeRevs'>, kaynakAdim: string): { urunId: string; opNo: number } | null {
+  const m = /^(\d+)-(.+)$/.exec(kaynakAdim);
+  if (!m) return null;
+  const urunId = m[1]!; const adimId = m[2]!;
+  const rotalar = [d.routes?.[urunId], ...(d.routeRevs ?? []).filter((r) => r.itemId === urunId).map((r) => r.data)];
+  for (const r of rotalar) {
+    const a = r?.steps.find((x) => x.id === adimId);
+    if (a) return { urunId, opNo: a.opNo };
+  }
+  return null;
+}
+export function stokVeSurec(
+  d: Pick<DurumCevabi, 'routes' | 'routeRevs' | 'emirler' | 'adimAdetleri'>, statulu: readonly StatuluSatir[] | null, okuma: StokOkumasi | null,
+): StokSurecSatiri[] {
+  const surec = surectekiMalzeme(d);
+  const satir = new Map<string, StokSurecSatiri>();
+  for (const s of statulu ?? []) {
+    const st = okuma?.statuler?.find((x) => x.id === s.statuId) ?? null;
+    const yer = st ? statuAdimi(d, st.kaynakAdim) : null;
+    const k = yer ? `${yer.urunId}|${String(yer.opNo)}` : `s${String(s.statuId)}`;
+    const o = satir.get(k) ?? {
+      anahtar: k, urunId: yer?.urunId ?? null, opNo: yer?.opNo ?? null, kart: s.malzeme, statuIdler: [], statu: st?.ad ?? `Statü ${String(s.statuId)}`,
+      depoda: 0, emirlere: yer && d.emirler ? 0 : null, fark: null, emirler: '',
+    };
+    o.statuIdler.push(s.statuId);
+    o.depoda = (o.depoda ?? 0) + s.miktar;
+    satir.set(k, o);
+  }
+  for (const s of surec) {
+    const o = satir.get(s.anahtar);
+    if (o) { o.emirlere = s.miktar; o.emirler = s.emirler; continue; }
+    satir.set(s.anahtar, {
+      anahtar: s.anahtar, urunId: s.urun, opNo: s.opNo, kart: null, statuIdler: [], statu: `OP ${String(s.opNo)} çıktısı`,
+      depoda: null, emirlere: s.miktar, fark: null, emirler: s.emirler,
+    });
+  }
+  return [...satir.values()].map((o) => ({ ...o, fark: o.depoda !== null && o.emirlere !== null ? o.depoda - o.emirlere : null }))
+    .sort((a, b) => (a.urunId ?? '~').localeCompare(b.urunId ?? '~') || (a.opNo ?? Infinity) - (b.opNo ?? Infinity) || a.anahtar.localeCompare(b.anahtar));
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Çok katmanlı emir (1476-F, 1483 a): stoktan karşılanan alt parça alt ağacıyla emre girmez. Seçim düğüm yoludur ("0.1"); gönderilen liste
 // en üstteki seçilenlerdir (altı zaten çıkar). Kök stoktan seçilemez.
@@ -483,4 +537,67 @@ export function altDugumAdimlari(d: Pick<Durum, 'routes'>, o: Pick<Emir, 'duguml
     const r = d.routes?.[g.itemId]?.steps.find((s) => s.opNo === a.kaynakOpNo);
     return { sira: 0, opNo: a.opNo, ad: r?.name ?? `OP ${String(a.kaynakOpNo)}`, opId: r?.opId ?? null, stationId: r?.stationId ?? null, durum: a.durum };
   }));
+}
+
+// 2547 eki, 2561 a: sahipsiz statülü stok tabloya eklenir. Satır statüleriyle eşleşir: serbest ve şartlı sahipsiz miktar toplanır (plan da
+// bunları sayar), karar bekleyen ayrı toplanır; kaynak emir ve son hareket en yeni hareketli satırdandır. Statüsü olan satırda eşleşme yoksa sahipsiz
+// 0'dır (stok o statüde tamamen açık emirlere ayrılmış); statüsüz satırda null. Tabloda karşılığı olmayan sahipsiz statü kendi satırı olur.
+// Liste okunamadıysa (null) alanlar null kalır, sıfır uydurulmaz.
+export type SahipsizSatir = SahipsizStatuluCevabi['satirlar'][number];
+const KULLANILABILIR: ReadonlySet<string> = new Set(['serbest', 'sartli']);
+
+// Atölye notu: tablo son harekete ya da sahipsiz miktara göre sıralanabilir; boş değer her yönde sonda kalır. Sıralama yoksa satırlar olduğu gibi.
+export function stokSurecSirala(satirlar: readonly StokSurecSatiri[], siralama: { alan: string; yon: 'artan' | 'azalan' } | null): StokSurecSatiri[] {
+  if (siralama === null || (siralama.alan !== 'sonHareket' && siralama.alan !== 'sahipsiz')) return [...satirlar];
+  const deger = (s: StokSurecSatiri): string | number | null => (siralama.alan === 'sonHareket' ? s.sonHareket ?? null : s.sahipsiz ?? null);
+  const yon = siralama.yon === 'artan' ? 1 : -1;
+  return [...satirlar].sort((a, b) => {
+    const x = deger(a); const y = deger(b);
+    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * yon;
+  });
+}
+export function sahipsizEkle(satirlar: readonly StokSurecSatiri[], sahipsiz: readonly SahipsizSatir[] | null, okuma: StokOkumasi | null): StokSurecSatiri[] {
+  if (sahipsiz === null) return satirlar.map((s) => ({ ...s, sahipsiz: null, kararBekleyen: null, kaynakEmir: null, sonHareket: null }));
+  const kullanilan = new Set<number>();
+  const ozet = (liste: readonly SahipsizSatir[]) => {
+    const son = [...liste].filter((x) => (x.sonHareket ?? null) !== null).sort((a, b) => (b.sonHareket ?? '').localeCompare(a.sonHareket ?? ''))[0];
+    const kaynak = son ?? liste.find((x) => (x.kaynakEmirId ?? null) !== null);
+    return {
+      sahipsiz: liste.filter((x) => KULLANILABILIR.has(x.kaliteDurumu)).reduce((t, x) => t + Number(x.sahipsiz), 0),
+      kararBekleyen: liste.filter((x) => x.kaliteDurumu === 'karar_bekliyor').reduce((t, x) => t + Number(x.sahipsiz), 0),
+      kaynakEmir: kaynak && (kaynak.kaynakEmirId ?? null) !== null ? { id: kaynak.kaynakEmirId as number, no: kaynak.kaynakEmirNo ?? null } : null,
+      sonHareket: son?.sonHareket ?? null,
+    };
+  };
+  const sonuc = satirlar.map((s) => {
+    if (s.statuIdler.length === 0) return { ...s, sahipsiz: null, kararBekleyen: null, kaynakEmir: null, sonHareket: null };
+    const eslesen = sahipsiz.filter((x) => s.statuIdler.includes(x.statuId) && (s.kart === null || x.malzemeId === s.kart.kayitNo));
+    eslesen.forEach((x) => { kullanilan.add(sahipsiz.indexOf(x)); });
+    return { ...s, ...ozet(eslesen) };
+  });
+  const artan = new Map<string, SahipsizSatir[]>();
+  sahipsiz.forEach((x, i) => {
+    if (kullanilan.has(i)) return;
+    const k = `x${String(x.malzemeId)}|${String(x.statuId)}`;
+    artan.set(k, [...(artan.get(k) ?? []), x]);
+  });
+  for (const [k, liste] of artan) {
+    const x = liste[0]!;
+    sonuc.push({
+      anahtar: k, urunId: null, opNo: null, kart: null, statuIdler: [x.statuId], statu: statuAdi(okuma, x.statuId), depoda: null, emirlere: null, fark: null, emirler: '',
+      malzemeMetni: [x.malzemeKod, x.malzemeAd].filter(Boolean).join(' ') || `Malzeme ${String(x.malzemeId)}`, ...ozet(liste),
+    });
+  }
+  return sonuc;
+}
+
+// 2571: iş emrinin süre özeti adımın satırında. Ölçülemeyen süre "–" ile ve nedeniyle yazılır (sıfır uydurulmaz); nedenler arkon'un
+// "Süre ölçülmedi" metinleriyle aynı dildedir (2567).
+export interface AdimSureOzeti { saglam: number; hurda: number; hazirlikDk: number | null; brutBirimDk: number | null; netBirimDk: number | null }
+export function sureOzetiNedenleri(o: AdimSureOzeti): { hazirlik: string | null; islem: string | null } {
+  const islem = o.netBirimDk !== null ? null
+    : o.saglam === 0 && o.hurda === 0 ? 'Sayım yok: işlem süresi ölçülmedi'
+      : o.saglam === 0 ? 'Sağlam sayım yok: işlem süresi ölçülmedi' : 'İşlem süresi ölçülmedi';
+  return { hazirlik: o.hazirlikDk === null ? 'Ayar basılmadı: hazırlık ölçülmedi' : null, islem };
 }

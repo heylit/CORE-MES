@@ -83,17 +83,26 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
       await expect(sema.getByRole('button', { name: 'Yakınlaştır' })).toBeVisible();
     }
     if (await kutu.count() > 0) {
+      // 2558 b/10: tek tık yalnız seçer; panel çekmecedir, üst çubuktaki düğmeyle açılır ve Esc ile kapanır.
       await kutu.click();
+      await sema.getByRole('button', { name: 'Düzenleme paneli', exact: true }).click();
       await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeVisible();
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+      await page.keyboard.press('Escape');
+      await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeHidden();
     }
-    await sema.getByRole('button', { name: 'Ürün listesi' }).click();
+    // 2558 b/4: ürün listesi ⋯ menüsündedir.
+    await sema.getByRole('button', { name: 'Diğer rota işlemleri' }).click();
+    await page.getByRole('menuitem', { name: 'Ürün listesi' }).click();
     await expect(sema.getByRole('table', { name: 'Ürünler ve rotaları' }).or(sema.getByText('Henüz ürün yok', { exact: false }))).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await seritte(page, 'Operasyonlar').click();
     const ops = page.getByRole('region', { name: 'Operasyonlar' });
     await expect(ops.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
-    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toBeVisible();
+    // 2559 a: revizyon listesi bu bölümden kalktı; katalog araması ve varsayılan açık "Pasifleri gizle" kalır.
+    await expect(ops.getByRole('searchbox', { name: 'Operasyon ara' })).toBeVisible();
+    await expect(ops.getByRole('checkbox', { name: 'Pasifleri gizle' })).toBeChecked();
+    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);

@@ -4,6 +4,7 @@ import type { MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { Kayit, KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { HamOnerisiCevabi, PatlatmaOnizlemeCevabi, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { IZINLI_KOMUTLAR, kopruHatasi, type KaynakEki, type KopruIsleyici, type PlanMotoru, type StokOkumasi } from '../kopru.ts';
 
@@ -25,8 +26,9 @@ export const anahtarlar = {
   eskiKayit: [...RR_ANAHTARI, 'eski-kayit'] as const,
   stok: (idler: readonly number[]) => [...RR_ANAHTARI, 'stok', idler.join(',')] as const,
   sureler: (revizyonId: number, makineId: number | null) => [...RR_ANAHTARI, 'sureler', revizyonId, makineId] as const,
-  patlatma: (revizyonId: number) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId] as const,
+  patlatma: (revizyonId: number, miktar: number | null = null) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId, miktar] as const,
   hamOnerisi: (urunId: string) => [...RR_ANAHTARI, 'ham-onerisi', urunId] as const,
+  sahipsizStatulu: [...RR_ANAHTARI, 'sahipsiz-statulu'] as const,
 };
 
 // Köprü komutunun adı: tablo kopru.ts IZINLI_KOMUTLAR'dır (rota, emir, kaynak, statü, stok, maliyet). Tabloda olmayan ad gönderilmez.
@@ -122,12 +124,16 @@ export function useSureler(revizyonId: number | null, makineId: number | null = 
 
 // Patlamış rota önizlemesi (1476-F): ürünün yürürlükteki revizyonundan çok katmanlı emrin açılış görüntüsü; yazma yoktur. Uç
 // rota.emre-kopyala ister; ekran işlemi olmayana sormaz.
-export function usePatlatmaOnizlemesi(revizyonId: number | null, etkin = true) {
+// miktar null ise sorgu parametresi hiç gönderilmez (sunucu 1 alır); boş ya da geçersiz miktar 400 aldığı için çağıran yalnız geçerli tam sayı verir.
+export function usePatlatmaOnizlemesi(revizyonId: number | null, etkin = true, miktar: number | null = null) {
   return useQuery({
-    queryKey: anahtarlar.patlatma(revizyonId ?? 0),
+    queryKey: anahtarlar.patlatma(revizyonId ?? 0, miktar),
     enabled: etkin && revizyonId !== null,
+    // Miktar değişince eski sayılar yenisi gelene dek kalır (tablo titremez); başka revizyonun verisi gösterilmez.
+    placeholderData: (onceki, sorgu) => (sorgu?.queryKey[3] === (revizyonId ?? 0) ? onceki : undefined),
     queryFn: async () => {
-      try { return await api.get<PatlatmaOnizlemeCevabi>(`/rota/revizyonlar/${String(revizyonId)}/patlatma-onizleme`); } catch (h) { throw new RrHatasi(h); }
+      const sorgu = miktar === null ? '' : `?miktar=${String(miktar)}`;
+      try { return await api.get<PatlatmaOnizlemeCevabi>(`/rota/revizyonlar/${String(revizyonId)}/patlatma-onizleme${sorgu}`); } catch (h) { throw new RrHatasi(h); }
     },
   });
 }
@@ -153,5 +159,16 @@ export function useEskiKayit(etkin = true) {
     queryKey: anahtarlar.eskiKayit,
     enabled: etkin,
     queryFn: async () => anaBelgeyiBul(await api.get<KayitlarCevabi>('/recete-rota/kayitlar')),
+  });
+}
+
+// 2547 eki, 2561 a: açık emre ayrılmamış statülü stok (sahibi stok, GET /stok/sahipsiz-statulu, stok okuma yetkisiyle). Yalnız okunur.
+export function useSahipsizStatulu(etkin: boolean) {
+  return useQuery({
+    queryKey: anahtarlar.sahipsizStatulu,
+    enabled: etkin,
+    queryFn: async () => {
+      try { return await api.get<SahipsizStatuluCevabi>('/stok/sahipsiz-statulu'); } catch (h) { throw new RrHatasi(h); }
+    },
   });
 }

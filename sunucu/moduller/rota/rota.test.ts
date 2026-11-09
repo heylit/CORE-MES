@@ -897,6 +897,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const carpanlar = await vt().tx((db) => db.sorgu<{ opNo: number; adetCarpani: number | null }>(
       'SELECT i.op_no AS "opNo", d.adet_carpani AS "adetCarpani" FROM uretim_emirleri_is_emri i LEFT JOIN uretim_emirleri_is_emri_dali d ON d.is_emri_id = i.id WHERE i.uretim_emri_id = $1 ORDER BY i.sira', [k.uretimEmriId]));
     assert.deepEqual(carpanlar.map((x) => [x.opNo, x.adetCarpani ?? 1]), [[1010, 3], [1020, 3], [10, 2], [20, 1], [30, 1]]);
+    // 2605 a: önizlemenin hedef adedi emrin adım hedefidir (adet x dal çarpanı, firesiz).
+    const hedefler = o.dugumler.flatMap((d) => d.adimlar.map((a) => [a.emirOpNo, a.hedef?.kokBasina, a.hedef?.siparis]));
+    assert.deepEqual(hedefler.sort((x, y) => Number(x[0]) - Number(y[0])), carpanlar.map((x) => [x.opNo, String(x.adetCarpani ?? 1), String(4 * (x.adetCarpani ?? 1))]).sort((x, y) => Number(x[0]) - Number(y[0])));
     // Miktar verilmezse 1; geçersiz miktar reddedilir.
     assert.equal((await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme`)).miktar, '1');
     for (const m of ['0', '1.5', 'x']) assert.equal((await istek(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme?miktar=${m}`)).statusCode, 400);
