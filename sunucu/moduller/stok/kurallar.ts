@@ -964,9 +964,9 @@ export interface UretimAdimPlani {
   cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
   // malzemeId null: emrin ürünü. statuId: birleştirmede dalların parçasından doğan ürün adımın statüsüne girer (1348 a); öteki hâllerde yok.
   giris: { malzemeId: number | null; miktar: bigint; statuId?: number | null } | null;
-  // 2522 a: bu adımda daha önce sayılanın taşınan miktarı (binde; adimPlaniKur ekler). Elle sarf edilen taşınan statü zincirinin dışında
-  // kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
-  oncekiTasinan?: bigint;
+  // 2522 a: bu adımda daha önce sayılanın taşınan miktarı, malzeme başına (binde; adimPlaniKur ekler, dallı adımda her dalın parçası ayrı).
+  // Elle sarf edilen taşınan statü zincirinin dışında kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
+  oncekiTasinanlar?: ReadonlyMap<number, bigint>;
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;

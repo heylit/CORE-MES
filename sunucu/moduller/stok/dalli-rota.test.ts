@@ -121,6 +121,8 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('stok_dalli');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
+    const gy = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    cerezler.set('yonetici', String(gy.headers['set-cookie']).split(';')[0] ?? '');
     projeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('STOK.DALLI', 'Deneme proje', $1) RETURNING id", [kisiler.get('yonetici')]))!.id;
     for (const [rol, islemler] of Object.entries(ROL_ISLEMLERI)) {
@@ -219,5 +221,27 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     }));
     assert.match(h.uyari ?? '', /eksi/i, 'B dalının parçası birleştirme istasyonunda yok: eksiye fire');
     assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [5.4, -1]);
+  });
+
+  test('2528 (2522 a): dallı emirde elle sarf edilen A dalı hammaddesi zincir dışında kalır: OP 10 elle verilmeyeni çevirir, birleştirme statüden onu düşer; hammadde bir kez düşer', async () => {
+    const k = await kur();
+    await malKabul(k.hm1, '6');
+    await malKabul(k.hm2, '10');
+    const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: k.hm1, konumId: await kabulKonumu(), miktar: '2.4', cikisNedeni: 'uretime_sarf', uretimEmriId: k.e });
+    assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+    await teslimEt({ malzemeId: k.hm1, miktar: '3.6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+    assert.equal((await sayim(k, 10, k.ist.a, '10')).uyari, null, 'A dalı elle verilen 2,4 kg dışında 3,6 kg çevirir');
+    await sayim(k, 20, k.ist.b, '10');
+    assert.deepEqual([await bakiye(k.hm1, k.ist.a, k.s[10]!), await bakiye(k.hm1, k.ist.a, null)], [3.6, 0]);
+    await teslimEt({ malzemeId: k.hm1, miktar: '3.6', statuId: k.s[10], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', statuId: k.s[20], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
+    assert.equal((await sayim(k, 30, k.ist.c, '10')).uyari, null);
+    await sayim(k, 40, k.ist.c, '10');
+    const cikis = Number((await o().vt.tek<{ m: string }>(
+      "SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'cikis'", [k.e, k.hm1]))!.m);
+    assert.equal(cikis, 6, 'hammadde bir kez düşer: 2,4 elle + 3,6 zincirden');
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [0, 0]);
+    assert.equal(await eksiSatir(k), 0, 'statüde eksi kalmaz');
   });
 });
