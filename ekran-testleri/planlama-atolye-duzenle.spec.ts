@@ -94,7 +94,7 @@ test('atölyede Düzenle ile taşı, Öne al önizlenir, Uygula yazar, Geri al d
   await expect(geri).toHaveAttribute('aria-disabled', 'true');
 
   // 2539 a: Kilit ve dondurma paneli üst çubuktan açılır; donuk bölge, sabitler, dondurulmuş günler ve başlamış iş notu.
-  await page.getByRole('button', { name: 'Kilit ve dondurma' }).click();
+  await page.getByRole('button', { name: /^Kilit ve dondurma: / }).click();
   const kp = page.getByRole('dialog', { name: 'Kilit ve dondurma' });
   await expect(kp).toBeVisible();
   await expect(kp.getByRole('button', { name: 'Sabitleri kaldır' })).toBeVisible();

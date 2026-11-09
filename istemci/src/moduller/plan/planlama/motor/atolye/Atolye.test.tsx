@@ -874,8 +874,7 @@ describe('PlanlamaAtolyesi 2531 a', () => {
     const c = ornekCalisma(); c.locks = { '2.40': { m: '5', S: 1 } };
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
-    const d = screen.getByRole('button', { name: 'Kilit ve dondurma' });
-    expect(d.getAttribute('title')).toMatch(/donuk \d+ sa · 1 sabit · 0 gün/);
+    const d = screen.getByRole('button', { name: /^Kilit ve dondurma: donuk \d+ sa · 1 sabit · 0 gün$/ });
     fireEvent.click(d);
     const k = screen.getByRole('dialog', { name: 'Kilit ve dondurma' });
     fireEvent.click(within(k).getByRole('button', { name: '16 sa' }));

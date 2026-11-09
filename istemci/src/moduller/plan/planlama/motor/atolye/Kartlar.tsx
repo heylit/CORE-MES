@@ -511,7 +511,7 @@ function GeriEylemleri({ ort }: { ort: Ortam }) {
             onClick={() => { if (ort.yaz && n > 0) setEmin(true); }}><Simge ad="rotate" boyut="k" />Taslağı sıfırla</button>
         )}
       </div>
-      <Not>{emin ? 'Emin misiniz? Bu oturumdaki kararların hepsi geri alınır; yinele ile dönülebilir.' : 'Sıfırlama bu oturumdaki kararları birlikte geri alır; canlı plan değişmez.'}</Not>
+      <Not>{emin ? 'Emin misiniz? Bu oturumdaki kararların hepsi geri alınır; canlı plan değişmez. Yinele ile dönülebilir.' : 'Sıfırlama bu oturumdaki kararları birlikte geri alır; canlı plan değişmez.'}</Not>
     </>
   );
 }

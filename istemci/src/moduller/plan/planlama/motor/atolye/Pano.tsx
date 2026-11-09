@@ -223,7 +223,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       <div className="tc-pym-tp-grup" role="group" aria-label="Ölçek">
         {OLCEKLER.map(([z, a]) => <button key={z} type="button" aria-pressed={olcek === z} onClick={() => setOlcek(z)}>{a}</button>)}
       </div>
-      <button type="button" className="tc-dugme tc-pym-hayalet" aria-label="Kilit ve dondurma" title={`Kilit ve dondurma: ${kilitOzeti(c, donuk)}`}
+      <button type="button" className="tc-dugme tc-pym-hayalet" aria-label={`Kilit ve dondurma: ${kilitOzeti(c, donuk)}`} title={`Kilit ve dondurma: ${kilitOzeti(c, donuk)}`}
         onClick={(e) => kartAc({ tur: 'dondurma' }, ankraj(e))}>
         <Simge ad="lock" boyut="k" /><span data-ikincil="" data-metin="">{kilitOzeti(c, donuk)}</span>
       </button>
