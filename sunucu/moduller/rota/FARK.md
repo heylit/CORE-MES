@@ -427,3 +427,8 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
 - VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
 - VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.
+
+## 2605: önizlemede emir hedefi ana sayı (kullanıcı kararı 2605 a)
+- `GET /rota/revizyonlar/:id/patlatma-onizleme` her adımda `hedef: { kokBasina, siparis }` döner: emrin o adımdaki hedef adedi (adet x dal çarpanı,
+  firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
+- Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.

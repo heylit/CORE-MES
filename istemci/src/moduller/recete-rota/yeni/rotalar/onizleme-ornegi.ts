@@ -2,7 +2,7 @@ import type { PatlatmaOnizlemeCevabi } from '#paylasilan/sozlesme/rota.ts';
 
 // Patlamış rota önizlemesinin uydurma cevabı (1476-F testleri): kök 11 (Rev A, 71), alt parça 13 (K1, kök başına 2), onun altı 14 (K1.1, 6).
 // 2557 malzeme alanları: kayıpsız adet (fire payı yok), giren ve yan ürün yok.
-const sayi = (adet: string) => ({ adet: { kokBasina: adet, siparis: adet }, cikanAdet: { kokBasina: adet, siparis: adet }, cikti: 'urun' as const, girenler: [], yanUrunler: [] });
+const sayi = (adet: string) => ({ hedef: { kokBasina: adet, siparis: adet }, adet: { kokBasina: adet, siparis: adet }, cikanAdet: { kokBasina: adet, siparis: adet }, cikti: 'urun' as const, girenler: [], yanUrunler: [] });
 const urun = (id: number, kod: string, ad: string, tur: string) => ({ id, stokKodu: kod, ad, tur, stokBirimi: 'adet', onayDurumu: 'onayli' });
 export function onizlemeOrnegi(ek: Partial<PatlatmaOnizlemeCevabi> = {}): PatlatmaOnizlemeCevabi {
   return {
