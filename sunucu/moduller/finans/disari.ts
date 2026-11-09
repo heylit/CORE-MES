@@ -40,3 +40,5 @@ export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId:
   return { tutar: b.tutar, paraBirimi: b.paraBirimi };
 }
 export { malzemeKartiIzleri } from './sorgular.ts';
+// 2481 (2461-3.1): satın alma siparişinin ödeme kapanış günü (paranın çıktığı gün, mahsup dahil); yalnız gün döner (FNS-48). Yetki denetlemez.
+export { siparisOdemeKapanislari } from './odeme-kapanisi/servis.ts';

@@ -235,3 +235,8 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 - Sistem Ayarları > Finans ve Muhasebe ekranın Ayarlar bölümünü açar (`FinansAyarlariBolumu`), çerçeveyi değil.
 - Silinen: `FinansCercevesi.tsx`, `kopru.ts`, `yazi-tipleri.ts`, `cerceve/yazi/`, `yeni/Hazirlaniyor.tsx` ve yalnız çerçeveyi sınayan testler (`FinansCercevesi.test.tsx`, `finans-tema`, `finans-ortak-palet`, `finans-iade`, kökteki `motor.test.ts`). İade ve sipariş/sevk seçimi testleri ekran üzerinde yeniden yazıldı (`yeni/iade-siparis.test.tsx`); motor sayıları `yeni/motor.test.ts`'te. `cerceve/finans.html` yalnız eşitlik testlerinin başvurusudur.
 - Sunucu, göç ve veri değişmedi.
+
+## Siparişin ödeme kapanışı (2481 a, 2481-1 a, 2481-2 a)
+
+- Eklenen: `odeme-kapanisi/` (sorgular, kurallar, servis ve testleri); `disari.ts` `siparisOdemeKapanislari`'nı açar. Satın alma siparişine bağlı iptal edilmemiş belgelerin hepsi kapandıysa kapatan satırların en geç günü döner, yoksa null. Gün paranın çıktığı gündür: ödemenin tarihi, çek, senet ve ciroda çekin vadesi; mahsupta mahsubun tarihi. Yalnız gün çıkar (FNS-48).
+- Göç, uç, yetki ve ekran değişmedi.
