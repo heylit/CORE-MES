@@ -432,3 +432,9 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - `GET /rota/revizyonlar/:id/patlatma-onizleme` her adımda `hedef: { kokBasina, siparis }` döner: emrin o adımdaki hedef adedi (adet x dal çarpanı,
   firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
 - Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.
+
+## 2610: önizlemede ara adımın statülü kartı ve stoğu (kullanıcı kararı 2610 a)
+- Önizleme adımına `araHal: { statu { id, ad } | null, kart urunOzeti | null, stok { toplam, planaSayilan } | null } | null`. Ürün adımında ve engelde null.
+- Kaynak Reçete ve Rota'nın `adimAraHalleri`'dir (yazmaz; sayımın statü ve çıktı kartı kuralı); bağ kablolama.ts'te `araHalCozucusuKaydet`.
+  Statü stoğu stok `statuStoklari` (2547 sorgusu, plana sayılan kalite `planaSayilirMi`), çıktı kartının stoğu `stokMiktarlari`.
+- Gösterilecek miktarı ekran seçer (2622 kararı); sözleşme ikisini de taşır. Tablo, göç ve yetki değişmedi.

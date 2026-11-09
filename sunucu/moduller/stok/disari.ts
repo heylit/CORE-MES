@@ -3,7 +3,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
-import { binde, planaSayilirMi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
+import { binde, bindenMetin, planaSayilirMi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
@@ -94,6 +94,26 @@ export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[])
 export const sahipsizStatuluStoklar = async (db: Db): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; sahipsiz: string }[]> =>
   (await servis.sahipsizStatuluStoklar(db)).satirlar.filter((s) => planaSayilirMi(s.kaliteDurumu))
     .map((s) => ({ malzemeId: s.malzemeId, statuId: s.statuId, kaliteDurumu: s.kaliteDurumu, sahipsiz: s.sahipsiz }));
+
+// 2610 a: istenen malzeme ve statü çiftlerinin statüdeki stoğu (2547'nin statuluStoklar sorgusu; konum toplamı eksi bakiyeyi düşer).
+// toplam bütün kalite durumları, planaSayilan yalnız plana sayılan kalite (planaSayilirMi). Bakiyesi olmayan çift satırsız döner (sıfır uydurulmaz).
+// Okuma yetkisini çağıran korur.
+export async function statuStoklari(
+  db: Db, ciftler: readonly { malzemeId: number; statuId: number }[],
+): Promise<{ malzemeId: number; statuId: number; toplam: string; planaSayilan: string }[]> {
+  if (ciftler.length === 0) return [];
+  const istenen = new Set(ciftler.map((c) => `${String(c.malzemeId)}:${String(c.statuId)}`));
+  const toplam = new Map<string, { malzemeId: number; statuId: number; toplam: bigint; planaSayilan: bigint }>();
+  for (const s of await sorgular.statuluStoklar(db, [...new Set(ciftler.map((c) => c.malzemeId))])) {
+    const k = `${String(s.malzemeId)}:${String(s.statuId)}`;
+    if (!istenen.has(k)) continue;
+    const t = toplam.get(k) ?? { malzemeId: s.malzemeId, statuId: s.statuId, toplam: 0n, planaSayilan: 0n };
+    t.toplam += binde(s.miktar);
+    if (planaSayilirMi(s.kaliteDurumu)) t.planaSayilan += binde(s.miktar);
+    toplam.set(k, t);
+  }
+  return [...toplam.values()].map((t) => ({ malzemeId: t.malzemeId, statuId: t.statuId, toplam: bindenMetin(t.toplam), planaSayilan: bindenMetin(t.planaSayilan) }));
+}
 
 // Akış süresi için emrin stok hareketleri (kart #1338): emrin kendi hareketleri, emrin partisinin hareketleri (statü çevirme,
 // sevk çıkışı) ve emrin teslimlerinin hareketleri; zamana göre, tekrarsız. Okuma yetkisini çağıran korur.

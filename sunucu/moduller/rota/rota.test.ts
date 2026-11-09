@@ -16,8 +16,9 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { adimliEmirAyrintisi, emirAyar, emirBaslat, emirBitir, emirBittiDinle, emirlerinMalzemeIhtiyaci, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { adimBilesenleri, adimEtkinSureleri, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
+import { adimBilesenleri, adimEtkinSureleri, araHalCozucusuKaydet, adimIlkParcaSecimleri, adimEtkinSureleriToplu, emirBittiYansit, revizyonGetir, revizyonlar, urunAgaci, yururluktekiRevizyon } from './disari.ts';
 import { isler } from './isler.ts';
+import { adimAraHalleri, adimStatusu } from '../recete-rota/disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -903,6 +904,41 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     // Miktar verilmezse 1; geçersiz miktar reddedilir.
     assert.equal((await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme`)).miktar, '1');
     for (const m of ['0', '1.5', 'x']) assert.equal((await istek(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme?miktar=${m}`)).statusCode, 400);
+  });
+
+  test('2610 a: önizlemede ara adımın statülü kartı ve statüdeki stoğu; statü açılmamışsa ve stok yoksa null, önizleme statü yazmaz', async () => {
+    const urun = await mamulAc();
+    const hm = await hammaddeAc();
+    const id = await yururlugeAlinmisRota(urun, [
+      yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [] }), yeniAdim({ bilesenler: [] }),
+    ]);
+    const birak = araHalCozucusuKaydet(adimAraHalleri);
+    try {
+      const statuSayisi = async () => (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM recete_rota_statu'))!.n;
+      const onizle = async () => (await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme?miktar=2`)).dugumler[0]!.adimlar;
+      const once = await statuSayisi();
+      const a = await onizle();
+      assert.equal(await statuSayisi(), once, 'önizleme statü açmaz');
+      assert.deepEqual(a.map((x) => [x.kaynakOpNo, x.araHal?.statu ?? null, x.araHal?.kart?.id ?? null, x.araHal?.stok ?? null]), [
+        [10, null, hm, null], [20, null, hm, null], [30, null, null, null],
+      ]);
+      assert.equal(a[2]?.araHal, null, 'ürün adımında ara hal yok');
+      // Sayım statüyü açar; stok statüdeki bakiyedir: eksi bakiyeli konum toplamdan düşer, karar bekleyen plana sayılmaz.
+      const statuId = (await vt().tx((db) => adimStatusu(db, { malzemeNo: urun, opNo: 10 })))!;
+      const konumlar = (await vt().sorgu<{ id: number }>("SELECT id FROM stok_konum ORDER BY id LIMIT 2")).map((k) => k.id);
+      const bakiye = (konum: number, miktar: string, kalite = 'serbest') => ortam!.sahip.sorgu(
+        'INSERT INTO stok_bakiye (malzeme_id, konum_id, statu_id, kalite_durumu, miktar, ilk_giris) VALUES ($1, $2, $3, $4, $5, now())', [hm, konum, statuId, kalite, miktar]);
+      await bakiye(konumlar[0]!, '5');
+      await bakiye(konumlar[1]!, '-2');
+      await bakiye(konumlar[0]!, '3', 'karar_bekliyor');
+      const b = await onizle();
+      const statu = (await vt().tek<{ ad: string }>('SELECT ad FROM recete_rota_statu WHERE id = $1', [statuId]))!;
+      assert.deepEqual(b[0]?.araHal, { statu: { id: statuId, ad: statu.ad }, kart: b[0]?.araHal?.kart, stok: { toplam: '6', planaSayilan: '3' } });
+      assert.equal(b[0]?.araHal?.kart?.id, hm);
+      assert.deepEqual(b[1]?.araHal?.stok ?? null, null, 'açılmamış statünün stoğu yok');
+    } finally {
+      birak();
+    }
   });
 
   test('RT-58: ağaç üstten aşağı toplam ihtiyacı fire paylarıyla döner; alt mamul kendi rotasıyla açılır', async () => {
