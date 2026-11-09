@@ -249,6 +249,33 @@ describe('R3 Üretim emirleri: komutlar', () => {
     expect(istekler.find((i) => i.yol === '/adimli-emirler/rotasiz')?.govde).toMatchObject({ malzemeNo: 11, adet: 25, emirTuru: 'seri' });
   });
 
+  it('açık projesi olmayan üründe proje şartı form açılırken görünür, Emri oluştur kapalıdır; emir isteği gitmez (B-2502-3)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: true, projeler: [] }) },
+    });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    expect((await within(form).findByText(/Bu ürün için açık proje yok/)).closest('p')?.querySelector('a')?.getAttribute('href')).toBe('/projeler');
+    const dugme = within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.click(dugme);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yontem === 'POST' && i.yol.startsWith('/adimli-emirler'))).toEqual([]);
+  });
+
+  it('proje gerekmeyen türde şart iletisi çıkmaz, Emri oluştur açıktır (B-2502-3, izinli)', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }) } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(within(form).queryByText(/açık proje yok/)).toBeNull();
+    expect((within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('çift tıklama tek emir açar: ikinci tık komut sürerken düşer (RR-2)', async () => {
     const istekler = sunucuKur(YONETICI, {
       yazmalar: {
