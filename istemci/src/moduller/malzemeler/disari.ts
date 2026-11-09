@@ -1,3 +1,4 @@
+import type { KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 // Başka modül ekranlarının ithal edebildiği tek dosya.
 // 1480: yerleşik kalitenin yoğunluğu (g/cm³) yalnız bu modülün kalite tablosundadır; tablo büyük olduğu için ilk istekte ayrı parça
 // olarak yüklenir. Aile ya da kod tabloda yoksa ya da yoğunluk yazılı değilse null.
@@ -11,3 +12,11 @@ export async function yerlesikKaliteYogunlugu(aile: string, kod: string): Promis
   }
   return null;
 }
+
+// 2465 (2459 a): kategori ağacının "Malzemeler'de düzenle" bağlantısı, türün Malzeme ayarları bölümü. Hizmet grupları yerleşiktir,
+// ayarda düzenlenmez: null (bağlantı çizilmez). Yol sabit yazılır; ekran parçalarını yüklememek için sekmeler ithal edilmez (test denetler).
+export function kategoriAgaciDuzenleYolu(tur: KategoriAgaciTuru): string | null {
+  const bolum = KATEGORI_DUZENLEME_BOLUMU[tur];
+  return bolum === null ? null : `/malzemeler/ayarlar?${new URLSearchParams({ bolum }).toString()}`;
+}
+const KATEGORI_DUZENLEME_BOLUMU: Readonly<Record<KategoriAgaciTuru, string | null>> = { hammadde: 'aile', sarf: 'sarf', demirbas: 'db', hizmet: null };

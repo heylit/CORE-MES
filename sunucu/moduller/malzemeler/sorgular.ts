@@ -794,6 +794,11 @@ export function kategoriTablosu(db: Db): Promise<{ tur: 'sarf' | 'demirbas' | 'h
   return db.sorgu('SELECT tur, kod, ad, kisa_kod AS "kisaKod", yerlesik FROM malzeme_kategorisi FOR UPDATE');
 }
 
+// 2465: kategori ağacının sarf, demirbaş ve hizmet düğümleri; pasifler de döner.
+export function kategoriSatirlari(db: Db): Promise<{ tur: 'sarf' | 'demirbas' | 'hizmet'; kod: string; ad: string; yerlesik: boolean; aktif: boolean }[]> {
+  return db.sorgu('SELECT tur, kod, ad, yerlesik, aktif FROM malzeme_kategorisi');
+}
+
 export async function kategorileriYaz(
   db: Db, k: readonly { tur: string; kod: string; ad: string; kisaKod: string | null; aktif: boolean }[],
 ): Promise<void> {
