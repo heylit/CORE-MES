@@ -5,7 +5,7 @@ import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
   adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
-  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, operasyonYaz, rotaEksikleri,
+  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
 } from './kurallar.ts';
@@ -52,7 +52,8 @@ function KartBilgisi({ r, m }: { r: RotaEkrani; m: Malzeme }) {
     return Number.isFinite(n) ? n : null;
   };
   const uretilen = duzen.adimlar(m.id).length > 0;
-  const tutar = maliyet ? (uretilen ? malzemeMaliyeti(m.id, duzen.adimlar, (id) => duzen.h.malzeme.get(id), birim) : birim(m.id)) : null;
+  const sonuc = maliyet ? malzemeMaliyetiSonucu(m.id, duzen.adimlar, (id) => duzen.h.malzeme.get(id), birim) : null;
+  const tutar = sonuc?.deger ?? null;
   return (
     <>
       <dl className="tc-rr1-ig">
@@ -60,7 +61,7 @@ function KartBilgisi({ r, m }: { r: RotaEkrani; m: Malzeme }) {
         <div><dt>Kod</dt><dd>{m.code}</dd></div>
         <div><dt>Birim</dt><dd>{m.unit ?? YOK}</dd></div>
         <div><dt>Tür</dt><dd>{TUR_ADI[m.type] ?? m.type}</dd></div>
-        {r.yetki.maliyetOku && <div><dt>{uretilen ? 'Malzeme maliyeti' : 'Birim maliyet'}</dt><dd>{tutar === null ? YOK : `${sayi(Math.round(tutar * 100) / 100)} ₺`}</dd></div>}
+        {r.yetki.maliyetOku && <div><dt>{uretilen ? 'Malzeme maliyeti' : 'Birim maliyet'}</dt><dd title={sonuc?.neden ?? undefined}>{tutar === null ? YOK : `${sayi(Math.round(tutar * 100) / 100)} ₺`}{sonuc?.neden ? <small> · {sonuc.neden}</small> : null}</dd></div>}
         <div><dt>Eldeki stok</dt><dd>{miktarMetni(m.stock, m.unit)}</dd></div>
         <div><dt>Minimum stok</dt><dd>{miktarMetni(m.min, m.unit)}</dd></div>
       </dl>

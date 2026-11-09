@@ -346,30 +346,40 @@ export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
 }
 
 // Malzeme maliyeti (prototipte matCost): rotası olan kartta girenlerin toplamı, olmayanda birim maliyet. Birim maliyeti bilinmeyen kalem
-// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren ve kendine dönen rota da toplamı
-// bilinmez yapar (2684): atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi.
-export function malzemeMaliyeti(
+// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren, kendine dönen rota ve miktarı girilmemiş
+// giren de toplamı bilinmez yapar: atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi. Kayıtlı rotada miktar zorunludur
+// (sunucu > 0); boş miktar yalnız düzenlenen taslakta olur ve özet taslaktan hesaplanır.
+export type MaliyetSonucu = { deger: number; neden: null } | { deger: null; neden: string };
+export function malzemeMaliyetiSonucu(
   id: string, rotaOf: (id: string) => readonly Adim[], malzeme: (id: string) => Malzeme | undefined,
   birimMaliyet: (id: string) => number | null, yol: readonly string[] = [],
-): number | null {
+): MaliyetSonucu {
+  const bos = (neden: string): MaliyetSonucu => ({ deger: null, neden });
   const m = malzeme(id);
-  if (!m || yol.includes(id)) return null;
+  if (!m) return bos(`Giren kartı bulunamadı (#${id}).`);
+  if (yol.includes(id)) return bos(`${m.code} rotası kendine dönüyor.`);
   const ss = sirali(rotaOf(id));
-  if (m.type === 'ham' || ss.length === 0) return birimMaliyet(id);
+  if (m.type === 'ham' || ss.length === 0) {
+    const b = birimMaliyet(id);
+    return b === null ? bos(`${m.code} birim maliyeti girilmemiş.`) : { deger: b, neden: null };
+  }
   const fs = adimCarpanlari(ss);
   let c = 0;
   let girdi = false;
   for (let j = 0; j < ss.length; j++) {
-    for (const x of ss[j]?.ins ?? []) {
-      const alt = malzemeMaliyeti(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
-      if (alt === null) return null;
+    const a = ss[j];
+    if (!a) continue;
+    for (const x of a.ins) {
+      if (!(Number(x.qty) > 0)) return bos(`${m.code} ${adimAdi(a)}: ${malzeme(x.itemId)?.code ?? 'giren'} miktarı girilmemiş.`);
+      const alt = malzemeMaliyetiSonucu(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
+      if (alt.deger === null) return alt;
       girdi = true;
-      c += (x.qty || 0) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt;
+      c += Number(x.qty) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt.deger;
     }
   }
-  // Rotada hiç giren yoksa maliyet sıfır değil, bilinmez (rota eksik): sıfır uydurulmaz.
-  return girdi ? c : null;
+  return girdi ? { deger: c, neden: null } : bos(`${m.code} rotasında giren yok.`);
 }
+export const malzemeMaliyeti = (...g: Parameters<typeof malzemeMaliyetiSonucu>): number | null => malzemeMaliyetiSonucu(...g).deger;
 
 // Adımın süresi (prototipte opDays): hazırlık + çevrim * miktar / verim; gün, iş merkezinin ortalama günlük saatiyle.
 export function adimSuresi(a: Adim, miktar: number, istasyon: Istasyon | undefined, gunSaati: number): { dk: number; gun: number } | null {
