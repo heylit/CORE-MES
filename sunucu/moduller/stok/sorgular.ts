@@ -27,7 +27,7 @@ export {
   malzemeKartiIzleri, aylikTuketim, tuketimTarihleri,
 } from './sorgular/malzeme/sorgular.ts';
 export {
-  isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinZincirdekiMiktari, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,
+  isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinZincirdekiMiktari, statuluStoklar, statuSonHareketleri, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,
   emrinAkisHareketleri, refakatCiktiPartiIdleri, type KartTeslimi, kartTeslimleri, type EmirTeslimSatiri, emirTeslimleri, type EmirIstekSatiri,
   emirIstekleri, partiGirisZamanlari, sonPartiler, emirTamamlamaKilidi, emirUretimGirisi, konumKodlari, bakiyeDefterFarki,
 } from './sorgular/emir/sorgular.ts';

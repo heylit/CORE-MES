@@ -1,6 +1,6 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 
@@ -128,6 +128,33 @@ export const AYRILMIS_KONUM_TURLERI = ['hurda', 'karantina', 'sevkiyat'] as cons
 // Kullanılabilir stok (rezerve, öneri, kritik seviye) yalnız serbest ve şartlı kalitedir; karar bekleyen ve red parça üretimde uyarıyla
 // ilerler ama rezerveye girmez (134 a, 135).
 export const KULLANILABILIR_KALITE = ['serbest', 'sartli'] as const satisfies readonly KaliteDurumu[];
+
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok, malzeme, statü ve kalite başına (miktarlar binde). Red sayılmaz.
+// Açık emirlere ayrılan önce kullanılabilir kalemden (serbest, sonra şartlı) düşülür, artarsa karar bekleyenden: rezerve kullanılabilir
+// stoka yapılır (134 a). Durumu bilinmeyen emrin rezervesi ayrılmış sayılmaz (emir yok). Plan yalnız kullanılabilir kaliteyi sayar.
+export type StatuluStok = { malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: bigint; konumlar: string[] };
+export type StatuluRezerve = { malzemeId: number; statuId: number; miktar: bigint; emirDurumu: string | null };
+export type SahipsizStatuluStok = StatuluStok & { ayrilan: bigint; sahipsiz: bigint };
+const AYIRMA_SIRASI: readonly KaliteDurumu[] = ['serbest', 'sartli', 'karar_bekliyor'];
+export function sahipsizStatuluHesapla(stoklar: readonly StatuluStok[], rezerveler: readonly StatuluRezerve[]): SahipsizStatuluStok[] {
+  const anahtar = (x: { malzemeId: number; statuId: number }): string => `${String(x.malzemeId)}:${String(x.statuId)}`;
+  const ayrilan = new Map<string, bigint>();
+  for (const r of rezerveler) {
+    if (r.emirDurumu === null || !(ACIK_EMIR_DURUMLARI as readonly string[]).includes(r.emirDurumu)) continue;
+    ayrilan.set(anahtar(r), (ayrilan.get(anahtar(r)) ?? 0n) + r.miktar);
+  }
+  const sirali = stoklar.filter((s) => AYIRMA_SIRASI.includes(s.kaliteDurumu) && s.miktar > 0n)
+    .toSorted((a, b) => a.malzemeId - b.malzemeId || a.statuId - b.statuId || AYIRMA_SIRASI.indexOf(a.kaliteDurumu) - AYIRMA_SIRASI.indexOf(b.kaliteDurumu));
+  const sonuc: SahipsizStatuluStok[] = [];
+  for (const s of sirali) {
+    const kalan = ayrilan.get(anahtar(s)) ?? 0n;
+    const dusen = kalan > 0n ? (kalan < s.miktar ? kalan : s.miktar) : 0n;
+    ayrilan.set(anahtar(s), kalan - dusen);
+    if (s.miktar - dusen > 0n) sonuc.push({ ...s, ayrilan: dusen, sahipsiz: s.miktar - dusen });
+  }
+  return sonuc;
+}
+export const planaSayilirMi = (k: KaliteDurumu): boolean => (KULLANILABILIR_KALITE as readonly KaliteDurumu[]).includes(k);
 // Güncel stok değeri yalnız kullanılabilir stoktan çıkar (228 a; Satın alma'nın kg stok değeriyle aynı tanım): raf, kabul ve zemin
 // konumunda, statüsüz, kalitesi kullanılabilir bakiye. Geri kalanı kendi satırında değerlenir, toplam ayrıca görünür.
 export const KULLANILABILIR_KONUM_TURLERI = ['raf_gozu', 'kabul', 'depo_zemini'] as const satisfies readonly KonumTuru[];

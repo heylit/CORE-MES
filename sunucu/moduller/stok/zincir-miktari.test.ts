@@ -6,13 +6,14 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
-import { emirlerinNetSarfi, emirlerinZincirdekiMiktari } from './disari.ts';
+import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, sahipsizStatuluStoklar } from './disari.ts';
 import { adimStatusuCozucusuKaydet, emirBirlestiYansit, uretimSayimiYansit } from './servis.ts';
 
 // B-2482-8 (2527-1): ilk adımın statüye çevirdiği hammadde emrin zincirinde sayılır; net sarfla toplamı emre verilendir. Veriler uydurmadır.
@@ -181,5 +182,39 @@ describe('stok: emrin statü zincirindeki miktarı (gerçek PostgreSQL)', () => 
     assert.deepEqual([await miktar(emirlerinZincirdekiMiktari, ikinci, hm), await miktar(emirlerinNetSarfi, ikinci, hm)], [0, 10], 'ikinci emrin zinciri eksi olmaz; 10 kg onun sarfı');
     const verilen = async (e: number) => await miktar(emirlerinZincirdekiMiktari, e, hm) + await miktar(emirlerinNetSarfi, e, hm);
     assert.equal(await verilen(ilk) + await verilen(ikinci), 10, 'iki emrin verileni toplamı ihtiyaç kadar (10 kg): çift sayım ve kayıp yok');
+  });
+
+  test('2547 a (B-2482-12): rezervesi kaldırılan statülü stok sahipsiz listesinde görünür; emre ayrılan kısmı görünmez', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const e = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const [op10] = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [e])).map((x) => x.id);
+    const s10 = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('HM', 'OP 10', $1, '#2F6FDE', 'HM') RETURNING id", [`zincir-${randomBytes(4).toString('hex')}`]))!.id;
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
+    await malKabul(hm, '10');
+    await sayim(e, op10!, a.id, '10');
+    const liste = async () => {
+      const c = await istek<SahipsizStatuluCevabi>('depo', 'GET', '/stok/sahipsiz-statulu');
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.satirlar.filter((x) => x.malzemeId === hm);
+    };
+    assert.deepEqual(await liste(), [], 'statüdeki 10 kg emre ayrılı: sahipsiz yok');
+    const k = await istek('yonetici', 'POST', '/stok/rezerve-kaldir', { malzemeId: hm, statuId: s10, uretimEmriId: e, miktar: '4', neden: 'Deneme: başka emre verilecek' });
+    assert.equal(k.durum, 200, JSON.stringify(k.govde));
+    const [satir, ...fazla] = await liste();
+    assert.equal(fazla.length, 0);
+    assert.deepEqual([satir?.statuId, Number(satir?.miktar), Number(satir?.ayrilan), Number(satir?.sahipsiz), satir?.konumlar.length], [s10, 10, 6, 4, 1]);
+    assert.equal(satir?.kaynakEmirId, e, '2561 a: statüye sokan emir');
+    assert.equal(typeof satir?.kaynakEmirNo, 'string');
+    assert.ok(satir?.sonHareket != null && !Number.isNaN(Date.parse(satir.sonHareket)), '2561 a: son hareket zamanı');
+    assert.equal(await miktar(emirlerinZincirdekiMiktari, e, hm), 6, 'emrin zinciri ayrılı kalan 6 kg');
+    const plana = async () => (await sahipsizStatuluStoklar(o().vt)).filter((x) => x.malzemeId === hm).map((x) => [x.kaliteDurumu, Number(x.sahipsiz)]);
+    assert.deepEqual(await plana(), [['serbest', 4]], 'plan okuması serbest sahipsizi sayar');
+    await o().sahip.sorgu("UPDATE stok_bakiye SET kalite_durumu = 'red' WHERE malzeme_id = $1 AND statu_id = $2", [hm, s10]);
+    assert.deepEqual(await liste(), [], 'red statülü stok sahipsiz listesinde yok');
+    assert.deepEqual(await plana(), [], 'red statülü stok plan okumasında yok');
+    const yetkisiz = await app.inject({ method: 'GET', url: '/api/stok/sahipsiz-statulu' });
+    assert.equal(yetkisiz.statusCode, 401, 'oturumsuz okunmaz');
   });
 });

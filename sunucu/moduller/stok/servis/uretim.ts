@@ -7,7 +7,7 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { type KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  KaliteDurumu, HareketCevabi, RezervelerCevabi, RezerveEtKomutu, RezerveKaldirKomutu, EmirTamamlamaCevabi, EmirTamamlaKomutu, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimReddetGovdesi,
+  KaliteDurumu, HareketCevabi, RezervelerCevabi, SahipsizStatuluCevabi, RezerveEtKomutu, RezerveKaldirKomutu, EmirTamamlamaCevabi, EmirTamamlaKomutu, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimReddetGovdesi,
   IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, UretimHazirligiCevabi, UretimHazirligiGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { StatulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -23,6 +23,7 @@ import {
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
   kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, tasinanMahsubu, adetMiktari, type BaslatmaEksigi,
   rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
+  sahipsizStatuluHesapla,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import type { BakiyeHam, IstekHam, TeslimHam } from '../sorgular.ts';
@@ -1486,6 +1487,34 @@ export async function rezerveListesi(db: Db, malzemeId: number): Promise<Rezerve
   const acik = satirlar.filter((r) => (ACIK_EMIR_DURUMLARI as readonly string[]).includes(durumlar.get(r.uretimEmriId) ?? ''));
   const nolar = await emirNolari(db, acik.map((r) => r.uretimEmriId));
   return { rezerveler: acik.map((r) => ({ statuId: r.statuId, uretimEmriId: r.uretimEmriId, emirNo: nolar.get(r.uretimEmriId) ?? null, miktar: r.miktar })) };
+}
+
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok. Rezervesi kaldırılan ya da emri kapanan statülü malzeme buradadır;
+// aynı ürün ve OP'nin herhangi bir emri kullanabilir. Plan bunu emir zincirinde görmez; sahte eksik olmasın diye ayrı okunur.
+export async function sahipsizStatuluStoklar(db: Db): Promise<SahipsizStatuluCevabi> {
+  const stoklar = await sorgular.statuluStoklar(db);
+  if (stoklar.length === 0) return { satirlar: [] };
+  const rezerveler = (await sorgular.rezerveler(db, [...new Set(stoklar.map((s) => s.malzemeId))])).flatMap((r) => (r.statuId === null ? [] : [{ ...r, statuId: r.statuId }]));
+  const durumlar = await emirDurumlari(db, [...new Set(rezerveler.map((r) => r.uretimEmriId))]);
+  const sahipsizler = sahipsizStatuluHesapla(
+    stoklar.map((s) => ({ ...s, miktar: binde(s.miktar) })),
+    rezerveler.map((r) => ({ malzemeId: r.malzemeId, statuId: r.statuId, miktar: binde(r.miktar), emirDurumu: durumlar.get(r.uretimEmriId) ?? null })),
+  );
+  const malzemeler = [...new Set(sahipsizler.map((s) => s.malzemeId))];
+  const kartlar = await malzemeOzetleri(db, malzemeler);
+  const izler = new Map((await sorgular.statuSonHareketleri(db, malzemeler)).map((h) => [`${String(h.malzemeId)}:${String(h.statuId)}`, h]));
+  const nolar = await emirNolari(db, [...new Set([...izler.values()].flatMap((h) => (h.kaynakEmirId === null ? [] : [h.kaynakEmirId])))]);
+  return {
+    satirlar: sahipsizler.map((s) => {
+      const iz = izler.get(`${String(s.malzemeId)}:${String(s.statuId)}`);
+      const kaynakEmirId = iz?.kaynakEmirId ?? null;
+      return {
+        malzemeId: s.malzemeId, malzemeKod: kartlar.get(s.malzemeId)?.kod ?? null, malzemeAd: kartlar.get(s.malzemeId)?.ad ?? null, statuId: s.statuId,
+        kaliteDurumu: s.kaliteDurumu, miktar: bindenMetin(s.miktar), ayrilan: bindenMetin(s.ayrilan), sahipsiz: bindenMetin(s.sahipsiz), konumlar: s.konumlar,
+        kaynakEmirId, kaynakEmirNo: kaynakEmirId === null ? null : nolar.get(kaynakEmirId) ?? null, sonHareket: iz?.sonHareket ?? null,
+      };
+    }),
+  };
 }
 
 // Elle ayırma: emir açık olmalı ve statü o emrin rotasındaki bir adımın statüsü olmalı; ayrılan, statüde kimseye ayrılmamış kadar olabilir.
