@@ -1,6 +1,7 @@
 // Excel ile toplu giriş (2627): sayfa tanımı, hücre çözümü ve önizleme planı. Saf; dosya okuma ve yazma kitap.ts'tedir.
 // Satır, sayfanın kendi formundaki alanlarla okunur; sunucu aynı kuralları yeniden denetler (tek transaction, 1/2 b).
 import { formulKoru } from '../veri/csv.ts';
+import { TOPLU_EN_COK_SATIR } from '#paylasilan/toplu.ts';
 
 export type Hucre = string | number | boolean | Date | null;
 // Çözülmüş değer: tarih 'YYYY-AA-GG', liste seçeneği kodu.
@@ -27,7 +28,7 @@ export interface ExcelSayfasi<K = unknown> {
   ad: string;
   kayitTuru: string;
   sutunlar: readonly ExcelSutunu[];
-  // Eşleşme anahtarı sütunu (kod); kayıt bu değerle bulunursa satır güncellemedir.
+  // Eşleşme anahtarı sütunu (kod); kayıt bu değerle bulunursa satır güncellemedir. Boş metin: eşleşme yok, her satır yeni kayıttır (emir gibi).
   anahtarSutun: string;
   kayitlar: readonly K[];
   anahtar: (k: K) => string;
@@ -35,6 +36,11 @@ export interface ExcelSayfasi<K = unknown> {
   satir: (k: K) => Record<string, Deger | null>;
   // false: sayfa yalnız var olan kaydı değiştirir (yetkinlik matrisi gibi); eşleşmeyen satır hatadır.
   ekleme?: false;
+  // Sayfada düzenlenemeyen kayıt (örnek: özlüğü İK'dan gelen kişi): nedeni döner; o kayda fark getiren satır önizlemede hatadır. Sunucu ayrıca denetler.
+  kilitli?: (k: K) => string | null;
+  // Yazımı durdurmayan uyarı (örnek: aynı ürün, miktar ve teslimle açık emir var); önizlemede satırın açıklamasında görünür.
+  // eslesen: satırın güncellediği kayıt, yeni kayıtta null.
+  uyari?: (degerler: Readonly<Record<string, Deger>>, eslesen: K | null) => string | null;
 }
 
 // Kayıt türü sayfa tanımında kalır; tanım listesi türü silinmiş sayfaları taşır.
@@ -46,6 +52,8 @@ export interface ExcelTanimi {
   baslik: string;
   sayfalar: readonly ExcelSayfasi[];
   kilavuz: readonly string[];
+  // Önizlemede yazılacak satırların özeti (örnek: "3 emir stok ayıracak"); yoksa null.
+  ozet?: (gidecek: readonly PlanSatiri[]) => string | null;
 }
 
 export type Islem = 'ekle' | 'guncelle' | 'ayni' | 'hata';
@@ -61,6 +69,8 @@ export interface PlanSatiri {
   eslesen: unknown;
   farklar: Fark[];
   hatalar: string[];
+  // Yazımı durdurmayan uyarılar (`ExcelSayfasi.uyari`); hatalı satırda yoktur.
+  uyarilar?: string[];
   // Okunan ham hücreler (hata dosyası için), sütun sırasıyla.
   ham: Hucre[];
 }
@@ -68,8 +78,8 @@ export interface PlanSatiri {
 // Sayfanın yazma işlevinin kullanıcıya gösterilecek reddi (sunucuya gitmeden önce).
 export class YazimReddi extends Error {}
 
-// Sunucunun toplu sözleşme sınırıyla (paylasilan/toplu.ts TOPLU_EN_COK_SATIR) aynıdır; istemci zod'lu sözleşmeden değer almaz.
-export const TOPLU_EN_COK = 2000;
+// Sunucunun toplu sözleşmeleriyle aynı sınır.
+export const TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
 export const DOSYA_EN_BUYUK_BAYT = 5 * 1024 * 1024;
 export const DAMGA_ONEKI = 'core-mes-excel';
 const AYRAC = ' — ';
@@ -209,9 +219,15 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
           const eski = mevcut[c.anahtar] ?? null;
           if (eski !== yeni) farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
         }
+        const kilit = farklar.length ? s.kilitli?.(eslesen) ?? null : null;
+        if (kilit !== null) hatalar.push(kilit);
       }
       const islem: Islem = hatalar.length ? 'hata' : eslesen === null ? 'ekle' : farklar.length ? 'guncelle' : 'ayni';
-      plan.push({ sayfa: s.ad, kayitTuru: s.kayitTuru, satir, kod: typeof anahtar === 'string' ? anahtar : null, islem, degerler, eslesen, farklar, hatalar, ham: yer.map((y) => (y < 0 ? null : r[y] ?? null)) });
+      const uyari = islem === 'hata' ? null : s.uyari?.(degerler, eslesen) ?? null;
+      plan.push({
+        sayfa: s.ad, kayitTuru: s.kayitTuru, satir, kod: typeof anahtar === 'string' ? anahtar : null, islem, degerler, eslesen, farklar, hatalar,
+        ...(uyari === null ? {} : { uyarilar: [uyari] }), ham: yer.map((y) => (y < 0 ? null : r[y] ?? null)),
+      });
     });
   }
   if (toplam > TOPLU_EN_COK) return { plan: [], uyari: `Dosyada ${toplam} satır var; bir seferde en çok ${TOPLU_EN_COK} satır yüklenir.` };
@@ -227,6 +243,14 @@ export const planSayilari = (plan: readonly PlanSatiri[]): PlanSayilari => {
 };
 
 // Sunucu reddinde satır numarası ayrıntıdadır (Mimar K2); plan satırı sayfa ve satırla bulunur.
+// Sunucuya giden satır numarası. Gönderilen satırlar tek sayfadansa Excel satırıdır: sunucunun "Satır N" iletisi dosyadaki
+// satırla aynı olur. Birden çok sayfadansa Excel satırı tekil olmadığı için gönderim sırasıdır (1'den). Pencere reddi aynı işlevle
+// satırına geri bağlar.
+export const gonderimNumaralari = (satirlar: readonly PlanSatiri[]): number[] => {
+  const tekSayfa = new Set(satirlar.map((p) => p.sayfa)).size <= 1;
+  return satirlar.map((p, i) => (tekSayfa ? p.satir : i + 1));
+};
+
 export const reddedilenSatir = (ayrinti: unknown): number | null => {
   const s = typeof ayrinti === 'object' && ayrinti !== null ? (ayrinti as { satir?: unknown }).satir : undefined;
   return typeof s === 'number' && Number.isInteger(s) ? s : null;

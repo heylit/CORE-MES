@@ -62,7 +62,7 @@ describe('Excel penceresi', () => {
   });
 
   it('sunucu reddi tek cümle: hiçbir satır yazılmadı, sayfa ve Excel satırıyla', async () => {
-    const yaz = vi.fn(async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Satır 2: Bu kod kullanılıyor.', ayrinti: { satir: 2 } }); });
+    const yaz = vi.fn(async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Satır 3: Bu kod kullanılıyor.', ayrinti: { satir: 3 } }); });
     render(<ExcelPenceresi tanim={tanim} kapat={() => undefined} yaz={yaz} />);
     await yukle(await doldur([['K5', 'Bir'], ['K6', 'İki']]));
     fireEvent.click(screen.getByRole('button', { name: 'Hepsini yaz (2 satır)' }));
@@ -88,5 +88,34 @@ describe('Excel penceresi', () => {
     expect(kapat).not.toHaveBeenCalled();
     bitir({ eklenen: 1, guncellenen: 0 });
     expect(await screen.findByText('1 satır yazıldı (1 yeni, 0 güncelleme).')).toBeTruthy();
+  });
+
+  it('aynı içerikli dosya aynı istek kimliğini verir (tekrar yükleme ikinci kez yazmaz); içerik değişince kimlik değişir', async () => {
+    const yaz = vi.fn(async () => ({ eklenen: 1, guncellenen: 0 }));
+    const kimlikler: string[] = [];
+    for (const ad of ['Bir', 'Bir', 'Iki']) {
+      const { unmount } = render(<ExcelPenceresi tanim={tanim} kapat={() => undefined} yaz={yaz} />);
+      await yukle(await doldur([['K8', ad]]));
+      fireEvent.click(screen.getByRole('button', { name: 'Hepsini yaz (1 satır)' }));
+      await screen.findByText('1 satır yazıldı (1 yeni, 0 güncelleme).');
+      kimlikler.push((yaz.mock.calls.at(-1) as unknown as [PlanSatiri[], string])[1]);
+      unmount();
+    }
+    expect(kimlikler[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(kimlikler[1]).toBe(kimlikler[0]);
+    expect(kimlikler[2]).not.toBe(kimlikler[0]);
+  });
+
+  it('sayfanın uyarısı ve özeti önizlemede görünür, yazımı durdurmaz', async () => {
+    const uyarili: ExcelTanimi = {
+      ...tanim, ozet: (g) => `${String(g.length)} kayıt özetlendi.`,
+      sayfalar: [{ ...tanim.sayfalar[0]!, uyari: (v) => (v['ad'] === 'Benzer' ? 'Benzer kayıt var.' : null) }],
+    };
+    render(<ExcelPenceresi tanim={uyarili} kapat={() => undefined} yaz={vi.fn()} />);
+    await yukle(await doldur([['K9', 'Benzer'], ['K10', 'Farklı']]));
+    expect(screen.getByText('Uyarı: Benzer kayıt var.')).toBeTruthy();
+    expect(screen.getByText(/2 kayıt özetlendi\./)).toBeTruthy();
+    expect(screen.getByText(/1 satırda uyarı var/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Hepsini yaz (2 satır)' }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

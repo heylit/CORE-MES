@@ -3,7 +3,7 @@
 import type {
   IsMerkezi, SurumluIstasyon, SurumluMakine, TesisTopluSatiri, TopluKaydetCevabi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
-import { YazimReddi, sayfaTanimi, type ExcelSutunu, type ExcelTanimi, type ListeSecenegi, type PlanSatiri } from '../../ortak/excel/kurallar.ts';
+import { YazimReddi, gonderimNumaralari, sayfaTanimi, type ExcelSutunu, type ExcelTanimi, type ListeSecenegi, type PlanSatiri } from '../../ortak/excel/kurallar.ts';
 import type { YazimSonucu } from '../../ortak/excel/ExcelPenceresi.tsx';
 import { api } from '../../ortak/veri/api.ts';
 import { BAGLANTI_ADLARI, KAPASITE_KAYNAGI_ADLARI, TIP_ADLARI } from './etiketler.ts';
@@ -82,8 +82,10 @@ export function tesisSatiri(p: PlanSatiri, satir: number): TesisTopluSatiri {
   return { kayit, islem: 'guncelle', satir, id: e.id, surum: e.surum, ...d } as TesisTopluSatiri;
 }
 
-export const tesisYaz = (satirlar: readonly PlanSatiri[], istekKimligi: string): Promise<TopluKaydetCevabi> =>
-  api.post<TopluKaydetCevabi>('/istasyonlar/toplu-kaydet', { satirlar: satirlar.map((p, i) => tesisSatiri(p, i + 1)) }, { istekKimligi });
+export const tesisYaz = (satirlar: readonly PlanSatiri[], istekKimligi: string): Promise<TopluKaydetCevabi> => {
+  const no = gonderimNumaralari(satirlar);
+  return api.post<TopluKaydetCevabi>('/istasyonlar/toplu-kaydet', { satirlar: satirlar.map((p, i) => tesisSatiri(p, no[i] ?? i + 1)) }, { istekKimligi });
+};
 
 // Yetkinlik: kişi başına satır, aktif istasyon (ve makine) başına Evet/Hayır sütunu. Boş hücre değişmez (Veri koşulu 2).
 const istasyonAnahtari = (id: number) => `i${String(id)}`;

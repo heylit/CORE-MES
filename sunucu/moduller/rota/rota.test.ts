@@ -1334,6 +1334,41 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const emir = await vt().tx((db) => adimliEmirAyrintisi(db, kabul.json<{ uretimEmriId: number }>().uretimEmriId));
     assert.equal(emir.kaynakRotaRevizyonId, yeni);
   });
+  test('2627: Excel toplu emir yürürlükteki rotadan açar; tek hatalı satır hiçbir emri bırakmaz ve satır numarasını söyler; aynı kimlikle ikinci gönderim emir açmaz; yetkisiz 403, istek kimliği ister', async () => {
+    const urun = await mamulAc();
+    const urun2 = await mamulAc();
+    const rotasiz = await mamulAc();
+    const rev = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim()]);
+    await yururlugeAlinmisRota(urun2, [yeniAdim()]);
+    const emirSayisi = async () => Number((await vt().tek<{ n: string }>('SELECT count(*)::text AS n FROM uretim_emri WHERE malzeme_no = ANY($1)', [[urun, urun2]]))?.n);
+    const yol = '/rota/emre-kopyala-toplu';
+    const satir = (n: number, urunId: number, ek: Record<string, unknown> = {}) => ({ satir: n, urunId, projeId: denemeProjeId, adet: 3, teslim: null, taslak: true, ...ek });
+    const red = await istek(c.planlama, 'POST', yol, { satirlar: [satir(2, urun), satir(3, urun2), satir(4, rotasiz)] });
+    assert.equal(red.statusCode, 422, red.body);
+    assert.deepEqual(red.json<{ mesaj: string; alan: string; ayrinti: unknown }>(), {
+      kod: 'GECERSIZ', mesaj: 'Satır 4: Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.', alan: 'satirlar.2', ayrinti: { satir: 4 },
+    });
+    assert.equal(await emirSayisi(), 0);
+    const govde = { satirlar: [satir(2, urun, { oncelik: 1, aciklama: 'Excel' }), satir(3, urun2)] };
+    assert.equal((await istek(c.operator, 'POST', yol, govde)).statusCode, 403);
+    assert.equal((await istek(c.planlama, 'POST', yol, govde, null)).statusCode, 400);
+    assert.equal((await istek(c.planlama, 'POST', yol, { satirlar: [{ ...satir(2, urun), cokKatmanli: true }] })).statusCode, 400);
+    assert.equal(await emirSayisi(), 0);
+    // İstemci kimliği dosyanın içeriğinden türetir: aynı dosyanın ikinci yüklenişi ilk cevabı alır, emir ikinci kez açılmaz (Veri 2627-3).
+    const dosyaKimligi = randomUUID();
+    const kabul = await istek(c.planlama, 'POST', yol, govde, dosyaKimligi);
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    assert.deepEqual(kabul.json(), { eklenen: 2, guncellenen: 0 });
+    const yine = await istek(c.planlama, 'POST', yol, govde, dosyaKimligi);
+    assert.equal(yine.statusCode, 200, yine.body);
+    assert.deepEqual(yine.json(), { eklenen: 2, guncellenen: 0 });
+    assert.equal(await emirSayisi(), 2);
+    const emir = await vt().tek<{ id: number; oncelik: number; aciklama: string | null }>('SELECT id, oncelik, aciklama FROM uretim_emri WHERE malzeme_no = $1', [urun]);
+    assert.deepEqual({ oncelik: emir?.oncelik, aciklama: emir?.aciklama }, { oncelik: 1, aciklama: 'Excel' });
+    const e = await vt().tx((db) => adimliEmirAyrintisi(db, emir!.id));
+    assert.equal(e.kaynakRotaRevizyonId, rev);
+    assert.equal(e.isEmirleri.length, 2);
+  });
   test('malzeme arama kullanımdaki kartları türe göre verir; hepsi istenince taslak kart da gelir', async () => {
     const mm = await mamulAc();
     const mmAdi = `Deneme mamul ${String(sayac)}`;

@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
+  eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiTopluKaydetCevabi, kisiTopluKaydetGovdesi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
   pinVerGovdesi, rolIslemiGovdesi, sinirliHesapGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiSecimAra,
+  baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiTopluKaydet, kisiSecimAra,
   icHesapYap, kisiPasifeAl, sinirliHesapYap, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
 } from './servis.ts';
 
@@ -64,6 +64,16 @@ export const uclar = [
     // Çift tıklama ya da cevabı yitirilen yeniden gönderim ikinci kişiyi açmaz (sicil boşken kısıt tutmaz).
     tekrarKorumali: true,
     isle: ({ db, kullanici, govde }) => kisiEkleGetir(db, govde, bayrakGorur(kullanici)),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kisiler/toplu-kaydet',
+    yetki: 'kisiler.yaz',
+    govde: kisiTopluKaydetGovdesi,
+    cevap: kisiTopluKaydetCevabi,
+    // Aynı dosyanın ikinci gönderimi kişileri ikinci kez açmaz.
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, govde }) => kisiTopluKaydet(db, kullanici.id, govde, bayrakGorur(kullanici)),
   }),
   uc({
     yontem: 'POST',

@@ -85,4 +85,3 @@ export const mesgul = (mesaj = 'Sistem şu an meşgul, birkaç saniye sonra tekr
 // Oturum veritabanında tutulur: veritabanı yokken isteğin kimin olduğu bilinemez, yetki kararı verilemez.
 export const veritabaniYok = (mesaj = 'Veritabanına ulaşılamıyor, kimlik doğrulanamadı.'): UygulamaHatasi =>
   new UygulamaHatasi('VERITABANI_YOK', mesaj);
-

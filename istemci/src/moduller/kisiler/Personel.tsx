@@ -14,6 +14,7 @@ import { anahtarlar as ortakAnahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { HesapPenceresi, KisiFormu, ParolaPenceresi, PinPenceresi, eskiyseYenile, listeyeYaz } from './KisiPencereleri.tsx';
 import { kisileriSuz, type DurumSuzgeci } from './suzme.ts';
+import { KisiExcelMenusu } from './ExcelGirisi.tsx';
 import './personel.css';
 
 type Islem = 'rol-ata' | 'rol-al';
@@ -299,6 +300,7 @@ export function Personel() {
         <span className="tc-personel-islemler">
           {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => acikYaz({ tur: 'form', kisiId: null })}>Kişi ekle</Dugme>}
           {yonetebilir && <Dugme simge="lock" onClick={() => { void git(YETKILER_YOLU); }}>Yetkiler</Dugme>}
+          {yazabilir && <KisiExcelMenusu kisiler={kisiler.data?.kisiler} />}
           <Dugme simge="rotate" aria-label="Yenile" onClick={() => { void kisiler.refetch(); }} yukleniyor={kisiler.isFetching} />
         </span>
       )}

@@ -560,6 +560,21 @@ export const emreKopyalaGovdesi = z.object({
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
 
+// Excel ile toplu emir (2627): her satır ürünün yürürlükteki revizyonundan emre-kopyala ile açılır, hepsi tek işlemde; biri reddedilirse
+// hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
+// satır sınırı genel toplu sınırdan küçüktür.
+export const EMIR_TOPLU_EN_COK = 200;
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true })
+  .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
+export const emreKopyalaTopluGovdesi = z.object({
+  satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.'),
+}).strict();
+export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+export type EmreKopyalaTopluSatiri = z.input<typeof emreKopyalaTopluSatiri>;
+export type EmreKopyalaTopluGirdisi = z.output<typeof emreKopyalaTopluGovdesi>;
+export type EmreKopyalaTopluCevabi = z.output<typeof emreKopyalaTopluCevabi>;
+
 // Patlamış rota (1476, 1481 a): donmuş anlık görüntü; düğüm yolu "0" kök, "0.2" kökün 2. ürün bileşeni.
 export const patlatmaParametresi = z.object({ id: yolKimligi });
 export const patlatmaCevabi = z.object({

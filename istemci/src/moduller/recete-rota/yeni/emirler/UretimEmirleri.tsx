@@ -11,6 +11,7 @@ import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
+import { EmirExcelMenusu } from './ExcelGirisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
@@ -87,6 +88,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
             {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
           </Dugme>
         )}
+        {yetki.rotaEmreKopyala && <EmirExcelMenusu durum={d} />}
       </div>
       {(durumSuzgeci === 'tamam' || durumSuzgeci === 'tum') && (
         <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
