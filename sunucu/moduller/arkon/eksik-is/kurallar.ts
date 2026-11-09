@@ -1,5 +1,6 @@
 import { kesisimDakika } from '../kurallar.ts';
 import type { NetAralik } from '../kurallar.ts';
+import type { OlcumNedeni } from '#paylasilan/sozlesme/arkon.ts';
 
 // Eksik iş kuralları (kart 2421 c, AR-EK-1..7). Saftır: zamanlar milisaniye, süreler vardiya takviminden, tarihler YYYY-AA-GG. Her kural plandan bağımsız bir yükümlülüğü
 // gerçekleşenle karşılaştırır; eşik boşsa kural kapalıdır (null), bilinmeyen veride hüküm yoktur (null): eksik uydurulmaz.
@@ -12,12 +13,14 @@ export interface EksikHukum {
   deger: number;
   kalanAdet: number | null;
   planaGore: boolean;
-  // Olaya bakılan an (plan bitişi, son hareket, son giriş, son canlıya alma, teslim günü sonu).
+  // Olaya bakılan an (plan bitişi, son hareket, son giriş, son canlıya alma, teslim günü sonu, bitiş).
   dayanak: number | null;
+  // Yalnız ölçülmeyen sürede (AR-EK-9) dolu.
+  nedenler: readonly OlcumNedeni[];
 }
 
-const hukum = (deger: number, dayanak: number | null, ek: Partial<Pick<EksikHukum, 'kalanAdet' | 'planaGore'>> = {}): EksikHukum =>
-  ({ deger, dayanak, kalanAdet: ek.kalanAdet ?? null, planaGore: ek.planaGore ?? false });
+const hukum = (deger: number, dayanak: number | null, ek: Partial<Pick<EksikHukum, 'kalanAdet' | 'planaGore' | 'nedenler'>> = {}): EksikHukum =>
+  ({ deger, dayanak, kalanAdet: ek.kalanAdet ?? null, planaGore: ek.planaGore ?? false, nedenler: ek.nedenler ?? [] });
 
 // AR-EK-1, plan gerisi: canlı plandaki bitişi geçmiş, bitmemiş iş. Gecikme bitişten şu ana kadarki net aktif dakikadır (kaynağın vardiyası);
 // vardiya bilinmiyorsa hüküm yoktur. Plan yeniden canlıya alınmasa da iş her gün gecikmesiyle görünür (bugünkü anomali hesabında beklenen sıfır
@@ -104,6 +107,16 @@ export function bayatPlan(g: {
   if (g.araliklar === null) return null;
   const saat = vardiyaSaati(g.araliklar, g.sonCanliyaAlma, g.simdi);
   return g.planGerisi > 0 && saat >= g.esikSaat && saat > 0 ? hukum(Math.floor(saat), g.sonCanliyaAlma) : null;
+}
+
+// AR-EK-9 (2567), süre ölçülmedi: biten iş emrinin terminal ölçümü atlandı (nedenleri ölçümün sahibi rota verir); değer bitiş gününden bu
+// yana geçen tesis günüdür. Neden yoksa ölçülmüştür, bitiş bilinmiyorsa hüküm yoktur.
+export function olcumsuzIs(g: {
+  nedenler: readonly OlcumNedeni[]; bitis: number | null; bitisGunu: string | null; bugun: string; esikGun: number | null;
+}): EksikHukum | null {
+  if (g.esikGun === null || g.nedenler.length === 0 || g.bitisGunu === null) return null;
+  const gecen = Math.max(gunNo(g.bugun) - gunNo(g.bitisGunu), 0);
+  return gecen >= g.esikGun ? hukum(gecen, g.bitis, { nedenler: [...g.nedenler] }) : null;
 }
 
 export type EksikEylem = { tur: 'ac'; h: EksikHukum } | { tur: 'guncelle'; h: EksikHukum } | { tur: 'kapat' } | { tur: 'yok' };
