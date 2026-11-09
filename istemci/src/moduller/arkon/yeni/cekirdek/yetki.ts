@@ -27,7 +27,7 @@ export function yetkiVar(kisi: Pick<User, 'role'> | null, matris: PermMatrix, k:
 
 // Arkon sayfa anahtarı (yeni ekranın adres parçası) -> sayfa yetkisi. Operatör ekranının eski işareti boştu, burada `operator`.
 export const SAYFA_YETKISI: Readonly<Record<string, Perm>> = {
-  operator: 'page.op', pano: 'page.board', planlama: 'page.plan', kuyruk: 'page.plan', hazirlik: 'page.prep', anomali: 'page.prep',
+  operator: 'page.op', pano: 'page.board', planlama: 'page.plan', kuyruk: 'page.plan', hazirlik: 'page.prep', anomali: 'page.board',
   kalite: 'page.quality', bakim: 'page.maint', raporlar: 'page.report', cizim: 'page.draw', onizle: 'page.prep',
 };
 const ILK_SAYFA_SIRASI = ['operator', 'pano', 'planlama', 'hazirlik', 'kalite', 'bakim', 'raporlar', 'cizim'] as const;

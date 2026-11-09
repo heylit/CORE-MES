@@ -10,6 +10,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window
 
 const HAZIRLIK: Deneme = { rol: 'prep', kullanici: { id: 5, ad: 'Deneme Hazirlik', islemler: ['sayfa.arkon', 'arkon.hazirlik', YENI_EKRAN_ISLEMI] } };
 const AMIR: Deneme = { rol: 'lead', kullanici: { id: 6, ad: 'Deneme Amir', islemler: ['sayfa.arkon', 'arkon.amir', YENI_EKRAN_ISLEMI] } };
+const KALITECI: Deneme = { rol: 'quality', kullanici: { id: 7, ad: 'Deneme Kalite', islemler: ['sayfa.arkon', 'arkon.kalite', YENI_EKRAN_ISLEMI] } };
 const bolum = async (ad: string) => screen.findByRole('region', { name: ad }, { timeout: 10000 });
 const yazmalar = (l: Istek[]) => l.filter((i) => i.yontem === 'POST' && /\/(yaz|sil)$/.test(i.yol));
 const bekle = () => new Promise((r) => { setTimeout(r, 400); });
@@ -259,7 +260,7 @@ describe('A3 sayfaları', () => {
     expect(diger.getAttribute('aria-expanded')).toBe('false');
   }, 20000);
 
-  it('Üretim Anomalisi açılır, kayıt yazmaz; amir rolünde sayfa açılmaz, ilk açık sayfasına geçer (eski firstPage)', async () => {
+  it('Üretim Anomalisi açılır, kayıt yazmaz; amir de açar (2421-4 a); kalite rolünde sayfa açılmaz, ilk açık sayfasına geçer (eski firstPage)', async () => {
     const istekler = sunucuKur(YONETICI, { belgeler });
     arkonAc('/arkon/anomali');
     await bolum('Üretim Anomalisi');
@@ -267,6 +268,10 @@ describe('A3 sayfaları', () => {
     expect(yazmalar(istekler)).toEqual([]);
     cleanup();
     sunucuKur(AMIR, { belgeler });
+    arkonAc('/arkon/anomali');
+    await bolum('Üretim Anomalisi');
+    cleanup();
+    sunucuKur(KALITECI, { belgeler });
     arkonAc('/arkon/anomali');
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).not.toBe('/arkon/anomali'); }, { timeout: 10000 });
     expect(screen.queryByRole('region', { name: 'Üretim Anomalisi' })).toBeNull();

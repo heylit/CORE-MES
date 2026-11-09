@@ -423,14 +423,14 @@ test('ikinci menü: her Arkon rolü yalnız sabit matriste açabildiği sayfalar
   assert.equal(ARKON_IKINCI_MENU.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler).some((m) => m.anahtar === 'operator'), false);
 });
 
-test('ikinci menü: Üretim Anomalisi maddesini Hazırlık ile aynı roller görür (kart #1193)', () => {
+test('ikinci menü: Üretim Anomalisi maddesini Hazırlık rolleri ve amir görür (kart #1193, 2421-4 a)', () => {
   const madde = (anahtar: string) => ARKON_IKINCI_MENU.gruplar.flatMap((g): readonly IkinciMenuMaddesi[] => g.maddeler).find((m) => m.anahtar === anahtar);
   const anomali = madde('anomali');
   const hazirlik = madde('hazirlik');
   assert.ok(anomali !== undefined && hazirlik !== undefined);
   assert.equal(anomali.yol, '/arkon/anomali');
   for (const islem of ARKON_ISLEMLERI) {
-    assert.equal(maddeGorunurMu(anomali, ['sayfa.arkon', islem]), maddeGorunurMu(hazirlik, ['sayfa.arkon', islem]), islem);
+    assert.equal(maddeGorunurMu(anomali, ['sayfa.arkon', islem]), islem === 'arkon.amir' || maddeGorunurMu(hazirlik, ['sayfa.arkon', islem]), islem);
   }
   assert.equal(maddeGorunurMu(anomali, ['sayfa.arkon', 'arkon.operator']), false);
 });

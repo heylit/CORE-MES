@@ -21,7 +21,8 @@ const ARKON_SAYFASI = { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.k
 // Fabrika Haritası "Son hareketler" (#1122): haritayı gören de okur; veri kapsamı serviste uygulanır.
 const SON_OLAY_OKUMA = { biri: [...ARKON_SAYFASI.biri, 'sayfa.atolye'] } as const;
 // Anomali panosunu görenler: hazırlık, planlama ve yönetici (kart #1149 kararı).
-const ANOMALI_OKUMA = { biri: ['arkon.hazirlik', 'arkon.planlama', 'arkon.yonetici'] } as const;
+// Amir de okur (2421-4 a): eksik işi sahada kapatan odur; kişi adları yine arkon.anomali-kisi ister.
+const ANOMALI_OKUMA = { biri: ['arkon.hazirlik', 'arkon.planlama', 'arkon.amir', 'arkon.yonetici'] } as const;
 export const uclar = [
   uc({
     yontem: 'GET',

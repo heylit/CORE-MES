@@ -43,8 +43,8 @@ export const ARKON_IKINCI_MENU = {
     ] },
     { baslik: 'Hazırlık ve kalite', maddeler: [
       { anahtar: 'hazirlik', baslik: 'Üretim Terminali Hazırlık', yol: '/arkon/hazirlik', simge: 'layers', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.yonetici'] },
-      // Hazırlık ile aynı roller görür; sunucudaki GET /arkon/anomaliler de bu üç işlemi ister (kart #1193).
-      { anahtar: 'anomali', baslik: 'Üretim Anomalisi', yol: '/arkon/anomali', simge: 'alert', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.yonetici'] },
+      // Hazırlık rolleri ve amir görür (kart #1193, 2421-4 a); sunucudaki anomali uçları da bu dört işlemi ister.
+      { anahtar: 'anomali', baslik: 'Üretim Anomalisi', yol: '/arkon/anomali', simge: 'alert', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.amir', 'arkon.yonetici'] },
       { anahtar: 'kalite', baslik: 'Kalite', yol: '/arkon/kalite', simge: 'target', islem: 'arkon.kalite', veya: ['arkon.planlama', 'arkon.hazirlik', 'arkon.amir', 'arkon.yonetici'] },
       { anahtar: 'cizim', baslik: 'Çizim', yol: '/arkon/cizim', simge: 'lab', islem: 'arkon.hazirlik', veya: ['arkon.planlama', 'arkon.yonetici'] },
     ] },

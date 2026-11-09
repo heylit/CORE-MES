@@ -112,10 +112,10 @@ export const BILDIRIM_TURLERI = {
     baslik: 'İş plan gerisinde kaldı', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
   'arkon.kayitsiz-gun': {
-    baslik: 'İstasyonda gün boyu kayıt girilmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+    baslik: 'İstasyonda gün boyu kayıt girilmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik', 'arkon.amir', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
   'arkon.yarim-is': {
-    baslik: 'Başlamış iş yarım kaldı', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+    baslik: 'Başlamış iş yarım kaldı', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.hazirlik', 'arkon.amir'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
   'arkon.plansiz-is': {
     baslik: 'Açık iş plana girmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
