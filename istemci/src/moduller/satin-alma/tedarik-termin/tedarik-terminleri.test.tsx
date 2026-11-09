@@ -71,6 +71,24 @@ describe('Tedarik terminleri (533 a)', () => {
     expect(within(gecmis).getAllByText('Gecikti').length).toBe(2);
   });
 
+  it('2433: sipariş varsa elle girilen termin değil siparişin beklenen teslimi karşılaştırılır', async () => {
+    bugun = '2026-10-30';
+    ac([satir({ termin: '2026-11-01', siparisler: [{ siparisNo: 'SP-DEN-002', tarih: '2026-11-08', miktar: '500', birim: 'kg' }] })]);
+    const tablo = await screen.findByRole('table');
+    expect(within(tablo).getByText('Geç kalıyor')).toBeTruthy();
+    expect(within(tablo).queryByText('Zamanında')).toBeNull();
+  });
+
+  it('2433-3 a: siparişte tarih yoksa elle termin kullanılmaz ve gösterilmez', async () => {
+    bugun = '2026-10-30';
+    ac([satir({ termin: '2026-11-01', siparisler: [{ siparisNo: 'SP-DEN-003', tarih: null, miktar: '500', birim: 'kg' }] })]);
+    const tablo = await screen.findByRole('table');
+    expect(within(tablo).getByText('Sipariş verildi, teslim tarihi yok')).toBeTruthy();
+    expect(within(tablo).queryByText('01.11.2026')).toBeNull();
+    expect(within(tablo).queryByText('Zamanında')).toBeNull();
+    expect(within(tablo).queryByRole('button', { name: /Termin gir/ })).toBeNull();
+  });
+
   it('okuyan termin giremez (düğme yok); planı yazan girer', async () => {
     ac([satir({})], ['satin-alma.oku']);
     await screen.findByRole('table', { name: 'Tedarik terminleri' });
