@@ -602,7 +602,7 @@ export function katalogSil(db: Db, id: string, surum: number): Promise<{ id: str
 
 // ---- Ayarlar
 // Kur bu tabloda değil, finanstadır (SA3 a); servis ekler.
-export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
+export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket' | 'dortGoz'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
 export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string }[]> {
   return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye FROM satin_alma_onay_limiti ORDER BY sira');
 }

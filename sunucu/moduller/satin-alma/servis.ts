@@ -216,7 +216,7 @@ async function ayarlariKur(db: Db): Promise<Ayarlar> {
   const tarihler = listeler.filter((k) => k.paraBirimi !== 'TRY').flatMap((k) => finans.get(k.paraBirimi)?.tarih ?? []).sort();
   // Şirket adı satın almanın değildir (1942 a): Sistem Ayarları > Firma adı'ndan okunur, burada değiştirilmez.
   const sirket = await sistemAyariOku(db, 'kabuk.kurum-adi');
-  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null };
+  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null, dortGoz: await sistemAyariOku(db, 'satin-alma.dort-goz') };
 }
 
 // Birim boş olabilir (departmansız talep); doluysa ayarlardaki listede olmalı.

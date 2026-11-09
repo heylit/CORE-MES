@@ -350,6 +350,10 @@ export const katalogKaydetGovdesi = z.object({
 });
 export const katalogSilGovdesi = z.object(beklenenSurum);
 
+// 1096 a: karar onaya gönderilince kur ve faiz sabitlenir. Sipariş, kilit 7 günü geçmişse ya da bir para biriminin güncel kuru
+// sabit kurdan %3'ten fazla saptıysa verilmez. Sınırlar ekranda da gösterildiği için burada; kural sunucudadır (kurallar.ts).
+export const KUR_KILIDI = { gun: 7, kaymaYuzdesi: 3 } as const;
+
 export const ayarlarSemasi = z.object({
   // Sistem Ayarları > Firma adı (1942 a); salt okunur, kaydet gövdesinde yoktur.
   sirket: z.string(),
@@ -364,6 +368,8 @@ export const ayarlarSemasi = z.object({
   kategoriler: z.array(z.string()),
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),
+  // Sistem Ayarları 'satin-alma.dort-goz' (salt okunur): ekran kendi kararını onaylatmamayı söyler; ret sunucudadır.
+  dortGoz: z.boolean(),
   surum: surumSemasi,
 });
 export const ayarlarKaydetGovdesi = z.object({

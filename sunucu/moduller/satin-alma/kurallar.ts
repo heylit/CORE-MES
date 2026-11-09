@@ -1,5 +1,5 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
-import { PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
+import { KUR_KILIDI, PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
@@ -174,9 +174,8 @@ export function siparisReddi(eski: TalepDurumu, yeni: TalepDurumu, kararVar: boo
   return kararVar && kararOnayliMi(onaylar) ? null : ILETILER.onaysizSiparis;
 }
 
-// 1096 a: karar onaya gönderilince kur ve faiz sabitlenir. Sipariş, kilit 7 günü geçmişse ya da bir para biriminin güncel kuru
-// sabit kurdan %3'ten fazla saptıysa verilmez; talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay).
-export const KUR_KILIDI = { gun: 7, kaymaYuzdesi: 3 } as const;
+// 1096 a: aşılan kilitte talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay). Sınırlar sözleşmede.
+export { KUR_KILIDI };
 
 // Onayın açtığı durumlar: bu durumlara karar onaydan geçmeden girilmez; dışındakilerde kilit yoktur.
 export const kilitliDurum = (d: TalepDurumu): boolean => d === 'onayda' || d === 'siparis_verildi' || d === 'teslim_alindi';

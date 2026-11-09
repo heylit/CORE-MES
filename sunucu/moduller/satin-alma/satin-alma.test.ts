@@ -2688,5 +2688,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     assert.deepEqual([Number(usd?.aylikFaizYuzdesi), Number(usd?.mevduatAylikFaizYuzdesi)], [1.5, 0.5]);
     assert.equal((await istek('POST', '/finans/faizler/ekle', { paraBirimi: 'TRY', gecerlilikBaslangic: '2026-01-01', aylikYuzde: 4 })).statusCode, 200);
     assert.equal((await ayarlar()).kurlar.find((x) => x.paraBirimi === 'TRY')?.aylikFaizYuzdesi, null);
+    // 2422: dört göz ayarı ekrana salt okunur gelir (varsayılan açık).
+    assert.equal((await ayarlar()).dortGoz, true);
   });
 });
