@@ -48,7 +48,7 @@ function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) 
   const kar = useMemo(() => (p ? kararlar(c, p, cx) : []), [c, p, cx]);
   const taban = useMemo(() => planOku(o.depo.calisma), [o.depo.calisma]);
   const dok = useMemo(() => (p ? dokum(taban, p, cx) : []), [taban, p, cx]);
-  if (!p) return <div className="tc-pym" data-parca="bugun"><BosPlan c={c} cx={cx} planKur={planKur} veriAc={veriAc && (() => veriAc(null))} /></div>;
+  if (!p) return <div className="tc-pym" data-parca="bugun"><BosPlan c={c} cx={cx} planKur={planKur} planYaz={o.yetki.planYaz} veriAc={veriAc && (() => veriAc(null))} /></div>;
 
   const komut = o.yetki.planYaz ? o.komut : null;
   const { secim, sec } = o;

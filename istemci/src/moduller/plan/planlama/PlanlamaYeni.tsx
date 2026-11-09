@@ -40,7 +40,7 @@ function PlanlamaEkrani() {
   const girebilir = kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false;
   const { durum, yenile, tazele } = usePlanlamaDeposu(girebilir);
   const yetki = useMemo(
-    () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
+    () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler) : null),
     [durum, kullanici],
   );
   const gorunum = parca === undefined ? ACILIS : gorunumOku(parca);
@@ -83,12 +83,30 @@ function PlanlamaEkrani() {
   useEffect(() => {
     if (yazici !== null && disSatir !== null) yazici.kaynakDegisikliginiYaz(disSatir);
   }, [yazici, disSatir]);
+  // Sekme kapanırken bekleyen yazma (2 sn) tarayıcının sürdüreceği garanti değildir: kirliyken tarayıcı çıkışı sorar, yazma o sırada başlar.
+  // keepalive kullanılmaz: gövde sınırı (64 KB) çalışmanın boyutundan küçüktür.
   useEffect(() => {
     if (yazici === null) return undefined;
     const cik = (): void => { void yazici.hepsiniYaz(); };
+    const sor = (e: BeforeUnloadEvent): void => {
+      if (!yazici.bekleyenVar || yazici.durdu) return;
+      cik();
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', sor);
     window.addEventListener('pagehide', cik);
-    return () => { window.removeEventListener('pagehide', cik); cik(); };
+    return () => { window.removeEventListener('beforeunload', sor); window.removeEventListener('pagehide', cik); cik(); };
   }, [yazici]);
+  // Yeniden okuma bekleyen yazmayı önce gönderir: yoksa okunan kayıt son değişikliği içermez, sonraki yazma kendi kendine 409 alırdı.
+  const yazYenile = useCallback((): void => {
+    if (yazici === null) { yenile(); return; }
+    void yazici.hepsiniYaz().then(yenile);
+  }, [yazici, yenile]);
+  const yazTazele = useCallback((): void => {
+    if (yazici === null) { tazele(); return; }
+    void yazici.hepsiniYaz().then(tazele);
+  }, [yazici, tazele]);
   // Ölçek ve seçim görünümler arasında taşınır (görünüm değişince bu bileşen kalır, adres parçası değişir).
   const [olcek, olcekKur] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
   const [secim, secimKur] = useState<PlanlamaSecimi>(BOS_SECIM);
@@ -120,7 +138,7 @@ function PlanlamaEkrani() {
     <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={ust ? '' : undefined}>
       {ust && (
         <div className="tc-py-ust">
-          {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={tazele} />}
+          {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={yazTazele} />}
           {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={durum.depo.planSurumu?.bayat ?? null} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
@@ -138,14 +156,14 @@ function PlanlamaEkrani() {
               {gorunum !== 'plan' && (
                 <Suspense fallback={null}>
                   <PlanSeridi
-                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazYenile}
                     olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
-                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazYenile}
                   olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc}
                 />
               </Suspense>

@@ -108,7 +108,7 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 function ac(yaz = true, komut: CalismaKomutu | null = null, git = vi.fn()) {
   vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? Promise.resolve({ planSurumu: null, isler: [] }) : Promise.reject(new Error('yok')))) as never);
   render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={ornekCalisma()} komut={komut} git={git} yenile={vi.fn()}
-    yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz })} /></BildirimSaglayici>);
+    yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])} /></BildirimSaglayici>);
 }
 const menudenAc = (ad: RegExp) => {
   fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
@@ -168,7 +168,7 @@ describe('Tahta kartları', () => {
     const post = vi.spyOn(api, 'post').mockImplementation((() => new Promise(() => undefined)) as never);
     vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.endsWith('/taban-ve-canli') ? Promise.resolve({ planSurumu: null, isler: [] }) : Promise.reject(new Error('yok')))) as never);
     render(<BildirimSaglayici><Iskelet depo={DEPO} calisma={c0} komut={komut} git={vi.fn()} yenile={vi.fn()}
-      yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'], { yazabilir: true })} /></BildirimSaglayici>);
+      yetki={yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz'])} /></BildirimSaglayici>);
     menudenAc(/^Plan/);
     fireEvent.keyDown(window, { key: '3' });
     fireEvent.click(within(within(kart('Kuyruklar')).getByRole('group', { name: 'Tezgâh grubu' })).getByRole('button', { name: '1' }));

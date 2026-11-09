@@ -42,7 +42,10 @@ describe('tedarik termini satırı', () => {
     render(<BildirimSaglayici><TedarikTerminiKarti D={D} l={L} taban={0} yazar yenile={yenile} /></BildirimSaglayici>);
     const tablo = screen.getByRole('table', { name: 'Tedarik terminleri' });
     expect(within(tablo).queryByLabelText('EL-1 tedarik termini')).toBeNull();
-    fireEvent.change(within(tablo).getByLabelText('11 tedarik termini'), { target: { value: '2026-01-12' } });
+    const kutu = within(tablo).getByLabelText('11 tedarik termini');
+    fireEvent.change(kutu, { target: { value: '2026-01-12' } });
+    expect(istekler).toEqual([]);
+    fireEvent.blur(kutu);
     await waitFor(() => { expect(yenile).toHaveBeenCalled(); });
     expect(istekler).toEqual([{ yol: '/satin-alma-tedarik-terminleri/kaydet', govde: { malzemeNo: 11, termin: '2026-01-12', aciklama: 'Deneme not', surum: 3 } }]);
     cleanup();

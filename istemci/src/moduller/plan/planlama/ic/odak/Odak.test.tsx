@@ -53,7 +53,7 @@ const DEPO = { durum: null } as unknown as PlanlamaDeposu;
 function ac(yaz = true) {
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: ornekCalisma(), komut: null, git: vi.fn(), yenile: vi.fn(),
-    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
+    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])]),
   };
   function Iskelet() {
     const [olcek, setOlcek] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);

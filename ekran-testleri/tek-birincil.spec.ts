@@ -12,6 +12,19 @@ const BORC: Readonly<Record<string, number>> = {
   '/ayarlar': 15,
   '/cnc-kurulum': 3,
   '/plan': 3,
+  // Planlama'nın ikinci menü görünümleri (B-2483-48): ekranlar teslim olduğu gibidir; sayı yalnız düşebilir.
+  '/plan/studio': 3,
+  '/plan/ysiparis': 3,
+  '/plan/terminler': 3,
+  '/plan/denge': 3,
+  '/plan/maliyet': 2,
+  '/plan/giderler': 2,
+  '/plan/mesaiplan': 2,
+  '/plan/fasonplan': 2,
+  '/plan/malzplan': 2,
+  '/plan/yillik': 2,
+  '/plan/ufuk': 2,
+  '/plan/sevkiyat': 2,
   '/recete-rota/plan': 3,
   '/ik': 3,
   '/degisiklik-yonetimi': 2,
@@ -33,10 +46,18 @@ test('her sayfada en çok bir birincil düğme; bugünkü aşımlar borç listes
   await ac('/');
   const tumu = page.getByTitle('Tüm sayfalar');
   if (await tumu.count()) await tumu.first().click();
-  const yollar = await page.evaluate(() => [...new Set(
+  const yollar: string[] = await page.evaluate(() => [...new Set(
     [...document.querySelectorAll('a[href^="/"]')].map((a) => (a.getAttribute('href') ?? '').split(/[?#]/)[0] ?? ''),
   )].filter((y) => y !== '' && !/cikis|oturum/.test(y)));
   expect(yollar.length).toBeGreaterThan(20);
+  // Planlama'nın alt görünümleri yalnız ikinci menüdedir (B-2483-48): menüden toplanır, kök sayfayla birlikte ölçülür.
+  await ac('/plan');
+  await expect(page.locator('[data-gorunum]')).toBeVisible();
+  const planlama = await page.evaluate(() => [...new Set(
+    [...document.querySelectorAll('a[href^="/plan/"]')].map((a) => (a.getAttribute('href') ?? '').split(/[?#]/)[0] ?? ''),
+  )]);
+  expect(planlama.length).toBeGreaterThan(10);
+  for (const y of planlama) if (!yollar.includes(y)) yollar.push(y);
 
   const asan: string[] = [];
   for (const yol of ['/', ...yollar.filter((y) => y !== '/')]) {

@@ -63,7 +63,7 @@ describe('Nasıl hesaplandı hesapları', () => {
 interface Degisiklik { ne: string; secenek: DegisiklikSecenegi | undefined; sonra: PlanlamaCalismasi }
 function ac(c: PlanlamaCalismasi | null, islemler = PLANCI) {
   const degisiklikler: Degisiklik[] = []; const git = vi.fn(); const sec = vi.fn();
-  const yetki = yetkiKur(islemler, { yazabilir: true });
+  const yetki = yetkiKur(islemler);
   function Kap() {
     const [x, setX] = useState(c);
     const komut: CalismaKomutu | null = x && yetki.calismaYazabilir ? {

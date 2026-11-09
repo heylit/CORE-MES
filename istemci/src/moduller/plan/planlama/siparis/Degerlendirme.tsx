@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Dugme, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -10,6 +10,7 @@ import {
   type DegerlendirmeCevabi, type DegerlendirmeIstegi, type DegerlendirmeTuru, type Degerlendirici, type MalzemeTerminiSatiri,
   type PlanSecenegi, type TerminSecenegiSatiri, type TerminUzatmaSatiri,
 } from './degerlendirme.ts';
+import { MOTOR_NOTU } from '../motor/ortak.tsx';
 import { MotorNotu } from './IsiHaritasi.tsx';
 import {
   PARTI_EN_COK, darbogaz, dengeAdi, dengeKatYazi, gunYaz, kasayaBol, ortusmeAdaylari, ortusmesiAcik, partiAdaylari, partiKurali, partiKuraliDenetle, 
@@ -22,8 +23,10 @@ import {
 // sayfadaki gibi düğmeyle istenir. Çalışmaya yazan tek eylem plan seçeneğini almaktır (yalnız plan alanları); termin uzatma ve parti bölme kaynak alanını
 // yazar, yerinde pasiftir (222 a).
 
-export function gorunumDegerlendiricisi(depo: PlanlamaDeposu): Degerlendirici | null {
-  return depo.calismaSurumu !== null ? degerlendirici(depo.calismaSurumu) : null;
+// Komut varsa sürüm her istekte yazıcıdan gelir (bekleyen yazma önce gider); işlev çizimler arasında aynı kalır, açık hesap yeniden istenmez.
+export function useGorunumDegerlendiricisi(depo: PlanlamaDeposu, komut: CalismaKomutu | null): Degerlendirici | null {
+  const surum = depo.calismaSurumu;
+  return useMemo(() => (surum === null ? null : degerlendirici(komut !== null ? komut.kaydet : surum)), [surum, komut]);
 }
 
 type Durum<K extends DegerlendirmeTuru> = { tur: 'bos' } | { tur: 'bekliyor' } | { tur: 'hata'; metin: string; yenile: boolean } | { tur: 'sonuc'; cevap: DegerlendirmeCevabi<K> };
@@ -363,11 +366,11 @@ export function OrtusmeKarti({ c, p }: { c: PlanlamaCalismasi | null; p: Kayitli
   const acik = ortusmesiAcik(c.D); const l = ortusmeAdaylari(c.D, p);
   return (
     <Kart baslik="Örtüşme" simge="layers" baslikEki={<span className="tc-pys-kucuk">"örtüşebilir" bağlarda, ek ayar yok</span>}
-      sag={<Dugme simge="rotate" disabled>Örtüşmeyi dene</Dugme>}>
+      sag={<Dugme simge="rotate" disabled title={`Örtüşmeyi dene: ${MOTOR_NOTU}`}>Örtüşmeyi dene</Dugme>}>
       {acik.length > 0 && (
         <p className="tc-pys-kucuk">Örtüşmesi açık: {acik.map((j) => (
           <span key={j}><b className="mono">{j}</b> <button type="button" className="tc-pys-kapat" aria-label={`${j} örtüşmesini kapat`}
-            disabled><Simge ad="x" boyut="k" />Kapat</button> </span>
+            disabled title={`Kapat: ${MOTOR_NOTU}`}><Simge ad="x" boyut="k" />Kapat</button> </span>
         ))}</p>
       )}
       <p className="tc-pys-kucuk">{l.length ? <>Denenecek: {l.map((s, i) => <span key={s.id}>{i ? ', ' : ''}<b className="mono">{s.id}</b></span>)}.</> : 'Örtüşebilir bağı olan geciken iş emri yok.'}</p>
@@ -386,7 +389,7 @@ export function PartiTaramasiKarti({ c, p }: { c: PlanlamaCalismasi | null; p: K
   const top = A.reduce((a, x) => a * x.n, 1);
   return (
     // Tarama motoru yüzlerce kez koşturur; değerlendirme sözleşmesinde yok, uç açılınca da pasif kalır.
-    <Kart baslik={baslik} simge="grid" baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled>Tara</Dugme>}>
+    <Kart baslik={baslik} simge="grid" baslikEki={baslikEki} sag={<Dugme simge="rotate" disabled title={`Tara: ${MOTOR_NOTU}`}>Tara</Dugme>}>
       <div className="tc-pys-eb-ust">
         <Secim etiket="En çok geciken kaç iş emri" value={String(k)} onChange={(e) => { kYaz(Number(e.target.value)); }}
           secenekler={Array.from({ length: TARAMA_EN_COK }, (_, i) => ({ deger: String(i + 1), baslik: String(i + 1) }))} />

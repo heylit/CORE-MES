@@ -25,7 +25,7 @@ export function Mrp() {
       <SayfaBasligi baslik="Malzeme ihtiyacı" simge="box" alt="Açık emirlerin malzeme ihtiyacı; stok ve açık siparişle netlenir. Yalnız okur."
         birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
-        : q.isError ? <DurumKutusu durum="hata" yenile={yenile} />
+        : q.isError ? <DurumKutusu durum="hata" mesaj="Malzeme ihtiyacı alınamadı" hata={q.error} yenile={yenile} />
           : <Rapor c={q.data} />}
     </div>
   );

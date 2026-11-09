@@ -255,7 +255,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
         <div><p>Yeni plan, değişiklik ve denemeler burada canlıyla karşılaştırılır, kontrol edilir ve onaylanır. Canlı plan yalnız burada onaylanınca değişir; o zamana kadar tezgâh kuyrukları ve operatör ekranı eski planı gösterir.</p></div>
         <div className="tc-pym-pa-dugmeler">
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={planSekmesi}><Simge ad="layers" boyut="k" />Planı düzenle</button>
-          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" disabled title="Motor bağlanınca"><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
+          {p && o.yetki.planYaz && <button type="button" className="tc-dugme tc-pym-kucuk" title="Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." onClick={() => { o.git('plan'); }}><Simge ad="play" boyut="k" />Plan iyileştirme ara</button>}
         </div>
       </header>
       <div className="tc-pym-pa-durum">

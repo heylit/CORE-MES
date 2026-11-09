@@ -36,6 +36,24 @@ describe('P3 Maliyetler', () => {
     expect(g.deger.D.tezgahlar).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'T1', ucret: 120 })]));
   }, 30000);
 
+  it('B-2483-35: yazılmamış değişiklik varken sekme kapanışı sorulur ve yazma hemen başlar; yazıldıktan sonra sorulmaz', async () => {
+    const govdeler: unknown[] = [];
+    sunucuKur(YONETICI, kayit(), { govdeler });
+    ac('/plan/maliyet');
+    fireEvent.click(await screen.findByRole('button', { name: /^S1, Tezgâh: / }, BEKLE));
+    const ac_ = screen.getByRole('region', { name: 'S1 · Tezgâh' });
+    fireEvent.change(within(ac_).getByLabelText(/Saat ücreti/), { target: { value: '130' } });
+    fireEvent.click(within(ac_).getByRole('button', { name: 'İleri' }));
+    fireEvent.click(within(ac_).getByRole('button', { name: 'Kaydet' }));
+    expect(await screen.findByText('T1 saat ücreti 130 TL/sa oldu')).toBeTruthy();
+    const kapat = () => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented; };
+    expect(govdeler).toHaveLength(0);
+    expect(kapat()).toBe(true);
+    // Bekleme süresini (2 sn) beklemeden gider.
+    await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 1000 });
+    await waitFor(() => { expect(kapat()).toBe(false); });
+  }, 30000);
+
   it('amortismanı girilmemiş tezgâhta genel gider hücresi "—", açılım nedenini yazar; sıfır yazılmaz', async () => {
     sunucuKur(YONETICI, kayit());
     ac('/plan/maliyet');
@@ -46,7 +64,7 @@ describe('P3 Maliyetler', () => {
     expect(within(screen.getByRole('region', { name: 'S1 · Genel gider' })).getByText(/S1 genel gider bilinmiyor/)).toBeTruthy();
   }, 30000);
 
-  it('hücre seçilince odak formun ilk alanına gider; kayıttan sonra plan eski notu, pasif "Plan iyileştirme ara" ve "Yeniden düzenle"; Esc açılımı kapatır, odak hücreye döner', async () => {
+  it('hücre seçilince odak formun ilk alanına gider; kayıttan sonra plan eski notu, plana giden "Plan iyileştirme ara" ve "Yeniden düzenle"; Esc açılımı kapatır, odak hücreye döner', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(YONETICI, kayit(), { govdeler });
     ac('/plan/maliyet');
@@ -60,7 +78,7 @@ describe('P3 Maliyetler', () => {
     fireEvent.click(within(ac_).getByRole('button', { name: 'Kaydet' }));
     expect(await screen.findByText('T1 saat ücreti 125 TL/sa oldu')).toBeTruthy();
     expect(screen.getByText(/Plan bu değişikliği henüz içermiyor/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Plan iyileştirme ara' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Plan iyileştirme ara' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Yeniden düzenle' }));
     expect((within(screen.getByRole('region', { name: 'S1 · Tezgâh' })).getByLabelText(/Saat ücreti/) as HTMLInputElement).value).toBe('125');
     fireEvent.keyDown(document.body, { key: 'Escape' });
