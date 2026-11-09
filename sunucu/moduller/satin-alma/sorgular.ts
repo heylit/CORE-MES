@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
-import type {
+import type { TalepDurumu,
   Ayarlar, AyarlarKaydetYazimi, Hareket, KatalogKaydetYazimi, KatalogKaydi, Onay, Talep, TalepYazimi, Teklif,
   TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -139,6 +139,7 @@ export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, s
   const satir = await db.tek<{ id: string }>(
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,
        iptal_nedeni = $10, agirlik_maliyet = $11, agirlik_termin = $12, agirlik_tedarikci = $13, agirlik_garanti = $14, uretim_emri_id = $15,
+       durum_zamani = CASE WHEN durum IS DISTINCT FROM $9 THEN now() ELSE durum_zamani END,
        surum = surum + 1, guncelleme = now()
      WHERE id = $1 AND surum = $2 RETURNING id`,
     [t.id, surum, ...anaDegerler(t, talepEden)],
@@ -1301,4 +1302,59 @@ export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
       WHERE t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
       ORDER BY yil, sira, ksira`,
   );
+}
+
+// 2432: hatırlatma adayları. İptal ve teslim alınmış talep aday değildir; sipariş verilmiş talepte yalnız açık siparişler gelir
+// (termin takibiyle aynı koşul: Logo'da kapatılmamış ve teslimi tamamlanmamış satırı olan).
+export interface HatirlatmaTalebiOkuma {
+  talepId: string;
+  no: string;
+  durum: TalepDurumu;
+  ihtiyacTarihi: string | null;
+  durumZamani: Date;
+  teklifIstegiVar: boolean;
+  kararVar: boolean;
+  kurKilidi: Date | null;
+  sonOnay: { id: string; sonuc: 'onay' | 'ret'; zaman: string } | null;
+  istekler: { firmaId: number; tedarikci: string; gonderim: string; teklifVar: boolean }[];
+  teklifler: { teklifId: string; tedarikci: string; gecerlilik: string | null }[];
+  siparisler: { teklifId: string; siparisNo: string | null; beklenenTeslim: string | null }[];
+}
+export function hatirlatmaTalepleriOku(db: Db): Promise<HatirlatmaTalebiOkuma[]> {
+  return db.sorgu<HatirlatmaTalebiOkuma>(
+    `SELECT t.id AS "talepId", t.no, t.durum, to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD') AS "ihtiyacTarihi", t.durum_zamani AS "durumZamani",
+        EXISTS (SELECT 1 FROM satin_alma_teklif_istegi r WHERE r.talep_id = t.id) AS "teklifIstegiVar",
+        (k.talep_id IS NOT NULL) AS "kararVar", k.kur_kilidi AS "kurKilidi",
+        (SELECT json_build_object('id', o.id, 'sonuc', o.sonuc, 'zaman', o.zaman) FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) AS "sonOnay",
+        coalesce((SELECT json_agg(json_build_object('firmaId', r.firma_id, 'tedarikci', coalesce(q1.tedarikci_adi, ''), 'gonderim', to_char(r.gonderim, 'YYYY-MM-DD'),
+            'teklifVar', q1.id IS NOT NULL) ORDER BY r.firma_id)
+          FROM satin_alma_teklif_istegi r
+          LEFT JOIN LATERAL (SELECT q.id, q.tedarikci_adi FROM satin_alma_teklif q WHERE q.talep_id = r.talep_id AND q.firma_id = r.firma_id LIMIT 1) q1 ON true
+          WHERE r.talep_id = t.id), '[]') AS istekler,
+        coalesce((SELECT json_agg(json_build_object('teklifId', q.id, 'tedarikci', q.tedarikci_adi, 'gecerlilik', to_char(q.gecerlilik, 'YYYY-MM-DD')) ORDER BY q.sira, q.id)
+          FROM satin_alma_teklif q WHERE q.talep_id = t.id), '[]') AS teklifler,
+        coalesce((SELECT json_agg(json_build_object('teklifId', p.teklif_id, 'siparisNo', coalesce(p.no, p.siparis_no), 'beklenenTeslim', to_char(p.beklenen_teslim, 'YYYY-MM-DD'))
+            ORDER BY p.teklif_id)
+          FROM satin_alma_siparis p
+          WHERE p.talep_id = t.id AND p.logo_kapatma_durumu IS NULL AND EXISTS (
+            SELECT 1 FROM satin_alma_siparis_satiri s
+            LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
+            WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id AND coalesce(m.toplam, 0) < s.miktar)), '[]') AS siparisler
+       FROM satin_alma_talep t LEFT JOIN satin_alma_karar k ON k.talep_id = t.id
+      WHERE t.durum NOT IN ('iptal', 'teslim_alindi')
+      ORDER BY t.yil, t.sira`,
+  );
+}
+
+export async function hatirlatmaKayitlari(db: Db): Promise<{ anahtar: string; tur: string; acik: boolean }[]> {
+  return db.sorgu<{ anahtar: string; tur: string; acik: boolean }>('SELECT anahtar, tur, kapandi IS NULL AS acik FROM satin_alma_hatirlatma');
+}
+// Yalnız yeni eklenen anahtar döner: aynı anda koşan iki tur aynı hatırlatmayı iki kez göndermez.
+export async function hatirlatmaEkle(db: Db, anahtar: string, tur: string, talepId: string): Promise<boolean> {
+  return (await db.tek('INSERT INTO satin_alma_hatirlatma (anahtar, tur, talep_id) VALUES ($1, $2, $3) ON CONFLICT (anahtar) DO NOTHING RETURNING anahtar',
+    [anahtar, tur, talepId])) !== null;
+}
+export async function hatirlatmaKapat(db: Db, anahtarlar: readonly string[]): Promise<void> {
+  if (anahtarlar.length === 0) return;
+  await db.sorgu('UPDATE satin_alma_hatirlatma SET kapandi = now() WHERE anahtar = ANY($1::text[]) AND kapandi IS NULL', [anahtarlar]);
 }

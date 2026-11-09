@@ -1079,3 +1079,140 @@ export function terminTakibi(g: TerminTakipGirdisi): TerminTakipSatiri[] {
   return satirlar.sort((a, b) => Number(b.durum === 'gecikti') - Number(a.durum === 'gecikti')
     || (a.gerekenTarih ?? '9999-12-31').localeCompare(b.gerekenTarih ?? '9999-12-31') || a.ad.localeCompare(b.ad, 'tr') || a.anahtar.localeCompare(b.anahtar));
 }
+
+// 2432: hatırlatmalar. Tarih maddeleri takvim günü, bekleme maddeleri iş günü sayar. Her hatırlatmanın kaynak kimliği dönemi taşır
+// (ihtiyaç tarihi, durumun başladığı an, teklif, beklenen teslim): koşul kalkınca kapanır, yeni dönem yeni hatırlatma açar.
+export const HATIRLATMA_ADLARI = [
+  'ihtiyac-yaklasiyor', 'taslak-bekliyor', 'teklif-cevapsiz', 'teklif-gecerlilik', 'degerlendirme-bekliyor', 'onay-bekliyor',
+  'siparis-bekliyor', 'teslim-yaklasiyor', 'teslim-gecikti', 'teslim-gecikti-yonetici',
+] as const;
+export type HatirlatmaAdi = (typeof HATIRLATMA_ADLARI)[number];
+export type HatirlatmaTuru = `satin-alma.hatirlatma-${HatirlatmaAdi}`;
+// Boş değer o hatırlatmayı kapatır.
+export type HatirlatmaAyarlari = Readonly<Record<HatirlatmaAdi, number | null>>;
+// Kur kilidinin bitmesine bu kadar gün kala onaylı ama siparişsiz talep hatırlatılır (danışman maddesi 7).
+export const KUR_KILIDI_UYARI_GUNU = 2;
+
+export interface HatirlatmaTalebi {
+  talepId: string;
+  no: string;
+  durum: TalepDurumu;
+  ihtiyacTarihi: string | null;
+  // Durumun başladığı an (ISO) ve tesis günü.
+  durumAni: string;
+  durumGunu: string;
+  teklifIstegiVar: boolean;
+  kararVar: boolean;
+  kararOnayli: boolean;
+  sonOnay: { id: string; gun: string } | null;
+  // Kur kilidinin bittiği tesis günü; kilit yoksa null.
+  kurKilidiBitisi: string | null;
+  istekler: readonly { firmaId: number; tedarikci: string; gonderim: string; teklifVar: boolean }[];
+  teklifler: readonly { teklifId: string; tedarikci: string; gecerlilik: string | null }[];
+  // Yalnız açık (teslimi tamamlanmamış, kapatılmamış) siparişler.
+  siparisler: readonly { teklifId: string; siparisNo: string | null; beklenenTeslim: string | null }[];
+}
+
+export interface HatirlatmaOlayi {
+  tur: HatirlatmaTuru;
+  kaynakKimlik: string;
+  talepId: string;
+  baslik: string;
+  yol: '/satin-alma/talepler' | '/satin-alma/onaylar';
+}
+
+const gunSayisi = (tarih: string): number => Date.UTC(Number(tarih.slice(0, 4)), Number(tarih.slice(5, 7)) - 1, Number(tarih.slice(8, 10))) / GUN_MS;
+// b - a, takvim günü.
+export const gunFarki = (a: string, b: string): number => gunSayisi(b) - gunSayisi(a);
+// Başlangıç gününden sonra bugüne kadar (bugün dahil) geçen iş günleri.
+export function isGunuFarki(baslangic: string, bugun: string, isGunleri: ReadonlySet<string>): number {
+  let n = 0;
+  for (const g of isGunleri) if (g > baslangic && g <= bugun) n += 1;
+  return n;
+}
+
+const ACIK_SIPARIS_ONCESI: readonly TalepDurumu[] = ['taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda'];
+
+export function hatirlatmalar(
+  talepler: readonly HatirlatmaTalebi[], ayar: HatirlatmaAyarlari, bugun: string, isGunleri: ReadonlySet<string>,
+): HatirlatmaOlayi[] {
+  const sonuc: HatirlatmaOlayi[] = [];
+  const ekle = (ad: HatirlatmaAdi, t: HatirlatmaTalebi, donem: string, baslik: string, yol: HatirlatmaOlayi['yol'] = '/satin-alma/talepler') => {
+    sonuc.push({ tur: `satin-alma.hatirlatma-${ad}`, kaynakKimlik: `${t.talepId}:${donem}`, talepId: t.talepId, baslik: `${t.no}: ${baslik}`, yol });
+  };
+  const bekledi = (t: HatirlatmaTalebi, n: number | null) => n !== null && isGunuFarki(t.durumGunu, bugun, isGunleri) >= n;
+  for (const t of talepler) {
+    const n = ayar['ihtiyac-yaklasiyor'];
+    if (n !== null && ACIK_SIPARIS_ONCESI.includes(t.durum) && t.ihtiyacTarihi !== null) {
+      const kalan = gunFarki(bugun, t.ihtiyacTarihi);
+      if (kalan <= n) ekle('ihtiyac-yaklasiyor', t, t.ihtiyacTarihi, kalan < 0 ? `ihtiyaç tarihi ${-kalan} gün geçti, sipariş yok` : `ihtiyaç tarihine ${kalan} gün kaldı, sipariş yok`);
+    }
+    if (t.durum === 'taslak' && !t.teklifIstegiVar && bekledi(t, ayar['taslak-bekliyor'])) ekle('taslak-bekliyor', t, t.durumAni, 'taslakta bekliyor, teklif istenmedi');
+    if (t.durum === 'teklif_isteniyor' || t.durum === 'degerlendirme') {
+      const ni = ayar['teklif-cevapsiz'];
+      if (ni !== null) {
+        for (const r of t.istekler) {
+          if (!r.teklifVar && isGunuFarki(r.gonderim, bugun, isGunleri) >= ni) ekle('teklif-cevapsiz', t, `${r.firmaId}:${r.gonderim}`, `${r.tedarikci} teklif vermedi`);
+        }
+      }
+      const ng = ayar['teklif-gecerlilik'];
+      if (ng !== null && !t.kararVar) {
+        for (const q of t.teklifler) {
+          if (q.gecerlilik === null) continue;
+          const kalan = gunFarki(bugun, q.gecerlilik);
+          if (kalan <= ng) ekle('teklif-gecerlilik', t, `${q.teklifId}:${q.gecerlilik}`, kalan < 0 ? `${q.tedarikci} teklifinin geçerliliği bitti, karar yok` : `${q.tedarikci} teklifinin geçerliliğine ${kalan} gün kaldı, karar yok`);
+        }
+      }
+    }
+    if (t.durum === 'degerlendirme' && bekledi(t, ayar['degerlendirme-bekliyor'])) ekle('degerlendirme-bekliyor', t, t.durumAni, 'değerlendirmede bekliyor');
+    if (t.durum === 'onayda' && !t.kararOnayli && bekledi(t, ayar['onay-bekliyor'])) ekle('onay-bekliyor', t, t.durumAni, 'onay bekliyor', '/satin-alma/onaylar');
+    const ns = ayar['siparis-bekliyor'];
+    if (ns !== null && t.durum === 'onayda' && t.kararOnayli && t.sonOnay !== null) {
+      const kilitKalan = t.kurKilidiBitisi === null ? null : gunFarki(bugun, t.kurKilidiBitisi);
+      if (gunFarki(t.sonOnay.gun, bugun) >= ns || (kilitKalan !== null && kilitKalan <= KUR_KILIDI_UYARI_GUNU)) {
+        ekle('siparis-bekliyor', t, t.sonOnay.id, kilitKalan !== null && kilitKalan <= KUR_KILIDI_UYARI_GUNU
+          ? `onaylandı, sipariş verilmedi; kur kilidi ${kilitKalan < 0 ? 'bitti' : `${kilitKalan} gün sonra bitiyor`}` : 'onaylandı, sipariş verilmedi');
+      }
+    }
+    if (t.durum !== 'siparis_verildi') continue;
+    for (const p of t.siparisler) {
+      if (p.beklenenTeslim === null) continue;
+      const kalan = gunFarki(bugun, p.beklenenTeslim);
+      const ad = p.siparisNo ?? 'sipariş';
+      const donem = `${p.teklifId}:${p.beklenenTeslim}`;
+      const ny = ayar['teslim-yaklasiyor'];
+      if (ny !== null && kalan >= 0 && kalan <= ny) ekle('teslim-yaklasiyor', t, donem, kalan === 0 ? `${ad} bugün teslim bekleniyor` : `${ad} teslimine ${kalan} gün kaldı`);
+      // 0 gecikmenin ilk günüdür: gecikme en az bir gündür.
+      const gecikme = -kalan;
+      for (const adi of ['teslim-gecikti', 'teslim-gecikti-yonetici'] as const) {
+        const ng = ayar[adi];
+        if (ng !== null && gecikme > 0 && gecikme >= ng) ekle(adi, t, donem, `${ad} teslimi ${gecikme} gün gecikti`);
+      }
+    }
+  }
+  return sonuc;
+}
+
+export const hatirlatmaAnahtari = (o: Pick<HatirlatmaOlayi, 'tur' | 'kaynakKimlik'>): string => `${o.tur}:${o.kaynakKimlik}`;
+
+// Açılacaklar: istenen ama tabloda hiç olmayanlar (kapanmış anahtar yeniden açılmaz). Kapanacaklar: açık ama artık istenmeyenler.
+export function hatirlatmaFarki(
+  istenen: readonly HatirlatmaOlayi[], kayitli: ReadonlySet<string>, acik: readonly { anahtar: string; tur: string }[],
+): { acilacak: HatirlatmaOlayi[]; kapanacak: { anahtar: string; tur: string; kaynakKimlik: string }[] } {
+  const istenenler = new Map(istenen.map((o) => [hatirlatmaAnahtari(o), o]));
+  return {
+    acilacak: [...istenenler].filter(([a]) => !kayitli.has(a)).map(([, o]) => o),
+    kapanacak: acik.filter((r) => !istenenler.has(r.anahtar)).map((r) => ({ ...r, kaynakKimlik: r.anahtar.slice(r.tur.length + 1) })),
+  };
+}
+
+// 2432 V1 geçici karşılığı (2452 vardiya takvimi gelene kadar): Pazartesi-Cuma, resmî tatiller hariç.
+export function haftaIciGunleri(baslangic: string, bitis: string, tatiller: ReadonlySet<string>): Set<string> {
+  const gunler = new Set<string>();
+  for (let g = gunSayisi(baslangic); g <= gunSayisi(bitis); g += 1) {
+    const d = new Date(g * GUN_MS);
+    const gun = d.toISOString().slice(0, 10);
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6 && !tatiller.has(gun)) gunler.add(gun);
+  }
+  return gunler;
+}

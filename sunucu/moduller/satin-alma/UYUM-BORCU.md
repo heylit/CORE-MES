@@ -178,3 +178,7 @@ Aşama 1, 1. tur (kart #162, dal `162-satin-alma-uyum`, kullanıcı kararları S
 47. [bağlama] TMI A14: alım "tamamlandı" görünürken giriş kontrolü (GKK) kararı bekleyen miktar satın almada görünmez; stok `disari.ts` kalite durumu okumasıyla sipariş özetine eklenir.
 48. TMI A10 (yeniden üretilmedi, BİLMİYORUM): ikinci talepte teklif kaydından sonra Karşılaştır adımı açılmadı. VARSAYIM: talep, teklif sayısı ayarlardaki "en az teklif" sayısına ulaşınca değerlendirmeye geçer (`merkez/ui.ts` save-quote); ikinci talepte teklif sayısı altta kalmış olabilir. Yeniden üretilirse ayrı kart.
 49. TMI A11: sipariş PDF'i yok (yalnız e-posta metni); yeni özellik, kullanıcıya sorulur.
+
+## Kart 2432 (hatırlatmalar)
+50. [2452 ile kapanacak] Bekleme hatırlatmaları (taslak, cevapsız teklif, değerlendirme, onay) iş gününü geçici olarak tesisin hafta içi günlerinden (Pazartesi-Cuma, İK resmî tatilleri hariç) sayar; 2432 V1 alıcının kendi çalışma günlerini ister. 2452 birleşince `vardiya/disari.ts kisilerinIsGunleri` ile alıcı başına sayılır ve gönderim `bildirimGonder({ yalnizKisiler: true, kisiler })` (2453) ile alıcı başına yapılır; bayrağın taşındığı testle denetlenir (Güvenlik 2453 notu).
+51. VARSAYIM: hatırlatma ayarı boşaltılınca açık hatırlatmalar kapanır; ayar yeniden açılınca aynı dönemin kapanmış hatırlatması yeniden açılmaz (tek kayıt tek hatırlatma). Geri alma ucuz.

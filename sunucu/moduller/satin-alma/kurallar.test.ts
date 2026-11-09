@@ -611,3 +611,89 @@ test('2433: terminTakibi fason kalemi emriyle ayrı satırdır; hizmet kartı hi
   ]);
   assert.equal(satirlar.find((x) => x.anahtar === 'malzeme:5')?.elleTermin?.termin, '2026-11-30');
 });
+
+// 2432: hatırlatmalar.
+import { HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaFarki, hatirlatmalar, isGunuFarki } from './kurallar.ts';
+
+const H_AYAR: HatirlatmaAyarlari = {
+  'ihtiyac-yaklasiyor': 7, 'taslak-bekliyor': 2, 'teklif-cevapsiz': 3, 'teklif-gecerlilik': 3, 'degerlendirme-bekliyor': 3, 'onay-bekliyor': 2,
+  'siparis-bekliyor': 1, 'teslim-yaklasiyor': 3, 'teslim-gecikti': 0, 'teslim-gecikti-yonetici': 3,
+};
+const hTalep = (x: Partial<HatirlatmaTalebi>): HatirlatmaTalebi => ({
+  talepId: 't1', no: 'ST-1', durum: 'taslak', ihtiyacTarihi: null, durumAni: '2026-11-02T08:00:00.000Z', durumGunu: '2026-11-02',
+  teklifIstegiVar: false, kararVar: false, kararOnayli: false, sonOnay: null, kurKilidiBitisi: null, istekler: [], teklifler: [], siparisler: [], ...x,
+});
+// 2026-11-09 Pazartesi.
+const H_BUGUN = '2026-11-09';
+const H_ISGUNLERI = haftaIciGunleri('2026-10-01', H_BUGUN, new Set());
+const turler = (t: Partial<HatirlatmaTalebi>, ayar: HatirlatmaAyarlari = H_AYAR) => hatirlatmalar([hTalep(t)], ayar, H_BUGUN, H_ISGUNLERI).map((o) => o.tur.replace('satin-alma.hatirlatma-', ''));
+
+test('2432: iş günü Pazartesi-Cuma, tatil hariç; başlangıç günü sayılmaz, bugün sayılır', () => {
+  const g = haftaIciGunleri('2026-11-06', '2026-11-10', new Set(['2026-11-10']));
+  assert.deepEqual([...g], ['2026-11-06', '2026-11-09']);
+  assert.equal(isGunuFarki('2026-11-06', '2026-11-09', g), 1);
+  assert.equal(isGunuFarki('2026-11-02', H_BUGUN, H_ISGUNLERI), 5);
+});
+
+test('2432-2 a: ihtiyaç tarihine N gün ya da daha az kalan, sipariş öncesi talep; sipariş verilmişte yok', () => {
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-16', teklifIstegiVar: true }), ['ihtiyac-yaklasiyor']);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-17', teklifIstegiVar: true }), []);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-01', teklifIstegiVar: true }), ['ihtiyac-yaklasiyor']);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-10', durum: 'siparis_verildi' }), []);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-10', teklifIstegiVar: true }, { ...H_AYAR, 'ihtiyac-yaklasiyor': null }), []);
+});
+
+test('2432: bekleme maddeleri iş günü sayar; teklif istenmiş taslak taslak hatırlatması almaz', () => {
+  // Cuma başlayan taslak Pazartesi 1 iş günüdür: 2 iş günü dolmadı.
+  assert.deepEqual(turler({ durumGunu: '2026-11-06' }), []);
+  assert.deepEqual(turler({ durumGunu: '2026-11-05' }), ['taslak-bekliyor']);
+  assert.deepEqual(turler({ durumGunu: '2026-11-05', teklifIstegiVar: true }), []);
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: '2026-11-04' }), ['degerlendirme-bekliyor']);
+  assert.deepEqual(turler({ durum: 'onayda', durumGunu: '2026-11-05', kararVar: true }), ['onay-bekliyor']);
+  assert.deepEqual(turler({ durum: 'onayda', durumGunu: '2026-11-05', kararVar: true, kararOnayli: true, sonOnay: { id: 'o1', gun: H_BUGUN } }), []);
+});
+
+test('2432: cevapsız teklif isteği firma başına; teklif gelen firma düşer. Geçerlilik yalnız karar yokken', () => {
+  const istekler = [
+    { firmaId: 1, tedarikci: 'A', gonderim: '2026-11-03', teklifVar: false },
+    { firmaId: 2, tedarikci: 'B', gonderim: '2026-11-03', teklifVar: true },
+    { firmaId: 3, tedarikci: 'C', gonderim: '2026-11-06', teklifVar: false },
+  ];
+  const o = hatirlatmalar([hTalep({ durum: 'teklif_isteniyor', durumGunu: H_BUGUN, teklifIstegiVar: true, istekler })], H_AYAR, H_BUGUN, H_ISGUNLERI);
+  assert.deepEqual(o.map((x) => x.kaynakKimlik), ['t1:1:2026-11-03']);
+  const teklifler = [{ teklifId: 'q1', tedarikci: 'A', gecerlilik: '2026-11-12' }, { teklifId: 'q2', tedarikci: 'B', gecerlilik: '2026-11-13' }];
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: H_BUGUN, teklifler }), ['teklif-gecerlilik']);
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: H_BUGUN, teklifler, kararVar: true }), []);
+});
+
+test('2432: onaylı siparişsiz talep N gün sonra ya da kur kilidinin bitmesine iki gün kala', () => {
+  const onayli = { durum: 'onayda' as const, durumGunu: H_BUGUN, kararVar: true, kararOnayli: true };
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN } }), []);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: '2026-11-08' } }), ['siparis-bekliyor']);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN }, kurKilidiBitisi: '2026-11-11' }), ['siparis-bekliyor']);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN }, kurKilidiBitisi: '2026-11-12' }), []);
+});
+
+test('2432: açık siparişte teslim yaklaşıyor, gecikti ve yöneticiye kademe; tarihsiz sipariş yok', () => {
+  const sp = (beklenenTeslim: string | null) => turler({ durum: 'siparis_verildi', siparisler: [{ teklifId: 'q1', siparisNo: 'SP-1', beklenenTeslim }] });
+  assert.deepEqual(sp('2026-11-12'), ['teslim-yaklasiyor']);
+  assert.deepEqual(sp('2026-11-09'), ['teslim-yaklasiyor']);
+  assert.deepEqual(sp('2026-11-13'), []);
+  assert.deepEqual(sp('2026-11-08'), ['teslim-gecikti']);
+  assert.deepEqual(sp('2026-11-06'), ['teslim-gecikti', 'teslim-gecikti-yonetici']);
+  assert.deepEqual(sp(null), []);
+});
+
+test('2432: her ayar boşken hiçbir hatırlatma yok', () => {
+  const kapali = Object.fromEntries(HATIRLATMA_ADLARI.map((a) => [a, null])) as HatirlatmaAyarlari;
+  assert.deepEqual(turler({ durumGunu: '2026-10-01', ihtiyacTarihi: H_BUGUN }, kapali), []);
+});
+
+test('2432: fark yalnız kayıtta olmayanı açar, koşulu kalkan açığı kapatır; kapanmış anahtar yeniden açılmaz', () => {
+  const istenen = hatirlatmalar([hTalep({ durumGunu: '2026-11-05' })], H_AYAR, H_BUGUN, H_ISGUNLERI);
+  const anahtar = `satin-alma.hatirlatma-taslak-bekliyor:t1:${hTalep({}).durumAni}`;
+  assert.deepEqual(hatirlatmaFarki(istenen, new Set(), []).acilacak.length, 1);
+  assert.deepEqual(hatirlatmaFarki(istenen, new Set([anahtar]), []).acilacak, []);
+  const f = hatirlatmaFarki([], new Set([anahtar]), [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor' }]);
+  assert.deepEqual(f.kapanacak, [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor', kaynakKimlik: `t1:${hTalep({}).durumAni}` }]);
+});

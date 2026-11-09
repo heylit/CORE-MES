@@ -25,13 +25,15 @@ import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetle
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
-import { bildirimGonder } from '../bildirim/disari.ts';
+import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
+import { resmiTatilGunleri } from '../ik/disari.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
+  KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { degerlendir, esitVadeOrtami, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
@@ -662,6 +664,10 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     varMi: () => s.talepVarMi(db, id),
     bulunamadiIletisi: ILETILER.talepYok,
   });
+  // 2432: onaydaki talebin kararı verilince (onay, ret) ya da talep onaydan çıkınca onaylayanlardaki görev kapanır.
+  if (eski.durum === 'onayda' && (yazilacak.durum !== 'onayda' || yeniOnaylar.length > 0)) {
+    await bildirimKapat(db, { tur: 'satin-alma.talep-onay-bekliyor', kaynakKimlik: id });
+  }
   // 221 a: onaya yeni düşen talep onaylayanlara bildirilir; onaydayken yeniden kaydetmek yeni bildirim açmaz.
   if (yazilacak.durum === 'onayda' && eski.durum !== 'onayda') {
     await bildirimGonder(db, {
@@ -1634,4 +1640,38 @@ export async function takvimKayitlari(db: Db, baslangic: string, bitis: string):
       ilgili: x.firmaId === null ? x.tedarikciAdi || null : (adlar.get(x.firmaId) ?? (x.tedarikciAdi || null)), durum: TAKVIM_TESLIM_DURUMU[durum], bitti: durum === 'tamam',
     };
   });
+}
+
+// 2432: hatırlatma turu. Adaylar okunur, kural istenenleri verir; yeni olan açılır ve gönderilir, koşulu kalkan kapanır.
+// 2452 (vardiya takvimi) ve 2453 (yalnız seçilen kişiler) gelene kadar iş günü tesisin hafta içi günleridir (UYUM-BORCU).
+const ISGUNU_GERI_EN_COK = 400;
+export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Promise<{ acilan: number; kapanan: number }> {
+  const bugun = tesisGunu(simdi);
+  const ayar: Partial<Record<(typeof HATIRLATMA_ADLARI)[number], number | null>> = {};
+  for (const a of HATIRLATMA_ADLARI) ayar[a] = await sistemAyariOku(db, `satin-alma.hatirlatma-${a}`);
+  const okunan = await s.hatirlatmaTalepleriOku(db);
+  const talepler: HatirlatmaTalebi[] = okunan.map((r) => ({
+    talepId: r.talepId, no: r.no, durum: r.durum, ihtiyacTarihi: r.ihtiyacTarihi, durumAni: r.durumZamani.toISOString(), durumGunu: tesisGunu(r.durumZamani),
+    teklifIstegiVar: r.teklifIstegiVar, kararVar: r.kararVar, kararOnayli: r.kararVar && r.sonOnay?.sonuc === 'onay',
+    sonOnay: r.sonOnay === null ? null : { id: r.sonOnay.id, gun: tesisGunu(new Date(r.sonOnay.zaman)) },
+    kurKilidiBitisi: r.kurKilidi === null ? null : tesisGunu(new Date(r.kurKilidi.getTime() + KUR_KILIDI.gun * 86_400_000)),
+    istekler: r.istekler, teklifler: r.teklifler, siparisler: r.siparisler,
+  }));
+  const enGeri = tesisGunu(new Date(simdi.getTime() - ISGUNU_GERI_EN_COK * 86_400_000));
+  const baslangic = [...talepler.map((t) => t.durumGunu), ...talepler.flatMap((t) => t.istekler.map((r) => r.gonderim))]
+    .reduce((a, b) => (b < a ? b : a), bugun);
+  const ilk = baslangic < enGeri ? enGeri : baslangic;
+  const tatiller = new Set((await resmiTatilGunleri(db, ilk, bugun)).map((t) => t.tarih));
+  const istenen = hatirlatmalar(talepler, ayar as HatirlatmaAyarlari, bugun, haftaIciGunleri(ilk, bugun, tatiller));
+  const kayitlar = await s.hatirlatmaKayitlari(db);
+  const { acilacak, kapanacak } = hatirlatmaFarki(istenen, new Set(kayitlar.map((k) => k.anahtar)), kayitlar.filter((k) => k.acik));
+  for (const k of kapanacak) await bildirimKapat(db, { tur: k.tur as Parameters<typeof bildirimKapat>[1]['tur'], kaynakKimlik: k.kaynakKimlik });
+  await s.hatirlatmaKapat(db, kapanacak.map((k) => k.anahtar));
+  let acilan = 0;
+  for (const o of acilacak) {
+    if (!await s.hatirlatmaEkle(db, hatirlatmaAnahtari(o), o.tur, o.talepId)) continue;
+    await bildirimGonder(db, { tur: o.tur, baslik: o.baslik, yol: o.yol, kaynakKimlik: o.kaynakKimlik });
+    acilan += 1;
+  }
+  return { acilan, kapanan: kapanacak.length };
 }

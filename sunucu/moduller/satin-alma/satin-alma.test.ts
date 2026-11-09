@@ -247,6 +247,52 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual((await bildirimler(c.mudur)).map((b) => b.tekrarSayisi), ilk.map((b) => b.tekrarSayisi));
   });
 
+  test('2432: onay bekliyor görevi karar verilince (onay ya da ret) bütün onaylayanlarda kapanır', async () => {
+    const yapildi = async (id: string) => (await ortam!.sahip.sorgu<{ yapildi: Date | null }>(
+      'SELECT yapildi FROM bildirim_kaydi WHERE tekil_anahtar = $1', [`satin-alma.talep-onay-bekliyor:${id}`])).map((r) => r.yapildi !== null);
+    const onayda = await kararli();
+    assert.ok((await yapildi(onayda.id)).length > 0);
+    assert.ok((await yapildi(onayda.id)).every((x) => !x));
+    tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] }));
+    assert.ok((await yapildi(onayda.id)).every((x) => x));
+    const ikinci = await kararli();
+    tamam<Talep>(await kaydet(c.mudur, { ...govde(ikinci), durum: 'degerlendirme', onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'ret', dortGozsuz: false, notlar: 'Fiyat yüksek' }] }));
+    assert.ok((await yapildi(ikinci.id)).length > 0);
+    assert.ok((await yapildi(ikinci.id)).every((x) => x));
+  });
+
+  test('2432: durum zamanı yalnız durum değişince yenilenir', async () => {
+    const zaman = async (id: string) => (await ortam!.sahip.tek<{ z: string }>('SELECT durum_zamani::text AS z FROM satin_alma_talep WHERE id = $1', [id]))!.z;
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum_zamani = now() - interval '3 days' WHERE id = $1", [t.id]);
+    const once = await zaman(t.id);
+    const ayni = tamam<Talep>(await kaydet(c.sa, { ...govde(t), baslik: 'Deneme talep 2' }));
+    assert.equal(await zaman(t.id), once);
+    tamam<Talep>(await kaydet(c.sa, { ...govde(ayni), durum: 'degerlendirme' }));
+    assert.notEqual(await zaman(t.id), once);
+  });
+
+  test('2432: hatırlatma bir kez açılır, okunsa da yinelenmez; koşul kalkınca kayıt ve bildirim kapanır', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ ihtiyacTarihi: null })));
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum_zamani = now() - interval '10 days' WHERE id = $1", [t.id]);
+    const tur = 'satin-alma.hatirlatma-taslak-bekliyor';
+    const kayitlar = () => ortam!.sahip.sorgu<{ acik: boolean }>('SELECT kapandi IS NULL AS acik FROM satin_alma_hatirlatma WHERE talep_id = $1 AND tur = $2', [t.id, tur]);
+    const bildirimler = () => ortam!.sahip.sorgu<{ kisi: number; yapildi: boolean }>(
+      "SELECT kisi_id AS kisi, yapildi IS NOT NULL AS yapildi FROM bildirim_kaydi WHERE tur = $1 AND tekil_anahtar LIKE $2", [tur, `${tur}:${t.id}:%`]);
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.deepEqual(await kayitlar(), [{ acik: true }]);
+    const ilk = await bildirimler();
+    assert.ok(ilk.some((b) => b.kisi === kisi.sa), 'satın alma alır');
+    assert.ok(!ilk.some((b) => b.kisi === kisi.talep), 'talep eden almaz');
+    await ortam!.sahip.sorgu('UPDATE bildirim_kaydi SET okundu = now() WHERE tur = $1', [tur]);
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.equal((await bildirimler()).length, ilk.length);
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme' }));
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.deepEqual(await kayitlar(), [{ acik: false }]);
+    assert.ok((await bildirimler()).every((b) => b.yapildi));
+  });
+
   test('SAT-13 SAT-56: ilk toplam ve revizyon sunucuda hesaplanır; istemcinin değeri yok sayılır', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
