@@ -113,7 +113,7 @@ export function calismayiYolla(a: { o: PlanlamaEkranOzellikleri; c: PlanlamaCali
   const acik = (a.sen?.senaryolar ?? []).filter((x) => x.durum === 'acik').length;
   return calismayiGonder({
     komut, not: a.not, hedef: a.hedef, planSurumu: a.sen?.canliSurum ?? a.o.depo.planSurumu?.planSurumu ?? null, canliKabul: a.canliKabul === true,
-    ad: taslakAdi(a.hedef, gunAdi(a.c.D, simdiSaati(a.c)), a.o.depo.ben.kisi.ad, acik),
+    ad: taslakAdi(a.hedef, gunAdi(a.c.D, simdiSaati(a.c, Date.now())), a.o.depo.ben.kisi.ad, acik),
   });
 }
 
@@ -207,7 +207,7 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
     setIsleniyor(true);
     try { otomatikUygulaIste(await is()); bildir('tamam', tamam); yenile(); return true; } catch (h) { bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
   }, [bildir, yenile]);
-  const simdi = c ? simdiSaati(c) : 0;
+  const simdi = c ? simdiSaati(c, Date.now()) : 0;
   const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
     void gonder(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdi) }), 'İş taşındı; plan yeniden diziliyor.');
   } : null), [yaz, komut, gonder, simdi]);

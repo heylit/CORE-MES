@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { planGuncel } from '../durum.ts';
-import { bitenler, derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
+import { bitenler, derle, girdiKur, olayAdi, planOku, plandanBitenler, saatYaz, simdiSaati, sorunlar, veriDenetimi, yerlesmeyenSiparisler } from './kurallar.ts';
 import { ornekCalisma } from './ornek.ts';
 import { ACIK_TEZGAH_YOK, beklemeler, cevap, gostergeler, ozetVerisi, yorumlar, type Metin } from './ozet/veri.ts';
 import { nabizDurumu } from './ust/nabiz.ts';
+
+import { saatiSabitle } from '../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
 
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla ekrana yazdığı değerlerdir; kalın yazı <b> ile.
 const html = (m: Metin) => m.map((x) => (typeof x === 'string' ? x : `<b>${x.b}</b>`)).join('');
@@ -146,5 +150,16 @@ describe('yerleşmeyen siparişler', () => {
     expect(yerlesmeyenSiparisler(c, p, bitenler({ ...acik, orders: [{ id: '1', status: 'tamam' }, { id: '3', status: 'tamam' }] }, c.D))).toEqual([]);
     const h = structuredClone(c); h.D.siparisler.find((s) => s.id === '3')!.havuz = true;
     expect(yerlesmeyenSiparisler(h, p, bitenler(acik, h.D))).toEqual([]);
+  });
+});
+
+describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
+  it('verilen an tesis saatiyle planın eksenine çevrilir; an yoksa ya da eksen yoksa kayıttaki simdi, o da yoksa 07:00', () => {
+    const c = { ...ornekCalisma(), simdi: 8 };
+    const b = c.D.meta?.baslangic ?? '';
+    expect(simdiSaati(c, Date.parse(`${b}T07:30:00Z`) + 24 * 3_600_000)).toBe(34.5);
+    expect(simdiSaati(c)).toBe(8);
+    expect(simdiSaati({ ...c, D: { ...c.D, meta: {} } }, Date.now())).toBe(8);
+    expect(simdiSaati({ ...c, simdi: undefined, D: { ...c.D, meta: {} } }, Date.now())).toBe(7);
   });
 });

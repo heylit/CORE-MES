@@ -11,6 +11,10 @@ import { calismaKur, OKUYAN, PLANCI } from '../veri/test-veri.tsx';
 import { AkisAgi } from './index.tsx';
 import { atolyeOzeti, atolyeSahnesi, baglar, bul, ilkKamera, izdus, kararSahnesi, KISIT_HATTI, tezgahAni, uretimSahnesi, type Konum } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => calismaKur());
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 // Uydurma ekip kaydı: bir alınan, bir alınmayan ek mesai ve kapalı CP-SAT kararı.

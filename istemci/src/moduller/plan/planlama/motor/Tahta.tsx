@@ -34,6 +34,7 @@ import './motor.css';
 import { useAtolyeKomutlari, useOtomatikUygula } from './atolye/gonder.ts';
 import { HamleOnizlemesi } from './hamle/Onizleme.tsx';
 import { HamleBaglami, siraAdimi, useHamle } from './hamle/hamle.ts';
+import { useAn } from './saat.ts';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -102,13 +103,14 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
   // Biten iş sunucunun iş emri durumundan; okunamazsa kayıtlı plandan.
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const tezGrup = useMemo(() => { const m = new Map(c.D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger'])); return (id: string) => (id.startsWith('@') ? 'fason' : m.get(id) ?? 'diger'); }, [c]);
   const guncel = planGuncel(c);
   const v = useMemo(() => (p ? ozetVerisi(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
   const nabiz = useMemo(() => (p ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
   const sor = useMemo(() => (p ? sorunlar(c, p, cx, guncel) : []), [c, p, cx, guncel]);
-  const now = simdiSaati(c);
+  const now = simdiSaati(c, an);
   const r = useMemo(() => aralik(now, donem, kayma), [now, donem, kayma]);
   // Zaman imleci şimdi ile dönemin sonu arasında kalır (rsT).
   const zaman = zamanSinirla(secim.zaman, now, pencereSonu(now, r));

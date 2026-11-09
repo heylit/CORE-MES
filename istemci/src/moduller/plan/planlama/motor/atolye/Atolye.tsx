@@ -72,7 +72,7 @@ function PlanSekmesi({ o, c, p, cf, sek, sekSec, onayda, sen, senYaz }: {
   if (!c) return <BosCalisma />;
   if (!p) {
     const emirler = o.depo.durum?.emirler ?? null;
-    return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null)))} planKur={planKur} planYaz={o.yetki.planYaz} />;
+    return <BosPlan c={c} cx={derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, null), Date.now()))} planKur={planKur} planYaz={o.yetki.planYaz} />;
   }
   if (sek === 'pg') return <PlanGercek o={o} c={c} p={p} canliSurum={sen?.canliSurum ?? null} />;
   return <Pano o={o} c={c} p={p} cf={cf} sekSec={sekSec} onayda={onayda} sen={sen} senYaz={senYaz} />;

@@ -17,6 +17,10 @@ import { CALISMA_DEGERI, calismaKur, OKUYAN, PLANCI } from '../veri/test-veri.ts
 import { BugununKararlari } from './index.tsx';
 import { dokum, durumCumlesi, gelenler, gosterGunu, kabulEdilenler, kabulYaz, kararlar } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => calismaKur());
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 // Uydurma çalışma (test-veri): T1 31-39 saat duruşta, tatil kuralı kapalı, veri bulguları var; S1 termine 3 saat geç, S2 yetişiyor.

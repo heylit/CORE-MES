@@ -8,6 +8,10 @@ import {
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
 } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
   const p = planOku(c); if (!p) throw new Error('plan yok');
   const cx = derle(girdiKur(c, plandanBitenler(c, p)));

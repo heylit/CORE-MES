@@ -19,6 +19,7 @@ import {
   type BugunAdimi, type BugunEylemi, type BugunKarti, type DokumSatiri,
 } from './kurallar.ts';
 import './bugun.css';
+import { useAn } from '../../motor/saat.ts';
 
 // "Bugünün kararları" (u-bugun.betik sBugun; Başka menüsünün Sayfalar'ından açılır): solda dört adımlı günlük akış, sağda seçili günün saatlik
 // planı. Öneriyi deneyen eylemler (öne al, plana al, söz tarihi, planı güncelle) motor ister (357 b), pasiftir; gecikme kabulü, duruşu kaldırmak
@@ -37,13 +38,14 @@ export function BugununKararlari(o: PlanlamaEkranOzellikleri) {
 function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) {
   const emirler = o.depo.durum?.emirler ?? null;
   const p = useMemo(() => planOku(c), [c]);
-  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const { bildir } = useBildirim();
   const planKur = usePlanKur(o, useCallback((ileti: string) => bildir('hata', ileti), [bildir]));
   const veriAc = useMemo(() => (o.altSec ? (bolum: string | null) => o.altSec?.({ ekran: 'veri', bolum }) : null), [o]);
   const [secAdim, setSecAdim] = useState<BugunAdimi | null>(null);
   const [g, setG] = useState(0);
-  const now = simdiSaati(c); const guncel = planGuncel(c);
+  const now = simdiSaati(c, an); const guncel = planGuncel(c);
   const gel = useMemo(() => gelenler(c, cx, guncel, now), [c, cx, guncel, now]);
   const kar = useMemo(() => (p ? kararlar(c, p, cx) : []), [c, p, cx]);
   const taban = useMemo(() => planOku(o.depo.calisma), [o.depo.calisma]);

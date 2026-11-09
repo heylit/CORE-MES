@@ -7,11 +7,12 @@ import { bekleyenListesi } from '../../kayit.ts';
 import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
+import { simdiSaati } from '../kurallar.ts';
 import { mesaiAdaylari } from '../secim/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, GOSTERGE_GECIKEN_IPUCU, gostergeGecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -159,7 +160,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             {canli ? (
               <>
                 <Satir a="Canlı sürüm" b={canli} />
-                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${gecikenSay(ort.liste)}`} />
+                <Satir a={<span title={GOSTERGE_GECIKEN_IPUCU}>Geciken emir</span>} b={`${sv ? sv.canli.geciken : '—'} → ${gostergeGecikenSay(ort.liste)}`} />
                 <Satir a="Toplam gecikme" b={`— → ${sure(p.ozet.wT)}`} />
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
@@ -347,7 +348,9 @@ function OlayFormu({ ort, ekle, m, on }: { ort: Ortam; ekle: (o: AtolyeOlayi) =>
   const gonder = async () => {
     if (!olay) return;
     setGidiyor(true);
-    if (await ekle(olay)) ort.kartKapat(); else setGidiyor(false);
+    // Arızanın başlangıcı gönderme anının saatinden (2506 a): form uzun açık kalsa da olay geçmişe yazılmaz.
+    const x = olay.tip === 'ariza' ? { ...olay, bas: simdiSaati(ort.c, Date.now()) + sayi('ofs') } : olay;
+    if (await ekle(x)) ort.kartKapat(); else setGidiyor(false);
   };
   const alan = (k: OlayAlani, ad: string, ic: ReactNode) => <><label htmlFor={`tc-pym-tp-olay-${k}`}>{ad}</label>{ic}</>;
   const secim = (k: OlayAlani, l: { id: string; ad: string }[]) => (

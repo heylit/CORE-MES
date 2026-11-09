@@ -54,7 +54,7 @@ function Satir({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
           <b><Simge ad={ac ? 'down' : 'chev-right'} boyut="k" />{no}{parca && <i>{parca}</i>}</b>
           {s.durum === 'gec' ? <span className="tc-pym-tp-rozet" data-durum="gec">{`${sure(s.T)} geç`}</span>
             : s.durum === 'risk' ? <span className="tc-pym-tp-rozet" data-durum="risk">{`${sure(s.pay)} pay`}</span> : null}
-          <small>{`${s.ad} · ${s.adet} ad${s.oncelik === 1 ? ' · acil' : ''}`}</small>
+          <small>{`${s.ad} · ${s.adet} ad${s.oncelik === 1 ? ` · ${ONCELIK_KISA[1] ?? ''}` : ''}`}</small>
         </div>
         <Zaman D={D} t={s.bas} uyar={mg} title={mg ? 'Malzeme tahmini üretim başlangıcından sonra geliyor' : undefined} />
         <Zaman D={D} t={s.ur} />
