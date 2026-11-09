@@ -76,9 +76,11 @@ describe('plan motoru: siparişin gecikme cezası (1461 a)', () => {
     assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000 }).p - 240) < 1e-6);
     assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000, cezaTavan: null }).p - 240) < 1e-6);
     assert.ok(Math.abs(ceza({ gelir: 2400, cezaOran: 1000, cezaTavan: 50 }).p - 1200) < 1e-6, 'girilen tavan varsayılandan büyük olabilir');
-    // Gelir bilinmezse oran uygulanamaz: motorun eski puan cezası (ağırlıklı) kalır.
+    // B-2483-10: gelir bilinmezse oran uygulanamaz; ceza bilinmez (null), puan cezası uydurulmaz. Zamanında işin cezası 0'dır.
     const bilinmez = ceza({ gelir: null, cezaOran: 1 });
-    assert.ok(Math.abs(bilinmez.p - bilinmez.T * Number(m.W0.ceza)) < 1e-6, `${String(bilinmez.p)}`);
+    assert.ok(bilinmez.T > 0);
+    assert.equal(bilinmez.p, null);
+    assert.equal(ceza({ gelir: null, cezaOran: null, termin: '2026-01-09 16:00' }).p, 0);
   });
 });
 

@@ -64,7 +64,8 @@ export async function mrpIhtiyaci(db: Db, kullanici: Kullanici, simdi = Date.now
   return {
     hesaplanan: new Date(simdi).toISOString(),
     stokGorunur, satinAlmaGorunur,
-    urunsuzEmir: emirler.filter((e) => ihtiyaclar.get(e.id) == null).length,
+    // B-2499-5: ürünü olmayan da bileşeni hiç olmayan da (rotada malzeme tanımsız) emrin ihtiyacı hesaplanamaz; sessiz düşmez.
+    urunsuzEmir: emirler.filter((e) => (ihtiyaclar.get(e.id) ?? []).length === 0).length,
     satirlar: satirlar.map(({ malzemeNo, acilanlar, ...x }) => ({
       ...x,
       malzeme: { id: malzemeNo, kod: kart(malzemeNo)?.kod ?? null, ad: kart(malzemeNo)?.ad ?? null, tur: kart(malzemeNo)?.tur ?? null, birim: kart(malzemeNo)?.birim ?? null },

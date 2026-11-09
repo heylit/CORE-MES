@@ -3,7 +3,7 @@ import {
   benCevabi, fasonTahminCevabi, fasonTahminSorgusu, kayitlarCevabi, receteRotaDurumCevabi, silCevabi, silGovdesi, statulerCevabi, statuTanimiCevabi, statuTanimiKaydetGovdesi,
   statuTanimiParametresi, statuTanimiSilGovdesi, yazCevabi, yazGovdesi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
-import { ben, durum, fasonTahminleri, kayitlar, sil, statuler, statuTanimiKaydet, statuTanimiSil, yaz } from './servis.ts';
+import { ben, durum, fasonTahminleri, kayitlar, komutlaSil, komutlaYaz, statuler, statuTanimiKaydet, statuTanimiSil } from './servis.ts';
 
 // Çerçevedeki prototipin yerel deposu bu uçlara gelir (istemci/src/moduller/recete-rota/kopru.ts). Her yazma uçtan geçer:
 // yetki ve denetim kaydı uç katmanındadır.
@@ -52,13 +52,13 @@ export const uclar = [
     yontem: 'POST',
     yol: '/recete-rota/kayitlar/yaz',
     yetki: 'recete-rota.yaz',
-    // Prototip her değişiklikte bütün durumunu (reçete, rota, emir, plan; yüzlerce KB olabilir) yazar: gövde deftere girmez, anahtar ve
-    // beklenen sürüm girer (CNC Kurulum Motoru ile aynı kalıp; uygulama.test listesine eklenir).
+    // Ana durum kaydı bu uçtan yazılmaz (komutlaYaz). Kayıt yüzlerce KB olabilir: gövde deftere girmez, anahtar ve beklenen sürüm girer
+    // (CNC Kurulum Motoru ile aynı kalıp; uygulama.test listesine eklenir).
     denetim: 'govdesiz',
     denetimOzeti: (g) => ({ anahtar: g.anahtar, bicim: g.bicim, beklenenSurum: g.beklenenSurum }),
     govde: yazGovdesi,
     cevap: yazCevabi,
-    isle: ({ db, kullanici, govde, gunluk }) => yaz(db, kullanici, govde, gunluk),
+    isle: ({ db, kullanici, govde, gunluk }) => komutlaYaz(db, kullanici, govde, gunluk),
   }),
   uc({
     yontem: 'POST',
@@ -66,7 +66,7 @@ export const uclar = [
     yetki: 'recete-rota.yaz',
     govde: silGovdesi,
     cevap: silCevabi,
-    isle: ({ db, govde }) => sil(db, govde.anahtar, govde.beklenenSurum),
+    isle: ({ db, govde }) => komutlaSil(db, govde.anahtar, govde.beklenenSurum),
   }),
   // Elle tanımlanan statü (geçiş planı adım 4): ekleme, değişiklik ve silme tabloya komutla gider.
   uc({

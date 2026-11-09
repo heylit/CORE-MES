@@ -143,6 +143,10 @@ export const kaynakTakvimiSemasi = z.object({
   araliklar: z.array(takvimAraligi),
   // Yalnız kişi takviminde: istasyon atama yüzdelerinin toplamı / 100 (1 tam zaman); öbür kaynaklarda ve atama yoksa null.
   yuzde: z.number().nullable().optional(),
+  // İş merkezinin haftalık matrisinde en az bir aktif vardiya var; kişide ayrıca kişinin vardiyası seçilmiş (2511 a). false: vardiya
+  // tanımlanmamış; true iken 0 dakikalı gün gerçekten çalışılmayan gündür (izin, ayrılma, kapalı gün, kişinin vardiyası o gün yok). Eski
+  // cevaplarda yoktur.
+  vardiyaTanimli: z.boolean().optional(),
 });
 // Kaynak bir iş merkezine bağlanamıyorsa (makinenin istasyonu yok, kişinin istasyon ataması yok) takvim null'dır; sürekli çalışma uydurulmaz.
 export const calismaTakvimiCevabi = z.object({ takvim: kaynakTakvimiSemasi.nullable() });

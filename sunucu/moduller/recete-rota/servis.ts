@@ -44,12 +44,30 @@ export function planlamaAnahtariniReddet(anahtar: string): void {
   if (planlamaAnahtariMi(anahtar)) throw dogrulama(PLANLAMA_ILETISI, 'anahtar');
 }
 
+// Ana durum kaydı komutla yazılmaz, silinmez (B-2484-2): yeni ekran yazmaz (204 a); eski çerçevenin bütün-belge yazımı taşıma tablolarında
+// belgede olmayan bütün bağları siliyordu. Reçete ve rota sahiplerinin komutlarıyla değişir; kayıt yalnız örnek veri yüklemesinde yazılır.
+const ANA_KAYIT_ILETISI = 'Reçete ve rota ana kaydı salt okunurdur; reçete ve rota kendi ekranlarından değiştirilir.';
+export function anaKaydiReddet(anahtar: string): void {
+  if (anahtar === DURUM_ANAHTARI) throw dogrulama(ANA_KAYIT_ILETISI, 'anahtar');
+}
+
 export function ben(kullanici: Kullanici): BenCevabi {
   return { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: kullanici.islemler.includes(ISLEM_YAZ) };
 }
 
 export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
   return { kayitlar: await sorgular.kayitlar(db) };
+}
+
+// Komut ucu: ana kayıt dışındaki anahtarlar.
+export async function komutlaYaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
+  anaKaydiReddet(g.anahtar);
+  return yaz(db, kullanici, g, gunluk);
+}
+
+export async function komutlaSil(db: Db, anahtar: string, beklenenSurum: number): Promise<SilCevabi> {
+  anaKaydiReddet(anahtar);
+  return sil(db, anahtar, beklenenSurum);
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
@@ -103,6 +121,18 @@ export async function statuTanimiSil(db: Db, kimlik: string, beklenenSurum: numb
   if (mevcut !== beklenenSurum) throw eskiSurum();
   await sorgular.statuTanimiSil(db, kimlik);
   return { statuses: await sorgular.statuTanimlari(db) };
+}
+
+// B-2483-11: termini girilmemiş bitmemiş fason adıma Satın Alma'nın tahmini (tek okumada); plan motoru termin yoksa onu, o da yoksa 7 günü alır.
+// Adet emrin adedidir (VARSAYIM: adımın kalan adedi değil; tahmin adetle az değişir).
+async function fasonTahminiEkle(db: Db, emirler: EmirKaydi[]): Promise<EmirKaydi[]> {
+  const sorulacak = emirler.flatMap((e) => (e.kaynakRotaRevizyonId === null ? [] : e.isEmirleri
+    .filter((i) => i.durum !== 'tamam' && i.kaynak?.tur === 'fason' && i.terminGun == null)
+    .map((i) => ({ e, i, q: { malzemeNo: e.malzemeNo, operasyonTipiId: i.operasyonTipiId, firmaId: i.kaynak!.id, adet: e.adet } }))));
+  if (sorulacak.length === 0) return emirler;
+  const gunler = await fasonSuresiTahminleri(db, sorulacak.map((x) => x.q));
+  const tahmin = new Map(sorulacak.map((x, n) => [x.i, gunler[n] ?? null]));
+  return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => (tahmin.has(i) ? { ...i, tahminGun: tahmin.get(i)! } : i)) }));
 }
 
 export async function fasonTahminleri(
@@ -214,7 +244,7 @@ export async function durumVeEmirler(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
-  const emirDilimleri = emirOkur ? await emirDilimi(db, emirSecimi) : null;
+  const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 
@@ -271,11 +301,15 @@ export const KAYNAK_OKUMA = {
 
 // Sayımın okuduğu belge: kayıtlı durum, ürünün rotası rota modülünün yürürlükteki hâliyle, adımın "çıkan" kalemi ve statü bağı taşıma
 // tablosundan (sayimBelgesiTablodan). Revizyon verilirse rota o
-// revizyonun hâlidir: eski revizyonla açılmış emir, yeni revizyonda kalkmış adımında da kendi rotasıyla sayılır. Kayıt yoksa null.
+// revizyonun hâlidir: eski revizyonla açılmış emir, yeni revizyonda kalkmış adımında da kendi rotasıyla sayılır. Yeni ekran ana kaydı yazmaz:
+// kayıt yoksa sayım boş belgeyle yürür (rota ve bağ tablodan okunur); yoksa ara adımın çıktısı statüsüz stoğa düşer (B-2484-1).
 async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null = null): Promise<unknown> {
   const kayit = await sorgular.kayitGetir(db, DURUM_ANAHTARI);
-  if (kayit === null || kayit.bicim !== 'json') return null;
+  if (kayit !== null && kayit.bicim !== 'json') return null;
+  const kayitliBelge: unknown = kayit === null ? {} : kayit.deger;
   const revizyonlar = await durumRevizyonlari(db, malzemeNo);
+  // Kayıt da rota da yoksa okunacak adım yoktur: sayım her adımda bu çözücüyü çağırır, gerisi okunmaz.
+  if (kayit === null && revizyonlar.every((r) => r.adimlar.length === 0)) return null;
   const secilen = revizyonId !== null && revizyonlar.some((r) => r.id === revizyonId)
     ? revizyonlar.map((r) => (r.id === revizyonId ? { ...r, durum: 'yururlukte' as const } : r.durum === 'yururlukte' ? { ...r, durum: 'onayli' as const } : r))
     : revizyonlar;
@@ -284,8 +318,8 @@ async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null 
   // revizyonu olmayan ürünün (rota modülüne geçmemiş yerel rota) bağı tabloya yazılamaz; belge olduğu gibi okunur. Rotalı emir her zaman
   // revizyonludur (uretim_emri_rotali), yani üretim sayımı bu yola düşmez.
   const bagRevizyonu = secilen.find((r) => r.durum === 'yururlukte')?.id ?? null;
-  const belge = bagRevizyonu === null ? kayit.deger
-    : sayimBelgesiTablodan(kayit.deger, malzemeNo, rota.routes[String(malzemeNo)], await sorgular.adimBaglari(db, bagRevizyonu));
+  const belge = bagRevizyonu === null ? kayitliBelge
+    : sayimBelgesiTablodan(kayitliBelge, malzemeNo, rota.routes[String(malzemeNo)], await sorgular.adimBaglari(db, bagRevizyonu));
   const ozetler = await malzemeOzetleri(db, sayimKartKimlikleri(belge, malzemeNo));
   const kartlar = [...ozetler.values()].map((o) => { const m = malzemeCevir(o, undefined); return { id: m.id, code: m.code, type: m.type }; });
   return sunucuKaynaklariyla(belge, kartlar, (await operasyonTipleri(db)).map((t) => ({ id: String(t.id), name: t.ad })));

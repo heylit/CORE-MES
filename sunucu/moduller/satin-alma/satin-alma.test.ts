@@ -9,7 +9,7 @@ import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { ButceKullanimiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { BeklenenOdemelerCevabi } from '#paylasilan/sozlesme/finans.ts';
+import type { BeklenenOdemelerCevabi, TedarikciAlacagi, TedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
 import type { BildirimListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -3153,6 +3153,106 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // B açık, TRY 10 x 9 = 90.
     const d = tamam<{ butce: { buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
     assert.ok(Math.abs((Number(d[0]!.buAlim) - 90) / kur - planToplami(planA) / 1.2) <= 0.01, `${d[0]!.buAlim} / ${kur}`);
+  });
+
+  // 2540 yardımcıları: finansın alacak listesi ve değişiklik defteri.
+  const alacagi = async (talepId: string, teklifId: string) => tamam<TedarikciAlacaklariCevabi>(await istek(c.yonetici, 'GET', '/finans/tedarikci-alacaklari'))
+    .alacaklar.find((x) => x.talepId === talepId && x.teklifId === teklifId);
+  const alacakDurumu = (id: number, govde: Record<string, unknown>) => istek(c.yonetici, 'POST', `/finans/tedarikci-alacaklari/${id}/durum`, govde);
+  const defter = (tablo: string, talepId: string) => vt().tx((db) => db.sorgu<{ islem: string; kisi: number | null; anahtar: Record<string, unknown>; alanlar: Record<string, unknown> }>(
+    `SELECT islem, kisi_id AS kisi, anahtar, alanlar FROM denetim_degisiklik WHERE tablo = $1 AND (anahtar ->> 'satin_alma_talep_id' = $2
+       OR anahtar ->> 'id' IN (SELECT id::text FROM finans_tedarikci_alacagi WHERE satin_alma_talep_id = $2::uuid)) ORDER BY id`, [tablo, talepId]));
+
+  test('2540: aşan avans kapatmada finansa "teyit bekliyor" alacağı olarak düşer; teslim düzeltmesi tutarı günceller; geçişler sunucuda (K2), sürümlü (K1); talep eden göremez (K4); defterde kişi dolu (K5)', async () => {
+    // A: 4 x 10, avans %80 = 32 (KDV dahil 38.40). 1 / 4 teslim: gerçekleşen 10, KDV dahil 12; aşım 26.40.
+    const { s, a, b } = await bolunmusSiparis('10', { avansYuzdesi: '80' });
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '25400');
+    await logoyaGitti(s.id, b, satirB, '25401');
+    await teslimEt(satirA, '1', 254001);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    let al = (await alacagi(s.id, a))!;
+    assert.deepEqual([al.durum, al.tutar, al.paraBirimi, al.siparisNo.length > 0], ['teyit_bekliyor', '26.40', 'TRY', true]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('fark tedarikçiden alacaktır (finansta teyit bekliyor)')));
+    assert.equal(await alacagi(s.id, b), undefined, 'B kapanmadı: alacak yok');
+    // K4: talep eden ve finans yetkisi olmayan göremez.
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', '/finans/tedarikci-alacaklari')).statusCode, 403);
+    // K5: kapatma ucundan yazılan alacağın defter satırında kişi kapatan satın almacıdır.
+    assert.deepEqual((await defter('finans_tedarikci_alacagi', s.id)).map((x) => [x.islem, x.kisi]), [['ekle', kisi.sa]]);
+    // Kapalı siparişte teslim düzeltmesi (aynı işlemde geri al ve yeniden yaz): 2 / 4 teslim, gerçekleşen 24, aşım 14.40; teyit bekleyen tutar güncellenir.
+    await vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 254001 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '2', malKabulSatirId: 254002 });
+    });
+    al = (await alacagi(s.id, a))!;
+    assert.deepEqual([al.durum, al.tutar], ['teyit_bekliyor', '14.40']);
+    // K2: izinsiz geçiş 422; gerekçesiz düşürme 422; eski sürüm 409.
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum, durum: 'kapandi', aciklama: 'Deneme' })).statusCode, 422);
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum, durum: 'dusuldu' })).statusCode, 422);
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum - 1, durum: 'acik' })).statusCode, 409);
+    assert.equal((await istek(c.sa, 'POST', `/finans/tedarikci-alacaklari/${al.id}/durum`, { surum: al.surum, durum: 'acik' })).statusCode, 403);
+    const acik = tamam<{ alacak: TedarikciAlacagi }>(await alacakDurumu(al.id, { surum: al.surum, durum: 'acik', aciklama: 'Avans ödendi' })).alacak;
+    assert.deepEqual([acik.durum, acik.durumDegistirenAdi !== null, acik.durumZamani !== null], ['acik', true, true]);
+    // Açılmış alacak teslim değişince değişmez; fark geçmişe not düşer.
+    await vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 254002 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '3', malKabulSatirId: 254003 });
+    });
+    assert.equal((await alacagi(s.id, a))!.tutar, '14.40');
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('avans aşımı 2.4 TRY oldu; finanstaki alacak kaydı değişmedi')));
+    assert.equal((await alacakDurumu(al.id, { surum: acik.surum, durum: 'dusuldu', aciklama: 'Deneme' })).statusCode, 422, 'açık alacak düşürülmez');
+    const kapandi = tamam<{ alacak: TedarikciAlacagi }>(await alacakDurumu(al.id, { surum: acik.surum, durum: 'kapandi', aciklama: 'Mahsup edildi' })).alacak;
+    assert.equal(kapandi.durum, 'kapandi');
+    assert.equal((await alacakDurumu(al.id, { surum: kapandi.surum, durum: 'acik', aciklama: 'Yeniden' })).statusCode, 422, 'kapanan alacak yeniden açılmaz');
+    // Defter: ekle; düzeltmede geri alma ve yeniden yazım ayrı tutar güncellemesi; iki durum geçişi; uçtan gelen geçişlerde kişi finansçıdır.
+    const d = await defter('finans_tedarikci_alacagi', s.id);
+    assert.deepEqual(d.map((x) => x.islem), ['ekle', 'guncelle', 'guncelle', 'guncelle', 'guncelle']);
+    assert.ok(d.slice(3).every((x) => x.kisi !== null && x.kisi !== kisi.sa));
+    // Veri 2: alacağı olan sipariş silinemez (FK RESTRICT); satın almanın kaydı bunu 409 ile önceden reddeder.
+    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [s.id, a]));
+  });
+
+  test('2540 Maliyet C1: elle plan alacağı planın avans satırından hesaplanır; Veri 2: alacaklı sipariş (düşüldü dahil) karar değişikliğiyle silinmez, 409', async () => {
+    // B: 10 x 9 = 90, teklifte avans yok. Elle plan: avans 60, vade 48. 4 / 10 teslim: gerçekleşen 36, KDV dahil 43.20; aşım 16.80.
+    const { s, a, b } = await bolunmusSiparis();
+    const satirB = siparisi(s, b).satirlar[0]!.id;
+    await logoyaGitti(s.id, b, satirB, '25410');
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: b, surum: (await acilistaki(s.id)).surum,
+      satirlar: [{ tur: 'avans', vade: '2026-10-08', yontem: 'banka', tutar: '60' }, { tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '48' }] }));
+    await teslimEt(satirB, '4', 254101);
+    tamam<Talep>(await kapat(await acilistaki(s.id), b));
+    const al = (await alacagi(s.id, b))!;
+    assert.deepEqual([al.durum, al.tutar], ['teyit_bekliyor', '16.80']);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('avans gerçekleşen teslim değerini 16.8 TRY aşıyor; avans ödendiyse')));
+    tamam(await alacakDurumu(al.id, { surum: al.surum, durum: 'dusuldu', aciklama: 'Avans ödenmedi' }));
+    // A siparişine de deneme alacağı (açık sipariş, Logo'ya gitmemiş): kararı tek teklife çevirip A'yı silmek 409 verir, alacak yerinde kalır.
+    await ortam!.sahip.sorgu(`INSERT INTO finans_tedarikci_alacagi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, firma_id, para_birimi, tutar, olusturan_id, durum, aciklama, durum_degistiren_id, durum_zamani)
+      VALUES ($1, $2, 'DENEME', $3, 'TRY', 1, $4, 'dusuldu', 'Deneme', $4, now())`, [s.id, a, firmaA, kisi.sa]);
+    const t = await acilistaki(s.id);
+    const red = await kaydet(c.sa, { ...govde(t), karar: { ...t.karar!, siparisler: t.karar!.siparisler.filter((x) => x.teklifId !== a).map((x) => ({
+      teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim })) } });
+    assert.equal(red.statusCode, 409, red.body);
+    assert.match(red.body, /tedarikçi alacağı var; önce finansta alacağı kapatın ya da düşürün/);
+    assert.ok(await alacagi(s.id, a));
+  });
+
+  test('2540 Veri 1 ve test 5: plan upsert; aynı plan ikinci kez yazılınca defterde yeni satır yok, tek taksit değişince tek güncelle, plandan çıkan sıra sil; kişi dolu', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const yaz = async (satirlar: unknown[]) => tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: a, surum: (await acilistaki(s.id)).surum, satirlar }));
+    const plan = [{ tur: 'avans', vade: '2026-10-07', yontem: 'banka', tutar: '10' }, { tur: 'vade', vade: '2026-12-01', yontem: 'banka', tutar: '14' }];
+    const satirlar = async () => (await defter('finans_siparis_odemesi', s.id)).filter((x) => x.anahtar.satin_alma_teklif_id === a);
+    await yaz(plan);
+    const ilk = (await satirlar()).length;
+    await yaz(plan);
+    assert.equal((await satirlar()).length, ilk, 'aynı plan defterde yeni satır açmaz');
+    await yaz([plan[0], { ...plan[1], tutar: '15' }]);
+    const tek = (await satirlar()).slice(ilk);
+    assert.deepEqual(tek.map((x) => [x.islem, x.anahtar.sira, Object.keys(x.alanlar)]), [['guncelle', 2, ['tutar']]]);
+    await yaz([plan[0]]);
+    const son = (await satirlar()).slice(ilk + 1);
+    assert.deepEqual(son.map((x) => [x.islem, x.anahtar.sira]), [['sil', 2]]);
+    assert.ok((await satirlar()).every((x) => x.kisi !== null), 'K5: uçtan yazımda kişi dolu');
+    assert.ok((await satirlar()).every((x) => !('id' in x.alanlar)), 'kimlik deftere girmez');
   });
 });
 

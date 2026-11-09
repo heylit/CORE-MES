@@ -56,6 +56,8 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyaci', kullaniciAdi: 'vardiyaci', parola: PAROLA }));
     // Kart #1324: kişi iş merkezinde istasyon atamasının yüzdesi kadar sayılır.
     await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: kisi, yuzde: '50.00' });
+    // 2511 a: kapasiteye yalnız vardiyası seçilmiş kişi girer.
+    await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${kisi}/belirle`, { vardiyaId: vardiya });
     await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/plan-ayari`, { verimYuzde: 100, operatorIhtiyaci: 10, surum: 0 });
 
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine } })]);
@@ -94,6 +96,10 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     // Tek tanım: makine ataması da kişi payıdır; %25 makineye atanan kişi kapasiteye 240 dakikanın çeyreğini ekler.
     const makineci = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme makineci', kullaniciAdi: 'makineci', parola: PAROLA }));
     await tamam(c.yonetici, 'POST', `/makineler/${makine}/kisiler/ata`, { kisiId: makineci, yuzde: '25.00' });
+    await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${makineci}/belirle`, { vardiyaId: vardiya });
+    // 2511 a: vardiyası seçilmemiş kişi iş merkezinin bütün vardiyalarıyla sayılmaz; kapasiteye girmez.
+    const vardiyasiz = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyasiz', kullaniciAdi: 'vardiyasiz', parola: PAROLA }));
+    await tamam(c.yonetici, 'POST', `/istasyonlar/${ist}/kisiler/ata`, { kisiId: vardiyasiz, yuzde: '50.00' });
     p = await taslaktaOner();
     assert.equal(Math.max(...p.personelYuku.find((x) => x.isMerkeziId === merkez.id)!.kapasite), 180);
     await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });

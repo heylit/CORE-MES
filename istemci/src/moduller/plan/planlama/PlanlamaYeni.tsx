@@ -121,7 +121,7 @@ function PlanlamaEkrani() {
       {ust && (
         <div className="tc-py-ust">
           {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={tazele} />}
-          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={durum.depo.planSurumu?.bayat ?? null} />}
+          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat)} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
               <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>

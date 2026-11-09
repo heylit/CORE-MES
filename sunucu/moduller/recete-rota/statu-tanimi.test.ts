@@ -9,7 +9,7 @@ import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { DURUM_ANAHTARI } from './disari.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 // Geçiş planı adım 4: elle tanımlanan statüde tablo tek kaynaktır. Ekran listeyi durumdan okur, ekleme, değişiklik ve silme komutla gider;
 // ana kaydın JSON'u tabloda olmayan statüyü yalnız ekler (ilk kurulumun varsayılanları), var olanı değiştirmez ve silmez. Veriler uydurmadır.
@@ -38,9 +38,7 @@ describe('recete-rota statü tanımı komutları (gerçek PostgreSQL)', () => {
     return ((r.json() as DurumCevabi).statuses ?? []).map((x) => [x.id, x.code, x.name, x.kind, x.color, x.surum]);
   };
   const belgeYaz = async (deger: unknown) => {
-    const c = await gonder('/recete-rota/kayitlar/yaz', { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: surum });
-    assert.equal(c.statusCode, 200, c.body);
-    surum = (c.json() as { kayit: { surum: number } }).kayit.surum;
+    surum = await anaKayitYaz(vt(), deger, surum);
   };
   let sira = 0;
   const kartAc = async (): Promise<number> => {

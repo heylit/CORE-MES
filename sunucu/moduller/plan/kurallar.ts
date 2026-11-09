@@ -9,6 +9,11 @@ export const ayniKaynak = (a: Kaynak, b: Kaynak): boolean => a.tur === b.tur && 
 
 export interface Aralik { baslangic: number; bitis: number }
 export const cakisirMi = (a: Aralik, b: Aralik): boolean => a.baslangic < b.bitis && b.baslangic < a.bitis;
+// B-2483-5: vardiyası tanımlanmamış kaynak: takvimi yok ya da iş merkezinin matrisinde aktif vardiya yok. Tanımlı ama ufukta 0 dakikalı
+// kaynak (izin, ayrılma, vardiyası o günlerde yok) tanımsız değildir, kapasitesi 0'dır. Alanı taşımayan eski cevapta bütün günleri 0 olan
+// tanımsız sayılır.
+export const vardiyasiTanimsiz = (t: { vardiyaTanimli?: boolean | undefined; gunler: readonly { dakika: number }[] } | null): boolean =>
+  t === null || !(t.vardiyaTanimli ?? t.gunler.some((g) => g.dakika > 0));
 
 // 879 a: aynı kaynakta kilitli iki iş üst üste binemez; motor kilidi yerinden oynatmadığı için ikisini aynı anda çalıştırırdı.
 // Bölünmüş işin her parçası ayrı aralıktır. Dönen: çakıştığı ilk kilitli işin kimliği, yoksa null.

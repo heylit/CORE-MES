@@ -1,18 +1,15 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
-import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
-import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { kullaniciYukle } from '../kisiler/disari.ts';
 import { bagFarklari, jsondanSatirlar, sayimBelgesi, sayimBelgesiTablodan } from './kurallar.ts';
 import { adimCiktisi, adimStatusu, yaz } from './servis.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 // Geçiş planı adım 3-4: JSON'da yalnız duran parçalar tablolara taşındı, sayım çıktı ve statü bağını tablodan okur. Bu dosya taşımadan önceki
 // davranışın aynı kaldığını (sayımın statüsü ve çıktısı) ve JSON'dan tablo satırı çıkarma kuralını sınar.
@@ -113,9 +110,7 @@ describe('JSON\'dan tablo satırları (kural)', () => {
 
 describe('taşıma tabloları ve bugünkü sayım davranışı (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
-  let app: FastifyInstance;
   let yoneticiId = 0;
-  let cerez = '';
   let surum: number | null = null;
   let sira = 0;
 
@@ -124,14 +119,7 @@ describe('taşıma tabloları ve bugünkü sayım davranışı (gerçek PostgreS
     return ortam.vt;
   };
 
-  const kaydet = async (deger: unknown) => {
-    const c = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: cerez },
-      payload: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: surum },
-    });
-    assert.equal(c.statusCode, 200, c.body);
-    surum = (c.json() as { kayit: { surum: number } }).kayit.surum;
-  };
+  const kaydet = async (deger: unknown) => { surum = await anaKayitYaz(vt(), deger, surum); };
 
   const kartAc = async (tur: 'mamul' | 'yarimamul' | 'hammadde'): Promise<number> => {
     sira += 1;
@@ -158,10 +146,7 @@ describe('taşıma tabloları ve bugünkü sayım davranışı (gerçek PostgreS
 
   before(async () => {
     ortam = await testVeritabaniKur('recete_rota_tasima');
-    app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
-    cerez = String(giris.headers['set-cookie']).split(';')[0] ?? '';
     await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('TSM-', 0) ON CONFLICT (onek) DO NOTHING");
   });
 

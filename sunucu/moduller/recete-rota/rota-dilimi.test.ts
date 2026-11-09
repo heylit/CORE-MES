@@ -12,9 +12,9 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
-import { DURUM_ANAHTARI } from './disari.ts';
 import { rotaDilimiCevir } from './kurallar.ts';
 import { adimCiktisi, adimStatusu } from './servis.ts';
+import { anaKayitSurumu, anaKayitYaz } from './test-ortak.ts';
 
 // Reçete ve Rota'nın rota dilimi (kart #1184): rota modülünün revizyonları prototipin `routes` ve `routeRevs` biçiminde gelir. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -245,19 +245,12 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const k = await taslakKur(urun, [adim({ ad: 'Kesim' }), adim({ ad: 'Tornalama', bilesenler: [] }), adim({ ad: 'Paketleme', bilesenler: [] })]);
     // Çerçevenin son yazımı: rota henüz taslakken (routes boş); OP 20'nin çıkanı yalnız taslak revizyonda.
     const taslakAdimi = (op: number, ek: Record<string, unknown> = {}) => ({ id: `${String(urun)}-o${String(op)}`, opNo: op, seq: op, opId: String(tipId), outItem: '', outStatus: '', ...ek });
-    const yaz = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: tam },
-      payload: {
-        anahtar: DURUM_ANAHTARI, bicim: 'json', beklenenSurum: (await vt().tek<{ surum: number }>('SELECT surum FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]))?.surum ?? null,
-        deger: {
-          items: [{ id: String(urun), code: 'RRR-SAYIM-MM', type: 'mamul' }, { id: String(hammadde), code: 'RRR-SAYIM-HM', type: 'ham' }, { id: String(ym), code: 'RRR-SAYIM-YM', type: 'yari' }],
-          opdefs: [{ id: String(tipId), name: 'Deneme operasyonu' }],
-          routes: {},
-          routeRevs: [{ id: String(k.id), itemId: String(urun), status: 'taslak', data: { steps: [taslakAdimi(10), taslakAdimi(20, { outItem: String(ym) }), taslakAdimi(30)] } }],
-        },
-      },
-    });
-    assert.equal(yaz.statusCode, 200, yaz.body);
+    await anaKayitYaz(vt(), {
+      items: [{ id: String(urun), code: 'RRR-SAYIM-MM', type: 'mamul' }, { id: String(hammadde), code: 'RRR-SAYIM-HM', type: 'ham' }, { id: String(ym), code: 'RRR-SAYIM-YM', type: 'yari' }],
+      opdefs: [{ id: String(tipId), name: 'Deneme operasyonu' }],
+      routes: {},
+      routeRevs: [{ id: String(k.id), itemId: String(urun), status: 'taslak', data: { steps: [taslakAdimi(10), taslakAdimi(20, { outItem: String(ym) }), taslakAdimi(30)] } }],
+    }, await anaKayitSurumu(vt()));
     const coz = () => vt().tx(async (db) => ({
       statu: [await adimStatusu(db, { malzemeNo: urun, opNo: 10 }), await adimStatusu(db, { malzemeNo: urun, opNo: 20 })],
       cikti: [await adimCiktisi(db, { malzemeNo: urun, opNo: 10 }), await adimCiktisi(db, { malzemeNo: urun, opNo: 20 })],
