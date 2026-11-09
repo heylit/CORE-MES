@@ -2,11 +2,12 @@ import { kisitIhlali } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import { UygulamaHatasi, bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
+import { satirdaReddet } from '#cekirdek/toplu.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
   EkipGuncellemesi, EkipKaydi, SurumluEkip, IsMerkeziGuncellemesi, IsMerkeziKaydi, IstasyonGuncellemesi, IstasyonKaydi, MakineGuncellemesi, MakineKaydi, OperasyonTipiGuncellemesi,
   AparatKapasitesi, AparatKapasitesiGovdesi, AparatKapasitesiGuncellemeGovdesi, IstasyonCokluEkleGovdesi, IstasyonPlanAyari, IstasyonTopluTasiGovdesi, MakineCokluEkleGovdesi, MakineDurumu, MakineDurumuGovdesi, MakineTopluDurumGovdesi, MakineTopluTasiGovdesi, TopluAktiflikGovdesi, OperasyonTipiKaydi, PanoOzetiCevabi, PlanAyariGovdesi, SecimGrubu, SurumluIsMerkezi as IsMerkezi, SurumluOperasyonTipi, SurumluIstasyon, SurumluMakine as Makine,
-  AyarYetkinligiAyrintisi, AyarYetkinligiBelirleGovdesi, TesisSablonuSonucu, YetkinlikAyrintiGovdesi, YetkinlikAyrintisi, YetkinlikGecmisiCevabi,
+  AyarYetkinligiAyrintisi, AyarYetkinligiBelirleGovdesi, IstasyonTopluKaydetGirdisi, TesisSablonuSonucu, TesisTopluSatiri, TopluKaydetCevabi, YetkinlikAyrintiGovdesi, YetkinlikAyrintisi, YetkinlikGecmisiCevabi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { TESIS_SABLONU } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -15,7 +16,7 @@ import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisil
 import type { AtamaTuru } from './kurallar.ts';
 import {
   AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
-  ayarListesi, ayarYetkinligiReddi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
+  ayarListesi, ayarYetkinligiReddi, gelenAlanlar, topluSirasi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AyarYetkinligiSatiri, YetkinlikAyrintiSatiri } from './sorgular.ts';
@@ -283,6 +284,79 @@ export async function istasyonlariEkle(db: Db, g: IstasyonCokluEkleGovdesi): Pro
     })));
   }
   return sonuc;
+}
+
+// Toplu kaydet (2627, 1/2 b): her satır tek kayıt ucunun servis işleviyle, aynı kuralla yazılır; uç tek transaction'dır, bir satır
+// reddedilirse hiçbiri kalmaz. Ret, satırın kendi iletisini satır numarasıyla taşır (başka kaydın adı eklenmez; Güvenlik T4) ve
+// alanı `satirlar.<i>.<alan>` olur (Mimar K2). Üst kayda kod ile bağlanılır; kod bu istekte açılan kayıtları da tanır.
+const kodlaBul = (kodlar: ReadonlyMap<string, number>, kod: string, alan: string, ileti: string): number => {
+  const id = kodlar.get(kod);
+  if (id === undefined) throw dogrulama(ileti, alan);
+  return id;
+};
+const bulunanKayit = <T>(kayit: T | undefined, ileti: string): T => {
+  if (kayit === undefined) throw bulunamadi(ileti);
+  return kayit;
+};
+
+export async function topluKaydet(db: Db, g: IstasyonTopluKaydetGirdisi): Promise<TopluKaydetCevabi> {
+  const merkezler = new Map((await sorgular.isMerkezleriListele(db, true)).map((m) => [m.id, m]));
+  const istasyonlarById = new Map((await sorgular.istasyonlariListele(db, true)).map((i) => [i.id, i]));
+  const makinelerById = new Map((await sorgular.makineleriListele(db, { pasiflerDahil: true, istasyonId: null })).map((m) => [m.id, m]));
+  const merkezKodlari = new Map([...merkezler.values()].map((m) => [m.kod, m.id]));
+  const istasyonKodlari = new Map([...istasyonlarById.values()].map((i) => [i.kod, i.id]));
+  const merkezId = (kod: string) => kodlaBul(merkezKodlari, kod, 'isMerkeziKodu', `İş merkezi kodu bulunamadı: ${kod}`);
+  const istasyonId = (kod: string) => kodlaBul(istasyonKodlari, kod, 'istasyonKodu', `İstasyon kodu bulunamadı: ${kod}`);
+  let eklenen = 0;
+  let guncellenen = 0;
+  const yaz = async (s: TesisTopluSatiri): Promise<void> => {
+    if (s.kayit === 'is-merkezi') {
+      if (s.islem === 'ekle') {
+        const { kayit: _k, islem: _i, satir: _s, ...kayit } = s;
+        const yeni = await isMerkeziEkle(db, kayit);
+        merkezKodlari.set(yeni.kod, yeni.id);
+        eklenen += 1;
+        return;
+      }
+      const { kayit: _k, islem: _i, satir: _s, id, surum, ...alanlar } = s;
+      const m = bulunanKayit(merkezler.get(id), 'İş merkezi bulunamadı.');
+      const sonuc = await isMerkeziGuncelle(db, id, { kod: m.kod, ad: m.ad, aciklama: m.aciklama, aktif: m.aktif, ...gelenAlanlar(alanlar), surum });
+      if (sonuc.kod !== m.kod) { merkezKodlari.delete(m.kod); merkezKodlari.set(sonuc.kod, sonuc.id); }
+      guncellenen += 1;
+      return;
+    }
+    if (s.kayit === 'istasyon') {
+      if (s.islem === 'ekle') {
+        const { kayit: _k, islem: _i, satir: _s, isMerkeziKodu, ...kayit } = s;
+        const yeni = await istasyonEkle(db, { ...kayit, isMerkeziId: merkezId(isMerkeziKodu) });
+        istasyonKodlari.set(yeni.kod, yeni.id);
+        eklenen += 1;
+        return;
+      }
+      const { kayit: _k, islem: _i, satir: _s, id, surum, isMerkeziKodu, ...alanlar } = s;
+      const i = bulunanKayit(istasyonlarById.get(id), 'İstasyon bulunamadı.');
+      const sonuc = await istasyonGuncelle(db, id, {
+        ...istasyonAlanlari(i), ...gelenAlanlar(alanlar), ...(isMerkeziKodu === undefined ? {} : { isMerkeziId: merkezId(isMerkeziKodu) }), surum,
+      });
+      if (sonuc.kod !== i.kod) { istasyonKodlari.delete(i.kod); istasyonKodlari.set(sonuc.kod, sonuc.id); }
+      guncellenen += 1;
+      return;
+    }
+    if (s.islem === 'ekle') {
+      const { kayit: _k, islem: _i, satir: _s, istasyonKodu, ...kayit } = s;
+      await makineEkle(db, { ...kayit, istasyonId: istasyonKodu === null ? null : istasyonId(istasyonKodu) });
+      eklenen += 1;
+      return;
+    }
+    const { kayit: _k, islem: _i, satir: _s, id, surum, istasyonKodu, ...alanlar } = s;
+    const m = bulunanKayit(makinelerById.get(id), 'Makine bulunamadı.');
+    const yeni = { ...makineAlanlari(m), ...gelenAlanlar(alanlar), ...(istasyonKodu === undefined ? {} : { istasyonId: istasyonId(istasyonKodu) }) };
+    if (yeni.baglantiAdresi !== null && yeni.baglantiTuru === null) throw dogrulama('Bağlantı adresi yalnız bağlantı türü seçiliyken girilir.', 'baglantiAdresi');
+    await makineGuncelle(db, id, { ...yeni, surum });
+    guncellenen += 1;
+  };
+  for (const { satir, sira } of topluSirasi(g.satirlar)) await satirdaReddet(sira, satir.satir, () => yaz(satir));
+  return { eklenen, guncellenen };
 }
 
 const KISI_YOK = 'Kişi bulunamadı.';

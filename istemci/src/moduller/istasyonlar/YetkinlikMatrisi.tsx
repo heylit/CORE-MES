@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DurumKutusu, Girdi, Simge } from '../../ortak/arayuz/index.ts';
+import { ExcelMenusu } from './ExcelGirisi.tsx';
 import { SecimHucresi } from './Hucreler.tsx';
 import { aramayaUyar } from './ListeAraclari.tsx';
 import { kisileriBirlestir, type KisiAtamasi, type KisiOzeti } from './tesis.ts';
@@ -66,6 +67,7 @@ export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: 
         <label className="tc-alan"><span className="tc-alan-etiket">Düzey</span>
           <SecimHucresi etiket="Yetkinlik düzeyi" deger={duzey} secenekler={DUZEYLER} kaydet={(d) => duzeyYaz(d === 'makine' ? 'makine' : 'istasyon')} />
         </label>
+        {yazabilir && <div className="tc-ist-arac-sag"><ExcelMenusu tur="yetkinlik" v={v} bolum="Yetkinlik" /></div>}
       </div>
       <p className="tc-ist-ipucu">
         Yetkinlik kişinin çalışabildiği istasyonlardır; plan yetkin olmadığı istasyondaki işi uyarır. Satır ve sütun başındaki kutu o kişiyi ya da istasyonu

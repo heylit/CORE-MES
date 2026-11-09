@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
@@ -416,6 +417,58 @@ export const istasyonCokluEkleGovdesi = z.object({
   kapasiteKaynagi: kapasiteKaynagi,
 });
 
+// Toplu kaydet (2627; 1/2 b "tek hata varsa hiçbiri", 2/2 c "her sayfada güncelle"): Excel gibi toplu girişin satırları tek komutla,
+// tek transaction'da yazılır. Satır kodla gelirse yeni kayıttır, id ve sürümle gelirse güncellemedir. Yeni satır tek kayıt gövdesinin
+// kendisidir; yalnız üst kayda kodla bağlanır (aynı istekte açılan iş merkezine istasyon bağlanabilsin, sunucu kodu çözer).
+// Güncellemede alanlar isteğe bağlıdır ve boş olamaz: gönderilmeyen alan değişmez, alan toplu girişle boşaltılmaz.
+// Bilinmeyen anahtar reddedilir (rol, bayrak gibi alan sızmasın).
+export const TOPLU_KAYDET_EN_COK = TOPLU_EN_COK_SATIR;
+const topluSatirNo = z.number().int().min(1).max(1_048_576);
+const doluMetin = z.string().trim().min(1).max(200);
+// Kayıt türü `kayit` alanındadır (`tur` makinenin kendi alanıdır).
+const topluSatir = <K extends string, I extends 'ekle' | 'guncelle', T extends z.ZodRawShape>(kayit: K, islem: I, alanlar: T) =>
+  z.object({ kayit: z.literal(kayit), islem: z.literal(islem), satir: topluSatirNo, ...alanlar }).strict();
+const topluGuncelleme = { id: kimlik, ...beklenenSurum };
+const isMerkeziTopluSatiri = z.discriminatedUnion('islem', [
+  topluSatir('is-merkezi', 'ekle', isMerkeziGovdesi.shape),
+  topluSatir('is-merkezi', 'guncelle', {
+    ...topluGuncelleme, kod: kodSemasi.optional(), ad: adSemasi.optional(), aciklama: doluMetin.optional(), aktif: z.boolean().optional(),
+  }),
+]);
+const { isMerkeziId: _isMerkeziId, ...istasyonYeniAlanlari } = istasyonGovdesi.shape;
+const istasyonTopluSatiri = z.discriminatedUnion('islem', [
+  topluSatir('istasyon', 'ekle', { ...istasyonYeniAlanlari, isMerkeziKodu: kodSemasi }),
+  topluSatir('istasyon', 'guncelle', {
+    ...topluGuncelleme, kod: kodSemasi.optional(), ad: adSemasi.optional(), isMerkeziKodu: kodSemasi.optional(), tip: istasyonTipi.optional(),
+    sorumluKisiId: kimlik.optional(), kapasiteKaynagi: kapasiteKaynagi.optional(), uretimAlani: z.boolean().optional(), aktif: z.boolean().optional(),
+  }),
+]);
+const { istasyonId: _istasyonId, ...makineYeniAlanlari } = makineAlanlari.shape;
+const makineTopluSatiri = z.discriminatedUnion('islem', [
+  topluSatir('makine', 'ekle', { ...makineYeniAlanlari, istasyonKodu: kodSemasi.nullish().transform((k) => k ?? null) }),
+  topluSatir('makine', 'guncelle', {
+    ...topluGuncelleme, kod: kodSemasi.optional(), ad: adSemasi.optional(), tur: doluMetin.optional(), markaModel: doluMetin.optional(), seriNo: doluMetin.optional(),
+    istasyonKodu: kodSemasi.optional(), baglantiTuru: baglantiTuru.optional(), baglantiAdresi: doluMetin.optional(), aktif: z.boolean().optional(),
+  }),
+]);
+const tesisTopluSatiri = z.discriminatedUnion('kayit', [isMerkeziTopluSatiri, istasyonTopluSatiri, makineTopluSatiri]);
+const ayniAnahtarYok = (satirlar: readonly { kayit: string; islem: string; kod?: string; id?: number }[]): boolean => {
+  const anahtarlar = satirlar.map((s) => (s.islem === 'ekle' ? `${s.kayit}:kod:${s.kod ?? ''}` : `${s.kayit}:id:${String(s.id)}`));
+  return new Set(anahtarlar).size === anahtarlar.length;
+};
+export const istasyonTopluKaydetGovdesi = z.object({
+  satirlar: z.array(tesisTopluSatiri).min(1).max(TOPLU_KAYDET_EN_COK)
+    .refine(ayniAnahtarYok, 'Aynı kayıt dosyada iki kez var.')
+    .refine((s) => new Set(s.map((x) => x.satir)).size === s.length, 'Satır numarası iki kez var.')
+    .superRefine((s, b) => s.forEach((x, i) => {
+      if (x.kayit === 'makine' && x.islem === 'ekle' && !adresTurIster.kosul(x)) {
+        // `adresTurIster.ileti` zod'a verildiğinde iletisi nesneden alınır; metin burada sabit yazılır.
+        b.addIssue({ code: 'custom', message: 'Bağlantı adresi yalnız bağlantı türü seçiliyken girilir.', path: [i, 'baglantiAdresi'] });
+      }
+    })),
+}).strict();
+export const topluKaydetCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+
 export type IsMerkezi = z.output<typeof isMerkeziSemasi>;
 export type Istasyon = z.output<typeof istasyonSemasi>;
 export type Makine = z.output<typeof makineSemasi>;
@@ -491,6 +544,10 @@ export type TopluAktiflikGovdesi = z.input<typeof topluAktiflikGovdesi>;
 export type MakineTopluDurumGovdesi = z.input<typeof makineTopluDurumGovdesi>;
 export type MakineCokluEkleGovdesi = z.input<typeof makineCokluEkleGovdesi>;
 export type IstasyonCokluEkleGovdesi = z.input<typeof istasyonCokluEkleGovdesi>;
+export type IstasyonTopluKaydetGovdesi = z.input<typeof istasyonTopluKaydetGovdesi>;
+export type IstasyonTopluKaydetGirdisi = z.output<typeof istasyonTopluKaydetGovdesi>;
+export type TesisTopluSatiri = IstasyonTopluKaydetGirdisi['satirlar'][number];
+export type TopluKaydetCevabi = z.output<typeof topluKaydetCevabi>;
 
 // Ortak seçicinin (IstasyonSecici, MakineSecici) arama ucu (kart #1318): kod ya da ad içinde arar, sayfa başına SECIM_SAYFA_BOYU
 // kayıt; `ust` makinede istasyon, istasyonda iş merkezidir (seçici gruplar). Varsayılan yalnız aktifler.
