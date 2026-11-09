@@ -292,3 +292,95 @@ export function tedarikciBasarimi(puan: number | null, zamanindaOrani: number | 
   if (kaliteOrani !== null) parca.push([kaliteOrani, 1]);
   return parca.length === 0 ? null : parca.reduce((t, [d, a]) => t + d * a, 0) / parca.reduce((t, [, a]) => t + a, 0);
 }
+
+// 2454: kararın kalem başına nominal TL tutarı (bütçe kullanımı). Tanım kararTutari ile aynıdır: seçilen satırların iskontolu tutarı,
+// teklifin nakliye (hariçse) ve diğer masrafı seçilen satırlara tutarlarıyla, mal tutarı sıfırsa eşit dağılır (V5); kur teklifin kuru.
+// Kararın seçmediği ya da fiyatı olmayan kalem harcama değildir, listede yoktur. Kuru olmayan teklifin kalemleri null döner (hesaplanamaz).
+// T2: tutarlar kuruşa yuvarlanır, kuruş farkı son kaleme yazılır; toplam yuvarlanmış kararTutari.tlToplam'a eşittir.
+// masraf: tl'nin içindeki nakliye ve diğer masraf payı (kuruş); kalanı maldır.
+export interface KalemHarcamasi { kalemId: string; teklifId: string; tl: number | null; masraf: number | null }
+const kurusa = (x: number): number => Math.round(x * 100) / 100;
+export function kalemHarcamalari(
+  k: { mod: 'tek' | 'bolunmus'; teklifId: string | null; bolunme: readonly { kalemId: string; teklifId: string }[] },
+  kalemler: readonly HesapKalemi[], hesaplar: readonly TeklifHesabi[],
+): KalemHarcamasi[] {
+  const atama = new Map(k.bolunme.map((b) => [b.kalemId, b.teklifId]));
+  const gruplar = new Map<string, { h: TeklifHesabi; satirlar: SatirHesabi[] }>();
+  for (const x of kalemler) {
+    const teklifId = k.mod === 'tek' ? k.teklifId : atama.get(x.id) ?? null;
+    const h = teklifId === null ? undefined : hesaplar.find((q) => q.teklifId === teklifId);
+    const s = h?.satirlar.find((r) => r.kalemId === x.id);
+    if (h === undefined || s === undefined) continue;
+    const g = gruplar.get(h.teklifId) ?? { h, satirlar: [] };
+    g.satirlar.push(s);
+    gruplar.set(h.teklifId, g);
+  }
+  const ham: { kalemId: string; teklifId: string; tl: number | null; masraf: number | null }[] = [];
+  for (const { h, satirlar } of gruplar.values()) {
+    const mal = satirlar.reduce((t, s) => t + s.tutar, 0);
+    const masraf = h.nakliye + h.digerMasraf;
+    for (const s of satirlar) {
+      const pay = mal > 0 ? (masraf * s.tutar) / mal : masraf / satirlar.length;
+      ham.push({ kalemId: s.kalemId, teklifId: h.teklifId, tl: h.kur === null ? null : (s.tutar + pay) * h.kur, masraf: h.kur === null ? null : pay * h.kur });
+    }
+  }
+  const sayilan = ham.filter((x) => x.tl !== null);
+  const hedef = kurusa(sayilan.reduce((t, x) => t + x.tl!, 0));
+  const sonuc = ham.map((x) => ({ ...x, tl: x.tl === null ? null : kurusa(x.tl), masraf: x.masraf === null ? null : kurusa(x.masraf) }));
+  const son = [...sonuc].reverse().find((x) => x.tl !== null);
+  if (son !== undefined) son.tl = kurusa(son.tl! + hedef - sonuc.reduce((t, x) => t + (x.tl ?? 0), 0));
+  return sonuc;
+}
+
+// 2454 bütçe satırı: kalemin birimi kaynağın birimi, yoksa talebin birimi (V4 a); yıl siparişin tarihinden, yoksa karar tarihinden (T3).
+// 2462 a (V2), 2472-1 a: kalanı kapatılmış siparişte kullanım gerçekleşen teslim değeridir: malın payı teslim alınan / sipariş miktarı
+// oranıyla iner (fazla teslim de sayılır), masraf payı tam kalır; siparişe hiç teslim gelmediyse masraf da sıfırdır (Maliyet M1).
+// Açık siparişte sipariş tutarıdır. İptal edilen talep buraya gelmez (V3).
+// 2462 a, 2472-1 a, 2472-2 a: kalanı kapatılmış siparişte bir satırın (ya da kalemin) gerçekleşen değeri; bütçe kullanımı ve ödeme planı
+// (2472) aynı tanımı kullanır. Malın payı teslim oranıyla iner (fazla teslim de sayılır), masraf payı tam kalır; siparişe hiç teslim
+// gelmediyse sıfırdır.
+export function gerceklesenPay(mal: number, masraf: number, teslimOrani: number, siparisteTeslimVar: boolean): number {
+  return siparisteTeslimVar ? mal * teslimOrani + masraf : 0;
+}
+// Siparişin bütün satırları için: satır başına mal payı ve teslim oranı, siparişin masrafı tek seferde.
+export function gerceklesenSiparisDegeri(satirlar: readonly { mal: number; miktar: number; teslim: number }[], masraf: number): number {
+  const teslimVar = satirlar.some((s) => s.teslim > 0);
+  return satirlar.reduce((t, s) => t + gerceklesenPay(s.mal, 0, s.miktar > 0 ? s.teslim / s.miktar : 0, teslimVar), 0) + gerceklesenPay(0, masraf, 0, teslimVar);
+}
+export interface ButceSatiri { birim: string | null; yil: number; tl: number | null }
+export function butceSatirlari(g: {
+  harcamalar: readonly KalemHarcamasi[];
+  kalemBirimi: (kalemId: string) => string | null;
+  kararTarihi: string | null;
+  siparisler: readonly { teklifId: string; siparisTarihi: string | null; kapali: boolean; satirlar: readonly { kalemId: string; miktar: string; teslimAlinan: string | null }[] }[];
+  bugun: string;
+}): ButceSatiri[] {
+  return g.harcamalar.map((x) => {
+    const p = g.siparisler.find((s) => s.teklifId === x.teklifId);
+    const tarih = p?.siparisTarihi ?? g.kararTarihi ?? g.bugun;
+    let tl = x.tl;
+    if (tl !== null && p !== undefined && p.kapali) {
+      const r = p.satirlar.find((s) => s.kalemId === x.kalemId);
+      const miktar = r === undefined ? 0 : Number(r.miktar);
+      const teslimVar = p.satirlar.some((s) => Number(s.teslimAlinan ?? '0') > 0);
+      const masraf = x.masraf ?? 0;
+      if (r !== undefined && miktar > 0) tl = kurusa(gerceklesenPay(tl - masraf, masraf, Number(r.teslimAlinan ?? '0') / miktar, teslimVar));
+    }
+    return { birim: g.kalemBirimi(x.kalemId), yil: Number(tarih.slice(0, 4)), tl };
+  });
+}
+// Birim başına toplam; hesaplanamayan satır toplama girmez, sayılır. Bütçesi tanımlı her birim satırda; kullanımı olmayanın kullanımı 0.
+export function butceKullanimi(satirlar: readonly ButceSatiri[], yil: number, butceler: readonly { ad: string; yillikButce: string }[]):
+  { birim: string | null; butce: string | null; kullanilan: string; hesaplanamayanKalem: number }[] {
+  const m = new Map<string | null, { tl: number; eksik: number }>();
+  for (const b of butceler) m.set(b.ad, { tl: 0, eksik: 0 });
+  for (const s of satirlar) {
+    if (s.yil !== yil) continue;
+    const x = m.get(s.birim) ?? { tl: 0, eksik: 0 };
+    if (s.tl === null) x.eksik += 1; else x.tl += s.tl;
+    m.set(s.birim, x);
+  }
+  const butce = new Map(butceler.map((b) => [b.ad, b.yillikButce]));
+  return [...m].map(([birim, x]) => ({ birim, butce: birim === null ? null : butce.get(birim) ?? null, kullanilan: kurusa(x.tl).toFixed(2), hesaplanamayanKalem: x.eksik }))
+    .sort((a, b) => (a.birim === null ? 1 : b.birim === null ? -1 : a.birim.localeCompare(b.birim, 'tr')));
+}

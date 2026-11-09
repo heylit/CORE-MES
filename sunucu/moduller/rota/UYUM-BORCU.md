@@ -69,3 +69,4 @@ Yazılan: adımın kaynağı fason firma olabilir (`rota_adimi.fason_firma_id` -
 | B46 | Şartname işlemleri rol satırsız gelir (976 a, yalnız yönetici); kalite ve planlama rolleri ortak yetki matrisinden verilir | Bağlama, rol matrisi |
 | B47 | Adımlı talimat (989 a): terminal (Arkon) adımları ve kontrol noktalarını henüz göstermez, zorunlu nokta engeli terminalde yok; `disari.ts` `talimatSurumuAdimlari` hazır | Bağlama: Arkon akışı (BASKA-MODUL-ISTEKLERI) |
 | B48 | Talimat videosu yalnız disk deposu açıkken bağlanır; canlıda yedek aynası gelene kadar kapalı (dosya UYUM-BORCU DSK-B2) | Ayna birleşince |
+| B49 | Emir fire çarpanı iki yerde (2557): `emirFireCarpanlari` (rota/kurallar.ts, patlamış rota önizlemesi) ile uretim-emirleri `malzemeIhtiyaci` aynı kural. Ayrışmayı rota.test.ts "2557" (açılan emrin malzeme ihtiyacıyla birebir eşitlik) yakalar | Kural uretim-emirleri `disari.ts`ten saf olarak açılınca önizleme onu kullanır, kopya kalkar |

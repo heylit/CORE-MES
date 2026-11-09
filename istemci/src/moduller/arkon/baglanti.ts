@@ -395,7 +395,7 @@ export interface AnlikIletim {
 
 // Kalıcı hata: oturum bitti (401) ya da Arkon yetkisi yok (403). Yeniden denemek aynı cevabı alır; döngü durur.
 export type YoklamaDurdu = 401 | 403;
-export const YETKI_YOK = 'Arkon için yetkiniz yok; ileti akışı durduruldu.';
+export const YETKI_YOK = 'Bu ekran için yetkiniz yok; ileti akışı durduruldu.';
 // Geçici hatada (ağ, 5xx, öteki) bekleme her denemede ikiye katlanır, bu sınırda kalır; başarılı okuma aralığı başa döndürür.
 export const ILETI_AZAMI_ARALIK_MS = 30_000;
 

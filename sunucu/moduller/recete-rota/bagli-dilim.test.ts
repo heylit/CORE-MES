@@ -14,6 +14,7 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import { bagliDilimleriAyikla } from './kurallar.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 // Ekranın açılışta sahibinden okuyup olduğu gibi değiştirdiği dilimler ana kayıtta tutulmaz (309 b): yeni yazmada ayıklanır, eski satırdaki kopyayı
 // tek seferlik göç siler. Yalnız kayıtta duran veri korunur: kartsız kalem, adımın çıktı kartı ve statüleri (ekran yeniden açılışta onları yalnız
@@ -62,6 +63,7 @@ describe('ana kayıtta bağlı dilimler (gerçek PostgreSQL)', () => {
     return ortam.vt;
   };
   const yaz = async (anahtar: string, deger: unknown, beklenenSurum: number | null) => {
+    if (anahtar === DURUM_ANAHTARI) { await anaKayitYaz(vt(), deger, beklenenSurum); return; }
     const c = await app.inject({ method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: cerez }, payload: { anahtar, bicim: 'json', deger, beklenenSurum } });
     assert.equal(c.statusCode, 200, c.body);
   };

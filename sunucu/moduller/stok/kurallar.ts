@@ -1,6 +1,6 @@
 // Stok iş kuralları: saf fonksiyon ve sabitler; veritabanı ve saat yok. Kural numaraları ON-PAKET-stok (DEP-).
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 
@@ -128,6 +128,33 @@ export const AYRILMIS_KONUM_TURLERI = ['hurda', 'karantina', 'sevkiyat'] as cons
 // Kullanılabilir stok (rezerve, öneri, kritik seviye) yalnız serbest ve şartlı kalitedir; karar bekleyen ve red parça üretimde uyarıyla
 // ilerler ama rezerveye girmez (134 a, 135).
 export const KULLANILABILIR_KALITE = ['serbest', 'sartli'] as const satisfies readonly KaliteDurumu[];
+
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok, malzeme, statü ve kalite başına (miktarlar binde). Red sayılmaz.
+// Açık emirlere ayrılan önce kullanılabilir kalemden (serbest, sonra şartlı) düşülür, artarsa karar bekleyenden: rezerve kullanılabilir
+// stoka yapılır (134 a). Durumu bilinmeyen emrin rezervesi ayrılmış sayılmaz (emir yok). Plan yalnız kullanılabilir kaliteyi sayar.
+export type StatuluStok = { malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: bigint; konumlar: string[] };
+export type StatuluRezerve = { malzemeId: number; statuId: number; miktar: bigint; emirDurumu: string | null };
+export type SahipsizStatuluStok = StatuluStok & { ayrilan: bigint; sahipsiz: bigint };
+const AYIRMA_SIRASI: readonly KaliteDurumu[] = ['serbest', 'sartli', 'karar_bekliyor'];
+export function sahipsizStatuluHesapla(stoklar: readonly StatuluStok[], rezerveler: readonly StatuluRezerve[]): SahipsizStatuluStok[] {
+  const anahtar = (x: { malzemeId: number; statuId: number }): string => `${String(x.malzemeId)}:${String(x.statuId)}`;
+  const ayrilan = new Map<string, bigint>();
+  for (const r of rezerveler) {
+    if (r.emirDurumu === null || !(ACIK_EMIR_DURUMLARI as readonly string[]).includes(r.emirDurumu)) continue;
+    ayrilan.set(anahtar(r), (ayrilan.get(anahtar(r)) ?? 0n) + r.miktar);
+  }
+  const sirali = stoklar.filter((s) => AYIRMA_SIRASI.includes(s.kaliteDurumu) && s.miktar > 0n)
+    .toSorted((a, b) => a.malzemeId - b.malzemeId || a.statuId - b.statuId || AYIRMA_SIRASI.indexOf(a.kaliteDurumu) - AYIRMA_SIRASI.indexOf(b.kaliteDurumu));
+  const sonuc: SahipsizStatuluStok[] = [];
+  for (const s of sirali) {
+    const kalan = ayrilan.get(anahtar(s)) ?? 0n;
+    const dusen = kalan > 0n ? (kalan < s.miktar ? kalan : s.miktar) : 0n;
+    ayrilan.set(anahtar(s), kalan - dusen);
+    if (s.miktar - dusen > 0n) sonuc.push({ ...s, ayrilan: dusen, sahipsiz: s.miktar - dusen });
+  }
+  return sonuc;
+}
+export const planaSayilirMi = (k: KaliteDurumu): boolean => (KULLANILABILIR_KALITE as readonly KaliteDurumu[]).includes(k);
 // Güncel stok değeri yalnız kullanılabilir stoktan çıkar (228 a; Satın alma'nın kg stok değeriyle aynı tanım): raf, kabul ve zemin
 // konumunda, statüsüz, kalitesi kullanılabilir bakiye. Geri kalanı kendi satırında değerlenir, toplam ayrıca görünür.
 export const KULLANILABILIR_KONUM_TURLERI = ['raf_gozu', 'kabul', 'depo_zemini'] as const satisfies readonly KonumTuru[];
@@ -912,8 +939,10 @@ const onBindeCarp = (adetBinde: bigint, onBinde: bigint): bigint => (adetBinde *
 // Başlatmadan önce adımın girdileri (kart #1289): istasyonda en az bir adetlik girdi yoksa eksiktir. İstenecek, emrin bütün adedi
 // için gereken miktarın istasyondakinden fazlasıdır. Aynı malzeme adımda iki kez yazılmışsa miktarları toplanır.
 export interface BaslatmaEksigi { malzemeId: number; gereken: bigint; istasyonda: bigint; istenecek: bigint }
+// kalanlar: malzeme başına adımın kalan ihtiyacı (binde; adimKalanIhtiyaci). Verilen malzemede istek bu toplamdan açılır, yoksa adet x miktar.
 export function baslatmaEksikleri(
   girdiler: readonly { malzemeNo: number; miktar: string }[], istasyonda: ReadonlyMap<number, bigint>, adetBinde: bigint,
+  kalanlar?: ReadonlyMap<number, bigint>,
 ): BaslatmaEksigi[] {
   // Toplam, bir adetin yuvarlanmış miktarından değil reçetenin dört ondalığından çarpılır: 1000 x 0,0004 kg 1 kg değil 0,4 kg'dır.
   const birim = new Map<number, bigint>();
@@ -923,10 +952,30 @@ export function baslatmaEksikleri(
     const gereken = onBindeCarp(1000n, onBinde);
     const mevcut = istasyonda.get(malzemeId) ?? 0n;
     if (gereken <= 0n || mevcut >= gereken) continue;
-    const toplam = onBindeCarp(adetBinde, onBinde);
+    const toplam = kalanlar?.get(malzemeId) ?? onBindeCarp(adetBinde, onBinde);
     eksikler.push({ malzemeId, gereken, istasyonda: mevcut, istenecek: toplam > mevcut ? toplam - mevcut : gereken - mevcut });
   }
   return eksikler;
+}
+
+// B-2501-3: adımın kalan malzeme ihtiyacı (binde). Brüt emrin iş emri kopyasındandır (fire payı ve dal çarpanı içinde); emre verilmiş net
+// sarf malzeme başına önce önceki adımların brütüne, artanı bu adıma düşülür. Brüt dört ondalıklı metindir; binde yukarı yuvarlanır.
+export function adimKalanIhtiyaci(
+  ihtiyac: readonly { malzemeNo: number; opNo: number; brut: string }[], opNo: number, verilen: ReadonlyMap<number, bigint>,
+): Map<number, bigint> {
+  const bu = new Map<number, bigint>();
+  const onceki = new Map<number, bigint>();
+  for (const s of ihtiyac) {
+    const m = s.opNo === opNo ? bu : s.opNo < opNo ? onceki : null;
+    if (m !== null) m.set(s.malzemeNo, (m.get(s.malzemeNo) ?? 0n) + (onBindeOku(s.brut) + 9n) / 10n);
+  }
+  const sonuc = new Map<number, bigint>();
+  for (const [malzemeNo, brut] of bu) {
+    const artan = (verilen.get(malzemeNo) ?? 0n) - (onceki.get(malzemeNo) ?? 0n);
+    const kalan = brut - (artan > 0n ? artan : 0n);
+    sonuc.set(malzemeNo, kalan > 0n ? kalan : 0n);
+  }
+  return sonuc;
 }
 
 // Sayım farkının stoğa planı. Adım taşınan malzemeyi (statü kuralı: ilk adımın ilk girdisi; çıktılı adımdan sonra o adımın çıktısı)
@@ -942,6 +991,9 @@ export interface UretimAdimPlani {
   cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
   // malzemeId null: emrin ürünü. statuId: birleştirmede dalların parçasından doğan ürün adımın statüsüne girer (1348 a); öteki hâllerde yok.
   giris: { malzemeId: number | null; miktar: bigint; statuId?: number | null } | null;
+  // 2522 a: bu adımda daha önce sayılanın taşınan miktarı, malzeme başına (binde; adimPlaniKur ekler, dallı adımda her dalın parçası ayrı).
+  // Elle sarf edilen taşınan statü zincirinin dışında kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
+  oncekiTasinanlar?: ReadonlyMap<number, bigint>;
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
@@ -970,6 +1022,13 @@ export function uretimAdimPlani(g: {
   }
   const giris = g.sonAdim ? { malzemeId: g.cikti, miktar: g.adet } : g.cikti === null ? null : { malzemeId: g.cikti, miktar: g.adet };
   return { sarflar, cevirme, giris };
+}
+
+// 2522 a: emre elle sarf edilen taşınan malzeme statü zincirinin dışında kalır. Zincirin her taşınan hareketinden (çevirme, statüden sarf)
+// elle verilenin, adımın birikimli miktarı ihtiyacı (elle verilen düşülmüş) aştığı kadarı düşülür; elle verilen emrin sonuna sayılır
+// (elleSarfMahsubu ile aynı). Hammadde bir kez düşer; zincirde eksi oluşmaz.
+export function tasinanMahsubu(g: { istenen: bigint; elle: bigint; oncekiTasinan: bigint; ihtiyac: bigint | null }): bigint {
+  return elleSarfMahsubu({ istenen: g.istenen, elle: g.elle, net: g.elle + g.oncekiTasinan, ihtiyac: g.ihtiyac });
 }
 
 // Dallı emirde (1348 a) adımın taşıma kaynağı, Reçete ve Rota statü kuralıyla aynı. Öncül listesi başka öncülün zaten beklediği

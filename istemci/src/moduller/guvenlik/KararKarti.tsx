@@ -5,7 +5,10 @@ import type { Karar } from './karar.ts';
 
 // Karar düğmesi kartın içinde (2231): alarmda bugünkü onay ve kapatma penceresi açılır, öbüründe ilgili sayfaya gidilir.
 // Yeni işlem yoktur; düğmeler bugün var olan uçları çağırır.
-export function KararKarti({ karar, yonetir, incele }: { karar: Karar; yonetir: boolean; incele: (a: Alarm) => void }) {
+// Sayfada tek birincil düğme kalsın diye yalnız listenin ilk (en önemli) kartı `oncelikli` alır; öbürlerinin düğmeleri ikincildir.
+export function KararKarti({ karar, yonetir, incele, oncelikli = false }: {
+  karar: Karar; yonetir: boolean; incele: (a: Alarm) => void; oncelikli?: boolean;
+}) {
   const git = useNavigate();
   const baslikKimligi = `tc-guvenlik-karar-${karar.anahtar.replace(/[^a-z0-9]/gi, '-')}`;
   return (
@@ -25,12 +28,12 @@ export function KararKarti({ karar, yonetir, incele }: { karar: Karar; yonetir: 
         {(karar.alarm !== null || karar.git !== null) && (
           <div className="tc-guvenlik-karar-dugmeler">
             {karar.alarm !== null && (
-              <Dugme tur="birincil" simge={yonetir ? 'check' : 'eye'} onClick={() => { if (karar.alarm) incele(karar.alarm); }}>
+              <Dugme tur={oncelikli ? 'birincil' : 'ikincil'} simge={yonetir ? 'check' : 'eye'} onClick={() => { if (karar.alarm) incele(karar.alarm); }}>
                 {yonetir ? 'İncele ve kapat' : 'İncele'}
               </Dugme>
             )}
             {karar.git !== null && (
-              <Dugme tur={karar.alarm === null ? 'birincil' : 'ikincil'} simge={karar.git.simge} onClick={() => { if (karar.git) void git(karar.git.yol); }}>
+              <Dugme tur={oncelikli && karar.alarm === null ? 'birincil' : 'ikincil'} simge={karar.git.simge} onClick={() => { if (karar.git) void git(karar.git.yol); }}>
                 {karar.git.metin}
               </Dugme>
             )}

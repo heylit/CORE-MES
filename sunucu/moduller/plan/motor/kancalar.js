@@ -89,7 +89,7 @@ function tlAmacUygula() {
   tFason = function (o, c, cx, ctx, b) { const r = f0(o, c, cx, ctx, b); if (r && r.cost == null && o.cTum && o.cTum.some(x => x.opt && x.m === c.m)) { const f = cx.FS[c.m.slice(1)]; const h = Math.min(...o.cTum.filter(x => !x.fas).map(x => x.run), Infinity); if (f && isFinite(h) && f.saatFiyat != null) r.cost = h * f.saatFiyat; } return r; };
 }
 tlAmacUygula();
-const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || 1) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
+const tmSureFas = (f, adet, A) => ((+(f && f.sureGun) || FASON_VARSAYILAN_GUN) * (f && f.terminKat != null ? +f.terminKat : A.katFas) + (f && f.terminEk != null ? +f.terminEk : A.ekFas) * adet / 100) * 24;
 /* motora bağlanan kısım (ana iş parçacığı ve işçi): genel gider her tezgâh saatine yük olarak, termin uyarıları, fason dönüşü */
 function terminUygula() {
   if (self.__tmU) return; self.__tmU = 1;

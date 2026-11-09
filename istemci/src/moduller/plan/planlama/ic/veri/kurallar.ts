@@ -128,7 +128,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'ariza', ad: 'Arıza ve planlı bakım', durum: 'tam', g: true, not: 'Bilinen kapalı pencere takvimden düşülür.', sayfa: 'takvim' },
     { id: 'isiksiz', ad: 'Işıksız (gözetimsiz) çalışma', durum: 'tam', not: 'İşaretli tezgâh vardiya dışında da işler; ayar vardiyada yapılır.', sayfa: 'tezgahlar' },
     { id: 'ekmesai', ad: 'Ek mesai', durum: 'tam', not: 'Tezgâhı, bir operatörü ve bir ayarcıyı o vardiyada açar.', sayfa: 'takvim' },
-    { id: 'tampon', ad: 'Arıza payı ve termin tamponu', durum: 'yaklasik', g: true, not: 'Tezgâhın arıza geçmişinden süreye pay; süre sapmasından termin tamponu.', p: [sayiP('param', 'acilPay', 'Acil iş payı', 'oran', 0, 0.3, 0.01), sayiP('param', 'tamponZ', 'Tampon katsayısı (z)', '', 0, 3, 0.05)] },
+    { id: 'tampon', ad: 'Arıza payı ve termin tamponu', durum: 'yaklasik', g: true, not: 'Tezgâhın arıza geçmişinden süreye pay; süre sapmasından termin tamponu.', p: [sayiP('param', 'tamponZ', 'Tampon katsayısı (z)', '', 0, 3, 0.05)] },
     { id: 'toplu', ad: 'Toplu işlem (fırın partisi)', durum: 'yaklasik', not: 'Isıl işlem fasonda kapasite ve çıkış günüyle; parti birleştirme yok.' },
     { id: 'enerji', ad: 'Enerji ve puant saat', durum: 'yok' },
   ] },

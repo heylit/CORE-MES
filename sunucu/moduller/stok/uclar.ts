@@ -5,7 +5,7 @@ import {
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
-  rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
+  rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sahipsizStatuluCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
@@ -108,6 +108,7 @@ export const uclar = [
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/tasima', yetki: 'stok.transfer', govde: tasimaGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.tasimaYap(db, kullanici.id, govde); } }),
   // Statülü malzemenin emre ayrılması: statü değiştirme yetkisiyle (müdür; kullanıcı kararı 15.10, yeni yetki yok).
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-et', yetki: 'stok.statu-degistir', govde: rezerveEtGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveEt(db, kullanici.id, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/sahipsiz-statulu', yetki: OKUMA, cevap: sahipsizStatuluCevabi, isle: ({ db }) => s.sahipsizStatuluStoklar(db) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/rezerve-kaldir', yetki: 'stok.statu-degistir', govde: rezerveKaldirGovdesi, cevap: rezervelerCevabi, isle: ({ db, kullanici, govde }) => s.rezerveKaldir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/statu-degistir', yetki: 'stok.statu-degistir', govde: statuDegistirGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.statuDegistir(db, kullanici.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/cikis', yetki: 'stok.cikis', govde: cikisGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); s.sktOnayiDenetle(kullanici, govde); return s.cikisYap(db, kullanici.id, govde); } }),

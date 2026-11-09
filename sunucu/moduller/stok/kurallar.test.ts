@@ -12,6 +12,7 @@ import {
   sevkAdediBinde, sevkKaynaklariSec, urunSevkAdimlari, elleSarfMahsubu, kaliteKarariHareketiMi, karantinaEngeli, FASON_DONUS_KARANTINA, fasonDonusKonumuEngeli, GKK_GIRIS_KARANTINA, gkkGirisKonumuEngeli, girisKontroluDuzeltmeEngeli, katalogEtiketiStokKodu, geriDusmeKodlari, siparisBagiEngeli,
   sevkCikisEngeli, istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu,
   eksiKaliteEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi, uretimGirisiKartEngeli, uretimGirisiKesirEngeli, statuKartEngeli, malKabulKonumuEngeli, gozTamSayildiMi, SAYIM_DISI_KONUMLAR, sevkAciklamasi, sevkTeslimIsi, faturaliSevkEngeli,
+  sahipsizStatuluHesapla, planaSayilirMi,
 } from './kurallar.ts';
 
 describe('stok kuralları (saf)', () => {
@@ -963,5 +964,18 @@ describe('STK-3 a: göz tamamı sayılınca sayıldı', () => {
     assert.equal(gozTamSayildiMi(b, [{ malzemeId: 1, partiId: null }, { malzemeId: 2, partiId: null }]), false, 'parti farklı satır sayılmış sayılmaz');
     assert.equal(gozTamSayildiMi(b, [{ malzemeId: 1, partiId: 7 }, { malzemeId: 2, partiId: null }]), true);
     assert.equal(gozTamSayildiMi([], []), true, 'boş göz');
+  });
+  test('2547 a sahipsizStatuluHesapla: red sayılmaz, açık emre ayrılan önce serbest sonra şartlı kalemden düşer, kapanan emrin rezervesi düşmez', () => {
+    const st = (statuId: number, kaliteDurumu: 'serbest' | 'sartli' | 'karar_bekliyor' | 'red', miktar: bigint) => ({ malzemeId: 1, statuId, kaliteDurumu, miktar, konumlar: ['K'] });
+    const ozet = (x: ReturnType<typeof sahipsizStatuluHesapla>) => x.map((s) => [s.statuId, s.kaliteDurumu, s.ayrilan, s.sahipsiz]);
+    const stoklar = [st(7, 'red', 5000n), st(7, 'sartli', 4000n), st(7, 'serbest', 3000n), st(7, 'karar_bekliyor', 2000n)];
+    assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [])), [[7, 'serbest', 0n, 3000n], [7, 'sartli', 0n, 4000n], [7, 'karar_bekliyor', 0n, 2000n]], 'red listede yok');
+    const acik = { malzemeId: 1, statuId: 7, miktar: 5000n, emirDurumu: 'basladi' };
+    assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [acik])), [[7, 'sartli', 2000n, 2000n], [7, 'karar_bekliyor', 0n, 2000n]], 'serbest 3 tükenir, şartlıdan 2 düşer');
+    assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [{ ...acik, miktar: 8000n }])), [[7, 'karar_bekliyor', 1000n, 1000n]], 'artan karar bekleyenden düşer');
+    assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [{ ...acik, miktar: 20000n }])), [], 'red ayrılana karşılık sayılmaz, eksi uydurulmaz');
+    assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [{ ...acik, emirDurumu: 'kapandi' }, { ...acik, emirDurumu: null }])).length, 3, 'kapanan ya da bulunamayan emrin rezervesi ayrılmış sayılmaz');
+    assert.deepEqual(ozet(sahipsizStatuluHesapla([st(7, 'serbest', 1000n), st(8, 'serbest', 1000n)], [acik])), [[8, 'serbest', 0n, 1000n]], 'ayrılan yalnız kendi statüsünden düşer');
+    assert.deepEqual(['serbest', 'sartli', 'karar_bekliyor', 'red'].map((k) => planaSayilirMi(k as 'serbest')), [true, true, false, false]);
   });
 });

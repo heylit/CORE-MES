@@ -4,7 +4,7 @@
 |---|---|---|
 | P-B1 | KAPANDI (T4 B, #415): `planlanacakIsEmirleri` ve `isEmriKaynagiYaz` uretim-emirleri `disari.ts`'inden; `baglanti.ts` yalnız P-B4'ü taşır | - |
 | P-B2 | KAPANDI (279 a, `20261019145500_plan_is_emri_bagi.sql`): `plan_yerlesimi` ve `plan_yerlesim_parcasi` iş emrine bağlı (silinince satır gider). Senaryo tabloları bağsız kalır: eksi kimlik deneme emridir, iş emri değil (göç satır 5). `plan_taban` geçmiş kaydıdır, bağsız | - |
-| P-B3 | KAPANDI (#441): motor vardiya modülünün çalışma takvimiyle yerleştirir (`calismaTakvimleri`); vardiyası tanımlanmamış kaynak sürekli çalışır, tatil ve kapalı günü yine düşülür, plan uyarısı alır | - |
+| P-B3 | KAPANDI (#441, B-2483-5/-6): motor vardiya modülünün çalışma takvimiyle yerleştirir (`calismaTakvimleri`). Vardiyası tanımlanmamış kaynak (takvimi yok ya da iş merkezinin matrisinde aktif vardiya yok, `vardiyaTanimli`) plan uyarısı alır; sunucu motoru kayıtlıyken tanımsız makinenin çalışma zamanı yoktur (168 b: iş dizilmez, istasyon kapasitesi 0, elle yerleştirme reddedilir); kişi ve motorsuz kurulumda sürekli çalışır, tatil ve kapalı günü düşülür. Tanımlı ama 0 dakikalı kaynak (izin, ayrılma, vardiyası o günlerde yok) tanımsız değildir, kapasitesi 0'dır (`vardiyasiTanimsiz`) | - |
 | P-B4 | KAPANDI (#439): `istasyonKisileri` istasyonlar `disari.ts`'inden; `baglanti.ts` kalktı | - |
 | P-B5 | Çakışma veritabanında dışlama kısıtıyla değil, servis denetimi ve plan sürümü kilidiyle (btrim_gist yok) | btree_gist eklentisi çekirdekçe açılırsa EXCLUDE kısıtı |
 | P-B6 | KAPANDI (borç değerlendirmesi 17.10.2026, yapılmış): `PLAN_ISLEMLERI` toplayıcıda (`paylasilan/islemler.ts` `...PLAN_ISLEMLERI`), rol satırları göçlerle girdi (`20261011114309_kisiler_planlama_plan_yaz.sql` `plan.yaz`, `20261015180508_kisiler_rota_canli_kalite_merkezi.sql` `('planlama_proje', 'plan.canliya-al')`). Toplayıcı ve eski sayfa kaldırma çekirdekte; rol satırları ayrı göçte | CEKIRDEK-ISTEKLERI |
@@ -64,7 +64,7 @@
   istemcideki `dengeEtkin`, `agBedel` çağrılmaz olur; musteri-tedarikci `gorunum.ts` sınıf yorumu eski. Sipariş çarpanı tabloları silinmedi, yazılmaz.
 - P-B35: `planMotoruCozucusu` kaydı ve kablolama bağı ADR 0020'den sonra aynı modülün iki ucunu bağlar (çözücü de plan modülünde); kayıt
   kalkıp plan servisi `sunucuPlanCozucusu`'nu doğrudan çağırabilir. 625n'in davranışına dokunulmadı.
-- P-B30: KISMEN KAPANDI (925 a): sunucuda planlama çalışmasını yazmak, silmek ve boş çalışmayı açmak yalnız `plan.yaz` ister; öteki anahtarlar `recete-rota.yaz` ile kalır (`planlamaYazmaDenetimi`, testler PY-05b, PC-06). Kalan: istemci `planlama/yetki.ts` `calismaYazabilir` hâlâ `ben.yazabilir` (recete-rota.yaz) da arıyor; o dosyanın kilidiyle kapanır.
+- P-B30: KAPANDI (925 a, 2503): sunucuda planlama çalışmasını yazmak, silmek ve boş çalışmayı açmak yalnız `plan.yaz` ister; öteki anahtarlar `recete-rota.yaz` ile kalır (`planlamaYazmaDenetimi`, testler PY-05b, PC-06). İstemci `planlama/yetki.ts` `calismaYazabilir` yalnız `plan.yaz` arar (`yetki.test.ts`).
 - P-B31: Reçete ve Rota'nın bazı sunucu testleri (RR-11, RR-18/19, EMR) birleşik durumu ve kapasiteyi plan uçlarından okur; testler modül
   sınırına göre ayrılınca plan modülüne geçer.
 - P-B32: eski planlama çerçevesinin derlemesi (`istemci/.../recete-rota/planlama-derle.ts`) motoru bu modülün klasöründen gömer; çerçeve

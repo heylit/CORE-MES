@@ -237,6 +237,8 @@ export interface EmirKaydi {
     ad: string; operasyonTipiId: number; istasyonId: number | null; ayarSuresiDk: string | null; birimSureDk: string | null;
     // Emirdeki üretim yeri (UE-URY): kaynak fason ise adım dışarıda yapılır; termin yalnız fasonda dolu.
     kaynak?: { tur: string; id: number } | null; terminGun?: number | null;
+    // B-2483-11: termini girilmemiş bitmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini (takvim günü; veri yoksa null ya da yok).
+    tahminGun?: number | null;
     // Rotadan gelen adım 'rota'dır; kola konan rework, tamir ya da ek adım türünü taşır. Verilmezse rota adımı sayılır.
     tur?: 'rota' | 'rework' | 'tamir' | 'ek';
     // 1476-D: çok katmanlı emirde adımın düğümü (kök "0"), düğüm ürününün rotasındaki op numarası ve kök başına adedi; emir içindeki
@@ -362,6 +364,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
         opYer[anahtar] = {
           fasonId: fason, terminGun: fason === null ? null : i.terminGun ?? null, stationId: i.istasyonId === null ? null : String(i.istasyonId),
           setup: metindenSayi(i.ayarSuresiDk), cycle: metindenSayi(i.birimSureDk),
+          ...(fason !== null && i.terminGun == null && i.tahminGun != null ? { tahminGun: i.tahminGun } : {}),
         };
       }
     }
@@ -865,8 +868,9 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
       chg: metindenSayi(x.degisimSuresiDk),
       cycle: metindenSayi(x.birimSureDk),
     })),
-    ins: a.bilesenler.map((b) => ({ itemId: String(b.malzemeId), qty: metindenSayi(b.miktar) ?? 0, scrap: metindenSayi(b.fireYuzde) ?? 0 })),
-    outs: a.yanUrunler.map((y) => ({ itemId: String(y.malzemeId), qty: metindenSayi(y.miktar) ?? 0, kind: 'yan' as const })),
+    // Miktar ve fire rota tablosunda boş olamaz (rota_bileseni_miktar, rota_yan_urunu_miktar): sıfır yedeği yazılmaz (B-2484-6).
+    ins: a.bilesenler.map((b) => ({ itemId: String(b.malzemeId), qty: Number(b.miktar), scrap: Number(b.fireYuzde) })),
+    outs: a.yanUrunler.map((y) => ({ itemId: String(y.malzemeId), qty: Number(y.miktar), kind: 'yan' as const })),
   };
 }
 

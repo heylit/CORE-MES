@@ -4,7 +4,7 @@ import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import { makineler, planAyarlari } from '../istasyonlar/disari.ts';
 import { aralikAdetleri, isEmriPlanBilgileri, isEmriZamanlari } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
-import type { Aralik, Kaynak } from './kurallar.ts';
+import { vardiyasiTanimsiz, type Aralik, type Kaynak } from './kurallar.ts';
 import { sapmaOlcusu, type PlanYeri } from './sapma-kurallar.ts';
 import { canliYerlesimleri, makinelerinCanliIsleri, planSurumu, tabanOku } from './sorgular.ts';
 
@@ -95,8 +95,8 @@ export async function planSapmalari(db: Db, g: { isEmriIdleri: readonly number[]
   const okunan = tekilKaynak.length === 0 ? new Map<string, KaynakTakvimi | null>() : await calismaTakvimleri(db, tekilKaynak, { baslangic: baslangicGunu, bitis: bitisGunu });
   const takvimler = new Map<string, Aralik[] | undefined>();
   for (const [anahtar, t] of okunan) {
-    const tanimsiz = t === null || t.gunler.every((x) => x.dakika === 0);
-    takvimler.set(anahtar, tanimsiz ? undefined : t.araliklar.map((a) => ({ baslangic: dakika(a.baslangic), bitis: dakika(a.bitis) })));
+    const tanimsiz = vardiyasiTanimsiz(t);
+    takvimler.set(anahtar, tanimsiz || t === null ? undefined : t.araliklar.map((a) => ({ baslangic: dakika(a.baslangic), bitis: dakika(a.bitis) })));
   }
 
   // Sıra uyumu: ilk çalışılan makinedeki canlı işler; girişleri ikinci okumada.
