@@ -3,7 +3,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
-import { binde, planaSayilirMi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
+import { binde, planaSayilirMi, statuKirilimi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
@@ -227,6 +227,15 @@ export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istas
 export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
 // Reçete ve Rota adımın çıktı kartını (ara adımda parçanın dönüştüğü kart) çözen işlevi kaydeder; çıktısız adımda null döner.
 export const adimCiktisiCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimCiktisiCozucusuKaydet(cozucu);
+// Kartların statülü stoğu, kart ve statü başına (malzeme ayrıntısının statü kırılımıyla aynı toplam; statüsüz satır dönmez). Reçete ve
+// Rota'nın emir malzeme ihtiyacı ara adım stoğunu buradan okur (2493, 461 b). Salt okur; yetkiyi çağıran korur.
+export async function statuluStoklar(db: Db, malzemeIdler: readonly number[]): Promise<{ malzemeId: number; statuId: number; miktar: string }[]> {
+  const sonuc: { malzemeId: number; statuId: number; miktar: string }[] = [];
+  for (const id of new Set(malzemeIdler)) {
+    for (const k of statuKirilimi(await sorgular.malzemeBakiyeleri(db, id))) if (k.statuId !== null) sonuc.push({ malzemeId: id, statuId: k.statuId, miktar: k.miktar });
+  }
+  return sonuc;
+}
 // Reçete ve Rota statü listesini veren işlevi kaydeder; stok bunu `GET /stok/statuler` ucundan stok okuyanlara sunar.
 export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void => servis.statuListesiCozucusuKaydet(cozucu);
 // 1222 a: Kalite Merkezi verilen partilerden açık uygunsuzluğu (NCR) olanları veren işlevi kaydeder; ürün sevki ve depo çıkışı onları almaz.

@@ -309,6 +309,36 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.equal(terminal.govde.emir.emirNo, satir.emirNo);
   });
 
+  test('2486-8 (B-2484-3): emir malzeme ihtiyacı emrin kendi kopyasından; emir okuyan 200, yalnız sayfa yetkili 403, bilinmeyen emir 404', async () => {
+    sayac += 1;
+    const ham = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'hammadde', 'RE-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [`re-dnm-${sayac}`, sayac, JSON.stringify({ id: `re-dnm-${sayac}`, com: { ad: `Deneme hammadde ${sayac}` } }), yoneticiId]))!.no;
+    const m = await makineKur();
+    const kim = kullanicilar.get('planlama_proje')!;
+    const { uretimEmriId: id } = await o().vt.tx((db) => uretimEmriAc(db, kim, {
+      projeId: denemeProjeId, malzemeNo: urunNo, adet: 5, baslangic: '2030-01-02', teslim: '2030-01-20', oncelik: 1, aciklama: null, kaynakRotaRevizyonId: revizyonId,
+      isEmirleri: [{ ...adim(1, m), bilesenler: [{ malzemeNo: ham, miktar: '2' }] }, adim(2, m)],
+    }));
+    type Cevap = { stokGorunur: boolean; emirler: { emirId: number; hammadde: { malzemeNo: number; kod: string | null; brut: string; verilen: string; alinacak: string }[]; eksikler: unknown[] }[] };
+    const c = await istek<Cevap>('planlama_proje', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.deepEqual(c.govde.emirler.map((e) => e.emirId), [id]);
+    const satir = c.govde.emirler[0]?.hammadde.find((h) => h.malzemeNo === ham);
+    assert.deepEqual([satir?.brut, satir?.verilen, satir?.alinacak, satir?.kod === null], ['10', '0', '10', false]);
+    assert.equal(c.govde.emirler[0]?.eksikler.length, 1);
+    // B-2501-1: tek kaynak: planın malzeme ihtiyacı aynı malzemede aynı brütü (sarf düşülmüş) verir.
+    const mrp = await istek<{ satirlar: { malzeme: { id: number }; brut: number }[] }>('yonetici', 'GET', '/plan/mrp-ihtiyaci');
+    assert.equal(mrp.durum, 200, JSON.stringify(mrp.govde));
+    assert.equal(mrp.govde.satirlar.find((x) => x.malzeme.id === ham)?.brut, Number(satir?.brut) - Number(satir?.verilen));
+    const hepsi = await istek<Cevap>('planlama_proje', 'GET', '/recete-rota/malzeme-ihtiyaci');
+    assert.equal(hepsi.durum, 200);
+    assert.ok(hepsi.govde.emirler.some((e) => e.emirId === id), 'emir verilmezse plandaki bütün emirler');
+    assert.equal((await istek('sadece_sayfa', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`)).durum, 403);
+    assert.equal((await istek('planlama_proje', 'GET', '/recete-rota/malzeme-ihtiyaci?emir=999999')).durum, 404);
+  });
+
   test('EMR-5: çeviri kuralı saf: katılma adımı bulunamayan alt emir kol olmaz; ortadan ayrılıp katılmayan kol ana emrin sonuna kadar yürür', () => {
     const iseEmri = (sira: number) => ({
       sira, opNo: sira * 10, durum: 'bekliyor' as const, saglamAdet: null, canliAdet: null, ad: 'A', operasyonTipiId: 1, istasyonId: null, ayarSuresiDk: null, birimSureDk: null,
