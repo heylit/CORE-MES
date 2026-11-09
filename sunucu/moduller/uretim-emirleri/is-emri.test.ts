@@ -367,8 +367,8 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const hareket = await fasonHareketiOzeti(o().vt, d1.hareketId);
     assert.deepEqual(hareket && [hareket.uretimEmriId, hareket.firmaId, hareket.yon, hareket.adet, hareket.hurdaAdet], [id, firmaId, 'donus', 4, 1]);
     const disarida = (await fasonIsEmirleri(o().vt)).find((x) => x.isEmriId === ie2);
-    assert.deepEqual(disarida && [disarida.uretimEmriId, disarida.emirNo, disarida.opNo, disarida.firmaId, disarida.gonderilen, disarida.donen, disarida.hurda, disarida.planlananGidis],
-      [id, e.emirNo, 20, firmaId, 9, 8, 1, null]);
+    assert.deepEqual(disarida && [disarida.uretimEmriId, disarida.emirNo, disarida.opNo, disarida.firmaId, disarida.gonderilen, disarida.donen, disarida.hurda, disarida.donusler.map((d) => [d.adet, d.hurda])],
+      [id, e.emirNo, 20, firmaId, 9, 8, 1, [[4, 1], [4, 0]]]);
     const ilkGun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(disarida!.ilkGidis!));
     const beklenenTermin = new Date(`${ilkGun}T00:00:00Z`);
     beklenenTermin.setUTCDate(beklenenTermin.getUTCDate() + 5);

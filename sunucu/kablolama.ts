@@ -15,9 +15,9 @@ import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
-import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatEmirBittiYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, canliMakineAyrimlari, canliPaylar, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
+import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatEmirBittiYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
@@ -141,6 +141,7 @@ export function sunucununBaglari(): Bag[] {
     bag('stok tüketim serisi -> satın alma analizi', tuketimSerisiCozucusu, stok.tuketimSerisi),
     bag('alım -> sevkiyat', alimDinle, sevkiyat.alimYansit),
     bag('kalite onay durumu -> satın alma siparişi', kaliteDurumuCozucusu, kaliteMerkezi.tedarikciOnayDurumlari),
+    bag('canlı plan -> dış operasyonlarda planlanan gidiş', planlananGidisCozucusu, canliPlan),
     bag('vardiya takvimi -> İK puantaj', ik.puantajTakvimCozucusu, vardiya.calismaTakvimleri),
     bag('vardiya aralıkları -> İK puantaj', ik.puantajAralikCozucusu, vardiya.basladigiGunTakvimleri),
     bag('vardiya tanımları -> İK kişi sayfası', ik.vardiyaTanimCozucusu, vardiya.vardiyaTanimlari),

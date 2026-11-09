@@ -7,6 +7,7 @@ import {
   ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
+import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
@@ -402,7 +403,7 @@ test('SAT-77: stok tutarı miktar x TL birim fiyat toplamıdır, kuruşa yuvarla
 test('898 a: fason ön talep bağlı, yoksayılmış ve gönderilmiş adımı almaz; en erken teslim üstte, tarihsiz sonda', () => {
   const f = (isEmriId: number, teslim: string | null, gonderilen: number | null = null) => ({
     isEmriId, uretimEmriId: 1, emirNo: `E${isEmriId}`, urun: null, opNo: 10, adim: null, firmaId: 1, adet: 5, malzemeNo: null, terminGun: 3, teslim,
-    planlananGidis: null, ilkGidis: null, termin: null, ilkDonus: null, sonDonus: null, gonderilen, donen: null, hurda: null,
+    ilkGidis: null, termin: null, ilkDonus: null, sonDonus: null, gonderilen, donen: null, hurda: null, donusler: [],
   });
   const l = fasonOnTalepAdaylari([f(1, null), f(2, '2026-11-05'), f(3, '2026-11-01'), f(4, '2026-10-30'), f(5, '2026-10-29'), f(6, '2026-10-28', 2)], new Set([4]), new Set([5]));
   assert.deepEqual(l.map((x) => x.isEmriId), [3, 2, 1]);
@@ -504,4 +505,20 @@ test('1839: üç yollu eşleşme; teslim ve tutar farkı uyarıdır, rakam taş�
   assert.deepEqual(faturaEslesmeUyarilari(sip(['5']), null), []);
   assert.deepEqual(faturaEslesmeUyarilari(sip(['5'], null), f('1')), []);
   for (const u of [ILETILER.eslesmeTutarFazla, ILETILER.eslesmeTutarEksik, ILETILER.eslesmeParaBirimi]) assert.doesNotMatch(u, /\d/);
+});
+
+test('2424 c: dış operasyon gecikmesi son dönüşe ve adet ağırlıklı ölçülür; termin yoksa ölçü yok', () => {
+  assert.equal(fasonKalani(10, 12, 7, 1), 4);
+  assert.equal(fasonKalani(10, null, null, null), 10);
+  assert.equal(fasonKalani(10, 10, 9, 3), 0);
+  assert.equal(sonDonusGecikmesi(null, null, 5, '2026-11-09'), null);
+  // Kalan varsa iş bitmemiştir: gecikme bugüne kadar sayılır.
+  assert.equal(sonDonusGecikmesi('2026-11-01', '2026-11-03T09:00:00Z', 2, '2026-11-09'), 8);
+  assert.equal(sonDonusGecikmesi('2026-11-01', '2026-11-03T09:00:00Z', 0, '2026-11-09'), 2);
+  assert.equal(sonDonusGecikmesi('2026-11-05', '2026-11-03T09:00:00Z', 0, '2026-11-09'), 0, 'erken dönüş eksi gecikme değildir');
+  assert.equal(agirlikliGecikme(null, [], 3, '2026-11-09'), null);
+  assert.equal(agirlikliGecikme('2026-11-01', [], 0, '2026-11-09'), null, 'adet yoksa ölçü yok, sıfır uydurulmaz');
+  // 6 adet 2 gün, 2 adet (1 hurda dahil) 4 gün, kalan 2 adet bugün 8 gün: (12 + 8 + 16) / 10 = 3.6
+  assert.equal(agirlikliGecikme('2026-11-01', [{ gun: '2026-11-03', adet: 6, hurda: 0 }, { gun: '2026-11-05', adet: 1, hurda: 1 }], 2, '2026-11-09'), 3.6);
+  assert.equal(agirlikliGecikme('2026-11-05', [{ gun: '2026-11-03', adet: 4, hurda: 0 }], 0, '2026-11-09'), 0);
 });

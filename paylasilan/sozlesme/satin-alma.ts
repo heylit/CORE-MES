@@ -705,7 +705,12 @@ export const disOperasyonSemasi = z.object({
   gonderilen: z.number().int().nullable(),
   donen: z.number().int().nullable(),
   hurda: z.number().int().nullable(),
+  // İlk dönüşe göre (D3 b; eski ekranlar için korunur): dönüş yoksa bugüne kadar.
   gecikmeGun: z.number().int().nullable(),
+  // 2424-a c: iki ölçü yan yana. Son dönüş: kalan adet varsa bugüne, yoksa son dönüşe göre termin aşımı (karneyle aynı).
+  // Adet ağırlıklı: her dönüşün (hurda dahil) termin aşımı adediyle; dönmeyen adet bugüne göre. Termin yoksa ikisi de boş.
+  gecikmeSonDonus: z.number().int().nullable(),
+  gecikmeAgirlikli: z.number().nullable(),
   // 1849: önceki iş emirleri bitti mi (fasona gönderilebilir mi); gidiş kaydıyla aynı kural.
   sirada: z.boolean(),
 });

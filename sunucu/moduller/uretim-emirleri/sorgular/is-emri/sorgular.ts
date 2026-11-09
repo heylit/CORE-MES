@@ -397,14 +397,17 @@ export function fasonHareketleriGetir(db: Db, isEmriIdleri: readonly number[]): 
 }
 
 // Satın almanın dış operasyon listesi: bitmemiş fason iş emirleri ve hareket toplamları. Gün dönüşümü bağlantının saat dilimiyle
-// (tesis, İstanbul) yapılır. Toplam yalnız o yönde hareket varsa doludur; plan tarihi emirde tutulmaz (null).
+// (tesis, İstanbul) yapılır. Toplam yalnız o yönde hareket varsa doludur. Plan tarihi emirde tutulmaz; satın alma canlı plandan alır.
+// Dönüşler gün sırasıyla (gün, adet, hurda): satın almanın adet ağırlıklı gecikmesi için.
 export function fasonIsEmirleri(db: Db): Promise<FasonIsEmri[]> {
   return db.sorgu<FasonIsEmri>(
     `SELECT i.id AS "isEmriId", e.id AS "uretimEmriId", e.emir_no AS "emirNo", e.parca_ad AS urun, i.op_no AS "opNo", i.ad AS adim, i.fason_firma_id AS "firmaId",
        e.adet, e.malzeme_no AS "malzemeNo", i.termin_gun AS "terminGun", to_char(e.teslim, 'YYYY-MM-DD') AS teslim,
-       NULL::text AS "planlananGidis", ${NULLU_ISO('h.ilk_gidis')} AS "ilkGidis",
+       ${NULLU_ISO('h.ilk_gidis')} AS "ilkGidis",
        CASE WHEN h.ilk_gidis IS NULL OR i.termin_gun IS NULL THEN NULL ELSE to_char(h.ilk_gidis::date + i.termin_gun, 'YYYY-MM-DD') END AS termin,
-       ${NULLU_ISO('h.ilk_donus')} AS "ilkDonus", ${NULLU_ISO('h.son_donus')} AS "sonDonus", h.gonderilen, h.donen, h.hurda
+       ${NULLU_ISO('h.ilk_donus')} AS "ilkDonus", ${NULLU_ISO('h.son_donus')} AS "sonDonus", h.gonderilen, h.donen, h.hurda,
+       (SELECT COALESCE(json_agg(json_build_object('gun', to_char(f.zaman::date, 'YYYY-MM-DD'), 'adet', f.adet, 'hurda', COALESCE(f.hurda_adet, 0)) ORDER BY f.zaman), '[]'::json)
+          FROM uretim_emirleri_fason_hareketi f WHERE f.is_emri_id = i.id AND f.yon = 'donus') AS donusler
      FROM uretim_emirleri_is_emri i
      JOIN uretim_emri e ON e.id = i.uretim_emri_id
      LEFT JOIN LATERAL (
@@ -432,7 +435,6 @@ export interface FasonIsEmri {
   malzemeNo: number | null;
   terminGun: number | null;
   teslim: string | null;
-  planlananGidis: string | null;
   ilkGidis: string | null;
   termin: string | null;
   ilkDonus: string | null;
@@ -440,6 +442,7 @@ export interface FasonIsEmri {
   gonderilen: number | null;
   donen: number | null;
   hurda: number | null;
+  donusler: { gun: string; adet: number; hurda: number }[];
 }
 
 export function fasonHareketiBul(db: Db, id: number): Promise<FasonHareketiSatiri | null> {

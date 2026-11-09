@@ -26,7 +26,7 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -547,6 +547,21 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
 
 // E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; tedarikçi onay durumunu sunucu açılışında kablolama kaydeder (ADR 0006).
 // Kayıtsız süreçte (çözücüyü kurmayan araç ya da test) kalite durumu bilinmez: denetlenmez ve gösterimde null'dır.
+// 2424: fason adımın planlanan gidişi canlı plandaki başlangıcıdır (tesis günü). Plan satın almayı okuduğu için bağı kablolama kurar;
+// bağ yoksa ya da adım canlıda değilse boş.
+export type PlanlananGidisCozucusu = (db: Db, isEmriIdleri: readonly number[]) => Promise<readonly { isEmriId: number; baslangic: string }[]>;
+let planlananGidisCozucu: PlanlananGidisCozucusu | null = null;
+export function planlananGidisCozucusuKaydet(cozucu: PlanlananGidisCozucusu | null): void { planlananGidisCozucu = cozucu; }
+async function planlananGidisler(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, string>> {
+  if (planlananGidisCozucu === null || isEmriIdleri.length === 0) return new Map();
+  const gunu = (z: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(z));
+  const m = new Map<number, string>();
+  for (const y of await planlananGidisCozucu(db, isEmriIdleri)) {
+    const g = gunu(y.baslangic);
+    if (!m.has(y.isEmriId) || g < m.get(y.isEmriId)!) m.set(y.isEmriId, g);
+  }
+  return m;
+}
 export type KaliteDurumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, KmTedarikciDurumu>>;
 let kaliteDurumuCozucu: KaliteDurumuCozucusu | null = null;
 export function kaliteDurumuCozucusuKaydet(cozucu: KaliteDurumuCozucusu | null): void { kaliteDurumuCozucu = cozucu; }
@@ -1137,12 +1152,18 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   const gun = await s.bugun(db);
   // 1849 (C17): gidiş kaydıyla aynı sıra kuralı; ekran sırası gelmemiş adımda "Gönder"i kapatır, sunucu yine reddeder.
   const gonderim = await fasonGonderimleri(db, liste.map((x) => ({ isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, adet: x.adet })));
+  const plan = await planlananGidisler(db, liste.map((x) => x.isEmriId));
   return {
     hazir: true,
-    operasyonlar: liste.map(({ ilkGidis, ...x }) => ({
-      ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
-      gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
-    })),
+    operasyonlar: liste.map(({ ilkGidis, donusler, ...x }) => {
+      const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
+      return {
+        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+        planlananGidis: plan.get(x.isEmriId) ?? null,
+        gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),
+        gecikmeAgirlikli: agirlikliGecikme(x.termin, donusler, kalan, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
+      };
+    }),
   };
 }
 // Fason grafikleri: gerçekleşen geçmiş (son `sonGun` günde başlayan) kırılımda ve firma bazında termin uyumu; adlar kendi sahibinden.

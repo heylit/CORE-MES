@@ -681,6 +681,22 @@ export function gecikmeGunu(termin: string | null, ilkDonus: string | null, bugu
   const son = ilkDonus === null ? bugun : istanbulGunu(ilkDonus);
   return Math.max(0, Math.round((Date.parse(son) - Date.parse(termin)) / GUN_MS));
 }
+// 2424-a c: parçalı dönüşte iki ölçü. Kalan: gönderilen (gönderilmemişse emir adedi) eksi dönen ve hurda; kalan varsa iş bitmemiştir.
+export function fasonKalani(adet: number, gonderilen: number | null, donen: number | null, hurda: number | null): number {
+  return Math.max(0, Math.max(adet, gonderilen ?? 0) - (donen ?? 0) - (hurda ?? 0));
+}
+const asim = (termin: string, gun: string): number => Math.max(0, Math.round((Date.parse(gun) - Date.parse(termin)) / GUN_MS));
+export function sonDonusGecikmesi(termin: string | null, sonDonus: string | null, kalan: number, bugun: string): number | null {
+  if (termin === null) return null;
+  return asim(termin, kalan > 0 || sonDonus === null ? bugun : istanbulGunu(sonDonus));
+}
+export function agirlikliGecikme(termin: string | null, donusler: readonly { gun: string; adet: number; hurda: number }[], kalan: number, bugun: string): number | null {
+  if (termin === null) return null;
+  const parcalar = [...donusler.map((d) => ({ gun: d.gun, adet: d.adet + d.hurda })), ...(kalan > 0 ? [{ gun: bugun, adet: kalan }] : [])].filter((p) => p.adet > 0);
+  const toplam = parcalar.reduce((t, p) => t + p.adet, 0);
+  if (toplam === 0) return null;
+  return Math.round((parcalar.reduce((t, p) => t + asim(termin, p.gun) * p.adet, 0) / toplam) * 10) / 10;
+}
 // ---- Fason süresi tahmini ve termin uyumu (saf). Süre ilk gidişten son dönüşe takvim günüdür (ondalık).
 export interface FasonSureOrnegi { malzemeNo: number | null; operasyonTipiId: number; firmaId: number; adet: number; sureGun: number }
 export interface FasonSureSorgusu { malzemeNo: number; operasyonTipiId: number; firmaId: number; adet: number }
