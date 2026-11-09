@@ -47,8 +47,8 @@ describe('vardiyası tanımsız ve sıfır kapasiteli kaynak', () => {
       const [is] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m.id } })]);
       const p: PlanCevabi = await planOku();
       const yuk = p.istasyonYuku.find((x) => x.istasyonId === m.istasyon_id);
-      assert.ok(yuk, 'istasyon yükte görünür');
-      assert.ok(yuk.kapasite.every((k) => k === 0), JSON.stringify(yuk.kapasite));
+      // Kapasitesi ve yükü 0 olan istasyon matriste gösterilmez; görünürse kapasitesi 0'dır (önceden günde 1440 dakika).
+      assert.ok(yuk === undefined || yuk.kapasite.every((k) => k === 0), JSON.stringify(yuk?.kapasite));
       const bas = new Date(tesisGunBasi(tesisGunu(Date.now())) + 2 * 86_400_000 + 10 * 3_600_000).toISOString();
       const r = await istek(c.planlama, 'POST', '/plan/yerlestir', { taslak: null, isEmriId: is, kaynak: { tur: 'makine', id: m.id }, baslangic: bas, planSurumu: p.surum });
       assert.equal(r.statusCode, 409, r.body);

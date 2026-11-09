@@ -860,17 +860,19 @@ function istasyonGunYuku(b: Baglam, yerler: readonly Yer[]): Map<number, number[
 }
 
 // PL-09: istasyon ataması olan kişisi bulunan iş merkezlerinin kişi-dakika ihtiyacı ve kapasitesi; kişisi olmayan merkezde veri yok sayılır.
-// Kapasite kişi takvimlerinin toplamıdır: onaylı izin günü 0, planlı fazla mesai eklenmiş (vardiya). Takvimi okunamayan kişi iş merkezinin
-// takvimiyle sayılır.
+// Kapasite kişi takvimlerinin toplamıdır: onaylı izin günü 0, planlı fazla mesai eklenmiş (vardiya). Vardiyası tanımsız kişi 0 sayılır.
 function personelVerisi(b: Baglam, yerler: readonly Yer[]) {
   const yuk = istasyonGunYuku(b, yerler);
   const istasyonMerkezi = new Map<number, number>();
   for (const k of b.kaynaklar.values()) if (k.istasyon && k.isMerkeziId !== null) istasyonMerkezi.set(k.istasyon.id, k.isMerkeziId);
   const t = anahtarTakvimi(b);
-  const kisiDakikasi = (kisiId: number, merkezId: number) =>
-    gunDakikalari(b, t((b.takvimler.get(`kisi:${kisiId}`) ?? null) === null ? `is-merkezi:${merkezId}` : `kisi:${kisiId}`));
+  // 2511 a: vardiyası tanımsız kişi (vardiyası seçilmemiş) kapasiteye girmez; iş merkezinin bütün vardiyalarıyla sayılsaydı kişi-saat şişerdi.
+  const kisiDakikasi = (kisiId: number) => {
+    const anahtar = `kisi:${kisiId}`;
+    return (b.takvimler.get(anahtar) ?? null) === null ? Array<number>(UFUK_GUN).fill(0) : gunDakikalari(b, t(anahtar));
+  };
   const girdi: PersonelMerkezi[] = [...b.merkezler].filter(([id, m]) => m.kisiler.length > 0 && (b.izinli.length === 0 || b.izinli.includes(id))).map(([id, m]) => ({
-    isMerkeziId: id, gunSayisi: UFUK_GUN, kisiler: m.kisiler.map((k) => ({ calismaDk: kisiDakikasi(k.kisiId, id), pay: k.pay })),
+    isMerkeziId: id, gunSayisi: UFUK_GUN, kisiler: m.kisiler.map((k) => ({ calismaDk: kisiDakikasi(k.kisiId), pay: k.pay })),
     istasyonlar: [...istasyonMerkezi].filter(([, mid]) => mid === id).map(([iid]) => ({ yuk: yuk.get(iid) ?? [], operator: b.operator.get(iid) ?? 1 })),
   }));
   return personelYuku(girdi).map((p) => ({ ...p, kod: b.merkezler.get(p.isMerkeziId)!.kod, ad: b.merkezler.get(p.isMerkeziId)!.ad }));
@@ -977,6 +979,8 @@ function uyariListesi(b: Baglam, y: Yer, yerler: readonly Yer[]): string[] {
   const yetkinlik = new Set([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].map((x) => yetkinlikUyarisi(
     x, x.tur === 'makine' ? b.kaynaklar.get(kaynakAnahtari(x))?.istasyon?.id ?? null : rotaIst, b.yetkinlik, TERMINAL_YETKINLIGI)));
   for (const m of yetkinlik) if (m !== null) u.push(m);
+  // 2511 a: vardiyası tanımsız kişiye yerleşen iş uyarı alır (kişi sürekli çalışır sayılır, kapasiteye girmez).
+  if ([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].some((x) => x.tur === 'kisi' && (b.takvimler.get(kaynakAnahtari(x)) ?? null) === null)) u.push(KISI_VARDIYASIZ);
   if (is.taslakEmir) u.push('Taslak emir: plana alınınca kesinleşir.');
   return u;
 }
@@ -1099,8 +1103,8 @@ function cevapKur(b: Baglam, satirlar: readonly YerlesimSatiri[]) {
       tamponGun: t === null || bit === null ? null : Math.round(((t - bit) / GUN_DK) * 10) / 10, engelli, isSayisi: l.length, yerlesen: y.length,
     };
   }).sort((x, y) => (x.baslangic ?? '9').localeCompare(y.baslangic ?? '9'));
-  // Matris: istasyon x gün dolu dakika ve kapasite (aktif kaynak x açık gün).
-  // Matris: istasyon x gün dolu dakika ve kapasite (aktif kaynakların o günkü vardiya dakikası; takvimi olmayan kaynak tam gün).
+  // Matris: istasyon x gün dolu dakika ve kapasite (aktif kaynakların o günkü vardiya dakikası; takvimi olmayan makine sunucu motoru
+  // kayıtlıyken 0, öteki takvimsiz kaynak tam gün).
   const istasyonlar = new Map<number, { istasyonId: number; kod: string; ad: string; kaynaklar: Kaynak[] }>();
   for (const k of b.kaynaklar.values()) {
     if (!k.istasyon || !izinliMi(b, k)) continue;

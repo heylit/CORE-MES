@@ -474,7 +474,8 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
         araliklar: dakikalar.map((_, i) => cevir(i)),
         // VR-26: kişinin çalışma payı; kapasite hesabı tam zamanla çarpar.
         ...(kisiId !== null ? { yuzde: atamaPayi(kisininAtamalari(atamalar, kisiId)) } : {}),
-        vardiyaTanimli: tanimliMerkezler.has(bag.isMerkeziId),
+        // 2511 a: vardiyası seçilmemiş kişi iş merkezinin bütün vardiyalarını alır (VR-08) ama plan için vardiyası tanımsızdır.
+        vardiyaTanimli: tanimliMerkezler.has(bag.isMerkeziId) && (kisiId === null || bag.vardiyaId !== null),
       } };
     };
     kurulacaklar.push({ anahtar, dakikalar: h.kaynaginDakikalari, kur });
