@@ -1112,22 +1112,62 @@ export async function fasonYoksayEkle(db: Db, g: { isEmriId: number; neden: stri
 export async function onTalepYoksaySil(db: Db, id: number): Promise<boolean> {
   return (await db.tek('DELETE FROM satin_alma_on_talep_yoksay WHERE id = $1 RETURNING id', [id])) !== null;
 }
-export interface KalemBagSatiri { kalemId: string; uygulananMalzemeNo: number | null; isEmriId: number | null }
+export interface KalemBagSatiri { kalemId: string; uygulananMalzemeNo: number | null; isEmriId: number | null; dieId: number | null }
 export async function kalemBaglariYaz(db: Db, talepId: string, baglar: readonly KalemBagSatiri[]): Promise<void> {
   if (baglar.length === 0) return;
   await db.sorgu(
-    `UPDATE satin_alma_talep_kalemi k SET uygulanan_malzeme_no = b.uygulanan, is_emri_id = b.is_emri
-       FROM unnest($2::uuid[], $3::int[], $4::int[]) AS b(id, uygulanan, is_emri) WHERE k.talep_id = $1 AND k.id = b.id`,
-    [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId)],
+    `UPDATE satin_alma_talep_kalemi k SET uygulanan_malzeme_no = b.uygulanan, is_emri_id = b.is_emri, die_id = b.die
+       FROM unnest($2::uuid[], $3::int[], $4::int[], $5::int[]) AS b(id, uygulanan, is_emri, die) WHERE k.talep_id = $1 AND k.id = b.id`,
+    [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId), baglar.map((b) => b.dieId)],
   );
 }
 // Talepteki kalem sırasıyla: sıra burada verilir, PostgreSQL ORDER BY olmadan sıra garantisi vermez (kalem bağları ekranda bu sırayla).
 export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
   return db.sorgu(
-    `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId"
-       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL)
+    `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId", die_id AS "dieId"
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL OR die_id IS NOT NULL)
       ORDER BY talep_id, sira`,
     [talepIdleri],
+  );
+}
+
+// 2428: dış işlem emrine bağlı talep kalemleri. Emre bağlı belgede bağ kalemin die_id'si ya da (DIE'den önce açılmış talepte) is_emri_id'sidir.
+export interface DieTalepKalemi { talepId: string; talepNo: string; kalemId: string; ad: string; miktar: string | null; birim: string; durum: TalepDurumu }
+export function dieTalepKalemleri(db: Db, dieId: number, isEmriId: number | null): Promise<DieTalepKalemi[]> {
+  return db.sorgu(
+    `SELECT k.talep_id AS "talepId", t.no AS "talepNo", k.id AS "kalemId", k.ad, k.miktar::text AS miktar, k.birim, t.durum
+       FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id
+      WHERE k.die_id = $1 OR ($2::int IS NOT NULL AND k.is_emri_id = $2)
+      ORDER BY t.olusturma, t.id, k.sira`,
+    [dieId, isEmriId],
+  );
+}
+// Sipariş satırının DIE'si kalemden okunur (sipariş satırında DIE sütunu yok); emre bağlı satır is_emri_id'siyle de gelir.
+export interface DieSiparisSatiri { id: number; talepId: string; siparisNo: string | null; miktar: string; birim: string; tedarikciAdi: string | null }
+export function dieSiparisSatirlari(db: Db, dieId: number, isEmriId: number | null): Promise<DieSiparisSatiri[]> {
+  return db.sorgu(
+    `SELECT s.id, s.talep_id AS "talepId", nullif(p.siparis_no, '') AS "siparisNo", s.miktar::text AS miktar, s.birim,
+            nullif(q.tedarikci_adi, '') AS "tedarikciAdi"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+      WHERE k.die_id = $1 OR ($2::int IS NOT NULL AND s.is_emri_id = $2)
+      ORDER BY s.id`,
+    [dieId, isEmriId],
+  );
+}
+// Parti belgelerinin sipariş satırı: belge başına en son, iptal olmayan talepten.
+export function dieSiparisSatirIdleri(db: Db, dieIdleri: readonly number[]): Promise<{ dieId: number; id: number }[]> {
+  if (dieIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT DISTINCT ON (k.die_id) k.die_id AS "dieId", s.id
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       JOIN satin_alma_talep t ON t.id = s.talep_id AND t.durum <> 'iptal'
+      WHERE k.die_id = ANY($1::int[])
+      ORDER BY k.die_id, s.id DESC`,
+    [dieIdleri],
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcYazimi, MalzemeSecenekleriCevabi, OnTalep, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
@@ -17,7 +17,7 @@ interface KalemTaslagi {
   anahtar: string; kart: KartSecenegi | null; serbest: boolean; ad: string; birim: string; miktar: string; aciklama: string;
   uygulanan: Uygulanan | null; isEmriId: number | null; kaynak: string | null;
 }
-const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet' };
+const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (): KalemTaslagi => ({
   anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null,
 });
@@ -179,7 +179,7 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
   const bagli = kalemler.some((k) => k.isEmriId !== null);
   const emirler = useQuery({ queryKey: anahtarlar.acikEmirler, queryFn: () => cagri.get('/satin-alma-acik-emirler', SURE) });
   const gonder = useMutation({
-    mutationFn: (govde: HizliAcYazimi) =>
+    mutationFn: (govde: HizliAcGovdesi) =>
       tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/hizli-ac', { govde, ...deneme, ...SURE }), { ...SURE, istekKimligi: govde.id }),
     onSuccess: (t) => {
       bildir('tamam', `${t.no} açıldı; satın almaya düştü.`);

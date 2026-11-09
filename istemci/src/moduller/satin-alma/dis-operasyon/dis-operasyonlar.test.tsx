@@ -11,7 +11,7 @@ const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govd
 const satir = (ek: Partial<DisOperasyon>): DisOperasyon => ({
   isEmriId: 1, uretimEmriId: 11, emirNo: 'UE-2026-001', urun: 'Deneme flanş', opNo: 30, adim: 'Kaplama', firmaId: 3, firmaAdi: 'Deneme Kaplama', planlananGidis: '2026-10-05',
   gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, gecikmeSonDonus: 2,
-  gecikmeAgirlikli: 2, siparisSatirId: null, fasonKonumId: null, sirada: true, ...ek,
+  gecikmeAgirlikli: 2, siparisSatirId: null, fasonKonumId: null, sirada: true, dieId: null, dieNo: null, durum: null, ...ek,
 });
 
 function MalKabulSahte() {
@@ -44,13 +44,13 @@ function ac(liste: () => Response, islemler: string[] = ['satin-alma.yaz'], komu
   );
   return istekler;
 }
-const liste = (...operasyonlar: DisOperasyon[]) => () => json(200, { hazir: true, operasyonlar } satisfies DisOperasyonlarCevabi);
+const liste = (...operasyonlar: DisOperasyon[]) => () => json(200, { hazir: true, operasyonlar, partiOperasyonlari: [] } satisfies DisOperasyonlarCevabi);
 const satirOf = (emirNo: string) => screen.getByText(emirNo).closest('tr') as HTMLElement;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Dış operasyonlar (#542)', () => {
   it('üretim emirleri bağlı değilken liste yerine bağlantının olmadığını söyler', async () => {
-    ac(() => json(200, { hazir: false, operasyonlar: [] } satisfies DisOperasyonlarCevabi));
+    ac(() => json(200, { hazir: false, operasyonlar: [], partiOperasyonlari: [] } satisfies DisOperasyonlarCevabi));
     expect(await screen.findByText(/bağlantı henüz kurulmadı/)).toBeTruthy();
   });
 

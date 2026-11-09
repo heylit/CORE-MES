@@ -158,7 +158,12 @@ export const ILETILER = {
   kapatmaVar: 'Siparişin kalanı zaten kapatıldı ya da sipariş iptal edildi.',
   kapatmaKalanYok: 'Siparişin bütün satırları teslim alındı; kapatılacak kalan yok.',
   numaraUzun: 'Numara kuralı çok uzun numara üretti; Sistem ayarlarındaki numara kuralını kısaltın.',
-  bagYalnizHizmette: 'Uygulanan parça ve fason adım yalnız hizmet talebinde yazılır.',
+  bagYalnizHizmette: 'Uygulanan parça ve fason adım yalnız hizmet ve fason talebinde yazılır.',
+  partiYalnizFasonda: 'Stoktaki parti yalnız fason talebinde seçilir.',
+  fasonKaynakTek: 'Fason kalemi ya üretim emrinin fason adımını ya da stoktaki partiyi taşır; ikisinden biri seçilmeli.',
+  fasonIslemYok: 'Stoktaki parti için yapılacak işlem (hizmet kartı) seçilmeli.',
+  fasonParcaYok: 'Stoktaki parti için işlem uygulanacak parça seçilmeli.',
+  fasonAdetTam: 'Stoktaki partinin fason adedi pozitif tam sayı olmalı.',
   uygulananKartYok: 'Uygulanan parça ya da malzeme kartı bulunamadı.',
   uygulananHizmet: 'Uygulanan kart bir parça ya da malzeme olmalı; hizmet kartı seçilemez.',
   fasonOnTalepYok: 'Bu fason adım için ön talep yok: emir kapandı, adım bitti ya da talebi zaten açıldı. Sayfayı yenileyin.',
@@ -518,6 +523,7 @@ export const TALEPTE_SECILEN_TURLER = ['hammadde', 'yarimamul', 'mamul', 'sarf',
 export const TALEP_TURU_KARTLARI = {
   malzeme: { turler: TALEPTE_SECILEN_TURLER, hizmetYonu: undefined },
   hizmet: { turler: ['hizmet'] as const, hizmetYonu: 'alinan' as const },
+  fason: { turler: ['hizmet'] as const, hizmetYonu: 'alinan' as const },
 } satisfies Record<TalepTuru, { turler: readonly string[]; hizmetYonu: 'alinan' | undefined }>;
 export function talepKartiReddi(
   kart: (BaglanacakKart & { tur: string; hizmetYonu?: string | null }) | undefined, talepTuru: TalepTuru = 'malzeme',
@@ -535,7 +541,7 @@ export function satinAlinabilirKartReddi(kart: Parameters<typeof talepKartiReddi
   return malzeme === null || talepKartiReddi(kart, 'hizmet') === null ? null : malzeme;
 }
 // #1192: kartsız kalemin kategorisi talep türünden gelir; kartlıda kategori karttandır.
-export const KARTSIZ_KATEGORI: Record<TalepTuru, string> = { malzeme: '', hizmet: 'Hizmet' };
+export const KARTSIZ_KATEGORI: Record<TalepTuru, string> = { malzeme: '', hizmet: 'Hizmet', fason: 'Fason' };
 export function hizliKalemReddi(k: Pick<HizliKalem, 'malzemeNo' | 'ad' | 'birim'>): string | null {
   if (k.malzemeNo !== null) return null;
   if (k.ad === '') return ILETILER.hizliKalemBos;
@@ -933,18 +939,38 @@ export function planOnTalepAdaylari(g: PlanOnTalepGirdisi): PlanOnTalepAdayi[] {
     }];
   });
 }
-// Uygulanan parça ve fason adım yalnız hizmet talebindedir; bir fason adım bir talepte bir kez geçer ve talebin emri seçiliyse o emrindir.
+// Uygulanan parça ve fason adım yalnız hizmet ve fason talebindedir; bir fason adım bir talepte bir kez geçer ve talebin emri seçiliyse o emrindir.
 export function hizliBagReddi(
   tur: TalepTuru, kalemler: readonly HizliKalem[], emirId: number | null, fasonEmri: (isEmriId: number) => number | undefined,
 ): string | null {
   const bagli = kalemler.filter((k) => k.uygulananMalzemeNo !== null || k.isEmriId !== null);
-  if (bagli.length > 0 && tur !== 'hizmet') return ILETILER.bagYalnizHizmette;
+  if (bagli.length > 0 && tur === 'malzeme') return ILETILER.bagYalnizHizmette;
   const isler = kalemler.flatMap((k) => (k.isEmriId === null ? [] : [k.isEmriId]));
   if (new Set(isler).size !== isler.length) return ILETILER.fasonTekrar;
   for (const i of isler) {
     const emir = fasonEmri(i);
     if (emir === undefined) return ILETILER.fasonOnTalepYok;
     if (emirId !== null && emir !== emirId) return ILETILER.fasonEmirFarkli;
+  }
+  return null;
+}
+// SA-FAS-1 (2428): fason kalemi tek kaynak taşır: emrin fason adımı ya da stoktaki parti. Partide işlem (hizmet kartı), uygulanan parça
+// ve tam sayı adet zorunludur; parti ve konum yalnız fason talebindedir. Partinin stokta varlığını gidişte stok denetler (katman sırası).
+export function fasonKalemReddi(tur: TalepTuru, kalemler: readonly HizliKalem[]): { ileti: string; sira: number } | null {
+  for (const [sira, k] of kalemler.entries()) {
+    if (tur !== 'fason') {
+      if (k.partiId !== null || k.konumId !== null) return { ileti: ILETILER.partiYalnizFasonda, sira };
+      continue;
+    }
+    if ((k.isEmriId === null) === (k.partiId === null)) return { ileti: ILETILER.fasonKaynakTek, sira };
+    if (k.partiId === null) {
+      if (k.konumId !== null) return { ileti: ILETILER.partiYalnizFasonda, sira };
+      continue;
+    }
+    if (k.malzemeNo === null) return { ileti: ILETILER.fasonIslemYok, sira };
+    if (k.uygulananMalzemeNo === null) return { ileti: ILETILER.fasonParcaYok, sira };
+    const adet = Number(k.miktar);
+    if (!Number.isInteger(adet) || adet <= 0 || adet > 2147483647) return { ileti: ILETILER.fasonAdetTam, sira };
   }
   return null;
 }

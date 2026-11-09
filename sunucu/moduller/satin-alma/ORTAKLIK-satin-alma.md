@@ -77,6 +77,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 - rota/kalite: GKK sonucu `gkkSonuclari` ile okunur (henüz yok).
 - Başka modül `satin-alma` ithal etmez (`disari.ts` yok).
 - `uretim-emirleri` (`uretim_emirleri_is_emri.id`, kart #542): hizmet siparişi satırı `satin_alma_siparis_satiri.is_emri_id` ile iş emrine bağlanır (yabancı anahtar). Fason tarihleri ve firma iş emrindedir (sahibi üretim emirleri); satın alma okur.
+- `uretim-emirleri` (`uretim_emirleri_dis_islem_emri.id`, 2428): fason talep kalemi `satin_alma_talep_kalemi.die_id` ile dış işlem emrine bağlanır (yabancı anahtar, ON DELETE SET NULL). Belge, durumu ve hareketleri üretim emirlerinindir; satın alma `dieAc`, `dieListesi`, `dieOku` ile açar ve okur. Parti ve konum kimliği belgede (sahibi stok).
 - `finans` belge (D6 b): siparişe bağlı alış faturası finansın `finans_belge.satin_alma_talep_id`, `satin_alma_teklif_id` sütunlarındadır (sahibi finans); satın alma bağı `belgeSiparisBagla`, listeyi `alisBelgeleri` ile alır, tutar almaz.
 
 ## Doğal sahibi başka modül olabilecekler
