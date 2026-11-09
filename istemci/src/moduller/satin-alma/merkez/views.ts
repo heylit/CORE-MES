@@ -15,7 +15,7 @@ import {
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
-import { inlineBulkHTML } from "./ui.ts";
+import { geriDugmesiHTML, inlineBulkHTML } from "./ui.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 export function render(): void {
@@ -124,7 +124,7 @@ function viewDash(): string {
   const reqs = Object.values(S.requests);
   if (!reqs.length && !Object.keys(S.suppliers).length) return `
     <div class="phead"><div><h1>Satın alma panosu</h1><p class="lead">Talepleri, teklifleri, kararları ve teslimatları tek yerde toplayın. Her alım; malzeme fiyat geçmişine, tedarikçi karnesine ve raporlara veri olarak eklenir.</p></div></div>
-    <div class="panel">${empty("Henüz kayıt yok", "Bir satın alma talebi açarak başlayın. Kalemler malzeme kataloğuna, teklifler fiyat geçmişine kendiliğinden işlenir.", '<button class="btn primary" data-act="new-request">Yeni talep aç</button><button class="btn" data-act="new-supplier">Tedarikçi ekle</button>')}</div>`;
+    <div class="panel">${empty("Henüz kayıt yok", "Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer.", '<button class="btn" data-act="new-supplier">Tedarikçi ekle</button>')}</div>`;
   const t = todayStr(), year = t.slice(0, 4), month = t.slice(0, 7);
   const open = reqs.filter(r => OPEN.includes(r.status));
   const urgent = open.filter(r => r.priority === "urgent").length;
@@ -245,7 +245,7 @@ function filteredRequests(): PurchaseRequest[] {
   if (V.prio) list = list.filter(r => (r.priority || "normal") === V.prio);
   if (V.dept) list = list.filter(r => norm(r.department) === norm(V.dept));
   const q = norm(V.q);
-  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, ...(r.items || []).map(i => i.name), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
+  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, r.uretimEmriNo ?? "", ...(r.items || []).map(i => i.name), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
   const po: Record<Priority, number> = { urgent: 0, normal: 1, low: 2 };
   const key = SORTS[V.sort];
   if (key) return list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * V.dir; });
@@ -267,12 +267,12 @@ function viewRequests(): string {
     <div class="seg" role="group" aria-label="Görünüm"><button data-act="view" data-v="list" aria-pressed="${!board}">Liste</button><button data-act="view" data-v="board" aria-pressed="${board}">Akış panosu</button></div></div>
   ${board ? "" : `<div class="chips qf" role="group" aria-label="Durum">${STATUS_FILTERS.map(([k, l, f]) => `<button class="chip" data-act="status-chip" data-v="${k}" aria-pressed="${V.status === k}">${l} <b class="num">${all.filter(f).length}</b></button>`).join("")}</div>`}
   <div class="row" data-sa-y="2">
-    <div data-sa-y="3"><input id="req-search" type="search" placeholder="No, talep, kalem veya tedarikçi" value="${esc(V.q)}" data-in="req-search" aria-label="Taleplerde ara"></div>
+    <div data-sa-y="3"><input id="req-search" type="search" placeholder="No, talep, kalem, tedarikçi ya da emir no" value="${esc(V.q)}" data-in="req-search" aria-label="Taleplerde ara"></div>
 
     <div data-sa-y="42"><select data-ch="prio-filter" aria-label="Öncelik"><option value="">Her öncelik</option>${Object.entries(PRIO).map(([k, l]) => `<option value="${k}" ${V.prio === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div data-sa-y="43"><select data-ch="dept-filter" aria-label="Birim"><option value="">Tüm birimler</option>${depts.map(d => `<option ${norm(V.dept) === norm(d) ? "selected" : ""}>${esc(d)}</option>`).join("")}</select></div>
   </div>
-  ${!all.length ? `<div class="panel">${empty("Henüz talep yok", "Malzeme veya hizmet ihtiyacını kalemleriyle girin. Daha önce alınmış kalemler için son fiyat ve tedarikçiler otomatik gelir.", '<button class="btn primary" data-act="new-request">Yeni talep aç</button>')}</div>`
+  ${!all.length ? `<div class="panel">${empty("Henüz talep yok", "Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer.")}</div>`
       : board ? boardHTML() : `<div class="panel">${reqTable(list, false, true)}</div>`}`;
 }
 function boardHTML(): string {
@@ -391,7 +391,7 @@ function viewRequest(): string {
     </section>`;
   };
   return `
-  <div class="crumb"><button data-act="go" data-page="requests">Talepler</button> / <span class="num">${esc(r.no)}</span></div>
+  ${geriDugmesiHTML(r.no)}
   <div class="rhead">
     <div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
       <p class="rmeta">${meta.map(m => `<span>${m}</span>`).join("")}${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
@@ -423,7 +423,6 @@ function reqMenuHTML(r: PurchaseRequest): string {
     ["req-edit", "Talebi düzenle"],
     ...(open && (r.items || []).length ? [["rfq", "Teklif iste"] as [string, string]] : []),
     ...(r.award ? [["approval-form", "Onay formunu göster"] as [string, string]] : []),
-    ["req-dup", "Tekrar talep et (kopyala)"],
     // Teslim alınan talebin durumu elle değişmez, yalnız taslak silinir (SAT-07, SAT-66); sunucunun reddedeceği işlem menüde durmaz.
     ...(r.status !== "received" ? [["req-status", "Durumu elle değiştir"] as [string, string]] : []),
     ...(r.status !== "cancelled" && r.status !== "received" ? [["req-cancel", "Talebi iptal et"] as [string, string]] : []),
@@ -569,6 +568,7 @@ function tabCompare(r: PurchaseRequest, detay = false): string {
       <ul data-sa-y="49">${ev.split.plan.groups.map(g => `<li>${esc(supName(g.x.q))}: ${g.items.map(it => esc(it.name)).join(", ")}${g.extras > 0.5 ? ` <span class="muted small">(+${money(g.extras, "TRY", 0)} nakliye ve masraf)</span>` : ""}${g.late ? ` <span class="flag bad">ihtiyaç tarihini ${g.late} gün kaçırır</span>` : ""}</li>`).join("")}</ul>
       <div class="row" data-sa-y="16"><button class="btn sm" data-act="split-review">Dağılımı karar ekranında incele</button><button class="btn sm" data-act="paylastir-git">Miktarı bölerek dene</button><span class="small muted">Ayrı siparişler, ayrı teslimat takibi gerektirir.</span></div></div>` : ""}
     <details class="adv" data-adv="matrix" ${UI.adv.matrix ? "open" : ""}><summary>Kalem kalem karşılaştırma tablosu</summary><section class="panel"><div class="panel-h"><h2>Kalem ve şart karşılaştırması</h2><span class="spacer"></span><button class="btn sm" data-act="csv">CSV indir</button></div>${matrixHTML(r, ev)}</section></details>
+    ${faizUyarisi(ev.all.filter(x => x.c.faizYok).map(x => x.q.currency))}
     <p class="small muted">Tutarlar KDV hariç. Net maliyet: vade etkisi dahil, ${OPEN.includes(r.status) ? "güncel" : "sipariş günü"} kurla TL. Her teklifin adım adım hesabı için "Hesabı göster".</p>
   </div>`;
 }
@@ -632,6 +632,11 @@ export function rankHTML(r: PurchaseRequest, ev: Evaluation): string {
   }).join("")}</ol>` : `<div class="empty">Değerlendirmeye uygun teklif yok. Fiyatları ve teknik uygunluk işaretini kontrol edin.</div>`}
   ${off.length ? `<div class="panel-f small muted">Sıralama dışı: ${off.map(x => esc(supName(x.q)) + (x.q.compliant === false ? " (teknik uygun değil)" : " (fiyat girilmemiş)")).join(", ")}</div>` : ""}`;
 }
+// Finansta faiz yoksa vade sıfır faizle indirgenir (çarpan 1); sessiz kalırsa vade girilmemiş gibi görünür.
+export function faizUyarisi(paraBirimleri: string[]): string {
+  const pb = [...new Set(paraBirimleri)];
+  return pb.length ? `<div class="flag warn" data-sa-faiz-yok>${esc(pb.join(", "))} faizi Finans'ta girilmemiş; vade bu tekliflerde hesaba katılmadı. Finans > Ayarlar > Kur ve faiz dosyasından faiz girilince karşılaştırma vadeyi de hesaba katar.</div>` : "";
+}
 function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   const cols = ev.all, items = r.items || [];
   const eligSet = new Set(ev.elig.map(x => x.q.id));
@@ -665,7 +670,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   h += row(OPEN.includes(r.status) ? "Kur (güncel)" : "Kur (sipariş günü)", cols.map(x => x.q.currency === "TRY" ? "–" : `${nfx.format(x.c.rate)}${isNum(x.q.fxRate) && Math.abs(x.q.fxRate - x.c.rate) > 1e-6 ? `<span class="sub">teklif günü ${nfx.format(x.q.fxRate)}</span>` : ""}`));
   h += row("Toplam TL", cols.map(x => money(x.c.totalTRY)), cols.map(x => x.c.covered === items.length ? x.c.totalTRY : null), "min", "key");
   h += row("Ödeme şekli", cols.map(x => payText(x.q)), cols.map(x => (parseNum(x.q.payDays) || 0) * (1 - clamp((parseNum(x.q.advancePct) || 0) / 100, 0, 1))), "max", "wrap");
-  h += row("Vade avantajı", cols.map(x => x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
+  h += row("Vade avantajı", cols.map(x => x.c.faizYok ? "faiz yok" : x.c.vadeGain > 0.5 ? money(x.c.vadeGain) : "–"));
   h += row("Net bugünkü maliyet", cols.map(x => money(x.c.pvTRY)), cols.map(x => x.c.covered === items.length ? x.c.pvTRY : null), "min", "key");
   h += sec("Teslimat");
   h += row("Termin", cols.map(x => { const l = parseNum(x.q.leadDays); const late = lateBy(r, x.q); return l === null ? "–" : `${l} gün${late ? `<span class="sub"><span class="flag bad">${late} gün geç</span></span>` : ""}`; }), cols.map(x => parseNum(x.q.leadDays)), "min");
@@ -795,14 +800,15 @@ function teslimYontemiHTML(r: PurchaseRequest): string {
   const dugme = (v: string, l: string) => `<button data-act="teslim-yontemi" data-v="${v}" aria-pressed="${r.teslimYontemi === v}">${l}</button>`;
   return `<div class="row" data-sa-teslim-yontemi><span class="small">Teslim</span><div class="seg" role="group" aria-label="Teslim yöntemi">${dugme("firma_getirir", "Tedarikçi getirir")}${dugme("biz_alacagiz", "Biz alacağız")}</div><span class="small muted">${r.teslimYontemi === "biz_alacagiz" ? "Sipariş sevkiyatta tedarikçiden alım olarak bekler." : "Biz alacaksak sipariş sevkiyatta alım olarak bekler."}</span></div>`;
 }
-function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
+export function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
   const selQ = (r.quotes || []).find(q => q.id === a.quoteId);
   const ld = selQ ? parseNum(selQ.leadDays) : null;
-  const expDefault = a.expectedDate || (a.orderDate && ld !== null ? addDays(a.orderDate, ld) : "");
+  // Sipariş verilmeden sipariş tarihi boştur ama alan bugünü gösterir; öneri de ondan sayılır (boş kalıp termin yeniden girilmesin).
+  const expDefault = a.expectedDate || (ld !== null ? addDays(a.orderDate || todayStr(), ld) : "");
   return `<p class="small muted">Sipariş no: ${a.orderNo ? `<b>${esc(a.orderNo)}</b>` : "sipariş verilince CORE verir (numara kuralı)"}${logoRozeti(a.logo)}</p><div class="grid g3">
       <label class="f"><span>Logo / tedarikçi no</span><input type="text" id="o-po" value="${esc(a.poNo || "")}"></label>
       <label class="f"><span>Sipariş tarihi</span><input type="date" id="o-date" value="${esc(a.orderDate || todayStr())}"></label>
-      <label class="f"><span>Beklenen teslim <small>— boşsa termine göre</small></span><input type="date" id="o-exp" value="${esc(expDefault)}"></label>
+      <label class="f"><span>Beklenen teslim <small>— termine göre önerildi</small></span><input type="date" id="o-exp" value="${esc(expDefault)}"${ld !== null ? ` data-termin="${ld}" data-oneri="${esc(a.expectedDate ? "" : expDefault)}"` : ""}></label>
     </div>${selQ ? `<div class="row"><button class="btn sm" data-act="po-text" data-qid="${selQ.id}">Sipariş metni</button><span class="small muted">Tedarikçiye gönderilecek sipariş e-postası</span></div>` : ""}`;
 }
 /* kalem bazlı kararda her tedarikçiye ayrı sipariş satırı */
@@ -812,9 +818,9 @@ function ordersFormHTML(r: PurchaseRequest, orders: OrderInfo[]): string {
     <td class="num">${o.orderNo ? esc(o.orderNo) : '<span class="muted">sipariş verilince</span>'}${logoRozeti(o.logo)}</td>
     <td><input type="text" data-of="poNo" value="${esc(o.poNo)}"></td>
     <td><input type="date" data-of="orderDate" value="${esc(o.orderDate || todayStr())}"></td>
-    <td><input type="date" data-of="expectedDate" value="${esc(o.expectedDate)}" title="Boşsa sipariş tarihi + termin"></td>
+    <td>${(() => { const oneri = !o.expectedDate && ld !== null ? addDays(o.orderDate || todayStr(), ld) : ""; return `<input type="date" data-of="expectedDate" value="${esc(o.expectedDate || oneri)}" title="Sipariş tarihi + termin"${ld !== null ? ` data-termin="${ld}" data-oneri="${esc(oneri)}"` : ""}>`; })()}</td>
     <td class="acts"><button class="btn sm" data-act="po-text" data-qid="${o.qid}">Sipariş metni</button></td></tr>`; }).join("")}
-  </tbody></table></div><p class="small muted">Beklenen teslim boş bırakılırsa sipariş tarihine termin eklenir.</p>`;
+  </tbody></table></div><p class="small muted">Beklenen teslim sipariş tarihi + terminle önerilir; elle değiştirilebilir.</p>`;
 }
 // TMI: teslim stokta mal kabul belgesiyle alınır, kalite GKK adımından gelir; satın almada yalnız görüntülenir (SAT-37, SAT-38).
 function teslimBilgisiHTML(a: { deliveredDate?: string; quality?: Quality; expectedDate?: string }, orders: OrderInfo[], isSplit: boolean): string {

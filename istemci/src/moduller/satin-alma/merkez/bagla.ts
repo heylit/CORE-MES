@@ -6,8 +6,8 @@
 import "./styles.css";
 import "./yerlesim.css";
 import { setOnaylayabilir, setRole, type Role } from "./roles.ts";
-import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
-import { bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, requestModal, toast, type BildirimYolu } from "./ui.ts";
+import { UNDO, V, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
+import { AYRINTI, bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, toast, type BildirimYolu } from "./ui.ts";
 import { onAfterRender, render } from "./views.ts";
 
 // Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
@@ -24,14 +24,14 @@ const ISKELET = `<div class="app">
       <div class="market" id="market" aria-label="Kurlar ve faiz"></div>
       <span class="spacer"></span>
       <span class="flag warn" id="kayit-uyari" role="status" hidden></span>
-      <button class="btn primary" data-act="new-request">Yeni talep</button>
     </div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
 </div>`;
 
 export type MerkezSayfasi = Page;
-export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string) => void; onaylayabilir?: boolean; bildirim?: BildirimYolu }
+// git: adresi değiştirir; yerine true ise tarayıcı geçmişine yeni kayıt eklemez.
+export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string; git: (yol: string, yerine?: boolean) => void; onaylayabilir?: boolean; bildirim?: BildirimYolu }
 
 // Prototip sayfası → ikinci menü yolu. Ayrıntı sayfası ait olduğu listenin yolundadır; talep ayrıntısı geldiği yolda kalır.
 const YOLLAR: Partial<Record<Page, string>> = {
@@ -41,6 +41,13 @@ const YOLLAR: Partial<Record<Page, string>> = {
 // Talep edenin ekranı şimdilik menüde yok (kullanıcı kararı); rol yine prototipte durur, iş kutusu yoluna düşer.
 const ANA_YOL: Record<Role, string> = { buyer: "/satin-alma", requester: "/satin-alma", approver: "/satin-alma/onaylar" };
 export const sayfaYolu = (sayfa: Page, rol: Role): string | null => (sayfa === "dash" ? ANA_YOL[rol] : YOLLAR[sayfa] ?? null);
+
+// Talep ayrıntısı geldiği madde yolunda ?talep= ile durur (2412): tarayıcının geri tuşu ayrıntıdan listeye döner, ileri tuşu yeniden açar.
+export function hedefAdres(sayfa: Page, id: string | null, rol: Role, yol: string): string | null {
+  if (sayfa === "request" && id) return `${yol}?talep=${encodeURIComponent(id)}`;
+  return sayfaYolu(sayfa, rol) ?? yol;
+}
+const simdikiAdres = (): string => window.location.pathname + window.location.search;
 
 // Açık ekran başka kişinin (Taleplerim, ana sayfa) açtığı talebi görsün diye sunucudan yenilenir. Yenileme ekranı yeniden çizer;
 // kullanıcı yazarken, pencere açıkken ya da geri al beklerken yapılmaz, girdisi silinmez.
@@ -55,16 +62,23 @@ export function yenilenebilirMi(kok: HTMLElement): boolean {
 let kancalar = false;
 let ilkYukleme: Promise<void> | null = null;
 let etkin: BaglamaSecenegi | null = null;
+// Ayrıntıyı merkezin kendisi açtıysa (listeden, iş kutusundan) "geri" düğmesi tarayıcı geçmişinde bir adım döner; adresle gelindiyse listeye gider.
+let icerdenAcilan: string | null = null;
 
 function kancalariKur(): void {
   if (kancalar) return;
   kancalar = true;
   registerUIHooks();
-  // İçeride sayfa değişince adres madde yoluna güncellenir; madde yolu olmayan sayfa (talep ayrıntısı) adresi değiştirmez.
+  // İçeride sayfa değişince adres güncellenir: liste sayfası madde yoluna, talep ayrıntısı ?talep= ile. Aynı talebin adresi
+  // (Ctrl K'nın bölümlü adresi) geçmişe yeni kayıt eklemeden düzeltilir.
   onAfterRender(() => {
     if (!etkin) return;
-    const y = sayfaYolu(V.page, etkin.rol);
-    if (y !== null && y !== etkin.yol) etkin.git(y);
+    const y = hedefAdres(V.page, V.id, etkin.rol, etkin.yol);
+    const simdi = simdikiAdres();
+    if (y === null || y === simdi) return;
+    const ayniTalep = V.page === "request" && new URLSearchParams(window.location.search).get("talep") === V.id;
+    if (V.page === "request" && !ayniTalep) icerdenAcilan = V.id;
+    etkin.git(y, ayniTalep);
   });
   // Yalnız modül sayfada bağlıyken çizilir: açılış verisi başka bir TMI sayfasındayken gelirse çizim atlanır.
   setRenderer(() => { if (document.querySelector("[data-sa-merkez]")) render(); });
@@ -93,11 +107,16 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   pencereKoku.className = "sa-kok sa-pencere-kok";
   pencereKoku.dataset.saMerkez = "1";
   document.body.append(pencereKoku);
-  // İçeriden gelinen ayrıntı sayfası (aynı madde yolunda) korunur; değilse maddenin ekranı açılır.
-  if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
+  // Adreste talep varsa ayrıntı açılır (yenileme, geri ve ileri tuşu); yoksa içeriden gelinen ayrıntı (aynı madde yolunda) korunur,
+  // değilse maddenin ekranı açılır.
+  const adrestekiTalep = new URLSearchParams(window.location.search).get("talep");
+  if (adrestekiTalep) { if (V.page !== "request" || V.id !== adrestekiTalep) { V.page = "request"; V.id = adrestekiTalep; V.tab = null; } }
+  else if (sayfaYolu(V.page, secenek.rol) !== secenek.yol) { V.page = secenek.sayfa; V.id = null; V.tab = null; }
   setRole(secenek.rol);
   setOnaylayabilir(secenek.onaylayabilir ?? false);
   etkin = secenek;
+  AYRINTI.donus = secenek.sayfa;
+  AYRINTI.geri = ayrintidanDon;
   bildirimYoluKur(secenek.bildirim ?? null);
   kancalariKur();
   if (!ilkYukleme) ilkYukleme = init(); else { render(); void yenile(); }
@@ -112,22 +131,33 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   };
 }
 
-// Ctrl K sonucu ya da komutu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle) ya da boş yeni talep penceresi.
-// Yazma pencerenin kendi ucundadır; açılış yetki vermez, yazamayan kişide pencere açılmaz.
-export interface MerkezAcilisi { talep: string | null; bolum: string | null; yeniTalep: boolean }
+// Ctrl K sonucu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle). Yeni talep merkezde açılmaz, Taleplerim'dedir (2405 a).
+export interface MerkezAcilisi { talep: string; bolum: string | null }
 export const ACILIS_BOLUMLERI = ["items", "quotes", "compare", "approval", "order", "delivery"] as const;
 
 export function acilisOku(adres: URLSearchParams): MerkezAcilisi | null {
   const talep = adres.get("talep");
   const bolum = adres.get("bolum");
-  const yeniTalep = adres.get("yeni") === "talep";
-  if (!talep && !yeniTalep) return null;
-  return { talep: talep || null, bolum: bolum && (ACILIS_BOLUMLERI as readonly string[]).includes(bolum) ? bolum : null, yeniTalep };
+  if (!talep) return null;
+  return { talep, bolum: bolum && (ACILIS_BOLUMLERI as readonly string[]).includes(bolum) ? bolum : null };
 }
 
 export function merkezAc(acilis: MerkezAcilisi): void {
-  const secenek = etkin;
-  if (!secenek) return;
-  if (acilis.talep) go("request", acilis.talep, acilis.bolum);
-  if (acilis.yeniTalep) void (ilkYukleme ?? Promise.resolve()).then(() => { if (etkin === secenek && canWrite()) requestModal(null); }, () => {});
+  if (!etkin) return;
+  if (V.page === "request" && V.id === acilis.talep && !acilis.bolum) return;
+  go("request", acilis.talep, acilis.bolum);
+}
+
+// Adres değişti (tarayıcının geri ya da ileri tuşu): adreste talep yoksa açık ayrıntı kapanır, maddenin ekranına dönülür.
+export function merkezAdresi(acilis: MerkezAcilisi | null): void {
+  if (!etkin) return;
+  if (acilis) { merkezAc(acilis); return; }
+  if (V.page === "request") { icerdenAcilan = null; go(etkin.sayfa); }
+}
+
+// Ayrıntının "geri" düğmesi: içeriden açıldıysa tarayıcı geçmişinde geri (liste kaydırması ve süzgeci yerinde kalır), değilse listeye.
+export function ayrintidanDon(): void {
+  if (!etkin) return;
+  if (icerdenAcilan !== null && icerdenAcilan === V.id) { icerdenAcilan = null; window.history.back(); return; }
+  go(etkin.sayfa);
 }

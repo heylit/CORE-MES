@@ -44,7 +44,7 @@ export function OnTalepKarti() {
   return (
     <Kart
       baslik="Ön talepler"
-      simge="rotate"
+      simge="list"
       {...(ozet === undefined ? {} : { baslikEki: ozet })}
       sag={<Dugme simge="next" onClick={() => void git('/taleplerim')}>Ön taleplere git</Dugme>}
     >

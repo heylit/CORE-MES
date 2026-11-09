@@ -152,7 +152,7 @@ export function katalogSunucuya(m: Material, surum: number | null): KatalogKayde
 }
 
 function ayarEkrana(a: Ayarlar): Settings {
-  const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: sayi(k.aylikFaizYuzdesi) ?? 0 }])) as Settings['currencies'];
+  const currencies = Object.fromEntries(a.kurlar.map((k) => [k.paraBirimi, { rate: sayi(k.kur), monthly: sayi(k.aylikFaizYuzdesi) }])) as Settings['currencies'];
   return {
     company: a.sirket, currencies,
     weights: { cost: a.agirliklar.maliyet, lead: a.agirliklar.termin, supplier: a.agirliklar.tedarikci, warranty: a.agirliklar.garanti },

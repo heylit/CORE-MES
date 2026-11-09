@@ -11,8 +11,11 @@ test.describe('3B sahne', () => {
   // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
   // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
   test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
-    // Yazılım çizicisinde ilk kare saniyeler sürer.
-    test.setTimeout(180_000);
+    // Yazılım çizicisinde ilk kare saniyeler sürer; CI'da g768'de 30 sn'yi aştığı görüldü (2418). Sahne başına bekleme 60 sn'dir,
+    // toplam süre altı sahnenin çoğu birkaç saniyede çizildiği için 240 sn içinde kalır. İlk kare süresi CI kaydına yazılır ki
+    // yavaşlama sınıra dayanmadan görülsün.
+    test.setTimeout(240_000);
+    const SAHNE_BEKLEME = 60_000;
     // Sahneler 3D seçilince çizilir; Kurulum ve Takım Ömrü 3D'de çarktır. Varsayılan 2B'de (kartlı akış) sürekli sahne yoktur (1843, 1921 a).
     await page.addInitScript(() => {
       (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla';
@@ -20,10 +23,11 @@ test.describe('3B sahne', () => {
     });
     for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
+      const baslangic = Date.now();
       // Kütüphane tezgâh cepleriyle açılır (1276 a); raf sahnesi Elimizdekiler'dedir.
       if (yol === 'kutuphane') await page.getByRole('button', { name: 'Elimizdekiler' }).click();
       const tuval = page.locator('.tc-cy-sahne-tuval').first();
-      await expect(tuval, yol).toBeVisible({ timeout: 30_000 });
+      await expect(tuval, yol).toBeVisible({ timeout: SAHNE_BEKLEME });
       await expect.poll(async () => tuval.evaluate((t: HTMLCanvasElement) => {
         // Tuvalin bağlamı görüntü aktarımıdır (bitmaprenderer); piksel, kopyası çizilen geçici tuvalden okunur.
         if (t.width === 0 || t.height === 0) return 0;
@@ -35,7 +39,10 @@ test.describe('3B sahne', () => {
         let dolu = 0;
         for (let i = 3; i < d.length; i += 4 * 97) if ((d[i] ?? 0) > 0) dolu++;
         return dolu;
-      }), { message: yol, timeout: 30_000 }).toBeGreaterThan(0);
+      }), { message: yol, timeout: SAHNE_BEKLEME }).toBeGreaterThan(0);
+      const sure = Date.now() - baslangic;
+      test.info().annotations.push({ type: 'ilk kare', description: `${yol} ${sure} ms` });
+      console.log(`3B sahne ilk kare: ${yol} ${sure} ms`);
     }
     expect(ag.hatalar).toEqual([]);
   });

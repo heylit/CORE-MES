@@ -602,8 +602,8 @@ export interface SatinAlmaUclari {
 
 // 1094 b: teklif karşılaştırmasının sunucudaki hesabı. Tutarlar TL ve ondalık metindir (2 basamak); puanlar 0-100.
 // Karar onaydaysa ya da sipariş verildiyse sabit kur ve faizle, değilse finansın bugünkü kuru ve faiziyle hesaplanır (1096 a).
-// Tedarikçi başarımı bilinmiyorsa (puan, teslim ve kalite verisi yok) null; o teklifte ağırlığı bilinen ölçütlere dağılır (2157).
-const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number(), tedarikci: z.number().nullable(), garanti: z.number() });
+// Tedarikçi başarımı bilinmiyorsa (puan, teslim ve kalite verisi yok) ya da termin girilmemişse null; o teklifte ağırlığı bilinen ölçütlere dağılır (2157).
+const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number().nullable(), tedarikci: z.number().nullable(), garanti: z.number() });
 export const degerlendirmeCevabi = z.object({
   kurKaynagi: z.enum(['sabit', 'guncel']),
   kurKilidi: z.string().nullable(),

@@ -9,9 +9,10 @@ import type { PurchaseRequest } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
 import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
-import { dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
+import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { nameOf } from "./store.ts";
+import { geriDugmesiHTML } from "./ui.ts";
 
 export type Role = "buyer" | "requester" | "approver";
 export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "Talep eden", approver: "Onaylayan" };
@@ -25,7 +26,7 @@ export function onaylayabilir(): boolean { return onayIslemi; }
 export function setOnaylayabilir(v: boolean): void { onayIslemi = v; }
 
 /* ================= satın alma: iş kutusu ================= */
-interface Job { r: PurchaseRequest; info: string; flag?: string; act: string; tab: string }
+interface Job { r: PurchaseRequest; info: string; flag?: string; act: string; tab: string; ret?: boolean; due?: string }
 function jobs(): Record<string, Job[]> {
   const t = todayStr(), set = settings();
   const g: Record<string, Job[]> = { quotes: [], decide: [], approval: [], order: [], delivery: [], draft: [] };
@@ -42,7 +43,7 @@ function jobs(): Record<string, Job[]> {
     }
     else if (r.status === "eval") {
       const aps = approvalState(r);
-      if (aps.state === "rejected") { g.decide!.push({ r, info: `Reddedildi: ${aps.last?.note || "gerekçe yok"}`, flag: '<span class="flag bad">ret</span>', act: "Gözden geçir", tab: "compare" }); continue; }
+      if (aps.state === "rejected") { g.decide!.push({ r, info: `Reddedildi: ${aps.last?.note || "gerekçe yok"}`, flag: '<span class="flag bad">ret</span>', act: "Gözden geçir", tab: "compare", ret: true }); continue; }
       const ev = nq ? evaluate(r) : null, top = ev?.ranking[0];
       const exp = (r.quotes || []).filter(q => q.validUntil && q.validUntil >= t && dayDiff(t, q.validUntil) <= 3).length;
       g.decide!.push({ r, info: top ? `${nq} teklif, önerilen ${supName(top.q)} ${money(top.c.pvTRY, "TRY", 0)}` : `${nq} teklif`, flag: exp ? `<span class="flag warn">${exp} teklifin süresi doluyor</span>` : needFlag, act: "Karar ver", tab: "compare" });
@@ -54,10 +55,13 @@ function jobs(): Record<string, Job[]> {
       const os = awardOrders(r).filter(o => !o.deliveredDate);
       const dues = os.map(o => orderDue(o)).filter(Boolean).sort();
       const late = dues[0] ? dayDiff(t, dues[0]) : null;
-      g.delivery!.push({ r, info: `${os.map(o => supName(o.q)).join(", ")}${dues[0] ? `, beklenen ${fmtDate(dues[0])}` : ""}`, flag: late !== null && late < 0 ? `<span class="flag bad">${-late} gün gecikti</span>` : late !== null && late <= 2 ? '<span class="flag warn">yakında</span>' : "", act: "Siparişi aç", tab: "decision" });
+      g.delivery!.push({ r, info: `${os.map(o => supName(o.q)).join(", ")}${dues[0] ? `, beklenen ${fmtDate(dues[0])}` : ""}`, flag: late !== null && late < 0 ? `<span class="flag bad">${-late} gün gecikti</span>` : late !== null && late <= 2 ? '<span class="flag warn">yakında</span>' : "", act: "Siparişi aç", tab: "decision", ...(dues[0] ? { due: dues[0] } : {}) });
     }
   }
   void set;
+  // Geri gönderilen karar en üstte: onaylayan bekliyor. Teslimat beklenen güne göre: en yakın gelecek önde.
+  g.decide!.sort((a, b) => Number(!!b.ret) - Number(!!a.ret));
+  g.delivery!.sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   return g;
 }
 /** İş kutusu sayısı (onayda bekleyenler hariç; onlar başkasının adımında) ve acil iş var mı */
@@ -76,10 +80,19 @@ const GROUPS: [string, string, string][] = [
   ["delivery", "Teslimat bekleyenler", "Siparişi verildi, teslim alınacak"],
   ["approval", "Onayda", "Onaylayanın kararı bekleniyor"],
 ];
+// Adımda bekleme son harekete göre (sunucu talep hareketi); hareket yoksa açılıştan. Bir günden az yazılmaz.
+export function adimdaGun(r: PurchaseRequest, simdi = Date.now()): number | null {
+  const son = Math.max(r.createdAt || 0, ...(r.log || []).map(h => h.at || 0));
+  if (!son) return null;
+  const gun = Math.floor((simdi - son) / 86400000);
+  return gun >= 1 ? gun : null;
+}
 function jobRow(j: Job, primary: boolean): string {
+  const gun = adimdaGun(j.r);
+  const info = gun === null ? j.info : `${j.info} · ${nf0.format(gun)} gündür bu adımda`;
   return `<li><button class="job" data-act="open-at" data-id="${j.r.id}" data-tab="${j.tab}">
     <span class="no num">${esc(j.r.no)}</span>
-    <span class="tt"><span class="ln">${prioDot(j.r.priority)}<b>${esc(j.r.title)}</b></span><span class="sub">${esc(j.info)}</span></span>
+    <span class="tt"><span class="ln">${prioDot(j.r.priority)}<b>${esc(j.r.title)}</b></span><span class="sub">${esc(info)}</span></span>
     <span class="fl">${j.flag || ""}</span>
     <span class="btn sm ${primary ? "primary" : ""}">${esc(j.act)}</span></button></li>`;
 }
@@ -87,10 +100,13 @@ export function viewInbox(): string {
   const g = jobs();
   const total = GROUPS.reduce((n, [k]) => n + (k === "approval" ? 0 : g[k]!.length), 0);
   const now = new Date();
-  const head = `<div class="phead"><div><h1>İş kutusu</h1><p class="lead">${now.toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })}. ${total ? `Sizi bekleyen ${total} iş var.` : "Sizi bekleyen iş yok."}</p></div></div>`;
+  const head = `<div class="phead"><div><h1>İş kutusu</h1><p class="lead">${now.toLocaleDateString("tr-TR", { day: "numeric", month: "long", weekday: "long" })}. ${total ? `Sizi bekleyen ${total} talep işi var.` : "Sizi bekleyen talep işi yok."}</p></div></div>`;
   const strip = panoSeridi();
-  if (!Object.keys(S.requests).length) return head + strip + `<div class="panel">${empty("Henüz talep yok", "İlk satın alma talebini oluşturun; teklif toplama, karşılaştırma ve onay adımları burada sırayla ilerler.", '<button class="btn primary" data-act="new-request">Yeni talep</button>')}</div>`;
-  const groups = GROUPS.filter(([k]) => g[k]!.length).map(([k, l, d], gi) => `<section class="panel jobs"><div class="panel-h"><h2>${l}</h2><span class="cnt">${g[k]!.length}</span><span class="sub">${d}</span></div>
+  if (!Object.keys(S.requests).length) return head + strip + `<div class="panel">${empty("Henüz talep yok", "Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer.")}</div>`;
+  const bugun = todayStr(), hafta = addDays(bugun, 7);
+  const buHafta = g.delivery!.filter(j => j.due && j.due >= bugun && j.due <= hafta).length;
+  const altYazi = (k: string, d: string) => (k === "delivery" && buHafta ? `${d}; bu hafta ${nf0.format(buHafta)} teslimat` : d);
+  const groups = GROUPS.filter(([k]) => g[k]!.length).map(([k, l, d], gi) => `<section class="panel jobs"><div class="panel-h"><h2>${l}</h2><span class="cnt">${g[k]!.length}</span><span class="sub">${altYazi(k, d)}</span></div>
     <ul class="joblist">${g[k]!.map(j => jobRow(j, gi === 0)).join("")}</ul></section>`).join("");
   return head + strip + `<div class="inbox">${groups || `<div class="panel">${empty("Bekleyen iş yok", "Tüm talepler ya tamamlandı ya da başkasının adımında.", '<button class="btn" data-act="go" data-page="requests">Tüm talepler</button>')}</div>`}${teslimPaneli()}</div>`;
 }
@@ -99,7 +115,7 @@ function panoSeridi(): string {
   const p = panoSayilari();
   // Her kutu sayısının listesini açar (2400): durumlar Talepler süzgecine, harcama Raporlar'a gider.
   const kutu = (v: string, k: string, d: string, hedef: string) =>
-    `<button type="button" data-act="pano-git" data-v="${hedef}"><div class="v">${v}</div><div class="k">${k}</div><div class="d">${d}</div></button>`;
+    `<button type="button" data-act="pano-git" data-v="${hedef}"><span class="v">${v}</span><span class="k">${k}</span><span class="d">${d}</span></button>`;
   return `<div class="strip" data-sa-pano>
     ${kutu(nf0.format(p.onayBekleyen), "Onay bekleyen", "onaylayanın kararında", "approval")}
     ${kutu(nf0.format(p.acikTalep), "Açık talep", "siparişe dönmemiş", "open")}
@@ -143,7 +159,7 @@ export function viewRequestRequester(r: PurchaseRequest): string {
   const idx = FLOW.indexOf(r.status);
   const tt = r.award ? awardTotals(r) : null;
   const orders = awardOrders(r);
-  return `<div class="crumb"><button data-act="go" data-page="dash">Taleplerim</button> / <span class="num">${esc(r.no)}</span></div>
+  return `${geriDugmesiHTML(r.no, "Taleplerime dön")}
   <div class="rhead"><div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
     <p class="rmeta"><span>${esc(r.department || "")}</span><span>İhtiyaç ${fmtDate(r.needDate)}</span><span>${prioDot(r.priority)}${PRIO[r.priority || "normal"]}</span></p></div>
     <div class="ract">${r.status === "draft" ? '<button class="btn" data-act="req-edit">Talebi düzenle</button>' : ""}${OPEN.includes(r.status) ? '<button class="btn ghost danger" data-act="req-cancel">İptal et</button>' : ""}</div></div>
@@ -172,7 +188,7 @@ export function viewApprovals(): string {
 export function viewApproval(r: PurchaseRequest): string {
   const tt = r.award ? awardTotals(r) : null;
   const aps = approvalState(r);
-  const back = '<div class="crumb"><button data-act="go" data-page="dash">Onay bekleyenler</button> / <span class="num">' + esc(r.no) + "</span></div>";
+  const back = geriDugmesiHTML(r.no, "Onay bekleyenlere dön");
   const head = `<div class="rhead"><div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
     <p class="rmeta"><span>${esc(r.department || "")}</span>${r.requester ? `<span>Talep eden ${esc(r.requester)}</span>` : ""}<span>İhtiyaç ${fmtDate(r.needDate)}</span>${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
     <div class="ract">${COMMITTED.includes(r.status) && r.award ? '<button class="btn" data-act="order-item-change">Siparişteki kalemi değiştir</button>' : ""}<button class="btn" data-act="approval-form">Onay formu</button></div></div>`;

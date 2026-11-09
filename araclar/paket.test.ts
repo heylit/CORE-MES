@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { AZAMI_GUNCELLEME, GUNCELLEME_PARCASI } from '#paylasilan/sozlesme/ayarlar.ts';
 import { AZAMI_DEGISIKLIK, AZAMI_DEGISIKLIK_METNI, calisanSurumSemasi, ortakAnahtar, paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  degisiklikleriAyikla, kartNoVarMi, onbellekListesi, ortakAnahtarMetni, paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi,
+  SUNUCUDA_KURULMAYAN, degisiklikleriAyikla, kartNoVarMi, paketBoyuDurumu, onbellekListesi, ortakAnahtarMetni, paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi,
   surumNotu, taramaSayilari,
 } from './paket.ts';
 
@@ -204,4 +206,32 @@ test('yapılamadı taraması bildirimden geçer; bilinmeyen durum bildirimi boza
   assert.deepEqual(yapilamadi.bildirim.tarama, { durum: 'yapilamadi', zaman: '2026-11-06T09:59:00.000Z' });
   const bozuk = { ...temel, tarama: { durum: 'belki', zaman: '2026-11-06T09:59:00.000Z' } } as unknown as Parameters<typeof paketKur>[0];
   assert.deepEqual(paketBasliginiCoz(paketKur(bozuk, Buffer.from('y'), privateKey), anahtar), { red: 'bildirimBozuk' });
+});
+
+test('paket boyu: sınırı aşan durur, %80 üstü uyarır (2419)', () => {
+  assert.equal(paketBoyuDurumu(80, 100), 'tamam');
+  assert.equal(paketBoyuDurumu(81, 100), 'uyari');
+  assert.equal(paketBoyuDurumu(100, 100), 'uyari');
+  assert.equal(paketBoyuDurumu(101, 100), 'asti');
+});
+
+test('sunucuya kurulmayanlar depodaki package.json\'da var; derleme ve çalışma paketleri kalır (2419)', () => {
+  const oku = (ad: string): unknown => JSON.parse(readFileSync(new URL(`../${ad}`, import.meta.url), 'utf8'));
+  const { kilit } = sunucuKurulumu(oku('package.json') as never, oku('package-lock.json') as never, SUNUCUDA_KURULMAYAN);
+  for (const ad of ['vite', '@vitejs/plugin-react', 'typescript', 'three-147', 'tesseract.js-core', '@tesseract.js-data/eng', 'exceljs', 'jsqr', 'fastify', 'pg', 'zod']) {
+    assert.ok(kilit.packages[`node_modules/${ad}`] !== undefined, `${ad} pakette kalmalı`);
+  }
+  for (const ad of SUNUCUDA_KURULMAYAN) assert.equal(kilit.packages[`node_modules/${ad}`], undefined, `${ad} pakete girmemeli`);
+});
+
+// Ekran paylaşılandan değer ithal edemez (zod, eslint kuralı); kopyası metinden okunup sözleşmeyle karşılaştırılır (2419).
+test('ekrandaki paket sınırı ve parça boyu sunucunun sözleşmesiyle aynı (2419)', () => {
+  const metin = readFileSync(new URL('../istemci/src/moduller/ayarlar/Guncelleme.tsx', import.meta.url), 'utf8');
+  const sayi = (ad: string): number => {
+    const e = new RegExp(`const ${ad} = (\\d+) \\* 1024(?: \\* 1024)?;`).exec(metin);
+    assert.ok(e !== null, `${ad} Guncelleme.tsx'te bulunamadı`);
+    return Number(e[1]) * (e[0].includes('1024 * 1024') ? 1024 * 1024 : 1024);
+  };
+  assert.equal(sayi('AZAMI_BAYT'), AZAMI_GUNCELLEME);
+  assert.equal(sayi('PARCA_BAYT'), GUNCELLEME_PARCASI);
 });

@@ -20,7 +20,7 @@ import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
-import { firmaOzeti, tumFirmalar } from '../musteri-tedarikci/disari.ts';
+import { firmaOzeti, karneOlayiYaz, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
 import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
@@ -36,7 +36,7 @@ import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedar
 import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
 import { numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { girisDurumu, girisGkkEngeli, girisNcrGovdesi } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
@@ -539,6 +539,18 @@ async function girisKaydi(db: Db, id: number): Promise<KmGirisKaydi> {
   return k;
 }
 
+// Kart 2406: lotu kapatan aşama tedarikçi karnesine lot olayı iter (1259 c); kararla aynı işlemdedir, biri yazılmazsa öteki de geri
+// alınır. Firması olmayan sipariş satırının (ya da siparişsiz kabulün) olayı yoktur.
+async function girisKarnesiniYaz(db: Db, id: number, siparisSatirId: number | null): Promise<void> {
+  if (siparisSatirId === null) return;
+  const [sp] = await siparisSatirlari(db, [siparisSatirId]);
+  if (sp === undefined || sp.firmaId === null) return;
+  const kararlar = await sorgular.girisKararlari(db, [id]);
+  const lot = girisKarneKarari(kararlar.find((k) => k.asama === 'gkk') ?? null, kararlar.find((k) => k.asama === 'karar') ?? null);
+  if (lot === null) return;
+  await karneOlayiYaz(db, { kaynak: 'kalite-merkezi', anahtar: GIRIS_KARNE_ANAHTARI(id), firmaId: sp.firmaId, zaman: lot.zaman, tur: 'lot', karar: lot.karar });
+}
+
 const girisAciklamasi = (k: KmGirisKaydi, ek: string, not: string | null): string => `${ek}: ${k.malKabulNo}${not === null ? '' : `. ${not}`}`;
 
 // 1252: GKK kabul ve hatalı verir; ikisi de karar bekleyeni kapatır. Kabul serbest olur ve mal kabul alanına geçer, hatalı karantinada
@@ -557,6 +569,7 @@ export async function girisGkk(db: Db, kullanici: Kullanici, id: number, g: KmGi
   await sorgular.girisKarariYaz(db, {
     malKabulSatirId: id, asama: 'gkk', kabulMiktar: g.kabul, hataliMiktar: g.hatali, karar: null, ncrKimlik: null, ncrNo: null, aciklama: g.not, kisiId: kullanici.id,
   });
+  await girisKarnesiniYaz(db, id, s.siparisSatirId);
   return { kayit: await girisKaydi(db, id) };
 }
 
@@ -582,6 +595,7 @@ export async function girisKarari(db: Db, kullanici: Kullanici, id: number, g: K
   await sorgular.girisKarariYaz(db, {
     malKabulSatirId: id, asama: 'karar', kabulMiktar: null, hataliMiktar: null, karar: g.karar, ncrKimlik: g.ncrKimlik, ncrNo: g.ncrNo, aciklama: g.not, kisiId: kullanici.id,
   });
+  await girisKarnesiniYaz(db, id, (await girisKontroluSatirlari(db, [id]))[0]?.siparisSatirId ?? null);
   return { kayit: await girisKaydi(db, id) };
 }
 

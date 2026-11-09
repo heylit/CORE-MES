@@ -3,7 +3,8 @@ import type { AcilisCevabi, Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, V, persistUndoable, UNDO } from './store.ts';
 import { openModal, toast } from './ui.ts';
-import { YENILEME_MS, acilisOku, merkezAc, merkeziBagla } from './bagla.ts';
+import { YENILEME_MS, acilisOku, ayrintidanDon, merkezAc, merkezAdresi, merkeziBagla } from './bagla.ts';
+import { go } from './ui.ts';
 
 const talep = (id: string, no: string): Talep => ({
   id, no, baslik: 'Deneme talep', birim: null, talepEdenKisiId: 5, talepEdenAdi: 'Deneme Kişi', teslimYontemi: null, uretimEmriId: null, uretimEmriNo: null, acanKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null,
@@ -99,11 +100,12 @@ describe('Merkez bağlama', () => {
     expect(f).toHaveBeenCalledTimes(once + 1);
   });
 
-  // 1237: Ctrl K sonucu talebi, komut yeni talep penceresini adresle açar.
-  it('açılış adresi: talep ayrıntısı bölümüyle açılır; yeni talep penceresi veri gelince açılır; bilinmeyen bölüm yok sayılır', async () => {
+  // 1237: Ctrl K sonucu talebi adresle açar. 2405 a: eski yeni talep adresi merkezde pencere açmaz.
+  it('açılış adresi: talep ayrıntısı bölümüyle açılır; bilinmeyen bölüm yok sayılır; yeni talep adresi yok sayılır', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     expect(acilisOku(new URLSearchParams(''))).toBeNull();
-    expect(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=boyle-yok`))).toEqual({ talep: ILK, bolum: null, yeniTalep: false });
+    expect(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=boyle-yok`))).toEqual({ talep: ILK, bolum: null });
+    expect(acilisOku(new URLSearchParams('yeni=talep'))).toBeNull();
     vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
     const kok = document.createElement('div');
     document.body.append(kok);
@@ -111,9 +113,55 @@ describe('Merkez bağlama', () => {
     merkezAc(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=order`))!);
     expect([V.page, V.id, V.tab]).toEqual(['request', ILK, 'order']);
     await vi.waitFor(() => expect(kok.querySelector('#main')?.textContent).toContain('ST-2026-001'));
-    merkezAc(acilisOku(new URLSearchParams('yeni=talep'))!);
-    await vi.waitFor(() => expect(document.querySelector('#modal-root')?.textContent).toContain('Yeni satın alma talebi'));
+    expect(kok.querySelector('[data-act="new-request"]')).toBeNull();
     kapat();
+  });
+
+  // 2412: talep ayrıntısı adreste durur; tarayıcının geri tuşu listeye döner, ileri tuşu ve yenileme ayrıntıyı yeniden açar.
+  it('talep ayrıntısı adrese ?talep= ile yazılır; geri tuşu ve geri düğmesi listeye döner; adresle açılış ayrıntıyı açar', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    window.history.replaceState(null, '', '/satin-alma/talepler');
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const gidilen: [string, boolean][] = [];
+    const git = (y: string, yerine?: boolean) => { gidilen.push([y, yerine === true]); if (yerine) window.history.replaceState(null, '', y); else window.history.pushState(null, '', y); };
+    let kok = document.createElement('div');
+    document.body.append(kok);
+    let kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    go('request', ILK);
+    expect(gidilen.at(-1)).toEqual([`/satin-alma/talepler?talep=${ILK}`, false]);
+    expect(kok.querySelector('[data-act="ayrinti-geri"]')?.textContent).toContain('Taleplere dön');
+    // Bölüm değişince geçmişe kayıt eklenmez.
+    const kayit = gidilen.length;
+    go('request', ILK, 'quotes');
+    expect(gidilen.length).toBe(kayit);
+    // Tarayıcının geri tuşu: adreste talep kalmaz, liste açılır.
+    window.history.replaceState(null, '', '/satin-alma/talepler');
+    merkezAdresi(null);
+    expect([V.page, V.id]).toEqual(['requests', null]);
+    // İleri tuşu: adresteki talep yeniden açılır.
+    window.history.replaceState(null, '', `/satin-alma/talepler?talep=${ILK}`);
+    merkezAdresi({ talep: ILK, bolum: null });
+    expect([V.page, V.id]).toEqual(['request', ILK]);
+    // Adresle açılan ayrıntının geri düğmesi geçmişe değil listeye gider.
+    const geri = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    ayrintidanDon();
+    expect(geri).not.toHaveBeenCalled();
+    expect(V.page).toBe('requests');
+    // İçeriden açılan ayrıntının geri düğmesi tarayıcı geçmişinde bir adım döner.
+    go('request', ILK);
+    ayrintidanDon();
+    expect(geri).toHaveBeenCalledTimes(1);
+    kapat();
+    // Yenileme: adreste talep varken ekran ayrıntıyla açılır.
+    window.history.replaceState(null, '', `/satin-alma/talepler?talep=${ILK}`);
+    V.page = 'requests'; V.id = null;
+    kok = document.createElement('div');
+    document.body.append(kok);
+    kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git });
+    expect([V.page, V.id]).toEqual(['request', ILK]);
+    kapat();
+    window.history.replaceState(null, '', '/');
   });
 
   // 2165: pencere ortak pencerenin yapısıyla, bildirim ve geri al kabuğun ortak bildirimiyle çizilir.

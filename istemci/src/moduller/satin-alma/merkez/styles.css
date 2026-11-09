@@ -138,6 +138,7 @@
 .sa-kok .strip > button{ display:block; width:auto; min-height:var(--dokunma); text-align:left; background:none; border-right:0; border-bottom:0; font:inherit; color:inherit; cursor:pointer; }
 .sa-kok .strip > button:hover{ background:var(--sa-surface-2); }
 .sa-kok .strip > button:focus-visible{ outline-offset:-2px; }
+.sa-kok .strip .v, .sa-kok .strip .k, .sa-kok .strip .d{ display:block; }
 .sa-kok .strip .v{ font-family:var(--sa-cond); font-size:var(--yazi-xl); font-weight:600; font-variant-numeric:tabular-nums; line-height:1.2; }
 .sa-kok .strip .k{ font-size:var(--yazi-s); color:var(--sa-muted); }
 .sa-kok .strip .d{ font-size:var(--yazi-xs); color:var(--sa-faint); }
@@ -497,6 +498,9 @@
 @media print{ .sa-kok .nav, .sa-kok .topbar, .sa-kok .btn, .sa-kok .tabs{ display:none !important; } .sa-kok .app{ display:block; } .sa-kok{ background:white; } }
 
 /* talep başlığı */
+.sa-kok .sa-geri-serit{ display:flex; align-items:center; gap:var(--b-3); margin-bottom:var(--b-3); }
+.sa-kok .sa-geri{ display:inline-flex; align-items:center; gap:var(--b-2); }
+.sa-kok .sa-geri-no{ color:var(--sa-muted); font-size:var(--yazi-s); }
 .sa-kok .rhead{ display:flex; gap:var(--b-3) var(--b-5); align-items:flex-start; flex-wrap:wrap; margin-bottom:var(--b-3); }
 .sa-kok .rhead .ttl{ flex:1 1 420px; min-width:0; }
 .sa-kok .rhead h1{ font-size:var(--yazi-baslik); }

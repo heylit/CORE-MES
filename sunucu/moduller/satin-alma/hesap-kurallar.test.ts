@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi,
+  type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani,
 } from './hesap-kurallar.ts';
 
 // Prototipteki örnek (Teklif matrisi): üç kalem, üç teklif. Kimlikler ve adlar deneme verisidir.
@@ -132,4 +132,14 @@ test('2157: başarımı bilinmeyen tedarikçinin teklifinde ölçüt hesaba kat�
   const k = bilinen.kriterPuani;
   yakin(bilinen.puan, (k.maliyet! * 50 + k.termin! * 20 + 60 * 20 + k.garanti! * 10) / 100, 1e-9);
   yakin(bos.puan, (k.maliyet! * 50 + k.termin! * 20 + k.garanti! * 10) / 80, 1e-9);
+});
+
+test('termini girilmemiş teklifte termin ölçütü bilinmez: 0 puan sayılmaz, ağırlığı bilinen ölçütlere dağılır', () => {
+  assert.equal(terminPuani(null, 5, ORTAM), null);
+  const bilinen = degerlendir(KALEMLER, [C], ORTAM).satirlar[0]!;
+  const terminsiz = degerlendir(KALEMLER, [{ ...C, terminGun: null, fiyatlar: C.fiyatlar.map((f) => ({ ...f, terminGun: null })) }], ORTAM).satirlar[0]!;
+  assert.equal(terminsiz.kriterPuani.termin, null);
+  assert.equal(terminsiz.pay.termin, 0);
+  const k = bilinen.kriterPuani;
+  yakin(terminsiz.puan, (k.maliyet * 50 + 60 * 20 + k.garanti * 10) / 80, 1e-9);
 });

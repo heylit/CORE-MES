@@ -804,7 +804,7 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
       vadeHesabaKatilmadi: x.hesap.vadeHesabaKatilmadi, kapsanan: x.hesap.kapsanan, tumKalemler: x.tumKalemler, termin: x.hesap.termin, gecikmeGun: x.gecikme,
       puan: Math.round(x.puan * 10) / 10,
       kriterPuani: {
-        maliyet: Math.round(x.kriterPuani.maliyet * 10) / 10, termin: Math.round(x.kriterPuani.termin * 10) / 10,
+        maliyet: Math.round(x.kriterPuani.maliyet * 10) / 10, termin: x.kriterPuani.termin === null ? null : Math.round(x.kriterPuani.termin * 10) / 10,
         tedarikci: x.kriterPuani.tedarikci === null ? null : Math.round(x.kriterPuani.tedarikci * 10) / 10, garanti: Math.round(x.kriterPuani.garanti * 10) / 10,
       },
       satirlar: x.hesap.satirlar.map((r) => ({ kalemId: r.kalemId, alinanMiktar: ondalik(r.alinanMiktar), tutar: para(r.tutar)!, bugunkuDegerTl: para(r.bugunkuDegerTl), termin: r.termin })),
