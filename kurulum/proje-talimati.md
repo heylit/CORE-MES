@@ -44,6 +44,15 @@ KURALLAR
 10. Yeni modulsen (depoda klasorun yok): yazmadan once cakisma taramasi yap. Modulun tuttugu her kavrami var olan modullerle karsilastir (harita, ORTAKLIK dosyalari, disari.ts) ve uc liste ver: baska modulde olan (oradan okunacak), yalniz sende olan, belirsiz (sorulacak). Belirsiz listesi cevaplanmadan yazima baslama.
 11. Node 24 ve PostgreSQL kur (ortamda hazir degilse); `npm run tip`, `npm run lint`, `npm run sinir -- --modul <ad>` ve kendi testlerini kos, son satirlarini yaz. Kosamadigini "calistirilmadi" diye yaz; uydurma sonuc yazma. Once test: yeni kuralin testi duzeltmeden once kirmizi, sonra yesil olur.
 
+AKIS HIZI (kullanici 09.11.2026; tekrar etmesin diye kalici)
+- Birlesme zinciri yok (gocler haric, 1865 a: gocler sirayla birlesmeye devam eder): birbirine dosya ya da sema bagimliligi olmayan yamalar ayri cekme istegiyle, hazir olan once birlesir. Zincire yalniz DOGRULANDI bagimlilik girer; Birlestirici bagimliligi DEVIR.md'de yazar.
+- Once karar, sonra kod: yazar onizlemede o isin acik sorularinin hepsini tek seferde listeler; Soru Merkezi bunlari ayni turda kart yapar. Kod, o isin kartlari kapaninca yazilir. Yazim sirasinda cikan yeni soru ise durdurur ve ayni yolla gider.
+- DEVIR toplu esitlenir: ayni turda gelen kararlar ve kayitlar tek yamada islenir; ayri ayri yama acilmaz.
+- On bakis en cok iki kisi kalir: sahip uzman ve Test. Guvenlik ve Veri yalniz kendi konularinda ek on bakis yapar (Guvenlik: yetki, goc, para ya da veri acan yamalar). Kapatilmis konu on bakis bekletmez.
+- Serbest yazi isteyen soru gonderilmez; her soru secenekli karar kartiyla sorulur.
+- Kullaniciya bagli eski isler haftada bir tek "kapat / surdur" kartinda toplanir.
+- Arac hatasi gecici yolla tasinmaz; ilk gorulen turda kalici duzeltme karti acilir.
+
 ONAY
 - Sorulur (2379 a; CLAUDE.md TEMEL KURAL 2'deki bes tur): veri silen ya da donusturen goc (DROP, tur daraltma, veriyi yeniden yazma, varsayilansiz NOT NULL; 2380 a), yetki modeli (rol x islem, oturumsuz uc, yetki genisletme), kirmizi cizgi, yeni paket, onayli kararla celisme. Sahipligi gercekten belirsiz kavram da sorulur (2382 a).
 - Sorulmaz, uzman on bakisiyla girer (2342-2 a) ve DEVIR'e tek bilgi satiri yazilir (2379 a): ADR, prototip degisikligi, davranis degistiren duzeltme, denetimi daraltma, guvenligi gevsetme, service worker; bos olabilen sutun, yeni tablo, dizin ve yabanci anahtar (Veri on bakisi, 2380 a). Riskli yama (goc, yetki, para) on bakis "tamam" olmadan birlesmez.
