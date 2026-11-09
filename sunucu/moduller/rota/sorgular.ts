@@ -440,6 +440,15 @@ export async function kullanilmisOpNolari(db: Db, malzemeId: number): Promise<nu
   return (await db.sorgu<{ opNo: number }>('SELECT op_no AS "opNo" FROM rota_op_numarasi WHERE malzeme_id = $1', [malzemeId])).map((s) => s.opNo);
 }
 
+export async function opNumaralari(db: Db, malzemeId: number): Promise<{ opNo: number; ilkRevizyonId: number; ilkRevizyonHarfi: string }[]> {
+  return db.sorgu(
+    `SELECT t.op_no AS "opNo", t.ilk_revizyon_id AS "ilkRevizyonId", r.harf AS "ilkRevizyonHarfi"
+       FROM rota_op_numarasi t JOIN rota_revizyonu r ON r.id = t.ilk_revizyon_id
+      WHERE t.malzeme_id = $1 ORDER BY t.op_no`,
+    [malzemeId],
+  );
+}
+
 // Ürüne aynı numara iki kez kaydolmaz; aynı ürünün başka revizyonundan gelen numara zaten kayıtlıdır.
 export async function opNolariKaydet(db: Db, malzemeId: number, opNolari: readonly number[], revizyonId: number): Promise<void> {
   if (opNolari.length === 0) return;
