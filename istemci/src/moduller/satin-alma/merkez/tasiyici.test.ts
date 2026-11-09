@@ -35,9 +35,9 @@ const TALEP: Talep = {
     mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: K1, teklifId: QB }, { kalemId: K2, teklifId: QA }], gerekce: 'Termin', kararVerenKisiId: 7, kararVerenAdi: 'Deneme Karar Veren',
     kararTarihi: '2026-10-06', ogrenilenler: 'Ambalaj', sabitKurlar: [{ paraBirimi: 'USD', kur: '41.5' }],
     siparisler: [
-      { teklifId: QA, no: 'SP-2026-001', siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', teslimDurumu: 'tamam', kalite: 'kismi_sorun', logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null },
+      { teklifId: QA, no: 'SP-2026-001', siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim', teslimDurumu: 'tamam', kalite: 'kismi_sorun', logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null },
         satirlar: [{ id: 11, kalemId: K2, miktar: '36.5', birim: 'kg', teslimAlinan: '36.5', sonTeslimTarihi: '2026-10-13', fazlaTeslim: null }] },
-      { teklifId: QB, no: 'SP-2026-002', siparisNo: 'SA-2', siparisTarihi: '2026-10-07', beklenenTeslim: null, teslimDurumu: 'bekleniyor', kalite: null, logo: null,
+      { teklifId: QB, no: 'SP-2026-002', siparisNo: 'SA-2', siparisTarihi: '2026-10-07', beklenenTeslim: null, vadeBaslangici: 'teslim', teslimDurumu: 'bekleniyor', kalite: null, logo: null,
         satirlar: [{ id: 12, kalemId: K1, miktar: '40', birim: 'adet', teslimAlinan: null, sonTeslimTarihi: null, fazlaTeslim: null }] },
     ],
   },
@@ -55,7 +55,7 @@ describe('TMI taşıyıcısı', () => {
     const { onaylar: gOnay, hareketler: gHareket, senaryolar: gSenaryo, ...gelen } = geri;
     // Siparişte yalnız satın almanın alanları geri gider (teslim ve kalite stoktan ve GKK'dan okunur).
     // Karar verenin adı yalnız çıkışta gelir; sunucuya karar veren kişi kimliği gider, ad gitmez.
-    const yalniz = (k: typeof beklenen.karar) => k && { ...k, kararVerenAdi: undefined, siparisler: k.siparisler.map(({ teklifId, siparisNo, siparisTarihi, beklenenTeslim }) => ({ teklifId, siparisNo, siparisTarihi, beklenenTeslim })) };
+    const yalniz = (k: typeof beklenen.karar) => k && { ...k, kararVerenAdi: undefined, siparisler: k.siparisler.map(({ teklifId, siparisNo, siparisTarihi, beklenenTeslim, vadeBaslangici }) => ({ teklifId, siparisNo, siparisTarihi, beklenenTeslim, vadeBaslangici })) };
     expect(gelen).toEqual({ ...beklenen, karar: yalniz(beklenen.karar) });
     // Yalnız eklenen kayıtlarda kişi ve zaman sunucunundur: kimlik, sonuç ve metin korunur.
     expect(gOnay.map((o) => [o.id, o.sonuc, o.notlar])).toEqual(onaylar.map((o) => [o.id, o.sonuc, o.notlar]));
@@ -67,12 +67,12 @@ describe('TMI taşıyıcısı', () => {
     const r = talepEkrana(TALEP);
     expect(r.award?.mode).toBe('split');
     expect(r.award?.orders?.[QA]).toEqual({
-      orderNo: 'SP-2026-001', poNo: 'SA-1', orderDate: '2026-10-07', expectedDate: '2026-10-14', deliveredDate: '2026-10-13', quality: 'partial', excess: [],
+      orderNo: 'SP-2026-001', poNo: 'SA-1', orderDate: '2026-10-07', expectedDate: '2026-10-14', vadeBaslangici: 'teslim', deliveredDate: '2026-10-13', quality: 'partial', excess: [],
       logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null },
     });
     const tek = talepEkrana({ ...TALEP, karar: { ...TALEP.karar!, mod: 'tek', teklifId: QA, bolunme: [], siparisler: [TALEP.karar!.siparisler[0]!] } });
     expect([tek.award?.mode, tek.award?.orderNo, tek.award?.poNo, tek.award?.quality]).toEqual(['single', 'SP-2026-001', 'SA-1', 'partial']);
-    expect(talepSunucuya(tek).karar?.siparisler).toEqual([{ teklifId: QA, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14' }]);
+    expect(talepSunucuya(tek).karar?.siparisler).toEqual([{ teklifId: QA, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim' }]);
     // Kısmi ya da bekleyen siparişte teslim tarihi boş görünür.
     expect(r.award?.orders?.[QB]?.deliveredDate).toBe('');
   });
@@ -91,7 +91,7 @@ describe('TMI taşıyıcısı', () => {
     expect(tek.award?.excess).toEqual([{ item: 'Gres', qty: 1.5, unit: 'kg' }]);
     const bol = talepEkrana({ ...TALEP, karar: { ...TALEP.karar!, siparisler: [asan, TALEP.karar!.siparisler[1]!] } });
     expect([bol.award?.orders?.[QA]?.excess, bol.award?.orders?.[QB]?.excess]).toEqual([[{ item: 'Gres', qty: 1.5, unit: 'kg' }], []]);
-    expect(talepSunucuya(tek).karar?.siparisler).toEqual([{ teklifId: QA, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14' }]);
+    expect(talepSunucuya(tek).karar?.siparisler).toEqual([{ teklifId: QA, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim' }]);
   });
 
   it('Borç 36: siparişteki kalem değişikliği ayrı komutla, son sürüm ve gerekçeyle gider; sunucu reddederse false döner', async () => {

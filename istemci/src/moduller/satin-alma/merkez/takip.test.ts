@@ -18,7 +18,7 @@ const TALEP: Talep = {
     teknikUygun: true, notlar: '', ilkToplam: null, revizyon: 0, fiyatlar: [{ kalemId: K1, birimFiyat: '100' }] }],
   karar: {
     mod: 'tek', teklifId: QA, bolunme: [], gerekce: '', kararVerenKisiId: 7, kararVerenAdi: 'Deneme Alıcı', kararTarihi: '2026-10-06', ogrenilenler: '', sabitKurlar: [],
-    siparisler: [{ teklifId: QA, no: 'SP-2026-001', siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null, teslimDurumu: 'bekleniyor', kalite: null, logo: null,
+    siparisler: [{ teklifId: QA, no: 'SP-2026-001', siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null, vadeBaslangici: 'teslim', teslimDurumu: 'bekleniyor', kalite: null, logo: null,
       satirlar: [{ id: 41, kalemId: K1, miktar: '10', birim: 'kg', teslimAlinan: null, sonTeslimTarihi: null, fazlaTeslim: null }] }],
   },
   onaylar: [{ id: '00000000-0000-4000-8000-0000000000d1', zaman: '2026-10-06T10:00:00.000Z', kisiId: 9, kisiAdi: 'Deneme Müdür', sonuc: 'onay', dortGozsuz: false, notlar: '' }],

@@ -74,7 +74,7 @@ async function talepleriKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Talep[]>
       };
     });
     return {
-      teklifId: x.teklifId, no: x.no, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim,
+      teklifId: x.teklifId, no: x.no, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim, vadeBaslangici: x.vadeBaslangici,
       // Kalanı kapatılmış sipariş tamamlanmış sayılır: talep, kalan beklenmeden teslim alındıya geçer.
       satirlar, teslimDurumu: x.logoKapatmaDurumu === null ? teslimDurumu(satirlar) : 'tamam', kalite: null,
       logo: x.logoDurumu === null ? null

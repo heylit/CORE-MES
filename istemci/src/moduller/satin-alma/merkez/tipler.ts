@@ -1,4 +1,4 @@
-import type { SiparisLogo } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { SiparisLogo, VadeBaslangici } from '#paylasilan/sozlesme/satin-alma.ts';
 /**
  * Sunucu ve arayüzün ortak veri tipleri.
  * Arayüz talepleri "toplu kayıt" (aggregate) olarak işler: kalemler, teklif istekleri,
@@ -156,6 +156,8 @@ export interface AwardOrder {
   poNo?: string;
   orderDate?: DateStr;
   expectedDate?: DateStr;
+  /** 2417: vade teslimattan (varsayılan) ya da siparişten sayılır */
+  vadeBaslangici?: VadeBaslangici;
   deliveredDate?: DateStr;
   quality?: Quality | "";
   excess?: ExcessLine[];
@@ -179,6 +181,7 @@ export interface Award {
   poNo?: string;
   orderDate?: DateStr;
   expectedDate?: DateStr;
+  vadeBaslangici?: VadeBaslangici;
   deliveredDate?: DateStr;
   quality?: Quality;
   excess?: ExcessLine[];

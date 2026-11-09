@@ -1387,17 +1387,36 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       satirlar: [{ tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '100' }] }));
     tamam(await teslimGunu(b, '2026-10-25'));
     assert.deepEqual(await plan(b), [['2026-12-15', '100']]);
-    // Mal kabul: vade son mal kabul gününden sayılır; geri alınınca beklenen teslime döner.
+    // Mal kabul: teslim edilen pay mal kabul gününden, kalanı beklenen teslimden sayılır (2417); geri alınınca beklenen teslime döner.
     const bugun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
     const otuzGunSonra = new Date(Date.parse(`${bugun}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10);
     await teslimEt(satirA, '2', 213261);
-    assert.deepEqual(await plan(a), [[otuzGunSonra, '24']]);
+    assert.deepEqual(await plan(a), [[otuzGunSonra, '12'], ['2026-11-19', '12']].sort((x, y) => x[0]!.localeCompare(y[0]!)));
     await geriAl(213261);
     assert.deepEqual(await plan(a), [['2026-11-19', '24']]);
     // Mevcut (göç öncesi) satırlar 'elle' sayılır: kaynağı elle olan plan mal kabulle değişmez.
     await vt().tx((db) => db.sorgu("UPDATE finans_siparis_odemesi SET kaynak = 'elle' WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2", [s.id, a]));
     await teslimEt(satirA, '2', 213262);
     assert.deepEqual(await plan(a), [['2026-11-19', '24']]);
+  });
+
+  test('2417: parçalı teslimatta her mal kabul kendi payıyla ayrı vade satırıdır; vade siparişten seçilirse tek satır, sipariş tarihi + vade', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const satir = siparisi(s, a).satirlar[0]!;
+    const plan = async () => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${s.id}/siparis-takibi`))
+      .siparisler.find((x) => x.teklifId === a)!.odemePlani.map((x) => [x.vade, x.tutar]);
+    assert.equal(siparisi(s, a).vadeBaslangici, 'teslim');
+    assert.deepEqual(await plan(), [['2026-11-06', '24']]);
+    const bugun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+    const otuzGunSonra = new Date(Date.parse(`${bugun}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10);
+    await teslimEt(satir.id, String(Number(satir.miktar) / 2), 224171);
+    assert.deepEqual(await plan(), [[otuzGunSonra, '12'], ['2026-11-06', '12']].sort((x, y) => x[0]!.localeCompare(y[0]!)));
+    // Siparişten: mal kabul vadeyi kaydırmaz; seçim kayıtta kalır.
+    const t = await acilistaki(s.id);
+    tamam(await kaydet(c.sa, { ...govde(t), karar: { ...t.karar!, siparisler: t.karar!.siparisler.map((x) => ({
+      teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim, vadeBaslangici: x.teklifId === a ? 'siparis' as const : x.vadeBaslangici })) } }));
+    assert.equal(siparisi(await acilistaki(s.id), a).vadeBaslangici, 'siparis');
+    assert.deepEqual(await plan(), [['2026-11-06', '24']]);
   });
 
   test('#489 pano: onay bekleyen onaylayana, açık talep ve teslim bekleyen satır yazana, açık sipariş okuyana sayılır; yetkisiz sayı null', async () => {

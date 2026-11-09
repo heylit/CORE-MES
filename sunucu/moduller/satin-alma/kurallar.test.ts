@@ -163,7 +163,7 @@ test('B-001: karar özü kim, ne zaman, sipariş, sabit kur ve öğrenilenler d�
   const k = { mod: 'tek' as const, teklifId: 'a', bolunme: [], gerekce: 'Fiyat', kararVerenKisiId: 1, kararTarihi: '2026-10-01', ogrenilenler: '',
     sabitKurlar: [], siparisler: [] };
   assert.equal(kararDegistiMi(k, { ...k, kararVerenKisiId: 2, kararTarihi: '2020-01-01', ogrenilenler: 'Not', sabitKurlar: [{ paraBirimi: 'USD', kur: '41' }],
-    siparisler: [{ teklifId: 'a', siparisNo: 'SA-1', siparisTarihi: null, beklenenTeslim: null }] }), false);
+    siparisler: [{ teklifId: 'a', siparisNo: 'SA-1', siparisTarihi: null, beklenenTeslim: null, vadeBaslangici: 'teslim' as const }] }), false);
   assert.equal(kararDegistiMi(k, { ...k, teklifId: 'b' }), true);
   assert.equal(kararDegistiMi(k, { ...k, gerekce: 'Termin' }), true);
   assert.equal(kararDegistiMi(k, { ...k, mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: 'x', teklifId: 'a' }] }), true);

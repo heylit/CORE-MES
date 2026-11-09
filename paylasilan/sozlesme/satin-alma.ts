@@ -78,12 +78,17 @@ export const teklifSemasi = z.object({
   })).max(500),
 });
 
+export const VADE_BASLANGICLARI = ['teslim', 'siparis'] as const;
+export type VadeBaslangici = (typeof VADE_BASLANGICLARI)[number];
+
 // İstemci yalnız satın almanın alanlarını yazar; teslim stok mal kabulünde yazılır (SAT-37, SAT-38, SH1 a); kalite GKK gelene kadar boş.
 export const siparisSemasi = z.object({
   teklifId: uuid,
   siparisNo: metin(40),
   siparisTarihi: tarih.nullable(),
   beklenenTeslim: tarih.nullable(),
+  // Kart 2417: vadeli ödeme teslimattan (her mal kabul kendi payıyla, varsayılan) ya da sipariş tarihinden sayılır.
+  vadeBaslangici: z.enum(VADE_BASLANGICLARI).default('teslim'),
 });
 export const siparisSatiriSemasi = z.object({
   id: z.number().int(),

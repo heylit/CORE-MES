@@ -47,7 +47,7 @@ export interface AltKayitlar {
   bolunmeler: { talepId: string; kalemId: string; teklifId: string }[];
   sabitKurlar: { talepId: string; paraBirimi: string; kur: string; aylikFaizYuzdesi: string | null }[];
   siparisler: {
-    talepId: string; teklifId: string; no: string | null; siparisNo: string; siparisTarihi: string | null; beklenenTeslim: string | null;
+    talepId: string; teklifId: string; no: string | null; siparisNo: string; siparisTarihi: string | null; beklenenTeslim: string | null; vadeBaslangici: 'teslim' | 'siparis';
     logoDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKayitNo: string | null; logoHata: string | null;
     logoIptalDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoIptalHata: string | null;
     logoGuncellemeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoGuncellemeHata: string | null;
@@ -87,7 +87,7 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
     sabitKurlar: await q(`SELECT talep_id AS "talepId", para_birimi AS "paraBirimi", kur, aylik_faiz_yuzdesi AS "aylikFaizYuzdesi"
       FROM satin_alma_sabit_kur WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, para_birimi`),
     siparisler: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", no, siparis_no AS "siparisNo", siparis_tarihi AS "siparisTarihi",
-      beklenen_teslim AS "beklenenTeslim", logo_gonderim_durumu AS "logoDurumu", logo_kayit_no AS "logoKayitNo", logo_hata AS "logoHata",
+      beklenen_teslim AS "beklenenTeslim", vade_baslangici AS "vadeBaslangici", logo_gonderim_durumu AS "logoDurumu", logo_kayit_no AS "logoKayitNo", logo_hata AS "logoHata",
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
       logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata",
       logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata" FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
@@ -256,10 +256,10 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
       const mevcut = await db.tek('SELECT 1 FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [id, s.teklifId]);
       const no = mevcut ? null : await yeniSiparisNo();
       await db.sorgu(
-        `INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi, beklenen_teslim) VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi, beklenen_teslim, vade_baslangici) VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (talep_id, teklif_id) DO UPDATE SET siparis_no = EXCLUDED.siparis_no, siparis_tarihi = EXCLUDED.siparis_tarihi,
-           beklenen_teslim = EXCLUDED.beklenen_teslim`,
-        [id, s.teklifId, no, s.siparisNo, s.siparisTarihi, s.beklenenTeslim],
+           beklenen_teslim = EXCLUDED.beklenen_teslim, vade_baslangici = EXCLUDED.vade_baslangici`,
+        [id, s.teklifId, no, s.siparisNo, s.siparisTarihi, s.beklenenTeslim, s.vadeBaslangici],
       );
       // Sipariş satırları: tek kararda teklifin fiyat verdiği kalemler, kalem bazlı kararda o teklife atananlar. Kimlik korunur
       // (stokun mal kabulü ve GKK buna bağlanır); kapsamdan çıkan satır silinir, miktarı boş kalem satır olmaz.
@@ -890,7 +890,12 @@ export async function siparisSatiriVarMi(db: Db, id: number): Promise<boolean> {
 
 // Kart #1124 (SAT-74): siparişin KDV hariç toplamı (teklif toplamı formülü, sipariş satırlarının miktarıyla; kalem bazlı kararda
 // yalnız bu tedarikçiye düşen kalemler), avans ve kalan tutarı, vade günü ve tarihleri. numeric ile hesaplanır.
-export interface SiparisOdemeKosulu { teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul: string | null; kdvOrani: string | null }
+// 2417: partiler mal kabul günü başına net teslim edilen malın sipariş malına oranı (satır fiyatı ve iskontosuyla), gün sırasıyla;
+// geri alınan teslimin günü eksi paydır (kural son partilerden düşer).
+export interface SiparisOdemeKosulu {
+  teklifId: string; toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul: string | null; kdvOrani: string | null;
+  vadeBaslangici: 'teslim' | 'siparis'; partiler: { gun: string; oran: string }[]; tamTeslim: boolean;
+}
 export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisOdemeKosulu[]> {
   return db.sorgu<SiparisOdemeKosulu>(
     `WITH t AS (
@@ -899,7 +904,19 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,
-         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim, o.kdv_orani,
+         q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.beklenen_teslim, o.kdv_orani, o.vade_baslangici,
+         (SELECT COALESCE(json_agg(json_build_object('gun', to_char(p.gun, 'YYYY-MM-DD'), 'oran', round(p.deger / NULLIF(m.deger, 0), 6)::text) ORDER BY p.gun), '[]'::json)
+            FROM (SELECT (x.zaman AT TIME ZONE 'Europe/Istanbul')::date AS gun, sum(x.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger
+                    FROM satin_alma_teslim x JOIN satin_alma_siparis_satiri ss ON ss.id = x.siparis_satiri_id
+                    JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
+                   WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id GROUP BY 1) p,
+                 (SELECT sum(ss.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger FROM satin_alma_siparis_satiri ss
+                    JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
+                   WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id) m
+           WHERE p.deger <> 0 AND m.deger > 0) AS partiler,
+         -- Teslimi bitti: kalanı kapatıldı ya da her satır net tam geldi.
+         (o.logo_kapatma_durumu IS NOT NULL OR NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri ss WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id
+            AND coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = ss.id), 0) < ss.miktar)) AS tam_teslim,
          -- 2132-6: net teslimi kalan siparişin son mal kabul günü (tesis günü); geri alınmış teslim sayılmaz.
          (SELECT CASE WHEN sum(x.miktar) > 0 THEN (max(x.zaman) FILTER (WHERE x.miktar > 0) AT TIME ZONE 'Europe/Istanbul')::date END
             FROM satin_alma_teslim x JOIN satin_alma_siparis_satiri ss ON ss.id = x.siparis_satiri_id
@@ -908,7 +925,7 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
         WHERE o.talep_id = $1)
      SELECT teklif_id AS "teklifId", toplam, round(toplam * avans_yuzdesi / 100, 2) AS avans, toplam - round(toplam * avans_yuzdesi / 100, 2) AS kalan,
             vade_gun AS "vadeGun", ${ISO('siparis_tarihi')} AS "siparisTarihi", ${ISO('beklenen_teslim')} AS "beklenenTeslim",
-            ${ISO('mal_kabul')} AS "malKabul", kdv_orani::text AS "kdvOrani"
+            ${ISO('mal_kabul')} AS "malKabul", kdv_orani::text AS "kdvOrani", vade_baslangici AS "vadeBaslangici", partiler, tam_teslim AS "tamTeslim"
        FROM t`, [talepId]);
 }
 // 2132-7: siparişin elle seçilen KDV oranı (boş: genel oran).
