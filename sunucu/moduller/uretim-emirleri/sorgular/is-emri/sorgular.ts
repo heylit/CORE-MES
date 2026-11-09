@@ -52,6 +52,10 @@ export function isEmirleriGetir(db: Db, emirIdleri: readonly number[]): Promise<
   );
 }
 
+export function isEmirleriBul(db: Db, idler: readonly number[]): Promise<IsEmriSatiri[]> {
+  return db.sorgu<IsEmriSatiri>(`SELECT ${IS_EMRI} FROM uretim_emirleri_is_emri i WHERE i.id = ANY($1::int[])`, [[...idler]]);
+}
+
 export function isEmriBul(db: Db, id: number, kilit = false): Promise<IsEmriSatiri | null> {
   return db.tek<IsEmriSatiri>(`SELECT ${IS_EMRI} FROM uretim_emirleri_is_emri i WHERE i.id = $1${kilit ? ' FOR UPDATE' : ''}`, [id]);
 }

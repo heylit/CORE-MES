@@ -20,7 +20,7 @@ export {
   fasonlaBitir, emirDurumlariGetir, siparisSatiriEmirleriGetir, emirNolariGetir, type EtkilenenEmirSatiri, malzemelerinAcikEmirleriGetir,
 } from './sorgular/ust-emir/sorgular.ts';
 export {
-  type IsEmriSatiri, isEmirleriGetir, isEmriBul, isEmriAyrimBilgileri, isEmriVarliklari, type AcikIsEmri, acikIsEmirleri, acikIsEmri, type PlanEmriBilgisi,
+  type IsEmriSatiri, isEmirleriGetir, isEmirleriBul, isEmriBul, isEmriAyrimBilgileri, isEmriVarliklari, type AcikIsEmri, acikIsEmirleri, acikIsEmri, type PlanEmriBilgisi,
   planlanacakIsEmirleriGetir, type IsEmriYazisi, isEmriEkle, onculleriSil, onculleriYaz, isaretliListeVar, bekleyenIsEmriniGuncelle, bekleyenIsEmriniSil,
   isEmriEkAciklamasiYaz, isEmriSirasiYaz, adayEkle, bilesenEkle, type AdaySatiri, adaylariGetir, bilesenleriGetir, isEmriKaynagiYaz, adaySil,
   type UretimYeriYazisi, uretimYeriYaz, type UretimYeriDegisimiSatiri, uretimYeriDegisimleriGetir, uretimYeriDegisimiEkle, kisiAdimiIstasyonunuYaz,

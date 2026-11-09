@@ -18,7 +18,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  acikEmir, acikEmirler, adimKararSayaclari, aralikAdetleri, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti,
+  acikEmir, acikEmirler, adimKararSayaclari, aralikAdetleri, emirBaslat, emirBitir, emirDevam, emirDurdur, emirSayim, kararliSayimiSonuclandir, gunlukAralikAdetleri, kisininGunlukIsEmirleri, katilimSureleri, makineSureleri, emirAkisKaydi, emirDurumlari, emirIptalEt, emirMalzemeIhtiyaci, emirNolari, emirOzeti, emirPlanBilgisiYaz, emirPlanaAl, fasonGecmisi, fasonHareketiOzeti, fasonIsEmirleri, isEmirleriniYenile, isEmriKaynagiYaz, isEmriOzeti, isEmriOzetleri,
   isEmriSureOzeti,
   acikIsEmirleri, acikIsEmri, bitenEmirler, bitenIsEmirleri, calismayaGecisAnlari, emirDilimi, istasyonDurusSureleri, fasonDonusuKaydet, isEmriPlanBilgileri, kirilimStandartSureleri, kisininHurdaNedenleri, kisininIsEmirleri, partiKomutuReddi, refakatKarti, standartSureler, planlanacakIsEmirleri, rotasizIsEmirleri, saglamSayimDinle, kaliteKarariDinle, hazirlikTamamlandiDinle, sonGirisler, uretimEmriAc, uretimEmriOzeti,
 } from './disari.ts';
@@ -859,6 +859,20 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.deepEqual(await durum(), { kaynak: m1, sure: [10, 1.5], adaylar: [[m2, 20, 2.5]] }, 'geri dönünce süre geri gelir');
     await o().vt.tx((db) => isEmriKaynagiYaz(db, kim('planlama_proje'), ie, { tur: 'makine', id: m3 }));
     assert.deepEqual(await durum(), { kaynak: m3, sure: [10, 1.5], adaylar: [[m2, 20, 2.5]] }, 'aday olmayan kaynakta süre uydurulmaz');
+  });
+
+  test('2431: isEmriOzetleri toplu okur; boş dizide boş, yinelenen tek, olmayan kimlik yok; iki emrin iş emirleri tekli okumayla aynı', async () => {
+    const a = await ac([adim(1, null), adim(2, { tur: 'fason', id: firmaId })]);
+    const b = await ac([adim(1, null)]);
+    const [a1, a2] = a.isEmriIdleri as [number, number];
+    const b1 = b.isEmriIdleri[0]!;
+    assert.equal((await o().vt.tx((db) => isEmriOzetleri(db, []))).size, 0);
+    const m = await o().vt.tx((db) => isEmriOzetleri(db, [a2, a1, b1, a1, 2147483000]));
+    assert.deepEqual([...m.keys()].sort((x, y) => x - y), [a1, a2, b1].sort((x, y) => x - y));
+    for (const id of [a1, a2, b1]) assert.deepEqual(m.get(id), await isEmriOzeti(o().vt, id));
+    assert.deepEqual([m.get(a2)?.kaynak, m.get(a1)?.uretimEmriId, m.get(b1)?.uretimEmriId], [{ tur: 'fason', id: firmaId }, a.uretimEmriId, b.uretimEmriId]);
+    assert.notEqual(m.get(a1)?.emirNo, m.get(b1)?.emirNo);
+    assert.equal(await isEmriOzeti(o().vt, 2147483000), null);
   });
 
   test('plan: planlanacak iş emirleri fasonsuz ve bitmemiştir, öncelik ve tarih taşır, taslak istenirse gelir; kaynak ve plan bilgisi yazılır; işlemsiz kişi reddedilir', async () => {

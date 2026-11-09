@@ -1726,15 +1726,24 @@ export interface IsEmriOzeti {
 }
 
 export async function isEmriOzeti(db: Db, id: number): Promise<IsEmriOzeti | null> {
-  const i = await s.isEmriBul(db, id);
-  if (i === null) return null;
-  const no = (await emirNolari(db, [i.uretimEmriId])).get(i.uretimEmriId) ?? '';
-  const tur = kaynakTuru(i);
-  const kaynakId = i.fasonFirmaId ?? i.makineId ?? i.kisiId;
-  return {
-    id: i.id, uretimEmriId: i.uretimEmriId, emirNo: no, opNo: i.opNo, ad: i.ad, durum: i.durum, istasyonId: i.istasyonId,
-    kaynak: tur === null || kaynakId === null ? null : { tur, id: kaynakId },
-  };
+  return (await isEmriOzetleri(db, [id])).get(id) ?? null;
+}
+
+// isEmriOzeti'nin toplu sürümü: kimlik sayısından bağımsız iki sorgu (iş emirleri, emir numaraları). Boş dizide sorgu atılmaz;
+// yinelenen kimlik tek kayıt, olmayan (silinmiş) kimlik haritada yok.
+export async function isEmriOzetleri(db: Db, idler: readonly number[]): Promise<Map<number, IsEmriOzeti>> {
+  const tekil = [...new Set(idler)];
+  if (tekil.length === 0) return new Map();
+  const satirlar = await s.isEmirleriBul(db, tekil);
+  const nolar = await emirNolari(db, satirlar.map((i) => i.uretimEmriId));
+  return new Map(satirlar.map((i) => {
+    const tur = kaynakTuru(i);
+    const kaynakId = i.fasonFirmaId ?? i.makineId ?? i.kisiId;
+    return [i.id, {
+      id: i.id, uretimEmriId: i.uretimEmriId, emirNo: nolar.get(i.uretimEmriId) ?? '', opNo: i.opNo, ad: i.ad, durum: i.durum, istasyonId: i.istasyonId,
+      kaynak: tur === null || kaynakId === null ? null : { tur, id: kaynakId },
+    }];
+  }));
 }
 
 export interface MalzemeIhtiyaci {

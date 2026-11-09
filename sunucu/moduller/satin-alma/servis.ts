@@ -22,7 +22,7 @@ import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/fina
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
-import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
@@ -380,8 +380,7 @@ async function kalemBaglariKur(db: Db, talepIdleri: readonly string[]): Promise<
   const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
   if (satirlar.length === 0) return new Map();
   const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
-  const isler = new Map<number, Awaited<ReturnType<typeof isEmriOzeti>>>();
-  for (const id of new Set(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])))) isler.set(id, await isEmriOzeti(db, id));
+  const isler = await isEmriOzetleri(db, satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])));
   const firmaId = (id: number) => { const k = isler.get(id)?.kaynak; return k?.tur === 'fason' ? k.id : null; };
   const firmalar = await firmaOzetleri(db, [...new Set([...isler.keys()].flatMap((id) => { const f = firmaId(id); return f === null ? [] : [f]; }))]);
   const m = new Map<string, KalemBagiCikisi[]>();
@@ -406,11 +405,11 @@ async function kalemBaglariKur(db: Db, talepIdleri: readonly string[]): Promise<
 async function kalemBagGorunumu(db: Db, talepIdleri: readonly string[]): Promise<Map<string, KalemBagi>> {
   const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
   const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
-  const isler = new Map<number, string>();
-  for (const id of new Set(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])))) {
-    const o = await isEmriOzeti(db, id);
-    isler.set(id, o === null ? `#${id}` : `${o.emirNo} · Op ${o.opNo}`);
-  }
+  const ozetler = await isEmriOzetleri(db, satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])));
+  const isler = new Map(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])).map((id) => {
+    const o = ozetler.get(id);
+    return [id, o === undefined ? `#${id}` : `${o.emirNo} · Op ${o.opNo}`] as const;
+  }));
   return new Map(satirlar.map((r) => {
     const kart = r.uygulananMalzemeNo === null ? undefined : kartlar.get(r.uygulananMalzemeNo);
     return [r.kalemId, {
