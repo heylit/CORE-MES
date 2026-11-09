@@ -25,7 +25,9 @@ function ac(fiyatlar: GuncelKgFiyatiSatiri[], islemler: string[] = ['satin-alma.
     istekler.push({ yontem: i?.method ?? 'GET', yol, govde: i?.body ? JSON.parse(String(i.body)) : undefined, kimlik: new Headers(i?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici: { id: 9, ad: 'Deneme Alıcı', islemler } });
     if (yol === '/satin-alma-kg-fiyatlari') return json(200, { fiyatlar, fiyatsizKaliteler, stokDegeri } satisfies KgFiyatlariCevabi);
-    if (yol.startsWith('/satin-alma-kg-fiyatlari/gecmis')) return json(200, { girisler: [satir({}), satir({ kgFiyati: '110.0000', tryKgFiyati: '110.0000', gecerlilik: '2026-10-01' })] });
+    if (yol.startsWith('/satin-alma-kg-fiyatlari/gecmis')) {
+      return json(200, { girisler: [satir({}), satir({ id: 2, kgFiyati: '110.0000', tryKgFiyati: '110.0000', gecerlilik: '2026-10-01', iptalEdildi: true, iptal: { gerekce: 'Deneme: yanlış para birimi', kisiAdi: 'Deneme Yönetici', zaman: '2026-10-02T06:30:00.000Z' } })] });
+    }
     return ekle();
   }));
   render(
@@ -37,66 +39,140 @@ function ac(fiyatlar: GuncelKgFiyatiSatiri[], islemler: string[] = ['satin-alma.
 }
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('Malzeme kg fiyatları (SAT-77)', () => {
-  it('satırda kalite, form, fiyat, TL karşılığı ve giren görünür; formsuz satır "Bütün formlar", kursuz TL "—"', async () => {
-    ac([satir({ form: null, paraBirimi: 'USD', kgFiyati: '3.2000', tryKgFiyati: null }), satir({})]);
+const satirDugmesi = (ad: string) => screen.findByRole('button', { name: ad });
+const toplu = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: 'Kg fiyatları: diğer işlemler' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: /Toplu giriş/ }));
+};
+
+describe('Malzeme kg fiyatları (SAT-77, 2455 Teslim A)', () => {
+  it('satırda kalite ve form, güncel kg (dövizde ₺ karşılığı), son alış ve sapma, yaş, kaynak; formsuz satır "Bütün formlar"', async () => {
+    ac([
+      satir({ form: null, paraBirimi: 'USD', kgFiyati: '3.8500', tryKgFiyati: '136.2900', sonAlisKgFiyati: '145.2000', sonAlisKgFiyatiDoviz: '4.1000', sonAlisParaBirimi: 'USD',
+        sapmaYuzde: '6.49', yasGun: 21, kaynak: 'tedarikci_teklifi' }),
+      satir({ id: 2, yasGun: 35, eskiMi: true }),
+    ]);
     expect(await screen.findByText('Bütün formlar')).toBeTruthy();
-    expect(screen.getByText('3,2 USD')).toBeTruthy();
-    expect(screen.getAllByText('125,5 TL').length).toBe(1);
-    expect(screen.getAllByText('Deneme Alıcı').length).toBe(2);
+    expect(screen.getByText('3,85 USD')).toBeTruthy();
+    expect(screen.getByText('136,29 ₺')).toBeTruthy();
+    expect(screen.getByText('125,50 ₺')).toBeTruthy();
+    expect(screen.getByText('145,20 ₺')).toBeTruthy();
+    expect(screen.getByText('+%6,5')).toBeTruthy();
+    expect(screen.getByText('listeye göre')).toBeTruthy();
+    expect(screen.getByText('Tedarikçi teklifi')).toBeTruthy();
+    expect(screen.getByText('alış yok')).toBeTruthy();
+    expect(screen.getByText('Eskidi')).toBeTruthy();
+    expect(screen.queryByText(/ TL/)).toBeNull();
   });
 
-  it('okuyan fiyat giremez: Yeni fiyat, Toplu giriş ve Fiyat gir düğmeleri yok', async () => {
-    ac([satir({})], ['satin-alma.oku']);
-    expect(await screen.findByText('Çubuk')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Yeni fiyat/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Toplu giriş/ })).toBeNull();
+  it('süzgeç sekmeleri sayılarıyla: eskiyen, sapan, fiyatsız aynı tabloda, kartta yok; yetim satırda tek iş "İptal et"', async () => {
+    ac([satir({ eskiMi: true, yasGun: 40 }), satir({ id: 2, kaliteKodu: 'DENEME-SP', sapmaYuzde: '-12.00', sapanMi: true, sonAlisKgFiyati: '110.0000' }),
+      satir({ id: 3, kaliteKodu: 'DENEME-YT', kartta: false })], undefined, undefined, [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 3 }]);
+    const tablo = await screen.findByRole('table', { name: 'Kg fiyatları' });
+    expect(within(tablo).getByText('Fiyat yok')).toBeTruthy();
+    expect(within(tablo).getByText('Boru · 3 kart')).toBeTruthy();
+    expect(within(tablo).getByText('Kartta yok')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'DENEME-YT · Çubuk: İptal et' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'DENEME-YT · Çubuk: Fiyat gir' })).toBeNull();
+    const sayi = (ad: RegExp) => screen.getByRole('tab', { name: ad }).querySelector('.tc-sekme-sayi')?.textContent;
+    expect([sayi(/Eskiyen/), sayi(/Sapan/), sayi(/Fiyatsız/), sayi(/Kartta yok/)]).toEqual(['1', '1', '1', '1']);
+    expect(screen.getByText('Eskiyen ya da sapan').closest('.tc-sayi-govde')?.querySelector('.tc-sayi-deger')?.textContent).toBe('2');
+    fireEvent.click(screen.getByRole('tab', { name: /Sapan/ }));
+    expect(within(tablo).getAllByRole('row').filter((r) => r.hasAttribute('data-satir')).map((r) => r.getAttribute('data-satir'))).toEqual(['DENEME-SP|cubuk']);
+  });
+
+  it('okuyan fiyat giremez ve iptal edemez: Fiyat gir, Toplu giriş, İptal et ve işlem menüsü yok (Güvenlik E1)', async () => {
+    ac([satir({}), satir({ id: 3, kaliteKodu: 'DENEME-YT', kartta: false })], ['satin-alma.oku']);
+    expect(await screen.findByText('DENEME-AL')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Fiyat gir/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /diğer işlemler/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /İptal et/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /için işlemler/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'İşlem' })).toBeNull();
   });
 
-  it('satırdan fiyat girilir: kalite ve form satırdan, virgüllü fiyat noktaya çevrilir, tekrar kimliğiyle gider', async () => {
-    const istekler = ac([satir({})]);
-    fireEvent.click(await screen.findByRole('button', { name: /Fiyat gir/ }));
+  it('satırdan fiyat girilir: kalite ve form satırdan, kaynak seçilir, virgüllü fiyat noktaya çevrilir, tekrar kimliğiyle gider', async () => {
+    const istekler = ac([satir({ kaynak: 'piyasa' })]);
+    fireEvent.click(await satirDugmesi('DENEME-AL · Çubuk: Fiyat gir'));
     const p = screen.getByRole('dialog');
+    expect(within(p).queryByLabelText('Kalite ve form')).toBeNull();
+    expect((within(p).getByLabelText('Kaynak') as HTMLSelectElement).value).toBe('piyasa');
+    fireEvent.change(within(p).getByLabelText('Kaynak'), { target: { value: 'tedarikci_teklifi' } });
     fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '130,25' } });
     fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
     const g = istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!;
     expect(g.kimlik).toBeTruthy();
-    expect(g.govde).toMatchObject({ satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '130.25', talasKgFiyati: null, paraBirimi: 'TRY' }] });
+    expect(g.govde).toMatchObject({ satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '130.25', talasKgFiyati: null, paraBirimi: 'TRY', kaynak: 'tedarikci_teklifi' }] });
   });
 
-  it('214 a: talaş fiyatı satırda kendi para birimiyle görünür; pencerede girilen talaş fiyatı gider, sıfır girilirse gitmez', async () => {
-    const istekler = ac([satir({ talasKgFiyati: '20.0000', tryTalasKgFiyati: '20.0000' })]);
-    expect(await screen.findByText('20 TRY')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Fiyat gir/ }));
+  it('2455-2 a: başlıktaki Fiyat gir kaliteyi yazdırmaz, kartlardaki kalite ve formlardan seçtirir; fiyatsızlar üstte, kartta olmayan seçilemez', async () => {
+    const istekler = ac([satir({}), satir({ id: 3, kaliteKodu: 'DENEME-YT', kartta: false })], undefined, undefined, [{ kaliteKodu: 'DENEME-FY', aile: null, form: 'boru', kartSayisi: 3 }]);
+    await screen.findByText('DENEME-AL');
+    fireEvent.click(screen.getByRole('button', { name: 'Fiyat gir' }));
     const p = screen.getByRole('dialog');
+    const secim = within(p).getByLabelText('Kalite ve form') as HTMLSelectElement;
+    expect([...secim.options].map((o) => o.textContent)).toEqual(['DENEME-FY · Boru (fiyatı yok)', 'DENEME-AL · Çubuk']);
+    expect((within(p).getByLabelText('Kaynak') as HTMLSelectElement).value).toBe('');
+    fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '90' } });
+    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
+    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kaliteKodu: 'DENEME-FY', form: 'boru', kgFiyati: '90', kaynak: null }] });
+  });
+
+  it('214 a ve 1352: talaş ve katsayılar pencerede kalır; satırdan açılınca güncel katsayılar hazır gelir, bozuk değer gönderilmez', async () => {
+    const istekler = ac([satir({ islemKatsayisi: '1.15', araciKatsayisi: '1.05', etkinKgFiyati: '151.5388' })]);
+    fireEvent.click(await satirDugmesi('DENEME-AL · Çubuk: Fiyat gir'));
+    const p = screen.getByRole('dialog');
+    expect((within(p).getByLabelText(/işlem katsayısı/i) as HTMLInputElement).value).toBe('1,15');
     fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '130' } });
     fireEvent.change(within(p).getByLabelText(/Talaş/), { target: { value: '0' } });
     fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
     expect(within(p).getByRole('alert').textContent).toContain('Talaş');
     fireEvent.change(within(p).getByLabelText(/Talaş/), { target: { value: '22,5' } });
+    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '0' } });
+    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
+    expect(within(p).getByRole('alert').textContent).toContain('Aracı katsayısını');
+    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '' } });
     fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kgFiyati: '130', talasKgFiyati: '22.5' }] });
+    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kgFiyati: '130', talasKgFiyati: '22.5', islemKatsayisi: '1.15', araciKatsayisi: null }] });
   });
 
-  it('fiyatı olmayan kalite ayrı listede uyarıyla görünür; oradan fiyat girilince kalite ve form hazır gelir', async () => {
-    const istekler = ac([], undefined, undefined, [{ kaliteKodu: 'DENEME-FY', aile: 'metal', form: 'boru', kartSayisi: 3 }]);
-    const liste = await screen.findByRole('table', { name: 'Fiyatı olmayan kaliteler' });
-    expect(within(liste).getByText('DENEME-FY')).toBeTruthy();
-    fireEvent.click(within(liste).getByRole('button', { name: /Fiyat gir/ }));
+  it('iptal: gerekçe zorunlu; gerekçeyle tekrar kimliği taşıyan tek istek gider, cevap listeyi yeniler', async () => {
+    const kalan = satir({ id: 1 });
+    const istekler = ac([satir({ id: 7, kaliteKodu: 'DENEME-YT', kartta: false, kgFiyati: '3.9000', paraBirimi: 'USD', gecerlilik: '2026-09-07' })], undefined,
+      () => json(200, { fiyatlar: [kalan], fiyatsizKaliteler: [], stokDegeri: null }));
+    fireEvent.click(await satirDugmesi('DENEME-YT · Çubuk: İptal et'));
     const p = screen.getByRole('dialog');
-    expect(within(p).queryByLabelText(/^Kalite/)).toBeNull();
-    fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '90' } });
-    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kaliteKodu: 'DENEME-FY', form: 'boru', kgFiyati: '90' }] });
+    expect(p.textContent).toContain('3,90 USD/kg, 07.09.2026. Bu kalite hiçbir malzeme kartında yok.');
+    fireEvent.click(within(p).getByRole('button', { name: /İptal et/ }));
+    expect(within(p).getByRole('alert').textContent).toContain('gerekçe');
+    expect(istekler.some((i) => i.yol.endsWith('/iptal'))).toBe(false);
+    fireEvent.change(within(p).getByLabelText(/Gerekçe/), { target: { value: 'Deneme: kalite kodu yanlış' } });
+    fireEvent.click(within(p).getByRole('button', { name: /İptal et/ }));
+    await waitFor(() => expect(istekler.filter((i) => i.yol === '/satin-alma-kg-fiyatlari/7/iptal')).toHaveLength(1));
+    const g = istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/7/iptal')!;
+    expect(g.govde).toEqual({ gerekce: 'Deneme: kalite kodu yanlış' });
+    expect(g.kimlik).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('DENEME-YT')).toBeNull());
+    expect(screen.getByText('DENEME-AL')).toBeTruthy();
+  });
+
+  it('kartta olan satırda son giriş "..." menüsünden iptal edilir; sunucu reddederse ileti pencerede kalır', async () => {
+    const istekler = ac([satir({ id: 4 })], undefined, () => json(422, { hata: { kod: 'GECERSIZ', mesaj: 'Deneme ret iletisi' } }));
+    fireEvent.click(await satirDugmesi('DENEME-AL · Çubuk için işlemler'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Son girişi iptal et/ }));
+    const p = screen.getByRole('dialog');
+    fireEvent.change(within(p).getByLabelText(/Gerekçe/), { target: { value: 'Deneme gerekçe' } });
+    fireEvent.click(within(p).getByRole('button', { name: /İptal et/ }));
+    expect(await within(p).findByRole('alert')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/4/iptal')).toBe(true);
   });
 
   it('toplu yapıştırmada hatalı satır varken kaydedilmez; düzelince sayı düğmede görünür ve hepsi tek istekte gider', async () => {
     const istekler = ac([]);
-    fireEvent.click(await screen.findByRole('button', { name: /Toplu giriş/ }));
+    await toplu();
     const p = screen.getByRole('dialog');
     const alan = within(p).getByLabelText(/Excel ya da CSV/);
     fireEvent.change(alan, { target: { value: 'DENEME-1;cubuk;10\nDENEME-2;;sıfır' } });
@@ -108,7 +184,18 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     expect((istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde as { satirlar: unknown[] }).satirlar).toHaveLength(2);
   });
 
-  it('stok değeri gelirse iki fiyatla kartta ve satırda görünür, fiyatsız kalem sayısı yazılır; gelmezse sütun ve kart yok', async () => {
+  it('toplu yüklemede sunucu kartta olmayan satırları numarasıyla reddeder; ileti metin olarak pencerede kalır', async () => {
+    ac([], undefined, () => json(422, { kod: 'GECERSIZ', mesaj: 'Malzeme kartlarında olmayan kalite: 2. satır <b>DENEME-X</b>' }));
+    await toplu();
+    const p = screen.getByRole('dialog');
+    fireEvent.change(within(p).getByLabelText(/Excel ya da CSV/), { target: { value: 'DENEME-1;cubuk;10\nDENEME-X;cubuk;12' } });
+    fireEvent.click(within(p).getByRole('button', { name: '2 fiyatı kaydet' }));
+    const uyari = await within(p).findByRole('alert');
+    expect(uyari.textContent).toContain('2. satır <b>DENEME-X</b>');
+    expect(uyari.querySelector('b')).toBeNull();
+  });
+
+  it('stok değeri gelirse iki özet ve satırda değer görünür, değere girmeyen gruplar notta; gelmezse stok özeti ve sütunu yok', async () => {
     ac([satir({})], undefined, undefined, [], {
       kgFiyatiyla: '1500.00', alisFiyatiyla: null, kgFiyatsizKalem: 2, alisFiyatsizKalem: 0,
       ayriToplam: { kgFiyatiyla: '300.00', alisFiyatiyla: '280.00' },
@@ -116,20 +203,19 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
         { grup: 'fason', kgFiyatiyla: '200.00', alisFiyatiyla: null }, { grup: 'yolda', kgFiyatiyla: null, alisFiyatiyla: null }, { grup: 'diger', kgFiyatiyla: null, alisFiyatiyla: null }],
       satirlar: [{ kaliteKodu: 'DENEME-AL', form: 'cubuk', tutar: '1250.50' }],
     });
-    expect(await screen.findByText('1.500,00 TL')).toBeTruthy();
-    // 228 a: kullanılabilir olmayan stok değere girmez; toplamı ve değeri olan grupları ayrı kartta görünür.
-    expect(screen.getByText('300,00 TL')).toBeTruthy();
-    expect(screen.getByText('Hurda 100,00 TL · Fason 200,00 TL')).toBeTruthy();
+    expect(await screen.findByText('1.500 ₺')).toBeTruthy();
+    expect(screen.getByText('Stok değerine dahil olmayan (kg fiyatıyla): Hurda 100,00 ₺ · Fason 200,00 ₺.')).toBeTruthy();
     expect(screen.getByText('2 stoklu malzemenin fiyatı yok, dahil değil')).toBeTruthy();
     expect(screen.getByText('Fiyatlı stok yok')).toBeTruthy();
-    expect(screen.getByText('1.250,50 TL')).toBeTruthy();
+    expect(screen.getByText('1.251 ₺')).toBeTruthy();
     cleanup();
     ac([satir({})]);
-    expect(await screen.findByText('Çubuk')).toBeTruthy();
-    expect(screen.queryByText(/Stok değeri/)).toBeNull();
+    expect(await screen.findByText('DENEME-AL')).toBeTruthy();
+    expect(screen.queryByText(/stok değeri/i)).toBeNull();
+    expect(screen.getByText('Eskiyen ya da sapan')).toBeTruthy();
   });
 
-  it('satıra basınca o kalite ve formun geçmişi açılır: kaydeden, kayıt zamanı (tesis saati) ve fiyat grafiği görünür', async () => {
+  it('satıra basınca geçmiş açılır: kaydeden, kaynak, kayıt zamanı (tesis saati), iptal edilen giriş gerekçe, kişi ve zamanla (Güvenlik E2); grafik iptal edileni çizmez', async () => {
     const istekler = ac([satir({})], ['satin-alma.oku']);
     fireEvent.click(await screen.findByText('DENEME-AL'));
     const p = await screen.findByRole('dialog');
@@ -137,8 +223,10 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     expect(within(tablo).getByText('01.10.2026')).toBeTruthy();
     expect(within(tablo).getByRole('columnheader', { name: 'Kaydeden' })).toBeTruthy();
     expect(within(tablo).getAllByText('19.10.2026 11:00')).toHaveLength(2);
+    expect(within(tablo).getAllByText('İptal edildi')).toHaveLength(1);
+    expect(within(tablo).getByText('Deneme: yanlış para birimi · Deneme Yönetici · 02.10.2026 09:30')).toBeTruthy();
     expect(within(p).getByText('Kg fiyatı, geçerlilik gününe göre', { selector: '.tc-grafik-baslik' })).toBeTruthy();
-    expect(within(p).getByText('125,5 TL', { selector: '.tc-grafik-son' })).toBeTruthy();
+    expect(within(p).getByText('125,5 ₺', { selector: '.tc-grafik-son' })).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/gecmis?kalite=DENEME-AL&form=cubuk')).toBe(true);
   });
 
@@ -147,7 +235,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     let indirilen: Blob | null = null;
     vi.stubGlobal('URL', Object.assign(Object.create(URL) as typeof URL, { createObjectURL: (b: Blob) => { indirilen = b; return 'blob:deneme'; }, revokeObjectURL: () => undefined }));
     const tikla = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    fireEvent.click(await screen.findByRole('button', { name: /Toplu giriş/ }));
+    await toplu();
     const p = screen.getByRole('dialog');
     fireEvent.click(within(p).getByRole('button', { name: /Şablonu indir/ }));
     expect(tikla).toHaveBeenCalled();
@@ -157,7 +245,7 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
     const dolu = sablon.replace('"DENEME-AL";"cubuk";""', '"DENEME-AL";"cubuk";"131,75"');
     fireEvent.change(within(p).getByLabelText('Kg fiyatı dosyası'), { target: { files: [new File([dolu], 'kg.csv', { type: 'text/csv' })] } });
     const onizleme = await within(p).findByRole('table', { name: 'Kaydedilecek fiyatlar' });
-    expect(within(onizleme).getByText('131,75 TRY')).toBeTruthy();
+    expect(within(onizleme).getByText('131,75 ₺')).toBeTruthy();
     expect(within(p).getByText('1 satırda kg fiyatı boş, atlanır.')).toBeTruthy();
     fireEvent.click(within(p).getByRole('button', { name: '1 fiyatı kaydet' }));
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toHaveLength(1));
@@ -166,31 +254,5 @@ describe('Malzeme kg fiyatları (SAT-77)', () => {
         islemKatsayisi: null, araciKatsayisi: null }],
     });
     tikla.mockRestore();
-  });
-
-  it('1352: satırda katsayılar ve etkin kg fiyatı görünür; satırdan açılan pencerede güncel katsayılar hazır gelir, bozuk katsayı gönderilmez', async () => {
-    const istekler = ac([satir({ islemKatsayisi: '1.15', araciKatsayisi: '1.05', etkinKgFiyati: '151.5388' })]);
-    expect(await screen.findByText('151,5388 TRY')).toBeTruthy();
-    expect(screen.getByText('1,15')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Fiyat gir/ }));
-    const p = screen.getByRole('dialog');
-    expect((within(p).getByLabelText(/işlem katsayısı/i) as HTMLInputElement).value).toBe('1,15');
-    fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '130' } });
-    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '0' } });
-    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
-    expect(within(p).getByRole('alert').textContent).toContain('Aracı katsayısını');
-    fireEvent.change(within(p).getByLabelText(/Aracı maliyeti/), { target: { value: '' } });
-    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/satin-alma-kg-fiyatlari/ekle')!.govde).toMatchObject({ satirlar: [{ kgFiyati: '130', islemKatsayisi: '1.15', araciKatsayisi: null }] });
-  });
-
-  it('sunucu reddederse ileti pencerede kalır', async () => {
-    ac([satir({})], undefined, () => json(422, { hata: { kod: 'GECERSIZ', mesaj: 'Deneme ret iletisi' } }));
-    fireEvent.click(await screen.findByRole('button', { name: /Fiyat gir/ }));
-    const p = screen.getByRole('dialog');
-    fireEvent.change(within(p).getByLabelText(/Kg fiyatı/), { target: { value: '5' } });
-    fireEvent.click(within(p).getByRole('button', { name: /Kaydet/ }));
-    expect(await within(p).findByRole('alert')).toBeTruthy();
   });
 });
