@@ -18,6 +18,10 @@ export { gkkGerekenKartlar } from './servis.ts';
 // alanlar yalnız okunur, stok kopyalamaz.
 export { kartAlanDegerleri, kategoriKartlari, sktTakipliKartlar } from './servis.ts';
 export type { KartAlanDegeri } from './servis.ts';
+// 2465 (2459 a, 2461-4 a): kategori ağacı [{ tur, kod, ad, ustAd, aktif }]; hammaddede kod kartın aile anahtarı. Pasifler aktif: false ile
+// döner. Düzenleme yeri istemci disari.ts kategoriAgaciDuzenleYolu. Yetki denetlemez.
+export { kategoriAgaci } from './servis.ts';
+export type { KategoriAgaciDugumu } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 // Logo bağlantısı (kart #232): kuyruğu okur, her kartın sonucunu bildirir. Yetki denetlemez; nasıl kullanılacağı NOTLAR.md "Logo bağlantısı".
 export { logoyaGidecekMalzemeler, malzemeLogoSonucu } from './servis.ts';
 // Logo modülü birim setini kaldırmadan önce: set bir birim karşılığında kullanılıyor mu (kart #207 isteği madde 4).

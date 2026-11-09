@@ -32,7 +32,8 @@ import {
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
-import { katalogGeriCekildiMi, katalogKartAdi } from './kurallar.ts';
+import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur } from './kurallar.ts';
+import type { KategoriAgaciDugumu } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
@@ -855,6 +856,11 @@ export async function katalogAyariKaydet(
     await s.kategorileriYaz(db, kategoriler);
   }
   return { id: anahtar, surum: yazilan.surum };
+}
+
+// 2465 (2459 a): kategori ağacı; ailelerin eki ve gizlisi Malzeme ayarından. Yetki denetlemez.
+export async function kategoriAgaci(db: Db): Promise<KategoriAgaciDugumu[]> {
+  return kategoriAgaciKur(await katalogMalzemeAyari(db), await s.kategoriSatirlari(db));
 }
 
 // Logo modülü bir birim setini kaldırmadan önce sorar (kart #207 isteği madde 4): bütün birim karşılıklarına bakar, kuyruktakilere değil.

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GKK_OLMAYAN_TURLER, KATALOG_ONAY_DURUMLARI, KATALOG_TURLERI, LOGO_KART_TURLERI } from '#paylasilan/sozlesme/malzemeler.ts';
+import { KATEGORI_AGACI_TURLERI, TABAN_HAMMADDE_AILELERI } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
+import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import type { HizmetYonu, KatalogKartDurumu, KatalogOnayDurumu, KatalogTuru, LogoEksik } from '#paylasilan/sozlesme/malzemeler.ts';
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları: MKK-1..MKK-15 ---------------- */
@@ -1106,6 +1108,31 @@ export function ayarKategorileri(
   }
   for (const k of tablo) if (k.yerlesik) ayarda.add(`${k.tur}|${k.kod}`);
   return [...sonuc].map(([anahtar, k]) => ({ ...k, aktif: ayarda.has(anahtar) && !gizli.has(anahtar) }));
+}
+
+// 2465: kategori ağacı. Ek aile ayarda `aileler = [{ key, ad }]`, gizlenen aile `gizliAileler = ['<key>']` (ekranın malzemeAyarUygula'sı);
+// taban aileyle aynı anahtarlı ek aile ekranda da yok sayılır. Bozuk girdi atlanır. Kategorilerde yerleşik önce, sonra ad sırası.
+export const KATEGORI_AGACI_TUR_ADLARI: Readonly<Record<KategoriAgaciTuru, string>> = { hammadde: 'Hammadde', sarf: 'Sarf', demirbas: 'Demirbaş', hizmet: 'Hizmet' };
+export function kategoriAgaciKur(
+  ayar: Readonly<Record<string, unknown>> | null,
+  kategoriler: readonly { tur: KategoriAgaciTuru; kod: string; ad: string; yerlesik: boolean; aktif: boolean }[],
+): KategoriAgaciDugumu[] {
+  const gizli = new Set(metinler(ayar?.['gizliAileler']));
+  const aileler: { kod: string; ad: string }[] = TABAN_HAMMADDE_AILELERI.map((a) => ({ ...a }));
+  const ekler = Array.isArray(ayar?.['aileler']) ? ayar['aileler'] : [];
+  for (const a of ekler) {
+    if (!nesneMi(a) || typeof a['key'] !== 'string' || typeof a['ad'] !== 'string') continue;
+    const kod = a['key'].trim();
+    const ad = a['ad'].trim();
+    if (kod === '' || ad === '' || aileler.some((x) => x.kod === kod)) continue;
+    aileler.push({ kod, ad });
+  }
+  const hammadde = aileler.map((a): KategoriAgaciDugumu => ({ tur: 'hammadde', kod: a.kod, ad: a.ad, ustAd: KATEGORI_AGACI_TUR_ADLARI.hammadde, aktif: !gizli.has(a.kod) }));
+  const digerleri = KATEGORI_AGACI_TURLERI.filter((t) => t !== 'hammadde').flatMap((tur) => kategoriler
+    .filter((k) => k.tur === tur)
+    .sort((a, b) => Number(b.yerlesik) - Number(a.yerlesik) || a.ad.localeCompare(b.ad, 'tr') || a.kod.localeCompare(b.kod))
+    .map((k): KategoriAgaciDugumu => ({ tur, kod: k.kod, ad: k.ad, ustAd: KATEGORI_AGACI_TUR_ADLARI[tur], aktif: k.aktif })));
+  return [...hammadde, ...digerleri];
 }
 
 /* ---------------- Örnek veri (kart #906) ---------------- */
