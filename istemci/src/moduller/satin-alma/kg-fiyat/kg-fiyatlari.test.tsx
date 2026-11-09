@@ -2,20 +2,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { FiyatsizKalite, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { FiyatsizKalite, GuncelKgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { KgFiyatlari } from './KgFiyatlari.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 // Kalite kodları ve kişi uydurmadır.
-const satir = (ek: Partial<KgFiyatiSatiri>): KgFiyatiSatiri => ({
+const satir = (ek: Partial<GuncelKgFiyatiSatiri>): GuncelKgFiyatiSatiri => ({
+  id: 1, kaynak: null, iptalEdildi: false, iptal: null, kartta: true, yasGun: 0, eskiMi: false, sonAlisKgFiyatiDoviz: null, sonAlisParaBirimi: null, sonAlisKgFiyati: null,
+  sapmaYuzde: null, sapanMi: false,
   kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '125.5000', paraBirimi: 'TRY', tryKgFiyati: '125.5000', talasKgFiyati: null, tryTalasKgFiyati: null, gecerlilik: '2026-10-19', aciklama: '',
   kisiAdi: 'Deneme Alıcı', zaman: '2026-10-19T08:00:00.000Z', islemKatsayisi: null, araciKatsayisi: null, etkinKgFiyati: null, ...ek,
 });
 
 interface Istek { yontem: string; yol: string; govde: unknown; kimlik: string | null }
-function ac(fiyatlar: KgFiyatiSatiri[], islemler: string[] = ['satin-alma.oku', 'satin-alma.yaz'], ekle: () => Response = () => json(200, { fiyatlar, fiyatsizKaliteler: [], stokDegeri: null }),
+function ac(fiyatlar: GuncelKgFiyatiSatiri[], islemler: string[] = ['satin-alma.oku', 'satin-alma.yaz'], ekle: () => Response = () => json(200, { fiyatlar, fiyatsizKaliteler: [], stokDegeri: null }),
   fiyatsizKaliteler: FiyatsizKalite[] = [], stokDegeri: KgStokDegeri | null = null) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, i?: RequestInit) => {

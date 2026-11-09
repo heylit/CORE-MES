@@ -965,11 +965,19 @@ export async function siparisKdvOraniYaz(db: Db, talepId: string, teklifId: stri
 
 // ---- Kg fiyatı (SAT-77): yalnız eklenir. TL karşılığı çağıranın verdiği kurla (para birimi, kur dizileri); kuru olmayan boş.
 export interface KgFiyatiOkuma {
+  id: number; kaynak: KgFiyatiKaynagi | null; iptalEdildi: boolean;
+  // Güvenlik E2: iptal edilen girişin iptal kaydı (gerekçe, kişi, zaman); iptal edilmemişse null.
+  iptal: { gerekce: string; kisiId: number; zaman: string } | null;
   kaliteKodu: string; form: string | null; kgFiyati: string; paraBirimi: string; tryKgFiyati: string | null; talasKgFiyati: string | null;
   tryTalasKgFiyati: string | null; gecerlilik: string; aciklama: string; kisiId: number; zaman: string;
   islemKatsayisi: string | null; araciKatsayisi: string | null; etkinKgFiyati: string | null;
 }
-const KG_FIYATI_SECIMI = `f.kalite_kodu AS "kaliteKodu", f.form, f.kg_fiyati::text AS "kgFiyati", f.para_birimi::text AS "paraBirimi",
+export type KgFiyatiKaynagi = 'tedarikci_teklifi' | 'piyasa' | 'son_alis';
+// 2455-A: iptal satırı (iptal_edilen_id dolu) okunmaz; iptal edilen giriş güncelden düşer, geçmişte işaretli görünür.
+const KG_IPTAL_EDILDI = 'EXISTS (SELECT 1 FROM satin_alma_kg_fiyati i WHERE i.iptal_edilen_id = f.id)';
+const KG_FIYATI_SECIMI = `f.id, f.kaynak, ${KG_IPTAL_EDILDI} AS "iptalEdildi",
+  (SELECT json_build_object('gerekce', i.aciklama, 'kisiId', i.kisi_id, 'zaman', ${ISO('i.zaman')}) FROM satin_alma_kg_fiyati i WHERE i.iptal_edilen_id = f.id) AS iptal,
+  f.kalite_kodu AS "kaliteKodu", f.form, f.kg_fiyati::text AS "kgFiyati", f.para_birimi::text AS "paraBirimi",
   (round(f.kg_fiyati * k.kur, 4))::text AS "tryKgFiyati",
   f.talas_kg_fiyati::text AS "talasKgFiyati", (round(f.talas_kg_fiyati * k.kur, 4))::text AS "tryTalasKgFiyati", f.gecerlilik::text AS gecerlilik, f.aciklama, f.kisi_id AS "kisiId", ${ISO('f.zaman')} AS zaman,
   trim_scale(f.islem_katsayisi)::text AS "islemKatsayisi", trim_scale(f.araci_katsayisi)::text AS "araciKatsayisi",
@@ -981,7 +989,9 @@ export interface KurDizisi { paraBirimleri: string[]; kurlar: string[] }
 export function guncelKgFiyatlari(db: Db, kur: KurDizisi, gun: string | null = null): Promise<KgFiyatiOkuma[]> {
   return db.sorgu<KgFiyatiOkuma>(
     `SELECT ${KG_FIYATI_SECIMI} FROM (
-       SELECT DISTINCT ON (kalite_kodu, form) * FROM satin_alma_kg_fiyati WHERE gecerlilik <= coalesce($3::date, current_date)
+       SELECT DISTINCT ON (kalite_kodu, form) * FROM satin_alma_kg_fiyati g
+        WHERE g.gecerlilik <= coalesce($3::date, current_date) AND g.iptal_edilen_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM satin_alma_kg_fiyati i WHERE i.iptal_edilen_id = g.id)
         ORDER BY kalite_kodu, form, gecerlilik DESC, id DESC) f
        ${KG_KURU}
       ORDER BY f.kalite_kodu, f.form NULLS FIRST`,
@@ -991,24 +1001,43 @@ export function guncelKgFiyatlari(db: Db, kur: KurDizisi, gun: string | null = n
 export function kgFiyatiGecmisi(db: Db, kur: KurDizisi, kaliteKodu: string, form: string | null): Promise<KgFiyatiOkuma[]> {
   return db.sorgu<KgFiyatiOkuma>(
     `SELECT ${KG_FIYATI_SECIMI} FROM satin_alma_kg_fiyati f ${KG_KURU}
-      WHERE f.kalite_kodu = $3 AND f.form IS NOT DISTINCT FROM $4::text ORDER BY f.gecerlilik DESC, f.id DESC`,
+      WHERE f.kalite_kodu = $3 AND f.form IS NOT DISTINCT FROM $4::text AND f.iptal_edilen_id IS NULL ORDER BY f.gecerlilik DESC, f.id DESC`,
     [kur.paraBirimleri, kur.kurlar, kaliteKodu, form],
   );
 }
 export interface KgFiyatiYazimi { kaliteKodu: string; form: string | null; kgFiyati: string; talasKgFiyati: string | null; paraBirimi: string;
-  gecerlilik: string; aciklama: string; islemKatsayisi: string | null; araciKatsayisi: string | null;
+  gecerlilik: string; aciklama: string; islemKatsayisi: string | null; araciKatsayisi: string | null; kaynak: KgFiyatiKaynagi | null;
 }
 export async function kgFiyatlariEkle(db: Db, kisiId: number, satirlar: readonly KgFiyatiYazimi[]): Promise<void> {
   await db.sorgu(
-    `INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, aciklama, talas_kg_fiyati, islem_katsayisi, araci_katsayisi, kisi_id)
-     SELECT a, b, c, d, e, f, g, h, i, $10::int
-       FROM unnest($1::text[], $2::text[], $3::numeric[], $4::text[], $5::date[], $6::text[], $7::numeric[], $8::numeric[], $9::numeric[])
-            WITH ORDINALITY AS x(a, b, c, d, e, f, g, h, i, sira)
+    `INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, aciklama, talas_kg_fiyati, islem_katsayisi, araci_katsayisi, kaynak, kisi_id)
+     SELECT a, b, c, d, e, f, g, h, i, j, $11::int
+       FROM unnest($1::text[], $2::text[], $3::numeric[], $4::text[], $5::date[], $6::text[], $7::numeric[], $8::numeric[], $9::numeric[], $10::text[])
+            WITH ORDINALITY AS x(a, b, c, d, e, f, g, h, i, j, sira)
       ORDER BY sira`,
     [satirlar.map((s) => s.kaliteKodu), satirlar.map((s) => s.form), satirlar.map((s) => s.kgFiyati), satirlar.map((s) => s.paraBirimi),
       satirlar.map((s) => s.gecerlilik), satirlar.map((s) => s.aciklama), satirlar.map((s) => s.talasKgFiyati),
-      satirlar.map((s) => s.islemKatsayisi), satirlar.map((s) => s.araciKatsayisi), kisiId],
+      satirlar.map((s) => s.islemKatsayisi), satirlar.map((s) => s.araciKatsayisi), satirlar.map((s) => s.kaynak), kisiId],
   );
+}
+// 2455-A: iptal yeni satırdır (tablo yalnız eklenir): kalite ve form iptal edilenden, geçerlilik bugün, gerekçe açıklamada.
+// İptal edilen satır kilitlenir; iptal satırı ya da zaten iptal edilmiş satır için null döner (ikincisi benzersiz dizinle de korunur).
+export type KgIptalSonucu = 'yok' | 'iptal-satiri' | 'zaten-iptal' | 'tamam';
+export async function kgFiyatiIptalEt(db: Db, id: number, kisiId: number, gerekce: string): Promise<KgIptalSonucu> {
+  const r = await db.tek<{ iptalSatiri: boolean; iptalEdildi: boolean }>(
+    `SELECT f.iptal_edilen_id IS NOT NULL AS "iptalSatiri", ${KG_IPTAL_EDILDI} AS "iptalEdildi" FROM satin_alma_kg_fiyati f WHERE f.id = $1 FOR UPDATE`, [id]);
+  if (r === null) return 'yok';
+  if (r.iptalSatiri) return 'iptal-satiri';
+  if (r.iptalEdildi) return 'zaten-iptal';
+  await db.sorgu(
+    `INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, gecerlilik, aciklama, iptal_edilen_id, kisi_id)
+     SELECT kalite_kodu, form, current_date, $3, id, $2 FROM satin_alma_kg_fiyati WHERE id = $1`, [id, kisiId, gerekce]);
+  return 'tamam';
+}
+// 2455-A son alış: teslimi olan malzeme numaraları (karttan kalite ve form, satın almadan fiyat okunur).
+export async function teslimliMalzemeNolari(db: Db): Promise<number[]> {
+  return (await db.sorgu<{ no: number }>(
+    `SELECT DISTINCT c.malzeme_no AS no FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI} WHERE m.miktar > 0 AND c.malzeme_no IS NOT NULL ORDER BY 1`)).map((r) => r.no);
 }
 
 // ---- 533 a: tedarik termini (malzeme başına tek satır). Planın gereken tarihi sürümü artırmaz: plan her kayıtta tam listeyi
@@ -1357,7 +1386,7 @@ export async function hatirlatmaKayitlari(db: Db): Promise<{ anahtar: string; tu
   return db.sorgu<{ anahtar: string; tur: string; acik: boolean }>('SELECT anahtar, tur, kapandi IS NULL AS acik FROM satin_alma_hatirlatma');
 }
 // Yalnız yeni eklenen anahtar döner: aynı anda koşan iki tur aynı hatırlatmayı iki kez göndermez.
-export async function hatirlatmaEkle(db: Db, anahtar: string, tur: string, talepId: string): Promise<boolean> {
+export async function hatirlatmaEkle(db: Db, anahtar: string, tur: string, talepId: string | null): Promise<boolean> {
   return (await db.tek('INSERT INTO satin_alma_hatirlatma (anahtar, tur, talep_id) VALUES ($1, $2, $3) ON CONFLICT (anahtar) DO NOTHING RETURNING anahtar',
     [anahtar, tur, talepId])) !== null;
 }

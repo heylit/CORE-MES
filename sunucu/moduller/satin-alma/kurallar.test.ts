@@ -7,6 +7,7 @@ import {
   ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, birlesikTalep, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
+import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikBol, sonAlisKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
@@ -741,4 +742,43 @@ test('2414 a K3 K4: kaynak talebin görünümü birleşik talepten yalnız kendi
   const b = birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: '2026-12-01', oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: '2026-11-01', oncelik: 'normal', uretimEmriId: 3 }]);
   assert.deepEqual([b.ihtiyacTarihi, b.oncelik, b.uretimEmriId, b.birim, b.durum], ['2026-11-01', 'normal', 3, null, 'taslak']);
   assert.equal(birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 4 }]).uretimEmriId, null);
+});
+
+test('2455-A: bölme yarım yukarı yuvarlanır, sıfıra bölme boş; formsuz satır kalitenin her formuna uyar; bilinmeyen satırlar 1den sayılır', () => {
+  assert.deepEqual([ondalikBol('10', '4'), ondalikBol('2', '3'), ondalikBol('-2', '3'), ondalikBol('1', '0')], ['2.5', '0.666667', '-0.666667', null]);
+  const kullanilan = [{ kaliteKodu: 'K1', form: 'cubuk' }, { kaliteKodu: 'K2', form: null }];
+  assert.deepEqual([kgFiyatiKartta('K1', 'cubuk', kullanilan), kgFiyatiKartta('K1', null, kullanilan), kgFiyatiKartta('K1', 'levha', kullanilan), kgFiyatiKartta('K2', 'cubuk', kullanilan)],
+    [true, true, false, false]);
+  assert.deepEqual(bilinmeyenKgSatirlari([{ kaliteKodu: 'K1', form: null }, { kaliteKodu: 'K3', form: null }, { kaliteKodu: 'K1', form: 'boru' }], kullanilan), [2, 3]);
+});
+
+test('2455-A: yaş geçerlilik gününden takvim günüdür; eşik boşsa eskime yok; son alış kg fiyatı stok birimine göre; sapma aynı kurla, eşik iki yönlü', () => {
+  assert.deepEqual([kgFiyatiYasi('2026-10-10', '2026-11-09'), kgFiyatiYasi('2026-11-10', '2026-11-09')], [30, 0]);
+  assert.deepEqual([kgFiyatiEskiMi(30, 30), kgFiyatiEskiMi(29, 30), kgFiyatiEskiMi(500, null)], [true, false, false]);
+  assert.deepEqual([sonAlisKgFiyati('12', 'KG', null), sonAlisKgFiyati('12', 'adet', 4), sonAlisKgFiyati('12', 'adet', null), sonAlisKgFiyati('12', null, 0)], ['12', '3', null, null]);
+  const g = { kgFiyati: '10', paraBirimi: 'USD', tryKgFiyati: '400', sonAlisKgFiyatiDoviz: '11', sonAlisParaBirimi: 'USD', sonAlisKgFiyati: '440' };
+  assert.equal(kgSapmasi(g), '10');
+  // Farklı para birimi: TL karşılıkları (ikisi de bugünkü kur) karşılaştırılır.
+  assert.equal(kgSapmasi({ ...g, sonAlisKgFiyatiDoviz: '9', sonAlisParaBirimi: 'EUR', sonAlisKgFiyati: '360' }), '-10');
+  assert.equal(kgSapmasi({ ...g, sonAlisParaBirimi: 'EUR', sonAlisKgFiyati: null }), null);
+  assert.equal(kgSapmasi({ ...g, sonAlisKgFiyatiDoviz: '10.333' }), '3.33');
+  assert.equal(kgSapmasi({ ...g, sonAlisKgFiyatiDoviz: null, sonAlisParaBirimi: null, sonAlisKgFiyati: null }), null);
+  assert.deepEqual([kgSapanMi('10', 10), kgSapanMi('-10', 10), kgSapanMi('9.99', 10), kgSapanMi(null, 10), kgSapanMi('50', null)], [true, true, false, false, false]);
+});
+
+test('2455-A: son alış her kartın uygulanan satırına yazılır, en son alış kazanır; eskime hatırlatması yalnız kartta olan eskimiş satıra, dönem satır kimliği', () => {
+  const genel = { kaliteKodu: 'K1', form: null }, cubuk = { kaliteKodu: 'K1', form: 'cubuk' };
+  const alis = (birimFiyat: string, zaman: string) => ({ birimFiyat, paraBirimi: 'TRY', zaman });
+  const m = kgSonAlislari([genel, cubuk], [
+    { kaliteKodu: 'K1', form: 'cubuk', stokBirimi: 'kg', birimKg: null, sonAlis: alis('10', '2026-11-01T10:00:00Z') },
+    { kaliteKodu: 'K1', form: 'levha', stokBirimi: 'adet', birimKg: 2, sonAlis: alis('30', '2026-11-03T10:00:00Z') },
+    { kaliteKodu: 'K1', form: 'levha', stokBirimi: 'kg', birimKg: null, sonAlis: alis('20', '2026-11-02T10:00:00Z') },
+    { kaliteKodu: 'K1', form: 'boru', stokBirimi: 'kg', birimKg: null, sonAlis: null },
+    { kaliteKodu: 'K9', form: null, stokBirimi: 'kg', birimKg: null, sonAlis: alis('99', '2026-11-05T10:00:00Z') },
+  ]);
+  assert.deepEqual([m.get(cubuk)?.kgFiyati, m.get(genel)?.kgFiyati, m.size], ['10', '15', 2]);
+  const satir = (id: number, gecerlilik: string, kartta = true) => ({ id, kaliteKodu: 'K1', form: id === 1 ? null : 'cubuk', gecerlilik, kartta });
+  const o = kgEskimeHatirlatmalari([satir(1, '2026-10-01'), satir(2, '2026-11-01'), { ...satir(3, '2026-01-01', false) }], 30, '2026-11-09');
+  assert.deepEqual(o, [{ tur: 'satin-alma.hatirlatma-kg-fiyati-eskidi', kaynakKimlik: 'kg:1', talepId: null, baslik: 'K1: kg fiyatı 39 gündür güncellenmedi', yol: '/satin-alma/kg-fiyatlari' }]);
+  assert.deepEqual(kgEskimeHatirlatmalari([satir(1, '2020-01-01')], null, '2026-11-09'), []);
 });
