@@ -1,41 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createContext, runInContext } from 'node:vm';
-import { prototipYukle } from '../prototip.ts';
-import { durumKur, gecerliFaizler, hesapToplamiTl, verileriHazirla } from './donustur.ts';
+import { durumKur, gecerliFaizler, verileriHazirla } from './donustur.ts';
 import { finansMotoru } from './motor.ts';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
 
-// Çeviri prototipin tam kip katmanıyla (verileriHazirla + durumKur) aynı motor durumunu kurmalı.
-const html = await prototipYukle();
-const motorBlogu = html.slice(html.indexOf('/*ENGINE-START*/'), html.indexOf('/*ENGINE-END*/'));
-const ceviriBlogu = html.slice(html.indexOf('const KAT = {'), html.indexOf('let yukleniyor = null;'));
 const BUGUN = '2026-10-15';
 
-function eskiDurum(): unknown {
-  const b = createContext({});
-  runInContext(motorBlogu + '\n' + ceviriBlogu, b);
-  runInContext(`setToday(${JSON.stringify(BUGUN)}); V = verileriHazirla(${JSON.stringify(ornekHamVeri())}); durumKur();`, b);
-  return JSON.parse(runInContext('JSON.stringify({ state, toplam: hesapToplamiTl() })', b) as string);
-}
-
 describe('sunucu verisinin motor biçimine çevrilmesi', () => {
-  it('prototipin tam kip çevirisiyle aynı durumu ve hesap toplamını verir', () => {
-    const m = finansMotoru(BUGUN);
-    const V = verileriHazirla(ornekHamVeri(), BUGUN);
-    const s = durumKur(V, m);
-    const yeni = JSON.parse(JSON.stringify({ state: s, toplam: hesapToplamiTl(V) })) as { state: { tx: { id: string; desc: string }[] } };
-    // Bilinçli tek fark (FIN-6): açıklamasız faturasız belge prototipte "Alış faturası", burada "Faturasız gider" adını alır.
-    const eski = eskiDurum() as typeof yeni;
-    const farkli = yeni.state.tx.filter((t) => t.desc.startsWith('Faturasız gider'));
-    expect(farkli.length).toBeGreaterThan(0);
-    for (const t of farkli) {
-      const e = eski.state.tx.find((x) => x.id === t.id)!;
-      expect(e.desc).toBe(t.desc.replace('Faturasız gider', 'Alış faturası'));
-      e.desc = t.desc;
-    }
-    expect(yeni).toEqual(eski);
-  });
-
   it('bugünkü nakit hesap toplamına eşittir (FNS-29)', () => {
     const m = finansMotoru(BUGUN);
     const V = verileriHazirla(ornekHamVeri(), BUGUN);

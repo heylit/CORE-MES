@@ -96,7 +96,6 @@ const OTURUM_UCLARI: readonly string[] = [
   'POST /hesabim/saat-onayla',
   'POST /ik/personel/:kimlik/iletisim',
   'POST /oturum/nabiz',
-  'POST /portal/ben/hazirla',
   'POST /profil/geri-bildirim-gonder',
   'POST /profil/tema-sec',
   'POST /ziyaretcilerim/:id/iptal',

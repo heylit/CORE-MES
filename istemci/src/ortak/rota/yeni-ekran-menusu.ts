@@ -8,10 +8,7 @@ import { YENI_EKRAN_ISLEMI } from './yeni-ekran.tsx';
 export const YENI_EKRAN_GRUBU = 'Yeni ekranlar (deneme)';
 
 // kok: ekranın bağlı olduğu ana menü sayfası; başlık ve simge ondan gelir, sayfa kişiye görünmüyorsa satır da çizilmez.
-const TUM_YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [
-  { kok: '/mesaj', yol: '/mesaj/yeni' },
-  { kok: '/portal', yol: '/portal/yeni' },
-];
+const TUM_YENI_EKRANLAR: readonly { kok: `/${string}`; yol: `/${string}`; baslik?: string }[] = [];
 const YENI_EKRANLAR = TUM_YENI_EKRANLAR.filter((e) => !kapaliModulYoluMu(e.kok));
 
 export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.yol);

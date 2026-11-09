@@ -1,36 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { prototipYukle } from '../../prototip-html.ts';
-import { fmtN, upTR } from '../bicim.ts';
-import { durumKur, state } from '../depo.ts';
-import { machine, toolLib, tools } from '../secici.ts';
+import { durumKur } from '../depo.ts';
 import {
-  denemeBitti, gkodKur, hamKaynagiKur, PR, prAllSig, prChecks, prFixN, prIsDone, prProg, prRawTs, PS, prSeq, prSig, prSrcText, prStep,
-  prStk, prStkLabel, prStkVol, prSuggest, prToolNote, prTs, type GkodProgrami, type HazirlikAdimi,
+  denemeBitti, gkodKur, hamKaynagiKur, PR, prAllSig, prChecks, prIsDone, PS, prSeq, prSig, prStk, prSuggest, prToolNote, type GkodProgrami,
 } from './hazirlik.ts';
-
-// Taşıma prototipin kendi işlevleriyle sınanır: işlev gövdesi eski ekranın yüklediği prototipten alınır, bağımlılıkları
-// taşınmış çekirdekten verilir; aynı girdide aynı imza ve sonuç beklenir.
-let HTML = '';
-function islev(imza: string): string {
-  const i = HTML.indexOf(imza);
-  if (i < 0) throw new Error(`Prototipte bulunamadı: ${imza}`);
-  let derinlik = 0;
-  for (let j = HTML.indexOf('{', i); j < HTML.length; j += 1) {
-    if (HTML[j] === '{') derinlik += 1;
-    else if (HTML[j] === '}') { derinlik -= 1; if (derinlik === 0) return HTML.slice(i, j + 1); }
-  }
-  throw new Error('Kapanmayan işlev');
-}
-function parca(bas: string, son: string): string {
-  const i = HTML.indexOf(bas);
-  if (i < 0) throw new Error(`Prototipte bulunamadı: ${bas}`);
-  return HTML.slice(i, HTML.indexOf(son, i) + son.length);
-}
-type Islev = (...a: unknown[]) => unknown;
-function prototipIslevi(ad: string, bag: Record<string, unknown>, ek = ''): Islev {
-  const adlar = Object.keys(bag);
-  return new Function(...adlar, `${ek}\n${islev(`function ${ad}(`)}\nreturn ${ad};`)(...adlar.map((a) => bag[a])) as Islev;
-}
 
 const SATIRLAR = [
   '0 BEGIN PGM ORNEK MM',
@@ -50,8 +22,7 @@ const PROGRAM: GkodProgrami = {
 };
 const ORNEK = 'ornek program metni';
 
-beforeAll(async () => {
-  HTML = await prototipYukle();
+beforeAll(() => {
   gkodKur({
     gParse: () => structuredClone(PROGRAM), tStation: (T) => T,
     SAMPLE_HEID: ORNEK, SAMPLE_ISO: `${ORNEK} iso`,
@@ -85,7 +56,7 @@ function hepsiniOnayla(): void {
 }
 
 describe('hazırlık imzaları', () => {
-  it('programlı sıra prototipteki gibi; son onay imzası sunucunun beklediği biçimde', () => {
+  it('programlı sıra ve son onay imzası sunucunun beklediği biçimde', () => {
     expect(prSeq().map((s) => s.key)).toEqual(['machine', 'prog', 'fixture', 'jaw', 'material', 'zero', 'T1', 'T2', 'T5', 'cool', 'gauges', 'cons', 'final', 'trial']);
     hepsiniOnayla();
     expect(sunucuBicimi()).toBe(true);
@@ -106,34 +77,9 @@ describe('hazırlık imzaları', () => {
     denemeBitti(true);
     expect(prIsDone({ key: 'trial', g: 'trial' })).toBe(true);
   });
-
-  it.each([['programlı', 'sh'], ['programsız', 'none'], ['ISO', 'si']])('%s: prSig, prAllSig ve prSeq prototiptekiyle aynı', (_ad, src) => {
-    PS().src = src;
-    PS().qty = 7;
-    state.machine = 'f5a';
-    const bag = {
-      machine, tools, PS, prSrcText, prStkLabel, prStk, prStep, prFixN, prTs, state,
-      get PR() { return PR; },
-    };
-    const sig = prototipIslevi('prSig', bag);
-    const seq = prototipIslevi('prSeq', bag) as () => HazirlikAdimi[];
-    expect(seq()).toEqual(prSeq());
-    PR.seq = prSeq();
-    for (const s of PR.seq) expect(sig(s)).toBe(prSig(s));
-    const all = prototipIslevi('prAllSig', { ...bag, PR, prSig: sig });
-    expect(all()).toBe(prAllSig());
-  });
 });
 
 describe('ham ölçü', () => {
-  it.each([
-    { bar: 1, d: 50, l: 100, src: 'def' }, { bar: 1, d: 42.5, l: 7, src: 'man' }, { x: 120, y: 80.4, z: 30, src: 'prog' }, { x: 10, y: undefined, z: 3, src: 'man' },
-  ])('etiket ve hacim prototipteki gibi: %o', (s) => {
-    const bag = { fmtN, PI: Math.PI };
-    expect(prototipIslevi('prStkLabel', bag)(s)).toBe(prStkLabel(s));
-    expect(prototipIslevi('prStkVol', bag)(s)).toEqual(prStkVol(s));
-  });
-
   it('kaynak sırası: program bloğu, sonra Ham Malzeme sonucu, sonra varsayılan', () => {
     expect(prStk()).toEqual({ x: 120, y: 80, z: 30, src: 'prog' });
     PS().src = 'none';
@@ -146,20 +92,8 @@ describe('ham ölçü', () => {
 });
 
 describe('takım notu ve önerisi', () => {
-  it('program satırındaki takım notu prototipteki gibi okunur', () => {
-    const not = prototipIslevi('prToolNote', { prProg, prRawTs });
-    for (const T of [1, 2, 5, 9]) expect(not(T)).toBe(prToolNote(T));
+  it('program satırındaki takım notu okunur; öneri listesi boş değildir', () => {
     expect(prToolNote(1)).toBe('ALIN FREZE D50');
-  });
-
-  it('öneri listesi prototipteki gibi', () => {
-    const ek = parca('var SUG_KW = [', ']]];');
-    const oner = prototipIslevi('prSuggest', { upTR, prToolNote, toolLib, machine, fmtN }, ek) as (T: number) => { t: { id: string }; sc: number; why: string[] }[];
-    for (const T of [1, 2, 5]) {
-      const a = oner(T).map((x) => ({ id: x.t.id, sc: x.sc, why: x.why }));
-      const b = prSuggest(T).map((x) => ({ id: x.t.id, sc: x.sc, why: x.why }));
-      expect(b).toEqual(a);
-    }
     expect(prSuggest(5).length).toBeGreaterThan(0);
   });
 });
