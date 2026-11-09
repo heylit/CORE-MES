@@ -752,7 +752,7 @@ describe('Teklif termin ve fiyat (44)', () => {
       planTermini: '2099-07-14', malzemeGelisi: '2099-07-03T08:00:00+03:00', satinalma: [{ kod: 'HM-DNM', miktar: '12.5', birim: 'kg', gelis: '2099-07-03T08:00:00+03:00' }],
       birimMaliyet: '10.0000', toplamMaliyet: '400.00', dokum: null, eksikVeri: [],
     }],
-    maliyetToplami: '400.00', genelGiderSaatBasi: null, kayanlar: [], plan: null,
+    maliyetToplami: '400.00', genelGiderSaatBasi: null, genelGiderGizli: false, kayanlar: [], plan: null,
   } satisfies TerminDenemesiCevabi;
   const SERITLI = {
     ...DENEME,
@@ -772,6 +772,7 @@ describe('Teklif termin ve fiyat (44)', () => {
       carpan, termin: ['2099-07-12', '2099-07-14', '2099-07-18', '2099-07-25'][i] ?? null, maliyetToplami: ['260.00', '400.00', '640.00', '1120.00'][i] ?? null,
       kalemler: [{ satirId: 11, adet: ['20.000', '40.000', '80.000', '160.000'][i] ?? '0', birimMaliyet: ['13.0000', '10.0000', '8.0000', '7.0000'][i] ?? null }],
     })),
+    genelGiderGizli: false,
   } satisfies AdetDenemesiCevabi;
   const ATOLYE = {
     taslaklar: [{
@@ -786,13 +787,13 @@ describe('Teklif termin ve fiyat (44)', () => {
   const KAYAN = { ...DENEME, istenenTermin: '2099-07-05', termin: '2099-07-05', yetisir: false, onayGerekli: true,
     kayanlar: [{ siparis: 'SS-DNM-1', once: '2099-07-01T10:00:00+03:00', sonra: '2099-07-04T10:00:00+03:00', termin: '2099-07-02', gecikir: true }] } satisfies TerminDenemesiCevabi;
 
-  const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI) => sunucuKur(kullanici, (yontem, yol) => {
+  const kur = (kullanici: Kullanici, deneme: (yol: string) => TerminDenemesiCevabi = () => DENEME, teklif: TeklifAyrintisi = TEKLIF_KARTLI, adet: AdetDenemesiCevabi = ADET) => sunucuKur(kullanici, (yontem, yol) => {
     if (yontem === 'GET' && yol === '/siparisler/teklifler/21') return json(200, teklif);
     if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/termin-denemesi')) return json(200, deneme(yol));
     if (yontem === 'GET' && yol === '/siparisler/teklifler/21/plan-taslaklari') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/surum-ver') return json(200, TEKLIF_VERILDI);
     if (yontem === 'POST' && yol === '/siparisler/teklifler/21/deneme-taslagi') return json(200, { taslaklar: [] } satisfies PlanTaslaklariCevabi);
-    if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/adet-denemesi')) return json(200, ADET);
+    if (yontem === 'GET' && yol.startsWith('/siparisler/teklifler/21/adet-denemesi')) return json(200, adet);
     if (yontem === 'GET' && yol === '/siparisler/satis-taslaklari') return json(200, ATOLYE);
     return undefined;
   });
@@ -887,6 +888,29 @@ describe('Teklif termin ve fiyat (44)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Deneme taslağı kaydet' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/teklifler/21/deneme-taslagi', govde: { karOrani: '25', istenenTermin: null } });
+  });
+
+  it('2661 a, 2669 b: gizli oranlı ayda maliyet ve genel gider "Gizli", fiyat önerilmez ve neden yazılır', async () => {
+    const gizli = {
+      ...DENEME, genelGiderGizli: true, genelGiderSaatBasi: null, maliyetToplami: null,
+      kalemler: [{
+        ...DENEME.kalemler[0]!, birimMaliyet: null, toplamMaliyet: null,
+        dokum: [{ tur: 'isleme', ad: '10', tezgah: 'T1', saat: '2.00', tutar: null }, { tur: 'genel-gider', ad: 'Genel gider', tezgah: null, saat: '2.00', tutar: null }],
+      }],
+    } satisfies TerminDenemesiCevabi;
+    const adet = { ...ADET, genelGiderGizli: true, satirlar: ADET.satirlar.map((r) => ({ ...r, maliyetToplami: null, kalemler: r.kalemler.map((k) => ({ ...k, birimMaliyet: null })) })) };
+    kur(MUDUR, () => gizli, TEKLIF_KARTLI, adet);
+    ac('/siparisler/teklifler/21');
+    expect(await screen.findByText(/Fiyat önerisi yok: genel gider oranı gizli/)).toBeTruthy();
+    const dokum = screen.getByRole('table', { name: 'Maliyet dökümü' });
+    expect(within(within(dokum).getByText(/Genel gider/).closest('tr')!).getByText('Gizli')).toBeTruthy();
+    expect(within(dokum).queryByText(/TRY/)).toBeNull();
+    expect(within(dokum).getAllByText('Gizli')).toHaveLength(2);
+    const ozet = screen.getByLabelText('Fiyat özeti');
+    expect(within(ozet).getAllByText('Gizli').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/Maliyeti bilinmeyen kalem var/)).toBeNull();
+    const adetTablosu = await screen.findByRole('table', { name: 'Adet değişirse' });
+    expect(within(adetTablosu).getAllByText('Gizli').length).toBeGreaterThan(0);
   });
 
   it('motor bağlı değilse elle: termin tarihi ve fiyat elle girilir, plan taslağı gitmez', async () => {

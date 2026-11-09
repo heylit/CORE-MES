@@ -10,6 +10,7 @@ import {
   BELIRSIZ_SAYI, ISKONTO_ONAY_ESIGI, belirsizSayi, bosYap, fiyatMetni, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni,
 } from './gorunum.ts';
 import { PlanSeridi } from './PlanSeridi.tsx';
+import { FIYAT_ONERISI_YOK, GIZLI } from './gizli.ts';
 import { eskiyseYenile, useKorumaliGonderim, useMaliyetOkur, useTerminDener, yazmaIletisi } from './yazma.ts';
 
 type TerminTuru = 'plan' | 'farkli';
@@ -176,6 +177,8 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
   });
   const satis = fiyatlar.some((f) => f === null) ? null : fiyatlar.reduce<number>((a, f) => a + (f ?? 0), 0);
   const maliyet = c === undefined ? null : sayi(c.maliyetToplami);
+  // 2661 a, 2669 b: gizli oranlı ayda maliyet "Gizli"; fiyat önerilmez, genel gider hariç maliyet de gösterilmez.
+  const gizli = c?.genelGiderGizli === true;
   const tumMaliyet = c !== undefined && c.kalemler.every((k) => k.plansiz || k.toplamMaliyet !== null) && !c.kalemler.some((k) => k.plansiz);
   const iskonto = Number(sayiGirdisi(d.iskontoOrani) || '0');
   const net = satis === null ? null : satis * (1 - iskonto / 100);
@@ -191,7 +194,7 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
       ),
     },
     { anahtar: 'bitis', baslik: 'Plan bitişi', hizala: 'sag', kirilmaz: true, hucre: ({ k }) => (k?.plansiz ? '—' : tarihMetni(k?.bitis ?? null)) },
-    { anahtar: 'maliyet', baslik: 'Birim maliyet', hizala: 'sag', kirilmaz: true, hucre: ({ k }) => fiyatMetni(k?.birimMaliyet ?? null, pb) },
+    { anahtar: 'maliyet', baslik: 'Birim maliyet', hizala: 'sag', kirilmaz: true, hucre: ({ k }) => (gizli && k !== undefined && !k.plansiz ? GIZLI : fiyatMetni(k?.birimMaliyet ?? null, pb)) },
     {
       anahtar: 'fiyat', baslik: 'Birim fiyat', hucre: ({ s, i }) => (
         <Girdi
@@ -245,6 +248,9 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               bosMesaj="Kalem yok."
             />
             {maliyetOkur && <MaliyetDokumu deneme={c} paraBirimi={pb} />}
+            {gizli && (
+              <p className="tc-sp-bildirim" role="note"><Rozet ton="bilgi"><Simge ad="lock" boyut="k" /> {GIZLI}</Rozet> {FIYAT_ONERISI_YOK}</p>
+            )}
             <div className="tc-sp-kar" role="group" aria-label="Kâr oranı">
               <span className="tc-sp-etiket">Kâr (maliyet üstü)</span>
               <div className="tc-sp-kar-dugmeler">
@@ -255,12 +261,12 @@ export function TerminFiyat({ teklif }: { teklif: TeklifAyrintiCevabi }) {
               <Girdi etiket="Başka oran (%)" inputMode="decimal" autoComplete="off" {...form.alan('kar')} />
             </div>
             <dl className="tc-sp-toplamlar" aria-label="Fiyat özeti">
-              <div><dt>Maliyet</dt><dd>{tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
+              <div><dt>Maliyet</dt><dd>{gizli ? GIZLI : tumMaliyet ? tutarMetni(maliyet, pb) : '—'}</dd></div>
               <div><dt>Teklif tutarı</dt><dd>{tutarMetni(satis, pb)}</dd></div>
               <div><dt>{`İskontolu tutar (%${miktarMetni(sayiGirdisi(d.iskontoOrani) || '0')})`}</dt><dd>{tutarMetni(net, pb)}</dd></div>
-              <div className="tc-sp-genel"><dt>İskontolu net kâr</dt><dd>{tumMaliyet && net !== null && maliyet !== null ? tutarMetni(net - maliyet, pb) : '—'}</dd></div>
+              <div className="tc-sp-genel"><dt>İskontolu net kâr</dt><dd>{gizli ? GIZLI : tumMaliyet && net !== null && maliyet !== null ? tutarMetni(net - maliyet, pb) : '—'}</dd></div>
             </dl>
-            {!tumMaliyet && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
+            {!tumMaliyet && !gizli && <p className="tc-sp-ipucu">Maliyeti bilinmeyen kalem var; kâr hesaplanmaz, fiyatı kontrol edin.</p>}
             <AdetTablosu teklifId={teklif.id} gecerlilik={d.gecerlilik} kar={kar} paraBirimi={pb} />
           </>
         ) : (
@@ -374,7 +380,11 @@ function MaliyetDokumu({ deneme, paraBirimi }: { deneme: TerminDenemesiCevabi; p
         { anahtar: 'kalem', baslik: 'Kalem', hucre: (m) => m.kalem },
         { anahtar: 'tur', baslik: 'Tür', hucre: (m) => `${MALIYET_TURU[m.tur]}${m.tezgah ? ` · ${m.tezgah}` : ''}` },
         { anahtar: 'saat', baslik: 'Saat', hizala: 'sag', kirilmaz: true, hucre: (m) => miktarMetni(m.saat) },
-        { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, hucre: (m) => (m.tutar === null ? <Rozet ton="uyari">Bilinmiyor</Rozet> : paraMetni(m.tutar, paraBirimi)) },
+        {
+          anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true,
+          hucre: (m) => (deneme.genelGiderGizli ? GIZLI
+            : m.tutar === null ? <Rozet ton="uyari">Bilinmiyor</Rozet> : paraMetni(m.tutar, paraBirimi)),
+        },
       ]}
       satirlar={satirlar}
       satirAnahtari={(m) => m.anahtar}

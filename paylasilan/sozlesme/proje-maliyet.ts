@@ -89,8 +89,11 @@ export const projeMaliyetCevabi = z.object({
   // Toplamlara girmeyen kalemler (planı ya da gerçekleşeni bilinmeyen).
   eksikKalemler: z.array(z.enum(MALIYET_KALEMLERI)),
   eksikler: z.array(z.enum(EKSIK_VERILER)),
+  // 2661 a: genel gider oranı gizli bir ayda (az kişili personel bileşeni) hesaplanan pay varsa true; o paydan türeyen bütün sayılar null
+  // döner ve ekran "Gizli" yazar. Hesap gerçek oranla yapılmıştır.
+  genelGiderGizli: z.boolean(),
   ozet: z.lazy(() => maliyetOzetiSemasi),
-});
+}).strict();
 export type ProjeMaliyetCevabi = z.output<typeof projeMaliyetCevabi>;
 export type KalemSatiri = z.output<typeof kalemSatiriSemasi>;
 export type SapanIsEmri = z.output<typeof sapanIsEmriSemasi>;
@@ -108,6 +111,8 @@ export const tabanSemasi = z.object({
   gerekce: z.string().nullable(),
   kisiAd: z.string().nullable(),
   an: zamanSemasi,
+  // Taban gizli oranlı ayda alındı: plan ve genel gider kalemi null (2661 a).
+  genelGiderGizli: z.boolean(),
 });
 // Projeye bağlanabilen gider kategorileri (2599 a): yalnız projeye özel gider. Malzeme üretim maliyetine sarftan, işçilik saatten,
 // kira ve enerji genel giderden girer; ikinci kez sayılmasın diye bağlanamaz. Faiz (finansman kalemi), vergi, kredi ve kur farkı da girmez.

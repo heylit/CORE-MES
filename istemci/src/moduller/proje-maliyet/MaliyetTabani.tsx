@@ -6,6 +6,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi, yenidenDenenebilirMi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihSaatMetni } from '../../ortak/veri/zaman-metni.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { gizliVeyaDeger } from './gizli.ts';
 
 export const KALEM_ADI: Record<MaliyetKalemi, string> = {
   malzeme: 'Malzeme', isleme: 'İşleme', ayar: 'Ayar', fason: 'Fason', iscilik: 'İşçilik ve mesai', genel_gider: 'Genel gider', finansman: 'Bekleme finansmanı',
@@ -22,25 +23,30 @@ export function useIstekKimligi() {
   };
 }
 
-interface KarsilastirmaSatiri { kalem: MaliyetKalemi; taban: number | null; guncel: number | null; gerceklesen: number | null }
+interface KarsilastirmaSatiri {
+  kalem: MaliyetKalemi; taban: number | null; guncel: number | null; gerceklesen: number | null; tabanGizli: boolean; guncelGizli: boolean;
+}
 
 const SUTUNLAR: Sutun<KarsilastirmaSatiri>[] = [
   { anahtar: 'kalem', baslik: 'Kalem', hucre: (k) => KALEM_ADI[k.kalem] },
-  { anahtar: 'taban', baslik: 'Taban plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => tl(k.taban) },
-  { anahtar: 'guncel', baslik: 'Güncel plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => tl(k.guncel) },
-  { anahtar: 'gerceklesen', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => tl(k.gerceklesen) },
+  { anahtar: 'taban', baslik: 'Taban plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => gizliVeyaDeger(tl(k.taban), k.tabanGizli) },
+  { anahtar: 'guncel', baslik: 'Güncel plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => gizliVeyaDeger(tl(k.guncel), k.guncelGizli) },
+  { anahtar: 'gerceklesen', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => gizliVeyaDeger(tl(k.gerceklesen), k.guncelGizli) },
 ];
 
 const isaretli = (x: number | null): string => (x === null ? '—' : `${x > 0 ? '+' : ''}${tl(x)}`);
 
 // 934, 936 a: ilk planlanan maliyet (taban), son gerçekleşen ve ikisinin farkı. Taban elle alınır; yenileme gerekçe ister.
-export function MaliyetTabani({ projeId, ozet, kalemler, yazabilir }: {
-  projeId: number; ozet: MaliyetOzeti; kalemler: readonly KalemSatiri[]; yazabilir: boolean;
+// gizli: güncel hesabın genel gider oranı gizli (2661 a); taban kendi işaretini taşır.
+export function MaliyetTabani({ projeId, ozet, kalemler, yazabilir, gizli = false }: {
+  projeId: number; ozet: MaliyetOzeti; kalemler: readonly KalemSatiri[]; yazabilir: boolean; gizli?: boolean;
 }) {
   const [pencere, pencereYaz] = useState(false);
   const { taban } = ozet;
+  const tabanGizli = taban?.genelGiderGizli === true;
   const satirlar: KarsilastirmaSatiri[] = kalemler.map((k) => ({
     kalem: k.kalem, taban: taban?.kalemler.find((t) => t.kalem === k.kalem)?.plan ?? null, guncel: k.plan, gerceklesen: k.gerceklesen,
+    tabanGizli: tabanGizli && k.kalem === 'genel_gider', guncelGizli: gizli && k.kalem === 'genel_gider',
   }));
   return (
     <Kart
@@ -55,18 +61,18 @@ export function MaliyetTabani({ projeId, ozet, kalemler, yazabilir }: {
       <div className="tc-pm">
         <div className="tc-pm-kartlar">
           <SayiKarti
-            baslik="Taban plan" simge="flag" metin={taban === null ? 'Alınmadı' : tl(taban.plan)}
+            baslik="Taban plan" simge="flag" metin={taban === null ? 'Alınmadı' : gizliVeyaDeger(tl(taban.plan), tabanGizli)}
             altMetin={taban === null ? 'İlk planlanan maliyet henüz kaydedilmedi' : `${taban.sira}. taban · ${tarihSaatMetni(taban.an)} · ${taban.kisiAd ?? '—'}`}
           />
           <SayiKarti
-            baslik="Son gerçekleşen" simge="chart" metin={tl(ozet.sonGerceklesen)}
+            baslik="Son gerçekleşen" simge="chart" metin={gizliVeyaDeger(tl(ozet.sonGerceklesen), gizli)}
             altMetin={ozet.masraflar.length === 0 ? 'Bağlı üretim dışı masraf yok'
-              : ozet.sonGerceklesen === null ? `Üretim dışı masraf ${tl(ozet.masrafToplami)}; üretim gerçekleşeni bilinmiyor`
+              : ozet.sonGerceklesen === null && !gizli ? `Üretim dışı masraf ${tl(ozet.masrafToplami)}; üretim gerçekleşeni bilinmiyor`
                 : `Üretim dışı masraf dahil: ${tl(ozet.masrafToplami)}`}
           />
           <SayiKarti
-            baslik="Fark (tahmini son - taban)" simge="gauge" metin={isaretli(ozet.fark)}
-            altMetin={`Tahmini son ${tl(ozet.tahminiSon)} (gerçekleşen + kalan plan)`}
+            baslik="Fark (tahmini son - taban)" simge="gauge" metin={gizliVeyaDeger(isaretli(ozet.fark), gizli || (tabanGizli && taban !== null))}
+            altMetin={`Tahmini son ${gizliVeyaDeger(tl(ozet.tahminiSon), gizli)} (gerçekleşen + kalan plan)`}
             ton={ozet.fark !== null && ozet.fark > 0 ? 'uyari' : 'bilgi'}
           />
         </div>
@@ -78,7 +84,7 @@ export function MaliyetTabani({ projeId, ozet, kalemler, yazabilir }: {
           <ul className="tc-pm-gecmis" aria-label="Önceki tabanlar">
             {ozet.tabanGecmisi.map((t) => (
               <li key={t.sira}>
-                <span className="mono">{t.sira}. taban {tl(t.plan)}</span>
+                <span className="mono">{t.sira}. taban {gizliVeyaDeger(tl(t.plan), t.genelGiderGizli)}</span>
                 <span className="tc-pm-risk-etiket">{tarihSaatMetni(t.an)} · {t.kisiAd ?? '—'}{t.gerekce === null ? '' : ` · ${t.gerekce}`}</span>
               </li>
             ))}

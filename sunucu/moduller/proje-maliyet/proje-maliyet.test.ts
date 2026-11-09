@@ -14,7 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { MaliyetKaydi } from './kurallar.ts';
-import { bitenleriDondur, FIYAT_ISLEMI, projeMaliyeti } from './servis.ts';
+import { bitenleriDondur, FIYAT_ISLEMI, projeMaliyeti, tabanAl } from './servis.ts';
 import { isler } from './isler.ts';
 import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './disari.ts';
 import { defterOku, defterYaz } from './sorgular.ts';
@@ -179,7 +179,7 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(await vt().tx((db) => defterYaz(db, siparisli.id, yoneticiId, [kayit])), 1);
     assert.equal(await vt().tx((db) => defterYaz(db, siparisli.id, yoneticiId, [{ ...kayit, gercek: { isleme: 999 } }])), 0);
     const defter = await vt().tx((db) => defterOku(db, siparisli.id));
-    assert.deepEqual(defter.get(isEmriId), { isEmriId, plan: { isleme: 100, ayar: 20 }, gercek: { isleme: 120, ayar: null } });
+    assert.deepEqual(defter.get(isEmriId), { isEmriId, plan: { isleme: 100, ayar: 20 }, gercek: { isleme: 120, ayar: null }, genelGiderGizli: false });
     const ucretler = await vt().tek<{ ucretler: unknown }>('SELECT ucretler FROM proje_maliyet_defteri WHERE is_emri_id = $1', [isEmriId]);
     assert.deepEqual(ucretler?.ucretler, kayit.ucretler);
     await assert.rejects(vt().sorgu("UPDATE proje_maliyet_defteri SET gercek = '{}' WHERE is_emri_id = $1", [isEmriId]), /yalnız ekleme/);
@@ -377,5 +377,53 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!c.eksikler.includes('kur_yok'));
     const siz = await ok(['finans.maliyet-oku']);
     assert.deepEqual([siz.gelir, siz.kurFarki], [null, null]);
+  });
+
+  test('PM-50 (2661 a, 2663): gizli oranlı ayda pay ve toplamlar null, gizli işaretli; taban ve defter gizliliği alındığı anınkidir', async () => {
+    // Öteki testlerin günü (SIMDI) etkilenmesin diye ileri bir ay; oran satırları yalnız ekleme.
+    const GIZLI_AN = Date.parse('2027-03-15T09:00:00Z');
+    const SONRA = Date.parse('2027-04-15T09:00:00Z');
+    const proje = await tamam<Proje>(gonder(yonetici, `/projeler/siparisten/${siparis.id}/ac`, { kod: 'PM.50', ad: 'Gizli oran' }));
+    const { isEmriId: biten, istasyonId } = await isEmriAc(proje.id);
+    await ortam!.sahip.sorgu('INSERT INTO finans_istasyon_maliyet (istasyon_id, saat_maliyeti, guncelleyen_id) VALUES ($1, 600, $2)', [istasyonId, yoneticiId]);
+    await ortam!.sahip.sorgu(
+      `INSERT INTO finans_genel_gider_orani (gecerlilik_baslangic, aylik_genel_gider, aylik_makine_saati, amortisman_dahil, olusturan_id, kaynak, donem_baslangic,
+         donem_bitis, kira, amortisman, diger, projesiz_satin_alma, elle_ek, personel_gizli)
+       VALUES ('2027-03-01', 150000, 1000, true, $1, 'belge', '2027-02-01', '2027-02-28', 50000, 10000, 20000, 0, 0, true)`, [yoneticiId]);
+    const ok = (an: number) => vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), proje.id, an));
+    const c = await ok(GIZLI_AN);
+    assert.equal(c.genelGiderGizli, true);
+    assert.deepEqual([c.plan, c.gerceklesen, c.bugunePlan, c.kalanPlan, c.sapma, c.katkiPayi, c.karRiski.tutar], [null, null, null, null, null, null, null]);
+    assert.deepEqual(c.haftalar, []);
+    assert.deepEqual(c.sapanIsEmirleri, []);
+    const gg = c.kalemler.find((k) => k.kalem === 'genel_gider')!;
+    assert.deepEqual([gg.plan, gg.gerceklesen, gg.sapmaOrani], [null, null, null]);
+    // Oranla değişmeyen kalem kalır; gizli kalem eksik sayılmaz (Arayüz K3).
+    assert.equal(c.kalemler.find((k) => k.kalem === 'isleme')!.plan, 600);
+    assert.ok(!c.eksikKalemler.includes('genel_gider'));
+    assert.ok(!JSON.stringify(c).includes('"saatBasi"'));
+    assert.deepEqual([c.ozet.sonGerceklesen, c.ozet.tahminiSon, c.ozet.fark], [null, null, null]);
+
+    // Taban gizli ayda alınır: hesap gerçek oranla saklanır, okumada plan ve genel gider kalemi gizlidir.
+    await vt().tx((db) => tabanAl(db, kullanici(['finans.maliyet-oku', 'projeler.yaz']), proje.id, null, GIZLI_AN));
+    const satir = await vt().tek<{ gizli: boolean; plan: string | null }>('SELECT genel_gider_gizli AS gizli, plan::text FROM proje_maliyet_taban WHERE proje_id = $1', [proje.id]);
+    assert.equal(satir!.gizli, true);
+    assert.notEqual(satir!.plan, null);
+    // Bitmiş iş emri gizli ayda dondurulur.
+    await ortam!.sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = now() - interval '1 hour', bitis = now(), saglam_adet = 10 WHERE id = $1", [biten]);
+    assert.ok((await vt().tx((db) => bitenleriDondur(db, GIZLI_AN))) >= 1);
+
+    // Sonraki ay gizli değil: taban ve dondurulmuş iş emri yine gizli; yeni açık iş yok, cevap gizli kalır.
+    await ortam!.sahip.sorgu(
+      "INSERT INTO finans_genel_gider_orani (gecerlilik_baslangic, aylik_genel_gider, aylik_makine_saati, amortisman_dahil, olusturan_id) VALUES ('2027-04-01', 120000, 1000, true, $1)",
+      [yoneticiId]);
+    const s = await ok(SONRA);
+    assert.equal(s.genelGiderGizli, true);
+    assert.equal(s.ozet.taban?.genelGiderGizli, true);
+    assert.equal(s.ozet.taban?.plan, null);
+    assert.equal(s.ozet.taban?.kalemler.find((k) => k.kalem === 'genel_gider')?.plan, null);
+    assert.equal(s.ozet.taban?.kalemler.find((k) => k.kalem === 'isleme')?.plan, 600);
+    const uc = await tamam<ProjeMaliyetCevabi>(oku(yonetici, `/proje-maliyet/${proje.id}`));
+    assert.equal(typeof uc.genelGiderGizli, 'boolean');
   });
 });

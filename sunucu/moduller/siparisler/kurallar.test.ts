@@ -182,6 +182,34 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
     assert.equal(kalemMaliyeti(kalem(1, { yerlesti: false }), 10, 10).toplam, null);
   });
 
+  test('TKL-20 (2661 a, 2669 b, Güvenlik K2): gizli oranlı ayda oranla değişen her sayı null; genel gider hariç maliyet de yok; öteki alanlar aynı', () => {
+    const sonuc: DenemeSonucu = { planSurumu: '412', kalemler: [kalem(1), kalem(2, { planTermini: '2099-07-20' })], kayanlar: [], plan: null };
+    const satirlar = [satir(1, 11), satir(2, 12), satir(3, null)];
+    const yaprak = (o: unknown, yol = '', m = new Map<string, unknown>()): Map<string, unknown> => {
+      if (o !== null && typeof o === 'object') for (const [k, v] of Object.entries(o)) yaprak(v, `${yol}.${k}`, m);
+      else m.set(yol, o);
+      return m;
+    };
+    const a = yaprak(denemeCevabi(satirlar, sonuc, { ...g, genelGiderSaatBasi: 10 }));
+    const b = yaprak(denemeCevabi(satirlar, sonuc, { ...g, genelGiderSaatBasi: 17 }));
+    const turuyen = [...a.keys()].filter((k) => a.get(k) !== b.get(k));
+    assert.ok(turuyen.includes('.maliyetToplami') && turuyen.includes('.genelGiderSaatBasi') && turuyen.includes('.kalemler.0.birimMaliyet'), turuyen.join(' '));
+    const gizli = denemeCevabi(satirlar, sonuc, { ...g, genelGiderSaatBasi: 10, genelGiderGizli: true });
+    const m = yaprak(gizli);
+    for (const k of turuyen) assert.equal(m.get(k), null, `${k} gizli ayda görünüyor`);
+    // Dökümün genel gidersiz tutarları da 2669 b gereği gizlidir (oranla değişmeseler de); öteki alanlar aynı kalır.
+    const dokumTutari = /\.dokum\.\d+\.tutar$/;
+    for (const [k, v] of m) if (!turuyen.includes(k) && k !== '.genelGiderGizli' && !dokumTutari.test(k)) assert.equal(v, a.get(k), `${k} gereksiz değişti`);
+    assert.equal(gizli.genelGiderGizli, true);
+    // Genel gider hariç toplam da verilmez (2669 b): kalem toplamı ve birim maliyet null.
+    assert.ok(gizli.kalemler.every((k) => k.toplamMaliyet === null && k.birimMaliyet === null));
+    // Dökümde görünen hiçbir tutar yok: genel gidersiz satırların hiçbir alt kümesi hariç maliyeti vermez (Maliyet 21:55Z).
+    assert.ok(gizli.kalemler.flatMap((k) => k.dokum ?? []).every((d) => d.tutar === null));
+    const haric = denemeCevabi(satirlar, sonuc, { ...g, genelGiderSaatBasi: 0 }).maliyetToplami;
+    assert.ok(![...m.values()].some((v) => v === haric));
+    assert.equal(denemeCevabi(satirlar, sonuc, g).genelGiderGizli, false);
+  });
+
   test('TKL-13 kartlı kalemler tek denemede: plan termini en geç kalemin; kartsız plansız; yerleşmeyen varsa termin yok; motor yoksa cozucu-yok', () => {
     const sonuc: DenemeSonucu = { planSurumu: '412', kalemler: [kalem(1), kalem(2, { planTermini: '2099-07-20' })], kayanlar: [], plan: null };
     const c = denemeCevabi([satir(1, 11), satir(2, 12), satir(3, null)], sonuc, g);

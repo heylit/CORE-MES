@@ -392,7 +392,7 @@ describe('siparisler teklif termin ve fiyat denemesi (gerçek PostgreSQL, gerçe
     assert.deepEqual([m.satirlar[1]?.termin, m.satirlar[1]?.maliyetToplami, m.satirlar[1]?.kalemler[0]?.birimMaliyet], [PLAN_TERMINI, null, null]);
     assert.equal((await oku(planlama.cerez, `/siparisler/teklifler/${t.id}/adet-denemesi`)).statusCode, 403);
     teklifDenemeCozucusu(null);
-    assert.deepEqual((await oku(yonetici, `/siparisler/teklifler/${t.id}/adet-denemesi`)).json<AdetDenemesiCevabi>(), { durum: 'cozucu-yok', satirlar: [] });
+    assert.deepEqual((await oku(yonetici, `/siparisler/teklifler/${t.id}/adet-denemesi`)).json<AdetDenemesiCevabi>(), { durum: 'cozucu-yok', satirlar: [], genelGiderGizli: false });
   });
 
   test('TKL-21 atölyedeki satış taslakları: yer tutan, onay bekleyen ve son 30 günde süresi dolan; kalkan ve eskisi yok; tutar ve kâr fiyat görene', async () => {

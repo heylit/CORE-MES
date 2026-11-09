@@ -35,3 +35,7 @@ VARSAYIM: fiyat yetkisi denetimi çağıran modülün ucundadır; disari fiyatı
 7. parça (teslim planı E-24, E-9): her sipariş ve teklif ucunun ret testi (403 işlemi olmayan ve salt okuyan, 404 olmayan kayıt; SIP-15, TKL-09). Davranış değişmez.
 Formdaki ödeme vadesi ipucu artık plan sırasının vadeyi okumadığını söyler; vadeyi yalnız proje maliyeti finansmanda kullanır.
 VARSAYIM: plan vadeyi okumaya başlayınca ipucu yeniden yazılır.
+
+## 2663 (2661 a, 2669 b): gizli genel gider oranı
+- Teklif denemesi gizli ayda oranı, genel gider payını ve onu içeren her maliyeti (kalem birim ve toplam, maliyet toplamı, adet denemesi) ve dökümün bütün tutarlarını (genel gidersiz satırların toplamı hariç maliyet olurdu, 2669 b) null verir; `genelGiderGizli` alanı terminDenemesiCevabi ve adetDenemesiCevabi'ne eklendi. Genel gider hariç maliyet gösterilmez (2669 b). Plan taslağına maliyet toplamı null yazılır (sütun boş olabilir).
+- Ekran "Gizli" ve "Fiyat önerisi yok: genel gider oranı gizli" yazar; birim maliyet null olduğu için fiyat önerilmez (Arayüz K8).

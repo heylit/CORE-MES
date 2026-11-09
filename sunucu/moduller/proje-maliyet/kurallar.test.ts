@@ -188,8 +188,8 @@ describe('proje-maliyet kuralları', () => {
       kayit({ isEmri: isEmri(3), bitti: true, plan: { isleme: 100 }, gercek: { isleme: 90 } }),
     ];
     const defter = new Map([
-      [1, { isEmriId: 1, plan: { isleme: 100 }, gercek: { isleme: 120 } }],
-      [2, { isEmriId: 2, plan: { isleme: 1 }, gercek: { isleme: 1 } }],
+      [1, { isEmriId: 1, plan: { isleme: 100 }, gercek: { isleme: 120 }, genelGiderGizli: false }],
+      [2, { isEmriId: 2, plan: { isleme: 1 }, gercek: { isleme: 1 }, genelGiderGizli: false }],
     ]);
     assert.deepEqual(defteriUygula(kayitlar, defter).map((k) => k.gercek.isleme), [120, 50, 90]);
   });

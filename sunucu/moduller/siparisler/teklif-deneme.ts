@@ -48,7 +48,7 @@ async function dene(
   const oran = await genelGiderOrani(db, bugun);
   const cevap = denemeCevabi(
     satirlar.map((s) => ({ id: s.id, sira: s.sira, malzemeNo: s.malzeme_no, tanim: s.tanim, miktar: s.miktar })),
-    sonuc, { ...g, genelGiderSaatBasi: oran?.saatBasi ?? null },
+    sonuc, { ...g, genelGiderSaatBasi: oran?.saatBasi ?? null, genelGiderGizli: oran?.gizli === true },
   );
   return { cevap, sonuc };
 }
@@ -62,15 +62,17 @@ export async function adetDenemesi(db: Db, kullanici: Kullanici, id: number, g: 
   await teklifVar(db, id);
   const yer = await sorgular.yerTutanTaslak(db, id);
   const satirlar: AdetDenemesiSatiri[] = [];
+  let gizli = false;
   for (const carpan of ADET_CARPANLARI) {
     const { cevap } = await dene(db, kullanici, id, { gecerlilik: g.gecerlilik, istenenTermin: null }, yer?.id ?? null, carpan);
-    if (cevap.durum === 'cozucu-yok') return { durum: 'cozucu-yok', satirlar: [] };
+    if (cevap.durum === 'cozucu-yok') return { durum: 'cozucu-yok', satirlar: [], genelGiderGizli: cevap.genelGiderGizli };
+    gizli ||= cevap.genelGiderGizli;
     satirlar.push({
       carpan, termin: cevap.planTermini, maliyetToplami: cevap.maliyetToplami,
       kalemler: cevap.kalemler.filter((k) => !k.plansiz).map((k) => ({ satirId: k.satirId, adet: k.adet, birimMaliyet: k.birimMaliyet })),
     });
   }
-  return { durum: 'hazir', satirlar: adetSatirlari(satirlar) };
+  return { durum: 'hazir', satirlar: adetSatirlari(satirlar), genelGiderGizli: gizli };
 }
 
 export async function terminDenemesi(db: Db, kullanici: Kullanici, id: number, g: TerminDenemesiSuzgeci): Promise<TerminDenemesiCevabi> {
