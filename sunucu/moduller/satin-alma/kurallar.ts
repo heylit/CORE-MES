@@ -70,6 +70,10 @@ export function onayLimitiReddi(limitler: readonly OnayLimiti[]): string | null 
 
 export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
+  kgBilinmeyen: (sira: readonly number[]) => `Kalite ve form kartlarda yok (satır ${sira.slice(0, 20).join(', ')}${sira.length > 20 ? ', ...' : ''}); hiçbir fiyat kaydedilmedi.`,
+  kgFiyatiYok: 'Kg fiyatı girişi bulunamadı.',
+  kgIptalSatiri: 'İptal kaydı iptal edilemez.',
+  kgZatenIptal: 'Bu kg fiyatı girişi zaten iptal edildi.',
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
   tedarikciYok: 'Tedarikçi bulunamadı.',
@@ -1009,6 +1013,94 @@ export function birimFiyati(kgFiyati: string | null, stokBirimi: string | null, 
   return birimKg === null || !(birimKg > 0) ? null : ondalikCarp(kgFiyati, birimKg.toFixed(OLCEK));
 }
 
+// 2455-A: kg fiyatı girişinin denetimi ve izlenmesi. Bölme yarım yukarı yuvarlanır; bölen sıfırsa boş.
+export function ondalikBol(a: string, b: string): string | null {
+  const y = tamSayiya(b);
+  if (y === 0n) return null;
+  const pay = tamSayiya(a) * 10n ** BigInt(OLCEK);
+  const eksi = (pay < 0n) !== (y < 0n);
+  const mp = pay < 0n ? -pay : pay, my = y < 0n ? -y : y;
+  const t = (2n * mp + my) / (2n * my);
+  return ondalikMetni(eksi ? -t : t);
+}
+// 2455-2 a: girilen kalite + form katalogda kullanılan bir çift olmalı. Formsuz satır kalitenin herhangi bir formuyla eşleşir.
+export function kgFiyatiKartta(kaliteKodu: string, form: string | null, kullanilan: readonly { kaliteKodu: string; form: string | null }[]): boolean {
+  return kullanilan.some((k) => k.kaliteKodu === kaliteKodu && (form === null || k.form === form));
+}
+// Bilinmeyen satırların 1'den başlayan sıra numaraları; boşsa hepsi geçerlidir.
+export function bilinmeyenKgSatirlari(satirlar: readonly { kaliteKodu: string; form: string | null }[], kullanilan: readonly { kaliteKodu: string; form: string | null }[]): number[] {
+  return satirlar.flatMap((s, i) => (kgFiyatiKartta(s.kaliteKodu, s.form, kullanilan) ? [] : [i + 1]));
+}
+// V2: yaş geçerlilik başlangıcından bugüne takvim günüdür (ileri tarihli giriş güncel listede yoktur).
+export function kgFiyatiYasi(gecerlilik: string, bugun: string): number {
+  return Math.max(0, gunFarki(gecerlilik, bugun));
+}
+// 2455-3 a: eşik boşsa eskime izlenmez.
+export function kgFiyatiEskiMi(yasGun: number, esikGun: number | null): boolean {
+  return esikGun !== null && yasGun >= esikGun;
+}
+// F-4: son alışın kg fiyatı, siparişin kendi para biriminde: stok birimi kg ise birim fiyat; değilse birim fiyat / kartın birim ağırlığı.
+export function sonAlisKgFiyati(birimFiyat: string, stokBirimi: string | null, birimKg: number | null): string | null {
+  if (stokBirimi !== null && stokBirimi.trim().toLocaleLowerCase('tr-TR') === 'kg') return birimFiyat;
+  return birimKg === null || !(birimKg > 0) ? null : ondalikBol(birimFiyat, birimKg.toFixed(OLCEK));
+}
+// Fiyat satırı başına son alış: her kartın son alışı, kartın kalite + formuna uygulanan güncel satıra yazılır (uygulananKgFiyati);
+// satır başına en son alış kazanır. Kg karşılığı çıkmayan alış atlanır, bir öncekine düşülmez (en son alışın fiyatı bilinmiyor demektir).
+export interface KartSonAlisi {
+  kaliteKodu: string; form: string | null; stokBirimi: string | null; birimKg: number | null;
+  sonAlis: { birimFiyat: string; paraBirimi: string; zaman: string } | null;
+}
+export function kgSonAlislari<T extends { kaliteKodu: string; form: string | null }>(
+  fiyatlar: readonly T[], kartlar: readonly KartSonAlisi[],
+): Map<T, { kgFiyati: string | null; paraBirimi: string; zaman: string }> {
+  const sonuc = new Map<T, { kgFiyati: string | null; paraBirimi: string; zaman: string }>();
+  for (const k of kartlar) {
+    if (k.sonAlis === null) continue;
+    const f = uygulananKgFiyati(fiyatlar, k.kaliteKodu, k.form);
+    if (f === null) continue;
+    const onceki = sonuc.get(f);
+    if (onceki !== undefined && onceki.zaman >= k.sonAlis.zaman) continue;
+    sonuc.set(f, { kgFiyati: sonAlisKgFiyati(k.sonAlis.birimFiyat, k.stokBirimi, k.birimKg), paraBirimi: k.sonAlis.paraBirimi, zaman: k.sonAlis.zaman });
+  }
+  return sonuc;
+}
+// F6, G1 (V6): sapma = son alış / liste fiyatı - 1, yüzde, iki ondalık. Aynı kurla ölçülür: para birimleri aynıysa doğrudan, farklıysa
+// ikisinin de bugünkü TL karşılığıyla. Biri boşsa (kur yok, ağırlık yok) boş.
+export function kgSapmasi(g: {
+  kgFiyati: string; paraBirimi: string; tryKgFiyati: string | null;
+  sonAlisKgFiyatiDoviz: string | null; sonAlisParaBirimi: string | null; sonAlisKgFiyati: string | null;
+}): string | null {
+  const ayni = g.sonAlisParaBirimi === g.paraBirimi;
+  const pay = ayni ? g.sonAlisKgFiyatiDoviz : g.sonAlisKgFiyati;
+  const payda = ayni ? g.kgFiyati : g.tryKgFiyati;
+  if (pay === null || payda === null) return null;
+  const oran = ondalikBol(pay, payda);
+  if (oran === null) return null;
+  const yuzde = ondalikCarp(ondalikTopla([oran, '-1']), '100');
+  const t = tamSayiya(yuzde), birim = 10n ** BigInt(OLCEK - 2);
+  const yuvarlak = ((t < 0n ? -t : t) + birim / 2n) / birim * birim;
+  return ondalikMetni(t < 0n ? -yuvarlak : yuvarlak);
+}
+// 2455-13 a: iki yönde |sapma| >= eşik; sapma ya da eşik boşsa sapmıyor sayılır.
+export function kgSapanMi(sapmaYuzde: string | null, esikYuzde: number | null): boolean {
+  if (sapmaYuzde === null || esikYuzde === null) return false;
+  const t = tamSayiya(sapmaYuzde);
+  return (t < 0n ? -t : t) >= tamSayiya(String(esikYuzde));
+}
+// 2455-6 (2432 onuncu madde): kartlarda kullanılan kalite + formun güncel girişi eşik kadar yaşlandıysa hatırlatılır. Dönem son girişin
+// kimliğidir: yeni giriş (ya da iptal) eski hatırlatmayı kapatır. VARSAYIM: kartta olmayan çift hatırlatılmaz (fiyatı kullanan yok).
+export function kgEskimeHatirlatmalari(
+  fiyatlar: readonly { id: number; kaliteKodu: string; form: string | null; gecerlilik: string; kartta: boolean }[], esikGun: number | null, bugun: string,
+): HatirlatmaOlayi[] {
+  if (esikGun === null) return [];
+  return fiyatlar.flatMap((f) => {
+    const yas = kgFiyatiYasi(f.gecerlilik, bugun);
+    if (!f.kartta || !kgFiyatiEskiMi(yas, esikGun)) return [];
+    const ad = f.form === null ? f.kaliteKodu : `${f.kaliteKodu} ${f.form}`;
+    return [{ tur: 'satin-alma.hatirlatma-kg-fiyati-eskidi' as const, kaynakKimlik: `kg:${f.id}`, talepId: null, baslik: `${ad}: kg fiyatı ${yas} gündür güncellenmedi`, yol: '/satin-alma/kg-fiyatlari' as const }];
+  });
+}
+
 // 1104 a: teklif isteğinde ve siparişte tedarikçiye giden kart alanları, ekrandaki sırayla. Fiyat, en az sipariş, tercih edilen
 // tedarikçi ve kart notu bizimdir, gitmez. Kart yoksa liste boştur.
 export function tedarikciyeGidenAyrinti(a: KartAyrintisi | null): { ad: string; deger: string }[] {
@@ -1125,7 +1217,8 @@ export const HATIRLATMA_ADLARI = [
   'siparis-bekliyor', 'teslim-yaklasiyor', 'teslim-gecikti', 'teslim-gecikti-yonetici',
 ] as const;
 export type HatirlatmaAdi = (typeof HATIRLATMA_ADLARI)[number];
-export type HatirlatmaTuru = `satin-alma.hatirlatma-${HatirlatmaAdi}`;
+// Kg fiyatı eskimesi talebe bağlı değildir ve kendi ayarını (satin-alma.kg-fiyati-eskime-gun) okur; bu yüzden listede yoktur.
+export type HatirlatmaTuru = `satin-alma.hatirlatma-${HatirlatmaAdi}` | 'satin-alma.hatirlatma-kg-fiyati-eskidi';
 // Boş değer o hatırlatmayı kapatır.
 export type HatirlatmaAyarlari = Readonly<Record<HatirlatmaAdi, number | null>>;
 // Kur kilidinin bitmesine bu kadar gün kala onaylı ama siparişsiz talep hatırlatılır (danışman maddesi 7).
@@ -1154,9 +1247,9 @@ export interface HatirlatmaTalebi {
 export interface HatirlatmaOlayi {
   tur: HatirlatmaTuru;
   kaynakKimlik: string;
-  talepId: string;
+  talepId: string | null;
   baslik: string;
-  yol: '/satin-alma/talepler' | '/satin-alma/onaylar';
+  yol: '/satin-alma/talepler' | '/satin-alma/onaylar' | '/satin-alma/kg-fiyatlari';
 }
 
 const gunSayisi = (tarih: string): number => Date.UTC(Number(tarih.slice(0, 4)), Number(tarih.slice(5, 7)) - 1, Number(tarih.slice(8, 10))) / GUN_MS;

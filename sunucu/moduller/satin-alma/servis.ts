@@ -8,7 +8,7 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  IptaliGeriAlCevabi, IptaliGeriAlYazimi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  IptaliGeriAlCevabi, IptaliGeriAlYazimi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -33,7 +33,7 @@ import {
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, birlestirmeReddi, birlesikTalep, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesikTalep, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { degerlendir, esitVadeOrtami, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
@@ -1492,14 +1492,48 @@ async function kgKuru(db: Db, gun: string | null = null): Promise<s.KurDizisi> {
   return { paraBirimleri: k.map(([p]) => p), kurlar: k.map(([, v]) => v.kur) };
 }
 async function kgFiyatiAdlari(db: Db, satirlar: s.KgFiyatiOkuma[]): Promise<KgFiyatiSatiri[]> {
-  const kisiler = await kisiAdlari(db, satirlar.map((x) => x.kisiId));
-  return satirlar.map(({ kisiId, ...x }) => ({ ...x, paraBirimi: x.paraBirimi as KgFiyatiSatiri['paraBirimi'], kisiAdi: ad(kisiler, kisiId) }));
+  const kisiler = await kisiAdlari(db, satirlar.flatMap((x) => (x.iptal === null ? [x.kisiId] : [x.kisiId, x.iptal.kisiId])));
+  return satirlar.map(({ kisiId, iptal, ...x }) => ({
+    ...x, paraBirimi: x.paraBirimi as KgFiyatiSatiri['paraBirimi'], kisiAdi: ad(kisiler, kisiId),
+    iptal: iptal === null ? null : { gerekce: iptal.gerekce, kisiAdi: ad(kisiler, iptal.kisiId), zaman: iptal.zaman },
+  }));
+}
+// 2455-A: güncel satırın izleme alanları (kartta, yaş, eskime, son alış, sapma). Son alış teslimi olan kartlardan okunur; TL karşılığı ve
+// farklı para birimli sapma bugünkü kurla (G1).
+async function kgIzleme(db: Db, fiyatlar: s.KgFiyatiOkuma[], kur: s.KurDizisi, kullanilan: readonly { kaliteKodu: string; form: string | null }[]): Promise<GuncelKgFiyatiSatiri[]> {
+  const bugun = tesisGunu(new Date());
+  const eskime = await sistemAyariOku(db, 'satin-alma.kg-fiyati-eskime-gun');
+  const esik = await sistemAyariOku(db, 'satin-alma.kg-fiyati-sapma-esigi');
+  const nolar = await s.teslimliMalzemeNolari(db);
+  const bilgiler = await malzemeMaliyetBilgileri(db, nolar);
+  const alislar = await sonAlisFiyatlari(db, nolar);
+  const kartlar = [...bilgiler].flatMap(([no, b]) => (b.kaliteKodu === null ? [] : [{
+    kaliteKodu: b.kaliteKodu, form: b.form, stokBirimi: b.stokBirimi, birimKg: b.birimKg, sonAlis: alislar.get(no) ?? null,
+  }]));
+  const son = kgSonAlislari(fiyatlar, kartlar);
+  const kurOf = new Map(kur.paraBirimleri.map((p, i) => [p, kur.kurlar[i]!]));
+  const adli = await kgFiyatiAdlari(db, fiyatlar);
+  return adli.map((f, i) => {
+    const a = son.get(fiyatlar[i]!);
+    const doviz = a?.kgFiyati ?? null;
+    const sonAlisParaBirimi = a === undefined || doviz === null ? null : a.paraBirimi as KgFiyatiSatiri['paraBirimi'];
+    const k = sonAlisParaBirimi === null ? undefined : kurOf.get(sonAlisParaBirimi);
+    const sonAlisKgFiyati = doviz === null || k === undefined ? null : ondalikCarp(doviz, k);
+    const yasGun = kgFiyatiYasi(f.gecerlilik, bugun);
+    const sapmaYuzde = kgSapmasi({ kgFiyati: f.kgFiyati, paraBirimi: f.paraBirimi, tryKgFiyati: f.tryKgFiyati, sonAlisKgFiyatiDoviz: doviz, sonAlisParaBirimi, sonAlisKgFiyati });
+    return {
+      ...f, kartta: kgFiyatiKartta(f.kaliteKodu, f.form, kullanilan), yasGun, eskiMi: kgFiyatiEskiMi(yasGun, eskime),
+      sonAlisKgFiyatiDoviz: doviz, sonAlisParaBirimi, sonAlisKgFiyati, sapmaYuzde, sapanMi: kgSapanMi(sapmaYuzde, esik),
+    };
+  });
 }
 export async function kgFiyatlari(db: Db, islemler: readonly string[]): Promise<KgFiyatlariCevabi> {
-  const fiyatlar = await s.guncelKgFiyatlari(db, await kgKuru(db));
-  const fiyatsizKaliteler = (await kullanilanKaliteler(db)).filter((k) => uygulananKgFiyati(fiyatlar, k.kaliteKodu, k.form) === null);
+  const kur = await kgKuru(db);
+  const fiyatlar = await s.guncelKgFiyatlari(db, kur);
+  const kullanilan = await kullanilanKaliteler(db);
+  const fiyatsizKaliteler = kullanilan.filter((k) => uygulananKgFiyati(fiyatlar, k.kaliteKodu, k.form) === null);
   const stokDegeri = islemler.includes('finans.oku') ? await kgStokDegeri(db) : null;
-  return { fiyatlar: await kgFiyatiAdlari(db, fiyatlar), fiyatsizKaliteler, stokDegeri };
+  return { fiyatlar: await kgIzleme(db, fiyatlar, kur, kullanilan), fiyatsizKaliteler, stokDegeri };
 }
 
 // Stok satın almayı ithal ettiği için satın alma stoğu ithal edemez: miktarı sunucu açılışında kablolama kaydeder (stokYokCozucusu gibi).
@@ -1591,8 +1625,19 @@ async function kgFiyatlariHesapla(db: Db, malzemeNolar: readonly number[], gun: 
 export async function kgFiyatiGecmisi(db: Db, kaliteKodu: string, form: string | null): Promise<KgFiyatiGecmisiCevabi> {
   return { girisler: await kgFiyatiAdlari(db, await s.kgFiyatiGecmisi(db, await kgKuru(db), kaliteKodu, form)) };
 }
+// 2455-2 a, V3: toplu yüklemede hepsi ya da hiçbiri; kartlarda olmayan kalite + form satır numarasıyla reddedilir.
 export async function kgFiyatlariEkle(db: Db, k: Kullanici, satirlar: readonly s.KgFiyatiYazimi[]): Promise<KgFiyatlariCevabi> {
+  const bilinmeyen = bilinmeyenKgSatirlari(satirlar, await kullanilanKaliteler(db));
+  if (bilinmeyen.length > 0) throw gecersiz(ILETILER.kgBilinmeyen(bilinmeyen));
   await s.kgFiyatlariEkle(db, k.id, satirlar);
+  return kgFiyatlari(db, k.islemler);
+}
+// 2455-A: iptal yeni satır yazar; iptal edilen giriş güncelden düşer (bir önceki giriş geçerli olur), geçmişte işaretli kalır.
+export async function kgFiyatiIptalEt(db: Db, k: Kullanici, id: number, g: KgFiyatiIptalYazimi): Promise<KgFiyatlariCevabi> {
+  const r = await kisitKorumali({}, () => s.kgFiyatiIptalEt(db, id, k.id, g.gerekce), { CAKISMA: ILETILER.kgZatenIptal });
+  if (r === 'yok') throw bulunamadi(ILETILER.kgFiyatiYok);
+  if (r === 'iptal-satiri') throw gecersiz(ILETILER.kgIptalSatiri);
+  if (r === 'zaten-iptal') throw gecersiz(ILETILER.kgZatenIptal);
   return kgFiyatlari(db, k.islemler);
 }
 
@@ -1710,7 +1755,12 @@ export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Pr
     .reduce((a, b) => (b < a ? b : a), bugun);
   const ilk = baslangic < enGeri ? enGeri : baslangic;
   const tatiller = new Set((await resmiTatilGunleri(db, ilk, bugun)).map((t) => t.tarih));
-  const istenen = hatirlatmalar(talepler, ayar as HatirlatmaAyarlari, bugun, haftaIciGunleri(ilk, bugun, tatiller));
+  const kullanilan = await kullanilanKaliteler(db);
+  const kgGuncel = (await s.guncelKgFiyatlari(db, { paraBirimleri: [], kurlar: [] })).map((f) => ({ ...f, kartta: kgFiyatiKartta(f.kaliteKodu, f.form, kullanilan) }));
+  const istenen = [
+    ...hatirlatmalar(talepler, ayar as HatirlatmaAyarlari, bugun, haftaIciGunleri(ilk, bugun, tatiller)),
+    ...kgEskimeHatirlatmalari(kgGuncel, await sistemAyariOku(db, 'satin-alma.kg-fiyati-eskime-gun'), bugun),
+  ];
   const kayitlar = await s.hatirlatmaKayitlari(db);
   const { acilacak, kapanacak } = hatirlatmaFarki(istenen, new Set(kayitlar.map((k) => k.anahtar)), kayitlar.filter((k) => k.acik));
   for (const k of kapanacak) await bildirimKapat(db, { tur: k.tur as Parameters<typeof bildirimKapat>[1]['tur'], kaynakKimlik: k.kaynakKimlik });

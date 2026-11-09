@@ -649,6 +649,7 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-kg-fiyatlari': { cevap: KgFiyatlariCevabi };
   'GET /satin-alma-kg-fiyatlari/gecmis': { sorgu: z.input<typeof kgFiyatiGecmisiSorgusu>; cevap: KgFiyatiGecmisiCevabi };
   'POST /satin-alma-kg-fiyatlari/ekle': { govde: KgFiyatiEkleGovdesi; cevap: KgFiyatlariCevabi };
+  'POST /satin-alma-kg-fiyatlari/:id/iptal': { govde: z.input<typeof kgFiyatiIptalGovdesi>; cevap: KgFiyatlariCevabi };
   'GET /satin-alma-kg-fiyatlari/malzemeler': { sorgu: z.input<typeof malzemeKgFiyatlariSorgusu>; cevap: MalzemeKgFiyatlariCevabi };
   'GET /satin-alma-tedarik-terminleri': { cevap: TedarikTerminleriCevabi };
   'POST /satin-alma-tedarik-terminleri/kaydet': { govde: z.input<typeof tedarikTerminiKaydetGovdesi>; cevap: TedarikTerminiKaydetCevabi };
@@ -805,7 +806,14 @@ export type FasonSureleriCevabi = z.output<typeof fasonSureleriCevabi>;
 // Malzeme kg fiyatı (kalite + form başına; form boş: kalitenin bütün formları). Geçmiş silinmez; güncel fiyat geçerlilik günü bugünü
 // geçmemiş en son giriştir. TL karşılığı finansın güncel kurundan; kur yoksa boş.
 const kaliteKodu = z.string().trim().min(1, 'Kalite boş olamaz.').max(60);
+// 2455-A: kaynak (boş: belirtilmedi) ve iptal. İptal yeni satırdır; iptal edilen giriş güncelden düşer, geçmişte iptalEdildi ile görünür.
+export const KG_FIYATI_KAYNAKLARI = ['tedarikci_teklifi', 'piyasa', 'son_alis'] as const;
 const kgFiyatiSatiri = z.object({
+  id: z.number().int(),
+  kaynak: z.enum(KG_FIYATI_KAYNAKLARI).nullable(),
+  iptalEdildi: z.boolean(),
+  // Güvenlik E2: iptal edildiyse iptal kaydı (gerekçe, iptal eden, zaman); değilse null.
+  iptal: z.object({ gerekce: z.string(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
   kaliteKodu: z.string(),
   form: z.string().nullable(),
   kgFiyati: ondalikMetinSemasi,
@@ -842,7 +850,21 @@ const kgStokDegeri = z.object({
   ayriGruplar: z.array(ayriStokDegeri.extend({ grup: z.enum(STOK_AYRI_GRUPLARI) })),
   satirlar: z.array(z.object({ kaliteKodu: z.string(), form: z.string().nullable(), tutar: ondalikMetinSemasi.nullable() })),
 });
-export const kgFiyatlariCevabi = z.object({ fiyatlar: z.array(kgFiyatiSatiri), fiyatsizKaliteler: z.array(fiyatsizKalite), stokDegeri: kgStokDegeri.nullable() });
+// 2455-A güncel satırın izleme alanları. kartta: kalite + form aktif hammadde kartlarında var. yasGun: geçerlilik gününden bugüne takvim günü;
+// eskiMi: yasGun eskime ayarına ulaştı (ayar boşsa false). Son alış (F-4): uygulanan kartların en son alışının kg fiyatı siparişin para
+// biriminde ve bugünkü kurla TL; çevrilemezse boş. sapmaYuzde (G1): son alış / kg fiyatı - 1, yüzde; aynı para biriminde doğrudan, farklıysa
+// ikisi de bugünkü kurla TL. sapanMi: |sapma| sapma eşiğine ulaştı (biri boşsa false).
+const guncelKgFiyatiSatiri = kgFiyatiSatiri.extend({
+  kartta: z.boolean(),
+  yasGun: z.number().int(),
+  eskiMi: z.boolean(),
+  sonAlisKgFiyatiDoviz: ondalikMetinSemasi.nullable(),
+  sonAlisParaBirimi: z.enum(PARA_BIRIMLERI).nullable(),
+  sonAlisKgFiyati: ondalikMetinSemasi.nullable(),
+  sapmaYuzde: z.string().regex(/^-?\d+(\.\d{1,2})?$/).nullable(),
+  sapanMi: z.boolean(),
+});
+export const kgFiyatlariCevabi = z.object({ fiyatlar: z.array(guncelKgFiyatiSatiri), fiyatsizKaliteler: z.array(fiyatsizKalite), stokDegeri: kgStokDegeri.nullable() });
 export type KgStokDegeri = z.output<typeof kgStokDegeri>;
 export type FiyatsizKalite = z.output<typeof fiyatsizKalite>;
 export const kgFiyatiGecmisiSorgusu = z.object({ kalite: kaliteKodu, form: z.string().trim().min(1).max(40).optional() });
@@ -861,8 +883,12 @@ export const kgFiyatiEkleGovdesi = z.object({
     paraBirimi: z.enum(PARA_BIRIMLERI),
     gecerlilik: tarih,
     aciklama: z.string().trim().max(500).prefault(''),
+    kaynak: z.enum(KG_FIYATI_KAYNAKLARI).nullable().prefault(null),
   })).min(1, 'En az bir fiyat girin.').max(500),
 });
+export const kgFiyatiParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
+export const kgFiyatiIptalGovdesi = z.object({ gerekce: z.string().trim().min(1, 'İptal gerekçesi yazın.').max(500) });
+export type KgFiyatiIptalYazimi = z.output<typeof kgFiyatiIptalGovdesi>;
 // Malzeme ekranı (köprü) malzemenin birim fiyatını buradan okur: en çok 200 malzeme no, virgülle. Fiyatı olmayan malzeme listede yoktur.
 export const malzemeKgFiyatlariSorgusu = z.object({ nolar: z.string().regex(/^\d+(,\d+){0,199}$/).transform((m) => [...new Set(m.split(',').map(Number))]) });
 const malzemeKgFiyati = z.object({
@@ -881,6 +907,7 @@ const malzemeKgFiyati = z.object({
 export const malzemeKgFiyatlariCevabi = z.object({ malzemeler: z.array(malzemeKgFiyati) });
 export type MalzemeKgFiyatlariCevabi = z.output<typeof malzemeKgFiyatlariCevabi>;
 export type KgFiyatiSatiri = z.output<typeof kgFiyatiSatiri>;
+export type GuncelKgFiyatiSatiri = z.output<typeof guncelKgFiyatiSatiri>;
 export type KgFiyatlariCevabi = z.output<typeof kgFiyatlariCevabi>;
 export type KgFiyatiGecmisiCevabi = z.output<typeof kgFiyatiGecmisiCevabi>;
 export type KgFiyatiEkleGovdesi = z.input<typeof kgFiyatiEkleGovdesi>;

@@ -119,6 +119,19 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     return { id: f.id, pasifle: async () => { tamam(await istek(c.yonetici, 'POST', `/finans/firmalar/${f.id}/pasif`, { surum: f.surum })); } };
   }
 
+  // 2455-2 a: kg fiyatı yalnız kartlarda kullanılan kalite + forma girilir; testin kalitesi aktif hammadde kartıyla açılır.
+  let kaliteKartiSirasi = 0;
+  const kaliteKarti = async (kalite: string, form: string | null, birim = 'kg', ek: Record<string, unknown> = {}): Promise<number> => {
+    kaliteKartiSirasi += 1;
+    const kimlik = `sa-kalite-${String(kaliteKartiSirasi)}`;
+    await ortam!.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SAKG-', 0) ON CONFLICT (onek) DO NOTHING");
+    return (await ortam!.sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'hammadde', 'SAKG-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [kimlik, 9000 + kaliteKartiSirasi, JSON.stringify({ id: kimlik, grade: kalite, ...(form === null ? {} : { form }), com: { ad: `Deneme ${kalite}`, birim }, ...ek }), yoneticiId],
+    ))!.no;
+  };
+
   before(async () => {
     // Sevkiyat alım bağı (kart #1310) gibi modüller arası bağlar ön yükleme olmadan da kurulu olsun (tek dosya koşusu).
     kablola();
@@ -2214,6 +2227,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('SAT-77: kg fiyatını satın alma girer; liste kalite + form başına güncel fiyatı verir, ileri tarihli fiyat güncel sayılmaz; geçmiş silinmez', async () => {
     const g = await bugun();
+    await kaliteKarti('DENEME-AL', 'cubuk');
     const yarin = (await vt().tx((db) => db.tek<{ g: string }>("SELECT (current_date + 1)::text AS g")))!.g;
     const satir = (kaliteKodu: string, form: string | null, kgFiyati: string, gecerlilik = g, paraBirimi = 'TRY') =>
       ({ kaliteKodu, form, kgFiyati, paraBirimi, gecerlilik, aciklama: '' });
@@ -2240,6 +2254,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('1352 a: işlem ve aracı katsayısı girişle yazılır ve geçmişte kalır; etkin kg fiyatı ikisi de yazılıysa çarpımdır, biri boşsa boş', async () => {
     const g = await bugun();
+    for (const f of ['cubuk', 'levha', 'boru']) await kaliteKarti('DENEME-KAT', f);
     const satir = (form: string, ek: Record<string, unknown>) => ({ kaliteKodu: 'DENEME-KAT', form, kgFiyati: '100', paraBirimi: 'TRY', gecerlilik: g, ...ek });
     tamam(await istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar: [
       satir('cubuk', { islemKatsayisi: '1.15', araciKatsayisi: '1.05' }), satir('levha', { islemKatsayisi: '1.2' }), satir('boru', {}),
@@ -2272,6 +2287,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('SAT-77: kg fiyatının TL karşılığı finansın güncel kurundan; kur yoksa boş (sıfır uydurulmaz)', async () => {
     const g = await bugun();
+    await kaliteKarti('DENEME-GBP', 'levha');
     const ekle = (kgFiyati: string) => istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle',
       { satirlar: [{ kaliteKodu: 'DENEME-GBP', form: 'levha', kgFiyati, paraBirimi: 'GBP', gecerlilik: g }] });
     const bul = async () => tamam<KgFiyatlariCevabi>(await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.find((f) => f.kaliteKodu === 'DENEME-GBP')!;
@@ -2370,6 +2386,117 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(uc.map((x) => [x.malzemeNo, x.birimFiyati === null ? null : Number(x.birimFiyati)]).sort(), [[cubuk, 150], [levha, null]].sort());
     assert.equal((await istek(c.operator, 'GET', `/satin-alma-kg-fiyatlari/malzemeler?nolar=${cubuk}`)).statusCode, 403);
     assert.equal((await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari/malzemeler?nolar=1,x')).statusCode, 400);
+  });
+
+  // 2455-A: doğrulama, kaynak, iptal, yaş ve eskime, son alış ve sapma, onuncu hatırlatma.
+  const kgEkle = (cerez: string, satirlar: unknown[]) => istek(cerez, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar });
+  const kgListe = async (kalite: string) => tamam<KgFiyatlariCevabi>(await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.filter((f) => f.kaliteKodu === kalite);
+  const gunOnce = (g: string, n: number) => new Date(Date.parse(`${g}T12:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
+
+  test('2455-2 a: kartlarda olmayan kalite + form satır numarasıyla 422 alır ve hiçbir satır yazılmaz; formsuz satır kalitenin her formuna uyar; kaynak yazılır', async () => {
+    const g = await bugun();
+    await kaliteKarti('DENEME-DG', 'cubuk');
+    const satir = (kaliteKodu: string, form: string | null, ek: Record<string, unknown> = {}) => ({ kaliteKodu, form, kgFiyati: '10', paraBirimi: 'TRY', gecerlilik: g, ...ek });
+    const red = await kgEkle(c.sa, [satir('DENEME-DG', 'cubuk'), satir('DENEME-DG', null), satir('DENEME-DG', 'levha'), satir('DENEME-YOKKALITE', null)]);
+    assert.equal(red.statusCode, 422);
+    assert.match(red.body, /satır 3, 4\)/);
+    const sayi = async () => (await ortam!.sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM satin_alma_kg_fiyati WHERE kalite_kodu = 'DENEME-DG'"))!.n;
+    assert.equal(await sayi(), 0);
+    assert.equal((await kgEkle(c.sa, [satir('DENEME-DG', null, { kaynak: 'tahmin' })])).statusCode, 400);
+    tamam(await kgEkle(c.sa, [satir('DENEME-DG', null, { kaynak: 'piyasa' }), satir('DENEME-DG', 'cubuk')]));
+    const l = await kgListe('DENEME-DG');
+    assert.deepEqual(l.map((f) => [f.form, f.kaynak, f.kartta, f.yasGun, f.eskiMi, f.iptalEdildi]), [[null, 'piyasa', true, 0, false, false], ['cubuk', null, true, 0, false, false]]);
+    assert.deepEqual(l.map((f) => [f.sonAlisKgFiyatiDoviz, f.sonAlisParaBirimi, f.sonAlisKgFiyati, f.sapmaYuzde, f.sapanMi]), [[null, null, null, null, false], [null, null, null, null, false]]);
+    // Doğrulamadan önce girilmiş (kartı sonradan kalkan) satır listede kalır, kartta değil diye işaretlenir.
+    await ortam!.sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ('DENEME-ESKIKALITE', NULL, 5, 'TRY', current_date, $1)", [yoneticiId]);
+    assert.deepEqual((await kgListe('DENEME-ESKIKALITE')).map((f) => f.kartta), [false]);
+  });
+
+  test('2455-A iptal: iptal yeni satır yazar, iptal edilen giriş güncelden düşer ve bir önceki geçerli olur; geçmişte işaretli görünür; ikinci iptal ve iptal satırının iptali reddedilir', async () => {
+    const g = await bugun();
+    await kaliteKarti('DENEME-IP', 'cubuk');
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'DENEME-IP', form: 'cubuk', kgFiyati: '100', paraBirimi: 'TRY', gecerlilik: gunOnce(g, 3) }]));
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'DENEME-IP', form: 'cubuk', kgFiyati: '120', paraBirimi: 'USD', gecerlilik: g }]));
+    const yeni = (await kgListe('DENEME-IP'))[0]!;
+    assert.equal(Number(yeni.kgFiyati), 120);
+    const iptal = (id: number, gerekce = 'Yanlış para birimi', cerez = c.sa) => istek(cerez, 'POST', `/satin-alma-kg-fiyatlari/${id}/iptal`, { gerekce });
+    assert.equal((await iptal(yeni.id, 'x', c.mudur)).statusCode, 403);
+    assert.equal((await iptal(yeni.id, '  ')).statusCode, 400);
+    assert.equal((await iptal(2147483000)).statusCode, 404);
+    const cevap = tamam<KgFiyatlariCevabi>(await iptal(yeni.id));
+    assert.deepEqual(cevap.fiyatlar.filter((f) => f.kaliteKodu === 'DENEME-IP').map((f) => [Number(f.kgFiyati), f.paraBirimi, f.yasGun]), [[100, 'TRY', 3]]);
+    const gecmis = tamam<KgFiyatiGecmisiCevabi>(await istek(c.mudur, 'GET', '/satin-alma-kg-fiyatlari/gecmis?kalite=DENEME-IP&form=cubuk')).girisler;
+    assert.deepEqual(gecmis.map((x) => [Number(x.kgFiyati), x.iptalEdildi, x.iptal?.gerekce ?? null, x.iptal?.kisiAdi ?? null]),
+      [[120, true, 'Yanlış para birimi', 'Deneme satinalma'], [100, false, null, null]]);
+    assert.match(gecmis[0]!.iptal!.zaman, /^\d{4}-\d{2}-\d{2}T/);
+    const satir = (await ortam!.sahip.tek<{ id: number; aciklama: string; kisi: number; gun: string; fiyat: string | null }>(
+      'SELECT id, aciklama, kisi_id AS kisi, gecerlilik::text AS gun, kg_fiyati::text AS fiyat FROM satin_alma_kg_fiyati WHERE iptal_edilen_id = $1', [yeni.id]))!;
+    assert.deepEqual([satir.aciklama, satir.kisi, satir.gun, satir.fiyat], ['Yanlış para birimi', kisi.sa, g, null]);
+    assert.equal((await iptal(yeni.id)).statusCode, 422);
+    assert.equal((await iptal(satir.id)).statusCode, 422);
+    // Kısıtlar: iptal satırı fiyat taşımaz, gerekçesiz olmaz; bir giriş bir kez iptal edilir; tablo yalnız eklenir.
+    const ekle = (sql: string) => assert.rejects(ortam!.sahip.tx((db) => db.sorgu(sql, [yeni.id, yoneticiId])), /satin_alma_kg_fiyati_iptal/);
+    await ekle("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, aciklama, iptal_edilen_id, kisi_id) VALUES ('DENEME-IP', 'cubuk', 1, 'TRY', current_date, 'x', $1, $2)");
+    await ekle("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, gecerlilik, aciklama, iptal_edilen_id, kisi_id) VALUES ('DENEME-IP', 'cubuk', current_date, ' ', $1, $2)");
+    await ekle("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, gecerlilik, aciklama, iptal_edilen_id, kisi_id) VALUES ('DENEME-IP', 'cubuk', current_date, 'ikinci', $1, $2)");
+    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, gecerlilik, kisi_id) VALUES ('DENEME-IP', 'cubuk', current_date, $1)", [yoneticiId])),
+      /satin_alma_kg_fiyati_iptal_satiri/);
+    await assert.rejects(ortam!.sahip.tx((db) => db.sorgu('DELETE FROM satin_alma_kg_fiyati WHERE id = $1', [satir.id])), /yalnız ekleme/);
+  });
+
+  test('2455-3 a ve 2432 onuncu madde: eşik kadar yaşlanan güncel giriş eski sayılır ve satın almaya hatırlatılır; yeni giriş hatırlatmayı kapatır', async () => {
+    const g = await bugun();
+    await kaliteKarti('DENEME-ES', 'cubuk');
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'DENEME-ES', form: 'cubuk', kgFiyati: '50', paraBirimi: 'TRY', gecerlilik: gunOnce(g, 30) }]));
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'DENEME-ES', form: null, kgFiyati: '50', paraBirimi: 'TRY', gecerlilik: gunOnce(g, 29) }]));
+    const l = await kgListe('DENEME-ES');
+    assert.deepEqual(l.map((f) => [f.form, f.yasGun, f.eskiMi]), [[null, 29, false], ['cubuk', 30, true]]);
+    const eski = l.find((f) => f.form === 'cubuk')!;
+    const tur = 'satin-alma.hatirlatma-kg-fiyati-eskidi';
+    const kayitlar = () => ortam!.sahip.sorgu<{ anahtar: string; acik: boolean; talep: string | null }>(
+      "SELECT anahtar, kapandi IS NULL AS acik, talep_id AS talep FROM satin_alma_hatirlatma WHERE tur = $1 AND anahtar LIKE $1 || ':kg:%' ORDER BY acildi, anahtar", [tur]);
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.deepEqual((await kayitlar()).filter((k) => k.anahtar === `${tur}:kg:${eski.id}`), [{ anahtar: `${tur}:kg:${eski.id}`, acik: true, talep: null }]);
+    const bildirim = await ortam!.sahip.sorgu<{ baslik: string; yol: string }>("SELECT DISTINCT baslik, yol FROM bildirim_kaydi WHERE tur = $1 AND baslik LIKE 'DENEME-ES%'", [tur]);
+    assert.deepEqual(bildirim, [{ baslik: 'DENEME-ES cubuk: kg fiyatı 30 gündür güncellenmedi', yol: '/satin-alma/kg-fiyatlari' }]);
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.equal((await kayitlar()).filter((k) => k.anahtar.endsWith(`:kg:${eski.id}`)).length, 1, 'ikinci tur aynı hatırlatmayı yeniden açmaz');
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'DENEME-ES', form: 'cubuk', kgFiyati: '55', paraBirimi: 'TRY', gecerlilik: g }]));
+    await vt().tx((db) => servis.hatirlatmalariYenile(db));
+    assert.deepEqual((await kayitlar()).filter((k) => k.anahtar.endsWith(`:kg:${eski.id}`)).map((k) => k.acik), [false]);
+    assert.equal((await kgListe('DENEME-ES')).find((f) => f.form === 'cubuk')!.eskiMi, false);
+  });
+
+  test('2455-A son alış ve sapma (F-4, G1): uygulanan kartın en son alışı kg fiyatına çevrilir; aynı para biriminde doğrudan, farklıysa bugünkü kurla ölçülür; eşik iki yönlüdür', async () => {
+    const g = await bugun();
+    // Stok birimi kg olan kart: son alışın kg fiyatı birim fiyatın kendisidir. Teslim satırı kartın kataloğuna bağlanır.
+    const kgKart = await kaliteKarti('DENEME-SA', 'cubuk', 'kg');
+    const katalogId = tamam<{ id: string }>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', { id: randomUUID(), malzemeNo: kgKart, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id;
+    const { s, a, k2 } = await bolunmusSiparis('8');
+    await teslimEt(siparisi(s, a).satirlar[0]!.id, '1', 8801);
+    await ortam!.sahip.sorgu('UPDATE satin_alma_talep_kalemi SET katalog_id = $1 WHERE talep_id = $2 AND id = $3', [katalogId, s.id, k2]);
+    const kart = { kalite: 'DENEME-SA', form: 'cubuk' };
+    const kgSon = 8;
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: kart.kalite, form: kart.form, kgFiyati: '6.4', paraBirimi: 'TRY', gecerlilik: g }]));
+    const r = (await kgListe(kart.kalite)).find((f) => f.form === kart.form)!;
+    assert.equal(r.sonAlisParaBirimi, 'TRY');
+    assert.ok(Math.abs(Number(r.sonAlisKgFiyatiDoviz) - kgSon) < 0.0001);
+    assert.ok(Math.abs(Number(r.sonAlisKgFiyati) - kgSon) < 0.0001);
+    assert.ok(Math.abs(Number(r.sapmaYuzde) - 25) < 0.02, String(r.sapmaYuzde));
+    assert.equal(r.sapanMi, true);
+    // Liste dövizde: ikisi de bugünkü satış kuruyla TL'ye çevrilir. Kur yoksa sapma boş.
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: kart.kalite, form: kart.form, kgFiyati: '1', paraBirimi: 'GBP', gecerlilik: g }]));
+    const kurlu = (await kgListe(kart.kalite)).find((f) => f.form === kart.form)!;
+    const tl = Number(kurlu.tryKgFiyati);
+    assert.ok(tl > 0, 'GBP kuru önceki testte yazıldı');
+    assert.ok(Math.abs(Number(kurlu.sapmaYuzde) - Math.round((kgSon / tl - 1) * 10000) / 100) < 0.02);
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: kart.kalite, form: kart.form, kgFiyati: '8', paraBirimi: 'TRY', gecerlilik: g }]));
+    const yakin = (await kgListe(kart.kalite)).find((f) => f.form === kart.form)!;
+    assert.deepEqual([yakin.sapmaYuzde, yakin.sapanMi], ['0', false]);
+    // Birim ağırlığı bilinmeyen adetli kartın son alışı kg'a çevrilmez: alanlar boş, sapma yok (sıfır uydurulmaz).
+    tamam(await kgEkle(c.sa, [{ kaliteKodu: 'S235', form: 'cubuk', kgFiyati: '5', paraBirimi: 'TRY', gecerlilik: g }]));
+    const agirliksiz = (await kgListe('S235')).find((f) => f.form === 'cubuk')!;
+    assert.deepEqual([agirliksiz.sonAlisKgFiyatiDoviz, agirliksiz.sonAlisKgFiyati, agirliksiz.sapmaYuzde, agirliksiz.sapanMi], [null, null, null, false]);
   });
 
   test('1942 a: şirket adı Sistem Ayarları > Firma adı\'ndan gelir; satın alma ayarı onu değiştirmez, eski şirket adı ucu yoktur', async () => {

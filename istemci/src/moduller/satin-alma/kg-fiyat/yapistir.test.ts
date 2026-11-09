@@ -61,7 +61,7 @@ describe('kg fiyatı toplu yapıştırma (SAT-77)', () => {
 
 // Kalite kodları ve fiyatlar uydurmadır.
 const satir = (ek: Partial<KgFiyatiSatiri>): KgFiyatiSatiri => ({
-  kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '100.0000', paraBirimi: 'TRY', tryKgFiyati: null, talasKgFiyati: null, tryTalasKgFiyati: null,
+  id: 1, kaynak: null, iptalEdildi: false, iptal: null, kaliteKodu: 'DENEME-AL', form: 'cubuk', kgFiyati: '100.0000', paraBirimi: 'TRY', tryKgFiyati: null, talasKgFiyati: null, tryTalasKgFiyati: null,
   gecerlilik: '2026-10-19', aciklama: '', kisiAdi: null, zaman: '2026-10-19T08:00:00.000Z', islemKatsayisi: null, araciKatsayisi: null, etkinKgFiyati: null, ...ek,
 });
 

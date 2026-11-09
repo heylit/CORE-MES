@@ -55,5 +55,14 @@ export const SATIN_ALMA_AYARLARI = {
     modul: 'satin-alma', tur: 'numara', varsayilan: 'SP-{YYYY}-{SAYAC:3}', alanlar: [], baslik: 'Satın alma siparişi numarası',
     aciklama: NUMARA_ACIKLAMASI,
   },
+  // 2455-3 a, 2455-13 a: kg fiyatı listesinin izlenmesi. Eskime günü onuncu hatırlatmayı da açar (ayrı gün ayarı yok).
+  'satin-alma.kg-fiyati-eskime-gun': {
+    modul: 'satin-alma', tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, ondalik: 0, baslik: 'Kg fiyatı eskime süresi (gün)',
+    aciklama: 'Kg fiyatı girişi geçerlilik gününden bu kadar gün geçince eski sayılır ve satın almaya hatırlatılır. Boş bırakılırsa eskime izlenmez.',
+  },
+  'satin-alma.kg-fiyati-sapma-esigi': {
+    modul: 'satin-alma', tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 100, ondalik: 0, baslik: 'Kg fiyatı son alış sapma eşiği (%)',
+    aciklama: 'Son alışın kg fiyatı listedeki kg fiyatından iki yönde bu yüzde kadar ya da daha çok saparsa satır işaretlenir. Boş bırakılırsa işaretlenmez.',
+  },
   ...SATIN_ALMA_HATIRLATMA_AYARLARI,
 } as const satisfies Record<string, AyarTanimi>;

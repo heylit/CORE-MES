@@ -4,7 +4,7 @@ import {
   acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
-  kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
+  kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
@@ -226,6 +226,11 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-kg-fiyatlari/ekle', yetki: 'satin-alma.yaz', govde: kgFiyatiEkleGovdesi, cevap: kgFiyatlariCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, govde }) => servis.kgFiyatlariEkle(db, kullanici, govde.satirlar),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-kg-fiyatlari/:id/iptal', yetki: 'satin-alma.yaz', parametre: kgFiyatiParametresi, govde: kgFiyatiIptalGovdesi,
+    cevap: kgFiyatlariCevabi, tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => servis.kgFiyatiIptalEt(db, kullanici, parametre.id, govde),
   }),
   uc({
     yontem: 'GET', yol: '/satin-alma-kg-fiyatlari/malzemeler', yetki: { biri: KG_FIYATI_OKUR }, sorgu: malzemeKgFiyatlariSorgusu,

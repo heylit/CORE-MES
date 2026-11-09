@@ -58,6 +58,7 @@ export const BILDIRIM_TURLERI = {
   'satin-alma.hatirlatma-teslim-yaklasiyor': { baslik: 'Siparişin teslimi yaklaşıyor', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
   'satin-alma.hatirlatma-teslim-gecikti': { baslik: 'Siparişin teslimi gecikti', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: true } },
   'satin-alma.hatirlatma-teslim-gecikti-yonetici': { baslik: 'Siparişin teslimi gecikti (yönetici)', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.ayar'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: true } },
+  'satin-alma.hatirlatma-kg-fiyati-eskidi': { baslik: 'Kg fiyatı eskidi', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/kg-fiyatlari', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-reddedildi': { baslik: 'Malzeme kartın reddedildi', onem: 'uyari', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {

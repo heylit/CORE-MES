@@ -23,7 +23,7 @@ export function fiyatSerisi(girisler: readonly KgFiyatiSatiri[]): FiyatSerisi | 
 // Girişler sunucudan geçerlilik ve giriş sırasına göre yeniden eskiye gelir (kgFiyatiGecmisi).
 export function KgFiyatGrafigi({ girisler, hata }: { girisler: readonly KgFiyatiSatiri[] | undefined; hata: boolean }) {
   const seri = girisler === undefined ? undefined : fiyatSerisi(girisler);
-  const birim = seri ? (seri.paraBirimi === 'TRY' ? 'TL' : seri.paraBirimi) : '';
+  const birim = seri ? (seri.paraBirimi === 'TRY' ? '₺' : seri.paraBirimi) : '';
   return (
     <GrafikKarti baslik="Kg fiyatı, geçerlilik gününe göre" simge="chart" tur="egri" birim={birim} hata={hata}
       noktalar={seri === undefined ? undefined : seri?.noktalar ?? null}

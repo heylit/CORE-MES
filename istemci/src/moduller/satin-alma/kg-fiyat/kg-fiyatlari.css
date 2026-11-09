@@ -9,3 +9,21 @@
 }
 .sa-kg-dosya:focus-within { outline: 2px solid var(--hazard); outline-offset: 2px; }
 .sa-kg-dosya input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+/* 2455 Teslim A: liste 7 sütun; ana değer üstte, açıklaması altta soluk. Kodlar ve tutarlar bölünmez. */
+.sa-kg { display: grid; gap: var(--b-4); min-width: 0; }
+.sa-kg .sa-kg-deger { margin-block-end: 0; }
+.sa-kg-iki { display: inline-flex; flex-direction: column; align-items: inherit; gap: var(--b-1); }
+.tc-tablo-sag .sa-kg-iki { align-items: flex-end; }
+.sa-kg-iki > small, .sa-kg-soluk, .sa-kg-not { color: var(--muted); font-size: var(--yazi-xs); }
+.sa-kg-not { margin: 0; }
+.sa-kg-kod { font-family: var(--font-mono); white-space: nowrap; }
+.sa-kg-tek { white-space: nowrap; }
+.sa-kg-sapma, .sa-kg-etiket { display: inline-flex; align-items: center; gap: var(--b-1); white-space: nowrap; }
+.sa-kg-sapma { flex-wrap: wrap; justify-content: flex-end; }
+.sa-kg-islem { display: inline-flex; align-items: center; gap: var(--b-1); }
+.sa-kg-form { display: grid; gap: var(--b-3); }
+.sa-kg-yan { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 767px) {
+  .sa-kg-yan { grid-template-columns: minmax(0, 1fr); }
+  .sa-kg .tc-sbaslik-alt { white-space: normal; }
+}
