@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { FirmaTuru, KarneCevabi, KarneOlayi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { DegerlendirmeCevabi, FirmaTuru, KarneAgirlikCevabi, KarneCevabi, KarneOlayi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -38,6 +38,10 @@ describe('tedarikçi karnesi (gerçek PostgreSQL, 1259 c, 1260 a)', () => {
   }
   const karne = (kim: string | null, id: number) => istek<KarneCevabi>(kim, 'GET', `/musteri-tedarikci/firmalar/${id}/karne`);
   const hizmetEkle = (kim: string | null, id: number, govde: unknown) => istek<KarneCevabi>(kim, 'POST', `/musteri-tedarikci/firmalar/${id}/hizmet-puani/ekle`, govde);
+  const kaliteEkle = (kim: string | null, id: number, govde: unknown) => istek<KarneCevabi>(kim, 'POST', `/musteri-tedarikci/firmalar/${id}/kalite-degerlendirmesi/ekle`, govde);
+  const matris = (kim: string | null) => istek<DegerlendirmeCevabi>(kim, 'GET', '/musteri-tedarikci/degerlendirme');
+  const agirliklar = (kim: string | null) => istek<KarneAgirlikCevabi>(kim, 'GET', '/musteri-tedarikci/karne-agirliklari');
+  const agirlikDegistir = (kim: string | null, govde: unknown) => istek<KarneAgirlikCevabi>(kim, 'POST', '/musteri-tedarikci/karne-agirliklari/degistir', govde);
   const yillikEkle = (kim: string | null, id: number, govde: unknown) => istek<KarneCevabi>(kim, 'POST', `/musteri-tedarikci/firmalar/${id}/yillik-karne/ekle`, govde);
 
   let sayac = 0;
@@ -83,6 +87,9 @@ describe('tedarikçi karnesi (gerçek PostgreSQL, 1259 c, 1260 a)', () => {
     await girisliKisi('okuyan', 'gecici_karne_oku', ['musteri-tedarikci.oku', 'musteri-tedarikci.yaz']);
     await girisliKisi('satinalma', 'gecici_karne_hizmet', ['musteri-tedarikci.oku', 'satin-alma.yaz']);
     await girisliKisi('kalite', 'gecici_karne_yillik', ['musteri-tedarikci.oku', 'kalite-merkezi.onayla']);
+    const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    assert.equal(c.statusCode, 200);
+    cerez.set('yonetici', String(c.headers['set-cookie']).split(';')[0] ?? '');
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -176,5 +183,91 @@ describe('tedarikçi karnesi (gerçek PostgreSQL, 1259 c, 1260 a)', () => {
     const c = (await karne('okuyan', id)).govde;
     assert.equal(c.hizmetPuanlari.length + c.yillikKarneler.length, 0);
     assert.equal((await hizmetEkle('satinalma', id, { puan: 6 })).durum, 400);
+  });
+  test('2456-3 a: Kalite değerlendirmesini yalnız kalite-merkezi.onayla yazar; tür uçtan gelir, gövdedeki tür yok sayılır', async () => {
+    const id = await firma();
+    for (const kim of [null, 'rolsuz', 'okuyan', 'satinalma']) {
+      assert.equal((await kaliteEkle(kim, id, { puan: 2 })).durum, kim === null ? 401 : 403, String(kim));
+    }
+    assert.equal((await karne('okuyan', id)).govde.hizmetPuanlari.length, 0);
+    const k = await kaliteEkle('kalite', id, { puan: 2, not: 'Ölçüm kayıtları eksik' });
+    assert.equal(k.durum, 200, JSON.stringify(k.govde));
+    assert.deepEqual(k.govde.karne.kaliteDegerlendirmesi, { sayi: 1, ortalama: 2, puan: 25 });
+    assert.equal(k.govde.karne.hizmet.puan, null);
+    assert.equal(k.govde.hizmetPuanlari[0]?.tur, 'kalite');
+    assert.equal(k.govde.hizmetPuanlari[0]?.giren, 'Deneme kalite');
+    const h = await hizmetEkle('satinalma', id, { puan: 4, tur: 'kalite' });
+    assert.equal(h.durum, 200);
+    assert.equal(h.govde.hizmetPuanlari[0]?.tur, 'satin-alma');
+    assert.equal(h.govde.karne.hizmet.puan, 75);
+    assert.equal((await kaliteEkle('kalite', await firma('musteri'), { puan: 3 })).durum, 422);
+  });
+
+  test('MT-16: yıllık karne hesap sürümünü ve bileşenleri saklar', async () => {
+    const id = await firma();
+    const gun = bugun();
+    for (let i = 0; i < 3; i += 1) await olay(teslim(id, `ys${id}-${i}`, gun, gun, i > 0));
+    for (let i = 0; i < 3; i += 1) await olay(lot(id, `yl${id}-${i}`, 'kabul'));
+    const y = await yillikEkle('kalite', id, { yil: 2026 });
+    assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    const [kayit] = y.govde.yillikKarneler;
+    assert.equal(kayit?.hesapSurumu, y.govde.karne.hesapSurumu);
+    assert.deepEqual(kayit?.bilesenler, y.govde.karne.bilesenler);
+    assert.equal(kayit?.puan, y.govde.karne.puan);
+    assert.equal(y.govde.karne.teslim.tam, 2);
+    assert.equal(y.govde.karne.teslim.oran, 100);
+    assert.equal(y.govde.karne.sinif !== null, true);
+  });
+
+  test('matris: musteri-tedarikci.oku ister; aktif tedarikçi ve ikisi türü gelir, müşteri ve pasif gelmez', async () => {
+    const tedarikci = await firma('tedarikci');
+    const ikisi = await firma('ikisi');
+    const musteri = await firma('musteri');
+    const pasif = await firma('tedarikci');
+    await vt().sorgu('UPDATE musteri_tedarikci_firma SET aktif = false WHERE id = $1', [pasif]);
+    assert.equal((await matris(null)).durum, 401);
+    assert.equal((await matris('rolsuz')).durum, 403);
+    const m = await matris('okuyan');
+    assert.equal(m.durum, 200, JSON.stringify(m.govde));
+    const idler = new Set(m.govde.satirlar.map((s) => s.firmaId));
+    assert.equal(idler.has(tedarikci) && idler.has(ikisi), true);
+    assert.equal(idler.has(musteri) || idler.has(pasif), false);
+    const satir = m.govde.satirlar.find((s) => s.firmaId === tedarikci)!;
+    assert.equal(satir.karne.puan, null);
+    assert.equal(satir.oncekiPuan, null);
+    assert.equal(m.govde.agirliklar.surum, satir.karne.hesapSurumu);
+    assert.equal(m.govde.kesildi, false);
+  });
+
+  // Son test: ağırlığı değiştirir; öteki testler sürüm 2'ye bağlı değil ama sıra korunur.
+  test('2456-2 c: ağırlıkları yalnız yönetici değiştirir; yeni sürüm açılır, eski sürüm, toplamı 100 olmayan ve gerekçesiz değişiklik reddedilir', async () => {
+    const g = await agirliklar('okuyan');
+    assert.equal(g.durum, 200);
+    assert.equal(g.govde.gecerli.surum, 2);
+    assert.equal(g.govde.gecerli.degistiren, null);
+    const yeni = { lot: 30, ppm: 10, zamaninda: 25, tam: 10, teklif: 5, satinAlma: 10, kalite: 10 };
+    for (const kim of [null, 'rolsuz', 'okuyan', 'satinalma', 'kalite']) {
+      assert.equal((await agirlikDegistir(kim, { surum: 2, agirliklar: yeni, gerekce: 'Deneme' })).durum, kim === null ? 401 : 403, String(kim));
+    }
+    assert.equal((await agirlikDegistir('yonetici', { surum: 2, agirliklar: { ...yeni, lot: 31 }, gerekce: 'Deneme' })).durum, 400);
+    assert.equal((await agirlikDegistir('yonetici', { surum: 2, agirliklar: yeni, gerekce: ' ' })).durum, 400);
+    assert.equal((await agirliklar('okuyan')).govde.gecmis.length, 1);
+    const d = await agirlikDegistir('yonetici', { surum: 2, agirliklar: yeni, gerekce: 'Lot kabul ağırlığı artırıldı' });
+    assert.equal(d.durum, 200, JSON.stringify(d.govde));
+    assert.equal(d.govde.gecerli.surum, 3);
+    assert.deepEqual(d.govde.gecerli.agirliklar, yeni);
+    assert.equal(d.govde.gecerli.degistiren, 'Deneme Yönetici');
+    assert.deepEqual(d.govde.gecmis.map((a) => a.surum), [3, 2]);
+    const eski = await agirlikDegistir('yonetici', { surum: 2, agirliklar: yeni, gerekce: 'Eski okumayla' });
+    assert.equal(eski.durum, 409);
+    assert.equal(kodu(eski), 'CAKISMA');
+    const id = await firma();
+    assert.equal((await karne('okuyan', id)).govde.karne.hesapSurumu, 3);
+    assert.equal(await kisitAdi(
+      "INSERT INTO musteri_tedarikci_karne_agirlik (surum, lot, ppm, zamaninda, tam, teklif, satin_alma, kalite, gerekce) VALUES (9, 100, 0, 0, 0, 0, 0, 0, 'x')",
+      []), 'musteri_tedarikci_karne_agirlik_kisili');
+    assert.notEqual(await kisitAdi('UPDATE musteri_tedarikci_karne_agirlik SET gerekce = $1 WHERE surum = 2', ['x']), null);
+    assert.notEqual(await kisitAdi('DELETE FROM musteri_tedarikci_karne_agirlik WHERE surum = 3', []), null);
+    assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM musteri_tedarikci_karne_agirlik'))?.n, 2);
   });
 });

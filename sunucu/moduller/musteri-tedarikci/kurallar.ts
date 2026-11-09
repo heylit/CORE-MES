@@ -1,9 +1,9 @@
 import {
-  ADRES_SINIRI, FIRMA_ARAMA_SINIRI, KARNE_AGIRLIKLARI, KARNE_DONEM_AYI, KARNE_EN_AZ_LOT, KARNE_EN_AZ_TESLIM, KARNE_SINIFLARI,
+  ADRES_SINIRI, FIRMA_ARAMA_SINIRI, HIZMET_PUANI_EN_AZ, KARNE_BILESEN_GRUPLARI, KARNE_BILESENLERI, KARNE_DONEM_AYI, KARNE_EN_AZ_LOT, KARNE_EN_AZ_TESLIM, KARNE_SINIFLARI,
   KARNE_SINIF_ALT_SINIRLARI, LOT_KARARLARI, LOT_KARAR_PUANI, TESLIM_TOLERANS_GUNU,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
-  FirmaKimligi, FirmaTuru, KarneOlayKaynagi, KarneOzeti, KarneSinifi, LogoCariEslesmesi, LogoCariOnerisi, LotKarari,
+  FirmaKimligi, FirmaTuru, KarneAgirliklari, KarneBileseni, KarneBilesenGrubu, KarneBilesenSatiri, KarneOlayKaynagi, KarneOzeti, KarneSinifi, LogoCariEslesmesi, LogoCariOnerisi, LotKarari,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Müşteri ve tedarikçi iş kuralları (saf). Numara (MT-n) KURAL-TEST.md ile aynıdır; finanstan gelenlerin eski numarası parantezde.
@@ -146,19 +146,21 @@ export function karneDonemi(bugun: string): { donemBasi: string; donemSonu: stri
   return { donemBasi: `${basYil}-${iki(basAy)}-${iki(Math.min(gun, ayinSonu))}`, donemSonu: bugun };
 }
 
-// MT-15: teslim tamsa ve termin + tolerans gününü geçmediyse zamanındadır; eksik teslim zamanında sayılmaz.
-export function zamanindaMi(o: { termin: string; teslimGunu: string; tam: boolean }): boolean {
-  if (!o.tam) return false;
+// MT-15 (sürüm 2, 2456): zamanlılık yalnız tarihe bakar; teslim termin + tolerans gününü geçmediyse zamanındadır. Eksikliği ayrı
+// "tam teslim" bileşeni ölçer; aynı eksik teslim iki bileşenden birden düşmez (2411 Tur 2 dışı nokta, tamlık çift sayımı).
+export function zamanindaMi(o: { termin: string; teslimGunu: string }): boolean {
   const gun = (t: string): number => Date.parse(`${t}T00:00:00Z`) / 86_400_000;
   return gun(o.teslimGunu) - gun(o.termin) <= TESLIM_TOLERANS_GUNU;
 }
 
+export interface ElleSayilar { sayi: number; toplam: number }
 export interface KarneSayilari {
   teslimToplam: number;
   teslimZamaninda: number;
+  teslimTam: number;
   lotKararlari: Partial<Record<LotKarari, number>>;
-  hizmetSayisi: number;
-  hizmetToplami: number;
+  satinAlma: ElleSayilar;
+  kalite: ElleSayilar;
 }
 
 const ondalik1 = (n: number): number => Math.round(n * 10) / 10;
@@ -167,29 +169,72 @@ export function karneSinifiBul(puan: number): KarneSinifi {
   return KARNE_SINIFLARI.find((s) => puan >= KARNE_SINIF_ALT_SINIRLARI[s]) ?? 'D';
 }
 
-// MT-16: puan = teslim 40 + kalite 40 + hizmet 20 (1260 a). Kalite lot başına kararın puanıdır (kabul 1, şartlı ve hatalı kabul 0,5,
-// red ve iade 0). Hizmet puanı girilmemişse ağırlığı öteki ikisine paylaştırılır (50/50). 12 ayda 3 teslim ve 3 lot yoksa
-// "yetersiz veri": puan ve sınıf null'dır, sıfır uydurulmaz.
-export function karneHesapla(s: KarneSayilari): Omit<KarneOzeti, 'firmaId' | 'donemBasi' | 'donemSonu'> {
+// MT-31: elle 1-5 puan 0-100'e (p - 1) x 25 ile çevrilir; en kötü puan 0, en iyi 100 (2456 önizlemesi, Maliyet 2411).
+export function ellePuani(e: ElleSayilar): { ortalama: number | null; puan: number | null } {
+  if (e.sayi <= 0) return { ortalama: null, puan: null };
+  const ortalama = e.toplam / e.sayi;
+  return { ortalama: ondalik1(ortalama), puan: ondalik1((ortalama - HIZMET_PUANI_EN_AZ) * 25) };
+}
+
+// MT-32: ağırlıklı ortalama yalnız verisi olan bileşenler üzerinden alınır; null bileşenin ağırlığı ötekilere oranla dağılır (sıfır
+// sayılmaz). Otomatik bileşenlerin (lot, PPM, zamanında, tam, teklif) hiçbirinde veri yoksa puan null'dır: tek kişinin elle puanı
+// tedarikçiye karne puanı vermez (Maliyet ön bakışı A1). Hiçbir bileşenin verisi ya da ağırlığı yoksa da puan null'dır.
+export function bilesenPuani(degerler: Record<KarneBileseni, number | null>, agirliklar: KarneAgirliklari): {
+  puan: number | null; bilesenler: KarneBilesenSatiri[]; gruplar: Record<KarneBilesenGrubu, number | null>;
+} {
+  const ortalama = (secilen: readonly KarneBileseni[]): { puan: number | null; toplamAgirlik: number } => {
+    const dolu = secilen.filter((b) => degerler[b] !== null);
+    const toplamAgirlik = dolu.reduce((t, b) => t + agirliklar[b], 0);
+    return { toplamAgirlik, puan: toplamAgirlik > 0 ? ondalik1(dolu.reduce((t, b) => t + degerler[b]! * agirliklar[b], 0) / toplamAgirlik) : null };
+  };
+  const otomatikVar = KARNE_BILESENLERI.some((b) => KARNE_BILESEN_GRUPLARI[b] !== 'elle' && degerler[b] !== null);
+  const genel = ortalama(KARNE_BILESENLERI);
+  const puan = otomatikVar ? genel.puan : null;
+  const grup = (g: KarneBilesenGrubu) => ortalama(KARNE_BILESENLERI.filter((b) => KARNE_BILESEN_GRUPLARI[b] === g)).puan;
+  return {
+    puan,
+    bilesenler: KARNE_BILESENLERI.map((b) => ({
+      anahtar: b,
+      deger: degerler[b],
+      agirlik: agirliklar[b],
+      etkinAgirlik: degerler[b] === null || puan === null ? null : ondalik1((agirliklar[b] / genel.toplamAgirlik) * 100),
+    })),
+    gruplar: { kalite: grup('kalite'), teslim: grup('teslim'), elle: grup('elle') },
+  };
+}
+
+// MT-16 (sürüm 2, 2456): bileşenler lot kabul (lot başına karar puanı: kabul 1, şartlı ve hatalı kabul 0,5, red ve iade 0), zamanında,
+// tam teslim, satın alma ve Kalite değerlendirmesi. PPM ve teklife yanıt için olay henüz gelmez: null (UYUM-BORCU). 12 ayda 3 teslim
+// ve 3 lot yoksa "yetersiz veri": puan verisi olan bileşenlerle hesaplanır ama sınıf verilmez (az veriyle yanlış sınıf bildirimi gitmesin).
+export function karneHesapla(s: KarneSayilari, agirliklar: KarneAgirliklari, hesapSurumu: number): Omit<KarneOzeti, 'firmaId' | 'donemBasi' | 'donemSonu'> {
   const lot = LOT_KARARLARI.reduce((t, k) => t + (s.lotKararlari[k] ?? 0), 0);
   const lotPuani = LOT_KARARLARI.reduce((t, k) => t + (s.lotKararlari[k] ?? 0) * LOT_KARAR_PUANI[k], 0);
   const oran = s.teslimToplam > 0 ? ondalik1((s.teslimZamaninda / s.teslimToplam) * 100) : null;
+  const tamOrani = s.teslimToplam > 0 ? ondalik1((s.teslimTam / s.teslimToplam) * 100) : null;
   const kalite = lot > 0 ? ondalik1((lotPuani / lot) * 100) : null;
-  const hizmet = s.hizmetSayisi > 0 ? ondalik1((s.hizmetToplami / s.hizmetSayisi) * 20) : null;
+  const satinAlma = ellePuani(s.satinAlma);
+  const kaliteDeg = ellePuani(s.kalite);
+  const { puan, bilesenler, gruplar } = bilesenPuani(
+    { lot: kalite, ppm: null, zamaninda: oran, tam: tamOrani, teklif: null, satinAlma: satinAlma.puan, kalite: kaliteDeg.puan }, agirliklar);
   const yetersizVeri = s.teslimToplam < KARNE_EN_AZ_TESLIM || lot < KARNE_EN_AZ_LOT;
-  let puan: number | null = null;
-  if (!yetersizVeri && oran !== null && kalite !== null) {
-    const { teslim: a, kalite: b, hizmet: c } = KARNE_AGIRLIKLARI;
-    puan = hizmet === null ? ondalik1((oran + kalite) / 2) : ondalik1((oran * a + kalite * b + hizmet * c) / (a + b + c));
-  }
+  const kararlar = Object.fromEntries(LOT_KARARLARI.filter((k) => (s.lotKararlari[k] ?? 0) > 0).map((k) => [k, s.lotKararlari[k]!]));
   return {
-    teslim: { toplam: s.teslimToplam, zamaninda: s.teslimZamaninda, oran },
-    kalite: { lot, puan: kalite },
-    hizmet: { sayi: s.hizmetSayisi, puan: hizmet },
+    teslim: { toplam: s.teslimToplam, zamaninda: s.teslimZamaninda, tam: s.teslimTam, oran },
+    kalite: { lot, kararlar, puan: kalite },
+    hizmet: { sayi: s.satinAlma.sayi, ...satinAlma },
+    kaliteDegerlendirmesi: { sayi: s.kalite.sayi, ...kaliteDeg },
+    bilesenler,
+    gruplar,
+    hesapSurumu,
     puan,
-    sinif: puan === null ? null : karneSinifiBul(puan),
+    sinif: puan === null || yetersizVeri ? null : karneSinifiBul(puan),
     yetersizVeri,
   };
+}
+
+// MT-33: ağırlık değişikliği okunan geçerli sürüm üzerine yapılır (arada başkası değiştirdiyse çakışma); toplam 100'dür (şema ve kısıt).
+export function agirlikSurumHatasi(okunan: number, gecerli: number): string | null {
+  return okunan === gecerli ? null : 'Ağırlıklar siz okuduktan sonra değişti; sayfayı yenileyin.';
 }
 
 // MT-17: hizmet puanı ve yıllık karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır.

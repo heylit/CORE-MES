@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ADRES_SINIRI, FIRMA_ARAMA_SINIRI } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
-  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, karneDonemi, karneHesapla, karneSinifiBul,
+  adresSiniriHatasi, aramaSiniri, defterFarki, durumGecisiHatasi, firmaAramaSonucu, firmaKaydiHatasi, agirlikSurumHatasi, bilesenPuani, ellePuani, karneDonemi, karneHesapla, karneSinifiBul,
   fasonTuruHatasi, karneYazmaHatasi, koordinatHatasi, logoKilidiIhlali, musteriSinifiTuru, turKapsami, vergiNoHatasi, zamanindaMi,
 } from './kurallar.ts';
+import type { KarneAgirliklari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { KarneSayilari } from './kurallar.ts';
 
 test('MT-1 (D-9): Türkiye\'deki firmada vergi numarası 10 ya da 11 rakamdır; harf ve kısa numara reddedilir', () => {
@@ -100,46 +101,88 @@ test('MT-14: karne dönemi tesis gününde biten 12 aydır; kısa ayda ayın son
   assert.deepEqual(karneDonemi('2026-01-01'), { donemBasi: '2025-01-01', donemSonu: '2026-01-01' });
 });
 
-test('MT-15: tam teslim termin + 2 gün içindeyse zamanındadır; geç ya da eksik teslim değildir', () => {
-  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-20', tam: true }), true);
-  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-30', tam: true }), true);
-  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-31', tam: true }), false);
-  assert.equal(zamanindaMi({ termin: '2026-12-31', teslimGunu: '2027-01-02', tam: true }), true);
-  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-28', tam: false }), false);
+test('MT-15: teslim termin + 2 gün içindeyse zamanındadır; tamlık zamanlılığa girmez (sürüm 2)', () => {
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-20' }), true);
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-30' }), true);
+  assert.equal(zamanindaMi({ termin: '2026-10-28', teslimGunu: '2026-10-31' }), false);
+  assert.equal(zamanindaMi({ termin: '2026-12-31', teslimGunu: '2027-01-02' }), true);
 });
 
+const AGIRLIK: KarneAgirliklari = { lot: 25, ppm: 15, zamaninda: 25, tam: 10, teklif: 5, satinAlma: 10, kalite: 10 };
 const sayilar = (ek: Partial<KarneSayilari> = {}): KarneSayilari => ({
-  teslimToplam: 10, teslimZamaninda: 9, lotKararlari: { kabul: 3, sartli_kabul: 1 }, hizmetSayisi: 2, hizmetToplami: 9, ...ek,
+  teslimToplam: 10, teslimZamaninda: 9, teslimTam: 8, lotKararlari: { kabul: 3, sartli_kabul: 1 },
+  satinAlma: { sayi: 2, toplam: 9 }, kalite: { sayi: 1, toplam: 5 }, ...ek,
 });
 
-test('MT-16: puan teslim 40, kalite 40, hizmet 20 ağırlıklıdır; sınıf eşikleri 90, 75, 60', () => {
-  const k = karneHesapla(sayilar());
-  assert.deepEqual(k.teslim, { toplam: 10, zamaninda: 9, oran: 90 });
-  assert.deepEqual(k.kalite, { lot: 4, puan: 87.5 });
-  assert.deepEqual(k.hizmet, { sayi: 2, puan: 90 });
-  assert.equal(k.puan, 89);
+test('MT-16, MT-32: puan verisi olan bileşenlerin ağırlıklı ortalamasıdır; PPM ve teklif yokken ağırlıkları dağılır', () => {
+  const k = karneHesapla(sayilar(), AGIRLIK, 2);
+  assert.deepEqual(k.teslim, { toplam: 10, zamaninda: 9, tam: 8, oran: 90 });
+  assert.deepEqual(k.kalite, { lot: 4, kararlar: { kabul: 3, sartli_kabul: 1 }, puan: 87.5 });
+  assert.deepEqual(k.hizmet, { sayi: 2, ortalama: 4.5, puan: 87.5 });
+  assert.deepEqual(k.kaliteDegerlendirmesi, { sayi: 1, ortalama: 5, puan: 100 });
+  assert.equal(k.puan, 88.9);
   assert.equal(k.sinif, 'B');
+  assert.equal(k.hesapSurumu, 2);
   assert.equal(k.yetersizVeri, false);
+  const lot = k.bilesenler.find((b) => b.anahtar === 'lot')!;
+  assert.deepEqual(lot, { anahtar: 'lot', deger: 87.5, agirlik: 25, etkinAgirlik: 31.3 });
+  assert.deepEqual(k.bilesenler.find((b) => b.anahtar === 'ppm'), { anahtar: 'ppm', deger: null, agirlik: 15, etkinAgirlik: null });
   assert.deepEqual([90, 89.9, 75, 74.9, 60, 59.9, 0].map(karneSinifiBul), ['A', 'B', 'B', 'C', 'C', 'D', 'D']);
+  assert.deepEqual(k.gruplar, { kalite: 87.5, teslim: 87.1, elle: 93.8 });
 });
 
-test('MT-16: red ve iade lotu sıfır, hatalı kabul yarım sayılır; hizmet puanı yoksa teslim ve kalite yarı yarıya', () => {
-  const k = karneHesapla(sayilar({ lotKararlari: { kabul: 1, hatali_kabul: 1, red: 1, iade: 1 }, hizmetSayisi: 0, hizmetToplami: 0 }));
+test('MT-16: red ve iade lotu sıfır, hatalı kabul yarım sayılır; elle puan yoksa sıfır değil null sayılır', () => {
+  const k = karneHesapla(sayilar({ lotKararlari: { kabul: 1, hatali_kabul: 1, red: 1, iade: 1 }, satinAlma: { sayi: 0, toplam: 0 }, kalite: { sayi: 0, toplam: 0 } }), AGIRLIK, 2);
   assert.equal(k.kalite.puan, 37.5);
   assert.equal(k.hizmet.puan, null);
-  assert.equal(k.puan, 63.8);
+  assert.equal(k.puan, 66.5);
   assert.equal(k.sinif, 'C');
 });
 
-test('MT-16: 3 teslim ve 3 lottan az veride puan ve sınıf null, oranlar yine gösterilir; sıfır uydurulmaz', () => {
-  const az = karneHesapla(sayilar({ teslimToplam: 2, teslimZamaninda: 2 }));
+test('MT-16: eksik teslim zamanlılıktan değil yalnız tam teslim bileşeninden düşer', () => {
+  const k = karneHesapla(sayilar({ teslimToplam: 4, teslimZamaninda: 4, teslimTam: 2 }), AGIRLIK, 2);
+  assert.equal(k.teslim.oran, 100);
+  assert.equal(k.bilesenler.find((b) => b.anahtar === 'tam')!.deger, 50);
+});
+
+test('MT-16: 3 teslim ve 3 lottan az veride sınıf verilmez, puan verisi olan bileşenle gösterilir; veri yoksa null', () => {
+  const az = karneHesapla(sayilar({ teslimToplam: 2, teslimZamaninda: 2, teslimTam: 2 }), AGIRLIK, 2);
   assert.equal(az.yetersizVeri, true);
-  assert.equal(az.puan, null);
+  assert.notEqual(az.puan, null);
   assert.equal(az.sinif, null);
-  assert.equal(az.teslim.oran, 100);
-  const bos = karneHesapla({ teslimToplam: 0, teslimZamaninda: 0, lotKararlari: {}, hizmetSayisi: 0, hizmetToplami: 0 });
+  const bos = karneHesapla({ teslimToplam: 0, teslimZamaninda: 0, teslimTam: 0, lotKararlari: {}, satinAlma: { sayi: 0, toplam: 0 }, kalite: { sayi: 0, toplam: 0 } }, AGIRLIK, 2);
   assert.deepEqual([bos.teslim.oran, bos.kalite.puan, bos.hizmet.puan, bos.puan, bos.sinif], [null, null, null, null, null]);
-  assert.equal(karneHesapla(sayilar({ lotKararlari: { kabul: 2 } })).yetersizVeri, true);
+  assert.equal(karneHesapla(sayilar({ lotKararlari: { kabul: 2 } }), AGIRLIK, 2).yetersizVeri, true);
+});
+
+test('MT-31: elle 1-5 puan (p - 1) x 25 ile 0-100 olur; değerlendirme yoksa null', () => {
+  assert.deepEqual(ellePuani({ sayi: 1, toplam: 1 }), { ortalama: 1, puan: 0 });
+  assert.deepEqual(ellePuani({ sayi: 2, toplam: 10 }), { ortalama: 5, puan: 100 });
+  assert.deepEqual(ellePuani({ sayi: 3, toplam: 10 }), { ortalama: 3.3, puan: 58.3 });
+  assert.deepEqual(ellePuani({ sayi: 0, toplam: 0 }), { ortalama: null, puan: null });
+});
+
+test('MT-32: hiçbir bileşenin ağırlığı yoksa puan null; sıfır ağırlıklı bileşen etkin ağırlık 0 alır', () => {
+  const sifir: KarneAgirliklari = { lot: 0, ppm: 0, zamaninda: 0, tam: 0, teklif: 0, satinAlma: 0, kalite: 100 };
+  const bos = bilesenPuani({ lot: 90, ppm: null, zamaninda: 80, tam: null, teklif: null, satinAlma: null, kalite: null }, sifir);
+  assert.equal(bos.puan, null);
+  const tek = bilesenPuani({ lot: 90, ppm: null, zamaninda: 80, tam: null, teklif: null, satinAlma: null, kalite: 40 }, sifir);
+  assert.equal(tek.puan, 40);
+  assert.equal(tek.bilesenler.find((b) => b.anahtar === 'lot')!.etkinAgirlik, 0);
+});
+
+test('MT-32: otomatik bileşenlerin hiçbirinde veri yoksa elle puanlar karne puanı vermez', () => {
+  const k = karneHesapla({ teslimToplam: 0, teslimZamaninda: 0, teslimTam: 0, lotKararlari: {}, satinAlma: { sayi: 1, toplam: 5 }, kalite: { sayi: 1, toplam: 4 } }, AGIRLIK, 2);
+  assert.equal(k.puan, null);
+  assert.equal(k.sinif, null);
+  assert.deepEqual(k.gruplar, { kalite: null, teslim: null, elle: 87.5 });
+  assert.equal(k.bilesenler.find((b) => b.anahtar === 'satinAlma')!.deger, 100);
+  assert.equal(k.bilesenler.find((b) => b.anahtar === 'satinAlma')!.etkinAgirlik, null);
+});
+
+test('MT-33: ağırlık değişikliği okunan sürüm geçerli değilse reddedilir', () => {
+  assert.equal(agirlikSurumHatasi(3, 3), null);
+  assert.notEqual(agirlikSurumHatasi(2, 3), null);
 });
 
 test('MT-17: karne yalnız tedarikçi ya da ikisi türündeki firmaya yazılır', () => {
