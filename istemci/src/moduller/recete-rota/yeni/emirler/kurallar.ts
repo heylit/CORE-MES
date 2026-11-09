@@ -208,26 +208,7 @@ export function rotaFarki(d: Durum, o: Emir): RotaFarki | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
-// Malzeme ihtiyacı: emirler plan sırasıyla (başlamış önce, sonra öncelik, teslim, açılış) ürün ağacından patlatılır; serbest stok emirlere
-// bu sırayla paylaştırılır (alt seviye üretilen parça da stoktan netleşir). Fire: adım ret yüzdesi önceki adımları büyütür, girdi firesi
-// girdiyi büyütür. Ara adım stoğu (stoktaki rota statüsü) da aynı sırayla paylaştırılır: adımın çıktısı olarak bekleyen miktar sonraki adımın
-// girdisini karşılar, o adım ve öncekiler o kadar az üretir (461 b; prototipin build kuralı). Yalnız ürünün kendi rota adımının statüsü
-// sayılır; kayıt belgesindeki yerel stok kullanılmaz (208 a).
-export interface IhtiyacSatiri { malzemeId: string; brut: number; stoktan: number; alinacak: number }
-export interface EmirIhtiyaci { hammadde: IhtiyacSatiri[]; yanUrun: { malzemeId: string; miktar: number }[]; eksikler: IhtiyacSatiri[]; uyarilar: string[] }
-
-// Adım ret yüzdesi önceki adımları büyütür: son adım 1, her önceki adım sonrakilerin 1/(1-ret) çarpımı (ret en çok %95).
-export function adimCarpanlari(adimlar: readonly Pick<DurumRotaAdimi, 'rejectPct'>[]): number[] {
-  const f = new Array<number>(adimlar.length).fill(1);
-  let birikim = 1;
-  for (let j = adimlar.length - 1; j >= 0; j--) {
-    const ret = Math.min(0.95, Math.max(0, (adimlar[j]?.rejectPct ?? 0) / 100));
-    birikim /= 1 - ret;
-    f[j] = birikim;
-  }
-  return f;
-}
-
+// Malzeme ihtiyacı sunucudadır (GET /recete-rota/malzeme-ihtiyaci; 461 b kuralı orada, B-2484-3). Ekran yalnız plan sırasını kullanır.
 const baslamis = (o: Emir, opStatus: Record<string, unknown>, opProg: Record<string, number>): boolean => {
   const onek = `${o.id}|`;
   return Object.keys(opStatus).some((k) => k.startsWith(onek)) || Object.entries(opProg).some(([k, v]) => k.startsWith(onek) && v > EPS);
@@ -240,114 +221,6 @@ export function planSirasi(d: Durum): Emir[] {
   return e.orders.filter(plandaMi).sort((a, b) =>
     Number(baslamis(b, e.opStatus, e.opProg)) - Number(baslamis(a, e.opStatus, e.opProg))
     || a.priority - b.priority || String(a.due).localeCompare(String(b.due)) || a.created - b.created);
-}
-
-const kolIcinde = (kol: { n: number; m: number }, j: number): boolean => j >= kol.n && j <= kol.m - 2;
-const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 1 && m - n >= 2 && m <= adimSayisi;
-
-// Ara adım havuzu: anahtar `<ürün>|<adım kimliği>`. Statünün kaynak adımı `<ürün no>-o<OP>` biçimindedir; ürünü yazmayan eski biçim
-// hangi ürünün olduğu belli olmadığı için sayılmaz. Bir statünün stoğu hangi kartın kırılımında görünürse görünsün toplanır.
-export function araStokHavuzu(okuma: StokOkumasi | null): Map<string, number> {
-  const havuz = new Map<string, number>();
-  const statuler = okuma?.statuler;
-  const malzemeler = okuma?.malzemeler;
-  if (!statuler || !malzemeler) return havuz;
-  const anahtar = new Map<number, string>();
-  for (const s of statuler) {
-    const m = /^(\d+)-(o\d+)$/.exec(s.kaynakAdim);
-    if (m) anahtar.set(s.id, `${m[1] ?? ''}|${m[2] ?? ''}`);
-  }
-  for (const k of Object.values(malzemeler)) {
-    for (const r of k?.kirilim ?? []) {
-      const a = r.statuId === null ? undefined : anahtar.get(r.statuId);
-      const q = Number(r.miktar);
-      if (a !== undefined && Number.isFinite(q) && q > EPS) havuz.set(a, (havuz.get(a) ?? 0) + q);
-    }
-  }
-  return havuz;
-}
-
-export function malzemeIhtiyaclari(d: Durum, okuma: StokOkumasi | null = null): Map<string, EmirIhtiyaci> {
-  const malzeme = new Map<string, Malzeme>((d.items ?? []).map((i) => [i.id, i]));
-  const havuz = new Map<string, number>((d.items ?? []).map((i) => [i.id, Math.max(0, i.stock ?? 0)]));
-  const araHavuz = araStokHavuzu(okuma);
-  const sira = planSirasi(d);
-  const sonuc = new Map<string, EmirIhtiyaci>();
-
-  for (const o of sira) {
-    const R: EmirIhtiyaci = { hammadde: [], yanUrun: [], eksikler: [], uyarilar: [] };
-    const ham = new Map<string, IhtiyacSatiri>();
-    const yan = new Map<string, number>();
-    const uyar = (m: string) => { if (!R.uyarilar.includes(m)) R.uyarilar.push(m); };
-
-    const patlat = (urunId: string, miktar: number, yol: readonly string[], kok: boolean, adimlar: readonly DurumRotaAdimi[] | null, tut: ((j: number) => number) | null) => {
-      const kart = malzeme.get(urunId);
-      if (yol.includes(urunId)) { uyar(`${kart?.code ?? urunId} kendi akışında tekrar kullanılıyor (döngü).`); return; }
-      let net = miktar;
-      let stoktan = 0;
-      if (!kok) {
-        const eldeki = havuz.get(urunId) ?? 0;
-        stoktan = Math.min(eldeki, miktar);
-        if (stoktan > EPS) havuz.set(urunId, eldeki - stoktan);
-        net = miktar - stoktan;
-      }
-      const ss = adimlar ?? (kart?.type !== 'ham' ? d.routes?.[urunId]?.steps ?? null : null);
-      if (ss === null || ss.length === 0) {
-        const e = ham.get(urunId) ?? { malzemeId: urunId, brut: 0, stoktan: 0, alinacak: 0 };
-        e.brut += miktar; e.stoktan += stoktan; e.alinacak += net;
-        ham.set(urunId, e);
-        if (kart && kart.type !== 'ham' && kart.type !== 'sarf') uyar(`${kart.code} ${kart.name}: rotası yok, satın alınan parça gibi hesaplandı.`);
-        return;
-      }
-      if (net <= EPS) return;
-      const sirali = siraliAdimlar(ss);
-      const fs = adimCarpanlari(sirali);
-      // Adımın yapacağı miktar; ara stok son adımdan geriye doğru düşülür. Kol hesabında (tut) ara stok kullanılmaz (prototipte de öyle).
-      const yapilacak = sirali.map((_, j) => net * (fs[j] ?? 1));
-      if (!tut && araHavuz.size) {
-        for (let k = sirali.length - 2; k >= 0; k--) {
-          const a = `${urunId}|${sirali[k]?.id ?? ''}`;
-          const kullan = Math.min(araHavuz.get(a) ?? 0, yapilacak[k + 1] ?? 0);
-          if (kullan > EPS) araHavuz.set(a, (araHavuz.get(a) ?? 0) - kullan);
-          const ret = Math.min(0.95, Math.max(0, (sirali[k]?.rejectPct ?? 0) / 100));
-          yapilacak[k] = Math.max(0, (yapilacak[k + 1] ?? 0) - Math.max(0, kullan)) / (1 - ret);
-        }
-      }
-      sirali.forEach((s, j) => {
-        const kf = tut ? tut(j) : 1;
-        if (!(kf > EPS)) return;
-        const carpan = (yapilacak[j] ?? 0) * kf;
-        for (const g of s.ins) {
-          if (!malzeme.has(g.itemId)) continue;
-          patlat(g.itemId, carpan * g.qty * (1 + (g.scrap || 0) / 100), [...yol, urunId], false, null, null);
-        }
-        for (const c of s.outs) {
-          if (c.kind === 'yan' && malzeme.has(c.itemId)) yan.set(c.itemId, (yan.get(c.itemId) ?? 0) + carpan * c.qty);
-        }
-      });
-    };
-
-    const adimlar = o.rotasiz ? [] : (emirRevizyonu(d, o)?.data ?? d.routes?.[o.itemId])?.steps ?? null;
-    const n = adimlar?.length ?? 0;
-    // Kol emri yalnız N+1..M-1 adımlarını, ana emir bu adımlarda kolların bıraktığı kalanı yapar.
-    const kollar = sira.filter((k) => k.parentId === o.id && k.kol !== null && kolAraligiGecerli(k.kol.n, k.kol.m, n) && k.qty > 0 && k.qty < o.qty);
-    const olcek = (j: number) => Math.max(0, kollar.reduce((f, k) => (k.kol && kolIcinde(k.kol, j) ? f - k.qty / o.qty : f), 1));
-    let tut: ((j: number) => number) | null = kollar.length ? olcek : null;
-    if (o.kol !== null && o.parentId !== null) {
-      const ana = sira.find((p) => p.id === o.parentId);
-      const kol = o.kol;
-      const gecerli = kolAraligiGecerli(kol.n, kol.m, n) && (!ana || o.qty < ana.qty);
-      tut = gecerli ? (j) => (kolIcinde(kol, j) ? olcek(j) : 0) : () => 0;
-      if (!gecerli) uyar('Kol aralığı ya da miktarı ana emre uymuyor; kolun malzemesi hesaplanmadı.');
-    }
-    if (adimlar !== null && adimlar.length > 0) patlat(o.itemId, o.qty, [], true, adimlar, tut);
-
-    R.hammadde = [...ham.values()].map((e) => ({ ...e, brut: yuvarla6(e.brut), stoktan: yuvarla6(e.stoktan), alinacak: yuvarla6(e.alinacak) }));
-    R.yanUrun = [...yan.entries()].map(([malzemeId, miktar]) => ({ malzemeId, miktar: yuvarla6(miktar) }));
-    R.eksikler = R.hammadde.filter((e) => e.alinacak > 1e-6);
-    sonuc.set(o.id, R);
-  }
-  return sonuc;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

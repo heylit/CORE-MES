@@ -1,18 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type MenuOgesi, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { useStokOkumasi, type RrDurumu } from '../veri.ts';
+import { RR_ANAHTARI, type RrDurumu } from '../veri.ts';
 import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, malzemeIhtiyaclari, planOzeti, planSirasi, plandaMi, rotaFarki, stokKartiIdleri, sureMetni,
-  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir, type IhtiyacSatiri,
+  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni,
+  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir,
 } from './kurallar.ts';
+import type { MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
+import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 
 const KANBAN_YOLU = '/recete-rota/kanban';
@@ -389,12 +392,15 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
   durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki'];
 }) {
   const yonlen = useNavigate();
-  // Ara adım stoğu stoktan okunur (Stok bölümüyle aynı okuma); okunamazsa yalnız serbest stokla hesaplanır.
-  const stokIdleri = useMemo(() => stokKartiIdleri(d.items ?? []), [d.items]);
-  const stok = useStokOkumasi(stokIdleri, yetki.stokOku).data ?? null;
-  const ihtiyaclar = useMemo(() => malzemeIhtiyaclari(d, stok), [d, stok]);
+  // Malzeme ihtiyacı sunucudan okunur (B-2484-3): emrin kendi iş emri kopyası, verilen sarf, ara adım stoğu ve plan sırasıyla paylaştırma
+  // (461 b) orada tek kuraldır. Anahtarda emrin sürümü vardır: emir komutu sürümü artırınca yeniden okunur.
   const planda = plandaMi(o);
-  const R = planda ? ihtiyaclar.get(o.id) ?? null : null;
+  const ihtiyac = useQuery({
+    queryKey: [...RR_ANAHTARI, 'malzeme-ihtiyaci', o.kayitNo, o.surum] as const,
+    enabled: planda,
+    queryFn: () => api.get<MalzemeIhtiyaciCevabi>(`/recete-rota/malzeme-ihtiyaci?emir=${String(o.kayitNo)}`),
+  });
+  const R = ihtiyac.data?.emirler.find((e) => e.emirId === o.kayitNo) ?? null;
   const plan = planOzeti(d, d.planYerlesim, o);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
@@ -417,30 +423,31 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
     };
   });
   const ops = [...altOps, ...kokOps];
-  const birim = (id: string) => d.items?.find((i) => i.id === id)?.unit ?? null;
   const kart = (id: string) => d.items?.find((i) => i.id === id) ?? null;
-  const tutar = (e: IhtiyacSatiri): string | null => {
-    const k = kart(e.malzemeId);
-    const m = k && d.maliyet ? d.maliyet.malzeme[String(k.kayitNo)] : undefined;
-    return m ? `${sayi(e.alinacak * Number(m.birimMaliyet))} ${m.paraBirimi}` : null;
+  const tutar = (e: MalzemeIhtiyaciSatiri): string | null => {
+    const m = d.maliyet?.malzeme[String(e.malzemeNo)];
+    return m ? `${sayi(Number(e.alinacak) * Number(m.birimMaliyet))} ${m.paraBirimi}` : null;
   };
+  const kod = (e: { kod: string | null; malzemeNo: number }) => e.kod ?? String(e.malzemeNo);
   // Yan panel dardır: tablo sığmayıp karta döner; adım tek satırda (OP, operasyon ve yeri, sağlam, durum) yazılır (tuval 3).
   // Başlamamış adımın plan başlangıcı, makinesi ve sağlam adedi "henüz yok"tur, veri eksikliği değil: çizgi yazılır.
   const adimYeri = (s: OpSatiri): string => [
     d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `plan ${zaman(s.baslangic)}` : null,
   ].filter((x) => x !== null).join(' · ') || YOK;
-  const hamSutunlar: Sutun<IhtiyacSatiri>[] = [
-    { anahtar: 'kod', baslik: 'Kod', hucre: (e) => kart(e.malzemeId)?.code ?? e.malzemeId, mono: true },
-    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => kart(e.malzemeId)?.name ?? null },
-    { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (e) => miktar(e.brut, birim(e.malzemeId)) },
-    { anahtar: 'stoktan', baslik: 'Stoktan', hizala: 'sag', hucre: (e) => miktar(e.stoktan, birim(e.malzemeId)) },
-    { anahtar: 'alinacak', baslik: 'Alınacak', hizala: 'sag', hucre: (e) => miktar(e.alinacak, birim(e.malzemeId)) },
+  const hamSutunlar: Sutun<MalzemeIhtiyaciSatiri>[] = [
+    { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },
+    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => e.ad },
+    { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (e) => miktar(Number(e.brut), e.birim) },
+    { anahtar: 'verilen', baslik: 'Verilen', hizala: 'sag', hucre: (e) => miktar(Number(e.verilen), e.birim) },
+    { anahtar: 'stoktan', baslik: 'Stoktan', hizala: 'sag', hucre: (e) => miktar(Number(e.stoktan), e.birim) },
+    { anahtar: 'alinacak', baslik: 'Alınacak', hizala: 'sag', hucre: (e) => miktar(Number(e.alinacak), e.birim) },
     ...(yetki.maliyetOku ? [{ anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag' as const, hucre: tutar }] : []),
   ];
-  const yanSutunlar: Sutun<{ malzemeId: string; miktar: number }>[] = [
-    { anahtar: 'kod', baslik: 'Kod', hucre: (e) => kart(e.malzemeId)?.code ?? e.malzemeId, mono: true },
-    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => kart(e.malzemeId)?.name ?? null },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(e.miktar, birim(e.malzemeId)) },
+  type YanSatir = MalzemeIhtiyaciCevabi['emirler'][number]['yanUrun'][number];
+  const yanSutunlar: Sutun<YanSatir>[] = [
+    { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },
+    { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => e.ad },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (e) => miktar(Number(e.miktar), e.birim) },
   ];
   const ipuclari = [
     ...(o.status === 'taslak' ? ['Taslak emirler plana girmez. Plana alınca yerleşir.'] : []),
@@ -461,7 +468,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
         <div className="tc-rr3-uyari-kutu" role="status">
           <Simge ad="box" />
           <span>
-            {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kart(e.malzemeId)?.code ?? e.malzemeId} ${miktar(e.alinacak, birim(e.malzemeId))}`).join(', ')}.
+            {R.eksikler.length} kalem eksik: {R.eksikler.map((e) => `${kod(e)} ${miktar(Number(e.alinacak), e.birim)}`).join(', ')}.
             Stok, plan sırasında önceki emirlere ayrıldıktan sonra kalan miktara göre hesaplanır.
           </span>
           <Dugme simge="cart" onClick={() => { void yonlen(TALEP_YOLU); }}>Satın alma talebi aç</Dugme>
@@ -490,9 +497,14 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
       {planda && (
         <>
           <h4>Malzeme</h4>
-          <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => e.malzemeId} bosMesaj="Satın alınacak malzeme yok." />
+          {ihtiyac.isError && <p className="tc-rr3-ipucu" role="alert">{hataIletisi(ihtiyac.error, 'Malzeme ihtiyacı okunamadı.')}</p>}
+          {ihtiyac.isPending && <p className="tc-rr3-ipucu" aria-busy="true">Malzeme ihtiyacı okunuyor…</p>}
+          {ihtiyac.data?.stokGorunur === false && <p className="tc-rr3-ipucu">Stok yetkiniz yok: yalnız serbest stok sayıldı, ara adım stoğu düşülmedi.</p>}
+          {ihtiyac.isSuccess && (
+            <Tablo etiket={`${o.no} malzeme ihtiyacı`} sutunlar={hamSutunlar} satirlar={R?.hammadde ?? []} satirAnahtari={(e) => String(e.malzemeNo)} bosMesaj="Satın alınacak malzeme yok." />
+          )}
           {yanUrun.length > 0
-            ? <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={yanUrun} satirAnahtari={(e) => e.malzemeId} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
+            ? <Tablo etiket={`${o.no} yan ürünleri`} sutunlar={yanSutunlar} satirlar={yanUrun} satirAnahtari={(e) => String(e.malzemeNo)} bosMesaj="Yan ürün ya da hurda çıkmıyor." />
             : <p className="tc-rr3-ipucu">Yan ürün ya da hurda çıkmıyor.</p>}
         </>
       )}
