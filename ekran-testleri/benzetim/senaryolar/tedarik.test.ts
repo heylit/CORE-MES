@@ -55,10 +55,11 @@ describe('tedarik yardımcıları', () => {
     assert.equal(onayEkle(talep({ durum: 'onayda' }), 'onay', '')['durum'], 'onayda');
   });
 
-  it('sipariş kararın teklifine yazılır; kararsız talepte düşer', () => {
+  // 2433-4 a: teslim tarihi olmayan sipariş oluşmaz; senaryo beklenen teslimi sipariş günü verir.
+  it('sipariş kararın teklifine beklenen teslimiyle yazılır; kararsız talepte düşer', () => {
     const g = siparisEkle(talep({ durum: 'onayda', karar: { teklifId: 'q1', siparisler: [] } }), 'BNZ-S', '2026-10-23');
     assert.equal(g['durum'], 'siparis_verildi');
-    assert.deepEqual((g['karar'] as { siparisler: unknown[] }).siparisler, [{ teklifId: 'q1', siparisNo: 'BNZ-S', siparisTarihi: '2026-10-23', beklenenTeslim: null }]);
+    assert.deepEqual((g['karar'] as { siparisler: unknown[] }).siparisler, [{ teklifId: 'q1', siparisNo: 'BNZ-S', siparisTarihi: '2026-10-23', beklenenTeslim: '2026-10-23' }]);
     assert.throws(() => siparisEkle(talep(), 'x', 'y'), /nesne değil/);
   });
 

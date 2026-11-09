@@ -3,6 +3,7 @@ import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/ha
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
+import type { Islem } from '#paylasilan/islemler.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
@@ -15,7 +16,7 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
 import type { KalemBagiCikisi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
+import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
 import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
@@ -26,7 +27,7 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -218,7 +219,11 @@ async function ayarlariKur(db: Db): Promise<Ayarlar> {
   const tarihler = listeler.filter((k) => k.paraBirimi !== 'TRY').flatMap((k) => finans.get(k.paraBirimi)?.tarih ?? []).sort();
   // Şirket adı satın almanın değildir (1942 a): Sistem Ayarları > Firma adı'ndan okunur, burada değiştirilmez.
   const sirket = await sistemAyariOku(db, 'kabuk.kurum-adi');
-  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null, dortGoz: await sistemAyariOku(db, 'satin-alma.dort-goz') };
+  // 2397-6: rol adı sahibinden (kisiler); rolleri göremeyen satın almacı basamağın rolünü adıyla görür.
+  const rolAdlari = a.onayLimitleri.some((l) => l.rolId != null) ? new Map((await rolSecenekleri(db)).map((r) => [r.id, r.ad])) : new Map<number, string>();
+  const onayLimitleri = a.onayLimitleri.map((l) => ({ ...l, rolAdi: l.rolId == null ? null : (rolAdlari.get(l.rolId) ?? null) }));
+  return { ...a, onayLimitleri, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null, dortGoz: await sistemAyariOku(db, 'satin-alma.dort-goz'),
+    onayKademesi: await sistemAyariOku(db, 'satin-alma.onay-kademesi') };
 }
 
 // Birim boş olabilir (departmansız talep); doluysa ayarlardaki listede olmalı.
@@ -642,6 +647,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (kararDegistiMi(eski.karar, temel.karar) && kararOnayliMi(eski.onaylar)) throw gecersiz(ILETILER.onayliKararDegismez);
   const siparisRed = siparisReddi(eski.durum, temel.durum, temel.karar !== null, [...eski.onaylar, ...yeniOnaylar])
     ?? kartsizSiparisReddi(eski.durum, temel.durum, temel.kalemler)
+    ?? terminsizSiparisReddi(eski, temel)
     ?? siparisliKalemReddi(eski, temel.kalemler)
     ?? logoSiparisDegisikligiReddi(eski, temel)
     ?? logoIptalGeriAlmaReddi(eski, temel.durum);
@@ -679,6 +685,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   // Sipariş bilgisi (beklenen teslim, tedarikçi) ya da durum değişmiş olabilir: alım satırları her kayıtta eşitlenir.
   if (siparisteMi(yazilacak.durum) || siparisteMi(eski.durum)) await alimlariBildir(db, k, id);
   if (siparisteMi(yazilacak.durum)) await kartKopyalariniAl(db, id);
+  let kademeTutari: number | null | undefined;
   for (const o of yeniOnaylar) {
     // Dört göz yazılan kararın sahibine bakar (B-001): istemcinin gönderdiği ya da eski karar değil.
     // Geçmiş bu kaydın talep edenini de içerir (talep güncellemesi yazdı): kendini çıkaran da yeni atanan da onaylayamaz.
@@ -686,6 +693,12 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     const sonuc = dortGozSonucu(k.id, yazilacak.karar?.kararVerenKisiId ?? null, await sistemAyariOku(db, 'satin-alma.dort-goz'), talepEdenler, o.sonuc);
     if (sonuc === 'red') throw yetkiYok(ILETILER.dortGoz);
     if (sonuc === 'talepEdenRed') throw yetkiYok(ILETILER.dortGozTalepEden);
+    if (await sistemAyariOku(db, 'satin-alma.onay-kademesi')) {
+      const ayar = await ayarlariKur(db);
+      const kademe = onayKademesiReddi(true, o.sonuc, kademeTutari ??= await kararTlToplami(db, id), ayar.onayLimitleri.map((l) => ({ ...l, rolId: l.rolId ?? null })),
+        await kisininRolleri(db, k.id));
+      if (kademe !== null) throw yetkiYok(kademe);
+    }
     await s.onayEkle(db, id, o, k.id, sonuc === 'dortGozsuz');
   }
   // TMI A2: karar talebi açana ve talep edene haber verilir; ret gerekçesi metindedir. Karar veren kendisi almaz.
@@ -829,6 +842,11 @@ export async function siparisTakibi(db: Db, talepId: string): Promise<SiparisTak
 // satın almanın 1-5 puanıdır; zamanında teslim ve kalite oranı ayrı işte gelir.
 const para = (x: number | null): string | null => (x === null || !Number.isFinite(x) ? null : x.toFixed(2));
 const ondalik = (x: number): string => sade(x.toFixed(6));
+// 2397 b: onay basamağı yazılmış kararın TL tutarından (değerlendirmeyle aynı hesap, kilitliyse sabit kur); kur eksikse boş.
+async function kararTlToplami(db: Db, talepId: string): Promise<number | null> {
+  const k = (await degerlendirme(db, talepId)).karar;
+  return k === null ? null : Number(k.tlToplam);
+}
 export async function degerlendirme(db: Db, talepId: string): Promise<DegerlendirmeCevabi> {
   const t = await talepOku(db, talepId);
   if (t === null) throw bulunamadi(ILETILER.talepYok);
@@ -1042,7 +1060,15 @@ export async function katalogSil(db: Db, id: string, surum: number): Promise<{ t
   return { tamam: true };
 }
 
-export async function ayarlarKaydet(db: Db, a: AyarlarKaydetYazimi): Promise<Ayarlar> {
+// 2397-5 a: onay basamağı harcama denetimidir; basamağı, eşiği ve rolü yalnız yönetici (ayarlar.yaz) değiştirir, öteki ayarlar satın almada.
+const YONETICI_AYARI = 'ayarlar.yaz' satisfies Islem;
+export async function ayarlarKaydet(db: Db, k: Kullanici, g: AyarlarKaydetYazimi): Promise<Ayarlar> {
+  const eski = await s.onayLimitleri(db);
+  const onayLimitleri = onayLimitRolleri(eski, g.onayLimitleri);
+  if (onayLimitleriDegistiMi(eski, onayLimitleri) && !k.islemler.includes(YONETICI_AYARI)) throw yetkiYok(ILETILER.onayLimitiYonetici);
+  const red = onayLimitiReddi(onayLimitleri);
+  if (red !== null) throw dogrulama(red, 'onayLimitleri');
+  const a = { ...g, onayLimitleri };
   await surumluGuncelle({ guncelle: () => s.ayarGuncelle(db, a), varMi: async () => true });
   await bagliyken(() => s.ayarListeleriniYaz(db, a));
   return ayarlariKur(db);

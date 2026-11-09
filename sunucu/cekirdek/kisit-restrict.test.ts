@@ -13,6 +13,8 @@ import { hataYonetiminiKur } from './uygulama.ts';
 // servisinde `pgKodu === '23503'` diye bakıyorsa RESTRICT anahtarında bu ret onu ıskalar: `hata.kod === 'BAGIMLI_KAYIT'` ile bakılır.
 const RESTRICT_ANAHTARLARI = [
   'kalibrasyon_kaydi.alet_id -> olcu_aleti',
+  // 2397 b: onay basamağında kullanılan rol silinmez; silinse basamak rolsüz kalır ve denetim sessizce gevşerdi.
+  'satin_alma_onay_limiti.rol_id -> rol',
   // Gerçek ihlal testi stokta: `stok.test.ts` DEP-14/12/13, DEP-09/13 ve DEP-57 bakiyeli konumu kapatmayı uçtan 409 BAGIMLI_KAYIT ile sınar.
   'stok_bakiye.konum_aktif -> stok_konum',
   'stok_bakiye.konum_id -> stok_konum',
@@ -76,5 +78,20 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     assert.equal((await app.inject({ method: 'POST', url: `/api/aletler/${bos}/sil` })).statusCode, 200);
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM olcu_aleti WHERE id = ANY($1)', [[kayitli, bos]]))?.n, 1);
     await app.close();
+  });
+
+  test('2397 b: onay basamağında kullanılan rolün silinmesi 409 BAGIMLI_KAYIT; basamaksız rol silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const rol = async (kod: string): Promise<number> => (await s.tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [kod]))!.id;
+    const kullanilan = await rol('deneme_basamak_rolu');
+    const bos = await rol('deneme_bos_rol');
+    await s.sorgu("INSERT INTO satin_alma_onay_limiti (sira, azami_tutar, seviye, rol_id) VALUES (1, NULL, 'Deneme basamak', $1)", [kullanilan]);
+    const ham = await uygulama.tx((db) => db.sorgu('DELETE FROM rol WHERE id = $1', [kullanilan])).catch((h: unknown) => h);
+    const ihlal = kisitIhlali(ham);
+    assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+    assert.equal(ihlal?.iz.kisit, 'satin_alma_onay_limiti_rol_id_fkey');
+    assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    await uygulama.tx((db) => db.sorgu('DELETE FROM rol WHERE id = $1', [bos]));
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM rol WHERE id = ANY($1)', [[kullanilan, bos]]))?.n, 1);
   });
 });

@@ -94,7 +94,7 @@ export function onayEkle(t: Talep, sonuc: 'onay' | 'ret', notlar: string): Nesne
 export function siparisEkle(t: Talep, siparisNo: string, bugun: string): Nesne {
   const karar = nesne(t['karar'], 'talep.karar');
   const teklifId = metin(karar['teklifId'], 'karar.teklifId');
-  return kayitGovdesi(t, { durum: 'siparis_verildi', karar: { ...karar, siparisler: [{ teklifId, siparisNo, siparisTarihi: bugun, beklenenTeslim: null }] } });
+  return kayitGovdesi(t, { durum: 'siparis_verildi', karar: { ...karar, siparisler: [{ teklifId, siparisNo, siparisTarihi: bugun, beklenenTeslim: bugun }] } });
 }
 
 export function talepBul(acilis: unknown, id: string): Talep {

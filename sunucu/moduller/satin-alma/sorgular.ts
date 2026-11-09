@@ -602,9 +602,9 @@ export function katalogSil(db: Db, id: string, surum: number): Promise<{ id: str
 
 // ---- Ayarlar
 // Kur bu tabloda değil, finanstadır (SA3 a); servis ekler.
-export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket' | 'dortGoz'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
-export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string }[]> {
-  return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye FROM satin_alma_onay_limiti ORDER BY sira');
+export type AyarSatirlari = Omit<Ayarlar, 'kurTarihi' | 'kurlar' | 'sirket' | 'dortGoz' | 'onayKademesi'> & { kurlar: { paraBirimi: Ayarlar['kurlar'][number]['paraBirimi'] }[] };
+export async function onayLimitleri(db: Db): Promise<{ azamiTutar: string | null; seviye: string; rolId: number | null }[]> {
+  return db.sorgu('SELECT azami_tutar AS "azamiTutar", seviye, rol_id AS "rolId" FROM satin_alma_onay_limiti ORDER BY sira');
 }
 export async function ayarlariOku(db: Db): Promise<AyarSatirlari> {
   const a = (await db.tek<{ m: number; t: number; td: number; g: number; gecerlilikGun: number; enAzTeklif: number; fiyatUyariYuzdesi: string; surum: number }>(
@@ -657,7 +657,8 @@ export async function ayarListeleriniYaz(db: Db, a: AyarlarKaydetYazimi): Promis
   }
   await db.sorgu('DELETE FROM satin_alma_onay_limiti');
   for (const [i, l] of a.onayLimitleri.entries()) {
-    await db.sorgu('INSERT INTO satin_alma_onay_limiti (sira, azami_tutar, seviye) VALUES ($1, $2, $3)', [i + 1, l.azamiTutar, l.seviye]);
+    await db.sorgu('INSERT INTO satin_alma_onay_limiti (sira, azami_tutar, seviye, rol_id) VALUES ($1, $2, $3, $4)',
+      [i + 1, l.azamiTutar, l.seviye, l.rolId ?? null]);
   }
 }
 
