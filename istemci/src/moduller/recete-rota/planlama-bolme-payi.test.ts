@@ -85,6 +85,11 @@ describe('bölünen siparişin gecikmesi adet oranlı (35 b)', () => {
       expect(e0.J['O2']?.T).toBeGreaterThan(0);
       expect(e1.J['O2/1']?.T).toBeCloseTo(e0.J['O2']?.T ?? NaN, 9);
       expect(e1.wT).toBeCloseTo(e0.wT, 9);
+      // B-2483-10: ceza verisi yoksa gecikmenin cezası bilinmez (null); parçalar da null kalır, uydurulmaz
+      if (ceza === null) {
+        expect([e0.J['O2']?.p, e1.J['O2/1']?.p, e1.J['O2/2']?.p]).toEqual([null, null, null]);
+        continue;
+      }
       expect((e1.J['O2/1']?.p ?? NaN) + (e1.J['O2/2']?.p ?? NaN)).toBeCloseTo(e0.J['O2']?.p ?? NaN, 9);
       expect(e1.J['O2/2']?.p).toBeCloseTo((e0.J['O2']?.p ?? NaN) * 0.75, 9);
     }

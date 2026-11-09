@@ -27,7 +27,7 @@ const kaynak = (makineler: Makine[] = [makine(0)]) => ({
   durum: { stations: [{ id: '10', code: 'TOR', name: 'Torna', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }], machines: makineler },
   ek: null,
 });
-const oku = (calisma: unknown, k = kaynak(), kayit: unknown = KAYIT) => planGirdisi({ calisma, kayit, kaynak: k, bugun: '2026-10-19' })!;
+const oku = (calisma: unknown, k: { durum: unknown; ek: unknown } = kaynak(), kayit: unknown = KAYIT) => planGirdisi({ calisma, kayit, kaynak: k, bugun: '2026-10-19' })!;
 
 // Açılıştaki çalışma bir kez sunucu birleşmesinden ve eski öncelik geçişinden geçmiştir (sayfanın kaydettiği hâl).
 function oturmus(k = kaynak()): Record<string, unknown> {
@@ -75,6 +75,21 @@ describe('kaynak değişikliği (1962)', () => {
     assert.ok(r.kaynakDegisikligi, 'değişiklik bekleniyordu');
     assert.equal(r.kaynakDegisikligi.farklar.length, KAYNAK_FARKI_EN_COK);
     assert.equal(r.kaynakDegisikligi.kesik, true);
+  });
+
+  test('B-2499-1: yalnız Satın Alma termin satırının sürümü artınca plan eskimez, sürüm yine yenilenir', () => {
+    const KAYIT2 = { ...KAYIT, items: [...KAYIT.items, { id: '60', code: 'HM-1', name: 'Ornek cubuk', type: 'ham', unit: 'kg' }] };
+    const k = (surum: number, termin: string | null = null) => ({ ...kaynak(), ek: { tedarikTerminleri: [{ kod: '60', termin, surum, aciklama: null }] } });
+    let S = oku(ILK, k(1), KAYIT2).S;
+    for (let i = 0; i < 3; i++) S = oku(S, k(1), KAYIT2).S;
+    const malzeme = (x: Record<string, unknown>) => ((x['D'] as { malzemeler: { kod: string; saSurum?: number }[] }).malzemeler).find((m) => m.kod === '60');
+    assert.equal(malzeme(S)?.saSurum, 1, JSON.stringify((S['D'] as { malzemeler: unknown }).malzemeler));
+    const r = oku(S, k(2), KAYIT2);
+    assert.equal(r.kaynakDegisikligi, null, JSON.stringify(r.kaynakDegisikligi));
+    assert.equal(r.S['dataVer'], S['dataVer']);
+    assert.equal(malzeme(r.S)?.saSurum, 2, 'ekran termin yazarken güncel sürümü gönderir');
+    const t = oku(S, k(2, '2026-10-25'), KAYIT2);
+    assert.ok(t.kaynakDegisikligi?.alanlar.includes('malzemeler'), 'termin değişince plan yine eskir');
   });
 
   test('girdi değişmez', () => {
