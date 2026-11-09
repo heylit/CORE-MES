@@ -252,6 +252,12 @@ export const durumEmirSemasi = z.object({
     seq: z.number().int(), opNo: z.number().int(), ad: z.string(), opId: kimlikMetni.nullable(), stationId: kimlikMetni.nullable(),
     setup: z.number().nullable(), cycle: z.number().nullable(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']),
   })).optional(),
+  // 2530 a: rotalı emre (bölünmüş ya da bölünmemiş) konan rework, tamir ya da ek adım; rotada olmadığı için opStatus anahtarı yoktur, durumu ve
+  // sağlamı (bitmişse kayıtlı, sürüyorsa canlı sayaç; yoksa null) burada. Sıra op numarasını izler. Ek adımı olmayan emirde alan yok.
+  ekAdimlar: z.array(z.object({
+    opNo: z.number().int(), tur: z.enum(['rework', 'tamir', 'ek']), ad: z.string(), opId: kimlikMetni.nullable(),
+    durum: z.enum(['bekliyor', 'calisiyor', 'tamam']), saglam: z.number().nullable(),
+  })).optional(),
   // 1476-D: çok katmanlı emrin alt düğümleri (kök hariç); tek katmanlı emirde alan yok. dugum patlatma yolu ("0.1"), itemId düğüm ürünü,
   // carpan kök başına, birim üst düğüm başına adet (okunamazsa null), ust üst düğümün yolu ("0" kök), ustOpNo çıktıyı tüketen üst adımın
   // rotadaki op numarası (bulunamazsa null). Adımın opNo'su emirdeki, kaynakOpNo düğüm ürününün rotasındaki numaradır.

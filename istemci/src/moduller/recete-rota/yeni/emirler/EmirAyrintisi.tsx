@@ -5,8 +5,9 @@ import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type Men
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, type RrDurumu } from '../veri.ts';
-import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
+import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
+import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
@@ -48,7 +49,7 @@ export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetn
 export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, kapat }: Ozellikler) {
   const yonlen = useNavigate();
   const [iptal, setIptal] = useState(false);
-  const [islem, setIslem] = useState<'bol' | 'katil' | null>(null);
+  const [islem, setIslem] = useState<'bol' | 'katil' | 'ek' | null>(null);
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const adimlar = emirAdimlari(d, o);
   const plan = planOzeti(d, d.planYerlesim, o, d.planCanli);
@@ -68,6 +69,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
     : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
   const diger: MenuOgesi[] = [
     ...(acik && yetki.emirYaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
+    ...(acik && yetki.emirYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Ek operasyon (rework, tamir, ek)', simge: 'plus' as const, sec: () => { setIslem('ek'); } }] : []),
     ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
     ...(ana && acik && yetki.emirYaz ? [{
       anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
@@ -136,9 +138,12 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
         </div>
       )}
 
-      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem} islemKapat={() => { setIslem(null); }} />
+      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem === 'ek' ? null : islem} islemKapat={() => { setIslem(null); }} />
+      {acik && islem === 'ek' && yetki.emirYaz && !o.rotasiz && (
+        <EkAdimPaneli durum={d} emir={o} yerler={ekYerleri(d, o, adimlar)} komut={komut} kapat={() => { setIslem(null); }} />
+      )}
       {o.rotasiz && <RotasizAdimlar durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />}
-      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} />
+      <PlanBolumu durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />
       {urun && <UretimYerleri emir={{ id: o.kayitNo, malzemeNo: Number(urun.id) }} duzenlenir />}
       {urun && o.status === 'tamam' && <StokTamamlama emir={{ id: o.kayitNo, emirNo: o.no, durum: 'bitti', malzemeNo: Number(urun.id) }} islenir />}
 
@@ -170,6 +175,16 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       </OnayPenceresi>
     </section>
   );
+}
+
+// Ek operasyonun girebileceği yerler: emrin kendi adımları (kolda kendi aralığı) ve ek adımları, op sırasıyla.
+function ekYerleri(d: RrDurumu, o: Emir, adimlar: readonly EmirAdimi[]): EkYeri[] {
+  const { ilk, son } = emirAraligi(o, adimlar.length);
+  const kisa = (opId: string | null, ad: string) => d.opdefs?.find((x) => x.id === opId)?.abbr ?? ad;
+  return [
+    ...adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => ({ opNo: a.opNo, baslik: `OP ${String(a.opNo)} ${kisa(a.opId, a.ad)}` })),
+    ...(o.ekAdimlar ?? []).map((e) => ({ opNo: e.opNo, baslik: `OP ${String(e.opNo)} ${kisa(e.opId, e.ad)}` })),
+  ].sort((a, b) => a.opNo - b.opNo);
 }
 
 // Alt emir bilgisi her zaman; bölme ve katılma panelleri yalnız "Diğer" menüsünden seçilince açılır (1102 a), içerikleri değişmez.
@@ -385,12 +400,17 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
   );
 }
 
-interface OpSatiri { adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null; oneri: boolean }
+interface OpSatiri {
+  adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null; oneri: boolean;
+  // 2530 a: rotada olmayan, emre konmuş adımın türü.
+  ek?: 'rework' | 'tamir' | 'ek';
+}
 
 // Adımlar ve malzeme: her emirde adım tablosu; plandaki (serbest ya da üretimdeki) emirde plan yerleşimi, uyarılar, malzeme ihtiyacı ve yan ürün.
-function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
-  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki'];
+function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut }: {
+  durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
 }) {
+  const [kaldir, setKaldir] = useState<number | null>(null);
   const yonlen = useNavigate();
   // Malzeme ihtiyacı sunucudan okunur (B-2484-3): emrin kendi iş emri kopyası, verilen sarf, ara adım stoğu ve plan sırasıyla paylaştırma
   // (461 b) orada tek kuraldır. Anahtarda emrin sürümü vardır: emir komutu sürümü artırınca yeniden okunur.
@@ -434,7 +454,16 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
       makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null, oneri: oneri && p !== null,
     };
   });
-  const ops = [...altOps, ...kokOps];
+  // 2530 a: emre konan adım rotada yoktur; op numarası komşularının arasındadır, kök adımlarla op sırasıyla dizilir.
+  const ekOps: OpSatiri[] = o.rotasiz ? [] : (o.ekAdimlar ?? []).map((e) => {
+    const { p, oneri } = adimYerlesimi(e.opNo);
+    return {
+      adim: { sira: 0, opNo: e.opNo, ad: e.ad, opId: e.opId, stationId: null, durum: e.durum }, durum: e.durum, baslangic: p?.baslangic ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: e.saglam, oneri: oneri && p !== null, ek: e.tur,
+    };
+  });
+  const ops = [...altOps, ...[...kokOps, ...ekOps].sort((a, b) => a.adim.opNo - b.adim.opNo)];
+  const kaldirilir = acikMi(o) && yetki.emirYaz;
   const kart = (id: string) => d.items?.find((i) => i.id === id) ?? null;
   const tutar = (e: MalzemeIhtiyaciSatiri): string | null => {
     const m = d.maliyet?.malzeme[String(e.malzemeNo)];
@@ -496,15 +525,34 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
             <span className="tc-rr3-op">{s.adim.opNo}</span>
             <span className="tc-rr3-adim-ad">
               <span className="tc-rr3-adim-dal">{g && <DalRozeti dal={g.dal} />}{d.opdefs?.find((x) => x.id === s.adim.opId)?.abbr ?? s.adim.ad}</span>
-              <small>{g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}</small>
+              <small>
+                {s.ek ? `${EK_TURLERI.find((t) => t.deger === s.ek)?.baslik ?? ''} · rotada yok · ` : ''}
+                {g ? `${kart(g.itemId)?.code ?? g.itemId} · rotada OP ${String(g.kaynakOpNo)} · ` : ''}{adimYeri(s)}
+              </small>
             </span>
             <span className="tc-rr3-adim-saglam"><small>Sağlam</small><b>{sayi(s.saglam)}</b></span>
-            <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
+            {/* Kaldır rozetle aynı hücrede: satırın ızgarası dört sütundur, dar panelde üçe iner; ayrı öğe yeni satıra düşerdi. */}
+            <span className="tc-rr3-eylemler">
+              <Rozet ton={IS_EMRI_DURUMU[s.durum].ton}>{IS_EMRI_DURUMU[s.durum].etiket}</Rozet>
+              {s.ek && kaldirilir && s.durum === 'bekliyor' && (
+                <Dugme
+                  simge="trash" aria-label={`OP ${String(s.adim.opNo)} ek adımını kaldır`} title="Başlamamış ek adımı emirden kaldır"
+                  onClick={() => { setKaldir(s.adim.opNo); }}
+                />
+              )}
+            </span>
           </li>
           );
         })}
         {ops.length === 0 && <li className="tc-rr3-adim-bos">Adım yok.</li>}
       </ol>
+      <OnayPenceresi
+        acik={kaldir !== null} baslik={`OP ${String(kaldir ?? '')} kaldırılsın mı?`} onayMetni="Kaldır" tehlikeli yukleniyor={komut.mesgul}
+        vazgec={() => { setKaldir(null); }}
+        onayla={() => { const opNo = kaldir; setKaldir(null); void komut.calistir('emir-ek-adim-kaldir', { id: o.id, surum: o.surum, opNo }, `OP ${String(opNo)} emirden kaldırıldı.`); }}
+      >
+        <p>Başlamamış ek adım emirden çıkar; rota değişmez.</p>
+      </OnayPenceresi>
       {!o.rotasiz && <p className="tc-rr3-ipucu">Fason ya da iç üretim değişikliği aşağıdaki "Operasyon adımları" bölümünde yapılır; rota değişmez.</p>}
       {planda && (
         <>
