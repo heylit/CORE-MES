@@ -503,4 +503,31 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     assert.equal(await adimCiktisi(vt(), { malzemeNo: yabanci, opNo: 10, uretimEmriId: emir }), null);
   });
 
+  // Yeni ekran ana kaydı yazmaz; belgesiz kurulumda da ara adım statü açmalı (B-2484-1). Ana kaydı siler: dosyanın son testidir.
+  test('B-2484-1: ana kayıt yokken yürürlükteki rotanın ara adımı statü açar, son adım açmaz; çıkan kalem yoksa çıktı null', async () => {
+    await vt().sorgu('DELETE FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]);
+    surum = null;
+    await vt().sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('BLG-', 0) ON CONFLICT (onek) DO NOTHING");
+    const kart = (await vt().tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('blg-1', 'mamul', 'BLG-', 1, 'aktif', $1, $2, $2) RETURNING no`, [JSON.stringify({ id: 'blg-1', com: { ad: 'Belgesiz deneme' } }), yoneticiId]))!.no;
+    const tip = (await vt().tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ('BLG', 'Torna', 'TAL') RETURNING id"))!.id;
+    const rev = (await vt().tek<{ id: number }>("INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) RETURNING id", [kart, yoneticiId]))!.id;
+    for (const [i, op] of [10, 20].entries()) {
+      await vt().sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3)', [kart, op, rev]);
+      await vt().sorgu('INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad) VALUES ($1, $2, $3, $4, $5, $6)', [rev, kart, op, i + 1, tip, `Adım ${String(op)}`]);
+    }
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [rev, yoneticiId]);
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [rev, yoneticiId]);
+    await vt().sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [rev, yoneticiId]);
+    assert.equal(await vt().tek('SELECT 1 FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]), null, 'ana kayıt yok');
+    const op10 = await adimStatusu(vt(), { malzemeNo: kart, opNo: 10 });
+    assert.ok(op10 !== null, 'ara adım statü açar');
+    const satir = await vt().tek<{ kaynak_adim: string; rota_revizyonu_id: number; tur: string }>(
+      'SELECT kaynak_adim, rota_revizyonu_id, tur FROM recete_rota_statu WHERE id = $1', [op10]);
+    assert.deepEqual(satir, { kaynak_adim: `${String(kart)}-o10`, rota_revizyonu_id: rev, tur: 'MM' });
+    assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 10 }), op10, 'ikinci sayım aynı statüyü kullanır');
+    assert.equal(await adimStatusu(vt(), { malzemeNo: kart, opNo: 20 }), null, 'son adım statü açmaz');
+    assert.equal(await adimCiktisi(vt(), { malzemeNo: kart, opNo: 10 }), null, 'bağ yok');
+  });
 });

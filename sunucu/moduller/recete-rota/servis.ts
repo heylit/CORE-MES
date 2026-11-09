@@ -289,11 +289,15 @@ export const KAYNAK_OKUMA = {
 
 // Sayımın okuduğu belge: kayıtlı durum, ürünün rotası rota modülünün yürürlükteki hâliyle, adımın "çıkan" kalemi ve statü bağı taşıma
 // tablosundan (sayimBelgesiTablodan). Revizyon verilirse rota o
-// revizyonun hâlidir: eski revizyonla açılmış emir, yeni revizyonda kalkmış adımında da kendi rotasıyla sayılır. Kayıt yoksa null.
+// revizyonun hâlidir: eski revizyonla açılmış emir, yeni revizyonda kalkmış adımında da kendi rotasıyla sayılır. Yeni ekran ana kaydı yazmaz:
+// kayıt yoksa sayım boş belgeyle yürür (rota ve bağ tablodan okunur); yoksa ara adımın çıktısı statüsüz stoğa düşer (B-2484-1).
 async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null = null): Promise<unknown> {
   const kayit = await sorgular.kayitGetir(db, DURUM_ANAHTARI);
-  if (kayit === null || kayit.bicim !== 'json') return null;
+  if (kayit !== null && kayit.bicim !== 'json') return null;
+  const kayitliBelge: unknown = kayit === null ? {} : kayit.deger;
   const revizyonlar = await durumRevizyonlari(db, malzemeNo);
+  // Kayıt da rota da yoksa okunacak adım yoktur: sayım her adımda bu çözücüyü çağırır, gerisi okunmaz.
+  if (kayit === null && revizyonlar.every((r) => r.adimlar.length === 0)) return null;
   const secilen = revizyonId !== null && revizyonlar.some((r) => r.id === revizyonId)
     ? revizyonlar.map((r) => (r.id === revizyonId ? { ...r, durum: 'yururlukte' as const } : r.durum === 'yururlukte' ? { ...r, durum: 'onayli' as const } : r))
     : revizyonlar;
@@ -302,8 +306,8 @@ async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null 
   // revizyonu olmayan ürünün (rota modülüne geçmemiş yerel rota) bağı tabloya yazılamaz; belge olduğu gibi okunur. Rotalı emir her zaman
   // revizyonludur (uretim_emri_rotali), yani üretim sayımı bu yola düşmez.
   const bagRevizyonu = secilen.find((r) => r.durum === 'yururlukte')?.id ?? null;
-  const belge = bagRevizyonu === null ? kayit.deger
-    : sayimBelgesiTablodan(kayit.deger, malzemeNo, rota.routes[String(malzemeNo)], await sorgular.adimBaglari(db, bagRevizyonu));
+  const belge = bagRevizyonu === null ? kayitliBelge
+    : sayimBelgesiTablodan(kayitliBelge, malzemeNo, rota.routes[String(malzemeNo)], await sorgular.adimBaglari(db, bagRevizyonu));
   const ozetler = await malzemeOzetleri(db, sayimKartKimlikleri(belge, malzemeNo));
   const kartlar = [...ozetler.values()].map((o) => { const m = malzemeCevir(o, undefined); return { id: m.id, code: m.code, type: m.type }; });
   return sunucuKaynaklariyla(belge, kartlar, (await operasyonTipleri(db)).map((t) => ({ id: String(t.id), name: t.ad })));
