@@ -151,8 +151,19 @@ export function ortakAnahtarMetni(ortak: KeyObject): string {
 
 // Paket, lock dosyasındaki npm paketlerini bu klasörde npm önbelleği olarak taşır (kart #1562): fabrika ağında internet yok.
 export const NPM_ONBELLEGI = '.npm-onbellek';
-// Yalnız ekran testlerinin kullandığı paketler sunucuya kurulmaz; paketteki package.json ve lock dosyasından çıkarılır.
-export const SUNUCUDA_KURULMAYAN: readonly string[] = ['@playwright/test'];
+// Yalnız testlerin ve denetim araçlarının (lint) kullandığı paketler sunucuya kurulmaz; paketteki package.json ve lock dosyasından
+// çıkarılır. Sunucu yalnız kurar, derler ve çalıştırır (guncelleyici.ts); derlemenin ve çalışmanın ithal ettiği paket buraya girmez (2419).
+export const SUNUCUDA_KURULMAYAN: readonly string[] = [
+  '@axe-core/playwright', '@playwright/test', '@testing-library/dom', '@testing-library/react', 'eslint', 'jsdom', 'stylelint',
+  'typescript-eslint', 'vitest',
+];
+
+// Paket sınırı sunucunun yükleme sınırıdır (AZAMI_GUNCELLEME); aşan paket yazılmaz, yüklenemezdi. Sınıra yaklaşınca uyarılır (2419).
+export const PAKET_UYARI_ORANI = 0.8;
+export function paketBoyuDurumu(bayt: number, sinir: number): 'tamam' | 'uyari' | 'asti' {
+  if (bayt > sinir) return 'asti';
+  return bayt > sinir * PAKET_UYARI_ORANI ? 'uyari' : 'tamam';
+}
 export const NPM_KAYIT_ADRESI = 'https://registry.npmjs.org/';
 
 // Yük git ağacı değildir: paketten açılan ilk kurulumda güncelleyici sürümü git'ten okuyamaz, bu dosyadan okur.

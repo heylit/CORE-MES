@@ -6,10 +6,11 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
+import { AZAMI_GUNCELLEME } from '#paylasilan/sozlesme/ayarlar.ts';
 import { paketBasliginiCoz } from '../sunucu/moduller/ayarlar/disari.ts';
 import {
-  BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, SUNUCUDA_KURULMAYAN, SURUM_DOSYASI, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
-  paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu, type Kilit, type PaketJson, type Platform,
+  BIRLESME_BICIMI, GOC_ADI, NPM_ONBELLEGI, PAKET_UYARI_ORANI, SUNUCUDA_KURULMAYAN, SURUM_DOSYASI, YAYIN_ETIKETI, degisiklikleriAyikla, onbellekListesi, ortakAnahtarMetni,
+  paketBoyuDurumu, paketKur, paketTaramasi, platformlariOku, sunucuKurulumu, surumAdi, surumDosyasi, surumNotu, type Kilit, type PaketJson, type Platform,
 } from './paket.ts';
 import { tarAc, tarOku, type TarGirdisi } from './tar-oku.ts';
 import { tarYaz } from './tar-yaz.ts';
@@ -168,6 +169,9 @@ function paketYap(s: PaketSecenekleri): void {
   const oncekiYayin = onceki === null ? null : onceki.slice(YAYIN_ETIKETI.length);
   const tarama = paketTaramasi(new Date().toISOString(), auditCiktisi(['--omit=dev']), auditCiktisi([]));
   const paket = paketKur({ surum, commit, tarih, gocler, not, degisiklikler, oncekiYayin, tarama }, yuk, gizli);
+  const mb = (bayt: number): string => (bayt / 1048576).toFixed(1);
+  const boy = paketBoyuDurumu(paket.length, AZAMI_GUNCELLEME);
+  if (boy === 'asti') dur(`Paket ${mb(paket.length)} MB; sunucu en çok ${mb(AZAMI_GUNCELLEME)} MB kabul eder. Paket yazılmadı.`);
   // Sunucunun okuyacağı gibi geri okunur: üretici ile doğrulayıcı ayrışırsa paket yazılmaz.
   const cozum = paketBasliginiCoz(paket, createPublicKey(gizli));
   if ('red' in cozum) dur(`Üretilen paket doğrulanmadı (${cozum.red}); paket yazılmadı.`);
@@ -178,6 +182,9 @@ function paketYap(s: PaketSecenekleri): void {
   git(['tag', '-a', `${YAYIN_ETIKETI}${surum}`, commit, '-m', `Yayin ${surum}`]);
 
   console.log(`Paket: ${resolve(s.cikti)} (${paket.length} bayt)`);
+  if (boy === 'uyari') {
+    console.log(`UYARI: paket ${mb(paket.length)} MB, sunucu sınırının (${mb(AZAMI_GUNCELLEME)} MB) %${String(PAKET_UYARI_ORANI * 100)}'ini aştı.`);
+  }
   console.log(`Sürüm ${surum}, commit ${commit.slice(0, 7)}, ${gocler.length} göç, ${degisiklikler.length} değişiklik`
     + (onceki === null ? ' (önceki yayın etiketi yok; son 50 birleşme)' : ` (${onceki} sonrası)`));
   if (kurulan !== null) {
