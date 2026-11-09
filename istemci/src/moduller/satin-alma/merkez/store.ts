@@ -7,7 +7,7 @@
 import type { AppUser, ExportFile, LogEntry, MalzemeSecenegi, Material, SiparisFaturasi, PurchaseRequest, RequestStatus, Settings, Supplier } from "./tipler.ts";
 import type { SiparisBelgesi, SiparisBelgesiYazimi } from "#paylasilan/sozlesme/satin-alma.ts";
 import type { SiparisIrsaliyesi, SonParti } from "#paylasilan/sozlesme/stok.ts";
-import type { OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
+import type { ButceKullanimiCevabi, DegerlendirmeCevabi, OdemePlaniSatiri, SiparisTakibiCevabi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DEFAULT_SETTINGS } from "./constants.ts";
 import { clone, uid } from "./util.ts";
 import { transport } from "./tasiyici.ts";
@@ -205,6 +205,10 @@ export interface Backend {
   odemePlaniKaydet(talepId: string, teklifId: string, satirlar: OdemePlaniSatiri[], kdvOrani?: string): Promise<SiparisTakibiCevabi | null>;
   /** Kart #1124: sipariş satırlarının stoktaki mal kabul irsaliyeleri. Başarısızsa ileti gösterilir, null döner. */
   siparisIrsaliyeleri(siparisSatirIdler: number[]): Promise<SiparisIrsaliyesi[] | null>;
+  /** 2479: yılın birim başına bütçe kullanımı (2454). Başarısızsa ileti göstermeden null döner. */
+  butceKullanimi(yil: number): Promise<ButceKullanimiCevabi | null>;
+  /** 2479: talebin birim kırılımı (değerlendirme cevabının butce alanı; kararsız talepte boş). Başarısızsa ileti göstermeden null döner. */
+  talepButcesi(talepId: string): Promise<DegerlendirmeCevabi["butce"] | null>;
 }
 export interface Transport {
   init(): Promise<void>;

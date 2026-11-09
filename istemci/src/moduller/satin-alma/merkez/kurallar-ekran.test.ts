@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, UNDO_MS, bump, persistUndoable, undoLast } from './store.ts';
 import { transport } from './tasiyici.ts';
-import { KUR_ILETISI, birimReddi, miktarIn, miktarSayisi, yapistirilanKalemler, durumEtiketi, siparisEtiketi, birimUyarisi, budgetUse, kataloglaEslesenleriBagla, fixedRates, kaydedilecekKur, kurIstenir, otomatikKur, quoteCalc, rateFor, vsLast, fiyatUyarisi } from './calc.ts';
+import { KUR_ILETISI, birimReddi, miktarIn, miktarSayisi, yapistirilanKalemler, durumEtiketi, siparisEtiketi, birimUyarisi, kataloglaEslesenleriBagla, fixedRates, kaydedilecekKur, kurIstenir, otomatikKur, quoteCalc, rateFor, vsLast, fiyatUyarisi } from './calc.ts';
 import { alerts } from './views.ts';
 
 const ayar = (ek: Partial<Settings> = {}): Settings => ({ ...DEFAULT_SETTINGS, departments: [{ name: 'Bakım', budget: 1000 }], ...ek });
@@ -35,22 +35,6 @@ function kur(talepler: PurchaseRequest[], set: Settings = ayar()): void {
 
 beforeEach(() => kur([]));
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
-
-describe('SAT-60 birim bütçe kullanımı', () => {
-  it('yalnız siparişe dönmüş kararlar, birimin o yılı için sayılır', () => {
-    kur([
-      talep('t1', 'ordered', [teklif('q1', 'f1', 10)], { orderDate: '2026-04-01' }),
-      talep('t2', 'received', [teklif('q2', 'f1', 5)], { orderDate: '2026-05-01' }),
-      talep('t3', 'approval', [teklif('q3', 'f1', 100)], {}),
-      talep('t4', 'eval', [teklif('q4', 'f1', 100)], {}),
-      talep('t5', 'cancelled', [teklif('q5', 'f1', 100)], {}),
-      talep('t6', 'ordered', [teklif('q6', 'f1', 100)], { orderDate: '2025-12-31' }),
-      talep('t7', 'ordered', [teklif('q7', 'f1', 100)], { orderDate: '2026-04-01' }, { department: 'Üretim' }),
-    ]);
-    expect(budgetUse('Bakım', 2026)).toEqual({ budget: 1000, used: 150 });
-    expect(budgetUse('bakım', '2025').used).toBe(1000);
-  });
-});
 
 describe('SAT-61 son alışa göre fiyat sapması', () => {
   it('teklif birim fiyatı aynı malzemenin son alışıyla yüzde olarak karşılaştırılır; talebin kendisi sayılmaz', () => {

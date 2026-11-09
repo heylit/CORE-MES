@@ -775,3 +775,5 @@
 .sa-kok .sa-karar-t tr.off td{ opacity:.6; }
 .sa-kok .sa-detay > summary{ font-weight:700; }
 .sa-kok .sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.sa-kok .sa-butce{ list-style:none; margin:0; padding:0; display:grid; gap:var(--b-1); }
+.sa-kok .sa-butce li{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--b-1) var(--b-2); }

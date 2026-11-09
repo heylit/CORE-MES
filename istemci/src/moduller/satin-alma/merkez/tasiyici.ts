@@ -4,7 +4,7 @@
  * sözleşmesi arasındaki eşleme yalnız burada. Kural sunucuda denetlenir; burası yalnız taşır.
  */
 import type {
-  AcilisCevabi, Ayarlar, KatalogKaydetYazimi, KatalogKaydi, SatinAlmaUclari, SiparisCikisi, Talep, TalepGovdesi, Tedarikci,
+  AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KatalogKaydetYazimi, KatalogKaydi, SatinAlmaUclari, SiparisCikisi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { FirmaCevabi, FirmaEkleGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { SiparisIrsaliyeleriCevabi, SonPartilerCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -504,6 +504,23 @@ const backend: Backend = {
       return (await api.get<SonPartilerCevabi>(`/stok/malzemeler/${malzemeNo}/son-partiler`, sure)).partiler;
     } catch (h) {
       await hata(h);
+      return null;
+    }
+  },
+  // Bütçe yan bilgidir: okunamazsa kutu "okunamadı" der; ileti ve yeniden yükleme yok (yazılmakta olan onay notu kaybolmasın).
+  async butceKullanimi(yil) {
+    try {
+      return await uc.get('/satin-alma-butce-kullanimi', { sorgu: { yil }, ...sure });
+    } catch {
+      return null;
+    }
+  },
+  async talepButcesi(talepId) {
+    try {
+      // 2454 öncesi sunucu alanı göndermez; o durumda okunamadı sayılır, başlık çizimi kırılmaz.
+      const butce: unknown = (await uc.get('/satin-alma-talepleri/:id/degerlendirme', { parametre: { id: talepId }, ...sure })).butce;
+      return Array.isArray(butce) ? butce as DegerlendirmeCevabi['butce'] : null;
+    } catch {
       return null;
     }
   },

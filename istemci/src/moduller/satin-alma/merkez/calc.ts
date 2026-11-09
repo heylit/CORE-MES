@@ -603,11 +603,6 @@ export function requiredApprover(amountTRY: number): ApprovalLimit | null {
   const lim = [...(settings().approvalLimits ?? [])].sort((a, b) => (a.max ?? Infinity) - (b.max ?? Infinity));
   return lim.find((l) => l.max === null || l.max === undefined || amountTRY <= l.max) ?? lim[lim.length - 1] ?? null;
 }
-export function budgetUse(dept: string, year: string | number): { budget: number; used: number } {
-  const d = (settings().departments ?? []).find((x) => norm(x.name) === norm(dept));
-  const used = sum(spendLines().filter((l) => norm(l.department) === norm(dept) && String(l.date).startsWith(String(year))).map((l) => l.amount));
-  return { budget: d ? parseNum(d.budget) || 0 : 0, used };
-}
 
 /**
  * Onay durumu, tek kaynaktan:
