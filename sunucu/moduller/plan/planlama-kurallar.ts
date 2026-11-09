@@ -228,9 +228,10 @@ export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]
     const S0 = planSaati(eksen, y.baslangic);
     const C = planSaati(eksen, y.bitis);
     const kay = typeof r.S === 'number' && Number.isFinite(r.S) ? S0 - r.S : 0;
-    const kaydir = (a: string, ust: number) => { if (typeof r[a] === 'number' && Number.isFinite(r[a])) r[a] = Math.min(ust, (r[a] as number) + kay); };
-    kaydir('Su', S0);
-    kaydir('lot1', C);
+    // Ayar bitişi ve ilk parti işlemin içinde kalır: başlangıçtan önce düşmez, bitişi aşmaz (B-2483-3: üst sınır başlangıç olunca ayar 0 olurdu).
+    const kaydir = (a: string) => { if (typeof r[a] === 'number' && Number.isFinite(r[a])) r[a] = Math.min(C, Math.max(S0, (r[a] as number) + kay)); };
+    kaydir('Su');
+    kaydir('lot1');
     Object.assign(r, { m: String(y.makineId), S: S0, C });
     yazilan++;
     if (y.kilitli) { locks[y.k] = { m: String(y.makineId), S: S0 }; kilitli++; } else delete locks[y.k];
@@ -253,7 +254,8 @@ export function acikSiparisSatirlari(
 }
 
 // 533 a: planın "olması gereken" tarihi Satın Alma'ya bildirilir: malzemeyi kullanan ilk işin kayıtlı plandaki başlangıcı eksi muayene süresi
-// (durum.betik tmIhtiyac), planın günü olarak. Havuzdaki sipariş ve bitmiş işlem sayılmaz. Plan ya da başlangıç günü yoksa liste boştur.
+// (motor/durum.js tmIhtiyac ile aynı tanım), planın günü olarak. 1473 a: adımı belli satırda ihtiyaç o adımın başlangıcıdır; adım bitmiş ya da
+// planda yoksa satır ihtiyaç doğurmaz. Havuzdaki ve iptal sipariş, bitmiş işlem sayılmaz. Plan ya da başlangıç günü yoksa liste boştur.
 export function gerekenTarihler(calisma: unknown): { kod: string; gerekenTarih: string }[] {
   const nesne = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
   const dizi = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.map(nesne) : []);
@@ -262,17 +264,24 @@ export function gerekenTarihler(calisma: unknown): { kod: string; gerekenTarih: 
   const taban = typeof bas === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(bas) ? Date.parse(`${bas}T00:00:00Z`) : Number.NaN;
   if (!Number.isFinite(taban)) return [];
   const ilk = new Map<string, number>();
-  for (const r of Object.values(nesne(nesne(c['plan'])['ops'])).map(nesne)) {
-    const S = r['S'], job = r['job'];
-    if (r['done'] || typeof S !== 'number' || !Number.isFinite(S) || typeof job !== 'string') continue;
+  const ops = nesne(nesne(c['plan'])['ops']);
+  const baslangic = (r: Record<string, unknown>): number | null => {
+    const S = r['S'];
+    return r['done'] || typeof S !== 'number' || !Number.isFinite(S) ? null : S;
+  };
+  for (const r of Object.values(ops).map(nesne)) {
+    const S = baslangic(r), job = r['job'];
+    if (S === null || typeof job !== 'string') continue;
     ilk.set(job, Math.min(ilk.get(job) ?? Infinity, S));
   }
+  const adimBasi = (id: string): number | null => (Object.hasOwn(ops, id) ? baslangic(nesne(ops[id])) : null);
   const muayene = new Map(dizi(D['malzemeler']).map((m) => [String(m['kod']), Number(m['muayeneGun']) || 0]));
   const gerek = new Map<string, number>();
   for (const s of dizi(D['siparisler'])) {
-    const t = ilk.get(String(s['id']));
-    if (s['havuz'] === true || t === undefined) continue;
+    if (s['havuz'] === true || s['iptal'] === true) continue;
     for (const r of dizi(s['malzeme'])) {
+      const t = r['adim'] != null ? adimBasi(`${String(s['id'])}.${String(r['adim'])}`) : ilk.get(String(s['id'])) ?? null;
+      if (t === null) continue;
       const kod = String(r['kod']);
       gerek.set(kod, Math.min(gerek.get(kod) ?? Infinity, t - (muayene.get(kod) ?? 0) * 24));
     }

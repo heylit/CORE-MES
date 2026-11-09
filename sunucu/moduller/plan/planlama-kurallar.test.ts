@@ -73,7 +73,7 @@ describe('planlama kuralları: çalışma planı ve canlı plan', () => {
     const b = '2026-10-19';
     const deger = {
       D: { meta: { baslangic: b } }, locks: { y: { m: '5', S: 1 }, z: { m: '5', S: 2 } },
-      plan: { dataVer: 3, ops: { x: { S: 10, C: 12, m: '5', Su: 9, lot1: 11, pin: 1 }, y: { S: 20, C: 21, m: '5' }, z: { S: 1, C: 2, m: '5', done: 1 } } },
+      plan: { dataVer: 3, ops: { x: { S: 10, C: 12, m: '5', Su: 10.5, lot1: 11, pin: 1 }, y: { S: 20, C: 21, m: '5' }, z: { S: 1, C: 2, m: '5', done: 1 } } },
     };
     const r = taslaktanCalismaya(deger, [
       { k: 'x', anahtar: 'E|10', makineId: 6, baslangic: planAni(b, 14), bitis: planAni(b, 16), kilitli: true },
@@ -83,12 +83,23 @@ describe('planlama kuralları: çalışma planı ve canlı plan', () => {
     ])!;
     assert.deepEqual([r.yazilan, r.kilitli, r.atlanan], [2, 1, ['E|30', 'E|40']]);
     const d = r.deger as typeof deger & { plan: { ops: Record<string, Record<string, unknown>> } };
-    assert.deepEqual(d.plan.ops.x, { S: 14, C: 16, m: '6', Su: 13, lot1: 15, pin: 1 });
+    assert.deepEqual(d.plan.ops.x, { S: 14, C: 16, m: '6', Su: 14.5, lot1: 15, pin: 1 });
     assert.deepEqual(d.plan.ops.y, { S: 30, C: 31, m: '5' });
     assert.deepEqual(d.locks, { x: { m: '6', S: 14 }, z: { m: '5', S: 2 } }, 'kilitsiz y açılır, biten z dokunulmaz');
     assert.equal(d.plan.dataVer, null);
     assert.equal(deger.plan.ops.x.S, 10, 'girdi değişmez');
     assert.equal(taslaktanCalismaya({ D: { meta: { baslangic: b } }, plan: null }, []), null, 'planı olmayan çalışma');
     assert.equal(taslaktanCalismaya({ D: {}, plan: { ops: {} } }, []), null, 'başlangıcı olmayan çalışma');
+  });
+
+  test('B-2483-3: ayar bitişi (Su) işlemle kayar, ayar süresi korunur; işlemin dışına taşmaz', () => {
+    const b = '2026-10-19';
+    const ops = (Su: number, lot1: number) => ({ D: { meta: { baslangic: b } }, plan: { ops: { x: { S: 10, C: 20, m: '5', Su, lot1 } } } });
+    const yaz = (deger: unknown, bas: number, bit: number) =>
+      (taslaktanCalismaya(deger, [{ k: 'x', anahtar: 'E|10', makineId: 5, baslangic: planAni(b, bas), bitis: planAni(b, bit), kilitli: false }])!
+        .deger as { plan: { ops: { x: { Su: number; lot1: number } } } }).plan.ops.x;
+    assert.deepEqual(yaz(ops(12, 14), 30, 40), { S: 30, C: 40, m: '5', Su: 32, lot1: 34 }, 'iki saatlik ayar iki saat kalır');
+    assert.deepEqual(yaz(ops(12, 19), 30, 34), { S: 30, C: 34, m: '5', Su: 32, lot1: 34 }, 'kısalan işte ilk parti bitişi aşmaz');
+    assert.deepEqual(yaz(ops(18, 19), 30, 31), { S: 30, C: 31, m: '5', Su: 31, lot1: 31 }, 'ayar bitişi işlemin bitişini aşmaz');
   });
 });

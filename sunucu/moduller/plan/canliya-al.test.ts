@@ -614,7 +614,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
     const k = (a: string) => Object.entries(kimlik).find(([, x]) => x === a)![0];
     const [k1, k2] = [k(a1!), k(a2!)];
     const bas = saat(Date.now() + 2 * 3_600_000);
-    const ops = { [k1]: { S: bas, C: bas + 1, m: String(makineA), Su: bas - 0.5, lot1: bas + 0.5 }, [k2]: { S: bas + 1, C: bas + 2, m: String(makineA) } };
+    const ops = { [k1]: { S: bas, C: bas + 1, m: String(makineA), Su: bas + 0.25, lot1: bas + 0.5 }, [k2]: { S: bas + 1, C: bas + 2, m: String(makineA) } };
     let surum = await calismaYaz(ops);
 
     // 507 2 a: çalışmanın ek vardiyası taslağa; sunucuda karşılığı olmayan tezgâh ve vardiya atlanır.
@@ -656,7 +656,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
       assert.ok(Math.abs(d.plan.ops[kk]!.S - eksende(yer(id).baslangic)) < 1 / 60, `${kk} başlangıcı taslaktan`);
       assert.ok(Math.abs(d.plan.ops[kk]!.C - eksende(yer(id).bitis)) < 1 / 60, `${kk} bitişi taslaktan`);
     }
-    assert.ok(Math.abs(d.plan.ops[k1]!.Su! - (d.plan.ops[k1]!.S - 0.5)) < 1e-9, 'ayar başlangıcı aynı kayar');
+    assert.ok(Math.abs(d.plan.ops[k1]!.Su! - Math.min(d.plan.ops[k1]!.C, d.plan.ops[k1]!.S + 0.25)) < 1e-9, 'ayar bitişi işlemle aynı kayar');
     assert.deepEqual(d.locks, { [k1]: { m: String(makineA), S: d.plan.ops[k1]!.S } }, 'yalnız kilitli iş kilitlenir');
     assert.equal(d.plan.dataVer, null, 'plan güncel değil; sayfa yeniden çözer');
     const denetim = await ortam!.sahip.sorgu<{ ek: unknown }>("SELECT govde -> '_ek' AS ek FROM denetim_kaydi WHERE yol = $1 ORDER BY id", [yol]);
