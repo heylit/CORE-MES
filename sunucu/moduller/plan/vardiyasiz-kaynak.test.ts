@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
+import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { calismaTakvimleri } from '../vardiya/disari.ts';
 import { vardiyasiTanimsiz } from './kurallar.ts';
-import { planTestOrtami } from './plan-ortak.test.ts';
+import { PAROLA, planTestOrtami } from './plan-ortak.test.ts';
 
 // B-2483-5, B-2483-6 (168 b): vardiyası tanımlanmamış makine sürekli çalışır sayılmaz; tanımlı ama ufukta 0 dakikalı kaynak tanımsız
 // sayılmaz, kapasitesi 0'dır. Veriler uydurmadır.
@@ -52,6 +53,21 @@ describe('vardiyası tanımsız ve sıfır kapasiteli kaynak', () => {
       const bas = new Date(tesisGunBasi(tesisGunu(Date.now())) + 2 * 86_400_000 + 10 * 3_600_000).toISOString();
       const r = await istek(c.planlama, 'POST', '/plan/yerlestir', { taslak: null, isEmriId: is, kaynak: { tur: 'makine', id: m.id }, baslangic: bas, planSurumu: p.surum });
       assert.equal(r.statusCode, 409, r.body);
+    });
+
+    // 2511 a (2482 ön bakışı 0003): vardiyası seçilmemiş kişi motor kayıtlıyken 24 saat çalışmaz; makine kuralıyla aynı, iş ona yerleşmez.
+    test('vardiyası seçilmemiş kişiye elle yerleştirme 409; iş yerleşmemişte, nedeni "Kişinin vardiyası seçilmemiş."', async () => {
+      const { istasyonA } = durum();
+      const kisi = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme vardiyasiz kisi', kullaniciAdi: 'vskisi', parola: PAROLA }));
+      await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyonA)}/kisiler/ata`, { kisiId: kisi, yuzde: '100.00' });
+      const [is] = await isEmirleriAc([yeniAdim({ ad: 'Deneme el isi', kaynak: { tur: 'kisi', id: kisi } })]);
+      let p: PlanCevabi = await planOku();
+      const bas = new Date(tesisGunBasi(tesisGunu(Date.now())) + 2 * 86_400_000 + 10 * 3_600_000).toISOString();
+      const r = await istek(c.planlama, 'POST', '/plan/yerlestir', { taslak: null, isEmriId: is, kaynak: { tur: 'kisi', id: kisi }, baslangic: bas, planSurumu: p.surum });
+      assert.equal(r.statusCode, 409, r.body);
+      p = await planOku();
+      assert.equal(p.yerlesimler.find((y) => y.isEmriId === is), undefined, 'kişiye 24 saat yerleşmedi');
+      assert.equal(p.yerlesmemis.find((y) => y.isEmriId === is)?.neden, 'Kişinin vardiyası seçilmemiş.', JSON.stringify(p.yerlesmemis.find((y) => y.isEmriId === is)));
     });
   });
 });

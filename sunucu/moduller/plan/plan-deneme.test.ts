@@ -61,6 +61,10 @@ describe('plan (gerçek PostgreSQL): denemeler, sayaçlar ve sorgu sayısı', ()
     p = await taslaktaOner(c.planlama, p);
     // S3 (2311 S5): terminal yetkinliği tanımlanmamış kişiye de iş başlatmaz; plan da uyarır. Başka istasyonda yetkin kişi uyarı alır,
     // adımın istasyonunda yetkin kişi almaz.
+    // 2511 a: vardiyası seçilmemiş ya da iş merkezine bağlanmamış kişiye iş yerleşmez; uyarı denemesi için operatör istasyona atanır ve
+    // vardiyası seçilir (atama yetkinlik değildir).
+    await tamam(c.yonetici, 'POST', `/istasyonlar/${String(istasyonA)}/kisiler/ata`, { kisiId: operatorId, yuzde: '100.00' });
+    await tamam(c.yonetici, 'POST', `/kisi-vardiyalari/${String(operatorId)}/belirle`, { vardiyaId: durum().tamGun[0] });
     const [k1] = await isEmirleriAc([yeniAdim({ adaylar: [{ kaynak: { tur: 'kisi', id: operatorId }, ayarSuresiDk: 30, birimSureDk: 2 }] })]);
     p = await taslaktaOner(c.planlama, p);
     const ileri = new Date(Date.parse(yer(p, k1!).baslangic) + 60 * 24 * 3600_000).toISOString();

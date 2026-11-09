@@ -164,9 +164,9 @@ async function kaynaklariOku(db: Db, istasyonMakineleri: IstasyonMakineleri): Pr
 
 const gunEkle = (tarih: string, gun: number): string => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * GUN_DK * DK).toISOString().slice(0, 10);
 
-// Vardiya takvimi tek okumada. Takvimi null olan (iş merkezine bağlanamayan) ya da ufukta hiç çalışma dakikası olmayan (vardiya
-// tanımlanmamış) kaynak sürekli çalışır sayılır ve plan uyarısı alır; tanımsızda tatil ve kapalı günler yine çalışma vermez, yoksa tek tatil
-// günü bütün ufku boşaltırdı.
+// Vardiya takvimi tek okumada. Takvimi null olan (iş merkezine bağlanamayan) ya da vardiyası tanımlanmamış kaynağın takvimi null'dır; ne
+// sayılacağı anahtarTakvimi'ndedir (motor kayıtlıyken makine ve kişi çalışmaz, motorsuz kurulumda sürekli çalışır) ve plan uyarısı alır.
+// Tanımsızda tatil ve kapalı günler yine çalışma vermez, yoksa tek tatil günü bütün ufku boşaltırdı.
 async function vardiyaOku(db: Db, simdi: number, kaynaklar: Map<string, KaynakBilgisi>) {
   const merkezIdleri = [...new Set([...kaynaklar.values()].flatMap((k) => (k.isMerkeziId === null ? [] : [k.isMerkeziId])))];
   const istekler = [...[...kaynaklar.values()].map((k) => ({ tur: k.tur, id: k.id })), ...merkezIdleri.map((id) => ({ tur: 'is-merkezi' as const, id }))];
@@ -787,7 +787,7 @@ type MotorParcasi = { no: number; adet: number; kaynak: Kaynak; baslangic: Date;
 
 // 168 b: sunucu motoru kayıtlıyken vardiyası tanımsız tezgâhın işi yerleşmez (motor sürekli çalışma varsaymaz).
 const VARDIYASIZ = 'Tezgâhın vardiyası tanımsız.';
-const KISI_VARDIYASIZ = 'Kişinin vardiyası tanımsız.';
+const KISI_VARDIYASIZ = 'Kişinin vardiyası seçilmemiş.';
 // 983 b (geçici; 1609 a ile emir açıldığı revizyonla planlanacak): sunucu motoru emri bugün yürürlükteki rotayla dizer, emir eski revizyondan
 // açıldıysa adımlar emirdekinden farklı olabilir. 1567 a: istasyon ve süre, adım rotadaki sırasında eşleşirse emirdendir.
 const ESKI_ROTA = 'emir eski rota revizyonundan açıldı; plan ürünün yürürlükteki rotasının adımlarıyla kuruldu, istasyon ve süreler emirdendir.';
@@ -820,11 +820,12 @@ function ekAdimlari(b: Baglam, idler: readonly number[], anahtarOf: (id: number)
     });
 }
 const vardiyasizTezgahta = (b: Baglam, i: Is): boolean =>
-  planMotoru !== null && i.kaynak?.tur === 'makine' && (b.takvimler.get(kaynakAnahtari(i.kaynak)) ?? null) === null;
+  planMotoru !== null && (i.kaynak?.tur === 'makine' || i.kaynak?.tur === 'kisi') && (b.takvimler.get(kaynakAnahtari(i.kaynak)) ?? null) === null;
 
 // Takvim (PL-04): kaynağın vardiya takvimi. Taslakta kapatılan gün (stüdyo denemesi) çalışma vermez. B-2483-6 (168 b): sunucu motoru
 // kayıtlıyken vardiyası tanımsız makinenin çalışma zamanı yoktur (motor oraya iş dizmez; istasyon yükü, elle yerleştirme ve kestirim de 24
-// saat saymaz). Motorsuz kurulumda ve kişide takvimsiz kaynak eskisi gibi sürekli çalışır.
+// saat saymaz). 2511 a: vardiyası seçilmemiş kişi de öyle (motor ona el tezgâhı kurmaz, girdi.betik). Motorsuz kurulumda takvimsiz kaynak
+// eskisi gibi sürekli çalışır.
 function anahtarTakvimi(b: Baglam): (anahtar: string) => Takvim {
   const kapali = b.kapaliGunler.map((g) => ({ baslangic: b.gun0 + g * GUN_DK, bitis: b.gun0 + (g + 1) * GUN_DK }));
   // Vardiyadan okunan aralıkla aynı ufuk (bugün dahil TAKVIM_GUN + 1 gün).
@@ -833,7 +834,7 @@ function anahtarTakvimi(b: Baglam): (anahtar: string) => Takvim {
   return (anahtar) => {
     if (!bellek.has(anahtar)) {
       const okunan = b.takvimler.get(anahtar) ?? null;
-      const t = okunan === null && planMotoru !== null && anahtar.startsWith('makine:') ? [] : okunan;
+      const t = okunan === null && planMotoru !== null && (anahtar.startsWith('makine:') || anahtar.startsWith('kisi:')) ? [] : okunan;
       const cikan = [...kapali, ...(b.takvimsizKapali.get(anahtar) ?? [])];
       bellek.set(anahtar, cikan.length === 0 ? t : araliktanCikar(t ?? surekli, cikan));
     }
@@ -979,7 +980,8 @@ function uyariListesi(b: Baglam, y: Yer, yerler: readonly Yer[]): string[] {
   const yetkinlik = new Set([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].map((x) => yetkinlikUyarisi(
     x, x.tur === 'makine' ? b.kaynaklar.get(kaynakAnahtari(x))?.istasyon?.id ?? null : rotaIst, b.yetkinlik, TERMINAL_YETKINLIGI)));
   for (const m of yetkinlik) if (m !== null) u.push(m);
-  // 2511 a: vardiyası tanımsız kişiye yerleşen iş uyarı alır (kişi sürekli çalışır sayılır, kapasiteye girmez).
+  // 2511 a: vardiyası seçilmemiş kişiye yerleşen iş uyarı alır; motor kayıtlıyken kişinin çalışma zamanı yoktur (anahtarTakvimi), uyarı
+  // yalnız önceden yerleşmiş ya da motorsuz kurulumdaki iş içindir. Kapasiteye girmez.
   if ([y.kaynak, ...(y.parcalar ?? []).map((p) => p.kaynak)].some((x) => x.tur === 'kisi' && (b.takvimler.get(kaynakAnahtari(x)) ?? null) === null)) u.push(KISI_VARDIYASIZ);
   if (is.taslakEmir) u.push('Taslak emir: plana alınınca kesinleşir.');
   return u;
@@ -1083,7 +1085,7 @@ function cevapKur(b: Baglam, satirlar: readonly YerlesimSatiri[]) {
   const yerlesmemis = [...b.isler.values()].filter((i) => !yerlesmis.has(i.id) && planlanacak(i)).map((i) => ({
     ...isOzeti(i), kaynak: i.kaynak,
     neden: i.sureDk === null ? ekAdimNedeni(i) ?? 'Süre bilinmiyor.' : i.kaynak === null && i.rotaKaynaklari.length === 0 ? 'Makine ya da kişi atanmamış.'
-      : b.yersiz.has(i.id) ? 'Bölünmüş; parçalar yerleşmedi, bölme duruyor.' : vardiyasizTezgahta(b, i) ? VARDIYASIZ
+      : b.yersiz.has(i.id) ? 'Bölünmüş; parçalar yerleşmedi, bölme duruyor.' : vardiyasizTezgahta(b, i) ? (i.kaynak?.tur === 'kisi' ? KISI_VARDIYASIZ : VARDIYASIZ)
       : yerlesmemeNedeni(b, i, yerlesmis),
     ...(b.yersiz.has(i.id) ? { bolme: b.yersiz.get(i.id)! } : {}),
   }));
@@ -1103,8 +1105,8 @@ function cevapKur(b: Baglam, satirlar: readonly YerlesimSatiri[]) {
       tamponGun: t === null || bit === null ? null : Math.round(((t - bit) / GUN_DK) * 10) / 10, engelli, isSayisi: l.length, yerlesen: y.length,
     };
   }).sort((x, y) => (x.baslangic ?? '9').localeCompare(y.baslangic ?? '9'));
-  // Matris: istasyon x gün dolu dakika ve kapasite (aktif kaynakların o günkü vardiya dakikası; takvimi olmayan makine sunucu motoru
-  // kayıtlıyken 0, öteki takvimsiz kaynak tam gün).
+  // Matris: istasyon x gün dolu dakika ve kapasite (aktif kaynakların o günkü vardiya dakikası; takvimi olmayan makine ya da kişi sunucu
+  // motoru kayıtlıyken 0, motorsuz kurulumda tam gün).
   const istasyonlar = new Map<number, { istasyonId: number; kod: string; ad: string; kaynaklar: Kaynak[] }>();
   for (const k of b.kaynaklar.values()) {
     if (!k.istasyon || !izinliMi(b, k)) continue;
