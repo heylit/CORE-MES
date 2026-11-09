@@ -66,7 +66,7 @@ const m = (kokBasina: string, siparis: string) => ({ kokBasina, siparis });
 function malzemeliOrnek(miktar: string) {
   const o = onizlemeOrnegi({ miktar, hammaddeToplami: [{ malzeme: oz(51, 'HM-0051', 'Örnek çubuk', 'hammadde', 'kg'), toplam: m('1.2', '30') }] });
   const kok = o.dugumler[2]!;
-  kok.adimlar = [{ ...kok.adimlar[0]!, adet: m('1.25', '31.25'), cikanAdet: m('1', '25'),
+  kok.adimlar = [{ ...kok.adimlar[0]!, hedef: m('1', '25'), adet: m('1.25', '31.25'), cikanAdet: m('1', '25'),
     girenler: [
       { malzeme: oz(13, 'YM-0013', 'Örnek mil', 'yari'), altDugum: '0.1', miktar: '2', fireYuzde: '0', toplam: m('2.5', '62.5') },
       { malzeme: oz(51, 'HM-0051', 'Örnek çubuk', 'hammadde', 'kg'), altDugum: null, miktar: '0.8', fireYuzde: '20', toplam: m('1.2', '30') },
@@ -102,8 +102,10 @@ describe('2557 patlamış rotada malzemeler', () => {
     expect(within(malz).getByText(/yan ürün/)).toBeTruthy();
     expect(within(malz).getByText('3,125 kg')).toBeTruthy();
     const satir = within(malz).getByText(/yan ürün/).closest('tr')!;
-    expect(within(satir).getByText('31,25')).toBeTruthy();
-    expect(within(satir).getByText('25')).toBeTruthy();
+    // 2605 a: ana sayı planlı hedef (firesiz), fire payıyla giren altında; çıkan aynı.
+    expect(within(satir).getAllByText('25')).toHaveLength(2);
+    expect(within(satir).getByText('fire payıyla 31,25')).toBeTruthy();
+    expect(within(bolge).getByRole('columnheader', { name: 'Planlı hedef' })).toBeTruthy();
     expect(within(satir).getByText('mamul çıkar')).toBeTruthy();
     expect(adresler().every((a) => a.endsWith('/patlatma-onizleme?miktar=25'))).toBe(true);
     expect(yazmalar(istekler)).toEqual([]);
@@ -139,7 +141,7 @@ describe('2557 patlamış rotada malzemeler', () => {
     localStorage.setItem('tc-rr1-gorunum', 'patlamis');
     const o = malzemeliOrnek('1');
     const kok = o.dugumler[2]!;
-    kok.adimlar = [{ ...kok.adimlar[0]!, adet: null, cikanAdet: null, girenler: kok.adimlar[0]!.girenler.map((g) => ({ ...g, toplam: null })) }];
+    kok.adimlar = [{ ...kok.adimlar[0]!, hedef: null, adet: null, cikanAdet: null, girenler: kok.adimlar[0]!.girenler.map((g) => ({ ...g, toplam: null })) }];
     sunucuKur(PLANLAMA, { durum: rotaDurumu(), yazmalar: { [`GET ${ONIZLEME}`]: () => json(200, { ...o, engel: 'Kesirli kök başına adet.', hammaddeToplami: [] }) } });
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
@@ -148,5 +150,19 @@ describe('2557 patlamış rotada malzemeler', () => {
     expect(within(satir).getAllByTitle('Emir açılamadığı için hesaplanmadı')).toHaveLength(2);
     expect(within(bolge).queryByRole('region', { name: 'Stoktan gelen malzeme toplamı' })).toBeNull();
     expect(within(malz).getAllByText('—')).toHaveLength(2);
+  });
+});
+
+describe('2605 a planlı hedef', () => {
+  it('fire payı yoksa alt satır çıkmaz; baz kipte kök başına hedef gösterilir', async () => {
+    localStorage.setItem('tc-rr1-gorunum', 'patlamis');
+    localStorage.setItem('tc-rr1-miktar-kipi', 'baz');
+    sunucuKur(PLANLAMA, { durum: rotaDurumu(), yazmalar: { [`GET ${ONIZLEME}`]: () => json(200, onizlemeOrnegi()) } });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const tablo = await within(bolge).findByRole('table');
+    expect(within(tablo).queryByText(/fire payıyla/)).toBeNull();
+    const satir = within(tablo).getByText('1010').closest('tr')!;
+    expect(within(satir).getAllByText('6')).toHaveLength(2);
   });
 });
