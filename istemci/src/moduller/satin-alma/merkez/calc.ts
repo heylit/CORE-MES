@@ -508,9 +508,16 @@ export function lateBy(req: PurchaseRequest, q: Quote): number | null {
   return d > 0 ? d : null;
 }
 
+// Sunucudaki esitVadeOrtami ile aynı: bir vadeli teklifin para biriminde faiz yoksa hiçbir teklif indirgenmez; yoksa vade yalnız
+// faizi bilinen tekliflere avantaj olur. Her vadeli teklif faizYok taşır, uyarı bütün para birimlerini sayar.
+export function esitVadeAyari(req: PurchaseRequest, set: Settings): Settings {
+  if (!(req.quotes ?? []).some((q) => quoteCalc(req, q, set).faizYok)) return set;
+  const currencies = Object.fromEntries(Object.entries(set.currencies).map(([k, v]) => [k, { ...v, monthly: null }])) as Settings["currencies"];
+  return { ...set, currencies };
+}
 export function evaluate(req: PurchaseRequest, wOverride?: Weights | null): Evaluation {
   const run = (): Evaluation => {
-    const set = settings(), items = req.items ?? [];
+    const set = esitVadeAyari(req, settings()), items = req.items ?? [];
     const all: EvalRow[] = (req.quotes ?? []).map((q) => ({ q, c: quoteCalc(req, q, set), sup: S.suppliers[q.supplierId], fill: 0, scorePV: 0, s: zero(), parts: zero(), score: 0, late: null, suspended: false }));
     const elig = all.filter((x) => x.q.compliant !== false && x.c.covered > 0);
     const maxUnit: Record<string, number> = {}, bestUnit: Evaluation["bestUnit"] = {};

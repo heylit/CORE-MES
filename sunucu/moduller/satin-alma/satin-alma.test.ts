@@ -1932,7 +1932,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const bul = async () => tamam<KgFiyatlariCevabi>(await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.find((f) => f.kaliteKodu === 'DENEME-GBP')!;
     tamam(await ekle('2.5'));
     assert.equal((await bul()).tryKgFiyati, null);
-    tamam(await istek(c.yonetici, 'POST', '/finans/kurlar/ekle', { paraBirimi: 'GBP', tarih: g, kur: 40 }));
+    tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'GBP', tarih: g, alis: 39, satis: 40 }));
     assert.equal(Number((await bul()).tryKgFiyati), 100);
   });
 
@@ -2034,7 +2034,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   });
 
   test('SA3 a: güncel kur finanstan; döviz teklifi kendi gününün kurunu saklar ve sonradan değişmez; finansta kur yoksa kullanıcıdan istenir, finansa yazılmaz', async () => {
-    const kurEkle = async (tarih: string, kur: number) => tamam(await istek(c.yonetici, 'POST', '/finans/kurlar/ekle', { paraBirimi: 'USD', tarih, kur }));
+    const kurEkle = async (tarih: string, kur: number) => tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih, alis: kur - 0.5, satis: kur }));
     await kurEkle('2026-01-02', 40.5);
     const once = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).ayarlar;
     const para = (['TRY', 'USD', 'EUR'] as const).map((paraBirimi) => ({ paraBirimi, aylikFaizYuzdesi: '0' }));
@@ -2482,7 +2482,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [{ teklifId, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null }] } });
 
   test('1096 a: onaya gönderilen kararın kuru ve faizi finanstan sabitlenir, istemcinin kuru yok sayılır; 7 günden eski kilitle sipariş verilmez', async () => {
-    tamam(await istek(c.yonetici, 'POST', '/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-01-03', kur: 36 }));
+    tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'EUR', tarih: '2026-01-03', alis: 35.5, satis: 36 }));
     const { t, a } = await onaydaEuro();
     assert.deepEqual(t.karar?.sabitKurlar.map((x) => [x.paraBirimi, x.kur]), [['EUR', '36']]);
     assert.ok(t.karar?.kurKilidi);
@@ -2590,7 +2590,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     assert.deepEqual(bos.kurlar.map((k) => [k.paraBirimi, k.kur]), [['TRY', '1']]);
     assert.equal(bos.kurTarihi, null);
     const kurEkle = async (paraBirimi: string, tarih: string, kur: number) => {
-      const r = await istek('POST', '/finans/kurlar/ekle', { paraBirimi, tarih, kur });
+      const r = await istek('POST', '/finans/kur-ciftleri/ekle', { paraBirimi, tarih, alis: kur * 0.99, satis: kur });
       assert.equal(r.statusCode, 200, r.body);
     };
     await kurEkle('USD', '2026-01-02', 40.5);
@@ -2607,7 +2607,7 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     const sahip = ortam!.sahip;
     const sayi = async (tablo: string, kosul = 'true') => Number((await sahip.tx((db) => db.tek<{ n: string }>(`SELECT count(*)::text AS n FROM ${tablo} WHERE ${kosul}`)))!.n);
     assert.equal(await sayi('satin_alma_kur', "para_birimi = 'USD'"), 0);
-    const finansSatiri = await sayi('finans_kur');
+    const finansSatiri = await sayi('finans_kur_cifti');
     const kalemId = randomUUID();
     const talep = { id: randomUUID(), baslik: 'Deneme', birim: null, talepEdenKisiId: null, oncelik: 'normal', ihtiyacTarihi: null, notlar: '', durum: 'taslak', iptalNedeni: '', agirliklar: null,
       kalemler: [{ id: kalemId, katalogId: null, ad: 'Kalem', ozellik: '', miktar: '1', birim: 'adet', kategori: '' }], teklifIstekleri: [], teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [] };
@@ -2629,12 +2629,12 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     assert.equal(ikinci.statusCode, 200, ikinci.body);
     assert.equal(await sayi('satin_alma_kur', "para_birimi = 'USD'"), 1);
     assert.equal(await sayi('satin_alma_kur'), 2);
-    assert.equal(await sayi('finans_kur'), finansSatiri);
+    assert.equal(await sayi('finans_kur_cifti'), finansSatiri);
     assert.equal((await ayarlar()).kurlar.find((k) => k.paraBirimi === 'USD')?.aylikFaizYuzdesi, null);
   });
 
   test('Borç 38: finansın para birimi yalnız kaydedilmemiş ayarlara önerilir; kaydedilmiş listeden kaldırılan para birimi geri gelmez', async () => {
-    assert.equal((await istek('POST', '/finans/kurlar/ekle', { paraBirimi: 'EUR', tarih: '2026-01-02', kur: 44 })).statusCode, 200);
+    assert.equal((await istek('POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'EUR', tarih: '2026-01-02', alis: 43, satis: 44 })).statusCode, 200);
     const once = await ayarlar();
     assert.deepEqual(once.kurlar.map((k) => k.paraBirimi), ['TRY', 'USD', 'EUR']);
     const { kurTarihi: _t, ...g } = once;
@@ -2652,8 +2652,9 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
   });
 
   test('937 b: finansta geçerli faiz varsa o görünür, yoksa boş; gelecek tarihli finans faizi sayılmaz', async () => {
-    const faizEkle = async (paraBirimi: string, gecerlilikBaslangic: string, aylikYuzde: number) => {
-      const r = await istek('POST', '/finans/faizler/ekle', { paraBirimi, gecerlilikBaslangic, aylikYuzde });
+    // 2238-2 a: finans yıllık oran tutar; satın alma kredi oranının aylığını gösterir (2238-3 c).
+    const faizEkle = async (paraBirimi: string, gecerlilikBaslangic: string, aylikYuzde: number, tur = 'kredi') => {
+      const r = await istek('POST', '/finans/oranlar/ekle', { tur, paraBirimi, gecerlilikBaslangic, yillikYuzde: aylikYuzde * 12 });
       assert.equal(r.statusCode, 200, r.body);
     };
     await faizEkle('USD', '2026-01-01', 1.25);
@@ -2662,5 +2663,11 @@ describe('satin-alma SA3 a: ayarlar hiç kaydedilmemiş kurulum (gerçek Postgre
     assert.deepEqual(k, [['TRY', null], ['USD', '1.25']]);
     await faizEkle('USD', '2026-02-01', 1.5);
     assert.equal(Number((await ayarlar()).kurlar.find((x) => x.paraBirimi === 'USD')?.aylikFaizYuzdesi), 1.5);
+    // Mevduat yanında verilir, puanlanan kredi faizini değiştirmez; eski tek faiz tablosu okunmaz.
+    await faizEkle('USD', '2026-01-01', 0.5, 'mevduat');
+    const usd = (await ayarlar()).kurlar.find((x) => x.paraBirimi === 'USD');
+    assert.deepEqual([Number(usd?.aylikFaizYuzdesi), Number(usd?.mevduatAylikFaizYuzdesi)], [1.5, 0.5]);
+    assert.equal((await istek('POST', '/finans/faizler/ekle', { paraBirimi: 'TRY', gecerlilikBaslangic: '2026-01-01', aylikYuzde: 4 })).statusCode, 200);
+    assert.equal((await ayarlar()).kurlar.find((x) => x.paraBirimi === 'TRY')?.aylikFaizYuzdesi, null);
   });
 });

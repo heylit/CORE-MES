@@ -354,7 +354,8 @@ export const ayarlarSemasi = z.object({
   fiyatUyariYuzdesi: ondalikMetinSemasi,
   // Güncel kur ve aylık faiz finanstan (SA3 a, 937 b); finansta kaydı olmayan para biriminde boş. Kur tarihi, gelen kurların en eskisinin günü.
   kurTarihi: z.string().nullable(),
-  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable() })),
+  // 2238-3 c: aylikFaizYuzdesi vadenin puanlandığı kredi faizidir; mevduat yanında gösterilir. İkisi de finansın yıllık oranının aylığı.
+  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable(), mevduatAylikFaizYuzdesi: ondalikMetinSemasi.nullable().optional() })),
   kategoriler: z.array(z.string()),
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),

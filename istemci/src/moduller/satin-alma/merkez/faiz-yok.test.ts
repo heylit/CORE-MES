@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PurchaseRequest, Quote } from './tipler.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 import { S, bump } from './store.ts';
-import { quoteCalc } from './calc.ts';
+import { evaluate, quoteCalc } from './calc.ts';
 import { faizUyarisi } from './views.ts';
 
 const q = (payDays: number, advancePct = 0): Quote => ({
@@ -31,4 +31,17 @@ describe('vade ve finans faizi', () => {
     expect(faizUyarisi(['TRY', 'TRY'])).toContain('TRY faizi Finans');
     expect(faizUyarisi([])).toBe('');
   });
+  it('bir para biriminde faiz yoksa karşılaştırmada hiçbir vadeli teklif indirgenmez (sunucuyla aynı eşit taban)', () => {
+    S.settings = { ...DEFAULT_SETTINGS, currencies: { ...DEFAULT_SETTINGS.currencies, TRY: { rate: 1, monthly: 3 }, EUR: { rate: 36, monthly: null } } };
+    S.suppliers = {};
+    bump();
+    const eur = { ...q(90), id: 'qe', currency: 'EUR' as const, fxRate: 36 };
+    const req = { ...r, quotes: [q(90), eur] } as unknown as PurchaseRequest;
+    const ev = evaluate(req);
+    expect(ev.all.every((x) => x.c.faizYok && x.c.pvTRY === x.c.totalTRY)).toBe(true);
+    faiz(3);
+    const tek = { ...r, id: 't2', quotes: [q(90)] } as unknown as PurchaseRequest;
+    expect(evaluate(tek).all[0]!.c.pvTRY).toBeLessThan(evaluate(tek).all[0]!.c.totalTRY);
+  });
 });
+

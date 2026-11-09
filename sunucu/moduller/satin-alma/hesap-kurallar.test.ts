@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani,
+  type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani, esitVadeOrtami,
 } from './hesap-kurallar.ts';
 
 // Prototipteki örnek (Teklif matrisi): üç kalem, üç teklif. Kimlikler ve adlar deneme verisidir.
@@ -142,4 +142,17 @@ test('termini girilmemiş teklifte termin ölçütü bilinmez: 0 puan sayılmaz,
   assert.equal(terminsiz.pay.termin, 0);
   const k = bilinen.kriterPuani;
   yakin(terminsiz.puan, (k.maliyet * 50 + 60 * 20 + k.garanti * 10) / 80, 1e-9);
+});
+
+test('faizi bilinmeyen para biriminde vadeli teklif varsa hiçbir teklif indirgenmez: vade yalnız faizi bilinene avantaj olmaz', () => {
+  const tlVadeli = teklif('t', { firmaId: 7, vadeGun: 90, terminGun: 5, fiyatlar: [{ kalemId: K1, birimFiyat: '1500' }, { kalemId: K2, birimFiyat: '920' }, { kalemId: K3, birimFiyat: '640' }] });
+  const faizYok = { ...ORTAM, aylikFaiz: (pb: string) => (pb === 'TRY' ? 3 : null) };
+  // EUR teklifi (C) vadeli ve EUR faizi yok: TRY teklifi de indirgenmez.
+  const esit = esitVadeOrtami([tlVadeli, C], faizYok);
+  assert.equal(esit.aylikFaiz('TRY'), null);
+  const d = degerlendir(KALEMLER, [tlVadeli, C], esit);
+  for (const x of d.satirlar) { assert.equal(x.hesap.vadeHesabaKatilmadi, true); assert.equal(x.hesap.bugunkuDeger, x.hesap.tlToplam); }
+  // Faizi eksik para biriminde vadeli teklif yoksa ortam değişmez.
+  assert.equal(esitVadeOrtami([tlVadeli], faizYok), faizYok);
+  assert.equal(esitVadeOrtami([{ ...C, vadeGun: 0 }, tlVadeli], faizYok), faizYok);
 });

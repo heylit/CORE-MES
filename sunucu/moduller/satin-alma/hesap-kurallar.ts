@@ -195,6 +195,13 @@ export function enIyiBolme(kalemler: readonly HesapKalemi[], hesaplar: readonly 
   return enIyi;
 }
 
+// Bir vadeli teklifin para biriminde faiz yoksa o teklif indirgenemez; ötekiler indirgenirse vade yalnız onlara avantaj olur.
+// Karşılaştırma eşit tabanda kalsın diye o durumda hiçbir teklif indirgenmez (her biri vadeHesabaKatilmadi ile söylenir).
+export function esitVadeOrtami<T extends Pick<HesapOrtami, 'aylikFaiz'>>(teklifler: readonly Pick<HesapTeklifi, 'paraBirimi' | 'vadeGun' | 'avansYuzdesi'>[], o: T): T {
+  const eksik = teklifler.some((q) => q.vadeGun > 0 && (sayi(q.avansYuzdesi) ?? 0) < 100 && o.aylikFaiz(q.paraBirimi) === null);
+  return eksik ? { ...o, aylikFaiz: () => null } : o;
+}
+
 export function degerlendir(kalemler: readonly HesapKalemi[], teklifler: readonly HesapTeklifi[], o: HesapOrtami): Degerlendirme {
   const satirlar: DegerlendirmeSatiri[] = teklifler.map((q) => {
     const hesap = teklifHesabi(q, kalemler, o);
