@@ -38,6 +38,13 @@ export function yeniAdimNumaralari(adimlar: readonly Adim[], siradaki: number): 
   return sonuc;
 }
 
+// Paletten eklenecek adımın alacağı numara: rotadaki bekleyen yeni adımlardan sonraki.
+export function eklenecekNumara(adimlar: readonly Adim[], siradaki: number): number {
+  const bekleyen = [...yeniAdimNumaralari(adimlar, siradaki).values()];
+  const taban = adimlar.reduce((m, a) => (a.opNo === null ? m : Math.max(m, a.opNo)), siradaki - ARALIK);
+  return Math.max(taban, ...bekleyen) + ARALIK;
+}
+
 // Bu üründe bir kez verilmiş ama gösterilen rotada olmayan numaralar (silinmiş ya da başka revizyonda kalmış); yeniden verilmez.
 export function rotadaOlmayanNumaralar(c: OpNumaralari, adimlar: readonly Adim[]): OpNumaralari['kullanilmis'] {
   const rotada = new Set(adimlar.flatMap((a) => (a.opNo === null ? [] : [a.opNo])));
