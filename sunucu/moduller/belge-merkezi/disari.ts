@@ -10,6 +10,8 @@ export {
   kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
   yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './servis.ts';
+// Arkon (2520-3): Çizim Merkezi'nden eklenen dosyanın okunması; özet yayındaki bir belgenin dosyası mı. Yetki denetlemez.
+export { yayindaOzetMi } from './servis.ts';
 // Liste ekranları (ör. üretim emirleri) satıra küçük resim koymak için: kayıt başına seçilmiş revizyon, tek sorguda (kart #688).
 // Kare dosyası herkese açık ortak uçtan okunur (`GET /cizimler/kucuk-resim/:revizyonId/:kare`); yetki denetlemez.
 export { kayitlarinKucukResimleri } from './servis.ts';

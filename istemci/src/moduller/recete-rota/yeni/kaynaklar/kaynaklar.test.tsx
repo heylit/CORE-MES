@@ -37,6 +37,7 @@ const SURELER: SurelerCevabi = {
       hazirlik: null, degisim: null,
       islem: { id: 9, sureDk: '4.5', kaynak: 'terminal', isEmriId: null, makineId: null, yazan: { id: 1, ad: null }, zaman: '2026-10-23T08:00:00.000Z' },
     },
+    ozet: { hazirlik: null, degisim: null, islem: { n: 1, ortancaDk: '4.5', enAzDk: '4.5', enCokDk: '4.5' } },
     etkin: { hazirlikDk: '30', birimSureDk: '6', islemDk: '5', degisimDk: '1', degisimOraniYuzde: '20' },
     fason: false,
   }],

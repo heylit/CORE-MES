@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ayarCevir, calismaEkMesaisi, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, planAni, taslaktanCalismaya } from './planlama-kurallar.ts';
+import { ayarCevir, calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, planAni, taslaktanCalismaya } from './planlama-kurallar.ts';
 
 // Planlama çalışmasının saf kuralları (658 b: Reçete ve Rota'dan taşındı; test kimlikleri aynı kaldı).
 describe('planlama kuralları: plan ayarı', () => {
@@ -117,5 +117,86 @@ describe('planlama kuralları: çalışma planı ve canlı plan', () => {
       [{ k: 'x', anahtar: 'E|10', kaynak: { tur: 'kisi', id: 4 }, baslangic: planAni(b, 5), bitis: planAni(b, 6), kilitli: true }])!;
     assert.deepEqual((r.deger as { plan: { ops: { x: unknown } }; locks: unknown }).plan.ops.x, { S: 5, C: 6, m: 'kisi-4' });
     assert.deepEqual((r.deger as { locks: unknown }).locks, { x: { m: 'kisi-4', S: 5 } });
+  });
+});
+
+// 2524 b: çalışmanın elle bölmesi (S.elleBol) plan taslağına parça olarak yazılır, taslaktaki elle bölme çalışmaya geri döner. Veriler uydurmadır.
+describe('planlama kuralları: elle bölme (2524 b)', () => {
+  const b = '2026-11-09';
+  const kimlik = { '1.10': 'E1|10', '2.10': 'E2|10' };
+  const op = (id: string, m: string, S: number) => ({ id, m, S, C: S + 2, bitti: false });
+
+  const adet = new Map([['E1|10', 10], ['E2|10', 10]]);
+  test('elle bölünen işin payları parça olarak yazılır; motorun kendi bölmesi de parça olarak, adedi eşit bölünerek ve motorBolmesi ile (B-2482-13)', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 6, m: '5' }, { adet: 4, m: '6' }], kotu: [{ adet: 0, m: '5' }, { adet: 1, m: '6' }], tek: [{ adet: 10, m: '5' }] } });
+    assert.deepEqual([...elle.keys()], ['1.10', 'tek'], 'adedi geçersiz kayıt atlanır');
+    const ops = [op('1.10', '5', 1), op('1.10~2', '6', 1), op('2.10', '5', 4), op('2.10~2', '6', 4), op('2.10~3', '7', 4)];
+    const r = calismaIsleri(ops, kimlik, new Set(['E1|10', 'E2|10']), elle, adet);
+    assert.deepEqual(r.yazilacak.map((i) => [i.k, i.kaynak.id, i.parca ?? null]), [
+      ['1.10', 5, { no: 1, adet: 6 }], ['1.10', 6, { no: 2, adet: 4 }],
+      ['2.10', 5, { no: 1, adet: 4, motorBolmesi: true }], ['2.10', 6, { no: 2, adet: 3, motorBolmesi: true }], ['2.10', 7, { no: 3, adet: 3, motorBolmesi: true }],
+    ]);
+    assert.deepEqual([r.yazilamaz, r.uyarilar], [[], []]);
+    const { kuyruklar, sabitler } = calismaKuyruklari(b, r.yazilacak, 0, new Set(['1.10']));
+    const m6 = kuyruklar.find((q) => q.kaynak.id === 6)!;
+    assert.deepEqual(m6.isler.map((x) => [x.emirNo, x.opNo, x.parca]), [['E1', 10, { no: 2, adet: 4 }], ['E2', 10, { no: 2, adet: 3, motorBolmesi: true }]]);
+    assert.equal(sabitler.has('E1|10'), false, 'elle bölünen işin payı sabitlenmez');
+  });
+
+  // B-2482-14 ve Test T-2524-2-1: pay adedi motorun uyguladığından; toplam hiçbir zaman adım adedini aşmaz, taslak yazımı düşmez.
+  test('elle 6 + 4, adım adedi 9: paylar orana göre ve uyarıyla, toplam 9 (B-2482-14)', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 6, m: '5' }, { adet: 4, m: '6' }] } });
+    const r = calismaIsleri([op('1.10', '5', 1), op('1.10~2', '6', 1)], kimlik, new Set(['E1|10']), elle, new Map([['E1|10', 9]]));
+    const parcalar = r.yazilacak.map((i) => i.parca!);
+    assert.equal(parcalar.reduce((t, p) => t + p.adet, 0), 9);
+    assert.deepEqual(parcalar.map((p) => p.adet), [6, 3], 'motorun kuralı: taban 5 + 3, kalan 1 ilk paya');
+    assert.deepEqual(r.uyarilar, ['E1 OP 10: adım adedi 9, elle bölmenin toplamı 10; paylar orana göre 6 + 3 yapıldı.']);
+  });
+
+  test('(a) motor elle bölmeyi uygulamayıp işi bütün bıraktı: iş parçasız yazılır, uyarı; tek parça gitmez', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 6, m: '5' }, { adet: 4, m: '6' }] } });
+    const r = calismaIsleri([op('1.10', '5', 1)], kimlik, new Set(['E1|10']), elle, adet);
+    assert.deepEqual(r.yazilacak.map((i) => [i.kaynak.id, i.parca ?? null]), [[5, null]]);
+    assert.deepEqual(r.uyarilar, ['E1 OP 10: motor elle bölmeyi uygulamadı; iş bütün yazıldı.']);
+  });
+
+  test('(b) motor elle bölmeyi yok sayıp kendi bölmesini kurdu: motorun tezgâhları motorun adetleriyle, elle adetler yazılmaz', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 6, m: '5' }, { adet: 4, m: '6' }] } });
+    const r = calismaIsleri([op('1.10', '7', 1), op('1.10~2', '8', 1)], kimlik, new Set(['E1|10']), elle, adet);
+    assert.deepEqual(r.yazilacak.map((i) => [i.kaynak.id, i.parca]), [[7, { no: 1, adet: 5, motorBolmesi: true }], [8, { no: 2, adet: 5, motorBolmesi: true }]]);
+    assert.deepEqual(r.uyarilar, ['E1 OP 10: motor elle bölmeyi uygulamadı; kendi bölmesi (2 pay) yazıldı.']);
+  });
+
+  test('(c) elle 15 + 5, adım adedi 10: toplam 10 yazılır (fazla adet taslağa girmez, yazım reddedilmez)', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 15, m: '5' }, { adet: 5, m: '6' }] } });
+    const r = calismaIsleri([op('1.10', '5', 1), op('1.10~2', '6', 1)], kimlik, new Set(['E1|10']), elle, adet);
+    assert.deepEqual(r.yazilacak.map((i) => i.parca!.adet), [8, 2]);
+    assert.equal(r.uyarilar.length, 1);
+  });
+
+  test('pay numarası atlanan, adım adedi bilinmeyen ya da pay sayısından az olan bölünmüş iş yazılamaz; bölmesiz çalışmada eski davranış', () => {
+    const elle = calismaElleBolmeleri({ elleBol: { '1.10': [{ adet: 6, m: '5' }, { adet: 4, m: '6' }] } });
+    assert.deepEqual(calismaIsleri([op('1.10', '5', 1), op('1.10~3', '7', 1)], kimlik, new Set(['E1|10']), elle, adet).yazilamaz, ['E1|10']);
+    assert.deepEqual(calismaIsleri([op('1.10', '5', 1), op('1.10~2', '6', 1)], kimlik, new Set(['E1|10']), elle).yazilamaz, ['E1|10']);
+    assert.deepEqual(calismaIsleri([op('1.10', '5', 1), op('1.10~2', '6', 1), op('1.10~3', '7', 1)], kimlik, new Set(['E1|10']), new Map(), new Map([['E1|10', 2]])).yazilamaz, ['E1|10']);
+    assert.deepEqual(calismaIsleri([op('1.10', '5', 1)], kimlik, new Set(['E1|10'])).yazilacak.map((i) => i.parca), [undefined]);
+  });
+
+  test('taslaktaki elle bölme çalışmaya döner; motor bölmesi dönmez; taslakta bütün iş çalışmadaki bölmeyi kaldırır, tek paylı kayıt kalır', () => {
+    const deger = {
+      D: { meta: { baslangic: b } }, plan: { ops: { x: { S: 1, C: 2, m: '5' }, y: { S: 1, C: 2, m: '5' }, z: { S: 1, C: 2, m: '5' }, t: { S: 1, C: 2, m: '5' } } },
+      elleBol: { y: [{ adet: 5, m: '5' }, { adet: 5, m: '6' }], t: [{ adet: 10, m: '5' }] },
+    };
+    const yer = (k: string, parcalar?: { adet: number; kaynak: { tur: 'makine' | 'kisi'; id: number }; motorBolmesi: boolean }[]) =>
+      ({ k, anahtar: `E${k}|10`, kaynak: { tur: 'makine' as const, id: 5 }, baslangic: planAni(b, 3), bitis: planAni(b, 4), kilitli: false, ...(parcalar ? { parcalar } : {}) });
+    const r = taslaktanCalismaya(deger, [
+      yer('x', [{ adet: 7, kaynak: { tur: 'makine', id: 5 }, motorBolmesi: false }, { adet: 3, kaynak: { tur: 'kisi', id: 9 }, motorBolmesi: false }]),
+      yer('y'),
+      yer('z', [{ adet: 5, kaynak: { tur: 'makine', id: 5 }, motorBolmesi: true }, { adet: 5, kaynak: { tur: 'makine', id: 6 }, motorBolmesi: true }]),
+      yer('t'),
+    ])!;
+    assert.deepEqual((r.deger as { elleBol: unknown }).elleBol, { x: [{ adet: 7, m: '5' }, { adet: 3, m: 'kisi-9' }], t: [{ adet: 10, m: '5' }] });
+    assert.equal((taslaktanCalismaya({ D: { meta: { baslangic: b } }, plan: { ops: { x: { S: 1, C: 2, m: '5' } } } }, [yer('x')])!.deger as { elleBol?: unknown }).elleBol, undefined,
+      'bölmesiz çalışmaya alan eklenmez');
   });
 });

@@ -3092,7 +3092,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   // Uçtan uca test raporu 2026-10-25 K1 ve T1 (kart 526, 521 1 a): terminal yolundan sayılan sağlam, ilk parça kararı Kalite Merkezi'nden gelene dek
   // karar bekler; ölçümü süren numune karar değildir, karar yalnız Kalite Merkezi'ndedir (798, 789-2a) ve açık Arkon numunesine aynalanır.
   // Bitirilen adımın sağlamı kararla dolar; sonraki adımın hedefi karar bekleyeni de sayar (2102-2 b, ARK-2). Rol reddinde modül adı geçmez (G1).
-  test('K1, T1, 521 1 a, G1, 798: terminal sayımı ilk parça kararına dek bekler; ölçümdeki numune karar değil; Arkon Kabulü reddedilir, sonraki adımın hedefi karar bekleyeni sayar (2102-2 b); Kalite Merkezi kararı bitmiş adıma yazar ve numuneye aynalanır; operatör karar veremez, paket yazamaz', async () => {
+  test('K1, T1, 521 1 a, G1, 798: terminal sayımı ilk parça kararına dek bekler; ölçümdeki numune karar değil; Arkon Kabulü reddedilir, sonraki adımın hedefi karar bekleyeni sayar (2102-2 b); karar gelmeden adım bitmez (2521 b); Kalite Merkezi kararı sağlama yazar ve numuneye aynalanır; operatör karar veremez, paket yazamaz', async () => {
     const r = await rotaliEmirKur();
     const [ie1, ie2] = await isEmriIdleri(r.emirId);
     const taslak = (await paketler()).get(ieKimligi(ie1!))!.govde;
@@ -3124,9 +3124,18 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const numune = await istek<{ surum: number }>(yonetici, 'POST', `/arkon/belgeler/requests/rq-k1-${r.emirId}/yaz`, { taban: 0, govde: numuneGovdesi('measuring'), kaynak: 'y1' });
     assert.equal(numune.durum, 200, JSON.stringify(numune.govde));
     assert.equal((await durum()).kararBekliyor, 18, 'ölçümü süren numune ilk parça kararı değildir');
-    await yaz('events', ieOlay(ie1!, 'done'));
-    assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'tamam', saglam: 0 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 18 },
-      'karar gelmeden bitirilen adımın sağlamı 0; karar bekleyen kayıp sayılmaz, sonraki adımın hedefi 18');
+    // 2521 b: karar gelmeden adım bitmez; Arkon kaydı yazılır, yansıma nedeniyle reddedilir (terminal nedeni gösterir).
+    const erkenBitis = ieOlay(ie1!, 'done');
+    const erken = await ekle(operator, 'events', { ...erkenBitis, machine: r.ilk });
+    assert.equal(erken.durum, 200);
+    const erkenRet = (erken.govde as { reddedilen?: { cid: string; ileti: string; tmiDurum?: string }[] }).reddedilen?.find((x) => x.cid === erkenBitis['cid']);
+    assert.deepEqual([erkenRet?.ileti, erkenRet?.tmiDurum], ['18 parça ilk parça kararı bekliyor (OP 10). Kalite Merkezi kararı gelmeden iş bitirilemez.', 'running'],
+      'terminal nedeni ve işin süren hâlini cevaptan alır (arkon/web biten-is.ts logRetleri, durumEsitleme)');
+    assert.deepEqual(await yansima(String(erkenBitis['cid'])), {
+      sonuc: 'reddedildi', neden: '18 parça ilk parça kararı bekliyor (OP 10). Kalite Merkezi kararı gelmeden iş bitirilemez.', emir_id: r.emirId,
+    });
+    assert.deepEqual(await durum(), { kararBekliyor: 18, adimlar: [{ durum: 'calisiyor', saglam: null }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 20 },
+      'reddedilen bitiş adımı açık bırakır; sonraki adımın hedefi bitişten önceki hâlinde kalır');
     // Reddedilen: operatör ilk parça kararı veremez; paket yazma reddinde modül adı rol adı gibi geçmez.
     const ret = await istek(operator, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay' });
     assert.equal(ret.durum, 403, JSON.stringify(ret.govde));
@@ -3145,6 +3154,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const onay = await istek<{ adet: number }>(yonetici, 'POST', `/kalite-merkezi/ilk-parca/${r.emirId}/karar`, { karar: 'onay', isEmriId: ie1 });
     assert.equal(onay.durum, 200, JSON.stringify(onay.govde));
     assert.equal(onay.govde.adet, 18);
+    await yaz('events', ieOlay(ie1!, 'done'));
     assert.deepEqual(await durum(), { kararBekliyor: 0, adimlar: [{ durum: 'tamam', saglam: 18 }, { durum: 'bekliyor', saglam: null }], sonrakiHedef: 18 });
     // Karar açık numuneye aynalanır: terminal bekleyen numunesini kapatır, operatöre sonuç gider.
     const ayna = isler.find((i) => i.ad === 'arkon-km-karar-aynasi');

@@ -738,6 +738,31 @@ describe('arkon (gerçek PostgreSQL)', () => {
       assert.equal((await liste()).some((b) => b.ozet === ozet), false);
     });
 
+    test('2520-3: dosyayı yüklemeyen paket yazarı merkezden eklediği yayındaki dosyayı okur; paket yazmayan rol, taslak ve yayından kalkan dosya okunmaz', async () => {
+      const rol = await vt().tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_hazirlik_2520', 'Geçici Hazırlık') RETURNING id");
+      await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'arkon.hazirlik'), ($1, 'sayfa.arkon')", [rol!.id]);
+      await girisliKisiEkle('hazirlik2520', 'gecici_hazirlik_2520');
+      const hazirlik = await girisCerezi('hazirlik2520');
+      const icerik = pdf('2520-yayinda');
+      const id = await belgeAc('2520 Burç', icerik, 'burc.pdf', true);
+      const ekle = await istek<MerkezEkleCevabi>(hazirlik, 'POST', `/arkon/cizim-merkezi/belgeler/${id}/ekle`);
+      assert.equal(ekle.durum, 200, JSON.stringify(ekle.govde));
+      const okunan = await indir(hazirlik, sha(icerik));
+      assert.equal(okunan.durum, 200, 'yükleyen yönetici değil hazırlık; paket kaydedilmeden önce dosya ona okunur');
+      assert.equal(okunan.icerik.equals(icerik), true);
+      assert.equal((await indir(operator, sha(icerik))).durum, 404, 'paket yazmayan rol, dosyayı anan paket yokken okuyamaz');
+
+      // Arkon'da bağlı ama merkezde yayında olmayan dosya: yalnız taslak revizyonda kalan özet.
+      const taslakIcerik = pdf('2520-taslak');
+      await belgeAc('2520 Taslak', taslakIcerik, 'taslak.pdf', false);
+      assert.equal((await istek(yonetici, 'POST', `/arkon/dosyalar/${sha(taslakIcerik)}/parca`, { sira: 0, toplam: 1, veri: taslakIcerik.toString('base64') })).durum, 200);
+      assert.equal((await indir(hazirlik, sha(taslakIcerik))).durum, 404, 'taslaktaki merkez dosyası merkez yoluyla okunmaz');
+
+      const belge = (await istek<MerkezBelgesi>(yonetici, 'GET', `/cizimler/${id}`)).govde;
+      await merkez(`/cizimler/${id}/arsivle`, { surum: belge.surum });
+      assert.equal((await indir(hazirlik, sha(icerik))).durum, 404, 'arşive kalkan belgenin dosyası artık bu yolla okunmaz');
+    });
+
     test('taslak, arşivdeki ve resim belgesi eklenemez; paket düzenleme rolü olmayan listeyi göremez ve ekleyemez', async () => {
       const taslak = await belgeAc('Eklenemez Taslak', pdf('taslak-b'), 'taslak.pdf', false);
       const resim = await belgeAc('Eklenemez Resim', png('resim-b'), 'resim.png', true, 'diger');
