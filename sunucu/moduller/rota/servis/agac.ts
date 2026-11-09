@@ -17,6 +17,9 @@ function agacRotasi(revizyonId: number, icerik: Icerik): AgacRotasi {
     adimlar: icerik.adimlar.map((a) => ({
       opNo: a.opNo,
       firePayiYuzde: sayi(a.firePayiYuzde),
+      bagimlilik: a.bagimlilik,
+      dal: a.dal,
+      birlesen: a.birlesen,
       bilesenler: icerik.bilesenler.filter((b) => b.adimId === a.id)
         .map((b) => ({ malzemeId: b.malzemeId, miktar: sayi(b.miktar), fireYuzde: sayi(b.fireYuzde) })),
     })),

@@ -253,6 +253,21 @@ describe('akış, miktar, süre', () => {
     assert.equal(m.get(10), 250);
   });
 
+  test('RT-43 dallı: bir dalın firesi paralel dalı büyütmez; adım ardıllarının en büyük fire yolunu taşır (B-2485-1)', () => {
+    const d = (opNo: number, firePayiYuzde: number, dal: string | null, birlesen: string[] = []) => ({ opNo, firePayiYuzde, bagimlilik: 'bekleyen' as const, dal, birlesen });
+    const m = adimMiktarlari([d(10, 0, 'A'), d(20, 50, 'B'), d(30, 0, null, ['A', 'B'])], 100);
+    assert.equal(m.get(30), 100);
+    assert.equal(m.get(20), 200);
+    assert.equal(m.get(10), 100);
+    // Ortak öncül iki ardıl yolundan büyüğünü alır: OP5 ana hat, A dalı %50, B dalı %20 fireli.
+    const k = adimMiktarlari([d(5, 0, null), d(10, 50, 'A'), d(20, 20, 'B'), d(30, 0, null, ['A', 'B'])], 100);
+    assert.equal(k.get(10), 200);
+    assert.equal(k.get(20), 125);
+    assert.equal(k.get(5), 200);
+    // Dal bilgisi olmayan tek hat bugünkü gibi zincir çarpar.
+    assert.deepEqual(adimMiktarlari([{ opNo: 10, firePayiYuzde: 50 }, { opNo: 20, firePayiYuzde: 50 }], 100), new Map([[20, 200], [10, 400]]));
+  });
+
   test('RT-41, RT-42: teorik süre ayar + birim x miktar, eksik süre null; etkin süre ölçülmüş varsa odur', () => {
     assert.equal(teorikSure(30, 2.5, 100), 280);
     assert.equal(teorikSure(null, 2.5, 100), null);

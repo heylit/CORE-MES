@@ -1172,6 +1172,25 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual(ihtiyac?.map((m) => [m.malzemeNo, m.brut]), [[hm, '10.0000'], [hm, '8.0000']]);
   });
 
+  test('B-2485-1: dallı rotada rota ekranının adım miktarı, ağaç ihtiyacı ve emrin malzeme ihtiyacı aynıdır; paralel dalın firesi öteki dalı büyütmez', async () => {
+    const hm = await hammaddeAc();
+    const urun = await mamulAc();
+    const yid = await yururlugeAlinmisRota(urun, [
+      yeniAdim({ dal: 'A', bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }),
+      yeniAdim({ dal: 'B', firePayiYuzde: 50, bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }),
+      yeniAdim({ birlesen: ['A', 'B'], bilesenler: [] }),
+    ]);
+    const a = await tamam<RevizyonAyrintisi>(c.planlama, 'GET', `/rota/revizyonlar/${yid}?miktar=100`);
+    assert.deepEqual(a.adimlar.map((x) => x.adimMiktari), ['100', '200', '100']);
+    const agac = await tamam<AgacCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${yid}/agac?miktar=100`);
+    assert.deepEqual(agac.toplamlar.map((t) => [t.malzeme.id, t.miktar]), [[hm, '300']]);
+    const e = await istek(c.planlama, 'POST', `/rota/revizyonlar/${yid}/emre-kopyala`, { projeId: denemeProjeId, adet: 100, teslim: null });
+    assert.equal(e.statusCode, 200, e.body);
+    const { uretimEmriId } = e.json<{ uretimEmriId: number }>();
+    const ihtiyac = (await vt().tx((db) => emirlerinMalzemeIhtiyaci(db, [uretimEmriId]))).get(uretimEmriId);
+    assert.deepEqual(ihtiyac?.map((m) => Number(m.brut)), a.adimlar.slice(0, 2).map((x) => Number(x.adimMiktari)));
+  });
+
   test('#861: emre kopyala gövdesindeki projeId üretim emrine gider; pasif ya da olmayan proje reddedilir; projeId verilmezse seri emir açılmaz (224)', async () => {
     const urun = await mamulAc();
     const id = await yururlugeAlinmisRota(urun, [yeniAdim()]);
