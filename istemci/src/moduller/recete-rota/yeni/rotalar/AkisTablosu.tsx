@@ -14,6 +14,11 @@ import { yeniKimlik } from './useRotaDuzeni.ts';
 
 interface Sira { id: string; miktar: number; tuketen: { urunId: string; adim: Adim } | null }
 
+// Adım satırının boş yerine tıklamak adımı seçer (B-2482-1). Satırdaki düğme, alan, seçim ve sürükleme tutamağı kendi işini yapar;
+// onlardan gelen tıklama satıra seçim olarak geçmez. Klavyede adım, başlıktaki OP düğmesiyle seçilir.
+const IC_DENETIM = 'button, input, select, textarea, a, label, [draggable="true"], [role="button"]';
+const icDenetimMi = (hedef: EventTarget): boolean => hedef instanceof Element && hedef.closest(IC_DENETIM) !== null;
+
 // Rotalar alt montajdan köke sıralanır; her rotanın miktarı ağaçtaki bütün geçişlerinin toplamıdır.
 function rotaSirasi(kok: Dugum, malzeme: (id: string) => Malzeme | undefined, rotaVar: (id: string) => boolean): Sira[] {
   const miktar = new Map<string, number>();
@@ -269,6 +274,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
         </div>
       ),
       <div key={`s${a.id}`} className={`tc-rr1-frow${ustunde === a.id ? ' tc-rr1-birak' : ''}`}
+        onClick={(e) => { if (!icDenetimMi(e.target)) r.sec({ tur: 'adim', urunId, adimId: a.id, seq: a.seq, miktar: q }); }}
         onDragOver={(e) => { if (duzen) { e.preventDefault(); setUstunde(a.id); } }}
         onDragLeave={() => { setUstunde(null); }}
         onDrop={(e) => { e.preventDefault(); setUstunde(null); if (duzen) birak(a, e.dataTransfer.getData(SURUKLE_TURU)); }}>
