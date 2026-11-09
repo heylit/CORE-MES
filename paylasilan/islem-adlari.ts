@@ -94,6 +94,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'logo.birim-seti-yaz': 'Logo birim setlerini düzenleme',
   'musteri-tedarikci.oku': 'Müşteri ve tedarikçi kartlarını görme',
   'musteri-tedarikci.yaz': 'Müşteri ve tedarikçi kartı ekleme ve düzenleme',
+  'musteri-tedarikci.karne-agirlik': 'Tedarikçi karnesi ağırlıklarını değiştirme',
   'malzemeler.yaz': 'Malzeme ekleme ve düzenleme',
   'malzemeler.onayla': 'Malzeme kartını onaylama',
   'malzemeler.tanim-yaz': 'Malzeme tanımlarını düzenleme',
