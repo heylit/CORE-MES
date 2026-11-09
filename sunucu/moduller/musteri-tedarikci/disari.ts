@@ -28,3 +28,7 @@ export const kayitAramaKaynaklari: readonly KayitAramaKaynagi<Db>[] = [firmaKayi
 export { logoCariCozuculeriKaydet } from './servis.ts';
 export type { LogoCariAramaCozucusu, LogoCariOkumaCozucusu, LogoCariSonucu } from './servis.ts';
 export type { LogoCariBilgisi } from './kurallar.ts';
+// 2475: değerlendirme matrisi tedarikçinin malzeme kategorilerini satın almadan okur (ters yön); sunucu/kablolama.ts bağlar.
+export { tedarikciKategoriCozucusuKaydet } from './servis.ts';
+export type { TedarikciKategoriCozucusu } from './servis.ts';
+export type { DegerlendirmeKategorisi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';

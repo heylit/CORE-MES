@@ -64,3 +64,9 @@
 .tc-mt-ad[data-secili] { color: var(--secili-yazi); }
 tr:has(.tc-mt-ad[data-secili]) > td { background: var(--secili-zemin); color: var(--secili-yazi); }
 .tc-mt-secili-kart { scroll-margin-top: calc(var(--ust-cubuk) + var(--b-3)); }
+
+/* Değerlendirme kategori süzgeci ve etiketleri (2475) */
+.tc-mt-kategoriler { display: flex; flex-wrap: wrap; gap: var(--b-1); flex-basis: 100%; }
+.tc-mt-kategori { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-mt-kategori[data-beyan] { border-style: dashed; }
+.tc-mt-kategori-suzgec { display: inline-flex; flex-wrap: wrap; align-items: end; gap: var(--b-2); }

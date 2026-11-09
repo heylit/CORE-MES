@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { DegerlendirmeCevabi, DegerlendirmeSatiri, KarneBileseni } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { DegerlendirmeCevabi, DegerlendirmeKategorisi, DegerlendirmeSatiri, KarneBileseni } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Degerlendirme } from './Degerlendirme.tsx';
 
@@ -13,10 +13,10 @@ const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['musteri
 const AGIRLIK = { lot: 25, ppm: 15, zamaninda: 25, tam: 10, teklif: 5, satinAlma: 10, kalite: 10 } as const;
 const SURUM = { surum: 2, agirliklar: AGIRLIK, gerekce: 'Başlangıç', degistiren: null, olusturma: '2026-11-09T10:00:00+03:00' };
 
-function satir(firmaId: number, ad: string, d: Partial<Record<KarneBileseni, number>>, puan: number | null, sinif: 'A' | 'B' | 'C' | 'D' | null, yetersiz = false, onceki: number | null = null): DegerlendirmeSatiri {
+function satir(firmaId: number, ad: string, d: Partial<Record<KarneBileseni, number>>, puan: number | null, sinif: 'A' | 'B' | 'C' | 'D' | null, yetersiz = false, onceki: number | null = null, kategoriler: DegerlendirmeKategorisi[] = []): DegerlendirmeSatiri {
   const grup = (...b: KarneBileseni[]) => { const v = b.map((x) => d[x]).filter((x) => x !== undefined); return v.length === 0 ? null : v[0]!; };
   return {
-    firmaId, kod: `T-${firmaId}`, ad, fason: false, oncekiPuan: onceki,
+    firmaId, kod: `T-${firmaId}`, ad, fason: false, oncekiPuan: onceki, kategoriler,
     karne: {
       firmaId, donemBasi: '2025-11-09', donemSonu: '2026-11-09',
       teslim: { toplam: 10, zamaninda: 8, tam: 9, oran: 80 }, kalite: { lot: 5, kararlar: { kabul: 5 }, puan: 100 },
@@ -35,16 +35,27 @@ const CEVAP: DegerlendirmeCevabi = {
   ],
   agirliklar: SURUM,
   kesildi: false,
+  kategoriAcik: false,
+};
+const kat = (kod: string, ad: string, aldik: boolean, verebilir: boolean): DegerlendirmeKategorisi => ({ tur: 'hammadde', kod, ad, aldik, verebilir });
+const KATEGORILI: DegerlendirmeCevabi = {
+  ...CEVAP,
+  kategoriAcik: true,
+  satirlar: [
+    satir(2, 'Tedarikci Orta', { lot: 80 }, 75, 'B', false, null, [kat('C1', 'Celik', true, true), kat('A1', 'Aluminyum', false, true), kat('P1', 'Plastik', true, false)]),
+    satir(3, 'Tedarikci Iyi', { lot: 96 }, 95, 'A', false, null, [kat('C1', 'Celik', false, true)]),
+    satir(4, 'Tedarikci Zayif', { lot: 50 }, 45, 'D'),
+  ],
 };
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
-function sunucuKur(kullanici: Kullanici) {
+function sunucuKur(kullanici: Kullanici, cevap: DegerlendirmeCevabi = CEVAP) {
   const yazilan: { yol: string; govde: unknown }[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     if (secenek?.method === 'POST') { yazilan.push({ yol, govde: JSON.parse(String(secenek.body)) }); return json(200, { gecerli: { ...SURUM, surum: 3 }, gecmis: [] }); }
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
-    if (yol === '/musteri-tedarikci/degerlendirme') return json(200, CEVAP);
+    if (yol === '/musteri-tedarikci/degerlendirme') return json(200, cevap);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Yok' });
   }));
   return yazilan;
@@ -92,6 +103,29 @@ describe('Tedarikçi değerlendirme matrisi (2456)', () => {
     await waitFor(() => expect(document.activeElement).toBe(kart));
     expect(within(tablo).getByText('Tedarikci Orta').closest('[aria-current="true"]')).toBeTruthy();
     expect(within(tablo).getByText('Tedarikci Iyi').closest('[aria-current="true"]')).toBeNull();
+  });
+
+  it('kategori süzgeci yalnız kaynak bağlıyken görünür; kip kategori seçilince çıkar; beyan etiketi ayrı, +n gizleneni söyler', async () => {
+    sunucuKur(OKUYUCU);
+    ac();
+    await screen.findByRole('table', { name: 'Değerlendirme matrisi' });
+    expect(screen.queryByRole('combobox', { name: 'Kategori' })).toBeNull();
+    cleanup();
+    sunucuKur(OKUYUCU, KATEGORILI);
+    ac();
+    const tablo = await screen.findByRole('table', { name: 'Değerlendirme matrisi' });
+    const adlar = () => within(tablo).getAllByText(/^Tedarikci /).map((e) => e.textContent);
+    expect(within(tablo).getByText('Aluminyum (beyan)')).toBeTruthy();
+    const arti = within(tablo).getByText(/^\+1/);
+    expect(arti.getAttribute('title')).toBe('Plastik');
+    expect(arti.textContent).toBe('+1: Plastik');
+    expect(screen.queryByRole('combobox', { name: 'Kaynak' })).toBeNull();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Kategori' }), { target: { value: 'hammadde:C1' } });
+    expect(adlar()).toEqual(['Tedarikci Iyi', 'Tedarikci Orta']);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Kaynak' }), { target: { value: 'aldik' } });
+    expect(adlar()).toEqual(['Tedarikci Orta']);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Kategori' }), { target: { value: 'yok' } });
+    expect(adlar()).toEqual(['Tedarikci Zayif']);
   });
 
   it('yetki: ağırlık düzenlemeyi yalnız karne-agirlik işlemi olan görür; gövde okunan sürümü ve toplamı 100 ağırlığı taşır', async () => {
