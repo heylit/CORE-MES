@@ -88,8 +88,10 @@ const LISTELER = {
   kurCifti: { secim: `rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, alis, satis, surum`, kaynak: 'finans_kur_cifti', iptal: 'true', sira: 'para_birimi, tarih' },
   oran: { secim: `id, tur, rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", yillik_yuzde AS "yillikYuzde", "not", ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_oran', iptal: 'true', sira: 'id' },
   faiz: { secim: `id, rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", aylik_yuzde AS "aylikYuzde", ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_faiz', iptal: 'true', sira: 'id' },
-  genelGider: { secim: `id, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", aylik_genel_gider AS "aylikGenelGider", aylik_makine_saati AS "aylikMakineSaati",
-    round(aylik_genel_gider / aylik_makine_saati, 4)::text AS "saatBasi", amortisman_dahil AS "amortismanDahil", aciklama, ${zamanMetni('olusturma')} AS olusturma`,
+  genelGider: { secim: `id, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", CASE WHEN personel_gizli THEN NULL ELSE aylik_genel_gider END AS "aylikGenelGider",
+    aylik_makine_saati AS "aylikMakineSaati", CASE WHEN personel_gizli THEN NULL ELSE round(aylik_genel_gider / aylik_makine_saati, 4)::text END AS "saatBasi", personel_gizli AS gizli, amortisman_dahil AS "amortismanDahil", aciklama, ${zamanMetni('olusturma')} AS olusturma,
+    kaynak, ${tarihMetni('donem_baslangic')} AS "donemBaslangic", ${tarihMetni('donem_bitis')} AS "donemBitis", kira::text, amortisman::text,
+    dolayli_personel::text AS "dolayliPersonel", emilmeyen_dogrudan::text AS "emilmeyenDogrudan", diger::text, projesiz_satin_alma::text AS "projesizSatinAlma", elle_ek::text AS "elleEk", eksik`,
     kaynak: 'finans_genel_gider_orani', iptal: 'true', sira: 'gecerlilik_baslangic, id' },
   kdv: { secim: `oran, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", ${tarihMetni('gecerlilik_bitis')} AS "gecerlilikBitis", surum`, kaynak: 'finans_kdv_orani', iptal: 'true', sira: 'oran, gecerlilik_baslangic' },
   duzenli: { secim: DUZENLI, kaynak: 'finans_duzenli_odeme', iptal: 'true', sira: 'id' },
@@ -296,8 +298,8 @@ export const genelGiderOraniEkle = (db: Db, g: { gecerlilikBaslangic: string; ay
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [g.gecerlilikBaslangic, g.aylikGenelGider, g.aylikMakineSaati, g.amortismanDahil, g.aciklama, kisi]);
 // Faizle aynı kural: o güne kadar başlamış son satır geçerlidir, aynı güne sonra girilen öncekini düzeltir.
 export const sonGenelGiderOrani = (db: Db, gun: string) =>
-  db.tek<{ aylikGenelGider: string; aylikMakineSaati: string; amortismanDahil: boolean }>(
-    `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil"
+  db.tek<{ aylikGenelGider: string; aylikMakineSaati: string; amortismanDahil: boolean; gizli: boolean }>(
+    `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil", personel_gizli AS gizli
        FROM finans_genel_gider_orani WHERE gecerlilik_baslangic <= $1::date ORDER BY gecerlilik_baslangic DESC, id DESC LIMIT 1`, [gun]);
 // Kur ve faiz şeridi: o güne kadar geçerli son kur ve faiz, son yazanı ve zamanıyla (düzeltme de giriş sayılır).
 // Önceki değer şeridin artış/azalış işaretidir (2083): kurda bir önceki tarihli satır, çünkü aynı günün düzeltmesi eski değeri tutmaz;

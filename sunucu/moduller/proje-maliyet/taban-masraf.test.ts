@@ -12,6 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { projedeSayilanBelgeler } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -193,6 +194,10 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     c = await maliyet(p.id);
     assert.deepEqual(c.ozet.masraflar.map((m) => [m.belgeId, m.sayilmaz]), [[lojistik, false], [doviz, false], [eskiPersonel, true]]);
     assert.equal(c.ozet.masrafToplami, 1000);
+    // 2594 b: finansın genel gider önerisine yalnız projede sayılan bağlar döner; sayılmayan eski personel bağı ve bağsız belge dönmez.
+    const bagsiz = await giderAc('lojistik', 5);
+    assert.deepEqual([...(await sahip().tx((db) => projedeSayilanBelgeler(db, [lojistik, doviz, eskiPersonel, bagsiz])))].sort((x, y) => x - y), [lojistik, doviz].sort((x, y) => x - y));
+    assert.equal((await sahip().tx((db) => projedeSayilanBelgeler(db, []))).size, 0);
     const iptalBelge = await giderAc('lojistik', 10);
     await sahip().sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [iptalBelge, yoneticiId]);
     assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: iptalBelge })).statusCode, 422);

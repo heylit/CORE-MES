@@ -466,3 +466,12 @@ export async function masrafSecenekleri(db: Db, kullanici: Kullanici, ara: strin
   };
 }
 
+
+// 2594 b (Mimar K1): finansın genel gider önerisi, projede sayılan masraf bağı olan belgeleri buradan çeker (kablolama). Sayılmayan bağ
+// (2599-a2: izinsiz kategori ya da satın almaya bağlı) projede sayılmadığı için genel gidere girebilir; burada dönmez.
+export async function projedeSayilanBelgeler(db: Db, belgeIdler: readonly number[]): Promise<Set<number>> {
+  const bagli = await sorgular.bagliBelgeler(db, belgeIdler);
+  if (bagli.size === 0) return bagli;
+  const belgeler = await giderBelgeleri(db, [...bagli]);
+  return new Set([...belgeler.values()].filter((d) => !masrafSayilmaz(d, PROJE_MASRAF_KATEGORILERI)).map((d) => d.id));
+}

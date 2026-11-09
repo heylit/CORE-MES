@@ -243,3 +243,9 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 ## İstasyon saatlik maliyet ekranı (2593, 2589 b, 2598 c)
 - Eklenen: Finans > Sistem > Saatlik maliyetler (`/finans/saatlik-maliyet`, `finans.maliyet-oku`); `GET /finans/saatlik-maliyetler/:tur` (yalnız istasyon) ve `saatlik-maliyet/` (sunucu ve istemci). İstasyon saatlik maliyeti artık yalnız burada yazılır; Reçete ve Rota > Kaynaklar salt okunur olur (2487).
 - Kişi saatlik maliyeti bu ekranda yoktur (2598 c); grup değeri 2602 ile gelir. Göç, işlem ve rol değişmedi.
+## 2594 b, 2612 a: genel gider bileşenleri belgelerden
+- Göç `20261110002355_finans_genel_gider_bilesenleri.sql`: finans_genel_gider_orani'ya kaynak (elle | belge), dönem, bileşen sütunları, emilmeyen_dogrudan (eksi olabilir), eksik, personel_gizli ve kısıtlar; finans_ayar'a genel_gider_belge_esigi (göç anı). Var olan satır değişmez.
+- Yeni alt birim `finans/genel-gider/`; uçlar GET `/finans/genel-gider-oranlari/oneri`, POST `/finans/genel-gider-oranlari/belgeden-ekle` (finans.yonet, tekrar korumalı). Liste kaynak ve bileşenleri taşır; gizli satırda aylık tutar ve saat başı null.
+- disari: çözücü kayıtları (genelGiderOrani, projeMasrafi, dolayliPersonel, stokCikisi, aracMasrafi) ve `belgelerinSiparisleri` (2642 b). `genelGiderOrani` cevabına `gizli` eklendi.
+- Ekran: Genel gider oranı sayfasında belgelerden öneri ve kayıt; tabloda kaynak sütunu; eski elle giriş kalır.
+- proje-maliyet: `projedeSayilanBelgeler` (disari).

@@ -198,8 +198,39 @@ export const genelGiderOraniEkleGovdesi = z.object({
   aciklama: metin(500),
 });
 export const genelGiderOraniSatiri = z.object({
-  id: z.number().int(), gecerlilikBaslangic: tarihSemasi, aylikGenelGider: numerik, aylikMakineSaati: numerik, saatBasi: numerik,
+  id: z.number().int(), gecerlilikBaslangic: tarihSemasi, aylikGenelGider: numerik.nullable(), aylikMakineSaati: numerik, saatBasi: numerik.nullable(),
   amortismanDahil: z.boolean(), aciklama: z.string().nullable(), olusturma: zamanSemasi,
+  // 2652 a: dolaylı personeli küçük grup olan satırda aylık tutar ve saat başı gizlidir (null).
+  gizli: z.boolean(),
+  // 2594 b: belgeden kurulan satırın bileşenleri; elle satırda null.
+  kaynak: z.enum(['elle', 'belge']), donemBaslangic: tarihSemasi.nullable(), donemBitis: tarihSemasi.nullable(),
+  kira: numerik.nullable(), amortisman: numerik.nullable(), dolayliPersonel: numerik.nullable(), emilmeyenDogrudan: numerik.nullable(), diger: numerik.nullable(),
+  projesizSatinAlma: numerik.nullable(), elleEk: numerik.nullable(), eksik: z.array(z.string()).nullable(),
+});
+// 2594 b, 2621 1/3 b: belgelerden genel gider önerisi; ay verilmezse son tam ay. Bilinmeyen bileşen null (sıfır değil).
+const aySemasi = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Ay YYYY-AA biçimindedir.');
+export const genelGiderOnerisiSorgusu = z.object({ ay: aySemasi.optional() });
+const bilesenDegeri = z.number().nullable();
+export const GENEL_GIDER_DISARIDA_NEDENLERI = ['eski_belge', 'oran_bilinmiyor', 'uretime_giden_pay', 'proje_masrafi', 'kategori'] as const;
+export const genelGiderOnerisiCevabi = z.object({
+  ay: z.string(), donemBaslangic: tarihSemasi, donemBitis: tarihSemasi,
+  bilesenler: z.object({ kira: bilesenDegeri, amortisman: bilesenDegeri, dolayliPersonel: bilesenDegeri, emilmeyenDogrudan: bilesenDegeri, diger: bilesenDegeri, projesizSatinAlma: bilesenDegeri }),
+  toplam: bilesenDegeri,
+  ayrinti: z.object({ digerBelgeler: bilesenDegeri, stokCikisi: bilesenDegeri, aracMasrafi: bilesenDegeri }),
+  disarida: z.array(z.object({ neden: z.enum(GENEL_GIDER_DISARIDA_NEDENLERI), kategori: z.string().nullable(), tutar: z.number(), adet: z.number().int() })),
+  eksik: z.array(z.string()), oraniBilinmeyen: z.array(z.string()),
+  gizli: z.boolean(),
+  baskinBelgeler: z.array(z.object({ bilesen: z.enum(['kira', 'diger']), belge: z.string(), tutar: z.number() })),
+});
+// Belgeden kayıt: tutarlar sunucuda yeniden hesaplanır; istemciden yalnız ay, makine saati, elle ek ve açıklama gelir.
+export const genelGiderBelgedenEkleGovdesi = z.object({
+  gecerlilikBaslangic: tarihSemasi,
+  ay: aySemasi,
+  aylikMakineSaati: z.number().positive('Makine saati sıfırdan büyük olmalı.').max(1e7, 'Makine saati çok büyük.')
+    .refine((v) => ondalik(2, '')(v) === true, 'Makine saati en çok iki ondalık olabilir.').transform((v) => v.toFixed(2)),
+  elleEk: z.number().min(0, 'Elle ek eksi olamaz.').max(1e13, 'Tutar çok büyük.')
+    .refine((v) => ondalik(2, '')(v) === true, 'Tutar en çok iki ondalık olabilir.').prefault(0).transform((v) => v.toFixed(2)),
+  aciklama: metin(500),
 });
 // Sabit kıymet yönetim amaçlıdır (Logo'ya gitmez). Kur boşsa sunucu alış gününün kurunu alır; devir tarihi ve birikmiş amortisman birlikte girilir.
 export const AMORTISMAN_YONTEMLERI = ['normal', 'azalan'] as const;

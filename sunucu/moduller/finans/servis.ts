@@ -807,13 +807,15 @@ export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {
 export function genelGiderOraniEkle(db: Db, k: Kullanici, g: G<typeof genelGiderOraniEkleGovdesi>) {
   return korumali(async () => ({ id: (await sorgular.genelGiderOraniEkle(db, g, k.id))!.id }));
 }
-export interface GenelGiderOrani { saatBasi: number; amortismanDahil: boolean }
+// 2652 a: gizli, dolaylı personeli 3 kişiden az olan belge satırıdır; değer hesapta kullanılır, okuyucu oranı ve ondan türeyen tutarı
+// ekranda, cevapta ve dışa aktarımda göstermez.
+export interface GenelGiderOrani { saatBasi: number; amortismanDahil: boolean; gizli: boolean }
 // Proje maliyet makine saatine ekler. O güne geçerli kayıt yoksa null (oran bilinmiyor; sıfır değil).
 export async function genelGiderOrani(db: Db, gun: string): Promise<GenelGiderOrani | null> {
   const s = await sorgular.sonGenelGiderOrani(db, gun);
   if (!s) return null;
   const saatBasi = genelGiderSaatBasi(s.aylikGenelGider, s.aylikMakineSaati);
-  return saatBasi === null ? null : { saatBasi, amortismanDahil: s.amortismanDahil };
+  return saatBasi === null ? null : { saatBasi, amortismanDahil: s.amortismanDahil, gizli: s.gizli };
 }
 export function kdvOraniEkle(db: Db, k: Kullanici, g: G<typeof kdvOraniEkleGovdesi>) {
   return korumali(async () => { await sorgular.kdvOraniEkle(db, g.oran, g.gecerlilikBaslangic, k.id); return { oran: g.oran }; });
@@ -1150,7 +1152,7 @@ export function sabitKiymetleriListele(db: Db, sorgu: { sayfa: number; sayfaBoyu
   });
 }
 
-async function amortismanToplamlari(db: Db, aylar: string[], kiymetler?: sorgular.SabitKiymetKaydi[]): Promise<Map<string, number>> {
+export async function amortismanToplamlari(db: Db, aylar: string[], kiymetler?: sorgular.SabitKiymetKaydi[]): Promise<Map<string, number>> {
   const liste = kiymetler ?? await sorgular.sabitKiymetlerHepsi(db);
   const toplam = new Map(aylar.map((a) => [a, 0]));
   for (const k of liste) {
