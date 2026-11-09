@@ -105,6 +105,22 @@ describe('Sistem ve Güvenlik genel bakış (2231)', () => {
     expect(within(screen.getByRole('region', { name: 'Sistem sağlığı özeti' })).getByText('Sağlık ayrıntısını görme yetkiniz yok.')).toBeTruthy();
   });
 
+  it('sayfada tek birincil düğme: yalnız ilk kartın düğmesi birincil, öbür kartlarınki ikincil', async () => {
+    const tarama = alarm({ id: 7, sinyal: 'adres-taramasi', onem: 'kritik', kullaniciAdi: null, ip: '127.0.0.1', gozlenenSayi: 40 });
+    sunucuKur({
+      'GET /guvenlik/ozet': () => json(200, ozet({ acikAlarm: { kritik: 1, yuksek: 0, orta: 1 } })),
+      'GET /guvenlik-alarmlari': () => json(200, liste([alarm(), tarama])),
+    });
+    cizdir(<GuvenlikDurum />, YONETICI_ISLEMLERI);
+    const kararlar = await screen.findAllByRole('article');
+    expect(kararlar).toHaveLength(2);
+    const [ilk, ikinci] = kararlar.map((k) => within(k).getByRole('button', { name: 'İncele ve kapat' }));
+    expect(ilk!.classList.contains('tc-dugme-birincil')).toBe(true);
+    expect(ikinci!.classList.contains('tc-dugme-birincil')).toBe(false);
+    expect(ikinci!.classList.contains('tc-dugme-ikincil')).toBe(true);
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
+  });
+
   it('karar yoksa "Karar bekleyen konu yok" der; yalnız okuyan "İncele" görür', async () => {
     sunucuKur({ 'GET /guvenlik/ozet': () => json(200, ozet()), 'GET /guvenlik-alarmlari': () => json(200, liste([])), 'GET /guvenlik/koruma': () => json(200, korumaCevabi('acik')) });
     cizdir(<GuvenlikDurum />, YONETICI_ISLEMLERI);

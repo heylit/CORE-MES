@@ -6,7 +6,7 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
 import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
@@ -251,6 +251,19 @@ describe('akış, miktar, süre', () => {
     assert.equal(m.get(30), 200);
     assert.equal(m.get(20), 250);
     assert.equal(m.get(10), 250);
+  });
+
+  test('2557: emir fire çarpanı emrin malzeme kuralıdır: öncül listesi yoksa önceki adım, listede sonraki sıradaki öncül sayılmaz', () => {
+    const tek = emirFireCarpanlari([{ sira: 1, opNo: 10, firePayiYuzde: 20 }, { sira: 2, opNo: 20, firePayiYuzde: 50 }]);
+    assert.deepEqual([...tek], [[20, 2], [10, 2.5]]);
+    const dalli = emirFireCarpanlari([
+      { sira: 1, opNo: 1010, firePayiYuzde: 0, onculler: [] },
+      { sira: 2, opNo: 10, firePayiYuzde: 0, onculler: [] },
+      { sira: 3, opNo: 20, firePayiYuzde: 50, onculler: [{ opNo: 1010 }, { opNo: 30 }] },
+      { sira: 4, opNo: 30, firePayiYuzde: 10, onculler: [{ opNo: 10 }, { opNo: 20 }] },
+    ]);
+    assert.equal(Number(dalli.get(10)?.toFixed(4)), 1.1111);
+    assert.equal(Number(dalli.get(1010)?.toFixed(4)), 2.2222);
   });
 
   test('RT-43 dallı: bir dalın firesi paralel dalı büyütmez; adım ardıllarının en büyük fire yolunu taşır (B-2485-1)', () => {

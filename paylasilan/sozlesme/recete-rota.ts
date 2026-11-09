@@ -269,8 +269,10 @@ export const durumEmirSemasi = z.object({
 // adımlarından çevirir (kolda ayrılma adımı kadar kayarak). Bekleyen iş emri opStatus'ta yoktur; opProg yalnız bitmemiş adımın sağlam adedidir.
 // opYer (aynı anahtar): rotalı emirde adımın emirdeki iç ya da dış üretimi (UE-URY). Emirde fasona alınan ya da içeri alınan adım rotadan
 // ayrılabilir; plan rotanın değil emrin seçimini kullanır. fasonId doluysa adım fasondadır (istasyon ve süre yok, terminGun firma süresi).
+// tahminGun (B-2483-11): termini girilmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini, takvim günü; tahmin yoksa alan yok.
 export const durumEmirYeriSemasi = z.object({
   fasonId: kimlikMetni.nullable(), terminGun: z.number().int().nullable(), stationId: kimlikMetni.nullable(), setup: z.number().nullable(), cycle: z.number().nullable(),
+  tahminGun: z.number().positive().optional(),
 });
 export const durumEmirlerSemasi = z.object({
   orders: z.array(durumEmirSemasi),

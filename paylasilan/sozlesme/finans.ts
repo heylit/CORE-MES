@@ -558,3 +558,21 @@ export const vergiBeyaniSatiri = z.object({
 });
 export const vergiBeyanlariCevabi = z.object({ satirlar: z.array(vergiBeyaniSatiri) });
 export type VergiBeyaniSatiri = z.output<typeof vergiBeyaniSatiri>;
+
+// ---- 2540: tedarikçi alacağı (kalanı kapatılmış siparişte gerçekleşen değeri aşan avans) ----
+// Kayıt "teyit bekliyor" başlar (2544 a): sistem avansın ödendiğini bilmez. Finans açar (avans ödendi) ya da düşürür (ödenmedi);
+// açık alacak tahsil ya da mahsupla kapanır. Tutar KDV dahil, sipariş dövizindedir.
+export const TEDARIKCI_ALACAGI_DURUMLARI = ['teyit_bekliyor', 'acik', 'dusuldu', 'kapandi'] as const;
+export const tedarikciAlacagiSemasi = z.object({
+  id: z.number().int(), talepId: z.string(), teklifId: z.string(), siparisNo: z.string(), firmaId: z.number().int(), firmaAdi: z.string(),
+  paraBirimi: z.string(), tutar: numerik, durum: z.enum(TEDARIKCI_ALACAGI_DURUMLARI), aciklama: z.string().nullable(),
+  durumDegistirenAdi: z.string().nullable(), durumZamani: zamanSemasi.nullable(), olusturma: zamanSemasi, surum: surumSemasi,
+});
+export type TedarikciAlacagi = z.infer<typeof tedarikciAlacagiSemasi>;
+export const tedarikciAlacaklariCevabi = z.object({ alacaklar: z.array(tedarikciAlacagiSemasi) });
+export type TedarikciAlacaklariCevabi = z.infer<typeof tedarikciAlacaklariCevabi>;
+export const tedarikciAlacagiDurumGovdesi = z.object({
+  ...beklenenSurum, durum: z.enum(['acik', 'dusuldu', 'kapandi']), aciklama: metin(500),
+});
+export type TedarikciAlacagiDurumYazimi = z.output<typeof tedarikciAlacagiDurumGovdesi>;
+export const tedarikciAlacagiCevabi = z.object({ alacak: tedarikciAlacagiSemasi });

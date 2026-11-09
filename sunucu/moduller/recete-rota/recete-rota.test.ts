@@ -17,6 +17,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI, receteRotaDurumu } from './disari.ts';
 import { durum } from './servis.ts';
 import type { MalzemeSiniri } from './servis.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -200,8 +201,23 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
   test('RR-10: disari.ts prototipin durum kaydını salt okunur verir', async () => {
     const yok = await vt().tx((db) => receteRotaDurumu(db));
     assert.equal(yok, null);
-    await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: { name: 'Deneme fabrika' }, beklenenSurum: null });
+    await anaKayitYaz(vt(), { name: 'Deneme fabrika' }, null);
     assert.deepEqual((await vt().tx((db) => receteRotaDurumu(db)))?.deger, { name: 'Deneme fabrika' });
+  });
+
+  test('B-2484-2: ana durum kaydı komut ucundan yazılmaz ve silinmez (yazar dahil 400); kayıt ve sürümü değişmez, başka anahtar yazılır', async () => {
+    const once = await vt().tek<{ surum: number }>('SELECT surum FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]);
+    assert.ok(once, 'RR-10 ana kaydı kurdu');
+    for (const deger of [{ statuses: [] }, { name: 'Ezen' }]) {
+      const r = await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: once.surum });
+      assert.equal(r.statusCode, 400, r.body);
+    }
+    assert.equal((await yaz(yazar, { anahtar: DURUM_ANAHTARI, bicim: 'metin', deger: 'x', beklenenSurum: once.surum })).statusCode, 400);
+    assert.equal((await istek(yazar, 'POST', '/recete-rota/kayitlar/sil', { anahtar: DURUM_ANAHTARI, beklenenSurum: once.surum })).statusCode, 400);
+    assert.equal((await istek(okur, 'POST', '/recete-rota/kayitlar/sil', { anahtar: DURUM_ANAHTARI, beklenenSurum: once.surum })).statusCode, 403);
+    const sonra = await vt().tek<{ surum: number; deger: unknown }>('SELECT surum, deger FROM recete_rota_kayit WHERE anahtar = $1', [DURUM_ANAHTARI]);
+    assert.deepEqual(sonra, { surum: once.surum, deger: { name: 'Deneme fabrika' } });
+    assert.equal((await yaz(yazar, { anahtar: `${DURUM_ANAHTARI}:studio:9`, bicim: 'json', deger: {}, beklenenSurum: null })).statusCode, 200, 'senaryo anahtarı yazılır');
   });
 
   test('RR-11: durum ucu oku, yaz ya da sayfa işlemiyle açık; yetkisiz 403; kaynak boşken koleksiyonlar boş, sıfır uydurulmaz', async () => {

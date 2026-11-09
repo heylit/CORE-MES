@@ -857,6 +857,51 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual(o2.dugumler.map((d) => [d.dal, d.kokBasina]), [['K1', '0.5'], [null, '1']]);
   });
 
+  test('2557: patlamış rota önizlemesinde adım adedi ve malzemeler açılan emrin malzeme ihtiyacıyla aynıdır; dal çarpanı adedi büyütür, malzemeyi büyütmez', async () => {
+    const ust = await mamulAc();
+    const alt = await mamulAc();
+    const hm = await hammaddeAc();
+    const hm2 = await hammaddeAc();
+    const yan = await hammaddeAc();
+    await yururlugeAlinmisRota(alt, [
+      yeniAdim({ firePayiYuzde: 20, bilesenler: [{ malzemeId: hm2, miktar: 0.5, fireYuzde: 10 }] }),
+      yeniAdim({ bilesenler: [] }),
+    ]);
+    const id = await yururlugeAlinmisRota(ust, [
+      yeniAdim({ dal: 'A', adetCarpani: 2, bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }),
+      yeniAdim({ dal: 'B', firePayiYuzde: 50, bilesenler: [{ malzemeId: alt, miktar: 3, fireYuzde: 0 }], yanUrunler: [{ malzemeId: yan, miktar: 2 }] }),
+      yeniAdim({ birlesen: ['A', 'B'], firePayiYuzde: 10, bilesenler: [] }),
+    ]);
+    const o = await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme?miktar=4`);
+    assert.equal(o.engel, null);
+    assert.equal(o.miktar, '4');
+    const kok = o.dugumler.find((d) => d.dugum === '0')!;
+    const k1 = o.dugumler.find((d) => d.dugum === '0.1')!;
+    // Birleşme adımının firesi iki dalı da büyütür, B dalının firesi A'yı büyütmez; A dalı mamul başına 2 parça işler.
+    assert.deepEqual(kok.adimlar.map((a) => [a.cikti, a.adet?.siparis, a.cikanAdet?.siparis]), [
+      ['ara-hal', '8.8889', '8.8889'], ['ara-hal', '8.8889', '4.4444'], ['urun', '4.4444', '4'],
+    ]);
+    assert.deepEqual(kok.adimlar[0]?.girenler.map((g) => [g.malzeme.id, g.altDugum, g.toplam?.kokBasina, g.toplam?.siparis]), [[hm, null, '1.1111', '4.4444']]);
+    assert.deepEqual(kok.adimlar[1]?.girenler.map((g) => [g.malzeme.id, g.altDugum, g.toplam?.siparis]), [[alt, '0.1', '26.6667']]);
+    assert.deepEqual(kok.adimlar[1]?.yanUrunler.map((y) => [y.malzeme.id, y.toplam?.siparis]), [[yan, '17.7778']]);
+    // Alt düğüm kök başına 3 adettir; ardılı olan tüketen adımın firesiyle büyür.
+    assert.deepEqual(k1.adimlar.map((a) => [a.cikti, a.adet?.kokBasina, a.adet?.siparis]), [['ara-hal', '8.3333', '33.3333'], ['urun', '6.6667', '26.6667']]);
+    assert.deepEqual(o.hammaddeToplami.map((t) => [t.malzeme.id, t.toplam.siparis]), [[hm, '4.4444'], [hm2, '18.3333']].sort((x, y) => Number(x[0]) - Number(y[0])));
+    // Açılan emir aynı sayıları verir.
+    const k = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 4, teslim: null, taslak: true, cokKatmanli: true });
+    const ihtiyac = (await vt().tx((db) => emirlerinMalzemeIhtiyaci(db, [k.uretimEmriId]))).get(k.uretimEmriId) ?? [];
+    const onizleme = o.dugumler.flatMap((d) => d.adimlar.flatMap((a) => a.girenler.filter((g) => g.altDugum === null)
+      .map((g) => [a.emirOpNo, g.malzeme.id, Number(g.toplam?.siparis)])));
+    assert.deepEqual(onizleme.sort((x, y) => Number(x[0]) - Number(y[0])), ihtiyac.map((m) => [m.opNo, m.malzemeNo, Number(Number(m.brut).toFixed(4))]));
+    // Emrin adım adedi (dal çarpanı) önizlemenin kayıpsız adedidir.
+    const carpanlar = await vt().tx((db) => db.sorgu<{ opNo: number; adetCarpani: number | null }>(
+      'SELECT i.op_no AS "opNo", d.adet_carpani AS "adetCarpani" FROM uretim_emirleri_is_emri i LEFT JOIN uretim_emirleri_is_emri_dali d ON d.is_emri_id = i.id WHERE i.uretim_emri_id = $1 ORDER BY i.sira', [k.uretimEmriId]));
+    assert.deepEqual(carpanlar.map((x) => [x.opNo, x.adetCarpani ?? 1]), [[1010, 3], [1020, 3], [10, 2], [20, 1], [30, 1]]);
+    // Miktar verilmezse 1; geçersiz miktar reddedilir.
+    assert.equal((await tamam<PatlatmaOnizlemeCevabi>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme`)).miktar, '1');
+    for (const m of ['0', '1.5', 'x']) assert.equal((await istek(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme?miktar=${m}`)).statusCode, 400);
+  });
+
   test('RT-58: ağaç üstten aşağı toplam ihtiyacı fire paylarıyla döner; alt mamul kendi rotasıyla açılır', async () => {
     const ust = await mamulAc();
     const alt = await mamulAc();

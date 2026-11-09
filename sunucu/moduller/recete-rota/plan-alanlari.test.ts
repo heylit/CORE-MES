@@ -9,6 +9,7 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import { planAlanlariniKoru } from './kurallar.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 // Elle sıra ve dondurma canlı planındır (plan-ekran-verisi-yeri.md 5.2): ana kayda ekranın gönderdiği qorder, frozen ve frozenAt yazılmaz;
 // kayıttaki eski hâl silinmeden kalır. Veriler uydurmadır.
@@ -37,6 +38,7 @@ describe('ana kayıtta plan alanları (gerçek PostgreSQL)', () => {
     return ortam.vt;
   };
   const yaz = async (anahtar: string, deger: unknown, beklenenSurum: number | null) => {
+    if (anahtar === DURUM_ANAHTARI) { await anaKayitYaz(vt(), deger, beklenenSurum); return; }
     const c = await app.inject({ method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: cerez }, payload: { anahtar, bicim: 'json', deger, beklenenSurum } });
     assert.equal(c.statusCode, 200, c.body);
   };

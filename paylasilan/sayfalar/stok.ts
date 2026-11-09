@@ -41,6 +41,8 @@ export const STOK_IKINCI_MENU = {
         { anahtar: 'komut-karti', baslik: 'Komut kartı', yol: '/stok/komut-karti', simge: 'printer', islem: 'sayfa.stok' },
         // Eşiği aşan sayım farkı ikinci yetkilinin onayını bekler (1279 a); sayan da listeyi görür.
         { anahtar: 'sayim-onaylari', baslik: 'Sayım onayları', yol: '/stok/sayim-onaylari', simge: 'check', islem: 'stok.sayim-onayla', veya: ['stok.sayim'] },
+        // 2547 a: statüde durup hiçbir açık emre ayrılmamış stok (rezervesi kaldırılan ya da emri kapanan).
+        { anahtar: 'sahipsiz-statulu', baslik: 'Sahipsiz statülü stok', yol: '/stok/sahipsiz-statulu', simge: 'alert', islem: 'sayfa.stok' },
         { anahtar: 'defter-farklari', baslik: 'Defter farkları', yol: '/stok/defter-farklari', simge: 'alert', islem: 'stok.eksi-onayla' },
       ],
     },
