@@ -166,7 +166,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/satin-alma-eki', yetki: KAYNAK_OKUR, cevap: satinAlmaEkiCevabi, isle: ({ db, kullanici }) => planlama.satinAlmaEki(db, kullanici) }),
   // Planlama çalışması ve sayfa tercihleri (662 a). Çalışma yalnız plan.yaz, öteki anahtarlar recete-rota.yaz ister (925 a,
   // planlamaYazmaDenetimi). Gövde deftere girmez (yüzlerce KB olabilir): anahtar ve beklenen sürüm girer.
-  uc({ yontem: 'GET', yol: '/plan/planlama-kayitlari', yetki: KAYNAK_OKUR, cevap: kayitlarCevabi, isle: ({ db }) => planlama.planlamaKayitlari(db) }),
+  uc({ yontem: 'GET', yol: '/plan/planlama-kayitlari', yetki: KAYNAK_OKUR, cevap: kayitlarCevabi, isle: ({ db, kullanici }) => planlama.planlamaKayitlari(db, kullanici) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-kayitlari/yaz', yetki: KAYIT_YAZAR, denetim: 'govdesiz',
     denetimOzeti: (g) => ({ anahtar: g.anahtar, bicim: g.bicim, beklenenSurum: g.beklenenSurum }), govde: planlamaYazGovdesi, cevap: yazCevabi,
     isle: ({ db, kullanici, govde }) => planlama.planlamaYaz(db, kullanici, govde) }),
