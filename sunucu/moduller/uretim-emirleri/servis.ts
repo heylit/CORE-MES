@@ -28,7 +28,7 @@ import type { IstasyonDurumu, MakineAyrimi, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
-import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
+import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { AdimDurumSatiri, AdimSatiri, EmirSatiri, IsEmriSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
@@ -739,6 +739,7 @@ export async function emirBitir(
   let emirKapanis = kapanis;
   if (calisan !== null) {
     await sorgular.isEmriBitir(db, calisan.id, kapanis, an);
+    await adimBittiBildir(db, { isEmriId: calisan.id, uretimEmriId: id, kisiId });
     const guncel = await sorgular.isEmirleriGetir(db, [id]);
     // Terminalde çalışan başka adım: emir başlamış kalır, istasyonu en küçük sıralı çalışan adıma geçer.
     const suren = guncel.filter((i) => i.durum === 'calisiyor' && i.fasonFirmaId === null && i.istasyonId !== null).sort((a, b) => a.sira - b.sira)[0];

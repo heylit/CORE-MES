@@ -5,7 +5,8 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import { adimBittiDinle, emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import type { AdimBittiOlayi } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 
 // İlk parça kararı bekleyen parça, bitmiş adımın kaybı sayılmaz: sonraki adımın işleyeceği adede girer. Adlar uydurmadır.
@@ -94,5 +95,30 @@ describe('uretim-emirleri karar bekleyen adet ve sonraki adım (gerçek PostgreS
     };
     assert.equal(await kur(3), 10, '10 parçanın hepsi onaylandı, kayıp yok');
     assert.equal(await kur(0), 7, '7 parça onaylandı, sayılmayan 3 kayıp düşer');
+  });
+  test('2520-5: terminalde biten her adım (emirle biten son adım dahil) adım bitti olayı verir; dinleyicinin reddi bitirmeyi geri alır', async () => {
+    const r = await tx(async (db) => uretimEmriAc(db, planlama, {
+      malzemeNo: urunNo, adet: 5, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [adim(1, await makine()), adim(2, await makine())], projeId,
+    }));
+    const [ie1, ie2] = r.isEmriIdleri as [number, number];
+    const id = r.uretimEmriId;
+    const olaylar: AdimBittiOlayi[] = [];
+    const birak = adimBittiDinle(async (_db, olay) => { olaylar.push(olay); });
+    try {
+      await tx((db) => emirBaslat(db, operator, id, undefined, undefined, ie1));
+      await tx((db) => emirBitir(db, operator, id, undefined, undefined, ie1));
+      await tx((db) => emirBaslat(db, operator, id, undefined, undefined, ie2));
+      const reddeden = adimBittiDinle(async () => { throw new Error('dinleyici reddi'); });
+      await assert.rejects(tx((db) => emirBitir(db, operator, id, undefined, undefined, ie2)), /dinleyici reddi/);
+      reddeden();
+      const adim2 = await o().sahip.tek<{ durum: string }>('SELECT durum FROM uretim_emirleri_is_emri WHERE id = $1', [ie2]);
+      assert.equal(adim2?.durum, 'calisiyor', 'reddedilen olay bitirmeyi geri alır');
+      await tx((db) => emirBitir(db, operator, id, undefined, undefined, ie2));
+    } finally {
+      birak();
+    }
+    const bekle = { uretimEmriId: id, kisiId: operator.id };
+    assert.deepEqual(olaylar, [{ isEmriId: ie1, ...bekle }, { isEmriId: ie2, ...bekle }, { isEmriId: ie2, ...bekle }],
+      'geri alınan denemenin olayı da dinleyiciye ulaşmıştı; kalıcı olan son ikisi işlemle birlikte yazıldı');
   });
 });

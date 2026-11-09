@@ -108,3 +108,4 @@ DK: `dis-islem-emri.test.ts` "UE-DIE kuralları (saf)", DP: aynı dosya "gerçek
 
 Bağsız kural: yok.
 | 2521 b (09.11.2026): karar bekleyen varken bitirme reddedilir, sayım ve iş değişmez; onay ya da ret bekleyeni kapatınca bitirilir | kurallar.test.ts "2521 b", karar-bekliyor.test.ts "2521 b" (izinli ve yasak), karar-bekleyen-adet.test.ts "2521 b", arkon/yansima.test.ts "K1, T1" |
+| 2520-5 (09.11.2026): terminalde biten adım olay verir; dinleyicinin reddi bitirmeyi geri alır | karar-bekleyen-adet.test.ts "2520-5" |
