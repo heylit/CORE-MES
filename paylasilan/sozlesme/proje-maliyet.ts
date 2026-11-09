@@ -109,8 +109,9 @@ export const tabanSemasi = z.object({
   kisiAd: z.string().nullable(),
   an: zamanSemasi,
 });
-// Projeye bağlanabilen gider kategorileri: üretim dışı proje masrafı. Faiz (finansman kalemi), vergi, kredi ve kur farkı girmez.
-export const PROJE_MASRAF_KATEGORILERI = ['mal_alimi', 'personel', 'kira', 'enerji', 'lojistik', 'pazarlama', 'diger_gider'] as const;
+// Projeye bağlanabilen gider kategorileri (2599 a): yalnız projeye özel gider. Malzeme üretim maliyetine sarftan, işçilik saatten,
+// kira ve enerji genel giderden girer; ikinci kez sayılmasın diye bağlanamaz. Faiz (finansman kalemi), vergi, kredi ve kur farkı da girmez.
+export const PROJE_MASRAF_KATEGORILERI = ['lojistik', 'pazarlama', 'diger_gider'] as const;
 export const masrafSatiriSemasi = z.object({
   id: z.number().int().positive(),
   belgeId: z.number().int().positive(),

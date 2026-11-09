@@ -506,7 +506,7 @@ export const TABAN_GEREKCE = 'Taban yenileniyor: gerekçe zorunlu.';
 export const MASRAF_YOK = 'Gider belgesi bulunamadı.';
 export const MASRAF_IPTAL = 'İptal edilmiş belge projeye bağlanamaz.';
 export const MASRAF_SATIN_ALMA = 'Satın alma siparişine bağlı belge üretim maliyetine satın almadan girer; projeye ayrıca bağlanamaz.';
-export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz (faiz, vergi, kredi, kur farkı).';
+export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz; projeye yalnız lojistik, pazarlama ve diğer gider bağlanır.';
 export const MASRAF_KAPALI_PROJE = 'Tamamlanmış ya da iptal edilmiş projeye masraf bağlanamaz.';
 export const MASRAF_KALDIRMA_YETKISI = 'Masraf bağını yalnız proje maliyetini gören kaldırabilir.';
 

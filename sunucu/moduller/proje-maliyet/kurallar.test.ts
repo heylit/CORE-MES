@@ -6,7 +6,7 @@ import {
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
 import { butceTl, iscilikPlaniEksik, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
-import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import { MALIYET_KALEMLERI, PROJE_MASRAF_KATEGORILERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 import { MASRAF_KAPALI_PROJE, projeMasrafReddi } from './kurallar.ts';
 
@@ -335,6 +335,13 @@ test('PM-41 masraf reddi: yok, iptal, satın almaya bağlı ve proje masrafı ol
   assert.equal(masrafReddi({ ...b, satinAlmaBagli: true }, tur), MASRAF_SATIN_ALMA);
   assert.equal(masrafReddi({ ...b, kategori: 'faiz' }, tur), MASRAF_KATEGORI);
   assert.equal(masrafReddi({ ...b, durum: 'kapandi' }, tur), null);
+});
+
+test('PM-41 (2599 a): proje masrafı yalnız lojistik, pazarlama ve diğer gider; mal alımı, personel, kira ve enerji reddedilir', () => {
+  assert.deepEqual([...PROJE_MASRAF_KATEGORILERI], ['lojistik', 'pazarlama', 'diger_gider']);
+  const b = { durum: 'acik', satinAlmaBagli: false };
+  for (const kategori of ['mal_alimi', 'personel', 'kira', 'enerji']) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), MASRAF_KATEGORI);
+  for (const kategori of PROJE_MASRAF_KATEGORILERI) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), null);
 });
 
 test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son + kalan plan; taban ya da bilinmeyen taraf yoksa null', () => {
