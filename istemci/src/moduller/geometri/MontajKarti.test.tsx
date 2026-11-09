@@ -34,7 +34,7 @@ function ac() {
   render(
     <QueryClientProvider client={istemci}>
       <BildirimSaglayici>
-        <MemoryRouter initialEntries={['/geometri?rev=41']}>
+        <MemoryRouter initialEntries={['/geometri/montaj?rev=41']}>
           <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
         </MemoryRouter>
       </BildirimSaglayici>

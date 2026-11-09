@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
-  Box3, BoxGeometry, BufferGeometry, Color, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments, Matrix4,
+  Box3, BoxGeometry, BufferGeometry, Color, CylinderGeometry, DirectionalLight, EdgesGeometry, Group, HemisphereLight, Line, LineBasicMaterial, LineDashedMaterial, LinearSRGBColorSpace, LineSegments, Matrix4,
   Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, Quaternion, Raycaster, Scene, SRGBColorSpace, TorusGeometry, Vector2, Vector3, WebGLRenderer,
 } from 'three';
 import type { Material, Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Dugme, DurumKutusu, Simge } from '../../ortak/arayuz/index.ts';
 import { birak, modelOku, type ModelBicimi } from '../belge-merkezi/disari.ts';
-import { agYuzAlanlari, agYuzNormalleri, MASKE_RENGI, patlatmaKaymasi, ucgeninYuzu, yuzSirasiUyar } from './gorunum.ts';
-import type { Yon3 } from './gorunum.ts';
+import { agYuzAlanlari, agYuzNormalleri, GORUNUMLER, MASKE_RENGI, patlatmaKaymasi, ucgeninYuzu, yuzSirasiUyar } from './gorunum.ts';
+import type { GorunumAdi, OnizlemeKatisi, Yon3 } from './gorunum.ts';
 
 // Sahne renkleri tasarım değişkenlerinden okunur; değişken yoksa (test ortamı) nötr gri.
 function renk(ad: string): Color {
@@ -19,9 +19,9 @@ function renk(ad: string): Color {
 // Seçilen deliğin vurgusu (2044-2): girişte halka, girişten içeri eksen çizgisi. Konum ve eksen sunucudandır, model koordinatında (mm, Z yukarı).
 export interface Vurgu { konum: readonly number[]; eksen: readonly number[]; capMm: number; derinlikMm: number }
 
-function vurguKur(v: Vurgu): Group {
+function vurguKur(v: Vurgu, renkAdi = '--hazard'): Group {
   const g = new Group();
-  const renkli = renk('--hazard');
+  const renkli = renk(renkAdi);
   const r = v.capMm / 2 + Math.max(0.5, v.capMm * 0.08);
   // Model önünde kalsın diye derinlik denetimi kapalı: halka delik içinde de görünür.
   const halka = new Mesh(new TorusGeometry(r, Math.max(0.2, r * 0.06), 8, 48), new MeshBasicMaterial({ color: renkli, depthTest: false }));
@@ -56,6 +56,93 @@ function kutularKur(kutular: readonly ParcaKutusu[]): Group {
     for (const n of [dolgu, kenar]) { n.userData['merkez'] = merkez; n.position.copy(merkez); n.renderOrder = 10; g.add(n); }
   }
   return g;
+}
+
+// Çalışmanın önizlemesi (2396): katılar (analiz kutuları, ham) kenar çizgisi ve yarı saydam dolguyla, delikler halkayla çizilir.
+// Katılar modelin ağ noktalarından kurulur (merkez ağdan bulunur, gorunum.ts); noktalar model koordinatındadır.
+export interface Onizleme {
+  // İçerik değişince önizleme yeniden kurulsun diye; işlev kimliği her çizimde değişebilir.
+  anahtar: string;
+  // Düğmede ve bilgi satırında ne gösterildiği.
+  etiket: string;
+  katilar: (noktalar: Float32Array) => readonly OnizlemeKatisi[];
+  delikler: readonly Vurgu[];
+}
+
+function katiKur(k: OnizlemeKatisi, renkli: Color, sira: number): Object3D[] {
+  const [boy, en, yukseklik] = k.boyut;
+  const govde = k.sekil === 'kutu'
+    ? new BoxGeometry(Math.max(boy, 0.01), Math.max(en, 0.01), Math.max(yukseklik, 0.01))
+    // Altıgende anahtar ağzı köşeden köşeye değil yüzden yüze ölçülür: çevre yarıçapı s / √3.
+    : new CylinderGeometry(k.sekil === 'silindir' ? en / 2 : en / Math.sqrt(3), k.sekil === 'silindir' ? en / 2 : en / Math.sqrt(3), Math.max(boy, 0.01), k.sekil === 'silindir' ? 48 : 6)
+      .rotateZ(-Math.PI / 2);
+  const [a, b] = k.eksenler;
+  const ea = new Vector3(...(a ?? [1, 0, 0])), eb = new Vector3(...(b ?? [0, 1, 0]));
+  // Sunucunun eksenleri sol el düzeni olabilir; dönüş için üçüncü eksen ilk ikisinden kurulur (kutu simetrik, yön işareti fark etmez).
+  const donus = new Matrix4().makeBasis(ea, eb, new Vector3().crossVectors(ea, eb).normalize());
+  const dolgu = new Mesh(govde, new MeshBasicMaterial({ color: renkli, transparent: true, opacity: 0.18, depthWrite: false }));
+  const kenar = new LineSegments(new EdgesGeometry(govde, 20), new LineBasicMaterial({ color: renkli, depthTest: false }));
+  for (const n of [dolgu, kenar]) {
+    n.quaternion.setFromRotationMatrix(donus);
+    n.position.set(...k.merkez);
+    n.renderOrder = 10 + sira;
+  }
+  return [dolgu, kenar];
+}
+
+const ONIZLEME_RENKLERI = ['--sahne3b-vurgu', '--grafik-2'] as const;
+
+function birakGrup(g: Group): void {
+  g.traverse((c) => {
+    if (c instanceof Mesh || c instanceof Line || c instanceof LineSegments) {
+      (c.geometry as BufferGeometry).dispose();
+      for (const m of (Array.isArray(c.material) ? c.material : [c.material]) as Material[]) m.dispose();
+    }
+  });
+}
+
+// Ağın noktaları model (iç grup) koordinatında, patlatmasız; önizlemenin yerini bulmak için bir kez toplanır.
+function agNoktalari(ic: Object3D): Float32Array {
+  ic.updateWorldMatrix(true, true);
+  const icTers = ic.matrixWorld.clone().invert();
+  const parcalar: Float32Array[] = [];
+  const v = new Vector3();
+  ic.traverse((n) => {
+    if (!(n instanceof Mesh)) return;
+    const konum = (n.geometry as BufferGeometry).getAttribute('position');
+    if (konum === undefined) return;
+    const m = new Matrix4().multiplyMatrices(icTers, n.matrixWorld);
+    const p = new Float32Array(konum.count * 3);
+    for (let i = 0; i < konum.count; i++) { v.fromBufferAttribute(konum, i).applyMatrix4(m); p[3 * i] = v.x; p[3 * i + 1] = v.y; p[3 * i + 2] = v.z; }
+    parcalar.push(p);
+  });
+  const toplam = new Float32Array(parcalar.reduce((t, p) => t + p.length, 0));
+  let i = 0;
+  for (const p of parcalar) { toplam.set(p, i); i += p.length; }
+  return toplam;
+}
+
+// Görünüm çubuğu (2396): standart görünümler, sığdır, kendiliğinden dönme ve önizleme; her çalışmada aynı yerde, görüntünün altında.
+function GorunumCubugu({ bak, sigdir, doner, donerYaz, onizleme, onizlemeAcik, onizlemeYaz }: {
+  bak: (g: GorunumAdi) => void; sigdir: () => void; doner: boolean; donerYaz: (x: boolean) => void;
+  onizleme: string | null; onizlemeAcik: boolean; onizlemeYaz: (x: boolean) => void;
+}) {
+  return (
+    <div className="tc-g3b-gorunum" role="toolbar" aria-label="Görünüm">
+      <div className="tc-g3b-gorunum-grup" role="group" aria-label="Standart görünüm">
+        {(Object.keys(GORUNUMLER) as GorunumAdi[]).map((g) => (
+          <Dugme key={g} title={`${GORUNUMLER[g].baslik} görünüm`} onClick={() => bak(g)}>{GORUNUMLER[g].baslik}</Dugme>
+        ))}
+        <Dugme simge="fit" title="Modeli görüntüye sığdır" onClick={sigdir}>Sığdır</Dugme>
+      </div>
+      <div className="tc-g3b-gorunum-grup">
+        <Dugme simge="rotate" aria-pressed={doner} onClick={() => donerYaz(!doner)}>Döndür</Dugme>
+        {onizleme !== null && (
+          <Dugme simge="eye" aria-pressed={onizlemeAcik} title={`Önizleme: ${onizleme}`} onClick={() => onizlemeYaz(!onizlemeAcik)}>Önizleme</Dugme>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Patlatma (2139-1 c): her ağ (katı parça) kendi yerinden, oran 1'deki kaymasıyla (ebeveyninin koordinatında) tutulur.
@@ -169,8 +256,8 @@ function taraliMalzeme(olcek: number): MeshStandardMaterial {
 export type ResimAl = () => Promise<Blob | null>;
 
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
-export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, yuzBoyasi = null, arac = null, bilgi = null, resimAlici }: {
-  veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null;
+export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, yuzBoyasi = null, arac = null, bilgi = null, resimAlici, onizleme = null }: {
+  veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null; onizleme?: Onizleme | null;
   // Görüntünün üstünde araç çubuğu (solda fırça, sağda görünüm) ve altında bilgi satırı (2144 prototip v3).
   yuzBoyasi?: YuzBoyasi | null; arac?: ReactNode; bilgi?: string | null; resimAlici?: (al: ResimAl | null) => void;
 }) {
@@ -191,6 +278,11 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
   secRef.current = yuzDurumu === 'hazir' ? (yuzBoyasi?.sec ?? null) : null;
   const resimAliciRef = useRef(resimAlici);
   resimAliciRef.current = resimAlici;
+  // Kamera ve modelin çerçevesi: görünüm düğmeleri sahne kurulduktan sonra bunlarla çalışır.
+  const bakis = useRef<{ kamera: PerspectiveCamera; kontrol: OrbitControls; merkez: Vector3; r: number } | null>(null);
+  const noktalar = useRef<Float32Array | null>(null);
+  const [doner, donerYaz] = useState(false);
+  const [onizlemeAcik, onizlemeYaz] = useState(true);
 
   useEffect(() => {
     const el = kap.current;
@@ -229,6 +321,7 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
       if (iptal) { birak(m); return; }
       model = m;
       icGrup.current = m.children[0] ?? m;
+      noktalar.current = agNoktalari(icGrup.current);
       yuzAglariRef.current = yuzAglari(icGrup.current);
       patlatma.current = patlatmaKur(icGrup.current);
       parcaSayisiYaz(patlatma.current.parcalar.length);
@@ -242,6 +335,7 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
       kamera.near = r / 100;
       kamera.far = r * 100;
       kamera.updateProjectionMatrix();
+      bakis.current = { kamera, kontrol, merkez, r };
     }, (e: unknown) => { if (!iptal) hataYaz(e instanceof Error ? e.message : 'Model okunamadı.'); });
     let kare = 0;
     const dongu = () => {
@@ -277,6 +371,8 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
     }));
     return () => {
       iptal = true;
+      bakis.current = null;
+      noktalar.current = null;
       resimAliciRef.current?.(null);
       cizer.domElement.removeEventListener('pointerdown', bas);
       cizer.domElement.removeEventListener('pointerup', birakildi);
@@ -308,6 +404,34 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
       }
     };
   }, [yuklendi, kx, ky, kz, ex, ey, ez, cap, derinlik]);
+
+  useEffect(() => {
+    const b = bakis.current;
+    if (b === null) return;
+    b.kontrol.autoRotate = doner;
+  }, [yuklendi, doner]);
+  const bak = (g: GorunumAdi | null) => {
+    const b = bakis.current;
+    if (b === null) return;
+    const yon = g === null ? b.kamera.position.clone().sub(b.kontrol.target) : new Vector3(...GORUNUMLER[g].yon);
+    if (yon.lengthSq() === 0) yon.set(1, 1, 1);
+    b.kontrol.target.copy(b.merkez);
+    b.kamera.position.copy(b.merkez).add(yon.normalize().multiplyScalar(b.r * 3));
+    b.kontrol.update();
+  };
+
+  const onizlemeAnahtari = onizleme === null || !onizlemeAcik ? '' : onizleme.anahtar;
+  const onizlemeRef = useRef(onizleme);
+  onizlemeRef.current = onizleme;
+  useEffect(() => {
+    const ic = icGrup.current, n = noktalar.current, o = onizlemeRef.current;
+    if (ic === null || n === null || o === null || onizlemeAnahtari === '') return undefined;
+    const g = new Group();
+    o.katilar(n).forEach((k, i) => { for (const x of katiKur(k, renk(ONIZLEME_RENKLERI[i % ONIZLEME_RENKLERI.length]!), i)) g.add(x); });
+    for (const d of o.delikler) g.add(vurguKur(d, '--sahne3b-vurgu'));
+    ic.add(g);
+    return () => { ic.remove(g); birakGrup(g); };
+  }, [yuklendi, onizlemeAnahtari]);
 
   // Parçalar ve vurgu kutuları orana göre yerine konur; oran değişince yalnız konum değişir, ağ yeniden kurulmaz.
   const yerlestir = () => {
@@ -414,6 +538,8 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
       {arac !== null && <div className="tc-g3b-sahne-arac">{arac}</div>}
       {bilgi !== null && <p className="tc-g3b-sahne-bilgi">{bilgi}</p>}
       {parcaSayisi >= 2 && <PatlatmaCubugu oran={oran} oranYaz={oranYaz} />}
+      <GorunumCubugu bak={bak} sigdir={() => bak(null)} doner={doner} donerYaz={donerYaz}
+        onizleme={onizleme?.etiket ?? null} onizlemeAcik={onizlemeAcik} onizlemeYaz={onizlemeYaz} />
     </div>
   );
 }
