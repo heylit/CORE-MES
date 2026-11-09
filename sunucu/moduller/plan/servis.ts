@@ -32,6 +32,7 @@ import type { AdimDugumu, PlanIsEmri } from '../uretim-emirleri/disari.ts';
 import {
   araliktanCikar, arkaArkaya, dortSaatGerekcesi, dortSaatIhlalleri, korunanIsler, kilitCakisani, emirTutari, katkiPaylari, calisilanParcalar, oncelikCarpani, oncelikSinifi, ayniKaynak, cakisirMi, dondurulacaklar, enErkenBaslangic, enErkenBitis, gostergeler, isSuresi, calismaBitisi,
   adetPayi, araliklaraEkle, ayarVeGecikme, bolmeAdetleri, EK_MESAI_HAFTA_SAAT, ekMesaiButcesi, vardiyaSaati, kapasiteBollugu, kapasiteKesri, kaynakAnahtari, kesisimDk, motorUyarilari, onayGecisiReddi, onayGecisleri, personelYuku, planMaliyeti, sinirliGunSayisi, terminDakikasi, uyarilar, uzayanBosluk, verimliSure, yetkinlikUyarisi, yukYuzdesi,
+  vardiyasiTanimsiz,
 } from './kurallar.ts';
 import type { OnayBaglami, PersonelMerkezi, YetkinlikVerisi } from './kurallar.ts';
 import type { Aralik, BedelSatiri, DortSaatNedeni, Kaynak, MotorIsi, MotorOnculu, PlanYeri, Sabit, Takvim, Yerlesim } from './kurallar.ts';
@@ -175,8 +176,8 @@ async function vardiyaOku(db: Db, simdi: number, kaynaklar: Map<string, KaynakBi
   const takvimsizKapali = new Map<string, Aralik[]>();
   const dakikasi = (iso: string) => (Date.parse(iso) - simdi) / DK;
   for (const [anahtar, t] of okunan) {
-    const tanimsiz = t === null || t.gunler.every((g) => g.dakika === 0);
-    takvimler.set(anahtar, tanimsiz ? null : t.araliklar.map((a) => ({ baslangic: dakikasi(a.baslangic), bitis: dakikasi(a.bitis) })));
+    const tanimsiz = vardiyasiTanimsiz(t);
+    takvimler.set(anahtar, tanimsiz || t === null ? null : t.araliklar.map((a) => ({ baslangic: dakikasi(a.baslangic), bitis: dakikasi(a.bitis) })));
     const kapali = tanimsiz && t ? t.gunler.filter((g) => g.kapali !== null).map((g) => ({ baslangic: (tesisGunBasi(g.tarih) - simdi) / DK, bitis: (tesisGunBasi(g.tarih) - simdi) / DK + GUN_DK })) : [];
     if (kapali.length > 0) takvimsizKapali.set(anahtar, kapali);
   }
@@ -821,7 +822,9 @@ function ekAdimlari(b: Baglam, idler: readonly number[], anahtarOf: (id: number)
 const vardiyasizTezgahta = (b: Baglam, i: Is): boolean =>
   planMotoru !== null && i.kaynak?.tur === 'makine' && (b.takvimler.get(kaynakAnahtari(i.kaynak)) ?? null) === null;
 
-// Takvim (PL-04): kaynağın vardiya takvimi; takvimi olmayan sürekli çalışır. Taslakta kapatılan gün (stüdyo denemesi) çalışma vermez.
+// Takvim (PL-04): kaynağın vardiya takvimi. Taslakta kapatılan gün (stüdyo denemesi) çalışma vermez. B-2483-6 (168 b): sunucu motoru
+// kayıtlıyken vardiyası tanımsız makinenin çalışma zamanı yoktur (motor oraya iş dizmez; istasyon yükü, elle yerleştirme ve kestirim de 24
+// saat saymaz). Motorsuz kurulumda ve kişide takvimsiz kaynak eskisi gibi sürekli çalışır.
 function anahtarTakvimi(b: Baglam): (anahtar: string) => Takvim {
   const kapali = b.kapaliGunler.map((g) => ({ baslangic: b.gun0 + g * GUN_DK, bitis: b.gun0 + (g + 1) * GUN_DK }));
   // Vardiyadan okunan aralıkla aynı ufuk (bugün dahil TAKVIM_GUN + 1 gün).
@@ -829,7 +832,8 @@ function anahtarTakvimi(b: Baglam): (anahtar: string) => Takvim {
   const bellek = new Map<string, Takvim>();
   return (anahtar) => {
     if (!bellek.has(anahtar)) {
-      const t = b.takvimler.get(anahtar) ?? null;
+      const okunan = b.takvimler.get(anahtar) ?? null;
+      const t = okunan === null && planMotoru !== null && anahtar.startsWith('makine:') ? [] : okunan;
       const cikan = [...kapali, ...(b.takvimsizKapali.get(anahtar) ?? [])];
       bellek.set(anahtar, cikan.length === 0 ? t : araliktanCikar(t ?? surekli, cikan));
     }

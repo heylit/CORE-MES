@@ -423,6 +423,8 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
     return { isMerkeziId, istasyonId, vardiyaId: k.tur === 'kisi' ? kisiVardiyasi.get(k.id) ?? null : null };
   }
 
+  // Matrisinde aktif vardiyası olan iş merkezleri: 0 dakikalı takvimin "vardiya tanımlanmamış" mı "çalışılmıyor" mu olduğunu okuyan ayırır.
+  const tanimliMerkezler = new Set(matris.filter((m) => vardiyalar.get(m.vardiyaId)?.aktif === true).map((m) => m.isMerkeziId));
   // Dakikalar bütün kaynaklar için tek sorguda ana çevrilir: önce her kaynağın dakikaları toplanır, sonra sonuç kurulur.
   const kurulacaklar: { anahtar: string; dakikalar: readonly number[]; kur: (anlar: readonly string[]) => TakvimHesabi }[] = [];
   // Kişi olmayan kaynağın hesabı yalnız bağından (iş merkezi, istasyon, vardiya) bellidir: aynı istasyonun makineleri ve istasyonun
@@ -472,6 +474,7 @@ async function takvimleriHesapla(db: Db, kaynaklar: readonly TakvimKaynagi[], ar
         araliklar: dakikalar.map((_, i) => cevir(i)),
         // VR-26: kişinin çalışma payı; kapasite hesabı tam zamanla çarpar.
         ...(kisiId !== null ? { yuzde: atamaPayi(kisininAtamalari(atamalar, kisiId)) } : {}),
+        vardiyaTanimli: tanimliMerkezler.has(bag.isMerkeziId),
       } };
     };
     kurulacaklar.push({ anahtar, dakikalar: h.kaynaginDakikalari, kur });
