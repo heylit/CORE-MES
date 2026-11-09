@@ -25,7 +25,7 @@ import {
 import { emirIptalDinle, fasonGidisYaz, fasonGonderimleri, fasonHareketiDinle, fasonIsEmriBelgesi, isEmriKontrolListesi, refakatKartiSayimlari } from './disari.ts';
 import type { EmirIptalOlayi, FasonHareketiOlayi, IsEmriGirdisi, SayimKirilimi } from './disari.ts';
 import {
-  ADIM_BASLAMAMIS, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_KOLDA, EK_ADIM_ROTA,
+  ADIM_BASLAMAMIS, ADIMLI_IPTAL_DURUMU, ADIMLI_IPTAL_KOLLU, HAZIRLIK_AYARSIZ, AYAR_PLANLI_DEGIL, AYAR_YINELENDI, BIRLESTIRME_ALT_PARTILI, BIRLESTIRME_KOK, BIRLESME_BEKLENIYOR, BIRLESME_GELMEDI, BIRLESTIRME_EK_ADIM, BOLME_ADET, BOLME_BASLAMIS, BOLME_URETILMIS, EK_ADIM_KALDIR_BASLAMIS, EK_ADIM_ROTA, KOL_ALT_PARTILI,
   FASON_DISARIDA, fasonKarneOlayi, FASON_DONUS_ASIMI, FASON_GIDIS_ASIMI, FASON_KAYNAGI_SABIT, FASON_SIRASI_DEGIL, FASON_TERMINSIZ,
   ISTASYONSUZ_ADIM, ISTASYONSUZ_KISI, KAYNAK_BEKLEYENDE, KOL_ONCEKI_BITMEDI, PLANA_AL_DURUMU, REFAKAT_IPTAL, TERMIN_FASON_DISI,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, IS_EMRI_YOK, ROTALI_EMIR_ADIMI, ROTASIZ_ADIM_BASLAMIS, ROTASIZ_EMIR_KAPALI,
@@ -1277,6 +1277,25 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     assert.equal((await istek<EmirAyrintiCevabi>('planlama_proje', 'GET', `/uretim-emirleri/${kolsuz}`)).govde.kolHurdasi, null);
   });
 
+  test('2530 a kabul: bölünmemiş emre konan rework plana sırasıyla girer; bitince ardılı açılır', async () => {
+    const mk = { tur: 'makine' as const, id: await makineKur(await istasyonKur()) };
+    const mk2 = { tur: 'makine' as const, id: await makineKur(await istasyonKur()) };
+    const { uretimEmriId: id } = await ac([adim(1, mk), adim(2, mk)], { adet: 4 });
+    const r = await istek<{ emir: AdimliEmirAyrintisi } & Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/ek-adim`, {
+      oncekiOpNo: 10, opNo: 15, tur: 'rework', ad: 'Rework', operasyonTipiId: tipId, kaynak: mk2, ayarSuresiDk: null, birimSureDk: '1', terminGun: null,
+      surum: (await ayrinti(id)).surum,
+    }, randomUUID());
+    assert.equal(r.durum, 200, JSON.stringify(r.govde));
+    const plan = (await o().vt.tx((db) => planlanacakIsEmirleri(db))).filter((i) => i.uretimEmriId === id).sort((a, b) => a.sira - b.sira);
+    assert.deepEqual(plan.map((i) => [i.sira, i.opNo, i.tur ?? 'rota']), [[1, 10, 'rota'], [2, 15, 'rework'], [3, 20, 'rota']], 'rework plana sırasıyla girer');
+    assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 4 })).durum, 200);
+    assert.equal((await ayrinti(id)).siradaki?.opNo, 15, 'ilk adımdan sonra sıra reworkte');
+    assert.equal((await terminal(`/${id}/baslat`)).durum, 200);
+    assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 4 })).durum, 200);
+    assert.equal((await ayrinti(id)).siradaki?.opNo, 20, 'rework bitince ardılı açılır');
+  });
+
   test('ek adım ve akışlı birleşme: kolda rework konur ve kaldırılır, rota adımı çıkmaz; akışlı adım başlar ama kol gelmeden bitmez', async () => {
     const ist = await istasyonKur();
     const m = await makineKur(ist);
@@ -1293,10 +1312,15 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     });
     const surum = async (x: number) => (await ayrinti(x)).surum;
 
-    assert.equal((await yaz(`${id}/ek-adim`, { ...ek(10, 15), surum: await surum(id) })).govde.mesaj, EK_ADIM_KOLDA, 'kök emre ek adım konmaz');
+    // 2530 a: bölünmemiş emre de ek adım konur ve çıkarılır; açık alt partisi olan köke konmaz (aşağıda, bölmeden sonra).
+    const kokEk = await yaz(`${id}/ek-adim`, { ...ek(10, 15), surum: await surum(id) });
+    assert.equal(kokEk.durum, 200, JSON.stringify(kokEk.govde));
+    assert.deepEqual(kokEk.govde.emir.isEmirleri.map((i) => [i.opNo, i.tur]), [[10, 'rota'], [15, 'tamir'], [20, 'rota'], [30, 'rota']]);
+    assert.equal((await yaz(`${id}/ek-adim-kaldir`, { opNo: 15, surum: await surum(id) })).durum, 200);
     const b = await istek<PartiBolCevabi & Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/bol`, { adimSira: 2, adet: 2, surum: await surum(id), birlesmeOpNo: 30 }, randomUUID());
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     const kol = b.govde.altEmirId;
+    assert.equal((await yaz(`${id}/ek-adim`, { ...ek(20, 25), surum: await surum(id) })).govde.mesaj, KOL_ALT_PARTILI, 'açık alt partisi olan köke ek adım konmaz');
     assert.equal((await yaz(`${kol}/ek-adim`, { ...ek(20, 25), surum: await surum(kol) }, 'operator')).durum, 403);
     assert.equal((await yaz(`${kol}/ek-adim`, { ...ek(20, 25), surum: await surum(kol) }, 'planlama_proje', null)).durum, 400, 'istek kimliği zorunlu');
     assert.equal((await yaz(`${kol}/ek-adim`, { ...ek(20, 25), surum: (await surum(kol)) - 1 })).durum, 409, 'eski sürüm');
