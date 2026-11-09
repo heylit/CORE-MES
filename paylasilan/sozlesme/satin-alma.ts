@@ -78,12 +78,17 @@ export const teklifSemasi = z.object({
   })).max(500),
 });
 
+export const VADE_BASLANGICLARI = ['teslim', 'siparis'] as const;
+export type VadeBaslangici = (typeof VADE_BASLANGICLARI)[number];
+
 // İstemci yalnız satın almanın alanlarını yazar; teslim stok mal kabulünde yazılır (SAT-37, SAT-38, SH1 a); kalite GKK gelene kadar boş.
 export const siparisSemasi = z.object({
   teklifId: uuid,
   siparisNo: metin(40),
   siparisTarihi: tarih.nullable(),
   beklenenTeslim: tarih.nullable(),
+  // Kart 2417: vadeli ödeme teslimattan (her mal kabul kendi payıyla, varsayılan) ya da sipariş tarihinden sayılır.
+  vadeBaslangici: z.enum(VADE_BASLANGICLARI).default('teslim'),
 });
 export const siparisSatiriSemasi = z.object({
   id: z.number().int(),
@@ -345,6 +350,10 @@ export const katalogKaydetGovdesi = z.object({
 });
 export const katalogSilGovdesi = z.object(beklenenSurum);
 
+// 1096 a: karar onaya gönderilince kur ve faiz sabitlenir. Sipariş, kilit 7 günü geçmişse ya da bir para biriminin güncel kuru
+// sabit kurdan %3'ten fazla saptıysa verilmez. Sınırlar ekranda da gösterildiği için burada; kural sunucudadır (kurallar.ts).
+export const KUR_KILIDI = { gun: 7, kaymaYuzdesi: 3 } as const;
+
 export const ayarlarSemasi = z.object({
   // Sistem Ayarları > Firma adı (1942 a); salt okunur, kaydet gövdesinde yoktur.
   sirket: z.string(),
@@ -354,10 +363,13 @@ export const ayarlarSemasi = z.object({
   fiyatUyariYuzdesi: ondalikMetinSemasi,
   // Güncel kur ve aylık faiz finanstan (SA3 a, 937 b); finansta kaydı olmayan para biriminde boş. Kur tarihi, gelen kurların en eskisinin günü.
   kurTarihi: z.string().nullable(),
-  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable() })),
+  // 2238-3 c: aylikFaizYuzdesi vadenin puanlandığı kredi faizidir; mevduat yanında gösterilir. İkisi de finansın yıllık oranının aylığı.
+  kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable(), mevduatAylikFaizYuzdesi: ondalikMetinSemasi.nullable().optional() })),
   kategoriler: z.array(z.string()),
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
   onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),
+  // Sistem Ayarları 'satin-alma.dort-goz' (salt okunur): ekran kendi kararını onaylatmamayı söyler; ret sunucudadır.
+  dortGoz: z.boolean(),
   surum: surumSemasi,
 });
 export const ayarlarKaydetGovdesi = z.object({
@@ -693,7 +705,15 @@ export const disOperasyonSemasi = z.object({
   gonderilen: z.number().int().nullable(),
   donen: z.number().int().nullable(),
   hurda: z.number().int().nullable(),
+  // İlk dönüşe göre (D3 b; eski ekranlar için korunur): dönüş yoksa bugüne kadar.
   gecikmeGun: z.number().int().nullable(),
+  // 2424-a c: iki ölçü yan yana. Son dönüş: kalan adet varsa bugüne, yoksa son dönüşe göre termin aşımı (karneyle aynı).
+  // Adet ağırlıklı: her dönüşün (hurda dahil) termin aşımı adediyle; dönmeyen adet bugüne göre. Termin yoksa ikisi de boş.
+  gecikmeSonDonus: z.number().int().nullable(),
+  gecikmeAgirlikli: z.number().nullable(),
+  // 2426: mal kabul formu iş emriyle dolsun. Hizmet sipariş satırı ve firmanın stoktaki fason kutusu; bilinmiyorsa boş.
+  siparisSatirId: z.number().int().nullable(),
+  fasonKonumId: z.number().int().nullable(),
   // 1849: önceki iş emirleri bitti mi (fasona gönderilebilir mi); gidiş kaydıyla aynı kural.
   sirada: z.boolean(),
 });

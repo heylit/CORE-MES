@@ -92,6 +92,11 @@ describe('Kalite Merkezi karne geri doldurma göçü (gerçek PostgreSQL)', () =
     const hepsi = (await readdir(GOC_KLASORU)).filter((ad) => ad.endsWith('.sql')).sort();
     assert.ok(hepsi.includes(GOC), 'göç bulunamadı');
     for (const ad of hepsi.filter((a) => a < GOC)) await copyFile(join(GOC_KLASORU, ad), join(klasor, ad));
+    // Hedeften sonra gelen göçler güncel kodun beklediği şemayı kurar (ör. 2417 vade_baslangici sütunu). Göç aracı ada göre sırayı
+    // denetlediği için hedefin hemen önüne sıralanan adla kopyalanır (aralarındaki sıra korunur); hedef göç sonra yine araçla uygulanır.
+    // Hedefin verisine dayanan sonraki göç yoktur.
+    const onune = `${String(BigInt(GOC.slice(0, 14)) - 1n)}_`;
+    for (const ad of hepsi.filter((a) => a > GOC)) await copyFile(join(GOC_KLASORU, ad), join(klasor, `${onune}${ad}`));
     await gocleriUygula(ortam.ayar, klasor, { sema: ortam.sema });
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));

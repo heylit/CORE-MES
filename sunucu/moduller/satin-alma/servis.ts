@@ -16,7 +16,9 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
-import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, faizler, kdvSecenekleri, kurGetir, kurlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
+import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
+import type { FaizTuru } from '../finans/disari.ts';
+import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
@@ -24,14 +26,14 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
-import { degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
+import { degerlendir, esitVadeOrtami, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
@@ -72,7 +74,7 @@ async function talepleriKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Talep[]>
       };
     });
     return {
-      teklifId: x.teklifId, no: x.no, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim,
+      teklifId: x.teklifId, no: x.no, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim, vadeBaslangici: x.vadeBaslangici,
       // Kalanı kapatılmış sipariş tamamlanmış sayılır: talep, kalan beklenmeden teslim alındıya geçer.
       satirlar, teslimDurumu: x.logoKapatmaDurumu === null ? teslimDurumu(satirlar) : 'tamam', kalite: null,
       logo: x.logoDurumu === null ? null
@@ -192,19 +194,29 @@ async function firmaKartlari(db: Db, kayitli: ReadonlySet<number>): Promise<Acil
 }
 
 // SA3 a, 937 b: güncel kur ve faiz finanstan, bugünün ya da öncesinin son kaydı; finansta yoksa boş (sıfır uydurulmaz).
+// 2238-1 c, 2238-3 c (ORAN_KULLANIMLARI): satın alma maliyeti finansın satış kuruyla; vade kredi faiziyle puanlanır, mevduat
+// faizi yanında verilir. Oran yıllıktır; satın almanın hesabı aylık yüzdeyle sürer (yıllık / 12, sabit kur sütunu 3 basamak).
+// Eski tek kur ve faiz tablolarına düşülmez: yeni tabloda yoksa boş (sıfır uydurulmaz).
+const kurlar = (db: Db, gun: string) => kurCiftleri(db, gun, ORAN_KULLANIMLARI.satinAlmaMaliyeti.kur);
+const kurGetir = (db: Db, pb: string, gun: string) => kurCiftiGetir(db, pb, gun, ORAN_KULLANIMLARI.satinAlmaMaliyeti.kur);
+async function faizler(db: Db, gun: string, tur: FaizTuru = ORAN_KULLANIMLARI.satinAlmaVadesi.faizler[0]): Promise<Map<string, { aylikYuzde: string }>> {
+  return new Map([...(await oranlar(db, tur, gun))].map(([pb, o]) => [pb, { aylikYuzde: yillikFaizdenAylik(Number(o.yillikYuzde)).toFixed(3) }]));
+}
+
 async function ayarlariKur(db: Db): Promise<Ayarlar> {
   const a = await s.ayarlariOku(db);
   const bugun = await s.bugun(db);
   const finans = await kurlar(db, bugun);
   const finansFaizi = await faizler(db, bugun);
+  const mevduat = await faizler(db, bugun, ORAN_KULLANIMLARI.satinAlmaVadesi.faizler[1]);
   // Finansın para birimleri yalnız hiç kaydedilmemiş ayarlara önerilir; kaydedilmiş listeden kaldırılan para birimi geri gelmez (borç 38).
   const oneri = a.surum === 1 ? finanstanEklenenKurlar(a.kurlar.map((k) => k.paraBirimi), new Set(finans.keys())) : [];
   const listeler = [...a.kurlar, ...oneri];
-  const satirlar = listeler.map((k) => ({ ...k, aylikFaizYuzdesi: aylikFaiz(finansFaizi.get(k.paraBirimi)?.aylikYuzde), kur: sade(finans.get(k.paraBirimi)?.kur ?? null) }));
+  const satirlar = listeler.map((k) => ({ ...k, aylikFaizYuzdesi: aylikFaiz(finansFaizi.get(k.paraBirimi)?.aylikYuzde), mevduatAylikFaizYuzdesi: aylikFaiz(mevduat.get(k.paraBirimi)?.aylikYuzde), kur: sade(finans.get(k.paraBirimi)?.kur ?? null) }));
   const tarihler = listeler.filter((k) => k.paraBirimi !== 'TRY').flatMap((k) => finans.get(k.paraBirimi)?.tarih ?? []).sort();
   // Şirket adı satın almanın değildir (1942 a): Sistem Ayarları > Firma adı'ndan okunur, burada değiştirilmez.
   const sirket = await sistemAyariOku(db, 'kabuk.kurum-adi');
-  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null };
+  return { ...a, sirket, kurlar: satirlar, kurTarihi: tarihler[0] ?? null, dortGoz: await sistemAyariOku(db, 'satin-alma.dort-goz') };
 }
 
 // Birim boş olabilir (departmansız talep); doluysa ayarlardaki listede olmalı.
@@ -535,6 +547,25 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
 
 // E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; tedarikçi onay durumunu sunucu açılışında kablolama kaydeder (ADR 0006).
 // Kayıtsız süreçte (çözücüyü kurmayan araç ya da test) kalite durumu bilinmez: denetlenmez ve gösterimde null'dır.
+// 2424: fason adımın planlanan gidişi canlı plandaki başlangıcıdır (tesis günü). Plan satın almayı okuduğu için bağı kablolama kurar;
+// bağ yoksa ya da adım canlıda değilse boş.
+export type PlanlananGidisCozucusu = (db: Db, isEmriIdleri: readonly number[]) => Promise<readonly { isEmriId: number; baslangic: string }[]>;
+let planlananGidisCozucu: PlanlananGidisCozucusu | null = null;
+export function planlananGidisCozucusuKaydet(cozucu: PlanlananGidisCozucusu | null): void { planlananGidisCozucu = cozucu; }
+async function planlananGidisler(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, string>> {
+  if (planlananGidisCozucu === null || isEmriIdleri.length === 0) return new Map();
+  const gunu = (z: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(z));
+  const m = new Map<number, string>();
+  for (const y of await planlananGidisCozucu(db, isEmriIdleri)) {
+    const g = gunu(y.baslangic);
+    if (!m.has(y.isEmriId) || g < m.get(y.isEmriId)!) m.set(y.isEmriId, g);
+  }
+  return m;
+}
+// 2426: stok satın almayı ithal eder; firmanın fason kutusu çözücüyle gelir (sunucu/kablolama.ts).
+export type FasonKonumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, number>>;
+let fasonKonumuCozucu: FasonKonumuCozucusu | null = null;
+export function fasonKonumuCozucusuKaydet(cozucu: FasonKonumuCozucusu | null): void { fasonKonumuCozucu = cozucu; }
 export type KaliteDurumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, KmTedarikciDurumu>>;
 let kaliteDurumuCozucu: KaliteDurumuCozucusu | null = null;
 export function kaliteDurumuCozucusuKaydet(cozucu: KaliteDurumuCozucusu | null): void { kaliteDurumuCozucu = cozucu; }
@@ -792,8 +823,9 @@ export async function degerlendirme(db: Db, talepId: string): Promise<Degerlendi
     kur, aylikFaiz: aylikFaizi, agirliklar, ihtiyacTarihi: t.ihtiyacTarihi, bazTarih: siparisGunleri[0] ?? (await s.bugun(db)),
     tedarikciPuani: (firmaId: number | null) => tedarikciBasarimi(firmaId === null ? null : puanlar.get(firmaId) ?? null, null, null),
   };
-  const d = degerlendir(t.kalemler, t.teklifler, ortam);
-  const tutar = t.karar === null ? null : kararTutari(t.karar, t.kalemler, t.teklifler.map((q) => teklifHesabi(q, t.kalemler, ortam)));
+  const esit = esitVadeOrtami(t.teklifler, ortam);
+  const d = degerlendir(t.kalemler, t.teklifler, esit);
+  const tutar = t.karar === null ? null : kararTutari(t.karar, t.kalemler, t.teklifler.map((q) => teklifHesabi(q, t.kalemler, esit)));
   const kilitUyarisi = sabit === null || t.durum !== 'onayda' ? null
     : kurKilidiReddi(t.karar?.kurKilidi ?? null, sabit, new Map(ayar.kurlar.map((k) => [k.paraBirimi, k.kur] as const)), Date.now());
   return {
@@ -1124,12 +1156,22 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   const gun = await s.bugun(db);
   // 1849 (C17): gidiş kaydıyla aynı sıra kuralı; ekran sırası gelmemiş adımda "Gönder"i kapatır, sunucu yine reddeder.
   const gonderim = await fasonGonderimleri(db, liste.map((x) => ({ isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, adet: x.adet })));
+  const plan = await planlananGidisler(db, liste.map((x) => x.isEmriId));
+  const satirlar = new Map((await s.fasonSiparisSatirlari(db, liste.map((x) => x.isEmriId))).map((r) => [r.isEmriId, r.id]));
+  const firmaIdleri = [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))];
+  const kutular = fasonKonumuCozucu === null || firmaIdleri.length === 0 ? new Map<number, number>() : await fasonKonumuCozucu(db, firmaIdleri);
   return {
     hazir: true,
-    operasyonlar: liste.map(({ ilkGidis, ...x }) => ({
-      ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
-      gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
-    })),
+    operasyonlar: liste.map(({ ilkGidis, donusler, ...x }) => {
+      const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
+      return {
+        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+        planlananGidis: plan.get(x.isEmriId) ?? null, siparisSatirId: satirlar.get(x.isEmriId) ?? null,
+        fasonKonumId: x.firmaId === null ? null : (kutular.get(x.firmaId) ?? null),
+        gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),
+        gecikmeAgirlikli: agirlikliGecikme(x.termin, donusler, kalan, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
+      };
+    }),
   };
 }
 // Fason grafikleri: gerçekleşen geçmiş (son `sonGun` günde başlayan) kırılımda ve firma bazında termin uyumu; adlar kendi sahibinden.

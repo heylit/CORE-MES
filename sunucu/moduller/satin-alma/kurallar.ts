@@ -1,5 +1,5 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
-import { PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
+import { KUR_KILIDI, PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
@@ -174,9 +174,8 @@ export function siparisReddi(eski: TalepDurumu, yeni: TalepDurumu, kararVar: boo
   return kararVar && kararOnayliMi(onaylar) ? null : ILETILER.onaysizSiparis;
 }
 
-// 1096 a: karar onaya gönderilince kur ve faiz sabitlenir. Sipariş, kilit 7 günü geçmişse ya da bir para biriminin güncel kuru
-// sabit kurdan %3'ten fazla saptıysa verilmez; talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay).
-export const KUR_KILIDI = { gun: 7, kaymaYuzdesi: 3 } as const;
+// 1096 a: aşılan kilitte talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay). Sınırlar sözleşmede.
+export { KUR_KILIDI };
 
 // Onayın açtığı durumlar: bu durumlara karar onaydan geçmeden girilmez; dışındakilerde kilit yoktur.
 export const kilitliDurum = (d: TalepDurumu): boolean => d === 'onayda' || d === 'siparis_verildi' || d === 'teslim_alindi';
@@ -610,7 +609,37 @@ export function odemePlaniHedefi(t: Pick<Talep, 'durum' | 'teklifler' | 'karar'>
 // oran siparişte elle seçilen, yoksa finansın genel oranı (2132-7). Oran bilinmiyorsa KDV hariç kalır (sıfır uydurulmaz, KDV eklenmez).
 // Avans ve toplam ayrı ayrı kuruşa yuvarlanır, kalan farktır: satırların toplamı KDV dahil toplama eşittir.
 // 2132-6 a: vadeli satır mal kabul günü varsa ondan, yoksa beklenen teslimden sayılır.
-export interface OdemeKosulu { toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul?: string | null }
+// 2417: vade teslimattan sayılıyorsa her mal kabul günü kendi payıyla ayrı vadeli satırdır (gün + vade); teslim edilmemiş pay beklenen
+// teslimden (yoksa sipariş tarihinden) sayılır. Siparişten sayılıyorsa tek satır: sipariş tarihi + vade. Pay toplamı 1'i aşmaz (fazla
+// teslim kalanı büyütmez); kuruş farkı son satıra düşer. Aynı güne düşen satırlar birleşir.
+export interface OdemeKosulu {
+  toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul?: string | null;
+  vadeBaslangici?: 'teslim' | 'siparis'; partiler?: readonly { gun: string; oran: string }[]; tamTeslim?: boolean;
+}
+export function vadeDilimleri(k: Pick<OdemeKosulu, 'siparisTarihi' | 'beklenenTeslim' | 'vadeBaslangici' | 'partiler' | 'tamTeslim'>, bugun: string): { gun: string; pay: number }[] {
+  const baslangic = k.siparisTarihi ?? bugun;
+  if (k.vadeBaslangici === 'siparis') return [{ gun: baslangic, pay: 1 }];
+  const dilimler: { gun: string; pay: number }[] = [];
+  let kalan = 1;
+  for (const p of k.partiler ?? []) {
+    let pay = Number(p.oran);
+    // Geri alınan teslim son partilerden düşer (mal geri gitti, o payın vadesi yok).
+    while (pay < 0 && dilimler.length > 0) {
+      const son = dilimler[dilimler.length - 1]!;
+      const dus = Math.min(son.pay, -pay);
+      son.pay -= dus; kalan += dus; pay += dus;
+      if (son.pay <= 1e-9) dilimler.pop();
+    }
+    pay = Math.min(pay, kalan);
+    if (!(pay > 0)) continue;
+    dilimler.push({ gun: p.gun, pay });
+    kalan -= pay;
+  }
+  // Teslimi bitmiş siparişte beklenen teslim yoktur: oran yuvarlamasından kalan pay son partiye eklenir (hayali satır yazılmaz).
+  if (k.tamTeslim === true && dilimler.length > 0) { dilimler[dilimler.length - 1]!.pay += kalan; kalan = 0; }
+  if (kalan > 1e-9) dilimler.push({ gun: k.beklenenTeslim ?? baslangic, pay: kalan });
+  return dilimler;
+}
 export function kdvEkle(tutar: string, oran: string): string {
   const kurus = tamSayiya(tutar) / 10n ** BigInt(OLCEK - 2);
   const c = kurus * (10_000n + tamSayiya(oran) / 10n ** BigInt(OLCEK - 2));
@@ -624,7 +653,23 @@ export function varsayilanOdemePlani(k: OdemeKosulu, bugun: string, kdvOrani: st
   const kalan = kdvOrani === null ? k.kalan : ondalikMetni(tamSayiya(kdvEkle(k.toplam, kdvOrani)) - tamSayiya(avans));
   const plan: { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] = [];
   if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem: 'banka', tutar: avans });
-  if (ondalikKiyas(kalan, '0') > 0) plan.push({ tur: 'vade', vade: gunEkle(k.malKabul ?? k.beklenenTeslim ?? baslangic, k.vadeGun), yontem: 'banka', tutar: kalan });
+  if (ondalikKiyas(kalan, '0') <= 0) return plan;
+  // Parti bilgisi gelmeyen çağıran (eski kurgu) son mal kabul gününü tek satır kullanır.
+  const dilimler = k.partiler === undefined && k.vadeBaslangici === undefined
+    ? [{ gun: k.malKabul ?? k.beklenenTeslim ?? baslangic, pay: 1 }]
+    : vadeDilimleri(k, bugun);
+  const kalanKurus = tamSayiya(kalan) / 10n ** BigInt(OLCEK - 2);
+  const gunler = new Map<string, bigint>();
+  let dagitilan = 0n;
+  dilimler.forEach((d, i) => {
+    const kurus = i === dilimler.length - 1 ? kalanKurus - dagitilan : BigInt(Math.round(Number(kalanKurus) * d.pay));
+    dagitilan += kurus;
+    const vade = gunEkle(d.gun, k.vadeGun);
+    gunler.set(vade, (gunler.get(vade) ?? 0n) + kurus);
+  });
+  for (const [vade, kurus] of [...gunler].sort(([a], [b]) => a.localeCompare(b))) {
+    if (kurus > 0n) plan.push({ tur: 'vade', vade, yontem: 'banka', tutar: ondalikMetni(kurus * 10n ** BigInt(OLCEK - 2)) });
+  }
   return plan;
 }
 // Dış operasyon gecikmesi (kart #542; D3 b: dönüş ilk dönüştür). Termin yoksa bilinmez (null). Dönüş geldiyse termini
@@ -635,6 +680,22 @@ export function gecikmeGunu(termin: string | null, ilkDonus: string | null, bugu
   if (termin === null) return null;
   const son = ilkDonus === null ? bugun : istanbulGunu(ilkDonus);
   return Math.max(0, Math.round((Date.parse(son) - Date.parse(termin)) / GUN_MS));
+}
+// 2424-a c: parçalı dönüşte iki ölçü. Kalan: gönderilen (gönderilmemişse emir adedi) eksi dönen ve hurda; kalan varsa iş bitmemiştir.
+export function fasonKalani(adet: number, gonderilen: number | null, donen: number | null, hurda: number | null): number {
+  return Math.max(0, Math.max(adet, gonderilen ?? 0) - (donen ?? 0) - (hurda ?? 0));
+}
+const asim = (termin: string, gun: string): number => Math.max(0, Math.round((Date.parse(gun) - Date.parse(termin)) / GUN_MS));
+export function sonDonusGecikmesi(termin: string | null, sonDonus: string | null, kalan: number, bugun: string): number | null {
+  if (termin === null) return null;
+  return asim(termin, kalan > 0 || sonDonus === null ? bugun : istanbulGunu(sonDonus));
+}
+export function agirlikliGecikme(termin: string | null, donusler: readonly { gun: string; adet: number; hurda: number }[], kalan: number, bugun: string): number | null {
+  if (termin === null) return null;
+  const parcalar = [...donusler.map((d) => ({ gun: d.gun, adet: d.adet + d.hurda })), ...(kalan > 0 ? [{ gun: bugun, adet: kalan }] : [])].filter((p) => p.adet > 0);
+  const toplam = parcalar.reduce((t, p) => t + p.adet, 0);
+  if (toplam === 0) return null;
+  return Math.round((parcalar.reduce((t, p) => t + asim(termin, p.gun) * p.adet, 0) / toplam) * 10) / 10;
 }
 // ---- Fason süresi tahmini ve termin uyumu (saf). Süre ilk gidişten son dönüşe takvim günüdür (ondalık).
 export interface FasonSureOrnegi { malzemeNo: number | null; operasyonTipiId: number; firmaId: number; adet: number; sureGun: number }

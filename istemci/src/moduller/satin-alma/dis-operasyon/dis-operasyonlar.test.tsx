@@ -10,7 +10,8 @@ import { DisOperasyonlar } from './DisOperasyonlar.tsx';
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 const satir = (ek: Partial<DisOperasyon>): DisOperasyon => ({
   isEmriId: 1, uretimEmriId: 11, emirNo: 'UE-2026-001', urun: 'Deneme flanş', opNo: 30, adim: 'Kaplama', firmaId: 3, firmaAdi: 'Deneme Kaplama', planlananGidis: '2026-10-05',
-  gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, sirada: true, ...ek,
+  gerceklesenGidis: '2026-10-05T08:00:00Z', termin: '2026-10-09', ilkDonus: null, sonDonus: null, gonderilen: 40, donen: null, hurda: null, gecikmeGun: 2, gecikmeSonDonus: 2,
+  gecikmeAgirlikli: 2, siparisSatirId: null, fasonKonumId: null, sirada: true, ...ek,
 });
 
 interface Istek { yontem: string; yol: string; govde: unknown; kimlik: string | null }

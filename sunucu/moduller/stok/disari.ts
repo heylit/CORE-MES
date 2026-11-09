@@ -326,3 +326,14 @@ export async function isEmriMalzemeHazirliklari(db: Db, isEmriIdleri: readonly n
   }
   return sonuc;
 }
+
+// 2426: satın almanın dış operasyon listesi mal kabul formunu doldurur: firmanın fason kutusu. Salt okur, konum açmaz;
+// açılmamış firma haritada yoktur. Boş dizide sorgu atılmaz.
+export async function firmaFasonKonumlari(db: Db, firmaIdler: readonly number[]): Promise<Map<number, number>> {
+  const m = new Map<number, number>();
+  for (const f of new Set(firmaIdler)) {
+    const id = await sorgular.firmaKonumu(db, f, 'fason');
+    if (id !== null) m.set(f, id);
+  }
+  return m;
+}

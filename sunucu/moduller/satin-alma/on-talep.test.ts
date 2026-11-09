@@ -232,5 +232,12 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     assert.equal(l.statusCode, 200, l.body);
     const sira = new Map((l.json() as DisOperasyonlarCevabi).operasyonlar.map((x) => [x.isEmriId, x.sirada]));
     assert.deepEqual([sira.get(acik), sira.get(sonra)], [true, false]);
+    // 2426: sipariş satırı ve fason kutusu yoksa boş; firmanın fason kutusu açılınca dolar (stoktan çözücüyle, konum açılmaz).
+    const satir = async () => ((await istek(cerezYonetici, 'GET', '/satin-alma-dis-operasyonlar')).json() as DisOperasyonlarCevabi).operasyonlar.find((x) => x.isEmriId === sonra)!;
+    assert.deepEqual([(await satir()).siparisSatirId, (await satir()).fasonKonumId], [null, null]);
+    assert.equal(await sahip.tek("SELECT id FROM stok_konum WHERE firma_id = $1", [firmaId]), null, 'okuma konum açmaz');
+    const depo = (await sahip.tek<{ id: number }>("INSERT INTO stok_depo (kod, ad) VALUES ('D2426', 'Deneme depo') RETURNING id"))!.id;
+    const kutu = (await sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur, ad, firma_id) VALUES ($1, 'FSN-D2426', 'fason', 'Deneme fason', $2) RETURNING id", [depo, firmaId]))!.id;
+    assert.equal((await satir()).fasonKonumId, kutu);
   });
 });

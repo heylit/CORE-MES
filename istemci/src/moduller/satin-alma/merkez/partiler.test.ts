@@ -15,7 +15,7 @@ const acilis: AcilisCevabi = {
   katalog: [kalem('00000000-0000-4000-8000-0000000000d1', 21, 'Deneme çubuk'), kalem('00000000-0000-4000-8000-0000000000d2', 22, 'Deneme levha')],
   ayarlar: {
     sirket: '', agirliklar: { maliyet: 60, termin: 20, tedarikci: 10, garanti: 10 }, gecerlilikGun: 15, enAzTeklif: 3, fiyatUyariYuzdesi: '10', kurTarihi: null,
-    kurlar: [{ paraBirimi: 'TRY', kur: null, aylikFaizYuzdesi: '3' }], kategoriler: [], birimler: [], onayLimitleri: [], surum: 1,
+    kurlar: [{ paraBirimi: 'TRY', kur: null, aylikFaizYuzdesi: '3' }], kategoriler: [], birimler: [], onayLimitleri: [], dortGoz: true, surum: 1,
   },
 };
 const partiler: SonPartilerCevabi = {

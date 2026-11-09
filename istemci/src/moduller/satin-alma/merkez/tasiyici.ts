@@ -86,14 +86,14 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     lessons: k.ogrenilenler,
     fx: Object.fromEntries(k.sabitKurlar.map((s) => [s.paraBirimi, Number(s.kur)])),
     ...(tekSiparis ? {
-      orderNo: tekSiparis.no ?? '', poNo: tekSiparis.siparisNo, orderDate: tekSiparis.siparisTarihi ?? '', expectedDate: tekSiparis.beklenenTeslim ?? '',
+      orderNo: tekSiparis.no ?? '', poNo: tekSiparis.siparisNo, orderDate: tekSiparis.siparisTarihi ?? '', expectedDate: tekSiparis.beklenenTeslim ?? '', vadeBaslangici: tekSiparis.vadeBaslangici,
       deliveredDate: teslimTarihi(tekSiparis), excess: fazlasi(tekSiparis), ...(tekSiparis.kalite ? { quality: KALITE_T[tekSiparis.kalite] } : {}),
       logo: tekSiparis.logo,
     } : {}),
     lines: k.siparisler.flatMap((x) => x.satirlar.map((r) => ({ id: r.id, itemId: r.kalemId, quoteId: x.teklifId }))),
     ...(k.mod === 'bolunmus' ? {
       orders: Object.fromEntries(k.siparisler.map((s): [string, AwardOrder] => [s.teklifId, {
-        orderNo: s.no ?? '', poNo: s.siparisNo, orderDate: s.siparisTarihi ?? '', expectedDate: s.beklenenTeslim ?? '', deliveredDate: teslimTarihi(s),
+        orderNo: s.no ?? '', poNo: s.siparisNo, orderDate: s.siparisTarihi ?? '', expectedDate: s.beklenenTeslim ?? '', vadeBaslangici: s.vadeBaslangici, deliveredDate: teslimTarihi(s),
         quality: s.kalite ? KALITE_T[s.kalite] : '', excess: fazlasi(s), logo: s.logo,
       }])),
     } : {}),
@@ -169,12 +169,12 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
   const benim = S.me ? Number(S.me.id) : null;
   // Siparişte yalnız satın almanın alanları gider; teslim ve kalite stoktan ve GKK'dan okunur, yazılmaz.
   const siparis = (qid: string, o: Partial<AwardOrder>) => ({
-    teklifId: qid, siparisNo: o.poNo ?? '', siparisTarihi: tarihN(o.orderDate), beklenenTeslim: tarihN(o.expectedDate),
+    teklifId: qid, siparisNo: o.poNo ?? '', siparisTarihi: tarihN(o.orderDate), beklenenTeslim: tarihN(o.expectedDate), vadeBaslangici: o.vadeBaslangici ?? 'teslim',
   });
   const siparisler = a === null ? [] : a.mode === 'split'
     ? Object.entries(a.orders ?? {}).filter(([, o]) => !!(o.poNo || o.orderDate || o.expectedDate)).map(([qid, o]) => siparis(qid, o))
     : a.quoteId && (a.poNo || a.orderDate || a.expectedDate)
-      ? [siparis(a.quoteId, { poNo: a.poNo ?? '', orderDate: a.orderDate ?? '', expectedDate: a.expectedDate ?? '' })]
+      ? [siparis(a.quoteId, { poNo: a.poNo ?? '', orderDate: a.orderDate ?? '', expectedDate: a.expectedDate ?? '', ...(a.vadeBaslangici ? { vadeBaslangici: a.vadeBaslangici } : {}) })]
       : [];
   return {
     id: r.id, baslik: r.title.trim() || 'Adsız talep', birim: r.department || null, talepEdenKisiId: sun?.talepEden || null,

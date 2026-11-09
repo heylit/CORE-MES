@@ -130,3 +130,34 @@ test('SA-HESAP H6: hızlı talep başlığı', () => {
 test('SA-HESAP H6: ondalık toplam kayan nokta kullanmaz', () => {
   assert.equal(ondalikTopla(['1.25', '2.5', '0.001']), '3.751');
 });
+
+test('2417: vade teslimattan sayılınca her mal kabul kendi payıyla ayrı vadeli satır; teslim edilmeyen pay beklenen teslimden', () => {
+  const k = { toplam: '1000', avans: '100', kalan: '900', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: '2026-10-20', vadeBaslangici: 'teslim' as const };
+  assert.deepEqual(varsayilanOdemePlani({ ...k, partiler: [{ gun: '2026-10-05', oran: '0.4' }] }, '2026-10-01', null), [
+    { tur: 'avans', vade: '2026-10-01', yontem: 'banka', tutar: '100' },
+    { tur: 'vade', vade: '2026-11-04', yontem: 'banka', tutar: '360' },
+    { tur: 'vade', vade: '2026-11-19', yontem: 'banka', tutar: '540' },
+  ]);
+  // Tamamı iki partide geldi: beklenen teslim satırı kalmaz; kuruş farkı son satıra düşer.
+  assert.deepEqual(varsayilanOdemePlani({ ...k, kalan: '100', avans: '0', partiler: [{ gun: '2026-10-05', oran: '0.333333' }, { gun: '2026-10-09', oran: '0.666667' }] }, '2026-10-01', null).map((x) => [x.vade, x.tutar]),
+    [['2026-11-04', '33.33'], ['2026-11-08', '66.67']]);
+  // Fazla teslim kalanı büyütmez; geri alınan teslim son partiden düşer ve beklenen teslime döner.
+  assert.deepEqual(varsayilanOdemePlani({ ...k, partiler: [{ gun: '2026-10-05', oran: '1.2' }] }, '2026-10-01', null).filter((x) => x.tur === 'vade').map((x) => [x.vade, x.tutar]), [['2026-11-04', '900']]);
+  assert.deepEqual(varsayilanOdemePlani({ ...k, partiler: [{ gun: '2026-10-05', oran: '0.5' }, { gun: '2026-10-06', oran: '-0.2' }] }, '2026-10-01', null).filter((x) => x.tur === 'vade').map((x) => [x.vade, x.tutar]),
+    [['2026-11-04', '270'], ['2026-11-19', '630']]);
+});
+
+test('2417: vade siparişten sayılınca tek satır, sipariş tarihi + vade; mal kabul vadeyi kaydırmaz', () => {
+  const plan = varsayilanOdemePlani({ toplam: '1000', avans: '0', kalan: '1000', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: '2026-10-20', vadeBaslangici: 'siparis', partiler: [{ gun: '2026-10-05', oran: '0.4' }] }, '2026-10-01', null);
+  assert.deepEqual(plan, [{ tur: 'vade', vade: '2026-10-31', yontem: 'banka', tutar: '1000' }]);
+});
+
+test('2417 Maliyet D1: tam teslimde oran yuvarlaması beklenen teslime hayali satır yazmaz; kalan pay son partiye eklenir', () => {
+  const k = { toplam: '1000000', avans: '0', kalan: '1000000', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: '2026-10-20', vadeBaslangici: 'teslim' as const,
+    partiler: [{ gun: '2026-10-05', oran: '0.333333' }, { gun: '2026-10-06', oran: '0.333333' }, { gun: '2026-10-07', oran: '0.333333' }] };
+  const plan = (tamTeslim: boolean) => varsayilanOdemePlani({ ...k, tamTeslim }, '2026-10-01', null).map((x) => [x.vade, x.tutar]);
+  assert.deepEqual(plan(true), [['2026-11-04', '333333'], ['2026-11-05', '333333'], ['2026-11-06', '333334']]);
+  // Teslimi sürüyorsa kalan beklenen teslime düşer (eski davranış).
+  assert.deepEqual(plan(false).at(-1), ['2026-11-19', '1']);
+  assert.equal(plan(true).reduce((t, [, x]) => t + Number(x), 0), 1000000);
+});
