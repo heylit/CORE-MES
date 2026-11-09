@@ -31,7 +31,8 @@ export interface Weights { cost: number; lead: number; supplier: number; warrant
 /** Güncel kur finanstan gelir (SA3 a); finansta kuru olmayan para biriminde boş. */
 export interface CurrencySetting { rate: number | null; monthly: number | null }
 export interface DepartmentSetting { name: string; budget: number }
-export interface ApprovalLimit { max: number | null; role: string }
+// rolId: basamağı onaylayan rol (2397 b; null rolsüz, undefined bilinmiyor); rolAdi yalnız okumadır, sunucu verir.
+export interface ApprovalLimit { max: number | null; role: string; rolId?: number | null; rolAdi?: string | null }
 
 export interface Settings {
   company: string;
@@ -44,6 +45,8 @@ export interface Settings {
   categories: string[];
   departments: DepartmentSetting[];
   approvalLimits: ApprovalLimit[];
+  // Basamak denetimi (sistem ayarı satin-alma.onay-kademesi); burada yalnız gösterilir.
+  onayKademesi?: boolean;
   version?: number;
 }
 

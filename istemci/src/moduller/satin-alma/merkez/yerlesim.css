@@ -12,3 +12,7 @@
 .sa-kok .sa-paylastir { margin-top: var(--b-4); scroll-margin-top: var(--b-3); }
 .sa-kok .sa-paylastir-h { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); align-items: baseline; }
 .sa-kok .sa-paylastir-h h3 { margin: 0; font-size: var(--yazi-l); }
+
+/* 2397-6: basamak kaldırma dokunmayla da rahat basılır (Arayüz ön bakışı). */
+.sa-kok .btn.sa-kaldir{ min-width:var(--dokunma); min-height:var(--dokunma); justify-content:center; }
+.sa-kok .flag svg{ vertical-align:-2px; }
