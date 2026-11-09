@@ -498,6 +498,9 @@
 @media print{ .sa-kok .nav, .sa-kok .topbar, .sa-kok .btn, .sa-kok .tabs{ display:none !important; } .sa-kok .app{ display:block; } .sa-kok{ background:white; } }
 
 /* talep başlığı */
+.sa-kok .sa-geri-serit{ display:flex; align-items:center; gap:var(--b-3); margin-bottom:var(--b-3); }
+.sa-kok .sa-geri{ display:inline-flex; align-items:center; gap:var(--b-2); }
+.sa-kok .sa-geri-no{ color:var(--sa-muted); font-size:var(--yazi-s); }
 .sa-kok .rhead{ display:flex; gap:var(--b-3) var(--b-5); align-items:flex-start; flex-wrap:wrap; margin-bottom:var(--b-3); }
 .sa-kok .rhead .ttl{ flex:1 1 420px; min-width:0; }
 .sa-kok .rhead h1{ font-size:var(--yazi-baslik); }

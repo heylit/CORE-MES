@@ -12,6 +12,7 @@ import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue,
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { nameOf } from "./store.ts";
+import { geriDugmesiHTML } from "./ui.ts";
 
 export type Role = "buyer" | "requester" | "approver";
 export const ROLES: Record<Role, string> = { buyer: "Satın alma", requester: "Talep eden", approver: "Onaylayan" };
@@ -158,7 +159,7 @@ export function viewRequestRequester(r: PurchaseRequest): string {
   const idx = FLOW.indexOf(r.status);
   const tt = r.award ? awardTotals(r) : null;
   const orders = awardOrders(r);
-  return `<div class="crumb"><button data-act="go" data-page="dash">Taleplerim</button> / <span class="num">${esc(r.no)}</span></div>
+  return `${geriDugmesiHTML(r.no, "Taleplerime dön")}
   <div class="rhead"><div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
     <p class="rmeta"><span>${esc(r.department || "")}</span><span>İhtiyaç ${fmtDate(r.needDate)}</span><span>${prioDot(r.priority)}${PRIO[r.priority || "normal"]}</span></p></div>
     <div class="ract">${r.status === "draft" ? '<button class="btn" data-act="req-edit">Talebi düzenle</button>' : ""}${OPEN.includes(r.status) ? '<button class="btn ghost danger" data-act="req-cancel">İptal et</button>' : ""}</div></div>
@@ -187,7 +188,7 @@ export function viewApprovals(): string {
 export function viewApproval(r: PurchaseRequest): string {
   const tt = r.award ? awardTotals(r) : null;
   const aps = approvalState(r);
-  const back = '<div class="crumb"><button data-act="go" data-page="dash">Onay bekleyenler</button> / <span class="num">' + esc(r.no) + "</span></div>";
+  const back = geriDugmesiHTML(r.no, "Onay bekleyenlere dön");
   const head = `<div class="rhead"><div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
     <p class="rmeta"><span>${esc(r.department || "")}</span>${r.requester ? `<span>Talep eden ${esc(r.requester)}</span>` : ""}<span>İhtiyaç ${fmtDate(r.needDate)}</span>${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
     <div class="ract">${COMMITTED.includes(r.status) && r.award ? '<button class="btn" data-act="order-item-change">Siparişteki kalemi değiştir</button>' : ""}<button class="btn" data-act="approval-form">Onay formu</button></div></div>`;

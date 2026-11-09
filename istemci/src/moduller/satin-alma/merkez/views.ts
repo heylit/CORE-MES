@@ -15,7 +15,7 @@ import {
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
-import { inlineBulkHTML } from "./ui.ts";
+import { geriDugmesiHTML, inlineBulkHTML } from "./ui.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewInbox, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 export function render(): void {
@@ -391,7 +391,7 @@ function viewRequest(): string {
     </section>`;
   };
   return `
-  <div class="crumb"><button data-act="go" data-page="requests">Talepler</button> / <span class="num">${esc(r.no)}</span></div>
+  ${geriDugmesiHTML(r.no)}
   <div class="rhead">
     <div class="ttl"><div class="row" data-sa-y="19"><h1>${esc(r.title)}</h1>${reqChip(r)}</div>
       <p class="rmeta">${meta.map(m => `<span>${m}</span>`).join("")}${headerFacts(r).map(f => `<span class="fact">${f}</span>`).join("")}</p></div>
