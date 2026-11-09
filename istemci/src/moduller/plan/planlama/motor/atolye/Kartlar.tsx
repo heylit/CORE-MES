@@ -14,7 +14,7 @@ import { gunDondurmasiniKaldir, gunuDondur, sabitleriKaldir } from '../cizelge/k
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, GOSTERGE_GECIKEN_IPUCU, gostergeGecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, kilitGunleri, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, donukEtiketi, IZ_KARAR, IZ_ONAY, duruslar, GOSTERGE_GECIKEN_IPUCU, gostergeGecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, kilitGunleri, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -398,8 +398,8 @@ function Donuk({ ort }: { ort: Ortam }) {
     <div className="tc-pym-tp-cipler">
       {DONUK_SECENEKLERI.map((x) => (
         <button key={x} type="button" className="tc-pym-tp-cip" aria-pressed={ort.donuk === x} aria-disabled={!ort.yaz}
-          onClick={() => { if (ort.yaz && ort.donuk !== x) komut?.degistir(`Donuk bölge ${x} sa`, (t) => { t.w = { ...t.w, dondurma: x }; }, { planKoru: true }); }}>
-          {`${x} sa`}
+          onClick={() => { if (ort.yaz && ort.donuk !== x) komut?.degistir(`Donuk bölge ${donukEtiketi(x)}`, (t) => { t.w = { ...t.w, dondurma: x }; }, { planKoru: true }); }}>
+          {donukEtiketi(x)}
         </button>
       ))}
     </div>

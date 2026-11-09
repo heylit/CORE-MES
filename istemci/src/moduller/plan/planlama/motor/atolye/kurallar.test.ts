@@ -4,7 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
   kilitGunleri, kilitOzeti, siraKomsu, siraTasi,
 } from './kurallar.ts';
@@ -262,10 +262,11 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
   });
 });
 
-describe('donuk bölge seçenekleri (248 a)', () => {
-  it('4 saatten kısa donuk bölge seçilemez', () => {
-    expect(DONUK_SECENEKLERI).toEqual([4, 8, 16, 24]);
-    expect(Math.min(...DONUK_SECENEKLERI)).toBe(4);
+describe('donuk bölge seçenekleri (248 a, 2529)', () => {
+  it('donuk bölge kapatılabilir (0 sa); açıkken en az 4 saat', () => {
+    expect(DONUK_SECENEKLERI).toEqual([0, 4, 8, 16, 24]);
+    expect(Math.min(...DONUK_SECENEKLERI.filter((x) => x > 0))).toBe(4);
+    expect([donukEtiketi(0), donukEtiketi(8)]).toEqual(['0 sa (kapalı)', '8 sa']);
   });
 });
 
