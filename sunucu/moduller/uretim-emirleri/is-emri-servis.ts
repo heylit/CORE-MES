@@ -346,6 +346,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
   for (const id of new Set(projeler.flatMap((p) => (p.siparisId === null ? [] : [p.siparisId])))) siparisler.set(id, await siparisAyrintisi(db, id));
   return {
     projeZorunlu: projeZorunluMu(emirTuru),
+    rotasizAcik: await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'),
     projeler: projeler.map((p) => {
       const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
       return {
