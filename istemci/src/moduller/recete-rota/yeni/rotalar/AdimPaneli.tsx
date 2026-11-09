@@ -80,12 +80,17 @@ export function OperasyonKutuculari({ r, sec, aramaEtiketi = 'Operasyon ara' }: 
 }
 
 // Şemanın solundaki operasyon paleti: kutucuğa dokununca (ya da Enter) "Eklenecek yer"e eklenir; şemaya sürüklenince bırakılan yere.
-export function AdimPaneli({ r, ekle, yer, urunId }: { r: RotaEkrani; ekle: (op: Operasyon) => void; yer: string | null; urunId: string | null }) {
+export function AdimPaneli({ r, ekle, yer, urunId, kapat }: { r: RotaEkrani; ekle: (op: Operasyon) => void; yer: string | null; urunId: string | null; kapat: () => void }) {
   const adimlar = urunId ? r.duzen.adimlar(urunId) : [];
   const { data: numaralar } = useOpNumaralari(urunId ?? '', adimlar, urunId !== null);
   return (
-    <aside className="tc-rr1-adimpanel" aria-label="Operasyon paleti">
-      <h3>Operasyon paleti</h3>
+    <aside id="tc-rr1-palet" className="tc-rr1-adimpanel" aria-label="Operasyon paleti">
+      <div className="tc-rr1-cekmece-bas">
+        <h3>Operasyon paleti</h3>
+        <button type="button" className="tc-rr1-ib" onClick={kapat} aria-label="Operasyon paletini kapat" title="Operasyon paletini kapat (Esc)">
+          <Simge ad="x" boyut="k" />
+        </button>
+      </div>
       {yer && (
         <p className="tc-rr1-hedef" aria-live="polite">
           <span>Dokununca eklenecek yer</span><b>{yer}</b>
@@ -96,5 +101,15 @@ export function AdimPaneli({ r, ekle, yer, urunId }: { r: RotaEkrani; ekle: (op:
       <p className="tc-rr1-ipucu">Operasyonu şemaya sürükle: adımın üstüne ya da altındaki şeride bırakınca ardına, rota başlığına bırakınca başa girer.</p>
       <OperasyonKutuculari r={r} sec={ekle} aramaEtiketi="Palette operasyon ara" />
     </aside>
+  );
+}
+
+// Kapalı palet şemanın solunda ince şerit olarak kalır; dokununca açılır (2558).
+export function PaletSeridi({ ac }: { ac: () => void }) {
+  return (
+    <button type="button" className="tc-rr1-insp-serit tc-rr1-palet-serit" onClick={ac} aria-label="Operasyon paletini aç" aria-expanded={false} aria-controls="tc-rr1-palet" title="Operasyon paletini aç">
+      <Simge ad="chev-right" boyut="k" />
+      <span className="tc-rr1-insp-serit-ad">Operasyon paleti</span>
+    </button>
   );
 }

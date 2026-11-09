@@ -15,28 +15,26 @@ const bolumAc = async () => {
 };
 const govde = (bolge: HTMLElement) => bolge.querySelector('.tc-rr1-body') as HTMLElement;
 
-describe('Sabit düzen ve daraltılabilir düzenleme paneli (B-2482-R5)', () => {
-  it('panel yalnız düğmeyle daralır; seçim paneli açmaz, şerit seçili adımı gösterir; şeride dokununca açılır ve tercih yazılır', async () => {
+describe('Sabit düzen ve çekmece düzenleme paneli (B-2482-R5, 2558 b/10)', () => {
+  it('panel açılışta kapalı; tek tık seçer ama açmaz, şerit seçili adımı gösterir; şeride dokununca açılır, çarpı kapatır ve seçim kalır', async () => {
     const bolge = await bolumAc();
     const dugme = within(bolge).getByRole('button', { name: 'Düzenleme paneli' });
-    expect(dugme.getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(dugme);
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    expect(dugme.getAttribute('aria-controls')).toBe('tc-rr1-duzen');
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(true);
-    expect(localStorage.getItem('tc-rr1-duzen-paneli-dar')).toBe('1');
     expect(within(bolge).getByRole('button', { name: 'Düzenleme panelini aç: Seçim yok' })).toBeTruthy();
 
     fireEvent.click(within(bolge).getByRole('button', { name: 'OP 10 Tornalama' }));
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(true);
     fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenleme panelini aç: OP 10 Tornalama' }));
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(false);
-    expect(localStorage.getItem('tc-rr1-duzen-paneli-dar')).toBe('');
-    expect(within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' })).toBeTruthy();
-  });
+    expect(dugme.getAttribute('aria-expanded')).toBe('true');
+    const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
+    expect(panel.classList.contains('tc-rr1-kapali')).toBe(false);
 
-  it('daraltma tercihi yeniden açılışta korunur', async () => {
-    localStorage.setItem('tc-rr1-duzen-paneli-dar', '1');
-    const bolge = await bolumAc();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Paneli kapat' }));
     expect(govde(bolge).classList.contains('tc-rr1-dar')).toBe(true);
+    expect(within(bolge).getByRole('button', { name: 'Düzenleme panelini aç: OP 10 Tornalama' })).toBeTruthy();
     expect(within(bolge).queryByRole('separator', { name: 'Düzenleme paneli genişliği' })).toBeNull();
   });
 
@@ -48,6 +46,7 @@ describe('Sabit düzen ve daraltılabilir düzenleme paneli (B-2482-R5)', () => 
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 440 } as DOMRect);
     const bolge = await bolumAc();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenleme paneli' }));
     const kenar = within(bolge).getByRole('separator', { name: 'Düzenleme paneli genişliği' });
     fireEvent.keyDown(kenar, { key: 'ArrowLeft' });
     expect(govde(bolge).style.getPropertyValue('--tc-rr1-panel')).toBe('472px');
