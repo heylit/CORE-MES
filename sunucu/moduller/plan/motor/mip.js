@@ -44,7 +44,7 @@ function mipModel(st,cx,jobIds,opt={}){
       if(g[o.id]&&g[o.id].S!=null&&c.m!==g[o.id].m)continue;
       if(c.fas){const f=cx.FS[c.m.slice(1)];if(!f)continue;
         for(let d=Math.floor(head/24);d<HDAYS;d++){const dy=cx.days[d];if(dy.tatil||!(f.cikisGunleri||[]).includes(dy.wd))continue;
-          const t=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(t<head-1e-9)continue;const ret=t+(+f.sureGun||1)*24;
+          const t=d*24+(f.cikisSaat==null?16:+f.cikisSaat);if(t<head-1e-9)continue;const ret=t+(+f.sureGun||FASON_VARSAYILAN_GUN)*24;
           if(t>H){dumC=Math.min(dumC,ret);break;}
           const n=nm();V.push(n);ex.vars.push(n);ex.S.push([n,t]);ex.C.push([n,ret]);cols[n]={o:o.id,m:c.m,S:t,C:ret};}
         continue;}
@@ -118,7 +118,7 @@ function ekAdaylar(st,cx){
 function cerceveModel(st,cx,plan,opt={}){
   // dilim vardiya boyu, ilk vardiya başına hizalı: gün dilimi akşam gelen işin sabaha kalmasını görmüyordu; haftalık bütçe dilimlerin toplamına konur
   const O=hm(cx.D.vardiyalar[0].bas)%8,L=vardiyaSaat(cx.D,cx.D.vardiyalar[0].id)||8,b0=Math.floor((st.now-O)/L),NB=Math.round((opt.gun||21)*24/L),ht=lbHeadsTails(st,cx),butH=+st.w.mesaiHafta||0;
-  const bk=k=>[O+(b0+k)*L,O+(b0+k+1)*L],wkOf=k=>Math.floor(bk(k)[0]/168),bOf=t=>Math.floor((t-O)/L)-b0;
+  const bk=k=>[O+(b0+k)*L,O+(b0+k+1)*L],wkOf=k=>haftaNo(cx.D,Math.floor(bk(k)[0]/24)),bOf=t=>Math.floor((t-O)/L)-b0;
   const grp=[...new Set(Object.values(cx.M).map(M=>M.grup))];
   // kapasite: gözetimsiz saat + en çok(vardiya saati, yetkin personel saati / tezgâh başına personel); personel toplamı ayrıca sınırlı
   const sl=(arr,a,b)=>{let h=0;for(let q=k0(a);q<k1(b);q++)h+=Math.max(0,arr[q])*SL;return h;};
@@ -129,8 +129,8 @@ function cerceveModel(st,cx,plan,opt={}){
   for(let k=0;k<NB;k++){const [a,b]=bk(k),a2=Math.max(a,st.now);tot[k]=sl(cx.capTot,a2,b);
     for(const g of grp){const x=capOf(g,a2,b);cap[g+'|'+k]=x.c;att[g+'|'+k]=x.U;}}
   const ad=ekAdaylar(st,cx),ot={};for(const x of ad){const k=bOf(x.a);if(k<0||k>=NB)continue;const key=x.g+'|'+k;ot[key]=(ot[key]||0)+1;}
-  const used={};for(const e of st.ekMesai||[]){const w=Math.floor(e.gun*24/168);used[w]=(used[w]||0)+vardiyaSaat(cx.D,e.vardiya);}
-  const vh=vardiyaSaat(cx.D,cx.D.vardiyalar[0].id)||8;
+  const used={};for(const e of st.ekMesai||[]){const w=haftaNo(cx.D,e.gun);used[w]=(used[w]||0)+vardiyaNetSaat(cx.D,e.vardiya);}
+  const vh=vardiyaNetSaat(cx.D,cx.D.vardiyalar[0].id)||8;
   const R=[],obj=[],gen=[],bnd=[];let n=0;const cols={},Y={},P={},EB={};
   const lin=a=>a.map(([v,c])=>(c<0?'- ':'+ ')+Math.abs(+(+c).toFixed(5))+' '+v).join(' ');
   const capT={};

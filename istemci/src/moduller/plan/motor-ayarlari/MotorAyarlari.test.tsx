@@ -11,7 +11,7 @@ import { MotorAyarlari } from './MotorAyarlari.tsx';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 // Kart 811: uydurma sürümler.
-const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali' };
+const MOTOR_AYARI_VARSAYILAN: Ayarlar = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05 };
 const BOS: MotorAyarlariCevabi = { guncel: { surumId: null, degerler: MOTOR_AYARI_VARSAYILAN, yazan: null, zaman: null }, taslak: null };
 const yetki = (islemler: string[]) => vi.spyOn(oturum, 'useOturum').mockReturnValue({ data: { islemler } } as unknown as ReturnType<typeof oturum.useOturum>);
 const ciz = () => render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><BildirimSaglayici><MotorAyarlari /></BildirimSaglayici></QueryClientProvider>);
@@ -57,6 +57,21 @@ describe('motor ayarları', () => {
     fireEvent.click(screen.getByRole('button', { name: /Kaydet/ }));
     expect(await screen.findByText('Kayıt başkası tarafından değiştirildi.')).toBeTruthy();
     await vi.waitFor(() => { expect(get).toHaveBeenCalledTimes(2); });
+  });
+
+  it('2509-1 c: acil iş payı yüzde girilir, oran gönderilir; sınır dışı değer kaydedilmez', async () => {
+    yetki(['plan.planlama-oku', 'plan.motor-ayari']);
+    vi.spyOn(api, 'get').mockResolvedValue(BOS);
+    const post = vi.spyOn(api, 'post').mockResolvedValue(BOS);
+    ciz();
+    const alan = await screen.findByLabelText(/Acil iş payı/);
+    expect((alan as HTMLInputElement).value).toBe('5');
+    const kaydet = screen.getByRole('button', { name: /Kaydet/ });
+    fireEvent.change(alan, { target: { value: '45' } });
+    expect((kaydet as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(alan, { target: { value: '2,5' } });
+    fireEvent.click(kaydet);
+    await vi.waitFor(() => { expect(post).toHaveBeenCalledWith('/plan/motor-ayarlari', { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.025, surumId: null }); });
   });
 
   it('1714: süre öğrenmesi varsayılan kapalı; açılınca gönderilir', async () => {

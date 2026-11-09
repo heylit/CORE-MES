@@ -66,7 +66,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   for (const c of istek.calisanlar) {
     const id = opOf[c.anahtar], o = okunan.get(c.anahtar) || {};
     if (!id || !kuyruktaki.has(c.anahtar) || !isFinite(+o.adet)) continue;
-    st.D.opAdet = Object.assign({}, st.D.opAdet, { [id]: Math.max(1, +o.adet - (+o.saglam || 0)) });
+    /* B-2483-16: sağlam adedi emri karşılamışsa kalan 0'dır; 1 adet uydurulmaz */
+    st.D.opAdet = Object.assign({}, st.D.opAdet, { [id]: Math.max(0, +o.adet - (+o.saglam || 0)) });
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
   fasonlariAdimaCevir(k, st.D);
@@ -137,7 +138,6 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
 /* 669 a, Motor A'nın kuralı (CA-2, #1424): fason adım önceki iç adımın bitişinden rotadaki termin günü kadar sonra döner (termini girilmemiş
    fason uretim-emirleri'nin FASON_VARSAYILAN_GUN'ü, 7 gün); çıkış günü, saati ve kapasitesi beklenmez. Süre firmanın değil adımındır: her
    fason adıma ayrı, hemen çıkan bir fasoncu kurulur. Yalnız sunucu çözümünde; sayfa motoru firmanın çıkış ayarıyla çözmeyi sürdürür. */
-const FASON_VARSAYILAN_GUN = 7;
 function fasonlariAdimaCevir(k, D) {
   D.fasoncular = (D.fasoncular || []).slice();
   for (const u of D.urunler || []) {
@@ -145,7 +145,7 @@ function fasonlariAdimaCevir(k, D) {
     (u.rota || []).forEach((r, i) => {
       if (!r.fason) return;
       const a = adimlar[i], gun = a && +a.terminGun > 0 ? +a.terminGun : FASON_VARSAYILAN_GUN, id = '~' + u.id + '.' + r.k;
-      D.fasoncular.push({ id, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() });
+      D.fasoncular.push({ id, ad: 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() });
       r.fason = id;
     });
   }
@@ -167,13 +167,27 @@ function emirFasonlariniEkle(D, emirler, k) {
     if (!y || y.fasonId == null || !(i >= 0)) continue;
     const s = sip.get(sid);
     let u = s && urun.get(s.urun);
-    if (!u || !u.rota || !u.rota[i] || u.rota[i].fason) continue;
+    if (!u || !u.rota || !u.rota[i]) continue;
+    /* B-2483-11: rotada zaten fason olan adımın süresi emrin adım kopyasındandır: emrin termin günü, yoksa Satın Alma'nın tahmini (tahminGun),
+       yoksa rotanın süresi; rotanınkiyle aynıysa ürün kopyalanmaz */
+    if (u.rota[i].fason) {
+      const f = (D.fasoncular || []).find(x => x.id === u.rota[i].fason), gun = +y.terminGun > 0 ? +y.terminGun : +y.tahminGun > 0 ? +y.tahminGun : null;
+      if (!f || gun === null || +f.sureGun === gun) continue;
+      if (!u.emreOzel) {
+        u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
+        D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
+      }
+      const fid = '~' + u.id + '.' + u.rota[i].k;
+      D.fasoncular = [...(D.fasoncular || []), Object.assign({}, f, { id: fid, sureGun: gun })];
+      u.rota[i] = Object.assign({}, u.rota[i], { fason: fid });
+      continue;
+    }
     if (!u.emreOzel) {
       u = Object.assign({}, u, { id: u.id + '#' + sid, emreOzel: true, rota: u.rota.map(r => Object.assign({}, r)) });
       D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
     }
-    const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : FASON_VARSAYILAN_GUN;
-    D.fasoncular = [...(D.fasoncular || []), { id, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
+    const id = '~' + u.id + '.' + u.rota[i].k, gun = +y.terminGun > 0 ? +y.terminGun : +y.tahminGun > 0 ? +y.tahminGun : FASON_VARSAYILAN_GUN;
+    D.fasoncular = [...(D.fasoncular || []), { id, ad: 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() }];
     u.rota[i] = Object.assign({}, u.rota[i], { fason: id, tezgahlar: [] });
   }
 }
@@ -262,7 +276,7 @@ function fasonBeklemeleriniEkle(D, istek, opOf) {
       D.urunler = [...D.urunler, u]; urun.set(u.id, u); s.urun = u.id;
     }
     const i = u.rota.findIndex(y => String(y.k) === k), fk = 'f' + k, fid = '~' + u.id + '.' + fk;
-    D.fasoncular = [...(D.fasoncular || []), { id: fid, ad: 'fason', hemen: true, sureGun: gun, kapasite: 999, cikisGunleri: GUNLER.slice() }];
+    D.fasoncular = [...(D.fasoncular || []), { id: fid, ad: 'fason', hemen: true, sureGun: gun, kapasite: null, cikisGunleri: GUNLER.slice() }];
     u.rota.splice(i, 0, { k: fk, ad: 'fason', bag: (u.rota[i].bag || []).map(b => b.slice()), aile: '', fason: fid, tezgahlar: [] });
     u.rota[i + 1] = Object.assign({}, u.rota[i + 1], { bag: [[fk, 'b']] });
   }

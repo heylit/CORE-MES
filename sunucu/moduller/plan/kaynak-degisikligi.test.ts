@@ -27,7 +27,7 @@ const kaynak = (makineler: Makine[] = [makine(0)]) => ({
   durum: { stations: [{ id: '10', code: 'TOR', name: 'Torna', wcId: '1', eff: 100, opPer: 1, count: 1, aktif: true }], machines: makineler },
   ek: null,
 });
-const oku = (calisma: unknown, k = kaynak(), kayit: unknown = KAYIT) => planGirdisi({ calisma, kayit, kaynak: k, bugun: '2026-10-19' })!;
+const oku = (calisma: unknown, k: { durum: unknown; ek: unknown } = kaynak(), kayit: unknown = KAYIT) => planGirdisi({ calisma, kayit, kaynak: k, bugun: '2026-10-19' })!;
 
 // Açılıştaki çalışma bir kez sunucu birleşmesinden ve eski öncelik geçişinden geçmiştir (sayfanın kaydettiği hâl).
 function oturmus(k = kaynak()): Record<string, unknown> {
