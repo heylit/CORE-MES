@@ -10,14 +10,31 @@ import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/iste
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, anahtarlar, cagri } from '../talep/ortak.ts';
 import { FasonSureGrafikleri } from './FasonSureGrafikleri.tsx';
+import './dis-operasyonlar.css';
 
 const gun = (t: string | null) => (t === null ? '—' : `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`);
 const zaman = (z: string | null) => (z === null ? '—' : new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Istanbul' }).format(new Date(z)));
 const adet = (n: number | null) => (n === null ? '—' : n.toLocaleString('tr-TR'));
 const disarida = (x: DisOperasyon) => (x.gonderilen ?? 0) - (x.donen ?? 0) - (x.hurda ?? 0);
 
+const gunMetni = (n: number) => `${n.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün`;
+function gecikmeHucresi(x: DisOperasyon) {
+  if (x.gecikmeSonDonus === null) return '—';
+  const ana = x.gecikmeSonDonus > 0 ? <Rozet ton="hata">{gunMetni(x.gecikmeSonDonus)}</Rozet> : <Rozet ton="tamam">Zamanında</Rozet>;
+  const agirlikli = x.gecikmeAgirlikli !== null && x.gecikmeAgirlikli > 0 ? <small>adet ağırlıklı {gunMetni(x.gecikmeAgirlikli)}</small> : null;
+  return agirlikli ? <span className="sa-gecikme">{ana}{agirlikli}</span> : ana;
+}
+
 type Islem = 'gidis' | 'tamamla';
 const BASLIK: Record<Islem, string> = { gidis: 'Fasona gönder', tamamla: 'Fason adımını tamamla' };
+
+// 2426: mal kabul formu iş emri, hizmet sipariş satırı ve firmanın fason kutusuyla dolar; bilinmeyen alan gönderilmez.
+export function malKabulAdresi(x: DisOperasyon): string {
+  const p = new URLSearchParams({ fasonIsEmri: String(x.isEmriId) });
+  if (x.siparisSatirId !== null) p.set('siparisSatiri', String(x.siparisSatirId));
+  if (x.fasonKonumId !== null) p.set('konum', String(x.fasonKonumId));
+  return `/stok/mal-kabul?${p.toString()}`;
+}
 
 const SUTUNLAR: Sutun<DisOperasyon>[] = [
   { anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, sirala: true, hucre: (x) => x.emirNo },
@@ -29,14 +46,15 @@ const SUTUNLAR: Sutun<DisOperasyon>[] = [
   { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, sirala: true, hucre: (x) => gun(x.termin) },
   { anahtar: 'donus', baslik: 'İlk dönüş', kirilmaz: true, hucre: (x) => zaman(x.ilkDonus) },
   { anahtar: 'adet', baslik: 'Giden / dönen / hurda', hizala: 'sag', hucre: (x) => `${adet(x.gonderilen)} / ${adet(x.donen)} / ${adet(x.hurda)}` },
-  { anahtar: 'gecikme', baslik: 'Gecikme', sirala: true, hucre: (x) => (x.gecikmeGun === null ? '—' : x.gecikmeGun > 0 ? <Rozet ton="hata">{x.gecikmeGun} gün</Rozet> : <Rozet ton="tamam">Zamanında</Rozet>) },
+  // 2424-a c: iki ölçü yan yana; ana sayı son dönüşe göre (karneyle aynı), altında adet ağırlıklı.
+  { anahtar: 'gecikme', baslik: 'Gecikme', sirala: true, hucre: (x) => gecikmeHucresi(x) },
 ];
 
 // Süzgeç: durum çipleri. "Dışarıda" gönderilmiş ve dönmemiş adedi olan, "Gidecek" henüz gitmemiş, "Dönen" hepsi dönmüş.
 type Durum = 'hepsi' | 'geciken' | 'gonderilecek' | 'disarida' | 'donen';
 const DURUMLAR: { deger: Durum; baslik: string; uyar: (x: DisOperasyon) => boolean }[] = [
   { deger: 'hepsi', baslik: 'Hepsi', uyar: () => true },
-  { deger: 'geciken', baslik: 'Geciken', uyar: (x) => (x.gecikmeGun ?? 0) > 0 },
+  { deger: 'geciken', baslik: 'Geciken', uyar: (x) => (x.gecikmeSonDonus ?? 0) > 0 },
   { deger: 'gonderilecek', baslik: 'Gidecek', uyar: (x) => !x.gonderilen },
   { deger: 'disarida', baslik: 'Dışarıda', uyar: (x) => !!x.gonderilen && disarida(x) > 0 },
   { deger: 'donen', baslik: 'Dönen', uyar: (x) => !!x.gonderilen && disarida(x) <= 0 },
@@ -44,11 +62,11 @@ const DURUMLAR: { deger: Durum; baslik: string; uyar: (x: DisOperasyon) => boole
 const kucuk = (t: string | null) => (t ?? '').toLocaleLowerCase('tr-TR');
 const SIRA_DEGERI: Record<string, (x: DisOperasyon) => string | number> = {
   emir: (x) => x.emirNo, urun: (x) => kucuk(x.urun), firma: (x) => kucuk(x.firmaAdi), planlanan: (x) => x.planlananGidis ?? '9999',
-  gidis: (x) => x.gerceklesenGidis ?? '9999', termin: (x) => x.termin ?? '9999', gecikme: (x) => x.gecikmeGun ?? -1,
+  gidis: (x) => x.gerceklesenGidis ?? '9999', termin: (x) => x.termin ?? '9999', gecikme: (x) => x.gecikmeSonDonus ?? -1,
 };
 // Varsayılan sıra (2424): geciken önde (çok geciken önce), sonra termini yakın olan; terminsiz sonda.
 function varsayilanSira(a: DisOperasyon, b: DisOperasyon): number {
-  const ga = a.gecikmeGun ?? 0, gb = b.gecikmeGun ?? 0;
+  const ga = a.gecikmeSonDonus ?? 0, gb = b.gecikmeSonDonus ?? 0;
   if ((ga > 0) !== (gb > 0)) return ga > 0 ? -1 : 1;
   if (ga !== gb) return gb - ga;
   return (a.termin ?? '9999').localeCompare(b.termin ?? '9999') || a.emirNo.localeCompare(b.emirNo);
@@ -121,7 +139,7 @@ export function DisOperasyonlar() {
     anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, hucre: (x) => (
       <>
         <Dugme simge="truck" disabled={x.firmaId === null || !x.sirada} title={x.firmaId === null ? 'Önce fason firması seçilmeli' : !x.sirada ? 'Önceki iş emirleri bitmeden fasona gönderilmez.' : undefined} onClick={() => acikYaz({ x, islem: 'gidis' })}>Gönder</Dugme>
-        <Dugme simge="box" disabled={disarida(x) <= 0} title="Dönüş (sağlam ve hurda) mal kabulden girilir" onClick={() => { void git(`/stok/mal-kabul?fasonIsEmri=${x.isEmriId}`); }}>Mal kabulde gir</Dugme>
+        <Dugme simge="box" disabled={disarida(x) <= 0} title="Dönüş (sağlam ve hurda) mal kabulden girilir" onClick={() => { void git(malKabulAdresi(x)); }}>Mal kabulde gir</Dugme>
         <Dugme simge="check" disabled={!(x.gonderilen && disarida(x) <= 0)} onClick={() => acikYaz({ x, islem: 'tamamla' })}>Tamamla</Dugme>
       </>
     ),
