@@ -284,16 +284,16 @@ describe('A3 sayfaları', () => {
     } satisfies AnomaliCevabi;
     const eksik = {
       hesaplama: '2026-11-09T09:00:00.000Z',
-      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null },
-      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 1, 'bayat-plan': 0, 'geride-onceki': 0 },
+      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null, olcumsuzIsGun: 0 },
+      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 1, 'bayat-plan': 0, 'geride-onceki': 0, 'olcumsuz-is': 0 },
       olaylar: [
         {
           id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
-          deger: 90, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T06:00:00.000Z', acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+          deger: 90, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T06:00:00.000Z', nedenler: [], acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
         },
         {
           id: 2, tur: 'geciken-emir', konu: 'uretim_emri', isEmriId: null, uretimEmriId: 4, emirNo: 'E-1', opNo: null, istasyon: null, kaynak: null,
-          deger: 3, kalanAdet: null, planaGore: false, dayanakAni: null, acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+          deger: 3, kalanAdet: null, planaGore: false, dayanakAni: null, nedenler: [], acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
         },
       ],
     } satisfies EksikIslerCevabi;

@@ -15,11 +15,15 @@ const EKSIK = {
   olaylar: [
     {
       id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
-      deger: 150, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T06:00:00.000Z', acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+      deger: 150, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T06:00:00.000Z', nedenler: [], acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
     },
     {
       id: 2, tur: 'kayitsiz-gun', konu: 'istasyon', isEmriId: null, uretimEmriId: null, emirNo: null, opNo: null, istasyon: { id: 2, ad: 'Torna' }, kaynak: null,
-      deger: 2, kalanAdet: null, planaGore: false, dayanakAni: null, acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+      deger: 2, kalanAdet: null, planaGore: false, dayanakAni: null, nedenler: [], acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
+    },
+    {
+      id: 3, tur: 'olcumsuz-is', konu: 'is_emri', isEmriId: 7, uretimEmriId: 6, emirNo: 'E-2', opNo: 20, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
+      deger: 1, kalanAdet: null, planaGore: false, dayanakAni: '2026-11-08T12:00:00.000Z', nedenler: ['ayar-yok', 'sayim-yok'], acilis: '2026-11-09T07:00:00.000Z', kapanis: null,
     },
   ],
 } satisfies EksikIslerimCevabi;
@@ -38,6 +42,10 @@ describe('Özetim: Girilmemiş işlerim (2421 c)', () => {
     expect(kart.textContent).toContain('4 adet kaldı');
     expect(kart.textContent).toContain('Kayıtsız gün');
     expect(kart.textContent).toContain('2 iş günü');
+    // 2567: ölçülmeyen süre nedenleriyle görünür.
+    expect(kart.textContent).toContain('Süre ölçülmedi');
+    expect(kart.textContent).toContain('Ayar basılmadı, Sayım yok');
+    expect(kart.textContent).toContain('1 gün önce');
     cleanup();
     sunucuKur(OPERATOR, { uclar: { 'GET /arkon/operator-ozeti': OZET, 'GET /arkon/eksik-islerim': { ...EKSIK, olaylar: [] } } });
     arkonAc('/uretim-terminali');
