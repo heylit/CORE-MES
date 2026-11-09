@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
-  argumanOku, ayriTurNedeni, denetle, devirOku, grupla, kilitIcinde, klasorOku, suslu, yamaDosyalari,
+  argumanOku, ayriTurNedeni, denetle, devirOku, grupla, kilitIcinde, klasorOku, suslu, yamaDosyalari, yamaSirasi,
 } from './teslim-denetle.ts';
 import type { Devir, TeslimGirdisi } from './teslim-denetle.ts';
 import { sonucMetni } from './teslim-vt.ts';
@@ -202,4 +202,10 @@ test('veritabanlı deneme: sonuç yoksa, sha tutmuyorsa ya da kırmızıysa kır
   assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 18, yamalar: ['b'.repeat(64)], gecti: true } })), ['kirmizi:vt']);
   assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 18, yamalar: [SHA], gecti: false } })), ['kirmizi:vt']);
   assert.deepEqual(etiketler(girdi({ vtSonuc: { pg: 16, yamalar: [SHA], gecti: true } })), ['uyari:vt-pg']);
+});
+
+test('yamaSirasi: ilk yama ek yamalardan önce, ekler sayı sırasıyla', () => {
+  assert.deepEqual(['2584-2.patch', '2584-10.patch', '2584.patch', '2584-3.patch'].sort(yamaSirasi), ['2584.patch', '2584-2.patch', '2584-3.patch', '2584-10.patch']);
+  assert.deepEqual(['0002.patch', '0010.patch', '0001.patch'].sort(yamaSirasi), ['0001.patch', '0002.patch', '0010.patch']);
+  assert.deepEqual(['2618-2.patch', '2618-1.patch', '2618-3.patch'].sort(yamaSirasi), ['2618-1.patch', '2618-2.patch', '2618-3.patch']);
 });

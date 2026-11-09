@@ -428,9 +428,12 @@ export const gerceklesenSureGovdesi = z.object({
 
 // Ölçümün kabulü: değer ürünün açık taslağına (yoksa yürürlükteki revizyondan açılan taslağa) teorik süre olarak yazılır. Makine boşsa
 // adımın kendi süresi, makine verilirse o makinenin (adımın kaynağı ya da adayı) süresi değişir; okunanId elle girişteki gibidir.
+// deger (2564 a): "ortanca" bu görünümdeki ölçüm penceresinin ortancasını yazar, olcumId pencerenin son ölçümü olmalıdır; gelmeyen ya da
+// "olcum" seçilen ölçümün kendisini yazar.
 export const gerceklesenKabulGovdesi = z.object({
   tur: gerceklesenTuru,
   olcumId: KIMLIK,
+  deger: z.enum(['olcum', 'ortanca']).optional(),
   makineId: KIMLIK.nullable(),
   okunanId: KIMLIK.nullable(),
 });
@@ -442,6 +445,8 @@ const olcumKaydi = z.object({
   yazan: adliKayit, zaman,
 });
 const turBasina = <T extends z.ZodTypeAny>(t: T) => z.object({ hazirlik: t, islem: t, degisim: t });
+// 2564 a: bekleyen ölçümle aynı penceredeki (son boşaltmadan sonraki) ölçümlerin sayısı, ortancası ve aralığı.
+const olcumOzetiSemasi = z.object({ n: z.number().int().positive(), ortancaDk: ondalikMetinSemasi, enAzDk: ondalikMetinSemasi, enCokDk: ondalikMetinSemasi });
 
 export const surelerCevabi = z.object({
   revizyon: revizyonBaglantisi.extend({ durum: revizyonDurumu, malzemeId: MALZEME_KIMLIGI }),
@@ -461,6 +466,7 @@ export const surelerCevabi = z.object({
     // Elle girişte ve kabulde okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
     sonKayit: turBasina(KIMLIK.nullable()),
     olcum: turBasina(olcumKaydi.nullable()),
+    ozet: turBasina(olcumOzetiSemasi.nullable()),
     // Planın kullandığı süre: teorik (169 c).
     etkin: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
@@ -471,7 +477,8 @@ export const surelerCevabi = z.object({
 });
 
 // Kabulün yazdığı taslak ve onun süreleri; plan yeni süreyi taslak yürürlüğe girince kullanır.
-// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa dolu (ROT-4); kabul yine yapılmıştır.
+// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa (ROT-4) ya da ortanca 3'ten az ölçümden kabul edildiyse (2564 a) dolu;
+// kabul yine yapılmıştır.
 export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi, uyari: z.string().nullable() });
 
 export type RevizyonDurumu = z.output<typeof revizyonDurumu>;
@@ -553,6 +560,21 @@ export const emreKopyalaGovdesi = z.object({
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
 
+// Excel ile toplu emir (2627): her satır ürünün yürürlükteki revizyonundan emre-kopyala ile açılır, hepsi tek işlemde; biri reddedilirse
+// hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
+// satır sınırı genel toplu sınırdan küçüktür.
+export const EMIR_TOPLU_EN_COK = 200;
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true })
+  .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
+export const emreKopyalaTopluGovdesi = z.object({
+  satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.'),
+}).strict();
+export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+export type EmreKopyalaTopluSatiri = z.input<typeof emreKopyalaTopluSatiri>;
+export type EmreKopyalaTopluGirdisi = z.output<typeof emreKopyalaTopluGovdesi>;
+export type EmreKopyalaTopluCevabi = z.output<typeof emreKopyalaTopluCevabi>;
+
 // Patlamış rota (1476, 1481 a): donmuş anlık görüntü; düğüm yolu "0" kök, "0.2" kökün 2. ürün bileşeni.
 export const patlatmaParametresi = z.object({ id: yolKimligi });
 export const patlatmaCevabi = z.object({
@@ -594,6 +616,9 @@ export const patlatmaOnizlemeCevabi = z.object({
       yer: z.string().nullable(),
       // 2557: sayılar emir açılış kuralıyladır (uretim-emirleri malzemeIhtiyaci). Adet adıma giren parçadır: dal çarpanı ve adımla
       // ardıllarının fire payı dahil; çıkan, adımın kendi firesinden sonra kalan sağlam parçadır. Emir açılamıyorsa (engel) sayılar null.
+      // 2605 a: hedef emrin bu adımdaki hedef adedidir (adet x dal çarpanı, firesiz; uretim-emirleri dalBasiAdedi); ekranın ana sayısı.
+      // adet fire payıyla giren parçadır (alt satır).
+      hedef: onizlemeMiktari.nullable(),
       adet: onizlemeMiktari.nullable(),
       cikanAdet: onizlemeMiktari.nullable(),
       // Son adımın çıktısı düğümün ürünüdür (kökte mamul, alt düğümde tüketen adıma girer); ötekiler ara haldir.

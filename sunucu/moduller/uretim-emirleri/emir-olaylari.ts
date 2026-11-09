@@ -63,6 +63,14 @@ export interface IsEmirleriDegistiOlayi {
   kisiId: number;
 }
 
+// Adım bitti (2497, B-2499-12): terminalde çalışan iş emri bitirildi (emirle biten son adım dahil). Plan erken ya da geç bitişi canlı
+// planın eskimesine sayar. Adımsız eski emir ve katılımdan ayrılma bu olay değildir.
+export interface AdimBittiOlayi {
+  isEmriId: number;
+  uretimEmriId: number;
+  kisiId: number;
+}
+
 type Dinleyici<T> = (db: Db, olay: T) => Promise<void>;
 export type EmirBittiDinleyicisi = Dinleyici<EmirBittiOlayi>;
 export type FasonHareketiDinleyicisi = Dinleyici<FasonHareketiOlayi>;
@@ -72,6 +80,7 @@ export type EmirBirlestiDinleyicisi = Dinleyici<EmirBirlestiOlayi>;
 export type HazirlikTamamlandiDinleyicisi = Dinleyici<HazirlikTamamlandiOlayi>;
 export type IsEmriKopyalandiDinleyicisi = Dinleyici<IsEmriKopyalandiOlayi>;
 export type IsEmirleriDegistiDinleyicisi = Dinleyici<IsEmirleriDegistiOlayi>;
+export type AdimBittiDinleyicisi = Dinleyici<AdimBittiOlayi>;
 
 function kayit<T>() {
   const dinleyiciler: Dinleyici<T>[] = [];
@@ -97,6 +106,7 @@ const birlesti = kayit<EmirBirlestiOlayi>();
 const hazirlik = kayit<HazirlikTamamlandiOlayi>();
 const kopyalandi = kayit<IsEmriKopyalandiOlayi>();
 const degisti = kayit<IsEmirleriDegistiOlayi>();
+const adimBitti = kayit<AdimBittiOlayi>();
 
 export const emirBittiDinle = bitti.dinle;
 export const emirBittiBildir = bitti.bildir;
@@ -114,3 +124,5 @@ export const isEmriKopyalandiDinle = kopyalandi.dinle;
 export const isEmriKopyalandiBildir = kopyalandi.bildir;
 export const isEmirleriDegistiDinle = degisti.dinle;
 export const isEmirleriDegistiBildir = degisti.bildir;
+export const adimBittiDinle = adimBitti.dinle;
+export const adimBittiBildir = adimBitti.bildir;

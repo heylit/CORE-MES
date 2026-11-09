@@ -83,7 +83,7 @@ export function ekranAc(secenek: { c?: PlanlamaCalismasi | null; islemler?: stri
   const degisiklikler: Degisiklik[] = [];
   const git = vi.fn(); const sec = vi.fn();
   const islemler = [...(secenek.islemler ?? PLANCI), ...(secenek.maliyet ? [MALIYET_ISLEMI] : [])];
-  const yetki = yetkiKur(islemler, { yazabilir: true });
+  const yetki = yetkiKur(islemler);
   function Kap() {
     const [c, cYaz] = useState<PlanlamaCalismasi | null>(secenek.c === undefined ? calismaKur() : secenek.c);
     const komut: CalismaKomutu | null = c && yetki.calismaYazabilir ? {

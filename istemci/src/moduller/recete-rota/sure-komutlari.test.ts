@@ -47,15 +47,18 @@ describe('Süreler köprüsü', () => {
     expect(yaz).toMatchObject({ sonuc: { ok: true }, ek: null });
     await isle('komut', { ad: 'rota-olcum-yaz', govde: { adimId: 41, tur: 'hazirlik', sureDk: null, makineId: 3, okunanId: null } });
     await isle('komut', { ad: 'rota-olcum-kabul', govde: { adimId: 41, tur: 'degisim', olcumId: 12, makineId: 3, okunanId: 12, sureDk: 99 } });
+    await isle('komut', { ad: 'rota-olcum-kabul', govde: { adimId: 41, tur: 'islem', olcumId: 14, deger: 'ortanca', makineId: null, okunanId: 14 } });
     const postlar = istekler.filter((i) => i.yontem === 'POST');
-    expect(postlar.map((i) => i.yol)).toEqual(['/rota/adimlar/41/gerceklesen-sure', '/rota/adimlar/41/gerceklesen-sure', '/rota/adimlar/41/gerceklesen-sure/kabul']);
+    expect(postlar.map((i) => i.yol)).toEqual(['/rota/adimlar/41/gerceklesen-sure', '/rota/adimlar/41/gerceklesen-sure', '/rota/adimlar/41/gerceklesen-sure/kabul',
+      '/rota/adimlar/41/gerceklesen-sure/kabul']);
     expect(postlar.map((i) => i.govde)).toEqual([
       { tur: 'islem', makineId: null, okunanId: 9, sureDk: 3.5 },
       { tur: 'hazirlik', makineId: 3, okunanId: null, sureDk: null },
       { tur: 'degisim', makineId: 3, okunanId: 12, olcumId: 12 },
+      { tur: 'islem', makineId: null, okunanId: 14, olcumId: 14, deger: 'ortanca' },
     ]);
     expect(postlar.every((i) => Boolean(i.baslik[ISTEK_KIMLIGI_BASLIGI]))).toBe(true);
-    expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(3);
+    expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(4);
   });
 
   it('SUK-3: geçersiz tür, adım, ölçüm ya da negatif süre istek atmadan 400 ile reddedilir', async () => {
@@ -67,6 +70,7 @@ describe('Süreler köprüsü', () => {
       ['rota-olcum-yaz', { adimId: 41, tur: 'islem', sureDk: -1, makineId: null, okunanId: null }],
       ['rota-olcum-kabul', { adimId: 41, tur: 'islem', makineId: null, okunanId: null }],
       ['rota-olcum-kabul', { adimId: 41, tur: 'islem', olcumId: 5, makineId: 'x', okunanId: null }],
+      ['rota-olcum-kabul', { adimId: 41, tur: 'islem', olcumId: 5, deger: 'ortalama', makineId: null, okunanId: null }],
     ];
     for (const [ad, govde] of gecersizler) {
       expect(await isle('komut', { ad, govde }).then(() => null, kopruHatasi), JSON.stringify(govde)).toMatchObject({ durum: 400 });

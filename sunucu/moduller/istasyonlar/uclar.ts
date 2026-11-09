@@ -6,7 +6,7 @@ import {
   kisiIsMerkezleriCevabi, kisiIsMerkezleriGovdesi, kisiParametresi, kisiSecenekleriCevabi, makineGovdesi, makineGuncellemeGovdesi,
   makineKaydiSemasi, makineKisiSorgusu, makineKisileriCevabi, makineSorgusu, makinelerCevabi, operasyonTipiGovdesi, operasyonTipiGuncellemeGovdesi, operasyonTipiKaydiSemasi,
   operasyonTipleriCevabi, panoOzetiCevabi, pasifSorgusu, kisiYetkinligiCevabi, makineDurumlariCevabi, makineDurumuGovdesi, planAyarlariCevabi, planAyariGovdesi,
-  yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluTasiGovdesi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
+  yetkinlikAyrintiGovdesi, yetkinlikGecmisiCevabi, yetkinlikGovdesi, yetkinlikParametresi, yetkinliklerCevabi, istasyonCokluEkleGovdesi, istasyonTopluKaydetGovdesi, istasyonTopluTasiGovdesi, topluKaydetCevabi, makineCokluEkleGovdesi, makineTopluDurumGovdesi,
   ayarYetkinligiBelirleGovdesi, ayarYetkinligiParametresi, makineTopluTasiGovdesi, topluAktiflikGovdesi, yetkinlikTopluGovdesi, makineYetkinlikGovdesi, tezgahSiniriGovdesi,
   aparatKapasiteleriCevabi, aparatKapasitesi, tesisSablonuSonucu, aparatKapasitesiGovdesi, aparatKapasitesiGuncellemeGovdesi, aparatKapasitesiSilmeGovdesi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -567,6 +567,16 @@ export const uclar = [
     govde: istasyonCokluEkleGovdesi,
     cevap: istasyonlarCevabi,
     isle: async ({ db, govde }) => ({ istasyonlar: await servis.istasyonlariEkle(db, govde) }),
+  }),
+  // Toplu kaydet (2627): Excel'den toplu giriş. Tek transaction; dosya başına tek istek kimliği, yinelenen istek ilk cevabı alır.
+  uc({
+    yontem: 'POST',
+    yol: '/istasyonlar/toplu-kaydet',
+    yetki: 'istasyonlar.yaz',
+    tekrarKorumali: true,
+    govde: istasyonTopluKaydetGovdesi,
+    cevap: topluKaydetCevabi,
+    isle: ({ db, govde }) => servis.topluKaydet(db, govde),
   }),
   ...aramaUclari,
 ];

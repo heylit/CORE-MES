@@ -13,6 +13,10 @@ import { yetkiKur } from '../../yetki.ts';
 import { eksen, kapaliPencereler, kaydirma, kuyruk, odakDolulugu, odakGruplari, odakTezgahlari, otomatikOdak, pencere, serit, varsayilanGun } from './kurallar.ts';
 import { BASLAMIS_SIRA } from '../../motor/hamle/hamle.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 afterEach(cleanup);
 
 // Örnek çalışma (motor/ornek.ts): beş tezgâh, her biri kendi grubunda, bir fasoncu; şimdi 8. saat, işler beşinci günden sonra.
@@ -53,7 +57,7 @@ const DEPO = { durum: null } as unknown as PlanlamaDeposu;
 function ac(yaz = true) {
   const oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> = {
     depo: DEPO, calisma: ornekCalisma(), komut: null, git: vi.fn(), yenile: vi.fn(),
-    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])], { yazabilir: yaz }),
+    yetki: yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])]),
   };
   function Iskelet() {
     const [olcek, setOlcek] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
@@ -106,8 +110,8 @@ describe('Odak tahtası ekranı', () => {
     expect(odak()?.dataset.sev).toBe('grup');
     fireEvent.change(k.getByRole('combobox', { name: 'Başka bölüm' }), { target: { value: 'fason' } });
     expect(screen.getByRole('region', { name: 'Odak: Fason' })).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('region', { name: 'Odak: Fason' })).getByRole('button', { name: /@5|5 \(fason\)/ }));
-    expect(screen.getByRole('region', { name: 'Odak: 5 (fason)' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('region', { name: 'Odak: Fason' })).getByRole('button', { name: /Ornek Fason Isil Islem \(fason\)/ }));
+    expect(screen.getByRole('region', { name: 'Odak: Ornek Fason Isil Islem (fason)' })).toBeTruthy();
     expect(screen.queryByText(/takvimi$/)).toBeNull();
     tus('o');
     expect(odak()).toBeNull();

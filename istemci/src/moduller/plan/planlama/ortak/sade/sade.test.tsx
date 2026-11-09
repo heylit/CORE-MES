@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { SadeSayfa, Sihirbaz, alanHatalari, type SadeTanimi, type SihirbazTanimi } from './index.ts';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { PLANA_GIDILEMEZ_NOTU, PLANDA_ARANIR_NOTU, SadeSayfa, SonKart, Sihirbaz, alanHatalari, type SadeTanimi, type SihirbazTanimi } from './index.ts';
 
 // Değerler uydurmadır.
 afterEach(() => { cleanup(); });
@@ -127,19 +128,36 @@ describe('Sade kabuk', () => {
     expect(document.activeElement).toBe(screen.getByLabelText(/Oran/));
   });
 
-  it('plan eskiyse kayıt kartı eski notu yazar; yetkiliye Plan iyileştirme ara pasif görünür (357 b), yetkisize görünmez', () => {
+  it('plan eskiyse kayıt kartı eski notu yazar; yetkiliye Plan iyileştirme ara görünür (yönlendiricisiz çizimde pasif, nedeni yazılı), yetkisize görünmez', () => {
     const t = { ...sayfa([{ ...form(), ilk: () => ({ tur: 'a', oran: '1', ay: '1' }) }]), planEski: true };
     const kaydet = (): void => { fireEvent.click(dugme('Gir')); fireEvent.click(dugme('İleri')); fireEvent.click(dugme('İleri')); fireEvent.click(dugme('Kaydet')); };
     const { unmount } = render(<SadeSayfa tanim={{ ...t, iyilestirYetkisi: true }} />);
     kaydet();
     expect(screen.getByRole('status').textContent).toContain('Plan bu değişikliği henüz içermiyor.');
     expect((dugme('Plan iyileştirme ara') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Plan motoru bu ekrana bağlanınca açılır.')).toBeTruthy();
+    expect(screen.getByText(PLANA_GIDILEMEZ_NOTU)).toBeTruthy();
     unmount();
     render(<SadeSayfa tanim={t} />);
     kaydet();
     expect(screen.getByRole('status').textContent).toContain('Plan bu değişikliği henüz içermiyor.');
     expect(screen.queryByRole('button', { name: 'Plan iyileştirme ara' })).toBeNull();
+  });
+
+  it('yönlendirici içinde Plan iyileştirme ara plan sayfasına gider (B-2483-36)', () => {
+    render(
+      <MemoryRouter initialEntries={['/plan/ysiparis']}>
+        <Routes>
+          <Route path="/plan/ysiparis" element={<SonKart metin="Kaydedildi" kapat={() => {}} planEski iyilestirYetkisi />} />
+          <Route path="/plan/plan" element={<p>Plan sayfası</p>} />
+          <Route path="/plan" element={<p>Plan sayfası</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(PLANDA_ARANIR_NOTU)).toBeTruthy();
+    const d = dugme('Plan iyileştirme ara') as HTMLButtonElement;
+    expect(d.disabled).toBe(false);
+    fireEvent.click(d);
+    expect(screen.getByText('Plan sayfası')).toBeTruthy();
   });
 
   it('kayıtta ek kontrol iletisi kaydı durdurur', () => {

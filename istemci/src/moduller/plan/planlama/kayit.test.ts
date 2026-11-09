@@ -192,6 +192,30 @@ describe('CalismaYazici', () => {
     expect(y.geriDon(0)).toBe(false);
   });
 
+  it('yinele geri alınanı sırayla yeniden uygular, yeniden geri alınabilir; yeni değişiklik yineleme listesini boşaltır', () => {
+    const { y } = kur();
+    y.degistir('Bir', (t) => { t.w.sure = 1; });
+    y.degistir('İki', (t) => { t.w.sure = 2; t.locks = { a: { m: 'M1', S: 1 } }; });
+    expect(y.yinelenebilir()).toBe(false);
+    expect(y.geriDon(2)).toBe(true);
+    expect(y.calisma.w.sure).toBe(10);
+    expect(y.yinelenebilir()).toBe(true);
+    expect(y.yinele()).toBe(true);
+    expect(y.calisma.w.sure).toBe(1);
+    expect(y.calisma.iz[0]?.ne).toBe('Yinelendi: Bir');
+    expect(y.yinele()).toBe(true);
+    expect(y.calisma.w.sure).toBe(2);
+    expect(Object.keys(y.calisma.locks)).toEqual(['a']);
+    expect(y.yinele()).toBe(false);
+    expect(y.geriAdimlari().map((g) => g.ne)).toEqual(['İki', 'Bir']);
+    expect(y.geriAl()).toBe(true);
+    expect(y.calisma.w.sure).toBe(1);
+    expect(Object.keys(y.calisma.locks)).toEqual([]);
+    y.degistir('Üç', (t) => { t.w.sure = 3; });
+    expect(y.yinelenebilir()).toBe(false);
+    expect(y.yinele()).toBe(false);
+  });
+
   it('yalnız sessiz değişiklik çatışırsa hata gösterilmez, sayfa yeniden okur; ardından gelen sessiz değişiklik de sessizce bırakılır', async () => {
     const catismadaYenile = vi.fn();
     const { y, uyarilar } = kur({ catismadaYenile }, async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); });

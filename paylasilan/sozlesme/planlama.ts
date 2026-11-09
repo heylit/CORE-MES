@@ -113,6 +113,8 @@ export const calismaTaslagiCevabi = z.object({
   // 507 2 a: çalışmanın ek vardiyaları taslağa geçer; atlanan: sunucuda karşılığı olmayan (elle girilmiş, kapsam dışı ya da kullanımda
   // olmayan) makine ya da vardiya. Eski istemciler okumadığı için isteğe bağlı; sunucu her cevapta doldurur.
   ekMesai: z.object({ yazilan: z.number().int(), atlanan: z.number().int() }).optional(),
+  // B-2482-14: elle bölmenin adım adedine uyarlanan ya da motorca uygulanmayan payları (iş bütün ya da motorun kendi bölmesiyle yazıldı).
+  uyarilar: z.array(z.string()).optional(),
 });
 
 // 507 3 a (503'ün tersi): plan taslağının yerleşimleri ve kilitleri çalışmaya yazılır (eski "Çalışmaya aç"ın planı). Yalnız çalışmada

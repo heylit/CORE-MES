@@ -2,6 +2,10 @@ import type { Metin } from './ozet/veri.ts';
 
 // Motor bağlanmadan çalışmayan düğmenin notu (357 b) ve yeni ekranda karşılığı olmayan iç görünümün notu (459/5 a).
 export const MOTOR_NOTU = 'Plan motoru bağlanınca açılır.';
+// Motor sunucuda açıkken (576) Planı kur ve iyileştirmenin pasif kalma nedenleri; motor notu bunlarda yanlış olurdu.
+export const CALISMA_ACILINCA = 'Planlama çalışması açılınca kurulur.';
+export const PLANDA_IYILESTIR = 'Plan sayfasında aranır.';
+export const PLAN_YETKISI_YOK = 'Plan yazma yetkiniz yok.';
 export const YOK_NOTU = 'Bu görünüm yeni ekranda yok.';
 // Verisi sahibi ekranından giren alanın notu (222 a, 223 a: veri.yaz kalkar).
 export const VERI_NOTU = 'Bu veri sahibi ekranında değişir.';

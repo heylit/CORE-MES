@@ -49,6 +49,7 @@ const Operasyonlar = tembel(yukleyiciler.rotalar, (m) => m.Operasyonlar);
 const Sureler = tembel(yukleyiciler.kaynaklar, (m) => m.Sureler);
 const Malzemeler = tembel(yukleyiciler.kaynaklar, (m) => m.Malzemeler);
 const Kaynaklar = tembel(yukleyiciler.kaynaklar, (m) => m.Kaynaklar);
+const Ayarlar = tembel(yukleyiciler.kaynaklar, (m) => m.Ayarlar);
 const SartnameTalimat = tembel(yukleyiciler.sartnameler, (m) => m.SartnameTalimat);
 
 const menu = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
@@ -68,6 +69,7 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   // Rota modülünün kütüphaneleri (989 a); rota tarafı olduğu için R1'in alanındadır.
   sartnameler: { ekran: SartnameTalimat, parca: 'R1' },
   kapanis: { ekran: Kapanis, parca: 'R3' },
+  ayarlar: { ekran: Ayarlar, parca: 'R2' },
 };
 
 export interface YeniSekme {

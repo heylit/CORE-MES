@@ -23,7 +23,8 @@ const kisi = (id: string) => ({
 const adim = (seq: number, stationId: string, ek: Record<string, unknown> = {}) => ({
   id: `50-o${String(seq)}`, seq, opNo: seq, opId: '13', stationId, setup: 0, cycle: 30, alts: [], altTimes: {}, ins: [], split: 'tek', minLot: 0, ...ek,
 });
-type Ayar = { istasyon: '40' | '10'; split?: 'bol' | 'tek'; minLot?: number; adet?: number; ekip?: Record<string, string[]>; bolmeKip?: string };
+type Ayar = { istasyon: '40' | '10'; split?: 'bol' | 'tek'; minLot?: number; adet?: number; ekip?: Record<string, string[]>;
+  bolmeKip?: 'otomatik' | 'kapali'; bolmeMaks?: number; kayitKip?: string };
 const girdi = (a: Ayar) => {
   const steps = [adim(10, a.istasyon, { split: a.split ?? 'bol', minLot: a.minLot ?? 0 }), adim(20, '30')];
   const ROTA = {
@@ -52,9 +53,11 @@ const girdi = (a: Ayar) => {
   const calisma = {
     surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
     rrSavedAt: 5, dataVer: 1, kisitSurum: 2, down: [], ekMesai: [], locks: {}, gercek: {}, w: { famK: 0.3, mat: 'sert', dondurma: 4, rule: 'edd' },
-    param: { tampon: false, tamponZ: 0, acilPay: 0, ...(a.bolmeKip ? { bolmeKip: a.bolmeKip } : {}) }, kapali: ['personel'], olaylar: [], plan: null,
+    param: { tampon: false, tamponZ: 0, acilPay: 0, ...(a.kayitKip ? { bolmeKip: a.kayitKip } : {}) }, kapali: ['personel'], olaylar: [], plan: null,
   };
-  const g = planGirdisi({ calisma: calismayaMotorAyari(calisma, MOTOR_AYARI_VARSAYILAN), kayit, kaynak, bugun: '2026-10-19' });
+  const g = planGirdisi({ calisma: calismayaMotorAyari(calisma, {
+    ...MOTOR_AYARI_VARSAYILAN, ...(a.bolmeKip ? { bolmeKip: a.bolmeKip } : {}), ...(a.bolmeMaks ? { bolmeMaks: a.bolmeMaks } : {}),
+  }), kayit, kaynak, bugun: '2026-10-19' });
   assert.ok(g);
   return g;
 };
@@ -90,9 +93,15 @@ describe('plan: paralel bölme planlama atölyesinde (1952 iş 2a)', () => {
     assert.deepEqual(planla({ istasyon: '40', adet: 1 }).paylar, ['O1.10']);
   });
 
-  test('reddedilen: rotada paralel böl yoksa ya da çalışmada bölme kapalıysa bölünmez', () => {
+  test('reddedilen: rotada paralel böl yoksa ya da motor ayarında bölme kapalıysa bölünmez', () => {
     assert.deepEqual(planla({ istasyon: '40', split: 'tek' }).paylar, ['O1.10']);
     assert.deepEqual(planla({ istasyon: '40', bolmeKip: 'kapali' }).paylar, ['O1.10']);
+  });
+
+  test('2523 a: bölmeyi ve en çok payı motor ayarı yönetir; sayfa kaydındaki eski değer geçmez', () => {
+    assert.equal(planla({ istasyon: '10', adet: 9, bolmeMaks: 2 }).paylar.length, 2);
+    assert.equal(planla({ istasyon: '10', adet: 9, kayitKip: 'kapali' }).paylar.length, 3, 'kayıtta kapalı, ayar açık');
+    assert.deepEqual(planla({ istasyon: '10', adet: 9, kayitKip: 'otomatik', bolmeKip: 'kapali' }).paylar, ['O1.10'], 'kayıtta açık, ayar kapalı');
   });
 
   test('önce ekip (1955 a): ekipte iki üye varsa paylar yalnız onlara; tek üyede istasyonun bütün kişileri', () => {

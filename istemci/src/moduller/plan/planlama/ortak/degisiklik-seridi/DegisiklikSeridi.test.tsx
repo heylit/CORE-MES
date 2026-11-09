@@ -5,7 +5,7 @@ import type { KaynakDegisikligi } from '#paylasilan/sozlesme/planlama.ts';
 import { CalismaYazici, bekleyenler, reddedilemez } from '../../kayit.ts';
 import { calismaKur } from '../../siparis/test-veri.ts';
 import { DegisiklikSeridi } from './DegisiklikSeridi.tsx';
-import { AYRINTI_FARK, canliBayatMetni, kaynakSatiri, seritListesi, seritMetni, type CanliBayatlik } from './kurallar.ts';
+import { AYRINTI_FARK, canliBayatMetni, canliBayatSatiri, farkMetni, kaynakSatiri, seritListesi, seritMetni, type CanliBayatlik } from './kurallar.ts';
 
 afterEach(() => { cleanup(); });
 
@@ -21,8 +21,16 @@ describe('değişiklik şeridi kuralları', () => {
   it('başka sayfa satırı alan adları ve farklarla kurulur; kişi uydurulmaz, reddedilemez', () => {
     const s = kaynakSatiri(KD, 5, 4);
     expect(s).toMatchObject({ id: 'dis-4', ne: 'Başka sayfada değişti: Tezgâhlar, Makine arızası', kim: '', isler: ['*'], geri: null, dis: true });
-    expect(s.ayrinti).toBe('tezgahlar[M2]: boş → {"id":"M2"}; ariza.M1: false → true');
+    expect(s.ayrinti).toBe('Tezgâhlar, M2: eklendi; Makine arızası, M1: hayır → evet');
     expect(reddedilemez([s], [s.id])).toMatch(/yalnız uygulanabilir/);
+  });
+
+  it('fark alan yolu değil kullanıcı metniyle yazılır; adı bilinmeyen iç alanın değeri yazılmaz (B-2499-8)', () => {
+    expect(farkMetni({ yol: 'ariza.length', eski: 0, yeni: 1 })).toBe('Makine arızası: kayıt sayısı 0 → 1');
+    expect(farkMetni({ yol: 'saSurum', eski: 3, yeni: 4 })).toBe('Planlama verisi: değişti');
+    expect(farkMetni({ yol: 'siparisler[2].adet', eski: 10, yeni: 12 })).toBe('Siparişler, 3. kayıt adet: 10 → 12');
+    expect(farkMetni({ yol: 'tezgahlar[0].xyz', eski: 1, yeni: 2 })).toBe('Tezgâhlar, 1. kayıt: değişti');
+    expect(farkMetni({ yol: 'tezgahlar[M3]', eski: { id: 'M3' }, yeni: null })).toBe('Tezgâhlar, M3: çıkarıldı');
   });
 
   it('ayrıntı en çok AYRINTI_FARK fark yazar, kalanı ve kesiği söyler', () => {
@@ -100,7 +108,7 @@ describe('DegisiklikSeridi', () => {
 // 2319 (S7): canlı plan bayat işareti. Veriler uydurmadır.
 const CANLI: CanliBayatlik = {
   bayat: true,
-  sayilar: { 'emir-bitti': 2, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0 },
+  sayilar: { 'emir-bitti': 2, 'adim-bitti': 0, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0 },
   olaylar: [
     { neden: 'durus', zaman: '2026-11-08T08:00:00.000Z', emirNo: null, makineKod: 'T1' },
     { neden: 'emir-bitti', zaman: '2026-11-08T07:00:00.000Z', emirNo: 'E-1', makineKod: null },
@@ -110,7 +118,9 @@ const CANLI: CanliBayatlik = {
 describe('canlı plan bayat işareti (2319)', () => {
   it('metin yalnız sıfırdan büyük nedenleri sayar; bayat değilse yok', () => {
     expect(canliBayatMetni(CANLI)).toBe('Canlı plan son canlıya almadan sonra eskidi: 2 emir erken bitti, 1 makine duruşu; planı gözden geçirin');
-    expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
+    expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'adim-bitti': 3 } })).toContain('2 emir erken bitti, 3 adım erken bitti');
+    expect(canliBayatSatiri({ neden: 'adim-bitti', zaman: '', emirNo: 'E-2', makineKod: null })).toBe('adım erken bitti: E-2');
+    expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'adim-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
   });
 
   it('bayatsa ikinci satır çizilir, olaylar düğmeyle açılır; şerit eski görünür', () => {

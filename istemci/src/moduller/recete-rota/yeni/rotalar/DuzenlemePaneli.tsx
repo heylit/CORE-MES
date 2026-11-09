@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Dugme, IsaretKutusu, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
-  adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz, carpanYaz,
-  cevrimToplami, DAL_HARFLERI, dalYaz, degisimOrani, fasonaCevir, fasonMu,
+  adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
+  cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
   girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
@@ -12,6 +12,7 @@ import {
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
+import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
 import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
@@ -24,7 +25,7 @@ function Baslik({ baslik, etiket, kapat }: { baslik: string; etiket?: string; ka
     <div className="tc-rr1-insp-hd">
       {etiket && <span className="tc-rr1-tag">{etiket}</span>}
       <b>{baslik}</b>
-      <button type="button" className="tc-rr1-ib" onClick={kapat} aria-label="Paneli kapat"><Simge ad="x" boyut="k" /></button>
+      <button type="button" className="tc-rr1-ib" onClick={kapat} aria-label="Paneli kapat" title="Paneli kapat (Esc)"><Simge ad="x" boyut="k" /></button>
     </div>
   );
 }
@@ -151,6 +152,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const liste = sirali(dz.adimlar(s.urunId));
   const a = liste.find((x) => x.id === s.adimId) ?? liste.find((x) => x.seq === s.seq && x.id.startsWith('o'));
   const sahip = h.malzeme.get(s.urunId);
+  const { data: numaralar } = useOpNumaralari(s.urunId, liste, a?.opNo === null);
   if (!a || !sahip) return <BosPanel r={r} />;
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
@@ -167,6 +169,12 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const onceki = tuketilenAdimlar(liste, idx);
   const onculler = adimOnculleri(liste)[idx] ?? null;
   const birlesebilen = [...new Set([...birlesebilenDallar(liste, idx), ...adimBirlesen(a)])].sort();
+  // 2542: kolun çatal ve birleşme yeri, kol çarpanı ve buradan açılan kollar (veri adım başına kalır).
+  const dallar = dalBilgileri(liste);
+  const kendiDali = dallar.find((b) => b.dal === adimDali(a)) ?? null;
+  const buradanCatallanan = dallar.filter((b) => b.catal?.id === a.id);
+  const yeniDal = serbestDal(liste);
+  const birlesmemis = birlesebilenDallar(liste, idx).filter((d) => !adimBirlesen(a).includes(d));
   const kart = son ? null : akisKarti(sahip.id, liste, idx, dz.malzemeVar);
   const opSecenek = [...h.op.values()].filter((o) => o.aktif || o.id === a.opId).map((o) => ({ deger: o.id, baslik: `${o.abbr ?? o.code} ${o.name}` }));
   const girenEkle = (m: Malzeme, n: number) => {
@@ -181,7 +189,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const yanEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, outs: [...x.outs, { itemId: m.id, qty: n, kind: 'yan' as const }] }), `${m.code} yan ürün eklendi`); };
   return (
     <>
-      <Baslik baslik={`${op?.abbr ?? 'Adım'} ${String(statuNo(a))}`} etiket={sahip.code} kapat={kapat} />
+      <Baslik baslik={`${op?.abbr ?? op?.code ?? 'Adım'} ${a.opNo === null ? '· yeni adım' : String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
+      {a.opNo === null && <YeniNumara siradaki={numaralar ? yeniAdimNumaralari(liste, numaralar.siradaki).get(a.id) : undefined} />}
       {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
       {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
       <UretimYeri r={r} s={s} a={a} duzen={duzen} />
@@ -210,10 +219,24 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
         <SecimAlani etiket="Bu adımın dalı" deger={adimDali(a) ?? ''} kapali={!duzen} bos="Ana hat"
           secenekler={[...new Set([...DAL_HARFLERI, ...(adimDali(a) ? [adimDali(a) ?? ''] : [])])].map((d) => ({ deger: d, baslik: `Dal ${d}` }))}
           yaz={(v) => { yaz((x) => dalYaz(x, v || null), 'Dal değişti'); }} />
-        {adimDali(a) !== null && (
-          <SayiAlani etiket="1 mamul için adet" deger={adimCarpani(a)} kapali={!duzen} birim="adet"
-            ipucu="Bu dalda bir mamul için kaç parça işlenir; adım adedi emir adedi ile çarpılır."
-            yaz={(v) => { yaz((x) => carpanYaz(x, v), 'Dal çarpanı değişti'); }} />
+        {kendiDali && <p className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(kendiDali)}</p>}
+        {kendiDali && (
+          <SayiAlani etiket={`Dal ${kendiDali.dal}: 1 mamul için adet`} deger={kendiDali.carpan ?? adimCarpani(a)} kapali={!duzen} birim="adet"
+            ipucu={kendiDali.carpan === null ? 'Dalın adımlarında farklı adet var; yazılan değer dalın bütün adımlarına geçer.'
+              : 'Bu dalda bir mamul için kaç parça işlenir; dalın bütün adımlarına yazılır, adım adedi emir adedi ile çarpılır.'}
+            yaz={(v) => { dz.degistir(s.urunId, (l) => dalCarpaniYaz(l, kendiDali.dal, v), `Dal ${kendiDali.dal} çarpanı değişti`); }} />
+        )}
+        {buradanCatallanan.map((b) => <p key={b.dal} className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(b)}</p>)}
+        {duzen && adimDali(a) === null && !son && (
+          <Dugme tur="ikincil" simge="route" disabled={yeniDal === null} title={yeniDal === null ? 'Sekiz dalın hepsi kullanılıyor' : undefined}
+            onClick={() => { if (yeniDal) { r.sec({ tur: 'adimEkle', urunId: s.urunId, sonraId: a.id, dal: yeniDal }); r.paletAc(); } }}>
+            Buradan kol aç
+          </Dugme>
+        )}
+        {duzen && birlesmemis.length > 0 && (
+          <Dugme tur="ikincil" simge="layers" onClick={() => { dz.degistir(s.urunId, (l) => kollariBirlestir(l, a.id), `Dal ${birlesmemis.join(', ')} bu adımda birleşti`); }}>
+            Kolları burada birleştir ({birlesmemis.map((d) => `Dal ${d}`).join(', ')})
+          </Dugme>
         )}
         {birlesebilen.length > 0 ? (
           <div className="tc-rr1-dalsec" role="group" aria-label="Bu adımda birleşen dallar">
@@ -294,15 +317,29 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                   secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
                   yaz={(v) => { yaz((x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
               </span>
-              <span className="tc-rr1-genis">
-                <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
-                  secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-                  yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
-                <small className="tc-rr1-ipucu">
-                  {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
-                  {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
-                </small>
-              </span>
+              {dz.insanli(a.stationId) ? (
+                // 2685: insanlı istasyonda adayları istasyonda yetkin kişilerdir; makineleri olsa da aday olmaz (kapasite-insan.md madde 2).
+                <span className="tc-rr1-genis tc-rr1-alan">
+                  <span className="tc-rr1-lbl">Makine</span>
+                  <small className="tc-rr1-ipucu">
+                    İnsanlı istasyon: iş, istasyonda yetkin ve vardiyası olan kişilere açılır; makine seçilmez.
+                    {a.machineId && ' Bu adımda eskiden seçilmiş bir makine var; plan onu kullanmaz.'}
+                  </small>
+                  {a.machineId && duzen && (
+                    <Dugme simge="x" onClick={() => { yaz((x) => ({ ...x, machineId: null }), 'Makine seçimi kaldırıldı'); }}>Makine seçimini kaldır</Dugme>
+                  )}
+                </span>
+              ) : (
+                <span className="tc-rr1-genis">
+                  <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
+                    secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
+                    yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
+                  <small className="tc-rr1-ipucu">
+                    {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
+                    {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
+                  </small>
+                </span>
+              )}
               {(() => {
                 // Hazırlık bölümü (1310 a): toplam hazırlık = hazırlık + ayar; ayar süresi yalnız ayar işaretliyken girilir.
                 const h = hazirlikBolumu(a);
@@ -350,8 +387,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             yaz={(v) => { yaz((x) => ({ ...x, rejectPct: Math.min(95, Math.max(0, v ?? 0)) }), 'Fire payı değişti'); }} />
           {!fason && (
             <>
-              <SecimAlani etiket="Makine kullanımı" deger={a.split} kapali={!duzen}
-                secenekler={[{ deger: 'tek', baslik: 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
+              <SecimAlani etiket={dz.insanli(a.stationId) ? 'Kişi kullanımı' : 'Makine kullanımı'} deger={a.split} kapali={!duzen}
+                secenekler={[{ deger: 'tek', baslik: dz.insanli(a.stationId) ? 'Tek kişide' : 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
                 yaz={(v) => { yaz((x) => ({ ...x, split: v === 'bol' ? 'bol' : 'tek' }), 'Makine kullanımı değişti'); }} />
               {a.split === 'bol' && (
                 <SayiAlani etiket="En küçük parça" deger={a.minLot} kapali={!duzen} yerTutucu="boş"
@@ -423,8 +460,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
       )}
       {duzen && (
         <div className="tc-rr1-isec tc-rr1-btnrow">
-          <Dugme tur="ikincil" simge="up" disabled={idx === 0} onClick={() => { const p = liste[idx - 1]; if (p) dz.degistir(s.urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>Yukarı</Dugme>
-          <Dugme tur="ikincil" simge="down" disabled={son} onClick={() => { const n = liste[idx + 1]; if (n) dz.degistir(s.urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>Aşağı</Dugme>
+          <Dugme tur="ikincil" simge="up" disabled={idx === 0} onClick={() => { const p = liste[idx - 1]; if (p) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>Yukarı</Dugme>
+          <Dugme tur="ikincil" simge="down" disabled={son} onClick={() => { const n = liste[idx + 1]; if (n) dz.tasi(s.urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>Aşağı</Dugme>
           <Dugme tur="ikincil" simge="plus" onClick={() => { r.paletAc(); }}>Sonrasına adım</Dugme>
           <Dugme tur="tehlike" simge="trash" onClick={() => { if (dz.degistir(s.urunId, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`)) r.sec(null); }}>Adımı sil</Dugme>
         </div>
@@ -548,6 +585,11 @@ function AdimEklePaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tu
     <>
       <Baslik baslik="Adım ekle" etiket={sahip.code} kapat={kapat} />
       {/* Operasyon listesi tek yerdedir: soldaki palet (1113 a). Burada yalnız eklenecek yer ve yeni operasyon tanımı kalır. */}
+      {s.dal && sonra && (
+        <p className="tc-rr1-ipucu" data-parca="yeni-kol">
+          Yeni Dal {s.dal}: OP {String(statuNo(sonra))} ardından çatallanır. Paletten ilk adımını seç; ardına eklenen adımlar da bu dala düşer.
+        </p>
+      )}
       <p className="tc-rr1-ipucu">{sonra ? `${String(sonra.seq)} numaralı adımdan sonra eklenecek.` : 'Rotanın başına eklenecek.'} Soldaki operasyon paletinden operasyona dokun ya da sürükle; istasyon ve süreler katalogdan gelir.</p>
       {/* Operasyon tipi kataloğu İstasyonlar'da tanımlanır (1927 a); yeni tip orada açılınca palete gelir. */}
       <SahibindeDuzenle sahip="operasyon" metin="Yeni operasyonu İstasyonlar'da tanımla" />
@@ -579,11 +621,20 @@ function YeniRotaPaneli({ r, kapat }: { r: RotaEkrani; kapat: () => void }) {
   );
 }
 
+// RT-31: numara kayıtta verilir, kullanıcı yazmaz; silinmiş numara yeniden verilmez (2519 a).
+function YeniNumara({ siradaki }: { siradaki: number | undefined }) {
+  return (
+    <p className="tc-rr1-ipucu" data-parca="yeni-op-no">
+      <Simge ad="tag" boyut="k" /> {siradaki === undefined ? 'Numarayı sistem kayıtta verir.' : `Numarayı sistem verir: sıradaki OP ${String(siradaki)}.`}
+    </p>
+  );
+}
+
 function BosPanel({ r }: { r: RotaEkrani }) {
   return (
     <div className="tc-rr1-insp-empty">
       <h3>Düzenleme paneli</h3>
-      <p className="tc-rr1-ipucu">Şemada bir operasyon kutusuna ya da malzeme kartına, tabloda bir satırın OP numarasına dokun; ayrıntıları burada {r.yetki.rotaYaz ? 'düzenlersin' : 'görürsün'}.</p>
+      <p className="tc-rr1-ipucu">Şemada bir operasyon kutusuna ya da malzeme kartına, tabloda bir satıra dokun; ayrıntıları burada {r.yetki.rotaYaz ? 'düzenlersin' : 'görürsün'}.</p>
       <ul className="tc-rr1-liste">
         <li>Rota değişiklikleri taslak revizyona yazılır; üstteki şeritte görünür ve geri alınabilir.</li>
         <li>Onaylanana kadar plan, Kanban ve emirler yürürlükteki rotayı kullanır.</li>
@@ -593,9 +644,40 @@ function BosPanel({ r }: { r: RotaEkrani }) {
   );
 }
 
-export function DuzenlemePaneli({ r }: { r: RotaEkrani }) {
+// Daraltılmış panelin şeridi (B-2482-R5): seçimin kısa adını gösterir, dokununca panel açılır. Seçim paneli kendiliğinden açmaz.
+function secimAdi(r: RotaEkrani): string {
   const s = r.secim;
-  const kapat = () => { r.sec(null); };
+  const { h } = r.duzen;
+  switch (s?.tur) {
+    case undefined: return 'Seçim yok';
+    case 'adim': {
+      const a = r.duzen.adimlar(s.urunId).find((x) => x.id === s.adimId);
+      const op = a ? h.op.get(a.opId) : undefined;
+      return a ? `${a.opNo === null ? 'Yeni adım' : `OP ${String(a.opNo)}`} ${op?.name ?? ''}`.trim() : 'Adım';
+    }
+    case 'urun': return h.malzeme.get(s.urunId)?.code ?? 'Ürün';
+    case 'giren': case 'girenEkle': return 'Giren';
+    case 'yan': case 'yanEkle': return 'Yan ürün';
+    case 'adimEkle': return 'Adım ekle';
+    case 'yeniRota': return 'Yeni rota';
+  }
+}
+
+export function PanelSeridi({ r, ac }: { r: RotaEkrani; ac: () => void }) {
+  const ad = secimAdi(r);
+  return (
+    <button type="button" className="tc-rr1-insp-serit" onClick={ac} aria-label={`Düzenleme panelini aç: ${ad}`} title="Düzenleme panelini aç">
+      <Simge ad="chev-left" boyut="k" />
+      <span className="tc-rr1-insp-serit-ad">{ad}</span>
+    </button>
+  );
+}
+
+// Panel çekmecedir (2558): kapalıyken seçim sürer, yalnız panel görünmez; çift tıklama ya da düğme açar.
+export function DuzenlemePaneli({ r, acik, kapat: paneliKapat }: { r: RotaEkrani; acik: boolean; kapat: () => void }) {
+  const s = r.secim;
+  // Başlıktaki çarpı çekmeceyi kapatır; seçim şemada kalır.
+  const kapat = paneliKapat;
   const icerik = (() => {
     switch (s?.tur) {
       case undefined: return <BosPanel r={r} />;
@@ -608,7 +690,7 @@ export function DuzenlemePaneli({ r }: { r: RotaEkrani }) {
     }
   })();
   return (
-    <aside className={`tc-rr1-insp${s ? '' : ' tc-rr1-kapali'}`} aria-label="Düzenleme paneli">
+    <aside id="tc-rr1-duzen" className={`tc-rr1-insp${s && acik ? '' : ' tc-rr1-kapali'}`} aria-label="Düzenleme paneli">
       {icerik}
     </aside>
   );

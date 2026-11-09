@@ -177,30 +177,45 @@ export function idariTalepSatinAlmalari(db: Db, idariIdler: readonly number[]): 
   );
 }
 
-// 2611 a: projeye bağlı talebin sipariş satırları. Satırın genel iskontolu mal tutarı, sipariş miktarı, net teslimi, kartı (kalemin katalog
-// kartı) ve fason bağı (sipariş satırının ya da kalemin iş emri); masraf siparişin nakliyesi (hariçse) ve diğer masrafı. İptal talep ve
-// başka talebe birleşmiş kaynak gelmez (siparişler birleşik taleptedir).
-export interface ProjeAlimSatiri {
-  projeId: number; talepId: string; teklifId: string; paraBirimi: string; mal: string; miktar: string; teslim: string;
-  malzemeNo: number | null; fasonBagli: boolean; masraf: string;
+// 2624 b: kalemin üretim emri. Birleşik talepte kaynaktan gelen kalem kaynağın emrine bağlı kalır (kaynak birleşmişken donmuştur);
+// talebin emri yalnız kaynaksız kaleme uygulanır. Mal kabul, proje ve emir tutarı ve genel gider oranı bu tek ifadeyi kullanır (Veri 3).
+// Sorguda t talep, kt kalemin kaynak talebi takma adıdır.
+export const KALEM_EMRI = 'COALESCE(kt.uretim_emri_id, t.uretim_emri_id)';
+
+// 2611 a, 2637 a, 2638: filtreye uyan siparişlerin bütün satırları (masraf payı siparişin bütün malına oranlanır). Satırın genel iskontolu
+// mal tutarı, sipariş miktarı, net teslimi, kartı (kalemin katalog kartı), fason bağı (sipariş satırının ya da kalemin iş emri), emri
+// (KALEM_EMRI, 2624) ve talebin projesi; masraf siparişin nakliyesi (hariçse) ve diğer masrafı. İptal talep gelmez; birleşmiş kaynağın
+// siparişi yoktur (siparişler birleşik taleptedir).
+export interface YolSatiri {
+  talepId: string; teklifId: string; paraBirimi: string; mal: string; miktar: string; teslim: string;
+  malzemeNo: number | null; fason: boolean; emirId: number | null; projeId: number | null; masraf: string;
 }
-export function projeAlimSatirlari(db: Db, projeIdler: readonly number[]): Promise<ProjeAlimSatiri[]> {
-  return db.sorgu<ProjeAlimSatiri>(
-    `SELECT t.proje_id AS "projeId", s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
+// siparisler: Finans'ın belgesine bağlı sipariş; talep iptal olsa da fatura gerçektir, durum süzülmez.
+export interface YolFiltresi { projeIdler?: readonly number[]; emirIdler?: readonly number[]; siparisler?: readonly { talepId: string; teklifId: string }[] }
+const YOL_KAYNAGI = `FROM satin_alma_talep t
+       JOIN satin_alma_siparis_satiri s ON s.talep_id = t.id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id`;
+export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]> {
+  return db.sorgu<YolSatiri>(
+    `WITH secilen AS (
+       SELECT DISTINCT s.talep_id, s.teklif_id ${YOL_KAYNAGI}
+        WHERE (t.durum <> 'iptal' AND (t.proje_id = ANY($1::int[]) OR ${KALEM_EMRI} = ANY($2::int[])))
+           OR (s.talep_id, s.teklif_id) IN (SELECT * FROM unnest($3::uuid[], $4::uuid[])))
+     SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
             (s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
             s.miktar::text AS miktar,
             coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim,
-            c.malzeme_no AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS "fasonBagli",
+            c.malzeme_no AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason,
+            ${KALEM_EMRI} AS "emirId", t.proje_id AS "projeId",
             (CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf)::text AS masraf
-       FROM satin_alma_talep t
-       JOIN satin_alma_siparis_satiri s ON s.talep_id = t.id
-       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       ${YOL_KAYNAGI}
+       JOIN secilen x ON x.talep_id = s.talep_id AND x.teklif_id = s.teklif_id
        LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
        JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
        JOIN satin_alma_teklif_satiri f ON f.talep_id = s.talep_id AND f.teklif_id = s.teklif_id AND f.kalem_id = s.kalem_id
-      WHERE t.proje_id = ANY($1::int[]) AND t.durum <> 'iptal' AND t.birlesen_talep_id IS NULL
-      ORDER BY t.proje_id, s.talep_id, s.teklif_id, s.id`,
-    [projeIdler],
+      ORDER BY s.talep_id, s.teklif_id, s.id`,
+    [f.projeIdler ?? [], f.emirIdler ?? [], (f.siparisler ?? []).map((x) => x.talepId), (f.siparisler ?? []).map((x) => x.teklifId)],
   );
 }
 
@@ -219,11 +234,13 @@ export async function birimVarMi(db: Db, ad: string): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_birim WHERE ad = $1', [ad])) !== null;
 }
 
-// Stok mal kabulü: sipariş satırının talebindeki üretim emri; emre bağlı olmayan talebin satırı haritada yoktur.
+// Stok mal kabulü: sipariş satırının üretim emri (KALEM_EMRI); emre bağlı olmayan satır haritada yoktur.
 export async function siparisSatirlarininEmri(db: Db, idler: readonly number[]): Promise<{ id: number; uretimEmriId: number }[]> {
   return db.sorgu<{ id: number; uretimEmriId: number }>(
-    `SELECT s.id, t.uretim_emri_id AS "uretimEmriId" FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id
-      WHERE s.id = ANY($1::int[]) AND t.uretim_emri_id IS NOT NULL`,
+    `SELECT s.id, ${KALEM_EMRI} AS "uretimEmriId" FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+      WHERE s.id = ANY($1::int[]) AND ${KALEM_EMRI} IS NOT NULL`,
     [idler],
   );
 }

@@ -282,6 +282,8 @@ export const talepKaynagiSemasi = z.object({
   talepId: uuid, no: z.string(), talepEdenAdi: z.string().nullable(), kalemIdleri: z.array(uuid), ihtiyacTarihi: z.string().nullable(),
   // V4 a: kalemin harcaması bu birime yazılır; boşsa birleşik talebin birimine.
   birim: z.string().nullable(),
+  // 2624 b: kaynağın üretim emri; birleşik talepte kaynaktan gelen kalem bu emre bağlı kalır (mal kabulde emre ayrılır).
+  uretimEmriNo: z.string().nullable(),
 });
 export type TalepKaynagi = z.output<typeof talepKaynagiSemasi>;
 export const talepSemasi = z.object({

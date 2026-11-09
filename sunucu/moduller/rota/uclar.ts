@@ -1,6 +1,6 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
-  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaOnizlemeSorgusu, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
+  agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaOnizlemeSorgusu, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, emreKopyalaTopluCevabi, emreKopyalaTopluGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
   talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
@@ -8,18 +8,29 @@ import {
   hamOnerisiCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
 import {
-  agac, emreKopyala, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
+  agac, emreKopyala, emreKopyalaToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
   karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
+// Rota verisi yalnız rotayla çalışan rollere açıktır (2490 b): Reçete ve Rota sayfası ya da bir rota işlemi. Üç uç başka sayfaların
+// bugünkü okumasını da taşır: yeni kart sihirbazı şablon ve rotalı ürün listesini, operasyon tipleri seçenekleri, markalama
+// tanımları malzeme aramasını okur. Operatör ekranları rota verisini sunucuda disari.ts ile alır, bu uçlara gelmez.
+const ROTA_OKUMA_ISLEMLERI = [
+  'sayfa.recete-rota', 'recete-rota.oku', 'rota.yaz', 'rota.onayla', 'rota.talimat-yaz', 'rota.emre-kopyala', 'rota.sartname-yaz', 'rota.sartname-yayinla',
+] as const;
+const ROTA_OKUR = { biri: ROTA_OKUMA_ISLEMLERI } as const;
+const ROTA_VE_KART_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'malzemeler.yaz'] } as const;
+const ROTA_VE_ISTASYON_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'sayfa.istasyonlar'] } as const;
+const ROTA_VE_MARKALAMA_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'sayfa.markalama'] } as const;
+
 export const uclar = [
-  // Rota şablonları (#698): okuma oturumla (Malzemeler kartı da okur), yazma rota.yaz ile.
+  // Rota şablonları (#698): Malzemeler yeni kart sihirbazı da okur; yazma rota.yaz ile.
   uc({
     yontem: 'GET',
     yol: '/rota/sablonlar',
-    yetki: 'oturum',
+    yetki: ROTA_VE_KART_OKUR,
     cevap: sablonlarCevabi,
     isle: ({ db }) => sablonListesi(db),
   }),
@@ -62,7 +73,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/malzeme-kullanimi',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     sorgu: kullanimSorgusu,
     cevap: kullanimCevabi,
     isle: ({ db, sorgu }) => malzemeKullanimi(db, sorgu.malzemeIdleri),
@@ -70,37 +81,37 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/secenekler',
-    yetki: 'oturum',
+    yetki: ROTA_VE_ISTASYON_OKUR,
     cevap: seceneklerCevabi,
     isle: ({ db }) => secenekler(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/rota/urunler',
-    yetki: 'oturum',
+    yetki: ROTA_VE_KART_OKUR,
     cevap: rotaListesiCevabi,
     isle: ({ db }) => rotaListesi(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/rota/revizyon-ozeti',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     cevap: revizyonOzetiCevabi,
     isle: ({ db }) => revizyonOzeti(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/rota/urunler/:urunId',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: urunParametresi,
     cevap: urunRevizyonlariCevabi,
     isle: ({ db, kullanici, parametre }) => urunRevizyonlari(db, kullanici, parametre.urunId),
   }),
-  // 1709: ürünün 3B analizinden hammadde önerisi; ürün okuması gibi oturumla.
+  // 1709: ürünün 3B analizinden hammadde önerisi; ürün okumasıyla aynı yetki.
   uc({
     yontem: 'GET',
     yol: '/rota/urunler/:urunId/ham-onerisi',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: urunParametresi,
     cevap: hamOnerisiCevabi,
     isle: ({ db, parametre }) => hamOnerisi(db, parametre.urunId),
@@ -108,7 +119,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/urunler/:urunId/talimatlar/:opNo',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: talimatParametresi,
     cevap: talimatlarCevabi,
     isle: ({ db, parametre }) => talimatListesi(db, parametre.urunId, parametre.opNo),
@@ -191,7 +202,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/talimat-medyasi/:ozet',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: medyaParametresi,
     cevap: ikiliCevap,
     isle: ({ db, parametre }) => talimatMedyasi(db, parametre.ozet),
@@ -199,14 +210,14 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/talimat-sablonlari',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     cevap: talimatSablonlariCevabi,
     isle: ({ db }) => talimatSablonlari(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/rota/talimat-sablonlari/:id',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: talimatSablonParametresi,
     cevap: talimatSablonuCevabi,
     isle: ({ db, parametre }) => talimatSablonu(db, parametre.id),
@@ -241,17 +252,17 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/revizyonlar/:id',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: revizyonParametresi,
     sorgu: ayrintiSorgusu,
     cevap: revizyonAyrintisi,
     isle: ({ db, kullanici, parametre, sorgu }) => ayrinti(db, kullanici, parametre.id, sorgu.miktar),
   }),
-  // Süreler (Reçete ve Rota "Süreler" bölümü): teorik, gerçekleşen ve plan için etkin süre; okuma oturumla.
+  // Süreler (Reçete ve Rota "Süreler" bölümü): teorik, gerçekleşen ve plan için etkin süre; okuma rota okuyan rollere.
   uc({
     yontem: 'GET',
     yol: '/rota/revizyonlar/:id/sureler',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: revizyonParametresi,
     sorgu: surelerSorgusu,
     cevap: surelerCevabi,
@@ -282,7 +293,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/revizyonlar/:id/fark',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: revizyonParametresi,
     cevap: farkCevabi,
     isle: ({ db, parametre }) => fark(db, parametre.id),
@@ -290,7 +301,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/revizyonlar/:id/agac',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: revizyonParametresi,
     sorgu: agacSorgusu,
     cevap: agacCevabi,
@@ -370,6 +381,16 @@ export const uclar = [
     cevap: emreKopyalaCevabi,
     isle: ({ db, kullanici, parametre, govde }) => emreKopyala(db, kullanici, parametre.id, govde),
   }),
+  // Excel ile toplu emir (2627): satırlar emre-kopyala kuralıyla, tek transaction'da.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/emre-kopyala-toplu',
+    yetki: 'rota.emre-kopyala',
+    tekrarKorumali: true,
+    govde: emreKopyalaTopluGovdesi,
+    cevap: emreKopyalaTopluCevabi,
+    isle: ({ db, kullanici, govde }) => emreKopyalaToplu(db, kullanici, govde),
+  }),
   // Patlamış rota (1476): emir açılışında yazılan donmuş görüntü; emri açabilen okur (ADR 0022 madde 6, 1526-b).
   uc({
     yontem: 'GET',
@@ -401,7 +422,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/revizyon-kunyeleri',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     sorgu: revizyonKunyeSorgusu,
     cevap: revizyonKunyeleriCevabi,
     isle: ({ db, sorgu }) => revizyonKunyeleri(db, sorgu.idler),
@@ -409,23 +430,23 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/malzeme-ara',
-    yetki: 'oturum',
+    yetki: ROTA_VE_MARKALAMA_OKUR,
     sorgu: malzemeAraSorgusu,
     cevap: malzemeAraCevabi,
     isle: ({ db, sorgu }) => malzemeAra(db, sorgu),
   }),
-  // İşlem şartnamesi kütüphanesi (971 a, 976 a): okuma oturumla (kalite, sevkiyat ve satın alma da okur); yazma ve yayın ayrı işlemdir.
+  // İşlem şartnamesi kütüphanesi (971 a, 976 a): okuma rota okuyan rollere (kalite Reçete ve Rota sayfasıyla okur); yazma ve yayın ayrı işlemdir.
   uc({
     yontem: 'GET',
     yol: '/rota/sartnameler',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     cevap: sartnamelerCevabi,
     isle: ({ db }) => sartnameListesi(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/rota/sartnameler/:id',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: sartnameParametresi,
     cevap: sartnameCevabi,
     isle: ({ db, parametre }) => sartnameAyrintisi(db, parametre.id),
@@ -524,7 +545,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/revizyonlar/:id/sartnameler',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     parametre: revizyonParametresi,
     cevap: revizyonSartnameleriCevabi,
     isle: ({ db, parametre }) => revizyonSartnameleri(db, parametre.id),
@@ -542,7 +563,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/rota/is-emri-sartnameleri',
-    yetki: 'oturum',
+    yetki: ROTA_OKUR,
     sorgu: sartnameSorgusu,
     cevap: isEmriSartnameleriCevabi,
     isle: ({ db, sorgu }) => isEmriSartnameleriOku(db, sorgu.idler),

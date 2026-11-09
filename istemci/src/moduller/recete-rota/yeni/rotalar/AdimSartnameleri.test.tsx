@@ -53,6 +53,10 @@ function kur(baglar: RevizyonSartnameleriCevabi) {
 const adimAc = async () => {
   rrAc('/recete-rota/schema');
   const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+  // 2558 b/5: sayfa görüntüleme kipinde açılır; yazma yetkisi olan test "Düzenle" ile düzenleme kipine geçer.
+  await waitFor(() => { expect(bolge.querySelector('.tc-rr1-rcol, .tc-rr1-emptycv, .tc-rr1-ftab')).not.toBeNull(); });
+  const duzenle = within(bolge).queryByRole('button', { name: 'Düzenle' });
+  if (duzenle) fireEvent.click(duzenle);
   fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
   return within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
 };

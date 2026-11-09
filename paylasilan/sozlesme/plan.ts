@@ -340,10 +340,11 @@ export type MusteriSecenekleriCevabi = z.output<typeof musteriSecenekleriCevabi>
 // Göndermeyen eski ekranın bütün işleri eskisi gibi elle sayılır.
 // `elleKaynak`: planlamacı bu işin makinesini elle seçti; toptan hesap işi başka makineye taşımaz, yalnız saatini ayarlar.
 // `parca`: elle bölünen işin parçası (kart #1572); bütün parçaları aynı yazımda, adetleri toplamı adım adedi. Parçasız yazılan iş birleşir.
+// `parca.motorBolmesi`: parça motorun paralel bölmesindendir (B-2482-13); motor sonraki öneride bölmeyi yeniden kurar, elle bölme sayılmaz.
 export const kuyrukYazIsi = z.object({
   emirNo: z.string().trim().min(1).max(60), opNo: z.number().int().positive().max(100_000), dondurulmus: z.boolean(), elle: z.boolean().prefault(true),
   elleKaynak: z.boolean().prefault(false),
-  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000) }).optional(),
+  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000), motorBolmesi: z.boolean().optional() }).optional(),
   // ADR 0018: tarayıcının önizlediği saat; sunucu motoru kayıtlıyken cevabın motorFarki'si bununla karşılaştırır.
   onizleme: z.object({ baslangic: tarihZaman, bitis: tarihZaman }).optional(),
 });
@@ -452,11 +453,18 @@ export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
 export const MOTOR_OGRENME = ['kapali', 'acik'] as const;
 // 2509-1 c: acil iş payı (işleme süresine eklenen pay, oran 0-0,3) yalnız buradadır; planlama çalışmasındaki alan bunun kopyasıdır.
 export const ACIL_PAY_SINIRI = 0.3;
+// 2523 a: rotada "paralel böl" işaretli adımı motor boşta duran kardeş tezgâhlara böler mi ve en çok kaç paya; ikinci tezgâh her zaman boş
+// değilse atölye kapatır. Varsayılan bugünkü davranıştır (açık, 3 pay).
+export const MOTOR_BOLME = ['otomatik', 'kapali'] as const;
+export const BOLME_PAY_SINIRI = { en: 2, cok: 5 } as const;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
   acilPay: z.number().min(0).max(ACIL_PAY_SINIRI),
+  bolmeKip: z.enum(MOTOR_BOLME), bolmeMaks: z.number().int().min(BOLME_PAY_SINIRI.en).max(BOLME_PAY_SINIRI.cok),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05 };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = {
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+};
 // Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
 // arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.
 export const motorAyariGovdesi = motorAyarlari.partial().extend({ surumId: KIMLIK.nullable() });
@@ -581,3 +589,16 @@ export const mrpIhtiyaciCevabi = z.object({
   })),
 });
 export type MrpIhtiyaciCevabi = z.output<typeof mrpIhtiyaciCevabi>;
+
+// 2618 (2602-a, 2603 a, 2626 1/2 b): son tam ayın departman grup saat maliyeti (TRY/saat). Kişi alanı yoktur; küçük grupta değer null.
+export const grupSaatMaliyetleriCevabi = z.object({
+  ay: z.string(),
+  gruplar: z.array(z.object({
+    departmanNo: z.number().int(), departmanAd: z.string(), saatMaliyeti: z.number().nullable(), kucuk: z.boolean(),
+  }).strict()),
+}).strict();
+export type GrupSaatMaliyetleriCevabi = z.output<typeof grupSaatMaliyetleriCevabi>;
+// 2653 (2644 b): taslağın ek mesai tutarı; yalnız toplam. Grup, saat, kişi alanı yok (fark alma ile küçük grubun değeri çıkmasın).
+export const mesaiMaliyetiSorgusu = z.object({ taslak: z.coerce.number<number>().int().positive() }).strict();
+export const mesaiMaliyetiCevabi = z.object({ ay: z.string(), toplam: z.number().nullable(), bilinmeyen: z.boolean() }).strict();
+export type MesaiMaliyetiCevabi = z.output<typeof mesaiMaliyetiCevabi>;

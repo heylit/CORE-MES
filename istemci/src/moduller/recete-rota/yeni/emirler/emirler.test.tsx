@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
+import { zaman } from '../bicim.ts';
 import { json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, YONETICI, type Istek } from '../test-ortak.tsx';
 import { durumAdi } from './kurallar.ts';
 
@@ -120,6 +121,34 @@ describe('R3 Üretim emirleri: plan bitiş', () => {
       baslangic: '2026-11-02T06:00:00.000Z', bitis: '2026-11-03T09:00:00.000Z', sabit: false }],
   };
 
+  const canliOzet = (isler: { anahtar: string; dondurulmus: boolean; sabit: boolean; baslangic?: string; bitis?: string }[]) => ({
+    planSurumu: 3, sonCanliyaAlma: null, planlanacak: ['UE-0001|10'], kuyruklar: [{ makineId: 51, isler }],
+  });
+  it('adım canlı planda yoksa saati motorun önerisi olarak yazılır (B-2499-7)', async () => {
+    sunucuKur(OKUYAN, { durum: { ...planli('2026-11-05'), planCanli: canliOzet([]) }, motorYerlesimi: motor });
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    expect(await within(ayrinti).findByText(/öneri \(canlı planda yok\)/)).toBeTruthy();
+    // Özetteki plan bitişi de motorun önerisidir (03.11) ve öyle etiketlenir.
+    expect(within(ayrinti).getByText('03.11.2026')).toBeTruthy();
+    expect(within(ayrinti).getByText('öneri, canlıda yok')).toBeTruthy();
+  });
+
+  it('adım canlı plandaysa saati canlı plandan okunur, öneri yazmaz (B-2499-7)', async () => {
+    const canli = canliOzet([{ anahtar: 'UE-0001|10', dondurulmus: false, sabit: false, baslangic: '2026-11-04T07:00:00.000Z', bitis: '2026-11-04T09:00:00.000Z' }]);
+    sunucuKur(OKUYAN, { durum: { ...planli('2026-11-05'), planCanli: canli }, motorYerlesimi: motor });
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    const satir = await within(ayrinti).findByText(/· plan /);
+    expect(satir.textContent).toContain(zaman('2026-11-04T07:00:00.000Z'));
+    expect(within(ayrinti).queryByText(/öneri/)).toBeNull();
+    // Bütün açık adımlar canlıda: özetteki plan bitişi canlı plandan (04.11), motorunki (03.11) değil.
+    expect(within(ayrinti).getByText('04.11.2026')).toBeTruthy();
+    expect(within(ayrinti).queryByText('03.11.2026')).toBeNull();
+  });
+
   it('sütun "Plan bitiş": motorun adım bitişini gösterir, teslimden sonra biten emir gecikir', async () => {
     sunucuKur(OKUYAN, { durum: planli('2026-11-02'), motorYerlesimi: motor });
     rrAc();
@@ -195,6 +224,38 @@ describe('R3 Üretim emirleri: plana girmeyen çalışan adım (487/2 b)', () =>
   });
 });
 
+describe('R3 Üretim emirleri: adım sağlamı (B18)', () => {
+  const kur = (emirler: (k: (sira: number) => string) => Partial<NonNullable<ReturnType<typeof ornekDurum>['emirler']>>) => {
+    const d = ornekDurum();
+    const adim = (id: string, seq: number, opNo: number) => ({
+      id, seq, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { '11': { base: null, steps: [adim('s1', 1, 10), adim('s2', 2, 20), adim('s3', 3, 30)] } } as unknown as typeof d.routes;
+    const o = d.emirler!.orders[0]!;
+    const k = (sira: number) => `${o.id}|root|${String(sira)}`;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const })), ...emirler(k) };
+    sunucuKur(OKUYAN, { durum: d });
+    rrAc();
+  };
+  const saglamlar = async () => {
+    await emirAc();
+    const liste = await screen.findByRole('list', { name: 'UE-0001 operasyonları' });
+    return within(liste).getAllByRole('listitem').map((li) => li.querySelector('.tc-rr3-adim-saglam b')?.textContent);
+  };
+
+  it('biten adım kayda geçen sağlamı, süren adım canlı sayacı gösterir; bekleyen adım boş kalır', async () => {
+    kur((k) => ({ opStatus: { [k(1)]: 'tamam', [k(2)]: 'calisiyor' }, opProg: { [k(2)]: 4 }, opSaglam: { [k(1)]: 9 } }));
+    expect(await saglamlar()).toEqual(['9', '4', '—']);
+  });
+
+  it('opSaglam gelmezse (eski sunucu ya da sağlamı yazılmamış adım) biten adım boş görünür, sayı uydurulmaz', async () => {
+    kur((k) => ({ opStatus: { [k(1)]: 'tamam', [k(2)]: 'tamam' }, opProg: { [k(1)]: 5 } }));
+    expect(await saglamlar()).toEqual(['—', '—', '—']);
+  });
+});
+
 describe('R3 Üretim emirleri: komutlar', () => {
   it('yönetici taslağı plana alır: emrin ekrandaki sürümüyle gider (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/plana-al': () => json(200, {}) } });
@@ -247,6 +308,62 @@ describe('R3 Üretim emirleri: komutlar', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/adimli-emirler/rotasiz')).toBe(true));
     expect(istekler.find((i) => i.yol === '/adimli-emirler/rotasiz')?.govde).toMatchObject({ malzemeNo: 11, adet: 25, emirTuru: 'seri' });
+  });
+
+  it('açık projesi olmayan üründe proje şartı form açılırken görünür, Emri oluştur kapalıdır; emir isteği gitmez (B-2502-3)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: true, projeler: [] }) },
+    });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    expect((await within(form).findByText(/Bu ürün için açık proje yok/)).closest('p')?.querySelector('a')?.getAttribute('href')).toBe('/projeler');
+    const dugme = within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.click(dugme);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yontem === 'POST' && i.yol.startsWith('/adimli-emirler'))).toEqual([]);
+  });
+
+  it('rotasız emir ayarı kapalıyken rotasız ürün seçilince form baştan söyler, Emri oluştur kapalıdır, Rotasını kur ürüne götürür (B-2500-6)', async () => {
+    const istekler = sunucuKur(YONETICI, {
+      yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], rotasizAcik: false }) },
+    });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    expect(await within(form).findByText(/rotasız üretim emri ayarlardan kapalı/)).toBeTruthy();
+    const dugme = within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement;
+    expect(dugme.disabled).toBe(true);
+    fireEvent.click(dugme);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(istekler.filter((i) => i.yontem === 'POST' && i.yol.startsWith('/adimli-emirler'))).toEqual([]);
+    fireEvent.click(within(form).getByRole('button', { name: 'Rotasını kur' }));
+    expect(await screen.findByRole('region', { name: 'Ürün ve rotalar' })).toBeTruthy();
+  });
+
+  it('rotasız emir ayarı açıkken uyarı çıkmaz (B-2500-6)', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [], rotasizAcik: true }) } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(within(form).queryByText(/ayarlardan kapalı/)).toBeNull();
+    expect((within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('proje gerekmeyen türde şart iletisi çıkmaz, Emri oluştur açıktır (B-2502-3, izinli)', async () => {
+    sunucuKur(YONETICI, { yazmalar: { 'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }) } });
+    rrAc();
+    const b = await bolum('Üretim emirleri');
+    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(within(form).queryByText(/açık proje yok/)).toBeNull();
+    expect((within(form).getByRole('button', { name: 'Emri oluştur' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('çift tıklama tek emir açar: ikinci tık komut sürerken düşer (RR-2)', async () => {
@@ -338,44 +455,47 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
   });
 });
 
-describe('R3 Üretim emirleri: eksik malzeme ve ara adım stoğu (461 b)', () => {
-  // Mamulün iki adımlı rotası; adım 10 hammaddeden 1 adet ister. Hammaddenin serbest stoğu yok, OP 10 çıktısı olarak 10 adet bekliyor.
+describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', () => {
   const planda = () => {
     const d = ornekDurum();
-    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
-      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
-    const adim = (opNo: number, ins: { itemId: string; qty: number; scrap: number }[]) => ({
-      id: `o${String(opNo)}`, seq: opNo, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 30,
-      proc: null, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
-      digerAdaylar: [], ins, outs: [],
-    });
-    d.routes = { 11: { base: null, steps: [adim(10, [{ itemId: '12', qty: 1, scrap: 0 }]), adim(20, [])] } };
     d.emirler!.orders[0] = { ...d.emirler!.orders[0]!, status: 'serbest' };
     return d;
   };
-  const statuler = () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' }] });
-  const stok = (id: number) => () => json(200, {
-    statuKirilimi: id === 12 ? [{ statuId: null, miktar: '0' }, { statuId: 7, miktar: '10' }] : [{ statuId: null, miktar: '4' }], bakiyeler: [],
+  const satir = (alinacak: string) => ({ malzemeNo: 12, kod: 'HM-0001', ad: 'Örnek çubuk', birim: 'adet', brut: '105', verilen: '5', stoktan: '0', alinacak });
+  const cevap = (stokGorunur: boolean, alinacak: string) => () => json(200, {
+    stokGorunur,
+    emirler: [{ emirId: ornekDurum().emirler!.orders[0]!.kayitNo, hammadde: [satir(alinacak)], yanUrun: [], eksikler: Number(alinacak) > 0 ? [satir(alinacak)] : [], uyarilar: ['Örnek uyarı.'] }],
   });
 
-  it('stok okuyan: OP 10 çıktısı adım 10 ihtiyacını karşılar, eksik kalmaz (izinli)', async () => {
-    const istekler = sunucuKur(YONETICI, {
-      durum: planda(), yazmalar: { 'GET /recete-rota/statuler': statuler, 'GET /stok/malzemeler/11': stok(11), 'GET /stok/malzemeler/12': stok(12) },
-    });
+  it('emrin ihtiyacı sunucunun sayısıyla gelir: brüt, verilen, stoktan, alınacak ve eksik; tarayıcı hesaplamaz (izinli)', async () => {
+    const istekler = sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(true, '100') } });
     rrAc();
     const b = await emirAc();
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/malzemeler/12')).toBe(true));
-    await waitFor(() => expect(within(b).queryByText(/kalem eksik/)).toBeNull());
-    // Hesap stoğa yazmaz (açılışta rota taslağı eşitlemesi ayrı iştir).
-    expect(yazmalar(istekler).filter((i) => i.yol.startsWith('/stok/'))).toEqual([]);
-  });
-
-  it('stok okumayan: stoğa istek gitmez, yalnız serbest stokla hesaplanır ve eksik görünür (reddedilen)', async () => {
-    const istekler = sunucuKur(OKUYAN, { durum: planda() });
-    rrAc();
-    const b = await emirAc();
-    await within(b).findByText(/1 kalem eksik: HM-0001/);
+    const tablo = await within(b).findByRole('table', { name: /malzeme ihtiyacı/ });
+    expect(tablo.textContent).toContain('HM-0001');
+    expect(tablo.textContent).toContain('105');
+    expect(within(b).getByText(/1 kalem eksik: HM-0001 100/)).toBeTruthy();
+    expect(within(b).getByText('Örnek uyarı.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/recete-rota/malzeme-ihtiyaci')).toBe(true);
+    const adres = vi.mocked(fetch).mock.calls.map((c) => String(c[0])).find((x) => x.includes('/recete-rota/malzeme-ihtiyaci'));
+    expect(adres).toMatch(new RegExp(`\\?emir=${String(ornekDurum().emirler!.orders[0]!.kayitNo)}$`));
     expect(istekler.some((i) => i.yol.startsWith('/stok/'))).toBe(false);
+  });
+
+  it('stok yetkisi yoksa sunucu söyler, ekran ara stoğun düşülmediğini yazar (reddedilen)', async () => {
+    sunucuKur(OKUYAN, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(false, '0') } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText(/ara adım stoğu düşülmedi/);
+    expect(within(b).queryByText(/kalem eksik/)).toBeNull();
+  });
+
+  it('okuma reddedilirse ileti çıkar, tablo uydurulmaz', async () => {
+    sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': () => json(403, { kod: 'YETKI_YOK', mesaj: 'Emir okuma yetkiniz yok.' }) } });
+    rrAc();
+    const b = await emirAc();
+    await within(b).findByText('Emir okuma yetkiniz yok.');
+    expect(within(b).queryByRole('table', { name: /malzeme ihtiyacı/ })).toBeNull();
   });
 });
 
@@ -402,8 +522,8 @@ describe('R3 Stok', () => {
     });
     rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
-    await within(b).findByRole('table', { name: 'Statülü stok' });
-    expect(within(b).getByRole('table', { name: 'Statülü stok' }).textContent).toContain('Torna çıktısı');
+    const tablo = await within(b).findByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo.textContent).toContain('Torna çıktısı'); });
     fireEvent.change(within(b).getByLabelText('Miktar'), { target: { value: '2' } });
     fireEvent.click(within(b).getByRole('button', { name: 'Statü atlat' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/statu-degistir')).toBe(true));
@@ -420,10 +540,130 @@ describe('R3 Stok', () => {
     const b = await bolum('Stok');
     fireEvent.change(await within(b).findByLabelText('Sayılan miktar'), { target: { value: '3' } });
     expect(within(b).queryByRole('button', { name: 'Statü atlat' })).toBeNull();
+    // 2553 b/4: notsuz sayım gitmez.
+    fireEvent.click(within(b).getByRole('button', { name: 'Sayımı yaz' }));
+    expect((await screen.findAllByText('Sayım notu girin: farkın nedeni hareketle birlikte yazılır.')).length).toBeGreaterThan(0);
+    expect(istekler.some((i) => i.yol === '/stok/sayim')).toBe(false);
+    fireEvent.change(within(b).getByLabelText(/Sayım notu/), { target: { value: 'Raf sayımı' } });
     fireEvent.click(within(b).getByRole('button', { name: 'Sayımı yaz' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sayim')?.govde).toEqual({
-      konumId: 3, satirlar: [{ malzemeId: 11, partiId: null, beklenenMiktar: '4', sayilanMiktar: '3' }],
+      konumId: 3, satirlar: [{ malzemeId: 11, partiId: null, beklenenMiktar: '4', sayilanMiktar: '3' }], aciklama: 'Raf sayımı',
     }));
+  });
+
+  it('2553: statülü stok süreçteki malzemeyle ürün ve OP üzerinden tek satırdır (Depoda, Emirlere göre, Fark); sahipsiz statülü bağlantısı stok okuyana görünür', async () => {
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    const adim = (opNo: number) => ({
+      id: `o${String(opNo)}`, seq: opNo, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 30,
+      proc: 2, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { 11: { base: null, steps: [adim(10), adim(20)] } };
+    const o = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: [{ ...o, status: 'uretimde' }], opStatus: { [`${o.id}|root|1`]: 'tamam' }, opProg: { [`${o.id}|root|2`]: 3 } };
+    sunucuKur(YONETICI, {
+      durum: d,
+      yazmalar: {
+        'GET /recete-rota/statuler': () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' }] }),
+        'GET /stok/malzemeler/11': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '4' }], bakiyeler: [] }),
+        'GET /stok/malzemeler/12': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '0' }, { statuId: 7, miktar: '6' }], bakiyeler: [] }),
+      },
+    });
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    // Stok okununca bölüm formlarıyla yeniden kurulur; tablo her denemede yeniden aranır.
+    const tablo = () => within(b).getByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo().textContent).toContain('OP 10 Tornalama'); });
+    const t = tablo();
+    const satir = [...t.querySelectorAll('tbody tr')].find((x) => x.textContent.includes('OP 10 Tornalama'))!;
+    // Emir 10 adet; OP 10 bitti, OP 20 3 sağlam bildirdi: 7 bekliyor. Depoda 6: fark -1.
+    // 2547 eki: sahipsiz listesi bu sunucuda yok (404); üç sütun boş kalır, sıfır yazılmaz.
+    expect([...satir.querySelectorAll('td')].map((x) => x.textContent)).toEqual(['HM-0001 Örnek çubuk', 'OP 10 Tornalama MM-0001', '6', '7', '-1', 'adet', 'UE-0001: 7', '—', '—', '—']);
+    expect(within(b).getByText(/Sahipsiz statülü stok okunamadı/)).toBeTruthy();
+    expect(within(b).getByRole('link', { name: 'Sahipsiz statülü stok' }).getAttribute('href')).toBe('/stok/sahipsiz-statulu');
+  });
+
+  it('2547 eki ve 2561 a: Sahipsiz, Kaynak emir ve Son hareket stoktan okunur; tabloda olmayan sahipsiz statü kendi satırıdır', async () => {
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    d.routes = { 11: { base: null, steps: [{ id: 'o10', seq: 10, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null,
+      setup: 30, proc: 2, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [] }] } };
+    const istekler = sunucuKur(YONETICI, {
+      durum: d,
+      yazmalar: {
+        'GET /recete-rota/statuler': () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' },
+          { id: 9, malzemeNo: 'YM-0009', urunKodu: 'MM-0009', kaynakAdim: '99-o20', ad: 'OP 20 Eski adım' }] }),
+        'GET /stok/malzemeler/11': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '4' }], bakiyeler: [] }),
+        'GET /stok/malzemeler/12': () => json(200, { statuKirilimi: [{ statuId: 7, miktar: '6' }], bakiyeler: [] }),
+        'GET /stok/sahipsiz-statulu': () => json(200, { satirlar: [
+          { malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId: 7, kaliteDurumu: 'serbest', miktar: '6', ayrilan: '4', sahipsiz: '2', konumlar: ['A1'],
+            kaynakEmirId: 61, kaynakEmirNo: 'UE-0061', sonHareket: '2026-11-08T09:30:00.000Z' },
+          { malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId: 7, kaliteDurumu: 'karar_bekliyor', miktar: '1', ayrilan: '0', sahipsiz: '1', konumlar: ['A1'],
+            kaynakEmirId: 60, kaynakEmirNo: 'UE-0060', sonHareket: '2026-11-07T09:30:00.000Z' },
+          { malzemeId: 19, malzemeKod: 'YM-0009', malzemeAd: 'Örnek eski parça', statuId: 9, kaliteDurumu: 'serbest', miktar: '3', ayrilan: '0', sahipsiz: '3', konumlar: [],
+            kaynakEmirId: null, kaynakEmirNo: null, sonHareket: null },
+        ] }),
+      },
+    });
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    const tablo = () => within(b).getByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo().textContent).toContain('UE-0061'); });
+    const satirlar = [...tablo().querySelectorAll('tbody tr')].map((x) => [...x.querySelectorAll('td')].map((y) => y.textContent));
+    const tor = satirlar.find((x) => x[1]?.startsWith('OP 10 Tornalama'))!;
+    // Veri koşulu: sahipsiz yalnız serbest ve şartlı; karar bekleyen altında ayrı.
+    expect(tor.slice(7, 9)).toEqual(['2karar bekleyen 1', 'UE-0061']);
+    expect(tor[9]).toMatch(/08\.11\.2026/);
+    const eski = satirlar.find((x) => x[0] === 'YM-0009 Örnek eski parça')!;
+    expect(eski.slice(1, 10)).toEqual(['OP 20 Eski adım', '—', '—', '—', '—', '—', '3', '—', '—']);
+    // Atölye notu: Son hareket başlığıyla sıralanır (azalan ilk tıkta ya da ikincide); boş son harekette sonda.
+    const basliklar = () => within(tablo()).getAllByRole('columnheader');
+    const sirala = () => basliklar().find((x) => x.textContent.includes('Son hareket'))!.querySelector('button')!;
+    fireEvent.click(sirala());
+    const ilk = () => [...tablo().querySelectorAll('tbody tr')].map((x) => x.querySelector('td')?.textContent);
+    const a1 = ilk();
+    fireEvent.click(sirala());
+    const a2 = ilk();
+    // Tek son hareketli satır iki yönde de en üstte (boşlar her yönde sonda); başlık yönü değişir.
+    expect([a1[0], a2[0]]).toEqual(['HM-0001 Örnek çubuk', 'HM-0001 Örnek çubuk']);
+    expect(basliklar().find((x) => x.textContent.includes('Son hareket'))!.getAttribute('aria-sort')).toMatch(/ascending|descending/);
+    expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
+  });
+
+  it('2547 eki: stok okuyamayan sahipsiz listesini istemez', async () => {
+    const istekler = sunucuKur(OKUYAN);
+    rrAc('/recete-rota/stock');
+    await bolum('Stok');
+    await within(await bolum('Stok')).findByText(/Stok verisine erişiminiz yok/);
+    expect(istekler.some((i) => i.yol === '/stok/sahipsiz-statulu')).toBe(false);
+  });
+
+  it('B-2482-16 ve 2553: Stok değeri bilinmeyen maliyeti sıfır saymaz, sayısını yazar; Minimum kartı Malzeme ihtiyacına gider; stok okumayan bağlantıyı görmez', async () => {
+    sunucuKur(OKUYAN);
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    expect(within(b).queryByRole('link', { name: 'Sahipsiz statülü stok' })).toBeNull();
+    const minimum = await within(b).findByRole('link', { name: /Minimumun altında/ });
+    expect(minimum.getAttribute('href')).toBe('/plan/mrp');
+    // 2553-2: kart hedefini yazar; tablodaki "yalnız minimumun altındakiler" süzgeciyle karışmaz.
+    expect(minimum.textContent).toContain('Planlama: malzeme ihtiyacına git');
+    cleanup();
+    vi.unstubAllGlobals();
+
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 5, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    d.maliyet = { malzeme: { '11': { birimMaliyet: '10', paraBirimi: 'TRY', surum: 1 } }, yazabilir: false } as unknown as typeof d.maliyet;
+    sunucuKur(YONETICI, { durum: d });
+    rrAc('/recete-rota/stock');
+    const kart = (await within(await bolum('Stok')).findByText('Stok değeri')).closest('[class]')!.parentElement!;
+    // MM-0001: 4 adet x 10 = 40; HM-0001'in maliyeti yok, sıfır sayılmaz.
+    await waitFor(() => { expect(kart.textContent).toContain('2 kalem, 1 kalemin değeri bilinmiyor'); });
+    expect(kart.textContent).toContain('40');
   });
 });
 
@@ -494,5 +734,39 @@ describe('R3 kolun devamı: ana kola katılır ya da ayrı ilerler (1827; 1825 a
     expect(within(ayrinti).queryByRole('button', { name: 'UE-0002 için diğer işlemler' })).toBeNull();
     expect(within(ayrinti).queryByRole('group', { name: 'Kolun devamı' })).toBeNull();
     expect(plan(istekler)).toEqual([]);
+  });
+});
+
+describe('R3 Üretim emirleri: adımın süre özeti (2571)', () => {
+  it('başlamış adımın altında hazırlık, net ve brüt birim, sağlam ve hurda; ölçülemeyen süre "–" ve nedeniyle; bekleyen adımda yok', async () => {
+    const d = ornekDurum();
+    const adim = (id: string, seq: number, opNo: number) => ({
+      id, seq, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { '11': { base: null, steps: [adim('s1', 1, 10), adim('s2', 2, 20), adim('s3', 3, 30)] } } as unknown as typeof d.routes;
+    const o = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const })),
+      opStatus: { [`${o.id}|root|1`]: 'tamam', [`${o.id}|root|2`]: 'calisiyor' } };
+    const ie = (id: number, opNo: number, baslama: string | null) => ({ id, opNo, baslama, kaynak: { tur: 'makine' }, fason: null });
+    const ozet = (isEmriId: number, ek: Record<string, unknown>) => ({
+      isEmriId, baslama: null, bitis: null, saglam: 8, hurda: 1, hazirlikDk: 12.5, brutBirimDk: 2.4, netBirimDk: 2.1, tekliAraliklarDk: [], tekliOrtalamaDk: null, ...ek,
+    });
+    sunucuKur(OKUYAN, { durum: d, yazmalar: {
+      [`GET /adimli-emirler/${String(o.kayitNo)}`]: () => json(200, { emir: { isEmirleri: [ie(101, 10, '2026-11-02T06:00:00.000Z'), ie(102, 20, '2026-11-03T06:00:00.000Z'), ie(103, 30, null)] } }),
+      [`GET /adimli-emirler/${String(o.kayitNo)}/is-emirleri/101/sure-ozeti`]: () => json(200, ozet(101, {})),
+      [`GET /adimli-emirler/${String(o.kayitNo)}/is-emirleri/102/sure-ozeti`]: () => json(200, ozet(102, { saglam: 0, hurda: 0, hazirlikDk: null, brutBirimDk: null, netBirimDk: null })),
+    } });
+    rrAc();
+    const b = await emirAc();
+    const liste = within(within(b).getByLabelText('UE-0001 ayrıntısı')).getByRole('list', { name: 'UE-0001 operasyonları' });
+    const op = (n: number) => within(liste).getAllByRole('listitem').find((li) => li.querySelector('.tc-rr3-op')?.textContent === String(n))!;
+    await waitFor(() => { expect(op(10).textContent).toContain('Hazırlık 12,5 dk'); });
+    expect(op(10).textContent).toContain('Net 2,1 · brüt 2,4 dk/adet');
+    expect(op(10).textContent).toContain('8 sağlam / 1 hurda');
+    expect(op(20).textContent).toContain('Hazırlık — dk');
+    expect(op(20).textContent).toContain('Ayar basılmadı: hazırlık ölçülmedi · Sayım yok: işlem süresi ölçülmedi');
+    expect(op(30).textContent).not.toContain('Hazırlık');
   });
 });

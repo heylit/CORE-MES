@@ -10,6 +10,10 @@ const BEKLE = { timeout: 4000 };
 const bolumAc = async () => {
   const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
   await waitFor(() => { expect(bolge.querySelector('[data-parca="R1"]')).not.toBeNull(); });
+  // 2558 b/5: sayfa görüntüleme kipinde açılır; yazma yetkisi olan test "Düzenle" ile düzenleme kipine geçer.
+  await waitFor(() => { expect(bolge.querySelector('.tc-rr1-rcol, .tc-rr1-emptycv, .tc-rr1-ftab')).not.toBeNull(); });
+  const duzenle = within(bolge).queryByRole('button', { name: 'Düzenle' });
+  if (duzenle) fireEvent.click(duzenle);
   return bolge;
 };
 // jsdom'da DataTransfer yok; sürükle-bırak verisi bu nesneyle taşınır.
@@ -41,7 +45,7 @@ describe('R1 operasyon paleti (1110 a, 1111 b, 1112 a, 1113 a)', () => {
     const bolge = await bolumAc();
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     expect(within(bolge).queryByRole('complementary', { name: 'Operasyon paleti' })).toBeNull();
-    expect(within(bolge).getByRole('button', { name: 'Operasyon paleti' }).getAttribute('aria-pressed')).toBe('false');
+    expect(within(bolge).getByRole('button', { name: 'Operasyon paleti' }).getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.click(within(bolge).getByRole('button', { name: 'Adım ekle' }));
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });

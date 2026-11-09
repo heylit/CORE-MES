@@ -97,8 +97,10 @@ export function Istasyonlar() {
     <Kart>
       <div className="tc-ist-sayfa" role="region" aria-label={tanim.baslik}>
         {bolum === 'genel' && <GenelBakis v={v} />}
-        {bolum === 'is-merkezleri' && islemler.includes('sayfa.etiket-merkezi') && <IstasyonEtiketleri v={v} />}
-        {bolum === 'is-merkezleri' && <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} islemler={islemler} />}
+        {bolum === 'is-merkezleri' && (
+          <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} islemler={islemler}
+            istasyonAraci={islemler.includes('sayfa.etiket-merkezi') ? <IstasyonEtiketleri v={v} /> : null} />
+        )}
         {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yazabilir} durumYazabilir={yazabilir || islemler.includes('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
         {bolum === 'personel' && (
           <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('ik.personel-yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />

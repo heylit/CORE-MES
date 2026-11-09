@@ -141,7 +141,7 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number, miktar = 1)
       }));
       adimlar.push({
         kaynakOpNo: x.kaynakOpNo, emirOpNo: numara.get(`${d.dugum}|${x.kaynakOpNo}`)!, ad: a?.ad ?? '', yer: a ? await yer(a) : null,
-        adet: adet === null ? null : ikili(adet), cikanAdet: adet === null ? null : ikili(adet * (1 - fire / 100)),
+        hedef: g === undefined ? null : ikili(g.adetCarpani ?? 1), adet: adet === null ? null : ikili(adet), cikanAdet: adet === null ? null : ikili(adet * (1 - fire / 100)),
         cikti: i === satirlar.length - 1 ? 'urun' as const : 'ara-hal' as const, girenler, yanUrunler,
       });
     }

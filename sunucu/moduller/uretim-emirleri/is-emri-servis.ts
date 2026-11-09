@@ -346,6 +346,7 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
   for (const id of new Set(projeler.flatMap((p) => (p.siparisId === null ? [] : [p.siparisId])))) siparisler.set(id, await siparisAyrintisi(db, id));
   return {
     projeZorunlu: projeZorunluMu(emirTuru),
+    rotasizAcik: await sistemAyariOku(db, 'uretim-emirleri.rotasiz-emir'),
     projeler: projeler.map((p) => {
       const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
       return {
@@ -365,11 +366,13 @@ export async function rotasizEmirAc(db: Db, kullanici: Kullanici, g: EmirBasligi
 }
 
 // UE-02 "emirlere uygula": rotanın yeni hâli güvenli kipte uygulanır. Başlamış ya da bitmiş iş emri korunur.
+// surum: çağıranın kararını verdiği emrin sürümü; satır kilidi alındıktan sonra denetlenir, arada değişen emir yenilenmez.
 export async function isEmirleriniYenile(
-  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[] },
+  db: Db, kullanici: Kullanici, uretimEmriId: number, g: { kaynakRotaRevizyonId: number; isEmirleri: IsEmriGirdisi[]; surum?: number },
 ): Promise<{ degisenler: string[] }> {
   const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz', 'rota.emre-kopyala']);
   const e = await kilitliUstEmir(db, uretimEmriId);
+  surumDenetle(e, g.surum);
   await cokKatmanliDegil(db, uretimEmriId, COK_KATMANLI_DEGISMEZ);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
   if (acik !== null) throw cakisma(acik);

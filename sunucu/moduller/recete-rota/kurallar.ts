@@ -2,9 +2,11 @@ import type { IsMerkezi, Istasyon, Makine, MakineDurumuDegeri, OperasyonTipi } f
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
 import type { KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { DurumEmirleri, DurumMalzemesi, DurumRotaAdimi as DurumRotaAdimiCikti, DurumRotaRevizyonu, DurumMaliyeti } from '#paylasilan/sozlesme/recete-rota.ts';
+import type {
+  DurumEmirleri, DurumMalzemesi, DurumRotaAdimi as DurumRotaAdimiCikti, DurumRotaRevizyonu, DurumMaliyeti, ReceteRotaDurumCevabi,
+} from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import { girdiOlabilirMi } from '../rota/disari.ts';
+import { adimMiktarlari, girdiOlabilirMi } from '../rota/disari.ts';
 import type { DurumRotaAdimi, DurumRotaRevizyonu as DurumRotaRevizyonuGirdisi } from '../rota/disari.ts';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
@@ -342,11 +344,20 @@ export function adimAdetleriCevir(adimlar: readonly AcikAdimKaydi[]): NonNullabl
   return y;
 }
 
+// 2530 a: rotalı emrin kök ek adımları (rotaYeri bunlara yer vermez). Alt düğüm adımı dugumleriCevir'dedir.
+function ekAdimlariCevir(isEmirleri: EmirKaydi['isEmirleri']): NonNullable<DurumEmirleri['orders'][number]['ekAdimlar']> {
+  return [...isEmirleri].filter((i) => ekAdimMi(i) && kokAdimiMi(i)).sort((a, b) => a.opNo - b.opNo).map((i) => ({
+    opNo: i.opNo, tur: i.tur === 'rework' || i.tur === 'tamir' ? i.tur : 'ek', ad: i.ad, opId: String(i.operasyonTipiId), durum: i.durum,
+    saglam: i.durum === 'tamam' ? i.saglamAdet : i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0 ? i.canliAdet : null,
+  }));
+}
+
 // kapanislar: sahibinin (uretim-emirleri) onaylı kapanış sonucu; haritada olmayan bitmiş emir onay bekliyordur (null).
 export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: ReadonlyMap<number, 'tamamlandi' | 'saglamsiz' | null> = new Map()): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
   const opStatus: DurumEmirleri['opStatus'] = {};
   const opProg: DurumEmirleri['opProg'] = {};
+  const opSaglam: NonNullable<DurumEmirleri['opSaglam']> = {};
   const opYer: NonNullable<DurumEmirleri['opYer']> = {};
   const orders = emirler.map((e): DurumEmirleri['orders'][number] => {
     // Sayfa kolu kol (n, m) geçerliyse rotanın n+1. adımından kurar; kol değilse emir kendi sırasıyla rotanın başından yürür.
@@ -359,6 +370,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       if (i.durum !== 'bekliyor') opStatus[anahtar] = i.durum;
       // Biten adımın ilerlemesi prototipte durumdan okunur; ilerleme yalnız süren adımın kendi sayacıdır (sayım yoksa yazılmaz).
       if (i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0) opProg[anahtar] = i.canliAdet;
+      if (i.durum === 'tamam' && i.saglamAdet !== null) opSaglam[anahtar] = i.saglamAdet;
       if (e.kaynakRotaRevizyonId !== null && i.durum !== 'tamam') {
         const fason = i.kaynak?.tur === 'fason' ? String(i.kaynak.id) : null;
         opYer[anahtar] = {
@@ -369,6 +381,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       }
     }
     const dugumler = e.kaynakRotaRevizyonId === null ? undefined : dugumleriCevir(e);
+    const ekAdimlar = e.kaynakRotaRevizyonId === null ? [] : ekAdimlariCevir(e.isEmirleri);
     return {
       id: String(e.id), kayitNo: e.id, no: e.emirNo, itemId: String(e.malzemeNo), qty: e.adet, start: e.baslangic, due: e.teslim, priority: e.oncelik,
       note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), status: EMIR_DURUMU_PROTOTIP[e.durum],
@@ -377,10 +390,11 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,
       ...(e.kaynakRotaRevizyonId === null ? { rotasiz: true, adimlar: rotasizAdimlariCevir(e.isEmirleri) } : {}),
       ...(dugumler === undefined ? {} : { dugumler }),
+      ...(ekAdimlar.length === 0 ? {} : { ekAdimlar }),
       ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
     };
   });
-  return { orders, opStatus, opProg, opYer };
+  return { orders, opStatus, opProg, opSaglam, opYer };
 }
 
 // 677 a: motorun tatili hem resmî tatil hem kapalı gündür (Vardiya yalnız kapalı gün yazar; plan stüdyosunun kapattığı gün de kapalıdır).
@@ -928,4 +942,174 @@ export function rotaAramaSonuclari(
       aciklama: [a.ad?.trim() ?? '', `Rota ${rotaHarfi.get(a.id) ?? ''} · yürürlükte`].filter((p) => p !== '').join(' · '),
       yol: `/recete-rota/schema?kayit=${String(a.id)}`,
     }));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Emir malzeme ihtiyacı (2486-8, B-2484-3; 461 b): ekranın kuralı sunucuda. Emirler plan sırasıyla (başlamış önce, sonra öncelik, teslim,
+// açılış) açılır; serbest stok ve ara adım stoğu emirlere bu sırayla paylaştırılır. Kökte brüt emrin kendi iş emri kopyasındandır
+// (uretim-emirleri malzemeIhtiyaci: emrin adedi, adım düzenlemesi, dal firesi, kol); emre verilmiş net sarf malzeme başına düşülür (plan
+// malzeme ihtiyacıyla aynı kural). Ara adım stoğu (ürünün kendi rota adımının statüsünde bekleyen) sonraki adımın girdisini karşılar, o adım
+// ve öncekiler o kadar az üretir; kolu olan ya da kol olan emirde kullanılmaz (ekranla aynı). Çok katmanlı emirde düğüm ürünü emrin içinde
+// üretilir: kopyadaki bileşen olarak yeniden açılmaz. Kök altındaki yarı mamul yürürlükteki rotasından açılır (ekranın kuralı).
+type IhtiyacDurumu = Pick<ReceteRotaDurumCevabi, 'items' | 'routes' | 'routeRevs' | 'emirler'>;
+type IhtiyacEmri = NonNullable<ReceteRotaDurumCevabi['emirler']>['orders'][number];
+type IhtiyacAdimi = NonNullable<ReceteRotaDurumCevabi['routes']>[string]['steps'][number];
+export interface IhtiyacGirdisi {
+  durum: IhtiyacDurumu;
+  // Emir kaydı (kayitNo) başına kopyanın brüt satırları; kopyası olmayan emirde null.
+  kopyalar: ReadonlyMap<number, readonly { malzemeNo: number; opNo: number; brut: string }[] | null>;
+  sarflar: readonly { emirId: number; malzemeId: number; miktar: string }[];
+  // Ara adım stoğu, anahtar `<ürün>|<adım kimliği>`; stok okunamıyorsa boş.
+  araStok: ReadonlyMap<string, number>;
+}
+export interface IhtiyacHamSatiri { malzemeNo: number; brut: number; verilen: number; stoktan: number; alinacak: number }
+export interface EmirIhtiyacSonucu { emirId: number; hammadde: IhtiyacHamSatiri[]; yanUrun: { malzemeNo: number; miktar: number }[]; uyarilar: string[] }
+
+const IHTIYAC_EPS = 1e-9;
+const yuvarla6 = (x: number): number => Math.round(x * 1e6) / 1e6;
+const plandaMi = (o: IhtiyacEmri): boolean => o.status === 'serbest' || o.status === 'uretimde';
+const siraliAdimlar = (adimlar: readonly IhtiyacAdimi[]): IhtiyacAdimi[] => [...adimlar].sort((a, b) => a.seq - b.seq);
+const kolIcinde = (kol: { n: number; m: number }, j: number): boolean => j >= kol.n && j <= kol.m - 2;
+const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 1 && m - n >= 2 && m <= adimSayisi;
+
+// Adımın yapacağı miktar çarpanı (ürün başına): rota modülünün adım miktarı kuralı (rota/disari adimMiktarlari, 2486-1). Adım kendisinin ve
+// ardıllarının ret payıyla büyür; dallı rotada bir dalın reti paralel dalı büyütmez. Ret en çok %95 sayılır.
+const ROTA_BAGIMLILIGI = { bagimli: 'bekleyen', ortulu: 'akisli', bagimsiz: 'bagimsiz' } as const;
+export function adimRetCarpanlari(adimlar: readonly (Pick<IhtiyacAdimi, 'rejectPct' | 'opNo'> & Partial<Pick<IhtiyacAdimi, 'dep' | 'dal' | 'birlesen'>>)[]): number[] {
+  const m = adimMiktarlari(adimlar.map((a) => ({
+    opNo: a.opNo, firePayiYuzde: Math.min(95, Math.max(0, a.rejectPct || 0)), bagimlilik: ROTA_BAGIMLILIGI[a.dep ?? 'bagimli'], dal: a.dal ?? null, birlesen: a.birlesen ?? [],
+  })), 1);
+  return adimlar.map((a) => m.get(a.opNo) ?? 1);
+}
+const dalliMi = (adimlar: readonly IhtiyacAdimi[]): boolean => adimlar.some((a) => (a.dal ?? null) !== null || (a.birlesen?.length ?? 0) > 0);
+
+export function ihtiyacPlanSirasi(e: NonNullable<IhtiyacDurumu['emirler']>): IhtiyacEmri[] {
+  const baslamis = (o: IhtiyacEmri): boolean => {
+    const onek = `${o.id}|`;
+    return Object.keys(e.opStatus).some((k) => k.startsWith(onek)) || Object.entries(e.opProg).some(([k, v]) => k.startsWith(onek) && v > IHTIYAC_EPS);
+  };
+  return e.orders.filter(plandaMi).sort((a, b) =>
+    Number(baslamis(b)) - Number(baslamis(a)) || a.priority - b.priority || String(a.due).localeCompare(String(b.due)) || a.created - b.created);
+}
+
+// Ara adım havuzu: statünün kaynak adımı `<ürün no>-o<OP>`; ürünü yazmayan eski biçim sayılmaz. Statünün stoğu hangi kartta görünürse toplanır.
+export function araStokHavuzuKur(statuler: readonly { id: number; kaynakAdim: string }[], stoklar: readonly { statuId: number; miktar: string }[]): Map<string, number> {
+  const anahtar = new Map<number, string>();
+  for (const s of statuler) { const m = /^(\d+)-(o\d+)$/.exec(s.kaynakAdim); if (m) anahtar.set(s.id, `${m[1] ?? ''}|${m[1] ?? ''}-${m[2] ?? ''}`); }
+  const havuz = new Map<string, number>();
+  for (const x of stoklar) {
+    const a = anahtar.get(x.statuId);
+    const q = Number(x.miktar);
+    if (a !== undefined && Number.isFinite(q) && q > IHTIYAC_EPS) havuz.set(a, (havuz.get(a) ?? 0) + q);
+  }
+  return havuz;
+}
+
+export function emirMalzemeIhtiyaclari(g: IhtiyacGirdisi): EmirIhtiyacSonucu[] {
+  const d = g.durum;
+  const malzeme = new Map((d.items ?? []).map((i) => [i.id, i]));
+  const havuz = new Map<string, number>((d.items ?? []).map((i) => [i.id, Math.max(0, i.stock ?? 0)]));
+  const araHavuz = new Map(g.araStok);
+  const sira = d.emirler ? ihtiyacPlanSirasi(d.emirler) : [];
+  const revizyonu = (o: IhtiyacEmri) => (o.rev === null ? null
+    : (d.routeRevs ?? []).find((r) => r.itemId === o.itemId && r.id === o.rev && (r.status === 'yururlukte' || r.status === 'onayli')) ?? null);
+  const sonuc: EmirIhtiyacSonucu[] = [];
+
+  for (const o of sira) {
+    const ham = new Map<string, IhtiyacHamSatiri>();
+    const yan = new Map<string, number>();
+    const uyarilar: string[] = [];
+    const uyar = (m: string) => { if (!uyarilar.includes(m)) uyarilar.push(m); };
+    const hamaYaz = (id: string, brut: number, verilen: number, stoktan: number, alinacak: number) => {
+      const e = ham.get(id) ?? { malzemeNo: Number(id), brut: 0, verilen: 0, stoktan: 0, alinacak: 0 };
+      e.brut += brut; e.verilen += verilen; e.stoktan += stoktan; e.alinacak += alinacak;
+      ham.set(id, e);
+    };
+
+    // Kök altı: stoktan netleşir, rotası varsa yürürlükteki rotasından açılır (ekranın patlat kuralı, kok=false).
+    const alt = (urunId: string, miktar: number, verilen: number, yol: readonly string[]): void => {
+      const kart = malzeme.get(urunId);
+      if (yol.includes(urunId)) { uyar(`${kart?.code ?? urunId} kendi akışında tekrar kullanılıyor (döngü).`); return; }
+      const ihtiyac = Math.max(0, miktar - verilen);
+      const eldeki = havuz.get(urunId) ?? 0;
+      const stoktan = Math.min(eldeki, ihtiyac);
+      if (stoktan > IHTIYAC_EPS) havuz.set(urunId, eldeki - stoktan);
+      const net = ihtiyac - stoktan;
+      const ss = kart !== undefined && kart.type !== 'ham' ? d.routes?.[urunId]?.steps ?? null : null;
+      if (ss === null || ss.length === 0) {
+        hamaYaz(urunId, miktar, Math.min(verilen, miktar), stoktan, net);
+        if (kart && kart.type !== 'ham' && kart.type !== 'sarf') uyar(`${kart.code} ${kart.name}: rotası yok, satın alınan parça gibi hesaplandı.`);
+        return;
+      }
+      if (net <= IHTIYAC_EPS) return;
+      const sirali = siraliAdimlar(ss);
+      const fs = adimRetCarpanlari(sirali);
+      const yapilacak = sirali.map((_, j) => net * (fs[j] ?? 1));
+      araStokDus(urunId, sirali, yapilacak);
+      sirali.forEach((s, j) => {
+        const carpan = yapilacak[j] ?? 0;
+        for (const x of s.ins) alt(x.itemId, carpan * x.qty * (1 + (x.scrap || 0) / 100), 0, [...yol, urunId]);
+        for (const c of s.outs) yan.set(c.itemId, (yan.get(c.itemId) ?? 0) + carpan * c.qty);
+      });
+    };
+    // Ara stok son adımdan geriye: adımın çıktısı olarak bekleyen sonraki adımın girdisini karşılar.
+    // Dallı rotada ara stok düşülmez: geri yürüyüş tek hattır (VARSAYIM, ekranla aynı kapsam).
+    const araStokDus = (urunId: string, sirali: readonly IhtiyacAdimi[], yapilacak: number[]): void => {
+      if (araHavuz.size === 0 || dalliMi(sirali)) return;
+      for (let k = sirali.length - 2; k >= 0; k--) {
+        const a = `${urunId}|${sirali[k]?.id ?? ''}`;
+        const kullan = Math.min(araHavuz.get(a) ?? 0, yapilacak[k + 1] ?? 0);
+        if (kullan > IHTIYAC_EPS) araHavuz.set(a, (araHavuz.get(a) ?? 0) - kullan);
+        const ret = Math.min(0.95, Math.max(0, (sirali[k]?.rejectPct ?? 0) / 100));
+        yapilacak[k] = Math.max(0, (yapilacak[k + 1] ?? 0) - Math.max(0, kullan)) / (1 - ret);
+      }
+    };
+
+    const kopya = g.kopyalar.get(o.kayitNo) ?? null;
+    const adimlar = o.rotasiz ? [] : (revizyonu(o)?.data ?? d.routes?.[o.itemId])?.steps ?? [];
+    const sirali = siraliAdimlar(adimlar);
+    const n = sirali.length;
+    const kollar = sira.filter((k) => k.parentId === o.id && k.kol !== null && kolAraligiGecerli(k.kol.n, k.kol.m, n) && k.qty > 0 && k.qty < o.qty);
+    const olcek = (j: number) => Math.max(0, kollar.reduce((f, k) => (k.kol && kolIcinde(k.kol, j) ? f - k.qty / o.qty : f), 1));
+    let tut: ((j: number) => number) | null = kollar.length ? olcek : null;
+    if (o.kol !== null && o.parentId !== null) {
+      const ana = sira.find((p) => p.id === o.parentId);
+      const kol = o.kol;
+      tut = kolAraligiGecerli(kol.n, kol.m, n) && (!ana || o.qty < ana.qty) ? (j) => (kolIcinde(kol, j) ? olcek(j) : 0) : () => 0;
+    }
+    // Ara stok kökte adım oranıyla uygulanır: adımın yapacağı miktar azaldıkça o adımın kopyadaki bileşeni de aynı oranda azalır.
+    const tam = sirali.map((_, j) => o.qty * (adimRetCarpanlari(sirali)[j] ?? 1));
+    const azalan = [...tam];
+    if (tut === null) araStokDus(o.itemId, sirali, azalan);
+    const oran = new Map(sirali.map((s, j) => [s.opNo, (tam[j] ?? 0) > IHTIYAC_EPS ? (azalan[j] ?? 0) / (tam[j] ?? 1) : 1]));
+    sirali.forEach((s, j) => {
+      const kf = tut ? tut(j) : 1;
+      for (const c of s.outs) if (kf > IHTIYAC_EPS) yan.set(c.itemId, (yan.get(c.itemId) ?? 0) + (azalan[j] ?? 0) * kf * c.qty);
+    });
+    if (kopya === null) {
+      if (n > 0) uyar('Emrin iş emri kopyası okunamadı; malzeme ihtiyacı hesaplanmadı.');
+    } else {
+      const dugumUrunu = new Set((o.dugumler ?? []).map((x) => x.itemId));
+      const kok = new Map<string, { brut: number; ilkOp: number }>();
+      for (const s of kopya) {
+        const id = String(s.malzemeNo);
+        if (dugumUrunu.has(id)) continue;
+        const e = kok.get(id) ?? { brut: 0, ilkOp: s.opNo };
+        e.brut += Number(s.brut) * (oran.get(s.opNo) ?? 1);
+        e.ilkOp = Math.min(e.ilkOp, s.opNo);
+        kok.set(id, e);
+      }
+      const verilen = (id: string) => g.sarflar.filter((x) => x.emirId === o.kayitNo && String(x.malzemeId) === id).reduce((t, x) => t + (Number(x.miktar) || 0), 0);
+      for (const [id, e] of [...kok].sort((a, b) => a[1].ilkOp - b[1].ilkOp || Number(a[0]) - Number(b[0]))) {
+        if (e.brut > IHTIYAC_EPS) alt(id, e.brut, Math.max(0, verilen(id)), [o.itemId]);
+      }
+    }
+    sonuc.push({
+      emirId: o.kayitNo,
+      hammadde: [...ham.values()].map((e) => ({ ...e, brut: yuvarla6(e.brut), verilen: yuvarla6(e.verilen), stoktan: yuvarla6(e.stoktan), alinacak: yuvarla6(e.alinacak) })),
+      yanUrun: [...yan].map(([id, m]) => ({ malzemeNo: Number(id), miktar: yuvarla6(m) })),
+      uyarilar,
+    });
+  }
+  return sonuc;
 }

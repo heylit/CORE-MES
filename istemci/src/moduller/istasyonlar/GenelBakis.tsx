@@ -80,7 +80,7 @@ export function GenelBakis({ v }: { v: TesisVerisi }) {
                 <span>{hafta === undefined ? (v.takvim === null ? 'Vardiya alınamadı' : '…') : `${saatMetni(hafta)} sa/hafta`}</span>
                 <span>{atamaVar ? `${kisiSayisi} kişi` : 'Kişi sayısı alınamadı'}</span>
                 <Link to="/istasyonlar/vardiyalar">Vardiyalar</Link>
-                <Link to="/istasyonlar/is-merkezleri">Düzenle</Link>
+                <Link to="/istasyonlar/is-merkezleri?sekme=is-merkezleri">Düzenle</Link>
               </p>
               {istasyonlar.length === 0 && <p className="tc-ist-ipucu">İstasyon yok.</p>}
               {istasyonlar.map((i) => {

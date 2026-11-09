@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import { MOTOR_NOTU } from '../ortak.tsx';
+import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
 import { akis, asilBekleme, DARBOGAZ, duruslar, gs, malzemeGec, sure, tz, yukOranlari, zs } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
-// Bugün (cizBugun): katlanır alt şerit; geciken ve riskli siparişler, asıl beklemesi ve son kararlar. Eski panonun her sipariş için arka planda
-// aradığı çözüm yolları motor ister (357 b). Kararlar bu oturumun geri alma listesidir.
+// Bugün (cizBugun): katlanır alt şerit; geciken ve riskli siparişler, asıl beklemesi ve son kararlar. Çözüm yolu motorun "öne al"
+// hamlesidir (2531 a): sonuç önizlenir, kişi uygular. Kararlar bu oturumun geri alma listesidir.
 export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
   const { c, liste } = ort;
+  const hamle = useHamleci();
   const L = liste.filter((x) => x.durum !== 'iyi'); const gec = L.filter((x) => x.durum === 'gec').length;
   const ar = duruslar(c).length; const son = c.iz[0];
   return (
@@ -26,11 +27,18 @@ export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
             <h4>Çözülecekler</h4>
             {L.map((x) => {
               const dar = asilBekleme(akis(ort.p, ort.cx, ort.hazir, x.id));
+              const oneY = hamleYapisi(hamle, (h) => { h.oneAl(x.id); });
               return (
-                <button key={x.id} type="button" className="tc-pym-tp-bugun-sat" onClick={() => ort.sipGoster(x.id)}>
-                  <b>{x.id}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
-                  <span className="tc-pym-tp-not" title={`Çözüm yolları: ${MOTOR_NOTU}`}>{dar ? `asıl bekleme · ${dar}` : 'çözüm yolu motorla'}</span>
-                </button>
+                <div key={x.id} className="tc-pym-tp-bugun-satir">
+                  <button type="button" className="tc-pym-tp-bugun-sat" onClick={() => ort.sipGoster(x.id)}>
+                    <b>{x.id}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
+                    <span className="tc-pym-tp-not">{dar ? `asıl bekleme · ${dar}` : ''}</span>
+                  </button>
+                  <button type="button" className="tc-dugme tc-pym-kucuk" aria-label={`${x.id} öne al`} aria-disabled={oneY.yap ? undefined : 'true'}
+                    title={oneY.yap ? 'Motor bu siparişi öne alan planı arar; önizlersiniz.' : `Öne al: ${oneY.not}`} onClick={oneY.yap ?? undefined}>
+                    <Simge ad="first" boyut="k" /><span data-metin="">Öne al</span>
+                  </button>
+                </div>
               );
             })}
             {!L.length && <p className="tc-pym-tp-not">Geciken ya da riskli sipariş yok.</p>}

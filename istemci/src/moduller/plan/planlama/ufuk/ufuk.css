@@ -25,7 +25,8 @@
 .tc-pyu-seg button:disabled { cursor: default; color: var(--muted); }
 
 /* Gösterge şeridi */
-.tc-pyu-kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--sutun-dar)), 1fr)); gap: var(--b-2); margin-bottom: var(--b-3); }
+/* --sutun-dar bir fr payıdır; minmax'ın alt sınırında geçersiz olduğu için kartlar tek sütuna düşüyordu. Alt sınır uzunluk olmalı. */
+.tc-pyu-kpi { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 5)), 1fr)); gap: var(--b-2); margin-bottom: var(--b-3); }
 .tc-pyu-kpi-kutu {
   display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; padding: var(--b-2) var(--b-3);
   border: var(--cizgi-ince) solid var(--edge); border-left: var(--cizgi-kalin) solid var(--edge); border-radius: var(--yari-1); background: var(--panel);

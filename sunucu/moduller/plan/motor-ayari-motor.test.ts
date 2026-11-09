@@ -23,6 +23,14 @@ describe('plan: motor ayarı çalışmaya uygulanır', () => {
     assert.deepEqual(tl.D.planTL, { amac: 'tl' });
     assert.equal(calismayaMotorAyari(null, MOTOR_AYARI_VARSAYILAN), null);
   });
+
+  test('2523 a: paralel bölme ayarı kayıttaki param değerlerinin üstüne yazılır; öbür param alanları kalır, kayıt değişmez', () => {
+    const kayit = { D: {}, param: { tampon: true, bolmeKip: 'otomatik', bolmeMaks: 4, bolmeMin: 5 } };
+    const c = calismayaMotorAyari(kayit, { ...MOTOR_AYARI_VARSAYILAN, bolmeKip: 'kapali', bolmeMaks: 2 }) as typeof kayit;
+    assert.deepEqual(c.param, { tampon: true, acilPay: 0.05, bolmeKip: 'kapali', bolmeMaks: 2, bolmeMin: 5 });
+    assert.equal(kayit.param.bolmeKip, 'otomatik');
+    assert.deepEqual((calismayaMotorAyari({ D: {} }, MOTOR_AYARI_VARSAYILAN) as typeof kayit).param, { acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3 });
+  });
 });
 
 describe('plan: süre öğrenmesi çalışmaya uygulanır (1714, 1684 b)', () => {

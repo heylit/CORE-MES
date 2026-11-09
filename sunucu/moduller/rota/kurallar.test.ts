@@ -9,7 +9,7 @@ import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
-import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
+import { azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
 import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
@@ -264,6 +264,23 @@ describe('akış, miktar, süre', () => {
     ]);
     assert.equal(Number(dalli.get(10)?.toFixed(4)), 1.1111);
     assert.equal(Number(dalli.get(1010)?.toFixed(4)), 2.2222);
+  });
+
+  test('2564 a: ölçüm özeti: ortanca tekte ortadaki, çiftte ortadaki ikinin ortalaması; aralık en az ve en çok; ölçüm yoksa null', () => {
+    assert.equal(olcumOzeti([]), null);
+    assert.deepEqual(olcumOzeti([5]), { n: 1, ortanca: 5, enAz: 5, enCok: 5 });
+    assert.deepEqual(olcumOzeti([9, 3.8, 5.1]), { n: 3, ortanca: 5.1, enAz: 3.8, enCok: 9 });
+    assert.deepEqual(olcumOzeti([9, 3.8, 5.1, 4]), { n: 4, ortanca: 4.55, enAz: 3.8, enCok: 9 });
+    assert.match(String(azOlcumUyarisi(2)), /en az 3/);
+    assert.equal(azOlcumUyarisi(3), null);
+  });
+
+  test('2564 a: ölçüm penceresi son boşaltmadan sonraki ölçümlerdir; bekleyen ölçüm pencerenin sonudur', () => {
+    const x = (id: number, sureDk: number | null, kaynak: 'elle' | 'terminal' | 'kabul' = 'elle', makineId: number | null = null) => ({ id, tur: 'islem' as const, makineId, sureDk, kaynak });
+    const satirlar = [x(1, 4), x(2, null), x(3, 5), x(4, 6, 'kabul'), x(5, 7, 'terminal', 9)];
+    assert.deepEqual(olcumPenceresi(satirlar, null).islem.map((s) => s.id), [3, 5]);
+    assert.deepEqual(olcumPenceresi(satirlar, 8).islem.map((s) => s.id), [3]);
+    assert.equal(bekleyenOlcum(satirlar, null).islem?.id, 5);
   });
 
   test('RT-43 dallı: bir dalın firesi paralel dalı büyütmez; adım ardıllarının en büyük fire yolunu taşır (B-2485-1)', () => {

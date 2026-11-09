@@ -105,7 +105,7 @@ export function siparisDurumu(J: PlanJ | null, id: string, iptal = false): Sipar
   if (j.T == null) return { ad: 'Planlanmadı', ton: 'hata' };
   return j.T > 0.01 ? { ad: `${j.T.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sa geç`, ton: 'hata' } : { ad: 'Zamanında', ton: 'tamam' };
 }
-export const ONCELIK: Record<number, [string, 'hata' | 'bilgi' | 'pasif']> = { 1: ['Yüksek', 'hata'], 2: ['Normal', 'bilgi'], 3: ['Düşük', 'pasif'] };
+export const ONCELIK: Record<number, [string, 'hata' | 'bilgi' | 'pasif']> = { 1: ['Acil/Yüksek', 'hata'], 2: ['Normal', 'bilgi'], 3: ['Düşük', 'pasif'] };
 
 // --- kısıtlar (d-kisitlar.betik KATALOG; araştırma notu cnc/1-kisitlar.md bölüm 2) ---
 // durum: tam (motor aynen uygular), yaklasik, karar (kullanıcı kararına bağlı), yok (modelde yok). g: kapatılabilir. p: parametreler.
@@ -160,7 +160,7 @@ export const KATALOG: readonly KisitGrubu[] = [
     { id: 'fasonTalas', ad: 'Talaşlı işi fasona verme', durum: 'karar', not: '"Gerekirse fasona verilebilir" işaretli adımlar için.', p: [{ tur: 'fason', yer: 'ayarlar', k: 'fasonTalas', etiket: 'Talaşlı fasoncu' }] },
     { id: 'bekleme', ad: 'En az ve en çok bekleme (soğuma, kuruma)', durum: 'yok' },
     { id: 'nowait', ad: 'Ara beklemesiz akış', durum: 'yok' },
-    { id: 'bolme', ad: 'Parti bölme', durum: 'yok', not: 'Elle bölme dondurma istisnası; bu denemede yok.' },
+    { id: 'bolme', ad: 'Parti bölme', durum: 'tam', not: 'Rotada Paralel böl seçili adım aday makineler arasında Motor ayarları\'ndaki en çok pay sayısına (varsayılan 3) bölünür; bölme orada kapatılabilir. Kilitli, başlamış ve sabit iş bölünmez. Elle bölmenin dondurma istisnası yok.' },
     { id: 'wip', ad: 'Alan ve WIP sınırı', durum: 'yok' },
   ] },
   { grup: 'Ayar ve sıralama', simge: 'wrench', l: [
@@ -171,7 +171,7 @@ export const KATALOG: readonly KisitGrubu[] = [
   ] },
   { grup: 'Zaman ve plan politikası', simge: 'clock', l: [
     { id: 'termin', ad: 'Termin ve öncelik ağırlığı', durum: 'tam', not: 'Amaç ağırlıklı gecikme: yüksek ×4, normal ×2, düşük ×1.', sayfa: 'siparisler' },
-    { id: 'dondurma', ad: 'Dondurulmuş bölge', durum: 'tam', not: 'Onarımda bu süre içinde başlayan işler yerinden oynamaz.', p: [sayiP('w', 'dondurma', 'Dondurma ufku', 'sa', 4, 72, 1)] },
+    { id: 'dondurma', ad: 'Dondurulmuş bölge', durum: 'tam', not: 'Onarımda bu süre içinde başlayan işler yerinden oynamaz.', p: [sayiP('w', 'dondurma', 'Dondurma ufku', 'sa', 0, 72, 1)] },
     { id: 'kilit', ad: 'Elle kilit', durum: 'tam', not: 'Plan masasında taşınan ya da kilitlenen iş.' },
     { id: 'degisim', ad: 'Değişiklik bütçesi (canlıya göre)', durum: 'tam', not: 'Onarım kipinde en çok bu kadar iş değişir. Olay toparlamasında sınır yerine her yeri değişen iş TL toplamına değişiklik bedeli ekler.', p: [sayiP('param', 'maxChg', 'Bütçe', 'iş', 0, 500, 1), sayiP('param', 'chgTL', 'Değişiklik bedeli (olayda)', 'TL/iş', 0, 5000, 10)] },
     { id: 'belge', ad: 'Belge onayı', durum: 'yaklasik', not: 'Serbest bırakma zamanıyla girilir.' },

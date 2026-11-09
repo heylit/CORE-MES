@@ -17,6 +17,7 @@ import { RotaSekmesi, TakvimSekmesi } from './Sekmeler.tsx';
 import './secim.css';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
+import { tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
 
 // Yan panel (zl-yan dkHtml) ve seçim kartı (zc-tahta tkSecim, z-komuta kmSiparis, kmTezgah, kmIs): Özet, Harita ve Keşfet'te seçim olunca
 // görünümün sağında açılır, dar ekranda alttan. Taşı, kaydır ve ek mesai sunucu komutudur (1982 a, 2053); öteki motor hamleleri (öne al,
@@ -241,7 +242,7 @@ function IsKarti({ c, p, cx, s, id, komut, planYaz: yaz, planKilitle, sipSec, ta
   } : null;
   return (
     <>
-      <Baslik tur="İş adımı" ad={id} alt={`${o?.ad ?? ''} · ${r.m.startsWith('@') ? r.m.slice(1) : r.m}${kl ? ' · sabit' : ''}`} />
+      <Baslik tur="İş adımı" ad={id} alt={`${o?.ad ?? ''} · ${tezgahKodu(r.m, tezgahKodlari(D))}${kl ? ' · sabit' : ''}`} />
       <p className="tc-pym-km-durum">
         <span className="tc-pym-mono">{saatYaz(D, r.S)} → {saatYaz(D, r.C)}</span> · <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => sipSec(r.job)}>{r.job} siparişine git</button>
       </p>

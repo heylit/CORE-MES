@@ -9,7 +9,7 @@ import type { TakvimEki, KaynakAnlik, KaynakKoleksiyonu, KomutTanimi } from './k
 import type { SilCevabi, YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi, KapasiteCevabi, SatinAlmaEkiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { BedelAyari, MotorUyarilariCevabi, MotorYerlesimiCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AcilisSecenekleri, AdimliEmirCevabi, SureOzetiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { api, ApiHatasi } from '../../ortak/veri/api.ts';
@@ -386,6 +386,17 @@ export function kopruKur(
         return { ayar: await api.get<BedelAyari>('/plan/bedel-ayari'), yazabilir: secenek.bedelAyariYazabilir === true };
       // Süreler bölümü (169 c): revizyonun teorik süresi, plan için etkin süresi ve tür başına bekleyen ölçümü; makine verilirse o makinenin
       // görünümü. Sahibi rota modülüdür; ekran adımı OP numarasıyla eşler.
+      // 2571: emir ayrıntısında başlamış iş emirlerinin süre özeti (hazırlık, net ve brüt birim, sağlam ve hurda). Sahibi üretim emirleridir;
+      // fason adımın dakikası ölçülmez, sorulmaz. Kimlik iş emirli emrin kayıt numarasıdır.
+      case 'emir-sure-ozetleri': {
+        if (!tamSayi(v['emirId'])) throw new Error('Geçersiz emir.');
+        const id = String(v['emirId']);
+        const { emir } = await api.get<AdimliEmirCevabi>(`/adimli-emirler/${id}`);
+        const isler = emir.isEmirleri.filter((i) => i.baslama !== null && i.kaynak?.tur !== 'fason' && !i.fason);
+        const ozetler = await Promise.all(isler.map((i) => api.get<SureOzetiCevabi>(`/adimli-emirler/${id}/is-emirleri/${String(i.id)}/sure-ozeti`)
+          .then((ozet) => ({ opNo: i.opNo, ozet }))));
+        return { ozetler };
+      }
       case 'sure-oku': {
         if (!tamSayi(v['revizyonId'])) throw new Error('Geçersiz revizyon.');
         const makine = v['makineId'];

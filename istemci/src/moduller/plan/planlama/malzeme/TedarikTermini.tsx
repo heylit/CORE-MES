@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Kart, Rozet, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { ApiHatasi, api } from '../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
@@ -12,11 +12,16 @@ const YOL = '/satin-alma-tedarik-terminleri/kaydet';
 
 const hataMetni = (h: unknown): string => (h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Termin kaydedilemedi; yeniden deneyin.');
 
+// Kayıt değişim bitince gider (kutudan çıkış ya da Enter): her tuşta yazmak yarım tarihi kaydeder ve her seferinde sayfayı yeniden okurdu.
+// Yarım tarih (badInput) yazılmaz; boş kutu termini kaldırır.
 function TerminGirdisi({ x, yenile }: { x: TedarikTerminiSatiri; yenile: () => void }) {
   const { bildir } = useBildirim();
   const [mesgul, mesgulYaz] = useState(false);
+  // Enter'dan sonra gelen kutudan çıkış aynı değeri ikinci kez göndermesin.
+  const son = useRef(x.termin ?? '');
   const kaydet = (termin: string) => {
-    if (x.malzemeNo === null || termin === (x.termin ?? '')) return;
+    if (x.malzemeNo === null || termin === son.current) return;
+    son.current = termin;
     mesgulYaz(true);
     const govde = { malzemeNo: x.malzemeNo, termin: termin === '' ? null : termin, aciklama: x.aciklama, surum: x.surum };
     tekrarKorumaliGonder((d) => api.post<unknown>(YOL, govde, d)).then(
@@ -27,7 +32,8 @@ function TerminGirdisi({ x, yenile }: { x: TedarikTerminiSatiri; yenile: () => v
   return (
     <input
       className="tc-alan-kutu tc-pys-tarih" type="date" defaultValue={x.termin ?? ''} disabled={mesgul} aria-label={`${x.kod} tedarik termini`}
-      onChange={(e) => { kaydet(e.target.value); }}
+      onBlur={(e) => { if (!e.currentTarget.validity.badInput) kaydet(e.currentTarget.value); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' && !e.currentTarget.validity.badInput) kaydet(e.currentTarget.value); }}
     />
   );
 }

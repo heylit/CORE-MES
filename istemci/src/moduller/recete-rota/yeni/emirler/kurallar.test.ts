@@ -4,8 +4,8 @@ import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
-  adimCarpanlari, adimDurumu, aramaUyar, araStokHavuzu, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec, malzemeIhtiyaclari,
-  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
+  adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
+  miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -206,98 +206,10 @@ describe('adımlar, ilerleme ve plan', () => {
   });
 });
 
-describe('malzeme ihtiyacı', () => {
-  it('ret yüzdesi önceki adımları büyütür', () => {
-    expect(adimCarpanlari([{ rejectPct: 0 }, { rejectPct: 50 }, { rejectPct: 0 }])).toEqual([2, 2, 1]);
-  });
-
-  it('stok plan sırasıyla paylaşılır; yarı mamul stoktan netleşir, eksiği kendi rotasından patlatılır; fire ve yan ürün', () => {
-    // UE-2 acil (önce), UE-1 normal. Her emir 10 adet: adım 10 için 2x10x2(ret)x1,1 = 44 hammadde; adım 20 için 1x10x2 = 20 yarı mamul.
-    const d = durum([emir('1'), emir('2', { priority: 1 })]);
-    expect(planSirasi(d).map((o) => o.id)).toEqual(['2', '1']);
-    const m = malzemeIhtiyaclari(d);
-    const r2 = m.get('2')!;
-    // Yarı mamul: 5 stoktan, 15 üretilir -> 15 hammadde. Hammadde stoğu 30: önce 44'ten 30 düşer.
-    const ham2 = r2.hammadde.find((e) => e.malzemeId === '3')!;
-    expect(ham2.brut).toBeCloseTo(59);
-    expect(ham2.stoktan).toBeCloseTo(30);
-    expect(ham2.alinacak).toBeCloseTo(29);
-    expect(r2.yanUrun).toEqual([{ malzemeId: '4', miktar: 5 }]);
-    const r1 = m.get('1')!;
-    expect(r1.hammadde.find((e) => e.malzemeId === '3')).toMatchObject({ stoktan: 0, alinacak: 64 });
-    expect(r1.eksikler.length).toBe(1);
-  });
-
-  it('taslak emir hesaba girmez; kolun malzemesi yalnız kendi aralığından, ana emir kalanı yapar', () => {
-    const ana = emir('1', { qty: 10 });
-    const kol = emir('2', { qty: 4, parentId: '1', kol: { n: 1, m: 3 } });
-    const m = malzemeIhtiyaclari(durum([ana, kol, emir('3', { status: 'taslak' })]));
-    expect(m.has('3')).toBe(false);
-    // Ana emir önce: 1. adım bütün miktar (44 hammadde, 30'u stoktan); 2. adımda kalan 6 adet x 2(ret) = 12 yarı mamul, 5'i stoktan, 7'si
-    // üretilir (7 hammadde). Kol yalnız 2. adımı yapar: 4 x 2 = 8 yarı mamul, stok bitti, 8 hammadde.
-    const ham = (id: string) => m.get(id)!.hammadde.find((e) => e.malzemeId === '3')!;
-    expect(ham('1').brut).toBeCloseTo(51);
-    expect(ham('1').stoktan).toBeCloseTo(30);
-    expect(ham('2')).toMatchObject({ brut: 8, stoktan: 0, alinacak: 8 });
-    expect(m.get('2')!.yanUrun).toEqual([]);
-  });
-});
-
-describe('malzeme ihtiyacı: ara adım stoğu (461 b)', () => {
-  // Statü 7: ürün 1'in OP 20 adımının çıktısı (stokta hammadde kartının kırılımında). Statü 8 ürünü yazmayan eski biçim, statü 9 başka ürünün adımı.
-  const okuma = (ara: string, g: Partial<StokOkumasi> = {}): StokOkumasi => ({
-    statuler: [
-      { id: 7, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: '1-o20', ad: 'OP 20' },
-      { id: 8, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: 'o20', ad: 'OP 20' },
-      { id: 9, malzemeNo: 'K-3', urunKodu: null, kaynakAdim: '5-o20', ad: 'OP 20' },
-    ],
-    malzemeler: { 3: { kirilim: [{ statuId: null, miktar: '30' }, { statuId: 7, miktar: ara }, { statuId: 8, miktar: '100' }, { statuId: 9, miktar: '100' }], bakiyeler: [] } },
-    ...g,
-  });
-  const ham = (m: Map<string, { hammadde: { malzemeId: string; brut: number; stoktan: number; alinacak: number }[] }>, id: string) =>
-    m.get(id)!.hammadde.find((e) => e.malzemeId === '3')!;
-
-  it('OP 20 çıktısı olarak bekleyen 4 adet, adım 20 ve öncesini azaltır (izinli)', () => {
-    // 10 adet: adım 30 10 yapar; 4'ü OP 20 stoğundan, adım 20 6 sağlam için 12 yapar (ret %50), adım 10 de 12: 12x2x1,1 = 26,4 hammadde;
-    // adım 20 12 yarı mamul ister, 5'i stoktan, 7 üretilir (7 hammadde). Toplam 33,4; 30'u stoktan, 3,4 eksik (ara stoksuz 29).
-    const m = malzemeIhtiyaclari(durum([emir('1')]), okuma('4'));
-    expect(ham(m, '1').brut).toBeCloseTo(33.4);
-    expect(ham(m, '1').stoktan).toBeCloseTo(30);
-    expect(ham(m, '1').alinacak).toBeCloseTo(3.4);
-  });
-
-  it('ara stok plan sırasıyla paylaşılır: önce giren emir kullanır, sonraki ara stoksuz hesaplanır', () => {
-    const m = malzemeIhtiyaclari(durum([emir('1'), emir('2', { priority: 1 })]), okuma('4'));
-    expect(ham(m, '2').alinacak).toBeCloseTo(3.4);
-    expect(ham(m, '1')).toMatchObject({ stoktan: 0 });
-    expect(ham(m, '1').alinacak).toBeCloseTo(64);
-  });
-
-  it('ara stok gerekenden fazlaysa adım 10 ve 20 hiç yapılmaz; artan sonraki emre kalır', () => {
-    const m = malzemeIhtiyaclari(durum([emir('1'), emir('2', { priority: 1 })]), okuma('15'));
-    expect(m.get('2')!.hammadde.every((e) => e.brut === 0)).toBe(true);
-    expect(m.get('2')!.eksikler).toEqual([]);
-    // UE-1: kalan 5 adet OP 20 stoğu; adım 20 5 sağlam için 10, adım 10 10: 22 hammadde + 10-5(yarı mamul stok) = 5; 27, 30 stokta.
-    expect(ham(m, '1')).toMatchObject({ stoktan: 27, alinacak: 0 });
-    expect(m.get('1')!.eksikler).toEqual([]);
-  });
-
-  it('ürünü yazmayan ya da başka ürünün statüsü sayılmaz; stok okunamazsa yalnız serbest stok (reddedilen)', () => {
-    const yalnizSerbest = ham(malzemeIhtiyaclari(durum([emir('1')])), '1');
-    expect(yalnizSerbest.alinacak).toBeCloseTo(29);
-    expect(ham(malzemeIhtiyaclari(durum([emir('1')]), okuma('0')), '1').alinacak).toBeCloseTo(29);
-    expect(ham(malzemeIhtiyaclari(durum([emir('1')]), okuma('4', { malzemeler: null })), '1').alinacak).toBeCloseTo(29);
-    expect(ham(malzemeIhtiyaclari(durum([emir('1')]), okuma('4', { statuler: null })), '1').alinacak).toBeCloseTo(29);
-    // Başka ürünün anahtarı havuzda kendi ürünüyle durur, bu ürünün hesabına girmez; ürünsüz eski biçim hiç girmez.
-    expect([...araStokHavuzu(okuma('4')).entries()]).toEqual([['1|o20', 4], ['5|o20', 100]]);
-  });
-
-  it('kol emrinde ara stok kullanılmaz (prototipte de öyle)', () => {
-    const ana = emir('1', { qty: 10 });
-    const kol = emir('2', { qty: 4, parentId: '1', kol: { n: 1, m: 3 } });
-    const m = malzemeIhtiyaclari(durum([ana, kol]), okuma('4'));
-    expect(ham(m, '2')).toMatchObject({ brut: 8, stoktan: 0, alinacak: 8 });
-    expect(ham(m, '1').brut).toBeCloseTo(51);
+describe('plan sırası', () => {
+  // Malzeme ihtiyacının kuralı sunucudadır (B-2484-3); senaryoları sunucunun testlerindedir. Ekran yalnız plan sırasını kullanır.
+  it('acil emir normalden önce gelir; taslak emir plana girmez', () => {
+    expect(planSirasi(durum([emir('1'), emir('2', { priority: 1 }), emir('3', { status: 'taslak' })])).map((o) => o.id)).toEqual(['2', '1']);
   });
 });
 
@@ -400,5 +312,83 @@ describe('liste süzgeci ve arama (1101 a)', () => {
     expect(aramaUyar(o, urun, 'ACİL')).toBe(true);
     expect(aramaUyar(o, null, 'mil')).toBe(false);
     expect(aramaUyar(o, urun, 'flanş')).toBe(false);
+  });
+});
+
+describe('2553 statülü stok ve süreçteki malzeme tek tablo', () => {
+  const kart = { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+    aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true } as unknown as Malzeme;
+  const okuma = (kaynakAdim: string): StokOkumasi => ({ statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim, ad: 'OP 10 Tornalama' }], malzemeler: {} });
+  const d = { routes: { 11: { base: null, steps: [{ id: 'o10', opNo: 10 }] } }, routeRevs: [], emirler: null, adimAdetleri: {} } as unknown as Parameters<typeof stokVeSurec>[0];
+
+  it('emir verisi okunmuyorsa emir tarafı ve fark bilinmez; sıfır uydurulmaz', () => {
+    expect(stokVeSurec(d, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o10'))).toMatchObject([
+      { urunId: '11', opNo: 10, depoda: 5, emirlere: null, fark: null },
+    ]);
+  });
+
+  it('adımı rotada bulunmayan statü kendi satırıdır; emir verisi olsa da eşleşmez', () => {
+    const e = { ...d, emirler: { orders: [], opStatus: {}, opProg: {} } } as unknown as Parameters<typeof stokVeSurec>[0];
+    expect(stokVeSurec(e, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o99'))).toMatchObject([
+      { anahtar: 's7', opNo: null, depoda: 5, emirlere: null, fark: null },
+    ]);
+    expect(stokVeSurec(e, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o10'))).toMatchObject([{ depoda: 5, emirlere: 0, fark: 5 }]);
+  });
+});
+
+describe('2547 eki, 2561 a: sahipsiz statülü stok tabloya eklenir', () => {
+  const kart = { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk' } as unknown as Malzeme;
+  const satir = (statuIdler: number[], k: Malzeme | null = kart) => ({
+    anahtar: 'a', urunId: '11', opNo: 10, kart: k, statuIdler, statu: 'OP 10', depoda: statuIdler.length ? 5 : null, emirlere: 5, fark: 0, emirler: '',
+  });
+  const ss = (statuId: number, sahipsiz: string, ek: Record<string, unknown> = {}) => ({
+    malzemeId: 12, malzemeKod: 'HM-0001', malzemeAd: 'Örnek çubuk', statuId, kaliteDurumu: 'serbest' as const, miktar: sahipsiz, ayrilan: '0', sahipsiz, konumlar: [], ...ek,
+  });
+  const okuma = { statuler: [{ id: 9, malzemeNo: 'X', urunKodu: null, kaynakAdim: '1-o', ad: 'Eski statü' }], malzemeler: {} } as unknown as StokOkumasi;
+
+  it('liste okunmadıysa alanlar null kalır; statüsüz satırda null, eşleşmeyen statülü satırda 0', () => {
+    expect(sahipsizEkle([satir([7])], null, okuma)[0]).toMatchObject({ sahipsiz: null, kaynakEmir: null, sonHareket: null });
+    expect(sahipsizEkle([satir([])], [], okuma)[0]).toMatchObject({ sahipsiz: null });
+    expect(sahipsizEkle([satir([7])], [], okuma)[0]).toMatchObject({ sahipsiz: 0, kaynakEmir: null, sonHareket: null });
+  });
+
+  it('serbest ve şartlı toplanır, karar bekleyen ayrı; kaynak emir ve son hareket en yeni hareketli satırdandır; başka malzemenin satırı eşleşmez', () => {
+    const r = sahipsizEkle([satir([7])], [
+      ss(7, '2', { kaynakEmirId: 1, kaynakEmirNo: 'UE-1', sonHareket: '2026-11-01T00:00:00.000Z' }),
+      ss(7, '1.5', { kaliteDurumu: 'karar_bekliyor', kaynakEmirId: 2, kaynakEmirNo: 'UE-2', sonHareket: '2026-11-03T00:00:00.000Z' }),
+      ss(7, '4', { malzemeId: 99 }),
+    ], okuma);
+    expect(r[0]).toMatchObject({ sahipsiz: 2, kararBekleyen: 1.5, kaynakEmir: { id: 2, no: 'UE-2' }, sonHareket: '2026-11-03T00:00:00.000Z' });
+    expect(sahipsizEkle([satir([7])], [ss(7, '1', { kaliteDurumu: 'sartli' }), ss(7, '2')], okuma)[0]).toMatchObject({ sahipsiz: 3, kararBekleyen: 0 });
+    expect(r[1]).toMatchObject({ anahtar: 'x99|7', kart: null, sahipsiz: 4, depoda: null });
+  });
+
+  it('tabloda karşılığı olmayan statü adıyla kendi satırı olur', () => {
+    const r = sahipsizEkle([], [ss(9, '3')], okuma);
+    expect(r).toMatchObject([{ anahtar: 'x12|9', statu: 'Eski statü', malzemeMetni: 'HM-0001 Örnek çubuk', sahipsiz: 3, kaynakEmir: null, sonHareket: null }]);
+  });
+});
+
+describe('2547 eki v2: stok tablosu sıralaması (Atölye notu)', () => {
+  const s = (anahtar: string, sonHareket: string | null, sahipsiz: number | null) => ({
+    anahtar, urunId: null, opNo: null, kart: null, statuIdler: [], statu: '', depoda: null, emirlere: null, fark: null, emirler: '', sonHareket, sahipsiz,
+  });
+  const l = [s('a', '2026-11-02T00:00:00.000Z', 1), s('b', null, null), s('c', '2026-11-05T00:00:00.000Z', 4)];
+  it('son harekete göre iki yönde sıralar, boş her yönde sondadır; sıralama yoksa sıra değişmez', () => {
+    expect(stokSurecSirala(l, { alan: 'sonHareket', yon: 'azalan' }).map((x) => x.anahtar)).toEqual(['c', 'a', 'b']);
+    expect(stokSurecSirala(l, { alan: 'sonHareket', yon: 'artan' }).map((x) => x.anahtar)).toEqual(['a', 'c', 'b']);
+    expect(stokSurecSirala(l, { alan: 'sahipsiz', yon: 'azalan' }).map((x) => x.anahtar)).toEqual(['c', 'a', 'b']);
+    expect(stokSurecSirala(l, null).map((x) => x.anahtar)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('2571 süre özeti nedenleri', () => {
+  const o = { saglam: 4, hurda: 1, hazirlikDk: 12, brutBirimDk: 2.4, netBirimDk: 2.1 };
+  it('ölçülen sürede neden yok', () => { expect(sureOzetiNedenleri(o)).toEqual({ hazirlik: null, islem: null }); });
+  it('ayar yoksa hazırlık; sayım yoksa, sağlam yoksa ya da başka nedenle işlem ölçülmedi', () => {
+    expect(sureOzetiNedenleri({ ...o, hazirlikDk: null }).hazirlik).toBe('Ayar basılmadı: hazırlık ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0, hurda: 0 }).islem).toBe('Sayım yok: işlem süresi ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0 }).islem).toBe('Sağlam sayım yok: işlem süresi ölçülmedi');
+    expect(sureOzetiNedenleri({ ...o, netBirimDk: null }).islem).toBe('İşlem süresi ölçülmedi');
   });
 });

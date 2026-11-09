@@ -2,6 +2,7 @@ import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../ti
 import type { Metin } from './ozet/veri.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
 import { planDisi } from '../tipler.ts';
+import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 
 // P1'in saf hesapları. Plan saat eksenlidir: 0, D.meta.baslangic günü 00:00 duvar saatidir (engine.betik baseMs, parseT, fmtDT).
 // Motor burada koşmaz (357 b); kayıttaki çözülmüş plan okunur. Eski sayfanın tarayıcıda motorun derlemesinden (compile) aldığı takvim,
@@ -26,6 +27,7 @@ export interface PlanIslemi {
   sl: number | null; famHit: boolean; act: boolean;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
+export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string }
 export interface OkunanPlan {
   ops: Record<string, PlanIslemi>;
   fail: string[];
@@ -35,6 +37,9 @@ export interface OkunanPlan {
   util: Record<string, { u: number; n: number; busy: number; open: number }>;
   warn: { t: string; j: string | null; txt: string }[];
   dataVer: number;
+  // Motorun yerleşmeme nedeni (2516-2); eski kayıtta yok. Kişi tezgâhına yerleşen iş canlı planın makine kuyruğuna yazılmaz.
+  failNeden?: Record<string, FailNedeni>;
+  kisiTezgahIsleri?: string[];
 }
 
 // Kayıttaki planı daraltır. Saatsiz işlem `S`/`C` olarak NaN taşır (eski sayfa kayıtta Infinity'yi null okur, yerleşmemiş sayar);
@@ -65,7 +70,18 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
     fail: Array.isArray(p.fail) ? p.fail.filter((x): x is string => typeof x === 'string') : [],
     warn: Array.isArray(p.warn) ? p.warn.filter(nesne).map((w) => ({ t: metin(w.t) ?? '', j: metin(w.j) ?? metin(w.job), txt: metin(w.txt) ?? '' })) : [],
     dataVer: p.dataVer,
+    failNeden: failNedenOku(p.failNeden),
+    kisiTezgahIsleri: Array.isArray(o.kisiTezgahIsleri) ? o.kisiTezgahIsleri.filter((x): x is string => typeof x === 'string') : [],
   };
+}
+function failNedenOku(v: unknown): Record<string, FailNedeni> {
+  const l: Record<string, FailNedeni> = {};
+  if (!nesne(v)) return l;
+  for (const [id, x] of Object.entries(v)) {
+    if (!nesne(x) || (x.kod !== 'aday' && x.kod !== 'oncul' && x.kod !== 'zaman')) continue;
+    l[id] = { kod: x.kod, ...(typeof x.oncul === 'string' ? { oncul: x.oncul } : {}) };
+  }
+  return l;
 }
 
 // --- saat ---
@@ -127,10 +143,12 @@ export function sayiEki(x: number, tur: 'i' | 'inde'): string {
   return "'" + (tur === 'inde' ? `${ek}nd${ikili}` : ek);
 }
 
-// Planın "şimdi"si (girdi.betik stKur + simdiUygula): kaydın `simdi`'si, yoksa başlangıç günü 07:00. Gece vardiyası sürerken 07:00'den önce
-// de olabilir (741 a).
+// Ekranın "şimdi"si gerçek saattir (2506 a, B-2500-3): tesis saati planın ekseninde (D.meta.baslangic; sunucu planSaati ile aynı).
+// An çağırandan gelir (kurallar saati okumaz); verilmezse ya da eksen okunamazsa kayıttaki `simdi`, o da yoksa başlangıç günü 07:00.
 export const BASLANGIC_SAATI = 7;
-export function simdiSaati(c: PlanlamaCalismasi): number {
+export function simdiSaati(c: PlanlamaCalismasi, an?: number): number {
+  const g = an === undefined ? null : saatOku(c.D, tesisSaati(an));
+  if (g !== null) return g;
   const s = sayi((c as ExtraAlanlar).simdi);
   return s !== null && s >= 0 ? s : BASLANGIC_SAATI;
 }
@@ -251,11 +269,11 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
   fasonGun: (g) => { g.D.fasoncular = (g.D.fasoncular ?? []).map((f) => ({ ...f, cikisGunleri: [...GUN_KODLARI] })); },
   ayar: (g) => { g.D.ayarMatrisi = []; },
 };
-export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new Set(), adim: new Set() }): Girdi {
+export function girdiKur(c: PlanlamaCalismasi, biten: Bitenler = { siparis: new Set(), adim: new Set() }, an?: number): Girdi {
   const D = structuredClone(c.D) as Girdi['D'];
   D.ayarlar = nesne(D.ayarlar) ? D.ayarlar : {};
   D.siparisler = D.siparisler.filter((s) => !planDisi(s) && !biten.siparis.has(s.id));
-  const g: Girdi = { D, now: simdiSaati(c), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
+  const g: Girdi = { D, now: simdiSaati(c, an), kapali: new Set(c.kapali), bitti: biten.adim, down: [], ekMesai: [], saGecik: {}, sapma: {} };
   for (const d of c.down) { const m = metin(d.m), a = sayi(d.from), b = sayi(d.to); if (m !== null && a !== null && b !== null) g.down.push({ m, from: a, to: b }); }
   for (const e of c.ekMesai) { const m = metin(e.m), gun = sayi(e.gun), v = metin(e.vardiya); if (m !== null && gun !== null && v !== null) g.ekMesai.push({ m, gun, vardiya: v }); }
   for (const k of g.kapali) GEVSEK[k]?.(g);
@@ -579,6 +597,8 @@ export function veriDenetimi(c: PlanlamaCalismasi, cx: Derleme): VeriBulgusu[] {
   if (eksik) bul('ayar', `${eksik} aile geçişinin ayar süresi matriste yok; tam ayar alınır.`);
   for (const [j, t] of Object.entries(malzemeHazir(cx))) if (!Number.isFinite(t)) bul('malzeme', `${j}: malzeme stok ve siparişle karşılanmıyor.`);
   for (const f of D.fasoncular ?? []) if (!f.cikisGunleri?.length) bul('fason', `${f.id}: çıkış günü yok.`);
+  // B-2483-16: kapasitesi girilmemiş fasoncu motorda sınırsız sayılır (eskiden 1); planlamacı bunu görmeli.
+  for (const f of D.fasoncular ?? []) if (f.kapasite == null || !Number.isFinite(Number(f.kapasite))) bul('fason', `${f.id}: kapasite girilmemiş; motor sınırsız sayıyor.`);
   for (const s of c.D.siparisler) {
     if (!c.D.urunler.some((u) => u.id === s.urun)) bul('tezgah', `${s.id}: ürün ${s.urun} tanımlı değil; sipariş planlanmaz.`);
     if (!s.termin) bul('amac', `${s.id}: termin yok; gecikmesi ölçülemez.`);
@@ -635,7 +655,8 @@ export type SorunEylemi = 'ekip' | 'kisit-hepsi' | 'git' | 'one-al' | 'sec-is' |
 export interface SorunEylemiKaydi { ad: string; tur: SorunEylemi; v: string; birincil: boolean }
 // `eylem` ilk eylemdir (Yapılacaklar); `metin` ve `eylemler` karar panelinindir.
 export interface Sorun { ton: SorunTonu; simge: 'rotate' | 'alert' | 'flag' | 'box' | 'gauge' | 'wrench' | 'scan'; baslik: string; metin: Metin; eylem: SorunEylemiKaydi; eylemler: SorunEylemiKaydi[]; job: string | null }
-export const ONCELIK_AD: Record<number, string> = { 1: 'Yüksek', 2: 'Normal', 3: 'Düşük' };
+// Motorun 1. sınıfı emrin Acil ve Yüksek önceliğini birlikte taşır (sunucu oncelikSinifi); ekran ikisini ayırt edemez, adı ikisini söyler.
+export const ONCELIK_AD: Record<number, string> = { 1: 'Acil/Yüksek', 2: 'Normal', 3: 'Düşük' };
 export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
   const D = c.D;
   if (ev.tip === 'malzeme') { const m = (D.malzemeler ?? []).find((x) => x.kod === ev.kod); return `${m?.ad ?? String(ev.kod)}: satın alma ${String(ev.gun)} gün gecikti`; }

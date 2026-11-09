@@ -1467,25 +1467,49 @@ export function projeReddi(t: Pick<TalepYazimi, 'projeId' | 'uretimEmriId'>, esk
   return null;
 }
 export const projeHareketi = (eski: string | null, yeni: string | null): string => `Proje: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+export const emirHareketi = (eski: string | null, yeni: string | null): string => `Üretim emri: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
 
-// 2611 a, Maliyet C1: projeye giden alım değeri, bir sipariş için. Yalnız stoğa girmeyen satırlar sayılır (stok kartlı satır sarfla emre,
-// oradan projeye ulaşır; fason bağlı satır iş emrinden gider). Hizmet kartlı satır teslim değeriyle (gerceklesenPay), kartsız satır
-// teslim kaydı olamadığı için sipariş tutarıyla sayılır (varsayım 7). Masraf sayılan satırların sipariş malı payı kadardır ve sayılan
-// değer varsa girer (N2: açık siparişte ilk teslimde tamamı).
-export type ProjeAlimSatirTuru = 'stok' | 'hizmet' | 'kartsiz' | 'fason';
-export function projeAlimDegeri(satirlar: readonly { tur: ProjeAlimSatirTuru; mal: number; miktar: number; teslim: number }[], masraf: number): number {
-  const teslimVar = satirlar.some((x) => x.teslim > 0);
-  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
-  const sayilan = satirlar.filter((x) => x.tur === 'hizmet' || x.tur === 'kartsiz');
-  const deger = sayilan.reduce((t, x) => t + (x.tur === 'kartsiz' ? x.mal : gerceklesenPay(x.mal, 0, x.miktar > 0 ? x.teslim / x.miktar : 0, teslimVar)), 0);
-  const pay = tumMal > 0 ? masraf * sayilan.reduce((t, x) => t + x.mal, 0) / tumMal : 0;
-  return deger > 0 ? deger + pay : 0;
+// 2637 a, 2638, 2611 a: sipariş satırının maliyet yolu; her satır tek yoldadır, hiçbiri iki kez sayılmaz ya da kaybolmaz. Sıra:
+// fason (iş emrine, isEmriFasonTutarlari), stok (stoğa girer, sarfla emre), emir (kalemin emri, 2624 KALEM_EMRI; Maliyet C1: yalnız
+// emrin projesi varsa), proje (talebin projesi), genel gider (kalan hizmet ve kartsız satır). Kartı bulunamayan satırın yolu bilinmiyor:
+// stok varsayılmaz (Maliyet, Mimar N2).
+export type SatirYolu = 'fason' | 'bilinmiyor' | 'stok' | 'emir' | 'proje' | 'genel_gider';
+export interface YolGirdisi { fason: boolean; kartTuru: string | null; kartBulunamadi?: boolean; emirId: number | null; emirProjeli: boolean; projeId: number | null }
+export function satirYolu(r: YolGirdisi): SatirYolu {
+  if (r.fason) return 'fason';
+  if (r.kartBulunamadi === true) return 'bilinmiyor';
+  if (r.kartTuru !== null && r.kartTuru !== 'hizmet') return 'stok';
+  if (r.emirId !== null && r.emirProjeli) return 'emir';
+  if (r.projeId !== null) return 'proje';
+  return 'genel_gider';
 }
 
-// 2620 a (Finans kararı): siparişin maliyeti başka yoldan üretime ya da projeye girer mi. Talepte proje ya da emir, kalemde fason bağı ya da
-// stoğa giren kart (türü hizmet olmayan) varsa evet; kalemlerden biri yeterlidir. Kartsız ve hizmet kartlı kalem tek başına hayırdır.
-export function siparisUretimeGiderMi(t: { projeId: number | null; uretimEmriId: number | null },
-  kalemler: readonly { fasonBagli: boolean; kartTuru: string | null }[]): boolean {
-  if (t.projeId !== null || t.uretimEmriId !== null) return true;
-  return kalemler.some((k) => k.fasonBagli || (k.kartTuru !== null && k.kartTuru !== 'hizmet'));
+// Bir siparişin dağılımı. Emir ve proje yolunda değer gerçekleşen değerdir: hizmet teslim oranıyla (gerceklesenPay), kartsız satır teslim
+// kaydı olamadığı için sipariş tutarıyla (2611 varsayım 7). Masraf satırın sipariş malı payı kadardır ve o hedefte değer varsa girer
+// (2611 N2). Genel gider oranı (2637 a) genel gider yolundaki malın bütün mala oranıdır; Finans belge tutarını bununla çarpar. Mal 0 ise
+// oran tanımsızdır: null (Veri 1); yolu bilinmeyen satır varsa oran bilinemez: null. Fason ve stok yolunun masraf payı hiçbir hedefe verilmez (Maliyet N4, ayrı iş).
+export interface DagilimSatiri extends YolGirdisi { mal: number; miktar: number; teslim: number }
+export interface SiparisDagilimi { hedefler: { yol: 'emir' | 'proje'; hedefId: number; deger: number }[]; genelGiderOrani: number | null }
+export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: number): SiparisDagilimi {
+  const teslimVar = satirlar.some((x) => x.teslim > 0);
+  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
+  const hedefler = new Map<string, { yol: 'emir' | 'proje'; hedefId: number; deger: number; pay: number }>();
+  let genelMal = 0;
+  let bilinmeyen = false;
+  for (const x of satirlar) {
+    const yol = satirYolu(x);
+    if (yol === 'bilinmiyor') bilinmeyen = true;
+    if (yol === 'genel_gider') genelMal += x.mal;
+    if (yol !== 'emir' && yol !== 'proje') continue;
+    const hedefId = yol === 'emir' ? x.emirId! : x.projeId!;
+    const a = `${yol}/${hedefId}`;
+    const h = hedefler.get(a) ?? { yol, hedefId, deger: 0, pay: 0 };
+    h.deger += x.kartTuru === null ? x.mal : gerceklesenPay(x.mal, 0, x.miktar > 0 ? x.teslim / x.miktar : 0, teslimVar);
+    h.pay += tumMal > 0 ? masraf * x.mal / tumMal : 0;
+    hedefler.set(a, h);
+  }
+  return {
+    hedefler: [...hedefler.values()].filter((h) => h.deger > 0).map((h) => ({ yol: h.yol, hedefId: h.hedefId, deger: h.deger + h.pay })),
+    genelGiderOrani: tumMal > 0 && !bilinmeyen ? Math.round(genelMal / tumMal * 1e6) / 1e6 : null,
+  };
 }

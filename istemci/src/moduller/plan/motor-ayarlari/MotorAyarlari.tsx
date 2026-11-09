@@ -6,7 +6,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../../or
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { api, ApiHatasi, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
-import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, degerAdi, secilebilir, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from './kurallar.ts';
+import { ACIL_PAY, ACIL_PAY_SINIRI, AYAR_SECENEKLERI, degerAdi, secilebilir, secimDegeri, surumMetni, yuzdeMetni, yuzdeOku, type SecimAyari } from './kurallar.ts';
 
 // Plan motoru ayarları (kart 811): planlama sayfalarını gören okur, plan.motor-ayari değiştirir (775 b). Kayıt yeni sürümdür; açık
 // taslaklar açıldıkları sürümde kalır (774 a).
@@ -19,7 +19,7 @@ export function MotorAyarlari() {
   const q = useQuery({ queryKey: ANAHTAR, queryFn: () => api.get<MotorAyarlariCevabi>(MOTOR_AYARLARI_YOLU) });
   return (
     <div>
-      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı, sıralama kuralı, süre öğrenmesi ve acil iş payı." />
+      <SayfaBasligi baslik="Motor ayarları" simge="gear" alt="Planlama motorunun amacı, eksik stokta davranışı, sıralama kuralı, süre öğrenmesi, paralel bölmesi ve acil iş payı." />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
         : q.isError ? <DurumKutusu durum="hata" mesaj={hataIletisi(q.error, 'Motor ayarları alınamadı')} yenile={() => { void q.refetch(); }} />
           : <Kart baslik="Güncel ayarlar" simge="gear">
@@ -54,14 +54,15 @@ function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number |
   });
   const gonder = (e: FormEvent) => { e.preventDefault(); yaz.mutate(); };
   return (
-    <form onSubmit={gonder} aria-label="Motor ayarlarını değiştir">
+    <form className="tc-form" onSubmit={gonder} aria-label="Motor ayarlarını değiştir">
       {ANAHTARLAR.map((k) => (
-        <Secim key={k} etiket={AYAR_SECENEKLERI[k].baslik} ipucu={AYAR_SECENEKLERI[k].ipucu} value={f[k]}
-          onChange={(e) => setF({ ...f, [k]: e.target.value })} secenekler={secilebilir(k, degerler[k])} />
+        <Secim key={k} etiket={AYAR_SECENEKLERI[k].baslik} ipucu={AYAR_SECENEKLERI[k].ipucu} value={String(f[k])}
+          onChange={(e) => { const d = secimDegeri(k, e.target.value); if (d !== null) setF({ ...f, [k]: d }); }}
+          secenekler={secilebilir(k, degerler[k])} />
       ))}
       <Girdi etiket={ACIL_PAY.baslik} ipucu={ACIL_PAY.ipucu} inputMode="decimal" value={pay} onChange={(e) => setPay(e.target.value)}
         hata={payOrani === null ? '0 ile 30 arasında bir sayı girin.' : undefined} />
-      <Dugme type="submit" simge="check" disabled={!degisti || payOrani === null} yukleniyor={yaz.isPending}>Kaydet</Dugme>
+      <div className="tc-form-tam"><Dugme type="submit" simge="check" disabled={!degisti || payOrani === null} yukleniyor={yaz.isPending}>Kaydet</Dugme></div>
     </form>
   );
 }

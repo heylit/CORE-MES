@@ -32,9 +32,12 @@ export function planMetni(p: PlanOzeti): { metin: string; ton: RozetTonu | null;
     case 'yerlesmedi': return p.calisanPlanDisi.length === p.acikAdim
       ? { metin: 'Yerleşmedi', ton: 'hata', alt: calisanMetni(p.calisanPlanDisi), altTon: 'uyari' }
       : { metin: 'Yerleşmedi', ton: 'hata', alt: `${String(p.acikAdim)} açık adım planda yok`, altTon: null };
-    case 'plan': return {
-      metin: tarih(p.bitis), ton: p.bitis === null ? null : p.gecikiyor ? 'hata' : 'tamam',
-      alt: p.calisanPlanDisi.length ? calisanMetni(p.calisanPlanDisi) : null, altTon: p.calisanPlanDisi.length ? 'uyari' : null,
-    };
+    case 'plan': {
+      const alt = [p.oneri ? 'öneri, canlıda yok' : null, p.calisanPlanDisi.length ? calisanMetni(p.calisanPlanDisi) : null].filter((x) => x !== null);
+      return {
+        metin: tarih(p.bitis), ton: p.bitis === null ? null : p.gecikiyor ? 'hata' : 'tamam',
+        alt: alt.length ? alt.join('; ') : null, altTon: alt.length ? 'uyari' : null,
+      };
+    }
   }
 }

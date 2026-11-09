@@ -59,3 +59,11 @@ export type { IsGunuCozucusu, PuantajAralikCozucusu, PuantajTakvimCozucusu, Vard
 // IK-74 çıkış uyarısı (244 a): açık zimmetler İdari İşler'den, aynı ters bağla.
 export { acikZimmetCozucusu } from './servis.ts';
 export type { AcikZimmetCozucusu } from './servis.ts';
+// 2602-a (2603 a, 2606 a): departman başına, çalışılan saatle ağırlıklı grup saat maliyeti; kişi başı değer ve brüt İK dışına çıkmaz.
+// Ay "YYYY-MM". Küçük grupta (3 kişiden az) ekrana gidebilen iki işlev null verir; `...YalnizHesapIcin` gerçek değeri yalnız sunucu içi
+// toplam hesabı için verir (cevaba konmaz). Aynı istekte aynı ay için bir kez çağrılır (her çağrı ayın puantajını okur). Yetki denetlemez.
+export { grupSaatMaliyetleri, kisilerinGrupSaatMaliyeti, kisilerinGrupSaatMaliyetiYalnizHesapIcin } from './saat-maliyeti/servis.ts';
+export type { GrupDegeri, KisiGrupDegeri } from './saat-maliyeti/servis.ts';
+// IK-87 (2653, 2657 a): küçük grupların tek havuz değeri, YALNIZ SUNUCU İÇİ TOPLAM İÇİN (cevaba konmaz); havuz 3 kişiden azsa null.
+export { kucukGrupHavuzuYalnizHesapIcin } from './saat-maliyeti/servis.ts';
+export type { HavuzDegeri } from './saat-maliyeti/servis.ts';

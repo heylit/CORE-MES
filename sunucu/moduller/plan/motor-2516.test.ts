@@ -232,7 +232,7 @@ describe('2516: acil iş payı motor ayarında, pay oranı yerleşimde (2509 a, 
     assert.equal(motorAyariCoz({ amac: 'sirali' }).acilPay, 0.05);
     assert.equal(motorAyariCoz({ acilPay: 0.5 }).acilPay, 0.05, 'sınır dışı varsayılana düşer');
     const c = calismayaMotorAyari({ D: {}, param: { tampon: true, acilPay: 0.2 } }, { ...MOTOR_AYARI_VARSAYILAN, acilPay: 0.1 }) as { param: Kayit };
-    assert.deepEqual(c.param, { tampon: true, acilPay: 0.1 });
+    assert.deepEqual(c.param, { tampon: true, acilPay: 0.1, bolmeKip: 'otomatik', bolmeMaks: 3 });
   });
   test('tampon açıkken yerleşim pay oranını taşır; işleme süresi 1/(1-pay) uzar', () => {
     const m = motor();

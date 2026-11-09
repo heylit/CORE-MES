@@ -21,9 +21,18 @@ export type PartiBolmeSonucu = DegerlendirmeCevabi<'parti-bolme'>['sonuc'];
 
 export type Degerlendirici = <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => Promise<DegerlendirmeCevabi<K>>;
 
-// Sürüm açılıştaki çalışmanınkidir; ekran yazdıysa sunucu 409 döner ve ekran yenilenir (iskelet yazıcının güncel sürümünü vermiyor: DEVIR'de istek).
-export function degerlendirici(surum: number, iste: typeof degerlendirmeIste = degerlendirmeIste): Degerlendirici {
-  return async <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => (await iste(surum, istek)) as DegerlendirmeCevabi<K>;
+// Hesap sunucudaki kayıtlı çalışmayla yapılır: yazan ekranda sürüm her istekte yazıcıdan alınır (bekleyen değişiklik önce yazılır, motor/coz.ts
+// planKur gibi); açılıştaki sürüm ilk değişiklikten sonra eskir ve her hesap 409 alırdı. Salt okunur ekranda sürüm açılıştakidir.
+export const KAYDEDILEMEDI = 'Çalışma kaydedilemedi; hesap yapılmadı. Sayfayı yenileyip yeniden deneyin.';
+export class KayitHatasi extends Error {
+  constructor() { super(KAYDEDILEMEDI); this.name = 'KayitHatasi'; }
+}
+export function degerlendirici(surum: number | (() => Promise<number | null>), iste: typeof degerlendirmeIste = degerlendirmeIste): Degerlendirici {
+  return async <K extends DegerlendirmeTuru>(istek: Extract<DegerlendirmeIstegi, { tur: K }>) => {
+    const s = typeof surum === 'number' ? surum : await surum();
+    if (s === null) throw new KayitHatasi();
+    return (await iste(s, istek)) as DegerlendirmeCevabi<K>;
+  };
 }
 
 // Sunucunun iki adımı (463 a): başlatma iş kimliği döner, sonuç kimlikle beklenir. Hesaptaki ret (plan yok, süre, meşgul) uçtaki hatanın
@@ -55,6 +64,7 @@ export async function degerlendirmeIste(surum: number, istek: SunucuIstegi, u: D
 }
 
 export function degerlendirmeHatasi(h: unknown): { metin: string; yenile: boolean } {
+  if (h instanceof KayitHatasi) return { metin: KAYDEDILEMEDI, yenile: true };
   if (h instanceof ApiHatasi) {
     if (h.durum === 409) return { metin: 'Çalışma hesap sırasında değişti ya da plan yok. Sayfayı yenileyip yeniden deneyin.', yenile: true };
     if (h.durum === 403) return { metin: 'Bu hesabı görme yetkiniz yok.', yenile: false };

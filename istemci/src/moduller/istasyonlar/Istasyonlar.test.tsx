@@ -122,6 +122,7 @@ function sunucuKur(kullanici: Kullanici, ek: Record<string, unknown> = {}): Cagr
 }
 
 // Varsayılan bölüm iş merkezleri ve istasyonlardır; öteki bölümlerin testleri adresi açıkça verir.
+const MERKEZ_SEKMESI = '/istasyonlar/is-merkezleri?sekme=is-merkezleri';
 function goster(ekran: React.ReactElement, adres = '/istasyonlar/is-merkezleri') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -485,6 +486,7 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     fireEvent.change(secim, { target: { value: '3' } });
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toMatchObject({ yol: '/istasyonlar/10/guncelle', govde: { kod: 'T-01', isMerkeziId: 3, surum: 1 } });
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezleri' }));
     await duzenle('FREZE iş merkezi');
     hucreYaz('FREZE iş merkezi adı', 'Freze Hattı Yeni');
     await waitFor(() => { expect(POSTLAR(cagrilar).length).toBeGreaterThan(1); });
@@ -539,6 +541,24 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/istasyonlar/11/plan-ayari', govde: { verimYuzde: 100, operatorIhtiyaci: 0.33, surum: 0 } });
   });
 
+  it('2686 2/2 a: istasyonlar ve iş merkezleri ayrı sekmelerdir; istasyon adresi İstasyonlar sekmesini açar', async () => {
+    sunucuKur(YONETICI);
+    goster(<Istasyonlar />);
+    expect((await screen.findByRole('tab', { name: 'İstasyonlar' })).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('row', { name: 'T-01' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'İş merkezi' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'TORNA iş merkezi düzenle' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezleri' }));
+    expect(await screen.findByRole('button', { name: 'İş merkezi' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'TORNA iş merkezi düzenle' })).toBeTruthy();
+    expect(screen.queryByRole('row', { name: 'T-01' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'CSV indir' })).toBeNull();
+    cleanup();
+    sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/is-merkezleri?sekme=is-merkezleri&istasyon=10');
+    expect((await screen.findByRole('tab', { name: 'İstasyonlar' })).getAttribute('aria-selected')).toBe('true');
+  });
+
   it('yeni iş merkezi ve istasyon tek tıkla boş kodla açılır', async () => {
     const cagrilar = sunucuKur(YONETICI);
     goster(<Istasyonlar />);
@@ -548,6 +568,7 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(POSTLAR(cagrilar)[0]).toEqual({
       yontem: 'POST', yol: '/istasyonlar', govde: { kod: 'TORNA-1', ad: 'Yeni istasyon', isMerkeziId: 1, tip: 'talasli', kapasiteKaynagi: 'makine' },
     });
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezleri' }));
     await waitFor(() => { expect((screen.getByRole('button', { name: 'İş merkezi' }) as HTMLButtonElement).disabled).toBe(false); });
     fireEvent.click(screen.getByRole('button', { name: 'İş merkezi' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
@@ -571,7 +592,7 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
   it('IST-5: tek tıkla açılan iş merkezi düzenleme kipinde gelir, adı seçili olur', async () => {
     const yeni = { id: 9, kod: 'IM-1', ad: 'Yeni iş merkezi', aciklama: null, aktif: true, surum: 1 };
     sunucuKur(YONETICI, { '/is-merkezleri': yeni, '/is-merkezleri?pasifler=true': { isMerkezleri: [...IS_MERKEZLERI.isMerkezleri, yeni] } });
-    goster(<Istasyonlar />);
+    goster(<Istasyonlar />, MERKEZ_SEKMESI);
     await screen.findByRole('region', { name: 'TORNA iş merkezi' });
     fireEvent.click(screen.getByRole('button', { name: 'İş merkezi' }));
     const ad = await screen.findByLabelText('IM-1 iş merkezi adı');
@@ -1448,6 +1469,11 @@ describe('yetkinlik matrisi', () => {
     expect((within(tablo).getByLabelText('Deneme Usta T-01 yetkinliği') as HTMLInputElement).checked).toBe(true);
     expect((within(tablo).getByLabelText('Deneme Yeni T-01 yetkinliği') as HTMLInputElement).checked).toBe(false);
     expect(within(tablo).queryByText('K-01')).toBeNull();
+    // 2692: başlık adı yazar, kod altında küçük; tam metin title'da.
+    const sutun = within(tablo).getByRole('columnheader', { name: /Torna Bir/ });
+    expect(within(sutun).getByText('T-01')).toBeTruthy();
+    expect(sutun.getAttribute('title')).toBe('T-01 Torna Bir');
+    expect(within(tablo).getByRole('columnheader', { name: /Torna Hattı/ }).getAttribute('title')).toBe('TORNA Torna Hattı');
     fireEvent.click(within(tablo).getByLabelText('T-01 sütununun hepsi'));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/toplu', govde: { degisiklikler: [{ kisiId: 7, istasyonId: 10, yetkin: true }] } });
@@ -1487,14 +1513,14 @@ describe('2166: tesis şablonu ve bağlı sayfa', () => {
     const cagrilar = sunucuKur(YONETICI, {
       '/tesis-sablonu/uygula': { acilanMerkezler: ['KALITE'], acilanIstasyonlar: ['KAL-GKK', 'KAL-SON'], atlananlar: [{ kod: 'DEPO', neden: 'var' }] },
     });
-    goster(<Istasyonlar />);
+    goster(<Istasyonlar />, MERKEZ_SEKMESI);
     fireEvent.click(await screen.findByRole('button', { name: 'Şablonu uygula' }));
     expect((await screen.findByRole('status')).textContent).toBe('1 iş merkezi ve 2 istasyon açıldı. 1 kayıt zaten vardı ya da pasif merkezdeydi, dokunulmadı.');
     expect(cagrilar.filter((c) => c.yontem === 'POST').map((c) => c.yol)).toEqual(['/tesis-sablonu/uygula']);
     cleanup();
     sunucuKur(OKUYUCU);
-    goster(<Istasyonlar />);
-    await screen.findByText('Torna Bir');
+    goster(<Istasyonlar />, MERKEZ_SEKMESI);
+    await screen.findByRole('region', { name: 'TORNA iş merkezi' });
     expect(screen.queryByRole('button', { name: 'Şablonu uygula' })).toBeNull();
   });
 

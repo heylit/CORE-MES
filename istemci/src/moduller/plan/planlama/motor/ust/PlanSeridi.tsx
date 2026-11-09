@@ -10,6 +10,7 @@ import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } 
 import { Cubuk } from './Cubuk.tsx';
 import { nabizDurumu, sabitReferans, type NabizDurumu } from './nabiz.ts';
 import '../motor.css';
+import { useAn } from '../saat.ts';
 
 // Nabız referansını seçmek ve şu anki planı sabitlemek çalışmaya yazar (zr-agirlik sdNabiz); motor ve öteki sayfalar aynı yazmayı kullanır.
 export function nabizYazmalari(c: PlanlamaCalismasi, komut: CalismaKomutu | null, yetki: PlanlamaYetkisi, p: OkunanPlan | null, nabiz: NabizDurumu | null) {
@@ -32,7 +33,8 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const { olcek: donem, kayma } = o.olcek;
   const [acik, setAcik] = useState(false);
   const p = useMemo(() => (c ? planOku(c) : null), [c]);
-  const cx = useMemo(() => (c ? derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p))) : null), [c, p, emirler]);
+  const an = useAn();
+  const cx = useMemo(() => (c ? derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)) : null), [c, p, emirler, an]);
   const nabiz = useMemo(() => (c && p && cx ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
   const y = c ? nabizYazmalari(c, o.komut, o.yetki, p, nabiz) : { refSec: null, sabitle: null, sabitAd: null };
   const { bildir } = useBildirim();

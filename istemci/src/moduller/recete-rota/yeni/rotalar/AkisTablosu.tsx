@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimCarpani, adimEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
-  operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
+  adimCarpani, adimDali, dalBilgileri, dalEtiketi, dalHatasi, kolaEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, islemSuresiBos, istasyonYaz, kartBasligi,
+  operasyonYaz, sirali, sonrakiBagimlilik, statuNo, adimAdi, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
 import { SURUKLE_TURU, surukleAdim, surukleCoz, yereBirak } from './AkisSemasi.tsx';
@@ -13,6 +13,11 @@ import { yeniKimlik } from './useRotaDuzeni.ts';
 // Adım kartında operasyon, istasyon, makine ve süreler yerinde düzenlenir; yazma şemayla ve düzenleme paneliyle aynı yoldan (duzen.degistir) gider.
 
 interface Sira { id: string; miktar: number; tuketen: { urunId: string; adim: Adim } | null }
+
+// Adım satırının boş yerine tıklamak adımı seçer (B-2482-1). Satırdaki düğme, alan, seçim ve sürükleme tutamağı kendi işini yapar;
+// onlardan gelen tıklama satıra seçim olarak geçmez. Klavyede adım, başlıktaki OP düğmesiyle seçilir.
+const IC_DENETIM = 'button, input, select, textarea, a, label, [draggable="true"], [role="button"]';
+const icDenetimMi = (hedef: EventTarget): boolean => hedef instanceof Element && hedef.closest(IC_DENETIM) !== null;
 
 // Rotalar alt montajdan köke sıralanır; her rotanın miktarı ağaçtaki bütün geçişlerinin toplamıdır.
 function rotaSirasi(kok: Dugum, malzeme: (id: string) => Malzeme | undefined, rotaVar: (id: string) => boolean): Sira[] {
@@ -75,10 +80,10 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     const c = surukleCoz(v);
     if (!c) return;
     if (c.tur === 'adim' && c.urunId === urunId && c.adimId !== hedef.id) {
-      r.duzen.degistir(urunId, (l) => adimSurukle(l, c.adimId, hedef.id), 'Adım taşındı');
+      r.duzen.tasi(urunId, (l) => adimSurukle(l, c.adimId, hedef.id), 'Adım taşındı');
     } else if (c.tur === 'op') {
       const yeni = yeniAdim(h.op.get(c.opId), yeniKimlik());
-      const l2 = adimEkle(r.duzen.adimlar(urunId), hedef.id, yeni);
+      const l2 = kolaEkle(r.duzen.adimlar(urunId), hedef.id, yeni);
       if (r.duzen.degistir(urunId, () => l2, 'Adım eklendi')) {
         r.sec({ tur: 'adim', urunId, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar: q });
       }
@@ -94,10 +99,15 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     </button>
   );
 
+  // 2542 E, F: dalın çatal ve birleşme yeri ilk adımında yazar; dal kuralı ihlali düzenlerken satırında görünür (onaya göndermeyi beklemez).
+  const dallar = dalBilgileri(liste);
+  const dalHata = dalHatasi(liste);
   const satirlar = liste.map((a, j) => {
     const op = h.op.get(a.opId);
     const ist = a.stationId ? h.istasyon.get(a.stationId) : undefined;
     const fason = fasonMu(a);
+    // 2555 a: süresi boş adım tabloda da görünür (önceden yalnız panelde ve onaya gönderirken).
+    const sureBos = islemSuresiBos(a);
     // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); sunucunun teorik süresiyle aynı.
     const t = adimSuresi(a, q * adimCarpani(a), ist, r.gunSaati(ist?.wcId ?? null));
     const son = j === liste.length - 1;
@@ -130,8 +140,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <span className="tc-rr1-fct"><b>{gm.code}</b><small>{gm.name}{yukarida ? ' ↑ yukarıdaki akıştan' : ''}</small></span>
               </button>
               <span className="tc-rr1-fcin">
-                <SayiAlani etiket={`${gm.code} miktarı (1 ${m.unit ?? ''} başına)`} deger={x.qty} birim={`${gm.unit ?? ''}/1`} kapali={!duzen}
-                  yaz={(v) => { yaz(a, (y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira2 ? { ...g, qty: v ?? 0 } : g)) }), 'Giren miktarı değişti'); }} />
+                <SayiAlani etiket={`${gm.code} miktarı (1 ${m.unit ?? ''} başına)`} deger={x.qty} birim={`${gm.unit ?? ''}/1`} kapali={!duzen} pozitif
+                  yaz={(v) => { yaz(a, (y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira2 ? { ...g, qty: v ?? g.qty } : g)) }), 'Giren miktarı değişti'); }} />
               </span>
               <span className="tc-rr1-fcq" title="Bu siparişte toplam">{sayi(Math.round(toplam * 100) / 100)}</span>
               {duzen && (
@@ -153,7 +163,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
 
     const orta = (
       <div className="tc-rr1-fcol tc-rr1-fmid">
-        <div className={`tc-rr1-fstep ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}`}>
+        <div className={`tc-rr1-fstep ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}${sureBos ? ' tc-rr1-fstep-uyari' : ''}`}>
           <div className="tc-rr1-fshd">
             {duzen && (
               <span className="tc-rr1-ftutamak" draggable title="Sürükleyerek taşı"
@@ -162,25 +172,25 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <Simge ad="more" boyut="k" />
               </span>
             )}
-            <button type="button" className="tc-rr1-fsop" aria-label={`OP ${String(statuNo(a))} ${op?.name ?? 'Operasyon seç'}`}
+            <button type="button" className="tc-rr1-fsop" aria-label={`${adimAdi(a)} ${op?.name ?? 'Operasyon seç'}`}
               onClick={() => { r.sec({ tur: 'adim', urunId, adimId: a.id, seq: a.seq, miktar: q }); }}>
-              <b>{op?.abbr ?? op?.code ?? '???'}</b><span>OP {statuNo(a)}</span>
+              <b>{op?.abbr ?? op?.code ?? '???'}</b><span>{a.opNo === null ? 'Yeni' : `OP ${String(a.opNo)}`}</span>
             </button>
             <span className="tc-rr1-fst">
               {fason ? `Termin ${a.terminGun !== null && a.terminGun > 0 ? `${String(a.terminGun)} gün` : 'girilmedi'}`
-                : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : 'süre yok'}
+                : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : sureBos ? 'süre yok' : 'istasyon yok'}
             </span>
             {duzen && (
               <span className="tc-rr1-fsacts">
-                <button type="button" className="tc-rr1-ib" disabled={j === 0} aria-label={`OP ${String(statuNo(a))} yukarı taşı`}
-                  onClick={() => { const p = liste[j - 1]; if (p) r.duzen.degistir(urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
+                <button type="button" className="tc-rr1-ib" disabled={j === 0} aria-label={`${adimAdi(a)} yukarı taşı`}
+                  onClick={() => { const p = liste[j - 1]; if (p) r.duzen.tasi(urunId, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
                   <Simge ad="up" boyut="k" />
                 </button>
-                <button type="button" className="tc-rr1-ib" disabled={son} aria-label={`OP ${String(statuNo(a))} aşağı taşı`}
-                  onClick={() => { const n = liste[j + 1]; if (n) r.duzen.degistir(urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
+                <button type="button" className="tc-rr1-ib" disabled={son} aria-label={`${adimAdi(a)} aşağı taşı`}
+                  onClick={() => { const n = liste[j + 1]; if (n) r.duzen.tasi(urunId, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
                   <Simge ad="down" boyut="k" />
                 </button>
-                <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" aria-label={`OP ${String(statuNo(a))} sil`}
+                <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" aria-label={`${adimAdi(a)} sil`}
                   onClick={() => { r.duzen.degistir(urunId, (l) => adimSil(l, a.id), `OP ${String(statuNo(a))} silindi`); }}>
                   <Simge ad="x" boyut="k" />
                 </button>
@@ -188,6 +198,12 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             )}
           </div>
           <div className="tc-rr1-fsbody">
+            {(() => {
+              const b = dallar.find((x) => x.adimlar[0]?.id === a.id);
+              return b && <p className="tc-rr1-ipucu" data-parca="dal-etiketi">{dalEtiketi(b)}</p>;
+            })()}
+            {adimDali(a) !== null && dallar.find((x) => x.adimlar[0]?.id === a.id) === undefined && <p className="tc-rr1-ipucu">Dal {adimDali(a)}</p>}
+            {dalHata && dalHata.adimId === a.id && <p className="tc-rr1-warnbox" role="alert" data-parca="dal-hatasi">{dalHata.ileti}</p>}
             <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
               yaz={(v) => { yaz(a, (x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
             {fason ? (
@@ -205,6 +221,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                   <SayiAlani etiket="İşlem dk" enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
                   <SayiAlani etiket="Değişim dk" enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
                 </div>
+                {sureBos && <p className="tc-rr1-warnbox" data-parca="sure-bos">İşlem süresi girilmedi: plan bu adımı süresiz sayar, onaya gönderilemez.</p>}
                 <small className="tc-rr1-fsoran">Değişim {oran === null ? '—' : `%${sayi(Math.round(oran * 10) / 10)}`}</small>
               </>
             )}
@@ -237,8 +254,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <span className="tc-rr1-fct"><b>{om.code}</b><small>yan ürün</small></span>
               </button>
               <span className="tc-rr1-fcin">
-                <SayiAlani etiket={`${om.code} yan ürün miktarı`} deger={o.qty} birim={om.unit ?? ''} kapali={!duzen}
-                  yaz={(v) => { yaz(a, (y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira2 ? { ...g, qty: v ?? 0 } : g)) }), 'Yan ürün miktarı değişti'); }} />
+                <SayiAlani etiket={`${om.code} yan ürün miktarı`} deger={o.qty} birim={om.unit ?? ''} kapali={!duzen} pozitif
+                  yaz={(v) => { yaz(a, (y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira2 ? { ...g, qty: v ?? g.qty } : g)) }), 'Yan ürün miktarı değişti'); }} />
               </span>
               {duzen && (
                 <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" aria-label={`${om.code} yan ürününü kaldır`}
@@ -269,6 +286,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
         </div>
       ),
       <div key={`s${a.id}`} className={`tc-rr1-frow${ustunde === a.id ? ' tc-rr1-birak' : ''}`}
+        onClick={(e) => { if (!icDenetimMi(e.target)) r.sec({ tur: 'adim', urunId, adimId: a.id, seq: a.seq, miktar: q }); }}
         onDragOver={(e) => { if (duzen) { e.preventDefault(); setUstunde(a.id); } }}
         onDragLeave={() => { setUstunde(null); }}
         onDrop={(e) => { e.preventDefault(); setUstunde(null); if (duzen) birak(a, e.dataTransfer.getData(SURUKLE_TURU)); }}>
@@ -285,6 +303,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
         {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}
         <span className="tc-rr1-ipucu">{miktarMetni(q, m.unit)}{tuketen ? `, ${tuketenKod ?? '?'} için alt montaj` : ', ana ürün'}</span>
       </div>
+      {dalHata && dalHata.adimId === null && <p className="tc-rr1-warnbox" role="alert" data-parca="dal-hatasi">{dalHata.ileti}</p>}
       <div className="tc-rr1-frow tc-rr1-fhead" aria-hidden="true"><div>Girenler</div><div>Rota adımları</div><div>Çıkanlar</div></div>
       {liste.length > 0 ? satirlar : (
         <div className={`tc-rr1-frow${ustunde === '' ? ' tc-rr1-birak' : ''}`}

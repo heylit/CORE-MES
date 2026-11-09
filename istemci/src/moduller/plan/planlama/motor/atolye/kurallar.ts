@@ -2,8 +2,9 @@ import type { CanliyaAlmaGecmisiCevabi, PlanCevabi, SenaryolarCevabi } from '#pa
 import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
-import { acikSaat, saatOku, tabanMs, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
+import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
 
 // Planlama atölyesinin saf hesapları (cerceve/planlama/parca/zz36-tezgah-panosu.betik). Motor burada koşmaz (357 b): kayıttaki çözülmüş plan
 // okunur; eski panonun motorla hesapladığı çözüm yolları, öne alma ve bölme burada yoktur.
@@ -13,8 +14,9 @@ export const OLCEKLER = [[24, 'Gün'], [72, '3 gün'], [168, 'Hafta'], [720, 'Ay
 export type AtolyeOlcegi = (typeof OLCEKLER)[number][0];
 // Telefonda Gün, ötekinde 3 gün açılır.
 export const ilkOlcek = (genislik: number): AtolyeOlcegi => (genislik < 768 ? 24 : 72);
-// 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz; donuk bölge 4 saatten kısa seçilemez.
-export const DONUK_SECENEKLERI = [4, 8, 16, 24] as const;
+// 248 a: başlamasına 4 saatten az kalan planlı işin önüne iş konamaz. 2529: donuk bölge başta kapatılabilir (0 sa), sonra yeniden açılır.
+export const DONUK_SECENEKLERI = [0, 4, 8, 16, 24] as const;
+export const donukEtiketi = (x: number): string => (x === 0 ? '0 sa (kapalı)' : `${String(x)} sa`);
 export const ETIKET_GENIS = (genislik: number): number => (genislik < 768 ? 72 : 115);
 
 const GUNK = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
@@ -72,9 +74,29 @@ export function elleSira(c: PlanlamaCalismasi): string[] {
   const kayitli = new Set(c.D.siparisler.map((x) => x.id));
   return s.filter((j): j is string => typeof j === 'string' && kayitli.has(j));
 }
+// Raydaki elle sıra: siparişi listede hedefin yerine koyar (hedef null ya da listede yoksa sona). Sıra yalnız rayın sırasıdır; planı motorun
+// "öne al" hamlesi değiştirir. Yer değişmezse null.
+export function siraTasi(ids: readonly string[], id: string, hedef: string | null): string[] | null {
+  const i = ids.indexOf(id); if (i < 0 || id === hedef) return null;
+  const l = ids.filter((x) => x !== id);
+  const k = hedef === null ? -1 : l.indexOf(hedef);
+  const y = k < 0 ? l.length : k >= i ? k + 1 : k;
+  l.splice(y, 0, id);
+  return l.every((x, n) => x === ids[n]) ? null : l;
+}
+// Bir yukarı (-1) ya da aşağı (1); ucta null.
+export function siraKomsu(ids: readonly string[], id: string, yon: -1 | 1): string[] | null {
+  const i = ids.indexOf(id); const j = i + yon; if (i < 0 || j < 0 || j >= ids.length) return null;
+  const l = [...ids]; l[i] = ids[j] as string; l[j] = id; return l;
+}
 // 1786 (PLN-3): çubuk ve onaya gönder geciken sayısını listenin "Geciken" grubuyla aynı sayar: planda yeri olmayan sipariş de bitişi
 // bilinmediği için oradadır (önceden çubuk planın kayıtlı özetini yazıyordu: "0 geciken" yanında "GECİKEN 3").
 export const gecikenSay = (L: readonly SiparisBilgisi[]): number => L.filter((s) => s.durum === 'gec').length;
+// Canlı planın geciken sayısı sunucunun göstergesidir (teslimi olan emir; bitmemiş ya da teslimden sonra biten). Onaya gönder penceresi iki
+// tarafı aynı tanımla yan yana koyar (B-2483-72); listenin "Geciken" grubu teslimsiz yerleşmeyeni de sayar, o sayı burada kullanılmaz.
+export const gostergeGecikenSay = (L: readonly SiparisBilgisi[]): number =>
+  L.filter((s) => s.due != null && (s.C == null || s.C > s.due)).length;
+export const GOSTERGE_GECIKEN_IPUCU = 'Teslim tarihi olan ve planda teslimden sonra biten ya da yerleşmeyen emir; canlı plan da böyle sayılır.';
 export function gecikenIpucu(L: readonly SiparisBilgisi[]): string {
   const yok = L.filter((s) => s.durum === 'gec' && s.C == null).length;
   return yok ? `Geciken sipariş; ${String(yok)} tanesi planda yerleşmedi (bitişi bilinmiyor)` : 'Geciken sipariş';
@@ -84,7 +106,7 @@ export const SIPARIS_GRUPLARI = [['gec', 'Geciken', 'alert'], ['risk', `Riskli �
 export const malzemeGec = (s: SiparisBilgisi): boolean => s.ur != null && s.bas > s.ur + 0.25;
 // Sipariş numarasının parça eki (/2) ayrı yazılır.
 export function parcaAyir(id: string): [string, string | null] { const m = /^(.*)(\/\d+)$/.exec(id); return m ? [m[1] ?? id, m[2] ?? null] : [id, null]; }
-export const ONCELIK_KISA: Record<number, string> = { 1: 'acil', 2: 'normal', 3: 'düşük' };
+export const ONCELIK_KISA: Record<number, string> = { 1: 'acil/yüksek', 2: 'normal', 3: 'düşük' };
 
 // --- bekleme nedeni (NEDEN) ---
 const NEDEN: Record<string, string> = {
@@ -583,13 +605,34 @@ export function ekMesaiFarki(a: PlanCevabi, b: PlanCevabi | null): ['clock' | 'm
 // Çalışma planının kontrolü: eski veriyle çözülmüş plan gönderilmez (kırmızı); bekleyen değişiklik uygulanmalı ya da reddedilmeli (755 a).
 // Yerleşmeyen iş ve canlıdan farksızlık uyarıdır.
 // 1786 (PLN-3): planda yeri olmayan sipariş (plandan sonra gelen) de yerleşmemiş sayılır; yoksa "Bütün işler yerleşti" yanlış olurdu.
-export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0, planDisi = 0): KontrolMaddesi[] {
+// Yerleşmeyen adımın nedeni (B-2499-7): motor bildirdiyse onunki (failNeden, 2516-2); eski kayıtta ekranda bulunabilen: adayı olmayan
+// ve öncülü yerleşmeyen adım derlemeden bilinir, öteki durumda kaynak ya da ufuk yetmemiştir.
+const NEDEN_METNI: Readonly<Record<FailNedeni['kod'], string>> = { aday: 'uygun tezgâh ya da fasoncu yok', oncul: 'önceki adım yerleşmedi', zaman: 'kaynak ya da ufuk yetmedi' };
+export function yerlesmemeNedeni(cx: Pick<Derleme, 'byId'>, fail: readonly string[], id: string, neden?: Readonly<Record<string, FailNedeni>>): string {
+  const m = neden?.[id];
+  if (m) return m.kod === 'oncul' && m.oncul ? `önceki adım ${m.oncul} yerleşmedi` : NEDEN_METNI[m.kod];
+  const a = cx.byId[id];
+  if (!a) return 'adım derlenmedi';
+  if (a.c.length === 0) return 'uygun tezgâh ya da fasoncu yok';
+  if (a.pr.some(([q]) => fail.includes(q))) return 'önceki adım yerleşmedi';
+  return 'kaynak ya da ufuk yetmedi';
+}
+const AYRINTI_EN_COK = 5;
+export function yerlesmeyenAyrintisi(cx: Pick<Derleme, 'byId'>, fail: readonly string[], siparisler: readonly string[], neden?: Readonly<Record<string, FailNedeni>>): string {
+  const l = [...fail.map((id) => `${id} (${yerlesmemeNedeni(cx, fail, id, neden)})`), ...siparisler.map((s) => `${s} (sipariş planda bitmedi)`)];
+  return l.length > AYRINTI_EN_COK ? `${l.slice(0, AYRINTI_EN_COK).join(', ')} ve ${String(l.length - AYRINTI_EN_COK)} tane daha` : l.join(', ');
+}
+
+// Kişi tezgâhına yerleşen iş motorda yerleşmiştir ama canlı planın makine kuyruğuna yazılmaz (B-2500-2); "Bütün işler yerleşti" denmez.
+export function paCalismaKontrol(guncel: boolean, yerlesmeyen: number, farkli: boolean, bekleyen = 0, planDisi = 0, ayrinti = '', kisiTezgah = 0): KontrolMaddesi[] {
   const eksik = [...(yerlesmeyen ? [`${yerlesmeyen} iş`] : []), ...(planDisi ? [`${planDisi} sipariş`] : [])];
-  const K: KontrolMaddesi[] = [
+  const L: (KontrolMaddesi | null)[] = [
     guncel ? ['ok', 'Plan güncel veriyle çözülmüş']
       : ['red', bekleyen > 0 ? `${String(bekleyen)} bekleyen değişiklik var; aşağıda uygulayın ya da reddedin` : 'Veri plandan sonra değişti; önce planı yeniden çözün'],
-    eksik.length ? ['uyari', `${eksik.join(', ')} yerleşmedi`] : ['ok', 'Bütün işler yerleşti'],
+    eksik.length ? ['uyari', `${eksik.join(', ')} yerleşmedi${ayrinti ? `: ${ayrinti}` : ''}`] : kisiTezgah ? null : ['ok', 'Bütün işler yerleşti'],
+    kisiTezgah ? ['uyari', `${String(kisiTezgah)} iş kişi tezgâhında; canlı planın makine kuyruğuna yazılmaz`] : null,
   ];
+  const K = L.filter((k): k is KontrolMaddesi => k !== null);
   if (!farkli) K.push(['uyari', 'Canlı plandan farkı yok']);
   return K;
 }
@@ -796,4 +839,21 @@ export function atolyeEkrani(c: PlanlamaCalismasi, cx: Derleme, canli: Record<st
   for (const [, r] of L) son[r.job] = Math.max(son[r.job] ?? -Infinity, r.C);
   const gec = Object.entries(son).flatMap(([j, C]) => { const due = cx.jobs[j]?.due; return due != null && C - due > 0.01 ? [{ j, T: C - due }] : []; }).sort((a, b) => b.T - a.T);
   return { kartlar, gec };
+}
+
+// Kilit ve dondurma paneli (2539 a): donuk bölge, elle sabitler ve dondurulmuş günler tek yerde. Günler bugünden itibaren KILIT_GUNU gün ve
+// bu pencerenin dışında dondurulmuş kalan günlerdir; her gün o gün başlayan iş sayısıyla gelir.
+export const KILIT_GUNU = 7;
+export interface KilitGunu { gNo: number; t: number; n: number; donuk: boolean }
+export function kilitGunleri(c: PlanlamaCalismasi, p: OkunanPlan, now: number): KilitGunu[] {
+  const l = new Set(Array.from({ length: KILIT_GUNU }, (_, g) => gunNumarasi(now, g)));
+  for (const x of Object.values(c.locks)) {
+    const g = x && typeof x === 'object' ? (x as Record<string, unknown>).gun : null;
+    if (typeof g === 'number') l.add(g);
+  }
+  return [...l].sort((a, b) => a - b).map((gNo) => ({ gNo, t: gNo * 24, n: gunBaslayanlar(p, gNo).length, donuk: gunDonuk(c, gNo) }));
+}
+export function kilitOzeti(c: PlanlamaCalismasi, donuk: number): string {
+  const e = elleSayilari(c);
+  return `donuk ${donuk} sa · ${e.sabit} sabit · ${e.gun} gün`;
 }
