@@ -948,3 +948,4 @@ Bu tur şunları varsaydı:
 
 ## Onaylı kararlar
 - 1765 b + teyit: arkon_kayit aylık bölümlenir; arkon_tmi_yansima bağı değişir; tetikler her bölüme kurulur.
+- 2520-3 (B-2499-9): Hazırlık "Çizim Merkezi'nden ekle" dosyayı yüklemeyen paket yazarında 404 veriyordu (ekle kişisiz bağlar, 732 a; okuma yalnız yükleyene ya da kayıtlı paketi okuyabilene açıktı). Okuma kuralına merkezden alma rolü + etkin belgenin yayındaki dosyası eklendi; belge-merkezi `yayindaOzetMi` okuması kullanılır. Taslak ve arşivdeki merkez dosyası bu yolla okunmaz.
