@@ -15,7 +15,28 @@ const bolumAc = async () => {
   return bolge;
 };
 
+// Görünüm tercihi tarayıcı deposunda kalır; tabloya geçen test şemaya döner ki sonraki test dosyaları şemayla açılsın.
+const tabloyuKapat = (bolge: HTMLElement) => { fireEvent.click(within(bolge).getByRole('button', { name: /Akış şeması/ })); };
+
 describe('R1 Ürün ve rotalar: izinli', () => {
+  it('akış tablosunda adım satırının boş yerine tıklayınca düzenleme paneli açılır; satırdaki alan ve düğme adımı seçmez (B-2482-1)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    const satir = alan.closest('.tc-rr1-frow')!;
+    const secili = () => satir.querySelector('.tc-rr1-fstep')?.classList.contains('tc-rr1-secili') ?? false;
+    fireEvent.click(alan);
+    fireEvent.click(within(bolge).getByLabelText('Operasyon'));
+    expect(secili()).toBe(false);
+    fireEvent.click(satir.querySelector('.tc-rr1-fst')!);
+    expect(secili()).toBe(true);
+    const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
+    expect(panel.textContent).toContain('Nerede yapılır');
+    tabloyuKapat(bolge);
+  });
+
   it('akış tablosunda giren miktarı boşaltılınca "zorunlu" iletisi çıkar, 0 gönderilmez; geçerli miktar kaydedilir (B-2484-6)', async () => {
     let durum = rotaDurumu();
     let kaydet: unknown = null;
@@ -46,6 +67,7 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     fireEvent.blur(alan);
     await waitFor(() => { expect(kaydet).not.toBeNull(); }, BEKLE);
     expect(JSON.stringify(kaydet)).toContain('"bilesenler":[{"malzemeId":12,"miktar":3,');
+    tabloyuKapat(bolge);
   });
 
   it('açılışta yazma yok; adımın hazırlık süresi değişince taslak açılır ve rota modülüne kaydedilir', async () => {
