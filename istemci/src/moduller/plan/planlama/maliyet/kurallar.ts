@@ -515,24 +515,26 @@ export function gunTuru(D: PlanVerisi, g: number): GunTuru {
   return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
 }
 // Ek vardiyanın bedeli: kişi bazlıysa saat × operatör oranı × grubun kişi saat maliyeti × gün çarpanı + kişi başı yemek ve servis;
-// değilse vardiya saati × mesai ücreti × (hafta sonu ve tatilde) çarpan. Ücret yoksa null.
+// değilse ya da grubun saat maliyeti yoksa vardiya saati × mesai ücreti × (vardiyasız günde) çarpan. Ücret yoksa null.
+// Tutar saf işlevdedir: sunucunun kopyası (2653, sunucu/moduller/plan/kurallar.ts) aynı örnek tablosuyla sınanır (devir-heylit/2653/ORNEKLER.md).
+export interface MesaiGirdisi {
+  h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
+  ucret: number | null; vardiyasiz: boolean; mesaiCarpan: number | undefined;
+}
+export function mesaiTutari(g: MesaiGirdisi): number | null {
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.vardiyasiz ? g.mesaiCarpan || 1 : 1);
+  const op = g.op ?? 1;
+  return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
+}
 export function mesaiBedeli(c: PlanlamaCalismasi, T: Takvim, e: EkMesai): number | null {
   const D = c.D;
   const m = mesaiSistemi(D);
-  const h = vardiyaSaati(D, e.vardiya);
-  const tek = (): number | null => {
-    const u = mesaiUcreti(D);
-    if (u === null) return null;
-    const g = T.gunler[e.gun];
-    const tatil = !g || !g.vard.length;
-    return h * u * (tatil ? ymAyar(D).mesaiCarpan || 1 : 1);
-  };
-  if (!m.kisiBazli) return tek();
   const t = D.tezgahlar.find((x) => x.id === e.m);
-  const op = t && t.opOran !== undefined && t.opOran !== null ? t.opOran : 1;
-  const s = grupSaati(D, t?.grup ?? '', m);
-  if (s === null) return tek();
-  return h * op * s * (m.carp[gunTuru(D, e.gun)] || 1.5) + op * (m.kisiEk ?? 0);
+  const g = T.gunler[e.gun];
+  return mesaiTutari({
+    h: vardiyaSaati(D, e.vardiya), kisiBazli: m.kisiBazli, op: t?.opOran, saatDegeri: m.kisiBazli ? grupSaati(D, t?.grup ?? '', m) : null,
+    carpan: m.carp[gunTuru(D, e.gun)], kisiEk: m.kisiEk, ucret: mesaiUcreti(D), vardiyasiz: !g || !g.vard.length, mesaiCarpan: ymAyar(D).mesaiCarpan,
+  });
 }
 // Ek mesai bedeli o tezgâhta mesai vardiyasında çalışan işlere çalıştıkları saat oranında dağılır; bedeli bilinmeyen vardiyadaki işin payı null.
 export function mesaiPaylari(c: PlanlamaCalismasi, T: Takvim): Record<string, number | null> {
