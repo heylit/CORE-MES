@@ -12,9 +12,10 @@ import { malKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { karneOzetleri } from '../musteri-tedarikci/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { GIRIS_NCR_KAYNAGI } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, GIRIS_NCR_KAYNAGI } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -64,25 +65,25 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     ))!.no;
   }
 
-  async function siparisSatiri(miktar: string): Promise<number> {
+  async function siparisSatiri(miktar: string, firmaId: number | null = null): Promise<number> {
     sira += 1;
     const [t, kl, tk] = [randomUUID(), randomUUID(), randomUUID()];
     const s = o().sahip;
     await s.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi')",
       [t, 80000 + sira, yoneticiId]);
     await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad) VALUES ($1, $2, 1, 'Deneme kalem')", [t, kl]);
-    await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, 'Deneme Tedarikçi')", [t, tk]);
+    await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi, firma_id) VALUES ($1, $2, 'TRY', current_date, 'Deneme Tedarikçi', $3)", [t, tk, firmaId]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
     return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, 'adet') RETURNING id",
       [t, tk, kl, miktar]))!.id;
   }
 
-  const malKabul = async (malzemeId: number, miktar: string) =>
-    istek('yonetici', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId, miktar, siparisSatirId: await siparisSatiri(miktar) }] });
+  const malKabul = async (malzemeId: number, miktar: string, firmaId: number | null = null) =>
+    istek('yonetici', 'POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId, miktar, siparisSatirId: await siparisSatiri(miktar, firmaId) }] });
 
-  async function kabulEt(malzemeId: number, miktar: string): Promise<KmGirisKaydi> {
-    const r = await malKabul(malzemeId, miktar);
+  async function kabulEt(malzemeId: number, miktar: string, firmaId: number | null = null): Promise<KmGirisKaydi> {
+    const r = await malKabul(malzemeId, miktar, firmaId);
     assert.equal(r.statusCode, 200, r.body);
     const no = malKabulCevabi.parse(r.json()).belge.no;
     const k = (await bekleyenler()).find((x) => x.malKabulNo === no);
@@ -237,5 +238,43 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     assert.deepEqual(await ayrilan(), [], 'karar bekleyen lot ayrılmaz');
     assert.equal((await istek('kaliteci', 'POST', `/kalite-merkezi/giris/${k.malKabulSatirId}/gkk`, { kabul: '3', hatali: '2' })).statusCode, 200);
     assert.deepEqual(await ayrilan(), [3], 'serbest kalan kabul miktarı emre ayrılır, hatalı ayrılmaz');
+  });
+  // Kart 2406 (1259 c): lotu kapatan aşama tedarikçi karnesine lot olayı yazar; geri doldurma göçü karne-geri-doldurma-goc.test.ts'te.
+  test('karne: hatalısız GKK kabul, hatalı lot kararıyla (hatalı kabul, şartlı kabul, red) olay yazar; bekleyen ve firmasız yazmaz; karne puanı hesaplanır', async () => {
+    const firmaId = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Karne Deneme GKK', 'tedarikci', $1) RETURNING id", [yoneticiId]))!.id;
+    await o().sahip.sorgu('INSERT INTO satin_alma_tedarikci (firma_id) VALUES ($1)', [firmaId]);
+    const olaylar = async () => o().sahip.sorgu<{ anahtar: string; firma: number; karar: string; zaman: string }>(
+      `SELECT anahtar, firma_id AS firma, lot_karari AS karar, zaman::text AS zaman FROM musteri_tedarikci_karne_olayi
+        WHERE kaynak = 'kalite-merkezi' AND tur = 'lot' ORDER BY anahtar`);
+    const gkk = (id: number, kabul: string, hatali: string) => istek('kaliteci', 'POST', `/kalite-merkezi/giris/${id}/gkk`, { kabul, hatali });
+    const karar = (id: number, k: string) => istek('kaliteci', 'POST', `/kalite-merkezi/giris/${id}/karar`, {
+      karar: k, ncrKimlik: `ncr-karne-${id}`, ncrNo: `NCR-KRN-${id}`, ciddiyet: 'Minör', not: 'deneme şartı',
+    });
+    const anahtarlar = async () => (await olaylar()).map((x) => [x.anahtar, x.karar]);
+
+    const temiz = await kabulEt(await kart('hammadde'), '2', firmaId);
+    const red = await kabulEt(await kart('hammadde'), '2', firmaId);
+    const sartli = await kabulEt(await kart('hammadde'), '2', firmaId);
+    const hatali = await kabulEt(await kart('hammadde'), '2', firmaId);
+    const firmasiz = await kabulEt(await kart('hammadde'), '2');
+    assert.deepEqual(await anahtarlar(), [], 'GKK verilmeden olay yok');
+
+    assert.equal((await gkk(temiz.malKabulSatirId, '2', '0')).statusCode, 200);
+    for (const k of [red, sartli, hatali]) assert.equal((await gkk(k.malKabulSatirId, '1', '1')).statusCode, 200);
+    assert.equal((await gkk(firmasiz.malKabulSatirId, '2', '0')).statusCode, 200);
+    const ana = (k: KmGirisKaydi) => GIRIS_KARNE_ANAHTARI(k.malKabulSatirId);
+    assert.deepEqual(await anahtarlar(), [[ana(temiz), 'kabul']], 'karar bekleyen ve firmasız lot olay yazmaz');
+
+    assert.equal((await karar(red.malKabulSatirId, 'red')).statusCode, 200);
+    assert.equal((await karar(sartli.malKabulSatirId, 'sartli_kabul')).statusCode, 200);
+    assert.equal((await karar(hatali.malKabulSatirId, 'kabul')).statusCode, 200);
+    const beklenen = [[ana(temiz), 'kabul'], [ana(red), 'red'], [ana(sartli), 'sartli_kabul'], [ana(hatali), 'hatali_kabul']]
+      .sort((a, b) => a[0]!.localeCompare(b[0]!));
+    assert.deepEqual(await anahtarlar(), beklenen);
+    assert.ok((await olaylar()).every((x) => x.firma === firmaId));
+    const ozet = (await o().vt.tx((db) => karneOzetleri(db, [firmaId]))).get(firmaId);
+    assert.equal(ozet?.kalite.lot, 4);
+    assert.equal(ozet?.kalite.puan, 50, 'kabul 1 + şartlı 0,5 + hatalı kabul 0,5 + red 0 = 2 / 4');
   });
 });

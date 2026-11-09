@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { onayAlaniDegisiyor as ekranOnayDegisiyor } from '../../../istemci/src/moduller/kalite-merkezi/yeni/kurallar.ts';
-import { KM_DOSYA_SINIRI, arsivDegisiyor, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, KM_DOSYA_SINIRI, arsivDegisiyor, girisKarneKarari, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -323,5 +323,18 @@ describe('Kalite Merkezi kuralları', () => {
     for (const [kol, onceki, yeni] of durumlar) {
       assert.equal(ekranOnayDegisiyor(kol, onceki, yeni), onayDegisiklikleri(kol, onceki, yeni).length > 0, `${kol} ${JSON.stringify(onceki)} -> ${JSON.stringify(yeni)}`);
     }
+  });
+  test('2406 giriş kontrolü karne kararı: hatalısız GKK kabul; hatalı lot kalite kararıyla kapanır; karar bekleyen ve GKK\'sız olay vermez', () => {
+    const gkk = (hataliMiktar: string | null) => ({ hataliMiktar, zaman: '2026-11-01T08:00:00+00:00' });
+    const karar = (k: 'kabul' | 'sartli_kabul' | 'red' | null) => ({ karar: k, zaman: '2026-11-02T09:00:00+00:00' });
+    assert.equal(girisKarneKarari(null, null), null);
+    assert.deepEqual(girisKarneKarari(gkk('0.000'), null), { karar: 'kabul', zaman: '2026-11-01T08:00:00+00:00' });
+    assert.deepEqual(girisKarneKarari(gkk(null), null), { karar: 'kabul', zaman: '2026-11-01T08:00:00+00:00' });
+    assert.equal(girisKarneKarari(gkk('3.000'), null), null, 'karar bekliyor');
+    assert.equal(girisKarneKarari(gkk('0.001'), karar(null)), null);
+    assert.deepEqual(girisKarneKarari(gkk('3'), karar('kabul')), { karar: 'hatali_kabul', zaman: '2026-11-02T09:00:00+00:00' });
+    assert.deepEqual(girisKarneKarari(gkk('3'), karar('sartli_kabul'))?.karar, 'sartli_kabul');
+    assert.deepEqual(girisKarneKarari(gkk('3'), karar('red'))?.karar, 'red');
+    assert.equal(GIRIS_KARNE_ANAHTARI(42), 'giris:42');
   });
 });

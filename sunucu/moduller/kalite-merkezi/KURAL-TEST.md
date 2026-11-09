@@ -80,6 +80,7 @@
 | KM-G4: GKK verilmiş belge düzeltilemez (409); `tedarikci_iade` elle çıkış nedeni değildir (400) | "karar: şartlı kabul ..." |
 | KM-G5: karantinadaki GKK lotu emre ayrılmaz; GKK kabulünde serbest kalan miktar bekleyen emre ayrılır | "rezerve: ..." |
 | KM-G6: Bugün ekranında giriş kontrolü yalnız onaylayabilende istenir; GKK ve karar tekrar korumalı gider; sertifikasız lot işaretlenir | "Giriş kontrolü (1246)" (GirisKarari.test.tsx) |
+| KM-G7 (2406, 1259 c): lotu kapatan aşama tedarikçi karnesine lot olayı yazar (anahtar `giris:<satır>`): hatalısız GKK kabul; kalite kararı kabul hatalı kabul, şartlı kabul şartlı kabul, red red; karar bekleyen ve firmasız lot yazmaz. Göç 20261109053712 eski kararları aynı eşlemeyle doldurur, yeniden koşu satır eklemez | "karne: ..." (giris-kontrolu.test.ts), "2406 giriş kontrolü karne kararı: ..." (kurallar.test.ts), "göç sunucunun yazacağı olayları doldurur: ..." (karne-geri-doldurma-goc.test.ts) |
 | KM-A1 (1238): Ctrl K sonuç yolu kabuğun adres denetiminden geçer; kimlikteki `: @ + \|` ve Türkçe harf yüzde kodlanır | "KM-A1 kayıt yolu ..." (`arama.test.ts`) |
 | KM-A2 (1238): NCR sonucu başlıkta numara (yoksa kimlik), açıklamada parça, durum ve "Arşivde"; Uygunsuzluklar görünümünde `?ac=` ile açar | "KM-A2 NCR sonucu ..." |
 | KM-A3 (1238): karar bekleyen hatalı parça emir no, hedef emir no, parça no ya da adla bulunur (Türkçe harf duyarsız); emir no tam, sonra baştan tutan önce; Bugün görünümünü açar | "KM-A3 hatalı parça ..." |

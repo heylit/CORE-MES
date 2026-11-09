@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
+import type { LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { HataliKarari, HataliKaydiOzeti, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1181,6 +1182,20 @@ export function girisDurumu(gkk: { hataliMiktar: string | null } | null, karar: 
   if (gkk === null) return 'gkk_bekliyor';
   if (karar === null && binde(gkk.hataliMiktar ?? '0') > 0n) return 'karar_bekliyor';
   return 'kapandi';
+}
+
+// Kart 2406: giriş kontrolünün tedarikçi karnesine giden lot kararı (1259 c). Hatalısız GKK kabuldür; hatalı lot kalite kararıyla
+// kapanır: olduğu gibi kabul hatalı kabul, şartlı kabul şartlı kabul, red (tedarikçiye iade çıkışı) red sayılır. Karar bekleyen lot
+// henüz sonuçlanmadığı için olay vermez. Zaman lotu kapatan aşamanın zamanıdır. Göç 20261109053712 aynı eşlemeyi SQL'le uygular.
+export const GIRIS_KARNE_ANAHTARI = (malKabulSatirId: number): string => `giris:${malKabulSatirId}`;
+const GIRIS_KARNE_KARARI: Readonly<Record<'kabul' | 'sartli_kabul' | 'red', LotKarari>> = { kabul: 'hatali_kabul', sartli_kabul: 'sartli_kabul', red: 'red' };
+export function girisKarneKarari(
+  gkk: { hataliMiktar: string | null; zaman: string } | null, karar: { karar: 'kabul' | 'sartli_kabul' | 'red' | null; zaman: string } | null,
+): { karar: LotKarari; zaman: string } | null {
+  if (gkk === null) return null;
+  if (binde(gkk.hataliMiktar ?? '0') <= 0n) return { karar: 'kabul', zaman: gkk.zaman };
+  if (karar === null || karar.karar === null) return null;
+  return { karar: GIRIS_KARNE_KARARI[karar.karar], zaman: karar.zaman };
 }
 
 // Hatalı giriş lotunun uygunsuzluk kaydı, üretimdeki hatalı parça kaydının eşi (1252). Lot ve emir alanı boştur: dolu olsaydı açık NCR
