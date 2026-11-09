@@ -777,6 +777,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ie2 = (await ayrinti(id2)).isEmirleri[0]?.id ?? 0;
     const ikinci = await terminal(`/${id2}/baslat`, undefined, 'kisi_op');
     assert.equal(ikinci.durum, 409, 'istasyonun makinesiz yeri dolu');
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 1 }, 'kisi_op')).durum, 200);
     await o().vt.tx((db) => emirBaslat(db, kim('kisi_op'), id2, undefined, undefined, ie2));
     assert.equal((await ayrinti(id2)).isEmirleri[0]?.istasyon?.id, ist);

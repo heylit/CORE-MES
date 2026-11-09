@@ -281,7 +281,8 @@ describe('uretim-emirleri dışa açık komutlar (gerçek PostgreSQL)', () => {
     const emir = await planliEmir();
     const adimlar: [string, (db: Db, kim: Kullanici) => Promise<unknown>][] = [
       ['başlat', (db, kim) => emirBaslat(db, kim, emir.id)],
-      ['sayım', (db, kim) => emirSayim(db, kim, emir.id, { tur: 'saglam', adet: 2 })],
+      // 2521 b: karar bekleyen sayım varken bitirilmez; sayımın ilk parçası onaylanır (onay ret yolunda hiç koşmaz).
+      ['sayım', async (db, kim) => { await emirSayim(db, kim, emir.id, { tur: 'saglam', adet: 2 }); await ilkParcaOnay(db, emir.id); }],
       ['duraklat', (db, kim) => emirDuraklat(db, kim, emir.id)],
       ['devam', (db, kim) => emirDevam(db, kim, emir.id)],
       ['durdur', (db, kim) => emirDurdur(db, kim, emir.id, durusId)],
