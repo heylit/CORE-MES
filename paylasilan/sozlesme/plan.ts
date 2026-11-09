@@ -453,11 +453,18 @@ export const MOTOR_KURALLARI = ['atcs', ...PLAN_KURALLARI] as const;
 export const MOTOR_OGRENME = ['kapali', 'acik'] as const;
 // 2509-1 c: acil iş payı (işleme süresine eklenen pay, oran 0-0,3) yalnız buradadır; planlama çalışmasındaki alan bunun kopyasıdır.
 export const ACIL_PAY_SINIRI = 0.3;
+// 2523 a: rotada "paralel böl" işaretli adımı motor boşta duran kardeş tezgâhlara böler mi ve en çok kaç paya; ikinci tezgâh her zaman boş
+// değilse atölye kapatır. Varsayılan bugünkü davranıştır (açık, 3 pay).
+export const MOTOR_BOLME = ['otomatik', 'kapali'] as const;
+export const BOLME_PAY_SINIRI = { en: 2, cok: 5 } as const;
 export const motorAyarlari = z.object({
   amac: z.enum(MOTOR_AMACLARI), eksikStok: z.enum(EKSIK_STOK_DAVRANISLARI), kural: z.enum(MOTOR_KURALLARI), ogrenme: z.enum(MOTOR_OGRENME),
   acilPay: z.number().min(0).max(ACIL_PAY_SINIRI),
+  bolmeKip: z.enum(MOTOR_BOLME), bolmeMaks: z.number().int().min(BOLME_PAY_SINIRI.en).max(BOLME_PAY_SINIRI.cok),
 });
-export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05 };
+export const MOTOR_AYARI_VARSAYILAN: MotorAyarlari = {
+  amac: 'sirali', eksikStok: 'varsay', kural: 'atcs', ogrenme: 'kapali', acilPay: 0.05, bolmeKip: 'otomatik', bolmeMaks: 3,
+};
 // Yazarken verilmeyen alan güncel sürümdekinden kalır. 1786 (PLN-9): surumId okunan güncel sürümün kimliğidir (hiç sürüm yoksa null);
 // arada başkası yazdıysa yazma eski sürüm diye reddedilir, iki yazar birbirini habersiz ezmez.
 export const motorAyariGovdesi = motorAyarlari.partial().extend({ surumId: KIMLIK.nullable() });
