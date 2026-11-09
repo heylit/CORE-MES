@@ -18,3 +18,4 @@
 | Refakat partisi (emir + hammadde lotu) | `uretim_sayimi.refakat_partisi_id` (FK yok, UE-B10) | stok (`stok_refakat_partisi`) |
 | Kapanış (onay, muafiyet, defter) | `uretim_emirleri_kapanis`, `_muafiyeti`, `_defteri` | uretim-emirleri (sahip, 1073 a); kalite ve müdür kişileri `kisi` |
 | Kapanış durum listeleri | aşama: belge, onay, tamam; sonuç: tamamlandi, saglamsiz; madde hâli: tamam, eksik, muaf, gerekmez, bilinmiyor | uretim-emirleri; etiket (1082 a) ve reçete-rota okur |
+| Dış işlem emri (fason belgesi, 2428) | `uretim_emirleri_dis_islem_emri`; hareketler `uretim_emirleri_fason_hareketi.die_id`; parti ve konum `parti_id`, `konum_id` (FK yok, UE-B14) | uretim-emirleri (sahip, 2428-2 a); satın alma ve stok `disari.ts` ile okur ve yazdırır |

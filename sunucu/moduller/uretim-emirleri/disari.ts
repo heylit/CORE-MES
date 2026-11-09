@@ -619,3 +619,8 @@ export const takvimKayitlari = isEmri.takvimKayitlari;
 export type { IsEmriKimligi, UretimEmriKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { isEmriKimligi, uretimEmriKimligi } from '#paylasilan/sozlesme/kimlikler.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// Dış işlem emri (DIE, 2428-2 a): belge bu modülündür. Satın alma (Fason talebi, Dış operasyonlar) ve stok (partinin gidişi, mal kabulde
+// dönüş, tamamlamada partiye giriş) bu fonksiyonları kendi transaction'ında çağırır; yetki denetlemezler, çağıranın ucu korur.
+export { dieAc, dieDonusuYaz, dieGidisYaz, dieIptal, dieListesi, dieOku, dieTamamla } from './dis-islem-emri.ts';
+export type { DieAcGirdisi } from './dis-islem-emri.ts';
