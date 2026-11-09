@@ -14,6 +14,10 @@ const bolumAc = async () => {
   rrAc('/recete-rota/schema');
   const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
   await within(bolge).findByRole('button', { name: 'OP 30 Tornalama' });
+  // 2558 b/5: sayfa görüntüleme kipinde açılır; yazma yetkisi olan test "Düzenle" ile düzenleme kipine geçer.
+  await waitFor(() => { expect(bolge.querySelector('.tc-rr1-rcol, .tc-rr1-emptycv, .tc-rr1-ftab')).not.toBeNull(); });
+  const duzenle = within(bolge).queryByRole('button', { name: 'Düzenle' });
+  if (duzenle) fireEvent.click(duzenle);
   return bolge;
 };
 const govde = (bolge: HTMLElement) => bolge.querySelector('.tc-rr1-body') as HTMLElement;
@@ -100,3 +104,57 @@ describe('Ürün ve rotalar düzeni: çekmeceler ve odak (2558 b)', () => {
     await waitFor(() => { expect(within(bolge).queryByRole('region', { name: 'Adımı silmek için buraya sürükle' })).toBeNull(); });
   });
 });
+
+describe('Ürün ve rotalar düzeni: tek satır, görüntüleme kipi, rozet, sorunlar (2558-2)', () => {
+  const ac = async (durum = ucAdim()) => {
+    sunucuKur(YONETICI, { durum: () => json(200, durum) });
+    rrAc('/recete-rota/schema');
+    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+    await within(bolge).findByRole('button', { name: /^OP 10 / });
+    return bolge;
+  };
+
+  it('görüntüleme kipinde açılır: ekleme düğmesi ve palet yok; "Düzenle" açar ve kip yazıyla belli olur; tek birincil düğme', async () => {
+    const bolge = await ac();
+    const ust = bolge.querySelector('.tc-rr1-top') as HTMLElement;
+    expect(ust.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
+    expect(within(ust).getByRole('button', { name: 'Üretim emri oluştur' })).toBeTruthy();
+    expect(within(bolge).queryByRole('button', { name: 'Adım ekle' })).toBeNull();
+    expect(within(bolge).queryByRole('button', { name: 'Operasyon paleti' })).toBeNull();
+    expect(within(bolge).queryByRole('button', { name: 'OP 10 sil' })).toBeNull();
+    const duzenle = within(bolge).getByRole('button', { name: 'Düzenle' });
+    expect(duzenle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(duzenle);
+    expect(within(bolge).getByRole('button', { name: 'Düzenlemeyi bitir' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(bolge).getByRole('button', { name: 'Adım ekle' })).toBeTruthy();
+    expect(within(bolge).getByRole('button', { name: 'Operasyon paleti' })).toBeTruthy();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Düzenlemeyi bitir' }));
+    expect(within(bolge).queryByRole('button', { name: 'Adım ekle' })).toBeNull();
+  });
+
+  it('açık taslak görüntüleme kipinde yazıyla belli olur', async () => {
+    const bolge = await ac(rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 1)]));
+    expect(within(bolge).getByText('Taslak açık')).toBeTruthy();
+  });
+
+  it('ara kart kutuları varsayılan gizli, kutuda "Statülü" rozeti; ⋯ menüsünden açılır', async () => {
+    const bolge = await ac();
+    expect(bolge.querySelectorAll('.tc-rr1-cip-arahal')).toHaveLength(0);
+    expect(within(kutu(bolge, 10)).getByText('Statülü')).toBeTruthy();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Diğer rota işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ara kartları göster' }));
+    expect(bolge.querySelectorAll('.tc-rr1-cip-arahal').length).toBeGreaterThan(0);
+  });
+
+  it('"Sorunlar (n)": istasyonsuz ve süresiz adımı sayar; seçilince adım seçilir; sorun yoksa nötr', async () => {
+    const bolge = await ac(rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3, [
+      adimOrnegi(), adimOrnegi({ id: 'o20', seq: 20, opNo: 20, ins: [], stationId: null, proc: null }),
+    ])]));
+    const ozet = within(bolge).getByRole('group', { name: 'Rota özeti' });
+    fireEvent.click(within(ozet).getByRole('button', { name: 'Sorunlar: 1' }));
+    const oge = screen.getByRole('menuitem', { name: 'OP 20 Tornalama: işlem süresi yok, istasyon yok' });
+    fireEvent.click(oge);
+    expect(kutu(bolge, 20).classList.contains('tc-rr1-secili')).toBe(true);
+  });
+});
+

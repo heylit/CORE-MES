@@ -91,7 +91,9 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
       await page.keyboard.press('Escape');
       await expect(sema.getByRole('complementary', { name: 'Düzenleme paneli' })).toBeHidden();
     }
-    await sema.getByRole('button', { name: 'Ürün listesi' }).click();
+    // 2558 b/4: ürün listesi ⋯ menüsündedir.
+    await sema.getByRole('button', { name: 'Diğer rota işlemleri' }).click();
+    await page.getByRole('menuitem', { name: 'Ürün listesi' }).click();
     await expect(sema.getByRole('table', { name: 'Ürünler ve rotaları' }).or(sema.getByText('Henüz ürün yok', { exact: false }))).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await seritte(page, 'Operasyonlar').click();

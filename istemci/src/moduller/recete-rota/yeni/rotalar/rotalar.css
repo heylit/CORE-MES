@@ -24,11 +24,12 @@
 .tc-rr1-top > .tc-rr1-secim, .tc-rr1-top > .tc-rr1-sayi, .tc-rr1-top > .tc-rr1-metin { min-height: var(--alan-boy); }
 .tc-rr1-top > .tc-rr1-sayi { width: calc(var(--b-6) * 3); }
 .tc-rr1 .tc-rr1-kd { padding: 0 var(--b-2); gap: var(--b-1); font-size: var(--yazi-s); font-weight: 600; }
-.tc-rr1-run {
-  display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-4); padding: var(--b-1) var(--b-3); font-size: var(--yazi-s);
-  background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-1);
-}
-.tc-rr1-uyari { color: var(--hold); font-weight: 700; cursor: help; }
+/* 2558 b/4-7: tek satır: özet, sorunlar, kip metni. Kip metni renge değil yazıya dayanır. */
+.tc-rr1-ozet, .tc-rr1-sorunyok, .tc-rr1-kipmetni { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); white-space: nowrap; }
+.tc-rr1-sorunyok { color: var(--muted); }
+.tc-rr1-ozetgrup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); min-width: 0; }
+.tc-rr1-sorunlar b { color: var(--stop); font-variant-numeric: tabular-nums; }
+.tc-rr1-kipmetni { color: var(--muted); font-weight: 600; }
 .tc-rr1-secim:disabled, .tc-rr1-metin:disabled, .tc-rr1-sayi:disabled { color: var(--muted); background: var(--panel2); }
 
 .tc-rr1-seg { display: inline-flex; border: 1px solid var(--edge); border-radius: var(--yari-1); overflow: hidden; }
@@ -385,10 +386,7 @@
   background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-3); font-size: var(--yazi-s);
 }
 .tc-rr1-cv-help ul { margin: var(--b-1) 0 0; padding-left: var(--b-4); display: flex; flex-direction: column; gap: var(--b-1); }
-.tc-rr1-cv-legend {
-  position: absolute; left: var(--b-3); bottom: var(--b-3); z-index: 2; pointer-events: none; display: flex; flex-wrap: wrap; gap: var(--b-3); font-size: var(--yazi-xs);
-  color: var(--muted); background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-1) var(--b-2);
-}
+.tc-rr1-cv-legend { display: flex; flex-wrap: wrap; gap: var(--b-3); margin-top: var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-cv-legend span { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-rr1-lg { display: inline-block; width: var(--b-4); height: var(--pay-ince); background: var(--muted); }
 .tc-rr1-lg-st { height: var(--b-2); border: 1.5px dashed var(--rr1-statu); background: color-mix(in srgb, var(--rr1-statu) 12%, transparent); }
@@ -544,7 +542,6 @@
   .tc-rr1-insp-kap { display: contents; }
 }
 @media (max-width: 767px) {
-  .tc-rr1-cv-legend { display: none; }
   /* 360'ta çekmece bütün ekranı alır; kapatma düğmesi ve Esc çıkarır. */
   .tc-rr1-insp, .tc-rr1-adimpanel { top: 0; right: 0; bottom: 0; left: 0; width: auto; max-height: none; border-radius: 0; }
   .tc-rr1-ig, .tc-rr1-flowbox { grid-template-columns: minmax(0, 1fr); }

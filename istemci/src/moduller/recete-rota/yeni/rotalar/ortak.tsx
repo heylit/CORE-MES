@@ -31,6 +31,8 @@ export interface RotaEkrani {
   // 2558 b/9: odak kipi. Odaktaki adım ortalanır ve yakınlaşır, öteki adımlar solar; Düzenleme paneli onun için açılır. null: odak yok.
   odak: { urunId: string; adimId: string } | null;
   odakla: (o: { urunId: string; adimId: string } | null) => void;
+  // 2558 b/6: ara (statülü) kart kutuları varsayılan olarak gizli; operasyon kutusu "Statülü" rozetini taşır.
+  araKartlar: boolean;
   // Sürükleme sürerken şemada bırakma şeritleri görünür.
   surukleniyor: boolean;
   surukleBasla: () => void;
