@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, sabitleriKaldir, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 import { ufukKur } from '../../ufuk-olcegi.ts';
 
 import { planAni, saatiSabitle } from '../../test-saati.ts';
@@ -53,6 +53,13 @@ describe('çizelge hesapları', () => {
     y.locks['x.1'] = { m: 'T', S: 1 };
     gunDondurmasiniKaldir(y, gNo);
     expect(y.locks).toEqual({ 'x.1': { m: 'T', S: 1 } });
+  });
+
+  it('sabitleri kaldır elle sabitleri siler, dondurulmuş günlerin kilitlerini korur', () => {
+    const { c } = kur();
+    const x = structuredClone(c); x.locks = { a: { m: '1', S: 1 }, b: { m: '1', S: 2, gun: 7 }, c: null };
+    sabitleriKaldir(x);
+    expect(x.locks).toEqual({ b: { m: '1', S: 2, gun: 7 } });
   });
 
   it('saatlik gün: kapalı saatler, bloklar, doluluk ve en erken başlama eski gün katmanıyla aynı', () => {

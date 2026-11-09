@@ -52,6 +52,9 @@ export interface CalismaKomutu {
   geriAdimlari: () => { ne: string; t: number }[];
   // En yeni n değişikliği birlikte geri alır (eski geriDon: seçilen karardan öncesine dön).
   geriDon: (n: number) => boolean;
+  // Son geri alınanı yeniden uygular (Ctrl Shift Z); yeni değişiklik yineleme listesini boşaltır. Deneme komutlarında olmayabilir.
+  yinele?: () => boolean;
+  yinelenebilir?: () => boolean;
   // Bekleyen değişikliği hemen, her zamanki yazmayla (sürüm denetimli) gönderir ve kayıtlı sürümü verir; yazılamadıysa (çatışma, hata) null.
   // Sunucu kayıtlı çalışmayı okuyan komuttan (taslak-yaz) önce çağrılır.
   kaydet: () => Promise<number | null>;
@@ -82,12 +85,16 @@ export interface YaziciAyari {
 }
 
 const kopya = <T>(v: T): T => structuredClone(v);
+// Bir geri kopyasının alanlarının şu anki değerleri (yineleme ile geri alma birbirinin tersidir).
+const anlik = (t: Record<string, unknown>, x: GeriKopyasi): GeriKopyasi => kopya(Object.fromEntries(Object.keys(x).map((k) => [k, t[k]]))) as GeriKopyasi;
 
 export class CalismaYazici implements CalismaKomutu {
   readonly #a: Required<YaziciAyari>;
   #calisma: PlanlamaCalismasi;
   #surum: number | null;
   readonly #geri = new GeriAlYigini<GeriAdimi>(VERI_GERI_ALMA);
+  // Geri alınan adımın geri almadan önceki alanları; en son geri alınan en üstte.
+  readonly #ileri = new GeriAlYigini<GeriAdimi>(VERI_GERI_ALMA);
   readonly #dinleyiciler = new Set<() => void>();
   #zamanlayici: ReturnType<typeof setTimeout> | null = null;
   #kirli = false;
@@ -127,6 +134,7 @@ export class CalismaYazici implements CalismaKomutu {
     if (fn(taslak) === false) return false;
     if (secenek.sessiz) { this.#koy(taslak); return true; }
     this.#yalnizSessiz = false;
+    this.#ileri.bosalt();
     const gunceldi = once.plan !== null && once.plan.dataVer === once.dataVer;
     const o = once as Record<string, unknown>, y = taslak as Record<string, unknown>;
     const ek = [...new Set([...Object.keys(o), ...Object.keys(y)])].filter((k) => !GERI_DISI.has(k) && JSON.stringify(o[k]) !== JSON.stringify(y[k]));
@@ -157,6 +165,7 @@ export class CalismaYazici implements CalismaKomutu {
     for (let i = 0; i < n; i++) {
       const g = this.#geri.al(); if (g === null) break;
       x = g.kopya;
+      this.#ileri.koy({ ne: g.ne, t: g.t, kopya: anlik(taslak, x) });
       taslak = { ...taslak, ...x };
       for (const [k, v] of Object.entries(x)) if (v === undefined) delete taslak[k];
     }
@@ -170,6 +179,22 @@ export class CalismaYazici implements CalismaKomutu {
     this.#koy(taslak);
     return true;
   }
+
+  yinelenebilir = (): boolean => this.#ileri.boy > 0;
+  yinele = (): boolean => {
+    if (this.#durdu) { this.#a.uyar(CATISMA); return false; }
+    const g = this.#ileri.al(); if (g === null) return false;
+    const once = this.#calisma as PlanlamaCalismasi & Record<string, unknown>;
+    this.#geri.koy({ ne: g.ne, t: g.t, kopya: anlik(once, g.kopya) });
+    const taslak = { ...kopya(once), ...kopya(g.kopya) } as PlanlamaCalismasi & Record<string, unknown>;
+    for (const [k, v] of Object.entries(g.kopya)) if (v === undefined) delete taslak[k];
+    this.#yalnizSessiz = false;
+    taslak.dataVer = once.dataVer + 1;
+    guncelseBosalt(taslak);
+    this.#izYaz(taslak, `Yinelendi: ${g.ne}`, '');
+    this.#koy(taslak);
+    return true;
+  };
 
   bekleyeniReddet = (idler: readonly string[], gerekce: string): string | null => {
     const g = gerekce.trim().slice(0, GEREKCE_EN_COK);

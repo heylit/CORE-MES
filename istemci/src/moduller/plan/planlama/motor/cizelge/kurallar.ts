@@ -45,6 +45,10 @@ export function gunuDondur(x: PlanlamaCalismasi, p: OkunanPlan, gNo: number): vo
 export function gunDondurmasiniKaldir(x: PlanlamaCalismasi, gNo: number): void {
   for (const id of Object.keys(x.locks)) if (kilitli(x, id)?.gun === gNo) delete x.locks[id];
 }
+// Sabitleri kaldır: elle sabitlenen işlerin kilidi silinir; dondurulmuş günlerin kilitleri (gun numaralı) korunur.
+export function sabitleriKaldir(x: PlanlamaCalismasi): void {
+  for (const [id, l] of Object.entries(x.locks)) if (!l || typeof l !== 'object' || (l as Record<string, unknown>).gun == null) delete x.locks[id];
+}
 
 // --- hafta, ay, yıl: tezgâh satırlarında işler gün ızgarasında; yılda hafta başına doluluk ısısı ---
 export interface OlcekBasligi { t: number; x: number; w: number; ad: string; bugun: boolean; baslik: string }

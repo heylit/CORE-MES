@@ -2,8 +2,9 @@ import type { CanliyaAlmaGecmisiCevabi, PlanCevabi, SenaryolarCevabi } from '#pa
 import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
-import { acikSaat, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
+import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
 
 // Planlama atölyesinin saf hesapları (cerceve/planlama/parca/zz36-tezgah-panosu.betik). Motor burada koşmaz (357 b): kayıttaki çözülmüş plan
 // okunur; eski panonun motorla hesapladığı çözüm yolları, öne alma ve bölme burada yoktur.
@@ -71,6 +72,21 @@ export function elleSira(c: PlanlamaCalismasi): string[] {
   const s = c.tpSira; if (!Array.isArray(s)) return [];
   const kayitli = new Set(c.D.siparisler.map((x) => x.id));
   return s.filter((j): j is string => typeof j === 'string' && kayitli.has(j));
+}
+// Raydaki elle sıra: siparişi listede hedefin yerine koyar (hedef null ya da listede yoksa sona). Sıra yalnız rayın sırasıdır; planı motorun
+// "öne al" hamlesi değiştirir. Yer değişmezse null.
+export function siraTasi(ids: readonly string[], id: string, hedef: string | null): string[] | null {
+  const i = ids.indexOf(id); if (i < 0 || id === hedef) return null;
+  const l = ids.filter((x) => x !== id);
+  const k = hedef === null ? -1 : l.indexOf(hedef);
+  const y = k < 0 ? l.length : k >= i ? k + 1 : k;
+  l.splice(y, 0, id);
+  return l.every((x, n) => x === ids[n]) ? null : l;
+}
+// Bir yukarı (-1) ya da aşağı (1); ucta null.
+export function siraKomsu(ids: readonly string[], id: string, yon: -1 | 1): string[] | null {
+  const i = ids.indexOf(id); const j = i + yon; if (i < 0 || j < 0 || j >= ids.length) return null;
+  const l = [...ids]; l[i] = ids[j] as string; l[j] = id; return l;
 }
 // 1786 (PLN-3): çubuk ve onaya gönder geciken sayısını listenin "Geciken" grubuyla aynı sayar: planda yeri olmayan sipariş de bitişi
 // bilinmediği için oradadır (önceden çubuk planın kayıtlı özetini yazıyordu: "0 geciken" yanında "GECİKEN 3").
@@ -822,4 +838,21 @@ export function atolyeEkrani(c: PlanlamaCalismasi, cx: Derleme, canli: Record<st
   for (const [, r] of L) son[r.job] = Math.max(son[r.job] ?? -Infinity, r.C);
   const gec = Object.entries(son).flatMap(([j, C]) => { const due = cx.jobs[j]?.due; return due != null && C - due > 0.01 ? [{ j, T: C - due }] : []; }).sort((a, b) => b.T - a.T);
   return { kartlar, gec };
+}
+
+// Kilit ve dondurma paneli (2539 a): donuk bölge, elle sabitler ve dondurulmuş günler tek yerde. Günler bugünden itibaren KILIT_GUNU gün ve
+// bu pencerenin dışında dondurulmuş kalan günlerdir; her gün o gün başlayan iş sayısıyla gelir.
+export const KILIT_GUNU = 7;
+export interface KilitGunu { gNo: number; t: number; n: number; donuk: boolean }
+export function kilitGunleri(c: PlanlamaCalismasi, p: OkunanPlan, now: number): KilitGunu[] {
+  const l = new Set(Array.from({ length: KILIT_GUNU }, (_, g) => gunNumarasi(now, g)));
+  for (const x of Object.values(c.locks)) {
+    const g = x && typeof x === 'object' ? (x as Record<string, unknown>).gun : null;
+    if (typeof g === 'number') l.add(g);
+  }
+  return [...l].sort((a, b) => a - b).map((gNo) => ({ gNo, t: gNo * 24, n: gunBaslayanlar(p, gNo).length, donuk: gunDonuk(c, gNo) }));
+}
+export function kilitOzeti(c: PlanlamaCalismasi, donuk: number): string {
+  const e = elleSayilari(c);
+  return `donuk ${donuk} sa · ${e.sabit} sabit · ${e.gun} gün`;
 }

@@ -16,6 +16,7 @@ import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { planDisi } from '../../tipler.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
+import { sabitleriKaldir } from './kurallar.ts';
 
 // Çizelgenin yan panelleri (t-tekyer.betik solPanel ve sagPanel): solda sepet ve havuz, sağda yardımcı (zz24-sade sdYardimci, altında
 // teknik ayrıntı) ve ayrıntı (n-karar.betik kararPaneli). Motor isteyen düğme görünür ve pasiftir (357 b), nedeni ipucunda.
@@ -183,9 +184,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
   };
   const sabitKaldir = () => {
     setSabitOnay(false);
-    komut?.degistir('Sabitler kaldırıldı', (t) => {
-      for (const [id, l] of Object.entries(t.locks)) if (!l || typeof l !== 'object' || (l as Record<string, unknown>).gun == null) delete t.locks[id];
-    }, { ayrinti: 'dondurulmuş günler korundu', planKoru: true });
+    komut?.degistir('Sabitler kaldırıldı', sabitleriKaldir, { ayrinti: 'dondurulmuş günler korundu', planKoru: true });
   };
   const adim = (no: number, sm: SimgeAdi, ad: string, durum: string, ton: string, ic: ReactNode, acik = false) => (
     <details key={no} className="tc-pym-yrd-adim" data-ton={ton || undefined} open={acik}>
