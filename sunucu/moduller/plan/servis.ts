@@ -2793,10 +2793,10 @@ async function onayGecisi(db: Db, k: Kullanici, id: number, surum: number, komut
 
 // B-2499 (on deneme): taslak açıldıktan sonra açılan emrin işini taslak bilmez; Planı kur'a basılmadan gönderilirse iş canlıya yersiz
 // gider. Taslakta yeri olmayan ve defterde de geçmeyen (taslağın hiç ele almadığı) böyle iş varsa gönderme ve canlıya alma durur.
-// Motorun yerleştiremediği iş defterdedir (yerlesmez), durdurmaz.
+// Motorun yerleştiremediği iş defterdedir (yerlesmez), durdurmaz; canlıda yeri olan iş (canlıya başka yoldan girmiş) canlıda kalır, durdurmaz.
 async function yeniIslerDenetle(db: Db, id: number, acilma: string, ne: string): Promise<void> {
   const ayar = await s.ayarOku(db, id);
-  const yerli = new Set((await s.yerlesimler(db, id)).map((y) => y.isEmriId));
+  const yerli = new Set([...(await s.yerlesimler(db, id)), ...(await s.yerlesimler(db, null))].map((y) => y.isEmriId));
   const defterde = new Set((await s.degisiklikler(db, [id])).flatMap((d) => d.isEmriIdleri));
   const an = Date.parse(acilma);
   const yeni = (await planlanacakIsler(db, { taslakDahil: ayar.taslakEmirler }))
