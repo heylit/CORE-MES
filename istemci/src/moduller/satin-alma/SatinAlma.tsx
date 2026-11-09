@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useBildirim } from '../../ortak/arayuz/Bildirim.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { StokYokKarti } from './StokYokKarti.tsx';
+import { OnTalepKarti } from './OnTalepKarti.tsx';
 import { acilisOku, merkezAc, merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
 import type { Role } from './merkez/roles.ts';
 
@@ -39,10 +39,11 @@ export function IsKutusuSayfasi() {
     if (var_('satin-alma.oku')) return <Navigate to="/satin-alma/talepler" replace />;
   }
   return (
-    <>
-      <StokYokKarti />
+    <div className="sa-is-kutusu">
       <Merkez rol="buyer" sayfa="dash" yol="/satin-alma" />
-    </>
+      {/* Merkezin altında: üstte kalınca sayfa başlığının ve aramanın önüne geçiyordu (2400, kullanıcı ekran görüntüsü). */}
+      <OnTalepKarti />
+    </div>
   );
 }
 

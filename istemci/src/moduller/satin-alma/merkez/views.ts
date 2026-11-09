@@ -6,7 +6,7 @@ import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
   awardOrders, orderDue, itemCost, planCost, type OrderInfo,
-  approvalState, durumEtiketi, siparisEtiketi,
+  approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
 } from "./calc.ts";
 import {
   $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fmtDate, fmtTs, isNum, money, MONTHS, nf0, nf2, nfx, norm, numIn,
@@ -254,7 +254,7 @@ function filteredRequests(): PurchaseRequest[] {
 // "Onayda" onay bekleyendir; onaylanıp siparişi beklenen talep Açık'ta kalır, Onayda sayılmaz (TMI Ç3, menü sayacıyla aynı tanım).
 const STATUS_FILTERS: [string, string, (r: PurchaseRequest) => boolean][] = [
   ["open", "Açık", r => OPEN.includes(r.status)], ["approval", "Onayda", r => r.status === "approval" && approvalState(r).state !== "approved"],
-  ["ordered", "Siparişte", r => r.status === "ordered"], ["received", "Tamamlanan", r => r.status === "received"],
+  ["ordered", "Siparişte", r => r.status === "ordered"], ["late", "Geciken", r => gecikenSiparisSayisi(r) > 0], ["received", "Tamamlanan", r => r.status === "received"],
   ["cancelled", "İptal", r => r.status === "cancelled"], ["all", "Tümü", () => true],
 ];
 function viewRequests(): string {

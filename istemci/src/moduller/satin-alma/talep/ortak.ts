@@ -14,7 +14,6 @@ export const anahtarlar = {
   ozet: ['satin-alma', 'ozet'] as const,
   acikEmirler: ['satin-alma', 'acik-emirler'] as const,
   disOperasyonlar: ['satin-alma', 'dis-operasyonlar'] as const,
-  stokYokIstekleri: ['satin-alma', 'stok-yok-istekleri'] as const,
   fasonSureleri: (sonGun: number) => ['satin-alma', 'fason-sureleri', sonGun] as const,
   kartlar: (tur: string, ara: string) => ['satin-alma', 'malzeme-secenekleri', tur, ara] as const,
 };

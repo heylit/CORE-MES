@@ -3,7 +3,7 @@ import type { Award, PurchaseRequest, Quote, RequestStatus, Supplier } from './t
 import { DEFAULT_SETTINGS } from './constants.ts';
 // Uygulamadaki yükleme sırası: store önce (store ile taşıyıcı birbirini döngüsel ithal eder).
 import { S, bump } from './store.ts';
-import { panoSayilari, teslimBasarimi } from './calc.ts';
+import { gecikenSiparisSayisi, panoSayilari, teslimBasarimi } from './calc.ts';
 import { viewInbox } from './roles.ts';
 
 function teklif(id: string, supplierId: string, fiyat: number): Quote {
@@ -42,7 +42,7 @@ describe('iş kutusu sayı şeridi', () => {
       talep('t5', 'received', { orderDate: '2026-09-10', expectedDate: '2026-09-15', deliveredDate: '2026-09-20' }),
     ]);
     expect(panoSayilari('2026-10-12')).toEqual({
-      onayBekleyen: 1, acikTalep: 2, acikSiparis: 2, acikSiparisTutari: 200, gecikenTeslim: 1, buAyHarcama: 200,
+      onayBekleyen: 1, acikTalep: 2, acikSiparis: 2, acikSiparisTalep: 2, acikSiparisTutari: 200, gecikenTeslim: 1, gecikenTalep: 1, buAyHarcama: 200,
     });
   });
 
@@ -63,5 +63,30 @@ describe('iş kutusu sayı şeridi', () => {
     const dolu = viewInbox();
     expect(dolu).toContain('data-sa-pano');
     expect(dolu).toContain('Henüz teslim alınmış sipariş yok.');
+  });
+
+  it('2400: her kutu listesini açar (durum süzgeci ya da Raporlar); geciken süzgeci kutuyla aynı sayar', () => {
+    kur([
+      talep('t3', 'ordered', { orderDate: '2026-10-01', expectedDate: '2026-10-05' }),
+      talep('t4', 'ordered', { orderDate: '2026-10-02', expectedDate: '2026-10-20' }),
+    ]);
+    const html = viewInbox();
+    for (const h of ['approval', 'open', 'ordered', 'late', 'reports']) expect(html).toContain(`data-act="pano-git" data-v="${h}"`);
+    expect(Object.values(S.requests).filter((r) => gecikenSiparisSayisi(r, '2026-10-12') > 0).map((r) => r.id)).toEqual(['t3']);
+    expect(panoSayilari('2026-10-12').gecikenTeslim).toBe(1);
+  });
+
+  it('2400: gruplar aciliyet sırasında; teklif istenmemiş talep teklif ve teslim beklemesinin önünde, onayda en sonda', () => {
+    kur([
+      talep('d1', 'draft', null),
+      talep('q1', 'rfq', null),
+      talep('o1', 'ordered', { orderDate: '2026-10-01', expectedDate: '2026-12-30' }),
+      talep('a1', 'approval', null),
+      talep('e1', 'eval', null),
+    ]);
+    const html = viewInbox();
+    const sira = ['Karar verilecekler', 'Satın almada', 'Teklif bekleyenler', 'Teslimat bekleyenler', 'Onayda'].map((b) => html.indexOf(`<h2>${b}</h2>`));
+    expect(sira.every((x) => x >= 0)).toBe(true);
+    expect([...sira].sort((a, b) => a - b)).toEqual(sira);
   });
 });

@@ -202,27 +202,35 @@ export function spendLines(): SpendLine[] {
 }
 
 /* ---------------- iş kutusu sayıları ---------------- */
-export interface PanoSayilari { onayBekleyen: number; acikTalep: number; acikSiparisTutari: number; acikSiparis: number; gecikenTeslim: number; buAyHarcama: number }
+export interface PanoSayilari { onayBekleyen: number; acikTalep: number; acikSiparisTutari: number; acikSiparis: number; acikSiparisTalep: number; gecikenTeslim: number; gecikenTalep: number; buAyHarcama: number }
+/** Siparişi verilmiş, teslim alınmamış ve termini geçmiş sipariş sayısı (iş kutusu "Geciken teslim" ve Talepler "Geciken" süzgeci). */
+export function gecikenSiparisSayisi(r: PurchaseRequest, bugun: string = todayStr()): number {
+  if (r.status !== "ordered") return 0;
+  return awardOrders(r).filter((o) => { if (o.deliveredDate) return false; const termin = orderDue(o); return !!termin && termin < bugun; }).length;
+}
 /** İş kutusunun üst şeridi. Tutarlar TL, iskonto ve masraf dahil (harcama satırlarıyla aynı hesap). */
 export function panoSayilari(bugun: string = todayStr()): PanoSayilari {
   const talepler = Object.values(S.requests);
   const satirlar = spendLines();
-  let acikSiparisTutari = 0, acikSiparis = 0, gecikenTeslim = 0;
+  // Kutular sipariş sayar, açtıkları liste talep gösterir (bir talep birden çok sipariş olabilir); ikisi de yazılır.
+  let acikSiparisTutari = 0, acikSiparis = 0, acikSiparisTalep = 0, gecikenTeslim = 0, gecikenTalep = 0;
   for (const r of talepler) {
     if (r.status !== "ordered") continue;
+    const geciken = gecikenSiparisSayisi(r, bugun);
+    gecikenTeslim += geciken;
+    if (geciken > 0) gecikenTalep++;
+    if (awardOrders(r).some((o) => !o.deliveredDate)) acikSiparisTalep++;
     for (const o of awardOrders(r)) {
       if (o.deliveredDate) continue;
       acikSiparis++;
       acikSiparisTutari += sum(satirlar.filter((l) => l.reqId === r.id && l.supplierId === o.supplierId).map((l) => l.amount));
-      const termin = orderDue(o);
-      if (termin && termin < bugun) gecikenTeslim++;
     }
   }
   const ay = bugun.slice(0, 7);
   return {
     onayBekleyen: talepler.filter((r) => r.status === "approval" && approvalState(r).state !== "approved").length,
     acikTalep: talepler.filter((r) => OPEN.includes(r.status)).length,
-    acikSiparisTutari, acikSiparis, gecikenTeslim,
+    acikSiparisTutari, acikSiparis, acikSiparisTalep, gecikenTeslim, gecikenTalep,
     buAyHarcama: sum(satirlar.filter((l) => l.month === ay).map((l) => l.amount)),
   };
 }
