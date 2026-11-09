@@ -2,21 +2,22 @@ import { useRef, useState } from 'react';
 import { Dugme, OnayPenceresi, Pencere, Simge, Tablo, type Sutun } from '../arayuz/index.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
 import { ApiHatasi, hataIletisi } from '../veri/api.ts';
-import { yeniIstekKimligi } from '../veri/istek-kimligi.ts';
+import { icerikKimligi } from '../veri/ozet.ts';
 import { DosyaReddi, dosyaIndir, dosyaOku, sablonYaz } from './kitap.ts';
-import { YazimReddi, planKur, planSayilari, reddedilenSatir, type ExcelTanimi, type Islem, type PlanSatiri } from './kurallar.ts';
+import { YazimReddi, gonderimNumaralari, planKur, planSayilari, reddedilenSatir, type ExcelTanimi, type Islem, type PlanSatiri } from './kurallar.ts';
 import './excel.css';
 
 export interface YazimSonucu { eklenen: number; guncellenen: number }
 
-// Gönderilen satırlar plan sırasıyla 1'den numaralanır; sunucu reddi bu numarayla gelir (bir dosyada birden çok sayfa olduğu için Excel satırı tek başına tekil değil).
 export const gonderilecekler = (plan: readonly PlanSatiri[]): PlanSatiri[] => plan.filter((p) => p.islem === 'ekle' || p.islem === 'guncelle');
 
 interface Ozellikler {
   kapat: () => void;
   // null: sayfanın verisi henüz yüklenmedi (şablon güncel veriden kurulur).
   tanim: ExcelTanimi | null;
-  // Satırlar tek komutla gider: biri reddedilirse hiçbiri yazılmaz (2627 1/2 b). Dosya başına tek istek kimliği (Güvenlik T3).
+  // Satırlar tek komutla gider: biri reddedilirse hiçbiri yazılmaz (2627 1/2 b). Satır numarası `gonderimNumaralari` ile verilir.
+  // İstek kimliği gidecek satırların içeriğinden türer: aynı dosya yeniden yüklenirse sunucu ilk cevabı döner, emirler ve
+  // rezerveler ikinci kez açılmaz (tekrar deposu 24 saat). Kayıtlar o arada değiştiyse eşleşen sürüm de değişir, kimlik yenilenir.
   yaz: (satirlar: readonly PlanSatiri[], istekKimligi: string) => Promise<YazimSonucu>;
 }
 
@@ -34,8 +35,13 @@ const SAYFA_BOYU = 50;
 interface Okunan { dosyaAdi: string; plan: PlanSatiri[]; istekKimligi: string }
 interface Sonuc { tamam: boolean; metin: string; redSatiri: PlanSatiri | null; redIletisi: string | null }
 
+const planKimligi = (ad: string, plan: readonly PlanSatiri[]): Promise<string> => icerikKimligi(new TextEncoder().encode(JSON.stringify([
+  ad, gonderilecekler(plan).map((p) => [p.sayfa, p.satir, p.islem, p.degerler, p.eslesen ?? null]),
+])));
+
 const notlar = (p: PlanSatiri): string[] => [
   ...p.hatalar,
+  ...(p.uyarilar ?? []).map((u) => `Uyarı: ${u}`),
   ...p.farklar.map((f) => `${f.baslik}: ${f.eski || '(boş)'} → ${f.yeni}`),
 ];
 
@@ -66,7 +72,7 @@ export function ExcelPenceresi({ kapat, tanim, yaz }: Ozellikler) {
     try {
       const { plan, uyari } = planKur(tanim, await dosyaOku(tanim, f));
       if (uyari) { iletiYaz(uyari); return; }
-      okunanYaz({ dosyaAdi: f.name, plan, istekKimligi: yeniIstekKimligi() });
+      okunanYaz({ dosyaAdi: f.name, plan, istekKimligi: await planKimligi(tanim.ad, plan) });
       suzYaz(planSayilari(plan).hata > 0 ? 'hata' : ''); sayfaYaz(1); adimYaz('onizle');
     } catch (e) {
       iletiYaz(e instanceof DosyaReddi ? e.message : 'Dosya okunamadı. Bu sayfadan indirilen şablonla doldurulmuş bir .xlsx olmalı.');
@@ -92,7 +98,7 @@ export function ExcelPenceresi({ kapat, tanim, yaz }: Ozellikler) {
       sonucYaz({ tamam: true, metin: `${String(s.eklenen + s.guncellenen)} satır yazıldı (${String(s.eklenen)} yeni, ${String(s.guncellenen)} güncelleme).`, redSatiri: null, redIletisi: null });
     } catch (e) {
       const no = e instanceof ApiHatasi ? reddedilenSatir(e.govde.ayrinti) : null;
-      const red = no === null ? null : gidecek[no - 1] ?? null;
+      const red = no === null ? null : gidecek[gonderimNumaralari(gidecek).indexOf(no)] ?? null;
       const ham = e instanceof ApiHatasi ? (e.sunucuIletisi ?? e.message) : e instanceof YazimReddi ? e.message : hataIletisi(e, 'Kayıt yapılamadı.');
       const neden = red ? `${red.sayfa} sayfası, ${String(red.satir)}. satır: ${ham.replace(/^Satır \d+: /, '')}` : ham;
       sonucYaz({ tamam: false, metin: `Hiçbir satır yazılmadı: ${neden}`, redSatiri: red, redIletisi: neden });
@@ -114,6 +120,8 @@ export function ExcelPenceresi({ kapat, tanim, yaz }: Ozellikler) {
   const plan = okunan?.plan ?? [];
   const say = planSayilari(plan);
   const yazilacak = say.ekle + say.guncelle;
+  const uyarili = plan.filter((p) => p.uyarilar?.length).length;
+  const ozet = tanim?.ozet?.(gonderilecekler(plan)) ?? null;
   const liste = plan.filter((p) => !suz || p.islem === suz);
   const sutunlar: Sutun<PlanSatiri>[] = [
     { anahtar: 'yer', baslik: 'Sayfa, satır', kirilmaz: true, hucre: (p) => `${p.sayfa} ${String(p.satir)}` },
@@ -165,6 +173,8 @@ export function ExcelPenceresi({ kapat, tanim, yaz }: Ozellikler) {
             <Simge ad="alert" /> {say.hata} satır hatalı; tek hatalı satır varken hiçbir satır yazılmaz. Hata dosyasını indirip düzeltin ve yeniden yükleyin.
           </p>
         )}
+        {say.hata === 0 && ozet && <p className="tc-xl-ipucu"><Simge ad="clipboard-check" /> {ozet}</p>}
+        {uyarili > 0 && <p className="tc-xl-ipucu"><Simge ad="alert" /> {uyarili} satırda uyarı var; yazımı durdurmaz, açıklamada okuyun.</p>}
         {say.hata === 0 && yazilacak === 0 && <p className="tc-xl-ipucu">Yazılacak değişiklik yok.</p>}
         <Tablo
           etiket="Önizleme" sutunlar={sutunlar} satirlar={liste.slice(ilk, ilk + SAYFA_BOYU)} satirAnahtari={(p) => `${p.sayfa}-${String(p.satir)}`}

@@ -93,7 +93,13 @@ export const kisiTopluSatiri = z.discriminatedUnion('islem', [
 export const kisiTopluKaydetGovdesi = z.object({
   satirlar: z.array(kisiTopluSatiri).min(1).max(KISI_TOPLU_EN_COK)
     .refine((s) => { const id = s.flatMap((x) => (x.islem === 'guncelle' ? [x.id] : [])); return new Set(id).size === id.length; }, 'Aynı kişi dosyada iki kez var.')
-    .refine((s) => new Set(s.map((x) => x.satir)).size === s.length, 'Satır numarası iki kez var.'),
+    .refine((s) => new Set(s.map((x) => x.satir)).size === s.length, 'Satır numarası iki kez var.')
+    // Sicil harf farksız tekildir (kisi_sicil_no_tek, lower()); dosyada iki kez gelen sicil veritabanına varmadan reddedilir. Yerel
+    // olmayan küçültme: tr-TR 'I'yı 'ı' yapar, veritabanının lower()'ı 'i' yapar.
+    .refine((s) => {
+      const sicil = s.flatMap((x) => (typeof x.sicilNo === 'string' && x.sicilNo.trim() !== '' ? [x.sicilNo.trim().toLowerCase()] : []));
+      return new Set(sicil).size === sicil.length;
+    }, 'Aynı sicil numarası dosyada iki kez var.'),
 }).strict();
 export const kisiTopluKaydetCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
 

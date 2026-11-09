@@ -21,6 +21,10 @@ describe('kişi Excel tanımı', () => {
   it('sicil no ile eşleşir (harf farkı önemsiz); sicilsiz satır adı aynı olsa da yeni kişidir', () => {
     const { plan } = planKur(kisiTanimi(KISILER), oku(['s-1', null, 'Frezeci'], [null, 'Aynı Ad', null], ['S-9', 'Yeni Kişi', null]));
     expect(plan.map((p) => [p.islem, p.hatalar])).toEqual([['guncelle', []], ['ekle', []], ['ekle', []]]);
+    // 2679 a: aynı adda kişi uyarısı yalnız yeni kişi satırında; yazımı durdurmaz (harf ve boşluk farkı önemsiz).
+    expect(plan.map((p) => p.uyarilar ?? [])).toEqual([[], ['Aynı adda kişi var; aynı kişiyse sicil yazın.'], []]);
+    expect(planKur(kisiTanimi(KISILER), oku([null, '  aynı   ad ', null], ['S-1', 'Kişi 4', null])).plan.map((p) => [p.islem, p.uyarilar ?? []]))
+      .toEqual([['ekle', ['Aynı adda kişi var; aynı kişiyse sicil yazın.']], ['guncelle', []]]);
     expect(kisiSatiri(plan[0]!, 1)).toEqual({ islem: 'guncelle', satir: 1, id: 1, surum: 3, gorev: 'Frezeci' });
     expect(kisiSatiri(plan[1]!, 2)).toEqual({ islem: 'ekle', satir: 2, ad: 'Aynı Ad', sicilNo: null, gorev: null });
   });

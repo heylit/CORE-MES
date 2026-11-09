@@ -24,6 +24,9 @@ describe('kişiler toplu kaydet (gerçek PostgreSQL)', () => {
   let app: FastifyInstance;
   let yonetici = '';
   let operator = '';
+  let ik = '';
+  let yoneticiId = 0;
+  let ikId = 0;
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam;
@@ -51,10 +54,18 @@ describe('kişiler toplu kaydet (gerçek PostgreSQL)', () => {
   before(async () => {
     ortam = await testVeritabaniKur('kisiler_toplu');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
-    const yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Toplu Yönetici', kullaniciAdi: 'toplu-yonetici', parola: PAROLA }));
+    yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Toplu Yönetici', kullaniciAdi: 'toplu-yonetici', parola: PAROLA }));
     const operatorRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'operator'");
     const yoneticiRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
-    if (!operatorRolu || !yoneticiRolu) throw new Error('rol yok');
+    const ikRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'insan_kaynaklari'");
+    if (!operatorRolu || !yoneticiRolu || !ikRolu) throw new Error('rol yok');
+    // Bayraksız yazar: kisiler.yaz taşır ama bütün işlemleri veren rolü yoktur.
+    ikId = await ortam.vt.tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: 'Toplu İK', kullaniciAdi: 'toplu-ik', parola: PAROLA });
+      await rolAta(db, yoneticiId, id, ikRolu.id);
+      await rolAl(db, yoneticiId, id, yoneticiRolu.id);
+      return id;
+    });
     await ortam.vt.tx(async (db) => {
       const id = await yoneticiOlustur(db, { ad: 'Toplu Operatör', kullaniciAdi: 'toplu-operator', parola: PAROLA });
       await rolAta(db, yoneticiId, id, operatorRolu.id);
@@ -62,6 +73,7 @@ describe('kişiler toplu kaydet (gerçek PostgreSQL)', () => {
     });
     yonetici = await girisCerezi('toplu-yonetici');
     operator = await girisCerezi('toplu-operator');
+    ik = await girisCerezi('toplu-ik');
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -123,6 +135,7 @@ describe('kişiler toplu kaydet (gerçek PostgreSQL)', () => {
       Array.from({ length: KISI_TOPLU_EN_COK + 1 }, (_, i) => ({ islem: 'ekle', satir: i + 2, ad: 'Çok' })),
       [{ islem: 'guncelle', satir: 2, id: k.id, surum: k.surum, ad: 'A' }, { islem: 'guncelle', satir: 3, id: k.id, surum: k.surum, ad: 'B' }],
       [{ islem: 'guncelle', satir: 2, id: k.id, surum: k.surum, sicilNo: null }],
+      [{ islem: 'ekle', satir: 2, ad: 'Bir', sicilNo: 'TS-AYNI' }, { islem: 'ekle', satir: 3, ad: 'İki', sicilNo: ' ts-ayni ' }],
     ]) assert.equal((await toplu(satirlar)).durum, 400, JSON.stringify(satirlar).slice(0, 120));
     assert.equal((await satir(k.id))?.ad, 'Sıkı');
   });
@@ -136,5 +149,32 @@ describe('kişiler toplu kaydet (gerçek PostgreSQL)', () => {
     assert.equal(ilk.durum, 200);
     assert.deepEqual(await toplu(satirlar, kimlik), ilk);
     assert.equal(await sicilliSay([s]), 1);
+  });
+
+  test('bayraksız yazar bayraklı kişinin kaydını toplu girişle de değiştiremez; aynı istekteki diğer satır da yazılmaz', async () => {
+    const diger = await kisiAc('Bayraksız Hedef');
+    const hedef = (await satir(yoneticiId))!;
+    const red = await toplu<Hata>([
+      { islem: 'guncelle', satir: 2, id: diger.id, surum: diger.surum, gorev: 'Yazılmayacak' },
+      { islem: 'guncelle', satir: 3, id: hedef.id, surum: hedef.surum, gorev: 'Değişmez' },
+    ], randomUUID(), ik);
+    assert.equal(red.durum, 403, JSON.stringify(red.govde));
+    assert.equal(red.govde.mesaj, `Satır 3: ${ILETILER.bayrakliKaydiYetkisiz}`);
+    assert.equal((await satir(diger.id))?.gorev, 'Deneme görevi');
+    assert.equal((await satir(yoneticiId))?.gorev, hedef.gorev);
+  });
+
+  test('toplu güncelleme kişi değişiklik defterine satır başına, eski ve yeni değerle ve yazan kişiyle düşer', async () => {
+    const a = await kisiAc('Defter A');
+    const b = await kisiAc('Defter B');
+    const c = await toplu([
+      { islem: 'guncelle', satir: 2, id: a.id, surum: a.surum, gorev: 'Freze' },
+      { islem: 'guncelle', satir: 3, id: b.id, surum: b.surum, ad: 'Defter B2' },
+    ], randomUUID(), ik);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const defter = (id: number) => o().sahip.sorgu<{ islem: string; kisi_id: number | null; alanlar: Record<string, { eski: unknown; yeni: unknown }> }>(
+      "SELECT islem, kisi_id, alanlar FROM denetim_degisiklik WHERE tablo = 'kisi' AND anahtar = $1::jsonb ORDER BY id", [JSON.stringify({ id })]);
+    assert.deepEqual(await defter(a.id), [{ islem: 'guncelle', kisi_id: ikId, alanlar: { gorev: { eski: 'Deneme görevi', yeni: 'Freze' } } }]);
+    assert.deepEqual(await defter(b.id), [{ islem: 'guncelle', kisi_id: ikId, alanlar: { ad: { eski: 'Defter B', yeni: 'Defter B2' } } }]);
   });
 });
