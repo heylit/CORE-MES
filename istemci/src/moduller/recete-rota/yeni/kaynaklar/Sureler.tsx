@@ -34,9 +34,11 @@ export const SURELER_ACIKLAMASI = 'Her rota adımının teorik süresi ve gerçe
   + '(işlem boş ya da 0 ise boş). Plan teorik süreyle hesaplanır. Gerçekleşen değer elle girilir ya da terminalden gelir ve ölçüm olarak bekler; '
   + 'kabul edilince ürünün rota taslağına teorik süre olarak yazılır, taslak yürürlüğe girince plan onu kullanır.';
 
-export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
+export function Sureler({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   const { durum } = veri;
   const [arama, aramaYaz] = useState('');
+  // 2559 a/3: Operasyonlar'daki "Kullanım: n adım" bu bölümü o operasyona süzülmüş açar (kimlik operasyon tipi kimliğidir); ayrı tablo yok.
+  const [opId, opIdYaz] = useState(() => (kimlik !== null && durum.opdefs?.some((x) => x.id === kimlik) ? kimlik : ''));
   const [sayfa, sayfaYaz] = useState(1);
 
   const urunler = useMemo(() => {
@@ -46,8 +48,14 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
     return durum.items
       .filter((i) => i.type !== 'ham' && rotalar[i.id] !== undefined)
       .sort((a, b) => a.code.localeCompare(b.code, 'tr'))
-      .map((i) => ({ urun: i, rev: revler.find((r) => r.itemId === i.id && r.status === 'yururlukte') ?? null }));
-  }, [durum.routes, durum.routeRevs, durum.items]);
+      .map((i) => ({ urun: i, rev: revler.find((r) => r.itemId === i.id && r.status === 'yururlukte') ?? null }))
+      // Süzgeçte ürün, yürürlükteki revizyonunda (yoksa rotasında) o operasyonun adımı varsa kalır.
+      .filter(({ urun, rev }) => !opId || (rev?.data.steps ?? rotalar[urun.id]?.steps ?? []).some((a) => a.opId === opId));
+  }, [durum.routes, durum.routeRevs, durum.items, opId]);
+  const kullanilan = useMemo(() => {
+    const idler = new Set(Object.values(durum.routes ?? {}).flatMap((r) => r.steps.map((a) => a.opId)));
+    return (durum.opdefs ?? []).filter((x) => idler.has(x.id) || x.id === opId).sort((a, b) => a.code.localeCompare(b.code, 'tr'));
+  }, [durum.routes, durum.opdefs, opId]);
 
   if (urunler === null) {
     return (
@@ -67,12 +75,17 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
           className="tc-alan-kutu tc-rr2-arama" type="search" value={arama} placeholder="Ürün kodu ya da adı ara…" aria-label="Ürün ara"
           onChange={(o) => { aramaYaz(o.target.value); sayfaYaz(1); }}
         />
+        <select className="tc-alan-kutu tc-rr2-girdi" value={opId} aria-label="Operasyon" onChange={(o) => { opIdYaz(o.target.value); sayfaYaz(1); }}>
+          <option value="">Tüm operasyonlar</option>
+          {kullanilan.map((x) => <option key={x.id} value={x.id}>{x.code} {x.name}</option>)}
+        </select>
         <Dugme simge="route" onClick={() => git('schema')}>Ürün ve rotalar</Dugme>
         <Dugme simge="list" onClick={() => git('ops')}>Operasyonlar</Dugme>
       </div>
-      {urunler.length === 0 && (
+      {urunler.length === 0 && opId === '' && (
         <DurumKutusu durum="bos" mesaj="Rotası olan ürün yok. Ürün ve rotalar bölümünde rota oluşturunca adımlar burada görünür." />
       )}
+      {urunler.length === 0 && opId !== '' && <DurumKutusu durum="bos" mesaj="Bu operasyonu kullanan yürürlükte rota adımı yok." />}
       {urunler.length > 0 && suzulen.length === 0 && <DurumKutusu durum="bos" mesaj="Aramaya uyan ürün yok." />}
       {gorunen.length > 0 && (
         <div className="tc-rr2-kaydir tc-rr2-kutu">
@@ -93,7 +106,7 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
               </tr>
             </thead>
             {gorunen.map(({ urun, rev }) => (
-              <UrunSureleri key={urun.id} kod={urun.code} ad={urun.name} revizyonId={rev ? Number(rev.id) : null} revNo={rev?.no ?? null} yetki={yetki} />
+              <UrunSureleri key={urun.id} kod={urun.code} ad={urun.name} revizyonId={rev ? Number(rev.id) : null} revNo={rev?.no ?? null} yetki={yetki} opId={opId || null} />
             ))}
           </table>
         </div>
@@ -103,8 +116,8 @@ export function Sureler({ veri, yetki, git }: EkranOzellikleri) {
   );
 }
 
-function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
-  kod: string; ad: string; revizyonId: number | null; revNo: string | null; yetki: RrYetkisi;
+function UrunSureleri({ kod, ad, revizyonId, revNo, yetki, opId }: {
+  kod: string; ad: string; revizyonId: number | null; revNo: string | null; yetki: RrYetkisi; opId: string | null;
 }) {
   const sureler = useSureler(revizyonId);
   const { calistir } = useR2Komutu();
@@ -146,6 +159,7 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
       </span>
     );
   };
+  const adimlar = sureler.data?.adimlar.filter((a) => opId === null || String(a.operasyonTipi.id) === opId);
   const bilgi = (icerik: React.ReactNode) => <tr><td colSpan={SUTUN_SAYISI}>{icerik}</td></tr>;
 
   return (
@@ -155,8 +169,8 @@ function UrunSureleri({ kod, ad, revizyonId, revNo, yetki }: {
       {sureler.isError && bilgi(
         <DurumKutusu durum="hata" mesaj={sureler.error.message || 'Süreler okunamadı.'} yenile={() => { void sureler.refetch(); }} />,
       )}
-      {sureler.data && sureler.data.adimlar.length === 0 && bilgi(<p className="tc-rr2-not">{baslik}: bu revizyonda adım yok.</p>)}
-      {sureler.data?.adimlar.map((a) => (
+      {adimlar?.length === 0 && bilgi(<p className="tc-rr2-not">{baslik}: {opId === null ? 'bu revizyonda adım yok.' : 'bu revizyonda bu operasyonun adımı yok.'}</p>)}
+      {adimlar?.map((a) => (
         <tr key={a.adimId} aria-label={`${kod} OP ${String(a.opNo)} süreleri`}>
           <td><span className="tc-rr2-iki"><b>{kod}</b><small>{ad}</small></span></td>
           <td><b>{revNo ?? YOK}</b></td>
