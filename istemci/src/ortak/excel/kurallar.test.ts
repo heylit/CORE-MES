@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOPLU_EN_COK, hucreCoz, metinYaz, planKur, planSayilari, reddedilenSatir, sayfaTanimi, type ExcelSutunu, type ExcelTanimi, type SayfaSatirlari } from './kurallar.ts';
+import { ANAHTAR_AYRACI, TOPLU_EN_COK, hucreCoz, metinYaz, planKur, planSayilari, reddedilenSatir, sayfaTanimi, type ExcelSutunu, type ExcelTanimi, type SayfaSatirlari } from './kurallar.ts';
 
 interface Kayit { id: number; kod: string; ad: string; aktif: boolean; merkez: string | null }
 const MERKEZLER = [{ kod: 'IM1', ad: 'Talaşlı' }, { kod: 'IM2', ad: 'Kalite' }];
@@ -106,5 +106,21 @@ describe('sunucu reddi', () => {
     expect(reddedilenSatir({ satir: 3 })).toBe(3);
     expect(reddedilenSatir({ kayitId: 3 })).toBeNull();
     expect(reddedilenSatir(null)).toBeNull();
+  });
+});
+
+describe('bileşik anahtar', () => {
+  interface Adim { urun: string; no: number; ad: string }
+  const t: ExcelTanimi = { ad: 'bilesik', baslik: 'Bileşik', kilavuz: [], sayfalar: [sayfaTanimi<Adim>({
+    ad: 'Adımlar', kayitTuru: 'adım', anahtarSutun: 'urun', ikinciAnahtar: 'no',
+    kayitlar: [{ urun: 'A|1', no: 10, ad: 'Bir' }, { urun: 'A', no: 110, ad: 'İki' }],
+    anahtar: (k) => `${k.urun}${ANAHTAR_AYRACI}${String(k.no)}`, satir: (k) => ({ urun: k.urun, no: k.no, ad: k.ad }),
+    sutunlar: [{ anahtar: 'urun', baslik: 'Ürün', tur: 'kod', zorunlu: true }, { anahtar: 'no', baslik: 'No', tur: 'sayi' }, { anahtar: 'ad', baslik: 'Ad', tur: 'metin', zorunlu: true }],
+  })] };
+  it('iki değerle eşleşir; koddaki "|" ayraçla karışmaz; ikinci boşsa yeni, eşleşmeyen ikinci hata', () => {
+    const s: SayfaSatirlari = { Adımlar: [{ no: 1, hucreler: ['Ürün *', 'No', 'Ad *'] },
+      { no: 2, hucreler: ['A|1', 10, 'Bir yeni'] }, { no: 3, hucreler: ['A', 110, 'İki'] }, { no: 4, hucreler: ['A', null, 'Üç'] }, { no: 5, hucreler: ['A', 11, 'Yok'] }] };
+    const { plan } = planKur(t, s);
+    expect(plan.map((p) => [p.islem, p.kod])).toEqual([['guncelle', 'A|1 / 10'], ['ayni', 'A / 110'], ['ekle', 'A'], ['hata', 'A / 11']]);
   });
 });

@@ -1,3 +1,4 @@
+import { YENI_ADIM_VARSAYILANI } from '#paylasilan/sozlesme/rota.ts';
 import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
@@ -1261,4 +1262,65 @@ export function cokKatmanaCevir<T extends KatmanAdimi>(
     }
   }
   return { girdiler };
+}
+
+// Excel ile rota adımları (2627): satırın adıma işlenmesi. Saf; servis okunan taslak adımına uygular, sonra kaydet komutu bütün denetimleri yapar.
+export const ONAYDAKI_ROTA = 'Ürünün rotası onay bekliyor; Excel yalnız taslağa yazar. Önce onaydan geri gönderin ya da onaylayın.';
+export const ROTA_DEGISTI = 'Rota bu arada değişti; Excel penceresini kapatıp dosyayı yeniden yükleyin.';
+export const AYRILMIS_SURE = 'Bu adımın birim süresi işlem ve değişim olarak ayrılmış; sayfada değiştirin.';
+export const FASON_KAYNAGI = 'Fason adıma Excel\'de makine ya da istasyon yazılamaz; kaynağı sayfada değiştirin.';
+export const YENI_ADIM_EKSIK = 'Yeni adımda operasyon tipi ve adım adı zorunlu.';
+
+export interface ExcelAdimSatiri {
+  operasyonTipiId?: number | undefined;
+  ad?: string | undefined;
+  kaynak?: { tur: 'istasyon' | 'makine'; id: number } | undefined;
+  ayarSuresiDk?: number | undefined;
+  birimSureDk?: number | undefined;
+}
+type Sure = number | string | null;
+export interface ExcelAdimHedefi {
+  operasyonTipiId: number;
+  ad: string;
+  kaynak: { tur: string; id: number | null } | null;
+  ayarSuresiDk: Sure;
+  birimSureDk: Sure;
+  islemSuresiDk: Sure;
+  degisimSuresiDk: Sure;
+}
+
+// Yeni adımın Excel'de gelmeyen alanları YENI_ADIM_VARSAYILANI'ndan; null: tip ya da ad eksik.
+export function excelYeniAdimi(x: ExcelAdimSatiri): (typeof YENI_ADIM_VARSAYILANI & {
+  opNo: null; operasyonTipiId: number; ad: string; kaynak: { tur: 'istasyon' | 'makine'; id: number } | null; ayarSuresiDk: number | null; birimSureDk: number | null;
+  adaylar: never[]; bilesenler: never[]; yanUrunler: never[]; birlesen: never[];
+}) | null {
+  if (x.operasyonTipiId === undefined || x.ad === undefined) return null;
+  return {
+    ...YENI_ADIM_VARSAYILANI, opNo: null, operasyonTipiId: x.operasyonTipiId, ad: x.ad, kaynak: x.kaynak ?? null,
+    ayarSuresiDk: x.ayarSuresiDk ?? null, birimSureDk: x.birimSureDk ?? null, adaylar: [], bilesenler: [], yanUrunler: [], birlesen: [],
+  };
+}
+
+// Gelen alanlar adıma yazılır (gelmeyen değişmez). Dönüş: ret iletisi ya da hazırlık toplamının değişip değişmediği (değiştiyse
+// hazırlık bölümü kaydette yeniden kurulur, 1310 a).
+export function excelAdimiUygula(hedef: ExcelAdimHedefi, x: ExcelAdimSatiri): { hata: string } | { hazirlikDegisti: boolean } {
+  if (x.birimSureDk !== undefined && (hedef.islemSuresiDk !== null || hedef.degisimSuresiDk !== null)) return { hata: AYRILMIS_SURE };
+  // 2703 b (kullanıcı kararı): fason adım (firmalı ya da firmasız) Excel'le iç adıma çevrilmez; satır reddedilir.
+  if (x.kaynak !== undefined && hedef.kaynak?.tur === 'fason') return { hata: FASON_KAYNAGI };
+  if (x.operasyonTipiId !== undefined) hedef.operasyonTipiId = x.operasyonTipiId;
+  if (x.ad !== undefined) hedef.ad = x.ad;
+  if (x.kaynak !== undefined) hedef.kaynak = x.kaynak;
+  if (x.birimSureDk !== undefined) hedef.birimSureDk = x.birimSureDk;
+  if (x.ayarSuresiDk === undefined) return { hazirlikDegisti: false };
+  hedef.ayarSuresiDk = x.ayarSuresiDk;
+  return { hazirlikDegisti: true };
+}
+
+// Önizlemenin dayandığı revizyon yazım anındakiyle aynı mı (Veri koşulu). simdiki: açık taslak, yoksa yürürlükteki; null: ürünün revizyonu yok.
+export function excelDayanagiTutar(
+  dayanak: { revizyonId: number; surum: number } | null,
+  simdiki: { id: number; surum: number } | null,
+): boolean {
+  if (dayanak === null || simdiki === null) return dayanak === simdiki;
+  return dayanak.revizyonId === simdiki.id && dayanak.surum === simdiki.surum;
 }
