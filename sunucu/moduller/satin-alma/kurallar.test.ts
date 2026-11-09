@@ -804,3 +804,55 @@ test('2455-A: son alış her kartın uygulanan satırına yazılır, en son alı
   assert.deepEqual(o, [{ tur: 'satin-alma.hatirlatma-kg-fiyati-eskidi', kaynakKimlik: 'kg:1', talepId: null, baslik: 'K1: kg fiyatı 39 gündür güncellenmedi', yol: '/satin-alma/kg-fiyatlari' }]);
   assert.deepEqual(kgEskimeHatirlatmalari([satir(1, '2020-01-01')], null, '2026-11-09'), []);
 });
+
+import { avansAsimi, gerceklesenKosul, planGerceklesenFarki, varsayilanOdemePlani } from './kurallar.ts';
+import { butceSatirlari, gerceklesenPay } from './hesap-kurallar.ts';
+test('2472: kalanı kapatılan siparişin planı gerçekleşen teslim değerine iner; partiler gerçekleşene oranlanır; açık sipariş değişmez', () => {
+  // İki satır: 10 x 10 (genel iskontolu mal 90) ve 5 x 4 (18); masraf 12. Birinciden 4, ikinciden 5 gelir: 36 + 18 + 12 = 66.
+  const k = {
+    toplam: '120', avans: '12', kalan: '108', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: '2026-11-20', vadeBaslangici: 'teslim' as const,
+    partiler: [{ gun: '2026-10-10', oran: '0.25' }, { gun: '2026-10-20', oran: '0.2' }], tamTeslim: true, kapali: true, masraf: '12',
+    satirlar: [{ mal: '90', miktar: '10', teslim: '4' }, { mal: '18', miktar: '5', teslim: '5' }],
+  };
+  const g = gerceklesenKosul(k);
+  assert.deepEqual([g.toplam, g.avans, g.kalan], ['66.00', '12', '54']);
+  assert.equal(g.partiler!.reduce((t, p) => t + Number(p.oran), 0).toFixed(9), '1.000000000');
+  const plan = varsayilanOdemePlani(k, '2026-11-09', '20');
+  // KDV dahil: 79.20; avans 14.40, kalan 64.80 iki partiye 0.25 / 0.2 oranında (gerçekleşene göre 5/9 ve 4/9).
+  assert.deepEqual(plan.map((x) => [x.tur, x.vade, x.tutar]), [['avans', '2026-10-01', '14.40'], ['vade', '2026-11-09', '36'], ['vade', '2026-11-19', '28.8']]);
+  assert.equal(plan.reduce((t, x) => t + Number(x.tutar), 0).toFixed(2), '79.20');
+  // Açık sipariş: koşul aynen kalır.
+  assert.equal(gerceklesenKosul({ ...k, kapali: false }).toplam, '120');
+  assert.equal(avansAsimi({ ...k, kapali: false, avans: '500' }, '20'), null);
+  // Fazla teslim de sayılır; teslim yoksa masraf da sıfır (2472-2 a).
+  assert.equal(gerceklesenKosul({ ...k, satirlar: [{ mal: '90', miktar: '10', teslim: '12' }, { mal: '18', miktar: '5', teslim: '0' }] }).toplam, '120.00');
+  assert.equal(gerceklesenKosul({ ...k, partiler: [], satirlar: [{ mal: '90', miktar: '10', teslim: '0' }, { mal: '18', miktar: '5', teslim: '0' }] }).toplam, '0.00');
+});
+test('2472 M2: avans aşımında vadeli satır çıkmaz, fark KDV dahil sipariş dövizindedir; elle plan farkı', () => {
+  const k = {
+    toplam: '100', avans: '50', kalan: '50', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: null, vadeBaslangici: 'teslim' as const,
+    partiler: [{ gun: '2026-10-10', oran: '0.2' }], tamTeslim: true, kapali: true, masraf: '0', satirlar: [{ mal: '100', miktar: '10', teslim: '2' }],
+  };
+  assert.deepEqual(varsayilanOdemePlani(k, '2026-11-09', '20').map((x) => [x.tur, x.tutar]), [['avans', '60.00']]);
+  assert.equal(avansAsimi(k, '20'), '36');
+  assert.equal(avansAsimi(k, null), '30');
+  assert.equal(avansAsimi({ ...k, avans: '10' }, '20'), null);
+  assert.equal(planGerceklesenFarki(k, '20', ['60', '60']), '96');
+  assert.equal(planGerceklesenFarki(k, '20', ['24']), null);
+  assert.equal(planGerceklesenFarki({ ...k, kapali: false }, '20', ['60']), null);
+});
+test('2472 M3: ödeme planı ve bütçe kullanımı aynı tanımı kullanır (gerceklesenPay); kalem toplamı sipariş değerine eşittir', () => {
+  // Bütçe kalem başına: mal payı + masraf payı; plan siparişin satırlarıyla. Masraf mal tutarıyla dağıtılmış: 12 = 10 + 2.
+  const b = butceSatirlari({
+    harcamalar: [{ kalemId: 'k1', teklifId: 'q', tl: 100, masraf: 10 }, { kalemId: 'k2', teklifId: 'q', tl: 20, masraf: 2 }],
+    kalemBirimi: () => null, kararTarihi: '2026-10-01', bugun: '2026-11-09',
+    siparisler: [{ teklifId: 'q', siparisTarihi: '2026-10-01', kapali: true, satirlar: [{ kalemId: 'k1', miktar: '10', teslimAlinan: '4' }, { kalemId: 'k2', miktar: '5', teslimAlinan: '5' }] }],
+  });
+  const plan = gerceklesenKosul({
+    toplam: '120', avans: '0', kalan: '120', vadeGun: 0, siparisTarihi: null, beklenenTeslim: null, kapali: true, masraf: '12',
+    satirlar: [{ mal: '90', miktar: '10', teslim: '4' }, { mal: '18', miktar: '5', teslim: '5' }],
+  });
+  assert.ok(Math.abs(b.reduce((t, x) => t + x.tl!, 0) - Number(plan.toplam)) <= 0.01);
+  assert.equal(gerceklesenPay(90, 10, 0.4, true), 46);
+  assert.equal(gerceklesenPay(90, 10, 0.4, false), 0);
+});
