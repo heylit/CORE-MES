@@ -239,3 +239,7 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 ## Birim maliyeti kaldırma (2574, 2572)
 - Eklenen: `POST /finans/maliyetler/:tur/:anahtar/kaldir` { surum } (`finans.yonet`, tekrar korumalı) ve `maliyet-kaldir/` (sorgular, kurallar, servis, test). Sözleşme: `maliyetKaldirParametresi`, `maliyetKaldirGovdesi`, `maliyetKaldirCevabi` (`paylasilan/sozlesme/finans.ts`).
 - Kaldırılan maliyet yeniden bilinmiyordur (satır yok). Göç, işlem ve rol değişmedi. Köprü komutu ve ekran düğmesi Reçete-Rota'dadır (2487).
+
+## İstasyon saatlik maliyet ekranı (2593, 2589 b, 2598 c)
+- Eklenen: Finans > Sistem > Saatlik maliyetler (`/finans/saatlik-maliyet`, `finans.maliyet-oku`); `GET /finans/saatlik-maliyetler/:tur` (yalnız istasyon) ve `saatlik-maliyet/` (sunucu ve istemci). İstasyon saatlik maliyeti artık yalnız burada yazılır; Reçete ve Rota > Kaynaklar salt okunur olur (2487).
+- Kişi saatlik maliyeti bu ekranda yoktur (2598 c); grup değeri 2602 ile gelir. Göç, işlem ve rol değişmedi.

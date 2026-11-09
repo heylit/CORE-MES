@@ -145,3 +145,10 @@ Ekran (`/finans/genel-gider`): `finans.maliyet-oku` yoksa liste istenmez; form y
 | Uç | İşlem | Kural | İzinli test | Reddeden test |
 |---|---|---|---|---|
 | POST /finans/maliyetler/:tur/:anahtar/kaldir | finans.yonet | FNS-75: tür malzeme, istasyon ya da kişi; okunan sürümle satır silinir, okuyanlar yeniden null görür (sıfır yazılmaz); satır kilitli okunur; silinen değer denetim ekine (`_ek`) yazılır; gövde `.strict()`; tekrar korumalı (istek kimliği zorunlu) | maliyet-kaldir: "okunan sürümle kaldırılır" (200, denetim eki), "aynı istek kimliğiyle" | maliyet-kaldir: "yetki:" (oturumsuz 401, finans.maliyet-oku ve finans.yaz 403), "yasak:" (eski sürüm 409, olmayan 404, kimliksiz 400, fazla alan 400, geçersiz anahtar ve tür 400) |
+
+## İstasyon saatlik maliyet ekranı (2593, 2589 b, 2598 c)
+| Uç | İşlem | Kural | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| GET /finans/saatlik-maliyetler/:tur | finans.maliyet-oku | FNS-76: tür yalnız istasyon; her aktif istasyon ve maliyeti olan pasif istasyon, maliyet yoksa null; kişi türü yoktur (kişi başı değer Finans'ta gösterilmez, 2598 c) | saatlik-maliyet: "yetki:" (okuyan 200), "istasyon listesi" | aynı test (oturumsuz 401, finans.oku/yaz/yonet 403, malzeme ve kişi türü 400) |
+
+Ekran (`/finans/saatlik-maliyet`): liste `finans.maliyet-oku` ile; Gir, Düzenle ve Kaldır yalnız `finans.yonet` ile çizilir. Yazma mevcut `POST /finans/maliyetler/:tur/yaz`, kaldırma 2574 ucudur; asıl denetim sunucudadır. Testler: `SaatlikMaliyet.test.tsx`.

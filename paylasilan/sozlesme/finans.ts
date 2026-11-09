@@ -531,6 +531,16 @@ export type MaliyetSatiri = z.output<typeof maliyetSatiri>;
 export const maliyetKaldirParametresi = z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.coerce.number<number>().int().positive() });
 export const maliyetKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
 export const maliyetKaldirCevabi = z.object({ kaldirilan: z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.number().int() }) });
+// 2593 (2589 b): istasyon saatlik maliyeti yalnız Finans sayfasından yazılır. Liste her aktif kaynağı ve maliyeti olan pasif
+// kaynağı taşır; maliyet null ise girilmemiştir (bilinmiyor), sıfır değildir. Kişi türü yoktur: kişi başı değer Finans'ta
+// gösterilmez (2598 c); grup değeri 2602 ile gelir.
+export const SAATLIK_MALIYET_TURLERI = ['istasyon'] as const;
+export const saatlikMaliyetTuruParametresi = z.object({ tur: z.enum(SAATLIK_MALIYET_TURLERI) });
+export const saatlikMaliyetSatiri = z.object({
+  anahtar: z.number().int(), kod: z.string().nullable(), ad: z.string(), aktif: z.boolean(), maliyet: maliyetSatiri.nullable(),
+});
+export type SaatlikMaliyetSatiri = z.output<typeof saatlikMaliyetSatiri>;
+export const saatlikMaliyetListesiCevabi = z.object({ satirlar: z.array(saatlikMaliyetSatiri) });
 export const maliyetCevabi = z.object({ maliyet: maliyetSatiri });
 export const maliyetListesiCevabi = listeCevapSemasi(maliyetSatiri);
 

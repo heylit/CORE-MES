@@ -50,8 +50,8 @@ describe('finans ekranı: adresler ve açılış', () => {
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
     // Sekmedeki sayı (kritik öneri) ad sayılmaz.
     const sekmeler = within(screen.getByRole('tablist', { name: 'Finans bölümleri' })).getAllByRole('tab').map((s) => s.textContent?.replace(/\d+ \(\d+\)$/, ''));
-    // Okuyan: Genel gider (finans.maliyet-oku) ve Ayarlar (finans.yonet) görünmez.
-    expect(sekmeler).toEqual(SEKMELER.filter((s) => !['genel-gider', 'ayarlar'].includes(s.anahtar)).map((s) => s.baslik));
+    // Okuyan: Genel gider ve Saatlik maliyetler (finans.maliyet-oku) ve Ayarlar (finans.yonet) görünmez.
+    expect(sekmeler).toEqual(SEKMELER.filter((s) => !['genel-gider', 'saatlik-maliyet', 'ayarlar'].includes(s.anahtar)).map((s) => s.baslik));
   });
 
   it('her bölüm menü maddesinin adresinde açılır; sekmeye tıklamak o adrese gider', async () => {
