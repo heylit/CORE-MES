@@ -54,7 +54,7 @@ function Rapor({ c, tablolar }: { c: PlanSagligiCevabi; tablolar: boolean }) {
           ozet={yuzdeMetni(uyum.yuzde)}
           altMetin={uyum.olculenAdim === 0 ? 'Planda yeri olan biten adım yok.'
             : `${String(uyum.olculenAdim)} biten adım; tezgâh dışı ${String(uyum.tezgahDisi)}, sıra dışı ${String(uyum.siraDisi)}, 8 saatten çok kayan ${String(uyum.kaymaDisi)}. Atölyenin plana uyma oranı.`} />
-        <SayiKarti baslik="Veri eksikleri" simge="alert" sayi={veri.eksikKonu} ton="uyari" yol="/plan/veri-sagligi"
+        <SayiKarti baslik="Veri eksikleri" simge="alert" sayi={veri.eksikKonu} ton="uyari" yol="/plan/analiz/veri-sagligi"
           altMetin={[
             'Planın varsayımla çalıştığı konu sayısı',
             veri.okunamayanKonu > 0 ? `${String(veri.okunamayanKonu)} konu okunamadı` : null,

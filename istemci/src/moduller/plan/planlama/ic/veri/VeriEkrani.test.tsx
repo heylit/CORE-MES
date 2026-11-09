@@ -15,7 +15,7 @@ const KAYIT = [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: CALI
 const veri = () => document.querySelector('[data-parca="veri"]');
 const cubuk = () => screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
 
-async function veriyeGir(k: Kullanici, adres = '/plan') {
+async function veriyeGir(k: Kullanici, adres = '/plan/plan') {
   sunucuKur(k, KAYIT);
   ac(adres);
   fireEvent.click(within(await cubuk()).getByRole('button', { name: 'Veri' }));
@@ -24,8 +24,8 @@ async function veriyeGir(k: Kullanici, adres = '/plan') {
 
 describe('Veri ve kısıtlar ekranı', () => {
   it('adres: ekran ve bölüm sorgudan okunur, tahta sorgusuz plan adresidir; bilinmeyen ekran tahtadır', () => {
-    expect(altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })).toBe('/plan?ekran=veri&bolum=kisitlar');
-    expect(altEkranAdresi({ ekran: 'tahta', bolum: 'x' })).toBe('/plan');
+    expect(altEkranAdresi({ ekran: 'veri', bolum: 'kisitlar' })).toBe('/plan/plan?ekran=veri&bolum=kisitlar');
+    expect(altEkranAdresi({ ekran: 'tahta', bolum: 'x' })).toBe('/plan/plan');
     expect(altEkranOku(new URLSearchParams('ekran=veri&bolum=denetim'))).toEqual({ ekran: 'veri', bolum: 'denetim' });
     expect(altEkranOku(new URLSearchParams('ekran=yok&bolum=denetim'))).toEqual({ ekran: 'tahta', bolum: null });
   });
@@ -36,7 +36,7 @@ describe('Veri ve kısıtlar ekranı', () => {
     expect(veri()?.getAttribute('data-bolum')).toBe('siparisler');
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Veri ve kısıtlar' })).getByRole('button', { name: /^Kısıtlar/ }));
     await waitFor(() => { expect(veri()?.getAttribute('data-bolum')).toBe('kisitlar'); });
-    expect(screen.getByTestId('adres').textContent).toBe('/plan');
+    expect(screen.getByTestId('adres').textContent).toBe('/plan/plan');
     fireEvent.click(within(await cubuk()).getByRole('button', { name: 'Plan' }));
     await waitFor(() => { expect(veri()).toBeNull(); });
     expect(within(await cubuk()).getByRole('button', { name: 'Veri' }).getAttribute('aria-current')).toBeNull();

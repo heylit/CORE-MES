@@ -6,4 +6,6 @@ import { PlanlamaYeni } from './PlanlamaYeni.tsx';
 export const PLANLAMA_ROTALARI: ModulRotasi[] = [
   { yol: KOK, ekran: PlanlamaYeni },
   { yol: `${KOK}/:gorunum`, ekran: PlanlamaYeni },
+  // Bir sayfanın sekmesi olan görünüm (gorunumler.ts AILELER): `/plan/ysiparis/terminler`.
+  { yol: `${KOK}/:gorunum/:sekme`, ekran: PlanlamaYeni },
 ];

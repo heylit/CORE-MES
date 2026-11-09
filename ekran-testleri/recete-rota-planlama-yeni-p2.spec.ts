@@ -30,13 +30,17 @@ test.describe('P2 siparişler, terminler, termin ve kâr', () => {
     });
   }
 
-  test('şeritten P2 görünümleri açılır', async ({ page, ac }) => {
+  // 2538 b: Terminler ile Termin ve kâr Siparişler sayfasının sekmesidir; menüde Siparişler seçili kalır.
+  test('şeritten Siparişler açılır, P2 görünümleri sayfanın sekmeleridir', async ({ page, ac }) => {
     await ac('/plan');
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
+    await serit.getByRole('link', { name: /^Siparişler/ }).click();
+    const sekmeler = page.getByRole('tablist', { name: 'Siparişler sekmeleri' });
     for (const [anahtar, ad] of GORUNUMLER) {
-      await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();
-      await expect(page).toHaveURL(new RegExp(`/plan/${anahtar}$`));
+      await sekmeler.getByRole('tab', { name: new RegExp(`^${ad}`) }).click();
+      await expect(page).toHaveURL(new RegExp(anahtar === 'ysiparis' ? '/plan/ysiparis$' : `/plan/ysiparis/${anahtar}$`));
       await expect(page.locator(`[data-parca="${anahtar}"]`)).toBeVisible();
+      await expect(serit.locator('[aria-current="page"]')).toHaveText(/^Siparişler/);
     }
   });
 

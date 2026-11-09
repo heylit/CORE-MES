@@ -27,7 +27,7 @@ describe('Planlama çalışmasının kaydı', () => {
   it('plan.yaz ve kayıt izni olan kişi değiştirir; ekran yeni çalışmayı görür, kayıt sürüm denetimiyle yalnız planlama anahtarına gider', async () => {
     const govdeler: unknown[] = [];
     sunucuKur(PLANLAMACI, KAYIT, { govdeler });
-    ac('/plan');
+    ac('/plan/plan');
     fireEvent.click(await screen.findByRole('button', { name: 'Değiştir' }, { timeout: 10000 }));
     expect(screen.getByTestId('surum').textContent).toBe('2');
     expect(await screen.findByText('Ağırlık değişti.')).toBeTruthy();
@@ -38,20 +38,20 @@ describe('Planlama çalışmasının kaydı', () => {
 
   it('plan.yaz işlemi olmayan kişide komut yoktur (reddedilen)', async () => {
     sunucuKur(MALIYETSIZ, KAYIT);
-    ac('/plan');
+    ac('/plan/plan');
     expect((await screen.findByTestId('komut', {}, { timeout: 10000 })).textContent).toBe('yok');
     expect(screen.getByTestId('surum').textContent).toBe('1');
   }, 20000);
 
   it('plan.yaz yoksa komut yoktur (925 a; Reçete ve Rota kayıt izni olsa da)', async () => {
     sunucuKur({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'plan.yaz') }, KAYIT);
-    ac('/plan');
+    ac('/plan/plan');
     expect((await screen.findByTestId('komut', {}, { timeout: 10000 })).textContent).toBe('yok');
   }, 20000);
 
   it('çalışma kaydı yoksa komut yoktur, çalışma null gelir', async () => {
     sunucuKur(YONETICI, []);
-    ac('/plan');
+    ac('/plan/plan');
     expect((await screen.findByTestId('komut', {}, { timeout: 10000 })).textContent).toBe('yok');
     expect(screen.getByTestId('surum').textContent).toBe('yok');
   }, 20000);

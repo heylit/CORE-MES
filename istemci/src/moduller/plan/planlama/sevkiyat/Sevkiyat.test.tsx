@@ -64,7 +64,7 @@ describe('P6 Sevkiyat', () => {
     expect(screen.queryByRole('region', { name: 'S2 · —' })).toBeNull();
     fireEvent.click(hucre);
     fireEvent.click(within(screen.getByRole('region', { name: 'S2 · —' })).getByRole('button', { name: /S2 çizelgede/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); }, { timeout: 10000 });
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
 

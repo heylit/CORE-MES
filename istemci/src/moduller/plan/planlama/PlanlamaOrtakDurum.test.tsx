@@ -23,7 +23,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Görünümler arası ölçek ve seçim', () => {
   it('açılışta Hafta ve boş seçim; ölçek kaymayı sıfırlar, seçim alan alan değişir, görünüm değişince korunur, yazma gitmez', async () => {
     const istekler = sunucuKur(YONETICI, [CALISMA_KAYDI]);
-    ac('/plan');
+    ac('/plan/plan');
     const olcek = await screen.findByTestId('olcek', {}, { timeout: 10000 });
     expect(olcek.textContent).toBe('hafta 0');
     expect(screen.getByTestId('secim').textContent).toBe('- - - -');
@@ -37,7 +37,7 @@ describe('Görünümler arası ölçek ve seçim', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tezgâh' }));
     expect(screen.getByTestId('secim').textContent).toBe('S1 - T1 12');
     fireEvent.click(screen.getByRole('button', { name: 'Atölyeye' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/studio'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); });
     expect(screen.getByTestId('olcek').textContent).toBe('ay 1');
     expect(screen.getByTestId('secim').textContent).toBe('S1 - T1 12');
     fireEvent.click(screen.getByRole('button', { name: 'Bugün' }));
