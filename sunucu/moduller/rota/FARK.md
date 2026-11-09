@@ -427,3 +427,14 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
 - VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
 - VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.
+## 2564-1: Süreler ölçüm özeti (kullanıcı kararı 2564 a, 1. madde)
+- `GET /rota/revizyonlar/:id/sureler` her adım ve tür için `ozet: { n, ortancaDk, enAzDk, enCokDk }` döner (ölçüm yoksa null). Pencere bekleyen ölçümünkiyle
+  aynıdır: son boşaltmadan sonraki elle ve terminal ölçümleri, görünümün makinesine göre (`olcumPenceresi`).
+- `POST /rota/adimlar/:id/gerceklesen-sure/kabul` gövdesine isteğe bağlı `deger: 'olcum' | 'ortanca'`. Ortancada değer sunucuda hesaplanır, `olcumId`
+  pencerenin son ölçümü olmalıdır (görünüm eskiyse 422); ölçüm 3'ten azsa `uyari` dolu, kabul yapılır. Gelmeyen değer eski davranıştır.
+- Ekranı 2487 bağlar ("Gerçekleşen (dk)" hücresi: ortanca, altında "n=5 · 3,8–5,1"; Kabul et ortancayı gönderir).
+- VARSAYIM: ortanca kabulünde kabul satırı (terminal ölçümü kabul edildiyse) son ölçümün iş emriyle ve ortanca değerle yazılır. Geri alma: ucuz.
+- VARSAYIM: kabul satırları ölçüm değildir, ortancaya girmez; pencere yürürlükte boşaltmayla kapanır (RT-79). Geri alma: ucuz.
+- VARSAYIM: ortanca 4 basamağa yuvarlanır (ölçüm sütunu gibi). Geri alma: ucuz.
+- Tablo, göç ve yetki değişmedi.
+

@@ -428,9 +428,12 @@ export const gerceklesenSureGovdesi = z.object({
 
 // Ölçümün kabulü: değer ürünün açık taslağına (yoksa yürürlükteki revizyondan açılan taslağa) teorik süre olarak yazılır. Makine boşsa
 // adımın kendi süresi, makine verilirse o makinenin (adımın kaynağı ya da adayı) süresi değişir; okunanId elle girişteki gibidir.
+// deger (2564 a): "ortanca" bu görünümdeki ölçüm penceresinin ortancasını yazar, olcumId pencerenin son ölçümü olmalıdır; gelmeyen ya da
+// "olcum" seçilen ölçümün kendisini yazar.
 export const gerceklesenKabulGovdesi = z.object({
   tur: gerceklesenTuru,
   olcumId: KIMLIK,
+  deger: z.enum(['olcum', 'ortanca']).optional(),
   makineId: KIMLIK.nullable(),
   okunanId: KIMLIK.nullable(),
 });
@@ -442,6 +445,8 @@ const olcumKaydi = z.object({
   yazan: adliKayit, zaman,
 });
 const turBasina = <T extends z.ZodTypeAny>(t: T) => z.object({ hazirlik: t, islem: t, degisim: t });
+// 2564 a: bekleyen ölçümle aynı penceredeki (son boşaltmadan sonraki) ölçümlerin sayısı, ortancası ve aralığı.
+const olcumOzetiSemasi = z.object({ n: z.number().int().positive(), ortancaDk: ondalikMetinSemasi, enAzDk: ondalikMetinSemasi, enCokDk: ondalikMetinSemasi });
 
 export const surelerCevabi = z.object({
   revizyon: revizyonBaglantisi.extend({ durum: revizyonDurumu, malzemeId: MALZEME_KIMLIGI }),
@@ -461,6 +466,7 @@ export const surelerCevabi = z.object({
     // Elle girişte ve kabulde okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
     sonKayit: turBasina(KIMLIK.nullable()),
     olcum: turBasina(olcumKaydi.nullable()),
+    ozet: turBasina(olcumOzetiSemasi.nullable()),
     // Planın kullandığı süre: teorik (169 c).
     etkin: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
@@ -471,7 +477,8 @@ export const surelerCevabi = z.object({
 });
 
 // Kabulün yazdığı taslak ve onun süreleri; plan yeni süreyi taslak yürürlüğe girince kullanır.
-// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa dolu (ROT-4); kabul yine yapılmıştır.
+// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa (ROT-4) ya da ortanca 3'ten az ölçümden kabul edildiyse (2564 a) dolu;
+// kabul yine yapılmıştır.
 export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi, uyari: z.string().nullable() });
 
 export type RevizyonDurumu = z.output<typeof revizyonDurumu>;

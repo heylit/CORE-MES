@@ -1570,6 +1570,56 @@ describe('rotalar (gerçek PostgreSQL)', () => {
           + `Onaylanırsa Rev ${harfYeni}'deki öteki değişiklikler geri alınabilir; farkı onaydan önce kontrol edin.`);
       });
 
+      test('2564 a: ölçüm özeti pencerenin sayısı, ortancası ve aralığıdır; ortanca kabulü ortancayı yazar, 3\'ten az ölçümde uyarır', async () => {
+        const urun = await mamulAc();
+        const rev = await yururlugeAlinmisRota(urun, [ayrikAdim()]);
+        let adim = (await sureler(rev)).adimlar[0]!;
+        assert.deepEqual(adim.ozet, { hazirlik: null, islem: null, degisim: null });
+        // Elle iki ölçüm: ortanca ortalamadır; az ölçümle kabul uyarır.
+        for (const sureDk of [4, 5]) {
+          const g = await yaz(adim.adimId, { tur: 'islem', sureDk, okunanId: adim.sonKayit.islem });
+          assert.equal(g.statusCode, 200, g.body);
+          adim = g.json<SurelerCevabi>().adimlar[0]!;
+        }
+        assert.deepEqual(adim.ozet.islem, { n: 2, ortancaDk: '4.5', enAzDk: '4', enCokDk: '5' });
+        // Boşaltma pencereyi kapatır; sonraki ölçümler yeni penceredir.
+        const bos = await yaz(adim.adimId, { tur: 'islem', sureDk: null, okunanId: adim.sonKayit.islem });
+        adim = bos.json<SurelerCevabi>().adimlar[0]!;
+        assert.equal(adim.ozet.islem, null);
+        for (const sureDk of [3.8, 9, 4, 5.1]) {
+          const g = await yaz(adim.adimId, { tur: 'islem', sureDk, okunanId: adim.sonKayit.islem });
+          assert.equal(g.statusCode, 200, g.body);
+          adim = g.json<SurelerCevabi>().adimlar[0]!;
+        }
+        assert.deepEqual(adim.ozet.islem, { n: 4, ortancaDk: '4.55', enAzDk: '3.8', enCokDk: '9' });
+        assert.equal(adim.olcum.islem?.sureDk, '5.1', 'bekleyen ölçüm son ölçümdür');
+        // Ortanca kabulünde ölçüm pencerenin son ölçümü olmalıdır.
+        const ilk = await vt().tx((db) => db.tek<{ id: number }>(
+          `SELECT min(id)::int AS id FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND sure_dk = 3.8`, [urun]));
+        const eski = await kabulEt(adim.adimId, { tur: 'islem', olcumId: ilk!.id, okunanId: adim.sonKayit.islem, deger: 'ortanca' });
+        assert.equal(eski.statusCode, 422, eski.body);
+        const k = await kabulEt(adim.adimId, { tur: 'islem', olcumId: adim.olcum.islem!.id, okunanId: adim.sonKayit.islem, deger: 'ortanca' });
+        assert.equal(k.statusCode, 200, k.body);
+        const c0 = k.json<GerceklesenKabulCevabi>();
+        assert.equal(c0.uyari, null, '4 ölçümde uyarı yok');
+        assert.deepEqual([c0.sureler.adimlar[0]?.etkin.birimSureDk, c0.sureler.adimlar[0]?.teorik.degisimDk], ['4.55', '0.5000'], 'birim ortancadır, değişim korunur');
+        // Hazırlıkta tek ölçüm: kabul yapılır, uyarı döner; gövdesiz değer seçilen ölçümü yazar (eski davranış).
+        const t = c0.sureler.adimlar[0]!;
+        const h = await yaz(t.adimId, { tur: 'hazirlik', sureDk: 25, okunanId: t.sonKayit.hazirlik });
+        const th = h.json<SurelerCevabi>().adimlar[0]!;
+        const hk = await kabulEt(th.adimId, { tur: 'hazirlik', olcumId: th.olcum.hazirlik!.id, okunanId: th.sonKayit.hazirlik, deger: 'ortanca' });
+        assert.equal(hk.statusCode, 200, hk.body);
+        assert.match(String(hk.json<GerceklesenKabulCevabi>().uyari), /Ortanca 1 ölçümden/);
+        assert.equal(hk.json<GerceklesenKabulCevabi>().sureler.adimlar[0]?.teorik.hazirlikDk, '25.00');
+        const t2 = hk.json<GerceklesenKabulCevabi>().sureler.adimlar[0]!;
+        const tek = await yaz(t2.adimId, { tur: 'islem', sureDk: 7, okunanId: t2.sonKayit.islem });
+        const t3 = tek.json<SurelerCevabi>().adimlar[0]!;
+        const dz = await kabulEt(t3.adimId, { tur: 'islem', olcumId: t3.olcum.islem!.id, okunanId: t3.sonKayit.islem });
+        assert.equal(dz.statusCode, 200, dz.body);
+        assert.equal(dz.json<GerceklesenKabulCevabi>().sureler.adimlar[0]?.etkin.birimSureDk, '7');
+        assert.equal((await kabulEt(t3.adimId, { tur: 'islem', olcumId: t3.olcum.islem!.id, okunanId: t3.sonKayit.islem, deger: 'x' })).statusCode, 400);
+      });
+
       test('RT-78: makineye özgü kabul adayın süresine yazar; yürürlükte yalnız o makinenin ölçümü boşalır, değişmeyen tür kalır', async () => {
         const urun = await mamulAc();
         const rev = await yururlugeAlinmisRota(urun, [yeniAdim({
