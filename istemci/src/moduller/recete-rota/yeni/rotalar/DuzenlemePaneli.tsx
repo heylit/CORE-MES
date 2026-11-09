@@ -12,6 +12,7 @@ import {
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
+import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
 import { BAG_ADI, Bolme, SayiAlani, SecimAlani, type RotaEkrani, type Secim, SURE_EN_COK } from './ortak.tsx';
 import { HizliEkle, MalzemeListesi } from './MalzemeSecici.tsx';
 import { SahibindeDuzenle } from '../kaynaklar/parcalar.tsx';
@@ -151,6 +152,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const liste = sirali(dz.adimlar(s.urunId));
   const a = liste.find((x) => x.id === s.adimId) ?? liste.find((x) => x.seq === s.seq && x.id.startsWith('o'));
   const sahip = h.malzeme.get(s.urunId);
+  const { data: numaralar } = useOpNumaralari(s.urunId, liste, a?.opNo === null);
   if (!a || !sahip) return <BosPanel r={r} />;
   const idx = liste.indexOf(a);
   const son = idx === liste.length - 1;
@@ -181,7 +183,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const yanEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, outs: [...x.outs, { itemId: m.id, qty: n, kind: 'yan' as const }] }), `${m.code} yan ürün eklendi`); };
   return (
     <>
-      <Baslik baslik={`${op?.abbr ?? 'Adım'} ${String(statuNo(a))}`} etiket={sahip.code} kapat={kapat} />
+      <Baslik baslik={a.opNo === null ? `${op?.abbr ?? 'Adım'} · yeni adım` : `${op?.abbr ?? 'Adım'} ${String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
+      {a.opNo === null && <YeniNumara siradaki={numaralar ? yeniAdimNumaralari(liste, numaralar.siradaki).get(a.id) : undefined} />}
       {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
       {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
       <UretimYeri r={r} s={s} a={a} duzen={duzen} />
@@ -579,11 +582,20 @@ function YeniRotaPaneli({ r, kapat }: { r: RotaEkrani; kapat: () => void }) {
   );
 }
 
+// RT-31: numara kayıtta verilir, kullanıcı yazmaz; silinmiş numara yeniden verilmez (2519 a).
+function YeniNumara({ siradaki }: { siradaki: number | undefined }) {
+  return (
+    <p className="tc-rr1-ipucu" data-parca="yeni-op-no">
+      <Simge ad="tag" boyut="k" /> {siradaki === undefined ? 'Numarayı sistem kayıtta verir.' : `Numarayı sistem verir: sıradaki OP ${String(siradaki)}.`}
+    </p>
+  );
+}
+
 function BosPanel({ r }: { r: RotaEkrani }) {
   return (
     <div className="tc-rr1-insp-empty">
       <h3>Düzenleme paneli</h3>
-      <p className="tc-rr1-ipucu">Şemada bir operasyon kutusuna ya da malzeme kartına, tabloda bir satırın OP numarasına dokun; ayrıntıları burada {r.yetki.rotaYaz ? 'düzenlersin' : 'görürsün'}.</p>
+      <p className="tc-rr1-ipucu">Şemada bir operasyon kutusuna ya da malzeme kartına, tabloda bir satıra dokun; ayrıntıları burada {r.yetki.rotaYaz ? 'düzenlersin' : 'görürsün'}.</p>
       <ul className="tc-rr1-liste">
         <li>Rota değişiklikleri taslak revizyona yazılır; üstteki şeritte görünür ve geri alınabilir.</li>
         <li>Onaylanana kadar plan, Kanban ve emirler yürürlükteki rotayı kullanır.</li>
