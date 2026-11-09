@@ -16,8 +16,9 @@ export const YENI_EKRAN_YOLLARI: readonly string[] = YENI_EKRANLAR.map((e) => e.
 // Eski ekranı kalkmış yeni ekranlar (1272 a, 1392 a, 1614): deneme satırı yoktur, ekran menünün kökünde (CNC ve Denetim
 // `/yeni` altında da) açılır; ikinci menünün maddelerini kendi sekmesi olarak çizer, kabuk şeridini çizmez.
 const ESKISI_KALKAN_YENI_EKRANLAR: readonly `/${string}`[] = ['/cnc-kurulum', '/finans', '/denetim-hazirlik', '/ik', '/ik-islemlerim'];
-// Kökün altında başka modülün ekranı olan madde (PDKS aktarımı Nizamiye'nindir): sekme çizmez, kabuğun şeridi orada durur.
-const KABUK_SERIDI_KALAN: readonly string[] = ['/ik/pdks'];
+// Kökün altında başka modülün ekranı olan madde (PDKS aktarımı Nizamiye'nin, vardiyalar ve tatiller Vardiya'nındır): o ekran sekme
+// çizmez, kabuğun şeridi orada durur; yoksa sayfada hiç ikinci menü kalmaz.
+const KABUK_SERIDI_KALAN: readonly string[] = ['/ik/pdks', '/ik/vardiya'];
 
 // Yeni ekran ikinci menünün maddelerini kendi sekmesi olarak çizer (soru 315 a); kabuk bu adreslerde şeridini çizmez,
 // yoksa iki şerit üst üste durur. Alt yollar (`/ik/izinler`) da sayılır.

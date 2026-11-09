@@ -64,6 +64,7 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     // İK ve İK İşlemlerim eski çerçevesi kalkınca kendi kökünde açılır (1614); PDKS aktarımı Nizamiye ekranıdır, şerit durur.
     for (const yol of ['/ik', '/ik/izinler', '/ik/calisan/emp_b', '/ik-islemlerim', '/ik-islemlerim/onaylar']) expect(yeniEkranAdresiMi(yol), yol).toBe(true);
     expect(yeniEkranAdresiMi('/ik/pdks')).toBe(false);
+    expect(yeniEkranAdresiMi('/ik/vardiya')).toBe(false);
     expect(yeniEkranAdresiMi('/iklim')).toBe(false);
     expect(yeniEkranAdresiMi('/recete-rota/plan')).toBe(false);
     expect(yeniEkranAdresiMi('/plan/studio')).toBe(false);
@@ -96,8 +97,11 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(within(menu as HTMLElement).getByRole('link', { name: /^Planlama atölyesi/ }).getAttribute('aria-current')).toBe('page');
   });
 
-  it('kökün altındaki başka modül ekranında (PDKS aktar) şerit durur', () => {
+  it('kökün altındaki başka modül ekranında (PDKS aktar, Vardiyalar ve tatiller) şerit durur', () => {
     adreste('/ik/pdks');
+    expect(serit('İnsan Kaynakları')).not.toBeNull();
+    cleanup();
+    adreste('/ik/vardiya');
     expect(serit('İnsan Kaynakları')).not.toBeNull();
   });
 });
