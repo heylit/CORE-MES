@@ -1461,6 +1461,36 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         assert.equal(adet?.n, 2);
       });
 
+      test('B-2485-3: çok katmanlı emirde alt düğüm adımının ölçümü alt parçanın rotasına, rotadaki op numarasıyla yazılır', async () => {
+        const ust = await mamulAc();
+        const alt = await mamulAc();
+        const altRev = await yururlugeAlinmisRota(alt, [ayrikAdim()]);
+        // Üst ürünün adımı alt parçayı tüketir; emir alt düğüm adımını ayrı numarayla taşır.
+        const ustRev = await yururlugeAlinmisRota(ust, [{ ...ayrikAdim(), bilesenler: [{ malzemeId: alt, miktar: 1, fireYuzde: 0 }] }]);
+        const altAdim = (await sureler(altRev)).adimlar[0]!;
+        const ustAdim = (await sureler(ustRev)).adimlar[0]!;
+        const e = await tamam<{ uretimEmriId: number; isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${ustRev}/emre-kopyala`, { projeId: denemeProjeId, adet: 10, teslim: null, cokKatmanli: true });
+        const simdi = Date.now();
+        const an = (dk: number) => new Date(simdi + dk * 60_000).toISOString();
+        const satirlar = await vt().tx(async (db) => {
+          const operator = await kullaniciYukle(db, operatorId);
+          const sirali = await db.sorgu<{ id: number; opNo: number }>('SELECT id, op_no AS "opNo" FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [e.uretimEmriId]);
+          for (const [i, ie] of sirali.entries()) {
+            const b = -100 + i * 40;
+            await emirAyar(db, operator!, e.uretimEmriId, an(b), ie.id);
+            await emirBaslat(db, operator!, e.uretimEmriId, undefined, an(b + 20), ie.id);
+            await emirSayim(db, operator!, e.uretimEmriId, { tur: 'saglam', adet: 10 }, { an: an(b + 30), isEmriId: ie.id });
+            await kararliSayimiSonuclandir(db, yoneticiId, e.uretimEmriId, 'onay');
+            await emirBitir(db, operator!, e.uretimEmriId, undefined, an(b + 31), ie.id);
+          }
+          return db.sorgu<{ malzemeId: number; opNo: number; tur: string }>(
+            'SELECT malzeme_id AS "malzemeId", op_no AS "opNo", tur FROM rota_gerceklesen_sure WHERE is_emri_id = ANY($1::int[]) ORDER BY malzeme_id, tur', [e.isEmriIdleri]);
+        });
+        assert.deepEqual(satirlar.map((x) => [x.malzemeId, x.opNo, x.tur]).sort(), [
+          [alt, altAdim.opNo, 'hazirlik'], [alt, altAdim.opNo, 'islem'], [ust, ustAdim.opNo, 'hazirlik'], [ust, ustAdim.opNo, 'islem'],
+        ].sort());
+      });
+
       test('RT-77, RT-78, RT-79: kabul yürürlükteki revizyondan taslak açar, teorik süreye yazar; plan yürürlüğe kadar eskiyle çalışır, yürürlükte ölçüm boşalır', async () => {
         const urun = await mamulAc();
         const rev = await yururlugeAlinmisRota(urun, [ayrikAdim()]);

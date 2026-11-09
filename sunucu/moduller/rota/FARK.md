@@ -416,3 +416,7 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Adım miktarı ardıl yolu kuralıyla hesaplanır: adım, çıktısını tüketen adımların fire yollarından en büyüğünü taşır; dallı rotada bir dalın
   firesi paralel dalı büyütmez. Kural emrin malzeme ihtiyacıyla (uretim-emirleri `malzemeIhtiyaci`) aynıdır; öncüller `oncullerCikar`dan.
   Rota ayrıntısındaki adım miktarı, teorik süre ve ürün ağacı ihtiyacı dallı rotada artık emirle aynı çıkar. Tek hatlı rota değişmez.
+## 2486-2: çok katmanlı emirde alt düğüm ölçümü (B-2485-3)
+- Emir bitince terminal ölçümü, çok katmanlı emirde (1476) alt düğüm adımı için alt parçanın rotasına ve rotadaki op numarasına
+  (`emirDugumleri`: malzemeNo, kaynakOpNo) yazılır. Önceden ölçüm yalnız kök ürünün rotasına ve kökün numaralarıyla yazılıyor,
+  alt düğüm adımları süzgeçte düşüyordu. Tek katmanlı emir değişmez.
