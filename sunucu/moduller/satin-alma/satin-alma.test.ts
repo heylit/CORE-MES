@@ -295,21 +295,26 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.operator, 'GET', '/satin-alma-taleplerim')).statusCode, 403);
   });
 
-  test('#375: talep edenin erişebildiği her uç teklif, fiyat, tedarikçi, karar ve ayar vermez; satın almanın teklifi korunur', async () => {
+  test('#375 SAT-53 b: talep edenin erişebildiği her uç teklif, fiyat, karar ve ayar vermez; teklif istenen tedarikçi görünür; satın almanın teklifi korunur', async () => {
     // Açma cevabı: talep eden yalnız kendi yazdığı geçmişi görür.
     const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     assert.doesNotMatch(JSON.stringify({ ...t, teklifler: undefined, teklifIstekleri: undefined, karar: undefined }), /Deneme Tedarik/);
     assert.deepEqual([t.teklifler, t.teklifIstekleri, t.karar], [[], [], null]);
-    // Satın alma teklif isterken teklifi girer; talep eden aynı durumda notunu düzeltir, cevapta teklif ve tedarikçi yoktur.
+    // Satın alma teklif isterken teklifi girer; talep eden aynı durumda notunu düzeltir. Cevapta teklif ve karar yoktur;
+    // teklif istenen tedarikçi (2429-ekran b) görünür ve talep eden onu gördüğü gibi geri gönderir.
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
     const sa = tamam<Talep>(await kaydet(c.sa, {
       ...govde(t), durum: 'teklif_isteniyor', teklifler: [a], teklifIstekleri: [{ firmaId: firmaA, gonderim: '2026-10-05', sonTarih: null }],
       hareketler: [...t.hareketler, { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: '1 tedarikçiden teklif istendi: Deneme Tedarik A' }],
     }));
-    const benim = tamam<Talep>(await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme düzeltme', surum: sa.surum }));
+    const benim = tamam<Talep>(await kaydet(c.talep, {
+      ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme düzeltme', teklifIstekleri: sa.teklifIstekleri, surum: sa.surum,
+    }));
     assert.equal(benim.notlar, 'Deneme düzeltme');
-    assert.deepEqual([benim.teklifler, benim.teklifIstekleri, benim.karar, benim.hareketler.map((h) => h.metin)], [[], [], null, ['Talep açıldı']]);
+    assert.deepEqual([benim.teklifler, benim.teklifIstekleri.map((q) => q.firmaId), benim.karar, benim.hareketler.map((h) => h.metin)], [[], [firmaA], null, ['Talep açıldı']]);
+    // Talep eden teklif istenen tedarikçiyi değiştiremez.
+    assert.equal((await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', teklifIstekleri: [], surum: benim.surum })).statusCode, 403);
     assert.doesNotMatch(JSON.stringify(benim.hareketler), /Deneme Tedarik/);
     const tam = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === t.id)!;
     assert.deepEqual([tam.teklifler.map((q) => q.id), tam.notlar], [[a.id], 'Deneme düzeltme']);
@@ -324,7 +329,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(Object.values(sayac).every((n) => n === null), true);
   });
 
-  test('Borç 39 K-058: kararlı talepte talep edenin her cevabı kararsız, teklifsiz ve tedarikçisizdir', async () => {
+  test('Borç 39 K-058 SAT-53 b: kararlı talepte talep edenin her cevabı kararsız ve teklifsizdir; seçilen tedarikçi görünür, fiyat ve gerekçe görünmez', async () => {
     const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
@@ -335,8 +340,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(kararli.karar?.teklifId, a.id);
     const benim = await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme kararlı', surum: kararli.surum });
     const g = tamam<Talep>(benim);
-    assert.deepEqual([g.notlar, g.karar, g.teklifler, g.senaryolar], ['Deneme kararlı', null, [], []]);
-    assert.doesNotMatch(benim.body, /Deneme Tedarik|"birimFiyat"|"firmaId"|Deneme gerekçe/);
+    assert.deepEqual([g.notlar, g.karar, g.teklifler, g.senaryolar, g.secilenTedarikciler], ['Deneme kararlı', null, [], [], [{ firmaId: firmaA, ad: 'Deneme Tedarik A' }]]);
+    assert.doesNotMatch(benim.body, /"birimFiyat"|"teklifId"|"tlToplam"|Deneme gerekçe/);
     const liste = await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500');
     assert.ok(tamam<TaleplerimCevabi>(liste).talepler.some((x) => x.id === t.id));
     assert.doesNotMatch(liste.body, SIZINTI);

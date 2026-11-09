@@ -265,10 +265,18 @@ export function dortGozSonucu(
 // fiyatsızdır (tedarikçi, fiyat, tutar, not yok). Teklif istekleri ve senaryolar görünmez.
 // #375: talep eden teklif, fiyat, tedarikçi ve kararı görmez (seçilen teklif dahil). Geçmiş metinleri ve onay notları tedarikçi adı
 // ve fiyat taşıyabildiği için talep eden yalnız kendi yazdığı geçmişi görür; onayın sonucu görünür, notu görünmez.
+// 2429-ekran b (kullanıcı 09.11): 375'in tedarikçi kısmı kalktı. Tedarikçi bilgisi (teklif istenen firmalar, kalem bağındaki fason
+// firması, kararın seçtiği tedarikçiler) talep edene açıktır; teklif, fiyat ve karar (tutar, gerekçe, sabit kur) kapalı kalır.
 export function talepEdenGorunumu<T extends TalepYazimi>(t: T, kisiId: number): T {
+  const secilenIdler = t.karar === null ? [] : t.karar.mod === 'tek' ? [t.karar.teklifId] : t.karar.bolunme.map((b) => b.teklifId);
+  const secilenTedarikciler = [...new Set(secilenIdler)].flatMap((id) => {
+    const q = t.teklifler.find((x) => x.id === id);
+    return q === undefined ? [] : [{ firmaId: q.firmaId, ad: q.tedarikciAdi }];
+  });
   return {
     ...t,
-    teklifler: [], teklifIstekleri: [], senaryolar: [], karar: null,
+    secilenTedarikciler,
+    teklifler: [], senaryolar: [], karar: null,
     onaylar: t.onaylar.map((o) => ({ ...o, notlar: '' })),
     hareketler: t.hareketler.filter((h) => h.kisiId === kisiId),
   };

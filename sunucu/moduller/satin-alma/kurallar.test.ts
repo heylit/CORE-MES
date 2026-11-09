@@ -89,7 +89,7 @@ test('2398 a: ayar açıkken talebi açan ya da talep eden onaylayamaz; reddedeb
   assert.equal(dortGozSonucu(1, 1, true, [1], 'ret'), 'red');
 });
 
-test('SAT-53 #375: talep edenin görünümünde teklif, istek, senaryo ve karar yok (seçilen dahil); geçmişte yalnız kendi yazdığı, onayda not yok', () => {
+test('SAT-53 #375: talep edenin görünümünde teklif, senaryo ve karar yok (seçilen dahil), teklif istekleri var (2429-ekran b); geçmişte yalnız kendi yazdığı, onayda not yok', () => {
   const q = (id: string) => ({ id, tedarikciAdi: 'Firma ' + id, firmaId: 1, fiyatlar: [{ kalemId: 'k', birimFiyat: '5' }] }) as unknown as Talep['teklifler'][number];
   const h = (id: string, kisiId: number, metin: string) => ({ id, zaman: '', kisiId, kisiAdi: null, metin });
   const t = { ...T, teklifler: [q('a'), q('b'), q('c')], teklifIstekleri: [{ firmaId: 1, gonderim: '2026-10-01', sonTarih: null }],
@@ -97,7 +97,11 @@ test('SAT-53 #375: talep edenin görünümünde teklif, istek, senaryo ve karar 
     onaylar: [{ id: 'o', zaman: '', kisiId: 9, kisiAdi: 'Müdür', sonuc: 'onay', dortGozsuz: false, notlar: 'Firma b 5 TL uygun' }],
     hareketler: [h('h1', 5, 'Talep açıldı'), h('h2', 7, 'Firma a teklifi silindi')] } as unknown as Talep;
   const g = talepEdenGorunumu(t, 5);
-  assert.deepEqual([g.teklifler, g.teklifIstekleri, g.senaryolar, g.karar], [[], [], [], null]);
+  assert.deepEqual([g.teklifler, g.teklifIstekleri, g.senaryolar, g.karar], [[], t.teklifIstekleri, [], null]);
+  // SAT-53 b: kararın seçtiği tedarikçi görünür (bölünmüş kararda her biri bir kez); fiyat ve teklif taşımaz.
+  assert.deepEqual(g.secilenTedarikciler, [{ firmaId: 1, ad: 'Firma b' }]);
+  assert.deepEqual(talepEdenGorunumu({ ...t, karar: { ...t.karar!, mod: 'tek', teklifId: 'c', bolunme: [] } }, 5).secilenTedarikciler, [{ firmaId: 1, ad: 'Firma c' }]);
+  assert.deepEqual(talepEdenGorunumu({ ...t, karar: null }, 5).secilenTedarikciler, []);
   assert.deepEqual([g.onaylar.map((o) => [o.sonuc, o.notlar]), g.hareketler.map((x) => x.metin)], [[['onay', '']], ['Talep açıldı']]);
   assert.equal(tamGorurMu([ISLEM.talepAc]), false);
   assert.equal(tamGorurMu([ISLEM.onayla]), true);
@@ -521,4 +525,12 @@ test('2424 c: dış operasyon gecikmesi son dönüşe ve adet ağırlıklı öl�
   // 6 adet 2 gün, 2 adet (1 hurda dahil) 4 gün, kalan 2 adet bugün 8 gün: (12 + 8 + 16) / 10 = 3.6
   assert.equal(agirlikliGecikme('2026-11-01', [{ gun: '2026-11-03', adet: 6, hurda: 0 }, { gun: '2026-11-05', adet: 1, hurda: 1 }], 2, '2026-11-09'), 3.6);
   assert.equal(agirlikliGecikme('2026-11-05', [{ gun: '2026-11-03', adet: 4, hurda: 0 }], 0, '2026-11-09'), 0);
+});
+
+test('2429-ekran b: talep eden tedarikçi bilgisini (teklif istekleri, fason firması) görür; teklif ve karar yine kapalı', () => {
+  const fason = { isEmriId: 7, uretimEmriId: 3, emirNo: 'UE-1', opNo: 30, adim: 'Kaplama', firmaId: 4, firmaAdi: 'Deneme Fason' };
+  const kalemBaglari = [{ kalemId: T.id, uygulanan: { no: 5, kod: 'K-1', ad: 'Deneme mil' }, fason }];
+  const teklifIstekleri = [{ firmaId: 4, gonderim: '2026-11-01', sonTarih: null }];
+  const g = talepEdenGorunumu({ ...T, kalemBaglari, teklifIstekleri }, 5);
+  assert.deepEqual([g.kalemBaglari, g.teklifIstekleri, g.teklifler, g.karar], [kalemBaglari, teklifIstekleri, [], null]);
 });

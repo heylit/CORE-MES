@@ -420,6 +420,8 @@ export const emirIptalEt = isEmri.adimliIptal;
 // Stok (UE12-UE14, K-080).
 export const emirNolari = isEmri.emirNolari;
 export const isEmriOzeti = isEmri.isEmriOzeti;
+// Toplu sürüm (2431): satın alma kalem bağları gibi listeler iş emri başına sorgu atmasın.
+export const isEmriOzetleri = isEmri.isEmriOzetleri;
 // Plan, elle sırası olan ama artık planlanmayan iş emrinin silindiğini ya da fasona alındığını buradan anlar.
 export { isEmriVarliklari } from './sorgular.ts';
 // 1476-E: çok katmanlı emirde iş emrinin düğümü, düğüm malzemesi, rotadaki op numarası (kaynak_op_no) ve emrin patlatması; yetki denetlemez.
