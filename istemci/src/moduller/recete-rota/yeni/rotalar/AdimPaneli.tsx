@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { kucuk, type Operasyon } from './kurallar.ts';
+import { eklenecekNumara, useOpNumaralari } from './opNumaralari.ts';
 import { renkSinifi, tercihOku, tercihYaz, type RotaEkrani } from './ortak.tsx';
 import { SURUKLE_TURU, surukleOp } from './AkisSemasi.tsx';
 
@@ -79,13 +80,17 @@ export function OperasyonKutuculari({ r, sec, aramaEtiketi = 'Operasyon ara' }: 
 }
 
 // Şemanın solundaki operasyon paleti: kutucuğa dokununca (ya da Enter) "Eklenecek yer"e eklenir; şemaya sürüklenince bırakılan yere.
-export function AdimPaneli({ r, ekle, yer }: { r: RotaEkrani; ekle: (op: Operasyon) => void; yer: string | null }) {
+export function AdimPaneli({ r, ekle, yer, urunId }: { r: RotaEkrani; ekle: (op: Operasyon) => void; yer: string | null; urunId: string | null }) {
+  const adimlar = urunId ? r.duzen.adimlar(urunId) : [];
+  const { data: numaralar } = useOpNumaralari(urunId ?? '', adimlar, urunId !== null);
   return (
     <aside className="tc-rr1-adimpanel" aria-label="Operasyon paleti">
       <h3>Operasyon paleti</h3>
       {yer && (
         <p className="tc-rr1-hedef" aria-live="polite">
-          <span>Dokununca eklenecek yer</span><b>{yer}</b><small>Şemada bir adım seçerek değiştir.</small>
+          <span>Dokununca eklenecek yer</span><b>{yer}</b>
+          {numaralar && <small data-parca="eklenecek-op">Yeni adım OP {eklenecekNumara(adimlar, numaralar.siradaki)} alır; numarayı sistem verir.</small>}
+          <small>Şemada bir adım seçerek değiştir.</small>
         </p>
       )}
       <p className="tc-rr1-ipucu">Operasyonu şemaya sürükle: adımın üstüne ya da altındaki şeride bırakınca ardına, rota başlığına bırakınca başa girer.</p>
