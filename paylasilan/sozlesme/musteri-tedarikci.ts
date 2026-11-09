@@ -213,6 +213,7 @@ export const HIZMET_PUANI_SINIRI = 100;
 // öteki bileşenlere oranla dağılır (sıfır uydurulmaz).
 export const KARNE_BILESENLERI = ['lot', 'ppm', 'zamaninda', 'tam', 'teklif', 'satinAlma', 'kalite'] as const;
 export const KARNE_BILESEN_GRUPLARI = { lot: 'kalite', ppm: 'kalite', zamaninda: 'teslim', tam: 'teslim', teklif: 'teslim', satinAlma: 'elle', kalite: 'elle' } as const;
+export const OTOMATIK_AGIRLIK_SIFIR = 'Otomatik bileşenlerin (lot, PPM, zamanında, tam, teklif) toplam ağırlığı 0 olamaz.';
 export type KarneBilesenGrubu = (typeof KARNE_BILESEN_GRUPLARI)[keyof typeof KARNE_BILESEN_GRUPLARI];
 // Elle puan türü: satın alma değerlendirmesi (satin-alma.yaz) ve Kalite değerlendirmesi / tedarikçi denetimi (kalite-merkezi.onayla, 2456-3 a).
 export const ELLE_PUAN_TURLERI = ['satin-alma', 'kalite'] as const;
@@ -347,7 +348,11 @@ export const karneAgirlikGovdesi = z.object({
   surum: z.number().int().min(1),
   agirliklar: karneAgirliklari,
   gerekce: z.string().trim().min(1, 'Gerekçe yazın.').max(500, 'En çok 500 karakter.'),
-}).refine((g) => KARNE_BILESENLERI.reduce((t, b) => t + g.agirliklar[b], 0) === 100, { message: 'Ağırlıkların toplamı 100 olmalı.', path: ['agirliklar'] });
+}).refine((g) => KARNE_BILESENLERI.reduce((t, b) => t + g.agirliklar[b], 0) === 100, { message: 'Ağırlıkların toplamı 100 olmalı.', path: ['agirliklar'] })
+  // Otomatik toplamı 0 olan sürüm bütün karne puanlarını sessizce null yapar (elle puan tek başına puan vermez; 2474).
+  .refine((g) => KARNE_BILESENLERI.some((b) => KARNE_BILESEN_GRUPLARI[b] !== 'elle' && g.agirliklar[b] > 0), {
+    message: OTOMATIK_AGIRLIK_SIFIR, path: ['agirliklar'],
+  });
 export type KarneAgirlikGovdesi = z.input<typeof karneAgirlikGovdesi>;
 
 // Değerlendirme matrisi: aktif tedarikçi ve "ikisi" türündeki firmaların karnesi; öncekiPuan aynı ağırlıklarla 91 gün önceki kayan karne.

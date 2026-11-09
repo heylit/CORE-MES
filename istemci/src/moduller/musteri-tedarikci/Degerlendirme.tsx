@@ -19,6 +19,8 @@ import { useKorumaliEkleme } from './yazma.ts';
 import './musteri-tedarikci.css';
 
 // Sözleşmedeki KARNE_BILESENLERI sırası (istemci sözleşmeyi değer olarak ithal etmez).
+// Sözleşmedeki OTOMATIK_AGIRLIK_SIFIR ile aynı metin.
+const OTOMATIK_SIFIR = 'Otomatik bileşenlerin (lot, PPM, zamanında, tam, teklif) toplam ağırlığı 0 olamaz.';
 const BILESENLER: readonly KarneBileseni[] = ['lot', 'ppm', 'zamaninda', 'tam', 'teklif', 'satinAlma', 'kalite'];
 const KISA_AD: Record<KarneBileseni, string> = {
   lot: 'Lot kabul', ppm: 'PPM', zamaninda: 'Zamanında', tam: 'Tam teslim', teklif: 'Teklife yanıt', satinAlma: 'Satın alma', kalite: 'Kalite',
@@ -135,6 +137,7 @@ function AgirlikFormu({ gecerli, kapat }: { gecerli: KarneAgirlikSurumu; kapat: 
       const hatalar: AlanHatalari = {};
       for (const b of BILESENLER) if (!/^\d{1,3}$/.test(d[b]) || Number(d[b]) > 100) hatalar[b] = '0-100 arası tam sayı.';
       if (Object.keys(hatalar).length === 0 && BILESENLER.reduce((t, b) => t + Number(d[b]), 0) !== 100) hatalar['toplam'] = 'Ağırlıkların toplamı 100 olmalı.';
+      else if (BILESENLER.every((b) => BILESEN_GRUBU[b] === 'elle' || Number(d[b]) === 0)) hatalar['toplam'] = OTOMATIK_SIFIR;
       if (d.gerekce.trim() === '') hatalar['gerekce'] = 'Gerekçe yazın.';
       return hatalar;
     },
@@ -152,13 +155,14 @@ function AgirlikFormu({ gecerli, kapat }: { gecerli: KarneAgirlikSurumu; kapat: 
     },
   });
   const toplam = BILESENLER.reduce((t, b) => t + (Number(form.degerler[b]) || 0), 0);
+  const otoSifir = BILESENLER.every((b) => BILESEN_GRUBU[b] === 'elle' || (Number(form.degerler[b]) || 0) === 0);
   return (
     <FormPenceresi baslik="Ağırlıkları düzenle" kimlik="tc-mt-agirlik-form" kapat={kapat} form={form}>
       {BILESENLER.map((b) => (
         <Girdi key={b} etiket={`${BILESEN_ADI[b]} (%)`} inputMode="numeric" maxLength={3} {...form.alan(b)} />
       ))}
-      <p id="tc-mt-agirlik-toplam" className={toplam === 100 ? 'tc-mt-yok' : 'tc-mt-hata'} aria-live="polite">
-        Toplam: %{toplam}{form.hata('toplam') !== undefined && toplam !== 100 && ` · ${form.hata('toplam')}`}
+      <p id="tc-mt-agirlik-toplam" className={toplam === 100 && !otoSifir ? 'tc-mt-yok' : 'tc-mt-hata'} aria-live="polite">
+        Toplam: %{toplam}{form.hata('toplam') !== undefined && (toplam !== 100 || otoSifir) && ` · ${form.hata('toplam')}`}
       </p>
       <Girdi etiket="Gerekçe" required autoComplete="off" maxLength={500} {...form.alan('gerekce')} />
       <p className="tc-mt-yok">Kayıt yeni hesap sürümü açar; kaydedilmiş yıllık karneler kendi sürümüyle kalır.</p>

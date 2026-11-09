@@ -166,8 +166,8 @@ test('MT-32: hiçbir bileşenin ağırlığı yoksa puan null; sıfır ağırlı
   const sifir: KarneAgirliklari = { lot: 0, ppm: 0, zamaninda: 0, tam: 0, teklif: 0, satinAlma: 0, kalite: 100 };
   const bos = bilesenPuani({ lot: 90, ppm: null, zamaninda: 80, tam: null, teklif: null, satinAlma: null, kalite: null }, sifir);
   assert.equal(bos.puan, null);
-  const tek = bilesenPuani({ lot: 90, ppm: null, zamaninda: 80, tam: null, teklif: null, satinAlma: null, kalite: 40 }, sifir);
-  assert.equal(tek.puan, 40);
+  const tek = bilesenPuani({ lot: 90, ppm: null, zamaninda: 80, tam: null, teklif: null, satinAlma: null, kalite: 40 }, { ...sifir, zamaninda: 50, kalite: 50 });
+  assert.equal(tek.puan, 60);
   assert.equal(tek.bilesenler.find((b) => b.anahtar === 'lot')!.etkinAgirlik, 0);
 });
 
@@ -178,6 +178,15 @@ test('MT-32: otomatik bileşenlerin hiçbirinde veri yoksa elle puanlar karne pu
   assert.deepEqual(k.gruplar, { kalite: null, teslim: null, elle: 87.5 });
   assert.equal(k.bilesenler.find((b) => b.anahtar === 'satinAlma')!.deger, 100);
   assert.equal(k.bilesenler.find((b) => b.anahtar === 'satinAlma')!.etkinAgirlik, null);
+});
+
+test('MT-32: otomatik ağırlıkların hepsi 0 ise veri olsa da elle puanlar karne puanı vermez', () => {
+  const elle: KarneAgirliklari = { lot: 0, ppm: 0, zamaninda: 0, tam: 0, teklif: 0, satinAlma: 50, kalite: 50 };
+  const k = karneHesapla(sayilar(), elle, 3);
+  assert.equal(k.puan, null);
+  assert.equal(k.sinif, null);
+  assert.equal(k.bilesenler.find((b) => b.anahtar === 'kalite')!.etkinAgirlik, null);
+  assert.equal(karneHesapla(sayilar(), { ...elle, satinAlma: 49, lot: 1 }, 3).puan !== null, true);
 });
 
 test('MT-33: ağırlık değişikliği okunan sürüm geçerli değilse reddedilir', () => {

@@ -251,6 +251,7 @@ describe('tedarikçi karnesi (gerçek PostgreSQL, 1259 c, 1260 a)', () => {
     }
     assert.equal((await agirlikDegistir('yonetici', { surum: 2, agirliklar: { ...yeni, lot: 31 }, gerekce: 'Deneme' })).durum, 400);
     assert.equal((await agirlikDegistir('yonetici', { surum: 2, agirliklar: yeni, gerekce: ' ' })).durum, 400);
+    assert.equal((await agirlikDegistir('yonetici', { surum: 2, agirliklar: { lot: 0, ppm: 0, zamaninda: 0, tam: 0, teklif: 0, satinAlma: 50, kalite: 50 }, gerekce: 'Deneme' })).durum, 400);
     assert.equal((await agirliklar('okuyan')).govde.gecmis.length, 1);
     const d = await agirlikDegistir('yonetici', { surum: 2, agirliklar: yeni, gerekce: 'Lot kabul ağırlığı artırıldı' });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));

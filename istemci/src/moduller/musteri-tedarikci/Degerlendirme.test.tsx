@@ -109,7 +109,15 @@ describe('Tedarikçi değerlendirme matrisi (2456)', () => {
     expect((await screen.findByText(/^Toplam: %105/)).textContent).toBe('Toplam: %105 · Ağırlıkların toplamı 100 olmalı.');
     expect(screen.getByRole('textbox', { name: /^Lot kabul/ }).getAttribute('aria-invalid')).not.toBe('true');
     expect(yazilan).toHaveLength(0);
-    fireEvent.change(screen.getByRole('textbox', { name: /^PPM/ }), { target: { value: '10' } });
+    for (const ad of [/^Lot kabul/, /^PPM/, /^Zamanında/, /^Tam teslim/, /^Teklife/]) fireEvent.change(screen.getByRole('textbox', { name: ad }), { target: { value: '0' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /^Satın alma/ }), { target: { value: '50' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /^Kalite/ }), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    expect((await screen.findByText(/^Toplam: %100/)).textContent).toContain('toplam ağırlığı 0 olamaz');
+    expect(yazilan).toHaveLength(0);
+    for (const [ad, v] of [[/^Lot kabul/, '30'], [/^PPM/, '10'], [/^Zamanında/, '25'], [/^Tam teslim/, '10'], [/^Teklife/, '5'], [/^Satın alma/, '10'], [/^Kalite/, '10']] as const) {
+      fireEvent.change(screen.getByRole('textbox', { name: ad }), { target: { value: v } });
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => expect(yazilan).toHaveLength(1));
     expect(yazilan[0]).toEqual({
