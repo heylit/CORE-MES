@@ -445,3 +445,8 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Tablo, göç, yetki değişmedi.
 - Fason dönüşü ve GKK kalite kararıyla biten adım adım bitti olayı vermez (2520-5); emir bitti toplayıcısı onları dener, rota fasonu zaten atlar.
 
+
+## 2605: önizlemede emir hedefi ana sayı (kullanıcı kararı 2605 a)
+- `GET /rota/revizyonlar/:id/patlatma-onizleme` her adımda `hedef: { kokBasina, siparis }` döner: emrin o adımdaki hedef adedi (adet x dal çarpanı,
+  firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
+- Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.

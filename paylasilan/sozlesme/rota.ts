@@ -601,6 +601,9 @@ export const patlatmaOnizlemeCevabi = z.object({
       yer: z.string().nullable(),
       // 2557: sayılar emir açılış kuralıyladır (uretim-emirleri malzemeIhtiyaci). Adet adıma giren parçadır: dal çarpanı ve adımla
       // ardıllarının fire payı dahil; çıkan, adımın kendi firesinden sonra kalan sağlam parçadır. Emir açılamıyorsa (engel) sayılar null.
+      // 2605 a: hedef emrin bu adımdaki hedef adedidir (adet x dal çarpanı, firesiz; uretim-emirleri dalBasiAdedi); ekranın ana sayısı.
+      // adet fire payıyla giren parçadır (alt satır).
+      hedef: onizlemeMiktari.nullable(),
       adet: onizlemeMiktari.nullable(),
       cikanAdet: onizlemeMiktari.nullable(),
       // Son adımın çıktısı düğümün ürünüdür (kökte mamul, alt düğümde tüketen adıma girer); ötekiler ara haldir.
