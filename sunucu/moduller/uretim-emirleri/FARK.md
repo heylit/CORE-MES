@@ -258,6 +258,7 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - 2520-5 (2497, B-2499-12): terminalde çalışan iş emri bitince (`emirBitir`, emirle biten son adım dahil) aynı işlemde `adimBittiBildir({ isEmriId, uretimEmriId, kisiId })`; `disari.ts` `adimBittiDinle` verir. Fason dönüşü, GKK kalite kararı, adımsız eski emir ve katılımdan ayrılma olay vermez.
 - 2520-6 (B-2499-4, 2493 sorusu): örnek veri emirleri rotanın adım girenlerini (bileşen) emre kopyalar; önceden kopyalanmadığı için örnek emirler Malzeme ihtiyacı'nda görünmüyor, sayım sarf ve depo isteği açmıyordu.
 - 2520-7 (B-2500-6, 2487 isteği): `GET /adimli-emirler/acilis-secenekleri` cevabına `rotasizAcik` ("Rotasız üretim emri" ayarı, `uretim-emirleri.rotasiz-emir`) eklendi. Uç yetkisi değişmedi (açma işlemlerinden biri); ayarın kendisi okunur, yazılmaz.
+- 2520-8: `isEmirleriniYenile` `surum` zorunlu (tipte ve sunucuda); sürümsüz çağrı 400 DOGRULAMA, adımlar değişmez. Tek çağıran rota `emreUygula` 2532'den beri her çağrıda okuduğu sürümü verir. Yetki değişmedi.
 
 ## 2530-s: bölünmemiş emre ek adım (kullanıcı kararı 2530 a)
 - Rework, tamir ve ek adım artık bölünmemiş emre de konur ve çıkarılır (`ekAdimIhlali`, `ekAdimKaldirIhlali`; `kolOrtak` kökü reddetmez).

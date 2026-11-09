@@ -18,6 +18,8 @@ import { isEmirleriDegistiDinle, isEmirleriniYenile, uretimEmriAc } from './disa
 import type { IsEmriGirdisi } from './disari.ts';
 import type { IsEmirleriDegistiOlayi } from './emir-olaylari.ts';
 
+const surumu = async (db: Db, id: number): Promise<number> => (await db.tek<{ surum: number }>('SELECT surum FROM uretim_emri WHERE id = $1', [id]))!.surum;
+
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
 
@@ -128,10 +130,10 @@ describe('uretim-emirleri iş emirleri değişti olayı (2327-1 a; gerçek Postg
     const a = await istasyon();
     const e = await ac(4, [a.makine, a.makine]);
     const yeni = [{ ...adim(1, a.makine), birimSureDk: '2.5' }, adim(2, a.makine), adim(3, a.makine)];
-    const ilk = await olaylarla(() => tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), e.id, { kaynakRotaRevizyonId: rev, isEmirleri: yeni })));
+    const ilk = await olaylarla(() => tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), e.id, { surum: await surumu(db, e.id), kaynakRotaRevizyonId: rev, isEmirleri: yeni })));
     assert.ok(ilk.sonuc.degisenler.length > 0, JSON.stringify(ilk.sonuc));
     assert.deepEqual(ilk.olaylar, [{ uretimEmriId: e.id, kisiId: kim('planlama_proje').id }]);
-    const ikinci = await olaylarla(() => tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), e.id, { kaynakRotaRevizyonId: rev, isEmirleri: yeni })));
+    const ikinci = await olaylarla(() => tx(async (db) => isEmirleriniYenile(db, kim('planlama_proje'), e.id, { surum: await surumu(db, e.id), kaynakRotaRevizyonId: rev, isEmirleri: yeni })));
     assert.deepEqual(ikinci.olaylar, [], JSON.stringify(ikinci.sonuc));
   });
 
