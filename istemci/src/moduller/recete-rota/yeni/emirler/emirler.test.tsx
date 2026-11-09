@@ -458,8 +458,8 @@ describe('R3 Stok', () => {
     });
     rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
-    await within(b).findByRole('table', { name: 'Statülü stok' });
-    expect(within(b).getByRole('table', { name: 'Statülü stok' }).textContent).toContain('Torna çıktısı');
+    const tablo = await within(b).findByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo.textContent).toContain('Torna çıktısı'); });
     fireEvent.change(within(b).getByLabelText('Miktar'), { target: { value: '2' } });
     fireEvent.click(within(b).getByRole('button', { name: 'Statü atlat' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/statu-degistir')).toBe(true));
@@ -476,10 +476,68 @@ describe('R3 Stok', () => {
     const b = await bolum('Stok');
     fireEvent.change(await within(b).findByLabelText('Sayılan miktar'), { target: { value: '3' } });
     expect(within(b).queryByRole('button', { name: 'Statü atlat' })).toBeNull();
+    // 2553 b/4: notsuz sayım gitmez.
+    fireEvent.click(within(b).getByRole('button', { name: 'Sayımı yaz' }));
+    expect((await screen.findAllByText('Sayım notu girin: farkın nedeni hareketle birlikte yazılır.')).length).toBeGreaterThan(0);
+    expect(istekler.some((i) => i.yol === '/stok/sayim')).toBe(false);
+    fireEvent.change(within(b).getByLabelText(/Sayım notu/), { target: { value: 'Raf sayımı' } });
     fireEvent.click(within(b).getByRole('button', { name: 'Sayımı yaz' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sayim')?.govde).toEqual({
-      konumId: 3, satirlar: [{ malzemeId: 11, partiId: null, beklenenMiktar: '4', sayilanMiktar: '3' }],
+      konumId: 3, satirlar: [{ malzemeId: 11, partiId: null, beklenenMiktar: '4', sayilanMiktar: '3' }], aciklama: 'Raf sayımı',
     }));
+  });
+
+  it('2553: statülü stok süreçteki malzemeyle ürün ve OP üzerinden tek satırdır (Depoda, Emirlere göre, Fark); sahipsiz statülü bağlantısı stok okuyana görünür', async () => {
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    const adim = (opNo: number) => ({
+      id: `o${String(opNo)}`, seq: opNo, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 30,
+      proc: 2, chg: null, cycle: 5, dep: 'bagimli' as const, depQty: null, rejectPct: 0, split: 'tek' as const, minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { 11: { base: null, steps: [adim(10), adim(20)] } };
+    const o = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: [{ ...o, status: 'uretimde' }], opStatus: { [`${o.id}|root|1`]: 'tamam' }, opProg: { [`${o.id}|root|2`]: 3 } };
+    sunucuKur(YONETICI, {
+      durum: d,
+      yazmalar: {
+        'GET /recete-rota/statuler': () => json(200, { statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim: '11-o10', ad: 'OP 10 Tornalama' }] }),
+        'GET /stok/malzemeler/11': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '4' }], bakiyeler: [] }),
+        'GET /stok/malzemeler/12': () => json(200, { statuKirilimi: [{ statuId: null, miktar: '0' }, { statuId: 7, miktar: '6' }], bakiyeler: [] }),
+      },
+    });
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    // Stok okununca bölüm formlarıyla yeniden kurulur; tablo her denemede yeniden aranır.
+    const tablo = () => within(b).getByRole('table', { name: 'Statülü stok ve süreçteki malzeme' });
+    await waitFor(() => { expect(tablo().textContent).toContain('OP 10 Tornalama'); });
+    const t = tablo();
+    const satir = [...t.querySelectorAll('tbody tr')].find((x) => x.textContent.includes('OP 10 Tornalama'))!;
+    // Emir 10 adet; OP 10 bitti, OP 20 3 sağlam bildirdi: 7 bekliyor. Depoda 6: fark -1.
+    expect([...satir.querySelectorAll('td')].map((x) => x.textContent)).toEqual(['HM-0001 Örnek çubuk', 'OP 10 Tornalama MM-0001', '6', '7', '-1', 'adet', 'UE-0001: 7']);
+    expect(within(b).getByRole('link', { name: 'Sahipsiz statülü stok' }).getAttribute('href')).toBe('/stok/sahipsiz-statulu');
+  });
+
+  it('B-2482-16 ve 2553: Stok değeri bilinmeyen maliyeti sıfır saymaz, sayısını yazar; Minimum kartı Malzeme ihtiyacına gider; stok okumayan bağlantıyı görmez', async () => {
+    sunucuKur(OKUYAN);
+    rrAc('/recete-rota/stock');
+    const b = await bolum('Stok');
+    expect(within(b).queryByRole('link', { name: 'Sahipsiz statülü stok' })).toBeNull();
+    expect((await within(b).findByRole('link', { name: /Minimumun altında/ })).getAttribute('href')).toBe('/plan/mrp');
+    cleanup();
+    vi.unstubAllGlobals();
+
+    const d = ornekDurum();
+    d.items = [...(d.items ?? []), { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 5, min: null,
+      aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true }];
+    d.maliyet = { malzeme: { '11': { birimMaliyet: '10', paraBirimi: 'TRY', surum: 1 } }, yazabilir: false } as unknown as typeof d.maliyet;
+    sunucuKur(YONETICI, { durum: d });
+    rrAc('/recete-rota/stock');
+    const kart = (await within(await bolum('Stok')).findByText('Stok değeri')).closest('[class]')!.parentElement!;
+    // MM-0001: 4 adet x 10 = 40; HM-0001'in maliyeti yok, sıfır sayılmaz.
+    await waitFor(() => { expect(kart.textContent).toContain('2 kalem, 1 kalemin değeri bilinmiyor'); });
+    expect(kart.textContent).toContain('40');
   });
 });
 

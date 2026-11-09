@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimCarpani, adimDali, dalBilgileri, dalEtiketi, dalHatasi, kolaEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, istasyonYaz, kartBasligi,
+  adimCarpani, adimDali, dalBilgileri, dalEtiketi, dalHatasi, kolaEkle, adimGuncelle, adimSil, adimSuresi, adimSurukle, agacKur, akisKarti, bagimlilikYaz, degisimOrani, fasonMu, islemSuresiBos, istasyonYaz, kartBasligi,
   operasyonYaz, sirali, sonrakiBagimlilik, statuNo, sureYaz, tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, SecimAlani, type RotaEkrani, SURE_EN_COK } from './ortak.tsx';
@@ -106,6 +106,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
     const op = h.op.get(a.opId);
     const ist = a.stationId ? h.istasyon.get(a.stationId) : undefined;
     const fason = fasonMu(a);
+    // 2555 a: süresi boş adım tabloda da görünür (önceden yalnız panelde ve onaya gönderirken).
+    const sureBos = islemSuresiBos(a);
     // Dal adımı bir mamul için çarpan kadar parça işler (1257 a); sunucunun teorik süresiyle aynı.
     const t = adimSuresi(a, q * adimCarpani(a), ist, r.gunSaati(ist?.wcId ?? null));
     const son = j === liste.length - 1;
@@ -161,7 +163,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
 
     const orta = (
       <div className="tc-rr1-fcol tc-rr1-fmid">
-        <div className={`tc-rr1-fstep ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}`}>
+        <div className={`tc-rr1-fstep ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}${sureBos ? ' tc-rr1-fstep-uyari' : ''}`}>
           <div className="tc-rr1-fshd">
             {duzen && (
               <span className="tc-rr1-ftutamak" draggable title="Sürükleyerek taşı"
@@ -219,6 +221,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                   <SayiAlani etiket="İşlem dk" enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
                   <SayiAlani etiket="Değişim dk" enCok={SURE_EN_COK} deger={a.chg} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'chg', v), 'Değişim süresi değişti'); }} />
                 </div>
+                {sureBos && <p className="tc-rr1-warnbox" data-parca="sure-bos">İşlem süresi girilmedi: plan bu adımı süresiz sayar, onaya gönderilemez.</p>}
                 <small className="tc-rr1-fsoran">Değişim {oran === null ? '—' : `%${sayi(Math.round(oran * 10) / 10)}`}</small>
               </>
             )}

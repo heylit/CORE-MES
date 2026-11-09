@@ -7,6 +7,6 @@ export const STOK_KOMUTLARI: Readonly<Record<string, KomutTanimi>> = {
   'stok-emir-tamamla': { yol: '/stok/uretim-emirleri/:id/tamamla', parametre: ['id'], alanlar: ['miktar', 'aciklama'], tekrarKorumali: true },
   // Stok: emrin çıktısından bir kısmının üretim alanına girişi.
   'stok-uretim-girisi': { yol: '/stok/uretim-girisi', alanlar: ['uretimEmriId', 'malzemeId', 'miktar', 'konumId'], tekrarKorumali: true },
-  // Stok: konumdaki sayım düzeltmesi (prototipin "eldeki stok" elle değişikliği).
-  'stok-sayim': { yol: '/stok/sayim', alanlar: ['konumId', 'satirlar'], tekrarKorumali: true },
+  // Stok: konumdaki sayım düzeltmesi (prototipin "eldeki stok" elle değişikliği). Not zorunludur (2553 b/4); kuralı sahibin ucundadır.
+  'stok-sayim': { yol: '/stok/sayim', alanlar: ['konumId', 'satirlar', 'aciklama'], tekrarKorumali: true },
 };

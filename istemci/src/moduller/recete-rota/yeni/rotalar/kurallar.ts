@@ -305,8 +305,8 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
 }
 
 // Fason olmayan her adımda işlem süresi zorunludur; hazırlık ve değişim 0 olabilir.
-export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null =>
-  sirali(adimlar).find((s) => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0)) ?? null;
+export const islemSuresiBos = (s: Adim): boolean => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0);
+export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null => sirali(adimlar).find(islemSuresiBos) ?? null;
 
 // Fire payı olan adımdan önceki her adım ve girenleri fazladan işlenir.
 export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
