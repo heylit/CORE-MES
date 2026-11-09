@@ -569,8 +569,12 @@ export type PatlatmaCevabi = z.output<typeof patlatmaCevabi>;
 // Patlamış rota önizlemesi (1476-F): çok katmanlı emrin bugünkü yürürlükteki rotalarla nasıl açılacağı; yazma yoktur, patlatma kaydı açılmaz.
 // Patlatma kurulamazsa (döngü, katman sınırı) `ileti` dolu, düğümler boştur. Kurulur ama çok katmanlı emir açılamazsa (kesirli ya da 1000 üstü
 // kök başına adet, uzun dal adı) `engel` doludur; düğümler yine gösterilir. Emir op numarası alt düğümlerde açılıştakiyle aynıdır.
+// 2557: önizleme sipariş miktarıyla da hesaplanır (boş: 1); her sayı kökün 1 adedi için ve bu miktar için verilir.
+export const patlatmaOnizlemeSorgusu = z.object({ miktar: z.coerce.number<number>().int().positive().max(1_000_000).prefault(1) });
+const onizlemeMiktari = z.object({ kokBasina: ondalikMetinSemasi, siparis: ondalikMetinSemasi });
 export const patlatmaOnizlemeCevabi = z.object({
   kokRevizyon: revizyonBaglantisi,
+  miktar: ondalikMetinSemasi,
   ileti: z.string().nullable(),
   engel: z.string().nullable(),
   dugumler: z.array(z.object({
@@ -588,8 +592,21 @@ export const patlatmaOnizlemeCevabi = z.object({
       kaynakOpNo: KIMLIK, emirOpNo: KIMLIK, ad: z.string(),
       // Adımın yeri: istasyon adı, istasyonsuz kaynağın adı ya da fason firması; atanmamışsa null.
       yer: z.string().nullable(),
+      // 2557: sayılar emir açılış kuralıyladır (uretim-emirleri malzemeIhtiyaci). Adet adıma giren parçadır: dal çarpanı ve adımla
+      // ardıllarının fire payı dahil; çıkan, adımın kendi firesinden sonra kalan sağlam parçadır. Emir açılamıyorsa (engel) sayılar null.
+      adet: onizlemeMiktari.nullable(),
+      cikanAdet: onizlemeMiktari.nullable(),
+      // Son adımın çıktısı düğümün ürünüdür (kökte mamul, alt düğümde tüketen adıma girer); ötekiler ara haldir.
+      cikti: z.enum(['ara-hal', 'urun']),
+      // Girenler rotadaki bileşenlerdir; altDugum dolu olan alt düğümün ürünüdür, stoktan gelmez. miktar ve fireYuzde rotadaki gibi bir adet içindir.
+      girenler: z.array(z.object({
+        malzeme: urunOzeti, altDugum: DUGUM_YOLU.nullable(), miktar: ondalikMetinSemasi, fireYuzde: ondalikMetinSemasi, toplam: onizlemeMiktari.nullable(),
+      })),
+      yanUrunler: z.array(z.object({ malzeme: urunOzeti, miktar: ondalikMetinSemasi, toplam: onizlemeMiktari.nullable() })),
     })),
   })),
+  // Stoktan gelen girenlerin malzeme başına toplamı (alt düğüm ürünleri hariç); engelde ya da ileti varken boş.
+  hammaddeToplami: z.array(z.object({ malzeme: urunOzeti, toplam: onizlemeMiktari })),
 });
 export type PatlatmaOnizlemeCevabi = z.output<typeof patlatmaOnizlemeCevabi>;
 export type EmreKopyalaGovdesi = z.input<typeof emreKopyalaGovdesi>;
