@@ -115,21 +115,95 @@ export const calismaKaynagi = (m: string): CalismaKaynagi | null => {
   return r && id > 0 ? { tur: r[1] ? 'kisi' : 'makine', id } : null;
 };
 const kaynakKodu = (k: CalismaKaynagi): string => `${k.tur}:${String(k.id)}`;
-export interface CalismaIsi { k: string; anahtar: string; kaynak: CalismaKaynagi; S: number; C: number }
+// 2524 b: parca elle bölünen işin payıdır (1..n, adedi çalışmanın S.elleBol'undan); yoksa iş bütündür.
+export interface CalismaIsi { k: string; anahtar: string; kaynak: CalismaKaynagi; S: number; C: number; parca?: { no: number; adet: number; motorBolmesi?: true } }
+// 2524 b: çalışmanın elle bölmeleri (S.elleBol, motor girdi.betik): iş kimliği -> paylar (adet, tezgâh). İki ya da daha çok pay elle bölmedir,
+// tek pay elle birleştirmedir. Adedi pozitif tamsayı olmayan ya da tezgâhı metin olmayan pay kaydı bütünüyle atlanır.
+export type ElleBolme = readonly { adet: number; m: string }[];
+export function calismaElleBolmeleri(kayit: unknown): Map<string, ElleBolme> {
+  const l = nesne(nesne(kayit)?.['elleBol']);
+  const sonuc = new Map<string, ElleBolme>();
+  for (const [k, v] of Object.entries(l ?? {})) {
+    if (!Array.isArray(v) || v.length === 0) continue;
+    const paylar = v.map(nesne);
+    if (paylar.every((p) => p !== null && Number.isInteger(p['adet']) && (p['adet'] as number) > 0 && typeof p['m'] === 'string')) {
+      sonuc.set(k, paylar.map((p) => ({ adet: p!['adet'] as number, m: p!['m'] as string })));
+    }
+  }
+  return sonuc;
+}
+// Motorun payı: işin kimliği ve ~n eki (motor engine.betik, ikinci pay ~2).
+const payOf = (id: string): { kok: string; no: number } | null => {
+  const r = /^(.+)~(\d+)$/.exec(id);
+  return r ? { kok: r[1]!, no: Number(r[2]) } : null;
+};
+// B-2482-14: pay adetleri motorun kuralıyla (motor engine.betik elleBolCoz) adımın adedine uyar: toplam tutarsa olduğu gibi, tutmazsa orana
+// göre (her pay en az 1, kalan sırayla dağıtılır) ve uyarıyla; adım adedi pay sayısından azsa elle bölme uygulanmaz. Toplam adım adedini aşmaz.
+export function elleBolmeAdetleri(paylar: readonly number[], adimAdedi: number): { adetler: number[] | null; duzeltildi: boolean } {
+  const top = paylar.reduce((t, x) => t + x, 0);
+  if (paylar.length < 2 || paylar.some((x) => !(x > 0)) || !Number.isInteger(adimAdedi) || adimAdedi < paylar.length) return { adetler: null, duzeltildi: false };
+  if (top === adimAdedi) return { adetler: [...paylar], duzeltildi: false };
+  const a = paylar.map((x) => Math.max(1, Math.floor((adimAdedi * x) / top)));
+  let k = adimAdedi - a.reduce((t, v) => t + v, 0);
+  for (let i = 0; k !== 0 && i < a.length * adimAdedi; i++) {
+    const j = i % a.length;
+    if (k > 0) { a[j]! += 1; k--; } else if (a[j]! > 1) { a[j]! -= 1; k++; }
+  }
+  return { adetler: a, duzeltildi: true };
+}
+const opMetni = (anahtar: string): string => { const b = anahtar.lastIndexOf('|'); return `${anahtar.slice(0, b)} OP ${anahtar.slice(b + 1)}`; };
+// 2524 b, B-2482-13, B-2482-14: işin motorun kurduğu payları (kimlik, kimlik~2, ...) parça olarak yazılır; pay adetleri toplamı her zaman adım
+// adedidir. Paylar elle bölmeyle (S.elleBol) aynı sayıda ve aynı tezgâhlardaysa motor elle bölmeyi uygulamıştır: adetler elle bölmeden,
+// adım adedine uyarlanarak (elleBolmeAdetleri, motorla aynı kural). Değilse bölme motorundur: adım adedi paylara eşit bölünür (motor engine.betik,
+// kalan ilk paylara) ve parça motorBolmesi taşır. Motor elle bölmeyi uygulamadıysa (iş bütün ya da başka paylarla) uyarı yazılır. Adım adedi
+// bilinmeyen ya da pay sayısından az olan bölünmüş iş yazılamaz; payı bitmiş ya da fasonda olan bölünmüş işe dokunulmaz.
 export function calismaIsleri(
   ops: readonly { id: string; m: string; S: number; C: number; bitti: boolean }[], kimlik: Readonly<Record<string, string>>, planlanacak: ReadonlySet<string>,
-): { yazilacak: CalismaIsi[]; yazilamaz: string[]; dokunulmaz: Set<string> } {
+  elleBol: ReadonlyMap<string, ElleBolme> = new Map(), adimAdetleri: ReadonlyMap<string, number> = new Map(),
+): { yazilacak: CalismaIsi[]; yazilamaz: string[]; dokunulmaz: Set<string>; uyarilar: string[] } {
   const yazilacak: CalismaIsi[] = [];
   const yazilamaz = new Set<string>();
   const dokunulmaz = new Set<string>();
+  const uyarilar: string[] = [];
+  const isler = new Map<string, { no: number; r: (typeof ops)[number] }[]>();
   for (const r of ops) {
-    const anahtar = kimlik[r.id];
-    if (r.bitti || r.m.startsWith('@')) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
-    const kaynak = calismaKaynagi(r.m);
-    if (kaynak === null || anahtar === undefined || !planlanacak.has(anahtar)) { yazilamaz.add(anahtar ?? r.id); continue; }
-    yazilacak.push({ k: r.id, anahtar, kaynak, S: r.S, C: r.C });
+    const pay = payOf(r.id);
+    const kok = pay?.kok ?? r.id;
+    isler.set(kok, [...(isler.get(kok) ?? []), { no: pay?.no ?? 1, r }]);
   }
-  return { yazilacak, yazilamaz: [...yazilamaz], dokunulmaz };
+  for (const [kok, ham] of isler) {
+    const paylar = [...ham].sort((x, y) => x.no - y.no);
+    const anahtar = kimlik[kok];
+    const elle = elleBol.get(kok);
+    const elleli = elle !== undefined && elle.length >= 2;
+    if (paylar.some(({ r }) => r.bitti || r.m.startsWith('@'))) { if (anahtar !== undefined) dokunulmaz.add(anahtar); continue; }
+    const kaynaklar = paylar.map(({ r }) => calismaKaynagi(r.m));
+    if (kaynaklar.some((k) => k === null) || anahtar === undefined || !planlanacak.has(anahtar) || paylar.some((p, n) => p.no !== n + 1)) { yazilamaz.add(anahtar ?? kok); continue; }
+    const yaz = (n: number, parca?: CalismaIsi['parca']) => {
+      const { r } = paylar[n]!;
+      yazilacak.push({ k: kok, anahtar, kaynak: kaynaklar[n]!, S: r.S, C: r.C, ...(parca ? { parca } : {}) });
+    };
+    if (paylar.length === 1) {
+      if (elleli) uyarilar.push(`${opMetni(anahtar)}: motor elle bölmeyi uygulamadı; iş bütün yazıldı.`);
+      yaz(0);
+      continue;
+    }
+    const adet = adimAdetleri.get(anahtar);
+    if (adet === undefined || !Number.isInteger(adet) || adet < paylar.length) { yazilamaz.add(anahtar); continue; }
+    const elleUygulandi = elleli && elle.length === paylar.length && paylar.every(({ r }, n) => r.m === elle[n]!.m);
+    if (elleUygulandi) {
+      const top = elle.reduce((t, x) => t + x.adet, 0);
+      const e = elleBolmeAdetleri(elle.map((x) => x.adet), adet);
+      if (e.adetler === null) { yazilamaz.add(anahtar); continue; }
+      if (e.duzeltildi) uyarilar.push(`${opMetni(anahtar)}: adım adedi ${String(adet)}, elle bölmenin toplamı ${String(top)}; paylar orana göre ${e.adetler.join(' + ')} yapıldı.`);
+      paylar.forEach((p, n) => { yaz(n, { no: p.no, adet: e.adetler![n]! }); });
+      continue;
+    }
+    if (elleli) uyarilar.push(`${opMetni(anahtar)}: motor elle bölmeyi uygulamadı; kendi bölmesi (${String(paylar.length)} pay) yazıldı.`);
+    const N = paylar.length;
+    paylar.forEach((p, n) => { yaz(n, { no: p.no, adet: Math.floor(adet / N) + (n < adet % N ? 1 : 0), motorBolmesi: true }); });
+  }
+  return { yazilacak, yazilamaz: [...yazilamaz], dokunulmaz, uyarilar };
 }
 
 export type FarkTuru = 'yeni' | 'tezgah' | 'sira' | 'eksik';
@@ -189,7 +263,8 @@ export function calismaKuyruklari(baslangic: string, isler: readonly CalismaIsi[
     g.l.push(i);
     gruplar.set(kaynakKodu(i.kaynak), g);
   }
-  const sabitler = new Set(isler.filter((i) => kilitler.has(i.k)).map((i) => i.anahtar));
+  // Elle bölünen işin payı sabitlenmez (kilit yalnız bütün işte; plan modülü parçayı kilitlemez).
+  const sabitler = new Set(isler.filter((i) => kilitler.has(i.k) && !i.parca).map((i) => i.anahtar));
   const kuyruklar = [...gruplar.values()].map(({ kaynak, l }) => {
     const sirali = [...l].sort((p, q) => p.S - q.S);
     return {
@@ -199,7 +274,7 @@ export function calismaKuyruklari(baslangic: string, isler: readonly CalismaIsi[
         const b = i.anahtar.lastIndexOf('|');
         return {
           emirNo: i.anahtar.slice(0, b), opNo: Number(i.anahtar.slice(b + 1)), dondurulmus: false, elle: true, elleKaynak: true,
-          onizleme: { baslangic: planAni(baslangic, i.S), bitis: planAni(baslangic, i.C) },
+          onizleme: { baslangic: planAni(baslangic, i.S), bitis: planAni(baslangic, i.C) }, ...(i.parca ? { parca: i.parca } : {}),
         };
       }),
     };
@@ -233,16 +308,22 @@ export function calismaEkMesaisi(baslangic: string, l: readonly { m: string; gun
 // çalışmadır, kopyası döner. Saatler kaydın kendi ekseninde (D.meta.baslangic). Yalnız çalışmada işlemi olan ve bitmemiş iş yazılır; işlemin
 // ayar başlangıcı (Su) ve ilk parti (lot1) aynı kayar. Taslakta kilitli iş çalışmada kilitlenir, kilitsizin kilidi kalkar. Plan "güncel
 // değil" işaretlenir (dataVer boş): sayfa yeniden çözer.
-export interface TaslakYeri { k: string; anahtar: string; kaynak: CalismaKaynagi; baslangic: string; bitis: string; kilitli: boolean }
+// 2524 b: parcalar taslaktaki bölünmüş işin parçalarıdır; elle bölme (motorBolmesi değil) çalışmaya S.elleBol olarak döner.
+export interface TaslakYeri {
+  k: string; anahtar: string; kaynak: CalismaKaynagi; baslangic: string; bitis: string; kilitli: boolean;
+  parcalar?: readonly { adet: number; kaynak: CalismaKaynagi; motorBolmesi: boolean }[];
+}
 const calismaKimligi = (k: CalismaKaynagi): string => (k.tur === 'kisi' ? `kisi-${String(k.id)}` : String(k.id));
 export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]): { deger: Record<string, unknown>; yazilan: number; kilitli: number; atlanan: string[] } | null {
   const S = JSON.parse(JSON.stringify(deger ?? null)) as {
     D?: { meta?: { baslangic?: unknown } }; plan?: { ops?: Record<string, Record<string, unknown>>; dataVer?: unknown } | null; locks?: Record<string, unknown>;
+    elleBol?: Record<string, unknown>;
   } | null;
   const eksen = S?.D?.meta?.baslangic;
   if (S === null || typeof eksen !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(eksen) || !S.plan?.ops) return null;
   const ops = S.plan.ops;
   const locks: Record<string, unknown> = { ...(S.locks ?? {}) };
+  const elleBol: Record<string, unknown> = { ...(S.elleBol ?? {}) };
   const atlanan: string[] = [];
   let yazilan = 0;
   let kilitli = 0;
@@ -259,8 +340,14 @@ export function taslaktanCalismaya(deger: unknown, yerler: readonly TaslakYeri[]
     Object.assign(r, { m: calismaKimligi(y.kaynak), S: S0, C });
     yazilan++;
     if (y.kilitli) { locks[y.k] = { m: calismaKimligi(y.kaynak), S: S0 }; kilitli++; } else delete locks[y.k];
+    // 2524 b: taslakta elle bölünen iş çalışmada elle bölünür (pay adedi ve tezgâhı); taslakta bütün olan işin çalışmadaki elle bölmesi kalkar.
+    // Motorun bölmesi çalışmaya yazılmaz, motor yeniden kurar. Tek paylı kayıt (elle birleştirme) taslakta bütün iş için kalır.
+    const p = y.parcalar ?? [];
+    if (p.length >= 2 && p.every((x) => !x.motorBolmesi)) elleBol[y.k] = p.map((x) => ({ adet: x.adet, m: calismaKimligi(x.kaynak) }));
+    else if (p.length === 0 && Array.isArray(elleBol[y.k]) && (elleBol[y.k] as unknown[]).length >= 2) delete elleBol[y.k];
   }
   S.locks = locks;
+  if (Object.keys(elleBol).length > 0 || S.elleBol !== undefined) S.elleBol = elleBol;
   S.plan.dataVer = null;
   return { deger: S as Record<string, unknown>, yazilan, kilitli, atlanan };
 }

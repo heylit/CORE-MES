@@ -157,6 +157,26 @@ describe('plan (gerçek PostgreSQL): elle sıra, elle makine ve bölme', () => {
     await vt().tx((db) => db.sorgu('DELETE FROM plan_yerlesim_parcasi WHERE is_emri_id = $1 AND parca_no = 3', [op10]));
   });
 
+  // B-2482-13: çalışmadan gelen motor bölmesinin payları parça olarak yazılır ve motorBolmesi taşır; elle bölme sayılmaz.
+  test('motor bölmesinin parçası motorBolmesi işaretiyle yazılır, elle parça işaretsiz (B-2482-13)', async () => {
+    const merkez = { id: await tamGunMerkezi('RT-MBP', 'Deneme motor payı merkezi') };
+    const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-MBP', ad: 'Deneme motor payı', isMerkeziId: merkez.id })).id;
+    const m: number[] = [];
+    for (const kod of ['RT-MBP1', 'RT-MBP2']) m.push((await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod, ad: `Deneme ${kod}`, istasyonId: ist })).id);
+    const [op10] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: m[0]! } })], 10);
+    const canli = await planOku();
+    const y0 = canli.yerlesimler.find((x) => x.isEmriId === op10) ?? canli.yerlesmemis.find((x) => x.isEmriId === op10)!;
+    const baslangic = new Date(Date.now() + 3600_000).toISOString();
+    const parca = (n: number, adet: number, motor: boolean) => ({ kaynak: { tur: 'makine', id: m[n - 1]! }, baslangic,
+      isler: [{ emirNo: y0.emirNo, opNo: y0.opNo, dondurulmus: false, elle: false, parca: { no: n, adet, ...(motor ? { motorBolmesi: true } : {}) } }] });
+    const isaret = async (taslak: number) => (await vt().tx((db) => db.sorgu<{ no: number; motor: boolean }>(
+      'SELECT parca_no AS no, motor_bolmesi AS motor FROM plan_senaryo_yerlesim_parcasi WHERE senaryo_id = $1 AND is_emri_id = $2 ORDER BY parca_no', [taslak, op10]))).map((x) => x.motor);
+    const motorlu = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [parca(1, 5, true), parca(2, 5, true)] });
+    assert.deepEqual(await isaret(motorlu.taslak), [true, true]);
+    const elle = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', { kuyruklar: [parca(1, 4, false), parca(2, 6, false)] });
+    assert.deepEqual(await isaret(elle.taslak), [false, false]);
+  });
+
   test('elle bölme kalıcıdır (kart #1572, 671 a): bölünmüş iş ortak motorda sabittir, makineleri kapansa da parçalarıyla yerinde kalır; yersiz bölme canlıda durur, parçalarıyla yeniden yazılır', async () => {
     const merkez = { id: await tamGunMerkezi('RT-BK', 'Deneme kalıcı bölme merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-BK', ad: 'Deneme kalıcı bölme', isMerkeziId: merkez.id })).id;
