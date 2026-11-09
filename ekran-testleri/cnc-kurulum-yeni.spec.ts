@@ -45,7 +45,7 @@ const kayitYazan = test.extend<{ kayitSirasi: undefined }>({
   }, { auto: true }],
 });
 
-const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'G-Kod Sim.', 'Takım Ömrü'];
+const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Takım Ömrü'];
 
 test.describe('iskelet', () => {
   test('görünüm şeridi tam, her görünüm adresiyle açılır, sayfa yatay taşmaz', async ({ page, ac }) => {
@@ -60,7 +60,7 @@ test.describe('iskelet', () => {
 
   // Görünüm alanı kendi kaydırıcısıyla kaydığı için belge taşmaz; kabuğun ve görünüm alanının ayrıca kendi eninde kaldığı ölçülür.
   test('kabuk ve görünüm alanı ekran eninde kalır', async ({ page, ac }) => {
-    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['ana-sayfa', 'kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
       const olcu = await page.evaluate(() => {
@@ -122,41 +122,25 @@ test.describe('P1 Kurulum ve Hazırlık', () => {
   }
 });
 
-test.describe('P3 Ham Malzeme ve G-Kod', () => {
+test.describe('P3 Ham Malzeme', () => {
   const tasmaz = async (page: Page) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
   };
 
-  kayitYazan('Ham Malzeme: örnek parça hesaplanır, G-Kod simülasyonuna ham olarak geçer', async ({ page, ac }) => {
+  kayitYazan('Ham Malzeme: örnek parça hesaplanır', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/hammadde');
     await expect(page.getByText('Model yok', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Örnek parça' }).click();
     await expect(page.getByText('Örnek: flanşlı mil (Ø80 × 120)').first()).toBeVisible();
     await expect(page.getByText(/Hammadde ölçüsü · Yuvarlak çubuk/)).toBeVisible();
-    await page.getByRole('button', { name: 'G-Kod simülasyonunda kullan' }).click();
-    await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/simulasyon$/);
-    await expect(page.getByRole('radio', { name: /Ham Malzeme sayfasından/ })).toBeChecked();
-  });
-
-  kayitYazan('G-Kod Sim.: örnek program yüklenir, takım değişimine gidilir, oynatılır', async ({ page, ac }) => {
-    await ac('/cnc-kurulum/yeni/simulasyon');
-    await page.getByRole('button', { name: 'Örnek ISO' }).click();
-    await expect(page.getByText('O1001 (ISO)').first()).toBeVisible();
-    await page.getByRole('button', { name: /^2\. değişim/ }).click();
-    await expect(page.getByText(/^T3 · /).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Oynat / duraklat (Boşluk)' }).click();
-    await page.keyboard.press('Space');
-    await expect(page.getByRole('slider', { name: 'Program zamanı' })).not.toHaveAttribute('aria-valuenow', '0');
+    await expect(page.getByRole('button', { name: 'CSV' })).toBeVisible();
   });
 
   // Projeler her testi 360, 768 ve 1280 genişlikte koşar.
-  kayitYazan('iki görünüm de yatay taşmaz', async ({ page, ac }) => {
+  kayitYazan('yatay taşmaz', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/hammadde');
     await page.getByRole('button', { name: 'Örnek parça' }).click();
     await expect(page.getByRole('button', { name: 'CSV' })).toBeVisible();
-    await tasmaz(page);
-    await ac('/cnc-kurulum/yeni/simulasyon');
-    await expect(page.getByRole('button', { name: 'Program yükle' })).toBeVisible();
     await tasmaz(page);
   });
 });
@@ -286,7 +270,7 @@ test.describe('3B sahne', () => {
   // 3B açılamayan bilgisayarda (yazılım çizicisi, WebGL yok) görünümler sahnesiz çalışır: tuval gizli, görünüm ve gezinme tam.
   test('3B yokken görünümler sahnesiz açılır ve gezilir', async ({ page, ac, ag }) => {
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'kapat'; });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-gorunum'), yol).toBeVisible();
       // 3D/2B seçimi modülün tek anahtarıdır (1920): üst şeritte bir kez durur, görünümlerin içinde yoktur.
@@ -303,8 +287,8 @@ test.describe('3B sahne', () => {
     await serit.getByRole('tab', { name: 'Kurulum' }).click();
     await expect(page).toHaveURL(/\/cnc-kurulum\/yeni\/kurulum$/);
     await expect(page.locator('.tc-cy-gorunum')).toBeVisible();
-    // 3D açılamayan bilgisayarda Ham Malzeme ve G-Kod 2B çizilir; 3D seçilemez (1271).
-    for (const yol of ['hammadde', 'simulasyon']) {
+    // 3D açılamayan bilgisayarda Ham Malzeme 2B çizilir; 3D seçilemez (1271).
+    for (const yol of ['hammadde']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       await expect(page.locator('.tc-cy-sahne-2b'), yol).toBeVisible();
       await expect(page.getByRole('group', { name: 'Çizim modu' }).getByRole('button', { name: '3D' }), yol).toBeDisabled();

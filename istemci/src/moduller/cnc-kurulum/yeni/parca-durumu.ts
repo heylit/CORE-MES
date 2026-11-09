@@ -1,7 +1,7 @@
 import { Quaternion } from 'three';
 import type { Geometri, Govde, HamSonuc } from './hesap/ham.ts';
 
-// Yüklenen parça (prototipin `S`inin veri kısmı). Ham Malzeme, G-Kod ve Hazırlık aynı parçayı görür. Sahne, ağ ve
+// Yüklenen parça (prototipin `S`inin veri kısmı). Ham Malzeme ve Hazırlık aynı parçayı görür. Sahne, ağ ve
 // malzeme nesneleri görünümündür; burada yalnız geometri ve hesap sonuçları durur. Kayda girmez (prototipte de bellekte).
 
 export type { Ag, Govde, HamSonuc, Geometri } from './hesap/ham.ts';

@@ -50,7 +50,7 @@ vi.mock('../hesap/hazirlik.ts', () => ({
   prFixList: () => [], prJawList: () => [], prZeroList: () => [],
   denemeBitti: () => undefined,
 }));
-vi.mock('../hesap/gkod.ts', () => ({ fmtT: () => '0:00', gkodaGonder: vi.fn(), tStation: (T: number) => T }));
+vi.mock('../hesap/gkod.ts', () => ({ fmtT: () => '0:00', tStation: (T: number) => T }));
 vi.mock('../hesap/omur.ts', () => ({ fmtDur: () => '', lifeCard: () => ({ st: 'na' }), cycleOf: () => null, wearRec: () => ({}) }));
 vi.mock('../hesap/kesme.ts', () => ({ coolHint: () => '', cutData: () => null, holderOf: () => '' }));
 vi.mock('../hesap/sinirlar.ts', () => ({ capDefOf: () => ({}) }));
@@ -84,7 +84,7 @@ describe('seçim kilidi (cerceve-kopru.ts 905-940)', () => {
   it('salt onayda program adımı da kilitlidir; yalnız onay, gezinme, yazdırma ve denemeye geçiş kalır', () => {
     hz.PR.at = 1; expect(kilitli(SALT_ONAY)).toBe(true);
     for (const a of ['ok', 'prev', 'next', 'print', 'toTrial']) expect(izinli(SALT_ONAY, a)).toBe(true);
-    for (const a of ['file', 'sim', 'trApply', 'accAll', 'fixN+', 'stkAuto', 'life', 'reset']) expect(izinli(SALT_ONAY, a)).toBe(false);
+    for (const a of ['file', 'trApply', 'accAll', 'fixN+', 'stkAuto', 'life', 'reset']) expect(izinli(SALT_ONAY, a)).toBe(false);
   });
   it('yazma yetkisi hiç olmayan kişide onay da yoktur', () => {
     expect(yazamaz(OKUYUCU)).toBe(true); expect(yazamaz(SALT_ONAY)).toBe(false);
@@ -92,7 +92,7 @@ describe('seçim kilidi (cerceve-kopru.ts 905-940)', () => {
     expect(izinli(OKUYUCU, 'ok')).toBe(false); expect(izinli(OKUYUCU, 'print')).toBe(true);
   });
   it('yazan kişide bütün eylemler açıktır', () => {
-    for (const a of ['ok', 'file', 'sim', 'trApply', 'accAll', 'life']) expect(izinli(YAZAR, a)).toBe(true);
+    for (const a of ['ok', 'file', 'trApply', 'accAll', 'life']) expect(izinli(YAZAR, a)).toBe(true);
   });
 });
 
@@ -142,9 +142,9 @@ describe('Hazırlık paneli düğmeleri (izinli ve reddedilen)', () => {
     render(<HazirlikPaneli yetki={y} eylem={eylem} kayit={null} emir={null} />);
     return eylem;
   };
-  it('son adımda yazan kişi tamamlar, bekleyenleri onaylar, simülasyona gider', () => {
+  it('son adımda yazan kişi tamamlar, bekleyenleri onaylar', () => {
     const eylem = ciz(YAZAR, 3);
-    for (const ad of ['Hazırlığı tamamla', 'Bekleyen 1 adımı onayla', 'Kesim / ömür denemesi', 'Hazırlık formu', 'Simülasyonda aç', 'Takım ömrü']) {
+    for (const ad of ['Hazırlığı tamamla', 'Bekleyen 1 adımı onayla', 'Kesim / ömür denemesi', 'Hazırlık formu', 'Takım ömrü']) {
       expect(screen.getByRole('button', { name: ad })).toBeTruthy();
     }
     fireEvent.click(screen.getByRole('button', { name: 'Hazırlığı tamamla' }));
@@ -154,7 +154,7 @@ describe('Hazırlık paneli düğmeleri (izinli ve reddedilen)', () => {
     ciz(SALT_ONAY, 3);
     expect(screen.getByRole('button', { name: 'Hazırlığı tamamla' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Hazırlık formu' })).toBeTruthy();
-    for (const ad of ['Bekleyen 1 adımı onayla', 'Simülasyonda aç', 'Takım ömrü']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+    for (const ad of ['Bekleyen 1 adımı onayla', 'Takım ömrü']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
   });
   it('yazma yetkisi olmayan kişi tamamlayamaz', () => {
     ciz(OKUYUCU, 3);

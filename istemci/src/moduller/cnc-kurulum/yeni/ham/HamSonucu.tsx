@@ -4,7 +4,7 @@ import { fmtN } from '../bicim.ts';
 import { hamTipiAdi, type Geometri, type HamSonuc } from '../hesap/ham.ts';
 
 // Ham Malzeme sonuc bolumu: prototipin sRenderResults'u (metinler aynen).
-export type SonucEylemi = 'toSim' | 'toSetup' | 'csv';
+export type SonucEylemi = 'toSetup' | 'csv';
 
 export interface ModelOzeti { area: number; tris: number; solids: number }
 export interface GovdeSatiri { name: string; vol: number }
@@ -104,7 +104,6 @@ export function HamSonucu({ r, geo, otomatikEksen, malzeme, model, govdeler, gov
         </>
       )}
       <div className="tc-ch-dugmeler">
-        <Dugme tur="birincil" simge="play" onClick={() => { eylem('toSim'); }}>G-Kod simülasyonunda kullan</Dugme>
         {yazabilir && <Dugme simge="clipboard-check" onClick={() => { eylem('toSetup'); }}>Kurulum kartına aktar</Dugme>}
         <Dugme simge="download" onClick={() => { eylem('csv'); }}>CSV</Dugme>
       </div>

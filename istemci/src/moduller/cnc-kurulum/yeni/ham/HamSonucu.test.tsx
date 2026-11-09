@@ -34,11 +34,10 @@ describe('Ham Malzeme sonuc bolumu', () => {
     expect(eylem).toHaveBeenCalledWith('toSetup');
   });
 
-  it('reddedilen: yazma yetkisi yoksa Kurulum kartina aktar gizli, CSV ve simulasyon kalir', () => {
+  it('reddedilen: yazma yetkisi yoksa Kurulum kartina aktar gizli, CSV kalir', () => {
     sonucCiz(false);
     expect(screen.queryByRole('button', { name: 'Kurulum kartına aktar' })).toBeNull();
     expect(screen.getByRole('button', { name: 'CSV' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'G-Kod simülasyonunda kullan' })).toBeTruthy();
   });
 
   it('sonuc yoksa yonlendirme notu', () => {

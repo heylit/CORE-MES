@@ -27,7 +27,7 @@ import { operasyon, saat } from './secim.ts';
 
 // Hazırlık paneli (prototip prPanel 21310-21433), üretim emri kartı ve onay kaydı (cerceve-kopru.ts 388-425, 840-903).
 
-export type PanelEylemi = 'ok' | 'file' | 'print' | 'sim' | 'life' | 'toTrial' | 'trApply' | 'toStock';
+export type PanelEylemi = 'ok' | 'file' | 'print' | 'life' | 'toTrial' | 'trApply' | 'toStock';
 
 interface Ortam { yetki: CncYetkisi; eylem: (a: PanelEylemi) => void }
 
@@ -437,7 +437,6 @@ function Govde({ st, S, o }: { st: HazirlikAdimi; S: AdimSecimi | null; o: Ortam
             {bek > 0 && !fin && ize('accAll') && <Dugme simge="check" onClick={prAccAll}>Bekleyen {bek} adımı onayla</Dugme>}
             {ize('toTrial') && <Dugme simge="play" onClick={() => { o.eylem('toTrial'); }}>Kesim / ömür denemesi</Dugme>}
             {ize('print') && <Dugme simge="printer" onClick={() => { o.eylem('print'); }}>Hazırlık formu</Dugme>}
-            {ize('sim') && <Dugme simge="play" onClick={() => { o.eylem('sim'); }}>Simülasyonda aç</Dugme>}
             {ize('life') && <Dugme simge="chev-right" onClick={() => { o.eylem('life'); }}>Takım ömrü</Dugme>}
           </div>
         </>

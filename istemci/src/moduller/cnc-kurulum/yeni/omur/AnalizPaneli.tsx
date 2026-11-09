@@ -146,7 +146,7 @@ export function AnalizPaneli({ res, yazabilir, geri, degisti }: Ozellikler) {
           (takımın talaş kaldırdığı süre), tezgâhın çalıştığı toplam süre değil.
         </span>
       </div>
-      {CH.parts == null && <Uyari>Parça sayısına çevirmek için “Üretim ve maliyet” bölümüne bu takımın <b>parça başı kesme süresini</b> girin (G-Kod simülasyonu yüklüyse otomatik gelir).</Uyari>}
+      {CH.parts == null && <Uyari>Parça sayısına çevirmek için “Üretim ve maliyet” bölümüne bu takımın <b>parça başı kesme süresini</b> girin (Hazırlık'ta program seçiliyse otomatik gelir).</Uyari>}
       {(M0.capped || M0.lowV) && (
         <Uyari>
           <Simge ad="alert" boyut="k" /> {M0.lowV

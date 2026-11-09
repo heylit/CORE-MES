@@ -94,7 +94,6 @@ export function AnaSayfa() {
           <Dugme tur="birincil" simge="play" onClick={() => { git('prep'); }}>Tezgâh hazırla</Dugme>
           <Dugme simge="gauge" onClick={() => { git('life'); }}>Takım ömrü</Dugme>
           <Dugme simge="layers" onClick={() => { git('lib'); }}>Kütüphane</Dugme>
-          <Dugme simge="route" onClick={() => { git('gcode'); }}>Simülasyon</Dugme>
         </div>
       </header>
 
@@ -257,7 +256,7 @@ export function AnaSayfa() {
           </div>
         </Kart>
 
-        <Kart baslik="Program ve ham malzeme" sag={<Dugme simge="chev-right" onClick={() => { git('gcode'); }}>Simülasyon</Dugme>}>
+        <Kart baslik="Program ve ham malzeme">
           {p && !p.err
             ? (
               <div className="tc-cl-program">
@@ -278,7 +277,6 @@ export function AnaSayfa() {
           )}
           <div className="tc-cl-dugmeler">
             <Dugme simge="box" onClick={() => { git('stock'); }}>Ham malzeme</Dugme>
-            <Dugme simge="route" onClick={() => { git('gcode'); }}>G-kod simülasyonu</Dugme>
           </div>
         </Kart>
 

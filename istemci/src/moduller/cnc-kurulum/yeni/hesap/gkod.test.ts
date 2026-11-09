@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { durumKur, state } from '../depo.ts';
-import { bekleyenGkodAl, gkodaGonder, gParse, gsimHazirla, gYukle, SAMPLE_HEID, SAMPLE_ISO } from './gkod.ts';
+import { describe, expect, it } from 'vitest';
+import { gParse, SAMPLE_HEID, SAMPLE_ISO } from './gkod.ts';
 
 // Örneklerin vermediği yolları da sınar (G18 yay, G91, inç, G99, torna mm/dev, makro, M91, PLANE, polar, CR, döngü uyarıları).
 const EK_ISO = ['G20 G18 G91 T5 M6', 'G0 X1 Z1 S800 M3', 'G2 X0.5 Z-0.5 R0.5 F4', 'G90 G19 G3 Y10 Z5 J2 K0', 'G99 G81 X5 Y5 Z-3 R1 F100', 'Y10', 'G80',
@@ -19,33 +18,3 @@ describe('gkod', () => {
   });
 });
 
-describe('program durumu', () => {
-  beforeEach(() => { durumKur(null, null); });
-
-  it('ayarlar açılışta varsayılanla birleşir, eski elle ham alanı taşınır', () => {
-    durumKur(JSON.stringify({ gsimOpt: { lathe: true }, gstock: { x: 1 } }), null);
-    const gs = gsimHazirla();
-    expect(gs).toMatchObject({ lathe: true, rapid: 30000, dialect: 'auto', stockSrc: 'blk', hamOrigin: 'tlf' });
-    expect(state['gtools']).toEqual({ __v2: 1 });
-    expect(state['gstockMan']).toEqual({ x: 1 });
-    expect(state['gstock']).toBeUndefined();
-  });
-
-  it('gYukle programı kaydeder; ham tanımı olmayan programda ham kaynağı otomatiğe döner', () => {
-    const r = gYukle(SAMPLE_ISO, 'O1001');
-    expect('prog' in r && r.prog.name).toBe('O1001');
-    expect(state['gsimText']).toEqual({ name: 'O1001', text: SAMPLE_ISO });
-    expect(gsimHazirla().stockSrc).toBe('auto');
-  });
-
-  it('gönderim bir kez alınır; Hazırlık gönderimi aynı ad yüklüyse yeniden okutmaz', () => {
-    gkodaGonder('G0 X1', 'P1');
-    expect(state['gsimText']).toEqual({ name: 'P1', text: 'G0 X1' });
-    expect(bekleyenGkodAl('P1')).toEqual({ name: 'P1', text: 'G0 X1' });
-    expect(bekleyenGkodAl(null)).toBeNull();
-    gkodaGonder('G0 X2', 'P2', { adDegisinceYukle: true });
-    expect(bekleyenGkodAl('P2')).toBeNull();
-    gkodaGonder('G0 X2', 'P2', { adDegisinceYukle: true });
-    expect(bekleyenGkodAl('P1')).toEqual({ name: 'P2', text: 'G0 X2' });
-  });
-});

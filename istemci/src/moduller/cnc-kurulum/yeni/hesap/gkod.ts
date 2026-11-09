@@ -1,9 +1,7 @@
-import { pad2, clamp, num } from '../bicim.ts';
-import { save, state } from '../depo.ts';
+import { pad2, clamp } from '../bicim.ts';
 import type { Tezgah } from '../veri/tipler.ts';
 
-// G-Kod simülasyonunun yorumlayıcısı (Heidenhain Klartext + ISO) ve programın durumdaki yeri. Sahne, çizim ve panel P3'tedir;
-// buradaki kısım başka görünümlerin de okuduğu kısımdır (Hazırlık program kaynağı, Takım Ömrü süreleri).
+// G-kod yorumlayıcısı (Heidenhain Klartext + ISO): Hazırlık programı okur, Takım Ömrü ve Ana Sayfa süreleri buradan alır.
 
 const TAU = Math.PI * 2;
 
@@ -372,63 +370,5 @@ export function fmtT(min: number | null | undefined): string {
   return `${h ? `${String(h)}:${pad2(m)}` : String(m)}:${pad2(ss)}`;
 }
 
-// ----- Programın durumdaki yeri (prototipin gsimOpt, gtools, gsimText alanları; eski ekranla aynı kayıt) -----
-
-export interface GsimAyari {
-  rapid: number | string;
-  dialect: string;
-  lathe: boolean;
-  removal: boolean;
-  showRapid: boolean;
-  follow: boolean;
-  speed: string;
-  stockSrc: string;
-  hamOrigin: string;
-  showPart: boolean;
-  compare: boolean;
-  [alan: string]: unknown;
-}
-// Programdaki takım numarası → kütüphane kalemi ya da elle çap (program adı başına).
-export type GTakimEslesmesi = Record<string, { id?: string; d?: number }>;
+// Hazırlık'ın son yüklenen programı (prototipin gsimText alanı; eski ekranla aynı kayıt).
 export interface GsimMetni { name: string; text: string }
-
-
-// Açılış varsayılanları durum kurulurken uygulanır (durum.ts acilisVarsayimlari); burada yalnız tipli okunur.
-export function gsimHazirla(): GsimAyari { return state['gsimOpt'] as GsimAyari; }
-export function gsimTakimlari(): Record<string, GTakimEslesmesi | number> { return state['gtools'] as Record<string, GTakimEslesmesi | number>; }
-
-// gLoad'un ayrıştırma ve durum kısmı: programı ayarlarla okur, kaydeder (600 000 karakteri aşan metin kayda girmez) ve ham kaynağını
-// düzeltir. Çizim, zaman çizelgesi ve kayıt yazımı (gRefresh → save) G-Kod görünümünündür.
-export function gYukle(text: string, name: string): { prog: GProgram } | { hata: string } {
-  const gs = gsimHazirla();
-  let p: GProgram;
-  try { p = gParse(text, { dialect: gs.dialect, lathe: gs.lathe, rapid: num(gs.rapid, 30000) }); } catch (e) { return { hata: `⚠ Program okunamadı: ${e instanceof Error ? e.message : String(e)}` }; }
-  p.name = name;
-  state['gsimText'] = text.length < 600000 ? { name, text } : null;
-  if (gs.stockSrc === 'blk' && !p.blk) gs.stockSrc = 'auto';
-  return { prog: p };
-}
-
-export interface GonderimAyari {
-  // Hazırlık'tan açılışta program aynı adla zaten yüklüyse yeniden okunmaz (prOpenSim).
-  adDegisinceYukle?: boolean;
-}
-let bekleyen: (GsimMetni & { adDegisince: boolean }) | null = null;
-
-// Başka görünümden simülasyona program gönderir (prototipte prOpenSim): metni duruma
-// yazar, kaydeder ve G-Kod görünümünün açılışta okuyacağı gönderimi bırakır. Görünüme geçmek gönderenin işidir (`git('gcode')`):
-// görünüm geçişi kabuktadır, hesap katmanı gezinmez.
-export function gkodaGonder(metin: string, ad: string, ayar: GonderimAyari = {}): void {
-  gsimHazirla();
-  state['gsimText'] = { name: ad, text: metin };
-  save();
-  bekleyen = { name: ad, text: metin, adDegisince: !!ayar.adDegisinceYukle };
-}
-
-// G-Kod görünümü açılınca bir kez alır; `yukluAd` görünümde yüklü programın adı.
-export function bekleyenGkodAl(yukluAd: string | null): GsimMetni | null {
-  const b = bekleyen;
-  bekleyen = null;
-  if (!b || (b.adDegisince && yukluAd === b.name)) return null;
-  return { name: b.name, text: b.text };
-}

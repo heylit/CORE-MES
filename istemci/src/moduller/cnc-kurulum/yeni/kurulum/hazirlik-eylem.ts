@@ -3,11 +3,10 @@ import { D } from '../durum.ts';
 import { clamp, num } from '../bicim.ts';
 import { byId, invKey, machine, material, stockOf, toolById, tools } from '../secici.ts';
 import { coolHint } from '../hesap/kesme.ts';
-import { gkodaGonder } from '../hesap/gkod.ts';
 import { onbellekSil } from '../sahne/gl.ts';
 import {
   PR, PS, prAllSig, prChecks, prExportSim, prFixCap, prFixN, prGroup, prInfo, prIsDone, prMachineChanged, prPendOk, prPk, prProg, prSeq,
-  prSig, prSrcText, prStep, prToolEval, type AdimSecenegi, type AdimSecimi, type HamOlcu, type HazirlikAdimi,
+  prSig, prStep, prToolEval, type AdimSecenegi, type AdimSecimi, type HamOlcu, type HazirlikAdimi,
 } from '../hesap/hazirlik.ts';
 import type { Kalem, Tezgah } from '../veri/tipler.ts';
 import type { CncYetkisi } from '../veri.ts';
@@ -179,13 +178,6 @@ export function prLoadFile(f: File | null | undefined): void {
     prFlash(p && !p.err ? `✓ ${f.name} · ${String(p.tools.length)} takım okundu` : '⚠ Program okunamadı', !(p && !p.err));
   };
   rd.readAsText(f);
-}
-
-// Simülasyonda aç: program G-Kod görünümüne gider (prototip prOpenSim).
-export function prOpenSim(git: () => void): void {
-  const src = prSrcText(); if (!src) { prFlash('Program seçilmedi', true); return; }
-  // Program aynı adla G-Kod'da zaten yüklüyse yeniden okunmaz (prototipte GS.prog.name karşılaştırması).
-  prExportSim(); gkodaGonder(src.text, src.name, { adDegisinceYukle: true }); git();
 }
 
 export function prQty(v: string): void { PS().qty = Math.max(1, Math.round(num(v, 1))); sahneKirli(); save(); prUI(); }

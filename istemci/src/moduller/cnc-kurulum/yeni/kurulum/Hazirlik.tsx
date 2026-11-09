@@ -13,7 +13,7 @@ import { Sahne } from '../sahne/Sahne.tsx';
 import { emirler, seciliEmir, useCncYetkisi, useHazirlikKaydi } from '../veri.ts';
 import { PRT, PRT_SPEEDS, prtApplyLife, prtFast, prtHedef, prtInit, prtSpeed, prtToggle } from './deneme.ts';
 import {
-  PU, izinli, kilitli, prBadges, prConfirm, prCurStep, prEnter, prFlash, prGo, prLoadFile, prMove, prOpenSim, prRail, prSelIdx, prSetOpt,
+  PU, izinli, kilitli, prBadges, prConfirm, prCurStep, prEnter, prFlash, prGo, prLoadFile, prMove, prRail, prSelIdx, prSetOpt,
   prTitleOf, prToggle, prUI,
 } from './hazirlik-eylem.ts';
 import { hazirlikBirak, hazirlikCiz, sahneBasildi, sahneBirakildi, sahneKaydi, sahneSifirla } from './hazirlik-sahnesi.ts';
@@ -172,7 +172,6 @@ export function Hazirlik() {
     if (a === 'ok') onayla();
     else if (a === 'file') dosya.current?.click();
     else if (a === 'print') prPrint();
-    else if (a === 'sim') prOpenSim(() => { git('gcode'); });
     else if (a === 'life') git('life');
     else if (a === 'toStock') git('stock');
     else if (a === 'toTrial') prGo(PR.seq.length - 1);
