@@ -344,11 +344,20 @@ export function adimAdetleriCevir(adimlar: readonly AcikAdimKaydi[]): NonNullabl
   return y;
 }
 
+// 2530 a: rotalı emrin kök ek adımları (rotaYeri bunlara yer vermez). Alt düğüm adımı dugumleriCevir'dedir.
+function ekAdimlariCevir(isEmirleri: EmirKaydi['isEmirleri']): NonNullable<DurumEmirleri['orders'][number]['ekAdimlar']> {
+  return [...isEmirleri].filter((i) => ekAdimMi(i) && kokAdimiMi(i)).sort((a, b) => a.opNo - b.opNo).map((i) => ({
+    opNo: i.opNo, tur: i.tur === 'rework' || i.tur === 'tamir' ? i.tur : 'ek', ad: i.ad, opId: String(i.operasyonTipiId), durum: i.durum,
+    saglam: i.durum === 'tamam' ? i.saglamAdet : i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0 ? i.canliAdet : null,
+  }));
+}
+
 // kapanislar: sahibinin (uretim-emirleri) onaylı kapanış sonucu; haritada olmayan bitmiş emir onay bekliyordur (null).
 export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: ReadonlyMap<number, 'tamamlandi' | 'saglamsiz' | null> = new Map()): DurumEmirleri {
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
   const opStatus: DurumEmirleri['opStatus'] = {};
   const opProg: DurumEmirleri['opProg'] = {};
+  const opSaglam: NonNullable<DurumEmirleri['opSaglam']> = {};
   const opYer: NonNullable<DurumEmirleri['opYer']> = {};
   const orders = emirler.map((e): DurumEmirleri['orders'][number] => {
     // Sayfa kolu kol (n, m) geçerliyse rotanın n+1. adımından kurar; kol değilse emir kendi sırasıyla rotanın başından yürür.
@@ -361,6 +370,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       if (i.durum !== 'bekliyor') opStatus[anahtar] = i.durum;
       // Biten adımın ilerlemesi prototipte durumdan okunur; ilerleme yalnız süren adımın kendi sayacıdır (sayım yoksa yazılmaz).
       if (i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0) opProg[anahtar] = i.canliAdet;
+      if (i.durum === 'tamam' && i.saglamAdet !== null) opSaglam[anahtar] = i.saglamAdet;
       if (e.kaynakRotaRevizyonId !== null && i.durum !== 'tamam') {
         const fason = i.kaynak?.tur === 'fason' ? String(i.kaynak.id) : null;
         opYer[anahtar] = {
@@ -371,6 +381,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       }
     }
     const dugumler = e.kaynakRotaRevizyonId === null ? undefined : dugumleriCevir(e);
+    const ekAdimlar = e.kaynakRotaRevizyonId === null ? [] : ekAdimlariCevir(e.isEmirleri);
     return {
       id: String(e.id), kayitNo: e.id, no: e.emirNo, itemId: String(e.malzemeNo), qty: e.adet, start: e.baslangic, due: e.teslim, priority: e.oncelik,
       note: e.aciklama, rev: e.kaynakRotaRevizyonId === null ? null : String(e.kaynakRotaRevizyonId), status: EMIR_DURUMU_PROTOTIP[e.durum],
@@ -379,10 +390,11 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       birlestigiId: e.birlestigiEmirId === null ? null : String(e.birlestigiEmirId), surum: e.surum,
       ...(e.kaynakRotaRevizyonId === null ? { rotasiz: true, adimlar: rotasizAdimlariCevir(e.isEmirleri) } : {}),
       ...(dugumler === undefined ? {} : { dugumler }),
+      ...(ekAdimlar.length === 0 ? {} : { ekAdimlar }),
       ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
     };
   });
-  return { orders, opStatus, opProg, opYer };
+  return { orders, opStatus, opProg, opSaglam, opYer };
 }
 
 // 677 a: motorun tatili hem resmî tatil hem kapalı gündür (Vardiya yalnız kapalı gün yazar; plan stüdyosunun kapattığı gün de kapalıdır).

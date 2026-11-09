@@ -146,7 +146,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     const d = await durum('yonetici');
     const emir = d.emirler?.orders.find((x) => x.id === String(id));
     assert.ok(emir, `emir dilimde yok: ${String(id)}`);
-    return { emir, opStatus: d.emirler?.opStatus ?? {}, opProg: d.emirler?.opProg ?? {} };
+    return { emir, opStatus: d.emirler?.opStatus ?? {}, opProg: d.emirler?.opProg ?? {}, opSaglam: d.emirler?.opSaglam ?? {} };
   };
   const ayrinti = async (id: number): Promise<AdimliEmirAyrintisi> => (await istek<{ emir: AdimliEmirAyrintisi }>('planlama_proje', 'GET', `/adimli-emirler/${id}`)).govde.emir;
 
@@ -200,11 +200,14 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     s = await siparis(id);
     assert.equal(s.opProg[adimAnahtari(1)], 4);
+    assert.equal(s.opSaglam[adimAnahtari(1)], undefined, 'süren adımın sağlamı opProg\'dadır');
 
     assert.equal((await terminal('/bitir', { saglamAdet: 9 })).durum, 200);
     s = await siparis(id);
     assert.equal(s.opStatus[adimAnahtari(1)], 'tamam');
     assert.equal(s.opProg[adimAnahtari(1)], undefined, 'biten adımın ilerlemesi durumdan okunur');
+    assert.equal(s.opSaglam[adimAnahtari(1)], 9, 'B18: biten adımın kayıtlı sağlamı');
+    assert.equal(s.opSaglam[adimAnahtari(2)], undefined);
     assert.equal(s.opStatus[adimAnahtari(2)], undefined, 'sıradaki adım bekliyor');
     assert.equal(s.emir.status, 'uretimde');
 
@@ -398,11 +401,17 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.deepEqual(c.opStatus, { '1|root|1': 'tamam' }, 'biten ek adım rota adımını bitmiş saydırmaz');
     assert.deepEqual(Object.keys(c.opYer ?? {}), ['1|root|2', '1|root|3'], 'OP20 ve OP30 rotadaki yerleriyle');
     assert.deepEqual(c.orders[1]!.kol, { n: 1, m: 3 }, 'kol rotanın 1. adımından sonra ayrılır, 3. adımda katılır');
+    assert.deepEqual(c.orders[0]!.ekAdimlar, [{ opNo: 11, tur: 'rework', ad: 'A', opId: '1', durum: 'tamam', saglam: null }], '2530 a: kök emrin ek adımı ayrıca gelir');
+    assert.equal('ekAdimlar' in c.orders[1]!, false, 'ek adımı olmayan emirde alan yok');
     const eski = emirleriCevir([{ ...ana, isEmirleri: ana.isEmirleri.map(({ tur: _t, ...i }) => i) }, kol]);
     assert.deepEqual(eski.opStatus, { '1|root|1': 'tamam', '1|root|2': 'tamam' }, 'tür verilmezse eski davranış');
     assert.deepEqual(eski.orders[1]!.kol, { n: 2, m: 4 });
     const rotasiz = emirleriCevir([{ ...ana, kaynakRotaRevizyonId: null, isEmirleri: [adim(1, 10, 'tamam', 'rework'), adim(2, 20, 'tamam', 'rework')] }]);
     assert.deepEqual(rotasiz.opStatus, { '1|root|1': 'tamam', '1|root|2': 'tamam' }, 'rotasız emrin adımları kendi sırasıyla');
+    assert.equal('ekAdimlar' in rotasiz.orders[0]!, false, 'rotasız emrin adımları adimlar alanındadır');
+    const sayili = emirleriCevir([{ ...ana, isEmirleri: [adim(1, 10, 'tamam', 'rota'), { ...adim(2, 15, 'tamam', 'rework'), tur: 'tamir' as const, saglamAdet: 4 },
+      { ...adim(3, 18, 'bekliyor', 'rework'), durum: 'calisiyor' as const, tur: 'ek' as const, canliAdet: 2 }, adim(4, 20, 'bekliyor', 'rota')] }]);
+    assert.deepEqual(sayili.orders[0]!.ekAdimlar?.map((x) => [x.opNo, x.tur, x.durum, x.saglam]), [[15, 'tamir', 'tamam', 4], [18, 'ek', 'calisiyor', 2]]);
   });
 
   test('701: kolun iş emri sırası 1\'den başlar; anahtarı rotadaki yeridir (ayrıldığı yer kadar kayar, kendi ek adımı yer almaz)', () => {
