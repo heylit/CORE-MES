@@ -196,8 +196,8 @@ export function kurulumIzi(durum: unknown): string {
 }
 
 // ---- Takım ömrü (295 a). Cebin yükü kurulum tamamlanınca prototip durumundan çıkar: seçili tezgâhın magazini (`tools`) ve
-// G-Kod simülasyonunun takım başına parça süresi (`gsim.perTool`, istasyon numarası 1'den başlar). Simülasyon başka tezgâhın
-// programıysa süre bilinmez; takım yine yüklenir, yalnız adet sayılır.
+// Hazırlık'ta okunan programın takım başına parça süresi (`gsim.perTool`, istasyon numarası 1'den başlar). Program başka tezgâhın
+// ise süre bilinmez; takım yine yüklenir, yalnız adet sayılır.
 
 export interface TakimYuku { cep: number; takimKimligi: string; takimAd: string; parcaBasiDk: number | null }
 
