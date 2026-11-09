@@ -1234,7 +1234,11 @@ export async function taslakYerlesimleri(db: Db, id: number) {
   const y = await s.yerlesimler(db, id);
   return {
     id: x.id, surum: x.surum, durum: x.durum,
-    yerlesimler: y.map((r) => ({ isEmriId: r.isEmriId, kaynak: r.kaynak, baslangic: r.baslangic.toISOString(), bitis: r.bitis.toISOString(), kilitli: r.kilitli })),
+    yerlesimler: y.map((r) => ({
+      isEmriId: r.isEmriId, kaynak: r.kaynak, baslangic: r.baslangic.toISOString(), bitis: r.bitis.toISOString(), kilitli: r.kilitli,
+      // 2524 b: bölünmüş işin parçaları (elle ya da motor bölmesi), çalışmaya elle bölme olarak dönmek için.
+      ...(r.parcalar?.length ? { parcalar: r.parcalar.map((p) => ({ adet: p.adet, kaynak: p.kaynak, motorBolmesi: p.motorBolmesi ?? false })) } : {}),
+    })),
   };
 }
 
@@ -1903,7 +1907,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         if (i.x.parca) {
           parcaYerleri.set(i.is.id, [...(parcaYerleri.get(i.is.id) ?? []), {
             no: i.x.parca.no, adet: i.x.parca.adet, kaynak: q.kaynak, baslangic: tarih(b, yer.baslangic), bitis: tarih(b, yer.bitis),
-            elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak,
+            elleSira: i.x.elle ? i.sira : null, elleIstasyonId: rotaIstasyonu(b, i.is), elleKaynak: i.x.elleKaynak, ...(i.x.parca.motorBolmesi ? { motorBolmesi: true } : {}),
           }]);
           continue;
         }

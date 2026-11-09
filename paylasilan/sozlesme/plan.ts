@@ -340,10 +340,11 @@ export type MusteriSecenekleriCevabi = z.output<typeof musteriSecenekleriCevabi>
 // Göndermeyen eski ekranın bütün işleri eskisi gibi elle sayılır.
 // `elleKaynak`: planlamacı bu işin makinesini elle seçti; toptan hesap işi başka makineye taşımaz, yalnız saatini ayarlar.
 // `parca`: elle bölünen işin parçası (kart #1572); bütün parçaları aynı yazımda, adetleri toplamı adım adedi. Parçasız yazılan iş birleşir.
+// `parca.motorBolmesi`: parça motorun paralel bölmesindendir (B-2482-13); motor sonraki öneride bölmeyi yeniden kurar, elle bölme sayılmaz.
 export const kuyrukYazIsi = z.object({
   emirNo: z.string().trim().min(1).max(60), opNo: z.number().int().positive().max(100_000), dondurulmus: z.boolean(), elle: z.boolean().prefault(true),
   elleKaynak: z.boolean().prefault(false),
-  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000) }).optional(),
+  parca: z.object({ no: z.number().int().positive().max(100), adet: z.number().int().positive().max(1_000_000), motorBolmesi: z.boolean().optional() }).optional(),
   // ADR 0018: tarayıcının önizlediği saat; sunucu motoru kayıtlıyken cevabın motorFarki'si bununla karşılaştırır.
   onizleme: z.object({ baslangic: tarihZaman, bitis: tarihZaman }).optional(),
 });
