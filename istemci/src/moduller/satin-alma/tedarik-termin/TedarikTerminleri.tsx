@@ -18,9 +18,10 @@ const ilkGelis = (x: Satir): string | null =>
 const bekliyorMu = (x: Satir) => x.termin === null && x.gerekenTarih !== null && x.siparisler.length === 0;
 
 // Plan termin girilmemiş malzemeyi olması gereken tarihle hesaplar ve "termin bekleniyor" der; geç kalan termin katı kipte işi bekletir.
-// Sipariş verilmişse elle termin yerine siparişin beklenen teslimi karşılaştırılır; gereken tarihi geçmiş satır gecikmiştir.
+// 2433-3 a: sipariş varsa siparişin teslim tarihi tek doğrudur; elle termin yalnız siparişsiz satırda kullanılır ve gösterilir.
+// Gereken tarihi geçmiş satır gecikmiştir.
 function durum(x: Satir, bugun: string | null) {
-  const tarih = x.termin ?? ilkGelis(x);
+  const tarih = x.siparisler.length > 0 ? ilkGelis(x) : x.termin;
   if (x.gerekenTarih === null) return x.termin !== null ? <Rozet>Plan istemiyor</Rozet> : x.siparisler.length > 0 ? <Rozet>Sipariş verildi</Rozet> : null;
   if (bugun !== null && x.gerekenTarih < bugun) return <Rozet ton="hata">Gecikti</Rozet>;
   if (tarih === null) return x.siparisler.length > 0 ? <Rozet ton="uyari">Sipariş verildi, teslim tarihi yok</Rozet> : <Rozet ton="uyari">Termin bekleniyor</Rozet>;
@@ -33,7 +34,7 @@ const sutunlarKur = (bugun: string | null): Sutun<Satir>[] => [
   { anahtar: 'kod', baslik: 'Malzeme', mono: true, kirilmaz: true, hucre: (x) => x.malzemeKodu || `#${x.malzemeNo}` },
   { anahtar: 'ad', baslik: 'Ad', hucre: (x) => x.malzemeAdi || '—' },
   { anahtar: 'gereken', baslik: 'Olması gereken', kirilmaz: true, hucre: (x) => gun(x.gerekenTarih) },
-  { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (x) => gun(x.termin) },
+  { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (x) => (x.siparisler.length > 0 ? '—' : gun(x.termin)) },
   { anahtar: 'siparis', baslik: 'Açık sipariş', hucre: (x) => siparisMetni(x) },
   { anahtar: 'durum', baslik: 'Durum', hucre: (x) => durum(x, bugun) ?? '—' },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (x) => x.aciklama || '—' },
@@ -86,7 +87,7 @@ export function TedarikTerminleri() {
   const temel = sutunlarKur(l.data?.bugun ?? null);
   const sutunlar: Sutun<Satir>[] = !yazar ? temel : [...temel, {
     anahtar: 'islem', baslik: 'İşlem', kirilmaz: true,
-    hucre: (x) => <Dugme simge="edit" onClick={() => acikYaz(x)}>Termin gir</Dugme>,
+    hucre: (x) => (x.siparisler.length > 0 ? '—' : <Dugme simge="edit" onClick={() => acikYaz(x)}>Termin gir</Dugme>),
   }];
   return (
     <Kart baslik="Tedarik terminleri" sag={bekleyen > 0 && <Rozet ton="uyari">{bekleyen} termin bekleniyor</Rozet>}>
