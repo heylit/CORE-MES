@@ -5,15 +5,15 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { useCanliPlan } from '../fark.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
-import { ATOLYE_GEC_SINIRI, atolyeEkrani, sure, tz, zs } from './kurallar.ts';
+import { ATOLYE_GEC_SINIRI, atolyeEkrani, sure, tz, zs, type EmirNo } from './kurallar.ts';
 
 // Atölye ekranı (zz36 atolyeAc, cizAtolye): canlı plan, salt okunur, büyük ekran; her tezgâhın şu anki ve sıradaki işi, yanda geciken
 // siparişler. Canlı plan sunucudan okunur (Plan ve gerçekleşen ile aynı okuma); taşan ızgara on saniyede bir sayfa kayar, sonda başa döner.
 // Esc ve Çık kapatır. Okuyan da yazan da aynısını görür.
 const KAYMA_MS = 10_000;
 
-export function AtolyeEkrani({ c, p, cx, now, canliSurum, kapat }: {
-  c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; now: number; canliSurum: number | null; kapat: () => void;
+export function AtolyeEkrani({ c, p, cx, now, emirNo, canliSurum, kapat }: {
+  c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; now: number; emirNo: EmirNo; canliSurum: number | null; kapat: () => void;
 }) {
   const d = useCanliPlan(true, c, p, canliSurum);
   const ekran = useMemo(() => (d.tur === 'tamam' && Object.keys(d.canli).length ? atolyeEkrani(c, cx, d.canli, now) : null), [d, c, cx, now]);
@@ -48,18 +48,18 @@ export function AtolyeEkrani({ c, p, cx, now, canliSurum, kapat }: {
               </div>
               {k.su ? (
                 <div className="tc-pym-ae-su">
-                  <b>{k.su.job}</b> · {k.su.ad}<small>{`bitiş ${zs(c.D, k.su.C)}`}</small>
+                  <b>{emirNo(k.su.job)}</b> · {k.su.ad}<small>{`bitiş ${zs(c.D, k.su.C)}`}</small>
                   <span className="tc-pym-ae-bar"><i ref={degisken({ '--o': `${Math.round(k.su.oran * 100)}%` })} /></span>
                 </div>
               ) : <div className="tc-pym-ae-su" data-bos="">Şu an iş yok</div>}
-              <div className="tc-pym-ae-sonra">{k.sonra ? <>Sıradaki: <b>{k.sonra.job}</b> · {k.sonra.ad} · {tz(c.D, k.sonra.S)}</> : 'Sıradaki iş yok'}</div>
+              <div className="tc-pym-ae-sonra">{k.sonra ? <>Sıradaki: <b>{emirNo(k.sonra.job)}</b> · {k.sonra.ad} · {tz(c.D, k.sonra.S)}</> : 'Sıradaki iş yok'}</div>
             </section>
           ))}
         </div>
         <aside aria-label="Geciken">
           <h4><Simge ad="alert" boyut="k" />{`Geciken · ${ekran.gec.length}`}</h4>
           {ekran.gec.length ? ekran.gec.slice(0, ATOLYE_GEC_SINIRI).map((x) => (
-            <div key={x.j} className="tc-pym-ae-satir"><b>{x.j}</b><span className="tc-pym-tp-rozet" data-durum="gec">{`${sure(x.T)} geç`}</span></div>
+            <div key={x.j} className="tc-pym-ae-satir"><b>{emirNo(x.j)}</b><span className="tc-pym-tp-rozet" data-durum="gec">{`${sure(x.T)} geç`}</span></div>
           )) : <p className="tc-pym-ae-not">Geciken yok.</p>}
           <p className="tc-pym-ae-not">Salt okunur. Çalışma planındaki değişiklikler onaylanıp canlıya alınmadan burada görünmez.</p>
         </aside>

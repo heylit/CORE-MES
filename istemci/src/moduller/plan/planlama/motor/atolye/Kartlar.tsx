@@ -75,7 +75,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       const neden = nedenKisa(r); const g = gercekOku(c, kart.id); const sap = g ? g.S - (g.plan ?? g.S) : 0;
       const kilit = (ac: boolean) => komut?.degistir(ac ? 'Kilit açıldı' : 'İş kilitlendi', (t) => { if (ac) delete t.locks[kart.id]; else t.locks[kart.id] = { m: r.m, S: r.S }; }, { ayrinti: kart.id, planKoru: true });
       return {
-        ad: `${r.job} · ${k}`, simge: 'cube', ic: (
+        ad: `${ort.emirNo(r.job)} · ${k}`, simge: 'cube', ic: (
           <>
             <Not>{`${a.ad} · ${b?.ad ?? ''}`}</Not>
             <Satir a="Tezgâh" b={r.fas ? r.m.slice(1) : r.m} />
@@ -130,7 +130,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             <label htmlFor="tc-pym-tp-suz-j">Üretim emri</label>
             <select id="tc-pym-tp-suz-j" value={f?.j ?? ''} onChange={(e) => ort.suzSec(suzKoy(D, f ? { ...f, j: null } : null, 'j', e.target.value || null))}>
               <option value="">Hepsi</option>
-              {D.siparisler.filter((x) => x.iptal !== true).map((x) => x.id).sort().map((j) => <option key={j} value={j}>{j}</option>)}
+              {D.siparisler.filter((x) => x.iptal !== true).map((x) => x.id).sort().map((j) => <option key={j} value={j}>{ort.emirNo(j)}</option>)}
             </select>
             <div className="tc-pym-tp-eylem">
               <button type="button" className="tc-dugme" aria-disabled={!f} onClick={() => { if (f) ort.suzSec(null); }}><Simge ad="x" boyut="k" />Temizle</button>
@@ -212,7 +212,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         navigator.clipboard.writeText(metin).then(() => bildir('tamam', 'Metin kopyalandı.'), hata);
       };
       return {
-        ad: `${s.id} · termin konuş`, simge: 'clock', ic: (
+        ad: `${ort.emirNo(s.id)} · termin konuş`, simge: 'clock', ic: (
           <>
             <div className="tc-pym-tp-karsi">
               <span>Termin</span><b>{tz(D, s.due)}</b><span />
@@ -245,7 +245,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
                 <b>{g.ac ? `%${Math.round(g.o * 100)}` : 'kapalı'}</b>
                 <small>
                   {`${g.n} iş · ${sure(g.is)} / ${sure(g.ac)}${g.ekMesai.length ? ` · ${g.ekMesai.map((e) => `ek mesai ${e}`).join(', ')}` : ''}`}
-                  {g.gercek.length ? ` · gerçek: ${g.gercek.map((x) => `${x.job} ${x.sapma > 0.25 ? `+${Math.round(x.sapma * 60)} dk` : 'planda'}`).join(', ')}` : ''}
+                  {g.gercek.length ? ` · gerçek: ${g.gercek.map((x) => `${ort.emirNo(x.job)} ${x.sapma > 0.25 ? `+${Math.round(x.sapma * 60)} dk` : 'planda'}`).join(', ')}` : ''}
                   {g.ariza.length > 0 && <> · <span className="tc-pym-tp-kotu">{g.ariza.map(([a, b]) => `arıza ${zs(D, a)}–${zs(D, b)}`).join(', ')}</span></>}
                 </small>
               </div>
@@ -430,7 +430,7 @@ function gunOzeti(ort: Ortam): Govde {
         <Etiket>Onay ve canlı</Etiket>
         {ony.length ? ony.map((z, i) => <Satir key={i} a={`${saatTr(z.t)} · ${z.ne}${z.ayrinti ? ` · ${z.ayrinti}` : ''}`} b="" />) : <Not>Onay hareketi yok.</Not>}
         <Etiket>Gün başına göre bitişi değişen</Etiket>
-        {fark.length ? fark.map((q) => <Satir key={q.j} a={`${q.j}${q.gec ? ` · ${q.gec}` : ''}`} b={`${q.d > 0 ? '+' : '−'}${sure(q.d)}`} durum={q.d > 0 ? 'gec' : 'iyi'} />) : <Not>Bitişi değişen sipariş yok.</Not>}
+        {fark.length ? fark.map((q) => <Satir key={q.j} a={`${ort.emirNo(q.j)}${q.gec ? ` · ${q.gec}` : ''}`} b={`${q.d > 0 ? '+' : '−'}${sure(q.d)}`} durum={q.d > 0 ? 'gec' : 'iyi'} />) : <Not>Bitişi değişen sipariş yok.</Not>}
         {dn.length > 0 && <><Etiket>Arızalar</Etiket>{dn.map((d) => <Satir key={`${d.m}-${d.from}`} a={d.m} b={`${tz(D, d.from)} → ${zs(D, d.to)}`} />)}</>}
         <Etiket>Geçmiş günler</Etiket>
         {g.gecmis.filter((x) => x.gun !== bu).slice(0, 30).map((x) => {

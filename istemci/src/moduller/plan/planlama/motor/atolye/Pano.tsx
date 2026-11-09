@@ -15,7 +15,7 @@ import { useAtolyeKomutlari, useOtomatikUygula } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  gecikenIpucu, gecikenSay, kilitOzeti, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type SiparisBilgisi, type Suzgec,
+  emirNoOkuyucu, gecikenIpucu, gecikenSay, kilitOzeti, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type EmirNo, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
@@ -30,6 +30,8 @@ import { useAn } from '../saat.ts';
 export interface Ortam {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; now: number; donuk: number; hazir: Record<string, number>;
   bilgi: Map<string, SiparisBilgisi>; liste: SiparisBilgisi[];
+  // Sipariş kimliğinin ekrandaki adı: iş emri no.
+  emirNo: EmirNo;
   suz: Suzgec | null; suzSec: (f: Suzgec | null) => void;
   secJob: string | null; secOp: string | null;
   yaz: boolean; o: PlanlamaEkranOzellikleri;
@@ -50,6 +52,17 @@ interface Ozellikler {
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
+// 2693 S2 cevabına göre tek satır: false eski davranış (ilk açılışta kabın altında kalan yer).
+const STUDYO_EKRANI_DOLDURUR = true;
+// Kabı kaydıran en yakın ata kutunun görünen üst kenarı; yoksa pencerenin üstü.
+function kaydirmaUstu(k: HTMLElement): number {
+  for (let e = k.parentElement; e; e = e.parentElement) {
+    const y = getComputedStyle(e).overflowY;
+    if ((y === 'auto' || y === 'scroll') && e.scrollHeight > e.clientHeight) return Math.max(0, e.getBoundingClientRect().top);
+  }
+  return 0;
+}
+
 export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
@@ -58,6 +71,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const liste = useMemo(() => siparisler(c, p, cx, hazir), [c, p, cx, hazir]);
   const bilgi = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
+  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi), [o.depo.receteRotaKaydi]);
   const now = simdiSaati(c, an);
   const donuk = Number(c.w.dondurma) || 0;
   const [olcek, setOlcek] = useState<AtolyeOlcegi>(() => ilkOlcek(typeof window === 'undefined' ? 1280 : window.innerWidth));
@@ -137,13 +151,15 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     if (g) komut.degistir('Gün özeti', (t) => { (t as Record<string, unknown>).tpGun = g; }, { sessiz: true });
   }, [yaz, komut, c, p, bugun]);
 
-  // Pano kabın kalan yüksekliğini alır (boyut): üstte başlık, altta telefonda alt menü.
+  // Pano yüksekliği: STUDYO_EKRANI_DOLDURUR ise kaydırma alanının görünen boyu (üstteki şeritler kaydırınca gider, pano ekranı doldurur);
+  // değilse kabın altında kalan yer. Altta telefonda alt menü düşülür.
   useLayoutEffect(() => {
     const olc = () => {
       const k = kap.current; if (!k) return;
       const alt = document.querySelector<HTMLElement>('.tc-kabuk-alt');
       const altH = alt && alt.offsetParent ? alt.offsetHeight : 0;
-      k.style.setProperty('--tc-pym-tp-yuk', `${Math.max(320, window.innerHeight - k.getBoundingClientRect().top - altH - 8)}px`);
+      const ust = STUDYO_EKRANI_DOLDURUR ? kaydirmaUstu(k) : k.getBoundingClientRect().top;
+      k.style.setProperty('--tc-pym-tp-yuk', `${Math.max(320, window.innerHeight - ust - altH - 8)}px`);
     };
     olc(); window.addEventListener('resize', olc);
     return () => window.removeEventListener('resize', olc);
@@ -191,7 +207,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   }, []);
 
   const ort: Ortam = {
-    c, p, cx, now, donuk, hazir, bilgi, liste, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
+    c, p, cx, now, donuk, hazir, bilgi, liste, emirNo, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
     olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
     tasi, olayEkle, isleniyor, ekMesai,
   };
@@ -201,7 +217,9 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const geriVar = yaz && !!komut?.geriAlinabilir();
   const ust = (
     <header className="tc-pym-tp-ust">
-      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-dar" aria-label="Siparişler" aria-expanded={rayAcik} onClick={() => setRayAcik((x) => !x)}><Simge ad="list" boyut="k" /></button>
+      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-dar" aria-label="Siparişler" aria-expanded={rayAcik} onClick={() => setRayAcik((x) => !x)}>
+        <Simge ad="list" boyut="k" /><span data-metin="">{`Siparişler · ${liste.length}`}</span>
+      </button>
       {!fark ? (
         <span className="tc-pym-tp-durum" title="Canlı planla fark okunuyor"><Simge ad="edit" boyut="k" />Çalışma</span>
       ) : !fark.var ? (
@@ -268,7 +286,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <Bugun ort={ort} acik={bugunAcik} />
       </div>
       {kart && <KartKatmani ort={ort} kart={kart.k} ankraj={kart.a} bildir={bildir} />}
-      {atolye && <AtolyeEkrani c={c} p={p} cx={cx} now={now} canliSurum={sen?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null} kapat={() => setAtolye(false)} />}
+      {atolye && <AtolyeEkrani c={c} p={p} cx={cx} now={now} emirNo={emirNo} canliSurum={sen?.canliSurum ?? o.depo.planSurumu?.planSurumu ?? null} kapat={() => setAtolye(false)} />}
       {yaz && (
         <Yapilacaklar c={c} p={p} cx={cx} l={sor} acik={ypAcik} ac={ypAc} komut={komut} sipSec={sipGoster} secim={secim} pan={pan} panAc={panAc} studyo={studyo}
           veriAc={veriAc} tasi={tasi} />

@@ -9,7 +9,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, type OkunanPlan } from '../kurallar.ts';
 import { degisken, HAZIRLANIYOR } from '../ortak.tsx';
 import {
-  PG_NEDEN, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSa, pgSatirlar, pgSerit, saatYaz, sapmaEsik, tarihGun, tt, type PgKaynak, type PgSatiri,
+  emirNoOkuyucu, PG_NEDEN, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSa, pgSatirlar, pgSerit, saatYaz, sapmaEsik, tarihGun, tt, type PgKaynak, type PgSatiri, type EmirNo,
 } from './kurallar.ts';
 import { useAn } from '../saat.ts';
 
@@ -18,6 +18,7 @@ import { useAn } from '../saat.ts';
 export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; canliSurum: number | null }) {
   const emirler = o.depo.durum?.emirler ?? null;
   const an = useAn();
+  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi), [o.depo.receteRotaKaydi]);
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const [cevap, setCevap] = useState<{ r: TabanVeCanliCevabi } | { hata: string } | null>(null);
@@ -49,7 +50,7 @@ export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikler
       <Gostergeler c={c} p={p} K={K} L={L} gecmis={gecmis} />
       <Serit c={c} p={p} K={K} now={simdiSaati(c, an)} />
       <NedenOzeti c={c} L={L} />
-      <Tablo c={c} L={L} yalniz={yalniz} degis={() => setYalniz((x) => !x)} />
+      <Tablo emirNo={emirNo} c={c} L={L} yalniz={yalniz} degis={() => setYalniz((x) => !x)} />
     </div>
   );
 }
@@ -116,7 +117,7 @@ function NedenOzeti({ c, L }: { c: PlanlamaCalismasi; L: PgSatiri[] }) {
   );
 }
 
-function Tablo({ c, L, yalniz, degis }: { c: PlanlamaCalismasi; L: PgSatiri[]; yalniz: boolean; degis: () => void }) {
+function Tablo({ c, L, yalniz, degis, emirNo }: { c: PlanlamaCalismasi; L: PgSatiri[]; yalniz: boolean; degis: () => void; emirNo: EmirNo }) {
   const esik = sapmaEsik(c); const D = c.D;
   const l = yalniz ? L.filter((x) => x.fark != null && Math.abs(x.fark) > esik) : L;
   const cip = (x: PgSatiri) => {
@@ -138,7 +139,7 @@ function Tablo({ c, L, yalniz, degis }: { c: PlanlamaCalismasi; L: PgSatiri[]; y
             <tbody>
               {l.map((x) => (
                 <tr key={x.j}>
-                  <th scope="row"><span>{x.j}</span><small>{`${x.ad} · ${x.adet ?? ''}`}</small></th>
+                  <th scope="row"><span>{emirNo(x.j)}</span><small>{`${x.ad} · ${x.adet ?? ''}`}</small></th>
                   <td data-b="Taban">{tt(D, x.tb)}</td>
                   <td data-b="Canlı">{tt(D, x.cb)}</td>
                   <td data-b="Gerçekleşen">{tt(D, x.gb.t)}{x.gb.tahmin && x.gb.t != null && <small> (tahmin)</small>}</td>
