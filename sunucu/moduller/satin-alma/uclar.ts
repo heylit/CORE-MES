@@ -196,7 +196,7 @@ export const uclar = [
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-ayarlari/kaydet', yetki: 'satin-alma.ayar', govde: ayarlarKaydetGovdesi, cevap: ayarlarSemasi,
-    isle: ({ db, govde }) => servis.ayarlarKaydet(db, govde),
+    isle: ({ db, kullanici, govde }) => servis.ayarlarKaydet(db, kullanici, govde),
   }),
   // SAT-77: malzeme kg fiyatları; satın almayı okuyan ve maliyet okuyan (215 a) görür, satın almayı yazan girer (geçmiş silinmez).
   uc({

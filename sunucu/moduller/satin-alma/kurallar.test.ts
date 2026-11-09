@@ -9,6 +9,7 @@ import {
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
+import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
@@ -533,4 +534,37 @@ test('2429-ekran b: talep eden tedarikçi bilgisini (teklif istekleri, fason fir
   const teklifIstekleri = [{ firmaId: 4, gonderim: '2026-11-01', sonTarih: null }];
   const g = talepEdenGorunumu({ ...T, kalemBaglari, teklifIstekleri }, 5);
   assert.deepEqual([g.kalemBaglari, g.teklifIstekleri, g.teklifler, g.karar], [kalemBaglari, teklifIstekleri, [], null]);
+});
+
+test('2397 b: onay basamağı tutarın düştüğü basamağın ya da üstünün rolünü ister; ret, kapalı ayar, rolsüz basamak ve yönetici serbest', () => {
+  const L = [{ azamiTutar: '100', seviye: 'Uzman', rolId: 1 }, { azamiTutar: '1000', seviye: 'Müdür', rolId: 2 }, { azamiTutar: null, seviye: 'GM', rolId: 3 }];
+  const r = (...idler: number[]) => idler.map((id) => ({ id, yonetici: false }));
+  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(1)), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 50, L, r(3)), null, 'üst basamak alt basamağı onaylar');
+  assert.match(onayKademesiReddi(true, 'onay', 500, L, r(1)) ?? '', /Müdür/);
+  assert.equal(onayKademesiReddi(true, 'onay', 1000, L, r(2)), null, 'sınır dahil');
+  assert.match(onayKademesiReddi(true, 'onay', 1000.01, L, r(2)) ?? '', /GM/);
+  assert.match(onayKademesiReddi(true, 'onay', null, L, r(2)) ?? '', /GM/, 'tutar bilinmiyorsa en üst basamak');
+  assert.equal(onayKademesiReddi(true, 'ret', 5000, L, r(1)), null);
+  assert.equal(onayKademesiReddi(false, 'onay', 5000, L, r(1)), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 5000, L, [{ id: 9, yonetici: true }]), null);
+  assert.equal(onayKademesiReddi(true, 'onay', 500, [{ ...L[0]! }, { ...L[1]!, rolId: null }, L[2]!], r(1)), null, 'rolsüz basamakta yetki yeter');
+  assert.equal(onayKademesiReddi(true, 'onay', 5000, [], r(1)), null);
+  // Son basamağın da sınırı varsa aşan tutar son basamağa düşer.
+  assert.match(onayKademesiReddi(true, 'onay', 5000, [L[0]!, L[1]!], r(1)) ?? '', /Müdür/);
+});
+
+test('2397 b v2: rolü gönderilmeyen basamak rolünü aynı addan, yoksa aynı sıradan alır; değişiklik sayıyla karşılaştırılır; rolsüz basamak rollünün üstünde olamaz', () => {
+  const eski = [{ azamiTutar: '1000.00', seviye: 'Uzman', rolId: 3 }, { azamiTutar: null, seviye: 'Müdür', rolId: 4 }];
+  assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: null, seviye: 'Müdür' }, { azamiTutar: '1000', seviye: 'Uzman' }]).map((l) => l.rolId), [4, 3]);
+  assert.deepEqual(onayLimitRolleri(eski, [{ azamiTutar: '1000', seviye: 'Yeni ad' }, { azamiTutar: null, seviye: 'Müdür', rolId: null }, { azamiTutar: null, seviye: 'Üçüncü' }])
+    .map((l) => l.rolId), [3, null, null]);
+  assert.equal(onayLimitleriDegistiMi(eski, onayLimitRolleri(eski, [{ azamiTutar: '1000', seviye: 'Uzman' }, { azamiTutar: null, seviye: 'Müdür' }])), false);
+  for (const yeni of [[eski[0]!], [{ ...eski[0]!, azamiTutar: '999' }, eski[1]!], [{ ...eski[0]!, rolId: null }, eski[1]!], [{ ...eski[0]!, seviye: 'X' }, eski[1]!], [eski[0]!, { ...eski[1]!, azamiTutar: '5' }]]) {
+    assert.equal(onayLimitleriDegistiMi(eski, yeni), true, JSON.stringify(yeni));
+  }
+  assert.equal(onayLimitiReddi([{ azamiTutar: null, seviye: 'Müdür', rolId: null }, { azamiTutar: '1000', seviye: 'Uzman', rolId: 3 }]), 'Rolü boş basamak, rolü olan basamağın üstünde olamaz: üst basamağa da rol verin.');
+  for (const l of [eski, [], [{ azamiTutar: '10', seviye: 'A', rolId: null }, { azamiTutar: null, seviye: 'B', rolId: 4 }], [{ azamiTutar: null, seviye: 'A', rolId: null }]]) {
+    assert.equal(onayLimitiReddi(l), null);
+  }
 });

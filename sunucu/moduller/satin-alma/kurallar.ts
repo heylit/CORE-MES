@@ -22,6 +22,52 @@ export const VARSAYILAN_ONAY_LIMITLERI: readonly { azamiTutar: string | null; se
   { azamiTutar: null, seviye: 'Genel müdür' },
 ];
 
+// 2397 b: ayar açıkken kararı onaylayan, tutarın düştüğü basamağın ya da bir üst basamağın rolünü taşımalı. Basamağın rolü boşsa
+// onaylama yetkisi yeter (varsayılan basamakların rolü yoktur); yönetici rolü her basamağı onaylar. Tutar bilinmiyorsa (kur eksik) en üst basamak gerekir (temkinli).
+// Ret serbesttir (dört gözle aynı gerekçe: talebi durdurur, harcama açmaz).
+export function onayKademesiReddi(
+  acik: boolean, sonuc: 'onay' | 'ret', tutar: number | null, limitler: readonly { azamiTutar: string | null; seviye: string; rolId: number | null }[],
+  roller: readonly { id: number; yonetici: boolean }[],
+): string | null {
+  if (!acik || sonuc !== 'onay' || limitler.length === 0) return null;
+  const sirali = [...limitler].sort((a, b) => azamiSirasi(a) - azamiSirasi(b));
+  const j = tutar === null ? -1 : sirali.findIndex((l) => l.azamiTutar === null || tutar <= Number(l.azamiTutar));
+  const i = j === -1 ? sirali.length - 1 : j;
+  const basamak = sirali[i]!;
+  if (basamak.rolId === null || roller.some((r) => r.yonetici)) return null;
+  const yetkili = new Set(sirali.slice(i).flatMap((l) => (l.rolId === null ? [] : [l.rolId])));
+  return roller.some((r) => yetkili.has(r.id)) ? null : `${ILETILER.onayKademesi} Gereken basamak: ${basamak.seviye}.`;
+}
+
+type OnayLimiti = { azamiTutar: string | null; seviye: string; rolId: number | null };
+const azamiSirasi = (l: { azamiTutar: string | null }) => (l.azamiTutar === null ? Infinity : Number(l.azamiTutar));
+
+// 2397 b: rolü göndermeyen basamak rolünü aynı adlı eski basamaktan, yoksa aynı sıradaki eski basamaktan alır. Ekran rolü
+// göndermeden kaydeder; basamak adı değişince rol düşüp basamak denetimsiz kalmasın.
+export function onayLimitRolleri(
+  eski: readonly { seviye: string; rolId: number | null }[], yeni: readonly { azamiTutar: string | null; seviye: string; rolId?: number | null | undefined }[],
+): OnayLimiti[] {
+  return yeni.map((l, i) => ({
+    azamiTutar: l.azamiTutar, seviye: l.seviye,
+    rolId: l.rolId !== undefined ? l.rolId : (eski.find((e) => e.seviye === l.seviye) ?? eski[i])?.rolId ?? null,
+  }));
+}
+
+// Basamak, eşik ya da rol değişti mi (sırayla; tutar sayı olarak karşılaştırılır).
+export function onayLimitleriDegistiMi(eski: readonly OnayLimiti[], yeni: readonly OnayLimiti[]): boolean {
+  return eski.length !== yeni.length || eski.some((e, i) => {
+    const y = yeni[i]!;
+    return e.seviye !== y.seviye || e.rolId !== y.rolId || (e.azamiTutar === null ? y.azamiTutar !== null : y.azamiTutar === null || Number(e.azamiTutar) !== Number(y.azamiTutar));
+  });
+}
+
+// Rolsüz basamak rollü basamağın üstünde olamaz: yoksa büyük tutar küçük tutardan gevşek denetlenir.
+export function onayLimitiReddi(limitler: readonly OnayLimiti[]): string | null {
+  const sirali = [...limitler].sort((a, b) => azamiSirasi(a) - azamiSirasi(b));
+  const ilkRollu = sirali.findIndex((l) => l.rolId !== null);
+  return ilkRollu !== -1 && sirali.slice(ilkRollu).some((l) => l.rolId === null) ? ILETILER.rolsuzUstBasamak : null;
+}
+
 export const ILETILER = {
   talepYok: 'Talep bulunamadı.',
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
@@ -33,6 +79,9 @@ export const ILETILER = {
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
   dortGoz: 'Kararı veren kişi o kararı onaylayamaz.',
+  onayKademesi: 'Bu tutardaki kararı onaylama basamağınız yetmiyor.',
+  rolsuzUstBasamak: 'Rolü boş basamak, rolü olan basamağın üstünde olamaz: üst basamağa da rol verin.',
+  onayLimitiYonetici: 'Onay basamaklarını, eşiklerini ve rollerini yalnız yönetici değiştirir.',
   dortGozTalepEden: 'Talebi açan ya da talep eden kişi o talebi onaylayamaz.',
   kisiYok: 'Talep eden kişi bulunamadı.',
   teslimMiktari: 'Teslim miktarı sıfırdan büyük olmalı.',

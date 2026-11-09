@@ -381,9 +381,13 @@ export const ayarlarSemasi = z.object({
   kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI), kur: ondalikMetinSemasi.nullable(), aylikFaizYuzdesi: ondalikMetinSemasi.nullable(), mevduatAylikFaizYuzdesi: ondalikMetinSemasi.nullable().optional() })),
   kategoriler: z.array(z.string()),
   birimler: z.array(z.object({ ad: z.string(), yillikButce: ondalikMetinSemasi })),
-  onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string() })),
+  // 2397 b: basamağın rolü (boş: onaylama yetkisi yeter). Sunucu her zaman yazar; eski ekran fikstürleri için isteğe bağlı.
+  // rolAdi yalnız okumadır (2397-6): rolleri göremeyen satın almacı basamağın rolünü adıyla görür; kayıt gövdesi taşımaz.
+  onayLimitleri: z.array(z.object({ azamiTutar: ondalikMetinSemasi.nullable(), seviye: z.string(), rolId: z.number().int().nullable().optional(), rolAdi: z.string().nullable().optional() })),
   // Sistem Ayarları 'satin-alma.dort-goz' (salt okunur): ekran kendi kararını onaylatmamayı söyler; ret sunucudadır.
   dortGoz: z.boolean(),
+  // Sistem Ayarları 'satin-alma.onay-kademesi' (salt okunur, 2397 b): açıkken basamak rolü sunucuda denetlenir.
+  onayKademesi: z.boolean().optional(),
   surum: surumSemasi,
 });
 export const ayarlarKaydetGovdesi = z.object({
@@ -395,7 +399,8 @@ export const ayarlarKaydetGovdesi = z.object({
   kurlar: z.array(z.object({ paraBirimi: z.enum(PARA_BIRIMLERI) })).min(1).max(4),
   kategoriler: z.array(z.string().trim().min(1).max(60)).max(100),
   birimler: z.array(z.object({ ad: z.string().trim().min(1).max(60), yillikButce: eksiOlmayan })).max(100),
-  onayLimitleri: z.array(z.object({ azamiTutar: eksiOlmayan.nullable(), seviye: z.string().trim().min(1).max(80) })).max(20),
+  // Rolü göndermeyen (eski) ekranın kaydı aynı adlı basamağın rolünü korur; null rolü kaldırır.
+  onayLimitleri: z.array(z.object({ azamiTutar: eksiOlmayan.nullable(), seviye: z.string().trim().min(1).max(80), rolId: z.number().int().positive().nullable().optional() })).max(20),
   ...beklenenSurum,
 });
 
