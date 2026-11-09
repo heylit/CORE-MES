@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { geriBildirimListeCevabi, profilCevabi, temaCevabi } from '#paylasilan/sozlesme/profil.ts';
+import { geriBildirimListeCevabi, miniPanoCevabi, profilCevabi, temaCevabi } from '#paylasilan/sozlesme/profil.ts';
 import type { ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -206,5 +206,44 @@ describe('profil ve şikayet/istek/öneri kutusu (gerçek PostgreSQL, gerçek gi
     assert.equal((await temaSec('operator', { tema: 'dark' })).durum, 400);
     assert.deepEqual(await tema('operator'), { tema: null, surum: 0 });
     await assert.rejects(o().sahip.sorgu("INSERT INTO profil_tema_tercihi (kisi_id, tema) VALUES ($1, 'mor')", [kisiler.get('operator')]), /profil_tema_tercihi_tema_gecerli/);
+  });
+
+  const miniPanoSec = (ad: string | null, govde: unknown) => istek<Record<string, unknown>>(ad, 'POST', '/profil/mini-pano-sec', govde);
+  const miniPano = async (ad: string) => {
+    const c = await istek<unknown>(ad, 'GET', '/profil/mini-pano');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return miniPanoCevabi.parse(c.govde);
+  };
+
+  test('PRF-6: mini pano seçimi oturum ister; kaydı olmayan kişide hepsi açık, öneri kapalı, sürüm 0', async () => {
+    assert.equal((await istek(null, 'GET', '/profil/mini-pano')).durum, 401);
+    assert.equal((await miniPanoSec(null, { kapali: [], acilistaOner: true, surum: 0 })).durum, 401);
+    assert.deepEqual(await miniPano('operator'), { kapali: [], acilistaOner: false, surum: 0 });
+  });
+
+  test('PRF-6: mini pano seçimi sürümle yazılır; eski sürüm ve ikinci ilk seçim reddedilir, kişiler birbirini etkilemez', async () => {
+    const ilk = await miniPanoSec('cam', { kapali: ['uretim', 'satin-alma'], acilistaOner: true, surum: 0 });
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.deepEqual(ilk.govde, { kapali: ['satin-alma', 'uretim'], acilistaOner: true, surum: 1 });
+    assert.equal((await miniPanoSec('cam', { kapali: [], acilistaOner: false, surum: 0 })).durum, 409);
+    assert.deepEqual((await miniPanoSec('cam', { kapali: [], acilistaOner: false, surum: 1 })).govde, { kapali: [], acilistaOner: false, surum: 2 });
+    assert.equal((await miniPanoSec('cam', { kapali: ['uretim'], acilistaOner: false, surum: 1 })).durum, 409);
+    assert.deepEqual(await miniPano('cam'), { kapali: [], acilistaOner: false, surum: 2 });
+    assert.deepEqual(await miniPano('yonetici'), { kapali: [], acilistaOner: false, surum: 0 });
+  });
+
+  test('PRF-6: mini pano gövdesi başka kişiyi seçemez; biçimsiz, yinelenen ve sınırı aşan anahtar reddedilir', async () => {
+    const yanlis = async (govde: unknown) => assert.equal((await miniPanoSec('operator', govde)).durum, 400, JSON.stringify(govde));
+    await yanlis({ kapali: [], acilistaOner: false, surum: 0, kisiId: kisiler.get('cam') });
+    await yanlis({ kapali: ['Satin_Alma'], acilistaOner: false, surum: 0 });
+    await yanlis({ kapali: ['a', 'a'], acilistaOner: false, surum: 0 });
+    await yanlis({ kapali: Array.from({ length: 51 }, (_, i) => `p${String(i)}`), acilistaOner: false, surum: 0 });
+    await yanlis({ kapali: [], acilistaOner: false, surum: -1 });
+    await yanlis({ kapali: [], surum: 0 });
+    assert.deepEqual(await miniPano('operator'), { kapali: [], acilistaOner: false, surum: 0 });
+    await assert.rejects(
+      o().sahip.sorgu('INSERT INTO profil_mini_pano_tercihi (kisi_id, kapali) VALUES ($1, $2)', [kisiler.get('operator'), Array.from({ length: 51 }, (_, i) => `p${String(i)}`)]),
+      /profil_mini_pano_tercihi_kapali_sinir/,
+    );
   });
 });

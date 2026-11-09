@@ -13,7 +13,7 @@ import { gorunenHizliIsler, type HizliIs } from '../rota/hizli-isler.ts';
 import { gorunenKomutlar, type Komut } from '../rota/komutlar.ts';
 import { rehberMaddeleri, sayfaRehberleri, type SayfaRehberi } from '../rota/rehber.ts';
 import { GENEL_KONULAR } from '../rota/rehber-genel.ts';
-import { gorunenUstEylemler, type UstEylem } from '../rota/ust-eylemler.ts';
+import { HesapMaddesiBaglami, gorunenUstEylemler, type HesapMaddesiDurumu, type HesapMaddesiYazici, type UstEylem } from '../rota/ust-eylemler.ts';
 import { gorunenUstSeritler, type UstSerit } from '../rota/ust-seritler.ts';
 import { rotaninSayfasi } from '../rota/sayfa.ts';
 import { useEkranGorunur } from '../rota/kalici.tsx';
@@ -297,6 +297,16 @@ export function Kabuk({
   // Geri ve İleri düğmeleri ile aramanın son yerleri aynı sayımı okur: tek kez tutulur.
   const gecmis = useGezinmeGecmisi();
   const [acmaIstekleri, acmaIstekleriYaz] = useState<Readonly<Record<string, number>>>({});
+  const [maddeDurumlari, maddeDurumlariYaz] = useState<ReadonlyMap<string, HesapMaddesiDurumu>>(new Map());
+  const maddeDurumuYaz = useCallback<HesapMaddesiYazici>((anahtar, durum) => {
+    maddeDurumlariYaz((o) => {
+      const eski = o.get(anahtar);
+      if (durum === null ? eski === undefined : eski?.gizli === durum.gizli && eski.baslik === durum.baslik) return o;
+      const yeni = new Map(o);
+      if (durum === null) yeni.delete(anahtar); else yeni.set(anahtar, durum);
+      return yeni;
+    });
+  }, []);
   const [tanitimAcik, tanitimYaz] = useState(false);
   const [davet, davetYaz] = useState(() => kisiId !== undefined && !tanitimGorulduMu(kisiId));
   const rehber = useMemo(
@@ -397,11 +407,16 @@ export function Kabuk({
   const gorunenler = gorunenUstEylemler(ustEylemler, islemler);
   const seritler = gorunenUstSeritler(ustSeritler, islemler);
   const sonYerListesi = sonYerler(gecmis);
-  const hesapMaddeleri = gorunenler.flatMap((e) => (e.hesapMaddesi === undefined ? [] : [{ anahtar: e.anahtar, hesapMaddesi: e.hesapMaddesi }]));
+  const hesapMaddeleri = gorunenler.flatMap((e) => {
+    const durum = maddeDurumlari.get(e.anahtar);
+    if (e.hesapMaddesi === undefined || durum?.gizli === true) return [];
+    return [{ anahtar: e.anahtar, hesapMaddesi: { ...e.hesapMaddesi, baslik: durum?.baslik ?? e.hesapMaddesi.baslik } }];
+  });
   // Yalnız kişinin gördüğü sayfaların sayısı okunur: görmediği sayfanın ucunu yoklamaz.
   const anaMenuSayaclari = ikinciMenuler.filter((m) => m.anaMenuSayaci !== undefined && m.sayacUcu !== undefined && sayfalar.some((p) => p.yol === m.kok));
   return (
     <AnaMenuSayacBaglami.Provider value={anaMenuSayilari}>
+    <HesapMaddesiBaglami.Provider value={maddeDurumuYaz}>
     {anaMenuSayaclari.map((m) => (
       <AnaMenuSayacOkuyucu key={m.kok} kok={m.kok} uc={m.sayacUcu ?? ''} anahtar={m.anaMenuSayaci ?? ''} yaz={anaMenuSayisiYaz} />
     ))}
@@ -621,6 +636,7 @@ export function Kabuk({
         )}
       </div>
     </div>
+    </HesapMaddesiBaglami.Provider>
     </AnaMenuSayacBaglami.Provider>
   );
 }

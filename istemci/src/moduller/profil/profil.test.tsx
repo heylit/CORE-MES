@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { AcikOturumlarCevabi, SaatCihazlariCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type {
   GeriBildirimAyrintiCevabi, GeriBildirimListeCevabi, GeriBildirimOzetiCevabi, GeriBildirimSecenekleriCevabi, KendiGeriBildirimi, ProfilCevabi,
-  TemaCevabi,
+  MiniPanoCevabi, TemaCevabi,
 } from '#paylasilan/sozlesme/profil.ts';
 import { temayiSifirla } from '../../ortak/veri/tema.ts';
 import { TemaEsitleyici } from './tema-tercihi.ts';
@@ -165,8 +165,8 @@ describe('Profil sayfası', () => {
 
 describe('Şikayet, istek ve öneri düğmesi', () => {
   it('her oturumda görünür (işlem istemez); tema eşitleyicisi de her oturumda durur', () => {
-    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum'], ['tema-tercihi', 'oturum']]);
-    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['geri-bildirim', 'tema-tercihi']);
+    expect(ustEylemler.map((e) => [e.anahtar, e.islem])).toEqual([['geri-bildirim', 'oturum'], ['tema-tercihi', 'oturum'], ['mini-pano', 'oturum']]);
+    expect(gorunenUstEylemler(ustEylemler, []).map((e) => e.anahtar)).toEqual(['mini-pano', 'geri-bildirim', 'tema-tercihi']);
   });
 
   it('çubukta yer tutmaz, Hesap menüsünden açılır (516 a)', async () => {
@@ -397,5 +397,35 @@ describe('Açık oturumlarım (2226-7 a)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Açık oturumlarım/ }));
     expect(await screen.findByText('Bilinmeyen tarayıcı')).toBeTruthy();
     expect((screen.getByRole('button', { name: /Diğer oturumlarımı kapat/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('Mini panolarım', () => {
+  const tercih = (t: MiniPanoCevabi) => () => json(200, t);
+
+  it('mini pano yetkisi olmayana kart çizilmez ve seçim sorulmaz', async () => {
+    const istekler = sunucuKur({ 'GET /profil': () => json(200, PROFIL), 'GET /oturum': oturumIle([]) });
+    ac('/profil');
+    expect(await screen.findByText('Görünüm')).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
+    expect(screen.queryByText('Mini panolarım')).toBeNull();
+    expect(istekler.some((i) => i.yol === '/profil/mini-pano')).toBe(false);
+  });
+
+  it('satın alma okuyana panoyu listeler; kapatınca kapalı listeyi okunan sürümle yazar', async () => {
+    const istekler = sunucuKur({
+      'GET /profil': () => json(200, PROFIL),
+      'GET /oturum': oturumIle(['satin-alma.oku']),
+      'GET /profil/mini-pano': tercih({ kapali: [], acilistaOner: false, surum: 0 }),
+      'POST /profil/mini-pano-sec': () => json(200, { kapali: ['satin-alma'], acilistaOner: false, surum: 1 }),
+    });
+    ac('/profil');
+    const anahtar = await screen.findByRole('switch', { name: 'Satın alma mini panosu' });
+    await waitFor(() => expect(anahtar.getAttribute('aria-checked')).toBe('true'));
+    await waitFor(() => expect((anahtar as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(anahtar);
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ kapali: ['satin-alma'], acilistaOner: false, surum: 0 }));
+    expect(istekler.find((i) => i.yontem === 'POST')?.basliklar['istek-kimligi']).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Satın alma mini panosu' }).getAttribute('aria-checked')).toBe('false'));
   });
 });

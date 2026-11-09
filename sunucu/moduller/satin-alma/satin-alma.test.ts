@@ -1426,13 +1426,17 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('#489 pano: onay bekleyen onaylayana, açık talep ve teslim bekleyen satır yazana, açık sipariş okuyana sayılır; yetkisiz sayı null', async () => {
     const ozet = async (cerez: string) => tamam<SatinAlmaOzetiCevabi>(await istek(cerez, 'GET', '/satin-alma/ozet'));
+    const BOS = {
+      onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null, gecikenTeslim: null, buHaftaGelecekTeslim: null,
+      siparisVerilecek: null, kararVerilecek: null, ihtiyaciGecen: null, gecikenEnEskiGun: null, ihtiyaciGecenEnEskiGun: null,
+    };
     const [sa0, md0] = [await ozet(c.sa), await ozet(c.mudur)];
     assert.equal(sa0.onayBekleyen, null);
-    assert.deepEqual(await ozet(c.operator), { onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null });
-    assert.deepEqual(await ozet(c.talep), { onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null });
+    assert.deepEqual(await ozet(c.operator), BOS);
+    assert.deepEqual(await ozet(c.talep), BOS);
     // Depo mal kabulü stokta yapar: yalnız teslim bekleyen satır sayısını görür.
     const depo = await ozet(c.depo);
-    assert.deepEqual({ ...depo, teslimBekleyenSatir: null }, { onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null });
+    assert.deepEqual({ ...depo, teslimBekleyenSatir: null }, BOS);
     assert.equal(depo.teslimBekleyenSatir, sa0.teslimBekleyenSatir);
 
     const t = await kararli();
@@ -1458,6 +1462,57 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([o.acikSiparis, o.teslimBekleyenSatir], [sa0.acikSiparis! + 1, sa0.teslimBekleyenSatir! + 1]);
     assert.equal(tutar(o) - tutar(sa0), 90);
     assert.equal((await app.inject({ method: 'GET', url: '/api/satin-alma/ozet' })).statusCode, 401);
+  });
+
+  test('2425: ortak pano sayıları iş kutusuyla aynı; sipariş tedarikçi başına, talep durum ve ihtiyaç gününe göre; talep eden ve depo görmez', async () => {
+    const ozet = async (cerez: string) => tamam<SatinAlmaOzetiCevabi>(await istek(cerez, 'GET', '/satin-alma/ozet'));
+    const gun = await bugun();
+    const ileri = (n: number) => { const d = new Date(`${gun}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const sayi = (o: SatinAlmaOzetiCevabi) => [o.gecikenTeslim, o.buHaftaGelecekTeslim, o.siparisVerilecek, o.kararVerilecek, o.ihtiyaciGecen];
+    const fark = (a: SatinAlmaOzetiCevabi, b: SatinAlmaOzetiCevabi) => sayi(a).map((x, i) => x! - sayi(b)[i]!);
+    for (const cerez of [c.talep, c.depo, c.operator]) {
+      const o = await ozet(cerez);
+      assert.deepEqual([...sayi(o), o.gecikenEnEskiGun, o.ihtiyaciGecenEnEskiGun], [null, null, null, null, null, null, null]);
+    }
+    const o0 = await ozet(c.sa);
+    // Değerlendirmedeki talep karar verilecektir; ihtiyaç günü geçtiği için ihtiyacı geçen de sayılır.
+    tamam(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme', ihtiyacTarihi: ileri(-3) })));
+    assert.deepEqual(fark(await ozet(c.sa), o0), [0, 0, 0, 1, 1]);
+    assert.ok((await ozet(c.sa)).ihtiyaciGecenEnEskiGun! >= 3);
+    // İhtiyacı bugün olan talep geçmiş sayılmaz.
+    tamam(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'taslak', ihtiyacTarihi: gun })));
+    assert.deepEqual(fark(await ozet(c.sa), o0), [0, 0, 0, 1, 1]);
+    // Onaydaki talep ne karar verilecek ne sipariş verilecektir; onaylanınca sipariş verilecek olur, ihtiyacı geçen kalır.
+    const k = await kararli(c.talep, { ihtiyacTarihi: ileri(-1) });
+    const o1 = await ozet(c.sa);
+    assert.deepEqual(fark(o1, o0), [0, 0, 0, 1, 2]);
+    tamam(await kaydet(c.mudur, { ...govde(k), onaylar: [onayKaydi()] }));
+    assert.deepEqual(fark(await ozet(c.sa), o1), [0, 0, 1, 0, 0]);
+    assert.equal((await ozet(c.mudur)).siparisVerilecek, (await ozet(c.sa)).siparisVerilecek, 'onaylayan da görür');
+    // Bölünmüş kararda iki tedarikçi siparişi: terminleri (sipariş tarihi + 7 gün) geçmiş, ikisi de gecikir; sipariş verilen talep ihtiyacı geçenden düşer.
+    const o2 = await ozet(c.sa);
+    const { s, a } = await bolunmusSiparis();
+    let o = await ozet(c.sa);
+    assert.deepEqual(fark(o, o2), [2, 0, 0, 0, 0]);
+    assert.ok(o.gecikenEnEskiGun! >= 25);
+    // Beklenen teslim terminin önüne geçer: A önümüzdeki 7 günde gelecek, gecikmez. Bugün + 7 bu hafta değildir.
+    const beklenen = async (g: string) => {
+      const x = await acilistaki(s.id);
+      tamam(await kaydet(c.sa, { ...govde(x), karar: { ...x.karar!, siparisler: x.karar!.siparisler.map((y) => ({
+        teklifId: y.teklifId, siparisNo: y.siparisNo, siparisTarihi: y.siparisTarihi, beklenenTeslim: y.teklifId === a ? g : y.beklenenTeslim, vadeBaslangici: y.vadeBaslangici })) } }));
+    };
+    await beklenen(ileri(6));
+    assert.deepEqual(fark(await ozet(c.sa), o2), [1, 1, 0, 0, 0]);
+    await beklenen(ileri(7));
+    assert.deepEqual(fark(await ozet(c.sa), o2), [1, 0, 0, 0, 0]);
+    // Kısmi teslim açık tutar; tamamı gelince sipariş sayılmaz.
+    await beklenen(ileri(-1));
+    const satirA = siparisi(await acilistaki(s.id), a).satirlar[0]!.id;
+    await teslimEt(satirA, '3', 7311);
+    assert.deepEqual(fark(await ozet(c.sa), o2), [2, 0, 0, 0, 0]);
+    await teslimEt(satirA, '1', 7312);
+    o = await ozet(c.sa);
+    assert.deepEqual(fark(o, o2), [1, 0, 0, 0, 0]);
   });
 
   test('#544 mal kabul listesi: teslimi tamamlanan satır açık siparişlerden düşer, kısmi kalır; kimlikle okunan satır yine gelir; geri alma satırı geri getirir', async () => {

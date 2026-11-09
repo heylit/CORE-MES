@@ -8,6 +8,7 @@ import '../../ortak/arayuz/index.ts';
 import { anaSayfaKartlari } from './ana-sayfa.tsx';
 
 const PANO = ['satin-alma-onay-bekleyen', 'satin-alma-acik-talep', 'satin-alma-teslim-bekleyen', 'satin-alma-acik-siparis'];
+const PANO_2425 = { gecikenTeslim: null, buHaftaGelecekTeslim: null, siparisVerilecek: null, kararVerilecek: null, ihtiyaciGecen: null, gecikenEnEskiGun: null, ihtiyaciGecenEnEskiGun: null };
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 
 function panoyuAc(cevap: () => Response) {
@@ -27,7 +28,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Satın alma pano kartları (#489)', () => {
   it('dört kart tek özet isteğiyle dolar; sayılar ve bağlantılar doğru', async () => {
-    const f = panoyuAc(() => json(200, { onayBekleyen: 2, acikTalep: 7, teslimBekleyenSatir: 5, acikSiparis: 3, acikSiparisTutari: '1250.5' } satisfies SatinAlmaOzetiCevabi));
+    const f = panoyuAc(() => json(200, { ...PANO_2425, onayBekleyen: 2, acikTalep: 7, teslimBekleyenSatir: 5, acikSiparis: 3, acikSiparisTutari: '1250.5' } satisfies SatinAlmaOzetiCevabi));
     await screen.findByText('7');
     expect(kart('Onay bekleyen satın alma talepleri').textContent).toContain('2');
     expect(kart('Onay bekleyen satın alma talepleri').getAttribute('href')).toBe('/satin-alma/onaylar');
@@ -39,7 +40,7 @@ describe('Satın alma pano kartları (#489)', () => {
 
   it('depo kartı teslim bekleyen satır sayısını gösterir ve stoktaki mal kabule götürür', async () => {
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    vi.stubGlobal('fetch', vi.fn(async () => json(200, { onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: 6, acikSiparis: null, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi)));
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { ...PANO_2425, onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: 6, acikSiparis: null, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi)));
     const K = anaSayfaKartlari.find((x) => x.anahtar === 'satin-alma-mal-kabul-bekleyen')!.ekran;
     render(<QueryClientProvider client={istemci}><MemoryRouter><K /></MemoryRouter></QueryClientProvider>);
     await screen.findByText('6');
@@ -47,7 +48,7 @@ describe('Satın alma pano kartları (#489)', () => {
   });
 
   it('yetkisiz sayı "Veri yok" der, sıfır uydurmaz; uç hata verirse "Alınamadı"', async () => {
-    panoyuAc(() => json(200, { onayBekleyen: 4, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi));
+    panoyuAc(() => json(200, { ...PANO_2425, onayBekleyen: 4, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi));
     await screen.findByText('4');
     expect(kart('Açık sipariş').textContent).toContain('Veri yok');
     cleanup();
@@ -62,13 +63,13 @@ describe('Satın alma pano kartları (#489)', () => {
       const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       render(<QueryClientProvider client={istemci}><MemoryRouter><K /></MemoryRouter></QueryClientProvider>);
     };
-    ac({ onayBekleyen: 3, acikTalep: 1, teslimBekleyenSatir: 1, acikSiparis: 2, acikSiparisTutari: '12500.6' });
+    ac({ ...PANO_2425, onayBekleyen: 3, acikTalep: 1, teslimBekleyenSatir: 1, acikSiparis: 2, acikSiparisTutari: '12500.6' });
     await screen.findByText((12501).toLocaleString('tr-TR'));
     const k = kart('Açık satın alma siparişi tutarı');
     expect(k.textContent).toContain('3 talep onay bekliyor');
     expect(k.getAttribute('href')).toBe('/satin-alma');
     cleanup();
-    ac({ onayBekleyen: 0, acikTalep: 0, teslimBekleyenSatir: 0, acikSiparis: 1, acikSiparisTutari: null });
+    ac({ ...PANO_2425, onayBekleyen: 0, acikTalep: 0, teslimBekleyenSatir: 0, acikSiparis: 1, acikSiparisTutari: null });
     await screen.findByText('Veri yok');
     expect(kart('Açık satın alma siparişi tutarı').textContent).not.toContain('onay bekliyor');
   });
@@ -89,7 +90,7 @@ describe('Satın alma pano kartları (#489)', () => {
 
   it('#1085: tedarik akışı talepten teslime dört adım; görülmeyen sayı "–", onay bekleyen uyarı tonunda', async () => {
     const K = anaSayfaKartlari.find((x) => x.anahtar === 'satin-alma-yonetim-akis')!.ekran;
-    vi.stubGlobal('fetch', vi.fn(async () => json(200, { onayBekleyen: 2, acikTalep: null, teslimBekleyenSatir: 5, acikSiparis: 3, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi)));
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { ...PANO_2425, onayBekleyen: 2, acikTalep: null, teslimBekleyenSatir: 5, acikSiparis: 3, acikSiparisTutari: null } satisfies SatinAlmaOzetiCevabi)));
     const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={istemci}><MemoryRouter><K /></MemoryRouter></QueryClientProvider>);
     const tablo = await screen.findByRole('table', { name: 'Tedarik akışı' });

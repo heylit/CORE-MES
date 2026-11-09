@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
+  anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, miniPanoCevabiYap, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
   yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 
@@ -27,6 +27,11 @@ describe('profil kuralları', () => {
   test('PRF-5: kaydı olmayan kişide tema null ve sürüm 0', () => {
     assert.deepEqual(temaCevabiYap(null), { tema: null, surum: 0 });
     assert.deepEqual(temaCevabiYap({ tema: 'gun', surum: 3 }), { tema: 'gun', surum: 3 });
+  });
+
+  test('PRF-6: kaydı olmayan kişide hepsi açık, öneri kapalı, sürüm 0; kapalı liste sıralı döner', () => {
+    assert.deepEqual(miniPanoCevabiYap(null), { kapali: [], acilistaOner: false, surum: 0 });
+    assert.deepEqual(miniPanoCevabiYap({ kapali: ['uretim', 'satin-alma'], acilistaOner: true, surum: 2 }), { kapali: ['satin-alma', 'uretim'], acilistaOner: true, surum: 2 });
   });
 
   test('GBM-1: takip satırı olmayan kayıt yenidir; satır varsa durumu okunur', () => {

@@ -1,4 +1,4 @@
-import type { GeriBildirimDurumu, GeriBildirimKonusu, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimDurumu, GeriBildirimKonusu, MiniPanoCevabi, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
 
 // PRF-1: kişinin profilinde son 50 geri bildirimi görünür; daha eskisi okuyanın listesindedir.
 export const PROFIL_GERI_BILDIRIM_SINIRI = 50;
@@ -25,6 +25,13 @@ export function mesaiToplami(satirlar: readonly { saat: number | null }[]): numb
 // PRF-5: kaydı olmayan kişinin teması null, sürümü 0 (ilk seçim bu sürümle yazılır); tema uydurulmaz.
 export function temaCevabiYap(satir: { tema: TemaTercihi; surum: number } | null): TemaCevabi {
   return satir === null ? { tema: null, surum: 0 } : { tema: satir.tema, surum: satir.surum };
+}
+
+// PRF-6: kaydı olmayan kişide bütün mini panolar açık, açılışta öneri kapalı, sürüm 0; kapalı liste sıralı döner.
+export function miniPanoCevabiYap(satir: { kapali: readonly string[]; acilistaOner: boolean; surum: number } | null): MiniPanoCevabi {
+  return satir === null
+    ? { kapali: [], acilistaOner: false, surum: 0 }
+    : { kapali: [...satir.kapali].sort(), acilistaOner: satir.acilistaOner, surum: satir.surum };
 }
 
 // Geri Bildirim Merkezi (kart 2192).
