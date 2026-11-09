@@ -212,14 +212,21 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
 export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null =>
   sirali(adimlar).find((s) => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0)) ?? null;
 
-// Fire payı olan adımdan önceki her adım ve girenleri fazladan işlenir.
+// Fire payı olan adımdan önceki adımlar ve girenleri fazladan işlenir. Sunucunun adimMiktarlari kuralı (RT-44, B-2485-1): adım, çıktısını
+// tüketen adımların (dallı rotada öncül listesinden, tek hatta sonraki adım) fire yollarından en büyüğünü taşır; paralel dalın firesi
+// öteki dalı büyütmez. Planlama MRP'si ve emrin malzeme ihtiyacı aynı kuraldadır (B-2502-1).
 export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
+  const onculler = oncullerCikar(adimlar.map((a, i) => ({
+    opNo: i, bagimlilik: SUNUCU_BAGI[a.dep], devirAdedi: null, dal: adimDali(a), birlesen: adimBirlesen(a),
+  })));
+  const ardillar = adimlar.map((): number[] => []);
+  adimlar.forEach((_, i) => {
+    for (const o of onculler[i]?.map((x) => x.opNo) ?? (i > 0 ? [i - 1] : [])) ardillar[o]?.push(i);
+  });
   const f = new Array<number>(adimlar.length).fill(1);
-  let acc = 1;
   for (let j = adimlar.length - 1; j >= 0; j--) {
     const rj = Math.min(0.95, Math.max(0, (adimlar[j]?.rejectPct ?? 0) / 100));
-    acc /= 1 - rj;
-    f[j] = acc;
+    f[j] = Math.max(1, ...(ardillar[j] ?? []).map((x) => f[x] ?? 1)) / (1 - rj);
   }
   return f;
 }
