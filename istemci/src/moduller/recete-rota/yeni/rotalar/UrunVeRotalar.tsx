@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Dugme, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
@@ -40,6 +40,13 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const [adimPaneli, setAdimPaneli] = useState(() => tercihOku('adim-paneli', '') === '1');
   const [kapali, setKapali] = useState<ReadonlySet<string>>(new Set());
   const [tamEkran, setTamEkran] = useState(false);
+  // Tam ekrandan Esc ile her yerden çıkılır (B-2482-R3); açık pencere Esc'i kendisi kullanırsa (defaultPrevented) dokunulmaz.
+  useEffect(() => {
+    if (!tamEkran) return undefined;
+    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) setTamEkran(false); };
+    window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('keydown', esc); };
+  }, [tamEkran]);
   const [copUstunde, setCopUstunde] = useState(false);
   const [surukleniyor, setSurukleniyor] = useState(false);
 
@@ -186,6 +193,11 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           </>
         )}
         <span className="tc-rr1-grow" />
+        {/* Düğme şemada, tabloda ve patlamış rotada aynı yerdedir; tam ekranda üst çubuk sabit kalır, çıkış kaydırmadan görünür (B-2482-R3). */}
+        {(tamEkran || (!liste && kokId)) && (
+          <Dugme className="tc-rr1-kd" simge={tamEkran ? 'x' : 'expand'} aria-pressed={tamEkran} title={tamEkran ? 'Tam ekrandan çık (Esc)' : 'Rotayı tam ekranda aç'}
+            onClick={() => { setTamEkran(!tamEkran); }}>{tamEkran ? 'Tam ekrandan çık' : 'Tam ekranda aç'}</Dugme>
+        )}
         {!liste && kokId && (o.yetki.maliyetOku || uyarilar.length > 0 || o.yetki.emirYaz) && (
           <span className="tc-rr1-run" role="group" aria-label="Rota özeti">
             {o.yetki.maliyetOku && (
@@ -209,7 +221,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
-                : <AkisSemasi r={r} kok={dugum} tamEkran={tamEkran} tamEkranDegistir={() => { setTamEkran(!tamEkran); }} cop={cop} />
+                : <AkisSemasi r={r} kok={dugum} tamEkranDegistir={() => { setTamEkran(!tamEkran); }} cop={cop} />
             ) : (
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>
