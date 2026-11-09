@@ -73,6 +73,8 @@ export const sirali = (adimlar: readonly Adim[]): Adim[] => [...adimlar].sort((a
 export const yenidenNumarala = (adimlar: readonly Adim[]): Adim[] => adimlar.map((a, i) => ({ ...a, seq: (i + 1) * 10 }));
 // Statünün adı adımın OP numarasıdır; yeni adımda sırası.
 export const statuNo = (a: Pick<Adim, 'opNo' | 'seq'>): number => a.opNo ?? a.seq;
+// Erişilebilir ad: numarası verilmiş adım "OP 20"; yeni adımın numarasını kayıt verir, bu yüzden sırasıyla okunur (OP numarası gibi değil).
+export const adimAdi = (a: Pick<Adim, 'opNo' | 'seq'>): string => (a.opNo === null ? `Yeni adım (${String(a.seq)}. sıra)` : `OP ${String(a.opNo)}`);
 export const fasonMu = (a: Pick<Adim, 'fasonId' | 'stationId' | 'machineId'>): boolean => !!a.fasonId && !a.stationId && !a.machineId;
 export const girdiOlur = (m: Malzeme | undefined): boolean => !!m && m.girdiOlabilir !== false && m.type !== 'hizmet';
 

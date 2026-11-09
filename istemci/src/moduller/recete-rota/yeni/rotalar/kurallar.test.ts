@@ -8,7 +8,7 @@ import {
 import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz, dalliRota, dalYaz } from './kurallar.ts';
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
-import { turKisa, yerelTur } from './kurallar.ts';
+import { adimAdi, turKisa, yerelTur } from './kurallar.ts';
 import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, kolParcalari, serbestDal } from './kurallar.ts';
 import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
@@ -505,5 +505,12 @@ describe('2542 C: şemada kollar yan yana', () => {
     expect(sirali(kolaTasi(l, 'b', null, 'a')).map((x) => x.dal ?? null)).toEqual([null, null, 'B', null]);
     expect(sirali(kolaTasi(l, 'c', 'A', 'b')).at(-1)?.birlesen).toEqual(['A']);
     expect(dalHatasi(kolaTasi(l, 'c', 'A', 'b'))).toBeNull();
+  });
+});
+
+describe('2558-3 adımın erişilebilir adı', () => {
+  it('numarası verilmiş adım OP numarasıyla, yeni adım sırasıyla okunur', () => {
+    expect(adimAdi({ opNo: 20, seq: 2 })).toBe('OP 20');
+    expect(adimAdi({ opNo: null, seq: 3 })).toBe('Yeni adım (3. sıra)');
   });
 });
