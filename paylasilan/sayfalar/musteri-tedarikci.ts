@@ -16,5 +16,9 @@ export const MUSTERI_TEDARIKCI_IKINCI_MENU = {
       { anahtar: 'tedarikciler', baslik: 'Tedarikçiler', yol: '/musteri-tedarikci/tedarikciler', simge: 'truck', islem: 'musteri-tedarikci.oku' },
       { anahtar: 'fason', baslik: 'Fason firmalar', yol: '/musteri-tedarikci/fason', simge: 'tool', islem: 'musteri-tedarikci.oku' },
     ] },
+    // 2456: tedarikçi değerlendirme matrisi (karne); firma listesinden ayrı grup.
+    { baslik: 'Değerlendirme', maddeler: [
+      { anahtar: 'degerlendirme', baslik: 'Tedarikçi değerlendirme', yol: '/musteri-tedarikci/degerlendirme', simge: 'chart', islem: 'musteri-tedarikci.oku' },
+    ] },
   ],
 } as const satisfies IkinciMenuTanimi;

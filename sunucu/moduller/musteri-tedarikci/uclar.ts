@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   adresEkleGovdesi, adresGuncelleGovdesi, adresKaldirGovdesi, adresParametresi, firmaAyrintiCevabi, firmaCevabi, firmaEkleGovdesi,
-  firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi,
+  firmaGuncelleGovdesi, firmaListeSorgusu, firmaListesiCevabi, firmaSecimCevabi, firmaSecimSorgusu, hizmetPuaniGovdesi, karneCevabi, degerlendirmeCevabi, karneAgirlikCevabi, karneAgirlikGovdesi,
   kimlikParametresi, logoCariAramaCevabi, logoCariAramaSorgusu, logoCariCevabi, logoCariSorgusu, logodanFirmaAlGovdesi, logoyaBaglaGovdesi,
   yillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
@@ -97,7 +97,18 @@ export const uclar = [
     parametre: kimlikParametresi,
     govde: hizmetPuaniGovdesi,
     cevap: karneCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => servis.hizmetPuaniEkle(db, kullanici, parametre.id, govde),
+    isle: ({ db, kullanici, parametre, govde }) => servis.ellePuanEkle(db, kullanici, parametre.id, 'satin-alma', govde),
+  }),
+  // 2456-3 a: Kalite değerlendirmesi / tedarikçi denetimi puanını kalite onay yetkisi olan verir (yıllık karneyle aynı işlem).
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/firmalar/:id/kalite-degerlendirmesi/ekle',
+    yetki: 'kalite-merkezi.onayla',
+    tekrarKorumali: true,
+    parametre: kimlikParametresi,
+    govde: hizmetPuaniGovdesi,
+    cevap: karneCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.ellePuanEkle(db, kullanici, parametre.id, 'kalite', govde),
   }),
   uc({
     yontem: 'POST',
@@ -108,6 +119,31 @@ export const uclar = [
     govde: yillikKarneGovdesi,
     cevap: karneCevabi,
     isle: ({ db, kullanici, parametre, govde }) => servis.yillikKarneEkle(db, kullanici, parametre.id, govde),
+  }),
+  // Değerlendirme matrisi (2456): karneyi gören matrisi de görür. Ağırlıkları yalnız yönetici değiştirir (2456-2 c): işlem
+  // musteri-tedarikci.karne-agirlik hiçbir role satırla verilmez; yönetici rolü bütün işlemleri taşır.
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/degerlendirme',
+    yetki: 'musteri-tedarikci.oku',
+    cevap: degerlendirmeCevabi,
+    isle: ({ db }) => servis.degerlendirmeMatrisi(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/musteri-tedarikci/karne-agirliklari',
+    yetki: 'musteri-tedarikci.oku',
+    cevap: karneAgirlikCevabi,
+    isle: ({ db }) => servis.karneAgirliklari(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/musteri-tedarikci/karne-agirliklari/degistir',
+    yetki: 'musteri-tedarikci.karne-agirlik',
+    tekrarKorumali: true,
+    govde: karneAgirlikGovdesi,
+    cevap: karneAgirlikCevabi,
+    isle: ({ db, kullanici, govde }) => servis.karneAgirlikDegistir(db, kullanici, govde),
   }),
   // Logo'dan cari (2118-3 a): yalnız firma yazabilen arar ve alır. Okumalar köprüyü beklediği için transaction dışındadır;
   // komutlar köprüye gitmez, aynı kişinin son okumasını kullanır.

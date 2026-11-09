@@ -192,7 +192,6 @@ export type FirmaSecimCevabi = z.output<typeof firmaSecimCevabi>;
 
 // Tedarikçi karnesi (1259 c, 1260 a). Karnenin sahibi Müşteri-Tedarikçi'dir; satın alma teslimi, Kalite Merkezi lot kararını kendi
 // işlemi içinde olay olarak iter (disari.ts), çünkü Müşteri-Tedarikçi onları ithal ederse modül döngüsü olur (ADR 0006).
-export const KARNE_AGIRLIKLARI = { teslim: 40, kalite: 40, hizmet: 20 } as const;
 // Az alım yapılan tedarikçide kısa dönem anlamlı veri vermez; puan her gün kayan son 12 ayla hesaplanır.
 export const KARNE_DONEM_AYI = 12;
 export const TESLIM_TOLERANS_GUNU = 2;
@@ -209,11 +208,27 @@ export const LOT_KARAR_PUANI = { kabul: 1, sartli_kabul: 0.5, hatali_kabul: 0.5,
 export const YILLIK_KARNE_SINIRI = 50;
 export const HIZMET_PUANI_SINIRI = 100;
 
+// Karne hesap sürümü 2 (2456, 2403 a): yedi bileşen, her biri 0-100. Ağırlıklar sürümlü tabloda tutulur; değiştiren yalnız yönetici
+// (2456-2 c), her değişiklik yeni sürümdür ve eski yıllık karneler kendi sürümüyle kalır. Verisi olmayan bileşen null'dır ve ağırlığı
+// öteki bileşenlere oranla dağılır (sıfır uydurulmaz).
+export const KARNE_BILESENLERI = ['lot', 'ppm', 'zamaninda', 'tam', 'teklif', 'satinAlma', 'kalite'] as const;
+export const KARNE_BILESEN_GRUPLARI = { lot: 'kalite', ppm: 'kalite', zamaninda: 'teslim', tam: 'teslim', teklif: 'teslim', satinAlma: 'elle', kalite: 'elle' } as const;
+export type KarneBilesenGrubu = (typeof KARNE_BILESEN_GRUPLARI)[keyof typeof KARNE_BILESEN_GRUPLARI];
+// Elle puan türü: satın alma değerlendirmesi (satin-alma.yaz) ve Kalite değerlendirmesi / tedarikçi denetimi (kalite-merkezi.onayla, 2456-3 a).
+export const ELLE_PUAN_TURLERI = ['satin-alma', 'kalite'] as const;
+export const KARNE_AGIRLIK_GECMISI_SINIRI = 50;
+export const KARNE_ONCEKI_DONEM_GUNU = 91;
+export const DEGERLENDIRME_SINIRI = 2000;
+
 export const karneSinifi = z.enum(KARNE_SINIFLARI);
 export type KarneSinifi = z.output<typeof karneSinifi>;
 export const karneOlayKaynagi = z.enum(KARNE_OLAY_KAYNAKLARI);
 export type KarneOlayKaynagi = z.output<typeof karneOlayKaynagi>;
 export const lotKarari = z.enum(LOT_KARARLARI);
+export const karneBileseni = z.enum(KARNE_BILESENLERI);
+export type KarneBileseni = z.output<typeof karneBileseni>;
+export const ellePuanTuru = z.enum(ELLE_PUAN_TURLERI);
+export type EllePuanTuru = z.output<typeof ellePuanTuru>;
 export type LotKarari = z.output<typeof lotKarari>;
 
 // Olay kaynak ve anahtarıyla tektir: aynı kaydın sonraki kararı (lot NCR'den iadeye döndü gibi) öncekinin yerine geçer,
@@ -251,16 +266,29 @@ export const yillikKarneGovdesi = z.object({
 export type YillikKarneGovdesi = z.input<typeof yillikKarneGovdesi>;
 
 const yuzluk = z.number().min(0).max(100).nullable();
+const agirlikDegeri = z.number().int().min(0, 'Ağırlık 0-100 arasındadır.').max(100, 'Ağırlık 0-100 arasındadır.');
+export const karneAgirliklari = z.object(Object.fromEntries(KARNE_BILESENLERI.map((b) => [b, agirlikDegeri])) as Record<KarneBileseni, typeof agirlikDegeri>);
+export type KarneAgirliklari = z.output<typeof karneAgirliklari>;
+// etkinAgirlik: bu firmada verisi olan bileşenler arasında dağıtılmış ağırlık (yüzde); değer null ise null.
+export const karneBilesenSatiri = z.object({ anahtar: karneBileseni, deger: yuzluk, agirlik: agirlikDegeri, etkinAgirlik: yuzluk });
+export type KarneBilesenSatiri = z.output<typeof karneBilesenSatiri>;
 export const karneOzetiSemasi = z.object({
   firmaId: z.number().int().positive(),
   donemBasi: tarihSemasi,
   donemSonu: tarihSemasi,
-  teslim: z.object({ toplam: z.number().int().nonnegative(), zamaninda: z.number().int().nonnegative(), oran: yuzluk }),
-  kalite: z.object({ lot: z.number().int().nonnegative(), puan: yuzluk }),
-  hizmet: z.object({ sayi: z.number().int().nonnegative(), puan: yuzluk }),
+  // zamaninda: termin + tolerans içindeki teslim (tam olsun olmasın, sürüm 2); tam: tam teslim sayısı; oran zamanında yüzdesidir.
+  teslim: z.object({ toplam: z.number().int().nonnegative(), zamaninda: z.number().int().nonnegative(), tam: z.number().int().nonnegative(), oran: yuzluk }),
+  kalite: z.object({ lot: z.number().int().nonnegative(), kararlar: z.partialRecord(lotKarari, z.number().int().nonnegative()), puan: yuzluk }),
+  // hizmet: satın alma değerlendirmesi; kaliteDegerlendirmesi: Kalite'nin 1-5 puanı. Puan (p-1) x 25 ile 0-100'dür.
+  hizmet: z.object({ sayi: z.number().int().nonnegative(), ortalama: z.number().min(1).max(5).nullable(), puan: yuzluk }),
+  kaliteDegerlendirmesi: z.object({ sayi: z.number().int().nonnegative(), ortalama: z.number().min(1).max(5).nullable(), puan: yuzluk }),
+  bilesenler: z.array(karneBilesenSatiri).length(KARNE_BILESENLERI.length),
+  // Grup puanı: grubun verisi olan bileşenlerinin kendi ağırlıklarıyla ortalaması; matrisin özet görünümü içindir, toplam puana ayrıca katılmaz.
+  gruplar: z.object({ kalite: yuzluk, teslim: yuzluk, elle: yuzluk }),
+  hesapSurumu: z.number().int().min(1),
   puan: yuzluk,
   sinif: karneSinifi.nullable(),
-  // En az veri yoksa puan ve sınıf null'dır; ekran "Yetersiz veri" yazar.
+  // Teslim ya da lot en az sayının altındaysa sınıf verilmez; puan varsa "az veri" ile gösterilir.
   yetersizVeri: z.boolean(),
 });
 export type KarneOzeti = z.output<typeof karneOzetiSemasi>;
@@ -277,12 +305,16 @@ export const yillikKarneSemasi = z.object({
   not: z.string().nullable(),
   degerlendiren: z.string(),
   olusturma: zamanSemasi,
+  // Sürüm 2 öncesi kayıtlarda boştur (40/40/20 hesabı).
+  hesapSurumu: z.number().int().min(1).nullable(),
+  bilesenler: z.array(karneBilesenSatiri).nullable(),
 });
 export type YillikKarne = z.output<typeof yillikKarneSemasi>;
 
 export const hizmetPuaniSemasi = z.object({
   id: z.number().int().positive(),
   puan: z.number().int().min(HIZMET_PUANI_EN_AZ).max(HIZMET_PUANI_EN_COK),
+  tur: ellePuanTuru,
   not: z.string().nullable(),
   giren: z.string(),
   olusturma: zamanSemasi,
@@ -295,6 +327,46 @@ export const karneCevabi = z.object({
   hizmetPuanlari: z.array(hizmetPuaniSemasi).max(HIZMET_PUANI_SINIRI),
 });
 export type KarneCevabi = z.output<typeof karneCevabi>;
+
+// Ağırlık sürümü (2456-2 c): değiştiren yönetici ve gerekçe kayıtlıdır; başlangıç sürümünü göç yazar (değiştiren boş).
+export const karneAgirlikSurumu = z.object({
+  surum: z.number().int().min(1),
+  agirliklar: karneAgirliklari,
+  gerekce: z.string(),
+  degistiren: z.string().nullable(),
+  olusturma: zamanSemasi,
+});
+export type KarneAgirlikSurumu = z.output<typeof karneAgirlikSurumu>;
+export const karneAgirlikCevabi = z.object({
+  gecerli: karneAgirlikSurumu,
+  gecmis: z.array(karneAgirlikSurumu).max(KARNE_AGIRLIK_GECMISI_SINIRI),
+});
+export type KarneAgirlikCevabi = z.output<typeof karneAgirlikCevabi>;
+// Sürüm denetimi: istemci okuduğu geçerli sürümü gönderir; arada başkası değiştirdiyse çakışma döner.
+export const karneAgirlikGovdesi = z.object({
+  surum: z.number().int().min(1),
+  agirliklar: karneAgirliklari,
+  gerekce: z.string().trim().min(1, 'Gerekçe yazın.').max(500, 'En çok 500 karakter.'),
+}).refine((g) => KARNE_BILESENLERI.reduce((t, b) => t + g.agirliklar[b], 0) === 100, { message: 'Ağırlıkların toplamı 100 olmalı.', path: ['agirliklar'] });
+export type KarneAgirlikGovdesi = z.input<typeof karneAgirlikGovdesi>;
+
+// Değerlendirme matrisi: aktif tedarikçi ve "ikisi" türündeki firmaların karnesi; öncekiPuan aynı ağırlıklarla 91 gün önceki kayan karne.
+export const degerlendirmeSatiri = z.object({
+  firmaId: z.number().int().positive(),
+  kod: z.string().nullable(),
+  ad: z.string(),
+  fason: z.boolean(),
+  karne: karneOzetiSemasi,
+  oncekiPuan: yuzluk,
+});
+export type DegerlendirmeSatiri = z.output<typeof degerlendirmeSatiri>;
+export const degerlendirmeCevabi = z.object({
+  satirlar: z.array(degerlendirmeSatiri).max(DEGERLENDIRME_SINIRI),
+  agirliklar: karneAgirlikSurumu,
+  // Sınırı aşan tedarikçi sayısı varsa true; ekran "ilk N" yazar.
+  kesildi: z.boolean(),
+});
+export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
 
 // Logo'dan cari arama ve alma (2118; kararlar 2118-1 a, 2118-2 a, 2118-3 a). Arama ve tek cari okuması köprüyü transaction dışında
 // çağırır; alma ve bağlama komutu köprüye gitmez, aynı kişinin son aramasında görülen cariyi kullanır (süresi dolduysa yeniden aranır).

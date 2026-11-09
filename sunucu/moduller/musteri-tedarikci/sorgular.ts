@@ -4,7 +4,8 @@ import type { Dilim, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import type {
-  Adres, AdresKimligi, Firma, FirmaKimligi, FirmaSatiri, FirmaTuru, KarneOlayKaynagi, KarneSinifi, LotKarari, MusteriSinifi,
+  Adres, AdresKimligi, EllePuanTuru, Firma, FirmaKimligi, FirmaSatiri, FirmaTuru, KarneAgirliklari, KarneBilesenSatiri, KarneOlayKaynagi,
+  KarneSinifi, LotKarari, MusteriSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 // Koordinat numeric(9,6) sütunudur; ekrana ve sözleşmeye sayı gider (altı ondalık float8'de kaybolmaz).
@@ -255,27 +256,29 @@ export function lotGruplari(db: Db, idler: readonly number[], donemBasi: string,
   );
 }
 
-export interface HizmetGrubu { firmaId: number; sayi: number; toplam: number }
+export interface HizmetGrubu { firmaId: number; tur: EllePuanTuru; sayi: number; toplam: number }
 export function hizmetGruplari(db: Db, idler: readonly number[], donemBasi: string, donemSonu: string, saatDilimi: string): Promise<HizmetGrubu[]> {
   return db.sorgu<HizmetGrubu>(
-    `SELECT firma_id AS "firmaId", count(*)::int AS sayi, sum(puan)::int AS toplam
+    `SELECT firma_id AS "firmaId", tur, count(*)::int AS sayi, sum(puan)::int AS toplam
        FROM musteri_tedarikci_hizmet_puani
       WHERE firma_id = ANY($1::int[]) AND (olusturma AT TIME ZONE $4)::date BETWEEN $2::date AND $3::date
-      GROUP BY firma_id`,
+      GROUP BY firma_id, tur`,
     [idler, donemBasi, donemSonu, saatDilimi],
   );
 }
 
-export interface HizmetPuaniSatiri { id: number; puan: number; not: string | null; girenId: number; olusturma: string }
-export function hizmetPuaniEkle(db: Db, firmaId: number, puan: number, not: string | null, kisiId: number): Promise<{ id: number } | null> {
+export interface HizmetPuaniSatiri { id: number; puan: number; tur: EllePuanTuru; not: string | null; girenId: number; olusturma: string }
+export function hizmetPuaniEkle(
+  db: Db, firmaId: number, tur: EllePuanTuru, puan: number, not: string | null, kisiId: number,
+): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
-    'INSERT INTO musteri_tedarikci_hizmet_puani (firma_id, puan, "not", giren_id) VALUES ($1, $2, $3, $4) RETURNING id',
-    [firmaId, puan, not, kisiId],
+    'INSERT INTO musteri_tedarikci_hizmet_puani (firma_id, tur, puan, "not", giren_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [firmaId, tur, puan, not, kisiId],
   );
 }
 export function hizmetPuanlari(db: Db, firmaId: number, sinir: number): Promise<HizmetPuaniSatiri[]> {
   return db.sorgu<HizmetPuaniSatiri>(
-    `SELECT id, puan, "not", giren_id AS "girenId", ${zamanMetni('olusturma')} AS olusturma
+    `SELECT id, puan, tur, "not", giren_id AS "girenId", ${zamanMetni('olusturma')} AS olusturma
        FROM musteri_tedarikci_hizmet_puani WHERE firma_id = $1 ORDER BY olusturma DESC, id DESC LIMIT $2`,
     [firmaId, sinir],
   );
@@ -284,21 +287,55 @@ export function hizmetPuanlari(db: Db, firmaId: number, sinir: number): Promise<
 export interface YillikKarneSatiri {
   id: number; firmaId: number; yil: number; teslimOrani: number | null; kalitePuani: number | null; hizmetPuani: number | null;
   puan: number | null; sinif: KarneSinifi | null; not: string | null; degerlendirenId: number; olusturma: string;
+  hesapSurumu: number | null; bilesenler: KarneBilesenSatiri[] | null;
 }
 const YILLIK = `id, firma_id AS "firmaId", yil, teslim_orani::float8 AS "teslimOrani", kalite_puani::float8 AS "kalitePuani",
-  hizmet_puani::float8 AS "hizmetPuani", puan::float8 AS puan, sinif, "not", degerlendiren_id AS "degerlendirenId", ${zamanMetni('olusturma')} AS olusturma`;
+  hizmet_puani::float8 AS "hizmetPuani", puan::float8 AS puan, sinif, "not", degerlendiren_id AS "degerlendirenId", ${zamanMetni('olusturma')} AS olusturma,
+  hesap_surumu AS "hesapSurumu", bilesenler`;
 export function yillikKarneEkle(
   db: Db, k: Omit<YillikKarneSatiri, 'id' | 'olusturma'>,
 ): Promise<YillikKarneSatiri | null> {
   return db.tek<YillikKarneSatiri>(
-    `INSERT INTO musteri_tedarikci_yillik_karne (firma_id, yil, teslim_orani, kalite_puani, hizmet_puani, puan, sinif, "not", degerlendiren_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${YILLIK}`,
-    [k.firmaId, k.yil, k.teslimOrani, k.kalitePuani, k.hizmetPuani, k.puan, k.sinif, k.not, k.degerlendirenId],
+    `INSERT INTO musteri_tedarikci_yillik_karne
+       (firma_id, yil, teslim_orani, kalite_puani, hizmet_puani, puan, sinif, "not", degerlendiren_id, hesap_surumu, bilesenler)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb) RETURNING ${YILLIK}`,
+    [k.firmaId, k.yil, k.teslimOrani, k.kalitePuani, k.hizmetPuani, k.puan, k.sinif, k.not, k.degerlendirenId, k.hesapSurumu,
+      k.bilesenler === null ? null : JSON.stringify(k.bilesenler)],
   );
 }
 export function yillikKarneler(db: Db, firmaId: number, sinir: number): Promise<YillikKarneSatiri[]> {
   return db.sorgu<YillikKarneSatiri>(
     `SELECT ${YILLIK} FROM musteri_tedarikci_yillik_karne WHERE firma_id = $1 ORDER BY yil DESC LIMIT $2`, [firmaId, sinir]);
+}
+
+// ---- Karne ağırlıkları (2456) ----
+
+export interface AgirlikSatiri { surum: number; agirliklar: KarneAgirliklari; gerekce: string; degistirenId: number | null; olusturma: string }
+const AGIRLIK = `surum, jsonb_build_object('lot', lot, 'ppm', ppm, 'zamaninda', zamaninda, 'tam', tam, 'teklif', teklif,
+  'satinAlma', satin_alma, 'kalite', kalite) AS agirliklar, gerekce, degistiren_id AS "degistirenId", ${zamanMetni('olusturma')} AS olusturma`;
+// kilitle: değişiklik geçerli satırı kilitler; eş zamanlı ikinci değişiklik sürüm denetiminde çakışma alır.
+export function gecerliAgirlik(db: Db, kilitle = false): Promise<AgirlikSatiri | null> {
+  return db.tek<AgirlikSatiri>(
+    `SELECT ${AGIRLIK} FROM musteri_tedarikci_karne_agirlik ORDER BY surum DESC LIMIT 1${kilitle ? ' FOR UPDATE' : ''}`);
+}
+export function agirlikGecmisi(db: Db, sinir: number): Promise<AgirlikSatiri[]> {
+  return db.sorgu<AgirlikSatiri>(`SELECT ${AGIRLIK} FROM musteri_tedarikci_karne_agirlik ORDER BY surum DESC LIMIT $1`, [sinir]);
+}
+export async function agirlikEkle(db: Db, surum: number, a: KarneAgirliklari, gerekce: string, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO musteri_tedarikci_karne_agirlik (surum, lot, ppm, zamaninda, tam, teklif, satin_alma, kalite, gerekce, degistiren_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [surum, a.lot, a.ppm, a.zamaninda, a.tam, a.teklif, a.satinAlma, a.kalite, gerekce, kisiId],
+  );
+}
+
+export interface DegerlendirilecekFirma { id: number; kod: string | null; ad: string; fason: boolean }
+export function degerlendirilecekFirmalar(db: Db, sinir: number): Promise<DegerlendirilecekFirma[]> {
+  return db.sorgu<DegerlendirilecekFirma>(
+    `SELECT id, kod, ad, fason FROM musteri_tedarikci_firma
+      WHERE aktif AND tur IN ('tedarikci', 'ikisi') ORDER BY ad, id LIMIT $1`,
+    [sinir],
+  );
 }
 
 // 2118: Logo carisiyle eşleşebilecek firmalar (kayıt no, cari kodu ya da kod, vergi no). Kodlar büyük harfle gelir (tekil indeks gibi).
