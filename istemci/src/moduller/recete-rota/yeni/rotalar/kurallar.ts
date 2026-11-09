@@ -168,6 +168,46 @@ export function kolaEkle(adimlar: readonly Adim[], sonraId: string | null, a: Ad
   const yeni = hedef === null ? a : { ...a, dal: hedef, ...(dal == null && onceki?.adetCarpani != null ? { adetCarpani: onceki.adetCarpani } : {}) };
   return adimEkle(adimlar, sonraId, yeni);
 }
+// C: şemada kollar yan yana. Rota sırası parçalara bölünür: çatalla birleşme arası (açık dal varken) tek "kollar" parçasıdır, içinde ana hat ve her dal
+// kendi sütunudur; kalan adımlar tek tek. Birleştiren adım, başka açık dal kalmadıysa parçadan sonra gelir.
+export type SemaParcasi = { tur: 'adim'; id: string } | { tur: 'kollar'; seritler: { dal: string | null; idler: string[] }[] };
+export function kolParcalari(adimlar: readonly Adim[]): SemaParcasi[] {
+  const l = sirali(adimlar);
+  const sonuc: SemaParcasi[] = [];
+  const acik = new Set<string>();
+  let bolge: Map<string | null, string[]> | null = null;
+  const kapat = () => {
+    if (!bolge) return;
+    const seritler = [...bolge.entries()].map(([dal, idler]) => ({ dal, idler }));
+    sonuc.push({ tur: 'kollar', seritler: [...seritler.filter((x) => x.dal === null), ...seritler.filter((x) => x.dal !== null)] });
+    bolge = null;
+  };
+  for (const a of l) {
+    for (const d of adimBirlesen(a)) acik.delete(d);
+    const dal = adimDali(a);
+    if (dal !== null) acik.add(dal);
+    if (dal !== null || acik.size > 0) {
+      bolge ??= new Map();
+      bolge.set(dal, [...(bolge.get(dal) ?? []), a.id]);
+    } else {
+      kapat();
+      sonuc.push({ tur: 'adim', id: a.id });
+    }
+  }
+  kapat();
+  return sonuc;
+}
+// C: adım sürüklenip bir kolun sütununa bırakılınca o kola geçer ve kolun son adımının ardına taşınır; ana hat sütununda dalı kalkar.
+export function kolaTasi(adimlar: readonly Adim[], adimId: string, dal: string | null, sonId: string): Adim[] {
+  const son = adimlar.find((a) => a.id === sonId);
+  const yer = sonId === adimId ? [...adimlar] : adimArkasinaTasi(adimlar, adimId, sonId);
+  // Kola geçen adım kolun çarpanını alır (D: çarpan kolda tektir).
+  const sonra = yer.map((a) => (a.id !== adimId ? a : dal === null ? dalYaz(a, null) : { ...dalYaz(a, dal), adetCarpani: son?.adetCarpani ?? null }));
+  // Son adımı da taşınan dal kalmaz; birleşme işareti de kalkar (yoksa "dalın adımı yok" hatası çıkar).
+  const kalan = new Set(sonra.flatMap((a) => adimDali(a) ?? []));
+  return sonra.map((a) => (adimBirlesen(a).some((d) => !kalan.has(d)) ? { ...a, birlesen: adimBirlesen(a).filter((d) => kalan.has(d)) } : a));
+}
+
 // F: düzenlerken dal denetimi (sunucuyla aynı kural); hatalı adımın kimliği ve iletisi, yoksa null.
 export function dalHatasi(adimlar: readonly Adim[]): { adimId: string | null; ileti: string } | null {
   const l = sirali(adimlar);
