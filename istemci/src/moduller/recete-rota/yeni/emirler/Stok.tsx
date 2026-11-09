@@ -66,7 +66,7 @@ export function Stok({ veri, yetki }: EkranOzellikleri) {
         {yetki.maliyetOku && <SayiKarti baslik="Stok değeri" simge="lira" metin={toplamDeger === null ? 'Veri yok' : para(toplamDeger)} altMetin={degerAlt} />}
         <SayiKarti
           baslik="Minimumun altında" simge="alert" sayi={alti.length} ton="uyari" yol={MALZEME_IHTIYACI}
-          altMetin={alti.length ? `${alti.slice(0, 3).map((s) => s.malzeme.code).join(', ')}${alti.length > 3 ? '…' : ''}` : 'Hepsi yeterli'}
+          altMetin={`${alti.length ? `${alti.slice(0, 3).map((s) => s.malzeme.code).join(', ')}${alti.length > 3 ? '…' : ''}` : 'Hepsi yeterli'} · Planlama: malzeme ihtiyacına git`}
         />
         <SayiKarti baslik="Hareket" simge="list" sayi={d.moves === null ? null : d.moves.length} altMetin="son stok hareketi" />
       </div>
