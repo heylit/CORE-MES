@@ -189,8 +189,14 @@ function tmEksikYaz(st) {
   D.satinalma = (D.satinalma || []).filter(p => p.tm !== 'siparis-yok');
   const bitti = st.bitti || {};
   const ihtiyac = {}; for (const s of D.siparisler || []) { if (s.havuz || s.iptal) continue; for (const r of s.malzeme || []) { if (r.adim != null && bitti[s.id + '.' + r.adim]) continue; ihtiyac[r.kod] = (ihtiyac[r.kod] || 0) + (+r.miktar || 0) * s.adet; } }
-  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod); const var0 = (m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0);
-    const eks = ihtiyac[kod] - var0; if (eks <= 1e-6) continue;
+  /* B-2483-67: sunucunun eksiği (girdi.js tmiMrpEksikleri) varsa o kullanılır: başlamış emrin verilen sarfı, fire ve yarı mamul orada sayılır;
+     brüt hesap (sarfı bilmez, malzemeyi iki kez düşer) yalnız sunucu sayısı yokken kalır. Sunucunun hesaplayamadığı (null) malzemeye satır yazılmaz. */
+  const sunucu = (D.malzemeler || []).filter(m => m.mrpEksik !== undefined);
+  for (const m of sunucu) if (!(m.kod in ihtiyac)) ihtiyac[m.kod] = 0;
+  for (const kod in ihtiyac) { const m = (D.malzemeler || []).find(x => x.kod === kod);
+    if (m && m.mrpEksik === null) continue;
+    const eks = m && m.mrpEksik !== undefined ? m.mrpEksik : ihtiyac[kod] - ((m ? +m.stok || 0 : 0) + D.satinalma.filter(p => p.kod === kod).reduce((a, p) => a + (+p.miktar || 0), 0));
+    if (eks <= 1e-6) continue;
     const sat = tmSaTermin(D, kod);
     D.satinalma.push({ kod, miktar: eks, gelis: sat || tmTarihYaz(D, tmGereken(D, kod, E.ih, E.bas)), tedarikci: (m && m.tedarikci) || '', src: null, tm: 'siparis-yok', ...(sat ? { saTermin: 1 } : { tb: 1 }) }); }
   return st;

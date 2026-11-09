@@ -118,7 +118,8 @@ describe('kaynak dilimi eşdeğerliği (1716, saf)', () => {
     assert.deepEqual(t['100']?.hafta, { pzt: ['1', '2'], sal: ['1'], car: [], per: [], cum: [], cmt: [], paz: [] });
     assert.deepEqual(d.calismaGunleri, { pzt: ['1', '2'], sal: ['1'], car: [], per: [], cum: [], cmt: ['1'], paz: [] });
     const p = Object.fromEntries(d.personel.map((x) => [x.id, x]));
-    assert.deepEqual([p['7']?.vardiya, p['7']?.ayar, p['8']?.vardiya, p['8']?.ayar, (p['8'] as unknown as Record<string, unknown>)['notu']], ['1', false, '', false, 'sayfanin alani']);
+    // 2513 a (1716): ayarcılık her okumada görevden; sayfadaki eski elle değer (false) kalmaz.
+    assert.deepEqual([p['7']?.vardiya, p['7']?.ayar, p['8']?.vardiya, p['8']?.ayar, (p['8'] as unknown as Record<string, unknown>)['notu']], ['1', false, '', true, 'sayfanin alani']);
     assert.deepEqual(d.devamsizlik, [
       { personel: '8', gun: '2026-10-23' }, { personel: '7', gun: '2026-10-21', sunucu: true }, { personel: '7', gun: '2026-10-22', sunucu: true },
     ]);

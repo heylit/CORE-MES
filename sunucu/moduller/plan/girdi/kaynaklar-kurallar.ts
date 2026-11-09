@@ -76,6 +76,17 @@ function ucretIzle(a: Record<string, unknown>, maliyet: number | null): void {
   const izler = a['ucretIst'] !== undefined ? a['ucret'] === a['ucretIst'] : a['ucret'] === maliyet;
   if (izler) { a['ucret'] = maliyet; a['ucretIst'] = maliyet; }
 }
+// B-2483-15: verim ve tezgâhın vardiya listesi ücret gibi izlenir (girdi.betik verimIzle, vardiyaIzle ile aynı kural).
+function verimIzle(a: Record<string, unknown>, verim: number): void {
+  const izler = a['verimIst'] !== undefined ? a['verim'] === a['verimIst'] : a['verim'] === verim;
+  if (izler) { a['verim'] = verim; a['verimIst'] = verim; }
+}
+const ayniListe = (x: unknown, y: readonly string[]): boolean => Array.isArray(x) && x.length === y.length && x.every((v, i) => String(v) === y[i]);
+function vardiyaIzle(a: Record<string, unknown>, vardiyalar: readonly string[]): void {
+  const izler = a['vardiyalarIst'] !== undefined ? ayniListe(a['vardiyalar'], (a['vardiyalarIst'] as unknown[]).map(String)) : ayniListe(a['vardiyalar'], vardiyalar);
+  if (izler) { a['vardiyalar'] = [...vardiyalar]; a['vardiyalarIst'] = [...vardiyalar]; }
+}
+const istasyonVerimi = (yuzde: number | null | undefined): number => ((yuzde ?? 0) > 0 ? yuzde! : 100) / 100;
 
 // 1952 (1953 a, 1954 a, 1957 a, 1959 a): insanlı istasyonun tezgâhları kişilerdir (girdi.betik rrCevir ile aynı kural). O istasyonda bugün
 // yetkin ve vardiyası olan her aktif kişiye bir el tezgâhı; kimlik motorun önekiyle (emirler.betik kisiTezgahi). Birden çok insanlı
@@ -101,8 +112,8 @@ function tezgahlar(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: Readonl
     const id = kisiTezgahKimligi(k.id);
     const a = kimlikle(elle.tezgahlar, id);
     const maliyet = o.istasyonMaliyeti?.get(ist.id) ?? null;
-    if (a !== undefined) ucretIzle(a, maliyet);
-    const ilk = a === undefined ? { ucret: maliyet, ucretIst: maliyet, verim: (ist.verimYuzde || 100) / 100 } : {};
+    if (a !== undefined) { ucretIzle(a, maliyet); verimIzle(a, istasyonVerimi(ist.verimYuzde)); }
+    const ilk = a === undefined ? { ucret: maliyet, ucretIst: maliyet, verim: istasyonVerimi(ist.verimYuzde), verimIst: istasyonVerimi(ist.verimYuzde) } : {};
     return ustuneYaz<MotorTezgahi>(a, {
       id, ad: k.ad, grup: String(ist.id), grupKod: ist.kod || undefined, grupAd: ist.ad || undefined, ...ilk, vardiyalar: [k.vardiya], hafta: undefined, opOran: 1,
     });
@@ -120,10 +131,11 @@ function makineTezgahlari(
     const id = String(m.id);
     const maliyet = o.istasyonMaliyeti?.get(ist.id) ?? null;
     const a = kimlikle(elle.tezgahlar, id);
-    if (a !== undefined) ucretIzle(a, maliyet);
+    const vl = o.vardiyalar.map((v) => String(v.id));
+    if (a !== undefined) { ucretIzle(a, maliyet); verimIzle(a, istasyonVerimi(ist.verimYuzde)); vardiyaIzle(a, vl); }
     // 69 a: ilk kurulumda ücret istasyon maliyetinden (yoksa null), verim istasyonun verimi, vardiyalar takvimin bütün vardiyaları.
     const ilk = a === undefined
-      ? { ucret: maliyet, ucretIst: maliyet, verim: (ist.verimYuzde || 100) / 100, vardiyalar: o.vardiyalar.map((v) => String(v.id)) }
+      ? { ucret: maliyet, ucretIst: maliyet, verim: istasyonVerimi(ist.verimYuzde), verimIst: istasyonVerimi(ist.verimYuzde), vardiyalar: vl, vardiyalarIst: [...vl] }
       : {};
     // 561 1 b: operatör oranı istasyonun plan ayarıdır; yoksa 1.
     const opOran = ist.operatorOrani === null || !Number.isFinite(ist.operatorOrani) ? 1 : ist.operatorOrani;
@@ -143,8 +155,8 @@ function personel(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi): MotorKisisi[]
     const makineler = [...k.makineler.map(String), ...(el.has(k.id) ? [kisiTezgahKimligi(k.id)] : [])];
     return ustuneYaz<MotorKisisi>(a, {
       id, ad: k.ad, vardiya: vardiya.get(k.id) ?? '', gruplar: k.yetkinlikler.map(String), makineler, enCok: k.enCok,
-      // İlk kurulumda ayarcı görevden; sonra planlamacının elle değeri kalır.
-      ...(a === undefined ? { ayar: k.gorev === 'Ayarcı' } : {}),
+      // 2513 a (1716): ayarcılık her okumada kişinin görevindendir (girdi.betik rrCevir ile aynı).
+      ayar: k.gorev === 'Ayarcı',
     });
   });
 }
