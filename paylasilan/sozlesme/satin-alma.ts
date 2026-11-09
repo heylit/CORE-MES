@@ -683,6 +683,15 @@ export const satinAlmaOzetiCevabi = z.object({
   acikSiparis: z.number().int().nullable(),
   // TL, ondalık metin; kuru bilinmeyen açık sipariş varsa boş.
   acikSiparisTutari: z.string().nullable(),
+  // 2425: ortak pano (iş kutusuyla aynı tanımlar). Sipariş sayıları tedarikçi siparişi, diğerleri talep sayar; en eski gün,
+  // en çok geciken siparişin ya da ihtiyacı en çok geçen talebin bugüne kadarki günü (yoksa boş). Yalnız tam gören dolu görür.
+  gecikenTeslim: z.number().int().nullable(),
+  buHaftaGelecekTeslim: z.number().int().nullable(),
+  siparisVerilecek: z.number().int().nullable(),
+  kararVerilecek: z.number().int().nullable(),
+  ihtiyaciGecen: z.number().int().nullable(),
+  gecikenEnEskiGun: z.number().int().nullable(),
+  ihtiyaciGecenEnEskiGun: z.number().int().nullable(),
 });
 export type SatinAlmaOzetiCevabi = z.output<typeof satinAlmaOzetiCevabi>;
 // Dış operasyonlar (fason, kart #542): tarihler iş emrindedir, satın alma üretim emirlerinden okur. Adetler ve tarihler

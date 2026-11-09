@@ -1104,9 +1104,20 @@ export async function panoOzeti(db: Db, k: Kullanici): Promise<SatinAlmaOzetiCev
   const okur = var_(ISLEM.oku) || var_(ISLEM.yaz);
   // Depo mal kabulü stokta yapar (`stok.giris`); teslim bekleyen satır sayısını satın almayı okumadan görür.
   const kabulEder = var_('stok.giris');
-  if (!var_(ISLEM.onayla) && !var_(ISLEM.yaz) && !okur && !kabulEder) return { onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null };
+  const bos = {
+    onayBekleyen: null, acikTalep: null, teslimBekleyenSatir: null, acikSiparis: null, acikSiparisTutari: null, gecikenTeslim: null, buHaftaGelecekTeslim: null,
+    siparisVerilecek: null, kararVerilecek: null, ihtiyaciGecen: null, gecikenEnEskiGun: null, ihtiyaciGecenEnEskiGun: null,
+  };
+  if (!var_(ISLEM.onayla) && !var_(ISLEM.yaz) && !okur && !kabulEder) return bos;
   const n = await s.panoSayilari(db);
+  // 2425: iş kutusunun sayımları talebin tamamını görene (tamGorurMu) verilir; talep eden ve depo görmez.
+  const tam = tamGorurMu(k.islemler);
   return {
+    ...bos,
+    ...(tam ? {
+      gecikenTeslim: n.gecikenTeslim, buHaftaGelecekTeslim: n.buHaftaGelecekTeslim, siparisVerilecek: n.siparisVerilecek, kararVerilecek: n.kararVerilecek,
+      ihtiyaciGecen: n.ihtiyaciGecen, gecikenEnEskiGun: n.gecikenEnEskiGun, ihtiyaciGecenEnEskiGun: n.ihtiyaciGecenEnEskiGun,
+    } : {}),
     onayBekleyen: var_(ISLEM.onayla) ? n.onayBekleyen : null,
     acikTalep: var_(ISLEM.yaz) ? n.acikTalep : null,
     teslimBekleyenSatir: var_(ISLEM.yaz) || kabulEder ? n.teslimBekleyenSatir : null,

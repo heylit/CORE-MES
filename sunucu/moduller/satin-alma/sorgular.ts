@@ -856,15 +856,36 @@ export async function menuSayilari(db: Db): Promise<{ acik: number; onayda: numb
 // sonrası yeniden gönderilen sayılır). Teslim bekleyen satır: siparişteki talepte net teslimi miktarın altında kalan satır;
 // açık sipariş: böyle satırı olan sipariş. Açık sipariş tutarı: bu siparişlerin bütün satırları, iskontolu, nakliye ve masraf
 // sipariş başına bir kez; TL'ye sabit kurla, yoksa teklif kuruyla. Kuru bilinmeyen sipariş varsa tutar boş (sıfır uydurulmaz).
-export interface PanoSayilariSatiri { onayBekleyen: number; acikTalep: number; teslimBekleyenSatir: number; acikSiparis: number; acikSiparisTutari: string | null }
+export interface PanoSayilariSatiri {
+  onayBekleyen: number; acikTalep: number; teslimBekleyenSatir: number; acikSiparis: number; acikSiparisTutari: string | null;
+  gecikenTeslim: number; buHaftaGelecekTeslim: number; siparisVerilecek: number; kararVerilecek: number; ihtiyaciGecen: number;
+  gecikenEnEskiGun: number | null; ihtiyaciGecenEnEskiGun: number | null;
+}
+// 2425: iş kutusunun sayımları (istemci calc.ts panoSayilari ve roles.ts ile aynı). Sipariş tedarikçi başına sayılır; Logo'da
+// kapatılmamış ve satırlarından biri tam gelmemişse açıktır. Termin beklenen teslim, yoksa sipariş tarihi + teklif termini;
+// hesaplanamayan sipariş gecikmeye ve bu haftaya girmez. Bu hafta bugün dahil önümüzdeki 7 gündür.
+const ACIK_SIPARIS_TERMINI_SQL = `SELECT COALESCE(p.beklenen_teslim, p.siparis_tarihi + q.termin_gun) AS termin
+       FROM satin_alma_siparis p JOIN satin_alma_talep t ON t.id = p.talep_id AND t.durum = 'siparis_verildi'
+       JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
+      WHERE p.logo_kapatma_durumu IS NULL AND EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
+        AND coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar)`;
+const SON_ONAY_SQL = `(SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1)`;
 export async function panoSayilari(db: Db): Promise<PanoSayilariSatiri> {
   return (await db.tek<PanoSayilariSatiri>(
     `WITH bekleyen AS (
        SELECT s.talep_id, s.teklif_id FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id AND t.durum = 'siparis_verildi'
-       WHERE coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar)
+       WHERE coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar),
+     termin AS (${ACIK_SIPARIS_TERMINI_SQL})
      SELECT (${ONAY_BEKLEYEN_SQL}) AS "onayBekleyen",
             (SELECT count(*)::int FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')) AS "acikTalep",
             (SELECT count(*)::int FROM bekleyen) AS "teslimBekleyenSatir",
+            (SELECT count(*)::int FROM termin WHERE termin < current_date) AS "gecikenTeslim",
+            (SELECT max(current_date - termin) FROM termin WHERE termin < current_date) AS "gecikenEnEskiGun",
+            (SELECT count(*)::int FROM termin WHERE termin BETWEEN current_date AND current_date + 6) AS "buHaftaGelecekTeslim",
+            (SELECT count(*)::int FROM satin_alma_talep t WHERE t.durum = 'onayda' AND ${SON_ONAY_SQL} = 'onay') AS "siparisVerilecek",
+            (SELECT count(*)::int FROM satin_alma_talep WHERE durum = 'degerlendirme') AS "kararVerilecek",
+            (SELECT count(*)::int FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda') AND ihtiyac_tarihi < current_date) AS "ihtiyaciGecen",
+            (SELECT max(current_date - ihtiyac_tarihi) FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda') AND ihtiyac_tarihi < current_date) AS "ihtiyaciGecenEnEskiGun",
             (SELECT count(*)::int FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) x) AS "acikSiparis",
             (SELECT CASE WHEN bool_and(kur IS NOT NULL) IS NOT FALSE THEN coalesce(round(sum(tutar * kur), 2), 0)::text END
                FROM (SELECT (sum(f.birim_fiyat * s.miktar * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100)) * (1 - q.iskonto_yuzdesi / 100) + q.nakliye + q.diger_masraf) AS tutar,
