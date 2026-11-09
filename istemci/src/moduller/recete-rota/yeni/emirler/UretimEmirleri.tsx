@@ -88,7 +88,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
             {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
           </Dugme>
         )}
-        {yetki.rotaEmreKopyala && <EmirExcelMenusu durum={d} />}
+        {(yetki.rotaEmreKopyala || yetki.emirYaz) && <EmirExcelMenusu durum={d} acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirYaz} />}
       </div>
       {(durumSuzgeci === 'tamam' || durumSuzgeci === 'tum') && (
         <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">

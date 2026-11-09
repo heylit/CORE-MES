@@ -20,6 +20,8 @@ export interface ExcelSutunu {
   // Liste aynı dosyadaki sayfanın yeni satırlarını da tanır (ör. yeni iş merkezine istasyon): o sayfanın adı.
   dosyadakiSayfa?: string;
   not?: string;
+  // Bilgi sütunu: kayıtlı değer şablonda gelir ama bu sayfada değişmez; değiştirilen hücre satırı hatalı yapar (örnek: emrin miktarı).
+  salt?: true;
   enUzun?: number;
   genislik?: number;
 }
@@ -41,6 +43,8 @@ export interface ExcelSayfasi<K = unknown> {
   // Yazımı durdurmayan uyarı (örnek: aynı ürün, miktar ve teslimle açık emir var); önizlemede satırın açıklamasında görünür.
   // eslesen: satırın güncellediği kayıt, yeni kayıtta null.
   uyari?: (degerler: Readonly<Record<string, Deger>>, eslesen: K | null) => string | null;
+  // Satırı hatalı yapan sayfa kuralı (örnek: planlı emir taslağa dönmez); önizlemede görünür, sunucu ayrıca denetler.
+  denetle?: (degerler: Readonly<Record<string, Deger>>, eslesen: K | null) => string | null;
 }
 
 // Kayıt türü sayfa tanımında kalır; tanım listesi türü silinmiş sayfaları taşır.
@@ -217,11 +221,15 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
           const yeni = degerler[c.anahtar];
           if (yeni === undefined || c.anahtar === s.anahtarSutun) continue;
           const eski = mevcut[c.anahtar] ?? null;
-          if (eski !== yeni) farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
+          if (eski === yeni) continue;
+          if (c.salt) hatalar.push(`${c.baslik} bu sayfada değişmez.`);
+          else farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
         }
         const kilit = farklar.length ? s.kilitli?.(eslesen) ?? null : null;
         if (kilit !== null) hatalar.push(kilit);
       }
+      const kural = hatalar.length ? null : s.denetle?.(degerler, eslesen) ?? null;
+      if (kural !== null) hatalar.push(kural);
       const islem: Islem = hatalar.length ? 'hata' : eslesen === null ? 'ekle' : farklar.length ? 'guncelle' : 'ayni';
       const uyari = islem === 'hata' ? null : s.uyari?.(degerler, eslesen) ?? null;
       plan.push({
