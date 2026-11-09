@@ -420,3 +420,7 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - `POST /rota/emirler/:id/yururlukteki-rotayi-uygula` isteğe bağlı `{ surum }` gövdesi alır; verilirse emrin sürümüyle karşılaştırılır,
   eskiyse 409 (ortak eski sürüm iletisi) ve emir değişmez. Gövdesiz ve boş gövdeli istek bugünkü gibi yürür; bilinmeyen alan 400.
   Ekran tarafı (sürümü göndermek) 2487'dedir.
+
+## 2532: emre uygulamada sürüm satır kilidi altında (B17, 2520-2 üstüne)
+- `emreUygula` her çağrıda okuduğu emrin sürümünü uretim-emirleri `isEmirleriniYenile`'ye geçer; sürüm satır kilidi alındıktan sonra
+  denetlenir. Okumayla kilit arasında değişen emir 409 alır ve yenilenmez. Gövdesiz istek bugünkü gibi kabul edilir (kendi okuduğu sürümle).

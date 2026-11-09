@@ -1295,6 +1295,35 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.planlama, 'POST', yol(ucuncu), { surum: 1, fazla: true })).statusCode, 400);
   });
 
+  test('2532: emre uygula okuduğu emir sürümünü satır kilidi altında denetletir; okumayla kilit arasında değişen emir 409 alır ve yenilenmez', async () => {
+    const urun = await mamulAc();
+    const a = await yururlugeAlinmisRota(urun, [yeniAdim()]);
+    const k = await istek(c.planlama, 'POST', `/rota/revizyonlar/${a}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: null });
+    assert.equal(k.statusCode, 200, k.body);
+    const id = k.json<{ uretimEmriId: number }>().uretimEmriId;
+    await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim()]);
+    // Başka bir işlem emri kilitleyip sürümünü artırır; uygulama eski sürümü okur, kilitte bekler, kilit bırakılınca değişmiş emri görür.
+    let birak = (): void => undefined;
+    const bekle = new Promise<void>((r) => { birak = r; });
+    const kilit = vt().tx(async (db) => {
+      await db.sorgu('SELECT id FROM uretim_emri WHERE id = $1 FOR UPDATE', [id]);
+      await db.sorgu('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1', [id]);
+      await bekle;
+    });
+    const cevap = istek(c.planlama, 'POST', `/rota/emirler/${id}/yururlukteki-rotayi-uygula`, {});
+    for (let i = 0; i < 100; i += 1) {
+      const n = await vt().tx((db) => db.tek<{ n: number }>(
+        "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'"));
+      if ((n?.n ?? 0) > 0) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    birak();
+    await kilit;
+    const u = await cevap;
+    assert.equal(u.statusCode, 409, u.body);
+    assert.equal((await vt().tx((db) => adimliEmirAyrintisi(db, id))).kaynakRotaRevizyonId, a);
+  });
+
   test('#1185: emir yalnız yürürlükteki revizyondan açılır; onaylı ama yürürlükte olmayan revizyon reddedilir, yürürlükteki kabul edilir', async () => {
     const urun = await mamulAc();
     const eski = await yururlugeAlinmisRota(urun, [yeniAdim()]);
