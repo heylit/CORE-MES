@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  denemeOrtami, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle,
+  denemeOrtami, initdbArgumanlari, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle,
 } from './teslim-vt.ts';
 
 const SHA = 'a'.repeat(64);
@@ -67,4 +67,12 @@ test('istemci testi klondaki sarmalayıcı yapılandırmayla koşar; izinli yoll
   const metin = istemciSarmalayicisi(['/k/agac', 'C:\\a\\node_modules']);
   assert.match(metin, /^import taban from '\.\/vite\.config\.ts';$/m);
   assert.ok(metin.includes(JSON.stringify(['/k/agac', 'C:\\a\\node_modules'])));
+});
+
+test('initdbArgumanlari (2457): Linux ve macOS kümesi C.UTF-8 ile açılır, Windows sistem yerel ayarıyla', () => {
+  // Yerel ayarsız küme kabuğun LANG'ından C olur; C'de lower('Ç') = 'Ç' ve Türkçe harf tekillik testleri (VRD-7) yanlış kırmızı verir.
+  const temel = ['-D', '/k/veri', '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-instructions'];
+  assert.deepEqual(initdbArgumanlari('/k/veri', 'linux'), [...temel, '--locale=C.UTF-8']);
+  assert.deepEqual(initdbArgumanlari('/k/veri', 'darwin'), [...temel, '--locale=C.UTF-8']);
+  assert.deepEqual(initdbArgumanlari('/k/veri', 'win32'), temel);
 });
