@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { gizliMi, taninmayanTurler } from '#paylasilan/gizli.ts';
-import { KAPALI_MODULLER } from '#paylasilan/kapali-moduller.ts';
 import type { Ayar } from './ayar.ts';
 import type { Veritabani } from './db.ts';
 import { ucEnvanteri } from './uc.ts';
@@ -75,10 +74,11 @@ test('test dışı ortamda uygulama eksik seçenekle kurulmaz: kimlik, denetim v
 test('kapaliModuller verilen modülün uçları kaydedilmez, öteki modül etkilenmez; verilmezse her modül kaydedilir', async () => {
   const durum = async (app: Awaited<ReturnType<typeof uygulamaKur>>, url: string) => (await app.inject({ method: 'GET', url })).statusCode;
   const hepsi = await uygulamaKur({ vt: sahteVt, ayar: AYAR });
-  for (const ad of KAPALI_MODULLER) assert.notEqual(await durum(hepsi, `/api/${ad}/ben`), 404, ad);
+  const ornek = ['cnc-kurulum', 'denetim-hazirlik'];
+  for (const ad of ornek) assert.notEqual(await durum(hepsi, `/api/${ad}/ben`), 404, ad);
   await hepsi.close();
-  const kapali = await uygulamaKur({ vt: sahteVt, ayar: AYAR, kapaliModuller: KAPALI_MODULLER });
-  for (const ad of KAPALI_MODULLER) assert.equal(await durum(kapali, `/api/${ad}/ben`), 404, ad);
+  const kapali = await uygulamaKur({ vt: sahteVt, ayar: AYAR, kapaliModuller: ornek });
+  for (const ad of ornek) assert.equal(await durum(kapali, `/api/${ad}/ben`), 404, ad);
   assert.notEqual(await durum(kapali, '/api/saglik'), 404);
   await kapali.close();
   const secilen = await uygulamaKur({ vt: sahteVt, ayar: AYAR, kapaliModuller: ['saglik'] });
@@ -139,9 +139,6 @@ const TAM_DENETLENMEYEN_UCLAR = [
   'POST /satin-alma-talepleri/ac govdesiz',
   'POST /satin-alma-talepleri/:id/kaydet govdesiz',
   'POST /finans/toplu-ice-aktar govdesiz',
-  'POST /portal/ekler/yukle govdesiz+secim',
-  // Mesaj eki: içerik (base64) deftere girmez, ad ve tür girer (kullanıcı kararı 12.10.2026, "girmesin").
-  'POST /mesaj/ekler/yukle govdesiz+secim',
   // Denetim hazırlığı ek yüklemesi: içerik (base64) deftere girmez, ad ve tür girer (kullanıcı kararı 12.10.2026, "girmesin").
   'POST /denetim-hazirlik/ekler/yukle govdesiz+secim',
   // CNC Kurulum Motoru her değişiklikte bütün durumunu yazar: gövde deftere girmez, anahtar ve beklenen sürüm girer (kullanıcı kararı, 12.10.2026).
