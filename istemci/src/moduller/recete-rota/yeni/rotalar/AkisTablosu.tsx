@@ -130,8 +130,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <span className="tc-rr1-fct"><b>{gm.code}</b><small>{gm.name}{yukarida ? ' ↑ yukarıdaki akıştan' : ''}</small></span>
               </button>
               <span className="tc-rr1-fcin">
-                <SayiAlani etiket={`${gm.code} miktarı (1 ${m.unit ?? ''} başına)`} deger={x.qty} birim={`${gm.unit ?? ''}/1`} kapali={!duzen}
-                  yaz={(v) => { yaz(a, (y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira2 ? { ...g, qty: v ?? 0 } : g)) }), 'Giren miktarı değişti'); }} />
+                <SayiAlani etiket={`${gm.code} miktarı (1 ${m.unit ?? ''} başına)`} deger={x.qty} birim={`${gm.unit ?? ''}/1`} kapali={!duzen} pozitif
+                  yaz={(v) => { yaz(a, (y) => ({ ...y, ins: y.ins.map((g, i) => (i === sira2 ? { ...g, qty: v ?? g.qty } : g)) }), 'Giren miktarı değişti'); }} />
               </span>
               <span className="tc-rr1-fcq" title="Bu siparişte toplam">{sayi(Math.round(toplam * 100) / 100)}</span>
               {duzen && (
@@ -237,8 +237,8 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <span className="tc-rr1-fct"><b>{om.code}</b><small>yan ürün</small></span>
               </button>
               <span className="tc-rr1-fcin">
-                <SayiAlani etiket={`${om.code} yan ürün miktarı`} deger={o.qty} birim={om.unit ?? ''} kapali={!duzen}
-                  yaz={(v) => { yaz(a, (y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira2 ? { ...g, qty: v ?? 0 } : g)) }), 'Yan ürün miktarı değişti'); }} />
+                <SayiAlani etiket={`${om.code} yan ürün miktarı`} deger={o.qty} birim={om.unit ?? ''} kapali={!duzen} pozitif
+                  yaz={(v) => { yaz(a, (y) => ({ ...y, outs: y.outs.map((g, i) => (i === sira2 ? { ...g, qty: v ?? g.qty } : g)) }), 'Yan ürün miktarı değişti'); }} />
               </span>
               {duzen && (
                 <button type="button" className="tc-rr1-ib tc-rr1-ib-sil" aria-label={`${om.code} yan ürününü kaldır`}

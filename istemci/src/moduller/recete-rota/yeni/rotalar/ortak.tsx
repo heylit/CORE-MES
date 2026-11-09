@@ -49,17 +49,20 @@ export function fasonAdi(firmalar: readonly { id: string; code: string | null; n
 // Bu alanların hepsi süre, miktar ya da yüzdedir: eksi kabul edilmez. Geçersiz girdi silinmez ve yazılmaz; altında nedeni görünür.
 export const SURE_EN_COK = 99_999;
 
-export function sayiAlaniHatasi(metin: string, enCok?: number): string | null {
-  if (metin.trim() === '') return null;
+// pozitif: alan boş ya da sıfır olamaz (sunucu miktarı sıfırdan büyük ister); boş bırakılan alana 0 yazılmaz (B-2484-6).
+export function sayiAlaniHatasi(metin: string, enCok?: number, pozitif = false): string | null {
+  if (metin.trim() === '') return pozitif ? 'Miktar zorunlu.' : null;
   const v = sayiGirisi(metin);
   if (v === null) return 'Sayı girin.';
   if (v < 0) return 'Eksi olamaz.';
+  if (pozitif && v === 0) return 'Sıfırdan büyük olmalı.';
   if (enCok !== undefined && v > enCok) return `En çok ${sayi(enCok)} olabilir.`;
   return null;
 }
 
-export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu, enCok }: {
+export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu, enCok, pozitif = false }: {
   etiket: string; deger: number | null; yaz: (v: number | null) => void; kapali?: boolean; yerTutucu?: string; birim?: string; ipucu?: string; enCok?: number;
+  pozitif?: boolean;
 }) {
   const metin = deger === null ? '' : String(deger).replace('.', ',');
   const [yerel, setYerel] = useState(metin);
@@ -67,7 +70,7 @@ export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu,
   useEffect(() => { setYerel(metin); setHata(null); }, [metin]);
   const isle = () => {
     if (yerel === metin) { setHata(null); return; }
-    const h = sayiAlaniHatasi(yerel, enCok);
+    const h = sayiAlaniHatasi(yerel, enCok, pozitif);
     setHata(h);
     if (h === null) yaz(sayiGirisi(yerel));
   };
