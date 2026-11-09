@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
@@ -567,4 +567,14 @@ test('2397 b v2: rolü gönderilmeyen basamak rolünü aynı addan, yoksa aynı 
   for (const l of [eski, [], [{ azamiTutar: '10', seviye: 'A', rolId: null }, { azamiTutar: null, seviye: 'B', rolId: 4 }], [{ azamiTutar: null, seviye: 'A', rolId: null }]]) {
     assert.equal(onayLimitiReddi(l), null);
   }
+});
+
+test('2433-4 a: tarihsiz yeni sipariş ve tarihi boşaltılan sipariş reddedilir; tarihsiz eski sipariş kalır', () => {
+  const k = (...siparisler: { teklifId: string; beklenenTeslim: string | null }[]) => ({ karar: { siparisler } });
+  assert.equal(terminsizSiparisReddi(k(), k({ teklifId: 'a', beklenenTeslim: null })), ILETILER.terminsizSiparis);
+  assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: '2026-10-20' }), k({ teklifId: 'a', beklenenTeslim: null })), ILETILER.terminsizSiparis);
+  assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: null }), k({ teklifId: 'a', beklenenTeslim: null }, { teklifId: 'b', beklenenTeslim: null })), ILETILER.terminsizSiparis);
+  assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: null }), k({ teklifId: 'a', beklenenTeslim: null })), null);
+  assert.equal(terminsizSiparisReddi({ karar: null }, k({ teklifId: 'a', beklenenTeslim: '2026-10-20' })), null);
+  assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: null }), { karar: null }), null);
 });

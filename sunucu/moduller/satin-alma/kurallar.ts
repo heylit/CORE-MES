@@ -103,6 +103,7 @@ export const ILETILER = {
   acilisDurumu: 'Talep taslak, teklif istenen, değerlendirme ya da iptal durumuyla açılır.',
   onayDurumu: 'Onay ya da ret yalnız onaydaki ve kararı verilmiş talebe eklenir.',
   onaysizSiparis: 'Sipariş için kararın onaylanmış olması gerekir.',
+  terminsizSiparis: 'Siparişin beklenen teslim tarihini girin: teslim tarihi olmayan sipariş oluşturulmaz.',
   kurKilidiEski: (gun: number): string => `Onay ${gun} günden eski: kur ve faiz yeniden sabitlensin diye talebi değerlendirmeye alıp yeniden onaya gönderin.`,
   kurKaydi: (paraBirimi: string, yuzde: string): string => `${paraBirimi} kuru onaydan bu yana %${yuzde} değişti: talebi değerlendirmeye alıp yeniden onaya gönderin.`,
   kilittenOnceOnay: 'Karar yeniden onaya gönderildi; sipariş için yeni onay gerekir.',
@@ -221,6 +222,18 @@ export function siparisReddi(eski: TalepDurumu, yeni: TalepDurumu, kararVar: boo
   const siparis = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
   if (!siparis(yeni) || siparis(eski)) return null;
   return kararVar && kararOnayliMi(onaylar) ? null : ILETILER.onaysizSiparis;
+}
+
+// 2433-4 a, 2433-6 a: teslim tarihi girilmemiş sipariş oluşmaz; siparişin tarihi de boşaltılamaz. Bugün tarihsiz kayıtlı eski
+// sipariş (veritabanı değişmez) tarihsiz kalarak yeniden kaydedilir, iptalden geri de alınır; ekranda uyarıyla görünür.
+type SiparisTermini = { teklifId: string; beklenenTeslim: string | null };
+export function terminsizSiparisReddi(
+  eski: { karar: { siparisler: readonly SiparisTermini[] } | null }, yeni: { karar: { siparisler: readonly SiparisTermini[] } | null },
+): string | null {
+  const eskiler = eski.karar?.siparisler ?? [];
+  const tarihsiz = (yeni.karar?.siparisler ?? []).some((s) => s.beklenenTeslim === null
+    && !eskiler.some((e) => e.teklifId === s.teklifId && e.beklenenTeslim === null));
+  return tarihsiz ? ILETILER.terminsizSiparis : null;
 }
 
 // 1096 a: aşılan kilitte talep değerlendirmeye alınıp yeniden onaya gönderilir (yeni kilit, yeni onay). Sınırlar sözleşmede.

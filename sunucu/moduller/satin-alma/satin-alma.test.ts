@@ -206,7 +206,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       karar: { mod: 'bolunmus' as const, teklifId: null, bolunme: [{ kalemId: k1, teklifId: b.id }, { kalemId: k2, teklifId: a.id }],
         gerekce: 'Termin', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-06', ogrenilenler: '', sabitKurlar: [{ paraBirimi: 'USD' as const, kur: '41.5' }],
         siparisler: [{ teklifId: a.id, siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14' },
-          { teklifId: b.id, siparisNo: 'SA-2', siparisTarihi: '2026-10-07', beklenenTeslim: null }] },
+          { teklifId: b.id, siparisNo: 'SA-2', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] },
       senaryolar: [senaryo],
     };
     // Taslaktan sipariş durumuna tek kayıtta geçilemez (SAT-07); satın alma adımları sırayla kaydeder.
@@ -517,7 +517,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(deg), durum: 'onayda', teklifler: [a],
       karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
     const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
-    const siparis = { teklifId: a.id, siparisNo: 'SA-KARTSIZ', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+    const siparis = { teklifId: a.id, siparisNo: 'SA-KARTSIZ', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' };
     const red = await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
     assert.deepEqual([red.statusCode, red.json().mesaj], [422, ILETILER.kartsizSiparis(['Deneme serbest'])]);
     const bagli = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), kalemler: onayli.kalemler.map((k) => ({ ...k, katalogId: KATALOG })) }));
@@ -536,7 +536,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(deg), durum: 'onayda', teklifler: [a],
         karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
       const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
-      const siparis = { teklifId: a.id, siparisNo: 'SA-REV', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+      const siparis = { teklifId: a.id, siparisNo: 'SA-REV', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' };
       const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
       const satir = async () => (await vt().tek<{ id: number; rev: string | null }>(
         'SELECT id, parca_revizyonu AS rev FROM satin_alma_siparis_satiri WHERE talep_id = $1', [t.id]))!;
@@ -752,7 +752,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('B-002 SAT-07 SAT-29: onay kaydı olmadan sipariş verilemez; iptalden siparişe dönüş de onay ister', async () => {
     const t = await kararli();
-    const siparis = { teklifId: t.karar!.teklifId!, siparisNo: 'SA-ONAYSIZ', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+    const siparis = { teklifId: t.karar!.teklifId!, siparisNo: 'SA-ONAYSIZ', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' };
     assert.equal((await kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [siparis] } })).statusCode, 422);
     const ip = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'iptal', iptalNedeni: 'Deneme' }));
     assert.equal((await kaydet(c.sa, { ...govde(ip), durum: 'siparis_verildi', karar: { ...ip.karar!, siparisler: [siparis] } })).statusCode, 422);
@@ -766,8 +766,26 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s.durum, 'siparis_verildi');
   });
 
+  test('2433-4 a, 2433-6 a: teslim tarihi olmayan sipariş oluşmaz, tarih boşaltılamaz; tarihsiz eski sipariş olduğu gibi kaydedilir', async () => {
+    const t = await kararli();
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [onayKaydi()] }));
+    const siparis = { teklifId: onayli.karar!.teklifId!, siparisNo: 'SA-TERMIN', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+    const red = await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
+    assert.deepEqual([red.statusCode, (red.json() as { mesaj: string }).mesaj], [422, ILETILER.terminsizSiparis]);
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [{ ...siparis, beklenenTeslim: '2026-10-20' }] } }));
+    const bosalt = (x: Talep) => ({ ...govde(x), karar: { ...x.karar!, siparisler: x.karar!.siparisler.map((y) => ({ ...y, beklenenTeslim: null })) } });
+    assert.equal((await kaydet(c.sa, bosalt(s))).statusCode, 422);
+    // Bugün tarihsiz kayıtlı eski sipariş (veritabanı değişmez): tarihsiz kalarak yeniden kaydedilir, tarih sonradan girilir.
+    await ortam!.sahip.sorgu('UPDATE satin_alma_siparis SET beklenen_teslim = NULL WHERE talep_id = $1', [s.id]);
+    const eski = await acilistaki(s.id);
+    const yeniden = tamam<Talep>(await kaydet(c.sa, { ...govde(eski), notlar: 'Deneme eski' }));
+    assert.deepEqual([yeniden.notlar, siparisi(yeniden, siparis.teklifId).beklenenTeslim], ['Deneme eski', null]);
+    const tarihli = tamam<Talep>(await kaydet(c.sa, { ...govde(yeniden), karar: { ...yeniden.karar!, siparisler: yeniden.karar!.siparisler.map((y) => ({ ...y, beklenenTeslim: '2026-10-25' })) } }));
+    assert.equal(siparisi(tarihli, siparis.teklifId).beklenenTeslim, '2026-10-25');
+  });
+
   // 236 a: tedarikçi onay durumunun sahibi Kalite Merkezi'dir; satın alma firma kimliğiyle okur, kendi durum sütunu siparişi engellemez.
-  const kararliOnayli = async (firmaId: number, ad: string): Promise<{ onayli: Talep; siparis: { teklifId: string; siparisNo: string; siparisTarihi: string; beklenenTeslim: null } }> => {
+  const kararliOnayli = async (firmaId: number, ad: string): Promise<{ onayli: Talep; siparis: { teklifId: string; siparisNo: string; siparisTarihi: string; beklenenTeslim: string } }> => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
     const [k1] = t.kalemler.map((k) => k.id) as [string];
     const q = teklif(firmaId, [[k1, '10']], { tedarikciAdi: ad });
@@ -775,7 +793,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       ...govde(t), durum: 'onayda', teklifler: [q],
       karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
     }));
-    return { onayli: tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] })), siparis: { teklifId: q.id, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null } };
+    return { onayli: tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] })), siparis: { teklifId: q.id, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' } };
   };
   const kaliteKaydi = (kimlik: string) => async (govdesi: Record<string, unknown>, surum: number | null): Promise<number> =>
     tamam<{ surum: number }>(await istek(c.yonetici, 'POST', `/kalite-merkezi/kayitlar/sup/${kimlik}/onayla`, { govde: govdesi, surum })).surum;
@@ -849,7 +867,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       const r = await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', {
         ...t, teklifler: [q],
         karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [],
-          siparisler: durum === 'onayda' ? [] : [{ teklifId: q.id, siparisNo: 'SA-ACILIS', siparisTarihi: '2026-10-07', beklenenTeslim: null }] },
+          siparisler: durum === 'onayda' ? [] : [{ teklifId: q.id, siparisNo: 'SA-ACILIS', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] },
       });
       assert.equal(r.statusCode, 422, `${durum}: ${r.body}`);
     }
@@ -883,7 +901,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await kaydet(c.sa, { ...govde(o), karar: { ...o.karar!, teklifId: b.id } })).statusCode, 422);
     assert.equal((await kaydet(c.sa, { ...govde(o), durum: 'degerlendirme', karar: { ...o.karar!, teklifId: b.id } })).statusCode, 422);
     assert.equal((await kaydet(c.sa, { ...govde(o), karar: { ...o.karar!, gerekce: 'Değişti' } })).statusCode, 422);
-    const siparis = { teklifId: o.karar!.teklifId!, siparisNo: 'SA-ONAYLI', siparisTarihi: '2026-10-07', beklenenTeslim: null };
+    const siparis = { teklifId: o.karar!.teklifId!, siparisNo: 'SA-ONAYLI', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' };
     const s = tamam<Talep>(await kaydet(c.sa, { ...govde(o), durum: 'siparis_verildi', karar: { ...o.karar!, siparisler: [siparis] } }));
     assert.equal(s.karar?.siparisler[0]?.siparisNo, 'SA-ONAYLI');
     // Siparişteki talebe onay ya da ret eklenmez; ret onaydaki talebe gelir, sonra karar değişebilir.
@@ -922,11 +940,16 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const s = tamam<Talep>(await kaydet(c.sa, {
       ...govde(onayli), durum: 'siparis_verildi',
       karar: { ...onayli.karar!, siparisler: [
-        { teklifId: a.id, siparisNo: 'SA-A', siparisTarihi: '2026-10-07', beklenenTeslim: null },
-        { teklifId: b.id, siparisNo: 'SA-B', siparisTarihi: '2026-10-08', beklenenTeslim: null },
+        { teklifId: a.id, siparisNo: 'SA-A', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' },
+        { teklifId: b.id, siparisNo: 'SA-B', siparisTarihi: '2026-10-08', beklenenTeslim: '2026-10-20' },
       ] },
     }));
-    return { s, k1, k2, a: a.id, b: b.id };
+    // 2433-6 a: bu yardımcıyı kullanan testler teslim tarihi olmayan eski siparişin davranışını sınar; tarih sipariş oluştuktan sonra
+    // veritabanında boşaltılır (bugün tarihsiz kayıtlı eski sipariş gibi), sonra aynı hâl yeniden kaydedilir.
+    await ortam!.sahip.sorgu('UPDATE satin_alma_siparis SET beklenen_teslim = NULL WHERE talep_id = $1', [s.id]);
+    const eski = await acilistaki(s.id);
+    const yeniden = tamam<Talep>(await kaydet(c.sa, { ...govde(eski) }));
+    return { s: yeniden, k1, k2, a: a.id, b: b.id };
   }
   const acilistaki = async (id: string) => tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === id)!;
   const siparisi = (t: Talep, teklifId: string) => t.karar!.siparisler.find((x) => x.teklifId === teklifId)!;
@@ -1768,7 +1791,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   test('#544 2a: sipariş numarasını TMI verir (SP-yıl-sıra); yeniden kayıtta değişmez; istemci numara yazamaz; eşzamanlı siparişler ayrı numara alır', async () => {
     const onayli = async () => { const t = await kararli(); return tamam<Talep>(await kaydet(c.mudur, { ...govde(t), onaylar: [onayKaydi()] })); };
     const siparisVer = (o: Talep, logo: string, ek: object = {}) => kaydet(c.sa, { ...govde(o), durum: 'siparis_verildi',
-      karar: { ...o.karar!, siparisler: [{ teklifId: o.karar!.teklifId!, siparisNo: logo, siparisTarihi: '2026-10-07', beklenenTeslim: null, ...ek }] } });
+      karar: { ...o.karar!, siparisler: [{ teklifId: o.karar!.teklifId!, siparisNo: logo, siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20', ...ek }] } });
     const yil = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Istanbul', year: 'numeric' }).format(new Date());
     const s1 = tamam<Talep>(await siparisVer(await onayli(), 'L-1', { no: 'SP-1999-999' }));
     const no = s1.karar!.siparisler[0]!.no!;
@@ -2312,7 +2335,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const k = await kararli();
     const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(k), onaylar: [onayKaydi()] }));
     const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
-      karar: { ...onayli.karar!, siparisler: [{ teklifId: onayli.karar!.teklifId!, siparisNo: 'SA-T', siparisTarihi: '2026-10-07', beklenenTeslim: null }] } }));
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: onayli.karar!.teklifId!, siparisNo: 'SA-T', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
     const qid = s.karar!.teklifId!;
     const [r1, r2] = siparisi(s, qid).satirlar;
     const id = await siparisNo(s.id, qid);
@@ -2633,7 +2656,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     return { t: ond, a };
   }
   const siparisVer = (t: Talep, teklifId: string) =>
-    kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [{ teklifId, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null }] } });
+    kaydet(c.sa, { ...govde(t), durum: 'siparis_verildi', karar: { ...t.karar!, siparisler: [{ teklifId, siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } });
 
   test('1096 a: onaya gönderilen kararın kuru ve faizi finanstan sabitlenir, istemcinin kuru yok sayılır; 7 günden eski kilitle sipariş verilmez', async () => {
     tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'EUR', tarih: '2026-01-03', alis: 35.5, satis: 36 }));
