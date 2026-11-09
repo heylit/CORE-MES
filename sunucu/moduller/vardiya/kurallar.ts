@@ -497,3 +497,48 @@ export function vardiyaKadrosu(
 export function kisiTakvimiGorunur(d: { kendisi: boolean; ikOkur: boolean; amirVeyaPlanlama: boolean; kapsamda: boolean }): boolean {
   return d.kendisi || d.ikOkur || (d.amirVeyaPlanlama && d.kapsamda);
 }
+
+// 2452: kişinin iş günleri. İş merkezi olan kişi üretim matrisinden çalışır (kişi vardiyası varsa yalnız o); olmayan kişinin vardiyası
+// kişi atamasından, yoksa departmanının varsayılanından, o da yoksa tesis varsayılanından gelir ve günleri vardiyanın kendi günleridir
+// (2452-2 a). Hiçbiri yoksa İK ayarı: pazartesi-cuma, ayar açıksa cumartesi (2452-3 a). Pasif vardiya yok sayılır.
+export type IsGunuKaynagi = 'kisi' | 'departman' | 'is-merkezi' | 'varsayilan-vardiya' | 'ik-ayari';
+export interface IsGunuBagi { kaynak: IsGunuKaynagi; vardiyaId: number | null; acik: (gun: number) => boolean }
+
+export function isGunuBagi(k: {
+  isMerkeziId: number | null; kisiVardiyasi: number | null; departmanVardiyasi: number | null; varsayilanVardiya: number | null;
+  aktifVardiyalar: ReadonlySet<number>; matris: readonly MatrisSatiri[]; vardiyaGunleri: readonly { vardiyaId: number; gun: number }[];
+  cumartesiIsGunu: boolean;
+}): IsGunuBagi {
+  const aktif = (id: number | null): number | null => (id !== null && k.aktifVardiyalar.has(id) ? id : null);
+  if (k.isMerkeziId !== null) {
+    const vardiyaId = aktif(k.kisiVardiyasi);
+    const acikGunler = new Set(k.matris.filter((m) => m.isMerkeziId === k.isMerkeziId && k.aktifVardiyalar.has(m.vardiyaId)
+      && (vardiyaId === null || m.vardiyaId === vardiyaId)).map((m) => m.gun));
+    // Matrisi hiç açık günü olmayan iş merkezi (düzeni girilmemiş) iş günü bilgisi taşımaz: kişi ofis sırasına düşer.
+    if (acikGunler.size > 0) return { kaynak: 'is-merkezi', vardiyaId, acik: (g) => acikGunler.has(g) };
+  }
+  const secim: [IsGunuKaynagi, number | null][] = [['kisi', aktif(k.kisiVardiyasi)], ['departman', aktif(k.departmanVardiyasi)], ['varsayilan-vardiya', aktif(k.varsayilanVardiya)]];
+  const bulunan = secim.find(([, id]) => id !== null);
+  if (bulunan) {
+    const vardiyaId = bulunan[1]!;
+    const acikGunler = new Set(k.vardiyaGunleri.filter((v) => v.vardiyaId === vardiyaId).map((v) => v.gun));
+    return { kaynak: bulunan[0], vardiyaId, acik: (g) => acikGunler.has(g) };
+  }
+  return { kaynak: 'ik-ayari', vardiyaId: null, acik: (g) => g <= 5 || (g === 6 && k.cumartesiIsGunu) };
+}
+
+// Aralığın iş günleri (iki uç dahil, artan): vardiyası o gün açık, tesis kapalı günü ya da resmî tatil değil, son çalışma gününden sonra değil.
+export function isGunleriniSec(baslangic: string, bitis: string, acik: (gun: number) => boolean, kapali: ReadonlySet<string>, sonGun: string | null): string[] {
+  const sonuc: string[] = [];
+  for (let i = 0, n = gunFarki(baslangic, bitis); i < n; i++) {
+    const tarih = tarihEkle(baslangic, i);
+    if (acik(haftaGunu(tarih)) && !kapali.has(tarih) && !ayrildiMi(sonGun, tarih)) sonuc.push(tarih);
+  }
+  return sonuc;
+}
+
+// Tarihten sonraki n'inci iş günü (n >= 1; tarihin kendisi sayılmaz); gün listesi yetmezse null.
+export function isGunuSonrasi(gunler: readonly string[], tarih: string, n: number): string | null {
+  if (!Number.isInteger(n) || n < 1) return null;
+  return gunler.filter((g) => g > tarih)[n - 1] ?? null;
+}

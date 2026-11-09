@@ -31,6 +31,8 @@ export const IK_IKINCI_MENU = {
       { anahtar: 'devam', baslik: 'Devam ve mesai', yol: '/ik/devam', simge: 'clock', islem: 'ik.oku' },
       // PDKS dosyası İK'nın işidir (259 a, 341 a); ekran Nizamiye'nin, yetki aynı nizamiye.pdks-aktar.
       { anahtar: 'pdks', baslik: 'PDKS aktar', yol: '/ik/pdks', simge: 'upload', islem: 'nizamiye.pdks-aktar' },
+      // 1934 a, 2452: vardiya tanımı, kapalı günler ve ofis mesaisi İK'da yazılır; ekran ve veri Vardiya'nındır, yetki `vardiya.tanim-yaz`.
+      { anahtar: 'vardiya', baslik: 'Vardiyalar ve tatiller', yol: '/ik/vardiya', simge: 'clock', islem: 'vardiya.tanim-yaz' },
       { anahtar: 'bordro', baslik: 'Bordro', yol: '/ik/bordro', simge: 'list', islem: 'ik.oku' },
       { anahtar: 'performans', baslik: 'Performans', yol: '/ik/performans', simge: 'target', islem: 'ik.oku' },
       { anahtar: 'egitim', baslik: 'Eğitim', yol: '/ik/egitim', simge: 'lab', islem: 'ik.oku' },

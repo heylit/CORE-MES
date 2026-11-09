@@ -88,12 +88,13 @@ test('Planlama ikinci menüsünde planlama maddeleri plan.planlama-oku, maliyet 
   assert.ok(rr.gruplar.flatMap((g) => g.maddeler).every((m) => m.islem === (m.anahtar === 'kapanis' ? 'uretim-emirleri.kapanis-oku' : 'sayfa.recete-rota')));
 });
 
-test('İK ikinci menüsünde PDKS aktar maddesi yalnız nizamiye.pdks-aktar ister (341 a); öteki maddeler ik.oku', () => {
+test('İK ikinci menüsünde PDKS aktar maddesi yalnız nizamiye.pdks-aktar (341 a), Vardiyalar ve tatiller vardiya.tanim-yaz ister (2452-1 a); öteki maddeler ik.oku', () => {
   const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/ik');
   assert.ok(menu);
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
   assert.deepEqual(maddeler.filter((m) => m.islem === 'nizamiye.pdks-aktar').map((m) => m.yol), ['/ik/pdks']);
-  assert.ok(maddeler.filter((m) => m.yol !== '/ik/pdks').every((m) => m.islem === 'ik.oku'));
+  assert.deepEqual(maddeler.filter((m) => m.islem === 'vardiya.tanim-yaz').map((m) => m.yol), ['/ik/vardiya']);
+  assert.ok(maddeler.filter((m) => m.yol !== '/ik/pdks' && m.yol !== '/ik/vardiya').every((m) => m.islem === 'ik.oku'));
 });
 
 test('Stok ikinci menüsünde Raflar maddesi yoktur; raf matrisi depo ve konum ekranlarından açılır', () => {

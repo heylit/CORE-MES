@@ -85,7 +85,25 @@ export const takvimCevabi = z.object({
   kadro: z.array(z.object({ isMerkeziId: kimlik, vardiyaId: kimlik.nullable(), kisiIdleri: z.array(kimlik) })),
   // Sunucunun bugünü: geçmiş tarihli gün ekranda ayrıca işaretlenir.
   bugun: tarihSemasi,
+  // 2452: iş merkezine bağlı olmayan kişinin vardiyası için vardiyanın kendi günleri, departman varsayılanları ve tesis varsayılanı.
+  // Sunucu hep gönderir; isteğe bağlıdır, çünkü takvimi okuyan öteki ekranların test verisi bu alanları taşımaz (yokluğu boş demektir).
+  vardiyaGunleri: z.array(z.object({ vardiyaId: kimlik, gun: z.number().int() })).optional(),
+  departmanVardiyalari: z.array(z.object({ departmanNo: kimlik, vardiyaId: kimlik })).optional(),
+  varsayilanVardiyaId: kimlik.nullable().optional(),
 });
+
+// 2452: ofis mesaisi bölümünün adlı okuması (İK departmanları ve iş merkezi olmayan personel); takvimden ayrıdır, çünkü takvim oturumla açıktır.
+export const ofisMesaisiCevabi = z.object({
+  departmanlar: z.array(z.object({ no: kimlik, ad: z.string() })),
+  personel: z.array(z.object({ kisiId: kimlik, ad: z.string(), departmanNo: kimlik.nullable(), vardiyaId: kimlik.nullable() })),
+  // İK ayarı (vardiyası bulunamayan kişinin günleri): cumartesi iş günü mü.
+  cumartesiIsGunu: z.boolean(),
+});
+const haftaGunleri = z.array(z.number().int().min(1).max(7)).max(7).refine((d) => new Set(d).size === d.length, 'Aynı gün iki kez seçilmiş.');
+export const vardiyaGunleriGovdesi = z.object({ vardiyaId: kimlik, gunler: haftaGunleri });
+export const departmanParametresi = z.object({ departmanNo: z.coerce.number<number>().pipe(kimlik) });
+export const departmanVardiyasiGovdesi = z.object({ vardiyaId: kimlik.nullable() });
+export const varsayilanVardiyaGovdesi = z.object({ vardiyaId: kimlik.nullable() });
 
 // Vardiya başına personel: istasyon ataması olan kişiler, iş merkezleri (en büyük yüzdeli atama) ve vardiyalarıyla; ada göre.
 export const vardiyaPersoneliCevabi = z.object({
@@ -246,6 +264,8 @@ export type VardiyaGirdisi = z.output<typeof vardiyaGovdesi>;
 export type VardiyaGuncelleGirdisi = z.output<typeof vardiyaGuncelleGovdesi>;
 export type Vardiya = z.output<typeof vardiyaSemasi>;
 export type TakvimCevabi = z.output<typeof takvimCevabi>;
+export type OfisMesaisiCevabi = z.output<typeof ofisMesaisiCevabi>;
+export type VardiyaGunleriGovdesi = z.output<typeof vardiyaGunleriGovdesi>;
 export type VardiyaPersoneliCevabi = z.output<typeof vardiyaPersoneliCevabi>;
 export type KaynakTuru = (typeof KAYNAK_TURLERI)[number];
 export type CalismaTakvimiSorgusu = z.input<typeof calismaTakvimiSorgusu>;

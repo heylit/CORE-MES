@@ -23,7 +23,7 @@ import './ik-yeni.css';
 // sekmelerdedir (315 a; kabuk bu adreslerde şeridini çizmez). Üstteki araçlar bugünkü ekranınkilerdir: Ara ve
 // Yardım (F1); "Başka bir gözle görüntüle" 856 ile kalktı. Kılavuz bugünkü ekrandaki gibi içeriğin yanında paneldir (1617 a):
 // sayfa açık ve kullanılır kalır; dar ekranda içeriğin üstüne tam genişlikte açılır.
-const SAYFA_DISI = { pdks: '/ik/pdks' } as const;
+const SAYFA_DISI = { pdks: '/ik/pdks', vardiya: '/ik/vardiya' } as const;
 
 interface MenuMaddesi { anahtar: string; baslik: string; simge?: SimgeAdi; islem: Islem }
 

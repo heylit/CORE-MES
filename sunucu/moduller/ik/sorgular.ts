@@ -487,6 +487,19 @@ export function kisilerinCikisSatirlari(db: Db, kisiIdleri: readonly number[]): 
   );
 }
 
+// 2452: kişinin departmanı (vardiya iş günü sorgusu departman varsayılanını buradan alır). İptal personel ve departman sayılmaz.
+export function kisilerinDepartmanSatirlari(db: Db, kisiIdleri: readonly number[]): Promise<{ kisi_id: number; departman_no: number | null }[]> {
+  return db.sorgu<{ kisi_id: number; departman_no: number | null }>(
+    `SELECT p.kisi_id, d.no AS departman_no FROM ik_personel p LEFT JOIN ik_departman d ON d.no = p.departman_no AND NOT d.iptal
+      WHERE p.kisi_id = ANY($1::int[]) AND NOT p.iptal ORDER BY p.kisi_id`,
+    [[...kisiIdleri]],
+  );
+}
+
+export function departmanSatirlari(db: Db): Promise<{ no: number; ad: string }[]> {
+  return db.sorgu<{ no: number; ad: string }>('SELECT no, ad FROM ik_departman WHERE NOT iptal ORDER BY ad, no');
+}
+
 export interface PersonelKartiSatiri {
   ad: string;
   soyad: string;

@@ -28,6 +28,12 @@ Her yazma ayrı uç, kendi şeması ve `vardiya.yaz` işlemiyle; kişi ve zaman 
 | POST /fazla-mesai/:id/iptal | vardiya.yaz | sürüm; kapsam | okunan sürümle iptal | ikinci iptal 409, kısıtlı 403, olmayan 404 |
 | `disari.planliDurusYaz`, `planliDurusSilArkon` (Arkon `downs`) | vardiya.durus-yaz | VR-16; çağıranın transaction'ı | planlama yazar ve siler | operatör 403, eski Arkon sürümü çakışma |
 
+| GET /vardiya-ofis | vardiya.yaz, vardiya.tanim-yaz ya da ik.oku | ad ve departman tasir, takvimden ayri | IK okur | operator 403 |
+| POST /vardiya-gunleri/degistir | vardiya.yaz ya da vardiya.tanim-yaz | tesis geneli; gun 1-7 tekil; vardiya var | IK yazar | operator 403, kisitli 403, ayni gun 400, olmayan vardiya 404 |
+| POST /departman-vardiyalari/:departmanNo/belirle | vardiya.yaz ya da vardiya.tanim-yaz | tesis geneli; departman IK'da var; yabanci anahtar | IK yazar ve kaldirir | olmayan departman 404, olmayan vardiya 409 |
+| POST /vardiya-varsayilani/belirle | vardiya.yaz ya da vardiya.tanim-yaz | tesis geneli; yabanci anahtar | IK yazar ve kaldirir | operator 403, kisitli 403, olmayan vardiya 409 |
+| POST /vardiyalar, /vardiyalar/:id/guncelle, /takvim-gunleri*, /kisi-vardiyalari/* | 2452-1 a ile vardiya.yaz ya da vardiya.tanim-yaz | kurallar degismedi | IK tanim ve kapali gun yazar | IK matris ve fazla mesai 403 |
+
 Tekrar korumalı uçlar `POST /vardiyalar`, `POST /planli-duruslar` ve `POST /fazla-mesai` (yeni kayıt açan komutlar); öbür komutlar aynı sonucu yazar (idempotent).
 Yalnız ekranda kalan kural: iki adımlı onay (haftayı uygula, temizle, toplu "Yalnız bunlar olsun", seçilenlere kopyala) ekrandadır; sunucu tek çağrıda uygular (yetki ve kapsam sunucuda).
 Kullanıcı metni (vardiya ve tatil adı) React ile kaçırılarak basılır; HTML basılmaz.

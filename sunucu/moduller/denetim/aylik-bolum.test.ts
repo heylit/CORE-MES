@@ -60,7 +60,9 @@ describe('denetim aylık bölüm göçü (1765): dolu denetim kaydı ve değişi
     assert.equal((once?.kayit.length ?? 0) >= 4, true);
     assert.equal((once?.degisiklik.length ?? 0) >= 1, true);
     assert.deepEqual(await vt.sorgu(KAYIT_SQL), once?.kayit);
-    assert.deepEqual(await vt.sorgu(DEGISIKLIK_SQL), once?.degisiklik);
+    // Bölüm göçünden sonraki göçler de izlenen tablolara yazabilir (2452: rol_islemi); onların yeni satırları deftere eklenir, eskiler değişmez.
+    const sonId = Math.max(...(once?.degisiklik ?? []).map((s) => (s as { id: number }).id));
+    assert.deepEqual((await vt.sorgu<{ id: number }>(DEGISIKLIK_SQL)).filter((s) => s.id <= sonId), once?.degisiklik);
     assert.deepEqual(
       await sahip.sorgu("SELECT yol, tableoid::regclass::text AS bolum FROM denetim_kaydi WHERE yol LIKE '/deneme/%' ORDER BY yol"),
       [

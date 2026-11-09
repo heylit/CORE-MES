@@ -1,6 +1,7 @@
 export const anahtarlar = {
   takvim: ['vardiya', 'takvim'] as const,
   personel: ['vardiya', 'personel'] as const,
+  ofisMesaisi: ['vardiya', 'ofis'] as const,
   planliDuruslar: (sayfa?: number) => (sayfa === undefined ? ['vardiya', 'planli-duruslar'] as const : ['vardiya', 'planli-duruslar', sayfa] as const),
   fazlaMesai: (baslangic?: string, bitis?: string) => (baslangic === undefined ? ['vardiya', 'fazla-mesai'] as const : ['vardiya', 'fazla-mesai', baslangic, bitis ?? ''] as const),
   durusNedenleri: ['vardiya', 'durus-nedenleri'] as const,
