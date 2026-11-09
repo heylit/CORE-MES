@@ -36,6 +36,26 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     tabloyuKapat(bolge);
   });
 
+  it('F tam ekranı şemada ve tabloda açıp kapatır; alana yazarken F tam ekranı değiştirmez (B-2482-2)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const kok = () => bolge.querySelector('[data-parca="R1"]')!;
+    fireEvent.keyDown(within(bolge).getByRole('button', { name: 'OP 10 Tornalama' }), { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(within(bolge).getByRole('button', { name: 'OP 10 Tornalama' }), { key: 'F' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    fireEvent.keyDown(alan, { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    fireEvent.keyDown(alan.closest('.tc-rr1-frow')!, { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(kok(), { key: 'f' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    tabloyuKapat(bolge);
+  });
+
   it('akış tablosunda adım satırının boş yerine tıklayınca düzenleme paneli açılır; satırdaki alan ve düğme adımı seçmez (B-2482-1)', async () => {
     sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
     rrAc('/recete-rota/schema');

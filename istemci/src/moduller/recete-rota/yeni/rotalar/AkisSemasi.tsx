@@ -390,8 +390,8 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
   return { kenarlar, en: kok.width / olcek, boy: kok.height / olcek };
 }
 
-export function AkisSemasi({ r, kok, tamEkranDegistir, cop }: {
-  r: RotaEkrani; kok: Dugum; tamEkranDegistir: () => void; cop: ReactNode;
+export function AkisSemasi({ r, kok, cop }: {
+  r: RotaEkrani; kok: Dugum; cop: ReactNode;
 }) {
   const vp = useRef<HTMLDivElement>(null);
   const ic = useRef<HTMLDivElement>(null);
@@ -488,7 +488,6 @@ export function AkisSemasi({ r, kok, tamEkranDegistir, cop }: {
       ArrowLeft: () => { v.scrollLeft -= adim; }, ArrowRight: () => { v.scrollLeft += adim; },
       ArrowUp: () => { v.scrollTop -= adim; }, ArrowDown: () => { v.scrollTop += adim; },
       '+': () => { yakinlas(1); }, '=': () => { yakinlas(1); }, '-': () => { yakinlas(-1); }, '0': () => { sigdir(false); }, Home: () => { sigdir(true); },
-      f: tamEkranDegistir, F: tamEkranDegistir,
     };
     const is = harita[o.key];
     if (is) { o.preventDefault(); elle(); is(); }
