@@ -7,6 +7,7 @@ import { Rozet } from '../../../ortak/arayuz/Rozet.tsx';
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Tablo } from '../../../ortak/arayuz/Tablo.tsx';
 import { api } from '../../../ortak/veri/api.ts';
+import { useYetki } from '../../../ortak/veri/yetki.ts';
 import { DUZELTME_YERI, durumu, ozet, type VeriSagligiKategorisi } from './kurallar.ts';
 
 // Veri sağlığı (782): plana giden verinin kaynağında boş olan yerler ve motorun o boşlukta bugün ne varsaydığı. Yalnız okur; düzeltme
@@ -28,6 +29,7 @@ export function VeriSagligi() {
 }
 
 function Rapor({ c }: { c: VeriSagligiCevabi }) {
+  const yetki = useYetki();
   const eksikler = c.kategoriler.filter((k) => (k.sayi ?? 0) > 0);
   return (
     <>
@@ -41,7 +43,7 @@ function Rapor({ c }: { c: VeriSagligiCevabi }) {
           { anahtar: 'baslik', baslik: 'Konu', hucre: (k) => k.baslik },
           { anahtar: 'durum', baslik: 'Durum', kirilmaz: true, hucre: (k) => { const d = durumu(k); return <Rozet ton={d.ton}>{d.metin}</Rozet>; }, csv: (k) => durumu(k).metin },
           { anahtar: 'etki', baslik: 'Planda ne olur', hucre: (k) => k.etki },
-          { anahtar: 'yer', baslik: 'Nerede düzeltilir', hucre: (k) => { const y = DUZELTME_YERI[k.anahtar]; return y ? <Link to={y.yol}>{y.ad}</Link> : '—'; }, csv: (k) => DUZELTME_YERI[k.anahtar]?.ad ?? '' },
+          { anahtar: 'yer', baslik: 'Nerede düzeltilir', hucre: (k) => { const y = DUZELTME_YERI[k.anahtar]; return !y ? '—' : yetki.var(y.islem) ? <Link to={y.yol}>{y.ad}</Link> : y.ad; }, csv: (k) => DUZELTME_YERI[k.anahtar]?.ad ?? '' },
         ]}
       />
       {eksikler.map((k) => (

@@ -1,4 +1,5 @@
 import type { RozetTonu } from '../../../ortak/arayuz/Rozet.tsx';
+import type { Islem } from '#paylasilan/islemler.ts';
 import type { VeriSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
 
 export type VeriSagligiKategorisi = VeriSagligiCevabi['kategoriler'][number];
@@ -18,14 +19,16 @@ export function ozet(c: VeriSagligiCevabi): string {
   return `${parcalar.join('. ')}.`;
 }
 
-// Eksik verinin düzeltildiği sayfa (2664, B-2482-31/7). Plan yalnız okur; düzeltme verinin sahibinde yapılır. Sahibi belli olmayan konuda
-// (Finans'ın birim maliyeti) bağlantı verilmez; yanlış sayfaya göndermek boş bırakmaktan kötüdür.
-export const DUZELTME_YERI: Partial<Record<VeriSagligiKategorisi['anahtar'], { yol: string; ad: string }>> = {
-  'stok-bos': { yol: '/stok', ad: 'Stok Merkezi' },
-  'sure-bos': { yol: '/recete-rota/sureler', ad: 'Reçete ve Rota > Süreler' },
-  'istasyon-plan-ayari-yok': { yol: '/istasyonlar/is-merkezleri', ad: 'İstasyonlar > İş merkezleri ve istasyonlar' },
-  'vardiyasiz-istasyon': { yol: '/istasyonlar/vardiyalar', ad: 'İstasyonlar > Vardiyalar' },
-  'terminsiz-emir': { yol: '/siparisler', ad: 'Siparişler' },
-  'arizali-makine': { yol: '/istasyonlar/makineler', ad: 'İstasyonlar > Makineler' },
-  'elle-tezgah-ucreti': { yol: '/plan/maliyet', ad: 'Planlama > Maliyetler' },
+// Eksik verinin düzeltildiği sayfa (2664, B-2482-31/7) ve o sayfayı açan işlem. Plan yalnız okur; düzeltme verinin sahibinde yapılır.
+// İşlemi olmayana bağlantı yerine düz metin yazılır. Kişi saat maliyeti İK'nındır, Finans'a bağlanmaz.
+export const DUZELTME_YERI: Partial<Record<VeriSagligiKategorisi['anahtar'], { yol: string; ad: string; islem: Islem }>> = {
+  'stok-bos': { yol: '/stok', ad: 'Stok Merkezi', islem: 'sayfa.stok' },
+  'sure-bos': { yol: '/recete-rota/sureler', ad: 'Reçete ve Rota > Süreler', islem: 'sayfa.recete-rota' },
+  'istasyon-plan-ayari-yok': { yol: '/istasyonlar/is-merkezleri', ad: 'İstasyonlar > İş merkezleri ve istasyonlar', islem: 'sayfa.istasyonlar' },
+  'vardiyasiz-istasyon': { yol: '/istasyonlar/vardiyalar', ad: 'İstasyonlar > Vardiyalar', islem: 'sayfa.istasyonlar' },
+  'istasyon-maliyet-yok': { yol: '/finans/saatlik-maliyet', ad: 'Finans > Saatlik maliyetler', islem: 'finans.maliyet-oku' },
+  'maliyet-doviz': { yol: '/finans', ad: 'Finans (Kur ve faiz şeridi)', islem: 'finans.oku' },
+  'terminsiz-emir': { yol: '/siparisler', ad: 'Siparişler', islem: 'siparisler.oku' },
+  'arizali-makine': { yol: '/istasyonlar/makineler', ad: 'İstasyonlar > Makineler', islem: 'sayfa.istasyonlar' },
+  'elle-tezgah-ucreti': { yol: '/plan/maliyet', ad: 'Planlama > Maliyetler', islem: 'finans.maliyet-oku' },
 };

@@ -28,15 +28,16 @@ describe('veri sağlığı', () => {
   });
 
   it('ekran raporu okur, eksik konunun örneklerini ve kesilme uyarısını gösterir', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue(RAPOR);
+    const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve(yol === '/oturum' ? { kullanici: { islemler: ['sayfa.stok'] } } : RAPOR) as never);
     render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><VeriSagligi /></QueryClientProvider></MemoryRouter>);
     expect(await screen.findByText('Kart 1', { exact: false })).toBeTruthy();
     expect(get).toHaveBeenCalledWith('/plan/veri-sagligi');
     expect(screen.getByRole('alert').textContent).toMatch(/kesildi/);
     expect(screen.getAllByText('Okunamadı').length).toBeGreaterThan(0);
     // 2664: eksiğin düzeltildiği sayfaya bağlantı; sahibi belli olmayan konuda bağlantı yok.
-    expect(screen.getByRole('link', { name: 'Stok Merkezi' }).getAttribute('href')).toBe('/stok');
-    expect(screen.getByRole('link', { name: 'Reçete ve Rota > Süreler' }).getAttribute('href')).toBe('/recete-rota/sureler');
-    expect(screen.queryByRole('link', { name: /Finans/ })).toBeNull();
+    expect((await screen.findByRole('link', { name: 'Stok Merkezi' })).getAttribute('href')).toBe('/stok');
+    // Sayfanın işlemi olmayana bağlantı yerine düz metin.
+    expect(screen.queryByRole('link', { name: 'Reçete ve Rota > Süreler' })).toBeNull();
+    expect(screen.getAllByText('Reçete ve Rota > Süreler').length).toBeGreaterThan(0);
   });
 });

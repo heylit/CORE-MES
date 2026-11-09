@@ -410,6 +410,8 @@
   position: sticky; z-index: calc(var(--z-katman) + 2); bottom: calc(var(--b-5) + env(safe-area-inset-bottom, 0px)); align-self: flex-end;
   display: flex; align-items: center; gap: var(--b-2); margin: auto var(--b-4) var(--b-5) 0;
 }
+/* Dar ekranda yüzen düğme kaydırılan içeriğin (KPI kartları) üstüne biniyordu: akışta, içeriğin sonunda durur; relative, açılan panelin dayanağı olarak kalır (2664/8c). */
+@media (width <= 599px) { .tc-pym-yp-sira { position: relative; margin: var(--b-3) 0 var(--b-5) auto; } }
 .tc-pym-yp-fab {
   display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); padding: 0 var(--b-2) 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge2);
   border-radius: var(--yari-tam); background: var(--panel-solid); color: var(--ink); font: inherit; font-weight: 700; box-shadow: var(--shadow); cursor: pointer;
