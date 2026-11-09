@@ -637,8 +637,13 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
     ...(Array.isArray(d.machines) && Array.isArray(d.stations) || kayittaVar('machines') ? [] : ['tezgahlar', 'urunler']),
     ...(Array.isArray(d.people) || kayittaVar('people') ? [] : ['personel']),
   ].filter(a => Array.isArray(D0[a])));
-  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
-  for (const a of alanlar) D0[a] = D[a];
+  /* B-2499-1: malzemenin saSurum'u Satın Alma termin satırının yazma sürümüdür, plan girdisi değil: plan her kayıtta termin satırı açıp
+     sürümü artırdığı için kaynak değişikliği sayılırsa her "Planı kur"dan sonra plan güncel değil görünür. Karşılaştırmada dışarıda kalır;
+     ekran termin yazarken güncel sürümü ister, alan yine yenilenir. */
+  const surumsuz = (a, v) => a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; return r; }) : v;
+  const uygun = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
+  const alanlar = uygun.filter(a => !rrEsit(surumsuz(a, D[a]), surumsuz(a, D0k[a])));
+  for (const a of uygun) D0[a] = D[a];
   if (alanlar.length) tmiTabanKur(D0, bugun);
   return alanlar;
 }
