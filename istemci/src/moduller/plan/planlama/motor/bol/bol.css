@@ -1,0 +1,12 @@
+/* Böl penceresi (2524 b): Düzenle köşesindeki pencere kalıbı; pay satırı adet ve tezgâh, dar ekranda alt alta. */
+.tc-pym-bol-paylar { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-pym-bol-pay { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 2fr); align-items: center; gap: var(--b-1) var(--b-2); }
+.tc-pym-bol-pay > b { font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pym-bol-pay input, .tc-pym-bol-pay select, .tc-pym-bol-sayi select { min-width: 0; width: 100%; }
+.tc-pym-bol-sayi { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--b-2); }
+.tc-pym-bol-ozet { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-1); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-pym-bol-ozet[data-hata] { color: var(--stop); }
+@container (max-width: 420px) {
+  .tc-pym-bol-pay { grid-template-columns: auto minmax(0, 1fr); }
+  .tc-pym-bol-pay select { grid-column: 1 / -1; }
+}
