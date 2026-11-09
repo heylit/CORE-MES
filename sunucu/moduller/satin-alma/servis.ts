@@ -17,8 +17,8 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { KalemBagiCikisi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
-import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
-import type { FaizTuru } from '../finans/disari.ts';
+import { alacakliSiparisler, alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
+import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
@@ -725,6 +725,10 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   await kalemKartlariniDenetle(db, temel.kalemler, eski.kalemler);
   const sunucudan = await sunucuAlanlari(db, k, temel, eski);
   const yazilacak: TalepYazimi = sunucudan.durum === 'teslim_alindi' ? { ...sunucudan, durum: 'siparis_verildi' } : sunucudan;
+  // 2540 (Veri 2, Maliyet): tedarikçi alacağı olan sipariş (düşüldü dahil) karar değişikliğiyle silinmez; para kaydı sessizce kaybolmaz.
+  const kalanlar = new Set((yazilacak.karar?.siparisler ?? []).map((x) => x.teklifId));
+  const silinen = (eski.karar?.siparisler ?? []).map((x) => x.teklifId).filter((x) => !kalanlar.has(x));
+  if ((await alacakliSiparisler(db, id, silinen)).length > 0) throw cakisma(ALACAKLI_SIPARIS_SILINMEZ);
   await surumluGuncelle({
     guncelle: () => s.talepGuncelle(db, yazilacak, talepEden, surum),
     varMi: () => s.talepVarMi(db, id),
@@ -842,15 +846,53 @@ async function kapanisPlanNotlari(db: Db, k: Kullanici, talepId: string, teklifI
   if (sip === undefined || kosul === undefined) return;
   const kdv = (await siparisKdvleri(db, talepId)).get(teklifId)?.oran ?? null;
   const paraBirimi = talep.teklifler.find((q) => q.id === teklifId)?.paraBirimi ?? 'TRY';
-  const asim = avansAsimi(kosul, kdv);
-  if (asim !== null) {
-    await s.hareketEkle(db, talepId, randomUUID(), `Sipariş ${siparisNumarasi(sip)}: avans gerçekleşen teslim değerini ${sade(asim)} ${paraBirimi} aşıyor; plandaki avans gerçekleşen değere indirildi, avans ödendiyse fark tedarikçiden alacaktır.`, k.id);
-  }
-  if (await siparisOtomatikPlaniVarMi(db, { talepId, teklifId })) return;
+  const otomatik = await siparisOtomatikPlaniVarMi(db, { talepId, teklifId });
   const plan = (await siparisPlanlari(db, [{ talepId, teklifId }])).get(`${talepId}:${teklifId}`)?.satirlar ?? [];
+  const asim = avansAlacagiTutari(kosul, kdv, otomatik, plan);
+  const alacak = await avansAlacaginiYaz(db, k, talep, teklifId, asim);
+  if (asim !== null) {
+    const nasil = otomatik ? 'plandaki avans gerçekleşen değere indirildi, ' : '';
+    const kayit = alacak === 'acildi' || alacak === 'guncellendi' ? ' (finansta teyit bekliyor)' : '';
+    await s.hareketEkle(db, talepId, randomUUID(), `Sipariş ${siparisNumarasi(sip)}: avans gerçekleşen teslim değerini ${sade(asim)} ${paraBirimi} aşıyor; ${nasil}avans ödendiyse fark tedarikçiden alacaktır${kayit}.`, k.id);
+  }
+  if (otomatik) return;
   const fark = planGerceklesenFarki(kosul, kdv, plan.map((x) => x.tutar));
   if (fark !== null) {
     await s.hareketEkle(db, talepId, randomUUID(), `Sipariş ${siparisNumarasi(sip)}: ödeme planı gerçekleşen teslim değerinden ${sade(fark)} ${paraBirimi} farklı; planı gözden geçirin.`, k.id);
+  }
+}
+
+const ALACAKLI_SIPARIS_SILINMEZ = 'Bu siparişin tedarikçi alacağı var; önce finansta alacağı kapatın ya da düşürün.';
+// 2540 (Maliyet C1): aşan avans KDV dahil, sipariş dövizinde. Otomatik planda siparişin avansı, elle ya da faturalı planda planın avans
+// satırları gerçekleşen değerle karşılaştırılır; aşım yoksa null.
+function avansAlacagiTutari(kosul: s.SiparisOdemeKosulu, kdv: string | null, otomatik: boolean, plan: readonly { tur: string; tutar: string }[]): string | null {
+  if (!kosul.kapali) return null;
+  if (otomatik || plan.length === 0) return avansAsimi(kosul, kdv);
+  const fark = planGerceklesenFarki(kosul, kdv, plan.filter((x) => x.tur === 'avans').map((x) => x.tutar));
+  return fark !== null && ondalikKiyas(fark, '0') > 0 ? fark : null;
+}
+// Güvenlik K3: tedarikçi alacağını yalnız kapatma ve kapalı siparişin teslim düzeltmesi yazar; tutar burada hesaplanır.
+// Açılmış (teyit edilmiş) ya da kapanmış alacak değişmez; fark geçmişe not düşer.
+async function avansAlacaginiYaz(db: Db, k: Kullanici, talep: Talep, teklifId: string, tutar: string | null): Promise<AvansAlacagiSonucu> {
+  const hedef = odemePlaniHedefi(talep, teklifId);
+  const sip = talep.karar?.siparisler.find((x) => x.teklifId === teklifId);
+  if ('red' in hedef || sip === undefined) return 'yok';
+  const sonuc = await siparisAvansAlacagiYaz(db, k.id, { siparis: { talepId: talep.id, teklifId }, siparisNo: siparisNumarasi(sip), firmaId: hedef.firmaId, paraBirimi: hedef.paraBirimi, tutar });
+  if (sonuc === 'korundu') {
+    await s.hareketEkle(db, talep.id, randomUUID(), `Sipariş ${siparisNumarasi(sip)}: avans aşımı ${tutar === null ? 'kalmadı' : `${sade(tutar)} ${hedef.paraBirimi} oldu`}; finanstaki alacak kaydı değişmedi, gözden geçirin.`, k.id);
+  }
+  return sonuc;
+}
+// Kapalı siparişte teslim geri alınınca ya da düzeltilince alacak gerçekleşen değere göre yenilenir (kapatmadaki tanımla aynı).
+async function kapaliAlacaklariYenile(db: Db, k: Kullanici, talepId: string): Promise<void> {
+  const kosullar = (await s.siparisOdemeKosullari(db, talepId)).filter((x) => x.kapali);
+  if (kosullar.length === 0) return;
+  const talep = (await talepOku(db, talepId))!;
+  const kdvler = await siparisKdvleri(db, talepId);
+  for (const kosul of kosullar) {
+    const otomatik = await siparisOtomatikPlaniVarMi(db, { talepId, teklifId: kosul.teklifId });
+    const plan = (await siparisPlanlari(db, [{ talepId, teklifId: kosul.teklifId }])).get(`${talepId}:${kosul.teklifId}`)?.satirlar ?? [];
+    await avansAlacaginiYaz(db, k, talep, kosul.teklifId, avansAlacagiTutari(kosul, kdvler.get(kosul.teklifId)?.oran ?? null, otomatik, plan));
   }
 }
 
@@ -1254,6 +1296,7 @@ export async function teslimIsle(db: Db, k: Kullanici, g: { siparisSatirId: numb
   await s.teslimEkle(db, g.siparisSatirId, g.malKabulSatirId, g.miktar, k.id);
   await karneTesliminiYenile(db, g.siparisSatirId);
   await otomatikPlanlariYenile(db, k, hedef.talepId);
+  await kapaliAlacaklariYenile(db, k, hedef.talepId);
 }
 
 // Mal kabul düzeltilince (stok DEP-53) eski satırın teslimi ters kayıtla geri alınır; kayıt silinmez.
@@ -1267,7 +1310,7 @@ export async function teslimGeriAl(db: Db, k: Kullanici, g: { malKabulSatirId: n
     await karneTesliminiYenile(db, n.siparisSatiriId);
     if (hedef !== null) talepler.add(hedef.talepId);
   }
-  for (const t of talepler) await otomatikPlanlariYenile(db, k, t);
+  for (const t of talepler) { await otomatikPlanlariYenile(db, k, t); await kapaliAlacaklariYenile(db, k, t); }
 }
 
 // Kart 1474 (1259 c): sipariş satırının teslimi tedarikçi karnesine olay olarak, aynı işlemde gider; olay satır başına tektir ve
