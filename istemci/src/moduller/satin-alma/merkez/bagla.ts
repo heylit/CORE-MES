@@ -38,7 +38,7 @@ export interface BaglamaSecenegi { rol: Role; sayfa: MerkezSayfasi; yol: string;
 
 // Prototip sayfası → ikinci menü yolu. Ayrıntı sayfası ait olduğu listenin yolundadır; talep ayrıntısı geldiği yolda kalır.
 const YOLLAR: Partial<Record<Page, string>> = {
-  requests: "/satin-alma/talepler", materials: "/satin-alma/malzemeler", material: "/satin-alma/malzemeler",
+  requests: "/satin-alma/talepler", orders: "/satin-alma/siparisler", materials: "/satin-alma/malzemeler", material: "/satin-alma/malzemeler",
   suppliers: "/satin-alma/tedarikciler", supplier: "/satin-alma/tedarikciler", reports: "/satin-alma/raporlar", settings: "/ayarlar",
 };
 // Talep edenin ekranı şimdilik menüde yok (kullanıcı kararı); rol yine prototipte durur, iş kutusu yoluna düşer.

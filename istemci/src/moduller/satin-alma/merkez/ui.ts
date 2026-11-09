@@ -803,7 +803,7 @@ function csvFor(r: PurchaseRequest): string {
 /* ================= tıklama olayları ================= */
 // Talep ayrıntısının geri düğmesi (2412): dönülecek madde ekranı ve dönüş yolu bağlamadan gelir (tarayıcı geçmişi bağlamadadır).
 export const AYRINTI: { donus: Page; geri: (() => void) | null } = { donus: "requests", geri: null };
-const DONUS_ETIKETI: Partial<Record<Page, string>> = { dash: "İş kutusuna dön", requests: "Taleplere dön" };
+const DONUS_ETIKETI: Partial<Record<Page, string>> = { dash: "İş kutusuna dön", requests: "Taleplere dön", orders: "Siparişlere dön" };
 export function geriDugmesiHTML(no: string, etiket?: string): string {
   const l = etiket ?? DONUS_ETIKETI[AYRINTI.donus] ?? "Taleplere dön";
   return `<div class="sa-geri-serit"><button class="btn sa-geri" data-act="ayrinti-geri"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>${esc(l)}</span></button><span class="sa-geri-no num">${esc(no)}</span></div>`;

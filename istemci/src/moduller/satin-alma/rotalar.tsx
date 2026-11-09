@@ -1,6 +1,6 @@
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import {
-  DisOperasyonlarSayfasi, IsKutusuSayfasi, KgFiyatlariSayfasi, MalzemelerSayfasi, OnaylarSayfasi, RaporlarSayfasi, TaleplerSayfasi, TedarikcilerSayfasi, TedarikTerminleriSayfasi,
+  DisOperasyonlarSayfasi, IsKutusuSayfasi, KgFiyatlariSayfasi, MalzemelerSayfasi, OnaylarSayfasi, RaporlarSayfasi, SiparislerSayfasi, TaleplerSayfasi, TedarikcilerSayfasi, TedarikTerminleriSayfasi,
 } from './SatinAlma.tsx';
 import { SatinAlmaAnalizi } from './analiz/SatinAlmaAnalizi.tsx';
 import { TaleplerimSayfasi } from './talep/TaleplerimSayfasi.tsx';
@@ -15,6 +15,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/satin-alma/malzemeler', ekran: MalzemelerSayfasi },
   { yol: '/satin-alma/kg-fiyatlari', ekran: KgFiyatlariSayfasi },
   { yol: '/satin-alma/tedarikciler', ekran: TedarikcilerSayfasi },
+  { yol: '/satin-alma/siparisler', ekran: SiparislerSayfasi },
   { yol: '/satin-alma/raporlar', ekran: RaporlarSayfasi },
   { yol: '/satin-alma/analiz', ekran: SatinAlmaAnalizi },
   { yol: '/taleplerim', ekran: TaleplerimSayfasi },

@@ -90,7 +90,9 @@ export function talepEkrana(t: Talep): PurchaseRequest {
       deliveredDate: teslimTarihi(tekSiparis), excess: fazlasi(tekSiparis), ...(tekSiparis.kalite ? { quality: KALITE_T[tekSiparis.kalite] } : {}),
       logo: tekSiparis.logo,
     } : {}),
-    lines: k.siparisler.flatMap((x) => x.satirlar.map((r) => ({ id: r.id, itemId: r.kalemId, quoteId: x.teklifId }))),
+    lines: k.siparisler.flatMap((x) => x.satirlar.map((r) => ({
+      id: r.id, itemId: r.kalemId, quoteId: x.teklifId, qty: Number(r.miktar), unit: r.birim, received: r.teslimAlinan === null ? null : Number(r.teslimAlinan),
+    }))),
     ...(k.mod === 'bolunmus' ? {
       orders: Object.fromEntries(k.siparisler.map((s): [string, AwardOrder] => [s.teklifId, {
         orderNo: s.no ?? '', poNo: s.siparisNo, orderDate: s.siparisTarihi ?? '', expectedDate: s.beklenenTeslim ?? '', vadeBaslangici: s.vadeBaslangici, deliveredDate: teslimTarihi(s),

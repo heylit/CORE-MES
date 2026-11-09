@@ -20,6 +20,8 @@ export const SATIN_ALMA_IKINCI_MENU = {
       maddeler: [
         { anahtar: 'is-kutusu', baslik: 'İş kutusu', yol: '/satin-alma', simge: 'bell', islem: 'satin-alma.yaz' },
         { anahtar: 'talepler', baslik: 'Talepler', yol: '/satin-alma/talepler', simge: 'list', islem: 'satin-alma.oku' },
+        // 2430: tedarikçiye verilen her sipariş bir satır; veri merkezin açılış verisinden.
+        { anahtar: 'siparisler', baslik: 'Siparişler', yol: '/satin-alma/siparisler', simge: 'cart', islem: 'satin-alma.oku' },
         { anahtar: 'onaylar', baslik: 'Onaylar', yol: '/satin-alma/onaylar', simge: 'check', islem: 'satin-alma.onayla' },
         { anahtar: 'dis-operasyonlar', baslik: 'Dış operasyonlar', yol: '/satin-alma/dis-operasyonlar', simge: 'rotate', islem: 'satin-alma.oku' },
         // 2433: plandaki ihtiyaç, açık talep ve sipariş kalemi başına termin durumu (534 2 a, 533 a).
