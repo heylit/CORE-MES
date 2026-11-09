@@ -146,7 +146,7 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     const d = await durum('yonetici');
     const emir = d.emirler?.orders.find((x) => x.id === String(id));
     assert.ok(emir, `emir dilimde yok: ${String(id)}`);
-    return { emir, opStatus: d.emirler?.opStatus ?? {}, opProg: d.emirler?.opProg ?? {} };
+    return { emir, opStatus: d.emirler?.opStatus ?? {}, opProg: d.emirler?.opProg ?? {}, opSaglam: d.emirler?.opSaglam ?? {} };
   };
   const ayrinti = async (id: number): Promise<AdimliEmirAyrintisi> => (await istek<{ emir: AdimliEmirAyrintisi }>('planlama_proje', 'GET', `/adimli-emirler/${id}`)).govde.emir;
 
@@ -200,11 +200,14 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     await o().vt.tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     s = await siparis(id);
     assert.equal(s.opProg[adimAnahtari(1)], 4);
+    assert.equal(s.opSaglam[adimAnahtari(1)], undefined, 'süren adımın sağlamı opProg\'dadır');
 
     assert.equal((await terminal('/bitir', { saglamAdet: 9 })).durum, 200);
     s = await siparis(id);
     assert.equal(s.opStatus[adimAnahtari(1)], 'tamam');
     assert.equal(s.opProg[adimAnahtari(1)], undefined, 'biten adımın ilerlemesi durumdan okunur');
+    assert.equal(s.opSaglam[adimAnahtari(1)], 9, 'B18: biten adımın kayıtlı sağlamı');
+    assert.equal(s.opSaglam[adimAnahtari(2)], undefined);
     assert.equal(s.opStatus[adimAnahtari(2)], undefined, 'sıradaki adım bekliyor');
     assert.equal(s.emir.status, 'uretimde');
 

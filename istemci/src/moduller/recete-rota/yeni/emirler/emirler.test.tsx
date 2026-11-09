@@ -224,6 +224,38 @@ describe('R3 Üretim emirleri: plana girmeyen çalışan adım (487/2 b)', () =>
   });
 });
 
+describe('R3 Üretim emirleri: adım sağlamı (B18)', () => {
+  const kur = (emirler: (k: (sira: number) => string) => Partial<NonNullable<ReturnType<typeof ornekDurum>['emirler']>>) => {
+    const d = ornekDurum();
+    const adim = (id: string, seq: number, opNo: number) => ({
+      id, seq, opNo, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 10,
+      proc: null, chg: null, cycle: 2, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {},
+      digerAdaylar: [], ins: [], outs: [],
+    });
+    d.routes = { '11': { base: null, steps: [adim('s1', 1, 10), adim('s2', 2, 20), adim('s3', 3, 30)] } } as unknown as typeof d.routes;
+    const o = d.emirler!.orders[0]!;
+    const k = (sira: number) => `${o.id}|root|${String(sira)}`;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const })), ...emirler(k) };
+    sunucuKur(OKUYAN, { durum: d });
+    rrAc();
+  };
+  const saglamlar = async () => {
+    await emirAc();
+    const liste = await screen.findByRole('list', { name: 'UE-0001 operasyonları' });
+    return within(liste).getAllByRole('listitem').map((li) => li.querySelector('.tc-rr3-adim-saglam b')?.textContent);
+  };
+
+  it('biten adım kayda geçen sağlamı, süren adım canlı sayacı gösterir; bekleyen adım boş kalır', async () => {
+    kur((k) => ({ opStatus: { [k(1)]: 'tamam', [k(2)]: 'calisiyor' }, opProg: { [k(2)]: 4 }, opSaglam: { [k(1)]: 9 } }));
+    expect(await saglamlar()).toEqual(['9', '4', '—']);
+  });
+
+  it('opSaglam gelmezse (eski sunucu ya da sağlamı yazılmamış adım) biten adım boş görünür, sayı uydurulmaz', async () => {
+    kur((k) => ({ opStatus: { [k(1)]: 'tamam', [k(2)]: 'tamam' }, opProg: { [k(1)]: 5 } }));
+    expect(await saglamlar()).toEqual(['—', '—', '—']);
+  });
+});
+
 describe('R3 Üretim emirleri: komutlar', () => {
   it('yönetici taslağı plana alır: emrin ekrandaki sürümüyle gider (izinli)', async () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/plana-al': () => json(200, {}) } });

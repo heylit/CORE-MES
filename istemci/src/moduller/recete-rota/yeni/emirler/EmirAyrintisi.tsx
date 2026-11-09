@@ -405,6 +405,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
+  const opSaglam = d.emirler?.opSaglam ?? {};
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
   // B-2499-7: saat canlı plandan okunur; canlıda olmayan adımda motorun yerleşimi "öneri" diye gösterilir. Canlı özet yoksa (plan okuması
   // gelmedi) ayrım yapılamaz, eskisi gibi motor saati yazılır.
@@ -417,9 +418,12 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
   const kokOps: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
     const { p, oneri } = adimYerlesimi(a.opNo);
     const k = `${o.id}|root|${String(o.kol ? a.sira - o.kol.n : a.sira)}`;
+    const durum = a.durum ?? adimDurumu(o, a.sira, opStatus);
+    // Süren adımın sağlamı canlı sayaçtır (opProg); biten adımınki kayda geçen sağlamdır (opSaglam, B18).
+    const saglam = (durum === 'tamam' ? opSaglam[k] : opProg[k]) ?? null;
     return {
-      adim: a, durum: a.durum ?? adimDurumu(o, a.sira, opStatus), baslangic: p?.baslangic ?? null,
-      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: opProg[k] ?? null, oneri: oneri && p !== null,
+      adim: a, durum, baslangic: p?.baslangic ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam, oneri: oneri && p !== null,
     };
   });
   // 1476-F C: alt parça adımları kökten önce (iş sırası); durumları emrin kaydından, sağlam sayacı yalnız kök adımda vardır.

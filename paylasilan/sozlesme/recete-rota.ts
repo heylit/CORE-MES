@@ -267,6 +267,7 @@ export const durumEmirSemasi = z.object({
 });
 // opStatus ve opProg anahtarı `<emir>|root|<sıra>`: emrin kendi iş emrinin sırası (1 tabanlı). Prototip bunu rota adımına kendi emir
 // adımlarından çevirir (kolda ayrılma adımı kadar kayarak). Bekleyen iş emri opStatus'ta yoktur; opProg yalnız bitmemiş adımın sağlam adedidir.
+// opSaglam (aynı anahtar): biten adımın kayıtlı sağlam adedi; sayısı yazılmamış adım haritada yoktur. İsteğe bağlı: eski sunucu göndermez.
 // opYer (aynı anahtar): rotalı emirde adımın emirdeki iç ya da dış üretimi (UE-URY). Emirde fasona alınan ya da içeri alınan adım rotadan
 // ayrılabilir; plan rotanın değil emrin seçimini kullanır. fasonId doluysa adım fasondadır (istasyon ve süre yok, terminGun firma süresi).
 // tahminGun (B-2483-11): termini girilmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini, takvim günü; tahmin yoksa alan yok.
@@ -278,6 +279,7 @@ export const durumEmirlerSemasi = z.object({
   orders: z.array(durumEmirSemasi),
   opStatus: z.record(z.string(), z.enum(['calisiyor', 'tamam'])),
   opProg: z.record(z.string(), z.number()),
+  opSaglam: z.record(z.string(), z.number()).optional(),
   opYer: z.record(z.string(), durumEmirYeriSemasi).optional(),
 });
 // Birim maliyetler finanstadır (kart #1187). Anahtar kaydın sayı kimliğinin metnidir; satırı olmayan kalemin maliyeti bilinmiyordur (haritada yok).

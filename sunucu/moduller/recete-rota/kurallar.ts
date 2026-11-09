@@ -349,6 +349,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
   const kimlige = new Map(emirler.map((e) => [e.id, e]));
   const opStatus: DurumEmirleri['opStatus'] = {};
   const opProg: DurumEmirleri['opProg'] = {};
+  const opSaglam: NonNullable<DurumEmirleri['opSaglam']> = {};
   const opYer: NonNullable<DurumEmirleri['opYer']> = {};
   const orders = emirler.map((e): DurumEmirleri['orders'][number] => {
     // Sayfa kolu kol (n, m) geçerliyse rotanın n+1. adımından kurar; kol değilse emir kendi sırasıyla rotanın başından yürür.
@@ -361,6 +362,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       if (i.durum !== 'bekliyor') opStatus[anahtar] = i.durum;
       // Biten adımın ilerlemesi prototipte durumdan okunur; ilerleme yalnız süren adımın kendi sayacıdır (sayım yoksa yazılmaz).
       if (i.durum === 'calisiyor' && i.canliAdet !== null && i.canliAdet > 0) opProg[anahtar] = i.canliAdet;
+      if (i.durum === 'tamam' && i.saglamAdet !== null) opSaglam[anahtar] = i.saglamAdet;
       if (e.kaynakRotaRevizyonId !== null && i.durum !== 'tamam') {
         const fason = i.kaynak?.tur === 'fason' ? String(i.kaynak.id) : null;
         opYer[anahtar] = {
@@ -382,7 +384,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
     };
   });
-  return { orders, opStatus, opProg, opYer };
+  return { orders, opStatus, opProg, opSaglam, opYer };
 }
 
 // 677 a: motorun tatili hem resmî tatil hem kapalı gündür (Vardiya yalnız kapalı gün yazar; plan stüdyosunun kapattığı gün de kapalıdır).
