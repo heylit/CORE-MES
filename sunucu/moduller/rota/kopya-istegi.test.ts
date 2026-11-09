@@ -133,7 +133,7 @@ describe('rota kopya isteği (gerçek PostgreSQL)', () => {
       await kisiEkle(ad, rol(rolAdi));
       c[ad] = await girisCerezi(ad);
     }
-    tipler = (await tamam<SeceneklerCevabi>(c.operator, 'GET', '/rota/secenekler')).operasyonTipleri;
+    tipler = (await tamam<SeceneklerCevabi>(c.kalite, 'GET', '/rota/secenekler')).operasyonTipleri;
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RK-IM', ad: 'Deneme merkez', aciklama: null });
     const istasyon = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RK-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
     makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RK-MA', ad: 'Deneme makine A', istasyonId: istasyon })).id;
