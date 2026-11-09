@@ -99,7 +99,10 @@ test.describe('R1 Ürün ve rotalar, Operasyonlar', () => {
     await seritte(page, 'Operasyonlar').click();
     const ops = page.getByRole('region', { name: 'Operasyonlar' });
     await expect(ops.locator('[data-parca="R1"]')).toBeVisible({ timeout: 15_000 });
-    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toBeVisible();
+    // 2559 a: revizyon listesi bu bölümden kalktı; katalog araması ve varsayılan açık "Pasifleri gizle" kalır.
+    await expect(ops.getByRole('searchbox', { name: 'Operasyon ara' })).toBeVisible();
+    await expect(ops.getByRole('checkbox', { name: 'Pasifleri gizle' })).toBeChecked();
+    await expect(ops.getByRole('table', { name: 'Rota revizyonları' })).toHaveCount(0);
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
