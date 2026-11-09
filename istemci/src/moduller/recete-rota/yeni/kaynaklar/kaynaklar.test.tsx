@@ -173,14 +173,14 @@ describe('R2 Malzemeler', () => {
     expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/finans/maliyetler/malzeme/yaz', govde: { anahtar: 11, birimMaliyet: 12.5, paraBirimi: 'TRY', surum: null } });
   });
 
-  it('2584 a: "Statü" düğmesi önce adı sorar; boş adla eklenmez, yazılan adla eklenir', async () => {
+  it('2584 a: "Yeni statü" düğmesi önce adı sorar; boş adla eklenmez, yazılan adla eklenir', async () => {
     const istekler = sunucuKur(MALIYETCI, {
       durum: statuluDurum(),
       yazmalar: { 'POST /recete-rota/statu-tanimlari/S2/kaydet': () => json(200, { statuses: [] }) },
     });
     rrAc('/recete-rota/ayarlar');
     const ayar = await bolumAc('Ayarlar');
-    fireEvent.click(await within(ayar).findByRole('button', { name: /Statü$/ }));
+    fireEvent.click(await within(ayar).findByRole('button', { name: /^Yeni statü$/ }));
     const pencere = await screen.findByRole('dialog', { name: 'Yeni statü' });
     const ekle = within(pencere).getByRole('button', { name: /Ekle/ }) as HTMLButtonElement;
     expect(ekle.disabled).toBe(true);
@@ -190,6 +190,27 @@ describe('R2 Malzemeler', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/recete-rota/statu-tanimlari/S2/kaydet', govde: { code: 'S2', name: 'Kalite bekliyor', beklenenSurum: null } });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yeni statü' })).toBeNull());
+  });
+
+  it('2584 Arayüz notu: aynı adla ikinci statü pencerede reddedilir; sunucu reddi de pencerede görünür, pencere açık kalır', async () => {
+    const istekler = sunucuKur(MALIYETCI, {
+      durum: statuluDurum(),
+      yazmalar: { 'POST /recete-rota/statu-tanimlari/S2/kaydet': () => json(409, { kod: 'CAKISMA', mesaj: 'S2 kimlikli statü zaten var; sayfayı yenileyin.' }) },
+    });
+    rrAc('/recete-rota/ayarlar');
+    const ayar = await bolumAc('Ayarlar');
+    fireEvent.click(await within(ayar).findByRole('button', { name: /^Yeni statü$/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni statü' });
+    const ekle = within(pencere).getByRole('button', { name: /Ekle/ }) as HTMLButtonElement;
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Statü adı/ }), { target: { value: ' KARANTİNA' } });
+    expect(within(pencere).getByRole('alert').textContent).toBe('Bu adla bir statü zaten var.');
+    expect(ekle.disabled).toBe(true);
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Statü adı/ }), { target: { value: 'Ret' } });
+    expect(within(pencere).queryByRole('alert')).toBeNull();
+    fireEvent.click(ekle);
+    expect(await within(pencere).findByText('S2 kimlikli statü zaten var; sayfayı yenileyin.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Yeni statü' })).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(1);
   });
 
   it('statülü kartlar ana kartın altında yalnız okunur satırdır; stok okunamazsa miktar boş', async () => {

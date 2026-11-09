@@ -196,7 +196,7 @@ test.describe('R2 kaynaklar', () => {
 
 // 2584 a: statü tanımları Ayarlar'dadır; "Statü" önce adı sorar, ad yazılmadan Ekle pasiftir. Pencere vazgeçilerek kapanır: yazma gitmez.
 test.describe('R2 ayarlar', () => {
-  test('Ayarlar statüleri gösterir; Malzemeler\'de statü yoktur; Statü önce ad sorar; yatay taşma yok', async ({ page, ag, ac }) => {
+  test('Ayarlar statüleri gösterir; Malzemeler\'de statü yoktur; Yeni statü önce ad sorar; yatay taşma yok', async ({ page, ag, ac }) => {
     await ac('/recete-rota/items');
     const malzeme = page.getByRole('region', { name: 'Malzemeler' });
     await expect(malzeme.locator('[data-parca="R2"]')).toBeVisible({ timeout: 15_000 });
@@ -204,7 +204,7 @@ test.describe('R2 ayarlar', () => {
     await seritte(page, 'Ayarlar').click();
     const ayar = page.getByRole('region', { name: 'Ayarlar' });
     await expect(ayar.getByRole('region', { name: 'Statüler' })).toBeVisible({ timeout: 15_000 });
-    await ayar.getByRole('button', { name: /Statü$/ }).click();
+    await ayar.getByRole('button', { name: /^Yeni statü$/ }).click();
     const pencere = page.getByRole('dialog', { name: 'Yeni statü' });
     await expect(pencere.getByRole('button', { name: /Ekle/ })).toBeDisabled();
     await pencere.getByRole('textbox', { name: /Statü adı/ }).fill('Deneme statüsü');

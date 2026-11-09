@@ -14,6 +14,9 @@ export function Statuler({ durum, yetki }: { durum: RrDurumu; yetki: RrYetkisi }
   const [silinecek, silinecekYaz] = useState<Statu | null>(null);
   // 2584 a: "Ekle" önce adı sorar; boş adla "Yeni statü" satırı açılmaz. null pencere kapalıdır.
   const [yeniAd, yeniAdYaz] = useState<string | null>(null);
+  // Ret pencerede görünür (2584 Arayüz notu): pencere kapanmaz, ileti ad kutusunun altındadır.
+  const [ekleHatasi, ekleHatasiYaz] = useState<string | null>(null);
+  const pencereyiAc = (deger: string | null) => { yeniAdYaz(deger); ekleHatasiYaz(null); };
   if (durum.statuses === undefined) return null;
   const liste = durum.statuses;
   const kaydet = async (s: Statu, yama: Partial<Pick<Statu, 'code' | 'name' | 'kind' | 'color'>>): Promise<boolean> => {
@@ -26,10 +29,12 @@ export function Statuler({ durum, yetki }: { durum: RrDurumu; yetki: RrYetkisi }
     const kod = `S${String(n)}`;
     const hata = await calistir('statu-tanimi-kaydet', {
       id: kod, code: kod, name: ad, kind: 'uretim', color: STATU_RENKLERI[n % STATU_RENKLERI.length], beklenenSurum: null,
-    }, { basari: 'Statü eklendi.' });
-    if (hata === null) yeniAdYaz(null);
+    }, { basari: 'Statü eklendi.', sessiz: true });
+    if (hata === null) pencereyiAc(null); else ekleHatasiYaz(hata.ileti);
   };
   const ad = yeniAd?.trim() ?? '';
+  const adVar = ad !== '' && liste.some((x) => x.name.trim().toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'));
+  const eklenebilir = ad !== '' && !adVar;
   const sutunlar: Sutun<Statu>[] = [
     {
       anahtar: 'kod', baslik: 'Kod', kirilmaz: true,
@@ -71,18 +76,21 @@ export function Statuler({ durum, yetki }: { durum: RrDurumu; yetki: RrYetkisi }
         çıktısı normal stoktur. Burada yalnızca operasyona bağlı olmayan statüleri tanımla: karantina, giriş onaylı, kalite bekliyor, ret gibi.
       </p>
       <Tablo<Statu> etiket="Statü tanımları" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(s) => s.id} bosMesaj="Elle tanımlanan statü yok." />
-      {yetki.yaz && <div className="tc-rr2-arac"><Dugme simge="plus" disabled={mesgul} onClick={() => yeniAdYaz('')}>Statü</Dugme></div>}
+      {yetki.yaz && <div className="tc-rr2-arac"><Dugme simge="plus" disabled={mesgul} onClick={() => pencereyiAc('')}>Yeni statü</Dugme></div>}
       <Pencere
-        acik={yeniAd !== null} kapat={() => yeniAdYaz(null)} baslik="Yeni statü"
+        acik={yeniAd !== null} kapat={() => pencereyiAc(null)} baslik="Yeni statü"
         alt={(
           <>
-            <Dugme onClick={() => yeniAdYaz(null)} disabled={mesgul}>Vazgeç</Dugme>
-            <Dugme tur="birincil" simge="plus" disabled={ad === ''} yukleniyor={mesgul} onClick={() => { void ekle(ad); }}>Ekle</Dugme>
+            <Dugme onClick={() => pencereyiAc(null)} disabled={mesgul}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="plus" disabled={!eklenebilir} yukleniyor={mesgul} onClick={() => { void ekle(ad); }}>Ekle</Dugme>
           </>
         )}
       >
-        <form onSubmit={(o) => { o.preventDefault(); if (ad !== '') void ekle(ad); }}>
-          <Girdi etiket="Statü adı" required autoFocus value={yeniAd ?? ''} onChange={(o) => { yeniAdYaz(o.target.value); }} />
+        <form onSubmit={(o) => { o.preventDefault(); if (eklenebilir) void ekle(ad); }}>
+          <Girdi
+            etiket="Statü adı" required autoFocus value={yeniAd ?? ''} onChange={(o) => { pencereyiAc(o.target.value); }}
+            hata={adVar ? 'Bu adla bir statü zaten var.' : (ekleHatasi ?? undefined)}
+          />
         </form>
       </Pencere>
       <OnayPenceresi
