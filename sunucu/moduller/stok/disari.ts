@@ -2,8 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { Hareket, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
-import { binde, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
+import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
+import { binde, planaSayilirMi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
@@ -89,6 +89,11 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgu
 // B-2482-8: emrin statü zincirinde duran hammaddesi (ilk adımın çevirmesi, statüden sarf düşülmüş). Malzeme ihtiyacında verilene eklenir:
 // verilen = emirlerinNetSarfi + bu. Okuma yetkisini çağıran korur.
 export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinZincirdekiMiktari(db, emirIdler);
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok; plan aynı ürün ve OP'nin emrine kullanılabilir sayar. Yalnız
+// kullanılabilir kalite (serbest, şartlı) döner; karar bekleyen ve red plana stok sayılmaz. Okuma yetkisini çağıran korur.
+export const sahipsizStatuluStoklar = async (db: Db): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; sahipsiz: string }[]> =>
+  (await servis.sahipsizStatuluStoklar(db)).satirlar.filter((s) => planaSayilirMi(s.kaliteDurumu))
+    .map((s) => ({ malzemeId: s.malzemeId, statuId: s.statuId, kaliteDurumu: s.kaliteDurumu, sahipsiz: s.sahipsiz }));
 
 // Akış süresi için emrin stok hareketleri (kart #1338): emrin kendi hareketleri, emrin partisinin hareketleri (statü çevirme,
 // sevk çıkışı) ve emrin teslimlerinin hareketleri; zamana göre, tekrarsız. Okuma yetkisini çağıran korur.

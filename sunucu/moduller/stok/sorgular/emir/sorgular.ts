@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import type { KaliteDurumu, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { DEFTER_FARKI_SECIMI, KULLANILABILIR_SQL, MALZEME_KAYNAGI } from '../ortak/sorgular.ts';
 
 // ---- İş kutusu ve dışa açık okumalar -----------------------------------------------------------------------------------------
@@ -41,6 +41,22 @@ export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[])
      FROM stok_rezerve WHERE uretim_emri_id = ANY($1::int[]) AND statu_id IS NOT NULL
     GROUP BY 1, 2 HAVING sum(miktar) <> 0 ORDER BY 1, 2`,
   [[...emirIdler]]);
+// 2547 a: statüdeki stok, malzeme, statü ve kalite başına (toplamı artı olan), bulunduğu konumların kodlarıyla. Emre ayrılanı ve redi
+// kurallar.sahipsizStatuluHesapla düşer (açık emir süzmesi uretim-emirlerinin durumuyla).
+export const statuluStoklar = (db: Db): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: string; konumlar: string[] }[]> => db.sorgu(
+  `SELECT b.malzeme_id AS "malzemeId", b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu", sum(b.miktar)::text AS miktar,
+          COALESCE(array_agg(DISTINCT k.kod ORDER BY k.kod) FILTER (WHERE b.miktar > 0), '{}') AS konumlar
+     FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+    WHERE b.statu_id IS NOT NULL GROUP BY 1, 2, 3 HAVING sum(b.miktar) > 0 ORDER BY 1, 2, 3`);
+// 2561 a: malzeme ve statü başına son hareket zamanı (statüye giren ya da çıkan) ve statüye son sokan emrin kimliği (yoksa null).
+export const statuSonHareketleri = (db: Db, malzemeIdler: readonly number[]): Promise<{ malzemeId: number; statuId: number; sonHareket: string; kaynakEmirId: number | null }[]> => db.sorgu(
+  `WITH h AS (
+     SELECT h.id, h.malzeme_id, h.zaman, h.uretim_emri_id, s.statu_id, s.giren
+       FROM stok_hareketi h CROSS JOIN LATERAL (VALUES (h.kaynak_statu_id, false), (h.hedef_statu_id, true)) AS s(statu_id, giren)
+      WHERE h.malzeme_id = ANY($1::int[]) AND s.statu_id IS NOT NULL)
+   SELECT malzeme_id AS "malzemeId", statu_id AS "statuId", ${zamanMetni('max(zaman)')} AS "sonHareket",
+          (array_agg(uretim_emri_id ORDER BY zaman DESC, id DESC) FILTER (WHERE giren AND uretim_emri_id IS NOT NULL))[1] AS "kaynakEmirId"
+     FROM h GROUP BY 1, 2 ORDER BY 1, 2`, [[...malzemeIdler]]);
 // 335: emir başına fiş hareketleri, malzeme başına net. Geri alma, geri aldığı hareketin emri ve türüyle sayılır (geri alma geri alınmaz,
 // tek geri alma kısıtı vardır). fis: sarf (üretime sarf ve fire çıkışı) ya da giris (üretim girişi); hurda fire çıkışıdır.
 export const emirlerinFisHareketleri = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; fis: 'sarf' | 'giris'; malzemeId: number; miktar: string; hurda: string }[]> => db.sorgu(
