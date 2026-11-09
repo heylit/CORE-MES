@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { DurumRotaAdimi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
+  miktarOku, planOzeti, planSirasi, rotaFarki, statuluSatirlar, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -311,5 +312,26 @@ describe('liste süzgeci ve arama (1101 a)', () => {
     expect(aramaUyar(o, urun, 'ACİL')).toBe(true);
     expect(aramaUyar(o, null, 'mil')).toBe(false);
     expect(aramaUyar(o, urun, 'flanş')).toBe(false);
+  });
+});
+
+describe('2553 statülü stok ve süreçteki malzeme tek tablo', () => {
+  const kart = { id: '12', kayitNo: 12, code: 'HM-0001', name: 'Örnek çubuk', type: 'ham', unit: 'adet', cost: null, stock: 0, min: null,
+    aktif: true, kategori: null, kategoriAdi: null, girdiOlabilir: true } as unknown as Malzeme;
+  const okuma = (kaynakAdim: string): StokOkumasi => ({ statuler: [{ id: 7, malzemeNo: 'HM-0001', urunKodu: 'MM-0001', kaynakAdim, ad: 'OP 10 Tornalama' }], malzemeler: {} });
+  const d = { routes: { 11: { base: null, steps: [{ id: 'o10', opNo: 10 }] } }, routeRevs: [], emirler: null, adimAdetleri: {} } as unknown as Parameters<typeof stokVeSurec>[0];
+
+  it('emir verisi okunmuyorsa emir tarafı ve fark bilinmez; sıfır uydurulmaz', () => {
+    expect(stokVeSurec(d, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o10'))).toMatchObject([
+      { urunId: '11', opNo: 10, depoda: 5, emirlere: null, fark: null },
+    ]);
+  });
+
+  it('adımı rotada bulunmayan statü kendi satırıdır; emir verisi olsa da eşleşmez', () => {
+    const e = { ...d, emirler: { orders: [], opStatus: {}, opProg: {} } } as unknown as Parameters<typeof stokVeSurec>[0];
+    expect(stokVeSurec(e, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o99'))).toMatchObject([
+      { anahtar: 's7', opNo: null, depoda: 5, emirlere: null, fark: null },
+    ]);
+    expect(stokVeSurec(e, [{ malzeme: kart, statuId: 7, miktar: 5 }], okuma('11-o10'))).toMatchObject([{ depoda: 5, emirlere: 0, fark: 5 }]);
   });
 });

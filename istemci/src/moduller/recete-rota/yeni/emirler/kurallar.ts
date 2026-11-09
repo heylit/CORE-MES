@@ -437,6 +437,54 @@ export function surectekiMalzeme(d: Pick<DurumCevabi, 'emirler' | 'routes' | 'ro
     .sort((a, b) => a.urun.localeCompare(b.urun) || a.opNo - b.opNo);
 }
 
+// 2553 b/3: statülü stok ile süreçteki malzeme tek tabloda. Statü rotanın bir adımının çıktısıdır (kaynak adım "<ürün>-<adım>"); ürün ve
+// OP numarası üzerinden süreçteki satırla eşlenir. Depoda stoktaki statülü miktar, Emirlere göre açık emirlerin o adımı geçip sonrakini
+// bekleyen miktarıdır, Fark ikisinin ayrımıdır. Statüsü olmayan süreç satırının deposu tutulmaz (null); emir verisi okunmuyorsa ya da
+// statünün adımı rotada bulunmuyorsa emir tarafı bilinmez (null). Bilinmeyen sıfır sayılmaz; fark yalnız iki taraf da biliniyorsa yazılır.
+export interface StokSurecSatiri {
+  anahtar: string; urunId: string | null; opNo: number | null; kart: Malzeme | null; statuIdler: number[]; statu: string;
+  depoda: number | null; emirlere: number | null; fark: number | null; emirler: string;
+}
+export function statuAdimi(d: Pick<DurumCevabi, 'routes' | 'routeRevs'>, kaynakAdim: string): { urunId: string; opNo: number } | null {
+  const m = /^(\d+)-(.+)$/.exec(kaynakAdim);
+  if (!m) return null;
+  const urunId = m[1]!; const adimId = m[2]!;
+  const rotalar = [d.routes?.[urunId], ...(d.routeRevs ?? []).filter((r) => r.itemId === urunId).map((r) => r.data)];
+  for (const r of rotalar) {
+    const a = r?.steps.find((x) => x.id === adimId);
+    if (a) return { urunId, opNo: a.opNo };
+  }
+  return null;
+}
+export function stokVeSurec(
+  d: Pick<DurumCevabi, 'routes' | 'routeRevs' | 'emirler' | 'adimAdetleri'>, statulu: readonly StatuluSatir[] | null, okuma: StokOkumasi | null,
+): StokSurecSatiri[] {
+  const surec = surectekiMalzeme(d);
+  const satir = new Map<string, StokSurecSatiri>();
+  for (const s of statulu ?? []) {
+    const st = okuma?.statuler?.find((x) => x.id === s.statuId) ?? null;
+    const yer = st ? statuAdimi(d, st.kaynakAdim) : null;
+    const k = yer ? `${yer.urunId}|${String(yer.opNo)}` : `s${String(s.statuId)}`;
+    const o = satir.get(k) ?? {
+      anahtar: k, urunId: yer?.urunId ?? null, opNo: yer?.opNo ?? null, kart: s.malzeme, statuIdler: [], statu: st?.ad ?? `Statü ${String(s.statuId)}`,
+      depoda: 0, emirlere: yer && d.emirler ? 0 : null, fark: null, emirler: '',
+    };
+    o.statuIdler.push(s.statuId);
+    o.depoda = (o.depoda ?? 0) + s.miktar;
+    satir.set(k, o);
+  }
+  for (const s of surec) {
+    const o = satir.get(s.anahtar);
+    if (o) { o.emirlere = s.miktar; o.emirler = s.emirler; continue; }
+    satir.set(s.anahtar, {
+      anahtar: s.anahtar, urunId: s.urun, opNo: s.opNo, kart: null, statuIdler: [], statu: `OP ${String(s.opNo)} çıktısı`,
+      depoda: null, emirlere: s.miktar, fark: null, emirler: s.emirler,
+    });
+  }
+  return [...satir.values()].map((o) => ({ ...o, fark: o.depoda !== null && o.emirlere !== null ? o.depoda - o.emirlere : null }))
+    .sort((a, b) => (a.urunId ?? '~').localeCompare(b.urunId ?? '~') || (a.opNo ?? Infinity) - (b.opNo ?? Infinity) || a.anahtar.localeCompare(b.anahtar));
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Çok katmanlı emir (1476-F, 1483 a): stoktan karşılanan alt parça alt ağacıyla emre girmez. Seçim düğüm yoludur ("0.1"); gönderilen liste
 // en üstteki seçilenlerdir (altı zaten çıkar). Kök stoktan seçilemez.
