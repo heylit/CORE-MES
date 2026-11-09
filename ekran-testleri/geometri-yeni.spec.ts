@@ -122,7 +122,7 @@ test.describe('3D Atölyesi', () => {
 
   test('montaj kartı (2113): ağaç ve bileşen listesi her genişlikte taşmadan çalışır; seçim özeti adedi söyler', async ({ page, ac, ag }) => {
     await sunucu(page);
-    await ac('/geometri?rev=8');
+    await ac('/geometri/montaj?rev=8');
     const kart = page.locator('.tc-g3b-mo');
     await expect(kart.getByText('Öneri')).toBeVisible();
     await expect(kart.getByText('1 alt montaj')).toBeVisible();

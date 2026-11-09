@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
-import type { KucukResim } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type {
   GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, GeometriOzellik,
   GeometriOzellikCevabi, HamStokOnerisi,
@@ -9,7 +8,7 @@ import type {
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
-import { KucukResimKutusu } from '../belge-merkezi/disari.ts';
+import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CALISMALAR, calismaOku, KOK, type CalismaAdi } from './calismalar.ts';
@@ -34,10 +33,6 @@ async function ikiliOku(yol: string, sinyal?: AbortSignal): Promise<Uint8Array> 
   return new Uint8Array(await c.arrayBuffer());
 }
 
-// Listedeki önizleme karesi: modelin kendi revizyonunun küçük resmi (Çizim Merkezi üretir); yoksa ya da okunamazsa yer tutucu ikon.
-const modelKaresi = (s: GeometriModelSatiri): KucukResim =>
-  ({ hedefId: s.malzemeNo, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: s.harf, kareSayisi: 1, revUyumu: null });
-
 const yetkiyse = (hata: unknown, ekran: string): string =>
   hata instanceof ApiHatasi && hata.durum === 403 ? '3D Atölyesi için yetkiniz yok.' : hataIletisi(hata, ekran);
 
@@ -56,6 +51,9 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
     placeholderData: keepPreviousData,
     refetchInterval: (s) => (s.state.data?.satirlar.some((x) => suruyorMu(x.durum)) ? YENILEME_MS : false),
   });
+  // Listedeki önizleme karesi (2396): malzemenin küçük resmi, sayfa için tek istekle; resmi olmayan satırda yer tutucu ikon
+  // (kare yokken revizyon başına istek atılıp 404 alınmaz).
+  const kareler = useKucukResimler('malzemeler', sorgu.data?.satirlar.map((s) => s.malzemeNo) ?? []);
   return (
     <section className="tc-g3b-liste" aria-label="Modeller">
       <div className="tc-g3b-suzgec">
@@ -75,7 +73,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                   {sorgu.data.satirlar.map((s) => (
                     <li key={`${String(s.malzemeNo)}:${String(s.revizyonId)}`}>
                       <button type="button" className="tc-g3b-satir" aria-current={s.revizyonId === secili ? 'true' : undefined} onClick={() => sec(s)}>
-                        <KucukResimKutusu resim={modelKaresi(s)} ad={`${s.malzemeKodu} önizleme`} />
+                        <KucukResimKutusu resim={kareler.get(s.malzemeNo) ?? null} ad={`${s.malzemeKodu} önizleme`} />
                         <span className="tc-g3b-satir-metin">
                           <strong>{s.malzemeKodu}</strong>
                           <span>{s.malzemeAdi ?? s.belgeAdi}</span>
