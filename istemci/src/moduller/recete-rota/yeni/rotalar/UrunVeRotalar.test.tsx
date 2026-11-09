@@ -16,6 +16,38 @@ const bolumAc = async () => {
 };
 
 describe('R1 Ürün ve rotalar: izinli', () => {
+  it('akış tablosunda giren miktarı boşaltılınca "zorunlu" iletisi çıkar, 0 gönderilmez; geçerli miktar kaydedilir (B-2484-6)', async () => {
+    let durum = rotaDurumu();
+    let kaydet: unknown = null;
+    const istekler = sunucuKur(YONETICI, {
+      durum: () => json(200, durum),
+      yazmalar: {
+        'POST /rota/urunler/11/taslak-ac': () => {
+          durum = rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3), revizyonOrnegi('72', 'B', 'taslak', 1)]);
+          return json(200, { id: 72, durum: 'taslak', surum: 1 });
+        },
+        'POST /rota/revizyonlar/72/kaydet': (g) => { kaydet = g; return json(200, { id: 72, durum: 'taslak', surum: 2 }); },
+      },
+    });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    const alan = await within(bolge).findByLabelText(/HM-0012 miktarı/);
+    fireEvent.change(alan, { target: { value: '' } });
+    fireEvent.blur(alan);
+    expect((await within(bolge).findByRole('alert')).textContent).toBe('Miktar zorunlu.');
+    fireEvent.change(alan, { target: { value: '0' } });
+    fireEvent.blur(alan);
+    expect((await within(bolge).findByRole('alert')).textContent).toBe('Sıfırdan büyük olmalı.');
+    await new Promise((r) => { setTimeout(r, 1000); });
+    expect(rotaYazmalari(istekler)).toEqual([]);
+
+    fireEvent.change(alan, { target: { value: '3' } });
+    fireEvent.blur(alan);
+    await waitFor(() => { expect(kaydet).not.toBeNull(); }, BEKLE);
+    expect(JSON.stringify(kaydet)).toContain('"bilesenler":[{"malzemeId":12,"miktar":3,');
+  });
+
   it('açılışta yazma yok; adımın hazırlık süresi değişince taslak açılır ve rota modülüne kaydedilir', async () => {
     let durum = rotaDurumu();
     let kaydet: unknown = null;

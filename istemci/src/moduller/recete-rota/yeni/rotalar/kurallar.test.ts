@@ -248,6 +248,14 @@ describe('ağaç, fark ve seçici', () => {
     expect(sayiAlaniHatasi('0')).toBeNull();
   });
 
+  it('pozitif sayı alanı boş ve sıfır miktarı reddeder, 0 yazmaz; geçerli miktar geçer (B-2484-6)', () => {
+    expect(sayiAlaniHatasi('', undefined, true)).toBe('Miktar zorunlu.');
+    expect(sayiAlaniHatasi('  ', undefined, true)).toBe('Miktar zorunlu.');
+    expect(sayiAlaniHatasi('0', undefined, true)).toBe('Sıfırdan büyük olmalı.');
+    expect(sayiAlaniHatasi('0,25', undefined, true)).toBeNull();
+    expect(sayiAlaniHatasi('-1', undefined, true)).toBe('Eksi olamaz.');
+  });
+
   it('seçici koda ve ada göre süzer, koduyla başlayan önce gelir, girdi olamayanı ve kendini atlar', () => {
     const liste = [malzeme('1', 'mamul', { code: 'X-AB' }), malzeme('2', 'ham', { code: 'AB-1' }), malzeme('3', 'hizmet', { code: 'AB-2' })];
     expect(malzemeAra(liste, 'ab', 'all', true, null).map((m) => m.id)).toEqual(['2', '1']);
