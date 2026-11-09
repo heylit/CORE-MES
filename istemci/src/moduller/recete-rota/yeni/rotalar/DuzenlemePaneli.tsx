@@ -317,15 +317,29 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
                   secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
                   yaz={(v) => { yaz((x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
               </span>
-              <span className="tc-rr1-genis">
-                <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
-                  secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-                  yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
-                <small className="tc-rr1-ipucu">
-                  {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
-                  {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
-                </small>
-              </span>
+              {dz.insanli(a.stationId) ? (
+                // 2685: insanlı istasyonda adayları istasyonda yetkin kişilerdir; makineleri olsa da aday olmaz (kapasite-insan.md madde 2).
+                <span className="tc-rr1-genis tc-rr1-alan">
+                  <span className="tc-rr1-lbl">Makine</span>
+                  <small className="tc-rr1-ipucu">
+                    İnsanlı istasyon: iş, istasyonda yetkin ve vardiyası olan kişilere açılır; makine seçilmez.
+                    {a.machineId && ' Bu adımda eskiden seçilmiş bir makine var; plan onu kullanmaz.'}
+                  </small>
+                  {a.machineId && duzen && (
+                    <Dugme simge="x" onClick={() => { yaz((x) => ({ ...x, machineId: null }), 'Makine seçimi kaldırıldı'); }}>Makine seçimini kaldır</Dugme>
+                  )}
+                </span>
+              ) : (
+                <span className="tc-rr1-genis">
+                  <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
+                    secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
+                    yaz={(v) => { yaz((x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
+                  <small className="tc-rr1-ipucu">
+                    {makineler.length ? 'Boş bırakılırsa makineyi planlayıcı seçer; seçilirse plan adımı bu makineye sabitler.' : 'Bu istasyonda tanımlı aktif makine yok.'}
+                    {a.machineId && a.alts.length > 0 ? ' Makine seçili: alternatif istasyonlar bu adımda kullanılmaz.' : ''}
+                  </small>
+                </span>
+              )}
               {(() => {
                 // Hazırlık bölümü (1310 a): toplam hazırlık = hazırlık + ayar; ayar süresi yalnız ayar işaretliyken girilir.
                 const h = hazirlikBolumu(a);
@@ -373,8 +387,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
             yaz={(v) => { yaz((x) => ({ ...x, rejectPct: Math.min(95, Math.max(0, v ?? 0)) }), 'Fire payı değişti'); }} />
           {!fason && (
             <>
-              <SecimAlani etiket="Makine kullanımı" deger={a.split} kapali={!duzen}
-                secenekler={[{ deger: 'tek', baslik: 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
+              <SecimAlani etiket={dz.insanli(a.stationId) ? 'Kişi kullanımı' : 'Makine kullanımı'} deger={a.split} kapali={!duzen}
+                secenekler={[{ deger: 'tek', baslik: dz.insanli(a.stationId) ? 'Tek kişide' : 'Tek makinede' }, { deger: 'bol', baslik: 'Paralel böl' }]}
                 yaz={(v) => { yaz((x) => ({ ...x, split: v === 'bol' ? 'bol' : 'tek' }), 'Makine kullanımı değişti'); }} />
               {a.split === 'bol' && (
                 <SayiAlani etiket="En küçük parça" deger={a.minLot} kapali={!duzen} yerTutucu="boş"

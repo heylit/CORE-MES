@@ -342,13 +342,14 @@ export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
 }
 
 // Malzeme maliyeti (prototipte matCost): rotası olan kartta girenlerin toplamı, olmayanda birim maliyet. Birim maliyeti bilinmeyen kalem
-// varsa toplam bilinmez (null); sıfır uydurulmaz.
+// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren ve kendine dönen rota da toplamı
+// bilinmez yapar (2684): atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi.
 export function malzemeMaliyeti(
   id: string, rotaOf: (id: string) => readonly Adim[], malzeme: (id: string) => Malzeme | undefined,
   birimMaliyet: (id: string) => number | null, yol: readonly string[] = [],
 ): number | null {
   const m = malzeme(id);
-  if (!m || yol.includes(id)) return 0;
+  if (!m || yol.includes(id)) return null;
   const ss = sirali(rotaOf(id));
   if (m.type === 'ham' || ss.length === 0) return birimMaliyet(id);
   const fs = adimCarpanlari(ss);
@@ -356,7 +357,6 @@ export function malzemeMaliyeti(
   let girdi = false;
   for (let j = 0; j < ss.length; j++) {
     for (const x of ss[j]?.ins ?? []) {
-      if (!malzeme(x.itemId)) continue;
       const alt = malzemeMaliyeti(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
       if (alt === null) return null;
       girdi = true;
