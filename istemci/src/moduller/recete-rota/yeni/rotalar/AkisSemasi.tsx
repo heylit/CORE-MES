@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, miktar as miktarMetni } from '../bicim.ts';
 import {
-  adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, adimEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
+  adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, kolaEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, type RotaEkrani } from './ortak.tsx';
@@ -33,10 +33,10 @@ export function yereBirak(r: RotaEkrani, urunId: string, sonraId: string | null,
   const s = surukleCoz(v);
   if (!s) return;
   if (s.tur === 'adim' && s.urunId === urunId) {
-    r.duzen.degistir(urunId, (l) => adimArkasinaTasi(l, s.adimId, sonraId), 'Adım taşındı');
+    r.duzen.tasi(urunId, (l) => adimArkasinaTasi(l, s.adimId, sonraId), 'Adım taşındı');
   } else if (s.tur === 'op') {
     const yeni = yeniAdim(r.duzen.h.op.get(s.opId), yeniKimlik());
-    const l2 = adimEkle(r.duzen.adimlar(urunId), sonraId, yeni);
+    const l2 = kolaEkle(r.duzen.adimlar(urunId), sonraId, yeni);
     if (r.duzen.degistir(urunId, () => l2, 'Adım eklendi')) {
       r.sec({ tur: 'adim', urunId, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar });
     }
@@ -103,10 +103,10 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
     const s = surukleCoz(v);
     if (!s) return;
     if (s.tur === 'adim' && s.urunId === sahip.id && s.adimId !== a.id) {
-      r.duzen.degistir(sahip.id, (l) => adimSurukle(l, s.adimId, a.id), 'Adım taşındı');
+      r.duzen.tasi(sahip.id, (l) => adimSurukle(l, s.adimId, a.id), 'Adım taşındı');
     } else if (s.tur === 'op') {
       const yeni = yeniAdim(h.op.get(s.opId), yeniKimlik());
-      const l2 = adimEkle(r.duzen.adimlar(sahip.id), a.id, yeni);
+      const l2 = kolaEkle(r.duzen.adimlar(sahip.id), a.id, yeni);
       if (r.duzen.degistir(sahip.id, () => l2, 'Adım eklendi')) {
         r.sec({ tur: 'adim', urunId: sahip.id, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar });
       }
@@ -267,11 +267,11 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
               {duzen && !r.surukleniyor && (
                 <div className="tc-rr1-stepbar">
                   <button type="button" className="tc-rr1-ib" disabled={i === 0} title="Yukarı taşı (Alt+Shift+↑)" aria-label={`OP ${String(statuNo(a))} yukarı taşı`}
-                    onClick={() => { const p = liste[i - 1]; if (p) r.duzen.degistir(d.id, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
+                    onClick={() => { const p = liste[i - 1]; if (p) r.duzen.tasi(d.id, (l) => adimSurukle(l, a.id, p.id), 'Adım yukarı taşındı'); }}>
                     <Simge ad="up" boyut="k" />
                   </button>
                   <button type="button" className="tc-rr1-ib" disabled={son} title="Aşağı taşı (Alt+Shift+↓)" aria-label={`OP ${String(statuNo(a))} aşağı taşı`}
-                    onClick={() => { const n = liste[i + 1]; if (n) r.duzen.degistir(d.id, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
+                    onClick={() => { const n = liste[i + 1]; if (n) r.duzen.tasi(d.id, (l) => adimSurukle(l, a.id, n.id), 'Adım aşağı taşındı'); }}>
                     <Simge ad="down" boyut="k" />
                   </button>
                   <button type="button" className="tc-rr1-add" onClick={() => { r.sec({ tur: 'adim', urunId: d.id, adimId: a.id, seq: a.seq, miktar: sn.miktar }); r.paletAc(); }}>

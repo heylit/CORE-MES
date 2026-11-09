@@ -121,6 +121,62 @@ export const birlesenYaz = (a: Adim, d: string, sec: boolean): Adim => ({
   ...a, birlesen: sec ? [...new Set([...adimBirlesen(a), d])].sort() : adimBirlesen(a).filter((x) => x !== d),
 });
 
+// 2542 (çatallı rota kolaylıkları): veri biçimi ve sunucu kuralı aynı kalır; dal hâlâ adım başına harf ve birleşme adımında işarettir.
+// Rotada kullanılmayan ilk dal harfi; sekizi de doluysa null.
+export const serbestDal = (liste: readonly Adim[]): string | null => {
+  const kullanilan = new Set(liste.flatMap((a) => [...(adimDali(a) ?? []), ...adimBirlesen(a)]));
+  return DAL_HARFLERI.find((d) => !kullanilan.has(d)) ?? null;
+};
+// Dalın çatal ve birleşme yeri (paylaşılan öncül kuralıyla aynı): ilk adımı, listede kendinden önceki son ana hat adımını bekler (yoksa rotanın
+// başından); birleşme, dalı birleşen listesinde taşıyan adımdır. carpan dalın bütün adımlarında aynıysa o sayı, farklıysa null.
+export interface DalBilgisi { dal: string; adimlar: Adim[]; catal: Adim | null; birlesme: Adim | null; carpan: number | null; sonaKadar: boolean }
+export function dalBilgileri(adimlar: readonly Adim[]): DalBilgisi[] {
+  const l = sirali(adimlar);
+  const dallar = [...new Set(l.flatMap((a) => adimDali(a) ?? []))];
+  return dallar.map((dal) => {
+    const ad = l.filter((a) => adimDali(a) === dal);
+    const ilk = l.findIndex((a) => adimDali(a) === dal);
+    const catal = l.slice(0, ilk).reverse().find((a) => adimDali(a) === null) ?? null;
+    const birlesme = l.find((a) => adimBirlesen(a).includes(dal)) ?? null;
+    const carpanlar = new Set(ad.map(adimCarpani));
+    return { dal, adimlar: ad, catal, birlesme, carpan: carpanlar.size === 1 ? [...carpanlar][0] ?? null : null, sonaKadar: birlesme === null && l.at(-1) === ad.at(-1) };
+  });
+}
+export const dalEtiketi = (b: DalBilgisi): string => `Dal ${b.dal}: ${b.catal ? `OP ${String(statuNo(b.catal))} ardından başlar` : 'rotanın başından başlar'}, ${
+  b.birlesme ? `OP ${String(statuNo(b.birlesme))} adımında birleşir` : b.sonaKadar ? 'rotanın sonuna kadar yürür' : 'birleşmiyor'}.`;
+// Taşımadan önce ve sonra dalların çatal ya da birleşme yeri değiştiyse yeni etiketler (sürüklemede onay için); değişmediyse boş.
+export function catalFarki(once: readonly Adim[], sonra: readonly Adim[]): string[] {
+  const yer = (b: DalBilgisi) => `${b.catal?.id ?? ''}>${b.birlesme?.id ?? ''}`;
+  const eski = new Map(dalBilgileri(once).map((b) => [b.dal, yer(b)]));
+  return dalBilgileri(sonra).filter((b) => eski.has(b.dal) && eski.get(b.dal) !== yer(b)).map(dalEtiketi);
+}
+// A: adımın ardından yeni kol açılır; yeni adım `dal` ile ana hattın o adımından çatallanır. B: adımda açık kolların hepsi birleşir.
+export const kollariBirlestir = (adimlar: readonly Adim[], adimId: string): Adim[] => {
+  const l = sirali(adimlar);
+  const i = l.findIndex((a) => a.id === adimId);
+  if (i < 0) return [...adimlar];
+  const acik = birlesebilenDallar(l, i);
+  return adimlar.map((a) => (a.id === adimId ? { ...a, birlesen: [...new Set([...adimBirlesen(a), ...acik])].sort() } : a));
+};
+// D: dal çarpanı dalın her adımına aynı yazılır (veri adım başına kalır).
+export const dalCarpaniYaz = (adimlar: readonly Adim[], dal: string, v: number | null): Adim[] =>
+  adimlar.map((a) => (adimDali(a) === dal ? carpanYaz(a, v) : a));
+// Paletten ya da bırakmayla eklenen adım: `dal` verilirse o kolu açar; verilmezse ardına eklendiği adım koldaysa o kola düşer (kolun çarpanıyla).
+export function kolaEkle(adimlar: readonly Adim[], sonraId: string | null, a: Adim, dal?: string | null): Adim[] {
+  const onceki = sonraId === null ? undefined : adimlar.find((x) => x.id === sonraId);
+  const hedef = dal ?? (onceki ? adimDali(onceki) : null);
+  const yeni = hedef === null ? a : { ...a, dal: hedef, ...(dal == null && onceki?.adetCarpani != null ? { adetCarpani: onceki.adetCarpani } : {}) };
+  return adimEkle(adimlar, sonraId, yeni);
+}
+// F: düzenlerken dal denetimi (sunucuyla aynı kural); hatalı adımın kimliği ve iletisi, yoksa null.
+export function dalHatasi(adimlar: readonly Adim[]): { adimId: string | null; ileti: string } | null {
+  const l = sirali(adimlar);
+  const h = dalDenetle(l.map((a) => ({ dal: adimDali(a), birlesen: adimBirlesen(a) })));
+  if (!h) return null;
+  const i = /^adimlar\.(\d+)/.exec(h.alan)?.[1];
+  return { adimId: i === undefined ? null : l[Number(i)]?.id ?? null, ileti: h.ileti };
+}
+
 // Adımın tükettiği önceki adımlar (sunucunun akisiCikar kuralı): dallı rotada öncülleri; tek hatlı rotada bağımsız ve ilk adım tüketmez,
 // ötekiler zincirdeki bağımsız olmayan önceki adımın ve aradaki bağımsız adımların çıktısını tüketir.
 export function tuketilenAdimlar(liste: readonly Adim[], i: number): Adim[] {

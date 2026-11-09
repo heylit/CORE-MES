@@ -10,7 +10,8 @@ export type Secim =
   | { tur: 'urun'; urunId: string; nid: string; miktar: number }
   | { tur: 'adim'; urunId: string; adimId: string; seq: number; miktar: number }
   | { tur: 'giren' | 'yan'; urunId: string; adimId: string; sira: number; nid: string; miktar: number }
-  | { tur: 'adimEkle'; urunId: string; sonraId: string | null }
+  // dal: "Buradan kol aç" (2542 A); eklenecek ilk adım bu yeni kola düşer.
+  | { tur: 'adimEkle'; urunId: string; sonraId: string | null; dal?: string }
   | { tur: 'girenEkle' | 'yanEkle'; urunId: string; adimId: string; yerine: number | null }
   | { tur: 'yeniRota' };
 
