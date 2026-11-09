@@ -33,6 +33,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /rota/talimat-medyasi/:ozet': ROTA_OKUR,
   'GET /rota/talimat-sablonlari': ROTA_OKUR,
   'GET /rota/talimat-sablonlari/:id': ROTA_OKUR,
+  'GET /rota/talimat-sablonlari/:id/kopyalar': ROTA_OKUR,
   'GET /rota/revizyonlar/:id': ROTA_OKUR,
   'GET /rota/revizyonlar/:id/sureler': ROTA_OKUR,
   'GET /rota/revizyonlar/:id/fark': ROTA_OKUR,

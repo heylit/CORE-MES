@@ -3,7 +3,7 @@ export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOze
 export { fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
-  talimatSablonlari, talimatSablonu, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
+  talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
 } from './servis/talimat.ts';
 export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGetir, patlatmaOnizlemesi, agac } from './servis/agac.ts';
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';

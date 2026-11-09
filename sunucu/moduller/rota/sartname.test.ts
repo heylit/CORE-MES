@@ -11,7 +11,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   AdimGirdisi, IsEmriSartnameleriCevabi, KomutCevabi, ParametreGirdisi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnamelerCevabi, SeceneklerCevabi,
-  TalimatAdimiGirdisi, TalimatlarCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
+  TalimatAdimiGirdisi, TalimatlarCevabi, TalimatSablonKopyalariCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -600,6 +600,60 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
     assert.equal(p.sablon.aktif, false);
   });
+  test('2588 a: şablondan kopya kökeni kaydedilir, sürüm denetlenir, yayında taslaktan geçer; kopyalar şablonla listelenir', async () => {
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', {
+      kod: 'TS-KOKEN', ad: 'Köken şablonu', sartnameId: null, adimlar: [adim({ baslik: 'Şablon adımı' })],
+    });
+    const kaynak = { id: e.sablon.id, surum: e.sablon.surum };
+    const koken = { sablon: { id: e.sablon.id, kod: 'TS-KOKEN', ad: 'Köken şablonu' }, surum: e.sablon.surum };
+    const t = await taslak();
+    const yaz = `/rota/urunler/${t.urun}/talimat-adimli-yaz`;
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: { ...kaynak, surum: kaynak.surum + 1 } }, 409);
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: { id: 999999, surum: 1 } }, 404, /şablonu bulunamadı/);
+    const y1 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: kaynak });
+    assert.deepEqual(y1.surumler[0]?.koken, koken);
+    const y2 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 1, adimlar: [adim({ baslik: 'Düzenlendi' })] });
+    assert.deepEqual(y2.surumler.map((x) => x.koken), [koken, koken], 'verilmeyen köken dayanılan sürümden devralınır');
+    const y3 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 2, adimlar: [adim({ baslik: 'Elle' })], kaynakSablon: null });
+    assert.equal(y3.surumler[0]?.koken, null, 'null kökeni kaldırır');
+    const y4 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 3, adimlar: [adim({ baslik: 'Elle 2' })] });
+    assert.equal(y4.surumler[0]?.koken, null, 'kökensiz sürümden devralınan köken yok');
+
+    const kaydet = taslakUrl(t.urun, 'talimat-taslak-kaydet');
+    const yayinla = taslakUrl(t.urun, 'talimat-yayinla');
+    const d1 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 4, taslakSurum: null, adimlar: [adim()], kaynakSablon: kaynak });
+    assert.deepEqual(d1.taslak?.koken, koken);
+    const d2 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 4, taslakSurum: 1, adimlar: [adim({ baslik: 'Düzeltildi' })] });
+    assert.deepEqual(d2.taslak?.koken, koken, 'verilmeyen köken taslakta korunur');
+    const y5 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yayinla, { opNo: 10, taslakSurum: 2 });
+    assert.deepEqual(y5.surumler.map((x) => [x.surum, x.koken]), [[5, koken], [4, null], [3, null], [2, koken], [1, koken]]);
+    // Mimar K1: kökenli sürümden kaynakSablon'suz açılan taslak kökeni devralır ve yayında taşır.
+    const d3 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 5, taslakSurum: null, adimlar: [adim({ baslik: 'Kopyayı düzenle' })] });
+    assert.deepEqual(d3.taslak?.koken, koken);
+    const y6 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yayinla, { opNo: 10, taslakSurum: 1 });
+    assert.deepEqual(y6.surumler[0]?.koken, koken, 'düzenlenen kopya kökenini taşır');
+    const d4 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 6, taslakSurum: null, adimlar: [adim()], kaynakSablon: null });
+    assert.equal(d4.taslak?.koken, null, 'null taslakta kökeni kaldırır');
+    await tamam(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 6, taslakSurum: 1, adimlar: [adim()], kaynakSablon: kaynak });
+
+    const k = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: e.sablon.surum, ad: 'Köken şablonu', sartnameId: null, adimlar: [adim({ baslik: 'Yeni şablon adımı' })],
+    });
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: 6, adimlar: [adim()], kaynakSablon: kaynak }, 409);
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}/kopyalar`)).statusCode, 403, 'kopyalar rota okuyanlara açıktır');
+    const l = await tamam<TalimatSablonKopyalariCevabi>(c.kalite, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}/kopyalar`);
+    assert.deepEqual(l.sablon, { id: e.sablon.id, kod: 'TS-KOKEN', ad: 'Köken şablonu', surum: k.sablon.surum });
+    assert.deepEqual(l.kopyalar.map((x) => [x.urun.id, x.opNo, x.talimatSurumu, x.taslak, x.sablonSurumu, x.geride, x.gecerli]), [
+      [t.urun, 10, null, true, kaynak.surum, true, false],
+      [t.urun, 10, 6, false, kaynak.surum, true, true],
+      [t.urun, 10, 5, false, kaynak.surum, true, false],
+      [t.urun, 10, 2, false, kaynak.surum, true, false],
+      [t.urun, 10, 1, false, kaynak.surum, true, false],
+    ]);
+    assert.equal((await istek(c.kalite, 'GET', '/rota/talimat-sablonlari/999999/kopyalar')).statusCode, 404);
+    await assert.rejects(vt().tx((db) => db.sorgu('UPDATE rota_talimat_kokeni SET sablon_surum = sablon_surum + 1')), 'köken yalnız eklenir');
+  });
+
   // Sentetik PNG: imza ve rastgele gövde (tür ilk baytlardan bulunur).
   async function resimYukle(cerez: string, ek = randomUUID()): Promise<string> {
     const icerik = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(ek)]);

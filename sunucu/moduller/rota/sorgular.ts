@@ -647,7 +647,7 @@ export function talimatTaslagi(db: Db, malzemeId: number, opNo: number, kilitle 
 // Taslak kaydı adımlarıyla bütün olarak yazılır: varsa adımları silinir (medya adımla birlikte), sürümü artar.
 export async function talimatTaslagiYaz(
   db: Db, g: { malzemeId: number; opNo: number; tabanSurum: number | null; kisiId: number; adimlar: readonly TalimatAdimiYazisi[] }, mevcut: TalimatTaslagiSatiri | null,
-): Promise<void> {
+): Promise<number> {
   let id: number;
   if (mevcut) {
     id = mevcut.id;
@@ -660,6 +660,7 @@ export async function talimatTaslagiYaz(
     ))!.id;
   }
   await adimlariEkle(db, TASLAK_TABLOLARI, id, g.adimlar);
+  return id;
 }
 
 export async function talimatTaslagiSil(db: Db, id: number): Promise<void> {
@@ -680,6 +681,55 @@ export function taslakMedyalari(db: Db, taslakId: number): Promise<MedyaSatiri[]
 
 export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: number, surum: number): Promise<{ id: number; metin: string } | null> {
   return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 AND surum = $3', [malzemeId, opNo, surum]);
+}
+
+/* ---------------- talimatın şablon kökeni (2588 a) ---------------- */
+
+export interface KokenSatiri { sahipId: number; sablonId: number; sablonKodu: string; sablonAdi: string; sablonSurum: number }
+export interface KokenYazisi { sablonId: number; sablonSurum: number }
+
+export function talimatKokenleri(db: Db, talimatIdleri: readonly number[]): Promise<KokenSatiri[]> {
+  return db.sorgu<KokenSatiri>(
+    `SELECT k.talimat_id AS "sahipId", k.sablon_id AS "sablonId", s.kod AS "sablonKodu", s.ad AS "sablonAdi", k.sablon_surum AS "sablonSurum"
+       FROM rota_talimat_kokeni k JOIN rota_talimat_sablonu s ON s.id = k.sablon_id WHERE k.talimat_id = ANY($1::int[])`,
+    [[...talimatIdleri]],
+  );
+}
+
+export function taslakKokeni(db: Db, taslakId: number): Promise<KokenSatiri | null> {
+  return db.tek<KokenSatiri>(
+    `SELECT k.taslak_id AS "sahipId", k.sablon_id AS "sablonId", s.kod AS "sablonKodu", s.ad AS "sablonAdi", k.sablon_surum AS "sablonSurum"
+       FROM rota_talimat_taslak_kokeni k JOIN rota_talimat_sablonu s ON s.id = k.sablon_id WHERE k.taslak_id = $1`,
+    [taslakId],
+  );
+}
+
+export async function talimatKokeniYaz(db: Db, talimatId: number, k: KokenYazisi): Promise<void> {
+  await db.sorgu('INSERT INTO rota_talimat_kokeni (talimat_id, sablon_id, sablon_surum) VALUES ($1, $2, $3)', [talimatId, k.sablonId, k.sablonSurum]);
+}
+
+// Taslağın kökeni kayıtla değişebilir: null kökeni kaldırır.
+export async function taslakKokeniYaz(db: Db, taslakId: number, k: KokenYazisi | null): Promise<void> {
+  await db.sorgu('DELETE FROM rota_talimat_taslak_kokeni WHERE taslak_id = $1', [taslakId]);
+  if (k) await db.sorgu('INSERT INTO rota_talimat_taslak_kokeni (taslak_id, sablon_id, sablon_surum) VALUES ($1, $2, $3)', [taslakId, k.sablonId, k.sablonSurum]);
+}
+
+export interface SablonKopyasiSatiri {
+  malzemeId: number; opNo: number; talimatSurumu: number | null; taslak: boolean; sablonSurumu: number; gecerli: boolean;
+}
+
+// Şablondan kopyalanan talimat sürümleri ve taslaklar; gecerli: sürüm OP'nin son yayınıdır (taslakta false).
+export function sablonKopyalari(db: Db, sablonId: number): Promise<SablonKopyasiSatiri[]> {
+  return db.sorgu<SablonKopyasiSatiri>(
+    `SELECT t.malzeme_id AS "malzemeId", t.op_no AS "opNo", t.surum AS "talimatSurumu", false AS taslak, k.sablon_surum AS "sablonSurumu",
+            t.surum = (SELECT max(x.surum) FROM rota_talimati x WHERE x.malzeme_id = t.malzeme_id AND x.op_no = t.op_no) AS gecerli
+       FROM rota_talimat_kokeni k JOIN rota_talimati t ON t.id = k.talimat_id WHERE k.sablon_id = $1
+     UNION ALL
+     SELECT t.malzeme_id, t.op_no, NULL, true, k.sablon_surum, false
+       FROM rota_talimat_taslak_kokeni k JOIN rota_talimat_taslagi t ON t.id = k.taslak_id WHERE k.sablon_id = $1
+     ORDER BY 1, 2, 4 DESC, 3 DESC`,
+    [sablonId],
+  );
 }
 
 /* ---------------- talimat şablonu (989 a) ---------------- */

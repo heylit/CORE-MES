@@ -386,8 +386,13 @@ export const talimatAdimiGirdisi = z.object({
   hedefSureDk: hedefSuresi.nullable().prefault(null),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
+// Adımlar şablondan kopyalandıysa şablonun kimliği ve ekranın gördüğü sürümü (2588 a); sunucu sürümü denetler ve kökeni kaydeder.
+// Verilmezse köken dayanılan yayın sürümünden devralınır (düzenlenen kopya kökenini taşır); null kökeni kaldırır.
+const kaynakSablonGirdisi = z.object({ id: KIMLIK, surum: KIMLIK });
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
-export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const adimliTalimatYazGovdesi = z.object({
+  opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari, kaynakSablon: kaynakSablonGirdisi.nullable().optional(),
+});
 export const talimatAdimiSemasi = z.object({
   sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
   asama: z.enum(TALIMAT_ASAMALARI), hedefSureDk: z.number().int().nullable(),
@@ -395,17 +400,22 @@ export const talimatAdimiSemasi = z.object({
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
 // taslak (1194 b): OP'nin yayınlanmamış taslağı; yoksa null. tabanSurum taslağın dayandığı son yayın sürümüdür.
+// koken (2588 a): sürüm ya da taslak hangi şablonun hangi sürümünden kopyalandı; null: elle yazıldı ya da kökeni bilinmiyor.
+const talimatKokeni = z.object({ sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }), surum: KIMLIK }).nullable();
 export const talimatlarCevabi = z.object({
   surumler: z.array(z.object({
-    surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi),
+    surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi), koken: talimatKokeni,
   })),
   taslak: z.object({
-    surum: KIMLIK, tabanSurum: KIMLIK.nullable(), yazan: adliKayit, yazma: zaman, adimlar: z.array(talimatAdimiSemasi),
+    surum: KIMLIK, tabanSurum: KIMLIK.nullable(), yazan: adliKayit, yazma: zaman, adimlar: z.array(talimatAdimiSemasi), koken: talimatKokeni,
   }).nullable(),
 });
 
 // Taslak kaydı (1194 b): okunanSurum ekranın gördüğü son yayın sürümü, taslakSurum düzenlenen taslağın sürümü (yeni taslakta null).
-export const talimatTaslakKaydetGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), taslakSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+// kaynakSablon (2588 a): verilmezse taslağın kökeni korunur (yeni taslakta dayanılan yayın sürümünden devralınır), null kökeni kaldırır.
+export const talimatTaslakKaydetGovdesi = z.object({
+  opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), taslakSurum: KIMLIK.nullable(), adimlar: talimatAdimlari, kaynakSablon: kaynakSablonGirdisi.nullable().optional(),
+});
 export const talimatTaslakKomutGovdesi = z.object({ opNo: KIMLIK, taslakSurum: KIMLIK });
 
 export const komutCevabi = z.object({ id: KIMLIK, durum: revizyonDurumu, surum: KIMLIK });
@@ -827,6 +837,14 @@ const talimatSablonOzeti = z.object({
 });
 export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
 export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });
+// Şablonun kopyaları (2588 a): kökeni bu şablon olan talimat sürümleri ve taslaklar. geride: kopyalandığı şablon sürümü güncelden eski;
+// gecerli: sürüm OP'nin son yayınıdır (taslakta false). Kopya şablona bağlı değildir; liste yalnız "nerede kullanıldı" bilgisidir.
+export const talimatSablonKopyalariCevabi = z.object({
+  sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), surum: KIMLIK }),
+  kopyalar: z.array(z.object({
+    urun: urunOzeti, opNo: KIMLIK, talimatSurumu: KIMLIK.nullable(), taslak: z.boolean(), sablonSurumu: KIMLIK, geride: z.boolean(), gecerli: z.boolean(),
+  })),
+});
 
 export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
 export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
@@ -834,6 +852,7 @@ export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
 export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
 export type TalimatTaslakKaydetGovdesi = z.input<typeof talimatTaslakKaydetGovdesi>;
+export type TalimatSablonKopyalariCevabi = z.output<typeof talimatSablonKopyalariCevabi>;
 export type TalimatTaslakKomutGovdesi = z.input<typeof talimatTaslakKomutGovdesi>;
 export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
 export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;

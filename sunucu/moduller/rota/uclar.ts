@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaOnizlemeSorgusu, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, emreKopyalaTopluCevabi, emreKopyalaTopluGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
-  talimatSablonParametresi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
+  talimatSablonParametresi, talimatSablonKopyalariCevabi, talimatSablonlariCevabi, talimatSablonuCevabi, medyaParametresi, taslakAcGovdesi,
   adimSartnameleriGovdesi, ekAdimSartnameParametresi, ekAdimSartnameleriGovdesi, isEmriSartnameleriCevabi, revizyonSartnameleriCevabi, sartnameCevabi, sartnameEkleGovdesi, sartnameKopyalaGovdesi, sartnameKunyeGovdesi,
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   hamOnerisiCevabi, opNumaralariCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
@@ -11,7 +11,7 @@ import {
   agac, emreKopyala, emreKopyalaToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
-  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, opNumaralari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
+  karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, opNumaralari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
 } from './servis.ts';
 
 // Rota verisi yalnız rotayla çalışan rollere açıktır (2490 b): Reçete ve Rota sayfası ya da bir rota işlemi. Üç uç başka sayfaların
@@ -221,6 +221,15 @@ export const uclar = [
     parametre: talimatSablonParametresi,
     cevap: talimatSablonuCevabi,
     isle: ({ db, parametre }) => talimatSablonu(db, parametre.id),
+  }),
+  // Şablonun kopyaları (2588 a): ürün listesi taşır; şablon okumasıyla aynı rota okuma takımına açıktır (2490 b).
+  uc({
+    yontem: 'GET',
+    yol: '/rota/talimat-sablonlari/:id/kopyalar',
+    yetki: ROTA_OKUR,
+    parametre: talimatSablonParametresi,
+    cevap: talimatSablonKopyalariCevabi,
+    isle: ({ db, parametre }) => talimatSablonKopyalari(db, parametre.id),
   }),
   uc({
     yontem: 'POST',
