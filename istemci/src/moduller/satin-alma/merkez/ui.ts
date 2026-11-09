@@ -382,7 +382,7 @@ function supplierModal(s: Supplier | null | undefined): void {
 }
 function evalModal(s: Supplier): void {
   openModal(`<div class="mh"><h2>Değerlendirme: ${esc(s.name)}</h2></div><div class="mb">
-    <div class="grid g2"><label class="f"><span>Tarih</span><input type="date" id="e-date" value="${todayStr()}"></label><label class="f"><span>Değerlendiren</span><input type="text" id="e-name" placeholder="Ad Soyad"></label></div>
+    <div class="grid g2"><label class="f"><span>Tarih</span><input type="date" id="e-date" value="${todayStr()}"></label><label class="f"><span>Değerlendiren</span><input type="text" id="e-name" value="${esc(S.me?.name ?? "")}" readonly></label></div>
     <div class="f"><span>Puan</span><div class="rating">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="e-rating" value="${n}" ${n === supRating(s) ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
     <label class="f"><span>Not</span><textarea id="e-text" placeholder="Örn. Fabrika ziyareti yapıldı, kalite kontrol süreci yeterli. Fiyat revizyonlarında yavaş."></textarea></label>
     <label class="chk"><input type="checkbox" id="e-apply" checked> Tedarikçinin genel puanını değerlendirmelerin ortalamasıyla güncelle</label>
@@ -842,6 +842,7 @@ const ACTIONS: Record<string, Action> = {
     if (!el.classList.contains("fsec-h")) requestAnimationFrame(() => $<HTMLElement>(".fsec.open")?.scrollIntoView({ block: "start", behavior: "smooth" }));
   },
   "status-chip": el => { V.status = el.dataset.v || "open"; render(); },
+  "pano-git": el => { const h = el.dataset.v || "open"; if (h === "reports") { go("reports"); return; } V.status = h; V.view = "list"; go("requests"); },
   "sort": el => { const k = el.dataset.k || ""; if (V.sort === k) { if (V.dir > 0) V.dir = -1; else { V.sort = ""; V.dir = 1; } } else { V.sort = k; V.dir = 1; } render(); },
   "view": el => { V.view = el.dataset.v as ViewState["view"]; render(); },
   "period": el => { V.period = el.dataset.v as ViewState["period"]; render(); },
@@ -1073,7 +1074,7 @@ const ACTIONS: Record<string, Action> = {
     const s = clone(cur); s.evals = s.evals || [];
     const rating = puanDegeri(($("input[name=e-rating]:checked") as FormEl | null)?.value);
     if (rating === null) { toast("Puan seçin."); return; }
-    s.evals.push({ id: uid(), date: $("#e-date").value || todayStr(), rating, text: $("#e-text").value.trim(), name: $("#e-name").value.trim(), by: S.me?.id ?? "" });
+    s.evals.push({ id: uid(), date: $("#e-date").value || todayStr(), rating, text: $("#e-text").value.trim(), name: S.me?.name ?? "", by: S.me?.id ?? "" });
     if (s.evals.length > 100) s.evals = s.evals.slice(-100);
     if ($("#e-apply").checked) s.rating = Math.round(sum(s.evals.map(e => e.rating)) / s.evals.length);
     saveSupplier(s); closeModal(); toast("Değerlendirme eklendi");

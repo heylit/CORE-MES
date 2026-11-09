@@ -66,13 +66,15 @@ export function jobCount(): { n: number; hot: boolean } {
   for (const [k, list] of Object.entries(g)) { if (k === "approval") continue; n += list.length; if (list.some(j => (j.flag || "").includes("flag bad"))) hot = true; }
   return { n, hot };
 }
+// Sıra satın almacının elindeki işin aciliyetidir (2400): onaylı sipariş ve karar önce; teklif istenmemiş talep tedarik süresinin
+// başladığı yerdir, teklif ve teslim beklemesinin önüne alınır. Onayda olan başkasının adımıdır, en sonda.
 const GROUPS: [string, string, string][] = [
-  ["decide", "Karar verilecekler", "Teklifler toplandı ya da onaylayan geri gönderdi"],
   ["order", "Sipariş verilecekler", "Onaylandı, tedarikçiye sipariş geçilecek"],
-  ["delivery", "Teslimat bekleyenler", "Siparişi verildi, teslim alınacak"],
-  ["quotes", "Teklif bekleyenler", "Tedarikçilerden cevap ya da teklif girişi bekleniyor"],
-  ["approval", "Onayda", "Onaylayanın kararı bekleniyor"],
+  ["decide", "Karar verilecekler", "Teklifler toplandı ya da onaylayan geri gönderdi"],
   ["draft", "Satın almada", "Henüz teklif istenmedi"],
+  ["quotes", "Teklif bekleyenler", "Tedarikçilerden cevap ya da teklif girişi bekleniyor"],
+  ["delivery", "Teslimat bekleyenler", "Siparişi verildi, teslim alınacak"],
+  ["approval", "Onayda", "Onaylayanın kararı bekleniyor"],
 ];
 function jobRow(j: Job, primary: boolean): string {
   return `<li><button class="job" data-act="open-at" data-id="${j.r.id}" data-tab="${j.tab}">
@@ -95,13 +97,15 @@ export function viewInbox(): string {
 // Finans ana sayfası gibi: önce durumu söyleyen sayılar, altında yapılacaklar ve tedarikçilerin teslim başarımı.
 function panoSeridi(): string {
   const p = panoSayilari();
-  const kutu = (v: string, k: string, d: string) => `<div><div class="v">${v}</div><div class="k">${k}</div><div class="d">${d}</div></div>`;
+  // Her kutu sayısının listesini açar (2400): durumlar Talepler süzgecine, harcama Raporlar'a gider.
+  const kutu = (v: string, k: string, d: string, hedef: string) =>
+    `<button type="button" data-act="pano-git" data-v="${hedef}"><div class="v">${v}</div><div class="k">${k}</div><div class="d">${d}</div></button>`;
   return `<div class="strip" data-sa-pano>
-    ${kutu(nf0.format(p.onayBekleyen), "Onay bekleyen", "onaylayanın kararında")}
-    ${kutu(nf0.format(p.acikTalep), "Açık talep", "siparişe dönmemiş")}
-    ${kutu(money(p.acikSiparisTutari, "TRY", 0), "Açık sipariş tutarı", `${nf0.format(p.acikSiparis)} sipariş teslim bekliyor`)}
-    ${kutu(nf0.format(p.gecikenTeslim), "Geciken teslim", "termini geçmiş, teslim alınmamış")}
-    ${kutu(money(p.buAyHarcama, "TRY", 0), "Bu ay harcama", "verilen siparişler, iskonto ve masraf dahil")}
+    ${kutu(nf0.format(p.onayBekleyen), "Onay bekleyen", "onaylayanın kararında", "approval")}
+    ${kutu(nf0.format(p.acikTalep), "Açık talep", "siparişe dönmemiş", "open")}
+    ${kutu(money(p.acikSiparisTutari, "TRY", 0), "Açık sipariş tutarı", `${nf0.format(p.acikSiparis)} sipariş, ${nf0.format(p.acikSiparisTalep)} talepte teslim bekliyor`, "ordered")}
+    ${kutu(nf0.format(p.gecikenTeslim), "Geciken teslim", `termini geçmiş sipariş, ${nf0.format(p.gecikenTalep)} talepte`, "late")}
+    ${kutu(money(p.buAyHarcama, "TRY", 0), "Bu ay harcama", "verilen siparişler, iskonto ve masraf dahil", "reports")}
   </div>`;
 }
 function teslimPaneli(): string {
