@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dugme, Girdi, Secim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { RrDurumu } from '../veri.ts';
 import { EK_TURLERI, type EkAdimSecimi } from './Bolme.tsx';
 import type { useEmirKomutu } from './komut.ts';
@@ -13,10 +13,17 @@ export interface EkYeri { opNo: number; baslik: string }
 type Form = Omit<EkAdimSecimi, 'sonra'> & { sonra: string };
 const BOS: Form = { tur: 'rework', sonra: '', opId: '', ad: '', ayar: '', birim: '', aciklama: '' };
 
+// Açık alt partisi (iptal edilmemiş alt emri, parti ya da kol) olan emrin adımı sahibinin kuralıyla değişmez: kök emre eklenen adım alt
+// partilerin kopyalanmış rotasına geçmez. Ekran bunu baştan söyler ve kullanıcıyı ilgili alt emre yönlendirir; kararı yine sahibi verir.
+export function acikAltEmirler(d: RrDurumu, o: Emir): string[] {
+  return (d.emirler?.orders ?? []).filter((x) => x.parentId === o.id && x.status !== 'iptal').map((x) => x.no);
+}
+
 export function EkAdimPaneli({ durum: d, emir: o, yerler, komut, kapat }: {
   durum: RrDurumu; emir: Emir; yerler: readonly EkYeri[]; komut: ReturnType<typeof useEmirKomutu>; kapat: () => void;
 }) {
   const [f, setF] = useState<Form>(BOS);
+  const altlar = acikAltEmirler(d, o);
   const degistir = (p: Partial<Form>) => { setF({ ...f, ...p }); };
   const gonder = () => {
     const op = d.opdefs?.find((x) => x.id === f.opId);
@@ -33,6 +40,12 @@ export function EkAdimPaneli({ durum: d, emir: o, yerler, komut, kapat }: {
       <p className="tc-rr3-ipucu">
         Bu emir rotada olmayan bir adım yapacaksa ekleyin; rota değişmez. Adı boşsa operasyonun adı kullanılır, açıklamayı operatör görür.
       </p>
+      {altlar.length > 0 && (
+        <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="note">
+          <Simge ad="layers" />
+          <span>Emrin açık alt partileri var ({altlar.join(', ')}); ek adımı ilgili partiye ekleyin.</span>
+        </div>
+      )}
       <div className="tc-rr3-satir">
         <Secim etiket="Tür" secenekler={EK_TURLERI} value={f.tur} onChange={(e) => { degistir({ tur: e.target.value as Form['tur'] }); }} />
         <Secim

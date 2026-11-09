@@ -27,7 +27,7 @@ const sahip = { emir: { id: 61, isEmirleri: [isEmri(1, 10), isEmri(2, 20)] } };
 
 const ayrintiAc = async () => {
   const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-  fireEvent.click(await within(b).findByRole('button', { name: /UE-0001/ }));
+  fireEvent.click((await within(b).findAllByRole('button', { name: /UE-0001(?!-)/ }))[0]!);
   return within(b).getByLabelText('UE-0001 ayrıntısı');
 };
 const panelAc = (a: HTMLElement) => {
@@ -45,6 +45,7 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
     rrAc();
     const a = await ayrintiAc();
     const p = panelAc(a);
+    expect(within(p).queryByRole('note')).toBeNull();
     fireEvent.change(within(p).getByLabelText('Tür'), { target: { value: 'tamir' } });
     fireEvent.change(within(p).getByLabelText('Yeri'), { target: { value: '10' } });
     fireEvent.change(within(p).getByLabelText('Operasyon'), { target: { value: '21' } });
@@ -74,17 +75,26 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
     }
   });
 
-  it('açık alt partisi olan emirde sahibinin reddi iletisiyle görünür, panel açık kalır (reddedilen)', async () => {
+  it('açık alt partisi olan emirde panel ilgili partiye yönlendirir; sahibinin reddi iletisiyle görünür, panel açık kalır (reddedilen)', async () => {
     const ileti = 'Alt partisi olan kolun adımları ve birleşme planı değişmez; önce alt partileri birleştirin.';
+    const d = durum();
+    const kok = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: [
+      kok,
+      { ...kok, id: '62', kayitNo: 62, no: 'UE-0001-P1', qty: 4, parentId: '61', kol: null },
+      { ...kok, id: '63', kayitNo: 63, no: 'UE-0001-P2', qty: 2, parentId: '61', kol: null, status: 'iptal' as const },
+    ] };
     sunucuKur(YONETICI, {
-      durum: durum(),
+      durum: d,
       yazmalar: { 'GET /adimli-emirler/61': () => json(200, sahip), 'POST /adimli-emirler/61/ek-adim': () => json(409, { kod: 'CAKISMA', mesaj: ileti }) },
     });
     rrAc();
     const p = panelAc(await ayrintiAc());
+    expect(within(p).getByRole('note').textContent).toBe('Emrin açık alt partileri var (UE-0001-P1); ek adımı ilgili partiye ekleyin.');
     fireEvent.change(within(p).getByLabelText('Operasyon'), { target: { value: '21' } });
     fireEvent.click(within(p).getByRole('button', { name: 'Ek operasyonu ekle' }));
     expect((await screen.findAllByText(ileti)).length).toBeGreaterThan(0);
+    expect(within(p).getByRole('note')).toBeTruthy();
     expect(screen.getByRole('group', { name: 'Ek operasyon' })).toBeTruthy();
   });
 
