@@ -9,7 +9,10 @@ test.describe('P4 malzeme planı', () => {
     await ac('/plan/malzplan');
     await expect(page.locator('[data-gorunum="malzplan"]')).toBeVisible();
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
-    await expect(serit.getByRole('link', { name: /^Malzeme satın alma planı/ })).toHaveAttribute('aria-current', 'page');
+    await expect(serit.locator('[aria-current="page"]')).toHaveText(/^Malzeme/);
+    // 2538 b: Malzeme ihtiyacı aynı sayfanın ikinci sekmesidir; eski /plan/mrp adresi ona gider.
+    const sekmeler = page.getByRole('tablist', { name: 'Malzeme sekmeleri' });
+    await expect(sekmeler.getByRole('tab', { name: /^Satın alma planı/ })).toHaveAttribute('aria-selected', 'true');
     // Isı haritası katmanı başta, asıl sayfa "Tüm satırlar" içinde (zz30-isi).
     const plan = page.getByRole('heading', { name: /Malzeme satın alma planı/ });
     await expect(plan.or(page.getByText('Planlama çalışması yok.'))).toBeVisible();
@@ -24,6 +27,18 @@ test.describe('P4 malzeme planı', () => {
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     // Stok uçlarının yetkisi olmayan hesapta 403 beklenir (ekran planın kopyasına döner); onun dışında hata yok.
     expect(ag.hatalar.filter((h) => !/^403 GET \/api\/stok\//.test(h))).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+
+  test('eski Malzeme ihtiyacı adresi Malzeme sayfasının sekmesine gider; sekmeler arasında geçilir', async ({ page, ac, ag }) => {
+    await ac('/plan/mrp');
+    await expect(page).toHaveURL(/\/plan\/malzplan\/ihtiyac$/);
+    const sekmeler = page.getByRole('tablist', { name: 'Malzeme sekmeleri' });
+    await expect(sekmeler.getByRole('tab', { name: /^Malzeme ihtiyacı/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('navigation', { name: 'Planlama menüsü' }).locator('[aria-current="page"]')).toHaveText(/^Malzeme/);
+    await sekmeler.getByRole('tab', { name: /^Satın alma planı/ }).click();
+    await expect(page.locator('[data-gorunum="malzplan"]')).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     expect(ag.yazmalar).toEqual([]);
   });
 

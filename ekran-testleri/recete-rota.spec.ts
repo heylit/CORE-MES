@@ -35,7 +35,7 @@ test.describe('planlama rolü', () => {
     await ac('/plan/maliyet');
     await expect(page.getByText('Bu bölümü görme yetkiniz yok.')).toBeVisible();
     await ac('/plan');
-    await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
+    await expect(page.locator('[data-gorunum="studio"]')).toBeVisible();
     const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
     await expect(menu.locator('a[href="/plan"]').first()).toBeAttached();
     await expect(menu.locator('a[href="/plan/maliyet"]')).toHaveCount(0);

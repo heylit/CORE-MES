@@ -13,11 +13,12 @@ describe('planlama menüsü', () => {
   it('önerilen menü çekirdekteki menüyle aynıdır; Planlama menüsünde planlama maddeleri planlama işlemini, maliyet maddeleri maliyet okumasını ister (195 a)', () => {
     expect(IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/recete-rota')).toEqual(ONERILEN_IKINCI_MENU);
     const planMenusu = IKINCI_MENU_TANIMLARI.find((m) => m.kok === '/plan');
-    // İlk grup Planlama görünümleridir; sonraki gruplar ayrı sayfalardır (782 veri sağlığı).
-    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = [...(planMenusu?.gruplar[0]?.maddeler ?? [])];
-    expect(maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI).map((m) => m.anahtar))
-      .toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
-    expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(MALIYET_ANAHTARLARI);
+    // Görünüm maddeleri gruplara dağılır (2538 b); bazı görünümler bir sayfanın sekmesidir, menüde yoktur.
+    const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = (planMenusu?.gruplar ?? []).flatMap((g) => g.maddeler)
+      .filter((m) => PLANLAMA_ANAHTARLARI.includes(m.anahtar));
+    expect(maddeler.length).toBeGreaterThan(0);
+    for (const m of maddeler) expect(m.islem, m.anahtar).toBe(MALIYET_ANAHTARLARI.includes(m.anahtar) ? MALIYET_ISLEMI : PLANLAMA_ISLEMI);
+    expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(['maliyet', 'giderler']);
     expect(MALIYET_ANAHTARLARI.every((a) => PLANLAMA_ANAHTARLARI.includes(a))).toBe(true);
   });
 });

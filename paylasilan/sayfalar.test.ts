@@ -70,18 +70,18 @@ test('Satın Alma grubu menüde Stok ile Kalite arasındadır; tek sayfadır, b�
 });
 
 // 195 a, 658 b: Planlama plan modülünün sayfasıdır; maddeleri planlama sayfalarını görme işlemini ister (yönetici, müdür ve planlama;
-// 663 a). Maliyet ve kâr gösteren üç madde birim maliyet okumasını ister (planlama rolü maliyet görmez, 200 a). Reçete ve Rota'da
-// planlama maddesi kalmaz.
+// 663 a). Maliyet gösteren iki madde birim maliyet okumasını ister (planlama rolü maliyet görmez, 200 a); Termin ve kâr Siparişler'in
+// sekmesidir (2538 b). Atölye ilk maddedir ve kök adrestir (2535 a). Reçete ve Rota'da planlama maddesi kalmaz.
 test('Planlama ikinci menüsünde planlama maddeleri plan.planlama-oku, maliyet maddeleri finans.maliyet-oku ister; Reçete ve Rota yalnız kendi sayfasını', () => {
   const menu: IkinciMenuTanimi | undefined = IKINCI_MENULER.find((m) => m.kok === '/plan');
   assert.ok(menu);
   const maddeler = menu.gruplar.flatMap((g) => g.maddeler);
   assert.deepEqual(maddeler.map((m) => m.anahtar),
-    ['plan', 'studio', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat', 'veri-sagligi', 'plan-sagligi', 'analiz', 'mrp', 'motor-ayarlari']);
-  const maliyet = ['maliyet', 'giderler', 'denge'];
+    ['studio', 'plan', 'ysiparis', 'ufuk', 'sevkiyat', 'mesaiplan', 'fasonplan', 'malzplan', 'maliyet', 'giderler', 'analiz', 'motor-ayarlari']);
+  const maliyet = ['maliyet', 'giderler'];
   assert.deepEqual(maddeler.filter((m) => m.islem === 'finans.maliyet-oku').map((m) => m.anahtar), maliyet);
   assert.ok(maddeler.filter((m) => !maliyet.includes(m.anahtar)).every((m) => m.islem === 'plan.planlama-oku'));
-  assert.ok(maddeler.every((m) => m.veya === undefined && (m.yol === '/plan' || m.yol === `/plan/${m.anahtar}`)));
+  assert.ok(maddeler.every((m) => m.veya === undefined && (m.anahtar === 'studio' ? m.yol === '/plan' : m.yol === `/plan/${m.anahtar}`)));
   const rr = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
   assert.ok(rr);
   // Tek istisna kapanış onaylarıdır (1416 a): kapanış okuması olmayan rol maddeyi görmez.

@@ -114,9 +114,9 @@ describe('Stüdyo isteğinin adresi', () => {
   it('istek adresin sorgusundadır; tanınmayan istek okunmaz', async () => {
     const { studyoAdresi, studyoIstegiOku } = await import('../../gorunumler.ts');
     const a = studyoAdresi({ tur: 'tez', v: 'T 1' });
-    expect(a).toBe('/plan/studio?istek=tez&v=T+1');
+    expect(a).toBe('/plan?istek=tez&v=T+1');
     expect(studyoIstegiOku(new URL(a, 'http://x').searchParams)).toEqual({ tur: 'tez', v: 'T 1' });
-    expect(studyoAdresi(null)).toBe('/plan/studio');
+    expect(studyoAdresi(null)).toBe('/plan');
     expect(studyoIstegiOku(new URLSearchParams('istek=kriz&v=1'))).toBeNull();
     expect(studyoIstegiOku(new URLSearchParams('istek=sip'))).toBeNull();
   });

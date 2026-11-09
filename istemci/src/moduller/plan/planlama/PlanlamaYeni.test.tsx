@@ -2,27 +2,38 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { MALIYET_ANAHTARLARI, ONERILEN_IKINCI_MENU } from '../planlama-menusu.ts';
-import { GORUNUM_KAYITLARI } from './gorunumler.ts';
+import { SAYFA_AILELERI } from '../sayfa-sekmeleri.tsx';
+import { aileBasi, GORUNUM_KAYITLARI, gorunumAdresi } from './gorunumler.ts';
 import { CALISMA_KAYDI, KAPISIZ, MALIYETSIZ, PLANLAMASIZ, YONETICI, ac, sunucuKur } from './test-ortak.tsx';
 
 // Testler yer tutucu metnine bağlı değildir: görünüm kabın `data-gorunum`'undan, şerit sekmelerden okunur (parça teslim edilince değişmezler).
-const MENU = ONERILEN_IKINCI_MENU.gruplar[0].maddeler;
+const MENU: readonly { anahtar: string; baslik: string; yol: string; islem: string }[] = ONERILEN_IKINCI_MENU.gruplar.flatMap((g): readonly { anahtar: string; baslik: string; yol: string; islem: string }[] => g.maddeler);
 const kap = () => document.querySelector('[data-gorunum]');
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('PlanlamaYeni', () => {
-  it('kök adres Planlama motoru görünümüdür; görünüm sırası ikinci menünündür; kayıt varken açılış yalnız okur', async () => {
+  it('2535 a: kök adres Atölye görünümüdür; her görünüm menüde ya da bir sayfanın sekmesidir; kayıt varken açılış yalnız okur', async () => {
     const istekler = sunucuKur(YONETICI, [CALISMA_KAYDI]);
     ac('/plan');
-    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('studio'); }, { timeout: 10000 });
     expect(screen.getByTestId('adres').textContent).toBe('/plan');
-    expect(GORUNUM_KAYITLARI.map((k) => k.baslik)).toEqual(MENU.map((m) => m.baslik));
+    expect(MENU[0]).toMatchObject({ anahtar: 'studio', baslik: 'Atölye', yol: '/plan' });
+    expect(MENU).toHaveLength(12);
+    for (const k of GORUNUM_KAYITLARI) {
+      const m = MENU.find((x) => x.anahtar === k.anahtar);
+      if (m) expect(m.yol, k.anahtar).toBe(gorunumAdresi(k.anahtar));
+      else expect(aileBasi(k.anahtar), k.anahtar).not.toBeNull();
+    }
+    for (const a of Object.values(SAYFA_AILELERI)) for (const t of a.sekmeler) {
+      const k = GORUNUM_KAYITLARI.find((x) => gorunumAdresi(x.anahtar) === t.yol);
+      if (k) expect(t.islem, t.yol).toBe(MALIYET_ANAHTARLARI.includes(k.anahtar) ? 'finans.maliyet-oku' : 'plan.planlama-oku');
+    }
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
     expect(istekler).toEqual(expect.arrayContaining(['GET /recete-rota/ben', 'GET /recete-rota/kayitlar', 'GET /plan/planlama-kaynagi', 'GET /plan/senaryolar']));
   }, 20000);
 
-  it('görünüm adresle açılır, adres eski ekranın anahtarıdır; /plan/plan eski bağlantı olarak motoru açar', async () => {
+  it('görünüm adresle açılır, adres eski ekranın anahtarıdır; motor /plan/plan; eski /plan/studio sorgusuyla köke döner', async () => {
     sunucuKur(YONETICI);
     ac('/plan/sevkiyat');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('sevkiyat'); }, { timeout: 10000 });
@@ -30,7 +41,32 @@ describe('PlanlamaYeni', () => {
     sunucuKur(YONETICI);
     ac('/plan/plan');
     await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YONETICI);
+    ac('/plan/studio?istek=tez&v=T1');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, { timeout: 10000 });
+    expect(kap()?.getAttribute('data-gorunum')).toBe('studio');
   }, 20000);
+
+  it('2538 b: sekmeye dönen görünümün eski adresi yeni adrese gider; sekme şeridi kendi yetkisini korur (2482 ön bakış 1-2)', async () => {
+    sunucuKur(YONETICI);
+    ac('/plan/terminler');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/ysiparis/terminler'); }, { timeout: 10000 });
+    const serit = await screen.findByRole('tablist', { name: 'Siparişler sekmeleri' }, { timeout: 10000 });
+    expect(within(serit).getByRole('tab', { name: /Terminler/ }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(within(serit).getByRole('tab', { name: /Termin ve kâr/ }));
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('denge'); }, { timeout: 10000 });
+    expect(screen.getByTestId('adres').textContent).toBe('/plan/ysiparis/denge');
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(MALIYETSIZ);
+    ac('/plan/ysiparis');
+    const okuyan = await screen.findByRole('tablist', { name: 'Siparişler sekmeleri' }, { timeout: 10000 });
+    expect(within(okuyan).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Siparişler', 'Terminler']);
+    cleanup(); vi.unstubAllGlobals();
+    sunucuKur(YONETICI);
+    ac('/plan/yillik');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/ufuk/yillik'); }, { timeout: 10000 });
+  }, 30000);
 
   it('1395 a: kayıt yoksa açılış yazmaz; yazabilen düğmeyle boş çalışmayı kurdurur ve yeniden okunur; yazamayana düğme çıkmaz', async () => {
     const istekler = sunucuKur(YONETICI);
@@ -43,7 +79,7 @@ describe('PlanlamaYeni', () => {
     cleanup(); vi.unstubAllGlobals();
     const okuyan = sunucuKur(MALIYETSIZ);
     ac('/plan');
-    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('studio'); }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: 'Planlama çalışmasını aç' })).toBeNull();
     expect(okuyan.filter((i) => !i.startsWith('GET'))).toEqual([]);
   }, 20000);
@@ -54,7 +90,7 @@ describe('PlanlamaYeni', () => {
     const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
     expect(cubuk.querySelector('[aria-current]')).toBeNull();
     fireEvent.click(within(cubuk).getByRole('button', { name: 'Plan' }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); });
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); });
     await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
   }, 20000);
 
@@ -68,7 +104,7 @@ describe('PlanlamaYeni', () => {
     sunucuKur(MALIYETSIZ);
     ac('/plan/maliyet');
     expect(await screen.findByText('Bu sayfayı görme yetkiniz yok.', {}, { timeout: 10000 })).toBeTruthy();
-    for (const a of MALIYET_ANAHTARLARI) expect(MENU.find((m) => m.anahtar === a)?.islem).toBe('finans.maliyet-oku');
+    for (const a of MALIYET_ANAHTARLARI.filter((x) => MENU.some((m) => m.anahtar === x))) expect(MENU.find((m) => m.anahtar === a)?.islem).toBe('finans.maliyet-oku');
   }, 20000);
 
   it('planlama okuması olmayan kişi ekranı açamaz ve hiçbir planlama ucunu sormaz', async () => {
@@ -81,7 +117,7 @@ describe('PlanlamaYeni', () => {
   it('659 a: ekran yönetici kapısı istemez; planlama işlemi olan kişi açar', async () => {
     sunucuKur(KAPISIZ);
     ac('/plan');
-    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('studio'); }, { timeout: 10000 });
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
   }, 20000);
 
@@ -92,6 +128,6 @@ describe('PlanlamaYeni', () => {
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(YONETICI, [], { ret: (y) => y === '/plan/senaryolar' });
     ac('/plan');
-    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('plan'); }, { timeout: 10000 });
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('studio'); }, { timeout: 10000 });
   }, 20000);
 });

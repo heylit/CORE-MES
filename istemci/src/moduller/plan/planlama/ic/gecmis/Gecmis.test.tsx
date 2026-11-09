@@ -154,7 +154,7 @@ describe('Geçmiş planlama ekranında', () => {
   const KAYIT = [{ anahtar: PLANLAMA_ANAHTARI, bicim: 'json' as const, deger: { ...CALISMA_DEGERI, iz: IZ }, surum: 4 }];
   it('plan çubuğunun Geçmiş düğmesiyle ve adresle açılır; Plan tahtaya döner', async () => {
     sunucuKur(YONETICI, KAYIT);
-    ortakAc('/plan');
+    ortakAc('/plan/plan');
     const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
     fireEvent.click(within(cubuk).getByRole('button', { name: 'Geçmiş' }));
     await waitFor(() => { expect(document.querySelector('[data-parca="gecmis"]')).not.toBeNull(); }, { timeout: 10000 });

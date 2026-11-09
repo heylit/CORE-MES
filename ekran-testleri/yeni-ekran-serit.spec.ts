@@ -21,11 +21,11 @@ for (const yol of YENI_EKRANLAR) {
   });
 }
 
-// Planlama ayrı sayfadır (658 b): şeridi kabuğun Planlama menüsüdür; ekran kendi sekmesini çizmez, tek şerit vardır.
-test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görünümdür', async ({ page, ac }) => {
+// Planlama ayrı sayfadır (658 b): şeridi kabuğun Planlama menüsüdür, tek şerit vardır. Sekme olan görünümde (2538 b) seçili madde sayfanındır.
+test('Planlama ekranında kabuğun Planlama şeridi durur, seçili madde görünümün sayfasıdır', async ({ page, ac }) => {
   await ac('/plan/terminler');
   const menu = page.getByRole('navigation', { name: 'Planlama menüsü' });
-  await expect(menu.locator('[aria-current="page"]')).toHaveText(/^Terminler/);
+  await expect(menu.locator('[aria-current="page"]')).toHaveText(/^Siparişler/);
   await expect(page.locator('.tc-ikinci')).toHaveCount(1);
 });
 

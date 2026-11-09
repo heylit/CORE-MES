@@ -16,7 +16,7 @@ const BOLUMLER = ['Plan nasıl gidiyor?', 'Siparişler nerede bekliyor?', 'Ne ya
 
 test.describe('P1a Planlama motoru', () => {
   test('Özet: altı bölüm ve tezgâh haritası ya da boş durum; çubuklar ve Başka menüsü; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     const ozet = page.getByRole('region', { name: 'Plan nasıl gidiyor?' });
@@ -66,7 +66,7 @@ test.describe('P1a Planlama motoru', () => {
 // P1b: Harita görünümü (tezgâh haritası, kılavuz, yakınlık, oynatıcı ve zaman imleci). Sürükleme kapalıdır (459/4 a); test yazma göndermez.
 test.describe('P1b Tezgâh haritası', () => {
   test('Harita: tuval, yakınlık ve oynatıcı; kılavuz açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.locator('[data-gorunum="plan"]')).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
@@ -114,7 +114,7 @@ test.describe('P1b Tezgâh haritası', () => {
 
 test.describe('P1c Çizelge', () => {
   test('Çizelge: araç satırı, hafta ızgarası, saatlik gün, Siparişler merceği, tam ekran, yan paneller; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
@@ -189,7 +189,7 @@ test.describe('P1c Çizelge', () => {
 // P1d-1: Keşfet (pay şeridi, sipariş hatları, hazırlık, planı anlat). Seçim yazma göndermez.
 test.describe('P1d Keşfet', () => {
   test('Keşfet: dört gösterim, sipariş seçimi, planı anlat adımları; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
@@ -220,7 +220,7 @@ test.describe('P1d Keşfet', () => {
 // P1d-2: seçim yan paneli (sipariş, iş adımı ve tezgâh kartı). Motor hamleleri pasif; seçim ve sekme yazma göndermez.
 test.describe('P1d Yan panel', () => {
   test('Yan panel: seçim kartı açılır, sekmeler (Rota, Takvim), yolculuktan iş kartı, Kapat; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Görünüm' }).or(page.getByText(BOS)).first()).toBeVisible();
     if (await page.getByText(BOS).first().isVisible()) { await tasmaz(page); return; }
     await page.getByRole('button', { name: 'Keşfet', exact: true }).click();
@@ -311,7 +311,7 @@ test.describe('577b Veri ve kısıtlar', () => {
     await ac('/plan/sevkiyat');
     const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
     await cubuk.getByRole('button', { name: /^Veri/ }).click();
-    await expect(page).toHaveURL(/\/plan\?ekran=veri$/);
+    await expect(page).toHaveURL(/\/plan\/plan\?ekran=veri$/);
     await expect(page.locator('[data-parca="veri"]')).toBeVisible();
     await expect(cubuk.getByRole('button', { name: /^Veri/ })).toHaveAttribute('aria-current', 'page');
     const menu = page.getByRole('navigation', { name: 'Veri ve kısıtlar' });
@@ -324,7 +324,7 @@ test.describe('577b Veri ve kısıtlar', () => {
     await expect(page).toHaveURL(/ekran=veri&bolum=denetim$/);
     await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
     await expect(page.locator('[data-parca="veri"]')).toHaveCount(0);
-    await expect(page).toHaveURL(/\/plan$/);
+    await expect(page).toHaveURL(/\/plan\/plan$/);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
 });
@@ -380,7 +380,7 @@ test.describe('577a Bugünün kararları', () => {
 
 test.describe('577a Odak tahtası', () => {
   test('Odak: O tuşu bir bölümü açar, tezgâha inilir, Esc seviye seviye çıkar; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     await expect(page.getByRole('toolbar', { name: 'Plan çubuğu' })).toBeVisible();
     await page.locator('body').press('o');
     const odak = page.locator('section.tc-pyo');
@@ -406,10 +406,10 @@ test.describe('577a Odak tahtası', () => {
 // canlı plan olmayabilir; o halde "Henüz canlıya alınmış plan yok" satırı kabul edilir.
 test.describe('577c Geçmiş ve fark', () => {
   test('Geçmiş: plan çubuğundan açılır, iki bölüm gezilir, Plan tahtaya döner; fark Başka menüsünden açılıp kapanır; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
     await cubuk.getByRole('button', { name: 'Geçmiş', exact: true }).click();
-    await expect(page).toHaveURL(/\/plan\?ekran=gecmis$/);
+    await expect(page).toHaveURL(/\/plan\/plan\?ekran=gecmis$/);
     const kok = page.locator('[data-parca="gecmis"]');
     await expect(kok).toBeVisible();
     await expect(cubuk.getByRole('button', { name: 'Geçmiş', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -444,7 +444,7 @@ test.describe('577d Tezgâh stüdyosu', () => {
   test('Stüdyo isteği: pano isteği işler, adresten siler; sayfa taşmaz, yazma gitmez', async ({ page, ac, ag }) => {
     await ac('/plan/studio?istek=tez&v=yok-boyle');
     await expect(page.locator('.tc-pym-tp')).toBeVisible();
-    if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/plan\/studio$/);
+    if (await page.locator('.tc-pym-tp-govde').isVisible()) await expect(page).toHaveURL(/\/plan$/);
     await tasmaz(page);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
@@ -453,7 +453,7 @@ test.describe('577d Tezgâh stüdyosu', () => {
 // 577d: Başka menüsünün kartları haritanın üstüne açılır; plan yoksa menüde pasiftir. Kartlar okur, yazma gitmez.
 test.describe('577d Tahta kartları', () => {
   test('Sekiz kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     const baska = page.getByRole('button', { name: /Başka/ });
     if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
       await page.keyboard.press('Escape');
@@ -480,7 +480,7 @@ test.describe('577d Tahta kartları', () => {
 // Motorun css'i sayfada yüklü kalır; tahta kartları başka parçanın önekini kullanınca maliyet sayfaları plan çubuğunun üstüne binip tıklanmaz oldu.
 test.describe('Motordan sonra öteki sayfalar', () => {
   test('Motor açıldıktan sonra maliyet sayfalarının başlığı plan çubuğunun altında kalır ve tıklanır', async ({ page, ac }) => {
-    await ac('/plan');
+    await ac('/plan/plan');
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
     for (const ad of ['Maliyetler', 'Genel gider', 'Ek mesai planı', 'Fason planı']) {
       await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();

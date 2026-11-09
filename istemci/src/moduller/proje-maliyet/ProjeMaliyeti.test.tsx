@@ -101,7 +101,7 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.getByText('Proje geliri')).toBeTruthy();
     expect(screen.getByText('Bugüne kadarki sapma')).toBeTruthy();
     expect(screen.getByText('5 gün')).toBeTruthy();
-    expect((await screen.findByRole('link', { name: /Plana git/ })).getAttribute('href')).toBe('/plan');
+    expect((await screen.findByRole('link', { name: /Plana git/ })).getAttribute('href')).toBe('/plan/plan');
     expect(screen.getByRole('table', { name: 'En çok sapan iş emirleri' })).toBeTruthy();
     expect(screen.getByText(/Toplamlara girmeyen kalemler.*Fason/)).toBeTruthy();
   });

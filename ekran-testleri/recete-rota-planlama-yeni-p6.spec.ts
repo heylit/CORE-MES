@@ -65,7 +65,7 @@ test.describe('P6 Sevkiyat', () => {
     // "çizelgede" siparişi seçip Planlama motoru tahtasını açar (Y5).
     await izgara.getByRole('button', { name: /^ORN-S2, 03\.03 Sal: / }).click();
     await acilim.getByRole('button', { name: /ORN-S2 çizelgede/ }).click();
-    await expect(page).toHaveURL(/\/plan$/);
+    await expect(page).toHaveURL(/\/plan\/plan$/);
     expect(ag.yazmalar).toEqual([]);
     expect(ag.hatalar).toEqual([]);
   });

@@ -81,7 +81,7 @@ describe('P2 Siparişler', () => {
     expect(screen.queryByRole('heading', { name: 'Partiyi böl' })).toBeNull();
     fireEvent.click(dugme(/S1 çizelgede/));
     // Yönlendirici adresi geçişle (startTransition) yazar; adres tembel yüklenen motor parçası gelince değişir, yük altında bir saniyeyi aşar.
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); }, BEKLE);
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/plan'); }, BEKLE);
   }, 20000);
 
   it('sunucu kayıt yazmayı vermiyorsa (ben.yazabilir false) yönetici de form görmez', async () => {

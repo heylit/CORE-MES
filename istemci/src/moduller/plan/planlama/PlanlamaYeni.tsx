@@ -1,5 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
@@ -8,6 +8,7 @@ import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
+import { aileOf, SayfaSekmeleri } from '../sayfa-sekmeleri.tsx';
 import {
   ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi, studyoAdresi,
   studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
@@ -33,7 +34,8 @@ const sonGorunum: { deger: string | null } = { deger: null };
 
 function PlanlamaEkrani() {
   const oturum = useOturum();
-  const { gorunum: parca } = useParams<{ gorunum?: string }>();
+  const { gorunum: parca, sekme } = useParams<{ gorunum?: string; sekme?: string }>();
+  const { pathname } = useLocation();
   const git = useNavigate();
   const [sorgu] = useSearchParams();
   const kullanici = oturum.data;
@@ -43,7 +45,8 @@ function PlanlamaEkrani() {
     () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
     [durum, kullanici],
   );
-  const gorunum = parca === undefined ? ACILIS : gorunumOku(parca);
+  // Motor ekranının eski kök adresi (`/plan?ekran=veri`) motorun adresine gider (2535 a: kök Atölye'dir).
+  const gorunum = parca === undefined ? (sorgu.has('ekran') ? 'plan' : ACILIS) : gorunumOku(parca, sekme);
   const { bildir } = useBildirim();
   // 657 a, 1395 a: çalışma kaydı yoksa sayfa açılışta yazmaz; yazabilen kişi boş çalışmayı düğmeyle sunucuya kurdurur (Reçete ve Rota
   // kaydından) ve sayfa düzenlenebilir açılır. Yazamayan salt okunur boş görür.
@@ -105,6 +108,9 @@ function PlanlamaEkrani() {
   if (durum.tur === 'yukleniyor' || yetki === null) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
 
   if (gorunum === null) return <Navigate to={KOK} replace />;
+  // Eski bağlantılar (`/plan/studio`, sekmeye dönen `/plan/terminler`) görünümün adresine gider; sorgu (istek, ekran) korunur.
+  if (pathname !== gorunumAdresi(gorunum)) return <Navigate to={{ pathname: gorunumAdresi(gorunum), search: sorgu.size > 0 ? `?${sorgu.toString()}` : '' }} replace />;
+  const aile = aileOf(pathname);
   const kayitlar = GORUNUM_KAYITLARI.filter((k) => gorunumAcik(k.anahtar, yetki));
   const etkin = kayitlar.find((k) => k.anahtar === gorunum);
   const gec = (g: PlanlamaGorunumu): void => { void git(gorunumAdresi(g)); };
@@ -143,6 +149,7 @@ function PlanlamaEkrani() {
                   />
                 </Suspense>
               )}
+              {aile && <SayfaSekmeleri aile={aile} />}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
                   depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
