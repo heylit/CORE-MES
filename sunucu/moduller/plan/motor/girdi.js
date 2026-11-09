@@ -26,6 +26,11 @@ const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 const dugumSipId = (o, yol) => String(o.id) + String(yol).split('.').slice(1).map(n => '-Y' + n).join('');
 /* 1952: kişinin el tezgâhının kimliği; sunucu motoru (emirler.js kisiTezgahi) ve çözücü (plan-cozucusu.ts) aynı öneki okur */
 const KISI_TEZGAH_ONEKI = 'kisi-';
+/* B-2500-2: kişi tezgâhına (insan kapasiteli istasyon) yerleşen iş motorda yerleşmiştir ama canlı planın makine kuyruğuna yazılmaz; plan
+   özeti onları ayrı sayar (ozet.kisiTezgahIsleri), ekran "bütün işler yerleşti" demez */
+function kisiTezgahIsleriOf(plan) {
+  return Object.values((plan && plan.ops) || {}).filter(r => r && !r.fas && String(r.m).startsWith(KISI_TEZGAH_ONEKI)).map(r => r.id).sort();
+}
 const kisiTezgahKimligi = id => KISI_TEZGAH_ONEKI + id;
 const rotaOpNo = a => a.opNo > 0 ? a.opNo : a.seq;
 const rotaAdimlari = (st, id) => ((((st && st.routes) || {})[id] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
@@ -670,8 +675,9 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   ].filter(a => Array.isArray(D0[a])));
   /* B-2499-1: malzemenin saSurum'u Satın Alma termin satırının yazma sürümüdür, plan girdisi değil: plan her kayıtta termin satırı açıp
      sürümü artırdığı için kaynak değişikliği sayılırsa her "Planı kur"dan sonra plan güncel değil görünür. Karşılaştırmada dışarıda kalır;
-     ekran termin yazarken güncel sürümü ister, alan yine yenilenir. */
-  const surumsuz = (a, v) => a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; return r; }) : v;
+     ekran termin yazarken güncel sürümü ister, alan yine yenilenir. B-2500-4: terminsiz satır (saTermin null) ile satırın olmaması motor için
+     aynıdır (durum.js tmSaTermin yalnız metni okur); ilk termin satırı açılınca "boş → boş" farkı sayılmaz. */
+  const surumsuz = (a, v) => a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; if (r.saTermin == null) delete r.saTermin; return r; }) : v;
   const uygun = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
   const alanlar = uygun.filter(a => !rrEsit(surumsuz(a, D[a]), surumsuz(a, D0k[a])));
   for (const a of uygun) D0[a] = D[a];

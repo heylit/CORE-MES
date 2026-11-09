@@ -123,6 +123,18 @@ export async function statuTanimiSil(db: Db, kimlik: string, beklenenSurum: numb
   return { statuses: await sorgular.statuTanimlari(db) };
 }
 
+// B-2483-11: termini girilmemiş bitmemiş fason adıma Satın Alma'nın tahmini (tek okumada); plan motoru termin yoksa onu, o da yoksa 7 günü alır.
+// Adet emrin adedidir (VARSAYIM: adımın kalan adedi değil; tahmin adetle az değişir).
+async function fasonTahminiEkle(db: Db, emirler: EmirKaydi[]): Promise<EmirKaydi[]> {
+  const sorulacak = emirler.flatMap((e) => (e.kaynakRotaRevizyonId === null ? [] : e.isEmirleri
+    .filter((i) => i.durum !== 'tamam' && i.kaynak?.tur === 'fason' && i.terminGun == null)
+    .map((i) => ({ e, i, q: { malzemeNo: e.malzemeNo, operasyonTipiId: i.operasyonTipiId, firmaId: i.kaynak!.id, adet: e.adet } }))));
+  if (sorulacak.length === 0) return emirler;
+  const gunler = await fasonSuresiTahminleri(db, sorulacak.map((x) => x.q));
+  const tahmin = new Map(sorulacak.map((x, n) => [x.i, gunler[n] ?? null]));
+  return emirler.map((e) => ({ ...e, isEmirleri: e.isEmirleri.map((i) => (tahmin.has(i) ? { ...i, tahminGun: tahmin.get(i)! } : i)) }));
+}
+
 export async function fasonTahminleri(
   db: Db, sorgu: readonly { malzemeNo: number; operasyonTipiId: number; firmaId: number; adet: number }[],
 ): Promise<FasonTahminCevabi> {
@@ -232,7 +244,7 @@ export async function durumVeEmirler(
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
   const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
-  const emirDilimleri = emirOkur ? await emirDilimi(db, emirSecimi) : null;
+  const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
   const adimAdetleri = emirOkur ? adimAdetleriCevir(await planlanacakIsEmirleri(db, { taslakDahil: true })) : null;
 

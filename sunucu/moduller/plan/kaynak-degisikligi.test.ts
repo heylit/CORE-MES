@@ -92,6 +92,24 @@ describe('kaynak değişikliği (1962)', () => {
     assert.ok(t.kaynakDegisikligi?.alanlar.includes('malzemeler'), 'termin değişince plan yine eskir');
   });
 
+  test('B-2500-4: araya giren tezgâh ötekileri değişmiş göstermez; fark kimlikle yazılır', () => {
+    const S = oturmus(kaynak([makine(1), makine(2)]));
+    const r = oku(S, kaynak([makine(0), makine(1), makine(2)]));
+    const yollar = (r.kaynakDegisikligi?.farklar ?? []).map((f) => f.yol);
+    assert.ok(yollar.includes('tezgahlar.length'), JSON.stringify(yollar));
+    assert.ok(yollar.includes('tezgahlar[100]'), JSON.stringify(yollar));
+    assert.ok(!yollar.some((y) => y.startsWith('tezgahlar[101]') || y.startsWith('tezgahlar[102]') || /tezgahlar\[\d\]/.test(y)), JSON.stringify(yollar));
+  });
+
+  test('B-2500-4: terminsiz ilk termin satırı açılınca plan eskimez', () => {
+    const KAYIT2 = { ...KAYIT, items: [...KAYIT.items, { id: '60', code: 'HM-1', name: 'Ornek cubuk', type: 'ham', unit: 'kg' }] };
+    const satirsiz = { ...kaynak(), ek: { tedarikTerminleri: [] } };
+    let S = oku(ILK, satirsiz, KAYIT2).S;
+    S = oku(S, satirsiz, KAYIT2).S;
+    const r = oku(S, { ...kaynak(), ek: { tedarikTerminleri: [{ kod: '60', termin: null, surum: 1, aciklama: null }] } }, KAYIT2);
+    assert.equal(r.kaynakDegisikligi, null, JSON.stringify(r.kaynakDegisikligi));
+  });
+
   test('girdi değişmez', () => {
     const S = oturmus();
     const once = JSON.stringify(S);
