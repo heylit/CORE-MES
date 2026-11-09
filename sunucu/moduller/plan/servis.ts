@@ -1328,11 +1328,14 @@ export async function siparisCarpani(db: Db, siparisId: number): Promise<Siparis
 }
 
 // Açık plan ekranlarının "plan değişti" uyarısı için hafif okuma: canlı plan sürümü ve son canlıya alma.
-export async function canliSurum(db: Db): Promise<PlanSurumCevabi> {
+export async function canliSurum(db: Db, k: Kullanici): Promise<PlanSurumCevabi> {
   const son = await s.sonCanliyaAlma(db);
   const ad = son ? (await kisiAdlari(db, [son.kisiId])).get(son.kisiId) ?? null : null;
-  // 2319 (2311 S7): canlı plan son canlıya almadan sonra eskidiyse işaret; yalnız işarettir, plan değişmez.
-  return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null, bayat: await planBayatligi(db) };
+  // 2319 (2311 S7): canlı plan son canlıya almadan sonra eskidiyse işaret; yalnız işarettir, plan değişmez. 2508 b: olay listesi ve
+  // sayılar (emir, makine) yalnız planlama sayfalarını görene; öteki oturum yalnız bayat mı değil mi görür.
+  const b = await planBayatligi(db);
+  const bayat = islemVarMi(k, 'plan.planlama-oku') ? b : { bayat: b.bayat, sonCanliyaAlma: b.sonCanliyaAlma };
+  return { planSurumu: await s.planSurumu(db), sonCanliyaAlma: son ? { zaman: son.zaman, kisi: ad } : null, bayat };
 }
 
 // 510 a: "Plan değişikliği" kutusu; kişi başına sayı çoktan aza, eşitte ada göre.
