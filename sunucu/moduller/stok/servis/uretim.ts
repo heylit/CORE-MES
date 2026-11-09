@@ -889,9 +889,15 @@ export async function adimPlaniKur(
   if (dalli !== null) {
     if (dalli.tasinan === null && dalli.gelenler.length === 0) return null;
     const cikti = bilgi.sonAdim || adimCiktisi === null ? null : await adimCiktisi(db, { malzemeNo, opNo: bilgi.opNo, uretimEmriId });
-    return dalliAdimPlani({
-      adet, sonAdim: bilgi.sonAdim, statuId, cikti, girdiler: bilgi.girdiler, tasinan: dalli.tasinan ?? { malzemeNo, miktar: '1' }, gelenler: dalli.gelenler, kaynak: dalli.kaynak.tur, onceki,
+    const tasinan = dalli.tasinan ?? { malzemeNo, miktar: '1' };
+    const plan = dalliAdimPlani({
+      adet, sonAdim: bilgi.sonAdim, statuId, cikti, girdiler: bilgi.girdiler, tasinan, gelenler: dalli.gelenler, kaynak: dalli.kaynak.tur, onceki,
     });
+    // 2522 a: dallı adımda mahsup her taşınan malzemenin kendi birikimiyle (dalın ilk girdisi ya da öncülden gelen parça).
+    const oncekiTasinanlar = new Map<number, bigint>();
+    if (dalli.kaynak.tur === 'ilk') oncekiTasinanlar.set(tasinan.malzemeNo, adetMiktari(onceki, tasinan.miktar, tasinan.bolen));
+    for (const p of dalli.gelenler) oncekiTasinanlar.set(p.malzemeId, birikimliMiktar(onceki, 0n, p.miktar, p.bolen, p.oran));
+    return { ...plan, oncekiTasinanlar };
   }
   const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
   if (tasinan === null) return null;
@@ -901,7 +907,7 @@ export async function adimPlaniKur(
     oncekiCiktili: oncekiOpNo !== null && (await cikti(oncekiOpNo)) !== null,
     cikti: bilgi.sonAdim ? null : await cikti(bilgi.opNo), girdiler: bilgi.girdiler, tasinan, onceki,
   });
-  return { ...plan, oncekiTasinan: adetMiktari(onceki, tasinan.miktar, tasinan.bolen) };
+  return { ...plan, oncekiTasinanlar: new Map([[tasinan.malzemeNo, adetMiktari(onceki, tasinan.miktar, tasinan.bolen)]]) };
 }
 
 // 1554 a: adımın bu sayımdan önceki toplam adedi (binde, adetMiktari'nin onceki'si). Sayım satırı olaydan önce aynı işlemde yazılır;
@@ -1194,7 +1200,8 @@ async function elleSarfMahsubuOku(db: Db, uretimEmriId: number, malzemeId: numbe
   const ihtiyac = ihtiyacToplami(((await emirMalzemeIhtiyaci(db, uretimEmriId)) ?? []).map((m) => ({ malzemeId: m.malzemeNo, brut: m.brut }))).get(malzemeId) ?? null;
   return elleSarfMahsubu({ istenen, elle: binde(sarf.elle), net: binde(sarf.net), ihtiyac });
 }
-async function tasinanMahsubuOku(db: Db, uretimEmriId: number, malzemeId: number, istenen: bigint, oncekiTasinan: bigint | undefined): Promise<bigint> {
+async function tasinanMahsubuOku(db: Db, uretimEmriId: number, malzemeId: number, istenen: bigint, oncekiler: ReadonlyMap<number, bigint> | undefined): Promise<bigint> {
+  const oncekiTasinan = oncekiler?.get(malzemeId);
   if (oncekiTasinan === undefined) return 0n;
   const elle = binde((await sorgular.emrinStatusuzSarfi(db, uretimEmriId, malzemeId)).elle);
   if (elle <= 0n) return 0n;
@@ -1213,7 +1220,7 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
   const pay = (m: SarfPayi, partiId: number | null | typeof ISTISNA, miktar: bigint) => { m.set(partiId, (m.get(partiId) ?? 0n) + miktar); };
   for (const s of plan.sarflar) {
     const istenen = s.statuId === null ? s.miktar - await elleSarfMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar)
-      : s.tasinan === true ? s.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar, plan.oncekiTasinan) : s.miktar;
+      : s.tasinan === true ? s.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar, plan.oncekiTasinanlar) : s.miktar;
     if (istenen <= 0n) continue;
     const hak = await kullanilabilirStatu(db, s.malzemeId, s.statuId, y.uretimEmriId, istenen);
     let dusulen = 0n;
@@ -1243,7 +1250,7 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
     }
   }
   const tam = plan.cevirme;
-  const c = tam === null ? null : { ...tam, miktar: tam.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, tam.malzemeId, tam.miktar, plan.oncekiTasinan) };
+  const c = tam === null ? null : { ...tam, miktar: tam.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, tam.malzemeId, tam.miktar, plan.oncekiTasinanlar) };
   if (c !== null && c.miktar > 0n) {
     const hak = await kullanilabilirStatu(db, c.malzemeId, c.kaynakStatuId, y.uretimEmriId, c.miktar);
     let cevrilen = 0n;
