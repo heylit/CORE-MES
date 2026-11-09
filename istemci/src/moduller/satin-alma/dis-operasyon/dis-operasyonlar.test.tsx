@@ -77,31 +77,41 @@ describe('Dış operasyonlarda gidiş ve tamamla (#995); dönüş mal kabulde', 
     expect(screen.queryByRole('button', { name: /Gönder/ })).toBeNull();
   });
 
-  it('düğmeler satırın durumuna göre açılır: dışarıda adet varken mal kabule yönlendirme, hepsi dönünce tamamla', async () => {
+  it('satırda yalnız sıradaki işlem düğmedir: gidiş yoksa Gönder, dışarıda adet varsa Mal kabul, hepsi dönünce Tamamla; öbürleri menüde', async () => {
     ac(liste(
       satir({}),
       satir({ isEmriId: 2, emirNo: 'UE-2026-002', donen: 38, hurda: 2 }),
       satir({ isEmriId: 3, emirNo: 'UE-2026-003', gonderilen: null, gerceklesenGidis: null }),
     ), ['uretim-emirleri.fason']);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /Gönder/ })).toHaveLength(3));
-    const dugme = (emirNo: string, ad: RegExp) => within(satirOf(emirNo)).getByRole('button', { name: ad }) as HTMLButtonElement;
-    expect([dugme('UE-2026-001', /Mal kabulde gir/).disabled, dugme('UE-2026-001', /Tamamla/).disabled]).toEqual([false, true]);
-    expect([dugme('UE-2026-002', /Mal kabulde gir/).disabled, dugme('UE-2026-002', /Tamamla/).disabled]).toEqual([true, false]);
-    expect([dugme('UE-2026-003', /Mal kabulde gir/).disabled, dugme('UE-2026-003', /Tamamla/).disabled]).toEqual([true, true]);
+    await waitFor(() => satirOf('UE-2026-001'));
+    expect(within(satirOf('UE-2026-001')).getByRole('button', { name: 'UE-2026-001 Op 30: Mal kabulde gir' }).textContent).toBe('Mal kabul');
+    expect(within(satirOf('UE-2026-002')).getByRole('button', { name: 'UE-2026-002 Op 30: Tamamla' })).toBeTruthy();
+    expect(within(satirOf('UE-2026-003')).getByRole('button', { name: 'UE-2026-003 Op 30: Gönder' })).toBeTruthy();
+    expect(within(satirOf('UE-2026-002')).getByText('38 / 40')).toBeTruthy();
+    expect(within(satirOf('UE-2026-002')).getByText('2 hurda')).toBeTruthy();
+    expect(within(satirOf('UE-2026-001')).getByText('Deneme flanş · Op 30 Kaplama')).toBeTruthy();
+    fireEvent.click(within(satirOf('UE-2026-001')).getByRole('button', { name: 'UE-2026-001 Op 30 için işlemler' }));
+    const menu = await screen.findByRole('menu');
+    const ogeler = within(menu).getAllByRole('menuitem');
+    expect(ogeler.map((o) => [o.textContent?.startsWith('Gönder') ? 'Gönder' : 'Tamamla', o.getAttribute('aria-disabled')])).toEqual([['Gönder', null], ['Tamamla', 'true']]);
+    expect(within(menu).getByText('Bütün adet dönünce tamamlanır.')).toBeTruthy();
   });
 
-  it('1849 (C17): sırası gelmemiş fason adımında Gönder kapalıdır ve nedenini söyler', async () => {
-    ac(liste(satir({}), satir({ isEmriId: 4, emirNo: 'UE-2026-004', sirada: false, gonderilen: null, gerceklesenGidis: null })), ['uretim-emirleri.fason']);
-    const gonder = (emirNo: string) => within(satirOf(emirNo)).getByRole('button', { name: /Gönder/ }) as HTMLButtonElement;
-    await waitFor(() => expect(screen.getAllByRole('button', { name: /Gönder/ })).toHaveLength(2));
-    expect([gonder('UE-2026-001').disabled, gonder('UE-2026-004').disabled]).toEqual([false, true]);
-    expect(gonder('UE-2026-004').title).toBe('Önceki iş emirleri bitmeden fasona gönderilmez.');
+  it('1849 (C17): sırası gelmemiş fason adımında Gönder satırda düğme olmaz; menüde kapalıdır ve nedenini söyler', async () => {
+    ac(liste(satir({ isEmriId: 4, emirNo: 'UE-2026-004', sirada: false, gonderilen: null, gerceklesenGidis: null })), ['uretim-emirleri.fason']);
+    await waitFor(() => satirOf('UE-2026-004'));
+    expect(within(satirOf('UE-2026-004')).queryByRole('button', { name: /: Gönder/ })).toBeNull();
+    fireEvent.click(within(satirOf('UE-2026-004')).getByRole('button', { name: 'UE-2026-004 Op 30 için işlemler' }));
+    const menu = await screen.findByRole('menu');
+    const gonder = within(menu).getAllByRole('menuitem').find((o) => o.textContent?.startsWith('Gönder'));
+    expect(gonder?.getAttribute('aria-disabled')).toBe('true');
+    expect(within(menu).getByText('Önceki iş emirleri bitmeden fasona gönderilmez.')).toBeTruthy();
   });
 
   it('gönder, emir ve iş emri kimliğiyle üretim emirlerinin ucuna adedi istek kimliğiyle yazar; yeniden basış aynı kimlikle gider', async () => {
     let cevap = () => json(409, { kod: 'CAKISMA', mesaj: 'Gönderilen adet planlananı aşıyor.' });
-    const istekler = ac(liste(satir({})), ['uretim-emirleri.fason'], () => cevap());
-    fireEvent.click(await within(await waitFor(() => satirOf('UE-2026-001'))).findByRole('button', { name: /Gönder/ }));
+    const istekler = ac(liste(satir({ gonderilen: null, gerceklesenGidis: null })), ['uretim-emirleri.fason'], () => cevap());
+    fireEvent.click(await within(await waitFor(() => satirOf('UE-2026-001'))).findByRole('button', { name: 'UE-2026-001 Op 30: Gönder' }));
     const pencere = await screen.findByRole('dialog');
     fireEvent.click(within(pencere).getByRole('button', { name: /Kaydet/ }));
     expect(await within(pencere).findByRole('alert')).toBeTruthy();
