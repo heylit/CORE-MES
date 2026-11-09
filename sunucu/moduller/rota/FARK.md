@@ -438,3 +438,10 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: ortanca 4 basamağa yuvarlanır (ölçüm sütunu gibi). Geri alma: ucuz.
 - Tablo, göç ve yetki değişmedi.
 
+## 2578: süre ölçümü her iş emri bitince (kullanıcı kararı 2578 a)
+- Terminal ölçümü iş emri bitince yazılır (`adimBittiYansit`, uretim-emirleri `adimBittiDinle` 2520-5, bağı kablolama.ts); emrin kapanması
+  beklenmez. Planlı birleşmeli kolun adımları da artık ölçülür (kol emir bitti olayı vermeden üste katılırdı).
+- `emirBittiYansit` toplayıcı olarak kalır: olaysız biten adımları (fason dönüşü, kalite kararı) aynı kuralla dener; ölçülmüş iş emri ikinci kez yazılmaz.
+- Tablo, göç, yetki değişmedi.
+- Fason dönüşü ve GKK kalite kararıyla biten adım adım bitti olayı vermez (2520-5); emir bitti toplayıcısı onları dener, rota fasonu zaten atlar.
+

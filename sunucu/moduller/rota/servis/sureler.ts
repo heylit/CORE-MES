@@ -5,7 +5,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { GerceklesenKabulCevabi, GerceklesenTuru, SurelerCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { adimliEmirAyrintisi, isEmriSureOzeti, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
-import type { EmirBittiOlayi } from '../../uretim-emirleri/disari.ts';
+import type { EmirBittiOlayi, AdimBittiOlayi } from '../../uretim-emirleri/disari.ts';
 import { ondalikMetin, hazirlikBol, eskiTabanUyarisi, azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, teorikAyrim, terminalOlcumleri } from '../kurallar.ts';
 import type { EtkinAdimSuresi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
@@ -180,14 +180,16 @@ export async function gerceklesenKabulEt(
 // Emir bitti (B38, bağı kablolama.ts kurar): biten her makine ya da kişi iş emrinin ölçümü rotaya terminal ölçümü olarak yazılır;
 // plan kullanmaz, planlamacı kabul eder (169 c). Ölçüm makinedeyse o makineye özgüdür. Rotada olmayan adım (ek adım), fason adım,
 // ölçülmemiş süre ve önceden ölçülmüş iş emri atlanır. Olay komutla aynı işlemdedir: burada ret emri bitirmeyi geri alır, bu yüzden
-// eksik veri reddedilmez, atlanır.
-export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
-  const emir = await uretimEmriOzeti(db, olay.uretimEmriId);
+// eksik veri reddedilmez, atlanır. 2578 a: ölçüm iş emri bitince yazılır (adimBittiYansit); emir bitti, olaysız biten adımları
+// (fason dönüşü, kalite kararı sonrası) toplar, ölçülmüş iş emri ikinci kez yazılmaz.
+async function olcumleriYaz(db: Db, uretimEmriId: number, kisiId: number, yalniz: number | null): Promise<void> {
+  const emir = await uretimEmriOzeti(db, uretimEmriId);
   if (emir === null || emir.malzemeNo === null) return;
   const malzemeId = emir.malzemeNo;
   const ayrinti = await adimliEmirAyrintisi(db, emir.id);
   const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
-  const adaylar = ayrinti.isEmirleri.filter((i) => i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.has(i.opNo));
+  const adaylar = ayrinti.isEmirleri.filter((i) => (yalniz === null || i.id === yalniz)
+    && i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason' && opNolari.has(i.opNo));
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
   for (const i of adaylar) {
     if (olculmus.has(i.id)) continue;
@@ -196,9 +198,17 @@ export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<voi
     for (const tur of ['hazirlik', 'islem'] as const) {
       const sureDk = olcum[tur];
       if (sureDk === null) continue;
-      await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId: olay.kisiId, kaynak: 'terminal', isEmriId: i.id });
+      await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId, kaynak: 'terminal', isEmriId: i.id });
     }
   }
+}
+
+export async function emirBittiYansit(db: Db, olay: EmirBittiOlayi): Promise<void> {
+  await olcumleriYaz(db, olay.uretimEmriId, olay.kisiId, null);
+}
+
+export async function adimBittiYansit(db: Db, olay: AdimBittiOlayi): Promise<void> {
+  await olcumleriYaz(db, olay.uretimEmriId, olay.kisiId, olay.isEmriId);
 }
 
 // Plan için etkin süre (169 c): yalnız teorik; ölçüm teoriğe kabul ve revizyonla geçer. OP numarasıyla döner; fason adım dönmez (dakika
