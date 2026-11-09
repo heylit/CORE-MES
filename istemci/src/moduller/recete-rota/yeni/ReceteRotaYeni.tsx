@@ -36,11 +36,12 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
   res: null,
   sartnameler: null,
   kapanis: null,
+  ayarlar: 'Operasyona bağlı olmayan statüler (karantina, giriş onaylı, ret gibi) burada tanımlanır; operasyon statüleri rotadan otomatik gelir.',
 };
 // Şartname ve talimatlar (prototip) ve kapanış onayları kendi başlığını çizer.
 const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler', 'kapanis']);
-// Kütüphane ve kapanış sayfası planla ilgisizdir: plan şeridi çizilmez.
-const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis']);
+// Kütüphane, kapanış ve ayarlar sayfası planla ilgisizdir: plan şeridi çizilmez.
+const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis', 'ayarlar']);
 
 // İkinci menü sayıları, eski ekranın kuralıyla (Sayaclar.hesapla): aktif emir (serbest ve üretimde), minimumun altındaki kalem, onayda
 // (yoksa taslak) rota revizyonu, operasyon ve malzeme sayısı. Okunamayan dilimin sayısı null'dır. Eski ekran boş stoğu 0 sayardı; burada
