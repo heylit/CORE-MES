@@ -1,4 +1,5 @@
 import type { AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import { planSaati } from './planlama-kurallar.ts';
 
 // Atölye komutlarının saf kuralı (1982 a): kayıtlı çalışmaya tek bir değişiklik uygulanır. Değişiklik sayfanın kendi yazmasıyla aynı izi
 // bırakır (istemci kayit.ts degistir): veri sürümü artar (plan bayatlar), plan varken bekleyen değişiklik satırı ve geri dönüş farkı yazılır,
@@ -10,9 +11,8 @@ const dizi = (x: unknown): unknown[] => (Array.isArray(x) ? x : []);
 const esit = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 const kopya = <T>(x: T): T => structuredClone(x);
 
-// Sayfanın değişiklik izi sınırı ve açılış saati (istemci kayit.ts IZ_SINIRI, motor/kurallar.ts BASLANGIC_SAATI).
+// Sayfanın değişiklik izi sınırı (istemci kayit.ts IZ_SINIRI).
 export const IZ_SINIRI = 400;
-export const BASLANGIC_SAATI = 7;
 
 export interface KomutKisisi { kim: string; sayfa: string; t: number }
 export type KomutHatasi = { tur: 'dogrulama'; ileti: string; alan: string } | { tur: 'cakisma'; ileti: string };
@@ -28,10 +28,14 @@ const bekleyenMi = (x: unknown): x is Bekleyen =>
 const dogrulama = (ileti: string, alan: string): KomutSonucu => ({ hata: { tur: 'dogrulama', ileti, alan } });
 const cakisma = (ileti: string): KomutSonucu => ({ hata: { tur: 'cakisma', ileti } });
 
-export function simdiSaati(c: Nesne): number {
-  const s = c.simdi;
-  return typeof s === 'number' && Number.isFinite(s) && s >= 0 ? s : BASLANGIC_SAATI;
+// 2506 a: şimdi her yerde gerçek saattir: komutun anı planın ekseninde (D.meta.baslangic, tesis günü 00:00'dan saat). Kayıttaki
+// `simdi` ve 07:00 varsayımı kullanılmaz (B-2500-3: arıza geçmişe yazılıyordu). Ekseni olmayan çalışmada şimdi bilinmez (null).
+export function simdiSaati(c: Nesne, an: number): number | null {
+  const meta = veriOf(c).meta;
+  const b = nesne(meta) ? meta.baslangic : undefined;
+  return typeof b === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b) ? planSaati(b, an) : null;
 }
+const EKSENSIZ = 'Çalışmada başlangıç günü yok; sayfada planı kurup kaydedin.';
 
 const planOf = (c: Nesne): Nesne | null => (nesne(c.plan) ? c.plan : null);
 const veriOf = (c: Nesne): Nesne => (nesne(c.D) ? c.D : {});
@@ -69,7 +73,9 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
   if (r.act) return cakisma('Başlamış iş taşınamaz.');
   if (r.fas) return cakisma('Fason iş tezgâha taşınamaz.');
   if (!kimligiVar(veriOf(deger).tezgahlar, 'id', g.tezgah)) return dogrulama('Tezgâh çalışmada yok.', 'tezgah');
-  if (g.baslangic < simdiSaati(deger) - 1e-9) return dogrulama('İş geçmiş bir saate taşınamaz.', 'baslangic');
+  const simdi = simdiSaati(deger, k.t);
+  if (simdi === null) return cakisma(EKSENSIZ);
+  if (g.baslangic < simdi - 1e-9) return dogrulama('İş geçmiş bir saate taşınamaz.', 'baslangic');
   const locks = nesne(deger.locks) ? deger.locks : {};
   const kilit = { m: g.tezgah, S: g.baslangic };
   if (esit(locks[g.isId], kilit)) return { deger, degisti: false };
@@ -109,7 +115,9 @@ function olayDenetimi(D: Nesne, o: AtolyeOlayi, simdi: number): KomutSonucu | nu
 // satırı bütün işleri işaretler (istemci etkilenenIsler olaylar için de '*').
 export function olayEkle(deger: unknown, olay: AtolyeOlayi, k: KomutKisisi): KomutSonucu {
   if (!nesne(deger)) return cakisma('Çalışma kaydı okunamadı; sayfayı yenileyin.');
-  const h = olayDenetimi(veriOf(deger), olay, simdiSaati(deger));
+  const simdi = simdiSaati(deger, k.t);
+  if (simdi === null) return cakisma(EKSENSIZ);
+  const h = olayDenetimi(veriOf(deger), olay, simdi);
   if (h !== null) return h;
   const olaylar = dizi(deger.olaylar);
   const yeni = kopya(deger);
@@ -124,7 +132,9 @@ export function ekMesaiEkle(deger: unknown, g: Omit<EkMesaiEkleGovdesi, 'calisma
   const D = veriOf(deger);
   if (!kimligiVar(D.tezgahlar, 'id', g.tezgah)) return dogrulama('Tezgâh çalışmada yok.', 'tezgah');
   if (!kimligiVar(D.vardiyalar, 'id', g.vardiya)) return dogrulama('Vardiya çalışmada yok.', 'vardiya');
-  if (g.gun < Math.floor(simdiSaati(deger) / 24)) return dogrulama('Geçmiş güne ek mesai eklenemez.', 'gun');
+  const simdi = simdiSaati(deger, k.t);
+  if (simdi === null) return cakisma(EKSENSIZ);
+  if (g.gun < Math.floor(simdi / 24)) return dogrulama('Geçmiş güne ek mesai eklenemez.', 'gun');
   const satir = { m: g.tezgah, gun: g.gun, vardiya: g.vardiya };
   const eski = dizi(deger.ekMesai);
   if (eski.some((x) => nesne(x) && String(x.m) === g.tezgah && x.gun === g.gun && String(x.vardiya) === g.vardiya)) return { deger, degisti: false };

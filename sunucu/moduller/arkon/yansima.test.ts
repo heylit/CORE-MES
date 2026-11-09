@@ -1752,6 +1752,15 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
        yururluge_alma = now() WHERE id = $1`, [rev.id, yoneticiId]);
   }
 
+  // 168 b (B-2483-6): motor kayıtlıyken vardiyası tanımsız tezgâhın çalışma zamanı yoktur; elle sıralama da oraya iş koymaz. Planlama
+  // sırası testleri bütün iş merkezlerini her gün çalıştırır (o ana dek kurulmuş merkezler; tekrar çağrı eksik kalanları ekler).
+  let tamGunVardiyasi: number | null = null;
+  async function herGunCalisir(): Promise<void> {
+    tamGunVardiyasi ??= (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Yansima gunduz', '00:00', '23:59') RETURNING id"))!.id;
+    await ortam!.sahip.sorgu(
+      'INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g ON CONFLICT DO NOTHING', [tamGunVardiyasi]);
+  }
+
   async function rotaliEmirKur(secenek: { kart?: number; ucuncuIlkte?: boolean; plansiz?: boolean; ilkParcasizOp?: number } = {}): Promise<{
     emirId: number; ilk: string; ikinci: string; ilkId: number; ikinciId: number; kart: number; ilkMerkez: number; ikinciMerkez: number; makineKodlari: string[];
   }> {
@@ -2180,6 +2189,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   // A4: Arkon Planlama'daki sıralama plan taslağına gider; canlı ve operatör müdür canlıya alana dek eski sırada kalır.
   test('Arkon Planlama sırası: CORE işinin sırası plan taslağına yazılır, canlı değişmez; eski ekran, geçersiz sıra ve yetkisiz reddedilir', async () => {
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
+    await herGunCalisir();
     const [ie1, , ie3] = await isEmriIdleri(r.emirId);
     const kaynak = await makinesi(ie1!);
     const sirala = async (cerez: string, onceki: number[], yeni: number[]) => istek<{ taslakId: number; taslakAcildi: boolean }>(
@@ -2219,8 +2229,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     const kaynak = await makinesi(ie1!);
     // ADR 0018: canlıya alma sunucu motoruyla dizer; motor planlama sayfasının çalışma kaydı olmadan çözmez (409) ve vardiyası tanımsız
     // tezgâha yer vermez (168 b). Kayıt boş yazılır, bütün iş merkezleri her gün çalışır.
-    const gunduz = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis) VALUES ('Yansima gunduz', '00:00', '23:59') RETURNING id"))!.id;
-    await ortam!.sahip.sorgu('INSERT INTO vardiya_matrisi (is_merkezi_id, gun, vardiya_id) SELECT m.id, g, $1 FROM is_merkezi m, generate_series(1, 7) g', [gunduz]);
+    await herGunCalisir();
     const kayit = await istek(yonetici, 'POST', '/plan/planlama-kayitlari/yaz', {
       anahtar: PLANLAMA_ANAHTARI, bicim: 'json', beklenenSurum: null,
       deger: {
@@ -2272,6 +2281,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   // Kart #199 (3b): makinede çalışan işin önüne iş alınabilir, operatör öndeki işe geçince çalışan duraklatılır; dondurulmuş başlamış iş yerinde kalır.
   test('Arkon Planlama sırası: başlamış iş dondurulmamışsa önüne iş alınır ve taslağa gider; dondurulunca yerinden oynatılamaz', async () => {
     const r = await rotaliEmirKur({ ucuncuIlkte: true });
+    await herGunCalisir();
     const [ie1, ie2, ie3] = await isEmriIdleri(r.emirId);
     const kaynak = await makinesi(ie1!);
     await canliyaYerlestir(ie3!, { makine: kaynak.id }, 60);
@@ -2367,6 +2377,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
   // Demo 2.16 (kart #544): emrin bir adımı çalışırken aynı emrin bekleyen adımı Arkon'dan sıralanır (çalışan adım kart #199 3b testinde).
   test('Arkon Planlama sırası: başlamış emrin bekleyen adımının önüne başka emrin adımı alınır', async () => {
     const a = await rotaliEmirKur({ ucuncuIlkte: true });
+    await herGunCalisir();
     const [a1, , a3] = await isEmriIdleri(a.emirId);
     const kaynak = await makinesi(a1!);
     const b = await rotaliEmirKur({ ucuncuIlkte: true });

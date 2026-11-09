@@ -41,7 +41,11 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     assert.equal(b.bayat, true);
     assert.equal(b.sayilar['emir-bitti'], 1);
     assert.ok(b.olaylar[0]?.emirNo);
-    assert.equal((await tamam<PlanSurumCevabi>(c.operator, 'GET', '/plan/surum')).bayat?.sayilar['emir-bitti'], 1);
+    // 2508 b: olay listesi ve sayılar yalnız planlama sayfalarını görene (plan.planlama-oku); operatör yalnız işareti görür.
+    assert.equal((await tamam<PlanSurumCevabi>(c.planlama, 'GET', '/plan/surum')).bayat?.sayilar?.['emir-bitti'], 1);
+    const op = (await tamam<PlanSurumCevabi>(c.operator, 'GET', '/plan/surum')).bayat;
+    assert.deepEqual(op && Object.keys(op).sort(), ['bayat', 'sonCanliyaAlma']);
+    assert.equal(op?.bayat, true);
     // BY-03: aynı olay ikinci kez yazılmaz.
     await vt().tx((db) => bayatEmirBittiYansit(db, { uretimEmriId: e1 }));
     // BY-04: canlı satırları geçmişte biten emir işaretlemez.
