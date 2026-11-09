@@ -1342,6 +1342,12 @@ export function eksiyleBitirmeUyarisi(kapanis: number, sonraki: { opNo: number; 
   return `OP ${sonraki.opNo}'de bu adımdan ${sonraki.sayilan - kapanis} fazla parça sayıldı; eksi ${sonraki.sayilan - kapanis} kaldı.`;
 }
 
+// 2521 b: ilk parça kararı beklenirken sayılan parça varsa adım bitirilmez; Kalite Merkezi kararı (onay ya da ret) bekleyeni kapatır.
+export function kararBekleyenBitisIhlali(kararBekliyor: number, opNo: number | null): string | null {
+  if (kararBekliyor <= 0) return null;
+  return `${kararBekliyor} parça ilk parça kararı bekliyor${opNo === null ? '' : ` (OP ${opNo})`}. Kalite Merkezi kararı gelmeden iş bitirilemez.`;
+}
+
 // Birden çok uyarı tek metne birleşir; hiçbiri yoksa null.
 export const uyarilariBirlestir = (...uyarilar: readonly (string | null)[]): string | null => {
   const dolu = uyarilar.filter((u): u is string => u !== null && u !== '');

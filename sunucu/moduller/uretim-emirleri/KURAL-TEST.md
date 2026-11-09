@@ -107,3 +107,4 @@ DK: `dis-islem-emri.test.ts` "UE-DIE kuralları (saf)", DP: aynı dosya "gerçek
 | UE-DIE-G | Göç açık fason işlerine belge ekler; iş emri ve hareket satırları değişmez (2428-3 a) | DG | yok |
 
 Bağsız kural: yok.
+| 2521 b (09.11.2026): karar bekleyen varken bitirme reddedilir, sayım ve iş değişmez; onay ya da ret bekleyeni kapatınca bitirilir | kurallar.test.ts "2521 b", karar-bekliyor.test.ts "2521 b" (izinli ve yasak), karar-bekleyen-adet.test.ts "2521 b", arkon/yansima.test.ts "K1, T1" |

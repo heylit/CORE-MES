@@ -5,7 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirBaslat, emirBitir, emirSayim, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
+import { emirBaslat, emirBitir, emirSayim, kararliSayimiSonuclandir, planlanacakIsEmirleri, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 
 // İlk parça kararı bekleyen parça, bitmiş adımın kaybı sayılmaz: sonraki adımın işleyeceği adede girer. Adlar uydurmadır.
@@ -76,7 +76,7 @@ describe('uretim-emirleri karar bekleyen adet ve sonraki adım (gerçek PostgreS
   after(async () => { await ortam?.kaldir(); });
 
   // Varsayılan ilk parça kapısında (her kurulum) karar verilmeden yazılan sağlam sayım da karar bekler; adımın onaylı sağlamı 0 kalır.
-  test('OP10 karar bekleyen parçalarla bitince OP20 onları işler; sayılmayan parça kayıp düşer', async () => {
+  test('2521 b: OP10 karar bekleyen parçayla bitmez; onaydan sonra biter ve OP20 onaylı sağlamı işler, sayılmayan parça kayıp düşer', async () => {
     const kur = async (kararBekleyen: number) => {
       const r = await tx(async (db) => uretimEmriAc(db, planlama, {
         malzemeNo: urunNo, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [adim(1, await makine()), adim(2, await makine())], projeId,
@@ -86,11 +86,13 @@ describe('uretim-emirleri karar bekleyen adet ve sonraki adım (gerçek PostgreS
       await tx((db) => emirBaslat(db, operator, id, undefined, undefined, ie1));
       await tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 7 }, { isEmriId: ie1 }));
       if (kararBekleyen > 0) await tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: kararBekleyen }, { kararBekliyor: true, isEmriId: ie1 }));
+      await assert.rejects(tx((db) => emirBitir(db, operator, id, undefined, undefined, ie1)), /ilk parça kararı bekliyor \(OP 10\)/);
+      await tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay', ie1));
       await tx((db) => emirBitir(db, operator, id, undefined, undefined, ie1));
       const plan = (await tx((db) => planlanacakIsEmirleri(db, { taslakDahil: true }))).filter((p) => p.uretimEmriId === id);
       return plan.find((p) => p.id === ie2)?.adimAdedi;
     };
-    assert.equal(await kur(3), 10, '10 parçanın hepsi karar bekliyor, kayıp yok');
-    assert.equal(await kur(0), 7, '7 parça karar bekliyor, sayılmayan 3 kayıp düşer');
+    assert.equal(await kur(3), 10, '10 parçanın hepsi onaylandı, kayıp yok');
+    assert.equal(await kur(0), 7, '7 parça onaylandı, sayılmayan 3 kayıp düşer');
   });
 });
