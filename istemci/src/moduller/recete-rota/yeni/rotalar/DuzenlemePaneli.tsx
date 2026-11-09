@@ -25,7 +25,7 @@ function Baslik({ baslik, etiket, kapat }: { baslik: string; etiket?: string; ka
     <div className="tc-rr1-insp-hd">
       {etiket && <span className="tc-rr1-tag">{etiket}</span>}
       <b>{baslik}</b>
-      <button type="button" className="tc-rr1-ib" onClick={kapat} aria-label="Paneli kapat"><Simge ad="x" boyut="k" /></button>
+      <button type="button" className="tc-rr1-ib" onClick={kapat} aria-label="Paneli kapat" title="Paneli kapat (Esc)"><Simge ad="x" boyut="k" /></button>
     </div>
   );
 }
@@ -659,9 +659,11 @@ export function PanelSeridi({ r, ac }: { r: RotaEkrani; ac: () => void }) {
   );
 }
 
-export function DuzenlemePaneli({ r }: { r: RotaEkrani }) {
+// Panel çekmecedir (2558): kapalıyken seçim sürer, yalnız panel görünmez; çift tıklama ya da düğme açar.
+export function DuzenlemePaneli({ r, acik, kapat: paneliKapat }: { r: RotaEkrani; acik: boolean; kapat: () => void }) {
   const s = r.secim;
-  const kapat = () => { r.sec(null); };
+  // Başlıktaki çarpı çekmeceyi kapatır; seçim şemada kalır.
+  const kapat = paneliKapat;
   const icerik = (() => {
     switch (s?.tur) {
       case undefined: return <BosPanel r={r} />;
@@ -674,7 +676,7 @@ export function DuzenlemePaneli({ r }: { r: RotaEkrani }) {
     }
   })();
   return (
-    <aside className={`tc-rr1-insp${s ? '' : ' tc-rr1-kapali'}`} aria-label="Düzenleme paneli">
+    <aside id="tc-rr1-duzen" className={`tc-rr1-insp${s && acik ? '' : ' tc-rr1-kapali'}`} aria-label="Düzenleme paneli">
       {icerik}
     </aside>
   );

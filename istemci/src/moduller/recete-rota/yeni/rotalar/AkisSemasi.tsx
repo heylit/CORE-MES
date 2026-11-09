@@ -126,6 +126,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       onDragLeave={() => { setUstunde(false); }}
       onDrop={(e) => { e.preventDefault(); setUstunde(false); if (duzen) birak(e.dataTransfer.getData(SURUKLE_TURU)); }}
       onClick={() => { r.sec({ tur: 'adim', urunId: sahip.id, adimId: a.id, seq: a.seq, miktar }); }}
+      onDoubleClick={() => { r.odakla({ urunId: sahip.id, adimId: a.id }); }}
       aria-label={`OP ${String(statuNo(a))} ${op?.name ?? 'Operasyon seç'}`}
     >
       <span className="tc-rr1-obar"><span className="tc-rr1-abbr">{op?.abbr ?? op?.code ?? '???'}</span><span className="tc-rr1-oseq" title={a.opNo === null ? 'Yeni adım; numarayı sistem kayıtta verir' : undefined}>{a.opNo ?? 'yeni'}</span></span>
@@ -471,6 +472,8 @@ export function AkisSemasi({ r, kok, cop }: {
   const capa = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const surukle = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
   const dokundu = useRef<string | null>(null);
+  const oncekiZ = useRef<Yakinlik | null>(null);
+  const sonOdak = useRef<string | null>(null);
 
   const sonCizim = useRef('');
   // Ölçü değişmediyse durum yazılmaz: her çizim yeni nesne üretir, koşulsuz yazmak sonsuz döngü olur.
@@ -540,6 +543,73 @@ export function AkisSemasi({ r, kok, cop }: {
   }, [kok.id, cizim.en, cizim.boy, sigdir]);
   const elle = () => { dokundu.current = kok.id; };
 
+  // 2558 b/8: seçilen kutu tuvalin ortasına kayar; yakınlık değişmez. Az hareket tercihinde kayma anlıktır.
+  const ortala = useCallback((yumusak: boolean) => {
+    const v = vp.current; const el = ic.current?.querySelector<HTMLElement>('.tc-rr1-secili');
+    if (!v || !el) return;
+    const vr = v.getBoundingClientRect(); const er = el.getBoundingClientRect();
+    const left = v.scrollLeft + er.left - vr.left + er.width / 2 - vr.width / 2;
+    const top = v.scrollTop + er.top - vr.top + er.height / 2 - vr.height / 2;
+    const azHareket = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof v.scrollTo === 'function') v.scrollTo({ left, top, behavior: yumusak && !azHareket ? 'smooth' : 'auto' });
+    else { v.scrollLeft = left; v.scrollTop = top; }
+  }, []);
+  const secimAnahtari = r.secim ? JSON.stringify([r.secim.tur, 'urunId' in r.secim ? r.secim.urunId : null, 'adimId' in r.secim ? r.secim.adimId : null]) : null;
+  const odakAnahtari = r.odak ? `${r.odak.urunId}|${r.odak.adimId}` : null;
+  // 2558 b/9: odağa girince kutu ortalanarak yakınlaşır (en az %125); çıkınca önceki yakınlığa döner. Odak değişmediyse yalnız ortalanır.
+  useEffect(() => {
+    const v = vp.current; const el = ic.current?.querySelector<HTMLElement>('.tc-rr1-secili');
+    if (odakAnahtari === sonOdak.current) { if (secimAnahtari) { elle(); ortala(true); } return; }
+    sonOdak.current = odakAnahtari;
+    if (!v || !el) return;
+    elle();
+    // Tuval sayfanın altında kalmışsa odakta bütünüyle görünür olsun.
+    if (odakAnahtari && typeof v.scrollIntoView === 'function') v.scrollIntoView({ block: 'nearest' });
+    const hedef: Yakinlik = odakAnahtari
+      ? (YAKINLIK.find((t) => t >= Math.max(125, z + 25)) ?? 200)
+      : (oncekiZ.current ?? z);
+    if (odakAnahtari) oncekiZ.current ??= z; else oncekiZ.current = null;
+    if (hedef === z) { ortala(true); return; }
+    const vr = v.getBoundingClientRect(); const er = el.getBoundingClientRect();
+    const olcek = z / 100;
+    capa.current = {
+      x: vr.width / 2, y: vr.height / 2,
+      cx: (v.scrollLeft + er.left - vr.left + er.width / 2) / olcek, cy: (v.scrollTop + er.top - vr.top + er.height / 2) / olcek,
+    };
+    setZ(hedef);
+    // Yalnız seçim ya da odak değişince çalışır; yakınlık değişimi bu etkiyi yeniden tetiklememeli.
+  }, [secimAnahtari, odakAnahtari]);
+  // Çekmece açılıp kapanınca tuval daralır ya da genişler: seçili kutu görünür kalsın diye anında yeniden ortalanır.
+  useEffect(() => {
+    const v = vp.current;
+    if (!v || typeof ResizeObserver === 'undefined') return undefined;
+    let ilk = true;
+    const g = new ResizeObserver(() => { if (ilk) { ilk = false; return; } ortala(false); });
+    g.observe(v);
+    return () => { g.disconnect(); };
+  }, [ortala]);
+  // Odakta adım tam görünür; öncülü ve ardılı az, ötekiler çok solar. Sınıflar DOM'dan okunur: kenar çizimi de aynı veriyi kullanır.
+  useLayoutEffect(() => {
+    const i = ic.current; if (!i) return;
+    const hepsi = i.querySelectorAll<HTMLElement>('.tc-rr1-opbox, .tc-rr1-cip');
+    const oge = odakAnahtari ? i.querySelector<HTMLElement>('.tc-rr1-opbox.tc-rr1-secili') : null;
+    const u = oge?.getAttribute('data-uc') ?? null;
+    if (!u || !oge) { hepsi.forEach((e) => { e.removeAttribute('data-odak-hucre'); }); return; }
+    const komsu = new Set([oge.getAttribute('data-sonraki'), ...(oge.getAttribute('data-onculler') ?? '').split(' ')].filter((x): x is string => !!x));
+    hepsi.forEach((e) => {
+      const eu = e.getAttribute('data-uc');
+      const kendi = e === oge || e.getAttribute('data-besler') === u || e.getAttribute('data-cikan') === u;
+      const yakin = (eu !== null && komsu.has(eu)) || e.getAttribute('data-sonraki') === u || (e.getAttribute('data-onculler') ?? '').split(' ').includes(u);
+      e.setAttribute('data-odak-hucre', kendi ? 'oge' : yakin ? 'komsu' : 'diger');
+    });
+  });
+  const odakMetni = (() => {
+    if (!r.odak) return '';
+    const a = r.duzen.adimlar(r.odak.urunId).find((x) => x.id === r.odak?.adimId);
+    return a ? `Odak: OP ${String(statuNo(a))} ${r.duzen.h.op.get(a.opId)?.name ?? ''}`.trim() : '';
+  })();
+  const seciliAdim = r.secim?.tur === 'adim' ? r.secim : null;
+
   useEffect(() => {
     const v = vp.current; if (!v) return undefined;
     let son = 0;
@@ -566,7 +636,13 @@ export function AkisSemasi({ r, kok, cop }: {
       '+': () => { yakinlas(1); }, '=': () => { yakinlas(1); }, '-': () => { yakinlas(-1); }, '0': () => { sigdir(false); }, Home: () => { sigdir(true); },
     };
     const is = harita[o.key];
-    if (is) { o.preventDefault(); elle(); is(); }
+    if (is) { o.preventDefault(); elle(); is(); return; }
+    // Enter: seçili kutuda ya da tuvalin kendisinde odaklar; seçili olmayan kutuda düğmenin kendi tıklaması seçer.
+    const hedef = o.target as HTMLElement;
+    if (o.key === 'Enter' && seciliAdim && !r.odak && (hedef === v || hedef.matches('.tc-rr1-opbox.tc-rr1-secili'))) {
+      o.preventDefault();
+      r.odakla({ urunId: seciliAdim.urunId, adimId: seciliAdim.adimId });
+    }
   };
 
   const basla = (o: PointerEvent<HTMLDivElement>) => {
@@ -574,14 +650,18 @@ export function AkisSemasi({ r, kok, cop }: {
     if ((o.target as HTMLElement).closest('button, input, select, textarea, a')) return;
     const v = vp.current; if (!v) return;
     surukle.current = { x: o.clientX, y: o.clientY, sl: v.scrollLeft, st: v.scrollTop };
-    v.setPointerCapture(o.pointerId);
+    if (typeof v.setPointerCapture === 'function') v.setPointerCapture(o.pointerId);
   };
   const tasima = (o: PointerEvent<HTMLDivElement>) => {
     const s = surukle.current; const v = vp.current; if (!s || !v) return;
     v.scrollLeft = s.sl - (o.clientX - s.x);
     v.scrollTop = s.st - (o.clientY - s.y);
   };
-  const birak = () => { surukle.current = null; };
+  // Boş alana kaydırmadan dokunmak odaktan çıkarır; sürükleyerek gezinmek çıkarmaz.
+  const birak = (o: PointerEvent<HTMLDivElement>) => {
+    const s = surukle.current; surukle.current = null;
+    if (s && r.odak && Math.abs(o.clientX - s.x) < 4 && Math.abs(o.clientY - s.y) < 4) r.odakla(null);
+  };
 
   return (
     <div className="tc-rr1-canvas-kap">
@@ -590,7 +670,7 @@ export function AkisSemasi({ r, kok, cop }: {
         aria-label="Akış şeması. Tekerlek yakınlaştırır, sürükleyerek gezersin, ok tuşları kaydırır."
         onKeyDown={tus} onPointerDown={basla} onPointerMove={tasima} onPointerUp={birak} onPointerCancel={birak}
       >
-        <div ref={ic} className={`tc-rr1-inner tc-rr1-z-${String(z)}`}>
+        <div ref={ic} className={`tc-rr1-inner tc-rr1-z-${String(z)}${r.odak ? ' tc-rr1-odakta' : ''}`}>
           <svg className="tc-rr1-edges" width={cizim.en} height={cizim.boy} aria-hidden="true">
             <defs>
               <marker id="tc-rr1-ok-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path className="tc-rr1-mf" d="M0,0 L10,5 L0,10 z" /></marker>
@@ -606,6 +686,14 @@ export function AkisSemasi({ r, kok, cop }: {
         </div>
       </div>
       {cop}
+      <p className="tc-gizli-etiket" aria-live="polite">{odakMetni}</p>
+      {seciliAdim && (
+        <button type="button" className="tc-rr1-odak-dugme" aria-pressed={r.odak !== null}
+          title={r.odak ? 'Odaktan çık (Esc ya da boş alana dokun)' : 'Seçili adıma odaklan: ortalar, yakınlaştırır, ötekileri soldurur (Enter ya da çift tık)'}
+          onClick={() => { r.odakla(r.odak ? null : { urunId: seciliAdim.urunId, adimId: seciliAdim.adimId }); }}>
+          <Simge ad={r.odak ? 'x' : 'target'} boyut="k" />{r.odak ? 'Odaktan çık' : 'Odakla'}
+        </button>
+      )}
       <div className="tc-rr1-cv-ctrl" role="group" aria-label="Görünüm">
         <button type="button" className="tc-rr1-ib" onClick={() => { yakinlas(1); }} title="Yakınlaştır (+)" aria-label="Yakınlaştır"><Simge ad="zin" boyut="k" /></button>
         <span className="tc-rr1-zl">{z}%</span>
@@ -622,6 +710,7 @@ export function AkisSemasi({ r, kok, cop }: {
             <li><b>Sürükle:</b> boş alanı tutup çek. Dokunmatik yüzeyde iki parmak hareketi de yakınlaştırır.</li>
             <li><b>Klavye:</b> oklar kaydırır (Shift ile hızlı), + / − yakınlaştırır, 0 tümünü sığdırır, Home başa döner.</li>
             <li><b>Adım:</b> Alt+↑/↓ önceki/sonraki adım, Alt+Shift+↑/↓ adımı taşır, Ctrl+Z / Ctrl+Y geri al / yinele.</li>
+            <li><b>Odak:</b> adıma çift tıkla ya da seçip Enter&apos;a bas; ortalanır, yakınlaşır, ötekiler solar. Esc ya da boş alana dokunmak çıkarır.</li>
             <li><b>Taşıma:</b> operasyon kutusunu başka bir adımın üstüne sürükle; aşağı taşırken onun altına, yukarı taşırken üstüne yerleşir.</li>
           </ul>
         </div>

@@ -34,7 +34,8 @@ describe('R1 akış tablosu: izinli', () => {
     expect(within(tablo).getByText('HM-0012')).toBeTruthy();
     expect(within(tablo).getByText('ürün, stoğa girer')).toBeTruthy();
     expect(within(tablo).getByRole('button', { name: 'OP 10 Tornalama' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Adımı silmek için buraya sürükle' })).toBeTruthy();
+    // 2558 b/2: çöp kutusu yalnız sürükleme sürerken görünür.
+    expect(screen.queryByRole('region', { name: 'Adımı silmek için buraya sürükle' })).toBeNull();
     expect(rotaYazmalari(istekler)).toEqual([]);
 
     const hazirlik = within(tablo).getByLabelText('Hazırlık dk');

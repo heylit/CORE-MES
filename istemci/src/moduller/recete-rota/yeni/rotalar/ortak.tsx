@@ -28,6 +28,9 @@ export interface RotaEkrani {
   gunSaati: (wcId: string | null) => number;
   // Operasyon paletini açar; eklenecek yer seçimden gelir (seçili adımın ardı ya da adimEkle seçiminin sonraId'si).
   paletAc: () => void;
+  // 2558 b/9: odak kipi. Odaktaki adım ortalanır ve yakınlaşır, öteki adımlar solar; Düzenleme paneli onun için açılır. null: odak yok.
+  odak: { urunId: string; adimId: string } | null;
+  odakla: (o: { urunId: string; adimId: string } | null) => void;
   // Sürükleme sürerken şemada bırakma şeritleri görünür.
   surukleniyor: boolean;
   surukleBasla: () => void;

@@ -95,7 +95,11 @@
   display: grid; grid-template-columns: minmax(0, 1fr) var(--tc-rr1-panel-sutun); gap: var(--b-3); min-height: var(--ekran-boy-60);
 }
 .tc-rr1-body.tc-rr1-dar { --tc-rr1-panel-sutun: var(--menu-serit); }
-.tc-rr1-body.tc-rr1-adimli { grid-template-columns: var(--menu-genis) minmax(0, 1fr) var(--tc-rr1-panel-sutun); }
+.tc-rr1-body.tc-rr1-adimli { --tc-rr1-palet-sutun: var(--menu-genis); grid-template-columns: var(--tc-rr1-palet-sutun) minmax(0, 1fr) var(--tc-rr1-panel-sutun); }
+/* 2558: palet de çekmecedir; kapalıyken yalnız şerit kalır. */
+.tc-rr1-body.tc-rr1-adimli.tc-rr1-palet-dar { --tc-rr1-palet-sutun: var(--menu-serit); }
+.tc-rr1-cekmece-bas { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); margin-bottom: var(--b-1); }
+.tc-rr1-cekmece-bas h3 { margin: 0; }
 .tc-rr1-insp-kap { position: relative; display: flex; min-width: 0; }
 .tc-rr1-insp-kap > .tc-rr1-insp { flex: 1; }
 .tc-rr1-dar .tc-rr1-insp-kap > .tc-rr1-insp { display: none; }
@@ -356,6 +360,20 @@
 }
 .tc-rr1-serit-ustunde { border-color: var(--done); background: color-mix(in srgb, var(--done) 12%, var(--panel-solid)); }
 .tc-rr1-serit-bos { min-height: calc(var(--dokunma) * 2); }
+/* 2558 b/9: odak kipi. Odaktaki adım ve kendi malzemeleri tam görünür; öncül ve ardıl az, ötekiler çok solar. */
+.tc-rr1-odakta [data-odak-hucre="diger"], .tc-rr1-odakta .tc-rr1-rhd, .tc-rr1-odakta .tc-rr1-add, .tc-rr1-odakta .tc-rr1-kolbas { opacity: var(--saydam-28); }
+.tc-rr1-odakta [data-odak-hucre="komsu"] { opacity: var(--saydam-55); }
+.tc-rr1-odakta .tc-rr1-edges { opacity: var(--saydam-45); }
+@media (prefers-reduced-motion: no-preference) {
+  .tc-rr1-opbox, .tc-rr1-cip, .tc-rr1-rhd, .tc-rr1-edges { transition: opacity var(--sure-kisa) ease; }
+}
+.tc-rr1-odak-dugme {
+  position: absolute; top: var(--b-3); right: var(--b-3); z-index: 2; display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma);
+  padding: 0 var(--b-3); font: inherit; font-size: var(--yazi-s); font-weight: 600; color: var(--ink); background: var(--panel-solid);
+  border: 1px solid var(--edge); border-radius: var(--yari-1); box-shadow: var(--shadow); cursor: pointer;
+}
+.tc-rr1-odak-dugme:hover { border-color: var(--edge2); }
+.tc-rr1-odak-dugme[aria-pressed="true"] { border-color: var(--done); color: var(--done); }
 .tc-rr1-cv-ctrl {
   position: absolute; right: var(--b-3); bottom: var(--b-3); z-index: 2; display: flex; flex-direction: column; gap: var(--b-1); align-items: center;
   background: var(--panel-solid); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-1); box-shadow: var(--shadow);
@@ -381,7 +399,8 @@
   padding: 0 var(--b-3); font-size: var(--yazi-xs); color: var(--muted); background: var(--panel-solid); border: var(--cizgi) dashed var(--edge); border-radius: var(--yari-1);
 }
 .tc-rr1-cop-ustunde { border-color: var(--stop); color: var(--stop); background: color-mix(in srgb, var(--stop) 10%, var(--panel-solid)); }
-.tc-rr1-rtab-wrap > .tc-rr1-copkutu { position: static; width: max-content; }
+/* Tabloda çöp kutusu sürükleme sürerken ekranın altında belirir; tabloyu kaydırmaz. */
+.tc-rr1-rtab-wrap > .tc-rr1-copkutu { position: fixed; top: auto; left: 50%; bottom: var(--b-5); transform: translateX(-50%); z-index: var(--z-katman); box-shadow: var(--shadow); }
 .tc-rr1-emptycv { display: flex; flex-direction: column; gap: var(--b-2); align-items: flex-start; padding: var(--b-5); background: var(--panel); border: 1px dashed var(--edge); border-radius: var(--yari-1); }
 .tc-rr1-emptycv h3 { margin: 0; }
 
@@ -491,9 +510,9 @@
 .tc-rr1-od .tc-rr1-od-kisa .tc-rr1-metin { border-left-color: var(--renk); }
 
 /* 768 altı: düzenleme paneli alttan açılır; adım paneli şemanın üstüne gelir. */
+/* 1024-1279: palet solda dar sütun olarak kalır (2558); ikisi birlikte açılınca sığmazsa biri kapanır (UrunVeRotalar). */
 @media (max-width: 1279px) {
-  .tc-rr1-body, .tc-rr1-body.tc-rr1-adimli { grid-template-columns: minmax(0, 1fr) var(--tc-rr1-panel-sutun); }
-  .tc-rr1-body.tc-rr1-adimli .tc-rr1-adimpanel { grid-column: 1 / -1; max-height: var(--ekran-boy-40); }
+  .tc-rr1-body.tc-rr1-adimli { --tc-rr1-palet-sutun: var(--menu-sabit); }
 }
 @media (max-width: 1023px) {
   /* Eski sayfa gibi dar ekranda tablo başlığı kalkar, her alan kendi etiketini gösterir (iki sütun). */
@@ -514,6 +533,11 @@
     background: var(--panel-solid); box-shadow: var(--shadow);
   }
   .tc-rr1-insp.tc-rr1-kapali { display: none; }
+  /* Palet soldan açılan çekmecedir; kapalıyken üst çubuktaki düğme açar. */
+  .tc-rr1-adimpanel {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: var(--z-katman); width: var(--cekmece-genis); max-width: 100%; max-height: none;
+    border-radius: 0 var(--yari-3) var(--yari-3) 0; background: var(--panel-solid); box-shadow: var(--shadow);
+  }
   /* Dar ekranda panel alttan açılan çekmecedir; daraltma, şerit ve tutamak geniş ekranındır. */
   .tc-rr1-panel-dugme, .tc-rr1-tutamak, .tc-rr1-insp-serit { display: none; }
   .tc-rr1-dar .tc-rr1-insp-kap > .tc-rr1-insp:not(.tc-rr1-kapali) { display: block; }
@@ -521,6 +545,8 @@
 }
 @media (max-width: 767px) {
   .tc-rr1-cv-legend { display: none; }
+  /* 360'ta çekmece bütün ekranı alır; kapatma düğmesi ve Esc çıkarır. */
+  .tc-rr1-insp, .tc-rr1-adimpanel { top: 0; right: 0; bottom: 0; left: 0; width: auto; max-height: none; border-radius: 0; }
   .tc-rr1-ig, .tc-rr1-flowbox { grid-template-columns: minmax(0, 1fr); }
   .tc-rr1-depsel { grid-template-columns: minmax(0, 1fr); }
   .tc-rr1-qtr, .tc-rr1-altrow { grid-template-columns: minmax(0, 1fr) auto; }

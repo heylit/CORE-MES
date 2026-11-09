@@ -12,7 +12,7 @@ import { useRotaDuzeni, yeniKimlik } from './useRotaDuzeni.ts';
 import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
 import { AkisTablosu } from './AkisTablosu.tsx';
 import { PatlamisRota } from './PatlamisRota.tsx';
-import { AdimPaneli } from './AdimPaneli.tsx';
+import { AdimPaneli, PaletSeridi } from './AdimPaneli.tsx';
 import { DuzenlemePaneli, PanelSeridi } from './DuzenlemePaneli.tsx';
 import { PanelTutamagi } from './PanelTutamagi.tsx';
 import { RevizyonCubugu } from './RevizyonCubugu.tsx';
@@ -48,8 +48,11 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     window.addEventListener('keydown', esc);
     return () => { window.removeEventListener('keydown', esc); };
   }, [tamEkran]);
-  // B-2482-R5: geniş ekranda düzen sabittir; panel yalnız kullanıcının düğmesiyle daralır ve açılır, genişliği sürükleyerek değişir. İkisi de hatırlanır.
-  const [panelDar, setPanelDar] = useState(() => tercihOku('duzen-paneli-dar', '') === '1');
+  // 2558 b/10: Düzenleme paneli yan çekmecedir, açılışta kapalıdır; tek tık seçer ama açmaz. Çift tık (odak), Enter, "Odakla", üst
+  // çubuktaki düğme ve kapalı şerit açar. Girdi isteyen seçim (giren, yan ürün, adım ekleme, yeni rota) paneli kendisi açar; yoksa
+  // dokunuşun karşılığı görünmezdi. Genişlik sürükleyerek değişir ve hatırlanır (B-2482-R5).
+  const [panelAcik, setPanelAcik] = useState(false);
+  const panelDar = !panelAcik;
   const [panelGenis, setPanelGenis] = useState<number | null>(() => { const n = Number(tercihOku('duzen-paneli-genis', '')); return n > 0 ? n : null; });
   const govdeRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -57,7 +60,30 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     if (!g) return;
     if (panelGenis === null) g.style.removeProperty('--tc-rr1-panel'); else g.style.setProperty('--tc-rr1-panel', `${String(panelGenis)}px`);
   });
-  const panelDarYaz = (v: boolean) => { setPanelDar(v); tercihYaz('duzen-paneli-dar', v ? '1' : ''); };
+  // Kap 1000 px'ten darsa (768, menü açık 1024) iki çekmece birlikte açılınca tuval okunmaz: biri açılınca öteki kapanır.
+  const katmanli = () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
+  const darKap = () => (govdeRef.current?.clientWidth ?? 1280) < 1000;
+  const [odak, setOdak] = useState<{ urunId: string; adimId: string } | null>(null);
+  const seciliyeDon = () => {
+    window.requestAnimationFrame(() => { govdeRef.current?.querySelector<HTMLElement>('.tc-rr1-secili')?.focus(); });
+  };
+  const panelAcYaz = (v: boolean) => {
+    setPanelAcik(v);
+    if (v && darKap()) setAdimPaneli(false);
+    if (!v) { setOdak(null); seciliyeDon(); }
+  };
+  const paletYaz = (v: boolean) => {
+    setAdimPaneli(v);
+    tercihYaz('adim-paneli', v ? '1' : '');
+    if (v && darKap()) setPanelAcik(false);
+    if (!v) seciliyeDon();
+  };
+  const ACAN: ReadonlySet<Secim['tur']> = new Set(['girenEkle', 'yanEkle', 'adimEkle', 'yeniRota']);
+  const secimYaz = (x: Secim | null) => {
+    setSecim(x);
+    if (x && ACAN.has(x.tur)) panelAcYaz(true);
+    if (odak && !(x?.tur === 'adim' && x.adimId === odak.adimId)) setOdak(null);
+  };
   const panelGenisYaz = (px: number | null, bitti: boolean) => { setPanelGenis(px); if (bitti) tercihYaz('duzen-paneli-genis', px === null ? '' : String(px)); };
   const [copUstunde, setCopUstunde] = useState(false);
   const [surukleniyor, setSurukleniyor] = useState(false);
@@ -68,12 +94,23 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const hafta = o.veri.ek.takvim?.hafta;
     return (wcId: string | null) => ortalamaGunSaati(wcId === null ? undefined : hafta?.[wcId], (id) => dk.get(id) ?? 0);
   }, [o.veri.durum.cal, o.veri.ek.takvim]);
-  const kokSec = (id: string) => { setKok(id); tercihYaz('kok', id); setRevUrun(null); setListe(false); setKapali(new Set()); };
+  const kokSec = (id: string) => { setKok(id); tercihYaz('kok', id); setRevUrun(null); setListe(false); setKapali(new Set()); setOdak(null); };
   const r: RotaEkrani = {
-    duzen, yetki: o.yetki, secim, sec: setSecim, git: o.git, kokSec, kapali, gunSaati,
+    duzen, yetki: o.yetki, secim, sec: secimYaz, git: o.git, kokSec, kapali, gunSaati, odak,
+    odakla: (x) => {
+      if (x === null) { panelAcYaz(false); return; }
+      const a = duzen.adimlar(x.urunId).find((y) => y.id === x.adimId);
+      if (!a) return;
+      setSecim({ tur: 'adim', urunId: x.urunId, adimId: x.adimId, seq: a.seq, miktar });
+      setOdak(x);
+      // 1023 px altında panel şemanın üstüne binen çekmecedir; odakta açılırsa odaklanan adımı örter. Orada panel üst çubuktaki düğmeyle açılır.
+      if (katmanli()) return;
+      setPanelAcik(true);
+      if (darKap()) setAdimPaneli(false);
+    },
     kapaliDegistir: (nid) => { const y = new Set(kapali); if (y.has(nid)) y.delete(nid); else y.add(nid); setKapali(y); },
     // Açık kalma tercihi yalnız üst çubuktaki düğmeyle yazılır (1111 b); "Araya adım" paleti yalnız bu oturumda açar.
-    paletAc: () => { setAdimPaneli(true); },
+    paletAc: () => { setAdimPaneli(true); if (darKap()) setPanelAcik(false); },
     surukleniyor,
     // Sürükleme başlarken şema değişirse tarayıcı sürüklemeyi bırakabilir; şeritler bir sonraki turda açılır.
     surukleBasla: () => { window.setTimeout(() => { setSurukleniyor(true); }, 0); },
@@ -137,6 +174,12 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   };
 
   const tus = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Esc önce odaktan çıkar (şema kendisi), sonra açık çekmeceyi kapatır; tam ekran ancak ondan sonra kapanır.
+    if (e.key === 'Escape' && !e.defaultPrevented && (odak || panelAcik || adimPaneli) && !(e.target as HTMLElement).closest('[role="dialog"]')) {
+      e.preventDefault();
+      if (odak || panelAcik) panelAcYaz(false); else paletYaz(false);
+      return;
+    }
     if ((e.target as HTMLElement).closest('input, select, textarea')) return;
     const k = e.key.toLocaleLowerCase('tr-TR');
     const hedef = secim && 'urunId' in secim ? secim.urunId : revId;
@@ -166,10 +209,11 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     if (s?.tur !== 'adim') return;
     const a = duzen.adimlar(s.urunId).find((x) => x.id === s.adimId);
     if (!a || !duzen.degistir(s.urunId, (l) => adimSil(l, s.adimId), `OP ${String(statuNo(a))} silindi`)) return;
-    if (secim?.tur === 'adim' && secim.adimId === s.adimId) setSecim(null);
+    if (secim?.tur === 'adim' && secim.adimId === s.adimId) secimYaz(null);
     bildir('bilgi', `OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} silindi.`, { eylem: { etiket: 'Geri al', yap: () => { duzen.geriAl(s.urunId, 'geri'); } } });
   };
-  const cop = kokId && duzen.duzenlenebilir(kokId) ? (
+  // 2558 b/2: çöp alanı yalnız sürüklerken, şemanın üstüne bindirme olarak çıkar; yer açmaz, bırakma hedefi kaymaz.
+  const cop = kokId && duzen.duzenlenebilir(kokId) && surukleniyor ? (
     <div className={`tc-rr1-copkutu${copUstunde ? ' tc-rr1-cop-ustunde' : ''}`} role="region" aria-label="Adımı silmek için buraya sürükle"
       onDragOver={(e) => { e.preventDefault(); setCopUstunde(true); }} onDragLeave={() => { setCopUstunde(false); }}
       onDrop={(e) => { e.preventDefault(); setCopUstunde(false); copeBirak(e.dataTransfer.getData(SURUKLE_TURU)); }}>
@@ -181,19 +225,19 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     <div className={`tc-rr1${tamEkran ? ' tc-rr1-tam' : ''}`} data-parca="R1" onKeyDown={tus}>
       <div className="tc-rr1-top">
         {urunler.length > 0 && !liste && (
-          <select className="tc-rr1-secim tc-rr1-kok" value={kokId ?? ''} aria-label="Şemadaki ürün" onChange={(e) => { kokSec(e.target.value); setSecim(null); }}>
+          <select className="tc-rr1-secim tc-rr1-kok" value={kokId ?? ''} aria-label="Şemadaki ürün" onChange={(e) => { kokSec(e.target.value); secimYaz(null); }}>
             {urunler.map((m) => <option key={m.id} value={m.id}>{m.code} {m.name}</option>)}
           </select>
         )}
         <Dugme className="tc-rr1-kd" tur={liste ? 'birincil' : 'ikincil'} simge="list" aria-pressed={liste} title="Bütün ürünleri ve rotalarını tabloda gör" onClick={() => { setListe(!liste); }}>Ürün listesi</Dugme>
-        {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge="plus" onClick={() => { setListe(false); setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
+        {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge="plus" onClick={() => { setListe(false); secimYaz({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
         {!liste && kokId && o.yetki.rotaYaz && (
-          <Dugme className="tc-rr1-kd" tur={adimPaneli ? 'birincil' : 'ikincil'} simge="layers" aria-pressed={adimPaneli}
-            onClick={() => { tercih('adim-paneli', adimPaneli ? '' : '1', (v) => { setAdimPaneli(v === '1'); }); }}>Operasyon paleti</Dugme>
+          <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
+            onClick={() => { paletYaz(!adimPaneli); }}>Operasyon paleti</Dugme>
         )}
         {!liste && gorunum !== 'patlamis' && (
-          <Dugme className="tc-rr1-kd tc-rr1-panel-dugme" tur="ikincil" simge={panelDar ? 'chev-left' : 'chev-right'} aria-pressed={!panelDar}
-            title={panelDar ? 'Düzenleme panelini aç' : 'Düzenleme panelini daralt; çalışma alanı genişler'} onClick={() => { panelDarYaz(!panelDar); }}>Düzenleme paneli</Dugme>
+          <Dugme className="tc-rr1-kd" tur="ikincil" simge={panelDar ? 'chev-left' : 'chev-right'} aria-expanded={panelAcik} aria-controls="tc-rr1-duzen"
+            title={panelDar ? 'Düzenleme panelini aç' : 'Düzenleme panelini kapat; çalışma alanı genişler'} onClick={() => { panelAcYaz(!panelAcik); }}>Düzenleme paneli</Dugme>
         )}
         {!liste && (
           <>
@@ -240,14 +284,16 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <p>Bu taşıma dalın çatallandığı ya da birleştiği adımı değiştirir:</p>
         <ul>{duzen.tasimaOnayi?.farklar.map((f) => <li key={f}>{f}</li>)}</ul>
       </OnayPenceresi>
-      {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); setSecim(null); }} /> : (
+      {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); secimYaz(null); }} /> : (
         <>
           {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} />}
           {gorunum === 'patlamis' && kokId ? (
             <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
           ) : (
-          <div ref={govdeRef} className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}${panelDar ? ' tc-rr1-dar' : ''}`}>
-            {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} urunId={yer?.urunId ?? null} />}
+          <div ref={govdeRef} className={`tc-rr1-body${kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${adimPaneli ? '' : ' tc-rr1-palet-dar'}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}${panelDar ? ' tc-rr1-dar' : ''}`}>
+            {kokId && o.yetki.rotaYaz && (adimPaneli
+              ? <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} urunId={yer?.urunId ?? null} kapat={() => { paletYaz(false); }} />
+              : <PaletSeridi ac={() => { paletYaz(true); }} />)}
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
@@ -256,13 +302,13 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>
                 <p className="tc-rr1-ipucu">Bir mamul seç, sonra rotasına adım ekleyip her adıma giren ve çıkan malzemeleri bağla. Ürün kartı Malzemeler ve Hizmetler&apos;de açılır.</p>
-                {o.yetki.rotaYaz && <Dugme tur="birincil" simge="plus" onClick={() => { setSecim({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
+                {o.yetki.rotaYaz && <Dugme tur="birincil" simge="plus" onClick={() => { secimYaz({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
               </div>
             )}
             <div className="tc-rr1-insp-kap">
               {!panelDar && <PanelTutamagi govde={() => govdeRef.current} genislik={panelGenis} yaz={panelGenisYaz} />}
-              <DuzenlemePaneli r={r} />
-              {panelDar && <PanelSeridi r={r} ac={() => { panelDarYaz(false); }} />}
+              <DuzenlemePaneli r={r} acik={panelAcik} kapat={() => { panelAcYaz(false); }} />
+              {panelDar && <PanelSeridi r={r} ac={() => { panelAcYaz(true); }} />}
             </div>
           </div>
           )}
