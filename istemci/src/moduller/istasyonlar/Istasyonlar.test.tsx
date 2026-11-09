@@ -1469,6 +1469,11 @@ describe('yetkinlik matrisi', () => {
     expect((within(tablo).getByLabelText('Deneme Usta T-01 yetkinliği') as HTMLInputElement).checked).toBe(true);
     expect((within(tablo).getByLabelText('Deneme Yeni T-01 yetkinliği') as HTMLInputElement).checked).toBe(false);
     expect(within(tablo).queryByText('K-01')).toBeNull();
+    // 2692: başlık adı yazar, kod altında küçük; tam metin title'da.
+    const sutun = within(tablo).getByRole('columnheader', { name: /Torna Bir/ });
+    expect(within(sutun).getByText('T-01')).toBeTruthy();
+    expect(sutun.getAttribute('title')).toBe('T-01 Torna Bir');
+    expect(within(tablo).getByRole('columnheader', { name: /Torna Hattı/ }).getAttribute('title')).toBe('TORNA Torna Hattı');
     fireEvent.click(within(tablo).getByLabelText('T-01 sütununun hepsi'));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/kisi-yetkinlikleri/toplu', govde: { degisiklikler: [{ kisiId: 7, istasyonId: 10, yetkin: true }] } });
