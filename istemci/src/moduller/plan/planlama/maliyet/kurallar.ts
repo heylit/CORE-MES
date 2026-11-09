@@ -499,7 +499,9 @@ export function genelGiderOrani(D: PlanVerisi, G: GenelGiderHesabi | null, m: st
   // Tek oran girilmemişse genel gider bilinmez (2173-1 a): sıfır ya da varsayılan uydurulmaz. Gizli ayda oran yoktur ama bilinmez de
   // sayılmaz: plan 0 alır (2668 a), sipariş maliyeti "genel gider hariç" kalır ve kâr gösterilmez (2677 b).
   const Y = ymAyar(D);
-  const tek = Y.genelGiderGizli ? 0 : Y.genelGider;
+  // Gizli ayda kalem kipinin tezgâh oranları da sayılmaz: o ay genel gidersiz hesaplanır (2668 a).
+  if (Y.genelGiderGizli) return 0;
+  const tek = Y.genelGider;
   if (maliyetSistemi(D).kip !== 'kalem') return tek;
   const z = G?.tez.find((x) => x.tezgah.id === m);
   if (z && z.amort === null) return null;

@@ -19,6 +19,7 @@ const eksiTl = (x: number | null | undefined): string => (x != null && x < 0 ? `
 // Genel gider oranı gizli ayda maliyet genel gider hariçtir; kâr ondan yüksek çıkacağı için yazılmaz (2677 b).
 const GIZLI = 'gizli';
 const gizliRozet = <Rozet ton="pasif">{GIZLI}</Rozet>;
+const GIZLI_ONERI = 'Fiyat önerisi yok: genel gider oranı gizli';
 
 interface Gosterge { simge: SimgeAdi; ad: string; deger: string; not: string; ton?: 'uyari' | 'hata' | 'tamam' }
 function Gostergeler({ l }: { l: readonly Gosterge[] }) {
@@ -45,7 +46,8 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
   const tutar = top((x) => x.tutar); const maliyet = top((x) => x.top); const gec = top((x) => x.gec); const net = top((x) => x.net);
   const W = b?.W ?? null; const wa = wipAyar(D);
   const gizli = ymAyar(D).genelGiderGizli;
-  const oner = (r: Satir): number | null => { const o = r.x && !r.x.eksik.length ? onerilenFiyat(r.x.top, hedefKarOrani(D, r.s)) : null; const y = o == null ? null : Math.round(o); return y != null && y > 0 ? y : null; };
+  // Gizli ayda öneri yok: genel gider hariç maliyetten çıkan teklif fiyatı düşük kalır (2669 b ile aynı).
+  const oner = (r: Satir): number | null => { if (gizli) return null; const o = r.x && !r.x.eksik.length ? onerilenFiyat(r.x.top, hedefKarOrani(D, r.s)) : null; const y = o == null ? null : Math.round(o); return y != null && y > 0 ? y : null; };
 
   const yaz = (r: Satir, ne: string, ayrinti: string, fn: (s: Siparis) => void, planKoru = false) => {
     komut?.degistir(ne, (t) => { const s = t.D.siparisler.find((x) => x.id === r.s.id); if (!s) return false; fn(s); return true; }, { ayrinti, planKoru });
@@ -116,7 +118,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
             <b className="mono">{tl(o)}</b>
             {o != null && (r.s.gelir == null || Math.abs(r.s.gelir - o) >= 1) && <Dugme simge="check" disabled={!yazilir} title={yazilir ? `Tutarı ${tl(o)} yap` : 'Tutar yazma yetkiniz yok.'} onClick={() => uygula(r, o)}>Uygula</Dugme>}
           </span>
-          {gizli && o != null && <small className="tc-pys-not">genel gider hariç</small>}
+          {gizli && <small className="tc-pys-not">{GIZLI_ONERI}</small>}
           {fark != null && Math.abs(fark) >= 1 && <small className="tc-pys-not">{fark > 0 ? `tutar ${tl(fark)} üstünde` : `tutar ${tl(-fark)} altında`}</small>}
         </>
       );
@@ -153,7 +155,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
       ]} />
       <div className="tc-pys-sira">
         <span className="tc-pys-kucuk tc-pys-sira-ara">Önerilen fiyat = maliyet × (1 + hedef kâr oranı), tam liraya yuvarlanır. Uygula siparişin tutarını değiştirir; gecikme bedeli ve öncelik tutardan yeniden hesaplanır.</span>
-        <Dugme simge="lira" disabled={!yazilir || fiyatsiz.length === 0} title={!yazilir ? 'Tutar yazma yetkiniz yok.' : fiyatsiz.length ? `${String(fiyatsiz.length)} siparişe yazılır` : 'Önerilen fiyatı olan fiyatsız sipariş yok.'} onClick={fiyatsizlaraYaz}>Fiyatsızlara önerilen fiyatı yaz</Dugme>
+        <Dugme simge="lira" disabled={!yazilir || fiyatsiz.length === 0} title={!yazilir ? 'Tutar yazma yetkiniz yok.' : gizli ? GIZLI_ONERI : fiyatsiz.length ? `${String(fiyatsiz.length)} siparişe yazılır` : 'Önerilen fiyatı olan fiyatsız sipariş yok.'} onClick={fiyatsizlaraYaz}>Fiyatsızlara önerilen fiyatı yaz</Dugme>
       </div>
       <Tablo etiket={BASLIK} sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(r) => r.s.id} bosMesaj="Planda sipariş yok." />
       <p className="tc-pys-kucuk">

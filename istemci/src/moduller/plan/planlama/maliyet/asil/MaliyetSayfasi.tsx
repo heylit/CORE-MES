@@ -67,10 +67,12 @@ type Y = (f: (z: Yaz) => boolean) => boolean;
 
 function PlanMaliyetKarti({ b }: { b: MaliyetBaglami }) {
   const t = planMaliyeti(b);
+  // Gizli ayda genel gider 0 değil "gizli" yazılır; 0, "genel gider yok" diye okunurdu.
+  const gizli = ymAyar(b.c.D).genelGiderGizli;
   const sat: [Parameters<typeof Simge>[0]['ad'], string, number | null, string, boolean][] = [
     ['box', 'Malzeme', t.mal, 'kg fiyatı × fire dahil miktar', false], ['rotate', 'Talaş satışı', t.talas ? -t.talas : 0, 'malzemeden düşülür', false],
     ['cpu', 'İşleme', t.isl, 'tezgâh saat maliyeti', true], ['wrench', 'Ayar', t.ayar, 'tezgâh + ayarcı', true],
-    ['layers', 'Genel gider', t.gg, 'tezgâh saati × yük oranı', true], ['truck', 'Fason', t.fas, 'fiyat + taşıma', true],
+    ['layers', 'Genel gider', gizli ? null : t.gg, gizli ? 'Finans oranı bu ay gizli' : 'tezgâh saati × yük oranı', true], ['truck', 'Fason', t.fas, 'fiyat + taşıma', true],
     ['clock', 'Ek mesai', t.mesTop, t.mesTop !== null && t.mesTop - t.mes > 1 ? `${tl(t.mesTop - t.mes)} işe düşmüyor` : 'vardiya × ücret × çarpan', true],
     ['pause', 'Bekleme finansmanı', t.fin, 'yarı mamul', true], ['lira', 'Erken tahsilat', t.tah, 'vade üretim bitince başlar', true],
     ['alert', 'Gecikme bedeli', t.gec, 'sipariş başına bedel × saat', true],
@@ -85,11 +87,11 @@ function PlanMaliyetKarti({ b }: { b: MaliyetBaglami }) {
             {sat.map(([sm, ad, v, alt, amac]) => (
               <tr key={ad}>
                 <td><Simge ad={sm} boyut="k" /> {ad}<AltNot>{alt}</AltNot></td>
-                <td className="tc-pyk-num"><b>{v === null ? tl(null) : tlEksi(v)}</b></td>
+                <td className="tc-pyk-num"><b>{v === null ? (gizli && sm === 'layers' ? <Rozet ton="pasif">gizli</Rozet> : tl(null)) : tlEksi(v)}</b></td>
                 <td>{amac ? <Rozet ton="tamam">evet</Rozet> : <Rozet ton="pasif">sabit</Rozet>}</td>
               </tr>
             ))}
-            <tr className="tc-pyk-toplam"><td><b>Toplam</b></td><td className="tc-pyk-num"><b>{tl(top)}</b></td><td /></tr>
+            <tr className="tc-pyk-toplam"><td><b>Toplam</b>{gizli && <AltNot>genel gider hariç</AltNot>}</td><td className="tc-pyk-num"><b>{tl(top)}</b></td><td /></tr>
           </tbody>
         </table>
       </div>

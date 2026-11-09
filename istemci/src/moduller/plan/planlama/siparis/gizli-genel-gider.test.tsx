@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { genelGiderOrani, maliyetBaglami, siparisMaliyeti } from '../maliyet/kurallar.ts';
 import { ornekCalisma } from '../maliyet/test-verisi.ts';
+import { maliyetIsisi } from '../maliyet/Maliyetler.tsx';
 import { saatiSabitle } from '../test-saati.ts';
 import { KarTablosu } from './KarTablosu.tsx';
 import { kayitliPlan } from './kurallar.ts';
@@ -49,5 +50,38 @@ describe('gizli genel gider (2674, 2677 b)', () => {
     const c = acikAy();
     render(<BildirimSaglayici><KarTablosu c={c} p={kayitliPlan(c)} fg komut={null} /></BildirimSaglayici>);
     expect(screen.queryByText('gizli')).toBeNull();
+  });
+
+  it('kalem kipinde de gizli ayda tezgâh oranı 0 sayılır (2668 a, Maliyet M3)', () => {
+    const ms = { kip: 'kalem', kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }], tez: { T1: { bedel: 120000, omur: 10 }, T2: { bedel: 60000, omur: 10 } } };
+    const c = ornekCalisma({ D: { planTL: { genelGider: null, genelGiderGizli: true }, maliyetSis: ms } });
+    const b = maliyetBaglami(c); const s = c.D.siparisler[0];
+    if (!b || !s) throw new Error('bağlam yok');
+    expect(b.G.tez.some((z) => (z.oran ?? 0) > 0)).toBe(true);
+    expect(genelGiderOrani(c.D, b.G, 'T1')).toBe(0);
+    const m = siparisMaliyeti(b, s);
+    expect(m?.gg).toBe(0);
+    expect(m?.ggGizli).toBe(true);
+  });
+
+  it('gizli ayda fiyat önerisi yoktur; toplu yazma pasif (Maliyet M1)', () => {
+    const c = gizliAy();
+    render(<BildirimSaglayici><KarTablosu c={c} p={kayitliPlan(c)} fg komut={null} /></BildirimSaglayici>);
+    expect(screen.getAllByText('Fiyat önerisi yok: genel gider oranı gizli').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Uygula/ })).toBeNull();
+    expect((screen.getByRole('button', { name: /Fiyatsızlara önerilen fiyatı yaz/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('maliyet ısı tablosunda genel gider ve kâr hücresi "gizli", toplam genel gider hariç (Maliyet M2)', () => {
+    const c = gizliAy();
+    const b = maliyetBaglami(c);
+    if (!b) throw new Error('bağlam yok');
+    const V = maliyetIsisi(b);
+    if (!('satirlar' in V)) throw new Error('ısı yok');
+    const r = V.satirlar[0];
+    expect(r?.h.gg?.v).toBe('gizli');
+    expect(r?.h.kar?.v).toBe('gizli');
+    expect(r?.alt).toContain('genel gider hariç');
+    expect(V.ust?.metin).toContain('Kâr gizli');
   });
 });
