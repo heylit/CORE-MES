@@ -297,3 +297,30 @@ export function temaGuncelle(db: Db, kisiId: number, tema: TemaTercihi, surum: n
     [kisiId, tema, surum],
   );
 }
+
+export interface MiniPanoSatiri { kapali: string[]; acilistaOner: boolean; surum: number }
+
+export function miniPanoOku(db: Db, kisiId: number): Promise<MiniPanoSatiri | null> {
+  return db.tek<MiniPanoSatiri>(
+    'SELECT kapali, acilista_oner AS "acilistaOner", surum FROM profil_mini_pano_tercihi WHERE kisi_id = $1',
+    [kisiId],
+  );
+}
+
+// İlk seçim: aynı anda gelen ikinci ilk seçim satır açmaz, null döner (sürüm çakışması).
+export function miniPanoEkle(db: Db, kisiId: number, kapali: readonly string[], acilistaOner: boolean): Promise<MiniPanoSatiri | null> {
+  return db.tek<MiniPanoSatiri>(
+    `INSERT INTO profil_mini_pano_tercihi (kisi_id, kapali, acilista_oner) VALUES ($1, $2, $3) ON CONFLICT (kisi_id) DO NOTHING
+      RETURNING kapali, acilista_oner AS "acilistaOner", surum`,
+    [kisiId, kapali, acilistaOner],
+  );
+}
+
+// Okunan sürüm tutmazsa satır değişmez, null döner.
+export function miniPanoGuncelle(db: Db, kisiId: number, kapali: readonly string[], acilistaOner: boolean, surum: number): Promise<MiniPanoSatiri | null> {
+  return db.tek<MiniPanoSatiri>(
+    `UPDATE profil_mini_pano_tercihi SET kapali = $2, acilista_oner = $3, surum = surum + 1, guncellendi = now()
+      WHERE kisi_id = $1 AND surum = $4 RETURNING kapali, acilista_oner AS "acilistaOner", surum`,
+    [kisiId, kapali, acilistaOner, surum],
+  );
+}

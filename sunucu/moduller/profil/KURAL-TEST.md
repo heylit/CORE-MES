@@ -15,6 +15,7 @@ Testler: `kurallar.test.ts` (saf), `profil.test.ts` ve `geri-bildirim-merkezi.te
 | Başkasının yazdığını yalnız okuma işlemi olan görür | `başkalarının yazdıklarını yalnız profil.geri-bildirim-oku okur ...` |
 | İK kartından ücret, kimlik, banka alanı dönmez | `İK kartına bağlı kişi kendi kartını ... ücret ve kimlik alanı dönmez` |
 | PRF-5 Tema kişinindir: dört değer (light, dark, kontrast, gun); kayıt yoksa null ve sürüm 0; sürümle yazılır | `PRF-5: kaydı olmayan kişide tema null ve sürüm 0`; `PRF-5: tema oturum ister ...`; `PRF-5: tema seçimi sürümle yazılır ...`; `PRF-5: tema gövdesi başka kişiyi seçemez ...`; `profil_tema_tercihi_tema_gecerli` kısıtı |
+| PRF-6 Mini pano seçimi kişinindir: kapatılanlar tutulur, kayıt yoksa hepsi açık ve öneri kapalı, sürüm 0; sürümle yazılır; en çok 50 anahtar | `PRF-6: kaydı olmayan kişide hepsi açık`; `PRF-6: mini pano seçimi oturum ister ...`; `PRF-6: mini pano seçimi sürümle yazılır ...`; `PRF-6: mini pano gövdesi başka kişiyi seçemez ...`; `profil_mini_pano_tercihi_kapali_sinir` kısıtı |
 | GBM-1 Takip satırı olmayan kayıt yenidir | `GBM-1 ...`; `hareketler yalnız eklenir; takip kayıtsız açılmaz` |
 | GBM-2 Yanıt açık kaydı yanıtlandıya taşır; çözülmüş ve kapanmış değişmez | `GBM-2 ...`; `GBM-2/3: yanıt rol adıyla imzalanır ...` |
 | GBM-3 İmza: yönetici olmayan rollerden sıraca ilkinin adı, yoksa "Yönetim" (karar 2192-2 b) | `GBM-3 ...`; `GBM-2/3 ...` |

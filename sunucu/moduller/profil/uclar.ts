@@ -2,11 +2,11 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   geriBildirimAyrintiCevabi, geriBildirimGonderCevabi, geriBildirimGonderGovdesi, geriBildirimIdParametresi, geriBildirimKategoriEkleGovdesi,
   geriBildirimKategoriGuncelleGovdesi, geriBildirimListeCevabi, geriBildirimListeSorgusu, geriBildirimNotGovdesi, geriBildirimOzetiCevabi,
-  geriBildirimSecenekleriCevabi, geriBildirimTakipGovdesi, geriBildirimYanitlaGovdesi, profilCevabi, temaCevabi, temaSecGovdesi,
+  geriBildirimSecenekleriCevabi, geriBildirimTakipGovdesi, geriBildirimYanitlaGovdesi, miniPanoCevabi, miniPanoSecGovdesi, profilCevabi, temaCevabi, temaSecGovdesi,
 } from '#paylasilan/sozlesme/profil.ts';
 import {
   geriBildirimAyrinti, geriBildirimGonder, geriBildirimKategoriEkle, geriBildirimKategoriGuncelle, geriBildirimListesi, geriBildirimNotEkle,
-  geriBildirimOzeti, geriBildirimSecenekleri, geriBildirimTakipDegistir, geriBildirimYanitla, profilOku, temaOku, temaSec,
+  geriBildirimOzeti, geriBildirimSecenekleri, geriBildirimTakipDegistir, geriBildirimYanitla, miniPanoOku, miniPanoSec, profilOku, temaOku, temaSec,
 } from './servis.ts';
 
 // Profil ve şikayet/istek/öneri kutusu her çalışanındır: okuma ve gönderme yalnız oturum ister, kişi her zaman oturumdan
@@ -69,5 +69,12 @@ export const uclar = [
     yontem: 'POST', yol: '/profil/tema-sec', yetki: 'oturum', tekrarKorumali: true,
     govde: temaSecGovdesi, cevap: temaCevabi,
     isle: ({ db, kullanici, govde }) => temaSec(db, kullanici, govde),
+  }),
+  // Mini pano seçimi kişinin kendi tercihidir (2425-3 a): okuma ve seçme yalnız oturum ister, kişi oturumdan gelir.
+  uc({ yontem: 'GET', yol: '/profil/mini-pano', yetki: 'oturum', cevap: miniPanoCevabi, isle: ({ db, kullanici }) => miniPanoOku(db, kullanici) }),
+  uc({
+    yontem: 'POST', yol: '/profil/mini-pano-sec', yetki: 'oturum', tekrarKorumali: true,
+    govde: miniPanoSecGovdesi, cevap: miniPanoCevabi,
+    isle: ({ db, kullanici, govde }) => miniPanoSec(db, kullanici, govde),
   }),
 ];

@@ -8,7 +8,7 @@ import type {
   GeriBildirim, GeriBildirimAyrintiCevabi, GeriBildirimDurumu, GeriBildirimGonderGovdesi, GeriBildirimKategoriEkleGovdesi,
   GeriBildirimKategoriGuncelleGovdesi, GeriBildirimKonusu, GeriBildirimListeSatiri, GeriBildirimNotGovdesi, GeriBildirimOzetiCevabi,
   GeriBildirimSecenekleriCevabi, GeriBildirimTakipGovdesi, GeriBildirimTuru, GeriBildirimYanitlaGovdesi, KendiGeriBildirimi,
-  ProfilCevabi, TemaCevabi, TemaSecGovdesi,
+  MiniPanoCevabi, MiniPanoSecGovdesi, ProfilCevabi, TemaCevabi, TemaSecGovdesi,
 } from '#paylasilan/sozlesme/profil.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
@@ -16,7 +16,7 @@ import { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, kisininPersonel
 import { kisiAdlari, kisiGorevi, kisilerinIslemleri, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
 import {
   anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari,
-  temaCevabiYap, yanitImzasi, yanitSonrasiDurum,
+  miniPanoCevabiYap, temaCevabiYap, yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -249,4 +249,18 @@ export async function temaSec(db: Db, kullanici: Kullanici, govde: TemaSecGovdes
     : await s.temaGuncelle(db, kullanici.id, govde.tema, govde.surum);
   if (yazilan === null) throw eskiSurum();
   return temaCevabiYap(yazilan);
+}
+
+// Mini pano seçimi de yalnız oturumdaki kişinindir (PRF-6); tema gibi sürümle yazılır.
+export async function miniPanoOku(db: Db, kullanici: Kullanici): Promise<MiniPanoCevabi> {
+  return miniPanoCevabiYap(await s.miniPanoOku(db, kullanici.id));
+}
+
+export async function miniPanoSec(db: Db, kullanici: Kullanici, govde: MiniPanoSecGovdesi): Promise<MiniPanoCevabi> {
+  const kapali = [...govde.kapali].sort();
+  const yazilan = govde.surum === 0
+    ? await s.miniPanoEkle(db, kullanici.id, kapali, govde.acilistaOner)
+    : await s.miniPanoGuncelle(db, kullanici.id, kapali, govde.acilistaOner, govde.surum);
+  if (yazilan === null) throw eskiSurum();
+  return miniPanoCevabiYap(yazilan);
 }

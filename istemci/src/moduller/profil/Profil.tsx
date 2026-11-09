@@ -3,12 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { DurumKutusu, Dugme, Kart, ParolaPenceresi, PinPenceresi, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
+import { AcKapa, DurumKutusu, Dugme, Kart, ParolaPenceresi, PinPenceresi, Rozet, Simge, type RozetTonu } from '../../ortak/arayuz/index.ts';
+import { miniPanoDestekli } from '../../ortak/arayuz/MiniPano.tsx';
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { tabanTema, useTemaTercihi, type TemaTercihi } from '../../ortak/veri/tema.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GeriBildirimPenceresi } from './GeriBildirimPenceresi.tsx';
+import { useMiniPanoSec, useMiniPanoTercihi } from './mini-pano-tercihi.tsx';
 import { OturumlarPenceresi } from './OturumlarPenceresi.tsx';
 import { SaatPenceresi } from './SaatPenceresi.tsx';
 import { BOS, DURUM_ADI, DURUM_TONU, KONU_ADI, TUR_ADI, TUR_TONU, basHarfler, kidemMetni, sayiMetni, tarihMetni, zamanMetni } from './gorunum.ts';
@@ -224,6 +226,47 @@ function GorunumKarti() {
   );
 }
 
+// Mini panolar (2425-3 a): kişi yetkisinin açtığı panolardan görmek istemediğini kapatır. Seçim hesapta, her cihazda geçerli.
+function MiniPanoKarti() {
+  const { kisiId, yetkili, tercih } = useMiniPanoTercihi();
+  const sec = useMiniPanoSec(kisiId);
+  if (yetkili.length === 0) return null;
+  const kapali = new Set(tercih?.kapali ?? []);
+  const yaz = (yeniKapali: ReadonlySet<string>, acilistaOner: boolean) => {
+    if (tercih === undefined) return;
+    sec.mutate({ kapali: [...yeniKapali].sort(), acilistaOner, surum: tercih.surum });
+  };
+  const degistir = (anahtar: string, acik: boolean) => {
+    const yeni = new Set(kapali);
+    if (acik) yeni.delete(anahtar); else yeni.add(anahtar);
+    yaz(yeni, tercih?.acilistaOner ?? false);
+  };
+  return (
+    <Kart baslik="Mini panolarım" simge="grid" baslikEki={<span className="tc-profil-soluk">Bu hesapla girdiğiniz her ekranda</span>}>
+      <p className="tc-profil-soluk tc-profil-mp-not">
+        {miniPanoDestekli()
+          ? 'Açık olanlar üst çubuktaki mini pano düğmesiyle küçük pencerede açılır; pencere öteki programların üstünde durur.'
+          : 'Mini pano Chrome ya da Edge tarayıcısında açılır.'}
+      </p>
+      <ul className="tc-profil-mp-liste">
+        {yetkili.map((p) => (
+          <li key={p.anahtar} className="tc-profil-mp-satir">
+            <span className="tc-profil-mp-simge" aria-hidden="true"><Simge ad={p.simge} /></span>
+            <strong className="tc-profil-mp-ad">{p.baslik}</strong>
+            <AcKapa etiket={`${p.baslik} mini panosu`} acik={!kapali.has(p.anahtar)} disabled={tercih === undefined || sec.isPending} degistir={(a) => degistir(p.anahtar, a)} />
+          </li>
+        ))}
+        <li className="tc-profil-mp-satir">
+          <span className="tc-profil-mp-simge" aria-hidden="true"><Simge ad="bell" /></span>
+          <strong className="tc-profil-mp-ad">Oturum açınca mini panoyu öner</strong>
+          <AcKapa etiket="Oturum açınca mini panoyu öner" acik={tercih?.acilistaOner === true} disabled={tercih === undefined || sec.isPending} degistir={(a) => yaz(kapali, a)} />
+        </li>
+      </ul>
+      {sec.isError && <p className="tc-profil-hata" role="alert">Seçim kaydedilemedi; sayfayı yenileyip yeniden deneyin.</p>}
+    </Kart>
+  );
+}
+
 function GeriBildirimKarti({ veri }: { veri: ProfilCevabi }) {
   const [acik, acikYaz] = useState(false);
   return (
@@ -276,6 +319,7 @@ export function Profil() {
         <IletisimKarti veri={veri} />
         <HesapKarti />
         <GorunumKarti />
+        <MiniPanoKarti />
       </div>
       <GeriBildirimKarti veri={veri} />
     </div>

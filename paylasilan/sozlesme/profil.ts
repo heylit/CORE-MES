@@ -180,6 +180,23 @@ export const temaCevabi = z.object({ tema: z.enum(TEMALAR).nullable(), surum: z.
 // surum okunan sürümdür; ilk seçimde 0.
 export const temaSecGovdesi = z.object({ tema: z.enum(TEMALAR), surum: z.number().int().min(0) }).strict();
 
+// Mini pano seçimi (2425-3 a): kişi kendi profilinde hangi mini panoyu görmek istemediğini seçer. Kapatılanlar tutulur:
+// sonradan gelen yeni pano kendiliğinden açık olur; kaydı olmayan kişide hepsi açık, sürüm 0. Pano anahtarlarını
+// istemcideki modüller bildirir; sunucu yalnız biçimi denetler, yetki her panonun kendi veri ucundadır.
+export const MINI_PANO_SINIRI = 50;
+const miniPanoAnahtari = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(64);
+export const miniPanoCevabi = z.object({
+  kapali: z.array(z.string()),
+  acilistaOner: z.boolean(),
+  surum: z.number().int().min(0),
+});
+// surum okunan sürümdür; ilk seçimde 0.
+export const miniPanoSecGovdesi = z.object({
+  kapali: z.array(miniPanoAnahtari).max(MINI_PANO_SINIRI).refine((l) => new Set(l).size === l.length, 'Aynı pano iki kez yazılamaz'),
+  acilistaOner: z.boolean(),
+  surum: z.number().int().min(0),
+}).strict();
+
 export type GeriBildirimGonderGovdesi = z.input<typeof geriBildirimGonderGovdesi>;
 export type GeriBildirim = z.output<typeof geriBildirimSemasi>;
 export type GeriBildirimListeSorgusu = z.input<typeof geriBildirimListeSorgusu>;
@@ -198,4 +215,6 @@ export type GeriBildirimOzetiCevabi = z.output<typeof geriBildirimOzetiCevabi>;
 export type KendiGeriBildirimi = z.output<typeof kendiGeriBildirimSemasi>;
 export type ProfilCevabi = z.output<typeof profilCevabi>;
 export type TemaCevabi = z.output<typeof temaCevabi>;
+export type MiniPanoCevabi = z.output<typeof miniPanoCevabi>;
+export type MiniPanoSecGovdesi = z.output<typeof miniPanoSecGovdesi>;
 export type TemaSecGovdesi = z.input<typeof temaSecGovdesi>;

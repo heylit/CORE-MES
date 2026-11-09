@@ -30,6 +30,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /profil/geri-bildirim-kategorileri/:id/guncelle': 'profil.geri-bildirim-kategori-yaz',
   'GET /profil/tema': 'oturum',
   'POST /profil/tema-sec': 'oturum',
+  'GET /profil/mini-pano': 'oturum',
+  'POST /profil/mini-pano-sec': 'oturum',
 };
 
 describe('profil uç yetkileri (gerçek giriş, gerçek PostgreSQL)', () => {
