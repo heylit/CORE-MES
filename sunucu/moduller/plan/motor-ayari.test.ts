@@ -15,6 +15,15 @@ describe('plan: motor ayarı kuralı', () => {
     assert.deepEqual(motorAyariCoz({ kural: 'kar', eksikStok: 'dur' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'dur' });
   });
 
+  test('2523 a: paralel bölme varsayılan açık ve 3 pay; eski sürümde yoksa varsayılan, pay 2-5 dışı ya da kesirliyse varsayılan', () => {
+    assert.deepEqual([MOTOR_AYARI_VARSAYILAN.bolmeKip, MOTOR_AYARI_VARSAYILAN.bolmeMaks], ['otomatik', 3]);
+    assert.deepEqual(motorAyariCoz({ amac: 'sirali' }), MOTOR_AYARI_VARSAYILAN);
+    assert.deepEqual(motorAyariCoz({ bolmeKip: 'kapali', bolmeMaks: 5 }), { ...MOTOR_AYARI_VARSAYILAN, bolmeKip: 'kapali', bolmeMaks: 5 });
+    for (const bolmeMaks of [1, 6, 2.5, '4']) assert.equal(motorAyariCoz({ bolmeMaks }).bolmeMaks, 3, String(bolmeMaks));
+    assert.equal(motorAyariCoz({ bolmeKip: 'bol' }).bolmeKip, 'otomatik');
+    assert.deepEqual(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { bolmeMaks: 2 }), { ...MOTOR_AYARI_VARSAYILAN, bolmeMaks: 2 });
+  });
+
   test('birleştirme: verilen alan güncelin üstüne yazılır; değişen yoksa boş', () => {
     assert.deepEqual(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { eksikStok: 'dur' }), { ...MOTOR_AYARI_VARSAYILAN, eksikStok: 'dur' });
     assert.equal(motorAyariBirlestir(MOTOR_AYARI_VARSAYILAN, { kural: 'atcs' }), null);
