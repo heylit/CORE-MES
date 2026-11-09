@@ -1,20 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { TUM_IKINCI_MENU_TANIMLARI } from '../../ortak/rota/ikinci-menu.ts';
 import type { GeometriAnalizCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriOzellik, GeometriOzellikCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { CALISMA_ADLARI, CALISMALAR, calismaYolu } from './calismalar.ts';
 import { rotalar } from './rotalar.tsx';
 
-vi.mock('./Goruntu3B.tsx', () => ({
-  default: ({ vurgu }: { vurgu?: { capMm: number; konum: readonly number[] } | null }) => (
-    <>
-      <div>görüntü</div>
-      {vurgu ? <div>{`vurgu Ø${String(vurgu.capMm)} @ ${vurgu.konum.join(',')}`}</div> : null}
-    </>
-  ),
-}));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+const kurulum = vi.hoisted(() => ({ sayi: 0 }));
+vi.mock('./Goruntu3B.tsx', async () => {
+  const { useEffect: etki } = await import('react');
+  return {
+    default: function Sahte({ vurgu, onizleme }: { vurgu?: { capMm: number; konum: readonly number[] } | null; onizleme?: { etiket: string; delikler: readonly unknown[] } | null }) {
+      // Görüntünün kaç kez kurulduğu: çalışma değişince yeniden kurulmamalı (2396).
+      etki(() => { kurulum.sayi += 1; }, []);
+      return (
+        <>
+          <div>görüntü</div>
+          {vurgu ? <div>{`vurgu Ø${String(vurgu.capMm)} @ ${vurgu.konum.join(',')}`}</div> : null}
+          {onizleme ? <div>{`önizleme: ${onizleme.etiket}`}</div> : null}
+        </>
+      );
+    },
+  };
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); kurulum.sayi = 0; });
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown; basliklar: Record<string, string> }
@@ -32,6 +44,19 @@ function sunucuKur(yollar: Record<string, (govde: unknown, yol: string) => Respo
   return istekler;
 }
 
+const GEOMETRI_IKINCI_MENU = TUM_IKINCI_MENU_TANIMLARI.find((t) => t.kok === '/geometri')!;
+
+// Kabuğun ikinci menüsü gibi: bağlantı yalnız maddenin yolunu açar, sorgu taşımaz.
+function AltMenu() {
+  return <nav aria-label="Alt menü">{GEOMETRI_IKINCI_MENU.gruplar.flatMap((g) => g.maddeler).map((m) => <Link key={m.anahtar} to={m.yol}>{m.baslik}</Link>)}</nav>;
+}
+const adresIzi = { son: '' };
+function Adres() {
+  const { pathname, search } = useLocation();
+  useEffect(() => { adresIzi.son = `${pathname}${search}`; }, [pathname, search]);
+  return null;
+}
+
 function ac(adres = '/geometri') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(
@@ -39,6 +64,8 @@ function ac(adres = '/geometri') {
       <BildirimSaglayici>
         <MemoryRouter initialEntries={[adres]}>
           <Routes>{rotalar.map((r) => <Route key={r.yol} path={r.yol} element={<r.ekran />} />)}</Routes>
+          <AltMenu />
+          <Adres />
         </MemoryRouter>
       </BildirimSaglayici>
     </QueryClientProvider>,
@@ -106,12 +133,19 @@ describe('3D Atölyesi', () => {
     expect(screen.getByText('8.000 mm³')).toBeTruthy();
     expect(screen.getByText('Ø 22,4 x 40 mm')).toBeTruthy();
     expect(await screen.findByText('görüntü')).toBeTruthy();
+    expect(screen.getByText('önizleme: dış kutu ve döndürülmüş kutu')).toBeTruthy();
+    // Ham önerisi kendi alt menüsündedir; Analiz sayfası ham okumaz.
+    expect(screen.queryByLabelText(/İşleme payı/)).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'Ham önerisi' }));
     expect(await screen.findByText('46 x 26 x 16 mm')).toBeTruthy();
     expect(screen.getByText('Boş bırakılırsa sistem ayarı: 3 mm')).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/İşleme payı/), { target: { value: '2' } });
     expect(await screen.findByText('44 x 24 x 14 mm')).toBeTruthy();
     expect(screen.getByText('Ø 25 x 3.000 mm')).toBeTruthy();
     expect(screen.getByText('Kesim boyu 44 mm')).toBeTruthy();
+    // Önizleme ilk öneridir; başka satır seçilince o önizlenir.
+    expect(await screen.findByText(/^önizleme: Yuvarlak çubuk Ø 25 x 3.000 mm/)).toBeTruthy();
+    expect(screen.getByText(/pay her yüzde eşit varsayılır/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Kalite'), { target: { value: 'C45' } });
     await waitFor(() => expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41?payMm=2&kalite=C45')).toBe(true));
     expect(istekler.some((i) => i.yol === '/geometri/ham-onerisi/41')).toBe(true);
@@ -216,8 +250,10 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller/41/dosya': DOSYA,
       'GET /geometri/ozellikler/41': () => json(200, OZELLIK),
     });
-    ac('/geometri?rev=41');
+    ac('/geometri/ozellikler?rev=41');
     expect(await screen.findByText('Özellikler (öneri)')).toBeTruthy();
+    // Önizleme: konumu olan bütün delikler.
+    expect(await screen.findByText(/^önizleme: \d+ delik$/)).toBeTruthy();
     expect(await screen.findByText('5 özellik')).toBeTruthy();
     expect(screen.getByText('3 delik')).toBeTruthy();
     expect(screen.getByText('Ø10 geçiş · 20 mm')).toBeTruthy();
@@ -246,7 +282,7 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller/41/dosya': DOSYA,
       'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: null, ozellikler: null }),
     });
-    ac('/geometri?rev=41');
+    ac('/geometri/ozellikler?rev=41');
     expect(await screen.findByText(/yüzleri okunamadı; özellik tanınamadı/)).toBeTruthy();
     cleanup();
     sunucuKur({
@@ -255,7 +291,7 @@ describe('3D Atölyesi', () => {
       'GET /geometri/modeller/41/dosya': DOSYA,
       'GET /geometri/ozellikler/41': () => json(200, { revizyonId: 41, motor: 'libcascade@3.1.0', ozellikler: [] }),
     });
-    ac('/geometri?rev=41');
+    ac('/geometri/ozellikler?rev=41');
     expect(await screen.findByText('Tanınan delik, pah ya da radyüs yok.')).toBeTruthy();
     cleanup();
     const ikinci = sunucuKur({
@@ -263,9 +299,44 @@ describe('3D Atölyesi', () => {
       'GET /geometri/analizler/42': () => json(200, { ...ANALIZ, revizyonId: 42, durum: 'calisiyor' }),
       'GET /geometri/modeller/42/dosya': DOSYA,
     });
-    ac('/geometri?rev=42');
-    // Analiz kartı eski analizi gösterir; özellikler ve montaj kartı (2113) hesap bitene kadar bekler.
-    expect(await screen.findAllByText('Hesap sürüyor; sonuç gelince burada görünür.')).toHaveLength(2);
+    ac('/geometri/ozellikler?rev=42');
+    // Özellikler ve montaj kartı (2113) hesap bitene kadar bekler.
+    expect(await screen.findAllByText('Hesap sürüyor; sonuç gelince burada görünür.')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('link', { name: 'Montaj' }));
+    expect(await screen.findAllByText('Hesap sürüyor; sonuç gelince burada görünür.')).toHaveLength(1);
     expect(ikinci.some((i) => i.yol.startsWith('/geometri/ozellikler') || i.yol.startsWith('/geometri/montaj'))).toBe(false);
+  });
+
+  it('2396: ikinci menü maddeleri çalışma listesiyle aynı sırada, hepsi sayfa.geometri', () => {
+    const maddeler = GEOMETRI_IKINCI_MENU.gruplar.flatMap((g) => g.maddeler);
+    expect(maddeler.map((m) => m.yol)).toEqual(CALISMA_ADLARI.map(calismaYolu));
+    expect(maddeler.map((m) => m.baslik)).toEqual(CALISMA_ADLARI.map((a) => CALISMALAR[a].baslik));
+    expect(new Set(maddeler.map((m) => m.islem))).toEqual(new Set(['sayfa.geometri']));
+  });
+
+  it('2396: alt menü geçişinde seçili model korunur, görüntü yeniden kurulmaz; tanınmayan çalışma köke döner', async () => {
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/ozellikler/41': () => json(200, OZELLIK),
+      'GET /geometri/montaj/41': () => json(200, { revizyonId: 41, neden: 'montaj-yok', dugumler: null, bilesenler: [] }),
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText('8.000 mm³')).toBeTruthy();
+    await screen.findByText('görüntü');
+    expect(kurulum.sayi).toBe(1);
+    fireEvent.click(screen.getByRole('link', { name: 'Montaj' }));
+    await waitFor(() => expect(adresIzi.son).toBe('/geometri/montaj?rev=41'));
+    fireEvent.click(screen.getByRole('link', { name: 'Özellikler' }));
+    expect(await screen.findByText('Özellikler (öneri)')).toBeTruthy();
+    expect(adresIzi.son).toBe('/geometri/ozellikler?rev=41');
+    expect(screen.queryByText('8.000 mm³')).toBeNull();
+    expect(kurulum.sayi).toBe(1);
+    cleanup();
+    sessionStorage.clear();
+    sunucuKur({ 'GET /geometri/modeller': () => json(200, LISTE) });
+    ac('/geometri/yok?rev=41');
+    await waitFor(() => expect(adresIzi.son).toBe('/geometri?rev=41'));
   });
 });

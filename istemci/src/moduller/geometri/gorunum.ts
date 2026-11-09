@@ -298,3 +298,123 @@ export function tozKg(alanMm2: number, kalinlikUm: number | null, yogunluk: numb
 }
 export const tozMetni = (kg: number): string => `${bicim(2).format(kg)} kg`;
 export const m2Kisa = (mm2: number): string => `${bicim(3).format(mm2 / 1e6)} m²`;
+
+// Önizleme (2396): çalışmanın sonucu modelin üstünde çizilir; ölçü sunucudandır, yer (merkez) görüntünün ağından bulunur, çünkü sözleşme
+// döndürülmüş kutunun ve kapsayan dairenin merkezini taşımaz. Yalnız görsel yardımdır (yaklaşık); hesap ve kesim planı değildir.
+export type Nokta2 = readonly [number, number];
+const ic3 = (p: ArrayLike<number>, i: number, e: Yon3): number => (p[i] ?? 0) * e[0] + (p[i + 1] ?? 0) * e[1] + (p[i + 2] ?? 0) * e[2];
+
+// Noktaların (x, y, z dizisi) her eksen üzerindeki izdüşüm aralığı.
+export function eksenAraliklari(noktalar: ArrayLike<number>, eksenler: readonly Yon3[]): { en: number[]; ust: number[] } | null {
+  if (noktalar.length < 3) return null;
+  const en = eksenler.map(() => Infinity), ust = eksenler.map(() => -Infinity);
+  for (let i = 0; i + 2 < noktalar.length; i += 3) {
+    eksenler.forEach((e, k) => {
+      const d = ic3(noktalar, i, e);
+      if (d < en[k]!) en[k] = d;
+      if (d > ust[k]!) ust[k] = d;
+    });
+  }
+  return { en, ust };
+}
+
+// Eksen katsayılarından model koordinatında nokta: toplam (katsayı x eksen).
+export function eksendenNokta(katsayilar: readonly number[], eksenler: readonly Yon3[]): [number, number, number] {
+  const p: [number, number, number] = [0, 0, 0];
+  eksenler.forEach((e, k) => { const c = katsayilar[k] ?? 0; p[0] += c * e[0]; p[1] += c * e[1]; p[2] += c * e[2]; });
+  return p;
+}
+
+function zarf(noktalar: readonly Nokta2[]): Nokta2[] {
+  const iz = [...noktalar].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (iz.length < 3) return iz;
+  const yon = (o: Nokta2, a: Nokta2, b: Nokta2): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const alt: Nokta2[] = [], ust: Nokta2[] = [];
+  for (const p of iz) { while (alt.length >= 2 && yon(alt[alt.length - 2]!, alt[alt.length - 1]!, p) <= 0) alt.pop(); alt.push(p); }
+  for (let i = iz.length - 1; i >= 0; i--) { const p = iz[i]!; while (ust.length >= 2 && yon(ust[ust.length - 2]!, ust[ust.length - 1]!, p) <= 0) ust.pop(); ust.push(p); }
+  return [...alt.slice(0, -1), ...ust.slice(0, -1)];
+}
+
+export interface Daire { x: number; y: number; r: number }
+const icinde = (d: Daire, p: Nokta2): boolean => Math.hypot(p[0] - d.x, p[1] - d.y) <= d.r * (1 + 1e-9) + 1e-9;
+const ikiden = (a: Nokta2, b: Nokta2): Daire => ({ x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, r: Math.hypot(a[0] - b[0], a[1] - b[1]) / 2 });
+function ucten(a: Nokta2, b: Nokta2, c: Nokta2): Daire {
+  const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+  if (Math.abs(d) < 1e-12) return [ikiden(a, b), ikiden(a, c), ikiden(b, c)].reduce((en, x) => (x.r > en.r ? x : en));
+  const a2 = a[0] ** 2 + a[1] ** 2, b2 = b[0] ** 2 + b[1] ** 2, c2 = c[0] ** 2 + c[1] ** 2;
+  const x = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d;
+  const y = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+  return { x, y, r: Math.hypot(a[0] - x, a[1] - y) };
+}
+
+// Noktaları kapsayan en küçük daire (Welzl, zarf üzerinde); sunucunun çubuk çapı hesabıyla aynı yöntem. Çubuk hamının merkezi budur,
+// kutu merkezi değildir (L ya da eksantrik kesitte ikisi ayrılır).
+export function kapsayanDaire(noktalar: readonly Nokta2[]): Daire | null {
+  const z = zarf(noktalar);
+  if (z.length === 0) return null;
+  let d: Daire = { x: z[0]![0], y: z[0]![1], r: 0 };
+  for (let i = 1; i < z.length; i++) {
+    if (icinde(d, z[i]!)) continue;
+    d = { x: z[i]![0], y: z[i]![1], r: 0 };
+    for (let j = 0; j < i; j++) {
+      if (icinde(d, z[j]!)) continue;
+      d = ikiden(z[i]!, z[j]!);
+      for (let k = 0; k < j; k++) if (!icinde(d, z[k]!)) d = ucten(z[i]!, z[j]!, z[k]!);
+    }
+  }
+  return d;
+}
+
+// Önizlemede çizilecek katı: eksenler model koordinatında (birim), boyut her eksende (mm), merkez model koordinatında.
+export interface OnizlemeKatisi { sekil: 'kutu' | 'silindir' | 'altigen'; merkez: [number, number, number]; eksenler: readonly Yon3[]; boyut: [number, number, number] }
+
+const sirala = (x: readonly number[]): [number, number, number] => {
+  const s = [...x].sort((a, b) => b - a);
+  return [s[0] ?? 0, s[1] ?? 0, s[2] ?? 0];
+};
+
+// Ham önerisinin katısı: döndürülmüş kutunun eksenlerinde (a uzun eksen). Çubuk ve altıgen a çevresinde, merkezleri dik düzlemde
+// kapsayan dairenin merkezidir; lama, levha ve blok kutudur, merkezi izdüşüm aralıklarının ortasıdır. Pay her yüzde eşit varsayılır.
+export function hamKatisi(o: HamStokOnerisi, yon: readonly Yon3[], noktalar: ArrayLike<number>): OnizlemeKatisi | null {
+  const ar = eksenAraliklari(noktalar, yon);
+  if (ar === null || yon.length !== 3) return null;
+  const orta = ar.en.map((e, k) => (e + ar.ust[k]!) / 2);
+  const olcu = (k: string): number => o.olcu[k] ?? 0;
+  if (o.form === 'cubuk' || o.form === 'altigen') {
+    const iz: Nokta2[] = [];
+    // Büyük ağda her noktayı almak gerekmez: zarf için 20 000 civarı yeter.
+    const adim = Math.max(1, Math.floor(noktalar.length / 3 / 20000)) * 3;
+    for (let i = 0; i + 2 < noktalar.length; i += adim) iz.push([ic3(noktalar, i, yon[1]!), ic3(noktalar, i, yon[2]!)]);
+    const d = kapsayanDaire(iz);
+    if (d === null) return null;
+    const boy = o.kesimBoyuMm ?? olcu('l');
+    const cap = o.form === 'cubuk' ? olcu('d') : olcu('s');
+    return { sekil: o.form === 'cubuk' ? 'silindir' : 'altigen', merkez: eksendenNokta([orta[0]!, d.x, d.y], yon), eksenler: yon, boyut: [boy, cap, cap] };
+  }
+  const boyut: [number, number, number] = o.form === 'lama' ? [o.kesimBoyuMm ?? olcu('l'), ...sirala([olcu('a'), olcu('b')]).slice(0, 2) as [number, number]]
+    : o.form === 'levha' ? [o.kesimBoyuMm ?? olcu('l'), ...sirala([olcu('w'), olcu('t')]).slice(0, 2) as [number, number]]
+      : sirala([olcu('a'), olcu('b'), olcu('h')]);
+  return { sekil: 'kutu', merkez: eksendenNokta(orta, yon), eksenler: yon, boyut };
+}
+
+export const BIRIM_EKSENLER: readonly Yon3[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+
+// Analizin iki kutusu: eksenlere hizalı dış kutu ve döndürülmüş kutu; ikisi de ağın izdüşüm aralığının ortasında.
+export function analizKatilari(obbYon: readonly Yon3[], obb: readonly [number, number, number], kutu: readonly [number, number, number], noktalar: ArrayLike<number>): OnizlemeKatisi[] {
+  const sonuc: OnizlemeKatisi[] = [];
+  const dis = eksenAraliklari(noktalar, BIRIM_EKSENLER);
+  if (dis !== null) sonuc.push({ sekil: 'kutu', merkez: eksendenNokta(dis.en.map((e, k) => (e + dis.ust[k]!) / 2), BIRIM_EKSENLER), eksenler: BIRIM_EKSENLER, boyut: [...kutu] });
+  const don = obbYon.length === 3 ? eksenAraliklari(noktalar, obbYon) : null;
+  if (don !== null) sonuc.push({ sekil: 'kutu', merkez: eksendenNokta(don.en.map((e, k) => (e + don.ust[k]!) / 2), obbYon), eksenler: obbYon, boyut: [...obb] });
+  return sonuc;
+}
+
+// Standart görünümler: kameranın modele baktığı yön, görüntü koordinatında (Y yukarı; model Z yukarıdan X ekseni çevresinde döner,
+// modelin -Y yönü görüntünün +Z'sidir). Ön: modelin -Y'sinden, üst: +Z'den, sağ: +X'ten.
+export const GORUNUMLER = {
+  on: { baslik: 'Ön', yon: [0, 0, 1] },
+  ust: { baslik: 'Üst', yon: [0, 1, 0.0001] },
+  sag: { baslik: 'Sağ', yon: [1, 0, 0] },
+  izo: { baslik: 'İzometrik', yon: [1, 1, 1] },
+} as const satisfies Record<string, { baslik: string; yon: Yon3 }>;
+export type GorunumAdi = keyof typeof GORUNUMLER;

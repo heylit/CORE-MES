@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import type {
   GeometriAnalizCevabi, GeometriDurumu, GeometriGuncelRevizyonCevabi, GeometriHamCevabi, GeometriModelListeCevabi, GeometriModelSatiri, GeometriOzellik,
   GeometriOzellikCevabi, HamStokOnerisi,
@@ -8,13 +8,15 @@ import type {
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
+import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { CALISMALAR, calismaOku, KOK, type CalismaAdi } from './calismalar.ts';
 import {
-  agirlikKg, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
+  agirlikKg, analizKatilari, hamKatisi, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
   uzunluk, yogunlukBicimi, yogunlukOku, type Yon3,
 } from './gorunum.ts';
-import type { ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
+import type { Onizleme, ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
 import { MontajKarti } from './MontajKarti.tsx';
 import { YuzeyKarti, type YuzeySahnesi } from './YuzeyKarti.tsx';
 import './geometri.css';
@@ -49,6 +51,9 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
     placeholderData: keepPreviousData,
     refetchInterval: (s) => (s.state.data?.satirlar.some((x) => suruyorMu(x.durum)) ? YENILEME_MS : false),
   });
+  // Listedeki önizleme karesi (2396): malzemenin küçük resmi, sayfa için tek istekle; resmi olmayan satırda yer tutucu ikon
+  // (kare yokken revizyon başına istek atılıp 404 alınmaz).
+  const kareler = useKucukResimler('malzemeler', sorgu.data?.satirlar.map((s) => s.malzemeNo) ?? []);
   return (
     <section className="tc-g3b-liste" aria-label="Modeller">
       <div className="tc-g3b-suzgec">
@@ -68,7 +73,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                   {sorgu.data.satirlar.map((s) => (
                     <li key={`${String(s.malzemeNo)}:${String(s.revizyonId)}`}>
                       <button type="button" className="tc-g3b-satir" aria-current={s.revizyonId === secili ? 'true' : undefined} onClick={() => sec(s)}>
-                        <Simge ad="cube" />
+                        <KucukResimKutusu resim={kareler.get(s.malzemeNo) ?? null} ad={`${s.malzemeKodu} önizleme`} />
                         <span className="tc-g3b-satir-metin">
                           <strong>{s.malzemeKodu}</strong>
                           <span>{s.malzemeAdi ?? s.belgeAdi}</span>
@@ -149,7 +154,9 @@ const HAM_NEDEN: Readonly<Record<NonNullable<GeometriHamCevabi['neden']>, string
 };
 
 // Stok listesi aktif hammadde kartlarıdır (1469 a). Pay boşsa sistem ayarı geçerlidir; ekran hangisinin kullanıldığını söyler.
-function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; analizVar: boolean; hacimMm3: number | null }) {
+function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
+  revizyonId: number; analizVar: boolean; hacimMm3: number | null; onizlemeYaz: (o: HamStokOnerisi | null) => void;
+}) {
   const [pay, payYaz] = useState('');
   // Yoğunluğu kullanıcı yazar (1446 a, 1468 a), kaydedilmez. Boşken her önerinin kendi kalitesinin yoğunluğu (1480) kullanılır;
   // net ağırlıkta ön değer listedeki ilk öneri (kalite süzgeci seçiliyse o kalite).
@@ -172,6 +179,15 @@ function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; ana
     placeholderData: keepPreviousData,
   });
   const v = sorgu.data;
+  // Önizlemedeki öneri (2396): ilk öneri (en az talaş) önizlenir; kullanıcı başka satırı seçebilir.
+  const [onizlenen, onizlenenYaz] = useState<string | null>(null);
+  const oneriler = v?.neden === null ? v.oneriler : [];
+  const gosterilen = oneriler.find((o) => o.form === onizlenen) ?? oneriler[0] ?? null;
+  const gosterilenAnahtari = gosterilen === null ? '' : `${gosterilen.form}:${String(gosterilen.malzemeNo)}:${String(gosterilen.kesimBoyuMm)}`;
+  const gosterilenRef = useRef(gosterilen);
+  gosterilenRef.current = gosterilen;
+  useEffect(() => { onizlemeYaz(gosterilenRef.current); }, [gosterilenAnahtari, onizlemeYaz]);
+  useEffect(() => () => onizlemeYaz(null), [onizlemeYaz]);
   const kaliteYogunlugu = useKaliteYogunluklari(v?.oneriler ?? []);
   const onerininYogunlugu = (o: HamStokOnerisi): number | null => yazilan ?? kaliteYogunlugu(o);
   const onDeger = (v?.oneriler ?? []).map((o) => ({ o, ro: kaliteYogunlugu(o) })).find((x) => x.ro !== null) ?? null;
@@ -208,13 +224,18 @@ function HamKarti({ revizyonId, analizVar, hacimMm3 }: { revizyonId: number; ana
                     <ul className="tc-g3b-oneriler" aria-label="Stok önerileri">
                       {sorgu.data.oneriler.map((o) => (
                         <li key={o.form}>
-                          <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}</span>
+                          <span className="tc-g3b-oneri-ust"><Simge ad="box" /> <strong>{FORM_ADI[o.form]}</strong> {stokOlcuMetni(o)}
+                            <Dugme simge="eye" className="tc-g3b-oneri-onizle" aria-pressed={gosterilen?.form === o.form} onClick={() => onizlenenYaz(o.form)}>Önizle</Dugme>
+                          </span>
                           <span className="tc-g3b-soluk">{o.kod}{o.ad ? ` · ${o.ad}` : ''}{o.kalite ? ` · ${o.kalite}` : ''}</span>
                           {o.kesimBoyuMm !== null && <span>Kesim boyu {uzunluk(o.kesimBoyuMm)} mm</span>}
                           {onerininYogunlugu(o) !== null && <span>Ham ağırlık ≈ {agirlikMetni(agirlikKg(o.hamHacimMm3, onerininYogunlugu(o))!)}</span>}
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {sorgu.data.neden === null && (
+                    <p className="tc-g3b-soluk">Önizleme yaklaşıktır: pay her yüzde eşit varsayılır; bağlama, testere ve alın payı çizilmez, kesim planı değildir.</p>
                   )}
                 </>
               )}
@@ -322,7 +343,43 @@ function EskiRevizyon({ revizyonId, yonlendir }: { revizyonId: number; yonlendir
   return <DurumKutusu durum="bos" mesaj="Bu model artık listede değil: belge arşivde ya da malzeme kartından kaldırılmış." />;
 }
 
-function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModelSatiri | null; revizyonId: number; yonlendir: (rev: number) => void }) {
+// Çalışmanın modeldeki önizlemesi (2396). Boya ve maskede önizleme boyamanın kendisi, montajda seçilen parçaların kutularıdır (kartlar verir).
+function useOnizleme(calisma: CalismaAdi, revizyonId: number, cevap: GeometriAnalizCevabi | undefined, ham: HamStokOnerisi | null): Onizleme | null {
+  const a = cevap?.analiz ?? null;
+  const durum = cevap?.durum;
+  const ozellik = useQuery({
+    queryKey: [...anahtarlar.ozellik(revizyonId), durum],
+    queryFn: () => api.get<GeometriOzellikCevabi>(`/geometri/ozellikler/${String(revizyonId)}`),
+    enabled: calisma === 'ozellikler' && durum !== undefined && !suruyorMu(durum),
+  });
+  const delikler = useMemo(() => (ozellik.data?.ozellikler ?? []).filter((o) => o.tur === 'delik' && o.ust === null).map(vurgusu)
+    .filter((v): v is Vurgu => v !== null), [ozellik.data]);
+  return useMemo((): Onizleme | null => {
+    if (a === null) return null;
+    const yon = a.obb.yon as unknown as readonly Yon3[];
+    if (calisma === 'analiz') {
+      return {
+        anahtar: `analiz:${JSON.stringify(a.obb)}:${JSON.stringify(a.kutu)}`, etiket: 'dış kutu ve döndürülmüş kutu', delikler: [],
+        katilar: (n) => analizKatilari(yon, [a.obb.a, a.obb.b, a.obb.c], [a.kutu.x, a.kutu.y, a.kutu.z], n),
+      };
+    }
+    if (calisma === 'ham') {
+      if (ham === null) return null;
+      return {
+        anahtar: `ham:${JSON.stringify(ham)}`, etiket: `${FORM_ADI[ham.form]} ${stokOlcuMetni(ham)} (yaklaşık)`, delikler: [],
+        katilar: (n) => { const k = hamKatisi(ham, yon, n); return k === null ? [] : [k]; },
+      };
+    }
+    if (calisma === 'ozellikler') {
+      return delikler.length === 0 ? null : { anahtar: `delik:${JSON.stringify(delikler)}`, etiket: `${String(delikler.length)} delik`, delikler, katilar: () => [] };
+    }
+    return null;
+  }, [a, calisma, ham, delikler]);
+}
+
+function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
+  satir: GeometriModelSatiri | null; revizyonId: number; yonlendir: (rev: number) => void; calisma: CalismaAdi;
+}) {
   const analiz = useQuery({
     queryKey: anahtarlar.analiz(revizyonId),
     queryFn: () => api.get<GeometriAnalizCevabi>(`/geometri/analizler/${String(revizyonId)}`),
@@ -344,6 +401,8 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
   const [resimAl, resimAlYaz] = useState<ResimAl | null>(null);
   const resimAlici = useCallback((al: ResimAl | null) => resimAlYaz(() => al), []);
   const yeniden = useYenidenHesapla(revizyonId, analiz.data?.is?.surum ?? null);
+  const [ham, hamYaz] = useState<HamStokOnerisi | null>(null);
+  const onizleme = useOnizleme(calisma, revizyonId, analiz.data, ham);
   if (analiz.isPending) return <DurumKutusu durum="yukleniyor" mesaj="Analiz okunuyor" />;
   if (analiz.isError) {
     if (analiz.error instanceof ApiHatasi && analiz.error.durum === 404) return <EskiRevizyon revizyonId={revizyonId} yonlendir={yonlendir} />;
@@ -360,41 +419,76 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir }: { satir: GeometriModel
         : dosya.isError ? <div className="tc-g3b-sahne"><DurumKutusu durum="hata" mesaj={yetkiyse(dosya.error, 'Model dosyası alınamadı.')} /></div>
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
-              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={vurgusu(secili)} kutular={kutular}
-                yuzBoyasi={yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzBilgisiYaz }} arac={yuzeySahnesi?.arac ?? null} bilgi={yuzeySahnesi?.bilgi ?? null} resimAlici={resimAlici} />
+              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={calisma === 'ozellikler' ? vurgusu(secili) : null}
+                kutular={calisma === 'montaj' ? kutular : null} onizleme={onizleme}
+                yuzBoyasi={calisma !== 'yuzey' || yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzBilgisiYaz }}
+                arac={calisma === 'yuzey' ? (yuzeySahnesi?.arac ?? null) : null} bilgi={calisma === 'yuzey' ? (yuzeySahnesi?.bilgi ?? null) : null}
+                resimAlici={resimAlici} />
             </Suspense>
           )}
       <div className="tc-g3b-kartlar">
-        <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
-          sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
-        <AnalizKarti cevap={analiz.data} yeniden={yeniden} />
-        <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} />
-        <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />
-        <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />
+        {calisma === 'analiz' && <AnalizKarti cevap={analiz.data} yeniden={yeniden} />}
+        {calisma === 'ham' && (
+          <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} onizlemeYaz={hamYaz} />
+        )}
+        {calisma === 'ozellikler' && <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />}
+        {calisma === 'yuzey' && (
+          <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
+            sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
+        )}
+        {calisma === 'montaj' && <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />}
       </div>
     </div>
   );
 }
 
-// 3D Atölyesi (1432 a, taslak 1444 a): solda 3B modeli olan malzemeler, sağda seçilen modelin görüntüsü, analizi ve ham önerisi.
-// Dar ekranda liste ve ayrıntı ayrı görünür; ayrıntıda geri düğmesi listeye döner.
+// Alt menü bağlantısı sorgu taşımaz (kabuk maddenin yolunu açar): seçili model sekme boyunca saklanır, çalışma değişince geri yazılır.
+const SON_REV = 'geometri.son-rev';
+function sonRevOku(): number | null {
+  try {
+    const x = Number(sessionStorage.getItem(SON_REV));
+    return Number.isSafeInteger(x) && x > 0 ? x : null;
+  } catch { return null; }
+}
+function sonRevYaz(rev: number | null): void {
+  try {
+    if (rev === null) sessionStorage.removeItem(SON_REV); else sessionStorage.setItem(SON_REV, String(rev));
+  } catch { /* saklanamazsa yalnız adres kalır */ }
+}
+
+// 3D Atölyesi (1432 a, taslak 1444 a; alt menü 2396): solda 3B modeli olan malzemeler, sağda seçilen modelin görüntüsü ve adresteki
+// çalışmanın kartı. Bütün çalışmalar aynı ekrandır; görüntü ve analiz çalışmalar arasında ortaktır. Dar ekranda liste ve ayrıntı
+// ayrı görünür; ayrıntıda geri düğmesi listeye döner.
 export function Atolye3B() {
+  const { calisma: parca } = useParams();
+  const { search } = useLocation();
+  const calisma = calismaOku(parca);
   const [adres, adresYaz] = useSearchParams();
   const rev = Number(adres.get('rev'));
-  const revizyonId = Number.isSafeInteger(rev) && rev > 0 ? rev : null;
+  const adrestekiRev = Number.isSafeInteger(rev) && rev > 0 ? rev : null;
+  // Adreste yoksa saklanan model hemen kullanılır (adres sonra yazılır): ayrıntı bir an bile kapanmaz, görüntü yeniden kurulmaz.
+  const [bosaldi, bosaldiYaz] = useState(false);
+  const revizyonId = adrestekiRev ?? (bosaldi ? null : sonRevOku());
   const [satir, satirYaz] = useState<GeometriModelSatiri | null>(null);
-  const sec = (s: GeometriModelSatiri) => { satirYaz(s); adresYaz({ rev: String(s.revizyonId) }); };
+  const sec = (s: GeometriModelSatiri) => { bosaldiYaz(false); satirYaz(s); adresYaz({ rev: String(s.revizyonId) }); };
   const yonlendir = useCallback((rev: number) => { satirYaz(null); adresYaz({ rev: String(rev) }, { replace: true }); }, [adresYaz]);
+  useEffect(() => {
+    if (revizyonId === null) return;
+    sonRevYaz(revizyonId);
+    if (adrestekiRev === null) adresYaz({ rev: String(revizyonId) }, { replace: true });
+  }, [revizyonId, adrestekiRev, adresYaz]);
+  if (calisma === null) return <Navigate to={`${KOK}${search}`} replace />;
+  const c = CALISMALAR[calisma];
   return (
     <div className="tc-g3b">
-      <SayfaBasligi baslik="3D Atölyesi" simge="expand" alt="STEP ve IGES modellerinin ölçüsü ve ham önerisi" />
+      <SayfaBasligi baslik="3D Atölyesi" simge="expand" alt={`${c.baslik}: ${c.alt}`} />
       <div className={`tc-g3b-izgara${revizyonId === null ? '' : ' tc-g3b-secili'}`}>
         <ModelListesi secili={revizyonId} sec={sec} />
         <section className="tc-g3b-sag" aria-label="Model ayrıntısı">
           {revizyonId === null ? <DurumKutusu durum="bos" mesaj="Soldan bir model seçin." /> : (
             <>
-              <Dugme tur="ikincil" simge="chev-left" className="tc-g3b-geri" onClick={() => { satirYaz(null); adresYaz({}); }}>Listeye dön</Dugme>
-              <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} yonlendir={yonlendir} />
+              <Dugme tur="ikincil" simge="chev-left" className="tc-g3b-geri" onClick={() => { sonRevYaz(null); bosaldiYaz(true); satirYaz(null); adresYaz({}); }}>Listeye dön</Dugme>
+              <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} yonlendir={yonlendir} calisma={calisma} />
             </>
           )}
         </section>

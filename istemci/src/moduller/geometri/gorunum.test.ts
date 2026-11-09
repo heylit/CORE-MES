@@ -3,7 +3,9 @@ import type { GeometriOzellik } from '#paylasilan/sozlesme/geometri.ts';
 import {
   agYuzAlanlari, agYuzNormalleri, islemAnahtari, m2Metni, PATLATMA_KATI, patlatmaKaymasi, pozitifSayi, sartnameSayisi, taslakAlanlari, tozKg,
   ucgeninYuzu, yuzGruplari, yuzSirasiUyar, type TaslakIsaret, type Yon3,
+  analizKatilari, BIRIM_EKSENLER, eksenAraliklari, hamKatisi, kapsayanDaire,
 } from './gorunum.ts';
+import type { HamStokOnerisi } from '#paylasilan/sozlesme/geometri.ts';
 
 describe('patlatmaKaymasi (2139)', () => {
   it('sıfır oranda parça yerinde kalır', () => {
@@ -119,5 +121,52 @@ describe('boya ve maske, prototip v3 (2144d)', () => {
     expect(tozKg(18000, 70, 1.5, 60, 20)).toBeCloseTo(0.063);
     expect(tozKg(18000, null, 1.5, 60, 1)).toBeNull();
     expect([pozitifSayi('1,5'), pozitifSayi(''), pozitifSayi('-2'), pozitifSayi('x')]).toEqual([1.5, null, null, null]);
+  });
+});
+
+describe('önizleme katıları (2396)', () => {
+  // L kesitli çubuk: x boyunca 0-100; kesit (y, z) iki kol, biri 0-40 x 0-10, öteki 0-10 x 0-40.
+  const kesit: [number, number][] = [[0, 0], [40, 0], [40, 10], [10, 10], [10, 40], [0, 40]];
+  const L = new Float32Array(kesit.flatMap(([y, z]) => [0, y, z, 100, y, z]));
+  const oneri = (form: HamStokOnerisi['form'], olcu: Record<string, number>, kesimBoyuMm: number | null): HamStokOnerisi => ({
+    malzemeNo: 1, kod: 'H', ad: null, kalite: null, form, olcu, aile: null, kaliteKodu: null, yogunluk: null, kesimBoyuMm, hamHacimMm3: 1,
+  });
+
+  it('kapsayan daire kutu merkezinde değildir (L kesit)', () => {
+    const d = kapsayanDaire(kesit)!;
+    // En uzak iki köşe (40,0) ve (0,40): merkez (20,20); kutu merkezi de (20,20) ama yarıçap köşegenin yarısıdır.
+    expect(d.r).toBeCloseTo(Math.hypot(40, 40) / 2, 6);
+    // Eksantrik kesit: kutu merkezi (25, 5), dairenin merkezi (25, 0).
+    const e = kapsayanDaire([[0, 0], [50, 0], [25, 10]])!;
+    expect([e.x, e.y]).toEqual([25, 0]);
+    expect(e.r).toBeCloseTo(25, 6);
+    expect(kapsayanDaire([])).toBeNull();
+  });
+
+  it('çubuk hamı uzun eksende, merkezi kapsayan dairenin merkezi; boy kesim boyu', () => {
+    const k = hamKatisi(oneri('cubuk', { d: 60, l: 3000 }, 106), BIRIM_EKSENLER, L)!;
+    expect(k.sekil).toBe('silindir');
+    expect(k.boyut).toEqual([106, 60, 60]);
+    expect(k.merkez[0]).toBeCloseTo(50, 6);
+    expect(k.merkez[1]).toBeCloseTo(20, 6);
+    expect(k.merkez[2]).toBeCloseTo(20, 6);
+  });
+
+  it('lama, levha ve blok kutudur; ölçüler büyükten küçüğe eksenlere', () => {
+    expect(hamKatisi(oneri('lama', { a: 20, b: 50, l: 1000 }, 106), BIRIM_EKSENLER, L)!.boyut).toEqual([106, 50, 20]);
+    expect(hamKatisi(oneri('levha', { t: 12, w: 50, l: 2000 }, 106), BIRIM_EKSENLER, L)!.boyut).toEqual([106, 50, 12]);
+    const blok = hamKatisi(oneri('blok', { a: 45, b: 110, h: 50 }, null), BIRIM_EKSENLER, L)!;
+    expect(blok.boyut).toEqual([110, 50, 45]);
+    expect(blok.merkez).toEqual([50, 20, 20]);
+    expect(hamKatisi(oneri('blok', { a: 1, b: 1, h: 1 }, null), BIRIM_EKSENLER, new Float32Array())).toBeNull();
+  });
+
+  it('analiz: dış kutu ve döndürülmüş kutu ağın aralığının ortasında', () => {
+    const [dis, don] = analizKatilari(BIRIM_EKSENLER, [100, 40, 40], [100, 40, 40], L);
+    expect(dis!.merkez).toEqual([50, 20, 20]);
+    expect(don!.boyut).toEqual([100, 40, 40]);
+    const ar = eksenAraliklari(L, [[0, Math.SQRT1_2, Math.SQRT1_2]])!;
+    expect(ar.en[0]).toBeCloseTo(0, 5);
+    expect(ar.ust[0]).toBeCloseTo(50 * Math.SQRT1_2, 4);
   });
 });
