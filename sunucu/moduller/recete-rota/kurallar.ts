@@ -6,7 +6,7 @@ import type {
   DurumEmirleri, DurumMalzemesi, DurumRotaAdimi as DurumRotaAdimiCikti, DurumRotaRevizyonu, DurumMaliyeti, ReceteRotaDurumCevabi,
 } from '#paylasilan/sozlesme/recete-rota.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
-import { girdiOlabilirMi } from '../rota/disari.ts';
+import { adimMiktarlari, girdiOlabilirMi } from '../rota/disari.ts';
 import type { DurumRotaAdimi, DurumRotaRevizyonu as DurumRotaRevizyonuGirdisi } from '../rota/disari.ts';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import type { Vardiya } from '#paylasilan/sozlesme/vardiya.ts';
@@ -960,16 +960,16 @@ const siraliAdimlar = (adimlar: readonly IhtiyacAdimi[]): IhtiyacAdimi[] => [...
 const kolIcinde = (kol: { n: number; m: number }, j: number): boolean => j >= kol.n && j <= kol.m - 2;
 const kolAraligiGecerli = (n: number, m: number, adimSayisi: number): boolean => n >= 1 && m - n >= 2 && m <= adimSayisi;
 
-// Adım ret yüzdesi önceki adımları büyütür: son adım 1, her önceki adım sonrakilerin 1/(1-ret) çarpımı (ret en çok %95).
-export function adimRetCarpanlari(adimlar: readonly Pick<IhtiyacAdimi, 'rejectPct'>[]): number[] {
-  const f = new Array<number>(adimlar.length).fill(1);
-  let birikim = 1;
-  for (let j = adimlar.length - 1; j >= 0; j--) {
-    birikim /= 1 - Math.min(0.95, Math.max(0, (adimlar[j]?.rejectPct ?? 0) / 100));
-    f[j] = birikim;
-  }
-  return f;
+// Adımın yapacağı miktar çarpanı (ürün başına): rota modülünün adım miktarı kuralı (rota/disari adimMiktarlari, 2486-1). Adım kendisinin ve
+// ardıllarının ret payıyla büyür; dallı rotada bir dalın reti paralel dalı büyütmez. Ret en çok %95 sayılır.
+const ROTA_BAGIMLILIGI = { bagimli: 'bekleyen', ortulu: 'akisli', bagimsiz: 'bagimsiz' } as const;
+export function adimRetCarpanlari(adimlar: readonly (Pick<IhtiyacAdimi, 'rejectPct' | 'opNo'> & Partial<Pick<IhtiyacAdimi, 'dep' | 'dal' | 'birlesen'>>)[]): number[] {
+  const m = adimMiktarlari(adimlar.map((a) => ({
+    opNo: a.opNo, firePayiYuzde: Math.min(95, Math.max(0, a.rejectPct || 0)), bagimlilik: ROTA_BAGIMLILIGI[a.dep ?? 'bagimli'], dal: a.dal ?? null, birlesen: a.birlesen ?? [],
+  })), 1);
+  return adimlar.map((a) => m.get(a.opNo) ?? 1);
 }
+const dalliMi = (adimlar: readonly IhtiyacAdimi[]): boolean => adimlar.some((a) => (a.dal ?? null) !== null || (a.birlesen?.length ?? 0) > 0);
 
 export function ihtiyacPlanSirasi(e: NonNullable<IhtiyacDurumu['emirler']>): IhtiyacEmri[] {
   const baslamis = (o: IhtiyacEmri): boolean => {
@@ -1041,8 +1041,9 @@ export function emirMalzemeIhtiyaclari(g: IhtiyacGirdisi): EmirIhtiyacSonucu[] {
       });
     };
     // Ara stok son adımdan geriye: adımın çıktısı olarak bekleyen sonraki adımın girdisini karşılar.
+    // Dallı rotada ara stok düşülmez: geri yürüyüş tek hattır (VARSAYIM, ekranla aynı kapsam).
     const araStokDus = (urunId: string, sirali: readonly IhtiyacAdimi[], yapilacak: number[]): void => {
-      if (araHavuz.size === 0) return;
+      if (araHavuz.size === 0 || dalliMi(sirali)) return;
       for (let k = sirali.length - 2; k >= 0; k--) {
         const a = `${urunId}|${sirali[k]?.id ?? ''}`;
         const kullan = Math.min(araHavuz.get(a) ?? 0, yapilacak[k + 1] ?? 0);

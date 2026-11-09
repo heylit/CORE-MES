@@ -101,4 +101,19 @@ describe('emir malzeme ihtiyacı (2486-8, 461 b)', () => {
     const h = araStokHavuzuKur([{ id: 7, kaynakAdim: '1-o20' }, { id: 8, kaynakAdim: 'o20' }], [{ statuId: 7, miktar: '4' }, { statuId: 7, miktar: '1.5' }, { statuId: 8, miktar: '9' }]);
     assert.deepEqual([...h], [['1|1-o20', 5.5]]);
   });
+  test('2526: kök altı dallı yarı mamulde adım miktarı rotanın ardıl yolundandır (2486-1): B dalının %50 firesi A dalını büyütmez', () => {
+    const d = (op: number, dal: string | null, ek: Partial<Adim> = {}) => adim(3, op, { dep: 'bagimli', dal, ...ek } as Partial<Adim>);
+    const r = emirMalzemeIhtiyaclari(girdi(
+      {
+        items: [kart(1, 'mamul'), kart(2, 'ham'), kart(3, 'yari'), kart(5, 'ham')],
+        routes: {
+          1: [adim(1, 10)],
+          3: [d(10, 'A', { ins: [{ itemId: '2', qty: 1, scrap: 0 }] }), d(20, 'B', { rejectPct: 50, ins: [{ itemId: '5', qty: 1, scrap: 0 }] }), d(30, null, { birlesen: ['A', 'B'] } as Partial<Adim>)],
+        },
+        orders: [emir(100, 1, 10)],
+      },
+      { kopyalar: new Map([[100, [{ malzemeNo: 3, opNo: 10, brut: '10' }]]]) },
+    ));
+    assert.deepEqual([satir(r, 100, 2)?.brut, satir(r, 100, 5)?.brut], [10, 20]);
+  });
 });
