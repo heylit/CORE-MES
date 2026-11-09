@@ -1,0 +1,29 @@
+/* Mini pano penceresi ayrı belgedir: yüzey her zaman doludur (işletim sistemi penceresi saydam olamaz, cam bulanıklığı yok). */
+.tc-mp-govde { margin: 0; background: var(--panel-solid); color: var(--ink); font-family: var(--font-ana); }
+.tc-mp { display: flex; flex-direction: column; gap: var(--b-2); padding: var(--b-3); }
+.tc-mp-bos { margin: 0; padding: var(--b-4); color: var(--muted); font-size: var(--yazi-s); }
+.tc-mp-sekmeler { display: flex; gap: var(--b-1); overflow-x: auto; }
+.tc-mp-sekme {
+  display: inline-flex; align-items: center; gap: var(--b-1); flex: none; padding: var(--b-1) var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: none; color: var(--muted);
+  font: inherit; font-size: var(--yazi-xs); cursor: pointer;
+}
+.tc-mp-sekme[aria-selected="true"] { border-color: var(--hazard); color: var(--ink); }
+.tc-mp-baslik { display: flex; align-items: center; gap: var(--b-2); margin: 0; font-size: var(--yazi-s); font-weight: 700; }
+.tc-mp-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
+.tc-mp-kutu {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--pay-ince); min-width: 0; padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: none; color: var(--ink);
+  font: inherit; text-align: start; cursor: pointer;
+}
+.tc-mp-kutu:hover { border-color: var(--edge2); }
+.tc-mp-kutu:focus-visible { outline: var(--cizgi) solid var(--hazard); outline-offset: var(--pay-ince); }
+.tc-mp-kutu-baslik { display: flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
+.tc-mp-kutu-sayi { font-size: var(--yazi-xl); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tc-mp-kutu-alt { color: var(--faint); font-size: var(--yazi-xs); line-height: 1.3; }
+.tc-mp-kutu[data-ton="dikkat"] { border-color: var(--stop); }
+.tc-mp-kutu[data-ton="dikkat"] .tc-mp-kutu-sayi { color: var(--stop); }
+.tc-mp-kutu[data-ton="uyari"] { border-color: var(--hold); }
+.tc-mp-kutu[data-ton="uyari"] .tc-mp-kutu-sayi { color: var(--hold); }
+.tc-mp-kutu[data-bos] .tc-mp-kutu-sayi { color: var(--faint); }
+.tc-mp-alt { display: flex; justify-content: space-between; gap: var(--b-2); margin: 0; color: var(--faint); font-size: var(--yazi-xs); }
