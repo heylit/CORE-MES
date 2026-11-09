@@ -994,6 +994,9 @@ export interface UretimAdimPlani {
   // 2522 a: bu adımda daha önce sayılanın taşınan miktarı, malzeme başına (binde; adimPlaniKur ekler, dallı adımda her dalın parçası ayrı).
   // Elle sarf edilen taşınan statü zincirinin dışında kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
   oncekiTasinanlar?: ReadonlyMap<number, bigint>;
+  // 2554: dallı emirde öncülün statüsünden kendi statüsüne çeviren ara adım (adimPlaniKur ekler). Mahsup, öncülün çevirmesinde mahsup edilenin
+  // bu adımda henüz mahsup edilmeyen kısmıdır (araCevirmeMahsubu); paralel dalda emir geneli birikim ara adımı tutturmaz.
+  araCevirme?: { onculOpNo: number; miktar: string; bolen?: number; oncekiTasinan: bigint };
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
@@ -1122,6 +1125,15 @@ export function dalliAdimPlani(g: {
 // Denetim #1: emre elle sarf edilen statüsüz girdi sayımda yeniden düşülmez. Sayımın istediğinden, emrin ihtiyacını aşan kısım elle
 // verilenden mahsup edilir (en çok elle verilen kadar): toplam düşüm ihtiyacı aşmaz. İhtiyaç bilinmiyorsa mahsup yoktur. Elle verilen
 // emrin sonuna sayılır: önce gelen sayım depodan düşebilir, emir bitince toplam doğrudur.
+// 2554: ara adım çevirmesinin mahsubu. ustFark: öncül adımın çevirmesinde istenen ile çevrilen arasındaki fark (elle verilen yüzünden
+// çevrilmeyen); buFark: bu adımda daha önce mahsup edilen. Bu sayımda kalan fark kadar, en çok istenen ve elle verilen kadar mahsup edilir.
+// Öncül geride kalıp eksiden çevrildiyse fark yoktur; eksi gerçek eksiktir ve mahsupla gizlenmez.
+export function araCevirmeMahsubu(g: { istenen: bigint; elle: bigint; ustFark: bigint; buFark: bigint }): bigint {
+  if (g.elle <= 0n) return 0n;
+  const m = g.ustFark - g.buFark;
+  const ust = g.istenen < g.elle ? g.istenen : g.elle;
+  return m <= 0n ? 0n : m < ust ? m : ust;
+}
 export function elleSarfMahsubu(g: { istenen: bigint; elle: bigint; net: bigint; ihtiyac: bigint | null }): bigint {
   if (g.ihtiyac === null || g.elle <= 0n) return 0n;
   const fazla = g.net + g.istenen - g.ihtiyac;

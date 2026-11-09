@@ -57,6 +57,15 @@ export const statuSonHareketleri = (db: Db, malzemeIdler: readonly number[]): Pr
    SELECT malzeme_id AS "malzemeId", statu_id AS "statuId", ${zamanMetni('max(zaman)')} AS "sonHareket",
           (array_agg(uretim_emri_id ORDER BY zaman DESC, id DESC) FILTER (WHERE giren AND uretim_emri_id IS NOT NULL))[1] AS "kaynakEmirId"
      FROM h GROUP BY 1, 2 ORDER BY 1, 2`, [[...malzemeIdler]]);
+// 2554: emrin bir malzemesinin iki statü arasındaki çevirmeleri (net, geri çevirme düşülmüş). ust: öncül statüye giren (bu statüden geri
+// gelen hariç); bu: öncül statüden bu statüye geçen. Aynı statüde yer değiştirme iki tarafta da sayılır, net sıfırdır.
+export const emrinStatuAkisi = async (db: Db, g: { uretimEmriId: number; malzemeId: number; oncekiStatuId: number; statuId: number }): Promise<{ ust: string; bu: string }> => (await db.tek<{ ust: string; bu: string }>(
+  `SELECT (COALESCE(sum(miktar) FILTER (WHERE hedef_statu_id = $3 AND kaynak_statu_id IS DISTINCT FROM $4), 0)
+         - COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $3 AND hedef_statu_id IS DISTINCT FROM $4), 0))::text AS ust,
+          (COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $3 AND hedef_statu_id = $4), 0)
+         - COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $4 AND hedef_statu_id = $3), 0))::text AS bu
+     FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'transfer'`,
+  [g.uretimEmriId, g.malzemeId, g.oncekiStatuId, g.statuId]))!;
 // 335: emir başına fiş hareketleri, malzeme başına net. Geri alma, geri aldığı hareketin emri ve türüyle sayılır (geri alma geri alınmaz,
 // tek geri alma kısıtı vardır). fis: sarf (üretime sarf ve fire çıkışı) ya da giris (üretim girişi); hurda fire çıkışıdır.
 export const emirlerinFisHareketleri = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; fis: 'sarf' | 'giris'; malzemeId: number; miktar: string; hurda: string }[]> => db.sorgu(
