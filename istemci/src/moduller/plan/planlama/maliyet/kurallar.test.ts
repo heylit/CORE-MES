@@ -3,6 +3,7 @@ import {
   beklemeHesabi, bitenAdimMaliyeti, birimMaliyet, calisilir, katkiPayi, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
   mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
+import { mesaiTutari } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
 
 import { saatiSabitle } from '../test-saati.ts';
@@ -290,4 +291,21 @@ describe('P3 saf hesaplar', () => {
     const ucretsiz = { ...yariBitti, D: { ...yariBitti.D, tezgahlar: yariBitti.D.tezgahlar.map((t) => ({ ...t, ucret: null })) } };
     expect(katkiPayi(ucretsiz, ucretsiz.D.siparisler[0]!)).toBeNull();
   });
+});
+
+// 2653: sunucunun mesai tutarı kopyası bu tabloyla sınanır; tablo devir-heylit/2653/ORNEKLER.md ile aynıdır, biri değişirse öteki de değişir.
+const MESAI_ORNEKLERI: [string, Parameters<typeof mesaiTutari>[0], number | null][] = [
+  ['M1 hafta içi', { h: 8, kisiBazli: true, op: 1, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 4950],
+  ['M2 cumartesi, iki operatör', { h: 8, kisiBazli: true, op: 2, saatDegeri: 350, carpan: 2, kisiEk: 100, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 11400],
+  ['M3 pazar, yarım operatör', { h: 7.5, kisiBazli: true, op: 0.5, saatDegeri: 500, carpan: 2, kisiEk: 0, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 3750],
+  ['M4 resmî tatil', { h: 8, kisiBazli: true, op: 1, saatDegeri: 420, carpan: 2.5, kisiEk: 120, ucret: null, vardiyasiz: true, mesaiCarpan: 3 }, 8520],
+  ['M5 gün çarpanı yok: 1,5', { h: 4, kisiBazli: true, op: 1, saatDegeri: 300, carpan: undefined, kisiEk: null, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 1800],
+  ['M6 operatör oranı tanımsız: 1', { h: 8, kisiBazli: true, op: undefined, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 4950],
+  ['M7 saat değeri yok: mesai ücretine düşer', { h: 8, kisiBazli: true, op: 2, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, vardiyasiz: false, mesaiCarpan: 2 }, 2000],
+  ['M8 saat değeri yok, vardiyasız gün', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, vardiyasiz: true, mesaiCarpan: 2 }, 4000],
+  ['M9 saat değeri ve ücret yok: bilinmez', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: 100, ucret: null, vardiyasiz: false, mesaiCarpan: 2 }, null],
+  ['M10 kişi bazlı değil, vardiyasız gün, çarpan yok: 1', { h: 8, kisiBazli: false, op: 1, saatDegeri: 400, carpan: 2, kisiEk: 100, ucret: 300, vardiyasiz: true, mesaiCarpan: undefined }, 2400],
+];
+describe('mesaiTutari (2653 ortak örnekler)', () => {
+  it.each(MESAI_ORNEKLERI)('%s', (_ad, girdi, beklenen) => { expect(mesaiTutari(girdi)).toBe(beklenen); });
 });
