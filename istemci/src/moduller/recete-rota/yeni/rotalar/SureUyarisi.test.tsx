@@ -20,4 +20,14 @@ describe('2555 akış tablosunda süresi boş adım', () => {
     expect(uyarilar[0]?.querySelector('.tc-rr1-fsop')?.textContent).toBe('TOP 20');
     expect(within(tablo).getAllByText('İşlem süresi girilmedi: plan bu adımı süresiz sayar, onaya gönderilemez.')).toHaveLength(1);
   }, 30000);
+
+  it('süresi girili ama istasyonu olmayan adımın başlığı "süre yok" demez, eksik olanı (istasyon) söyler (2553-2)', async () => {
+    sunucuKur(OKUYAN, { durum: rotaDurumu([revizyonOrnegi('71', 'A', 'yururlukte', 3, [adimOrnegi(), adimOrnegi({ id: 'o20', seq: 20, opNo: 20, stationId: null, ins: [] })])]) });
+    rrAc('/recete-rota/schema');
+    const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(await within(bolge).findByRole('button', { name: /Akış tablosu/ }));
+    const tablo = await within(bolge).findByRole('region', { name: 'MM-0001 rotası' });
+    expect([...tablo.querySelectorAll('.tc-rr1-fst')].map((x) => x.textContent)).toEqual([expect.stringMatching(/sa, .* gün/), 'istasyon yok']);
+    expect(tablo.querySelector('.tc-rr1-fstep-uyari')).toBeNull();
+  }, 30000);
 });

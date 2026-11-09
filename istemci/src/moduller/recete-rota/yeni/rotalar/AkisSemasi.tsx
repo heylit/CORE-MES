@@ -5,7 +5,7 @@ import {
   adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, kolaEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
-import { dalBilgileri, dalCarpaniYaz, dalEtiketi, kolaTasi, kolParcalari, type SemaParcasi } from './kurallar.ts';
+import { dalBilgileri, dalCarpaniYaz, dalEtiketi, islemSuresiBos, kolaTasi, kolParcalari, type SemaParcasi } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, type RotaEkrani } from './ortak.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -136,7 +136,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       </span>
       <span className="tc-rr1-otime">
         {fason ? `Termin ${a.terminGun !== null && a.terminGun > 0 ? `${String(a.terminGun)} gün` : 'girilmedi'}`
-          : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : 'Süre yok'}
+          : t ? `${sayi(Math.round((t.dk / 60) * 10) / 10)} sa, ${sayi(Math.round(t.gun * 100) / 100)} gün` : islemSuresiBos(a) ? 'Süre yok' : 'Süre hesaplanmadı: istasyon yok'}
         {a.rejectPct > 0 && `, ret %${sayi(a.rejectPct)}`}
       </span>
       <span className="tc-rr1-ostat2">→ <b className={son ? undefined : 'tc-rr1-stx'}>{son ? sahip.code : kartAdi}</b>{son ? ' (ürün)' : ' (statülü)'}</span>

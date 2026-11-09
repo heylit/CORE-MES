@@ -588,7 +588,10 @@ describe('R3 Stok', () => {
     rrAc('/recete-rota/stock');
     const b = await bolum('Stok');
     expect(within(b).queryByRole('link', { name: 'Sahipsiz statülü stok' })).toBeNull();
-    expect((await within(b).findByRole('link', { name: /Minimumun altında/ })).getAttribute('href')).toBe('/plan/mrp');
+    const minimum = await within(b).findByRole('link', { name: /Minimumun altında/ });
+    expect(minimum.getAttribute('href')).toBe('/plan/mrp');
+    // 2553-2: kart hedefini yazar; tablodaki "yalnız minimumun altındakiler" süzgeciyle karışmaz.
+    expect(minimum.textContent).toContain('Planlama: malzeme ihtiyacına git');
     cleanup();
     vi.unstubAllGlobals();
 
