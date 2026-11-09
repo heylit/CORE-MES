@@ -25,7 +25,7 @@ export const anahtarlar = {
   eskiKayit: [...RR_ANAHTARI, 'eski-kayit'] as const,
   stok: (idler: readonly number[]) => [...RR_ANAHTARI, 'stok', idler.join(',')] as const,
   sureler: (revizyonId: number, makineId: number | null) => [...RR_ANAHTARI, 'sureler', revizyonId, makineId] as const,
-  patlatma: (revizyonId: number) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId] as const,
+  patlatma: (revizyonId: number, miktar: number | null = null) => [...RR_ANAHTARI, 'patlatma-onizleme', revizyonId, miktar] as const,
   hamOnerisi: (urunId: string) => [...RR_ANAHTARI, 'ham-onerisi', urunId] as const,
 };
 
@@ -122,12 +122,16 @@ export function useSureler(revizyonId: number | null, makineId: number | null = 
 
 // Patlamış rota önizlemesi (1476-F): ürünün yürürlükteki revizyonundan çok katmanlı emrin açılış görüntüsü; yazma yoktur. Uç
 // rota.emre-kopyala ister; ekran işlemi olmayana sormaz.
-export function usePatlatmaOnizlemesi(revizyonId: number | null, etkin = true) {
+// miktar null ise sorgu parametresi hiç gönderilmez (sunucu 1 alır); boş ya da geçersiz miktar 400 aldığı için çağıran yalnız geçerli tam sayı verir.
+export function usePatlatmaOnizlemesi(revizyonId: number | null, etkin = true, miktar: number | null = null) {
   return useQuery({
-    queryKey: anahtarlar.patlatma(revizyonId ?? 0),
+    queryKey: anahtarlar.patlatma(revizyonId ?? 0, miktar),
     enabled: etkin && revizyonId !== null,
+    // Miktar değişince eski sayılar yenisi gelene dek kalır (tablo titremez); başka revizyonun verisi gösterilmez.
+    placeholderData: (onceki, sorgu) => (sorgu?.queryKey[3] === (revizyonId ?? 0) ? onceki : undefined),
     queryFn: async () => {
-      try { return await api.get<PatlatmaOnizlemeCevabi>(`/rota/revizyonlar/${String(revizyonId)}/patlatma-onizleme`); } catch (h) { throw new RrHatasi(h); }
+      const sorgu = miktar === null ? '' : `?miktar=${String(miktar)}`;
+      try { return await api.get<PatlatmaOnizlemeCevabi>(`/rota/revizyonlar/${String(revizyonId)}/patlatma-onizleme${sorgu}`); } catch (h) { throw new RrHatasi(h); }
     },
   });
 }

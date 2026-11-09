@@ -761,3 +761,12 @@ export const onerilebilirKartlar = (oneriler: readonly HamOneri[], malzeme: Read
     const kart = malzeme.get(String(oneri.malzemeNo));
     return kart !== undefined && kart.aktif && kart.girdiOlabilir ? [{ oneri, kart }] : [];
   });
+
+// 2557: önizlemeye gönderilecek sipariş miktarı. Sunucu yalnız 1..1 000 000 tam sayı alır; baz kipte, 1'de ve tam sayı olmayan miktarda
+// parametre gönderilmez (sunucu 1 alır) ve ekran sayıları kök başına gösterir. `kesirli` tam sayı olmayan sipariş miktarını bildirir.
+export const ONIZLEME_AZAMI_MIKTAR = 1_000_000;
+export function onizlemeMiktari(baz: boolean, miktar: number): { gonderilen: number | null; kesirli: boolean } {
+  if (baz) return { gonderilen: null, kesirli: false };
+  const gecerli = Number.isInteger(miktar) && miktar >= 1 && miktar <= ONIZLEME_AZAMI_MIKTAR;
+  return { gonderilen: gecerli && miktar !== 1 ? miktar : null, kesirli: !gecerli };
+}
