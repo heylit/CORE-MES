@@ -29,7 +29,7 @@ export interface State {
 export const FIRMA_KARTLARI: { id: string; ad: string }[] = [];
 export const S: State = { requests: {}, suppliers: {}, materials: {}, settings: null, users: {}, me: null, ready: false, online: true, ver: 0 };
 
-export type Page = "dash" | "requests" | "request" | "materials" | "material" | "suppliers" | "supplier" | "reports" | "settings";
+export type Page = "dash" | "requests" | "orders" | "request" | "materials" | "material" | "suppliers" | "supplier" | "reports" | "settings";
 export interface ViewState {
   page: Page; id: string | null; tab: string | null;
   q: string; status: string; view: "list" | "board"; prio: string; dept: string;

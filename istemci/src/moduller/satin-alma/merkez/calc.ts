@@ -634,3 +634,36 @@ export function birimReddi(birim: string, liste: readonly string[]): string | nu
 export function durumEtiketi(r: PurchaseRequest): string {
   return r.status === "approval" && approvalState(r).state === "approved" ? "Onaylandı, sipariş bekliyor" : stLabel(r.status);
 }
+
+/* ---------------- Siparişler sayfası (2430) ---------------- */
+export interface SiparisSatiri {
+  anahtar: string; talepId: string; talepNo: string; talepAdi: string; orderNo: string; poNo: string; tedarikci: string; supplierId: string;
+  /** TL, KDV hariç, iskonto ve masraf dahil (iş kutusu "Açık sipariş" tutarıyla aynı hesap); hesaplanamazsa null. */
+  tutar: number | null;
+  siparisTarihi: string; termin: string; teslim: string; kalem: number; gelenKalem: number; kalemAdlari: string;
+  /** Tek kalemli siparişte miktarla okunur. */
+  tek: { gelen: number; miktar: number; birim: string } | null;
+  /** Termini geçmiş, teslimi bitmemiş siparişte geciken gün; değilse null. */
+  gecikme: number | null; buHafta: boolean; logo: SiparisLogo | null;
+}
+/** Verilmiş her sipariş bir satır. Geciken ve "bu hafta" tanımları iş kutusuyla aynıdır (2425): bitmemiş teslim, termin bugünden önce
+ * ya da bugün ile bugün+6 arasında; beklenen teslim yoksa sipariş tarihi + teklif termini. */
+export function siparisListesi(bugun: string = todayStr()): SiparisSatiri[] {
+  const satirlar = spendLines();
+  return Object.values(S.requests).filter((r) => COMMITTED.includes(r.status)).flatMap((r) => awardOrders(r).map((o): SiparisSatiri => {
+    const termin = orderDue(o);
+    const teslim = o.deliveredDate;
+    const hatlar = (r.award?.lines ?? []).filter((l) => l.quoteId === o.qid);
+    const geldi = (itemId: string) => teslim !== "" || hatlar.some((l) => l.itemId === itemId && l.qty !== undefined && (l.received ?? 0) >= l.qty);
+    const tekHat = o.items.length === 1 ? hatlar.find((l) => l.itemId === o.items[0]!.id) : undefined;
+    const tutarlar = satirlar.filter((l) => l.reqId === r.id && l.supplierId === o.supplierId).map((l) => l.amount);
+    const gecikme = !teslim && termin && termin < bugun ? dayDiff(termin, bugun) : null;
+    return {
+      anahtar: `${r.id}:${o.qid}`, talepId: r.id, talepNo: r.no, talepAdi: r.title, orderNo: o.orderNo, poNo: o.poNo, tedarikci: supName(o.q), supplierId: o.supplierId,
+      tutar: tutarlar.length ? sum(tutarlar) : null, siparisTarihi: o.orderDate, termin, teslim, kalem: o.items.length, gelenKalem: o.items.filter((it) => geldi(it.id)).length,
+      kalemAdlari: o.items.map((it) => it.name).join(', '),
+      tek: tekHat?.qty !== undefined ? { gelen: teslim ? tekHat.qty : tekHat.received ?? 0, miktar: tekHat.qty, birim: tekHat.unit ?? "" } : null,
+      gecikme, buHafta: !teslim && !!termin && termin >= bugun && dayDiff(bugun, termin) <= 6, logo: o.logo,
+    };
+  }));
+}

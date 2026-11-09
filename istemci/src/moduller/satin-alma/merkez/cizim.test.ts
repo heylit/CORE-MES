@@ -39,7 +39,7 @@ afterEach(() => { ekranKaldir(); S.ready = false; setRole('buyer'); document.bod
 // Her bölüm uydurma veriyle hata vermeden çizilir; boş, "undefined" ya da "NaN" metin çıkmaz.
 describe('satın alma ekran çizimi', () => {
   const sayfalar: [Page, string | null][] = [
-    ['dash', null], ['requests', null], ['request', 't2'], ['request', 't1'], ['materials', null], ['material', 'm1'],
+    ['dash', null], ['requests', null], ['orders', null], ['request', 't2'], ['request', 't1'], ['materials', null], ['material', 'm1'],
     ['suppliers', null], ['supplier', 'f1'], ['reports', null], ['settings', null],
   ];
   for (const [sayfa, id] of sayfalar) {

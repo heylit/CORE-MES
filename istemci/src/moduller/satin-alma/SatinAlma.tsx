@@ -51,6 +51,7 @@ export function IsKutusuSayfasi() {
 }
 
 export const TaleplerSayfasi = () => <Merkez rol="buyer" sayfa="requests" yol="/satin-alma/talepler" />;
+export const SiparislerSayfasi = () => <Merkez rol="buyer" sayfa="orders" yol="/satin-alma/siparisler" />;
 // Kabuk yalnız sayfa düzeyinde rota keser; adresle açılan Onaylar, onay işlemi olmayana Onayla/Reddet çizmesin diye kökle döner.
 export function OnaylarSayfasi() {
   const { data: kullanici } = useOturum();

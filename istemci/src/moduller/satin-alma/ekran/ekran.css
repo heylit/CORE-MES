@@ -54,3 +54,16 @@
   .sa-ekran-sayilar { display: flex; overflow-x: auto; gap: var(--b-2); scroll-snap-type: x mandatory; }
   .sa-ekran-sayilar > * { flex: 0 0 auto; min-width: 150px; scroll-snap-align: start; }
 }
+/* 2430: telefon kartında Logo durumu yalnız hatada görünür, nedeniyle birlikte; öteki durumlar talebin sipariş adımında. */
+.sa-ekran-siparisler [data-kip="kart"] td[data-baslik="Logo"]:not(:has(.sa-sp-logo-hata)) { display: none; }
+/* 1280'de tablo kipinde kalsın diye Gecikme ve Logo rozetleri dar yerde iki satıra iner; uzun Logo durumu sütunu genişletmez. */
+.sa-ekran-siparisler .tc-tablo td[data-baslik="Gecikme"] .tc-rozet,
+.sa-ekran-siparisler .tc-tablo td[data-baslik="Logo"] .tc-rozet { white-space: normal; }
+/* Kodlar (sipariş ve talep no, miktar) tireden bölünmez; ad kırılabilir. */
+.sa-sp-kod > *, .sa-sp-nowrap { white-space: nowrap; }
+.sa-sp-logo-hata { align-items: flex-start; }
+/* Siparişler kendi tablosunda arar; merkezin genel araması burada ikinci kutu olurdu. */
+.mainwrap:has(.sa-ekran-siparisler) .gsearch { display: none; }
+@media (max-width: 767px) {
+  .sa-ekran-siparisler .tc-sbaslik-alt { white-space: normal; }
+}

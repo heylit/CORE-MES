@@ -201,7 +201,8 @@ export interface Award {
   lines?: OrderLine[];
 }
 
-export interface OrderLine { id: number; itemId: string; quoteId: string }
+/** Sipariş satırı; miktar ve stokta kabul edilen miktar Siparişler sayfası (2430) içindir, sunucuya geri gitmez. */
+export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null }
 
 export interface LogEntry { id: string; at: number; by: string; t: string }
 

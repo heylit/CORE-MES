@@ -25,14 +25,14 @@ const DINLEYICILER = new Set<() => void>();
 export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }
 export const merkezSurumu = (): number => cizimSurumu;
 /** Bu sayfanın başlığını, listesini ve adım şeridini ortak parçalar çizer; merkez yalnız gövdeyi (ya da hiçbir şeyi) yazar. */
-export const ortakEkranMi = (): boolean => getRole() === "buyer" && (V.page === "dash" || V.page === "requests" || V.page === "request");
+export const ortakEkranMi = (): boolean => getRole() === "buyer" && (V.page === "dash" || V.page === "requests" || V.page === "orders" || V.page === "request");
 export function render(): void {
   renderNav();
   const m = $("#main");
   const ae = document.activeElement as FormEl | null;
   const keep = ae && m.contains(ae) && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
   if (!S.ready) { m.innerHTML = '<p class="loading">Veriler yükleniyor…</p>'; return; }
-  const P: Record<Page, () => string> = { dash: viewDash, requests: viewRequests, request: viewRequest, materials: viewMaterials, material: viewMaterial, suppliers: viewSuppliers, supplier: viewSupplier, reports: viewReports, settings: viewSettings };
+  const P: Record<Page, () => string> = { dash: viewDash, requests: viewRequests, orders: () => "", request: viewRequest, materials: viewMaterials, material: viewMaterial, suppliers: viewSuppliers, supplier: viewSupplier, reports: viewReports, settings: viewSettings };
   const role = getRole();
   if (V.page === "dash") P.dash = role === "approver" ? viewApprovals : role === "requester" ? viewRequesterHome : () => "";
   if (role === "buyer" && V.page === "requests") P.requests = () => (V.view === "board" ? boardHTML() : "");
