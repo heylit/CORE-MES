@@ -124,7 +124,8 @@ export function gunOrtalamasi(v: OzetVerisi): (number | null)[] {
 export const sutunAni = (v: OzetVerisi, d: number): number => v.T0 + d * v.kova * 24 + 1;
 
 // --- göstergeler (brKpi) ---
-export interface Gosterge { simge: 'list' | 'alert' | 'check' | 'gauge' | 'cpu' | 'wrench' | 'flag'; ad: string; deger: string | number | null; ek: string; alt: string; ton: '' | 'hata' | 'tamam' | 'uyari' }
+// birim değerin birimidir ve değerle aynı satırda yazılır (yüzde önde); ek ikinci bir ölçüdür, alt satırda kalın yazılır.
+export interface Gosterge { simge: 'list' | 'alert' | 'check' | 'gauge' | 'cpu' | 'wrench' | 'flag'; ad: string; deger: string | number | null; birim?: '%' | 'sa'; ek: string; alt: string; ton: '' | 'hata' | 'tamam' | 'uyari' }
 export function gostergeler(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: string) => string): Gosterge[] {
   const n = v.sip.length, gec = v.sip.filter((s) => s.gec), olculen = n - v.terminsiz, zam = olculen - gec.length; const top = gec.reduce((a, s) => a + s.T, 0);
   const ort = v.u.length ? v.u.reduce((a, [, x]) => a + x, 0) / v.u.length : null; const dar = [...v.u].sort((a, b) => b[1] - a[1])[0];
@@ -135,9 +136,9 @@ export function gostergeler(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: st
       ? { simge: 'check', ad: 'Zamanında', deger: zam, ek: `%${Math.round(zam / Math.max(1, olculen + v.yok.length) * 100)}`, alt: v.terminsiz ? `termininden önce biter; ${v.terminsiz} terminsiz` : 'termininden önce biter', ton: 'tamam' }
       : { simge: 'check', ad: 'Zamanında', deger: null, ek: '', alt: 'termini olan sipariş yok', ton: '' },
     { simge: 'alert', ad: 'Geç', deger: gec.length, ek: saKisa(top), alt: 'toplam gecikme', ton: gec.length ? 'hata' : 'tamam' },
-    { simge: 'gauge', ad: 'Ortalama doluluk', deger: ort == null ? null : Math.round(ort * 100), ek: '%', alt: 'çalışan tezgâhlarda', ton: '' },
+    { simge: 'gauge', ad: 'Ortalama doluluk', deger: ort == null ? null : Math.round(ort * 100), birim: '%', ek: '', alt: 'çalışan tezgâhlarda', ton: '' },
     { simge: 'cpu', ad: 'En yoğun tezgâh', deger: dar ? tezgahKodu(dar[0], v.tezKod) : '—', ek: dar ? `%${Math.round(dar[1] * 100)}` : '', alt: dar ? GRUP_AD[tezGrup(dar[0])] ?? v.grupAd[tezGrup(dar[0])] ?? '' : '', ton: 'uyari' },
-    { simge: 'wrench', ad: 'Ayar', deger: Math.round(v.oz.suH ?? 0), ek: 'sa', alt: `${v.oz.suN} ayar${v.oz.famN != null ? `; aile ${v.oz.famN} kez kısalttı` : ' bu dönemde'}`, ton: '' },
+    { simge: 'wrench', ad: 'Ayar', deger: Math.round(v.oz.suH ?? 0), birim: 'sa', ek: '', alt: `${v.oz.suN} ayar${v.oz.famN != null ? `; aile ${v.oz.famN} kez kısalttı` : ' bu dönemde'}`, ton: '' },
     { simge: 'flag', ad: 'Son iş biter', deger: saatYaz(c.D, v.oz.Cmax).slice(6), ek: '', alt: 'planın sonu', ton: '' },
   ];
 }

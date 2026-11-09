@@ -283,7 +283,7 @@ function DagilimTablosu({ d, tur, sec, fg, dar, ad, malzemeAdi, tedarikci, mikta
             <th className="tc-pyz-num">Toplam</th>
           </tr></thead>
           <tbody>
-            {d.satirlar.length === 0 && <tr><td colSpan={d.kovalar.length + 2} className="tc-pyz-kucuk">Bu görünümde satır yok.</td></tr>}
+            {d.satirlar.length === 0 && <tr><td colSpan={d.kovalar.length + 2} className="tc-pyz-kucuk">Bu planda satın alınacak malzeme yok: ihtiyaç stoktan ve açık siparişlerden karşılanıyor ya da işlerin malzemesi tanımlı değil.</td></tr>}
             {d.satirlar.map((s) => (
               <tr key={s.anahtar}>
                 <Td b="">{satirAdi(s.anahtar)}</Td>

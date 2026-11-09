@@ -71,8 +71,10 @@ export function Gostergeler({ l }: { l: Gosterge[] }) {
       {l.map((k) => (
         <div key={k.ad} className="tc-pym-br-kpi" data-ton={k.ton || undefined}>
           <span><Simge ad={k.simge} boyut="k" />{k.ad}</span>
-          <b className="tc-pym-mono">{k.deger == null ? '—' : typeof k.deger === 'number' ? <Sayac x={k.deger} /> : k.deger}</b>
-          <small><b>{k.ek}</b> {k.alt}</small>
+          <b className="tc-pym-mono">
+            {k.deger == null ? '—' : <>{k.birim === '%' && '%'}{typeof k.deger === 'number' ? <Sayac x={k.deger} /> : k.deger}{k.birim === 'sa' && ' sa'}</>}
+          </b>
+          <small>{k.ek && <b>{k.ek}</b>} {k.alt}</small>
         </div>
       ))}
     </div>
