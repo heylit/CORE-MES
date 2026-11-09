@@ -1669,7 +1669,7 @@ const YM_GRUP: Sozluk<string> = { 'Talaşlı işlenmiş parça': 'TAL', 'Kesilmi
 const KOD_DESEN = new RegExp('^((HM|YM|MM|SF|DB|HZ|TM)-[A-Z0-9]{3}|[A-Z0-9]{2,5}-(HM|YM|MM|SF|DB|HZ|TM))-\\d{' + KOD_HANE + ',}$');
 const FIRMA_KODU_DESEN = /^[A-Z0-9]{2,5}$/;
 const AC_KISA: [RegExp, string][] = [[/ \/ (SAE|AISI) [^ ,;]+/g, ''], [/yuvarlak çubuk/gi, 'çubuk'], [/kutu profil/gi, 'kutu'], [/levha \/ sac/gi, 'levha'], [/Çözeltiye alınmış/g, 'Çöz.'], [/Sertleştirilmiş/g, 'Sert.'], [/ ve /g, ' '], [/\s*\([^)]*\)/g, ''], [/ mm\b/g, ''], [/,\s+/g, ',']];
-const OPG_VARSAYILAN: OperasyonGrubu[] = ([['KES', 'Kesim'], ['SKL', 'Şekillendirme'], ['TAL', 'Talaşlı imalat'], ['KYN', 'Kaynak'], ['ISL', 'Isıl işlem'], ['YZY', 'Yüzey hazırlık'], ['KAP', 'Kaplama'], ['BOY', 'Boya'], ['MRK', 'Markalama'], ['MON', 'Montaj'], ['KAL', 'Kalite kontrol'], ['PAK', 'Paketleme ve sevk'], ['FAS', 'Fason']] satisfies [string, string][]).map(([kod, ad]) => ({ kod, ad }));
+const OPG_VARSAYILAN: OperasyonGrubu[] = ([['KES', 'Kesim'], ['SKL', 'Şekillendirme'], ['TAL', 'Talaşlı imalat'], ['KYN', 'Kaynak'], ['ISL', 'Isıl işlem'], ['YZY', 'Yüzey hazırlık'], ['KAP', 'Kaplama'], ['BOY', 'Boya'], ['MRK', 'Markalama'], ['MON', 'Montaj'], ['KAL', 'Kalite kontrol'], ['DEP', 'Depo operasyonları'], ['PAK', 'Paketleme ve sevk'], ['FAS', 'Fason']] satisfies [string, string][]).map(([kod, ad]) => ({ kod, ad }));
 const OP_SURUM = 2;
 const OP_VARSAYILAN: OperasyonTanimi[] = ([
     ['LZR', 'Lazer kesim', 'KES'], ['PLZ', 'Plazma kesim', 'KES'], ['TST', 'Testere kesim', 'KES'], ['GYT', 'Giyotin kesim', 'KES'], ['SJT', 'Su jeti kesim', 'KES'], ['OKS', 'Oksijen kesim', 'KES'], ['ZMB', 'Zımba / punch', 'KES'],
@@ -1683,7 +1683,8 @@ const OP_VARSAYILAN: OperasyonTanimi[] = ([
     ['LMK', 'Lazer markalama', 'MRK'], ['NVR', 'Nokta vuruşlu markalama', 'MRK'], ['DMG', 'Damgalama (çelik harf)', 'MRK'], ['MKY', 'Mürekkep / inkjet markalama', 'MRK'], ['ECM', 'Elektrokimyasal markalama', 'MRK'], ['GRV', 'Gravür', 'MRK'], ['KNY', 'Künye / etiket plakası takma', 'MRK'],
     ['MNT', 'Montaj', 'MON'], ['PRC', 'Perçinleme', 'MON'], ['CVT', 'Cıvatalı bağlantı', 'MON'], ['YPS', 'Yapıştırma', 'MON'], ['PGM', 'Pres geçme', 'MON'], ['KBL', 'Elektrik montajı / kablolama', 'MON'],
     ['GKK', 'Giriş kalite kontrol', 'KAL'], ['IPK', 'İlk parça kontrol (FAI)', 'KAL'], ['BM', 'Boyutsal muayene', 'KAL'], ['GM', 'Görsel muayene', 'KAL'], ['KMM', 'Koordinat ölçüm (CMM)', 'KAL'], ['SRO', 'Sertlik ölçümü', 'KAL'], ['PRZ', 'Pürüzlülük ölçümü', 'KAL'], ['NDT', 'Tahribatsız muayene (PT, MT, UT)', 'KAL'], ['PMI', 'Malzeme analizi (PMI)', 'KAL'], ['KKO', 'Kaplama kalınlığı ölçümü', 'KAL'], ['BKO', 'Boya kalınlık ölçümü', 'KAL'], ['YPT', 'Yapışma testi (çapraz kesim)', 'KAL'], ['TUZ', 'Tuz sisi testi', 'KAL'], ['SZT', 'Basınç / sızdırmazlık testi', 'KAL'], ['FNT', 'Fonksiyon testi', 'KAL'], ['SKK', 'Son kalite kontrol', 'KAL'],
-    ['ETK', 'Etiketleme', 'PAK'], ['PKT', 'Paketleme', 'PAK'], ['SND', 'Sandıklama / paletleme', 'PAK'],
+    ['ASC', 'Ara stoktan çıkış', 'DEP'], ['ASG', 'Ara stoka giriş', 'DEP'], ['DTR', 'Depolar arası transfer', 'DEP'], ['KIT', 'Malzeme hazırlama (kit çıkarma)', 'DEP'], ['MDG', 'Mamul depoya giriş', 'DEP'],
+    ['ETK', 'Etiketleme', 'PAK'], ['PKT', 'Paketleme', 'PAK'], ['SND', 'Sandıklama / paletleme', 'PAK'], ['SVK', 'Sevkiyat / yükleme', 'PAK'], ['VCI', 'Koruyucu yağlama / VCI ambalaj', 'PAK'],
     ['FSN', 'Fason işlem', 'FAS']
 ] satisfies [string, string, string][]).map(([kod, ad, grup]) => ({ kod, ad, grup, aciklama: '', merkez: '', fason: grup === 'FAS', aktif: true, varsayilan: true }));
 const OP_KOD_ESKI: Sozluk<string> = { KS01: 'LZR', KS02: 'PLZ', KS03: 'TST', KS04: 'GYT', KS05: 'SJT', KS06: 'OKS', KS07: 'ZMB', SK01: 'ABK', SK02: 'SLB', SK03: 'BRB', SK04: 'PRS', SK05: 'DGR', TL01: 'TRN', TL02: 'FRZ', TL03: 'IMM', TL04: 'DLM', TL05: 'KLV', TL06: 'TSL', TL07: 'TEL', TL08: 'DLE', TL09: 'HON', TL10: 'KTR',
@@ -1898,7 +1899,7 @@ const AyarKaydi: AyarKaydiDeposu = { l: [], db: null,
 AyarKaydi.yukle();
 const DOCTIPS = ['EN 10204 3.1 sertifikası', 'Veri föyü (TDS)', 'Güvenlik bilgi formu (SDS)', 'Uygunluk beyanı (DoC)', 'Teknik çizim', 'Test raporu', 'Diğer'];
 const LSIZES: Sozluk<[number, number]> = { '100x50': [100, 50], '70x37': [70, 37], '50x30': [50, 30] };
-const OP_TUR_IKON: Sozluk<string> = { KES: 'blade', SKL: 'press', TAL: 'rings', KYN: 'flame', ISL: 'thermo', YZY: 'surface', KAP: 'coat', BOY: 'palette', MRK: 'barcode', MON: 'wrench', KAL: 'magnifier', PAK: 'box', FAS: 'truck' };
+const OP_TUR_IKON: Sozluk<string> = { KES: 'blade', SKL: 'press', TAL: 'rings', KYN: 'flame', ISL: 'thermo', YZY: 'surface', KAP: 'coat', BOY: 'palette', MRK: 'barcode', MON: 'wrench', KAL: 'magnifier', DEP: 'stack', PAK: 'box', FAS: 'truck' };
 const MA_MENU = [
     ['ozet', 'Genel bakış', ''],
     ['#', 'Hammadde'], ['aile', 'Aileler ve sınıflar'], ['kalite', 'Kaliteler'], ['ozellik', 'Teknik özellikler'], ['durum', 'Durum ve işlem seçenekleri'], ['varsayilan', 'Sınıf varsayılanları'], ['tol', 'Tolerans normları'],

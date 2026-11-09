@@ -26,12 +26,12 @@ describe('IS11: operasyon tipi kataloğu (gerçek PostgreSQL)', () => {
     await ortam?.kaldir();
   });
 
-  test('İ2: katalog malzemelerin kodlu listesiyle gelir: 96 aktif tip, her grupta en az bir tip, kodlar tekil', async () => {
+  test('İ2: katalog malzemelerin kodlu listesiyle gelir: 103 aktif tip, her grupta en az bir tip, kodlar tekil', async () => {
     const liste = await aktifler();
-    assert.equal(liste.length, 96);
+    assert.equal(liste.length, 103);
     assert.ok(liste.every((t) => t.aktif));
     assert.deepEqual([...new Set(liste.map((t) => t.grup))].sort(), [...OPERASYON_GRUP_KODLARI].sort());
-    assert.equal(new Set(liste.map((t) => t.kod)).size, 96);
+    assert.equal(new Set(liste.map((t) => t.kod)).size, 103);
     const torna = liste.find((t) => t.kod === 'TRN');
     assert.deepEqual(torna && { ad: torna.ad, grup: torna.grup }, { ad: 'Torna (CNC)', grup: 'TAL' });
   });
@@ -57,9 +57,9 @@ describe('IS11: operasyon tipi kataloğu (gerçek PostgreSQL)', () => {
     assert.ok((await aktifler()).some((t) => t.kod === 'ZZ-YENI'));
   });
 
-  test('IR1: varsayılanlar boş olabilir; 96 tohum satırında boş kalır; kısaltma biçimli, süre negatif olamaz, istasyon var olmalı', async () => {
+  test('IR1: varsayılanlar boş olabilir; 103 tohum satırında boş kalır; kısaltma biçimli, süre negatif olamaz, istasyon var olmalı', async () => {
     const tohum = (await aktifler()).filter((t) => !t.kod.startsWith('ZZ-'));
-    assert.equal(tohum.length, 96);
+    assert.equal(tohum.length, 103);
     assert.ok(tohum.every((t) => t.kisaltma === null && t.varsayilanAyarDk === null && t.varsayilanBirimDk === null && t.varsayilanIstasyonId === null));
     const guncelle = (sutun: string, deger: unknown) =>
       vt().sorgu(`UPDATE istasyonlar_operasyon_tipi SET ${sutun} = $1 WHERE kod = 'TRN'`, [deger]);

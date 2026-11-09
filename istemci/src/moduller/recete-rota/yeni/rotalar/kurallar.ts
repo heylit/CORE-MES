@@ -29,7 +29,8 @@ export const BAGIMLILIK_SIRASI: readonly Bagimlilik[] = ['bagimli', 'ortulu', 'b
 // Operasyon grupları bugünkü ekranın sırasıyla (İstasyonlar'ın grup kodları); durumdaki grup adı önceliklidir.
 export const OP_GRUPLARI: readonly (readonly [string, string])[] = [
   ['KES', 'Kesim'], ['SKL', 'Şekillendirme'], ['TAL', 'Talaşlı imalat'], ['KYN', 'Kaynak'], ['ISL', 'Isıl işlem'], ['YZY', 'Yüzey hazırlık'],
-  ['KAP', 'Kaplama'], ['BOY', 'Boya'], ['MRK', 'Markalama'], ['MON', 'Montaj'], ['KAL', 'Kalite kontrol'], ['PAK', 'Paketleme ve sevk'], ['FAS', 'Fason'],
+  ['KAP', 'Kaplama'], ['BOY', 'Boya'], ['MRK', 'Markalama'], ['MON', 'Montaj'], ['KAL', 'Kalite kontrol'], ['DEP', 'Depo operasyonları'],
+  ['PAK', 'Paketleme ve sevk'], ['FAS', 'Fason'],
 ];
 
 // Rota modülünün önizlemesi malzeme türünü katalog adıyla verir (hammadde, yarimamul); ekran kısa adı ve rengi yerel türden alır.

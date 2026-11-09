@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { OPERASYON_GRUP_KODLARI } from './operasyon-gruplari.ts';
 
 export const ISTASYON_TIPLERI = ['talasli', 'kalite', 'depo', 'markalama', 'boya', 'montaj', 'tesviye'] as const;
 export const BAGLANTI_TURLERI = ['focas', 'opcua', 'mtconnect', 'modbus', 'dijital_giris'] as const;
@@ -166,13 +167,8 @@ export const istasyonKaydiSemasi = istasyonSemasi.extend({
 export const makineKaydiSemasi = makineSemasi.extend(surumlu);
 
 // Operasyon tipi kataloğu (IS11, IS13); başka modüller `disari.ts` ile okur, ekran uçlarla yazar.
-// Gruplar malzemeler kataloğundaki kodlarla aynıdır (kullanıcı kararı İ2); sıra ekrandaki sıradır.
-export const OPERASYON_GRUP_KODLARI = ['KES', 'SKL', 'TAL', 'KYN', 'ISL', 'YZY', 'KAP', 'BOY', 'MRK', 'MON', 'KAL', 'PAK', 'FAS'] as const;
-export type OperasyonGrubu = (typeof OPERASYON_GRUP_KODLARI)[number];
-export const OPERASYON_GRUP_ADLARI: Readonly<Record<OperasyonGrubu, string>> = {
-  KES: 'Kesim', SKL: 'Şekillendirme', TAL: 'Talaşlı imalat', KYN: 'Kaynak', ISL: 'Isıl işlem', YZY: 'Yüzey hazırlık', KAP: 'Kaplama',
-  BOY: 'Boya', MRK: 'Markalama', MON: 'Montaj', KAL: 'Kalite kontrol', PAK: 'Paketleme ve sevk', FAS: 'Fason',
-};
+// Gruplar tek kaynaktan gelir (`operasyon-gruplari.ts`); kodlar malzemeler kataloğundaki kodlarla aynıdır (kullanıcı kararı İ2).
+export { OPERASYON_GRUP_ADLARI, OPERASYON_GRUP_KODLARI, type OperasyonGrubu } from './operasyon-gruplari.ts';
 
 // Varsayılanlar rota adımına öneridir (RT2 a); boş "bilinmiyor" demektir. Süreler dakika, ondalık metin.
 export const operasyonTipiSemasi = z.object({
