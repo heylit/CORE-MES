@@ -15,6 +15,16 @@ const DUZEYLER = [{ deger: 'istasyon', baslik: 'İstasyon' }, { deger: 'makine',
 // 565 a: kişi ve istasyon yetkinliği tek tabloda; hücre, satır (kişi) ve sütun (istasyon) aç ve kapat. Hepsi tek toplu uçtan geçer: kişi
 // kartındaki uçla aynı kural ve defter. Geçerlilik bitişi ve dayanak kişi kartında kalır; süresi dolan yetkinlik burada işaretlidir.
 // 563 c: makine düzeyinde sütunlar istasyonun aktif makineleridir; makine hücresi yalnız kişi o istasyonda yetkinse açılır.
+// 2692: sütun başlığı adı yazar, kod küçük ikinci satırdadır (yalnız kod okunmuyordu). Uzun ad kesilmez, satıra bölünür; tam metin title'da.
+function SutunAdi({ kod, ad }: { kod: string; ad: string }) {
+  return (
+    <span className="tc-ist-sutun-adi">
+      <span>{ad}</span>
+      <small className="tc-ist-mono">{kod}</small>
+    </span>
+  );
+}
+
 export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: boolean }) {
   const [ara, araYaz] = useState('');
   const [merkez, merkezYaz] = useState('');
@@ -84,13 +94,13 @@ export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: 
               <thead>
                 <tr>
                   <th scope="col" rowSpan={2}>Kişi</th>
-                  {makineSutunlari.map(({ i, makineler }) => <th key={i.id} scope="colgroup" colSpan={makineler.length} title={i.ad}><span className="tc-ist-mono">{i.kod}</span></th>)}
+                  {makineSutunlari.map(({ i, makineler }) => <th key={i.id} scope="colgroup" colSpan={makineler.length} title={`${i.kod} ${i.ad}`}><SutunAdi kod={i.kod} ad={i.ad} /></th>)}
                   <th scope="col" rowSpan={2}>En çok</th>
                 </tr>
                 <tr>
                   {makineSutunlari.flatMap(({ i, makineler }) => makineler.map((m) => (
-                    <th key={m.id} scope="col" title={m.ad}>
-                      <span className="tc-ist-mono">{m.kod}</span>
+                    <th key={m.id} scope="col" title={`${m.kod} ${m.ad}`}>
+                      <SutunAdi kod={m.kod} ad={m.ad} />
                       {yazabilir && <>{' '}{makineKutusu(`${m.kod} sütununun hepsi`, kisiler.filter((k) => yetkin(k.id, i.id)).map((k) => [k, m.id] as [KisiOzeti, number]))}</>}
                     </th>
                   )))}
@@ -124,12 +134,12 @@ export function YetkinlikMatrisi({ v, yazabilir }: { v: TesisVerisi; yazabilir: 
             <thead>
               <tr>
                 <th scope="col" rowSpan={2}>Kişi</th>
-                {gruplar.map((g) => <th key={g.m.id} scope="colgroup" colSpan={g.istasyonlar.length}>{g.m.kod}</th>)}
+                {gruplar.map((g) => <th key={g.m.id} scope="colgroup" colSpan={g.istasyonlar.length} title={`${g.m.kod} ${g.m.ad}`}><SutunAdi kod={g.m.kod} ad={g.m.ad} /></th>)}
               </tr>
               <tr>
                 {sutunlar.map((i) => (
-                  <th key={i.id} scope="col" title={i.ad}>
-                    <span className="tc-ist-mono">{i.kod}</span>
+                  <th key={i.id} scope="col" title={`${i.kod} ${i.ad}`}>
+                    <SutunAdi kod={i.kod} ad={i.ad} />
                     {yazabilir && <>{' '}{topluKutu(`${i.kod} sütununun hepsi`, kisiler.map((k) => [k, i.id] as [KisiOzeti, number]))}</>}
                   </th>
                 ))}
